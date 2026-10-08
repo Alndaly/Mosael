@@ -100,6 +100,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { Truncate } from "@/components/ui/truncate";
 import {
   CanvasAgentChat,
@@ -185,6 +186,7 @@ const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
 export function SceneStudio({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   const qc = useQueryClient(),
     [id, setId] = React.useState(readId),
     [creating, setCreating] = React.useState(false),
@@ -207,11 +209,13 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
    * 「打开三间展厅示例」:这个工作区已经有一份(content.template 认得出,改过名、改过内容都算)就打开那份,
    * 没有才建。此前每点一次复制一份,点几次就有几份同名的场景 —— 按钮说的是「打开」。
    */
+  const existingSample = (list.data ?? []).find((one) => one.template === SAMPLE_TEMPLATE);
   function openSample() {
-    const existing = (list.data ?? []).find((one) => one.template === SAMPLE_TEMPLATE);
-    if (existing) location.hash = `#/scenes?scene=${existing.id}`;
+    if (existingSample) location.hash = `#/scenes?scene=${existingSample.id}`;
     else void create(true);
   }
+  //: 已经有一份示例时这颗只是打开它,只读成员也能点;没有才是建一份,那才要「编辑」。
+  const sampleBlocked = existingSample ? null : writeBlocked;
   async function create(demo: boolean) {
     setCreating(true);
     try {
@@ -274,6 +278,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             <SceneBlenderPull
               workspaceId={workspace.id}
               disabled={creating}
+              disabledReason={writeBlocked?.reason}
               onCreated={async (sceneId) => {
                 await qc.invalidateQueries({ queryKey: sceneKeys.list(workspace.id) });
                 location.hash = `#/scenes?scene=${sceneId}`;
@@ -282,16 +287,20 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             {/* 空着的时候这一颗在正中的空状态里,页头不再摆第二颗同一件事的。清单没到之前点不了:
                 还不知道有没有那一份,点了就可能又复制一份。 */}
             {!!list.data?.length && (
-              <Button variant="outline" disabled={creating} onClick={openSample}>
-                {t("scenesOpenSample")}
-              </Button>
+              <Hint disabledReason={sampleBlocked?.reason}>
+                <Button variant="outline" disabled={creating || Boolean(sampleBlocked)} onClick={openSample}>
+                  {t("scenesOpenSample")}
+                </Button>
+              </Hint>
             )}
             {/* 空着的时候「新建场景」也挪进空状态(在示例旁边、次一级):页头再留一颗实心的,一屏两个主动作。 */}
             {!(list.isSuccess && list.data.length === 0) && (
-              <Button disabled={creating} onClick={() => void create(false)}>
-                <Plus size={16} />
-                {t("scenesNew")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button disabled={creating || Boolean(writeBlocked)} onClick={() => void create(false)}>
+                  <Plus size={16} />
+                  {t("scenesNew")}
+                </Button>
+              </Hint>
             )}
           </>
         }
@@ -310,11 +319,15 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
             body={t("sceneEmptyBody")}
             action={
               <span className="inline-flex flex-wrap items-center justify-center gap-2">
-                <Button disabled={creating} onClick={openSample}>{t("scenesOpenSample")}</Button>
-                <Button variant="outline" disabled={creating} onClick={() => void create(false)}>
-                  <Plus size={16} />
-                  {t("scenesNew")}
-                </Button>
+                <Hint disabledReason={sampleBlocked?.reason}>
+                  <Button disabled={creating || Boolean(sampleBlocked)} onClick={openSample}>{t("scenesOpenSample")}</Button>
+                </Hint>
+                <Hint disabledReason={writeBlocked?.reason}>
+                  <Button variant="outline" disabled={creating || Boolean(writeBlocked)} onClick={() => void create(false)}>
+                    <Plus size={16} />
+                    {t("scenesNew")}
+                  </Button>
+                </Hint>
               </span>
             }
           />
@@ -322,6 +335,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
       ) : (
         <SceneList
           scenes={list.data}
+          writeBlocked={writeBlocked}
           selecting={selecting}
           onSelecting={setSelecting}
           onOpen={sceneId => { location.hash = `#/scenes?scene=${sceneId}`; }}

@@ -6,10 +6,11 @@
  * - 拖进来的 .md 直接成笔记,一次可以好几个,不认识的文件不碰。
  */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { emptyNote, type Note } from "@/api/domains/notes";
+import { readHint } from "@/test/hint";
 
 vi.mock("@/app/preferences", () => ({ usePreferences: () => ({ locale: "zh-CN" }), useI18n: () => (key: string) => key }));
 const api = vi.hoisted(() => ({
@@ -51,10 +52,10 @@ it("换成另一篇以列表结尾的笔记,「无序列表」不会自己亮", 
   expect(screen.getByRole("button", { name: "无序列表" })).not.toHaveAttribute("aria-pressed", "true");
 });
 
-function mountView() {
+function mountView(role = "editor") {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <NotesView workspace={{ id: "ws" } as never} />
+      <NotesView workspace={{ id: "ws", role } as never} />
     </QueryClientProvider>,
   );
 }
@@ -119,4 +120,33 @@ it("切到收藏按参数向服务端取;主题下拉的选项来自服务端,�
   //: 已加载的一页里一篇都没有,下拉照样列得出服务端说有的那个专题。
   expect(await screen.findByText("专题")).toBeInTheDocument();
   expect(api.listNoteTopics).toHaveBeenCalledWith("ws", false);
+});
+
+//: 只读成员(体检 UM-20 / D62):写的入口灰掉并说为什么;打开的那篇只能看 —— 此前打的字存不上,只换来一条报错。
+it("只读成员:导入、新建是灰的,拖 .md 进来不建;打开的那篇标题、正文改不了,收藏是灰的", async () => {
+  api.listNotes.mockResolvedValue([]);
+  api.listNoteTopics.mockResolvedValue([]);
+  api.getNote.mockImplementation(async (_ws: string, id: string) => note(id, "同事写的"));
+  window.location.hash = "#/notes?note=n7";
+  const view = mountView("viewer");
+
+  const importButton = screen.getByRole("button", { name: "导入 Markdown" });
+  expect(importButton).toBeDisabled();
+  expect(await readHint(importButton)).toContain("roleReadOnlyHint");
+  for (const button of screen.getAllByRole("button", { name: "新建笔记" })) expect(button).toBeDisabled();
+
+  const title = await screen.findByDisplayValue("同事写的");
+  expect(title).toBeDisabled();
+  await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
+  expect(document.querySelector(".ProseMirror")).toHaveAttribute("contenteditable", "false");
+  const header = view.container.querySelector(".note-document-header") as HTMLElement;
+  expect(within(header).getByRole("button", { name: "收藏" })).toBeDisabled();
+
+  const layout = view.container.querySelector(".notes-layout")!;
+  const file = new File(["# 甲"], "甲.md", { type: "text/markdown" });
+  const dataTransfer = { files: [file], types: ["Files"], items: [{ kind: "file", type: file.type, getAsFile: () => file }], dropEffect: "none" };
+  fireEvent.dragEnter(layout, { dataTransfer });
+  expect(view.container.querySelector(".notes-drop")).toBeNull();
+  fireEvent.drop(layout, { dataTransfer });
+  expect(api.createNote).not.toHaveBeenCalled();
 });

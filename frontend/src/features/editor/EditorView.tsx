@@ -65,6 +65,8 @@ import { formatCombo } from "@/lib/shortcuts";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
+import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { SectionBoundary } from "@/components/app/errorBoundary";
 import { useAgentPlace } from "@/features/agent/activePlace";
@@ -108,6 +110,7 @@ export function EditorView({
   creatingProject: boolean;
 }) {
   const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   if (!project) {
     // 空态必须给出口:一个项目都没有时顶栏的项目切换器压根不渲染(AppShell 里
     // `projects.length > 0` 才挂),这个按钮就是剪辑页唯一能新建的地方——否则用户
@@ -119,9 +122,11 @@ export function EditorView({
           title={t("emptyProject")}
           body={t("homeEmptyBody")}
           action={
-            <Button onClick={onCreateProject} disabled={creatingProject}>
-              <FolderPlus size={15} /> {t("createProject")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button onClick={onCreateProject} disabled={creatingProject || Boolean(writeBlocked)}>
+                <FolderPlus size={15} /> {t("createProject")}
+              </Button>
+            </Hint>
           }
         />
       </div>
@@ -132,6 +137,7 @@ export function EditorView({
 
 function Editor({ workspace, project }: { workspace: Workspace; project: Project }) {
   const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   //: 剪辑这一处是这个项目(ADR 0044):助手面板接这个项目的对话,面板收起来时浮标和跳转也认得出你在这里。
   const agentPlace = useAgentPlace({ kind: "project", id: project.id });
   const qc = useQueryClient();
@@ -966,9 +972,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           title={t("emptyTimeline")}
           body={t("mediaEmptyBody")}
           action={
-            <Button onClick={() => createSequence.mutate()} loading={createSequence.isPending}>
-              <Plus size={15} /> {t("createMainSequence")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button onClick={() => createSequence.mutate()} loading={createSequence.isPending} disabled={Boolean(writeBlocked)}>
+                <Plus size={15} /> {t("createMainSequence")}
+              </Button>
+            </Hint>
           }
         />
       </div>
@@ -1055,7 +1063,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           >
             <Sparkles size={14} />
           </IconButton>
-          <ExportControl sequence={sequence} />
+          <ExportControl sequence={sequence} writeBlocked={writeBlocked} />
 
         </div>
       </div>
@@ -1141,6 +1149,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           workspaceId={workspace.id}
           projectId={project.id}
           uploading={importFiles.isPending}
+          writeBlocked={writeBlocked}
           onImportFiles={importMediaOrSubtitles}
           onRecord={() => openRecorder({ projectId: project.id })}
           onAddToTimeline={addAssetToTimeline}

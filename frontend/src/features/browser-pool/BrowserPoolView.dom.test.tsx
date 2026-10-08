@@ -31,12 +31,13 @@ vi.mock("@/api/client", () => ({
 }));
 
 const { BrowserPoolView } = await import("./BrowserPoolView");
+const { readHint } = await import("@/test/hint");
 
-function show() {
+function show(role = "editor") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BrowserPoolView workspace={{ id: "ws" } as never} />
+      <BrowserPoolView workspace={{ id: "ws", role } as never} />
     </QueryClientProvider>,
   );
 }
@@ -84,4 +85,15 @@ it("复检一张卡:只有这张卡的复检键在转", async () => {
   await vi.waitFor(() => expect(first).toHaveAttribute("aria-busy", "true"));
   expect(recheckPublishAccount).toHaveBeenCalledWith("a3");
   expect(second).not.toHaveAttribute("aria-busy");
+});
+
+//: 只读成员(体检 UM-20 / D62):建登录身份、加账号要「编辑」,按钮是灰的、说清为什么;共享来的照常能打开。
+it("只读成员:新建登录身份、添加账号是灰的并说为什么", async () => {
+  profiles = [{ ...base, id: "p1", name: "同事的 B 站", bound_account_id: "a1", is_mine: false }];
+  show("viewer");
+  expect(await screen.findByText("同事的 B 站")).toBeInTheDocument();
+  const create = screen.getByRole("button", { name: "poolCreate" });
+  expect(create).toBeDisabled();
+  expect(await readHint(create)).toBe("roleReadOnlyHint");
+  expect(screen.getByRole("button", { name: "publishAccountAdd" })).toBeDisabled();
 });

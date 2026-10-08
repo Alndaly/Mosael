@@ -6,6 +6,7 @@ import { listBlenderConnections, pullFromBlender } from "@/api/domains/scenes";
 import { blenderKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
 import { usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -25,10 +26,13 @@ import {
 export function SceneBlenderPull({
   workspaceId,
   disabled,
+  disabledReason = null,
   onCreated,
 }: {
   workspaceId: string;
   disabled?: boolean;
+  /** 点不了的原因(只读成员):给了就只画一颗灰按钮、悬停说明为什么,不开取回的浮层。 */
+  disabledReason?: string | null;
   onCreated: (sceneId: string) => void;
 }) {
   const { locale, t } = usePreferences();
@@ -57,6 +61,15 @@ export function SceneBlenderPull({
     }
   }
 
+  if (disabledReason)
+    return (
+      <Hint disabledReason={disabledReason}>
+        <Button variant="outline" disabled>
+          <Box size={16} />
+          {t("sceneBlenderPullButton")}
+        </Button>
+      </Hint>
+    );
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

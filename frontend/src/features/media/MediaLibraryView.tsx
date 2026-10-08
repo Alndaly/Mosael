@@ -15,6 +15,7 @@ import { assetThumbnailUrl, convertVideoToGif, deleteAsset, renameAsset, setAsse
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { assetKindKey, documentFacts, IMPORT_ACCEPT, kindHasSound, kindIsVisual } from "@/lib/assetKinds";
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { toast } from "sonner";
@@ -90,6 +91,9 @@ type ActionTarget = Pick<AssetCard, "id" | "name" | "original_filename" | "works
 
 export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  //: 只读成员导入不了、改不了、删不了素材:写入口灰掉并说为什么,拖进来也不收(体检 D62,和定时任务页同一个做法)。
+  //: 下载、对比、看详情照常。
+  const writeBlocked = useWriteBlocked(workspace.role);
   const qc = useQueryClient();
   const { openRecorder } = useRecorder();
   const [renaming, setRenaming] = React.useState<ActionTarget | null>(null);
@@ -333,18 +337,18 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   //: 详情头部那一排操作:和卡片的 ⋯ / 右键同一组动作,详情里也能改名、打标签、删(体检 UM-13)。
   const detailActions = (asset: ActionTarget): MenuAction[] => [
     { label: t("assetSaveLocal"), icon: <Download />, onSelect: () => saveAssetToDisk(asset) },
-    { label: t("rename"), icon: <Pencil />, onSelect: () => setRenaming(asset) },
-    { label: t("editTags"), icon: <Tag />, onSelect: () => setEditingTags(asset) },
-    ...(kindIsVisual(asset.kind) ? [{ label: t("assetSetAsReference"), icon: <Layers />, onSelect: () => setReferencing(asset) }] : []),
-    ...(asset.kind === "document" ? [{ label: t("docSaveAsNote"), icon: <NotebookPen />, disabled: saveAsNote.isPending, onSelect: () => saveAsNote.mutate(asset.id) }] : []),
-    ...(asset.kind === "video" ? [{ label: t("assetConvertGif"), icon: <ImagePlus />, disabled: convertGif.isPending, onSelect: () => convertGif.mutate(asset.id) }] : []),
+    { label: t("rename"), icon: <Pencil />, disabledReason: writeBlocked?.brief, onSelect: () => setRenaming(asset) },
+    { label: t("editTags"), icon: <Tag />, disabledReason: writeBlocked?.brief, onSelect: () => setEditingTags(asset) },
+    ...(kindIsVisual(asset.kind) ? [{ label: t("assetSetAsReference"), icon: <Layers />, disabledReason: writeBlocked?.brief, onSelect: () => setReferencing(asset) }] : []),
+    ...(asset.kind === "document" ? [{ label: t("docSaveAsNote"), icon: <NotebookPen />, disabled: saveAsNote.isPending, disabledReason: writeBlocked?.brief, onSelect: () => saveAsNote.mutate(asset.id) }] : []),
+    ...(asset.kind === "video" ? [{ label: t("assetConvertGif"), icon: <ImagePlus />, disabled: convertGif.isPending, disabledReason: writeBlocked?.brief, onSelect: () => convertGif.mutate(asset.id) }] : []),
     ...(kindHasSound(asset.kind)
       ? [
-          { label: t("separateAudio"), icon: <Scissors />, disabled: separateAudio.isPending, onSelect: () => separateAudio.mutate(asset.id) },
-          { label: t("denoiseAction"), icon: <AudioWaveform />, onSelect: () => denoise(asset.id) },
+          { label: t("separateAudio"), icon: <Scissors />, disabled: separateAudio.isPending, disabledReason: writeBlocked?.brief, onSelect: () => separateAudio.mutate(asset.id) },
+          { label: t("denoiseAction"), icon: <AudioWaveform />, disabledReason: writeBlocked?.brief, onSelect: () => denoise(asset.id) },
         ]
       : []),
-    { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setDeleting(asset) },
+    { label: t("delete"), icon: <Trash2 />, destructive: true, disabledReason: writeBlocked?.brief, onSelect: () => setDeleting(asset) },
   ];
 
   /** 一张卡片(网格)或一行(列表):点开详情 / 选择模式下勾选,⋯ 和右键是同一张菜单;图和视频角上还有一颗「看大图」。 */
@@ -372,15 +376,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             <Popover open={actionMenuId === asset.id} onOpenChange={open => setActionMenuId(current => open ? asset.id : current === asset.id ? null : current)}><PopoverTrigger asChild><IconButton variant="secondary" size="icon-xs" label={`${t("studioActions")}: ${asset.name}`} aria-haspopup="menu"><MoreHorizontal /></IconButton></PopoverTrigger>
             <MenuContent label={t("studioActions")} align="end" onCloseAutoFocus={event => { if (actionMenuId && actionMenuId !== asset.id) event.preventDefault(); }}>
               <PopoverClose asChild><MenuItem icon={<Download />} label={t("assetSaveLocal")} onClick={() => saveAssetToDisk(asset)} /></PopoverClose>
-              <PopoverClose asChild><MenuItem icon={<Pencil />} label={t("rename")} onClick={() => setRenaming(asset)} /></PopoverClose>
-              <PopoverClose asChild><MenuItem icon={<Tag />} label={t("editTags")} onClick={() => setEditingTags(asset)} /></PopoverClose>
-              {kindIsVisual(asset.kind) && <PopoverClose asChild><MenuItem icon={<Layers />} label={t("assetSetAsReference")} onClick={() => setReferencing(asset)} /></PopoverClose>}
-              {asset.kind === "document" && <PopoverClose asChild><MenuItem icon={saveAsNote.isPending ? <Loader2 className="animate-spin" /> : <NotebookPen />} label={t("docSaveAsNote")} disabled={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)} /></PopoverClose>}
-              {asset.kind === "video" && <PopoverClose asChild><MenuItem icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} disabled={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)} /></PopoverClose>}
-              {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} disabled={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)} /></PopoverClose>}
-              {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={<AudioWaveform />} label={t("denoiseAction")} onClick={() => denoise(asset.id)} /></PopoverClose>}
+              <PopoverClose asChild><MenuItem icon={<Pencil />} label={t("rename")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setRenaming(asset)} /></PopoverClose>
+              <PopoverClose asChild><MenuItem icon={<Tag />} label={t("editTags")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setEditingTags(asset)} /></PopoverClose>
+              {kindIsVisual(asset.kind) && <PopoverClose asChild><MenuItem icon={<Layers />} label={t("assetSetAsReference")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setReferencing(asset)} /></PopoverClose>}
+              {asset.kind === "document" && <PopoverClose asChild><MenuItem icon={saveAsNote.isPending ? <Loader2 className="animate-spin" /> : <NotebookPen />} label={t("docSaveAsNote")} disabled={saveAsNote.isPending || Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => saveAsNote.mutate(asset.id)} /></PopoverClose>}
+              {asset.kind === "video" && <PopoverClose asChild><MenuItem icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} disabled={convertGif.isPending || Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => convertGif.mutate(asset.id)} /></PopoverClose>}
+              {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} disabled={separateAudio.isPending || Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => separateAudio.mutate(asset.id)} /></PopoverClose>}
+              {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={<AudioWaveform />} label={t("denoiseAction")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => denoise(asset.id)} /></PopoverClose>}
               <MenuSeparator />
-              <PopoverClose asChild><MenuItem icon={<Trash2 />} label={t("delete")} destructive onClick={() => setDeleting(asset)} /></PopoverClose>
+              <PopoverClose asChild><MenuItem icon={<Trash2 />} label={t("delete")} destructive disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setDeleting(asset)} /></PopoverClose>
             </MenuContent></Popover>
           </div>}
         </div>
@@ -389,40 +393,40 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
           <MenuItemBody icon={<Download />} label={t("assetSaveLocal")} />
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => setRenaming(asset)}>
-          <MenuItemBody icon={<Pencil />} label={t("rename")} />
+        <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setRenaming(asset)}>
+          <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => setEditingTags(asset)}>
-          <MenuItemBody icon={<Tag />} label={t("editTags")} />
+        <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setEditingTags(asset)}>
+          <MenuItemBody icon={<Tag />} label={t("editTags")} description={writeBlocked?.brief} />
         </ContextMenuItem>
         {kindIsVisual(asset.kind) && (
-          <ContextMenuItem onSelect={() => setReferencing(asset)}>
-            <MenuItemBody icon={<Layers />} label={t("assetSetAsReference")} />
+          <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setReferencing(asset)}>
+            <MenuItemBody icon={<Layers />} label={t("assetSetAsReference")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         )}
         {asset.kind === "document" && (
-          <ContextMenuItem disabled={saveAsNote.isPending} onSelect={() => saveAsNote.mutate(asset.id)}>
-            <MenuItemBody icon={<NotebookPen />} label={t("docSaveAsNote")} />
+          <ContextMenuItem disabled={saveAsNote.isPending || Boolean(writeBlocked)} onSelect={() => saveAsNote.mutate(asset.id)}>
+            <MenuItemBody icon={<NotebookPen />} label={t("docSaveAsNote")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         )}
         {asset.kind === "video" && (
-          <ContextMenuItem disabled={convertGif.isPending} onSelect={() => convertGif.mutate(asset.id)}>
-            <MenuItemBody icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} />
+          <ContextMenuItem disabled={convertGif.isPending || Boolean(writeBlocked)} onSelect={() => convertGif.mutate(asset.id)}>
+            <MenuItemBody icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         )}
         {kindHasSound(asset.kind) && (
-          <ContextMenuItem onSelect={() => denoise(asset.id)}>
-            <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} />
+          <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => denoise(asset.id)}>
+            <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         )}
         {kindHasSound(asset.kind) && (
-          <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
-            <MenuItemBody icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} />
+          <ContextMenuItem disabled={separateAudio.isPending || Boolean(writeBlocked)} onSelect={() => separateAudio.mutate(asset.id)}>
+            <MenuItemBody icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
-          <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+        <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={() => setDeleting(asset)}>
+          <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -439,7 +443,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   return (
     // 两层:外层不滚,只做定位上下文;里层是滚动区。遮罩挂在**外层**上 ——
     // 挂在滚动容器里的话,absolute 会跟着内容一起滚走,滚到一半松手时提示已经在屏幕外了。
-    <div className="relative h-full min-h-0" {...drop.handlers}>
+    <div className="relative h-full min-h-0" {...(writeBlocked ? {} : drop.handlers)}>
       {/* inset-0 一点不留:留边就会在四角露出没被盖住的缝。落点是整块区域,不是某个方框。 */}
       {(drop.active || importFiles.isPending) && (
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
@@ -478,15 +482,21 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   event.currentTarget.value = "";
                 }}
               />
-              <Button size="default" loading={importFiles.isPending} onClick={() => importInputRef.current?.click()}>
-                <ImagePlus />{t("import")}
-              </Button>
-              <Button variant="outline" size="default" onClick={() => setUrlImportOpen(true)}>
-                <Link2 size={13} /> {t("urlImport")}
-              </Button>
-              <Button variant="outline" size="default" onClick={() => openRecorder()}>
-                <CircleDot size={13} /> {t("record")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button size="default" loading={importFiles.isPending} disabled={Boolean(writeBlocked)} onClick={() => importInputRef.current?.click()}>
+                  <ImagePlus />{t("import")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" size="default" disabled={Boolean(writeBlocked)} onClick={() => setUrlImportOpen(true)}>
+                  <Link2 size={13} /> {t("urlImport")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" size="default" disabled={Boolean(writeBlocked)} onClick={() => openRecorder()}>
+                  <CircleDot size={13} /> {t("record")}
+                </Button>
+              </Hint>
       </>} />
       {/* 顶部工具条 + 标签筛选 sticky 吸顶:滚动素材网格时保持可见。顶部内边距放在本 sticky 头上
           (滚动容器不留 pt),吸顶时才能严丝合缝贴顶、不露出上一行卡片;-mx 铺满宽度,底色盖住滚上来的卡片。 */}
@@ -574,23 +584,27 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <Columns2 size={13} /> {t("mediaCompare")}
                     </Button>
                   </Hint>
-                  <Button
-                    variant="outline"
-                    size="default"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => setBatchTagging(true)}
-                  >
-                    <Tag size={13} /> {t("addTags")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="default"
-                    className="hover:border-destructive/50 hover:text-destructive"
-                    disabled={selectedIds.size === 0}
-                    onClick={() => setBatchDeleting(true)}
-                  >
-                    <Trash2 size={13} /> {t("delete")}
-                  </Button>
+                  <Hint disabledReason={writeBlocked?.reason}>
+                    <Button
+                      variant="outline"
+                      size="default"
+                      disabled={selectedIds.size === 0 || Boolean(writeBlocked)}
+                      onClick={() => setBatchTagging(true)}
+                    >
+                      <Tag size={13} /> {t("addTags")}
+                    </Button>
+                  </Hint>
+                  <Hint disabledReason={writeBlocked?.reason}>
+                    <Button
+                      variant="outline"
+                      size="default"
+                      className="hover:border-destructive/50 hover:text-destructive"
+                      disabled={selectedIds.size === 0 || Boolean(writeBlocked)}
+                      onClick={() => setBatchDeleting(true)}
+                    >
+                      <Trash2 size={13} /> {t("delete")}
+                    </Button>
+                  </Hint>
                   <Button variant="outline" size="default" onClick={exitSelectMode}>
                     <X size={13} /> {t("cancel")}
                   </Button>

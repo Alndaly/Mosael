@@ -29,8 +29,9 @@ vi.mock("@/app/preferences", () => ({
 
 import { ApiError, type BoardSummary, type Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
+import { readHint } from "@/test/hint";
 
-const workspace = { id: "w1", name: "测试工作区" } as Workspace;
+const workspace = { id: "w1", name: "测试工作区", role: "editor" } as Workspace;
 
 //: 清单接口给的是摘要:没有整份画布,只有缩略图要的那一份。
 function board(id: string, name: string): BoardSummary {
@@ -48,11 +49,11 @@ function board(id: string, name: string): BoardSummary {
 
 let boards: BoardSummary[] = [];
 
-function mount() {
+function mount(as: Workspace = workspace) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <BoardsView workspace={workspace} />
+      <BoardsView workspace={as} />
     </QueryClientProvider>,
   );
 }
@@ -209,5 +210,23 @@ describe("画板卡片的右键菜单", () => {
 
     expect(screen.getByText(zh.mediaSelectedCount.replace("{n}", "1"))).toBeInTheDocument();
     expect(card("分镜")).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+//: 只读成员(体检 UM-20 / D62):新建、改名、复制、删除是灰的、说清为什么;打开、选择照常。
+describe("只读成员", () => {
+  it("新建是灰的并说为什么;右键里重命名、创建副本、删除是灰的,打开和选择照常", async () => {
+    mount({ ...workspace, role: "viewer" } as Workspace);
+    const create = await screen.findByRole("button", { name: new RegExp(zh.boardsNew) });
+    expect(create).toBeDisabled();
+    expect(await readHint(create)).toBe(zh.roleReadOnlyHint);
+
+    fireEvent.contextMenu(await screen.findByText("分镜"), { clientX: 10, clientY: 10 });
+    for (const label of [zh.rename, zh.boardsDuplicate, zh.delete]) {
+      expect(screen.getByRole("menuitem", { name: new RegExp(`^${label}`) })).toHaveAttribute("aria-disabled", "true");
+    }
+    for (const label of [zh.boardsOpen, zh.boardsSelect]) {
+      expect(screen.getByRole("menuitem", { name: label })).not.toHaveAttribute("aria-disabled");
+    }
   });
 });

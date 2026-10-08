@@ -3,12 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileOutput } from "lucide-react";
 
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { getJob } from "@/api/domains/jobs";
 import { jobSettled } from "@/components/jobs/runStatus";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Truncate } from "@/components/ui/truncate";
+import { Hint } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EXPORT_PARAMS_KEY = "mosael.export.params";
@@ -19,7 +21,8 @@ type RememberedExportParams = Omit<ExportParams, "ai_label">;
  * 弹提示、发系统通知、刷新素材 —— 这里再挂一个「✓ 导出完成」就是同一件事说两遍,而且它会
  * 一直钉在按钮旁边,直到换页。
  */
-export function ExportControl({ sequence }: { sequence: Sequence }) {
+/** `writeBlocked`:只读成员导不了(导出要「编辑」及以上),按钮收成灰的、说明为什么。 */
+export function ExportControl({ sequence, writeBlocked = null }: { sequence: Sequence; writeBlocked?: WriteBlock | null }) {
   const t = useI18n();
   const qc = useQueryClient();
   const sequenceId = sequence.id;
@@ -91,10 +94,12 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
           <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
         </span>
       )}
-      <Button size="sm" loading={busy} onClick={() => setConfigOpen(true)}>
-        <FileOutput size={13} />
-        {busy ? t("exporting") : t("exportVideo")}
-      </Button>
+      <Hint disabledReason={writeBlocked?.reason}>
+        <Button size="sm" loading={busy} disabled={Boolean(writeBlocked)} onClick={() => setConfigOpen(true)}>
+          <FileOutput size={13} />
+          {busy ? t("exporting") : t("exportVideo")}
+        </Button>
+      </Hint>
       <ModalShell
         open={configOpen}
         onOpenChange={setConfigOpen}

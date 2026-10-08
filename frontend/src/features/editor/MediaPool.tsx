@@ -1,5 +1,6 @@
 import React from "react";
 import { assetKeys } from "@/api/queryKeys";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Loader2, Pencil, Plus, Scissors, Search, Tag, Trash2 } from "lucide-react";
 
@@ -35,6 +36,7 @@ export function MediaPool({
   workspaceId,
   projectId,
   uploading,
+  writeBlocked = null,
   onImportFiles,
   onRecord,
   onAddToTimeline,
@@ -43,6 +45,8 @@ export function MediaPool({
   /** 这个项目里的素材,连同工作区级的(素材库里导入的那些)。 */
   projectId: string;
   uploading: boolean;
+  /** 只读成员:导入、录制和改素材的条目收成灰的,说明为什么(见 useWriteBlocked)。 */
+  writeBlocked?: WriteBlock | null;
   onImportFiles: (files: File[]) => void;
   onRecord: () => void;
   onAddToTimeline: (asset: AssetCard) => void;
@@ -132,7 +136,11 @@ export function MediaPool({
         <Truncate className="text-ui-xs tabular-nums text-muted-foreground" data-pool-count>{countLabel}</Truncate>
         <div className="ml-auto flex shrink-0 gap-1">
           {/* Keep import and recording reachable in every panel width. */}
-          <IconButton asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} label={t("import")}>
+          {writeBlocked ? (
+            <IconButton variant="ghost" size="icon-sm" className="text-muted-foreground" disabled disabledReason={writeBlocked?.reason} label={t("import")}>
+              <ImagePlus size={14} />
+            </IconButton>
+          ) : <IconButton asChild variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={uploading} label={t("import")}>
             <label>
               <input
                 type="file"
@@ -148,11 +156,13 @@ export function MediaPool({
               />
               <ImagePlus size={14} />
             </label>
-          </IconButton>
+          </IconButton>}
           <IconButton
             variant="ghost"
             size="icon-sm"
             className="text-muted-foreground hover:text-foreground"
+            disabled={Boolean(writeBlocked)}
+            disabledReason={writeBlocked?.reason}
             onClick={onRecord}
             label={t("record")}
           >
@@ -193,25 +203,25 @@ export function MediaPool({
               <ContextMenuItem onSelect={() => saveAssetToDisk(asset)}>
                 <MenuItemBody icon={<Download />} label={t("assetSaveLocal")} />
               </ContextMenuItem>
-              <ContextMenuItem onSelect={() => setRenaming(asset)}>
-                <MenuItemBody icon={<Pencil />} label={t("rename")} />
+              <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setRenaming(asset)}>
+                <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
               </ContextMenuItem>
-              <ContextMenuItem onSelect={() => setEditingTags(asset)}>
-                <MenuItemBody icon={<Tag />} label={t("editTags")} />
+              <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setEditingTags(asset)}>
+                <MenuItemBody icon={<Tag />} label={t("editTags")} description={writeBlocked?.brief} />
               </ContextMenuItem>
               {kindHasSound(asset.kind) && (
-                <ContextMenuItem onSelect={() => audioActions.denoise(asset.id)}>
-                  <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} />
+                <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => audioActions.denoise(asset.id)}>
+                  <MenuItemBody icon={<AudioWaveform />} label={t("denoiseAction")} description={writeBlocked?.brief} />
                 </ContextMenuItem>
               )}
               {kindHasSound(asset.kind) && (
-                <ContextMenuItem disabled={audioActions.separate.isPending} onSelect={() => audioActions.separate.mutate(asset.id)}>
-                  <MenuItemBody icon={audioActions.separate.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} />
+                <ContextMenuItem disabled={audioActions.separate.isPending || Boolean(writeBlocked)} onSelect={() => audioActions.separate.mutate(asset.id)}>
+                  <MenuItemBody icon={audioActions.separate.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} description={writeBlocked?.brief} />
                 </ContextMenuItem>
               )}
               <ContextMenuSeparator />
-              <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
-                <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+              <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={() => setDeleting(asset)}>
+                <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>

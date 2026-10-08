@@ -9,6 +9,7 @@ vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ ope
 import { getAssetFacets, listAssetPage, separateAssetAudio, type AssetCard, type AssetQuery, type Workspace } from "@/api/client";
 import { gotoSection } from "@/lib/deepLink";
 import { MediaLibraryView } from "./MediaLibraryView";
+import { readHint } from "@/test/hint";
 
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
@@ -48,7 +49,7 @@ it("keeps only the current asset action menu open and closes it for a context me
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   serve(["one", "two", "three"].map((id) => asset(id, "image")));
-  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
   await screen.findByRole("button", { name: "studioActions: one" });
   for (const id of ["one", "two", "three"]) {
@@ -69,7 +70,7 @@ it("有声音的素材才能分离人声与背景音,点了就排任务", async 
   localStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   serve([asset("clip", "video"), asset("still", "image")]);
-  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
 
   await user.click(await screen.findByRole("button", { name: "studioActions: still" }));
@@ -88,7 +89,7 @@ it("有声音的素材能降噪:点了打开降噪对话框", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   serve([asset("clip", "audio")]);
   client.setQueryData(["denoise-engines"], []);
-  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: "studioActions: clip" }));
   await user.click(await screen.findByRole("menuitem", { name: "denoiseAction" }));
@@ -103,9 +104,48 @@ it("从起点进来时清掉记住的类型和标签筛选", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   serve([asset("clip", "video", ["b-roll"]), asset("still", "image", [])]);
   gotoSection("media");
-  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
   expect(await screen.findByRole("button", { name: "still" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "clip" })).toBeInTheDocument();
   expect(localStorage.getItem("mosael:tab:media-kind")).toBe("all");
   expect(localStorage.getItem("mosael:selected-set:media-tags")).toBeNull();
+});
+
+//: 只读成员(体检 UM-20 / D62):写的入口都是灰的、说清为什么(和定时任务页同一个做法);下载这类只读的照常能点。
+it("只读成员:导入和改素材的条目是灰的、说为什么;下载照常能点", async () => {
+  localStorage.clear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  serve([asset("clip", "video")]);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "viewer" } as Workspace} /></QueryClientProvider>);
+  const user = userEvent.setup();
+
+  const importButton = await screen.findByRole("button", { name: "import" });
+  expect(importButton).toBeDisabled();
+  expect(await readHint(importButton)).toBe("roleReadOnlyHint");
+  expect(screen.getByRole("button", { name: "record" })).toBeDisabled();
+
+  await user.click(await screen.findByRole("button", { name: "studioActions: clip" }));
+  const rename = await screen.findByRole("menuitem", { name: "rename" });
+  expect(rename).toBeDisabled();
+  expect(rename).toHaveAccessibleDescription("roleReadOnlyBrief");
+  expect(screen.getByRole("menuitem", { name: "delete" })).toBeDisabled();
+  expect(screen.getByRole("menuitem", { name: "separateAudio" })).toBeDisabled();
+  expect(screen.getByRole("menuitem", { name: "assetSaveLocal" })).toBeEnabled();
+  await user.keyboard("{Escape}");
+
+  fireEvent.contextMenu(screen.getByRole("button", { name: "clip" }), { button: 2, clientX: 50, clientY: 50 });
+  expect(await screen.findByRole("menuitem", { name: /^delete/ })).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("menuitem", { name: /^assetSaveLocal/ })).not.toHaveAttribute("aria-disabled");
+});
+
+it("编辑及以上:同一批入口照常能点", async () => {
+  localStorage.clear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  serve([asset("clip", "video")]);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
+  const user = userEvent.setup();
+  expect(await screen.findByRole("button", { name: "import" })).toBeEnabled();
+  await user.click(await screen.findByRole("button", { name: "studioActions: clip" }));
+  expect(await screen.findByRole("menuitem", { name: "rename" })).toBeEnabled();
+  expect(screen.getByRole("menuitem", { name: "delete" })).toBeEnabled();
 });

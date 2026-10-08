@@ -49,6 +49,7 @@ import { assetKindKey } from "@/lib/assetKinds";
 import { emitOpenEvent, gotoAdmin, gotoSettings, openBoard, openNote, OPEN_ASSET_EVENT } from "@/lib/deepLink";
 import { isCommandPaletteKey, listenKeys } from "@/lib/shortcuts";
 import { leaveNativeView } from "@/lib/nativeView";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 
 
 type PaletteItem = {
@@ -90,6 +91,8 @@ export function CommandPalette({
   const t = useI18n();
   const { theme, setTheme } = usePreferences();
   const isDeploymentAdmin = useIsDeploymentAdmin();
+  //: 只读成员建不了项目:面板里一条点不了、又说不出为什么的命令只是噪音,不列(顶栏切换器里那条是灰的、带说明)
+  const writeBlocked = useWriteBlocked(workspace.role);
   const [open, setOpen] = React.useState(false);
   const [input, setInput] = React.useState("");
   const [query, setQuery] = React.useState("");
@@ -237,17 +240,21 @@ export function CommandPalette({
       items:
         q === ""
           ? [
-              {
-                value: "action-new-project",
-                disabled: creatingProject,
-                onSelect: onCreateProject,
-                content: (
-                  <>
-                    <FolderPlus size={14} />
-                    {t("createProject")}
-                  </>
-                ),
-              },
+              ...(writeBlocked
+                ? []
+                : [
+                    {
+                      value: "action-new-project",
+                      disabled: creatingProject,
+                      onSelect: onCreateProject,
+                      content: (
+                        <>
+                          <FolderPlus size={14} />
+                          {t("createProject")}
+                        </>
+                      ),
+                    },
+                  ]),
               // 和顶栏那个按钮同一个循环(themeCycle):浅 → 深 → 跟随系统。显示的是按下去会到哪一档。
               {
                 value: "action-toggle-theme",

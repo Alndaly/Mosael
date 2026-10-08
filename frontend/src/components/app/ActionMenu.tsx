@@ -25,6 +25,11 @@ export type MenuAction = {
   /** 点不了。为什么点不了写在 `description` 里(菜单里没有悬停说明可看)。 */
   disabled?: boolean;
   /**
+   * 点不了,而且原因就是这一句(如只读成员碰写操作,见 components/layout/useWriteBlocked):给了就当 `disabled`,
+   * 这一句顶替 `description` 画在名字下面。调用方不必自己同时设两格 —— 漏设 `disabled` 就成了「说点不了却点得了」。
+   */
+  disabledReason?: string | null;
+  /**
    * 分组名:和前一个条目的组不同,中间就画一条分组线(工作流卡片的「打开 | 应用 | 文件 | 路径 | 补齐 | 删除」)。
    * 不给就和以前一样只有破坏性条目自动单独成组。
    */
@@ -82,12 +87,12 @@ export function ActionMenu({
               <MenuItem
                 icon={action.icon}
                 label={action.label}
-                description={action.description}
+                description={action.disabledReason || action.description}
                 truncate={action.truncate}
                 hint={action.hint}
                 shortcut={action.shortcut}
                 destructive={action.destructive}
-                disabled={action.disabled}
+                disabled={isDisabled(action)}
                 onClick={action.onSelect}
               />
             </PopoverClose>
@@ -96,6 +101,10 @@ export function ActionMenu({
       </MenuContent>
     </Popover>
   );
+}
+
+function isDisabled(action: MenuAction): boolean {
+  return Boolean(action.disabled || action.disabledReason);
 }
 
 /**
@@ -121,13 +130,13 @@ export function ActionContextMenuItems({ actions }: { actions: MenuAction[] }) {
           {startsGroup(actions, i) && <ContextMenuSeparator />}
           <ContextMenuItem
             className={cn(action.destructive && MENU_ITEM_DESTRUCTIVE)}
-            disabled={action.disabled}
+            disabled={isDisabled(action)}
             onSelect={action.onSelect}
           >
             <MenuItemBody
               icon={action.icon}
               label={action.label}
-              description={action.description}
+              description={action.disabledReason || action.description}
               truncate={action.truncate}
               hint={action.hint}
               shortcut={action.shortcut}

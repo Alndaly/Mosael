@@ -19,6 +19,7 @@ import { api, assetThumbnailUrl, deleteProject, renameProject, type Project, typ
 import { projectKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
+import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
 import { HomeHero } from "@/features/home/HomeHero";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { formatShortDate, formatTimecode, relativeTime } from "@/lib/time";
@@ -57,7 +58,8 @@ export function HomeView({
   onOpenProject: (projectId: string) => void;
 }) {
   const t = useI18n();
-  
+  //: 只读成员建不了、改不了、删不了项目:这几处灰掉并说为什么(体检 D62,和定时任务页同一个做法)。
+  const writeBlocked = useWriteBlocked(workspace.role);
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Project | null>(null);
   //: 新建:先弹窗起名,建好**留在首页**,新项目滚到看得见的地方、高亮一下 —— 此前一点就建了个
@@ -211,7 +213,11 @@ export function HomeView({
   return (
     <div className={STUDIO_PAGE}>
       <HomeHero
-        actions={empty ? undefined : <Button onClick={() => setNaming(true)}><FolderPlus />{t("createProject")}</Button>}
+        actions={empty ? undefined : (
+          <Hint disabledReason={writeBlocked?.reason}>
+            <Button disabled={Boolean(writeBlocked)} onClick={() => setNaming(true)}><FolderPlus />{t("createProject")}</Button>
+          </Hint>
+        )}
         greeting={t(greetingKey)}
         workspaceName={workspace.name}
         now={now}
@@ -232,14 +238,16 @@ export function HomeView({
               <Button variant="outline" onClick={() => selectAll(visible)}>
                 <ListChecks size={13} /> {allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
               </Button>
-              <Button
-                variant="outline"
-                className="hover:border-destructive/50 hover:text-destructive"
-                disabled={selectedIds.size === 0}
-                onClick={() => setBatchDeleting(true)}
-              >
-                <Trash2 size={13} /> {t("delete")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button
+                  variant="outline"
+                  className="hover:border-destructive/50 hover:text-destructive"
+                  disabled={selectedIds.size === 0 || Boolean(writeBlocked)}
+                  onClick={() => setBatchDeleting(true)}
+                >
+                  <Trash2 size={13} /> {t("delete")}
+                </Button>
+              </Hint>
               <Button variant="outline" onClick={exit}>
                 <X size={13} /> {t("cancel")}
               </Button>
@@ -273,19 +281,21 @@ export function HomeView({
           title={t("homeEmptyTitle")}
           body={t("homeEmptyBody")}
           action={
-            <Button onClick={() => setNaming(true)}>
-              <FolderPlus size={15} /> {t("createProject")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button disabled={Boolean(writeBlocked)} onClick={() => setNaming(true)}>
+                <FolderPlus size={15} /> {t("createProject")}
+              </Button>
+            </Hint>
           }
         />
       ) : (
         <>
           {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
-            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} />)}
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} writeBlocked={writeBlocked} />)}
           </div>}
           <div className="grid gap-1 empty:hidden">
-            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} />)}
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} writeBlocked={writeBlocked} />)}
           </div>
         </>
       )}
@@ -328,7 +338,7 @@ export function HomeView({
 }
 
 /** Every presentation shares the same actions; images always belong to this project. */
-function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, menuSelection = 1, onDeleteSelection, highlighted = false }: {
+function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, menuSelection = 1, onDeleteSelection, highlighted = false, writeBlocked = null }: {
   project: ProjectWithStats; featured?: boolean; className?: string;
   onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
   /** 选择模式下点卡片是勾选,不是打开;单条的操作菜单收起来(批量动作在工具条上)。 */
@@ -338,6 +348,8 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   menuSelection?: number; onDeleteSelection?: () => void;
   /** 刚建好的那一个:亮一下,让人一眼看到它在哪儿。 */
   highlighted?: boolean;
+  /** 改不了(只读成员)的原因;改名、删除灰掉,原因写在条目下面。 */
+  writeBlocked?: WriteBlock | null;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -389,9 +401,9 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
             <PopoverTrigger asChild><IconButton label={`${t("projectActions")}: ${project.name}`} aria-haspopup="menu"><MoreHorizontal /></IconButton></PopoverTrigger>
             <MenuContent label={`${t("projectActions")}: ${project.name}`} align="end">
               <MenuItem icon={<Scissors />} label={t("homeOpenEditor")} onClick={() => { setMenuOpen(false); open(); }} />
-              <MenuItem icon={<Pencil />} label={t("rename")} onClick={() => { setMenuOpen(false); onRename(project); }} />
+              <MenuItem icon={<Pencil />} label={t("rename")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => { setMenuOpen(false); onRename(project); }} />
               <MenuSeparator />
-              <MenuItem icon={<Trash2 />} label={t("delete")} destructive onClick={() => { setMenuOpen(false); onDelete(project); }} />
+              <MenuItem icon={<Trash2 />} label={t("delete")} destructive disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => { setMenuOpen(false); onDelete(project); }} />
             </MenuContent>
           </Popover></span>}
         </div>
@@ -399,13 +411,13 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
     </ContextMenuTrigger>
     <ContextMenuContent>
       {menuSelection > 1 && onDeleteSelection ? (
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDeleteSelection}><MenuItemBody icon={<Trash2 />} label={t("deleteSelectedN").replace("{n}", String(menuSelection))} /></ContextMenuItem>
+        <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={onDeleteSelection}><MenuItemBody icon={<Trash2 />} label={t("deleteSelectedN").replace("{n}", String(menuSelection))} description={writeBlocked?.brief} /></ContextMenuItem>
       ) : (
         <>
           <ContextMenuItem onSelect={open}><MenuItemBody icon={<Scissors />} label={t("homeOpenEditor")} /></ContextMenuItem>
-          <ContextMenuItem onSelect={() => onRename(project)}><MenuItemBody icon={<Pencil />} label={t("rename")} /></ContextMenuItem>
+          <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => onRename(project)}><MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} /></ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(project)}><MenuItemBody icon={<Trash2 />} label={t("delete")} /></ContextMenuItem>
+          <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={() => onDelete(project)}><MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} /></ContextMenuItem>
         </>
       )}
     </ContextMenuContent>

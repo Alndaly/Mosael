@@ -52,7 +52,7 @@ function mount() {
   vi.mocked(listAssetPage).mockImplementation(async () => ({ items: cards, next_cursor: null, total: cards.length }));
   vi.mocked(getAssetFacets).mockResolvedValue({ total: cards.length, kinds: { image: 2, audio: 1, video: 1 }, tags: {}, intermediates: {} });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MediaLibraryView workspace={{ id: "ws", role: "editor" } as Workspace} /></QueryClientProvider>);
 }
 
 afterEach(() => {

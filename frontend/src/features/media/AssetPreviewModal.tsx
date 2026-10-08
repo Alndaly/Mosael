@@ -241,10 +241,13 @@ function DetailActions({ actions, label }: { actions: MenuAction[]; label: strin
   return (
     <div data-asset-detail-actions="" className="ml-auto flex flex-wrap items-center gap-1">
       {shown.map((action) => (
-        <Button key={action.label} variant="outline" size="xs" disabled={action.disabled} onClick={action.onSelect}>
-          {action.icon}
-          {action.label}
-        </Button>
+        //: 摆成按钮的那几个照样说得出为什么点不了(只读成员,见 MenuAction.disabledReason):菜单里写在条目下面,这里悬停说。
+        <Hint key={action.label} disabledReason={action.disabledReason}>
+          <Button variant="outline" size="xs" disabled={Boolean(action.disabled || action.disabledReason)} onClick={action.onSelect}>
+            {action.icon}
+            {action.label}
+          </Button>
+        </Hint>
       ))}
       {rest.length > 0 && <ActionMenu label={label} actions={rest} />}
     </div>

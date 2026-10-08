@@ -14,6 +14,7 @@ import {
   type SessionGroupKind,
 } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -157,6 +158,7 @@ export function SessionList<S extends ListedSession>({
   toolbar,
   emptyTitle,
   aside,
+  writeBlocked = null,
 }: {
   /** 对话还是生成 —— 两边各自一套分组,差异全在 SESSION_KINDS 那张表里。 */
   kind: SessionGroupKind;
@@ -180,6 +182,8 @@ export function SessionList<S extends ListedSession>({
    * 只收**没进分组**的:用户亲手收进分组的,照旧在那个分组里。搜索时它照样参与,有命中就展开着。
    */
   aside?: { title: string; isAside: (session: S) => boolean };
+  /** 只读成员:新建会话、新建分组、分组改名和删除收成灰的,说明为什么(见 useWriteBlocked)。 */
+  writeBlocked?: WriteBlock | null;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -415,6 +419,8 @@ export function SessionList<S extends ListedSession>({
                 variant="ghost"
                 size="icon-xs"
                 label={t("chatNewGroup")}
+                disabled={Boolean(writeBlocked)}
+                disabledReason={writeBlocked?.reason}
                 onClick={() => setCreatingGroup(true)}
               >
                 <FolderPlus size={14} />
@@ -432,6 +438,8 @@ export function SessionList<S extends ListedSession>({
                 variant="ghost"
                 size="icon-xs"
                 label={t(spec.newSession)}
+                disabled={Boolean(writeBlocked)}
+                disabledReason={writeBlocked?.reason}
                 onClick={onCreate}
                 loading={creating}
               >
@@ -504,14 +512,15 @@ export function SessionList<S extends ListedSession>({
                   />
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem onSelect={() => setRenamingGroup(group)}>
-                    <MenuItemBody icon={<Pencil />} label={t("rename")} />
+                  <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setRenamingGroup(group)}>
+                    <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
                   </ContextMenuItem>
                   <ContextMenuItem
                     className="text-destructive focus:text-destructive"
+                    disabled={Boolean(writeBlocked)}
                     onSelect={() => setDeletingGroup(group)}
                   >
-                    <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+                    <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>

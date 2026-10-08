@@ -80,7 +80,7 @@ async function renderEditor(graph: WorkflowGraph) {
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <WithPageTrail>
-          <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+          <WorkflowsView workspace={{ id: "w1", name: "w", role: "editor" } as Workspace} />
         </WithPageTrail>
       </TooltipProvider>
     </QueryClientProvider>,
@@ -587,7 +587,7 @@ describe("工作流列表", () => {
       <QueryClientProvider client={client}>
         <TooltipProvider>
           <WithPageTrail>
-            <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+            <WorkflowsView workspace={{ id: "w1", name: "w", role: "editor" } as Workspace} />
           </WithPageTrail>
         </TooltipProvider>
       </QueryClientProvider>,
@@ -668,7 +668,7 @@ describe("从别处打开某一次运行", () => {
       <QueryClientProvider client={client}>
         <TooltipProvider>
           <WithPageTrail>
-            <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+            <WorkflowsView workspace={{ id: "w1", name: "w", role: "editor" } as Workspace} />
           </WithPageTrail>
         </TooltipProvider>
       </QueryClientProvider>,

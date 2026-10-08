@@ -102,7 +102,7 @@ const GONE = { provider_profile_id: "gone", model: "krea2-text-2-image.json#app"
                group: null, reason: "它所在的那条连接已经删掉了", upgrade: false, plugin_instance_id: "" };
 
 function renderStudio({ isMine = true, generations = [] as unknown[], options = [IMAGE_OPTION] as unknown[],
-                        sessions = [session(isMine)] as unknown[], missing = GONE as unknown } = {}) {
+                        sessions = [session(isMine)] as unknown[], missing = GONE as unknown, role = "editor" } = {}) {
   const writes: Array<{ url: string; method: string; body?: unknown }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -122,7 +122,7 @@ function renderStudio({ isMine = true, generations = [] as unknown[], options = 
   render(
     <QueryClientProvider client={client}>
       <ImagePreviewProvider>
-        <AiStudio workspace={{ id: "w1", name: "W" } as never} />
+        <AiStudio workspace={{ id: "w1", name: "W", role } as never} />
       </ImagePreviewProvider>
     </QueryClientProvider>,
   );
@@ -583,6 +583,15 @@ describe("没选过会话时停在「新的一条」;「+」不建空会话(UC-0
     fireEvent.click(plus);
     expect(writes.filter((one) => one.url.endsWith("/api/generation/sessions"))).toEqual([]);
     expect(screen.getAllByText("同事的海报"), "标题换成了新的一条").toHaveLength(1);
+  });
+
+  //: 只读成员(体检 UM-20 / D62):建不了会话、分组(后端要「编辑」),「+」和「新建分组」是灰的、说清为什么。
+  it("只读成员:「+」和「新建分组」是灰的并说为什么", async () => {
+    renderStudio({ isMine: false, role: "viewer" });
+    const plus = await screen.findByRole("button", { name: "generationNewSession" });
+    expect(plus).toBeDisabled();
+    expect(await readHint(plus)).toContain("roleReadOnlyHint");
+    expect(screen.getByRole("button", { name: "chatNewGroup" })).toBeDisabled();
   });
 });
 

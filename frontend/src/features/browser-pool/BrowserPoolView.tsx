@@ -1,6 +1,7 @@
 import React from "react";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, Eraser, ExternalLink, Globe, KeyRound, LogIn, LogOut, Pencil, Plus, RefreshCcw, SquarePen, Trash2, Users, Users2 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ const TRANSITIONAL = new Set(["checking", "unknown"]);
  *  通用档案任意站点复用(工作流/智能体)。账号矩阵从发布页抽离到这里。 */
 export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const [creating, setCreating] = React.useState(false);
@@ -269,12 +271,16 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
           body={t("poolEmptyBody")}
           action={
             <span className="inline-flex items-center gap-2">
-              <Button onClick={() => setCreating(true)}>
-                <Plus size={15} /> {t("poolCreate")}
-              </Button>
-              <Button variant="outline" onClick={() => setAddingAccount(true)}>
-                <Users size={15} /> {t("publishAccountAdd")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                  <Plus size={15} /> {t("poolCreate")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" disabled={Boolean(writeBlocked)} onClick={() => setAddingAccount(true)}>
+                  <Users size={15} /> {t("publishAccountAdd")}
+                </Button>
+              </Hint>
             </span>
           }
         />
@@ -293,12 +299,16 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
   return (
     <div className={STUDIO_PAGE}>
       <PageHeading title={t("poolTitle")} description={t("poolSubtitle")} count={items.length} actions={<>
-        <Button variant="outline" onClick={() => setAddingAccount(true)}>
-          <Users size={14} /> {t("publishAccountAdd")}
-        </Button>
-        <Button onClick={() => setCreating(true)}>
-          <Plus size={14} /> {t("poolCreate")}
-        </Button>
+        <Hint disabledReason={writeBlocked?.reason}>
+          <Button variant="outline" disabled={Boolean(writeBlocked)} onClick={() => setAddingAccount(true)}>
+            <Users size={14} /> {t("publishAccountAdd")}
+          </Button>
+        </Hint>
+        <Hint disabledReason={writeBlocked?.reason}>
+          <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+            <Plus size={14} /> {t("poolCreate")}
+          </Button>
+        </Hint>
       </>} />
 
       <div className="grid content-start gap-5 grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]">

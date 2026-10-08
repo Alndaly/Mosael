@@ -2,6 +2,7 @@ import { useNoteAttachments } from "@/features/notes/useNoteAttachments";
 import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, CircleDot, Database, Eye, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
@@ -105,6 +106,7 @@ export function ChatWorkspace({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const writeBlocked = useWriteBlocked(workspace.role);
   // AI Studio 这一处的当前对话、选择、草稿、删后回到草稿:和免提浮标、页面跳转在这一处时读的是同一份(见 currentAgentSession)。
   // 列表列全部(每行写着在哪开的);点开哪段,就是在 AI Studio 接着它,它的家不变(ADR 0044 §5)。
   const current = useCurrentAgentSession(workspace.id, STUDIO_PLACE);
@@ -452,6 +454,7 @@ export function ChatWorkspace({
           onSelect={current.select}
           onCreate={current.startDraft}
           creating={false}
+          writeBlocked={writeBlocked}
           onDeleted={current.forget}
           //: 家在 AI Studio 的不写(每行都说「在 AI Studio 里开的」只是噪音);回得去的给一颗「回到那里」。
           extras={(item) =>

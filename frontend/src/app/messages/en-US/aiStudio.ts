@@ -712,6 +712,7 @@ export const aiStudio = {
   configured: "Configured",
   schedulerTitle: "Scheduler",
   roleReadOnlyHint: "You're a Viewer in this workspace; to change things, ask a workspace admin to update your role in Settings → Team & members",
+  roleReadOnlyBrief: "You're a Viewer in this workspace",
   createTask: "New task",
   noTasks: "No scheduled tasks",
   manual: "Manual",

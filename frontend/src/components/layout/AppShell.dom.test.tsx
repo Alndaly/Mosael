@@ -139,3 +139,26 @@ it("账号菜单说出账号从哪来;「账号设置」直达设置里的账号
   expect(window.location.hash).toBe("#/settings");
   expect(opened).toHaveBeenCalledWith("account");
 });
+
+//: 只读成员(体检 UM-20 / D62)建不了项目:顶栏项目切换器里那条是灰的、说清为什么;切换项目照常。
+it("只读成员:项目切换器里「新建项目」是灰的并说为什么,切换照常", async () => {
+  const create = vi.fn();
+  const switchTo = vi.fn();
+  mount({
+    view: "editor",
+    projectName: "片子 A",
+    projects: [{ id: "a", name: "片子 A" }, { id: "b", name: "片子 B" }],
+    currentProjectId: "a",
+    onSwitchProject: switchTo,
+    onCreateProject: create,
+    createProjectBlocked: "roleReadOnlyBrief",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "timelineSwitch" }));
+  const menu = await screen.findByRole("menu", { name: "timelineSwitch" });
+  const item = within(menu).getByRole("menuitem", { name: "createProject" });
+  expect(item).toBeDisabled();
+  expect(item).toHaveAccessibleDescription("roleReadOnlyBrief");
+  fireEvent.click(within(menu).getByRole("menuitemradio", { name: "片子 B" }));
+  expect(switchTo).toHaveBeenCalledWith("b");
+  expect(create).not.toHaveBeenCalled();
+});

@@ -4,6 +4,7 @@ import { Copy } from "lucide-react";
 import { toast } from "sonner";
 
 import { getNoteRevision, listNoteRevisions, type NoteRevisionSummary } from "@/api/domains/notes";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { errorText } from "@/api/errorMessage";
 import { noteKeys } from "@/api/queryKeys";
 import { useAuth } from "@/app/auth";
@@ -44,7 +45,7 @@ type View = "preview" | "current" | "previous";
  * - 右边切「预览 / 和当前版本对比 / 和上一版对比」。对比一律从旧到新画:划掉的是后来(或这一版)删掉的,高亮的是
  *   后来(或这一版)加上的。切到别的版本,看的方式不变;那一版用不了的方式(当前版本和当前比、第 1 版没有上一版)点不了。
  */
-export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, current, focusRevision, onRestore }: {
+export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, current, focusRevision, onRestore, readOnly = null }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
@@ -55,6 +56,8 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
   focusRevision: number | null;
   /** 恢复成新的一版;做完由笔记页关掉弹窗。 */
   onRestore: (revision: number) => Promise<void>;
+  /** 只读成员能翻版本、不能恢复:恢复按钮收成灰的,说明为什么。 */
+  readOnly?: WriteBlock | null;
 }) {
   const s = useNoteStrings();
   const v = s.versions;
@@ -176,7 +179,7 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
                   <IconButton label={v.copy} disabled={!shown} onClick={copy}>
                     <Copy size={16} strokeWidth={1.7} aria-hidden="true" />
                   </IconButton>
-                  {!isCurrent && <Button size="sm" disabled={!shown} onClick={() => setConfirming(true)}>{v.restore}</Button>}
+                  {!isCurrent && <Hint disabledReason={readOnly?.reason}><Button size="sm" disabled={!shown || Boolean(readOnly)} onClick={() => setConfirming(true)}>{v.restore}</Button></Hint>}
                 </div>
               </div>
               <div className="note-history-views">

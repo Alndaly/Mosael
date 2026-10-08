@@ -43,6 +43,7 @@ import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { VALID_VIEWS, readHash, writeHash } from "@/app/hashRoute";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
@@ -517,6 +518,7 @@ function Studio({
   const { voiceDock, setVoiceDock } = usePreferences();
   const t = useI18n();
   const qc = useQueryClient();
+  const createProjectBlocked = useWriteBlocked(workspace.role);
   // 自动放行、飞书、别的设备批掉的卡执行完了,这边的素材库 / 时间线也要跟着刷(见 confirmationCaches)。
   useRefreshWhenCardsLand(workspace.id);
   // 顶栏页面工具存东西进的是这个工作区(见 BrowserToolsWorkspace)。
@@ -648,6 +650,7 @@ function Studio({
         onSwitchProject={openProject}
         onCreateProject={() => createProject.mutate()}
         creatingProject={createProject.isPending}
+        createProjectBlocked={createProjectBlocked?.brief}
       >
         {/* 页面按需加载(见 app/pages.tsx),所以渲染出口统一兜一层 —— 每个页面各写一次
             Suspense 的话,漏写的那一页在首次打开时会直接抛,而不是转一下菊花。 */}

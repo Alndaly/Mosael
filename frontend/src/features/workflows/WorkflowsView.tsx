@@ -25,6 +25,8 @@ import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
+import { Hint } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
@@ -43,6 +45,7 @@ export { NodeInspector } from "@/features/workflows/NodeInspector";
 
 export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const { t } = usePreferences();
+  const writeBlocked = useWriteBlocked(workspace.role);
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
@@ -179,10 +182,10 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   });
   // 卡片的 ⋯ 和(没在多选时的)右键菜单同一份清单(见 ActionContextMenuItems)。
   const cardActions = (workflow: Workflow): MenuAction[] => [
-    { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, onSelect: () => menuRun.mutate(workflow) },
-    { label: t("rename"), icon: <Pencil />, onSelect: () => setMenuRenaming(workflow) },
+    { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, disabledReason: writeBlocked?.brief, onSelect: () => menuRun.mutate(workflow) },
+    { label: t("rename"), icon: <Pencil />, disabledReason: writeBlocked?.brief, onSelect: () => setMenuRenaming(workflow) },
     { label: t("wfExport"), icon: <FileOutput />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
-    { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setMenuDeleting(workflow) },
+    { label: t("delete"), icon: <Trash2 />, destructive: true, disabledReason: writeBlocked?.brief, onSelect: () => setMenuDeleting(workflow) },
   ];
 
   // 列表页 / 详情页两态:**没选中就是列表**。
@@ -223,6 +226,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         label: t("deleteSelectedN").replace("{n}", String(targets.length)),
         icon: <Trash2 />,
         destructive: true,
+        disabledReason: writeBlocked?.brief,
         onSelect: () => setBatchDeleting(true),
       },
     ];
@@ -281,19 +285,26 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           body={t("wfEmptyBody")}
           action={
             <span className="inline-flex flex-wrap items-center justify-center gap-2">
-              <Button onClick={() => setCommunityOpen(true)}>
-                <Store size={15} /> {t("wfCommunity")}
-              </Button>
-              <Button
-                variant="outline"
-                loading={create.isPending && create.variables === undefined}
-                onClick={() => create.mutate(undefined)}
-              >
-                <Plus size={15} /> {t("wfCreate")}
-              </Button>
-              <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <Import size={15} /> {t("wfImport")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button disabled={Boolean(writeBlocked)} onClick={() => setCommunityOpen(true)}>
+                  <Store size={15} /> {t("wfCommunity")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button
+                  variant="outline"
+                  loading={create.isPending && create.variables === undefined}
+                  disabled={Boolean(writeBlocked)}
+                  onClick={() => create.mutate(undefined)}
+                >
+                  <Plus size={15} /> {t("wfCreate")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" loading={importFile.isPending} disabled={Boolean(writeBlocked)} onClick={() => importInputRef.current?.click()}>
+                  <Import size={15} /> {t("wfImport")}
+                </Button>
+              </Hint>
               <input
                 ref={importInputRef}
                 type="file"
@@ -362,14 +373,16 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" onClick={() => selectAll(workflows.data ?? [])}>
                 <ListChecks size={13} /> {allSelected(workflows.data ?? []) ? t("mediaDeselectAll") : t("mediaSelectAll")}
               </Button>
-              <Button
-                variant="outline"
-                className="hover:border-destructive/50 hover:text-destructive"
-                disabled={selectedIds.size === 0}
-                onClick={() => setBatchDeleting(true)}
-              >
-                <Trash2 size={13} /> {t("delete")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button
+                  variant="outline"
+                  className="hover:border-destructive/50 hover:text-destructive"
+                  disabled={selectedIds.size === 0 || Boolean(writeBlocked)}
+                  onClick={() => setBatchDeleting(true)}
+                >
+                  <Trash2 size={13} /> {t("delete")}
+                </Button>
+              </Hint>
               <Button variant="outline" onClick={exit}>
                 <X size={13} /> {t("cancel")}
               </Button>
@@ -379,15 +392,21 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" onClick={() => enterSelectMode()}>
                 <Check size={13} /> {t("mediaSelectMode")}
               </Button>
-              <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>
-                <Import size={13} /> {t("wfImport")}
-              </Button>
-              <Button variant="outline" onClick={() => setCommunityOpen(true)}>
-                <Store size={13} /> {t("wfCommunity")}
-              </Button>
-              <Button loading={create.isPending && create.variables === undefined} onClick={() => create.mutate(undefined)}>
-                <Plus size={13} /> {t("wfCreate")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" loading={importFile.isPending} disabled={Boolean(writeBlocked)} onClick={() => importInputRef.current?.click()}>
+                  <Import size={13} /> {t("wfImport")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" disabled={Boolean(writeBlocked)} onClick={() => setCommunityOpen(true)}>
+                  <Store size={13} /> {t("wfCommunity")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button loading={create.isPending && create.variables === undefined} disabled={Boolean(writeBlocked)} onClick={() => create.mutate(undefined)}>
+                  <Plus size={13} /> {t("wfCreate")}
+                </Button>
+              </Hint>
             </>
           )}
         </span>

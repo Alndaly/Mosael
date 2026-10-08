@@ -26,6 +26,8 @@ import { useOpenRequest } from "@/lib/deepLink";
 import { TAG_MATCHES, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
+import { Hint } from "@/components/ui/tooltip";
 import { EntityDetail } from "@/features/entities/EntityDetail";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 
@@ -98,7 +100,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     () => sortEntities(ofKind.filter((one) => matchesTags(one, tagFilter, tagMatch)), sortKey),
     [ofKind, tagFilter, tagMatch, sortKey],
   );
-  const collection = useEntityCollection(workspace.id, visible, { onOpen: setOpenId });
+  //: 只读成员建不了、改不了、删不了资产:写入口灰掉并说为什么(体检 D62,和定时任务页同一个做法)。
+  const writeBlocked = useWriteBlocked(workspace.role);
+  const collection = useEntityCollection(workspace.id, visible, { onOpen: setOpenId, writeBlocked });
   const { selectMode, enter: enterSelectMode, exit: exitSelectMode } = collection.selection;
   const refresh = () => void qc.invalidateQueries({ queryKey: entityKeys.all(workspace.id) });
   const fail = (error: unknown) => toast.error(errorText(error));
@@ -151,10 +155,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         className="py-7 xl:py-8"
         actions={
           emptyKind ? undefined : (
-            <Button onClick={() => setCreating(true)}>
-              <Plus />
-              {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                <Plus />
+                {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+              </Button>
+            </Hint>
           )
         }
       />
@@ -242,10 +248,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
             body={filtering ? t("studioNoMatchesHint") : t(`entitiesEmptyBody_${kind}`)}
             action={
               filtering ? undefined : (
-                <Button onClick={() => setCreating(true)}>
-                  <Plus />
-                  {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-                </Button>
+                <Hint disabledReason={writeBlocked?.reason}>
+                  <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                    <Plus />
+                    {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+                  </Button>
+                </Hint>
               )
             }
           />

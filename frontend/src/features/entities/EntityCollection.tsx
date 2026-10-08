@@ -4,6 +4,7 @@ import { FolderOpen, Layers, ListChecks, Pencil, Tag, Trash2 } from "lucide-reac
 import { toast } from "sonner";
 
 import { createVariant, deleteEntity, entityKeys, updateEntity, type EntitySummary } from "@/api/client";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -14,6 +15,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { MenuItemBody } from "@/components/ui/menu";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/tooltip";
 import { EntityCard } from "@/features/entities/EntityCard";
 
 /**
@@ -26,7 +28,14 @@ import { EntityCard } from "@/features/entities/EntityCard";
 export function useEntityCollection(
   workspaceId: string,
   rows: readonly EntitySummary[],
-  { onOpen }: { onOpen: (id: string) => void },
+  {
+    onOpen,
+    writeBlocked = null,
+  }: {
+    onOpen: (id: string) => void;
+    /** 改不了(只读成员)的原因,见 components/layout/useWriteBlocked:右键里的改动和批量按钮灰掉,原因跟着写。 */
+    writeBlocked?: WriteBlock | null;
+  },
 ) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -146,6 +155,7 @@ export function useEntityCollection(
     selection,
     selected,
     dialogs,
+    writeBlocked,
     actions: {
       open: onOpen,
       rename: setRenaming,
@@ -173,7 +183,7 @@ export function EntityGrid({
   tile?: boolean;
 }) {
   const t = useI18n();
-  const { selection, actions } = collection;
+  const { selection, actions, writeBlocked } = collection;
   return (
     <div className={className}>
       {rows.map((entity) => (
@@ -193,21 +203,21 @@ export function EntityGrid({
             <ContextMenuItem onSelect={() => actions.open(entity.id)}>
               <MenuItemBody icon={<FolderOpen />} label={t("entitiesOpen")} />
             </ContextMenuItem>
-            <ContextMenuItem onSelect={() => actions.rename(entity)}>
-              <MenuItemBody icon={<Pencil />} label={t("rename")} />
+            <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => actions.rename(entity)}>
+              <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
             </ContextMenuItem>
-            <ContextMenuItem onSelect={() => actions.editTags(entity)}>
-              <MenuItemBody icon={<Tag />} label={t("editTags")} />
+            <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => actions.editTags(entity)}>
+              <MenuItemBody icon={<Tag />} label={t("editTags")} description={writeBlocked?.brief} />
             </ContextMenuItem>
             {/* 变体下面不再挂变体。 */}
             {!entity.parent_id && (
-              <ContextMenuItem onSelect={() => actions.addVariant(entity)}>
-                <MenuItemBody icon={<Layers />} label={t("entityVariantNew")} />
+              <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => actions.addVariant(entity)}>
+                <MenuItemBody icon={<Layers />} label={t("entityVariantNew")} description={writeBlocked?.brief} />
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
-            <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => actions.remove([entity])}>
-              <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+            <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={() => actions.remove([entity])}>
+              <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
@@ -227,7 +237,7 @@ export function EntitySelectionBar({
   className?: string;
 }) {
   const t = useI18n();
-  const { selection, selected, actions } = collection;
+  const { selection, selected, actions, writeBlocked } = collection;
   if (!selection.selectMode) return null;
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)} role="group" aria-label={t("mediaSelectMode")}>
@@ -238,19 +248,23 @@ export function EntitySelectionBar({
         <ListChecks size={13} />
         {selection.allSelected(rows) ? t("mediaDeselectAll") : t("mediaSelectAll")}
       </Button>
-      <Button variant="outline" disabled={selected.length === 0} onClick={actions.tagSelected}>
-        <Tag size={13} />
-        {t("addTags")}
-      </Button>
-      <Button
-        variant="outline"
-        className="hover:border-destructive/50 hover:text-destructive"
-        disabled={selected.length === 0}
-        onClick={() => actions.remove(selected)}
-      >
-        <Trash2 size={13} />
-        {t("delete")}
-      </Button>
+      <Hint disabledReason={writeBlocked?.reason}>
+        <Button variant="outline" disabled={selected.length === 0 || Boolean(writeBlocked)} onClick={actions.tagSelected}>
+          <Tag size={13} />
+          {t("addTags")}
+        </Button>
+      </Hint>
+      <Hint disabledReason={writeBlocked?.reason}>
+        <Button
+          variant="outline"
+          className="hover:border-destructive/50 hover:text-destructive"
+          disabled={selected.length === 0 || Boolean(writeBlocked)}
+          onClick={() => actions.remove(selected)}
+        >
+          <Trash2 size={13} />
+          {t("delete")}
+        </Button>
+      </Hint>
     </div>
   );
 }

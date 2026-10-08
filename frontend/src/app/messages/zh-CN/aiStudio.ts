@@ -717,6 +717,8 @@ export const aiStudio = {
   configured: "已配置",
   schedulerTitle: "定时任务",
   roleReadOnlyHint: "你在这个工作区是「只读」;要改东西,请工作区的管理员在「设置 → 团队与成员」里调整你的角色",
+  //: 菜单条目底下那一行(同一张菜单里每条都写,得短;整句在按钮的悬停说明里)
+  roleReadOnlyBrief: "你在这个工作区是「只读」",
   createTask: "新建任务",
   noTasks: "还没有定时任务",
   manual: "手动",

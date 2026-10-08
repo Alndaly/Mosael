@@ -7,10 +7,12 @@ import {
   X,
 } from "lucide-react";
 import type { SceneSummary } from "@/api/domains/scenes";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuItemBody } from "@/components/ui/menu";
 import { Truncate } from "@/components/ui/truncate";
+import { Hint } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { ModalShell, ConfirmDialog } from "@/components/app/modals";
 import {
@@ -35,6 +37,7 @@ export function SceneList({
   onOpen,
   onRename,
   onDelete,
+  writeBlocked = null,
 }: {
   scenes: SceneSummary[];
   selecting: boolean;
@@ -42,6 +45,8 @@ export function SceneList({
   onOpen: (id: string) => void;
   onRename: (scene: SceneSummary, name: string) => Promise<boolean>;
   onDelete: (scenes: SceneSummary[]) => Promise<string[]>;
+  /** 只读成员:改名、删除收成灰的,说明为什么(见 useWriteBlocked)。 */
+  writeBlocked?: WriteBlock | null;
 }) {
   const t = useI18n();
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -164,15 +169,17 @@ export function SceneList({
             {t("sceneListSelectedCount").replace("{n}", String(chosen.length))}
           </label>
           <div>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy || !chosen.length}
-              onClick={() => setRemove(chosen)}
-            >
-              <Trash2 />
-              {t("sceneListDeleteSelected")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || !chosen.length || Boolean(writeBlocked)}
+                onClick={() => setRemove(chosen)}
+              >
+                <Trash2 />
+                {t("sceneListDeleteSelected")}
+              </Button>
+            </Hint>
             <IconButton
               variant="outline"
               size="icon-sm"
@@ -255,6 +262,7 @@ export function SceneList({
                         icon: <Pencil />,
                         onSelect: () => edit(scene),
                         disabled: busy,
+                        disabledReason: writeBlocked?.brief,
                       },
                       {
                         label: selected.has(scene.id) ? t("sceneListDeselect") : t("sceneListSelect"),
@@ -268,6 +276,7 @@ export function SceneList({
                         onSelect: () => setRemove([scene]),
                         destructive: true,
                         disabled: busy,
+                        disabledReason: writeBlocked?.brief,
                       },
                     ]}
                   />
@@ -282,8 +291,8 @@ export function SceneList({
               <ContextMenuItem onSelect={() => onOpen(targets[0].id)}>
                 <MenuItemBody icon={<ArrowUpRight />} label={t("sceneListOpen")} />
               </ContextMenuItem>
-              <ContextMenuItem onSelect={() => edit(targets[0])}>
-                <MenuItemBody icon={<Pencil />} label={t("rename")} />
+              <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => edit(targets[0])}>
+                <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
@@ -303,11 +312,11 @@ export function SceneList({
           )}
           <ContextMenuSeparator />
           <ContextMenuItem
-            disabled={!targets.length}
+            disabled={!targets.length || Boolean(writeBlocked)}
             className="text-destructive"
             onSelect={() => setRemove(targets)}
           >
-            <MenuItemBody icon={<Trash2 />} label={targets.length > 1 ? t("sceneListDeleteCount").replace("{n}", String(targets.length)) : t("sceneListDelete")} />
+            <MenuItemBody icon={<Trash2 />} label={targets.length > 1 ? t("sceneListDeleteCount").replace("{n}", String(targets.length)) : t("sceneListDelete")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

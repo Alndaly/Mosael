@@ -54,7 +54,7 @@ beforeEach(() => {
   h.setTheme.mockReset();
 });
 
-function mount() {
+function mount(role = "editor") {
   const onNavigate = vi.fn();
   const onCreateProject = vi.fn();
   render(
@@ -62,7 +62,7 @@ function mount() {
       {/* 和 App 里一样挂在 OverNativeView 里(ADR 0051) */}
       <OverNativeView>
         <CommandPalette
-          workspace={{ id: "w1", name: "W" } as never}
+          workspace={{ id: "w1", name: "W", role } as never}
           projects={[]}
           onNavigate={onNavigate}
           onOpenProject={vi.fn()}
@@ -80,6 +80,13 @@ it("新建项目直接建,不跳首页", async () => {
   fireEvent.click(await screen.findByRole("option", { name: /createProject/ }));
   expect(onCreateProject).toHaveBeenCalledTimes(1);
   expect(onNavigate).not.toHaveBeenCalled();
+});
+
+//: 只读成员(体检 UM-20 / D62)建不了项目:面板里一条点不了、又说不出为什么的命令只是噪音,不列;别的照常。
+it("只读成员:快捷操作里没有「新建项目」,切换主题照常", async () => {
+  mount("viewer");
+  expect(await screen.findByRole("option", { name: /cmdkToggleTheme/ })).toBeInTheDocument();
+  expect(screen.queryByRole("option", { name: /createProject/ })).toBeNull();
 });
 
 it("切换主题和顶栏同一个循环:深色的下一档是跟随系统", async () => {

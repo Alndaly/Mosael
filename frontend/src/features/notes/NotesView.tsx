@@ -30,6 +30,7 @@ import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { Hint } from "@/components/ui/tooltip";
 import { saveBlobToDisk } from "@/lib/download";
 import { useFileDrop } from "@/lib/useFileDrop";
+import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { useI18n } from "@/app/preferences";
 import type { ComposerChip } from "@/lib/composerChip";
@@ -115,6 +116,7 @@ export function NotesView({ workspace, AgentPanel, onNoteChange }: {
   onNoteChange?: (noteId: string | null) => void;
 }) {
   const s = useNoteStrings(); const qc = useQueryClient(); const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   const [id, setId] = React.useState(() => locationNote() ?? rememberedNote(workspace.id));
   // 从记住的那篇打开时把地址补上,和点开一篇的状态一样(刷新、返回都认它)。
   React.useEffect(() => { if (id && !locationNote()) window.history.replaceState(null, "", noteHref(id)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -246,21 +248,21 @@ export function NotesView({ workspace, AgentPanel, onNoteChange }: {
   }
   // 只拖图片/音视频时不接:那是往正文里插图(编辑器自己处理),不是导入笔记。
   const drop = useFileDrop(files => void importFiles(files), isMarkdownFile, types => types.some(type => !/^(image|video|audio)\//.test(type)));
-  return <div ref={measureLayout} className={`notes-layout ${!focus ? "notes-show-list" : ""}`} {...drop.handlers}>
+  return <div ref={measureLayout} className={`notes-layout ${!focus ? "notes-show-list" : ""}`} {...(writeBlocked ? {} : drop.handlers)}>
     {drop.active && <div className="notes-drop" aria-hidden="true"><span><Import size={20} />{s.dropHint}</span></div>}
-    {!focus && <aside className="notes-index" style={{ "--notes-index-width": `${sidebar.width}px` } as React.CSSProperties}><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><IconButton unstyled className="note-icon" label={s.import} onClick={() => input.current?.click()}><Import size={16} /></IconButton><IconButton unstyled className="note-icon" label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></IconButton><IconButton unstyled className="note-icon" label={s.new} onClick={() => void add()}><Plus size={16} /></IconButton></div></header>
+    {!focus && <aside className="notes-index" style={{ "--notes-index-width": `${sidebar.width}px` } as React.CSSProperties}><header><h1>{s.title}</h1><div className="flex shrink-0 items-center gap-1"><IconButton unstyled className="note-icon" label={s.import} disabled={Boolean(writeBlocked)} disabledReason={writeBlocked?.reason} onClick={() => input.current?.click()}><Import size={16} /></IconButton><IconButton unstyled className="note-icon" label={s.selectNotes} aria-pressed={selecting} onClick={()=>setSelecting(!selecting)}><CheckSquare size={16}/></IconButton><IconButton unstyled className="note-icon" label={s.new} disabled={Boolean(writeBlocked)} disabledReason={writeBlocked?.reason} onClick={() => void add()}><Plus size={16} /></IconButton></div></header>
       <Input aria-label={s.search} placeholder={s.search} value={q} onChange={e => setQ(e.target.value)} />
       <nav className="notes-filter">{([["all", s.all], ["favorite", s.favorite], ["trash", s.trash]] as const).map(([key, label]) => <button key={key} aria-pressed={filter === key} onClick={() => { setFilter(key); setTopic(""); window.location.hash = "#/notes"; }}>{label}</button>)}</nav>
       {!!topics.length && <SearchableSelect value={topic} onValueChange={setTopic} options={[{value: "", label: s.topics}, ...topics.map(t => ({value:t,label:t}))]} placeholder={s.topics} />}
       <NoteList key={`${workspace.id}:${search}:${filter}:${topic}`} notes={shown} currentId={id} selecting={selecting} onSelecting={setSelecting}
         onOpen={noteId=>{openNote(noteId);if(window.matchMedia("(max-width: 740px)").matches)setFocus(true);}}
-        onAction={listAction} empty={notes.isError?<PageLoadError size="compact" icon={<BookOpen size={15} />} error={notes.error} onRetry={() => void notes.refetch()} />:notes.isPending?<p className="p-3 text-xs text-muted-foreground">{s.loading}</p>:<div className="note-empty-state"><span className="note-empty-icon">{search || topic ? <SearchX size={24} strokeWidth={1.5} /> : filter === "trash" ? <Trash2 size={24} strokeWidth={1.5} /> : filter === "favorite" ? <Star size={24} strokeWidth={1.5} /> : <BookOpen size={24} strokeWidth={1.5} />}</span><strong>{search || topic ? s.noResults : filter === "trash" ? s.trashEmpty : filter === "favorite" ? s.favoriteEmpty : s.listEmpty}</strong><p>{search || topic ? s.searchHint : filter === "trash" ? s.trashHint : filter === "favorite" ? s.favoriteHint : s.listEmptyHint}</p>{search || topic ? <Button variant="ghost" size="sm" onClick={() => { setQ(""); setTopic(""); }}>{s.clearSearch}</Button> : filter === "all" ? <Button variant="ghost" size="sm" onClick={() => void add()}><Plus size={14} />{s.new}</Button> : null}</div>} more={notes.hasNextPage&&<Button variant="ghost" onClick={()=>void notes.fetchNextPage()}>{s.more}</Button>} />
+        onAction={listAction} writeBlocked={writeBlocked} empty={notes.isError?<PageLoadError size="compact" icon={<BookOpen size={15} />} error={notes.error} onRetry={() => void notes.refetch()} />:notes.isPending?<p className="p-3 text-xs text-muted-foreground">{s.loading}</p>:<div className="note-empty-state"><span className="note-empty-icon">{search || topic ? <SearchX size={24} strokeWidth={1.5} /> : filter === "trash" ? <Trash2 size={24} strokeWidth={1.5} /> : filter === "favorite" ? <Star size={24} strokeWidth={1.5} /> : <BookOpen size={24} strokeWidth={1.5} />}</span><strong>{search || topic ? s.noResults : filter === "trash" ? s.trashEmpty : filter === "favorite" ? s.favoriteEmpty : s.listEmpty}</strong><p>{search || topic ? s.searchHint : filter === "trash" ? s.trashHint : filter === "favorite" ? s.favoriteHint : s.listEmptyHint}</p>{search || topic ? <Button variant="ghost" size="sm" onClick={() => { setQ(""); setTopic(""); }}>{s.clearSearch}</Button> : filter === "all" ? <Hint disabledReason={writeBlocked?.reason}><Button variant="ghost" size="sm" disabled={Boolean(writeBlocked)} onClick={() => void add()}><Plus size={14} />{s.new}</Button></Hint> : null}</div>} more={notes.hasNextPage&&<Button variant="ghost" onClick={()=>void notes.fetchNextPage()}>{s.more}</Button>} />
       <input hidden ref={input} type="file" multiple accept=".md,.markdown,.txt" onChange={e => { const files = Array.from(e.target.files || []); e.target.value = ""; if (files.length) void importFiles(files); }} />
     </aside>}
     {!focus && <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "notes-resize")} />}
-    {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} controller={controller} focus={focus} onFocus={() => setFocus(!focus)}
+    {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} readOnly={writeBlocked} controller={controller} focus={focus} onFocus={() => setFocus(!focus)}
       agentOpen={showAgent} onToggleAgent={AgentPanel && (() => setAgentOpen(agentOpen === "on" ? "off" : "on"))} onSelectionChange={setSelection} onAskAi={AgentPanel && askAi}
-      onAiAction={AgentPanel && aiAction} onQuote={AgentPanel && quoteInChat} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
+      onAiAction={AgentPanel && aiAction} onQuote={AgentPanel && quoteInChat} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Hint disabledReason={writeBlocked?.reason}><Button disabled={Boolean(writeBlocked)} onClick={() => void add()}><Plus size={15} />{s.new}</Button></Hint>}</main>}
     {showAgent && (
       // 停靠:占一栏,正文真的让出宽度。放不下时改成盖在正文右侧;浮动时面板自己 fixed,外层 contents 不占位。
       <div data-testid="notes-agent-slot"
@@ -303,8 +305,11 @@ function NoteStatusBadge({ status, label }: { status: NoteStatus; label: string 
   </span></Hint>;
 }
 
-export function NoteDocument({ note, controller, focus, onFocus, agentOpen = false, onToggleAgent, onSelectionChange, onAskAi, onAiAction, onQuote }: {
-  note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void;
+export function NoteDocument({ note, readOnly = null, controller, focus, onFocus, agentOpen = false, onToggleAgent, onSelectionChange, onAskAi, onAiAction, onQuote }: {
+  note: Note;
+  /** 只读成员:正文、标题、主题和标签都不能改,收藏、移到回收站、恢复版本收成灰的(说明为什么)—— 否则打的字存不上、只换来一条报错。 */
+  readOnly?: WriteBlock | null;
+  controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void;
   /** 笔记页助手的开关(顶栏右边那一组里);不给就不显示。 */
   agentOpen?: boolean; onToggleAgent?: () => void;
   onSelectionChange?: (selection: NoteSelection | null) => void; onAskAi?: (selection: NoteSelection) => void;
@@ -327,6 +332,8 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
   const [historyFocus, setHistoryFocus] = React.useState<number | null>(null);
   const [referenceRevision,setReferenceRevision] = React.useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = React.useState(false); const [deleting, setDeleting] = React.useState(false);
+  //: 在回收站里的和只读成员看的,正文都不能改
+  const locked = draft.trashed || Boolean(readOnly);
   function change(patch: Partial<NoteContent>) { const next = {...latest.current, ...patch}; latest.current = next; try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* Server autosave remains available when device storage is full. */ } setDraft(next); setStatus("draft"); }
   const persist = React.useCallback(async () => {
     if (busy.current || JSON.stringify(latest.current) === saved.current) return;
@@ -415,28 +422,28 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
       <IconButton unstyled className="note-icon note-source-toggle" label={s.raw} hint={s.rawHint} aria-pressed={mode === "raw"} onClick={() => setMode(mode === "raw" ? "edit" : "raw")}><FileCode size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
       {/* 窄了只剩图标(文字收起),名字靠 IconButton 的 aria-label 和悬停说明。 */}
       {onToggleAgent && <IconButton unstyled className="note-agent-toggle" label={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={16} strokeWidth={1.7} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></IconButton>}
-      <IconButton unstyled className="note-icon" label={s.favorite} aria-pressed={draft.favorite} onClick={() => change({favorite: !draft.favorite})}><Star size={16} strokeWidth={1.7} fill={draft.favorite ? "currentColor" : "none"} /></IconButton>
+      <IconButton unstyled className="note-icon" label={s.favorite} aria-pressed={draft.favorite} disabled={Boolean(readOnly)} disabledReason={readOnly?.reason} onClick={() => change({favorite: !draft.favorite})}><Star size={16} strokeWidth={1.7} fill={draft.favorite ? "currentColor" : "none"} /></IconButton>
       <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><IconButton unstyled className="note-icon" label={s.actions} aria-haspopup="menu"><MoreHorizontal size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>{/* 和笔记列表的右键菜单同一套条目(MenuItem / MenuItemBody)。 */}
       <MenuContent label={s.actions} align="end">
         <MenuItem icon={<FileOutput />} label={s.export} onClick={() => { setMoreOpen(false); exportMarkdown(draft); }} />
         <MenuItem icon={<History />} label={s.history} onClick={() => { setMoreOpen(false); setHistoryFocus(null); setHistory(true); }} />
         <MenuItem icon={<Info />} label={s.source} onClick={() => { setMoreOpen(false); setProperties(!properties); }} />
         <MenuSeparator />
-        <MenuItem icon={draft.trashed ? <RotateCcw /> : <Trash2 />} label={draft.trashed ? s.restoreTrash : s.moveTrash} destructive={!draft.trashed} onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }} />
+        <MenuItem icon={draft.trashed ? <RotateCcw /> : <Trash2 />} label={draft.trashed ? s.restoreTrash : s.moveTrash} destructive={!draft.trashed} disabled={Boolean(readOnly)} description={readOnly?.brief} onClick={() => { setMoreOpen(false); change({trashed: !draft.trashed}); }} />
       </MenuContent></Popover>
-    </div></header>{draft.trashed && <div className="note-trash-notice" role="status"><div className="note-notice-row"><span>{s.inTrash}</span><span className="note-notice-actions"><button onClick={() => change({trashed: false})}><RotateCcw size={13} aria-hidden="true" />{s.restoreTrash}</button><button className="note-notice-danger" disabled={deleting} onClick={() => setConfirmDelete(true)}><Trash2 size={13} aria-hidden="true" />{s.deleteForever}</button></span></div></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
+    </div></header>{draft.trashed && <div className="note-trash-notice" role="status"><div className="note-notice-row"><span>{s.inTrash}</span><span className="note-notice-actions"><button disabled={Boolean(readOnly)} onClick={() => change({trashed: false})}><RotateCcw size={13} aria-hidden="true" />{s.restoreTrash}</button><button className="note-notice-danger" disabled={deleting || Boolean(readOnly)} onClick={() => setConfirmDelete(true)}><Trash2 size={13} aria-hidden="true" />{s.deleteForever}</button></span></div></div>}{error && <div className="note-error-notice" role="alert"><div className="note-notice-row"><span><AlertCircle size={13} aria-hidden="true"/>{error}</span><button onClick={() => void persist()}>{s.retry}</button><button onClick={() => { exportMarkdown(draft); void getNote(note.workspace_id, note.id).then(n => { saved.current = JSON.stringify(n); latest.current = n; setDraft(n); setStatus("saved"); setError(""); localStorage.removeItem(storageKey); }).catch(e => toast.error(errorText(e))); }}>{s.reload}</button></div></div>}
     {referenceRevision&&<div className="note-reference-notice"><div className="note-notice-row"><span>{s.referenceVersion(referenceRevision)}</span><button onClick={()=>{setHistoryFocus(referenceRevision);setHistory(true);}}>{s.viewReference}</button></div></div>}
     <div className="note-body"><article className="note-paper">
-      {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={!draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
-        title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} />}
+      {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={locked} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={locked} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={!locked} workspaceId={note.workspace_id} noteId={note.id}
+        title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={locked} onValueChange={title => change({title})} />}
         onReference={n => { if (!latest.current.sources.some(source => source.kind === "note" && source.id === n.id && source.revision === n.revision)) change({sources: [...latest.current.sources, {kind: "note", id: n.id, label: n.title, quote: "", revision: n.revision}]}); }}
         onSelectionChange={onSelectionChange} onAskAi={onAskAi} onAiAction={onAiAction} onQuote={onQuote}
         saveSource={{ kind: "note", id: note.id, label: draft.title || s.untitled, quote: "", revision: draft.revision }} />}
     </article></div></main>
-    {properties && <aside className="note-properties"><header><strong>{s.source}</strong><IconButton unstyled className="note-icon" label={s.close} onClick={()=>setProperties(false)}><X size={15}/></IconButton></header><label>{s.topics}</label><NoteLabels label={s.topics} placeholder={s.topicHint} values={draft.topics} disabled={draft.trashed} onChange={topics=>change({topics})}/><label>{s.tags}</label><NoteLabels label={s.tags} placeholder={s.tagHint} values={draft.tags} disabled={draft.trashed} onChange={tags=>change({tags})}/><label>{s.source}</label>{draft.sources.length ? draft.sources.map((source, i) => <div className="note-source" key={i}><SourceLink source={source} workspaceId={note.workspace_id} />{source.quote && <blockquote>{source.quote}</blockquote>}</div>) : <p className="leading-relaxed text-muted-foreground">{s.sourcesEmpty}</p>}</aside>}
+    {properties && <aside className="note-properties"><header><strong>{s.source}</strong><IconButton unstyled className="note-icon" label={s.close} onClick={()=>setProperties(false)}><X size={15}/></IconButton></header><label>{s.topics}</label><NoteLabels label={s.topics} placeholder={s.topicHint} values={draft.topics} disabled={locked} onChange={topics=>change({topics})}/><label>{s.tags}</label><NoteLabels label={s.tags} placeholder={s.tagHint} values={draft.tags} disabled={locked} onChange={tags=>change({tags})}/><label>{s.source}</label>{draft.sources.length ? draft.sources.map((source, i) => <div className="note-source" key={i}><SourceLink source={source} workspaceId={note.workspace_id} />{source.quote && <blockquote>{source.quote}</blockquote>}</div>) : <p className="leading-relaxed text-muted-foreground">{s.sourcesEmpty}</p>}</aside>}
     <ConfirmDialog open={confirmDelete} title={`${s.deleteForever} · ${draft.title || s.untitled}`} body={s.deleteWarning} onCancel={() => { if (!deleting) setConfirmDelete(false); }} pending={deleting} onConfirm={() => void deleteForever()} />
     <NoteHistoryDialog open={history} onOpenChange={setHistory} workspaceId={note.workspace_id} noteId={note.id}
-      current={{ revision: draft.revision, saveSeq: draft.save_seq, title: draft.title, markdown: draft.markdown }} focusRevision={historyFocus} onRestore={restore} />
+      current={{ revision: draft.revision, saveSeq: draft.save_seq, title: draft.title, markdown: draft.markdown }} focusRevision={historyFocus} onRestore={restore} readOnly={readOnly} />
   </>;
 }
 

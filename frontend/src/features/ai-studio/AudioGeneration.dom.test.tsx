@@ -122,7 +122,7 @@ function renderStudio({
   render(
     <QueryClientProvider client={client}>
       <ImagePreviewProvider>
-        <AiStudio workspace={{ id: "w1", name: "W" } as never} />
+        <AiStudio workspace={{ id: "w1", name: "W", role: "editor" } as never} />
       </ImagePreviewProvider>
     </QueryClientProvider>,
   );

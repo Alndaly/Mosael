@@ -60,7 +60,7 @@ afterEach(() => { cleanup(); localStorage.clear(); window.location.hash = ""; vi
 function mount() {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <NotesView workspace={{ id: "ws" } as never} AgentPanel={FakePanel} />
+      <NotesView workspace={{ id: "ws", role: "editor" } as never} AgentPanel={FakePanel} />
     </QueryClientProvider>,
   );
 }

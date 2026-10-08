@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ProjectWithStats, Workspace } from "@/api/client";
 import { HomeView } from "./HomeView";
+import { readHint } from "@/test/hint";
 
 const mocks = vi.hoisted(() => ({ summary: vi.fn(), navigate: vi.fn(), deleteProject: vi.fn(async (_id: string) => undefined) }));
 vi.mock("@/api/client", async original => ({
@@ -19,7 +20,7 @@ vi.mock("@/api/client", async original => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en-US" }) }));
 vi.mock("@/lib/deepLink", () => ({ gotoRecord: mocks.navigate }));
-const workspace = { id: "studio-a", name: "Studio A" } as Workspace;
+const workspace = { id: "studio-a", name: "Studio A", role: "editor" } as Workspace;
 const projects = [
   { id: "older", name: "Older film", updated_at: "2026-09-01", created_at: "2026-08-01" },
   // 封面由后端算好给(时间线上最早出现的画面),卡片只管画。
@@ -199,4 +200,30 @@ it("轮询中途失败、手上还有上一份时照旧列项目", () => {
   ));
   expect(screen.getAllByText("Newer film").length).toBeGreaterThan(0);
   expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+});
+
+//: 只读成员(体检 UM-20 / D62):新建、改名、删除是灰的、说清为什么;打开、多选照常(多选只是看)。
+it("只读成员:新建项目、⋯ 里的重命名和删除、批量删除都是灰的并说为什么", async () => {
+  const viewer = { ...workspace, role: "viewer" } as Workspace;
+  const view = render(provider(<HomeView workspace={viewer} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
+  const create = within(screen.getByRole("banner")).getByRole("button", { name: "createProject" });
+  expect(create).toBeDisabled();
+  expect(await readHint(create)).toBe("roleReadOnlyHint");
+
+  fireEvent.click(screen.getAllByRole("button", { name: "projectActions: Older film" })[0]);
+  const menu = await screen.findByRole("menu");
+  for (const name of ["rename", "delete"]) {
+    const item = within(menu).getByRole("menuitem", { name });
+    expect(item).toBeDisabled();
+    expect(item).toHaveAccessibleDescription("roleReadOnlyBrief");
+  }
+  fireEvent.keyDown(menu, { key: "Escape" });
+
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
+  expect(screen.getByRole("button", { name: "delete" })).toBeDisabled();
+  view.unmount();
+
+  render(provider(<HomeView workspace={viewer} projects={[]} load={loaded} onOpenProject={vi.fn()} />));
+  expect(screen.getByRole("button", { name: "createProject" })).toBeDisabled();
 });

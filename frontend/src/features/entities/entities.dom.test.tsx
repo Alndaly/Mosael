@@ -77,6 +77,7 @@ vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightb
 import { toast } from "sonner";
 import { WithPageTrail } from "@/test/pageTrail";
 import { EntitiesView } from "./EntitiesView";
+import { readHint } from "@/test/hint";
 import { AssetEntitiesList, SetAsReferenceDialog } from "./AssetEntities";
 
 const CATALOG = {
@@ -154,7 +155,7 @@ function mount(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-const WORKSPACE = { id: "ws", name: "W" } as never;
+const WORKSPACE = { id: "ws", name: "W", role: "editor" } as never;
 //: 素材库一页页给,种类在服务端筛(参考图只要图片和视频)。
 const servedAssets = (rows: { id: string; kind: string; name: string }[]) => async (query: { kind?: string[] }) => {
   const items = rows
@@ -318,6 +319,27 @@ describe("资产页的操作", () => {
     await screen.findByText("张三");
     const names = [...document.querySelectorAll("[data-entity-tile] strong")].map((one) => one.textContent);
     expect(names).toEqual(["阿澄", "张三"]);
+  });
+
+  //: 只读成员(体检 UM-20 / D62):新建、改名、打标签、建变体、删除都是灰的并说为什么;打开、选择照常。
+  it("只读成员:新建是灰的并说为什么;右键里改名、删除和批量删除都是灰的", async () => {
+    api.listEntities.mockResolvedValue(ROWS);
+    mount(<EntitiesView workspace={{ id: "ws", name: "W", role: "viewer" } as never} />);
+    await screen.findByText("张三");
+    const create = screen.getAllByRole("button", { name: /entitiesNew/ })[0];
+    expect(create).toBeDisabled();
+    expect(await readHint(create)).toBe("roleReadOnlyHint");
+
+    fireEvent.contextMenu(screen.getByText("张三").closest("[data-entity-tile]") as HTMLElement);
+    expect(await screen.findByRole("menuitem", { name: /^rename/ })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("menuitem", { name: /^delete/ })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+
+    fireEvent.click(screen.getByRole("button", { name: /mediaSelectMode/ }));
+    fireEvent.click(screen.getByText("张三").closest("button")!);
+    const bar = screen.getByRole("group", { name: "mediaSelectMode" });
+    expect(within(bar).getByRole("button", { name: /delete/ })).toBeDisabled();
+    expect(api.deleteEntity).not.toHaveBeenCalled();
   });
 });
 

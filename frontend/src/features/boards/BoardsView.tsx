@@ -52,6 +52,8 @@ import { MenuItemBody } from "@/components/ui/menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Truncate } from "@/components/ui/truncate";
 import { usePageTrail } from "@/components/layout/pageTrail";
+import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
+import { Hint } from "@/components/ui/tooltip";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
@@ -108,6 +110,7 @@ import { useSaveShortcut } from "@/lib/saveShortcut";
  */
 export function BoardsView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   const queryClient = useQueryClient();
 
   const boards = useQuery({
@@ -255,9 +258,11 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
           title={t("boardsEmptyTitle")}
           body={t("boardsEmptyHint")}
           action={
-            <Button loading={create.isPending} onClick={() => create.mutate()}>
-              <Plus size={15} /> {t("boardsNew")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button loading={create.isPending} disabled={Boolean(writeBlocked)} onClick={() => create.mutate()}>
+                <Plus size={15} /> {t("boardsNew")}
+              </Button>
+            </Hint>
           }
         />
       </div>
@@ -279,14 +284,16 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" onClick={() => selectAll(list)}>
                 <ListChecks size={13} /> {allSelected(list) ? t("mediaDeselectAll") : t("mediaSelectAll")}
               </Button>
-              <Button
-                variant="outline"
-                className="hover:border-destructive/50 hover:text-destructive"
-                disabled={selectedIds.size === 0}
-                onClick={() => setBatchDeleting(true)}
-              >
-                <Trash2 size={13} /> {t("delete")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button
+                  variant="outline"
+                  className="hover:border-destructive/50 hover:text-destructive"
+                  disabled={selectedIds.size === 0 || Boolean(writeBlocked)}
+                  onClick={() => setBatchDeleting(true)}
+                >
+                  <Trash2 size={13} /> {t("delete")}
+                </Button>
+              </Hint>
               <Button variant="outline" onClick={exit}>
                 <X size={13} /> {t("cancel")}
               </Button>
@@ -296,9 +303,11 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
               <Button variant="outline" disabled={list.length === 0} onClick={() => enterSelectMode()}>
                 <Check size={13} /> {t("mediaSelectMode")}
               </Button>
-              <Button loading={create.isPending} onClick={() => create.mutate()}>
-                <Plus size={13} /> {t("boardsNew")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button loading={create.isPending} disabled={Boolean(writeBlocked)} onClick={() => create.mutate()}>
+                  <Plus size={13} /> {t("boardsNew")}
+                </Button>
+              </Hint>
             </>
           )}
         </span>
@@ -332,6 +341,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
                 onDuplicate={() => duplicate.mutate(board)}
                 duplicating={duplicate.isPending && duplicate.variables?.id === board.id}
                 onDelete={() => setMenuDeleting(board)}
+                writeBlocked={writeBlocked}
               />
             ))}
           </div>
@@ -433,6 +443,7 @@ function BoardCard({
   onDuplicate,
   duplicating,
   onDelete,
+  writeBlocked,
 }: {
   board: BoardSummary;
   selecting: boolean;
@@ -443,6 +454,8 @@ function BoardCard({
   onDuplicate: () => void;
   duplicating: boolean;
   onDelete: () => void;
+  /** 只读成员:改名、复制、删除收成灰的,说明为什么(见 useWriteBlocked)。 */
+  writeBlocked: WriteBlock | null;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -486,9 +499,9 @@ function BoardCard({
                 label={`${t("studioActions")}: ${board.name}`}
                 actions={[
                   { label: t("boardsOpen"), icon: <ArrowUpRight />, onSelect: onOpen },
-                  { label: t("rename"), icon: <Pencil />, onSelect: onRename },
-                  { label: t("boardsDuplicate"), icon: <Copy />, disabled: duplicating, onSelect: onDuplicate },
-                  { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: onDelete },
+                  { label: t("rename"), icon: <Pencil />, disabledReason: writeBlocked?.brief, onSelect: onRename },
+                  { label: t("boardsDuplicate"), icon: <Copy />, disabled: duplicating, disabledReason: writeBlocked?.brief, onSelect: onDuplicate },
+                  { label: t("delete"), icon: <Trash2 />, destructive: true, disabledReason: writeBlocked?.brief, onSelect: onDelete },
                 ]}
               />
             </div>
@@ -499,11 +512,11 @@ function BoardCard({
         <ContextMenuItem onSelect={onOpen}>
           <MenuItemBody icon={<ArrowUpRight />} label={t("boardsOpen")} />
         </ContextMenuItem>
-        <ContextMenuItem onSelect={onRename}>
-          <MenuItemBody icon={<Pencil />} label={t("rename")} />
+        <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={onRename}>
+          <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
         </ContextMenuItem>
-        <ContextMenuItem disabled={duplicating} onSelect={onDuplicate}>
-          <MenuItemBody icon={<Copy />} label={t("boardsDuplicate")} />
+        <ContextMenuItem disabled={duplicating || Boolean(writeBlocked)} onSelect={onDuplicate}>
+          <MenuItemBody icon={<Copy />} label={t("boardsDuplicate")} description={writeBlocked?.brief} />
         </ContextMenuItem>
         <ContextMenuSeparator />
         {/* 从右键直接进选择模式并勾上这一张 —— 想批量处理时,右键的往往就是第一张。 */}
@@ -511,8 +524,8 @@ function BoardCard({
           <MenuItemBody icon={<CheckSquare />} label={selecting && selected ? t("boardsDeselect") : t("boardsSelect")} />
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-          <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+        <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={onDelete}>
+          <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

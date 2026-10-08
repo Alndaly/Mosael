@@ -29,6 +29,7 @@ vi.mock("@/app/preferences", () => ({
 import type { Workspace } from "@/api/client";
 import { MENU_ITEM_DESTRUCTIVE } from "@/components/ui/floating";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
+import { readHint } from "@/test/hint";
 
 beforeAll(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
@@ -51,7 +52,7 @@ it("⋯ 里是 重命名 / 版本历史 v29 / 导出为文件,删除单独一组
   apiMocks.listWorkflows.mockResolvedValue([workflow]);
   apiMocks.fetchWorkflowNodeTypes.mockResolvedValue([]);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><WorkflowsView workspace={{ id: "w1", name: "w", role: "editor" } as Workspace} /></QueryClientProvider>);
 
   const toolbar = await screen.findByRole("group", { name: "canvasTools" }, { timeout: 10000 });
   fireEvent.click(within(toolbar).getByRole("button", { name: "more" }));
@@ -77,7 +78,7 @@ it("列表卡片:名字浮在整卡按钮上面(截断时悬停看得到全文),
   apiMocks.listWorkflows.mockResolvedValue([workflow]);
   apiMocks.fetchWorkflowNodeTypes.mockResolvedValue([]);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><WorkflowsView workspace={{ id: "w1", name: "w", role: "editor" } as Workspace} /></QueryClientProvider>);
 
   const name = await screen.findByText(workflow.name, { selector: "strong" }, { timeout: 10000 });
   expect(name.className).toContain("z-[2]");
@@ -90,4 +91,35 @@ it("列表卡片:名字浮在整卡按钮上面(截断时悬停看得到全文),
 
   fireEvent.click(name);
   expect(await screen.findByRole("group", { name: "canvasTools" }, { timeout: 10000 })).toBeInTheDocument();
+}, 20000);
+
+//: 只读成员(体检 UM-20 / D62):会改东西的入口是灰的、说清为什么(和定时任务页同一个做法),导出这种只读的照常。
+it("只读成员:页头的新建、导入、社区是灰的;卡片 ⋯ 里运行、重命名、删除是灰的并说为什么,导出照常", async () => {
+  localStorage.removeItem("mosael:selected:workflows");
+  apiMocks.listWorkflows.mockResolvedValue([workflow]);
+  apiMocks.fetchWorkflowNodeTypes.mockResolvedValue([]);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><WorkflowsView workspace={{ id: "w1", name: "w", role: "viewer" } as Workspace} /></QueryClientProvider>);
+
+  await screen.findByText(workflow.name, { selector: "strong" }, { timeout: 10000 });
+  for (const name of ["wfCreate", "wfImport", "wfCommunity"]) expect(screen.getByRole("button", { name })).toBeDisabled();
+  expect(await readHint(screen.getByRole("button", { name: "wfCreate" }))).toBe("roleReadOnlyHint");
+
+  fireEvent.click(screen.getByRole("button", { name: `studioActions: ${workflow.name}` }));
+  const menu = screen.getByRole("menu");
+  for (const name of ["wfRun", "rename", "delete"]) {
+    const item = within(menu).getByRole("menuitem", { name });
+    expect(item).toBeDisabled();
+    expect(item).toHaveAccessibleDescription("roleReadOnlyBrief");
+  }
+  expect(within(menu).getByRole("menuitem", { name: "wfExport" })).toBeEnabled();
+  fireEvent.keyDown(menu, { key: "Escape" });
+
+  //: 右键菜单是同一份清单(ActionContextMenuItems):同样灰、同样说原因。
+  fireEvent.contextMenu(screen.getByRole("button", { name: workflow.name }), { clientX: 10, clientY: 10 });
+  const context = await screen.findByRole("menu");
+  const run = within(context).getByRole("menuitem", { name: /^wfRun/ });
+  expect(run).toHaveAttribute("aria-disabled", "true");
+  expect(run.textContent).toContain("roleReadOnlyBrief");
+  expect(within(context).getByRole("menuitem", { name: "wfExport" })).not.toHaveAttribute("aria-disabled");
 }, 20000);

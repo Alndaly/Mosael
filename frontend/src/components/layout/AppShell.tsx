@@ -80,6 +80,7 @@ export function AppShell({
   onSwitchProject,
   onCreateProject,
   creatingProject,
+  createProjectBlocked = null,
   actions,
   children,
 }: {
@@ -96,6 +97,8 @@ export function AppShell({
   onSwitchProject?: (id: string) => void;
   onCreateProject?: () => void;
   creatingProject?: boolean;
+  /** 只读成员建不了项目:切换器里「新建项目」收成灰的,说明为什么。 */
+  createProjectBlocked?: string | null;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -223,6 +226,7 @@ export function AppShell({
                         onSwitchProject={onSwitchProject}
                         onCreateProject={onCreateProject}
                         creatingProject={creatingProject}
+                        createProjectBlocked={createProjectBlocked}
                       />
                     ) : (
                       <Truncate as="strong" className="font-semibold text-foreground">{projectName}</Truncate>
@@ -304,12 +308,15 @@ function ProjectSwitcher({
   onSwitchProject,
   onCreateProject,
   creatingProject,
+  createProjectBlocked,
 }: {
   projects: { id: string; name: string }[];
   currentProjectId: string | null;
   onSwitchProject: (id: string) => void;
   onCreateProject?: () => void;
   creatingProject?: boolean;
+  /** 只读成员建不了项目:条目收成灰的,说明为什么(见 useWriteBlocked)。 */
+  createProjectBlocked?: string | null;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -349,7 +356,8 @@ function ProjectSwitcher({
             <MenuItem
               icon={<FolderPlus />}
               label={t("createProject")}
-              disabled={creatingProject}
+              disabled={creatingProject || Boolean(createProjectBlocked)}
+              description={createProjectBlocked ?? undefined}
               onClick={() => {
                 setOpen(false);
                 onCreateProject();

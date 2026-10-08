@@ -1,6 +1,7 @@
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownLeft,
@@ -389,7 +390,8 @@ export function GenerateWorkspace({
   const t = useI18n();
   const { locale } = usePreferences();
   const qc = useQueryClient();
-  
+  const writeBlocked = useWriteBlocked(workspace.role);
+
   const panels = useSidePanels("generation", AI_PANEL_BOUNDS);
   const narrowLayout = useMediaMatch("(max-width: 1180px)");
   const singleColumn = useMediaMatch("(max-width: 820px)");
@@ -1353,6 +1355,7 @@ export function GenerateWorkspace({
           }}
           onCreate={startNewSession}
           creating={false}
+          writeBlocked={writeBlocked}
           toolbar={<CreateFilterRow value={filter} onChange={setFilter} />}
           emptyTitle={t(emptySessionsKey(filter))}
           extras={(listed) => {

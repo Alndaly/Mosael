@@ -42,8 +42,10 @@ const EXCEPTIONS: Record<string, { disabled: string; count?: number; why: string
       why: "transcriptsLoading 是逐字稿清单还没读回来(还不知道哪些转过了),不是转写在跑;转圈会被读成「正在转写」" },
   ],
   "features/notes/NoteList.tsx": [
-    { disabled: "busy", count: 3,
-      why: "列表行、「取消选择」、「彻底删除」:一样批量操作在跑时整列锁住;转圈的是点的那一颗(删除在确认框里转)" },
+    { disabled: "busy", count: 2,
+      why: "列表行、「取消选择」:一样批量操作在跑时整列锁住;转圈的是点的那一颗" },
+    { disabled: "busy||Boolean(writeBlocked)",
+      why: "「彻底删除」只是打开确认框,删除在确认框里转;批量操作在跑时、只读成员(D62)都点不了" },
   ],
   "features/notes/SaveToNote.tsx": [
     { disabled: "busy", why: "存哪一种形状的分段选项:存的时候不让换,转圈的是「新建」或追加的那一行" },
@@ -56,7 +58,8 @@ const EXCEPTIONS: Record<string, { disabled: string; count?: number; why: string
     { disabled: "busy||pending", why: "「打开收到的场景」只是跳页,不跑;有事在跑或场景还没存好时先别跳" },
   ],
   "features/scenes/SceneList.tsx": [
-    { disabled: "busy||!chosen.length", why: "「删除所选」只是打开确认框;删除、改名在跑时它点不了,转圈的是确认框、改名框里那颗" },
+    { disabled: "busy||!chosen.length||Boolean(writeBlocked)",
+      why: "「删除所选」只是打开确认框;删除、改名在跑时、只读成员(D62)都点不了,转圈的是确认框、改名框里那颗" },
     { disabled: "busy", count: 2, why: "「取消选择」和卡片本身:删除、改名在跑时整列锁住,转圈的是确认框、改名框里那颗" },
   ],
   "features/scenes/SceneStudio.tsx": [

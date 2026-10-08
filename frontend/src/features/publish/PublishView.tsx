@@ -32,6 +32,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { MenuItemBody } from "@/components/ui/menu";
 import { Truncate } from "@/components/ui/truncate";
+import { Hint } from "@/components/ui/tooltip";
+import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -50,6 +52,7 @@ const STATUS_FILTERS: readonly string[] = ["all", "active", "succeeded", "attent
  *  由桌面端 persist: 分区持久化,重启不丢。 */
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
+  const writeBlocked = useWriteBlocked(workspace.role);
   const { locale } = usePreferences();
   const qc = useQueryClient();
 
@@ -153,6 +156,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       />
       <PublishDetailDialog
         task={opened}
+        writeBlocked={writeBlocked}
         onClose={() => setOpenId(null)}
         onDelete={() => {
           if (opened) setDeleting(opened);
@@ -193,15 +197,17 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <Button variant="outline" size="default" onClick={() => selectAll(filteredTasks)}>
               <ListChecks size={13} /> {allSelected(filteredTasks) ? t("mediaDeselectAll") : t("mediaSelectAll")}
             </Button>
-            <Button
-              variant="outline"
-              size="default"
-              className="hover:border-destructive/50 hover:text-destructive"
-              disabled={selectedIds.size === 0}
-              onClick={() => setBatchDeleting(true)}
-            >
-              <Trash2 size={13} /> {t("delete")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button
+                variant="outline"
+                size="default"
+                className="hover:border-destructive/50 hover:text-destructive"
+                disabled={selectedIds.size === 0 || Boolean(writeBlocked)}
+                onClick={() => setBatchDeleting(true)}
+              >
+                <Trash2 size={13} /> {t("delete")}
+              </Button>
+            </Hint>
             <Button variant="outline" size="default" onClick={exit}>
               <X size={13} /> {t("cancel")}
             </Button>
@@ -211,9 +217,11 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <Button variant="outline" size="default" onClick={() => enterSelectMode()}>
               <Check size={13} /> {t("mediaSelectMode")}
             </Button>
-            <Button onClick={() => setCreating(true)}>
-              <Plus size={13} /> {t("publishCreate")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                <Plus size={13} /> {t("publishCreate")}
+              </Button>
+            </Hint>
           </>
         )}
       </span>
@@ -230,12 +238,16 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           body={t("publishEmptyBody")}
           action={
             <div className="flex items-center gap-1.5">
-              <Button onClick={() => setCreating(true)}>
-                <Plus size={15} /> {t("publishCreate")}
-              </Button>
-              <Button variant="outline" onClick={() => gotoRecord("/browser-pool")}>
-                <Users size={15} /> {t("publishAccountAdd")}
-              </Button>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button disabled={Boolean(writeBlocked)} onClick={() => setCreating(true)}>
+                  <Plus size={15} /> {t("publishCreate")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button variant="outline" disabled={Boolean(writeBlocked)} onClick={() => gotoRecord("/browser-pool")}>
+                  <Users size={15} /> {t("publishAccountAdd")}
+                </Button>
+              </Hint>
             </div>
           }
         />
@@ -282,8 +294,8 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                       </button>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
-                      <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(task)}>
-                        <MenuItemBody icon={<Trash2 />} label={t("delete")} />
+                      <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={() => setDeleting(task)}>
+                        <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
                       </ContextMenuItem>
                     </ContextMenuContent>
                   </ContextMenu>
@@ -354,7 +366,7 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
 }
 
 /** 详情弹窗。点开一条才看细节 —— 常驻右栏会把整页宽度让给"当前这一条",而多数时候人是在扫一遍。 */
-function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | null; onClose: () => void; onDelete: () => void }) {
+function PublishDetailDialog({ task, writeBlocked, onClose, onDelete }: { task: PublishTask | null; writeBlocked: WriteBlock | null; onClose: () => void; onDelete: () => void }) {
   const t = useI18n();
   return (
     <ModalShell
@@ -381,9 +393,11 @@ function PublishDetailDialog({ task, onClose, onDelete }: { task: PublishTask | 
                 <ExternalLink size={13} /> {t("publishOpenPage")}
               </Button>
             )}
-            <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" onClick={onDelete}>
-              <Trash2 size={13} /> {t("delete")}
-            </Button>
+            <Hint disabledReason={writeBlocked?.reason}>
+              <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" disabled={Boolean(writeBlocked)} onClick={onDelete}>
+                <Trash2 size={13} /> {t("delete")}
+              </Button>
+            </Hint>
             <Button size="sm" onClick={onClose}>{t("close")}</Button>
           </>
         ) : undefined

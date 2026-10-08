@@ -30,6 +30,7 @@ vi.mock("@/api/domains/scenes", async (importOriginal) => ({
 }));
 
 import { SceneStudio } from "./SceneStudio";
+import { readHint } from "@/test/hint";
 
 const summary = (id: string, name: string, template: SceneSummary["template"] = null): SceneSummary =>
   ({ id, name, revision: 1, updated_at: "2026-10-08T00:00:00", object_count: 2, shot_count: 1, template }) as SceneSummary;
@@ -43,11 +44,11 @@ afterEach(() => {
   location.hash = "";
 });
 
-function open() {
+function open(role = "editor") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <SceneStudio workspace={{ id: "w1" } as never} />
+      <SceneStudio workspace={{ id: "w1", role } as never} />
     </QueryClientProvider>,
   );
 }
@@ -83,4 +84,25 @@ it("有场景但没有示例:页头那颗建一份", async () => {
   open();
   fireEvent.click(await screen.findByRole("button", { name: "scenesOpenSample" }));
   await waitFor(() => expect(api.createScene).toHaveBeenCalledTimes(1));
+});
+
+//: 只读成员(体检 UM-20 / D62):会建一份场景的按钮是灰的、说为什么;已经有示例时那颗只是打开它,照常能点。
+it("只读成员:建场景的按钮是灰的并说为什么;已有示例时「打开示例」照常打开那一份", async () => {
+  scenes = [];
+  open("viewer");
+  await screen.findByText("sceneEmptyTitle");
+  const sample = screen.getByRole("button", { name: "scenesOpenSample" });
+  expect(sample).toBeDisabled();
+  expect(await readHint(sample)).toBe("roleReadOnlyHint");
+  expect(screen.getByRole("button", { name: "scenesNew" })).toBeDisabled();
+  cleanup();
+
+  scenes = [summary("hall", "我的展厅", "three_halls")];
+  open("viewer");
+  const openHall = await screen.findByRole("button", { name: "scenesOpenSample" });
+  expect(openHall).toBeEnabled();
+  expect(screen.getByRole("button", { name: "scenesNew" })).toBeDisabled();
+  fireEvent.click(openHall);
+  await waitFor(() => expect(location.hash).toBe("#/scenes?scene=hall"));
+  expect(api.createScene).not.toHaveBeenCalled();
 });

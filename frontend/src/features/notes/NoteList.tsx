@@ -1,5 +1,6 @@
 import React from "react";
 import { noteSnippet } from "@/features/notes/noteSnippet";
+import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import {
   CheckSquare,
   Copy,
@@ -58,6 +59,7 @@ export function NoteList({
   onAction,
   empty,
   more,
+  writeBlocked = null,
 }: {
   notes: Note[];
   currentId: string | null;
@@ -71,6 +73,8 @@ export function NoteList({
   ) => Promise<string[]>;
   empty: React.ReactNode;
   more?: React.ReactNode;
+  /** 只读成员:改名、复制、收藏、移到回收站、彻底删除都收成灰的,说明为什么(见 useWriteBlocked)。导出照旧。 */
+  writeBlocked?: WriteBlock | null;
 }) {
   const s = useNoteStrings();
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -223,27 +227,28 @@ export function NoteList({
               </ContextMenuItem>
               {!targets[0].trashed && (
                 <ContextMenuItem
+                  disabled={Boolean(writeBlocked)}
                   onSelect={() => {
                     setRename(targets[0]);
                     setTitle(targets[0].title);
                   }}
                 >
-                  <MenuItemBody icon={<Pencil />} label={s.rename} />
+                  <MenuItemBody icon={<Pencil />} label={s.rename} description={writeBlocked?.brief} />
                 </ContextMenuItem>
               )}
-              <ContextMenuItem onSelect={() => void run("duplicate", targets)}>
-                <MenuItemBody icon={<Copy />} label={s.duplicate} />
+              <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => void run("duplicate", targets)}>
+                <MenuItemBody icon={<Copy />} label={s.duplicate} description={writeBlocked?.brief} />
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}
           <ContextMenuItem
-            disabled={!targets.length || busy}
+            disabled={!targets.length || busy || Boolean(writeBlocked)}
             onSelect={() =>
               void run(allFavorite ? "unfavorite" : "favorite", targets)
             }
           >
-            <MenuItemBody icon={<Star />} label={allFavorite ? s.unfavorite : s.favorite} />
+            <MenuItemBody icon={<Star />} label={allFavorite ? s.unfavorite : s.favorite} description={writeBlocked?.brief} />
           </ContextMenuItem>
           <ContextMenuItem
             disabled={!targets.length || busy}
@@ -253,7 +258,7 @@ export function NoteList({
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
-            disabled={!targets.length || busy}
+            disabled={!targets.length || busy || Boolean(writeBlocked)}
             onSelect={() =>
               void run(targets[0]?.trashed ? "restore" : "trash", targets)
             }
@@ -261,15 +266,16 @@ export function NoteList({
             <MenuItemBody
               icon={targets[0]?.trashed ? <RotateCcw /> : <Trash2 />}
               label={targets[0]?.trashed ? s.restoreTrash : s.moveTrash}
+              description={writeBlocked?.brief}
             />
           </ContextMenuItem>
           {!!targets.length && targets.every((n) => n.trashed) && (
             <ContextMenuItem
               className="text-destructive"
-              disabled={busy}
+              disabled={busy || Boolean(writeBlocked)}
               onSelect={() => setRemove(targets)}
             >
-              <MenuItemBody icon={<Trash2 />} label={s.deleteForever} />
+              <MenuItemBody icon={<Trash2 />} label={s.deleteForever} description={writeBlocked?.brief} />
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -316,9 +322,9 @@ export function NoteList({
                   ? s.unfavorite
                   : s.favorite
               }
-              disabled={!chosen.length || busy}
+              disabled={!chosen.length || busy || Boolean(writeBlocked)}
               loading={running === "favorite" || running === "unfavorite"}
-              disabledReason={!chosen.length && s.noneSelected}
+              disabledReason={writeBlocked?.reason || (!chosen.length && s.noneSelected)}
               onClick={() =>
                 void run(
                   chosen.every((n) => n.favorite) ? "unfavorite" : "favorite",
@@ -337,11 +343,11 @@ export function NoteList({
             >
               <FileOutput />
             </IconButton>
-            <Hint disabledReason={!chosen.length && s.noneSelected}>
+            <Hint disabledReason={writeBlocked?.reason || (!chosen.length && s.noneSelected)}>
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={!chosen.length || busy}
+                disabled={!chosen.length || busy || Boolean(writeBlocked)}
                 loading={running === "trash" || running === "restore"}
                 onClick={() =>
                   void run(chosen[0]?.trashed ? "restore" : "trash", chosen)
@@ -355,7 +361,8 @@ export function NoteList({
               <IconButton
                 className="text-destructive"
                 label={s.deleteForever}
-                disabled={busy}
+                disabled={busy || Boolean(writeBlocked)}
+                disabledReason={writeBlocked?.reason}
                 onClick={() => setRemove(chosen)}
               >
                 <Trash2 />

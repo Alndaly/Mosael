@@ -17,8 +17,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (k: string) => k, usePreferences: () => ({ locale: "zh-CN" }) }));
 
 import { EditorView } from "@/features/editor/EditorView";
+import { readHint } from "@/test/hint";
 
-const workspace = { id: "w1", name: "W" } as never;
+const workspace = { id: "w1", name: "W", role: "editor" } as never;
 
 describe("剪辑页空态", () => {
   it("没有项目时给出新建入口,点击触发回调", async () => {
@@ -38,5 +39,17 @@ describe("剪辑页空态", () => {
       <EditorView workspace={workspace} project={null} onCreateProject={vi.fn()} creatingProject={true} />,
     );
     expect(screen.getByRole("button", { name: /createProject/ })).toBeDisabled();
+  });
+
+  //: 只读成员(体检 UM-20 / D62):建不了项目,按钮是灰的、说清为什么,点了也不触发。
+  it("只读成员:新建入口是灰的并说为什么", async () => {
+    const onCreateProject = vi.fn();
+    render(
+      <EditorView workspace={{ id: "w1", name: "W", role: "viewer" } as never} project={null} onCreateProject={onCreateProject} creatingProject={false} />,
+    );
+    const button = screen.getByRole("button", { name: /createProject/ });
+    expect(button).toBeDisabled();
+    expect(await readHint(button)).toBe("roleReadOnlyHint");
+    expect(onCreateProject).not.toHaveBeenCalled();
   });
 });

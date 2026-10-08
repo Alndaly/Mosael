@@ -33,10 +33,11 @@ vi.mock("@/app/preferences", () => ({
 import { listAssetPage } from "@/api/client";
 import { gotoSection } from "@/lib/deepLink";
 import { PublishView } from "./PublishView";
+import { readHint } from "@/test/hint";
 
 it("selects only visible publish records and drops selections hidden by a status filter", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
   await screen.findByRole("button", { name: /Published film/ });
   fireEvent.click(screen.getByRole("tab", { name: "studioNeedsAttention" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
@@ -52,7 +53,7 @@ it("selects only visible publish records and drops selections hidden by a status
 it("enters at the succeeded records when the statistics tile sends it there", async () => {
   gotoSection("publish", "succeeded");
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
   await screen.findByRole("button", { name: /Published film/ });
   await waitFor(() => expect(screen.queryByRole("button", { name: /Needs a retry/ })).toBeNull());
   client.clear();
@@ -64,7 +65,7 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Element.prototype.scrollIntoView = () => {};
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
   const dialog = await screen.findByRole("dialog", { name: "publishCreate" });
@@ -100,7 +101,7 @@ it("新建发布:账号取不回来说取不回来、能重试;存着的设置�
   Element.prototype.scrollIntoView = () => {};
   vi.mocked(listPublishAccounts).mockRejectedValueOnce(new Error("boom"));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  const { container } = render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
+  const { container } = render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
   await waitFor(() => expect(container.ownerDocument.querySelector("[data-publish-accounts-error]")).not.toBeNull());
@@ -113,5 +114,18 @@ it("新建发布:账号取不回来说取不回来、能重试;存着的设置�
     expect(container.ownerDocument.querySelector("[data-publish-accounts-unreadable]")?.textContent).toContain("publishAccountConfigUnreadable"),
   );
   expect(container.ownerDocument.querySelector("[data-publish-accounts-error]")).toBeNull();
+  client.clear();
+});
+
+//: 只读成员(体检 UM-20 / D62):新建发布和删除记录是灰的、说清为什么;看记录照常。
+it("只读成员:新建发布是灰的并说为什么,右键删除也是灰的", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "viewer" } as Workspace} /></QueryClientProvider>);
+  const record = await screen.findByRole("button", { name: /Published film/ });
+  const create = screen.getByRole("button", { name: "publishCreate" });
+  expect(create).toBeDisabled();
+  expect(await readHint(create)).toBe("roleReadOnlyHint");
+  fireEvent.contextMenu(record, { clientX: 10, clientY: 10 });
+  expect(await screen.findByRole("menuitem", { name: /^delete/ })).toHaveAttribute("aria-disabled", "true");
   client.clear();
 });

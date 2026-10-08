@@ -28,6 +28,7 @@ function mount(
   action = vi.fn(async (_action: string, rows: Note[]) =>
     rows.map((n) => n.id),
   ),
+  writeBlocked: { reason: string; brief: string } | null = null,
 ) {
   const open = vi.fn();
   function Harness() {
@@ -41,6 +42,7 @@ function mount(
         onOpen={open}
         onAction={action}
         empty={null}
+        writeBlocked={writeBlocked}
       />
     );
   }
@@ -112,4 +114,22 @@ it("批量操作在跑时转圈的是点的那一颗,别的动作只是点不了
   finish(["a"]);
   await waitFor(() => expect(exportButton().getAttribute("aria-busy")).toBeNull());
   expect((trashButton() as HTMLButtonElement).disabled).toBe(false);
+});
+//: 只读成员(体检 UM-20 / D62):改名、复制、收藏、移到回收站都是灰的并说为什么;导出照常(只是把字带走)。
+it("只读成员:右键和批量里会改笔记的都是灰的、说为什么,导出照常", async () => {
+  const { row, action } = mount(undefined, { reason: "只读,找管理员调", brief: "只读" });
+  fireEvent.contextMenu(row("b"), { clientX: 10, clientY: 10 });
+  for (const name of [/^重命名/, /^创建副本/, /^收藏/, /^移入回收站/]) {
+    expect(screen.getByRole("menuitem", { name })).toHaveAttribute("aria-disabled", "true");
+  }
+  //: 菜单条目底下是短的那句(同一张菜单里每条都写);整句在按钮的悬停说明里
+  expect(screen.getByRole("menuitem", { name: /^重命名/ }).textContent).toBe("重命名只读");
+  expect(screen.getByRole("menuitem", { name: "导出 Markdown" })).not.toHaveAttribute("aria-disabled");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+
+  fireEvent.click(row("a"), { metaKey: true });
+  expect((screen.getByRole("button", { name: "移入回收站" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "收藏" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "导出 Markdown" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(action).not.toHaveBeenCalled();
 });
