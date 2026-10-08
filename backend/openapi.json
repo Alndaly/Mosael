@@ -41970,6 +41970,11 @@
             "type": "object",
             "title": "Config"
           },
+          "config_unreadable": {
+            "type": "boolean",
+            "title": "Config Unreadable",
+            "default": false
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"

@@ -419,6 +419,8 @@ export const publish = {
   serverForceConnect: "仍要连接",
   serverBadUrl: "请填写 http(s):// 开头的地址",
   serverPickerHint: "切换服务器会重新加载并需要重新登录。团队模式填云端后端地址;那台服务器开放注册时自己注册,否则向它的管理员要一个邀请码。",
+  publishAccountsLoadFailed: "发布账号没取回来。",
+  publishAccountConfigUnreadable: "「{names}」存着的设置解不开了(这台电脑的主密钥换了或丢了):在「浏览器池」里重新登录一次再发。",
   settingsVersionDesc: "当前 Mosael 应用版本。",
   wfDefaultName: "新工作流",
   wfEmptyTitle: "还没有工作流",

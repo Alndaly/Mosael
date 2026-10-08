@@ -525,6 +525,8 @@ function CreatePublishDialog({
   const allAccounts = accounts.data ?? [];
   const usableAccounts = allAccounts.filter((account) => account.enabled);
   const disabledAccounts = allAccounts.length - usableAccounts.length;
+  //: 存着的设置解不开了(主密钥换了或丢了):照样列出来,但说清要重新登录一次(体检 UM-22)。
+  const unreadableAccounts = usableAccounts.filter((account) => account.config_unreadable);
   const selectedAccount = usableAccounts.find((account) => account.id === accountId) ?? null;
   const platformMeta =
     (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
@@ -621,6 +623,20 @@ function CreatePublishDialog({
             className="w-full"
             onValueChange={setAccountId}
           />
+          {/* 取不回来不是「没有账号」:此前下拉里只写「没有匹配的结果」,没有一句错误也没有下一步(体检 UM-22)。 */}
+          {accounts.isError && (
+            <small data-publish-accounts-error="" className="text-destructive">
+              {t("publishAccountsLoadFailed")}{" "}
+              <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={() => void accounts.refetch()}>
+                {t("retry")}
+              </button>
+            </small>
+          )}
+          {unreadableAccounts.length > 0 && (
+            <small data-publish-accounts-unreadable="">
+              {t("publishAccountConfigUnreadable").replace("{names}", unreadableAccounts.map((account) => account.name).join(t("listSeparator")))}
+            </small>
+          )}
           {accounts.isSuccess && (allAccounts.length === 0 || disabledAccounts > 0) && (
             <small>
               {allAccounts.length === 0

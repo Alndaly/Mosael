@@ -417,6 +417,8 @@ export const publish = {
   serverForceConnect: "Connect anyway",
   serverBadUrl: "Enter an http(s):// URL",
   serverPickerHint: "Switching reloads the app and requires re-login. For team mode, enter the cloud backend URL; sign up there yourself if it allows sign-up, otherwise ask its admin for an invite code.",
+  publishAccountsLoadFailed: "Couldn’t load the publishing accounts.",
+  publishAccountConfigUnreadable: "The saved settings of “{names}” can’t be decrypted (this computer’s master key changed or was lost): sign in again in the Browser pool before publishing.",
   settingsVersionDesc: "Current Mosael app version.",
   wfDefaultName: "New workflow",
   wfEmptyTitle: "No workflows yet",

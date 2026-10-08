@@ -38,6 +38,11 @@ class PublishAccount(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
+    @property
+    def config_unreadable(self) -> bool:
+        """落盘加密的设置解不开了(主密钥换了或丢了,见 core/secrets_at_rest):读出来是 None。"""
+        return self.config is None
+
 
 class PublishTask(Base):
     """One publishing attempt backed by a job on the task bus."""

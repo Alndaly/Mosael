@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.api.schemas.base import ApiModel, OrmModel
 
@@ -58,12 +58,20 @@ class PublishAccountOut(OrmModel):
     platform: str
     name: str
     config: dict
+    #: 存着的设置解不开了(主密钥换了或丢了):`config` 给空,界面说重新登录 / 重新填一次。此前 `config` 是 None,
+    #: 整张账号列表 500,新建发布的目标下拉只写「没有匹配的结果」(体检 UM-22)。
+    config_unreadable: bool = False
     enabled: bool
     proxy: str | None = None
     binding_status: str = "unknown"
     last_error: str | None = None
     last_checked_at: datetime | None = None
     created_at: datetime
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def _unreadable_config_is_empty(cls, value: Any) -> Any:
+        return {} if value is None else value
 
 
 class PublishCreate(ApiModel):

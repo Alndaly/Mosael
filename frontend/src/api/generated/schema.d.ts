@@ -16045,6 +16045,11 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
+            /**
+             * Config Unreadable
+             * @default false
+             */
+            config_unreadable: boolean;
             /** Enabled */
             enabled: boolean;
             /** Proxy */

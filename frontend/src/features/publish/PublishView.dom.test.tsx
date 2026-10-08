@@ -92,3 +92,26 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   expect(submit).toBeEnabled();
   client.clear();
 });
+
+//: 体检 UM-22:主密钥丢了之后账号列表此前整个 500,下拉里只写「没有匹配的结果」。
+it("新建发布:账号取不回来说取不回来、能重试;存着的设置解不开的账号说要重新登录", async () => {
+  const { listPublishAccounts } = await import("@/api/client");
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  Element.prototype.scrollIntoView = () => {};
+  vi.mocked(listPublishAccounts).mockRejectedValueOnce(new Error("boom"));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const { container } = render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
+  const user = userEvent.setup();
+  await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
+  await waitFor(() => expect(container.ownerDocument.querySelector("[data-publish-accounts-error]")).not.toBeNull());
+
+  vi.mocked(listPublishAccounts).mockResolvedValueOnce([
+    { id: "live", name: "Live account", platform: "short", enabled: true, binding_status: "bound", config: {}, config_unreadable: true },
+  ] as never);
+  await user.click(within(container.ownerDocument.querySelector("[data-publish-accounts-error]") as HTMLElement).getByRole("button", { name: "retry" }));
+  await waitFor(() =>
+    expect(container.ownerDocument.querySelector("[data-publish-accounts-unreadable]")?.textContent).toContain("publishAccountConfigUnreadable"),
+  );
+  expect(container.ownerDocument.querySelector("[data-publish-accounts-error]")).toBeNull();
+  client.clear();
+});
