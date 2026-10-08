@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from uuid import uuid4
 
@@ -406,14 +405,6 @@ def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
     db.delete(model)
     # 行没了(提交成功)才删文件:反过来的话,删文件成功、提交失败就只剩一条指空的行
     after_commit(db, lambda: path.unlink(missing_ok=True))
-
-
-def delete_workspace_model_files(workspace_id: str) -> None:
-    """删工作区时把它的模型文件(和场景预览图缓存)一起删。**行是 CASCADE 走的,文件没人管** —— 和字体、LUT
-    同一套(`delete_font_files`),由删除那条路显式调用。"""
-    for directory in (scene_model_dir(workspace_id), scene_preview_dir(workspace_id)):
-        if directory.is_dir():
-            shutil.rmtree(directory, ignore_errors=True)
 
 
 def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, objects: list[dict], remove_ids: list[str], shots: list[dict] | None, name: str | None) -> Scene3D:

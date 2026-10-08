@@ -88,6 +88,22 @@ export function resetUserPassword(userId: string): Promise<components["schemas"]
   return api<components["schemas"]["AdminPasswordResetOut"]>(`/api/admin/users/${userId}/password`, { method: "POST" });
 }
 
+export type StorageOrphan = components["schemas"]["StorageOrphanOut"];
+export type StorageOrphans = components["schemas"]["StorageOrphansOut"];
+
+/** 数据目录里没人认领的文件(部署管理员看)。只列,不删 —— 见后端 domain/storage_cleanup。 */
+export function storageOrphansQuery() {
+  return {
+    queryKey: ["admin", "storage-orphans"] as const,
+    queryFn: () => api<StorageOrphans>("/api/admin/storage/orphans"),
+  };
+}
+
+/** 删掉勾选的那些孤儿。后端删之前再判一遍,不再是孤儿的跳过。 */
+export function deleteStorageOrphans(keys: string[]): Promise<components["schemas"]["StorageOrphanDeleteOut"]> {
+  return api("/api/admin/storage/orphans/delete", { method: "POST", body: JSON.stringify({ keys }) });
+}
+
 export function setDeploymentAdmin(userId: string, granted: boolean): Promise<unknown> {
   return api(`/api/auth/users/${userId}/deployment-admin`, { method: "POST", body: JSON.stringify({ granted }) });
 }

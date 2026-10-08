@@ -5961,6 +5961,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/storage/orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Storage Orphans
+         * @description 数据目录里没人认领的文件:工作区 / 素材 / 音色 / LUT / 字体已经删了、文件还在的,没有账号在用的头像。
+         *     **只列,不删**(见 domain/storage_cleanup:判据是此刻库里没有对应的行,而那可能是恢复到一半的库)。
+         */
+        get: operations["list_storage_orphans_api_admin_storage_orphans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/storage/orphans/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Storage Orphans
+         * @description 删掉管理员看过、勾选的那些孤儿。删之前再判一遍:此刻已经有人认领、或者不在清单里的一律跳过。
+         */
+        post: operations["delete_storage_orphans_api_admin_storage_orphans_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/overview": {
         parameters: {
             query?: never;
@@ -17109,6 +17150,39 @@ export interface components {
             pending_id: string;
             /** Url */
             url: string;
+        };
+        /** StorageOrphanDelete */
+        StorageOrphanDelete: {
+            /** Keys */
+            keys: string[];
+        };
+        /** StorageOrphanDeleteOut */
+        StorageOrphanDeleteOut: {
+            /** Deleted */
+            deleted: string[];
+            /** Skipped */
+            skipped: string[];
+        };
+        /** StorageOrphanOut */
+        StorageOrphanOut: {
+            /** Key */
+            key: string;
+            /** Reason */
+            reason: string;
+            /** Bytes */
+            bytes: number;
+            /**
+             * Modified At
+             * Format: date-time
+             */
+            modified_at: string;
+        };
+        /** StorageOrphansOut */
+        StorageOrphansOut: {
+            /** Items */
+            items: components["schemas"]["StorageOrphanOut"][];
+            /** Total Bytes */
+            total_bytes: number;
         };
         /** SubtitleCueInput */
         SubtitleCueInput: {
@@ -31678,6 +31752,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutboundAllowlist"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_storage_orphans_api_admin_storage_orphans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageOrphansOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_storage_orphans_api_admin_storage_orphans_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageOrphanDelete"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageOrphanDeleteOut"];
                 };
             };
             /** @description Validation Error */

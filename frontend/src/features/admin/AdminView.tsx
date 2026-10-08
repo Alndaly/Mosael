@@ -10,6 +10,7 @@ import { AdminMembers } from "./AdminMembers";
 import { AiRuntimeSection } from "./AiRuntimeSection";
 import { AsrModelsSection } from "./AsrModelsSection";
 import { DataDiagnosticsSection } from "./DataDiagnosticsSection";
+import { StorageCleanupSection } from "./StorageCleanupSection";
 import { DenoiseEnginesSection } from "./DenoiseEnginesSection";
 import { InstallSourceSection } from "./InstallSourceSection";
 import { ProviderPricingSection } from "./ProviderPricingSection";
@@ -102,6 +103,8 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
             <ProxySection />
             <AiRuntimeSection />
             <DataDiagnosticsSection />
+            {/* 没人认领的文件:列出来,确认后才删(后端 domain/storage_cleanup)。挨着备份恢复 —— 都是这台部署的数据目录。 */}
+            <StorageCleanupSection />
           </>
         )}
       </div>

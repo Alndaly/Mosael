@@ -53,6 +53,17 @@ def scene_model_key(workspace_id: str, filename: str) -> str:
     return str(Path("media") / "scene-models" / workspace_id / filename)
 
 
+#: media/ 下**按工作区分目录**的几类东西。删工作区时整个清掉的就是这几个目录(见 domain/storage_cleanup),对账也照它找
+#: 「工作区已经不在了的目录」。新加一类按工作区存的东西就加在这里 —— 漏了的话删工作区时它的文件留在盘上,
+#: 而行早就跟着外键走了(tests/test_deleted_workspaces_leave_no_files.py 钉着:上面每个按工作区分的 *_dir 都要在这张表里)。
+WORKSPACE_MEDIA_CATEGORIES = ("assets", "voices", "luts", "fonts", "scene-models", "scene-previews")
+
+
+def workspace_media_dirs(workspace_id: str) -> tuple[Path, ...]:
+    """这个工作区在 media/ 下的全部目录(素材、音色、LUT、字体、3D 模型、场景预览)。"""
+    return tuple(settings.media_dir / category / workspace_id for category in WORKSPACE_MEDIA_CATEGORIES)
+
+
 class StorageKeyError(ValueError):
     """存储键逃出了数据目录。键都由上面这些 *_key 在服务端生成,碰到它只可能是 bug 或被塞了数据。"""
 

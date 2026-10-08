@@ -363,9 +363,15 @@ def delete_account(db: Session, user: User) -> None:
             names = tr("punct_listSep").join(w.name for w in blocked)
             raise MemberError("memberErr_sharedWorkspaces", names=names)
 
+        #: 独占的工作区走和「删工作区」同一条路:行靠外键 CASCADE 走,文件(素材、音色、LUT、字体、3D 模型、技能)在
+        #: 提交之后清。此前这里直接 `db.delete(workspace)`,绕过了那条路 —— 文件一个都没清。
         for workspace in solo_workspaces(db, user.id):
-            db.delete(workspace)  # 内容靠 FK CASCADE 跟着走
+            delete_workspace(db, workspace.id)
         db.flush()
+        from app.domain.storage_cleanup import delete_user_files
+
+        avatar_key = user.avatar_key
+        after_commit(db, lambda: delete_user_files(avatar_key))
 
         # 剩下的按列扫。users 那一行留到最后 —— 有 CASCADE 的表会自己走,没有的在这里清掉。
         for table, column in _tables_pointing_at_a_person():
@@ -377,16 +383,18 @@ def delete_account(db: Session, user: User) -> None:
 
 
 def delete_workspace(db: Session, workspace_id: str) -> None:
-    """删工作区。成员和工作区里的各种资源由外键 CASCADE 带走;**文件不会** —— 3D 模型归工作区
-    (和字体、LUT 同一套)、技能文件夹也归工作区,由这里显式清掉。"""
+    """删工作区。成员和工作区里的各种资源由外键 CASCADE 带走;**文件不会** —— 素材、音色、LUT、字体、3D 模型
+    (都在 media/ 下按工作区分目录,见 media/paths.WORKSPACE_MEDIA_CATEGORIES)、技能文件夹,由这里显式清掉。
+
+    此前只清了 3D 模型和技能:素材原件、代理、缩略图、音色样本全留在盘上,而确认框写着「永久移除」。"""
     from app.domain.agent.skills.store import delete_workspace_files as delete_workspace_skills
-    from app.domain.scenes.operations import delete_workspace_model_files
+    from app.domain.storage_cleanup import delete_workspace_files
 
     workspace = db.get(Workspace, workspace_id)
     if workspace is None:
         return
     db.delete(workspace)
-    # 文件在行真的删掉(提交成功)之后再清:回滚了的话工作区还在,它的模型文件不能先没了。
-    after_commit(db, lambda: delete_workspace_model_files(workspace_id))
+    # 文件在行真的删掉(提交成功)之后再清:回滚了的话工作区还在,它的文件不能先没了。
+    after_commit(db, lambda: delete_workspace_files(workspace_id))
     # 技能文件夹也归工作区(ADR 0040 §3):索引行由外键带走,文件夹在这里删。
     after_commit(db, lambda: delete_workspace_skills(workspace_id))

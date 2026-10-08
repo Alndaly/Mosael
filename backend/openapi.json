@@ -18338,6 +18338,80 @@
         }
       }
     },
+    "/api/admin/storage/orphans": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Storage Orphans",
+        "description": "数据目录里没人认领的文件:工作区 / 素材 / 音色 / LUT / 字体已经删了、文件还在的,没有账号在用的头像。\n**只列,不删**(见 domain/storage_cleanup:判据是此刻库里没有对应的行,而那可能是恢复到一半的库)。",
+        "operationId": "list_storage_orphans_api_admin_storage_orphans_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageOrphansOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/storage/orphans/delete": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete Storage Orphans",
+        "description": "删掉管理员看过、勾选的那些孤儿。删之前再判一遍:此刻已经有人认领、或者不在清单里的一律跳过。",
+        "operationId": "delete_storage_orphans_api_admin_storage_orphans_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageOrphanDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageOrphanDeleteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/overview": {
       "get": {
         "tags": [
@@ -44336,6 +44410,98 @@
           "url"
         ],
         "title": "StartOut"
+      },
+      "StorageOrphanDelete": {
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keys"
+        ],
+        "title": "StorageOrphanDelete"
+      },
+      "StorageOrphanDeleteOut": {
+        "properties": {
+          "deleted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Deleted"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "skipped"
+        ],
+        "title": "StorageOrphanDeleteOut"
+      },
+      "StorageOrphanOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Modified At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "reason",
+          "bytes",
+          "modified_at"
+        ],
+        "title": "StorageOrphanOut"
+      },
+      "StorageOrphansOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StorageOrphanOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total_bytes": {
+            "type": "integer",
+            "title": "Total Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total_bytes"
+        ],
+        "title": "StorageOrphansOut"
       },
       "SubtitleCueInput": {
         "properties": {

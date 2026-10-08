@@ -169,7 +169,7 @@ describe("结构", () => {
     // 只有部署管理员写得了的设置都在这里,不在设置页(见 AdminView 的说明)。
     fireEvent.click(screen.getByRole("button", { name: "adminTabDeployment" }));
     await screen.findByRole("switch", { name: "deployRegistrationOpen" });
-    expect(sections(container)).toEqual(["registration", "shared-folders", "outbound-allowlist", "proxy", "ai-runtime", "data"]);
+    expect(sections(container)).toEqual(["registration", "shared-folders", "outbound-allowlist", "proxy", "ai-runtime", "data", "storage"]);
     // 选中的 tab 活过导航。
     expect(localStorage.getItem("mosael:tab:admin")).toBe("deployment");
   });
