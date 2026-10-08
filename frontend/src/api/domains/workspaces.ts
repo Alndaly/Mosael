@@ -25,6 +25,15 @@ export function inviteMember(
   });
 }
 
+/** 这个工作区发出去、对方还没应答的邀请(团队页列在成员下面)。 */
+export function sentInvitations(workspaceId: string): Promise<{ invitations: WorkspaceInvitation[] }> {
+  return api<{ invitations: WorkspaceInvitation[] }>(`/api/workspaces/${workspaceId}/invitations`);
+}
+
+export function revokeInvitation(workspaceId: string, invitationId: string): Promise<void> {
+  return api<void>(`/api/workspaces/${workspaceId}/invitations/${invitationId}`, { method: "DELETE" });
+}
+
 export function myInvitations(): Promise<{ invitations: WorkspaceInvitation[] }> {
   return api<{ invitations: WorkspaceInvitation[] }>("/api/invitations");
 }

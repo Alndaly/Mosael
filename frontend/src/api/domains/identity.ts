@@ -121,6 +121,11 @@ export function registrationInvites(): Promise<RegistrationInvite[]> {
   return api<RegistrationInvite[]>("/api/auth/invites");
 }
 
+/** 作废一个还没用过的邀请码。 */
+export function revokeRegistrationInvite(code: string): Promise<void> {
+  return api<void>(`/api/auth/invites/${encodeURIComponent(code)}`, { method: "DELETE" });
+}
+
 export function createRegistrationInvite(note: string): Promise<RegistrationInvite> {
   return api<RegistrationInvite>("/api/auth/invites", { method: "POST", body: JSON.stringify({ note }) });
 }

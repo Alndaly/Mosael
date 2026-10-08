@@ -81,6 +81,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/invites/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Registration Invite
+         * @description 作废一个还没用过的邀请码:发错了人、发出去的消息被转走了。此前发出去就撤不回,只能等它 7 天后过期(体检 UM-09)。
+         *     用过的码留着 —— 它记着这个账号是凭谁发的码进来的。
+         */
+        delete: operations["revoke_registration_invite_api_auth_invites__code__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/users": {
         parameters: {
             query?: never;
@@ -869,7 +890,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Sent Invitations
+         * @description 这个工作区发出去、对方还没应答的邀请(团队页列在成员下面,能撤回)。
+         */
+        get: operations["sent_invitations_api_workspaces__workspace_id__invitations_get"];
         put?: never;
         /**
          * Invite Member
@@ -877,6 +902,23 @@ export interface paths {
          */
         post: operations["invite_member_api_workspaces__workspace_id__invitations_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Invitation */
+        delete: operations["revoke_invitation_api_workspaces__workspace_id__invitations__invitation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -19749,6 +19791,35 @@ export interface operations {
             };
         };
     };
+    revoke_registration_invite_api_auth_invites__code__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_deployment_users_api_auth_users_get: {
         parameters: {
             query?: never;
@@ -21288,6 +21359,37 @@ export interface operations {
             };
         };
     };
+    sent_invitations_api_workspaces__workspace_id__invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     invite_member_api_workspaces__workspace_id__invitations_post: {
         parameters: {
             query?: never;
@@ -21311,6 +21413,36 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InvitationOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invitation_api_workspaces__workspace_id__invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

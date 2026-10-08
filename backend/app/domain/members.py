@@ -13,12 +13,12 @@ import secrets
 import threading
 
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.core.i18n import LocalizedError, tr
 from app.core.security import hash_password
 from app.core.unit_of_work import after_commit
-from app.db.models import RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
+from app.db.models import Notification, RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
 from app.domain import deployment
 from app.domain.permissions import PermissionDenied
 from app.domain import notifications as notifications_svc
@@ -72,7 +72,9 @@ def create_account(db: Session, *, username: str, display_name: str, password: s
     bootstrapping = db.scalar(select(User).limit(1)) is None
     invite = usable_invite(db, invite_code)
     if not bootstrapping and invite is None and not deployment.open_registration(db):
-        raise SignupClosed("routeErr_signupClosed")
+        #: 填了码却用不了,和压根没填是两回事:手里有码的人(抄错一位、过了一周、被别人先用了)此前也被告知
+        #: 「去要一个邀请码」,不知道是码的问题(体检 UM-09)。
+        raise SignupClosed("routeErr_inviteCodeUnusable" if (invite_code or "").strip() else "routeErr_signupClosed")
     username = normalize_username(username)
     if db.scalar(select(User).where(User.username == username)) is not None:
         raise UsernameTaken("memberErr_usernameTaken")
@@ -215,6 +217,37 @@ def invite_member(db: Session, workspace_id: str, inviter: User, username: str, 
         db.commit()
         db.refresh(invitation)
     return invitee, invitation
+
+
+def sent_invitations(db: Session, workspace_id: str) -> list[tuple[WorkspaceInvitation, User, User]]:
+    """这个工作区发出去、对方还没应答的邀请:(邀请, 受邀人, 邀请人)。团队页把它们列在成员下面,能撤回 ——
+    此前发出去就看不见了,邀错了人只能等对方拒绝(体检 UM-07)。"""
+    invitee, inviter = aliased(User), aliased(User)
+    rows = db.execute(
+        select(WorkspaceInvitation, invitee, inviter)
+        .join(invitee, invitee.id == WorkspaceInvitation.invitee_id)
+        .join(inviter, inviter.id == WorkspaceInvitation.inviter_id)
+        .where(WorkspaceInvitation.workspace_id == workspace_id, WorkspaceInvitation.status == "pending")
+        .order_by(WorkspaceInvitation.created_at.desc())
+    ).all()
+    return [(inv, to, by) for inv, to, by in rows]
+
+
+def revoke_invitation(db: Session, workspace_id: str, invitation_id: str) -> None:
+    """撤回一条还没应答的邀请。对方通知里那张「接受 / 拒绝」卡随之消失(卡片只列待处理的),那条「邀请你加入」
+    的通知也一起删掉 —— 留着它,点进去是一句「邀请已处理过」。不提交:交给入口的 Tx。"""
+    invitation = db.get(WorkspaceInvitation, invitation_id)
+    if invitation is None or invitation.workspace_id != workspace_id:
+        raise MemberError("memberErr_inviteNotFound")
+    if invitation.status != "pending":
+        raise MemberError("memberErr_inviteHandled")
+    invitation.status = "revoked"
+    invitation.responded_at = now()
+    db.query(Notification).filter(
+        Notification.user_id == invitation.invitee_id,
+        func.json_extract(Notification.payload, "$.invitation_id") == invitation.id,
+    ).delete(synchronize_session=False)
+    db.flush()
 
 
 def pending_invitations(db: Session, user_id: str) -> list[tuple[WorkspaceInvitation, Workspace, User]]:

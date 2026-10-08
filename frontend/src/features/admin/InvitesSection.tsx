@@ -1,11 +1,11 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, KeyRound, Plus } from "lucide-react";
+import { Ban, Copy, KeyRound, Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import { authBootstrap, createRegistrationInvite, registrationInvites } from "@/api/client";
+import { authBootstrap, createRegistrationInvite, registrationInvites, revokeRegistrationInvite } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
+import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,17 @@ export function InvitesSection({ onOpenDeployment }: { onOpenDeployment: () => v
   });
   const [creating, setCreating] = React.useState(false);
   const rows = invites.data ?? [];
+  //: 发错了人、消息被转走了:作废还没用过的码。此前发出去就撤不回,只能等它 7 天后过期(体检 UM-09)。
+  const qc = useQueryClient();
+  const [revoking, setRevoking] = React.useState<string | null>(null);
+  const revoke = useMutation({
+    mutationFn: (code: string) => revokeRegistrationInvite(code),
+    onSuccess: () => {
+      toast.success(t("deployInviteRevoked"));
+      void qc.invalidateQueries({ queryKey: ["registration-invites"] });
+    },
+    onSettled: () => setRevoking(null),
+  });
 
   return (
     <AdminSection
@@ -78,25 +89,39 @@ export function InvitesSection({ onOpenDeployment }: { onOpenDeployment: () => v
               }
             >
               <Badge variant={invite.used ? "secondary" : "outline"}>{invite.used ? t("deployInviteUsed") : t("deployInviteOpen")}</Badge>
-              {/* 用过的码没有「复制」,但那一格照样占着 —— 否则两行的状态标签对不齐。 */}
+              {/* 用过的码没有「复制」「作废」,但那两格照样占着 —— 否则几行的状态标签对不齐。 */}
               {invite.used ? (
-                <span aria-hidden className="size-8" />
+                <span aria-hidden className="w-[4.25rem]" />
               ) : (
-                <IconButton
-                  label={t("deployInviteCopy")}
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(invite.code);
-                    toast.success(t("deployInviteCopied"));
-                  }}
-                >
-                  <Copy />
-                </IconButton>
+                <span className="flex items-center gap-1">
+                  <IconButton
+                    label={t("deployInviteCopy")}
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(invite.code);
+                      toast.success(t("deployInviteCopied"));
+                    }}
+                  >
+                    <Copy />
+                  </IconButton>
+                  <IconButton label={t("deployInviteRevoke")} onClick={() => setRevoking(invite.code)}>
+                    <Ban />
+                  </IconButton>
+                </span>
               )}
             </AdminRow>
           ))
         )}
       </div>
       <InviteDialog open={creating} onClose={() => setCreating(false)} />
+      <ConfirmDialog
+        open={revoking !== null}
+        title={t("deployInviteRevoke")}
+        body={t("deployInviteRevokeConfirm")}
+        confirmLabel={t("deployInviteRevoke")}
+        onCancel={() => setRevoking(null)}
+        pending={revoke.isPending}
+        onConfirm={() => revoking && revoke.mutate(revoking)}
+      />
     </AdminSection>
   );
 }

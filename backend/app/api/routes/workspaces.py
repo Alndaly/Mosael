@@ -128,6 +128,35 @@ def invite_member(workspace_id: str, body: InviteMemberRequest, db: Tx, user: Cu
     )
 
 
+@router.get("/workspaces/{workspace_id}/invitations", response_model=InvitationListOut)
+def sent_invitations(workspace_id: str, db: DbSession, user: CurrentUser) -> InvitationListOut:
+    """这个工作区发出去、对方还没应答的邀请(团队页列在成员下面,能撤回)。"""
+    workspace = db.get(Workspace, workspace_id)
+    items = [
+        InvitationOut(
+            id=inv.id,
+            workspace_id=workspace_id,
+            workspace_name=workspace.name if workspace else workspace_id,
+            inviter_name=inviter.display_name,
+            invitee_name=invitee.display_name,
+            role=inv.role,
+            status=inv.status,
+            created_at=inv.created_at,
+        )
+        for inv, invitee, inviter in workspaces.list_sent_invitations(db, user, workspace_id)
+    ]
+    return InvitationListOut(invitations=items)
+
+
+@router.delete("/workspaces/{workspace_id}/invitations/{invitation_id}", status_code=204)
+def revoke_invitation(workspace_id: str, invitation_id: str, db: Tx, user: CurrentUser) -> Response:
+    try:
+        workspaces.revoke_invitation(db, user, workspace_id, invitation_id)
+    except members_svc.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
 @router.get("/invitations", response_model=InvitationListOut)
 def my_invitations(db: DbSession, user: CurrentUser) -> InvitationListOut:
     """当前用户的待处理邀请(供通知中心渲染 接受/拒绝)。"""

@@ -148,6 +148,6 @@ class WorkspaceInvitation(Base):
     inviter_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     invitee_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role: Mapped[str] = mapped_column(String(40), nullable=False, default="editor")  # admin|editor|viewer
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending|accepted|declined
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")  # pending|accepted|declined|revoked
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

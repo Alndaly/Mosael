@@ -35,6 +35,7 @@ const calls = {
   resetPassword: vi.fn(),
   setOpenRegistration: vi.fn(),
   createInvite: vi.fn(),
+  revokeInvite: vi.fn(),
 };
 /** 部署设置与成本规则那几节走通用的 `api(path)`:按路径给一份最小的回包。 */
 function fakeApi(path: string, init?: RequestInit): Promise<unknown> {
@@ -81,6 +82,10 @@ vi.mock("@/api/client", async (importOriginal) => ({
     return Promise.resolve({ open });
   },
   registrationInvites: () => Promise.resolve([{ code: "CODE1", note: "for **Sam**", used: false, expires_at: "2099-01-01T00:00:00Z" }]),
+  revokeRegistrationInvite: (code: string) => {
+    calls.revokeInvite(code);
+    return Promise.resolve();
+  },
   createRegistrationInvite: (note: string) => {
     calls.createInvite(note);
     return Promise.resolve({ code: "NEW", note, used: false, expires_at: "2099-01-01T00:00:00Z" });
@@ -394,6 +399,17 @@ describe("成员", () => {
     fireEvent.change(within(dialog).getByLabelText(/deployInviteNoteLabel/), { target: { value: "for Kim" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "deployInviteCreate" }));
     await waitFor(() => expect(calls.createInvite).toHaveBeenCalledWith("for Kim"));
+  });
+
+  //: 体检 UM-09:发出去的码此前撤不回,只能等它 7 天后过期。
+  it("没用过的邀请码能作废(先问一句)", async () => {
+    openRegistration = false;
+    show([admin], "members");
+    fireEvent.click(await screen.findByRole("button", { name: "deployInviteRevoke" }));
+    expect(calls.revokeInvite).not.toHaveBeenCalled();
+    const confirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "deployInviteRevoke" }));
+    await waitFor(() => expect(calls.revokeInvite).toHaveBeenCalledWith("CODE1"));
   });
 });
 

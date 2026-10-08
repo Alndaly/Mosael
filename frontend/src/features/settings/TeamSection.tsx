@@ -9,6 +9,7 @@ import {
   Pencil,
   Trash2,
   UserPlus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,10 +18,13 @@ import {
   listActivity,
   listMembers,
   removeMember,
+  revokeInvitation,
+  sentInvitations,
   setMemberRole,
   type Workspace,
   type WorkspaceMember,
   type ActivityEvent,
+  type WorkspaceInvitation,
 } from "@/api/client";
 import { workspaceKeys } from "@/api/queryKeys";
 import { useAuth } from "@/app/auth";
@@ -31,7 +35,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
@@ -71,6 +75,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const members = useQuery({ queryKey: key, queryFn: () => listMembers(wid) });
   const activity = useQuery({ queryKey: ["activity", wid], queryFn: () => listActivity(wid) });
   const invalidate = () => void qc.invalidateQueries({ queryKey: key });
+  const sentKey = ["sent-invitations", wid];
   const onErr = (error: Error) => toast.error(error.message);
   const [renameOpen, setRenameOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
@@ -78,6 +83,18 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const myRole = members.data?.my_role ?? workspace.role ?? "viewer";
   const canManage = atLeast(myRole, "admin");
   const isOwner = myRole === "owner";
+  //: 发出去、还没应答的邀请列在成员下面,能撤回 —— 此前发出去就看不见了,邀错了人只能等对方拒绝(体检 UM-07)。
+  //: 只有能发邀请的人看得到(和后端同一道闸)。
+  const sent = useQuery({ queryKey: sentKey, queryFn: () => sentInvitations(wid), enabled: canManage });
+  const [revoking, setRevoking] = React.useState<WorkspaceInvitation | null>(null);
+  const revokeMut = useMutation({
+    mutationFn: (invitation: WorkspaceInvitation) => revokeInvitation(wid, invitation.id),
+    onSuccess: (_, invitation) => {
+      toast.success(t("teamInviteRevoked").replace("{name}", invitation.invitee_name));
+      void qc.invalidateQueries({ queryKey: sentKey });
+    },
+    onSettled: () => setRevoking(null),
+  });
   //: 改名 / 删除工作区的门槛和切换器同一份(workspaceMenuState):包括「只剩一个不许删」。
   //: 权限不够的直接不摆;只剩一个的摆出来但灰掉,并说原因 —— 他有权限,只是现在不能删。
   const workspaces = useWorkspaces();
@@ -169,6 +186,15 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             onRole={(role) => roleMut.mutate({ userId: m.user_id, role })}
             onRemove={() => removeMut.mutate(m.user_id)}
             removing={removeMut.isPending && removeMut.variables === m.user_id}
+            workspaceName={workspace.name}
+          />
+        ))}
+        {canManage && (sent.data?.invitations ?? []).map((invitation) => (
+          <PendingInvitationRow
+            key={invitation.id}
+            invitation={invitation}
+            roleLabel={roleLabel}
+            onRevoke={() => setRevoking(invitation)}
           />
         ))}
       </SettingsListBlock>
@@ -179,11 +205,21 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             onInvite={async (body) => {
               await inviteMember(wid, body);
               invalidate();
+              void qc.invalidateQueries({ queryKey: sentKey });
             }}
           />
         </SettingsBlock>
       )}
 
+      <ConfirmDialog
+        open={revoking !== null}
+        title={t("teamInviteRevoke")}
+        body={t("teamInviteRevokeConfirm").replace("{name}", revoking?.invitee_name ?? "")}
+        confirmLabel={t("teamInviteRevoke")}
+        onCancel={() => setRevoking(null)}
+        pending={revokeMut.isPending}
+        onConfirm={() => revoking && revokeMut.mutate(revoking)}
+      />
       <RenameDialog
         open={renameOpen}
         title={t("renameWorkspace")}
@@ -232,6 +268,7 @@ function MemberRow({
   onRole,
   onRemove,
   removing,
+  workspaceName,
 }: {
   member: WorkspaceMember;
   canManage: boolean;
@@ -242,6 +279,8 @@ function MemberRow({
   onRemove: () => void;
   /** 移除 / 退出正在进行 —— 确认框开着、确认键转圈,完成后这一行自己就没了。 */
   removing: boolean;
+  /** 退出确认里说的是退出哪个工作区(此前把自己的用户名填进了「{name}」所在的工作区)。 */
+  workspaceName: string;
 }) {
   const t = useI18n();
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -288,13 +327,47 @@ function MemberRow({
             <ConfirmDialog
               open={confirmOpen}
               title={isSelf ? t("teamLeave") : t("teamRemove")}
-              body={(isSelf ? t("teamLeaveConfirm") : t("teamRemoveConfirm")).replace("{name}", member.username)}
+              body={isSelf ? t("teamLeaveConfirm").replace("{name}", workspaceName) : t("teamRemoveConfirm").replace("{name}", memberName)}
               onCancel={() => setConfirmOpen(false)}
               pending={removing}
               onConfirm={onRemove}
             />
           </>
         )}
+      </div>
+    </SettingsListItem>
+  );
+}
+
+/** 一条发出去、还没应答的邀请:谁、什么角色、多久前发的,能撤回。 */
+function PendingInvitationRow({
+  invitation,
+  roleLabel,
+  onRevoke,
+}: {
+  invitation: WorkspaceInvitation;
+  roleLabel: (role: string) => string;
+  onRevoke: () => void;
+}) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  return (
+    <SettingsListItem data-pending-invitation={invitation.id} className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground" aria-hidden>
+          <Clock size={12} />
+        </span>
+        <Truncate className="text-ui-md text-muted-foreground">{invitation.invitee_name}</Truncate>
+        <Badge variant="secondary">{t("teamInvitePending")}</Badge>
+        <span className="shrink-0 text-ui-xs text-muted-foreground">
+          {t("teamInviteSentAgo").replace("{t}", relativeTime(invitation.created_at, locale)).replace("{name}", invitation.inviter_name)}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Badge variant="outline">{roleLabel(invitation.role)}</Badge>
+        <IconButton onClick={onRevoke} label={t("teamInviteRevoke")}>
+          <X size={14} />
+        </IconButton>
       </div>
     </SettingsListItem>
   );
@@ -340,6 +413,8 @@ function InviteMemberForm({ onInvite }: { onInvite: (body: { username: string; r
                 <FormControl>
                   <Input autoComplete="off" placeholder={t("teamInvitePlaceholder")} {...field} />
                 </FormControl>
+                {/* 后端按界面语言给了原因(没有这个用户名、已经是成员、已经邀请过);此前只把标签染红,一句话都没有(体检 UM-07)。 */}
+                <FormMessage />
               </FormItem>
             )}
           />

@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from datetime import timedelta
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from app.api.responses import file_response
 from sqlalchemy import func, select
@@ -116,6 +116,21 @@ def list_registration_invites(db: DbSession, user: CurrentUser) -> list[dict]:
         }
         for row in rows
     ]
+
+
+@router.delete("/auth/invites/{code}", status_code=204)
+def revoke_registration_invite(code: str, db: DbSession, user: CurrentUser) -> Response:
+    """作废一个还没用过的邀请码:发错了人、发出去的消息被转走了。此前发出去就撤不回,只能等它 7 天后过期(体检 UM-09)。
+    用过的码留着 —— 它记着这个账号是凭谁发的码进来的。"""
+    ensure_deployment_admin(db, user)
+    invite = db.get(RegistrationInvite, code)
+    if invite is None:
+        raise HTTPException(status_code=404, detail=tr("routeErr_inviteCodeNotFound"))
+    if invite.used_by:
+        raise HTTPException(status_code=409, detail=tr("routeErr_inviteCodeUsed"))
+    db.delete(invite)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/auth/users")

@@ -131,6 +131,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "该素材不支持生成预览代理",
         "en": "This asset doesn't support a preview proxy.",
     },
+    "routeErr_inviteCodeUnusable": {
+        "zh": "这个邀请码用不了:可能抄错了、已经有人用过,或者过了 7 天有效期。请向管理员要一个新的",
+        "en": "This invite code can't be used: it may be mistyped, already used, or past its 7-day validity. Ask an administrator for a new one.",
+    },
+    "routeErr_inviteCodeNotFound": {
+        "zh": "没有这个邀请码(可能已经作废了)",
+        "en": "No such invite code (it may already have been revoked).",
+    },
+    "routeErr_inviteCodeUsed": {
+        "zh": "这个邀请码已经有人用来注册了,作废不了",
+        "en": "Someone has already signed up with this invite code, so it can't be revoked.",
+    },
     "routeErr_signupClosed": {
         "zh": "这个部署不开放自助注册,请向管理员要一个邀请码",
         "en": "This deployment doesn't allow self sign-up. Ask an administrator for an invite code.",

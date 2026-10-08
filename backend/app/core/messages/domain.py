@@ -140,8 +140,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A .cube file must be UTF-8 text.",
     },
     "memberErr_userNotFound": {
-        "zh": "该用户名不存在;请对方先在登录页注册账号",
-        "en": "No such username. Ask them to sign up on the login page first.",
+        "zh": "没有这个用户名。对方要先有这台 Mosael 的账号:开放注册时他在登录页自己注册;仅限邀请时请部署管理员给他一个邀请码",
+        "en": "No such username. They need an account on this Mosael first: with open sign-up they register on the login page; if it's invite-only, ask a deployment admin for an invite code for them.",
     },
     "memberErr_inviteSelf": {
         "zh": "不能邀请自己",
@@ -152,8 +152,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "They're already a member of this workspace.",
     },
     "memberErr_invitePending": {
-        "zh": "已有待处理的邀请",
-        "en": "There's already a pending invitation.",
+        "zh": "已经邀请过了,等对方在通知里接受;要换角色,先撤回下面那条邀请",
+        "en": "Already invited — waiting for them to accept in their notifications. To change the role, revoke that invitation below first.",
     },
     "memberErr_inviteNotFound": {
         "zh": "邀请不存在",

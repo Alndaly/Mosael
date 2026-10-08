@@ -109,6 +109,17 @@ def invite_to_workspace(
     return invitee, invitation, workspace.name if workspace else workspace_id
 
 
+def list_sent_invitations(db: Session, user: User, workspace_id: str) -> list[tuple[WorkspaceInvitation, User, User]]:
+    """发出去、还没应答的邀请。和发邀请同一道闸(`members`)。"""
+    ensure_workspace_perm(db, user, workspace_id, "members")
+    return members_svc.sent_invitations(db, workspace_id)
+
+
+def revoke_invitation(db: Session, user: User, workspace_id: str, invitation_id: str) -> None:
+    ensure_workspace_perm(db, user, workspace_id, "members")
+    members_svc.revoke_invitation(db, workspace_id, invitation_id)
+
+
 def change_member_role(
     db: Session, user: User, workspace_id: str, user_id: str, role: str
 ) -> tuple[WorkspaceMember, User | None]:

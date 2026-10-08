@@ -416,7 +416,7 @@ export const publish = {
   serverConnectLocal: "Connect local",
   serverForceConnect: "Connect anyway",
   serverBadUrl: "Enter an http(s):// URL",
-  serverPickerHint: "Switching reloads the app and requires re-login. For team mode, enter the cloud backend URL (an admin must create your account on that server first).",
+  serverPickerHint: "Switching reloads the app and requires re-login. For team mode, enter the cloud backend URL; sign up there yourself if it allows sign-up, otherwise ask its admin for an invite code.",
   settingsVersionDesc: "Current Mosael app version.",
   wfDefaultName: "New workflow",
   wfEmptyTitle: "No workflows yet",

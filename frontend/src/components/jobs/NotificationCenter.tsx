@@ -144,7 +144,10 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
         {/* 单列 grid 的隐式列是 max-content —— 一条长通知正文会把整个弹层撑到能左右滚
             (任务中心同一处坑)。锁住列宽,行内的 truncate 才有定数可截。 */}
         <div className="grid max-h-[min(560px,70vh)] grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto overflow-x-hidden px-3 py-2">
-          {pendingInvites.map((inv) => (
+          {pendingInvites.map((inv) => {
+            //: 只转这一张卡上点的那个键:此前所有邀请卡的四个按钮看同一个 isPending,一起转(体检 UM-35)。
+            const answering = respond.isPending && respond.variables?.id === inv.id ? respond.variables.accept : null;
+            return (
             <div
               key={inv.id}
               className="grid gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--primary)_28%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] px-2.5 py-2"
@@ -158,7 +161,8 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
               <div className="flex gap-1.5">
                 <Button
                   size="xs"
-                  loading={respond.isPending}
+                  loading={answering === true}
+                  disabled={answering === false}
                   onClick={() => respond.mutate({ id: inv.id, accept: true })}
                 >
                   <Check size={12} /> {t("notifInviteAccept")}
@@ -167,14 +171,16 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
                   size="xs"
                   variant="outline"
                   className="text-muted-foreground"
-                  loading={respond.isPending}
+                  loading={answering === false}
+                  disabled={answering === true}
                   onClick={() => respond.mutate({ id: inv.id, accept: false })}
                 >
                   <X size={12} /> {t("notifInviteDecline")}
                 </Button>
               </div>
             </div>
-          ))}
+            );
+          })}
           {/* 行间的线**不用 `divide-y`**,理由有两个,都是实测出来的:
               一、行上曾有个 `border-0`,而 Tailwind v4 把 divide-y 编译成
                  `:where(.divide-y > :not(:last-child))` —— `:where()` 特异性是 0,被 `border-0`
