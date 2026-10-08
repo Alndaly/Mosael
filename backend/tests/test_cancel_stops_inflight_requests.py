@@ -57,7 +57,8 @@ class _SlowUpstream:
         self.answered = False
         self._listener = socket.create_server(("127.0.0.1", 0))
         self.port = self._listener.getsockname()[1]
-        threading.Thread(target=self._serve, daemon=True).start()
+        self._server = threading.Thread(target=self._serve, daemon=True)
+        self._server.start()
 
     def _serve(self) -> None:
         while True:
@@ -146,7 +147,14 @@ class _SlowUpstream:
             conn.setblocking(True)
 
     def close(self) -> None:
+        # 只 close 叫不醒阻塞在 accept() 里的线程 —— macOS 上会醒,Linux(CI)上不会,线程一直活着,
+        # 测试结束后的「线程没收完」检查就红。先 shutdown 再 close,两边都会让 accept() 抛错退出。
+        try:
+            self._listener.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         self._listener.close()
+        self._server.join(timeout=5)
 
 
 @pytest.fixture
