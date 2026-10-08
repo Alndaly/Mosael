@@ -42202,7 +42202,14 @@
             "title": "Platform"
           },
           "asset_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Asset Id"
           },
           "asset_name": {

@@ -321,11 +321,31 @@ def recheck_account(db: Session, account: PublishAccount, *, actor: str | None) 
 
 
 def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -> None:
-    """删发布账号(发布任务随外键级联)。只有主人能删。"""
+    """删发布账号(发布任务随外键级联)。只有主人能删。
+
+    **还没发完的任务先撤单**:任务行随外键一起没了,而它背后那个任务总线上的 job 不会 —— 此前它一直停在「排队 / 运行中」,
+    任务中心和等着它的工作流节点永远等不到结果。撤单让 job 落取消态;正在发的那条,桌面发布器每半秒查一次任务状态,
+    查不到任务就中止(electron/publish/publishWorker.ts 的 checkpoint)。"""
+    from app.domain.jobs import cancel_job_tree
+
     sharing.ensure_manageable(db, "publish_account", account, actor=actor)
+    for task in db.scalars(select(PublishTask).where(
+        PublishTask.account_id == account.id, PublishTask.status.notin_(TERMINAL_TASK_STATUSES),
+    )):
+        job = db.get(Job, task.job_id) if task.job_id else None
+        if job is not None:
+            cancel_job_tree(db, job)  # 已经落了终态的不动;顺带把任务撤单(见 jobs._cancel_job_row)
+        task.status = "cancelled"
     sharing.forget(db, "publish_account", account.id)
     db.delete(account)
     db.flush()
+
+
+def active_tasks_for_asset(db: Session, asset_id: str) -> list[PublishTask]:
+    """这份素材还在发的那些任务(没落终态的)。删素材之前问一声(见 assets.deletion.delete_asset)。"""
+    return list(db.scalars(select(PublishTask).where(
+        PublishTask.asset_id == asset_id, PublishTask.status.notin_(TERMINAL_TASK_STATUSES),
+    )))
 
 
 def start_publish(
@@ -379,6 +399,8 @@ def start_publish(
         workspace_id=workspace_id,
         account_id=account.id,
         asset_id=asset.id,
+        #: 素材之后删了,记录还说得出发的是什么(见 PublishTask.asset_id)。
+        asset_name=asset.name or "",
         title=title,
         description=description,
         tags=tags,
@@ -402,7 +424,7 @@ def start_publish(
 def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
     job = db.get(Job, task.job_id) if task.job_id else None
     account = db.get(PublishAccount, task.account_id)
-    asset = db.get(Asset, task.asset_id)
+    asset = db.get(Asset, task.asset_id) if task.asset_id else None
     platform = account.platform if account else ""
     # 发布任务有自己的状态机(pending/running/login_required/waiting_manual/…),job 表达不了
     # 那些需要人介入的中间态。以前这里要按 executor 在 task.status 和 job.status 之间二选一,
@@ -415,7 +437,8 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
         "account_name": account.name if account else "",
         "platform": platform,
         "asset_id": task.asset_id,
-        "asset_name": asset.name if asset else "",
+        #: 素材删了,记录还在(asset_id 为空):名字取建任务时记下的那份。
+        "asset_name": asset.name if asset else task.asset_name,
         "title": task.title,
         "description": task.description,
         "tags": list(task.tags or []),

@@ -8574,6 +8574,33 @@ def _drop_agent_sessions_project_id() -> None:
         _rebuild_dropping("agent_sessions", ("project_id",))
 
 
+def _migrate_publish_records_outlive_their_asset() -> None:
+    """删素材不再连带删掉它的发布记录(MED-3):`publish_tasks.asset_id` 从「不可空、`ON DELETE CASCADE`」改成「可空、
+    `SET NULL`」,并加上 `asset_name` —— 素材没了,记录还说得出发的是什么。
+
+    此前删一份发过的成片腾空间,发布历史和平台上的作品 ID(`post`,之后查播放、评论的唯一线索)跟着没了。SQLite 改不了
+    已有列的外键动作和可空性,只能照现在的 ORM 重建这张表(见 `_rebuild_dropping`,这里一列都不删)。重建之后按还在的素材
+    回填 `asset_name`;建这一列之前就删掉的素材,连同记录早已级联删掉,无从回填。
+
+    表还没有就什么都不做;外键、可空、列都已经是新形状就只补名字。幂等。
+    """
+    with engine.connect() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
+        if "publish_tasks" not in tables:
+            return
+        # table_info: (cid, name, type, notnull, dflt_value, pk);foreign_key_list: (id, seq, table, from, to, on_update, on_delete, match)
+        columns = {row[1]: row for row in conn.execute(text("PRAGMA table_info(publish_tasks)"))}
+        on_delete = {row[3]: row[6] for row in conn.execute(text("PRAGMA foreign_key_list(publish_tasks)"))}
+    if on_delete.get("asset_id") != "SET NULL" or columns["asset_id"][3] or "asset_name" not in columns:
+        _rebuild_dropping("publish_tasks", ())
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE publish_tasks SET asset_name = "
+            "(SELECT COALESCE(assets.name, '') FROM assets WHERE assets.id = publish_tasks.asset_id) "
+            "WHERE asset_name = '' AND asset_id IN (SELECT id FROM assets)"
+        ))
+
+
 def _foreign_key_violations(sqlite: Any, tables: list[str]) -> Counter[tuple[str, str]]:
     """这几张表上「指向不存在的行」的外键,按 (子表, 父表) 计数。按计数比,不按 rowid:重建的那张表 rowid 会变。"""
     found: Counter[tuple[str, str]] = Counter()
@@ -9026,6 +9053,9 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _expire_orphaned_session_confirmations),
             #: 一次性改名的老账按 key 记,换成按 key 和旧名字记(PLG-2):数的是这个连接现在的模型行和工具名。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_applied_moves_remember_old_names),
+            #: 删素材不再连带删掉发布记录(MED-3):外键改 SET NULL 只能重建表。要在 SCHEMA 之后 —— 新表照现在的 ORM 建,
+            #: 那时 publish_tasks 上 ORM 要的其余列(options、claimed_by、post)都已由上面那几步补上。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_publish_records_outlive_their_asset),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

@@ -93,7 +93,8 @@ class PublishTaskOut(ApiModel):
     account_id: str
     account_name: str
     platform: str
-    asset_id: str
+    #: 素材已经删了的那条发布记录为空(记录留着,见 db.model_slices.publish.PublishTask.asset_id)。
+    asset_id: str | None
     asset_name: str
     title: str
     description: str

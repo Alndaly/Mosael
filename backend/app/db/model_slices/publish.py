@@ -47,7 +47,11 @@ class PublishTask(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     account_id: Mapped[str] = mapped_column(ForeignKey("publish_accounts.id", ondelete="CASCADE"), nullable=False)
-    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
+    #: 发的是哪份素材。**素材删了,发布记录留着**(`SET NULL`):平台上的作品还在,作品 ID(`post`)是之后查播放、评论的
+    #: 唯一线索。此前是 CASCADE —— 删一份发过的成片腾空间,发布历史和作品 ID 跟着没了。素材名记在 `asset_name` 里,
+    #: 素材没了也说得出发的是什么。
+    asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    asset_name: Mapped[str] = mapped_column(String(400), nullable=False, default="", server_default="")
     title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)

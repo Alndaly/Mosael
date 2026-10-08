@@ -57,7 +57,7 @@ it("勾一处、确认之后只删那一处", async () => {
   fireEvent.click(await screen.findByRole("checkbox", { name: "media/assets/gone-ws" }));
   fireEvent.click(screen.getByRole("button", { name: /storageOrphansDelete/ }));
   const dialog = await screen.findByRole("alertdialog");
-  expect(deletes).toEqual([], "确认之前不删");
+  expect(deletes).toEqual([]); // 确认之前不删
   fireEvent.click(within(dialog).getByRole("button", { name: "storageOrphansConfirmAction" }));
   await waitFor(() => expect(deletes).toEqual([["media/assets/gone-ws"]]));
 });

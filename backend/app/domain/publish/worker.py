@@ -129,7 +129,8 @@ def claim_next_pending(
     if row is None:
         return None
     task, account = row
-    asset = db.get(Asset, task.asset_id)
+    # 素材删了、发布记录留着的(asset_id 置空,见 PublishTask.asset_id)。还在发的素材删不掉,所以排着的任务正常走不到这里。
+    asset = db.get(Asset, task.asset_id) if task.asset_id else None
     if asset is None or not asset.file_key:
         task.status = "failed"
         task.error_message = "素材文件缺失"

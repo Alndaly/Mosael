@@ -72,6 +72,7 @@ logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import AssetProjectError
+from app.domain.assets.deletion import AssetBeingPublished
 from app.domain.assets.importer import AssetFileTypeError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes.operations import SceneDomainError
@@ -262,6 +263,11 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(AssetFileTypeError)
     async def _asset_file_type_error(_request: Request, exc: AssetFileTypeError) -> JSONResponse:
         """素材库不收这种文件(ADR 0031)。和上面同一个理由:入库的入口很多,判断在 assets/importer 一处,翻成 415 也在这一处。"""
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(AssetBeingPublished)
+    async def _asset_being_published(_request: Request, exc: AssetBeingPublished) -> JSONResponse:
+        """素材还在发布,不让删(409)。删素材有接口和智能体确认卡两个入口,判断在 assets/deletion 一处,翻也在这一处。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(SkillDomainError)

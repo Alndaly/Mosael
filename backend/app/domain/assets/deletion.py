@@ -14,11 +14,34 @@ from dataclasses import dataclass
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
-from app.db.models import Asset, Clip
+from app.db.models import Asset, Clip, PublishAccount
 from app.db.models import Sequence as SequenceModel
 from app.domain.sequences.offline import offline_snapshot
 from app.media.paths import resolve_key
+
+
+class AssetBeingPublished(LocalizedError, ValueError):
+    """这份素材还有没发完的发布任务。先等它发完,或先取消那条发布。"""
+
+    status = 409
+
+
+def ensure_not_being_published(db: Session, asset: Asset) -> None:
+    """还在发的素材不让删。
+
+    发布器认领任务之后要按 `asset_id` 读这份文件、上传到平台;中途把文件删了,平台那头是一次传了一半的失败,
+    而这边任务已经没有素材可重试。发完了(成功 / 失败 / 已取消)就随便删 —— 发布记录留着(见 PublishTask.asset_id)。
+    """
+    from app.domain.publish import active_tasks_for_asset
+
+    active = active_tasks_for_asset(db, asset.id)
+    if active:
+        account = db.get(PublishAccount, active[0].account_id)
+        raise AssetBeingPublished(
+            "assetErr_beingPublished", name=asset.name, account=account.name if account else "", count=len(active),
+        )
 
 
 @dataclass(frozen=True)
@@ -39,7 +62,10 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
     想删一个素材得先自己一条条翻出每一段。
 
     不记成可撤销的时间线操作:素材文件已经删了,撤销只能还回一个指向空文件的片段。
+
+    **还在发布的不删**(见 ensure_not_being_published);发完的照删,发布记录留着、`asset_id` 置空。
     """
+    ensure_not_being_published(db, asset)
     snapshot = offline_snapshot(asset)
     touched: set[str] = set()
     count = 0

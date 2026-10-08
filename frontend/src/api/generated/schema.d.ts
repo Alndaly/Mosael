@@ -16148,7 +16148,7 @@ export interface components {
             /** Platform */
             platform: string;
             /** Asset Id */
-            asset_id: string;
+            asset_id: string | null;
             /** Asset Name */
             asset_name: string;
             /** Title */
