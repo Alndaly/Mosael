@@ -288,6 +288,39 @@ def test_目录变了才重新拉_问指纹不留调用记录(connected) -> None
     assert len(rows) == calls_before + 2, "只有真的重新拉目录的那两次留记录;问指纹不留"
 
 
+def test_目录变了却刷不出来_退避着重试_指纹又变了立刻再试(connected, monkeypatch) -> None:
+    """PLG-7:刷新失败时指纹留着旧的,便宜的 `op: fingerprint` 每分钟都说「变了」,此前每分钟就把整份目录(每张工作流 + object_info)
+    重拉一遍、留一条失败的调用记录。现在同一个指纹没刷出来,一分钟起、每次翻倍、最多半小时再试;指纹又变了立刻再试。"""
+    from app.db.models import PluginInvocation
+    from app.domain.plugins import catalog_watch
+
+    client, comfy, instance_id = connected
+    clock = [1000.0]
+    monkeypatch.setattr(catalog_watch, "_clock", lambda: clock[0])
+    monkeypatch.setattr(catalog_watch, "_failed", {})
+
+    def tries() -> int:
+        with SessionLocal() as db:
+            return db.query(PluginInvocation).filter_by(instance_id=instance_id).count()
+
+    comfy.state.static["/object_info"] = ("text/html", b"<html>500</html>")  # 指纹照样问得到,目录拉不出来
+    comfy.state.workflows["fresh.json"] = comfy.state.workflows["portrait.json"]
+    before = tries()
+    assert catalog_watch.check_for_changes() == 0
+    assert tries() == before + 2, "变了就试一次(模型目录、工具清单各一次)"
+    clock[0] += 30
+    assert catalog_watch.check_for_changes() == 0 and tries() == before + 2, "同一个指纹,一分钟内不再试"
+    clock[0] += 31
+    assert catalog_watch.check_for_changes() == 0 and tries() == before + 4, "过了一分钟再试一次"
+    clock[0] += 61
+    assert catalog_watch.check_for_changes() == 0 and tries() == before + 4, "又没成:这回等两分钟"
+    del comfy.state.static["/object_info"]
+    comfy.state.workflows["fresher.json"] = comfy.state.workflows["portrait.json"]
+    assert catalog_watch.check_for_changes() == 2, "指纹又变了(那一头又改了东西):不等,立刻再试,这回成了"
+    assert "fresher.json" in _options(client, "image")
+    assert catalog_watch._failed == {}
+
+
 def test_工作台跑画布上的图_从头到尾_普通的生成任务_产出标来源节点(connected) -> None:
     """ADR 0038 §6:工作台的「运行」跑画布上现在这张(含没存的改动)。真插件、假 ComfyUI、普通的生成执行器:图在任务载荷里交给
     插件,原样提交(前端的 clientId、界面格式进 extra_pnginfo),不读文件、不填参数,产出进素材库、各带来自哪个节点。"""

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -36,6 +37,15 @@ logger = logging.getLogger(__name__)
 WATCH_INTERVAL_SECONDS = 60.0
 #: 问一次指纹最多等多久。它该是一个只列目录的请求,几秒还没回就当这一轮没问到。
 FINGERPRINT_TIMEOUT_SECONDS = 20.0
+#: 指纹变了、目录却没刷出来(插件那一头 object_info 出错、目录拉到超时……)之后,多久再试:第一次失败等一分钟,之后每次翻倍,
+#: 最多半小时。指纹又变了(那一头又改了东西)立刻再试;人点「刷新」不走这里。不退避的话,便宜的指纹每分钟都说「变了」,
+#: 每分钟就把上百张工作流全拉一遍、留一条失败的调用记录(PLG-7)。
+RETRY_BASE_SECONDS = 60.0
+RETRY_MAX_SECONDS = 30 * 60.0
+#: 刷不出来的那几项:(实例, 能力) → (那时的指纹, 连着失败几次, 下次最早什么时候试)。只在内存里 —— 重启时 refresh_all 本来就整轮刷一遍。
+_failed: dict[tuple[str, str], tuple[str, int, float]] = {}
+#: 退避用的钟(测试里换掉它,不碰全局的 time.monotonic)。
+_clock = time.monotonic
 
 _watch_stop = threading.Event()
 _watch_thread: threading.Thread | None = None
@@ -97,14 +107,30 @@ def check_for_changes() -> int:
                     db.rollback()
                     logger.debug("插件实例 %s 的「%s」指纹没问到:%s", instance.id, capability, exc)
                     continue
+                key = (instance.id, capability)
                 if current == known:
+                    _failed.pop(key, None)
                     continue
+                failed = _failed.get(key)
+                if failed is not None and failed[0] == current and _clock() < failed[2]:
+                    continue  # 同一个指纹上次没刷出来,还在等(见 RETRY_BASE_SECONDS)
                 try:
                     host_capabilities.refresh(db, instance, capability)
-                    refreshed += 1
                 except Exception:  # noqa: BLE001 — 一项刷不出来不该挡住下一项
                     db.rollback()
                     logger.exception("插件实例 %s 的「%s」目录变了,但没刷出来", instance.id, capability)
+                # 刷成了,那一项的指纹就换成了这一个;没换就是没刷出来(宿主侧把原因记在 capability_status 上,不一定抛)
+                db.refresh(instance)
+                now = str(((instance.capability_status or {}).get(capability) or {}).get("fingerprint") or "")
+                if now == current:
+                    _failed.pop(key, None)
+                    refreshed += 1
+                    continue
+                times = failed[1] + 1 if failed is not None and failed[0] == current else 1
+                wait = min(RETRY_BASE_SECONDS * 2 ** (times - 1), RETRY_MAX_SECONDS)
+                _failed[key] = (current, times, _clock() + wait)
+                logger.info("插件实例 %s 的「%s」目录变了但没刷出来(连着 %d 次),%d 秒内不再试", instance.id, capability, times,
+                            int(wait))
     return refreshed
 
 
