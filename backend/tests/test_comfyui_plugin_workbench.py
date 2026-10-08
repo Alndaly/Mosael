@@ -96,6 +96,40 @@ def test_写进画布的标记_一张表单都不要只留结果_指着不存在
         _host("app_marks", comfy.url, content=live, forms=[], results=["999"])
 
 
+def _v1(ui: dict[str, Any], *, version: Any = 1) -> dict[str, Any]:
+    """上一版(1.20 之前)存的样子(维护者那台 krea2-text-2-image.json 就是这样):图上 `{"version": 1, "app": …}`,
+    节点上 `expose`。`version` 换成别的就是更新版插件写的。"""
+    stored = copy.deepcopy(ui)
+    stored["extra"]["mosael"] = {"version": version, "app": {"title": "快速出图", "description": "", "graph_items": {}}}
+    for node in stored["nodes"]:
+        if node["id"] == 6:
+            node["properties"]["mosael"] = {"expose": {"text": {"order": 0, "main": True}}}
+    return stored
+
+
+def test_画布上是上一版的表单_写标记就拒_一个字都不交回_不然桥会把旧表单抹掉(comfy) -> None:
+    """工作台「表单」页签、「只要这个节点的图」(PLG-1):上一版的标记这一版读不懂,照「没有表单」算出来的标记交给桥,
+    桥会摘掉节点 6 上的 expose、把 extra 换成空的第 2 版 —— 用户一存盘,作者的表单就永久没了。"""
+    for live, said in ((_v1(multi_reference_ui()), "旧格式.*查看并升级"),
+                       (_v1(multi_reference_ui(), version=3), "第 3 版.*升级 Mosael")):
+        before = copy.deepcopy(live)
+        for forms, results in (([], ["9"]), ([APP], []), ([], [])):
+            with pytest.raises(runtime.PluginRuntimeError, match=said):
+                _host("app_marks", comfy.url, content=live, forms=forms, results=results)
+        assert live == before
+    assert not _writes(comfy)
+
+
+def test_文件上是上一版的表单_annotate也拒_一个字都不写(comfy) -> None:
+    comfy.state.workflows["multi.json"] = _v1(multi_reference_ui())
+    seen = _host("app", comfy.url, path="multi.json")
+    assert seen["app"]["status"] == "unsupported" and seen["app"]["upgradable"] is True
+    with pytest.raises(runtime.PluginRuntimeError, match="旧格式.*查看并升级"):
+        _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[], results=["17"])
+    assert not _writes(comfy)
+    assert comfy.state.workflows["multi.json"]["extra"]["mosael"]["version"] == 1
+
+
 def test_写进画布的新表单_插件起的id在交回的标记里(comfy) -> None:
     live = multi_reference_ui()
     marks = _host("app_marks", comfy.url, content=live, forms=[APP, {"title": "精调", "items": [

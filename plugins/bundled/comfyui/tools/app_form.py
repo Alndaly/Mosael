@@ -24,7 +24,8 @@ ADR 0045 第一步就把 `#app` / `_app` 定死了);新建的表单由插件起 
 - `resolve(marks, api, …)` → Resolved:完整工作流的表单、每张表单、失效的项。每一项核对一遍 —— 节点还在会跑的那部分图里
   (graph.live)、那一格还是一个能填的字面量(没被拉成连线)、`choices` 还在下拉里;对不上的不进表单,列出来(工作流库里
   「一键去掉」);
-- `apply(ui_graph, forms, results)` → 只改 `mosael` 那几处标记的新图(`annotate`、工作台的 `app_marks`);
+- `apply(ui_graph, forms, results)` → 只改 `mosael` 那几处标记的新图(`annotate`、工作台的 `app_marks`);图上的标记不是这一版的
+  一律拒(照「没有表单」重写会把那几张表单抹掉,见 `refuse_other_version`);
 - `upgrade(ui_graph)` → 第 1 版改写成这一版的新图,只动 `mosael` 那几处(`upgrade_marks`)。
 """
 
@@ -331,6 +332,29 @@ def _bad(locale: str, zh: str, en: str) -> ComfyError:
     return ComfyError(say(locale, zh, en))
 
 
+def refuse_other_version(ui_graph: dict[str, Any], locale: str = "zh") -> None:
+    """图上的标记不是这一版(第 1 版、更新版插件写的、认不出版本的)就拒:这一版读不懂它们,照「没有表单」改会把作者的表单
+    整个抹掉(工作台的「表单」页签、「只要这个节点的图」、工作流库的 `annotate` 都走 `apply`)。第 1 版先经 `upgrade` 改写过来;
+    更新版的只能升级插件。`extra.mosael` 不是一个对象(手改坏了的)里没有能丢的东西,照常覆盖。"""
+    extra = ui_graph.get("extra")
+    head = extra.get(KEY) if isinstance(extra, dict) else None
+    if not isinstance(head, dict) or _version(head) == VERSION:
+        return
+    version = _version(head)
+    if version == LEGACY_VERSION:
+        raise _bad(locale,
+                   "这张工作流的表单还是旧格式(第 1 版),这一版插件读不到,直接改会把它抹掉 —— 先到这个连接的工作流库里点"
+                   "「查看并升级」,升级之后再改",
+                   "This workflow's forms are in the old format (version 1), which this version of the plugin doesn't read; "
+                   "changing them here would wipe them out. Click “Review and upgrade” in this connection's workflow library "
+                   "first, then change them.")
+    raise _bad(locale,
+               f"这张工作流的表单标记是第 {version if version is not None else '?'} 版,这一版插件不认识,直接改会把它抹掉 —— "
+               "升级 Mosael 之后再改",
+               f"This workflow's form marks are version {version if version is not None else '?'}, which this version of "
+               "the plugin doesn't know; changing them here would wipe them out. Update Mosael first.")
+
+
 def new_form_id(taken: set[str]) -> str:
     """一张新表单的 id:6 位随机小写字母和数字,和这张工作流已有的撞了就重抽。"""
     while True:
@@ -347,10 +371,12 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     照原样。
 
     只认根图上的节点(子图里面的节点这一版不能放进表单);指着不存在的节点、id 重复或不合规、形状不对就拒,什么都不写。
+    图上的标记不是这一版的也拒(`refuse_other_version`):照「没有表单」重写会把那几张表单抹掉。
     """
     if not isinstance(ui_graph.get("nodes"), list):
         raise _bad(locale, "这不是界面格式的工作流,没有地方放表单", "This is not a UI-format workflow, so there is nowhere to "
                    "keep a form.")
+    refuse_other_version(ui_graph, locale)
     if not isinstance(forms, list) or len(forms) > MAX_FORMS:
         raise _bad(locale, f"一张工作流最多 {MAX_FORMS} 张表单", f"A workflow can have at most {MAX_FORMS} forms.")
     given = [one.get("id") for one in forms if isinstance(one, dict) and one.get("id")]
@@ -455,4 +481,4 @@ def upgrade(ui_graph: Any) -> dict[str, Any] | None:
 
 
 __all__ = ["FORM_ID", "FORM_ID_PATTERN", "FormMarks", "KEY", "LEGACY_VERSION", "MAX_FORMS", "Mark", "Marks", "NONE",
-           "Resolved", "VERSION", "apply", "new_form_id", "read", "resolve", "summary", "upgrade"]
+           "Resolved", "VERSION", "apply", "new_form_id", "read", "refuse_other_version", "resolve", "summary", "upgrade"]

@@ -58,6 +58,24 @@ function freshKey(): string {
   return `new-${fresh}`;
 }
 
+/**
+ * 这张图上的表单这一版**不能改**:标记是上一版(第 1 版,能「查看并升级」)或更新版插件写的。这一版把它们读成「没有表单」,
+ * 照空草稿写回去会把作者的表单抹掉(插件那一侧也会拒,见 app_form.refuse_other_version)—— 编辑器、「只要这个节点的图」
+ * 遇到它只说清楚、不给写。能改回 null。
+ */
+export interface FormsLock {
+  /** 上一版的:到工作流库「查看并升级」就能改 */
+  upgradable: boolean;
+  /** 文件里写的版本(更新版插件写的那种要说出来) */
+  version: string;
+}
+
+export function formsLock(data: Pick<WorkflowApp, "app">): FormsLock | null {
+  const app = data.app;
+  if (!app || app.status !== "unsupported") return null;
+  return { upgradable: Boolean(app.upgradable), version: app.version ?? "" };
+}
+
 /** 从插件读到的那份起草:文件里的每张表单照它(对不上的那几项也留着,标着原因,作者自己决定去不去掉)。 */
 export function initialDraft(data: WorkflowApp): FormsDraft {
   const app = data.app ?? { status: "none" as const };

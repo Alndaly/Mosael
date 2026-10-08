@@ -86,6 +86,7 @@ import { comboFromEvent, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { declaresDrag, noDragAfter } from "@/test/dragRegions";
 import { COLUMN_DEFAULT, COLUMN_MIN, DRAG_GUARD } from "./columnWidth";
+import { FormsLockedError, markOnlyResult } from "./canvasMarks";
 import { ComfyWorkbench } from "./ComfyWorkbench";
 import { RECHECK_DELAY_MS } from "./MissingPanel";
 import { openWorkbench, resetWorkbench } from "./workbenchSession";
@@ -512,6 +513,67 @@ describe("ComfyUI 工作台", () => {
     expect(api.getFormUsages).toHaveBeenCalledWith("i1", { workspace_id: "w1", model: "古风.json#k3x9a2", tool: "wf_x_k3x9a2" });
     fireEvent.click(within(ask).getByRole("button", { name: "cancel" }));
     await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
+  });
+
+  //: PLG-1:上一版的表单这一版读成「没有表单」,此前照常摆编辑器、「结果取自」;写一次再一存盘,作者的表单就永久没了
+  it("表单:画布上这张的表单是上一版的 —— 不摆编辑器、不给写,说清楚;「查看并升级」和工作流库同一个弹窗,压在外壳之上", async () => {
+    const bridge = await mount(state({ workflow: { ...GUFENG, modified: false } }));
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
+                                                        results: [], invalid: 0, stray: 0 } }));
+    api.getWorkflowLibrary.mockResolvedValue({
+      workflows: [{ path: "人像/古风.json", label: "古风", modified: 12, app: { status: "unsupported", version: "1", upgradable: true } },
+                  { path: "别的.json", label: "别的", modified: 3, app: { status: "ok", version: "2", upgradable: false } }],
+      manager: { version: "V4.0" },
+    });
+    tab("workbenchTabApp");
+    expect(await screen.findByText("workbenchFormsOld")).toBeTruthy();
+    const panel = shownPanel();
+    expect(within(panel).queryByRole("button", { name: /workbenchAppWrite/ }), "不给写进画布").toBeNull();
+    expect(panel.querySelector("[data-no-forms]"), "不说「没有表单」、不给新建").toBeNull();
+    expect(within(panel).queryByText(/workflowAppResults/), "不摆「结果取自」").toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "workflowFormsUpgradeOpen" }));
+    await waitFor(() => expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.className, "压在外壳(z-200)之上").toMatch(/\bz-\[205\]/);
+    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
+    expect(within(dialog).getByText("人像/古风.json")).toBeTruthy();
+    expect(within(dialog).queryByText("别的.json"), "只列上一版的那几张").toBeNull();
+    expect(api.getCanvasMarks, "什么都没往画布上写").not.toHaveBeenCalled();
+    expect(calls(bridge).some((one) => one.op === "setMarks")).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "cancel" }));
+    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
+  });
+
+  it("表单:更新版插件写的表单 —— 说升级 Mosael,不给升级也不给写;画布上有没存的改动时上一版的也先不给升级", async () => {
+    const bridge = await mount();
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "3", upgradable: false, forms: [],
+                                                        results: [], invalid: 0, stray: 0 } }));
+    tab("workbenchTabApp");
+    expect(await screen.findByText("workbenchFormsNewer")).toBeTruthy();
+    expect(within(shownPanel()).queryByRole("button", { name: "workflowFormsUpgradeOpen" })).toBeNull();
+    expect(within(shownPanel()).queryByRole("button", { name: /workbenchAppWrite/ })).toBeNull();
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
+                                                        results: [], invalid: 0, stray: 0 } }));
+    bridge.emit(state({ workflow: { ...GUFENG, modified: true, revision: 2 } }));
+    fireEvent.click(within(shownPanel()).getByRole("button", { name: /workbenchAppReload/ }));
+    const upgrade = await within(shownPanel()).findByRole("button", { name: "workflowFormsUpgradeOpen" });
+    expect(upgrade.hasAttribute("disabled"), "升级完要重新打开这张:没存的改动会丢").toBe(true);
+  });
+
+  it("运行:这张的表单是上一版的 —— 「只要这个节点的图」不给点,说去「表单」页签升级;一个字都不往画布上写", async () => {
+    const bridge = await mount();
+    api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
+    api.getJob.mockResolvedValue(SUCCEEDED);
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "unsupported", version: "1", upgradable: true, forms: [],
+                                                        results: [], invalid: 0, stray: 0 } }));
+    fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
+    const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
+    expect(await screen.findByText("workbenchRunFormsOld")).toBeTruthy();
+    expect(within(preview).queryByRole("button", { name: "workbenchRunOnlyThisLabel" })).toBeNull();
+    //: 面板读完之前就点了(按钮还在的那一下):改标记那一步自己再看一眼,照样不写
+    await expect(markOnlyResult("i1", "17")).rejects.toBeInstanceOf(FormsLockedError);
+    expect(api.getCanvasMarks).not.toHaveBeenCalled();
+    expect(calls(bridge).some((one) => one.op === "setMarks")).toBe(false);
   });
 
   it("运行:跑画布上这张(API 图、界面格式、前端的 clientId);产出按来自的节点分组、标节点名;「只要这个节点的图」标在画布上", async () => {

@@ -15,6 +15,7 @@ import { NoForms } from "@/features/plugins/WorkflowAppEditor";
 import {
   appendForm,
   blankForm,
+  formsLock,
   initialDraft,
   replaceForm,
   sameDraft,
@@ -23,6 +24,7 @@ import {
   type FormsDraft,
 } from "@/features/plugins/workflowAppForm";
 import { readCanvasApp, writeCanvasApp } from "@/features/plugins/workbench/canvasMarks";
+import { FormsLocked } from "@/features/plugins/workbench/FormsLocked";
 import { PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import { WorkbenchCallError, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 
@@ -85,6 +87,8 @@ export function AppPanel({ target, path = "", canvasModified, canExport, canMark
   const dirty = Boolean(draft && base && !sameDraft(draft, base));
   const nameless = draft ? untitled(draft).length : 0;
   const current = draft?.forms.find((one) => one.key === selected) ?? null;
+  //: 上一版 / 更新版插件写的表单:这一版读成「没有表单」,照空草稿写进画布再一存盘就把它们抹掉了 —— 只说清楚、不给写
+  const lock = data ? formsLock(data) : null;
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3">
       <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workbenchAppHint")}</p>
@@ -102,10 +106,12 @@ export function AppPanel({ target, path = "", canvasModified, canExport, canMark
           <RefreshCcw size={12} />
           {t("workbenchAppReload")}
         </Button>
-        <Button size="xs" disabled={!draft || !dirty || nameless > 0} loading={write.isPending}
-                onClick={() => draft && write.mutate(draft)}>
-          {t("workbenchAppWrite")}
-        </Button>
+        {!lock && (
+          <Button size="xs" disabled={!draft || !dirty || nameless > 0} loading={write.isPending}
+                  onClick={() => draft && write.mutate(draft)}>
+            {t("workbenchAppWrite")}
+          </Button>
+        )}
       </div>
       {written && !dirty && canvasModified && <PanelNote>{t("workbenchAppWritten")}</PanelNote>}
       {failure && (
@@ -115,6 +121,8 @@ export function AppPanel({ target, path = "", canvasModified, canExport, canMark
       )}
       {read.isPending && !data ? (
         <LoadingState label={t("workflowAppLoading")} className="h-auto min-h-0 flex-1" />
+      ) : data && lock ? (
+        <FormsLocked target={target} lock={lock} path={path} canvasModified={canvasModified} />
       ) : data && draft ? (
         <>
           <ResultsSection outputs={data.outputs ?? []} results={draft.results} onToggle={(node) => change(toggleResult(draft, node))} />

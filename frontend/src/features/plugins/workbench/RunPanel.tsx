@@ -19,7 +19,13 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { markOnlyResult, readCanvasResults, unmarkResult, type CanvasResults } from "@/features/plugins/workbench/canvasMarks";
+import {
+  FormsLockedError,
+  markOnlyResult,
+  readCanvasResults,
+  unmarkResult,
+  type CanvasResults,
+} from "@/features/plugins/workbench/canvasMarks";
 import { liveProgress, nodeLabels, outputGroups, runGallery, runsByWorkflow } from "@/features/plugins/workbench/workbenchLogic";
 import { PANEL_ROOT, PanelEmpty, PanelNote, jobDone, useJobWatch } from "@/features/plugins/workbench/workbenchParts";
 import {
@@ -139,7 +145,9 @@ export function RunPanel({
   }, [workflowKey, resetChange]);
   const labels = results.data?.labels ?? {};
   const labelOf = (node: string) => `${labels[node] || t("workbenchNode")} #${node}`;
-  const marks: MarkControls | null = canMark ? {
+  //: 这张的表单是上一版 / 更新版插件写的:标结果要重写整份标记,会把表单抹掉 —— 不给标,说去「表单」页签升级
+  const locked = results.data?.lock ?? null;
+  const marks: MarkControls | null = canMark && !locked ? {
     results: results.data?.results ?? null,
     pending: change.isPending ? change.variables?.node ?? null : null,
     mark: (node) => change.mutate({ node, undo: false }),
@@ -161,6 +169,13 @@ export function RunPanel({
           <Truncate>{t("workbenchRunResultsFrom").replace("{nodes}", marked.map(labelOf).join("、"))}</Truncate>
         </p>
       )}
+      {locked && current.length > 0 && (
+        <PanelNote tone="warning">
+          <span data-results-locked="">
+            {locked.upgradable ? t("workbenchRunFormsOld") : t("workbenchFormsNewer").replace("{version}", locked.version || "?")}
+          </span>
+        </PanelNote>
+      )}
       {changed && (
         <PanelNote>
           {t(changed.undo ? "workbenchRunUnmarked" : "workbenchRunMarked").replace("{node}", labelOf(changed.node))}
@@ -168,8 +183,9 @@ export function RunPanel({
       )}
       {change.isError && (
         <PanelNote tone="error">
-          {change.error instanceof WorkbenchCallError ? t("workbenchCallFailed").replace("{why}", change.error.message)
-            : errorText(change.error)}
+          {change.error instanceof FormsLockedError ? t("workbenchRunFormsOld")
+            : change.error instanceof WorkbenchCallError ? t("workbenchCallFailed").replace("{why}", change.error.message)
+              : errorText(change.error)}
         </PanelNote>
       )}
       {current.length === 0 ? (

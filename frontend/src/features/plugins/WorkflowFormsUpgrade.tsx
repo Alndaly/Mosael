@@ -31,7 +31,7 @@ export function FormsUpgradeBanner({ count, onOpen }: { count: number; onOpen: (
 }
 
 export function FormsUpgradeDialog({ instance, workflows, onClose, onDone }: {
-  instance: PluginInstance;
+  instance: Pick<PluginInstance, "id" | "name">;
   workflows: readonly WorkflowFile[];
   onClose: () => void;
   /** 改成了:工作流库、生成选项重新问(宿主已经让这个连接的目录重拉过) */

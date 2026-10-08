@@ -95,6 +95,27 @@ def test_写的时候_id重复或不合规就拒_什么都不写(app_form) -> No
         app_form.apply(multi_reference_ui(), [{"title": str(n), "items": []} for n in range(21)], [])
 
 
+def test_图上的标记不是这一版_写的时候就拒_不当成没有表单重写(app_form) -> None:
+    """第 1 版、更新版插件写的、认不出版本的:这一版读成「没有表单」,照它重写就把作者的表单抹掉了(PLG-1)。第 1 版先经
+    `upgrade` 改写;`extra.mosael` 根本不是对象(手改坏的)里没有能丢的东西,照常覆盖。"""
+    from lines import ComfyError
+
+    for head, said in (({"version": 1, "app": {"title": "快速出图"}}, "旧格式"), ({"version": 1}, "旧格式"),
+                       ({"version": 3, "forms": []}, "第 3 版"), ({"forms": []}, "第 \\? 版")):
+        ui = multi_reference_ui()
+        ui["extra"]["mosael"] = head
+        before = copy.deepcopy(ui)
+        for forms, results in (([QUICK], []), ([], ["17"]), ([], [])):
+            with pytest.raises(ComfyError, match=said):
+                app_form.apply(ui, forms, results)
+        assert ui == before
+    upgraded = app_form.upgrade(_v1(multi_reference_ui()))
+    assert app_form.read(app_form.apply(upgraded, [QUICK], ["17"])).forms[0].id == "app", "改写过来就能改了"
+    broken = multi_reference_ui()
+    broken["extra"]["mosael"] = "坏了"
+    assert app_form.apply(broken, [QUICK], [])["extra"]["mosael"]["version"] == 2
+
+
 def test_对不上任何一张表单的标记_不进表单_列成失效_下次保存清掉(app_form) -> None:
     ui = app_form.apply(multi_reference_ui(), [QUICK], [])
     by_id = {node["id"]: node for node in ui["nodes"]}

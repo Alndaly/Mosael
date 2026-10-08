@@ -4,7 +4,7 @@
  * 再经桥改画布上的节点。不写那台机器上的文件。每次交全部表单(ADR 0045 §7)。
  */
 import { getCanvasApp, getCanvasMarks, type WorkflowApp } from "@/api/client";
-import { annotatePayload, initialDraft, type FormsDraft } from "@/features/plugins/workflowAppForm";
+import { annotatePayload, formsLock, initialDraft, type FormsDraft, type FormsLock } from "@/features/plugins/workflowAppForm";
 import { onlyResult, withoutResult } from "@/features/plugins/workbench/workbenchLogic";
 import { WorkbenchCallError, exportCanvas, workbenchCall } from "@/features/plugins/workbench/workbenchSession";
 
@@ -24,15 +24,28 @@ export async function writeCanvasApp(instanceId: string, draft: FormsDraft): Pro
   if (!result.ok) throw new WorkbenchCallError(result.error, "message" in result ? result.message : "");
 }
 
-/** 画布上这张现在标着哪几个输出节点是结果,和每个输出节点叫什么(插件报的给人看的名字,和表单同一种叫法)。 */
+/** 画布上这张现在标着哪几个输出节点是结果,和每个输出节点叫什么(插件报的给人看的名字,和表单同一种叫法)。`lock`:这张的
+ *  表单是上一版 / 更新版插件写的,这一版不能改标记(见 formsLock)。 */
 export interface CanvasResults {
   results: string[];
   labels: Record<string, string>;
+  lock: FormsLock | null;
+}
+
+/** 这张的表单这一版不能改(上一版 / 更新版插件写的):照「没有表单」写回去会把它们抹掉,一个字都不写。 */
+export class FormsLockedError extends Error {
+  readonly lock: FormsLock;
+
+  constructor(lock: FormsLock) {
+    super("forms locked");
+    this.lock = lock;
+  }
 }
 
 const resultsOf = (data: WorkflowApp, results: string[]): CanvasResults => ({
   results,
   labels: Object.fromEntries((data.outputs ?? []).map((one) => [one.node, one.label || one.title || one.class_type])),
+  lock: formsLock(data),
 });
 
 export async function readCanvasResults(instanceId: string): Promise<CanvasResults> {
@@ -43,6 +56,8 @@ export async function readCanvasResults(instanceId: string): Promise<CanvasResul
 /** 改结果标记(读画布上现在的那份,只动 `results`,每张表单照旧);回改完的样子。 */
 async function changeResults(instanceId: string, change: (draft: FormsDraft) => FormsDraft): Promise<CanvasResults> {
   const { data } = await readCanvasApp(instanceId);
+  const lock = formsLock(data);
+  if (lock) throw new FormsLockedError(lock);
   const next = change(initialDraft(data));
   await writeCanvasApp(instanceId, next);
   return resultsOf(data, next.results);
