@@ -751,7 +751,7 @@ Mosael 的库**不加迁移**:没有新列、新表;`capability_status.generatio
 ### 实现记录
 
 插件 1.23.0(`app_form.Marks.forms_await_upgrade`、`models.catalog` / `tooling.catalog` / `models.pick` 的空档、`tooling.explain`、
-`workflow_library._Snapshot` / `_moved`);宿主 `plugins/moves.py`(按旧名字记账、`follow_renames`)、`dynamic_tools.explain`、`nodes.unusable`、
+`workflow_library._Snapshot` / `_moved`);宿主 `backend/app/domain/plugins/moves.py`(按旧名字记账、`follow_renames`)、`dynamic_tools.explain`、`nodes.unusable`、
 `workflow_library._follow_moved`、`providers/moved_models.py` 和各领域监听的 `why`、`workflows/graph_rules.validate_graph(unusable_plugin_nodes_ok)`;
 前端 `unknownNodeTypeText` 的「需要升级」、检查器的「去工作流库升级」、改名确认框的在用几处、修订来源「工作流库里改名时跟着改」。测试:
 `test_comfyui_forms_moved_references.py`(分两次报的改名、老账迁移)、`test_comfyui_plugin_forms_v2.py`(空档里不报、explain 的模型和工具)、
@@ -759,3 +759,8 @@ Mosael 的库**不加迁移**:没有新列、新表;`capability_status.generatio
 `moved`)、`test_comfyui_rename_follows_references.py`(各领域跟着改、历史也改、不记账但账跟着走、另一条连接不动、工具名按路径哈希的、文件夹、
 改不成整批撤掉)、前端 `NodeInspector.unusableReason`、`workflowCanvasModel`、`WorkflowLibrary` 的改名确认框。变异检查把每一处改回去,对应的测试都红
 (记账只看 key、迁移记成空的一串、空档照常报、explain 不认完整入口、宿主不问插件、改名不跟、账不跟着走、`why` 不传、改不成不撤、保存照旧拦等)。
+
+在隔离环境里走一遍时补的两处:**界面当场跟上** —— 后端在改名的请求里(或升级之后那次目录重拉里)改了引用,界面只失效了生成选项,关上工作流库
+回到会话,会话还指着改名前的那个(升级完的会话摆着完整工作流的参数),画板格子说「用不了」,要等一分钟的 staleTime;插件连接一变要失效的缓存
+(`frontend/src/features/plugins/pluginCaches.ts`)加上存着引用的生成会话、生成记录、画板、工作流、定时任务。**几条连接卡在同一处时原因说一遍**
+—— 指着同一台 ComfyUI 的几条连接都「需要升级」时,节点检查器里同一段话此前重复几遍,`nodes.unusable` 按原因把连接名并在一起。
