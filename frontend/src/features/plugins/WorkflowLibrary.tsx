@@ -1143,6 +1143,12 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
                   <Truncate hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>{flow.label}</Truncate>
                 </button>
                 <FormTitleLine flow={flow} />
+                {/* 卡片上那枚「标记是旧格式」列表里写在名字下面那一行(和「表单:…」同一处,行高不变):不然这一档里看不出哪几张要升级 */}
+                {flow.app?.upgradable && (
+                  <span data-workflow-old-marks="" className="block min-w-0 text-ui-2xs text-warning">
+                    <Truncate>{t("workflowFormsOldBadge")}</Truncate>
+                  </span>
+                )}
               </td>
               {folders && (
                 <td className={cn(cell, "text-ui-xs text-muted-foreground", wide)}>

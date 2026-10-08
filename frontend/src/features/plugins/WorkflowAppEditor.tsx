@@ -225,6 +225,14 @@ export function WorkflowAppEditor({
 }
 
 /** 一张表单都没有:用的人看到的是完整工作流(全部能填的项);给一颗「新表单」。 */
+/** 「结果取自」那一行的节点:插件报的输出节点名(和工作流库其余地方同一种叫法)后面带节点号 —— 此前只写一个「#9」。 */
+export function markedResults(results: readonly string[], outputs: readonly { node?: string; title?: string }[], separator: string): string {
+  return results.map((one) => {
+    const title = outputs.find((output) => output.node === one)?.title;
+    return title ? `${title} #${one}` : `#${one}`;
+  }).join(separator);
+}
+
 export function NoForms({ onNew }: { onNew: () => void }) {
   const t = useI18n();
   return (
@@ -344,7 +352,7 @@ export function WorkflowAppSection({
       )}
       {(app.results ?? []).length > 0 && app.status === "ok" && (
         <p className="m-0 text-ui-xs text-muted-foreground">
-          {t("workflowAppResultsMarked").replace("{nodes}", (app.results ?? []).map((one) => `#${one}`).join(t("listSeparator")))}
+          {t("workflowAppResultsMarked").replace("{nodes}", markedResults(app.results ?? [], flow.outputs ?? [], t("listSeparator")))}
         </p>
       )}
       {app.status === "ok" && (app.stray ?? 0) > 0 && (

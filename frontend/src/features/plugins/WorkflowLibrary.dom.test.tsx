@@ -1082,6 +1082,11 @@ describe("上一版格式的表单(ADR 0045 §7)", () => {
     const banner = document.querySelector("[data-forms-upgrade-banner]") as HTMLElement;
     expect(banner.textContent).toContain("workflowFormsUpgradeBanner");
     expect(within(cardOf("krea2")).getByText("workflowFormsOldBadge"), "卡片上标着旧格式").toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
+    const row = within(screen.getByRole("table", { name: "workflowLibraryTitle" })).getAllByRole("row")
+      .find((one) => one.textContent?.includes("krea2"))!;
+    expect(within(row).getByText("workflowFormsOldBadge"), "列表里也标着(PLG-13:此前只有卡片上有)").toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "libraryDensitySmall" }));
     fireEvent.click(within(banner).getByRole("button", { name: "workflowFormsUpgradeOpen" }));
     const dialog = await screen.findByRole("dialog", { name: "workflowFormsUpgradeTitle" });
     expect(within(dialog).getByText("workflowFormsUpgradeBody")).toBeTruthy();

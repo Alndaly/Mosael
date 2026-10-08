@@ -307,12 +307,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{item}” in the form won't do: only nodes on the top-level graph (numeric ids) and the graph-level seed / size / runs",
     },
     "pluginNotice_formsOutdated": {
-        "zh": "{name} 上有工作流的表单是旧格式",
-        "en": "Some workflows on {name} have forms in the old format",
+        "zh": "{name} 上有工作流里 Mosael 的标记是旧格式",
+        "en": "Some workflows on {name} have Mosael marks in the old format",
     },
     "pluginNotice_formsOutdatedBody": {
-        "zh": "{n} 张工作流的表单是旧格式,升级之后才看得到它们的表单。到插件页打开这个连接的工作流库,点「查看并升级」:只改每张里 Mosael 的标记,确认一次就整台改完。",
-        "en": "{n} workflows have forms in the old format; their forms show up once upgraded. On the Plugins page, open this connection's workflow library and click “Review and upgrade”: only Mosael's marks in each file change, and one confirmation upgrades the whole server.",
+        "zh": "{n} 张工作流里 Mosael 的标记(表单、「结果取自」)是旧格式,升级之后才生效。到插件页打开这个连接的工作流库,点「查看并升级」:只改每张里 Mosael 的标记,确认一次就整台改完。",
+        "en": "{n} workflows have Mosael marks (forms, “Results from”) in the old format; they take effect once upgraded. On the Plugins page, open this connection's workflow library and click “Review and upgrade”: only Mosael's marks in each file change, and one confirmation upgrades the whole server.",
     },
     "workflowLibErr_badFormId": {
         "zh": "表单的编号「{form}」不对:只认 1–8 位小写字母和数字,一张工作流里不能重复",

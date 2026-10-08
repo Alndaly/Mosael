@@ -36,7 +36,7 @@ vi.mock("@/app/preferences", () => ({
 import type { PluginInstance, WorkflowApp, WorkflowFile } from "@/api/client";
 import { AppFormEditor } from "@/features/plugins/appForm/AppFormEditor";
 import { blankForm, initialDraft, type FormDraft } from "@/features/plugins/workflowAppForm";
-import { WorkflowAppEditor, WorkflowAppSection, type FormFocus } from "./WorkflowAppEditor";
+import { WorkflowAppEditor, WorkflowAppSection, markedResults, type FormFocus } from "./WorkflowAppEditor";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15" } as PluginInstance;
 const flow = { path: "换装.json", label: "换装" } as WorkflowFile;
@@ -627,6 +627,8 @@ describe("工作流库详情里的「表单」", () => {
     expect(within(list).getAllByRole("button").map((one) => one.textContent)).toEqual([
       `换装上传人物${t("workflowFormFields")}`, `${t("workflowFormUntitled")}${t("workflowFormFields")}`]);
     expect(screen.getByText(t("workflowAppResultsMarked"))).toBeTruthy();
+    expect(markedResults(["17", "4"], [{ node: "17", title: "预览图像" }], "、"), "写节点名和节点号,认不出名字的只写号")
+      .toBe("预览图像 #17、#4");
     fireEvent.click(within(list).getAllByRole("button")[1]);
     expect(onEdit).toHaveBeenLastCalledWith({ form: "k3x9a2" });
     fireEvent.click(screen.getByRole("button", { name: t("workflowFormNew") }));
