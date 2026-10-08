@@ -124,3 +124,13 @@ method for every caller: a non-idempotent request is resent only on 429 / 503 / 
 processed; never after a read timeout or another 5xx (ADR 0019, revision of 2026-10-08). The explicit
 `max_retries=0` on Lyria and Alibaba audio stays as it is — it is still correct, it just no longer carries the rule
 alone.
+
+## Revision (2026-10-08): speech and podcast share the generation sessions (ADR 0055)
+
+Decision 2 stays for the engines: TTS is not a generation adapter, voices remain a per-engine list with cloning, and the
+dubbing path still synthesizes many lines per job. What changed is the *record* side. AI Studio's "Chat | Create" split puts
+image, video, music, speech and podcast in one session workspace: `generation_sessions.kind` / `generation_jobs.kind` gain
+`speech` and `podcast`, written by `POST /api/generation/speech` and `/api/generation/podcast`, which call
+`voices.start_synthesis` / `start_podcast` and keep a generation record (result, failure, stop, cost) beside the job. The
+speech engine catalog is still `/tts/engines`; it is not folded into the generation catalog. Details, the one-time migration
+of earlier speech/podcast outputs and the session "family" lock are in ADR 0055.
