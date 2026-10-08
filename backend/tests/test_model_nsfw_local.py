@@ -54,11 +54,15 @@ class _Weights:
                 pass
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self._thread.start()
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
 
     def close(self) -> None:
+        # shutdown() 停掉 serve_forever 的循环;server_close() 关掉监听的套接字(不关的话 fd 留到进程退出);再等服务线程走完。
         self.server.shutdown()
+        self.server.server_close()
+        self._thread.join(timeout=30)
 
 
 def _wait_install() -> dict:

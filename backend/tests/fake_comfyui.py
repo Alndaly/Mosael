@@ -1426,6 +1426,7 @@ class FakeComfyUI(ThreadingHTTPServer):
     def __exit__(self, *exc: Any) -> None:
         self.shutdown()
         self.server_close()
+        self._thread.join(timeout=30)
 
     def posted(self, path: str) -> list[Any]:
         return [body for method, called, body in self.state.calls if method == "POST" and called == path]

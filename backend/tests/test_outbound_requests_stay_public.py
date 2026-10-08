@@ -75,11 +75,13 @@ class _Server:
         self.httpd = CountingServer(("127.0.0.1", 0), Handler)
         self.port = self.httpd.server_port
         self.url = f"http://127.0.0.1:{self.port}"
-        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self._thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self._thread.start()
 
     def close(self) -> None:
         self.httpd.shutdown()
         self.httpd.server_close()
+        self._thread.join(timeout=30)
 
 
 @pytest.fixture

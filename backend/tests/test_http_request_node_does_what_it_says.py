@@ -66,10 +66,14 @@ class _Server:
 
         self.httpd = HTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.httpd.server_port}"
-        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self._thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self._thread.start()
 
     def close(self) -> None:
+        # shutdown() 停掉 serve_forever 的循环;server_close() 关掉监听的套接字(不关的话 fd 留到进程退出);再等服务线程走完。
         self.httpd.shutdown()
+        self.httpd.server_close()
+        self._thread.join(timeout=30)
 
 
 @pytest.fixture

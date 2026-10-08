@@ -299,11 +299,13 @@ class _Previews:
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.port = self.server.server_address[1]
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self._thread.start()
 
     def close(self) -> None:
         self.server.shutdown()
         self.server.server_close()
+        self._thread.join(timeout=30)
 
 
 @pytest.fixture(autouse=True)

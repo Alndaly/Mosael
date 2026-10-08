@@ -33,8 +33,17 @@ def _serve(status: int, body: bytes) -> ThreadingHTTPServer:
             return None
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    server.serving = threading.Thread(target=server.serve_forever, daemon=True)
+    server.serving.start()
     return server
+
+
+def _stop(server: ThreadingHTTPServer) -> None:
+    """停掉一个 `_serve` 起的服务:shutdown() 停掉 serve_forever 的循环,server_close() 关掉监听的套接字
+    (不关的话 fd 留到进程退出),再等服务线程走完 —— 测试结束时还活着的线程会让这条测试红(tests/conftest.py)。"""
+    server.shutdown()
+    server.server_close()
+    server.serving.join(timeout=30)
 
 
 @pytest.fixture
@@ -49,8 +58,8 @@ def system_proxy(monkeypatch) -> Iterator[int]:
     try:
         yield local.server_address[1]
     finally:
-        proxy.shutdown()
-        local.shutdown()
+        _stop(proxy)
+        _stop(local)
 
 
 def test_模拟成立_不处理的话本机请求进了代理(system_proxy: int) -> None:

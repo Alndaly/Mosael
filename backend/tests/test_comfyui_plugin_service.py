@@ -447,7 +447,8 @@ def test_补装_走_GitHub_镜像前缀_内容照样按_sha256_校验(service, t
     data = _archive({"__init__.py": b"# pysssss\n"})
     handler = type("Mirror", (_Mirror,), {"body": data, "asked": []})
     mirror = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=mirror.serve_forever, daemon=True).start()
+    mirror.serving = threading.Thread(target=mirror.serve_forever, daemon=True)
+    mirror.serving.start()
     prefix = f"http://127.0.0.1:{mirror.server_address[1]}"
     try:
         root = _comfy(tmp_path / "ComfyUI")
@@ -465,7 +466,7 @@ def test_补装_走_GitHub_镜像前缀_内容照样按_sha256_校验(service, t
         assert prefix in str(caught.value), "说清楚是从哪个地址下的"
         assert list((other / "custom_nodes").iterdir()) == []
     finally:
-        mirror.shutdown()
+        _stop(mirror)
 
 
 def test_钉死的_pysssss_地址就是那个提交(service) -> None:
@@ -491,8 +492,17 @@ class _Stats(BaseHTTPRequestHandler):
 def _serve(body: dict) -> ThreadingHTTPServer:
     handler = type("Handler", (_Stats,), {"body": json.dumps(body).encode()})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    server.serving = threading.Thread(target=server.serve_forever, daemon=True)
+    server.serving.start()
     return server
+
+
+def _stop(server: ThreadingHTTPServer) -> None:
+    """停掉一个 `_serve` 起的服务:shutdown() 停掉 serve_forever 的循环,server_close() 关掉监听的套接字
+    (不关的话 fd 留到进程退出),再等服务线程走完 —— 测试结束时还活着的线程会让这条测试红(tests/conftest.py)。"""
+    server.shutdown()
+    server.server_close()
+    server.serving.join(timeout=30)
 
 
 def test_本机发现_只认回了_ComfyUI_那份系统信息的(service) -> None:
@@ -502,8 +512,8 @@ def test_本机发现_只认回了_ComfyUI_那份系统信息的(service) -> Non
         ports = (comfy.server_address[1], other.server_address[1], 9)
         found = service.discover({}, "zh", ports=ports)["servers"]
     finally:
-        comfy.shutdown()
-        other.shutdown()
+        _stop(comfy)
+        _stop(other)
     assert found == [{"url": f"http://127.0.0.1:{ports[0]}", "label": {
         "zh": f"本机的 ComfyUI 0.39.0(端口 {ports[0]})", "en": f"ComfyUI 0.39.0 on this computer (port {ports[0]})"}}]
     assert service.DISCOVER_PORTS == (8188, 8000), "ComfyUI 自己的缺省端口和官方 Desktop 的"

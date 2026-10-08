@@ -180,11 +180,13 @@ class _Files:
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self._thread.start()
 
     def close(self) -> None:
         self.server.shutdown()
         self.server.server_close()
+        self._thread.join(timeout=30)
 
 
 @pytest.fixture

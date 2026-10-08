@@ -241,8 +241,15 @@ class TestAgainstAFakeServer:
 
         thread = threading.Thread(target=lambda: asyncio.run(main()), daemon=True)
         thread.start()
-        ready.wait(5)
+        assert ready.wait(30), "假的 WebSocket 服务一直没起来"
+        holder["thread"] = thread
         return f"ws://127.0.0.1:{holder['port']}", holder
+
+    @staticmethod
+    def _shut(holder) -> None:
+        """叫停假服务,并等它那条线程走完(测试结束时还活着的线程会让这条测试红,见 tests/conftest.py)。"""
+        holder["loop"].call_soon_threadsafe(holder["stop"].set)
+        holder["thread"].join(timeout=30)
 
     def test_a_full_session_yields_audio_and_the_dialogue(self) -> None:
         script = [
@@ -261,7 +268,7 @@ class TestAgainstAFakeServer:
                 "app", "token", input_text="原文", speakers=["a", "b"], endpoint=url
             )
         finally:
-            holder["loop"].call_soon_threadsafe(holder["stop"].set)
+            self._shut(holder)
 
         assert result.audio == b"AUDIO"
         assert result.texts == [{"speaker": "a", "text": "你好"}]
@@ -272,7 +279,7 @@ class TestAgainstAFakeServer:
             with pytest.raises(podcast.PodcastSynthesisError, match="连接被拒绝"):
                 podcast.synthesize_volcano_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
         finally:
-            holder["loop"].call_soon_threadsafe(holder["stop"].set)
+            self._shut(holder)
 
     def test_an_error_frame_carries_its_code(self) -> None:
         error = PodcastProtocolMessage(MessageType.Error, MessageFlags.WithEvent)
@@ -293,7 +300,7 @@ class TestAgainstAFakeServer:
             with pytest.raises(podcast.PodcastSynthesisError, match="55000000"):
                 podcast.synthesize_volcano_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
         finally:
-            holder["loop"].call_soon_threadsafe(holder["stop"].set)
+            self._shut(holder)
 
     def test_a_session_that_produces_no_audio_is_an_error(self) -> None:
         """Silence is not a successful podcast, and an empty mp3 asset would look like one."""
@@ -307,7 +314,7 @@ class TestAgainstAFakeServer:
             with pytest.raises(podcast.PodcastSynthesisError, match="空音频"):
                 podcast.synthesize_volcano_podcast("app", "token", input_text="x", speakers=["a", "b"], endpoint=url)
         finally:
-            holder["loop"].call_soon_threadsafe(holder["stop"].set)
+            self._shut(holder)
 
 
 class TestTheJobEndpoint:
