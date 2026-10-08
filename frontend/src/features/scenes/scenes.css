@@ -256,7 +256,9 @@
 
 .scene-viewport {
   flex: 1;
-  min-height: 180px;
+  /* **视口至少占舞台的一半。** 关键帧表的高度是人拖出来的(默认 300px),矮窗口(1024×700)里此前把视口压成
+     一条 190px 的缝:看不清镜头,而这一页是来看镜头的。视口守住一半,剩下的才给关键帧表(它会缩,见下)。 */
+  min-height: max(180px, 50%);
   min-width: 0;
   position: relative;
   overflow: hidden;
@@ -370,7 +372,9 @@
   color: var(--primary);
 }
 .scene-timeline {
-  flex-shrink: 0;
+  /* 能缩:舞台不够高时它跟着里面的关键帧表一起让(关键帧表自己最矮 160,见 .scene-dope)。 */
+  flex-shrink: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -407,6 +411,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  /* 拖出来的高度是它想要的,不是硬性的:舞台不够高时先让视口(上面那一半),自己缩,最矮 160。 */
+  flex-shrink: 1;
   min-height: 160px;
   max-height: 55vh;
   min-width: 0;

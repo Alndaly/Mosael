@@ -479,3 +479,19 @@ describe("链接片段:标记与 ⌥ 临时解链", () => {
     expect(onDuplicateClipsAt).not.toHaveBeenCalled();
   });
 });
+
+describe("窄的时候工具条不折成两行", () => {
+  //: 1024 宽的窗口里这一排折成两行,轨道区只剩一条半(真浏览器量过:工具条 81px 高)。字只在时间线那排够宽时显示
+  //: (容器查询),窄时收起只留图标 —— jsdom 没有版面,这里钉的是「字收得起来、收起来名字还在」。
+  it("工具、「添加轨道」的字在窄时是 sr-only、够宽才显示;按钮的名字照样是那个字", () => {
+    renderTimeline([track("v1", "video", 0)], { onAddTrack: vi.fn() });
+    expect(document.querySelector(".editor-timeline-toolbar")!.className).toContain("@container/timeline-bar");
+    for (const name of ["toolSelect", "toolBlade", "editModeOverwrite", "editModeInsert", "editorAddTrack"]) {
+      const button = screen.getByRole("button", { name });
+      const label = [...button.querySelectorAll("span")].find((one) => one.textContent === name);
+      expect(label, name).toBeDefined();
+      expect(label!.className.split(/\s+/)).toContain("sr-only");
+      expect(label!.className).toContain("@[1120px]/timeline-bar:not-sr-only");
+    }
+  });
+});

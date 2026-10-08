@@ -967,7 +967,9 @@ export function Timeline({
 
   return (
     <div ref={rootRef} className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]" data-tool={tool} onWheel={handleWheel}>
-      <div className="editor-timeline-toolbar flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider bg-workspace-panel px-3 py-1.5">
+      {/* 窄的时候(容器不到 1120:英文的字更长,1280 宽带展开侧栏的窗口就放不下)左边几颗工具的字、右边「序列设置」「添加轨道」的字收起来只留图标,
+          字照样给读屏(sr-only)—— 此前这一排在 1024 宽时折成两行,轨道区只剩一条半。 */}
+      <div className="editor-timeline-toolbar @container/timeline-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider bg-workspace-panel px-3 py-1.5">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <Hint label={t("toolSelectHint")} shortcut="A">
@@ -977,7 +979,7 @@ export function Timeline({
                 aria-pressed={tool === "select"}
                 onClick={() => useEditorStore.getState().setTool("select")}
               >
-                <MousePointer2 size={12} /> {t("toolSelect")}
+                <MousePointer2 size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("toolSelect")}</span>
               </button>
             </Hint>
             <Hint label={t("toolBladeHint")} shortcut="B">
@@ -987,7 +989,7 @@ export function Timeline({
                 aria-pressed={tool === "blade"}
                 onClick={() => useEditorStore.getState().setTool("blade")}
               >
-                <Slice size={12} /> {t("toolBlade")}
+                <Slice size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("toolBlade")}</span>
               </button>
             </Hint>
           </div>
@@ -999,7 +1001,7 @@ export function Timeline({
                 aria-pressed={editMode === "overwrite"}
                 onClick={() => useEditorStore.getState().setEditMode("overwrite")}
               >
-                <Replace size={12} /> {t("editModeOverwrite")}
+                <Replace size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editModeOverwrite")}</span>
               </button>
             </Hint>
             <Hint label={t("editModeInsertHint")}>
@@ -1009,7 +1011,7 @@ export function Timeline({
                 aria-pressed={editMode === "insert"}
                 onClick={() => useEditorStore.getState().setEditMode("insert")}
               >
-                <BetweenHorizontalStart size={12} /> {t("editModeInsert")}
+                <BetweenHorizontalStart size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editModeInsert")}</span>
               </button>
             </Hint>
           </div>
@@ -1079,7 +1081,7 @@ export function Timeline({
           {onAddTrack && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="sm"><Plus size={14} />{t("editorAddTrack")}<ChevronDown size={12} /></Button>
+                <Button variant="ghost" size="sm"><Plus size={14} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editorAddTrack")}</span><ChevronDown size={12} /></Button>
               </PopoverTrigger>
               <MenuContent label={t("editorAddTrack")} align="end">
                 {(["video", "audio", "subtitle"] as const).map((kind) => (

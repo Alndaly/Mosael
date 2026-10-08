@@ -62,7 +62,8 @@ export function SequenceSettings({
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm">
           <Proportions size={14} />
-          {t("sequenceSettings")}
+          {/* 只在时间线那排工具里出现:窄的时候字收起来只留图标和尺寸(见 Timeline 的 timeline-bar 容器) */}
+          <span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("sequenceSettings")}</span>
           <span className="tabular-nums text-muted-foreground">{preset?.label ?? size}</span>
           <ChevronDown size={12} />
         </Button>
