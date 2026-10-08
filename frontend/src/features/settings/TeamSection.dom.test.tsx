@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
   server: [] as Array<{ id: string; name: string; role: string }>,
   members: [] as Array<Record<string, unknown>>,
   sent: [] as Array<Record<string, unknown>>,
+  activity: [] as Array<Record<string, unknown>>,
   deleteWorkspace: vi.fn(),
   inviteMember: vi.fn(),
   revokeInvitation: vi.fn(),
@@ -32,7 +33,7 @@ vi.mock("@/api/client", () => ({
   listMembers: async () => ({ my_role: h.role, members: h.members }),
   sentInvitations: async () => ({ invitations: h.sent }),
   revokeInvitation: (wid: string, id: string) => h.revokeInvitation(wid, id),
-  listActivity: async () => [],
+  listActivity: async () => h.activity,
   deleteWorkspace: (id: string) => h.deleteWorkspace(id),
   renameWorkspace: vi.fn(),
   inviteMember: (wid: string, body: unknown) => h.inviteMember(wid, body),
@@ -56,6 +57,7 @@ beforeEach(() => {
   h.role = "owner";
   h.members = [];
   h.sent = [];
+  h.activity = [];
   h.inviteMember.mockReset();
   h.revokeInvitation.mockReset();
   h.revokeInvitation.mockResolvedValue(undefined);
@@ -150,4 +152,16 @@ it("退出确认里写的是工作区名,不是自己的用户名", async () => 
   const dialog = await screen.findByRole("alertdialog");
   expect(dialog.textContent).toContain("teamLeaveConfirm");
   expect(dialog.textContent).not.toContain("uiviewer");
+});
+
+//: 体检 UM-29:团队动态此前一屏都是「系统 发起了任务 · 任务 · 182a4f63…」,真正的协作动态被淹没。
+it("团队动态不列系统自己起的任务", async () => {
+  h.server = [{ id: "w1", name: "Studio", role: "owner" }];
+  h.activity = [
+    { id: "a1", action: "job.created", actor: null, subject_type: "job", subject_id: "182a4f63", created_at: "2026-10-08T00:00:00Z", summary: "" },
+    { id: "a2", action: "board.created", actor: { display_name: "小美", username: "mate" }, subject_type: "board", subject_id: "b1", created_at: "2026-10-08T00:00:00Z", summary: "" },
+  ];
+  mount(h.server[0]);
+  expect(await screen.findByText("小美")).toBeInTheDocument();
+  expect(screen.queryByText(/182a4f63/)).toBeNull();
 });

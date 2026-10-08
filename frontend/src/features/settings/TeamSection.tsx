@@ -102,6 +102,9 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const gate = workspaceMenuState(myRole, workspaces.data?.length ?? 0);
   const deleteReason = workspaceDeleteBlockedReason(gate);
   const roleLabel = (role: string) => t(`role_${role}` as never) as string;
+  //: 团队动态说的是**人**做了什么:系统自己起的任务(定时任务、预览代理、后台整理)不进来 —— 此前一屏都是
+  //: 「系统 发起了任务 · 任务 · 182a4f63…」,真正的协作动态被淹没(体检 UM-29)。它们在任务中心里看得到。
+  const teamActivity = (activity.data ?? []).filter((event) => event.actor || event.action !== "job.created");
 
   const roleMut = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) => setMemberRole(wid, userId, role),
@@ -166,10 +169,10 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
           <Clock size={15} /> {t("teamActivity")}
         </SettingsBlockTitle>
         <SettingsList scrollable>
-          {(activity.data ?? []).slice(0, 20).map((event) => (
+          {teamActivity.slice(0, 20).map((event) => (
             <ActivityRow key={event.id} event={event} />
           ))}
-          {activity.isSuccess && activity.data.length === 0 && (
+          {activity.isSuccess && teamActivity.length === 0 && (
             <div className="px-3 py-5 text-center text-ui-sm text-muted-foreground">{t("teamActivityEmpty")}</div>
           )}
         </SettingsList>
