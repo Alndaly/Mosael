@@ -12,6 +12,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import httpx
+
+from tests.util import stub_client
 import pytest
 
 from app.ai.providers import VoiceEnrollmentError, build_voice_enrollment_adapter
@@ -49,7 +51,7 @@ def bailian(monkeypatch):
         uploaded.append({"url": url, "data": data, "file": files["file"][0]})
         return SimpleNamespace(raise_for_status=lambda: None)
 
-    monkeypatch.setattr(temporary_storage.httpx, "post", fake_post)
+    monkeypatch.setattr(temporary_storage, "RetryingClient", stub_client(post=fake_post))
     return SimpleNamespace(sent=sent, replies=replies, uploaded=uploaded)
 
 

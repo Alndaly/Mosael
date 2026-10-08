@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import httpx
-
 from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 
@@ -50,8 +48,9 @@ def upload_temporary(client: RetryingClient, model: str, path: Path) -> str:
         "key": key,
         "success_action_status": "200",
     }
-    with path.open("rb") as handle:
-        uploaded = httpx.post(host, data=form, files={"file": (path.name, handle)}, timeout=300)
+    #: 直传地址是百炼回给我们的(和成片下载同一类);一次就好 —— 文件句柄传过一遍就读完了,重发不了。
+    with path.open("rb") as handle, RetryingClient(timeout=300, max_retries=0) as uploader:
+        uploaded = uploader.post(host, data=form, files={"file": (path.name, handle)})
     uploaded.raise_for_status()
     return f"oss://{key}"
 

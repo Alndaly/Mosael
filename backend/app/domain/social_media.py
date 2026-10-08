@@ -120,11 +120,14 @@ def _is_short_link(url: str) -> bool:
 def resolve_short_link(url: str) -> str:
     """跟短链的跳转,直到落到一个不是短链的地址。取不到(断网、被拦)就原样交回 —— 浏览器那一路照样能打开短链,
     TikHub 的几个工具也收分享链接;没跟成功只是少了一个编号。"""
-    import httpx
+    from app.core.http_retry import RetryingClient
+    from app.core.outbound_guard import Origin
 
     current = url
     try:
-        with httpx.Client(timeout=8, follow_redirects=False, headers={"User-Agent": _MOBILE_UA}) as client:
+        #: 分享链接是别人给的:每一跳都按「别人给的地址」过出站检查。
+        with RetryingClient(timeout=8, max_retries=0, origin=Origin.GIVEN, follow_redirects=False,
+                            headers={"User-Agent": _MOBILE_UA}) as client:
             for _ in range(5):
                 if not _is_short_link(current):
                     break

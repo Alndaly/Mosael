@@ -24,6 +24,14 @@ from app.core.db import SessionLocal
 from app.core.http_retry import RetryingClient
 from tests.util import add_provider, fresh_client, until, wait_settled, wait_status
 
+
+@pytest.fixture(autouse=True)
+def _desktop(monkeypatch):
+    """这里的服务起在本机回环上,是桌面版的情形:连接里填的(部署配的)地址照连(core/outbound_guard)。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "local_desktop", True)
+
 #: 上游「生成」要多久才回。旧代码下取消之后连接一直挂到这时;新代码下取消后一秒内就断。
 GENERATE_SECONDS = 8.0
 #: 取消之后最多等多久看到断开:线画在「不修的话要等多久」(生成完才断)的一半。此前是 1.5 秒,几套测试同时跑时不够。

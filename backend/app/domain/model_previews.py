@@ -39,6 +39,7 @@ from PIL import Image
 
 from app.core.child_process import run_logged
 from app.core.config import settings
+from app.core.http_retry import RetryingClient
 from app.domain.plugins import egress as plugin_egress
 from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, write_thumbnail
 
@@ -437,7 +438,8 @@ def fetch_media(instance_id: str, route: plugin_egress.Egress, url: str, headers
     那边明确说没有(404 这类)、不是图、太大 → None,记成没有;那边一时出错(5xx、限流、连接断了、超时)→ 抛
     PreviewNotNow,这次不给、也不记成没有,下次照常去取。"""
     try:
-        with httpx.Client(timeout=30, headers=headers, follow_redirects=True, **route.httpx_options(url)) as client:
+        with RetryingClient(timeout=30, max_retries=0, headers=headers, follow_redirects=True,
+                            **route.httpx_options(url)) as client:
             with client.stream("GET", url) as response:
                 if response.status_code >= 500 or response.status_code == 429:
                     raise PreviewNotNow(f"HTTP {response.status_code}")

@@ -137,6 +137,7 @@ async def _run(
     payload: dict,
     *,
     endpoint: str,
+    proxy: str,
 ) -> PodcastSynthesisResult:
     import websockets
 
@@ -150,7 +151,7 @@ async def _run(
     result = PodcastSynthesisResult()
     session_id = uuid.uuid4().hex
 
-    async with websockets.connect(endpoint, additional_headers=headers, max_size=None) as socket:
+    async with websockets.connect(endpoint, additional_headers=headers, max_size=None, proxy=proxy) as socket:
         await socket.send(_control(EventType.StartConnection, b"{}"))
         started = parse_message(await asyncio.wait_for(socket.recv(), HANDSHAKE_TIMEOUT))
         if started.event != EventType.ConnectionStarted:
@@ -264,7 +265,17 @@ def synthesize_volcano_podcast(
         speech_rate=max(-50, min(100, round((max(0.2, min(3.0, speed)) - 1.0) * 100))),
         audio_format=audio_format,
     )
-    result = asyncio.run(_run(appid, token, payload, endpoint=endpoint or ENDPOINT))
+    from app.core.outbound_guard import Origin
+    from app.core.outbound_proxy import ticket
+
+    #: websocket 也过出站检查:经守卫代理连过去(core/outbound_proxy)。地址是连接里填的(或内置的)。
+    with ticket(Origin.CONFIGURED) as issued:
+        try:
+            result = asyncio.run(_run(appid, token, payload, endpoint=endpoint or ENDPOINT, proxy=issued.url))
+        except Exception:
+            if issued.refused is not None:
+                raise issued.refused from None
+            raise
     if out_path is not None:
         out_path.write_bytes(result.audio)
     return result

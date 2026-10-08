@@ -31,7 +31,9 @@ from typing import Any, Awaitable, Callable, TypeVar
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from app.core import outbound_proxy
 from app.core.i18n import LocalizedError, get_current_locale
+from app.core.outbound_guard import Origin
 from app.domain.plugins.child_env import base_env
 from app.domain.plugins.egress import UNDECIDED, Egress
 from app.domain.plugins.manifest import LOCALE_ENV, expand
@@ -113,15 +115,23 @@ async def _run(
         headers.setdefault("Accept-Language", get_current_locale())
         #: 不用 SDK 的 create_mcp_http_client:它不收代理参数,而这条请求是后端替这个连接发的,
         #: 该走这个连接的出站决定(见 egress)。超时照抄它的缺省 —— 服务可能长时间开着一条响应流。
-        async with httpx2.AsyncClient(
-            headers=headers,
-            timeout=httpx2.Timeout(MCP_DEFAULT_TIMEOUT, read=MCP_DEFAULT_SSE_READ_TIMEOUT),
-            **egress.httpx_options(url),
-        ) as http_client:
-            async with streamable_http_client(url, http_client=http_client) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    return await fn(session)
+        #: 经守卫代理出去(core/outbound_proxy):每一条连接都过出站检查,再按这个连接的出站决定往外走。
+        with outbound_proxy.ticket(Origin.CONFIGURED, route=egress.route(url)) as issued:
+            try:
+                async with httpx2.AsyncClient(
+                    headers=headers,
+                    timeout=httpx2.Timeout(MCP_DEFAULT_TIMEOUT, read=MCP_DEFAULT_SSE_READ_TIMEOUT),
+                    proxy=issued.url,
+                    trust_env=False,
+                ) as http_client:
+                    async with streamable_http_client(url, http_client=http_client) as (read, write):
+                        async with ClientSession(read, write) as session:
+                            await session.initialize()
+                            return await fn(session)
+            except Exception:
+                if issued.refused is not None:
+                    raise McpBridgeError.relay(issued.refused) from None
+                raise
 
     raise McpBridgeError("pluginErr_mcpBadTransport", transport=transport)
 

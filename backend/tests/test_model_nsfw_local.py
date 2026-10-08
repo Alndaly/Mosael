@@ -21,6 +21,14 @@ from tests.util import fresh_client, second_client
 
 
 @pytest.fixture(autouse=True)
+def _desktop(monkeypatch):
+    """这里的服务起在本机回环上,是桌面版的情形:连接里填的(部署配的)地址照连(core/outbound_guard)。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "local_desktop", True)
+
+
+@pytest.fixture(autouse=True)
 def _clean():
     """每条从头来:没下权重、没有记着的结果(测试的数据目录是整轮共用的一个临时目录)。"""
 

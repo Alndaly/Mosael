@@ -15,7 +15,7 @@ import time
 
 import httpx
 
-from app.core import abort
+from app.core import abort, outbound_guard
 
 #: 默认重试次数(不含首次)。与 db.models.AiRuntimeConfig.max_retries 的列默认值一致。
 DEFAULT_MAX_RETRIES = 3
@@ -144,37 +144,14 @@ def sent_but_unanswered(exc: BaseException) -> bool:
     return False
 
 
-#: 本机地址。设置页的承诺是「本机回连永不走代理」。
-LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
-
-
-def loopback_direct() -> dict[str, None]:
-    """交给 httpx 的 `mounts`:本机地址不走任何代理。
-
-    httpx 默认按环境变量找代理,环境里没有就去读**系统代理设置**(macOS、Windows)。应用里代理留空时,环境变量是删掉的,
-    于是开着 Clash 之类系统代理的 Mac 上,连 `127.0.0.1` 都被送进系统代理 —— 系统设置那条路带不来「绕过」名单。本机的
-    Ollama、LM Studio、ComfyUI 一关代理就全挂,报的还是代理替它回的「HTTP 502」,而不是「连不上」(SEC-10)。
-    映射到 None = 这些地址用不带代理的默认连接。应用里设了代理时,环境变量里的 NO_PROXY 本来就带着回环,这里是同一个意思。
-    """
-    return {f"all://{host}": None for host in LOOPBACK_HOSTS}
-
-
-def is_loopback(url: str) -> bool:
-    """这个地址是不是本机。给不经 RetryingClient 的那几处(`httpx.get(..., trust_env=not is_loopback(url))`)用。"""
-    try:
-        host = httpx.URL(url).host
-    except (httpx.InvalidURL, TypeError):
-        return False
-    return host in ("localhost", "127.0.0.1", "::1")
-
-
 def backoff_seconds(attempt: int) -> float:
     """指数退避 + 少量抖动。抖动是为了让同时失败的多个请求不要在同一刻一起重击供应商。"""
     return min(_BASE_SECONDS * 2**attempt, _MAX_SLEEP_SECONDS) + random.uniform(0, 0.4)
 
 
-class RetryingClient(httpx.Client):
-    """会对瞬时失败自动重试的 httpx.Client。
+class RetryingClient(abort.AbortableClient):
+    """会对瞬时失败自动重试的 httpx.Client。**后端往外发 HTTP 请求一律用它**(tests/test_outbound_requests_pass_one_gate
+    钉着):它缺省就装着出站检查(core/outbound_guard.GuardedTransport),每一跳都过同一道闸。
 
     重试放在 `send()` 而不是包一层函数:适配器们用的是 `with httpx.Client(...) as c` 这种
     写法,换个类名就全都覆盖到了,不必去改每一处调用姿势。
@@ -182,33 +159,40 @@ class RetryingClient(httpx.Client):
     **流式响应也会被重试**:失败的那次响应会先关掉再重来,不会泄连接。但**请求体若是生成器
     就不能重试** —— httpx 的请求体只能消费一次。目前所有 AI 调用传的都是 json= 或 bytes,
     真出现流式上传时应显式传 max_retries=0。
+
+    `origin`:地址是谁定的(见 outbound_guard.Origin)。缺省是「部署配的」—— 供应商、内置服务、连接里填的地址,
+    和它们回给我们去取的东西;别人给的地址(用户填的参考图链接、分享链接)要明说 `Origin.GIVEN`。
+    `proxy` / `trust_env=False` 照 httpx 的意思:明说的代理 / 直连;都不给就照进程的代理设置。
     """
 
-    def __init__(self, *args, max_retries: int | None = None, **kwargs) -> None:
+    def __init__(
+        self, *args, max_retries: int | None = None, origin: outbound_guard.Origin = outbound_guard.Origin.CONFIGURED,
+        **kwargs,
+    ) -> None:
         self._max_retries = max_retries
-        #: 在一件可以取消的活里建的客户端(见 core/abort):记下自己建的连接,活被取消时把它们关掉。
-        scope = abort.current()
-        self._reaper = abort.SocketReaper(scope) if scope is not None else None
-        #: 本机地址永远直连(见 loopback_direct);调用方自己给的 mounts 叠在上面。
-        kwargs["mounts"] = {**loopback_direct(), **(kwargs.get("mounts") or {})}
+        if "transport" not in kwargs:
+            route: outbound_guard.Route = outbound_guard.FOLLOW_ENVIRONMENT
+            if "proxy" in kwargs:
+                route = kwargs.pop("proxy")
+            elif kwargs.get("trust_env") is False:
+                route = None
+            options = {key: kwargs.pop(key) for key in outbound_guard.TRANSPORT_OPTIONS if key in kwargs}
+            kwargs["transport"] = outbound_guard.GuardedTransport(origin, route=route, **options)
+            #: 代理由那道闸按同一份环境变量定(只认进程的变量,不认操作系统的代理设置;本机回连永远直连)。
+            kwargs["trust_env"] = False
         super().__init__(*args, **kwargs)
 
     def send(self, request: httpx.Request, **kwargs) -> httpx.Response:  # type: ignore[override]
         limit = self._max_retries if self._max_retries is not None else _max_retries
         attempts = max(1, limit + 1)
-        reaper = self._reaper
-        if reaper is not None:
-            request.extensions["trace"] = reaper.trace(request.extensions.get("trace"))
         for attempt in range(attempts):
             last = attempt == attempts - 1
-            #: 活已经被取消:不再发(也不再重试)—— 一次新的付费调用正是取消要拦住的东西。
-            if reaper is not None and reaper.scope.aborted:
-                raise abort.RequestAborted("the work this request belongs to was cancelled", request=request)
             try:
+                #: 取消了就不再发、在途的当场断(见 abort.AbortableClient),那一句不重试。
                 response = super().send(request, **kwargs)
+            except abort.RequestAborted:
+                raise
             except httpx.RequestError as exc:
-                if reaper is not None and reaper.scope.aborted:
-                    raise abort.RequestAborted("cancelled while the request was in flight", request=request) from exc
                 # 连接断开 / 超时 / DNS:末次才抛,其余退避后再来。
                 if last or not resend_is_safe(request, exc):
                     raise
@@ -219,17 +203,6 @@ class RetryingClient(httpx.Client):
                 response.close()
             time.sleep(backoff_seconds(attempt))
         raise AssertionError("unreachable: the last attempt always returns or raises")  # 仅为类型收敛
-
-    def close(self) -> None:
-        if self._reaper is not None:
-            self._reaper.close()
-        super().close()
-
-    def __exit__(self, *exc_info) -> None:  # type: ignore[override]
-        #: httpx 的 __exit__ 不经过 close():两条路都要把取消登记撤掉。
-        if self._reaper is not None:
-            self._reaper.close()
-        super().__exit__(*exc_info)
 
 
 def post(url: str, *, max_retries: int | None = None, **kwargs) -> httpx.Response:

@@ -19,6 +19,7 @@ pi 在这块不提供任何能力(六家 Provider 里没有配额查询,也不�
 
 from __future__ import annotations
 
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 
 import time
@@ -394,7 +395,7 @@ def access_token(credential: dict[str, Any] | None) -> str | None:
 
 
 def _get_json(url: str, headers: dict[str, str], *, proxies_from_env: bool = True) -> dict[str, Any]:
-    with httpx.Client(timeout=TIMEOUT_SECONDS, trust_env=proxies_from_env) as client:
+    with RetryingClient(timeout=TIMEOUT_SECONDS, max_retries=0, trust_env=proxies_from_env) as client:
         response = client.get(url, headers=headers)
         if response.status_code == 401:
             raise CredentialExpired("quotaErr_credentialExpired")

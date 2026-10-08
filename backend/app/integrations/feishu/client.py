@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 from app.db.models import FeishuBot
 
@@ -37,7 +38,8 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
         cached = _token_cache.get(bot.id)
         if cached and not force and cached[1] > time.time() + 120:
             return cached[0]
-    response = httpx.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret}, timeout=15.0)
+    with RetryingClient(timeout=15.0, max_retries=0) as client:
+        response = client.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret})
     data = response.json()
     if data.get("code") != 0:
         raise FeishuError("feishuErr_token", detail=data.get("msg") or data.get("code"))
@@ -49,7 +51,7 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
 
 def call_api(bot: FeishuBot, method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     def _call(token: str) -> dict[str, Any]:
-        with httpx.Client(timeout=15.0) as client:
+        with RetryingClient(timeout=15.0, max_retries=0) as client:
             response = client.request(method, url, headers={"Authorization": f"Bearer {token}"}, json=body)
             response.raise_for_status()
             return response.json()
@@ -121,7 +123,7 @@ def download_message_resource(bot: FeishuBot, message_id: str, file_key: str, ki
     """把消息里的图片/文件取回来。走 tenant token,和其它 API 调用同一条路。"""
 
     def _fetch(token: str) -> httpx.Response:
-        with httpx.Client(timeout=60.0) as client:
+        with RetryingClient(timeout=60.0, max_retries=0) as client:
             return client.get(
                 f"{API_BASE}/im/v1/messages/{message_id}/resources/{file_key}",
                 params={"type": kind},

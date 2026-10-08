@@ -88,7 +88,7 @@ def test_没有第二处自己拼这个头() -> None:
     )
 
 
-def test_本地端点问得出目录() -> None:
+def test_本地端点问得出目录(monkeypatch) -> None:
     """反面那一条此前没有:测试只断言了"填了 key 时 key 要发到端点"。"""
     import app.ai.model_catalog as catalog
 
@@ -102,12 +102,10 @@ def test_本地端点问得出目录() -> None:
             json={"data": [{"id": "qwen3:32b", "context_window": 131072}]},
         )
 
-    original = catalog.httpx.get
-    catalog.httpx.get = fake_get  # type: ignore[assignment]
-    try:
-        models = catalog.fetch_models("http://127.0.0.1:11434/v1", "", use_cache=False)
-    finally:
-        catalog.httpx.get = original  # type: ignore[assignment]
+    from tests.util import stub_client
+
+    monkeypatch.setattr(catalog, "RetryingClient", stub_client(get=fake_get))
+    models = catalog.fetch_models("http://127.0.0.1:11434/v1", "", use_cache=False)
 
     assert [one.id for one in models] == ["qwen3:32b"], "本地端点的目录还是拿不到"
     assert "Authorization" not in seen[0], "空密钥还是把 Authorization 发出去了"

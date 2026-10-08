@@ -33,6 +33,10 @@ def _direct(monkeypatch):
     for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
         monkeypatch.delenv(key, raising=False)
         monkeypatch.delenv(key.lower(), raising=False)
+    #: 进程里没有代理变量时会去读操作系统的代理设置(和后端的 httpx 一样):开发机上常开着一个,CI 上没有。
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "getproxies", urllib.request.getproxies_environment)
 
 
 class _Server:

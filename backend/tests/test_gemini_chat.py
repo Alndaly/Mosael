@@ -27,7 +27,7 @@ from app.domain.providers import thinking
 from app.domain.providers.chat_connection import default_chat_connection, reachable_on
 from app.domain.providers.presets import provider_definition, served_by_pi
 from app.domain.providers.runtime import sidecar_provider
-from tests.util import add_provider, fresh_client
+from tests.util import add_provider, fresh_client, stub_client
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -149,7 +149,7 @@ def test_gemini_目录只列对话模型_按原生协议鉴权_翻页(monkeypatc
         body = _PAGE_2 if params.get("pageToken") == "page-2" else _PAGE_1
         return httpx.Response(200, json=body, request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(model_catalog.httpx, "get", fake_get)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=fake_get))
     models = model_catalog.fetch_models(GEMINI_BASE, "aistudio-key", protocol="gemini", use_cache=False)
 
     assert [model.id for model in models] == ["gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3.8-flash"]
@@ -168,7 +168,7 @@ def test_openai_兼容的目录照旧(monkeypatch) -> None:
         seen.append(dict(kwargs.get("headers") or {}))
         return httpx.Response(200, json={"data": [{"id": "gpt-x"}]}, request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(model_catalog.httpx, "get", fake_get)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=fake_get))
     assert [m.id for m in model_catalog.fetch_models("https://api.openai.com/v1", "sk", use_cache=False)] == ["gpt-x"]
     assert seen == [{"Authorization": "Bearer sk"}]
 

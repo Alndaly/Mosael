@@ -63,6 +63,7 @@
 | `app/ai/sidecar/pi_client.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/domain/browser/__init__.py:_executor_contact` | 最近一次浏览器执行器来认领 / 心跳的时刻 | 只用来把排队超时说清楚(执行器在线 → 「排队太久、前面有几条」,不在 → 「桌面端没开」)。重启后归零,执行器下一拍认领就补上;第二个进程收不到另一边的认领,会把「排队太久」错说成「桌面端没开」—— 错的只是那句话,动作照样按超时收尾。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
+| `app/core/outbound_proxy.py:_server`、`app/core/outbound_proxy.py:_tickets` | 出站的守卫代理(只听本机回环)和它发出去的票:yt-dlp、websocket、远程 MCP 这几处不经 httpx 的出网经它过出站检查(core/outbound_guard) | 要用时才起,之后跟进程同生同死;票只在一次调用期间有效,用完收回。重启后重起一个(端口不同),没有要恢复的;第二个进程各起各的,票只对发它的那个进程有效 —— 用它的客户端本来就在同一个进程里。 |
 | `app/domain/plugins/catalog_watch.py:_watch_stop`、`app/domain/plugins/catalog_watch.py:_watch_thread` | 插件目录的巡检线程(启动时把每个实例替宿主做的事刷一遍 —— 生成模型、运行时报出的工具 —— 之后每分钟问一次指纹,变了才重新拉) | 重启后重新刷一遍,不丢东西(目录缓存在模型行和 `discovered_tools` 上)。第二个进程会**再巡检一份**:每分钟多问一次 ComfyUI,结果一样,只是多一倍请求。 |
 
 ## 三、启动时装配的配置快照
@@ -194,6 +195,8 @@
 - `app/domain/model_library.py:_lock`、`app/domain/model_nsfw_local.py:_lock`、`app/domain/model_previews.py:_lock`、
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
   `app/domain/media_tools.py:_status_lock`(探 ffmpeg 一次一个:启动时的后台探测和管理页的「重新检测」可能撞上)
+  `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
+  `app/core/outbound_proxy.py:_lock`(守 `_tickets` 和起守卫代理那一下)
 - `app/integrations/feishu/client.py:_token_lock`、`app/integrations/feishu/connections.py:_process_lock`、
   `app/integrations/feishu/inbound.py:_seen_lock`、`app/integrations/feishu/inbound.py:_awaiting_lock`、`app/integrations/feishu/onboarding.py:_onboard_lock`
 

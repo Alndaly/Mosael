@@ -139,6 +139,53 @@ class SocketReaper:
             self._sockets.clear()
 
 
+class AbortableClient(httpx.Client):
+    """认得「这件活被取消了」的 httpx.Client。在一件可以取消的活里建的(`current()` 不是 None):活已经取消了就不再发;
+    发出去的连接都记下(SocketReaper),活被取消时当场关掉,正在等的那一句以 RequestAborted 结束。不在任务里建的和
+    普通 Client 一样。
+
+    重试层(core/http_retry.RetryingClient)和出站检查的 `send`(core/outbound_guard)都建在它上面 —— 「取消就停」只写这一处。
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        scope = current()
+        self._reaper = SocketReaper(scope) if scope is not None else None
+        super().__init__(*args, **kwargs)
+
+    def send(self, request: httpx.Request, **kwargs) -> httpx.Response:  # type: ignore[override]
+        reaper = self._reaper
+        if reaper is None:
+            return super().send(request, **kwargs)
+        #: 活已经被取消:不再发(也不再重试)—— 一次新的付费调用正是取消要拦住的东西。
+        if reaper.scope.aborted:
+            raise RequestAborted("the work this request belongs to was cancelled", request=request)
+        traced = request.extensions.get("trace")
+        if getattr(traced, "reaped_by", None) is not reaper:
+            #: 同一个请求重发时(重试层)不再套一层。
+            traced = reaper.trace(traced)
+            traced.reaped_by = reaper  # type: ignore[attr-defined]
+            request.extensions["trace"] = traced
+        try:
+            return super().send(request, **kwargs)
+        except RequestAborted:
+            raise
+        except httpx.RequestError as exc:
+            if reaper.scope.aborted:
+                raise RequestAborted("cancelled while the request was in flight", request=request) from exc
+            raise
+
+    def close(self) -> None:
+        if self._reaper is not None:
+            self._reaper.close()
+        super().close()
+
+    def __exit__(self, *exc_info) -> None:  # type: ignore[override]
+        #: httpx 的 __exit__ 不经过 close():两条路都要把取消登记撤掉。
+        if self._reaper is not None:
+            self._reaper.close()
+        super().__exit__(*exc_info)
+
+
 def _shutdown(sock: socket.socket) -> None:
     try:
         sock.shutdown(socket.SHUT_RDWR)
@@ -146,4 +193,4 @@ def _shutdown(sock: socket.socket) -> None:
         pass  # 已经关了 / TLS 包装之后原来那个对象已经交出了 fd
 
 
-__all__ = ["AbortScope", "RequestAborted", "SocketReaper", "current", "scope"]
+__all__ = ["AbortScope", "AbortableClient", "RequestAborted", "SocketReaper", "current", "scope"]

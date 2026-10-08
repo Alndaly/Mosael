@@ -300,7 +300,7 @@ export const otherUi = {
   deploySharedFoldersAdd: "Add",
   deploySharedFoldersRemove: "Stop sharing this folder",
   deployOutboundTitle: "Internal network access",
-  deployOutboundDesc: "Workflow HTTP requests, the agent's page fetches and link imports may only reach the public internet by default; loopback, private networks and cloud metadata need to be allowed here.",
+  deployOutboundDesc: "Workflow HTTP requests, the agent's page fetches, link imports and image links entered for generation may only reach the public internet by default; on a shared deployment, so may addresses entered in connections. Allow services on this machine or the local network here.",
   deployOutboundEmpty: "Public internet only",
   deployOutboundEmptyBody: "Loopback, private network and cloud metadata addresses are blocked; the error says which entry to add.",
   deployOutboundNew: "Add address",

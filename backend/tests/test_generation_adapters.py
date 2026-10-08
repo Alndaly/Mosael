@@ -450,14 +450,17 @@ def test_qwen_edit_payload_uses_uploaded_reference_image(tmp_path) -> None:
     assert payload["parameters"] == {"n": 1, "watermark": False, "negative_prompt": "low quality", "seed": 9}
 
 
-def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_compatible_mode() -> None:
+def test_qwen_image_async_tasks_follow_the_connection_base_url_normalized_to_the_native_root() -> None:
+    """异步任务(文生图、万相视频)跟着连接里填的地址走,compatible-mode 剥成原生根 —— 和语音、音频同一个归一(UC-07)。"""
     context = GenerationAdapterContext(
         connection_id="p1",
         vendor_id="alibaba",
         api_key="sk-test",
         base_url="https://llm-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
     )
-    assert task_api_base(context) == DASHSCOPE_BASE
+    assert task_api_base(context) == "https://llm-example.cn-beijing.maas.aliyuncs.com"
+    unset = GenerationAdapterContext(connection_id="p1", vendor_id="alibaba", api_key="sk-test")
+    assert task_api_base(unset) == DASHSCOPE_BASE, "没填地址时还是百炼的中国站"
     assert resolve_qwen_edit_base(context) == "https://llm-example.cn-beijing.maas.aliyuncs.com"
 
     custom = GenerationAdapterContext(

@@ -39,13 +39,14 @@ def failure_detail(response: httpx.Response) -> str:
 
 
 def task_api_base(context: GenerationAdapterContext) -> str:
-    """异步任务接口(文生图、万相视频)的根。
+    """异步任务接口(文生图、万相视频)的根:**跟着连接里填的地址走**,和语音、音频同一个归一(`native_base`)。
 
-    它不看连接的 base_url:那一格是给对话填的,可能是某个只代理了 compatible-mode 的网关。
-    要换只能显式写在 `dashscope_base_url` / `generation_base_url` 里。
+    此前它不看连接的 base_url,永远打中国站 —— 填了国际站或公司网关的人,对话走他填的地址,图像 / 视频却被送去了
+    别处,设置页上那句「会自动归一为原生 API 根」也不成立(UC-07)。单独写在 `dashscope_base_url` /
+    `generation_base_url` 里的照样优先。
     """
     configured = str(context.options.get("dashscope_base_url") or context.options.get("generation_base_url") or "").strip()
-    return (configured or DASHSCOPE_BASE).rstrip("/")
+    return configured.rstrip("/") if configured else native_base(context.base_url)
 
 
 def async_task_client(context: GenerationAdapterContext, *, timeout: float) -> RetryingClient:

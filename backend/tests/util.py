@@ -41,6 +41,31 @@ def _assert_disposable_data_dir() -> None:
         )
 
 
+def stub_client(*, get=None, post=None):
+    """替身 RetryingClient:`with X(...) as client: client.get(url, **kw)` 交给 `get(url, **kw)`(post 同理)。
+
+    给只想换掉「这一处往外发了什么、回了什么」的测试用,按模块换:`monkeypatch.setattr(模块, "RetryingClient", stub_client(...))`。
+    """
+
+    class _Stub:
+        def __init__(self, *args, **kwargs) -> None:
+            self.options = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info) -> bool:
+            return False
+
+        def get(self, url, **kwargs):
+            return get(url, **kwargs)
+
+        def post(self, url, **kwargs):
+            return post(url, **kwargs)
+
+    return _Stub
+
+
 def fresh_client(username: str = "tester") -> TestClient:
     """Drop/recreate the isolated test DB and return a logged-in client.
 

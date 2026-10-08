@@ -761,6 +761,16 @@ MESSAGES: dict[str, dict[str, str]] = {
               "If this is intended, ask a deployment admin to add “{entry}” to the allowlist under "
               "Admin → Deployment → Internal network access (a host name, an IP or a CIDR range also works).",
     },
+    "outboundErr_privateConfigured": {
+        "zh": "不能访问 {host}:它解析到 {address},是{reason}。这是多人共用的部署,连接里填的地址和别处给的一样只许去公网,"
+              "免得借这台服务器摸进本机和内网的服务。确实需要的话(比如同一台服务器上的模型服务),请部署管理员在"
+              "「管理 → 部署设置 → 内网访问」里把「{entry}」加进允许名单(也可以写主机名、IP 或 CIDR 网段)。",
+        "en": "Can't reach {host}: it resolves to {address}, which is {reason}. This deployment is shared, so addresses "
+              "entered in connections may only go to the public internet, like any other address, so nobody can use "
+              "this server to reach services on this machine or the internal network. If this is intended (say, a "
+              "model server on the same machine), ask a deployment admin to add “{entry}” to the allowlist under "
+              "Admin → Deployment → Internal network access (a host name, an IP or a CIDR range also works).",
+    },
     "outboundErr_badUrl": {
         "zh": "不是可以访问的网址:{url}(只支持 http:// 或 https:// 开头的地址)",
         "en": "Not a reachable web address: {url} (only http:// and https:// addresses are supported).",

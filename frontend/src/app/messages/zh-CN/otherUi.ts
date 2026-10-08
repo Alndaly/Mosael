@@ -300,7 +300,7 @@ export const otherUi = {
   deploySharedFoldersAdd: "添加",
   deploySharedFoldersRemove: "取消共享这个文件夹",
   deployOutboundTitle: "内网访问",
-  deployOutboundDesc: "工作流的 HTTP 请求、智能体抓网页、从链接导入默认只许去公网;本机回环、局域网和云服务器元数据要在这里放行才去得了。",
+  deployOutboundDesc: "工作流的 HTTP 请求、智能体抓网页、从链接导入、生成时填的图片链接默认只许去公网;多人共用的部署里,连接里填的地址也一样。要去本机或局域网上的服务,在这里放行。",
   deployOutboundEmpty: "只许访问公网",
   deployOutboundEmptyBody: "本机回环、局域网和云元数据地址都会被拦下,报错里会说该加哪一项。",
   deployOutboundNew: "添加地址",

@@ -20,6 +20,14 @@ from app.ai import model_catalog
 from app.core.http_retry import RetryingClient
 
 
+@pytest.fixture(autouse=True)
+def _desktop(monkeypatch):
+    """这里的服务起在本机回环上,是桌面版的情形:连接里填的(部署配的)地址照连(core/outbound_guard)。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "local_desktop", True)
+
+
 def _serve(status: int, body: bytes) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 — http.server 的名字

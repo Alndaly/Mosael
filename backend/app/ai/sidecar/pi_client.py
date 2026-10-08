@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
+
 """
 Agent CLI adapters: Mosael hosts a specialized external coding-agent (pi — the
 instead of a homegrown loop. The agent gets
@@ -17,7 +19,7 @@ Mosael's MCP server (with a session token) as its tool surface; mutations still
 flow through the confirmation cards.
 """
 
-from app.core import abort
+from app.core import abort, outbound_guard
 from app.core.child_process import ChildProcess, popen_text
 from app.core.i18n import LocalizedError, tr
 
@@ -99,7 +101,16 @@ def _provider_frame(provider: dict) -> dict:
     **三种帧共用这一份**(一轮对话、网关单次补全、手动压缩)。此前三处各拼一遍,压缩那份少了思考档位表等几格:
     手动压缩时摘要请求按「不知道这个模型怎么思考」发 —— 对关不掉思考的 Gemini 2.5 Pro,那是一次 `thinkingBudget: 0`,
     直接 400。
+
+    **交出去之前,地址先过一遍出站检查**:sidecar(Node)自己连供应商,不经后端那道装在 httpx 上的闸,所以在交接这一处按
+    「部署配的地址」判(core/outbound_guard)—— 多人共用的部署里,成员连接填的内网地址在这里就拦下,说清为什么、怎么放行。
     """
+    base_url = str(provider.get("base_url") or "")
+    if base_url:
+        try:
+            outbound_guard.check(base_url, origin=outbound_guard.Origin.CONFIGURED)
+        except httpx.ConnectError:
+            pass  # 解析不了不归这里说:sidecar 连的时候会报连不上
     return {
         "baseUrl": provider.get("base_url", ""),
         "apiKey": provider.get("api_key", ""),

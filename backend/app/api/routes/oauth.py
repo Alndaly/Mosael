@@ -37,6 +37,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError, tr
 from app.api.deps import DbSession
 from app.api.routes.auth import current_user_out
@@ -269,7 +270,8 @@ def _exchange_code(provider: str, code: str, verifier: str) -> dict[str, Any]:
             "redirect_uri": _redirect_uri("apple"),
         }
         token_url = APPLE_TOKEN_URL
-    response = httpx.post(token_url, data=body, timeout=15.0)
+    with RetryingClient(timeout=15.0, max_retries=0) as client:
+        response = client.post(token_url, data=body)
     data = response.json() if response.content else {}
     if response.status_code != 200 or "id_token" not in data:
         raise OAuthLoginError(

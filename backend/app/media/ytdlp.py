@@ -10,12 +10,18 @@
 
 这里只管**字节**:落到临时目录、返回文件路径。入库(探测时长、缩略图、波形、建记录)交给
 `domain/assets.register_file_asset` —— 那是所有素材共用的唯一一条入库路径。
+
+**yt-dlp 的每一条连接都过出站检查**:链接是别人给的,一路跟过去的每一跳也是。yt-dlp 自己连网、自己跟重定向,所以给它
+一个守卫代理(core/outbound_proxy)当出口,每一条连接在那里按「别人给的地址」判;下载也不交给外部程序(它们自己连网,
+不一定走这个出口)。被拒时说的是被拒的那一句(为什么、怎么放行),不是 yt-dlp 那句「代理拒绝了隧道」。
 """
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -96,6 +102,26 @@ class YtdlpError(RuntimeError):
 
 class YtdlpCancelled(RuntimeError):
     """下载被叫停了(任务被人取消)。**不是失败**:不进 classify,不会被说成一句「下载失败」。"""
+
+
+@contextmanager
+def _guarded(options: dict[str, Any]) -> Iterator[Any]:
+    """这一次 yt-dlp 的出口:守卫代理的一张票(见模块说明)。交回那张票 —— 失败时看它记没记下被拒的那一句。"""
+    from app.core.outbound_guard import Origin
+    from app.core.outbound_proxy import ticket
+
+    with ticket(Origin.GIVEN) as issued:
+        options["proxy"] = issued.url
+        options["external_downloader"] = {"default": "native"}
+        yield issued
+
+
+def _failure(exc: BaseException, issued: Any) -> YtdlpError:
+    """yt-dlp 失败时说哪一句:有一条连接被出站检查拦下,就说那一句;否则照 classify。"""
+    refused = issued.refused
+    if refused is not None:
+        return YtdlpError(refused.key, **refused.params)
+    return classify(exc)
 
 
 @lru_cache(maxsize=1)
@@ -257,21 +283,23 @@ def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> Remot
     }
     if cookie_file is not None:
         options["cookiefile"] = str(cookie_file)
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as exc:  # noqa: BLE001 — yt-dlp 的异常层次很深,对调用方只有"取不到"
-        raise classify(exc) from exc
-    if not info:
-        raise YtdlpError("urlImportErr_noMedia")
-
-    entries = [entry for entry in (info.get("entries") or []) if isinstance(entry, dict)]
+    with _guarded(options) as issued:
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except Exception as exc:  # noqa: BLE001 — yt-dlp 的异常层次很深,对调用方只有"取不到"
+            raise _failure(exc, issued) from exc
+        if not info:
+            raise YtdlpError("urlImportErr_noMedia")
+        entries = [entry for entry in (info.get("entries") or []) if isinstance(entry, dict)]
+        if entries:
+            filled = _fill_untitled(yt_dlp, options, entries)
     if entries:
         title = str(info.get("title") or "")
         return RemoteListing(
             title=title,
             is_playlist=True,
-            entries=[_entry(raw, url, within=title) for raw in _fill_untitled(yt_dlp, options, entries)],
+            entries=[_entry(raw, url, within=title) for raw in filled],
             truncated=len(entries) >= MAX_ENTRIES,
             start=max(1, start),
         )
@@ -355,15 +383,16 @@ def download(
         # 合流容器固定 mp4:时间线和导出链路对它最熟,而 webm 在某些解码路径上要另做转码。
         options["merge_output_format"] = "mp4"
 
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=True)
-            path = Path(ydl.prepare_filename(info))
-    except Exception as exc:  # noqa: BLE001
-        # 叫停引起的中止 yt-dlp 可能包了几层才抛出来;问一句「是不是我们叫停的」比认异常类型稳。
-        if should_stop is not None and should_stop():
-            raise YtdlpCancelled() from exc
-        raise classify(exc) from exc
+    with _guarded(options) as issued:
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=True)
+                path = Path(ydl.prepare_filename(info))
+        except Exception as exc:  # noqa: BLE001
+            # 叫停引起的中止 yt-dlp 可能包了几层才抛出来;问一句「是不是我们叫停的」比认异常类型稳。
+            if should_stop is not None and should_stop():
+                raise YtdlpCancelled() from exc
+            raise _failure(exc, issued) from exc
 
     if path.is_file():
         return path

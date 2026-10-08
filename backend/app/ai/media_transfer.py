@@ -9,6 +9,9 @@ pre-signed object-storage URL, and user-supplied source URLs may point anywhere.
 API client for either leaks credentials (or invalidates the signature). This module is the
 single seam that decides whether a hop is trusted and drops headers again after a cross-origin
 redirect.
+
+每一跳都过出站检查(core/outbound_guard,经 RetryingClient 缺省带着的那道闸):服务商回给我们的成片地址算「部署配的」,
+用户填的素材地址(`fetch_bytes`)算「别人给的」。
 """
 
 from __future__ import annotations
@@ -24,8 +27,13 @@ import httpx
 
 from app.core.http_retry import RetryingClient, backoff_seconds
 from app.core.i18n import LocalizedError
+from app.core.outbound_guard import Origin
 
 _MAX_REDIRECTS = 5
+
+#: 一份成片 / 一份权重最多收多少。和插件产出同一个上限(domain/plugins/artifacts):够装下最长的成片,
+#: 又不至于让一个不停发数据的地址把磁盘写满。
+MAX_DOWNLOAD_BYTES = 8 * 1024 * 1024 * 1024
 
 #: 下到一半断了(连接被重置、读超时、对面没发完就关了)之后,从断的地方接着下,最多接这么多次。
 _RESUME_ATTEMPTS = 5
@@ -86,6 +94,7 @@ def download_to_path(
     timeout: float = 180,
     trusted_base_url: str = "",
     trusted_headers: dict[str, str] | None = None,
+    max_bytes: int = MAX_DOWNLOAD_BYTES,
 ) -> str:
     """Stream a remote asset to disk without carrying credentials across origins.
 
@@ -102,7 +111,7 @@ def download_to_path(
                 try:
                     content_type, total = _receive(
                         str(url), handle, timeout=timeout, trusted_base_url=trusted_base_url,
-                        trusted_headers=trusted_headers,
+                        trusted_headers=trusted_headers, max_bytes=max_bytes,
                     )
                 except httpx.TransportError as exc:
                     # 连上了又断了(或者这一次压根没连上):攒下的留着,下一次从这里接着要。
@@ -135,8 +144,10 @@ def _receive(
     timeout: float,
     trusted_base_url: str,
     trusted_headers: dict[str, str] | None,
+    max_bytes: int,
 ) -> tuple[str, int | None]:
-    """连一次、收一段:跟重定向,文件里已经有 `handle.tell()` 字节时带 `Range` 从那里接着要。返回 (content-type, 总长或 None)。"""
+    """连一次、收一段:跟重定向,文件里已经有 `handle.tell()` 字节时带 `Range` 从那里接着要。返回 (content-type, 总长或 None)。
+    收到超过 `max_bytes` 就停(对面说的长度可能是假的,也可能不说)。"""
     offset = handle.tell()
     current = url
     for _hop in range(_MAX_REDIRECTS + 1):
@@ -156,8 +167,12 @@ def _receive(
                     handle.truncate()
                     offset = 0
                 total = _total_length(response, offset)
+                if total is not None and total > max_bytes:
+                    raise MediaDownloadError(f"larger than {max_bytes} bytes")
                 for chunk in response.iter_bytes():
                     handle.write(chunk)
+                    if handle.tell() > max_bytes:
+                        raise MediaDownloadError(f"larger than {max_bytes} bytes")
                 return str(response.headers.get("content-type") or "").split(";", 1)[0].strip(), total
     raise MediaDownloadError(f"more than {_MAX_REDIRECTS} redirects")
 
@@ -181,11 +196,13 @@ def fetch_bytes(
     trusted_base_url: str = "",
     trusted_headers: dict[str, str] | None = None,
 ) -> DownloadedBytes:
-    """Fetch a bounded source asset for APIs that require inline/multipart bytes."""
+    """Fetch a bounded source asset for APIs that require inline/multipart bytes.
+
+    地址是用户(或智能体、模板)给的素材链接:每一跳都按「别人给的地址」过出站检查。"""
     current = str(url)
     for _hop in range(_MAX_REDIRECTS + 1):
         headers = trusted_headers_for_url(current, trusted_base_url, trusted_headers)
-        with RetryingClient(timeout=timeout, headers=headers, follow_redirects=False) as client:
+        with RetryingClient(timeout=timeout, headers=headers, follow_redirects=False, origin=Origin.GIVEN) as client:
             with client.stream("GET", current) as response:
                 redirected = _redirect_target(current, response)
                 if redirected is not None:

@@ -21,10 +21,8 @@ import threading
 import time
 from dataclasses import dataclass
 
-import httpx
-
 from app.ai.gemini_models import is_chat_model as is_gemini_chat_model
-from app.core.http_retry import auth_headers, is_loopback
+from app.core.http_retry import RetryingClient, auth_headers
 
 #: 目录变动很慢(供应商上新模型),但也不能永不刷新。
 _TTL_SECONDS = 300
@@ -149,13 +147,8 @@ def _fetch_gemini(base: str, api_key: str) -> list[CatalogModel]:
         params: dict[str, str | int] = {"pageSize": 1000}
         if page_token:
             params["pageToken"] = page_token
-        resp = httpx.get(
-            f"{base}/models",
-            headers=catalog_headers("gemini", api_key),
-            params=params,
-            timeout=_FETCH_TIMEOUT,
-            trust_env=not is_loopback(base),
-        )
+        with RetryingClient(timeout=_FETCH_TIMEOUT, max_retries=0) as client:
+            resp = client.get(f"{base}/models", headers=catalog_headers("gemini", api_key), params=params)
         resp.raise_for_status()
         body = resp.json()
         rows.extend(body.get("models") or [])
@@ -181,13 +174,9 @@ def fetch_models(
         if protocol == "gemini":
             models = _fetch_gemini(base, api_key)
         else:
-            resp = httpx.get(
-                f"{base}/models",
-                headers=auth_headers(api_key),
-                timeout=_FETCH_TIMEOUT,
-                #: 本机端点(Ollama、LM Studio)不被送进系统代理(见 core/http_retry.loopback_direct)。
-                trust_env=not is_loopback(base),
-            )
+            #: 连接里填的地址:过出站检查(core/outbound_guard);本机端点永远直连,不被送进代理。
+            with RetryingClient(timeout=_FETCH_TIMEOUT, max_retries=0) as client:
+                resp = client.get(f"{base}/models", headers=auth_headers(api_key))
             resp.raise_for_status()
             models = _parse(resp.json().get("data"))
     except Exception:  # noqa: BLE001 - 端点不可达/不实现 /models 都只是「没有目录」,不是错误

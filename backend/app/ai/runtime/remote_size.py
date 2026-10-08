@@ -22,7 +22,7 @@ import threading
 import time
 from typing import Sequence
 
-import httpx
+from app.core.http_retry import RetryingClient
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,8 @@ def _fetch(source: str, repo: str) -> dict[str, int] | None:
     try:
         if source == "modelscope":
             url = f"https://modelscope.cn/api/v1/models/{repo}/repo/files"
-            response = httpx.get(url, params={"Recursive": "True"}, timeout=_TIMEOUT,
-                                 follow_redirects=True)
+            with RetryingClient(timeout=_TIMEOUT, max_retries=0, follow_redirects=True) as client:
+                response = client.get(url, params={"Recursive": "True"})
             response.raise_for_status()
             entries = ((response.json().get("Data") or {}).get("Files")) or []
             # 目录项的 Size 是 0,混进来只会稀释判断;按有没有 Size 过滤不行(空文件也是 0),
@@ -76,8 +76,8 @@ def _fetch(source: str, repo: str) -> dict[str, int] | None:
         host = _HOSTS.get(source)
         if host is None:
             return None
-        response = httpx.get(f"{host}/api/models/{repo}", params={"blobs": "true"},
-                             timeout=_TIMEOUT, follow_redirects=True)
+        with RetryingClient(timeout=_TIMEOUT, max_retries=0, follow_redirects=True) as client:
+            response = client.get(f"{host}/api/models/{repo}", params={"blobs": "true"})
         response.raise_for_status()
         siblings = response.json().get("siblings") or []
         return {

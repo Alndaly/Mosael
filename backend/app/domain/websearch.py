@@ -11,6 +11,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core import outbound_guard
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 
 _MAX_REDIRECTS = 5
@@ -29,7 +30,7 @@ def search(query: str, count: int = 5) -> list[dict[str, str]]:
         raise WebSearchError("webErr_emptyQuery")
     count = max(1, min(count, 10))
     try:
-        with httpx.Client(timeout=15, headers={"User-Agent": _UA}, follow_redirects=True) as client:
+        with RetryingClient(timeout=15, max_retries=0, headers={"User-Agent": _UA}, follow_redirects=True) as client:
             response = client.post(_DDG, data={"q": query})
             response.raise_for_status()
     except httpx.HTTPError as exc:

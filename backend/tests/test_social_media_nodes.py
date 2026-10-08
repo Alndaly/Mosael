@@ -122,8 +122,10 @@ class Test认链接:
                 return httpx.Response(302, headers={"location": "https://www.bilibili.com/video/BV1xx411c7mD?share=1"})
             return httpx.Response(200)
 
-        real = httpx.Client
-        monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+        from app.core import http_retry
+
+        real = http_retry.RetryingClient
+        monkeypatch.setattr(http_retry, "RetryingClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
         assert social_media.resolve_short_link("https://b23.tv/abcd") == "https://www.bilibili.com/video/BV1xx411c7mD?share=1"
         assert asked == ["https://b23.tv/abcd"], "落到 bilibili.com 之后不该再请求"
 
@@ -131,8 +133,10 @@ class Test认链接:
         def handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("offline")
 
-        real = httpx.Client
-        monkeypatch.setattr(httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+        from app.core import http_retry
+
+        real = http_retry.RetryingClient
+        monkeypatch.setattr(http_retry, "RetryingClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
         assert social_media.resolve_short_link("https://xhslink.com/a/b") == "https://xhslink.com/a/b"
 
 

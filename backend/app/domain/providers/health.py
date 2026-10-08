@@ -23,6 +23,7 @@ import httpx
 from app.core.i18n import tr
 from app.ai.model_catalog import catalog_headers
 from app.domain.providers.credentials import ResolvedConnection
+from app.core import outbound_guard
 from app.core.http_retry import RetryingClient
 from app.domain.providers.presets import catalog_protocol, provider_definition
 
@@ -69,6 +70,9 @@ def probe(profile: ResolvedConnection) -> HealthResult:
         latency = int((time.monotonic() - started) * 1000)
     except httpx.HTTPError as exc:
         return HealthResult(supported=True, online=False, detail=_short(str(exc) or exc.__class__.__name__))
+    except outbound_guard.OutboundBlocked as exc:
+        #: 这个地址不许去(多人共用的部署里,连接填的内网地址要部署管理员先放行):说清为什么、怎么放行,不说「离线」。
+        return HealthResult(supported=True, online=False, detail=str(exc))
     # 401/403 说明**端点是通的**,只是凭据不对 —— 这与"服务没起"是两回事,得分开说。
     if response.status_code in (401, 403):
         return HealthResult(supported=True, online=True, latency_ms=latency, detail=tr("providerHealth_credentialRejected"))

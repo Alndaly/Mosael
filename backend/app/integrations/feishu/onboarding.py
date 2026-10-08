@@ -9,9 +9,8 @@ import threading
 import time
 from typing import Any
 
-import httpx
-
 from app.core.db import SessionLocal
+from app.core.http_retry import RetryingClient
 from app.domain.feishu import bots
 from app.integrations.feishu import client, connections
 
@@ -25,7 +24,7 @@ _onboard_state: dict[str, dict[str, Any]] = {}  # workspace_id -> {phase, qr_url
 
 
 def _post_registration(base_url: str, body: dict[str, str]) -> dict[str, Any]:
-    with httpx.Client(timeout=10.0) as client:
+    with RetryingClient(timeout=10.0, max_retries=0) as client:
         response = client.post(f"{base_url}{ONBOARD_REGISTRATION_PATH}", data=body)
     try:
         return response.json()

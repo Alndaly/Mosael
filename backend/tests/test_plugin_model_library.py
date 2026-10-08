@@ -27,6 +27,15 @@ from app.db.models import PluginPackage
 from app.domain.plugins import runtime
 from tests.util import fresh_client, wait_status
 
+
+@pytest.fixture(autouse=True)
+def _desktop(monkeypatch):
+    """这里的服务起在本机回环上,是桌面版的情形:连接里填的(部署配的)地址照连(core/outbound_guard)。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "local_desktop", True)
+
+
 PACKAGE_ID = "test.models"
 WEBP = b"RIFF\x1a\x00\x00\x00WEBPVP8L\x0d\x00\x00\x00/\x00\x00\x00\x10\x07\x10\x11\x11\x88\x88\xfe\x07\x00"
 

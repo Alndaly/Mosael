@@ -162,6 +162,21 @@ class Test两种子进程同一份_后端的请求同一个决定:
         def refuse(*_args, **_kwargs):
             raise Stop
 
+        #: 远程 MCP 经守卫代理出去(core/outbound_proxy):客户端的代理是那张票,这个连接的决定写在票上(往外走哪条路)。
+        from contextlib import contextmanager
+
+        from app.core.outbound_guard import Origin
+
+        issued: list = []
+        real_ticket = mcp_bridge.outbound_proxy.ticket
+
+        @contextmanager
+        def recording(origin, *, route):
+            with real_ticket(origin, route=route) as one:
+                issued.append(one)
+                yield one
+
+        monkeypatch.setattr(mcp_bridge.outbound_proxy, "ticket", recording)
         monkeypatch.setattr(httpx2, "AsyncClient", FakeClient)
         monkeypatch.setattr(streamable, "streamable_http_client", refuse)
         manifest = {"kind": "mcp", "mcp": {"transport": "http", "url": "https://mcp.example/mcp"}}
@@ -171,4 +186,6 @@ class Test两种子进程同一份_后端的请求同一个决定:
 
         with pytest.raises(Stop):
             asyncio.run(mcp_bridge._run(manifest, {}, never, Egress("http://p:1", "localhost")))
-        assert seen["proxy"] == "http://p:1" and seen["trust_env"] is False
+        (one,) = issued
+        assert seen["proxy"] == one.url and seen["trust_env"] is False
+        assert one.route == "http://p:1" and one.origin is Origin.CONFIGURED

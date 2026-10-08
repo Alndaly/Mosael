@@ -3,8 +3,9 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from app.ai import model_catalog
 from app.ai.model_catalog import clear_cache, fetch_models
-from tests.util import fresh_client
+from tests.util import fresh_client, stub_client
 
 """按供应商模型目录预填计价规则。
 
@@ -43,7 +44,7 @@ def _stub_models(monkeypatch, payload: object) -> None:
     def fake_get(url: str, **kwargs: object) -> httpx.Response:
         return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=fake_get))
 
 
 def test_per_token_pricing_is_converted_to_per_million(monkeypatch) -> None:

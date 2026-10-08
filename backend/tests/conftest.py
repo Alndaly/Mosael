@@ -139,8 +139,9 @@ def _every_process_starts_with_the_current_schema():
 
 #: 测试函数体里起的线程,测试连同它的 fixture 都收完之后,最多再等这么久让它们自己结束。
 _STRAY_THREAD_GRACE_SECONDS = 10.0
-#: 本来就活到进程结束的后台线程(按线程 target 的名字认):本机合成 / 识别常驻进程池的回收线程,池子是进程级的。
-_PROCESS_LIFETIME_THREAD_TARGETS = ("_reap_idle",)
+#: 本来就活到进程结束的后台线程(按线程 target 的名字认):本机合成 / 识别常驻进程池的回收线程,池子是进程级的;
+#: 出站的守卫代理(core/outbound_proxy),要用时才起、起来就跟进程同生同死。
+_PROCESS_LIFETIME_THREAD_TARGETS = ("_reap_idle", "_serve_outbound_proxy")
 _THREADS_BEFORE_BODY = pytest.StashKey[set]()
 
 

@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.providers.credentials import ResolvedConnection
-from app.core import http_retry
+from app.core import http_retry, outbound_guard
 from app.domain.providers import models as provider_models
 from app.domain.providers.presets import served_by_pi
 from app.domain.billing.usage import BillableCall
@@ -339,6 +339,9 @@ def chat(
         raise AiChatError("aiChatErr_network", label=label, detail=detail) from exc
     except (KeyError, IndexError, TypeError, ValueError) as exc:
         raise AiChatError("aiChatErr_badShape", label=label, detail=_sanitize(str(exc), target.api_key)) from exc
+    except outbound_guard.OutboundBlocked as exc:
+        #: 这个地址不许去(出站检查):原话说清为什么、怎么放行。
+        raise AiChatError.relay(exc) from exc
 
     return content
 

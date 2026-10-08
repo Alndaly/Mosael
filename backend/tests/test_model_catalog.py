@@ -3,7 +3,9 @@ from __future__ import annotations
 import httpx
 import pytest
 
+from app.ai import model_catalog
 from app.ai.model_catalog import cached_model, clear_cache, fetch_models
+from tests.util import stub_client
 
 """供应商模型目录的解析与缓存。
 
@@ -26,7 +28,7 @@ def _stub(monkeypatch, payload: object, *, calls: list | None = None) -> None:
             calls.append((url, kwargs.get("headers")))
         return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=fake_get))
 
 
 def test_metadata_is_absent_when_the_endpoint_omits_it(monkeypatch) -> None:
@@ -88,7 +90,7 @@ def test_unreachable_endpoint_yields_empty_not_error(monkeypatch) -> None:
     def boom(url: str, **kwargs: object) -> httpx.Response:
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr(httpx, "get", boom)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=boom))
     assert fetch_models("http://127.0.0.1:9/v1", "k") == []
     assert cached_model("http://127.0.0.1:9/v1", "k", "m") is None
 
@@ -124,7 +126,7 @@ def test_a_turn_never_waits_on_the_catalog(monkeypatch) -> None:
     它上面。而一次问不通的目录请求要等满 _FETCH_TIMEOUT(8 秒)——配了个连不通的地址,
     就是每说一句话都先卡八秒不动。所以这条路只读缓存,缺了在后台补。
 
-    这里用一个**永远不返回**的 httpx.get 来钉:只要谁在调用方线程里发请求,这条就挂死。
+    这里用一个**永远不返回**的 get 来钉:只要谁在调用方线程里发请求,这条就挂死。
     """
     import threading as _th
 
@@ -138,7 +140,7 @@ def test_a_turn_never_waits_on_the_catalog(monkeypatch) -> None:
         release.wait(10)  # 不设死等,免得断言失败时整个测试卡住
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr(httpx, "get", never_returns)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=never_returns))
     clear_cache()
     try:
         # 缓存里没有 → 必须立刻返回「还不知道」,而不是跟着那个请求一起挂住。
@@ -175,7 +177,7 @@ def test_an_unreachable_endpoint_is_not_retried_every_time(monkeypatch) -> None:
         calls.append(url)
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr(httpx, "get", refused)
+    monkeypatch.setattr(model_catalog, "RetryingClient", stub_client(get=refused))
     clear_cache()
     for _ in range(5):
         assert fetch_models("http://127.0.0.1:9/v1", "k") == []

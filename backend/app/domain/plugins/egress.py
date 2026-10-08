@@ -32,6 +32,7 @@ from urllib.request import proxy_bypass_environment
 from mosael_formats.plugin_env import NODE_USE_ENV_PROXY
 from sqlalchemy.orm import Session
 
+from app.core import outbound_guard
 from app.db.models import PluginInstance
 from app.domain import network
 from app.domain.plugins.errors import PluginDomainError
@@ -107,6 +108,15 @@ class Egress:
         if self.no_proxy == BYPASS_ALL:
             return {"trust_env": False}
         return {}
+
+    def route(self, url: str) -> outbound_guard.Route:
+        """同一个决定,换成出站检查认的说法(给不经 httpx 的那几处,经守卫代理出去时用,见 core/outbound_proxy)。"""
+        options = self.httpx_options(url)
+        if "proxy" in options:
+            return options["proxy"]
+        if options.get("trust_env") is False:
+            return None
+        return outbound_guard.FOLLOW_ENVIRONMENT
 
 
 #: 没人替这个连接做过决定(直接调传输层的地方:测试、脚本):什么都不注入,httpx 照缺省。

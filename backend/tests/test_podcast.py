@@ -175,7 +175,7 @@ class TestSessionPayload:
         is what makes `speed` mean the same thing across engines."""
         captured = {}
 
-        def fake_run(appid, token, payload, *, endpoint):
+        def fake_run(appid, token, payload, *, endpoint, proxy=""):
             captured.update(payload["req_params"]["audio_config"])
             raise podcast.PodcastSynthesisError("stop")
 
@@ -224,6 +224,13 @@ def _short_timeouts(monkeypatch):
 
 class TestAgainstAFakeServer:
     """The state machine, driven by the same frames the real server sends."""
+
+    @pytest.fixture(autouse=True)
+    def _desktop(self, monkeypatch):
+        """The fake server listens on loopback: the desktop case, where configured addresses are reached as is."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "local_desktop", True)
 
     @staticmethod
     def _serve(script):
