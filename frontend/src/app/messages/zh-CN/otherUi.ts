@@ -166,6 +166,8 @@ export const otherUi = {
   confirmTitle: "外部智能体请求",
   confirmPayload: "原始数据",
   confirmAgentRequest: "智能体请求",
+  confirmCenterWaiting: "{n} 个请求等你确认",
+  confirmCenterTuck: "先收起来",
   confirmParams: "参数",
   confirmEmptyValue: "(空)",
   confirmLineCount: "{n} 行",

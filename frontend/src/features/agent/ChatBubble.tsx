@@ -61,7 +61,12 @@ function AgentOrigin({ sessionId }: { sessionId: string }) {
   );
 }
 
-export function ChatBubble({
+/**
+ * **memo 的。** 对话页每一秒都可能重渲(运行计时、会话轮询、开关右栏),一段三百条的对话每次都把三百个气泡
+ * 连同里面的 Markdown、代码高亮、工具行再算一遍(前端架构分析 FA-04)。消息对象由 React Query 的结构共享保持
+ * 同一个引用,调用方负责让 `usageEvents`、`mediaGallery` 也只在真变了的时候换(见 ChatWorkspace 的 NO_USAGE)。
+ */
+export const ChatBubble = React.memo(function ChatBubble({
   message,
   usageEvents,
   mediaGallery,
@@ -73,7 +78,6 @@ export function ChatBubble({
   /** 念这一条记在哪个工作区的账上,也决定要不要 ai 权限(见 routes/agent.speak)。 */
   workspaceId: string;
 }) {
-  
   const payload = message.payload as
     | {
         usage?: { duration_seconds?: number };
@@ -185,4 +189,4 @@ export function ChatBubble({
       )}
     </div>
   );
-}
+});

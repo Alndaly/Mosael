@@ -280,6 +280,8 @@ export function ChatComposer({
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": t("chatComposerLabel"),
+        //: 示例文字只占一行、放不下就省略(见 styles.css)。
+        "data-placeholder-line": "single",
         class: cn(
           "max-h-[220px] min-h-9 w-full overflow-y-auto border-0 bg-transparent px-0.5 pb-1.5 pt-0.5 text-ui-md leading-[1.55] text-foreground outline-none",
           className,

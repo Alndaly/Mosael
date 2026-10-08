@@ -263,6 +263,7 @@ export const agentMemory = {
   agentContextPart_free: "剩余",
   agentContextFixedHint: "工具定义与系统提示每轮都要重发,对话为空时也占着 —— 整理上下文腾不出这一部分。",
   agentCompactNow: "立即整理上下文",
+  agentCompactRunning: "正在整理上下文…",
   agentSessionSettings: "会话设置",
   agentContextTitle: "上下文",
   agentThinking: "思考中…",

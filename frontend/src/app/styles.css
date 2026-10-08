@@ -76,4 +76,20 @@
     pointer-events: none;
     color: var(--muted-foreground);
   }
+  /* 智能体输入框的示例文字只占一行,放不下就省略:上面那个是 `height: 0` 的浮动块,折到第二行的那半截会被输入框的边裁掉一半
+   * (窄面板、英文界面里都看得到,智能体那一路 AGENT-18)。省略号要 overflow: hidden,而高度为 0 的块一裁就什么都不剩 ——
+   * 所以这里换成绝对定位、贴着这一段的左右边:有自己的一行高,又不占位置,光标照旧在行首。 */
+  .tiptap[data-placeholder-line="single"] p.is-editor-empty:first-child {
+    position: relative;
+  }
+  .tiptap[data-placeholder-line="single"] p.is-editor-empty:first-child::before {
+    float: none;
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: auto;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
 }

@@ -1,8 +1,10 @@
+import React from "react";
+import { createPortal } from "react-dom";
 import { FLOATING_SURFACE } from "@/components/ui/floating";
 import { confirmationKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CornerUpLeft, X } from "lucide-react";
+import { Check, ChevronUp, CornerUpLeft, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { type AgentSession, approveConfirmation, getAgentSession, listConfirmations, rejectConfirmation } from "@/api/client";
@@ -15,6 +17,7 @@ import { ConfirmationCard, useSettledCards } from "@/features/agent/Confirmation
 import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
 import { canGoHome, openedIn } from "@/features/agent/homeLabel";
 import { Truncate } from "@/components/ui/truncate";
+import { useHeaderStatusSlot } from "@/components/layout/headerSlot";
 
 
 /**
@@ -75,7 +78,37 @@ export function ConfirmationCenter({
   const items = (pending.data ?? []).filter(
     (item) => (!item.session_id || !handledSessions.includes(item.session_id)) && !settledIds.has(item.id),
   );
+  //: **收得起来**(智能体那一路 AGENT-10):中心浮在页面右上角,三百多像素宽,正好盖住页面工具条的右半截(笔记页的「AI 助手」开关、
+  //: 面板标题栏的「新对话 / 关闭」)—— 别处有一段对话在等批卡时,眼前这一页那几颗按钮点不到。收起来是**顶栏里**的一颗胶囊,写着几张
+  //: 在等(见 headerSlot:还浮在页面上的话,盖住的还是那几颗);来了新卡自己再展开(收起的是「这几张」,不是「以后的都别给我看」)。
+  const [tucked, setTucked] = React.useState<ReadonlySet<string>>(() => new Set());
+  const headerSlot = useHeaderStatusSlot();
+  const allTucked = items.length > 0 && items.every((item) => tucked.has(item.id)) && settled.cards.length === 0;
   if (items.length === 0 && settled.cards.length === 0) return null;
+  if (allTucked) {
+    const waiting = t("confirmCenterWaiting").replace("{n}", String(items.length));
+    const pill = (
+      <Button
+        size="sm"
+        variant="outline"
+        className={cn("gap-1.5 rounded-full", !headerSlot && FLOATING_SURFACE)}
+        aria-label={waiting}
+        onClick={() => setTucked(new Set())}
+      >
+        <ShieldAlert size={14} aria-hidden />
+        {/* 窄窗口顶栏放不下一句话(搜索框也只剩图标):只留数字。 */}
+        <span className="max-[760px]:hidden">{waiting}</span>
+        <span className="tabular-nums min-[761px]:hidden">{items.length}</span>
+      </Button>
+    );
+    return headerSlot ? (
+      createPortal(pill, headerSlot)
+    ) : (
+      <div className="fixed right-4 top-14 z-[60]" role="region" aria-label={t("confirmTitle")}>
+        {pill}
+      </div>
+    );
+  }
 
   return (
     // 高度有界、自己滚:卡多了不能从窗口底下溢出去,最后那张的按钮就点不到了。
@@ -84,11 +117,25 @@ export function ConfirmationCenter({
       role="region"
       aria-label={t("confirmTitle")}
     >
+      {items.length > 0 && (
+        <div className="flex justify-end">
+          <Button
+            size="xs"
+            variant="ghost"
+            className={cn(FLOATING_SURFACE, "gap-1 text-muted-foreground")}
+            onClick={() => setTucked(new Set(items.map((item) => item.id)))}
+          >
+            <ChevronUp size={13} aria-hidden />
+            {t("confirmCenterTuck")}
+          </Button>
+        </div>
+      )}
       {items.map((item) => (
         <ConfirmationCard
           key={item.id}
           item={item}
-          eyebrow={`${t("confirmTitle")} · ${item.requested_by}`}
+          //: 挂在对话上的卡是本工作区自己的智能体开的,不是「外部智能体」—— 下一行写着是哪段对话(CardHome)。
+          eyebrow={item.session_id ? t("confirmAgentRequest") : `${t("confirmTitle")} · ${item.requested_by}`}
           className={cn(FLOATING_SURFACE, "animate-confirm-in")}
           actions={
             <>
@@ -107,7 +154,7 @@ export function ConfirmationCenter({
         <ConfirmationCard
           key={card.id}
           item={card}
-          eyebrow={`${t("confirmTitle")} · ${card.requested_by}`}
+          eyebrow={card.session_id ? t("confirmAgentRequest") : `${t("confirmTitle")} · ${card.requested_by}`}
           className={FLOATING_SURFACE}
           onDismiss={() => settled.dismiss(card.id)}
         />

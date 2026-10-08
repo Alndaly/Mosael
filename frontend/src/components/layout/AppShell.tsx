@@ -24,6 +24,7 @@ import { MenuContent, MenuItem, MenuItemBody, MenuLabel, MenuSeparator } from "@
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { NotificationCenter } from "@/components/jobs/NotificationCenter";
+import { HEADER_STATUS_SLOT_ID } from "@/components/layout/headerSlot";
 import { TaskCenter } from "@/components/jobs/TaskCenter";
 import {
   workspaceDeleteBlockedReason,
@@ -234,6 +235,8 @@ export function AppShell({
           );
         })()}
         <div className="flex shrink-0 items-center gap-1">
+          {/* 收起来的浮层住这里(见 headerSlot):确认中心收起来就是这一颗「N 个请求等你确认」。 */}
+          <div id={HEADER_STATUS_SLOT_ID} className="contents" />
           {actions}
           <button
             type="button"

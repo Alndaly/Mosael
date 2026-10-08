@@ -246,6 +246,7 @@ export const agentMemory = {
   agentContextPart_free: "Free",
   agentContextFixedHint: "Tool definitions and the system prompt are resent every turn — they stay even with no messages, and compacting cannot reclaim them.",
   agentCompactNow: "Compact context now",
+  agentCompactRunning: "Compacting context…",
   agentSessionSettings: "Session settings",
   agentContextTitle: "Context",
   agentThinking: "Thinking…",

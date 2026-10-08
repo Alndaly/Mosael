@@ -46,7 +46,8 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { IconButton } from "@/components/ui/icon-button";
 import type { JSONContent } from "@tiptap/react";
 
-import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { DraftBlank, DraftComposer, useComposerDraft } from "@/features/agent/composerDraft";
 import { collectSkills } from "@/features/agent/SkillChip";
 import type { AgentReference } from "@/features/agent/references";
 import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
@@ -146,22 +147,18 @@ export function CanvasAgentChat({
   const t = useI18n();
   const qc = useQueryClient();
   //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点,存成字符串就散了。
-  //: 要发出去的那句话由 `draftText` 从文档派生(引用序列化成 `@名字`)。
+  //: 要发出去的那句话由 `draft.text()` 从文档派生(引用序列化成 `@名字`)。
   //: **按地方分**(ADR 0044):换一篇笔记、工作台换一张图,面板不重挂、只换 `place` —— 输入框里那半句话不该跟着走
   //: (在 A 里写的「把这篇第一段删掉」发出去就成了对 B)。打的字记在 sessionStorage,附件和引用的笔记暂存在内存里。
-  const [draft, setDraftState] = React.useState<JSONContent>(() => readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
+  //: 草稿**不是这里的状态**:这一层不订阅它,打字只重渲输入框和发送键,不重渲整段对话(见 composerDraft,FA-04)。
+  const draft = useComposerDraft(() => readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
   const setDraft = React.useCallback(
     (next: JSONContent | ((current: JSONContent) => JSONContent)) => {
-      setDraftState((current) => {
-        const value = typeof next === "function" ? next(current) : next;
-        writeComposerDraft(workspaceId, place, documentText(value).trim() || collectReferences(value).length ? value : null);
-        return value;
-      });
+      const value = draft.set(next);
+      writeComposerDraft(workspaceId, place, documentText(value).trim() || collectReferences(value).length ? value : null);
     },
-    [workspaceId, place],
+    [draft, workspaceId, place],
   );
-  const draftText = React.useMemo(() => documentText(draft), [draft]);
-  const draftRefs = React.useMemo(() => collectReferences(draft), [draft]);
   const noteAttach = useNoteAttachments(workspaceId);
   // 这一处的当前对话:和免提浮标、页面跳转在同一处时读的是同一个答案(见 currentAgentSession)——
   // 选择、草稿、删后回到草稿都在那里,这里不再各写一份。
@@ -199,8 +196,8 @@ export function CanvasAgentChat({
     const saved = takeComposerExtras<{ media: Asset[]; files: { name: string; content: string }[]; notes: Note[] }>(workspaceId, place);
     restoreAttachments({ media: saved?.media ?? [], files: saved?.files ?? [] });
     restoreNotes(saved?.notes ?? []);
-    setDraftState(readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
-  }, [workspaceId, place, here, restoreAttachments, restoreNotes]);
+    draft.set(readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
+  }, [workspaceId, place, here, restoreAttachments, restoreNotes, draft]);
 
   const isFloating = mode === "floating";
 
@@ -343,7 +340,6 @@ export function CanvasAgentChat({
       refreshQueue();
     },
   });
-  const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
     mutationFn: () => stopAgentSession(sessionId),
     meta: { silentError: true },
@@ -443,11 +439,12 @@ export function CanvasAgentChat({
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
-    if ((!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || send.isPending) return;
+    const draftText = draft.text().trim();
+    if ((!draftText && attach.isEmpty && !noteAttach.hasNotes) || send.isPending) return;
     send.mutate({
-      text: draftText.trim(),
-      references: draftRefs,
-      document: draft,
+      text: draftText,
+      references: collectReferences(draft.get()),
+      document: draft.get(),
       files: attach.files,
       mediaAssets: attach.media,
       quote: messageQuote ?? null,
@@ -643,7 +640,7 @@ export function CanvasAgentChat({
         {running && !streamText && (
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
             <AgentTurnContent timeline={streamTimeline} />
-            <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
+            <AgentStatusRow label={t(compact.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
         <PendingDecisions placed={placedToolCalls} />
@@ -695,9 +692,9 @@ export function CanvasAgentChat({
             {attach.previewModal}
             {noteAttach.dialog}
             {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
-            <ChatComposer
+            <DraftComposer
+              draft={draft}
               workspaceId={workspaceId}
-              value={draft}
               onChange={setDraft}
               onSubmit={() => submit()}
               onPaste={attach.onPaste}
@@ -742,7 +739,8 @@ export function CanvasAgentChat({
                   onCompact={running ? undefined : () => compact.mutate()}
                 />
               </div>
-              {showStop ? (
+              <DraftBlank draft={draft}>
+              {(blank) => running && blank && attach.isEmpty && !noteAttach.hasNotes ? (
                 <IconButton
                   variant="default"
                   size="icon"
@@ -760,13 +758,14 @@ export function CanvasAgentChat({
                   className="rounded-full"
                   label={running ? t("chatSteer") : t("chatSend")}
                   hint={running ? t("chatSteerHint") : undefined}
-                  disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
+                  disabled={(blank && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
                   disabledReason={attach.uploading ? t("composerUploading") : undefined}
                   onClick={submit}
                 >
                   <Send size={14} />
                 </IconButton>
               )}
+              </DraftBlank>
             </div>
           </div>
         </>

@@ -82,6 +82,12 @@ const TEXT = new Set(["span", "p", "strong", "em", "small", "code", "Skeleton", 
  * 都是隐形的:一个 40px 的输入框旁边配 32px 的保存键,一直没人拦。
  */
 const ROW_COMPONENT = new Set(["SettingsRow", "SettingsField"]);
+/**
+ * **原地渲染孩子、自己不出盒子的组件**(render prop:`<DraftBlank>{(blank) => <IconButton …/>}</DraftBlank>`)。
+ * 它们在 DOM 里不存在,里面的控件就是外面那一行的兄弟 —— 当成一层普通元素的话,那几个控件的高度到不了那一行,
+ * 一行里故意大一圈的发送键就从这条棘轮眼里消失了(看起来像「对齐了」,其实是看不见了)。
+ */
+const TRANSPARENT = new Set(["DraftBlank"]);
 
 function files(dir: string, ext: RegExp): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -255,6 +261,7 @@ function scan(file: string) {
   TAG.lastIndex = 0;
   while ((m = TAG.exec(src))) {
     const [, closing, rawTag, rawAttrs, self] = m;
+    if (TRANSPARENT.has(rawTag)) continue;
     // IconButton 就是 Button(不写 size 是 icon-sm);unstyled 的是原生 <button>,高度由它自己的类定。
     const [tag, attrs] = iconButtonAs(rawTag, rawAttrs);
     if (closing) {

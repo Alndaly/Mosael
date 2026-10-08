@@ -34,7 +34,8 @@ import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
 import type { JSONContent } from "@tiptap/react";
 
-import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
+import { appendText, collectReferences, emptyDocument } from "@/features/agent/ChatComposer";
+import { DraftBlank, DraftComposer, useComposerDraft } from "@/features/agent/composerDraft";
 import { collectSkills } from "@/features/agent/SkillChip";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import type { AgentReference } from "@/features/agent/references";
@@ -91,6 +92,9 @@ export const AI_PANEL_BOUNDS = {
 const COMPOSER_COLUMN = "mx-auto w-[min(780px,calc(100%-32px))]";
 /** 轨迹 / 子代理视图:对话里的工具行不在屏上,待决的卡全摆在输入框上方。 */
 const NOTHING_PLACED: ReadonlySet<string> = new Set();
+/** 没有用量的那些气泡共用这一份:每次渲染新给一个 `[]`,气泡的 memo 就永远对不上(FA-04)。 */
+const NO_USAGE: AgentUsageEvent[] = [];
+const NO_MESSAGES: AgentMessage[] = [];
 
 export function ChatWorkspace({
   workspace,
@@ -110,11 +114,12 @@ export function ChatWorkspace({
   //: 会话设置、附件都在输入区里,一起不给;排队条、停止、拍板的按钮也是主人的。消息、轨迹、花费照看。
   const readOnly = current.readOnly;
   //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点(见 ChatComposer)。
-  const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
-  const draftText = React.useMemo(() => documentText(draft), [draft]);
+  //: 它**不是这里的状态**:这一层不订阅它,打字只重渲输入框和发送键,不重渲整段对话(见 composerDraft,FA-04)。
+  //: 这一层只在发送、填入、清空的那一刻读写。
+  const draft = useComposerDraft();
   // 从别处带着一段话来(内嵌浏览器顶栏「交给智能体」):填进输入框,一行一段,不替他发送。
   useOpenRequest(AGENT_DRAFT_EVENT, (text) => {
-    setDraft({
+    draft.set({
       type: "doc",
       content: text.split("\n").map((line) => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
     });
@@ -181,7 +186,10 @@ export function ChatWorkspace({
     queryFn: () => listAgentQueue(activeSession!.id),
     refetchInterval: 1500,
   });
-  const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+  const queuedIds = React.useMemo(
+    () => new Set((running ? queue.data ?? [] : []).map((message) => message.id)),
+    [running, queue.data],
+  );
   const refreshQueue = () => {
     void qc.invalidateQueries({ queryKey: ["agent-queue", activeSession?.id] });
     void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
@@ -201,7 +209,6 @@ export function ChatWorkspace({
       refreshQueue();
     },
   });
-  const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
     mutationFn: () => stopAgentSession(String(activeSession?.id)),
     // Nothing to report either way: a successful stop is visible as the turn ending, and
@@ -237,7 +244,7 @@ export function ChatWorkspace({
       return { message, targetId };
     },
     onSuccess: ({ targetId }, _content, _ctx) => {
-      setDraft(emptyDocument);
+      draft.set(emptyDocument);
       noteAttach.clear();
       // 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了(画布助手一直是这样)。
       attach.clear();
@@ -258,6 +265,7 @@ export function ChatWorkspace({
     event.preventDefault();
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
+    const draftText = draft.text();
     if ((!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || sendMessage.isPending) return;
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     // 文本文件内联成围栏上下文、媒体编码成附件标记 —— 与工作流助手同一种拼法,
@@ -274,18 +282,20 @@ export function ChatWorkspace({
     }
     sendMessage.mutate({
       content: full,
-      references: collectReferences(draft),
-      document: draft,
+      references: collectReferences(draft.get()),
+      document: draft.get(),
     });
   };
 
   // 回执消息里,答案已经被 `ask_user` 的工具结果记下的那些不再画 —— 同一次选择此前会紧挨着
   // 出现两遍(上面一张独立的卡,下面 ask_user 那一行展开还是它)。判据见 answerRecords:
   // 靠 question_id 对上才算,猜的话错的方向是把唯一那份痕迹也藏掉。
-  const allMessages = messages.data ?? [];
+  //: 这一串都要 memo:气泡是 memo 的(ChatBubble),这里每次渲染派生一个新数组,画廊跟着变,三百个气泡就全部重画。
+  const allMessages = messages.data ?? NO_MESSAGES;
   const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
-  const visibleMessages = allMessages.filter(
-    (message) => !queuedIds.has(message.id) && !isRedundantAnswerRecord(message, recordedQuestions),
+  const visibleMessages = React.useMemo(
+    () => allMessages.filter((message) => !queuedIds.has(message.id) && !isRedundantAnswerRecord(message, recordedQuestions)),
+    [allMessages, queuedIds, recordedQuestions],
   );
   const mediaGallery = React.useMemo(() => chatMediaGallery(visibleMessages), [visibleMessages]);
   //: 还没交给智能体的回执不算进对话记录(轨迹、统计):它们这一轮结束才交出去,在那之前画在正在跑的那一轮下面。
@@ -562,7 +572,7 @@ export function ChatWorkspace({
                   key={message.id}
                   message={message}
                   workspaceId={workspace.id}
-                  usageEvents={usageByMessage.get(message.id) ?? []}
+                  usageEvents={usageByMessage.get(message.id) ?? NO_USAGE}
                   mediaGallery={mediaGallery}
                 />
               ))}
@@ -575,7 +585,8 @@ export function ChatWorkspace({
               {running && !streamText && (
                 <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} />
-                  <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
+                  {/* 整理上下文的那几十秒这段对话也是占着的(和一轮同一个认领,见 host.compact_session_context):说它在整理,不说在思考。 */}
+                  <AgentStatusRow label={t(compactContext.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
                 </div>
               )}
               {/* **「还没读到」和「读过了,是空的」必须分开。**
@@ -593,7 +604,7 @@ export function ChatWorkspace({
                     <Sparkles className="mb-6 size-9 text-primary" strokeWidth={1.4} />
                     <h2 className="text-3xl font-semibold leading-tight tracking-tight">{t("studioChatStart")}</h2>
                     <p className="mb-8 mt-4 max-w-[42ch] text-ui-md leading-relaxed text-muted-foreground">{t("studioChatIntro")}</p>
-                    {!readOnly && <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => setDraft({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: t(`studioPrompt${kind}Text`) }] }] })}>{t(`studioPrompt${kind}`)}</Button>)}</div>}
+                    {!readOnly && <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => draft.set({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: t(`studioPrompt${kind}Text`) }] }] })}>{t(`studioPrompt${kind}`)}</Button>)}</div>}
                   </div>
                 </div>
               )}
@@ -604,7 +615,7 @@ export function ChatWorkspace({
                   key={message.id}
                   message={message}
                   workspaceId={workspace.id}
-                  usageEvents={[]}
+                  usageEvents={NO_USAGE}
                   mediaGallery={mediaGallery}
                 />
               ))}
@@ -653,10 +664,9 @@ export function ChatWorkspace({
                   {noteAttach.dialog}
                   {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
                       地方能力不同的话,用户没有任何办法预期哪个能干什么(附件那条也是这个理由)。 */}
-                  <ChatComposer
+                  <DraftComposer
+                    draft={draft}
                     workspaceId={workspace.id}
-                    value={draft}
-                    onChange={setDraft}
                     onSubmit={() => submit(new Event("submit") as unknown as React.FormEvent)}
                     onPaste={attach.onPaste}
                     placeholder={t("chatPlaceholder")}
@@ -683,7 +693,7 @@ export function ChatWorkspace({
                       {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
                       <DictateButton
                         onText={(text) =>
-                          setDraft((current) => appendText(current, text))
+                          draft.set((current) => appendText(current, text))
                         }
                       />
                       {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
@@ -705,7 +715,8 @@ export function ChatWorkspace({
                     {/* One button that changes meaning, the way ChatGPT does it: while the agent
                         works it stops the turn, and the moment you type something it becomes send
                         again — because then the obvious intent is to say that, not to stop. */}
-                    {showStop ? (
+                    <DraftBlank draft={draft}>
+                    {(blank) => running && blank && attach.isEmpty && !noteAttach.hasNotes ? (
                       <IconButton
                         type="button"
                         variant="default"
@@ -725,12 +736,13 @@ export function ChatWorkspace({
                         className="shrink-0 rounded-full"
                         label={running ? t("chatSteer") : t("chatSend")}
                         hint={running ? t("chatSteerHint") : undefined}
-                        disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
+                        disabled={(blank && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
                         disabledReason={attach.uploading ? t("composerUploading") : undefined}
                       >
                         <Send size={15} />
                       </IconButton>
                     )}
+                    </DraftBlank>
                   </div>
                 </form>
               </>

@@ -166,6 +166,8 @@ export const otherUi = {
   confirmTitle: "Agent request",
   confirmPayload: "Raw data",
   confirmAgentRequest: "Agent request",
+  confirmCenterWaiting: "{n} waiting for you",
+  confirmCenterTuck: "Tuck away",
   confirmParams: "Parameters",
   confirmEmptyValue: "(empty)",
   confirmLineCount: "{n} lines",
