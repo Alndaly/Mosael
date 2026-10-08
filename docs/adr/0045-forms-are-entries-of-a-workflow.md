@@ -5,7 +5,7 @@
 Accepted — 2026-10-08,两步都已实现(第一步插件 1.20.0,第二步 1.21.0)。方向由维护者定(见「维护者定的方向」);文末待拍板
 1–12 全部照推荐拍板(1–9 第一步、10–12 第二步,都是 2026-10-08);13 另开一项,已由 ADR 0042 那一路做完(ADR 0044 修订:工作台
 那一轮只发用得上的工作流工具,长下拉不进定义);14、15 是第二步实现时冒出来的,按推荐做着、待维护者定。两步的实现见文末两节
-「实现记录」。
+「实现记录」;**修订之一**(2026-10-08,记着的模型用不了时不顶替,插件 1.21.1)见文末。
 
 分两步:**第一步**(两层名字 + 把「完整工作流」作为入口加回来,表单入口的 id 现在就定死)不改 ComfyUI 上的存储格式;
 **第二步**(一张工作流多张表单)动了存储格式(v2,ComfyUI 上已有的文件由维护者确认一次、整台改写)和两处编辑器。
@@ -440,7 +440,7 @@ ComfyUI 插件把 ComfyUI 上每张保存的工作流报成两样东西:一个**
 - 一张工作流能有几张表单,各是一个入口、一个工具;「本会话始终允许」也按入口记(§7)。
 - ComfyUI 上的标记换成 v2:上一版的文件要连接的主人确认一次整台改写,改写之前那几张的表单入口不在(指着它们的地方说清楚去升级)。
 - 插件契约再多三格:`group.order`(同一样东西的几个入口谁先谁后)、`op: models` 回答里的 `library_upgrades` 和 `unavailable`
-  (几张要升级;认得、现在用不了的模型和原因)。
+  (几张要升级;认得、现在用不了的模型和原因)。`unavailable` 后来由修订之一换成 `op: explain`(见文末)。
 
 ## 待拍板
 
@@ -619,3 +619,45 @@ Mosael 的库**不加迁移**:没有新列、新表;`capability_status.generatio
 | 工作台删表单的确认框不抬过外壳 | `frontend/src/features/plugins/workbench/ComfyWorkbench.dom.test.tsx` |
 | 存好之后「还没保存」那句不收 | `frontend/src/features/plugins/workbench/ComfyWorkbench.dom.test.tsx` |
 | 状态行和标题框底下写同一句 | `frontend/src/features/plugins/WorkflowAppEditor.dom.test.tsx` |
+
+## 修订之一(2026-10-08):记着的模型用不了时照实说,不拿别的顶上
+
+**问题(维护者撞到的)。** AI Studio 的一段会话记着 `krea2-text-2-image.json#app`,他那台 ComfyUI 还没升级(v1),这个入口不在生成选项里。
+`GenerateWorkspace` 的选择是「这次挑的 → 会话记着的 → 默认」:会话记着的找不到就**悄悄落到默认图像模型**(按次付费的
+`gpt-image-2-client`)—— 下拉、右栏参数、输入框底下那枚按钮全是它,底下又写着「选着的 krea2…#app 现在用不了」;点发送,
+`createGeneration` 拿默认那个去生成了。生成记录的脚注找不到选项时写 `plugin:dev.mosael.comfyui · krea2-text-2-image.json#app`。
+画板格子同一个形状(`pickGenerationOption` 的 `saved` 找不到就落到默认),格子的表单还会被改写成默认那个。第二步的 `unavailable`
+只覆盖 v1 那一种;工作流改名、挪文件夹、删表单之后指着它的地方只剩一个空的「选择模型」,删表单确认框里「那几处会说『这张表单已经
+没了』」没有兑现(体检 PLG-5)。
+
+**决定。**
+
+1. **记着的不在选项里就是「用不了」,不拿任何别的顶上**(`chooseGenerationOption`:记着的 → 什么都没记着时才落到默认 → 没有)。界面照常
+   显示**记着的那个**(人话的名字,两层,触发器上「X · 需要升级 / 用不了」)、说原因、给出路(修法是升级的就地打开那个连接的工作流库;
+   「换一个模型」打开下拉),发送键灰着并说为什么;用户自己挑了别的才换成那个(照旧记进会话 / 格子)。清单还没到时不说「不在了」。
+   AI Studio 会话、画板格子(参数和生成方式原样留着,不被覆盖)、工作流生成节点(检查器说原因;就绪清单报 `gen-model-missing`,挡住运行)、
+   画板「写」格的对话模型同样。设置里的默认模型是外键,行删了就置空,没有这个形状。
+2. **为什么不在,由宿主统一说**:`GET /api/generation/missing?provider_profile_id&model&kind` →
+   `{model_label, profile_name, group, reason, upgrade, plugin_instance_id}`(名字和生成选项同几格,界面同一套两层摆法)。由近到远:连接删了 /
+   不是他的 / 停了、模型行停了或不再被认成这种生成;插件连接问插件;都说不上来写「这条连接上已经没有它了」,名字写「之前选的模型」——
+   **不露模型 id**。生成的漏斗在点名的那一对解析不出来时也照这里报 `genErr_modelUnavailable`(名字、原因留着没翻,存进运行记录按读的人的语言翻),
+   画板、工作流、智能体、定时任务从后端发起的都覆盖到。
+3. **插件契约:可选的 `op: explain`**(`{"ids": [...]}` → `{"models": [{id, label, group, reason, upgrade}]}`),**取代第二步的 `unavailable`**。
+   `unavailable` 只能报插件自己知道的那几个 id(v1 的 `#app`),改名、删表单之后旧 id 插件根本不知道有人在用;`explain` 是宿主拿着记着的
+   id 来问,插件能分清「表单是旧格式要升级」「表单删了」「工作流不在了(改名、挪走、删了)」「转不过来」。ComfyUI 不读 v1 的表单内容,
+   名字写「X 的表单」。两条路并存只会多一份要对齐的真相,所以 `unavailable` 从目录、`capability_status`、`GET /api/generation/unavailable`
+   一起撤掉(第二步没发布过;维护者库里那一格是 JSON 状态里没人读的一格,插件升到 1.21.1、指纹变了,下一次目录刷新整份覆盖掉它)。
+4. **顺手的三处(体检 UC-03 / UC-10 / UC-04)**:AI Studio 生成页没选过会话时停在「新的一条」,不落进最近那条(画板、工作流、智能体每跑
+   一次都新开会话,此前用户的提示词会续进画板那条);「+」只换成新的一条,第一次提交才建会话(和对话的草稿先行一致);生成框
+   ⌘Enter / Ctrl+Enter 提交、回车换行,和画板、音频格子同一个判据(`isSubmitChord`)。
+
+**否掉的。** 记着的不在就落到默认、旁边写一句提醒(就是出事的那个样子:显示的和发出去的是两个模型);在读的一侧认 v1 来填空档
+(ADR 0038 §2 的规矩);把「在 Mosael 里改名时当场改引用」并进这一版 —— 那要修订 §1「模型 id 是路径」的已知代价、牵涉跨领域改写,
+另起草稿(仓库外,`0045-revision-rename-moves-references`)。给生成会话记出处(UC-03 的长远修法)另起 ADR 0052 草稿。
+
+**实现记录。** 插件 1.21.1(`models.explain`,目录不再带 `unavailable`);宿主 `backend/app/domain/generation/missing.py`、`GET /api/generation/missing`、
+漏斗(`operations.create_generation_job`)解析失败时问它;前端 `chooseGenerationOption`、`useMissingModel`、`MissingModelNote` /
+`MissingModelNotice`、`SearchableSelect` / `OptionPicker` 的 `missingLabel`、`isSubmitChord`。测试:插件 `explain` 三种情形、宿主五条
+(模型删了 / 停了、连接停了删了、表单删了、工作流改名、插件问不到)和 v1 那条,前端 AI Studio(用不了时下拉 / 右栏 / 按钮 / 发送键、挑了别的
+才换、脚注不露编号、UC-03 / UC-10 / UC-04)、画板格子、工作流检查器和就绪清单;变异检查把「落回默认」「脚注写编号」「回车就提交」等十二处
+加回去,对应的测试都红。
