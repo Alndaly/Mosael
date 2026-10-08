@@ -490,6 +490,15 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
   every form to have a title.
 
 
+## Fixes (1.21.3)
+
+- **Workflows that only produce text are "text"**: caption / prompt-from-image workflows that save no file used to report `kind`
+  `image` from `workflows` / `list_workflows` (the `kind_of` fallback); now they report `text` (`graph.shown_kind`: every output node is
+  text). Running and wiring inputs still follow `kind_of`.
+- **The catalog fingerprint watches more model folders**: text_encoders, clip, clip_vision, model_patches, style_models, audio_encoders,
+  latent_upscale_models (only the ones the server has). A newly installed text encoder shows up in `CLIPLoader`-style dropdowns without
+  waiting for some other change.
+
 ## Fixes (1.21.1)
 
 - **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's

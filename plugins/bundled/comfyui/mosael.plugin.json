@@ -7,7 +7,7 @@
     "en": "Connect a ComfyUI server: its saved workflows become generation models and tools, and you manage its models and workflows from Mosael."
   },
   "default_locale": "zh",
-  "version": "1.21.2",
+  "version": "1.21.3",
   "homepage": "https://github.com/comfyanonymous/ComfyUI",
   "author": {
     "name": "Mosael",

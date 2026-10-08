@@ -398,6 +398,13 @@ HTTP 404。
 `label` 是这个入口的主名 —— 表单这时多半读不到标题,写「X 的表单」(不读上一版的表单内容);`group` 和目录里同一个形状。
 目录不再带 `unavailable`(1.21.0 那一格),说原因的只有这一处。
 
+## 修补(1.21.3)
+
+- **只交出一段字的工作流是「文字」**:反推提示词、打标签这类一个文件都不交的工作流,`workflows` / `list_workflows` 报的 `kind`
+  此前被 `kind_of` 兜成 `image`,现在是 `text`(`graph.shown_kind`:输出节点全是文字的)。跑、接素材仍看 `kind_of`。
+- **目录指纹多看几个模型目录**:text_encoders、clip、clip_vision、model_patches、style_models、audio_encoders、latent_upscale_models
+  (只看那台服务器上有的)。新装一个文本编码器,`CLIPLoader` 这类下拉不用等别的变化就跟着刷新。
+
 ## 精简表单(1.13.0;此前叫「应用表单」)
 
 对应 RunningHub 的「AI 应用」(ADR 0038 第一刀):作者从一张工作流**全部能填的项**里挑出要给别人填的几项、起名、排序、
