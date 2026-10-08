@@ -216,7 +216,7 @@ export const shell = {
   boardSceneNoMatches: "No matching scenes",
   boardSceneNone: "This workspace has no 3D scenes yet",
   boardSceneMeta: "{objects} objects · {shots} shots",
-  navEditor: "Edit",
+  navEditor: "Editor",
   navAi: "AI Studio",
   navPublish: "Publish",
   navSettings: "Settings",

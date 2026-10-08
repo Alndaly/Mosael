@@ -258,7 +258,11 @@ function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => 
   // dnd-kit(指针驱动):原生 HTML5 拖拽在 Electron + Radix 包裹下不可靠,这里全面换掉。
   const { setNodeRef, listeners, attributes } = useDraggable({ id: `asset-${asset.id}`, data: { asset } });
   const [thumbFailed, setThumbFailed] = React.useState(false);
+  //: 静帧不写时长:探出来的 duration 是一帧那么长(25fps 下 0.04s),此前照样写「00:00.0」,像一段坏掉的零长视频。
+  //: 图片至少两帧(动图)才写时长,视频、音频有长度就写;不写的写种类。
   const duration = asset.media_info.duration;
+  const frames = typeof duration === "number" ? duration * (asset.media_info.fps || 25) : 0;
+  const timed = typeof duration === "number" && duration > 0 && (asset.kind !== "image" || frames >= 2);
   const hasThumb = asset.media_info.has_thumbnail && !thumbFailed;
   return (
     <div
@@ -299,7 +303,7 @@ function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => 
         {/* 标签和时长同一行,有没有标签行高都一样;挤不下的标签收成「+N」,面板拖到最窄时
             标签先被截掉,不把行撑出面板。 */}
         <span className="flex min-w-0 items-center gap-1.5">
-          <small className="timecode shrink-0">{duration != null ? formatTimecode(duration) : t(assetKindKey(asset.kind))}</small>
+          <small className="timecode shrink-0">{timed ? formatTimecode(duration) : t(assetKindKey(asset.kind))}</small>
           <TagChips tags={tagsOf(asset)} tone="surface" className="overflow-hidden" />
         </span>
       </div>

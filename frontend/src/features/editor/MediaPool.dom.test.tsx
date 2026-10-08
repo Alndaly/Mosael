@@ -183,3 +183,21 @@ it("有声音的素材:右键能分离人声与背景音(排任务)、能降噪(
   await user.click(await screen.findByRole("menuitem", { name: "denoiseAction" }));
   expect(await screen.findByRole("dialog", { name: "denoiseTitle" })).toBeInTheDocument();
 });
+
+it("静帧不写「00:00.0」(像一段坏掉的零长视频)写种类;有长度的照写时长,动图也写", async () => {
+  const original = ASSETS.map((one) => one);
+  const timed = (one: AssetCard, duration: number, fps: number | null = null): AssetCard => ({ ...one, media_info: { ...one.media_info, duration, fps } });
+  ASSETS[0] = timed(ASSETS[0], 4.2, 25);
+  //: 从视频里存下的一帧:探出来的 duration 是一帧那么长(25fps 下 0.04s)—— 演示库里那几张参考图就是这样。
+  ASSETS[2] = timed(ASSETS[2], 0.04, 25);
+  ASSETS[3] = { ...timed(ASSETS[3], 2, 12), kind: "image", name: "loop.gif" };
+  try {
+    await renderPool();
+    const line = (id: string) => document.querySelector(`[data-pool-item="${id}"] small.timecode`)?.textContent;
+    expect(line("pier")).toBe("kindImage");
+    expect(line("beach")).toBe("00:04.2");
+    expect(line("plain")).toBe("00:02.0");
+  } finally {
+    original.forEach((one, index) => (ASSETS[index] = one));
+  }
+});
