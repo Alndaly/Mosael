@@ -298,7 +298,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
           await deleteAsset(id);
         } catch (error) {
           const asset = visible.find((item) => item.id === id);
-          failures.push(`${asset?.name ?? id}: ${String((error as Error).message)}`);
+          const name = asset?.name ?? id;
+          const reason = String((error as Error).message);
+          //: 原因里已经点了名的(「『成片A』还在发布到……」)不再在前面重复一遍名字。
+          failures.push(reason.includes(name) ? reason : `${name}: ${reason}`);
         }
       }
       return failures;

@@ -78,7 +78,7 @@ async function expectRefusedNotice(title: string, ...lines: string[]) {
 
 it("素材库单删:被拒时确认框关掉,单独说删不了和原因,只有「知道了」", async () => {
   serveAssets();
-  render(<QueryClientProvider client={client()}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client()}><MediaLibraryView workspace={{ id: "ws", role: "owner" } as Workspace} /></QueryClientProvider>);
   fireEvent.click(await screen.findByRole("button", { name: "成片A" }));
   await waitFor(() => expect(detailActions.current).not.toBeNull());
   act(() => detailActions.current!(CARDS[0]).at(-1)!.onSelect());
@@ -90,7 +90,7 @@ it("素材库单删:被拒时确认框关掉,单独说删不了和原因,只有�
 
 it("素材库批量删:删掉能删的,删不掉的列出来、各带原因", async () => {
   serveAssets();
-  render(<QueryClientProvider client={client()}><MediaLibraryView workspace={{ id: "ws" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client()}><MediaLibraryView workspace={{ id: "ws", role: "owner" } as Workspace} /></QueryClientProvider>);
   await screen.findByRole("button", { name: "成片A" });
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "成片A" }));
@@ -98,7 +98,9 @@ it("素材库批量删:删掉能删的,删不掉的列出来、各带原因", as
   fireEvent.click(screen.getByRole("button", { name: "delete" }));
   fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
 
-  await expectRefusedNotice("deleteAssetsPartlyRefusedTitle", `成片A: ${REFUSED}`);
+  await screen.findByText("deleteAssetsPartlyRefusedTitle");
+  expect(screen.getByText(REFUSED)).toBeInTheDocument(); // 原因里点了名,前面不再重复一遍「成片A: 」
+  await expectRefusedNotice("deleteAssetsPartlyRefusedTitle", REFUSED);
   expect(vi.mocked(deleteAsset).mock.calls.map(([id]) => id).sort()).toEqual(["a", "b"]);
 });
 
