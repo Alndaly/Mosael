@@ -203,7 +203,7 @@ def remux_in_place(path: Path) -> bool:
                 [settings.ffmpeg, "-y", "-v", "error", "-i", str(path), "-c", "copy", *extra, str(tmp)],
                 check=True,
                 capture_output=True,
-                timeout=120, what="音轨探测", level=logging.DEBUG)
+                timeout=120, what="补写时长头(重封装)", level=logging.DEBUG)
         except Exception:
             tmp.unlink(missing_ok=True)
             continue
@@ -265,7 +265,7 @@ def probe_has_audio(path: Path) -> bool:
             check=True,
             capture_output=True,
             text=True,
-            timeout=20, what="封面提取", level=logging.DEBUG)
+            timeout=20, what="音轨探测", level=logging.DEBUG)
     except Exception:
         return False
     return bool(proc.stdout.strip())

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import tr
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, say
-from app.db.models import Asset, Font, Job, Lut, Sequence, Track
+from app.db.models import Asset, Clip, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import EXPORT, FRAME, derived
 from app.domain.export_presets import QUALITY_PRESETS, RESOLUTION_PRESETS
@@ -440,6 +440,32 @@ def _export_message(phase: str, prog: RenderProgress | None) -> str:
     return " · ".join(bits) if len(bits) > 1 else "编码中…"
 
 
+def _deleted_since_queued(db: Session, plan: RenderPlan) -> list[str]:
+    """计划里用到、而此刻库里已经没有的素材的名字。素材删了,时间线上那几段留着脱机占位,名字记在占位上
+    (见 assets.deletion、sequences.offline);找不到就用 id 的头几位。"""
+    ids = list(dict.fromkeys(_export_sources(plan)))
+    if not ids:
+        return []
+    present = set(db.scalars(select(Asset.id).where(Asset.id.in_(ids))))
+    gone = [one for one in ids if one not in present]
+    if not gone:
+        return []
+    names: dict[str, str] = {}
+    for snapshot in db.scalars(
+        select(Clip.offline_asset).where(Clip.sequence_id == plan.sequence_id, Clip.asset_id.is_(None))
+    ):
+        snapshot = snapshot or {}
+        if snapshot.get("asset_id") in gone and snapshot.get("name"):
+            names[snapshot["asset_id"]] = str(snapshot["name"])
+    return [names.get(one) or one[:8] for one in gone]
+
+
+def _deleted_message(names: list[str]) -> str:
+    listed = "」「".join(names[:3]) + (f"」等 {len(names)} 份" if len(names) > 3 else "」")
+    return (f"素材「{listed}在导出排队期间被删除了。时间线上用到它的那几段现在是「素材已删除」的占位:"
+            "换上别的素材或者删掉那几段,再导出。")
+
+
 #: 估成片多大时多留的余量:封装、音轨、码率波动。
 _EXPORT_SIZE_MARGIN = 1.25
 
@@ -520,6 +546,13 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             write_progress(prog.fraction, _export_message(PHASE_ENCODE, prog))
 
         try:
+            #: 计划在建任务时就定死了;排队那一阵(两个导出名额都占着)素材可能被删掉。不先查的话 ffmpeg 打不开文件,
+            #: 用户看到的是「文件可能损坏或未录制完整」,去检查一个其实已经删掉的文件(MED-8)。
+            gone = _deleted_since_queued(db, plan)
+            if gone:
+                if finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=_deleted_message(gone)):
+                    emit_job_event(db, job.id, "job.failed", {"reason": "asset_deleted"})
+                return
             shortage = _not_enough_disk(workdir, export_size_estimate(plan))
             if shortage is not None:
                 if finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=shortage):

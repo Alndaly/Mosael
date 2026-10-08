@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
+import numpy as np
+
 from app.core.child_process import run_logged
 from app.core.config import settings
 
@@ -53,23 +56,22 @@ def generate_waveform(source: Path, kind: str, asset_directory: Path) -> Path | 
 
 
 def compute_peaks(pcm_s16le: bytes, buckets: int) -> list[float]:
-    """Max-abs peak per bucket, normalized to [0, 1] with 2 decimals."""
+    """Max-abs peak per bucket, normalized to [0, 1] with 2 decimals.
+
+    向量化算(numpy)。此前逐样本一个 Python 循环:10 分钟的音频 1.8 秒、一小时约 11 秒,而这段跑在导入请求里、启动对账也走它
+    (MED-10)。桶的边界和取值和原来逐字一样:第 i 桶是 `[int(i·每桶), int((i+1)·每桶))` 个样本,取绝对值最大的那个
+    (-32768 记 32768),除以 32768 保留两位。"""
     total_samples = len(pcm_s16le) // 2
     if total_samples == 0:
         return []
     bucket_count = min(buckets, total_samples)
     samples_per_bucket = total_samples / bucket_count
-    peaks: list[float] = []
-    view = memoryview(pcm_s16le)
-    for index in range(bucket_count):
-        start = int(index * samples_per_bucket) * 2
-        end = int((index + 1) * samples_per_bucket) * 2
-        chunk = view[start:end]
-        peak = 0
-        for offset in range(0, len(chunk) - 1, 2):
-            value = int.from_bytes(chunk[offset : offset + 2], "little", signed=True)
-            magnitude = -value if value < 0 else value
-            if magnitude > peak:
-                peak = magnitude
-        peaks.append(round(peak / 32768, 2))
-    return peaks
+    samples = np.frombuffer(pcm_s16le, dtype="<i2", count=total_samples)
+    #: int32 再取绝对值:int16 的 -32768 取绝对值会溢出回 -32768。
+    magnitudes = np.abs(samples.astype(np.int32))
+    #: 每桶至少一个样本(桶数不超过样本数),起点严格递增,reduceat 正好按桶取最大值。最后一桶的终点照原来的算法取
+    #: `int(桶数·每桶)` —— 浮点误差下它偶尔比样本数少一,原来那一版就不看最后那个样本;照旧,画出来的波形一点不变。
+    starts = (np.arange(bucket_count) * samples_per_bucket).astype(np.int64)
+    end = int(bucket_count * samples_per_bucket)
+    maxima = np.maximum.reduceat(magnitudes[:end], starts)
+    return [round(int(peak) / 32768, 2) for peak in maxima]

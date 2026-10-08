@@ -138,8 +138,18 @@ class TextRasterizer:
         return self._dist is not None
 
     def __enter__(self) -> "TextRasterizer":
+        """起静态服务和 Chromium。**中途失败要把已经起来的收掉**:`with` 的 `__enter__` 抛异常时 `__exit__` 不会被调用 ——
+        此前 Chromium 起不来(没装、装坏了)时,调用方照常回落到 ASS 烧字,可每次导出 / 取帧都留下一个 Playwright 驱动进程、
+        一条 HTTP 服务线程和一个监听端口(MED-9)。"""
         if self._dist is None:
             raise RuntimeError("frontend dist not found; cannot rasterize text")
+        try:
+            return self._start()
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def _start(self) -> "TextRasterizer":
         # 静态服务 dist,让 @font-face 的相对 URL(assets/*.woff2)解析得到
         handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(self._dist))
         handler.log_message = lambda *a, **k: None  # 静音
@@ -167,14 +177,22 @@ class TextRasterizer:
         return self
 
     def __exit__(self, *exc) -> None:
+        browser, pw, httpd, thread = self._browser, self._pw, self._httpd, self._thread
+        self._browser = self._pw = self._page = self._httpd = self._thread = None
         try:
-            if self._browser:
-                self._browser.close()
+            if browser:
+                browser.close()
         finally:
-            if self._pw:
-                self._pw.stop()
-            if self._httpd:
-                self._httpd.shutdown()
+            try:
+                if pw:
+                    pw.stop()
+            finally:
+                if httpd:
+                    #: shutdown 等 serve_forever 的循环退出 —— 线程没起来就别等(会一直等下去)。
+                    if thread is not None and thread.is_alive():
+                        httpd.shutdown()
+                    #: shutdown 只停循环;监听的套接字要 server_close 才还回去。
+                    httpd.server_close()
 
     def _screenshot(self, css: str, text: str) -> bytes:
         # 用 JS 直接设 cssText + textContent,而不是拼进 HTML 的 style="…" 属性——字体栈里的
