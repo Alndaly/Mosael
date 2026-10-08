@@ -34,6 +34,7 @@ import {
   listAgentMessages,
   listAgentQueue,
   listAgentUsageEvents,
+  resumeQueuedMessage,
   sendAgentMessage,
   steerQueuedMessage,
   stopAgentSession,
@@ -264,11 +265,12 @@ export function CanvasAgentChat({
   // Same contract as the studio chat: a message typed mid-turn is a correction, the backend
   // injects it into the running turn, and one button covers stop-vs-send.
   // Same source of truth as the studio chat: the server knows what is still waiting.
+  //: 空闲时也读:按了停止,扣下的那几条等人点「继续发送」(D63)。跑着时轮询,空闲时跟着会话状态重取(transcriptFollowsSession)。
   const queue = useQuery({
     queryKey: ["agent-queue", sessionId],
-    enabled: Boolean(sessionId) && running,
+    enabled: Boolean(sessionId),
     queryFn: () => listAgentQueue(sessionId),
-    refetchInterval: 1500,
+    refetchInterval: running ? 1500 : false,
   });
   // 计费/用量:与对话页同源,按 agent_message_id 归到各条回复(见 MessageUsageFooter)。
   const usageEvents = useQuery({
@@ -287,7 +289,7 @@ export function CanvasAgentChat({
     }
     return byMessage;
   }, [usageEvents.data]);
-  const queuedIds = new Set((running ? queue.data ?? [] : []).map((message) => message.id));
+  const queuedIds = new Set((queue.data ?? []).map((message) => message.id));
 
   // 和 ChatWorkspace 同一条规矩,同一个函数:答案已经被 `ask_user` 的工具结果记下的回执
   // 不再画一遍(见 features/agent/answerRecords)。两个面板各写一遍的话,这条迟早在其中
@@ -330,6 +332,13 @@ export function CanvasAgentChat({
     mutationFn: (messageId: string) =>
       dropQueuedMessage(sessionId, messageId),
     onSuccess: refreshQueue,
+  });
+  const resumeQueued = useMutation({
+    mutationFn: (messageId: string) => resumeQueuedMessage(sessionId, messageId),
+    onSuccess: () => {
+      refreshQueue();
+      void live.refetch();
+    },
   });
   const steerQueued = useMutation({
     mutationFn: (messageId: string) =>
@@ -669,8 +678,10 @@ export function CanvasAgentChat({
             /* 和下面那张输入卡同样的留边(mx-2)—— 侧栏很窄,差这 8px 一眼就看得出来。 */
             className={COMPOSER_COLUMN}
             onSteer={(id) => steerQueued.mutate(id)}
+            onResume={(id) => resumeQueued.mutate(id)}
             onCancel={(id) => cancelQueued.mutate(id)}
             steering={steerQueued.isPending}
+            resuming={resumeQueued.isPending}
             cancelling={cancelQueued.isPending}
           />
           <div data-toast-avoid="" className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>

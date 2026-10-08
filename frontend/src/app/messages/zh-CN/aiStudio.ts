@@ -133,6 +133,8 @@ export const aiStudio = {
   chatQueuedCancel: "移除",
   chatSteerAction: "插话",
   chatSteerHint: "插进当前这一轮,改变智能体接下来做什么",
+  chatQueuedResume: "继续发送",
+  chatQueuedResumeHint: "你按了停止,这一句就没有自己发出去。点这里让它接着发",
   chatSteerTooLate: "这一轮已经结束,它会作为下一轮单独执行",
   chatSteer: "补充说明",
   chatThinking: "智能体思考中…",

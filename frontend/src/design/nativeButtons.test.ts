@@ -57,7 +57,6 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/agent/InlineQuestions.tsx": 1,
   "features/agent/messageUsage.tsx": 1,
   "features/agent/NoteEditPreview.tsx": 1,
-  "features/agent/QueuedMessages.tsx": 1,
   "features/agent/skills/SkillCardPreviews.tsx": 1,
   "features/agent/skills/SkillContent.tsx": 1,
   "features/agent/SpeakButton.tsx": 1,

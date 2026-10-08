@@ -23482,7 +23482,7 @@
           "agent"
         ],
         "summary": "List Queued Messages",
-        "description": "Messages waiting behind the current answer. Empty when nothing is running.",
+        "description": "Messages waiting behind the current answer. 按停止时扣下的那几条(payload 带 `held`)空闲时也在这里,等人点「继续发送」。",
         "operationId": "list_queued_messages_api_agent_sessions__session_id__queue_get",
         "parameters": [
           {
@@ -23560,6 +23560,60 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Steer Queued Message Api Agent Sessions  Session Id  Queue  Message Id  Steer Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/sessions/{session_id}/queue/{message_id}/resume": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Resume Queued Message",
+        "description": "「继续发送」:按停止时扣下的那条放回队列 —— 这段对话空闲就当场开跑,正忙就排在这一轮后面(D63)。",
+        "operationId": "resume_queued_message_api_agent_sessions__session_id__queue__message_id__resume_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Resume Queued Message Api Agent Sessions  Session Id  Queue  Message Id  Resume Post"
                 }
               }
             }

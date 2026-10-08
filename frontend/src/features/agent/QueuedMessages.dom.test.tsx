@@ -21,7 +21,7 @@ const MESSAGES = [{ id: "q1", content: "我想要英文" }];
 
 it("这一条的宽度就是调用方给的那一列 —— 不自带一个和输入框对不上的写死值", () => {
   const { container } = render(
-    <QueuedMessages messages={MESSAGES} className="mx-2" onSteer={() => {}} onCancel={() => {}} />,
+    <QueuedMessages messages={MESSAGES} className="mx-2" onSteer={() => {}} onResume={() => {}} onCancel={() => {}} />,
   );
   const row = container.firstElementChild as HTMLElement;
   expect(row.className).toContain("mx-2");
@@ -37,6 +37,7 @@ it("插进这一轮和撤回各自点到自己那一条", () => {
     <QueuedMessages
       messages={[...MESSAGES, { id: "q2", content: "再补一句" }]}
       onSteer={steer}
+      onResume={() => {}}
       onCancel={cancel}
     />,
   );
@@ -44,4 +45,26 @@ it("插进这一轮和撤回各自点到自己那一条", () => {
   expect(steer).toHaveBeenCalledWith("q2");
   fireEvent.click(screen.getAllByLabelText("chatQueuedCancel")[0]);
   expect(cancel).toHaveBeenCalledWith("q1");
+});
+
+/**
+ * 按了停止,排着的那几条被扣下(D63):那一格是「继续发送」,不是「插话」—— 没有一轮在跑,插不进去;它也不会自己发出去。
+ */
+it("停止时扣下的那条给「继续发送」,点到的是它自己;没扣下的照旧是「插话」", () => {
+  const steer = vi.fn();
+  const resume = vi.fn();
+  render(
+    <QueuedMessages
+      messages={[{ id: "q1", content: "我想要英文", payload: { queued: true, held: true } }, { id: "q2", content: "再补一句", payload: { queued: true } }]}
+      onSteer={steer}
+      onResume={resume}
+      onCancel={() => {}}
+    />,
+  );
+  expect(screen.getAllByText("chatQueuedResume")).toHaveLength(1);
+  expect(screen.getAllByText("chatSteerAction")).toHaveLength(1);
+  fireEvent.click(screen.getByText("chatQueuedResume"));
+  expect(resume).toHaveBeenCalledWith("q1");
+  fireEvent.click(screen.getByText("chatSteerAction"));
+  expect(steer).toHaveBeenCalledWith("q2");
 });

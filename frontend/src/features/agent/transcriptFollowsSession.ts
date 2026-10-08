@@ -31,5 +31,7 @@ export function useTranscriptFollowsSession(
     //: 刚换到这一段(或刚挂上):消息查询自己会取,不必再来一次。
     if (last.id !== sessionId || last.mark === mark) return;
     void qc.invalidateQueries({ queryKey: ["agent-messages", sessionId] });
+    //: 排着的那几条也只会因为一轮而变(轮到了、被停止扣下),和消息同一个节拍重取(D63)。
+    void qc.invalidateQueries({ queryKey: ["agent-queue", sessionId] });
   }, [qc, sessionId, mark]);
 }

@@ -111,6 +111,9 @@ export const dropQueuedMessage = (sessionId: string, messageId: string) =>
   api(`/api/agent/sessions/${sessionId}/queue/${messageId}`, { method: "DELETE" });
 export const steerQueuedMessage = (sessionId: string, messageId: string) =>
   api<{ steered: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/steer`, { method: "POST" });
+/** 「继续发送」:按停止时扣下的那条放回队列 —— 空闲就当场开跑,正忙就排在这一轮后面(D63)。 */
+export const resumeQueuedMessage = (sessionId: string, messageId: string) =>
+  api<{ resumed: boolean }>(`/api/agent/sessions/${sessionId}/queue/${messageId}/resume`, { method: "POST" });
 
 export const listAgentUsageEvents = <T>(sessionId: string) =>
   api<T[]>(`/api/agent/sessions/${sessionId}/usage-events`);

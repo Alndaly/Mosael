@@ -16,6 +16,7 @@ import {
   listAgentQueue,
   listAgentTools,
   listAgentUsageEvents,
+  resumeQueuedMessage,
   sendAgentMessage,
   steerQueuedMessage,
   stopAgentSession,
@@ -182,16 +183,15 @@ export function ChatWorkspace({
   });
   // What is still waiting behind the current answer. Read from the server rather than counted
   // locally so it survives a reload and stays right when a turn ends mid-flight.
+  //: **空闲时也要读**:按了停止,排着的那几条被扣下(D63),停在排队条里等人点「继续发送」—— 那时没有一轮在跑。
+  //: 跑着的时候轮询;空闲时跟着会话的状态 / updated_at 重取(见 transcriptFollowsSession),和消息同一个节拍。
   const queue = useQuery({
     queryKey: ["agent-queue", activeSession?.id],
-    enabled: Boolean(activeSession) && running,
+    enabled: Boolean(activeSession),
     queryFn: () => listAgentQueue(activeSession!.id),
-    refetchInterval: 1500,
+    refetchInterval: running ? 1500 : false,
   });
-  const queuedIds = React.useMemo(
-    () => new Set((running ? queue.data ?? [] : []).map((message) => message.id)),
-    [running, queue.data],
-  );
+  const queuedIds = React.useMemo(() => new Set((queue.data ?? []).map((message) => message.id)), [queue.data]);
   const refreshQueue = () => {
     void qc.invalidateQueries({ queryKey: ["agent-queue", activeSession?.id] });
     void qc.invalidateQueries({ queryKey: ["agent-messages", activeSession?.id] });
@@ -200,6 +200,14 @@ export function ChatWorkspace({
     mutationFn: (messageId: string) =>
       dropQueuedMessage(String(activeSession?.id), messageId),
     onSuccess: refreshQueue,
+  });
+  //: 「继续发送」:按停止时扣下的那条放回队列,空闲就当场开跑。
+  const resumeQueued = useMutation({
+    mutationFn: (messageId: string) => resumeQueuedMessage(String(activeSession?.id), messageId),
+    onSuccess: () => {
+      refreshQueue();
+      void qc.invalidateQueries({ queryKey: ["agent-session", activeSession?.id] });
+    },
   });
   const steerQueued = useMutation({
     mutationFn: (messageId: string) =>
@@ -653,8 +661,10 @@ export function ChatWorkspace({
                   /* 和下面那个 form 同一个宽度表达式 —— 窗口一窄两个盒子必须一起缩。 */
                   className={COMPOSER_COLUMN}
                   onSteer={(id) => steerQueued.mutate(id)}
+                  onResume={(id) => resumeQueued.mutate(id)}
                   onCancel={(id) => cancelQueued.mutate(id)}
                   steering={steerQueued.isPending}
+                  resuming={resumeQueued.isPending}
                   cancelling={cancelQueued.isPending}
                 />
                 <form

@@ -363,11 +363,15 @@ JOB_RECEIPT_ROLE = "job_receipt"
 
 
 def _waiting(session_id: str):
-    """「这个会话有东西在等下一轮」的条件:有人排了话,或者有回执还没交给智能体。"""
+    """「这个会话有东西在等下一轮」的条件:有人排了话(而且没被停止扣下,见 `_hold_queue`),或者有回执还没交给智能体。"""
     return exists().where(
         AgentMessage.session_id == session_id,
         or_(
-            and_(AgentMessage.role == "user", AgentMessage.payload["queued"].as_boolean().is_(True)),
+            and_(
+                AgentMessage.role == "user",
+                AgentMessage.payload["queued"].as_boolean().is_(True),
+                AgentMessage.payload["held"].as_boolean().is_not(True),
+            ),
             and_(AgentMessage.role == JOB_RECEIPT_ROLE, AgentMessage.payload["undelivered"].as_boolean().is_(True)),
         ),
     )
@@ -664,6 +668,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
     #: 这一轮收尾时,它还在等人的确认卡以什么由头作废(见 card_expiry.expire_session_cards)。缺省是失败;
     #: 落库成功时改成「照常结束」或「被停止」。
     cards_expire_as = card_expiry.EXPIRY_TURN_FAILED
+    #: 这一轮是**用户按停止**停下的:收尾时把排着的话扣下,不自动接着跑(见 `_hold_queue`)。
+    stopped_by_user = False
 
     # ---- 1. 准备:短会话,读完就还连接 ----
     # **跑模型的那几分钟不占数据库连接。** 此前整轮包在一个会话里:一轮对话几分钟,连接就被钉几分钟,
@@ -771,6 +777,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             db.add(assistant_message)
             db.flush()
             cards_expire_as = card_expiry.EXPIRY_TURN_STOPPED if result.aborted else card_expiry.EXPIRY_TURN_ENDED
+            stopped_by_user = result.aborted
             name_it = titles.wants_a_name(db, session)
             if provider_vendor or provider_model:
                 # 记账的形状交给 billable(归属、耗时、幂等、落库);这里只报计量。
@@ -894,6 +901,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 expired = 0
             if expired:
                 logger.info("turn of session %s ended; expired %d pending confirmation card(s) (%s)", session_id, expired, cards_expire_as)
+            if stopped_by_user:
+                _hold_queue(db, session)
             session.status = "idle"
             session.updated_at = now()
             # Revoke the service token this turn was given. It is minted per turn so the MCP
@@ -948,7 +957,7 @@ def _drain_queue_locked(session_id: str) -> None:
         if not claimed:
             return
         db.refresh(session)
-        pending = _queued_messages(db, session)
+        pending = _runnable_queued(db, session)
         receipts = _undelivered_receipts(db, session)
         if not pending and not receipts:
             # 抢的时候队列里还有,读的时候没了(那条刚被取消 / 被引导进了别的轮)。必须把 status
@@ -1096,6 +1105,46 @@ def _queued_messages(db: Session, session: AgentSession) -> list[AgentMessage]:
     return [message for message in messages if (message.payload or {}).get("queued")]
 
 
+def _runnable_queued(db: Session, session: AgentSession) -> list[AgentMessage]:
+    """排着、而且轮得到的那些:被停止扣下的(`held`)等人点「继续发送」。"""
+    return [message for message in _queued_messages(db, session) if not (message.payload or {}).get("held")]
+
+
+def _hold_queue(db: Session, session: AgentSession) -> int:
+    """用户按停止停下了这一轮:**此刻排着的话扣下**,不在收尾的 drain 里自动接着跑(维护者 2026-10-09 拍板 D63)。
+
+    按停止往往是「它跑偏了」;停之前顺手排的那句多半是基于跑偏的内容写的,此前它在停下之后半秒就作为新的一轮开跑,
+    还得再按一次停止。扣下的留在排队条里,由人点「继续发送」(`resume_queued_message`)、插话或删掉。只扣**此刻**排着的:
+    之后再排的照常排队。不是用户停的(出错、整轮超时、整理上下文)照旧接着跑 —— 那不是「它跑偏了」。
+    """
+    held = 0
+    for message in _queued_messages(db, session):
+        if (message.payload or {}).get("held"):
+            continue
+        message.payload = {**(message.payload or {}), "held": True}
+        held += 1
+    return held
+
+
+def resume_queued_message(db: Session, session: AgentSession, message_id: str) -> None:
+    """「继续发送」:把停止时扣下的那条放回队列。调用方提交之后 drain(`drain_queue_after_commit`)—— 空闲就当场开跑,
+    正忙就排在这一轮后面。"""
+    message = db.get(AgentMessage, message_id)
+    if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
+        raise HostError("agentErr_queuedMessageMissing")
+    payload = dict(message.payload or {})
+    payload.pop("held", None)
+    message.payload = payload
+    db.flush()
+
+
+def drain_queue_after_commit(db: Session, session_id: str) -> None:
+    """这次事务提交之后跑一次 drain(它开自己的会话、起下一轮,得读到刚提交的那一份)。"""
+    from app.core.unit_of_work import after_commit
+
+    after_commit(db, lambda: _drain_queue(session_id))
+
+
 def _unqueue(db: Session, message: AgentMessage) -> None:
     """Take a message out of the queue, as of now.
 
@@ -1111,6 +1160,7 @@ def _unqueue(db: Session, message: AgentMessage) -> None:
     payload = dict(message.payload or {})
     payload.pop("queued", None)
     payload.pop("queued_by", None)
+    payload.pop("held", None)
     message.payload = payload
     message.created_at = now()
 

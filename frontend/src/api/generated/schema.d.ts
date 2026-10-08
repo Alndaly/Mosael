@@ -7840,7 +7840,7 @@ export interface paths {
         };
         /**
          * List Queued Messages
-         * @description Messages waiting behind the current answer. Empty when nothing is running.
+         * @description Messages waiting behind the current answer. 按停止时扣下的那几条(payload 带 `held`)空闲时也在这里,等人点「继续发送」。
          */
         get: operations["list_queued_messages_api_agent_sessions__session_id__queue_get"];
         put?: never;
@@ -7868,6 +7868,26 @@ export interface paths {
          *     "change what you are doing now".
          */
         post: operations["steer_queued_message_api_agent_sessions__session_id__queue__message_id__steer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/sessions/{session_id}/queue/{message_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Queued Message
+         * @description 「继续发送」:按停止时扣下的那条放回队列 —— 这段对话空闲就当场开跑,正忙就排在这一轮后面(D63)。
+         */
+        post: operations["resume_queued_message_api_agent_sessions__session_id__queue__message_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -35968,6 +35988,40 @@ export interface operations {
         };
     };
     steer_queued_message_api_agent_sessions__session_id__queue__message_id__steer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_queued_message_api_agent_sessions__session_id__queue__message_id__resume_post: {
         parameters: {
             query?: never;
             header?: never;

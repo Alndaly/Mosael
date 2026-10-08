@@ -204,7 +204,7 @@ def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> 
 
 @router.get("/agent/sessions/{session_id}/queue", response_model=list[AgentMessageOut])
 def list_queued_messages(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentMessage]:
-    """Messages waiting behind the current answer. Empty when nothing is running."""
+    """Messages waiting behind the current answer. 按停止时扣下的那几条(payload 带 `held`)空闲时也在这里,等人点「继续发送」。"""
     session = readable_session(db, user, session_id)
     return host.queued_messages(db, session)
 
@@ -221,6 +221,18 @@ def steer_queued_message(session_id: str, message_id: str, db: Tx, user: Current
         return {"steered": host.steer_queued_message(db, session, message_id, user)}
     except host.HostError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/agent/sessions/{session_id}/queue/{message_id}/resume")
+def resume_queued_message(session_id: str, message_id: str, db: Tx, user: CurrentUser) -> dict:
+    """「继续发送」:按停止时扣下的那条放回队列 —— 这段对话空闲就当场开跑,正忙就排在这一轮后面(D63)。"""
+    session = writable_session(db, user, session_id)
+    try:
+        host.resume_queued_message(db, session, message_id)
+    except host.HostError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    host.drain_queue_after_commit(db, session.id)
+    return {"resumed": True}
 
 
 @router.delete("/agent/sessions/{session_id}/queue/{message_id}")
