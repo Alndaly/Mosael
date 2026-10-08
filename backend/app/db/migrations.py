@@ -8232,6 +8232,53 @@ def _migrate_plugin_connection_errors_follow_the_reader() -> None:
                 )
 
 
+def _migrate_board_failures_follow_the_reader() -> None:
+    """画板上失败的格子改存失败的原样(原文 + 文案 key + 参数,和任务同形),给人看的那一句、原文、原因和怎么修在读的时候按读的人
+    的语言出(见 domain/boards/failures)。
+
+    此前回执存的是按回执那一刻的语言摘好的一句(`run.error`)、原文(`run.error_detail`)、拼好的一段提示(`run.error_hint`)。
+    老格子认不回文案 key —— 那一句已经是某种语言的字了 —— 照原样挪进新形状,读出来和原来一样(还是写下时的那种语言):
+
+    - 有原文的:`error` 换成原文,原来那一句挪进参数的 `summary`(失败摘要先用它,见 failure_summary.summarize);
+    - 有提示的:挪进参数的 `hint.cause`(拆不开原因和步骤,不猜);
+    - 只有一句的不动(读的时候那一句就是它自己)。
+
+    改到的板版本号 +1。幂等:新形状里没有 `error_detail` / `error_hint`。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                run = item.get("run") if isinstance(item, dict) else None
+                if not isinstance(run, dict) or not ("error_detail" in run or "error_hint" in run):
+                    continue
+                detail, hint = run.pop("error_detail", None), run.pop("error_hint", None)
+                params = dict(run.get("error_params") or {}) if isinstance(run.get("error_params"), dict) else {}
+                said = run.get("error") if isinstance(run.get("error"), str) else ""
+                if isinstance(detail, str) and detail.strip():
+                    if said.strip():
+                        params["summary"] = said.strip()
+                    run["error"] = detail.strip()
+                if isinstance(hint, str) and hint.strip():
+                    params["hint"] = {"cause": hint.strip()}
+                if params:
+                    run["error_params"] = params
+                changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_failure_hints_say_cause_and_steps() -> None:
     """失败参数里认得出的原因(`error_params.hint`)从一整句话改成「原因 + 怎么修」:`{"cause": 一句, "steps": [{"text", "command"}]}`。
 
@@ -9369,6 +9416,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_generation_results_keep_output_parameters_apart),
             #: 失败参数里认得出的原因从一整句话改成「原因 + 怎么修」:旧的那一句挪进 `cause`。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_failure_hints_say_cause_and_steps),
+            #: 画板失败的格子改存原样(原文 + key + 参数),给人看的在读的时候按读的人的语言出:老格子照原样挪进新形状。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_failures_follow_the_reader),
             #: 百炼说话照片之前的人像预检(wan2.2-s2v-detect)补上参考价:预检此前一笔都没进账。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_s2v_detect_price),
             #: Google 连接能对话了:已有 Gemini 对话模型行的补上 Gemini 的参考价。

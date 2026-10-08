@@ -30436,6 +30436,15 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "failures": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FailureViewOut"
+            },
+            "type": "object",
+            "title": "Failures",
+            "description": "跑挂了的格子给人看的样子:`{格子 id: 那一句、原文、原因和怎么修}`,按读的人的语言(见 domain/boards/failures)。\n画布里只存失败的原样(原文 + 文案 key + 参数),不混进这几样 —— 客户端存画布时不会再带回来。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -30446,7 +30455,8 @@
           "canvas",
           "revision",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "failures"
         ],
         "title": "BoardOut"
       },
@@ -34416,6 +34426,45 @@
         "title": "FailureStepOut",
         "description": "修的一步:一句话;要在终端里敲的命令另放(原样,不翻)—— 失败卡把它摆成等宽的一块、带复制。"
       },
+      "FailureViewOut": {
+        "properties": {
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureHintOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "FailureViewOut",
+        "description": "一处失败给人看的三样(画板格子那一张表里的一条)。"
+      },
       "FeishuBindCodeOut": {
         "properties": {
           "code": {
@@ -35063,7 +35112,7 @@
               }
             ],
             "title": "Error Summary",
-            "description": "失败给人看的那一句话(按请求方的语言翻,见 domain/failure_summary):失败卡上写它,原文 `error` 在\n「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。",
+            "description": "出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。",
             "readOnly": true
           },
           "error_detail": {
@@ -35076,7 +35125,7 @@
               }
             ],
             "title": "Error Detail",
-            "description": "失败的原文(上游 / 插件的原话),失败卡默认折起的「详情」里给;和那一句人话说的是同一件事、没有多出信息时是 None ——\n不摆一个点开还是那句话的「详情」(见 domain/failure_summary.detail_of)。",
+            "description": "原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是\n那句话的「详情」。",
             "readOnly": true
           },
           "error_hint": {
@@ -35088,7 +35137,7 @@
                 "type": "null"
               }
             ],
-            "description": "认得出的原因和怎么修(插件说的,ComfyUI 的 hostbuf 那一种:「那台 ComfyUI 装的 comfy-kitchen……太旧」+ 升级命令、重启),\n失败卡上那句话下面摆。没有是 None。",
+            "description": "认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。",
             "readOnly": true
           },
           "repeatable": {
@@ -36202,6 +36251,44 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Result"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary",
+            "description": "出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。",
+            "readOnly": true
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail",
+            "description": "原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是\n那句话的「详情」。",
+            "readOnly": true
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureHintOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -36216,7 +36303,10 @@
           "error",
           "created_at",
           "updated_at",
-          "result"
+          "result",
+          "error_summary",
+          "error_detail",
+          "error_hint"
         ],
         "title": "JobOut",
         "description": "一个任务的全部:列表里那一行,加上它做出了什么(`result`)。详情、取消、子任务这些一次只出几个的出口用它。"
@@ -36290,6 +36380,44 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary",
+            "description": "出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。",
+            "readOnly": true
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail",
+            "description": "原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是\n那句话的「详情」。",
+            "readOnly": true
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureHintOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -36303,7 +36431,10 @@
           "payload",
           "error",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "error_summary",
+          "error_detail",
+          "error_hint"
         ],
         "title": "JobSummaryOut",
         "description": "任务列表里的一行:除了 `result` 什么都有(`JobOut` 是它加上 `result`)。**message 在这里按请求方的语言翻**。\n\n结果只在详情里给(`GET /api/jobs/{id}`)。工作流任务的 `result` 是整次运行的上下文,一条几十到几百 KB:维护者库里\n578 个顶层任务的列表 2.4 MB,其中 3 MB 量级的是工作流的结果 —— 而列表一处都不读它,有任务在跑时却每 1.5 秒拉一遍。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。"
@@ -43516,6 +43647,44 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary",
+            "description": "出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。",
+            "readOnly": true
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail",
+            "description": "原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是\n那句话的「详情」。",
+            "readOnly": true
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureHintOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -43534,7 +43703,10 @@
           "error",
           "result",
           "job_id",
-          "created_at"
+          "created_at",
+          "error_summary",
+          "error_detail",
+          "error_hint"
         ],
         "title": "PublishTaskOut"
       },
@@ -44822,6 +44994,44 @@
               }
             ],
             "title": "Finished At"
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary",
+            "description": "出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。",
+            "readOnly": true
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail",
+            "description": "原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是\n那句话的「详情」。",
+            "readOnly": true
+          },
+          "error_hint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureHintOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -44833,7 +45043,10 @@
           "result",
           "error",
           "started_at",
-          "finished_at"
+          "finished_at",
+          "error_summary",
+          "error_detail",
+          "error_hint"
         ],
         "title": "ScheduledTaskRunOut"
       },

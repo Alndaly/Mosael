@@ -441,9 +441,12 @@ def test_成功结束却没交回产出_失败原因不是任务状态() -> None
 
     _deliver(board_id, "img", SimpleNamespace(id="job-1", status="succeeded", result={"asset_ids": []}, error=""))
 
-    run = _canvas(client, ws, board_id)["items"][0]["run"]
+    board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
+    run = board["canvas"]["items"][0]["run"]
     assert run["status"] == "failed"
-    assert run.get("error") == t("boardErr_noOutput"), run
+    #: 格子里存失败的原样(文案 key),给人看的那一句在出口的 failures 里按读的人的语言出(boards/failures)
+    assert run.get("error_key") == "boardErr_noOutput", run
+    assert board["failures"]["img"]["error_summary"] == t("boardErr_noOutput"), board["failures"]
 
 
 def _board_with_live_job(client, ws: str) -> tuple[str, str]:

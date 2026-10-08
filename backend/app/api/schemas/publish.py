@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import Field, field_validator
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.failures import FailureReadout
 
 
 class PublishOptionChoice(ApiModel):
@@ -95,7 +96,7 @@ class PublishedPostOut(ApiModel):
     published_at: str
 
 
-class PublishTaskOut(ApiModel):
+class PublishTaskOut(FailureReadout, ApiModel):
     id: str
     workspace_id: str
     account_id: str

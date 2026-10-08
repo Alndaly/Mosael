@@ -91,7 +91,7 @@ def test_画板上是_3D_场景格的一种填法_剧本从连进来的文档便
             "form": {"producer": "node:scene_from_text", "config": {"shot_id": "old-shot", "render": "video"}},
             "run": {"status": "running", "job_id": "j1"}}
     canvas = _canvas_with_delivered_result({"items": [cell], "edges": []}, item_id="set", job_id="j1", outputs=outputs,
-                                           reason="", cancelled=False, succeeded=True, assets={})
+                                           cancelled=False, succeeded=True, assets={})
     [filled] = canvas["items"]
     assert (filled["scene_id"], filled["text"], filled["run"]["status"]) == ("sc-new", "天台告白", "succeeded")
     assert filled["form"]["config"] == {"render": "video"}, "旧场景上挑的镜头摘掉,别的设置留着"

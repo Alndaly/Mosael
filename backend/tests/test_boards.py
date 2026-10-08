@@ -894,7 +894,7 @@ def test_表单记着上次自动填进提示词的那段_出了结果一起用�
     with pytest.raises(BoardDomainError):
         normalize_canvas({"items": [{**item, "form": {"prefilled": 3}}]})
     done = _canvas_with_delivered_result({"items": [item], "edges": []}, item_id="i", job_id="j",
-                                         outputs=[{"type": "asset", "asset_id": "a"}], reason="", cancelled=False,
+                                         outputs=[{"type": "asset", "asset_id": "a"}], cancelled=False,
                                          succeeded=True)
     form = done["items"][0]["form"]
     assert form["prompt"] == "" and "prefilled" not in form, form

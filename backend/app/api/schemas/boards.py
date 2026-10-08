@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.failures import FailureViewOut
 from app.api.schemas.workflows import WorkflowNodeTypeOut
 
 
@@ -16,6 +17,16 @@ class BoardOut(OrmModel):
     revision: int
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def failures(self) -> dict[str, FailureViewOut]:
+        """跑挂了的格子给人看的样子:`{格子 id: 那一句、原文、原因和怎么修}`,按读的人的语言(见 domain/boards/failures)。
+        画布里只存失败的原样(原文 + 文案 key + 参数),不混进这几样 —— 客户端存画布时不会再带回来。"""
+        from app.core.i18n import get_current_locale
+        from app.domain.boards.failures import failures_of
+
+        return {item_id: FailureViewOut.model_validate(view) for item_id, view in failures_of(self.canvas, get_current_locale()).items()}
 
 
 class BoardPreviewItem(ApiModel):

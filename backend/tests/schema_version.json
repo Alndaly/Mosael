@@ -1,5 +1,5 @@
 {
-  "version": 14,
+  "version": 15,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -53,6 +53,7 @@
     "migrate-board-documents-can-be-written",
     "migrate-board-documents-keep-the-note-they-became",
     "migrate-board-empty-slots-name-their-producer",
+    "migrate-board-failures-follow-the-reader",
     "migrate-board-failures-keep-their-original-error",
     "migrate-board-forms-name-their-producer",
     "migrate-board-frame-names-become-titles",

@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import Field, ValidationInfo, computed_field, field_validator
 
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
+from app.api.schemas.failures import FailureReadout
 from app.api.schemas.jobs import JobOut, _rendered
 from app.api.schemas.plugins import EntryGroupOut
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
@@ -162,21 +163,7 @@ class PodcastCreate(ApiModel):
     speed: float = Field(default=1.0, ge=0.25, le=3.0)
 
 
-class FailureStepOut(ApiModel):
-    """修的一步:一句话;要在终端里敲的命令另放(原样,不翻)—— 失败卡把它摆成等宽的一块、带复制。"""
-
-    text: str = ""
-    command: str | None = None
-
-
-class FailureHintOut(ApiModel):
-    """认得出的失败:为什么(`cause`,一句)和怎么修(`steps`,一步一句),按读的人的语言挑好(见 domain/failure_summary.hint_of)。"""
-
-    cause: str | None = None
-    steps: list[FailureStepOut] = Field(default_factory=list)
-
-
-class GenerationJobOut(OrmModel):
+class GenerationJobOut(FailureReadout, OrmModel):
     id: str
     workspace_id: str
     session_id: str | None = None
@@ -222,43 +209,6 @@ class GenerationJobOut(OrmModel):
     @classmethod
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
         return _rendered(value, info, "error_key", "error_params")
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def error_summary(self) -> str | None:
-        """失败给人看的那一句话(按请求方的语言翻,见 domain/failure_summary):失败卡上写它,原文 `error` 在
-        「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。"""
-        if not self.error_key and not self.error:
-            return None
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import summarize
-
-        return summarize(self.error, self.error_key, self.error_params, get_current_locale()) or None
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def error_detail(self) -> str | None:
-        """失败的原文(上游 / 插件的原话),失败卡默认折起的「详情」里给;和那一句人话说的是同一件事、没有多出信息时是 None ——
-        不摆一个点开还是那句话的「详情」(见 domain/failure_summary.detail_of)。"""
-        if not self.error_key and not self.error:
-            return None
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import detail_of
-
-        return detail_of(self.error, self.error_key, self.error_params, get_current_locale())
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def error_hint(self) -> FailureHintOut | None:
-        """认得出的原因和怎么修(插件说的,ComfyUI 的 hostbuf 那一种:「那台 ComfyUI 装的 comfy-kitchen……太旧」+ 升级命令、重启),
-        失败卡上那句话下面摆。没有是 None。"""
-        if not self.error_params:
-            return None
-        from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import hint_of
-
-        hint = hint_of(self.error_params, get_current_locale())
-        return FailureHintOut.model_validate(hint) if hint else None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

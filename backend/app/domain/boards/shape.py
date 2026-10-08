@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.core.i18n import is_message_key
 from app.domain.boards.errors import BoardDomainError, _field_error
 from app.domain.boards.producer_ids import is_producer_id, missing_slot_producer
 
@@ -65,8 +66,24 @@ MAX_TEXT_CHARS = 20_000
 #: 一格的名字(`title`)最长多少字。它挂在节点上方那一行、查找列表的一行里,是个**名字**不是一段话。
 MAX_TITLE_CHARS = 120
 RUN_STATUSES = ("idle", "queued", "running", "succeeded", "failed", "cancelled")
-#: 一格失败的原文(`run.error_detail`)最多存多少字 —— 上游回包能很长,格子上只在「查看原始错误」里看。
+#: 一格失败的原文(`run.error`)最多存多少字 —— 上游回包能很长,格子上只在「详情」里看。
 RUN_ERROR_DETAIL_CHARS = 2000
+
+
+def _stored_params(value: Any, depth: int = 0) -> Any:
+    """失败参数(文案 key 的参数、插件说的原话、原因和怎么修)存进画布前的样子:只留 JSON 认得的,字截到原文那么长,层数有限。
+    画布是客户端写回来的,这里不信它带回来的东西。"""
+    if depth > 6:
+        return None
+    if isinstance(value, dict):
+        return {str(key)[:64]: _stored_params(one, depth + 1) for key, one in list(value.items())[:32]}
+    if isinstance(value, list):
+        return [_stored_params(one, depth + 1) for one in value[:32]]
+    if isinstance(value, str):
+        return value[: RUN_ERROR_DETAIL_CHARS * 2]
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    return str(value)[:RUN_ERROR_DETAIL_CHARS]
 
 
 def finite_number(value: Any, field: str, item_id: str = "") -> float:
@@ -381,26 +398,21 @@ def _normalize_run(value: Any, item_id: str) -> dict[str, Any] | None:
         if not isinstance(job_id, str) or not job_id.strip():
             raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="run.job_id")
         run["job_id"] = job_id.strip()
+    #: 失败的原样:原文(`error`)、文案 key、参数 —— 和任务同形(见 outputs._canvas_with_delivered_result)。给人看的那一句、
+    #: 原文、原因和怎么修是读的时候按读的人的语言出的(boards.failures.readable 加进出口的 `error_summary` / `error_detail` /
+    #: `error_hint`),不存:客户端存画布时带回来的那几格在这里丢掉。
     error = value.get("error")
     if error is not None:
         if not isinstance(error, str):
             raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error")
         if error.strip():
-            run["error"] = error.strip()[:300]
-    #: `error` 是给人看的那一句(见 domain/failure_summary),`error_detail` 是它摘自的原文 —— 格子上「查看原始错误」。
-    detail = value.get("error_detail")
-    if detail is not None:
-        if not isinstance(detail, str):
-            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error_detail")
-        if detail.strip():
-            run["error_detail"] = detail.strip()[:RUN_ERROR_DETAIL_CHARS]
-    #: 认得出的原因:该去哪修(见 domain/failure_summary.hint_of)
-    hint = value.get("error_hint")
-    if hint is not None:
-        if not isinstance(hint, str):
-            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error_hint")
-        if hint.strip():
-            run["error_hint"] = hint.strip()[:RUN_ERROR_DETAIL_CHARS]
+            run["error"] = error.strip()[:RUN_ERROR_DETAIL_CHARS]
+    error_key = value.get("error_key")
+    if isinstance(error_key, str) and error_key and is_message_key(error_key):
+        run["error_key"] = error_key
+    error_params = value.get("error_params")
+    if isinstance(error_params, dict) and error_params:
+        run["error_params"] = _stored_params(error_params)
     #: 这一轮跑的是这一格的哪一项能力(见 producer_ids.ability_of)。没有就是它自己的产出者。
     ability = value.get("ability")
     if ability is not None:

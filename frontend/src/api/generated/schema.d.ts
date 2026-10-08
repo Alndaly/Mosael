@@ -10664,6 +10664,14 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Failures
+             * @description 跑挂了的格子给人看的样子:`{格子 id: 那一句、原文、原因和怎么修}`,按读的人的语言(见 domain/boards/failures)。
+             *     画布里只存失败的原样(原文 + 文案 key + 参数),不混进这几样 —— 客户端存画布时不会再带回来。
+             */
+            readonly failures: {
+                [key: string]: components["schemas"]["FailureViewOut"];
+            };
         };
         /** BoardPreview */
         BoardPreview: {
@@ -12426,6 +12434,17 @@ export interface components {
             /** Command */
             command?: string | null;
         };
+        /**
+         * FailureViewOut
+         * @description 一处失败给人看的三样(画板格子那一张表里的一条)。
+         */
+        FailureViewOut: {
+            /** Error Summary */
+            error_summary?: string | null;
+            /** Error Detail */
+            error_detail?: string | null;
+            error_hint?: components["schemas"]["FailureHintOut"] | null;
+        };
         /** FeishuBindCodeOut */
         FeishuBindCodeOut: {
             /** Code */
@@ -12681,20 +12700,16 @@ export interface components {
             retrievable: boolean;
             /**
              * Error Summary
-             * @description 失败给人看的那一句话(按请求方的语言翻,见 domain/failure_summary):失败卡上写它,原文 `error` 在
-             *     「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。
+             * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
              */
             readonly error_summary: string | null;
             /**
              * Error Detail
-             * @description 失败的原文(上游 / 插件的原话),失败卡默认折起的「详情」里给;和那一句人话说的是同一件事、没有多出信息时是 None ——
-             *     不摆一个点开还是那句话的「详情」(见 domain/failure_summary.detail_of)。
+             * @description 原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是
+             *     那句话的「详情」。
              */
             readonly error_detail: string | null;
-            /**
-             * @description 认得出的原因和怎么修(插件说的,ComfyUI 的 hostbuf 那一种:「那台 ComfyUI 装的 comfy-kitchen……太旧」+ 升级命令、重启),
-             *     失败卡上那句话下面摆。没有是 None。
-             */
+            /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
             readonly error_hint: components["schemas"]["FailureHintOut"] | null;
             /**
              * Repeatable
@@ -13201,6 +13216,19 @@ export interface components {
             result: {
                 [key: string]: unknown;
             };
+            /**
+             * Error Summary
+             * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
+             */
+            readonly error_summary: string | null;
+            /**
+             * Error Detail
+             * @description 原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是
+             *     那句话的「详情」。
+             */
+            readonly error_detail: string | null;
+            /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
+            readonly error_hint: components["schemas"]["FailureHintOut"] | null;
         };
         /**
          * JobSummaryOut
@@ -13248,6 +13276,19 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Error Summary
+             * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
+             */
+            readonly error_summary: string | null;
+            /**
+             * Error Detail
+             * @description 原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是
+             *     那句话的「详情」。
+             */
+            readonly error_detail: string | null;
+            /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
+            readonly error_hint: components["schemas"]["FailureHintOut"] | null;
         };
         /**
          * Keyframe
@@ -16710,6 +16751,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Error Summary
+             * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
+             */
+            readonly error_summary: string | null;
+            /**
+             * Error Detail
+             * @description 原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是
+             *     那句话的「详情」。
+             */
+            readonly error_detail: string | null;
+            /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
+            readonly error_hint: components["schemas"]["FailureHintOut"] | null;
         };
         /**
          * PublishedPostOut
@@ -17306,6 +17360,19 @@ export interface components {
             started_at: string | null;
             /** Finished At */
             finished_at: string | null;
+            /**
+             * Error Summary
+             * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
+             */
+            readonly error_summary: string | null;
+            /**
+             * Error Detail
+             * @description 原文(上游 / 插件的原话),默认收起的「详情」里给;和那一句说的是同一件事、没有多出信息时是 None —— 不摆一个点开还是
+             *     那句话的「详情」。
+             */
+            readonly error_detail: string | null;
+            /** @description 认得出的原因和怎么修(插件或后端的失败归类说的),那一句下面摆。没有是 None。 */
+            readonly error_hint: components["schemas"]["FailureHintOut"] | null;
         };
         /** ScheduledTaskUpdate */
         ScheduledTaskUpdate: {

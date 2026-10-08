@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.failures import FailureReadout
 from app.api.schemas.jobs import JobOut
 
 
@@ -79,7 +80,7 @@ class TaskAwaitingApprovalOut(ApiModel):
     awaiting: AwaitingApprovalOut
 
 
-class ScheduledTaskRunOut(OrmModel):
+class ScheduledTaskRunOut(FailureReadout, OrmModel):
     id: str
     scheduled_task_id: str
     job_id: str | None

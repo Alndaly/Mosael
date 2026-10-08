@@ -263,12 +263,12 @@ def _canvas_with_delivered_result(
     item_id: str,
     job_id: str,
     outputs: list[dict[str, Any]],
-    reason: str,
     cancelled: bool,
     succeeded: bool = False,
     assets: dict[str, tuple[str, str]] | None = None,
-    detail: str = "",
-    hint: str = "",
+    error: str = "",
+    error_key: str = "",
+    error_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Merge one asynchronous receipt into the newest board projection.
 
@@ -330,15 +330,17 @@ def _canvas_with_delivered_result(
             # 去任务中心翻一遍才知道为什么。
             #: 「生成失败」这句话由界面说;这里只存**真正的原因**,没有就不写。此前没原因时拿任务
             #: 状态顶上 —— 一个成功结束却没交回产出的任务,格子上的失败原因就成了「succeeded」。
+            #:
+            #: 存的是失败的**原样**:原文、文案 key、参数(和任务同形)。给人看的那一句、原文、原因和怎么修在读的时候按读的人的
+            #: 语言出(见 boards.failures.readable,BoardOut 出口)—— 此前存的是回执那一刻按那时的语言摘好的一句,中文界面跑的
+            #: 格子切到英文界面还是中文(UC-06 的尾巴)。
             run = {"status": "cancelled" if cancelled else "failed"}
-            if reason.strip():
-                run["error"] = reason.strip()[:300]
-            #: 原文(`reason` 是从它摘出来的那一句,见 domain/failure_summary):格子上「查看原始错误」里给。和那一句一样就不存。
-            if detail.strip() and detail.strip() != reason.strip():
-                run["error_detail"] = detail.strip()[:RUN_ERROR_DETAIL_CHARS]
-            #: 认得出的原因:该去哪修(插件说的,见 domain/failure_summary.hint_of)。格子上收在「详情」的悬停里,不撑大格子。
-            if hint.strip():
-                run["error_hint"] = hint.strip()[:RUN_ERROR_DETAIL_CHARS]
+            if error.strip():
+                run["error"] = error.strip()[:RUN_ERROR_DETAIL_CHARS]
+            if error_key:
+                run["error_key"] = error_key
+            if error_params:
+                run["error_params"] = dict(error_params)
             kept.append({**item, "run": {**run, **marker}})
             continue
         if derives:

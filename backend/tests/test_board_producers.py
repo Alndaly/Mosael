@@ -1182,7 +1182,7 @@ def test_别的文件落成写着素材名的便签() -> None:
     canvas = {"items": [{"id": "a1", "kind": "audio", "x": 0, "y": 0, "width": 280, "asset_id": "src",
                          "run": {"status": "running", "job_id": "j", "ability": "node:separate_audio"}}], "edges": []}
     merged = _canvas_with_delivered_result(
-        canvas, item_id="a1", job_id="j", reason="", cancelled=False, succeeded=True,
+        canvas, item_id="a1", job_id="j", cancelled=False, succeeded=True,
         outputs=[{"type": "asset", "asset_id": "doc"}, {"type": "asset", "asset_id": "clip"},
                  {"type": "asset", "asset_id": "elsewhere"}],
         assets={"doc": ("document", "报告.pdf"), "clip": ("audio", "旁白.mp3")},

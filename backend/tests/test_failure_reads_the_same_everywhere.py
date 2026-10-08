@@ -100,12 +100,22 @@ def test_画板格子存那一句和原文(monkeypatch) -> None:
                           error_params={"vendor": "DashScope", "detail": HTTPX_401 + BODY}, created_by=None)
     with SessionLocal() as db:
         deliver_generated(db, job, receipt_to_item(board_id, "img"))
-    canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()["canvas"]
-    run = canvas["items"][0]["run"]
-    assert run["status"] == "failed"
-    assert "不认这把密钥" in run["error"] and "://" not in run["error"]
+    board = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()
+    run = board["canvas"]["items"][0]["run"]
+    #: 格子里存失败的原样(和任务同形),给人看的那几样在出口的 `failures` 里按读的人的语言出
+    assert run == {"status": "failed", "error": raw.strip(), "error_key": "providerErr_requestFailed",
+                   "error_params": {"vendor": "DashScope", "detail": HTTPX_401 + BODY}}
+    view = board["failures"]["img"]
+    assert "不认这把密钥" in view["error_summary"] and "://" not in view["error_summary"]
     #: 原文是上游那句原话(谁失败了 —— 「DashScope 请求失败:」那截壳 —— 格子上的模型已经说了)
-    assert run["error_detail"].startswith("Client error '401 Unauthorized'") and "InvalidApiKey" in run["error_detail"]
+    assert view["error_detail"].startswith("Client error '401 Unauthorized'") and "InvalidApiKey" in view["error_detail"]
+    english = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}, headers={"Accept-Language": "en-US"}).json()
+    assert "rejected the credentials" in english["failures"]["img"]["error_summary"], "按读的人的语言,不是跑的那一刻的"
+    #: 客户端把出口的样子原样存回来:给人看的那几样不进画布,原样留着
+    saved = client.patch(f"/api/boards/{board_id}",
+                         json={"workspace_id": workspace, "canvas": english["canvas"], "base_revision": english["revision"]})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["canvas"]["items"][0]["run"] == run
 
 
 def test_老画板上的失败格子由迁移改成那一句加原文() -> None:
@@ -202,9 +212,49 @@ def test_画板格子跑挂了_原因和怎么修拼好存进格子() -> None:
                           error_key="providerErr_pluginFailed", error_params=COMFY_FAILURE, created_by=None)
     with SessionLocal() as db:
         deliver_generated(db, job, receipt_to_item(board_id, "img"))
-    run = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()["canvas"]["items"][0]["run"]
-    assert run["error"] == "ComfyUI 执行到「KSampler」这一步出错"
-    assert run["error_hint"].startswith("那台 ComfyUI 装的 comfy-kitchen 太旧\n1. ") and UPGRADE in run["error_hint"]
+    view = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()["failures"]["img"]
+    assert view["error_summary"] == "ComfyUI 执行到「KSampler」这一步出错"
+    assert view["error_hint"] == {"cause": "那台 ComfyUI 装的 comfy-kitchen 太旧", "steps": [
+        {"text": "在那台机器上升级:", "command": UPGRADE}, {"text": "重启 ComfyUI,再生成一次。", "command": None}]}, \
+        "和 AI 工作台的失败卡同一份「原因 + 怎么修」,格子的详情浮层照格子摆"
+    english = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace},
+                         headers={"Accept-Language": "en-US"}).json()["failures"]["img"]
+    assert english["error_summary"].startswith("ComfyUI hit an error") and english["error_hint"]["cause"].startswith("That ComfyUI")
+
+
+def test_老画板上失败的格子挪进新形状_读出来和原来一样_重跑不变() -> None:
+    from tests.util import fresh_client
+    from app.db.migrations import _migrate_board_failures_follow_the_reader
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    board_id = client.post("/api/boards", json={"workspace_id": workspace, "name": "B", "canvas": {"items": [], "edges": []}}).json()["id"]
+    old_items = [
+        {"id": "a", "kind": "image", "x": 0, "y": 0, "run": {"status": "failed", "error": "DashScope 不认这把密钥",
+                                                              "error_detail": "Client error '401 Unauthorized'", "error_hint": "去设置里换一把"}},
+        {"id": "b", "kind": "image", "x": 300, "y": 0, "run": {"status": "failed", "error": "没有产出"}},
+    ]
+    with SessionLocal() as db:
+        board = db.get(Board, board_id)
+        board.canvas = {"items": old_items, "edges": []}
+        db.commit()
+        before = board.revision
+
+    _migrate_board_failures_follow_the_reader()
+    _migrate_board_failures_follow_the_reader()
+
+    with SessionLocal() as db:
+        board = db.get(Board, board_id)
+        canvas = board.canvas if isinstance(board.canvas, dict) else json.loads(board.canvas)
+        assert board.revision == before + 1
+    first, second = canvas["items"]
+    assert first["run"] == {"status": "failed", "error": "Client error '401 Unauthorized'",
+                            "error_params": {"summary": "DashScope 不认这把密钥", "hint": {"cause": "去设置里换一把"}}}
+    assert second["run"] == {"status": "failed", "error": "没有产出"}, "只有一句的不动"
+    view = client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace}).json()["failures"]
+    assert view["a"] == {"error_summary": "DashScope 不认这把密钥", "error_detail": "Client error '401 Unauthorized'",
+                         "error_hint": {"cause": "去设置里换一把", "steps": []}}, "读出来和原来一样"
+    assert view["b"] == {"error_summary": "没有产出", "error_detail": None, "error_hint": None}
 
 
 def test_插件说的失败的样子_原因和步骤收成规整的形状() -> None:
@@ -272,3 +322,37 @@ def test_原文比那一句多出信息时才给详情() -> None:
     params = {"vendor": "DashScope", "detail": HTTPX_401 + BODY}
     assert detail_of("x", "providerErr_requestFailed", params, "zh").startswith("Client error '401 Unauthorized'")
     assert detail_of("服务商已经生成好了。", "", {}, "zh") is None
+
+
+def test_任务也带那一句_原文_原因和怎么修_和生成记录同一份() -> None:
+    """任务中心的任务详情、工作流的运行面板读任务本身:和 AI 工作台的失败卡同一份三样(schemas/failures.FailureReadout)。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = _failed_generation(client, key="providerErr_pluginFailed", params=COMFY_FAILURE,
+                                   error="「ComfyUI · http://192.168.3.15:8188」生成失败:ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed")
+    with SessionLocal() as db:
+        job_id = db.query(Job.id).filter(Job.workspace_id == workspace).scalar()
+    job = client.get(f"/api/jobs/{job_id}").json()
+    assert job["error_summary"] == "ComfyUI 执行到「KSampler」这一步出错"
+    assert job["error_detail"] == "KSampler: hostbuf_file_reader_read failed"
+    assert job["error_hint"]["steps"][0]["command"] == UPGRADE
+    english = client.get(f"/api/jobs/{job_id}", headers={"Accept-Language": "en-US"}).json()
+    assert english["error_summary"].startswith("ComfyUI hit an error")
+
+
+def test_只有原文的失败_那一句是原文去掉套话的样子() -> None:
+    """发布记录、定时运行只有原文(没有文案 key):那一句是原文去掉 httpx 套话、地址、截到一句的样子,原文进详情。"""
+    from app.api.schemas.failures import FailureReadout
+
+    class Run(FailureReadout):
+        def __init__(self, error: str | None) -> None:
+            self.error = error
+
+    raw = HTTPX_401 + BODY
+    run = Run(raw)
+    assert run.error_summary and "://" not in run.error_summary
+    assert run.error_detail == raw.strip()
+    assert run.error_hint is None
+    assert Run(None).error_summary is None and Run(None).error_detail is None
+    assert Run("没有找到这个账号").error_detail is None, "本来就是一句人话:没有详情"

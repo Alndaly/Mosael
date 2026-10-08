@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import Field, ValidationInfo, field_validator
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.api.schemas.failures import FailureReadout
 
 
 class JobKindOut(ApiModel):
@@ -48,7 +49,7 @@ class TaskEventOut(OrmModel):
     created_at: datetime
 
 
-class JobSummaryOut(OrmModel):
+class JobSummaryOut(FailureReadout, OrmModel):
     """任务列表里的一行:除了 `result` 什么都有(`JobOut` 是它加上 `result`)。**message 在这里按请求方的语言翻**。
 
     结果只在详情里给(`GET /api/jobs/{id}`)。工作流任务的 `result` 是整次运行的上下文,一条几十到几百 KB:维护者库里

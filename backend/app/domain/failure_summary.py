@@ -133,8 +133,11 @@ def _flat(text: str) -> str:
 
 
 def _same(raw: str, summary: str) -> bool:
-    """原文和那一句说的是不是同一件事:去掉空白和句末标点之后一样,或者那一句就是原文去掉套话之后的样子。"""
-    return _flat(raw) == _flat(summary) or _flat(short_detail(raw)) == _flat(summary)
+    """原文和那一句说的是不是同一件事:去掉空白和句末标点之后一样。
+
+    那一句是原文去掉套话、地址、截到一句的样子时**不算**一样 —— 去掉的正是原文多出来的那些(地址、回包、状态码),发布、定时运行
+    这类只有原文的失败,「详情」里要看得到它们。"""
+    return _flat(raw) == _flat(summary)
 
 
 def status_of(text: str) -> int | None:
