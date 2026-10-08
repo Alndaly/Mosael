@@ -222,10 +222,23 @@ def _open(destination: outbound_guard.Destination) -> socket.socket:
     return socket.create_connection((destination.address or destination.host, destination.port), timeout=_CONNECT_TIMEOUT)
 
 
-def _pipe(a: socket.socket, b: socket.socket) -> None:
-    """两头对拷,直到一头关了或者闲太久。"""
+def _closing_head(head: bytes) -> bytes:
+    """回给客户端的响应头改成「这条连接用完就关」:去掉管连接去留的那几个头,加上 `Connection: close`。"""
+    lines = head.split(b"\r\n")
+    kept = [line for line in lines[1:] if line.split(b":", 1)[0].strip().lower() not in _HOP_HEADER_BYTES]
+    return b"\r\n".join([lines[0], *kept, b"Connection: close", b"Proxy-Connection: close"])
+
+
+def _pipe(a: socket.socket, b: socket.socket, *, close_after_response: bool = False) -> None:
+    """两头对拷(a 是客户端,b 是上游),直到一头关了或者闲太久。
+
+    `close_after_response`:转的是明文请求 —— 一条连接只转一个请求,所以回给客户端的响应头要明说这条连接用完就关。
+    不说的话客户端以为能接着用(HTTP/1.1 缺省保持连接),在我们关掉之后把下一个请求(比如跟着重定向的那一跳)发进来,
+    撞上「对面没回话就关了」—— 先发现关没关,要看两头的时机,有的机器上一次都撞不上,有的每次都撞上。
+    """
     for one in (a, b):
         one.settimeout(None)
+    pending: bytes | None = b"" if close_after_response else None
     try:
         while True:
             readable, _, _ = select.select([a, b], [], [], _IDLE_TIMEOUT)
@@ -234,8 +247,19 @@ def _pipe(a: socket.socket, b: socket.socket) -> None:
             for source in readable:
                 data = source.recv(65536)
                 if not data:
+                    if pending:
+                        a.sendall(pending)
                     return
-                (b if source is a else a).sendall(data)
+                if source is a:
+                    b.sendall(data)
+                elif pending is None:
+                    a.sendall(data)
+                else:
+                    pending += data
+                    head, found, body = pending.partition(b"\r\n\r\n")
+                    if found:
+                        a.sendall(_closing_head(head) + b"\r\n\r\n" + body)
+                        pending = None
     except OSError:
         return
     finally:
@@ -248,6 +272,7 @@ def _pipe(a: socket.socket, b: socket.socket) -> None:
 
 #: 转明文请求时不往下带的头:给我们这一跳的(代理认证)、管连接去留的(一条连接只转一个请求)。
 _HOP_HEADERS = frozenset({"proxy-authorization", "proxy-connection", "connection", "keep-alive"})
+_HOP_HEADER_BYTES = frozenset(name.encode() for name in _HOP_HEADERS)
 
 
 class _Handler(socketserver.BaseRequestHandler):
@@ -320,7 +345,7 @@ class _Handler(socketserver.BaseRequestHandler):
                 upstream.close()
                 client.close()
                 return
-        _pipe(client, upstream)
+        _pipe(client, upstream, close_after_response=method.upper() != "CONNECT")
 
 
 __all__ = ["Ticket", "ticket"]

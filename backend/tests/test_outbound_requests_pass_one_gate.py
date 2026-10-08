@@ -387,6 +387,19 @@ def test_守卫代理只认发出去的票_收回之后就不认(servers) -> Non
         assert client.get(f"{local.url}/v1").status_code == 407, "票收回之后还能用"
 
 
+def test_守卫代理转明文请求_回给客户端的响应说这条连接用完就关(servers) -> None:
+    """一条连接只转一个请求:不明说的话,客户端会把下一个请求(跟着重定向的那一跳)发进一条已经关掉的连接。"""
+    local = servers(redirect_to="/next")
+    outbound_guard.set_allowlist([f"127.0.0.1:{local.port}"])
+    with outbound_proxy.ticket(Origin.GIVEN) as issued:
+        with httpx.Client(proxy=issued.url, trust_env=False, timeout=10) as client:
+            response = client.get(f"{local.url}/start")
+            again = client.get(f"{local.url}/start")
+
+    assert response.status_code == 302 and response.headers["connection"] == "close"
+    assert again.status_code == 302
+
+
 def test_守卫代理_被拒的那一句记在票上_那边一个连接都没收到(servers) -> None:
     local = servers()
     with outbound_proxy.ticket(Origin.GIVEN) as issued:
