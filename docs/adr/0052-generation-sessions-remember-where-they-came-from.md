@@ -113,7 +113,7 @@ ADR 0055 的迁移给那两条写死了中文标题。这里标成 `audio_page`(
 
 ## 实现记录(2026-10-09)
 
-- 库版本 14:`migrate-generation-sessions-get-an-origin`(SCHEMA 之前,加列;很老的库这时还没有 `owner_user_id`,索引等下一步建)、
+- 库版本 16(整合时排在 ADR 0054 的 14、失败展示的 15 之后):`migrate-generation-sessions-get-an-origin`(SCHEMA 之前,加列;很老的库这时还没有 `owner_user_id`,索引等下一步建)、
   `migrate-generation-sessions-origin-from-facts`、`migrate-earlier-speech-and-podcast-find-their-origin`(SCHEMA 之后,排在 ADR 0055
   并会话那一步之后、引用表对账之前)。
 - 比草稿多出的一种出处:`entity`(资产详情页跑补画、说话的那几个节点,作用域是资产自己,草稿的入口表里漏了它)。
