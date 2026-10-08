@@ -5,7 +5,8 @@ ComfyUI 的前端存工作流用的是 `JSON.stringify`:紧凑、没有空格,�
 文件重排,那台机器上的版本记录、同步盘、git 里每次都是「整个文件都改了」。
 
 照原来的:紧凑的写成紧凑的(和 `JSON.stringify` 一样的分隔符、数字写法、不转义中文),缩进的照它的缩进(空格或制表符、
-几格),键和值之间有没有空格、末尾有没有换行照旧。没改的那部分于是逐字节相同。
+几格),键和值之间有没有空格、末尾有没有换行照旧。原文里的小数照它在原文里的写法写回(`loads` 读进来时记着:别的工具存的
+`1.0`、`1e-05` 不会被改成 JavaScript 的 `1`、`0.00001`);新写进去的数按 JavaScript 的写法。没改的那部分于是逐字节相同。
 """
 
 from __future__ import annotations
@@ -22,6 +23,22 @@ _MARKED = re.compile(r'"\\u0000n(\d+)\\u0000"')
 #: 有的编辑器把空的 `{}` / `[]` 也拆成三行(中间一行只有缩进):照它的,先占位,写完按那一行的缩进换回去
 _EMPTY = "\x00e{}\x00"
 _EMPTIED = re.compile(r'(?m)^([ \t]*)(.*)"\\u0000e([{\[])\\u0000"')
+
+
+class Number(float):
+    """原文里的一个小数,记着它在原文里的写法(`text`):写回时照写,不换成 JavaScript 的写法。"""
+
+    text: str
+
+    def __new__(cls, text: str) -> "Number":
+        number = super().__new__(cls, text)
+        number.text = text
+        return number
+
+
+def loads(text: str) -> Any:
+    """读一份 JSON,小数记着原文的写法(见 Number)—— 要照原样写回的那份(`annotate`、`upgrade_marks`)用它读。"""
+    return json.loads(text, parse_float=Number)
 
 
 def dumps_like(value: Any, original: str) -> str:
@@ -62,7 +79,7 @@ def _separators_of(original: str, indent: str | None) -> tuple[str, str]:
 def _mark(value: Any, numbers: list[str], spread: bool) -> Any:
     """浮点数换成占位(见 _MARK);`spread` 时空的对象、数组也换成占位(见 _EMPTY)。"""
     if isinstance(value, float):
-        numbers.append(js_number(value))
+        numbers.append(value.text if isinstance(value, Number) and isinstance(value.text, str) else js_number(value))
         return _MARK.format(len(numbers) - 1)
     if spread and isinstance(value, (dict, list)) and not value:
         return _EMPTY.format("{" if isinstance(value, dict) else "[")

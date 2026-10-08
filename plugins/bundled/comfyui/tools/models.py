@@ -113,8 +113,9 @@ class Workflow(NamedTuple):
     marks: app_form.Marks = app_form.NONE
 
 
-#: 没起标题的表单叫什么(主名;副名里写着来自哪张工作流)。
-FORM_NAME = {"zh": "表单", "en": "Form"}
+#: 没起标题的表单叫什么(主名;副名里写着来自哪张工作流)。编辑器要求每张表单起标题(ADR 0045 §7),只有从上一版改写过来、
+#: 当初没起标题的那张会是空的。
+FORM_NAME = {"zh": "未命名表单", "en": "Untitled form"}
 
 
 class Entry(NamedTuple):
@@ -130,6 +131,8 @@ class Entry(NamedTuple):
     name: Any
     #: 这张图上有没有表单(完整入口用得上:有表单时它不进智能体的工具表,见 tooling.tool_for)
     formed: bool = False
+    #: 在这张图的入口里排第几:完整工作流是 0,表单按文件里的顺序从 1 起(宿主据此排,见 group_of)
+    order: int = 0
 
 
 def entry_id(path: str, form_id: str) -> str:
@@ -154,8 +157,8 @@ def entries(workflow: Workflow, object_info: dict[str, Any]) -> list[Entry]:
     resolved = app_form.resolve(workflow.marks, workflow.api, object_info, workflow.titles)
     formed = bool(resolved.forms)
     found = [Entry(workflow.id, workflow, "", resolved.full, workflow.label, formed)]
-    for form_id, form in resolved.forms.items():
-        found.append(Entry(entry_id(workflow.id, form_id), workflow, form_id, form, form.title or FORM_NAME, formed))
+    for order, (form_id, form) in enumerate(resolved.forms.items(), start=1):
+        found.append(Entry(entry_id(workflow.id, form_id), workflow, form_id, form, form.title or FORM_NAME, formed, order))
     return found
 
 
@@ -164,23 +167,26 @@ def group_of(entry: Entry) -> dict[str, Any] | None:
     内置文生图不是存着的工作流,没有。"""
     if entry.workflow.id == BUILTIN:
         return None
-    return {"id": entry.workflow.id, "label": entry.workflow.label, "entry": "form" if entry.form_id else "full"}
+    return {"id": entry.workflow.id, "label": entry.workflow.label, "entry": "form" if entry.form_id else "full",
+            "order": entry.order}
 
 
-#: 一次性的改名(ADR 0045 §6):1.20 之前,一张有表单的图,它的路径 / 工具名指的是那张表单;从这一版起它们指完整工作流,
+#: 一次性的改名(ADR 0045 §6):1.20 之前,一张有表单的图,它的路径 / 工具名指的是那张表单;从 1.20 起它们指完整工作流,
 #: 表单搬到表单入口。宿主每个连接只做一次(按 `key` 记账),把存着的老引用改到表单入口 —— 跑起来和以前一样。
+#: 只报 id 是 `app` 的那张(上一版那唯一一张改写过来的):从 1.20 之前直接升到这一版的人,文件改写成新格式之后照样做一次
+#: (ADR 0045 §7);新建的表单从来没有老引用,不报。
 MOVED_KEY = "form-entries"
 
 
 def moved(found: list[Entry], name_of: Any = None) -> list[dict[str, str]]:
-    """`found` 里每个表单入口一条 `{key, from, to}`:`from` 是这张图完整入口的名字,`to` 是表单入口的。`name_of` 把入口
-    换成要报的名字(工具名);不给就是模型 id。"""
+    """`found` 里每张图 id 为 `app` 的那个表单入口一条 `{key, from, to}`:`from` 是这张图完整入口的名字,`to` 是表单入口的。
+    `name_of` 把入口换成要报的名字(工具名);不给就是模型 id。"""
     name_of = name_of or (lambda entry: entry.id)
     by_workflow = {one.workflow.id: one for one in found if not one.form_id}
     out: list[dict[str, str]] = []
     for one in found:
         full = by_workflow.get(one.workflow.id)
-        if not one.form_id or full is None:
+        if one.form_id != app_form.FORM_ID or full is None:
             continue
         source, target = name_of(full), name_of(one)
         if source and target and source != target:
@@ -197,9 +203,20 @@ def pick(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) 
     for one in entries(workflow, object_info):
         if one.id == entry_id(path, form_id):
             return loaded, one
+    if loaded.marks.upgradable:
+        raise outdated(path, locale)
     raise ComfyError(say(locale, f"工作流「{label_of(path)}」上已经没有这张表单了 —— 在工作流库或工作台里看看它现在有哪些表单",
                          f"The workflow “{label_of(path)}” no longer has this form. Check its forms in the workflow library "
                          "or the workbench."))
+
+
+def outdated(path: str, locale: str) -> ComfyError:
+    """表单还是上一版的格式(这一版不读):说清楚去哪升级,别说成「表单没了」。"""
+    return ComfyError(say(locale, f"工作流「{label_of(path)}」的表单还是旧格式,这一版插件读不到 —— 到这个连接的工作流库里点"
+                                  "「查看并升级」,升级之后就能用了",
+                          f"The forms on the workflow “{label_of(path)}” are in the old format, which this version of the "
+                          "plugin doesn't read. Open this connection's workflow library and click “Review and upgrade”; "
+                          "the forms work again once upgraded."))
 
 
 def _ident(ui_graph: Any) -> str:
@@ -251,13 +268,24 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
 
     **不交出文件的图不是模型**(反推提示词、打标签这类只交出一段字的,见 graph.media_outputs):生成是
     「一段提示词 → 一份成片」,它们交不出成片。它们照样是工具(每个入口一个,见 tooling),在工作流里、画板上用。
+
+    `library_upgrades`:这台服务器上有几张工作流的表单还是上一版的格式(app_form.upgradable,交不交出文件都算)—— 宿主据此
+    发一次通知,工作流库里「查看并升级」(见 workflow_library.upgrade_marks、docs/PLUGIN_MANIFEST)。`unavailable`:那几张上
+    一版的表单入口(`<路径>#app`)现在为什么不在 —— 指着它的格子、会话跑的时候,宿主照这句说清楚去升级,不说「模型不存在」。
     """
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
     listed: list[Entry] = []
+    upgrades = 0
+    unavailable: list[dict[str, Any]] = []
     for workflow in each(comfy, object_info, locale):
+        upgrades += workflow.marks.upgradable
         if workflow.problem or not graph.media_outputs(workflow.api, object_info, workflow.titles):
             continue
+        if workflow.marks.upgradable:
+            reason = outdated(workflow.id, locale)
+            unavailable += [{"id": entry_id(workflow.id, form_id), "reason": reason.said}
+                            for form_id in workflow.marks.legacy_forms]
         for entry in entries(workflow, object_info):
             model = graph.describe(entry.id, entry.name, workflow.api, object_info, workflow.titles, entry.form)
             if entry.id == BUILTIN:
@@ -268,7 +296,7 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
                 model["group"] = group
             models.append(model)
             listed.append(entry)
-    return {"models": models, "moved": moved(listed)}
+    return {"models": models, "moved": moved(listed), "library_upgrades": upgrades, "unavailable": unavailable}
 
 
 #: 判「模型清单有没有变」时顺带看的模型目录:换了一个 checkpoint / LoRA,参数里的下拉就该跟着变。

@@ -65,9 +65,9 @@ def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
 def _titled(title: str) -> dict[str, Any]:
     """portrait.json 起了精简表单标题 `title`(只挑了提示词那一格)。"""
     stored = json.loads(json.dumps(PORTRAIT_UI))
-    stored["extra"] = {"mosael": {"version": 1, "app": {"title": title, "description": "", "graph_items": {}}}}
+    stored["extra"] = {"mosael": {"version": 2, "forms": [{"id": "app", "title": title, "description": "", "graph_items": {}}]}}
     prompt = next(one for one in stored["nodes"] if one["id"] == 6)
-    prompt["properties"] = {"mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+    prompt["properties"] = {"mosael": {"forms": {"app": {"text": {"order": 0, "main": True}}}}}
     return stored
 
 
@@ -85,12 +85,12 @@ def test_有表单的工作流是两个入口_完整工作流和表单_名字分
     tools = _tools(comfy.url, tmp_path)
     full, form = tools[PORTRAIT_TOOL], tools[form_tool]
     assert form["label"] == {"zh": "工作流 · 快速出图", "en": "Workflow · 快速出图"}
-    assert form["group"] == {"id": "portrait.json", "label": "portrait", "entry": "form"}
+    assert form["group"] == {"id": "portrait.json", "label": "portrait", "entry": "form", "order": 1}
     assert "「快速出图」" in form["description"]["zh"] and "portrait.json" in form["description"]["zh"]
     assert "“快速出图”" in form["description"]["en"] and "portrait.json" in form["description"]["en"]
     assert list(form["input_schema"]["properties"]) == ["prompt", "include_previews"], "表单只挑了提示词那一格"
     assert full["label"] == {"zh": "工作流 · portrait", "en": "Workflow · portrait"}
-    assert full["group"] == {"id": "portrait.json", "label": "portrait", "entry": "full"}
+    assert full["group"] == {"id": "portrait.json", "label": "portrait", "entry": "full", "order": 0}
     assert full["agent"] is False and "agent" not in form, \
         "有表单的图:完整工作流不进智能体的工具表(表单就是给别人用的那张),工作流节点、画板照常有它"
     assert {"seed", "width"} <= set(full["input_schema"]["properties"]), "完整工作流:全部能填的项"
@@ -126,12 +126,12 @@ def test_有表单的工作流是两个入口_完整工作流和表单_名字分
     assert _catalog(comfy.url, "tools")["moved"] == []
 
 
-def test_没起标题的表单_主名叫表单(comfy, tmp_path: Path) -> None:
+def test_没起标题的表单_主名叫未命名表单(comfy, tmp_path: Path) -> None:
     comfy.state.workflows["portrait.json"] = _titled("")
     tool = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL + "_app"]
-    assert tool["label"] == {"zh": "工作流 · 表单", "en": "Workflow · Form"}
+    assert tool["label"] == {"zh": "工作流 · 未命名表单", "en": "Workflow · Untitled form"}
     model = next(one for one in _catalog(comfy.url, "models")["models"] if one["id"] == "portrait.json#app")
-    assert model["label"] == {"zh": "表单", "en": "Form"} and model["group"]["label"] == "portrait"
+    assert model["label"] == {"zh": "未命名表单", "en": "Untitled form"} and model["group"]["label"] == "portrait"
 
 
 def test_跑表单入口的工具_只填表单那几格_对照表记的是入口(comfy, tmp_path: Path) -> None:

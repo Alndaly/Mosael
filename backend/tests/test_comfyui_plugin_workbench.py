@@ -25,6 +25,7 @@ PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
 
 APP: dict[str, Any] = {
+    "id": "app",
     "title": "换装",
     "description": "",
     "items": [{"node": "10", "input": "image", "label": "人物照片"}, {"node": "6", "input": "text", "main": True}],
@@ -71,10 +72,10 @@ def test_画布上的图不是界面格式就说清楚(comfy) -> None:
 
 def test_写进画布的标记_和annotate写文件的一模一样_只交回标记(comfy) -> None:
     live = multi_reference_ui()
-    marks = _host("app_marks", comfy.url, content=live, app=APP, results=["17"])
+    marks = _host("app_marks", comfy.url, content=live, forms=[APP], results=["17"])
     assert not _writes(comfy), "画布开着时不写文件:存盘是 ComfyUI 自己的保存"
     seen = _host("app", comfy.url, path="multi.json")
-    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=["17"])
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[APP], results=["17"])
     stored = comfy.state.workflows["multi.json"]
     expected = {str(node["id"]): node["properties"]["mosael"] for node in stored["nodes"]
                 if "mosael" in (node.get("properties") or {})}
@@ -84,15 +85,24 @@ def test_写进画布的标记_和annotate写文件的一模一样_只交回标�
     assert marks["nodes"]["17"] == {"result": True}
 
 
-def test_写进画布的标记_去掉应用表单只留结果_指着不存在的节点就拒(comfy) -> None:
+def test_写进画布的标记_一张表单都不要只留结果_指着不存在的节点就拒(comfy) -> None:
     live = multi_reference_ui()
-    only_result = _host("app_marks", comfy.url, content=live, app=None, results=["9"])
+    only_result = _host("app_marks", comfy.url, content=live, forms=[], results=["9"])
     assert only_result["nodes"] == {"9": {"result": True}}
-    assert only_result["extra"] == {"version": 1}
-    cleared = _host("app_marks", comfy.url, content=live, app=None, results=[])
+    assert only_result["extra"] == {"version": 2, "forms": []}
+    cleared = _host("app_marks", comfy.url, content=live, forms=[], results=[])
     assert (cleared["nodes"], cleared["extra"]) == ({}, None)
     with pytest.raises(runtime.PluginRuntimeError, match="#999"):
-        _host("app_marks", comfy.url, content=live, app=None, results=["999"])
+        _host("app_marks", comfy.url, content=live, forms=[], results=["999"])
+
+
+def test_写进画布的新表单_插件起的id在交回的标记里(comfy) -> None:
+    live = multi_reference_ui()
+    marks = _host("app_marks", comfy.url, content=live, forms=[APP, {"title": "精调", "items": [
+        {"node": "3", "input": "steps"}]}], results=[])
+    ids = [one["id"] for one in marks["extra"]["forms"]]
+    assert ids[0] == "app" and len(ids[1]) == 6, "界面写完照这份认出新表单的 id,下次再写带着它,不会又起一个"
+    assert marks["nodes"]["3"] == {"forms": {ids[1]: {"steps": {"order": 0}}}}
 
 
 def test_选中的节点那一格是哪个模型目录(comfy) -> None:

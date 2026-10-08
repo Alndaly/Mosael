@@ -12,8 +12,10 @@
     {"op": "make_folder", "path"}                      → 新建文件夹(ADR 0035 后续「文件夹」)
     {"op": "rename_folder", "path", "new_path"}        → 文件夹改名 / 挪到别的文件夹里(里面的一切跟着走)
     {"op": "trash_folder", "path"}                     → 删除文件夹:**只删空的**(挪进回收目录);里面还有文件回 not_empty
-    {"op": "app", "path"}                              → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、读到时的改动时间
-    {"op": "annotate", "path", "modified", "app", "results"} → 只改 `mosael` 那几处标记,**覆盖写**;改动时间对不上回 stale
+    {"op": "app", "path"}                              → 一张的表单(ADR 0038、0045):全部能填的项、文件里的标记、读到时的改动时间
+    {"op": "annotate", "path", "modified", "forms", "results"} → 只改 `mosael` 那几处标记,**覆盖写**;改动时间对不上回 stale
+    {"op": "upgrade_marks", "paths": [{"path", "modified"}]} → 上一版格式的表单标记改写成这一版(ADR 0045 §7):逐张、只动
+                                                          `mosael` 那几处、覆盖写;改动时间对不上的那张跳过(stale)
 
 导入、装缺的节点包、重启在 workflow_import。
 
@@ -27,8 +29,9 @@
 
 **不覆盖、不硬删**:写和移动一律 `overwrite=false`,撞名回 `{"conflict": true, "suggestion": …}`;ComfyUI 的 `DELETE` 是硬删,
 这里从不调 —— 删除是挪进 `.mosael-trash/workflows/<删除时刻 UTC>/<原来的相对路径>`(在 `workflows/` 外面,ComfyUI 的侧栏和
-插件的模型清单都不列它)。**唯一的例外是 `annotate`**(ADR 0038 §2):它覆盖写一张已有的工作流,但只改 `mosael` 那几处标记
-(app_form.apply),而且带着读到时的改动时间来 —— 那台机器上的文件在这之间被改过就不写,回 `{"stale": true}`。
+插件的模型清单都不列它)。**唯一的例外是 `annotate` 和 `upgrade_marks`**(ADR 0038 §2、ADR 0045 §7):它们覆盖写已有的工作流,
+但只改 `mosael` 那几处标记(app_form.apply / app_form.upgrade),照原来的排版写回(json_style),而且带着读到时的改动时间来 ——
+那台机器上的文件在这之间被改过就不写,回 `{"stale": true}`。
 
 **文件夹**就是 `workflows/` 里的子目录 —— 和 ComfyUI 自己的侧栏同一份,不另记。ComfyUI 没有「建目录」「删目录」的接口:
 新建是往里写一个隐藏的占位文件(`.mosael-folder`;写文件时 ComfyUI 把父目录建出来,ComfyUI 的侧栏和这里都不列隐藏文件);
@@ -53,6 +56,7 @@ import graph
 import json_style
 import labels
 import models
+import tooling
 import workflows as described
 from comfy_http import Comfy, is_workflow_path
 from install import manager_version
@@ -695,16 +699,18 @@ def live_graph(payload: dict[str, Any], locale: str) -> dict[str, Any]:
 
 
 def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """一张工作流的应用表单,给编辑器用:这张图**全部能填的项**(graph.items)、交回结果的输出节点(标「以后只要这张」用)、
-    文件里的标记(对不上的带着原因)、读到时的改动时间(`annotate` 要带着它来)。API 格式的文件放不了标记(`editable: false`)。
+    """一张工作流的表单,给编辑器用:这张图**全部能填的项**(graph.items)、交回结果的输出节点(标「以后只要这张」用)、
+    文件里的标记(每张表单,对不上的带着原因)、读到时的改动时间(`annotate` 要带着它来)。API 格式的文件放不了标记
+    (`editable: false`)。每张表单带着它的模型 id 和工具名(宿主据此数「Mosael 里有几处在用它」,删之前说给作者听)。
 
-    带着 `content`(工作台画布上现在这张,含没存的改动)来就不读文件:同样的回答,没有路径和改动时间 —— 改的是画布,
-    存盘是 ComfyUI 自己的保存。
+    带着 `content`(工作台画布上现在这张,含没存的改动)来就不读文件:同样的回答,没有改动时间 —— 改的是画布,存盘是
+    ComfyUI 自己的保存;`path` 这时只用来起名字(画布开的是哪张)。
 
     `names`:这张图里每个会跑的节点给人看的名字(`{"zh", "en"}`,和表单项、「结果取自」同一种叫法,见 labels.node_name)。
     工作台的「运行与结果」按节点号说正在跑哪个、产出来自哪个,用的就是它 —— 不再是 `PreviewImage #12` 这种类名。"""
     if payload.get("content") is not None:
-        path, source, modified = "", live_graph(payload, locale), None
+        source, modified = live_graph(payload, locale), None
+        path = check_path(payload["path"], locale) if payload.get("path") else ""
     else:
         path = check_path(payload.get("path"), locale)
         source, modified = _read(comfy, path, locale)
@@ -724,35 +730,98 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
         "outputs": graph.generation_nodes(api, kind, object_info, titles),
         "names": {node_id: labels.node_name(str(node.get("class_type", "")), titles.get(node_id, ""), object_info)
                   for node_id, node in api.items()},
-        "app": app_form.summary(marks, resolved, locale),
+        "app": app_form.summary(marks, resolved, locale, _form_ids(comfy, path, source, api, titles, marks, object_info)),
     }
 
 
-def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """改一张工作流的应用表单和结果标记:**只改 `mosael` 那几处**(app_form.apply),覆盖写回那台机器。
+def _form_ids(comfy: Comfy, path: str, source: dict[str, Any], api: dict[str, Any], titles: dict[str, str],
+              marks: app_form.Marks, object_info: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """每张表单的模型 id 和工具名(表单 id → `{"model", "tool"}`)。没有路径(画布没说开的是哪张)就说不出来。"""
+    if not path or not marks.forms:
+        return {}
+    workflow = models.Workflow(path, models.label_of(path), api, titles, "", models._ident(source), marks)  # noqa: SLF001
+    names = tooling.names_of(comfy, workflow, object_info)
+    return {one.id: {"model": models.entry_id(path, one.id), "tool": names.get(models.entry_id(path, one.id), "")}
+            for one in marks.forms}
 
-    带着读到时的改动时间(`modified`)来:那台机器上的文件在这之间被改过(在 ComfyUI 里存过、别人改过)就不写,回
-    `{"stale": true, "modified": 现在的}` —— 宿主翻成 409,界面说「它刚在 ComfyUI 里改过,重新打开再改」。
-    `app`:`{title, description, items: [{node, input, label?, main?, choices?}]}`,顺序就是表单的顺序;`null` 去掉应用表单。
-    `results`:标成结果的输出节点(「以后只要这张」)。成了回 `{"path", "modified"}`(写完之后的改动时间,接着改用它)。
-    """
-    path = check_path(payload.get("path"), locale)
-    app = payload.get("app")
-    if app is not None and not isinstance(app, dict):
-        raise ComfyError(say(locale, "应用表单的形状不对", "The app form is malformed."))
+
+def _forms(payload: dict[str, Any], locale: str) -> list[dict[str, Any]]:
+    """要写进去的全部表单(`forms`,宿主查过一遍形状;这里只认列表)。"""
+    forms = payload.get("forms") if payload.get("forms") is not None else []
+    if not isinstance(forms, list) or any(not isinstance(one, dict) for one in forms):
+        raise ComfyError(say(locale, "表单的形状不对", "The forms are malformed."))
+    return forms
+
+
+def _results(payload: dict[str, Any], locale: str) -> list[str]:
     results = payload.get("results") or []
     if not isinstance(results, list) or len(results) > app_form.MAX_RESULTS:
         raise ComfyError(say(locale, "标成结果的节点形状不对", "The result nodes are malformed."))
+    return [str(one) for one in results]
+
+
+def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """改一张工作流的表单和结果标记:**只改 `mosael` 那几处**(app_form.apply),覆盖写回那台机器。
+
+    带着读到时的改动时间(`modified`)来:那台机器上的文件在这之间被改过(在 ComfyUI 里存过、别人改过)就不写,回
+    `{"stale": true, "modified": 现在的}` —— 宿主翻成 409,界面说「它刚在 ComfyUI 里改过,重新打开再改」。
+    `forms`:**全部**表单(`[{id?, title, description, items: [{node, input, label?, main?, choices?}]}]`,没给 id 的是新表单;
+    空列表 = 一张都不要)。`results`:标成结果的输出节点(「以后只要这张」)。成了回 `{"path", "modified"}`(写完之后的
+    改动时间,接着改用它)。
+    """
+    path = check_path(payload.get("path"), locale)
+    forms, results = _forms(payload, locale), _results(payload, locale)
     current = _modified(comfy, path)
     if current is None:
         raise _gone(locale, path)
     if not _same_time(current, payload.get("modified")):
         return {"stale": True, "modified": current}
-    source, text = comfy.fetch_workflow_text(path)
+    _, text = comfy.fetch_workflow_text(path)
     if not _same_time(_modified(comfy, path), current):
         return {"stale": True, "modified": _modified(comfy, path)}
-    updated = app_form.apply(source, app, [str(one) for one in results], locale)
+    #: 小数记着原文的写法读进来:写回去时照写,只有 mosael 那几处变(见 json_style)
+    updated = app_form.apply(json_style.loads(text), forms, results, locale)
     # 照原来的排版写回:ComfyUI 自己存的是紧凑的 JSON,只改了 `mosael` 那几处,别的字节一个不变(见 json_style)
     info = comfy.overwrite_userdata(f"workflows/{path}", json_style.dumps_like(updated, text))
     written = _seconds(info.get("modified"))
     return {"path": path, "modified": written if written is not None else _modified(comfy, path)}
+
+
+#: 一次最多改写几张(一台服务器上几百张工作流是见过的)。
+MAX_UPGRADES = 1000
+
+
+def upgrade_marks(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """上一版格式的表单标记改写成这一版(ADR 0045 §7,宿主那边维护者确认过一次):`paths` 里每张 `{path, modified}`,
+    逐张读、改(app_form.upgrade)、带着读到时的改动时间覆盖写回 —— 和 `annotate` 同一套:只动 `mosael` 那几处、照原来的
+    排版写回,别的字节一个不变;那台机器上在这之间改过的那张不写(`stale`),已经不是上一版的不动(`skipped`),
+    不在了的说一声(`gone`)。一张出错不拦别的(`failed`,带着原因)。"""
+    paths = payload.get("paths")
+    if not isinstance(paths, list) or len(paths) > MAX_UPGRADES or any(not isinstance(one, dict) for one in paths):
+        raise ComfyError(say(locale, "要升级的工作流形状不对", "The workflows to upgrade are malformed."))
+    done: dict[str, list[Any]] = {"upgraded": [], "stale": [], "skipped": [], "gone": [], "failed": []}
+    for one in paths:
+        try:
+            path = check_path(one.get("path"), locale)
+            current = _modified(comfy, path)
+            if current is None:
+                done["gone"].append(path)
+                continue
+            if not _same_time(current, one.get("modified")):
+                done["stale"].append(path)
+                continue
+            _, text = comfy.fetch_workflow_text(path)
+            if not _same_time(_modified(comfy, path), current):
+                done["stale"].append(path)
+                continue
+            updated = app_form.upgrade(json_style.loads(text))
+            if updated is None:
+                done["skipped"].append(path)
+                continue
+            comfy.overwrite_userdata(f"workflows/{path}", json_style.dumps_like(updated, text))
+            done["upgraded"].append(path)
+        except ComfyError as exc:
+            done["failed"].append({"path": str(one.get("path") or "")[:500], "reason": str(exc)})
+    return done
+
+

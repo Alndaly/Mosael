@@ -5,7 +5,7 @@
                                                         → 选中的加载节点那一格选的是哪个模型目录的文件(模型库面板据此筛);
                                                           CLIP 加载节点再说它每一种 type 配哪几种编码器(界面照节点现在
                                                           的 type 挑,据此排)
-    {"op": "app_marks", "content", "app", "results"}           → 应用表单写进画布要改的那几处标记(节点上的
+    {"op": "app_marks", "content", "forms", "results"}         → 表单写进画布要改的那几处标记(节点上的
                                                                   `properties.mosael`、图上的 `extra.mosael`)
 
 `app_marks` 和 `annotate` 写的是同一种形状(都是 app_form.apply):画布开着时改的是画布上的节点,存盘是 ComfyUI 自己的保存;
@@ -21,7 +21,7 @@ import encoders
 import labels
 from comfy_http import Comfy
 from lines import ComfyError, say
-from workflow_library import live_graph
+from workflow_library import _forms, _results, live_graph
 
 #: 一次最多问几格(选中的节点上选模型文件的输入,一个节点见过最多的是四个 CLIP)。
 MAX_NODE_FOLDERS = 64
@@ -48,17 +48,12 @@ def node_folders(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str
 
 
 def app_marks(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """应用表单和结果标记写进**画布上现在这张**要改成的样子:按 `app` / `results` 换上新标记(app_form.apply,和 annotate 写文件
-    同一个函数),交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`。别的节点上的标记要摘掉 ——
-    宿主那一侧的桥按这份清单改画布(不在清单里的节点去掉 `mosael` 那一格,别的一个字都不动)。"""
+    """表单和结果标记写进**画布上现在这张**要改成的样子:按 `forms`(全部表单,没给 id 的是新表单)/ `results` 换上新标记
+    (app_form.apply,和 annotate 写文件同一个函数),交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`
+    (新表单的 id 就在 `extra.mosael.forms` 里)。别的节点上的标记要摘掉 —— 宿主那一侧的桥按这份清单改画布(不在清单里的节点
+    去掉 `mosael` 那一格,别的一个字都不动)。"""
     content = live_graph(payload, locale)
-    app = payload.get("app")
-    if app is not None and not isinstance(app, dict):
-        raise ComfyError(say(locale, "应用表单的形状不对", "The app form is malformed."))
-    results = payload.get("results") or []
-    if not isinstance(results, list) or len(results) > app_form.MAX_RESULTS:
-        raise ComfyError(say(locale, "标成结果的节点形状不对", "The result nodes are malformed."))
-    updated = app_form.apply(content, app, [str(one) for one in results], locale)
+    updated = app_form.apply(content, _forms(payload, locale), _results(payload, locale), locale)
     nodes: dict[str, Any] = {}
     for node in updated.get("nodes") or []:
         props = node.get("properties") if isinstance(node, dict) else None

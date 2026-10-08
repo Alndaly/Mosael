@@ -44,8 +44,9 @@
     {"op": "trash_folder", "path"}                      → 删除文件夹:只删空的,挪进回收目录;里面还有文件回 not_empty
     {"op": "app", "path"}                               → 一张的应用表单(ADR 0038):全部能填的项、文件里的标记、改动时间
     {"op": "app", "content"}                            → 同上,读的是工作台画布上现在这张(不读文件,没有改动时间)
-    {"op": "annotate", "path", "modified", "app", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
-    {"op": "app_marks", "content", "app", "results"}    → 工作台:应用表单写进画布要改成的那几处标记(不写文件,见 workbench)
+    {"op": "annotate", "path", "modified", "forms", "results"} → 只改 mosael 标记、覆盖写;改动时间对不上回 stale
+    {"op": "upgrade_marks", "paths": [{"path", "modified"}]} → 上一版格式的表单标记改写成这一版(逐张,改动时间对不上的跳过)
+    {"op": "app_marks", "content", "forms", "results"}  → 工作台:表单写进画布要改成的那几处标记(不写文件,见 workbench)
 
 **工作台里的智能体**(ADR 0042,都只读 —— 改画布的是桥,这里只算;宿主经 `workflow_library` 问,见 canvas / canvas_edit / diagnose /
 templates / node_types / node_packs):
@@ -165,6 +166,7 @@ _WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, An
     "trash_folder": workflow_library.trash_folder,
     "app": workflow_library.app,
     "annotate": workflow_library.annotate,
+    "upgrade_marks": workflow_library.upgrade_marks,
     "app_marks": workbench.app_marks,
     "inspect_import": workflow_import.inspect_import,
     "save_workflow": workflow_import.save_workflow,

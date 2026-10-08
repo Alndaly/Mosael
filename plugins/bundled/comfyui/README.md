@@ -442,7 +442,7 @@ reach. Now a workflow has a **full workflow** entry (everything it can take, alw
 | --- | --- | --- |
 | Model id | the path (`krea2-text-2-image.json`, as before) | `<path>#<form id>` (`krea2-text-2-image.json#app`) |
 | Tool name | `wf_<id>` (as before) | `wf_<id>_<form id>` (`wf_0ef16828a002_app`) |
-| Main name | the file name without `.json` | the form's title ("Form" when it has none) |
+| Main name | the file name without `.json` | the form's title ("Form" when it has none; "Untitled form" from 1.21.0) |
 | `group` | `{"id": path, "label": file name, "entry": "full"}` | `{…, "entry": "form"}` |
 
 - The name has two layers that are never joined into one string: the main name belongs to the entry, the workflow it
@@ -457,6 +457,37 @@ reach. Now a workflow has a **full workflow** entry (everything it can take, alw
   records…) at the form's entry, so what runs and what you see after the upgrade is what you had.
 - `list_workflows` lists one item per workflow describing the full workflow, with its forms under `forms` (form id,
   title, model id, tool). The workflow library's "inputs / parameters" describe the full workflow too; forms are under "Form".
+
+## Several forms per workflow (1.21.0, ADR 0045 step 2)
+
+The same graph often wants several uses ("Quick" exposes just the prompt, "Fine-tune" also exposes size and steps). A workflow can now
+have **several forms**, each an entry of its own: model `<path>#<form id>`, tool `wf_<id>_<form id>`, listed right after the full
+workflow in model pickers, workflow nodes and boards, in the author's order (`group.order`: the full workflow is 0, forms count from 1).
+
+- **Storage format version 2**: on the graph `extra.mosael = {"version": 2, "forms": [{"id", "title", "description", "graph_items"}, …]}`
+  (the order is the listing order, at most 20); on nodes `properties.mosael = {"forms": {<form id>: {<input>: {label, order, main?,
+  choices?}}}, "result"?: true}`. "Only this node's images" (`result`) belongs to the workflow, not to a form. Marks pointing at a form
+  that isn't there, and forms with duplicate or malformed ids, join no form and are cleared on the next save.
+- **Form ids**: the single form of the previous format becomes `app` (the `#app` / `_app` stored since 1.20 stay valid); new ones get 6
+  random lowercase letters or digits from the plugin — not the title (it changes) and not a sequence number (delete one, add one, and
+  stored references would silently point at another form).
+- **Writing**: `annotate` and the workbench's `app_marks` take **all** forms (`forms: [{id?, title, description, items}]`; no id means a
+  new form) plus the result marks and rewrite the `mosael` parts as a whole; the workbench reads the canvas again after writing to pick
+  up the ids the plugin gave.
+- **Files in the previous format**: this version only reads version 2 (no branch on the reading side for old formats). A version-1 file
+  is treated as having no forms and reported as `unsupported` (`upgradable: true`); its form entries are absent until upgraded. Cells
+  and sessions pointing at `#app` say "the forms are in the old format; upgrade them in the workflow library" when run, not "model not
+  found" (the catalog carries that sentence in `unavailable`). The catalog also reports how many workflows on the server need upgrading
+  (`library_upgrades`); the host sends one notification and shows a banner at the top of the workflow library.
+- **`upgrade_marks`**: `{"op": "upgrade_marks", "paths": [{path, modified}]}` reads each file, rewrites it as version 2 and overwrites
+  it with the modification time it was read at — the same rules as `annotate`: only the `mosael` parts change, keys keep their place,
+  the original layout is kept (not a byte else changes); a file changed on that machine in between is skipped (`stale`), one that isn't
+  version 1 is left alone (`skipped`). After the rewrite the form with id `app` keeps reporting the one-off `form-entries` rename, so for
+  people coming straight from before 1.20 the host does it once if that connection hasn't yet.
+- **The `app` answer** carries each form's model id and tool name (`model`, `tool`; the workbench asking about the canvas passes `path`
+  too): the host uses them to count where Mosael uses the form before the author deletes it.
+- A form without a title (the one rewritten from the previous format, if it never had one) is named "Untitled form"; the editor requires
+  every form to have a title.
 
 ## Simplified forms (1.13.0; formerly "app forms")
 
@@ -512,7 +543,7 @@ the workflow, and so does the agent when it calls it; a workflow without one sti
   (not muted, not bypassed, connected to an output), that the input is still a value to fill in (not turned into a link)
   and that narrowed choices are still in the dropdown. Items that don't match are left off the form, listed in the
   workflow's detail and can be removed in one go.
-- **Version**: only `extra.mosael.version` `1` is read. Other versions are treated as having no app form, with a notice;
+- **Version** (as of 1.13.0–1.20.0; from 1.21.0 it is version 2, see "Several forms per workflow" above): only `extra.mosael.version` `1` is read. Other versions are treated as having no app form, with a notice;
   when the shape changes later, the plugin will ship an operation that rewrites the workflow files on that machine after
   one confirmation — the reading side doesn't understand old versions. On a graph without `extra.mosael`, marks on nodes
   don't count (they came along with nodes copied from another workflow).

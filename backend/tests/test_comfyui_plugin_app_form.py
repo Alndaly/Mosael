@@ -42,6 +42,7 @@ _MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy
 
 #: 测试里那张「换装」应用:两张参考图(人物起了名、背景没起)、主提示词、收窄到一个文件的 LoRA、步数、种子;#17 标成结果。
 APP: dict[str, Any] = {
+    "id": "app",
     "title": "换装",
     "description": "上传人物和背景",
     "items": [
@@ -85,7 +86,7 @@ def _form(plugin, ui: dict[str, Any], object_info: dict[str, Any] = OBJECT_INFO)
     api, titles = _api(plugin, ui, object_info)
     marks = app_form.read(ui)
     resolved = app_form.resolve(marks, api, object_info, titles)
-    return api, titles, marks, resolved.shown, resolved.invalid
+    return api, titles, marks, resolved.forms.get("app", resolved.full), resolved.invalid
 
 
 def _strip(ui: dict[str, Any]) -> dict[str, Any]:
@@ -275,9 +276,9 @@ def test_缺省的目录_唯一一个没起名的槽位不挂名字(plugin) -> N
 
 def test_应用表单_目录里只有作者挑的那几项_按作者排的顺序和名字(plugin) -> None:
     graph, _, app_form = plugin
-    ui = app_form.apply(multi_reference_ui(), APP, ["17"])
+    ui = app_form.apply(multi_reference_ui(), [APP], ["17"])
     api, titles, marks, form, invalid = _form(plugin, ui)
-    assert marks.status == "ok" and marks.app and invalid == []
+    assert marks.status == "ok" and [one.id for one in marks.forms] == ["app"] and invalid == []
     assert [field.key for field in form.fields] == ["10.image", "14.image", "6.text", "20.lora_name", "3.steps", "seed"]
     model = graph.describe("multi.json#app", "换装", api, OBJECT_INFO, titles, form)
     assert list(model["parameters"]) == ["seed", "output_node", "20.lora_name", "3.steps"], \
@@ -319,7 +320,7 @@ def test_没有应用表单_目录里没有表_提示词存的是空的就没有
 
 def test_应用表单_填图只写表单那几格_素材按表单的顺序接(plugin) -> None:
     graph, _, app_form = plugin
-    ui = app_form.apply(multi_reference_ui(), APP, [])
+    ui = app_form.apply(multi_reference_ui(), [APP], [])
     api, _, _, form, _ = _form(plugin, ui)
     filled = graph.fill(api, {"prompt": "a cat", "negative": "ugly"}, {}, OBJECT_INFO, form.prompts())
     assert filled["6"]["inputs"]["text"] == "a cat"
@@ -331,7 +332,7 @@ def test_应用表单_填图只写表单那几格_素材按表单的顺序接(pl
 
 def test_节点号变了_标记跟着节点走(plugin) -> None:
     graph, _, app_form = plugin
-    ui = app_form.apply(multi_reference_ui(), APP, [])
+    ui = app_form.apply(multi_reference_ui(), [APP], [])
     for node in ui["nodes"]:
         if node["id"] == 10:
             node["id"] = 110
@@ -347,7 +348,7 @@ def test_节点号变了_标记跟着节点走(plugin) -> None:
 
 def test_节点删了_标记一起没_别的照旧(plugin) -> None:
     graph, _, app_form = plugin
-    ui = app_form.apply(multi_reference_ui(), APP, [])
+    ui = app_form.apply(multi_reference_ui(), [APP], [])
     ui["nodes"] = [node for node in ui["nodes"] if node["id"] != 14]
     for link in ui["links"]:
         if link[0] == 6:
@@ -360,14 +361,14 @@ def test_节点删了_标记一起没_别的照旧(plugin) -> None:
 
 def test_对不上的项不进表单_说出原因(plugin) -> None:
     graph, _, app_form = plugin
-    app = {"title": "", "description": "", "items": [
+    app = {"id": "app", "title": "", "description": "", "items": [
         *APP["items"],
         {"node": "13", "input": "image"},
         {"node": "3", "input": "gone"},
         {"node": "9", "input": "filename_prefix"},
         {"node": "3", "input": "sampler_name", "choices": ["euler", "removed_sampler"]},
     ]}
-    ui = app_form.apply(multi_reference_ui(), app, [])
+    ui = app_form.apply(multi_reference_ui(), [app], [])
     for node in ui["nodes"]:
         if node["id"] == 13:
             node["mode"] = 2  # 静音:不在会跑的那部分图里
@@ -376,13 +377,14 @@ def test_对不上的项不进表单_说出原因(plugin) -> None:
     assert set(problems) == {"13.image", "3.gone", "9.filename_prefix", "3.sampler_name"}
     assert "不在会跑的那部分图里" in problems["13.image"]
     assert "没有「gone」这一格了" in problems["3.gone"]
-    assert "不是一个能放进应用表单的项" in problems["9.filename_prefix"]
+    assert "不是一个能放进表单的项" in problems["9.filename_prefix"]
     assert "removed_sampler" in problems["3.sampler_name"], "收窄的可选值不在下拉里了"
     assert "13.image" not in [field.key for field in form.fields]
     summary = app_form.summary(marks, app_form.resolve(marks, api, OBJECT_INFO, titles), "zh")
-    assert summary["invalid"] == 4 and summary["fields"] == len(form.fields)
-    assert {one["key"]: bool(one.get("problem")) for one in summary["items"]}["3.gone"] is True
-    titles = {one["key"]: one.get("title") for one in summary["items"]}
+    said = summary["forms"][0]
+    assert summary["invalid"] == 4 and said["invalid"] == 4 and said["fields"] == len(form.fields)
+    assert {one["key"]: bool(one.get("problem")) for one in said["items"]}["3.gone"] is True
+    titles = {one["key"]: one.get("title") for one in said["items"]}
     assert titles["10.image"] == "人物照片" and titles["14.image"] == "参考图 · 背景" and titles["3.steps"] == "步数", \
         "有效的项带着它在表单上的名字(没起名就是这一项自己的名字);对不上的没有"
     assert titles["3.gone"] is None
@@ -391,7 +393,7 @@ def test_对不上的项不进表单_说出原因(plugin) -> None:
 def test_拉成连线的那一格不再能填(plugin) -> None:
     _, _, app_form = plugin
     info = {**OBJECT_INFO, "PrimitiveInt": {"input": {"required": {"value": ["INT", {"default": 0}]}}, "output": ["INT"]}}
-    ui = app_form.apply(multi_reference_ui(), APP, [])
+    ui = app_form.apply(multi_reference_ui(), [APP], [])
     ui["nodes"].append({"id": 30, "type": "PrimitiveInt", "widgets_values": [40], "inputs": [{"name": "value", "widget": {"name": "value"}}]})
     ui["links"].append([40, 30, 0, 3, 4, "INT"])
     for node in ui["nodes"]:
@@ -405,10 +407,10 @@ def test_拉成连线的那一格不再能填(plugin) -> None:
 
 def test_版本不认识_按没有应用表单处理(plugin) -> None:
     graph, _, app_form = plugin
-    ui = app_form.apply(multi_reference_ui(), APP, ["17"])
-    ui["extra"]["mosael"]["version"] = 2
+    ui = app_form.apply(multi_reference_ui(), [APP], ["17"])
+    ui["extra"]["mosael"]["version"] = 3
     api, titles, marks, form, invalid = _form(plugin, ui)
-    assert (marks.status, marks.version) == ("unsupported", 2)
+    assert (marks.status, marks.version, marks.upgradable) == ("unsupported", 3, False), "更新的版本:只能升级插件"
     assert not form.app and not form.results and invalid == [], "读的一侧不留认别的版本的分支:当作没有应用表单"
     default = graph.describe("m.json", "m", api, OBJECT_INFO, titles)
     assert graph.describe("m.json", "m", api, OBJECT_INFO, titles, form) == default
@@ -417,7 +419,7 @@ def test_版本不认识_按没有应用表单处理(plugin) -> None:
 
 def test_没有图上的那一份_节点上的标记不算(plugin) -> None:
     _, _, app_form = plugin
-    ui = app_form.apply(multi_reference_ui(), APP, ["17"])
+    ui = app_form.apply(multi_reference_ui(), [APP], ["17"])
     del ui["extra"]["mosael"]
     assert app_form.read(ui) == app_form.NONE, "从别的工作流拷过来的节点带着的标记:没有版本,不当应用表单"
 
@@ -428,8 +430,8 @@ def test_只标了结果_听标记不再猜(plugin) -> None:
     api, titles = _api(plugin, ui, info)
     guessed = graph.describe("hand.json", "hand", api, info, titles)
     assert guessed["parameters"]["output_node"]["x-enum-labels"]["final"]["zh"] == "最终结果(预览图像 #17)"
-    marked = app_form.apply(ui, None, ["8"])
-    assert marked["extra"]["mosael"] == {"version": 1}, "只有结果标记:没有应用表单"
+    marked = app_form.apply(ui, [], ["8"])
+    assert marked["extra"]["mosael"] == {"version": 2, "forms": []}, "只有结果标记:一张表单都没有"
     _, _, marks, form, _ = _form(plugin, marked, info)
     assert marks.results == ("8",) and not form.app
     model = graph.describe("hand.json", "hand", api, info, titles, form)
@@ -448,23 +450,23 @@ def test_只标了结果_听标记不再猜(plugin) -> None:
 def test_写标记_只改mosael那几处_别的扩展写的键原样留着(plugin) -> None:
     _, _, app_form = plugin
     ui = multi_reference_ui()
-    marked = app_form.apply(ui, APP, ["17"])
+    marked = app_form.apply(ui, [APP], ["17"])
     assert _strip(marked) == _strip(ui) == ui
     assert marked["extra"]["ue_links"] == [] and marked["extra"]["0246.VERSION"] == [0, 0, 4]
     by_id = {node["id"]: node for node in marked["nodes"]}
     assert by_id[10]["properties"]["ue_properties"] == {"version": "7.1"}
-    assert by_id[10]["properties"]["mosael"] == {"expose": {"image": {"order": 0, "label": "人物照片"}}}
-    assert by_id[20]["properties"]["mosael"] == {"expose": {"lora_name": {"order": 3, "label": "风格",
-                                                                          "choices": ["detail.safetensors"]}}}
-    assert by_id[6]["properties"]["mosael"] == {"expose": {"text": {"order": 2, "main": True}}}
+    assert by_id[10]["properties"]["mosael"] == {"forms": {"app": {"image": {"order": 0, "label": "人物照片"}}}}
+    assert by_id[20]["properties"]["mosael"] == {"forms": {"app": {"lora_name": {"order": 3, "label": "风格",
+                                                                                 "choices": ["detail.safetensors"]}}}}
+    assert by_id[6]["properties"]["mosael"] == {"forms": {"app": {"text": {"order": 2, "main": True}}}}
     assert by_id[17]["properties"]["mosael"] == {"result": True}
-    assert marked["extra"]["mosael"] == {"version": 1, "app": {"title": "换装", "description": "上传人物和背景",
-                                                               "graph_items": {"seed": {"order": 5}}}}
+    assert marked["extra"]["mosael"] == {"version": 2, "forms": [{"id": "app", "title": "换装", "description": "上传人物和背景",
+                                                                  "graph_items": {"seed": {"order": 5}}}]}
     # 改一次:旧的标记先摘干净,不留指着不再挑的项的配置
-    again = app_form.apply(marked, {"title": "", "description": "", "items": [{"node": "3", "input": "cfg"}]}, [])
+    again = app_form.apply(marked, [{"title": "", "description": "", "items": [{"node": "3", "input": "cfg"}]}], [])
     assert sum("mosael" in (node.get("properties") or {}) for node in again["nodes"]) == 1
-    assert _strip(app_form.apply(again, None, [])) == _strip(ui)
-    assert "mosael" not in app_form.apply(again, None, [])["extra"], "去掉应用表单、也没有结果标记:图上那一份也没了"
+    assert _strip(app_form.apply(again, [], [])) == _strip(ui)
+    assert "mosael" not in app_form.apply(again, [], [])["extra"], "一张表单都没有、也没有结果标记:图上那一份也没了"
 
 
 def test_写标记_指着不存在的节点或子图里的节点就拒_什么都不写(plugin) -> None:
@@ -473,11 +475,11 @@ def test_写标记_指着不存在的节点或子图里的节点就拒_什么都
 
     for bad in ("99", "12:5"):
         with pytest.raises(ComfyError):
-            app_form.apply(multi_reference_ui(), {"items": [{"node": bad, "input": "text"}]}, [])
+            app_form.apply(multi_reference_ui(), [{"items": [{"node": bad, "input": "text"}]}], [])
     with pytest.raises(ComfyError):
-        app_form.apply(multi_reference_ui(), {"items": [{"node": "", "input": "steps"}]}, [])
+        app_form.apply(multi_reference_ui(), [{"items": [{"node": "", "input": "steps"}]}], [])
     with pytest.raises(ComfyError):
-        app_form.apply({"3": {"class_type": "KSampler", "inputs": {}}}, None, ["3"])
+        app_form.apply({"3": {"class_type": "KSampler", "inputs": {}}}, [], ["3"])
 
 
 # --- 对着假 ComfyUI:app / annotate,和经插件进程跑的目录、工具、生成 --------------------------
@@ -513,25 +515,25 @@ def test_读应用表单_全部能填的项和读到时的改动时间(comfy) ->
     assert out["names"]["17"]["zh"] == "保存图像", "核心节点没起标题:ComfyUI 给这类节点的中文名,不是 SaveImage"
     assert out["names"]["17"] == next(one["label"] for one in out["outputs"] if one["node"] == "17")
     assert out["names"]["13"] == by_key["13.image"]["node_label"]
-    assert out["app"]["status"] == "none" and out["app"]["items"] == []
+    assert out["app"]["status"] == "none" and out["app"]["forms"] == []
 
 
 def test_annotate_写回_目录和工具只剩表单那几项(comfy, tmp_path: Path) -> None:
     seen = _host("app", comfy.url, path="multi.json")
-    written = _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=["17"])
+    written = _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[APP], results=["17"])
     assert written["path"] == "multi.json" and written["modified"] != seen["modified"]
     writes = [call for call in comfy.state.calls if call[0] == "WRITE"]
     assert len(writes) == 1 and writes[0][1] == "workflows/multi.json" and writes[0][2]["overwrite"] is True, \
         "Mosael 唯一一处覆盖写:只写这一张、只写一次"
     stored = comfy.state.workflows["multi.json"]
     assert _strip(stored) == multi_reference_ui()
-    assert stored["extra"]["mosael"]["app"]["title"] == "换装"
+    assert stored["extra"]["mosael"]["forms"][0]["title"] == "换装"
 
     again = _host("app", comfy.url, path="multi.json")
     assert again["modified"] == written["modified"]
-    assert [one["key"] for one in again["app"]["items"]] == ["10.image", "14.image", "6.text", "20.lora_name", "3.steps",
-                                                            "seed"]
-    assert again["app"]["results"] == ["17"] and again["app"]["fields"] == 6
+    form = again["app"]["forms"][0]
+    assert [one["key"] for one in form["items"]] == ["10.image", "14.image", "6.text", "20.lora_name", "3.steps", "seed"]
+    assert again["app"]["results"] == ["17"] and form["fields"] == 6
 
     # 表单是这张工作流的一个入口(ADR 0045):表单入口只剩表单那几项,完整工作流照旧全部能填的项
     models = {one["id"]: one for one in _host("models", comfy.url)["models"] if one["id"].startswith("multi.json")}
@@ -539,7 +541,7 @@ def test_annotate_写回_目录和工具只剩表单那几项(comfy, tmp_path: P
     model = models["multi.json#app"]
     assert model["label"] == "换装" and list(model["parameters"]) == ["seed", "output_node", "20.lora_name", "3.steps"]
     assert model["inputs"] == [{"role": "reference_image", "max": 2, "labels": ["人物照片", "背景"]}]
-    assert model["group"] == {"id": "multi.json", "label": "multi", "entry": "form"}
+    assert model["group"] == {"id": "multi.json", "label": "multi", "entry": "form", "order": 1}
     full = models["multi.json"]
     assert full["label"] == "multi" and "form" not in full and full["group"]["entry"] == "full"
     assert {"negative_prompt", "size", "3.cfg", "4.ckpt_name"} <= set(full["parameters"]), "完整工作流:全部能填的项"
@@ -586,18 +588,18 @@ def test_annotate_照原来的排版写回_没改的字节一个不变(comfy) ->
 
     # 什么都不改(没有表单、没标结果):写回去的就是原文,一个字节不差
     seen = _host("app", comfy.url, path="multi.json")
-    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=None, results=[])
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[], results=[])
     assert comfy.state.raw_texts["workflows/multi.json"] == compact
 
     # 改了:还是紧凑的、JS 的数字写法、中文原样;再写一遍同样的,一个字节都不变
     seen = _host("app", comfy.url, path="multi.json")
-    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=["17"])
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[APP], results=["17"])
     once = comfy.state.raw_texts["workflows/multi.json"]
     assert "\n" not in once and '": ' not in once and '", "' not in once, "紧凑的还是紧凑的"
     assert '"scale":0.00001' in once and "1e-05" not in once and "中文,不转义" in once
-    assert json.loads(once)["extra"]["mosael"]["app"]["title"] == "换装"
+    assert json.loads(once)["extra"]["mosael"]["forms"][0]["title"] == "换装"
     seen = _host("app", comfy.url, path="multi.json")
-    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=["17"])
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[APP], results=["17"])
     assert comfy.state.raw_texts["workflows/multi.json"] == once, "同样的标记再写一遍:不多一个字节的改动"
 
     # 缩进的(制表符、冒号后面没空格,有的编辑器就这么存):照它的
@@ -605,7 +607,7 @@ def test_annotate_照原来的排版写回_没改的字节一个不变(comfy) ->
     comfy.state.raw_texts["workflows/multi.json"] = tabbed
     comfy.state.workflows["multi.json"] = json.loads(tabbed)
     seen = _host("app", comfy.url, path="multi.json")
-    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=None, results=[])
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[], results=[])
     assert comfy.state.raw_texts["workflows/multi.json"] == tabbed
 
 
@@ -613,7 +615,7 @@ def test_annotate_文件在这之间被改过_不写(comfy) -> None:
     seen = _host("app", comfy.url, path="multi.json")
     comfy.state.touch("multi.json")  # 有人在 ComfyUI 里存了一次
     before = copy.deepcopy(comfy.state.workflows["multi.json"])
-    out = _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], app=APP, results=[])
+    out = _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[APP], results=[])
     assert out["stale"] is True and out["modified"] != seen["modified"]
     assert not [call for call in comfy.state.calls if call[0] == "WRITE"], "对不上就一个字都不写"
     assert comfy.state.workflows["multi.json"] == before
@@ -621,13 +623,13 @@ def test_annotate_文件在这之间被改过_不写(comfy) -> None:
 
 def test_annotate_没有这张了说清楚(comfy) -> None:
     with pytest.raises(runtime.PluginRuntimeError, match="已经没有工作流"):
-        _host("annotate", comfy.url, path="gone.json", modified=1, app=None, results=[])
+        _host("annotate", comfy.url, path="gone.json", modified=1, forms=[], results=[])
 
 
 def test_生成_表单入口只认表单里的键_没挑的照工作流原样跑_产出标来源节点(comfy, tmp_path: Path) -> None:
     seen = _host("app", comfy.url, path="multi.json")
     _host("annotate", comfy.url, path="multi.json", modified=seen["modified"],
-          app={**APP, "items": [item for item in APP["items"] if item["input"] != "seed"]}, results=["17"])
+          forms=[{**APP, "items": [item for item in APP["items"] if item["input"] != "seed"]}], results=["17"])
     comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]},
                            "17": {"images": [{"filename": "b.png", "subfolder": "", "type": "output"}]}}
     scratch = tmp_path / "out"
@@ -653,7 +655,7 @@ def test_生成_同一张图的完整工作流入口_全部能填的项都认_�
     种子没给就换一个;「结果取自」照样听工作流上标的结果。这也是老引用要迁到表单入口的原因:同一个 id 换了意思。"""
     seen = _host("app", comfy.url, path="multi.json")
     _host("annotate", comfy.url, path="multi.json", modified=seen["modified"],
-          app={**APP, "items": [item for item in APP["items"] if item["input"] != "seed"]}, results=["17"])
+          forms=[{**APP, "items": [item for item in APP["items"] if item["input"] != "seed"]}], results=["17"])
     comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]},
                            "17": {"images": [{"filename": "b.png", "subfolder": "", "type": "output"}]}}
     scratch = tmp_path / "out"

@@ -481,6 +481,19 @@ def _remember(comfy: Comfy, names: dict[str, str]) -> None:
         pass  # 记不下来只是下次要多扫一遍
 
 
+def names_of(comfy: Comfy, workflow: models.Workflow, object_info: dict[str, Any]) -> dict[str, str]:
+    """这张图每个入口的工具名(入口 id → 工具名):先看上次清单记下的对照表(那是和别的图一起排过撞名的),没记着的(刚加的
+    表单)按这张图自己算。工作流库据此告诉宿主一张表单的工具叫什么(数「Mosael 里有几处在用它」)。"""
+    known: dict[str, str] = {}
+    path = _cache_path(comfy)
+    if path is not None and path.is_file():
+        try:
+            known = {entry_id: tool for tool, entry_id in json.loads(path.read_text(encoding="utf-8")).items()}
+        except (OSError, ValueError, AttributeError):
+            known = {}
+    return {entry_id: known.get(entry_id, tool) for entry_id, tool in tool_names(models.entries(workflow, object_info)).items()}
+
+
 def runnable(workflow: models.Workflow, object_info: dict[str, Any]) -> bool:
     """这张图跑得起来吗:一个输出节点(保存、预览、显示文字……)都没有的,ComfyUI 不跑(`Prompt has no outputs`),
     原样跑一遍什么也交不回 —— 不做成工具(此前它的工具写着「交回它全部 0 个输出节点的产出」)。"""
@@ -530,6 +543,10 @@ def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) 
     for entry in entries:
         if names.get(entry.id) == name:
             return models.pick(comfy, entry.id, object_info, locale)
+    for entry in entries:
+        # 一张表单的工具(完整工作流的工具名加 `_<表单 id>`),而那张图的表单还是上一版的格式:说清楚去升级,别说成「没有这张」
+        if entry.workflow.marks.upgradable and not entry.form_id and name.startswith(f"{names.get(entry.id)}_"):
+            raise models.outdated(entry.workflow.id, locale)
     raise ComfyError(say(locale, f"ComfyUI 里已经没有这张工作流了({name})—— 到插件页点「刷新模型」",
                          f"ComfyUI no longer has this workflow ({name}). Click Refresh models on the Plugins page."))
 
