@@ -467,6 +467,9 @@ class RemoteTaskWatch:
     settled: Callable[[dict[str, Any]], None]
     #: `side_call(model, units, raw)`:适配器为这次生成**顺带**调了另一个按次计费的模型(见 report_side_call)。
     side_call: Callable[[str, dict[str, Any], dict[str, Any]], None] = lambda _model, _units, _raw: None
+    #: `interrupted(n)`:等远端时连续第 n 次没问到(断网、5xx、网关页),轮询循环退避后接着问;`n == 0` 是又问到了。
+    #: 运行器据此在任务上写一句「连接中断,正在重新连接」—— 不然用户只看见进度停住,以为卡死了。
+    interrupted: Callable[[int], None] = lambda _failures: None
 
 
 _REMOTE_TASK_WATCH: ContextVar[RemoteTaskWatch | None] = ContextVar("remote_task_watch", default=None)
@@ -498,6 +501,13 @@ def remote_task_cancelled() -> bool:
     """用户取消了吗(没装 watch 时是 False)。见 `remember_remote_task`。"""
     watch = _REMOTE_TASK_WATCH.get()
     return bool(watch is not None and watch.is_cancelled())
+
+
+def remote_task_interrupted(failures: int) -> None:
+    """等远端时连续第 `failures` 次没问到;0 = 又问到了(没装 watch 时什么都不做)。见 RemoteTaskWatch.interrupted。"""
+    watch = _REMOTE_TASK_WATCH.get()
+    if watch is not None:
+        watch.interrupted(failures)
 
 
 def report_side_call(model: str, units: dict[str, Any], raw: dict[str, Any] | None = None) -> None:

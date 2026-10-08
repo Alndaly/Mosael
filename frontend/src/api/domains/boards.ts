@@ -70,7 +70,10 @@ export interface BoardItem {
   run?: {
     status: "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
     job_id?: string;
+    /** 失败时给人看的那一句(后端 domain/failure_summary 摘的,和 AI 工作台同一个来源)。 */
     error?: string;
+    /** 那一句摘自的原文(上游回包、httpx 的原话):格子上「查看原始错误」里看。和那一句一样时没有。 */
+    error_detail?: string;
     /** 这一轮跑的是这一格的哪一项能力(没有就是它自己的产出者)。产出新建在右边,这一格自己的内容不动。 */
     ability?: NodeProducer;
   };

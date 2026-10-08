@@ -23,7 +23,7 @@ from app.ai.providers.contracts.generation import (
     source_url_values,
 )
 from app.ai.providers.adapters.shared.errors import adapter_http_error
-from app.ai.media_transfer import fetch_bytes
+from app.ai.media_transfer import download_to_path, fetch_bytes
 
 """
 OpenAI Images-compatible adapter:
@@ -173,14 +173,12 @@ class OpenAIImageAdapter(GenerationAdapter):
                 data = [one for one in (content.get("data") or []) if isinstance(one, dict)]
                 #: 两种回法:外链和内联 base64。**都要全取** —— n 是几就有几条,
                 #: 只取第一条的话后面那几张连同它们的钱一起消失。
-                images: list[bytes] = []
+                images: list[bytes | str] = []
                 for one in data:
                     if one.get("b64_json"):
                         images.append(base64.b64decode(str(one["b64_json"])))
                     elif one.get("url"):
-                        # Provider results are commonly pre-signed object-storage URLs. Never
-                        # reuse the API client carrying the OpenAI bearer token.
-                        images.append(fetch_bytes(str(one["url"])).data)
+                        images.append(str(one["url"]))
                 if not images:
                     raise GenerationAdapterError("providerErr_noImageData", vendor="OpenAI")
                 output_dir.mkdir(parents=True, exist_ok=True)
@@ -189,8 +187,14 @@ class OpenAIImageAdapter(GenerationAdapter):
                     suffix = "png"
                 #: 文件名带序号 —— 同名的话第二张会把第一张覆盖掉,而两次写入都"成功"。
                 targets = [output_dir / f"generated-{index + 1}.{suffix}" for index in range(len(images))]
-                for target, blob in zip(targets, images):
-                    target.write_bytes(blob)
+                for target, image in zip(targets, images):
+                    if isinstance(image, bytes):
+                        target.write_bytes(image)
+                    else:
+                        # Provider results are commonly pre-signed object-storage URLs. Never reuse the
+                        # API client carrying the OpenAI bearer token. 走 download_to_path:断了接着下,
+                        # 接不上抛 MediaDownloadError(运行器说「已经生成好了,只是没取回来」,不说「OpenAI 请求失败」)。
+                        download_to_path(image, target, timeout=120)
                 return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=content)
         except httpx.HTTPError as exc:
             raise adapter_http_error("OpenAI", exc, context.api_key) from exc

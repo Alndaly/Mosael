@@ -12,13 +12,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import after_commit
-from app.db.models import GenerationJob, GenerationSession, User
+from app.db.models import GenerationJob, GenerationSession, Job, User
 from app.domain import sharing
-from app.domain.generation.operations import create_generation_job
+from app.domain.generation.operations import GenerationDomainError, create_generation_job
 from app.domain.generation.prompt_optimizer import optimize_image_prompt
-from app.domain.generation.runner import start_generation_thread
-from app.domain.generation.sessions import SHARE_KIND, new_session, visible_history
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.generation.runner import remote_poll_path, retrievable, start_generation_thread, start_retrieval_thread
+from app.domain.generation.sessions import SHARE_KIND, ensure_job_writable, new_session, visible_history
+from app.domain.jobs import create_job, emit_job_event
+from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 
 #: 会话列表最多给多少条(最近用过的在前)。
 SESSION_LIST_LIMIT = 50
@@ -44,7 +45,18 @@ def history(
     db: Session, user: User, workspace_id: str, *, kind: str | None = None, session_id: str | None = None
 ) -> list[GenerationJob]:
     ensure_workspace_access(db, user, workspace_id)
-    return visible_history(db, user, workspace_id, kind=kind, session_id=session_id)
+    generations = visible_history(db, user, workspace_id, kind=kind, session_id=session_id)
+    _attach_retrievable(db, generations)
+    return generations
+
+
+def _attach_retrievable(db: Session, generations: list[GenerationJob]) -> None:
+    """失败了、但远端结果还能再取一次的那几条(见 runner.retrievable),贴到瞬态属性上 —— 界面据此在失败卡上摆「重新取回」。
+    判据要看任务行和适配器,所以在这里(用例认识运行器)贴,不在 sessions 里贴(运行器经 operations 认识 sessions,反过来就是环)。"""
+    job_ids = [g.job_id for g in generations if g.job_id]
+    jobs = {job.id: job for job in db.scalars(select(Job).where(Job.id.in_(job_ids)))} if job_ids else {}
+    for generation in generations:
+        generation.retrievable = retrievable(db, generation, jobs.get(generation.job_id or ""))  # type: ignore[attr-defined]
 
 
 # ---------------- 写 ----------------
@@ -80,6 +92,46 @@ def generate(db: Session, user: User, workspace_id: str, **request: Any) -> tupl
     generation, job = create_generation_job(db, created_by=user.id, workspace_id=workspace_id, **request)
     generation_id = generation.id
     after_commit(db, lambda: start_generation_thread(generation_id))
+    return generation, job
+
+
+def retrieve(db: Session, user: User, generation_id: str) -> tuple[GenerationJob, Job]:
+    """「重新取回」:服务商那边已经做完(或者还在做)的那个远端任务,**不重新提交**,再问它要一次结果、下载、登记。
+
+    给的是这几种失败:下载成片时断了、等远端时出了确定性的错(钥匙被换掉、六小时上限)。它们共同的地方是远端任务交出去了、
+    多半扣了钱,而成片没拿到 —— 此前唯一的路是重新生成,也就是再付一次(ADR 0019 修订)。
+
+    **建一个新任务,不复活失败的那个**:任务落了终态就是终态(任务总线的状态守卫),失败的那一次留在任务中心的历史里。
+    新任务带着旧任务的载荷(远端回执、画板 / 对话的回执),生成记录改挂到新任务上;替谁干还是原来那个人 —— 远端任务
+    在他的账号下,只有他的钥匙问得到。
+
+    谁能点:和「停止」同一条(ensure_job_writable:会话主人),外加要能花钱(`ai`)。
+    """
+    generation = db.get(GenerationJob, generation_id)
+    if generation is None:
+        raise NotVisible("Not found")
+    ensure_workspace_perm(db, user, generation.workspace_id, "ai")
+    previous = db.get(Job, generation.job_id) if generation.job_id else None
+    if previous is not None:
+        ensure_job_writable(db, user, previous.id)
+    if not retrievable(db, generation, previous):
+        raise GenerationDomainError("genErr_notRetrievable")
+    assert previous is not None  # retrievable 已经判过
+    job = create_job(
+        db,
+        workspace_id=generation.workspace_id,
+        kind="ai_generation",
+        payload=dict(previous.payload or {}),
+        created_by=previous.created_by,
+        message="jobMsg_generationRetrieving",
+    )
+    generation.job_id = job.id
+    #: 失败原因是上一次的:这一次还没结束,界面不该继续摆那张失败卡(见前端 turnStatus 的兜底)。
+    generation.error = None
+    generation.error_key = ""
+    generation.error_params = {}
+    emit_job_event(db, job.id, "job.retrieving", {"previous_job_id": previous.id, "poll_path": remote_poll_path(previous)})
+    after_commit(db, lambda: start_retrieval_thread(generation_id))
     return generation, job
 
 

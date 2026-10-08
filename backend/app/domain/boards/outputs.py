@@ -17,7 +17,7 @@ from app.domain.boards.producer_ids import (
     node_type_of,
 )
 from app.domain.boards.run_state import live_job
-from app.domain.boards.shape import _MEDIA_KINDS, DEFAULT_SIZE, MAX_TEXT_CHARS
+from app.domain.boards.shape import _MEDIA_KINDS, DEFAULT_SIZE, MAX_TEXT_CHARS, RUN_ERROR_DETAIL_CHARS
 
 
 #: 一次运行的产出是哪几种。和工作流的输出类型词表对得上的那一半(见 boards.tools.board_outputs)。
@@ -267,6 +267,7 @@ def _canvas_with_delivered_result(
     cancelled: bool,
     succeeded: bool = False,
     assets: dict[str, tuple[str, str]] | None = None,
+    detail: str = "",
 ) -> dict[str, Any]:
     """Merge one asynchronous receipt into the newest board projection.
 
@@ -331,6 +332,9 @@ def _canvas_with_delivered_result(
             run = {"status": "cancelled" if cancelled else "failed"}
             if reason.strip():
                 run["error"] = reason.strip()[:300]
+            #: 原文(`reason` 是从它摘出来的那一句,见 domain/failure_summary):格子上「查看原始错误」里给。和那一句一样就不存。
+            if detail.strip() and detail.strip() != reason.strip():
+                run["error_detail"] = detail.strip()[:RUN_ERROR_DETAIL_CHARS]
             kept.append({**item, "run": {**run, **marker}})
             continue
         if derives:

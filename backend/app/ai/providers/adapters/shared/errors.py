@@ -6,7 +6,21 @@ from typing import Any
 
 import httpx
 
+from app.ai.providers.contracts.failures import UPSTREAM_ERROR_KEYS, http_status_category
+from app.core.http_retry import is_retryable_status
 from app.ai.providers.contracts.generation import GenerationAdapterError, sanitize_adapter_error
+
+#: 失败的类别和归类表住在契约里(宿主也照它说话,见 contracts/failures);这里照旧导出,适配器从这儿拿。
+__all__ = [
+    "PollAnswerUnreadable",
+    "UPSTREAM_ERROR_KEYS",
+    "adapter_http_error",
+    "categorized_http_error",
+    "http_error_detail",
+    "http_status_category",
+    "transient_poll_failure",
+    "upstream_error",
+]
 
 
 def adapter_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None) -> GenerationAdapterError:
@@ -21,43 +35,10 @@ def adapter_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None
     return GenerationAdapterError("providerErr_requestFailed", vendor=vendor, detail=http_error_detail(exc, credential))
 
 
-#: 供应商回话里**常见的几类失败**,各对应一句按读的人语言翻好的话。上游原文(已脱敏)仍放进
-#: `detail`,我们不翻、也不猜它;类别只是让用户一眼知道下一步是**换钥匙、充值、等一会儿、改提示词
-#: 还是改参数** —— 此前一律是「{vendor} 生成失败:1008 insufficient balance」,中文界面上只剩一串
-#: 英文和一个数字。
-#:
-#: 哪个错误码属于哪一类由各家 Adapter 按自己的文档判(错误码表各家各一套),这里只收类别。
-UPSTREAM_ERROR_KEYS = {
-    "auth": "providerErr_upstreamAuth",
-    "balance": "providerErr_upstreamBalance",
-    "rate_limited": "providerErr_upstreamRateLimited",
-    "content_blocked": "providerErr_upstreamContentBlocked",
-    "invalid_params": "providerErr_upstreamInvalidParams",
-    "not_entitled": "providerErr_upstreamNotEntitled",
-    "unavailable": "providerErr_upstreamUnavailable",
-}
-
-
 def upstream_error(vendor: str, category: str | None, detail: Any) -> GenerationAdapterError:
     """一条归了类的上游失败。认不出类别的落回通用的「生成失败」,原文照带。"""
     key = UPSTREAM_ERROR_KEYS.get(category or "", "providerErr_generationFailed")
     return GenerationAdapterError(key, vendor=vendor, detail=str(detail)[:500])
-
-
-def http_status_category(status: int) -> str | None:
-    """HTTP 状态码 → 失败类别(见 UPSTREAM_ERROR_KEYS)。只收各家通用的那几个含义;
-    认不出的回 None,由调用方落回通用的「请求失败」。"""
-    if status in (401, 403):
-        return "auth"
-    if status == 402:
-        return "balance"
-    if status == 429:
-        return "rate_limited"
-    if status in (400, 422):
-        return "invalid_params"
-    if status >= 500:
-        return "unavailable"
-    return None
 
 
 def categorized_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None) -> GenerationAdapterError:
@@ -83,3 +64,21 @@ def http_error_detail(exc: httpx.HTTPError, credential: str | None) -> str:
         if body:
             message = f"{message}; body: {body[:800]}"
     return sanitize_adapter_error(message, credential)
+
+
+class PollAnswerUnreadable(ValueError):
+    """轮询的回答不是一份 JSON 对象:代理 / 网关回了一页 HTML,或者空串。由轮询循环抛(见 adapters/shared/polling)。"""
+
+
+def transient_poll_failure(exc: BaseException) -> bool:
+    """等远端时这一次没问到,是不是「过一会儿再问就好」(轮询循环据此退避再问,而不是放弃付过钱的远端任务)。
+
+    是:连接层的(断网、超时、对面断开)、对面一时答不上来的(429 / 5xx)、回答不是 JSON 对象的(网关页)。
+    不是:401 / 403 / 404 这类说的是凭据或任务本身,再问一百遍也一样;用户取消(`core/abort.RequestAborted`,
+    它是 RequestError 而不是 TransportError)也不是。
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return is_retryable_status(exc.response.status_code)
+    if isinstance(exc, httpx.TransportError):
+        return True
+    return isinstance(exc, PollAnswerUnreadable)

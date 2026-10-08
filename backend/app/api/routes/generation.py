@@ -159,6 +159,17 @@ def create_generation(body: GenerationCreate, db: Tx, user: CurrentUser) -> Gene
     )
 
 
+@router.post("/generation/jobs/{generation_id}/retrieve", response_model=GenerationCreateResponse)
+def retrieve_generation(generation_id: str, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
+    """重新取回:服务商那边已经做完的那一次,不重新提交、不再付钱,再问它要一次结果。只对 `retrievable` 的记录有效,
+    别的一律 409。谁能点和「停止」同一条(会话主人)。"""
+    try:
+        record, job = generation.retrieve(db, user, generation_id)
+    except GenerationDomainError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return GenerationCreateResponse(generation=GenerationJobOut.model_validate(record), job=job)
+
+
 @router.get("/generation/jobs", response_model=list[GenerationJobOut])
 def list_generation_jobs(
     workspace_id: str,

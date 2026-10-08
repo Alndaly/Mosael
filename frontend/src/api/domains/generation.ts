@@ -36,6 +36,15 @@ export function optimizeImagePrompt(body: {
   });
 }
 
+/**
+ * 重新取回一条失败了的生成:服务商那边已经做完(或还在做)的那个远端任务,**不重新提交、不再付钱**,再问它要一次结果
+ * (下载成片时断了、等远端时钥匙失效之类,见后端 generation.use_cases.retrieve)。只对 `retrievable` 的记录有效。
+ * 回来的是挂到这条记录上的新任务。
+ */
+export function retrieveGeneration(generationId: string): Promise<GenerationCreateResponse> {
+  return api<GenerationCreateResponse>(`/api/generation/jobs/${encodeURIComponent(generationId)}/retrieve`, { method: "POST" });
+}
+
 /** 这种生成能用哪些(连接 × 模型)。设置页里加了什么,这里就有什么。 */
 export function listGenerationOptions(kind: string): Promise<GenerationOption[]> {
   return api<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`);

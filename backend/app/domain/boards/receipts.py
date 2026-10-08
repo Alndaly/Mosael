@@ -215,8 +215,18 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     actor_id = getattr(job, "created_by", None)
     outputs = outputs_of(job)
     #: 这一格为什么没拿到产出。任务成功结束却什么都没交回,原因就是这句话本身 —— 任务那一侧
-    #: 没有 error 可给;失败/取消用任务自己记下的原因。
-    reason = tr("boardErr_noOutput") if job_status == "succeeded" else str(getattr(job, "error", "") or "")
+    #: 没有 error 可给;失败/取消用任务自己记下的原因:格子上写**给人看的那一句**(和 AI 工作台同一个来源,见
+    #: domain/failure_summary,UC-06),原文另存在 `run.error_detail`,格子上「查看原始错误」里看。此前格子上贴的
+    #: 是原文的头三行 —— 一串 httpx 的英文加一条带签名的地址。
+    if job_status == "succeeded":
+        reason, detail = tr("boardErr_noOutput"), ""
+    else:
+        from app.core.i18n import get_current_locale
+        from app.domain.failure_summary import summarize
+
+        detail = str(getattr(job, "error", "") or "")
+        reason = summarize(detail, str(getattr(job, "error_key", "") or ""), dict(getattr(job, "error_params", None) or {}),
+                           get_current_locale())
 
     board = db.get(Board, board_id)
     if board is None:
@@ -230,7 +240,7 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     def merge(canvas: dict[str, Any]) -> dict[str, Any]:
         item = next((one for one in canvas.get("items") or [] if one.get("id") == item_id), None)
         merged = _canvas_with_delivered_result(
-            canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason,
+            canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason, detail=detail,
             cancelled=was_cancelled(job), succeeded=job_status == "succeeded", assets=assets,
         )
         after = next((one for one in merged.get("items") or [] if one.get("id") == item_id), None)

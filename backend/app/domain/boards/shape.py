@@ -65,6 +65,8 @@ MAX_TEXT_CHARS = 20_000
 #: 一格的名字(`title`)最长多少字。它挂在节点上方那一行、查找列表的一行里,是个**名字**不是一段话。
 MAX_TITLE_CHARS = 120
 RUN_STATUSES = ("idle", "queued", "running", "succeeded", "failed", "cancelled")
+#: 一格失败的原文(`run.error_detail`)最多存多少字 —— 上游回包能很长,格子上只在「查看原始错误」里看。
+RUN_ERROR_DETAIL_CHARS = 2000
 
 
 def finite_number(value: Any, field: str, item_id: str = "") -> float:
@@ -385,6 +387,13 @@ def _normalize_run(value: Any, item_id: str) -> dict[str, Any] | None:
             raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error")
         if error.strip():
             run["error"] = error.strip()[:300]
+    #: `error` 是给人看的那一句(见 domain/failure_summary),`error_detail` 是它摘自的原文 —— 格子上「查看原始错误」。
+    detail = value.get("error_detail")
+    if detail is not None:
+        if not isinstance(detail, str):
+            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error_detail")
+        if detail.strip():
+            run["error_detail"] = detail.strip()[:RUN_ERROR_DETAIL_CHARS]
     #: 这一轮跑的是这一格的哪一项能力(见 producer_ids.ability_of)。没有就是它自己的产出者。
     ability = value.get("ability")
     if ability is not None:

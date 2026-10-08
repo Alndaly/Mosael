@@ -10,6 +10,11 @@ export function itemError(item: BoardItem): string | undefined {
   return item.run?.error;
 }
 
+/** 失败原因的原文(`itemError` 那一句是从它摘出来的);没有就是 undefined。格子上「查看原始错误」里给。 */
+export function itemErrorDetail(item: BoardItem): string | undefined {
+  return item.run?.error_detail;
+}
+
 /**
  * 选中这一格时底下挂哪个产出者的面板;不挂回 null。**一处说了算。**
  *

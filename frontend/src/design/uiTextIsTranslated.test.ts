@@ -92,7 +92,6 @@ const LEFT = new Map<string, number>([
   ["electron/publish/clickChain.ts", 1],
   ["electron/publish/platforms.ts", 7],
   //: 剩下 1 行是剥掉报错前缀「失败 ·」的解析正则,不是界面文字。
-  ["frontend/src/features/ai-studio/GenerateWorkspace.tsx", 1],
   ["frontend/src/features/scenes/SceneStudio.tsx", 4],
 ]);
 

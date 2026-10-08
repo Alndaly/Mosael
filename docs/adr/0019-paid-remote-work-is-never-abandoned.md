@@ -77,3 +77,64 @@ state, or the user cancels**. "We waited long enough" is not one of them.
   better surfaced than waited on.
 - Cancelling a job stops *our* waiting. Most providers cannot stop a task that is already
   generating; the user is choosing to give up that result.
+
+## Revision (2026-10-08): a glitch is not an ending, and a result that was paid for can always be collected
+
+An analysis pass (with mock providers, never a real paid call) found that the decision above still lost paid
+work in five ordinary situations. Each is now pinned by a regression test whose name says what it prevents.
+
+1. **A network blip while waiting ended the wait.** Any exception inside `poll_until_ready` broke out of the
+   loop: one lid-close or Wi-Fi switch longer than the GET's own retries, one 502 from the query endpoint, or a
+   proxy answering 200 with an HTML page failed the job, booked it as *not billed*, and was never resumed — while
+   the provider finished and charged. Now a **transient** failure (a transport error, 429 / 5xx, a body that is not
+   a JSON object) is retried with backoff (doubling from the poll interval, capped at 60 s, checked for
+   cancellation every second), and the job shows *"reconnecting (attempt n) — the remote task is still there"*.
+   Only a **deterministic** failure (401 / 403 / 404, or the provider's own failed state) or the six-hour ceiling
+   ends the wait. (`tests/test_remote_waits_survive_network_blips.py`)
+2. **A paid POST was resent on gateway errors.** `RetryingClient` retried every 5xx regardless of method. A relay
+   behind Cloudflare answers 524 after 100 s while the origin keeps generating and charging; a gateway 502 on an
+   asynchronous submit created a second remote task that nobody tracked. A non-idempotent request is now resent
+   only on the statuses that say *the request was not processed* — 429, 503, 529; 500 / 502 / 504 / 52x are
+   treated like a read timeout (`http_retry.status_resend_is_safe`). Idempotent requests (polling) still retry
+   on any 5xx. (`tests/test_paid_posts_are_not_resent_on_gateway_errors.py`)
+3. **Waiting held a database connection.** Every poll asked "was I cancelled?" with `db.refresh(job)` on the
+   runner's long session and never committed, so each waiting generation pinned one of the pool's 15
+   connections for minutes to hours; fifteen concurrent videos starved every request. A synchronous paid call
+   held one too (the read transaction opened before the adapter call). The runner now ends its read transaction
+   before calling the adapter, and everything it does while waiting — cancellation checks, the reconnecting
+   notice, a side-call booking — uses a short session or commits at once.
+   (`tests/test_waiting_generations_hold_no_connection.py`) *Not changed:* a waiting generation still occupies
+   one of the 16 job slots; parking it while it waits changes dispatch semantics and needs its own decision.
+4. **A restart's resume re-resolved the inputs.** Resuming went through the same path as submitting, so a first
+   frame deleted after submission (or a validator made stricter by an upgrade) failed the resume before the
+   provider was ever asked — nothing collected, nothing booked. Resuming now builds the request without
+   sources and without re-validation (the inputs were handed over at submission), and meters the submitted image
+   count from the stored request. (`tests/test_resume_after_restart_ignores_deleted_inputs.py`)
+5. **A dropped download lost the result for good.** The provider had finished and charged; the download of the
+   finished file broke once; the job failed as *"ARK request failed: peer closed connection"* (blaming the
+   provider) and nothing could collect it again. Now:
+   - `media_transfer.download_to_path` resumes from where it broke (`Range`, up to five times), starts over when
+     the server ignores `Range`, checks the length it was promised, and raises `MediaDownloadError` — not an
+     httpx error, so adapters no longer relabel it as a provider failure. The OpenAI image adapter's result URLs
+     go through it too.
+   - The job says what happened: *"the provider finished (most likely charged), the download broke off — use
+     Retrieve again"*; for synchronous providers, which keep no receipt, it says only a new generation can help.
+   - **Retrieve again** (`POST /api/generation/jobs/{id}/retrieve`, the button on AI Studio's failure card)
+     creates a **new job** on the same generation record and runs the resume path: nothing is resubmitted. The
+     failed job stays failed (terminal stays terminal). It is offered only for a failed generation with a
+     receipt, a resumable adapter and no output — **not** for a stopped one: stopping still means giving up that
+     result (Consequences above). Who may click it is who may stop it (the session owner).
+   (`tests/test_interrupted_downloads_can_be_retrieved.py`)
+
+**Booking.** A failure *after* the receipt is no longer booked as *not billed*: with the provider's terminal
+payload it is booked as the provider reported; without one (or when the payload reports nothing), it is
+estimated from the request and annotated `unsettled_remote_task` (or `result_not_collected` when the provider
+finished but the file was not downloaded). When Retrieve again later succeeds, the success entry **replaces**
+the failed one (`billing.usage.retire_usage`; the old entry is kept verbatim in the new one's
+`replaces_failed_attempt`) — it is the same provider call, and summing both would count it twice. A generation
+cancelled while its outputs were being registered (the files are in the library, the provider charged) is now
+booked as succeeded with `cancelled_locally`, not dropped. (`tests/test_cancelled_while_registering_is_still_billed.py`)
+
+**Known limits.** The receipt lives on the job; clearing finished jobs from the task center also clears what
+Retrieve again needs. A synchronous paid call whose response never arrives (read timeout, restart mid-call) is
+still booked as not billed; telling "sent, outcome unknown" apart from "rejected on the spot" is open.

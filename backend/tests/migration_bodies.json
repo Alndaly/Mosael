@@ -48,6 +48,7 @@
   "migrate-board-documents-can-be-written": "c4ea6816844853f0",
   "migrate-board-documents-keep-the-note-they-became": "8259804276ef4146",
   "migrate-board-empty-slots-name-their-producer": "b9cc7e7996232046",
+  "migrate-board-failures-keep-their-original-error": "d0914686efd34f16",
   "migrate-board-forms-name-their-producer": "0322eafe1d3782b0",
   "migrate-board-frame-names-become-titles": "fdcb55e819e4d4f8",
   "migrate-board-plugin-array-inputs-are-lists": "ccdae1db614c11fc",

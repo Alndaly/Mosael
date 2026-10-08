@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -12,13 +13,39 @@ from app.ai.providers.contracts.generation import (
     provider_payload_settled,
     remember_remote_task,
     remote_task_cancelled,
+    remote_task_interrupted,
 )
+from app.ai.providers.adapters.shared.errors import PollAnswerUnreadable, transient_poll_failure
 
 #: 异步任务的默认节奏。各家可以覆盖,但没有理由的话就用这一份 —— 此前七个文件各定义了一次
 #: 自己的 POLL_INTERVAL,而它们的值本来就一样。
 POLL_INTERVAL_SECONDS = 2.0
 
+#: 一次没问到(见 `transient_poll_failure`)之后隔多久再问:从轮询间隔起每次翻倍,封顶一分钟。合盖十几秒、换一次
+#: Wi-Fi、查询接口限一阵流都等得过去;仍受六小时的上限和取消约束(ADR 0019 修订)。
+TRANSIENT_BACKOFF_CAP_SECONDS = 60.0
+
 _Ready = TypeVar("_Ready")
+
+
+def _ask(client: Any, poll_path: str) -> dict[str, Any]:
+    response = client.get(poll_path)
+    response.raise_for_status()
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise PollAnswerUnreadable("poll response is not JSON") from exc
+    if not isinstance(payload, dict):
+        raise PollAnswerUnreadable("poll response is not a JSON object")
+    return payload
+
+
+def _pause(seconds: float) -> None:
+    """退避时一秒一秒地等,每一秒都看一眼取消 —— 断网时退避到一分钟,用户点了停止不该再干等一分钟。"""
+    for _ in range(max(1, math.ceil(seconds))):
+        if remote_task_cancelled():
+            return
+        time.sleep(min(1.0, seconds))
 
 
 def poll_until_ready(
@@ -42,17 +69,32 @@ def poll_until_ready(
 
     计时用 `time.monotonic()` 而不是 `time.time()`:墙钟会跳(NTP 校时、夏令时),跳一下
     要么把还在跑的任务判成超时,要么让它多等一个小时。六家原本都用的是墙钟。
+
+    **一次没问到不是结束。** 远端任务提交了就在花钱,网络抖一下、查询接口回一次 502、代理回一页 HTML,远端照样在做。
+    此前这里任何一步抛异常都直接跳出循环,任务判失败、账记「未扣费」,远端做完的成片再没人去取 —— 用户照提示重来就是
+    再付一次。现在这些(见 `transient_poll_failure`)退避再问,每次都报给运行器(界面上写「连接中断,正在重新连接」),
+    接上了也报一声;只有确定性的失败(401 / 404、服务商判了失败)和六小时上限才结束等待(ADR 0019 修订)。
     """
     #: **开始等之前先报回执。** 这是远端任务号唯一一次离开适配器的局部变量。
     remember_remote_task(poll_path)
     deadline = time.monotonic() + timeout
     payload: dict[str, Any] = {}
+    failures = 0
     while time.monotonic() < deadline:
         if remote_task_cancelled():
             raise GenerationAdapterError("providerErr_cancelled")
-        response = client.get(poll_path)
-        response.raise_for_status()
-        payload = response.json()
+        try:
+            payload = _ask(client, poll_path)
+        except Exception as exc:
+            if not transient_poll_failure(exc):
+                raise
+            failures += 1
+            remote_task_interrupted(failures)
+            _pause(min(interval * 2**failures, TRANSIENT_BACKOFF_CAP_SECONDS))
+            continue
+        if failures:
+            failures = 0
+            remote_task_interrupted(0)
         try:
             ready = extract(payload)
         except Exception:

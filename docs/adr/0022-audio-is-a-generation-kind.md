@@ -113,3 +113,14 @@ replaced by one field for every kind: `prompt` = `required` (default; lyrics cou
 `optional` / `none` (takes no prompt; sending one is rejected). The rule set stays in `validate_text_inputs`; see
 the ADR 0020 addendum of the same date. Saved custom profiles are rewritten by
 `migrate-prompt-requirement-becomes-one-field`.
+
+## Addendum (2026-10-08): the "no retry on the paid POST" rule moved into the transport
+
+Decision 6 had synchronous vendors turn HTTP retries off for their paid POST (`max_retries=0`) because a retried
+read timeout pays twice. The same is true of a gateway 5xx — a 524 from a relay behind Cloudflare means the origin
+is still generating and charging — and the vendors that had not opted out (OpenAI-compatible images, Seedream,
+qwen-image-edit, every asynchronous submit) resent their paid POST on any 5xx. `RetryingClient` now decides by
+method for every caller: a non-idempotent request is resent only on 429 / 503 / 529, which say the request was not
+processed; never after a read timeout or another 5xx (ADR 0019, revision of 2026-10-08). The explicit
+`max_retries=0` on Lyria and Alibaba audio stays as it is — it is still correct, it just no longer carries the rule
+alone.

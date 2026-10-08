@@ -68,12 +68,34 @@ def current_max_retries() -> int:
 
 
 def is_retryable_status(status: int) -> bool:
-    """429(限流)与 5xx(过载/网关)是瞬时状态,值得重试;4xx 是请求本身的问题,重试无益。"""
+    """429(限流)与 5xx(过载/网关)是瞬时状态,值得重试;4xx 是请求本身的问题,重试无益。
+
+    这只回答「这个状态码是不是瞬时的」;**能不能重发**还要看方法,见 `status_resend_is_safe`。
+    """
     return status == 429 or 500 <= status < 600
 
 
 #: 重发不会多做一遍的方法(HTTP 语义上幂等)。
 _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+
+#: 对方**明说了没处理这一次**的状态码:限流(429)、暂时不接(503)、过载拒单(529)。只有它们,非幂等的请求才重发。
+_NOT_PROCESSED_STATUSES = frozenset({429, 503, 529})
+
+
+def status_resend_is_safe(request: httpx.Request, status: int) -> bool:
+    """收到这个状态码之后再发一遍,会不会让供应商多做(多收)一次。
+
+    **非幂等请求只在对方明说「没处理」时重发**(429 / 503 / 529)。500、502、504 和 Cloudflare 的 52x 说的是
+    「中间某一层没等到 / 没拿到回答」,不是「源站没做」:中转站在 Cloudflare 后面跑一张慢图,源站过 100 秒还没答,
+    CF 回 524,源站照样把图做完、照样扣费。此前这几种一律重发,一次点击最多扣四次;网关 502 时异步提交建出两个
+    远端任务,只有后一个被跟踪(见 docs/adr/0019 修订)。它们和读超时同一个道理(见 `resend_is_safe`)。
+    幂等的请求(轮询的 GET)照旧遇 5xx 就重发。
+    """
+    if not is_retryable_status(status):
+        return False
+    if request.method.upper() in _IDEMPOTENT_METHODS:
+        return True
+    return status in _NOT_PROCESSED_STATUSES
 
 
 def resend_is_safe(request: httpx.Request, exc: httpx.RequestError) -> bool:
@@ -132,7 +154,7 @@ class RetryingClient(httpx.Client):
                 if last or not resend_is_safe(request, exc):
                     raise
             else:
-                if last or not is_retryable_status(response.status_code):
+                if last or not status_resend_is_safe(request, response.status_code):
                     return response
                 # 不读完就丢会占着连接,而这条响应我们只关心状态码。
                 response.close()

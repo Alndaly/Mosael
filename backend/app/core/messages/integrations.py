@@ -334,6 +334,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_generationRunning": {"zh": "生成中", "en": "Generating"},
     #: 重启之后接着取已经提交给供应商的那一条 —— 不再提交,不会再扣一次费。
     "jobMsg_generationResuming": {"zh": "后端重启过,正在接着取回已提交的生成结果", "en": "The backend restarted; picking up the result of the already-submitted generation"},
+    # 等远端时连不上(见 adapters/shared/polling):远端任务还在,我们只是暂时问不到它。
+    "jobMsg_generationReconnecting": {
+        "zh": "和服务商的连接断了,正在第 {attempt} 次重新连接 —— 远端任务还在,不会重新提交",
+        "en": "Lost the connection to the provider; reconnecting (attempt {attempt}). The remote task is still there and will not be submitted again.",
+    },
+    # 「重新取回」(见 generation.use_cases.retrieve):只问远端要结果、下载,不提交。
+    "jobMsg_generationRetrieving": {
+        "zh": "正在重新取回已经生成好的结果(不重新提交,不会再付一次钱)",
+        "en": "Retrieving the already-generated result again (nothing is resubmitted, nothing is charged twice)",
+    },
     "jobMsg_generationDone": {"zh": "生成完成", "en": "Generation complete"},
     "jobMsg_generationFailed": {"zh": "生成失败", "en": "Generation failed"},
     "jobMsg_waitingWorker": {"zh": "等待执行器认领", "en": "Waiting for a worker to claim it"},

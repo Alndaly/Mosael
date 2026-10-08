@@ -164,6 +164,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{label}素材不存在或不属于当前工作区",
         "en": "The {label} asset doesn't exist or isn't in this workspace.",
     },
+    # 服务商做完了、成片没拉回来(见 ai/media_transfer.MediaDownloadError)。这时钱多半已经扣了 —— 不能说成「供应商
+    # 请求失败」,更不能让人以为要重新生成。远端任务还能再问的,说去点「重新取回」;问不了的(同步接口),说清只能重来。
+    "genErr_resultNotCollected": {
+        "zh": "服务商已经生成好了(这一次多半已经计费),只是把成片下载回来时断了:{detail}。点「重新取回」再下一次就行,不用重新生成,也不会再付一次钱。",
+        "en": "The provider finished this generation (it has most likely been charged), but downloading the result broke off: {detail}. Use “Retrieve again” to download it once more — no need to generate again or pay twice.",
+    },
+    "genErr_resultNotCollectedNoReceipt": {
+        "zh": "服务商已经生成好了(这一次多半已经计费),只是把成片下载回来时断了:{detail}。这家的接口事后取不回,只能重新生成;重来之前可以先去服务商后台看看这一次有没有扣费。",
+        "en": "The provider finished this generation (it has most likely been charged), but downloading the result broke off: {detail}. This provider can't hand a result over again later, so the only way is to generate again — check the provider's console for this charge first.",
+    },
+    "genErr_notRetrievable": {
+        "zh": "这条生成没有能重新取回的远端结果:它没提交出去、已经取回过、被停下了,或者这家供应商不支持事后再取",
+        "en": "There is no remote result to retrieve for this generation: it was never submitted, was already retrieved, was stopped, or this provider can't hand a result over again.",
+    },
     "genErr_sourceMustBeVideo": {"zh": "{label}素材必须是视频", "en": "The {label} asset must be a video."},
     "genErr_sourceMustBeImage": {"zh": "{label}素材必须是图片", "en": "The {label} asset must be an image."},
     "genErr_sourceMustBeAudio": {"zh": "{label}素材必须是音频", "en": "The {label} asset must be audio."},

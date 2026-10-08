@@ -15,6 +15,7 @@ import {
   Images,
   Music,
   Ratio,
+  RotateCcw,
   SlidersHorizontal,
   CircleAlert,
   Copy,
@@ -35,6 +36,7 @@ import {
   cancelJob,
   entityReceipt,
   optimizeImagePrompt,
+  retrieveGeneration,
   type EntitySummary,
   type GenerationCreateResponse,
   type GenerationJob,
@@ -764,6 +766,17 @@ export function GenerateWorkspace({
     onError: (error) => toast.error(t("genStopFailed"), { description: errorText(error) }),
   });
 
+  //: 重新取回一条失败了的:服务商已经做完的那一次,不重新提交、不再付钱(见后端 generation.use_cases.retrieve)。挂上一个新任务,
+  //: 卡片从失败变回进度,和刚提交的那一条同一种样子;落了终态由下面那段重拉记录。
+  const retrieveAgain = useMutation({
+    mutationFn: (generationId: string) => retrieveGeneration(generationId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+    },
+    onError: (error) => toast.error(t("genRetrieveFailed"), { description: errorText(error) }),
+  });
+
   //: 一条任务落了终态就重拉这条会话的记录:成功的带回产出,失败的带回**记录自己存的**失败原因
   //: (生成记录在任务失败那一刻抄下它,任务之后会被清掉,见后端 generation.runner.record_failure)。
   const settledCount = (jobs.data ?? []).filter((job) => job.status === "succeeded" || job.status === "failed").length;
@@ -1173,6 +1186,8 @@ export function GenerateWorkspace({
               gallery={sessionGallery}
               onStop={readOnly ? undefined : (jobId) => stopGeneration.mutate(jobId)}
               stopping={stopGeneration.isPending && stopGeneration.variables === generation.job_id}
+              onRetrieve={readOnly ? undefined : () => retrieveAgain.mutate(generation.id)}
+              retrieving={retrieveAgain.isPending && retrieveAgain.variables === generation.id}
             />
             );
           })}
@@ -1661,6 +1676,8 @@ function GenerationTurn({
   gallery,
   onStop,
   stopping,
+  onRetrieve,
+  retrieving,
 }: {
   generation: GenerationJob;
   /** 用的哪条连接上的哪个模型,两层名字(ADR 0045):脚注写主名,副名(来自哪张工作流、哪台服务器)在悬停里。连接或模型
@@ -1673,6 +1690,9 @@ function GenerationTurn({
   /** 停下这一条(取消它的任务);只读的会话不给。 */
   onStop?: (jobId: string) => void;
   stopping?: boolean;
+  /** 重新取回这一条(只在后端说 `retrievable` 时摆出来);只读的会话不给。 */
+  onRetrieve?: () => void;
+  retrieving?: boolean;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -1782,7 +1802,13 @@ function GenerationTurn({
           <GenerationStoppedCard />
         ) : status === "failed" ? (
           //: 原因读**生成记录自己**存的那份 —— 任务会被清掉,记录不会(见后端 generation.runner.record_failure)。
-          <GenerationFailureCard error={generation.error ?? ""} />
+          //: 那一句人话由后端出(error_summary,和画板格子同一个来源,见后端 domain/failure_summary),原文进「查看原始错误」。
+          <GenerationFailureCard
+            summary={generation.error_summary ?? ""}
+            error={generation.error ?? ""}
+            onRetrieve={generation.retrievable ? onRetrieve : undefined}
+            retrieving={retrieving}
+          />
         ) : (
           <GenerationProgress
             kind={generation.kind}
@@ -1980,10 +2006,27 @@ function GenerationStoppedCard() {
   );
 }
 
-function GenerationFailureCard({ error }: { error: string }) {
+/**
+ * 跑挂了的那一条:写**一句人话**(后端的 `error_summary`,和画板格子同一个来源 —— 此前这里用正则从原文里抠,而 httpx
+ * 原文里「For more information check」前面是换行,切不掉),原文收在「查看原始错误」里。
+ *
+ * 服务商已经做完、只是成片没拿回来的(`onRetrieve` 给了),摆「重新取回」:不重新提交、不再付钱,挂一个新任务接着取,
+ * 卡片回到进度的样子(见后端 generation.use_cases.retrieve)。没给就是只能重新生成。
+ */
+function GenerationFailureCard({
+  summary: said,
+  error,
+  onRetrieve,
+  retrieving,
+}: {
+  summary: string;
+  error: string;
+  onRetrieve?: () => void;
+  retrieving?: boolean;
+}) {
   const t = useI18n();
   const [copied, setCopied] = React.useState(false);
-  const summary = React.useMemo(() => generationErrorSummary(error, t("genFailed")), [error, t]);
+  const summary = said.trim() || t("genFailed");
   const copy = () => {
     if (!error) return;
     void navigator.clipboard?.writeText(error);
@@ -2002,6 +2045,14 @@ function GenerationFailureCard({ error }: { error: string }) {
           </span>
         </div>
       </div>
+      {onRetrieve ? (
+        <Hint label={t("genRetrieveHint")}>
+          <Button type="button" variant="outline" size="xs" className="w-fit" loading={retrieving} onClick={onRetrieve}>
+            <RotateCcw size={12} />
+            {t("genRetrieve")}
+          </Button>
+        </Hint>
+      ) : null}
       {error ? (
         <div className="flex items-start justify-between gap-2">
           <details className="min-w-0 text-ui-xs text-muted-foreground">
@@ -2020,31 +2071,4 @@ function GenerationFailureCard({ error }: { error: string }) {
       ) : null}
     </div>
   );
-}
-
-function generationErrorSummary(error: string, fallback: string): string {
-  const text = error.trim();
-  if (!text) return fallback;
-  const bodyMatch = text.match(/body:\s*(\{.*\})\s*$/s);
-  if (bodyMatch) {
-    try {
-      const parsed = JSON.parse(bodyMatch[1]) as { error?: { message?: unknown }; message?: unknown };
-      const message = parsed.error?.message ?? parsed.message;
-      if (typeof message === "string" && message.trim()) return trimErrorSummary(message);
-    } catch {
-      // Fall through to text cleanup.
-    }
-  }
-  const messageMatch = text.match(/"message"\s*:\s*"([^"]+)"/);
-  if (messageMatch?.[1]) return trimErrorSummary(messageMatch[1]);
-  const beforeDetails = text
-    .replace(/^失败\s*·\s*/i, "")
-    .split(" For more information check:")[0]
-    .split("; body:")[0]
-    .trim();
-  return trimErrorSummary(beforeDetails || fallback);
-}
-
-function trimErrorSummary(value: string): string {
-  return value.replace(/\s+/g, " ").trim().slice(0, 150);
 }

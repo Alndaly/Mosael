@@ -19,6 +19,7 @@ import pytest
 from PIL import Image
 from sqlalchemy import select
 
+from app.ai.media_transfer import MediaDownloadError
 from app.ai.providers import register_generation_adapter_source
 from app.ai.providers.adapters.bytedance.ark.image import SeedreamAdapter
 from app.ai.providers.adapters.alibaba.dashscope.image import QwenImageAdapter
@@ -100,14 +101,15 @@ def test_a_sync_adapter_hands_over_its_payload_before_downloading(tmp_path, monk
         def post(self, _path: str, **_kwargs) -> _Response:
             return _Response(payload)
 
-    def broken_download(url: str, **_kwargs):
-        raise GenerationAdapterError("providerErr_noImageData", vendor="OpenAI")
+    def broken_download(url: str, target, **_kwargs):
+        #: 成片下载断了(接了几次都没接上):media_transfer 抛的是 MediaDownloadError,不是适配器的错。
+        raise MediaDownloadError("peer closed connection")
 
     monkeypatch.setattr("app.ai.providers.adapters.openai.image.RetryingClient", FakeClient)
-    monkeypatch.setattr("app.ai.providers.adapters.openai.image.fetch_bytes", broken_download)
+    monkeypatch.setattr("app.ai.providers.adapters.openai.image.download_to_path", broken_download)
     settled: list[dict] = []
     request = GenerationRequest(kind="image", model="gpt-image-2", prompt="a cat")
-    with watching_remote_tasks(_watch(settled)), pytest.raises(GenerationAdapterError):
+    with watching_remote_tasks(_watch(settled)), pytest.raises(MediaDownloadError):
         OpenAIImageAdapter().generate(request, GenerationAdapterContext("p", "openai", "k"), tmp_path)
     assert settled == [payload]
 

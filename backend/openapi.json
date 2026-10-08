@@ -10836,6 +10836,49 @@
         }
       }
     },
+    "/api/generation/jobs/{generation_id}/retrieve": {
+      "post": {
+        "tags": [
+          "generation"
+        ],
+        "summary": "Retrieve Generation",
+        "description": "重新取回:服务商那边已经做完的那一次,不重新提交、不再付钱,再问它要一次结果。只对 `retrievable` 的记录有效,\n别的一律 409。谁能点和「停止」同一条(会话主人)。",
+        "operationId": "retrieve_generation_api_generation_jobs__generation_id__retrieve_post",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/scenes/blender/connections": {
       "get": {
         "tags": [
@@ -33889,6 +33932,24 @@
             ],
             "title": "Cost Confidence"
           },
+          "retrievable": {
+            "type": "boolean",
+            "title": "Retrievable",
+            "default": false
+          },
+          "error_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Summary",
+            "description": "失败给人看的那一句话(按请求方的语言翻,见 domain/failure_summary):失败卡上写它,原文 `error` 在\n「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。",
+            "readOnly": true
+          },
           "stopped": {
             "type": "boolean",
             "title": "Stopped",
@@ -33907,6 +33968,7 @@
           "result_asset_id",
           "created_at",
           "updated_at",
+          "error_summary",
           "stopped"
         ],
         "title": "GenerationJobOut"

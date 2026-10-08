@@ -22,7 +22,7 @@ import "@/features/notes/notes.css";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
-import { itemError, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { itemError, itemErrorDetail, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
 import { SceneOverview } from "@/features/boards/SceneOverview";
 import { SequenceCell } from "@/features/boards/SequenceCell";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
@@ -589,6 +589,9 @@ function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop
  */
 function Failed({ item, reason }: { item: BoardItem; reason: string }) {
   const t = useI18n();
+  //: `reason` 是给人看的那一句(后端 domain/failure_summary 摘的,和 AI 工作台同一个来源);原文另存着,在「查看原始错误」里。
+  //: 此前格子上贴的是原文的头三行 —— 一串 httpx 的英文加一条带签名的地址(UC-06)。
+  const detail = itemErrorDetail(item);
   return (
     <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3", CELL_INNER_RADIUS)}>
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
@@ -597,6 +600,13 @@ function Failed({ item, reason }: { item: BoardItem; reason: string }) {
         <Truncate lines={3} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
           {reason}
         </Truncate>
+        {detail ? (
+          <Hint label={detail}>
+            <span data-run-error-detail="" className="cursor-help text-ui-2xs text-muted-foreground underline decoration-dotted underline-offset-2">
+              {t("generationErrorDetail")}
+            </span>
+          </Hint>
+        ) : null}
       </div>
     </div>
   );

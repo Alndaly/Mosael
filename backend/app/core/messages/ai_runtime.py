@@ -143,6 +143,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{vendor} 不支持取回已提交的任务",
         "en": "{vendor} cannot resume a task that was already submitted",
     },
+    # 从远端拉一份媒体回来没成(见 ai/media_transfer.MediaDownloadError)。生成那边会换成一句更具体的话。
+    "transferErr_downloadFailed": {"zh": "下载失败:{detail}", "en": "Download failed: {detail}"},
     "providerErr_promptEmpty": {"zh": "提示词不能为空", "en": "The prompt cannot be empty"},
     "providerErr_numImagesRange": {"zh": "图片张数要在 1 到 {max} 之间", "en": "The number of images must be between 1 and {max}"},
     "providerErr_durationInvalid": {

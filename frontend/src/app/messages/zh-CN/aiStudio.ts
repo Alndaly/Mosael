@@ -260,6 +260,10 @@ export const aiStudio = {
   genStop: "停止",
   genStopHint: "停下这一次生成。跑在 ComfyUI 上的,只停这一次的任务,同一台机器上别人的不受影响",
   genStopFailed: "没能停下这次生成",
+  //: 失败卡上的「重新取回」:服务商已经做完的那一次,不重新提交、不再付钱,再去取一次结果(见后端 generation.use_cases.retrieve)。
+  genRetrieve: "重新取回",
+  genRetrieveHint: "服务商那边已经生成好了,再去取一次 —— 不重新提交,不会再付一次钱",
+  genRetrieveFailed: "没能重新取回",
   genStopped: "已停止",
   genStoppedBody: "在生成完之前停下了,没有产出。",
   separationTitle: "人声与背景音分离",

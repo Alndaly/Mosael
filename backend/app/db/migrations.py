@@ -2154,6 +2154,46 @@ def _migrate_board_scene_cells_hold_no_image() -> None:
                 )
 
 
+def _migrate_board_failures_keep_their_original_error() -> None:
+    """画板上失败的格子:`run.error` 换成给人看的那一句,原文搬进 `run.error_detail`(UC-06,见 domain/failure_summary)。
+
+    此前回执把任务的原文截 300 字放在 `run.error`,格子上照贴 —— 一串 httpx 的英文、一条带签名的地址、一截「For more
+    information check」。现在回执存两样:摘出来的那一句和原文。老格子上只有原文、没有 key,按同一套清理规则摘一句
+    (认不出类别,但去掉了套话、地址和尾巴);两样一样(本来就是一句人话)就不动。改到的板版本号 +1。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    from app.core.i18n import DEFAULT_LOCALE
+    from app.domain.failure_summary import summarize
+
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                run = item.get("run") if isinstance(item, dict) else None
+                if not isinstance(run, dict) or run.get("status") != "failed" or "error_detail" in run:
+                    continue
+                original = run.get("error")
+                if not isinstance(original, str) or not original.strip():
+                    continue
+                summary = summarize(original, "", {}, DEFAULT_LOCALE)
+                if summary and summary != original.strip():
+                    run["error"] = summary[:300]
+                    run["error_detail"] = original.strip()
+                    changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_boards_remember_their_project() -> None:
     """画板记着自己的项目(`boards.project_id`,ADR 0030):时间线格背后的时间线放在那里。老画板没有,第一次放
     时间线格时才建 —— 这里只加列。**必须在 SCHEMA 之前**:create_all 不会给已有的表补列。"""
@@ -8781,6 +8821,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_keep_the_note_they_became),
+            #: 失败格子上的原因:给人看的那一句和原文分开存(UC-06)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_failures_keep_their_original_error),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
             #: 后台任务的回执不再是用户消息:换成自己的角色,排着的那条改成「待送」。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_job_receipts_get_their_own_role),

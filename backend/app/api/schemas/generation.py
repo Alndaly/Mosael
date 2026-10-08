@@ -130,6 +130,9 @@ class GenerationJobOut(OrmModel):
     # (前端显示「未定价」);没有事件时两者都空。
     costs: list[CostAmountOut] = []
     cost_confidence: str | None = None
+    #: 失败了,但服务商那边的结果还能**不重新提交**再取一次(下载成片时断了、等远端时出了确定性的错):AI 工作台的失败卡上
+    #: 据此摆「重新取回」(POST /generation/jobs/{id}/retrieve)。由列表从任务行算出来贴上(见 sessions._attach_retrievable)。
+    retrievable: bool = False
 
     @field_validator("error_key", mode="before")
     @classmethod
@@ -145,6 +148,18 @@ class GenerationJobOut(OrmModel):
     @classmethod
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
         return _rendered(value, info, "error_key", "error_params")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_summary(self) -> str | None:
+        """失败给人看的那一句话(按请求方的语言翻,见 domain/failure_summary):失败卡上写它,原文 `error` 在
+        「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。"""
+        if not self.error_key and not self.error:
+            return None
+        from app.core.i18n import get_current_locale
+        from app.domain.failure_summary import summarize
+
+        return summarize(self.error, self.error_key, self.error_params, get_current_locale()) or None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

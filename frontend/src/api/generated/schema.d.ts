@@ -3623,6 +3623,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generation/jobs/{generation_id}/retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retrieve Generation
+         * @description 重新取回:服务商那边已经做完的那一次,不重新提交、不再付钱,再问它要一次结果。只对 `retrievable` 的记录有效,
+         *     别的一律 409。谁能点和「停止」同一条(会话主人)。
+         */
+        post: operations["retrieve_generation_api_generation_jobs__generation_id__retrieve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scenes/blender/connections": {
         parameters: {
             query?: never;
@@ -12171,6 +12192,17 @@ export interface components {
             costs: components["schemas"]["CostAmountOut"][];
             /** Cost Confidence */
             cost_confidence?: string | null;
+            /**
+             * Retrievable
+             * @default false
+             */
+            retrievable: boolean;
+            /**
+             * Error Summary
+             * @description 失败给人看的那一句话(按请求方的语言翻,见 domain/failure_summary):失败卡上写它,原文 `error` 在
+             *     「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。
+             */
+            readonly error_summary: string | null;
             /**
              * Stopped
              * @description 有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
@@ -26418,6 +26450,37 @@ export interface operations {
                 "application/json": components["schemas"]["GenerationCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retrieve_generation_api_generation_jobs__generation_id__retrieve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

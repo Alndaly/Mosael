@@ -46,6 +46,7 @@ vi.mock("@/features/boards/BoardPlayer", () => ({
 }));
 
 import { BOARD_NODE_TYPES, BOARD_TEXT_MAX } from "./boardNodes";
+import { hoverHint } from "@/test/hint";
 
 const STATUS_LABEL = {
   queued: "等待执行",
@@ -242,6 +243,25 @@ describe("无限画布节点运行状态", () => {
     const text = getByText(copy);
     expect(text.className).toContain("[overflow-wrap:anywhere]");
     expect(text.parentElement?.className).toContain("min-w-0");
+  });
+
+  //: UC-06:此前格子上贴的是原文头三行(一串 httpx 英文加带签名的地址);现在写后端摘好的那一句,原文在悬停里。
+  it("失败格子写给人看的那一句,原文在「查看原始错误」的悬停里", async () => {
+    const raw = "DashScope 请求失败:Client error '401 Unauthorized' for url 'https://dashscope.aliyuncs.com/x?Signature=SECRET'";
+    const { container } = renderNode("image", "failed", {
+      run: { status: "failed", error: "DashScope 不认这把密钥,请到设置里检查连接的凭据", error_detail: raw },
+    });
+    const alert = container.querySelector<HTMLElement>("[role=alert]")!;
+    expect(alert.textContent).toContain("DashScope 不认这把密钥");
+    expect(alert.textContent).not.toContain("SECRET");
+    const trigger = alert.querySelector<HTMLElement>("[data-run-error-detail]")!;
+    expect(trigger.textContent).toBe("generationErrorDetail");
+    expect(await hoverHint(trigger)).toContain("Signature=SECRET");
+  });
+
+  it("本来就是一句人话的(没有原文):不摆「查看原始错误」", () => {
+    const { container } = renderNode("image", "failed", { run: { status: "failed", error: "没有产出" } });
+    expect(container.querySelector("[data-run-error-detail]")).toBeNull();
   });
 });
 

@@ -168,6 +168,7 @@ describe("失败原因读生成记录自己的", () => {
           result_asset_id: null,
           result_asset_ids: [],
           error: "供应商 openai 还没有配置你的密钥,请先在设置里填写",
+          error_summary: "供应商 openai 还没有配置你的密钥,请先在设置里填写",
           created_at: "2026-09-01T00:00:00Z",
           updated_at: "2026-09-01T00:01:00Z",
           costs: [],
@@ -205,6 +206,40 @@ describe("失败原因读生成记录自己的", () => {
       ],
     });
     await waitFor(() => expect(screen.getByText("genFailed")).toBeInTheDocument());
+  });
+});
+
+describe("失败卡写后端那一句人话,原文收在「查看原始错误」里(UC-06)", () => {
+  const failed = (extra: Record<string, unknown>) => ({
+    id: "g1", workspace_id: "w1", session_id: "s1", job_id: "j1", provider_profile_id: "p1", provider: "alibaba",
+    model: "wanx", kind: "image", request: { prompt: "一只猫" }, result_asset_id: null, result_asset_ids: [],
+    error: "DashScope 请求失败:Client error '401 Unauthorized' for url 'https://dashscope.aliyuncs.com/api/v1/x?Signature=SECRET'\nFor more information check: https://developer.mozilla.org/401",
+    error_summary: "DashScope 不认这把密钥,请到设置里检查连接的凭据:Invalid API-key provided.",
+    created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z", costs: [], cost_confidence: null,
+    retrievable: false, ...extra,
+  });
+
+  it("卡上写那一句,不写原文;原文在「查看原始错误」里", async () => {
+    renderStudio({ generations: [failed({})] });
+    const card = (await screen.findByText("generationFailedTitle")).closest("article")!;
+    expect(card.textContent).toContain("DashScope 不认这把密钥");
+    const shown = within(card).getByText(/DashScope 不认这把密钥/);
+    expect(shown.textContent).not.toMatch(/https?:|For more information|SECRET/);
+    expect(within(card).getByText("generationErrorDetail")).toBeInTheDocument();
+    expect(card.querySelector("pre")?.textContent).toContain("For more information check");
+  });
+
+  it("服务商做完了、成片没拿回来的:摆「重新取回」,点了发重新取回,不重新生成", async () => {
+    const { writes } = renderStudio({ generations: [failed({ retrievable: true })] });
+    fireEvent.click(await screen.findByRole("button", { name: /genRetrieve/ }));
+    await waitFor(() => expect(writes).toContainEqual({ url: expect.stringContaining("/api/generation/jobs/g1/retrieve"), method: "POST" }));
+    expect(writes.some((one) => one.url.endsWith("/api/generation/jobs"))).toBe(false);
+  });
+
+  it("取不回的(没提交出去、被停下、同步接口):不摆「重新取回」", async () => {
+    renderStudio({ generations: [failed({ retrievable: false })] });
+    await screen.findByText("generationFailedTitle");
+    expect(screen.queryByRole("button", { name: /genRetrieve/ })).toBeNull();
   });
 });
 

@@ -476,6 +476,31 @@ def record_usage(
     return event
 
 
+def retire_usage(db: Session, idempotency_key: str) -> dict[str, Any] | None:
+    """撤下一条已经记过的账,交回它原来的样子(写进接替它的那一条的注解里);没有这一条就是 None。不提交。
+
+    **只为一种情形存在:同一次服务商调用先被记成了失败,后来又拿到了结果。** 生成在下载成片时断了、或者等远端时出了确定性
+    的错,运行器按「成片没拿到」记一笔(服务商回报的扣费,或者远端任务没了结时的请求侧估价);之后用户点「重新取回」,拿到了
+    **同一个**远端任务的成片 —— 那不是又花了一次钱。两条都留着,这次生成的花费就被加两遍(`costs_by_currency` 把同一条生成
+    的几条账加在一起),失败次数也多算一次。所以成功的那一条接替失败的那一条:失败的撤下,它原来记了什么写进成功那条的
+    注解,账上看得见曾经发生过什么。
+    """
+    event = db.scalar(select(ProviderUsageEvent).where(ProviderUsageEvent.idempotency_key == idempotency_key))
+    if event is None:
+        return None
+    summary = {
+        "status": event.status,
+        "cost_micros": event.cost_micros,
+        "currency": event.currency,
+        "cost_confidence": event.cost_confidence,
+        "recorded_at": event.created_at.isoformat() if event.created_at else None,
+        "units": dict(event.units or {}),
+    }
+    db.delete(event)
+    db.flush()
+    return summary
+
+
 @dataclass(frozen=True)
 class Pricing:
     """一次调用按计价规则算出来的价。
