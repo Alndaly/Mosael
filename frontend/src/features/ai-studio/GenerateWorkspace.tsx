@@ -1418,6 +1418,7 @@ export function GenerateWorkspace({
           </p>
         ) : (
           <form
+            data-toast-avoid=""
             className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-control px-2.5 pb-1.5 pl-3 pt-2.5 transition-colors duration-100 focus-within:border-ring"
             onSubmit={submit}
           >

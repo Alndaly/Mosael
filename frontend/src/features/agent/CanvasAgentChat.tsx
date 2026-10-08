@@ -675,7 +675,7 @@ export function CanvasAgentChat({
             steering={steerQueued.isPending}
             cancelling={cancelQueued.isPending}
           />
-          <div className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
+          <div data-toast-avoid="" className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
             <input
               ref={fileRef}
               type="file"

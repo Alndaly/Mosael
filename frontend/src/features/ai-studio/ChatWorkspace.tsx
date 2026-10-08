@@ -654,6 +654,7 @@ export function ChatWorkspace({
                   cancelling={cancelQueued.isPending}
                 />
                 <form
+                  data-toast-avoid=""
                   className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring")}
                   onSubmit={submit}
                 >

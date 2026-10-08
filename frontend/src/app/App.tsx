@@ -52,6 +52,7 @@ import { goHome } from "@/features/ai-studio/goToPlace";
 import { PlugZap } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
+import { useToastClearance } from "@/components/app/toastClearance";
 import { APP_CHROME, ChromeAboveDialogs, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -320,10 +321,14 @@ export function PublishViewBar() {
 /** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
 function AppToaster() {
   const { theme } = usePreferences();
+  //: 贴底的输入区(AI Studio、智能体面板)伸进右下角那一列时整体抬到它上沿之上,不盖住发送键(见 toastClearance)。
+  const bottom = useToastClearance();
   return (
     <Toaster
       theme={theme}
       position="bottom-right"
+      offset={{ bottom }}
+      mobileOffset={{ bottom }}
       gap={8}
       toastOptions={{
         className:
