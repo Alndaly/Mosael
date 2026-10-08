@@ -18,6 +18,8 @@ on:
 # (2026-10-07 16:03–16:45 连着四次 cancelled,那一小时 main 没有任何结论),哪个提交弄红的只能二分。
 # 推 main 时 group 带上提交:只关掉 cancel-in-progress 不够 —— 同一个 group 里排着等的那一个,会被更新的那次
 # 推送顶掉(GitHub 的 concurrency 只留一个 pending),照样拿不到结论。
+# 这条规则管的是**整次运行**:tests.yml 里分出来的几组 job(checks / frontend / backend / …)同属一次运行,
+# 一起排队、一起被(或不被)取消,不必每个 job 再写一遍。
 concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

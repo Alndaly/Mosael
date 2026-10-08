@@ -23,66 +23,19 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  # 三组并行跑,各自出结论:便宜的那组(lint、契约快照、sidecar / electron / 扩展、官网)几分钟就有结果,
+  # 不用再排在二十分钟的后端测试后面 —— f5db6125f 那次官网 MDX 写坏,要等满整个 job 才报出来。
+  # 三组都过,这道门禁才算过(ci.yml / release.yml 等的是整个 workflow,不是哪一个 job)。
+  # 本机门禁是同一份清单:README「测试与检查」。
+  checks:
     runs-on: ubuntu-latest
-    # 正常一次二十分钟出头。上限是给「挂住」的:没有它,一条死锁的测试要占着 runner 等满默认的 6 小时。
-    # 挂住的那条会在 10 分钟时由 faulthandler 打出所有线程的栈(backend/pyproject.toml),日志里看得到卡在哪。
-    timeout-minutes: 45
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            website/pnpm-lock.yaml
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            backend/uv.lock
-            community/uv.lock
-            packages/mosael-formats/uv.lock
-
-      # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
-      # Ubuntu 24.04 自带的是 6.1,其 framesync 在 EOF 处有已知时序缺陷;产品与开发环境已经以
-      # 现代 FFmpeg 为基线,CI 也必须测同一条契约,不能继续为发行多年前的运行时堆兼容滤镜。
-      # 下载地址与 sha256 都钉在一次不可变的上游构建,避免 latest 静默换包。
-      - uses: actions/cache@v5
-        id: ffmpeg-cache
-        with:
-          path: .ci/ffmpeg
-          key: ffmpeg-linux64-8.1.3-14-g330caae0c1-89cca03b
-      - name: Install FFmpeg 8.1
-        env:
-          FFMPEG_URL: https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-01-13-06/ffmpeg-n8.1.3-14-g330caae0c1-linux64-gpl-8.1.tar.xz
-          FFMPEG_SHA256: 89cca03b81002bef5a48c2e983afa6100e52904052c1c75dfd2090b09b57efee
-        run: |
-          if [ ! -x .ci/ffmpeg/bin/ffmpeg ]; then
-            curl --fail --location --retry 3 "$FFMPEG_URL" --output /tmp/ffmpeg.tar.xz
-            echo "$FFMPEG_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum --check --strict
-            mkdir -p .ci/ffmpeg
-            tar -xJf /tmp/ffmpeg.tar.xz --strip-components=1 -C .ci/ffmpeg
-          fi
-          echo "$GITHUB_WORKSPACE/.ci/ffmpeg/bin" >> "$GITHUB_PATH"
-          .ci/ffmpeg/bin/ffmpeg -version | head -1
-          test "$(.ci/ffmpeg/bin/ffmpeg -version | sed -n 's/^ffmpeg version n\?\([0-9][0-9]*\).*/\1/p')" -ge 8
-
-      # 沙箱执行时禁止拉取镜像,所以测试前显式准备。环境不可用必须阻止发版,
-      # 不能让隔离用例被跳过后仍然显示测试通过。
-      - name: Prepare sandbox runtime
-        run: |
-          for i in $(seq 1 30); do
-            docker info >/dev/null 2>&1 && break
-            sleep 1
-          done
-          test "$(docker info --format '{{.OSType}} {{.MemoryLimit}} {{.SwapLimit}} {{.PidsLimit}}')" = "linux true true true"
-          docker pull python:3.14-alpine
+      - uses: ./.github/actions/toolchain
 
       - name: Install dependencies
         run: |
@@ -105,54 +58,6 @@ jobs:
       # 里往往表现为一个八竿子打不着的报错。
       - name: Lint
         run: pnpm lint
-
-      # `build` = `tsc --noEmit` + vite build。两件事都要:
-      # - 类型检查此前不在任何一道闸里(这里原先的注释说它由 build 阶段覆盖,但没有哪一步跑 build),
-      #   类型错进了 main,要到打 tag 发版时 release 的打包才炸;
-      # - 后端的烧字测试要真渲一遍产品默认的那条路(无头 Chromium 按预览 CSS 出 PNG),要找得到构建好的
-      #   frontend/dist(app/media/text_render.find_frontend_dist 从仓库结构里找)。没有它,那几条在 CI 上整片跳过。
-      - name: Frontend typecheck and build
-        run: pnpm --dir frontend build
-
-      # 烧字的浏览器那条路用 Playwright 自带的 Chromium。取舍:装它多花一两分钟(浏览器本体按 uv.lock 缓存,
-      # 系统依赖每次 apt 装),换来字幕 / 花字 / AI 标识的默认导出路径在 CI 上真渲一遍 —— 此前没有任何自动门禁渲过它。
-      - uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
-      - name: Headless Chromium for burned-in text
-        run: cd backend && uv run playwright install --with-deps chromium
-
-      # 并行跑(pytest-xdist):`-n auto` 按核数开 worker,ubuntu-latest(公开仓库)是 4 核,就是 4 个。
-      # pyproject 的 addopts 里本来就带着它,这里写出来是让读这一步的人知道日志里那几个 [gwN] 是怎么来的。
-      # 每个 worker 有自己的数据目录和库(tests/conftest.py)。单进程时这一步要二十五分钟左右。
-      # 排查材料:`-rfEs` 把失败、出错和**跳过的原因**列在最后(此前日志里只有「29 skipped」);`--durations`
-      # 列出最慢的几条;junit 里每条用例记着跑在哪个 worker 上,失败时整份传上来(见最后一步)。
-      - name: Backend tests
-        env:
-          MOSAEL_TEST_THREAD_JITTER: ${{ inputs.thread-jitter }}
-          MOSAEL_TEST_THREAD_JITTER_SEED: ${{ inputs.shuffle-seed }}
-          SHUFFLE_SEED: ${{ inputs.shuffle-seed }}
-        run: |
-          cd backend
-          args=(-q -n auto -rfEs --durations=25 --junitxml="$GITHUB_WORKSPACE/.ci/junit-backend.xml")
-          if [ -n "$SHUFFLE_SEED" ]; then
-            uv run --with pytest-randomly python -m pytest "${args[@]}" -p randomly --randomly-seed="$SHUFFLE_SEED"
-          else
-            uv run python -m pytest "${args[@]}"
-          fi
-
-      # 类型检查在上面的 build 里跑过了,这里只跑单测。
-      - name: Frontend tests
-        env:
-          SHUFFLE_SEED: ${{ inputs.shuffle-seed }}
-        run: |
-          cd frontend
-          if [ -n "$SHUFFLE_SEED" ]; then
-            pnpm vitest run --sequence.shuffle --sequence.seed="$SHUFFLE_SEED"
-          else
-            pnpm vitest run
-          fi
 
       # 契约链快照的新鲜度:openapi.json 必须是 app 此刻的形状,schema.d.ts 必须是从它
       # 再生成出来的那份。此前两端靠手工同步,漂移没有任何闸 —— 已经实测漂过一次
@@ -197,6 +102,122 @@ jobs:
           pnpm --dir website test
           pnpm --dir website build
 
+  # 前端:类型检查(`build` 的前一半,`tsc --noEmit`)和整套 vitest(连同 electron/ 下的测试)。
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/toolchain
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 类型检查此前不在任何一道闸里,类型错进了 main,要到打 tag 发版时 release 的打包才炸。
+      - name: Frontend typecheck
+        run: pnpm --dir frontend exec tsc --noEmit
+
+      - name: Frontend tests
+        env:
+          SHUFFLE_SEED: ${{ inputs.shuffle-seed }}
+        run: |
+          cd frontend
+          if [ -n "$SHUFFLE_SEED" ]; then
+            pnpm vitest run --sequence.shuffle --sequence.seed="$SHUFFLE_SEED"
+          else
+            pnpm vitest run
+          fi
+
+  # 后端整套。最慢的一组,所以它自己一个 job、工具链之外只装它要的:ffmpeg、沙箱的 Docker 镜像、烧字用的前端 dist 和 Chromium。
+  backend:
+    runs-on: ubuntu-latest
+    # 正常十几分钟。上限是给「挂住」的:没有它,一条死锁的测试要占着 runner 等满默认的 6 小时。
+    # 挂住的那条会在 10 分钟时由 faulthandler 打出所有线程的栈(backend/pyproject.toml),日志里看得到卡在哪。
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/toolchain
+
+      # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
+      # Ubuntu 24.04 自带的是 6.1,其 framesync 在 EOF 处有已知时序缺陷;产品与开发环境已经以
+      # 现代 FFmpeg 为基线,CI 也必须测同一条契约,不能继续为发行多年前的运行时堆兼容滤镜。
+      # 下载地址与 sha256 都钉在一次不可变的上游构建,避免 latest 静默换包。
+      - uses: actions/cache@v5
+        id: ffmpeg-cache
+        with:
+          path: .ci/ffmpeg
+          key: ffmpeg-linux64-8.1.3-14-g330caae0c1-89cca03b
+      - name: Install FFmpeg 8.1
+        env:
+          FFMPEG_URL: https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-01-13-06/ffmpeg-n8.1.3-14-g330caae0c1-linux64-gpl-8.1.tar.xz
+          FFMPEG_SHA256: 89cca03b81002bef5a48c2e983afa6100e52904052c1c75dfd2090b09b57efee
+        run: |
+          if [ ! -x .ci/ffmpeg/bin/ffmpeg ]; then
+            curl --fail --location --retry 3 "$FFMPEG_URL" --output /tmp/ffmpeg.tar.xz
+            echo "$FFMPEG_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum --check --strict
+            mkdir -p .ci/ffmpeg
+            tar -xJf /tmp/ffmpeg.tar.xz --strip-components=1 -C .ci/ffmpeg
+          fi
+          echo "$GITHUB_WORKSPACE/.ci/ffmpeg/bin" >> "$GITHUB_PATH"
+          .ci/ffmpeg/bin/ffmpeg -version | head -1
+          test "$(.ci/ffmpeg/bin/ffmpeg -version | sed -n 's/^ffmpeg version n\?\([0-9][0-9]*\).*/\1/p')" -ge 8
+
+      # 沙箱执行时禁止拉取镜像,所以测试前显式准备。环境不可用必须阻止发版,
+      # 不能让隔离用例被跳过后仍然显示测试通过。
+      - name: Prepare sandbox runtime
+        run: |
+          for i in $(seq 1 30); do
+            docker info >/dev/null 2>&1 && break
+            sleep 1
+          done
+          test "$(docker info --format '{{.OSType}} {{.MemoryLimit}} {{.SwapLimit}} {{.PidsLimit}}')" = "linux true true true"
+          docker pull python:3.14-alpine
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend && uv sync --frozen --python 3.14
+
+      # 后端的烧字测试要真渲一遍产品默认的那条路(无头 Chromium 按预览 CSS 出 PNG),要找得到构建好的
+      # frontend/dist(app/media/text_render.find_frontend_dist 从仓库结构里找)。没有它,那几条在 CI 上整片跳过。
+      # 这里只要产物:类型检查在 frontend 那组跑。
+      - name: Frontend dist for burned-in text
+        run: pnpm --dir frontend exec vite build
+
+      # 烧字的浏览器那条路用 Playwright 自带的 Chromium。取舍:装它多花一两分钟(浏览器本体按 uv.lock 缓存,
+      # 系统依赖每次 apt 装),换来字幕 / 花字 / AI 标识的默认导出路径在 CI 上真渲一遍 —— 此前没有任何自动门禁渲过它。
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+      - name: Headless Chromium for burned-in text
+        run: cd backend && uv run playwright install --with-deps chromium
+
+      # 并行跑(pytest-xdist):`-n auto` 按核数开 worker,ubuntu-latest(公开仓库)是 4 核,就是 4 个。
+      # pyproject 的 addopts 里本来就带着它,这里写出来是让读这一步的人知道日志里那几个 [gwN] 是怎么来的。
+      # 每个 worker 有自己的数据目录和库(tests/conftest.py)。单进程时这一步要二十五分钟左右。
+      # 排查材料:`-rfEs` 把失败、出错和**跳过的原因**列在最后(此前日志里只有「29 skipped」);`--durations`
+      # 列出最慢的几条;junit 里每条用例记着跑在哪个 worker 上,失败时整份传上来(见最后一步)。
+      - name: Backend tests
+        env:
+          MOSAEL_TEST_THREAD_JITTER: ${{ inputs.thread-jitter }}
+          MOSAEL_TEST_THREAD_JITTER_SEED: ${{ inputs.shuffle-seed }}
+          SHUFFLE_SEED: ${{ inputs.shuffle-seed }}
+        run: |
+          cd backend
+          args=(-q -n auto -rfEs --durations=25 --junitxml="$GITHUB_WORKSPACE/.ci/junit-backend.xml")
+          if [ -n "$SHUFFLE_SEED" ]; then
+            uv run --with pytest-randomly python -m pytest "${args[@]}" -p randomly --randomly-seed="$SHUFFLE_SEED"
+          else
+            uv run python -m pytest "${args[@]}"
+          fi
+
       - name: Upload backend test report
         if: failure()
         uses: actions/upload-artifact@v7
@@ -207,9 +228,10 @@ jobs:
 
   # 社区服务眼下不在产品里(桌面端的接入已拿掉,见 2d1378623),代码留在仓库里等以后接回。它的整套测试要起一个
   # Postgres 容器,没必要每次提交都付这个钱:只在这次改动碰到它自己、它依赖的格式包或这份工作流时跑;发版(打 tag、
-  # 手动触发)和算不出改了什么的时候照跑,宁可多跑不漏跑。ruff 仍由 test job 的 `pnpm lint` 每次都跑。
+  # 手动触发)和算不出改了什么的时候照跑,宁可多跑不漏跑。ruff 仍由 checks 那组的 `pnpm lint` 每次都跑。
   community-changed:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.diff.outputs.run }}
     steps:
@@ -232,7 +254,7 @@ jobs:
           echo "community tests: $run"
 
   # 社区服务(ADR 0026):生产跑 PostgreSQL,所以 CI 在 Postgres 服务容器上跑整套测试(本地缺省是 SQLite)。
-  # ruff 由上面 test job 里根目录的 `pnpm lint` 跑(和本地提交前那一条是同一条),这里再跑一次是为了
+  # ruff 由上面 checks 那组里根目录的 `pnpm lint` 跑(和本地提交前那一条是同一条),这里再跑一次是为了
   # 这个 job 单独失败时能直接看到是哪一半。
   community:
     needs: [community-changed]

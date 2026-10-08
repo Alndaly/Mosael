@@ -253,7 +253,7 @@ cd frontend && VITE_MOSAEL_API_URL=http://127.0.0.1:8833 pnpm exec vite --host 1
 
 ### 测试与检查
 
-和 CI([`.github/workflows/tests.yml`](.github/workflows/tests.yml))是同一份清单、同样的顺序,改一处要两处一起改:
+和 CI([`.github/workflows/tests.yml`](.github/workflows/tests.yml),分「快的那几项」「前端」「后端」三组并行跑)是同一份清单,改一处要两处一起改:
 
 ```bash
 pnpm lint                                   # oxlint(frontend、website)+ ruff(backend、community、packages/mosael-formats)

@@ -282,7 +282,7 @@ says why in the console. `vite build` reads the variable too; release builds don
 
 ### Tests and checks
 
-The same steps, in the same order, as CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)) — keep the two in sync:
+The same steps as CI ([`.github/workflows/tests.yml`](.github/workflows/tests.yml), which runs them as three parallel jobs: the quick checks, the frontend, the backend) — keep the two in sync:
 
 ```bash
 pnpm lint                                   # oxlint (frontend, website) + ruff (backend, community, packages/mosael-formats)

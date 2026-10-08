@@ -483,7 +483,7 @@ hint 说明各 Adapter 如何把兼容地址归一到原生 API 根。
 
 ## Verification rule
 
-完整的门禁清单只有一份:README「测试与检查」那一段,和 CI(`.github/workflows/tests.yml`)按同样的顺序跑同样的几步。
+完整的门禁清单只有一份:README「测试与检查」那一段,和 CI(`.github/workflows/tests.yml`,三组并行)跑的是同样的几步。
 每个 slice 至少跑:
 
 - `pnpm lint`(仓库根)**每次都跑** —— 它是 oxlint(frontend、website)加三处 ruff(backend、community、

@@ -1,0 +1,22 @@
+# tests.yml 里三个 job 共用的工具链:pnpm、Node 24、uv,各带缓存。版本钉在这一处 —— 三个 job 各写一遍的话,
+# 改一处漏两处,三个 job 跑的就不是同一套工具。先 checkout 再用它(本地 action 从工作区里读)。
+name: Toolchain
+description: pnpm + Node 24 + uv, with caches
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: pnpm
+        cache-dependency-path: |
+          pnpm-lock.yaml
+          website/pnpm-lock.yaml
+    - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          backend/uv.lock
+          community/uv.lock
+          packages/mosael-formats/uv.lock
