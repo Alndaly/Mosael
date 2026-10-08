@@ -405,6 +405,14 @@ HTTP 404。
 - **目录指纹多看几个模型目录**:text_encoders、clip、clip_vision、model_patches、style_models、audio_encoders、latent_upscale_models
   (只看那台服务器上有的)。新装一个文本编码器,`CLIPLoader` 这类下拉不用等别的变化就跟着刷新。
 
+## 修补(1.21.4)
+
+- **标题一样的几个节点,参数名各带节点号**:复制出来的几个同名节点(维护者的 moodyKrea 里两个「Detailer CLIP Text Encode
+  (Positive Prompt)」),参数名此前是「标题 · Text · 标题」、两格一模一样;现在节点名只出现一次,还撞的各带上节点号(「… · Text #730」),
+  和画布上的号对得上(`labels.numbered`,能填的项和参数表同一套)。英文的第几个写成 `2nd KSampler`,不再是 `KSampler #2`。
+- **有表单的工作流,`list_workflows` 不给完整工作流的 `tool`**:它不进智能体的工具表(`agent: false`),此前照给,智能体拿着一个调不到的
+  名字;跑它用 `forms[].tool`,要全部参数走生成、带完整工作流的模型 id。
+
 ## 精简表单(1.13.0;此前叫「应用表单」)
 
 对应 RunningHub 的「AI 应用」(ADR 0038 第一刀):作者从一张工作流**全部能填的项**里挑出要给别人填的几项、起名、排序、

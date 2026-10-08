@@ -490,6 +490,16 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
   every form to have a title.
 
 
+## Fixes (1.21.4)
+
+- **Nodes with the same title get node numbers in parameter names**: copied nodes with one title (two "Detailer CLIP Text Encode
+  (Positive Prompt)" in the maintainer's moodyKrea) used to give "title · Text · title" twice, identical; now the node name appears once
+  and names that still clash end with the node number ("… · Text #730"), matching the canvas (`labels.numbered`, shared by the fillable
+  items and the parameter table). The English ordinal reads `2nd KSampler` instead of `KSampler #2`.
+- **`list_workflows` gives no full-workflow `tool` for a workflow with forms**: that tool isn't in the agent's tool list
+  (`agent: false`), so the agent used to get a name it couldn't call; run it through `forms[].tool`, or through generation with the full
+  workflow's model id for every parameter.
+
 ## Fixes (1.21.3)
 
 - **Workflows that only produce text are "text"**: caption / prompt-from-image workflows that save no file used to report `kind`
