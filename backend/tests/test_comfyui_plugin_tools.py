@@ -329,6 +329,10 @@ def test_模型清单的指纹_工作流变了它就变(comfy) -> None:
     after = [call for call in comfy.state.calls if call[1] == "/object_info"]
     assert before == after, "问指纹不拉 object_info、不拉任何一张图"
     assert not [call for call in comfy.state.calls[-6:] if call[1].startswith("/api/userdata/")]
+    # PLG-12:装了一个新的文本编码器(CLIPLoader 的下拉读 text_encoders),指纹也跟着变
+    known = _call(comfy.url, "comfyui_generation", {"op": "fingerprint"})["fingerprint"]
+    comfy.state.model_folders["text_encoders"] = [*comfy.state.model_folders.get("text_encoders", []), "qwen3vl_4b.safetensors"]
+    assert _call(comfy.url, "comfyui_generation", {"op": "fingerprint"})["fingerprint"] != known
 
 
 def test_插件升了版指纹就变_宿主据此重拉目录(comfy, tmp_path: Path) -> None:

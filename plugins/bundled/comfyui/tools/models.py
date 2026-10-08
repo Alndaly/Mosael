@@ -362,8 +362,12 @@ def explain(comfy: Comfy, ids: Any, locale: str) -> dict[str, Any]:
     return {"models": out}
 
 
-#: 判「模型清单有没有变」时顺带看的模型目录:换了一个 checkpoint / LoRA,参数里的下拉就该跟着变。
-_WATCHED_FOLDERS = ("checkpoints", "loras", "diffusion_models", "unet", "vae", "upscale_models", "controlnet")
+#: 判「模型清单有没有变」时顺带看的模型目录:换了一个 checkpoint / LoRA,参数里的下拉就该跟着变。文本编码器、CLIP 视觉、
+#: 模型补丁这几样也在加载节点的下拉里(Flux、Qwen、Krea2 这类新架构的 `CLIPLoader.clip_name` 读的就是 text_encoders)——
+#: 此前不看,装了一个新编码器,Mosael 里那个下拉要等别的变化或者手动「刷新模型」才有它(PLG-12)。每个目录每分钟一个列目录的请求。
+_WATCHED_FOLDERS = ("checkpoints", "loras", "diffusion_models", "unet", "vae", "upscale_models", "controlnet",
+                    "text_encoders", "clip", "clip_vision", "model_patches", "style_models", "audio_encoders",
+                    "latent_upscale_models")
 
 
 def plugin_version() -> str:
