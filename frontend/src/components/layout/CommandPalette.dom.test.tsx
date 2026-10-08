@@ -20,6 +20,20 @@ vi.mock("@/api/client", () => ({
   api: async () => [],
   listWorkflows: async () => [{ id: "wf1", name: "zzqx 周报", description: "", graph: { nodes: [] } }],
   listPublishTasks: async () => [],
+  listEntities: async (_ws: string, filters: { q?: string }) =>
+    filters.q === "珍珠" ? [{ id: "e1", kind: "character", name: "珍珠耳环少女" }] : [],
+  listNotes: async (_ws: string, q: string) => (q === "珍珠" ? [{ id: "n1", title: "珍珠的来历" }] : []),
+  listBoards: async () => [{ id: "b1", name: "珍珠分镜" }, { id: "b2", name: "别的" }],
+  entityKeys: { catalog: () => ["entity-catalog"], list: (ws: string, filters: unknown) => ["entities", ws, "list", filters] },
+  getEntityCatalog: async () => ({ kinds: [{ kind: "character", label: "人物" }], roles: [], roles_by_kind: {}, consent_kinds: [], attach_priority: {} }),
+}));
+const links = vi.hoisted(() => ({ openNote: vi.fn(), openBoard: vi.fn(), gotoSettings: vi.fn(), gotoAdmin: vi.fn() }));
+vi.mock("@/lib/deepLink", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/deepLink")>()),
+  openNote: links.openNote,
+  openBoard: links.openBoard,
+  gotoSettings: links.gotoSettings,
+  gotoAdmin: links.gotoAdmin,
 }));
 
 import { CommandPalette } from "@/components/layout/CommandPalette";
@@ -75,4 +89,31 @@ it("只搜到工作流时,默认高亮落在它身上", async () => {
   fireEvent.change(await screen.findByRole("combobox"), { target: { value: "zzqx" } });
   const workflow = await screen.findByRole("option", { name: /zzqx 周报/ });
   await waitFor(() => expect(workflow).toHaveAttribute("aria-selected", "true"));
+});
+
+//: 体检 UM-14:「全局搜索」此前搜不到资产、笔记、画板和设置项 —— 搜「珍珠耳环」只出来那张图片素材。
+it("资产、笔记、画板都搜得到,点了各自打开", async () => {
+  const { onNavigate } = mount();
+  fireEvent.change(await screen.findByRole("combobox"), { target: { value: "珍珠" } });
+  const entity = await screen.findByRole("option", { name: /珍珠耳环少女/ });
+  expect(entity).toHaveTextContent("人物");
+  expect(await screen.findByRole("option", { name: /珍珠的来历/ })).toBeInTheDocument();
+  expect(await screen.findByRole("option", { name: /珍珠分镜/ })).toBeInTheDocument();
+  expect(screen.queryByRole("option", { name: /别的/ })).toBeNull();
+
+  fireEvent.click(entity);
+  expect(onNavigate).toHaveBeenCalledWith("entities");
+});
+
+it("设置项搜得到;只在管理页的,不是部署管理员时看得到但点不了", async () => {
+  mount();
+  fireEvent.change(await screen.findByRole("combobox"), { target: { value: "settingsPassword" } });
+  fireEvent.click(await screen.findByRole("option", { name: /settingsAccount/ }));
+  expect(links.gotoSettings).toHaveBeenCalledWith("account");
+
+  act(() => void window.dispatchEvent(new CustomEvent("mosael:open-cmdk")));
+  fireEvent.change(await screen.findByRole("combobox"), { target: { value: "proxyTitle" } });
+  const proxy = await screen.findByRole("option", { name: /proxyTitle/ });
+  expect(proxy).toHaveTextContent("cmdkAdminOnly");
+  expect(proxy).toHaveAttribute("aria-disabled", "true");
 });

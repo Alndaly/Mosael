@@ -1,23 +1,40 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  BookOpen,
   Clapperboard,
   FileAudio,
   FileImage,
   FileVideo,
   FolderPlus,
+  LayoutGrid,
   Rocket,
   SearchX,
+  Settings,
+  ShieldCheck,
+  UsersRound,
   Workflow,
 } from "lucide-react";
 
-import { listPublishTasks, listWorkflows, type ProjectWithStats, type Workspace } from "@/api/client";
+import {
+  entityKeys,
+  getEntityCatalog,
+  listBoards,
+  listEntities,
+  listNotes,
+  listPublishTasks,
+  listWorkflows,
+  type ProjectWithStats,
+  type Workspace,
+} from "@/api/client";
+import { boardKeys, noteKeys } from "@/api/queryKeys";
 import { useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Highlight } from "@/components/app/Highlight";
 import type { StudioView } from "@/components/layout/AppShell";
 import { NAV_ITEMS } from "@/components/layout/navLabels";
 import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
+import { Truncate } from "@/components/ui/truncate";
 import {
   CommandDialog,
   CommandGroup,
@@ -26,8 +43,10 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { ADMIN_SETTINGS, SETTINGS_SEARCH, matchSettings } from "@/lib/settingsSearch";
 import { useAssetPages } from "@/lib/assetQueries";
-import { emitOpenEvent, OPEN_ASSET_EVENT } from "@/lib/deepLink";
+import { assetKindKey } from "@/lib/assetKinds";
+import { emitOpenEvent, gotoAdmin, gotoSettings, openBoard, openNote, OPEN_ASSET_EVENT } from "@/lib/deepLink";
 import { listenKeys } from "@/lib/shortcuts";
 
 
@@ -122,6 +141,34 @@ export function CommandPalette({
     enabled: open && query.length > 0,
     staleTime: 30_000,
   });
+  //: 「全局搜索」此前搜不到资产(人物 / 场景 / 道具)、笔记、画板和设置项 —— 记得名字的人得出「没有」,
+  //: 其实就在那(体检 UM-14)。资产、笔记在服务端按关键字搜;画板列表本来就小,和工作流一样取回来在这儿筛。
+  const entities = useQuery({
+    queryKey: entityKeys.list(workspace.id, { q: query }),
+    queryFn: () => listEntities(workspace.id, { q: query }),
+    enabled: open && query.length > 0,
+    staleTime: 30_000,
+  });
+  const notes = useQuery({
+    queryKey: noteKeys.search(workspace.id, query),
+    queryFn: () => listNotes(workspace.id, query),
+    enabled: open && query.length > 0,
+    staleTime: 30_000,
+  });
+  const boards = useQuery({
+    queryKey: boardKeys.list(workspace.id),
+    queryFn: () => listBoards(workspace.id),
+    enabled: open && query.length > 0,
+    staleTime: 30_000,
+  });
+  //: 种类名(人物 / 场景 / 道具)从后端的词表来,和资产页同一份(同一个 query key,打开过资产页就不再取)。
+  const entityCatalog = useQuery({
+    queryKey: entityKeys.catalog(),
+    queryFn: getEntityCatalog,
+    staleTime: Infinity,
+    enabled: open && query.length > 0,
+  });
+  const entityKindLabel = (kind: string) => entityCatalog.data?.kinds.find((one) => one.kind === kind)?.label ?? "";
 
   const q = query.toLowerCase();
   // 页面清单读 navLabels 那一份。此前这里抄了一份,漏掉了笔记、3D 场景、画板、管理 —— ⌘K 跳不过去。
@@ -156,6 +203,14 @@ export function CommandPalette({
         )
         .slice(0, 6)
     : [];
+
+  const entityMatches = q ? (entities.data ?? []).slice(0, 6) : [];
+  const noteMatches = q ? (notes.data ?? []).slice(0, 6) : [];
+  const boardMatches = q ? (boards.data ?? []).filter((board) => board.name.toLowerCase().includes(q)).slice(0, 6) : [];
+  //: 设置项和设置页左边那个搜索框是同一份(settingsSearch):分区里的行、只在管理页的设置都搜得到。
+  //: 管理页的那些,部署管理员点了直达那个 tab;别人看得到它在哪、由谁改,但点不了。
+  const settingsMatches = q ? matchSettings(SETTINGS_SEARCH, query, t).slice(0, 6) : [];
+  const adminSettingMatches = q ? matchSettings(ADMIN_SETTINGS, query, t).slice(0, 4) : [];
 
   const run = (action: () => void) => {
     setOpen(false);
@@ -234,6 +289,24 @@ export function CommandPalette({
       })),
     },
     {
+      id: "entities",
+      heading: t("navEntities"),
+      items: entityMatches.map((entity) => ({
+        value: `entity-${entity.id}`,
+        onSelect: () => {
+          onNavigate("entities");
+          emitOpenEvent("mosael:open-entity", entity.id);
+        },
+        content: (
+          <>
+            <UsersRound size={14} />
+            <Highlight className="min-w-0 flex-1 truncate" text={entity.name} query={query} />
+            <span className="text-ui-xs text-muted-foreground">{entityKindLabel(entity.kind)}</span>
+          </>
+        ),
+      })),
+    },
+    {
       id: "workflows",
       heading: t("navWorkflows"),
       items: workflowMatches.map((workflow) => ({
@@ -249,6 +322,34 @@ export function CommandPalette({
             <span className="text-ui-xs tabular-nums text-muted-foreground">
               {t("wfNodeCount").replace("{n}", String(((workflow.graph as { nodes?: unknown[] }).nodes ?? []).length))}
             </span>
+          </>
+        ),
+      })),
+    },
+    {
+      id: "notes",
+      heading: t("navNotes"),
+      items: noteMatches.map((note) => ({
+        value: `note-${note.id}`,
+        onSelect: () => openNote(note.id),
+        content: (
+          <>
+            <BookOpen size={14} />
+            <Highlight className="min-w-0 flex-1 truncate" text={note.title || t("cmdkUntitledNote")} query={query} />
+          </>
+        ),
+      })),
+    },
+    {
+      id: "boards",
+      heading: t("navBoards"),
+      items: boardMatches.map((board) => ({
+        value: `board-${board.id}`,
+        onSelect: () => openBoard(board.id),
+        content: (
+          <>
+            <LayoutGrid size={14} />
+            <Highlight className="min-w-0 flex-1 truncate" text={board.name} query={query} />
           </>
         ),
       })),
@@ -285,14 +386,47 @@ export function CommandPalette({
           <>
             {ASSET_ICONS[asset.kind] ?? <FileVideo size={14} />}
             <Highlight className="min-w-0 flex-1 truncate" text={asset.name} query={query} />
-            <span className="text-ui-xs uppercase text-muted-foreground">{asset.kind}</span>
+            <span className="text-ui-xs text-muted-foreground">{t(assetKindKey(asset.kind))}</span>
           </>
         ),
       })),
     },
+    {
+      id: "settings",
+      heading: t("navSettings"),
+      items: [
+        ...settingsMatches.map(({ entry, hit }) => ({
+          value: `settings-${entry.id}`,
+          onSelect: () => gotoSettings(entry.id),
+          content: (
+            <>
+              <Settings size={14} />
+              <Truncate className="min-w-0 flex-1">
+                {t(entry.label)}
+                {hit && <span className="text-muted-foreground"> · {t(hit)}</span>}
+              </Truncate>
+            </>
+          ),
+        })),
+        ...adminSettingMatches.map(({ entry }) => ({
+          value: `admin-setting-${entry.id}`,
+          disabled: !isDeploymentAdmin,
+          onSelect: () => gotoAdmin(entry.tab),
+          content: (
+            <>
+              <ShieldCheck size={14} />
+              <Truncate className="min-w-0 flex-1">{t(entry.label)}</Truncate>
+              <span className="text-ui-xs text-muted-foreground">{isDeploymentAdmin ? t("navAdmin") : t("cmdkAdminOnly")}</span>
+            </>
+          ),
+        })),
+      ],
+    },
   ].filter((group) => group.items.length > 0);
 
-  const searching = assets.isFetching || workflows.isFetching || publishTasks.isFetching || input.trim() !== query;
+  const searching =
+    assets.isFetching || workflows.isFetching || publishTasks.isFetching || entities.isFetching || notes.isFetching
+    || boards.isFetching || input.trim() !== query;
 
   // 关掉内建过滤后 cmdk 不再自动高亮第一项(Enter 会没有目标)— 受控高亮:
   // 结果集头名变化(=输入变化)时重置到第一项,方向键仍经 onValueChange 自由移动。

@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useOpenRequest } from "@/lib/deepLink";
 import { usePersistentTab } from "@/lib/usePersistentTab";
+import { ADMIN_TABS, type AdminTab } from "@/lib/adminTabs";
 import { AdminOverview } from "./AdminOverview";
 import { AdminMembers } from "./AdminMembers";
 import { AiRuntimeSection } from "./AiRuntimeSection";
@@ -25,8 +26,6 @@ import { SharedHostFoldersSection } from "./SharedHostFoldersSection";
 import { OutboundAllowlistSection } from "./OutboundAllowlistSection";
 import { VoiceCloneSection } from "./VoiceCloneSection";
 
-const TABS = ["overview", "members", "pricing", "engines", "deployment"] as const;
-export type AdminTab = (typeof TABS)[number];
 
 /**
  * 管理员控制台 —— **这台部署**的状况。
@@ -54,11 +53,11 @@ export type AdminTab = (typeof TABS)[number];
  */
 export function AdminView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
-  const [tab, setTab] = usePersistentTab<AdminTab>("admin", "overview", TABS);
+  const [tab, setTab] = usePersistentTab<AdminTab>("admin", "overview", ADMIN_TABS);
   // 深链(gotoAdmin):统计页的「N 次未定价」→ 成本规则;转写、降噪等处「引擎没装」→ 引擎。
   // 认不出的 tab 原地不动。
   useOpenRequest("mosael:open-admin", (link) => {
-    const target = TABS.find((one) => one === link);
+    const target = ADMIN_TABS.find((one) => one === link);
     if (target) setTab(target);
   });
   //: 入口只对部署管理员显示,但地址(#/admin)谁都打得开。此前非管理员打开是四个「—」、「还没有产生花费」+「去设置价格规则」

@@ -1,7 +1,9 @@
 import React from "react";
+import { ShieldCheck } from "lucide-react";
 
-import { useOpenRequest } from "@/lib/deepLink";
+import { gotoAdmin, useOpenRequest } from "@/lib/deepLink";
 import type { Workspace } from "@/api/client";
+import { useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,7 @@ import {
   SETTINGS_GROUPS,
   resolveSettingsLink,
 } from "@/features/settings/settingsSections";
+import { ADMIN_SETTINGS, SETTINGS_SEARCH, matchSettings } from "@/lib/settingsSearch";
 
 const SECTION_STORAGE_KEY = "mosael:settings-section";
 
@@ -24,6 +27,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
   // 导航项是短标签,不是长内容 —— 用紧凑档,宽度让给右边真正在配的东西。
   const sidebar = useResizableSidebar("settings", COMPACT_SIDEBAR_BOUNDS);
   const t = useI18n();
+  const isDeploymentAdmin = useIsDeploymentAdmin();
   const [navSearch, setNavSearch] = React.useState("");
   const [focusCapability, setFocusCapability] = React.useState<string | null>(null);
   const [section, setSectionState] = React.useState<string>(() => {
@@ -44,8 +48,10 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
     setFocusCapability(target.focus);
   });
 
-  const query = navSearch.toLocaleLowerCase();
-  const matches = (label: string) => label.toLocaleLowerCase().includes(query);
+  //: 搜的不只是分区名,还有分区里那些行(「主题」「密码」「默认模型」)和只在管理页的设置(「代理」「镜像」「邀请码」),
+  //: 见 settingsSearch。此前只比分区名,按「我要改什么」来搜几乎都是「没有找到」(体检 UM-15)。
+  const sectionHits = new Map(matchSettings(SETTINGS_SEARCH, navSearch, t).map(({ entry, hit }) => [entry.id, hit]));
+  const adminHits = navSearch.trim() ? matchSettings(ADMIN_SETTINGS, navSearch, t) : [];
   const current = ALL_SECTIONS.find((one) => one.id === section) ?? ALL_SECTIONS[0];
 
   return (
@@ -54,7 +60,7 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
         <nav className="flex min-h-0 flex-col gap-5 overflow-y-auto border-r border-divider bg-workspace-subtle px-4 py-5 max-[880px]:max-h-48 max-[880px]:border-b max-[880px]:border-r-0" aria-label={t("settingsTitle")}>
           <Input className="shrink-0" aria-label={t("studioSettingsSearch")} placeholder={t("studioSettingsSearch")} value={navSearch} onChange={e => setNavSearch(e.target.value)} />
           {SETTINGS_GROUPS.map((group) => {
-            const items = group.sections.filter((one) => matches(t(one.label)));
+            const items = group.sections.filter((one) => sectionHits.has(one.id));
             if (items.length === 0) return null;
             return (
               <div key={group.title} className="grid gap-1">
@@ -74,13 +80,39 @@ export function SettingsView({ workspace }: { workspace: Workspace }) {
                     }}
                   >
                     {item.icon}
-                    <span>{t(item.label)}</span>
+                    <span className="min-w-0">
+                      {t(item.label)}
+                      {sectionHits.get(item.id) && <span className="text-ui-xs font-normal text-muted-foreground"> · {t(sectionHits.get(item.id)!)}</span>}
+                    </span>
                   </button>
                 ))}
               </div>
             );
           })}
-          {ALL_SECTIONS.every((one) => !matches(t(one.label))) && (
+          {adminHits.length > 0 && (
+            <div className="grid gap-1" data-settings-admin-hits="">
+              <h3 className="m-0 px-2 pb-1 text-ui-xs font-medium text-muted-foreground">{t("settingsSearchInAdmin")}</h3>
+              {adminHits.map(({ entry }) =>
+                isDeploymentAdmin ? (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left text-ui-sm text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => gotoAdmin(entry.tab)}
+                  >
+                    <ShieldCheck size={14} />
+                    <span>{t(entry.label)}</span>
+                  </button>
+                ) : (
+                  <div key={entry.id} className="grid gap-0.5 px-2 py-1.5 text-ui-sm text-muted-foreground">
+                    <span>{t(entry.label)}</span>
+                    <small className="text-ui-xs leading-normal">{t("settingsSearchAdminOnly")}</small>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+          {sectionHits.size === 0 && adminHits.length === 0 && (
             <p className="text-ui-sm text-muted-foreground">{t("studioSettingsEmpty")}</p>
           )}
         </nav>

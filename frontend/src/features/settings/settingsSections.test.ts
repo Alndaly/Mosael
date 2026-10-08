@@ -26,10 +26,15 @@ vi.mock("@/features/settings/TeamSection", () => ({ TeamSection: () => null }));
 vi.mock("@/features/settings/VoiceLibrarySection", () => ({ VoiceLibrarySection: () => null }));
 
 import { ALL_SECTIONS, SETTINGS_GROUPS, resolveSettingsLink } from "./settingsSections";
+import { SETTINGS_SEARCH } from "@/lib/settingsSearch";
 
 const groupOf = (id: string) => SETTINGS_GROUPS.find((group) => group.sections.some((one) => one.id === id))?.title;
 
 describe("设置页结构", () => {
+  it("搜索那一份(settingsSearch,⌘K 也读它)和这里的分区一一对得上:加一页忘了登记就搜不到", () => {
+    expect(SETTINGS_SEARCH.map((one) => [one.id, one.label])).toEqual(ALL_SECTIONS.map((one) => [one.id, one.label]));
+  });
+
   it("每一页只出现一次", () => {
     const ids = ALL_SECTIONS.map((one) => one.id);
     expect(new Set(ids).size).toBe(ids.length);
