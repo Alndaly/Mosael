@@ -259,6 +259,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "genErr_contractMissing": {"zh": "参数契约不存在", "en": "This parameter contract doesn't exist."},
     "genErr_connectionMissing": {"zh": "生成连接不存在", "en": "The generation connection doesn't exist."},
+    "genErr_modelUnavailable": {
+        "zh": "「{model}」现在用不了:{reason}",
+        "en": "“{model}” can't be used right now: {reason}",
+    },
     "genErr_modelNotEnabled": {
         "zh": "生成模型未启用或不存在",
         "en": "The generation model isn't enabled or doesn't exist.",

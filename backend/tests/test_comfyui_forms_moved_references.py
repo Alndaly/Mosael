@@ -39,9 +39,10 @@ FORM_TOOL = FULL_TOOL + "_app"
 
 def _formed(ui: dict[str, Any]) -> dict[str, Any]:
     stored = copy.deepcopy(ui)
-    stored["extra"] = {"mosael": {"version": 1, "app": {"title": "快速出图", "description": "", "graph_items": {}}}}
+    stored["extra"] = {"mosael": {"version": 2, "forms": [{"id": "app", "title": "快速出图", "description": "",
+                                                           "graph_items": {}}]}}
     next(one for one in stored["nodes"] if one["id"] == 6)["properties"] = {
-        "mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+        "mosael": {"forms": {"app": {"text": {"order": 0, "main": True}}}}}
     return stored
 
 

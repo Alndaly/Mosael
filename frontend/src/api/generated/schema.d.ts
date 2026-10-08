@@ -3513,6 +3513,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generation/unavailable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Unavailable Models
+         * @description 插件连接上「认得、现在用不了」的模型和为什么:选着它们的格子、会话据此说清楚该去哪(ADR 0045 §7)。
+         */
+        get: operations["list_unavailable_models_api_generation_unavailable_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generation/capability-profile-schema": {
         parameters: {
             query?: never;
@@ -6737,7 +6757,7 @@ export interface paths {
         };
         /**
          * Get Workflow App
-         * @description 一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。
+         * @description 一张工作流的表单(ADR 0038、0045):全部能填的项、交回结果的输出节点、文件里的每张表单、读到时的改动时间。
          */
         get: operations["get_workflow_app_api_plugins_instances__instance_id__workflow_library_app_get"];
         put?: never;
@@ -6759,10 +6779,52 @@ export interface paths {
         put?: never;
         /**
          * Annotate Workflow
-         * @description 改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。那张在读到之后被改过
-         *     就不写,回 409 `stale`。
+         * @description 改那台服务器上一张工作流的表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。`forms` 是全部表单。
+         *     那张在读到之后被改过就不写,回 409 `stale`。
          */
         post: operations["annotate_workflow_api_plugins_instances__instance_id__workflow_library_annotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/upgrade-marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upgrade Workflow Marks
+         * @description 把这个连接上上一版格式的表单标记改写成这一版(ADR 0045 §7,界面上确认过一次):只改每张里的 `mosael` 那几处,
+         *     那台机器上刚改过的那张跳过。
+         */
+        post: operations["upgrade_workflow_marks_api_plugins_instances__instance_id__workflow_library_upgrade_marks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/form-usages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Form Usages
+         * @description 一张表单在这个工作区里被哪些地方用着(删之前说给作者听):画板、工作流、AI Studio 的生成会话。`model` / `tool` 是
+         *     这张表单的模型 id 和工具名(`…/workflow-library/app` 的回答里有)。
+         */
+        get: operations["get_form_usages_api_plugins_instances__instance_id__workflow_library_form_usages_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6780,7 +6842,7 @@ export interface paths {
         put?: never;
         /**
          * Get Canvas App
-         * @description 工作台的「应用」面板(ADR 0038 §3):画布上现在这张(含没存的改动)的应用表单。不读、不写那台机器上的文件。
+         * @description 工作台的「表单」页签(ADR 0038 §3):画布上现在这张(含没存的改动)的表单。不读、不写那台机器上的文件。
          */
         post: operations["get_canvas_app_api_plugins_instances__instance_id__workflow_library_app_live_post"];
         delete?: never;
@@ -6800,7 +6862,7 @@ export interface paths {
         put?: never;
         /**
          * Get Canvas Marks
-         * @description 应用表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。
+         * @description 表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。
          */
         post: operations["get_canvas_marks_api_plugins_instances__instance_id__workflow_library_app_marks_post"];
         delete?: never;
@@ -11796,6 +11858,11 @@ export interface components {
             label: string;
             /** Entry */
             entry: string;
+            /**
+             * Order
+             * @default 0
+             */
+            order: number;
         };
         /**
          * ExportRequest
@@ -12228,6 +12295,18 @@ export interface components {
             model?: string | null;
             /** Kind */
             kind?: string | null;
+        };
+        /**
+         * GenerationUnavailableOut
+         * @description 插件连接上「认得、现在用不了」的一个模型(ComfyUI:表单还是旧格式、要先升级的那几张工作流的表单入口)。
+         */
+        GenerationUnavailableOut: {
+            /** Provider Profile Id */
+            provider_profile_id: string;
+            /** Model */
+            model: string;
+            /** Reason */
+            reason: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -17806,31 +17885,17 @@ export interface components {
         };
         /**
          * WorkflowAnnotateRequest
-         * @description 改一张工作流的应用表单和结果标记(只改 `mosael` 那几处,覆盖写)。
+         * @description 改一张工作流的表单和结果标记(只改 `mosael` 那几处,覆盖写)。
          */
         WorkflowAnnotateRequest: {
             /** Path */
             path: string;
             /** Modified */
             modified: number;
-            app?: components["schemas"]["WorkflowAppIn"] | null;
+            /** Forms */
+            forms?: components["schemas"]["WorkflowFormIn"][];
             /** Results */
             results?: string[];
-        };
-        /** WorkflowAppIn */
-        WorkflowAppIn: {
-            /**
-             * Title
-             * @default
-             */
-            title: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Items */
-            items?: components["schemas"]["WorkflowAppItemIn"][];
         };
         /**
          * WorkflowAppItemIn
@@ -17859,7 +17924,7 @@ export interface components {
         };
         /**
          * WorkflowAppItemOut
-         * @description 工作流文件里应用表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。
+         * @description 工作流文件里一张表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。
          */
         WorkflowAppItemOut: {
             /** Key */
@@ -17956,7 +18021,7 @@ export interface components {
         };
         /**
          * WorkflowAppSummaryOut
-         * @description 一张工作流的应用表单:有没有、版本认不认、标题、每一项、标成结果的节点。
+         * @description 一张工作流的表单:有没有标记、版本认不认(能不能升级)、每张表单、标成结果的节点。
          */
         WorkflowAppSummaryOut: {
             /**
@@ -17971,22 +18036,12 @@ export interface components {
              */
             version: string;
             /**
-             * App
+             * Upgradable
              * @default false
              */
-            app: boolean;
-            /**
-             * Title
-             * @default
-             */
-            title: string;
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Items */
-            items?: components["schemas"]["WorkflowAppItemOut"][];
+            upgradable: boolean;
+            /** Forms */
+            forms?: components["schemas"]["WorkflowFormOut"][];
             /** Results */
             results?: string[];
             /**
@@ -17995,10 +18050,10 @@ export interface components {
              */
             invalid: number;
             /**
-             * Fields
+             * Stray
              * @default 0
              */
-            fields: number;
+            stray: number;
         };
         /**
          * WorkflowCanvasMarksOut
@@ -18018,14 +18073,15 @@ export interface components {
         };
         /**
          * WorkflowCanvasMarksRequest
-         * @description 应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」;不写文件)。
+         * @description 表单和结果标记写进画布要改成的样子(工作台的「表单」页签、「以后只要这张」;不写文件)。
          */
         WorkflowCanvasMarksRequest: {
             /** Content */
             content: {
                 [key: string]: unknown;
             };
-            app?: components["schemas"]["WorkflowAppIn"] | null;
+            /** Forms */
+            forms?: components["schemas"]["WorkflowFormIn"][];
             /** Results */
             results?: string[];
         };
@@ -18038,6 +18094,11 @@ export interface components {
             content: {
                 [key: string]: unknown;
             };
+            /**
+             * Path
+             * @default
+             */
+            path: string;
         };
         /**
          * WorkflowCanvasRunRequest
@@ -18253,6 +18314,97 @@ export interface components {
         WorkflowFolderRequest: {
             /** Path */
             path: string;
+        };
+        /**
+         * WorkflowFormIn
+         * @description 要写进去的一张表单。
+         */
+        WorkflowFormIn: {
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Items */
+            items?: components["schemas"]["WorkflowAppItemIn"][];
+        };
+        /**
+         * WorkflowFormOut
+         * @description 工作流文件里的一张表单(ADR 0045:表单是工作流的一个入口)。
+         */
+        WorkflowFormOut: {
+            /** Id */
+            id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Items */
+            items?: components["schemas"]["WorkflowAppItemOut"][];
+            /**
+             * Fields
+             * @default 0
+             */
+            fields: number;
+            /**
+             * Invalid
+             * @default 0
+             */
+            invalid: number;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Tool
+             * @default
+             */
+            tool: string;
+        };
+        /** WorkflowFormUsagesOut */
+        WorkflowFormUsagesOut: {
+            /** Uses */
+            uses?: components["schemas"]["WorkflowFormUseOut"][];
+        };
+        /**
+         * WorkflowFormUseOut
+         * @description 一张表单在这个工作区里的一处用法(删之前说给作者听)。
+         */
+        WorkflowFormUseOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "board" | "workflow" | "session";
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
         };
         /**
          * WorkflowFromPage
@@ -18949,6 +19101,47 @@ export interface components {
             } | null;
             /** Base Graph Hash */
             base_graph_hash?: string | null;
+        };
+        /** WorkflowUpgradeFailureOut */
+        WorkflowUpgradeFailureOut: {
+            /** Path */
+            path: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /**
+         * WorkflowUpgradeItemIn
+         * @description 要升级的一张:路径和列表里读到的改动时间(那台机器上在这之后改过就跳过)。
+         */
+        WorkflowUpgradeItemIn: {
+            /** Path */
+            path: string;
+            /** Modified */
+            modified?: number | null;
+        };
+        /** WorkflowUpgradeMarksOut */
+        WorkflowUpgradeMarksOut: {
+            /** Upgraded */
+            upgraded?: string[];
+            /** Stale */
+            stale?: string[];
+            /** Skipped */
+            skipped?: string[];
+            /** Gone */
+            gone?: string[];
+            /** Failed */
+            failed?: components["schemas"]["WorkflowUpgradeFailureOut"][];
+        };
+        /**
+         * WorkflowUpgradeMarksRequest
+         * @description 把上一版格式的表单标记改写成这一版(ADR 0045 §7「查看并升级」):只改每张里的 `mosael` 标记。
+         */
+        WorkflowUpgradeMarksRequest: {
+            /** Paths */
+            paths: components["schemas"]["WorkflowUpgradeItemIn"][];
         };
         /**
          * WorkflowUseOut
@@ -26050,6 +26243,35 @@ export interface operations {
             };
         };
     };
+    list_unavailable_models_api_generation_unavailable_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationUnavailableOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_capability_profile_schema_api_generation_capability_profile_schema_get: {
         parameters: {
             query?: {
@@ -32772,6 +32994,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowAnnotateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upgrade_workflow_marks_api_plugins_instances__instance_id__workflow_library_upgrade_marks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowUpgradeMarksRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowUpgradeMarksOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_form_usages_api_plugins_instances__instance_id__workflow_library_form_usages_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                model?: string;
+                tool?: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowFormUsagesOut"];
                 };
             };
             /** @description Validation Error */

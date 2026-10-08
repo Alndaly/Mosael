@@ -12,6 +12,7 @@ from app.api.schemas import (
     GenerationJobOut,
     GenerationOptionOut,
     GenerationSessionCreate,
+    GenerationUnavailableOut,
     GenerationSessionOut,
     GenerationSessionUpdate,
     PromptOptimizeRequest,
@@ -89,6 +90,14 @@ def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser)
 def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image") -> list[GenerationOptionOut]:
     """能用来生成的 (连接 × 模型)。设置页里加了什么,这里就有什么 —— 同一个来源。"""
     return [GenerationOptionOut(**option) for option in generation_options(db, kind, user_id=user.id)]
+
+
+@router.get("/generation/unavailable", response_model=list[GenerationUnavailableOut])
+def list_unavailable_models(db: DbSession, user: CurrentUser) -> list[GenerationUnavailableOut]:
+    """插件连接上「认得、现在用不了」的模型和为什么:选着它们的格子、会话据此说清楚该去哪(ADR 0045 §7)。"""
+    from app.domain.generation.resolution import unavailable_models
+
+    return [GenerationUnavailableOut(**one) for one in unavailable_models(db, user_id=user.id)]
 
 
 @router.get("/generation/capability-profile-schema", response_model=CapabilityProfileSchemaOut)

@@ -94,6 +94,8 @@ class EntryGroupOut(ApiModel):
     id: str
     label: str
     entry: str
+    #: 在这一组里排第几(插件给的顺序:完整工作流 0,表单按作者排的从 1 起)
+    order: int = 0
 
 
 class PluginProvidedModelOut(ApiModel):
@@ -861,7 +863,7 @@ class WorkflowUseOut(ApiModel):
 
 
 class WorkflowAppItemOut(ApiModel):
-    """工作流文件里应用表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。"""
+    """工作流文件里一张表单的一项(ADR 0038 §2):节点上的一格,或图级的种子 / 尺寸 / 跑几遍(`node` 是空串)。"""
 
     #: `<节点 id>.<输入名>`,图级的项就是它的名字(seed / size / runs)
     key: str
@@ -879,24 +881,41 @@ class WorkflowAppItemOut(ApiModel):
     problem: str = ""
 
 
-class WorkflowAppSummaryOut(ApiModel):
-    """一张工作流的应用表单:有没有、版本认不认、标题、每一项、标成结果的节点。"""
+class WorkflowFormOut(ApiModel):
+    """工作流文件里的一张表单(ADR 0045:表单是工作流的一个入口)。"""
 
-    #: none(没有 Mosael 的标记)/ ok / unsupported(版本不是这一版插件认的,按「没有应用表单」处理)
-    status: Literal["none", "ok", "unsupported"] = "none"
-    #: unsupported 时文件里写的版本
-    version: str = ""
-    #: 有应用表单(没有时只可能有结果标记)
-    app: bool = False
+    #: 表单 id(1–8 位小写字母和数字,只在这张工作流里唯一;上一版改写过来的那张是 `app`)
+    id: str
+    #: 标题;空串 = 没起(界面写「未命名表单」)
     title: str = ""
     description: str = ""
     items: list[WorkflowAppItemOut] = Field(default_factory=list)
-    #: 标成结果的输出节点(「以后只要这张」)
-    results: list[str] = Field(default_factory=list)
-    #: 对不上的有几项(含标成结果、却不再交出东西的节点)
-    invalid: int = 0
     #: 有效的有几项
     fields: int = 0
+    #: 对不上的有几项
+    invalid: int = 0
+    #: 这张表单的模型 id(`<路径>#<表单 id>`)和工具名:删之前数「Mosael 里有几处在用它」用;说不出来是空串
+    model: str = ""
+    tool: str = ""
+
+
+class WorkflowAppSummaryOut(ApiModel):
+    """一张工作流的表单:有没有标记、版本认不认(能不能升级)、每张表单、标成结果的节点。"""
+
+    #: none(没有 Mosael 的标记)/ ok / unsupported(版本不是这一版插件认的,按「没有表单」处理)
+    status: Literal["none", "ok", "unsupported"] = "none"
+    #: unsupported 时文件里写的版本
+    version: str = ""
+    #: 是上一版的标记、能改写过来(工作流库里「查看并升级」);更新的版本只能升级插件
+    upgradable: bool = False
+    #: 每张表单,按要列出来的顺序
+    forms: list[WorkflowFormOut] = Field(default_factory=list)
+    #: 标成结果的输出节点(「以后只要这张」,按工作流记,不按表单)
+    results: list[str] = Field(default_factory=list)
+    #: 对不上的有几项(各张表单的,加上标成结果、却不再交出东西的节点)
+    invalid: int = 0
+    #: 对不上任何一张表单的标记有几处(节点上指着不在的表单、重复或不合规的表单 id;下次保存时清掉)
+    stray: int = 0
 
 
 class WorkflowFileOut(ApiModel):
@@ -928,7 +947,7 @@ class WorkflowFileOut(ApiModel):
     last_output: WorkflowRecentOutputOut | None = None
     #: 这个工作区里选了它的工作流节点、画板格子
     used_by: list[WorkflowUseOut] = Field(default_factory=list)
-    #: 它的应用表单(ADR 0038);插件没说(转不过来的那几张)是 None。有应用表单时上面的 inputs / parameters 只是表单那几项
+    #: 它的表单(ADR 0038、0045);插件没说(转不过来的那几张)是 None。上面的 inputs / parameters 说的是完整工作流
     app: WorkflowAppSummaryOut | None = None
 
 
@@ -1003,20 +1022,24 @@ class WorkflowAppItemIn(ApiModel):
     choices: list[str] | None = Field(default=None, max_length=1000)
 
 
-class WorkflowAppIn(ApiModel):
+class WorkflowFormIn(ApiModel):
+    """要写进去的一张表单。"""
+
+    #: 已有的表单带着它的 id;新表单不给(插件起 id)
+    id: str = Field(default="", max_length=8)
     title: str = Field(default="", max_length=120)
     description: str = Field(default="", max_length=1000)
     items: list[WorkflowAppItemIn] = Field(default_factory=list, max_length=200)
 
 
 class WorkflowAnnotateRequest(ApiModel):
-    """改一张工作流的应用表单和结果标记(只改 `mosael` 那几处,覆盖写)。"""
+    """改一张工作流的表单和结果标记(只改 `mosael` 那几处,覆盖写)。"""
 
     path: str = Field(min_length=1, max_length=500)
     #: 读到它时的改动时间(`GET …/workflow-library/app` 给的):对不上就不写,回 409
     modified: float
-    #: 不给(null)= 去掉应用表单
-    app: WorkflowAppIn | None = None
+    #: **全部**表单,按要列出来的顺序(编辑器每次交全部);空列表 = 一张都不要
+    forms: list[WorkflowFormIn] = Field(default_factory=list, max_length=20)
     #: 标成结果的输出节点
     results: list[str] = Field(default_factory=list, max_length=64)
 
@@ -1031,15 +1054,61 @@ class WorkflowCanvasRequest(ApiModel):
     """工作台画布上现在这张(界面格式,含没存的改动;主进程的桥从内嵌的 ComfyUI 里导出来)。"""
 
     content: dict[str, Any]
+    #: 画布开的是哪张(相对 workflows/ 的路径;新建还没存的是空串):插件据此说出每张表单的模型 id 和工具名
+    path: str = Field(default="", max_length=500)
 
 
 class WorkflowCanvasMarksRequest(ApiModel):
-    """应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」;不写文件)。"""
+    """表单和结果标记写进画布要改成的样子(工作台的「表单」页签、「以后只要这张」;不写文件)。"""
 
     content: dict[str, Any]
-    #: 不给(null)= 去掉应用表单
-    app: WorkflowAppIn | None = None
+    #: **全部**表单(没给 id 的是新表单);空列表 = 一张都不要
+    forms: list[WorkflowFormIn] = Field(default_factory=list, max_length=20)
     results: list[str] = Field(default_factory=list, max_length=64)
+
+
+class WorkflowUpgradeItemIn(ApiModel):
+    """要升级的一张:路径和列表里读到的改动时间(那台机器上在这之后改过就跳过)。"""
+
+    path: str = Field(min_length=1, max_length=500)
+    modified: float | None = None
+
+
+class WorkflowUpgradeMarksRequest(ApiModel):
+    """把上一版格式的表单标记改写成这一版(ADR 0045 §7「查看并升级」):只改每张里的 `mosael` 标记。"""
+
+    paths: list[WorkflowUpgradeItemIn] = Field(min_length=1, max_length=1000)
+
+
+class WorkflowUpgradeFailureOut(ApiModel):
+    path: str
+    reason: str = ""
+
+
+class WorkflowUpgradeMarksOut(ApiModel):
+    upgraded: list[str] = Field(default_factory=list)
+    #: 在 ComfyUI 里刚改过的:没动,重新打开工作流库再升级
+    stale: list[str] = Field(default_factory=list)
+    #: 已经不是上一版的:不用改
+    skipped: list[str] = Field(default_factory=list)
+    #: 已经不在了的
+    gone: list[str] = Field(default_factory=list)
+    failed: list[WorkflowUpgradeFailureOut] = Field(default_factory=list)
+
+
+class WorkflowFormUseOut(ApiModel):
+    """一张表单在这个工作区里的一处用法(删之前说给作者听)。"""
+
+    #: board / workflow / session(AI Studio 的生成会话)
+    kind: Literal["board", "workflow", "session"]
+    id: str
+    name: str = ""
+    #: 那一处里有几格 / 几个节点用着它
+    count: int = 1
+
+
+class WorkflowFormUsagesOut(ApiModel):
+    uses: list[WorkflowFormUseOut] = Field(default_factory=list)
 
 
 class WorkflowCanvasMarksOut(ApiModel):

@@ -252,7 +252,9 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
     ]
     count = provider_models.replace_declared_catalog(db, profile, entries)
     db.flush()
-    # 连同模型清单一起由 set_capability_status 提交。
+    if found.library_upgrades and not previous.get("library_upgrades"):
+        _tell_about_upgrades(db, instance, found.library_upgrades)
+    # 连同模型清单(和那条通知)一起由 set_capability_status 提交。
     inst.set_capability_status(
         db,
         instance,
@@ -261,11 +263,31 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
             "models": count,
             "refreshed_at": _now(),
             "fingerprint": found.fingerprint,
+            "library_upgrades": found.library_upgrades,
+            "unavailable": found.unavailable,
             "error": "",
             "error_key": "",
             "error_params": {},
         },
     )
+
+
+def _tell_about_upgrades(db: Session, instance: PluginInstance, count: int) -> None:
+    """这个连接的工作流库里有几张工作流的表单还是上一版的格式(ADR 0045 §7):升级之前它们的表单入口都不在,指着它们的格子、
+    会话说「到工作流库里升级」。从没有到有的那一次通知连接的主人(他在的每个工作区一条;工作流库顶上另有一条横幅,确认
+    一次整台改写)。不是每次刷新都发。"""
+    from app.core.i18n import DEFAULT_LOCALE, t
+    from app.db.models import WorkspaceMember
+    from app.domain.notifications import notify
+
+    if not instance.owner_user_id:
+        return
+    workspaces = db.scalars(select(WorkspaceMember.workspace_id).where(WorkspaceMember.user_id == instance.owner_user_id))
+    for workspace_id in workspaces:
+        notify(db, workspace_id, type="system", user_id=instance.owner_user_id,
+               title=t("pluginNotice_formsOutdated", DEFAULT_LOCALE, name=instance.name),
+               body=t("pluginNotice_formsOutdatedBody", DEFAULT_LOCALE, n=str(count)),
+               link="#/plugins", payload={"plugin_instance_id": instance.id, "library_upgrades": count})
 
 
 def _handler(db: Session, instance: PluginInstance, refresh: bool) -> None:

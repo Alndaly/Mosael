@@ -28,6 +28,15 @@ class SourceAssetRef(ApiModel):
     role: str = Field(default=FIRST_FRAME, pattern=f"^({'|'.join(SOURCE_ROLES)})$")
 
 
+class GenerationUnavailableOut(ApiModel):
+    """插件连接上「认得、现在用不了」的一个模型(ComfyUI:表单还是旧格式、要先升级的那几张工作流的表单入口)。"""
+
+    provider_profile_id: str
+    model: str
+    #: 为什么、该去哪(按看的人的语言挑好)
+    reason: str
+
+
 class GenerationOptionOut(ApiModel):
     """一个「用哪条连接的哪个模型来生成」的选项。
 

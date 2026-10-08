@@ -54,6 +54,7 @@ from app.db.models import (
     Board,
     GeneratedAsset,
     GenerationJob,
+    GenerationSession,
     Job,
     PluginInstance,
     PluginInvocation,
@@ -64,6 +65,7 @@ from app.db.models import (
 from app.db.references import generation_model_key
 from app.domain import capabilities, local_services
 from app.domain.agent import places
+from app.domain.boards.producer_ids import node_producer_id
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import generation as plugin_generation
@@ -72,6 +74,7 @@ from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import WORKFLOW_LIBRARY
+from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 from app.domain.providers import models as provider_models
@@ -312,28 +315,31 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
     }
 
 
-#: 应用表单(ADR 0038):有没有、版本认不认。
+#: 表单(ADR 0038、0045):有没有标记、版本认不认。
 _APP_STATUSES = {"none", "ok", "unsupported"}
-#: 一张表最多几项、一项最多几个可选值、最多标几个结果;名字、标题、说明最长多少字(和插件那一侧同一套数)。
+#: 一张表最多几项、一项最多几个可选值、最多标几个结果、一张工作流最多几张表单;名字、标题、说明最长多少字(和插件那一侧
+#: 同一套数)。
 MAX_APP_ITEMS = 200
 MAX_APP_CHOICES = 1000
 MAX_APP_RESULTS = 64
+MAX_FORMS = 20
 _MAX_APP_LABEL = 120
 _MAX_APP_DESCRIPTION = 1000
 _GRAPH_ITEMS = {"seed", "size", "runs"}
-#: 根图上的节点号(子图里面的节点 —— `12:5` 这种 —— 这一版不能放进应用表单)。
+#: 根图上的节点号(子图里面的节点 —— `12:5` 这种 —— 这一版不能放进表单)。
 _ROOT_NODE = re.compile(r"\d{1,9}")
 #: 一格输入的名字:不收控制字符,不太长。
 _INPUT_NAME = re.compile(r"[^\x00-\x1f]{1,200}")
+#: 表单 id:小写字母和数字,1–8 位(插件起的,只在一张工作流里唯一;ADR 0045 §1)。
+_FORM_ID = re.compile(r"[a-z0-9]{1,8}")
+#: 一张表单的模型 id、工具名最长多少(模型 id 和 provider_models.model_id 一样长)。
+_MAX_FORM_MODEL = 160
+_MAX_FORM_TOOL = 64
 
 
-def _app_summary(raw: Any) -> dict[str, Any] | None:
-    """插件说的这张工作流的应用表单(有没有、版本、标题、每一项和对不上的原因、标成结果的节点),规整一遍。没说就是 None。"""
-    if not isinstance(raw, dict):
-        return None
-    status = _text(raw.get("status"), 20)
+def _app_items(raw: Any) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for one in raw.get("items") or []:
+    for one in raw if isinstance(raw, list) else []:
         if not isinstance(one, dict) or len(items) >= MAX_APP_ITEMS:
             continue
         node, name = _text(one.get("node"), 20), _text(one.get("input"), 200)
@@ -346,18 +352,43 @@ def _app_summary(raw: Any) -> dict[str, Any] | None:
             item["choices"] = [str(choice)[:1000] for choice in one["choices"][:MAX_APP_CHOICES]
                                if isinstance(choice, (str, int, float)) and not isinstance(choice, bool)]
         items.append(item)
+    return items
+
+
+def _app_form(raw: Any) -> dict[str, Any] | None:
+    """插件说的一张表单:id、标题、说明、每一项(对不上的带着原因)、几项有效 / 失效、它的模型 id 和工具名(说得出的话)。"""
+    if not isinstance(raw, dict) or not isinstance(raw.get("id"), str) or not _FORM_ID.fullmatch(raw["id"]):
+        return None
+    return {
+        "id": raw["id"],
+        "title": _text(raw.get("title"), _MAX_APP_LABEL),
+        "description": _text(raw.get("description"), _MAX_APP_DESCRIPTION),
+        "items": _app_items(raw.get("items")),
+        "fields": int(_number(raw.get("fields")) or 0),
+        "invalid": int(_number(raw.get("invalid")) or 0),
+        "model": _text(raw.get("model"), _MAX_FORM_MODEL),
+        "tool": _text(raw.get("tool"), _MAX_FORM_TOOL),
+    }
+
+
+def _app_summary(raw: Any) -> dict[str, Any] | None:
+    """插件说的这张工作流的表单(有没有标记、版本、能不能升级、每张表单、标成结果的节点、对不上任何一张表单的标记几处),
+    规整一遍。没说就是 None。"""
+    if not isinstance(raw, dict):
+        return None
+    status = _text(raw.get("status"), 20)
     version = raw.get("version")
+    forms = [one for one in (_app_form(item) for item in (raw.get("forms") or [])[:MAX_FORMS]
+                             if isinstance(raw.get("forms"), list)) if one]
     return {
         "status": status if status in _APP_STATUSES else "none",
         "version": str(version)[:20] if isinstance(version, (int, float, str)) and not isinstance(version, bool) else "",
-        "app": raw.get("app") is True,
-        "title": _text(raw.get("title"), _MAX_APP_LABEL),
-        "description": _text(raw.get("description"), _MAX_APP_DESCRIPTION),
-        "items": items,
+        "upgradable": raw.get("upgradable") is True,
+        "forms": [one for index, one in enumerate(forms) if one["id"] not in {other["id"] for other in forms[:index]}],
         "results": [_text(one, 20) for one in raw.get("results") or []
                     if isinstance(one, str) and _ROOT_NODE.fullmatch(one)][:MAX_APP_RESULTS],
         "invalid": int(_number(raw.get("invalid")) or 0),
-        "fields": int(_number(raw.get("fields")) or 0),
+        "stray": int(_number(raw.get("stray")) or 0),
     }
 
 
@@ -743,14 +774,15 @@ def app_form(db: Session, instance: PluginInstance, path: str) -> dict[str, Any]
     return _app_answer(db, instance, output, path)
 
 
-def _app_answer(db: Session, instance: PluginInstance, output: dict[str, Any], path: str) -> dict[str, Any]:
+def _app_answer(db: Session, instance: PluginInstance, output: dict[str, Any], path: str, *,
+                live: bool = False) -> dict[str, Any]:
     if not isinstance(output.get("items"), list):
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
     text = inst.manifest_for(db, instance).text
     items = [one for one in (_app_item(raw, text) for raw in output["items"][:_MAX_APP_FOUND]) if one]
     return {
         "path": path,
-        "modified": _number(output.get("modified")) if path else None,
+        "modified": _number(output.get("modified")) if path and not live else None,
         "kind": _text(output.get("kind"), 20),
         "editable": output.get("editable") is True,
         "items": items,
@@ -786,16 +818,22 @@ def _too_big() -> WorkflowLibraryError:
                                 results=str(MAX_APP_RESULTS))
 
 
-def _form_payload(app: dict[str, Any] | None, results: list[str]) -> dict[str, Any] | None:
-    """要写进去的应用表单先在这里过一遍:几项、每项是根图上的节点(或图级的种子 / 尺寸 / 跑几遍)、名字多长、可选值几个。"""
+def _results_payload(results: list[str]) -> list[str]:
     if len(results) > MAX_APP_RESULTS:
         raise _too_big()
     for one in results:
         if not _ROOT_NODE.fullmatch(one):
             raise WorkflowLibraryError("workflowLibErr_badAppItem", item=one[:200])
-    if app is None:
-        return None
-    entries = app.get("items") or []
+    return results
+
+
+def _form_payload(form: dict[str, Any]) -> dict[str, Any]:
+    """要写进去的一张表单先在这里过一遍:id(新表单不给)、几项、每项是根图上的节点(或图级的种子 / 尺寸 / 跑几遍)、
+    名字多长、可选值几个。"""
+    form_id = str(form.get("id") or "")
+    if form_id and not _FORM_ID.fullmatch(form_id):
+        raise WorkflowLibraryError("workflowLibErr_badFormId", form=form_id[:40])
+    entries = form.get("items") or []
     if not isinstance(entries, list) or len(entries) > MAX_APP_ITEMS:
         raise _too_big()
     clean: list[dict[str, Any]] = []
@@ -818,29 +856,131 @@ def _form_payload(app: dict[str, Any] | None, results: list[str]) -> dict[str, A
             item["choices"] = [str(one)[:1000] for one in choices
                                if isinstance(one, (str, int, float)) and not isinstance(one, bool)]
         clean.append(item)
-    return {"title": _text(app.get("title"), _MAX_APP_LABEL),
-            "description": _text(app.get("description"), _MAX_APP_DESCRIPTION), "items": clean}
+    return {**({"id": form_id} if form_id else {}), "title": _text(form.get("title"), _MAX_APP_LABEL),
+            "description": _text(form.get("description"), _MAX_APP_DESCRIPTION), "items": clean}
 
 
-def annotate(db: Session, instance: PluginInstance, path: str, *, modified: float, app: dict[str, Any] | None,
+def _forms_payload(forms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """要写进去的**全部**表单(ADR 0045 §7:编辑器每次交全部表单,没给 id 的是新表单,插件起 id):张数、id 不重复、每张过一遍。"""
+    if len(forms) > MAX_FORMS:
+        raise WorkflowLibraryError("workflowLibErr_tooManyForms", max=str(MAX_FORMS))
+    clean = [_form_payload(one) for one in forms]
+    ids = [one["id"] for one in clean if "id" in one]
+    if len(ids) != len(set(ids)):
+        raise WorkflowLibraryError("workflowLibErr_badFormId", form=next(one for one in ids if ids.count(one) > 1))
+    return clean
+
+
+def annotate(db: Session, instance: PluginInstance, path: str, *, modified: float, forms: list[dict[str, Any]],
              results: list[str]) -> dict[str, Any]:
-    """改那台服务器上一张工作流的应用表单和结果标记:**只改 `mosael` 那几处**,带着读到时的改动时间去(`modified`)。
-    那张在这之间被改过就不写(`WorkflowStale`,翻成 409)。成了让这个连接的目录马上重拉一遍(生成表单、工具跟着变),
-    回写完之后的改动时间(接着改用它)。界面每次都先确认:写明哪台服务器上的哪个文件、只改这几处标记。"""
+    """改那台服务器上一张工作流的表单和结果标记:**只改 `mosael` 那几处**,带着读到时的改动时间去(`modified`)。
+    `forms` 是**全部**表单(按要列出来的顺序;没给 id 的是新表单;空列表 = 一张都不要)。那张在这之间被改过就不写
+    (`WorkflowStale`,翻成 409)。成了让这个连接的目录马上重拉一遍(生成表单、工具跟着变),回写完之后的改动时间(接着改
+    用它)。界面每次都先确认:写明哪台服务器上的哪个文件、只改这几处标记。"""
     _require(db, instance)
     path = workflow_path(path)
-    results = [str(one) for one in results]
-    form = _form_payload(app, results)
+    results = _results_payload([str(one) for one in results])
+    clean = _forms_payload(forms)
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
-                               {"op": "annotate", "path": path, "modified": modified, "app": form, "results": results},
+                               {"op": "annotate", "path": path, "modified": modified, "forms": clean, "results": results},
                                timeout=QUICK_TIMEOUT_SECONDS)
     if output.get("stale") is True:
         raise WorkflowStale(path, _number(output.get("modified")))
     if _text(output.get("path"), 600) != path:
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
-    # 生成选项、工具清单跟着变(只剩表单那几项、名字换成作者起的),不等那一分钟的指纹
+    # 生成选项、工具清单跟着变(表单入口多了 / 少了、名字换成作者起的),不等那一分钟的指纹
     host_capabilities.notify(db, instance, refresh=True)
     return {"path": path, "modified": _number(output.get("modified"))}
+
+
+#: 一次最多改写几张(和插件那一侧同一个数)。
+MAX_UPGRADES = 1000
+
+
+def upgrade_marks(db: Session, instance: PluginInstance, paths: list[dict[str, Any]]) -> dict[str, Any]:
+    """把这个连接上上一版格式的表单标记改写成这一版(ADR 0045 §7「查看并升级」,维护者在弹窗里确认过一次):插件逐张读、
+    只改 `mosael` 那几处、带着读到时的改动时间覆盖写回 —— 那台机器上在这之间改过的那张跳过。改完让这个连接的目录马上重拉
+    (表单入口出来、一次性的改名照做),回改成了几张、跳过的是哪几张。"""
+    _require(db, instance)
+    if len(paths) > MAX_UPGRADES:
+        raise WorkflowLibraryError("workflowLibErr_tooManyUpgrades", max=str(MAX_UPGRADES))
+    wanted = [{"path": workflow_path(str(one.get("path") or "")), "modified": one.get("modified")} for one in paths]
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "upgrade_marks", "paths": wanted},
+                               timeout=LIBRARY_TIMEOUT_SECONDS)
+    asked = {one["path"] for one in wanted}
+
+    def listed(key: str) -> list[str]:
+        return [one for one in output.get(key) or [] if isinstance(one, str) and one in asked]
+
+    failed = [{"path": one["path"], "reason": _text(one.get("reason"), 2000)} for one in output.get("failed") or []
+              if isinstance(one, dict) and one.get("path") in asked]
+    if listed("upgraded"):
+        host_capabilities.notify(db, instance, refresh=True)
+    return {"upgraded": listed("upgraded"), "stale": listed("stale"), "skipped": listed("skipped"), "gone": listed("gone"),
+            "failed": failed}
+
+
+#: 一张表单最多列多少处在用它。
+_MAX_FORM_USES = 50
+
+
+def _count_uses(value: Any, profile_id: str, model: str, node_type: str, instance_id: str) -> int:
+    """一份存着的数据(工作流的图、画板的画布,任意嵌套)里指着这张表单的有几处:选它做生成模型的(连接 + 模型 id,或者
+    `<连接>:<种类>:<模型 id>` 这种生成选项 id)、用它的工具的节点(节点类型;没选连接的节点哪台都算)、画板格子上的能力和
+    生成器。"""
+    if isinstance(value, list):
+        return sum(_count_uses(one, profile_id, model, node_type, instance_id) for one in value)
+    if isinstance(value, str):
+        return int(bool(model) and value.startswith(f"{profile_id}:") and value.endswith(f":{model}")
+                   and value.count(":") >= 2 and value.split(":", 2)[2] == model)
+    if not isinstance(value, dict):
+        return 0
+    own = 0
+    if model and value.get("provider_profile_id") == profile_id and value.get("model") == model:
+        own = 1
+    elif node_type and value.get("type") == node_type and str((value.get("config") or {}).get("instance_id") or "") in (
+            "", instance_id):
+        own = 1
+    elif node_type and value.get("producer") == node_producer_id(node_type):
+        own = 1
+    abilities = value.get("abilities")
+    if node_type and isinstance(abilities, dict) and node_producer_id(node_type) in abilities:
+        own += 1
+    return own + sum(_count_uses(one, profile_id, model, node_type, instance_id) for key, one in value.items()
+                     if key not in ("abilities", "producer", "type", "model", "provider_profile_id"))
+
+
+def form_usages(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, model: str,
+                tool: str) -> list[dict[str, Any]]:
+    """一张表单在这个工作区里被哪些地方用着(删表单之前说给作者听,ADR 0045 §7):画板(选它生成的格子、用它的工具的能力
+    和生成器)、工作流(生成节点、用它的工具的节点)、AI Studio 的生成会话。`model` / `tool` 是插件说的这张表单的模型 id
+    和工具名(工作流库 `app` 的回答里有)。删了之后那几处会说「这张表单已经没了」,不悄悄换成完整工作流。"""
+    ensure_workspace_access(db, user, workspace_id)
+    _require(db, instance)
+    profile = _profile(db, instance)
+    profile_id = profile.id if profile is not None else ""
+    model = model if profile_id else ""
+    node_type = f"{PLUGIN_NODE_PREFIX}{instance.package_id}.{tool}" if tool else ""
+    if not model and not node_type:
+        return []
+    needles = [one for one in (model, node_type) if one]
+    uses: list[dict[str, Any]] = []
+    for board in db.scalars(select(Board).where(Board.workspace_id == workspace_id).order_by(Board.name)):
+        if any(needle in json.dumps(board.canvas, ensure_ascii=False) for needle in needles):
+            count = _count_uses(board.canvas, profile_id, model, node_type, instance.id)
+            if count:
+                uses.append({"kind": "board", "id": board.id, "name": board.name, "count": count})
+    for workflow in db.scalars(select(Workflow).where(Workflow.workspace_id == workspace_id).order_by(Workflow.name)):
+        if any(needle in json.dumps(workflow.graph, ensure_ascii=False) for needle in needles):
+            count = _count_uses(workflow.graph, profile_id, model, node_type, instance.id)
+            if count:
+                uses.append({"kind": "workflow", "id": workflow.id, "name": workflow.name, "count": count})
+    if model:
+        sessions = db.scalars(select(GenerationSession).where(
+            GenerationSession.workspace_id == workspace_id, GenerationSession.provider_profile_id == profile_id,
+            GenerationSession.model == model).order_by(GenerationSession.updated_at.desc()))
+        uses += [{"kind": "session", "id": session.id, "name": session.title, "count": 1} for session in sessions]
+    return uses[:_MAX_FORM_USES]
 
 
 # --- 工作台(ADR 0038 §3、§6)------------------------------------------------------
@@ -862,29 +1002,33 @@ def _canvas(content: Any) -> dict[str, Any]:
     return content
 
 
-def app_live(db: Session, instance: PluginInstance, content: dict[str, Any]) -> dict[str, Any]:
-    """工作台的「应用」面板:画布上现在这张的应用表单 —— 全部能填的项、交回结果的输出节点、画布上的标记。和读文件的
-    `app_form` 同一个形状,没有路径和改动时间(改的是画布,不是文件)。"""
+def app_live(db: Session, instance: PluginInstance, content: dict[str, Any], path: str = "") -> dict[str, Any]:
+    """工作台的「表单」页签:画布上现在这张的表单 —— 全部能填的项、交回结果的输出节点、画布上的标记。和读文件的
+    `app_form` 同一个形状,没有改动时间(改的是画布,不是文件)。`path` 是画布开的是哪张:插件据此说出每张表单的模型 id 和
+    工具名(删表单前数「Mosael 里有几处在用它」)。"""
     _require(db, instance)
-    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "app", "content": _canvas(content)},
+    path = workflow_path(path) if path else ""
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
+                               {"op": "app", "content": _canvas(content), **({"path": path} if path else {})},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
-    return _app_answer(db, instance, output, "")
+    return _app_answer(db, instance, output, path, live=True)
 
 
 #: 一个节点上的 Mosael 标记最大多大(一张应用表单最多 200 项、每项最多 1000 个可选值,放在一个节点上也够)。
 _MAX_MARK_CHARS = 2 * 1024 * 1024
 
 
-def app_marks(db: Session, instance: PluginInstance, content: dict[str, Any], *, app: dict[str, Any] | None,
+def app_marks(db: Session, instance: PluginInstance, content: dict[str, Any], *, forms: list[dict[str, Any]],
               results: list[str]) -> dict[str, Any]:
-    """应用表单和结果标记写进画布要改成的样子(工作台的「应用」「以后只要这张」):插件按和 `annotate` 同一个函数算,
-    交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`;界面经桥改画布上的节点,存盘是 ComfyUI 自己的
-    保存。插件交回的先规整:只认根图节点号、值是对象、大小有上限。"""
+    """表单和结果标记写进画布要改成的样子(工作台的「表单」页签、「以后只要这张」):`forms` 是**全部**表单(没给 id 的是
+    新表单),插件按和 `annotate` 同一个函数算,交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`
+    (新表单的 id 在里面);界面经桥改画布上的节点,存盘是 ComfyUI 自己的保存。插件交回的先规整:只认根图节点号、值是
+    对象、大小有上限。"""
     _require(db, instance)
-    results = [str(one) for one in results]
-    form = _form_payload(app, results)
+    results = _results_payload([str(one) for one in results])
+    clean = _forms_payload(forms)
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
-                               {"op": "app_marks", "content": _canvas(content), "app": form, "results": results},
+                               {"op": "app_marks", "content": _canvas(content), "forms": clean, "results": results},
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
     raw_nodes, extra = output.get("nodes"), output.get("extra")
     if not isinstance(raw_nodes, dict) or not (extra is None or isinstance(extra, dict)):

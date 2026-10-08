@@ -62,7 +62,7 @@ def test_每张保存的工作流都是选择器里的一个模型(connected) ->
     images = _options(client, "image")
     assert set(images) == {"builtin:txt2img", "portrait.json"}
     portrait = images["portrait.json"]
-    assert (portrait["model_label"], portrait["group"]) == ("portrait", {"id": "portrait.json", "label": "portrait", "entry": "full"})
+    assert (portrait["model_label"], portrait["group"]) == ("portrait", {"id": "portrait.json", "label": "portrait", "entry": "full", "order": 0})
     assert "label" not in portrait, "没有拼好的「连接名 · 模型名」(ADR 0045):两层名字由界面拿结构化的几格摆"
     caps = portrait["capabilities"]
     assert caps["sizes"][0] == "832x1216" and caps["default_size"] == "832x1216"
@@ -170,12 +170,13 @@ def test_精简表单到了选择器_标题说明和表上的每一项_按看的
     标题、说明、按表上顺序的每一项(主提示词是 `prompt`),名字按看的人的语言挑好;提示词可以不写时带着不写用的那一句。"""
     client, comfy, instance_id = connected
     ui = copy.deepcopy(comfy.state.workflows["portrait.json"])
-    ui["extra"] = {"mosael": {"version": 1, "app": {"title": "快速出图", "description": "只填一句话", "graph_items": {}}}}
+    ui["extra"] = {"mosael": {"version": 2, "forms": [{"id": "app", "title": "快速出图", "description": "只填一句话",
+                                                       "graph_items": {}}]}}
     for node in ui["nodes"]:
         if node["id"] == 6:
-            node["properties"] = {"mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+            node["properties"] = {"mosael": {"forms": {"app": {"text": {"order": 0, "main": True}}}}}
         if node["id"] == 3:
-            node["properties"] = {"mosael": {"expose": {"steps": {"order": 1, "label": "快慢"}}}}
+            node["properties"] = {"mosael": {"forms": {"app": {"steps": {"order": 1, "label": "快慢"}}}}}
     comfy.state.workflows["portrait.json"] = ui
     assert client.post(f"/api/plugins/instances/{instance_id}/refresh").status_code == 200
     options = _options(client, "image")

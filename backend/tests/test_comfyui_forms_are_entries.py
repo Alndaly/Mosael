@@ -29,9 +29,9 @@ PORTRAIT_TOOL = "wf_" + PORTRAIT_ID.replace("-", "")[:12]
 def _formed(ui: dict[str, Any], title: str) -> dict[str, Any]:
     """portrait.json 做了一张表单 `title`(只挑了提示词那一格)。"""
     stored = copy.deepcopy(ui)
-    stored["extra"] = {"mosael": {"version": 1, "app": {"title": title, "description": "", "graph_items": {}}}}
+    stored["extra"] = {"mosael": {"version": 2, "forms": [{"id": "app", "title": title, "description": "", "graph_items": {}}]}}
     prompt = next(one for one in stored["nodes"] if one["id"] == 6)
-    prompt["properties"] = {"mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+    prompt["properties"] = {"mosael": {"forms": {"app": {"text": {"order": 0, "main": True}}}}}
     return stored
 
 
@@ -58,8 +58,8 @@ def test_生成选项_同一张工作流两项_名字分两层_挨在一起完�
     options = _options(client, "image")
     assert [one["model"] for one in options] == ["builtin:txt2img", "portrait.json", "portrait.json#app"]
     full, form = options[1], options[2]
-    assert (form["model_label"], form["group"]) == ("快速出图", {"id": "portrait.json", "label": "portrait", "entry": "form"})
-    assert (full["model_label"], full["group"]) == ("portrait", {"id": "portrait.json", "label": "portrait", "entry": "full"})
+    assert (form["model_label"], form["group"]) == ("快速出图", {"id": "portrait.json", "label": "portrait", "entry": "form", "order": 1})
+    assert (full["model_label"], full["group"]) == ("portrait", {"id": "portrait.json", "label": "portrait", "entry": "full", "order": 0})
     assert options[0]["group"] is None, "内置文生图不是存着的工作流,不属于哪一组"
     assert "form" in form["capabilities"] and "form" not in full["capabilities"]
     assert "3.steps" in full["capabilities"]["parameter_schema"] and "3.steps" not in form["capabilities"].get(
@@ -70,7 +70,7 @@ def test_插件页提供的模型和工具_带着组_完整工作流不进智能
     client, _, instance_id = connected
     models = client.get(f"/api/plugins/instances/{instance_id}/models").json()
     groups = {one["id"]: one["group"] for one in models}
-    assert groups["portrait.json#app"] == {"id": "portrait.json", "label": "portrait", "entry": "form"}
+    assert groups["portrait.json#app"] == {"id": "portrait.json", "label": "portrait", "entry": "form", "order": 1}
     assert groups["builtin:txt2img"] is None
 
     instance = next(one for one in client.get("/api/plugins").json() if one["id"] == PACKAGE)["instances"][0]
@@ -89,7 +89,7 @@ def test_插件页提供的模型和工具_带着组_完整工作流不进智能
     node_types = {one["type"]: one for one in client.get("/api/workflows/node-types").json()}
     assert node_types[f"plugin.{PACKAGE}.{PORTRAIT_TOOL}"]["group"]["entry"] == "full", "工作流里照常能加完整工作流"
     assert node_types[f"plugin.{PACKAGE}.{PORTRAIT_TOOL}_app"]["group"] == {
-        "id": "portrait.json", "label": "portrait", "entry": "form"}
+        "id": "portrait.json", "label": "portrait", "entry": "form", "order": 1}
 
 
 def test_表单入口的模型id比路径长_生成接口收得下(connected) -> None:

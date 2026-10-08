@@ -4,11 +4,12 @@ ComfyUI 的一张工作流有一个「完整工作流」入口和它上面每张
 (表单标题 / 文件名)。它们来自同一张工作流这件事放在 `group` 里,不拼进名字 —— 宿主据此把同一组的几项排在一起、
 第二行写「来自 krea2-text-2-image」,搜文件名也搜得到:
 
-    "group": {"id": "krea2-text-2-image.json", "label": "krea2-text-2-image", "entry": "form"}
+    "group": {"id": "krea2-text-2-image.json", "label": "krea2-text-2-image", "entry": "form", "order": 1}
 
 - `id`:那样东西的编号(同一组的几项这一格相同);
 - `label`:它自己的名字,可以按语言分(`{"zh", "en"}`,给人看时再挑);
-- `entry`:`full` 是这样东西本身(全部参数),`form` 是它上面的一张表单。
+- `entry`:`full` 是这样东西本身(全部参数),`form` 是它上面的一张表单;
+- `order`:在这一组里排第几(插件给的顺序,一张工作流的几张表单按作者排的;不给就是本身 0、表单 1)。
 
 宿主不认识「工作流」,只认「同一组」「本身 / 表单」。形状不对的整条不认(当没说),不让一条坏数据把一项藏起来。
 """
@@ -24,6 +25,8 @@ ENTRIES = ("full", "form")
 #: 编号、名字最长多少。编号是 ComfyUI 的工作流路径,和模型 id 一样长。
 _MAX_ID = 600
 _MAX_LABEL = 200
+#: 一组里最多排到第几(一张工作流最多 20 张表单,留足)。
+_MAX_ORDER = 999
 
 
 def clean_group(raw: Any) -> dict[str, Any] | None:
@@ -41,16 +44,21 @@ def clean_group(raw: Any) -> dict[str, Any] | None:
         label = label.strip()[:_MAX_LABEL]
     if not label:
         return None
-    return {"id": group_id.strip(), "label": label, "entry": entry}
+    order = raw.get("order")
+    if not isinstance(order, int) or isinstance(order, bool) or not 0 <= order <= _MAX_ORDER:
+        order = 0 if entry == "full" else 1
+    return {"id": group_id.strip(), "label": label, "entry": entry, "order": order}
 
 
-def readable_group(group: Any, locale: str | None = None) -> dict[str, str] | None:
+def readable_group(group: Any, locale: str | None = None) -> dict[str, Any] | None:
     """给人看的样子:名字按看的人的语言挑好(清单在后台刷新,那一刻的语言不是看的人的)。不拼成一句 ——
     「来自 X · 连接名」怎么摆是界面的事。"""
     if not isinstance(group, dict) or not group.get("id"):
         return None
-    return {"id": str(group["id"]), "label": pick_text(group.get("label"), locale) or str(group["id"]),
-            "entry": str(group.get("entry") or "full")}
+    entry = str(group.get("entry") or "full")
+    order = group.get("order")
+    return {"id": str(group["id"]), "label": pick_text(group.get("label"), locale) or str(group["id"]), "entry": entry,
+            "order": order if isinstance(order, int) and not isinstance(order, bool) else (0 if entry == "full" else 1)}
 
 
 __all__ = ["ENTRIES", "clean_group", "readable_group"]

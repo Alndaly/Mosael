@@ -56,6 +56,9 @@ from app.api.schemas import (
     PluginToolOut,
     WorkflowAnnotateOut,
     WorkflowAnnotateRequest,
+    WorkflowFormUsagesOut,
+    WorkflowUpgradeMarksOut,
+    WorkflowUpgradeMarksRequest,
     WorkflowAppOut,
     WorkflowCanvasMarksOut,
     WorkflowCanvasMarksRequest,
@@ -784,7 +787,7 @@ def get_workflow_content(instance_id: str, path: str, db: DbSession, user: Curre
 
 @router.get("/plugins/instances/{instance_id}/workflow-library/app", response_model=WorkflowAppOut)
 def get_workflow_app(instance_id: str, path: str, db: DbSession, user: CurrentUser) -> dict:
-    """一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。"""
+    """一张工作流的表单(ADR 0038、0045):全部能填的项、交回结果的输出节点、文件里的每张表单、读到时的改动时间。"""
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.app_form(db, instance, path)
@@ -794,35 +797,59 @@ def get_workflow_app(instance_id: str, path: str, db: DbSession, user: CurrentUs
 
 @router.post("/plugins/instances/{instance_id}/workflow-library/annotate", response_model=WorkflowAnnotateOut)
 def annotate_workflow(instance_id: str, body: WorkflowAnnotateRequest, db: Tx, user: CurrentUser) -> dict:
-    """改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。那张在读到之后被改过
-    就不写,回 409 `stale`。"""
+    """改那台服务器上一张工作流的表单和结果标记:只改 `mosael` 那几处,覆盖写(界面上确认过)。`forms` 是全部表单。
+    那张在读到之后被改过就不写,回 409 `stale`。"""
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.annotate(
-            db, instance, body.path, modified=body.modified,
-            app=body.app.model_dump() if body.app is not None else None, results=body.results,
+            db, instance, body.path, modified=body.modified, forms=[one.model_dump() for one in body.forms],
+            results=body.results,
         )
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/upgrade-marks", response_model=WorkflowUpgradeMarksOut)
+def upgrade_workflow_marks(instance_id: str, body: WorkflowUpgradeMarksRequest, db: Tx, user: CurrentUser) -> dict:
+    """把这个连接上上一版格式的表单标记改写成这一版(ADR 0045 §7,界面上确认过一次):只改每张里的 `mosael` 那几处,
+    那台机器上刚改过的那张跳过。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.upgrade_marks(db, instance, [one.model_dump() for one in body.paths])
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.get("/plugins/instances/{instance_id}/workflow-library/form-usages", response_model=WorkflowFormUsagesOut)
+def get_form_usages(instance_id: str, workspace_id: str, db: DbSession, user: CurrentUser, model: str = "",
+                    tool: str = "") -> dict:
+    """一张表单在这个工作区里被哪些地方用着(删之前说给作者听):画板、工作流、AI Studio 的生成会话。`model` / `tool` 是
+    这张表单的模型 id 和工具名(`…/workflow-library/app` 的回答里有)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return {"uses": workflow_library.form_usages(db, user, instance, workspace_id=workspace_id, model=model[:160],
+                                                     tool=tool[:64])}
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
 
 @router.post("/plugins/instances/{instance_id}/workflow-library/app/live", response_model=WorkflowAppOut)
 def get_canvas_app(instance_id: str, body: WorkflowCanvasRequest, db: DbSession, user: CurrentUser) -> dict:
-    """工作台的「应用」面板(ADR 0038 §3):画布上现在这张(含没存的改动)的应用表单。不读、不写那台机器上的文件。"""
+    """工作台的「表单」页签(ADR 0038 §3):画布上现在这张(含没存的改动)的表单。不读、不写那台机器上的文件。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.app_live(db, instance, body.content)
+        return workflow_library.app_live(db, instance, body.content, body.path)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 
 
 @router.post("/plugins/instances/{instance_id}/workflow-library/app/marks", response_model=WorkflowCanvasMarksOut)
 def get_canvas_marks(instance_id: str, body: WorkflowCanvasMarksRequest, db: DbSession, user: CurrentUser) -> dict:
-    """应用表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。"""
+    """表单和结果标记写进画布要改成的样子(界面经桥改画布,存盘是 ComfyUI 自己的保存)。不写那台机器上的文件。"""
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.app_marks(
-            db, instance, body.content, app=body.app.model_dump() if body.app is not None else None, results=body.results,
+            db, instance, body.content, forms=[one.model_dump() for one in body.forms], results=body.results,
         )
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc

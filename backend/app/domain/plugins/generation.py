@@ -89,11 +89,15 @@ class PluginModel:
 @dataclass(frozen=True)
 class Catalog:
     """一次 `op: models` 的结果。`fingerprint` 是插件给的「这份清单的指纹」(可以没有,见 `fingerprint`);`moved` 是插件报的
-    一次性改名(key → {旧模型 id: 新模型 id},见 plugins.moves),新名字都在这份清单里。"""
+    一次性改名(key → {旧模型 id: 新模型 id},见 plugins.moves),新名字都在这份清单里;`library_upgrades` 是这个连接的工作流库
+    里有几张工作流的表单还是上一版的格式(要在工作流库里「查看并升级」,见 docs/PLUGIN_MANIFEST)。"""
 
     models: list[PluginModel]
     fingerprint: str = ""
     moved: Moves = field(default_factory=dict)
+    library_upgrades: int = 0
+    #: 插件认得、现在用不了的模型 id → 为什么(`{"zh", "en"}` 或一句话):指着它的地方跑的时候照这句说,不说「模型不存在」
+    unavailable: dict[str, Any] = field(default_factory=dict)
 
 
 #: 指纹最长多少。它只拿来比「变没变」,不是存档。
@@ -114,7 +118,33 @@ def catalog(db: Session, instance: PluginInstance) -> Catalog:
         if model is not None and model.id not in seen:
             seen.add(model.id)
             models.append(model)
-    return Catalog(models=models, fingerprint=_fingerprint(output), moved=clean_moves(output.get("moved"), seen))
+    upgrades = output.get("library_upgrades")
+    return Catalog(models=models, fingerprint=_fingerprint(output), moved=clean_moves(output.get("moved"), seen),
+                   library_upgrades=upgrades if isinstance(upgrades, int) and not isinstance(upgrades, bool)
+                   and upgrades > 0 else 0,
+                   unavailable=_unavailable(output.get("unavailable"), seen))
+
+
+#: 最多记多少个「认得、现在用不了」的模型;一句原因最长多少字。
+_MAX_UNAVAILABLE = 500
+_MAX_REASON = 500
+
+
+def _unavailable(raw: Any, listed: set[str]) -> dict[str, Any]:
+    """插件说的「这几个模型 id 现在用不了、为什么」:id 合规、不在这份清单里(在的就是用得了)、原因是一句话或按语言分的话。"""
+    out: dict[str, Any] = {}
+    for one in raw if isinstance(raw, list) else []:
+        model_id = str(one.get("id") or "").strip() if isinstance(one, dict) else ""
+        reason = one.get("reason") if isinstance(one, dict) else None
+        if not _MODEL_ID.match(model_id) or model_id in listed or len(out) >= _MAX_UNAVAILABLE:
+            continue
+        if isinstance(reason, dict):
+            reason = {str(lang): text[:_MAX_REASON] for lang, text in reason.items() if isinstance(text, str) and text.strip()}
+        elif isinstance(reason, str):
+            reason = reason[:_MAX_REASON]
+        if reason:
+            out[model_id] = reason
+    return out
 
 
 def _fingerprint(output: dict[str, Any]) -> str:

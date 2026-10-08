@@ -299,12 +299,32 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The plugin of “{name}” answered with something unexpected; nothing was changed",
     },
     "workflowLibErr_stale": {
-        "zh": "「{path}」刚在 ComfyUI 里改过,应用表单没存。重新打开再改",
-        "en": "“{path}” was just changed in ComfyUI, so the app form wasn't saved. Open it again and redo the change",
+        "zh": "「{path}」刚在 ComfyUI 里改过,表单没存。重新打开再改",
+        "en": "“{path}” was just changed in ComfyUI, so the forms weren't saved. Open it again and redo the change",
     },
     "workflowLibErr_badAppItem": {
-        "zh": "应用表单里的「{item}」不对:只认根图上的节点(节点号是数字)和图级的种子 / 尺寸 / 跑几遍",
-        "en": "“{item}” in the app form won't do: only nodes on the top-level graph (numeric ids) and the graph-level seed / size / runs",
+        "zh": "表单里的「{item}」不对:只认根图上的节点(节点号是数字)和图级的种子 / 尺寸 / 跑几遍",
+        "en": "“{item}” in the form won't do: only nodes on the top-level graph (numeric ids) and the graph-level seed / size / runs",
+    },
+    "pluginNotice_formsOutdated": {
+        "zh": "{name} 上有工作流的表单是旧格式",
+        "en": "Some workflows on {name} have forms in the old format",
+    },
+    "pluginNotice_formsOutdatedBody": {
+        "zh": "{n} 张工作流的表单是旧格式,升级之后才看得到它们的表单。到插件页打开这个连接的工作流库,点「查看并升级」:只改每张里 Mosael 的标记,确认一次就整台改完。",
+        "en": "{n} workflows have forms in the old format; their forms show up once upgraded. On the Plugins page, open this connection's workflow library and click “Review and upgrade”: only Mosael's marks in each file change, and one confirmation upgrades the whole server.",
+    },
+    "workflowLibErr_badFormId": {
+        "zh": "表单的编号「{form}」不对:只认 1–8 位小写字母和数字,一张工作流里不能重复",
+        "en": "The form id “{form}” won't do: 1–8 lowercase letters or digits, unique within the workflow",
+    },
+    "workflowLibErr_tooManyForms": {
+        "zh": "一张工作流最多 {max} 张表单",
+        "en": "A workflow can have at most {max} forms",
+    },
+    "workflowLibErr_tooManyUpgrades": {
+        "zh": "一次最多升级 {max} 张工作流",
+        "en": "At most {max} workflows can be upgraded at a time",
     },
     "workflowLibErr_canvasNotUi": {
         "zh": "画布上的图不是界面格式的工作流",
@@ -327,8 +347,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{name} returned malformed canvas marks",
     },
     "workflowLibErr_appTooBig": {
-        "zh": "应用表单太大了:最多 {items} 项、每项最多 {choices} 个可选值、最多标 {results} 个结果",
-        "en": "The app form is too big: at most {items} items, {choices} choices per item and {results} result nodes",
+        "zh": "表单太大了:最多 {items} 项、每项最多 {choices} 个可选值、最多标 {results} 个结果",
+        "en": "The form is too big: at most {items} items, {choices} choices per item and {results} result nodes",
     },
     "pluginErr_capabilityNoTool": {
         "zh": "「{name}」没有负责 {capability} 的工具,请到插件页更新这个插件",

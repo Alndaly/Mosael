@@ -78,11 +78,17 @@ elif op == "workflows":
                                 "packs": [{"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": False}]}],
              "missing_models": [{"folder": "vae", "name": "ae.safetensors",
                                  "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors"}],
-             "app": {"status": "ok", "app": True, "title": " 人像应用 ", "description": "", "fields": 1, "invalid": 1,
-                     "items": [{"key": "10.image", "node": "10", "input": "image", "label": "人物", "main": False},
-                               {"key": "3.cfg", "node": "3", "input": "cfg", "label": "", "problem": "节点 #3 上没有「cfg」"},
-                               {"key": "12:5.text", "node": "12:5", "input": "text"},
-                               {"node": "4", "input": ""}],
+             "app": {"status": "ok", "upgradable": False, "invalid": 1, "stray": 2, "forms": [
+                         {"id": "app", "title": " 人像应用 ", "description": "", "fields": 1, "invalid": 1,
+                          "model": "portrait.json#app", "tool": "wf_0123456789ab_app",
+                          "items": [{"key": "10.image", "node": "10", "input": "image", "label": "人物", "main": False},
+                                    {"key": "3.cfg", "node": "3", "input": "cfg", "label": "",
+                                     "problem": "节点 #3 上没有「cfg」"},
+                                    {"key": "12:5.text", "node": "12:5", "input": "text"},
+                                    {"node": "4", "input": ""}]},
+                         {"id": "Bad-Id", "title": "不合规的 id"},
+                         {"id": "app", "title": "重复的"},
+                         {"id": "k3x9a2", "title": "精调", "items": []}],
                      "results": ["9", "12:5", 7]}},
             {"path": "sub/sketch.json", "problem": "缺节点:CR Prompt Text"},
             {"path": "../outside.json"},
@@ -137,8 +143,8 @@ elif op == "app_marks":
     if payload["content"].get("evil"):
         emit({"ok": True, "output": {"nodes": {"12:5": {"result": True}}, "extra": None}})
     else:
-        emit({"ok": True, "output": {"nodes": {"9": {"result": True}, "10": {"expose": {"image": {"order": 0}}}},
-                                     "extra": {"version": 1, "app": {"title": "人像应用"}}, "ignored": 1}})
+        emit({"ok": True, "output": {"nodes": {"9": {"result": True}, "10": {"forms": {"app": {"image": {"order": 0}}}}},
+                                     "extra": {"version": 2, "forms": [{"id": "app", "title": "人像应用"}]}, "ignored": 1}})
 elif op == "generate":
     emit({"ok": False, "error": "测试插件不真的跑:收到了" + ("画布上的图" if payload.get("graph") else "存着的那张")})
 elif op == "app":
@@ -166,8 +172,11 @@ elif op == "app":
                     {"node": "12", "title": "高清", "class_type": "SaveImage", "media": "image"}],
         "names": {"9": {"zh": "保存图像", "en": "Save Image"}, "12:5": {"zh": "K采样器", "en": "KSampler"}, "3": "",
                   "": {"zh": "无名", "en": "Nameless"}},
-        "app": {"status": "unsupported", "version": 2, "items": [], "results": []},
+        "app": {"status": "unsupported", "version": 1, "upgradable": True, "forms": [], "results": []},
     }})
+elif op == "upgrade_marks":
+    emit({"ok": True, "output": {"upgraded": ["portrait.json", "not-asked.json"], "stale": ["busy.json"], "skipped": [],
+                                 "gone": [], "failed": [{"path": "broken.json", "reason": "拉不下来"}, "junk"]}})
 elif op == "annotate":
     if payload["modified"] == 1.0:
         emit({"ok": True, "output": {"stale": True, "modified": 2.0}})
@@ -683,9 +692,13 @@ def test_列出来的每一张带着它的应用表单_宿主规整一遍(librar
     body = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()
     portrait, sketch = body["workflows"]
     app = portrait["app"]
-    assert (app["status"], app["app"], app["title"], app["fields"], app["invalid"]) == ("ok", True, "人像应用", 1, 1)
-    assert [one["key"] for one in app["items"]] == ["10.image", "3.cfg"], "子图里的节点、没写是哪一格的丢掉"
-    assert app["items"][0]["label"] == "人物" and app["items"][1]["problem"] == "节点 #3 上没有「cfg」"
+    assert (app["status"], app["upgradable"], app["invalid"], app["stray"]) == ("ok", False, 1, 2)
+    assert [(one["id"], one["title"]) for one in app["forms"]] == [("app", "人像应用"), ("k3x9a2", "精调")], \
+        "id 不合规、重复的表单不要(插件那一侧本来就不报,这里再挡一道)"
+    form = app["forms"][0]
+    assert (form["fields"], form["invalid"], form["model"], form["tool"]) == (1, 1, "portrait.json#app", "wf_0123456789ab_app")
+    assert [one["key"] for one in form["items"]] == ["10.image", "3.cfg"], "子图里的节点、没写是哪一格的丢掉"
+    assert form["items"][0]["label"] == "人物" and form["items"][1]["problem"] == "节点 #3 上没有「cfg」"
     assert app["results"] == ["9"], "结果标记只认根图上的节点号"
     assert sketch["app"] is None, "插件没说(转不过来的那张)就没有"
 
@@ -713,47 +726,71 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
         {"node": "9", "title": "SaveImage", "label": "保存图像", "class_type": "SaveImage", "media": "image"},
         {"node": "12", "title": "高清", "label": "高清", "class_type": "SaveImage", "media": "image"},
     ], "输出节点给人看的名字按语言挑好;插件没给就用标题"
-    assert body["app"]["status"] == "unsupported" and body["app"]["version"] == "2"
+    assert (body["app"]["status"], body["app"]["version"], body["app"]["upgradable"]) == ("unsupported", "1", True)
     bad = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "../x.json"})
     assert bad.status_code == 422
 
 
-def test_写应用表单_宿主先查形状_改动时间对不上回409_成了让目录重拉(library) -> None:
+def test_写表单_宿主先查形状_改动时间对不上回409_成了让目录重拉(library) -> None:
     client, instance_id = library
     url = f"/api/plugins/instances/{instance_id}/workflow-library/annotate"
-    app = {"title": " 人像应用 ", "description": "", "items": [
+    app = {"id": "app", "title": " 人像应用 ", "description": "", "items": [
         {"node": "10", "input": "image", "label": " 人物 "},
         {"node": "6", "input": "text", "main": True},
         {"input": "seed", "main": True, "choices": ["x"]},
         {"node": "4", "input": "ckpt_name", "choices": ["a.safetensors"]},
     ]}
     for bad in ({"node": "12:5", "input": "text"}, {"input": "steps"}, {"node": "10", "input": "image"}):
-        response = client.post(url, json={"path": "portrait.json", "modified": 5, "app": {**app, "items": [*app["items"], bad]}})
+        response = client.post(url, json={"path": "portrait.json", "modified": 5,
+                                          "forms": [{**app, "items": [*app["items"], bad]}]})
         assert response.status_code == 422, (bad, response.text)
-    assert client.post(url, json={"path": "portrait.json", "modified": 5, "app": None,
+    assert client.post(url, json={"path": "portrait.json", "modified": 5, "forms": [],
                                   "results": ["12:5"]}).status_code == 422
+    for forms in ([app, app], [{**app, "id": "Bad-Id"}], [{"title": str(n)} for n in range(21)]):
+        assert client.post(url, json={"path": "portrait.json", "modified": 5, "forms": forms}).status_code == 422, \
+            "id 重复、不合规、超过 20 张"
     assert not [op for op in _ops() if op["op"] == "annotate"], "形状不对的不交给插件"
 
-    stale = client.post(url, json={"path": "portrait.json", "modified": 1.0, "app": app, "results": ["9"]})
+    stale = client.post(url, json={"path": "portrait.json", "modified": 1.0, "forms": [app], "results": ["9"]})
     assert stale.status_code == 409
     assert stale.json()["detail"]["code"] == "stale" and stale.json()["detail"]["modified"] == 2.0
 
     refreshed = len([op for op in _ops() if op["op"] == "models"])
-    done = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "app": app, "results": ["9"]})
+    done = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9,
+                                  "forms": [app, {"title": "精调", "items": [{"node": "4", "input": "ckpt_name"}]}],
+                                  "results": ["9"]})
     assert done.status_code == 200, done.text
     assert done.json() == {"path": "portrait.json", "modified": 1776098699.5}
     sent = [op for op in _ops() if op["op"] == "annotate"][-1]
     assert sent["modified"] == 1776098682.9 and sent["results"] == ["9"]
-    assert sent["app"] == {"title": "人像应用", "description": "", "items": [
+    assert sent["forms"] == [{"id": "app", "title": "人像应用", "description": "", "items": [
         {"node": "10", "input": "image", "label": "人物"},
         {"node": "6", "input": "text", "label": "", "main": True},
         {"node": "", "input": "seed", "label": ""},
         {"node": "4", "input": "ckpt_name", "label": "", "choices": ["a.safetensors"]},
-    ]}, "名字去掉首尾空白;图级的项没有 main / choices"
+    ]}, {"title": "精调", "description": "", "items": [{"node": "4", "input": "ckpt_name", "label": ""}]}], \
+        "名字去掉首尾空白;图级的项没有 main / choices;新表单不带 id(插件起)"
     assert len([op for op in _ops() if op["op"] == "models"]) > refreshed, "改成了:这个连接的目录马上重拉(生成表单跟着变)"
 
-    removed = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "app": None, "results": []})
-    assert removed.status_code == 200 and [op for op in _ops() if op["op"] == "annotate"][-1]["app"] is None
+    removed = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "forms": [], "results": []})
+    assert removed.status_code == 200 and [op for op in _ops() if op["op"] == "annotate"][-1]["forms"] == []
+
+
+def test_升级旧格式的表单标记_交给插件逐张改_只报问过的那几张_改成了让目录重拉(library) -> None:
+    client, instance_id = library
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/upgrade-marks"
+    assert client.post(url, json={"paths": [{"path": "../x.json", "modified": 1}]}).status_code == 422
+    assert not [op for op in _ops() if op["op"] == "upgrade_marks"]
+    refreshed = len([op for op in _ops() if op["op"] == "models"])
+    response = client.post(url, json={"paths": [{"path": "portrait.json", "modified": 1776098682.9},
+                                                {"path": "busy.json", "modified": 3}, {"path": "broken.json"}]})
+    assert response.status_code == 200, response.text
+    assert response.json() == {"upgraded": ["portrait.json"], "stale": ["busy.json"], "skipped": [], "gone": [],
+                               "failed": [{"path": "broken.json", "reason": "拉不下来"}]}, "没问过的那张不认"
+    sent = [op for op in _ops() if op["op"] == "upgrade_marks"][-1]
+    assert sent["paths"] == [{"path": "portrait.json", "modified": 1776098682.9}, {"path": "busy.json", "modified": 3},
+                             {"path": "broken.json", "modified": None}]
+    assert len([op for op in _ops() if op["op"] == "models"]) > refreshed, "改成了:表单入口要出来,目录马上重拉"
 
 
 
@@ -771,7 +808,11 @@ def test_工作台_画布上这张的应用表单_没有路径和改动时间_�
     assert body["path"] == "" and body["modified"] is None, "改的是画布,不是文件"
     assert [one["key"] for one in body["items"]][:2] == ["6.text", "10.image"]
     sent = [op for op in _ops() if op["op"] == "app"][-1]
-    assert sent == {"op": "app", "content": CANVAS}, "读的是画布上这张,不带路径"
+    assert sent == {"op": "app", "content": CANVAS}, "读的是画布上这张;画布没说开的是哪张就不带路径"
+    named = client.post(url, json={"content": CANVAS, "path": "portrait.json"})
+    assert named.json()["path"] == "portrait.json" and named.json()["modified"] is None
+    assert [op for op in _ops() if op["op"] == "app"][-1] == {"op": "app", "content": CANVAS, "path": "portrait.json"}, \
+        "带着路径:插件说得出每张表单的模型 id 和工具名(只用来起名字,不读文件)"
     #: 工作台「运行与结果」说节点用它:和表单项、「结果取自」同一种叫法,按看的人的语言挑好;没名字、没节点号的不要
     assert body["names"] == {"9": "保存图像", "12:5": "K采样器"}
     calls = len(_ops())
@@ -782,13 +823,13 @@ def test_工作台_画布上这张的应用表单_没有路径和改动时间_�
 def test_工作台_写进画布的标记_宿主先查形状_规整插件交回的(library) -> None:
     client, instance_id = library
     url = f"/api/plugins/instances/{instance_id}/workflow-library/app/marks"
-    response = client.post(url, json={"content": CANVAS, "app": {"title": " 人像应用 ", "items": [
-        {"node": "10", "input": "image", "label": "人物"}]}, "results": ["9"]})
+    response = client.post(url, json={"content": CANVAS, "forms": [{"id": "app", "title": " 人像应用 ", "items": [
+        {"node": "10", "input": "image", "label": "人物"}]}], "results": ["9"]})
     assert response.status_code == 200, response.text
-    assert response.json() == {"nodes": {"9": {"result": True}, "10": {"expose": {"image": {"order": 0}}}},
-                               "extra": {"version": 1, "app": {"title": "人像应用"}}}
+    assert response.json() == {"nodes": {"9": {"result": True}, "10": {"forms": {"app": {"image": {"order": 0}}}}},
+                               "extra": {"version": 2, "forms": [{"id": "app", "title": "人像应用"}]}}
     sent = [op for op in _ops() if op["op"] == "app_marks"][-1]
-    assert sent["app"]["title"] == "人像应用" and sent["results"] == ["9"]
+    assert sent["forms"][0]["title"] == "人像应用" and sent["results"] == ["9"]
     assert not [op for op in _ops() if op["op"] == "annotate"], "画布开着时不写文件"
     calls = len(_ops())
     assert client.post(url, json={"content": CANVAS, "results": ["12:5"]}).status_code == 422, "子图里的节点不能标"
