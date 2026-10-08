@@ -402,8 +402,8 @@ def record_usage(
     occurred_at: datetime | None = None,
     supersedes: str | None = None,
 ) -> ProviderUsageEvent:
-    """记一次可计费调用的账。**`db` 只拿来读**(价目、这一笔记过没有);这条账由记账这一层在 `db` 的事务结束之后
-    自己写(见下面「账在调用方的事务结束之后写」那一节的契约)。
+    """记一次可计费调用的账。**`db` 只拿来读**(价目、这一笔记过没有);这条账由记账这一层随 `db` 提交的那一刻写
+    (见下面「账随调用方提交的那一刻落库」那一节的契约)。
 
     交回算好的那一条:**还没落库**的对象(`id` 为空),成本那几格(`cost_micros` / `currency` / `cost_confidence`)
     已经算好,调用方读它们就够了(智能体把成本写进消息)。同一个 `idempotency_key` 已经记过(库里有、或者这个会话里
@@ -603,37 +603,43 @@ def _announce(db: Session, event: ProviderUsageEvent) -> None:
     )
 
 
-# ---------- 账在调用方的事务结束之后写(D66) ----------
+# ---------- 账随调用方提交的那一刻落库(D66) ----------
 #
-# **契约**:可计费调用的账(provider_usage_events 的一行)**一律由记账这一层自己写**,写在调用方会话的根事务结束
-# (提交、回滚、没提交就关)之后,用一个新会话、一个短事务。调用方的会话里不写账 —— 不 add、不 flush、不发
-# `usage.recorded` 事件。调用方那边看到的是:
+# **契约**:可计费调用的账(provider_usage_events 的一行)由记账这一层写,调用方不碰。调用期间它只排在调用方会话上
+# (`session.info`),**调用方提交的那一刻**(`before_commit`)随这次提交一起落库;调用方没提交(回滚、没提交就关、提交
+# 失败)的,在它的事务结束之后用一个新会话、一个短事务补写。调用方那边看到的是:
 #
-# 1. **调用方从不因为记账攥写锁。** SQLite 只有一个写者,flush 一次就攥着写锁直到那个事务结束。此前账写进调用方的事务:
-#    一个会话里接连几次付费调用(工作流的「口播收紧」一个节点里两三轮大模型、批量翻译……),第一笔账 flush 之后,
-#    后面每一次大模型请求都攥着写锁 —— 别的节点、任务进度、请求都在排队,超过等锁的上限就是 database is locked。
-# 2. **调用方的事务里看不见这条账**:它在那个事务结束之后才落库。要读成本就读 `record_usage` / `billable` 交回的那一条
-#    (`BillableCall.event`:成本已经算好、还没落库的对象,`id` 为空);要查账就在调用方提交之后查。
-# 3. **钱花了就有账,跟调用方的事务成不成无关。** 失败的工作流节点会回滚、会话用完没提交就关 —— 账照写。账上的引用
-#    (`job_id`、`agent_message_id`)指向的行没能活下来时置空,和 schema 里 `ondelete="SET NULL"` 同一个语义;
-#    工作区都没了(CASCADE)的不写。
-# 4. **同一个键只记一条**:库里有、或者这个会话里已经排着,`record_usage` 交回那一条;写的时候库里已经有了就跳过。
-# 5. **接替**(`supersedes`,见 superseded_attempt):撤下被接替的那一条和写这一条在同一个事务里。
-# 6. 写在事务结束那一个跳变上(`after_transaction_end`),不挂在某个调用点上 —— 和 jobs._note_settled_jobs 同一个理由:
-#    调用方有十几处,各自记得做某件事的做法已经证明靠不住。保存点结束不算:外层事务还没完。
+# 1. **调用方不因为记账攥写锁跨过别的调用。** SQLite 只有一个写者,flush 一次就攥着写锁直到那个事务结束。账要是在调用
+#    之后当场 flush 进调用方的事务,一个会话里接连几次付费调用(工作流的「口播收紧」一个节点里两三轮大模型)时,第一笔
+#    之后每一次大模型请求都攥着写锁,别的节点、任务进度、请求排在后面,超过等锁的上限就是 database is locked。现在账只在
+#    提交那一刻写,写完就提交。
+# 2. **谁看得见调用方提交的东西,谁就看得见这条账。** 账和调用方这次提交的东西(任务落终态、消息落库)在同一个事务里,
+#    一起出现:落终态之后跑的收拾、回执、界面上「任务结束了就去取成本」,都不会读到一个「已经成功、还没记账」的样子。
+#    此前(D66 第一版)账在调用方提交**之后**另开事务写,中间有一段窗口:AI Studio 在任务落终态那一下去取记录的成本,
+#    碰上窗口就一直空着(那一条不再轮询),CI 上「接着取回之后账在」的测试也碰上过。
+# 3. **调用方的事务里、提交之前看不见这条账**:要读成本就读 `record_usage` / `billable` 交回的那一条(`BillableCall.event`:
+#    成本已经算好、还没落库的对象,`id` 为空)。
+# 4. **钱花了就有账,跟调用方的事务成不成无关。** 失败的工作流节点会回滚、会话用完没提交就关 —— 账在它的事务结束之后
+#    照写。那时账上的引用(`job_id`、`agent_message_id`)指向的行没能活下来的置空,和 schema 里 `ondelete="SET NULL"`
+#    同一个语义;工作区都没了(CASCADE)的不写。
+# 5. **同一个键只记一条**:库里有、或者这个会话里已经排着,`record_usage` 交回那一条;写的时候库里已经有了就跳过。
+# 6. **接替**(`supersedes`,见 superseded_attempt):撤下被接替的那一条和写这一条在同一个事务里。
+# 7. 挂在会话的事务跳变上(`before_commit` / `after_commit` / `after_transaction_end`),不挂在某个调用点上 —— 和
+#    jobs._note_settled_jobs 同一个理由:调用方有十几处,各自记得做某件事的做法已经证明靠不住。保存点提交时写进去的,
+#    要等外层提交才算数;外层回滚了,事务结束之后照样补写。
 #
 # 归属(这条账记在谁、哪个工作区名下)按调用发生时定:`workspace_id` 显式给的优先,否则取环境上下文;`job_id` 同理
 # (见 billable)。写入时间推迟,归属不跟着变。
 #
-# 代价:进程在调用之后、调用方事务结束之前没了,这一笔账就没了 —— 和此前一样(那时账在调用方没提交的事务里,同样丢)。
+# 代价:进程在调用之后、调用方事务结束之前没了,这一笔账就没了 —— 和账写进调用方事务时一样(那时同样跟着丢)。
 
-#: 这个会话里排着、等它的事务结束之后写的账(列值,外加 `supersedes`)。挂在 session.info 上而不是模块级 ——
-#: 后台线程各有各的会话。
+#: 这个会话里排着、还没随一次提交落库的账(列值、`supersedes`、这一回提交有没有写进去)。挂在 session.info 上而不是
+#: 模块级 —— 后台线程各有各的会话。
 _QUEUED = "mosael_queued_usage"
 
 
 def _write_after_caller(db: Session, values: dict[str, Any], *, supersedes: str | None) -> None:
-    db.info.setdefault(_QUEUED, []).append({"values": values, "supersedes": supersedes})
+    db.info.setdefault(_QUEUED, []).append({"values": values, "supersedes": supersedes, "written": False})
 
 
 def _queued_usage(db: Session, idempotency_key: str) -> ProviderUsageEvent | None:
@@ -643,9 +649,32 @@ def _queued_usage(db: Session, idempotency_key: str) -> ProviderUsageEvent | Non
     return None
 
 
+@orm_event.listens_for(Session, "before_commit")
+def _write_with_the_caller(session: Session) -> None:
+    """调用方提交的那一刻:排着的账写进这次提交。提交成功之前不从队里摘(见 _settled_with_the_caller)。
+
+    先把调用方还没 flush 的东西 flush 掉(提交本来就要 flush):账上引用的任务、消息可能就是这一次刚建的,不先落进事务,
+    下面核对引用时会当成「已经没了」置空。"""
+    unwritten = [queued for queued in session.info.get(_QUEUED, ()) if not queued["written"]]
+    if not unwritten:
+        return
+    session.flush()
+    for queued in unwritten:
+        _write(session, queued["values"], supersedes=queued["supersedes"])
+        queued["written"] = True
+
+
+@orm_event.listens_for(Session, "after_commit")
+def _settled_with_the_caller(session: Session) -> None:
+    """根事务提交成功了:写进去的账随它落了库。保存点提交也发 after_commit —— 那时还在保存点里(外层还可能回滚),不摘。"""
+    if session.in_nested_transaction():
+        return
+    session.info.pop(_QUEUED, None)
+
+
 @orm_event.listens_for(Session, "after_transaction_end")
 def _settle_usage(session: Session, transaction: SessionTransaction) -> None:
-    """调用方的根事务结束(提交、回滚、没提交就关)之后,把这一轮排着的账写进库。"""
+    """调用方的根事务结束了、账还排着(回滚、没提交就关、提交失败):用一个新会话、一个短事务补写。"""
     if transaction.parent is not None:
         return  # 保存点结束不算:外层事务还没完
     queued = session.info.pop(_QUEUED, None)
@@ -1114,9 +1143,9 @@ def billable(
     - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。`job_id` 同理:
       没给就挂在当前正在执行的任务上(见 jobs.current_parent_job_id)。
       两个都没有时不记账,但会 warning 出来 —— 静默漏记正是这次要终结的毛病。
-    - **不写进调用方的会话**(D66):`db` 只拿来读价目;这条账在 `db` 的事务结束之后由记账这一层自己写
-      (契约见上面「账在调用方的事务结束之后写」)。调用方照常提交或回滚,不必为账操心,也不会因为记账而攥着写锁
-      跨过下一次供应商调用。块结束之后 `call.event` 是算好成本、还没落库的那一条。
+    - **调用期间不写进调用方的会话**(D66):`db` 只拿来读价目;这条账随 `db` 提交的那一刻一起落库,没提交的在事务结束
+      之后补写(契约见上面「账随调用方提交的那一刻落库」)。调用方照常提交或回滚,不必为账操心,也不会因为记账而攥着
+      写锁跨过下一次供应商调用。块结束之后 `call.event` 是算好成本、还没落库的那一条。
     - `supersedes`:这一条接替的那一条账的键(见 superseded_attempt),写这一条时一并撤下。
     - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用照样记一条 ——"最近失败了多少次"
       本身就是用户想在账上看到的;服务商回报了用量或扣费的照它计价,什么都没回的记 0

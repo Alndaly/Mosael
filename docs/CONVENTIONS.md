@@ -228,10 +228,10 @@ SQLite 同一时刻只有一个写事务。从第一句写到提交,别的写入
 - 保存点(`begin_nested`)可以放心用:事务里还没写过时开保存点,`core/db` 先 `BEGIN IMMEDIATE`,保存点从来不是最外层
   (否则 SQLite 把它当成延迟事务的开头:里面先读后写当场报 database is locked,RELEASE 还会当场提交)。
   棘轮:`tests/test_writes_wait_for_the_write_lock.py`、`tests/test_unit_of_work.py`。
-- 付费调用的账不写进调用方的会话(D66):`billable` / `record_usage` 只用调用方的会话读价目,账在调用方的事务结束之后由
-  记账那一层用自己的短事务写(契约写在 `domain/billing/usage` 的「账在调用方的事务结束之后写」那一节)。所以一个会话里
-  接连几次付费调用不会攥着写锁跨过后面的请求;代价是调用方的事务里查不到刚记的账 —— 要成本读 `call.event`。
-  棘轮:`tests/test_billing_writes_after_the_caller.py`。
+- 付费调用的账调用期间不写进调用方的会话(D66):`billable` / `record_usage` 只用调用方的会话读价目,账随调用方**提交的那一刻**
+  一起落库(没提交的在事务结束之后补写;契约写在 `domain/billing/usage` 的「账随调用方提交的那一刻落库」那一节)。所以一个
+  会话里接连几次付费调用不会攥着写锁跨过后面的请求,而任务落终态的那一刻账已经在。提交之前调用方查不到刚记的账 ——
+  要成本读 `call.event`。棘轮:`tests/test_billing_writes_after_the_caller.py`、`tests/test_usage_is_booked_when_the_job_settles.py`。
 
 ### 批量维护不把行读成 ORM 对象
 
