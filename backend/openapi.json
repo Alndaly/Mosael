@@ -18571,6 +18571,49 @@
         }
       }
     },
+    "/api/confirmations/{confirmation_id}/expire": {
+      "post": {
+        "tags": [
+          "confirmations"
+        ],
+        "summary": "Expire",
+        "description": "sidecar 等一张卡等到点了:作废它,再告诉模型「没做」(ADR 0007 修订 2026-10-08)。只认开这张卡的那一轮的凭据,\n闸在 agent/use_cases.expire_card_for_turn。看不见 / 不是那一轮的一律 404。",
+        "operationId": "expire_api_confirmations__confirmation_id__expire_post",
+        "parameters": [
+          {
+            "name": "confirmation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Confirmation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/feishu/bots": {
       "get": {
         "tags": [

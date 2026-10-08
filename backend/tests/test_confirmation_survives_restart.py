@@ -42,7 +42,9 @@ def test_重启把中断那轮的确认卡一并作废() -> None:
 
     with SessionLocal() as db:
         card = db.scalars(select_cards(sid)).one()
-        assert card.status == "cancelled", f"中断那轮的卡还是 {card.status} —— 点下去会真的执行"
+        # 和别的「这一轮结束了,卡没人等了」同一个状态(ADR 0007 修订 2026-10-08)。
+        assert card.status == "expired", f"中断那轮的卡还是 {card.status} —— 点下去会真的执行"
+        assert card.error == "backend_restarted"
         assert card.resolved_at is not None
 
     # 界面据此不再显示它:内联卡只拉 status=pending。

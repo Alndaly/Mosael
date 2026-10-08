@@ -157,9 +157,9 @@
   ],
   "budgets": [
     {
-      "name": "confirmation_wait_fits_inside_the_turn",
+      "name": "confirmation_wait_fits_inside_the_pause",
       "rule": "less_than",
-      "why": "一张确认卡最多等多久,必须压在后端那一轮的总时限底下。超过它:卡还亮着,而那一轮已经被判超时 —— 用户点了批准,什么都不会发生,两侧都不报错。这层关系此前只写在 tools.ts 的一段注释里,而改 Python 那个 600 的人没有任何理由来读一段 TypeScript 注释。",
+      "why": "等人批卡 / 作答的时候,后端停掉那一轮总时限的表(sidecar 发 awaiting_user,见 pi_client)。停表也得有个上限 —— sidecar 那边要是卡死在「等人中」,这一轮不能永远挂着 —— 而这个上限必须比 sidecar 等一张卡的上限长。反过来的话,人还在合法地看卡,后端先把表接着走了,一轮慢慢做的活加上这段等待就可能被判超时,卡被这一轮的收尾作废:用户点批准,回来的是「卡已作废」。此前这一条是「卡的等待压在整轮 600 秒底下」,那只管得住一张卡、而且把等人的时间算进了整轮时限(ADR 0007 修订 2026-10-08)。",
       "inner": {
         "runtime": "agent-sidecar",
         "location": "agent-sidecar/src/tools.ts",
@@ -169,7 +169,7 @@
       "outer": {
         "runtime": "python",
         "location": "backend/app/ai/sidecar/pi_client.py",
-        "symbol": "TURN_TIMEOUT_SECONDS",
+        "symbol": "AWAITING_USER_PAUSE_CAP_SECONDS",
         "unit": "s"
       }
     },

@@ -141,7 +141,7 @@ export function ChatBubble({
           <AgentTurnContent timeline={payload?.timeline} />
           {message.error && (
             <div className={payload?.timeline?.length ? "mt-2" : undefined}>
-              <AgentErrorCard content={message.content} error={message.error} />
+              <AgentErrorCard content={message.content} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />
             </div>
           )}
         </>

@@ -219,6 +219,9 @@ export type Event =
     }
   | { type: "queued"; turnId: string; mode: "steer" | "follow_up"; pending: boolean }
   | { type: "aborted"; turnId: string }
+  //: 这一轮开始 / 结束等人(批确认卡、答选择卡)。后端在等人的那段时间停掉整轮时限的表:人慢慢看卡不该把这一轮判成超时。
+  //: 几张卡同时等时成对发,后端按计数停表。
+  | { type: "awaiting_user"; turnId: string; waiting: boolean }
   //: abort 帧的**回执**,和 `aborted` 是两件事:`aborted` 要等 Agent 真的停下来才发,
   //: 回答不了「你收到了吗」。accepted=false 意味着那一轮已经结束,没有东西可停。
   | { type: "aborted_ack"; turnId: string; accepted: boolean }

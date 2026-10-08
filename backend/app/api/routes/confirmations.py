@@ -90,6 +90,13 @@ def reject(confirmation_id: str, db: Tx, user: CurrentUser) -> ToolConfirmation:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.post("/confirmations/{confirmation_id}/expire", response_model=ConfirmationOut)
+def expire(confirmation_id: str, db: Tx, user: CurrentUser, token: PresentedToken) -> ToolConfirmation:
+    """sidecar 等一张卡等到点了:作废它,再告诉模型「没做」(ADR 0007 修订 2026-10-08)。只认开这张卡的那一轮的凭据,
+    闸在 agent/use_cases.expire_card_for_turn。看不见 / 不是那一轮的一律 404。"""
+    return agent_use_cases.expire_card_for_turn(db, user, confirmation_id, autopilot.session_for_token(db, token))
+
+
 def _get_or_404(db: DbSession, confirmation_id: str) -> ToolConfirmation:
     """只管存在性。归属校验交给调用方 —— 读走 agent/use_cases.confirmation,写走 authorize_and_*。"""
     confirmation = db.get(ToolConfirmation, confirmation_id)

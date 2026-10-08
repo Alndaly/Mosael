@@ -36,12 +36,12 @@ import { log } from "./protocol.js";
 const TOOL_CALL_TIMEOUT_MS = 180_000;
 
 /**
- * 一张确认卡最多等多久。
+ * 一张卡最多等多久(人走开了,这一轮不能无限期挂着)。
  *
- * **压在后端 TURN_TIMEOUT_SECONDS(600s)底下** —— 超过它,卡还亮着而那一轮已经被判超时,
- * 用户点批准之后什么都不会发生。这条关系此前只写在这里的注释里,而**改 Python 那个 600 的人
- * 没有任何理由来读一段 TypeScript 注释**。现在它由 contracts/shared-constants.json 的
- * budgets 钉着(提成具名常量,就是为了让那条契约读得到它)。
+ * 此前它得压在后端整轮时限(TURN_TIMEOUT_SECONDS,600s)底下,由 contracts/shared-constants.json 的 budgets 钉着 ——
+ * 可那只管得住**一张**卡:一轮先干两分钟活再开卡,卡还没等到点,整轮先被判超时,卡留在那里还能批。现在等人的
+ * 时间不算进整轮时限(等的时候发 `awaiting_user`,后端停表),这个数只回答「人最多让它等多久」;到点了这张卡当场作废
+ * (`expireCard`),不会再有「模型以为没做、卡却被批了」的事。
  */
 const CARD_WAIT_CEILING_MS = 590_000;
 
@@ -142,15 +142,36 @@ async function awaitCard<T>(
   read: () => Promise<T>,
   settle: (current: T) => unknown | undefined,
   signal: AbortSignal | undefined,
+  hooks: ToolHooks,
 ): Promise<unknown | undefined> {
   const ceiling = Number(process.env.MOSAEL_CARD_WAIT_MS) || CARD_WAIT_CEILING_MS;
   const step = Math.min(1500, ceiling);
-  for (let waited = 0; waited < ceiling; waited += step) {
-    const settled = settle(await read());
-    if (settled !== undefined) return settled;
-    await sleep(step, signal);
+  // 等人的这段时间告诉后端:它停掉整轮时限的表(见 pi_client 的 awaiting_user),等完再接着走。成对发,出错也发。
+  hooks.onAwaitingUser?.(true);
+  try {
+    for (let waited = 0; waited < ceiling; waited += step) {
+      const settled = settle(await read());
+      if (settled !== undefined) return settled;
+      await sleep(step, signal);
+    }
+    return undefined;
+  } finally {
+    hooks.onAwaitingUser?.(false);
   }
-  return undefined;
+}
+
+/**
+ * 卡等到点了:让后端**当场作废**它,再告诉模型「没做」。
+ *
+ * 只抛错不作废的话,卡还亮着 —— 模型被告知「超时 = 这个动作没有发生」,用户回来一点批准,动作却真的发生了,
+ * 结果也送不回对话。作废失败(后端没响应)就照旧抛错:这一轮结束时后端还会把它结掉(host 的收尾)。
+ */
+async function expireCard(apiBase: string, token: string, confirmationId: string): Promise<void> {
+  try {
+    await apiPost(apiBase, token, `/api/confirmations/${confirmationId}/expire`, { reason: "wait_timeout" });
+  } catch (error) {
+    log("could not expire a timed-out confirmation card:", String(error));
+  }
 }
 
 /**
@@ -163,6 +184,7 @@ async function awaitConfirmation(
   token: string,
   confirmationId: string,
   signal: AbortSignal | undefined,
+  hooks: ToolHooks,
 ): Promise<unknown> {
   const settled = await awaitCard<Confirmation>(
     () => apiGet(apiBase, token, `/api/confirmations/${confirmationId}`, undefined, signal) as Promise<Confirmation>,
@@ -170,14 +192,24 @@ async function awaitConfirmation(
       if (cur.status === "executed") return { result: cur.result };
       if (cur.status === "rejected") throw new Error("用户拒绝了该操作");
       if (cur.status === "failed") throw new Error(`执行失败:${cur.error ?? "unknown"}`);
+      if (cur.status === "expired" || cur.status === "cancelled") throw new Error(CARD_EXPIRED);
       return undefined;
     },
     signal,
+    hooks,
   );
-  // 超时 = 这个动作**没有发生**。说成别的都会让模型以为它做过了。
-  if (settled === undefined) throw new Error("等待用户确认超时");
+  // 超时 = 这个动作**没有发生**。说成别的都会让模型以为它做过了 —— 所以先把卡作废,保证它以后也不会发生。
+  if (settled === undefined) {
+    await expireCard(apiBase, token, confirmationId);
+    throw new Error(CARD_WAIT_TIMED_OUT);
+  }
   return (settled as { result: unknown }).result;
 }
+
+/** 卡等到点:作废了,动作没做。和后端作废卡时写给模型的话同一个意思(系统提示里说「卡已作废 = 没做」)。 */
+export const CARD_WAIT_TIMED_OUT = "等待用户确认超时,这张卡已作废 —— 这个操作没有执行。";
+/** 卡在别处被作废了(这一轮被停止 / 结束时后端结掉的)。 */
+export const CARD_EXPIRED = "这张确认卡已作废 —— 这个操作没有执行。";
 
 /**
  * Block until the user answers (or skips) a question card in Mosael.
@@ -191,6 +223,7 @@ async function awaitAnswer(
   token: string,
   questionId: string,
   signal: AbortSignal | undefined,
+  hooks: ToolHooks,
 ): Promise<unknown> {
   const settled = await awaitCard<Question>(
     () => apiGet(apiBase, token, `/api/agent/questions/${questionId}`, undefined, signal) as Promise<Question>,
@@ -200,6 +233,7 @@ async function awaitAnswer(
       return undefined;
     },
     signal,
+    hooks,
   );
   return settled ?? {
     status: "pending",
@@ -294,11 +328,18 @@ const TOOL_LABELS: Record<string, string> = {
   read_skill_file: "读技能文件",
 };
 
+/** 一轮里工具要通知宿主的事。 */
+export interface ToolHooks {
+  /** 开始 / 结束等人(确认卡、选择卡)。index.ts 把它变成 `awaiting_user` 帧,后端据此停整轮时限的表。 */
+  onAwaitingUser?: (waiting: boolean) => void;
+}
+
 /** All Mosael tools for a turn, generated from the backend manifest. */
 export async function buildAllTools(
   apiBase: string,
   token: string,
   workspaceId: string,
+  hooks: ToolHooks = {},
 ): Promise<AgentTool[]> {
   let specs: ToolSpec[];
   try {
@@ -351,13 +392,13 @@ export async function buildAllTools(
             const card = (response?.result ?? {}) as { question_id?: string; error?: string };
             // 没有会话上下文时后端回的是一句 error(飞书 / 外部客户端),照原样给模型。
             if (!card.question_id) return jsonResult(response?.result ?? null);
-            return answerResult(await awaitAnswer(apiBase, token, card.question_id, signal), card.question_id);
+            return answerResult(await awaitAnswer(apiBase, token, card.question_id, signal, hooks), card.question_id);
           }
           if (!spec.confirmation) return jsonResult(response?.result ?? null);
           // 确认门控:调用只创建了待确认卡,阻塞等用户在 Mosael 里批准后把执行结果给模型。
           const card = (response?.result ?? {}) as { confirmation_id?: string };
           if (!card.confirmation_id) throw new Error("确认卡创建失败(缺 confirmation_id)");
-          return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal));
+          return jsonResult(await awaitConfirmation(apiBase, token, card.confirmation_id, signal, hooks));
         },
       };
     });

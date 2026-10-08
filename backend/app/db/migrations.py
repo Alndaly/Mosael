@@ -8429,6 +8429,38 @@ def _drop_empty_agent_sessions() -> None:
         logger.info("deleted %d empty agent conversations (never had a message)", len(empty))
 
 
+def _expire_orphaned_session_confirmations() -> None:
+    """挂在对话上、还在等人的确认卡,作废(ADR 0007 修订 2026-10-08)。
+
+    此前一轮结束(用户停止、卡等满 590 秒、整轮超时、失败)时,它正等着的那张卡原样留着:仍是 `pending`、仍能批、批了照样
+    执行,而模型被告知「失败 / 没发生」、结果也送不回对话(全局确认中心里还一直挂着)。现在一轮收尾时 host 把这段对话还在等的
+    卡结成 `expired`;这一步处理升级之前留下的那些。**迁移跑在启动时、任何一轮开跑之前**,所以这一刻挂在对话上的待决卡没有一张
+    还有人在等,全部作废。没挂对话的(MCP 直连、工作流节点开的)不碰:它们不属于哪一轮。
+
+    同一步把老的 `cancelled`(后端重启时作废的,`host.reconcile_orphaned_agent_sessions` 此前写的)也改成 `expired` ——
+    「卡已作废」只剩一种状态,界面不留第二个分支。原因记成机器认的码(界面按它说人话)。幂等。
+    """
+    if "tool_confirmations" not in set(inspect(engine).get_table_names()):
+        return
+    stamp = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(tool_confirmations)"))}
+        if not {"session_id", "status", "error", "resolved_at"} <= columns:
+            return
+        restarted = conn.execute(
+            text("UPDATE tool_confirmations SET status = 'expired', error = 'backend_restarted' WHERE status = 'cancelled'")
+        ).rowcount
+        orphaned = conn.execute(
+            text(
+                "UPDATE tool_confirmations SET status = 'expired', error = 'orphaned', resolved_at = :now"
+                " WHERE status = 'pending' AND session_id IS NOT NULL AND session_id != ''"
+            ),
+            {"now": stamp},
+        ).rowcount
+    if restarted or orphaned:
+        logger.info("expired %d orphaned confirmation cards (and relabelled %d cancelled ones)", orphaned, restarted)
+
+
 def _drop_dead_agent_session_columns() -> None:
     """删掉 `agent_sessions` 上早就没人读、模型上也没有了的列 —— 下一步重建这张表之前。
 
@@ -8908,6 +8940,9 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _drop_dead_agent_session_columns, _drop_agent_sessions_project_id),
             #: 从没说过话的空对话删掉(打开智能体是草稿之后,它们没有任何东西指着)。排在上一步之后:死路由那批这时已是 ui。
             *_steps(MigrationPhase.AFTER_SCHEMA, _drop_empty_agent_sessions),
+            #: 升级之前一轮结束时留下的、还挂在对话上等人的确认卡作废(此后由 host 在每一轮收尾时结掉,ADR 0007 修订)。
+            #: 排在删空对话之后:被删的那些本来就没有卡。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _expire_orphaned_session_confirmations),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

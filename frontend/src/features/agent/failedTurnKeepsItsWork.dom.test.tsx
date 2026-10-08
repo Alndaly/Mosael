@@ -12,8 +12,14 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+const settings = vi.hoisted(() => ({ opened: [] as string[] }));
+vi.mock("@/lib/deepLink", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gotoSettings: (section: string) => settings.opened.push(section),
+}));
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
@@ -101,5 +107,26 @@ describe("ask_user 的结果卡", () => {
   it("跳过了也说清楚", () => {
     render(<ToolResultCard value={{ status: "dismissed", skipped: true }} />);
     expect(screen.getByText("你跳过了这几个问题,让它自己判断")).toBeTruthy();
+  });
+});
+
+
+describe("配置类的失败(UC-05)", () => {
+  it("没配对话模型:气泡说原因,并给一个去设置里配模型的按钮", () => {
+    render(
+      <AgentErrorCard
+        content="还没有选好对话模型:在输入框旁边选一个,或到设置里把它设成你的默认模型。"
+        error="还没有选好对话模型"
+        code="no_chat_model"
+      />,
+    );
+    expect(screen.getByText(/还没有选好对话模型:在输入框旁边/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /agentConfigureModel/ }));
+    expect(settings.opened).toEqual(["providers:chat"]);
+  });
+
+  it("别的失败不冒出这颗按钮", () => {
+    render(<AgentErrorCard content="智能体执行失败，请稍后重试。" error="Connection error." code="output_limit" />);
+    expect(screen.queryByRole("button", { name: /agentConfigureModel/ })).toBeNull();
   });
 });

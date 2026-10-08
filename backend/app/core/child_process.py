@@ -227,10 +227,64 @@ class ChildProcess:
         self._drain = threading.Thread(target=self._read_stderr, daemon=True)
         self._drain.start()
         self._killer: threading.Timer | None = None
+        #: 停表(`pause_deadline`)用:时限还剩多少、这一段表从什么时候开始走、停了几层、停表本身的上限。
+        self._deadline_lock = threading.Lock()
+        self._remaining = timeout
+        self._running_since = time.monotonic()
+        self._pauses = 0
+        self._pause_cap: threading.Timer | None = None
         if timeout is not None:
-            self._killer = threading.Timer(timeout, self._kill)
-            self._killer.daemon = True
-            self._killer.start()
+            self._arm(timeout)
+
+    def _arm(self, seconds: float) -> None:
+        self._killer = threading.Timer(max(0.0, seconds), self._kill)
+        self._killer.daemon = True
+        self._killer.start()
+        self._running_since = time.monotonic()
+
+    def pause_deadline(self, cap: float) -> None:
+        """停表:这段时间不算进时限(智能体一轮里**等人**批卡、作答的时候,见 pi_client 的 `awaiting_user`)。
+
+        可以叠:几张卡同时等,每张一次 pause、一次 resume,最后一次 resume 才接着走。停表本身也有上限 `cap` ——
+        对面要是卡死在「等人中」永远不说等完了,到点自动接着走,看门狗不会因此失效。
+        """
+        with self._deadline_lock:
+            if self._remaining is None or self.killed:
+                return
+            self._pauses += 1
+            if self._pauses > 1:
+                return
+            if self._killer is not None:
+                self._killer.cancel()
+                self._killer = None
+            self._remaining -= time.monotonic() - self._running_since
+            self._pause_cap = threading.Timer(cap, self._resume_all)
+            self._pause_cap.daemon = True
+            self._pause_cap.start()
+
+    def resume_deadline(self) -> None:
+        """接着走表(和 `pause_deadline` 成对)。没停着时什么都不做。"""
+        with self._deadline_lock:
+            if self._pauses == 0:
+                return
+            self._pauses -= 1
+            if self._pauses == 0:
+                self._restart_locked()
+
+    def _resume_all(self) -> None:
+        with self._deadline_lock:
+            if self._pauses == 0:
+                return
+            logger.warning("子进程 pid=%s 停表超过上限仍没有接着走,时限恢复计时", self._process.pid)
+            self._pauses = 0
+            self._restart_locked()
+
+    def _restart_locked(self) -> None:
+        if self._pause_cap is not None:
+            self._pause_cap.cancel()
+            self._pause_cap = None
+        if self._remaining is not None and not self.killed:
+            self._arm(self._remaining)
 
     def _read_stderr(self) -> None:
         """一直把 stderr 读空。
@@ -330,8 +384,13 @@ class ChildProcess:
             self.kill()
             self._process.wait()
         finally:
-            if self._killer is not None:
-                self._killer.cancel()
+            with self._deadline_lock:
+                #: 收完了:之后来的「接着走表」不再上弦(否则一个已经收掉的进程会被一个迟到的看门狗再判一次超时)。
+                self._remaining = None
+                if self._killer is not None:
+                    self._killer.cancel()
+                if self._pause_cap is not None:
+                    self._pause_cap.cancel()
         self._drain.join(timeout=1.0)
         return self.stderr_tail(limit)
 

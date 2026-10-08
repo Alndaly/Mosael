@@ -24,6 +24,7 @@ from app.db.models import (
     now,
 )
 from app.domain import sharing
+from app.domain.agent import card_expiry
 from app.domain.agent import host
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import places
@@ -305,6 +306,20 @@ def list_confirmations(
         stmt = stmt.where(or_(ToolConfirmation.hold_until.is_(None), ToolConfirmation.hold_until <= now()))
     stmt = stmt.order_by(ToolConfirmation.created_at.desc()).limit(min(limit, CONFIRMATION_LIST_LIMIT))
     return list(db.scalars(stmt))
+
+
+def expire_card_for_turn(db: Session, user: User, confirmation_id: str, token_session_id: str | None) -> ToolConfirmation:
+    """sidecar 等一张卡等到点:作废它(ADR 0007 修订 2026-10-08)。
+
+    **只认开这张卡的那一轮的凭据**:`token_session_id` 是这次调用的令牌铸的时候记着的那段对话(和开卡归属同一个来源);
+    别的对话、登录令牌(没有对话)一律当作看不见。还要这个工作区的 edit —— 开卡要的就是它(proposals.propose)。
+    已经有结论的(刚被批 / 拒)原样返回。
+    """
+    row = db.get(ToolConfirmation, confirmation_id)
+    if row is None or not token_session_id or row.session_id != token_session_id:
+        raise NotVisible("Not found")
+    ensure_workspace_perm(db, user, row.workspace_id, "edit")
+    return card_expiry.expire_card(db, row, card_expiry.EXPIRY_WAIT_TIMEOUT)
 
 
 def confirmation(db: Session, user: User, confirmation_id: str) -> ToolConfirmation:

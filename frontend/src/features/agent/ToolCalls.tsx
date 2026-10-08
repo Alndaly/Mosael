@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music, Sparkles, X } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music, Settings2, Sparkles, X } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, getAsset, type Asset, type Confirmation } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
@@ -9,12 +9,14 @@ import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Truncate } from "@/components/ui/truncate";
 import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
 import { decodeByteFallback } from "@/features/agent/byteFallback";
 import { NOISE_KEYS } from "@/features/agent/machineFields";
+import { gotoSettings } from "@/lib/deepLink";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
@@ -24,6 +26,7 @@ import { FailureReason } from "@/features/agent/ConfirmationCard";
 import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { useToolCallConfirmation } from "@/features/agent/decisionsContext";
+import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {
@@ -273,7 +276,8 @@ function decisionWord(card: Confirmation, t: ReturnType<typeof useI18n>): string
     case "rejected":
       return t("confirmStatusRejected");
     default:
-      return t("confirmStatusCancelled");
+      //: 作废(这一轮已经结束,见 cardExpiry):按由头说。
+      return t(expiryLabel(card.error));
   }
 }
 
@@ -283,7 +287,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   const decision = useToolCallConfirmation(tool.id);
   //: 用户拒了 / 卡作废了:工具那边是「失败」(sidecar 抛的是「用户拒绝了该操作」),但这不是出了错 ——
   //: 是他做的决定。不标红、不自动摊开那句错误。
-  const declined = decision?.status === "rejected" || decision?.status === "cancelled";
+  const declined = decision?.status === "rejected" || decision?.status === EXPIRED;
   const failed = tool.status === "error" && !declined;
   // 失败默认展开(让人一眼看到出错原因),其余默认折叠。
   const [open, setOpen] = React.useState(failed);
@@ -688,15 +692,28 @@ export function AgentTurnContent({
 }
 
 /** 失败轮的错误卡:标题 + 可展开的原始错误,而不是把「执行失败」当正常回答铺开。 */
-export function AgentErrorCard({ content, error }: { content: string; error?: string | null }) {
+/** 后端在失败的那一轮上记的机器原因(`payload.error_code`):这几种在气泡上给一个能点的去处。 */
+const ERROR_FIXES: Record<string, { label: "agentConfigureModel"; go: () => void }> = {
+  //: 没有可用的对话模型:去设置里配一个(和模型选择器空着时那颗按钮同一个去处)。
+  no_chat_model: { label: "agentConfigureModel", go: () => gotoSettings("providers:chat") },
+};
+
+export function AgentErrorCard({ content, error, code }: { content: string; error?: string | null; code?: string | null }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
+  const fix = code ? ERROR_FIXES[code] : undefined;
   return (
     <div className="flex flex-col gap-[5px] rounded-lg border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,var(--muted))] px-2.5 py-2">
-      <div className="flex items-center gap-1.5 text-ui-sm text-destructive">
-        <CircleAlert size={14} />
-        <span>{content || t("agentFailedTitle")}</span>
+      <div className="flex items-start gap-1.5 text-ui-sm text-destructive">
+        <CircleAlert size={14} className="mt-[3px] shrink-0" />
+        <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{content || t("agentFailedTitle")}</span>
       </div>
+      {fix && (
+        <Button type="button" variant="outline" size="xs" className="self-start gap-1" onClick={fix.go}>
+          <Settings2 size={13} />
+          {t(fix.label)}
+        </Button>
+      )}
       {error && (
         <>
           <button type="button" className="self-start text-ui-xs text-muted-foreground underline" onClick={() => setOpen((value) => !value)}>

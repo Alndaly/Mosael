@@ -6038,6 +6038,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/confirmations/{confirmation_id}/expire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Expire
+         * @description sidecar 等一张卡等到点了:作废它,再告诉模型「没做」(ADR 0007 修订 2026-10-08)。只认开这张卡的那一轮的凭据,
+         *     闸在 agent/use_cases.expire_card_for_turn。看不见 / 不是那一轮的一律 404。
+         */
+        post: operations["expire_api_confirmations__confirmation_id__expire_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/feishu/bots": {
         parameters: {
             query?: never;
@@ -31678,6 +31699,37 @@ export interface operations {
         };
     };
     reject_api_confirmations__confirmation_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                confirmation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expire_api_confirmations__confirmation_id__expire_post: {
         parameters: {
             query?: never;
             header?: never;

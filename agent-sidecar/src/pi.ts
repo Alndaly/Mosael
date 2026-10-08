@@ -20,6 +20,7 @@ import {
 
 import { BackendCredentialStore } from "./credentials.js";
 import type { RunTurnRequest } from "./protocol.js";
+import { keepWhatWasSaid } from "./stopped.js";
 import { dropToolImages, keepRecentToolImages } from "./toolImages.js";
 // 规范入口(不是 `/compat` —— 那是上游标注为「临时、将随 ModelManager 迁移删除」的兼容层)。
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
@@ -703,6 +704,14 @@ export interface PiTurnInput {
   /** 思考档位。off 时 pi 根本不向供应商要思考(reasoning 传 undefined),
    *  所以"模型是推理模型"和"这一轮要不要思考"是两件事,前者只决定怎么解析。 */
   thinkingLevel?: "off" | "low" | "medium" | "high";
+  /**
+   * 用户按过「停止」吗(index.ts 收到 abort 帧时记下)。
+   *
+   * **只看 pi 自己的标记认不全**:停在工具执行中(最常见的是正等着批一张卡)时,pi 把被中止的那次模型请求记成
+   * `stopReason: "error"`(「This operation was aborted」),不是 `aborted`;而 `agent.signal` 在运行结束后就没了。
+   * 两条判据都认不出,这一轮就被报成「智能体执行失败」。按下去的那一刻是唯一确定的事实,所以从帧那里传进来。
+   */
+  wasStopped?: () => boolean;
 }
 
 export interface PiTurnResult {
@@ -875,9 +884,11 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
   // 收尾清算:模型答完了,但后台可能还有子智能体在跑、或报告还没进过它的上下文。
   // 等全部跑完,把没送达的报告作为一条通知消息续一轮 —— 模型消化完(可能因此又派新的,
   // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。
+  const stopped = () =>
+    Boolean(input.wasStopped?.()) || Boolean(agent.signal?.aborted) || stoppedByUser(agent.state.messages.slice(turnStartIndex));
   const settleSubagents = async () => {
     for (;;) {
-      if (agent.signal?.aborted || stoppedByUser(agent.state.messages.slice(turnStartIndex))) {
+      if (stopped()) {
         // 中止也要等后台子智能体真的停下。它们现在收得到同一个中止信号(见 subagent.ts),
         // 所以这一等是有限的 —— 等的是把在飞的请求收掉,不是等它们跑完。
         // 直接 break 的话 promise 还挂在事件循环里,Node 不退,只能等后端强杀收场。
@@ -902,10 +913,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     await settleSubagents();
     // 没说完就停下的(截断 / 工具调用丢了 / 供应商暂停,见 stallOf):**续一次**,让它从断处接着做。
     // 只续一次:输出额度本身太小的话续多少次都一样,那时该说清楚,而不是替用户一遍遍花钱。
-    const stall =
-      agent.signal?.aborted || stoppedByUser(agent.state.messages.slice(turnStartIndex))
-        ? null
-        : stallOf(lastAssistant(agent.state.messages));
+    const stall = stopped() ? null : stallOf(lastAssistant(agent.state.messages));
     if (stall) {
       await agent.prompt(stall.nudge);
       await settleSubagents();
@@ -916,9 +924,12 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     if (agent.signal?.aborted || String(err).includes("abort")) aborted = true;
     else throw err;
   }
-  if (stoppedByUser(agent.state.messages.slice(turnStartIndex))) aborted = true;
+  if (stopped()) aborted = true;
   // 工具截图不进会话状态:下一轮重发上一轮的画面没有意义(见 toolImages.ts)。
-  const messages = dropToolImages(agent.state.messages);
+  // 被停下的那一轮:停之前说出来的那段、做到哪一步,得留在记忆里(见 stopped.ts)—— pi 发请求时会整条丢掉
+  // `aborted` / `error` 的助手消息,不改写的话,用户屏上看着的那段回答模型下一轮一个字都不记得。
+  const kept = dropToolImages(agent.state.messages);
+  const messages = aborted ? keepWhatWasSaid(kept, turnStartIndex) : kept;
   const turnMessages = messages.slice(turnStartIndex);
   // 最近一条标记为 error 的消息即本轮的失败原因(如 base_url 不是 OpenAI 兼容端点、
   // 模型不存在、鉴权失败)。

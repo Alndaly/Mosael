@@ -35,3 +35,14 @@ def test_确认门控工具的描述讲明了它是阻塞的_并且不叫模型�
     # 非门控工具不该被塞这段协议:它们根本不建卡,多这一段只是噪音(还占每轮的上下文)。
     for name in ("list_assets", "get_current_time"):
         assert "BLOCKS until the user approves" not in specs[name].description, f"{name}:不该带确认协议"
+
+
+def test_系统提示也不教模型去轮询确认卡() -> None:
+    """系统提示每轮都发,它和每个确认类工具的说明是同一个模型读的。此前它还留着阻塞协议之前的三句话
+    (「创建后用 get_confirmation 轮询结果」「只有工具返回 confirmation_id/status=pending 时才可以说已提交」
+    「修改后告诉用户你提交了什么等待确认」)—— 和工具说明正好相反:这条路上模型拿到结果就是已经做了。"""
+    from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE
+
+    for stale in ("get_confirmation", "confirmation_id", "等待确认"):
+        assert stale not in SYSTEM_PROMPT_TEMPLATE, f"系统提示里还有「{stale}」"
+    assert "卡已作废" in SYSTEM_PROMPT_TEMPLATE, "批 / 拒 / 作废三种结局,模型都要知道各自意味着什么"

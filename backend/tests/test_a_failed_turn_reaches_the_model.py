@@ -116,3 +116,60 @@ def test_sidecar_在错误事件里带上记忆() -> None:
     assert "sessionState: result.sessionState" in error_payload, "错误事件没有带上 sessionState"
     assert "usage: result.usage" in error_payload, "错误事件没有带上真实用量"
     assert "context: result.context" in error_payload, "错误事件没有带上上下文水位"
+
+
+def _say_failed(db, session_id: str, content: str, error: str, *, memory_saved: bool) -> None:
+    db.add(AgentMessage(
+        session_id=session_id, role="assistant", content=content, error=error,
+        payload={"memory_saved": True} if memory_saved else {},
+    ))
+    db.flush()
+
+
+def test_记忆已经回存的失败轮不再整段重述_只补那一句中断原因() -> None:
+    """失败时 sidecar 交回了记忆(host 回存、落库记 `memory_saved`):那条用户消息和做过的工具调用都在模型记忆里。
+    此前这里仍把它们当成「你没见过的」整段重述 —— 同一个请求在模型眼前出现两次,还被告知从没处理过,它会把已经做成的
+    部分再做一遍(假模型实测:sleep / create_workflow 又调了一遍)。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        session = _session(db, workspace["id"])
+        _say(db, session.id, "user", "帮我建一个叫「出海」的工作流再跑一遍")
+        _say_failed(db, session.id, "智能体运行超过 600 秒", error="上游断线", memory_saved=True)
+
+        note = unseen_since_last_success(db, session)
+        assert "出海" not in note, "记忆里已经有这句了,不该再重述"
+        assert "没有见过" not in note
+        assert "上游断线" in note, "它没见过的只有「那一轮失败了、为什么」—— 这一句要补"
+        assert "不要把做成的再做一遍" in note
+
+
+def test_回存过的失败之后又有一轮没回存的_只重述后面那一轮() -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        session = _session(db, workspace["id"])
+        _say(db, session.id, "user", "第一件事")
+        _say_failed(db, session.id, "失败", error="错误甲", memory_saved=True)
+        _say(db, session.id, "user", "第二件事")
+        _say_failed(db, session.id, "失败", error="错误乙", memory_saved=False)
+
+        note = unseen_since_last_success(db, session)
+        assert "第一件事" not in note
+        assert "第二件事" in note and "错误乙" in note
+
+
+def test_没回存过的失败之后跟一轮回存过的_前面那段已经随那一轮的提示进了记忆() -> None:
+    """后一轮的提示里已经带着前面那段补记(发出去的就是它),它的记忆回存了,前面那段也就在记忆里了。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        session = _session(db, workspace["id"])
+        _say(db, session.id, "user", "第一件事")
+        _say_failed(db, session.id, "失败", error="错误甲", memory_saved=False)
+        _say(db, session.id, "user", "再试一次")
+        _say_failed(db, session.id, "失败", error="错误乙", memory_saved=True)
+
+        note = unseen_since_last_success(db, session)
+        assert "第一件事" not in note and "错误甲" not in note
+        assert "错误乙" in note

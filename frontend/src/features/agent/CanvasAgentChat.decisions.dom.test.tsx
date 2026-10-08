@@ -104,7 +104,7 @@ vi.mock("@/features/agent/useAgentTurnStream", () => ({
 }));
 vi.mock("@/features/agent/messageUsage", () => ({ MessageUsageFooter: () => null }));
 vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
+  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {}, selected: [], restore() {} }),
 }));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 1e6,
@@ -120,7 +120,7 @@ vi.mock("@/features/agent/composerAttachments", () => ({
     onPaste() {},
     drop: { handlers: {}, overlay: null },
     accept() {},
-    clear() {},
+    clear() {}, restore() {},
   }),
 }));
 vi.mock("@/features/agent/ChatComposer", () => ({
@@ -284,18 +284,31 @@ it("执行失败:那一行写明失败原因", async () => {
   expect(container.querySelector("article")).toBeNull();
 });
 
-it("拒绝 / 作废:一行「已拒绝」「已作废」,不是卡", async () => {
-  mocks.streamTimeline = [tool("a1", "generate_speech", "error"), tool("a2", "generate_speech", "error")];
+it("拒绝 / 作废:一行「已拒绝」「这一轮已停止,卡已作废」,不是卡,也不标红", async () => {
+  mocks.streamTimeline = [
+    tool("a1", "generate_speech", "error"),
+    tool("a2", "generate_speech", "error"),
+    tool("a3", "generate_speech", "error"),
+    tool("a4", "generate_speech", "error"),
+  ];
   mocks.cards = [
     { id: "card-a1", tool_call_id: "a1", status: "rejected" },
-    { id: "card-a2", tool_call_id: "a2", status: "cancelled" },
+    //: 这一轮结束时后端把它还在等的卡结成 expired,error 里是由头的码(ADR 0007 修订 2026-10-08)。
+    { id: "card-a2", tool_call_id: "a2", status: "expired", error: "turn_stopped" },
+    { id: "card-a3", tool_call_id: "a3", status: "expired", error: "wait_timeout" },
+    { id: "card-a4", tool_call_id: "a4", status: "expired", error: "turn_failed" },
   ];
   const { container } = await mount();
 
-  await waitFor(() => expect(container.querySelectorAll("[data-decision]")).toHaveLength(2));
+  await waitFor(() => expect(container.querySelectorAll("[data-decision]")).toHaveLength(4));
   expect(row(container, "a1")!.querySelector("[data-decision]")!.textContent).toContain("confirmStatusRejected");
-  expect(row(container, "a2")!.querySelector("[data-decision]")!.textContent).toContain("confirmStatusCancelled");
+  expect(row(container, "a2")!.querySelector("[data-decision]")!.textContent).toContain("confirmExpiredTurnStopped");
+  expect(row(container, "a3")!.querySelector("[data-decision]")!.textContent).toContain("confirmExpiredWaitTimeout");
+  expect(row(container, "a4")!.querySelector("[data-decision]")!.textContent).toContain("confirmExpiredTurnEnded");
+  // 作废的卡不再给按钮,行上也不摆那个码。
   expect(container.querySelector("article")).toBeNull();
+  expect(screen.queryByRole("button", { name: "confirmAllowOnce" })).toBeNull();
+  expect(container.textContent).not.toContain("turn_stopped");
 });
 
 it("自动放行的那几张写「自动放行」,不冒充用户点过", async () => {
@@ -315,3 +328,29 @@ it("对不上任何一行的待决卡照样摆出来 —— 那一行还没到�
   await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(1));
   expect(container.querySelector("article")!.closest("[data-tool-call]")).toBeNull();
 });
+
+it("等卡时按了停止:这一轮收尾,那一行收成「这一轮已停止,卡已作废」,不退回成工具的「失败」", async () => {
+  //: 跑着的时候卡在等;用户按停止,宿主收尾时把它作废(ADR 0007 修订 2026-10-08)。不跑的时候「有结论的卡」不轮询 ——
+  //: 收尾那一刻不再取一次的话,待决列表里它没了、有结论的那份还停在收尾之前,这一行就既不是卡也没有结论。
+  mocks.running = true;
+  mocks.streamTimeline = [tool("w1", "edit_note")];
+  mocks.cards = [{ id: "card-w1", tool_call_id: "w1", status: "pending" }];
+  const { container } = await mount();
+  await waitFor(() => expect(screen.getByRole("button", { name: "confirmAllowOnce" })).toBeTruthy());
+
+  mocks.running = false;
+  mocks.streamTimeline = [];
+  mocks.messages = [
+    ...mocks.messages,
+    { id: "m9", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:00:00",
+      payload: { timeline: [tool("w1", "edit_note", "error")] } },
+  ];
+  mocks.cards = [{ id: "card-w1", tool_call_id: "w1", status: "expired", error: "turn_stopped" }];
+
+  await waitFor(
+    () => expect(row(container, "w1")?.querySelector("[data-decision]")?.textContent).toContain("confirmExpiredTurnStopped"),
+    { timeout: 6000 },
+  );
+  expect(screen.queryByRole("button", { name: "confirmAllowOnce" })).toBeNull();
+  expect(row(container, "w1")!.textContent).not.toContain("toolFailed");
+}, 15_000);

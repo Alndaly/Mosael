@@ -129,6 +129,13 @@ export function ConfirmationsProvider({
     refetchInterval: live ? 2000 : false,
     refetchOnWindowFocus: true,
   });
+  //: **一轮收尾时再取一次**:那一刻宿主把这一轮还在等的卡作废了(ADR 0007 修订 2026-10-08)。不取的话,待决列表里它没了、
+  //: 有结论的那份还停在收尾之前(不跑的时候不轮询)—— 那一行既不是卡也没有结论,退回成工具的「失败」。
+  const wasLive = React.useRef(live);
+  React.useEffect(() => {
+    if (wasLive.current && !live) void qc.invalidateQueries({ queryKey: confirmationKeys.session(workspaceId, sessionId) });
+    wasLive.current = live;
+  }, [live, qc, workspaceId, sessionId]);
 
   /**
    * 自己刚拍板的那几张:接口回来的那一份。两份列表刷新之前,它让那一行**立刻**从卡变成状态 ——

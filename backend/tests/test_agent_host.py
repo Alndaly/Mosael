@@ -50,7 +50,9 @@ def test_system_prompt_separates_workflow_edits_from_timeline_edits() -> None:
     assert "remove_node" in prompt
     assert "edit_timeline 只用于视频时间线" in prompt
     assert "start/开始节点也可以删除" in prompt
-    assert "confirmation_id/status=pending" in prompt
+    # 确认卡的三种结局要说清(拿到结果就是做了、拒绝 / 作废就是没做),而且不教它去轮询 —— 这条路上它拿不到
+    # confirmation_id(见 test_tool_confirmation_contract.test_系统提示也不教模型去轮询确认卡)。
+    assert "拿到结果就是已经做了" in prompt
 
 
 def test_turn_metering_estimates_tokens_when_adapter_usage_is_missing() -> None:

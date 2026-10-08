@@ -42,6 +42,11 @@ const running = new Set<string>();
  * 那一轮继续跑到底。把意图记下来,就绪时立刻兑现。
  */
 const abortPending = new Set<string>();
+/**
+ * 用户按过「停止」的轮次(收到 abort 帧时它还在跑)。runPiTurn 据此把这一轮记成「停止」而不是「失败」——
+ * 停在工具执行中时,pi 自己的标记认不出来(见 pi.ts 的 `wasStopped`)。
+ */
+const stopped = new Set<string>();
 
 /** 进行中的登录:loginId -> 取消开关。授权可能持续几分钟,用户随时可能关掉弹窗。 */
 const logins = new Map<string, AbortController>();
@@ -50,7 +55,10 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
   const { turnId, prompt } = msg;
   // 订阅计划(piProvider)没有用户填的 baseUrl —— 端点在 pi 的 Provider 定义里。
   if ((msg.provider?.baseUrl || msg.provider?.piProvider) && msg.model) {
-    const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId);
+    const tools = await buildAllTools(msg.apiBase, msg.token, msg.workspaceId, {
+      // 等人批卡 / 作答的时间不算进这一轮的总时限:后端收到这两拍就停表、接着走(见 pi_client 的 awaiting_user)。
+      onAwaitingUser: (waiting) => send({ type: "awaiting_user", turnId, waiting }),
+    });
     const result = await runPiTurn(
       {
         systemPrompt: msg.systemPrompt,
@@ -64,6 +72,7 @@ async function handleRunTurn(msg: Extract<Request, { type: "run_turn" }>): Promi
         sessionState: msg.sessionState,
         forceCompact: msg.forceCompact,
         thinkingLevel: msg.thinkingLevel,
+        wasStopped: () => stopped.has(turnId),
         onAgentReady: (agent) => {
           active.set(turnId, agent);
           // 就绪之前按下的停止,在这里兑现 —— 否则那几百毫秒里「按了等于没按」。
@@ -204,6 +213,7 @@ async function main(): Promise<void> {
           .finally(() => {
             active.delete(msg.turnId);
             abortPending.delete(msg.turnId);
+            stopped.delete(msg.turnId);
             running.delete(msg.turnId);
           });
       } else if (msg.type === "gateway_complete") {
@@ -240,6 +250,7 @@ async function main(): Promise<void> {
         oneShot(handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })));
       } else if (msg.type === "abort") {
         const agent = active.get(msg.turnId);
+        if (running.has(msg.turnId)) stopped.add(msg.turnId);
         if (agent) agent.abort();
         else if (running.has(msg.turnId)) abortPending.add(msg.turnId);
         // 回执:后端据此知道「按下去到底算不算数」。accepted=false 只有一个意思 ——

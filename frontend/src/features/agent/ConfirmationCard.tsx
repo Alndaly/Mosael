@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, CircleAlert, Loader2, ShieldAlert, TriangleAlert, X } from "lucide-react";
+import { Ban, Check, CircleAlert, Loader2, ShieldAlert, TriangleAlert, X } from "lucide-react";
 
 import type { Confirmation } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { CardChoicesContext, type CardChoices } from "@/features/agent/cardChoices";
+import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 import { payloadFields, type PayloadField } from "@/features/agent/confirmationPayload";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { NoteEditPreview } from "@/features/agent/NoteEditPreview";
@@ -98,12 +99,14 @@ function RiskNotice({ tone, text }: { tone: PermissionTone; text: string }) {
 function SettledLine({ item, onDismiss }: { item: Confirmation; onDismiss?: () => void }) {
   const t = useI18n();
   const { icon: Icon, label, className } = SETTLED[item.status as keyof typeof SETTLED] ?? SETTLED.approved;
+  const expired = item.status === EXPIRED;
   return (
     <div className="flex min-w-0 items-start gap-2 border-t border-divider pt-2.5 text-ui-xs" role="status">
       <Icon size={14} className={cn("mt-[2px] shrink-0", className, item.status === "approved" && "animate-spin")} aria-hidden />
       <div className="grid min-w-0 flex-1 gap-0.5">
-        <span className={cn("font-medium", className)}>{t(label)}</span>
-        {item.error ? <FailureReason text={item.error} /> : null}
+        <span className={cn("font-medium", className)}>{t(expired ? expiryLabel(item.error) : label)}</span>
+        {/* 作废卡的 `error` 是由头的码,已经说在上面那一句里了。 */}
+        {item.error && !expired ? <FailureReason text={item.error} /> : null}
       </div>
       {onDismiss ? (
         <IconButton variant="ghost" size="icon-xs" className="-my-1 shrink-0" label={t("confirmDismiss")} onClick={onDismiss}>
@@ -151,6 +154,8 @@ const SETTLED = {
   executed: { icon: Check, label: "confirmStatusExecuted", className: "text-success" },
   rejected: { icon: X, label: "confirmStatusRejected", className: "text-muted-foreground" },
   failed: { icon: CircleAlert, label: "confirmStatusFailed", className: "text-destructive" },
+  //: 作废:这一轮已经结束,没人在等这张卡了(说法按由头,见 cardExpiry)。不是出错,不标红。
+  expired: { icon: Ban, label: "confirmExpiredTurnEnded", className: "text-muted-foreground" },
 } as const;
 
 /**

@@ -24,6 +24,11 @@ from app.core.i18n import LocalizedError, tr
 logger = logging.getLogger(__name__)
 
 TURN_TIMEOUT_SECONDS = 600
+#: 一轮里等人(批确认卡、答选择卡)的时候停掉整轮时限的表 —— 这一段停多久的上限。人慢慢看卡不该把一轮判成超时
+#: (此前 600 秒里包括等人的时间:先干两分钟活再开卡,人八分钟后回来,整轮已经被杀、卡还亮着)。上限要比 sidecar
+#: 等一张卡的上限(CARD_WAIT_CEILING_MS)长,由 contracts/shared-constants.json 的 budgets 钉着;它只防 sidecar 卡死在
+#: 「等人中」永远不说等完了。
+AWAITING_USER_PAUSE_CAP_SECONDS = 900
 
 
 
@@ -78,6 +83,8 @@ class TurnResult:
     #: 本轮开始前发生的压缩;没发生为 None。必须一路带到前端 —— 压缩静默进行的话,
     #: 用户不会知道早期消息已经不在上下文里了。
     compaction: dict | None = None
+    #: 这一轮是被用户「停止」的(不是自己跑完的)。宿主据此把这一轮留下的待决确认卡记成「停止时作废」。
+    aborted: bool = False
 
 
 @dataclass(frozen=True)
@@ -406,7 +413,8 @@ def _run_pi(
     service token; mutations still flow through confirmation cards. adapter_state
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
-        raise SidecarError("aiErr_noProvider")
+        # 气泡上直接说原因,并让界面给一个去设置的按钮(code 和 host.NO_CHAT_MODEL 同一个值)。
+        raise SidecarError("aiErr_noProvider", human=tr("aiErr_noProvider"), code="no_chat_model")
 
     frame = {
         "type": "run_turn",
@@ -471,6 +479,12 @@ def _run_pi(
                 live.ack("queued", bool(event.get("pending")))
             elif kind == "aborted_ack":
                 live.ack("aborted_ack", bool(event.get("accepted")))
+            elif kind == "awaiting_user":
+                # 等人批卡 / 作答的这段不算进整轮时限(见 AWAITING_USER_PAUSE_CAP_SECONDS)。成对来,按计数停表。
+                if event.get("waiting"):
+                    child.pause_deadline(AWAITING_USER_PAUSE_CAP_SECONDS)
+                else:
+                    child.resume_deadline()
             elif kind == "turn_done":
                 result_text = str(event.get("text", ""))
                 result_state = event.get("sessionState")
@@ -502,7 +516,10 @@ def _run_pi(
                 if error_code in TURN_CUT_SHORT:
                     raise SidecarError(detail, failed_state, human=detail, **error_kwargs)
                 if not saw_tool:
-                    raise SidecarError("aiErr_turnFailedCheckProvider", failed_state, detail=detail, **error_kwargs)
+                    raise SidecarError(
+                        "aiErr_turnFailedCheckProvider", failed_state, detail=detail,
+                        human=tr("aiErr_turnFailedCheckProvider", detail=detail), **error_kwargs,
+                    )
                 raise SidecarError(detail, failed_state, **error_kwargs)
             elif kind == "aborted":
                 aborted = True
@@ -529,7 +546,10 @@ def _run_pi(
     if aborted:
         # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
         # partial text is real output they watched arrive.
-        return TurnResult(text=result_text, adapter_state=result_state, usage=result_usage, context=result_context, compaction=result_compaction)
+        return TurnResult(
+            text=result_text, adapter_state=result_state, usage=result_usage, context=result_context,
+            compaction=result_compaction, aborted=True,
+        )
     if not result_text.strip() and not saw_tool:
         # A turn that finished with neither text nor tool calls means the model call itself failed
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that

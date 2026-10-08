@@ -30,6 +30,7 @@ from app.domain.agent.stream import (
     _stream_tool_event,
     _timeline_for_payload,
 )
+from app.domain.agent import card_expiry
 from app.domain.agent import origins
 from app.domain.agent import titles
 from app.domain.agent.places import STUDIO_PLACE, Place
@@ -81,6 +82,10 @@ def wait_for_idle_turns(timeout: float = 5.0) -> bool:
     return not any(t.name == TURN_THREAD_NAME and t.is_alive() for t in threading.enumerate())
 
 
+#: 这一轮因为「没有可用的对话模型」没跑起来(SidecarError.code)。界面据此在失败气泡上给一个去设置的按钮。
+NO_CHAT_MODEL = "no_chat_model"
+
+
 def resolve_chat_provider(
     db: Session, provider_profile_id: str | None, model: str, *, user_id: str | None
 ) -> tuple[dict | None, str | None, object | None]:
@@ -104,7 +109,9 @@ def resolve_chat_provider(
         # **不再回退到"第一个启用的连接"。** 那个兜底的失败方式跑出来过:界面显示 DeepSeek、
         # 回答却是「我是 Kimi」—— 碰巧第一个是订阅计划连接,而订阅走它自己的 provider 定义
         # (自带身份、自带思考)。没有默认就说没有,这句话用户看得懂;悄悄换一个他看不懂。
-        raise SidecarError(tr("agentErr_noChatModelChosen"))
+        # **气泡上就说原因**(`human`):不带的话气泡退回「执行失败,请稍后重试」,原因藏在「错误详情」里 —— 而重试永远不会好。
+        # `code` 让界面在气泡上给一个去设置的按钮。
+        raise SidecarError("agentErr_noChatModelChosen", human=tr("agentErr_noChatModelChosen"), code=NO_CHAT_MODEL)
     if not (model or "").strip():
         # 没指定模型时用这条连接下第一个能对话的模型。default_model 那个字段正在退场 ——
         # 它是"一档案一模型"时代的写法,同一条连接有多个对话模型时它给不出答案。
@@ -116,7 +123,8 @@ def resolve_chat_provider(
     # A profile with no usable model would otherwise reach the sidecar as model=""
     # and come back as a silent empty turn.
     if not agent_model:
-        raise SidecarError(tr("agentErr_connectionNoModel", name=profile.name))
+        message = tr("agentErr_connectionNoModel", name=profile.name)
+        raise SidecarError(message, human=message, code=NO_CHAT_MODEL)
     provider_dict = sidecar_provider(db, profile, agent_model)
     return provider_dict, agent_model, profile
 
@@ -255,16 +263,18 @@ class HostError(LocalizedError, RuntimeError):
 def unseen_since_last_success(db: Session, session: AgentSession) -> str:
     """失败的那几轮,模型其实从来没见过 —— 把它们如实补给它。
 
-    模型的记忆是 `session.adapter_state`(pi 序列化的消息),而**只有成功的回合会回存它**
-    (见下面那两条 except:它们写 AgentMessage、记账、标失败,唯独不碰 adapter_state)。
-    于是一失败,界面上的对话和模型的对话就分叉:用户看得见自己说过的话和那条「执行失败」,
+    模型的记忆是 `session.adapter_state`(pi 序列化的消息)。成功的回合会回存它;失败的回合**拿得到就也回存**
+    (sidecar 交回了失败现场,见下面 SidecarError 那条 except,落库时记 `memory_saved`),拿不到(sidecar 整个没了、
+    准备阶段就失败)才不碰。后一种一失败,界面上的对话和模型的对话就分叉:用户看得见自己说过的话和那条「执行失败」,
     模型两样都没有,它的记忆停在最后一次成功的回合。
 
-    真机上的样子是:用户说「再试一次」,模型答「这句含义不太明确」,然后照着**上一次成功**
-    那轮的话题往下推。它不是在装傻 —— 它确实不知道中间试过什么、又为什么没成。
+    真机上的样子是:用户说「再试一次」,模型答「这句含义不太明确」,然后照着**上一次成功**那轮的话题往下推。
 
-    这里不替它重放那次请求(那是用户的决定,不是我们的),只把丢掉的那一段说清楚:
-    当时说了什么、失败在哪。没有失败就返回空串,一个字都不加。
+    这里不替它重放那次请求(那是用户的决定,不是我们的),只把丢掉的那一段说清楚:当时说了什么、失败在哪。
+
+    **记忆已经回存的那几轮不再重述**:它们的用户消息和做过的工具调用都在记忆里,再说一遍「你没见过这些」,同一个请求就在
+    模型眼前出现两次、还被告知从没处理过 —— 它会把已经做成的部分再做一遍(建工作流、生成……)。对这种轮只补一句它没见过
+    的那件事:那一轮中途失败了、为什么。没有失败就返回空串,一个字都不加。
     """
     last_ok = db.scalar(
         select(AgentMessage.created_at)
@@ -283,20 +293,36 @@ def unseen_since_last_success(db: Session, session: AgentSession) -> str:
     if last_ok is not None:
         stmt = stmt.where(AgentMessage.created_at > last_ok)
     rows = list(db.scalars(stmt.order_by(AgentMessage.created_at)).all())
-    if not any(row.error for row in rows):
-        return ""
-    lines: list[str] = []
+    unseen: list[str] = []
+    #: 还没落定归属的用户消息:后面跟的是「记忆已回存」的失败轮,它们就在记忆里;跟的是没回存的失败轮,它们没见过。
+    said: list[str] = []
+    interrupted = ""
     for row in rows:
         if row.role == "user":
-            lines.append(f"· 用户说:{(row.content or '').strip()[:300]}")
+            said.append(f"· 用户说:{(row.content or '').strip()[:300]}")
         elif row.error:
-            lines.append(f"· 那一轮失败了:{row.error.strip()[:300]}")
-    return (
-        "【上面这些你没有见过】下面几轮因为执行失败,没有进入你的对话记忆 —— "
-        "它们在用户的界面上是可见的,所以他会以为你知道:\n"
-        + "\n".join(lines)
-        + "\n如果这次的消息是在指代它们(比如「再试一次」),按这段来理解;不要说你不明白他在说什么。"
-    )
+            if (row.payload or {}).get("memory_saved"):
+                said.clear()
+                unseen.clear()
+                interrupted = row.error.strip()[:300]
+            else:
+                unseen.extend(said)
+                said.clear()
+                unseen.append(f"· 那一轮失败了:{row.error.strip()[:300]}")
+    parts: list[str] = []
+    if interrupted:
+        parts.append(
+            "【上一轮中途失败了】原因:" + interrupted + "\n那一轮做过的步骤(工具调用和结果)都在你的记忆里 —— "
+            "接着做之前先看清哪些已经做成,不要把做成的再做一遍。"
+        )
+    if unseen:
+        parts.append(
+            "【上面这些你没有见过】下面几轮因为执行失败,没有进入你的对话记忆 —— "
+            "它们在用户的界面上是可见的,所以他会以为你知道:\n"
+            + "\n".join(unseen)
+            + "\n如果这次的消息是在指代它们(比如「再试一次」),按这段来理解;不要说你不明白他在说什么。"
+        )
+    return "\n\n".join(parts)
 
 
 
@@ -634,6 +660,9 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
     failure: BaseException | None = None
     #: 这是这段对话第一轮成功的回答:收尾之后照实际聊的内容给它起个名字(见 titles)。
     name_it = False
+    #: 这一轮收尾时,它还在等人的确认卡以什么由头作废(见 card_expiry.expire_session_cards)。缺省是失败;
+    #: 落库成功时改成「照常结束」或「被停止」。
+    cards_expire_as = card_expiry.EXPIRY_TURN_FAILED
 
     # ---- 1. 准备:短会话,读完就还连接 ----
     # **跑模型的那几分钟不占数据库连接。** 此前整轮包在一个会话里:一轮对话几分钟,连接就被钉几分钟,
@@ -714,8 +743,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             # Never persist a blank assistant turn: an empty reply with no tool calls means the
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
             # provider misconfiguration look like "nothing happened".
+            if result.aborted and not final_text.strip() and not timeline:
+                # 还没出字就被停下:那不是「模型什么都没回」,是用户按了停止 —— 照停止记,不报检查供应商配置。
+                final_text = tr("agentTurn_stoppedBeforeReply")
             if not final_text.strip() and not timeline:
-                raise SidecarError(tr("agentErr_emptyReply"))
+                raise SidecarError("agentErr_emptyReply", human=tr("agentErr_emptyReply"))
             usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
             prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
@@ -737,6 +769,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             )
             db.add(assistant_message)
             db.flush()
+            cards_expire_as = card_expiry.EXPIRY_TURN_STOPPED if result.aborted else card_expiry.EXPIRY_TURN_ENDED
             name_it = titles.wants_a_name(db, session)
             if provider_vendor or provider_model:
                 # 记账的形状交给 billable(归属、耗时、幂等、落库);这里只报计量。
@@ -773,7 +806,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             # 已经做过那些事,于是会再做一遍 —— 而它做的是建项目、改时间线这类有副作用的事。
             # 拿不到就保持原样(sidecar 整个没了),那时确实无从补起,由 unseen_since_last_success
             # 把「有过一轮、失败了」这件事补给它。
-            if getattr(exc, "adapter_state", None) is not None:
+            memory_saved = getattr(exc, "adapter_state", None) is not None
+            if memory_saved:
                 session.adapter_state = exc.adapter_state
             usage = _usage_from_started(turn_started)
             usage["metering"] = _turn_metering(prompt, "", getattr(exc, "usage", None))
@@ -785,6 +819,11 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 error=str(exc)[:800],
                 payload={
                     "usage": usage,
+                    # 这一轮的记忆回存了:那条用户消息、做过的工具调用都在模型记忆里。`unseen_since_last_success` 据此
+                    # 不再把它当成「你没见过的」整段重述一遍(重述会让模型以为没做过,再做一遍)。
+                    **({"memory_saved": True} if memory_saved else {}),
+                    # 机器认的原因(如 no_chat_model):界面据此在气泡上给出能点的去处。
+                    **({"error_code": exc.code} if getattr(exc, "code", "") else {}),
                     # **失败的那一轮,过程照样要留下来。** 上面那段已经说了失败点之前的工具调用
                     # 真的发生过 —— 记忆回存了,而给人看的记录此前没有:一次跑了三分钟、调了十来次
                     # 工具的对话,只要最后一步断线,用户看到的就只剩一句「执行失败」。模型知道自己
@@ -843,6 +882,17 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                     call.meter(usage["metering"])
                     call.mark_failed()
         finally:
+            # **这一轮留下的待决卡跟着结束**(ADR 0007 修订 2026-10-08):再没有谁在等它们 —— 批了照样执行,结果却送不回
+            # 对话,模型被告知的是「失败 / 没发生」。和拨回 idle 同一个事务落库。
+            # 作废失败不能连累收尾(会话会永远停在「思考中」):卡留着、记一条带栈的日志 —— 宁可多一张没作废的卡,
+            # 也不能让这段对话哑掉。
+            try:
+                expired = card_expiry.expire_session_cards(db, session_id, cards_expire_as)
+            except Exception:  # noqa: BLE001 —— 收尾路径
+                logger.exception("could not expire the pending cards of session %s", session_id)
+                expired = 0
+            if expired:
+                logger.info("turn of session %s ended; expired %d pending confirmation card(s) (%s)", session_id, expired, cards_expire_as)
             session.status = "idle"
             session.updated_at = now()
             # Revoke the service token this turn was given. It is minted per turn so the MCP
@@ -974,7 +1024,7 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
                 ToolConfirmation.session_id.in_([session.id for session in stale]),
                 ToolConfirmation.status == "pending",
             )
-            .values(status="cancelled", error="backend restarted mid-turn", resolved_at=now())
+            .values(status=card_expiry.EXPIRED, error=card_expiry.EXPIRY_BACKEND_RESTARTED, resolved_at=now())
         )
     # 不提交:重启收尾是一次用例,几张表收完一起提交(见 domain/restart.settle_previous_run)。
     return len(stale)
