@@ -142,7 +142,7 @@ def test_回执认类型_别人的回执不算数() -> None:
         _drop("s6")
 
 
-def _wait_until(predicate, timeout: float = 2.0) -> None:
+def _wait_until(predicate, timeout: float = 30.0) -> None:
     import time
 
     deadline = time.monotonic() + timeout

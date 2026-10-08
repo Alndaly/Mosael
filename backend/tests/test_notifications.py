@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import time
-
-from tests.util import fresh_client, second_client
+from tests.util import fresh_client, second_client, wait_settled
 
 
 def test_notification_read_flow() -> None:
@@ -24,12 +22,9 @@ def test_notification_read_flow() -> None:
     assert run.status_code == 200, run.text
     job_id = run.json()["id"]
 
-    for _ in range(100):
-        job = client.get(f"/api/jobs/{job_id}").json()
-        if job["status"] in ("succeeded", "failed"):
-            break
-        time.sleep(0.1)
-    assert job["status"] == "failed"
+    #: 等到落终态、并且落终态之后的那些事做完(通知可能在任务线程收尾时才落库)。上限给足:code 节点每次要建、起、删一个
+    #: 容器,机器满载(几套测试同时跑)时十几秒也正常 —— 此前只等 10 秒、看到还在 running 就判了红。
+    assert wait_settled(client, job_id, timeout=120) == "failed"
 
     listing = client.get(f"/api/notifications?workspace_id={ws['id']}").json()
     assert listing["unread"] == 1

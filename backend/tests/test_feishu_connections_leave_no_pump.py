@@ -24,8 +24,13 @@ def _pumps_alive() -> list[str]:
 def test_子进程自己退出_停机时也等它的泵写完最后一次状态(monkeypatch) -> None:
     #: 读完凭据就退出的替身 worker:不出网,退出码 3 —— 泵该把「进程退出」写成错误状态。
     quick_exit = [sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)"]
-    monkeypatch.setattr(connections, "popen_text", lambda _argv, **kwargs: connections.subprocess.Popen(
-        quick_exit, text=True, **kwargs))
+    spawned: list = []
+
+    def popen(_argv, **kwargs):
+        spawned.append(connections.subprocess.Popen(quick_exit, text=True, **kwargs))
+        return spawned[-1]
+
+    monkeypatch.setattr(connections, "popen_text", popen)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     #: 写状态放慢一点:真机上它快得几乎看不见,但「停机时它还在写」这个窗口是真的,放大它才测得到。
@@ -41,7 +46,12 @@ def test_子进程自己退出_停机时也等它的泵写完最后一次状态(
     monkeypatch.setattr(connections.bots, "write_status", slow_write)
     bot = client.post("/api/feishu/bots", json={"workspace_id": ws["id"], "app_id": "cli_q", "app_secret": "s"}).json()
     #: 等子进程**自己**退出(不是被停掉的):这时它可能已经不在连接表里,泵还在写最后一次状态。
-    connections._processes[bot["id"]].process.wait(timeout=10)
+    #: 拿自己起的那个进程等,不去连接表里查:它退得快,泵收尾时把那一行删了,查表就是 KeyError(线程起步推后时实测)。
+    deadline = time.monotonic() + 30
+    while not spawned and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert spawned, "建机器人没起 worker"
+    spawned[0].wait(timeout=30)
     #: 等泵**已经在写**「出错」那一笔了再停机 —— 要测的正是「停机时它还在写」。此前子进程一退就停机:泵的线程起步晚一点、
     #: 还没读到 EOF,停机就把它当成「被停掉的」记了离线(线程起步推后 0–0.3 秒时实测 `'offline' == 'error'`)。
     assert writing_error.wait(30), "子进程退出了,泵一直没去写「出错」"

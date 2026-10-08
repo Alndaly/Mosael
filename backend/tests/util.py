@@ -212,7 +212,12 @@ def seed_assets(workspace_id: str, kinds: dict[str, str]) -> None:
         db.commit()
 
 
-def wait_status(client, job_id: str, timeout: float = 10.0) -> str:
+def wait_status(client, job_id: str, timeout: float = 60.0) -> str:
+    """等任务落终态,返回它;等满 `timeout` 还没落就返回当时的状态(断言会说清是哪一种)。
+
+    上限是 60 秒而不是 10 秒:状态一落就返回,给多大都不花钱;而 code 节点每次要建、起、删一个容器,几套测试同时跑时
+    十几秒也正常 —— 10 秒的上限让这类用例看到还在 running 就判了红(全套 23 分钟那次实测)。
+    """
     deadline = time.monotonic() + timeout
     status = "queued"
     while time.monotonic() < deadline:

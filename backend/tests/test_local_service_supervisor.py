@@ -154,23 +154,26 @@ def test_运行中崩了_退避之后重起_起来又是运行中(tmp_path: Path
     assert service.error is None
 
 
-def test_崩得太勤_五分钟内第四次停在起不来_退避一次比一次长(tmp_path: Path) -> None:
+def test_崩得太勤_五分钟内第四次停在起不来_退避一次比一次长(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     count = tmp_path / "count"
     service = _service(tmp_path)
     spec = _spec(tmp_path, "--crash-after", "0.2", "--count", str(count))
-    seen: list[str] = []
-    started = time.monotonic()
+    #: 记下看护线程**真拿去等的**那几段退避,不量两次重起之间隔了多久:那段时间里还有起进程、跑到崩,机器一忙
+    #: 某一次起得慢,「后一段比前一段长」就不成立了(几套测试同时跑时实测 0.63 / 1.81 / 2.65)。
+    delays: list[float | None] = []
+    next_delay = supervisor.RestartPolicy.next_delay
 
-    def respawn() -> LaunchSpec:
-        seen.append(f"{time.monotonic() - started:.2f}")
-        return spec
+    def recording(self, now: float) -> float | None:
+        delays.append(next_delay(self, now))
+        return delays[-1]
 
-    service.launch(spec, respawn=respawn)
-    assert _wait_for(lambda: service.state == FAILED, 20), service.state
+    monkeypatch.setattr(supervisor.RestartPolicy, "next_delay", recording)
+
+    service.launch(spec, respawn=lambda: spec)
+    assert _wait_for(lambda: service.state == FAILED, 60), service.state
     assert service.error is not None and service.error.key == "localServiceErr_crashedTooOften"
     assert len(_starts(count)) == 1 + supervisor.MAX_RESTARTS, "第一次 + 三次重启,第四次崩了就不再起"
-    gaps = [float(b) - float(a) for a, b in zip(seen, seen[1:])]
-    assert gaps[0] < gaps[1], f"1 秒起翻倍(这里缩成 0.1 秒起):{seen}"
+    assert delays == [0.1, 0.2, 0.4, None], f"1 秒起翻倍(这里缩成 0.1 秒起),第四次不再起:{delays}"
     assert any("崩掉" in line for line in service.failure_lines)
 
 

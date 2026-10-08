@@ -24,7 +24,7 @@ import pytest
 from app.ai.runtime import asr_models, tts_models
 
 
-def _wait_checked(module, engine: str, seconds: float = 2.0) -> bool:
+def _wait_checked(module, engine: str, seconds: float = 30.0) -> bool:
     deadline = time.time() + seconds
     while time.time() < deadline:
         if module.runtime_status(engine)[1]:
@@ -58,7 +58,7 @@ def test_清缓存之后新的探测起得来(module, engine, resolver, fresh, m
     monkeypatch.setattr(module, resolver, slow)
     module.clear_runtime_probes()
     module.probe_in_background(engine)
-    assert started.wait(2), "第一次探测没起来"
+    assert started.wait(30), "第一次探测没起来"
 
     monkeypatch.setattr(module, resolver, lambda _arg: fresh)
     module.clear_runtime_probes()
@@ -89,7 +89,7 @@ def test_上一代的结果不许写回来(module, engine, resolver, stale, fres
     monkeypatch.setattr(module, resolver, slow)
     module.clear_runtime_probes()
     module.probe_in_background(engine)
-    assert started.wait(2)
+    assert started.wait(30)
 
     monkeypatch.setattr(module, resolver, lambda _arg: fresh)
     module.clear_runtime_probes()
@@ -97,7 +97,12 @@ def test_上一代的结果不许写回来(module, engine, resolver, stale, fres
     assert _wait_checked(module, engine)
 
     release.set()
-    time.sleep(0.3)  # 给上一代那条写回的机会
+    #: 等上一代那条探测**真的跑完**(写回、或者因为不是当代而不写)再看。此前睡 0.3 秒「给它写回的机会」:机器一忙它还没走到
+    #: 写回那一步,断言照样成立 —— 修复撤掉也是绿的。
+    deadline = time.monotonic() + 30
+    while any(t.name == "runtime-probe" and t.is_alive() for t in threading.enumerate()) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not any(t.name == "runtime-probe" and t.is_alive() for t in threading.enumerate()), "上一代的探测一直没跑完"
 
     assert module.runtime_status(engine)[0] is True, "上一代的过期答案把新的覆盖掉了"
 

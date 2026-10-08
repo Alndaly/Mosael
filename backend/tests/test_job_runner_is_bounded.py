@@ -8,7 +8,7 @@ import time
 from app.domain.jobs import JobRunner
 
 
-def _until(predicate, timeout: float = 5.0) -> bool:
+def _until(predicate, timeout: float = 30.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():

@@ -32,7 +32,7 @@ def _configured(client):
     return client
 
 
-def wait_idle(client, session_id: str, seconds: float = 8) -> str:
+def wait_idle(client, session_id: str, seconds: float = 30) -> str:
     deadline = time.time() + seconds
     status = client.get(f"/api/agent/sessions/{session_id}").json()["status"]
     while time.time() < deadline:

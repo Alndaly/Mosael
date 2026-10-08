@@ -30,7 +30,7 @@ def _named(session_id: str) -> tuple[str, str]:
         return session.title, session.title_source
 
 
-def _until(condition, timeout: float = 5.0) -> None:
+def _until(condition, timeout: float = 30.0) -> None:
     deadline = time.monotonic() + timeout
     while not condition():
         assert time.monotonic() < deadline, "等不到"

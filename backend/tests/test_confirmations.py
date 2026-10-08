@@ -25,7 +25,7 @@ def video_clips(sequence: dict) -> list[dict]:
     return [clip for t in sequence["tracks"] if t["kind"] == "video" for clip in t["clips"]]
 
 
-def wait_job(client: TestClient, job_id: str, timeout: float = 10.0) -> dict:
+def wait_job(client: TestClient, job_id: str, timeout: float = 60.0) -> dict:
     deadline = time.time() + timeout
     job = client.get(f"/api/jobs/{job_id}").json()
     while time.time() < deadline:

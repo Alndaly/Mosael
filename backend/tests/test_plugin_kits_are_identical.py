@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -107,15 +108,13 @@ def test_取消时连子孙一起停_组长先退了也一样(kit, tmp_path, mon
 @posix_only
 def test_到时限就停_抛TimedOut(kit, tmp_path) -> None:
     pid_file = tmp_path / "pid"
-    args = _script(tmp_path, f"""
-        import os, time
-        open({str(pid_file)!r}, "w").write(str(os.getpid()))
-        time.sleep(60)
-    """)
+    #: 子进程用 sh 起、头一件事就记下自己的 pid 再 exec 成 sleep:此前是 Python 子进程,时限只有 1 秒,机器一忙解释器还没起完
+    #: 就被停了,pid 文件是空的(`int('')`,几套测试同时跑时实测)。sh 起来是毫秒级;时限给 3 秒,对照是睡满 60 秒。
+    args = ["/bin/sh", "-c", f"echo $$ > {shlex.quote(str(pid_file))}; exec sleep 60"]
     started = time.monotonic()
     with pytest.raises(kit.TimedOut):
-        kit.follow(args, locale="en", timeout=1)
-    assert time.monotonic() - started < 10
+        kit.follow(args, locale="en", timeout=3)
+    assert time.monotonic() - started < 30, "没到时限就停 —— 等满了子进程自己的 60 秒"
     assert not _alive(int(pid_file.read_text()))
 
 

@@ -72,7 +72,7 @@ def _session(client):
     return client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()["id"]
 
 
-def _wait_until(predicate, seconds: float = 8) -> None:
+def _wait_until(predicate, seconds: float = 30) -> None:
     """等一个**具体的事实**成立。
 
     「看起来空闲了」是间接判据,而间接判据在并发里会在错误的一瞬成立(见 _wait_idle 的注释,
@@ -83,7 +83,7 @@ def _wait_until(predicate, seconds: float = 8) -> None:
         time.sleep(0.02)
 
 
-def _wait_idle(session_id: str, seconds: float = 8) -> str:
+def _wait_idle(session_id: str, seconds: float = 30) -> str:
     """真正空闲 = 状态非 running **且**队列已空。
 
     只看状态是不够的:一个 turn 结束到队列里下一个 turn 启动之间有一段空隙,状态在那一瞬就是
