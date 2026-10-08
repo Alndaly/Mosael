@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Truncate } from "@/components/ui/truncate";
-import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
+import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS, AGENT_TURN_BLOCKS_CLASS } from "@/features/agent/agentRow";
 import { decodeByteFallback } from "@/features/agent/byteFallback";
 import { NOISE_KEYS } from "@/features/agent/machineFields";
 import { gotoSettings } from "@/lib/deepLink";
@@ -672,7 +672,7 @@ export function AgentTurnContent({
     // —— 一个长 URL 或 32 位 session id 会把这一列撑到内容宽度,冲破外面那层 780px,而**同一个
     // grid 里的其它块(思考、正文)跟着一起变宽**,看起来像"整条消息比别的宽"。子项自己的
     // truncate 救不了:truncate 要父级先有确定宽度,而这里父级宽度正是由它的内容定的。
-    <CitationContext.Provider value={citations}><div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">
+    <CitationContext.Provider value={citations}><div className={AGENT_TURN_BLOCKS_CLASS}>
       {turnBlocks(timeline).map((item, index) =>
         item.type === "tools" ? (
           // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,

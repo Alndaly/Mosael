@@ -53,7 +53,7 @@ import { GenerationFailureCard, GenerationStoppedCard } from "@/features/ai-stud
 import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { IconButton } from "@/components/ui/icon-button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonLine } from "@/components/ui/skeleton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,6 +161,7 @@ import { CreateFilterRow, KindBadge, emptySessionsKey, familyKinds, generationKi
 import {
   PodcastComposerFields,
   PodcastDialogue,
+  PodcastDialogueSkeleton,
   PodcastSettings,
   SpeechComposerField,
   SpeechSettings,
@@ -489,7 +490,9 @@ export function GenerateWorkspace({
   const namesOf = (option: GenerationOption) => generationOptionNames(option, formed, t);
   //: 会话锁「族」(ADR 0055 §2):有记录的会话,下拉只列同一族(视觉 = 图像 + 视频、音乐、语音、播客);想换族就新开一条。
   //: 没有记录的(新的一条、刚开还空着的)按筛选列:选了「语音」就只列语音引擎,「全部」列全部。
-  const hasRecords = (sessionJobs.data ?? []).length > 0;
+  //: 记录还没读到时按「有记录」算:会话是第一次提交才建的,开着的那条几乎都有记录;不这样的话读完那一下右栏冒出锁族那句说明,
+  //: 下面的字段整块往下跳一截(和中间那一轮的骨架同一个目标:加载完不挪位置)。
+  const hasRecords = (sessionJobs.data ?? []).length > 0 || (Boolean(activeSession) && sessionJobs.isLoading);
   const familyLocked = Boolean(activeSession?.kind && hasRecords);
   const pickerKinds: readonly string[] | null = familyLocked
     ? familyKinds(activeSession!.kind!)
@@ -1354,16 +1357,11 @@ export function GenerateWorkspace({
         </div>
         <div className="relative grid min-h-0 min-w-0">
         <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
-          {/* First load: skeleton turns instead of flashing the "no jobs yet" empty state. */}
+          {/* 第一次打开一条会话、记录还没到:按这条会话的种类摆骨架(不闪「还没有生成任务」)。外壳和真的那一轮是同一套
+              (TURN_* 那几个类、结果卡的框),记录到了原地换上,版面不跳。 */}
+          {/* 只摆一轮:两轮的高度常常超出这一栏,贴底跟随会先把它滚到底下,记录到了又回到顶上 —— 那正是这次要消掉的那一下跳 */}
           {activeSession && sessionJobs.isLoading && ordered.length === 0 && (
-            <div className="flex flex-col gap-3.5" aria-hidden>
-              {[0, 1].map((i) => (
-                <div key={i} className="flex flex-col gap-2">
-                  <Skeleton className="h-4 w-44 self-end rounded-full" />
-                  <Skeleton className="aspect-square w-full max-w-[320px] rounded-lg" />
-                </div>
-              ))}
-            </div>
+            <GenerationTurnSkeleton kind={activeSession.kind ?? "image"} bubble="w-56" />
           )}
           {!(activeSession && sessionJobs.isLoading) && ordered.length === 0 && (
             <div className="m-auto">
@@ -1908,7 +1906,7 @@ function GeneratedVideo({ assetId, onExpand }: { assetId: string; onExpand: (src
   return (
     <div
       data-generated-video={assetId}
-      className="max-h-[420px] w-full max-w-[min(560px,100%)] overflow-hidden rounded-lg border border-border"
+      className={VIDEO_FRAME_CLASS}
       style={{ aspectRatio: ratio }}
     >
       <VideoPlayer
@@ -1919,6 +1917,71 @@ function GeneratedVideo({ assetId, onExpand }: { assetId: string; onExpand: (src
         className="bg-[#05070a]"
       />
     </div>
+  );
+}
+
+/**
+ * 一轮生成的外壳:整轮、提示词那一行与气泡、结果那一行、图框、视频框。GenerationTurn 和首次加载的骨架(GenerationTurnSkeleton)**共用这几个类**,
+ * 不各写一份 —— 此前骨架是一条 16px 高的细胶囊加一块 320 的方块,和真的气泡、结果卡对不上,记录一到整屏往下跳
+ * (维护者:「实际位置似乎和真实的不一样」)。改外壳就改这里,两边一起变。
+ */
+const TURN_CLASS = "group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center";
+const TURN_PROMPT_ROW_CLASS = "grid justify-items-end gap-1";
+const TURN_PROMPT_BUBBLE_CLASS =
+  "w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground";
+const TURN_RESULT_ROW_CLASS = "grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5";
+/**
+ * 产出下面那一行元信息(模型 · 用时 · 费用)的外框,和 TurnMeta 摆出来的 `<div className="justify-self-start"><small …>` 同一串。
+ * TurnMeta 归失败卡那一路(卡头里也用它,正在抽成共用组件),这里不去改它的写法;两边一字不差由 Skeletons.dom.test 钉着。
+ */
+const TURN_META_ROW_CLASS = "justify-self-start";
+const TURN_META_CLASS = "flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-xs text-muted-foreground";
+/** 结果卡的框:图一行几张(画的是缩略图,320px 宽、最高 360px)、视频一格(最宽 560px、最高 420px,元数据回来之前按 16:9)。 */
+const IMAGE_ROW_CLASS = "flex max-w-[min(720px,100%)] flex-wrap gap-1.5";
+const IMAGE_FRAME_CLASS = "block rounded-lg border border-border";
+const IMAGE_SINGLE_CLASS = "max-h-[360px] w-auto max-w-full";
+const VIDEO_FRAME_CLASS = "max-h-[420px] w-full max-w-[min(560px,100%)] overflow-hidden rounded-lg border border-border";
+
+/**
+ * 第一次打开一条会话、记录还没到时的一轮:**按这条会话的种类**摆 —— 外壳是真的那几个类(见上),结果那一格是真卡片的框:
+ * 图是一张缩略图那么大的方图(320px 加边框),视频是 16:9 的那一格,音乐、语音、播客是音频卡(和生成中的占位同一个壳,PendingAudioList),
+ * 播客多一行对谈稿的按钮。提示词和脚注各占一行字。记录到了原地换上,不挪位置。
+ */
+function GenerationTurnSkeleton({ kind, bubble }: { kind: string; bubble: string }) {
+  return (
+    <article className={TURN_CLASS} data-generation-skeleton={kind} aria-hidden>
+      <div className={TURN_PROMPT_ROW_CLASS}>
+        <div className={TURN_PROMPT_BUBBLE_CLASS} data-skeleton-prompt="">
+          <SkeletonLine className={bubble} />
+        </div>
+        {/* 真的那一轮下面有一行悬停才显形的脚注(复制 + 时间),透明但占高度:骨架也留着这一行 */}
+        <MessageFooter content="" className="justify-end opacity-0" />
+      </div>
+      <div className={TURN_RESULT_ROW_CLASS}>
+        {isAudibleKind(kind) ? (
+          <>
+            <PendingAudioList count={1} running />
+            {kind === "podcast" && <PodcastDialogueSkeleton />}
+          </>
+        ) : kind === "video" ? (
+          <div className={VIDEO_FRAME_CLASS} style={{ aspectRatio: 16 / 9 }} data-skeleton-frame="video">
+            <Skeleton surface className="h-full w-full rounded-none" />
+          </div>
+        ) : (
+          <div className={IMAGE_ROW_CLASS}>
+            {/* 真的那张画的是缩略图(宽 320,后端 media/thumbnails.THUMBNAIL_WIDTH)加一圈边框;比例要等记录到了才知道,先按方图 */}
+            <div className={cn(IMAGE_FRAME_CLASS, "max-w-full overflow-hidden")} data-skeleton-frame="image">
+              <Skeleton surface className="aspect-square w-[320px] max-w-full rounded-none" />
+            </div>
+          </div>
+        )}
+        <div className={TURN_META_ROW_CLASS}>
+          <small className={TURN_META_CLASS}>
+            <SkeletonLine className="w-40" />
+          </small>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -2035,11 +2098,11 @@ function GenerationTurn({
     <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput ? timestamp : null} />
   );
   return (
-    <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center" data-generation-status={status}>
-      <div className="grid justify-items-end gap-1">
+    <article className={TURN_CLASS} data-generation-status={status}>
+      <div className={TURN_PROMPT_ROW_CLASS}>
         {/* 不收提示词的工作流(放大、抠图、一张不填字的 ComfyUI 图)这一轮没写字:不摆一个空气泡,时间照旧在 */}
         {prompt ? (
-          <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground" data-generation-prompt="">
+          <div className={TURN_PROMPT_BUBBLE_CLASS} data-generation-prompt="">
             {prompt}
           </div>
         ) : null}
@@ -2057,7 +2120,7 @@ function GenerationTurn({
         <EntityReceiptNote receipt={entityReceipt(generation.request)} />
         {voiced && <TruncatedNote generation={generation} />}
       </div>
-      <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
+      <div className={TURN_RESULT_ROW_CLASS}>
         {outputs.length > 0 && isAudibleKind(generation.kind) ? (
           //: 一次可能交回几首(Suno 一次两首):每一首一张卡,而不是只放封面那一首。语音、播客同一张卡(ADR 0055):
           //: 波形、真时长、下载、在素材库里打开;播客下面多一块对谈稿和「改稿再念」。
@@ -2081,7 +2144,7 @@ function GenerationTurn({
           //: **按高度定尺寸,不按宽度铺满。** 此前多张时每张至少占半行、还会伸展:一张竖图(1080×1920)将近 500px 高,
           //: 单数的最后一张被拉成整行宽(维护者:「生成页面的图片可以稍微小一些 太大了」)。现在一张最高 360px,
           //: 多张时每张 220px 高、宽跟着比例走、不伸展,一行排得下几张排几张;点开看大图。
-          <div className={cn("flex max-w-[min(720px,100%)] flex-wrap gap-1.5")}>
+          <div className={IMAGE_ROW_CLASS}>
             {outputs.map((assetId) => (
               <IconButton
                 unstyled
@@ -2102,8 +2165,8 @@ function GenerationTurn({
               >
                 <img
                   className={cn(
-                    "block rounded-lg border border-border",
-                    outputs.length > 1 ? "h-[220px] w-auto max-w-full object-contain" : "max-h-[360px] w-auto max-w-full",
+                    IMAGE_FRAME_CLASS,
+                    outputs.length > 1 ? "h-[220px] w-auto max-w-full object-contain" : IMAGE_SINGLE_CLASS,
                   )}
                   src={assetThumbnailUrl(assetId)}
                   alt=""

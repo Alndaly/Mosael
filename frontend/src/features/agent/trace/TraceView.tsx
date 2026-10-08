@@ -15,6 +15,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { SkeletonLine } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -152,20 +153,32 @@ function TraceOverview({
   );
 }
 
+const TRACE_STATS_BAR_CLASS = "flex flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-2xs text-muted-foreground";
+
 /** 会话统计。**渲染在输入框下方**(见 ChatWorkspace),不再挂在轨迹列表底部 ——
     挂在列表底部时它随内容滚动、只在轨迹页有,而这组数字(几轮、耗时、缓存命中、失败数)
     是整个会话的体征,对话页同样该看得到。缺的项直接不出现,而不是占个位显示 0。 */
 export function TraceStatsBar({
   turns,
   usageEvents,
+  pending = false,
   className,
 }: {
   turns: TraceTurn[];
   usageEvents: AgentUsageEvent[];
+  /** 会话还没读到:同一个外框里摆一行骨架,占住这一行字的高度 —— 不然消息一到,这一行冒出来,输入框整个往上跳一行。 */
+  pending?: boolean;
   className?: string;
 }) {
   const t = useI18n();
   const stats = React.useMemo(() => traceStats(turns, usageEvents), [turns, usageEvents]);
+  if (pending) {
+    return (
+      <div aria-hidden className={cn(TRACE_STATS_BAR_CLASS, className)} data-trace-stats-skeleton="">
+        <SkeletonLine className="w-28" />
+      </div>
+    );
+  }
   if (turns.length === 0) return null; // 空会话没有体征可报,「0 轮 · 0 步」只是噪声
   const parts: { text: string; title?: string }[] = [
     { text: `${t("traceStatTurns").replace("{n}", String(stats.turns))} · ${t("traceStatSteps").replace("{n}", String(stats.steps))}` },
@@ -197,7 +210,7 @@ export function TraceStatsBar({
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5 text-ui-2xs text-muted-foreground", className)}>
+    <div className={cn(TRACE_STATS_BAR_CLASS, className)}>
       {parts.map((part, index) => (
         <React.Fragment key={part.text}>
           {index > 0 && <span aria-hidden className="opacity-40">|</span>}

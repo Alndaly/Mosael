@@ -10,6 +10,7 @@ import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextM
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
+import { CHAT_ASSISTANT_ROW_CLASS, CHAT_USER_PILL_CLASS, CHAT_USER_ROW_CLASS } from "@/features/agent/agentRow";
 import type { JSONContent } from "@tiptap/react";
 
 import { UserMessageContent } from "@/features/agent/userMessage";
@@ -122,13 +123,10 @@ export const ChatBubble = React.memo(function ChatBubble({
       className={cn(
         "group/bubble",
         message.role === "assistant"
-          ? "relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]"
+          ? CHAT_ASSISTANT_ROW_CLASS
           : inset
             ? "mx-auto w-full max-w-[780px] shrink-0"
-            // **items-end,不是 items-stretch。** 这一列里除了气泡还有悬停才显形的脚注(发出的时间 + 复制),
-            // 它透明但占宽度;stretch 会把气泡拉到和脚注一样宽 —— 短消息右边平白多一截,而时间是相对的
-            // (「刚刚」→「3 分钟前」,每 30 秒重算),脚注一变宽,气泡就跟着伸缩。气泡按自己的字定宽、靠右。
-            : "ml-auto mr-[max(calc((100%-780px)/2),0px)] flex w-fit max-w-[min(560px,82%)] shrink-0 flex-col items-end",
+            : CHAT_USER_ROW_CLASS,
       )}
     >
       {/* 自动压缩发生在这一轮开始前,标记就排在这条回复之前 —— 位置本身在说"从这里往前被整理过"。 */}
@@ -154,7 +152,7 @@ export const ChatBubble = React.memo(function ChatBubble({
           className={
             inset
               ? "grid gap-1.5 rounded-lg border border-border border-l-[3px] border-l-muted-foreground/40 bg-panel-subtle px-3 py-2.5 text-ui-md leading-[1.65] [word-break:break-word]"
-              : "whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
+              : CHAT_USER_PILL_CLASS
           }
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}

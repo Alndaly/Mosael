@@ -38,4 +38,17 @@ function Skeleton({
   );
 }
 
-export { Skeleton };
+/**
+ * 占**一行字**那么高的占位:高度跟着它所在那一层的行高走(`lh`),中间一条扫光。骨架里替一行字占位用它 ——
+ * 外面套的是真卡片的外壳(对话气泡、提示词气泡、脚注),于是内容到了那一刻,这一行的高度不变、版面不跳。
+ * 宽度由 className 给(那一行大概多长)。
+ */
+function SkeletonLine({ className }: { className?: string }) {
+  return (
+    <span data-slot="skeleton-line" aria-hidden className="block py-[0.3lh]">
+      <Skeleton className={cn("h-[0.4lh] rounded-full", className)} />
+    </span>
+  );
+}
+
+export { Skeleton, SkeletonLine };

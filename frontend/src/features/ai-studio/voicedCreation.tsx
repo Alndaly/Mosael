@@ -36,6 +36,8 @@ import { ConfigNotice, EngineNotice } from "@/components/app/ConfigNotice";
 import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
 import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/components/generation/parameterPanel";
 import { Button } from "@/components/ui/button";
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { Skeleton } from "@/components/ui/skeleton";
 import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
@@ -681,10 +683,12 @@ export function PodcastDialogue({
     catalog.data?.find((one) => one.value === value)?.label ||
     value;
   const [open, setOpen] = React.useState(false);
+  //: 素材还没到:先占住对谈稿那一行(和会话首次加载的骨架同一个壳),到了原地换上,版面不跳
+  if (asset.isPending) return <PodcastDialogueSkeleton />;
   if (dialogue.length === 0) return null;
   return (
-    <div className="grid w-full max-w-[min(560px,100%)] gap-1.5" data-podcast-dialogue="">
-      <div className="flex items-center gap-1.5">
+    <div className={DIALOGUE_BLOCK_CLASS} data-podcast-dialogue="">
+      <div className={DIALOGUE_ROW_CLASS}>
         <Button type="button" variant="ghost" size="xs" className="text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
           <ChevronDown size={12} className={cn("transition-transform duration-[120ms]", !open && "-rotate-90")} />
           {t("createDialogueShow").replace("{n}", String(dialogue.length))}
@@ -713,6 +717,21 @@ export function PodcastDialogue({
           })}
         </ol>
       )}
+    </div>
+  );
+}
+
+/** 对谈稿那一块和它的按钮行(PodcastDialogue 与它的骨架共用)。 */
+const DIALOGUE_BLOCK_CLASS = "grid w-full max-w-[min(560px,100%)] gap-1.5";
+const DIALOGUE_ROW_CLASS = "flex items-center gap-1.5";
+
+/** 对谈稿那一行还没到时的样子:同一个壳,按钮那么高(xs 档)的一条扫光。 */
+export function PodcastDialogueSkeleton() {
+  return (
+    <div className={DIALOGUE_BLOCK_CLASS} data-podcast-dialogue-skeleton="" aria-hidden>
+      <div className={DIALOGUE_ROW_CLASS}>
+        <Skeleton className={cn(CONTROL_HEIGHT.xs, "w-32")} />
+      </div>
     </div>
   );
 }

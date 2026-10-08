@@ -8,6 +8,7 @@ import { usePreferences } from "@/app/preferences";
 import { Hint } from "@/components/ui/tooltip";
 import { formatCosts, sumByCurrency, type CostAmount } from "@/lib/money";
 import { formatElapsedSeconds, relativeTime, useNow } from "@/lib/time";
+import { MESSAGE_FOOTER_ROW_CLASS } from "@/features/agent/agentRow";
 import { cn } from "@/lib/utils";
 
 /**
@@ -167,7 +168,7 @@ export function MessageFooter({
     // 字号设在**行容器**上,不设在按钮上。tokens.css 里那条无层级的 `button{font:inherit}`
     // 会压掉按钮自己的字号类(class 还在,尺寸静默回落到继承值)—— 而它继承的正是这里。
     // 所以顺着它写:容器定 11px,按钮跟着 11px,和旁边的耗时/时间一样齐。
-    <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5 text-ui-xs", className)}>
+    <div className={cn(MESSAGE_FOOTER_ROW_CLASS, className)}>
       {content ? (
         <button type="button" className={FOOTER_ACTION_CLASS} onClick={copy}>
           {copied ? <Check size={11} /> : <Copy size={11} />}

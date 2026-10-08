@@ -67,3 +67,32 @@ export const AGENT_ROW_BODY_CLASS = "ml-[13px] border-l border-border pl-3 text-
  * 事" —— 一步工具、一段思考、一段回答。两者相等的话,一轮回答会读成一整片没有停顿的东西。
  */
 export const AGENT_TEXT_BLOCK_CLASS = "py-1";
+
+/**
+ * 一轮回答里几块(思考、正文、工具行)排成的那一列:单列 grid、块与块之间 gap-1.5(见 AgentTurnContent 的说明)。
+ * 骨架(ChatTranscriptSkeleton)用同一个类,内容到了原地换上。
+ */
+export const AGENT_TURN_BLOCKS_CLASS = "grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5";
+
+/**
+ * 气泡下面那一行脚注的外框(悬停才显形,但一直占着高度)。骨架照它留一行,内容到了不挪位置。
+ *
+ * **最低高度 = 一个脚注动作的高度**(FOOTER_ACTION_CLASS:一行字 + 上下 py-0.5)。按钮的字号、行高都继承这一行
+ * (`button{font:inherit}`),所以写成 `1lh + 0.25rem` 在任何行高下都和那颗「复制」一样高 —— 有没有按钮,这一行都一样高;
+ * 此前写死 18px,骨架那一行(没有按钮)比真的(有「复制」)矮 4px,内容一到下面整块往下跳 4px。
+ */
+export const MESSAGE_FOOTER_ROW_CLASS = "mt-1.5 flex min-h-[calc(1lh+0.25rem)] items-center gap-1.5 text-ui-xs";
+
+/** 助手那一轮占的那一列(ChatBubble 和骨架共用;骨架换成真内容时不挪位置)。 */
+export const CHAT_ASSISTANT_ROW_CLASS = "relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]";
+
+/**
+ * 用户气泡那一列。**items-end,不是 items-stretch。** 这一列里除了气泡还有悬停才显形的脚注(发出的时间 + 复制),
+ * 它透明但占宽度;stretch 会把气泡拉到和脚注一样宽 —— 短消息右边平白多一截,而时间是相对的
+ * (「刚刚」→「3 分钟前」,每 30 秒重算),脚注一变宽,气泡就跟着伸缩。气泡按自己的字定宽、靠右。
+ */
+export const CHAT_USER_ROW_CLASS = "ml-auto mr-[max(calc((100%-780px)/2),0px)] flex w-fit max-w-[min(560px,82%)] shrink-0 flex-col items-end";
+
+/** 用户气泡本身(药丸)。 */
+export const CHAT_USER_PILL_CLASS =
+  "whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]";

@@ -86,8 +86,14 @@ describe("智能体正文的单列 grid 显式约束轨道", () => {
   it("AgentTurnContent 的容器给了 minmax(0,1fr)", () => {
     const text = fs.readFileSync(AGENT_TURN, "utf8");
     const body = text.slice(text.indexOf("export function AgentTurnContent"));
-    const root = body.match(/className="(grid[^"]*)"/);
-    expect(root, "AgentTurnContent 的根容器不再是 grid?那这条约束要跟着改").not.toBeNull();
+    //: 根容器的类抽成了 AGENT_TURN_BLOCKS_CLASS(agentRow.ts,骨架 ChatTranscriptSkeleton 共用同一个),顺着常量查
+    expect(body.match(/className=\{([A-Z_]+)\}/)?.[1], "AgentTurnContent 的根容器不再用 AGENT_TURN_BLOCKS_CLASS?那这条约束要跟着改").toBe(
+      "AGENT_TURN_BLOCKS_CLASS",
+    );
+    const rows = fs.readFileSync(path.join(SRC, "features/agent/agentRow.ts"), "utf8");
+    const root = rows.match(/export const AGENT_TURN_BLOCKS_CLASS = "([^"]*)"/);
+    expect(root, "AGENT_TURN_BLOCKS_CLASS 不在 agentRow.ts 里了?").not.toBeNull();
+    expect(root![1]).toMatch(/^grid\b/);
     expect(root![1]).toContain("grid-cols-[minmax(0,1fr)]");
   });
 });

@@ -42,12 +42,12 @@ import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { ChatBubble } from "@/features/agent/ChatBubble";
+import { ChatTranscriptSkeleton } from "@/features/agent/chatSkeleton";
 import { isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/agent/userMessage";
 import { type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { LoadingState } from "@/components/layout/LoadingState";
 import { DictateButton } from "@/features/agent/DictateButton";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
@@ -593,10 +593,12 @@ export function ChatWorkspace({
                   此前这里只看 `length === 0`,而读取中 `data` 是 undefined —— 于是打开一条有
                   几十轮历史的会话时,先给你看一屏「开始新对话」的欢迎页,几秒后消息才顶进来。
                   那不是"少了个 loading",是**显示了相反的状态**:它在说这条会话是空的。 */}
+              {/* 还没读到:摆真气泡外壳的骨架(用户气泡、助手那一轮),消息到了原地换上 —— 不在正中间转圈 */}
               {sessionLoading && !running && (
-                <div className="m-auto w-full max-w-[780px]">
-                  <LoadingState label={t("chatLoadingSession")} />
-                </div>
+                <>
+                  <span role="status" className="sr-only">{t("chatLoadingSession")}</span>
+                  <ChatTranscriptSkeleton />
+                </>
               )}
               {!sessionLoading && (messages.data ?? []).length === 0 && !running && (
                 <div className="m-auto w-full max-w-[780px]">
@@ -754,6 +756,7 @@ export function ChatWorkspace({
             <TraceStatsBar
               turns={statsTurns}
               usageEvents={usageEvents.data ?? []}
+              pending={sessionLoading && !running}
               className={cn(COMPOSER_COLUMN, "-mt-2 mb-2 px-3")}
             />
           </>

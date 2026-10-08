@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_TEXT_BLOCK_CLASS } from "./agentRow";
+import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_TEXT_BLOCK_CLASS, AGENT_TURN_BLOCKS_CLASS } from "./agentRow";
 
 /** Tailwind 的间距刻度:1 = 4px。 */
 const px = (step: number) => step * 4;
@@ -63,7 +63,8 @@ describe("块与块之间只有一种间距", () => {
   it("容器的 gap 加上两侧内缩,仍是原先最常见的那一档", () => {
     // 收窄 gap 是为了"只把 22 那一档收回来",不是把整体压扁:18 = 6(gap-1.5) + 4 + 4 + 字体度量。
     const source = readFileSync(join(import.meta.dirname, "ToolCalls.tsx"), "utf8");
-    const gap = /grid w-full min-w-0 grid-cols-\[minmax\(0,1fr\)\] gap-(\d+(?:\.\d+)?)/.exec(source);
+    expect(source, "AgentTurnContent 的容器用 AGENT_TURN_BLOCKS_CLASS(骨架也用它)").toContain("className={AGENT_TURN_BLOCKS_CLASS}");
+    const gap = /grid w-full min-w-0 grid-cols-\[minmax\(0,1fr\)\] gap-(\d+(?:\.\d+)?)/.exec(AGENT_TURN_BLOCKS_CLASS);
     expect(gap, "AgentTurnContent 的容器该用一个统一的 gap").not.toBeNull();
     expect(Number(gap![1]) * 4 + py(AGENT_TEXT_BLOCK_CLASS) + py(AGENT_ROW_CLASS)).toBe(14);
   });
