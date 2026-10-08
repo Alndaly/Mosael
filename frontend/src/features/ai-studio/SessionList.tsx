@@ -502,7 +502,7 @@ export function SessionList<S extends ListedSession>({
                   >
                     <ChevronRight
                       size={11}
-                      className={cn("shrink-0 transition-transform duration-[120ms]", !isCollapsed && "rotate-90")}
+                      className={cn("shrink-0 transition-transform duration-100", !isCollapsed && "rotate-90")}
                       aria-hidden
                     />
                     <Truncate className="flex-1 normal-case">{group.name}</Truncate>
@@ -549,7 +549,7 @@ export function SessionList<S extends ListedSession>({
             >
               <ChevronRight
                 size={11}
-                className={cn("shrink-0 transition-transform duration-[120ms]", asideShown && "rotate-90")}
+                className={cn("shrink-0 transition-transform duration-100", asideShown && "rotate-90")}
                 aria-hidden
               />
               <Truncate className="flex-1">{aside.title}</Truncate>

@@ -27,13 +27,9 @@ const SCALE = new Set([0, 100, 160, 240, 600]);
 
 /**
  * 还没换到刻度上的。只许减少。
- * AI Studio 的创作页正由另一路在改(会话列表、生成区),失败卡正被抽成全应用共用的组件,这一批不动,等它们合完再收。
+ * 现在一个不剩:失败卡随共用失败组件那一批、创作页的会话列表和生成区随 ADR 0052 那一批都收到了刻度上。
  */
-const KNOWN = new Set([
-  "features/ai-studio/GenerateWorkspace.tsx",
-  "features/ai-studio/SessionList.tsx",
-  "features/ai-studio/voicedCreation.tsx",
-]);
+const KNOWN = new Set<string>([]);
 
 function sources(ext: RegExp): string[] {
   const walk = (dir: string): string[] =>

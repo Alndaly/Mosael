@@ -1645,7 +1645,7 @@ export function GenerateWorkspace({
             <div
               data-engine-section=""
               data-flash={engineFlash ? "" : undefined}
-              className="-m-2 rounded-lg p-2 transition-colors duration-500 data-[flash]:bg-accent data-[flash]:duration-150"
+              className="-m-2 rounded-lg p-2 transition-colors duration-600 data-[flash]:bg-accent data-[flash]:duration-160"
             >
             <ParameterSection icon={Cpu} title={t("genSectionEngine")}>
               <ParameterField label={t("wfModelPreset")}>
@@ -2155,7 +2155,7 @@ function GenerationTurn({
         {prompt || !noOutput ? (
           <MessageFooter
             content={prompt}
-            className="justify-end opacity-0 transition-opacity duration-[120ms] group-hover/gen:opacity-100"
+            className="justify-end opacity-0 transition-opacity duration-100 group-hover/gen:opacity-100"
           >
             {noOutput ? null : <MessageTime iso={timestamp} />}
           </MessageFooter>

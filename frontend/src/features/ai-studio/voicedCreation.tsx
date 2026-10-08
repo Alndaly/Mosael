@@ -695,7 +695,7 @@ export function PodcastDialogue({
     <div className={DIALOGUE_BLOCK_CLASS} data-podcast-dialogue="">
       <div className={DIALOGUE_ROW_CLASS}>
         <Button type="button" variant="ghost" size="xs" className="text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
-          <ChevronDown size={12} className={cn("transition-transform duration-[120ms]", !open && "-rotate-90")} />
+          <ChevronDown size={12} className={cn("transition-transform duration-100", !open && "-rotate-90")} />
           {t("createDialogueShow").replace("{n}", String(dialogue.length))}
         </Button>
         {onRescript && (
