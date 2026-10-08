@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Clock,
+  Link2,
   LogOut,
   Pencil,
   Trash2,
@@ -19,8 +20,11 @@ import {
   listMembers,
   removeMember,
   revokeInvitation,
+  revokeWorkspaceInviteLink,
   sentInvitations,
   setMemberRole,
+  workspaceInviteLinks,
+  type InviteLink,
   type Workspace,
   type WorkspaceMember,
   type ActivityEvent,
@@ -43,6 +47,7 @@ import { atLeast, workspaceDeleteBlockedReason, workspaceMenuState } from "@/com
 import { DeleteWorkspaceDialog } from "@/components/layout/DeleteWorkspaceDialog";
 import { relativeTime } from "@/lib/time";
 import { useDeleteWorkspace, useRenameWorkspace, useWorkspaces } from "@/lib/workspaces";
+import { InviteLinkDialog, PendingInviteLinkRow, inviteLinksKey } from "./InviteLinks";
 
 const ASSIGNABLE = ["admin", "editor", "viewer"] as const;
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -88,6 +93,19 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   //: 只有能发邀请的人看得到(和后端同一道闸)。
   const sent = useQuery({ queryKey: sentKey, queryFn: () => sentInvitations(wid), enabled: canManage });
   const [revoking, setRevoking] = React.useState<WorkspaceInvitation | null>(null);
+  //: 发出去、还能用的邀请链接(ADR 0054)和按用户名的邀请列在一起,同一道闸。
+  const links = useQuery({ queryKey: inviteLinksKey(wid), queryFn: () => workspaceInviteLinks(wid), enabled: canManage });
+  const [linkOpen, setLinkOpen] = React.useState(false);
+  const [revokingLink, setRevokingLink] = React.useState<InviteLink | null>(null);
+  const revokeLinkMut = useMutation({
+    mutationFn: (link: InviteLink) => revokeWorkspaceInviteLink(wid, link.id),
+    onSuccess: () => {
+      toast.success(t("inviteLinkRevoked"));
+      void qc.invalidateQueries({ queryKey: inviteLinksKey(wid) });
+    },
+    onError: onErr,
+    onSettled: () => setRevokingLink(null),
+  });
   const revokeMut = useMutation({
     mutationFn: (invitation: WorkspaceInvitation) => revokeInvitation(wid, invitation.id),
     onSuccess: (_, invitation) => {
@@ -201,6 +219,9 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             onRevoke={() => setRevoking(invitation)}
           />
         ))}
+        {canManage && (links.data ?? []).map((link) => (
+          <PendingInviteLinkRow key={link.id} link={link} roleLabel={roleLabel} onRevoke={() => setRevokingLink(link)} />
+        ))}
       </SettingsListBlock>
 
       {canManage && (
@@ -212,8 +233,25 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
               void qc.invalidateQueries({ queryKey: sentKey });
             }}
           />
+          {/* 对方还没有账号、或者不知道他的用户名:发一张链接,打开就进来(ADR 0054)。 */}
+          <div className="mt-3 flex flex-wrap items-center gap-2.5 border-t border-divider pt-3">
+            <Button data-invite-link-new="" variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
+              <Link2 size={13} /> {t("inviteLinkNew")}
+            </Button>
+            <span className="text-ui-xs text-muted-foreground">{t("inviteLinkHint")}</span>
+          </div>
         </SettingsBlock>
       )}
+      <InviteLinkDialog open={linkOpen} workspaceId={wid} workspaceName={workspace.name} onClose={() => setLinkOpen(false)} />
+      <ConfirmDialog
+        open={revokingLink !== null}
+        title={t("inviteLinkRevoke")}
+        body={t("inviteLinkRevokeConfirm").replace("{hint}", revokingLink?.code_hint ?? "")}
+        confirmLabel={t("inviteLinkRevoke")}
+        onCancel={() => setRevokingLink(null)}
+        pending={revokeLinkMut.isPending}
+        onConfirm={() => revokingLink && revokeLinkMut.mutate(revokingLink)}
+      />
 
       <ConfirmDialog
         open={revoking !== null}

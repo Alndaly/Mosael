@@ -91,7 +91,7 @@ def test_an_invited_person_can_still_get_in(monkeypatch) -> None:
     """
     owner = fresh_client()
     _set_open(False)  # 必须在 fresh_client 之后 —— 它会重建库
-    invite = owner.post("/api/auth/invites", json={"note": "给 mate"})
+    invite = owner.post("/api/admin/invite-links", json={"note": "给 mate"})
     assert invite.status_code == 200, invite.text
     code = invite.json()["code"]
 
@@ -115,7 +115,7 @@ def test_a_workspace_invitation_still_works() -> None:
     """有了账号之后,进工作区的流程一点没变。"""
     owner = fresh_client()
     workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
-    code = owner.post("/api/auth/invites", json={}).json()["code"]
+    code = owner.post("/api/admin/invite-links", json={}).json()["code"]
     mate = TestClient(app)
     mate.post("/api/auth/register", json={"username": "mate", "password": "whatever123", "invite_code": code})
 

@@ -151,13 +151,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个邀请码用不了:可能抄错了、已经有人用过,或者过了 7 天有效期。请向管理员要一个新的",
         "en": "This invite code can't be used: it may be mistyped, already used, or past its 7-day validity. Ask an administrator for a new one.",
     },
-    "routeErr_inviteCodeNotFound": {
-        "zh": "没有这个邀请码(可能已经作废了)",
-        "en": "No such invite code (it may already have been revoked).",
+    "routeErr_webUrlScheme": {
+        "zh": "网页地址要以 https:// 或 http:// 开头,例如 https://studio.example.com",
+        "en": "The web address has to start with https:// or http://, e.g. https://studio.example.com.",
     },
-    "routeErr_inviteCodeUsed": {
-        "zh": "这个邀请码已经有人用来注册了,作废不了",
-        "en": "Someone has already signed up with this invite code, so it can't be revoked.",
+    "routeErr_inviteLinkNeedsDeploymentAdmin": {
+        "zh": "这台 Mosael 只收受邀的人:这张链接能让已有账号的人加入工作区,注册要部署管理员放行。请找发链接的人,或者部署管理员",
+        "en": "This Mosael only accepts invited people: this link lets existing accounts join the workspace, but signing up needs a deployment administrator's approval. Ask whoever sent the link, or a deployment administrator.",
     },
     "routeErr_signupClosed": {
         "zh": "这个部署不开放自助注册,请向管理员要一个邀请码",

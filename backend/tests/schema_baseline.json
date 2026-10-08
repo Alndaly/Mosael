@@ -364,6 +364,22 @@
     "updated_at",
     "workspace_id"
   ],
+  "invite_links": [
+    "code_hash",
+    "code_hint",
+    "created_at",
+    "created_by",
+    "expires_at",
+    "id",
+    "note",
+    "revoked_at",
+    "role",
+    "signup_approved_by",
+    "signup_requested_at",
+    "used_at",
+    "used_by",
+    "workspace_id"
+  ],
   "jobs": [
     "created_at",
     "error",

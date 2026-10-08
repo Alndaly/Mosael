@@ -68,11 +68,12 @@ def test_邀请码填了却用不了_说是码的问题_没填才说去要一个
     wrong = client.post("/api/auth/register", json={"username": "a1", "password": "whatever123", "invite_code": "deadbeef"})
     assert wrong.status_code == 403 and "这个邀请码用不了" in wrong.json()["detail"]
 
-    code = owner.post("/api/auth/invites", json={"note": "给 a1"}).json()["code"]
-    assert owner.delete(f"/api/auth/invites/{code}").status_code == 204
+    issued = owner.post("/api/admin/invite-links", json={"note": "给 a1"}).json()
+    code, link_id = issued["code"], issued["link"]["id"]
+    assert owner.delete(f"/api/admin/invite-links/{link_id}").status_code == 204
     revoked = client.post("/api/auth/register", json={"username": "a1", "password": "whatever123", "invite_code": code})
     assert revoked.status_code == 403 and "这个邀请码用不了" in revoked.json()["detail"]
-    assert owner.delete(f"/api/auth/invites/{code}").status_code == 404
+    assert owner.delete("/api/admin/invite-links/no-such-link").status_code == 404
 
 
 def test_用过的邀请码作废不了_只有部署管理员能作废() -> None:
@@ -81,11 +82,14 @@ def test_用过的邀请码作废不了_只有部署管理员能作废() -> None
     with SessionLocal() as db:
         deployment.set_open_registration(db, False)
         db.commit()
-    used = owner.post("/api/auth/invites", json={}).json()["code"]
+    used = owner.post("/api/admin/invite-links", json={}).json()
     mate = TestClient(app)
-    assert mate.post("/api/auth/register", json={"username": "mate", "password": "whatever123", "invite_code": used}).status_code == 200
-    assert owner.delete(f"/api/auth/invites/{used}").status_code == 409
+    assert mate.post("/api/auth/register",
+                     json={"username": "mate", "password": "whatever123", "invite_code": used["code"]}).status_code == 200
+    assert owner.delete(f"/api/admin/invite-links/{used['link']['id']}").status_code == 409
 
-    fresh = owner.post("/api/auth/invites", json={}).json()["code"]
-    assert member.delete(f"/api/auth/invites/{fresh}").status_code == 403
-    assert any(row["code"] == fresh for row in owner.get("/api/auth/invites").json())
+    fresh = owner.post("/api/admin/invite-links", json={}).json()
+    assert member.delete(f"/api/admin/invite-links/{fresh['link']['id']}").status_code == 403
+    listed = owner.get("/api/admin/invite-links").json()
+    assert any(row["id"] == fresh["link"]["id"] and row["code_hint"] == fresh["code"][-4:] for row in listed)
+    assert all("code" not in row for row in listed), "列表里没有原文 —— 库里也没有,只在生成的那一次给"

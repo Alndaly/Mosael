@@ -162,4 +162,4 @@ def test_issuing_registration_invites_now_reads_the_column() -> None:
     token = granted_admin.post("/api/auth/login", json={"username": "mate", "password": "pass1234"}).json()["token"]
     granted_admin.headers["Authorization"] = f"Bearer {token}"
 
-    assert granted_admin.post("/api/auth/invites", json={}).status_code == 200
+    assert granted_admin.post("/api/admin/invite-links", json={}).status_code == 200

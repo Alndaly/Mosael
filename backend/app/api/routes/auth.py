@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import time
-from datetime import timedelta
 
-from fastapi import APIRouter, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from app.api.responses import file_response
 from sqlalchemy import func, select
@@ -16,7 +15,8 @@ from app.api.schemas import (
     AuthOut,
     BootstrapOut,
     DeploymentAdminUpdate,
-    InviteCreate,
+    InviteCodeIn,
+    InviteLinkPreviewOut,
     PasswordUpdate,
     RegisterCredentials,
     UserOut,
@@ -28,17 +28,13 @@ from app.core.security import (
     find_session,
     hash_password,
     mint_login_session,
-    new_session_token,
     revoke_other_logins,
     verify_password,
 )
 from app.domain import deployment, members
-from app.db.models import OAuthIdentity, RegistrationInvite, User, now
+from app.db.models import OAuthIdentity, User
 
 router = APIRouter(tags=["auth"])
-
-#: 邀请码的有效期。够对方从收到消息到坐下来注册,又不至于长期挂在那儿。
-INVITE_TTL = timedelta(days=7)
 
 
 def current_user_out(db: Session, user: User) -> UserOut:
@@ -85,52 +81,14 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
     return AuthOut(token=token, user=current_user_out(db, user))
 
 
-@router.post("/auth/invites")
-def create_registration_invite(body: InviteCreate, db: DbSession, user: CurrentUser) -> dict:
-    """发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。
-
-    「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。
-    """
-    ensure_deployment_admin(db, user)
-    invite = RegistrationInvite(
-        code=new_session_token()[:32],
-        created_by=user.id,
-        note=body.note.strip()[:120],
-        expires_at=now() + INVITE_TTL,
-    )
-    db.add(invite)
-    db.commit()
-    return {"code": invite.code, "note": invite.note, "expires_at": invite.expires_at.isoformat()}
-
-
-@router.get("/auth/invites")
-def list_registration_invites(db: DbSession, user: CurrentUser) -> list[dict]:
-    ensure_deployment_admin(db, user)
-    rows = db.scalars(select(RegistrationInvite).order_by(RegistrationInvite.created_at.desc()).limit(50))
-    return [
-        {
-            "code": row.code,
-            "note": row.note,
-            "used": bool(row.used_by),
-            "expires_at": row.expires_at.isoformat(),
-        }
-        for row in rows
-    ]
-
-
-@router.delete("/auth/invites/{code}", status_code=204)
-def revoke_registration_invite(code: str, db: DbSession, user: CurrentUser) -> Response:
-    """作废一个还没用过的邀请码:发错了人、发出去的消息被转走了。此前发出去就撤不回,只能等它 7 天后过期(体检 UM-09)。
-    用过的码留着 —— 它记着这个账号是凭谁发的码进来的。"""
-    ensure_deployment_admin(db, user)
-    invite = db.get(RegistrationInvite, code)
-    if invite is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_inviteCodeNotFound"))
-    if invite.used_by:
-        raise HTTPException(status_code=409, detail=tr("routeErr_inviteCodeUsed"))
-    db.delete(invite)
-    db.commit()
-    return Response(status_code=204)
+@router.post("/auth/invite-links/preview", response_model=InviteLinkPreviewOut)
+def preview_invite_link(body: InviteCodeIn, db: DbSession) -> InviteLinkPreviewOut:
+    """打开一张邀请链接、还没登录的那一屏:进哪个工作区、谁邀请的、还能不能用、没账号的人能不能凭它注册
+    (ADR 0054)。**不需要登录** —— 拿着原文的人就是被邀请的人;码在请求体里,不进访问日志。"""
+    preview = members.preview_invite_link(db, body.code)
+    if preview is None:
+        raise HTTPException(status_code=404, detail=tr("memberErr_linkUnknown"))
+    return InviteLinkPreviewOut(**preview)
 
 
 @router.get("/auth/users")
@@ -287,7 +245,9 @@ def bootstrap(db: DbSession) -> BootstrapOut:
     没人 → 界面进「创建管理员账户」:那时没有任何人可以发邀请,而没有部署管理员的部署是块砖头。
     """
     count = db.scalar(select(func.count()).select_from(User)) or 0
-    return BootstrapOut(has_users=count > 0, open_registration=deployment.open_registration(db))
+    return BootstrapOut(
+        has_users=count > 0, open_registration=deployment.open_registration(db), web_url=deployment.web_url(db)
+    )
 
 
 def _create_session(db: DbSession, user: User) -> str:

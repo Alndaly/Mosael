@@ -116,25 +116,41 @@ class WorkspaceMember(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
-class RegistrationInvite(Base):
-    """**进这个部署**的邀请码 —— 与 WorkspaceInvitation(进某个工作区)是两件事。
+class InviteLink(Base):
+    """一个邀请链接(ADR 0054):拿着它的人能进这台部署,或者进某个工作区,或者两样一起。
 
-    关掉自助注册之后必须有这个:老的邀请流程是「按用户名邀请一个**已注册**账号」,而账号从哪来
-    正是被关掉的那条路。两层划分在这里第一次显形 —— 一个是部署的门,一个是工作区的门。
+    两道门还是两道门(ADR 0008):**进部署**归部署管理员,**进工作区**归工作区管理员。一张链接把一次邀请要走的
+    路合成一步 —— 带着工作区的(`workspace_id`),打开就成为那个工作区的成员;还没账号的人能不能顺带注册,
+    要部署那道门点过头(`signup_approved_by`,部署管理员发的链接自带),或者部署本来就开放注册。不带工作区的
+    就是此前的「注册邀请码」(那张表由迁移并进来,老码照样用到过期)。
 
-    码是随机串,由管理员带外发给对方;对方拿它注册并**自己设密码** —— 保持仓库既有的那条
-    「密码不经过任何第三人之手」(见 domain/members 的说明)。
+    链接本身是凭据:库里只存哈希(`code_hash`,和会话令牌同一个做法,见 core/tokens),原文只在生成的那一次
+    给发链接的人;列表里认它靠末尾几位(`code_hint`)。7 天有效、用一次就作废、能撤回。
     """
 
-    __tablename__ = "registration_invites"
+    __tablename__ = "invite_links"
+    __table_args__ = (Index("idx_invite_links_workspace", "workspace_id"),)
 
-    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    code_hash: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    #: 原文的末尾几位:列表里认得出是哪一张,又拼不回原文。
+    code_hint: Mapped[str] = mapped_column(String(8), nullable=False, default="")
+    #: 进哪个工作区。空 = 只进这台部署(不带工作区的邀请)。
+    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True)
+    #: 进工作区时的角色(admin|editor|viewer);不带工作区时是空串。
+    role: Mapped[str] = mapped_column(String(40), nullable=False, default="")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    #: 给谁的(仅备注,不做校验)—— 管理员自己看得出这个码发给了谁。
+    #: 给谁的(仅备注,不做校验)—— 发的人自己看得出这张发给了谁。
     note: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    used_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    #: 哪位部署管理员同意了「还没账号的人能凭它注册」。部署管理员发的链接是他自己;工作区管理员发的要请人放行。
+    signup_approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 工作区管理员请部署管理员放行的时间(还没放行时,管理页把它列在「等你放行」里)。
+    signup_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 
 class WorkspaceInvitation(Base):

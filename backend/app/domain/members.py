@@ -11,14 +11,17 @@ from __future__ import annotations
 
 import secrets
 import threading
+from dataclasses import dataclass
+from datetime import timedelta
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, aliased
 
 from app.core.i18n import LocalizedError, tr
 from app.core.security import hash_password
+from app.core.tokens import token_digest
 from app.core.unit_of_work import after_commit
-from app.db.models import Notification, RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
+from app.db.models import InviteLink, Notification, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
 from app.domain import deployment
 from app.domain.permissions import PermissionDenied
 from app.domain import notifications as notifications_svc
@@ -45,15 +48,89 @@ def normalize_username(value: str) -> str:
     return value.strip().lower()
 
 
-def usable_invite(db: Session, code: str) -> RegistrationInvite | None:
-    """还能用的注册邀请码:存在、没用过、没过期。看不懂的码一律当作没有。"""
+# ---------------- 邀请链接(ADR 0054) ----------------
+
+#: 邀请链接多久过期(D49)。用一次就作废;和此前的注册邀请码一样是 7 天。
+INVITE_TTL = timedelta(days=7)
+#: 链接能给的工作区角色。所有者不经链接给 —— 只有所有者能在成员列表里当面授予(见 ensure_may_touch_owner)。
+LINK_ROLES = ("admin", "editor", "viewer")
+
+
+@dataclass(frozen=True)
+class IssuedLink:
+    """刚发出去的一张链接。`code` 是原文,只在这一次给发链接的人 —— 库里只有哈希。"""
+
+    link: InviteLink
+    code: str
+
+
+@dataclass(frozen=True)
+class Joined:
+    """凭链接进了一个工作区:进的是哪个、什么角色、主人是谁(界面上那句「已加入」说的就是这几样)。"""
+
+    workspace: Workspace
+    role: str
+    owner_name: str
+    #: 本来就是成员(不是凭这张链接进来的):什么都没改,界面也不给「撤销」—— 撤销会把原有的成员身份一起退掉。
+    already_member: bool
+
+
+def issue_invite_link(db: Session, creator: User, *, workspace_id: str | None, role: str = "", note: str = "") -> IssuedLink:
+    """发一张邀请链接。`workspace_id` 为空是只进这台部署的(此前的注册邀请码)。不提交。
+
+    谁能发、能发哪种,由调用方先判(工作区的 `members` 权限 / 部署管理员);这里只记一件和人有关的事:
+    **部署管理员发的链接自带「能顺带注册」**(D48),工作区管理员发的要请部署管理员放行,或者部署本来开放注册。
+    """
+    if workspace_id is not None and role not in LINK_ROLES:
+        raise MemberError("memberErr_linkRole", roles=" / ".join(LINK_ROLES))
+    code = secrets.token_urlsafe(24)
+    link = InviteLink(
+        code_hash=token_digest(code),
+        code_hint=code[-4:],
+        workspace_id=workspace_id,
+        role=role if workspace_id is not None else "",
+        created_by=creator.id,
+        note=note.strip()[:120],
+        signup_approved_by=creator.id if creator.is_deployment_admin else None,
+        expires_at=now() + INVITE_TTL,
+    )
+    db.add(link)
+    db.flush()
+    return IssuedLink(link=link, code=code)
+
+
+def find_invite_link(db: Session, code: str) -> InviteLink | None:
+    """按原文找那张链接(比的是哈希)。空串、找不到都是 None。"""
     code = (code or "").strip()
     if not code:
         return None
-    invite = db.get(RegistrationInvite, code)
-    if invite is None or invite.used_by or invite.expires_at <= now():
-        return None
-    return invite
+    return db.scalar(select(InviteLink).where(InviteLink.code_hash == token_digest(code)))
+
+
+def link_state(link: InviteLink) -> str:
+    """`open`(还能用)/ `used` / `revoked` / `expired`。撤回、用过排在过期前面:说得出是哪件事发生了。"""
+    if link.revoked_at is not None:
+        return "revoked"
+    if link.used_by:
+        return "used"
+    if link.expires_at <= now():
+        return "expired"
+    return "open"
+
+
+#: 一张链接用不了时说的是哪件事(找不到的另说:memberErr_linkUnknown)。
+_LINK_STATE_ERRORS = {"used": "memberErr_linkUsed", "revoked": "memberErr_linkRevoked", "expired": "memberErr_linkExpired"}
+
+
+def link_allows_signup(db: Session, link: InviteLink) -> bool:
+    """还没账号的人能不能凭它注册:部署管理员放过行(他自己发的自带),或者部署本来开放注册(D48)。"""
+    return bool(link.signup_approved_by) or deployment.open_registration(db)
+
+
+def usable_invite(db: Session, code: str) -> InviteLink | None:
+    """还能用的那张链接;看不懂的码、用过的、撤回的、过期的一律当作没有。"""
+    link = find_invite_link(db, code)
+    return link if link is not None and link_state(link) == "open" else None
 
 
 def create_account(db: Session, *, username: str, display_name: str, password: str | None, invite_code: str = "") -> User:
@@ -71,10 +148,14 @@ def create_account(db: Session, *, username: str, display_name: str, password: s
     """
     bootstrapping = db.scalar(select(User).limit(1)) is None
     invite = usable_invite(db, invite_code)
-    if not bootstrapping and invite is None and not deployment.open_registration(db):
-        #: 填了码却用不了,和压根没填是两回事:手里有码的人(抄错一位、过了一周、被别人先用了)此前也被告知
-        #: 「去要一个邀请码」,不知道是码的问题(体检 UM-09)。
-        raise SignupClosed("routeErr_inviteCodeUnusable" if (invite_code or "").strip() else "routeErr_signupClosed")
+    if not bootstrapping and not deployment.open_registration(db):
+        if invite is None:
+            #: 填了码却用不了,和压根没填是两回事:手里有码的人(抄错一位、过了一周、被别人先用了)此前也被告知
+            #: 「去要一个邀请码」,不知道是码的问题(体检 UM-09)。
+            raise SignupClosed("routeErr_inviteCodeUnusable" if (invite_code or "").strip() else "routeErr_signupClosed")
+        if not link_allows_signup(db, invite):
+            #: 工作区管理员发的链接只管进工作区,进部署那道门还没人点头(ADR 0054 D48)。
+            raise SignupClosed("routeErr_inviteLinkNeedsDeploymentAdmin")
     username = normalize_username(username)
     if db.scalar(select(User).where(User.username == username)) is not None:
         raise UsernameTaken("memberErr_usernameTaken")
@@ -89,7 +170,8 @@ def create_account(db: Session, *, username: str, display_name: str, password: s
     db.flush()
     _adopt_orphan_workspaces(db, user)
     if invite is not None:
-        invite.used_by = user.id
+        #: 带着工作区的链接,注册完直接是那个工作区的成员 —— 不经过「先建一个自己的工作区」那一步。
+        _use_link(db, invite, user)
     return user
 
 
@@ -291,6 +373,174 @@ def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool
         db.commit()
         db.refresh(invitation)
     return invitation
+
+
+def _use_link(db: Session, link: InviteLink, user: User) -> bool:
+    """`user` 用掉这张链接:记下谁、什么时候;带着工作区的,建成员行(本来就是成员就不动)并告诉发链接的人。
+    回「新进了工作区」。不提交。"""
+    link.used_by = user.id
+    link.used_at = now()
+    if link.workspace_id is None:
+        return False
+    if db.get(WorkspaceMember, {"workspace_id": link.workspace_id, "user_id": user.id}) is not None:
+        return False
+    db.add(WorkspaceMember(workspace_id=link.workspace_id, user_id=user.id, role=link.role))
+    workspace = db.get(Workspace, link.workspace_id)
+    notifications_svc.notify(
+        db,
+        link.workspace_id,
+        type="team",
+        title=tr("memberNotice_joinedByLink", name=user.display_name, workspace=workspace.name if workspace else ""),
+        body="",
+        payload={"kind": "invite-link-used", "invite_link_id": link.id},
+        user_id=link.created_by,
+    )
+    db.flush()
+    return True
+
+
+def _owner_name(db: Session, workspace_id: str) -> str:
+    owner = db.scalar(
+        select(User)
+        .join(WorkspaceMember, WorkspaceMember.user_id == User.id)
+        .where(WorkspaceMember.workspace_id == workspace_id, WorkspaceMember.role == "owner")
+        .order_by(WorkspaceMember.created_at.asc())
+        .limit(1)
+    )
+    return (owner.display_name or owner.username) if owner is not None else ""
+
+
+def redeem_invite_link(db: Session, user: User, code: str) -> Joined:
+    """已登录的人打开一张工作区邀请链接:直接成为成员(D51)。不提交。
+
+    **对用过它的那个人是幂等的**:注册时已经凭它进来了、或者同一个人再点一次,回同一个工作区,什么都不改。
+    本来就是这个工作区的成员时也不消耗它(链接是一次性的,留着还能转给真正要它的人)。
+    """
+    link = find_invite_link(db, code)
+    if link is None:
+        raise MemberError("memberErr_linkUnknown")
+    workspace = db.get(Workspace, link.workspace_id) if link.workspace_id else None
+    if link.workspace_id is None:
+        raise MemberError("memberErr_linkIsForSignup")
+    if workspace is None:
+        raise MemberError("memberErr_linkUnknown")
+    member = db.get(WorkspaceMember, {"workspace_id": workspace.id, "user_id": user.id})
+    if link.used_by == user.id and member is not None:
+        #: 就是凭这张进来的(刚注册完、或者又点了一次):照「加入了」回,界面照样给撤销。
+        return Joined(workspace=workspace, role=member.role, owner_name=_owner_name(db, workspace.id), already_member=False)
+    state = link_state(link)
+    if state != "open":
+        raise MemberError(_LINK_STATE_ERRORS[state])
+    if member is not None:
+        return Joined(workspace=workspace, role=member.role, owner_name=_owner_name(db, workspace.id), already_member=True)
+    _use_link(db, link, user)
+    return Joined(workspace=workspace, role=link.role, owner_name=_owner_name(db, workspace.id), already_member=False)
+
+
+def preview_invite_link(db: Session, code: str) -> dict[str, object] | None:
+    """打开链接、还没登录的那一屏要知道的:进哪个工作区、谁邀请的、什么角色、还能不能用、没账号的人能不能凭它注册。
+    找不到回 None。只给拿着原文的人看(原文就是凭据)。"""
+    link = find_invite_link(db, code)
+    if link is None:
+        return None
+    workspace = db.get(Workspace, link.workspace_id) if link.workspace_id else None
+    inviter = db.get(User, link.created_by)
+    return {
+        "workspace_name": workspace.name if workspace is not None else "",
+        "inviter_name": (inviter.display_name or inviter.username) if inviter is not None else "",
+        "role": link.role,
+        "state": link_state(link),
+        "allows_signup": link_allows_signup(db, link),
+    }
+
+
+def workspace_links(db: Session, workspace_id: str) -> list[InviteLink]:
+    """这个工作区发出去、还能用的链接(团队页和按用户名的邀请列在一起,能撤回)。"""
+    return [
+        link
+        for link in db.scalars(
+            select(InviteLink)
+            .where(InviteLink.workspace_id == workspace_id, InviteLink.used_by.is_(None), InviteLink.revoked_at.is_(None))
+            .order_by(InviteLink.created_at.desc())
+        )
+        if link_state(link) == "open"
+    ]
+
+
+def deployment_links(db: Session) -> list[InviteLink]:
+    """不带工作区的邀请(管理页「成员」那一节;含此前的注册邀请码,见迁移)。最近 50 张。"""
+    return list(
+        db.scalars(
+            select(InviteLink).where(InviteLink.workspace_id.is_(None)).order_by(InviteLink.created_at.desc()).limit(50)
+        )
+    )
+
+
+def links_awaiting_signup(db: Session) -> list[InviteLink]:
+    """工作区管理员请部署管理员放行、还没放行的那些(还能用的才列)。"""
+    return [
+        link
+        for link in db.scalars(
+            select(InviteLink)
+            .where(InviteLink.signup_requested_at.is_not(None), InviteLink.signup_approved_by.is_(None))
+            .order_by(InviteLink.signup_requested_at.desc())
+        )
+        if link_state(link) == "open"
+    ]
+
+
+def revoke_invite_link(db: Session, link_id: str, *, workspace_id: str | None) -> None:
+    """撤回一张还没用过的链接。`workspace_id` 是从哪一边撤的(工作区团队页 / 管理页的不带工作区那一节),
+    对不上就当作没有。不提交。"""
+    link = db.get(InviteLink, link_id)
+    if link is None or link.workspace_id != workspace_id:
+        raise MemberError("memberErr_linkUnknown")
+    if link.used_by:
+        raise MemberError(_LINK_STATE_ERRORS["used"])
+    if link.revoked_at is None:
+        link.revoked_at = now()
+    db.flush()
+
+
+def request_signup(db: Session, link_id: str, *, workspace_id: str, requester: User) -> InviteLink:
+    """工作区管理员请部署管理员放行:让还没账号的人也能凭这张链接注册(D48)。给每位部署管理员发一条通知,
+    管理页「等你放行」里也列着。重复请求不重复通知。不提交。"""
+    link = db.get(InviteLink, link_id)
+    if link is None or link.workspace_id != workspace_id or link_state(link) != "open":
+        raise MemberError("memberErr_linkUnknown")
+    if link.signup_approved_by or link.signup_requested_at is not None:
+        return link
+    link.signup_requested_at = now()
+    workspace = db.get(Workspace, workspace_id)
+    for admin in db.scalars(select(User).where(User.is_deployment_admin.is_(True))):
+        places = [ws for ws, _role in workspaces_of(db, admin.id)]
+        #: 通知挂在某个工作区下;放行这件事和哪个工作区无关,挂在他自己在的那一个(优先就是这张链接的工作区)。
+        place = next((ws for ws in places if ws.id == workspace_id), places[0] if places else None)
+        if place is None:
+            continue
+        notifications_svc.notify(
+            db,
+            place.id,
+            type="team",
+            title=tr("memberNotice_signupRequested", name=requester.display_name,
+                     workspace=workspace.name if workspace else ""),
+            body="",
+            link="#/admin",
+            payload={"kind": "invite-link-signup", "invite_link_id": link.id},
+            user_id=admin.id,
+        )
+    db.flush()
+    return link
+
+
+def approve_signup(db: Session, link_id: str, *, admin: User) -> InviteLink:
+    """部署管理员放行:这张链接从此也能让还没账号的人注册。调用方先确认他是部署管理员。不提交。"""
+    link = db.get(InviteLink, link_id)
+    if link is None or link_state(link) != "open":
+        raise MemberError("memberErr_linkUnknown")
+    link.signup_approved_by = admin.id
+    db.flush()
+    return link
 
 
 def ensure_may_touch_owner(

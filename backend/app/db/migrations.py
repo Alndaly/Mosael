@@ -8727,6 +8727,72 @@ def _migrate_scheduled_tasks_vouch_for_what_they_run() -> None:
         db.commit()
 
 
+def _migrate_deployments_know_their_web_address() -> None:
+    """deployment_config 新增 web_url:成员用浏览器打开 Mosael 的地址(ADR 0054 D52)。空串 = 没有网页版(桌面单机),
+    邀请只给 `mosael://` 深链。create_all 只建新表,不给已有表补列;加列要在 SCHEMA 之前。"""
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "web_url" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE deployment_config ADD COLUMN web_url VARCHAR(500) NOT NULL DEFAULT ''"))
+
+
+def _migrate_registration_invites_become_invite_links() -> None:
+    """注册邀请码(`registration_invites`)并进邀请链接(`invite_links`,ADR 0054 D50):不带工作区、部署管理员发的。
+
+    老码**照样用到过期**:库里此前存的是原文(主键就是码),这里换成和会话令牌同一个哈希(core/tokens.token_digest),
+    记下末尾四位给列表认;没过期的、用过的(记着这个账号是凭谁的码进来的)都搬,原文不再留在库里。「能顺带注册」
+    记在发码的人头上 —— 只有部署管理员发得了码。搬完删掉旧表。幂等:旧表不在就什么都不做。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "registration_invites" not in tables or "invite_links" not in tables:
+        return
+    with engine.begin() as conn:
+        for row in conn.execute(text(
+            "SELECT code, created_by, note, used_by, created_at, expires_at FROM registration_invites"
+        )).mappings().all():
+            code = str(row["code"] or "")
+            if not code:
+                continue
+            digest = token_digest(code)
+            if conn.execute(text("SELECT 1 FROM invite_links WHERE code_hash = :h"), {"h": digest}).first() is not None:
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO invite_links (id, code_hash, code_hint, workspace_id, role, created_by, note,"
+                    " signup_approved_by, expires_at, used_by, used_at, created_at)"
+                    " VALUES (:id, :h, :hint, NULL, '', :by, :note, :by, :expires, :used_by, :used_at, :created)"
+                ),
+                {
+                    "id": uuid.uuid4().hex, "h": digest, "hint": code[-4:], "by": row["created_by"],
+                    "note": row["note"] or "", "expires": row["expires_at"], "used_by": row["used_by"],
+                    #: 老表没记用掉的时间:用发码时间顶上(只用来排序、显示「用过」)。
+                    "used_at": row["created_at"] if row["used_by"] else None, "created": row["created_at"],
+                },
+            )
+        conn.execute(text("DROP TABLE registration_invites"))
+
+
+def _drop_invitations_and_notifications_of_people_who_are_gone() -> None:
+    """指着已经不在的人的工作区邀请(受邀人或邀请人)和通知(收件人)删掉。
+
+    外键写的是 ON DELETE CASCADE,可早先删账号时 SQLite 的外键检查没开,删掉的人留下了孤儿 —— 维护者库的
+    `PRAGMA foreign_key_check` 报出两行:一条 2026-07-22 的待处理邀请(受邀人已不在)、一条团队通知(收件人已不在)。
+    它们谁都看不见(列表按人连表,连不上的那行自然不出现),但每次核对外键都报,也挡着以后要开的外键检查。幂等。
+    """
+    tables = set(inspect(engine).get_table_names())
+    with engine.begin() as conn:
+        if {"workspace_invitations", "users"} <= tables:
+            conn.execute(text(
+                "DELETE FROM workspace_invitations WHERE invitee_id NOT IN (SELECT id FROM users)"
+                " OR inviter_id NOT IN (SELECT id FROM users)"
+            ))
+        if {"notifications", "users"} <= tables:
+            conn.execute(text("DELETE FROM notifications WHERE user_id NOT IN (SELECT id FROM users)"))
+
+
 def _foreign_key_violations(sqlite: Any, tables: list[str]) -> Counter[tuple[str, str]]:
     """这几张表上「指向不存在的行」的外键,按 (子表, 父表) 计数。按计数比,不按 rowid:重建的那张表 rowid 会变。"""
     found: Counter[tuple[str, str]] = Counter()
@@ -9111,6 +9177,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_plugin_instances_remember_applied_moves,
                 # 同上:ORM 上的 ScheduledTask 指望「触发密钥的哈希」两列在;明文从 payload 里摘掉、换成哈希。
                 _migrate_webhook_secrets_are_hashed,
+                # 同上:ORM 上的 DeploymentConfig 指望「网页地址」那一列在(ADR 0054)。
+                _migrate_deployments_know_their_web_address,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -9326,6 +9394,13 @@ def migration_plan() -> MigrationPlan:
             #: 定时任务的主人为它此刻跑的那几版补一条认可(ADR 0047 D11):升级前它们就这样在跑,升级后要「有主人担保」
             #: 才花主人的连接。排在所有落新修订的迁移之后 —— 认可的是迁移完之后的当前版。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_scheduled_tasks_vouch_for_what_they_run),
+            #: 注册邀请码并进邀请链接(ADR 0054 D50):新表由 SCHEMA 建好了;码换成哈希,老码照样用到过期,旧表删掉。
+            #: 指着已经不在的人的邀请和通知一并清掉(维护者库里有 2026-07-22 留下的两行)。
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _migrate_registration_invites_become_invite_links,
+                _drop_invitations_and_notifications_of_people_who_are_gone,
+            ),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

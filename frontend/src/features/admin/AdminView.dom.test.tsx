@@ -25,6 +25,15 @@ const rows: Array<Record<string, unknown>> = [];
 let overview: Record<string, unknown> = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
 let overviewFails = false;
 let openRegistration = true;
+let webUrl = "";
+function inviteLink(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "L", code_hint: "0000", workspace_id: null, role: "", note: "", state: "open", allows_signup: true,
+    signup_requested: false, created_by_name: "Boss", expires_at: "2099-01-01T00:00:00Z", created_at: "2026-10-01T00:00:00Z",
+    ...overrides,
+  };
+}
+let awaiting: Array<Record<string, unknown>> = [];
 /** 出站代理读得到什么:null = 读失败(后端拒了、或者断网)。 */
 let network: Record<string, unknown> | null = { proxy_url: "", no_proxy: "" };
 const calls = {
@@ -36,6 +45,8 @@ const calls = {
   setOpenRegistration: vi.fn(),
   createInvite: vi.fn(),
   revokeInvite: vi.fn(),
+  approveSignup: vi.fn(),
+  setWebUrl: vi.fn(),
 };
 /** 部署设置与成本规则那几节走通用的 `api(path)`:按路径给一份最小的回包。 */
 function fakeApi(path: string, init?: RequestInit): Promise<unknown> {
@@ -75,20 +86,34 @@ vi.mock("@/api/client", async (importOriginal) => ({
     calls.resetPassword(id);
     return Promise.resolve({ password: "Temp-Pass-123" });
   },
-  authBootstrap: () => Promise.resolve({ has_users: true, open_registration: openRegistration }),
+  authBootstrap: () => Promise.resolve({ has_users: true, open_registration: openRegistration, web_url: webUrl }),
+  setWebUrl: (url: string) => {
+    calls.setWebUrl(url);
+    webUrl = url;
+    return Promise.resolve({ url });
+  },
   setOpenRegistration: (open: boolean) => {
     calls.setOpenRegistration(open);
     openRegistration = open;
     return Promise.resolve({ open });
   },
-  registrationInvites: () => Promise.resolve([{ code: "CODE1", note: "for **Sam**", used: false, expires_at: "2099-01-01T00:00:00Z" }]),
-  revokeRegistrationInvite: (code: string) => {
-    calls.revokeInvite(code);
+  deploymentInvites: () => Promise.resolve([
+    inviteLink({ id: "L1", code_hint: "AB12", note: "for **Sam**" }),
+    inviteLink({ id: "L2", code_hint: "CD34", state: "used" }),
+  ]),
+  revokeDeploymentInvite: (id: string) => {
+    calls.revokeInvite(id);
     return Promise.resolve();
   },
-  createRegistrationInvite: (note: string) => {
+  createDeploymentInvite: (note: string) => {
     calls.createInvite(note);
-    return Promise.resolve({ code: "NEW", note, used: false, expires_at: "2099-01-01T00:00:00Z" });
+    return Promise.resolve({ link: inviteLink({ id: "L3", code_hint: "WXYZ", note }), code: "NEW-CODE-WXYZ", web_url: webUrl });
+  },
+  invitesAwaitingSignup: () => Promise.resolve(awaiting),
+  approveInviteSignup: (id: string) => {
+    calls.approveSignup(id);
+    awaiting = [];
+    return Promise.resolve(inviteLink({ id, allows_signup: true }));
   },
   getSharedHostFolders: () => Promise.resolve({ folders: [] }),
   getOutboundAllowlist: () => Promise.resolve({ entries: [] }),
@@ -137,6 +162,8 @@ const admin = { ...base, id: "a1", username: "boss", display_name: "Boss", is_de
 beforeEach(() => {
   localStorage.clear();
   openRegistration = true;
+  webUrl = "";
+  awaiting = [];
   network = { proxy_url: "", no_proxy: "" };
   overview = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
   overviewFails = false;
@@ -388,17 +415,37 @@ describe("成员", () => {
     expect(await screen.findByRole("switch", { name: "deployRegistrationOpen" })).toBeInTheDocument();
   });
 
-  it("仅限邀请时列出邀请码(备注按行内 markdown 渲染),生成走弹窗", async () => {
+  it("仅限邀请时列出不带工作区的邀请(认末尾几位、备注按行内 markdown 渲染),生成之后链接只给这一次", async () => {
     openRegistration = false;
     show([admin], "members");
-    expect(await screen.findByText("CODE1")).toBeInTheDocument();
+    expect(await screen.findByText("··AB12")).toBeInTheDocument();
     expect(screen.getByText("Sam").tagName).toBe("STRONG");
+    expect(screen.getAllByRole("button", { name: "deployInviteRevoke" })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: /deployInviteNew/ }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText(/deployInviteNoteLabel/), { target: { value: "for Kim" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "deployInviteCreate" }));
     await waitFor(() => expect(calls.createInvite).toHaveBeenCalledWith("for Kim"));
+    //: 这个界面开在网页上(jsdom 是 http)、部署没配网页地址:网页链接用自己这个地址,桌面端链接是深链。
+    expect(await within(dialog).findByText("mosael://open?join=NEW-CODE-WXYZ")).toBeInTheDocument();
+    expect(dialog.querySelector("[data-invite-link=web]")?.textContent).toMatch(/^http:\/\/localhost(:\d+)?\/#\/join\/NEW-CODE-WXYZ$/);
+  });
+
+  //: ADR 0054 D48:工作区管理员发的链接要部署管理员放行,还没账号的人才能凭它注册。
+  it("等你放行的工作区邀请:列出来、一键放行", async () => {
+    openRegistration = false;
+    awaiting = [inviteLink({ id: "W1", workspace_id: "ws", role: "editor", code_hint: "EF56", created_by_name: "Lee",
+                             allows_signup: false, signup_requested: true })];
+    show([admin], "members");
+    const box = await waitFor(() => {
+      const found = document.querySelector("[data-invites-awaiting-signup]");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    fireEvent.click(within(box).getByRole("button", { name: /deployInviteApprove/ }));
+    await waitFor(() => expect(calls.approveSignup).toHaveBeenCalledWith("W1"));
+    await waitFor(() => expect(document.querySelector("[data-invites-awaiting-signup]")).toBeNull());
   });
 
   //: 体检 UM-09:发出去的码此前撤不回,只能等它 7 天后过期。
@@ -409,7 +456,7 @@ describe("成员", () => {
     expect(calls.revokeInvite).not.toHaveBeenCalled();
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByRole("button", { name: "deployInviteRevoke" }));
-    await waitFor(() => expect(calls.revokeInvite).toHaveBeenCalledWith("CODE1"));
+    await waitFor(() => expect(calls.revokeInvite).toHaveBeenCalledWith("L1"));
   });
 });
 

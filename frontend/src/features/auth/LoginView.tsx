@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { ApiError, ApiOfflineError, oauthPending, oauthProviders, oauthStart } from "@/api/client";
+import { ApiError, ApiOfflineError, oauthPending, oauthProviders, oauthStart, previewInviteLink } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import loginHeroUrl from "@/assets/login-hero.jpg";
@@ -19,6 +19,7 @@ import { ServerPicker } from "@/components/app/ServerPicker";
 import { LegalDialog, type LegalDoc } from "@/features/auth/legal";
 import type { MessageKey } from "@/app/messages";
 import { docsUrl } from "@/lib/deepLink";
+import { clearPendingInvite, codeFromInviteText, usePendingInvite } from "@/lib/inviteLinks";
 
 type LoginValues = { username: string; displayName: string; password: string; confirm: string; inviteCode: string };
 
@@ -44,6 +45,15 @@ export function LoginView() {
   const [mode, setMode] = React.useState<"login" | "register">(hasUsers ? "login" : "register");
   const [legalDoc, setLegalDoc] = React.useState<LegalDoc | null>(null);
   const [forgotOpen, setForgotOpen] = React.useState(false);
+  //: 打开的是一张邀请链接(ADR 0054):登录页说清是谁邀请进哪里,注册时带上它 —— 不用再手抄一个码。
+  const invite = usePendingInvite();
+  const preview = useQuery({
+    queryKey: ["invite-link-preview", invite],
+    queryFn: () => previewInviteLink(invite!),
+    enabled: Boolean(invite),
+    retry: false,
+  });
+  const inviteUsable = preview.data?.state === "open";
 
   const schema = React.useMemo(() => {
     const base = z.object({
@@ -80,7 +90,16 @@ export function LoginView() {
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       if (mode === "login") await login(values.username, values.password);
-      else await register(values.username, values.password, values.displayName, values.inviteCode);
+      else
+        await register(
+          values.username,
+          values.password,
+          values.displayName,
+          //: 带着邀请链接来的就用它;手填的框认得出粘进来的整条链接(网页地址或深链)。
+          inviteUsable && invite ? invite : codeFromInviteText(values.inviteCode),
+        );
+      //: 不带工作区的邀请只管进部署:注册完就用掉了,不留给登录之后那一步(它会说「这是注册用的」)。
+      if (mode === "register" && inviteUsable && !preview.data?.workspace_name) clearPendingInvite();
     } catch (err) {
       form.setError("root", { message: friendlyAuthError(err, mode, t) });
     }
@@ -123,6 +142,14 @@ export function LoginView() {
             </p>
           </div>
 
+          {invite && (preview.isSuccess || preview.isError) && (
+            <InviteNotice
+              preview={preview.data ?? null}
+              openRegistration={openRegistration}
+              onDismiss={clearPendingInvite}
+            />
+          )}
+
           <Form {...form}>
             {/* 组间 16px 明显大于组内标签的 8px,字段归属一眼可辨。 */}
             <form className="grid gap-5 [&_input]:h-12" onSubmit={onSubmit} noValidate>
@@ -162,7 +189,7 @@ export function LoginView() {
               )}
               {/* 邀请码只在**关掉了自助注册**的部署上出现。开放的部署摆一个永远不用填的框,
                   等于让每个新人先去问一句"这个要填吗";空库时更没有任何人可以给他发码。 */}
-              {mode === "register" && hasUsers && !openRegistration && (
+              {mode === "register" && hasUsers && !openRegistration && !inviteUsable && (
                 <FormField
                   control={form.control}
                   name="inviteCode"
@@ -263,6 +290,62 @@ export function LoginView() {
           <ServerPicker />
         </div>
       </main>
+    </div>
+  );
+}
+
+/**
+ * 带着一张邀请链接来的(ADR 0054):谁邀请你进哪个工作区、什么角色;还没账号能不能凭它注册。用不了的(用过、撤回、过期、
+ * 找不到)说是哪件事,给一个「不用这张」把它放下 —— 登录照常。
+ */
+function InviteNotice({
+  preview,
+  openRegistration,
+  onDismiss,
+}: {
+  preview: { workspace_name: string; inviter_name: string; role: string; state: string; allows_signup: boolean } | null;
+  openRegistration: boolean;
+  onDismiss: () => void;
+}) {
+  const t = useI18n();
+  const usable = preview?.state === "open";
+  const problems: Record<string, MessageKey> = {
+    used: "loginInviteUsed",
+    revoked: "loginInviteRevoked",
+    expired: "loginInviteExpired",
+  };
+  const body = !preview
+    ? t("loginInviteUnknown")
+    : !usable
+      ? t(problems[preview.state] ?? "loginInviteUnknown")
+      : preview.workspace_name
+        ? t("loginInviteTitle")
+            .replace("{inviter}", preview.inviter_name)
+            .replace("{workspace}", preview.workspace_name)
+            .replace("{role}", t(`role_${preview.role}` as never))
+        : t("loginInviteDeployment").replace("{inviter}", preview.inviter_name);
+  const next = !usable
+    ? null
+    : preview?.allows_signup || openRegistration
+      ? t("loginInviteSignupOk")
+      : t("loginInviteMembersOnly");
+  return (
+    <div
+      role="status"
+      data-login-invite={usable ? "open" : "unusable"}
+      className="-mt-2 grid gap-1.5 rounded-md border border-border bg-secondary px-3.5 py-3 text-ui-sm leading-[1.6]"
+    >
+      <span className="font-[550] text-foreground">{body}</span>
+      {next && <span className="text-ui-xs text-muted-foreground">{next}</span>}
+      {!usable && (
+        <button
+          type="button"
+          className="justify-self-start cursor-pointer border-0 bg-transparent p-0 text-ui-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          onClick={onDismiss}
+        >
+          {t("loginInviteDismiss")}
+        </button>
+      )}
     </div>
   );
 }

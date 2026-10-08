@@ -5,7 +5,7 @@
  * 删完只让列表失效 —— 切换器灰掉的删除,在这里照样点得下去。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
@@ -29,6 +29,10 @@ const h = vi.hoisted(() => ({
   deleteWorkspace: vi.fn(),
   inviteMember: vi.fn(),
   revokeInvitation: vi.fn(),
+  links: [] as Array<Record<string, unknown>>,
+  createLink: vi.fn(),
+  revokeLink: vi.fn(),
+  requestSignup: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
   listWorkspaces: async () => h.server,
@@ -44,6 +48,10 @@ vi.mock("@/api/client", () => ({
   inviteMember: (wid: string, body: unknown) => h.inviteMember(wid, body),
   removeMember: vi.fn(),
   setMemberRole: vi.fn(),
+  workspaceInviteLinks: async () => h.links,
+  createWorkspaceInviteLink: (wid: string, role: string) => h.createLink(wid, role),
+  revokeWorkspaceInviteLink: (wid: string, id: string) => h.revokeLink(wid, id),
+  requestInviteSignup: (wid: string, id: string) => h.requestSignup(wid, id),
 }));
 
 import { TeamSection } from "@/features/settings/TeamSection";
@@ -67,6 +75,11 @@ beforeEach(() => {
   h.inviteMember.mockReset();
   h.revokeInvitation.mockReset();
   h.revokeInvitation.mockResolvedValue(undefined);
+  h.links = [];
+  h.createLink.mockReset();
+  h.revokeLink.mockReset();
+  h.revokeLink.mockResolvedValue(undefined);
+  h.requestSignup.mockReset();
   h.deleteWorkspace.mockReset();
   h.deleteWorkspace.mockImplementation(async (id: string) => {
     h.server = h.server.filter((one) => one.id !== id);
@@ -171,4 +184,73 @@ it("团队动态不列系统自己起的任务", async () => {
   mount(h.server[0]);
   expect(await screen.findByText("小美")).toBeInTheDocument();
   expect(screen.queryByText(/182a4f63/)).toBeNull();
+});
+
+
+//: ADR 0054:一张链接把人拉进工作区。
+function link(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "L1", code_hint: "AB12", workspace_id: "w1", role: "editor", note: "", state: "open", allows_signup: false,
+    signup_requested: false, created_by_name: "我", expires_at: "2099-01-01T00:00:00Z", created_at: "2026-10-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+it("发邀请链接:选角色、生成、链接当场给出;还没账号的人用不了时能请部署管理员放行", async () => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  h.server = [{ id: "w1", name: "内容组", role: "admin" }];
+  h.role = "admin";
+  h.createLink.mockResolvedValue({ link: link(), code: "Secret-Code-AB12", web_url: "https://studio.example.com" });
+  h.requestSignup.mockResolvedValue(link({ signup_requested: true }));
+  mount(h.server[0]);
+  fireEvent.click(await screen.findByRole("button", { name: /inviteLinkNew/ }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: /inviteLinkCreate/ }));
+  await waitFor(() => expect(h.createLink).toHaveBeenCalledWith("w1", "editor"));
+  expect(await within(dialog).findByText("https://studio.example.com/#/join/Secret-Code-AB12")).toBeInTheDocument();
+  expect(within(dialog).getByText("mosael://open?join=Secret-Code-AB12")).toBeInTheDocument();
+  expect(within(dialog).getByText("inviteLinkSignupNo")).toBeInTheDocument();
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "inviteLinkAskSignup" }));
+  await waitFor(() => expect(h.requestSignup).toHaveBeenCalledWith("w1", "L1"));
+  expect(await within(dialog).findByText("inviteLinkSignupWaiting")).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: "inviteLinkAskSignup" })).toBeNull();
+});
+
+it("部署管理员发的链接能顺带注册:不摆「请放行」", async () => {
+  h.server = [{ id: "w1", name: "内容组", role: "owner" }];
+  h.createLink.mockResolvedValue({ link: link({ allows_signup: true }), code: "Secret-Code-AB12", web_url: "" });
+  mount(h.server[0]);
+  fireEvent.click(await screen.findByRole("button", { name: /inviteLinkNew/ }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: /inviteLinkCreate/ }));
+  expect(await within(dialog).findByText("inviteLinkSignupYes")).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: "inviteLinkAskSignup" })).toBeNull();
+});
+
+it("还能用的邀请链接和按用户名的邀请列在一起,能撤回;只读成员看不到", async () => {
+  h.server = [{ id: "w1", name: "内容组", role: "owner" }];
+  h.links = [link({ id: "L9", code_hint: "ZZ99", signup_requested: true })];
+  mount(h.server[0]);
+  const row = await waitFor(() => {
+    const found = document.querySelector("[data-pending-invite-link=L9]");
+    expect(found).not.toBeNull();
+    return found as HTMLElement;
+  });
+  expect(row.textContent).toContain("··ZZ99");
+  expect(row.textContent).toContain("inviteLinkBadgeWaiting");
+  fireEvent.click(within(row).getByRole("button", { name: "inviteLinkRevoke" }));
+  const confirm = await screen.findByRole("alertdialog");
+  fireEvent.click(within(confirm).getByRole("button", { name: "inviteLinkRevoke" }));
+  await waitFor(() => expect(h.revokeLink).toHaveBeenCalledWith("w1", "L9"));
+});
+
+it("只读成员:没有发链接的按钮,也不列链接", async () => {
+  h.server = [{ id: "w1", name: "内容组", role: "viewer" }];
+  h.role = "viewer";
+  h.links = [link()];
+  mount(h.server[0]);
+  await screen.findByText("teamActivity");
+  expect(screen.queryByRole("button", { name: /inviteLinkNew/ })).toBeNull();
+  expect(document.querySelector("[data-pending-invite-link]")).toBeNull();
 });

@@ -2,6 +2,7 @@ import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
 import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
 import { useCreateWorkspace, useWorkspaces } from "@/lib/workspaces";
 import { FirstWorkspace } from "@/app/FirstWorkspace";
+import { useJoinFromInvite } from "@/app/useJoinFromInvite";
 import { PageBoundary } from "@/app/PageBoundary";
 import { JOBS_CREATED_EVENT } from "@/api/client";
 import { assetKeys, projectKeys } from "@/api/queryKeys";
@@ -456,6 +457,8 @@ function WorkspaceGate() {
   const list = workspaces.data;
   const workspace =
     list?.find((item) => item.id === activeId) ?? list?.[0] ?? null;
+  //: 带着一张邀请链接登录 / 注册进来的:加入那个工作区、切过去(ADR 0054)。
+  const joining = useJoinFromInvite(selectWorkspace, workspace?.id ?? null);
 
   // Stamp the resolved workspace so the very first load (empty storage) pins list[0].
   React.useEffect(() => {
@@ -465,7 +468,7 @@ function WorkspaceGate() {
     }
   }, [workspace, activeId]);
 
-  if (workspaces.isLoading)
+  if (workspaces.isLoading || (joining && !workspace))
     return (
       <PreShellScreen>
         <StartupLoading

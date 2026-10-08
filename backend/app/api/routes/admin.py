@@ -9,7 +9,16 @@ from sqlalchemy import func, select
 from app.core.i18n import tr
 from app.core.outbound_guard import AllowlistError
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AdminOverviewOut, AdminPasswordResetOut, AdminUserOut
+from app.api.routes.workspaces import invite_link_out, issued_out
+from app.api.schemas import (
+    AdminOverviewOut,
+    AdminPasswordResetOut,
+    AdminUserOut,
+    InviteCreate,
+    InviteLinkOut,
+    IssuedInviteLinkOut,
+    WebUrlUpdate,
+)
 from app.domain.permissions import ensure_deployment_admin
 from app.domain import dashboard, deployment, host_files, members, outbound_allowlist
 from app.db.models import AuthSession, User, WorkspaceMember
@@ -103,6 +112,66 @@ def set_registration(body: RegistrationSwitch, db: DbSession, user: CurrentUser)
     deployment.set_open_registration(db, body.open)
     db.commit()
     return {"open": deployment.open_registration(db)}
+
+
+# ---------------- 邀请(ADR 0054) ----------------
+
+
+@router.post("/admin/invite-links", response_model=IssuedInviteLinkOut)
+def create_deployment_invite(body: InviteCreate, db: Tx, user: CurrentUser) -> IssuedInviteLinkOut:
+    """发一张**不带工作区**的邀请:只进这台部署(此前的「注册邀请码」)。对方注册完自己建工作区,或者再被人拉进去。
+
+    「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。原文只在这一次。
+    """
+    ensure_deployment_admin(db, user)
+    return issued_out(db, members.issue_invite_link(db, user, workspace_id=None, note=body.note))
+
+
+@router.get("/admin/invite-links", response_model=list[InviteLinkOut])
+def list_deployment_invites(db: DbSession, user: CurrentUser) -> list[InviteLinkOut]:
+    """不带工作区的邀请(含升级前发出去的注册邀请码,迁移时并进来了,照样用到过期)。最近 50 张。"""
+    ensure_deployment_admin(db, user)
+    return [invite_link_out(db, link) for link in members.deployment_links(db)]
+
+
+@router.delete("/admin/invite-links/{link_id}", status_code=204)
+def revoke_deployment_invite(link_id: str, db: Tx, user: CurrentUser) -> Response:
+    """作废一张还没用过的不带工作区的邀请。用过的留着 —— 它记着这个账号是凭谁发的邀请进来的。"""
+    ensure_deployment_admin(db, user)
+    try:
+        members.revoke_invite_link(db, link_id, workspace_id=None)
+    except members.MemberError as exc:
+        status = 404 if exc.key == "memberErr_linkUnknown" else 409
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.get("/admin/invite-links/awaiting-signup", response_model=list[InviteLinkOut])
+def invites_awaiting_signup(db: DbSession, user: CurrentUser) -> list[InviteLinkOut]:
+    """工作区管理员请你放行的邀请链接:放行之后,还没账号的人也能凭它注册(ADR 0054 D48)。"""
+    ensure_deployment_admin(db, user)
+    return [invite_link_out(db, link) for link in members.links_awaiting_signup(db)]
+
+
+@router.post("/admin/invite-links/{link_id}/approve-signup", response_model=InviteLinkOut)
+def approve_invite_signup(link_id: str, db: Tx, user: CurrentUser) -> InviteLinkOut:
+    ensure_deployment_admin(db, user)
+    try:
+        return invite_link_out(db, members.approve_signup(db, link_id, admin=user))
+    except members.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.put("/admin/web-url", response_model=WebUrlUpdate)
+def set_web_url(body: WebUrlUpdate, db: Tx, user: CurrentUser) -> WebUrlUpdate:
+    """部署的网页地址:成员用浏览器打开 Mosael 的地方。填了,邀请链接就带一个网页地址(ADR 0054 D52)。"""
+    ensure_deployment_admin(db, user)
+    url = body.url.strip().rstrip("/")
+    if url and not url.lower().startswith(("https://", "http://")):
+        raise HTTPException(status_code=422, detail=tr("routeErr_webUrlScheme"))
+    deployment.set_web_url(db, url)
+    db.flush()
+    return WebUrlUpdate(url=deployment.web_url(db))
 
 
 class SharedHostFolders(BaseModel):

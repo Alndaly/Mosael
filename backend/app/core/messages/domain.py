@@ -159,6 +159,39 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "邀请不存在",
         "en": "Invitation not found.",
     },
+    # 邀请链接(ADR 0054)。
+    "memberErr_linkRole": {
+        "zh": "邀请链接只能给这几种角色:{roles}。所有者要由所有者在成员列表里当面授予",
+        "en": "An invite link can only grant one of these roles: {roles}. Ownership is granted by an owner in the member list.",
+    },
+    "memberErr_linkUnknown": {
+        "zh": "没有这个邀请链接 —— 可能抄错了,或者已经撤回",
+        "en": "There's no such invite link — it may be mistyped or already revoked.",
+    },
+    "memberErr_linkUsed": {
+        "zh": "这个邀请链接已经有人用过了(每张只能用一次)。请向发链接的人要一张新的",
+        "en": "Someone has already used this invite link (each one works once). Ask whoever sent it for a new one.",
+    },
+    "memberErr_linkRevoked": {
+        "zh": "这个邀请链接已经撤回了。请向发链接的人要一张新的",
+        "en": "This invite link has been revoked. Ask whoever sent it for a new one.",
+    },
+    "memberErr_linkExpired": {
+        "zh": "这个邀请链接过了 7 天有效期。请向发链接的人要一张新的",
+        "en": "This invite link is past its 7-day validity. Ask whoever sent it for a new one.",
+    },
+    "memberErr_linkIsForSignup": {
+        "zh": "这是一张注册用的邀请(不带工作区),你已经有账号了,用不着它",
+        "en": "This invite is for signing up (it doesn't include a workspace), and you already have an account.",
+    },
+    "memberNotice_joinedByLink": {
+        "zh": "{name} 通过邀请链接加入了「{workspace}」",
+        "en": "{name} joined “{workspace}” with an invite link",
+    },
+    "memberNotice_signupRequested": {
+        "zh": "{name} 请你放行「{workspace}」的一张邀请链接:让还没账号的人也能凭它注册",
+        "en": "{name} asks you to let an invite link for “{workspace}” also sign up people who don't have an account yet",
+    },
     "memberErr_inviteHandled": {
         "zh": "邀请已处理过",
         "en": "This invitation has already been handled.",

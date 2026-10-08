@@ -66,8 +66,12 @@ export function setOutboundAllowlist(entries: string[]): Promise<OutboundAllowli
  */
 export type AdminUser = components["schemas"]["AdminUserOut"];
 export type AdminOverview = components["schemas"]["AdminOverviewOut"];
-/** 注册邀请码。后端回的是裸 dict(没有 response_model),形状照 routes/auth.list_registration_invites 写。 */
-export type RegistrationInvite = { code: string; note: string; used: boolean; expires_at: string };
+/** 一张邀请链接(ADR 0054):进工作区的,或者不带工作区、只进这台部署的(此前的注册邀请码)。原文不在这里。 */
+export type InviteLink = components["schemas"]["InviteLinkOut"];
+/** 刚发出去的那一张:`code` 原文只在这一次;`web_url` 是部署配的网页地址(空 = 只有深链)。 */
+export type IssuedInviteLink = components["schemas"]["IssuedInviteLinkOut"];
+export type InviteLinkPreview = components["schemas"]["InviteLinkPreviewOut"];
+export type InviteLinkJoined = components["schemas"]["InviteLinkJoinedOut"];
 
 /** `days`:两张图(任务活动、按人花费)的窗口;账户、工作区、素材是当前总数,不受它影响。 */
 export function adminOverview(days: number): Promise<AdminOverview> {
@@ -117,17 +121,42 @@ export function setOpenRegistration(open: boolean): Promise<{ open: boolean }> {
   return api<{ open: boolean }>("/api/admin/registration", { method: "PUT", body: JSON.stringify({ open }) });
 }
 
-export function registrationInvites(): Promise<RegistrationInvite[]> {
-  return api<RegistrationInvite[]>("/api/auth/invites");
+/** 部署的网页地址(成员用浏览器打开 Mosael 的地方);空串 = 没有网页版。 */
+export function setWebUrl(url: string): Promise<{ url: string }> {
+  return api<{ url: string }>("/api/admin/web-url", { method: "PUT", body: JSON.stringify({ url }) });
 }
 
-/** 作废一个还没用过的邀请码。 */
-export function revokeRegistrationInvite(code: string): Promise<void> {
-  return api<void>(`/api/auth/invites/${encodeURIComponent(code)}`, { method: "DELETE" });
+/** 不带工作区的邀请(含升级前发出去的注册邀请码)。 */
+export function deploymentInvites(): Promise<InviteLink[]> {
+  return api<InviteLink[]>("/api/admin/invite-links");
 }
 
-export function createRegistrationInvite(note: string): Promise<RegistrationInvite> {
-  return api<RegistrationInvite>("/api/auth/invites", { method: "POST", body: JSON.stringify({ note }) });
+/** 作废一张还没用过的不带工作区的邀请。 */
+export function revokeDeploymentInvite(linkId: string): Promise<void> {
+  return api<void>(`/api/admin/invite-links/${encodeURIComponent(linkId)}`, { method: "DELETE" });
+}
+
+export function createDeploymentInvite(note: string): Promise<IssuedInviteLink> {
+  return api<IssuedInviteLink>("/api/admin/invite-links", { method: "POST", body: JSON.stringify({ note }) });
+}
+
+/** 工作区管理员请你放行的邀请链接(放行之后,还没账号的人也能凭它注册)。 */
+export function invitesAwaitingSignup(): Promise<InviteLink[]> {
+  return api<InviteLink[]>("/api/admin/invite-links/awaiting-signup");
+}
+
+export function approveInviteSignup(linkId: string): Promise<InviteLink> {
+  return api<InviteLink>(`/api/admin/invite-links/${encodeURIComponent(linkId)}/approve-signup`, { method: "POST" });
+}
+
+/** 打开链接、还没登录时问一声:进哪个工作区、谁邀请的、还能不能用。码放在请求体里(地址会进访问日志)。 */
+export function previewInviteLink(code: string): Promise<InviteLinkPreview> {
+  return api<InviteLinkPreview>("/api/auth/invite-links/preview", { method: "POST", body: JSON.stringify({ code }) });
+}
+
+/** 已登录的人凭链接加入工作区。对用过它的那个人是幂等的(注册时已经凭它进来了也照样回那个工作区)。 */
+export function redeemInviteLink(code: string): Promise<InviteLinkJoined> {
+  return api<InviteLinkJoined>("/api/invite-links/redeem", { method: "POST", body: JSON.stringify({ code }) });
 }
 
 export function oauthPending(

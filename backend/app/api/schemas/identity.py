@@ -73,6 +73,8 @@ class BootstrapOut(ApiModel):
     has_users: bool = False
     #: 收不收自助注册。不收时注册要邀请码,界面才摆那个框。
     open_registration: bool = True
+    #: 成员用浏览器打开 Mosael 的地址(部署管理员在管理页配,ADR 0054);空 = 没有网页版。
+    web_url: str = ""
 
 
 class AuthOut(ApiModel):
@@ -138,6 +140,72 @@ class InvitationOut(ApiModel):
 
 class InvitationListOut(ApiModel):
     invitations: list[InvitationOut]
+
+
+class InviteLinkCreate(ApiModel):
+    """在工作区团队页发一张邀请链接(ADR 0054)。所有者不经链接给。"""
+
+    role: str = Field(default="editor", pattern="^(admin|editor|viewer)$")
+
+
+class InviteCodeIn(ApiModel):
+    """链接里那串码。**放在请求体里,不放进地址** —— 地址会进访问日志,而它就是凭据。"""
+
+    code: str = Field(min_length=8, max_length=200)
+
+
+class InviteLinkOut(ApiModel):
+    """一张发出去的邀请链接。原文不在这里(库里只有哈希);认它靠末尾几位。"""
+
+    id: str
+    code_hint: str
+    #: 进哪个工作区;空 = 只进这台部署(不带工作区的邀请)。
+    workspace_id: str | None
+    role: str
+    note: str
+    #: open / used / revoked / expired
+    state: str
+    #: 还没账号的人能不能凭它注册(部署管理员放过行,或者部署开放注册)。
+    allows_signup: bool
+    #: 工作区管理员请部署管理员放行了、还在等。
+    signup_requested: bool
+    created_by_name: str
+    expires_at: datetime
+    created_at: datetime
+
+
+class IssuedInviteLinkOut(ApiModel):
+    """刚发出去的那一张:**原文只在这一次**。`web_url` 是部署配的网页地址(空 = 没有网页版,只给深链)。"""
+
+    link: InviteLinkOut
+    code: str
+    web_url: str
+
+
+class InviteLinkPreviewOut(ApiModel):
+    """打开链接、还没登录的那一屏要知道的(只给拿着原文的人)。"""
+
+    workspace_name: str
+    inviter_name: str
+    role: str
+    state: str
+    allows_signup: bool
+
+
+class InviteLinkJoinedOut(ApiModel):
+    """凭链接进了哪个工作区(界面切过去,toast 说主人和角色,能撤销)。"""
+
+    workspace_id: str
+    workspace_name: str
+    role: str
+    owner_name: str
+    already_member: bool
+
+
+class WebUrlUpdate(ApiModel):
+    """部署的网页地址:空串 = 没有网页版。"""
+
+    url: str = Field(default="", max_length=500)
 
 
 class SetRoleRequest(ApiModel):

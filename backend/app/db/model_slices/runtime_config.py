@@ -48,6 +48,9 @@ class DeploymentConfig(Base):
     #: 用户给的地址(HTTP 请求节点、智能体的 http_request / fetch_url、从链接导入)**可以**去的内网地址:
     #: 主机名 / IP / CIDR,主机名和 IP 可带端口。空 = 只许公网(见 core/outbound_guard)。
     outbound_allowlist: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    #: 成员用浏览器打开 Mosael 的地址(`https://studio.example.com`)。填了,邀请链接就带一个网页地址(ADR 0054):
+    #: 对方可能还没装客户端。桌面单机版没有网页,空着,邀请只给 `mosael://` 深链。
+    web_url: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

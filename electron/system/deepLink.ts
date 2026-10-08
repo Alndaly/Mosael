@@ -16,6 +16,7 @@
  *   mosael://open?view=workflows&id=<记录 id>
  *   mosael://open?view=plugins&market=<插件 id>        —— 打开插件市场、找到这个插件
  *   mosael://open?view=workflows&template=<模板 id>    —— 打开工作流社区、选中这个模板
+ *   mosael://open?join=<邀请码>                        —— 一张邀请链接(ADR 0054):应用被叫到前台,码交给界面
  * view 必须在白名单里(和前端 StudioView 一一对应);id 可选,用于打开具体记录。
  *
  * `market` / `template` 是官网社区页「在 Mosael 中打开」用的:官网上看的是**还没装**的插件、
@@ -51,6 +52,9 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 export const PROTOCOL = "mosael";
 
+/** 邀请码是 token_urlsafe 的字符集。 */
+const JOIN_PATTERN = /^[A-Za-z0-9_-]{8,200}$/;
+
 /** 插件 id 形如 `dev.mosael.remotion`(带点),模板 id 形如 `full_video_generation`。 */
 const MARKET_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
 const TEMPLATE_PATTERN = /^[a-z0-9_]{1,64}$/;
@@ -62,6 +66,12 @@ export interface DeepLink {
   market?: string;
   /** 工作流社区里要选中的模板(只在 view=workflows 时)。 */
   template?: string;
+  /**
+   * 邀请链接里的码(ADR 0054)。界面拿到它:没登录时登录页说「X 邀请你加入 Y」、注册时带上;登录了就加入那个工作区、
+   * 切过去,toast 写主人和角色、能撤销(维护者拍板 D51)。加入一个工作区不花钱、不对外发东西,也不碰你别的工作区里的
+   * 内容;撤销就是退出。它来时 view 一律是首页。
+   */
+  join?: string;
 }
 
 /** 解析失败一律返回 null(不抛):输入来自外部,不可信也不该让主进程崩。 */
@@ -76,6 +86,9 @@ export function parseDeepLink(raw: string): DeepLink | null {
   if (url.protocol !== `${PROTOCOL}:`) return null;
   // mosael://open?... —— host 是 "open",其余动作一律不认(见文件头:只导航)。
   if (url.hostname !== "open") return null;
+
+  const join = url.searchParams.get("join");
+  if (join !== null) return JOIN_PATTERN.test(join) ? { view: "home", join } : null;
 
   const view = url.searchParams.get("view") || "";
   if (!ALLOWED_VIEWS.has(view)) return null;

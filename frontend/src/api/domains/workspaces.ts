@@ -1,4 +1,5 @@
 import type { components } from "@/api/generated/schema";
+import type { InviteLink, IssuedInviteLink } from "@/api/domains/identity";
 import { api } from "@/api/transport";
 
 export type Workspace = components["schemas"]["WorkspaceOut"];
@@ -28,6 +29,25 @@ export function inviteMember(
 /** 这个工作区发出去、对方还没应答的邀请(团队页列在成员下面)。 */
 export function sentInvitations(workspaceId: string): Promise<{ invitations: WorkspaceInvitation[] }> {
   return api<{ invitations: WorkspaceInvitation[] }>(`/api/workspaces/${workspaceId}/invitations`);
+}
+
+/** 发一张进这个工作区的邀请链接(ADR 0054):7 天、一次性。原文只在回来的这一次。 */
+export function createWorkspaceInviteLink(workspaceId: string, role: string): Promise<IssuedInviteLink> {
+  return api<IssuedInviteLink>(`/api/workspaces/${workspaceId}/invite-links`, { method: "POST", body: JSON.stringify({ role }) });
+}
+
+/** 这个工作区发出去、还能用的邀请链接。 */
+export function workspaceInviteLinks(workspaceId: string): Promise<InviteLink[]> {
+  return api<InviteLink[]>(`/api/workspaces/${workspaceId}/invite-links`);
+}
+
+export function revokeWorkspaceInviteLink(workspaceId: string, linkId: string): Promise<void> {
+  return api<void>(`/api/workspaces/${workspaceId}/invite-links/${linkId}`, { method: "DELETE" });
+}
+
+/** 请部署管理员放行:让还没账号的人也能凭这张链接注册。 */
+export function requestInviteSignup(workspaceId: string, linkId: string): Promise<InviteLink> {
+  return api<InviteLink>(`/api/workspaces/${workspaceId}/invite-links/${linkId}/request-signup`, { method: "POST" });
 }
 
 export function revokeInvitation(workspaceId: string, invitationId: string): Promise<void> {

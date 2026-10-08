@@ -178,7 +178,7 @@ def test_an_editor_cannot_change_the_workspaces_autopilot_rules() -> None:
     [
         ("put", "/api/settings/network", {"proxy_url": "http://127.0.0.1:1"}),
         ("put", "/api/settings/ai-runtime", {"max_retries": 9}),
-        ("post", "/api/auth/invites", {}),
+        ("post", "/api/admin/invite-links", {}),
     ],
 )
 def test_these_really_are_deployment_wide(method: str, path: str, body: dict) -> None:

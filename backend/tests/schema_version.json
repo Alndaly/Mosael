@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -17,6 +17,7 @@
     "drop-dead-agent-session-columns",
     "drop-empty-agent-sessions",
     "drop-generation-models",
+    "drop-invitations-and-notifications-of-people-who-are-gone",
     "drop-legacy-profile-columns",
     "drop-member-perm-overrides",
     "drop-plugin-packages-that-break-the-manifest-rules",
@@ -95,6 +96,7 @@
     "migrate-connections-get-an-owner",
     "migrate-deployment-admin",
     "migrate-deployment-config",
+    "migrate-deployments-know-their-web-address",
     "migrate-detached-audio-joins-its-video",
     "migrate-documents-are-not-videos",
     "migrate-drop-deployment-defaults",
@@ -170,6 +172,7 @@
     "migrate-publish-task-claimed-by",
     "migrate-publish-task-options",
     "migrate-publish-task-post",
+    "migrate-registration-invites-become-invite-links",
     "migrate-removed-track-records-are-complete",
     "migrate-resource-ownership",
     "migrate-scene-cameras-become-objects",

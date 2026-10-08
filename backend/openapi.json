@@ -86,53 +86,19 @@
         }
       }
     },
-    "/api/auth/invites": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "List Registration Invites",
-        "operationId": "list_registration_invites_api_auth_invites_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "type": "array",
-                  "title": "Response List Registration Invites Api Auth Invites Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
+    "/api/auth/invite-links/preview": {
       "post": {
         "tags": [
           "auth"
         ],
-        "summary": "Create Registration Invite",
-        "description": "发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。\n\n「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。",
-        "operationId": "create_registration_invite_api_auth_invites_post",
+        "summary": "Preview Invite Link",
+        "description": "打开一张邀请链接、还没登录的那一屏:进哪个工作区、谁邀请的、还能不能用、没账号的人能不能凭它注册\n(ADR 0054)。**不需要登录** —— 拿着原文的人就是被邀请的人;码在请求体里,不进访问日志。",
+        "operationId": "preview_invite_link_api_auth_invite_links_preview_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/InviteCreate"
+                "$ref": "#/components/schemas/InviteCodeIn"
               }
             }
           },
@@ -144,48 +110,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Create Registration Invite Api Auth Invites Post"
+                  "$ref": "#/components/schemas/InviteLinkPreviewOut"
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/auth/invites/{code}": {
-      "delete": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Revoke Registration Invite",
-        "description": "作废一个还没用过的邀请码:发错了人、发出去的消息被转走了。此前发出去就撤不回,只能等它 7 天后过期(体检 UM-09)。\n用过的码留着 —— 它记着这个账号是凭谁发的码进来的。",
-        "operationId": "revoke_registration_invite_api_auth_invites__code__delete",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Code"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -2320,6 +2248,242 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/invite-links": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Create Invite Link",
+        "description": "发一张进这个工作区的邀请链接(ADR 0054):7 天、一次性、能撤回。还没账号的人能不能凭它注册,\n看部署那道门(部署管理员发的自带;否则开放注册,或者请部署管理员放行)。",
+        "operationId": "create_invite_link_api_workspaces__workspace_id__invite_links_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteLinkCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedInviteLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "List Invite Links",
+        "description": "这个工作区发出去、还能用的链接(和按用户名的邀请列在一起)。",
+        "operationId": "list_invite_links_api_workspaces__workspace_id__invite_links_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InviteLinkOut"
+                  },
+                  "title": "Response List Invite Links Api Workspaces  Workspace Id  Invite Links Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/invite-links/{link_id}": {
+      "delete": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Revoke Invite Link",
+        "operationId": "revoke_invite_link_api_workspaces__workspace_id__invite_links__link_id__delete",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{workspace_id}/invite-links/{link_id}/request-signup": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Request Link Signup",
+        "description": "请部署管理员放行:让还没账号的人也能凭这张链接注册(ADR 0054 D48)。",
+        "operationId": "request_link_signup_api_workspaces__workspace_id__invite_links__link_id__request_signup_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invite-links/redeem": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Redeem Invite Link",
+        "description": "已登录的人打开一张工作区邀请链接:直接加入(ADR 0054 D51),界面切过去、说主人和角色、能撤销(退出)。",
+        "operationId": "redeem_invite_link_api_invite_links_redeem_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteLinkJoinedOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -18484,6 +18648,238 @@
         }
       }
     },
+    "/api/admin/invite-links": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Deployment Invites",
+        "description": "不带工作区的邀请(含升级前发出去的注册邀请码,迁移时并进来了,照样用到过期)。最近 50 张。",
+        "operationId": "list_deployment_invites_api_admin_invite_links_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InviteLinkOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Deployment Invites Api Admin Invite Links Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create Deployment Invite",
+        "description": "发一张**不带工作区**的邀请:只进这台部署(此前的「注册邀请码」)。对方注册完自己建工作区,或者再被人拉进去。\n\n「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。原文只在这一次。",
+        "operationId": "create_deployment_invite_api_admin_invite_links_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedInviteLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invite-links/{link_id}": {
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Revoke Deployment Invite",
+        "description": "作废一张还没用过的不带工作区的邀请。用过的留着 —— 它记着这个账号是凭谁发的邀请进来的。",
+        "operationId": "revoke_deployment_invite_api_admin_invite_links__link_id__delete",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invite-links/awaiting-signup": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Invites Awaiting Signup",
+        "description": "工作区管理员请你放行的邀请链接:放行之后,还没账号的人也能凭它注册(ADR 0054 D48)。",
+        "operationId": "invites_awaiting_signup_api_admin_invite_links_awaiting_signup_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InviteLinkOut"
+                  },
+                  "type": "array",
+                  "title": "Response Invites Awaiting Signup Api Admin Invite Links Awaiting Signup Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invite-links/{link_id}/approve-signup": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Approve Invite Signup",
+        "operationId": "approve_invite_signup_api_admin_invite_links__link_id__approve_signup_post",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/web-url": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Set Web Url",
+        "description": "部署的网页地址:成员用浏览器打开 Mosael 的地方。填了,邀请链接就带一个网页地址(ADR 0054 D52)。",
+        "operationId": "set_web_url_api_admin_web_url_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebUrlUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebUrlUpdate"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/shared-host-folders": {
       "get": {
         "tags": [
@@ -31060,6 +31456,11 @@
             "type": "boolean",
             "title": "Open Registration",
             "default": true
+          },
+          "web_url": {
+            "type": "string",
+            "title": "Web Url",
+            "default": ""
           }
         },
         "type": "object",
@@ -35422,6 +35823,22 @@
         ],
         "title": "InvitationOut"
       },
+      "InviteCodeIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "InviteCodeIn",
+        "description": "链接里那串码。**放在请求体里,不放进地址** —— 地址会进访问日志,而它就是凭据。"
+      },
       "InviteCreate": {
         "properties": {
           "note": {
@@ -35433,6 +35850,160 @@
         },
         "type": "object",
         "title": "InviteCreate"
+      },
+      "InviteLinkCreate": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "pattern": "^(admin|editor|viewer)$",
+            "title": "Role",
+            "default": "editor"
+          }
+        },
+        "type": "object",
+        "title": "InviteLinkCreate",
+        "description": "在工作区团队页发一张邀请链接(ADR 0054)。所有者不经链接给。"
+      },
+      "InviteLinkJoinedOut": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "workspace_name": {
+            "type": "string",
+            "title": "Workspace Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "owner_name": {
+            "type": "string",
+            "title": "Owner Name"
+          },
+          "already_member": {
+            "type": "boolean",
+            "title": "Already Member"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "workspace_name",
+          "role",
+          "owner_name",
+          "already_member"
+        ],
+        "title": "InviteLinkJoinedOut",
+        "description": "凭链接进了哪个工作区(界面切过去,toast 说主人和角色,能撤销)。"
+      },
+      "InviteLinkOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code_hint": {
+            "type": "string",
+            "title": "Code Hint"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "allows_signup": {
+            "type": "boolean",
+            "title": "Allows Signup"
+          },
+          "signup_requested": {
+            "type": "boolean",
+            "title": "Signup Requested"
+          },
+          "created_by_name": {
+            "type": "string",
+            "title": "Created By Name"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code_hint",
+          "workspace_id",
+          "role",
+          "note",
+          "state",
+          "allows_signup",
+          "signup_requested",
+          "created_by_name",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "InviteLinkOut",
+        "description": "一张发出去的邀请链接。原文不在这里(库里只有哈希);认它靠末尾几位。"
+      },
+      "InviteLinkPreviewOut": {
+        "properties": {
+          "workspace_name": {
+            "type": "string",
+            "title": "Workspace Name"
+          },
+          "inviter_name": {
+            "type": "string",
+            "title": "Inviter Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "allows_signup": {
+            "type": "boolean",
+            "title": "Allows Signup"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_name",
+          "inviter_name",
+          "role",
+          "state",
+          "allows_signup"
+        ],
+        "title": "InviteLinkPreviewOut",
+        "description": "打开链接、还没登录的那一屏要知道的(只给拿着原文的人)。"
       },
       "InviteMemberRequest": {
         "properties": {
@@ -35454,6 +36025,29 @@
           "username"
         ],
         "title": "InviteMemberRequest"
+      },
+      "IssuedInviteLinkOut": {
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/InviteLinkOut"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "web_url": {
+            "type": "string",
+            "title": "Web Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link",
+          "code",
+          "web_url"
+        ],
+        "title": "IssuedInviteLinkOut",
+        "description": "刚发出去的那一张:**原文只在这一次**。`web_url` 是部署配的网页地址(空 = 没有网页版,只给深链)。"
       },
       "JobKindCatalogOut": {
         "properties": {
@@ -46949,6 +47543,19 @@
         "type": "object",
         "title": "VoiceUpdate",
         "description": "改音色。**只改说明性的字段** —— 参考音频不在其中:换了音频就是另一个音色了,\n而已经用它生成过的配音还在时间线上,让同一个 id 底下的声音悄悄换人比新建一条更糟。"
+      },
+      "WebUrlUpdate": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WebUrlUpdate",
+        "description": "部署的网页地址:空串 = 没有网页版。"
       },
       "WorkflowAiEditRequest": {
         "properties": {

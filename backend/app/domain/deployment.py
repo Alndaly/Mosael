@@ -45,6 +45,15 @@ def plugin_registry_url(db: Session) -> str:
     return (_row(db).plugin_registry_url or "").strip()
 
 
+def web_url(db: Session) -> str:
+    """成员用浏览器打开 Mosael 的地址(ADR 0054);空串 = 没有网页版(桌面单机)。"""
+    return (_row(db).web_url or "").strip()
+
+
+def set_web_url(db: Session, value: str) -> None:
+    _row(db).web_url = value.strip()
+
+
 def outbound_allowlist(db: Session) -> list[str]:
     """用户给的地址可以去的内网地址。解析与判定在 core/outbound_guard,推进进程在 domain/outbound_allowlist。"""
     return [str(item) for item in (_row(db).outbound_allowlist or [])]

@@ -39,7 +39,7 @@ export const SETTINGS_SEARCH: readonly SettingsSearchEntry[] = [
 ];
 
 export const ADMIN_SETTINGS: readonly AdminSetting[] = [
-  { id: "invites", label: "deployInvitesTitle", tab: "members", keywords: [] },
+  { id: "invites", label: "deployInvitesTitle", tab: "members", keywords: [], terms: ["settingsSearchTermsInvites"] },
   { id: "pricing", label: "pricingRulesTitle", tab: "pricing", keywords: [] },
   { id: "install-source", label: "installSourceTitle", tab: "engines", keywords: [], terms: ["settingsSearchTermsInstallSource"] },
   { id: "model-source", label: "voiceCloneSource", tab: "engines", keywords: [], terms: ["settingsSearchTermsModelSource"] },

@@ -293,8 +293,9 @@ export const VIEW_RECORD_EVENTS: Record<string, string> = {
  */
 export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () => void {
   const onLink = (event: Event) => {
-    const link = (event as CustomEvent<{ view?: string; id?: string; market?: string; template?: string }>).detail;
-    if (!link?.view) return;
+    const link = (event as CustomEvent<{ view?: string; id?: string; market?: string; template?: string; join?: string }>).detail;
+    //: 邀请链接(`join`)不在这里:登录之前也要接得住,由启动时挂上的 lib/inviteLinks.listenInviteDeepLinks 收。
+    if (!link?.view || link.join) return;
     //: 官网社区页的「在 Mosael 中打开」:没装的插件、没添加的模板在本机没有记录 id,
     //: 要的是「打开市场 / 社区,找到它」—— 装、添加仍由人点(只导航,见 electron/system/deepLink)。
     if (link.market) return gotoRecord("/plugins", OPEN_PLUGIN_IN_MARKET, link.market);

@@ -6,7 +6,12 @@ from pydantic import BaseModel
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
+    InviteCodeIn,
+    InviteLinkCreate,
+    InviteLinkJoinedOut,
+    InviteLinkOut,
     InviteMemberRequest,
+    IssuedInviteLinkOut,
     MembersOut,
     RenameRequest,
     SetRoleRequest,
@@ -17,8 +22,10 @@ from app.api.schemas import (
     InvitationOut,
     InvitationListOut,
 )
-from app.db.models import User, Workspace
-from app.domain import dashboard, members as members_svc
+from sqlalchemy.orm import Session
+
+from app.db.models import InviteLink, User, Workspace
+from app.domain import dashboard, deployment, members as members_svc
 from app.domain.workspaces import use_cases as workspaces
 
 router = APIRouter(tags=["workspaces"])
@@ -155,6 +162,79 @@ def revoke_invitation(workspace_id: str, invitation_id: str, db: Tx, user: Curre
     except members_svc.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
+
+
+def invite_link_out(db: Session, link: InviteLink) -> InviteLinkOut:
+    """一张邀请链接交给界面的样子(团队页、管理页同一份)。"""
+    creator = db.get(User, link.created_by)
+    return InviteLinkOut(
+        id=link.id,
+        code_hint=link.code_hint,
+        workspace_id=link.workspace_id,
+        role=link.role,
+        note=link.note,
+        state=members_svc.link_state(link),
+        allows_signup=members_svc.link_allows_signup(db, link),
+        signup_requested=link.signup_requested_at is not None and not link.signup_approved_by,
+        created_by_name=(creator.display_name or creator.username) if creator is not None else "",
+        expires_at=link.expires_at,
+        created_at=link.created_at,
+    )
+
+
+def issued_out(db: Session, issued: members_svc.IssuedLink) -> IssuedInviteLinkOut:
+    """刚发出去的那一张:原文只在这一次;网页地址由部署配(没配就只有深链,ADR 0054 D52)。"""
+    return IssuedInviteLinkOut(link=invite_link_out(db, issued.link), code=issued.code, web_url=deployment.web_url(db))
+
+
+@router.post("/workspaces/{workspace_id}/invite-links", response_model=IssuedInviteLinkOut)
+def create_invite_link(workspace_id: str, body: InviteLinkCreate, db: Tx, user: CurrentUser) -> IssuedInviteLinkOut:
+    """发一张进这个工作区的邀请链接(ADR 0054):7 天、一次性、能撤回。还没账号的人能不能凭它注册,
+    看部署那道门(部署管理员发的自带;否则开放注册,或者请部署管理员放行)。"""
+    try:
+        return issued_out(db, workspaces.issue_invite_link(db, user, workspace_id, body.role))
+    except members_svc.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/workspaces/{workspace_id}/invite-links", response_model=list[InviteLinkOut])
+def list_invite_links(workspace_id: str, db: DbSession, user: CurrentUser) -> list[InviteLinkOut]:
+    """这个工作区发出去、还能用的链接(和按用户名的邀请列在一起)。"""
+    return [invite_link_out(db, link) for link in workspaces.list_invite_links(db, user, workspace_id)]
+
+
+@router.delete("/workspaces/{workspace_id}/invite-links/{link_id}", status_code=204)
+def revoke_invite_link(workspace_id: str, link_id: str, db: Tx, user: CurrentUser) -> Response:
+    try:
+        workspaces.revoke_invite_link(db, user, workspace_id, link_id)
+    except members_svc.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/workspaces/{workspace_id}/invite-links/{link_id}/request-signup", response_model=InviteLinkOut)
+def request_link_signup(workspace_id: str, link_id: str, db: Tx, user: CurrentUser) -> InviteLinkOut:
+    """请部署管理员放行:让还没账号的人也能凭这张链接注册(ADR 0054 D48)。"""
+    try:
+        return invite_link_out(db, workspaces.request_link_signup(db, user, workspace_id, link_id))
+    except members_svc.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/invite-links/redeem", response_model=InviteLinkJoinedOut)
+def redeem_invite_link(body: InviteCodeIn, db: Tx, user: CurrentUser) -> InviteLinkJoinedOut:
+    """已登录的人打开一张工作区邀请链接:直接加入(ADR 0054 D51),界面切过去、说主人和角色、能撤销(退出)。"""
+    try:
+        joined = members_svc.redeem_invite_link(db, user, body.code)
+    except members_svc.MemberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return InviteLinkJoinedOut(
+        workspace_id=joined.workspace.id,
+        workspace_name=joined.workspace.name,
+        role=joined.role,
+        owner_name=joined.owner_name,
+        already_member=joined.already_member,
+    )
 
 
 @router.get("/invitations", response_model=InvitationListOut)

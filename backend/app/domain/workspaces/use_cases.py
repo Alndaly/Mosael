@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import User, Workspace, WorkspaceInvitation, WorkspaceMember
+from app.db.models import InviteLink, User, Workspace, WorkspaceInvitation, WorkspaceMember
 from app.domain import dashboard
 from app.domain import members as members_svc
 from app.domain.agent import rules as autopilot_rules
@@ -118,6 +118,28 @@ def list_sent_invitations(db: Session, user: User, workspace_id: str) -> list[tu
 def revoke_invitation(db: Session, user: User, workspace_id: str, invitation_id: str) -> None:
     ensure_workspace_perm(db, user, workspace_id, "members")
     members_svc.revoke_invitation(db, workspace_id, invitation_id)
+
+
+def issue_invite_link(db: Session, user: User, workspace_id: str, role: str) -> members_svc.IssuedLink:
+    """发一张进这个工作区的邀请链接:和按用户名邀请同一道闸(`members`)。授予管理员也一样 —— 发链接的人
+    本来就能把一个已有账号邀请成管理员(ADR 0054)。"""
+    ensure_workspace_perm(db, user, workspace_id, "members")
+    return members_svc.issue_invite_link(db, user, workspace_id=workspace_id, role=role)
+
+
+def list_invite_links(db: Session, user: User, workspace_id: str) -> list[InviteLink]:
+    ensure_workspace_perm(db, user, workspace_id, "members")
+    return members_svc.workspace_links(db, workspace_id)
+
+
+def revoke_invite_link(db: Session, user: User, workspace_id: str, link_id: str) -> None:
+    ensure_workspace_perm(db, user, workspace_id, "members")
+    members_svc.revoke_invite_link(db, link_id, workspace_id=workspace_id)
+
+
+def request_link_signup(db: Session, user: User, workspace_id: str, link_id: str) -> InviteLink:
+    ensure_workspace_perm(db, user, workspace_id, "members")
+    return members_svc.request_signup(db, link_id, workspace_id=workspace_id, requester=user)
 
 
 def change_member_role(

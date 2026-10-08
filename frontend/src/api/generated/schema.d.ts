@@ -58,30 +58,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/invites": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Registration Invites */
-        get: operations["list_registration_invites_api_auth_invites_get"];
-        put?: never;
-        /**
-         * Create Registration Invite
-         * @description 发一个进这个部署的邀请码。带外发给对方,对方拿它注册并自己设密码。
-         *
-         *     「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。
-         */
-        post: operations["create_registration_invite_api_auth_invites_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/invites/{code}": {
+    "/api/auth/invite-links/preview": {
         parameters: {
             query?: never;
             header?: never;
@@ -90,13 +67,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
         /**
-         * Revoke Registration Invite
-         * @description 作废一个还没用过的邀请码:发错了人、发出去的消息被转走了。此前发出去就撤不回,只能等它 7 天后过期(体检 UM-09)。
-         *     用过的码留着 —— 它记着这个账号是凭谁发的码进来的。
+         * Preview Invite Link
+         * @description 打开一张邀请链接、还没登录的那一屏:进哪个工作区、谁邀请的、还能不能用、没账号的人能不能凭它注册
+         *     (ADR 0054)。**不需要登录** —— 拿着原文的人就是被邀请的人;码在请求体里,不进访问日志。
          */
-        delete: operations["revoke_registration_invite_api_auth_invites__code__delete"];
+        post: operations["preview_invite_link_api_auth_invite_links_preview_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -919,6 +896,88 @@ export interface paths {
         post?: never;
         /** Revoke Invitation */
         delete: operations["revoke_invitation_api_workspaces__workspace_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invite-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invite Links
+         * @description 这个工作区发出去、还能用的链接(和按用户名的邀请列在一起)。
+         */
+        get: operations["list_invite_links_api_workspaces__workspace_id__invite_links_get"];
+        put?: never;
+        /**
+         * Create Invite Link
+         * @description 发一张进这个工作区的邀请链接(ADR 0054):7 天、一次性、能撤回。还没账号的人能不能凭它注册,
+         *     看部署那道门(部署管理员发的自带;否则开放注册,或者请部署管理员放行)。
+         */
+        post: operations["create_invite_link_api_workspaces__workspace_id__invite_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invite-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Invite Link */
+        delete: operations["revoke_invite_link_api_workspaces__workspace_id__invite_links__link_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspaces/{workspace_id}/invite-links/{link_id}/request-signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Link Signup
+         * @description 请部署管理员放行:让还没账号的人也能凭这张链接注册(ADR 0054 D48)。
+         */
+        post: operations["request_link_signup_api_workspaces__workspace_id__invite_links__link_id__request_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/invite-links/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem Invite Link
+         * @description 已登录的人打开一张工作区邀请链接:直接加入(ADR 0054 D51),界面切过去、说主人和角色、能撤销(退出)。
+         */
+        post: operations["redeem_invite_link_api_invite_links_redeem_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6027,6 +6086,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/invite-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Deployment Invites
+         * @description 不带工作区的邀请(含升级前发出去的注册邀请码,迁移时并进来了,照样用到过期)。最近 50 张。
+         */
+        get: operations["list_deployment_invites_api_admin_invite_links_get"];
+        put?: never;
+        /**
+         * Create Deployment Invite
+         * @description 发一张**不带工作区**的邀请:只进这台部署(此前的「注册邀请码」)。对方注册完自己建工作区,或者再被人拉进去。
+         *
+         *     「谁能放人进这个部署」和「谁对这个部署负责」是同一件事,所以判据就是部署管理员那一列。原文只在这一次。
+         */
+        post: operations["create_deployment_invite_api_admin_invite_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/invite-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Deployment Invite
+         * @description 作废一张还没用过的不带工作区的邀请。用过的留着 —— 它记着这个账号是凭谁发的邀请进来的。
+         */
+        delete: operations["revoke_deployment_invite_api_admin_invite_links__link_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/invite-links/awaiting-signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Invites Awaiting Signup
+         * @description 工作区管理员请你放行的邀请链接:放行之后,还没账号的人也能凭它注册(ADR 0054 D48)。
+         */
+        get: operations["invites_awaiting_signup_api_admin_invite_links_awaiting_signup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/invite-links/{link_id}/approve-signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Invite Signup */
+        post: operations["approve_invite_signup_api_admin_invite_links__link_id__approve_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/web-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Web Url
+         * @description 部署的网页地址:成员用浏览器打开 Mosael 的地方。填了,邀请链接就带一个网页地址(ADR 0054 D52)。
+         */
+        put: operations["set_web_url_api_admin_web_url_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/shared-host-folders": {
         parameters: {
             query?: never;
@@ -10974,6 +11136,11 @@ export interface components {
              * @default true
              */
             open_registration: boolean;
+            /**
+             * Web Url
+             * @default
+             */
+            web_url: string;
         };
         /** BrowserProfileCreate */
         BrowserProfileCreate: {
@@ -12851,6 +13018,14 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * InviteCodeIn
+         * @description 链接里那串码。**放在请求体里,不放进地址** —— 地址会进访问日志,而它就是凭据。
+         */
+        InviteCodeIn: {
+            /** Code */
+            code: string;
+        };
         /** InviteCreate */
         InviteCreate: {
             /**
@@ -12858,6 +13033,83 @@ export interface components {
              * @default
              */
             note: string;
+        };
+        /**
+         * InviteLinkCreate
+         * @description 在工作区团队页发一张邀请链接(ADR 0054)。所有者不经链接给。
+         */
+        InviteLinkCreate: {
+            /**
+             * Role
+             * @default editor
+             */
+            role: string;
+        };
+        /**
+         * InviteLinkJoinedOut
+         * @description 凭链接进了哪个工作区(界面切过去,toast 说主人和角色,能撤销)。
+         */
+        InviteLinkJoinedOut: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
+            /** Role */
+            role: string;
+            /** Owner Name */
+            owner_name: string;
+            /** Already Member */
+            already_member: boolean;
+        };
+        /**
+         * InviteLinkOut
+         * @description 一张发出去的邀请链接。原文不在这里(库里只有哈希);认它靠末尾几位。
+         */
+        InviteLinkOut: {
+            /** Id */
+            id: string;
+            /** Code Hint */
+            code_hint: string;
+            /** Workspace Id */
+            workspace_id: string | null;
+            /** Role */
+            role: string;
+            /** Note */
+            note: string;
+            /** State */
+            state: string;
+            /** Allows Signup */
+            allows_signup: boolean;
+            /** Signup Requested */
+            signup_requested: boolean;
+            /** Created By Name */
+            created_by_name: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * InviteLinkPreviewOut
+         * @description 打开链接、还没登录的那一屏要知道的(只给拿着原文的人)。
+         */
+        InviteLinkPreviewOut: {
+            /** Workspace Name */
+            workspace_name: string;
+            /** Inviter Name */
+            inviter_name: string;
+            /** Role */
+            role: string;
+            /** State */
+            state: string;
+            /** Allows Signup */
+            allows_signup: boolean;
         };
         /** InviteMemberRequest */
         InviteMemberRequest: {
@@ -12868,6 +13120,17 @@ export interface components {
              * @default editor
              */
             role: string;
+        };
+        /**
+         * IssuedInviteLinkOut
+         * @description 刚发出去的那一张:**原文只在这一次**。`web_url` 是部署配的网页地址(空 = 没有网页版,只给深链)。
+         */
+        IssuedInviteLinkOut: {
+            link: components["schemas"]["InviteLinkOut"];
+            /** Code */
+            code: string;
+            /** Web Url */
+            web_url: string;
         };
         /** JobKindCatalogOut */
         JobKindCatalogOut: {
@@ -18413,6 +18676,17 @@ export interface components {
             /** Consent Kind */
             consent_kind?: string | null;
         };
+        /**
+         * WebUrlUpdate
+         * @description 部署的网页地址:空串 = 没有网页版。
+         */
+        WebUrlUpdate: {
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
         /** WorkflowAiEditRequest */
         WorkflowAiEditRequest: {
             /** Instruction */
@@ -20022,38 +20296,7 @@ export interface operations {
             };
         };
     };
-    list_registration_invites_api_auth_invites_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_registration_invite_api_auth_invites_post: {
+    preview_invite_link_api_auth_invite_links_preview_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -20062,7 +20305,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["InviteCreate"];
+                "application/json": components["schemas"]["InviteCodeIn"];
             };
         };
         responses: {
@@ -20072,39 +20315,8 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["InviteLinkPreviewOut"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    revoke_registration_invite_api_auth_invites__code__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -21740,6 +21952,167 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invite_links_api_workspaces__workspace_id__invite_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invite_link_api_workspaces__workspace_id__invite_links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedInviteLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invite_link_api_workspaces__workspace_id__invite_links__link_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_link_signup_api_workspaces__workspace_id__invite_links__link_id__request_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_invite_link_api_invite_links_redeem_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLinkJoinedOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -32172,6 +32545,190 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_deployment_invites_api_admin_invite_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_deployment_invite_api_admin_invite_links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedInviteLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_deployment_invite_api_admin_invite_links__link_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invites_awaiting_signup_api_admin_invite_links_awaiting_signup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_invite_signup_api_admin_invite_links__link_id__approve_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_web_url_api_admin_web_url_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebUrlUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebUrlUpdate"];
                 };
             };
             /** @description Validation Error */
