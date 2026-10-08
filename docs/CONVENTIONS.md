@@ -268,6 +268,9 @@ SQLite 同一时刻只有一个写事务。从第一句写到提交,别的写入
 - **落终态之后的收拾**(失败原因抄到生成记录上、关掉这次运行开的浏览器会话)在任务提交之后的 after_commit 里做:
   断言它们用 `tests/util.wait_settled`,不用 `wait_status`。
 - **谁起的线程谁收**:测试函数体里起的线程,测完还活着,这条测试会在 teardown 红(`tests/conftest.py`)。
+- **谁起的子进程谁收**:测试自己停掉它起的服务、插件进程。会话收尾时还在跑的子进程,conftest 连同它们的进程组一起收掉
+  (`tests/child_processes.py`);测试进程被 kill -9 时那里跑不到,所以**一直不退的替身要自己跟着起它的测试进程走**
+  (`tests/fake_local_service.py` 的 `_follow_owner`)。替身写成「睡 60 秒」这种自己会退的,就不用跟。
 - **读库的测试先 `fresh_client()`**:进程起来时表已经建好(conftest),但里面是前面测试留下的什么,看排在谁后面。
 - 前端同理:用 `waitFor` 等条件,`vi.useFakeTimers` 推进计时器;不要 `await new Promise((r) => setTimeout(r, 800))`
   然后断言;模块级的可变状态(测试文件里的 `const config = {...}`、被测模块里的缓存)在 `beforeEach` 里还原 ——

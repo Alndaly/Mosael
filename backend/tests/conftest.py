@@ -70,6 +70,30 @@ def pytest_report_header(config) -> str | None:
     return thread_jitter.header()
 
 
+def _runs_tests_here(session) -> bool:
+    """这个进程自己跑测试:xdist 的 worker,或者不分发时的那一个进程。分发的那个(dsession)只管派活,它起的是 worker。"""
+    return not session.config.pluginmanager.has_plugin("dsession")
+
+
+def pytest_sessionstart(session) -> None:
+    if _runs_tests_here(session):
+        from tests import child_processes
+
+        child_processes.track()
+
+
+def pytest_sessionfinish(session) -> None:
+    """测试都收完了还在跑的子进程,连同它们的进程组一起收掉(见 tests/child_processes.py)。
+
+    各条测试自己会收它起的服务、插件;这里兜的是半路失败、忘了收、被 Ctrl-C 打断的那些 —— 起在新会话里的子进程收不到
+    发给测试进程的信号,此前就这么以 1 号进程为父一直挂着。
+    """
+    if _runs_tests_here(session):
+        from tests import child_processes
+
+        child_processes.sweep()
+
+
 @pytest.hookimpl(optionalhook=True)
 def pytest_xdist_auto_num_workers(config) -> int | None:
     """`-n auto` 写在 pyproject 的 addopts 里:跑全套(或整个目录)时按核数开 worker,点名了文件或某一条用例时

@@ -14,6 +14,10 @@
 - `--ignore-term`:不理 SIGTERM(验「10 秒后强杀」);
 - `--mute-after`:就绪之后(头一回答了健康检查之后)过这么久不再应答(关掉监听),进程照样活着(「进程在、却没有应答」)。
 
+**它和它起的孙进程都跟着起它的那个测试进程走**:测试进程没了(被 kill -9、超时掐掉),它们自己退出(见 `_follow_owner`)。
+看护起服务时给的是一个新的会话、日志写进文件,测试进程死了它们收不到信号、也读不到管道断开;此前测试进程一被强杀,
+它们就以 1 号进程为父一直挂着(实测撞到过两天前留下的八个)。
+
 「崩」「不再应答」都从**头一回答了健康检查**算,不从开始听算:看护那边要先看到它就绪,这两件事才是「运行中崩了 / 没了应答」。
 此前从开始听算,看护线程起得晚 0.2 秒,进程就在被看到就绪之前崩了 —— 测的成了「还没就绪就退出」。
 
@@ -35,6 +39,36 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 #: 头一回答了健康检查(有人看到它就绪了)。
 _seen_ready = threading.Event()
+
+#: 起这个假服务的测试进程。孙进程从环境变量里拿到同一个,跟着的是测试进程,不是这个假服务 ——
+#: 「停整组,孙进程也走」那条要看的是看护把整组停掉了,孙进程不能因为假服务没了就自己先走。
+OWNER_ENV = "FAKE_SERVICE_OWNER"
+#: 孙进程:一直在,直到起它的测试进程没了。
+FOLLOWER = (
+    "import os, time\n"
+    f"owner = int(os.environ[{OWNER_ENV!r}])\n"
+    "while True:\n"
+    "    time.sleep(0.2)\n"
+    "    try:\n"
+    "        os.kill(owner, 0)\n"
+    "    except OSError:\n"
+    "        break\n"
+)
+
+
+def _follow_owner() -> None:
+    """测试进程一没,这个假服务就退出(os._exit:不等别的线程、不跑清理)。"""
+    owner = int(os.environ[OWNER_ENV])
+
+    def watch() -> None:
+        while True:
+            time.sleep(0.2)
+            try:
+                os.kill(owner, 0)
+            except OSError:  # 没了(ProcessLookupError),或者号已经被别人的进程用上(PermissionError)
+                os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -70,6 +104,8 @@ def main() -> None:
     parser.add_argument("--ignore-term", action="store_true")
     parser.add_argument("--mute-after", type=float, default=None)
     args = parser.parse_args()
+    os.environ.setdefault(OWNER_ENV, str(os.getppid()))
+    _follow_owner()
 
     starts = 1
     if args.count:
@@ -86,7 +122,7 @@ def main() -> None:
     sys.stdout.write("\n")
     sys.stdout.flush()
     if args.child:
-        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+        child = subprocess.Popen([sys.executable, "-c", FOLLOWER])
         with open(args.child, "w", encoding="utf-8") as handle:
             handle.write(str(child.pid))
     if args.exit_at_start is not None:
