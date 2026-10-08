@@ -63,6 +63,24 @@ describe("登录失败的说法", () => {
     await submitLoginFailingWith(new ApiError("Invalid credentials", 401, ""));
     expect(await screen.findByText("loginFailed")).toBeTruthy();
   });
+
+  //: 体检 UM-27:用户名 1 个字时后端 422,此前界面说「无法创建账户,请稍后重试」,重试多少次都不行。
+  it("用户名不到 2 个字在本地就说,不发请求;后端回 422 时说是哪几项不合要求", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <LoginView />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("username"), { target: { value: "k" } });
+    fireEvent.change(screen.getByLabelText("password"), { target: { value: "secret" } });
+    fireEvent.submit(screen.getByLabelText("password").closest("form")!);
+    expect(await screen.findByText("teamUsernameShort")).toBeTruthy();
+    expect(login).not.toHaveBeenCalled();
+    cleanup();
+
+    await submitLoginFailingWith(new ApiError("Unprocessable", 422, ""));
+    expect(await screen.findByText("authInvalidFields")).toBeTruthy();
+  });
 });
 
 describe("忘了密码", () => {

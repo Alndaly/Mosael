@@ -32,6 +32,7 @@ function friendlyAuthError(err: unknown, mode: "login" | "register", t: (key: Me
     if (mode === "register" && err.status === 409) return t("usernameTaken");
     //: 注册已转邀请制、邀请码无效:后端给的就是按界面语言翻好的原因,照说。
     if (mode === "register" && err.status === 403) return err.message;
+    if (err.status === 422) return t("authInvalidFields");
   }
   return mode === "login" ? t("loginFailed") : t("registerFailed");
 }
@@ -46,7 +47,9 @@ export function LoginView() {
 
   const schema = React.useMemo(() => {
     const base = z.object({
-      username: z.string().min(1, t("fieldRequired")),
+      //: 和后端同一个下限(AuthCredentials.username ≥ 2):此前填 1 个字,后端 422,界面说「无法创建账户,请稍后重试」,
+      //: 重试一百次也不行(体检 UM-27)。
+      username: z.string().trim().min(1, t("fieldRequired")).min(2, t("teamUsernameShort")),
       displayName: z.string(),
       inviteCode: z.string(),
       password: z.string().min(4, t("passwordTooShort")),

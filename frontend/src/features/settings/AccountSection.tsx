@@ -11,6 +11,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { accountOrigin } from "@/components/layout/accountOrigin";
+import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
@@ -23,20 +24,28 @@ export function AccountSection() {
   const [passwords, setPasswords] = React.useState({ current: "", next: "", confirm: "" });
   const [passwordPending, setPasswordPending] = React.useState(false);
   const lastSavedRef = React.useRef(profileKey(profile));
+  //: 用户名(登录名)**不跟着自动保存**:此前三项一起 650ms 防抖,停顿一下就把登录名改成了半截,下次登录用不上
+  //: (体检 UM-19)。昵称、签名照旧边打边存;登录名改成显式的「修改登录名」+ 确认。
+  const [usernameDraft, setUsernameDraft] = React.useState(user?.username ?? "");
+  const [confirmingUsername, setConfirmingUsername] = React.useState(false);
+  const [usernamePending, setUsernamePending] = React.useState(false);
 
   React.useEffect(() => {
     const next = profileFromUser(user);
     setProfile(next);
     lastSavedRef.current = profileKey(next);
-    setSaveState("saved");
+    //: 刚打开页面时什么都没改,不说「资料已保存」(体检 UM-27:一进来右上角就是「✓ 资料已保存」);存过一次之后照旧说。
+    setSaveState((current) => (current === "idle" ? "idle" : "saved"));
   }, [user?.id, user?.username, user?.display_name, user?.signature]);
+  //: 只在登录名真的变了(改成功、或换了账号)时把输入框对回去 —— 昵称自动保存回来时不动正在改的登录名。
+  React.useEffect(() => setUsernameDraft(user?.username ?? ""), [user?.username]);
 
   React.useEffect(() => {
     const next = normalizeProfile(profile);
     const nextKey = profileKey(next);
     if (next.username.length < 2 || next.display_name.length < 1) return;
     if (nextKey === lastSavedRef.current) {
-      setSaveState("saved");
+      setSaveState((current) => (current === "saving" ? "saved" : current));
       return;
     }
     setSaveState("saving");
@@ -52,6 +61,22 @@ export function AccountSection() {
     }, 650);
     return () => window.clearTimeout(timer);
   }, [profile, t, updateProfile]);
+
+  const usernameNext = usernameDraft.trim().toLowerCase();
+  const usernameChanged = usernameNext !== (user?.username ?? "");
+  const usernameTooShort = usernameChanged && usernameNext.length < 2;
+  const changeUsername = async () => {
+    setUsernamePending(true);
+    try {
+      const saved = await updateProfile({ ...normalizeProfile(profile), username: usernameNext });
+      toast.success(t("usernameChanged").replace("{name}", saved.username));
+    } catch (error) {
+      toast.error(errorText(error) || t("profileSaveFailed"));
+    } finally {
+      setUsernamePending(false);
+      setConfirmingUsername(false);
+    }
+  };
 
   const canUpdatePassword =
     passwords.current.length >= 4 &&
@@ -164,11 +189,27 @@ export function AccountSection() {
       <SettingsBlock>
         <SettingsForm>
           <SettingsField label={t("settingsUsername")} description={t("settingsUsernameDesc")}>
-            <Input
-              value={profile.username}
-              autoComplete="username"
-              onChange={(event) => setProfile((current) => ({ ...current, username: event.target.value }))}
-            />
+            <div className="flex min-w-0 items-center gap-2">
+              <Input
+                value={usernameDraft}
+                autoComplete="username"
+                aria-invalid={usernameTooShort || undefined}
+                onChange={(event) => setUsernameDraft(event.target.value)}
+              />
+              {usernameChanged && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0"
+                  data-username-change=""
+                  disabled={usernameTooShort}
+                  onClick={() => setConfirmingUsername(true)}
+                >
+                  {t("usernameChange")}
+                </Button>
+              )}
+            </div>
+            {usernameTooShort && <small className="text-ui-sm text-destructive">{t("teamUsernameShort")}</small>}
           </SettingsField>
           <SettingsField label={t("displayName")} description={t("displayNameDesc")}>
             <Input
@@ -231,6 +272,15 @@ export function AccountSection() {
           </SettingsForm>
         </div>
       </SettingsBlock>
+      <ConfirmDialog
+        open={confirmingUsername}
+        title={t("usernameChange")}
+        body={t("usernameChangeConfirm").replace("{name}", usernameNext)}
+        confirmLabel={t("usernameChange")}
+        onCancel={() => setConfirmingUsername(false)}
+        pending={usernamePending}
+        onConfirm={() => void changeUsername()}
+      />
     </SettingsGroup>
   );
 }
