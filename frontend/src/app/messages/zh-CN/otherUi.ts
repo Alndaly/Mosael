@@ -8,6 +8,12 @@ export const otherUi = {
   appearanceImageReadFailed: "读取图片失败",
   appearanceImageDecodeFailed: "无法解析图片",
   appearanceCanvasUnavailable: "画布不可用",
+  //: 失败展示(components/failure/FailureCard,全应用一份):原因、怎么修、详情、复制
+  failureCause: "原因",
+  failureFix: "怎么修",
+  failureDetail: "详情",
+  failureCopyError: "复制错误",
+  failureCopyCommand: "复制命令",
   mutationFailedFallback: "操作失败",
   apiServerUnreachable: "{url} 连不上",
   canvasInputMode: "画布操控方式",

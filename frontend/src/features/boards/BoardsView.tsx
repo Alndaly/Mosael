@@ -1,4 +1,5 @@
 import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
+import { BoardFailuresProvider } from "@/features/boards/boardFailures";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
@@ -1297,6 +1298,8 @@ function BoardDetail({
         <RightDockResizeHandle panel={agentPanel} toolbarTop={8} />
       )}
 
+      {/* 跑挂了的格子给人看的样子(那一句、原因和怎么修)按读的人的语言出,另放一张表 —— 格子、它的面板从这里读(见 boardFailures)。 */}
+      <BoardFailuresProvider failures={board.failures}>
       <BoardCanvas
         boardId={board.id}
         workspaceId={workspaceId}
@@ -1338,6 +1341,7 @@ function BoardDetail({
         onExitMarkerMode={() => setMarkerMode(false)}
         onReady={setApi}
       />
+      </BoardFailuresProvider>
 
       <RenameDialog
         open={renaming}

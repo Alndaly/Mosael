@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
+import { BoardFailuresProvider } from "@/features/boards/boardFailures";
+import type { BoardFailureView } from "@/api/client";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BoardItem } from "@/api/client";
@@ -83,6 +85,7 @@ function renderNode(
   extra: Partial<BoardItem> = {},
   commentMode = false,
   onStop?: (id: string) => void,
+  failures: Record<string, BoardFailureView> = {},
 ) {
   const Node = BOARD_NODE_TYPES[kind];
   const item: BoardItem = {
@@ -108,7 +111,9 @@ function renderNode(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <Node {...props} />
+      <BoardFailuresProvider failures={failures}>
+        <Node {...props} />
+      </BoardFailuresProvider>
     </QueryClientProvider>,
   );
 }
@@ -193,12 +198,12 @@ describe("无限画布节点运行状态", () => {
   });
 
   it("失败按产出者说:生成挂了是「生成失败」,截一段挂了是「运行失败」—— 不是「没能发起生成」", () => {
+    //: 失败展示是一组(role=group,名字是那个短标题),不是 alert —— 打开画板时一板失败的格子不该一起朗读
     const { getByRole } = renderNode("image", "failed", { form: { producer: "generate" } });
-    expect(getByRole("alert")).toHaveTextContent("生成失败");
+    expect(getByRole("group", { name: "生成失败" })).toBeInTheDocument();
     cleanup();
     const trimmed = renderNode("video", "failed", { form: { producer: "trim" } });
-    expect(trimmed.getByRole("alert")).toHaveTextContent("运行失败");
-    expect(trimmed.getByRole("alert")).toHaveTextContent("上游拒绝了请求");
+    expect(trimmed.getByRole("group", { name: "运行失败" })).toHaveTextContent("上游拒绝了请求");
   });
 
 
@@ -245,28 +250,35 @@ describe("无限画布节点运行状态", () => {
     expect(text.parentElement?.className).toContain("min-w-0");
   });
 
-  //: UC-06:此前格子上贴的是原文头三行(一串 httpx 英文加带签名的地址);现在写后端摘好的那一句,原文在悬停里。
-  it("失败格子写给人看的那一句,原文和认得出的原因在「详情」的悬停里;和失败卡同一种克制的样子", async () => {
+  //: UC-06:此前格子上贴的是原文头三行(一串 httpx 英文加带签名的地址);现在写后端按读的人的语言摘好的那一句(Board.failures),
+  //: 原因、怎么修、原文在点开的「详情」浮层里 —— 和 AI 工作台的失败卡同一份展示(components/failure/FailureCard 的紧凑档)。
+  it("失败格子是紧凑档:写给人看的那一句,原因、怎么修和原文在点开的「详情」里;格子底色是中性的", async () => {
     const raw = "DashScope 请求失败:Client error '401 Unauthorized' for url 'https://dashscope.aliyuncs.com/x?Signature=SECRET'";
-    const { container } = renderNode("image", "failed", {
-      run: { status: "failed", error: "DashScope 不认这把密钥,请到设置里检查连接的凭据", error_detail: raw,
-             error_hint: "这是那台机器上的问题" },
+    const { container } = renderNode("image", "failed", { run: { status: "failed", error: raw } }, false, undefined, {
+      "image-failed": { error_summary: "DashScope 不认这把密钥,请到设置里检查连接的凭据", error_detail: "Client error '401 Unauthorized' Signature=SECRET",
+                        error_hint: { cause: "这是那台机器上的问题", steps: [{ text: "换一把钥匙", command: "mosael keys rotate" }] } },
     });
-    const alert = container.querySelector<HTMLElement>("[role=alert]")!;
-    expect(alert.textContent).toContain("DashScope 不认这把密钥");
-    expect(alert.textContent).not.toContain("SECRET");
-    expect(alert.className, "不再整格淡红").not.toMatch(/destructive/);
-    const trigger = alert.querySelector<HTMLElement>("[data-run-error-detail]")!;
-    expect(trigger.textContent).toBe("genFailureDetail");
-    expect(trigger.tabIndex, "键盘也切得到「详情」").toBe(0);
-    const said = await hoverHint(trigger);
-    expect(said).toContain("这是那台机器上的问题");
-    expect(said).toContain("Signature=SECRET");
+    const card = container.querySelector<HTMLElement>("[data-board-failed]")!;
+    expect(card.getAttribute("data-failure-size")).toBe("compact");
+    expect(card.getAttribute("role")).toBe("group");
+    expect(card.textContent).toContain("DashScope 不认这把密钥");
+    expect(card.textContent, "原文不贴在格子上").not.toContain("SECRET");
+    expect(card.parentElement!.className, "不再整格淡红").not.toMatch(/destructive/);
+    const more = card.querySelector<HTMLButtonElement>("[data-failure-more]")!;
+    expect(more.tagName, "键盘切得到、点得开").toBe("BUTTON");
+    expect(more.className).toMatch(/\bnodrag\b/);
+    fireEvent.click(more);
+    const popover = await screen.findByText("这是那台机器上的问题");
+    const panel = popover.closest("[data-failure-popover]")!;
+    expect(panel.querySelector("[data-failure-command] code")?.textContent, "命令一块等宽字、带复制").toBe("mosael keys rotate");
+    expect(panel.querySelector<HTMLElement>("[data-failure-detail]")!.hidden, "点开的就是详情:原文直接展开").toBe(false);
+    expect(panel.querySelector("[data-failure-detail]")!.textContent).toContain("Signature=SECRET");
   });
 
-  it("本来就是一句人话的(没有原文):不摆「详情」", () => {
-    const { container } = renderNode("image", "failed", { run: { status: "failed", error: "没有产出" } });
-    expect(container.querySelector("[data-run-error-detail]")).toBeNull();
+  it("出口的那一句还没到(刚跑挂)时写格子里存的原文;本来就是一句人话的(没有原文、没有怎么修):不摆「详情」", () => {
+    const fresh = renderNode("image", "failed", { run: { status: "failed", error: "上游挂了" } });
+    expect(fresh.container.querySelector("[data-board-failed]")!.textContent).toContain("上游挂了");
+    expect(fresh.container.querySelector("[data-failure-more]")).toBeNull();
   });
 });
 
@@ -386,7 +398,7 @@ it("文档格在「让 AI 写」时:排队、扫光占位 + 这次的要求,不�
   cleanup();
 
   const failed = renderNode("document", "failed", { text: undefined, form: { producer: "write" } });
-  expect(failed.container.querySelector("[data-document-empty] [role=alert]")!.textContent).toContain("上游拒绝了请求");
+  expect(failed.container.querySelector("[data-document-empty] [data-document-write-failed]")!.textContent).toContain("上游拒绝了请求");
 });
 
 it("「让 AI 写」是后台任务:便签、文档格在写时盖上占位、带停止;写挂了便签里写出原因", () => {

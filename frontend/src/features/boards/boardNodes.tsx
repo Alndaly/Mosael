@@ -22,7 +22,9 @@ import "@/features/notes/notes.css";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
-import { itemError, itemErrorDetail, itemErrorHint, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { useItemFailure } from "@/features/boards/boardFailures";
+import { FailureCard } from "@/components/failure/FailureCard";
 import { SceneOverview } from "@/features/boards/SceneOverview";
 import { SequenceCell } from "@/features/boards/SequenceCell";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
@@ -361,6 +363,7 @@ export function NoteNode({ data, selected }: NodeProps) {
   const status = itemRunStatus(item);
   const writing = !runningAbility(item) && itemIsRunning(item);
   const writeFailed = !runningAbility(item) && status === "failed";
+  const failure = useItemFailure(item);
   const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
   return (
     <div
@@ -437,16 +440,12 @@ export function NoteNode({ data, selected }: NodeProps) {
       {/* 让 AI 写的时候整格是占位(和图片格生成一样),停止在占位里。 */}
       {writing && <WritingCover item={item} onStop={stop} data-note-writing="" />}
       {/* 写挂了:原因写在格子里(和文档格同一句),不只是边框变红。 */}
-      {writeFailed && !editing && (
+      {writeFailed && !editing && failure && (
         <div
-          role="alert"
           data-note-write-failed=""
-          className="absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs text-destructive shadow-sm backdrop-blur"
+          className="nodrag nopan absolute inset-x-1 bottom-1 z-10 min-w-0 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 shadow-sm backdrop-blur"
         >
-          <AlertTriangle size={11} className="shrink-0" />
-          <Truncate lines={2} className="flex-1 [overflow-wrap:anywhere]">
-            {[t(runCopy(item).failed), itemError(item)].filter(Boolean).join(" · ")}
-          </Truncate>
+          <FailureCard size="inline" lines={2} title={t(runCopy(item).failed)} {...failure} />
         </div>
       )}
       <AbilityRun data={nodeData} selected={selected} />
@@ -475,15 +474,27 @@ function AbilityRunStrip({ data, className }: { data: BoardNodeData; className?:
   const progress = useJobProgress(itemJobId(item), itemIsRunning(item));
   const stop = onStop && !commentMode && itemIsRunning(item) ? onStop : undefined;
   const said = running ? t(runCopy(item).running) : t(status === "failed" ? runCopy(item).failed : "boardNodeCancelled");
+  const failure = useItemFailure(item);
+  if (failure) {
+    //: 跑挂了:和别处同一份失败展示(一行档),那一句、详情浮层里的原因和怎么修
+    return (
+      <div
+        data-board-ability-run={status}
+        className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 min-w-0 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 shadow-sm backdrop-blur", className)}
+      >
+        <FailureCard size="inline" title={[said, abilityLabel].filter(Boolean).join(" · ")} {...failure} />
+      </div>
+    );
+  }
   return (
     <div
       data-board-ability-run={status}
       role={running ? "status" : "alert"}
       className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs shadow-sm backdrop-blur", className)}
     >
-      {running ? <Loader2 size={11} className="shrink-0 animate-spin text-primary" /> : <AlertTriangle size={11} className="shrink-0 text-destructive" />}
-      <Truncate className={cn("flex-1", running ? "text-primary" : "text-destructive")}>
-        {[said, abilityLabel, progress > 0 ? `${Math.round(progress * 100)}%` : "", !running ? itemError(item) : ""]
+      {running ? <Loader2 size={11} className="shrink-0 animate-spin text-primary" /> : <Ban size={11} className="shrink-0 text-muted-foreground" />}
+      <Truncate className={cn("flex-1", running ? "text-primary" : "text-muted-foreground")}>
+        {[said, abilityLabel, progress > 0 ? `${Math.round(progress * 100)}%` : ""]
           .filter(Boolean)
           .join(" · ")}
       </Truncate>
@@ -587,34 +598,15 @@ function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop
  * **说的是「生成失败」/「运行失败」,不是「没能发起生成」** —— 任务明明发起了、跑到一半才挂;
  * 「没能发起」是提交那一刻被拒时的那句提示(BoardsView.RUN_FAILED),两件事。
  */
-function Failed({ item, reason }: { item: BoardItem; reason: string }) {
+function Failed({ item }: { item: BoardItem }) {
   const t = useI18n();
-  //: `reason` 是给人看的那一句(后端 domain/failure_summary 摘的,和 AI 工作台的失败卡同一个来源);原文(比那一句多出信息时才有)
-  //: 和认得出的原因(该去哪修)收在「详情」的悬停里 —— 格子不撑大。此前格子上贴的是原文的头三行(UC-06)。
-  //: 和失败卡同一种样子:中性的底,只有图标和短标题用 destructive 色,那一句是正常的前景色(此前整格淡红、字是灰的)。
-  const detail = itemErrorDetail(item);
-  const hint = itemErrorHint(item);
+  //: 那一句、原文、原因和怎么修都是后端出口按读的人的语言出的(Board.failures,见 boardFailures),和 AI 工作台的失败卡同一份 ——
+  //: 格子里是紧凑档:一枚图标、短标题、截断的那一句,其余在点开的「详情」浮层里(格子不撑大;浮层里放得下复制命令的按钮)。
+  const failure = useItemFailure(item);
   return (
-    <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-secondary/35 px-3", CELL_INNER_RADIUS)}>
-      <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
-        <AlertTriangle size={15} aria-hidden className="text-destructive" />
-        <span className="text-ui-2xs font-semibold text-destructive">{t(runCopy(item).failed)}</span>
-        <Truncate lines={3} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-foreground">
-          {reason}
-        </Truncate>
-        {hint || detail ? (
-          //: 悬停里先说该去哪修(认得出时),原文淡色在下面;键盘也能切到它(说明在聚焦时也出)
-          <Hint label={hint ?? detail} hint={hint ? detail : undefined}>
-            <span
-              data-run-error-detail=""
-              tabIndex={0}
-              className="cursor-help rounded-sm text-ui-2xs text-muted-foreground underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {t("genFailureDetail")}
-            </span>
-          </Hint>
-        ) : null}
-      </div>
+    <div className={cn("grid h-full w-full place-items-center overflow-hidden bg-secondary/35 px-3", CELL_INNER_RADIUS)}>
+      <FailureCard size="compact" align="center" title={t(runCopy(item).failed)} summary={failure?.summary || "—"}
+                   detail={failure?.detail} fix={failure?.fix} copyText={failure?.copyText} data-board-failed="" />
     </div>
   );
 }
@@ -645,8 +637,7 @@ function PendingSlot({ item, icon, onStop }: { item: BoardItem; icon: React.Reac
   const stop = onStop && itemIsRunning(item) ? onStop : undefined;
   if (status === "queued") return <Queued item={item} text={text} onStop={stop} />;
   if (status === "running") return <Generating item={item} text={text} onStop={stop} />;
-  const error = itemError(item);
-  if (status === "failed") return <Failed item={item} reason={error || "—"} />;
+  if (status === "failed") return <Failed item={item} />;
   if (status === "cancelled") return <Cancelled />;
   return <EmptySlot icon={icon} />;
 }
@@ -835,6 +826,7 @@ function DocumentNode({ data, selected }: NodeProps) {
   const status = itemRunStatus(item);
   const writing = !runningAbility(item) && itemIsRunning(item);
   const writeFailed = !runningAbility(item) && status === "failed";
+  const failure = useItemFailure(item);
   const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
   const state = useRunState(item);
   return (
@@ -873,10 +865,9 @@ function DocumentNode({ data, selected }: NodeProps) {
           <BookOpen size={28} strokeWidth={1.3} />
           <span className="font-medium text-foreground">{t("documentEmptyTitle")}</span>
           <span>{t("documentEmptyHint")}</span>
-          {writeFailed && (
-            <span role="alert" className="max-w-full text-destructive [overflow-wrap:anywhere]">
-              {[t(runCopy(item).failed), itemError(item)].filter(Boolean).join(" · ")}
-            </span>
+          {writeFailed && failure && (
+            <FailureCard size="inline" lines={3} className="nodrag nopan max-w-full text-left"
+                         title={t(runCopy(item).failed)} {...failure} data-document-write-failed="" />
           )}
         </div>
       ) : document?.error ? (

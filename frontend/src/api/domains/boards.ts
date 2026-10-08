@@ -70,12 +70,11 @@ export interface BoardItem {
   run?: {
     status: "idle" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
     job_id?: string;
-    /** 失败时给人看的那一句(后端 domain/failure_summary 摘的,和 AI 工作台同一个来源)。 */
+    /** 失败的原样:原文、文案 key、参数(和任务同形)。给人看的那一句、原文、原因和怎么修在 `Board.failures` 里,按读的人的
+     *  语言出(见后端 domain/boards/failures)—— 格子上读那一份,这几格原样存回去。 */
     error?: string;
-    /** 那一句摘自的原文(上游回包、httpx 的原话):格子上「查看原始错误」里看。和那一句一样时没有。 */
-    error_detail?: string;
-    /** 认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」)。认不出时没有。 */
-    error_hint?: string;
+    error_key?: string;
+    error_params?: Record<string, unknown>;
     /** 这一轮跑的是这一格的哪一项能力(没有就是它自己的产出者)。产出新建在右边,这一格自己的内容不动。 */
     ability?: NodeProducer;
   };
@@ -105,6 +104,9 @@ export interface BoardCanvas {
   markers?: BoardMarker[];
 }
 
+/** 一格跑挂了给人看的样子(后端 FailureViewOut):那一句、原文、原因和怎么修,按读的人的语言。 */
+export type BoardFailureView = components["schemas"]["FailureViewOut"];
+
 export interface Board {
   id: string;
   workspace_id: string;
@@ -113,6 +115,8 @@ export interface Board {
   revision: number;
   created_at: string;
   updated_at: string;
+  /** 跑挂了的格子:格子 id → 给人看的样子(见 features/boards/boardFailures)。画布本身原样存,不带这些。 */
+  failures?: Record<string, BoardFailureView>;
 }
 
 /** 清单上的一张:不带整份画布,只带缩略图要的那一份(`preview`)—— 整份画布打开时由 getBoard 给。 */

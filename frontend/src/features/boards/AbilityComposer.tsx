@@ -1,4 +1,6 @@
 import React from "react";
+import { FailureCard } from "@/components/failure/FailureCard";
+import { useItemFailure } from "@/features/boards/boardFailures";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, PlugZap } from "lucide-react";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -172,9 +174,9 @@ export function AbilityComposer({
     if (blocked || working) return;
     run(() => onRun({ config, bindings }));
   };
-  //: 这一格上一轮跑的就是这一项、而且没跑成:原因写在面板里(格子上只在选中时挂一条)。
-  const failed =
-    item.run?.status === "failed" && (ability ? item.run.ability === tool?.id : !item.run.ability) ? item.run.error : undefined;
+  //: 这一格上一轮跑的就是这一项、而且没跑成:原因写在面板里(格子上只在选中时挂一条)。和别处同一份失败展示。
+  const failure = useItemFailure(item);
+  const failed = failure && (ability ? item.run?.ability === tool?.id : !item.run?.ability) ? failure : null;
 
   return (
     <BoardComposerShell
@@ -323,11 +325,7 @@ export function AbilityComposer({
               <InlineMarkdown text={tool.board_description} />
             </p>
           ) : null}
-          {failed ? (
-            <p role="alert" data-ability-failed="" className="m-0 px-1 text-ui-xs leading-relaxed text-destructive">
-              {t("boardNodeRunFailed")} · {failed}
-            </p>
-          ) : null}
+          {failed ? <FailureCard title={t("boardNodeRunFailed")} {...failed} data-ability-failed="" /> : null}
           {missingConnection ? (
             <p data-tool-connection="" className="m-0 flex items-start gap-1.5 px-1 text-ui-xs leading-relaxed text-muted-foreground">
               <PlugZap size={13} className="mt-0.5 shrink-0" />

@@ -31,7 +31,6 @@ const SCALE = new Set([0, 100, 160, 240, 600]);
  */
 const KNOWN = new Set([
   "features/ai-studio/GenerateWorkspace.tsx",
-  "features/ai-studio/GenerationFailureCard.tsx",
   "features/ai-studio/SessionList.tsx",
   "features/ai-studio/voicedCreation.tsx",
 ]);

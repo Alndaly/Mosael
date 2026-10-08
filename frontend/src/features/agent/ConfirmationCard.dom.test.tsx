@@ -40,7 +40,7 @@ function card(overrides: Partial<Confirmation> = {}): Confirmation {
     },
     status: "pending",
     result: {},
-    error: null,
+    error: null, error_summary: null, error_detail: null, error_hint: null,
     requested_by: "agent",
     decision_mode: "manual",
     decided_by: null,

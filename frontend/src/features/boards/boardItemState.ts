@@ -6,19 +6,6 @@ export function itemJobId(item: BoardItem): string | undefined {
   return item.run?.job_id;
 }
 
-export function itemError(item: BoardItem): string | undefined {
-  return item.run?.error;
-}
-
-/** 失败原因的原文(`itemError` 那一句是从它摘出来的);没有就是 undefined。格子上「查看原始错误」里给。 */
-export function itemErrorDetail(item: BoardItem): string | undefined {
-  return item.run?.error_detail;
-}
-
-/** 认得出的原因:该去哪修(后端 domain/failure_summary.hint_of,插件说的);认不出时 undefined。格子上收在「详情」的悬停里。 */
-export function itemErrorHint(item: BoardItem): string | undefined {
-  return item.run?.error_hint;
-}
 
 /**
  * 选中这一格时底下挂哪个产出者的面板;不挂回 null。**一处说了算。**

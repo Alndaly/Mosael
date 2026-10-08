@@ -35,7 +35,7 @@ function card(operations: unknown[]): Confirmation {
     payload: { note_id: "n1", operations, _title: "周报" },
     status: "pending",
     result: {},
-    error: null,
+    error: null, error_summary: null, error_detail: null, error_hint: null,
     requested_by: "pi-agent",
     decision_mode: "manual",
     decided_by: null,

@@ -17,6 +17,12 @@ export const otherUi = {
   appearanceImageReadFailed: "Couldn't read the image",
   appearanceImageDecodeFailed: "Couldn't decode the image",
   appearanceCanvasUnavailable: "Canvas is unavailable",
+  //: 失败展示(components/failure/FailureCard,全应用一份):原因、怎么修、详情、复制
+  failureCause: "Why",
+  failureFix: "How to fix",
+  failureDetail: "Details",
+  failureCopyError: "Copy error",
+  failureCopyCommand: "Copy command",
   mutationFailedFallback: "Action failed",
   apiServerUnreachable: "Can't reach {url}",
   canvasInputMode: "Canvas navigation",

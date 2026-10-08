@@ -45,7 +45,7 @@ function card(tool: string, payload: Record<string, unknown>, over: Partial<Conf
   return {
     id: `card-${tool}`, workspace_id: "ws-1", session_id: null, tool_call_id: null, tool, allow_tool: tool, permission: "edit",
     summary: "摘要", headline: `卡:${tool}`, warning: "", summary_key: "", summary_params: {}, payload, status: "pending",
-    result: {}, error: null, requested_by: "pi-agent", decision_mode: "manual", decided_by: null,
+    result: {}, error: null, error_summary: null, error_detail: null, error_hint: null, requested_by: "pi-agent", decision_mode: "manual", decided_by: null,
     created_at: "2026-10-07T00:00:00Z", resolved_at: null, always_asks: true, choices: {}, ...over,
   };
 }
