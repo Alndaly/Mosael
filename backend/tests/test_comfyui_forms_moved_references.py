@@ -165,7 +165,7 @@ def test_工具改名有一处没改成_整批撤掉不记账_清单照样存下
 
     client, _, ids = upgraded
 
-    def broken(db, instance, renames) -> None:
+    def broken(db, instance, renames, **_) -> None:
         raise RuntimeError("画板那一侧炸了")
 
     monkeypatch.setattr(plugin_moves, "_tool_listeners", [*plugin_moves._tool_listeners, broken])

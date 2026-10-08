@@ -1218,7 +1218,7 @@ def billable(
                 logger.warning("用量入账失败(%s),已忽略", operation, exc_info=True)
 
 
-def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> None:
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str], *, why: str = "moved") -> None:
     """连接上的模型改了名(ADR 0045,见 providers.moved_models):这条连接上记的用量、按这条连接定的价跟着改到新名字 ——
     它们说的就是改名之后叫新名字的那一个(ComfyUI 有表单的工作流,以前路径指那张表单)。用量是事实记录,只改名、不动别的。"""
     for source, target in renames.items():

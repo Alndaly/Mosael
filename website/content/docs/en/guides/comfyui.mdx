@@ -424,11 +424,15 @@ header has Copy, Rename, Move, Export, Copy path and Delete as well.
 - **Copy… / Rename…**: the path may include subfolders, and `.json` is optional; a name that won't work (`..`, backslashes,
   `:*?"<>|`, a leading dot) is pointed out on the spot. If that server already has the name, **nothing is overwritten** and a
   suggestion is offered. A copy gets a free name by default; done from the details you land on the new one, done from the list
-  (context menu) you stay on the list.
+  (context menu) you stay on the list. **Renaming here carries Mosael's references along**: board cells, AI Studio sessions (and
+  their generation records), workflow nodes, scheduled tasks and default models move to the new name, and the confirmation lists
+  them first. Only this connection's references move — another connection pointing at the same ComfyUI is left alone.
+  **Renaming or moving a file in ComfyUI's own interface isn't followed**: Mosael doesn't know the new name, so those places say
+  the workflow is gone and you choose it again there.
 - **Move to…**: pick a folder (or the top of `workflows/`); the name stays. You can also drag a card onto a folder (or All) on
   the left: dropping it opens the same confirmation with that folder already chosen. A workflow with the same name already there
-  is never overwritten — you get a suggestion; if something in Mosael uses the workflow, the confirmation says so, since after the
-  move it will say the model can't be found.
+  is never overwritten — you get a suggestion; if something in Mosael uses the workflow, the confirmation lists it — those places
+  follow it to the new path.
 - **Delete…**: not a real delete — the file moves into a trash folder on that machine (`.mosael-trash/workflows`), and the
   confirmation lists what in Mosael uses it (those will say the model can't be found when they run). Deleted ones are under
   **Trash** in the left column and can be restored, under a new name if the old place is taken. Mosael has no "empty trash" — to
@@ -444,7 +448,7 @@ them are confirmed and go through ComfyUI's own API:
   creates the folder when it writes a file). ComfyUI's own sidebar only lists folders that hold a workflow, so an empty one shows
   up there once something is moved in. An existing name (ignoring case) isn't created again; you get a suggestion.
 - **Rename**: changing the parent in the path moves it into another folder. The whole folder moves at once and the workflows in it
-  get new paths — the confirmation says how many, and which of them something in Mosael uses. An existing target is never merged
+  get new paths — the confirmation says how many, and which of them something in Mosael uses (those follow to the new paths). An existing target is never merged
   into (you get a suggestion), and a folder can't be moved into itself.
 - **Delete only empties**: while a folder still holds files (workflows, or something else copied in, like an archive) the menu item
   is greyed out and says how many — move them out or delete them one by one first (each confirmed, each restorable from Trash).

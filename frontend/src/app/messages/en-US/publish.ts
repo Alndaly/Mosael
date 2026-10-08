@@ -501,6 +501,7 @@ export const publish = {
   wfRevisionSourceTemplate: "Official template",
   wfRevisionSourceAgent: "Agent edit",
   wfRevisionSourceMigration: "Created during upgrade",
+  wfRevisionSourceRename: "Followed a rename in the workflow library",
   wfStepSkipped: "skipped",
   wfStepRunning: "running",
   wfMinimap: "Overview",

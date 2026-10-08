@@ -177,7 +177,7 @@ def ensure_runnable(
         raise SchedulerDomainError.relay(problem)
 
 
-def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> None:
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str], *, why: str = "moved") -> None:
     """连接上的模型改了名(ADR 0045,见 providers.moved_models):定时任务里选着这条连接旧模型名的,改到新名字。不提交。
     `updated_at` 不动(不是谁改了这个任务);这样写不经过 flush,引用表就地对一遍。"""
     for task in db.scalars(select(ScheduledTask)):

@@ -503,6 +503,7 @@ export const publish = {
   wfRevisionSourceTemplate: "官方模板",
   wfRevisionSourceAgent: "智能体修改",
   wfRevisionSourceMigration: "升级时建立",
+  wfRevisionSourceRename: "工作流库里改名时跟着改",
   wfStepSkipped: "跳过",
   wfStepRunning: "运行中",
   wfMinimap: "全览",

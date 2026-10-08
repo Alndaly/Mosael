@@ -22,7 +22,7 @@ from app.domain.providers.moved_models import renamed
 _GENERATION_JOB = "ai_generation"
 
 
-def follow(db: Session, profile_id: str, renames: dict[str, str]) -> None:
+def follow(db: Session, profile_id: str, renames: dict[str, str], *, why: str = "moved") -> None:
     """这条连接的模型 `renames`(旧 → 新)改了名:会话、记录、素材、回执跟着改。不提交。"""
     for source, target in renames.items():
         records = select(GenerationJob).where(GenerationJob.provider_profile_id == profile_id, GenerationJob.model == source)

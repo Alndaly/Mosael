@@ -38,7 +38,9 @@ ComfyUI 才加载;重启经插件(等它停下再起来),回来以后这个连�
 from __future__ import annotations
 
 import json
+import logging
 import re
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -74,15 +76,19 @@ from app.domain.permissions import ensure_workspace_access, ensure_workspace_per
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
+from app.domain.plugins import moves as plugin_moves
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import WORKFLOW_LIBRARY
+from app.domain.plugins.manifest import GENERATION, TOOLS, WORKFLOW_LIBRARY
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 from app.domain.providers import models as provider_models
+from app.domain.providers import moved_models
 from app.domain.references import referrers
 from app.media.paths import resolve_key
+
+logger = logging.getLogger(__name__)
 
 #: 列一遍最多等多久:要取每张工作流、转一遍、再列一遍模型目录。
 LIBRARY_TIMEOUT_SECONDS = 600
@@ -636,9 +642,10 @@ def _fits(suggestion: str, *, folder: bool) -> bool:
 
 
 def _write(db: Session, instance: PluginInstance, request: dict[str, Any], *, wanted: str, folder: bool = False,
-           refresh: bool = True) -> str:
-    """一次写操作:交给插件,撞名翻成 WorkflowConflict、要删的文件夹不空翻成 WorkflowFolderNotEmpty;成了就让这个连接的
-    目录重拉一遍(`refresh`,新建空文件夹什么模型都没变就不拉)。回改完之后的路径。"""
+           refresh: bool = True, follow: Callable[[dict[str, Any]], None] | None = None) -> str:
+    """一次写操作:交给插件,撞名翻成 WorkflowConflict、要删的文件夹不空翻成 WorkflowFolderNotEmpty;成了先 `follow`(改名时
+    把存着的引用跟过去,见 _follow_moved),再让这个连接的目录重拉一遍(`refresh`,新建空文件夹什么模型都没变就不拉)。回改完
+    之后的路径。"""
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS)
     if output.get("conflict") is True:
         suggestion = _text(output.get("suggestion"), 500)
@@ -648,6 +655,8 @@ def _write(db: Session, instance: PluginInstance, request: dict[str, Any], *, wa
     path = _text(output.get("path"), 600)
     if not path:
         raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
+    if follow is not None:
+        follow(output)
     if refresh:
         # 生成选项、工具清单里的那张跟着变(新的一张、换了名字的、删掉的),不等那一分钟的指纹
         host_capabilities.notify(db, instance, refresh=True)
@@ -661,13 +670,67 @@ def copy(db: Session, instance: PluginInstance, path: str, new_path: str) -> dic
     return {"path": _write(db, instance, {"op": "copy_workflow", "path": path, "new_path": new_path}, wanted=new_path)}
 
 
+#: 一次改名最多跟着改多少个名字(一个文件夹里的几十张,每张几个入口)
+_MAX_FOLLOWED = 1000
+
+
+def _pairs(raw: Any) -> dict[str, str]:
+    """插件报的一串 `{from, to}` 收成「旧名字 → 新名字」:都是像样的字符串、不一样;认不出的丢掉。"""
+    found: dict[str, str] = {}
+    for entry in raw[:_MAX_FOLLOWED] if isinstance(raw, list) else []:
+        source = entry.get("from") if isinstance(entry, dict) else None
+        target = entry.get("to") if isinstance(entry, dict) else None
+        if isinstance(source, str) and isinstance(target, str) and source.strip() and target.strip() \
+                and source != target and len(source) <= 600 and len(target) <= 600:
+            found.setdefault(source.strip(), target.strip())
+    return found
+
+
+def _follow_moved(db: Session, instance: PluginInstance) -> Callable[[dict[str, Any]], None]:
+    """在工作流库里改了名、挪了目录:指着旧路径的引用当场跟过去(ADR 0045 修订之二 D2–D4,维护者 2026-10-09 按推荐拍板)。
+
+    插件在改名的回答里报 `moved`(模型 id 和工具名各一串,插件知道一张图有几个入口、工具名怎么起);这里在**同一个请求里、
+    目录重拉之前**照做 —— 反过来,重拉先把旧名字那几行模型删了,就无处可改。和插件报的一次性改名走同一套:模型行原地改名
+    (默认模型、停用跟着走),各领域改它们存着的 (连接, 模型) 引用(生成会话、生成记录和产出、任务回执、用量、定时任务、
+    画板、工作流 —— 历史记录也改,工作流落一版 `rename` 修订);工具开关跟着新名字,工作流里用那个工具的插件节点改到新名字。
+
+    - 不记一次性改名的账(`applied_moves`):那本账是插件报的、每个旧名字只做一次的改名;这里每次都不一样,照做就是了。账上
+      做过的旧名字换了地方,新名字也算做过(plugins.moves.follow_renames)—— 不然下一次刷新又把跟过去的引用改走一次。
+    - 改不成(D3):引用的改动整批撤掉(保存点),文件改名照样算成功,记一条日志 —— 不让引用的改写拖垮用户要的改名;引用停在
+      旧名字上,会说清楚「工作流不在了」。
+    - 只改这条连接的(D4):另一条连接哪怕指着同一台 ComfyUI,也是另一套目录。
+    - 直接在 ComfyUI 里改名的(D5)宿主不知道,这一版不管。"""
+
+    def follow(output: dict[str, Any]) -> None:
+        moved = output.get("moved") if isinstance(output.get("moved"), dict) else {}
+        models_moved, tools_moved = _pairs(moved.get("models")), _pairs(moved.get("tools"))
+        if not models_moved and not tools_moved:
+            return
+        profile = _profile(db, instance)
+        try:
+            with db.begin_nested():
+                if models_moved and profile is not None:
+                    moved_models.apply(db, profile, models_moved, why=moved_models.RENAMED)
+                    plugin_moves.follow_renames(db, instance, GENERATION, models_moved)
+                if tools_moved:
+                    inst.carry_capabilities(db, instance, tools_moved)
+                    plugin_moves.tools_moved(db, instance, tools_moved, why=moved_models.RENAMED)
+                    plugin_moves.follow_renames(db, instance, TOOLS, tools_moved)
+        except Exception:  # noqa: BLE001 — 跟着改引用的那一侧出错,不让文件改名本身失败
+            logger.exception("连接 %s 在工作流库里改了名,跟着改引用没做成(引用停在旧名字上,改名照样算成功)", instance.id)
+
+    return follow
+
+
 def rename(db: Session, instance: PluginInstance, path: str, new_path: str) -> dict[str, str]:
-    """改名 / 挪目录(已有就撞名,不覆盖)。在这张里开的对话,家跟着挪(ADR 0044 §9)。"""
+    """改名 / 挪目录(已有就撞名,不覆盖)。指着旧路径的引用当场跟过去(见 _follow_moved);在这张里开的对话,家跟着挪
+    (ADR 0044 §9)。"""
     _require(db, instance)
     path, new_path = workflow_path(path), workflow_path(new_path)
     if path == new_path:
         return {"path": path}
-    done = _write(db, instance, {"op": "rename_workflow", "path": path, "new_path": new_path}, wanted=new_path)
+    done = _write(db, instance, {"op": "rename_workflow", "path": path, "new_path": new_path}, wanted=new_path,
+                  follow=_follow_moved(db, instance))
     places.follow_library_move(db, instance, path, done)
     return {"path": done}
 
@@ -702,8 +765,8 @@ def make_folder(db: Session, instance: PluginInstance, path: str) -> dict[str, s
 
 
 def rename_folder(db: Session, instance: PluginInstance, path: str, new_path: str) -> dict[str, str]:
-    """文件夹改名,或挪到别的文件夹里:里面的工作流跟着换路径(生成目录重拉),在它们里面开的对话家也跟着挪。目标已经有了
-    撞名 409,不合并进去。"""
+    """文件夹改名,或挪到别的文件夹里:里面的工作流跟着换路径(生成目录重拉),指着它们旧路径的引用当场跟过去(见
+    _follow_moved),在它们里面开的对话家也跟着挪。目标已经有了撞名 409,不合并进去。"""
     _require(db, instance)
     path, new_path = folder_path(path), folder_path(new_path)
     if path == new_path:
@@ -711,7 +774,7 @@ def rename_folder(db: Session, instance: PluginInstance, path: str, new_path: st
     if new_path.lower().startswith(path.lower() + "/"):
         raise WorkflowLibraryError("workflowLibErr_folderIntoItself", path=path)
     request = {"op": "rename_folder", "path": path, "new_path": new_path}
-    done = _write(db, instance, request, wanted=new_path, folder=True)
+    done = _write(db, instance, request, wanted=new_path, folder=True, follow=_follow_moved(db, instance))
     places.follow_library_move(db, instance, path, done, folder=True)
     return {"path": done}
 

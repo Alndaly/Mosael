@@ -440,7 +440,9 @@ export function WorkflowLibraryDialog({
       </ContextMenu>
     );
   };
-  //: 文件夹改名的确认框多说一句:里面几张工作流跟着换路径、Mosael 里在用其中哪几张(换了路径它们跑的时候会说找不到)
+  //: 改名的确认框列出 Mosael 里在用这一张的几处(它们会跟着改到新名字)
+  const usedByOf = (path: string) => (workflows.find((flow) => flow.path === path)?.used_by ?? []).map((one) => one.name);
+  //: 文件夹改名的确认框多说一句:里面几张工作流跟着换路径、Mosael 里在用其中哪几张(它们会跟着改到新路径)
   const folderRenameNote = (path: string) => {
     const inside = workflows.filter((flow) => inFolder(flow.path, path));
     if (inside.length === 0) return undefined;
@@ -790,6 +792,7 @@ export function WorkflowLibraryDialog({
                 : "workflowRestoreConfirm")}
               where={t("workflowWriteWhere").replace("{server}", instance.name)}
               initial={action.initial}
+              usedBy={action.kind === "rename" ? usedByOf(action.path) : []}
               onClose={() => setAction(null)}
               onSubmit={async (path) => {
                 const done =
@@ -1506,13 +1509,15 @@ function TrashList({ items, onRestore }: { items: WorkflowTrashed[]; onRestore: 
 
 /**
  * 复制、改名、恢复都要一个名字:先确认,写明改的是哪台机器上的文件。`.json` 不用自己写;不合格的当场说、点不了;
- * 撞名(409)不覆盖 —— 说清楚,给一个建议名。
+ * 撞名(409)不覆盖 —— 说清楚,给一个建议名。改名时列出 Mosael 里在用它的几处:它们会跟着改到新名字(ADR 0045 修订之二 D2,
+ * 和「移动到…」同一句)。
  */
 function WorkflowPathDialog({
   title,
   confirmLabel,
   where,
   initial,
+  usedBy = [],
   onSubmit,
   onClose,
 }: {
@@ -1520,6 +1525,8 @@ function WorkflowPathDialog({
   confirmLabel: string;
   where: string;
   initial: string;
+  /** 改名时:Mosael 里在用它的几处(它们跟着改到新名字) */
+  usedBy?: string[];
   onSubmit: (path: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -1542,6 +1549,11 @@ function WorkflowPathDialog({
       <div className="grid gap-3">
         <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{where}</p>
         <WorkflowPathField state={state} />
+        {usedBy.length > 0 && (
+          <p className="m-0 text-ui-sm text-foreground" data-rename-used-by="">
+            {`${t("workflowRenameUsedBy")}${usedBy.join(t("listSeparator"))}`}
+          </p>
+        )}
       </div>
     </ModalShell>
   );

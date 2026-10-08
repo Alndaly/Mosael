@@ -381,6 +381,9 @@ describe("工作流库", () => {
     const menu = await more("portrait");
     fireEvent.click(within(menu).getByRole("menuitem", { name: "workflowRename" }));
     const dialog = await screen.findByRole("dialog", { name: "workflowRenameTitle" });
+    //: ADR 0045 修订之二 D2:在 Mosael 里改名,在用它的几处跟着改到新名字 —— 改之前说一声是哪几处
+    const used = dialog.querySelector("[data-rename-used-by]");
+    expect(used?.textContent, "列出在用的几处、说会跟着改").toMatch(/^workflowRenameUsedBy出图流程/);
     const input = within(dialog).getByRole("textbox", { name: "workflowPathLabel" });
     fireEvent.change(input, { target: { value: "../出去" } });
     expect(within(dialog).getByText("workflowPathBad")).toBeTruthy();

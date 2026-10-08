@@ -228,12 +228,53 @@ def test_复制_副本换一个新的图id_不覆盖_撞名给建议名(library,
 def test_改名_挪目录_不覆盖(library, comfy) -> None:
     module, Comfy = library
     client = Comfy(comfy.url)
-    assert module.rename_workflow({"path": "portrait.json", "new_path": "人像/人像.json"}, client, "zh") == \
-        {"path": "人像/人像.json"}
+    assert module.rename_workflow({"path": "portrait.json", "new_path": "人像/人像.json"}, client, "zh")["path"] == \
+        "人像/人像.json"
     assert "portrait.json" not in comfy.state.workflows and "人像/人像.json" in comfy.state.workflows
     clash = module.rename_workflow({"path": "人像/人像.json", "new_path": "video/wan.json"}, client, "zh")
     assert clash == {"conflict": True, "suggestion": "video/wan (1).json"}
     assert all(call[2]["overwrite"] is False for call in comfy.state.calls if call[0] == "MOVE")
+
+
+def test_改名的回答带着moved_每个入口的模型id_工具名变了的才报_上一版没升级的表单也算(library, comfy) -> None:
+    """ADR 0045 修订之二 D2:在 Mosael 的工作流库里改名、挪目录,插件在回答里报这次的 `moved`,宿主在同一个请求里把存着的引用
+    改过去。模型 id 怎么拼(`<路径>` / `<路径>#<表单 id>`)、工具名怎么起(按图的 id 起的改名不变,退到路径哈希的才变)是插件的
+    写法,宿主不拆。"""
+    module, Comfy = library
+    client = Comfy(comfy.url)
+    import app_form
+
+    comfy.state.workflows["portrait.json"] = app_form.apply(comfy.state.workflows["portrait.json"], [
+        {"id": "app", "title": "快速出图", "description": "", "items": [{"node": "6", "input": "text", "main": True}]},
+        {"id": "k3x9a2", "title": "精调", "description": "", "items": [{"node": "3", "input": "steps"}]}], [])
+    done = module.rename_workflow({"path": "portrait.json", "new_path": "人像/portrait.json"}, client, "zh")
+    assert done["moved"]["models"] == [
+        {"from": "portrait.json", "to": "人像/portrait.json"},
+        {"from": "portrait.json#app", "to": "人像/portrait.json#app"},
+        {"from": "portrait.json#k3x9a2", "to": "人像/portrait.json#k3x9a2"}], "完整入口和每张表单各一条"
+    assert done["moved"]["tools"] == [], "按图里 ComfyUI 存的 id 起的工具名,改名不变:不报"
+
+    legacy = json.loads(json.dumps(comfy.state.workflows["人像/portrait.json"]))
+    legacy["extra"]["mosael"] = {"version": 1, "app": {"title": "快速出图", "description": "", "graph_items": {}}}
+    del legacy["id"]
+    comfy.state.workflows["老的.json"] = legacy
+    before = module._Snapshot(client, "zh")  # noqa: SLF001
+    done = module.rename_workflow({"path": "老的.json", "new_path": "归档/老的.json"}, client, "zh")
+    assert done["moved"]["models"] == [{"from": "老的.json", "to": "归档/老的.json"},
+                                       {"from": "老的.json#app", "to": "归档/老的.json#app"}], \
+        "上一版格式还没升级的那张表单也算:1.20 那次迁移已经把引用改到它了"
+    old_tool = before.names["老的.json"]
+    new_tool = module._Snapshot(client, "zh").names["归档/老的.json"]  # noqa: SLF001
+    assert old_tool != new_tool and done["moved"]["tools"] == [
+        {"from": old_tool, "to": new_tool}, {"from": f"{old_tool}_app", "to": f"{new_tool}_app"}], \
+        "没有 id 的老文件按路径哈希起名:名字跟着变,表单的工具名一起报"
+
+    folder = module.rename_folder({"path": "video", "new_path": "片子"}, client, "zh")
+    assert folder["path"] == "片子"
+    assert folder["moved"]["models"] == [{"from": "video/wan.json", "to": "片子/wan.json"}], "文件夹改名:里面每一张各报"
+    assert len(folder["moved"]["tools"]) == 1 and folder["moved"]["tools"][0]["from"] != folder["moved"]["tools"][0]["to"]
+    clash = module.rename_workflow({"path": "归档/老的.json", "new_path": "片子/wan.json"}, client, "zh")
+    assert "moved" not in clash, "没改成(撞名)不报"
 
 
 def test_删除是挪进回收目录_能恢复_从不硬删(library, comfy) -> None:
@@ -320,8 +361,8 @@ def test_移动到文件夹就是改名_目标文件夹没有会建出来_这张
     client = Comfy(comfy.url)
     from lines import ComfyError
 
-    assert module.rename_workflow({"path": "portrait.json", "new_path": "人像/portrait.json"}, client, "zh") == \
-        {"path": "人像/portrait.json"}
+    assert module.rename_workflow({"path": "portrait.json", "new_path": "人像/portrait.json"}, client, "zh")["path"] == \
+        "人像/portrait.json"
     assert "人像" in _folders(library, comfy)
     with pytest.raises(ComfyError, match="已经没有工作流「portrait.json」"):
         module.rename_workflow({"path": "portrait.json", "new_path": "别处/portrait.json"}, client, "zh")
@@ -333,7 +374,7 @@ def test_文件夹改名_整个目录一次挪过去_里面的跟着走(library,
     module, Comfy = library
     client = Comfy(comfy.url)
     comfy.state.dirs.add("workflows/video/空的子文件夹")
-    assert module.rename_folder({"path": "video", "new_path": "片子/视频"}, client, "zh") == {"path": "片子/视频"}
+    assert module.rename_folder({"path": "video", "new_path": "片子/视频"}, client, "zh")["path"] == "片子/视频"
     assert "片子/视频/wan.json" in comfy.state.workflows and "video/wan.json" not in comfy.state.workflows
     moves = [call for call in comfy.state.calls if call[0] == "MOVE"]
     assert [(call[1], call[2]["dest"], call[2]["overwrite"]) for call in moves] == [
@@ -359,7 +400,7 @@ def test_文件夹改名_不覆盖_不能挪进自己里面_已经不在了说�
 def test_文件夹只改大小写_不分大小写的磁盘上先挪到临时名字再挪过去(library, comfy) -> None:
     module, Comfy = library
     comfy.state.case_insensitive = True
-    assert module.rename_folder({"path": "video", "new_path": "Video"}, Comfy(comfy.url), "zh") == {"path": "Video"}
+    assert module.rename_folder({"path": "video", "new_path": "Video"}, Comfy(comfy.url), "zh")["path"] == "Video"
     assert "Video/wan.json" in comfy.state.workflows and "video/wan.json" not in comfy.state.workflows
     folders = _folders(library, comfy)
     assert "Video" in folders and "video" not in folders

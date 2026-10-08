@@ -150,15 +150,15 @@ def _rewrite_tool_cells(db: Session, found: list[Any]) -> int:
 # ── 一次性的改名(ADR 0045,见 domain/plugins/moves) ─────────────────────────────────
 
 
-def follow_moved_tools(db: Session, instance: PluginInstance, renames: dict[str, str]) -> int:
+def follow_moved_tools(db: Session, instance: PluginInstance, renames: dict[str, str], *, why: str = "moved") -> int:
     """画板上选着这个连接旧工具名的能力、生成器改到新名字(和工作流那边同一张「取代」表,见
     workflows.plugin_references.moved_tools)。不提交。返回改了几块画板。"""
     from app.domain.workflows.plugin_references import moved_tools
 
-    return _rewrite_tool_cells(db, moved_tools(db, instance, renames))
+    return _rewrite_tool_cells(db, moved_tools(db, instance, renames, why=why))
 
 
-def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str]) -> int:
+def follow_moved_models(db: Session, profile_id: str, renames: dict[str, str], *, why: str = "moved") -> int:
     """画板上选着这条连接旧模型名的格子(生成格、能力里按生成选项选的模型)改到新名字。不提交。返回改了几块画板。"""
     from app.domain.providers.moved_models import renamed
 

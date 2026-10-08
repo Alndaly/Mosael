@@ -7,6 +7,9 @@ ComfyUI 插件 1.19 就是这样:有表单的工作流,它的路径以前指那�
 `apply` 先把模型行原地改名(providers.models.rename_declared_models:默认模型、停用跟着走),再交给每个存着引用的领域
 (生成的会话和记录、用量、定时任务、画板、工作流)各改各的 —— 它们在组装根登记(`on_moved`),这里不认识它们。
 
+在 Mosael 的工作流库里改名、挪目录也走这里(ADR 0045 修订之二 D2):插件在改名的回答里报这次的 `moved`,宿主在同一个请求里
+照做(`why="renamed"`),不记一次性改名的账。监听据 `why` 说清楚为什么改(工作流的修订说明、来源)。
+
 存着的引用有两种写法,`renamed` 一处认:
 
 - 一个字典里 `provider_profile_id` 是这个连接、`model` 是旧名字(画板的生成格、工作流的 `ai_generate`、定时任务、任务回执);
@@ -23,8 +26,11 @@ from sqlalchemy.orm import Session
 from app.db.models import ProviderProfile
 from app.domain.providers import models as provider_models
 
-#: (db, 连接 id, 旧名字 → 新名字)。
-Listener = Callable[[Session, str, dict[str, str]], None]
+#: (db, 连接 id, 旧名字 → 新名字, *, why)。`why`:`"moved"` 插件报的一次性改名;`"renamed"` 在 Mosael 的工作流库里改名、挪目录。
+Listener = Callable[..., None]
+#: 改名是怎么来的
+MOVED = "moved"
+RENAMED = "renamed"
 _listeners: list[Listener] = []
 
 #: 生成选项 id 里的种类(见 generation.resolution.generation_options)。
@@ -36,13 +42,13 @@ def on_moved(listener: Listener) -> None:
         _listeners.append(listener)
 
 
-def apply(db: Session, profile: ProviderProfile, renames: dict[str, str]) -> None:
-    """这条连接的模型改了名:模型行原地改名,再让每个领域改它存着的引用。不提交 —— 和记账在同一个事务里。"""
+def apply(db: Session, profile: ProviderProfile, renames: dict[str, str], *, why: str = MOVED) -> None:
+    """这条连接的模型改了名:模型行原地改名,再让每个领域改它存着的引用。不提交 —— 和记账(或者改名那一笔)在同一个事务里。"""
     if not renames:
         return
     provider_models.rename_declared_models(db, profile, renames)
     for listener in _listeners:
-        listener(db, profile.id, renames)
+        listener(db, profile.id, renames, why=why)
     db.flush()
 
 
@@ -63,4 +69,4 @@ def renamed(value: Any, profile_id: str, renames: dict[str, str]) -> Any:
     return value
 
 
-__all__ = ["apply", "on_moved", "renamed"]
+__all__ = ["MOVED", "RENAMED", "apply", "on_moved", "renamed"]

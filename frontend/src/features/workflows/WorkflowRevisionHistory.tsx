@@ -39,6 +39,7 @@ const SOURCE_LABELS: Record<string, MessageKey> = {
   template: "wfRevisionSourceTemplate",
   agent: "wfRevisionSourceAgent",
   migration: "wfRevisionSourceMigration",
+  rename: "wfRevisionSourceRename",
 };
 
 function absoluteTime(iso: string, locale: string): string {

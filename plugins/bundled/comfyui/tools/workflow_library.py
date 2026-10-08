@@ -567,14 +567,46 @@ def copy_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[st
     return {"path": new_path}
 
 
+class _Snapshot:
+    """改名之前 / 之后这台上每张图的入口叫什么:图(路径 → 那张图)、每个入口的工具名(入口 id → 工具名)。工具名要看每一张图
+    才定得下来(几张图撞 id 时都退到路径哈希,见 tooling._workflow_names),所以照全部的算。"""
+
+    def __init__(self, comfy: Comfy, locale: str) -> None:
+        object_info = comfy.object_info()
+        self.workflows = {one.id: one for one in models.each(comfy, object_info, locale)}
+        entries = [entry for one in self.workflows.values() for entry in models.entries(one, object_info)]
+        self.names = tooling.tool_names(entries)
+        self.forms = {path: sorted({entry.form_id for entry in entries if entry.workflow.id == path and entry.form_id}
+                                   | set(one.marks.legacy_forms)) for path, one in self.workflows.items()}
+
+
+def _moved(before: _Snapshot, after: _Snapshot, paths: dict[str, str]) -> dict[str, list[dict[str, str]]]:
+    """这几张图(`paths`:旧路径 → 新路径)换了地方,宿主存着的引用要跟着改成什么(ADR 0045 修订之二 D2):每个入口一条模型 id
+    (完整入口 `<路径>`、每张表单 `<路径>#<表单 id>`,上一版格式还没升级的那张表单也算 —— 1.20 那次迁移已经把引用改到它了)、
+    工具名变了的一条工具名(按图里 ComfyUI 存的 id 起名的,改名不变,不报;退到路径哈希的才变)。宿主在同一个请求里照做,
+    不记一次性改名的账;模型 id 怎么拼、工具名怎么起是插件自己的写法,宿主不拆。"""
+    models_moved: list[dict[str, str]] = []
+    tools_moved: list[dict[str, str]] = []
+    for old, new in paths.items():
+        forms = ["", *before.forms.get(old, [])]
+        models_moved += [{"from": models.entry_id(old, form), "to": models.entry_id(new, form)} for form in forms]
+        old_tool, new_tool = before.names.get(old), after.names.get(new)
+        if old_tool and new_tool and old_tool != new_tool:
+            tools_moved += [{"from": f"{old_tool}_{form}" if form else old_tool, "to": f"{new_tool}_{form}" if form else new_tool}
+                            for form in forms]
+    return {"models": models_moved, "tools": tools_moved}
+
+
 def rename_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
-    """改名、挪到别的文件夹(「移动到…」、拖到左边的文件夹上)。目标文件夹不在会被建出来;这张已经不在了说清楚。"""
+    """改名、挪到别的文件夹(「移动到…」、拖到左边的文件夹上)。目标文件夹不在会被建出来;这张已经不在了说清楚。改成了就带上
+    `moved`:宿主存着的引用要跟着改成什么(见 `_moved`)。"""
     path, new_path = check_path(payload.get("path"), locale), check_path(payload.get("new_path"), locale)
     if path == new_path:
         return {"path": path}
+    before = _Snapshot(comfy, locale)
     if not _move(comfy, f"workflows/{path}", f"workflows/{new_path}", _gone(locale, path)):
         return _conflict(comfy, new_path)
-    return {"path": new_path}
+    return {"path": new_path, "moved": _moved(before, _Snapshot(comfy, locale), {path: new_path})}
 
 
 def trash_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
@@ -610,8 +642,8 @@ def make_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
 
 def rename_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     """文件夹改名,或者挪到别的文件夹里(`new_path` 带上级):整个目录一次挪过去,里面的工作流、子文件夹跟着走 —— 它们的
-    路径都变了,宿主让生成目录重拉。不覆盖:目标已经有了回 conflict。只改大小写(`video` → `Video`)在不分大小写的磁盘上
-    「目标已经有了」,先挪到一个临时名字再挪过去。"""
+    路径都变了,宿主让生成目录重拉;改成了带上里面每一张的 `moved`(见 `_moved`)。不覆盖:目标已经有了回 conflict。只改大小写
+    (`video` → `Video`)在不分大小写的磁盘上「目标已经有了」,先挪到一个临时名字再挪过去。"""
     path, new_path = check_folder(payload.get("path"), locale), check_folder(payload.get("new_path"), locale)
     if path == new_path:
         return {"path": path}
@@ -625,8 +657,14 @@ def rename_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[st
     case_only = new_path.lower() == path.lower()
     if not case_only and new_path.lower() in taken:
         return {"conflict": True, "suggestion": _free_folder(new_path, taken)}
+    before = _Snapshot(comfy, locale)
+    inside = {one: new_path + one[len(path):] for one in before.workflows if one.lower().startswith(path.lower() + "/")}
+
+    def moved() -> dict[str, Any]:
+        return {"path": new_path, "moved": _moved(before, _Snapshot(comfy, locale), inside)}
+
     if _move(comfy, f"workflows/{path}", f"workflows/{new_path}", gone):
-        return {"path": new_path}
+        return moved()
     if not case_only:
         return {"conflict": True, "suggestion": _free_folder(new_path, taken | {new_path.lower()})}
     parent = path.rsplit("/", 1)[0] + "/" if "/" in path else ""
@@ -634,7 +672,7 @@ def rename_folder(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[st
     if not _move(comfy, f"workflows/{path}", temporary, gone):
         raise ComfyError(say(locale, "临时名字撞上了,没改成,再试一次", "The temporary name clashed; nothing changed. Try again."))
     if _move(comfy, temporary, f"workflows/{new_path}", gone):
-        return {"path": new_path}
+        return moved()
     _move(comfy, temporary, f"workflows/{path}", gone)  # 挪回去:什么都没变
     return {"conflict": True, "suggestion": _free_folder(new_path, taken | {new_path.lower()})}
 

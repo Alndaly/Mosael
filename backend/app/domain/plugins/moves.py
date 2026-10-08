@@ -85,6 +85,20 @@ def record(db: Session, instance: PluginInstance, capability: str, moves: Moves)
     db.flush()
 
 
+def follow_renames(db: Session, instance: PluginInstance, capability: str, renames: dict[str, str]) -> None:
+    """在 Mosael 的工作流库里改了名、挪了目录(ADR 0045 修订之二 D2,`renames`:旧名字 → 新名字):账上做过的旧名字换了地方,
+    新名字也算做过 —— 不然下一次目录刷新,插件照常报的一次性改名(`归档/x.json` → `归档/x.json#app`)在账上找不到它,又把
+    刚跟过去的引用改走一次。改名这件事本身不进账(它不是插件报的一次性改名)。不提交。"""
+    ledger = _done(instance, capability)
+    if not any(source in names for names in ledger.values() for source in renames):
+        return
+    applied = {name: (dict(value) if isinstance(value, dict) else value) for name, value in (instance.applied_moves or {}).items()}
+    applied[capability] = {key: sorted(names | {renames[one] for one in names if one in renames})[-MAX_RECORDED:]
+                           for key, names in ledger.items()}
+    instance.applied_moves = applied
+    db.flush()
+
+
 def merged(moves: Moves) -> dict[str, str]:
     """几批改名并成一张「旧 → 新」的表(同一个旧名字只认第一批说的)。"""
     renames: dict[str, str] = {}
@@ -95,7 +109,8 @@ def merged(moves: Moves) -> dict[str, str]:
 
 
 #: 工具改了名之后要跟着动的那些(工作流节点、画板格子)。插件域不认识它们 —— 由那边在组装根登记进来。
-ToolsListener = Callable[[Session, PluginInstance, dict[str, str]], None]
+#: (db, 连接, 旧工具名 → 新工具名, *, why):`why` 和模型那一侧同一个意思(providers.moved_models.MOVED / RENAMED)。
+ToolsListener = Callable[..., None]
 _tool_listeners: list[ToolsListener] = []
 
 
@@ -104,10 +119,12 @@ def on_tools_moved(listener: ToolsListener) -> None:
         _tool_listeners.append(listener)
 
 
-def tools_moved(db: Session, instance: PluginInstance, renames: dict[str, str]) -> None:
-    """这个连接的工具改了名(`renames`:旧工具名 → 新工具名):每个监听改自己的数据。不提交。"""
+def tools_moved(db: Session, instance: PluginInstance, renames: dict[str, str], *, why: str = "moved") -> None:
+    """这个连接的工具改了名(`renames`:旧工具名 → 新工具名):每个监听改自己的数据。`why`:`"moved"` 插件报的一次性改名,
+    `"renamed"` 在 Mosael 的工作流库里改名、挪目录(那时新名字还没进工具清单,见 workflows.plugin_references.moved_tools)。不提交。"""
     for listener in _tool_listeners:
-        listener(db, instance, renames)
+        listener(db, instance, renames, why=why)
 
 
-__all__ = ["MAX_MOVES", "Moves", "clean_moves", "merged", "on_tools_moved", "pending", "record", "tools_moved"]
+__all__ = ["MAX_MOVES", "Moves", "clean_moves", "follow_renames", "merged", "on_tools_moved", "pending", "record",
+           "tools_moved"]
