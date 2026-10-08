@@ -72,6 +72,10 @@ def persist(
     if too_long:
         raise PluginDomainError("pluginErr_stateTooLong", limit=MAX_VALUE_CHARS, keys=", ".join(too_long))
 
+    # 比较交换要和**库里现在的**比:手里这个对象是调用开始前读的(会话不在提交时过期,见 core/db),拿它比永远和基线相等,
+    # 写回时 set_config 还会在这份旧快照上合并 —— 调用途中别处改的配置(用户在插件页改的地址、本机服务换端口后宿主写的地址)
+    # 会被整份盖回去(PLG-9)。凭据每次都是现查的,不受这个影响。
+    db.refresh(instance, attribute_names=["config"])
     current = inst.secrets_for(db, instance)
     moved = sorted(key for key in state if current.get(key, "") != baseline.get(key, ""))
     if moved:

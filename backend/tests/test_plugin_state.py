@@ -31,7 +31,8 @@ MANIFEST = {
     "runtime": {"kind": "process", "entry": "main.py"},
     "instance": {
         "credentials": [{"key": "TOKEN", "label": "令牌", "required": False}],
-        "config": [{"key": "CURSOR", "label": "游标", "type": "text", "required": False}],
+        "config": [{"key": "CURSOR", "label": "游标", "type": "text", "required": False},
+                   {"key": "SERVER", "label": "地址", "type": "text", "required": False}],
     },
     "tools": {"expose": "all", "declare": [{"name": "go", "description": "跑一下"}]},
 }
@@ -179,6 +180,31 @@ class Test并发写回:
             assert inst.credential_values(db, instance_id)["TOKEN"] == "RT2"
             # 途中没人动过的那一格照常写回。
             assert db.get(PluginInstance, instance_id).config["CURSOR"] == "第 7 页"
+
+    def test_调用途中配置被别处改过了_不拿这次的旧值盖掉_也不把别的配置盖回旧快照(self, tmp_path, monkeypatch) -> None:
+        """PLG-9:配置那一侧的比较交换此前形同虚设 —— 基线和「现在」都取自调用开始前读的那个对象(会话不在提交时过期),永远相等;
+        写回时又在这份旧快照上合并,调用途中用户改的地址被整份盖回去。"""
+        from app.domain.plugins import tools
+        from app.domain.plugins.runtime import ToolResult
+
+        ws, instance_id = install(tmp_path, WRITES_BOTH)
+        with SessionLocal() as db:
+            inst.set_config(db, db.get(PluginInstance, instance_id), {"CURSOR": "第 1 页", "SERVER": "旧地址"}, notify=False)
+
+        def slow_call(*args, **kwargs) -> ToolResult:
+            # 这次调用跑着的时候,用户在插件页改了地址,另一次调用把游标推到了第 9 页
+            with SessionLocal() as other:
+                inst.set_config(other, other.get(PluginInstance, instance_id), {"CURSOR": "第 9 页", "SERVER": "新地址"},
+                                notify=False)
+            return ToolResult(output={"done": True}, state={"CURSOR": "第 2 页(旧的)"})
+
+        monkeypatch.setattr(tools, "execute_tool", slow_call)
+        with SessionLocal() as db:
+            assert invoke(db, instance_id, "go", {}, workspace_id=ws).status == "succeeded"
+        with SessionLocal() as db:
+            config = db.get(PluginInstance, instance_id).config
+        assert config["CURSOR"] == "第 9 页", "途中被改过的那一格不拿这次的旧值盖"
+        assert config["SERVER"] == "新地址", "插件没交回的那一格不被调用开始前的旧快照盖回去"
 
     def test_途中没人动过就照常写回(self, tmp_path) -> None:
         ws, instance_id = install(tmp_path, WRITES_BOTH)
