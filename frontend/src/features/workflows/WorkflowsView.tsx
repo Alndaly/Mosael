@@ -32,7 +32,7 @@ import { WorkflowCard } from "@/features/workflows/WorkflowCard";
 import { WorkflowEditor } from "@/features/workflows/WorkflowEditor";
 import { analyzeWorkflowNow } from "@/features/workflows/readiness";
 import { refreshAfterWorkflowDelete } from "@/features/workflows/workflowViewShared";
-import { OPEN_WORKFLOW_RUN, OPEN_WORKFLOW_TEMPLATE, parseWorkflowRunLink, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
+import { gotoJob, OPEN_WORKFLOW_RUN, OPEN_WORKFLOW_TEMPLATE, parseWorkflowRunLink, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
@@ -200,6 +200,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   // 就按列表画 —— 否则会先把整张画布挂上再卸掉(见 lib/deepLink 的 useSectionEntry)。
   const enteringRoot = useSectionEntry("workflows", () => setSelectedId(null)) !== null;
   const selected = enteringRoot ? null : (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
+  //: 要打开的那次运行所在的工作流已经删了(「工作流失败」的通知常常比工作流活得久):转给任务中心看那次运行的
+  //: 详情和失败原因 —— 任务和事件还在,不该落在一张空列表上(体检 UM-17)。
+  React.useEffect(() => {
+    if (!runToOpen || !workflows.isSuccess) return;
+    if (workflows.data.some((workflow) => workflow.id === runToOpen.workflowId)) return;
+    setRunToOpen(null);
+    setSelectedId(null);
+    gotoJob(runToOpen.runId);
+  }, [runToOpen, workflows.isSuccess, workflows.data, setSelectedId]);
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
   const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
     useMultiSelect(workflows.data ?? [], (workflow) => workflow.id);

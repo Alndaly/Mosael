@@ -92,11 +92,25 @@ export function useSectionEntry(view: string, onEnter: (entry: string) => void):
   return mailbox.get(event) ?? null;
 }
 
-/** 通知类型 → 打开单条记录的事件名 + payload 里的记录 id 字段。 */
-export const NOTIFICATION_DEEP_LINKS: Record<string, { event: string; payloadKey: string }> = {
-  publish: { event: "mosael:open-publish-task", payloadKey: "task_id" },
-  workflow: { event: "mosael:open-workflow", payloadKey: "workflow_id" },
-};
+/**
+ * 一条通知点进去打开哪一条记录(事件名 + 信箱里的载荷)。认不出就只跳页。
+ *
+ * **工作流失败开的是失败的那一次运行**,不是工作流本身:此前只选中工作流、打开编辑器,失败原因和那次运行都看不到;
+ * 工作流删了就落在空列表上,而任务和事件明明都还在(体检 UM-17)。工作流不在了由工作流页转给任务中心。
+ */
+export function notificationRecord(
+  type: string,
+  payload: Record<string, unknown> | null | undefined,
+): { event: string; id: string } | null {
+  const text = (key: string) => (typeof payload?.[key] === "string" ? (payload[key] as string) : "");
+  if (type === "publish" && text("task_id")) return { event: "mosael:open-publish-task", id: text("task_id") };
+  if (type === "workflow" && text("workflow_id")) {
+    return text("job_id")
+      ? { event: OPEN_WORKFLOW_RUN, id: workflowRunLink(text("workflow_id"), text("job_id")) }
+      : { event: "mosael:open-workflow", id: text("workflow_id") };
+  }
+  return null;
+}
 
 /** 打开任务中心,并翻到某一条任务的执行详情。
  *

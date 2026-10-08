@@ -653,4 +653,27 @@ describe("从别处打开某一次运行", () => {
     expect(screen.getByText("最新一次").closest("button")!.getAttribute("aria-current")).toBeNull();
     await waitFor(() => expect(apiMocks.listJobEvents).toHaveBeenCalledWith("job-old"));
   });
+
+  //: 体检 UM-17:「工作流失败」的通知常常比工作流活得久。工作流删了就转给任务中心看那次运行,不落在空列表上。
+  it("那条工作流已经删了:转给任务中心打开那次运行", async () => {
+    const { emitOpenEvent, OPEN_WORKFLOW_RUN, workflowRunLink } = await import("@/lib/deepLink");
+    const opened: string[] = [];
+    const onTasks = (event: Event) => opened.push(String((event as CustomEvent).detail));
+    window.addEventListener("mosael:open-tasks", onTasks);
+    localStorage.removeItem("mosael:selected:workflows");
+    apiMocks.listWorkflows.mockResolvedValue([workflowWith({ nodes: [], edges: [] })]);
+    act(() => emitOpenEvent(OPEN_WORKFLOW_RUN, workflowRunLink("gone", "job-9")));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <WithPageTrail>
+            <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+          </WithPageTrail>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(opened).toEqual(["job-9"]));
+    window.removeEventListener("mosael:open-tasks", onTasks);
+  });
 });

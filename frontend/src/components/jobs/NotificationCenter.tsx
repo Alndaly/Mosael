@@ -20,7 +20,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { LIST_HAIRLINE } from "@/components/ui/floating";
 import { Truncate } from "@/components/ui/truncate";
-import { NOTIFICATION_DEEP_LINKS, gotoRecord } from "@/lib/deepLink";
+import { gotoRecord, notificationRecord } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -88,8 +88,8 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const openItem = (item: AppNotification) => {
     if (!item.read_at) readOne.mutate(item.id);
     if (item.link) {
-      const deep = NOTIFICATION_DEEP_LINKS[item.type];
-      gotoRecord(item.link, deep?.event, deep ? item.payload?.[deep.payloadKey] : undefined);
+      const record = notificationRecord(item.type, item.payload);
+      gotoRecord(item.link, record?.event, record?.id);
       setOpen(false);
     }
   };
