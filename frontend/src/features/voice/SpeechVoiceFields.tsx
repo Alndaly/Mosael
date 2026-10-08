@@ -11,10 +11,21 @@ import { CLONE_ENGINE } from "@/api/domains/speech";
 
 /** 带小标签的紧凑表单格:下拉全长一个样,没有标签就分不清「音色」「语速」「发音人 B」谁是谁 ——
     标签贴在控件上方而不是靠占位符。 */
-export function VoiceField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+export function VoiceField({
+  label,
+  children,
+  className,
+  labelClassName = "text-ui-xs font-medium leading-snug",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+  /** 标签的字号、字重。默认是剪辑台配音页那一档(12px);放进别的面板时跟那个面板的标签走(创作页右栏是 ParameterField 那一档)。 */
+  labelClassName?: string;
+}) {
   return (
     <div className={cn("grid min-w-0 content-start gap-1.5", className)}>
-      <span className="text-ui-xs font-medium leading-snug text-muted-foreground">{label}</span>
+      <span className={cn("text-muted-foreground", labelClassName)}>{label}</span>
       {children}
     </div>
   );
@@ -51,7 +62,8 @@ export function VoicePicker({
 export function SpeedPicker({ value, onChange, ariaLabel }: { value: number; onChange: (value: number) => void; ariaLabel: string }) {
   return (
     <Select value={String(value)} onValueChange={(next) => onChange(Number(next))}>
-      <SelectTrigger className="w-full min-w-0" aria-label={ariaLabel}>
+      {/* text-foreground:创作页右栏把它放在 ParameterField(整个 label 是次级色)里,不写的话「1×」跟着变灰,和旁边的发音人不是一个颜色 */}
+      <SelectTrigger className="w-full min-w-0 text-foreground" aria-label={ariaLabel}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -99,9 +111,26 @@ function remoteVoiceChoices(voice: SpeechVoice, t: ReturnType<typeof useI18n>) {
 }
 
 /** 引擎 → (克隆引擎 + 音色 | 发音人 | 手填 id) → 语速。状态全在 `voice` 里。
- *  `hideEngine`:引擎在别处挑(创作页的模型下拉,ADR 0055),这里只摆音色和语速;引擎用不了的那句也归那边说。 */
-export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: SpeechVoice; hideEngine?: boolean }) {
+ *  `hideEngine`:引擎在别处挑(创作页的模型下拉,ADR 0055),这里只摆音色和语速;引擎用不了的那句也归那边说。
+ *  `voiceAction`:贴在音色那一格右边的东西(创作页右栏的试听键),和音色同一行、同高 —— 播客的发音人旁边也是这样摆的。
+ *  `speedOwnRow`:语速另起一行、铺满。窄栏(创作页右栏)里音色那一格要装名字和试听键,再和语速分一行就只剩一百来像素。 */
+export function SpeechVoiceFields({
+  voice,
+  hideEngine = false,
+  voiceAction,
+  speedOwnRow = false,
+  labelClassName,
+}: {
+  voice: SpeechVoice;
+  hideEngine?: boolean;
+  voiceAction?: React.ReactNode;
+  speedOwnRow?: boolean;
+  /** 每一格标签的字号(见 VoiceField 的 labelClassName)。 */
+  labelClassName?: string;
+}) {
   const t = useI18n();
+  const withAction = (picker: React.ReactNode) =>
+    voiceAction ? <span className="flex min-w-0 items-center gap-1.5">{picker}{voiceAction}</span> : picker;
   const { engine, activeEngine } = voice;
   const remote = remoteVoiceChoices(voice, t);
   const runtimeSuffix = (runtime: Parameters<typeof runtimeState>[0]) => {
@@ -111,7 +140,7 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
   return (
     <div className="grid gap-3">
       {!hideEngine && (
-      <VoiceField label={t("voiceEngine")}>
+      <VoiceField labelClassName={labelClassName} label={t("voiceEngine")}>
         <Select value={engine} onValueChange={voice.setEngine}>
           <SelectTrigger className="w-full min-w-0" aria-label={t("voiceEngine")}>
             <SelectValue />
@@ -132,7 +161,7 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
       {engine === CLONE_ENGINE && (
         <FieldRow>
           {/* 没装好的照样列出来但标明白,而不是藏起来让人猜为什么少了一个。 */}
-          <VoiceField label={t("voicePanelCloneEngine")} className={FIELD_WIDE}>
+          <VoiceField labelClassName={labelClassName} label={t("voicePanelCloneEngine")} className={FIELD_WIDE}>
             <Select value={voice.cloneEngine} onValueChange={voice.setCloneEngine}>
               <SelectTrigger className="w-full min-w-0" aria-label={t("voicePanelCloneEngine")}>
                 <SelectValue />
@@ -150,8 +179,8 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
           </VoiceField>
           {/* 音色和语速**一起**换行:语速只有「1.25×」那么宽,单独甩到下一行最难看。 */}
           <FieldRow className="min-w-[12rem] flex-1 flex-nowrap">
-            <VoiceField label={t("voiceLibraryPick")} className="min-w-0 flex-1">
-              {voice.library.length > 0 ? (
+            <VoiceField labelClassName={labelClassName} label={t("voiceLibraryPick")} className="min-w-0 flex-1">
+              {withAction(voice.library.length > 0 ? (
                 <OptionPicker
                   value={voice.voiceId}
                   onChange={voice.setVoiceId}
@@ -162,10 +191,10 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
                 />
               ) : (
                 <Input value="" disabled readOnly aria-label={t("voiceLibraryPick")} placeholder={t("voiceLibraryPickEmpty")} />
-              )}
+              ))}
             </VoiceField>
-            {voice.speedSupported && (
-              <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
+            {voice.speedSupported && !speedOwnRow && (
+              <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")} className={FIELD_SPEED}>
                 <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
               </VoiceField>
             )}
@@ -176,16 +205,18 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
       {engine !== CLONE_ENGINE && remote.choices.length > 0 && (
         <FieldRow className="flex-nowrap">
           {/* 语速藏起来时音色独占一行 —— flex-1 自然铺满,不必另给宽度。 */}
-          <VoiceField label={t("voiceEngineVoice")} className="min-w-0 flex-1">
-            <VoicePicker
-              value={remote.value}
-              onChange={(next) => voice.setEngineVoice(next === TYPED_VOICE ? "" : next)}
-              choices={remote.choices}
-              ariaLabel={t("voiceEngineVoice")}
-            />
+          <VoiceField labelClassName={labelClassName} label={t("voiceEngineVoice")} className="min-w-0 flex-1">
+            {withAction(
+              <VoicePicker
+                value={remote.value}
+                onChange={(next) => voice.setEngineVoice(next === TYPED_VOICE ? "" : next)}
+                choices={remote.choices}
+                ariaLabel={t("voiceEngineVoice")}
+              />,
+            )}
           </VoiceField>
-          {voice.speedSupported && !remote.showInput && (
-            <VoiceField label={t("voiceSpeed")} className={FIELD_SPEED}>
+          {voice.speedSupported && !remote.showInput && !speedOwnRow && (
+            <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")} className={FIELD_SPEED}>
               <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
             </VoiceField>
           )}
@@ -195,21 +226,23 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
       {/* 目录拉不到、需要手填发音人 id 的引擎。两样都没有就**整行不渲染** ——
           此前这里会剩下一个 76px 宽、孤零零的语速下拉。 */}
       {engine !== CLONE_ENGINE &&
-        (remote.showInput || (remote.choices.length === 0 && voice.speedSupported)) && (
+        (remote.showInput || (remote.choices.length === 0 && voice.speedSupported && !speedOwnRow)) && (
         <FieldRow className="flex-nowrap">
           {remote.showInput && (
-            <VoiceField label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
-              <Input
-                className="min-w-0"
-                value={voice.engineVoiceChoice}
-                placeholder={t("voiceEngineVoiceIdHint")}
-                aria-label={t("voiceEngineVoiceId")}
-                onChange={(event) => voice.setEngineVoice(event.target.value)}
-              />
+            <VoiceField labelClassName={labelClassName} label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
+              {withAction(
+                <Input
+                  className="min-w-0"
+                  value={voice.engineVoiceChoice}
+                  placeholder={t("voiceEngineVoiceIdHint")}
+                  aria-label={t("voiceEngineVoiceId")}
+                  onChange={(event) => voice.setEngineVoice(event.target.value)}
+                />,
+              )}
             </VoiceField>
           )}
-          {voice.speedSupported && (
-            <VoiceField label={t("voiceSpeed")} className={remote.showInput ? FIELD_SPEED : "min-w-0 flex-1"}>
+          {voice.speedSupported && !speedOwnRow && (
+            <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")} className={remote.showInput ? FIELD_SPEED : "min-w-0 flex-1"}>
               <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
             </VoiceField>
           )}
@@ -224,6 +257,12 @@ export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: Speech
         <p data-speaks-cloned-voice="" className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">
           {t("voiceClonedOnEngineHint")}
         </p>
+      )}
+      {/* 语速自成一行(speedOwnRow):排在说音色的那几句后面,不把「要填音色 id」那句和音色那一格隔开 */}
+      {speedOwnRow && voice.speedSupported && (
+        <VoiceField labelClassName={labelClassName} label={t("voiceSpeed")}>
+          <SpeedPicker value={voice.speed} onChange={voice.setSpeed} ariaLabel={t("voiceSpeed")} />
+        </VoiceField>
       )}
       {/* 引擎在别处挑时(hideEngine),「用不了」由那边的提示条说(带去配置的出路),这里不再写一遍。 */}
       {engine !== CLONE_ENGINE && activeEngine?.note && !(hideEngine && activeEngine.ready === false) && (

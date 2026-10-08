@@ -19,8 +19,9 @@
 - 字号走 `text-ui-*` token(有哪几档由 `design/tokens.css` 说了算),不写死像素。写死的 `text-[11px]` 不跟屏幕走,而且各写各的;
   这一条有棘轮守着(`design/typeScale.test.ts`),特例列在它的 `ALLOWED` 里。
 - 圆角走 8px 刻度,分段控件是胶囊形,表单填充用 `--field`。不用投影。
-- 按钮高度走 `Button` 的 `size` 档,不在 className 里改高宽。四档:`xs`/`icon-xs` 28px(工具栏)、
-  `sm`/`icon-sm` 32px、`default`/`icon` 36px、`lg` 40px。缺一档就往 `buttonVariants` 里加一档 ——
+- 按钮高度走 `Button` 的 `size` 档,不在 className 里改高宽。几档:`xs`/`icon-xs` 28px(工具栏)、
+  `sm`/`icon-sm` 32px、`icon` 36px(顶栏)、`default`/`icon-lg` 40px(和 md 字段同高,挨着输入框、下拉的图标按钮用 `icon-lg`)、
+  `lg` 44px。缺一档就往 `buttonVariants` 里加一档 ——
   就地写 `h-7 w-7` 盖住 `size="icon"` 的代价是漏一处就露 8px,智能体输入框栽过这一下。
   棘轮:`components/ui/buttonScale.test.ts`,一次性尺寸列在它的 `GRANDFATHERED` 里。
 - **按钮的分量跟着它的地位走。** 一页 / 一个弹窗只有一个实心的主动作(`default`);和它并排的次要动作用

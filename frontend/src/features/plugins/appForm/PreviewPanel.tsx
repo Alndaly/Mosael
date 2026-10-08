@@ -72,13 +72,13 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
         <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workflowAppPromptNone")}</p>
       ) : (
         <ParameterField label={t("genPromptLabel")}>
-          <Textarea className="min-h-20 rounded-lg border-border bg-field text-ui-sm" value={values.prompt ?? ""}
+          <Textarea className="min-h-20 text-foreground" value={values.prompt ?? ""}
                     onChange={(event) => set("prompt", event.target.value)} />
         </ParameterField>
       )}
       {supportsParameter(option, "negative_prompt") && (
         <ParameterField label={t("genNegativePrompt")}>
-          <Textarea className="min-h-14 rounded-lg border-border bg-field text-ui-sm" value={values.negative ?? ""}
+          <Textarea className="min-h-14 text-foreground" value={values.negative ?? ""}
                     onChange={(event) => set("negative", event.target.value)} />
         </ParameterField>
       )}

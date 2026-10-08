@@ -207,8 +207,7 @@ export function TimePricesEditor({
             </div>
             <IconButton
               type="button"
-              size="icon"
-              className="size-10"
+              size="icon-lg"
               label={t("pricingTimeWindowRemove")}
               onClick={() => onChange({ timeZone: windows.length > 1 ? timeZone : "", windows: windows.filter((_, i) => i !== index) })}
             >

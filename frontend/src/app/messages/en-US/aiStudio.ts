@@ -26,7 +26,6 @@ export const aiStudio = {
   createSectionVoice: "Voice",
   createSectionSpeakers: "Speakers",
   createVoicePreviewText: "Hi, this is how this voice sounds.",
-  createVoicePreviewHint: "Hear a sample",
   createPickVoiceFirst: "Pick a voice first",
   createSpeechLabel: "Text to read aloud",
   createSpeechPlaceholder: "Type what to read aloud…",

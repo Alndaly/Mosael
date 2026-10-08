@@ -17,11 +17,17 @@ export const CONTROL_HEIGHT = {
   lg: "h-11",
 } as const;
 
-/** 方形图标按钮:边长与同档文字控件相同,并排时不高出一截。 */
+/**
+ * 方形图标按钮:边长与同档文字控件相同,并排时不高出一截。
+ *
+ * md 是 36(顶栏那一档,⌘K 那颗胶囊),**不是** md 字段的 40 —— 历史上 `size="icon"` 就是它。挨着 40px 的输入框、下拉放的
+ * 图标按钮(试听键、一行末尾的删除钮)用 lg:40,和 md 字段同高。
+ */
 export const CONTROL_SQUARE = {
   xs: "size-7",
   sm: "size-8",
   md: "size-9",
+  lg: "size-10",
 } as const;
 
 /**

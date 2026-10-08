@@ -34,7 +34,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ConfigNotice, EngineNotice } from "@/components/app/ConfigNotice";
 import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
-import { PARAMETER_CONTROL_CLASS, ParameterField, ParameterSection } from "@/components/generation/parameterPanel";
+import { PARAMETER_CONTROL_CLASS, PARAMETER_LABEL_CLASS, ParameterField, ParameterSection } from "@/components/generation/parameterPanel";
 import { Button } from "@/components/ui/button";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -206,18 +206,23 @@ export function SpeechSettings({ voice, workspaceId }: { voice: SpeechVoice; wor
           section="provider-audio"
         />
       )}
+      {/* 试听键贴在音色右边、和它同高(和播客的发音人一个摆法);语速自成一行 —— 窄栏里三样挤一行,音色名就只剩半截 */}
       <div data-speech-voice="" className="grid gap-3">
-        <SpeechVoiceFields voice={voice} hideEngine />
-      </div>
-      <div className="flex items-center gap-2 text-ui-xs text-muted-foreground">
-        <VoicePreviewButton
-          load={() =>
-            fetchVoicePreview({ workspace_id: workspaceId, engine: voice.engine, voice: previewVoice, text: t("createVoicePreviewText") })
+        <SpeechVoiceFields
+          voice={voice}
+          hideEngine
+          speedOwnRow
+          labelClassName={PARAMETER_LABEL_CLASS}
+          voiceAction={
+            <VoicePreviewButton
+              load={() =>
+                fetchVoicePreview({ workspace_id: workspaceId, engine: voice.engine, voice: previewVoice, text: t("createVoicePreviewText") })
+              }
+              disabled={!previewVoice || engineUnready}
+              disabledReason={t("createPickVoiceFirst")}
+            />
           }
-          disabled={!previewVoice || engineUnready}
-          disabledReason={t("createPickVoiceFirst")}
         />
-        <span>{t("createVoicePreviewHint")}</span>
       </div>
     </ParameterSection>
   );

@@ -59,7 +59,7 @@ const FONT = new Map([
   ["--text-ui-md", 16], ["--text-ui-lg", 18],
 ]);
 const BUTTON_SIZE = new Map([
-  ["default", 40], ["lg", 44], ["icon", 36],
+  ["default", 40], ["lg", 44], ["icon", 36], ["icon-lg", 40],
   ["sm", 32], ["icon-sm", 32], ["xs", 28], ["icon-xs", 28],
 ]);
 /** 字段的 `size` 档(components/ui/control-size.ts 的 FIELD_SIZE),和按钮同名同高。 */

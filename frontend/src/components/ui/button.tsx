@@ -51,6 +51,9 @@ const buttonVariants = cva(
         // 就是一个 36px 的圆按钮杵在一排 28px 控件中间,智能体输入框刚栽过这一下。
         // 棘轮:`components/ui/buttonScale.test.ts` 拦下一处再手搓。
         "icon-xs": `${CONTROL_SQUARE.xs} rounded-md`,
+        // 40px:和 md 字段(输入框、下拉的默认档)同高的方钮。挨着字段放的图标按钮用它 —— 生成右栏音色、发音人旁边的试听键,
+        // 分时段价格那一行末尾的删除钮;用 icon(36)会比旁边的字段矮一截。
+        "icon-lg": `${CONTROL_SQUARE.lg} rounded-md`,
       },
     },
     compoundVariants: [

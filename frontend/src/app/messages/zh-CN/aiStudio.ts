@@ -26,7 +26,6 @@ export const aiStudio = {
   createSectionVoice: "音色",
   createSectionSpeakers: "发音人",
   createVoicePreviewText: "你好,这是这个声音念出来的样子。",
-  createVoicePreviewHint: "试听一句",
   createPickVoiceFirst: "先挑一个音色",
   createSpeechLabel: "要念的字",
   createSpeechPlaceholder: "输入要念的字…",

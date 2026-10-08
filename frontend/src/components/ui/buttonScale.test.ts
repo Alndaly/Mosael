@@ -9,7 +9,7 @@
  * `size="icon"` 渲染成 36px,杵在一排 28px 中间。圆形按钮尤其藏不住这 8px —— 智能体输入框
  * 的工具行就是这么坏的,当时是手工把那几个按钮补上 `h-7 w-7`,而不是补上缺的那一档。
  *
- * 刻度是:`xs`/`icon-xs` 28,`sm`/`icon-sm` 32,`icon` 36,`default` 40,`lg` 44。
+ * 刻度是:`xs`/`icon-xs` 28,`sm`/`icon-sm` 32,`icon` 36,`default`/`icon-lg` 40,`lg` 44。
  * 想要新的一档就往 `buttonVariants` 里加一档,别在 className 里加。
  *
  * **`icon` 是 36,和 `default`(40)不是一对。** 36 是顶栏那一档(⌘K 那颗胶囊就是 h-9),
@@ -46,9 +46,6 @@ const GRANDFATHERED = new Set<string>([
   "features/ai-studio/FrameSlotField.tsx: h-5 w-5",
   "features/ai-studio/FrameSlotField.tsx: h-6 w-6",
   "features/agent/trace/TraceView.tsx: h-6 w-6",
-  // 分时段价格表单里和 40px 输入框、时间选择并排的删除钮。方形档最大只到 36(icon),为这一处
-  // 加一档 40 的方形不值;此前它是没写 size 的 Button 加 size-10,换成 IconButton 后才被这条看见。
-  "features/admin/PricingTimePrices.tsx: size-10",
 ]);
 
 function sourceFiles(dir: string): string[] {
@@ -128,7 +125,7 @@ describe("按钮尺寸刻度", () => {
       .filter((entry) => !GRANDFATHERED.has(entry));
     expect(
       offenders,
-      "改用现成的那一档(xs/icon-xs=28、sm/icon-sm=32、default/icon=36、lg=40);" +
+      "改用现成的那一档(xs/icon-xs=28、sm/icon-sm=32、icon=36、default/icon-lg=40、lg=44);" +
         "确实缺一档就往 buttonVariants 里加,别写在 className 里",
     ).toEqual([]);
   });

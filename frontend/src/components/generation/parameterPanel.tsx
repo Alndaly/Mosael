@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { DeclaredParameter } from "@/lib/generationCapabilities";
+import { cn } from "@/lib/utils";
 
 /**
  * 「引擎参数」侧栏的排版词汇 —— 和对话页右侧的智能体检查器共用一套壳(InspectorCard)。
@@ -22,15 +23,18 @@ import type { DeclaredParameter } from "@/lib/generationCapabilities";
  */
 
 /**
- * 参数面板里控件统一的样子。
+ * 参数面板里控件的那一点**排版**:铺满这一栏、能被压窄、值用前景色(ParameterField 的标签是次级色,不压回来控件里的字会跟着变灰)。
  *
- * 三件事在这儿定死,因为此前它们在十三处各写各的:**高度**收到 h-8(表单默认的 h-10 在侧栏里
- * 一屏放不下几栏);**底色**统一 `bg-field` —— 此前 Select 是 field(浅色下是白)、Input 却被
- * 改成了 control(面板色),同一行里两种填充,而它们是同一类控件;**焦点**回到全局那一套
- * `ring-ring`,不再让 Input 单独走一套 primary 描边。
+ * **尺寸不在这里写。** 高度、左右留白、字号、圆角、描边、底色全走字段自己的默认档(md:40px,control-size.ts 的 FIELD_SIZE、
+ * field-trigger.ts),和右栏里「音色」「发音人」那几格(SpeechVoiceFields,本来就走默认档)同一套。此前这里写死一份
+ * `h-8 rounded-lg border-border px-2.5 font-medium`:同一个右栏里模型、尺寸、调参是 32px 的大圆角,音色、语速是 40px 的
+ * 小圆角,维护者一眼看出「输入框风格不一致」。经常量传进去的 className 又躲过了 `design/fieldScale.test.ts`(它只看字面量),
+ * 所以一致性改由 `features/ai-studio/enginePanelFields.dom.test.tsx` 在渲染出来的右栏上钉。
  */
-export const PARAMETER_CONTROL_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border-border bg-field px-2.5 text-ui-sm font-medium text-foreground";
+export const PARAMETER_CONTROL_CLASS = "w-full min-w-0 text-foreground";
+
+/** 一栏参数的标签那一档(字号)。右栏里别处画的字段(SpeechVoiceFields 的音色、语速)用它,标签和模型、发音人那几栏一样大。 */
+export const PARAMETER_LABEL_CLASS = "text-ui-sm";
 
 /**
  * 一栏参数:上标签、下控件。
@@ -52,7 +56,7 @@ export function ParameterField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1.5 text-ui-sm text-muted-foreground">
+    <label className={cn("grid gap-1.5 text-muted-foreground", PARAMETER_LABEL_CLASS)}>
       <Hint label={title}>
         <span>{label}</span>
       </Hint>
@@ -201,7 +205,7 @@ export function DeclaredParameterControl({
   if (parameter.multiline) {
     return (
       <Textarea
-        className="min-h-20 rounded-lg border-border bg-field text-ui-sm text-foreground"
+        className="min-h-20 text-foreground"
         value={value}
         placeholder={fallback}
         onChange={(event) => onChange(event.target.value)}
