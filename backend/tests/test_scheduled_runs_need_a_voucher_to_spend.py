@@ -516,3 +516,41 @@ def test_the_assembly_root_wires_the_run_authority_into_the_gate() -> None:
     from app.domain.workflows.authority import current_authority
 
     assert authority._run_authority is current_authority
+
+
+@pytest.mark.parametrize("source", ["migration", "rename"])
+def test_a_mechanical_rewrite_keeps_the_vouchers_and_reminds_nobody(team, source) -> None:
+    """机械改写(升级迁移;在工作流库里改名时引用跟着改,ADR 0045 修订之二)沿用上一版的作者和认可,不提醒谁去认可 ——
+    此前只认 `migration`:改名落的那一版以上一版作者的名义告诉任务主人「存了新的一版、等你认可」,而谁都没改过这张图。"""
+    from app.domain.workflows.plugin_references import _commit_mechanical_revision
+    from app.domain.workflows.revisions import current_workflow_revision, revision_vouchers
+
+    workflow = _workflow(team.owner, team.workspace["id"], _llm_graph())
+    _hooked_task(team.owner, team.workspace["id"], workflow["id"])
+    _edit(team.mate, workflow["id"], _llm_graph("同事改"))
+
+    def reminders() -> list[Notification]:
+        with SessionLocal() as db:
+            return [row for row in db.query(Notification).filter_by(user_id=user_id("tester"))
+                    if (row.payload or {}).get("reminder") == "awaiting_approval"]
+
+    assert len(reminders()) == 1
+    with SessionLocal() as db:
+        from app.db.models import now
+
+        for row in db.query(Notification).filter_by(user_id=user_id("tester")):
+            row.read_at = now()
+        db.commit()
+
+    def rewrite(graph: dict) -> dict:
+        graph["nodes"][1]["config"]["prompt"] = "同事改(机械改写过)"
+        return graph
+
+    with SessionLocal() as db:
+        row = db.get(Workflow, workflow["id"])
+        before = revision_vouchers(db, current_workflow_revision(db, row))
+        assert _commit_mechanical_revision(db, row, rewrite, "机械改写", source=source)
+        db.commit()
+        after = current_workflow_revision(db, row)
+        assert after.source == source and revision_vouchers(db, after) == before
+    assert len(reminders()) == 1, "机械改写不提醒"

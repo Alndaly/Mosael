@@ -764,3 +764,5 @@ Mosael 的库**不加迁移**:没有新列、新表;`capability_status.generatio
 回到会话,会话还指着改名前的那个(升级完的会话摆着完整工作流的参数),画板格子说「用不了」,要等一分钟的 staleTime;插件连接一变要失效的缓存
 (`frontend/src/features/plugins/pluginCaches.ts`)加上存着引用的生成会话、生成记录、画板、工作流、定时任务。**几条连接卡在同一处时原因说一遍**
 —— 指着同一台 ComfyUI 的几条连接都「需要升级」时,节点检查器里同一段话此前重复几遍,`nodes.unusable` 按原因把连接名并在一起。
+和 ADR 0047(定时任务的担保人)合到一起时:改名落的那一版(`source = "rename"`)和升级迁移一样是机械改写 —— 作者沿用上一版、认可照抄,
+存的时候不提醒定时任务主人去认可(`workflows/revisions.MECHANICAL_SOURCES`)。

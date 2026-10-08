@@ -34,9 +34,14 @@ class WorkflowRevisionError(LocalizedError, RuntimeError):
 
 #: 存出新的一版之后要告诉谁:(db, 工作流, 新的这一版)。ADR 0047 —— 别人的定时任务绑着这张图(或调用它的图)时,
 #: 这一版要等任务主人认可才会花他的钥匙和额度,得告诉他。工作流不认识定时任务(定时任务依赖工作流),由组装根
-#: 登记(app.main._wire_seams)。机械改写(`source="migration"`)不通知:它沿用上一版的担保人
+#: 登记(app.main._wire_seams)。机械改写(MECHANICAL_SOURCES)不通知:它沿用上一版的担保人
 #: (见 plugin_references._commit_mechanical_revision),没有什么要谁去认可。
 RevisionSaved = Callable[[Session, Workflow, WorkflowRevision], None]
+
+#: 机械改写落的修订:升级迁移(`migration`),和在工作流库里改名、挪目录时引用跟着改(`rename`,ADR 0045 修订之二)。
+#: 作者沿用上一版、认可照抄,存的时候不提醒谁去认可 —— 此前只认 `migration`,改名落的那一版会以上一版作者的名义
+#: 告诉定时任务主人「存了新的一版、等你认可」,而谁都没改过这张图。
+MECHANICAL_SOURCES = frozenset({"migration", "rename"})
 _saved_listeners: list[RevisionSaved] = []
 
 
@@ -262,7 +267,7 @@ def commit_graph_revision(
         )
         db.refresh(workflow)
         #: 刷新之后再告诉别人:听的一方要按「当前版」判(revision 是条件 UPDATE 写的,会话里那份还是旧号)。
-        if source != "migration":
+        if source not in MECHANICAL_SOURCES:
             for listener in _saved_listeners:
                 listener(db, workflow, revision)
         return revision
