@@ -374,6 +374,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "该供应商不支持 {capability} 能力",
         "en": "This provider doesn't support the {capability} capability.",
     },
+    "providerErr_unknownVendor": {
+        "zh": "没有这家供应商:{vendor}",
+        "en": "There is no provider called {vendor}.",
+    },
     "providerErr_missingRequiredConfig": {
         "zh": "缺少必要配置: {fields}",
         "en": "Missing required settings: {fields}",

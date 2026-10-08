@@ -195,9 +195,10 @@ def invoke_agent_tool(
     if name.startswith(PLUGIN_TOOL_PREFIX):
         return _invoke_plugin_tool(db, name, body, user, token, workspace_id)
     registry = tool_registry()
-    fn = getattr(registry, name, None)
-    if fn is None or not callable(fn) or name.startswith("_"):
+    #: 只认登记过的工具(mcp_server.REGISTERED_TOOLS),不认模块里随便哪个公开的可调用对象。
+    if name not in registry.REGISTERED_TOOLS:
         raise HTTPException(status_code=404, detail=f"Tool {name} not found")
+    fn = getattr(registry, name)
 
     # 这次调用属于哪次对话:从**令牌**取,不从参数取。turn 令牌铸造时就带着它
     # (core/security.mint_service_session),而参数是调用方自己填的 —— 填上别人的会话 id 就能把

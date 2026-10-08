@@ -3469,6 +3469,10 @@ def list_workspaces() -> list[dict[str, Any]]:
 
 #: 由上面每个工具的 `@tool(effect=...)` 派生(见 `tool` 的说明)。读它们的代码(manifest、子智能体的工具挑选、
 #: 确认卡)不用关心它们是怎么来的。
+#: 登记过的工具,一个不多。**HTTP 通道(/api/agent/tools/{name})只认这份**:此前它 `getattr(这个模块, name)`,于是模块里任何
+#: 公开的可调用对象 —— `Any`、`MCPServer`、`calling_as`,以后哪天多 import 进来的一个函数 —— 都成了登录用户能调、不经确认卡的
+#: 「工具」(SEC-13)。每个工具登记时都写了 `effect`,所以这份就是 `_TOOL_EFFECTS` 的键。
+REGISTERED_TOOLS = frozenset(_TOOL_EFFECTS)
 CONFIRMATION_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if effect == "confirms")
 READ_ONLY_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if effect == "reads")
 MUTATING_TOOLS = frozenset(name for name, effect in _TOOL_EFFECTS.items() if effect == "writes")

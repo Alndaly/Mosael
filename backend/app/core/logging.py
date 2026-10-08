@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 
 from app.core.config import settings
@@ -23,9 +24,20 @@ _configured = False
 #: 下一个 worker 端点加进来时悄悄失效,而命名约定不会。
 _POLL_MARKER = "/worker/"
 
+#: 地址里带着凭据的那几个查询参数。`<img>` / `<video>` 带不了请求头,媒体、头像、预览这些地址用 `?token=` 把登录令牌
+#: 带上(见 api/deps/auth.presented_token)—— uvicorn 的访问日志原样记下完整地址,整串令牌就以明文躺在日志里;
+#: 远程部署的日志常被收集、外发、给支持看(SEC-8)。
+_CREDENTIAL_QUERY = re.compile(r"([?&](?:token|access_token|secret)=)[^&#\s]*", re.IGNORECASE)
+
+
+def redact_credentials(path: str) -> str:
+    """把地址里的凭据参数换成 `<redacted>`,别的原样。"""
+    return _CREDENTIAL_QUERY.sub(r"\1<redacted>", path)
+
 
 class AccessLogFilter(logging.Filter):
-    """压掉"什么都没发生"的轮询访问日志。
+    """访问日志的两件事:**凭据不落日志**(地址里的 `?token=` 换成 `<redacted>`,见 redact_credentials,一直做),以及
+    压掉"什么都没发生"的轮询访问日志(MOSAEL_LOG_ACCESS=all 时不压)。
 
     用户的终端里一屏全是这个:
 
@@ -44,13 +56,17 @@ class AccessLogFilter(logging.Filter):
         self.quiet = quiet
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if not self.quiet:
-            return True
         args = record.args
         # uvicorn.access 的形状:(client, method, path, http_version, status)
         if not isinstance(args, tuple) or len(args) < 5:
             return True
         path, status = args[2], args[4]
+        if isinstance(path, str):
+            redacted = redact_credentials(path)
+            if redacted != path:
+                record.args = (*args[:2], redacted, *args[3:])
+        if not self.quiet:
+            return True
         if not isinstance(path, str) or not isinstance(status, int):
             return True
         return not (_POLL_MARKER in path and status < 400)

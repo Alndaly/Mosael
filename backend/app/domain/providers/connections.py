@@ -44,7 +44,12 @@ def create_connection(
     `copy_credentials_from`:同一把 Key 要配到另一能力的独立连接时,密钥从他自己的另一条连接
     直接拷过来,不经前端往返(设置接口对密钥只回打码提示,前端本就拿不到)。显式填了的照样优先。
     **调用方负责确认那条连接是他自己的** —— 否则这就是一条读到别人钥匙的路。
+
+    **只建认得的那几家**(预设里有的)。此前 `vendor` 填什么都收:接口直调(智能体、脚本、旧客户端)能写进一条没有能力、
+    没有端点、永远用不了的连接,还出现在列表里(SEC-14)。插件的连接不走这里(由插件实例建)。
     """
+    if provider_definition(vendor) is None:
+        raise ConnectionConfigError("providerErr_unknownVendor", vendor=vendor)
     incoming = dict(config)
     if copy_credentials_from is not None:
         source_key = provider_credentials.get(db, copy_credentials_from.id, owner_user_id)
