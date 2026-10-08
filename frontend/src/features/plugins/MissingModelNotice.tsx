@@ -37,7 +37,7 @@ export function MissingModelNotice({
       className={className}
       actions={upgradeIn || onPickAnother ? (
         <>
-          {upgradeIn && <UpgradeInLibrary instanceId={upgradeIn} workspaceId={workspaceId} />}
+          {upgradeIn && <UpgradeInLibraryButton instanceId={upgradeIn} workspaceId={workspaceId} />}
           {onPickAnother && (
             <Button type="button" size="xs" variant="ghost" onClick={onPickAnother} data-model-missing-pick="">
               {t("genModelMissingPickAnother")}
@@ -49,8 +49,8 @@ export function MissingModelNotice({
   );
 }
 
-/** 「去工作流库升级」:就地打开那个连接的工作流库(和插件页那颗按钮开的是同一个窗口)。 */
-function UpgradeInLibrary({ instanceId, workspaceId }: { instanceId: string; workspaceId: string }) {
+/** 「去工作流库升级」:就地打开那个连接的工作流库(和插件页那颗按钮开的是同一个窗口)。AI Studio 的失败卡也摆这一颗。 */
+export function UpgradeInLibraryButton({ instanceId, workspaceId }: { instanceId: string; workspaceId: string }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const packages = useQuery({ queryKey: ["plugins"], queryFn: () => listPluginPackages() });

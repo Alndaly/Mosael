@@ -15,6 +15,11 @@ export function itemErrorDetail(item: BoardItem): string | undefined {
   return item.run?.error_detail;
 }
 
+/** 认得出的原因:该去哪修(后端 domain/failure_summary.hint_of,插件说的);认不出时 undefined。格子上收在「详情」的悬停里。 */
+export function itemErrorHint(item: BoardItem): string | undefined {
+  return item.run?.error_hint;
+}
+
 /**
  * 选中这一格时底下挂哪个产出者的面板;不挂回 null。**一处说了算。**
  *

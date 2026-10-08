@@ -22,7 +22,7 @@ import "@/features/notes/notes.css";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
-import { itemError, itemErrorDetail, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { itemError, itemErrorDetail, itemErrorHint, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
 import { SceneOverview } from "@/features/boards/SceneOverview";
 import { SequenceCell } from "@/features/boards/SequenceCell";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
@@ -589,21 +589,28 @@ function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop
  */
 function Failed({ item, reason }: { item: BoardItem; reason: string }) {
   const t = useI18n();
-  //: `reason` 是给人看的那一句(后端 domain/failure_summary 摘的,和 AI 工作台同一个来源);原文另存着,在「查看原始错误」里。
-  //: 此前格子上贴的是原文的头三行 —— 一串 httpx 的英文加一条带签名的地址(UC-06)。
+  //: `reason` 是给人看的那一句(后端 domain/failure_summary 摘的,和 AI 工作台的失败卡同一个来源);原文(比那一句多出信息时才有)
+  //: 和认得出的原因(该去哪修)收在「详情」的悬停里 —— 格子不撑大。此前格子上贴的是原文的头三行(UC-06)。
+  //: 和失败卡同一种样子:中性的底,只有图标和短标题用 destructive 色,那一句是正常的前景色(此前整格淡红、字是灰的)。
   const detail = itemErrorDetail(item);
+  const hint = itemErrorHint(item);
   return (
-    <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3", CELL_INNER_RADIUS)}>
+    <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-secondary/35 px-3", CELL_INNER_RADIUS)}>
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
-        <AlertTriangle size={15} className="text-destructive" />
+        <AlertTriangle size={15} aria-hidden className="text-destructive" />
         <span className="text-ui-2xs font-semibold text-destructive">{t(runCopy(item).failed)}</span>
-        <Truncate lines={3} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+        <Truncate lines={3} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-foreground">
           {reason}
         </Truncate>
-        {detail ? (
-          <Hint label={detail}>
-            <span data-run-error-detail="" className="cursor-help text-ui-2xs text-muted-foreground underline decoration-dotted underline-offset-2">
-              {t("generationErrorDetail")}
+        {hint || detail ? (
+          //: 悬停里先说该去哪修(认得出时),原文淡色在下面;键盘也能切到它(说明在聚焦时也出)
+          <Hint label={hint ?? detail} hint={hint ? detail : undefined}>
+            <span
+              data-run-error-detail=""
+              tabIndex={0}
+              className="cursor-help rounded-sm text-ui-2xs text-muted-foreground underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t("genFailureDetail")}
             </span>
           </Hint>
         ) : null}

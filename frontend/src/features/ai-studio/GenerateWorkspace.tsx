@@ -4,8 +4,6 @@ import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownLeft,
-  Check,
-  CircleStop,
   ClipboardList,
   Clock3,
   Cpu,
@@ -15,10 +13,8 @@ import {
   Images,
   Music,
   Ratio,
-  RotateCcw,
   SlidersHorizontal,
   CircleAlert,
-  Copy,
   Loader2,
   Send,
   Sparkles,
@@ -37,6 +33,7 @@ import {
   cancelJob,
   entityReceipt,
   optimizeImagePrompt,
+  repeatGeneration,
   retrieveGeneration,
   type EntitySummary,
   type GenerationCreateResponse,
@@ -47,7 +44,8 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
-import { MissingModelNotice } from "@/features/plugins/MissingModelNotice";
+import { MissingModelNotice, UpgradeInLibraryButton } from "@/features/plugins/MissingModelNotice";
+import { GenerationFailureCard, GenerationStoppedCard } from "@/features/ai-studio/GenerationFailureCard";
 import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { IconButton } from "@/components/ui/icon-button";
@@ -786,6 +784,19 @@ export function GenerateWorkspace({
     onError: (error) => toast.error(t("genRetrieveFailed"), { description: errorText(error) }),
   });
 
+  //: 失败卡上的「再来一次」:照这一条记着的模型和参数重新提交一次,收在同一条会话里(见后端 generation.use_cases.again)。新的一条
+  //: 接在下面,和点发送一样。
+  const repeatAgain = useMutation({
+    mutationFn: (generationId: string) => repeatGeneration(generationId),
+    onSuccess: () => {
+      stick.scrollToBottom();
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+    },
+    onError: (error) => toast.error(t("genRepeatFailed"), { description: errorText(error) }),
+  });
+
   //: 一条任务落了终态就重拉这条会话的记录:成功的带回产出,失败的带回**记录自己存的**失败原因
   //: (生成记录在任务失败那一刻抄下它,任务之后会被清掉,见后端 generation.runner.record_failure)。
   const settledCount = (jobs.data ?? []).filter((job) => job.status === "succeeded" || job.status === "failed").length;
@@ -1202,6 +1213,9 @@ export function GenerateWorkspace({
               stopping={stopGeneration.isPending && stopGeneration.variables === generation.job_id}
               onRetrieve={readOnly ? undefined : () => retrieveAgain.mutate(generation.id)}
               retrieving={retrieveAgain.isPending && retrieveAgain.variables === generation.id}
+              onRepeat={readOnly ? undefined : () => repeatAgain.mutate(generation.id)}
+              repeating={repeatAgain.isPending && repeatAgain.variables === generation.id}
+              workspaceId={workspace.id}
             />
             );
           })}
@@ -1718,6 +1732,9 @@ function GenerationTurn({
   stopping,
   onRetrieve,
   retrieving,
+  onRepeat,
+  repeating,
+  workspaceId,
 }: {
   generation: GenerationJob;
   /** 用的哪条连接上的哪个模型,两层名字(ADR 0045):脚注写主名,副名(来自哪张工作流、哪台服务器)在悬停里。连接或模型
@@ -1733,6 +1750,11 @@ function GenerationTurn({
   /** 重新取回这一条(只在后端说 `retrievable` 时摆出来);只读的会话不给。 */
   onRetrieve?: () => void;
   retrieving?: boolean;
+  /** 再来一次(只在后端说 `repeatable`、记着的模型还在时摆出来);只读的会话不给。 */
+  onRepeat?: () => void;
+  repeating?: boolean;
+  /** 「去工作流库升级」开的是这个工作区里那个连接的工作流库 */
+  workspaceId: string;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -1783,9 +1805,12 @@ function GenerationTurn({
   return (
     <article className="group/gen grid w-full max-w-[780px] shrink-0 gap-2.5 self-center" data-generation-status={status}>
       <div className="grid justify-items-end gap-1">
-        <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground">
-          {prompt}
-        </div>
+        {/* 不收提示词的工作流(放大、抠图、一张不填字的 ComfyUI 图)这一轮没写字:不摆一个空气泡,时间照旧在 */}
+        {prompt ? (
+          <div className="w-fit max-w-[min(560px,82%)] justify-self-end whitespace-pre-wrap break-words rounded-lg rounded-br bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground" data-generation-prompt="">
+            {prompt}
+          </div>
+        ) : null}
         {/* 和对话页的用户气泡同一个脚注:复制 + 时间。此前这里只有一个裸 <time>,
             没法把提示词捞出来 —— 而提示词正是最常要复制去改一版再生成的东西。 */}
         <MessageFooter
@@ -1850,12 +1875,19 @@ function GenerationTurn({
           <GenerationStoppedCard />
         ) : status === "failed" ? (
           //: 原因读**生成记录自己**存的那份 —— 任务会被清掉,记录不会(见后端 generation.runner.record_failure)。
-          //: 那一句人话由后端出(error_summary,和画板格子同一个来源,见后端 domain/failure_summary),原文进「查看原始错误」。
+          //: 那一句人话、原文、认得出的原因都由后端出(error_summary / error_detail / error_hint,和画板格子同一个来源,见后端
+          //: domain/failure_summary);能做什么也按后端说的:能不能照原样再来(repeatable)、能不能重新取回(retrievable)。
+          //: 记着的模型用不了(knownName 是 null)时不摆「再来一次」—— 修法是升级的给「去工作流库升级」。
           <GenerationFailureCard
             summary={generation.error_summary ?? ""}
-            error={generation.error ?? ""}
-            onRetrieve={generation.retrievable ? onRetrieve : undefined}
-            retrieving={retrieving}
+            detail={generation.error_detail ?? null}
+            hint={generation.error_hint ?? null}
+            copyText={generation.error ?? ""}
+            repeat={onRepeat && generation.repeatable && knownName ? { run: onRepeat, pending: repeating } : undefined}
+            retrieve={onRetrieve && generation.retrievable ? { run: onRetrieve, pending: retrieving } : undefined}
+            upgrade={gone.missing?.upgrade && gone.missing.plugin_instance_id
+              ? <UpgradeInLibraryButton instanceId={gone.missing.plugin_instance_id} workspaceId={workspaceId} />
+              : undefined}
           />
         ) : (
           <GenerationProgress
@@ -2038,85 +2070,3 @@ function PendingFrames({
  * 有人把它停下了(这里的「停止」、任务中心的取消、画板的停止):不是跑挂了,不摆红色的失败卡。
  * 花没花钱写在下面的脚注里,和别的记录同一句(「未扣费」或金额)。
  */
-function GenerationStoppedCard() {
-  const t = useI18n();
-  return (
-    <div
-      className="flex w-[min(560px,100%)] items-start gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2.5"
-      data-generation-stopped=""
-    >
-      <CircleStop size={14} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden />
-      <div className="grid min-w-0 gap-0.5">
-        <strong className="text-ui-sm leading-[1.35] text-foreground">{t("genStopped")}</strong>
-        <span className="text-ui-sm leading-[1.55] text-muted-foreground">{t("genStoppedBody")}</span>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 跑挂了的那一条:写**一句人话**(后端的 `error_summary`,和画板格子同一个来源 —— 此前这里用正则从原文里抠,而 httpx
- * 原文里「For more information check」前面是换行,切不掉),原文收在「查看原始错误」里。
- *
- * 服务商已经做完、只是成片没拿回来的(`onRetrieve` 给了),摆「重新取回」:不重新提交、不再付钱,挂一个新任务接着取,
- * 卡片回到进度的样子(见后端 generation.use_cases.retrieve)。没给就是只能重新生成。
- */
-function GenerationFailureCard({
-  summary: said,
-  error,
-  onRetrieve,
-  retrieving,
-}: {
-  summary: string;
-  error: string;
-  onRetrieve?: () => void;
-  retrieving?: boolean;
-}) {
-  const t = useI18n();
-  const [copied, setCopied] = React.useState(false);
-  const summary = said.trim() || t("genFailed");
-  const copy = () => {
-    if (!error) return;
-    void navigator.clipboard?.writeText(error);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  };
-
-  return (
-    <div className="grid w-[min(560px,100%)] gap-2 rounded-lg border border-[color-mix(in_srgb,var(--destructive)_34%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_7%,var(--card))] px-3 py-2.5">
-      <div className="flex min-w-0 items-start gap-2 text-destructive">
-        <CircleAlert size={14} className="mt-0.5 shrink-0" />
-        <div className="grid min-w-0 gap-0.5">
-          <strong className="text-ui-sm leading-[1.35] text-destructive">{t("generationFailedTitle")}</strong>
-          <span className="[overflow-wrap:anywhere] text-ui-sm leading-[1.55] text-[color-mix(in_srgb,var(--destructive)_82%,var(--foreground))]">
-            {summary}
-          </span>
-        </div>
-      </div>
-      {onRetrieve ? (
-        <Hint label={t("genRetrieveHint")}>
-          <Button type="button" variant="outline" size="xs" className="w-fit" loading={retrieving} onClick={onRetrieve}>
-            <RotateCcw size={12} />
-            {t("genRetrieve")}
-          </Button>
-        </Hint>
-      ) : null}
-      {error ? (
-        <div className="flex items-start justify-between gap-2">
-          <details className="min-w-0 text-ui-xs text-muted-foreground">
-            <summary className="w-fit cursor-pointer list-none after:ml-1 after:inline-block after:content-['›'] [&::-webkit-details-marker]:hidden">
-              {t("generationErrorDetail")}
-            </summary>
-            <pre className="mt-[7px] max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-[color-mix(in_srgb,var(--background)_72%,var(--card))] p-2 font-mono text-ui-xs leading-normal text-muted-foreground">
-              {error}
-            </pre>
-          </details>
-          <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-[7px] text-ui-xs" onClick={copy}>
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-            {copied ? t("copied") : t("copyMessage")}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}

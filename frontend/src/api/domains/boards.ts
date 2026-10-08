@@ -74,6 +74,8 @@ export interface BoardItem {
     error?: string;
     /** 那一句摘自的原文(上游回包、httpx 的原话):格子上「查看原始错误」里看。和那一句一样时没有。 */
     error_detail?: string;
+    /** 认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」)。认不出时没有。 */
+    error_hint?: string;
     /** 这一轮跑的是这一格的哪一项能力(没有就是它自己的产出者)。产出新建在右边,这一格自己的内容不动。 */
     ability?: NodeProducer;
   };

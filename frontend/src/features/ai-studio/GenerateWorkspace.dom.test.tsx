@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -217,30 +217,108 @@ describe("失败原因读生成记录自己的", () => {
   });
 });
 
-describe("失败卡写后端那一句人话,原文收在「查看原始错误」里(UC-06)", () => {
+describe("失败卡写后端那一句人话,原文收在折起的「详情」里(UC-06,维护者 2026-10-08 重构)", () => {
   const failed = (extra: Record<string, unknown>) => ({
     id: "g1", workspace_id: "w1", session_id: "s1", job_id: "j1", provider_profile_id: "p1", provider: "alibaba",
     model: "wanx", kind: "image", request: { prompt: "一只猫" }, result_asset_id: null, result_asset_ids: [],
     error: "DashScope 请求失败:Client error '401 Unauthorized' for url 'https://dashscope.aliyuncs.com/api/v1/x?Signature=SECRET'\nFor more information check: https://developer.mozilla.org/401",
     error_summary: "DashScope 不认这把密钥,请到设置里检查连接的凭据:Invalid API-key provided.",
+    error_detail: "Client error '401 Unauthorized' for url 'https://dashscope.aliyuncs.com/api/v1/x?Signature=SECRET'\nFor more information check: https://developer.mozilla.org/401",
+    error_hint: null,
     created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z", costs: [], cost_confidence: null,
-    retrievable: false, ...extra,
+    retrievable: false, repeatable: true, ...extra,
+  });
+  //: 维护者截图里那一条:ComfyUI 报了执行错误(远端明确失败)。后端给的一句话、原话、认得出的原因
+  const comfy = (extra: Record<string, unknown>) => failed({
+    provider_profile_id: "p9", provider: "plugin:dev.mosael.comfyui", model: "krea2-text-2-image.json#app",
+    error: "「ComfyUI · http://192.168.3.15:8188」生成失败:ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed",
+    error_summary: "ComfyUI 执行到「KSampler」这一步出错",
+    error_detail: "KSampler: hostbuf_file_reader_read failed",
+    error_hint: "这是那台 ComfyUI 上的问题,不是这张工作流的:它装的 comfy-kitchen 太旧……",
+    ...extra,
   });
 
-  it("卡上写那一句,不写原文;原文在「查看原始错误」里", async () => {
+  it("卡上写那一句,不写原文;原文在默认折起的「详情」里,复制在详情里", async () => {
     renderStudio({ generations: [failed({})] });
-    const card = (await screen.findByText("generationFailedTitle")).closest("article")!;
+    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
     expect(card.textContent).toContain("DashScope 不认这把密钥");
     const shown = within(card).getByText(/DashScope 不认这把密钥/);
     expect(shown.textContent).not.toMatch(/https?:|For more information|SECRET/);
-    expect(within(card).getByText("generationErrorDetail")).toBeInTheDocument();
-    expect(card.querySelector("pre")?.textContent).toContain("For more information check");
+    const details = card.querySelector<HTMLDetailsElement>("[data-failure-detail]")!;
+    expect(details.open, "默认折起").toBe(false);
+    expect(within(details).getByText("genFailureDetail")).toBeInTheDocument();
+    expect(details.querySelector("pre")?.textContent).toContain("For more information check");
+    expect(details.querySelector("[data-failure-copy]"), "有详情时复制在详情里").not.toBeNull();
+    expect(card.querySelector("[data-failure-actions] [data-failure-copy]"), "动作那一排不再摆一颗").toBeNull();
+  });
+
+  it("ComfyUI 报了执行错误:不摆「重新取回」;一句人话不重复连接名;认得出的原因给提示;能再来一次;没写字不摆空气泡", async () => {
+    renderStudio({ generations: [comfy({ request: { prompt: "" } })], options: [IMAGE_OPTION, { ...IMAGE_OPTION, id: "p9:image:krea2", provider_profile_id: "p9",
+      provider: "plugin:dev.mosael.comfyui", model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", is_default: false }] });
+    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+    expect(within(card).queryByRole("button", { name: /genRetrieve/ })).toBeNull();
+    const said = card.querySelector("[data-failure-summary]")!.textContent!;
+    expect(said).toBe("ComfyUI 执行到「KSampler」这一步出错");
+    expect(said).not.toContain("生成失败");
+    expect(card.querySelector("[data-failure-hint]")?.textContent).toContain("这是那台 ComfyUI 上的问题");
+    expect(within(card).getByRole("button", { name: /genRepeat/ })).toBeInTheDocument();
+    expect(card.querySelector("[data-failure-detail] pre")?.textContent).toBe("KSampler: hostbuf_file_reader_read failed");
+    const turn = card.closest("article")!;
+    expect(turn.querySelector("[data-generation-prompt]"), "这一轮没写字:不摆空气泡").toBeNull();
+    expect(within(turn as HTMLElement).queryByRole("button", { name: "复制" }), "也没有空的「复制」").toBeNull();
+  });
+
+  it("原文和那一句说的是同一件事(后端不给详情):不摆「详情」,「复制错误」在动作那一排", async () => {
+    renderStudio({ generations: [failed({ error: "ComfyUI 里这个任务被中断了", error_summary: "ComfyUI 里这个任务被中断了",
+                                          error_detail: null })] });
+    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+    expect(card.querySelector("[data-failure-detail]")).toBeNull();
+    expect(within(card).queryByText("genFailureDetail")).toBeNull();
+    expect(card.querySelector("[data-failure-actions] [data-failure-copy]")?.textContent).toContain("genCopyError");
+  });
+
+  it("颜色克制:只有标题用 destructive 色,那一句是正常前景色,底是中性面板色", async () => {
+    renderStudio({ generations: [failed({})] });
+    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+    expect(card.className).not.toMatch(/destructive/);
+    expect(card.className).toMatch(/bg-secondary/);
+    expect(card.querySelector("[data-failure-summary]")!.className).toMatch(/text-foreground/);
+    expect(card.querySelector("[data-failure-summary]")!.className).not.toMatch(/destructive/);
+    expect(card.getAttribute("role")).toBe("group");
+    expect(document.getElementById(card.getAttribute("aria-labelledby")!)?.textContent).toBe("generationFailedTitle");
+  });
+
+  it("记着的模型用不了、修法是升级:失败卡上给「去工作流库升级」,不给「再来一次」", async () => {
+    renderStudio({ generations: [comfy({})], missing: { ...GONE, provider_profile_id: "p9", model: "krea2-text-2-image.json#app",
+                                                        model_label: "krea2-text-2-image 的表单", upgrade: true,
+                                                        plugin_instance_id: "inst9", reason: "表单还是旧格式" } });
+    const card = (await screen.findByText("generationFailedTitle")).closest("[data-generation-failed]") as HTMLElement;
+    await waitFor(() => expect(within(card).getByRole("button", { name: "genModelMissingUpgrade" })).toBeInTheDocument());
+    expect(within(card).queryByRole("button", { name: /genRepeat/ })).toBeNull();
+  });
+
+  it("再来一次:发 /again,不发新的生成请求体", async () => {
+    //: 记着的模型还在选项里才摆(用不了的给「去工作流库升级」)
+    const { writes } = renderStudio({ generations: [failed({ provider: "openai", model: "gpt-image-1" })] });
+    fireEvent.click(await screen.findByRole("button", { name: /genRepeat/ }));
+    await waitFor(() => expect(writes.some((one) => one.url.endsWith("/api/generation/jobs/g1/again"))).toBe(true));
+    expect(writes.some((one) => one.url.endsWith("/api/generation/jobs"))).toBe(false);
+  });
+
+  it("不能照原样再来的(工作台画布、数字人)、记着的模型用不了的:不摆「再来一次」", async () => {
+    renderStudio({ generations: [failed({ provider: "openai", model: "gpt-image-1", repeatable: false })] });
+    await screen.findByText("generationFailedTitle");
+    expect(screen.queryByRole("button", { name: /genRepeat/ })).toBeNull();
+    cleanup();
+    renderStudio({ generations: [failed({ model: "gone-model" })] });
+    await screen.findByText("generationFailedTitle");
+    expect(screen.queryByRole("button", { name: /genRepeat/ }), "模型不在了").toBeNull();
   });
 
   it("服务商做完了、成片没拿回来的:摆「重新取回」,点了发重新取回,不重新生成", async () => {
     const { writes } = renderStudio({ generations: [failed({ retrievable: true })] });
     fireEvent.click(await screen.findByRole("button", { name: /genRetrieve/ }));
-    await waitFor(() => expect(writes).toContainEqual({ url: expect.stringContaining("/api/generation/jobs/g1/retrieve"), method: "POST" }));
+    await waitFor(() => expect(writes).toContainEqual(expect.objectContaining({ url: expect.stringContaining("/api/generation/jobs/g1/retrieve"), method: "POST" })));
     expect(writes.some((one) => one.url.endsWith("/api/generation/jobs"))).toBe(false);
   });
 

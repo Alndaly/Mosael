@@ -150,7 +150,7 @@ export function MessageFooter({
   children,
   className,
 }: {
-  /** 「一键复制」复制什么。 */
+  /** 「一键复制」复制什么。空的就不摆复制钮(比如一轮不写字的生成:没东西可复制)。 */
   content: string;
   children?: React.ReactNode;
   className?: string;
@@ -168,10 +168,12 @@ export function MessageFooter({
     // 会压掉按钮自己的字号类(class 还在,尺寸静默回落到继承值)—— 而它继承的正是这里。
     // 所以顺着它写:容器定 11px,按钮跟着 11px,和旁边的耗时/时间一样齐。
     <div className={cn("mt-1.5 flex min-h-[18px] items-center gap-1.5 text-ui-xs", className)}>
-      <button type="button" className={FOOTER_ACTION_CLASS} onClick={copy}>
-        {copied ? <Check size={11} /> : <Copy size={11} />}
-        {copied ? t("copied") : t("copyMessage")}
-      </button>
+      {content ? (
+        <button type="button" className={FOOTER_ACTION_CLASS} onClick={copy}>
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? t("copied") : t("copyMessage")}
+        </button>
+      ) : null}
       {children}
     </div>
   );
