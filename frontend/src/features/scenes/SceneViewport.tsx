@@ -212,7 +212,9 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       // 从没打开 —— 那些标记是死的。而这一页产出的画面是要交给图像/视频模型当参考的:
       // 影子是模型判断"光从哪来"最强的线索,没有它,参考帧是一张平的图。
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      //: three r186 把 PCFSoftShadowMap 删了(写它只换来每次渲染一句警告,实际按 PCFShadowMap 画)。PCF 认
+      //: shadow.radius,「影子软硬」那个旋钮靠的就是它(见下面的 applyLighting)。
+      renderer.shadowMap.type = THREE.PCFShadowMap;
       element.append(renderer.domElement);
       const scene = new THREE.Scene(),
         root = new THREE.Group();
@@ -270,10 +272,10 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       const applyLighting = (lighting: SceneLighting) => {
         sun.color.copy(kelvinColor(lighting.temperature));
         sun.intensity = lighting.intensity;
-        // 软硬只有一个能调的旋钮:PCFSoft 的模糊半径。它不是物理意义上的面光源,但"硬光
+        // 软硬只有一个能调的旋钮:PCF 的模糊半径。它不是物理意义上的面光源,但"硬光
         // 投影边缘锐利、柔光边缘化开"这一条读者看得出来,而那正是要传给模型的信息。
+        // (此前还设了 blurSamples —— 那是 VSM 才读的,PCF 下是死配置。)
         sun.shadow.radius = 1 + lighting.softness * 12;
-        sun.shadow.blurSamples = lighting.softness > 0.5 ? 16 : 8;
         fitShadow();
       };
       // 着色器网格,没有边(见 infiniteGrid)。此前是一块写死 40 米的 GridHelper:到 ±20 米
