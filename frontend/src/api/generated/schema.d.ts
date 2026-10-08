@@ -3693,6 +3693,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generation/jobs/{generation_id}/again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repeat Generation
+         * @description 再来一次:照这一条记着的模型和参数重新提交一次,收在同一条会话里(见 use_cases.again)。和发送一样花钱。
+         *     不能照原样再来的(工作台画布上那张图、数字人生成)、模型现在用不了的,422 说为什么。
+         */
+        post: operations["repeat_generation_api_generation_jobs__generation_id__again_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scenes/blender/connections": {
         parameters: {
             query?: never;
@@ -12407,6 +12428,23 @@ export interface components {
              *     「查看原始错误」里。没失败就是 None。和画板格子上那句同一个来源(UC-06)。
              */
             readonly error_summary: string | null;
+            /**
+             * Error Detail
+             * @description 失败的原文(上游 / 插件的原话),失败卡默认折起的「详情」里给;和那一句人话说的是同一件事、没有多出信息时是 None ——
+             *     不摆一个点开还是那句话的「详情」(见 domain/failure_summary.detail_of)。
+             */
+            readonly error_detail: string | null;
+            /**
+             * Error Hint
+             * @description 认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」),失败卡上那句话下面摆。没有是 None。
+             */
+            readonly error_hint: string | null;
+            /**
+             * Repeatable
+             * @description 能不能「再来一次」(照这一条记着的模型和参数重新提交一次,POST /generation/jobs/{id}/again):工作台跑画布上那张图的不行
+             *     (那张图不在记录里),带驱动音频的数字人生成不行(授权每次都要本人勾,不替他带过去)。
+             */
+            readonly repeatable: boolean;
             /**
              * Stopped
              * @description 有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
@@ -26845,6 +26883,37 @@ export interface operations {
         };
     };
     retrieve_generation_api_generation_jobs__generation_id__retrieve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repeat_generation_api_generation_jobs__generation_id__again_post: {
         parameters: {
             query?: never;
             header?: never;

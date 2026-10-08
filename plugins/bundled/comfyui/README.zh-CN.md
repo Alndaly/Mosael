@@ -413,6 +413,21 @@ HTTP 404。
 - **有表单的工作流,`list_workflows` 不给完整工作流的 `tool`**:它不进智能体的工具表(`agent: false`),此前照给,智能体拿着一个调不到的
   名字;跑它用 `forms[].tool`,要全部参数走生成、带完整工作流的模型 id。
 
+## 失败时说清是怎么回事(1.22.0)
+
+生成失败时,插件除了那句失败原因,再交一份**失败的样子**(`failure`,见 docs/PLUGIN_MANIFEST「失败的样子」),宿主据此在 AI Studio 的
+失败卡、画板格子上说人话、给对的动作:
+
+- **远端明确失败了还是没拿到**(`remote`):ComfyUI 报了执行错误、任务被中断、那边已经没有这个任务、跑完了却没有产出文件 —— `failed`,
+  再取一次只会拿到同一个错误,宿主不摆「重新取回」;任务交出去之后连不上 ComfyUI、取产出文件时断了 —— `pending`,ComfyUI 可能照样
+  跑完,宿主摆「重新取回」(带着回执接着等,不重新提交)。此前不分,ComfyUI 已经报了「KSampler 出错」,失败卡上照样摆「重新取回」。
+- **一句人话**(`summary`):节点执行出错说成「ComfyUI 执行到「KSampler」这一步出错」(节点在图里的名字,没起就是类名),ComfyUI 的
+  原话(`detail`,「KSampler: …」)收进失败卡的「详情」。缺模型文件、checkpoint 里没有 CLIP / VAE 这几种原来就说人话的,一句话和
+  该怎么办拆成 `summary` 和 `hint`。
+- **认得出的原因**(`hint`,`known_failures.py`):原话里带着一段已知的话,就给一句该去哪修。现在认得 `hostbuf_file_reader_read failed`
+  —— 那台 ComfyUI 的 comfy-kitchen 或 comfyui-workflow-templates 太旧(要 ≥ 0.2.37 / ≥ 0.11.77)。加一种就在 `KNOWN` 里加一行。
+- 失败原因那句话(`error`)不变:任务中心、日志、智能体读的还是它。
+
 ## 精简表单(1.13.0;此前叫「应用表单」)
 
 对应 RunningHub 的「AI 应用」(ADR 0038 第一刀):作者从一张工作流**全部能填的项**里挑出要给别人填的几项、起名、排序、

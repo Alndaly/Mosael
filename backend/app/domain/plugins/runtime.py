@@ -88,6 +88,9 @@ class PluginRuntimeError(LocalizedError, RuntimeError):
     #: 插件说这次失败是因为**对方不再接受已存的令牌**(失败响应里的 `reauthorize: true`)。
     #: 宿主据此把连接标成「需要重新授权」(见 instances.note_authorization)。
     reauthorize: bool = False
+    #: 插件说的**失败的样子**(失败响应里的 `failure`,可选,见 docs/PLUGIN_MANIFEST「失败的样子」,收成规整的形状见 `failure_shape`):
+    #: 远端明确失败了还是没拿到(`remote`)、一句人话(`summary`)、原话(`detail`)、该去哪修(`hint`)。没说是空的。
+    failure: dict[str, Any] = {}
 
 
 class PluginCancelled(PluginRuntimeError):
@@ -280,6 +283,37 @@ def _env(
     }
 
 
+#: 「失败的样子」里 `remote` 认的两个值:`failed` = 远端明确失败了(再问一次也是这一句),`pending` = 交出去了、没等到或没拿到
+#: (远端可能照样做完 —— 生成那一侧据此摆「重新取回」)。
+FAILURE_REMOTE = ("failed", "pending")
+#: 原话最长收多少字;一句人话、一句提示最长多少字。
+_FAILURE_DETAIL_CHARS = 4000
+_FAILURE_TEXT_CHARS = 600
+
+
+def failure_shape(raw: Any) -> dict[str, Any]:
+    """插件说的「失败的样子」收成规整的形状:认不出的格子丢掉。`summary` / `hint` 可以按语言分(`{"zh": …, "en": …}`),原样
+    留着、给人看时再挑。整个认不出就是空的。"""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    if raw.get("remote") in FAILURE_REMOTE:
+        out["remote"] = raw["remote"]
+    for key in ("summary", "hint"):
+        value = raw.get(key)
+        if isinstance(value, dict):
+            texts = {str(lang)[:16]: one.strip()[:_FAILURE_TEXT_CHARS] for lang, one in value.items()
+                     if isinstance(one, str) and one.strip()}
+            if texts:
+                out[key] = texts
+        elif isinstance(value, str) and value.strip():
+            out[key] = value.strip()[:_FAILURE_TEXT_CHARS]
+    detail = raw.get("detail")
+    if isinstance(detail, str) and detail.strip():
+        out["detail"] = detail.strip()[:_FAILURE_DETAIL_CHARS]
+    return out
+
+
 def _final_response(response: Any) -> ToolResult:
     """最后那一个 JSON 对象 → 结果。一问一答和流式两条路共用这一段判读。"""
     if not isinstance(response, dict):
@@ -297,6 +331,7 @@ def _final_response(response: Any) -> ToolResult:
             error.state = dict(state)
         # 只认字面的 true:一个随手写成 "false" 的字符串不该把连接标成要重新授权。
         error.reauthorize = response.get("reauthorize") is True
+        error.failure = failure_shape(response.get("failure"))
         raise error
     output = response.get("output")
     if not isinstance(output, dict):

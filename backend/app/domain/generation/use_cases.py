@@ -135,6 +135,40 @@ def retrieve(db: Session, user: User, generation_id: str) -> tuple[GenerationJob
     return generation, job
 
 
+def again(db: Session, user: User, generation_id: str) -> tuple[GenerationJob, Any]:
+    """「再来一次」:照这一条记着的模型和参数(提示词、反向提示词、参数、输入素材,连同第一次漏斗替他补的那几段说明)重新提交一次,
+    收在同一条会话里。和点发送是同一个漏斗、同样花钱,所以和生成同一道闸(`ai`,会话得是他自己的)。
+
+    工作台跑画布上那张图的(图不在记录里)、带驱动音频的数字人生成(授权每次都要本人勾)不行 —— 生成记录上 `repeatable` 是假,
+    界面不摆这颗按钮。记着的模型现在用不了的,漏斗照常说为什么(见 generation.missing)。"""
+    generation = db.get(GenerationJob, generation_id)
+    if generation is None:
+        raise NotVisible("Not found")
+    ensure_workspace_perm(db, user, generation.workspace_id, "ai")
+    request = dict(generation.request or {})
+    if not generation.session_id or request.get("workbench") or request.get("digital_human_consent"):
+        raise GenerationDomainError("genErr_cannotRepeat")
+    created, job = create_generation_job(
+        db,
+        workspace_id=generation.workspace_id,
+        session_id=generation.session_id,
+        project_id=request.get("project_id"),
+        created_by=user.id,
+        provider=generation.provider,
+        provider_profile_id=generation.provider_profile_id,
+        model=generation.model,
+        kind=generation.kind,
+        prompt=str(request.get("prompt") or ""),
+        negative_prompt=str(request.get("negative_prompt") or ""),
+        parameters=dict(request.get("parameters") or {}),
+        source_assets=[dict(one) for one in request.get("source_assets") or [] if isinstance(one, dict)],
+        carried_notes=[str(one) for one in request.get("prompt_notes") or []],
+    )
+    created_id = created.id
+    after_commit(db, lambda: start_generation_thread(created_id))
+    return created, job
+
+
 def optimize_prompt(
     db: Session,
     user: User,

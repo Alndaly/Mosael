@@ -222,6 +222,25 @@ json.dump({
 
 失败响应还可以带 `"reauthorize": true`,说「对方不再接受已存的令牌」—— 见 `instance.oauth` 那节的「连接的授权状态」。
 
+**失败的样子**(可选的 `failure`,和 `error` 平级):说清这次失败是怎么回事,宿主据此在失败卡上说人话、给对的动作 ——
+
+```python
+json.dump({"ok": False, "error": {"zh": "ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed", "en": "…"},
+           "failure": {
+               "remote": "failed",                       # failed:远端明确失败了;pending:交出去了、没等到或没拿到
+               "summary": {"zh": "ComfyUI 执行到「KSampler」这一步出错", "en": "…"},   # 失败卡上那一句
+               "detail": "KSampler: hostbuf_file_reader_read failed",               # 原话,收进「详情」
+               "hint": {"zh": "这是那台 ComfyUI 上的问题:……", "en": "…"},            # 认得出的原因:该去哪修
+           }}, sys.stdout, ensure_ascii=False)
+```
+
+- `remote`:替宿主做生成的插件最该说的一格。`pending` 的意思是「任务交出去了,但我没等到结果 / 结果没拿回来」(连不上那台服务器、
+  取产出文件时断了),远端可能照样做完 —— 宿主据此在失败卡上摆「重新取回」(带着回执调 `resume`,不重新提交);`failed` 是远端
+  明确失败了(执行出错、被中断、那边已经没有这个任务),再取一次只会拿到同一个错误,宿主不摆。不说就当「不知道」,也不摆。
+- `summary`:一句人话,不带「谁失败了」那截(连接名、「生成失败」由宿主说);`detail`:原话(宿主在它比那一句多出信息时才摆「详情」);
+  `hint`:认得出的原因、该去哪修(只写确定的,认不出就不给)。`summary` / `hint` 可以按语言分。
+- 宿主只认这几格,认不出的丢掉;`error` 照旧是完整的那句失败原因(任务中心、日志、智能体读它)。
+
 **失败的响应里也可以带 `state`**(`{"ok": false, "error": "…", "state": {…}}`),宿主照样记住:令牌续好了、
 重试却撞上一个与令牌无关的失败(文件不存在)时,有的服务(百度)换令牌时连 refresh_token 一起轮换、旧的当场
 作废 —— 这份丢了,下一次只能让用户重新授权。

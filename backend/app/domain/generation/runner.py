@@ -49,6 +49,7 @@ from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now
 from app.domain.providers import models as provider_models
 from app.domain.generation.operations import prompt_for_provider
 from app.domain.jobs import (
+    RESTART_ERROR_KEY,
     blame,
     dispatch_job,
     emit_job_event,
@@ -138,13 +139,39 @@ def resume_generation(job_id: str) -> bool:
         return dispatch_job(db, job, lambda: _run_generation(generation_id, resume_from=poll_path))
 
 
+#: **远端可能已经做完、是我们没拿到结果**的那几种失败(按任务记下的失败原因认):成片下载断了、付费请求发出去没等到回答、等远端
+#: 等过了上限、等的时候后端重启了(GEN-1 / 5 / 6)。插件生成另看它说的失败的样子(见 result_may_exist)。
+RESULT_MAY_EXIST_KEYS = frozenset({
+    "genErr_resultNotCollected",
+    "genErr_outcomeUnknown",
+    "providerErr_pollTimeout",
+    "providerErr_vendorPollTimeout",
+    RESTART_ERROR_KEY,
+})
+
+
+def result_may_exist(error_key: str, error_params: dict | None) -> bool:
+    """这次失败的**性质**:远端那边可能已经做完(或者还在做)、是我们没拿到结果 —— 再问一次值得;不是这一种的(远端明确报了错、
+    当场被拒、还没交出去)再问也只会拿到同一句。
+
+    插件生成(`providerErr_pluginFailed`)按插件说的失败的样子判(`remote`,见 plugin_connections._plugin_failed):`pending` 是交出去了、
+    没等到或没拿到;`failed` 是远端明确失败了(ComfyUI 报了执行错误)—— 此前不分这个,ComfyUI 已经报了「KSampler 出错」,失败卡上照样摆
+    「重新取回」,点了只会拿到同一个错误。没说的(老记录、插件没说)按「不知道」算,不摆。"""
+    if error_key in RESULT_MAY_EXIST_KEYS:
+        return True
+    return error_key == "providerErr_pluginFailed" and (error_params or {}).get("remote") == "pending"
+
+
 def retrievable(db, generation: GenerationJob, job: Job | None) -> bool:
-    """这条失败了的生成能不能「重新取回」:远端任务交出去了(有回执)、这一家能接着取、没有产出、而且**不是被停下的**。
+    """这条失败了的生成能不能「重新取回」:远端任务交出去了(有回执)、这一家能接着取、没有产出、**不是被停下的**,而且失败的
+    性质是「远端可能做完了、我们没拿到」(见 result_may_exist)。
 
     停下 = 用户说了「这一份我不要了」(ADR 0019 Consequences);跑挂了的才值得再问一次。任务被任务中心清掉之后回执跟着没了,
     那时也取不回。
     """
     if job is None or job.status != "failed" or was_cancelled(job) or generation.result_asset_id:
+        return False
+    if not result_may_exist(str(job.error_key or ""), dict(job.error_params or {})):
         return False
     return can_resume(db, job)
 

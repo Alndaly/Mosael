@@ -178,6 +178,17 @@ def retrieve_generation(generation_id: str, db: Tx, user: CurrentUser) -> Genera
     return GenerationCreateResponse(generation=GenerationJobOut.model_validate(record), job=job)
 
 
+@router.post("/generation/jobs/{generation_id}/again", response_model=GenerationCreateResponse)
+def repeat_generation(generation_id: str, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
+    """再来一次:照这一条记着的模型和参数重新提交一次,收在同一条会话里(见 use_cases.again)。和发送一样花钱。
+    不能照原样再来的(工作台画布上那张图、数字人生成)、模型现在用不了的,422 说为什么。"""
+    try:
+        created, job = generation.again(db, user, generation_id)
+    except GenerationDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return GenerationCreateResponse(generation=GenerationJobOut.model_validate(created), job=job)
+
+
 @router.get("/generation/jobs", response_model=list[GenerationJobOut])
 def list_generation_jobs(
     workspace_id: str,

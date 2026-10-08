@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class Line(str):
     """一句话:它本身就是按读的人的语言挑好的那句(当场念给人听的进度、摘要直接用),
@@ -26,13 +28,18 @@ class Line(str):
 
 
 class ComfyError(Exception):
-    """做不成。消息已经是给人看的那一句(按语言挑好了);是 `say` 说的,两种语言都带着(见 `said`)。"""
+    """做不成。消息已经是给人看的那一句(按语言挑好了);是 `say` 说的,两种语言都带着(见 `said`)。
 
-    def __init__(self, message: str, *, status: int = 0, body: str = "") -> None:
+    `failure`(可选):这次失败的样子,原样交给宿主(见 docs/PLUGIN_MANIFEST「失败的样子」)—— `remote`(`failed` = 远端明确
+    失败了,再问也是这一句;`pending` = 交出去了、没等到或没拿到,远端可能照样做完,宿主据此摆「重新取回」)、`summary`(一句人话,
+    宿主摆在失败卡上)、`detail`(ComfyUI 的原话,收进「详情」)、`hint`(认得出的原因:该去哪修,见 known_failures)。"""
+
+    def __init__(self, message: str, *, status: int = 0, body: str = "", failure: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.status = status
         self.body = body
         self.texts: dict[str, str] | None = getattr(message, "texts", None)
+        self.failure = failure
 
     @property
     def said(self) -> dict[str, str] | str:

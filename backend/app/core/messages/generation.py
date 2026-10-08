@@ -180,6 +180,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "请求已经送到服务商,但没等到回答:{detail}。服务商可能照样做完、照样扣了费(这一次的花费按估算记下了)。重新生成之前,先去服务商后台看看这一次有没有扣费、有没有出结果。",
         "en": "The request reached the provider, but no answer came back: {detail}. The provider may have finished it and charged for it anyway (an estimate for this attempt has been recorded). Before generating again, check the provider's console for this charge and result.",
     },
+    "genErr_cannotRepeat": {
+        "zh": "这一条不能照原样再来一次:工作台画布上跑的那张图不在记录里,数字人生成每次都要重新确认授权 —— 在原来的地方重新提交",
+        "en": "This one can't be run again as is: a canvas run from the workbench isn't kept in the record, and a digital-human "
+              "generation needs the consent confirmed each time. Submit it again from where it came from.",
+    },
     "genErr_notRetrievable": {
         "zh": "这条生成没有能重新取回的远端结果:它没提交出去、已经取回过、被停下了,或者这家供应商不支持事后再取",
         "en": "There is no remote result to retrieve for this generation: it was never submitted, was already retrieved, was stopped, or this provider can't hand a result over again.",

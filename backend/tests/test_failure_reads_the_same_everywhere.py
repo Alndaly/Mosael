@@ -104,7 +104,8 @@ def test_画板格子存那一句和原文(monkeypatch) -> None:
     run = canvas["items"][0]["run"]
     assert run["status"] == "failed"
     assert "不认这把密钥" in run["error"] and "://" not in run["error"]
-    assert run["error_detail"].startswith("DashScope 请求失败:Client error '401 Unauthorized'")
+    #: 原文是上游那句原话(谁失败了 —— 「DashScope 请求失败:」那截壳 —— 格子上的模型已经说了)
+    assert run["error_detail"].startswith("Client error '401 Unauthorized'") and "InvalidApiKey" in run["error_detail"]
 
 
 def test_老画板上的失败格子由迁移改成那一句加原文() -> None:
@@ -134,3 +135,50 @@ def test_老画板上的失败格子由迁移改成那一句加原文() -> None:
     first, second = canvas["items"]
     assert first["run"] == {"status": "failed", "error": "DashScope 请求失败:HTTP 401 Unauthorized", "error_detail": old}
     assert second["run"] == {"status": "failed", "error": "没有产出"}, "本来就是一句人话的不动"
+
+
+# --- 失败卡(维护者 2026-10-08:「生成失败」消息框太丑)----------------------------------------------------------------------
+
+#: ComfyUI 执行出错时插件交回的失败的样子(见插件 run.failure):一句人话、原话、认得出的原因。
+COMFY_FAILURE = {
+    "name": "ComfyUI · http://192.168.3.15:8188",
+    "detail": "ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed",
+    "original": "KSampler: hostbuf_file_reader_read failed",
+    "summary": {"__text": {"zh": "ComfyUI 执行到「KSampler」这一步出错", "en": "ComfyUI hit an error at the “KSampler” step"}},
+    "hint": {"__text": {"zh": "这是那台 ComfyUI 上的问题,不是这张工作流的:……", "en": "This is a problem with that ComfyUI install: …"}},
+    "remote": "failed",
+}
+
+
+def test_插件说了一句人话_失败卡写它_不重复连接名_原文和提示各给() -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = _failed_generation(client, key="providerErr_pluginFailed", params=COMFY_FAILURE,
+                                   error="「ComfyUI · http://192.168.3.15:8188」生成失败:ComfyUI 执行失败:KSampler: hostbuf_file_reader_read failed")
+    [record] = client.get("/api/generation/jobs", params={"workspace_id": workspace}).json()
+    assert record["error_summary"] == "ComfyUI 执行到「KSampler」这一步出错"
+    assert record["error_detail"] == "KSampler: hostbuf_file_reader_read failed"
+    assert record["error_hint"].startswith("这是那台 ComfyUI 上的问题")
+    assert record["retrievable"] is False and record["repeatable"] is True
+
+
+def test_插件没说人话的_只留原因_原文和它一样就没有详情() -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    params = {"name": "ComfyUI · http://192.168.3.15:8188", "detail": "ComfyUI 里这个任务被中断了"}
+    workspace = _failed_generation(client, key="providerErr_pluginFailed", params=params,
+                                   error="「ComfyUI · http://192.168.3.15:8188」生成失败:ComfyUI 里这个任务被中断了")
+    [record] = client.get("/api/generation/jobs", params={"workspace_id": workspace}).json()
+    assert record["error_summary"] == "ComfyUI 里这个任务被中断了", "「「连接名」生成失败:」那截前缀不进那一句"
+    assert record["error_detail"] is None, "原文和那一句说的是同一件事:不摆详情"
+    assert record["error_hint"] is None
+
+
+def test_原文比那一句多出信息时才给详情() -> None:
+    from app.domain.failure_summary import detail_of
+
+    params = {"vendor": "DashScope", "detail": HTTPX_401 + BODY}
+    assert detail_of("x", "providerErr_requestFailed", params, "zh").startswith("Client error '401 Unauthorized'")
+    assert detail_of("服务商已经生成好了。", "", {}, "zh") is None

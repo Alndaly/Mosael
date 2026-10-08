@@ -10,7 +10,11 @@
   用户一眼知道下一步是换钥匙、充值、等一会儿还是改参数;
 - 句子里那段上游原文(`detail`)只留**服务商自己说的那句**(回包 JSON 里的 message),没有就去掉 httpx 的套话、
   地址和「For more information check」那截尾巴,截到一句话的长度;
-- 没有 key 的(第三方原话)同样只做这一步清理。
+- 没有 key 的(第三方原话)同样只做这一步清理;
+- 插件说了一句人话的(参数里的 `summary`,ComfyUI:「ComfyUI 执行到「KSampler」这一步出错」)就是它;插件生成失败没说的,只留原因本身
+  —— 「「连接名」生成失败:」那截前缀在失败卡的标题和脚注里已经说过了。
+
+旁边两样:`detail_of`(原文,收进「详情」;和那一句说的是同一件事、没有多出信息时不给)、`hint_of`(认得出的原因:该去哪修)。
 
 不翻、不猜上游的原话,只是不把它整段搬到用户眼前。
 """
@@ -22,7 +26,7 @@ import re
 from typing import Any
 
 from app.ai.providers.contracts.failures import UPSTREAM_ERROR_KEYS, http_status_category
-from app.core.i18n import is_message_key, t
+from app.core.i18n import is_message_key, read_param, t
 
 #: 摘要里那段上游原话最长多少字。再长就是原文了 —— 原文在「查看原始错误」里。
 SUMMARY_DETAIL_CHARS = 160
@@ -38,10 +42,19 @@ _URL = re.compile(r"https?://\S+")
 _HTTP_STATUS = re.compile(r"\bHTTP (\d{3})\b")
 
 
+#: 只是「谁失败了:原因」这一层壳的那几个 key:一句人话里只留原因(谁失败了在失败卡的标题和脚注里)。
+_WRAPPER_KEYS = frozenset({"providerErr_pluginFailed"})
+
+
 def summarize(error: str | None, key: str, params: dict[str, Any] | None, locale: str) -> str:
     """一次失败给人看的那一句话(按 `locale` 翻)。`error` 是原文,`key` / `params` 是它的文案 key 与参数(没有就是空)。"""
+    fields = dict(params or {})
+    said = read_param(fields.get("summary"), locale) if fields.get("summary") else ""
+    if isinstance(said, str) and said.strip():
+        return _clip(said)
+    if key in _WRAPPER_KEYS and isinstance(fields.get("detail"), str) and fields["detail"].strip():
+        return short_detail(fields["detail"])
     if key and is_message_key(key):
-        fields = dict(params or {})
         detail = fields.get("detail")
         if isinstance(detail, str) and detail.strip():
             if key == "providerErr_requestFailed":
@@ -52,6 +65,40 @@ def summarize(error: str | None, key: str, params: dict[str, Any] | None, locale
             fields["detail"] = short_detail(detail)
         return t(key, locale, **fields)
     return short_detail(error or "")
+
+
+def detail_of(error: str | None, key: str, params: dict[str, Any] | None, locale: str) -> str | None:
+    """原文(失败卡、画板格子的「详情」里给):插件给的原话(参数里的 `original`,ComfyUI 的「KSampler: …」)、上游的原话(`detail`),
+    都没有就是记下的那句失败原因。它和那一句人话说的是同一件事、没有多出任何信息时是 None —— 不摆一个点开还是那句话的「详情」。"""
+    fields = dict(params or {})
+    raw = next((fields[key] for key in ("original", "detail") if isinstance(fields.get(key), str) and fields[key].strip()),
+               error)
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    summary = summarize(error, key, params, locale)
+    if _same(text, summary):
+        return None
+    return text
+
+
+def hint_of(params: dict[str, Any] | None, locale: str) -> str | None:
+    """认得出的原因:该去哪修(插件说的 `hint`,ComfyUI:「这是那台 ComfyUI 上的问题:……」)。没有就是 None。"""
+    hint = read_param((params or {}).get("hint"), locale) if (params or {}).get("hint") else ""
+    return hint.strip() if isinstance(hint, str) and hint.strip() else None
+
+
+#: 比「是不是同一件事」时不算的句末标点
+_TRAILING = re.compile(r"[\s.;:,\u3002\uff1b\uff1a\uff0c]+$")
+
+
+def _flat(text: str) -> str:
+    return _TRAILING.sub("", " ".join(text.split()))
+
+
+def _same(raw: str, summary: str) -> bool:
+    """原文和那一句说的是不是同一件事:去掉空白和句末标点之后一样,或者那一句就是原文去掉套话之后的样子。"""
+    return _flat(raw) == _flat(summary) or _flat(short_detail(raw)) == _flat(summary)
 
 
 def status_of(text: str) -> int | None:
@@ -103,4 +150,4 @@ def _clip(text: str) -> str:
     return collapsed[: SUMMARY_DETAIL_CHARS - 1].rstrip() + "…"
 
 
-__all__ = ["SUMMARY_DETAIL_CHARS", "short_detail", "status_of", "summarize"]
+__all__ = ["SUMMARY_DETAIL_CHARS", "detail_of", "hint_of", "short_detail", "status_of", "summarize"]

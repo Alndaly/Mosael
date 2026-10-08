@@ -221,6 +221,7 @@ def _create_generation_job(
     documents: Sequence[ReferenceDocument] = (),
     digital_human_consent: bool = False,
     workbench_graph: dict[str, Any] | None = None,
+    carried_notes: Sequence[str] = (),
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
@@ -288,7 +289,9 @@ def _create_generation_job(
     #: 素材对照只说**调用方给的**那几份:后面 3D 参考渲出来的、`@` 资产挂上的,各自在自己那段说明里交代。
     legend = source_legend(db, workspace_id, source_assets) if name_sources and prompt.strip() else ""
     #: 文档排在补充的最前面,紧跟用户写的那句 —— 画板此前在前端把它直接拼在正文后面,模型收到的顺序不变。
-    notes: list[str] = (
+    #: 「再来一次」带着第一次漏斗替他补的那几段(文档、白模说明、资产描述、素材对照,见 use_cases.again):照第一次交给供应商的
+    #: 那一份原样再交一次,不按今天的资产描述、场景重新拼。
+    notes: list[str] = [str(note) for note in carried_notes if str(note).strip()] + (
         [documents_note(documents)] if documents and (capabilities is None or prompt_mode(capabilities) != "none") else []
     )
     scene_receipt: dict[str, Any] | None = None

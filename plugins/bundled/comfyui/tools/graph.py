@@ -1684,12 +1684,13 @@ def interrupted(status: dict[str, Any]) -> bool:
                for message in status.get("messages") or [])
 
 
-def execution_error_parts(status: dict[str, Any]) -> tuple[str, str] | None:
-    """ComfyUI 自己说的失败:(哪一类节点, 它的原话);历史里没有 execution_error 就是 None。"""
+def execution_error_parts(status: dict[str, Any]) -> tuple[str, str, str] | None:
+    """ComfyUI 自己说的失败:(哪一类节点, 它的原话, 节点 id);历史里没有 execution_error 就是 None。"""
     for message in reversed(status.get("messages") or []):
         if isinstance(message, list) and len(message) == 2 and message[0] == "execution_error":
             payload = message[1] or {}
-            return str(payload.get("node_type") or ""), str(payload.get("exception_message") or "")
+            return (str(payload.get("node_type") or ""), str(payload.get("exception_message") or ""),
+                    str(payload.get("node_id") or ""))
     return None
 
 
@@ -1698,7 +1699,7 @@ def execution_error(status: dict[str, Any]) -> str:
     parts = execution_error_parts(status)
     if parts is None:
         return ""
-    node, said = parts
+    node, said, _ = parts
     return f"{node}: {said}".strip(": ") if said or node else "execution_error"
 
 

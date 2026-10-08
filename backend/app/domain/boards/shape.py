@@ -394,6 +394,13 @@ def _normalize_run(value: Any, item_id: str) -> dict[str, Any] | None:
             raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error_detail")
         if detail.strip():
             run["error_detail"] = detail.strip()[:RUN_ERROR_DETAIL_CHARS]
+    #: 认得出的原因:该去哪修(见 domain/failure_summary.hint_of)
+    hint = value.get("error_hint")
+    if hint is not None:
+        if not isinstance(hint, str):
+            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="run.error_hint")
+        if hint.strip():
+            run["error_hint"] = hint.strip()[:RUN_ERROR_DETAIL_CHARS]
     #: 这一轮跑的是这一格的哪一项能力(见 producer_ids.ability_of)。没有就是它自己的产出者。
     ability = value.get("ability")
     if ability is not None:

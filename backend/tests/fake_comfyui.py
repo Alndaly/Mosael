@@ -1233,7 +1233,7 @@ class _Handler(BaseHTTPRequestHandler):
                     "prompt": [state.next_id, prompt_id, body.get("prompt") or {}, {}, []],
                     "status": {
                         "status_str": "error", "completed": False,
-                        "messages": [["execution_error", {"node_type": state.error_node,
+                        "messages": [["execution_error", {"node_id": "3", "node_type": state.error_node,
                                                           "exception_message": state.error_message}]],
                     },
                 }

@@ -268,6 +268,7 @@ def _canvas_with_delivered_result(
     succeeded: bool = False,
     assets: dict[str, tuple[str, str]] | None = None,
     detail: str = "",
+    hint: str = "",
 ) -> dict[str, Any]:
     """Merge one asynchronous receipt into the newest board projection.
 
@@ -335,6 +336,9 @@ def _canvas_with_delivered_result(
             #: 原文(`reason` 是从它摘出来的那一句,见 domain/failure_summary):格子上「查看原始错误」里给。和那一句一样就不存。
             if detail.strip() and detail.strip() != reason.strip():
                 run["error_detail"] = detail.strip()[:RUN_ERROR_DETAIL_CHARS]
+            #: 认得出的原因:该去哪修(插件说的,见 domain/failure_summary.hint_of)。格子上收在「详情」的悬停里,不撑大格子。
+            if hint.strip():
+                run["error_hint"] = hint.strip()[:RUN_ERROR_DETAIL_CHARS]
             kept.append({**item, "run": {**run, **marker}})
             continue
         if derives:

@@ -256,8 +256,9 @@ def main() -> None:
             raise ComfyError(say(locale, f"不认识的工具:{tool}", f"Unknown tool: {tool}"))
         emit({"ok": True, "output": output})
     except ComfyError as exc:
-        #: 两种语言都交:连接的出错原因会被宿主存下来,给人看时按读的人的语言挑(见 lines)。
-        emit({"ok": False, "error": exc.said})
+        #: 两种语言都交:连接的出错原因会被宿主存下来,给人看时按读的人的语言挑(见 lines)。失败的样子(远端明确失败了还是没拿到、
+        #: 一句人话、原话、提示)有就一起交(见 lines.ComfyError.failure)。
+        emit({"ok": False, "error": exc.said, **({"failure": exc.failure} if exc.failure else {})})
     except pinned.Cancelled:
         # 宿主建了取消文件:它自己知道是取消,这一行只是交代一声
         emit({"ok": False, "error": {"zh": "取消了", "en": "Cancelled"}})

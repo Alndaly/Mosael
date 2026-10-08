@@ -174,6 +174,36 @@ class GenerationJobOut(OrmModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def error_detail(self) -> str | None:
+        """失败的原文(上游 / 插件的原话),失败卡默认折起的「详情」里给;和那一句人话说的是同一件事、没有多出信息时是 None ——
+        不摆一个点开还是那句话的「详情」(见 domain/failure_summary.detail_of)。"""
+        if not self.error_key and not self.error:
+            return None
+        from app.core.i18n import get_current_locale
+        from app.domain.failure_summary import detail_of
+
+        return detail_of(self.error, self.error_key, self.error_params, get_current_locale())
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def error_hint(self) -> str | None:
+        """认得出的原因:该去哪修(插件说的,ComfyUI:「这是那台 ComfyUI 上的问题:……」),失败卡上那句话下面摆。没有是 None。"""
+        if not self.error_params:
+            return None
+        from app.core.i18n import get_current_locale
+        from app.domain.failure_summary import hint_of
+
+        return hint_of(self.error_params, get_current_locale())
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def repeatable(self) -> bool:
+        """能不能「再来一次」(照这一条记着的模型和参数重新提交一次,POST /generation/jobs/{id}/again):工作台跑画布上那张图的不行
+        (那张图不在记录里),带驱动音频的数字人生成不行(授权每次都要本人勾,不替他带过去)。"""
+        return not self.request.get("workbench") and not self.request.get("digital_human_consent")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def stopped(self) -> bool:
         """有人把它停下了(AI 工作台的「停止」、任务中心的取消、画板的停止都走 jobs.cancel_job),不是跑挂了 ——
         界面说「已停止」,不摆一张红色的失败卡。判据和任务总线同一个:取消在库里是 failed + CANCELLED_ERROR_KEY

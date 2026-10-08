@@ -509,6 +509,24 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
   latent_upscale_models (only the ones the server has). A newly installed text encoder shows up in `CLIPLoader`-style dropdowns without
   waiting for some other change.
 
+## Saying what went wrong (1.22.0)
+
+When a generation fails, the plugin now hands over the **shape of the failure** (`failure`, see "Failure shape" in docs/PLUGIN_MANIFEST)
+besides the failure text, so the host's AI Studio failure card and board cells say it in plain words and offer the right actions:
+
+- **Did the remote fail, or did we just not get the result** (`remote`): ComfyUI reported an execution error, the task was interrupted,
+  that ComfyUI no longer knows the task, or it finished without output files — `failed`: retrieving again would only return the same
+  error, so the host shows no "Retrieve again". The task was submitted but ComfyUI became unreachable, or fetching the output files broke
+  off — `pending`: ComfyUI may still finish, so the host offers "Retrieve again" (keeps waiting with the receipt, nothing is resubmitted).
+  Before, it didn't tell them apart and showed "Retrieve again" even after ComfyUI had reported a KSampler error.
+- **One plain sentence** (`summary`): a node execution error reads "ComfyUI hit an error at the “KSampler” step" (the node's title in the
+  graph, or its class), and ComfyUI's own words (`detail`, "KSampler: …") go into the card's Details. The cases that were already worded
+  (missing model file, no CLIP / VAE in the checkpoint) split their sentence and the fix into `summary` and `hint`.
+- **Known causes** (`hint`, `known_failures.py`): when ComfyUI's words contain a known phrase, a sentence on where to fix it comes along.
+  It knows `hostbuf_file_reader_read failed` for now — that ComfyUI's comfy-kitchen or comfyui-workflow-templates is too old (needs
+  ≥ 0.2.37 / ≥ 0.11.77). Adding one is one more line in `KNOWN`.
+- The failure text (`error`) is unchanged: the task center, logs and the agent still read it.
+
 ## Fixes (1.21.1)
 
 - **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's

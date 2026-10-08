@@ -24,7 +24,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
+import convert
 import graph
+import known_failures
 import models
 from comfy_http import Comfy
 from lines import ComfyError, say
@@ -339,9 +341,9 @@ def _follow_ws(comfy: Comfy, socket: WebSocket, prompt_id: str, tracker: _Tracke
                             progress(emit, tracker.fraction(), tracker.message(f"{int(value)}/{int(maximum)}"))
             elif kind == "execution_error" and data.get("prompt_id") == prompt_id:
                 raise failure(locale, str(data.get("node_type") or ""), str(data.get("exception_message") or ""),
-                              tracker.prompt)
+                              tracker.prompt, str(data.get("node_id") or ""))
             elif kind == "execution_interrupted" and data.get("prompt_id") == prompt_id:
-                raise ComfyError(say(locale, "ComfyUI 里这个任务被中断了", "The task was interrupted in ComfyUI"))
+                raise interrupted(locale)
             elif kind == "execution_success" and data.get("prompt_id") == prompt_id:
                 entry = history_entry(comfy, prompt_id)
                 if entry:
@@ -362,13 +364,36 @@ _MISSING_PART = re.compile(r"\b(clip|vae) input is invalid: None", re.IGNORECASE
 _MISSING_FILE = re.compile(r"Model in folder '([^']+)' with filename '([^']+)' not found", re.IGNORECASE)
 
 
-def failure(locale: str, node: str, said: str, api: dict[str, Any] | None) -> ComfyError:
-    """ComfyUI 执行失败时给人看的那句。
+def no_outputs(locale: str) -> ComfyError:
+    """ComfyUI 跑完了、却没有产出文件:远端明确结束了,再取也没有(不摆「重新取回」)。"""
+    line = say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
+               "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node).")
+    return ComfyError(line, failure={"remote": "failed", "summary": line.texts})
+
+
+def interrupted(locale: str) -> ComfyError:
+    """ComfyUI 里这个任务被中断了(界面上点了中断、别人 /interrupt 了它):远端明确停了,再问也是这样。"""
+    line = say(locale, "ComfyUI 里这个任务被中断了", "The task was interrupted in ComfyUI")
+    return ComfyError(line, failure={"remote": "failed", "summary": line.texts})
+
+
+def failure(locale: str, node: str, said: str, api: dict[str, Any] | None, node_id: str = "") -> ComfyError:
+    """ComfyUI 执行失败时给人看的那句,和交给宿主的失败的样子(`ComfyError.failure`:远端明确失败了 —— 再取一次只会拿到同一句)。
 
     认得出的原因说人话、点名是哪个模型文件、说怎么办;认不出的照旧带上 ComfyUI 的原话。此前一律是
     「ComfyUI 执行失败:CLIPTextEncode: ERROR: clip input is invalid: None If the clip is from a checkpoint…」——
     用户在「模型」里挑了一个不带文本编码器的文件,读完这句也不知道是哪个文件、该换成什么。
+
+    交给宿主的那一句人话(`summary`)只说出错在哪一步(节点在图里的名字,没有就是类名),ComfyUI 的原话(`detail`)收进失败卡的
+    「详情」;原话认得出(见 known_failures)再带一句该去哪修(`hint`)。
     """
+    titles = convert.titles_of(api or {})
+    step = titles.get(node_id) or node
+    raw = f"{node}: {said}".strip(": ")
+    hint = known_failures.hint_for(said)
+    told = (say(locale, f"ComfyUI 执行到「{step}」这一步出错", f"ComfyUI hit an error at the “{step}” step").texts if step
+            else say(locale, "ComfyUI 执行出错", "ComfyUI hit an error while running the workflow").texts)
+    shape = {"remote": "failed", "summary": told, "detail": raw, **({"hint": hint} if hint else {})}
     absent = _MISSING_FILE.search(said or "")
     if absent:
         folder, name = absent.groups()
@@ -378,7 +403,9 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None) -> Co
             "文件再试。",
             f"ComfyUI doesn't have the model file “{name}” (folder {folder}). Put it in ComfyUI's models/{folder}, or pick a "
             "file it has in the parameters, and try again.",
-        ))
+        ), failure={**shape, "summary": say(locale, f"ComfyUI 上没有模型文件「{name}」", f"ComfyUI doesn't have the model file “{name}”").texts,
+                    "hint": say(locale, f"把它放进 ComfyUI 的 models/{folder},或者在参数里换成已有的文件再试。",
+                                f"Put it in ComfyUI's models/{folder}, or pick a file it has in the parameters, and try again.").texts})
     missing = _MISSING_PART.search(said or "")
     if missing:
         files = graph.checkpoint_files(api or {})
@@ -393,17 +420,26 @@ def failure(locale: str, node: str, said: str, api: dict[str, Any] | None) -> Co
                 f"The model file {named_en} has no text encoder (CLIP), so a plain checkpoint loader can't read one. Models "
                 "such as Flux or Anima ship their text encoder separately. Pick a complete checkpoint, or save a workflow in "
                 "ComfyUI that loads the text encoder on its own and pick that workflow in Mosael.",
-            ))
+            ), failure={**shape, "summary": say(locale, f"模型文件{named_zh}里没有文本编码器(CLIP)",
+                                                f"The model file {named_en} has no text encoder (CLIP)").texts,
+                        "hint": say(locale, "Flux、Anima 这类模型的文本编码器是单独的文件。换一个完整的 checkpoint;或者在 ComfyUI 里搭一张"
+                                            "单独加载文本编码器的工作流并保存,再在 Mosael 里选那个工作流。",
+                                    "Models such as Flux or Anima ship their text encoder separately. Pick a complete checkpoint, "
+                                    "or save a workflow in ComfyUI that loads the text encoder on its own and pick that workflow in "
+                                    "Mosael.").texts})
         return ComfyError(say(
             locale,
             f"模型文件{named_zh}里没有 VAE。换一个自带 VAE 的 checkpoint;或者在 ComfyUI 里给工作流加一个 VAE 加载节点"
             "并保存,再在 Mosael 里选那个工作流。",
             f"The model file {named_en} has no VAE. Pick a checkpoint with a baked-in VAE, or add a VAE loader to a "
             "workflow in ComfyUI, save it, and pick that workflow in Mosael.",
-        ))
-    text = f"{node}: {said}".strip(": ")
-    return ComfyError(say(locale, f"ComfyUI 执行失败:{text or '详见 ComfyUI 日志'}",
-                          f"ComfyUI execution failed: {text or 'see the ComfyUI log'}"))
+        ), failure={**shape, "summary": say(locale, f"模型文件{named_zh}里没有 VAE", f"The model file {named_en} has no VAE").texts,
+                    "hint": say(locale, "换一个自带 VAE 的 checkpoint;或者在 ComfyUI 里给工作流加一个 VAE 加载节点并保存,再在 Mosael 里选那个"
+                                        "工作流。",
+                                "Pick a checkpoint with a baked-in VAE, or add a VAE loader to a workflow in ComfyUI, save it, and "
+                                "pick that workflow in Mosael.").texts})
+    return ComfyError(say(locale, f"ComfyUI 执行失败:{raw or '详见 ComfyUI 日志'}",
+                          f"ComfyUI execution failed: {raw or 'see the ComfyUI log'}"), failure=shape)
 
 
 def history_entry(comfy: Comfy, prompt_id: str) -> dict[str, Any] | None:
@@ -413,13 +449,13 @@ def history_entry(comfy: Comfy, prompt_id: str) -> dict[str, Any] | None:
         return None
     status = entry.get("status") or {}
     if status.get("status_str") == "error" and graph.interrupted(status):
-        raise ComfyError(say(comfy.locale, "ComfyUI 里这个任务被中断了", "The task was interrupted in ComfyUI"))
+        raise interrupted(comfy.locale)
     if status.get("status_str") == "error":
-        node, said = graph.execution_error_parts(status) or ("", "")
+        node, said, node_id = graph.execution_error_parts(status) or ("", "", "")
         #: 历史条目里存着提交的那张图(`prompt` 的第三项):接着等上一个进程提交的任务时,手里只有它。
         submitted = entry.get("prompt")
         api = submitted[2] if isinstance(submitted, list) and len(submitted) > 2 and isinstance(submitted[2], dict) else {}
-        raise failure(comfy.locale, node, said, api)
+        raise failure(comfy.locale, node, said, api, node_id)
     if status.get("completed") or entry.get("outputs"):
         return entry
     return None
@@ -454,8 +490,10 @@ def follow_poll(comfy: Comfy, prompt_id: str, emit: Emit, locale: str, *, deadli
             # (刚提交的那一瞬间两边都可能还没登记)。
             missing += 1
             if missing >= 5:
-                raise ComfyError(say(locale, f"ComfyUI 里已经找不到任务 {prompt_id}(它可能重启过)",
-                                     f"ComfyUI no longer knows task {prompt_id} (it may have restarted)"))
+                lost = say(locale, f"ComfyUI 里已经找不到任务 {prompt_id}(它可能重启过)",
+                           f"ComfyUI no longer knows task {prompt_id} (it may have restarted)")
+                # 那边已经没有这个任务了:再问也找不到(不摆「重新取回」)
+                raise ComfyError(lost, failure={"remote": "failed", "summary": lost.texts})
         if deadline is not None and time.monotonic() >= deadline:
             return None
         time.sleep(POLL_SECONDS)
@@ -594,6 +632,38 @@ def repeat_note(result: Repeated, locale: str) -> str:
 
 
 def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
+    """替宿主生成一次(见 main 的 `op: generate`)。交出去之后才出的错,没说清是远端明确失败的(执行出错、被中断、那边已经没有
+    这个任务、跑完了没有产出),就是「交出去了、没等到或没拿到」:连不上 ComfyUI、取产出文件时断了 —— 远端可能照样做完,
+    交给宿主的失败的样子标 `remote: pending`,宿主据此摆「重新取回」(见 lines.ComfyError.failure)。还没交出去就出的错不标。
+    两段的失败原因(第一行给人看,下面是地址和底层原话)拆成一句人话和原话。"""
+    resume = request.get("resume")
+    submitted = {"yes": isinstance(resume, dict) and bool(resume.get("prompt_id"))}
+
+    def watching(event: dict[str, Any]) -> None:
+        if event.get("event") == "task":
+            submitted["yes"] = True
+        emit(event)
+
+    try:
+        return _generate(request, comfy, locale, watching)
+    except ComfyError as exc:
+        if exc.failure is None:
+            shape = {**({"remote": "pending"} if submitted["yes"] else {}), **_split(exc)}
+            exc.failure = shape or None
+        raise
+
+
+def _split(exc: ComfyError) -> dict[str, Any]:
+    """「连不上这台 ComfyUI,确认它在运行、地址填对\n<地址>:<底层原因>」这类两段的:第一行是给人看的那一句(两种语言),下面那段
+    (地址和底层原话,不分语言)是原话。"""
+    texts = exc.texts or {}
+    if not texts or not all("\n" in one for one in texts.values()):
+        return {}
+    rest = str(exc).split("\n", 1)[1].strip()
+    return {"summary": {lang: one.split("\n", 1)[0].strip() for lang, one in texts.items()}, **({"detail": rest} if rest else {})}
+
+
+def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
     kind = str(request.get("kind") or "image")
     resume = request.get("resume")
     #: 「结果取自」(见 graph._output_choice):没选就是缺省的「最终结果」,中间一步的预览不交回、不跑;选了一个节点
@@ -647,8 +717,7 @@ def _delivered(comfy: Comfy, entry: dict[str, Any] | None, kind: str, wanted: se
     """跑完的这一次交回什么:这一种的产出(`wanted` 只要那几个节点的),取回到本地,每份带上它来自的节点。"""
     files = graph.collect_outputs(entry or {}, kind, wanted)
     if not files:
-        raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
-                             "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
+        raise no_outputs(locale)
     # 每份产出带上它来自的节点(ADR 0038 §5):宿主记进生成记录和素材的生成参数。不叫 `output_node` —— 那是「结果取自」
     # 的参数键,记进去之后「用同样的参数再来一次」会被当成选了那一个节点
     outputs = [{"path": one["path"], "parameters": {"source_node": one["node"]}}
@@ -720,8 +789,7 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
             files.append({**one, "media": kind})
             seeds.append(seed)
     if not files:
-        raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
-                             "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))
+        raise no_outputs(locale)
     outputs = [{"path": one["path"], "parameters": {"seed": seed, "source_node": one["node"]}}
                for one, seed in zip(download(comfy, files, "comfyui"), seeds, strict=True)]
     output: dict[str, Any] = {

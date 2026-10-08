@@ -38,7 +38,7 @@ from app.ai.providers import (
 )
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.i18n import LocalizedError, get_current_locale, pick_text
+from app.core.i18n import LocalizedError, authored_text, get_current_locale, pick_text
 from app.db.models import PluginInstance, ProviderProfile
 from app.domain import capabilities
 from app.domain.providers import models as provider_models
@@ -50,7 +50,7 @@ from app.domain.plugins import moves as plugin_moves
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import readable_group
 from app.domain.plugins.manifest import GENERATION
-from app.domain.plugins.runtime import PluginCancelled, PluginRuntimeError, StreamHooks
+from app.domain.plugins.runtime import PluginCancelled, PluginRuntimeError, PluginTimeout, StreamHooks
 from app.domain.providers.plugin_vendor import VENDOR_PREFIX, package_of, vendor_for
 
 logger = logging.getLogger(__name__)
@@ -435,10 +435,28 @@ class PluginGenerationAdapter(GenerationAdapter):
             except PluginCancelled as exc:
                 raise GenerationAdapterError("providerErr_cancelled") from exc
             except (PluginDomainError, PluginRuntimeError, LocalizedError) as exc:
-                raise GenerationAdapterError("providerErr_pluginFailed", name=profile.name, detail=str(exc)) from exc
+                raise _plugin_failed(profile.name, exc) from exc
         usage = {**metering_from_request(request), **outcome.usage}
         return GenerationResult(output_paths=outcome.paths, usage=usage, raw_usage=outcome.raw,
                                 output_parameters=outcome.output_parameters, note=outcome.note)
+
+
+def _plugin_failed(name: str, exc: Exception) -> GenerationAdapterError:
+    """插件那边没生成成:原因照插件说的记(`detail`,任务中心、日志读的那句),连同它说的**失败的样子**(见 plugins.runtime.failure_shape)
+    记进参数 —— 失败卡上那一句人话(`summary`)、该去哪修(`hint`)、原话(`original`,失败卡的「详情」),和「远端还会不会有结果」
+    (`remote`):生成那一侧只在远端可能照样做完时摆「重新取回」(见 runner.result_may_exist)。宿主自己等不下去了(超过上限)也是远端
+    可能还在跑。"""
+    failure = dict(getattr(exc, "failure", None) or {})
+    remote = "pending" if isinstance(exc, PluginTimeout) else failure.get("remote", "")
+    return GenerationAdapterError(
+        "providerErr_pluginFailed",
+        name=name,
+        detail=str(exc),
+        **({"original": failure["detail"]} if failure.get("detail") else {}),
+        **({"summary": authored_text(failure["summary"])} if failure.get("summary") else {}),
+        **({"hint": authored_text(failure["hint"])} if failure.get("hint") else {}),
+        **({"remote": remote} if remote else {}),
+    )
 
 
 def _library_file(path: Path) -> Path:

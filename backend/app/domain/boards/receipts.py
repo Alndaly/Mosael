@@ -219,14 +219,17 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     #: domain/failure_summary,UC-06),原文另存在 `run.error_detail`,格子上「查看原始错误」里看。此前格子上贴的
     #: 是原文的头三行 —— 一串 httpx 的英文加一条带签名的地址。
     if job_status == "succeeded":
-        reason, detail = tr("boardErr_noOutput"), ""
+        reason, detail, hint = tr("boardErr_noOutput"), "", ""
     else:
         from app.core.i18n import get_current_locale
-        from app.domain.failure_summary import summarize
+        from app.domain.failure_summary import detail_of, hint_of, summarize
 
-        detail = str(getattr(job, "error", "") or "")
-        reason = summarize(detail, str(getattr(job, "error_key", "") or ""), dict(getattr(job, "error_params", None) or {}),
-                           get_current_locale())
+        error = str(getattr(job, "error", "") or "")
+        key, params = str(getattr(job, "error_key", "") or ""), dict(getattr(job, "error_params", None) or {})
+        reason = summarize(error, key, params, get_current_locale())
+        #: 原文只在它比那一句多出信息时留(和 AI 工作台的失败卡同一个判据);认得出的原因另带一句该去哪修
+        detail = detail_of(error, key, params, get_current_locale()) or ""
+        hint = hint_of(params, get_current_locale()) or ""
 
     board = db.get(Board, board_id)
     if board is None:
@@ -240,7 +243,7 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     def merge(canvas: dict[str, Any]) -> dict[str, Any]:
         item = next((one for one in canvas.get("items") or [] if one.get("id") == item_id), None)
         merged = _canvas_with_delivered_result(
-            canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason, detail=detail,
+            canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason, detail=detail, hint=hint,
             cancelled=was_cancelled(job), succeeded=job_status == "succeeded", assets=assets,
         )
         after = next((one for one in merged.get("items") or [] if one.get("id") == item_id), None)
