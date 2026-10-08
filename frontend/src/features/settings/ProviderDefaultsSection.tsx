@@ -128,8 +128,8 @@ function DefaultRow({
             label: options.length === 0 ? t("providerDefaultsEmpty") : t("providerDefaultsUnset"),
             description: options.length === 0 ? undefined : t("providerDefaultsUnsetHint"),
           },
-          //: 两层名字(ADR 0045):主名是这个模型自己的,第二行说它来自哪条连接;有表单的工作流是一小组(小标题工作流名 +
-          //: 连接名,下面「完整工作流」和每张表单)。和 AI Studio、画板同一种样子;记得住原始 model id 的人仍然搜得到。
+          //: 两层名字(ADR 0045):主名是这个模型自己的,第二行说它来自哪条连接;有表单的工作流的几个入口挨着、
+          //: 各自一行(第二行写「完整工作流」/「来自 X」)。和 AI Studio、画板同一种样子;记得住原始 model id 的人仍然搜得到。
           ...options.map((item) => ({
             value: valueOf(item),
             ...generationPickerEntry(

@@ -25,7 +25,7 @@ describe("添加节点的选项", () => {
     expect(option.keywords).toEqual(["fetch_one_video"]);
   });
 
-  it("同一张工作流的完整工作流和表单(ADR 0045 §7):一小组 —— 小标题工作流名 + 插件名,下面「完整工作流」和每张表单;按工作流名、路径都搜得到", () => {
+  it("同一张工作流的完整工作流和表单(ADR 0045 §7):每个入口一行、名字是它自己的,第二行先说是哪个入口;同属一小组只为搜索;按工作流名、路径都搜得到", () => {
     const said: Record<string, string> = { entryFromGroup: "来自 {name}", entryFullWorkflow: "完整工作流" };
     const t = (key: string) => said[key] ?? key;
     const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
@@ -38,12 +38,14 @@ describe("添加节点的选项", () => {
       "其它",
       t,
     );
-    const section = { key: "ComfyUI\nkrea2-text-2-image.json", label: "krea2-text-2-image", subtitle: "ComfyUI" };
-    expect([full.label, full.section]).toEqual(["完整工作流", section]);
+    const section = { key: "ComfyUI\nkrea2-text-2-image.json" };
+    expect([full.label, full.section]).toEqual(["plugin.c.wf_a", section]);
     expect([form.label, form.section]).toEqual(["plugin.c.wf_a_app", section]);
+    expect(full.description.startsWith("完整工作流 · ComfyUI · "), full.description).toBe(true);
+    expect(form.description.startsWith("来自 krea2-text-2-image · ComfyUI · "), form.description).toBe(true);
     expect(plain.section, "没有表单的工作流照旧一行").toBeUndefined();
     expect(plain.description.startsWith("ComfyUI · ")).toBe(true);
-    expect(form.keywords).toEqual(["wf_a_app", "krea2-text-2-image", "krea2-text-2-image.json", "plugin.c.wf_a_app"]);
+    expect(form.keywords).toEqual(["wf_a_app", "krea2-text-2-image", "krea2-text-2-image.json"]);
   });
 
   it("副标题是纯文本:说明里的 markdown 记号不露出来", () => {

@@ -127,27 +127,28 @@ async function openPicker(panel: HTMLElement) {
 }
 
 describe("同一张工作流的完整工作流和表单:一小组,名字分两层", () => {
-  it("下拉里一小组:小标题工作流名 + 连接名,下面「完整工作流」和表单;按表单标题、工作流名都搜得到", async () => {
+  it("下拉里每个入口一行、各自选得中:主名 + 第二行说是哪个入口;没有点不了的小标题、不缩进;按表单标题、工作流名都搜得到", async () => {
+    // 维护者:「一个无法点击的工作流名称下方有几个选项,而且还会存在莫名其妙的左侧内间距」
     renderStudio();
     const panel = screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true });
     const search = await openPicker(panel);
     const form = await screen.findByRole("option", { name: /快速用krea2生图/ });
-    const full = screen.getByRole("option", { name: /^完整工作流/ });
-    const head = document.querySelector("[data-section-head]") as HTMLElement;
-    expect(head.textContent, "小标题:工作流名和哪台服务器").toBe(`krea2-text-2-image${SERVER}`);
-    expect(form).toHaveAttribute("data-indent");
-    expect(full).toHaveAttribute("data-indent");
+    const full = screen.getByRole("option", { name: /^krea2-text-2-image/ });
+    expect(document.querySelector("[data-section-head]"), "没有点不了的工作流名").toBeNull();
+    expect(full.textContent).toBe(`krea2-text-2-image完整工作流 · ${SERVER}`);
+    expect(form.textContent).toBe(`快速用krea2生图来自 krea2-text-2-image · ${SERVER}`);
+    for (const row of [full, form]) expect(row.className, "和别的行左边对齐").not.toMatch(/\bpl-6\b/);
     expect(form.getAttribute("data-section")).toBe(full.getAttribute("data-section"));
-    expect(screen.getByRole("option", { name: /^gpt-image-1/ }).textContent, "没有表单、不属于哪一组:照旧一行,第二行只有连接名")
+    expect(screen.getByRole("option", { name: /^gpt-image-1/ }).textContent, "没有表单:照旧一行,第二行只有连接名")
       .toBe("gpt-image-1OpenAI");
-    const names = () => screen.getAllByRole("option").map((one) => one.textContent ?? "");
-    expect(names().indexOf("完整工作流") + 1, "表单紧挨着它的完整工作流").toBe(names().indexOf("快速用krea2生图"));
+    const rows = () => screen.getAllByRole("option").map((one) => one.textContent ?? "");
+    expect(rows().indexOf(full.textContent!) + 1, "表单紧挨着它的完整工作流").toBe(rows().indexOf(form.textContent!));
 
     fireEvent.change(search, { target: { value: "快速" } });
-    await waitFor(() => expect(names(), "搜表单标题:整组留着").toEqual(["完整工作流", "快速用krea2生图"]));
+    await waitFor(() => expect(rows(), "搜表单标题:同一张工作流的入口都留着").toEqual([full.textContent, form.textContent]));
     expect(screen.getByRole("option", { name: /快速用krea2生图/ }), "命中的那行加粗").toHaveAttribute("data-hit");
     fireEvent.change(search, { target: { value: "krea2" } });
-    await waitFor(() => expect(names()).toHaveLength(2));
+    await waitFor(() => expect(rows()).toHaveLength(2));
   });
 
   it("右栏那张表下面写着来自哪张工作流;选完整工作流,右栏是全部参数", async () => {
@@ -160,7 +161,7 @@ describe("同一张工作流的完整工作流和表单:一小组,名字分两�
     expect(panel.textContent, "表单只露画幅").not.toContain("步数");
 
     await openPicker(panel);
-    fireEvent.click(await screen.findByRole("option", { name: /^完整工作流/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /^krea2-text-2-image/ }));
     await waitFor(() => expect(panel.textContent).not.toContain("genAppFormSection"));
     expect(panel.textContent, "完整工作流:全部能填的项").toContain("步数");
     expect(panel.textContent).toContain("画幅");

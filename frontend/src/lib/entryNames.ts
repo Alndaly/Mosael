@@ -55,34 +55,30 @@ export function generationOptionKeywords(option: NamedOption): string[] {
   return [option.model_label, option.group?.label ?? "", option.model, option.profile_name].filter(Boolean);
 }
 
-/** 下拉里的一行(生成选项):名字、第二行、搜索词,有表单的工作流再带上它那一小组。 */
+/** 下拉里的一行(生成选项):名字、第二行、搜索词,有表单的工作流再带上它那一小组(只管搜索,见 SearchableSelect)。 */
 export type PickerEntry = {
   label: string;
   description?: string;
   keywords: string[];
   section?: OptionSection;
-  selectedLabel?: string;
 };
 
+/** 有表单的工作流的几个入口同属一小组:同一个连接上的同一张工作流。 */
+function sectionOf(group: EntryGroup | null | undefined, formed: ReadonlySet<string>, connection: string): OptionSection | undefined {
+  return group && formed.has(group.id) ? { key: `${connection}\n${group.id}` } : undefined;
+}
+
 /**
- * 一个生成选项在下拉里怎么摆(ADR 0045 §7「列表按工作流分组」):有表单的工作流是一小组 —— 小标题是工作流名 + 连接名,下面
- * 「完整工作流」和每张表单各一行(行上不再重复来自哪张、哪台);选中之后触发器上写主名。没有表单的工作流、别的模型照旧一行:
- * 主名 + 第二行连接名。搜索词照旧是主名、工作流名、模型 id、连接名(命中小组里任何一行,整个小组留着,见 SearchableSelect)。
+ * 一个生成选项在下拉里怎么摆(ADR 0045 §7「列表按工作流分组」):**每个入口一行、各自能选**,主名 + 第二行副名 ——
+ * 完整工作流「krea2-text-2-image / 完整工作流 · 连接名」,表单「快速出图 / 来自 krea2-text-2-image · 连接名」,和别的模型
+ * 左边对齐。同一张工作流的几个入口挨着(后端排好的顺序),搜到其中一个整组留着(`section`)。此前有表单的工作流上面是一行
+ * 点不了的工作流名、下面「完整工作流」和表单缩进一格。
  */
 export function generationPickerEntry(option: NamedOption, formed: ReadonlySet<string>, t: Translate): PickerEntry {
-  const keywords = generationOptionKeywords(option);
-  const group = option.group;
-  if (!group || !formed.has(group.id)) {
-    const names = generationOptionNames(option, formed, t);
-    return { label: names.primary, description: names.secondary || undefined, keywords };
-  }
-  return {
-    label: group.entry === "form" ? option.model_label || option.model : t("entryFullWorkflow"),
-    keywords: [...keywords, t("entryFullWorkflow")],
-    section: { key: `${option.provider_profile_id ?? option.profile_name}\n${group.id}`, label: group.label,
-               subtitle: option.profile_name || undefined },
-    selectedLabel: option.model_label || option.model,
-  };
+  const names = generationOptionNames(option, formed, t);
+  const section = sectionOf(option.group, formed, option.provider_profile_id ?? option.profile_name);
+  return { label: names.primary, description: names.secondary || undefined, keywords: generationOptionKeywords(option),
+           ...(section ? { section } : {}) };
 }
 
 /** 一个用不了的记着的模型(见 lib/generationOptions 的 useMissingModel):和生成选项同几格名字,外加修法是不是升级。 */
@@ -108,28 +104,21 @@ export function twoLayerTitle(name: TwoLayerName): string {
 }
 
 /**
- * 现查选项里按生成选项列的那几项,摆成两层:第二行是入口那一截再接连接名,按工作流名、模型 id、连接名也搜得到,同一张
- * 工作流的表单入口缩进。后端只给结构化的几格(workflows.field_options.generation_option_names),不拼成一句。别的选项原样。
+ * 现查选项里按生成选项列的那几项,摆成两层:第二行是入口那一截再接连接名,按工作流名、模型 id、连接名也搜得到;有表单的
+ * 工作流的几个入口同属一小组(只管搜索,不画小标题、不缩进,见 generationPickerEntry)。后端只给结构化的几格
+ * (workflows.field_options.generation_option_names),不拼成一句。别的选项原样。
  */
 export function entryNamedOptions<T extends FieldOption>(options: readonly T[], t: Translate) {
   const formed = formedGroups(options.map((one) => ({ group: one.entry_group })));
   return options.map((one) => {
     if (one.profile_name === undefined) return one;
     const group = one.entry_group;
-    if (!group || !formed.has(group.id)) {
-      return {
-        ...one,
-        description: [entryOrigin(group, formed, t), one.profile_name].filter(Boolean).join(" · "),
-        keywords: [group?.label ?? "", one.model ?? "", one.profile_name].filter(Boolean),
-      };
-    }
-    //: 有表单的工作流:一小组(小标题工作流名 + 连接名),行上是「完整工作流」/ 表单标题,触发器上写原来的名字
+    const section = sectionOf(group, formed, one.profile_name);
     return {
       ...one,
-      label: group.entry === "form" ? one.label : t("entryFullWorkflow"),
-      selectedLabel: one.label,
-      keywords: [group.label, one.model ?? "", one.profile_name, one.label].filter(Boolean),
-      section: { key: `${one.profile_name}\n${group.id}`, label: group.label, subtitle: one.profile_name || undefined },
+      description: [entryOrigin(group, formed, t), one.profile_name].filter(Boolean).join(" · "),
+      keywords: [group?.label ?? "", one.model ?? "", one.profile_name].filter(Boolean),
+      ...(section ? { section } : {}),
     };
   });
 }

@@ -16,7 +16,7 @@ export interface NodePickerOption {
   description: string;
   group: string;
   keywords?: string[];
-  /** 有表单的工作流是一小组:小标题工作流名 + 插件名,下面「完整工作流」和每张表单各一行(ADR 0045 §7)。 */
+  /** 有表单的工作流的几个入口同属一小组(ADR 0045 §7):只管搜索,命中一行整组留着(见 SearchableSelect)。 */
   section?: OptionSection;
 }
 
@@ -47,22 +47,11 @@ export function nodePickerOptions(
       //: 按调用名、工作流名、文件路径都搜得到
       const keywords = [meta.tool_name, meta.group?.label, meta.group?.id].filter((one): one is string => Boolean(one));
       const group = meta.group;
-      if (group && formed.has(group.id)) {
-        //: 有表单的工作流(ADR 0045 §7):一小组,小标题是工作流名(节点按插件聚合、不分连接:接插件名,不写连接名),
-        //: 下面「完整工作流」和每张表单(画布上的节点名「工作流 · 表单标题」)
-        return {
-          value: meta.type,
-          label: group.entry === "form" ? meta.label : t("entryFullWorkflow"),
-          description: toPlainText(meta.description),
-          group: meta.category || otherGroup,
-          keywords: [...keywords, meta.label],
-          section: { key: `${meta.plugin_name ?? ""}\n${group.id}`, label: group.label, subtitle: meta.plugin_name || undefined },
-        };
-      }
-      //: 两层名字的副名(ADR 0045):这个工具是哪张工作流的哪个入口。节点按插件聚合、不分连接,不写连接名。
+      //: 两层名字的副名(ADR 0045):这个工具是哪张工作流的哪个入口(「完整工作流」/「来自 krea2-text-2-image」)。节点按插件
+      //: 聚合、不分连接,不写连接名。同名工具可能来自不同插件(两个平台的 fetch_one_video),副标题点名是谁提供的。
+      //: 面板里的副标题最多两行、也参与搜索:用纯文本(节点说明里有 **强调**),来自哪张、哪个插件在最前面,长说明截掉、悬停看全文。
+      //: 有表单的工作流:每个入口一行、各自能选,和别的节点左边对齐;此前上面一行点不了的工作流名,下面缩进一格。
       const origin = entryOrigin(group, formed, t);
-      // 同名工具可能来自不同插件(两个平台的 fetch_one_video),副标题点名是谁提供的。
-      // 面板里的副标题只有一行、也参与搜索:用纯文本(节点说明里有 **强调**)。
       const source = [origin, meta.plugin_name].filter(Boolean).join(" · ");
       return {
         value: meta.type,
@@ -70,6 +59,7 @@ export function nodePickerOptions(
         description: source ? `${source} · ${toPlainText(meta.description)}` : toPlainText(meta.description),
         group: meta.category || otherGroup,
         keywords,
+        ...(group && formed.has(group.id) ? { section: { key: `${meta.plugin_name ?? ""}\n${group.id}` } } : {}),
       };
     });
 }

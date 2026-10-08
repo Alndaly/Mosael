@@ -42,7 +42,7 @@ describe("两层名字", () => {
     expect(twoLayerTitle({ primary: "gpt-image-1", secondary: "" })).toBe("gpt-image-1");
   });
 
-  it("工作流字段的现查选项:有表单的工作流是一小组(行上「完整工作流」/ 表单标题,触发器写原名),没有表单的两层,别的原样", () => {
+  it("工作流字段的现查选项:有表单的工作流每个入口一行、名字是它自己的,第二行说来自哪张;同属一小组只为搜索;别的原样", () => {
     const listed = entryNamedOptions(
       [
         { value: "p9:image:krea2-text-2-image.json#app", label: "快速用krea2生图", model: form.model, profile_name: SERVER,
@@ -53,9 +53,9 @@ describe("两层名字", () => {
       ],
       t,
     );
-    const section = { key: `${SERVER}\nkrea2-text-2-image.json`, label: "krea2-text-2-image", subtitle: SERVER };
-    expect(listed[0]).toMatchObject({ label: "快速用krea2生图", selectedLabel: "快速用krea2生图", section });
-    expect(listed[1]).toMatchObject({ label: "完整工作流", selectedLabel: "krea2-text-2-image · 默认", section });
+    const section = { key: `${SERVER}\nkrea2-text-2-image.json` };
+    expect(listed[0]).toMatchObject({ label: "快速用krea2生图", description: `来自 krea2-text-2-image · ${SERVER}`, section });
+    expect(listed[1]).toMatchObject({ label: "krea2-text-2-image · 默认", description: `完整工作流 · ${SERVER}`, section });
     expect(listed[2]).toEqual({ value: "edge", label: "Edge TTS" });
   });
 });

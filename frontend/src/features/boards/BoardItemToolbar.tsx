@@ -323,13 +323,14 @@ export function ItemToolbar({
               trigger={<MoreButton label={t("boardMoreAbilities")} />}
               actions={overflow.map((ability) => {
                 const Icon = boardToolIcon(ability);
-                //: 有表单的工作流是一组(ADR 0045 §7):小标题工作流名,下面「完整工作流」和每张表单
+                //: 有表单的工作流(ADR 0045 §7):每个入口一行、各自能选,名字是它自己的,悬停说它是哪张工作流的哪个入口;
+                //: 同一张工作流的几个入口用分组线围在一起。此前上面一行点不了的工作流名,下面写「完整工作流」。
                 const group = ability.group && formed.has(ability.group.id) ? ability.group : null;
                 return {
-                  label: group?.entry === "full" ? t("entryFullWorkflow") : ability.label,
+                  label: ability.label,
                   icon: <Icon size={14} />,
-                  hint: group ? ability.plugin_name || undefined : sourceOf(ability) || undefined,
-                  ...(group ? { group: `entry:${group.id}`, groupLabel: group.label } : {}),
+                  hint: sourceOf(ability) || undefined,
+                  ...(group ? { group: `entry:${group.id}` } : {}),
                   onSelect: () => onPanel(item.id, ability.id),
                 };
               })}

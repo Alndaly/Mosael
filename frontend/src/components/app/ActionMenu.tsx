@@ -6,7 +6,6 @@ import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
 import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
 import type { HintShortcut } from "@/components/ui/tooltip";
-import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 export type MenuAction = {
@@ -34,8 +33,6 @@ export type MenuAction = {
    * 不给就和以前一样只有破坏性条目自动单独成组。
    */
   group?: string;
-  /** 这一组的小标题(画在分组线下面、组里第一项上面;有表单的工作流:工作流名,下面「完整工作流」和每张表单,ADR 0045 §7)。 */
-  groupLabel?: string;
 };
 
 /**
@@ -78,11 +75,6 @@ export function ActionMenu({
         {actions.map((action, i) => (
           <Fragment key={action.label}>
             {startsGroup(actions, i) && <MenuSeparator />}
-            {action.groupLabel && (i === 0 || (actions[i - 1].group ?? "") !== (action.group ?? "")) && (
-              <div role="presentation" data-menu-group-label="" className="grid px-2 pb-0.5 pt-1 text-ui-xs font-medium text-muted-foreground">
-                <Truncate>{action.groupLabel}</Truncate>
-              </div>
-            )}
             <PopoverClose asChild>
               <MenuItem
                 icon={action.icon}

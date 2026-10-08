@@ -28,25 +28,10 @@ export type PickerOption = {
    * 同一个约定,两个分支都分组;没有标题的那几项不分组。
    */
   group?: string;
-  /** 挂在上一项下面、缩进一格(同一张工作流的表单入口挂在它的完整工作流下面,ADR 0045)。两个分支都缩。 */
-  indent?: boolean;
-  /** 组里的一小组(有表单的工作流:小标题是工作流名 + 连接名,下面「完整工作流」和每张表单各一行,ADR 0045 §7)。两个分支都画。
-   *  搜索的规矩见 SearchableSelect:命中一行,整个小组留着。 */
+  /** 属于哪一小组(有表单的工作流的几个入口,ADR 0045 §7):只管搜索 —— 命中一行整个小组留着,见 SearchableSelect。
+   *  不画小标题、不缩进,每一行自己是一个能选的入口。 */
   section?: OptionSection;
-  /** 选中之后触发器上写什么(小组里的「完整工作流」单独写在触发器上说不清是哪张);不给就是 `label`。 */
-  selectedLabel?: string;
 };
-
-/** 相邻的同一小组(`section.key`)归成一段;不属于哪一小组的行各自一段(不重排)。 */
-function sectionRuns(rows: PickerOption[]): Array<{ section?: OptionSection; rows: PickerOption[] }> {
-  const out: Array<{ section?: OptionSection; rows: PickerOption[] }> = [];
-  for (const row of rows) {
-    const last = out[out.length - 1];
-    if (last && row.section && last.section?.key === row.section.key) last.rows.push(row);
-    else out.push({ section: row.section, rows: [row] });
-  }
-  return out;
-}
 
 /** 相邻的同名 `group` 归成一组(不重排)。 */
 function groupAdjacent(options: PickerOption[]): Array<[string, PickerOption[]]> {
@@ -147,7 +132,7 @@ export function OptionPicker({
             {icon}
             {/* 选中的值在触发器里会被截断(一个 checkpoint 文件名动辄四五十个字符):悬停看得到全名。 */}
             <Truncate className={cn(!selected && (missing ? "text-warning" : "text-muted-foreground"))} style={selected?.style}>
-              {selected?.selectedLabel ?? selected?.label ?? (missing ? missingLabel : null) ?? placeholder ?? ""}
+              {selected?.label ?? (missing ? missingLabel : null) ?? placeholder ?? ""}
             </Truncate>
             <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
           </button>
@@ -167,7 +152,7 @@ export function OptionPicker({
                        data-missing={missing ? "" : undefined} {...rest}>
           {icon}
           <SelectValue placeholder={missing ? missingLabel : placeholder}>
-            {selected ? <Truncate>{selected.selectedLabel ?? selected.label}</Truncate> : undefined}
+            {selected ? <Truncate>{selected.label}</Truncate> : undefined}
           </SelectValue>
         </SelectTrigger>
       </Hint>
@@ -181,24 +166,12 @@ export function OptionPicker({
               style={one.style}
               description={one.description}
               media={one.media}
-              className={one.indent || one.section ? "pl-6" : undefined}
-              data-indent={one.indent || one.section ? "" : undefined}
               data-section={one.section?.key}
             >
               {one.label}
             </SelectItem>
           );
-          //: 一小组(有表单的工作流)自成一个 SelectGroup,小标题是它的 SelectLabel —— Radix 的 SelectLabel 只能放在 SelectGroup 里,
-          //: 光秃秃地挂在清单里整页报错(画板格子的模型下拉不到 8 项、又有一张带表单的工作流时就是这样)
-          const items = sectionRuns(rows).map((run) => run.section ? (
-            <SelectGroup key={`section:${run.section.key}`} data-section-group={run.section.key}>
-              <SelectLabel data-section-head={run.section.key} className="grid gap-px font-normal">
-                <Truncate className="font-medium text-foreground">{run.section.label}</Truncate>
-                {run.section.subtitle && <Truncate className="text-muted-foreground">{run.section.subtitle}</Truncate>}
-              </SelectLabel>
-              {run.rows.map(item)}
-            </SelectGroup>
-          ) : run.rows.map(item));
+          const items = rows.map(item);
           return heading ? (
             <SelectGroup key={heading}>
               <SelectLabel>{heading}</SelectLabel>

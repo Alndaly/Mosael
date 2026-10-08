@@ -217,25 +217,25 @@ describe("短清单里的小组;记着的那一项不在清单里", () => {
       scrollIntoView: () => {},
     });
   });
-  const SECTION = { key: "p9\nkrea2.json", label: "krea2", subtitle: "ComfyUI" };
+  const SECTION = { key: "p9\nkrea2.json" };
   const SECTIONED: PickerOption[] = [
     { value: "builtin", label: "内置文生图" },
-    { value: "krea2.json", label: "完整工作流", section: SECTION, selectedLabel: "krea2" },
-    { value: "krea2.json#app", label: "快速出图", section: SECTION },
+    { value: "krea2.json", label: "krea2", description: "完整工作流 · ComfyUI", section: SECTION },
+    { value: "krea2.json#app", label: "快速出图", description: "来自 krea2 · ComfyUI", section: SECTION },
     { value: "girl.json", label: "girl" },
   ];
 
-  it("没有分组标题时也能打开:小组的小标题在、组里的行缩进,选得中", () => {
+  it("有表单的工作流:没有点不了的小标题、不缩进,每个入口一行、各自选得中", () => {
+    // 维护者:「一个无法点击的工作流名称下方有几个选项,而且还会存在莫名其妙的左侧内间距」
     const onChange = vi.fn();
     render(<OptionPicker value="krea2.json#app" onChange={onChange} options={SECTIONED} ariaLabel="模型" />);
     fireEvent.click(screen.getByRole("combobox", { name: "模型" }));
-    const head = document.querySelector("[data-section-head]");
-    expect(head?.textContent).toContain("krea2");
-    expect(head?.closest("[role=group]")?.getAttribute("data-section-group")).toBe(SECTION.key);
-    expect(screen.getByRole("option", { name: "完整工作流" })).toHaveAttribute("data-indent");
-    expect(screen.getByRole("option", { name: "girl" })).not.toHaveAttribute("data-indent");
-    fireEvent.click(screen.getByRole("option", { name: "girl" }));
-    expect(onChange).toHaveBeenCalledWith("girl.json");
+    expect(document.querySelector("[data-section-head]")).toBeNull();
+    const full = screen.getByRole("option", { name: /^krea2/ });
+    expect(full.className).not.toMatch(/\bpl-6\b/);
+    expect(full.textContent).toContain("完整工作流 · ComfyUI");
+    fireEvent.click(full);
+    expect(onChange).toHaveBeenCalledWith("krea2.json");
   });
 
   it("记着的那一项不在清单里:触发器写它(用不了),不写占位", () => {

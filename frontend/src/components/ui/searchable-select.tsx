@@ -29,19 +29,16 @@ type Option = {
   style?: React.CSSProperties;
   /** 行首的一张小图(模型文件的缩略图),比 `icon` 大一号。 */
   media?: React.ReactNode;
-  /** 挂在上一项下面、缩进一格(同一张工作流的表单入口挂在它的完整工作流下面,ADR 0045)。顺序仍由提供选项的一方定。 */
-  indent?: boolean;
   /**
-   * 这一项属于组里的哪一小组(有表单的工作流:组标题是工作流名 + 连接名,下面「完整工作流」和每张表单各一行,ADR 0045 §7)。
-   * 相邻的同一个 `key` 归一小组,上面一行不能选的小标题,组里的行缩进一格。**搜索命中小组里任何一行,整个小组留着**
-   * (按原来的顺序),命中的那几行加粗 —— 搜「精调」还看得见它是哪张工作流的、旁边还有哪几个入口。
+   * 这一项属于哪一小组(有表单的工作流:它的完整工作流和每张表单,ADR 0045 §7)。只管搜索和排序:相邻的同一个 `key` 当一项排,
+   * **搜索命中小组里任何一行,整个小组留着**(按原来的顺序),命中的那几行加粗 —— 搜「精调」还看得见同一张工作流的别的入口。
+   * 不画小标题、不缩进:每一行自己就是一个能选的入口,第二行说它是哪张工作流的(见 lib/entryNames 的两层名字)。此前小组上面
+   * 有一行点不了的工作流名、下面的几行缩进一格,维护者说「一个无法点击的标题、莫名其妙的左侧内间距」。
    */
   section?: OptionSection;
-  /** 选中之后触发器上写什么(小组里的行名字常是「完整工作流」,单独写在触发器上说不清是哪张);不给就是 `label`。 */
-  selectedLabel?: string;
 };
 
-export type OptionSection = { key: string; label: string; subtitle?: string };
+export type OptionSection = { key: string };
 
 /**
  * 可搜索、限高的下拉——用于选项多到普通 Select 会溢出屏幕的场景(如 ComfyUI 的 checkpoint/采样器
@@ -193,7 +190,7 @@ export function SearchableSelect({
     [options],
   );
   const selected = items.find((item) => item.value === value);
-  const selectedText = selected?.selectedLabel ?? selected?.label;
+  const selectedText = selected?.label;
   const missing = !selected && Boolean(missingLabel);
   const hasDescriptions = items.some((item) => item.description);
   // 按**相邻**的同名 group 归组,不重排 —— 提供选项的一方已经排好了顺序(节点面板的
@@ -275,16 +272,8 @@ export function SearchableSelect({
           >
             <CommandEmpty>{emptyText ?? t("searchableSelectNoMatch")}</CommandEmpty>
             {shown.map(([heading, groupItems]) => {
-              const rows = groupItems.map((item, index) => (
+              const rows = groupItems.map((item) => (
                 <React.Fragment key={item.value}>
-                {item.section && item.section.key !== groupItems[index - 1]?.section?.key && (
-                  // 小组的标题(工作流名 + 连接名):不能选,只说下面这几行是哪张工作流的
-                  <div role="presentation" data-section-head={item.section.key}
-                       className="grid gap-px px-2 pb-0.5 pt-1.5 text-ui-xs leading-[1.35] text-muted-foreground">
-                    <Truncate className="font-medium text-foreground">{item.section.label}</Truncate>
-                    {item.section.subtitle && <Truncate>{item.section.subtitle}</Truncate>}
-                  </div>
-                )}
                 <CommandItem
                   key={item.value}
                   // **cmdk 拿 value 认「哪一行」**(高亮、键盘上下、选中都按它),所以它必须是这一项唯一的
@@ -295,8 +284,7 @@ export function SearchableSelect({
                     onValueChange(item.value);
                     setOpen(false);
                   }}
-                  className={cn((item.indent || item.section) && "pl-6", query && item.section && item.hit && "font-semibold")}
-                  data-indent={item.indent || item.section ? "" : undefined}
+                  className={cn(query && item.section && item.hit && "font-semibold")}
                   data-section={item.section?.key}
                   data-hit={query && item.section && item.hit ? "" : undefined}
                 >
@@ -312,11 +300,14 @@ export function SearchableSelect({
                       {item.media}
                     </span>
                   )}
-                  {/* 名字是动态的长值(模型名、文件名):单行截断、悬停看全文。说明是静态的一句话:折行。 */}
+                  {/* 名字是动态的长值(模型名、文件名):单行截断、悬停看全文。说明最多两行,长的(插件节点交给智能体读的那一段)
+                      截在两行、悬停看全文 —— 此前整段折行,一项占四五行,清单里一屏看不到几项。 */}
                   <span className="grid min-w-0 flex-1 gap-px leading-[1.35]" style={item.style}>
                     <Truncate>{item.label}</Truncate>
                     {item.description && (
-                      <span className="break-words text-ui-xs text-muted-foreground">{item.description}</span>
+                      <Truncate lines={2} className="text-ui-xs text-muted-foreground" data-option-description="">
+                        {item.description}
+                      </Truncate>
                     )}
                   </span>
                   {item.value === value && <Check size={14} className="shrink-0 text-primary" />}

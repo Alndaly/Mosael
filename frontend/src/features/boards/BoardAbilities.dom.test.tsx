@@ -65,7 +65,7 @@ const PRODUCERS = [
   producer("node:plugin.x.music", "配乐", { hosts: ["audio"], fills_empty_slot: true }),
 ];
 
-function mount(items: BoardItem[]) {
+function mount(items: BoardItem[], producers: BoardProducerInfo[] = PRODUCERS) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const canvas: Canvas = { items, edges: [], markers: [] };
   render(
@@ -79,7 +79,7 @@ function mount(items: BoardItem[]) {
             onChange={() => undefined}
             onPickAsset={() => undefined}
             onRun={vi.fn(async () => undefined)}
-            producers={PRODUCERS}
+            producers={producers}
           />
         </div>
       </ImagePreviewProvider>
@@ -140,6 +140,24 @@ describe("操作条上的能力", () => {
     act(() => row.click());
     expect(abilityButton("放大").getAttribute("aria-pressed")).toBe("true");
     expect(composer()?.dataset.boardComposer).toBe("ability");
+  });
+
+  it("「⋯」里有表单的工作流:每个入口一行、写它自己的名字,上面没有一行点不了的工作流名", () => {
+    // 维护者:「一个无法点击的工作流名称下方有几个选项」—— 此前组上一行工作流名,下面写「完整工作流」和表单标题
+    const group = { id: "krea2.json", label: "krea2" };
+    mount([video], [
+      ...PRODUCERS,
+      ability("node:plugin.c.wf_a", "工作流 · krea2", ["video"], "clip", { plugin_name: "ComfyUI", group: { ...group, entry: "full", order: 0 } }),
+      ability("node:plugin.c.wf_a_app", "工作流 · 快速出图", ["video"], "clip", { plugin_name: "ComfyUI", group: { ...group, entry: "form", order: 1 } }),
+    ]);
+    select("vi");
+    act(() => abilityButton("boardMoreAbilities").click());
+    const more = screen.getByRole("menu", { name: "boardMoreAbilities" });
+    expect(more.querySelector("[data-menu-group-label]")).toBeNull();
+    const rows = [...more.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((one) => one.textContent);
+    expect(rows, "名字下面一行说是哪个入口、哪个插件").toEqual(expect.arrayContaining([
+      "工作流 · krea2entryFullWorkflow · ComfyUI", "工作流 · 快速出图entryFromGroup · ComfyUI",
+    ]));
   });
 
   it("点一项,它的面板挂在格子下面;点另一项,下面那块换成它的;再点一次收起", () => {

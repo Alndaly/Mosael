@@ -1117,8 +1117,8 @@ export function NodeComposer({
                 placeholder={t("genPickModel")}
                 missingLabel={missingEngine ? missingModelLabel(missingModel.missing, t) : null}
                 onChange={pickModel}
-                //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪台服务器;有表单的工作流是一小组
-                //: (小标题工作流名 + 连接名,下面「完整工作流」和每张表单)。按主名、工作流名、文件名、连接名都搜得到。
+                //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪台服务器;有表单的工作流的几个入口
+                //: 挨着、各自一行。按主名、工作流名、文件名、连接名都搜得到。
                 options={options.map((one) => ({ value: `${one.provider_profile_id}:${one.model}`, ...generationPickerEntry(one, formed, t) }))}
               />
             </span>
