@@ -102,8 +102,9 @@ describe("默认模型所在的连接用不了", () => {
     defaults = [{ capability: "chat", provider_profile_id: "kimi", model: "k3", is_mine: true }];
     models = [{ provider_profile_id: "kimi", provider_name: "Kimi", model: "k3", display_name: "k3" }];
     const { container } = renderSection("chat");
-    await screen.findByText("capChat");
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    //: 等到默认值真的显示在那一格里(连接、默认、候选模型都到了 —— 「用不了」就是在这一刻算出来的)再看。
+    //: 不睡 30 毫秒:机器一忙数据还没到,「没说」照样成立,判据撤掉也是绿的。
+    await waitFor(() => expect(container.textContent).toContain("k3"));
     expect(container.querySelector("[data-default-broken]")).toBeNull();
   });
 });
