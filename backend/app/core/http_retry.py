@@ -111,6 +111,39 @@ def resend_is_safe(request: httpx.Request, exc: httpx.RequestError) -> bool:
     return not isinstance(exc, httpx.ReadTimeout)
 
 
+#: 请求送到了、回答断在半路:读超时之外,连接在回答中途断掉(对面掉线、回了半截)也是这一类。
+_ANSWER_LOST = (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError)
+#: 网关替源站回的「我没等到」:502 / 504,和 Cloudflare 的 520–527、530(源站照样在做)。源站自己回的 500 不算 ——
+#: 那是它说「我这儿出错了」,多半没做成。
+_GATEWAY_GAVE_UP = frozenset({502, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530})
+
+
+def sent_but_unanswered(exc: BaseException) -> bool:
+    """这次失败是不是「非幂等请求送到了、没等到回答」—— 对方做没做不知道,多半在做、会扣钱。
+
+    和 `resend_is_safe` / `status_resend_is_safe` 同一个判据的另一面:那边据此**不重发**,这里据此**不说成当场被拒**。
+    读超时、回答中途断线,或者网关回了「没等到」(502 / 504 / Cloudflare 52x:中间一层没等到,源站照样在做)。连不上、连接池
+    等不到、对方明说没处理(429 / 503 / 529)、4xx 都是「没做」。GET 这类幂等请求(轮询、下载)不算 —— 那不是付费的那一下。
+
+    顺着 `__cause__` / `__context__` 找:适配器把 httpx 的异常包成了自己的错误再抛(`raise … from exc`)。
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, httpx.HTTPStatusError):
+            status = current.response.status_code
+            return current.request.method.upper() not in _IDEMPOTENT_METHODS and status in _GATEWAY_GAVE_UP
+        if isinstance(current, _ANSWER_LOST):
+            try:
+                method = current.request.method.upper()
+            except RuntimeError:  # 没挂请求的(手工抛的):不知道是哪种请求,不猜
+                return False
+            return method not in _IDEMPOTENT_METHODS
+        current = current.__cause__ or current.__context__
+    return False
+
+
 def backoff_seconds(attempt: int) -> float:
     """指数退避 + 少量抖动。抖动是为了让同时失败的多个请求不要在同一刻一起重击供应商。"""
     return min(_BASE_SECONDS * 2**attempt, _MAX_SLEEP_SECONDS) + random.uniform(0, 0.4)

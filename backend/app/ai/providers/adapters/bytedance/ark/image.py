@@ -20,6 +20,7 @@ from app.ai.providers.contracts.generation import (
     metering_from_request,
 )
 from app.ai.providers.adapters.bytedance.ark.errors import ark_http_error
+from app.ai.providers.adapters.shared.sync_calls import sync_generation_timeout
 from app.ai.media_transfer import download_to_path
 
 """
@@ -98,7 +99,7 @@ class SeedreamAdapter(GenerationAdapter):
         base_url = (context.base_url or ARK_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
-            with RetryingClient(base_url=base_url, timeout=180, headers=headers) as client:
+            with RetryingClient(base_url=base_url, timeout=sync_generation_timeout(), headers=headers) as client:
                 response = client.post(IMAGES_PATH, json=build_image_payload(request, context))
                 response.raise_for_status()
                 payload = response.json()

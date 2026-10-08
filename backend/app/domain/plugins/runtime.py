@@ -48,7 +48,7 @@ from app.core.child_process import ChildProcess, ProcessOutputLimitExceeded, kil
 from app.core.text import blame_line
 from app.core.i18n import LocalizedError, authored_text, get_current_locale
 from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
-from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
+from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV, cancel_file_for
 from app.domain.plugins.child_env import base_env
 from app.domain.plugins.egress import UNDECIDED, Egress
 from app.domain.plugins.manifest import LOCALE_ENV
@@ -399,7 +399,7 @@ def stream_tool(
     entry_path = resolve_entry(plugin_dir, entry)
     locale = get_current_locale()
     request = json.dumps({"tool": tool_name, "input": input_payload, "locale": locale}, ensure_ascii=False)
-    cancel_file = Path(f"{scratch_dir}.cancel") if scratch_dir is not None else None
+    cancel_file = cancel_file_for(scratch_dir) if scratch_dir is not None else None
     env = _env(locale, credentials, scratch_dir, data_dir, egress)
     if cancel_file is not None:
         env[CANCEL_ENV] = str(cancel_file)

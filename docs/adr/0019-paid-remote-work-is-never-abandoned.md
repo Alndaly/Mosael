@@ -138,3 +138,40 @@ booked as succeeded with `cancelled_locally`, not dropped. (`tests/test_cancelle
 **Known limits.** The receipt lives on the job; clearing finished jobs from the task center also clears what
 Retrieve again needs. A synchronous paid call whose response never arrives (read timeout, restart mid-call) is
 still booked as not billed; telling "sent, outcome unknown" apart from "rejected on the spot" is open.
+
+## Revision (2026-10-08, second pass): an unanswered call is not a free one, and following a stopped task costs nothing but the wait
+
+The first revision left three gaps; each is now pinned by a regression test.
+
+1. **"Sent, outcome unknown" is told apart from "rejected on the spot".** A non-idempotent request that reached the
+   provider and got no answer — a read timeout, a connection dropped mid-answer, or a gateway's "I didn't wait"
+   (502 / 504 / Cloudflare 52x; a plain 500 from the origin is not one) — is classified by
+   `http_retry.sent_but_unanswered`, the other face of the rule that refuses to resend it. Such a failure is booked
+   as an estimate from the request, annotated `outcome_unknown`, and the job says *"the request reached the
+   provider but no answer came back; it may have finished and charged — check its console before generating
+   again"* (`genErr_outcomeUnknown`). A 401 or a refused connection is still *not billed*. Synchronous paid calls
+   (OpenAI images, Seedream, Qwen image edit) now wait up to 600 s for the answer instead of 120 / 180 s; connecting
+   still gives up after 30 s. (`tests/test_unanswered_paid_calls_are_billed.py`)
+2. **A restart in the middle of a provider call is booked.** The runner marks the job (`payload.provider_call`)
+   just before it calls the adapter and removes the mark when it is done, whatever the outcome; a process that
+   dies in between leaves the mark. After the restart, `generation.runner.reconcile_unsettled_charges` (registered
+   in `domain/restart`, after the job reconciler) books an estimate annotated `interrupted_by_restart` (plus
+   `unsettled_remote_task` when a receipt existed but the provider cannot be resumed) for each such job that the job
+   reconciler failed — once; resumable ones were already picked up and are not touched.
+3. **Following a stopped task to its end no longer downloads the result or holds a slot.** When a cancelled task
+   cannot be withdrawn, the runner still follows it to a terminal state so the charge can be booked, but through a
+   watch with `collect=False`: the shared poll loop hands over the terminal payload and stops
+   (`RemoteTaskSettled`) instead of returning a URL to download. The charge is booked from that payload with
+   `cancelled_locally`, as before. While following, the job yields its slot (the same mechanism as waiting on a
+   child job). The job is marked `remote_task.following`; a restart in the middle resumes the follow in a
+   background thread and books it (the mark is removed after the booking commits, so a second restart cannot book
+   it twice — the idempotency key would refuse anyway). Stopping still means giving up the result: nothing lands
+   in the library. Adapters that do not use the shared poll loop (plugin providers) still follow by collecting.
+   (`tests/test_cancelled_generations_follow_without_downloading.py`)
+
+Related: the runner's working directory (and the plugin output directory) moved from the system temp directory to
+`<data dir>/tmp/<purpose>/`, cleared at startup before any job resumes, so a process killed mid-download no longer
+leaves hundreds of megabytes behind. (`tests/test_scratch_left_by_a_killed_backend_is_cleared.py`)
+
+**Still open.** A synchronous call that the *user* stops while it is in flight is still booked as not billed
+(stopping aborts the connection; whether the provider finished is unknown, and the user chose to give it up).

@@ -10,10 +10,12 @@ from typing import Any, TypeVar
 from app.ai.providers.contracts.generation import (
     POLL_TIMEOUT_SECONDS,
     GenerationAdapterError,
+    RemoteTaskSettled,
     provider_payload_settled,
     remember_remote_task,
     remote_task_cancelled,
     remote_task_interrupted,
+    result_wanted,
 )
 from app.ai.providers.adapters.shared.errors import PollAnswerUnreadable, transient_poll_failure
 
@@ -104,6 +106,9 @@ def poll_until_ready(
         if ready:
             # **先交回包,再回产物。**调用方接下来要下载 —— 下载失败的话,这份写着用量和扣费的回包不能跟着丢。
             provider_payload_settled(payload)
+            if not result_wanted():
+                # 停下之后替记账跟到这里的:回包就是要的全部,成片不下(见 RemoteTaskWatch.collect)。
+                raise RemoteTaskSettled()
             return ready, payload
         time.sleep(interval)
     # 是哪一家超时了由调用方给(`vendor`):那句话会一路显示到用户眼前,收成一份不带名字的

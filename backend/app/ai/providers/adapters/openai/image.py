@@ -23,6 +23,7 @@ from app.ai.providers.contracts.generation import (
     source_url_values,
 )
 from app.ai.providers.adapters.shared.errors import adapter_http_error
+from app.ai.providers.adapters.shared.sync_calls import sync_generation_timeout
 from app.ai.media_transfer import download_to_path, fetch_bytes
 
 """
@@ -140,7 +141,7 @@ class OpenAIImageAdapter(GenerationAdapter):
         base_url = (context.base_url or OPENAI_BASE).rstrip("/")
         headers = {"Authorization": f"Bearer {context.api_key}"}
         try:
-            with RetryingClient(base_url=base_url, timeout=120, headers=headers) as client:
+            with RetryingClient(base_url=base_url, timeout=sync_generation_timeout(), headers=headers) as client:
                 references = request.sources_for(REFERENCE_IMAGE)
                 reference_urls = source_url_values(request.parameters, REFERENCE_IMAGE, request.kind)
                 if references or reference_urls:

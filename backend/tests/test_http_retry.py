@@ -200,6 +200,8 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         # DeepFilterNet 起的是本机二进制。下载那一步在 runtime/denoise_models,走的是
         # media_transfer.download_to_path(RetryingClient),不在这个模块里。
         "app.ai.providers.adapters.local.deepfilter_denoise",
+        # 同步生成接口的超时取值(几个数),请求由各家适配器自己的 RetryingClient 发。
+        "app.ai.providers.adapters.shared.sync_calls",
     }
 
     #: **不自己建连接**的模块 —— 请求是拿调用方给的 client 发的,而那个 client 就是

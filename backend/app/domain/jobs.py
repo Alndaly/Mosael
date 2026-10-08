@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 TERMINAL_STATUSES = ("succeeded", "failed")
 #: 「被人取消」在库里的记法:failed + 这个 key(见 _cancel_job_row)。判它的地方都认这一个常量。
 CANCELLED_ERROR_KEY = "jobErr_cancelled"
+#: 「后端重启时它还在跑、接不回来」的记法:failed + 这个 key(见 reconcile_orphaned_jobs)。
+RESTART_ERROR_KEY = "jobErr_backendRestart"
 
 
 def was_cancelled(job: Any) -> bool:
@@ -931,8 +933,8 @@ def reconcile_orphaned_jobs(db: Session) -> int:
         #: **失败原因和任务消息同一条规矩**:落库的话存 key,出口按读的人的语言翻。
         #: 此前这一句是写死的中文,于是英文用户的任务列表里它永远是中文 —— 而
         #: `error_key` / `error_params` 这套东西早就齐了,只是总线自己没用。
-        job.error_key = "jobErr_backendRestart"
-        job.error = t("jobErr_backendRestart", DEFAULT_LOCALE)
+        job.error_key = RESTART_ERROR_KEY
+        job.error = t(RESTART_ERROR_KEY, DEFAULT_LOCALE)
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
     #: **不在这里提交。** 重启收尾是一次用例(domain/restart.settle_previous_run):几张表一起收完、一起提交,提交钩子
     #: (落终态之后的收拾、送回执 —— 回执会在对话里起一轮)在**全部**收完之后才跑。此前这里自己提交,钩子当场就跑:

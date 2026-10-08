@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -66,6 +67,7 @@ from app.core.logging import configure_logging
 from app.core.rate_limit import install_rate_limiting
 from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal
+from app.media.scratch import clear_scratch
 from app.db.migrations import init_db
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         register_external_kind(kind)
     if external:
         logger.info("external job kinds (driven by outside worker): %s", ", ".join(external))
+    # 上一个进程留下的暂存(生成下到一半的成片、导出的半截、插件产物):它的任务线程没机会走到 finally。排在收尾之前 ——
+    # 收尾会接着取远端任务,新建的暂存不能被这一步当成旧的(见 media/scratch)。
+    cleared = clear_scratch(older_than=time.time())
+    if cleared:
+        logger.info("cleared %d scratch entr(ies) left by a previous backend", cleared)
     # 重启杀掉一切进程内的线程/子进程/连接,**在调用之前就落库的那些「进行中」的行自己不会醒过来**。谁来收尾登记在
     # domain/restart 的那张表上(由一条棘轮按 ORM 推导「哪些表需要登记」);卡住的智能体会话、缺的预览代理、坏素材的
     # 时长一起收。**一次用例一个事务**,全部收完才提交 —— 提交钩子(送回执会在对话里起一轮)在那之后才跑,见那里的说明。

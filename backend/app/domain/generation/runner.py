@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import shutil
-import tempfile
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -21,6 +21,7 @@ from app.ai.providers import (
     GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    RemoteTaskSettled,
     RemoteTaskWatch,
     SourceAsset,
     get_generation_adapter,
@@ -38,10 +39,11 @@ from app.ai.providers.contracts.generation import (
     sanitize_adapter_error,
     with_reported,
 )
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.core.db import SessionLocal
-from app.core.unit_of_work import unit_of_work
+from app.core.http_retry import sent_but_unanswered
+from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job, now
 from app.domain.providers import models as provider_models
@@ -55,10 +57,12 @@ from app.domain.jobs import (
     register_resumer,
     register_settle_listener,
     say,
+    waiting_on_other_jobs,
     was_cancelled,
 )
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
+from app.media.scratch import GENERATION as GENERATION_SCRATCH, scratch_dir
 from app.domain.billing.usage import billable, price_usage, retire_usage, usage_mismatches
 
 """
@@ -91,6 +95,12 @@ def start_generation_thread(generation_id: str) -> None:
 
 #: 远端任务回执在 Job.payload 里的那一栏。见 `_remember_remote_task`。
 REMOTE_TASK_FIELD = "remote_task"
+
+
+#: 「正在调服务商」的标记,在 Job.payload 里。进调用之前写上、走完(成败都记过账)摘掉;进程中途没了的,它还在 ——
+#: 重启时据此估一笔账(见 reconcile_unsettled_charges)。此前调到一半重启,任务被判「后端重启中断」、一条用量都没有:
+#: 同步接口的那张图、异步提交的那个远端任务,对方多半照样做完、照样扣钱(GEN-6)。
+PROVIDER_CALL_FIELD = "provider_call"
 
 
 def remote_poll_path(job: Job) -> str:
@@ -172,23 +182,10 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             ))
             return
 
-        from app.domain.providers.selection import resolve_connection
-
-        # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
-        profile = resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
+        profile, context = _connection(db, generation, job)
         if adapter.requires_credentials() and (profile is None or not profile.api_key):
             _fail(db, job, GenerationRunError("genErr_noApiKey", provider=generation.provider))
             return
-        context = GenerationAdapterContext(
-            connection_id=profile.id if profile is not None else None,
-            vendor_id=profile.vendor if profile is not None else generation.provider,
-            api_key=profile.api_key if profile is not None else "",
-            base_url=profile.base_url if profile is not None else "",
-            # 这条连接在本次生成的能力下该用的模型。此前取 profile.default_model ——
-            # 那个字段不区分能力,对话档案的默认模型被拿去当生图模型用过。
-            configured_model_id=provider_models.model_id_for(db, profile, generation.kind),
-            options=dict(profile.extra or {}) if profile is not None else {},
-        )
         if not finish_job(db, job, status="running"):
             db.commit()
             return
@@ -197,7 +194,11 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
         if not resume_from:
             say(job, "jobMsg_generationRunning")
         emit_job_event(db, job.id, "job.running", {"provider": generation.provider})
+        #: 从这里起在调服务商(见 PROVIDER_CALL_FIELD):进程这时没了,重启时按「调到一半」估一笔账。走完(成败都记过账)由
+        #: 下面的 finally 摘掉 —— 进程被杀时 finally 不执行,摘不掉的正是要估的那些。
+        job.payload = {**(job.payload or {}), PROVIDER_CALL_FIELD: True}
         db.commit()
+        job_id = job.id
         logger.info(
             "generation job %s: provider=%s model=%s kind=%s",
             job.id,
@@ -206,7 +207,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             generation.kind,
         )
 
-        workdir = Path(tempfile.mkdtemp(prefix="mosael-gen-"))
+        #: 在数据目录里,不在系统临时目录:进程中途没了,下次启动清掉(见 media/scratch)。
+        workdir = scratch_dir(GENERATION_SCRATCH)
         request: GenerationRequest | None = None
         result: GenerationResult | None = None
         #: 服务商的终态回包,一到手就由轮询循环 / 同步适配器交到这里(见 RemoteTaskWatch.settled)。
@@ -216,19 +218,10 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
         #: 接着取(重启后、或者「重新取回」)时送进去几张图:素材不再解析(见下),计量照提交时那一份数。
         source_images = _stored_source_image_count(generation) if resume_from else None
         try:
-            request = GenerationRequest(
-                kind=generation.kind,
-                model=generation.model,
-                prompt=prompt_for_provider(generation.request),
-                negative_prompt=str(generation.request.get("negative_prompt", "")),
-                parameters=dict(generation.request.get("parameters") or {}),
-                #: **接着取不碰输入素材。**素材在提交那一刻就交出去了,接着取只需要轮询路径和模型;此前这里照样重新解析、
-                #: 重新校验 —— 用户提交之后删了首帧、或者升级后校验变严,接着取就在问远端之前失败,付过钱的成片没人去取,
-                #: 账也一笔不记(ADR 0019 修订)。
-                sources=() if resume_from else _resolved_sources(generation),
-                #: 工作台跑画布上那张图(ADR 0038 §6):图在任务载荷里,不在生成参数里
-                graph=_workbench_graph(job),
-            )
+            #: **接着取不碰输入素材。**素材在提交那一刻就交出去了,接着取只需要轮询路径和模型;此前这里照样重新解析、
+            #: 重新校验 —— 用户提交之后删了首帧、或者升级后校验变严,接着取就在问远端之前失败,付过钱的成片没人去取,
+            #: 账也一笔不记(ADR 0019 修订)。
+            request = _request_for(generation, job, sources=() if resume_from else _resolved_sources(generation))
             if not resume_from:
                 adapter.validate_request(request)
             #: 远端任务一出现就落库(见 contracts.generation.watching_remote_tasks)——从那一刻起
@@ -333,13 +326,20 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
         except (GenerationAdapterError, MediaDownloadError) as exc:
             #: 下载成片断了(接了几次都没接上、链接过期):服务商早就做完了。不是「供应商请求失败」,也不该让人以为要重新生成。
             not_collected = isinstance(exc, MediaDownloadError)
+            #: 付费请求发出去了、没等到回答(读超时、网关 5xx):对方多半照样在做、照样扣钱。不是「当场被拒」。
+            unknown = not not_collected and sent_but_unanswered(exc)
             if request is not None:
                 _record_failed_or_cancelled(db, generation, job, adapter, request, context, result, workdir, started,
-                                            settled, result_not_collected=not_collected)
+                                            settled, result_not_collected=not_collected, outcome_unknown=unknown)
             # 用户取消时 cancel_job 已落终态并写好「已取消」;再 _fail 会把它改写成
             # 泛化的 Generation failed,取消看起来就像出了错。
             if job.status in ("queued", "running"):
-                _fail(db, job, _result_not_collected(db, job, exc) if not_collected else exc)
+                if not_collected:
+                    _fail(db, job, _result_not_collected(db, job, exc))
+                elif unknown:
+                    _fail(db, job, GenerationRunError("genErr_outcomeUnknown", detail=str(exc)))
+                else:
+                    _fail(db, job, exc)
             else:
                 db.commit()
         except Exception as exc:  # defensive: worker threads must never die silently
@@ -349,6 +349,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             _fail(db, job, sanitize_adapter_error(str(exc), context.api_key))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
+            _forget_provider_call(job_id)
 
 
 def _record_failed_or_cancelled(
@@ -364,9 +365,13 @@ def _record_failed_or_cancelled(
     settled: list[dict],
     *,
     result_not_collected: bool = False,
+    outcome_unknown: bool = False,
 ) -> None:
     """这次生成失败了,或者被取消了。适配器已经交回了结果(失败在我们这边,登记素材出错之类)的照结果记;没交回、
     而任务是被取消的,远端任务已经交出去的先把它了结(见 _settle_after_cancel)再记账。
+
+    `outcome_unknown`:付费请求发出去了、没等到回答(读超时、网关 5xx,见 core/http_retry.sent_but_unanswered)。对方多半照样
+    在做、照样扣钱 —— 按请求侧计量估一笔,写明「结局不明」,不记成「未扣费」(GEN-6)。
 
     **没被取消、却在远端任务交出去之后失败的**(等远端时出了确定性的错、六小时上限,或者 `result_not_collected`:服务商做完了、
     成片没下载回来),远端多半照样扣钱:有服务商的终态回包就照它记;没有回包、或者回包里没报用量,按请求侧计量估一笔并写明
@@ -374,10 +379,40 @@ def _record_failed_or_cancelled(
     if result is not None:
         _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed")
         return
-    finished, outcome, poll_path = _settle_after_cancel(db, job, adapter, request, context, workdir, settled)
-    if finished is not None:
-        #: 我们取消了、服务商照样做完:按它回包里实际计费的量记这一笔(成片没留,账照记)。
+    finished, outcome, poll_path = _settle_after_cancel(job.id, adapter, request, context, workdir, settled)
+    _record_settled(db, generation, job, adapter, request, context, started, settled, finished, outcome, poll_path,
+                    result_not_collected=result_not_collected, outcome_unknown=outcome_unknown)
+
+
+def _record_settled(
+    db,
+    generation: GenerationJob,
+    job: Job,
+    adapter: GenerationAdapter,
+    request: GenerationRequest,
+    context: GenerationAdapterContext,
+    started: float,
+    settled: list[dict],
+    finished: GenerationResult | None,
+    outcome: str,
+    poll_path: str,
+    *,
+    result_not_collected: bool = False,
+    outcome_unknown: bool = False,
+) -> None:
+    """`_settle_after_cancel` 了结之后记这一笔(不提交)。拆出来是为了重启后接着跟的那条路(_follow_after_restart):
+    跟的那一段不拿着会话,记账时才开一个。"""
+    if outcome == "cancelled_remotely":
+        emit_job_event(db, job.id, "job.remote_cancelled", {"poll_path": poll_path})
+    if outcome in ("followed", "followed_to_done"):
+        #: 跟完了:摘掉「正在跟」—— 在这一笔账提交**之后**(提交前进程没了,下次启动再跟一遍,账按幂等键只记一笔)。
+        job_id = job.id
+        after_commit(db, lambda: _forget_following(job_id))
+    if finished is not None or outcome == "followed_to_done":
+        #: 我们取消了、服务商照样做完:按它回包里实际计费的量记这一笔(成片没留,账照记)。跟到终态时成片不下
+        #: (followed_to_done),回包在 settled 里。
         _record_generation_usage(db, generation, job, adapter, request, context, finished, started, "succeeded",
+                                 settled=settled[-1] if finished is None and settled else None,
                                  annotations={"cancelled_locally": True})
         return
     annotations: dict | None = None
@@ -388,6 +423,9 @@ def _record_failed_or_cancelled(
     elif result_not_collected:
         #: 服务商报了做完,是我们没把成片拉回来:它说了扣多少就照它记;没说,按请求侧计量估 —— 做完了的不会是免费的。
         annotations = {"result_not_collected": poll_path or True}
+    elif outcome_unknown and outcome == "not_cancelled":
+        #: 请求送到了、没等到回答:不知道对方做没做,多半在做、会扣钱。按请求侧计量估一笔,写明结局不明。
+        annotations = {"outcome_unknown": poll_path or True}
     _record_generation_usage(
         db, generation, job, adapter, request, context, None, started, "failed",
         settled=settled[-1] if settled else None, annotations=annotations,
@@ -395,8 +433,7 @@ def _record_failed_or_cancelled(
 
 
 def _settle_after_cancel(
-    db,
-    job: Job,
+    job_id: str,
     adapter: GenerationAdapter,
     request: GenerationRequest,
     context: GenerationAdapterContext,
@@ -411,14 +448,15 @@ def _settle_after_cancel(
     这家撤不掉也接不着取的,结局是 "unsettled"。
 
     返回 (远端做完交回的结果或 None, 结局, 回执):结局是 "not_cancelled" / "no_remote_task" / "cancelled_remotely" /
-    "followed" / "unsettled",回执是远端任务的轮询路径(没交出去是空串)。
+    "followed"(跟到了终态:交回了结果,或者服务商判了失败)/ "followed_to_done"(跟到远端做完,成片没下,回包在
+    `settled` 里)/ "unsettled",回执是远端任务的轮询路径(没交出去是空串)。
 
-    **任务行用短会话读,不 refresh 调用方的会话。**跟到终态可能还要等几分钟到几小时,refresh 会开一个读事务、一直攥着
-    连接池里的一条连接(见 _remote_task_watch)。
+    **不碰调用方的会话。**任务行用短会话读、标记用短会话写:跟到终态可能还要等几分钟到几小时,在长会话上读写会开一个
+    事务、一直攥着连接池里的一条连接(见 _remote_task_watch)。撤掉了要发的那条事件由 `_record_settled` 发。
     """
     from app.core import abort
 
-    cancelled, poll_path = _job_state(job.id)
+    cancelled, poll_path = _job_state(job_id)
     if not cancelled:
         return None, "not_cancelled", poll_path
     if not poll_path or settled:
@@ -428,22 +466,185 @@ def _settle_after_cancel(
     with abort.scope(abort.AbortScope()):
         try:
             if adapter.cancel_remote(poll_path, request, context):
-                #: 不在这里提交:记完账,调用方那条路(_fail 或 db.commit)一起提交。
-                emit_job_event(db, job.id, "job.remote_cancelled", {"poll_path": poll_path})
-                logger.info("generation job %s: remote task %s cancelled at the provider", job.id, poll_path)
+                logger.info("generation job %s: remote task %s cancelled at the provider", job_id, poll_path)
                 return None, "cancelled_remotely", poll_path
         except Exception:  # noqa: BLE001 — 撤销是尽力而为;撤不成就照「撤不掉」接着往下走
-            logger.warning("generation job %s: cancelling remote task %s failed", job.id, poll_path, exc_info=True)
+            logger.warning("generation job %s: cancelling remote task %s failed", job_id, poll_path, exc_info=True)
         if not adapter.supports_resume:
             return None, "unsettled", poll_path
-        logger.info("generation job %s: cancelled locally; following remote task %s to settle its charge", job.id, poll_path)
-        follow = RemoteTaskWatch(remember=lambda _path: None, is_cancelled=lambda: False, settled=settled.append)
+        logger.info("generation job %s: cancelled locally; following remote task %s to settle its charge", job_id, poll_path)
+        #: 跟到一半进程没了,重启时接着跟(见 reconcile_unsettled_charges);记完账由 _record_settled 摘掉。
+        _mark_following(job_id)
+        #: 只等终态、不要成片(collect=False):成片拉回来也是马上删掉 —— 此前已取消的视频照样整份下载几分钟到几小时。
+        follow = RemoteTaskWatch(remember=lambda _path: None, is_cancelled=lambda: False, settled=settled.append,
+                                 collect=False)
         try:
-            with watching_remote_tasks(follow):
+            #: 任务已经停了,剩下的只是等服务商给个终态好记账:这段不占任务名额(和等子任务同一个机制,见 JobRunner.parked)。
+            with watching_remote_tasks(follow), waiting_on_other_jobs():
                 return adapter.resume(poll_path, request, context, workdir), "followed", poll_path
+        except RemoteTaskSettled:
+            return None, "followed_to_done", poll_path
         except Exception:  # noqa: BLE001 — 服务商判了失败(回包在 settled 里)或者取不回来:照手里有的记
-            logger.info("generation job %s: remote task %s ended without a result", job.id, poll_path, exc_info=True)
+            logger.info("generation job %s: remote task %s ended without a result", job_id, poll_path, exc_info=True)
             return None, "followed", poll_path
+
+
+def _connection(db, generation: GenerationJob, job: Job):
+    """这次生成用哪条连接、交给适配器的连接上下文。返回 (连接或 None, 上下文)。"""
+    from app.domain.providers.selection import resolve_connection
+
+    # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
+    profile = resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)
+    context = GenerationAdapterContext(
+        connection_id=profile.id if profile is not None else None,
+        vendor_id=profile.vendor if profile is not None else generation.provider,
+        api_key=profile.api_key if profile is not None else "",
+        base_url=profile.base_url if profile is not None else "",
+        # 这条连接在本次生成的能力下该用的模型。此前取 profile.default_model ——
+        # 那个字段不区分能力,对话档案的默认模型被拿去当生图模型用过。
+        configured_model_id=provider_models.model_id_for(db, profile, generation.kind),
+        options=dict(profile.extra or {}) if profile is not None else {},
+    )
+    return profile, context
+
+
+def _request_for(generation: GenerationJob, job: Job, *, sources: tuple[SourceAsset, ...]) -> GenerationRequest:
+    return GenerationRequest(
+        kind=generation.kind,
+        model=generation.model,
+        prompt=prompt_for_provider(generation.request),
+        negative_prompt=str(generation.request.get("negative_prompt", "")),
+        parameters=dict(generation.request.get("parameters") or {}),
+        sources=sources,
+        #: 工作台跑画布上那张图(ADR 0038 §6):图在任务载荷里,不在生成参数里
+        graph=_workbench_graph(job),
+    )
+
+
+def _forget_provider_call(job_id: str) -> None:
+    """摘掉「正在调服务商」的标记(见 PROVIDER_CALL_FIELD)。短会话:运行器的长会话这时可能处在任何状态。"""
+    with unit_of_work() as fresh:
+        row = fresh.get(Job, job_id)
+        if row is not None and PROVIDER_CALL_FIELD in (row.payload or {}):
+            row.payload = {key: value for key, value in row.payload.items() if key != PROVIDER_CALL_FIELD}
+
+
+def _mark_following(job_id: str) -> None:
+    """记下「停下之后正在替记账跟远端任务」,当场落库(短会话)—— 跟到一半进程没了,重启时接着跟(见 reconcile_unsettled_charges)。"""
+    _set_following(job_id, True)
+
+
+def _forget_following(job_id: str) -> None:
+    """跟完、账记上之后摘掉「正在跟」。"""
+    _set_following(job_id, False)
+
+
+def _set_following(job_id: str, following: bool) -> None:
+    with unit_of_work() as fresh:
+        row = fresh.get(Job, job_id)
+        if row is None:
+            return
+        remote = {key: value for key, value in ((row.payload or {}).get(REMOTE_TASK_FIELD) or {}).items()
+                  if key != "following"}
+        if following:
+            remote["following"] = True
+        row.payload = {**(row.payload or {}), REMOTE_TASK_FIELD: remote}
+
+
+def reconcile_unsettled_charges(db) -> int:
+    """重启前没来得及记的那几笔生成账。两种:
+
+    - **停下之后正在替记账跟远端任务的**(`remote_task.following`):接着跟 —— 起一条线程,不占任务名额,只等终态、不下成片;
+    - **调服务商调到一半进程没了的**(`provider_call` 还在,任务已被判「后端重启中断」;能接着取的那些已经被接走、不在其中):
+      按请求侧计量估一笔,写明 `interrupted_by_restart`(交出去了远端任务、却接不着取的,另写 `unsettled_remote_task`)。
+
+    已经有账的不再记(同一次生成的账按幂等键只有一笔)。返回处理了几条。排在 jobs 的收尾之后(见 domain/restart):要看的正是
+    它刚判了「后端重启中断」的那些。**不提交、不当场起线程**:重启收尾是一次用例(domain/restart.settle_previous_run),
+    接着跟的线程登记成提交之后再起。
+    """
+    from app.db.models import ProviderUsageEvent
+    from app.domain.jobs import RESTART_ERROR_KEY
+
+    #: 上一步(jobs 的收尾)只改了对象、没提交;这个会话不自动 flush,不先 flush 的话查询看不到它刚判的失败。
+    db.flush()
+    marked = func.json_extract(Job.payload, f"$.{PROVIDER_CALL_FIELD}")
+    following = func.json_extract(Job.payload, f"$.{REMOTE_TASK_FIELD}.following")
+    #: 只取带着这两个标记之一的那几行 —— 不把全部失败的生成读成对象(CONVENTIONS「批量维护不把行读成 ORM 对象」)。
+    rows = db.scalars(select(Job).where(
+        Job.kind == "ai_generation", Job.status == "failed", or_(marked.is_not(None), following.is_not(None)),
+    )).all()
+    handled = 0
+    followers: list[str] = []
+    for job in rows:
+        payload = job.payload or {}
+        remote = payload.get(REMOTE_TASK_FIELD) or {}
+        if remote.get("following") and was_cancelled(job):
+            followers.append(job.id)
+            handled += 1
+            continue
+        if not payload.get(PROVIDER_CALL_FIELD) or job.error_key != RESTART_ERROR_KEY:
+            continue
+        generation = db.scalars(select(GenerationJob).where(GenerationJob.job_id == job.id)).first()
+        job.payload = {key: value for key, value in payload.items() if key != PROVIDER_CALL_FIELD}
+        if generation is None:
+            continue
+        charged = db.scalar(select(ProviderUsageEvent.id).where(
+            ProviderUsageEvent.source_type == "generation_job", ProviderUsageEvent.source_id == generation.id,
+        ).limit(1))
+        if charged is None:
+            annotations: dict = {"interrupted_by_restart": True}
+            if remote.get("poll_path"):
+                annotations["unsettled_remote_task"] = remote["poll_path"]
+            try:
+                # 一条估不出来(连接删了、价目读不懂)不能让后端起不来,也不能拖着别的几条一起回滚。
+                with db.begin_nested():
+                    _, context = _connection(db, generation, job)
+                    _record_generation_usage(
+                        db, generation, job, get_generation_adapter(generation.provider, generation.kind),
+                        _request_for(generation, job, sources=()), context, None, time.monotonic(), "failed",
+                        annotations=annotations, source_images=_stored_source_image_count(generation),
+                    )
+            except Exception:  # noqa: BLE001 — 见上
+                logger.exception("generation %s: could not record the charge of a call cut off by the restart", generation.id)
+        handled += 1
+    if followers:
+        after_commit(db, lambda: _start_followers(followers))
+    return handled
+
+
+def _start_followers(job_ids: list[str]) -> None:
+    for job_id in job_ids:
+        threading.Thread(target=_follow_after_restart, args=(job_id,), daemon=True, name="generation-follow").start()
+
+
+def _follow_after_restart(job_id: str) -> None:
+    """重启前正在替记账跟的那个远端任务:接着跟到终态,记账。和取消那一刻走同一条路(_settle_after_cancel → _record_settled)。
+
+    跟的那一段**不拿着会话**:读完要用的东西就把会话关掉,记账时再开一个(见 _job_state 说的连接池)。"""
+    try:
+        with SessionLocal() as db:
+            job = db.get(Job, job_id)
+            generation = db.scalars(select(GenerationJob).where(GenerationJob.job_id == job_id)).first()
+            adapter = get_generation_adapter(generation.provider, generation.kind) if generation is not None else None
+            if job is None or generation is None or adapter is None:
+                return
+            generation_id = generation.id
+            _, context = _connection(db, generation, job)
+            request = _request_for(generation, job, sources=())
+        settled: list[dict] = []
+        started = time.monotonic()
+        workdir = scratch_dir(GENERATION_SCRATCH)
+        try:
+            finished, outcome, poll_path = _settle_after_cancel(job_id, adapter, request, context, workdir, settled)
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
+        with unit_of_work() as db:
+            job, generation = db.get(Job, job_id), db.get(GenerationJob, generation_id)
+            if job is not None and generation is not None:
+                _record_settled(db, generation, job, adapter, request, context, started, settled, finished, outcome,
+                                poll_path)
+    except Exception:  # noqa: BLE001 — 后台线程不能无声地死;没跟完的标记还在,下次启动再跟
+        logger.exception("generation job %s: following its remote task after a restart failed", job_id)
 
 
 def _job_state(job_id: str) -> tuple[bool, str]:

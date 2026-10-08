@@ -174,6 +174,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "服务商已经生成好了(这一次多半已经计费),只是把成片下载回来时断了:{detail}。这家的接口事后取不回,只能重新生成;重来之前可以先去服务商后台看看这一次有没有扣费。",
         "en": "The provider finished this generation (it has most likely been charged), but downloading the result broke off: {detail}. This provider can't hand a result over again later, so the only way is to generate again — check the provider's console for this charge first.",
     },
+    # 付费请求送到了、没等到回答(读超时、网关 502 / 504 / 524,见 core/http_retry.sent_but_unanswered)。对方多半照样在做、
+    # 照样扣钱,而我们手里什么都没有 —— 不能说成「请求失败」让人放心重来。
+    "genErr_outcomeUnknown": {
+        "zh": "请求已经送到服务商,但没等到回答:{detail}。服务商可能照样做完、照样扣了费(这一次的花费按估算记下了)。重新生成之前,先去服务商后台看看这一次有没有扣费、有没有出结果。",
+        "en": "The request reached the provider, but no answer came back: {detail}. The provider may have finished it and charged for it anyway (an estimate for this attempt has been recorded). Before generating again, check the provider's console for this charge and result.",
+    },
     "genErr_notRetrievable": {
         "zh": "这条生成没有能重新取回的远端结果:它没提交出去、已经取回过、被停下了,或者这家供应商不支持事后再取",
         "en": "There is no remote result to retrieve for this generation: it was never submitted, was already retrieved, was stopped, or this provider can't hand a result over again.",

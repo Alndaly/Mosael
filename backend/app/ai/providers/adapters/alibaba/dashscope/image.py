@@ -20,6 +20,7 @@ from app.ai.providers.contracts.generation import (
     metering_from_request,
 )
 from app.ai.providers.adapters.shared.errors import adapter_http_error
+from app.ai.providers.adapters.shared.sync_calls import sync_generation_timeout
 from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.ai.media_transfer import download_to_path
 from app.ai.providers.adapters.alibaba.dashscope import connection
@@ -152,7 +153,7 @@ class QwenImageAdapter(GenerationAdapter):
             # 静默走到文生图端点，参考图完全没被使用。
             if source_values(request, REFERENCE_IMAGE):
                 headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
-                with RetryingClient(base_url=resolve_qwen_edit_base(context), timeout=120, headers=headers) as client:
+                with RetryingClient(base_url=resolve_qwen_edit_base(context), timeout=sync_generation_timeout(), headers=headers) as client:
                     submit = client.post(EDIT_PATH, json=build_edit_payload(request, context))
                     submit.raise_for_status()
                     # 同步的参考图编辑:回包到手钱就扣了,先交给运行器,下面下载失败也丢不掉。

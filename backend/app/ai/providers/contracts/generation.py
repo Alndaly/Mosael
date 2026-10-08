@@ -470,6 +470,9 @@ class RemoteTaskWatch:
     #: `interrupted(n)`:等远端时连续第 n 次没问到(断网、5xx、网关页),轮询循环退避后接着问;`n == 0` 是又问到了。
     #: 运行器据此在任务上写一句「连接中断,正在重新连接」—— 不然用户只看见进度停住,以为卡死了。
     interrupted: Callable[[int], None] = lambda _failures: None
+    #: 要不要成片。`False` = 只等终态记账:任务已经被停下,撤不掉的远端任务替记账跟到终态(见 runner._settle_after_cancel)。
+    #: 轮询循环交完终态回包就抛 `RemoteTaskSettled` 停下,不往下载那一步走 —— 成片拉回来也是马上删掉,白占带宽和磁盘。
+    collect: bool = True
 
 
 _REMOTE_TASK_WATCH: ContextVar[RemoteTaskWatch | None] = ContextVar("remote_task_watch", default=None)
@@ -495,6 +498,16 @@ def remember_remote_task(receipt: str) -> None:
     watch = _REMOTE_TASK_WATCH.get()
     if watch is not None:
         watch.remember(receipt)
+
+
+class RemoteTaskSettled(Exception):
+    """远端任务做成了,而这一次不要成片(`RemoteTaskWatch.collect` 是 False)。终态回包已经交给了运行器。"""
+
+
+def result_wanted() -> bool:
+    """这一次要不要成片(没装 watch 时要)。见 `RemoteTaskWatch.collect`。"""
+    watch = _REMOTE_TASK_WATCH.get()
+    return watch is None or watch.collect
 
 
 def remote_task_cancelled() -> bool:

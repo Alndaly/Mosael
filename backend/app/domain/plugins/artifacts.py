@@ -34,6 +34,7 @@ from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 from app.domain.plugins import media_bridge
 from app.domain.plugins.egress import Egress
+from app.media.scratch import PLUGIN_OUTPUT, scratch_dir
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,19 @@ class ArtifactError(LocalizedError, RuntimeError):
 
 
 def make_scratch_dir() -> Path:
-    return Path(tempfile.mkdtemp(prefix="mosael-plugin-out-"))
+    """在数据目录里,不在系统临时目录:插件跑到一半进程没了,下次启动清掉(见 media/scratch)。"""
+    return scratch_dir(PLUGIN_OUTPUT)
+
+
+def cancel_file_for(scratch: Path) -> Path:
+    """这次调用的「请停下」开关:挨着暂存目录的一个文件(见 runtime._GracefulSwitch)。"""
+    return Path(f"{scratch}.cancel")
 
 
 def cleanup_scratch_dir(path: Path | None) -> None:
     if path is not None:
         shutil.rmtree(path, ignore_errors=True)
+        cancel_file_for(path).unlink(missing_ok=True)
 
 
 def _resolve_local(spec: dict[str, Any], scratch: Path) -> Path:
@@ -155,6 +163,7 @@ __all__ = [
     "ArtifactError",
     "MAX_ARTIFACT_BYTES",
     "SCRATCH_ENV",
+    "cancel_file_for",
     "cleanup_scratch_dir",
     "fetch",
     "make_scratch_dir",

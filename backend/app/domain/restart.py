@@ -54,12 +54,16 @@ def registered() -> dict[str, Callable[[Session], int]]:
     """
     from app.domain.browser import reconcile_browser_state
     from app.domain.documents.extraction import reconcile_orphaned_extractions
+    from app.domain.generation.runner import reconcile_unsettled_charges
     from app.domain.jobs import reconcile_orphaned_jobs
     from app.domain.plugins.tools import reconcile_orphaned_invocations
     from app.domain.voices.remote import reconcile_orphaned_enrollments
 
     return {
         "jobs": reconcile_orphaned_jobs,
+        # 生成那几笔没来得及记的账(调到一半没了的估一笔;停下之后正在跟的接着跟)。**排在 jobs 之后**:要看的正是
+        # 上一步判了「后端重启中断」的那些,能接着取的已经被它接走。
+        "generation_jobs": reconcile_unsettled_charges,
         "plugin_invocations": reconcile_orphaned_invocations,
         # 克隆音色的远端副本(ADR 0037):建到一半进程没了的,记成失败、下次用到时重建。
         "voice_enrollments": reconcile_orphaned_enrollments,
