@@ -72,6 +72,8 @@ def test_在只花钱的那一档点过始终允许_对外的那一档照样问�
 
     again = chat.run_card(harmless)
     assert (again.status, again.decision_mode) == ("executed", "session-allow"), "同一档的照样不再问"
+    # 自动放行的这一次也跑了、也交回执 —— 同样等它那一轮收完再开下一张。
+    assert wait_for_idle_jobs(timeout=30) and wait_for_idle_turns(timeout=30)
 
     risky = chat.run_card(outward)
     assert risky.permission == "external"
