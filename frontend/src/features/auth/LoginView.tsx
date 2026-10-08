@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { ApiError, ApiOfflineError, oauthPending, oauthProviders, oauthStart, previewInviteLink } from "@/api/client";
+import { ApiError, ApiOfflineError, oauthConfirm, oauthPending, oauthProviders, oauthStart, previewInviteLink } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import loginHeroUrl from "@/assets/login-hero.jpg";
@@ -346,8 +346,10 @@ function InviteNotice({
 }
 
 /** 第三方登录(Google / Apple):后端只报已配置的提供方,一个没配就整块不渲染。
- *  流程:start 拿授权 URL(系统浏览器打开)+ pending_id → 每 2s 轮询取票 →
- *  adoptAuth 落座。file://(Electron)与 5173 开发页都无需注册自己为回调目标。 */
+ *  流程:start 拿授权 URL(系统浏览器打开)+ pending_id → 每 2s 轮询 → 浏览器那边成了,轮询说「等确认」,
+ *  这里换成一个确认码输入框 → 填回调页上显示的码 → 对上了拿到票,adoptAuth 落座。
+ *  **令牌只交给填对码的这一边**:此前轮询直接交票,谁开的这次登录谁就能取走 —— 转一条授权链接给别人,
+ *  对方登录完,会话落进发起人手里(SEC-11)。file://(Electron)与 5173 开发页都无需注册自己为回调目标。 */
 function OAuthButtons() {
   const t = useI18n();
   const { adoptAuth } = useAuth();
@@ -355,18 +357,29 @@ function OAuthButtons() {
   const [pending, setPending] = React.useState<{ provider: string; id: string | null } | null>(null);
   const pendingId = pending?.id ?? null;
   const [failure, setFailure] = React.useState<string | null>(null);
+  //: 浏览器那边登录成了,等人把回调页上的确认码填进来。
+  const [confirming, setConfirming] = React.useState(false);
+  const [code, setCode] = React.useState("");
+  const [codeHint, setCodeHint] = React.useState<string | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
   const providers = useQuery({ queryKey: ["oauth-providers"], queryFn: oauthProviders, staleTime: 60_000 });
 
+  const reset = () => {
+    setPending(null);
+    setConfirming(false);
+    setCode("");
+    setCodeHint(null);
+  };
+
   React.useEffect(() => {
-    if (!pendingId) return;
+    if (!pendingId || confirming) return;
     const timer = window.setInterval(async () => {
       try {
         const state = await oauthPending(pendingId);
-        if (state.status === "done" && state.token && state.user) {
-          setPending(null);
-          adoptAuth({ token: state.token, user: state.user });
+        if (state.status === "confirm") {
+          setConfirming(true);
         } else if (state.status === "error" || state.status === "expired") {
-          setPending(null);
+          reset();
           setFailure(state.error || t("authOauthFailed"));
         }
       } catch {
@@ -374,7 +387,29 @@ function OAuthButtons() {
       }
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [pendingId, adoptAuth, t]);
+  }, [pendingId, confirming, t]);
+
+  const submitCode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!pendingId || !code.trim()) return;
+    setSubmitting(true);
+    try {
+      const answer = await oauthConfirm(pendingId, code);
+      if (answer.status === "done" && answer.token && answer.user) {
+        reset();
+        adoptAuth({ token: answer.token, user: answer.user });
+      } else if (answer.status === "wrong_code") {
+        setCodeHint(t("authOauthWrongCode").replace("{n}", String(answer.attempts_left ?? 0)));
+      } else if (answer.status !== "waiting") {
+        reset();
+        setFailure(answer.error || t("authOauthFailed"));
+      }
+    } catch (err) {
+      setCodeHint(String((err as Error).message));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const begin = async (provider: string) => {
     setFailure(null);
@@ -409,13 +444,41 @@ function OAuthButtons() {
           {t("authContinueApple")}
         </Button>
       )}
-      {pendingId && (
+      {pendingId && !confirming && (
         <p className="m-0 flex items-center justify-between gap-2 text-ui-xs leading-normal text-muted-foreground">
           {t("authOauthWaiting")}
-          <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline underline-offset-2" onClick={() => setPending(null)}>
+          <Button variant="inline" onClick={reset}>
             {t("authOauthCancel")}
-          </button>
+          </Button>
         </p>
+      )}
+      {pendingId && confirming && (
+        <form className="grid gap-2" onSubmit={submitCode} data-oauth-confirm="">
+          <label className="text-ui-xs leading-normal text-muted-foreground" htmlFor="oauth-confirm-code">
+            {t("authOauthConfirmLead")}
+          </label>
+          <div className="flex gap-2">
+            <Input
+              id="oauth-confirm-code"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="ABC-DEF"
+              autoComplete="one-time-code"
+              autoFocus
+              className="font-mono uppercase tracking-widest"
+            />
+            <Button type="submit" loading={submitting} disabled={!code.trim()}>
+              {t("authOauthConfirmSubmit")}
+            </Button>
+          </div>
+          {codeHint && <p className="m-0 text-ui-xs text-destructive">{codeHint}</p>}
+          <p className="m-0 flex items-center justify-between gap-2 text-ui-xs leading-normal text-muted-foreground">
+            {t("authOauthConfirmNote")}
+            <Button variant="inline" onClick={reset}>
+              {t("authOauthCancel")}
+            </Button>
+          </p>
+        </form>
       )}
       {failure && <p className="m-0 text-ui-xs text-destructive">{failure}</p>}
     </div>

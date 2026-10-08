@@ -305,10 +305,34 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Poll Pending */
+        /**
+         * Poll Pending
+         * @description 登录走到哪了:`waiting`(还没回调)/ `confirm`(回调成了,等人把确认码填进来)/ `error` / `expired`。
+         *     **这里从不交出令牌** —— 令牌只从 `confirm` 交出去。
+         */
         get: operations["poll_pending_api_auth_oauth_pending__pending_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/oauth/pending/{pending_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Pending
+         * @description 填回调页上的确认码。对上了才找到 / 创建本地账号、铸造会话令牌交回(一次性);填错了说还能试几次,试满就作废。
+         */
+        post: operations["confirm_pending_api_auth_oauth_pending__pending_id__confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11635,6 +11659,11 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ConfirmIn */
+        ConfirmIn: {
+            /** Code */
+            code: string;
+        };
         /**
          * ConfirmationApproval
          * @description 批准时带上的东西:卡上那几个开关拨成了什么(只认工具声明过的,见 ConfirmableTool.choices)。
@@ -20839,6 +20868,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_pending_api_auth_oauth_pending__pending_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pending_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

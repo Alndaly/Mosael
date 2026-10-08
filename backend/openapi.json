@@ -584,6 +584,7 @@
           "oauth"
         ],
         "summary": "Poll Pending",
+        "description": "登录走到哪了:`waiting`(还没回调)/ `confirm`(回调成了,等人把确认码填进来)/ `error` / `expired`。\n**这里从不交出令牌** —— 令牌只从 `confirm` 交出去。",
         "operationId": "poll_pending_api_auth_oauth_pending__pending_id__get",
         "parameters": [
           {
@@ -605,6 +606,61 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Poll Pending Api Auth Oauth Pending  Pending Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/pending/{pending_id}/confirm": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Confirm Pending",
+        "description": "填回调页上的确认码。对上了才找到 / 创建本地账号、铸造会话令牌交回(一次性);填错了说还能试几次,试满就作废。",
+        "operationId": "confirm_pending_api_auth_oauth_pending__pending_id__confirm_post",
+        "parameters": [
+          {
+            "name": "pending_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Pending Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Confirm Pending Api Auth Oauth Pending  Pending Id  Confirm Post"
                 }
               }
             }
@@ -32743,6 +32799,19 @@
           "version"
         ],
         "title": "CommitOut"
+      },
+      "ConfirmIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "ConfirmIn"
       },
       "ConfirmationApproval": {
         "properties": {

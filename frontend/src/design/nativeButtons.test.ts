@@ -71,7 +71,7 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/ai-studio/GenerateWorkspace.tsx": 2,
   "features/ai-studio/SessionList.tsx": 1,
   "features/ai-studio/voicedCreation.tsx": 2,
-  "features/auth/LoginView.tsx": 5,
+  "features/auth/LoginView.tsx": 4,
   "features/boards/AbilityComposer.tsx": 1,
   "features/boards/BoardCommentLayer.tsx": 1,
   "features/boards/BoardComposerShell.tsx": 1,

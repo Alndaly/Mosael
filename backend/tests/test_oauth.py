@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from app.api.routes.oauth import _find_or_create_user
@@ -64,8 +66,10 @@ def test_第三方登录取到的票和_me_是同一个形状并且报得出是�
 
     started = client.post("/api/auth/oauth/google/start").json()
     state = dict(httpx.URL(started["url"]).params)["state"]
-    assert client.get("/api/auth/oauth/google/callback", params={"state": state, "code": "c"}).status_code == 200
-    ticket = client.get(f"/api/auth/oauth/pending/{started['pending_id']}").json()
+    page = client.get("/api/auth/oauth/google/callback", params={"state": state, "code": "c"})
+    assert page.status_code == 200
+    code = re.search(r"data-confirm-code[^>]*>([A-Z0-9-]+)<", page.text).group(1)
+    ticket = client.post(f"/api/auth/oauth/pending/{started['pending_id']}/confirm", json={"code": code}).json()
 
     assert ticket["status"] == "done"
     assert ticket["user"]["oauth_providers"] == ["google"]

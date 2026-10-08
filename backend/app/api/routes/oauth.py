@@ -1,9 +1,13 @@
 """第三方登录(Google / Apple)— 桌面友好的授权码流。
 
 形态:前端 `start` 拿到授权 URL(系统浏览器打开)+ 一次性 pending_id;
-提供方回调打到本机后端(回环地址),后端换码、解出身份、找到/创建本地账号、
-铸造会话 token 存进 pending 槽;前端轮询 `pending/{id}` 取票完成登录。
-这样 file://(Electron)与 5173(网页开发)都不需要把自己注册成重定向目标。
+提供方回调打到本机后端(回环地址),后端换码、解出身份、记进 pending 槽,回调页上显示一个**确认码**;
+前端轮询 `pending/{id}` 看到「等确认」,让人把确认码填进应用,`pending/{id}/confirm` 对上了才找到/创建本地账号、
+铸造会话 token 交回。这样 file://(Electron)与 5173(网页开发)都不需要把自己注册成重定向目标。
+
+**为什么要确认码。** 发起和完成此前没有绑在一起:谁都能开一个 pending 槽、拿到一条真的授权链接发给别人;对方点开、用自己的
+账号登录(页面是真的 Google、真的应用名),会话就落进发起人的槽,被发起人轮询取走(SEC-11)。现在令牌只交给**填对了回调页
+上那个码**的人 —— 被钓鱼的人手里有码,却不在发起人的应用里;回调页也写明:不是你自己在 Mosael 里点的登录,关掉就是。
 
 id_token 直接解 payload 不验签:它来自我们主动发起的、对提供方 token 端点的
 TLS 请求响应体,不经过用户手,验签在这个信道里是冗余防御;换任何一步走
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import json
 import secrets
 import threading
@@ -53,8 +58,13 @@ APPLE_AUTH_URL = "https://appleid.apple.com/auth/authorize"
 APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token"
 
 _PENDING_TTL_S = 600.0
+#: 确认码:回调页上显示、回到应用里填。字母表去掉了容易看错的 0/O、1/I/L。
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_CODE_LENGTH = 6
+#: 填错几次就作废这一次登录(猜码的路就此断掉,真的本人重新点一次登录即可)。
+_CONFIRM_ATTEMPTS = 5
 _pending_lock = threading.Lock()
-_pending: dict[str, dict[str, Any]] = {}  # pending_id → {provider, state, verifier, created, token?, error?}
+_pending: dict[str, dict[str, Any]] = {}  # pending_id → {provider, state, verifier, created, identity?, code?, attempts, error?}
 
 
 def _providers() -> list[str]:
@@ -125,6 +135,8 @@ def start(provider: str) -> StartOut:
 
 @router.get("/auth/oauth/pending/{pending_id}")
 def poll_pending(pending_id: str) -> dict[str, Any]:
+    """登录走到哪了:`waiting`(还没回调)/ `confirm`(回调成了,等人把确认码填进来)/ `error` / `expired`。
+    **这里从不交出令牌** —— 令牌只从 `confirm` 交出去。"""
     with _pending_lock:
         _prune_pending()
         entry = _pending.get(pending_id)
@@ -133,10 +145,46 @@ def poll_pending(pending_id: str) -> dict[str, Any]:
         if entry.get("error"):
             _pending.pop(pending_id, None)
             return {"status": "error", "error": entry["error"]}
-        if entry.get("token"):
-            _pending.pop(pending_id, None)  # 一次性取票
-            return {"status": "done", "token": entry["token"], "user": entry["user"]}
+        if entry.get("identity"):
+            return {"status": "confirm"}
     return {"status": "waiting"}
+
+
+class ConfirmIn(BaseModel):
+    code: str
+
+
+def _normalized_code(raw: str) -> str:
+    """人填的码:大小写、空格、连字符都不计较。"""
+    return "".join(ch for ch in raw.upper() if ch.isalnum())
+
+
+@router.post("/auth/oauth/pending/{pending_id}/confirm")
+def confirm_pending(pending_id: str, body: ConfirmIn, db: DbSession) -> dict[str, Any]:
+    """填回调页上的确认码。对上了才找到 / 创建本地账号、铸造会话令牌交回(一次性);填错了说还能试几次,试满就作废。"""
+    with _pending_lock:
+        _prune_pending()
+        entry = _pending.get(pending_id)
+        if entry is None:
+            return {"status": "expired"}
+        if not entry.get("identity"):
+            return {"status": "waiting"}
+        if not secrets.compare_digest(_normalized_code(body.code), entry["code"]):
+            entry["attempts"] = entry.get("attempts", 0) + 1
+            left = _CONFIRM_ATTEMPTS - entry["attempts"]
+            if left <= 0:
+                _pending.pop(pending_id, None)
+                return {"status": "error", "error": tr("oauthLogin_tooManyWrongCodes")}
+            return {"status": "wrong_code", "attempts_left": left}
+        identity = _pending.pop(pending_id)["identity"]  # 一次性取票
+    try:
+        user = _find_or_create_user(db, **identity)
+        token = mint_login_session(db, user.id)
+    except Exception as exc:  # 把原因带回前端,而不是让人对着一个不动的按钮猜
+        db.rollback()
+        return {"status": "error", "error": str(exc)[:300]}
+    # 和密码登录回同一个形状(AuthOut.user):前端拿它直接落座,少一格就少显示一样。
+    return {"status": "done", "token": token, "user": current_user_out(db, user).model_dump()}
 
 
 @router.get("/auth/oauth/{provider}/callback")
@@ -173,23 +221,22 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
         return _result_page(tr("oauthLogin_noCodePage"), ok=False)
     try:
         claims = _exchange_code(provider, code, entry["verifier"])
-        user = _find_or_create_user(
-            db,
-            provider=provider,
-            subject=str(claims.get("sub") or ""),
-            email=str(claims.get("email") or ""),
-            display_name=str(claims.get("name") or ""),
-        )
-        token = mint_login_session(db, user.id)
-        # 和密码登录回同一个形状(AuthOut.user):前端拿它直接落座,少一格就少显示一样。
-        _finish(pending_id, token=token, user=current_user_out(db, user).model_dump())
+        subject = str(claims.get("sub") or "")
+        if not subject:
+            raise OAuthLoginError("oauthLogin_noSubject")
     except Exception as exc:  # 把原因带回前端轮询,而不是让用户对着浏览器空页猜
         _finish(pending_id, error=str(exc)[:300])
         return _result_page(tr("oauthLogin_failedPage"), ok=False)
-    return _result_page(tr("oauthLogin_okPage"), ok=True)
+    #: 账号在**确认之后**才找 / 建(见 confirm_pending):被人钓鱼点进来的那一次,确认码不会被填,也就不在这台部署上建号。
+    confirm_code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_LENGTH))
+    _finish(pending_id, identity={
+        "provider": provider, "subject": subject,
+        "email": str(claims.get("email") or ""), "display_name": str(claims.get("name") or ""),
+    }, code=confirm_code)
+    return _code_page(confirm_code)
 
 
-def _finish(pending_id: str, *, token: str | None = None, user: dict | None = None, error: str | None = None) -> None:
+def _finish(pending_id: str, *, identity: dict | None = None, code: str = "", error: str | None = None) -> None:
     with _pending_lock:
         entry = _pending.get(pending_id)
         if entry is None:
@@ -197,8 +244,9 @@ def _finish(pending_id: str, *, token: str | None = None, user: dict | None = No
         if error:
             entry["error"] = error
         else:
-            entry["token"] = token
-            entry["user"] = user
+            entry["identity"] = identity
+            entry["code"] = code
+            entry["attempts"] = 0
 
 
 def _exchange_code(provider: str, code: str, verifier: str) -> dict[str, Any]:
@@ -255,6 +303,22 @@ def _find_or_create_user(db: Session, *, provider: str, subject: str, email: str
     user = members.create_account(db, username=members.free_username(db, base), display_name=display_name or base, password=None)
     db.add(OAuthIdentity(provider=provider, subject=subject, user_id=user.id, email=email))
     return user
+
+
+def _code_page(code: str) -> HTMLResponse:
+    """回调成了:显示确认码,请人回到 Mosael 里填。不是自己点的登录就关掉 —— 什么都不会发生。"""
+    shown = f"{code[:3]}-{code[3:]}"
+    return HTMLResponse(
+        "<!doctype html><meta charset='utf-8'><title>Mosael</title>"
+        "<body style=\"display:grid;place-items:center;min-height:96vh;margin:0;"
+        "font-family:system-ui,-apple-system,'PingFang SC',sans-serif;background:#f6f4f0;color:#3d3a45\">"
+        "<div style='text-align:center;max-width:440px;padding:0 20px'>"
+        f"<p style='font-size:15px'>{html.escape(tr('oauthLogin_codePageLead'))}</p>"
+        f"<div data-confirm-code style='font:600 34px ui-monospace,Menlo,monospace;letter-spacing:6px;margin:14px 0 18px'>"
+        f"{shown}</div>"
+        f"<p style='font-size:13px;color:#7a7484;line-height:1.6'>{html.escape(tr('oauthLogin_codePageWarning'))}</p>"
+        "</div></body>"
+    )
 
 
 def _result_page(message: str, *, ok: bool) -> HTMLResponse:

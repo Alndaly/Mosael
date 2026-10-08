@@ -247,9 +247,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "登录失败,请回到 Mosael 查看原因。",
         "en": "Sign-in failed. Go back to Mosael to see why.",
     },
-    "oauthLogin_okPage": {
-        "zh": "登录成功,回到 Mosael 即可,本页可以关闭。",
-        "en": "Signed in. Go back to Mosael; you can close this page.",
+    "oauthLogin_codePageLead": {
+        "zh": "快好了。回到 Mosael,把这个确认码填进去:",
+        "en": "Almost done. Go back to Mosael and enter this confirmation code:",
+    },
+    "oauthLogin_codePageWarning": {
+        "zh": "如果不是你自己刚在 Mosael 里点的「用 Google / Apple 登录」,别把这个码告诉任何人,直接关掉本页 —— 什么都不会发生。",
+        "en": "If you didn't just click “Continue with Google / Apple” in Mosael yourself, don't share this code with anyone; "
+              "just close this page and nothing will happen.",
+    },
+    "oauthLogin_tooManyWrongCodes": {
+        "zh": "确认码填错太多次,这次登录已作废。重新点一次登录即可。",
+        "en": "Too many wrong confirmation codes, so this sign-in was cancelled. Start the sign-in again.",
     },
     "oauthLogin_tokenExchangeFailed": {
         "zh": "换取令牌失败:{detail}",

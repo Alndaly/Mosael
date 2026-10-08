@@ -159,8 +159,15 @@ export function redeemInviteLink(code: string): Promise<InviteLinkJoined> {
   return api<InviteLinkJoined>("/api/invite-links/redeem", { method: "POST", body: JSON.stringify({ code }) });
 }
 
-export function oauthPending(
-  pendingId: string,
-): Promise<{ status: string; token?: string; user?: User; error?: string }> {
+/** 第三方登录走到哪了:`waiting` / `confirm`(浏览器那边成了,等人填确认码)/ `error` / `expired`。从不带令牌。 */
+export function oauthPending(pendingId: string): Promise<{ status: string; error?: string }> {
   return api(`/api/auth/oauth/pending/${pendingId}`);
+}
+
+/** 填回调页上的确认码。对上了交回令牌(一次性);填错了说还能试几次。 */
+export function oauthConfirm(
+  pendingId: string,
+  code: string,
+): Promise<{ status: string; token?: string; user?: User; error?: string; attempts_left?: number }> {
+  return api(`/api/auth/oauth/pending/${pendingId}/confirm`, { method: "POST", body: JSON.stringify({ code }) });
 }
