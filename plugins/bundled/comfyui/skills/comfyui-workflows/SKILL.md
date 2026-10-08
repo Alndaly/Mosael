@@ -31,7 +31,7 @@ metadata:
 | 看一张模板、照这台机器改 | `comfy_template`:改了什么、还缺什么、各多大 |
 | 查节点类型 | `comfy_node_types`:输入(类型、必填、可选值、缺省值)和输出 —— 写改动之前用它拿**准确的**输入、输出名字 |
 | 节点包 | `comfy_node_packs`(装了哪些、图里的节点各来自哪个包)、`comfy_node_pack_search`(找)、`comfy_node_pack_info`(装之前分析) |
-| 跑一张存着的工作流 | 画布上开着的那张、这段对话里用过或用户点过名的,各有自己的工具(「工作流 · 名字」),直接调;别的那几张先 `list_workflows` 找到(`tool` 那一栏),`plugin_tools(tool=…)` 看它收哪些入参,再 `run_plugin_tool(tool, arguments)` —— 开一张确认卡,卡上写的、批准后跑的和调它自己的工具一样;入参名写错会报错并列出它认的 |
+| 跑一张存着的工作流 | 画布上开着的那张、这段对话里用过或用户点过名的,各有自己的工具(「工作流 · 名字」),直接调;别的那几张先 `list_workflows` 找到(`tool` 那一栏;有表单的工作流在 `forms[].tool`,要全部参数走生成、带完整工作流的模型 id),`plugin_tools(tool=…)` 看它收哪些入参,再 `run_plugin_tool(tool, arguments)` —— 开一张确认卡,卡上写的、批准后跑的和调它自己的工具一样;入参名写错会报错并列出它认的 |
 | 下拉里有哪些值 | 定义里写着「N options — plugin_tools lists them」的那一格(模型、LoRA 这种几百项的),`plugin_tools(tool=…, input=…, query=…)` 按字筛着查,**别猜文件名** |
 
 ## 节点怎么指

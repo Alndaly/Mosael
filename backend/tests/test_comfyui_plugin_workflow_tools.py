@@ -109,7 +109,8 @@ def test_有表单的工作流是两个入口_完整工作流和表单_名字分
 
     listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {"query": "快速"}, {"SERVER_URL": comfy.url},
                                   timeout=60).output["workflows"]
-    assert [(one["id"], one["label"], one["tool"]) for one in listed] == [("portrait.json", "portrait", PORTRAIT_TOOL)]
+    assert [(one["id"], one["label"], one.get("tool")) for one in listed] == [("portrait.json", "portrait", None)], \
+        "有表单:完整工作流的工具智能体调不到(agent: false),顶上不给 tool,跑它用表单的工具(PLG-15)"
     assert [(one["id"], one["title"], one["model"], one["tool"]) for one in listed[0]["forms"]] == [
         ("app", "快速出图", "portrait.json#app", form_tool)], "按表单标题找得到它在哪张工作流上"
 

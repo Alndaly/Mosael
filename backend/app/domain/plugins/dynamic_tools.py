@@ -41,8 +41,6 @@ logger = logging.getLogger(__name__)
 
 #: 问一次清单最多等多久(一台 ComfyUI 上百张工作流,每张拉一次图)。
 CATALOG_TIMEOUT_SECONDS = 60.0
-#: 一个连接最多报多少个工具。再多工具表和节点面板就没法用了。
-MAX_TOOLS = 300
 #: 一个工具最多声明取代几种老用法。
 MAX_REPLACES = 8
 #: 报出来的工具上宿主认的键。别的丢掉 —— 尤其是 `provides` 和 `internal`:运行时报出的工具不能替宿主
@@ -203,7 +201,7 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
     declared = {str(tool.get("name")) for tool in manifest.declared_tools}
     found: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for entry in raw[:MAX_TOOLS]:
+    for entry in raw[:tools.MAX_TOOLS]:
         clean = _clean(entry, declared)
         if clean is None or clean["name"] in seen:
             continue
@@ -248,4 +246,4 @@ def _apply_moves(db: Session, instance: PluginInstance, raw: Any, names: set[str
         logger.exception("插件实例 %s 的工具改名没做成,下次刷新再来", instance.id)
 
 
-__all__ = ["CATALOG_TIMEOUT_SECONDS", "MAX_TOOLS", "clean_mirror", "on_refreshed", "refresh"]
+__all__ = ["CATALOG_TIMEOUT_SECONDS", "clean_mirror", "on_refreshed", "refresh"]

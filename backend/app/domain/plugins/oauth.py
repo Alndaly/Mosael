@@ -126,15 +126,18 @@ def credentials_from_token(spec: OAuthSpec, response: dict[str, Any]) -> dict[st
     return out
 
 
-def exchange_code(spec: OAuthSpec, credentials: dict[str, str], code: str) -> dict[str, str]:
+def exchange_code(spec: OAuthSpec, credentials: dict[str, str], code: str, *, network: dict[str, Any]) -> dict[str, str]:
     """拿授权码去对方的令牌端点换令牌,返回要写回的那几个凭据键(见 credentials_from_token)。
 
     走统一的重试传输层:令牌端点一样会限流,而"刚授权完就失败"最让人摸不着头脑。网络或对方
     报错都是**结果**,不是服务端故障 —— 说清楚是哪一步、对方说了什么。
+
+    `network` 是这个连接往外连的那条路(`egress.resolve(...).httpx_options(令牌端点)`):连接设成直连、走它自己的代理时,
+    换令牌这一下也照那样走 —— 此前它走的是后端的默认出口,插件自己的调用通、授权这一步却不通(PLG-15)。
     """
     payload = token_request(spec, credentials, code)
     try:
-        with RetryingClient(timeout=30) as client:
+        with RetryingClient(timeout=30, **network) as client:
             response = client.post(spec.token_url, data=payload)
         response.raise_for_status()
         body = response.json()

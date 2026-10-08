@@ -85,6 +85,10 @@ def test_插件页提供的模型和工具_带着组_完整工作流不进智能
     assert any(name.endswith(f"__{PORTRAIT_TOOL}_app") for name in names), "表单入口给智能体"
     assert not any(name.endswith(f"__{PORTRAIT_TOOL}") for name in names), \
         "有表单的图:完整工作流不进智能体的工具表(插件说 agent: false)"
+    toolsets = [one for one in client.get("/api/agent/toolsets").json() if one["source"] == VENDOR]
+    listed = {tool["name"] for one in toolsets for tool in one["tools"]}
+    assert toolsets and PORTRAIT_TOOL + "_app" in listed
+    assert PORTRAIT_TOOL not in listed, "给别的智能体的工具集同一条规矩:此前照列,给出去的是一个调不到的工具名(PLG-15)"
 
     node_types = {one["type"]: one for one in client.get("/api/workflows/node-types").json()}
     assert node_types[f"plugin.{PACKAGE}.{PORTRAIT_TOOL}"]["group"]["entry"] == "full", "工作流里照常能加完整工作流"

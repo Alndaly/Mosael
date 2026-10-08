@@ -163,8 +163,8 @@
           "en": "List workflows"
         },
         "description": {
-          "zh": "这台 ComfyUI 上的每张工作流(连同内置文生图):能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…),以及跑它用哪个工具(`tool`,「工作流 · 名字」,入参就是它自己的节点)。",
-          "en": "Every workflow on this ComfyUI (plus the built-in text-to-image): what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, what it seems to do (upscale, inpaint, background removal…), and which tool runs it (`tool`, “Workflow · name”, whose inputs are that workflow's own nodes)."
+          "zh": "这台 ComfyUI 上的每张工作流(连同内置文生图):能喂什么(图 / 蒙版 / 视频 / 音频各接在哪个节点)、能调什么、会交出什么、看起来在做什么(放大、局部重绘、抠图…),以及跑它用哪个工具(`tool`,「工作流 · 名字」,入参就是它自己的节点);有表单的工作流,工具在每张表单上(`forms[].tool`),要全部参数走生成、带完整工作流的模型 id(`id`)。",
+          "en": "Every workflow on this ComfyUI (plus the built-in text-to-image): what it takes (which node loads each image / mask / video / audio), what can be tuned, what it outputs, what it seems to do (upscale, inpaint, background removal…), and which tool runs it (`tool`, “Workflow · name”, whose inputs are that workflow's own nodes); for a workflow with forms the tools are on each form (`forms[].tool`), and the full set of parameters goes through generation with the full workflow's model id (`id`)."
         },
         "input_schema": {
           "type": "object",

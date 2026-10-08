@@ -97,6 +97,7 @@ from app.domain.generation.operations import GenerationDomainError
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins.runtime import PluginRuntimeError
 from app.domain.plugins import bundled
+from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import package_sources
@@ -1165,7 +1166,8 @@ def plugin_oauth_complete(
     manifest = inst.manifest_for(db, instance)
     try:
         spec = plugin_oauth.spec_of(manifest)
-        values = plugin_oauth.exchange_code(spec, inst.credential_values(db, instance.id), body.code)
+        network = plugin_egress.resolve(db, instance, manifest).httpx_options(spec.token_url)
+        values = plugin_oauth.exchange_code(spec, inst.credential_values(db, instance.id), body.code, network=network)
     except plugin_oauth.PluginOAuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     inst.set_credentials(db, instance, values)

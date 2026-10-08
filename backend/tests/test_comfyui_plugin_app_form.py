@@ -557,7 +557,8 @@ def test_annotate_写回_目录和工具只剩表单那几项(comfy, tmp_path: P
 
     listed = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
     flow = next(one for one in listed["workflows"] if one["id"] == "multi.json")
-    assert flow["label"] == "multi" and flow["tool"] == tools["multi.json"]["name"]
+    assert flow["label"] == "multi" and "tool" not in flow, \
+        "有表单:完整工作流的工具不进智能体的工具表(agent: false),不给智能体一个调不到的名字(PLG-15)"
     assert flow["forms"] == [{"id": "app", "title": "换装", "description": "上传人物和背景", "model": "multi.json#app",
                               "tool": tools["multi.json#app"]["name"]}]
     assert "3.cfg" in [one["key"] for one in flow["parameters"]], "说的是完整工作流"

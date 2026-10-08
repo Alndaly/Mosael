@@ -356,9 +356,16 @@ def missing_credentials(db: Session, instance: PluginInstance) -> list[str]:
 
 
 def secrets_for(db: Session, instance: PluginInstance) -> dict[str, str]:
-    """`${...}` 展开与进程注入用的值:配置 + 已填的凭据,按声明的 key。"""
-    merged = {key: str(value) for key, value in (instance.config or {}).items() if value not in (None, "")}
-    merged.update({key: value for key, value in credential_values(db, instance.id).items() if value})
+    """`${...}` 展开与进程注入用的值:清单**现在**声明的配置和凭据里填了的那几项。
+
+    只按声明的键取:插件更新后去掉的凭据键,那一行还在库里 —— 插件页照清单列凭据,看不到它、也删不掉;此前它照样每次注入
+    插件进程(PLG-15)。配置写的时候就只收声明的键(_fit_config),老版本留下的照样在这里挡一道。"""
+    manifest = manifest_for(db, instance)
+    config_keys = {spec.key for spec in manifest.config}
+    credential_keys = {spec.key for spec in manifest.credentials}
+    merged = {key: str(value) for key, value in (instance.config or {}).items()
+              if key in config_keys and value not in (None, "")}
+    merged.update({key: value for key, value in credential_values(db, instance.id).items() if key in credential_keys and value})
     return merged
 
 

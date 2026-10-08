@@ -33,6 +33,7 @@ from app.domain.plugins.manifest import (
     GENERATION,
     Manifest,
     localized_tool,
+    TOOL_NAME_RE,
     manifest_of,
     text_of,
     tool_label,
@@ -48,6 +49,9 @@ from app.domain.plugins.runtime import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: 一个连接最多有多少个运行时才知道的工具(插件 `op: tools` 报的、MCP 服务给的同一个上限)。再多工具表和节点面板就没法用了。
+MAX_TOOLS = 300
 
 
 #: 插件自己能声明的最长预算。再长的活该拆步(先准备、再干活),而不是让一次调用挂半小时。
@@ -191,6 +195,7 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
         # 启用、改配置时顺手拉的那一次失败不往外抛,不记下来的话插件页只能说「没有工具」,说不出为什么。
         inst.record_tool_list_failure(db, instance, exc)
         raise PluginDomainError(exc.key, **exc.params) from exc
+    discovered = _callable(instance, discovered)
     instance.discovered_tools = discovered
     db.flush()
     db.refresh(instance)
@@ -198,6 +203,25 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
     inst.seed_capabilities(db, instance, manifest, [t["name"] for t in discovered])
     inst.record_tool_list(db, instance, len(discovered))
     return instance
+
+
+def _callable(instance: PluginInstance, discovered: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """MCP 服务给的清单照插件运行时报的工具同一条规矩收(见 dynamic_tools.refresh):名字合 TOOL_NAME_RE、不重名、最多
+    MAX_TOOLS 个;不合的丢掉、记一条日志,不让整份清单作废。
+
+    此前照单全收(PLG-15):名字带点的,工作流节点类型 `plugin.<包>.<a.b>` 被 parse_node_type 切错、智能体的工具名也不收点;
+    重名的两个只调得到一个;一台服务器报几千个,工具表和节点面板就没法用了。"""
+    kept: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for tool in discovered[:MAX_TOOLS]:
+        name = str(tool.get("name") or "")
+        if TOOL_NAME_RE.match(name) and name not in seen:
+            seen.add(name)
+            kept.append(tool)
+    dropped = len(discovered) - len(kept)
+    if dropped:
+        logger.info("插件实例 %s 的 MCP 服务报的工具里有 %d 个名字不合规矩、重名或超出 %d 个,没收", instance.id, dropped, MAX_TOOLS)
+    return kept
 
 
 def _runtime_manifest(manifest: Manifest) -> dict[str, Any]:
@@ -678,7 +702,7 @@ def _recorded(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["COLLECTED_AS", "SERVICE_OP_TIMEOUT_SECONDS", "all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host",
+__all__ = ["COLLECTED_AS", "MAX_TOOLS", "SERVICE_OP_TIMEOUT_SECONDS", "all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host",
            "invoke_service", "output_port", "quiet_hooks", "refresh_tools", "staged_artifact", "staged_output"]
 
 

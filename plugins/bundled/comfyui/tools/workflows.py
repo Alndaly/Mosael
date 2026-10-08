@@ -47,7 +47,10 @@ def _text(value: Any, locale: str) -> str:
 
 def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     """保存的每张工作流(加内置文生图):能喂什么、能调什么、会交出什么,跑它用哪个工具 —— 说的是**完整工作流**;它上面的
-    表单(ADR 0045:表单是工作流的入口)列在 `forms` 里,各带自己的模型 id 和工具。按工作流名、文件路径、表单标题都搜得到。"""
+    表单(ADR 0045:表单是工作流的入口)列在 `forms` 里,各带自己的模型 id 和工具。按工作流名、文件路径、表单标题都搜得到。
+
+    有表单的工作流,完整工作流的工具不进智能体的工具表(`agent: false`,ADR 0045 §5):这时不给顶上那一格 `tool` —— 此前照给,
+    智能体拿着一个调不到的名字(PLG-15)。跑它用表单的工具;要全部参数走生成、带完整工作流的模型 id(就是 `id`)。"""
     query = str(payload.get("query") or "").strip().lower()
     object_info = comfy.object_info()
     found: list[dict[str, Any]] = []
@@ -67,7 +70,7 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
         full = entries[0]
         described = inspect(workflow.id, name, workflow.api, object_info, workflow.titles, locale, full.form)
         runnable = tooling.runnable(workflow, object_info)
-        if workflow.id in names and runnable:
+        if workflow.id in names and runnable and not forms:
             # 跑它用的工具(输入就是它自己的节点);一个输出节点都没有的图没有工具
             described["tool"] = names[workflow.id]
         if forms:
