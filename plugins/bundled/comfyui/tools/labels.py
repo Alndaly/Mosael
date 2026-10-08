@@ -329,6 +329,8 @@ class Parameter:
     node_label: dict[str, str] = field(default_factory=dict)
     #: ComfyUI 给这一格的说明(按语言),没有是 None
     hint: dict[str, str] | None = None
+    #: 名字里已经带着是哪个节点(不认得的输入是「节点名 · 这一格」):撞名时不再接一遍节点名
+    names_node: bool = False
 
 
 def _humanize(name: str) -> str:
@@ -358,7 +360,7 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
         return Parameter(
             key=f"{node}.{name}", node=node, input=name, class_type=class_type, node_title=custom,
             rank=1000 + order, common=False, zh=f"{where['zh']} · {own['zh']}", en=f"{where['en']} · {own['en']}",
-            node_label=where, hint=hint,
+            node_label=where, hint=hint, names_node=True,
         )
     return Parameter(
         key=f"{node}.{name}", node=node, input=name, class_type=class_type, node_title=custom,
@@ -367,12 +369,33 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
     )
 
 
+def _ordinal(n: int) -> str:
+    """英文的「第几个」(`2nd`):不写成 `#2` —— `#` 后面跟的是节点号(见 numbered),两种数混在一张表里分不清。"""
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def numbered(names: dict[str, dict[str, str]], nodes: dict[str, str]) -> dict[str, dict[str, str]]:
+    """还是撞名的那几个(同一个标题的几个节点 —— 复制出来的那种):每个后面带上节点号(`#12`),和画布上节点角上的号对得上。
+    `names`:键 → 名字(`{"zh", "en"}`);`nodes`:键 → 节点号(图级的项没有节点,不带)。哪种语言撞了都算撞。"""
+    count: dict[tuple[str, str], int] = {}
+    for name in names.values():
+        for lang in ("zh", "en"):
+            count[(lang, name[lang])] = count.get((lang, name[lang]), 0) + 1
+    out: dict[str, dict[str, str]] = {}
+    for key, name in names.items():
+        clash = any(count[(lang, name[lang])] > 1 for lang in ("zh", "en"))
+        out[key] = {lang: f"{name[lang]} #{nodes[key]}" for lang in ("zh", "en")} if clash and nodes.get(key) else name
+    return out
+
+
 def titled(parameters: list[Parameter]) -> dict[str, dict[str, str]]:
     """每个参数最终的名字(`{"zh", "en"}`)。**只在撞名时**才带上是哪个节点 —— 用节点给人看的名字(`node_name`),不用类名。
 
     - 用户给节点起了名字 → 「采样器 · 精修」;
     - 没起名字 → 同一类节点里按出现顺序数,第一个不带尾巴,之后的「采样器 · 第 2 个 K 采样器」;
-    - 不撞名 → 就是「采样器」,不带任何技术名词。
+    - 不撞名 → 就是「采样器」,不带任何技术名词;
+    - 名字里本来就带着节点名的(不认得的输入)不再接一遍;这样还撞的(几个节点标题一样)各带上节点号,见 numbered。
     """
     seen: dict[str, list[Parameter]] = {}
     for one in parameters:
@@ -388,6 +411,9 @@ def titled(parameters: list[Parameter]) -> dict[str, dict[str, str]]:
         for position, one in enumerate(group):
             per_class[one.class_type] = per_class.get(one.class_type, 0) + 1
             where = one.node_label or {"zh": one.class_type, "en": one.class_type}
+            if one.names_node:
+                out[one.key] = {"zh": one.zh, "en": one.en}
+                continue
             if one.node_title:
                 hint_zh = hint_en = one.node_title
             elif position == 0:
@@ -395,12 +421,12 @@ def titled(parameters: list[Parameter]) -> dict[str, dict[str, str]]:
                 continue
             elif classes.count(one.class_type) > 1:
                 index = per_class[one.class_type]
-                hint_zh, hint_en = f"第 {index} 个 {where['zh']}", f"{where['en']} #{index}"
+                hint_zh, hint_en = f"第 {index} 个 {where['zh']}", f"{_ordinal(index)} {where['en']}"
             else:
                 hint_zh, hint_en = where["zh"], where["en"]
             out[one.key] = {"zh": f"{one.zh} · {hint_zh}", "en": f"{one.en} · {hint_en}"}
-    return out
+    return numbered(out, {one.key: one.node for one in parameters})
 
 
 __all__ = ["CORE_NODE_ZH", "HIDDEN_INPUTS", "I18N_KEY", "KNOWN", "Known", "Parameter", "ROLE_NAMES", "advanced_input",
-           "describe", "hidden_input", "input_hint", "input_name", "node_name", "titled", "with_i18n"]
+           "describe", "hidden_input", "input_hint", "input_name", "node_name", "numbered", "titled", "with_i18n"]

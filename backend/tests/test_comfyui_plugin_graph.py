@@ -432,9 +432,50 @@ def test_撞名时才带上是哪个节点(graph) -> None:
     }
     parameters = graph.describe("x.json", "x", api, OBJECT_INFO, {"9": "精修"})["parameters"]
     assert parameters["3.steps"]["title"] == {"zh": "步数", "en": "Steps"}
-    assert parameters["8.steps"]["title"] == {"zh": "步数 · 第 2 个 K 采样器", "en": "Steps · KSampler #2"}, \
-        "撞名时带的是节点给人看的名字(中文是核心节点的中文名),不是类名"
+    assert parameters["8.steps"]["title"] == {"zh": "步数 · 第 2 个 K 采样器", "en": "Steps · 2nd KSampler"}, \
+        "撞名时带的是节点给人看的名字(中文是核心节点的中文名),不是类名;英文的第几个不写成 #2(# 后面是节点号)"
     assert parameters["9.steps"]["title"] == {"zh": "步数 · 精修", "en": "Steps · 精修"}, "用户起了名字就用名字"
+
+
+def test_几个节点标题一样_名字里不重复节点名_各带上节点号(graph) -> None:
+    """PLG-16:维护者的大工作流里复制出来的两个「Detailer CLIP Text Encode (Positive Prompt)」,两格都叫
+    「Detailer CLIP Text Encode (Positive Prompt) · Text · Detailer CLIP Text Encode (Positive Prompt)」—— 标题出现两遍,
+    两格还一模一样,AI Studio 右栏里分不清哪格是哪个节点。"""
+    detailer = "Detailer CLIP Text Encode (Positive Prompt)"
+    api = {
+        "3": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "positive": ["6", 0], "negative": ["7", 0]}},
+        "8": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 10, "positive": ["6", 0], "negative": ["7", 0]}},
+        "9": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 5, "positive": ["6", 0], "negative": ["7", 0]}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "p"}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "n"}},
+        "730": {"class_type": "Odd Encoder", "inputs": {"wording": "a"}},
+        "739": {"class_type": "Odd Encoder", "inputs": {"wording": "b"}},
+        "41": {"class_type": "Odd Encoder", "inputs": {"wording": "c"}},
+        "42": {"class_type": "Odd Encoder", "inputs": {"wording": "d"}},
+    }
+    titles = {"730": detailer, "739": detailer, "8": "精修", "9": "精修"}
+    info = {**OBJECT_INFO, "Odd Encoder": {"input": {"required": {"wording": ["STRING", {"multiline": False}]}}}}
+    parameters = graph.describe("x.json", "x", api, info, titles)["parameters"]
+    assert parameters["730.wording"]["title"] == {"zh": f"{detailer} · Wording #730", "en": f"{detailer} · Wording #730"}, \
+        "节点名只出现一次,后面是节点号(和画布上节点角上的号对得上)"
+    assert parameters["739.wording"]["title"] == {"zh": f"{detailer} · Wording #739", "en": f"{detailer} · Wording #739"}
+    assert parameters["41.wording"]["title"]["en"] == "Odd Encoder · Wording #41", "没起名字的同类节点:也不再接一遍类名"
+    assert parameters["42.wording"]["title"]["en"] == "Odd Encoder · Wording #42"
+    assert parameters["8.steps"]["title"] == {"zh": "步数 · 精修 #8", "en": "Steps · 精修 #8"}, "两个节点起了同一个名字"
+    assert parameters["9.steps"]["title"] == {"zh": "步数 · 精修 #9", "en": "Steps · 精修 #9"}
+    assert parameters["3.steps"]["title"] == {"zh": "步数", "en": "Steps"}, "不撞名的不带节点号"
+    names = [spec["title"]["zh"] for key, spec in parameters.items() if "." in key]
+    assert len(names) == len(set(names)), names
+    assert graph.tunable(api, info, titles)["8.steps"]["title"] == {"zh": "步数 · 精修 #8", "en": "Steps · 精修 #8"}, \
+        "给人调的那几格(tunable)和能填的项是同一份名字"
+    #: 能填的项(表单编辑器)同一套:写提示词的两格(第二遍采样另接了一格正向提示词)标题一样时,也各带上节点号
+    two_prompts = {**api, "16": {"class_type": "CLIPTextEncode", "inputs": {"text": "q"}},
+                   "8": {**api["8"], "inputs": {**api["8"]["inputs"], "positive": ["16", 0]}}}
+    found = {one["key"]: one["title"] for one in graph.items(two_prompts, info, {**titles, "6": detailer, "16": detailer})}
+    assert found["6.text"] == {"zh": f"提示词 · {detailer} #6", "en": f"Prompt · {detailer} #6"}
+    assert found["16.text"] == {"zh": f"提示词 · {detailer} #16", "en": f"Prompt · {detailer} #16"}
+    assert found["7.text"] == {"zh": "反向提示词", "en": "Negative prompt"}
+    assert found["730.wording"]["zh"] == f"{detailer} · Wording #730"
 
 
 def test_LoRA和checkpoint是下拉_选项来自object_info(graph) -> None:

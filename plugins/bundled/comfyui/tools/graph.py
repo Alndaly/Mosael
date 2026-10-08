@@ -1020,7 +1020,9 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
         if spec.get("x-model-folder"):
             item["folder"] = spec["x-model-folder"]
         found.append(item)
-    return found
+    # 几格写提示词的节点标题一样(复制出来的那种)、或者别的项和它们同名:各带上节点号,编辑器和右栏里分得清
+    names = labels.numbered({one["key"]: one["title"] for one in found}, {one["key"]: one["node"] for one in found})
+    return [{**one, "title": names[one["key"]]} for one in found]
 
 
 @dataclass(frozen=True)
