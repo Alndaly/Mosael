@@ -187,6 +187,7 @@ export const plugins = {
   capabilityBuiltinUnready: "“{name}” can't be chosen yet: {fields}",
   capabilityGoPlugins: "Open Plugins",
   capabilityNone: "No plugin connection can do this yet",
+  capabilityNoneReady: "None of them is ready yet — see below what each one still needs",
   assetLinkNone: "No object storage connection yet — create one under Object Storage on the Plugins page (Aliyun OSS / Tencent COS / Volcengine TOS / Amazon S3 / S3-compatible)",
   assetLinkNoneReady: "No storage is set up yet — fill in the bucket and keys on the Plugins page",
   assetLinkAuto: "Automatic: only “{name}” is set up, so it is used",

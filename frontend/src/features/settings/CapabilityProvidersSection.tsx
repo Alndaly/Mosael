@@ -37,6 +37,9 @@ const KEY = capabilityKeys.choices();
 
 /** 一家都没有时怎么说:素材外链要去建一个对象存储连接;别的能力说句通用的。 */
 const NONE_HINT: Record<string, MessageKey> = { public_url: "assetLinkNone" };
+//: 有几家、可一家都没配好时同理:「填上桶和密钥」只对素材外链成立。此前转写也这么说,把想转写的人指去了对象存储
+//: (体检 UM-06);别的能力说句中性的,缺什么由下面一家一行写清。
+const NONE_READY_HINT: Record<string, MessageKey> = { public_url: "assetLinkNoneReady" };
 
 export function CapabilityProvidersSection() {
   const state = useQuery({ queryKey: KEY, queryFn: listCapabilityChoices });
@@ -136,7 +139,7 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
     : options.length === 0
       ? t(NONE_HINT[choices.capability] ?? "capabilityNone")
       : ready.length === 0
-        ? t("assetLinkNoneReady")
+        ? t(NONE_READY_HINT[choices.capability] ?? "capabilityNoneReady")
         : automatic
           ? t("assetLinkAuto").replace("{name}", automatic.name)
           : t("assetLinkAsk");

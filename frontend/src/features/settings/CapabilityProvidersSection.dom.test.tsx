@@ -164,3 +164,28 @@ it("每项能力都能去插件市场找「谁还能做这件事」,带着这项
   within(speech).getByRole("button", { name: /capabilityFindPlugins/ }).click();
   expect(findPluginsFor).toHaveBeenCalledWith("speech");
 });
+
+it("有几家、却一家都没配好时按能力说:转写不提「桶和密钥」,素材外链才提(体检 UM-06)", async () => {
+  //: 全新部署上转写的本机引擎都没装:此前第一句是「还没有配好的存储 —— 去「插件」页填上桶和密钥」,把想转写的人指去了对象存储。
+  listCapabilityChoices.mockImplementation(async () => [
+    { capability: "transcribe", label: "转写", description: "听写成字", current: null, automatic: null,
+      options: [
+        { id: "builtin:funasr", name: "FunASR", builtin: true, missing: ["运行环境"] },
+        { id: "builtin:whisperx", name: "WhisperX", builtin: true, missing: ["运行环境"] },
+      ] },
+    { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null,
+      options: [{ id: "oss", name: "阿里云 OSS", builtin: false, missing: ["bucket"] }] },
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("转写")).toBeTruthy());
+  const transcribe = screen.getByText("转写").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(transcribe.textContent).toContain("capabilityNoneReady");
+  expect(transcribe.textContent).not.toContain("assetLinkNoneReady");
+  expect(within(transcribe).getAllByText("capabilityBuiltinUnready")).toHaveLength(2);
+  const link = screen.getByText("素材外链").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(link.textContent).toContain("assetLinkNoneReady");
+});

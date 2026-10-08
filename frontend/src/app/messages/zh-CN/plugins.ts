@@ -189,6 +189,7 @@ export const plugins = {
   capabilityBuiltinUnready: "「{name}」还不能选:{fields}",
   capabilityGoPlugins: "去插件页",
   capabilityNone: "还没有能做这件事的插件连接",
+  capabilityNoneReady: "现在没有能用的一家 —— 下面写着每一家还缺什么",
   assetLinkNone: "还没有对象存储连接 —— 去「插件」页的「对象存储」建一个(阿里云 OSS / 腾讯云 COS / 火山引擎 TOS / Amazon S3 / S3 兼容服务)",
   assetLinkNoneReady: "还没有配好的存储 —— 去「插件」页填上桶和密钥",
   assetLinkAuto: "自动:只配好了「{name}」,就用它",
