@@ -253,3 +253,27 @@ describe("供应商连接列表", () => {
     expect(rows[1].textContent).toContain("providerDisabled");
   });
 });
+
+//: 体检 UM-23:「未授权」「未配置你的密钥」此前是纯文字,授权登录要点「更多」才找得到;缺密钥的连接旁边亮着绿色的延迟。
+describe("连接用不了时直接点状态去修", () => {
+  it("「未配置你的密钥」点了就是编辑这条连接(填密钥);地址通也不亮成功色", async () => {
+    const user = userEvent.setup();
+    vendorsResult = [{ vendor: "alibaba", label: "阿里云百炼", capability_ids: ["chat"], capabilities: "", auth: ["api_key"],
+      fields: [{ key: "base_url", label: "百炼 API Endpoint", storage: "base_url", required: false, secret: false }] }];
+    providersResult = [{ id: "p1", name: "百炼", vendor: "alibaba", enabled: true, auth_type: "api_key", oauth_linked: false, key_hint: "",
+      capability_ids: ["chat"], config: { base_url: "https://x" }, base_url: "https://x", quota_supported: false }];
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "providerNoKeyOfMine" }));
+    expect(await screen.findByText("百炼 API Endpoint")).toBeInTheDocument();
+  });
+
+  it("「未授权」点了就是去授权", async () => {
+    const user = userEvent.setup();
+    vendorsResult = [{ vendor: "kimi", label: "Kimi", capability_ids: ["chat"], capabilities: "", auth: ["oauth"], fields: [] }];
+    providersResult = [{ id: "p2", name: "Kimi", vendor: "kimi", enabled: true, auth_type: "oauth", oauth_linked: false, key_hint: "",
+      capability_ids: ["chat"], config: {}, base_url: "", quota_supported: false }];
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "providerOauthUnlinked" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+});

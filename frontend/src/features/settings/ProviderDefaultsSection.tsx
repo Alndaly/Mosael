@@ -8,6 +8,7 @@ import {
   setProviderDefault,
   type CapabilityModel,
   type ProviderDefault,
+  type ProviderProfile,
 } from "@/api/client";
 import { providerKeys, generationKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
@@ -15,6 +16,23 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { PROVIDER_FIX_ATTR, providerProblem, providerRowId, type ProviderProblem } from "./providerProblem";
+
+const PROBLEM_TEXT: Record<ProviderProblem, "providerDefaultBroken_disabled" | "providerDefaultBroken_unauthorized" | "providerDefaultBroken_expired" | "providerDefaultBroken_noKey"> = {
+  disabled: "providerDefaultBroken_disabled",
+  unauthorized: "providerDefaultBroken_unauthorized",
+  expired: "providerDefaultBroken_expired",
+  noKey: "providerDefaultBroken_noKey",
+};
+
+/** 「去处理」:滚到那条连接、把焦点交给它那颗修它的按钮(授权 / 填密钥);停用的交给那一行本身。 */
+function goFixConnection(profileId: string) {
+  const row = document.getElementById(providerRowId(profileId));
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  (row.querySelector<HTMLElement>(`[${PROVIDER_FIX_ATTR}]`) ?? row).focus({ preventScroll: true });
+}
 
 
 const NONE = "__none__";
@@ -39,11 +57,14 @@ function DefaultRow({
   label,
   current,
   highlighted,
+  connection,
 }: {
   capability: string;
   label: string;
   current: ProviderDefault | undefined;
   highlighted?: boolean;
+  /** 默认模型所在的那条连接(没设默认就没有)。 */
+  connection?: ProviderProfile;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -60,6 +81,7 @@ function DefaultRow({
   // 值必须同时含连接与模型:同一个模型 id 可能出现在两条连接下(同一端点配了两把 key)。
   const valueOf = (item: CapabilityModel) => `${item.provider_profile_id}::${item.model}`;
   const currentValue = providerId && model ? `${providerId}::${model}` : NONE;
+  const problem = connection && currentValue !== NONE ? providerProblem(connection) : null;
 
   const save = useMutation({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
@@ -81,6 +103,7 @@ function DefaultRow({
       controlClassName="w-full min-w-0 shrink"
       label={label}
     >
+      <div className="grid min-w-0 gap-1.5">
       {/* 一条连接下几十个模型是常态,超过阈值 OptionPicker 自己换成可搜索的那一版。 */}
       <OptionPicker
         key={currentValue}
@@ -118,6 +141,17 @@ function DefaultRow({
         ]}
         className="w-full min-w-0"
       />
+      {/* 默认模型所在的连接现在用不了(未授权、没填密钥、停用):此前这一行毫无提示,AI Studio、智能体用默认模型时才报错,
+          回到设置页也看不出默认模型就是坏的那条(体检 UM-23)。 */}
+      {problem && connection && (
+        <p data-default-broken={problem} className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-destructive">
+          <span>{t(PROBLEM_TEXT[problem]).replace("{name}", connection.name)}</span>
+          <Button variant="outline" size="xs" onClick={() => goFixConnection(connection.id)}>
+            {t("providerDefaultFix")}
+          </Button>
+        </p>
+      )}
+      </div>
     </SettingsRow>
   );
 }
@@ -189,6 +223,7 @@ export function ProviderDefaultsSection({
               label={row.label}
               current={byCapability.get(row.capability)}
               highlighted={focusCapability === row.capability}
+              connection={(providers.data ?? []).find((profile) => profile.id === byCapability.get(row.capability)?.provider_profile_id)}
             />
           ))}
         </>

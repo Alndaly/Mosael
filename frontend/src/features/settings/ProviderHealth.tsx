@@ -19,7 +19,17 @@ import { cn } from "@/lib/utils";
  * **点进去才探,不轮询**:探针会真的打到用户自己的端点上,定时轮询等于替他持续产生请求 ——
  * 而"现在通不通"这个问题只在他看着这一页时才有意义。所以挂载时探一次,之后点它重探。
  */
-export function ProviderHealth({ profileId, className }: { profileId: string; className?: string }) {
+export function ProviderHealth({
+  profileId,
+  className,
+  usable = true,
+}: {
+  profileId: string;
+  className?: string;
+  /** 这条连接对我能不能用(钥匙填了、授权了)。地址通而我用不了时,圆点不用成功色 —— 此前缺密钥的连接旁边亮着绿色的
+   *  「275ms」,读起来像「连上了」(体检 UM-23)。 */
+  usable?: boolean;
+}) {
   const t = useI18n();
   const health = useQuery({
     queryKey: providerKeys.health(profileId),
@@ -46,7 +56,7 @@ export function ProviderHealth({ profileId, className }: { profileId: string; cl
 
   return (
     // 第一行说点了会怎样,第二行是探测回来的细节(哪儿不通、多慢)。
-    <Hint label={t("providerHealthRecheck")} hint={health.data?.detail}>
+    <Hint label={t("providerHealthRecheck")} hint={online && !usable ? t("providerHealthReachableNotUsable") : health.data?.detail}>
     <button
       type="button"
       className={cn(
@@ -62,9 +72,10 @@ export function ProviderHealth({ profileId, className }: { profileId: string; cl
         <Loader2 size={9} className="animate-spin" />
       ) : (
         <span
+          data-health-dot={health.data ? (online ? (usable ? "online" : "reachable") : "offline") : "unknown"}
           className={cn(
             "h-[6px] w-[6px] rounded-full bg-muted-foreground/50",
-            health.data && (online ? "bg-success" : "bg-destructive"),
+            health.data && (online ? (usable ? "bg-success" : "bg-muted-foreground/50") : "bg-destructive"),
           )}
         />
       )}

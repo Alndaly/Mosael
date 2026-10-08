@@ -32,6 +32,7 @@ import { ProviderOAuthDialog } from "@/features/settings/ProviderOAuthDialog";
 import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
+import { PROVIDER_FIX_ATTR, providerProblem, providerRowId } from "@/features/settings/providerProblem";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
@@ -472,6 +473,7 @@ export function ProviderProfilesSection({
                   bulk.isSelected(profile.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] opacity-100",
                 )}
                 key={profile.id}
+                id={providerRowId(profile.id)}
               >
               {bulk.selectMode && (
                 <BulkCheckbox
@@ -494,23 +496,24 @@ export function ProviderProfilesSection({
                         profile.oauth_expired ? (
                           // 走到这里说明后端已经替它刷过且没刷动(见 _auto_refresh_expired)——
                           // 单纯的"过期"不会到用户面前,所以这一行现在确实需要人来处理,
-                          // 用警告色说出来。
-                          <span className="text-destructive">{t("providerOauthExpired")}</span>
+                          // 用警告色说出来。点它就是重新授权。
+                          <FixLink onClick={() => setAuthing(profile)}>{t("providerOauthExpired")}</FixLink>
                         ) : (
                           t("providerOauthLinked")
                         )
                       ) : (
-                        t("providerOauthUnlinked")
+                        //: 「未授权」「未配置你的密钥」此前是纯文字,授权登录要点「更多」才找得到(体检 UM-23):直接点它。
+                        <FixLink onClick={() => setAuthing(profile)}>{t("providerOauthUnlinked")}</FixLink>
                       )}
                     </>
-                  ) : profile.key_hint ? (
-                    ` · ${profile.key_hint}`
+                  ) : profile.key_hint || profile.plugin_instance_id ? (
+                    profile.key_hint ? ` · ${profile.key_hint}` : ""
                   ) : (
-                    <> · <span className="text-destructive">{t("providerNoKeyOfMine")}</span></>
+                    <> · <FixLink onClick={() => openEdit(profile)}>{t("providerNoKeyOfMine")}</FixLink></>
                   )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                   {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}
-                  <ProviderHealth profileId={profile.id} className="ml-1.5 align-middle" />
+                  <ProviderHealth profileId={profile.id} className="ml-1.5 align-middle" usable={providerProblem(profile) === null} />
                 </Truncate>
               </div>
               <div className="flex items-center gap-2">
@@ -660,5 +663,22 @@ export function ProviderProfilesSection({
         />
       )}
     </SettingsGroup>
+  );
+}
+
+/** 连接那一行上「未授权」「未配置你的密钥」这类状态:用警告色写出来,点它就去修(授权 / 填密钥)。 */
+function FixLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      {...{ [PROVIDER_FIX_ATTR]: "" }}
+      className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-destructive underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
   );
 }
