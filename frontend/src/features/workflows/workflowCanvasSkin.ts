@@ -1,5 +1,5 @@
 /**
- * 工作流画布的皮肤:React Flow 自带部件(背景、右下角署名)的主题色,以及节点接点的样子。
+ * 工作流画布的皮肤:React Flow 自带的背景色,以及节点接点的样子(右下角署名两块画布同一份,在 canvasEdges)。
  * 挂在画布外层容器上,和共用的 `CANVAS_EDGE_CLASS` 叠着用。
  *
  * **连线不在这里。** 线色、线宽、箭头、按语义的变体(条件的真/假、数据线、类型不匹配、运行走过)
@@ -8,11 +8,7 @@
  *
  * 选择器里的下划线一律写 `\_`,整串用 String.raw(棘轮:design/arbitrarySelectors.test.ts)。
  */
-export const WORKFLOW_CANVAS_CLASS = [
-  "[--xy-background-color:var(--background)]",
-  "[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]",
-  String.raw`[&_.react-flow\_\_attribution_a]:text-muted-foreground`,
-].join(" ");
+export const WORKFLOW_CANVAS_CLASS = ["[--xy-background-color:var(--background)]"].join(" ");
 
 /**
  * 节点的控制流接点(进 / 出 / 条件的真假两路)。

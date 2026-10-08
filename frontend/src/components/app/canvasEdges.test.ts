@@ -228,6 +228,12 @@ describe("共用的连线外观", () => {
     expect(CANVAS_EDGE_MARKER.height).toBe(CANVAS_EDGE_MARKER.width);
   });
 
+  it("右下角的 React Flow 署名跟主题(画板和工作流同一份):底色取面板色,字是次要文字色", () => {
+    //: 画布没传 colorMode,React Flow 按它自己的 light 配色画署名 —— 深色下画板右下角是一块灰底灰字的亮斑。
+    expect(declared("", "--xy-attribution-background-color")).toContain("var(--panel)");
+    expect(CANVAS_EDGE_CLASS.split(/\s+/)).toContain(String.raw`[&_.react-flow\_\_attribution_a]:text-muted-foreground`);
+  });
+
   it("每条边带的选项:共用的箭头,够宽的命中带", () => {
     expect(CANVAS_EDGE_OPTIONS.markerEnd).toBe(CANVAS_EDGE_MARKER);
     expect(CANVAS_EDGE_OPTIONS.interactionWidth).toBeGreaterThanOrEqual(20);

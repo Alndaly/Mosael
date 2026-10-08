@@ -109,6 +109,10 @@ export const CANVAS_EDGE_CLASS = [
   "[--xy-connectionline-stroke:var(--primary)]",
   "[--xy-connectionline-stroke-width:2]",
   "[--xy-background-pattern-color:var(--canvas-dot)]",
+  // 右下角的 React Flow 署名跟主题:它按 React Flow 自己的 light 配色画(画布没传 colorMode),深色下是一块
+  // 灰底灰字的亮斑。此前只有工作流那块画布覆盖了它,画板上一直亮着。
+  "[--xy-attribution-background-color:color-mix(in_srgb,var(--panel)_70%,transparent)]",
+  String.raw`[&_.react-flow\_\_attribution_a]:text-muted-foreground`,
   // 线帽线角一律圆的;颜色和线宽的变化带一点过渡。
   String.raw`[&_.react-flow\_\_edge-path]:[stroke-linecap:round]`,
   String.raw`[&_.react-flow\_\_edge-path]:[stroke-linejoin:round]`,
