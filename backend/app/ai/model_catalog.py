@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.ai.gemini_models import is_chat_model as is_gemini_chat_model
-from app.core.http_retry import auth_headers
+from app.core.http_retry import auth_headers, is_loopback
 
 #: 目录变动很慢(供应商上新模型),但也不能永不刷新。
 _TTL_SECONDS = 300
@@ -154,6 +154,7 @@ def _fetch_gemini(base: str, api_key: str) -> list[CatalogModel]:
             headers=catalog_headers("gemini", api_key),
             params=params,
             timeout=_FETCH_TIMEOUT,
+            trust_env=not is_loopback(base),
         )
         resp.raise_for_status()
         body = resp.json()
@@ -184,6 +185,8 @@ def fetch_models(
                 f"{base}/models",
                 headers=auth_headers(api_key),
                 timeout=_FETCH_TIMEOUT,
+                #: 本机端点(Ollama、LM Studio)不被送进系统代理(见 core/http_retry.loopback_direct)。
+                trust_env=not is_loopback(base),
             )
             resp.raise_for_status()
             models = _parse(resp.json().get("data"))

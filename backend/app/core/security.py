@@ -22,6 +22,7 @@ __all__ = [
     "SERVICE_PATH_PREFIXES",
     "prune_expired_sessions",
     "token_digest",
+    "revoke_other_logins",
     "revoke_session",
     "renew_if_stale",
     "verify_password",
@@ -68,6 +69,23 @@ def revoke_session(db, raw: str | None) -> bool:
         return False
     db.delete(session)
     return True
+
+
+def revoke_other_logins(db, user_id: str, keep_raw: str | None) -> int:
+    """撤掉这个人除 `keep_raw` 之外的全部**登录**凭据,返回撤了几份。不提交。
+
+    改密码时用:察觉异常登录的人改密码,预期的是「别处都被踢下线」—— 此前只挡住了「再用旧密码登录」,已经攥着一份
+    登录令牌(30 天、活跃续期)的人照样进得来(SEC-6)。服务令牌(智能体回合、工具通道)不动:它们本来就短、跟着一次
+    操作走,撤了只会把正在跑的那一轮打断。
+    """
+    from sqlalchemy import delete
+
+    from app.db.models import AuthSession
+
+    keep = token_digest(keep_raw) if keep_raw else ""
+    return db.execute(delete(AuthSession).where(
+        AuthSession.user_id == user_id, AuthSession.kind == "login", AuthSession.token != keep,
+    )).rowcount
 
 
 #: 剩余不足这么多就续期。不是每次请求都写库 —— 那是一次登录换来每个请求一次 UPDATE。

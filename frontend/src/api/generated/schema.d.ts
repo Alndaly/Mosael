@@ -213,7 +213,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Update Password */
+        /**
+         * Update Password
+         * @description 改密码,并把这个人**别处的登录**都踢下线(当前这一份留着,改完不用重新登录)。
+         */
         post: operations["update_password_api_auth_me_password_post"];
         delete?: never;
         options?: never;

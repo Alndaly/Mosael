@@ -25,8 +25,8 @@ export function updateMe(body: { username: string; display_name: string; signatu
   return api<User>("/api/auth/me", { method: "PATCH", body: JSON.stringify(body) });
 }
 
-export function updatePassword(body: { current_password: string; new_password: string }): Promise<{ ok: boolean }> {
-  return api<{ ok: boolean }>("/api/auth/me/password", { method: "POST", body: JSON.stringify(body) });
+export function updatePassword(body: { current_password: string; new_password: string }): Promise<{ ok: boolean; signed_out: number }> {
+  return api<{ ok: boolean; signed_out: number }>("/api/auth/me/password", { method: "POST", body: JSON.stringify(body) });
 }
 
 /** Start OAuth in the system browser, then poll the pending exchange for an application token. */

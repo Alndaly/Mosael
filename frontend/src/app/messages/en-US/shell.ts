@@ -106,7 +106,7 @@ export const shell = {
   currentPassword: "Current password",
   newPassword: "New password",
   updatePassword: "Update password",
-  passwordUpdated: "Password updated",
+  passwordUpdated: "Password updated; you have been signed out everywhere else",
   passwordUpdateFailed: "Password update failed",
   settingsAppearanceDesc: "Theme and language, applied immediately.",
   settingsThemeDesc: "System follows your macOS appearance automatically.",

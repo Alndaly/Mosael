@@ -18,6 +18,9 @@ from app.domain.workflows.executors.common import truthy, wait_until
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
 HTTP_TEXT_CAP = 100_000
+#: 一次 HTTP 节点 / 智能体 HTTP 工具最多收多少字节。交给下游的文本截在 HTTP_TEXT_CAP,而此前截在**整份读进内存之后** ——
+#: 地址是用户 / 模板 / 模型写的,碰上一个几个 GB 的文件就整份进内存(SEC-4)。接口回的 JSON 远小于这个数。
+HTTP_MAX_BYTES = 16 * 1024 * 1024
 CODE_TIMEOUT_SECONDS = 20
 DELAY_MAX_SECONDS = 300
 
@@ -106,7 +109,7 @@ def run_http(*, method: str, url: str, headers: dict[str, str], body: str) -> di
     #: 地址是用户 / 模板 / 模型写的:经内网守卫出去(只许公网或部署允许名单里的地址,连的是查过的那个 IP)。
     #: 不跟随重定向,和此前一样 —— 3xx 原样交回(按非 2xx 算失败,或由 fail_on_error 关掉)。
     response = outbound_guard.send(
-        verb, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS
+        verb, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS, max_bytes=HTTP_MAX_BYTES
     ).response
     try:
         parsed: Any = response.json()
@@ -140,7 +143,7 @@ def http_request(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
             body=as_text(config.get("body")),
         )
-    except outbound_guard.OutboundBlocked as exc:
+    except (outbound_guard.OutboundBlocked, outbound_guard.ResponseTooLarge) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     fail_on_error = str(config.get("fail_on_error") or "").strip()
     if not 200 <= result["status"] < 300 and (truthy(fail_on_error) if fail_on_error else True):

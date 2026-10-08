@@ -24,7 +24,14 @@ from app.api.schemas import (
 )
 from app.core.config import settings
 from app.domain.permissions import ensure_deployment_admin
-from app.core.security import find_session, hash_password, mint_login_session, new_session_token, verify_password
+from app.core.security import (
+    find_session,
+    hash_password,
+    mint_login_session,
+    new_session_token,
+    revoke_other_logins,
+    verify_password,
+)
 from app.domain import deployment, members
 from app.db.models import OAuthIdentity, RegistrationInvite, User, now
 
@@ -233,12 +240,14 @@ def get_user_avatar(user_id: str, db: DbSession, user: CurrentUser) -> FileRespo
 
 
 @router.post("/auth/me/password")
-def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser) -> dict:
+def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser, token: PresentedToken) -> dict:
+    """改密码,并把这个人**别处的登录**都踢下线(当前这一份留着,改完不用重新登录)。"""
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
     user.password_hash = hash_password(body.new_password)
+    signed_out = revoke_other_logins(db, user.id, token)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "signed_out": signed_out}
 
 
 @router.post("/auth/logout")

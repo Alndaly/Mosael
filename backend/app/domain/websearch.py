@@ -58,6 +58,11 @@ def search(query: str, count: int = 5) -> list[dict[str, str]]:
     return results
 
 
+#: 读一个网页最多收多少字节。交回去的只是前几千字,而此前整份先读进内存再截 —— 任何登录用户都能让后端去读一个
+#: 几个 GB 的地址(SEC-4)。网页正文远小于这个数;超了就停,说清是太大了。
+FETCH_MAX_BYTES = 8 * 1024 * 1024
+
+
 def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
     """Fetch a page and return {title, text} — readable text, scripts/styles stripped.
 
@@ -67,11 +72,12 @@ def fetch(url: str, max_chars: int = 6000) -> dict[str, str]:
     url = (url or "").strip()
     try:
         exchange = outbound_guard.send(
-            "GET", url, headers={"User-Agent": _UA}, timeout=20, follow_redirects=True, max_redirects=_MAX_REDIRECTS
+            "GET", url, headers={"User-Agent": _UA}, timeout=20, follow_redirects=True, max_redirects=_MAX_REDIRECTS,
+            max_bytes=FETCH_MAX_BYTES,
         )
         response = exchange.response
         response.raise_for_status()
-    except outbound_guard.OutboundBlocked as exc:
+    except (outbound_guard.OutboundBlocked, outbound_guard.ResponseTooLarge) as exc:
         raise WebSearchError.relay(exc) from exc
     except httpx.TooManyRedirects as exc:
         raise WebSearchError("webErr_tooManyRedirects") from exc

@@ -108,7 +108,7 @@ export const shell = {
   currentPassword: "当前密码",
   newPassword: "新密码",
   updatePassword: "更新密码",
-  passwordUpdated: "密码已更新",
+  passwordUpdated: "密码已更新;别处的登录已退出",
   passwordUpdateFailed: "密码更新失败",
   settingsAppearanceDesc: "界面主题与语言,立即生效。",
   settingsThemeDesc: "跟随系统会随 macOS 外观自动切换。",

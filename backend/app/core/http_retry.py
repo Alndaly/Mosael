@@ -144,6 +144,30 @@ def sent_but_unanswered(exc: BaseException) -> bool:
     return False
 
 
+#: 本机地址。设置页的承诺是「本机回连永不走代理」。
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
+
+def loopback_direct() -> dict[str, None]:
+    """交给 httpx 的 `mounts`:本机地址不走任何代理。
+
+    httpx 默认按环境变量找代理,环境里没有就去读**系统代理设置**(macOS、Windows)。应用里代理留空时,环境变量是删掉的,
+    于是开着 Clash 之类系统代理的 Mac 上,连 `127.0.0.1` 都被送进系统代理 —— 系统设置那条路带不来「绕过」名单。本机的
+    Ollama、LM Studio、ComfyUI 一关代理就全挂,报的还是代理替它回的「HTTP 502」,而不是「连不上」(SEC-10)。
+    映射到 None = 这些地址用不带代理的默认连接。应用里设了代理时,环境变量里的 NO_PROXY 本来就带着回环,这里是同一个意思。
+    """
+    return {f"all://{host}": None for host in LOOPBACK_HOSTS}
+
+
+def is_loopback(url: str) -> bool:
+    """这个地址是不是本机。给不经 RetryingClient 的那几处(`httpx.get(..., trust_env=not is_loopback(url))`)用。"""
+    try:
+        host = httpx.URL(url).host
+    except (httpx.InvalidURL, TypeError):
+        return False
+    return host in ("localhost", "127.0.0.1", "::1")
+
+
 def backoff_seconds(attempt: int) -> float:
     """指数退避 + 少量抖动。抖动是为了让同时失败的多个请求不要在同一刻一起重击供应商。"""
     return min(_BASE_SECONDS * 2**attempt, _MAX_SLEEP_SECONDS) + random.uniform(0, 0.4)
@@ -165,6 +189,8 @@ class RetryingClient(httpx.Client):
         #: 在一件可以取消的活里建的客户端(见 core/abort):记下自己建的连接,活被取消时把它们关掉。
         scope = abort.current()
         self._reaper = abort.SocketReaper(scope) if scope is not None else None
+        #: 本机地址永远直连(见 loopback_direct);调用方自己给的 mounts 叠在上面。
+        kwargs["mounts"] = {**loopback_direct(), **(kwargs.get("mounts") or {})}
         super().__init__(*args, **kwargs)
 
     def send(self, request: httpx.Request, **kwargs) -> httpx.Response:  # type: ignore[override]

@@ -313,16 +313,23 @@ def _install_permission_handlers(app: FastAPI) -> None:
 
         所以把原值过一遍:非有限的数换成它的字面写法(照样看得出是 NaN 还是 Infinity),
         其余原样。不整个丢掉 input —— 少了它,"哪个字段不对"要靠 loc 自己拼。
+
+        **请求体不是 JSON 对象时,input 是原始的 bytes**(Content-Type 写成 text/plain、正文是一段 JSON):
+        bytes 编不进 JSON,同一个崩法(SEC-5)。解成文字、截前 200 字节;JSON 认不得的别的东西一律写成它的字面。
         """
 
         def safe(value: object) -> object:
             if isinstance(value, float) and not math.isfinite(value):
                 return repr(value)
+            if isinstance(value, (bytes, bytearray)):
+                return bytes(value[:200]).decode("utf-8", "replace")
             if isinstance(value, dict):
-                return {key: safe(item) for key, item in value.items()}
+                return {str(key): safe(item) for key, item in value.items()}
             if isinstance(value, (list, tuple)):
                 return [safe(item) for item in value]
-            return value
+            if value is None or isinstance(value, (str, int, float, bool)):
+                return value
+            return repr(value)
 
         return JSONResponse(status_code=422, content={"detail": safe(exc.errors())})
 
