@@ -3706,7 +3706,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Generation Jobs */
+        /**
+         * List Generation Jobs
+         * @description 生成记录,按时间正序。`limit`:只要最近的那么多条(创作页按页取一条会话:一块画板一条会话,跑了几百次就是几百轮)。
+         */
         get: operations["list_generation_jobs_api_generation_jobs_get"];
         put?: never;
         /** Create Generation */
@@ -12873,6 +12876,20 @@ export interface components {
             model?: string | null;
             /** Kind */
             kind?: string | null;
+            /**
+             * Origin Kind
+             * @enum {string}
+             */
+            origin_kind: "studio" | "audio_page" | "board" | "workflow" | "entity" | "schedule" | "agent" | "comfyui";
+            /** Origin Id */
+            origin_id: string;
+            /** Origin Name */
+            origin_name: string;
+            /**
+             * Origin State
+             * @enum {string}
+             */
+            origin_state: "ok" | "deleted" | "hidden";
             /**
              * Created At
              * Format: date-time
@@ -27485,6 +27502,7 @@ export interface operations {
                 workspace_id: string;
                 kind?: string | null;
                 session_id?: string | null;
+                limit?: number | null;
             };
             header?: never;
             path?: never;

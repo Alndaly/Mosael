@@ -8,6 +8,7 @@ AI 工作台的表单会把声明的默认值预填上，可工作流、画板�
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
@@ -37,7 +38,7 @@ def _evolink(models: dict[str, list[str]]) -> tuple[str, str, str]:
 def _sent(ws: str, profile_id: str, user_id: str, *, model: str, kind: str, parameters: dict) -> dict:
     with SessionLocal() as db:
         generation, _job = create_generation_job(
-            db, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
             provider="evolink", provider_profile_id=profile_id, model=model, kind=kind,
             prompt="一只橘猫坐在窗台上", negative_prompt="", parameters=parameters, source_assets=[],
         )

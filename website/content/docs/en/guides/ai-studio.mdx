@@ -207,6 +207,12 @@ back-and-forth of the open session in the middle, the composer at the bottom and
 
 - **Show by type**: a row of filters above the session list — All, Image, Video, Speech, Podcast, Music — remembered on this device;
   every session is tagged with its type.
+- **From elsewhere**: generations made on a board, in a workflow, on an asset's page, by a schedule, by the agent in a chat or in the
+  ComfyUI workbench are creation sessions too, collected at the bottom of the list under **From elsewhere** (collapsed, with a count).
+  **One session per place**: every generation on the same board goes into "Board "Shots and ideas"", and what you approve in one chat
+  (images, speech, podcasts) stays together. The title is that place's current name ("Deleted board" once it's gone), and **Go there**
+  on the row takes you back. Open one to read it or keep generating. Long sessions show the latest 40 results first; **Show earlier**
+  at the top loads more.
 - **The model decides the type**: a new session is whatever the chosen model makes. The model list is grouped into Image, Video,
   Music & sound, Speech (each voice engine) and Podcast; with a type filter selected, only that type is listed.
 - **One family per session**: image and video are one family (you can turn the last image into a video), music, speech and podcasts are
@@ -305,8 +311,9 @@ What each vendor supports, and what is wired from documentation only, is in the 
 ### Speech and podcasts made earlier
 
 After the update, speech and podcasts made on the old Audio page are part of creation sessions: one "Earlier speech" and one "Earlier
-podcasts" session per person (titled in Chinese, 以前的语音 / 以前的播客). Only the beginning of the text was stored back then, and those
-records say so. Old outputs whose task records were already cleared stay in the media library, outside any session.
+podcasts" session per person (named in your interface language). Only the beginning of the text was stored back then, and those records
+say so. Old outputs whose task records were already cleared stay in the media library, outside any session. A board's **Read aloud** and
+the agent's speech that were swept in at the time were later moved back to that board's or that chat's session.
 
 Speech made by a board's **Read aloud**, a workflow's voice node, subtitle dubbing or note read-aloud doesn't go into creation sessions —
 it belongs to that board, timeline or note. Dubbing the subtitles on a timeline happens on the editor's Voice tab — see

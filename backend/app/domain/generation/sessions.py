@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderUsageEvent, User
 from app.domain import sharing
 from app.domain.billing import usage
+from app.domain.generation.origins import STUDIO, Origin
 from app.domain.permissions import NotVisible
 
 #: 共享记录里这一类叫什么(见 domain/sharing.KINDS)。
@@ -123,23 +124,46 @@ def new_session(
     provider_profile_id: str | None,
     model: str,
     kind: str,
+    origin: Origin,
 ) -> GenerationSession:
     """开一条生成会话。界面上点「新生成」和生成漏斗里没点名会话时现开的那条,走的都是这里。
 
     **必须有主**:列表按 `owner_user_id == 我 或 被共享` 过滤,没主人的会话连建它的人自己都看不见。
     生成会话默认不共享给工作区(见 domain/sharing.KINDS),所以这里只记下主人。
+
+    `origin`:在哪一处开的(ADR 0052,见 generation.origins)。创作页开的标题空着就是「新生成」;别处开的标题留空 ——
+    界面写那一处现在叫什么(画板改了名跟着变、删了写「已删除的画板」),用户改过名才用他起的。
     """
     session = GenerationSession(
         workspace_id=workspace_id,
         owner_user_id=owner_user_id,
-        title=title.strip() or "新生成",
+        title=title.strip() or ("新生成" if origin.kind == STUDIO else ""),
         provider_profile_id=provider_profile_id,
         model=model,
         kind=kind,
+        origin_kind=origin.kind,
+        origin_id=origin.id,
     )
     db.add(session)
     db.flush()
     return session
+
+
+def session_at(db: Session, *, workspace_id: str, owner_user_id: str | None, origin: Origin) -> GenerationSession | None:
+    """这个人在这一处的那条会话(ADR 0052 §2,D42):别处的生成一处一条。迁移之前一次一条的老会话没合并(D46),同一处可能
+    有几条 —— 接着用最近用过的那条。"""
+    return db.scalars(
+        select(GenerationSession)
+        .where(
+            GenerationSession.workspace_id == workspace_id,
+            GenerationSession.owner_user_id.is_(owner_user_id) if owner_user_id is None
+            else GenerationSession.owner_user_id == owner_user_id,
+            GenerationSession.origin_kind == origin.kind,
+            GenerationSession.origin_id == origin.id,
+        )
+        .order_by(GenerationSession.updated_at.desc(), GenerationSession.id.desc())
+        .limit(1)
+    ).first()
 
 
 def delete_session(db: Session, session: GenerationSession) -> None:
@@ -158,12 +182,16 @@ def delete_session(db: Session, session: GenerationSession) -> None:
 
 
 def visible_history(
-    db: Session, user: User, workspace_id: str, *, kind: str | None = None, session_id: str | None = None
+    db: Session, user: User, workspace_id: str, *, kind: str | None = None, session_id: str | None = None,
+    limit: int | None = None,
 ) -> list[GenerationJob]:
     """这个人在这个工作区里看得见的生成记录,按时间正序;每条带上全部产出与花费(瞬态属性)。
 
     记录跟着它所属的会话走:私有会话里生成的东西不该在工作区的总列表里露出来 —— 否则「私有」只挡住了
     标题,内容还在。不属于任何会话的老记录(session_id 为空)照旧全工作区可见。
+
+    `limit`:只要**最近的**那么多条(仍按时间正序给)。一块画板一条会话(ADR 0052 §2),跑了几百次就是几百轮 —— 创作页
+    先取最近一页,往上翻再多要一些。
     """
     visible_sessions = select(GenerationSession.id).where(sharing.visible_filter(SHARE_KIND, user, workspace_id))
     stmt = select(GenerationJob).where(
@@ -178,8 +206,11 @@ def visible_history(
         stmt = stmt.where(GenerationJob.kind == kind)
     # 按记录自身时间排序,不 join jobs:job 被任务中心清掉后(job_id 置空)
     # 记录仍要出现在会话历史里 —— inner join 会把它们整个吞掉。
-    stmt = stmt.order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
-    generations = list(db.scalars(stmt))
+    if limit is not None:
+        newest = stmt.order_by(GenerationJob.created_at.desc(), GenerationJob.id.desc()).limit(limit)
+        generations = list(reversed(list(db.scalars(newest))))
+    else:
+        generations = list(db.scalars(stmt.order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())))
     _attach_costs(db, generations)
     _attach_assets(db, generations)
     return generations

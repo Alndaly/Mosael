@@ -59,6 +59,9 @@ export function gotoRecord(route: string, event?: string, id?: unknown): void {
   if (event && typeof id === "string" && id) emitOpenEvent(event, id);
 }
 
+/** 定时任务页收的「选中这一个」(创作页「回到那里」:这条会话是这个定时任务跑出来的,ADR 0052)。 */
+export const OPEN_SCHEDULED_TASK_EVENT = "mosael:open-scheduled-task";
+
 /** 素材库那一侧收的「打开这一份」(见 MediaLibraryView)。 */
 export const OPEN_ASSET_EVENT = "mosael:open-asset";
 

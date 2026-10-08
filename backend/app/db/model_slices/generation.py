@@ -23,7 +23,11 @@ class GeneratedAsset(Base):
 
 class GenerationSession(Base):
     __tablename__ = "generation_sessions"
-    __table_args__ = (Index("idx_generation_sessions_ws_updated", "workspace_id", "updated_at"),)
+    __table_args__ = (
+        Index("idx_generation_sessions_ws_updated", "workspace_id", "updated_at"),
+        #: 「这个人在这一处的那条会话」按它找(ADR 0052 §2)
+        Index("idx_generation_sessions_origin", "workspace_id", "owner_user_id", "origin_kind", "origin_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
@@ -40,6 +44,12 @@ class GenerationSession(Base):
     )
     model: Mapped[str | None] = mapped_column(String(160), nullable=True)
     kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    #: 出处(ADR 0052,见 domain/generation/origins):这条会话是在哪一处开出来的 —— 和智能体对话的「家」同一个形状(种类 + id),
+    #: 建的那一刻定、之后不变。`studio` 是创作页自己开的(id 为空);别处(画板、工作流、资产、定时任务、智能体对话、ComfyUI
+    #: 工作台)一处一条,同一个人在同一处的生成都进这一条。不设外键:一列指几种表,而且要的正是「东西删了,会话照旧」。
+    #: 库里也带默认值:老迁移里直接写 SQL 建会话的那几处(ADR 0055 并进来的「以前的…」)不写这两列。
+    origin_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="studio", server_default="studio")
+    origin_id: Mapped[str] = mapped_column(String(700), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

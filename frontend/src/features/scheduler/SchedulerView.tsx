@@ -55,6 +55,7 @@ import { errorText } from "@/api/errorMessage";
 import { Hint } from "@/components/ui/tooltip";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
+import { OPEN_SCHEDULED_TASK_EVENT, useOpenRequest } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 
 /** 一个任务的运行记录。详情页和右键菜单读同一份(同一个键、同一种轮询)。 */
@@ -160,6 +161,11 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   );
   const selected =
     (tasks.data ?? []).find((task) => task.id === selectedId) ?? (tasks.data ?? [])[0] ?? null;
+  //: 别处要求选中某一个(创作页「回到那里」):列表到了、里面有它才接
+  useOpenRequest(OPEN_SCHEDULED_TASK_EVENT, (id) => {
+    if (!(tasks.data ?? []).some((task) => task.id === id)) return false;
+    setSelectedId(id);
+  }, [tasks.data]);
 
   // 一个任务都没有:整页一个居中空状态,不摆空的主从骨架(否则
   // 列表和详情各出一个空提示,像坏掉了一样)。

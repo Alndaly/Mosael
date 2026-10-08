@@ -3,8 +3,8 @@
 图像、视频、音乐走生成管线(`operations.create_generation_job` → 适配器);语音和播客不是生成适配器(ADR 0022 决定 2:
 音色是每个引擎自己的一张表、带克隆和远端副本,字幕配音一个任务要念很多句),所以这里只做三件事:
 
-1. 过会话的闸(点了名的会话:是他的;从创作页来的还要同一族,`lock_family`),没点名就现开一条 —— 和生成管线同一个
-   `_named_session` / `_resolve_session`;
+1. 过会话的闸(点了名的会话:是他的;从创作页来的还要同一族,`lock_family`),没点名就按出处找那一处的会话(创作页现开一条,
+   别处一处一条,ADR 0052)—— 和生成管线同一个 `_named_session` / `_resolve_session`;
 2. 叫配音那一族建任务(`voices.start_synthesis` / `start_podcast`),告诉它用量记在这条记录名下、产出登记之后交给 `attach_output`;
 3. 写这条记录(`GenerationJob`,kind 是 `speech` / `podcast`)。
 
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.db.model_base import new_id
 from app.db.models import GeneratedAsset, GenerationJob, Job, ProviderProfile, Voice
 from app.domain.generation.operations import _named_session, _resolve_session
+from app.domain.generation.origins import Origin
 
 SPEECH = "speech"
 PODCAST = "podcast"
@@ -77,6 +78,7 @@ def create_speech(
     clone_model: str = "",
     speed: float = 1.0,
     lock_family: bool = False,
+    origin: Origin,
 ) -> tuple[GenerationJob, Job]:
     """念一段字,记成会话里的一条(ADR 0055 §3)。`voice` 是「音色一格」:克隆引擎是配音库里的嗓子 id,别的引擎是它自己的音色
     (能复刻的引擎点配音库里的嗓子时也是嗓子 id)—— 和工作流、画板、智能体同一个口径,由 `synthesis_params` 拆成合成要的那组参数。
@@ -117,6 +119,7 @@ def create_speech(
     )
     session = _resolve_session(
         db, workspace_id=workspace_id, named=named, prompt=text, created_by=created_by, engine=(None, engine, SPEECH),
+        origin=origin,
     )
     request: dict[str, Any] = {
         "prompt": text,
@@ -149,6 +152,7 @@ def create_podcast(
     speed: float = 1.0,
     provider_profile_id: str | None = None,
     lock_family: bool = False,
+    origin: Origin,
 ) -> tuple[GenerationJob, Job]:
     """一段双人播客,记成会话里的一条(ADR 0055 §6)。`text` 在「改写材料」时是材料、「聊一个主题」时是主题;「照稿念」给
     `turns: [{speaker: 0|1, text}]`(`speaker` 是 `speakers` 里的第几位)。`speakers` 是 `[{value, label}]`,label 只用来显示。
@@ -191,6 +195,7 @@ def create_podcast(
     session = _resolve_session(
         db, workspace_id=workspace_id, named=named, prompt=subject, created_by=created_by,
         engine=(_existing_profile(db, provider_profile_id), PODCAST_ENGINE, PODCAST),
+        origin=origin,
     )
     request: dict[str, Any] = {
         "mode": mode,

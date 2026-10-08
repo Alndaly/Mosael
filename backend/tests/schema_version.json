@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 16,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -104,6 +104,7 @@
     "migrate-drop-local-publish-accounts",
     "migrate-drop-the-community-integration",
     "migrate-drop-the-knowledge-base",
+    "migrate-earlier-speech-and-podcast-find-their-origin",
     "migrate-encrypt-secrets",
     "migrate-entity-reference-roles-follow-kind",
     "migrate-entity-voices-name-their-engine",
@@ -120,7 +121,9 @@
     "migrate-generation-prompts-drop-the-reference-documents",
     "migrate-generation-prompts-drop-the-source-legend",
     "migrate-generation-results-keep-output-parameters-apart",
+    "migrate-generation-sessions-get-an-origin",
     "migrate-generation-sessions-know-their-kind",
+    "migrate-generation-sessions-origin-from-facts",
     "migrate-hash-session-tokens",
     "migrate-install-sources-get-pytorch-and-github",
     "migrate-job-actor",

@@ -245,6 +245,7 @@ def generate_on_board(
     回执按先后填进去(见 outputs._canvas_with_delivered_result)。
     """
     from app.domain.generation import create_generation_job
+    from app.domain.generation.origins import BOARD, Origin
     from app.core.unit_of_work import after_commit
     from app.domain.generation.operations import parse_source_assets, planned_outputs
     from app.domain.generation.runner import start_generation_thread
@@ -277,6 +278,8 @@ def generate_on_board(
             name_sources=True,
             documents=documents,
             digital_human_consent=digital_human_consent,
+            #: 这块画板上的生成都进这个人在这块画板上的那条会话(ADR 0052)
+            origin=Origin(BOARD, slot.board_id),
         )
     finally:
         reset_receipt(token)

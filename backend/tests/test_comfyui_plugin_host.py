@@ -355,4 +355,8 @@ def test_工作台跑画布上的图_从头到尾_普通的生成任务_产出�
         assert generated.parameters == {"source_node": "9"}, "图不进生成参数"
         generation = db.scalar(select(GenerationJob).where(GenerationJob.job_id == job_id))
         assert generation.request["workbench"] is True and "workbench_graph" not in generation.request
-        assert db.get(GenerationSession, generation.session_id).title == "portrait", "会话按那张工作流的名字叫"
+        session = db.get(GenerationSession, generation.session_id)
+        #: 出处是这台连接上的这张工作流(ADR 0052):标题空着,列表写那张工作流的名字
+        assert (session.origin_kind, session.origin_id, session.title) == ("comfyui", f"{instance_id}/portrait.json", "")
+    listed = client.get("/api/generation/sessions", params={"workspace_id": workspace}).json()
+    assert [(one["origin_kind"], one["origin_name"]) for one in listed] == [("comfyui", "portrait")], "会话按那张工作流的名字叫"

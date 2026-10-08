@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import json
 
 import pytest
@@ -26,7 +27,7 @@ def _submit(ws: str, sources: list[dict]) -> str:
     """走漏斗;返回它拒的理由(模型不存在那一道在后面,过了授权一定会撞上它)。"""
     with SessionLocal() as db, pytest.raises(GenerationDomainError) as refused:
         create_generation_job(
-            db, workspace_id=ws, session_id=None, project_id=None, created_by=None,
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=None,
             provider="nobody", model="no-such-model", kind="video", prompt="", negative_prompt="",
             parameters={}, source_assets=sources, digital_human_consent=True,
         )

@@ -71,7 +71,7 @@ function renderStudio(kind: string, record: Record<string, unknown>) {
     const url = String(input);
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     if (url.includes("/api/generation/sessions")) {
-      return json([{ id: "s1", workspace_id: "w1", title: "会话", kind, provider_profile_id: null, model: "", is_mine: true,
+      return json([{ id: "s1", workspace_id: "w1", title: "会话", kind, provider_profile_id: null, model: "", origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok", is_mine: true,
                      shared: false, created_at: "2026-10-08T00:00:00Z", updated_at: "2026-10-08T00:00:00Z" }]);
     }
     if (url.includes("/api/generation/jobs")) {

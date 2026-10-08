@@ -36,7 +36,8 @@ from app.domain.generation.missing import explain_missing
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.core.i18n import LocalizedError, fragment, pick_text, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
-from app.domain.generation.sessions import SESSION_FAMILIES, ensure_writable, has_records, new_session, same_family
+from app.domain.generation.origins import STUDIO, Origin
+from app.domain.generation.sessions import SESSION_FAMILIES, ensure_writable, has_records, new_session, same_family, session_at
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,7 @@ def _create_generation_job(
     workbench_graph: dict[str, Any] | None = None,
     carried_notes: Sequence[str] = (),
     lock_family: bool = False,
+    origin: Origin,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
@@ -240,7 +242,10 @@ def _create_generation_job(
     工作流里人物说话 / 图片说话 / 对口型的节点在自己那一层已经查过(资产声明或面板上的确认),传 True 进来。
 
     `lock_family`:点了名的会话锁「族」(ADR 0055 §2)—— 创作页的规矩,只有创作页的入口传 True。别处(画板、工作流、智能体、
-    以后按出处归的会话,ADR 0052)往自己那条会话里放什么种类都行:一块画板的会话本来就有图有歌。
+    按出处归的会话,ADR 0052)往自己那条会话里放什么种类都行:一块画板的会话本来就有图有歌。
+
+    `origin`:这一次是在哪一处发起的(ADR 0052,见 generation.origins)。**必传**:每个入口说自己是哪儿 —— 漏斗不猜。没点名会话时
+    按它找那一处的会话(别处一处一条,创作页每次新开);点了名的会话照旧,出处是那条会话开的时候定的。
 
     `workbench_graph`:ComfyUI 工作台跑**画布上现在这张**(ADR 0038 §6):前端 `graphToPrompt` 出来的 API 图、界面格式、前端的
     `clientId`(工作流库那一侧规整过,见 workflow_library.run_canvas)。图就是用户要跑的样子 —— 不补声明的默认值、不按模型的
@@ -373,10 +378,10 @@ def _create_generation_job(
         db,
         workspace_id=workspace_id,
         named=named,
-        #: 工作台跑画布上的图没有提示词:会话按那张工作流的名字叫,不是一串「新生成」
-        prompt=prompt if workbench_graph is None else model.rsplit("/", 1)[-1].removesuffix(".json"),
+        prompt=prompt,
         created_by=created_by,
         engine=(provider_profile.id if provider_profile else None, model, kind),
+        origin=origin,
     )
     request = {
         "project_id": project_id,
@@ -652,35 +657,39 @@ def _resolve_session(
     prompt: str,
     created_by: str | None,
     engine: tuple[str | None, str, str],
+    origin: Origin,
 ) -> GenerationSession:
-    """这一次生成收在哪条会话线程里:点了名的(已经过了 `_named_session`)就是那条,没点名就现开一条。
+    """这一次生成收在哪条会话线程里:点了名的(已经过了 `_named_session`)就是那条;没点名的,**别处**(画板、工作流、资产、
+    定时任务、智能体、工作台)接着用这个人在那一处的那条(ADR 0052 §2:一处一条,不是一次一条),没有才开;创作页没点名就现开。
 
-    现开的那条记下这次的连接、模型和种类(`engine`):创作页按种类筛会话(ADR 0055),不记的话,从画板生成的一首歌
-    会出现在「图像」那一栏里;记下模型,打开这条会话时选择器停在它用过的那个上。点了名的那条也记下这一次的种类。
+    记下这次的连接、模型和种类(`engine`):创作页按种类筛会话(ADR 0055),会话记着的是**最后一次**的种类 —— 先出图、
+    后生视频的会话归到「视频」;记下模型,打开这条会话时选择器停在它用过的那个上。
 
     **现开的那条必须有主。** 生成会话和对话一样是某人的私人线程,列表按
     `owner_user_id == 我 或 被共享` 过滤 —— 不设主人的话它是 NULL,谁都匹配不上,
     于是这条记录**连创建它的人自己都看不见**:图进了素材库,而带着提示词、参数和花费的
     那条记录成了孤儿,既回不到历史里,也不进成本核算。
-
-    界面那条路一直是传 session_id 的,所以这件事只在**另外四个入口**上发生:从画板生成、
-    工作流的 ai_generate、智能体生成、定时任务 —— 它们都传 session_id=None。
     """
     provider_profile_id, model, kind = engine
+    if named is None and origin.kind != STUDIO:
+        named = session_at(db, workspace_id=workspace_id, owner_user_id=created_by, origin=origin)
+        if named is not None:
+            named.provider_profile_id, named.model = provider_profile_id, model
     if named is not None:
         if named.title == "新生成":
             named.title = _title_from_prompt(prompt)
-        #: 会话记着最后一次用的种类(ADR 0055 §2):创作页的筛选按它归 —— 先出图、后生视频的会话归到「视频」。
         named.kind = kind
         return named
     return new_session(
         db,
         workspace_id=workspace_id,
         owner_user_id=created_by,
-        title=_title_from_prompt(prompt),
+        #: 别处开的不起标题:界面写那一处现在叫什么(见 sessions.new_session)
+        title=_title_from_prompt(prompt) if origin.kind == STUDIO else "",
         provider_profile_id=provider_profile_id,
         model=model,
         kind=kind,
+        origin=origin,
     )
 
 

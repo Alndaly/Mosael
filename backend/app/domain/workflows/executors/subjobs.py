@@ -226,6 +226,7 @@ def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError, keep_source_group, parse_source_assets
+    from app.domain.generation.origins import of_run_scope
     from app.domain.generation.runner import start_generation_thread
     from app.domain.entities import parse_entity_ids
 
@@ -252,6 +253,8 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
             entity_ids=parse_entity_ids(config.get("entity_ids")),
             digital_human_consent=str(config.get("consent") or "").strip() == "yes",
+            #: 这张工作流(画板上跑的是那块画板、资产详情页上的是那个资产)的那条会话(ADR 0052)
+            origin=of_run_scope(scope.id),
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc

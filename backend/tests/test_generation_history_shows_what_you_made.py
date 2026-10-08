@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import pytest
 
 from sqlalchemy import select
@@ -45,7 +46,7 @@ def _visible_to(db, user, workspace_id: str) -> set[str]:
 def _session(db, workspace_id: str, owner: str | None):
     return _resolve_session(
         db, workspace_id=workspace_id, named=None, prompt="一只红苹果", created_by=owner,
-        engine=(None, "gpt-image-1", "image"),
+        engine=(None, "gpt-image-1", "image"), origin=STUDIO_ORIGIN,
     )
 
 
@@ -93,7 +94,7 @@ def test_点名了就用那一条_不新建() -> None:
         named = _named_session(db, workspace_id=workspace["id"], session_id=existing.id, actor=me.id)
         got = _resolve_session(
             db, workspace_id=workspace["id"], named=named, prompt="一只红苹果",
-            created_by=me.id, engine=(None, "gpt-image-1", "image"),
+            created_by=me.id, engine=(None, "gpt-image-1", "image"), origin=STUDIO_ORIGIN,
         )
         assert got.id == existing.id
         # 「新生成」这个占位标题会被第一条提示词顶掉。
@@ -126,7 +127,7 @@ def test_现开的会话记下这次的种类和模型_音频不会跑进生成�
     with SessionLocal() as db:
         session = _resolve_session(
             db, workspace_id=workspace["id"], named=None, prompt="一首海边的歌", created_by=_me(db).id,
-            engine=(None, "suno-v5", "audio"),
+            engine=(None, "suno-v5", "audio"), origin=STUDIO_ORIGIN,
         )
         assert (session.kind, session.model) == ("audio", "suno-v5")
         db.rollback()

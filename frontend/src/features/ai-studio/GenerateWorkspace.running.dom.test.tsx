@@ -104,7 +104,7 @@ const WITH_FORM = {
 function session() {
   return {
     id: "s1", workspace_id: "w1", title: "测试", kind: "image", provider_profile_id: "p9", model: "slow.json",
-    is_mine: true, shared: false, created_at: "2026-10-07T00:00:00Z", updated_at: "2026-10-07T00:00:00Z",
+    is_mine: true, shared: false, origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok", created_at: "2026-10-07T00:00:00Z", updated_at: "2026-10-07T00:00:00Z",
   };
 }
 

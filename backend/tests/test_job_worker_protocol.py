@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import threading
 
 import pytest
@@ -279,7 +280,7 @@ class TestDispatchWiring:
             db.commit()
         with SessionLocal() as db:
             generation, job = create_generation_job(
-            db,
+            db, origin=STUDIO_ORIGIN,
             created_by=None,
                 workspace_id=workspace_id,
                 session_id=None,

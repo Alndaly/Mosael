@@ -78,6 +78,7 @@ const IMAGE_OPTION = {
 
 function sessionRow(id: string, kind: string, title: string, model = "") {
   return { id, workspace_id: "w1", title, kind, provider_profile_id: null, model, is_mine: true, shared: false,
+           origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok",
            created_at: "2026-10-08T00:00:00Z", updated_at: "2026-10-08T00:00:00Z" };
 }
 

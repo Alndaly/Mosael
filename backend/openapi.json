@@ -11081,6 +11081,7 @@
           "generation"
         ],
         "summary": "List Generation Jobs",
+        "description": "生成记录,按时间正序。`limit`:只要最近的那么多条(创作页按页取一条会话:一块画板一条会话,跑了几百次就是几百轮)。",
         "operationId": "list_generation_jobs_api_generation_jobs_get",
         "parameters": [
           {
@@ -11122,6 +11123,24 @@
                 }
               ],
               "title": "Session Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 1000,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
             }
           }
         ],
@@ -35491,6 +35510,37 @@
             ],
             "title": "Kind"
           },
+          "origin_kind": {
+            "type": "string",
+            "enum": [
+              "studio",
+              "audio_page",
+              "board",
+              "workflow",
+              "entity",
+              "schedule",
+              "agent",
+              "comfyui"
+            ],
+            "title": "Origin Kind"
+          },
+          "origin_id": {
+            "type": "string",
+            "title": "Origin Id"
+          },
+          "origin_name": {
+            "type": "string",
+            "title": "Origin Name"
+          },
+          "origin_state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "deleted",
+              "hidden"
+            ],
+            "title": "Origin State"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -35507,6 +35557,10 @@
           "id",
           "workspace_id",
           "title",
+          "origin_kind",
+          "origin_id",
+          "origin_name",
+          "origin_state",
           "created_at",
           "updated_at"
         ],

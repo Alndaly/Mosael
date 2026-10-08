@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, ValidationInfo, computed_field, field_validator
 
@@ -279,6 +280,9 @@ class GenerationSessionUpdate(ApiModel):
     kind: str | None = Field(default=None, pattern="^(image|video|audio|speech|podcast)$")
 
 
+GenerationOriginKind = Literal["studio", "audio_page", "board", "workflow", "entity", "schedule", "agent", "comfyui"]
+
+
 class GenerationSessionOut(OrmModel):
     id: str
     workspace_id: str
@@ -291,6 +295,12 @@ class GenerationSessionOut(OrmModel):
     provider_profile_id: str | None = None
     model: str | None = None
     kind: str | None = None
+    #: 在哪一处开的(ADR 0052,见 domain/generation/origins)。`origin_name` 现查、**按看的人**查:那一处删了是 `deleted`、
+    #: 他看不见是 `hidden`,这两种 `origin_name` 和 `origin_id` 都是空串。标题空着的会话,界面写的就是这一处的名字。
+    origin_kind: GenerationOriginKind
+    origin_id: str = Field(validation_alias="origin_id_shown")
+    origin_name: str
+    origin_state: Literal["ok", "deleted", "hidden"]
     created_at: datetime
     updated_at: datetime
 

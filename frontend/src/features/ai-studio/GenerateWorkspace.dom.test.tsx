@@ -88,6 +88,10 @@ function session(isMine: boolean) {
     model: "gpt-image-1",
     is_mine: isMine,
     shared: true,
+    origin_kind: "studio",
+    origin_id: "",
+    origin_name: "",
+    origin_state: "ok",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   };

@@ -9096,6 +9096,211 @@ def _migrate_speech_and_podcast_join_creation_sessions() -> None:
                 )
 
 
+def _migrate_generation_sessions_get_an_origin() -> None:
+    """生成会话记出处(ADR 0052 §1):`generation_sessions` 加 `origin_kind`(默认 `studio`)、`origin_id`(默认空)和「这个人在这一处
+    的那条会话」按它找的索引。老会话的出处由 SCHEMA 之后的 `_migrate_generation_sessions_origin_from_facts` 按事实补。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 GenerationSession 已经指望它们在了。表还没有就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(generation_sessions)"))}
+        if not columns:
+            return
+        if "origin_kind" not in columns:
+            conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN origin_kind VARCHAR(16) NOT NULL DEFAULT 'studio'"))
+        if "origin_id" not in columns:
+            conn.execute(text("ALTER TABLE generation_sessions ADD COLUMN origin_id VARCHAR(700) NOT NULL DEFAULT ''"))
+        #: 很老的库这时还没有 `owner_user_id`(由 SCHEMA 之后的 `_migrate_resource_ownership` 补):索引等补出处那一步再建。
+        if "owner_user_id" in columns:
+            _index_generation_sessions_by_origin(conn)
+
+
+def _index_generation_sessions_by_origin(conn: Any) -> None:
+    conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_generation_sessions_origin "
+        "ON generation_sessions (workspace_id, owner_user_id, origin_kind, origin_id)"
+    ))
+
+
+def _json_object(raw: Any) -> dict[str, Any]:
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _generation_origin_from_job_payload(kind: str, payload: dict[str, Any]) -> tuple[str, str] | None:
+    """一个(祖先)任务说明了这次生成是在哪一处跑的:工作流(定时任务跑的工作流也是 —— 生成在那张工作流里)、画板上跑的能力、
+    资产详情页、定时任务。和现在的漏斗同一个判据(workflows 执行器按作用域、定时任务按任务)。"""
+    if payload.get("workflow_id"):
+        return "workflow", str(payload["workflow_id"])
+    if kind == "board_run" and payload.get("board_id"):
+        return "board", str(payload["board_id"])
+    if kind == "entity_draw" and payload.get("entity_id"):
+        return "entity", str(payload["entity_id"])
+    if payload.get("scheduled_task_id"):
+        return "schedule", str(payload["scheduled_task_id"])
+    return None
+
+
+def _generation_origin_from_receipt(payload: dict[str, Any]) -> tuple[str, str] | None:
+    """任务载荷上的回执:画板格子的生成(`board_item`)、智能体批准确认卡之后建的(`agent_session`)。"""
+    receipt = payload.get("receipt") if isinstance(payload.get("receipt"), dict) else {}
+    if receipt.get("kind") == "board_item" and receipt.get("board_id"):
+        return "board", str(receipt["board_id"])
+    if receipt.get("kind") == "agent_session" and receipt.get("session_id"):
+        return "agent", str(receipt["session_id"])
+    return None
+
+
+def _migrate_generation_sessions_origin_from_facts() -> None:
+    """老会话按**查得到的事实**归出处(ADR 0052 §4、D46),查不到的就是 `studio`;不合并老会话(一次一条的照旧各是一条)。
+
+    一条会话的出处看它**第一条**生成记录(开出它的那一次):
+
+    - 任务还在:祖先任务里最近的那个说了在哪跑的(工作流、画板上的能力、资产详情页、定时任务),否则看任务上的回执
+      (画板格子、智能体的对话),否则是工作台跑的(记录上 `workbench`,出处是那台连接 + 那张工作流的路径),否则就是
+      创作页开的 —— 任务在、什么都没说,那就是创作页;
+    - 任务被「清空已结束」删了:工作台跑的照记录认;确认卡的结果里记着这条记录的,是那段对话;会话只有这一条、它的产出
+      摆在某块画板的格子上的,是那块画板(引用表);别的是 `studio`。
+
+    「以前的语音 / 播客」(ADR 0055 的迁移建的那两条)标成 `audio_page`、标题清空 —— 界面按读的人的语言写
+    (`_migrate_speech_and_podcast_join_creation_sessions` 写死的是中文)。
+    """
+    needed = {"generation_sessions", "generation_jobs", "jobs"}
+    tables = set(inspect(engine).get_table_names())
+    if not needed <= tables:
+        return
+    with engine.begin() as conn:
+        _index_generation_sessions_by_origin(conn)
+        conn.execute(text(
+            "UPDATE generation_sessions SET origin_kind = 'audio_page', origin_id = kind, title = '' "
+            "WHERE origin_kind = 'studio' AND provider_profile_id IS NULL "
+            "AND ((title = '以前的语音' AND kind = 'speech') OR (title = '以前的播客' AND kind = 'podcast'))"
+        ))
+        firsts = conn.execute(text(
+            "SELECT s.id, g.id, g.job_id, g.request, g.provider_profile_id, g.model, g.result_asset_id, "
+            "(SELECT COUNT(*) FROM generation_jobs c WHERE c.session_id = s.id) "
+            "FROM generation_sessions s JOIN generation_jobs g ON g.session_id = s.id "
+            "WHERE s.origin_kind = 'studio' AND g.id = ("
+            "SELECT f.id FROM generation_jobs f WHERE f.session_id = s.id ORDER BY f.created_at, f.id LIMIT 1)"
+        )).all()
+        instances = (
+            dict(conn.execute(text("SELECT id, plugin_instance_id FROM provider_profiles")).all())
+            if "provider_profiles" in tables else {}
+        )
+
+        def job(job_id: str | None) -> tuple[str, dict[str, Any], str | None] | None:
+            row = conn.execute(
+                text("SELECT kind, payload, parent_job_id FROM jobs WHERE id = :id"), {"id": job_id}
+            ).first() if job_id else None
+            return (str(row[0]), _json_object(row[1]), row[2]) if row is not None else None
+
+        for session_id, record_id, job_id, raw_request, profile_id, model, asset_id, records in firsts:
+            request = _json_object(raw_request)
+            workbench = (
+                ("comfyui", f"{instances[profile_id]}/{model}")
+                if request.get("workbench") and instances.get(profile_id) and model else None
+            )
+            origin: tuple[str, str] | None = None
+            own = job(job_id)
+            if own is not None:
+                parent, seen = own[2], set()
+                while parent and parent not in seen and origin is None:
+                    seen.add(parent)
+                    found = job(parent)
+                    if found is None:
+                        break
+                    origin = _generation_origin_from_job_payload(found[0], found[1])
+                    parent = found[2]
+                origin = origin or _generation_origin_from_receipt(own[1]) or workbench
+            else:
+                origin = workbench
+                if origin is None and "tool_confirmations" in tables:
+                    agent = conn.execute(text(
+                        "SELECT session_id FROM tool_confirmations WHERE session_id IS NOT NULL "
+                        "AND json_extract(result, '$.generation_id') = :id LIMIT 1"
+                    ), {"id": record_id}).scalar()
+                    origin = ("agent", str(agent)) if agent else None
+                if origin is None and records == 1 and asset_id and "record_references" in tables:
+                    board = conn.execute(text(
+                        "SELECT source_id FROM record_references WHERE source_kind = 'board' AND target_kind = 'asset' "
+                        "AND target_id = :asset ORDER BY source_id LIMIT 1"
+                    ), {"asset": asset_id}).scalar()
+                    origin = ("board", str(board)) if board else None
+            if origin is not None:
+                conn.execute(
+                    text("UPDATE generation_sessions SET origin_kind = :kind, origin_id = :id WHERE id = :session"),
+                    {"kind": origin[0], "id": origin[1], "session": session_id},
+                )
+
+
+def _migrate_earlier_speech_and_podcast_find_their_origin() -> None:
+    """「以前的语音 / 播客」里查得到出处的那几条归到各自的出处(ADR 0052;ADR 0055 的迁移当时一并收进来的画板「念出来」、
+    智能体念的):任务载荷上有画板格子 / 对话的回执的,挪进那个人在那一处的会话 —— 有就进最近用过的那条(和生成漏斗
+    `_resolve_session` 同一个找法),没有就开一条(标题空着,界面写出处的名字)。查不到的(笔记朗读没记是哪篇)留在原地。
+    挪完空了的「以前的…」删掉。挪动过的会话按里面的记录重算种类(最后一条的)和更新时间。
+
+    排在 `_migrate_generation_sessions_origin_from_facts` 之后:它先把那两条标成 `audio_page`、把老会话的出处补齐。
+    """
+    needed = {"generation_sessions", "generation_jobs", "jobs"}
+    if not needed <= set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT g.id, s.id, s.workspace_id, s.owner_user_id, j.payload "
+            "FROM generation_jobs g JOIN generation_sessions s ON s.id = g.session_id JOIN jobs j ON j.id = g.job_id "
+            "WHERE s.origin_kind = 'audio_page' ORDER BY g.created_at, g.id"
+        )).all()
+        touched: set[str] = set()
+        targets: dict[tuple[str, str | None, str, str], str] = {}
+        for record_id, earlier_id, workspace_id, owner, raw_payload in rows:
+            origin = _generation_origin_from_receipt(_json_object(raw_payload))
+            if origin is None:
+                continue
+            key = (workspace_id, owner, origin[0], origin[1])
+            target = targets.get(key)
+            if target is None:
+                target = conn.execute(text(
+                    "SELECT id FROM generation_sessions WHERE workspace_id = :ws AND owner_user_id IS :owner "
+                    "AND origin_kind = :kind AND origin_id = :origin ORDER BY updated_at DESC, id DESC LIMIT 1"
+                ), {"ws": workspace_id, "owner": owner, "kind": origin[0], "origin": origin[1]}).scalar()
+            if target is None:
+                target = uuid.uuid4().hex
+                stamp = now()
+                conn.execute(text(
+                    "INSERT INTO generation_sessions (id, workspace_id, owner_user_id, title, group_id, provider_profile_id, "
+                    "model, kind, origin_kind, origin_id, created_at, updated_at) "
+                    "VALUES (:id, :ws, :owner, '', NULL, NULL, '', 'speech', :kind, :origin, :stamp, :stamp)"
+                ), {"id": target, "ws": workspace_id, "owner": owner, "kind": origin[0], "origin": origin[1], "stamp": stamp})
+            targets[key] = target
+            conn.execute(text("UPDATE generation_jobs SET session_id = :to WHERE id = :id"), {"to": target, "id": record_id})
+            #: 任务中心「前往」打开的是记录所在的那条会话(job_catalog 的 record_field 读载荷里的 session_id)
+            payload = _json_object(raw_payload)
+            if payload.get("session_id"):
+                conn.execute(
+                    text("UPDATE jobs SET payload = :payload WHERE id = (SELECT job_id FROM generation_jobs WHERE id = :id)"),
+                    {"payload": json.dumps({**payload, "session_id": target}, ensure_ascii=False), "id": record_id},
+                )
+            touched.update({earlier_id, target})
+        for session_id in touched:
+            latest = conn.execute(text(
+                "SELECT kind, provider, created_at FROM generation_jobs WHERE session_id = :id "
+                "ORDER BY created_at DESC, id DESC LIMIT 1"
+            ), {"id": session_id}).first()
+            if latest is None:
+                conn.execute(text("DELETE FROM generation_sessions WHERE id = :id"), {"id": session_id})
+                continue
+            first = conn.execute(text(
+                "SELECT MIN(created_at) FROM generation_jobs WHERE session_id = :id"
+            ), {"id": session_id}).scalar()
+            conn.execute(text(
+                "UPDATE generation_sessions SET kind = :kind, updated_at = MAX(updated_at, :latest), "
+                "created_at = MIN(created_at, :first) WHERE id = :id"
+            ), {"kind": latest[0], "latest": latest[2], "first": first, "id": session_id})
+
+
 def migration_plan() -> MigrationPlan:
     """Declare startup migration order in one validated plan.
 
@@ -9226,6 +9431,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_webhook_secrets_are_hashed,
                 # 同上:ORM 上的 DeploymentConfig 指望「网页地址」那一列在(ADR 0054)。
                 _migrate_deployments_know_their_web_address,
+                # 同上:ORM 上的 GenerationSession 指望「出处」两列在(ADR 0052)。
+                _migrate_generation_sessions_get_an_origin,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -9449,6 +9656,13 @@ def migration_plan() -> MigrationPlan:
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_registration_invites_become_invite_links,
                 _drop_invitations_and_notifications_of_people_who_are_gone,
+            ),
+            #: 老会话按事实归出处,「以前的语音 / 播客」里查得到出处的挪过去(ADR 0052)。排在上一步之后:那两条由它建;
+            #: 读引用表(画板格子上摆着哪些素材)—— 那是上一次启动对账建的,下面这次对账之前读,读到的照旧是它。
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _migrate_generation_sessions_origin_from_facts,
+                _migrate_earlier_speech_and_podcast_find_their_origin,
             ),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。

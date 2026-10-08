@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import threading
 from pathlib import Path
 
@@ -191,13 +192,13 @@ def test_会话锁族_有记录的语音会话不出图也不念播客_空会话
     assert moved.status_code == 200 and moved.json()["kind"] == "speech", "还空着的会话不是任何东西的会话"
     assert wait_for_idle_jobs(15)
 
-    #: 锁族是创作页的规矩,不是会话本身的:别的入口(以后按出处归的会话,一块画板一条,ADR 0052)往里放别的种类照样放得进
+    #: 锁族是创作页的规矩,不是会话本身的:别的入口(按出处归的会话,一块画板一条,ADR 0052)往里放别的种类照样放得进
     from app.domain.generation.voiced import create_podcast as podcast_into
 
     with SessionLocal() as db:
         owner = db.get(GenerationSession, session_id).owner_user_id
         record, _job = podcast_into(db, workspace_id=ws, session_id=session_id, project_id=None, created_by=owner,
-                                    mode="research", text="AI 剪辑")
+                                    mode="research", text="AI 剪辑", origin=STUDIO_ORIGIN)
         assert record.session_id == session_id
         db.rollback()
 
@@ -218,7 +219,7 @@ def test_视觉一族里换种类_会话记着最后一次用的() -> None:
         db.commit()
         named = _named_session(db, workspace_id=ws, session_id=session.id, actor=session.owner_user_id, family_of="video")
         resolved = _resolve_session(db, workspace_id=ws, named=named, prompt="动起来", created_by=session.owner_user_id,
-                                    engine=(None, "v", "video"))
+                                    engine=(None, "v", "video"), origin=STUDIO_ORIGIN)
         assert resolved.id == session.id and resolved.kind == "video"
         from app.domain.generation.operations import GenerationDomainError
 

@@ -158,6 +158,7 @@ import { useOpenRequest } from "@/lib/deepLink";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
 import { CreateFilterRow, KindBadge, emptySessionsKey, familyKinds, generationKindOf } from "@/features/ai-studio/createFilter";
+import { canGoToOrigin, goToOrigin, isFromElsewhere, originSubtitle, sessionTitle } from "@/features/ai-studio/generationOrigin";
 import {
   PodcastComposerFields,
   PodcastDialogue,
@@ -203,6 +204,9 @@ import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
+
+/** 一条会话一次取多少条记录(往上翻再多要这么多,ADR 0052)。 */
+const RECORD_PAGE = 40;
 
 const ENGINE_SEP = "::";
 
@@ -440,6 +444,12 @@ export function GenerateWorkspace({
   //: 开着的那条:**选过的那条,没选过就是「新的一条」** —— 不落进列表里最近的那条。画板、工作流、智能体、定时任务每跑一次
   //: 生成都会新开一条会话,落进「最近一条」的话,用户在这里写的提示词就续进了画板那条线程(UC-03)。新的一条第一次提交时才建。
   const activeSession = (sessions.data ?? []).find((session) => session.id === sessionId) ?? null;
+  //: 列表上写的标题:别处开的会话标题空着,写那一处现在叫什么(ADR 0052)。搜索、改名框按它。
+  const sessionById = React.useMemo(() => new Map((sessions.data ?? []).map((session) => [session.id, session])), [sessions.data]);
+  const listedSessions = React.useMemo(
+    () => (sessions.data ?? []).map((session) => ({ ...session, title: sessionTitle(t, session) })),
+    [sessions.data, t],
+  );
   //: 同事共享来的:只能看。只认后端明说「不是你的」—— 没说的(刚建、还没回来)当作自己的。
   const readOnly = activeSession?.is_mine === false;
   //: 模型与参数栏是「写」的一部分:只读的会话不开它(开着的话,在这里换模型会写进别人的会话)。
@@ -454,11 +464,20 @@ export function GenerateWorkspace({
       : `${panels.left}px minmax(0,1fr)`;
   //: 贴底跟随(见 features/agent/stickToBottom)。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
+  //: 一条会话先取最近的一页(ADR 0052:一块画板一条会话,跑了几百次就是几百轮),往上翻点「显示更早的」再多要一页。
+  //: 多要一条:回来的比这一页多,就是还有更早的。换会话回到一页。
+  const [paging, setPaging] = React.useState<{ session: string; limit: number } | null>(null);
+  const recordLimit = paging && paging.session === activeSession?.id ? paging.limit : RECORD_PAGE;
+  const showEarlier = () => activeSession && setPaging({ session: activeSession.id, limit: recordLimit + RECORD_PAGE });
   const sessionJobs = useQuery({
-    queryKey: ["generation-jobs", workspace.id, activeSession?.id],
+    queryKey: ["generation-jobs", workspace.id, activeSession?.id, recordLimit],
     enabled: Boolean(activeSession),
+    //: 同一条会话多要一页时照旧摆着这一页,不闪回占位;换了会话不拿上一条的顶着
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === activeSession?.id ? previous : undefined),
     queryFn: () =>
-      api<GenerationJob[]>(`/api/generation/jobs?workspace_id=${workspace.id}&session_id=${activeSession!.id}`),
+      api<GenerationJob[]>(
+        `/api/generation/jobs?workspace_id=${workspace.id}&session_id=${activeSession!.id}&limit=${recordLimit + 1}`,
+      ),
     refetchInterval: (query) => {
       const activeJobIds = new Set(
         (jobs.data ?? []).filter((job) => job.status === "queued" || job.status === "running").map((job) => job.id),
@@ -723,7 +742,11 @@ export function GenerateWorkspace({
     setSessionId(null);
     window.localStorage.removeItem(sessionKey);
   };
-  const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
+  const hasEarlier = (sessionJobs.data?.length ?? 0) > recordLimit;
+  const ordered = React.useMemo(
+    () => (hasEarlier ? (sessionJobs.data ?? []).slice(1) : sessionJobs.data ?? []),
+    [sessionJobs.data, hasEarlier],
+  );
   //: 老的语音记录(迁移过来的)没记音色名:标题从这条会话所用引擎的音色目录里认
   const voiceLabels = useVoiceLabels(
     workspace.id,
@@ -1321,7 +1344,7 @@ export function GenerateWorkspace({
         <SessionList
           kind="generation"
           workspaceId={workspace.id}
-          sessions={sessions.data ?? []}
+          sessions={listedSessions}
           loaded={sessions.isSuccess}
           activeSessionId={activeSession?.id ?? null}
           onSelect={(id) => {
@@ -1332,7 +1355,22 @@ export function GenerateWorkspace({
           creating={false}
           toolbar={<CreateFilterRow value={filter} onChange={setFilter} />}
           emptyTitle={t(emptySessionsKey(filter))}
-          extras={(session) => ({ badge: <KindBadge kind={session.kind} /> })}
+          extras={(listed) => {
+            const session = sessionById.get(listed.id) ?? listed;
+            return {
+              badge: <KindBadge kind={session.kind} />,
+              subtitle: originSubtitle(t, session),
+              goBack: canGoToOrigin(session)
+                ? {
+                    label: t("createGoToOrigin"),
+                    hint: t("createGoToOriginHint"),
+                    onClick: () => void Promise.resolve(goToOrigin(workspace.id, session)).catch((error: Error) => toast.error(error.message)),
+                  }
+                : undefined,
+            };
+          }}
+          //: 画板、工作流、智能体……那里开出来的收在最下面,默认合着、带个数(ADR 0052 §3,D45)
+          aside={{ title: t("createFromElsewhere"), isAside: isFromElsewhere }}
           onDeleted={(ids) => {
             // 删掉的里面有正开着的那个,就把视图放下 —— 否则右边还停在一个已经不存在的会话上。
             if (sessionId && ids.includes(sessionId)) {
@@ -1350,7 +1388,7 @@ export function GenerateWorkspace({
       <section className="min-h-0 overflow-hidden bg-workspace-panel grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
-          <Truncate className="flex-1 text-ui-sm font-medium">{activeSession?.title ?? t("generationNewSession")}</Truncate>
+          <Truncate className="flex-1 text-ui-sm font-medium">{activeSession ? sessionTitle(t, activeSession) : t("generationNewSession")}</Truncate>
           {!readOnly && (
             <Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
           )}
@@ -1375,6 +1413,12 @@ export function GenerateWorkspace({
                 }
               />
             </div>
+          )}
+          {hasEarlier && (
+            <Button variant="ghost" size="sm" className="self-center" onClick={showEarlier} loading={sessionJobs.isFetching}
+                    data-show-earlier="">
+              {t("createShowEarlier")}
+            </Button>
           )}
           {ordered.map((generation) => {
             const voiced = isVoicedKind(generation.kind);

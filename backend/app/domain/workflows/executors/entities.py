@@ -316,6 +316,7 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
     from app.domain.entities import EntityDomainError, add_reference, get_entity
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError
+    from app.domain.generation.origins import of_run_scope
     from app.domain.generation.runner import start_generation_thread
 
     model = drawing.model
@@ -337,6 +338,7 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
                 parameters={},
                 source_assets=[],
                 entity_ids=[drawing.entity_id],
+                origin=of_run_scope(scope.id),
             )
             started.append((role, generation.id, child.id))
     except BaseException as exc:

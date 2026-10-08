@@ -72,7 +72,8 @@ function renderStudio() {
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     if (init?.method && init.method !== "GET") {
       posts.push({ url, body: init.body ? JSON.parse(String(init.body)) : null });
-      if (url.includes("/api/generation/sessions")) return json({ id: "s-new", workspace_id: "w1", kind: "image", title: "", is_mine: true });
+      if (url.includes("/api/generation/sessions")) return json({ id: "s-new", workspace_id: "w1", kind: "image", title: "", is_mine: true,
+                                                                            origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok" });
       return json({ id: "g1", job_id: "j1" });
     }
     if (url.includes("/api/generation/options?kind=image")) return json([OPENAI, PORTRAIT]);

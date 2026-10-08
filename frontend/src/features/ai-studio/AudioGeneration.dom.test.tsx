@@ -92,7 +92,7 @@ const SUNO = {
   },
 };
 
-const SESSION = { id: "s1", workspace_id: "w1", title: "会话", created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z" };
+const SESSION = { id: "s1", workspace_id: "w1", title: "会话", origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok", created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z" };
 
 function renderStudio({
   capabilities = SUNO as Record<string, unknown>,

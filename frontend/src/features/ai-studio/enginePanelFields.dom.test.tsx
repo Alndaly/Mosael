@@ -109,7 +109,7 @@ const SESSIONS: Record<string, { kind: string; provider_profile_id: string | nul
 };
 
 function renderMode(mode: keyof typeof SESSIONS) {
-  const session = { id: "s1", workspace_id: "w1", title: mode, ...SESSIONS[mode], is_mine: true, shared: false,
+  const session = { id: "s1", workspace_id: "w1", title: mode, ...SESSIONS[mode], origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok", is_mine: true, shared: false,
                     created_at: "2026-10-08T00:00:00Z", updated_at: "2026-10-08T00:00:00Z" };
   localStorage.setItem("mosael.generation.session.w1.create", "s1");
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {

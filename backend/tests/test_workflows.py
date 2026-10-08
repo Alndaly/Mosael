@@ -1684,7 +1684,7 @@ def test_生成节点的参数_没填的不发给供应商(monkeypatch) -> None:
         raise Captured
 
     monkeypatch.setattr(generation, "create_generation_job", capture)
-    workflow = Workflow(workspace_id="ws", name="W", graph={"nodes": [], "edges": []})
+    workflow = Workflow(id="w1", workspace_id="ws", name="W", graph={"nodes": [], "edges": []})
     with pytest.raises(Captured):
         subjobs.ai_generate(
             None,

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import pytest
 
 from app.core.db import SessionLocal
@@ -28,7 +29,7 @@ def _external(monkeypatch) -> None:
 def _create(ws: str, profile: str, prompt: str, *, name_sources: bool) -> dict:
     with SessionLocal() as db:
         generation, _job = create_generation_job(
-            db, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
             provider_profile_id=profile, model="doubao-seedance-2-0-260128", kind="video", prompt=prompt,
             negative_prompt="", parameters={},
             source_assets=[

@@ -24,13 +24,14 @@ from app.domain.capabilities import CapabilityUnavailable
 from app.domain.permissions import require_own_profile
 from app.domain.voices.errors import VoiceError
 from app.db.models import GenerationJob, GenerationSession
-from app.domain import session_groups, sharing
+from app.domain import session_groups
 from app.domain.generation import generation_options
 from app.domain.generation import use_cases as generation
 from app.domain.generation.operations import GenerationDomainError
+from app.domain.generation.origins import STUDIO_ORIGIN
 from app.domain.generation.custom_profiles import capability_ref_choices
 from app.domain.generation.prompt_optimizer import PromptOptimizeError
-from app.domain.generation.sessions import SHARE_KIND, delete_session, writable_session
+from app.domain.generation.sessions import delete_session, writable_session
 
 router = APIRouter(tags=["generation"])
 
@@ -84,7 +85,7 @@ def update_generation_session(
         session_groups.restore_updated_at(db, session, kept_updated_at)
         db.commit()
     db.refresh(session)
-    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
+    return generation.described(db, user, session.workspace_id, [session])[0]
 
 
 @router.delete("/generation/sessions/{session_id}", status_code=204)
@@ -166,7 +167,7 @@ def optimize_prompt(body: PromptOptimizeRequest, db: Tx, user: CurrentUser) -> P
 def create_generation(body: GenerationCreate, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
     fields = body.model_dump()
     try:
-        created, job = generation.generate(db, user, fields.pop("workspace_id"), **fields)
+        created, job = generation.generate(db, user, fields.pop("workspace_id"), origin=STUDIO_ORIGIN, **fields)
     except GenerationDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return GenerationCreateResponse(
@@ -227,5 +228,7 @@ def list_generation_jobs(
     user: CurrentUser,
     kind: str | None = None,
     session_id: str | None = None,
+    limit: int | None = Query(default=None, ge=1, le=1000),
 ) -> list[GenerationJob]:
-    return generation.history(db, user, workspace_id, kind=kind, session_id=session_id)
+    """生成记录,按时间正序。`limit`:只要最近的那么多条(创作页按页取一条会话:一块画板一条会话,跑了几百次就是几百轮)。"""
+    return generation.history(db, user, workspace_id, kind=kind, session_id=session_id, limit=limit)

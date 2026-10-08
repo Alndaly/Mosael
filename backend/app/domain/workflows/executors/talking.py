@@ -118,6 +118,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
     之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。"""
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError
+    from app.domain.generation.origins import of_run_scope
     from app.domain.generation.runner import start_generation_thread
 
     try:
@@ -137,6 +138,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
             source_assets=sources,
             #: 授权在这一层查过了:人物资产的声明(check_entity_speak)或面板上的确认(_require_consent)。
             digital_human_consent=True,
+            origin=of_run_scope(scope.id),
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 from unittest.mock import patch as mock_patch
 
 import pytest
@@ -121,7 +122,7 @@ def test_生成漏斗挂上渲出来的素材_说明并进提示词_回执记下
     profile = _seedance(client)
     with SessionLocal() as db:
         generation, _job = create_generation_job(
-            db, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
             provider_profile_id=profile, model="doubao-seedance-2-0-260128", kind="video", prompt="她在草原上奔跑",
             negative_prompt="", parameters={}, source_assets=[],
             scene_reference={"scene_id": scene_id, "shot_id": "", "use": "composition"},
@@ -138,7 +139,7 @@ def _generate(ws: str, profile: str, scene_id: str, **extra):
 
     with SessionLocal() as db:
         generation, _job = create_generation_job(
-            db, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
             provider_profile_id=profile, model="doubao-seedance-2-0-260128", kind="video", prompt="她在草原上奔跑",
             negative_prompt="", parameters=extra.pop("parameters", {}), source_assets=[],
             scene_reference={"scene_id": scene_id, "shot_id": "", "use": "composition"}, **extra,

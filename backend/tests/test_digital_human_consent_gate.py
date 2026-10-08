@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import pytest
 
 from app.core.db import SessionLocal
@@ -22,7 +23,7 @@ TALKING = [{"asset_id": "face", "role": "first_frame"}, {"asset_id": "line", "ro
 def _submit(ws: str, *, sources: list[dict], parameters: dict | None = None, consent: bool = False):
     with SessionLocal() as db:
         return create_generation_job(
-            db, workspace_id=ws, session_id=None, project_id=None, created_by=None,
+            db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=None,
             provider="nobody", model="no-such-model", kind="video", prompt="", negative_prompt="",
             parameters=parameters or {}, source_assets=sources, digital_human_consent=consent,
         )

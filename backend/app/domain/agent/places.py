@@ -23,8 +23,9 @@ from sqlalchemy import ColumnElement, func, literal, select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.db.models import AgentMessage, AgentSession, Board, Note, PluginInstance, Project, Scene3D, User, Workflow, WorkspaceMember
+from app.db.models import AgentMessage, AgentSession, Board, Note, PluginInstance, Project, Scene3D, User, Workflow
 from app.domain.permissions import NotVisible
+from app.domain.place_names import DELETED, HIDDEN, OK, Described, comfy_parts, comfy_places, workspace_things
 
 STUDIO = "studio"
 PROJECT = "project"
@@ -33,11 +34,6 @@ BOARD = "board"
 WORKFLOW = "workflow"
 SCENE = "scene"
 COMFYUI = "comfyui"
-
-#: 家的三种状况(`AgentSessionOut.home_state`)。
-OK = "ok"
-DELETED = "deleted"
-HIDDEN = "hidden"
 
 #: 一样东西的 id 最长多少(库里的 id 是 32 位十六进制)。ComfyUI 的 id 带路径,上限是列宽。
 _THING_ID_CHARS = 64
@@ -61,16 +57,6 @@ class PlaceError(LocalizedError, ValueError):
 
 
 # ---------- 形状 ----------
-
-
-def comfy_parts(place_id: str) -> tuple[str, str, str]:
-    """(连接 id, 存过的路径, 没存过的标签页 key):后两样至多一样不空。从左边第一个 `/` 或 `#` 切开。"""
-    marks = [index for index in (place_id.find("/"), place_id.find("#")) if index >= 0]
-    if not marks:
-        return place_id, "", ""
-    cut = min(marks)
-    connection, rest = place_id[:cut], place_id[cut + 1:]
-    return (connection, rest, "") if place_id[cut] == "/" else (connection, "", rest)
 
 
 def checked(kind: str, place_id: str) -> Place:
@@ -132,10 +118,6 @@ def memory_project(session: AgentSession) -> str | None:
 
 # ---------- 每一种地方:校验、按 id 批量取名字 ----------
 
-#: id → (状况, 名字)。看不见、删了的,名字是空串 —— 响应里不出现看的人看不见的标题。
-Described = dict[str, tuple[str, str]]
-
-
 @dataclass(frozen=True)
 class PlaceKind:
     #: 建会话时:那样东西在、他看得见、在这个工作区里。不在 / 看不见是 `NotVisible`(404),连接不是他的是 `PlaceError`(422)。
@@ -154,21 +136,15 @@ def _studio_describe(_db: Session, _viewer: User, ids: set[str]) -> Described:
 
 
 def _workspace_thing(model: Any, name_column: Any, words: tuple[str, str, str]) -> PlaceKind:
-    """剪辑项目、笔记、画板、工作流、3D 场景:都是工作区里的东西,工作区的人都看得见(各自的读闸都是「它在、你是这个
-    工作区的人」)。建会话时它得在这次对话所在的工作区里 —— 别的工作区的和不存在的是同一个回答。"""
+    """剪辑项目、笔记、画板、工作流、3D 场景:都是工作区里的东西,工作区的人都看得见(名字怎么取见 place_names)。建会话时它得在
+    这次对话所在的工作区里 —— 别的工作区的和不存在的是同一个回答。"""
 
     def ensure(db: Session, _user: User, workspace_id: str, place_id: str) -> None:
         owner_workspace = db.scalar(select(model.workspace_id).where(model.id == place_id))
         if owner_workspace != workspace_id:
             raise NotVisible("Not found")
 
-    def describe(db: Session, viewer: User, ids: set[str]) -> Described:
-        rows = db.execute(select(model.id, name_column, model.workspace_id).where(model.id.in_(ids))).all()
-        mine = set(db.scalars(select(WorkspaceMember.workspace_id).where(WorkspaceMember.user_id == viewer.id)))
-        found = {row[0]: ((OK, row[1] or "") if row[2] in mine else (HIDDEN, "")) for row in rows}
-        return {place_id: found.get(place_id, (DELETED, "")) for place_id in ids}
-
-    return PlaceKind(ensure=ensure, describe=describe, words=words)
+    return PlaceKind(ensure=ensure, describe=workspace_things(model, name_column), words=words)
 
 
 def _comfy_connection(db: Session, user: User, connection_id: str) -> PluginInstance | None:
@@ -193,30 +169,6 @@ def _comfy_ensure(db: Session, user: User, _workspace_id: str, place_id: str) ->
         raise PlaceError("agentErr_placeNotYourComfy")
 
 
-def _file_name(path: str) -> str:
-    name = path.rsplit("/", 1)[-1]
-    return name[: -len(".json")] if name.lower().endswith(".json") else name
-
-
-def _comfy_describe(db: Session, viewer: User, ids: set[str]) -> Described:
-    """名字取路径里的文件名(不连那台机器);画布上一张都没开的,是连接的名字。连接删了是 `deleted`,不是他的是 `hidden`。"""
-    connections = {comfy_parts(place_id)[0] for place_id in ids}
-    owners = dict(db.execute(
-        select(PluginInstance.id, PluginInstance.owner_user_id).where(PluginInstance.id.in_(connections))
-    ).all())
-    names = dict(db.execute(select(PluginInstance.id, PluginInstance.name).where(PluginInstance.id.in_(connections))).all())
-    described: Described = {}
-    for place_id in ids:
-        connection, path, key = comfy_parts(place_id)
-        if connection not in owners:
-            described[place_id] = (DELETED, "")
-        elif owners[connection] != viewer.id:
-            described[place_id] = (HIDDEN, "")
-        else:
-            described[place_id] = (OK, _file_name(path or key) if (path or key) else names[connection])
-    return described
-
-
 KINDS: dict[str, PlaceKind] = {
     STUDIO: PlaceKind(ensure=_studio_ensure, describe=_studio_describe, words=("在 AI Studio 里开的",) * 3),
     PROJECT: _workspace_thing(Project, Project.name, ("在剪辑《{name}》里开的", "在已删除的剪辑项目里开的", "在一个剪辑项目里开的")),
@@ -225,7 +177,7 @@ KINDS: dict[str, PlaceKind] = {
     WORKFLOW: _workspace_thing(Workflow, Workflow.name, ("在工作流《{name}》里开的", "在已删除的工作流里开的", "在一个工作流里开的")),
     SCENE: _workspace_thing(Scene3D, Scene3D.name, ("在 3D 场景《{name}》里开的", "在已删除的 3D 场景里开的", "在一个 3D 场景里开的")),
     COMFYUI: PlaceKind(
-        ensure=_comfy_ensure, describe=_comfy_describe,
+        ensure=_comfy_ensure, describe=comfy_places,
         words=("在 ComfyUI 的《{name}》里开的", "在已删除的 ComfyUI 连接里开的", "在一台 ComfyUI 里开的"),
     ),
 }

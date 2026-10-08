@@ -11,6 +11,7 @@ content 数组、可灵的 image / image_tail),是我们这一层把它抹平了
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 from collections import Counter
 from pathlib import Path
 
@@ -295,7 +296,7 @@ def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None
     def _submit(asset_id: str):
         with SessionLocal() as db:
             return create_generation_job(
-                db, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
+                db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
                 provider="bytedance", provider_profile_id=pid, model=SEEDANCE_2, kind="video",
                 prompt="照这个风格来", negative_prompt="",
                 parameters={"duration_seconds": 5, "resolution": "720p"},

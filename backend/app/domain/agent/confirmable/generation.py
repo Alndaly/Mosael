@@ -18,6 +18,14 @@ def _asked_for(payload: dict[str, Any]) -> str:
     return str(payload.get("prompt") or payload.get("text") or payload.get("topic") or payload.get("model") or "")[:80]
 
 
+def _origin(confirmation: Any) -> Any:
+    """智能体的生成按对话归(ADR 0052 §2,D43):一段对话里批准的几次生成都进那段对话的那条会话。卡没挂在哪段对话上
+    (老卡)的,出处说不出 —— 和迁移同一个判据,记 `studio`。"""
+    from app.domain.generation.origins import AGENT, STUDIO_ORIGIN, Origin
+
+    return Origin(AGENT, confirmation.session_id) if confirmation.session_id else STUDIO_ORIGIN
+
+
 #: 走生成漏斗(create_generation_job)的那三个工具各自生成哪一种。此前 image / video 两个执行体
 #: 各抄一份、靠 `"image" if tool == "generate_image" else "video"` 判 —— 多一种就会被判成视频。
 _GENERATION_KIND_BY_TOOL = {"generate_image": "image", "generate_video": "video", "generate_sound": "audio"}
@@ -48,6 +56,7 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
         entity_ids=parse_entity_ids(payload.get("entity_ids")),
         #: 智能体声明的授权(generate_video 的 digital_human_consent);卡片由人批准时一并过目。
         digital_human_consent=payload.get("digital_human_consent") is True,
+        origin=_origin(confirmation),
     )
     # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起;执行体后面炸了、整个回滚,它就不起。
     generation_id = generation.id
@@ -155,7 +164,7 @@ def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateAudio", {"asked": _asked_for(payload)}
 
 def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    """念卡上定好的那一对,记成创作页里的一条新会话(ADR 0055 §4,和它出图一样)。参数经 synthesis_params 拼,和工作流、
+    """念卡上定好的那一对,记进这段对话的那条创作会话(ADR 0055 §4、ADR 0052,和它出图一样)。参数经 synthesis_params 拼,和工作流、
     画板、字幕配音同一条路。"""
     payload = confirmation.payload
     from app.domain.generation.voiced import create_speech
@@ -171,6 +180,7 @@ def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -
         voice=str(payload.get("voice") or ""),
         engine_model=str(payload.get("model") or "").strip(),
         speed=float(payload.get("speed") or 1.0),
+        origin=_origin(confirmation),
     )
     return {"job_id": job.id, "generation_id": record.id, "session_id": record.session_id}
 
@@ -189,7 +199,7 @@ def _summarize_generate_podcast(db: Session, payload: dict[str, Any]) -> Summary
     return "confirm_generatePodcast", {"asked": _asked_for(payload)}
 
 def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    """一段双人播客,记成创作页里的一条新会话(ADR 0055 §4)。「照读」给的是一段字(不是逐段的稿子):按句拆成两人轮流的几段
+    """一段双人播客,记进这段对话的那条创作会话(ADR 0055 §4、ADR 0052)。「照读」给的是一段字(不是逐段的稿子):按句拆成两人轮流的几段
     再交进去 —— 领域只认逐段的稿子(`turns`)。"""
     payload = confirmation.payload
     from app.ai.providers import split_podcast_rounds
@@ -215,6 +225,7 @@ def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None)
         speakers=[{"value": one} for one in speakers],
         speed=float(payload.get("speed") or 1.0),
         provider_profile_id=str(payload.get("provider_profile_id") or "").strip() or None,
+        origin=_origin(confirmation),
     )
     return {"job_id": job.id, "generation_id": record.id, "session_id": record.session_id}
 

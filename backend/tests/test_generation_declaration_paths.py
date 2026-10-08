@@ -11,6 +11,7 @@ scheduler.py 里都只是把载荷原样喂给 `create_generation_job` —— �
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 import pytest
 
 from sqlalchemy import select
@@ -202,7 +203,7 @@ class Test从声明到提交只有一份规则:
         with SessionLocal() as db:
             #: 没绑声明:目录不认识它,放行(见 validate_against_capabilities 的说明)。
             create_generation_job(
-                db, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
+                db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
                 provider="openai", provider_profile_id=pid, model="gpt-image-2-client",
                 kind="image", prompt="一只猫", negative_prompt="",
                 parameters={"quality": "ultra"}, source_assets=[],
@@ -214,7 +215,7 @@ class Test从声明到提交只有一份规则:
         with SessionLocal() as db:
             with pytest.raises(GenerationDomainError, match="quality"):
                 create_generation_job(
-                    db, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
+                    db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
                     provider="openai", provider_profile_id=pid, model="gpt-image-2-client",
                     kind="image", prompt="一只猫", negative_prompt="",
                     parameters={"quality": "ultra"}, source_assets=[],
@@ -234,7 +235,7 @@ class Test提交前拦得住用户写下的约束:
     def _submit_video(self, user_id: str, ws: str, pid: str, parameters: dict, sources: list[dict]):
         with SessionLocal() as db:
             return create_generation_job(
-                db, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
+                db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=user_id,
                 provider="minimax", provider_profile_id=pid, model="MiniMax-H3-client",
                 kind="video", prompt="一只猫在窗台", negative_prompt="",
                 parameters=parameters, source_assets=sources,
@@ -250,7 +251,7 @@ class Test提交前拦得住用户写下的约束:
         with SessionLocal() as db:
             with pytest.raises(GenerationDomainError, match="最多收 2 份"):
                 create_generation_job(
-                    db, workspace_id=_workspace(client), session_id=None, project_id=None,
+                    db, origin=STUDIO_ORIGIN, workspace_id=_workspace(client), session_id=None, project_id=None,
                     created_by=_user_id(), provider="openai", provider_profile_id=pid,
                     model="gpt-image-2-client", kind="image", prompt="一只猫", negative_prompt="",
                     parameters={"size": "1024x1024"},
@@ -325,13 +326,13 @@ class Test同一个模型在多条连接下:
         with SessionLocal() as db:
             with pytest.raises(GenerationDomainError, match="明确选择连接"):
                 create_generation_job(
-                    db, workspace_id=ws, session_id=None, project_id=None, created_by=_user_id(),
+                    db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=_user_id(),
                     provider="openai", model="gpt-image-2-client", kind="image",
                     prompt="一只猫", negative_prompt="", parameters={}, source_assets=[],
                 )
             #: 点名了就分得开。
             create_generation_job(
-                db, workspace_id=ws, session_id=None, project_id=None, created_by=_user_id(),
+                db, origin=STUDIO_ORIGIN, workspace_id=ws, session_id=None, project_id=None, created_by=_user_id(),
                 provider="openai", provider_profile_id=first, model="gpt-image-2-client",
                 kind="image", prompt="一只猫", negative_prompt="", parameters={}, source_assets=[],
             )

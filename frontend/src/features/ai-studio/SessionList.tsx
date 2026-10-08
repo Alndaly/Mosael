@@ -155,6 +155,7 @@ export function SessionList<S extends ListedSession>({
   extras,
   toolbar,
   emptyTitle,
+  aside,
 }: {
   /** 对话还是生成 —— 两边各自一套分组,差异全在 SESSION_KINDS 那张表里。 */
   kind: SessionGroupKind;
@@ -173,6 +174,11 @@ export function SessionList<S extends ListedSession>({
   toolbar?: React.ReactNode;
   /** 一条都没有时说什么。没给就是这一类会话的那句(SESSION_KINDS);创作页按筛选的种类说。 */
   emptyTitle?: string;
+  /**
+   * 收在列表最下面、默认合着的那一摞(创作页的「来自别处」:画板、工作流、智能体……那里开出来的会话,ADR 0052)。
+   * 只收**没进分组**的:用户亲手收进分组的,照旧在那个分组里。搜索时它照样参与,有命中就展开着。
+   */
+  aside?: { title: string; isAside: (session: S) => boolean };
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -186,6 +192,8 @@ export function SessionList<S extends ListedSession>({
   const [query, setQuery] = React.useState("");
   // 折叠状态只活在这次会话里:它是"我现在不想看这一摞",不是设置。
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
+  //: 「来自别处」默认合着:这一屏是这里开的那些(ADR 0052 §3)
+  const [asideOpen, setAsideOpen] = React.useState(false);
 
   const groups = useQuery({
     queryKey: ["session-groups", kind, workspaceId],
@@ -289,8 +297,23 @@ export function SessionList<S extends ListedSession>({
         loose.push(session);
       }
     }
-    return { map, loose };
-  }, [visible, groupList]);
+    //: 没进分组的再分两摞:这里开的,和收在最下面的「来自别处」
+    const isAside = aside?.isAside;
+    return {
+      map,
+      loose,
+      main: isAside ? loose.filter((session) => !isAside(session)) : loose,
+      aside: isAside ? loose.filter((session) => isAside(session)) : [],
+    };
+  }, [visible, groupList, aside?.isAside]);
+  //: 这里开的一条都没有(「来自别处」那摞不算):空态照说
+  const mainCount = aside ? sessions.filter((session) => !aside.isAside(session)).length : sessions.length;
+  const asideShown = asideOpen || Boolean(keyword);
+  //: 开着的那条在「来自别处」里(从任务中心、智能体的 open_view、「回到」带过来的):展开,看得见它在哪一行;之后照样能合上
+  const activeInAside = Boolean(activeSessionId) && byGroup.aside.some((session) => session.id === activeSessionId);
+  React.useEffect(() => {
+    if (activeInAside) setAsideOpen(true);
+  }, [activeInAside, activeSessionId]);
 
   // 未分组那一摞的容器键。用一个不可能撞上 id 的常量,免得和真实分组 id 混在一起。
   const UNGROUPED = "__ungrouped__";
@@ -445,11 +468,11 @@ export function SessionList<S extends ListedSession>({
       <div
         className={cn(
           "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5",
-          loaded && ((sessions.length === 0 && groupList.length === 0) || (Boolean(keyword) && visible.length === 0)) &&
+          loaded && ((mainCount === 0 && groupList.length === 0 && byGroup.aside.length === 0) || (Boolean(keyword) && visible.length === 0)) &&
             "content-center justify-items-center",
         )}
       >
-        {loaded && sessions.length === 0 && groupList.length === 0 && (
+        {loaded && mainCount === 0 && groupList.length === 0 && !keyword && (
           <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={emptyTitle ?? t(spec.empty)} />
         )}
         {keyword && visible.length === 0 && (
@@ -506,7 +529,7 @@ export function SessionList<S extends ListedSession>({
         })}
         {/* 「未分组」这个小标题只在**真有分组**时才出现 —— 一个分组都没建过的人不该被告知
             他的对话"未分组"。 */}
-        {groupList.length > 0 && byGroup.loose.length > 0 && (
+        {groupList.length > 0 && byGroup.main.length > 0 && (
           // separator 变体 = 左右两条细线夹住中间那几个字。它本来就是 Marker 的
           //「带标签的分隔线」那一档 —— 这一段不是标题,是"下面这些没归到任何分组"的分界。
           <Marker variant="separator" className="px-1.5 pt-1">
@@ -515,7 +538,26 @@ export function SessionList<S extends ListedSession>({
             </MarkerContent>
           </Marker>
         )}
-        {byGroup.loose.map(renderSession)}
+        {byGroup.main.map(renderSession)}
+        {aside && byGroup.aside.length > 0 && (
+          <div className="grid gap-1 pt-1" data-session-aside="">
+            <button
+              type="button"
+              aria-expanded={asideShown}
+              className="flex w-full cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-ui-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-muted"
+              onClick={() => setAsideOpen(!asideOpen)}
+            >
+              <ChevronRight
+                size={11}
+                className={cn("shrink-0 transition-transform duration-[120ms]", asideShown && "rotate-90")}
+                aria-hidden
+              />
+              <Truncate className="flex-1">{aside.title}</Truncate>
+              <span className="shrink-0 tabular-nums">{byGroup.aside.length}</span>
+            </button>
+            {asideShown && byGroup.aside.map(renderSession)}
+          </div>
+        )}
       </div>
       {/* 拖起来时跟手的那一片 —— 没有它,拖动中的行只是原地变淡,看不出自己在拖什么。 */}
       <DragOverlay dropAnimation={null}>

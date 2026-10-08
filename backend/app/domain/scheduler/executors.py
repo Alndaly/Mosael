@@ -62,6 +62,7 @@ def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: 
 def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import parse_source_assets
+    from app.domain.generation.origins import SCHEDULE, Origin
     from app.domain.generation.runner import start_generation_thread
 
     payload: dict[str, Any] = task.payload or {}
@@ -83,6 +84,8 @@ def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job
         source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
         #: 挂任务的人在建任务时声明过的数字人授权(见 create_generation_job)。
         digital_human_consent=payload.get("digital_human_consent") is True,
+        #: 这个定时任务每次跑出来的都进同一条会话(ADR 0052)
+        origin=Origin(SCHEDULE, task.id),
     )
     if _delegate(db, run, job, delegated.id, f"Dispatched generation {generation.id}"):
         # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起。

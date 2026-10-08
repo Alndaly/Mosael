@@ -1046,7 +1046,11 @@ def form_usages(db: Session, user: User, instance: PluginInstance, *, workspace_
         sessions = db.scalars(select(GenerationSession).where(
             GenerationSession.workspace_id == workspace_id, GenerationSession.provider_profile_id == profile_id,
             GenerationSession.model == model).order_by(GenerationSession.updated_at.desc()))
-        uses += [{"kind": "session", "id": session.id, "name": session.title, "count": 1} for session in sessions]
+        from app.domain.generation.origins import describe_origins
+
+        #: 别处开的会话标题空着(ADR 0052):叫它那一处现在的名字
+        uses += [{"kind": "session", "id": session.id, "name": session.title or session.origin_name, "count": 1}
+                 for session in describe_origins(db, user, sessions)]
     for task in db.scalars(select(ScheduledTask).where(ScheduledTask.workspace_id == workspace_id).order_by(ScheduledTask.name)):
         if any(needle in json.dumps(task.payload, ensure_ascii=False) for needle in needles):
             count = _count_uses(task.payload, profile_id, model, node_type, instance.id)
@@ -1141,6 +1145,7 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
     """工作台的「运行」(ADR 0038 §6):跑画布上现在这张(含没存的改动)。建一个**普通的生成任务** —— 模型是这张工作流
     (`path`,得已经是这个连接下的生成模型:新建的要先在 ComfyUI 里存一次),图放在任务的载荷里(不进生成参数),插件
     提交它、`client_id` 用前端的那个、按历史轮询跟到完成。取消、重启后接着等、用量、素材入库都是生成任务已有的那一套。"""
+    from app.domain.generation.origins import COMFYUI, Origin
     from app.domain.generation.use_cases import generate
 
     _require(db, instance)
@@ -1158,9 +1163,10 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
         if row is None and _forms_await_upgrade(db, instance, path):
             raise WorkflowLibraryError("workflowLibErr_runFormsOld", path=path)
         raise WorkflowLibraryError("workflowLibErr_runNotModel", path=path)
+    #: 这台连接上这张工作流的那条会话(ADR 0052,D44):和 0044 的 ComfyUI 地方同一种 id。工作流改了名不跟着走 —— 出处是开的那一刻
     return generate(db, user, workspace_id, session_id=None, project_id=project_id, provider=profile.vendor, model=path,
                     kind=kinds[0], prompt="", negative_prompt="", parameters={}, source_assets=[],
-                    provider_profile_id=profile.id, workbench_graph=graph)
+                    provider_profile_id=profile.id, workbench_graph=graph, origin=Origin(COMFYUI, f"{instance.id}/{path}"))
 
 
 def _forms_await_upgrade(db: Session, instance: PluginInstance, path: str) -> bool:

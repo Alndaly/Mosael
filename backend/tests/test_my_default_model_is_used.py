@@ -17,6 +17,7 @@ Kimi**,而不是显示错了。
 
 from __future__ import annotations
 
+from app.domain.generation.origins import STUDIO_ORIGIN
 from app.core.db import SessionLocal
 from app.db.models import User
 from app.domain.providers import defaults as provider_defaults
@@ -118,7 +119,7 @@ class Test生成不点名模型时用我的默认:
         from app.domain.generation import create_generation_job
 
         return create_generation_job(
-            db, workspace_id=workspace_id, session_id=None, project_id=None, created_by=user_id,
+            db, origin=STUDIO_ORIGIN, workspace_id=workspace_id, session_id=None, project_id=None, created_by=user_id,
             provider="", model="", kind="image", prompt="p", negative_prompt="", parameters={}, source_assets=[],
         )
 
