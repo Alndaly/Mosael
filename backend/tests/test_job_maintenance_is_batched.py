@@ -93,7 +93,8 @@ def test_clearing_finished_jobs_reads_no_job_objects_and_commits_per_batch(monke
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     done = [_job(ws, status="succeeded", events=2) for _ in range(5)]
-    parent = _job(ws, status="succeeded", events=1, kind="workflow")
+    # 父任务用配音(收纳子任务的那种);工作流运行是工作流页的执行历史,「清空已结束」留着它(UM-01)
+    parent = _job(ws, status="succeeded", events=1, kind="subtitle_dub")
     child = _job(ws, status="failed", events=1, parent=parent)
     running = _job(ws, status="running", events=1)
     monkeypatch.setattr(job_center, "DELETE_JOBS_BATCH", 2)

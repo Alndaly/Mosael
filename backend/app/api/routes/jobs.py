@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.job_center import use_cases as job_center
-from app.api.schemas import JobKindCatalogOut, JobOut, TaskEventOut
+from app.api.schemas import ClearFinishedPreviewOut, JobKindCatalogOut, JobOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
 from app.db.models import Job, TaskEvent
 from app.domain import job_catalog
@@ -44,6 +44,12 @@ def list_job_kinds(user: CurrentUser) -> dict:
         "kinds": [_kind_out(entry, entry.label_key, locale) for entry in job_catalog.JOB_KINDS.values()],
         "fallback": _kind_out(job_catalog.FALLBACK, job_catalog.FALLBACK_LABEL_KEY, locale),
     }
+
+
+@router.get("/jobs/finished/preview", response_model=ClearFinishedPreviewOut)
+def preview_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数。"""
+    return job_center.preview_clear_finished(db, user, workspace_id)
 
 
 @router.delete("/jobs/finished")

@@ -27,6 +27,19 @@ class JobKindCatalogOut(ApiModel):
     fallback: JobKindOut
 
 
+class ClearFinishedPreviewOut(ApiModel):
+    """「清空已结束」删之前给人看的那几个数(见 domain/job_center.preview_clear_finished)。"""
+
+    #: 会删掉几条(面板上的顶层任务)。
+    tasks: int
+    #: 连同收纳的子任务一共几个任务。
+    jobs: int
+    #: 这几条里有几条是工作区里别的成员发起的。
+    by_others: int
+    #: 已结束却留下的几条:工作流的运行记录、记过用量的任务。
+    kept: int
+
+
 class TaskEventOut(OrmModel):
     id: str
     job_id: str

@@ -38,6 +38,8 @@ vi.mock("@/api/client", () => ({
   api: h.apiMock,
   fetchJobKinds: async () => CATALOG,
   getJob: vi.fn(),
+  previewClearFinished: vi.fn(),
+  clearFinishedJobs: vi.fn(),
   topLevelJobsQuery: (workspaceId: string) => ({
     queryKey: ["jobs", workspaceId, "top-level"],
     queryFn: () => h.apiMock(`/api/jobs?workspace_id=${workspaceId}&top_level=true`),

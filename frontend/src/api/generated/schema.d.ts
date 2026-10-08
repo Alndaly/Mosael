@@ -3209,6 +3209,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/finished/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Finished Jobs
+         * @description 「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数。
+         */
+        get: operations["preview_finished_jobs_api_jobs_finished_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/jobs/finished": {
         parameters: {
             query?: never;
@@ -10971,6 +10991,20 @@ export interface components {
             kind: string;
             /** Label */
             label: string;
+        };
+        /**
+         * ClearFinishedPreviewOut
+         * @description 「清空已结束」删之前给人看的那几个数(见 domain/job_center.preview_clear_finished)。
+         */
+        ClearFinishedPreviewOut: {
+            /** Tasks */
+            tasks: number;
+            /** Jobs */
+            jobs: number;
+            /** By Others */
+            by_others: number;
+            /** Kept */
+            kept: number;
         };
         /**
          * ClipAudioRequest
@@ -25612,6 +25646,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobKindCatalogOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_finished_jobs_api_jobs_finished_preview_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearFinishedPreviewOut"];
                 };
             };
             /** @description Validation Error */

@@ -9499,6 +9499,49 @@
         }
       }
     },
+    "/api/jobs/finished/preview": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Preview Finished Jobs",
+        "description": "「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数。",
+        "operationId": "preview_finished_jobs_api_jobs_finished_preview_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearFinishedPreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/finished": {
       "delete": {
         "tags": [
@@ -31122,6 +31165,35 @@
         ],
         "title": "CapabilityUseOut",
         "description": "一项宿主能力用在哪(ADR 0032 §4),从能力表现算。"
+      },
+      "ClearFinishedPreviewOut": {
+        "properties": {
+          "tasks": {
+            "type": "integer",
+            "title": "Tasks"
+          },
+          "jobs": {
+            "type": "integer",
+            "title": "Jobs"
+          },
+          "by_others": {
+            "type": "integer",
+            "title": "By Others"
+          },
+          "kept": {
+            "type": "integer",
+            "title": "Kept"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tasks",
+          "jobs",
+          "by_others",
+          "kept"
+        ],
+        "title": "ClearFinishedPreviewOut",
+        "description": "「清空已结束」删之前给人看的那几个数(见 domain/job_center.preview_clear_finished)。"
       },
       "ClipAudioRequest": {
         "properties": {

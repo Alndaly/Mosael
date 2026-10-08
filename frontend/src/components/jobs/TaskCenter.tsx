@@ -4,7 +4,10 @@ import { Activity, Ban, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, 
 
 import { toast } from "sonner";
 
-import { api, getJob, topLevelJobsQuery, type Job } from "@/api/client";
+import { api, clearFinishedJobs, getJob, previewClearFinished, topLevelJobsQuery, type ClearFinishedPreview, type Job } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
+import { ConfirmDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
@@ -56,9 +59,23 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       (query.state.data ?? []).some((job) => ACTIVE.has(job.status)) ? 1500 : 8000,
     refetchOnWindowFocus: true,
   });
+  //: 「清空已结束」是**物理删除**,删的是整个工作区所有人的已结束任务:先开确认框,框里写的数来自后端那份
+  //: 删除计划(会删几条、几条是别人的、留下几条),确认才删。此前一点就删,连工作流的执行历史一起没了。
+  const [confirmingClear, setConfirmingClear] = React.useState(false);
+  const clearPreview = useQuery({
+    queryKey: ["jobs", workspaceId, "clear-finished-preview"],
+    queryFn: () => previewClearFinished(workspaceId),
+    enabled: confirmingClear,
+    staleTime: 0,
+    gcTime: 0,
+  });
   const clearFinished = useMutation({
-    mutationFn: () => api(`/api/jobs/finished?workspace_id=${workspaceId}`, { method: "DELETE" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: jobsQuery.queryKey }),
+    mutationFn: () => clearFinishedJobs(workspaceId),
+    onSuccess: ({ removed }) => {
+      setConfirmingClear(false);
+      toast.success(t("clearEndedDone").replace("{n}", String(removed)));
+      void qc.invalidateQueries({ queryKey: jobsQuery.queryKey });
+    },
   });
   const cancelJob = useMutation({
     mutationFn: (jobId: string) => api(`/api/jobs/${jobId}/cancel`, { method: "POST" }),
@@ -194,7 +211,10 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
               className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive"
               disabled={clearFinished.isPending}
               aria-busy={clearFinished.isPending || undefined}
-              onClick={() => clearFinished.mutate()}
+              onClick={() => {
+                setOpen(false);
+                setConfirmingClear(true);
+              }}
             >
               {clearFinished.isPending ? <Loader2 size={11} className="animate-mosael-spin" /> : <Trash2 size={11} />} {t("clearEnded")}
             </button>
@@ -230,7 +250,33 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
         onClose={() => setDetailJob(null)}
         onGoto={detailJob && jobPage(detailJob, kindOf(detailJob.kind)) ? () => gotoDetailPage(detailJob) : undefined}
       />
+      <ConfirmDialog
+        open={confirmingClear}
+        title={t("clearEndedTitle")}
+        body={clearEndedBody(t, clearPreview)}
+        pending={clearFinished.isPending}
+        confirmDisabled={!clearPreview.data || clearPreview.data.tasks === 0}
+        confirmLabel={clearPreview.data?.tasks ? t("clearEndedConfirm").replace("{n}", String(clearPreview.data.tasks)) : undefined}
+        onCancel={() => setConfirmingClear(false)}
+        onConfirm={() => clearFinished.mutate()}
+      />
     </Popover>
+  );
+}
+
+/** 确认框里那段话:还在数、数不出来、没有可删的,或者「会删几条、几条是别人的、留下几条」。 */
+function clearEndedBody(
+  t: (key: MessageKey) => string,
+  preview: { data?: ClearFinishedPreview; isError: boolean; error: unknown },
+): string {
+  if (preview.isError) return errorText(preview.error);
+  const plan = preview.data;
+  if (!plan) return t("clearEndedCounting");
+  const kept = plan.kept > 0 ? ` ${t("clearEndedKept").replace("{n}", String(plan.kept))}` : "";
+  if (plan.tasks === 0) return `${t("clearEndedNothing")}${kept}`;
+  const others = plan.by_others > 0 ? ` ${t("clearEndedByOthers").replace("{n}", String(plan.by_others))}` : "";
+  return (
+    t("clearEndedBody").replace("{tasks}", String(plan.tasks)).replace("{jobs}", String(plan.jobs)) + others + kept
   );
 }
 

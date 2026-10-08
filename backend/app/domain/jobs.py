@@ -1237,9 +1237,57 @@ def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
     return sum(delete_task_events(db, ids[start:start + PRUNE_BATCH]) for start in range(0, len(ids), PRUNE_BATCH))
 
 
-def finished_job_trees(db: Session, workspace_id: str, *, removable: Any = None) -> list[str]:
-    """任务中心的「清空已结束」该删哪些任务:面板上列着的那些已结束任务,**连同它们收纳的子任务**。只读,返回 id ——
-    一棵树的 id 挨在一起(删由 `delete_jobs` 分批做,见 job_center.clear_finished)。
+@dataclass(frozen=True)
+class FinishedJobRow:
+    """建「清空已结束」那份计划时读的几列 —— 不把任务读成 ORM 对象(见 `plan_clear_finished`)。"""
+
+    id: str
+    parent_job_id: str | None
+    status: str
+    created_by: str | None
+
+
+@dataclass(frozen=True)
+class FinishedJobsPlan:
+    """「清空已结束」这一下会删什么、留什么(删之前先给人看,见 `plan_clear_finished`)。"""
+
+    #: 要删的树:每棵是一个已结束的顶层任务连同它收纳的子任务;一棵树的行挨在一起,删由 `delete_jobs` 分批做。
+    trees: list[list[FinishedJobRow]]
+    #: 已结束、他也动得了,却**留下**的树 —— 它们是别处的记录(见 `_kept_job_ids`)。
+    kept: int
+
+    def ids(self) -> list[str]:
+        return [node.id for nodes in self.trees for node in nodes]
+
+
+def _kept_job_ids(db: Session, workspace_id: str) -> set[str]:
+    """已结束了也不归「清空已结束」删的任务:它们是别处的记录,不只是任务中心面板上的一行。
+
+    - 工作流运行(`kind == "workflow"`):工作流页的「执行历史」就是这些行;
+    - 留着运行产出全文的任务(`workflow_run_outputs`,别种任务跑图时也会留,见 workflows/authority):
+      产出跟着任务级联,删了任务,能复制 / 下载的模型回复一起没了;
+    - 记过用量的任务:「谁在花钱」顺着用量事件的 `job_id` 找到是谁花的(见 dashboard),删了任务
+      这笔钱就再也归不到人头上。
+
+    这是止血:「清空」到底该是物理删除还是「从我的面板拿掉」、用量事件要不要自己记下是谁花的,还待 ADR 定。
+    """
+    from app.db.models import ProviderUsageEvent, WorkflowRunOutput
+
+    in_workspace = select(Job.id).where(Job.workspace_id == workspace_id)
+    kept = set(db.scalars(in_workspace.where(Job.kind == "workflow")))
+    kept |= set(db.scalars(
+        select(WorkflowRunOutput.job_id).where(WorkflowRunOutput.job_id.in_(in_workspace)).distinct()
+    ))
+    kept |= set(db.scalars(
+        select(ProviderUsageEvent.job_id)
+        .where(ProviderUsageEvent.job_id.is_not(None), ProviderUsageEvent.job_id.in_(in_workspace))
+        .distinct()
+    ))
+    return kept
+
+
+def plan_clear_finished(db: Session, workspace_id: str, *, removable: Any = None) -> FinishedJobsPlan:
+    """任务中心的「清空已结束」会删掉哪些:面板上列着的那些已结束任务,**连同它们收纳的子任务**。只读。
 
     面板只列顶层任务(子任务收在父任务的详情里,见 routes/jobs 的 `top_level`),所以清的单位是**一棵树**:
     顶层任务结束了、而且它底下每一个子任务也都结束了,整棵一起删。此前是「这个工作区里所有已结束的行」,
@@ -1252,41 +1300,52 @@ def finished_job_trees(db: Session, workspace_id: str, *, removable: Any = None)
 
     `removable`:清的人能动哪些行(`jobs` 表上的 SQL 条件,见 generation/sessions.jobs_writable_filter)。
     一棵树里只要有一行他动不了(别人私有会话里的生成),整棵留着 —— 和取消任务同一道闸。
+
+    树里只要有一行是别处的记录(工作流运行、记过用量的,见 `_kept_job_ids`),整棵也留着,数进 `kept`。
+    预览(job_center.preview_clear_finished)和真删(job_center.clear_finished)读的是同一份计划。
     """
-    #: 只读建树要的三列,不把任务读成 ORM 对象:一个用了几个月的工作区有上万个任务,整行(连 payload、result)读进来
+    #: 只读建树要的几列,不把任务读成 ORM 对象:一个用了几个月的工作区有上万个任务,整行(连 payload、result)读进来
     #: 再逐个 `db.delete`,ORM 每删一个都把身份映射过一遍 —— 1.2 万个任务点一次要 41 秒,全程攥着写锁。
-    rows = db.execute(
-        select(Job.id, Job.parent_job_id, Job.status).where(Job.workspace_id == workspace_id)
-    ).all()
+    rows = [
+        FinishedJobRow(row.id, row.parent_job_id, row.status, row.created_by)
+        for row in db.execute(
+            select(Job.id, Job.parent_job_id, Job.status, Job.created_by).where(Job.workspace_id == workspace_id)
+        ).all()
+    ]
     allowed = (
         None if removable is None
         else set(db.scalars(select(Job.id).where(Job.workspace_id == workspace_id, removable)))
     )
-    status_of = {row.id: row.status for row in rows}
-    children: dict[str, list[str]] = {}
+    kept_ids = _kept_job_ids(db, workspace_id)
+    present = {row.id for row in rows}
+    children: dict[str, list[FinishedJobRow]] = {}
     for row in rows:
         if row.parent_job_id:
-            children.setdefault(row.parent_job_id, []).append(row.id)
+            children.setdefault(row.parent_job_id, []).append(row)
 
-    def tree(root: str) -> list[str]:
+    def tree(root: FinishedJobRow) -> list[FinishedJobRow]:
         nodes, frontier = [root], [root]
         while frontier:
-            kids = children.get(frontier.pop(), [])
+            kids = children.get(frontier.pop().id, [])
             nodes.extend(kids)
             frontier.extend(kids)
         return nodes
 
-    doomed: list[str] = []
-    for row in rows:
-        if row.parent_job_id in status_of:
+    trees: list[list[FinishedJobRow]] = []
+    kept = 0
+    for root in rows:
+        if root.parent_job_id in present:
             continue
-        nodes = tree(row.id)
-        if any(status_of[node] not in TERMINAL_STATUSES for node in nodes):
+        nodes = tree(root)
+        if any(node.status not in TERMINAL_STATUSES for node in nodes):
             continue
-        if allowed is not None and any(node not in allowed for node in nodes):
+        if allowed is not None and any(node.id not in allowed for node in nodes):
             continue
-        doomed.extend(nodes)
-    return doomed
+        if any(node.id in kept_ids for node in nodes):
+            kept += 1
+            continue
+        trees.append(nodes)
+    return FinishedJobsPlan(trees=trees, kept=kept)
 
 
 #: 「清空已结束」一批删多少个任务。删的时候攥着写锁(连带它们的事件、外键上的置空),一批要短。

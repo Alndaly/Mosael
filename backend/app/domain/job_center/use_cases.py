@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Job, User
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter, jobs_writable_filter
 from app.core.unit_of_work import unit_of_work
-from app.domain.jobs import DELETE_JOBS_BATCH, cancel_job, delete_jobs, finished_job_trees
+from app.domain.jobs import DELETE_JOBS_BATCH, cancel_job, delete_jobs, plan_clear_finished
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 
 
@@ -71,9 +71,26 @@ def clear_finished(db: Session, user: User, workspace_id: str) -> int:
     `db` 只用来读和鉴权,删走自己的事务。
     """
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    doomed = finished_job_trees(db, workspace_id, removable=jobs_writable_filter(Job.id, user))
+    doomed = plan_clear_finished(db, workspace_id, removable=jobs_writable_filter(Job.id, user)).ids()
     removed = 0
     for start in range(0, len(doomed), DELETE_JOBS_BATCH):
         with unit_of_work() as batch:
             removed += delete_jobs(batch, doomed[start:start + DELETE_JOBS_BATCH])
     return removed
+
+
+def preview_clear_finished(db: Session, user: User, workspace_id: str) -> dict[str, int]:
+    """点「清空已结束」之前先给他看:会删几条(连同子任务几个)、其中几条是别人发起的、留下几条。
+
+    和 `clear_finished` 同一份计划、同一道闸 —— 看到的数和真删的数是同一个。
+    """
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    plan = plan_clear_finished(db, workspace_id, removable=jobs_writable_filter(Job.id, user))
+    return {
+        "tasks": len(plan.trees),
+        "jobs": sum(len(nodes) for nodes in plan.trees),
+        "by_others": sum(
+            1 for nodes in plan.trees if any(node.created_by not in (None, user.id) for node in nodes)
+        ),
+        "kept": plan.kept,
+    }

@@ -236,6 +236,7 @@ export function ConfirmDialog({
   body,
   pending,
   confirmLabel,
+  confirmDisabled = false,
   onCancel,
   onConfirm,
   children,
@@ -246,6 +247,8 @@ export function ConfirmDialog({
   pending: boolean;
   /** 确认键上写什么;不给就是「确认」。写成动作本身(「重置密钥」)比一个泛泛的确认更不容易点错。 */
   confirmLabel?: string;
+  /** 还不能确认:要确认的东西还在数、数不出来,或者数出来是零 —— 说明里写着为什么。 */
+  confirmDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
   /** 说明下面、按钮上面多摆的东西(要人顺带选一下的那几个勾)。 */
@@ -269,6 +272,7 @@ export function ConfirmDialog({
           <Button
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             loading={pending}
+            disabled={confirmDisabled}
             onClick={onConfirm}
           >
             {confirmLabel ?? t("confirm")}

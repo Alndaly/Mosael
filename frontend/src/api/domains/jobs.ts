@@ -38,6 +38,18 @@ export function listJobChildren(jobId: string): Promise<Job[]> {
   return api<Job[]>(`/api/jobs/${jobId}/children`);
 }
 
+export type ClearFinishedPreview = components["schemas"]["ClearFinishedPreviewOut"];
+
+/** 「清空已结束」会删几条、其中几条是别人的、留下几条 —— 确认框里写的就是这几个数,和真删的是同一份计划。 */
+export function previewClearFinished(workspaceId: string): Promise<ClearFinishedPreview> {
+  return api<ClearFinishedPreview>(`/api/jobs/finished/preview?workspace_id=${encodeURIComponent(workspaceId)}`);
+}
+
+/** 删掉那些已结束的任务(连同子任务和事件)。**不可恢复**,先给人看 `previewClearFinished`。 */
+export function clearFinishedJobs(workspaceId: string): Promise<{ removed: number }> {
+  return api<{ removed: number }>(`/api/jobs/finished?workspace_id=${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
+}
+
 export type JobKind = components["schemas"]["JobKindOut"];
 export type JobKindCatalog = components["schemas"]["JobKindCatalogOut"];
 
