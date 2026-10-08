@@ -2,7 +2,7 @@ import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout"
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
-import { useCanvasInputMode, canvasWheelProps } from "@/components/app/canvasInputMode";
+import { useCanvasInputMode, canvasWheelProps, CANVAS_POINTER_PROPS } from "@/components/app/canvasInputMode";
 import React from "react";
 import {
   Background,
@@ -966,6 +966,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         className={cn(!ready && "opacity-0", (commentMode || markerMode) && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}
         {...canvasWheelProps(inputMode)}
+        {...CANVAS_POINTER_PROPS}
         zoomOnPinch
         maxZoom={2.5}
         // 删除键由 useCanvasDeleteKey 判(见下):React Flow 自带的那一套把面板按钮、Portal 出去的

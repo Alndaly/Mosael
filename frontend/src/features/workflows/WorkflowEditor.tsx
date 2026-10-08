@@ -21,7 +21,7 @@ import {
 } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
-import { useCanvasInputMode, canvasWheelProps } from "@/components/app/canvasInputMode";
+import { useCanvasInputMode, canvasWheelProps, CANVAS_POINTER_PROPS } from "@/components/app/canvasInputMode";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { CANVAS_GLASS_SURFACE_CLASS, canvasDockedPanelEdges, canvasRightDockOcclusion } from "@/components/app/canvasPanelLayout";
 import { canvasInsets, centerCanvasViewport, fitCanvasViewport, visibleCanvasSize } from "@/components/app/fitCanvasViewport";
@@ -706,6 +706,7 @@ export function WorkflowEditor({
               selectInspectorNode(null);
             }}
             {...canvasWheelProps(inputMode)}
+            {...CANVAS_POINTER_PROPS}
             zoomOnPinch
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
             proOptions={{ hideAttribution: false }}

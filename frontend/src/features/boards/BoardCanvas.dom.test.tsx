@@ -908,3 +908,67 @@ describe("停止属于运行态的外壳", () => {
     expect(onStop).toHaveBeenCalledWith("i1");
   });
 });
+
+describe("双击空白处写一张便签", () => {
+  //: 画布是真的 React Flow:它默认的双击缩放挂在 d3-zoom 上,处理双击时 stopImmediatePropagation,
+  //: 画板自己的 onDoubleClick 收不到 —— 双击只是放大一倍(演示库、新画板上都复现过)。
+  //: 不比视口前后:挂上时那次适配在下一帧,机器忙的时候晚到,前后一比就成了偶发的红。直接看事件有没有被吞。
+  it("空画布上双击空白:落下一张便签;双击没被 d3-zoom 吞掉(往上冒得到 document)", async () => {
+    const view = mount({ items: [], edges: [], markers: [] });
+    //: 等画布挂好(onInit 交出实例之前双击落不了点)。
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    const pane = document.querySelector<HTMLElement>(".react-flow__pane");
+    expect(pane).not.toBeNull();
+    const reached = vi.fn();
+    document.addEventListener("dblclick", reached);
+    try {
+      act(() => void fireEvent.doubleClick(pane!, { clientX: 300, clientY: 200 }));
+    } finally {
+      document.removeEventListener("dblclick", reached);
+    }
+    expect(reached).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(view.latest().items).toEqual([expect.objectContaining({ kind: "note", color: "yellow" })]);
+  });
+
+  it("双击在格子上不算空白:不多出一张便签(格子自己的双击是改字)", async () => {
+    const view = mount({ items: [note("n1", "原来的")], edges: [], markers: [] });
+    const cell = document.querySelector<HTMLElement>('[data-id="n1"]');
+    act(() => void fireEvent.doubleClick(cell!, { clientX: 10, clientY: 10 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(view.latest().items.map((one) => one.id)).toEqual(["n1"]);
+  });
+});
+
+describe("Shift + 点击是加选(和时间线、3D 关键帧一致)", () => {
+  //: React Flow 靠 window 上的 keydown 记着多选键按没按住 —— 真按 Shift 时浏览器先发这一下。
+  function clickWith(id: string, key: "Shift" | "Control") {
+    const cell = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${id}"]`)!;
+    fireEvent.keyDown(window, { key, shiftKey: key === "Shift", ctrlKey: key === "Control" });
+    act(() => void fireEvent.click(cell, { shiftKey: key === "Shift", ctrlKey: key === "Control" }));
+    fireEvent.keyUp(window, { key });
+  }
+  const selected = () => [...document.querySelectorAll(".react-flow__node.selected")].map((one) => one.getAttribute("data-id")).sort();
+
+  it("点一格再 Shift + 点另一格:两格都选着;再 Shift + 点其中一格:把它移出", async () => {
+    mount({ items: [note("n1", "一"), { ...note("n2", "二"), x: 400 }], edges: [], markers: [] });
+    act(() => void fireEvent.click(document.querySelector<HTMLElement>('.react-flow__node[data-id="n1"]')!));
+    clickWith("n2", "Shift");
+    expect(selected()).toEqual(["n1", "n2"]);
+    clickWith("n1", "Shift");
+    expect(selected()).toEqual(["n2"]);
+  });
+
+  it("⌘ / Ctrl + 点击照旧加选", () => {
+    mount({ items: [note("n1", "一"), { ...note("n2", "二"), x: 400 }], edges: [], markers: [] });
+    act(() => void fireEvent.click(document.querySelector<HTMLElement>('.react-flow__node[data-id="n1"]')!));
+    clickWith("n2", "Control");
+    expect(selected()).toEqual(["n1", "n2"]);
+  });
+});

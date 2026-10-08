@@ -145,6 +145,34 @@ it("⌘/Ctrl 点击是往选区里加,不是换成只选这一个", async () => 
   expect(screen.getByText("wfCollapseToSubgraph")).toBeTruthy();
 });
 
+it("Shift 点击也是往选区里加(和画板、时间线、3D 关键帧同一条规则)", async () => {
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  fireEvent.click(nodeEl("llm-1"));
+  fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
+  fireEvent.click(nodeEl("template-1"), { shiftKey: true });
+  fireEvent.keyUp(window, { key: "Shift" });
+  await waitFor(() => {
+    expect(nodeEl("llm-1").className).toContain("selected");
+    expect(nodeEl("template-1").className).toContain("selected");
+  });
+});
+
+it("双击画布空白处不缩放(两块画布同一份指针设置;缩放走捏合、滚轮和工具条)", async () => {
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  //: React Flow 缺省的双击缩放挂在 d3-zoom 上,处理双击时 stopImmediatePropagation —— 看事件有没有被它吞掉。
+  //: (不比视口前后:挂上时那次适配在下一帧,机器忙的时候晚到,前后一比就成了偶发的红。)
+  const reached = vi.fn();
+  document.addEventListener("dblclick", reached);
+  try {
+    fireEvent.doubleClick(document.querySelector<HTMLElement>(".react-flow__pane")!, { clientX: 300, clientY: 200 });
+  } finally {
+    document.removeEventListener("dblclick", reached);
+  }
+  expect(reached).toHaveBeenCalledTimes(1);
+});
+
 it("复制粘贴一组节点:组内的 {{引用}} 跟着换成新节点,组外的不动", async () => {
   await renderEditor(CHAIN);
   await selectNodes(["llm-1", "template-1"]);
