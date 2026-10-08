@@ -63,6 +63,7 @@ import { LivePanels } from "@/features/browser-pool/LivePanels";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
 import { installEmbeddedFocus, pageAfterPointer } from "@/features/browser-pool/embeddedFocus";
 import { isImeKeystroke } from "@/lib/shortcuts";
+import { canReviveDesktopBackend, reviveDesktopBackend } from "@/lib/desktopBackend";
 import { MainStaleBadge } from "@/features/desktop/MainStaleBadge";
 import { MainStaleNotice } from "@/features/desktop/MainStaleNotice";
 import { BrowserDownloads } from "@/features/browser-pool/session-tools/BrowserDownloads";
@@ -371,13 +372,26 @@ function AuthGate() {
 function OfflineView() {
   const t = useI18n();
   const { retry } = useAuth();
+  //: 桌面版的后端连崩被认输时,先请主进程重拉它、等它就绪,再重试(见 lib/desktopBackend)。
+  const [reviving, setReviving] = React.useState(false);
+  const revive = () => {
+    if (!canReviveDesktopBackend()) {
+      retry();
+      return;
+    }
+    setReviving(true);
+    void reviveDesktopBackend().then(() => {
+      setReviving(false);
+      retry();
+    });
+  };
   return (
     <PreShellScreen>
       <div className="grid max-w-sm justify-items-center gap-3 px-6 text-center">
         <PlugZap size={28} className="text-muted-foreground/70" />
         <p className="m-0 text-ui-md font-semibold text-foreground">{t("offlineTitle")}</p>
         <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{t("offlineBody")}</p>
-        <Button onClick={() => void retry()} className="mt-1">
+        <Button onClick={revive} loading={reviving} className="mt-1">
           {t("retry")}
         </Button>
         <ServerPicker />

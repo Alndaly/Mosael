@@ -28,6 +28,8 @@ import {
 
 /** 轮询的节奏(ADR 0038 §3:大约 300ms)。 */
 export const POLL_MS = 300;
+/** 窗口收进托盘、最小化时:画布谁也看不见,只隔一会儿看一眼窗口回来没有,不去问画布。 */
+export const PAUSED_POLL_MS = 1_000;
 const POLL_BUDGET_MS = 2_000;
 //: 导出一张大图、刷新下拉要重新拉一遍节点定义:都可能要几秒
 const CALL_BUDGET_MS: Record<WorkbenchCall["op"], number> = {
@@ -74,6 +76,8 @@ export class WorkbenchSessions {
     private readonly deps: {
       driver: (partition: string) => Driver | null;
       visible: (partition: string) => boolean;
+      /** 窗口藏起来了(收进托盘、最小化):会话留着,先不轮询 —— 此前开着工作台关窗,之后几天里每秒三次往画布里跑脚本。 */
+      paused?: () => boolean;
       emit: WorkbenchEmit;
       schedule?: (callback: () => void, ms: number) => ReturnType<typeof setTimeout>;
     },
@@ -136,6 +140,14 @@ export class WorkbenchSessions {
       this.stop(partition);
       return;
     }
+    const later = (ms: number) => {
+      const next = () => void this.tick(partition, session);
+      session.timer = this.deps.schedule ? this.deps.schedule(next, ms) : setTimeout(next, ms);
+    };
+    if (this.deps.paused?.()) {
+      later(PAUSED_POLL_MS);
+      return;
+    }
     const driver = this.deps.driver(partition);
     if (driver) {
       const raw = await driver.evaluate<unknown>(workbenchPollScript(session.origin), POLL_BUDGET_MS).catch(() => null);
@@ -155,7 +167,6 @@ export class WorkbenchSessions {
       }
     }
     if (session.stopped) return;
-    const next = () => void this.tick(partition, session);
-    session.timer = this.deps.schedule ? this.deps.schedule(next, POLL_MS) : setTimeout(next, POLL_MS);
+    later(POLL_MS);
   }
 }

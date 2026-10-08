@@ -28,6 +28,7 @@ export {
   focusViewPage,
   hideFloat,
   republishViewState,
+  hostZoomChanged,
   releaseWorkbenchView,
   embeddedViewVisible,
   hidePublishView,

@@ -571,6 +571,7 @@ export function startPublishWorker(opts: {
   workbench = new WorkbenchSessions({
     driver: (partition) => views?.existingDriver(partition) ?? null,
     visible: (partition) => views?.visibleAccountId === partition,
+    paused: () => opts.window.isDestroyed() || !opts.window.isVisible() || opts.window.isMinimized(),
     emit: (partition, state) =>
       opts.onWorkbench?.({ connectionId: partition.slice(COMFY_PARTITION_PREFIX.length), state }),
   });
@@ -699,6 +700,11 @@ export function setComfyViewNavigation(opts: { partition: string; mode: ComfyNav
 /** 渲染层重新加载之后,把当前内嵌视图状态补播一次(见 AccountViewManager.republish)。 */
 export function republishViewState(): void {
   views?.republish();
+}
+
+/** 主窗口的页面缩放变了(「视图 → 放大 / 缩小」):视图按新的缩放重新摆(见 AccountViewManager.hostZoom)。 */
+export function hostZoomChanged(): void {
+  views?.hostZoomChanged();
 }
 
 /**

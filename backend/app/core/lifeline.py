@@ -54,12 +54,30 @@ def parent_alive(pid: int) -> bool:
     return process_alive(pid)
 
 
-def _shut_down() -> None:
-    logger.warning("the shell that started this backend is gone; shutting down")
+def _shut_down(reason: str = "the shell that started this backend is gone") -> None:
+    logger.warning("%s; shutting down", reason)
     # 走 uvicorn 自己的信号处理:lifespan 的收尾(停飞书连接、调度线程……)照常执行。
     signal.raise_signal(signal.SIGTERM)
     time.sleep(FORCE_EXIT_AFTER)
     os._exit(0)
+
+
+#: 收到「请收尾」之后等多久再开始:让那一次请求的回应先发出去。
+SHUTDOWN_DELAY = 0.2
+
+
+def shut_down_soon(reason: str) -> threading.Thread:
+    """壳请后端自己收尾退出(Windows 上壳发不了 SIGTERM:Node 的 kill 在那边就是强杀,收尾一步都不跑)。
+
+    和壳没了时同一条路(`_shut_down`):先回应,再走 uvicorn 的信号处理,到点还没退就直接退。"""
+
+    def run() -> None:
+        time.sleep(SHUTDOWN_DELAY)
+        _shut_down(reason)
+
+    thread = threading.Thread(target=run, daemon=True, name="shell-shutdown")
+    thread.start()
+    return thread
 
 
 def watch_parent(

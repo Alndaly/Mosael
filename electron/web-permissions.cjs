@@ -16,14 +16,29 @@
  * - **内嵌网页**(其余所有会话):只放全屏(看视频)和写剪贴板(网页上的「复制链接」)。读剪贴板、摄像头、麦克风、
  *   通知、定位、外部协议一律不给 —— 登录、发布、读页面都用不着它们;按 ⌘V 粘贴走的是 paste 事件,不要这个权限。
  *
+ * 另有几样**只和「登录态留不留得住」有关**、不碰隐私也不碰设备的,拒了反而坏事,两档都放(按 Electron 44 实际会问的
+ * 权限名逐个看过,见 web-permissions.test.ts 的 ELECTRON_44_PERMISSIONS):
+ * - `persistent-storage`:磁盘紧张时别清这个站的数据。拒了,发布账号、浏览器池档案的 Cookie / 本地存储可能被回收,
+ *   人得重新登录(维护者 main.log 里抖音创作者平台就在要它);Mosael 自己的登录令牌也在 localStorage 里。
+ * - `storage-access` / `top-level-storage-access`(只给内嵌那一档):嵌在别的站里的登录框(第三方 iframe)要它自己的
+ *   Cookie 时用的。Electron 本来就不拦第三方 Cookie,放行不多给什么;拒了,那种跨站登录框会当场说登录失败。
+ * 后台同步、唤醒锁、本地网络访问、字体列表这些和登录态无关的照旧拒 —— 本地网络访问尤其不给:那是公网网页去探本机
+ * 后端和局域网的口子。
+ *
  * 内嵌那一档靠 `app.on("session-created")` 装在**每一个**新会话上(分区是谁建的、什么时候建的都不用记);
  * 应用那一档在 ready 之后单独装到默认会话上,覆盖掉前面那一档。
  */
 
 /** 应用自己的页面能要的。 */
-const APP_PERMISSIONS = new Set(["media", "display-capture", "fullscreen", "clipboard-sanitized-write"]);
+const APP_PERMISSIONS = new Set(["media", "display-capture", "fullscreen", "clipboard-sanitized-write", "persistent-storage"]);
 /** 内嵌网页能要的。 */
-const EMBEDDED_PERMISSIONS = new Set(["fullscreen", "clipboard-sanitized-write"]);
+const EMBEDDED_PERMISSIONS = new Set([
+  "fullscreen",
+  "clipboard-sanitized-write",
+  "persistent-storage",
+  "storage-access",
+  "top-level-storage-access",
+]);
 /** 应用自己的页面能交给系统打开的外部协议(http(s) 不走这里)。 */
 const APP_EXTERNAL_SCHEMES = new Set(["mailto:"]);
 

@@ -314,6 +314,10 @@ export interface MosaelDesktopBridge {
     createBackup(token: string): Promise<{ status: "saved" | "cancelled"; path?: string }>;
     applyRestore(stageId: string): Promise<{ status: "restarting" }>;
   };
+  /** 内置后端。连崩被认输之后,「重试」经它请主进程真的重拉(正跑着就什么都不做);回的是重拉的结果。 */
+  backend?: {
+    retry(): Promise<{ status: "ready" | "reused" | "running" | "portTaken" | "exited" | "cancelled" | "timeout" }>;
+  };
   /** 开发时主进程过期(正式打包的应用里文件列表永远是空的)。 */
   devMain?: {
     status(): Promise<MainStaleStatus>;

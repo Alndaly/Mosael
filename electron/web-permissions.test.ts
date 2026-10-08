@@ -41,17 +41,26 @@ function ask(target: FakeSession, permission: string, details: Record<string, un
 const APP = "http://127.0.0.1:5173";
 const isAppUrl = (url: string) => url.startsWith(`${APP}/`);
 
-/** Electron 的权限名里网页可能要的那些(setPermissionRequestHandler 的文档列表)。 */
-const EVERY_PERMISSION = [
-  "clipboard-read", "clipboard-sanitized-write", "display-capture", "fullscreen", "geolocation", "idle-detection",
-  "media", "mediaKeySystem", "midi", "midiSysex", "notifications", "pointerLock", "keyboardLock", "openExternal",
-  "speaker-selection", "storage-access", "top-level-storage-access", "window-management", "fileSystem", "unknown",
+/**
+ * Electron 44 会交给权限处理器的权限名(从 Electron Framework 的权限名表里逐个抄下来的,外加 media / midi / openExternal /
+ * unknown)。新版本 Electron 多出来的名字默认就是拒绝;要放行得在这里和 web-permissions.cjs 一起想清楚。
+ */
+const ELECTRON_44_PERMISSIONS = [
+  "automatic-fullscreen", "background-fetch", "background-sync", "clipboard-read", "clipboard-sanitized-write",
+  "local-fonts", "hand-tracking", "idle-detection", "keyboardLock", "midiSysex", "notifications", "payment-handler",
+  "periodic-background-sync", "persistent-storage", "geolocation", "pointerLock", "mediaKeySystem", "screen-wake-lock",
+  "sensors", "storage-access", "system-wake-lock", "window-management", "display-capture", "top-level-storage-access",
+  "captured-surface-control", "web-printing", "speaker-selection", "web-app-installation", "local-network-access",
+  "local-network", "loopback-network", "geolocation-approximate", "deprecated-sync-clipboard-read", "fileSystem", "serial",
+  "media", "midi", "fullscreen", "openExternal", "unknown",
 ];
 
 describe("内嵌网页的权限:默认拒绝", () => {
-  it("只放全屏和写剪贴板,别的一律不给(读剪贴板、摄像头、麦克风、通知、定位、外部协议……)", () => {
-    const granted = EVERY_PERMISSION.filter((permission) => permissionAllowed({ trusted: false, permission }));
-    expect(granted.sort()).toEqual(["clipboard-sanitized-write", "fullscreen"]);
+  it("只放全屏、写剪贴板和几样只关乎登录态留不留得住的;读剪贴板、摄像头、麦克风、通知、定位、外部协议、本地网络一律不给", () => {
+    const granted = ELECTRON_44_PERMISSIONS.filter((permission) => permissionAllowed({ trusted: false, permission }));
+    expect(granted.sort()).toEqual(
+      ["clipboard-sanitized-write", "fullscreen", "persistent-storage", "storage-access", "top-level-storage-access"].sort(),
+    );
     expect(permissionAllowed({ trusted: false, permission: "openExternal", externalURL: "mailto:a@b.c" })).toBe(false);
   });
 
@@ -66,6 +75,26 @@ describe("内嵌网页的权限:默认拒绝", () => {
     expect(ask(target, "fullscreen", page)).toBe(true);
     expect(ask(target, "clipboard-sanitized-write", page)).toBe(true);
     expect(target.device!()).toBe(false);
+  });
+
+  it("磁盘紧张时别清这个站的数据(persistent-storage):放 —— 拒了,发布账号的登录态可能被回收(抖音创作者平台就在要它)", () => {
+    const target = fakeSession();
+    const log = vi.fn();
+    installPermissionPolicy(target, { isAppUrl: null, log });
+    const douyin = { requestingUrl: "https://creator.douyin.com/creator-micro/home", isMainFrame: true };
+    expect(ask(target, "persistent-storage", douyin)).toBe(true);
+    expect(target.check!(null, "persistent-storage", "https://creator.douyin.com", douyin)).toBe(true);
+    expect(log).not.toHaveBeenCalled();
+    // 嵌在别的站里的登录框要它自己的 Cookie:放。
+    expect(ask(target, "storage-access", { requestingUrl: "https://passport.example/login", isMainFrame: false })).toBe(true);
+  });
+
+  it("本地网络访问不给:那是公网网页去探本机后端、局域网的口子", () => {
+    const target = fakeSession();
+    installPermissionPolicy(target, { isAppUrl: null });
+    for (const permission of ["local-network-access", "local-network", "loopback-network"]) {
+      expect(ask(target, permission, { requestingUrl: "https://evil.example/", isMainFrame: true }), permission).toBe(false);
+    }
   });
 
   it("就算网页停在和应用同一个地址上也不算应用自己:内嵌那一档根本没有「应用来源」", () => {
@@ -86,8 +115,8 @@ describe("内嵌网页的权限:默认拒绝", () => {
 
 describe("应用自己的页面", () => {
   it("录音录像、录屏、全屏、写剪贴板 —— 界面里真用到的;通知、定位、读剪贴板照样不给", () => {
-    const granted = EVERY_PERMISSION.filter((permission) => permissionAllowed({ trusted: true, permission }));
-    expect(granted.sort()).toEqual(["clipboard-sanitized-write", "display-capture", "fullscreen", "media"]);
+    const granted = ELECTRON_44_PERMISSIONS.filter((permission) => permissionAllowed({ trusted: true, permission }));
+    expect(granted.sort()).toEqual(["clipboard-sanitized-write", "display-capture", "fullscreen", "media", "persistent-storage"]);
   });
 
   it("外部协议只放 mailto:", () => {

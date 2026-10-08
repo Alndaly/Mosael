@@ -8,6 +8,7 @@ const {
   nativeImage,
   net,
   safeStorage,
+  screen,
   session,
   shell,
   systemPreferences,
@@ -20,7 +21,10 @@ const { loginShellPath } = require("./login-shell-path.cjs");
 const { SEALED_NAME, shellToken, unlockMasterKey } = require("./master-key.cjs");
 const { createAppUrlCheck, createSenderCheck, guardNavigation } = require("./app-origin.cjs");
 const { installPermissionPolicy } = require("./web-permissions.cjs");
-const { createRestartPolicy, reusable } = require("./backend-lifecycle.cjs");
+const { createBackendSupervisor } = require("./backend-lifecycle.cjs");
+const { createStartupSplash, lastLogLine } = require("./startup-splash.cjs");
+const { createRendererRecovery } = require("./renderer-recovery.cjs");
+const { FILE_NAME: WINDOW_STATE_FILE, placeWindow, readSaved, rememberWindowBounds } = require("./window-bounds.cjs");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const {
@@ -238,7 +242,6 @@ function markSmokeStage(stage) {
   reportSmoke({});
 }
 
-let backend = null;
 let quitting = false;
 
 // 发布执行器(老版前身项目移植):esbuild 打成的单文件 bundle,缺失/损坏不挡应用启动,
@@ -274,7 +277,7 @@ try {
 // 这不只是为了协议唤起(Windows/Linux 上 mosael:// 与「用 Mosael 打开某文件」都是
 // 靠再启动一个进程、把 URL/路径放进 argv 传过来)。没有这把锁,双击两次图标就会有两个实例:
 // 两个发布 worker 抢同一批任务、两套内嵌浏览器争同一个登录分区(分区有单会话租约,后到的
-// 会被拒),而后端因为 ensureBackend 见端口健康就复用,反而看起来"没问题"——很难查。
+// 会被拒),而后端因为端口上已经有个健康的后端就复用,反而看起来"没问题"——很难查。
 //
 // 必须在 app ready 之前调用。
 if (!app.requestSingleInstanceLock()) {
@@ -358,21 +361,6 @@ async function probeBackend() {
   }
 }
 
-async function isHealthy() {
-  const body = await probeBackend();
-  return Boolean(body && body.status === "ok");
-}
-
-async function waitForBackend(timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await isHealthy()) return true;
-    if (backend && backend.exitCode !== null) return false;
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  return false;
-}
-
 /**
  * 封存的主密钥解不开时问人:重试 / (mac)打开钥匙串访问再试 / 退出。说清楚为什么不能「先凑合用着」——
  * 另生一把新钥匙,已存的凭据就再也解不开了。
@@ -406,18 +394,11 @@ async function openKeychainAccess() {
   }
 }
 
-async function ensureBackend() {
-  // 端口上已经有个健康的后端(开发时手动起的 uvicorn、上次没退干净的)→ 对得上才复用。
-  // 打包版要版本、数据目录都一致:上次壳被强杀留下的孤儿可能是旧版本、指着另一份数据。
-  const existing = await probeBackend();
-  if (existing) {
-    const verdict = reusable(existing, { version: app.getVersion(), dataDir: configuredDataDir, strict: !isDev });
-    if (verdict.ok) return true;
-    appendMainLog("backend-not-reusable", verdict.reason);
-    dialog.showErrorBox(t("backend_portTakenTitle"), t("backend_portTakenBody", { port: BACKEND_PORT, reason: verdict.reason }));
-    return false;
-  }
-
+/**
+ * 拉起后端进程(要不要拉、等它就绪、意外退出重拉都是 backendSupervisor 的事)。回 null = 不起了:人在主密钥那个框里选了退出,
+ * 这时已经在退出应用。
+ */
+async function spawnBackendProcess() {
   // 落盘加密的主密钥:系统钥匙串封存,经标准输入交给后端(见 master-key.cjs)。没有可用的钥匙串时后端照旧用数据目录里的
   // secret.key。封存过却解不开就停下来问人,人说退出就不起后端 —— 绝不让后端另生一把新钥匙。**只在打包版这么做**:
   // 开发时常有人对着同一个数据目录手动起 uvicorn,明文文件被收走的话,手动起的那个就起不来了。
@@ -433,7 +414,7 @@ async function ensureBackend() {
     });
     if (!resolved) {
       app.quit();
-      return false;
+      return null;
     }
     // 壳令牌:界面(file://,Origin 为 null)发往本机后端的请求都带上它,后端只放行带着它的 null 来源。
     installShellHeader(shellToken(resolved.key));
@@ -475,7 +456,7 @@ async function ensureBackend() {
   if (!isDev) {
     // 打包版从 Finder / Dock 启动时 PATH 是 launchd 的最小集,插件找不到 node / uvx(见 login-shell-path)。
     // 开发时是从终端起的,PATH 本来就对,不必多起一个 shell。
-    backendEnv.PATH = loginShellPath();
+    backendEnv.PATH = await shellPath();
     // 打包版:pi sidecar 随资源分发,用 Electron 二进制(当 node)拉起
     backendEnv.MOSAEL_PI_SIDECAR = path.join(process.resourcesPath, "agent-sidecar", "sidecar.cjs");
     backendEnv.MOSAEL_AGENT_BIN_NODE = process.execPath;
@@ -508,55 +489,94 @@ async function ensureBackend() {
     windowsHide: true,
   });
   if (masterKey && spawnedBackend.stdin) spawnedBackend.stdin.end(`${masterKey}\n`);
-  backend = spawnedBackend;
-  spawnedBackend.on("exit", (code, signal) => {
-    if (backend === spawnedBackend) backend = null;
-    // 退出、恢复备份时 quitting 已经置上;其余的退出都是意外(包括被 OOM 之类的信号杀掉,code 为 null)。
-    if (quitting) return;
-    appendMainLog("backend-exit", `code=${code} signal=${signal}`);
-    const delay = backendRestarts.next();
-    if (delay === null) {
-      dialog.showErrorBox(t("backend_stoppedTitle"), t("backend_stoppedBody", { code: code ?? signal }));
-      return;
-    }
-    setTimeout(() => {
-      if (quitting || backend) return;
-      ensureBackend()
-        .then((ok) => appendMainLog("backend-restarted", ok ? "healthy" : "did not become healthy"))
-        .catch((error) => appendMainLog("backend-restart-failed", error));
-    }, delay);
-  });
-  return waitForBackend(30000);
+  return spawnedBackend;
 }
 
-//: 后端意外退出后的退避重启(见 backend-lifecycle.cjs)。
-const backendRestarts = createRestartPolicy();
+/** 登录 shell 里的 PATH(见 login-shell-path.cjs):起一次 shell 要几百毫秒到几秒,只取一次、后端重启时接着用。 */
+let shellPathOnce = null;
+const shellPath = () => (shellPathOnce ??= loginShellPath());
 
-function stopBackend() {
-  if (backend && !backend.killed) {
-    backend.kill("SIGTERM");
-    backend = null;
-  }
-}
+/** 两处日志:壳和后端的输出(userData/logs:main.log、backend.log)、后端自己写的(数据目录的 logs)。 */
+const logPlaces = () => ({ logs: electronLogDir, dataLogs: path.join(configuredDataDir, "logs") });
 
-async function stopManagedBackendForRestore() {
-  const child = backend;
-  if (!child || child.exitCode !== null) {
-    throw new Error(t("restore_needsManagedBackend"));
-  }
-  await new Promise((resolve, reject) => {
-    let forceTimer;
-    const hardTimer = setTimeout(() => {
-      reject(new Error(t("restore_backendStopTimeout")));
-    }, 15_000);
-    child.once("exit", () => {
-      clearTimeout(forceTimer);
-      clearTimeout(hardTimer);
-      resolve();
+/**
+ * Windows 上退出时请后端自己收尾(见 backend-lifecycle 的 shutdown):Node 在那边的 kill 就是强杀。只认壳令牌 ——
+ * 开发时没有壳令牌,回 false,照旧强杀。
+ */
+async function requestBackendShutdown() {
+  if (!currentShellToken) return false;
+  try {
+    const res = await net.fetch(`${BACKEND_URL}/api/health/shutdown`, {
+      method: "POST",
+      headers: { "X-Mosael-Shell": currentShellToken },
+      signal: AbortSignal.timeout(2000),
     });
-    child.kill("SIGTERM");
-    forceTimer = setTimeout(() => child.kill("SIGKILL"), 8_000);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 连崩认输:说清楚、给「再试一次」。不用模态的 showErrorBox —— 那会把整个主进程卡在一个框上。 */
+async function askAfterBackendGaveUp(lastExit) {
+  const { response } = await dialog.showMessageBox({
+    type: "error",
+    title: t("backend_stoppedTitle"),
+    message: t("backend_stoppedTitle"),
+    detail: t("backend_stoppedBody", { code: String(lastExit ?? "?"), ...logPlaces() }),
+    buttons: [t("backend_retry"), t("menu_quitApp")],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
   });
+  if (response === 0) {
+    const result = await backendSupervisor.retry();
+    appendMainLog("backend-retry", result.status);
+    return;
+  }
+  app.quit();
+}
+
+//: 内置后端的一生:起、等就绪、意外退出退避重启、认输后再试、退出时收尾(规则见 backend-lifecycle.cjs)。
+const backendSupervisor = createBackendSupervisor({
+  probe: probeBackend,
+  spawn: spawnBackendProcess,
+  expected: { version: app.getVersion(), dataDir: configuredDataDir, strict: !isDev },
+  requestShutdown: requestBackendShutdown,
+  onGiveUp: (lastExit) => void askAfterBackendGaveUp(lastExit),
+  log: appendMainLog,
+});
+
+/**
+ * 启动时起后端。等得久了(首次打开、升级迁移)亮「正在启动」小窗,显示等了多久、后端日志的最后一句;人在小窗里点退出就退出。
+ * 冒烟里没人看着:不亮小窗,等够两分钟算没起来,结果文件里记一笔。
+ */
+async function startBackendOnLaunch() {
+  const SPLASH_AFTER_MS = 4_000;
+  const SLOW_AFTER_MS = 180_000;
+  const backendLog = path.join(electronLogDir, "backend.log");
+  const splash = createStartupSplash({
+    BrowserWindow,
+    strings: { title: t("startup_title"), body: t("startup_body"), quit: t("menu_quitApp"), lang: i18n.getLocale() },
+    onQuit: () => app.quit(),
+  });
+  try {
+    return await backendSupervisor.start({
+      initial: true,
+      deadlineMs: isSmokeTest ? 120_000 : undefined,
+      onWaiting: (elapsedMs) => {
+        if (isSmokeTest || quitting || elapsedMs < SPLASH_AFTER_MS) return;
+        splash.show();
+        splash.update({
+          elapsed: t("startup_elapsed", { seconds: Math.round(elapsedMs / 1000) }),
+          log: isDev ? "" : lastLogLine(backendLog),
+          ...(elapsedMs >= SLOW_AFTER_MS ? { body: t("startup_slowBody", logPlaces()) } : {}),
+        });
+      },
+    });
+  } finally {
+    splash.close();
+  }
 }
 
 // ---------------- 应用更新(检查-提示式) ----------------
@@ -607,6 +627,18 @@ function applyLocale(raw) {
   publish?.setLocale?.(locale);
   system?.setLocale?.(locale);
   return locale;
+}
+
+/**
+ * 缩放主窗口的界面:`"reset"` 回到 100%,数字是缩放级别的增减(和 Chromium 的 ⌘+ / ⌘- 一样每步 0.5 级)。
+ * 改完让内嵌视图按新的缩放重新摆。
+ */
+function zoomWindow(change) {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (!win || win.isDestroyed()) return;
+  const contents = win.webContents;
+  contents.setZoomLevel(change === "reset" ? 0 : contents.getZoomLevel() + change);
+  publish?.hostZoomChanged?.();
 }
 
 /** 应用菜单(按界面语言出标签 + 标准 role 行为/快捷键)。mac 是全局顶部菜单栏;
@@ -670,23 +702,28 @@ function buildAppMenu() {
           label: t("menu_reload"),
           accelerator: "CmdOrCtrl+R",
           click: () => {
-            if (publish?.embeddedViewVisible?.()) publish.viewReload();
-            else BrowserWindow.getFocusedWindow()?.webContents.reload();
+            const win = BrowserWindow.getFocusedWindow();
+            // 界面自己崩了的时候,内嵌网页亮着也先救界面(否则 Mosael 那一圈一直是死的)。
+            if (publish?.embeddedViewVisible?.() && !win?.webContents.isCrashed()) publish.viewReload();
+            else win?.webContents.reload();
           },
         },
         {
           label: t("menu_forceReload"),
           accelerator: "Shift+CmdOrCtrl+R",
           click: () => {
-            if (publish?.embeddedViewVisible?.()) publish.viewReload();
-            else BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache();
+            const win = BrowserWindow.getFocusedWindow();
+            if (publish?.embeddedViewVisible?.() && !win?.webContents.isCrashed()) publish.viewReload();
+            else win?.webContents.reloadIgnoringCache();
           },
         },
         { role: "toggleDevTools", label: t("menu_devTools") },
         { type: "separator" },
-        { role: "resetZoom", label: t("menu_resetZoom") },
-        { role: "zoomIn", label: t("menu_zoomIn") },
-        { role: "zoomOut", label: t("menu_zoomOut") },
+        // 不用 resetZoom / zoomIn / zoomOut 这几个 role:缩放的是 Mosael 的界面,而内嵌网页、工作台画布这些原生视图要跟着
+        // 重新摆(它们的位置按界面的 CSS 像素算,见 accountViews 的 hostZoom),role 改完缩放不告诉任何人。
+        { label: t("menu_resetZoom"), accelerator: "CmdOrCtrl+0", click: () => zoomWindow("reset") },
+        { label: t("menu_zoomIn"), accelerator: "CmdOrCtrl+Plus", click: () => zoomWindow(0.5) },
+        { label: t("menu_zoomOut"), accelerator: "CmdOrCtrl+-", click: () => zoomWindow(-0.5) },
         { type: "separator" },
         { role: "togglefullscreen", label: t("menu_fullscreen") },
       ],
@@ -705,6 +742,23 @@ function buildAppMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+/** 界面一载入就崩、连崩了几次:不再自己重来,问人要不要再载一次。 */
+async function askAfterRendererCrashes(win, details) {
+  if (win.isDestroyed()) return;
+  const { response } = await dialog.showMessageBox(win, {
+    type: "error",
+    title: t("renderer_crashedTitle"),
+    message: t("renderer_crashedTitle"),
+    detail: t("renderer_crashedBody", { reason: String(details.reason), ...logPlaces() }),
+    buttons: [t("renderer_reload"), t("menu_quitApp")],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+  if (response === 0 && !win.isDestroyed()) win.webContents.reload();
+  else if (response === 1) app.quit();
+}
+
 /** 把主窗口叫到前台:不在就建一个,最小化了就还原。托盘、Dock(activate)、第二次启动、深链都走这一个。 */
 function showWindow() {
   let win = BrowserWindow.getAllWindows()[0];
@@ -718,12 +772,22 @@ function showWindow() {
   win.focus();
 }
 
+let mainWindowCreated = false;
+
 function createWindow() {
+  mainWindowCreated = true;
   const isMac = process.platform === "darwin";
+  // 上次在哪、多大就照原样打开(对得上此刻的显示器才用,见 window-bounds.cjs)。
+  const windowStateFile = path.join(app.getPath("userData"), WINDOW_STATE_FILE);
+  const primary = screen.getPrimaryDisplay();
+  const placement = placeWindow(
+    readSaved(windowStateFile),
+    [primary, ...screen.getAllDisplays().filter((display) => display.id !== primary.id)],
+    { width: 1440, height: 900, minWidth: 980, minHeight: 640 },
+  );
   const win = new BrowserWindow({
     show: !isSmokeTest,
-    width: 1440,
-    height: 900,
+    ...placement.bounds,
     minWidth: 980,
     minHeight: 640,
     title: "Mosael",
@@ -743,6 +807,8 @@ function createWindow() {
       preload: path.join(__dirname, "preload.bundle.cjs"),
     },
   });
+  if (placement.maximized && !isSmokeTest) win.maximize();
+  rememberWindowBounds(win, windowStateFile);
   // 无边框自绘标题:菜单栏默认隐藏,Win/Linux 下按 Alt 唤起(快捷键始终有效)。
   win.setMenuBarVisibility(false);
   win.autoHideMenuBar = true;
@@ -778,7 +844,18 @@ function createWindow() {
   win.webContents.on("did-start-navigation", (details) => {
     if (details.isMainFrame && !details.isSameDocument) publish?.releaseWorkbenchView?.();
   });
-  win.webContents.on("render-process-gone", () => publish?.releaseWorkbenchView?.());
+  // 渲染进程崩了(内存撑爆、GPU 重置):不再留一块灰窗,自动重新载入;一分钟里连崩三次就停下来问人(见 renderer-recovery.cjs)。
+  const recover = createRendererRecovery({
+    reload: () => {
+      if (!win.isDestroyed()) win.webContents.reload();
+    },
+    giveUp: (details) => void askAfterRendererCrashes(win, details),
+    log: (line) => appendMainLog("renderer-recovery", line),
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    publish?.releaseWorkbenchView?.();
+    recover(details);
+  });
   // 外链(如供应商控制台"获取密钥")走系统浏览器,不在应用内开无控制的新窗口。
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
@@ -927,21 +1004,29 @@ function createWindow() {
 app.whenReady().then(async () => {
   // 应用自己的页面(主窗口、浮层视图)用默认会话:换成应用那一档权限(session-created 先给它装的是内嵌网页那一档)。
   installPermissionPolicy(session.defaultSession, { isAppUrl, log: (line) => appendMainLogOnce("permission", line) });
-  // 最先定语言:下面 ensureBackend 失败时弹的错误框就要用到它。getLocale 要等 ready。
+  // 最先定语言:下面起后端时的小窗、失败时弹的错误框就要用到它。getLocale 要等 ready。
   applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
   const platformAuthenticatorConfigured = require("./webauthn.cjs").configurePlatformAuthenticator();
   reportSmoke({ platformAuthenticatorConfigured });
-  const ready = await ensureBackend();
-  if (!ready) {
-    reportSmoke({ backendHealthy: false, rendererLoaded: false, error: "backend did not become healthy" });
+  const started = await startBackendOnLaunch();
+  if (started.status !== "ready" && started.status !== "reused") {
+    reportSmoke({ backendHealthy: false, rendererLoaded: false, error: `backend did not become healthy (${started.status})` });
     if (isSmokeTest) {
       app.exit(1);
       return;
     }
-    // 人在主密钥那个框里选了退出:已经在退了,不再补一个「启动失败」。
-    if (quitting) return;
-    dialog.showErrorBox(t("backend_startFailedTitle"), t("backend_startFailedBody", { port: BACKEND_PORT }));
+    // 人在主密钥那个框、或者「正在启动」小窗里选了退出:已经在退了,不再补一个「启动失败」。
+    if (quitting || started.status === "cancelled") return;
+    appendMainLog("backend-start-failed", JSON.stringify(started));
+    if (started.status === "portTaken") {
+      dialog.showErrorBox(t("backend_portTakenTitle"), t("backend_portTakenBody", { port: BACKEND_PORT, reason: started.reason }));
+    } else {
+      dialog.showErrorBox(
+        t("backend_startFailedTitle"),
+        t("backend_startFailedBody", { port: BACKEND_PORT, code: String(started.code ?? "?"), ...logPlaces() }),
+      );
+    }
     app.quit();
     return;
   }
@@ -1183,31 +1268,41 @@ app.whenReady().then(async () => {
   });
   handle(IPC.invoke.dataApplyRestore, async (_event, payload) => {
     const { stageId } = parseRestoreStage(payload);
-    quitting = true;
+    let stopped = false;
     try {
-      await stopManagedBackendForRestore();
+      stopped = await backendSupervisor.stopForRestore().catch(() => {
+        throw new Error(t("restore_backendStopTimeout"));
+      });
+      if (!stopped) throw new Error(t("restore_needsManagedBackend"));
       activateStagedRestore(configuredDataDir, stageId);
       appendMainLog("restore-activated", `stage=${stageId}`);
+      quitting = true;
       app.relaunch();
       setTimeout(() => app.exit(0), 100);
       return { status: "restarting" };
     } catch (error) {
-      quitting = false;
-      await ensureBackend().catch(() => false);
+      // 恢复没成:接着用原来的数据,把后端拉回来。
+      if (stopped) await backendSupervisor.resumeAfterFailedRestore().catch(() => undefined);
       throw error;
     }
   });
+  // 「暂时无法加载 · 重试」:后端连崩被认输了的话,这一下真的去重拉它(正跑着就什么都不做),等它就绪再回话。
+  handle(IPC.invoke.backendRetry, async () => ({ status: (await backendSupervisor.retry()).status }));
   if (app.isPackaged && !isSmokeTest) {
-    setTimeout(async () => {
+    // 启动 5 秒后查一次,之后每天查一次(常驻托盘的应用可能几周不重启)。同一个新版本只说一次。
+    let announced = "";
+    const checkAndAnnounce = async () => {
       try {
         const info = await checkForUpdates();
-        if (info.hasUpdate) {
-          for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.updateAvailable, info);
-        }
+        if (!info.hasUpdate || info.latest === announced) return;
+        announced = info.latest;
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.updateAvailable, info);
       } catch {
         /* 静默 */
       }
-    }, 5000);
+    };
+    setTimeout(checkAndAnnounce, 5000);
+    setInterval(checkAndAnnounce, 24 * 60 * 60 * 1000);
   }
 
   buildAppMenu();
@@ -1278,20 +1373,36 @@ app.whenReady().then(async () => {
 // 关窗不退:窗口只是隐藏(见 system/residency),托盘是应用还活着的可见入口。定时任务
 // 依赖后端进程活着,而后端是主进程 spawn 的子进程 —— 以前这里 app.quit() 等于「关窗就把
 // 定时任务一起关了」。系统能力没加载成功时退回老行为,否则应用会变成关不掉的幽灵进程。
+// 主窗口建出来之前关掉的只可能是「正在启动」小窗:那不是「窗口全关了」。
 app.on("window-all-closed", () => {
+  if (!mainWindowCreated) return;
   if (!system && process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
-  markSmokeStage("before-quit");
-  quitting = true;
-  systemHandle?.dispose();
-  stopBackend();
+let backendShutDown = false;
+app.on("before-quit", (event) => {
+  if (!quitting) {
+    markSmokeStage("before-quit");
+    quitting = true;
+    systemHandle?.dispose();
+  }
+  if (backendShutDown) return;
+  // Windows:先请后端自己收尾、等它退,再让壳退(壳一退,作业对象就把它强杀了)。见 backend-lifecycle 的 shutdown。
+  if (backendSupervisor.needsGracefulShutdown()) {
+    event.preventDefault();
+    void backendSupervisor.shutdown().finally(() => {
+      backendShutDown = true;
+      app.quit();
+    });
+    return;
+  }
+  backendShutDown = true;
+  void backendSupervisor.shutdown();
 });
 
 app.on("will-quit", () => {
   markSmokeStage("will-quit");
   staleWatcher?.close();
-  stopBackend();
+  backendSupervisor.killNow();
 });
-process.on("exit", stopBackend);
+process.on("exit", () => backendSupervisor.killNow());

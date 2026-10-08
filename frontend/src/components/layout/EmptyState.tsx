@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { errorText, splitErrorText } from "@/api/errorMessage";
+import { canReviveDesktopBackend, reviveDesktopBackend } from "@/lib/desktopBackend";
 
 /**
  * 「这里还没有东西」的统一说法。
@@ -112,13 +113,28 @@ export function PageLoadError({
   className?: string;
 }) {
   const t = useI18n();
+  //: 桌面版的后端连崩被认输时,「重试」先请主进程重拉它、等它就绪(见 lib/desktopBackend)。这段时间按钮转圈。
+  const [reviving, setReviving] = React.useState(false);
+  const retry = onRetry
+    ? () => {
+        if (!canReviveDesktopBackend()) {
+          onRetry();
+          return;
+        }
+        setReviving(true);
+        void reviveDesktopBackend().then(() => {
+          setReviving(false);
+          onRetry();
+        });
+      }
+    : undefined;
   //: 正文只说第一行那句人话;原文(errno、地址、对方回的正文)收进「详情」,要排查时展开看、能选中复制。
   const { summary, detail } = splitErrorText(errorText(error ?? ""));
   const buttons =
-    onRetry || actions ? (
+    retry || actions ? (
       <div className="flex flex-wrap justify-center gap-2">
-        {onRetry && (
-          <Button variant="secondary" loading={retrying} onClick={onRetry}>
+        {retry && (
+          <Button variant="secondary" loading={retrying || reviving} onClick={retry}>
             {t("retry")}
           </Button>
         )}

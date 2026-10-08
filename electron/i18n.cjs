@@ -76,9 +76,10 @@ const MESSAGES = {
   dialog_backupFile: { zh: "Mosael 备份", en: "Mosael backup" },
   backend_stoppedTitle: { zh: "Mosael 后端已停止", en: "Mosael backend stopped" },
   backend_stoppedBody: {
-    zh: "本地后端反复意外退出(最后一次退出码 {code}),自动重启没能恢复。请查看 ~/.mosael/logs 后重启 Mosael。",
-    en: "The local backend kept exiting unexpectedly (last code {code}) and automatic restarts did not recover it. Check ~/.mosael/logs and restart Mosael.",
+    zh: "本地后端反复意外退出(最后一次:{code}),自动重启没能恢复。可以再试一次;一直起不来的话,日志在 {logs} 和 {dataLogs}(设置 → 数据里能导出诊断包)。",
+    en: "The local backend kept exiting unexpectedly (last: {code}) and automatic restarts did not recover it. You can try again; if it keeps failing, the logs are in {logs} and {dataLogs} (Settings → Data can export a diagnostics package).",
   },
+  backend_retry: { zh: "再试一次", en: "Try Again" },
   backend_portTakenTitle: { zh: "端口被另一个后端占用", en: "Port taken by another backend" },
   backend_portTakenBody: {
     zh: "端口 {port} 上已经有一个后端在跑,但它不是这个版本、这份数据的({reason})。请先退出它(或结束残留的 mosael-backend 进程)再打开 Mosael。",
@@ -86,9 +87,25 @@ const MESSAGES = {
   },
   backend_startFailedTitle: { zh: "Mosael 后端启动失败", en: "Mosael backend failed to start" },
   backend_startFailedBody: {
-    zh: "本地后端没能在端口 {port} 上就绪。请确认端口未被占用;日志可在 ~/.mosael/logs 查看。",
-    en: "The local backend did not become healthy on port {port}. Check that the port is free and see logs in ~/.mosael/logs if available.",
+    zh: "本地后端没能在端口 {port} 上起来(进程退出了:{code})。日志在 {logs} 和 {dataLogs}。",
+    en: "The local backend could not start on port {port} (the process exited: {code}). The logs are in {logs} and {dataLogs}.",
   },
+  renderer_crashedTitle: { zh: "Mosael 的界面反复崩溃", en: "The Mosael window keeps crashing" },
+  renderer_crashedBody: {
+    zh: "界面一分钟里崩了好几次(最后一次:{reason}),已经不再自动重新载入。可以再载入一次;一直这样的话,日志在 {logs} 和 {dataLogs}。",
+    en: "The window crashed several times within a minute (last: {reason}) and is no longer reloaded automatically. You can reload it once more; if it keeps happening, the logs are in {logs} and {dataLogs}.",
+  },
+  renderer_reload: { zh: "重新载入", en: "Reload" },
+  startup_title: { zh: "Mosael 正在启动…", en: "Starting Mosael…" },
+  startup_body: {
+    zh: "首次打开、或者升级之后要整理数据时,可能要几分钟。",
+    en: "The first launch, or tidying up data after an update, can take a few minutes.",
+  },
+  startup_slowBody: {
+    zh: "还没好。可以接着等;想看它在做什么,日志在 {logs}。",
+    en: "Not ready yet. You can keep waiting; to see what it's doing, the logs are in {logs}.",
+  },
+  startup_elapsed: { zh: "已经等了 {seconds} 秒", en: "Waiting for {seconds} s" },
   masterKey_title: { zh: "Mosael 取不到加密钥匙", en: "Mosael can't unlock its encryption key" },
   masterKey_message: {
     zh: "存在系统钥匙串里的 Mosael 主密钥解不开。",

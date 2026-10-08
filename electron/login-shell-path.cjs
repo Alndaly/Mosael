@@ -11,8 +11,9 @@
  * - 用标记把输出包起来:rc 文件里打印东西的人很多,不能指望输出只有那一段。
  * - 有超时、失败就退回原样:拿不到更好的 PATH 不该让应用起不来。
  * - Windows 不需要:图形程序本来就继承完整的 PATH。
+ * - 异步:rc 文件慢的人,同步等这 5 秒就是主进程整个卡住(IPC、发布执行器、工作台轮询一起停)。调用方只取一次、记住。
  */
-const { execFileSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const path = require("node:path");
 
 const MARKER = "__MOSAEL_LOGIN_ENV__";
@@ -40,15 +41,37 @@ function pathFromEnvDump(output) {
   return line ? line.slice("PATH=".length).trim() : "";
 }
 
-function loginShellPath({ platform = process.platform, env = process.env, run = execFileSync } = {}) {
+/** 起 shell、收它的标准输出;超时就杀掉它、算失败。 */
+function runShell(shell, args, { env, timeout }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(shell, args, { env, stdio: ["ignore", "pipe", "ignore"] });
+    let output = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("ETIMEDOUT"));
+    }, timeout);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve(output);
+    });
+  });
+}
+
+async function loginShellPath({ platform = process.platform, env = process.env, run = runShell } = {}) {
   const current = env.PATH || "";
   if (platform === "win32") return current;
   const shell = env.SHELL || (platform === "darwin" ? "/bin/zsh" : "/bin/sh");
   try {
-    const output = run(shell, ["-ilc", `echo ${MARKER}; env; echo ${MARKER}`], {
-      encoding: "utf8",
+    const output = await run(shell, ["-ilc", `echo ${MARKER}; env; echo ${MARKER}`], {
       timeout: 5000,
-      stdio: ["ignore", "pipe", "ignore"],
       // oh-my-zsh 之类在交互 shell 里会去检查更新、弹提示 —— 别让它在这儿等。
       env: { ...env, DISABLE_AUTO_UPDATE: "true", ZSH_DISABLE_COMPFIX: "true" },
     });
@@ -60,4 +83,4 @@ function loginShellPath({ platform = process.platform, env = process.env, run = 
   }
 }
 
-module.exports = { loginShellPath, mergePaths, pathFromEnvDump, MARKER };
+module.exports = { loginShellPath, mergePaths, pathFromEnvDump, runShell, MARKER };

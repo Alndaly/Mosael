@@ -54,7 +54,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.views.visibleAccountId = null;
-  startPublishWorker({ window: {} as never });
+  // 主窗口:开着、看得见(工作台在窗口藏起来时会暂停轮询,见 comfyWorkbenchSessions 的 paused)。
+  startPublishWorker({ window: { isDestroyed: () => false, isVisible: () => true, isMinimized: () => false } as never });
 });
 afterEach(() => {
   stopPublishWorker();

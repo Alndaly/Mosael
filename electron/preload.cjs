@@ -50,6 +50,14 @@ ipcRenderer.on(IPC.event.publishView, (_event, state) => {
   lastViewState = state;
 });
 
+// 有新版本的消息同理:主进程启动 5 秒后查一次、之后每天查,而界面要到登录进去(AppShell 挂上)才订阅 —— 记住最新的一条,
+// 订阅时补发,不然启动时还停在登录页的那一次就丢了。
+/** @type {import("./preload-api").MosaelUpdateInfo | null} */
+let lastUpdate = null;
+ipcRenderer.on(IPC.event.updateAvailable, (_event, info) => {
+  lastUpdate = info;
+});
+
 // 通知点击 → 主进程要求打开任务中心。TaskCenter 监听的是 window 事件,这里做转发。
 ipcRenderer.on(IPC.event.openTasks, () => {
   window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
@@ -108,6 +116,10 @@ const desktopBridge = {
     createBackup: (token) => invoke(IPC.invoke.dataCreateBackup, { token }),
     applyRestore: (stageId) => invoke(IPC.invoke.dataApplyRestore, { stageId }),
   },
+  // 后端连崩被认输之后的「重试」(见 main.cjs 的 backend:retry)。
+  backend: {
+    retry: () => invoke(IPC.invoke.backendRetry),
+  },
   // 更新:checkUpdates 主动查(设置页按钮);onUpdateAvailable 订阅启动静默检查的结果。
   checkUpdates: () => invoke(IPC.invoke.checkUpdates),
   // 开发时主进程过期:哪几份产物变了、能不能重启;变了推一次;要求重启(见 main.cjs 的 restartMain)。
@@ -116,7 +128,10 @@ const desktopBridge = {
     onStale: (callback) => onEvent(IPC.event.mainStale, callback),
     restart: () => invoke(IPC.invoke.restartMain),
   },
-  onUpdateAvailable: (callback) => onEvent(IPC.event.updateAvailable, callback),
+  onUpdateAvailable: (callback) => {
+    if (lastUpdate) callback(lastUpdate);
+    return onEvent(IPC.event.updateAvailable, callback);
+  },
   // 全屏状态订阅:主进程在进入/退出全屏(及首帧)推送布尔值。订阅时立即补发缓存的当前值,
   // 避免渲染层挂载晚于首帧推送时"有时"漏掉全屏态。
   // 自定义 CSS(userData/custom.css)。read 取当前内容,onChange 订阅存盘后的推送 ——

@@ -6,9 +6,9 @@ const { loginShellPath, pathFromEnvDump, MARKER } = createRequire(import.meta.ur
 const LAUNCHD = "/usr/bin:/bin:/usr/sbin:/sbin";
 
 describe("打包版的 PATH 取自登录 shell", () => {
-  it("rc 文件打印了东西也取得准,且登录 shell 的在前、原有的一项不丢", () => {
-    const run = vi.fn(() => `Welcome back!\n${MARKER}\nHOME=/Users/u\nPATH=/opt/homebrew/bin:/usr/bin:/Users/u/.local/bin\nSHELL=/bin/zsh\n${MARKER}\nbye\n`);
-    const out = loginShellPath({ platform: "darwin", env: { PATH: LAUNCHD, SHELL: "/bin/zsh" }, run });
+  it("rc 文件打印了东西也取得准,且登录 shell 的在前、原有的一项不丢", async () => {
+    const run = vi.fn(async () => `Welcome back!\n${MARKER}\nHOME=/Users/u\nPATH=/opt/homebrew/bin:/usr/bin:/Users/u/.local/bin\nSHELL=/bin/zsh\n${MARKER}\nbye\n`);
+    const out = await loginShellPath({ platform: "darwin", env: { PATH: LAUNCHD, SHELL: "/bin/zsh" }, run });
     expect(out).toBe("/opt/homebrew/bin:/usr/bin:/Users/u/.local/bin:/bin:/usr/sbin:/sbin");
     // 起的是用户自己的 shell,登录 + 交互:rc 文件里那些 export 只有这样才会跑。
     expect(run.mock.calls[0][0]).toBe("/bin/zsh");
@@ -20,19 +20,28 @@ describe("打包版的 PATH 取自登录 shell", () => {
     expect(pathFromEnvDump(`${MARKER}\nPATH=/opt/homebrew/bin:/usr/bin\n${MARKER}`)).toBe("/opt/homebrew/bin:/usr/bin");
   });
 
-  it("shell 起不来或超时,退回原样 —— 拿不到更好的 PATH 不该让应用起不来", () => {
-    const run = vi.fn(() => { throw new Error("ETIMEDOUT"); });
-    expect(loginShellPath({ platform: "darwin", env: { PATH: LAUNCHD }, run })).toBe(LAUNCHD);
+  it("shell 起不来或超时,退回原样 —— 拿不到更好的 PATH 不该让应用起不来", async () => {
+    const run = vi.fn(async () => { throw new Error("ETIMEDOUT"); });
+    expect(await loginShellPath({ platform: "darwin", env: { PATH: LAUNCHD }, run })).toBe(LAUNCHD);
   });
 
-  it("输出里没有标记(被 rc 吞了)也退回原样", () => {
-    const run = vi.fn(() => "PATH=/evil/bin\n");
-    expect(loginShellPath({ platform: "linux", env: { PATH: LAUNCHD, SHELL: "/bin/bash" }, run })).toBe(LAUNCHD);
+  it("输出里没有标记(被 rc 吞了)也退回原样", async () => {
+    const run = vi.fn(async () => "PATH=/evil/bin\n");
+    expect(await loginShellPath({ platform: "linux", env: { PATH: LAUNCHD, SHELL: "/bin/bash" }, run })).toBe(LAUNCHD);
   });
 
-  it("Windows 不起 shell:图形程序本来就继承完整的 PATH", () => {
+  it("Windows 不起 shell:图形程序本来就继承完整的 PATH", async () => {
     const run = vi.fn();
-    expect(loginShellPath({ platform: "win32", env: { PATH: "C:\\Windows" }, run })).toBe("C:\\Windows");
+    expect(await loginShellPath({ platform: "win32", env: { PATH: "C:\\Windows" }, run })).toBe("C:\\Windows");
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("真起一个 shell:不阻塞,慢的 rc 到点就放弃(主进程不跟着卡 5 秒)", async () => {
+    // 一个睡 10 秒的「shell」:超时 5 秒,这里改成 50ms 验证到点就回原样。
+    const { runShell } = createRequire(import.meta.url)("./login-shell-path.cjs");
+    const started = Date.now();
+    await expect(runShell("/bin/sh", ["-c", "sleep 10"], { env: process.env, timeout: 50 })).rejects.toThrow("ETIMEDOUT");
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(await runShell("/bin/sh", ["-c", "echo hi"], { env: process.env, timeout: 2000 })).toBe("hi\n");
   });
 });

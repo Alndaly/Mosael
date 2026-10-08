@@ -123,7 +123,15 @@ const fake = vi.hoisted(() => {
   class Window extends Emitter {
     size: [number, number] = [1440, 900];
     /** 主窗口自己的网页(Mosael 的界面)。 */
-    webContents = { focused: false, focus() { this.focused = true; }, isDestroyed: () => false, on: () => undefined };
+    webContents = {
+      focused: false,
+      focus() { this.focused = true; },
+      isDestroyed: () => false,
+      on: () => undefined,
+      /** 「视图 → 放大 / 缩小」的页面缩放(见 accountViews 的 hostZoom)。 */
+      zoom: 1,
+      getZoomFactor() { return this.zoom; },
+    };
     /** 子视图,按 z 序从下到上(和 Electron 的 contentView.children 一样)。 */
     children: WebContentsView[] = [];
     contentView = (() => {
@@ -794,6 +802,72 @@ describe("several pages in one session (the page list)", () => {
     expect(viewOf("pool-a").bounds).toEqual({ x: 232, y: HEADER, width: 1440 - 232 - 360, height: 900 - HEADER });
     manager.setPagesInset(5000);
     expect(viewOf("pool-a").bounds.x).toBe(480);
+  });
+});
+
+describe("the Mosael window zoomed in (View → Zoom In)", () => {
+  // 125%:渲染层的 1 CSS 像素是 1.25 DIP。窗口 1440×900 DIP = 1152×720 CSS 像素。
+  const ZOOM = 1.25;
+  const HEADER = 56;
+
+  it("lays the foreground page below the toolbar and beside the page list as the renderer draws them (CSS px → DIP)", () => {
+    window.webContents.zoom = ZOOM;
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setPagesInset(220);
+    manager.setShellInset(420);
+    expect(viewOf("pool-a").bounds).toEqual({
+      x: 220 * ZOOM,
+      y: HEADER * ZOOM,
+      width: 1440 - (220 + 420) * ZOOM,
+      height: 900 - HEADER * ZOOM,
+    });
+  });
+
+  it("caps the side insets by the window width in CSS px (half / a third of 1152, not of 1440)", () => {
+    window.webContents.zoom = ZOOM;
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setShellInset(5000);
+    expect(viewOf("pool-a").bounds.width).toBe(1440 - (1152 / 2) * ZOOM);
+    manager.setShellInset(0);
+    manager.setPagesInset(5000);
+    expect(viewOf("pool-a").bounds.x).toBe(Math.round(Math.floor(1152 / 3) * ZOOM));
+  });
+
+  it("snapshots the page with its place in CSS px — where the renderer lays the stand-in frame", async () => {
+    window.webContents.zoom = ZOOM;
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setPagesInset(48);
+    expect((await manager.snapshotForeground())?.bounds).toEqual({ x: 48, y: HEADER, width: 1152 - 48, height: 720 - HEADER });
+  });
+
+  it("keeps a panel's page inside the card the renderer draws, and its page at the desktop layout width", () => {
+    window.webContents.zoom = ZOOM;
+    attach("a");
+    const card = cards[0];
+    const page = viewOf("a").getBounds();
+    // 视图(DIP)换回 CSS 像素,落在卡片外壳(CSS 像素)以内、标题条以下。
+    const css = { x: page.x / ZOOM, y: page.y / ZOOM, width: page.width / ZOOM, height: page.height / ZOOM };
+    expect(css.x).toBeGreaterThanOrEqual(card.x);
+    expect(css.y).toBeGreaterThanOrEqual(card.y + card.header);
+    expect(css.x + css.width).toBeLessThanOrEqual(card.x + card.width + 0.5);
+    expect(css.y + css.height).toBeLessThanOrEqual(card.y + card.height + 0.5);
+    expect(card.x + card.width).toBeLessThanOrEqual(1152);
+    // 面板网页的缩放跟着主窗口放大:布局视口还是那套桌面版宽度。
+    expect(page.width / viewOf("a").webContents.getZoomFactor()).toBeCloseTo(1280, 0);
+  });
+
+  it("re-lays everything when the zoom changes while a page and a panel are up", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    attach("b");
+    const before = viewOf("b").webContents.getZoomFactor();
+    window.webContents.zoom = ZOOM;
+    manager.hostZoomChanged();
+    expect(viewOf("pool-a").bounds).toEqual({ x: 0, y: HEADER * ZOOM, width: 1440, height: 900 - HEADER * ZOOM });
+    expect(viewOf("b").webContents.getZoomFactor()).toBeCloseTo(before * ZOOM, 6);
   });
 });
 

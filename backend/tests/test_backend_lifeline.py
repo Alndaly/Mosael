@@ -49,3 +49,41 @@ def test_no_parent_pid_means_no_watchdog(monkeypatch) -> None:
     assert lifeline.watch_parent_from_env() is None
     monkeypatch.setenv(lifeline.PARENT_ENV, "not-a-pid")
     assert lifeline.watch_parent_from_env() is None
+
+
+def test_the_desktop_shell_can_ask_the_backend_to_shut_down(monkeypatch) -> None:
+    """Windows 上壳发不了 SIGTERM(Node 的 kill 在那边就是强杀):壳带着壳令牌请后端自己收尾退出。"""
+    from app.api.routes import health
+    from app.core.shell_origin import shell_token
+
+    asked: list[str] = []
+    monkeypatch.setattr(health.lifeline, "shut_down_soon", lambda reason: asked.append(reason))
+    monkeypatch.setattr(settings, "local_desktop", True)
+    client = fresh_client()
+
+    assert client.post("/api/health/shutdown").status_code == 404, "没带壳令牌:当没有这个接口"
+    assert client.post("/api/health/shutdown", headers={"X-Mosael-Shell": "guess"}).status_code == 404
+    assert asked == []
+    answer = client.post("/api/health/shutdown", headers={"X-Mosael-Shell": shell_token()})
+    assert answer.status_code == 202
+    assert len(asked) == 1
+
+
+def test_a_team_server_has_no_shutdown_endpoint(monkeypatch) -> None:
+    from app.api.routes import health
+    from app.core.shell_origin import shell_token
+
+    asked: list[str] = []
+    monkeypatch.setattr(health.lifeline, "shut_down_soon", lambda reason: asked.append(reason))
+    monkeypatch.setattr(settings, "local_desktop", False)
+    answer = fresh_client().post("/api/health/shutdown", headers={"X-Mosael-Shell": shell_token()})
+    assert answer.status_code == 404
+    assert asked == []
+
+
+def test_shutting_down_soon_answers_first_then_takes_the_signal_path(monkeypatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(lifeline, "SHUTDOWN_DELAY", 0)
+    monkeypatch.setattr(lifeline, "_shut_down", lambda reason: calls.append(reason))
+    lifeline.shut_down_soon("asked by the shell").join(timeout=2)
+    assert calls == ["asked by the shell"]

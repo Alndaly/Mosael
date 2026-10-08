@@ -50,6 +50,7 @@ export const IPC: {
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
+    backendRetry: "backend:retry";
     pickPath: "dialog:pickPath";
   }>;
   readonly send: Readonly<{

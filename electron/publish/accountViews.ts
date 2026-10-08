@@ -389,7 +389,8 @@ export class AccountViewManager {
       return { width: Math.round(bounds.width / zoom), height: Math.round(bounds.height / zoom) };
     }
     const area = this.panelArea() ?? { width: 1440, height: 900 };
-    const page = panelStack(this.panelLayout, area, 1).page;
+    // 面板几何是 CSS 像素,换成 DIP 再除以面板缩放(它已经含着主窗口的缩放,见 panelZoom)。
+    const page = this.toDip(panelStack(this.panelLayout, area, 1).page);
     const zoom = this.panelZoom();
     return { width: Math.round(page.width / zoom), height: Math.round(page.height / zoom) };
   }
@@ -611,11 +612,46 @@ export class AccountViewManager {
     if (changed) this.savePanelLayout();
   }
 
-  /** 窗口内容区 —— 面板几何的边界。窗口没了就没有可摆的地方。 */
+  /** 窗口内容区 —— 面板几何的边界(CSS 像素,和渲染层画卡片外壳用的是同一套,见 hostZoom)。窗口没了就没有可摆的地方。 */
   private panelArea(): PanelArea | null {
+    return this.contentArea();
+  }
+
+  /**
+   * 主窗口页面的缩放(「视图 → 放大 / 缩小」)。
+   *
+   * 渲染层报来的让位宽度、画卡片外壳用的矩形都是 **CSS 像素**;原生视图的 bounds 是 **DIP**。缩放 100% 时两者一样,
+   * 125% 时差 1.25 倍 —— 此前直接混着用,顶栏 56 CSS 像素实际是 70 DIP,网页视图却还从 y=56 摆起,压住顶栏下沿和
+   * 页面列表右边那一截。所以这里的几何一律按 CSS 像素算,只在 `setBounds` 那一下经 `toDip` 换算。
+   */
+  private hostZoom(): number {
+    const zoom = this.hostWebContents()?.getZoomFactor() ?? 1;
+    return zoom > 0 ? zoom : 1;
+  }
+
+  /** 窗口内容区有多大(CSS 像素)。 */
+  private contentArea(): { width: number; height: number } | null {
     if (!this.window || this.window.isDestroyed()) return null;
     const [width, height] = this.window.getContentSize();
-    return { width, height };
+    const zoom = this.hostZoom();
+    return { width: width / zoom, height: height / zoom };
+  }
+
+  /** CSS 像素的矩形 → 原生视图要的 DIP。往里取整:原生视图宁可窄半个像素,也不压住外壳的边。 */
+  private toDip(rect: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
+    const zoom = this.hostZoom();
+    // `|| 0`:Math.ceil(-0.000001) 是 -0。
+    const x = Math.ceil(rect.x * zoom - 1e-6) || 0;
+    const y = Math.ceil(rect.y * zoom - 1e-6) || 0;
+    const right = Math.floor((rect.x + rect.width) * zoom + 1e-6);
+    const bottom = Math.floor((rect.y + rect.height) * zoom + 1e-6);
+    return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
+  }
+
+  /** 主窗口的缩放变了:面板网页的缩放(含着主窗口的缩放)和所有视图的位置重来一遍。 */
+  hostZoomChanged(): void {
+    for (const id of this.panels) this.applyPanelZoom(id);
+    this.republish();
   }
 
   /** 系统指针此刻是否在这块面板的网页(原生视图)上。PanelHover 的兜底检查用。 */
@@ -688,10 +724,11 @@ export class AccountViewManager {
     return this.panels.includes(accountId);
   }
 
-  /** 面板模式的缩放:视图实际宽度 / 期望布局宽度。用户缩放面板后这个值随之变化,
-   *  所以布局视口恒为 layoutWidth —— 平台页面永远按桌面版排版,不随面板大小掉进窄屏分支。 */
+  /** 面板模式的缩放:视图实际宽度(DIP)/ 期望布局宽度。用户缩放面板后这个值随之变化,
+   *  所以布局视口恒为 layoutWidth —— 平台页面永远按桌面版排版,不随面板大小掉进窄屏分支。
+   *  面板宽度是 CSS 像素,乘上主窗口的缩放才是视图的 DIP 宽度(见 hostZoom)。 */
   private panelZoom(): number {
-    return (this.panelLayout.width - PANEL.inset * 2) / PANEL.layoutWidth;
+    return ((this.panelLayout.width - PANEL.inset * 2) * this.hostZoom()) / PANEL.layoutWidth;
   }
 
   /** 把面板缩放重新设一遍。同源缩放策略下每次导航都要补,见 ensure() 里 sync 的说明。 */
@@ -789,7 +826,7 @@ export class AccountViewManager {
 
   /** 侧栏开合:前台视图右侧让出这么宽(见 shellInsetRight)。 */
   setShellInset(right: number): void {
-    const width = this.window && !this.window.isDestroyed() ? this.window.getContentSize()[0] : 0;
+    const width = this.contentArea()?.width ?? 0;
     // 至少给网页留一半:侧栏再宽也不能把页面挤没了。
     const next = Math.max(0, Math.min(Math.round(right), Math.floor(width / 2)));
     if (next === this.shellInsetRight) return;
@@ -820,9 +857,9 @@ export class AccountViewManager {
     return { frame: `data:image/jpeg;base64,${image.toJPEG(90).toString("base64")}`, bounds: this.foregroundBounds() };
   }
 
-  /** 前台网页在窗口里该在的位置:顶栏下面,左边让出页面列表、右边让出侧栏。 */
+  /** 前台网页在窗口里该在的位置(CSS 像素):顶栏下面,左边让出页面列表、右边让出侧栏。 */
   private foregroundBounds(): { x: number; y: number; width: number; height: number } {
-    const [width, height] = this.window && !this.window.isDestroyed() ? this.window.getContentSize() : [0, 0];
+    const { width, height } = this.contentArea() ?? { width: 0, height: 0 };
     return {
       x: this.shellInsetLeft,
       y: EMBED_HEADER_HEIGHT,
@@ -1268,7 +1305,7 @@ export class AccountViewManager {
 
   /** 页面列表开合:前台视图左侧让出这么宽(收起成图标条时窄,展开时宽,不挂列表时是 0)。 */
   setPagesInset(left: number): void {
-    const width = this.window && !this.window.isDestroyed() ? this.window.getContentSize()[0] : 0;
+    const width = this.contentArea()?.width ?? 0;
     // 至多三分之一:列表再宽也不能把网页挤没了。
     const next = Math.max(0, Math.min(Math.round(left), Math.floor(width / 3)));
     if (next === this.shellInsetLeft) return;
@@ -1297,12 +1334,12 @@ export class AccountViewManager {
     if (!this.window || this.window.isDestroyed()) {
       return;
     }
-    const [width, height] = this.window.getContentSize();
+    const area = this.contentArea() ?? { width: 0, height: 0 };
 
     // 前台全屏视图:铺满内容区(顶部留出渲染层自己画的工具条)。页面列表盖着它变形时整块挪到窗口外,大小照旧。
     const visible = this.visibleId ? this.views.get(this.visibleId) : null;
     if (this.alive(visible)) {
-      const bounds = this.foregroundBounds();
+      const bounds = this.toDip(this.foregroundBounds());
       const offWindow = OFF_WINDOW_REASONS.some((reason) => this.foregroundHiddenFor.has(reason));
       visible.setBounds(offWindow ? { ...bounds, x: -(bounds.width + OFF_WINDOW_GAP) } : bounds);
     }
@@ -1314,10 +1351,10 @@ export class AccountViewManager {
     const mounted = this.panels.filter(
       (accountId) => accountId !== this.visibleId && this.alive(this.views.get(accountId)),
     );
-    const stack = panelStack(this.panelLayout, { width, height }, mounted.length);
+    const stack = panelStack(this.panelLayout, area, mounted.length);
     const cards: PanelCard[] = mounted.map((accountId, index) => {
       const view = this.views.get(accountId)!;
-      view.setBounds(stack.page);
+      view.setBounds(this.toDip(stack.page));
       // 卡片外廓:渲染层照这个矩形画圆角、边框、阴影和标题条。
       return {
         id: accountId,

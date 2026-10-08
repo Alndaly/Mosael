@@ -173,7 +173,7 @@ describe("封存过的钥匙解不开时停下来问人,绝不另生一把", () 
 
   it("main.cjs:取不到就退出、不起后端;冒烟里不弹框", () => {
     const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
-    expect(main).toMatch(/const resolved = await unlockMasterKey\(\{[\s\S]*?\}\);\s*if \(!resolved\) \{\s*app\.quit\(\);\s*return false;/);
+    expect(main).toMatch(/const resolved = await unlockMasterKey\(\{[\s\S]*?\}\);\s*if \(!resolved\) \{\s*app\.quit\(\);\s*return null;/);
     expect(main).toMatch(/ask: isSmokeTest \? async \(\) => "quit" : askAboutMasterKey/);
     expect(main).not.toMatch(/resolveMasterKey\(/);
   });

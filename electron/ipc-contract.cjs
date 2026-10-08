@@ -24,6 +24,8 @@ const IPC = Object.freeze({
     dataExportDiagnostics: "data:exportDiagnostics",
     dataCreateBackup: "data:createBackup",
     dataApplyRestore: "data:applyRestore",
+    // 后端连崩被认输之后,界面上的「重试」请主进程真的重拉它(见 backend-lifecycle 的 retry)。
+    backendRetry: "backend:retry",
     // 路径格旁边的「选择…」:系统的选文件 / 选文件夹对话框(见 path-picker.cjs)。
     pickPath: "dialog:pickPath",
     publishLogin: "publish:login",

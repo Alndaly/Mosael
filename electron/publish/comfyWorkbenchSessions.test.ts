@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { WORKBENCH_VERSION, workbenchCallScript, workbenchInstallScript, workbenchPollScript } from "./comfyWorkbench";
-import { POLL_MS, WorkbenchSessions } from "./comfyWorkbenchSessions";
+import { PAUSED_POLL_MS, POLL_MS, WorkbenchSessions } from "./comfyWorkbenchSessions";
 
 const ORIGIN = "http://192.168.3.15:8188";
 const PARTITION = "persist:pool-comfyui-c1";
@@ -137,5 +137,37 @@ describe("工作台会话(主进程这一侧)", () => {
     await h.sessions.call(PARTITION, { ...call, openedBy: undefined });
     await h.tick();
     expect(h.emit, "不是智能体开的:没什么要报").toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe("窗口藏起来时(收进托盘、最小化)", () => {
+  it("会话留着、不往画布里跑脚本,只隔一秒看一眼;窗口回来接着照常轮询", async () => {
+    let hidden = true;
+    const queued: { callback: () => void; ms: number }[] = [];
+    const driver = { evaluate: vi.fn(async (script: string) => (script === workbenchPollScript(ORIGIN) ? answer() : true)) };
+    const emit = vi.fn();
+    const sessions = new WorkbenchSessions({
+      driver: () => driver,
+      visible: () => true,
+      paused: () => hidden,
+      emit,
+      schedule: (callback, ms) => {
+        queued.push({ callback, ms });
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+    });
+    sessions.start(PARTITION, ORIGIN);
+    await vi.waitFor(() => expect(queued).toHaveLength(1));
+    expect(queued[0].ms).toBe(PAUSED_POLL_MS);
+    expect(driver.evaluate, "藏着的时候一次都不问画布").not.toHaveBeenCalled();
+    expect(sessions.active(PARTITION), "会话还在:窗口回来工作台照常能用").toBe(true);
+    expect(emit, "没有告诉渲染层会话结束").not.toHaveBeenCalled();
+
+    hidden = false;
+    queued.shift()!.callback();
+    await vi.waitFor(() => expect(queued).toHaveLength(1));
+    expect(driver.evaluate).toHaveBeenCalled();
+    expect(queued[0].ms).toBe(POLL_MS);
   });
 });
