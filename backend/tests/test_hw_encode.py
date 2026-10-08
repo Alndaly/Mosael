@@ -1,6 +1,6 @@
 """导出编码参数选择:硬件优先 + 软件回落 + 码率 / 恒定质量映射。
 
-真机是否有硬件编码器不可控:纯逻辑(_target_bitrate_kbps 的映射、_hw_encode_args 各家参数、
+真机是否有硬件编码器不可控:纯逻辑(target_bitrate_kbps 的映射、_hw_encode_args 各家参数、
 _video_encode_args 在开关/探测结果下的取舍)在这里测;要真编码器的(VideoToolbox 的画质、
 起不来的编码器在开跑前就被挡下)用真 ffmpeg 跑,本机没有就跳过。
 """
@@ -29,27 +29,27 @@ def _out(width=1920, height=1080, fps=30, crf=20, preset="veryfast"):
 
 def test_bitrate_1080p30_is_high_quality_ballpark():
     # 1080p30 @ CRF20 ≈ 0.10 bpp ≈ 6 Mbps。
-    kbps = rx._target_bitrate_kbps(_out())
+    kbps = rx.target_bitrate_kbps(_out())
     assert 5000 <= kbps <= 7500
 
 
 def test_bitrate_scales_with_pixels_and_fps():
-    base = rx._target_bitrate_kbps(_out(1280, 720, 30))
-    four_k = rx._target_bitrate_kbps(_out(3840, 2160, 30))
-    high_fps = rx._target_bitrate_kbps(_out(1280, 720, 60))
+    base = rx.target_bitrate_kbps(_out(1280, 720, 30))
+    four_k = rx.target_bitrate_kbps(_out(3840, 2160, 30))
+    high_fps = rx.target_bitrate_kbps(_out(1280, 720, 60))
     assert four_k > base
     assert high_fps > base
 
 
 def test_bitrate_crf_plus_6_roughly_halves():
-    hi = rx._target_bitrate_kbps(_out(crf=20))
-    lo = rx._target_bitrate_kbps(_out(crf=26))
+    hi = rx.target_bitrate_kbps(_out(crf=20))
+    lo = rx.target_bitrate_kbps(_out(crf=26))
     assert lo == pytest.approx(hi / 2, rel=0.05)
 
 
 def test_bitrate_clamped_to_sane_bounds():
-    assert rx._target_bitrate_kbps(_out(64, 64, 1, crf=51)) >= 500
-    assert rx._target_bitrate_kbps(_out(7680, 4320, 60, crf=0)) <= 120_000
+    assert rx.target_bitrate_kbps(_out(64, 64, 1, crf=51)) >= 500
+    assert rx.target_bitrate_kbps(_out(7680, 4320, 60, crf=0)) <= 120_000
 
 
 @pytest.mark.parametrize("encoder", [e for e in rx._HW_ENCODER_PRIORITY if e != "h264_videotoolbox"])

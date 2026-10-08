@@ -27,6 +27,7 @@ the index with a few Range requests and decodes only the stretch of samples it i
 
 from __future__ import annotations
 
+import subprocess
 import threading
 from pathlib import Path
 
@@ -54,8 +55,29 @@ def proxy_path(asset_directory: Path) -> Path:
     return asset_directory / PROXY_NAME
 
 
-def build_proxy(source: Path, target: Path) -> bool:
-    """Transcode the H.264 short-GOP faststart preview proxy. Returns success."""
+#: 转一份预览代理最多等多久:至少 10 分钟,长片按时长放宽。此前一律 600 秒:实测 4K HEVC 10-bit 约 0.35 秒 / 秒素材,
+#: 28 分钟以上的片子永远转不出代理,而失败是终态、手动重试照样超时(MED-7)。
+PROXY_TIMEOUT_FLOOR_SECONDS = 600.0
+PROXY_TIMEOUT_PER_SOURCE_SECOND = 3.0
+
+
+def proxy_timeout(duration: float | None) -> float:
+    """按素材时长给的转码时限(秒)。时长不知道的按下限。"""
+    try:
+        seconds = float(duration or 0.0)
+    except (TypeError, ValueError):
+        seconds = 0.0
+    return max(PROXY_TIMEOUT_FLOOR_SECONDS, PROXY_TIMEOUT_PER_SOURCE_SECOND * seconds)
+
+
+class ProxyTimedOut(RuntimeError):
+    """转码在时限内没做完 —— 和「解不开」是两回事:换台快一点的机器、或者等空闲时再试,多半转得出来。"""
+
+
+def build_proxy(source: Path, target: Path, *, timeout: float = PROXY_TIMEOUT_FLOOR_SECONDS) -> bool:
+    """Transcode the H.264 short-GOP faststart preview proxy. Returns success.
+
+    超时抛 `ProxyTimedOut`(半截文件已删),好让调用方说清是「太慢」而不是「转坏了」。"""
     # Cap height (even width via -2), never upscaling — yuv420p needs even dimensions either way.
     scale = f"scale=-2:'min({PROXY_HEIGHT},ih)'"
     args = [
@@ -74,7 +96,10 @@ def build_proxy(source: Path, target: Path) -> bool:
         str(target),
     ]
     try:
-        run_logged(args, check=True, capture_output=True, timeout=600, what="代理转码")
+        run_logged(args, check=True, capture_output=True, timeout=timeout, what="代理转码")
+    except subprocess.TimeoutExpired as exc:
+        target.unlink(missing_ok=True)
+        raise ProxyTimedOut(f"proxy transcode did not finish within {timeout:.0f}s") from exc
     except Exception:
         target.unlink(missing_ok=True)
         return False

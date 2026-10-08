@@ -97,6 +97,7 @@ def register_web_download(
             raise WebCaptureError("webDownloadErr_empty", name=name)
         asset = register_file_asset(
             db, workspace_id=workspace_id, project_id=project_id, source_path=path, name=name, source="downloaded",
+            move=True,  # 存在这次自己的暂存目录里
         )
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

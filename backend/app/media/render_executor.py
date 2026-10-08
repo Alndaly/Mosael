@@ -1104,7 +1104,7 @@ def ensure_text_can_burn(plan: RenderPlan) -> None:
         raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
 
 
-def _target_bitrate_kbps(output) -> int:
+def target_bitrate_kbps(output) -> int:
     """由 分辨率×帧率×每像素比特(bpp) 推目标码率,bpp 受 CRF 调节。
 
     硬件编码器大多没有 x264 那种成熟的 CRF 恒定质量,得给码率。把用户设的 CRF 映射成 bpp:
@@ -1142,7 +1142,7 @@ def _hw_encode_args(encoder: str, output) -> list[str]:
             "-c:v", encoder, "-q:v", str(_videotoolbox_quality(int(output.crf))),
             "-pix_fmt", "yuv420p", "-realtime", "0", "-allow_sw", "1",
         ]
-    kbps = _target_bitrate_kbps(output)
+    kbps = target_bitrate_kbps(output)
     common = [
         "-c:v",
         encoder,

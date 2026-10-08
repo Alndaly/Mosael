@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 GENERATION = "gen"
 #: 插件交回的产物(见 domain/plugins/artifacts)。
 PLUGIN_OUTPUT = "plugin-out"
+#: 导出时 ffmpeg 写的成片,编完搬进素材库(见 domain/render)。
+EXPORT = "export"
 
 
 def scratch_root() -> Path:

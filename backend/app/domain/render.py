@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import re
+import shutil
 import tempfile
 import time
 from pathlib import Path
@@ -10,7 +12,6 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.config import settings
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import tr
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, say
@@ -20,6 +21,7 @@ from app.domain.assets.lineage import EXPORT, FRAME, derived
 from app.domain.export_presets import QUALITY_PRESETS, RESOLUTION_PRESETS
 from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
+from app.media.scratch import EXPORT as EXPORT_SCRATCH, scratch_dir
 from app.media.render_executor import (
     PHASE_ENCODE,
     PHASE_FALLBACK,
@@ -29,6 +31,7 @@ from app.media.render_executor import (
     RenderProgress,
     ensure_text_can_burn,
     execute_render,
+    target_bitrate_kbps,
 )
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
 from app.media.scene import assign_base_and_overlays, is_visual_clip, text_layers
@@ -437,8 +440,32 @@ def _export_message(phase: str, prog: RenderProgress | None) -> str:
     return " · ".join(bits) if len(bits) > 1 else "编码中…"
 
 
+#: 估成片多大时多留的余量:封装、音轨、码率波动。
+_EXPORT_SIZE_MARGIN = 1.25
+
+
+def export_size_estimate(plan: RenderPlan) -> int:
+    """这次导出大概要多少字节:目标码率 × 时长(视频)+ 一路 192 kbps 的音频,再留余量。只用来判盘够不够。"""
+    video_kbps = target_bitrate_kbps(plan.output)
+    seconds = max(float(plan.timeline_duration or 0.0), 0.0)
+    return int((video_kbps + 192) * 1000 / 8 * seconds * _EXPORT_SIZE_MARGIN)
+
+
+def _not_enough_disk(target_dir: Path, needed: int) -> str | None:
+    """数据目录所在的盘放不下这次导出时,给人看的那句话;放得下是 None。"""
+    free = shutil.disk_usage(target_dir).free
+    if free >= needed:
+        return None
+    return (f"磁盘空间不够:这次导出估计要 {needed / 1_073_741_824:.1f} GB,数据目录所在的盘只剩 "
+            f"{free / 1_073_741_824:.1f} GB。腾出空间后再导出。")
+
+
 def _run_export_body(job_id: str, plan: RenderPlan) -> None:
-    output_path = settings.data_dir / "exports" / f"{job_id}.mp4"
+    #: 成片先写在暂存目录(和素材库同一块盘),编完**搬**进素材库,不再复制一份;进程中途没了,下次启动清掉
+    #: (见 media/scratch)。此前写在 <数据目录>/exports,编完再整份复制进素材库:几个 GB 的成片要占两倍的盘,复制到
+    #: 一半盘满,刚编完的成片在 finally 里被删掉;后端在导出中途被杀,半截文件永远留在那里(MED-6)。
+    workdir = scratch_dir(EXPORT_SCRATCH)
+    output_path = workdir / f"{job_id}.mp4"
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -493,6 +520,11 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             write_progress(prog.fraction, _export_message(PHASE_ENCODE, prog))
 
         try:
+            shortage = _not_enough_disk(workdir, export_size_estimate(plan))
+            if shortage is not None:
+                if finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=shortage):
+                    emit_job_event(db, job.id, "job.failed", {"reason": "disk_full"})
+                return
             execute_render(
                 plan,
                 resolve_key,
@@ -507,7 +539,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             if not finish_job(db, job, status="running"):
                 return
             say(job, "jobMsg_renderFinishing")
-            # 「封装 / 入库中」先落库再登记:成片要整个拷进素材库(几百 MB),这期间不攥着写锁。
+            # 「封装 / 入库中」先落库再登记(探测、缩略图、波形要几秒),这期间不攥着写锁。
             db.commit()
             sequence = db.get(Sequence, plan.sequence_id)
             asset = register_file_asset(
@@ -518,6 +550,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 name=f"{sequence.name if sequence else 'Sequence'} · Export r{plan.sequence_revision}",
                 #: 成片的出处是它用到的每一份素材 —— 其中有 AI 内容的,成片也含 AI 内容(导出再拿去剪、再导出,照样认得出)。
                 derived_from=derived(EXPORT, *_export_sources(plan)),
+                move=True,
             )
             if finish_job(
                 db,
@@ -528,7 +561,7 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 result={"asset_id": asset.id},
             ):
                 emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
-                size_mb = output_path.stat().st_size / 1_048_576 if output_path.exists() else 0.0
+                size_mb = (asset.media_info or {}).get("size", 0) / 1_048_576
                 logger.info(
                     "export job %s finished in %.1fs (%.1f MB) → asset %s",
                     job_id,
@@ -544,17 +577,25 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 return
             emit_job_event(db, job.id, "job.failed", {"stderr_tail": exc.stderr_tail, "render_plan_hash": plan.render_plan_hash})
         except Exception as exc:  # defensive: a worker thread must never die silently
-            if finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=str(exc)[:500]):
+            error = _DISK_FULL if _is_disk_full(exc) else str(exc)[:500]
+            if finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=error):
                 emit_job_event(db, job.id, "job.failed", {})
         finally:
             # The registry must not outlive the run, or a later cancel would kill a dead
             # process handle — or worse, a recycled one.
             unregister_job_child(job_id)
-            # ffmpeg 写的那个文件是**中转**,不是成品:成功时它已经被拷进素材库(register_file_asset
-            # 是流式拷贝,不搬走源文件),失败和取消时它是个半截。三种情况都不该留下 ——
-            # 留着的话,成功的导出在磁盘上存两份,取消的导出留一截永远没人清。
-            # 实测某台机器上 ~/.mosael/exports 攒了 66 个文件 445 MB,全是这么来的。
-            output_path.unlink(missing_ok=True)
+            # ffmpeg 写的那个文件是**中转**:成功时它已经搬进了素材库,失败和取消时它是个半截。都不该留下。
+            shutil.rmtree(workdir, ignore_errors=True)
+
+
+#: 写到一半盘满了(编码时 ffmpeg 报的,或者搬进素材库时 OSError 28):说人话,而不是「[Errno 28]」或「退出码 N」。
+_DISK_FULL = "磁盘空间不够,导出没能写完。腾出空间后再导出。"
+
+
+def _is_disk_full(exc: BaseException) -> bool:
+    if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
+        return True
+    return isinstance(exc, RenderExecutionError) and "No space left on device" in (exc.stderr_tail or "")
 
 
 def _friendly_render_error(exc: RenderExecutionError) -> str:
@@ -562,6 +603,8 @@ def _friendly_render_error(exc: RenderExecutionError) -> str:
     —— 最常见就是录制未完整 / 损坏的 webm(无效 EBML / End of file),让用户知道该换哪段,
     而不是只看到无意义的「FFmpeg exited with code 187」。认不出就退回原始错误。"""
     tail = exc.stderr_tail or ""
+    if _is_disk_full(exc):
+        return _DISK_FULL
     match = re.search(r"Error opening input file (.+)", tail)
     if match:
         name = os.path.basename(match.group(1).strip().rstrip(".")) or match.group(1).strip()

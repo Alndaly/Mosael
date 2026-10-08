@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.config import settings
+from app.media.scratch import scratch_root
 from tests.util import fresh_client
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
@@ -80,7 +80,7 @@ def test_export_renders_mp4_with_gap_black(tmp_path: Path) -> None:
     assert job["progress"] == 1.0
 
     # 中转文件跑完就该没了 —— 成品在素材库里,留着它就是第二份。
-    assert not (settings.data_dir / "exports" / f"{job['id']}.mp4").exists()
+    assert not list((scratch_root() / "export").glob("*")), "导出的中转目录没清"
     assert _exported_file(client, ws["id"], tmp_path).stat().st_size > 0
 
     exported_asset = client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"]
@@ -124,7 +124,7 @@ def test_export_video_on_overlay_track_renders_with_audio(tmp_path: Path) -> Non
         time.sleep(0.5)
     assert job["status"] == "succeeded", job.get("error")
 
-    assert not (settings.data_dir / "exports" / f"{job['id']}.mp4").exists()
+    assert not list((scratch_root() / "export").glob("*"))
     output = _exported_file(client, ws["id"], tmp_path)
     streams = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(output)],

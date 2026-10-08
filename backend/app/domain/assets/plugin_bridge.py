@@ -43,6 +43,7 @@ def _take(
         name=name,
         source="plugin",
         derived_from=derived(PLUGIN, *derived_from),
+        move=True,  # 产物在这次调用的暂存目录里(见 plugins/artifacts:只收暂存目录里的文件)
     )
     return asset.id, asset.name
 

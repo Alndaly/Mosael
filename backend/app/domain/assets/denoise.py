@@ -157,6 +157,7 @@ def denoise_asset(
             source="denoised",
             # 派生关系记在新素材上(同分离、转 GIF),否则"这份是从哪份降出来的"只能靠名字猜。
             derived_from=derived(DENOISE, asset.id),
+            move=True,  # 降出来的落在这次的临时目录里
         )
     made.media_info = {
         **(made.media_info or {}),

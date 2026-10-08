@@ -83,6 +83,13 @@ def find_orphans(db: Session, *, now: float | None = None) -> list[Orphan]:
         for avatar in sorted(avatars.iterdir()):
             if avatar.is_file() and f"avatars/{avatar.name}" not in used:
                 found.extend(_orphan(avatar, "avatar_unused", moment))
+    #: 老版本的导出中转目录。现在的导出写在暂存目录里、编完搬进素材库(见 domain/render、media/scratch),这里不会
+    #: 再有新东西;留下的是老版本被打断的半截成片、没删的 .ass / 文字图片(某台机器上攒过几百 MB)。早年的版本里它也许
+    #: 是某次导出唯一的一份,所以不自动删:列出来,管理员看过再删(MED-6)。
+    #: 整个目录算一项(一台机器上攒过两百多个文件,一行一个没法看)。
+    exports = settings.data_dir / "exports"
+    if exports.is_dir() and not exports.is_symlink() and any(exports.iterdir()):
+        found.extend(_orphan(exports, "export_leftover", moment))
     return found
 
 

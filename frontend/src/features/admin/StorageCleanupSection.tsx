@@ -26,6 +26,7 @@ const REASON_LABEL: Record<string, MessageKey> = {
   workspace_gone: "storageOrphanWorkspaceGone",
   row_gone: "storageOrphanRowGone",
   avatar_unused: "storageOrphanAvatarUnused",
+  export_leftover: "storageOrphanExportLeftover",
 };
 
 /**

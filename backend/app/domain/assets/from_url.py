@@ -217,6 +217,7 @@ def _run(job_id: str) -> None:
                     source_path=path,
                     name=asset_name(item, path),
                     source="downloaded",
+                    move=True,  # 下在这次自己的暂存目录里
                 )
                 remember_asset_source(asset, item["url"])
                 if page_url:

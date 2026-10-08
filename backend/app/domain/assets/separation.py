@@ -142,6 +142,7 @@ def separate_asset(
                 name=f"{asset.name} · {_SUFFIX[stem]}",
                 source="separated",
                 derived_from=derived(SEPARATE, asset.id),
+                move=True,  # 分离出来的落在这次的临时目录里
             )
     # 出处(登记时的 derived_from)和哪份是人声都记在新素材上;原素材不改一字(和转 GIF、降噪同款)。
     # **记在产出它们的这一处**,不在某个调用方里:此前只有界面那条任务路径记,工作流节点和配音收尾

@@ -258,6 +258,9 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                     source="generated",
                     #: 生成任务的每一份产出都是 AI 生成的(AI 工作台、画板、智能体、工作流都走这个漏斗)。
                     ai_generated=True,
+                    #: 下回来的落在这次的暂存目录里,是自己的:搬进去,不再复制一份。适配器交回的若是别处的文件(本机
+                    #: 引擎自己的输出目录),不搬。
+                    move=path.is_relative_to(workdir),
                 )
                 for path in result.output_paths
             ]
