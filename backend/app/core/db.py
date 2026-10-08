@@ -9,9 +9,11 @@ import。两个方向相反的职责挤在一起时,迁移只能靠写在函数�
 from __future__ import annotations
 
 import logging
+import sqlite3
 import sys
 import threading
 import time
+import weakref
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,9 +38,57 @@ class Base(DeclarativeBase):
 PARTITION_PREFIX = "mosael"
 
 
+class _Connection(sqlite3.Connection):
+    """池子里的 SQLite 连接:记着自己开出去的游标,还回池子时一个不留地关掉(见下面的 `_no_statement_outlives_the_checkout`)。
+
+    **为什么要记。** 一个结果没读完就丢下(`next(row for row in conn.execute(...) if ...)`、循环里 `break`),它底下的
+    语句就还在跑。Python 3.11 起 `rollback()` 不再顺手 reset 这条连接上的语句,于是连接带着一条没结束的语句回了池子;
+    这个结果对象要是又在一个引用环里(SQLAlchemy 的结果就是),得等循环垃圾回收那一轮才放 —— 在那之前,下一个拿到这条
+    连接的人做 `DROP TABLE`,SQLite 报 SQLITE_LOCKED「database table is locked」(同一条连接上还有没结束的语句时,不许删表)。
+    测试里的表现是 `fresh_client()` 的 `drop_all` 偶尔红,红在哪条测试取决于垃圾回收什么时候跑、池子把哪条连接给了谁。
+
+    `execute` / `executemany` / `executescript` 也改走 `cursor()`:内置的那几个快捷方法在 C 里直接开游标,不经过
+    `cursor()`,不改的话直接拿 DBAPI 连接写 SQL 的地方(迁移里有)就记不上。
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._open_cursors: weakref.WeakSet[sqlite3.Cursor] = weakref.WeakSet()
+
+    def cursor(self, factory: Any = sqlite3.Cursor) -> Any:  # type: ignore[override]
+        cursor = super().cursor(factory)
+        self._open_cursors.add(cursor)
+        return cursor
+
+    def execute(self, sql: str, parameters: Any = (), /) -> sqlite3.Cursor:  # type: ignore[override]
+        return self.cursor().execute(sql, parameters)
+
+    def executemany(self, sql: str, parameters: Any, /) -> sqlite3.Cursor:  # type: ignore[override]
+        return self.cursor().executemany(sql, parameters)
+
+    def executescript(self, script: str, /) -> sqlite3.Cursor:  # type: ignore[override]
+        return self.cursor().executescript(script)
+
+    def close_cursors(self) -> None:
+        """关掉还开着的游标,它们底下的语句随之结束。"""
+        for cursor in list(self._open_cursors):
+            cursor.close()
+
+
 settings.data_dir.mkdir(parents=True, exist_ok=True)
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
+engine = create_engine(settings.database_url, connect_args={"check_same_thread": False, "factory": _Connection})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+@event.listens_for(engine.pool, "reset")
+def _no_statement_outlives_the_checkout(dbapi_connection, _record, _state) -> None:
+    """连接还回池子的那一刻:这次借出去时开的游标全部关掉,没读完的语句不跟着连接回池子。
+
+    关掉之后还想接着读那个结果的,会当场报「Cannot operate on a closed cursor」—— 本来就不该读:连接已经还了,
+    下一个借到它的人(可能在另一个线程)正在上面跑自己的语句。这比悄悄读下去、或者让别人删表时撞上 SQLITE_LOCKED 好查。
+    """
+    if isinstance(dbapi_connection, _Connection):
+        dbapi_connection.close_cursors()
 
 
 def pool_capacity() -> int:

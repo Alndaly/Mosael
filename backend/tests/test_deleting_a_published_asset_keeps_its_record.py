@@ -174,8 +174,11 @@ def test_老库的发布记录升级后_删素材不再连带删掉_名字补上
     _migrate_publish_records_outlive_their_asset()  # 第二次:已经是新形状,只按名字补一遍(没有要补的)
 
     with engine.connect() as conn:
-        asset_fk = next(row for row in conn.execute(text("PRAGMA foreign_key_list(publish_tasks)")) if row[3] == "asset_id")
-        asset_column = next(row for row in conn.execute(text("PRAGMA table_info(publish_tasks)")) if row[1] == "asset_id")
+        #: 先读完再挑:读一行就丢下的结果,底下的语句跟着连接回池子(见 test_pooled_connections_carry_no_open_statement)
+        foreign_keys = conn.execute(text("PRAGMA foreign_key_list(publish_tasks)")).all()
+        columns = conn.execute(text("PRAGMA table_info(publish_tasks)")).all()
+    asset_fk = next(row for row in foreign_keys if row[3] == "asset_id")
+    asset_column = next(row for row in columns if row[1] == "asset_id")
     assert asset_fk[6] == "SET NULL"
     assert asset_column[3] == 0, "asset_id 还是不可空"
     kept = _task_out(client, ws["id"], task["id"])
