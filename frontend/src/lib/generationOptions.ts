@@ -1,6 +1,8 @@
 import { useQueries, type QueryClient } from "@tanstack/react-query";
 
-import { listGenerationOptions, type GenerationOption } from "@/api/domains/generation";
+import { useQuery } from "@tanstack/react-query";
+
+import { listGenerationOptions, listUnavailableModels, type GenerationOption } from "@/api/domains/generation";
 import { generationKeys } from "@/api/queryKeys";
 
 /**
@@ -34,6 +36,21 @@ export function useGenerationOptions(kinds: readonly string[], { enabled = true 
     })),
     combine,
   });
+}
+
+/**
+ * 选着的 (连接, 模型) 不在生成选项里时,插件说过的「现在用不了、为什么」(ComfyUI:那张工作流的表单还是旧格式,到工作流库里升级,
+ * ADR 0045 §7);没说过、或者就在选项里,是 null。界面据此在「选择模型」旁边说清楚,不让人以为选择丢了。
+ */
+export function useUnavailableReason(profileId: string | null | undefined, model: string | null | undefined): string | null {
+  const unavailable = useQuery({
+    queryKey: generationKeys.unavailable(),
+    queryFn: listUnavailableModels,
+    enabled: Boolean(profileId && model),
+    staleTime: 30_000,
+  });
+  if (!profileId || !model) return null;
+  return unavailable.data?.find((one) => one.provider_profile_id === profileId && one.model === model)?.reason ?? null;
 }
 
 /** 命令式的那一份(点「运行」的那一刻把清单取齐):同样的键,有缓存就用缓存。 */

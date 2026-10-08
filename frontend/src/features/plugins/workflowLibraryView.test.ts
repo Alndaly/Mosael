@@ -70,10 +70,16 @@ describe("文件夹名", () => {
 });
 
 describe("搜索", () => {
-  it("表单的标题也算(ADR 0045):AI Studio 里看到「快速用krea2生图」,在库里搜得到是哪张工作流", () => {
-    const formed = { ...flow("krea2-text-2-image.json"), app: { status: "ok", app: true, title: "快速用krea2生图" } } as WorkflowFile;
+  it("每张表单的标题都算(ADR 0045):AI Studio 里看到「快速用krea2生图」「精调」,在库里搜得到是哪张工作流", () => {
+    const form = (id: string, title: string) => ({ id, title, description: "", fields: 1, invalid: 0, model: "", tool: "" });
+    const formed = {
+      ...flow("krea2-text-2-image.json"),
+      app: { status: "ok", version: "", upgradable: false, invalid: 0, stray: 0, results: [],
+             forms: [form("app", "快速用krea2生图"), form("k3x9a2", "精调")] },
+    } as WorkflowFile;
     const other = flow("girl.json");
     expect(filterWorkflows([formed, other], { kind: "all", query: "快速" })).toEqual([formed]);
+    expect(filterWorkflows([formed, other], { kind: "all", query: "精调" })).toEqual([formed]);
     expect(filterWorkflows([formed, other], { kind: "all", query: "krea2" })).toEqual([formed]);
   });
 });

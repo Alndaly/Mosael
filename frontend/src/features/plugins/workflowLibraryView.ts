@@ -76,8 +76,8 @@ export function filterWorkflows(
     if (kind === "broken" ? !flow.problem : kind !== "all" && flow.kind !== kind) return false;
     if (!needle) return true;
     const haystack = [
-      //: 表单的标题也算(ADR 0045):AI Studio 里看到「快速用krea2生图」,在库里搜得到是哪张工作流
-      flow.label, flow.path, flow.problem, flow.app?.title ?? "",
+      //: 每张表单的标题也算(ADR 0045):AI Studio 里看到「快速用krea2生图」,在库里搜得到是哪张工作流
+      flow.label, flow.path, flow.problem, ...(flow.app?.forms ?? []).map((one) => one.title),
       ...(flow.models ?? []).map((one) => one.name),
       ...(flow.missing_nodes ?? []).map((one) => one.type),
       ...(flow.inputs ?? []).map((one) => one.title),

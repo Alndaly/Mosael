@@ -40,3 +40,10 @@ export function optimizeImagePrompt(body: {
 export function listGenerationOptions(kind: string): Promise<GenerationOption[]> {
   return api<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`);
 }
+
+export type UnavailableModel = components["schemas"]["GenerationUnavailableOut"];
+
+/** 插件连接上「认得、现在用不了」的模型和为什么(ComfyUI:表单还是旧格式,到工作流库里升级)。 */
+export function listUnavailableModels(): Promise<UnavailableModel[]> {
+  return api<UnavailableModel[]>("/api/generation/unavailable");
+}

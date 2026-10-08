@@ -13,7 +13,7 @@ import { providerKeys, generationKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
-import { formedGroups, generationOptionNames } from "@/lib/entryNames";
+import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 
 
@@ -105,23 +105,16 @@ function DefaultRow({
             label: options.length === 0 ? t("providerDefaultsEmpty") : t("providerDefaultsUnset"),
             description: options.length === 0 ? undefined : t("providerDefaultsUnsetHint"),
           },
-          ...options.map((item) => {
-            //: 两层名字(ADR 0045):主名是这个模型自己的,第二行说它来自哪张工作流、哪条连接;同一张工作流的表单入口
-            //: 挂在完整工作流下面。和 AI Studio、画板同一种样子。
-            const names = generationOptionNames(
+          //: 两层名字(ADR 0045):主名是这个模型自己的,第二行说它来自哪条连接;有表单的工作流是一小组(小标题工作流名 +
+          //: 连接名,下面「完整工作流」和每张表单)。和 AI Studio、画板同一种样子;记得住原始 model id 的人仍然搜得到。
+          ...options.map((item) => ({
+            value: valueOf(item),
+            ...generationPickerEntry(
               { model: item.model, model_label: item.display_name || item.model, profile_name: item.provider_name, group: item.group },
               formed,
               t,
-            );
-            return {
-              value: valueOf(item),
-              label: names.primary,
-              description: names.secondary,
-              // 展示名换成人话之后,记得住原始 model id 的人仍然搜得到;工作流名也算。
-              keywords: [item.model, item.group?.label ?? "", item.provider_name].filter(Boolean),
-              indent: item.group?.entry === "form",
-            };
-          }),
+            ),
+          })),
         ]}
         className="w-full min-w-0"
       />

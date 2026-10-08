@@ -25,24 +25,25 @@ describe("添加节点的选项", () => {
     expect(option.keywords).toEqual(["fetch_one_video"]);
   });
 
-  it("同一张工作流的完整工作流和表单(ADR 0045):副名说是哪个入口,表单挂在完整工作流下面,按工作流名、路径都搜得到", () => {
+  it("同一张工作流的完整工作流和表单(ADR 0045 §7):一小组 —— 小标题工作流名 + 插件名,下面「完整工作流」和每张表单;按工作流名、路径都搜得到", () => {
     const said: Record<string, string> = { entryFromGroup: "来自 {name}", entryFullWorkflow: "完整工作流" };
     const t = (key: string) => said[key] ?? key;
     const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
     const [full, form, plain] = nodePickerOptions(
       [
-        node("plugin.c.wf_a", { plugin_name: "ComfyUI", tool_name: "wf_a", group: { ...group, entry: "full" } }),
-        node("plugin.c.wf_a_app", { plugin_name: "ComfyUI", tool_name: "wf_a_app", group: { ...group, entry: "form" } }),
-        node("plugin.c.wf_b", { plugin_name: "ComfyUI", tool_name: "wf_b", group: { id: "b.json", label: "b", entry: "full" } }),
+        node("plugin.c.wf_a", { plugin_name: "ComfyUI", tool_name: "wf_a", group: { ...group, entry: "full", order: 0 } }),
+        node("plugin.c.wf_a_app", { plugin_name: "ComfyUI", tool_name: "wf_a_app", group: { ...group, entry: "form", order: 1 } }),
+        node("plugin.c.wf_b", { plugin_name: "ComfyUI", tool_name: "wf_b", group: { id: "b.json", label: "b", entry: "full", order: 0 } }),
       ],
       "其它",
       t,
     );
-    expect(full.description.startsWith("完整工作流 · ComfyUI · ")).toBe(true);
-    expect(form.description.startsWith("来自 krea2-text-2-image · ComfyUI · ")).toBe(true);
+    const section = { key: "ComfyUI\nkrea2-text-2-image.json", label: "krea2-text-2-image", subtitle: "ComfyUI" };
+    expect([full.label, full.section]).toEqual(["完整工作流", section]);
+    expect([form.label, form.section]).toEqual(["plugin.c.wf_a_app", section]);
+    expect(plain.section, "没有表单的工作流照旧一行").toBeUndefined();
     expect(plain.description.startsWith("ComfyUI · ")).toBe(true);
-    expect([full.indent, form.indent, plain.indent]).toEqual([false, true, false]);
-    expect(form.keywords).toEqual(["wf_a_app", "krea2-text-2-image", "krea2-text-2-image.json"]);
+    expect(form.keywords).toEqual(["wf_a_app", "krea2-text-2-image", "krea2-text-2-image.json", "plugin.c.wf_a_app"]);
   });
 
   it("副标题是纯文本:说明里的 markdown 记号不露出来", () => {

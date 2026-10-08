@@ -31,7 +31,17 @@ type Option = {
   media?: React.ReactNode;
   /** 挂在上一项下面、缩进一格(同一张工作流的表单入口挂在它的完整工作流下面,ADR 0045)。顺序仍由提供选项的一方定。 */
   indent?: boolean;
+  /**
+   * 这一项属于组里的哪一小组(有表单的工作流:组标题是工作流名 + 连接名,下面「完整工作流」和每张表单各一行,ADR 0045 §7)。
+   * 相邻的同一个 `key` 归一小组,上面一行不能选的小标题,组里的行缩进一格。**搜索命中小组里任何一行,整个小组留着**
+   * (按原来的顺序),命中的那几行加粗 —— 搜「精调」还看得见它是哪张工作流的、旁边还有哪几个入口。
+   */
+  section?: OptionSection;
+  /** 选中之后触发器上写什么(小组里的行名字常是「完整工作流」,单独写在触发器上说不清是哪张);不给就是 `label`。 */
+  selectedLabel?: string;
 };
+
+export type OptionSection = { key: string; label: string; subtitle?: string };
 
 /**
  * 可搜索、限高的下拉——用于选项多到普通 Select 会溢出屏幕的场景(如 ComfyUI 的 checkpoint/采样器
@@ -53,7 +63,8 @@ type Option = {
 export const RENDER_BATCH = 60;
 const MORE_WITHIN_PX = 240;
 
-type Group = [string, Option[]];
+type Row = Option & { hit?: boolean };
+type Group = [string, Row[]];
 
 /** 相邻的同名 group 归一组,不重排(顺序由提供选项的一方定,见下面 groups 那段说明)。 */
 function groupAdjacent(items: Option[]): Group[] {
@@ -69,25 +80,32 @@ function groupAdjacent(items: Option[]): Group[] {
 
 /**
  * 按搜索词过滤、排序:和 cmdk 自己过滤时同一个打分(`defaultFilter`,按 value 和 keywords 打),同一种排法 ——
- * 组内按分数高低,组按组里最高的那一项;分数一样的保持原来的先后。
+ * 组内按分数高低,组按组里最高的那一项;分数一样的保持原来的先后。一个小组(`section`)当一项排:分数是组里最高的
+ * 那一行,命中一行整个小组留着、按原来的顺序,命中的行标 `hit`。
  */
 function filterGroups(items: Option[], query: string): Group[] {
   if (!query) return groupAdjacent(items);
-  const byHeading = new Map<string, { best: number; order: number; rows: Array<{ item: Option; score: number; index: number }> }>();
+  type Unit = { score: number; index: number; rows: Row[] };
+  const byHeading = new Map<string, { best: number; order: number; units: Map<string, Unit> }>();
   items.forEach((item, index) => {
     const score = defaultFilter(item.value, query, keywordsOf(item));
-    if (score <= 0) return;
     const heading = item.group ?? "";
-    const group = byHeading.get(heading) ?? { best: 0, order: byHeading.size, rows: [] };
-    group.rows.push({ item, score, index });
+    const group = byHeading.get(heading) ?? { best: 0, order: byHeading.size, units: new Map<string, Unit>() };
+    const unitKey = item.section ? `section:${item.section.key}` : `item:${item.value}`;
+    const unit = group.units.get(unitKey) ?? { score: 0, index, rows: [] };
+    unit.rows.push({ ...item, hit: score > 0 });
+    unit.score = Math.max(unit.score, score);
+    group.units.set(unitKey, unit);
     group.best = Math.max(group.best, score);
     byHeading.set(heading, group);
   });
   return [...byHeading.entries()]
+    .filter(([, group]) => group.best > 0)
     .sort(([, a], [, b]) => b.best - a.best || a.order - b.order)
     .map(([heading, group]) => [
       heading,
-      group.rows.sort((a, b) => b.score - a.score || a.index - b.index).map((row) => row.item),
+      [...group.units.values()].filter((unit) => unit.score > 0)
+        .sort((a, b) => b.score - a.score || a.index - b.index).flatMap((unit) => unit.rows),
     ]);
 }
 
@@ -163,6 +181,7 @@ export function SearchableSelect({
     [options],
   );
   const selected = items.find((item) => item.value === value);
+  const selectedText = selected?.selectedLabel ?? selected?.label;
   const hasDescriptions = items.some((item) => item.description);
   // 按**相邻**的同名 group 归组,不重排 —— 提供选项的一方已经排好了顺序(节点面板的
   // 分组顺序来自后端的 NODE_CATEGORIES),这里再排一次就成了第二份要维护的顺序。
@@ -207,7 +226,7 @@ export function SearchableSelect({
                   未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
                   写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
               <Truncate className={cn(!selected && "text-muted-foreground")}>
-                {selected?.label ?? placeholder ?? ""}
+                {selectedText ?? placeholder ?? ""}
               </Truncate>
               <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
             </button>
@@ -240,7 +259,16 @@ export function SearchableSelect({
           >
             <CommandEmpty>{emptyText ?? t("searchableSelectNoMatch")}</CommandEmpty>
             {shown.map(([heading, groupItems]) => {
-              const rows = groupItems.map((item) => (
+              const rows = groupItems.map((item, index) => (
+                <React.Fragment key={item.value}>
+                {item.section && item.section.key !== groupItems[index - 1]?.section?.key && (
+                  // 小组的标题(工作流名 + 连接名):不能选,只说下面这几行是哪张工作流的
+                  <div role="presentation" data-section-head={item.section.key}
+                       className="grid gap-px px-2 pb-0.5 pt-1.5 text-ui-xs leading-[1.35] text-muted-foreground">
+                    <Truncate className="font-medium text-foreground">{item.section.label}</Truncate>
+                    {item.section.subtitle && <Truncate>{item.section.subtitle}</Truncate>}
+                  </div>
+                )}
                 <CommandItem
                   key={item.value}
                   // **cmdk 拿 value 认「哪一行」**(高亮、键盘上下、选中都按它),所以它必须是这一项唯一的
@@ -251,8 +279,10 @@ export function SearchableSelect({
                     onValueChange(item.value);
                     setOpen(false);
                   }}
-                  className={item.indent ? "pl-6" : undefined}
-                  data-indent={item.indent ? "" : undefined}
+                  className={cn((item.indent || item.section) && "pl-6", query && item.section && item.hit && "font-semibold")}
+                  data-indent={item.indent || item.section ? "" : undefined}
+                  data-section={item.section?.key}
+                  data-hit={query && item.section && item.hit ? "" : undefined}
                 >
                   {/* 勾在右端、只在选中时渲染:左侧占位勾会让**每一行**都白缩进一个图标宽,
                       而「添加节点」这类当动作菜单用的场景根本没有选中项,那块缩进纯属浪费。 */}
@@ -275,6 +305,7 @@ export function SearchableSelect({
                   </span>
                   {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
                 </CommandItem>
+                </React.Fragment>
               ));
               return heading ? (
                 <CommandGroup key={heading} heading={heading}>

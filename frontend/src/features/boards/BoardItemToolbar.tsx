@@ -324,10 +324,13 @@ export function ItemToolbar({
               trigger={<MoreButton label={t("boardMoreAbilities")} />}
               actions={overflow.map((ability) => {
                 const Icon = boardToolIcon(ability);
+                //: 有表单的工作流是一组(ADR 0045 §7):小标题工作流名,下面「完整工作流」和每张表单
+                const group = ability.group && formed.has(ability.group.id) ? ability.group : null;
                 return {
-                  label: ability.label,
+                  label: group?.entry === "full" ? t("entryFullWorkflow") : ability.label,
                   icon: <Icon size={14} />,
-                  hint: sourceOf(ability) || undefined,
+                  hint: group ? ability.plugin_name || undefined : sourceOf(ability) || undefined,
+                  ...(group ? { group: `entry:${group.id}`, groupLabel: group.label } : {}),
                   onSelect: () => onPanel(item.id, ability.id),
                 };
               })}

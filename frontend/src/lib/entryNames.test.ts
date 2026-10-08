@@ -8,9 +8,9 @@ const said: Record<string, string> = { entryFromGroup: "来自 {name}", entryFul
 const t = (key: string) => said[key] ?? key;
 const GROUP = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
 const SERVER = "ComfyUI · http://192.168.3.15:8188";
-const full = { model: "krea2-text-2-image.json", model_label: "krea2-text-2-image", profile_name: SERVER, group: { ...GROUP, entry: "full" } };
-const form = { model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", profile_name: SERVER, group: { ...GROUP, entry: "form" } };
-const lone = { model: "girl.json", model_label: "girl", profile_name: SERVER, group: { id: "girl.json", label: "girl", entry: "full" } };
+const full = { model: "krea2-text-2-image.json", model_label: "krea2-text-2-image", profile_name: SERVER, group: { ...GROUP, entry: "full", order: 0 } };
+const form = { model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图", profile_name: SERVER, group: { ...GROUP, entry: "form", order: 1 } };
+const lone = { model: "girl.json", model_label: "girl", profile_name: SERVER, group: { id: "girl.json", label: "girl", entry: "full", order: 0 } };
 const plain = { model: "gpt-image-1", model_label: "gpt-image-1", profile_name: "OpenAI", group: null };
 
 describe("两层名字", () => {
@@ -42,7 +42,7 @@ describe("两层名字", () => {
     expect(twoLayerTitle({ primary: "gpt-image-1", secondary: "" })).toBe("gpt-image-1");
   });
 
-  it("工作流字段的现查选项:按生成选项列的那几项摆成两层,别的原样", () => {
+  it("工作流字段的现查选项:有表单的工作流是一小组(行上「完整工作流」/ 表单标题,触发器写原名),没有表单的两层,别的原样", () => {
     const listed = entryNamedOptions(
       [
         { value: "p9:image:krea2-text-2-image.json#app", label: "快速用krea2生图", model: form.model, profile_name: SERVER,
@@ -53,8 +53,9 @@ describe("两层名字", () => {
       ],
       t,
     );
-    expect(listed[0]).toMatchObject({ description: `来自 krea2-text-2-image · ${SERVER}`, indent: true });
-    expect(listed[1]).toMatchObject({ label: "krea2-text-2-image · 默认", description: `完整工作流 · ${SERVER}`, indent: false });
+    const section = { key: `${SERVER}\nkrea2-text-2-image.json`, label: "krea2-text-2-image", subtitle: SERVER };
+    expect(listed[0]).toMatchObject({ label: "快速用krea2生图", selectedLabel: "快速用krea2生图", section });
+    expect(listed[1]).toMatchObject({ label: "完整工作流", selectedLabel: "krea2-text-2-image · 默认", section });
     expect(listed[2]).toEqual({ value: "edge", label: "Edge TTS" });
   });
 });

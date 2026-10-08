@@ -239,7 +239,9 @@ export const aiStudio = {
   //: 两层名字的副名(ADR 0045:表单是工作流的入口)
   entryFromGroup: "来自 {name}",
   entryFullWorkflow: "完整工作流",
-  genAppFormSection: "精简表单",
+  genAppFormSection: "表单",
+  genModelUnavailable: "选着的「{model}」现在用不了:{reason}",
+  genModelUnavailableShort: "选着的模型现在用不了",
   genAppFormMore: "其他选项",
   genFormPromptInComposer: "写在下面的输入框里",
   genFormPromptOptional: "写在下面的输入框里,也可以不写",

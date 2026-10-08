@@ -14,6 +14,7 @@
 import type { FieldOption } from "@/api/domains/workflows";
 import type { components } from "@/api/generated/schema";
 import type { MessageKey } from "@/app/messages";
+import type { OptionSection } from "@/components/ui/searchable-select";
 
 export type EntryGroup = components["schemas"]["EntryGroupOut"];
 type Translate = (key: MessageKey) => string;
@@ -37,7 +38,8 @@ export function entryOrigin(group: EntryGroup | null | undefined, formed: Readon
   return formed.has(group.id) ? t("entryFullWorkflow") : "";
 }
 
-type NamedOption = { model: string; model_label: string; profile_name: string; group?: EntryGroup | null };
+type NamedOption = { model: string; model_label: string; profile_name: string; group?: EntryGroup | null;
+                     provider_profile_id?: string };
 
 /** 一个生成选项的两层名字:主名是 `model_label`,副名是入口那一截再接连接名。 */
 export function generationOptionNames(option: NamedOption, formed: ReadonlySet<string>, t: Translate): TwoLayerName {
@@ -53,6 +55,36 @@ export function generationOptionKeywords(option: NamedOption): string[] {
   return [option.model_label, option.group?.label ?? "", option.model, option.profile_name].filter(Boolean);
 }
 
+/** 下拉里的一行(生成选项):名字、第二行、搜索词,有表单的工作流再带上它那一小组。 */
+export type PickerEntry = {
+  label: string;
+  description?: string;
+  keywords: string[];
+  section?: OptionSection;
+  selectedLabel?: string;
+};
+
+/**
+ * 一个生成选项在下拉里怎么摆(ADR 0045 §7「列表按工作流分组」):有表单的工作流是一小组 —— 小标题是工作流名 + 连接名,下面
+ * 「完整工作流」和每张表单各一行(行上不再重复来自哪张、哪台);选中之后触发器上写主名。没有表单的工作流、别的模型照旧一行:
+ * 主名 + 第二行连接名。搜索词照旧是主名、工作流名、模型 id、连接名(命中小组里任何一行,整个小组留着,见 SearchableSelect)。
+ */
+export function generationPickerEntry(option: NamedOption, formed: ReadonlySet<string>, t: Translate): PickerEntry {
+  const keywords = generationOptionKeywords(option);
+  const group = option.group;
+  if (!group || !formed.has(group.id)) {
+    const names = generationOptionNames(option, formed, t);
+    return { label: names.primary, description: names.secondary || undefined, keywords };
+  }
+  return {
+    label: group.entry === "form" ? option.model_label || option.model : t("entryFullWorkflow"),
+    keywords: [...keywords, t("entryFullWorkflow")],
+    section: { key: `${option.provider_profile_id ?? option.profile_name}\n${group.id}`, label: group.label,
+               subtitle: option.profile_name || undefined },
+    selectedLabel: option.model_label || option.model,
+  };
+}
+
 /** 只有一行、又放不下第二行说明的地方(原生 `title`、一句话的悬停):两层连成一句,中间用破折号隔开。 */
 export function twoLayerTitle(name: TwoLayerName): string {
   return name.secondary ? `${name.primary} — ${name.secondary}` : name.primary;
@@ -64,14 +96,23 @@ export function twoLayerTitle(name: TwoLayerName): string {
  */
 export function entryNamedOptions<T extends FieldOption>(options: readonly T[], t: Translate) {
   const formed = formedGroups(options.map((one) => ({ group: one.entry_group })));
-  return options.map((one) =>
-    one.profile_name === undefined
-      ? one
-      : {
-          ...one,
-          description: [entryOrigin(one.entry_group, formed, t), one.profile_name].filter(Boolean).join(" · "),
-          keywords: [one.entry_group?.label ?? "", one.model ?? "", one.profile_name].filter(Boolean),
-          indent: one.entry_group?.entry === "form",
-        },
-  );
+  return options.map((one) => {
+    if (one.profile_name === undefined) return one;
+    const group = one.entry_group;
+    if (!group || !formed.has(group.id)) {
+      return {
+        ...one,
+        description: [entryOrigin(group, formed, t), one.profile_name].filter(Boolean).join(" · "),
+        keywords: [group?.label ?? "", one.model ?? "", one.profile_name].filter(Boolean),
+      };
+    }
+    //: 有表单的工作流:一小组(小标题工作流名 + 连接名),行上是「完整工作流」/ 表单标题,触发器上写原来的名字
+    return {
+      ...one,
+      label: group.entry === "form" ? one.label : t("entryFullWorkflow"),
+      selectedLabel: one.label,
+      keywords: [group.label, one.model ?? "", one.profile_name, one.label].filter(Boolean),
+      section: { key: `${one.profile_name}\n${group.id}`, label: group.label, subtitle: one.profile_name || undefined },
+    };
+  });
 }

@@ -73,8 +73,8 @@ import {
   ParameterSection,
 } from "@/components/generation/parameterPanel";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
-import { formedGroups, generationOptionKeywords, generationOptionNames, twoLayerTitle, type TwoLayerName } from "@/lib/entryNames";
-import { useGenerationOptions } from "@/lib/generationOptions";
+import { formedGroups, generationOptionNames, generationPickerEntry, twoLayerTitle, type TwoLayerName } from "@/lib/entryNames";
+import { useGenerationOptions, useUnavailableReason } from "@/lib/generationOptions";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
@@ -426,6 +426,8 @@ export function GenerateWorkspace({
     activeSession?.provider_profile_id && activeSession.model && activeSession.kind
       ? findGenerationOption(modelOptions, activeSession.provider_profile_id, activeSession.kind, activeSession.model)
       : null;
+  //: 会话记着的模型不在选项里、插件说过为什么(ComfyUI:表单还是旧格式,到工作流库里升级):在「选择模型」下面说清楚
+  const unavailableReason = useUnavailableReason(sessionOption ? null : activeSession?.provider_profile_id, activeSession?.model);
   //: 这次挑的 → 会话记着的 → 用户设的默认(先这一页的第一种,没有就这一页随便哪一种的默认)→ 没有。
   //: **不拿第一项顶上**:没设默认时选择器显示「选择模型」,等人选(见 pickGenerationOption)。
   const selectedModel =
@@ -1341,24 +1343,23 @@ export function GenerateWorkspace({
                   value={selectedModel?.value ?? ""}
                   onValueChange={selectEngine}
                   options={modelGroups.flatMap((group) =>
-                    group.models.map((model) => {
-                      const names = namesOf(model);
-                      return {
-                        value: model.value,
-                        label: names.primary,
-                        description: names.secondary,
-                        keywords: generationOptionKeywords(model),
-                        //: 同一张工作流的表单入口挂在它的完整工作流下面(后端已经把它们排在一起)
-                        indent: model.group?.entry === "form",
-                        group: capabilityLabel(group.kind),
-                      };
-                    }),
+                    group.models.map((model) => ({
+                      value: model.value,
+                      //: 有表单的工作流是一小组:小标题工作流名 + 连接名,下面「完整工作流」和每张表单(后端已经把它们排在一起)
+                      ...generationPickerEntry(model, formed, t),
+                      group: capabilityLabel(group.kind),
+                    })),
                   )}
                   placeholder={t("genPickModel")}
                   emptyText={t("cmdkEmpty")}
                   className={PARAMETER_CONTROL_CLASS}
                 />
                 </div>
+                {unavailableReason && !modelId && (
+                  <p role="alert" data-engine-unavailable="" className="m-0 text-ui-xs leading-relaxed text-warning">
+                    {t("genModelUnavailable").replace("{model}", activeSession?.model ?? "").replace("{reason}", unavailableReason)}
+                  </p>
+                )}
               </ParameterField>
               {/* 选中的是某台 ComfyUI 上的一张工作流:在工作台里打开它(画布 + 模型库、缺失项、应用、运行,ADR 0038) */}
               {selectedModel?.plugin_instance_id && (

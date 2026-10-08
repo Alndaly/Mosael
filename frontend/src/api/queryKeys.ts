@@ -193,4 +193,6 @@ export const blenderKeys = {
  */
 export const generationKeys = {
   options: (kind?: string) => (kind ? (["generation-options", kind] as const) : (["generation-options"] as const)),
+  //: 挂在 generation-options 下面:目录重拉时和生成选项一起失效
+  unavailable: () => ["generation-options", "__unavailable"] as const,
 };

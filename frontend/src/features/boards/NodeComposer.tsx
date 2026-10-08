@@ -3,7 +3,8 @@ import { noteHref } from "@/lib/deepLink";
 import React from "react";
 
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
-import { ArrowLeftRight, Plus, Sparkles } from "lucide-react";
+import { ArrowLeftRight, Plus, Sparkles, TriangleAlert } from "lucide-react";
+import { useUnavailableReason } from "@/lib/generationOptions";
 
 
 import { type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
@@ -59,7 +60,7 @@ import {
   withTriggerWords,
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
-import { formedGroups, generationOptionKeywords, generationOptionNames } from "@/lib/entryNames";
+import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
@@ -529,6 +530,10 @@ export function NodeComposer({
   //: 有表单的那几张工作流:完整工作流的副名写「完整工作流」(ADR 0045)
   const formed = React.useMemo(() => formedGroups(options), [options]);
   const modelValue = current ? `${current.provider_profile_id}:${current.model}` : "";
+  //: 存着的模型不在清单里、插件说过为什么(ComfyUI:表单还是旧格式,到工作流库里升级):挨着「选择模型」说一句,悬停看全句
+  const savedKey = saved.provider_profile_id && saved.model ? `${saved.provider_profile_id}:${saved.model}` : "";
+  const unavailableReason = useUnavailableReason(savedKey && picked === savedKey && modelValue !== savedKey ? saved.provider_profile_id : null,
+                                                 saved.model);
 
   //: 每一项的默认值都**从描述符取**(default_* 那几条),而不是前端挑一个 —— 后端那份才是
   //: 对着真机核过的。换模型时跟着换,所以用 key 重挂而不是 useState 记着上一个模型的值。
@@ -1102,19 +1107,18 @@ export function NodeComposer({
               value={modelValue}
               placeholder={t("genPickModel")}
               onChange={pickModel}
-              options={options.map((one) => {
-                //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪张工作流、哪台服务器;
-                //: 同一张工作流的表单入口挂在完整工作流下面。按主名、工作流名、文件名、连接名都搜得到。
-                const names = generationOptionNames(one, formed, t);
-                return {
-                  value: `${one.provider_profile_id}:${one.model}`,
-                  label: names.primary,
-                  description: names.secondary,
-                  keywords: generationOptionKeywords(one),
-                  indent: one.group?.entry === "form",
-                };
-              })}
+              //: 两层名字(ADR 0045):主名是这一项自己的(表单标题 / 工作流名),副名说来自哪台服务器;有表单的工作流是一小组
+              //: (小标题工作流名 + 连接名,下面「完整工作流」和每张表单)。按主名、工作流名、文件名、连接名都搜得到。
+              options={options.map((one) => ({ value: `${one.provider_profile_id}:${one.model}`, ...generationPickerEntry(one, formed, t) }))}
             />
+            {unavailableReason && (
+              <Hint label={t("genModelUnavailable").replace("{model}", saved.model ?? "").replace("{reason}", unavailableReason)}>
+                <span role="alert" data-model-unavailable="" className="inline-flex min-w-0 items-center gap-1 px-1 text-ui-2xs text-warning">
+                  <TriangleAlert size={12} aria-hidden className="shrink-0" />
+                  <Truncate>{t("genModelUnavailableShort")}</Truncate>
+                </span>
+              </Hint>
+            )}
             {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮;「我们不认识这个模型」
                 (手填的别名、经另一条中转配的同一个模型)要说出来 —— 静默地什么都不显示,
                 用户会以为这个模型就是没参数。显隐和弹层内容共用 settingBlocks。 */}

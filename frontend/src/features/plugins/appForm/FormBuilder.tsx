@@ -28,9 +28,8 @@ import {
   moveItemTo,
   recommendedItems,
   removeItem,
-  toggleResult,
   updateItem,
-  type AppDraft,
+  type FormDraft,
   type AppItemDraft,
 } from "@/features/plugins/workflowAppForm";
 import { cn } from "@/lib/utils";
@@ -43,7 +42,7 @@ const DRAG_DISTANCE = 4;
 /**
  * 「表单」:正在搭的那张表。每一项是一张紧凑的卡片 —— 拖动手柄(指针拖;聚焦后按 ↑ ↓ 挪)、种类图标、名字(就地改)、现在的值,
  * 右边「设置」(收窄可选值、当主提示词、上下挪、拿掉)和「拿掉」。失效的项标着原因,能修的给一键修(只留还在的可选值),修不了的
- * 一键去掉。空着时给「按推荐先挑一版」。下面单独一节「结果取自」:标哪个输出节点出的图才算结果。
+ * 一键去掉。空着时给「按推荐先挑一版」。「结果取自」不在这里:它按工作流记,在表单那一排上面(见 ResultsSection)。
  */
 export function FormBuilder({
   data,
@@ -51,21 +50,20 @@ export function FormBuilder({
   onChange,
 }: {
   data: WorkflowApp;
-  draft: AppDraft;
-  onChange: (next: AppDraft) => void;
+  draft: FormDraft;
+  onChange: (next: FormDraft) => void;
 }) {
   const t = useI18n();
   const found = React.useMemo(() => itemsByKey(data), [data]);
   const [said, setSaid] = React.useState("");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }));
   const invalid = draft.items.filter((one) => one.problem).length;
-  const outputs = data.outputs ?? [];
 
   const nameOf = (key: string) => {
     const one = draft.items.find((entry) => entry.key === key);
     return one?.label || found.get(key)?.title || key;
   };
-  const announceMove = (next: AppDraft, key: string) => {
+  const announceMove = (next: FormDraft, key: string) => {
     const index = next.items.findIndex((one) => one.key === key);
     setSaid(t("workflowAppMoved").replace("{name}", nameOf(key)).replace("{n}", String(index + 1)));
   };
@@ -129,9 +127,6 @@ export function FormBuilder({
         </DndContext>
       )}
       <p role="status" aria-live="polite" data-app-announce="" className="sr-only">{said}</p>
-      {outputs.length > 1 && (
-        <ResultsSection outputs={outputs} results={draft.results} onToggle={(node) => onChange(toggleResult(draft, node))} />
-      )}
     </section>
   );
 }
@@ -414,16 +409,18 @@ function outputName(output: WorkflowAppOutput): string {
 
 /**
  * 「结果取自」:这张工作流有几个出图的节点时,标哪几个出的图才算结果(插件记在那个节点上,ADR 0038 §5)。说的是节点,不是某一张图:
- * 「只要这个节点的图」;标了的写「结果取自这个节点」,能撤销。
+ * 「只要这个节点的图」;标了的写「结果取自这个节点」,能撤销。**按工作流记,不按表单**(ADR 0045 §7):完整工作流和每张表单
+ * 都按它,所以摆在表单那一排上面单独一块。只有一个出图的节点时不出。
  */
-function ResultsSection({ outputs, results, onToggle }: {
+export function ResultsSection({ outputs, results, onToggle }: {
   outputs: WorkflowAppOutput[];
   results: string[];
   onToggle: (node: string) => void;
 }) {
   const t = useI18n();
+  if (outputs.length < 2) return null;
   return (
-    <section aria-label={t("workflowAppResults")} data-app-results="" className="grid min-w-0 gap-2 border-t border-divider pt-4">
+    <section aria-label={t("workflowAppResults")} data-app-results="" className="grid min-w-0 gap-2">
       <h4 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">
         {t("workflowAppResults")}
         {results.length > 0 && <span className="text-ui-xs font-normal tabular-nums text-muted-foreground">{results.length}</span>}

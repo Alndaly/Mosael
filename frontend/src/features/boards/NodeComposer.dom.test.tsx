@@ -175,9 +175,9 @@ it("尺寸只是推荐值时可以手填 —— 768x1024 照写的发出去", as
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ parameters: expect.objectContaining({ size: "768x1024" }) }));
 });
 
-it("模型下拉两层名字:主名是表单标题 / 工作流名,第二行说来自哪张工作流、哪台服务器;按表单标题、工作流名都搜得到", async () => {
-  // 维护者(ADR 0045):起了「快速用krea2生图」,到处只叫表单名 —— 认不出是哪张图,也拿不到全部参数。现在同一张工作流两项:
-  // 完整工作流(主名是工作流名,第二行「完整工作流 · 连接名」)和表单(主名是表单标题,第二行「来自 krea2-text-2-image · 连接名」)
+it("模型下拉按工作流分组:小标题工作流名 + 连接名,下面「完整工作流」和表单;搜表单标题整组留着、命中的那行加粗", async () => {
+  // 维护者(ADR 0045):起了「快速用krea2生图」,到处只叫表单名 —— 认不出是哪张图,也拿不到全部参数。现在同一张工作流是一小组:
+  // 小标题写工作流名和哪台服务器,下面「完整工作流」(全部参数)和每张表单各一行;触发器上写主名
   HTMLElement.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   const group = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
@@ -189,8 +189,8 @@ it("模型下拉两层名字:主名是表单标题 / 工作流名,第二行说�
   render(<NodeComposer
     item={{ id: "image", kind: "image", text: "" } as BoardItem}
     models={[
-      option("krea2-text-2-image.json", "krea2-text-2-image", { group: { ...group, entry: "full" } }),
-      option("krea2-text-2-image.json#app", "快速用krea2生图", { group: { ...group, entry: "form" }, is_default: true }),
+      option("krea2-text-2-image.json", "krea2-text-2-image", { group: { ...group, entry: "full", order: 0 } }),
+      option("krea2-text-2-image.json#app", "快速用krea2生图", { group: { ...group, entry: "form", order: 1 }, is_default: true }),
       ...Array.from({ length: 11 }, (_, index) => option(`flow-${index}.json`, `工作流 ${index}`, {})),
     ]}
     busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={vi.fn()}
@@ -207,11 +207,16 @@ it("模型下拉两层名字:主名是表单标题 / 工作流名,第二行说�
     return input!;
   });
   const form = await screen.findByRole("option", { name: /快速用krea2生图/ });
-  expect(form.textContent).toContain("entryFromGroup");
   expect(form).toHaveAttribute("data-indent");
-  expect((await screen.findByRole("option", { name: /^krea2-text-2-image/ })).textContent).toContain("entryFullWorkflow");
+  const head = document.querySelector("[data-section-head]") as HTMLElement;
+  expect(head.textContent, "小标题:工作流名和哪台服务器").toBe("krea2-text-2-imageComfyUI · http://192.168.3.15:8188");
+  expect(screen.getByRole("option", { name: /^entryFullWorkflow/ }).getAttribute("data-section")).toBe(form.getAttribute("data-section"));
+  const named = (rows: HTMLElement[]) => rows.map((one) => one.textContent);
   fireEvent.change(search, { target: { value: "快速" } });
-  await waitFor(() => expect(screen.getAllByRole("option").map((one) => one.textContent?.split("entry")[0])).toEqual(["快速用krea2生图"]));
+  await waitFor(() => expect(named(screen.getAllByRole("option")), "搜表单标题:整组留着(完整工作流也在)")
+    .toEqual(["entryFullWorkflow", "快速用krea2生图"]));
+  expect(screen.getByRole("option", { name: /快速用krea2生图/ })).toHaveAttribute("data-hit");
+  expect(screen.getByRole("option", { name: /^entryFullWorkflow/ })).not.toHaveAttribute("data-hit");
   fireEvent.change(search, { target: { value: "krea2-text" } });
   await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
 });

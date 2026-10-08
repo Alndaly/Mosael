@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Truncate } from "@/components/ui/truncate";
-import { defaultDraft, previewOption, type AppDraft } from "@/features/plugins/workflowAppForm";
+import { defaultDraft, previewOption, type FormDraft } from "@/features/plugins/workflowAppForm";
 import {
   declaredParameters,
   promptMode,
@@ -26,7 +26,7 @@ type Translate = ReturnType<typeof useI18n>;
  * 「预览」:用的人看到的那张表 —— 按草稿拼一份和生成目录同形的描述符(workflowAppForm.previewOption),交给生成面板同一组读法和
  * 控件画出来,能试着填、不存。表单还空着时,画的是**现在**用的人看到的那张(缺省的应用:全部能填的项),并说清楚这一点。
  */
-export function PreviewPanel({ instanceId, data, draft }: { instanceId: string; data: WorkflowApp; draft: AppDraft }) {
+export function PreviewPanel({ instanceId, data, draft }: { instanceId: string; data: WorkflowApp; draft: FormDraft }) {
   const t = useI18n();
   const empty = draft.items.length === 0;
   const shown = React.useMemo(() => (empty ? defaultDraft(data) : draft), [empty, data, draft]);

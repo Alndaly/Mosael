@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FormBuilder } from "@/features/plugins/appForm/FormBuilder";
 import { PreviewPanel } from "@/features/plugins/appForm/PreviewPanel";
 import { SourcePanel } from "@/features/plugins/appForm/SourcePanel";
-import { addItem, removeItem, type AppDraft } from "@/features/plugins/workflowAppForm";
+import { addItem, removeItem, type FormDraft } from "@/features/plugins/workflowAppForm";
 import { useElementWidth } from "@/lib/useElementWidth";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +38,8 @@ export function AppFormEditor({
 }: {
   instance: Pick<PluginInstance, "id">;
   data: WorkflowApp;
-  draft: AppDraft;
-  onChange: (next: AppDraft) => void;
+  draft: FormDraft;
+  onChange: (next: FormDraft) => void;
   layout?: "auto" | "narrow";
 }) {
   const t = useI18n();
@@ -60,7 +60,10 @@ export function AppFormEditor({
   const notices = (
     <>
       {data.app?.status === "unsupported" && (
-        <Notice>{t("workflowAppUnsupported").replace("{version}", data.app?.version || "?")}</Notice>
+        <Notice>
+          {data.app.upgradable ? t("workflowAppUpgradeNeeded")
+            : t("workflowAppUnsupported").replace("{version}", data.app.version || "?")}
+        </Notice>
       )}
       {!data.editable && <Notice>{t("workflowAppNotEditable")}</Notice>}
     </>
@@ -121,19 +124,26 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * 应用名和说明(就地改),下面一行小字说存在哪 —— 用大白话:「存进这张工作流文件里,复制、导出都跟着走」。弹窗把它钉在标题下面,
- * 工作台的面板放在最上面。按容器宽度决定两个框并排还是上下叠。
+ * 选中那张表单的标题和说明(就地改),下面一行小字说存在哪 —— 用大白话:「存进这张工作流文件里,复制、导出都跟着走」。弹窗把它
+ * 钉在表单那一排下面,工作台的面板放在表单那一排下面。按容器宽度决定两个框并排还是上下叠。标题必填(几张表单都叫「表单」
+ * 分不出来,ADR 0045 §7):空着时就地提醒。
  */
-export function AppHead({ draft, onChange, where }: { draft: AppDraft; onChange: (next: AppDraft) => void; where?: string }) {
+export function AppHead({ draft, onChange, where }: { draft: FormDraft; onChange: (next: FormDraft) => void; where?: string }) {
   const t = useI18n();
+  const missing = !draft.title.trim();
+  const needsTitle = React.useId();
   return (
     <div className="@container grid min-w-0 gap-2" data-app-head="">
       <div className="grid min-w-0 gap-3 @lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <label className="grid min-w-0 gap-1 text-ui-xs font-medium text-muted-foreground">
-          {t("workflowAppName")}
-          <Input value={draft.title} maxLength={120} placeholder={t("workflowAppNamePlaceholder")}
-                 onChange={(event) => onChange({ ...draft, title: event.target.value })} />
-        </label>
+        <div className="grid min-w-0 gap-1">
+          <label className="grid min-w-0 gap-1 text-ui-xs font-medium text-muted-foreground">
+            {t("workflowAppName")}
+            <Input value={draft.title} maxLength={120} placeholder={t("workflowAppNamePlaceholder")} aria-invalid={missing}
+                   aria-describedby={missing ? needsTitle : undefined}
+                   onChange={(event) => onChange({ ...draft, title: event.target.value })} />
+          </label>
+          {missing && <span id={needsTitle} className="text-ui-xs text-warning">{t("workflowFormNeedsTitle")}</span>}
+        </div>
         <label className="grid min-w-0 gap-1 text-ui-xs font-medium text-muted-foreground">
           {t("workflowAppDescription")}
           <Input value={draft.description} maxLength={1000} placeholder={t("workflowAppDescriptionPlaceholder")}

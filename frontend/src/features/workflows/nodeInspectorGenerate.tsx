@@ -51,7 +51,7 @@ import {
   sourceLimit,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { formedGroups, generationOptionKeywords, generationOptionNames } from "@/lib/entryNames";
+import { formedGroups, generationPickerEntry } from "@/lib/entryNames";
 import { GENERATION_KIND_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 
 //: 节点检查器里「AI 生成素材」的专区:选模型、按模型能力铺参数、按角色挂输入素材。
@@ -360,13 +360,9 @@ export function generateNodeSection({
         <OptionPicker
           value={genModel?.id ?? ""}
           options={(generationModels.options).map((model) => {
-            const names = generationOptionNames(model, formed, t);
             return {
               value: model.id,
-              label: names.primary,
-              description: names.secondary,
-              keywords: generationOptionKeywords(model),
-              indent: model.group?.entry === "form",
+              ...generationPickerEntry(model, formed, t),
               group: t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage"),
             };
           })}

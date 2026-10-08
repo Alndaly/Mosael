@@ -61,6 +61,7 @@ const api = vi.hoisted(() => ({
   markWorkflowOutputNsfw: vi.fn(),
   getLocalNsfw: vi.fn(async () => ({ status: "missing", size_bytes: 0, pending: 0, scored: 0, message: "" })),
   installLocalNsfw: vi.fn(),
+  upgradeWorkflowMarks: vi.fn(),
 }));
 const saved = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/download", () => ({ saveJsonToDisk: saved }));
@@ -974,7 +975,7 @@ describe("工作流库 · 卡片的菜单", () => {
     api.getWorkflowLibrary.mockResolvedValue(library({
       editor: EDITOR,
       workflows: library().workflows!.map((one) => one.path === "sub/sketch.json"
-        ? { ...one, app: { status: "ok", version: "1", app: false, title: "", description: "", items: [], results: [], invalid: 0, fields: 0 } }
+        ? { ...one, app: { status: "ok", version: "1", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 } }
         : one),
     }));
     await openLibrary();
@@ -1065,5 +1066,34 @@ describe("工作流库 · 卡片的菜单", () => {
     const data = transfer();
     fireEvent.dragStart(row, { dataTransfer: data });
     expect(data.getData("application/x-mosael-workflow")).toBe("portrait.json");
+  });
+});
+
+describe("上一版格式的表单(ADR 0045 §7)", () => {
+  const old = (path: string, modified: number) => flow({
+    path, label: path.replace(/\.json$/, ""), modified,
+    app: { status: "unsupported", version: "1", upgradable: true, forms: [], results: [], invalid: 0, stray: 0 },
+  });
+
+  it("顶上一条横幅说有几张;「查看并升级」列出要改的文件、写明只改 Mosael 的标记;确认一次整台改,报改了几张、跳过的", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({ workflows: [...library().workflows!, old("krea2.json", 11), old("老/人像.json", 12)] }));
+    api.upgradeWorkflowMarks.mockResolvedValue({ upgraded: ["krea2.json"], stale: ["老/人像.json"], skipped: [], gone: [], failed: [] });
+    await openLibrary();
+    const banner = document.querySelector("[data-forms-upgrade-banner]") as HTMLElement;
+    expect(banner.textContent).toContain("workflowFormsUpgradeBanner");
+    expect(within(cardOf("krea2")).getByText("workflowFormsOldBadge"), "卡片上标着旧格式").toBeTruthy();
+    fireEvent.click(within(banner).getByRole("button", { name: "workflowFormsUpgradeOpen" }));
+    const dialog = await screen.findByRole("dialog", { name: "workflowFormsUpgradeTitle" });
+    expect(within(dialog).getByText("workflowFormsUpgradeBody")).toBeTruthy();
+    expect(within(within(dialog).getByRole("list", { name: "workflowFormsUpgradeFiles" })).getAllByRole("listitem")
+      .map((one) => one.textContent)).toEqual(["krea2.json", "老/人像.json"]);
+    expect(api.upgradeWorkflowMarks).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "workflowFormsUpgradeConfirm" }));
+    });
+    expect(api.upgradeWorkflowMarks).toHaveBeenCalledWith("i1", [{ path: "krea2.json", modified: 11 }, { path: "老/人像.json", modified: 12 }]);
+    const outcome = await within(dialog).findByRole("status");
+    expect(outcome.textContent).toContain("workflowFormsUpgraded");
+    expect(outcome.textContent, "刚改过的那张跳过了,说出来").toContain("workflowFormsUpgradeStale");
   });
 });

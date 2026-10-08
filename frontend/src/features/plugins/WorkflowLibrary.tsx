@@ -87,7 +87,8 @@ import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { invalidatePluginDependents, refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
-import { WorkflowAppEditor, WorkflowAppSection } from "@/features/plugins/WorkflowAppEditor";
+import { WorkflowAppEditor, WorkflowAppSection, type FormFocus } from "@/features/plugins/WorkflowAppEditor";
+import { FormsUpgradeBanner, FormsUpgradeDialog, upgradableWorkflows } from "@/features/plugins/WorkflowFormsUpgrade";
 import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
 import { WorkflowOutputs } from "@/features/plugins/WorkflowOutputs";
 import {
@@ -223,8 +224,10 @@ export function WorkflowLibraryDialog({
   const [dropTarget, setDropTarget] = React.useState<string | null>(null);
   //: 从菜单的「下载缺的模型」「装缺的节点」打开详情时,停到哪一节
   const [detailFocus, setDetailFocus] = React.useState<"models" | "nodes" | null>(null);
-  //: 正在编辑哪一张的应用表单(ADR 0038):详情里「编辑应用表单」、卡片菜单里「编辑应用表单…」打开
-  const [editingApp, setEditingApp] = React.useState<WorkflowFile | null>(null);
+  //: 正在编辑哪一张的表单(ADR 0038、0045),停到哪张:详情里点某一张 / 「新表单」、卡片菜单里「编辑表单…」打开
+  const [editingApp, setEditingApp] = React.useState<{ flow: WorkflowFile; focus: FormFocus } | null>(null);
+  //: 「查看并升级」上一版格式的表单(ADR 0045 §7):横幅和详情里那颗按钮打开
+  const [upgrading, setUpgrading] = React.useState(false);
   //: 正在导入(往库上拖进来的那个文件一并带上)
   const [importing, setImporting] = React.useState<{ file?: File } | null>(null);
   //: 装节点包:这次打开之后发起的任务、正在确认装哪个、正在确认重启
@@ -507,7 +510,8 @@ export function WorkflowLibraryDialog({
       },
       {
         group: "app", label: t("workflowMenuEditApp"), icon: <SlidersHorizontal />, disabled: !flow.app,
-        description: flow.app ? undefined : t("workflowMenuAppUnavailable"), onSelect: () => setEditingApp(flow),
+        description: flow.app ? undefined : t("workflowMenuAppUnavailable"),
+        onSelect: () => (flow.app?.upgradable ? setUpgrading(true) : setEditingApp({ flow, focus: null })),
       },
       ...file.slice(0, -1),
       ...lacking,
@@ -671,6 +675,9 @@ export function WorkflowLibraryDialog({
       chips={
         library.data ? (
           <>
+            {upgradableWorkflows(workflows).length > 0 && (
+              <FormsUpgradeBanner count={upgradableWorkflows(workflows).length} onOpen={() => setUpgrading(true)} />
+            )}
             {listNote}
             <LibraryFilterChips
               label={t("modelLibraryActiveFilters")}
@@ -702,7 +709,8 @@ export function WorkflowLibraryDialog({
             restartError={restart.error ? errorText(restart.error) : ""}
             onRestart={() => setRestartAsk(true)}
             onDismissNote={editor.dismiss}
-            app={<WorkflowAppSection instance={instance} flow={detail} onEdit={() => setEditingApp(detail)} onSaved={changed} />}
+            app={<WorkflowAppSection instance={instance} flow={detail} onEdit={(focus) => setEditingApp({ flow: detail, focus })}
+                                     onUpgrade={() => setUpgrading(true)} onSaved={changed} />}
             outputs={detail.last_output && workspaceId
               ? <WorkflowOutputs instanceId={instance.id} workspaceId={workspaceId} path={detail.path} label={detail.label} />
               : null}
@@ -752,10 +760,15 @@ export function WorkflowLibraryDialog({
           {editingApp && (
             <WorkflowAppEditor
               instance={instance}
-              flow={editingApp}
+              flow={editingApp.flow}
+              focus={editingApp.focus}
+              workspaceId={workspaceId}
               onClose={() => setEditingApp(null)}
               onSaved={changed}
             />
+          )}
+          {upgrading && (
+            <FormsUpgradeDialog instance={instance} workflows={workflows} onClose={() => setUpgrading(false)} onDone={changed} />
           )}
           {importing && (
             <WorkflowImportDialog
@@ -952,19 +965,19 @@ function CardMenuButton({ menu, className }: { menu: CardMenu; className?: strin
   );
 }
 
-/** 这张工作流上那张表单的标题(ADR 0045:表单是它的一个入口)。没有表单、表单没起标题是空串。 */
-function formTitle(flow: WorkflowFile): string {
-  return flow.app?.status === "ok" && flow.app.app ? (flow.app.title ?? "").trim() : "";
+/** 这张工作流上每张表单的标题(ADR 0045:表单是它的入口),按存的顺序;没起标题的写「未命名表单」。没有表单是空的。 */
+function formTitles(flow: WorkflowFile, untitled: string): string[] {
+  return flow.app?.status === "ok" ? (flow.app.forms ?? []).map((one) => one.title.trim() || untitled) : [];
 }
 
-/** 名字下面一行淡色小字「表单:快速用krea2生图」—— AI Studio、画板里看到的表单名,在库里找得到是哪张工作流。 */
+/** 名字下面一行淡色小字「表单:快速用krea2生图、精调」—— AI Studio、画板里看到的表单名,在库里找得到是哪张工作流。 */
 function FormTitleLine({ flow }: { flow: WorkflowFile }) {
   const t = useI18n();
-  const title = formTitle(flow);
-  if (!title) return null;
+  const titles = formTitles(flow, t("workflowFormUntitled"));
+  if (titles.length === 0) return null;
   return (
     <span data-workflow-form-title="" className="block min-w-0 text-ui-2xs text-muted-foreground">
-      <Truncate>{t("workflowFormTitleLine").replace("{title}", title)}</Truncate>
+      <Truncate>{t("workflowFormTitleLine").replace("{title}", titles.join(t("listSeparator")))}</Truncate>
     </span>
   );
 }
@@ -1014,9 +1027,12 @@ function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
         <div className="flex h-6 min-w-0 items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1">
             <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
-            {flow.app?.status === "ok" && flow.app.app && (
-              <CatalogBadge tone={(flow.app.invalid ?? 0) > 0 ? "warning" : "muted"}>{t("workflowAppBadge")}</CatalogBadge>
+            {flow.app?.status === "ok" && (flow.app.forms ?? []).length > 0 && (
+              <CatalogBadge tone={(flow.app.invalid ?? 0) > 0 ? "warning" : "muted"}>
+                {t("workflowAppBadge").replace("{n}", String((flow.app.forms ?? []).length))}
+              </CatalogBadge>
             )}
+            {flow.app?.upgradable && <CatalogBadge tone="warning">{t("workflowFormsOldBadge")}</CatalogBadge>}
           </span>
           <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
             {t("workflowLibraryNodes").replace("{n}", String(flow.node_count))}
@@ -1323,7 +1339,11 @@ function WorkflowDetail({
           {flow.folder && <span>{flow.folder}</span>}
           {flow.folder && <span aria-hidden>·</span>}
           <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
-          {formTitle(flow) && <span data-workflow-form-title="">{t("workflowFormTitleLine").replace("{title}", formTitle(flow))}</span>}
+          {formTitles(flow, t("workflowFormUntitled")).length > 0 && (
+            <span data-workflow-form-title="">
+              {t("workflowFormTitleLine").replace("{title}", formTitles(flow, t("workflowFormUntitled")).join(t("listSeparator")))}
+            </span>
+          )}
           <span className="tabular-nums">{t("workflowLibraryNodes").replace("{n}", String(flow.node_count))}</span>
           {flow.modified != null && <span aria-hidden>·</span>}
           {flow.modified != null && <span className="tabular-nums">{new Date(flow.modified * 1000).toLocaleString(locale)}</span>}

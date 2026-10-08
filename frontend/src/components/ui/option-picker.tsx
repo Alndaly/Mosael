@@ -2,7 +2,7 @@ import * as React from "react";
 import { ChevronDown } from "lucide-react";
 
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableSelect, type OptionSection } from "@/components/ui/searchable-select";
 import type { FieldSize } from "@/components/ui/control-size";
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
 import { Hint } from "@/components/ui/tooltip";
@@ -30,6 +30,11 @@ export type PickerOption = {
   group?: string;
   /** 挂在上一项下面、缩进一格(同一张工作流的表单入口挂在它的完整工作流下面,ADR 0045)。两个分支都缩。 */
   indent?: boolean;
+  /** 组里的一小组(有表单的工作流:小标题是工作流名 + 连接名,下面「完整工作流」和每张表单各一行,ADR 0045 §7)。两个分支都画。
+   *  搜索的规矩见 SearchableSelect:命中一行,整个小组留着。 */
+  section?: OptionSection;
+  /** 选中之后触发器上写什么(小组里的「完整工作流」单独写在触发器上说不清是哪张);不给就是 `label`。 */
+  selectedLabel?: string;
 };
 
 /** 相邻的同名 `group` 归成一组(不重排)。 */
@@ -123,7 +128,7 @@ export function OptionPicker({
             {icon}
             {/* 选中的值在触发器里会被截断(一个 checkpoint 文件名动辄四五十个字符):悬停看得到全名。 */}
             <Truncate className={cn(!selected && "text-muted-foreground")} style={selected?.style}>
-              {selected?.label ?? placeholder ?? ""}
+              {selected?.selectedLabel ?? selected?.label ?? placeholder ?? ""}
             </Truncate>
             <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
           </button>
@@ -141,24 +146,34 @@ export function OptionPicker({
       <Hint label={hint}>
         <SelectTrigger aria-label={ariaLabel} size={size} className={className} {...rest}>
           {icon}
-          <SelectValue placeholder={placeholder}>{selected ? <Truncate>{selected.label}</Truncate> : undefined}</SelectValue>
+          <SelectValue placeholder={placeholder}>
+            {selected ? <Truncate>{selected.selectedLabel ?? selected.label}</Truncate> : undefined}
+          </SelectValue>
         </SelectTrigger>
       </Hint>
       <SelectContent align={align} className={contentClassName}>
         {groupAdjacent(options).map(([heading, rows]) => {
-          const items = rows.map((one) => (
-            <SelectItem
-              key={one.value}
-              value={one.value}
-              truncate
-              style={one.style}
-              description={one.description}
-              media={one.media}
-              className={one.indent ? "pl-6" : undefined}
-              data-indent={one.indent ? "" : undefined}
-            >
-              {one.label}
-            </SelectItem>
+          const items = rows.map((one, index) => (
+            <React.Fragment key={one.value}>
+              {one.section && one.section.key !== rows[index - 1]?.section?.key && (
+                <SelectLabel data-section-head={one.section.key} className="grid gap-px font-normal">
+                  <Truncate className="font-medium text-foreground">{one.section.label}</Truncate>
+                  {one.section.subtitle && <Truncate className="text-muted-foreground">{one.section.subtitle}</Truncate>}
+                </SelectLabel>
+              )}
+              <SelectItem
+                value={one.value}
+                truncate
+                style={one.style}
+                description={one.description}
+                media={one.media}
+                className={one.indent || one.section ? "pl-6" : undefined}
+                data-indent={one.indent || one.section ? "" : undefined}
+                data-section={one.section?.key}
+              >
+                {one.label}
+              </SelectItem>
+            </React.Fragment>
           ));
           return heading ? (
             <SelectGroup key={heading}>

@@ -7,7 +7,7 @@
  * 产出来自哪个节点以插件读的历史为准(任务回执里的 `source_node`)。
  */
 import type { EncoderRecipe, Job, ModelFile, NodeEncoders, WorkflowNodePack } from "@/api/client";
-import type { AppDraft } from "@/features/plugins/workflowAppForm";
+import type { FormsDraft } from "@/features/plugins/workflowAppForm";
 import type { WorkbenchRun } from "@/features/plugins/workbench/workbenchSession";
 
 export type WorkbenchNode = NonNullable<ComfyWorkbenchState["selection"]["node"]>;
@@ -189,13 +189,13 @@ export function liveProgress(events: readonly ComfyWorkbenchEvent[], promptId?: 
   return current;
 }
 
-/** 「只要这个节点的图」:这张工作流的结果只标这一个输出节点(清掉别的节点上的,ADR 0038 §5)。应用表单的别的部分不动。 */
-export function onlyResult(draft: AppDraft, node: string): AppDraft {
+/** 「只要这个节点的图」:这张工作流的结果只标这一个输出节点(清掉别的节点上的,ADR 0038 §5)。每张表单照旧。 */
+export function onlyResult(draft: FormsDraft, node: string): FormsDraft {
   return { ...draft, results: [node] };
 }
 
 /** 撤销:这个节点不再标成结果(别的节点上的标记不动)。 */
-export function withoutResult(draft: AppDraft, node: string): AppDraft {
+export function withoutResult(draft: FormsDraft, node: string): FormsDraft {
   return { ...draft, results: draft.results.filter((one) => one !== node) };
 }
 

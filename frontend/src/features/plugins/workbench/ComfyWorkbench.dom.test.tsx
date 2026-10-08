@@ -37,6 +37,7 @@ const api = vi.hoisted(() => ({
   rebootWorkflowServer: vi.fn(),
   getCanvasApp: vi.fn(),
   getCanvasMarks: vi.fn(),
+  getFormUsages: vi.fn(),
   runCanvas: vi.fn(),
   refreshPluginInstance: vi.fn(),
   getJob: vi.fn(),
@@ -184,7 +185,7 @@ const appData = (overrides: Partial<WorkflowApp> = {}): WorkflowApp => ({
   ],
   outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
             { node: "17", title: "", label: "PreviewImage", class_type: "PreviewImage", media: "image" }],
-  app: { status: "none", version: "", app: false, title: "", description: "", items: [], results: [], invalid: 0, fields: 0 },
+  app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
   ...overrides,
 });
 
@@ -448,35 +449,71 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(api.startNodeInstall).toHaveBeenCalledWith("i1", { workspace_id: "w1", packs: ["comfyroll"] }));
   });
 
-  it("应用:读画布上这张;改了「写进画布」—— 插件算标记、经桥改节点,不写文件", async () => {
+  it("表单:读画布上这张;新建一张、起名、挑项再「写进画布」—— 插件算标记、经桥改节点,不写文件;写完重读拿到新表单的 id", async () => {
     const bridge = await mount();
     api.getCanvasApp.mockResolvedValue(appData());
-    api.getCanvasMarks.mockResolvedValue({ nodes: { "3": { expose: { steps: { order: 0 } } } }, extra: { version: 1, app: {} } });
+    const marks = { nodes: { "3": { forms: { k3x9a2: { steps: { order: 0 } } } } },
+                    extra: { version: 2, forms: [{ id: "k3x9a2", title: "调步数" }] } };
+    api.getCanvasMarks.mockResolvedValue(marks);
     tab("workbenchTabApp");
-    await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledWith("i1", EXPORTED.workflow));
+    await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledWith("i1", EXPORTED.workflow, "人像/古风.json"));
     const write = await screen.findByRole("button", { name: /workbenchAppWrite/ });
     expect(write.hasAttribute("disabled"), "没改过不用写").toBe(true);
+    //: 一张表单都没有:用的人看到的是完整工作流;「新表单」加一张空白的
+    fireEvent.click(within(document.querySelector("[data-no-forms]") as HTMLElement).getByRole("button", { name: /workflowFormNew/ }));
+    expect(write.hasAttribute("disabled"), "新表单还没起标题:写不了").toBe(true)
+    fireEvent.change(screen.getByPlaceholderText("workflowAppNamePlaceholder"), { target: { value: "调步数" } });
     //: 面板窄:编辑器是「挑项 / 表单 / 预览」三个标签,先到「挑项」里点「+」
     fireEvent.mouseDown(await screen.findByRole("tab", { name: /workflowAppTabSource/ }));
     fireEvent.click(within(document.querySelector("[data-source-item='3.steps']") as HTMLElement)
       .getByRole("button", { name: "workflowAppAdd" }));
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "2", upgradable: false, results: [], invalid: 0,
+                                                        stray: 0, forms: [{ id: "k3x9a2", title: "调步数", description: "",
+                                                                            fields: 1, invalid: 0, model: "", tool: "",
+                                                                            items: [] }] } }));
     fireEvent.click(write);
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     const [, body] = api.getCanvasMarks.mock.calls[0];
     expect(body.content).toEqual(EXPORTED.workflow);
-    expect(body.app.items.map((one: { node: string; input: string }) => `${one.node}.${one.input}`)).toHaveLength(1);
-    await waitFor(() => expect(calls(bridge)).toContainEqual({
-      op: "setMarks", marks: { nodes: { "3": { expose: { steps: { order: 0 } } } }, extra: { version: 1, app: {} } },
-    }));
+    expect(body.forms).toHaveLength(1);
+    expect(body.forms[0].id, "新表单不带 id:插件起").toBe("");
+    expect(body.forms[0].title).toBe("调步数");
+    expect(body.forms[0].items.map((one: { node: string; input: string }) => `${one.node}.${one.input}`)).toEqual(["3.steps"]);
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks }));
     expect(await screen.findByText("workbenchAppWritten")).toBeTruthy();
+    await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("tab", { name: "调步数" }), "重读之后:那张有了插件起的 id,还停在它").toBeTruthy();
+    //: 桌面版真机走查:按了顶栏「保存」、画布报存好了,「已同步到画布,但还没保存」还挂着
+    bridge.emit(state({ workflow: { ...GUFENG, modified: false, revision: 2 } }));
+    await waitFor(() => expect(screen.queryByText("workbenchAppWritten"), "存好了:那句收起来").toBeNull());
+  });
+
+  //: 桌面版真机走查:确认框是普通弹窗(z-50)时,中间被画布盖着、两边被外壳盖着,在用的那几处一处都看不见
+  it("表单:删一张存过的表单,确认框压在外壳之上、请画布让开,列出这个工作区里在用它的几处", async () => {
+    const bridge = await mount();
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "2", upgradable: false, results: [], invalid: 0,
+                                                        stray: 0, forms: [{ id: "k3x9a2", title: "调步数", description: "",
+                                                                            fields: 1, invalid: 0, model: "古风.json#k3x9a2",
+                                                                            tool: "wf_x_k3x9a2", items: [] }] } }));
+    api.getFormUsages.mockResolvedValue({ uses: [{ kind: "board", id: "b1", name: "海报", count: 1 }] });
+    tab("workbenchTabApp");
+    fireEvent.click(await screen.findByRole("button", { name: "workflowFormActions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "workflowFormDelete" }));
+    const ask = await screen.findByRole("alertdialog");
+    expect(ask.className, "压在外壳(z-200)之上").toMatch(/\bz-\[205\]/);
+    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(within(ask).getAllByRole("listitem")).toHaveLength(1));
+    expect(api.getFormUsages).toHaveBeenCalledWith("i1", { workspace_id: "w1", model: "古风.json#k3x9a2", tool: "wf_x_k3x9a2" });
+    fireEvent.click(within(ask).getByRole("button", { name: "cancel" }));
+    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
   });
 
   it("运行:跑画布上这张(API 图、界面格式、前端的 clientId);产出按来自的节点分组、标节点名;「只要这个节点的图」标在画布上", async () => {
     const bridge = await mount();
     api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
     api.getJob.mockResolvedValue(SUCCEEDED);
-    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "1", app: false, title: "", description: "", items: [],
-                                                        results: ["9"], invalid: 0, fields: 0 } }));
+    api.getCanvasApp.mockResolvedValue(appData({ app: { status: "ok", version: "1", upgradable: false, forms: [],
+                                                        results: ["9"], invalid: 0, stray: 0 } }));
     api.getCanvasMarks.mockResolvedValue({ nodes: { "17": { result: true } }, extra: { version: 1 } });
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     await waitFor(() => expect(api.runCanvas).toHaveBeenCalledWith("i1", {
@@ -852,7 +889,7 @@ describe("运行与结果:节点名和应用表单、「结果取自」同一种
       outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
                 { node: "17", title: "PreviewImage", label: "预览图像", class_type: "PreviewImage", media: "image" }],
       names: { "4": "Checkpoint 加载器", "9": "高清", "17": "预览图像" },
-      app: { status: "ok", version: "1", app: false, title: "", description: "", items: [], results: ["17"], invalid: 0, fields: 0 },
+      app: { status: "ok", version: "1", upgradable: false, forms: [], results: ["17"], invalid: 0, stray: 0 },
     }));
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     expect(await screen.findByRole("region", { name: "预览图像 #17" })).toBeTruthy();
@@ -886,8 +923,8 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     const bridge = await mount();
     api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
     api.getJob.mockResolvedValue(SUCCEEDED);
-    const marked = (results: string[]) => appData({ app: { status: "ok", version: "1", app: false, title: "", description: "", items: [],
-                                                            results, invalid: 0, fields: 0 } });
+    const marked = (results: string[]) => appData({ app: { status: "ok", version: "2", upgradable: false, forms: [],
+                                                            results, invalid: 0, stray: 0 } });
     api.getCanvasApp.mockResolvedValue(marked(["9", "5"]));
     api.getCanvasMarks.mockResolvedValue({ nodes: {}, extra: { version: 1 } });
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));

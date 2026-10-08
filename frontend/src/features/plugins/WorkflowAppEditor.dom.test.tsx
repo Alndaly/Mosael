@@ -1,17 +1,19 @@
 /** @vitest-environment jsdom */
 
 /**
- * 应用表单编辑器(ADR 0038 第一刀,1.10.0 重做成「搭一张表单」):工作流库详情里的「编辑应用表单」,和工作台「应用」面板里的同一个
- * 编辑器。数据是 `/workflow-library/app` 给的(这张图全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间),这里看的是
- * 怎么搭、怎么存:
+ * 表单编辑器(ADR 0038 第一刀,1.10.0 重做成「搭一张表单」;ADR 0045 第二步起一张工作流几张表单):工作流库详情里的「表单」,和工作台
+ * 「表单」页签里的同一个编辑器。数据是 `/workflow-library/app` 给的(这张图全部能填的项、交回结果的输出节点、文件里的每张表单、
+ * 读到时的改动时间),这里看的是怎么搭、怎么存:
  *
+ * - 几张表单:顶上一排切换,「新表单」(空白 / 按推荐先挑一版 / 复制这张),复制、删除(删之前列出这个工作区里在用它的几处);
+ *   每张都要有标题才存得了;
  * - 三块:工作流里能填的(按节点分组、人话名字、现在的值、一颗「+」)、表单(卡片)、预览(生成面板那套控件);
  * - 加、拿掉;排序 —— 指针拖手柄、聚焦手柄按 ↑ ↓、设置里的上移下移;就地改名;设置里收窄可选值、当主提示词;
- * - 空着时「按推荐先挑一版」;「结果取自」单独一节:只要这个节点的图 / 撤销;
+ * - 空着时「按推荐先挑一版」;「结果取自」按工作流记,在表单那一排上面:只要这个节点的图 / 撤销;
  * - 失效的项标着原因:能修的一键修(只留还在的可选值),修不了的一键去掉;
  * - 窄的时候(工作台面板)是「挑项 / 表单 / 预览」三个标签;
- * - 存:有没存的修改时说出来、关掉先问;每次存先确认(哪台服务器上的哪个文件),带着读到时的改动时间;那张刚被改过(409 stale)就说清楚、
- *   给「重新打开」;一项都不挑就是去掉应用表单。
+ * - 存:有没存的修改时说出来、关掉先问;每次存先确认(哪台服务器上的哪个文件),带着读到时的改动时间,交全部表单;那张刚被改过
+ *   (409 stale)就说清楚、给「重新打开」;一张表单都不剩就是去掉表单。
  */
 
 import React from "react";
@@ -22,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   getWorkflowApp: vi.fn(),
   annotateWorkflow: vi.fn(),
+  getFormUsages: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
 //: 文案用键名 + 一个 {name} 占位:替换进去的名字看得出来,按名字找得到那颗按钮
@@ -32,8 +35,8 @@ vi.mock("@/app/preferences", () => ({
 
 import type { PluginInstance, WorkflowApp, WorkflowFile } from "@/api/client";
 import { AppFormEditor } from "@/features/plugins/appForm/AppFormEditor";
-import { initialDraft, type AppDraft } from "@/features/plugins/workflowAppForm";
-import { WorkflowAppEditor, WorkflowAppSection } from "./WorkflowAppEditor";
+import { blankForm, initialDraft, type FormDraft } from "@/features/plugins/workflowAppForm";
+import { WorkflowAppEditor, WorkflowAppSection, type FormFocus } from "./WorkflowAppEditor";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15" } as PluginInstance;
 const flow = { path: "换装.json", label: "换装" } as WorkflowFile;
@@ -71,24 +74,25 @@ function data(overrides: Partial<WorkflowApp> = {}): WorkflowApp {
       { node: "9", title: "SaveImage", label: "保存图像", class_type: "SaveImage", media: "image" },
       { node: "17", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
     ],
-    app: { status: "none", version: "", app: false, title: "", description: "", items: [], results: [], invalid: 0, fields: 0 },
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
     ...overrides,
   };
 }
 
-function mount(onSaved = vi.fn(), onClose = vi.fn()) {
+/** 挂弹窗。缺省「新表单」进来(一张空白的),和详情里点「新表单」一样;`focus: null` 是停在第一张(没有就是空着)。 */
+function mount(onSaved = vi.fn(), onClose = vi.fn(), focus: FormFocus = { new: true }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <WorkflowAppEditor instance={instance} flow={flow} onClose={onClose} onSaved={onSaved} />
+      <WorkflowAppEditor instance={instance} flow={flow} workspaceId="w1" focus={focus} onClose={onClose} onSaved={onSaved} />
     </QueryClientProvider>,
   );
   return { onSaved, onClose };
 }
 
-/** 直接挂编辑器正文(工作台面板那样),草稿在测试里自己管。 */
+/** 直接挂编辑器正文(工作台面板那样),一张表单的草稿在测试里自己管。 */
 function Harness({ value, layout }: { value: WorkflowApp; layout?: "auto" | "narrow" }) {
-  const [draft, setDraft] = React.useState<AppDraft>(() => initialDraft(value));
+  const [draft, setDraft] = React.useState<FormDraft>(() => initialDraft(value).forms[0] ?? blankForm());
   return (
     <>
       <AppFormEditor instance={{ id: "i1" }} data={value} draft={draft} onChange={setDraft} layout={layout} />
@@ -105,14 +109,16 @@ const card = (key: string) => document.querySelector(`[data-app-item='${key}']`)
 const handle = (key: string) => card(key).querySelector("[data-drag-handle]") as HTMLElement;
 const settings = (name: string) => fireEvent.click(screen.getByRole("button", { name: t("workflowAppSettings", name) }));
 const announced = () => document.querySelector("[data-app-announce]")?.textContent;
-const draftOf = () => JSON.parse(document.querySelector("[data-draft]")?.textContent ?? "{}") as AppDraft;
+const draftOf = () => JSON.parse(document.querySelector("[data-draft]")?.textContent ?? "{}") as FormDraft;
+const nameBox = () => screen.getByRole("textbox", { name: t("workflowAppName") });
+const formTabs = () => within(screen.getByRole("tablist", { name: t("workflowFormsBar") })).getAllByRole("tab");
 
 beforeEach(() => {
   api.getWorkflowApp.mockReset();
   api.annotateWorkflow.mockReset();
 });
 
-describe("精简表单弹窗的高度", () => {
+describe("表单弹窗的高度", () => {
   it("读着、读完一样高:弹窗定高,正文撑满,不随内容跳", async () => {
     let resolve: (value: WorkflowApp) => void = () => {};
     api.getWorkflowApp.mockReturnValue(new Promise<WorkflowApp>((done) => { resolve = done; }));
@@ -128,7 +134,7 @@ describe("精简表单弹窗的高度", () => {
   });
 });
 
-describe("应用表单编辑器:三块", () => {
+describe("表单编辑器:三块", () => {
   it("工作流里能填的按节点分组、用人话名字、带着现在的值;类名只在悬停的技术名里;子图里的节点灰着", async () => {
     api.getWorkflowApp.mockResolvedValue(data());
     mount();
@@ -205,6 +211,7 @@ describe("应用表单编辑器:三块", () => {
     api.getWorkflowApp.mockResolvedValue(data());
     mount();
     await screen.findByRole("region", { name: t("workflowAppSource") });
+    fireEvent.change(nameBox(), { target: { value: "挑模型" } });
     add("提示词");
     add("模型");
     add("LoRA 强度");
@@ -288,11 +295,14 @@ describe("排序", () => {
   });
 });
 
-/** 文件里已有的应用表单:按这几项起(没起名、没收窄)。 */
-function appWith(keys: string[], extra: Partial<NonNullable<WorkflowApp["app"]>> = {}): NonNullable<WorkflowApp["app"]> {
+type FormItem = NonNullable<NonNullable<NonNullable<WorkflowApp["app"]>["forms"]>[number]["items"]>[number];
+type FormOut = NonNullable<NonNullable<WorkflowApp["app"]>["forms"]>[number];
+
+/** 文件里的一张表单:按这几项起(没起名、没收窄)。 */
+function formWith(id: string, keys: string[], extra: Partial<FormOut> = {}): FormOut {
   return {
-    status: "ok", version: "", app: true, title: "", description: "", results: [], invalid: 0, fields: keys.length,
-    items: keys.map((key) => {
+    id, title: "", description: "", fields: keys.length, invalid: 0, model: "", tool: "",
+    items: keys.map((key): FormItem => {
       const [node, input] = key.includes(".") ? key.split(".") : ["", key];
       return { key, node, input, label: "", title: "", main: false, problem: "" };
     }),
@@ -300,23 +310,128 @@ function appWith(keys: string[], extra: Partial<NonNullable<WorkflowApp["app"]>>
   };
 }
 
-describe("结果取自", () => {
-  it("说的是节点:只要这个节点的图;标了写「结果取自这个节点」,能撤销", async () => {
-    render(<Harness value={data()} />);
-    const results = screen.getByRole("region", { name: t("workflowAppResults") });
+/** 文件里已有一张表单(id `app`):按这几项起。 */
+function appWith(keys: string[], extra: Partial<FormOut> = {}, results: string[] = []): NonNullable<WorkflowApp["app"]> {
+  return { status: "ok", version: "2", upgradable: false, invalid: extra.invalid ?? 0, stray: 0, results,
+           forms: [formWith("app", keys, extra)] };
+}
+
+describe("结果取自(按工作流记,在表单那一排上面)", () => {
+  it("说的是节点:只要这个节点的图;标了写「结果取自这个节点」,能撤销;写进去的是工作流的结果标记", async () => {
+    api.getWorkflowApp.mockResolvedValue(data({ app: appWith(["3.steps"], { title: "调步数" }) }));
+    api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
+    mount(vi.fn(), vi.fn(), null);
+    const results = await screen.findByRole("region", { name: t("workflowAppResults") });
     expect(within(results).getByText(t("workflowAppResultsHint"))).toBeTruthy();
     expect(within(results).getByText("保存图像 #9"), "节点给人看的名字加节点号").toBeTruthy();
     fireEvent.click(within(results).getByRole("button", { name: t("workflowAppResultsMarkLabel", "高清 #17") }));
-    expect(draftOf().results).toEqual(["17"]);
     const marked = results.querySelector("[data-result-node='17']") as HTMLElement;
     expect(within(marked).getByText(t("workflowAppResultsChosen"))).toBeTruthy();
     fireEvent.click(within(marked).getByRole("button", { name: t("workflowAppResultsUndoLabel", "高清 #17") }));
-    expect(draftOf().results).toEqual([]);
+    expect(within(marked).queryByText(t("workflowAppResultsChosen"))).toBeNull();
+    fireEvent.click(within(results).getByRole("button", { name: t("workflowAppResultsMarkLabel", "高清 #17") }));
+    fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
+    await act(async () => {
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: t("workflowAppSaveConfirm") }));
+    });
+    expect(api.annotateWorkflow.mock.calls[0][1].results).toEqual(["17"]);
   });
 
-  it("只有一个出图的节点:没有可挑的,不出这一节", () => {
-    render(<Harness value={data({ outputs: [{ node: "9", title: "SaveImage", label: "保存图像", class_type: "SaveImage", media: "image" }] })} />);
+  it("只有一个出图的节点:没有可挑的,不出这一节", async () => {
+    api.getWorkflowApp.mockResolvedValue(data({ outputs: [{ node: "9", title: "SaveImage", label: "保存图像", class_type: "SaveImage",
+                                                           media: "image" }] }));
+    mount();
+    await screen.findByRole("region", { name: t("workflowAppSource") });
     expect(screen.queryByRole("region", { name: t("workflowAppResults") })).toBeNull();
+  });
+});
+
+describe("几张表单", () => {
+  const two = () => data({ app: { status: "ok", version: "2", upgradable: false, invalid: 0, stray: 0, results: [], forms: [
+    formWith("app", ["6.text"], { title: "快速出图", model: "换装.json#app", tool: "wf_x_app" }),
+    formWith("k3x9a2", ["6.text", "3.steps"], { title: "精调", model: "换装.json#k3x9a2", tool: "wf_x_k3x9a2" }),
+  ] } });
+
+  it("顶上一排切换:各是各的项;停到点进来的那张", async () => {
+    api.getWorkflowApp.mockResolvedValue(two());
+    mount(vi.fn(), vi.fn(), { form: "k3x9a2" });
+    await waitFor(() => expect(chosenKeys()).toEqual(["6.text", "3.steps"]));
+    expect(formTabs().map((one) => [one.textContent, one.getAttribute("aria-selected")])).toEqual([["快速出图", "false"], ["精调", "true"]]);
+    expect((nameBox() as HTMLInputElement).value).toBe("精调");
+    fireEvent.click(formTabs()[0]);
+    expect(chosenKeys()).toEqual(["6.text"]);
+    expect((nameBox() as HTMLInputElement).value).toBe("快速出图");
+  });
+
+  it("新表单:空白 / 按推荐先挑一版 / 复制这张;复制出来的是新表单(存的时候不带 id),标题加「副本」", async () => {
+    api.getWorkflowApp.mockResolvedValue(two());
+    api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
+    mount(vi.fn(), vi.fn(), { form: "k3x9a2" });
+    await waitFor(() => expect(chosenKeys()).toEqual(["6.text", "3.steps"]));
+    fireEvent.click(screen.getByRole("button", { name: t("workflowFormNew") }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: t("workflowFormNewCopy", "精调") }));
+    expect(formTabs().map((one) => one.textContent)).toEqual(["快速出图", "精调", `精调 ${t("workflowFormCopySuffix")}`]);
+    expect(chosenKeys(), "同样的项").toEqual(["6.text", "3.steps"]);
+    fireEvent.click(screen.getByRole("button", { name: t("workflowFormNew") }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: t("workflowFormNewRecommended") }));
+    expect(chosenKeys(), "按推荐先挑一版").toEqual(["6.text", "7.text", "4.ckpt_name", "seed", "10.image", "14.image"]);
+    expect(screen.getByRole("button", { name: t("workflowAppSave") }).hasAttribute("disabled"), "新表单没起标题:存不了").toBe(true);
+    expect(screen.getByText(t("workflowFormNeedsTitle")), "标题框底下说为什么要起").toBeTruthy();
+    expect(screen.getByText(t("workflowFormsUntitled")), "底下那行说还有几张没起,不重复上面那句").toBeTruthy();
+    fireEvent.change(nameBox(), { target: { value: "一套推荐" } });
+    fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
+    await act(async () => {
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: t("workflowAppSaveConfirm") }));
+    });
+    const sent = api.annotateWorkflow.mock.calls[0][1];
+    expect(sent.forms.map((one: { id: string; title: string }) => [one.id, one.title])).toEqual([
+      ["app", "快速出图"], ["k3x9a2", "精调"], ["", `精调 ${t("workflowFormCopySuffix")}`], ["", "一套推荐"]]);
+  });
+
+  it("删一张:确认框里列出这个工作区里在用它的几处;删了之后存的是剩下的那几张", async () => {
+    api.getWorkflowApp.mockResolvedValue(two());
+    api.getFormUsages.mockResolvedValue({ uses: [{ kind: "board", id: "b1", name: "海报", count: 2 },
+                                                 { kind: "session", id: "s1", name: "调步数", count: 1 }] });
+    api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
+    mount(vi.fn(), vi.fn(), { form: "k3x9a2" });
+    await waitFor(() => expect(chosenKeys()).toEqual(["6.text", "3.steps"]));
+    fireEvent.click(screen.getByRole("button", { name: t("workflowFormActions", "精调") }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: t("workflowFormDelete") }));
+    const ask = await screen.findByRole("alertdialog");
+    await waitFor(() => expect(within(ask).getByText(t("workflowFormDeleteInUse"))).toBeTruthy());
+    expect(api.getFormUsages).toHaveBeenCalledWith("i1", { workspace_id: "w1", model: "换装.json#k3x9a2", tool: "wf_x_k3x9a2" });
+    expect(within(ask).getAllByRole("listitem").map((one) => one.textContent)).toEqual([
+      t("workflowFormUse_board", "海报"), t("workflowFormUse_session", "调步数")]);
+    expect(within(ask).getByText(t("workflowFormDeleteBody")), "不会悄悄换成完整工作流").toBeTruthy();
+    fireEvent.click(within(ask).getByRole("button", { name: t("workflowFormDeleteConfirm") }));
+    await waitFor(() => expect(formTabs().map((one) => one.textContent)).toEqual(["快速出图"]));
+    expect(chosenKeys(), "停到挨着的那张").toEqual(["6.text"]);
+    fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
+    await act(async () => {
+      fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: t("workflowAppSaveConfirm") }));
+    });
+    expect(api.annotateWorkflow.mock.calls[0][1].forms.map((one: { id: string }) => one.id)).toEqual(["app"]);
+  });
+
+  it("没起标题的老表单写「未命名表单」,打开编辑器时提醒起一个", async () => {
+    api.getWorkflowApp.mockResolvedValue(data({ app: appWith(["6.text"]) }));
+    mount(vi.fn(), vi.fn(), null);
+    await waitFor(() => expect(chosenKeys()).toEqual(["6.text"]));
+    expect(formTabs()[0].textContent).toBe(t("workflowFormUntitled"));
+    expect(screen.getByText(t("workflowFormNeedsTitle"))).toBeTruthy();
+  });
+
+  it("一张表单都没有:说清楚用的人看到的是完整工作流,给「新表单」", async () => {
+    api.getWorkflowApp.mockResolvedValue(data());
+    mount(vi.fn(), vi.fn(), null);
+    const empty = await waitFor(() => {
+      const found = document.querySelector("[data-no-forms]") as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(within(empty).getByText(t("workflowFormsEmpty"))).toBeTruthy();
+    fireEvent.click(within(empty).getByRole("button", { name: t("workflowFormNew") }));
+    expect(await screen.findByRole("region", { name: t("workflowAppSource") })).toBeTruthy();
   });
 });
 
@@ -369,7 +484,7 @@ describe("存", () => {
     api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 1776098699.5 });
     const { onSaved, onClose } = mount();
     await screen.findByRole("region", { name: t("workflowAppSource") });
-    fireEvent.change(screen.getByRole("textbox", { name: t("workflowAppName") }), { target: { value: " 换装 " } });
+    fireEvent.change(nameBox(), { target: { value: " 换装 " } });
     expect(screen.getByText(t("workflowAppWhere")), "存在哪用大白话写在头上").toBeTruthy();
     add("参考图 · 人物");
     add("种子");
@@ -392,7 +507,8 @@ describe("存", () => {
     expect(api.annotateWorkflow).toHaveBeenCalledWith("i1", {
       path: "换装.json",
       modified: 1776098682.9,
-      app: {
+      forms: [{
+        id: "",
         title: "换装",
         description: "",
         items: [
@@ -400,7 +516,7 @@ describe("存", () => {
           { node: "", input: "seed", label: "", main: false, choices: null },
           { node: "4", input: "ckpt_name", label: "", main: false, choices: ["c.safetensors"] },
         ],
-      },
+      }],
       results: ["17"],
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -408,8 +524,8 @@ describe("存", () => {
   });
 
   it("有没存的修改时关掉:先问放弃不放弃;没改过直接关", async () => {
-    api.getWorkflowApp.mockResolvedValue(data());
-    const { onClose } = mount();
+    api.getWorkflowApp.mockResolvedValue(data({ app: appWith([], { title: "调步数" }) }));
+    const { onClose } = mount(vi.fn(), vi.fn(), null);
     await screen.findByRole("region", { name: t("workflowAppSource") });
     fireEvent.click(screen.getByRole("button", { name: t("cancel") }));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -429,6 +545,7 @@ describe("存", () => {
     }));
     const { onSaved } = mount();
     await screen.findByRole("region", { name: t("workflowAppSource") });
+    fireEvent.change(nameBox(), { target: { value: "调步数" } });
     add("步数");
     fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
     await act(async () => {
@@ -441,80 +558,102 @@ describe("存", () => {
     await waitFor(() => expect(api.getWorkflowApp).toHaveBeenCalledTimes(2));
   });
 
-  it("文件里已有的表单照它起;一项都不剩就是去掉应用表单(结果标记留着)", async () => {
-    api.getWorkflowApp.mockResolvedValue(data({ app: appWith(["10.image"], { title: "换装", results: ["9"] }) }));
+  it("文件里已有的表单照它起;一张都不剩就是去掉表单(结果标记留着)", async () => {
+    api.getWorkflowApp.mockResolvedValue(data({ app: appWith(["10.image"], { title: "换装" }, ["9"]) }));
     api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
-    mount();
+    mount(vi.fn(), vi.fn(), null);
     await waitFor(() => expect(chosenKeys()).toEqual(["10.image"]));
-    expect((screen.getByRole("textbox", { name: t("workflowAppName") }) as HTMLInputElement).value).toBe("换装");
+    expect((nameBox() as HTMLInputElement).value).toBe("换装");
     expect(screen.getByText(t("workflowAppResultsChosen"))).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: t("workflowAppRemove", "参考图 · 人物") }));
+    fireEvent.click(screen.getByRole("button", { name: t("workflowFormActions", "换装") }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: t("workflowFormDelete") }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: t("workflowFormDeleteConfirm") }));
+    await waitFor(() => expect(document.querySelector("[data-no-forms]")).not.toBeNull());
     fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
     const confirm = await screen.findByRole("alertdialog");
     expect(within(confirm).getByText(t("workflowAppSaveRemoveBody"))).toBeTruthy();
     await act(async () => {
       fireEvent.click(within(confirm).getByRole("button", { name: t("workflowAppSaveConfirm") }));
     });
-    expect(api.annotateWorkflow).toHaveBeenCalledWith("i1", { path: "换装.json", modified: 1776098682.9, app: null, results: ["9"] });
+    expect(api.annotateWorkflow).toHaveBeenCalledWith("i1", { path: "换装.json", modified: 1776098682.9, forms: [], results: ["9"] });
   });
 
-  it("版本不认识、API 格式的文件:说清楚;API 格式的存不了", async () => {
+  it("更新的版本、API 格式的文件:说清楚;API 格式的存不了", async () => {
     api.getWorkflowApp.mockResolvedValue(data({
       editable: false,
-      app: { status: "unsupported", version: "2", app: false, title: "", description: "", items: [], results: [], invalid: 0, fields: 0 },
+      app: { status: "unsupported", version: "3", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
     }));
     mount();
     expect(await screen.findByText(t("workflowAppUnsupported"))).toBeTruthy();
     expect(screen.getByText(t("workflowAppNotEditable"))).toBeTruthy();
+    fireEvent.change(nameBox(), { target: { value: "调步数" } });
     add("步数");
     expect(screen.getByRole("button", { name: t("workflowAppSave") }).hasAttribute("disabled")).toBe(true);
   });
+
+  it("上一版格式的表单:说清楚要升级(这一版不读它)", async () => {
+    api.getWorkflowApp.mockResolvedValue(data({
+      app: { status: "unsupported", version: "1", upgradable: true, forms: [], results: [], invalid: 0, stray: 0 },
+    }));
+    mount();
+    expect(await screen.findByText(t("workflowAppUpgradeNeeded"))).toBeTruthy();
+  });
 });
 
-describe("工作流库详情里的「应用」", () => {
-  function section(app: WorkflowFile["app"], onEdit = vi.fn(), onSaved = vi.fn()) {
+describe("工作流库详情里的「表单」", () => {
+  function section(app: WorkflowFile["app"], onEdit = vi.fn(), onSaved = vi.fn(), onUpgrade = vi.fn()) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <WorkflowAppSection instance={instance} flow={{ ...flow, app } as WorkflowFile} onEdit={onEdit} onSaved={onSaved} />
+        <WorkflowAppSection instance={instance} flow={{ ...flow, app } as WorkflowFile} onEdit={onEdit} onUpgrade={onUpgrade}
+                            onSaved={onSaved} />
       </QueryClientProvider>,
     );
-    return { onEdit, onSaved };
+    return { onEdit, onSaved, onUpgrade };
   }
 
-  it("有应用表单:标题、挑了哪几项、结果取自哪个节点;「编辑应用表单」打开编辑器", () => {
+  it("每张表单一行(标题、几项);点哪张打开那张;「新表单」打开编辑器并加一张;写着结果取自哪个节点", () => {
     const { onEdit } = section({
-      status: "ok", version: "", app: true, title: "换装", description: "上传人物", results: ["17"], invalid: 0, fields: 2,
-      items: [{ key: "10.image", node: "10", input: "image", label: "人物照片", title: "", main: false, problem: "" },
-              { key: "3.steps", node: "3", input: "steps", label: "", title: "步数", main: false, problem: "" }],
+      status: "ok", version: "2", upgradable: false, results: ["17"], invalid: 0, stray: 0, forms: [
+        formWith("app", ["10.image", "3.steps"], { title: "换装", description: "上传人物" }),
+        formWith("k3x9a2", ["3.steps"]),
+      ],
     });
-    const list = screen.getByRole("list", { name: t("workflowAppChosen") });
-    expect(within(list).getAllByRole("listitem").map((one) => one.textContent)).toEqual(["人物照片", "步数"]);
-    expect(screen.getByText("换装")).toBeTruthy();
+    const list = screen.getByRole("list", { name: t("workflowFormsBar") });
+    expect(within(list).getAllByRole("button").map((one) => one.textContent)).toEqual([
+      `换装上传人物${t("workflowFormFields")}`, `${t("workflowFormUntitled")}${t("workflowFormFields")}`]);
     expect(screen.getByText(t("workflowAppResultsMarked"))).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: t("workflowAppEdit") }));
-    expect(onEdit).toHaveBeenCalled();
+    fireEvent.click(within(list).getAllByRole("button")[1]);
+    expect(onEdit).toHaveBeenLastCalledWith({ form: "k3x9a2" });
+    fireEvent.click(screen.getByRole("button", { name: t("workflowFormNew") }));
+    expect(onEdit).toHaveBeenLastCalledWith({ new: true });
   });
 
-  it("没有应用表单就说生成表单列出全部;插件没说就不出这一节", () => {
-    section({ status: "none", version: "", app: false, title: "", description: "", items: [], results: [], invalid: 0, fields: 0 });
+  it("没有表单就说用的是完整工作流;上一版格式的说清楚、给「查看并升级」", () => {
+    section({ status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 });
     expect(screen.getByText(t("workflowAppNone"))).toBeTruthy();
   });
 
-  it("对不上的项:列出来,一键去掉(先确认)—— 重新读一遍、只去掉失效的那几项", async () => {
-    api.getWorkflowApp.mockResolvedValue(data({
-      app: {
-        status: "ok", version: "", app: true, title: "", description: "", results: ["9", "99"], invalid: 2, fields: 1,
+  it("上一版格式:说要升级,按钮打开「查看并升级」", () => {
+    const { onUpgrade } = section({ status: "unsupported", version: "1", upgradable: true, forms: [], results: [], invalid: 0, stray: 0 });
+    expect(screen.getByText(t("workflowAppUpgradeNeeded"))).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: t("workflowFormsUpgradeOpen") }));
+    expect(onUpgrade).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: t("workflowFormNew") }), "升级之前不能新建").toBeNull();
+  });
+
+  it("对不上的项:列出来,一键去掉(先确认)—— 重新读一遍、每张表单只去掉失效的那几项", async () => {
+    const broken = {
+      status: "ok" as const, version: "2", upgradable: false, results: ["9", "99"], invalid: 2, stray: 0,
+      forms: [formWith("app", ["10.image", "3.gone"], {
+        invalid: 1, fields: 1,
         items: [{ key: "10.image", node: "10", input: "image", label: "人物", title: "", main: false, problem: "" },
                 { key: "3.gone", node: "3", input: "gone", label: "", title: "", main: false, problem: "没有这一格了" }],
-      },
-    }));
+      })],
+    };
+    api.getWorkflowApp.mockResolvedValue(data({ app: broken }));
     api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
-    const { onSaved } = section({
-      status: "ok", version: "", app: true, title: "", description: "", results: ["9", "99"], invalid: 2, fields: 1,
-      items: [{ key: "10.image", node: "10", input: "image", label: "人物", title: "", main: false, problem: "" },
-              { key: "3.gone", node: "3", input: "gone", label: "", title: "", main: false, problem: "没有这一格了" }],
-    });
+    const { onSaved } = section(broken);
     expect(screen.getByRole("alert").textContent).toContain(t("workflowAppInvalidCount"));
     fireEvent.click(screen.getByRole("button", { name: t("workflowAppDropInvalidSaved") }));
     await act(async () => {
@@ -523,7 +662,7 @@ describe("工作流库详情里的「应用」", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(api.annotateWorkflow).toHaveBeenCalledWith("i1", {
       path: "换装.json", modified: 1776098682.9, results: ["9"],
-      app: { title: "", description: "", items: [{ node: "10", input: "image", label: "人物", main: false, choices: null }] },
+      forms: [{ id: "app", title: "", description: "", items: [{ node: "10", input: "image", label: "人物", main: false, choices: null }] }],
     });
   });
 });

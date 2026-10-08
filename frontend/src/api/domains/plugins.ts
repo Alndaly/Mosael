@@ -62,6 +62,9 @@ export type WorkflowImport = components["schemas"]["WorkflowLibraryImportOut"];
 /** 应用表单(ADR 0038):一张工作流能填的项、文件里的标记、要写进去的样子。 */
 export type WorkflowApp = components["schemas"]["WorkflowAppOut"];
 export type WorkflowAppSummary = components["schemas"]["WorkflowAppSummaryOut"];
+export type WorkflowForm = components["schemas"]["WorkflowFormOut"];
+export type WorkflowFormUse = components["schemas"]["WorkflowFormUseOut"];
+export type WorkflowUpgradeResult = components["schemas"]["WorkflowUpgradeMarksOut"];
 export type WorkflowFillable = components["schemas"]["WorkflowFillableOut"];
 export type WorkflowAppOutput = components["schemas"]["WorkflowAppOutputOut"];
 export type WorkflowAnnotate = components["schemas"]["WorkflowAnnotateRequest"];
@@ -292,12 +295,12 @@ export const inspectWorkflowImport = (
 export const saveImportedWorkflow = (instanceId: string, path: string, content: Record<string, unknown>) =>
   workflowWrite(instanceId, "save", { path, content });
 
-/** 一张工作流的应用表单(ADR 0038):全部能填的项、交回结果的输出节点、文件里的标记、读到时的改动时间。 */
+/** 一张工作流的表单(ADR 0038、0045):全部能填的项、交回结果的输出节点、文件里的每张表单、读到时的改动时间。 */
 export const getWorkflowApp = (instanceId: string, path: string) =>
   api<WorkflowApp>(`/api/plugins/instances/${instanceId}/workflow-library/app?${new URLSearchParams({ path })}`);
 /**
- * 改那台服务器上一张工作流的应用表单和结果标记:只改 `mosael` 那几处,**覆盖写**(调之前界面上确认过)。带着读到时的
- * 改动时间(`modified`);那张在这之间被改过就不写,回 409(`detail.code === "stale"`)。
+ * 改那台服务器上一张工作流的表单和结果标记:只改 `mosael` 那几处,**覆盖写**(调之前界面上确认过)。`forms` 是全部表单
+ * (没给 id 的是新表单)。带着读到时的改动时间(`modified`);那张在这之间被改过就不写,回 409(`detail.code === "stale"`)。
  */
 export const annotateWorkflow = (instanceId: string, body: WorkflowAnnotate) =>
   api<{ path: string; modified?: number | null }>(`/api/plugins/instances/${instanceId}/workflow-library/annotate`, {
@@ -305,16 +308,30 @@ export const annotateWorkflow = (instanceId: string, body: WorkflowAnnotate) =>
     body: JSON.stringify(body),
   });
 
-/** 工作台的「应用」面板:画布上现在这张(界面格式,含没存的改动)的应用表单。没有路径和改动时间 —— 改的是画布。 */
-export const getCanvasApp = (instanceId: string, content: Record<string, unknown>) =>
+/** 把这个连接上上一版格式的表单标记改写成这一版(ADR 0045 §7「查看并升级」,界面上确认过一次):只改每张里的 mosael 标记,
+ *  那台机器上刚改过的那张跳过。 */
+export const upgradeWorkflowMarks = (instanceId: string, paths: { path: string; modified?: number | null }[]) =>
+  api<WorkflowUpgradeResult>(`/api/plugins/instances/${instanceId}/workflow-library/upgrade-marks`, {
+    method: "POST",
+    body: JSON.stringify({ paths }),
+  });
+/** 一张表单在这个工作区里被哪些地方用着(删之前说给作者听):`model` / `tool` 是 app 回答里那张表单的模型 id 和工具名。 */
+export const getFormUsages = (instanceId: string, query: { workspace_id: string; model: string; tool: string }) =>
+  api<{ uses?: WorkflowFormUse[] }>(
+    `/api/plugins/instances/${instanceId}/workflow-library/form-usages?${new URLSearchParams(query)}`,
+  );
+
+/** 工作台的「表单」页签:画布上现在这张(界面格式,含没存的改动)的表单。没有改动时间 —— 改的是画布;`path` 是画布开的是
+ *  哪张(插件据此说出每张表单的模型 id 和工具名)。 */
+export const getCanvasApp = (instanceId: string, content: Record<string, unknown>, path = "") =>
   api<WorkflowApp>(`/api/plugins/instances/${instanceId}/workflow-library/app/live`, {
     method: "POST",
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, path }),
   });
-/** 应用表单和结果标记写进画布要改成的样子(界面经桥改画布上的节点;存盘是 ComfyUI 自己的保存)。不写文件。 */
+/** 表单和结果标记写进画布要改成的样子(界面经桥改画布上的节点;存盘是 ComfyUI 自己的保存)。不写文件。 */
 export const getCanvasMarks = (
   instanceId: string,
-  body: { content: Record<string, unknown>; app: WorkflowAnnotate["app"]; results: string[] },
+  body: { content: Record<string, unknown>; forms: NonNullable<WorkflowAnnotate["forms"]>; results: string[] },
 ) =>
   api<WorkflowCanvasMarks>(`/api/plugins/instances/${instanceId}/workflow-library/app/marks`, {
     method: "POST",

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { KindIcon, techText, valueText, visualOf } from "@/features/plugins/appForm/fieldFacts";
-import { exposable, matchesSource, shortTitle, sourceGroups, type AppDraft } from "@/features/plugins/workflowAppForm";
+import { exposable, matchesSource, shortTitle, sourceGroups, type FormDraft } from "@/features/plugins/workflowAppForm";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,7 +24,7 @@ export function SourcePanel({
   onRemove,
 }: {
   data: WorkflowApp;
-  draft: AppDraft;
+  draft: FormDraft;
   onAdd: (item: WorkflowFillable) => void;
   onRemove: (key: string) => void;
 }) {

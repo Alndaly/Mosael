@@ -8,8 +8,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
  * 表单是工作流的入口(ADR 0045 第一步),在 AI Studio 里看到的样子。维护者:krea2-text-2-image.json 上做了表单「快速用krea2生图」,
  * 之后到处只叫表单名 —— 认不出是哪张工作流,也拿不到全部参数。现在同一张工作流两项:
  *
- * - 下拉里两行:表单入口主名是表单标题、第二行「来自 krea2-text-2-image · 连接名」,挂在完整工作流下面;完整工作流主名是
- *   工作流名、第二行「完整工作流 · 连接名」。搜「快速」只剩表单,搜「krea2」两个都在;
+ * - 下拉里是一小组(第二步,ADR 0045 §7):小标题写工作流名和哪台服务器,下面「完整工作流」和表单各一行(缩进);没有表单的
+ *   照旧一行、第二行连接名。搜「快速」整组留着、命中的表单那行加粗,搜「krea2」两个都在;
  * - 右栏那张表的标题下面写着来自哪张工作流、哪台服务器;选完整工作流,右栏是全部参数(不是那张表)。
  *
  * 断言画出来的字,不只看数据。
@@ -63,7 +63,7 @@ const GROUP = { id: "krea2-text-2-image.json", label: "krea2-text-2-image" };
 const FULL = {
   id: "p9:image:krea2-text-2-image.json", provider_profile_id: "p9", plugin_instance_id: "i9", profile_name: SERVER,
   provider: "plugin:dev.mosael.comfyui", kind: "image", model: "krea2-text-2-image.json", model_label: "krea2-text-2-image",
-  group: { ...GROUP, entry: "full" },
+  group: { ...GROUP, entry: "full", order: 0 },
   capabilities: {
     modes: ["text-to-image"], parameter_keys: ["3.steps", "10.aspect_ratio"], prompt: "optional",
     parameter_schema: {
@@ -78,7 +78,7 @@ const FULL = {
 const FORM = {
   ...FULL,
   id: "p9:image:krea2-text-2-image.json#app", model: "krea2-text-2-image.json#app", model_label: "快速用krea2生图",
-  group: { ...GROUP, entry: "form" }, is_default: true,
+  group: { ...GROUP, entry: "form", order: 1 }, is_default: true,
   capabilities: {
     modes: ["text-to-image"], parameter_keys: ["10.aspect_ratio"], prompt: "optional",
     parameter_schema: { "10.aspect_ratio": { type: "string", title: "画幅", enum: ["1:1", "9:16"], default: "9:16" } },
@@ -126,25 +126,26 @@ async function openPicker(panel: HTMLElement) {
   });
 }
 
-describe("同一张工作流的完整工作流和表单:两项,名字分两层", () => {
-  it("下拉里两行字、表单挂在完整工作流下面;按表单标题、工作流名都搜得到", async () => {
+describe("同一张工作流的完整工作流和表单:一小组,名字分两层", () => {
+  it("下拉里一小组:小标题工作流名 + 连接名,下面「完整工作流」和表单;按表单标题、工作流名都搜得到", async () => {
     renderStudio();
     const panel = screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true });
     const search = await openPicker(panel);
     const form = await screen.findByRole("option", { name: /快速用krea2生图/ });
-    const full = screen.getByRole("option", { name: /^krea2-text-2-image/ });
-    expect(form.textContent).toContain(`来自 krea2-text-2-image · ${SERVER}`);
+    const full = screen.getByRole("option", { name: /^完整工作流/ });
+    const head = document.querySelector("[data-section-head]") as HTMLElement;
+    expect(head.textContent, "小标题:工作流名和哪台服务器").toBe(`krea2-text-2-image${SERVER}`);
     expect(form).toHaveAttribute("data-indent");
-    expect(full.textContent).toContain(`完整工作流 · ${SERVER}`);
-    expect(full).not.toHaveAttribute("data-indent");
-    expect(screen.getByRole("option", { name: /^gpt-image-1/ }).textContent, "没有表单、不属于哪一组:第二行只有连接名")
-      .not.toContain("完整工作流");
+    expect(full).toHaveAttribute("data-indent");
+    expect(form.getAttribute("data-section")).toBe(full.getAttribute("data-section"));
+    expect(screen.getByRole("option", { name: /^gpt-image-1/ }).textContent, "没有表单、不属于哪一组:照旧一行,第二行只有连接名")
+      .toBe("gpt-image-1OpenAI");
     const names = () => screen.getAllByRole("option").map((one) => one.textContent ?? "");
-    expect(names().findIndex((one) => one.startsWith("krea2-text-2-image")) + 1, "表单紧挨着它的完整工作流")
-      .toBe(names().findIndex((one) => one.startsWith("快速用krea2生图")));
+    expect(names().indexOf("完整工作流") + 1, "表单紧挨着它的完整工作流").toBe(names().indexOf("快速用krea2生图"));
 
     fireEvent.change(search, { target: { value: "快速" } });
-    await waitFor(() => expect(names().map((one) => one.split("来自")[0])).toEqual(["快速用krea2生图"]));
+    await waitFor(() => expect(names(), "搜表单标题:整组留着").toEqual(["完整工作流", "快速用krea2生图"]));
+    expect(screen.getByRole("option", { name: /快速用krea2生图/ }), "命中的那行加粗").toHaveAttribute("data-hit");
     fireEvent.change(search, { target: { value: "krea2" } });
     await waitFor(() => expect(names()).toHaveLength(2));
   });
@@ -159,7 +160,7 @@ describe("同一张工作流的完整工作流和表单:两项,名字分两层",
     expect(panel.textContent, "表单只露画幅").not.toContain("步数");
 
     await openPicker(panel);
-    fireEvent.click(await screen.findByRole("option", { name: /^krea2-text-2-image/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /^完整工作流/ }));
     await waitFor(() => expect(panel.textContent).not.toContain("genAppFormSection"));
     expect(panel.textContent, "完整工作流:全部能填的项").toContain("步数");
     expect(panel.textContent).toContain("画幅");

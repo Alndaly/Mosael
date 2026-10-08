@@ -155,8 +155,9 @@ describe("工作台面板背后的纯函数", () => {
       { promptId: "p1", node: "3", value: 4, max: 20 });
   });
 
-  it("「只要这个节点的图」:只标这一个结果;撤销只去掉这一个;应用表单别的部分不动", () => {
-    const draft = { title: "人像", description: "", items: [], results: ["9", "17"] };
+  it("「只要这个节点的图」:只标这一个结果;撤销只去掉这一个;每张表单照旧", () => {
+    const form = { id: "app", key: "app", title: "人像", description: "", items: [], model: "", tool: "" };
+    const draft = { forms: [form], results: ["9", "17"] };
     expect(onlyResult(draft, "17")).toEqual({ ...draft, results: ["17"] });
     expect(withoutResult(draft, "9")).toEqual({ ...draft, results: ["17"] });
     expect(withoutResult(draft, "5")).toEqual(draft);
