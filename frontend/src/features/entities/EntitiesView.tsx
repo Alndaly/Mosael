@@ -131,6 +131,8 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
 
   const KindIcon = entityKindIcon(kind);
   const filtering = Boolean(keyword || tagFilter.length);
+  //: 这一类一个都没有(不是筛没了)时,「新建」只在正中的空状态里摆一颗,页头不再摆第二颗同一件事的实心按钮。
+  const emptyKind = !filtering && listing.isSuccess && visible.length === 0;
   const sortLabel: Record<SortKey, string> = { updated: t("sortUpdated"), name: t("sortName"), references: t("entitiesSortReferences") };
 
   return (
@@ -148,10 +150,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         count={all.data?.length}
         className="py-7 xl:py-8"
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus />
-            {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-          </Button>
+          emptyKind ? undefined : (
+            <Button onClick={() => setCreating(true)}>
+              <Plus />
+              {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+            </Button>
+          )
         }
       />
 

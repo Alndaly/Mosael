@@ -172,6 +172,17 @@ it("项目没取回来时说没取回来、能重试,不说「还没有项目」
   expect(screen.getByText("homeEmptyTitle")).toBeTruthy();
 });
 
+it("真是空的:「新建项目」只在空状态里摆一颗,页头不再摆第二颗;取的途中页头照旧有", () => {
+  const view = render(provider(<HomeView workspace={workspace} projects={[]} load={loaded} onOpenProject={vi.fn()} />));
+  const buttons = screen.getAllByRole("button", { name: "createProject" });
+  expect(buttons).toHaveLength(1);
+  expect(buttons[0].closest(".empty-state")).not.toBeNull();
+
+  view.rerender(provider(<HomeView workspace={workspace} projects={[]} load={{ ...loaded, pending: true }} onOpenProject={vi.fn()} />));
+  expect(screen.getAllByRole("button", { name: "createProject" })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "createProject" }).closest(".empty-state")).toBeNull();
+});
+
 //: 体检 UM-30:英文首页「1 sequences」。一个就用单数那条。
 it("项目卡上的序列数一个时用单数那条文案", () => {
   localStorage.setItem("mosael:tab:home-collection", "all");

@@ -247,6 +247,21 @@ describe("资产页", () => {
     );
     expect(await screen.findByRole("region", { name: "entityReferences" })).toBeTruthy();
   });
+
+  it("这一类一个都没有:「新建」只在空状态里摆一颗,页头不再摆第二颗;切到有东西的那一类,页头那颗回来", async () => {
+    api.listEntities.mockResolvedValue([summary({ id: "e2", kind: "location", name: "老街", cover_asset_id: null, tags: [], variant_count: 0 })]);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    await screen.findByText("entitiesEmptyTitle");
+    const only = screen.getAllByRole("button", { name: /entitiesNew/ });
+    expect(only).toHaveLength(1);
+    expect(only[0].closest(".empty-state")).not.toBeNull();
+
+    fireEvent.click(within(screen.getByRole("tablist", { name: "entitiesKinds" })).getByRole("tab", { name: /场景/ }));
+    await screen.findByText("老街");
+    const header = screen.getAllByRole("button", { name: /entitiesNew/ });
+    expect(header).toHaveLength(1);
+    expect(header[0].closest(".empty-state")).toBeNull();
+  });
 });
 
 describe("资产页的操作", () => {

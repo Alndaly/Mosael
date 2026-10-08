@@ -58,6 +58,12 @@ it("空着的时候只有一颗示例按钮(在空状态里),点了建一份带�
   await screen.findByText("sceneEmptyTitle");
   const buttons = screen.getAllByRole("button", { name: "scenesOpenSample" });
   expect(buttons).toHaveLength(1);
+  //: 一屏只有一个实心主动作:「新建场景」也只有一颗,在空状态里、次一级(描边),页头那颗收起来。
+  const fresh = screen.getAllByRole("button", { name: "scenesNew" });
+  expect(fresh).toHaveLength(1);
+  expect(fresh[0].closest(".empty-state")).not.toBeNull();
+  expect(fresh[0].className).not.toMatch(/\bbg-action\b/);
+  expect(buttons[0].className).toMatch(/\bbg-action\b/);
   fireEvent.click(buttons[0]);
   await waitFor(() => expect(api.createScene).toHaveBeenCalledTimes(1));
   expect(api.createScene.mock.calls[0][2]).toMatchObject({ template: "three_halls" });

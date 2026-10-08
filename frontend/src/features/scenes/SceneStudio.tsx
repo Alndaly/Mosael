@@ -286,10 +286,13 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
                 {t("scenesOpenSample")}
               </Button>
             )}
-            <Button disabled={creating} onClick={() => void create(false)}>
-              <Plus size={16} />
-              {t("scenesNew")}
-            </Button>
+            {/* 空着的时候「新建场景」也挪进空状态(在示例旁边、次一级):页头再留一颗实心的,一屏两个主动作。 */}
+            {!(list.isSuccess && list.data.length === 0) && (
+              <Button disabled={creating} onClick={() => void create(false)}>
+                <Plus size={16} />
+                {t("scenesNew")}
+              </Button>
+            )}
           </>
         }
       />
@@ -301,7 +304,20 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         </div>
       ) : !list.data?.length ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <EmptyState icon={<Box />} title={t("sceneEmptyTitle")} body={t("sceneEmptyBody")} action={<Button disabled={creating} onClick={openSample}>{t("scenesOpenSample")}</Button>} />
+          <EmptyState
+            icon={<Box />}
+            title={t("sceneEmptyTitle")}
+            body={t("sceneEmptyBody")}
+            action={
+              <span className="inline-flex flex-wrap items-center justify-center gap-2">
+                <Button disabled={creating} onClick={openSample}>{t("scenesOpenSample")}</Button>
+                <Button variant="outline" disabled={creating} onClick={() => void create(false)}>
+                  <Plus size={16} />
+                  {t("scenesNew")}
+                </Button>
+              </span>
+            }
+          />
         </div>
       ) : (
         <SceneList

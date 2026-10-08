@@ -165,7 +165,8 @@ function ErrorDetails({ text }: { text: string }) {
   return (
     <Collapsible className="grid w-full justify-items-center gap-2">
       <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" className="group text-muted-foreground">
+        {/* 行内动作:它是「重试」底下那句报错的附注,不和「重试」争 —— 此前是 sm 档、正文字号,和「重试」一样大。 */}
+        <Button variant="inline" className="group">
           {t("errorDetails")}
           <ChevronDown className="transition-transform duration-100 group-data-[state=open]:rotate-180" />
         </Button>

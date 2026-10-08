@@ -438,7 +438,7 @@ function AboutSection({ text }: { text: string }) {
       title={t("pluginSectionAbout")}
       action={
         folded ? (
-          <Button variant="ghost" size="xs" className="text-muted-foreground" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
+          <Button variant="inline" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
             {open ? t("pluginShowLess") : t("pluginShowMore")}
           </Button>
         ) : undefined
@@ -468,7 +468,7 @@ function ToolSection({ tools, runtime }: { tools: PluginTool[]; runtime: string 
       count={tools.length || undefined}
       action={
         tools.length > TOOLS_SHOWN ? (
-          <Button variant="ghost" size="xs" className="text-muted-foreground" aria-expanded={all} onClick={() => setAll(!all)}>
+          <Button variant="inline" aria-expanded={all} onClick={() => setAll(!all)}>
             {all ? t("pluginShowLess") : t("pluginToolsAll").replace("{n}", String(tools.length))}
           </Button>
         ) : undefined

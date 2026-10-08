@@ -204,10 +204,14 @@ export function HomeView({
 
 
 
+  //: 真取回来一个空列表时,「新建项目」只在正中的空状态里摆一颗:页头再留一颗同一件事的实心按钮,一屏两个主动作,
+  //: 空状态的视觉中心也被拽到右上角(画板、工作流、发布空页同一个做法)。取的途中照旧摆着 —— 大多数工作区不是空的,不让它晚一拍才冒出来。
+  const empty = projects.length === 0 && !load.error && !load.pending;
+
   return (
     <div className={STUDIO_PAGE}>
       <HomeHero
-        actions={<Button onClick={() => setNaming(true)}><FolderPlus />{t("createProject")}</Button>}
+        actions={empty ? undefined : <Button onClick={() => setNaming(true)}><FolderPlus />{t("createProject")}</Button>}
         greeting={t(greetingKey)}
         workspaceName={workspace.name}
         now={now}
