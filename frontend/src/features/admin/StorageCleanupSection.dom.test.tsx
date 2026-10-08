@@ -10,7 +10,7 @@ import { beforeEach, expect, it, vi } from "vitest";
  */
 
 const t = (key: string) => key;
-vi.mock("@/app/preferences", () => ({ useI18n: () => t }));
+vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({ locale: "zh-CN" }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() } }));
 
 const deletes: string[][] = [];

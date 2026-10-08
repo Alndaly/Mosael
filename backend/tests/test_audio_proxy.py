@@ -140,7 +140,7 @@ def test_没有音轨的视频记silent_任务照样成功_画面代理不受影
     monkeypatch.setattr(settings, "generate_proxies", True)
     monkeypatch.setattr(jobs_bus.threading, "Thread", _FakeThread)
     # 画面代理用的 libx264 不一定在;这里只关心音频那一半,画面那一步换成「转成功了」。
-    monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target: target.write_bytes(b"x") is not None)
+    monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target, **_options: target.write_bytes(b"x") is not None)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     src = tmp_path / "ai.mp4"
@@ -161,7 +161,7 @@ def test_没有音轨的视频记silent_任务照样成功_画面代理不受影
 def test_有声视频两样代理一起出(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "generate_proxies", True)
     monkeypatch.setattr(jobs_bus.threading, "Thread", _FakeThread)
-    monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target: target.write_bytes(b"x") is not None)
+    monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target, **_options: target.write_bytes(b"x") is not None)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     src = tmp_path / "talk.mp4"
@@ -177,7 +177,7 @@ def test_有声视频两样代理一起出(tmp_path: Path, monkeypatch: pytest.M
 def test_音频代理转失败_记failed_任务失败_画面代理那一半照样落ready(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "generate_proxies", True)
     monkeypatch.setattr(jobs_bus.threading, "Thread", _FakeThread)
-    monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target: target.write_bytes(b"x") is not None)
+    monkeypatch.setattr(proxyjobs, "build_proxy", lambda source, target, **_options: target.write_bytes(b"x") is not None)
     monkeypatch.setattr(proxyjobs, "build_audio_proxy", lambda source, target: False)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

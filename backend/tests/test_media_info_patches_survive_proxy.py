@@ -36,11 +36,11 @@ def test_代理转码期间记下的块标记_转码结束后还在_重跑认得
     started, release = threading.Event(), threading.Event()
     real_build = proxies.build_proxy
 
-    def slow_build(src, target):
+    def slow_build(src, target, **options):
         #: 真的转码,只是等块标记写进去之后才收尾 —— 线上就是这个顺序(转码几十秒,标记在生成任务落地后就写)。
         started.set()
         release.wait(30)
-        return real_build(src, target)
+        return real_build(src, target, **options)
 
     monkeypatch.setattr(proxies, "build_proxy", slow_build)
     with unit_of_work() as db:

@@ -145,6 +145,7 @@ export const shell = {
   storageOrphanRowGone: "Its asset / voice / LUT / font was deleted",
   storageOrphanAvatarUnused: "Avatar no account uses",
   storageOrphanExportLeftover: "Left over from exports in an older version (partial videos, subtitle and text images)",
+  storageOrphanTouched: "last changed {time}",
   dataDiagnosticsTitle: "Data & diagnostics",
   dataDiagnosticsDesc: "Backup, recovery, and troubleshooting tools. Diagnostic bundles never include databases, media, or secrets.",
   dataDiagnosticsBundle: "Diagnostic bundle",

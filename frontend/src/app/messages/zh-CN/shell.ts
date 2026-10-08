@@ -147,6 +147,7 @@ export const shell = {
   storageOrphanRowGone: "对应的素材 / 音色 / LUT / 字体已删除",
   storageOrphanAvatarUnused: "没有账号在用的头像",
   storageOrphanExportLeftover: "老版本导出时留下的中转文件(半截成片、字幕和文字图片)",
+  storageOrphanTouched: "最后改动 {time}",
   dataDiagnosticsTitle: "数据与诊断",
   dataDiagnosticsDesc: "备份、恢复与故障排查工具。诊断包不会包含数据库、素材或密钥。",
   dataDiagnosticsBundle: "诊断包",

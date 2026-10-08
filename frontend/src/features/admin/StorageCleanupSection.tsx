@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HardDrive, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { deleteStorageOrphans, storageOrphansQuery, type StorageOrphan } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatBytes } from "@/lib/bytes";
+import { relativeTime } from "@/lib/time";
 import { ADMIN_CARD, AdminSection } from "./adminLayout";
 
 const REASON_LABEL: Record<string, MessageKey> = {
@@ -37,6 +38,7 @@ const REASON_LABEL: Record<string, MessageKey> = {
  */
 export function StorageCleanupSection() {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const orphans = useQuery(storageOrphansQuery());
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
@@ -105,7 +107,9 @@ export function StorageCleanupSection() {
                 <div className="grid min-w-0 flex-1 gap-0.5">
                   <span className="truncate font-mono text-ui-xs text-foreground">{one.key}</span>
                   <span className="text-ui-xs text-muted-foreground">
-                    {t(REASON_LABEL[one.reason] ?? "storageOrphanRowGone")} · {formatBytes(one.bytes)}
+                    {t(REASON_LABEL[one.reason] ?? "storageOrphanRowGone")} · {formatBytes(one.bytes)} ·{" "}
+                    {/* 多久没动过了:刚导入一半的不会列出来(一小时内动过的不算),放了很久的才是真没人要。 */}
+                    {t("storageOrphanTouched").replace("{time}", relativeTime(one.modified_at, locale))}
                   </span>
                 </div>
               </li>

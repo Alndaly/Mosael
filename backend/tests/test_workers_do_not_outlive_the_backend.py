@@ -64,4 +64,6 @@ def test_the_watchdog_is_installed_in_serve_mode() -> None:
     """判据挂在**常驻模式**上 —— 一次性模式跑完就退,不需要看门狗。"""
     source = WORKER.read_text(encoding="utf-8")
 
-    assert "getppid" in source, "没有人盯着父进程"
+    assert "watch_parent()" in source, "没有人盯着父进程"
+    #: 怎么盯写在识别、合成共用的那一份里(workers/parent_watch:POSIX 看 getppid,Windows 握着句柄问退出码)。
+    assert "getppid" in (WORKER.parent / "parent_watch.py").read_text(encoding="utf-8")

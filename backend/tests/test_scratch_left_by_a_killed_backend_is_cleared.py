@@ -113,5 +113,5 @@ def test_启动收尾在接着取远端任务之前清暂存() -> None:
     from app import main
 
     source = inspect.getsource(main.lifespan)
-    assert 0 < source.index("clear_scratch(") < source.index("reconcile_after_restart("), "启动时没清暂存,或者清在收尾之后"
+    assert 0 < source.index("clear_scratch(") < source.index("settle_previous_run("), "启动时没清暂存,或者清在收尾之后"
     assert settings.data_dir in scratch_root().parents
