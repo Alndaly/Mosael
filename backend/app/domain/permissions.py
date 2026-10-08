@@ -128,14 +128,27 @@ _PERM_ROLE = {
 }
 
 
+def minimum_role(perm: str) -> str:
+    """这一类操作要哪一档角色(见 _PERM_ROLE)。
+
+    **不认识的名字当场报错。** 此前不认识的名字悄悄落到 admin:找、补预览图的任务由编辑者发起(要 `edit`),轮询结果那一步
+    写成了 `"view"` —— 表里没有这个名字,于是轮询要 admin,编辑者发起的任务自己看不到结果(403)。按最严的算看起来稳妥,
+    实际是把一个笔误变成了一条只有低权限的人才撞得上、而且说不出原因的 403。要「只读」用 ensure_workspace_access。
+    """
+    try:
+        return _PERM_ROLE[perm]
+    except KeyError:
+        raise ValueError(f"unknown workspace permission {perm!r}; known: {sorted(_PERM_ROLE)}") from None
+
+
 def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str) -> None:
     """写闸:成员的角色要够。
 
     保留 `perm` 这个参数是为了让调用点自己说清「这是哪一类操作」—— 它读起来比一个裸的 "editor"
     有信息(`ensure_workspace_perm(..., "publish")` 一眼看出这条路由在发东西)。但它**不再是一个
-    可以逐位开关的能力**,只是映射到一档角色(见 _PERM_ROLE)。
+    可以逐位开关的能力**,只是映射到一档角色(见 _PERM_ROLE)。名字得在表里(见 minimum_role)。
     """
-    minimum = _PERM_ROLE.get(perm, "admin")
+    minimum = minimum_role(perm)
     member = _membership(db, user, workspace_id)
     if not role_at_least(member.role, minimum):
         raise _role_too_low(minimum)
@@ -147,8 +160,9 @@ def holds_workspace_perm(db: Session, user: User, workspace_id: str, perm: str) 
 
     给列表用 —— 「只列他能做的」要在出清单时就答出和写闸同一个结论,而不是等他点了再 403。
     """
+    minimum = minimum_role(perm)
     role = workspace_role(db, user, workspace_id)
-    return role is not None and role_at_least(role, _PERM_ROLE.get(perm, "admin"))
+    return role is not None and role_at_least(role, minimum)
 
 
 def ensure_deployment_admin(db: Session, user: User) -> None:

@@ -31,4 +31,10 @@ def role_rank(role: str) -> int:
 
 
 def role_at_least(role: str, minimum: str) -> bool:
-    return role_rank(role) >= role_rank(minimum)
+    """`role`(成员身上记的那一档)够不够 `minimum`。
+
+    `minimum` 是调用点写的:不在阶梯上的名字是代码写错了,当场报错。此前它按 -1 算,**谁都够** —— 写错一个字就是放行所有人。
+    `role` 是库里的数据:不认识的按最低算(-1),谁的门都过不了。"""
+    if minimum not in _RANK:
+        raise ValueError(f"unknown workspace role {minimum!r}; the ladder is {list(_RANK)}")
+    return role_rank(role) >= _RANK[minimum]

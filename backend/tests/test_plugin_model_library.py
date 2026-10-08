@@ -1017,6 +1017,27 @@ def test_只找不存_对上的当场记进宿主的列表_任务交回那一条
     assert other.status_code == 422
 
 
+def test_编辑者发起的找图任务_自己轮询拿得到结果(library) -> None:
+    """发起要 `edit`,轮询此前写成了表里没有的 `"view"`、落成 admin:编辑者自己发起的任务,轮询拿到 403。"""
+    from app.db.models import WorkspaceMember
+    from tests.util import second_client, user_id
+
+    client, instance_id, _ = library
+    workspace = second_client("boss").post("/api/workspaces", json={"name": "别人的"}).json()["id"]
+    with SessionLocal() as db:
+        db.add(WorkspaceMember(workspace_id=workspace, user_id=user_id("tester"), role="editor"))
+        db.commit()
+    base = f"/api/plugins/instances/{instance_id}/model-library"
+    client.get(base)
+    started = client.post(f"{base}/lookups", json={"workspace_id": workspace,
+                                                   "files": [{"folder": "loras", "name": "plain.safetensors"}]})
+    assert started.status_code == 200, started.text
+    assert wait_status(client, started.json()["id"]) == "succeeded"
+    polled = client.get(f"{base}/lookups/{started.json()['id']}")
+    assert polled.status_code == 200, polled.text
+    assert polled.json()["job"]["id"] == started.json()["id"]
+
+
 def test_补图时按文件名对上的不替你存_列出来等你确认(library) -> None:
     client, instance_id, _ = library
     _flag("lookup-match")

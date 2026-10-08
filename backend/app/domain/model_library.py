@@ -33,7 +33,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, ModelFileMark, PluginInstance, User
 from app.domain import capabilities, model_nsfw_local, model_previews
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, say
-from app.domain.permissions import ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
@@ -758,12 +758,15 @@ def start_lookup(
 
 def lookup_job(db: Session, user: User, instance: PluginInstance, job_id: str) -> dict[str, Any]:
     """一个找、补预览图任务现在怎样(界面轮询它):任务本身,做完了带上它交回的(对上的那几条现在的样子在 `found` 里)。
-    不是这个连接的找图任务一律当没有。"""
+    不是这个连接的找图任务一律当没有。
+
+    **轮询是读**:看得见这个工作区的人就看得见它(和任务中心看任务同一道闸)。发起要 `edit`(start_lookup),看结果不该比发起更严 ——
+    此前这里写的是表里没有的 `"view"`,落成了 admin,编辑者发起的任务自己轮询拿到 403。"""
     _require(db, instance)
     job = db.get(Job, job_id)
     if job is None or job.kind != INFO_KIND or (job.payload or {}).get("instance_id") != instance.id:
         raise ModelLibraryError("modelLibErr_noSuchLookup")
-    ensure_workspace_perm(db, user, job.workspace_id, "view")
+    ensure_workspace_access(db, user, job.workspace_id)
     return {"job": job, "result": dict(job.result or {}) if job.status == "succeeded" else None}
 
 
