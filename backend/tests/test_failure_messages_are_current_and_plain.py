@@ -91,11 +91,8 @@ def test_saving_the_settings_page_drops_it(monkeypatch) -> None:
         tts_models.DownloadProgress(status="failed", message="连不上模型下载源(https://hf-mirror.com):…"),
     )
 
-    saved = client.put(
-        "/api/settings/tts",
-        json={"engine": "f5-tts", "python_path": "", "source": "modelscope",
-              "pip_index": "", "fish_repo_dir": "", "fish_model_dir": ""},
-    )
+    #: 模型下载源归「安装源」了(本机识别、本机 ComfyUI 也读它):换源走那一个接口,收尾照旧。
+    saved = client.put("/api/settings/install-source", json={"model_source": "modelscope"})
     assert saved.status_code == 200, saved.text
 
     row = next(item for item in client.get("/api/tts/models").json() if item["id"] == "f5-tts")

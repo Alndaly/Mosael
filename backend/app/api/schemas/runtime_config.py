@@ -87,7 +87,6 @@ class TtsEngineChoiceOut(ApiModel):
 class TtsConfigOut(ApiModel):
     engine: str
     python_path: str = ""
-    source: str = "hf-mirror"
     pip_index: str = ""  # 空 = 官方 PyPI
     fish_repo_dir: str = ""  # Fish Speech source checkout
     fish_model_dir: str = ""  # Fish Speech weights dir (contains codec.pth)
@@ -101,7 +100,8 @@ class TtsConfigOut(ApiModel):
 class TtsConfigUpdate(ApiModel):
     engine: str = Field(pattern="^(f5-tts|fish-speech)$")
     python_path: str = ""
-    source: str = Field(default="hf-mirror", pattern="^(hf|hf-mirror|modelscope)$")
+    #: 没有 source(模型下载源)—— 同一个理由:本机识别(NSFW)、Mosael 起的本机 ComfyUI 下模型读的也是它,
+    #: 它归「安装源」(`PUT /settings/install-source` 的 `model_source`)。
     #: 没有 pip_index:它不属于克隆 —— 转写和人声分离装依赖时读的也是它,所以它有自己的接口
     #: (`PUT /settings/install-source`)。留在这里的话,克隆表单不发它时默认成 "",每保存一次
     #: 克隆设置,镜像就被悄悄重置回官方 PyPI。
@@ -123,6 +123,11 @@ class InstallSourceOut(ApiModel):
     #: 「让 Mosael 装」装 CUDA 版 PyTorch 的源:预设 key(nju)或自定义的 simple 索引根地址;空 = 官方(ADR 0041 §4)。
     pytorch_index: str = ""
     pytorch_presets: list[PackageSourcePresetOut] = Field(default_factory=list)
+    #: 模型权重从哪儿下:`hf-mirror` / `hf` / `modelscope`。声音克隆、本机识别(NSFW)、Mosael 起的本机 ComfyUI 都读它;
+    #: ModelScope 只有支持它的克隆引擎会走(见 ai/runtime/tts_models.effective_source),别的照旧从 HuggingFace 拉。
+    model_source: str = "hf-mirror"
+    #: 能选哪几个(名字由界面按 key 翻)。
+    model_sources: list[str] = Field(default_factory=list)
     #: 下 GitHub 上钉死的压缩包时接在前面的镜像前缀(以 `/` 结尾);空 = 直连。
     github_mirror: str = ""
 
@@ -134,6 +139,7 @@ class InstallSourceUpdate(ApiModel):
     pytorch_index: str | None = Field(default=None, max_length=200)
     #: 空串 = 直连。
     github_mirror: str | None = Field(default=None, max_length=500)
+    model_source: str | None = Field(default=None, pattern="^(hf|hf-mirror|modelscope)$")
 
 
 class DenoiseEngineOut(ApiModel):

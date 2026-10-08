@@ -12672,6 +12672,13 @@ export interface components {
             /** Pytorch Presets */
             pytorch_presets?: components["schemas"]["PackageSourcePresetOut"][];
             /**
+             * Model Source
+             * @default hf-mirror
+             */
+            model_source: string;
+            /** Model Sources */
+            model_sources?: string[];
+            /**
              * Github Mirror
              * @default
              */
@@ -12687,6 +12694,8 @@ export interface components {
             pytorch_index?: string | null;
             /** Github Mirror */
             github_mirror?: string | null;
+            /** Model Source */
+            model_source?: string | null;
         };
         /** InvitationListOut */
         InvitationListOut: {
@@ -17609,11 +17618,6 @@ export interface components {
              */
             python_path: string;
             /**
-             * Source
-             * @default hf-mirror
-             */
-            source: string;
-            /**
              * Pip Index
              * @default
              */
@@ -17653,11 +17657,6 @@ export interface components {
              * @default
              */
             python_path: string;
-            /**
-             * Source
-             * @default hf-mirror
-             */
-            source: string;
             /**
              * Fish Repo Dir
              * @default

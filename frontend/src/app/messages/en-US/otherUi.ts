@@ -415,7 +415,6 @@ export const otherUi = {
   chatTabTrace: "Trace",
   sizeApprox: "~{size}",
   ttsThisDownloading: "This engine is already downloading.",
-  optionsLoading: "Loading…",
   chatJumpToLatest: "Jump to latest",
   chatSubagents: "{n} subagents",
   chatSubagentsTitle: "Subagents",

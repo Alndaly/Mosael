@@ -12,7 +12,6 @@ import {
   listTtsModels,
   updateTtsConfig,
 } from "@/api/client";
-import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -21,37 +20,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-import { cn } from "@/lib/utils";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 import { ModelDownloadRow } from "./ModelDownloadRow";
 
 
-type ConfigForm = { engine: string; python_path: string; source: string; fish_repo_dir: string; fish_model_dir: string };
+type ConfigForm = { engine: string; python_path: string; fish_repo_dir: string; fish_model_dir: string };
 
-/** 管理 → 引擎 → 声音克隆:选默认克隆引擎、指定装了引擎的 Python 解释器、模型下载源,并下载
-    引擎权重。这几项存在整台部署共用的一行 TtsConfig 里,写入只给部署管理员
-    (routes/voices.set_tts_config:解释器路径会进子进程的 argv;下载同理),所以在管理页。 */
-const SOURCE_LABELS: Record<string, MessageKey> = {
-  "hf-mirror": "settingsVoiceCloneSourceHfMirror",
-  hf: "settingsVoiceCloneSourceHf",
-  modelscope: "settingsVoiceCloneSourceModelscope",
-};
-
-/**
- * 受控下拉的值**必须**是列得出来的某一项 —— 这是 Radix Select 的硬约束:找不到对应 Item 时
- * 它会把值清成空串并回调出来,而 react-hook-form 把那记成一次"用户改动"。用户报的
- * 「每次刷新页面下载源都会变动,导致要重新保存」就是这么来的:表单一进页面自己变脏,
- * 顶上常驻「改了还没保存」,下拉还显示成一片空白。
- *
- * 所以:哪些源能选**由后端按引擎给**(ModelScope 上没有 F5 要的 vocos,列出来就是陷阱),
- * 而当前值一旦不在其中就落到第一项上。加上给 Select 一个随引擎变的 key —— 换引擎时整个
- * 重挂,不存在"值还在、对应项已经没了"的那一帧。
- */
-export function normalizeSource(source: string, sources: readonly string[]): string {
-  if (sources.length === 0) return source; // 还没拉到,先别动
-  return sources.includes(source) ? source : sources[0];
-}
-
+/** 管理 → 引擎 → 声音克隆:选默认克隆引擎、指定装了引擎的 Python 解释器,并下载引擎权重。这几项存在整台部署共用的
+    一行 TtsConfig 里,写入只给部署管理员(routes/voices.set_tts_config:解释器路径会进子进程的 argv;下载同理),
+    所以在管理页。**模型下载源不在这里**:本机识别(NSFW)、Mosael 起的本机 ComfyUI 下模型读的也是它,它是这一页顶上
+    「下载源」里的一行(体检 UM-16)。 */
 export function VoiceCloneSection() {
   const t = useI18n();
   const qc = useQueryClient();
@@ -73,53 +51,28 @@ export function VoiceCloneSection() {
       z.object({
         engine: z.string(),
         python_path: z.string(),
-        source: z.string(),
         fish_repo_dir: z.string(),
         fish_model_dir: z.string(),
       }),
     ),
-    defaultValues: { engine: "f5-tts", python_path: "", source: "hf-mirror", fish_repo_dir: "", fish_model_dir: "" },
+    defaultValues: { engine: "f5-tts", python_path: "", fish_repo_dir: "", fish_model_dir: "" },
   });
   const engineValue = form.watch("engine");
-  // 这个引擎能用哪些下载源,后端说了算 —— F5 要的 vocos 在 ModelScope 上没有。
-  const sources = (models.data ?? []).find((item) => item.id === engineValue)?.sources ?? [];
   const engineLabel = (models.data ?? []).find((item) => item.id === engineValue)?.label ?? engineValue;
 
-  // **归一化放在 reset 这一步**,让表单里存的就是下拉显示得出来的那个值。
-  //
-  // 此前是把归一化包在下拉的 `value=` 上,于是表单里是 modelscope、下拉显示 hf —— 两者不一致。
-  // Radix Select 会用一次 `onValueChange("")` 来"纠正"这种不一致,而 react-hook-form 把它
-  // 记成一次用户改动:一个字没动,页面却说「改了还没保存」,而下拉显示的又不是存着的那个值。
-  // 用户看到的就是「保存点了没用」「每次进来都要再存一次」。真机上抓到的渲染序列:
-  //   source='hf-mirror'(默认值) → 'modelscope'(reset) → ''(Radix 纠正) + dirty
-  //
-  // 等 sources 到齐再落:它是异步来的,空着的时候归一化不出任何东西(见 normalizeSource)。
-  //: 归一化要用**配置里那个引擎**的选项,不是表单当前那个。表单的 engine 也要等 reset,
-  //: 所以第一次 reset 时 `sources` 还是默认引擎(f5)的 —— 拿它去归一化 fish 存着的
-  //: modelscope,会落成 hf,然后引擎一变又 reset 一次成 modelscope,而下拉早已挂载,
-  //: 于是又撞上"挂载后从外部改 value"那一下。
-  const savedSources = (models.data ?? []).find((item) => item.id === config.data?.engine)?.sources ?? [];
-  const sourceKey = savedSources.join(",");
-  //: 配置**已经落进表单**了没有。不是"数据到了没有"——数据到达和 reset 之间隔着一帧,
-  //: 而下拉正是在那一帧挂载的(实测:sources 与 config 同帧到齐,Select 挂载时表单里还是默认值)。
-  const [loaded, setLoaded] = React.useState(false);
   React.useEffect(() => {
-    if (!config.data || savedSources.length === 0) return;
+    if (!config.data) return;
     form.reset({
       engine: config.data.engine,
       python_path: config.data.python_path,
-      source: normalizeSource(config.data.source, savedSources),
       fish_repo_dir: config.data.fish_repo_dir ?? "",
       fish_model_dir: config.data.fish_model_dir ?? "",
     });
-    setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.data, sourceKey]);
+  }, [config.data]);
 
   const save = useMutation({
-    // 存下去的就是显示出来的那一个 —— 归一化只有一处实现。
-    mutationFn: (values: ConfigForm) =>
-      updateTtsConfig({ ...values, source: normalizeSource(values.source, sources) }),
+    mutationFn: (values: ConfigForm) => updateTtsConfig(values),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["tts-config"] });
       toast.success(t("saved"));
@@ -237,54 +190,8 @@ export function VoiceCloneSection() {
               </AdminRow>
             )}
           />
-          <FormField
-            control={form.control}
-            name="source"
-            render={({ field }) => (
-              <AdminRow label={t("voiceCloneSource")}>
-                {/* **选项和配置都到齐之前不挂载它。**
-                    Radix Select 对「挂载之后从外部改 value」反应不正常:实测渲染序列是
-                    `hf-mirror`(默认值) → `hf`(配置落下) → `''`(它自己清空并回调),
-                    而 react-hook-form 把最后那一下记成用户改动。于是一个字没动,页面却说
-                    「改了还没保存」,下拉显示的也不是存着的值 —— 用户看到的就是
-                    「保存点了没用」「每次进来都要再存一次」。
-                    等 reset **真的落进表单**了再挂(不是等数据到达——那中间隔着一帧,
-                    下拉正好在那一帧挂载),它的 value 从一开始就是最终值,不存在"事后被改"。
-                    不用「加 key 让它重挂」那招:重挂本身同样会带出一次 change。 */}
-                {!loaded ? (
-                  // 占位不能用 SelectTrigger —— 它必须长在 Select 里面。
-                  <div
-                    className={cn(
-                      SETTINGS_FIELD_WIDTH,
-                      "flex h-10 items-center rounded-md border border-field-border bg-transparent px-3 py-2 text-ui-sm text-muted-foreground",
-                    )}
-                  >
-                    {t("optionsLoading")}
-                  </div>
-                ) : (
-                  <Select
-                    key={engineValue}
-                    // 直接用表单里的值:reset 那一步已经归一化过,两者不再有不一致可言。
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  >
-                    <SelectTrigger className={SETTINGS_FIELD_WIDTH} aria-label={t("voiceCloneSource")}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sources.map((id) => (
-                        <SelectItem key={id} value={id}>
-                          {SOURCE_LABELS[id] ? t(SOURCE_LABELS[id]) : id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </AdminRow>
-            )}
-          />
-          {/* pip 镜像不在这里 —— 它是这一页顶上的「下载源」。转写和人声分离装依赖时读的也是它,
-              挂在克隆名下的时候,想给转写换镜像的人得来「声音克隆」里找。 */}
+          {/* pip 镜像、模型下载源不在这里 —— 它们是这一页顶上的「下载源」。转写、人声分离装依赖读的也是 pip 那一行,
+              本机识别、本机 ComfyUI 下模型读的也是模型下载源;挂在克隆名下时,想给它们换源的人得来「声音克隆」里找。 */}
         </form>
       </Form>
 

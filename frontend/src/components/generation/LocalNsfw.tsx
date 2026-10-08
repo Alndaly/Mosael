@@ -1,6 +1,6 @@
 import React from "react";
 import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, ScanEye } from "lucide-react";
+import { Download, Repeat, ScanEye } from "lucide-react";
 
 import { getLocalNsfw, installLocalNsfw, type ModelLocalNsfw } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
@@ -8,6 +8,7 @@ import { useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/bytes";
+import { gotoAdmin } from "@/lib/deepLink";
 
 export const LOCAL_NSFW_KEY = ["model-local-nsfw"] as const;
 
@@ -93,10 +94,19 @@ export function LocalNsfwRow() {
           {t("modelLocalNsfwInstalling")}
         </Button>
       ) : downloadable && admin ? (
-        <Button variant="outline" size="xs" className="justify-self-start" loading={install.isPending} onClick={() => install.mutate()}>
-          <Download size={12} />
-          {data.status === "failed" ? t("modelLocalNsfwRetry") : t("modelLocalNsfwDownload").replace("{size}", size)}
-        </Button>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Button variant="outline" size="xs" loading={install.isPending} onClick={() => install.mutate()}>
+            <Download size={12} />
+            {data.status === "failed" ? t("modelLocalNsfwRetry") : t("modelLocalNsfwDownload").replace("{size}", size)}
+          </Button>
+          {/* 下不下来多半是网络:权重从「模型下载源」那一行拉(管理 → 引擎 → 下载源),此前失败只写原因,想不到能换源(体检 UM-16)。 */}
+          {data.status === "failed" && (
+            <Button variant="ghost" size="xs" onClick={() => gotoAdmin("engines")}>
+              <Repeat size={12} />
+              {t("modelLocalNsfwChangeSource")}
+            </Button>
+          )}
+        </span>
       ) : downloadable ? (
         <p className="m-0 text-ui-xs text-muted-foreground">{t("modelLocalNsfwAdminOnly")}</p>
       ) : null}

@@ -356,7 +356,6 @@ def _tts_config_out() -> dict:
     return {
         "engine": cfg.engine,
         "python_path": cfg.python_path,
-        "source": cfg.source,
         "pip_index": cfg.pip_index,
         "fish_repo_dir": cfg.fish_repo_dir,
         "fish_model_dir": cfg.fish_model_dir,
@@ -411,11 +410,10 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     wanted = {
         "engine": body.engine,
         "python_path": body.python_path.strip(),
-        "source": body.source,
         "fish_repo_dir": body.fish_repo_dir.strip(),
         "fish_model_dir": body.fish_model_dir.strip(),
     }
-    # pip 镜像不在这里写 —— 它归「安装源」(见 routes/settings/system.set_install_source)。
+    # pip 镜像、模型下载源不在这里写 —— 它们归「安装源」(见 routes/settings/system.set_install_source)。
     for name, value in wanted.items():
         setattr(row, name, value)
     db.commit()

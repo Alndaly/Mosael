@@ -78,10 +78,12 @@ by a deployment admin" where they would need one (the transcript, the denoise di
 
 - **Download sources**: which mirrors packages come from. **Dependency source (pip index)** serves the local engines' Python
   dependencies — each pulls 2–3 GB, and the official PyPI is often too slow from mainland China; **npm registry** serves plugins that
-  install npm packages (such as Remotion). A plugin connection can pick its own; otherwise it follows these.
+  install npm packages (such as Remotion). A plugin connection can pick its own; otherwise it follows these. The last row, **Model
+  download source** (HF mirror, HuggingFace, ModelScope), is where model weights come from: voice cloning, local NSFW detection and the
+  local ComfyUI that Mosael starts all use it.
 - **Transcription models**: runtimes and models for FunASR and WhisperX. After **Install runtime**, an engine becomes selectable under
   **Settings → Capability providers → Transcription**.
-- **Voice cloning**: runtime, weights and download source for local cloning (F5-TTS, Fish Speech).
+- **Voice cloning**: runtime and weights for local cloning (F5-TTS, Fish Speech); weights come from the **Model download source** above.
 - **Voice and background separation**: Demucs. A long asset takes many minutes on a CPU.
 - **Noise reduction**: the built-in method needs nothing; DeepFilterNet downloads once here (about 30 MB); RNNoise ships with the app.
 

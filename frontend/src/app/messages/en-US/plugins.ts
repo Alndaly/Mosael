@@ -983,6 +983,7 @@ export const plugins = {
   modelLocalNsfwInstalling: "Downloading…",
   modelLocalNsfwFailed: "Download failed: {why}",
   modelLocalNsfwRetry: "Retry",
+  modelLocalNsfwChangeSource: "Change model download source",
   modelLocalNsfwReady: "On · {n} checked",
   modelLocalNsfwPending: "Checking · {n} to go",
   modelPreviewSettingsNote: "Blurred previews clear up when you hover or open one; hidden ones show only an icon, and the details page can show one for the moment. Model pickers in generation forms and the workbench follow this too.",

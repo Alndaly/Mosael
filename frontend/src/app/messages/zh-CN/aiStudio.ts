@@ -296,7 +296,8 @@ export const aiStudio = {
      「语音与服务」组里 —— 同一件事拆在两个组,内置引擎卡片上还挂着一个跳去克隆页的链接。 */
   settingsDubbingTitle: "配音与音色",
   installSourceTitle: "下载源",
-  installSourcePipIndexHint: "只管装 Python 依赖。国内建议选镜像,直连 PyPI 可能非常慢。模型权重从哪下是另一项:下面「声音克隆」里的「模型下载源」。",
+  installSourcePipIndexHint: "只管装 Python 依赖。国内建议选镜像,直连 PyPI 可能非常慢。模型权重从哪下是另一项:这一节最后的「模型下载源」。",
+  installSourceModelHint: "模型权重从哪儿下:声音克隆、本机识别(NSFW)、Mosael 起的本机 ComfyUI 都用这一行。选 ModelScope 时只有支持它的克隆引擎走 ModelScope,别的照旧从 HuggingFace 拉。",
   installSourceNpm: "npm 源",
   installSourceNpmHint: "给要装 npm 依赖的插件(如 Remotion)。插件连接上可以各自换,没换就用这里。",
   installSourcePytorch: "PyTorch 源",

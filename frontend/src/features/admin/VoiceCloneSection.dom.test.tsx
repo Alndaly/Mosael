@@ -26,8 +26,6 @@ vi.mock("@/app/preferences", () => ({
 const config = {
   engine: "f5-tts",
   python_path: "",
-  // 关键:已保存的是 modelscope,而 F5-TTS 的下拉里没有这一项(它对 F5 没有意义)。
-  source: "modelscope",
   pip_index: "",
   fish_repo_dir: "",
   fish_model_dir: "",
@@ -90,29 +88,9 @@ describe("声音克隆设置", () => {
 });
 
 
-describe("已保存 fish-speech + modelscope(用户库里的真实那一行)", () => {
-  it("显示得出「ModelScope」,而不是一片空白 —— 它对 Fish Speech 是真的源", async () => {
-    config.engine = "fish-speech";
-    config.source = "modelscope";
-    renderSection();
-
-    await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    await waitFor(() => expect(screen.getAllByText("settingsVoiceCloneSourceModelscope").length).toBeGreaterThan(0));
-  });
-
-  it("引擎不支持的源落到该引擎的第一个源上,而不是空白", async () => {
-    config.engine = "f5-tts"; // ModelScope 上没有它要的 vocos
-    config.source = "modelscope";
-    renderSection();
-
-    await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    await waitFor(() => expect(screen.getAllByText("settingsVoiceCloneSourceHf").length).toBeGreaterThan(0));
-    expect(screen.queryByText("settingsVoiceCloneSourceModelscope")).toBeNull();
-  });
-
+describe("已保存 fish-speech(用户库里的真实那一行)", () => {
   it("一个字没动,就不该是「改了还没保存」—— 否则每次刷新都要重存一遍", async () => {
     config.engine = "fish-speech";
-    config.source = "modelscope";
     (window as any).__DEBUG_TTS__ = true;
     renderSection();
 
@@ -144,7 +122,6 @@ describe("横幅说的是被选中那个引擎的真实状态", () => {
       scrollIntoView: () => {},
     });
     config.engine = "f5-tts";
-    config.source = "hf";
     config.worker_ready = true;
     models[0] = { ...base, id: "f5-tts", label: "F5-TTS", expected_bytes: 1_500_000_000, sources: ["hf", "hf-mirror"], status: "installed", runtime_ready: true, runtime_checked: true };
     models[1] = { ...base, id: "fish-speech", label: "Fish Speech", expected_bytes: 11_000_000_000, sources: ["hf", "hf-mirror", "modelscope"], status: "installed", runtime_ready: true, runtime_checked: true };
@@ -199,7 +176,7 @@ describe("改了设置之后点重试", () => {
   });
 });
 
-describe("下载源的下拉显示的是**存着的那个值**", () => {
+describe("刚进页面、什么都没装", () => {
   // 前面几个 describe 会把 models 改成 installed / failed 且不还原(它们各自只关心自己那一幕)。
   // 这一组要的是"刚进页面、什么都没装"的样子,所以自己还原一次。
   beforeEach(() => {
@@ -210,32 +187,24 @@ describe("下载源的下拉显示的是**存着的那个值**", () => {
     config.worker_ready = true;
   });
 
-  it("选项异步到达之后,显示的是配置里那一项,不是表单默认值", async () => {
-    // 真机那一幕:库里存着 hf,而 defaultValues 是 hf-mirror。选项(sources)跟模型列表一起
-    // 异步来,第一帧 SelectContent 是空的 —— Radix 记不住任何选中项,等 value 变成 hf 之后
-    // 它显示的仍是挂载那一刻的旧值「HF 镜像」。用户看到存的和显示的对不上,就再点一次保存,
-    // 于是「每次进入都要重新点一次保存」「保存按钮点了没用」。
-    // **存着的源不在当前引擎的选项里** —— 这正是真机那一幕的条件。F5 的选项里没有
-    // modelscope,归一化后该落到 hf;而下拉若在配置落进表单之前就挂载,Radix 会用一次
-    // onValueChange("") 来"纠正"这个它没见过的值,表单于是无端变脏、显示也不对。
-    config.engine = "f5-tts";
-    config.source = "modelscope";
-    renderSection();
-
-    await screen.findAllByRole("button", { name: /asrModelDownload/ });
-    // 只看**触发器上显示的那一行**。用 getByText 会匹配到 Radix 在 jsdom 里额外渲染的
-    // 隐藏 <option> 列表 —— 那里面每个选项都在,断言不出"显示的是哪一个"。
-    const picker = await screen.findByRole("combobox", { name: "voiceCloneSource" });
-    await waitFor(() => expect(picker.textContent).toContain("settingsVoiceCloneSourceHf"));
-    expect(picker.textContent).not.toContain("settingsVoiceCloneSourceHfMirror");
-  });
-
   it("一个字没动,所以不该显示「改了还没保存」", async () => {
     config.engine = "f5-tts";
-    config.source = "modelscope"; // 同上:F5 的选项里没有它,归一化会落到 hf
     renderSection();
 
     await screen.findAllByRole("button", { name: /asrModelDownload/ });
     await waitFor(() => expect(screen.queryByText(/ttsSaveAndDownload/)).toBeNull());
+  });
+});
+
+//: 体检 UM-16:模型下载源管着本机识别(NSFW)、本机 ComfyUI 的下载,此前却是这张克隆表单里的一行,跟着克隆设置一起存。
+describe("模型下载源不在克隆表单里", () => {
+  it("没有那一行,保存克隆设置也不带它", async () => {
+    const spy = vi.spyOn(await import("@/api/client"), "updateTtsConfig");
+    renderSection();
+    await screen.findAllByRole("button", { name: /asrModelDownload/ });
+    expect(screen.queryByRole("combobox", { name: "voiceCloneSource" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "save" }));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(Object.keys(spy.mock.calls[0][0])).not.toContain("source");
   });
 });

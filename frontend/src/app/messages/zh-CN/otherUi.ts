@@ -415,7 +415,6 @@ export const otherUi = {
   chatTabTrace: "轨迹",
   sizeApprox: "约 {size}",
   ttsThisDownloading: "这个引擎正在下载中。",
-  optionsLoading: "载入中…",
   chatJumpToLatest: "回到最新",
   chatSubagents: "{n} 个子代理",
   chatSubagentsTitle: "子代理",

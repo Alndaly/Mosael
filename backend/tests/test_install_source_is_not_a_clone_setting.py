@@ -13,7 +13,7 @@ from tests.util import fresh_client
 
 
 def _clone_body(**extra):
-    return {"engine": "f5-tts", "python_path": "", "source": "hf-mirror", "fish_repo_dir": "", "fish_model_dir": "", **extra}
+    return {"engine": "f5-tts", "python_path": "", "fish_repo_dir": "", "fish_model_dir": "", **extra}
 
 
 def test_安装源有自己的一对接口() -> None:
@@ -34,11 +34,29 @@ def test_保存克隆设置不会把镜像冲掉() -> None:
 
 def test_改安装源不碰克隆那几项() -> None:
     client = fresh_client()
-    client.put("/api/settings/tts", json=_clone_body(engine="fish-speech", source="modelscope"))
+    client.put("/api/settings/tts", json=_clone_body(engine="fish-speech", python_path="/tmp/py"))
 
-    client.put("/api/settings/install-source", json={"pip_index": "tencent"})
+    client.put("/api/settings/install-source", json={"pip_index": "tencent", "model_source": "modelscope"})
     tts = client.get("/api/settings/tts").json()
-    assert tts["engine"] == "fish-speech" and tts["source"] == "modelscope"
+    assert tts["engine"] == "fish-speech" and tts["python_path"] == "/tmp/py"
+
+
+def test_模型下载源也归安装源_保存克隆设置不会把它冲掉() -> None:
+    """模型下载源(体检 UM-16):本机识别(NSFW)、Mosael 起的本机 ComfyUI 下模型读的也是它,此前却藏在「声音克隆」里、
+    跟着克隆表单一起存 —— 想给 NSFW 换源的人想不到去那儿,改了克隆的源也不知道连带改了别的。"""
+    from app.ai.runtime import config as runtime_config
+    from app.api.schemas import TtsConfigUpdate
+
+    assert "source" not in TtsConfigUpdate.model_fields
+    client = fresh_client()
+    install = client.get("/api/settings/install-source").json()
+    assert install["model_source"] == "hf-mirror" and install["model_sources"] == ["hf-mirror", "hf", "modelscope"]
+
+    assert client.put("/api/settings/install-source", json={"model_source": "hf"}).status_code == 200
+    assert runtime_config.get().hf_endpoint == "https://huggingface.co", "NSFW、本机 ComfyUI 拿到的端点跟着换"
+    assert client.put("/api/settings/tts", json={**_clone_body(), "source": "hf-mirror"}).status_code == 200
+    assert client.get("/api/settings/install-source").json()["model_source"] == "hf", "克隆表单冲不掉它"
+    assert client.put("/api/settings/install-source", json={"model_source": "nope"}).status_code == 422
 
 
 def test_克隆接口压根不收_pip_index() -> None:

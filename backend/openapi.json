@@ -34998,6 +34998,18 @@
             "type": "array",
             "title": "Pytorch Presets"
           },
+          "model_source": {
+            "type": "string",
+            "title": "Model Source",
+            "default": "hf-mirror"
+          },
+          "model_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Model Sources"
+          },
           "github_mirror": {
             "type": "string",
             "title": "Github Mirror",
@@ -35057,6 +35069,18 @@
               }
             ],
             "title": "Github Mirror"
+          },
+          "model_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(hf|hf-mirror|modelscope)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Source"
           }
         },
         "type": "object",
@@ -45402,11 +45426,6 @@
             "title": "Python Path",
             "default": ""
           },
-          "source": {
-            "type": "string",
-            "title": "Source",
-            "default": "hf-mirror"
-          },
           "pip_index": {
             "type": "string",
             "title": "Pip Index",
@@ -45455,12 +45474,6 @@
             "type": "string",
             "title": "Python Path",
             "default": ""
-          },
-          "source": {
-            "type": "string",
-            "pattern": "^(hf|hf-mirror|modelscope)$",
-            "title": "Source",
-            "default": "hf-mirror"
           },
           "fish_repo_dir": {
             "type": "string",

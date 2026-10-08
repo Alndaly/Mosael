@@ -81,6 +81,9 @@ def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
     return _install_source_out()
 
 
+#: 模型下载源能选哪几个:两种 HuggingFace 端点,加上 ModelScope(只有支持它的克隆引擎会走)。
+MODEL_SOURCES = ("hf-mirror", "hf", "modelscope")
+
 def _install_source_out() -> InstallSourceOut:
     from app.ai.runtime import config as runtime_config
     from app.domain.local_services import sources as service_sources
@@ -95,6 +98,8 @@ def _install_source_out() -> InstallSourceOut:
         pytorch_index=current.pytorch_index or "",
         pytorch_presets=service_sources.pytorch_presets(),
         github_mirror=current.github_mirror or "",
+        model_source=current.source,
+        model_sources=list(MODEL_SOURCES),
     )
 
 
@@ -119,8 +124,18 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
             row.pytorch_index = service_sources.normalize_pytorch_index(body.pytorch_index)
         if body.github_mirror is not None:
             row.github_mirror = service_sources.normalize_github_mirror(body.github_mirror)
+        model_source_changed = body.model_source is not None and body.model_source != row.source
+        if body.model_source is not None:
+            row.source = body.model_source
     except PluginDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     runtime_config.refresh()
+    if model_source_changed:
+        from app.ai.runtime import tts_daemon, tts_models
+
+        # 和改克隆设置同一套收尾:探测缓存、上次失败的那句话按旧源算的;常驻的合成进程带着旧源的 env。
+        tts_models.clear_runtime_probes()
+        tts_models.forget_failures()
+        tts_daemon.pool().drop_all()
     return _install_source_out()

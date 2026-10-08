@@ -735,6 +735,11 @@ describe("本机识别", () => {
     fireEvent.click(screen.getByRole("button", { name: "modelPreviewSettings" }));
     expect((await within(row()).findByRole("alert")).textContent).toContain("modelLocalNsfwFailed");
     expect(await within(row()).findByRole("button", { name: /modelLocalNsfwRetry/ })).toBeTruthy();
+    //: 体检 UM-16:下不下来多半是网络 —— 给一条去换模型下载源的路(管理 → 引擎 → 下载源)。
+    const hash = window.location.hash;
+    fireEvent.click(within(row()).getByRole("button", { name: /modelLocalNsfwChangeSource/ }));
+    expect(window.location.hash).toBe("#/admin");
+    window.location.hash = hash;
   });
 
   it("本机识别那一条依据:悬停写 NSFW 的可能是几成", async () => {

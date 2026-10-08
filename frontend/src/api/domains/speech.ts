@@ -299,9 +299,9 @@ export function getInstallSource(): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source");
 }
 
-/** 只改给了的那一行(pip / npm / 「让 Mosael 装」的 PyTorch 源、GitHub 镜像前缀);空串 = 官方源 / 直连。 */
+/** 只改给了的那一行(pip / npm / 「让 Mosael 装」的 PyTorch 源、GitHub 镜像前缀、模型下载源);空串 = 官方源 / 直连。 */
 export function updateInstallSource(
-  body: { pip_index?: string; npm_registry?: string; pytorch_index?: string; github_mirror?: string },
+  body: { pip_index?: string; npm_registry?: string; pytorch_index?: string; github_mirror?: string; model_source?: string },
 ): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source", { method: "PUT", body: JSON.stringify(body) });
 }
@@ -313,7 +313,6 @@ export function getTtsConfig(): Promise<TtsConfig> {
 export function updateTtsConfig(body: {
   engine: string;
   python_path: string;
-  source: string;
   fish_repo_dir?: string;
   fish_model_dir?: string;
 }): Promise<TtsConfig> {

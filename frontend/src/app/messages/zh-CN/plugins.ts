@@ -989,6 +989,7 @@ export const plugins = {
   modelLocalNsfwInstalling: "正在下载…",
   modelLocalNsfwFailed: "没下成:{why}",
   modelLocalNsfwRetry: "重试",
+  modelLocalNsfwChangeSource: "换模型下载源",
   modelLocalNsfwReady: "已开 · 识别过 {n} 张",
   modelLocalNsfwPending: "正在识别 · 还有 {n} 张",
   modelPreviewSettingsNote: "模糊的鼠标移上去或点开时看清;不显示的只画图标,点开详情能临时显示一张。生成表单和工作台里选模型的下拉也照这里。",

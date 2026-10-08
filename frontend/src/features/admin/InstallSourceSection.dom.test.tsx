@@ -2,6 +2,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 
 /**
@@ -39,6 +40,7 @@ beforeEach(() => {
   updates.length = 0;
   stored = {
     pip_index: "", npm_registry: "", pip_presets: [], npm_presets: [], pytorch_index: "", github_mirror: "",
+    model_source: "hf-mirror", model_sources: ["hf-mirror", "hf", "modelscope"],
     pytorch_presets: [
       { value: "pytorch", label: "官方(download.pytorch.org)", url: "" },
       { value: "nju", label: "南京大学", url: "https://mirror.nju.edu.cn/pytorch/whl" },
@@ -69,4 +71,19 @@ it("GitHub 镜像前缀离开框时才存,去掉两头空白;没改不存", asyn
   fireEvent.focus(input);
   fireEvent.blur(input);
   expect(updates).toHaveLength(1);
+});
+
+//: 体检 UM-16:模型下载源管着声音克隆、本机识别(NSFW)、Mosael 起的本机 ComfyUI 的所有 HuggingFace 下载,此前却藏在「声音克隆」里。
+it("模型下载源是这一节里的一行:显示存着的那个,换了只存这一项,说明里写着谁在用它", async () => {
+  Element.prototype.scrollIntoView ??= () => {};
+  Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {} });
+  show();
+  const picker = await screen.findByRole("combobox", { name: "voiceCloneSource" });
+  expect(picker.textContent).toContain("settingsVoiceCloneSourceHfMirror");
+  expect(screen.getByText("installSourceModelHint")).toBeTruthy();
+  expect(updates).toEqual([]);
+
+  await userEvent.click(picker);
+  await userEvent.click(await screen.findByRole("option", { name: "settingsVoiceCloneSourceHf" }));
+  await waitFor(() => expect(updates).toEqual([{ model_source: "hf" }]));
 });
