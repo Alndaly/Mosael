@@ -19,6 +19,7 @@ import {
   type FormDraft,
   type FormsDraft,
 } from "@/features/plugins/workflowAppForm";
+import { kindName } from "@/features/plugins/WorkflowFacts";
 import { cn } from "@/lib/utils";
 
 type Translate = ReturnType<typeof useI18n>;
@@ -192,6 +193,10 @@ function DeleteForm({ form, instanceId, workspaceId, onCancel, onConfirm }: {
               </ul>
             </>
           )}
+          {/* 表单存在那台 ComfyUI 的文件里:别的工作区、别人连着同一台的连接里的用法这里数不到,说一句 */}
+          {!usages.isPending && !usages.isError && (
+            <p className="m-0 text-ui-xs text-muted-foreground" data-form-usages-scope="">{t("workflowFormDeleteScope")}</p>
+          )}
         </div>
       )}
     </ConfirmDialog>
@@ -199,7 +204,9 @@ function DeleteForm({ form, instanceId, workspaceId, onCancel, onConfirm }: {
 }
 
 function usageLine(use: WorkflowFormUse, t: Translate): string {
+  //: 默认模型按人记:name 是那种能力(image / video / audio)
+  if (use.kind === "default") return t("workflowFormUse_default").replace("{kind}", kindName(t, use.name || use.id));
   const key = use.kind === "board" ? "workflowFormUse_board" : use.kind === "workflow" ? "workflowFormUse_workflow"
-    : "workflowFormUse_session";
+    : use.kind === "task" ? "workflowFormUse_task" : "workflowFormUse_session";
   return t(key).replace("{name}", use.name || use.id).replace("{n}", String(use.count ?? 1));
 }

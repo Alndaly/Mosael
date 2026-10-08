@@ -58,7 +58,10 @@ from app.db.models import (
     Job,
     PluginInstance,
     PluginInvocation,
+    ProviderDefault,
+    ProviderModel,
     ProviderProfile,
+    ScheduledTask,
     User,
     Workflow,
 )
@@ -953,8 +956,9 @@ def _count_uses(value: Any, profile_id: str, model: str, node_type: str, instanc
 def form_usages(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, model: str,
                 tool: str) -> list[dict[str, Any]]:
     """一张表单在这个工作区里被哪些地方用着(删表单之前说给作者听,ADR 0045 §7):画板(选它生成的格子、用它的工具的能力
-    和生成器)、工作流(生成节点、用它的工具的节点)、AI Studio 的生成会话。`model` / `tool` 是插件说的这张表单的模型 id
-    和工具名(工作流库 `app` 的回答里有)。删了之后那几处会说「这张表单已经没了」,不悄悄换成完整工作流。"""
+    和生成器)、工作流(生成节点、用它的工具的节点)、AI Studio 的生成会话、定时任务(载荷里选着它的),外加问的这个人在设置里
+    把它定成了哪几种默认模型(默认模型按人记,不按工作区)。`model` / `tool` 是插件说的这张表单的模型 id 和工具名(工作流库 `app`
+    的回答里有)。删了之后那几处会说「这张表单已经没了」,不悄悄换成完整工作流。"""
     ensure_workspace_access(db, user, workspace_id)
     _require(db, instance)
     profile = _profile(db, instance)
@@ -980,6 +984,19 @@ def form_usages(db: Session, user: User, instance: PluginInstance, *, workspace_
             GenerationSession.workspace_id == workspace_id, GenerationSession.provider_profile_id == profile_id,
             GenerationSession.model == model).order_by(GenerationSession.updated_at.desc()))
         uses += [{"kind": "session", "id": session.id, "name": session.title, "count": 1} for session in sessions]
+    for task in db.scalars(select(ScheduledTask).where(ScheduledTask.workspace_id == workspace_id).order_by(ScheduledTask.name)):
+        if any(needle in json.dumps(task.payload, ensure_ascii=False) for needle in needles):
+            count = _count_uses(task.payload, profile_id, model, node_type, instance.id)
+            if count:
+                uses.append({"kind": "task", "id": task.id, "name": task.name, "count": count})
+    if model:
+        row = db.scalar(select(ProviderModel).where(ProviderModel.provider_profile_id == profile_id,
+                                                    ProviderModel.model_id == model))
+        if row is not None:
+            defaults = db.scalars(select(ProviderDefault).where(ProviderDefault.provider_model_id == row.id,
+                                                                ProviderDefault.owner_user_id == user.id)
+                                  .order_by(ProviderDefault.capability))
+            uses += [{"kind": "default", "id": one.capability, "name": one.capability, "count": 1} for one in defaults]
     return uses[:_MAX_FORM_USES]
 
 

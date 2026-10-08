@@ -18542,7 +18542,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "board" | "workflow" | "session";
+            kind: "board" | "workflow" | "session" | "task" | "default";
             /** Id */
             id: string;
             /**

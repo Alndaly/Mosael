@@ -1102,8 +1102,9 @@ class WorkflowUpgradeMarksOut(ApiModel):
 class WorkflowFormUseOut(ApiModel):
     """一张表单在这个工作区里的一处用法(删之前说给作者听)。"""
 
-    #: board / workflow / session(AI Studio 的生成会话)
-    kind: Literal["board", "workflow", "session"]
+    #: board / workflow / session(AI Studio 的生成会话)/ task(定时任务)/ default(问的这个人设置里的默认模型;id、name
+    #: 是那种能力:image / video / audio……)
+    kind: Literal["board", "workflow", "session", "task", "default"]
     id: str
     name: str = ""
     #: 那一处里有几格 / 几个节点用着它

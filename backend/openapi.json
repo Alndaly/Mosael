@@ -47004,7 +47004,9 @@
             "enum": [
               "board",
               "workflow",
-              "session"
+              "session",
+              "task",
+              "default"
             ],
             "title": "Kind"
           },

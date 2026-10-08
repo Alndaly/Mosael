@@ -16,7 +16,10 @@ import pytest
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.db.models import Board, GenerationSession, Notification, PluginInstance, ProviderProfile
+from app.db.models import (
+    Board, GenerationSession, Notification, PluginInstance, ProviderModel, ProviderProfile, ScheduledTask,
+)
+from app.domain.providers import defaults as provider_defaults
 from tests.fake_comfyui import PORTRAIT_ID, FakeComfyUI, comfyui_grants
 from tests.test_plugin_dynamic_tools import _workflow
 from tests.util import fresh_client, user_id
@@ -168,6 +171,15 @@ def test_删表单之前_数这个工作区里有几处在用它(formed) -> None
         ]}))
         db.add(GenerationSession(workspace_id=ws, owner_user_id=user_id(), provider_profile_id=profile_id,
                                  model=fine["model"], kind="image", title="调步数"))
+        # PLG-6:定时任务、设置里的默认模型也存着这个 id —— 此前删之前不数它们,删了才到点失败
+        db.add(ScheduledTask(workspace_id=ws, owner_user_id=user_id(), name="每天一张", kind="generation",
+                             trigger_type="cron", payload={"provider_profile_id": profile_id, "model": fine["model"],
+                                                           "prompt": "柴犬"}))
+        db.add(ScheduledTask(workspace_id=ws, owner_user_id=user_id(), name="选完整工作流的", kind="generation",
+                             trigger_type="cron", payload={"provider_profile_id": profile_id, "model": "portrait.json"}))
+        row = db.scalar(select(ProviderModel).where(ProviderModel.provider_profile_id == profile_id,
+                                                    ProviderModel.model_id == fine["model"]))
+        provider_defaults.set_default(db, "image", row, owner_user_id=user_id())
         db.commit()
     _workflow(ws, {"nodes": [
         {"id": "start", "type": "start", "config": {}},
@@ -178,7 +190,8 @@ def test_删表单之前_数这个工作区里有几处在用它(formed) -> None
                       params={"workspace_id": ws, "model": fine["model"], "tool": fine["tool"]})
     assert used.status_code == 200, used.text
     assert [(one["kind"], one["name"], one["count"]) for one in used.json()["uses"]] == [
-        ("board", "海报", 2), ("workflow", "老节点", 1), ("session", "调步数", 1)], "完整工作流的那几处不算"
+        ("board", "海报", 2), ("workflow", "老节点", 1), ("session", "调步数", 1), ("task", "每天一张", 1),
+        ("default", "image", 1)], "完整工作流的那几处不算"
     other = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/form-usages",
                        params={"workspace_id": "nope", "model": fine["model"], "tool": fine["tool"]})
     assert other.status_code in (403, 404), "别的工作区不让查"

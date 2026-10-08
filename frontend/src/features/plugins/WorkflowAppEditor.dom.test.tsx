@@ -391,7 +391,9 @@ describe("几张表单", () => {
   it("删一张:确认框里列出这个工作区里在用它的几处;删了之后存的是剩下的那几张", async () => {
     api.getWorkflowApp.mockResolvedValue(two());
     api.getFormUsages.mockResolvedValue({ uses: [{ kind: "board", id: "b1", name: "海报", count: 2 },
-                                                 { kind: "session", id: "s1", name: "调步数", count: 1 }] });
+                                                 { kind: "session", id: "s1", name: "调步数", count: 1 },
+                                                 { kind: "task", id: "t1", name: "每天一张", count: 1 },
+                                                 { kind: "default", id: "image", name: "image", count: 1 }] });
     api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
     mount(vi.fn(), vi.fn(), { form: "k3x9a2" });
     await waitFor(() => expect(chosenKeys()).toEqual(["6.text", "3.steps"]));
@@ -401,7 +403,9 @@ describe("几张表单", () => {
     await waitFor(() => expect(within(ask).getByText(t("workflowFormDeleteInUse"))).toBeTruthy());
     expect(api.getFormUsages).toHaveBeenCalledWith("i1", { workspace_id: "w1", model: "换装.json#k3x9a2", tool: "wf_x_k3x9a2" });
     expect(within(ask).getAllByRole("listitem").map((one) => one.textContent)).toEqual([
-      t("workflowFormUse_board", "海报"), t("workflowFormUse_session", "调步数")]);
+      t("workflowFormUse_board", "海报"), t("workflowFormUse_session", "调步数"), t("workflowFormUse_task", "每天一张"),
+      t("workflowFormUse_default")]);
+    expect(ask.querySelector("[data-form-usages-scope]"), "说清楚别的工作区、别人的连接数不到").toBeTruthy();
     expect(within(ask).getByText(t("workflowFormDeleteBody")), "不会悄悄换成完整工作流").toBeTruthy();
     fireEvent.click(within(ask).getByRole("button", { name: t("workflowFormDeleteConfirm") }));
     await waitFor(() => expect(formTabs().map((one) => one.textContent)).toEqual(["快速出图"]));
