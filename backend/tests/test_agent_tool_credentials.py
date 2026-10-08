@@ -31,6 +31,8 @@ def _probe(monkeypatch) -> list[str]:
         return {}
 
     monkeypatch.setattr(mcp_server, "probe_caller", probe_caller, raising=False)
+    #: 通道只认登记过的工具(SEC-13):临时工具也登记进去,和 `@tool` 登记的同一个待遇。
+    monkeypatch.setattr(mcp_server, "REGISTERED_TOOLS", mcp_server.REGISTERED_TOOLS | {"probe_caller"})
     return seen
 
 
