@@ -305,7 +305,12 @@ function backendCommand() {
         : path.join(backendDir, ".venv", "bin", "python");
     return {
       command: venvPython,
-      args: ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT)],
+      // 关机时最多等没结束的请求 5 秒,然后照样跑后端的收尾(停本机服务等)—— 数字和 backend/app/core/lifeline.py 的
+      // GRACEFUL_SHUTDOWN_SECONDS 一致(backend/tests/test_shutdown_does_not_wait_forever.py 对着)。
+      args: [
+        "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(BACKEND_PORT),
+        "--timeout-graceful-shutdown", "5",
+      ],
       cwd: backendDir,
     };
   }

@@ -401,3 +401,14 @@ Linux + NVIDIA 的服务器(验收清单在交付说明里,和第二步的 Windo
 - pysssss 维护跟不上是风险:它要是和某个新版 ComfyUI 不兼容,固定版本先不升,同时考虑把模型库要的那几个路由
   (Range 读、元数据、存预览图)做成 Mosael 自己的小节点。
 - PyTorch 和 CUDA 的对照表、固定的 ComfyUI 版本、两个压缩包的 sha256 都在插件里,要跟着上游定期更新。
+
+## 修订:关机不因为一条开着的连接无限等(2026-10-08)
+
+「退出 Mosael 时照样停 —— Mosael 起的进程不留在后台」靠的是 lifespan 的收尾。uvicorn 默认等所有连接自己结束才走它:智能体这一轮的流、
+一个慢慢读的视频、一次长插件调用还开着,关机就停在「Waiting for connections to close」;壳没了的那条路(`core/lifeline`)15 秒后
+`os._exit`,收尾整段跳过,ComfyUI 留在后台占着显存。实测开着一条 SSE,20 秒后服务线程还在、停本机服务那一步一次都没跑。
+
+现在三处起后端的命令(打包版 `run_backend.config`、Electron 开发态拉起的那条、`pnpm dev:backend`)都带 `timeout_graceful_shutdown`
+= `core/lifeline.GRACEFUL_SHUTDOWN_SECONDS`(5 秒):到点放手,收尾照跑;壳那条路的强退延后到 `GRACEFUL_SHUTDOWN_SECONDS + 25` 秒,
+给收尾(本机服务先请它自己退、10 秒后强杀)留够时间。`tests/test_shutdown_does_not_wait_forever.py` 起真服务开着一条流验它,
+并对着三条命令里的数。

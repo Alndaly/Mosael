@@ -29,8 +29,17 @@ PARENT_ENV = "MOSAEL_PARENT_PID"
 #: 这个后端进程的身份。每次启动都换 —— 壳和界面据此分辨「还是那一个」还是「已经重启过」。
 INSTANCE_ID = uuid.uuid4().hex
 
-#: 发出退出信号之后,等正常收尾的上限;到点还没退就直接退。
-FORCE_EXIT_AFTER = 15.0
+#: 收到退出信号之后,**最多等还没结束的请求这么久**,然后照样走 lifespan 的收尾(停本机服务、常驻进程、飞书连接)。
+#:
+#: uvicorn 的默认是无限等:一条还开着的连接(智能体这一轮的流、一个慢慢读的视频、一次长插件调用)就让关机停在
+#: 「Waiting for connections to close」,收尾一直不跑;壳没了的那条路(下面)到点 `os._exit`,收尾整段跳过 ——
+#: Mosael 起的 ComfyUI 留在后台占着显存(ADR 0041 拍板 4 说的正是不能留)。三处起后端的命令都要带上它:
+#: 打包版的 run_backend.py、Electron 开发态拉起的那条、`pnpm dev:backend`(tests/test_shutdown_does_not_wait_forever 对着)。
+GRACEFUL_SHUTDOWN_SECONDS = 5
+
+#: 发出退出信号之后,等正常收尾的上限;到点还没退就直接退。要比「等请求」加上收尾本身(本机服务先请它自己退、
+#: 10 秒后强杀)长,否则收尾跑到一半被截断。
+FORCE_EXIT_AFTER = GRACEFUL_SHUTDOWN_SECONDS + 25.0
 
 
 def data_dir_id(data_dir: object) -> str:
