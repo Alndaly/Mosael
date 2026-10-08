@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from base64 import b64decode
 from types import SimpleNamespace
@@ -110,7 +111,7 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     message = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "帮我看看时间线"})
     assert message.status_code == 200
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -198,7 +199,7 @@ def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypat
     assert res.status_code == 200
     assert res.json()["content"] == "删掉这个节点"
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -223,7 +224,7 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -287,7 +288,7 @@ def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
     session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -311,7 +312,7 @@ def test_只有一段日志时仍然退回那句常量(monkeypatch) -> None:
     session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -336,7 +337,7 @@ def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
     session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -374,7 +375,7 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
     session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "hi"})
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
@@ -396,9 +397,14 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
     action on the queued item. See test_agent_queue.py for both halves.
     """
     steers: list[str] = []
+    #: 第一轮一直跑到测试放它走:第二条要在它跑着的时候发、在它跑着的时候看队列。
+    #: 此前是第一轮睡 1.5 秒,赌这几步在 1.5 秒内做完。
+    running = threading.Event()
+    release = threading.Event()
 
     def slow_run_turn(*args, **kwargs):
-        time.sleep(1.5)
+        running.set()
+        release.wait(30)
         return TurnResult(text="ok")
 
     monkeypatch.setattr(host, "run_turn", slow_run_turn)
@@ -409,12 +415,16 @@ def test_a_message_sent_mid_turn_is_accepted_and_queued(monkeypatch) -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     session = client.post("/api/agent/sessions", json={"home": {"kind": "studio"}, "workspace_id": ws["id"]}).json()
     assert client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "one"}).status_code == 200
+    assert running.wait(30), "the first turn never started"
 
-    second = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "two"})
+    try:
+        second = client.post(f"/api/agent/sessions/{session['id']}/messages", json={"content": "two"})
 
-    assert second.status_code == 200, second.text
-    assert steers == [], "a plain follow-up must not cut into the running turn"
-    assert [m["content"] for m in client.get(f"/api/agent/sessions/{session['id']}/queue").json()] == ["two"]
+        assert second.status_code == 200, second.text
+        assert steers == [], "a plain follow-up must not cut into the running turn"
+        assert [m["content"] for m in client.get(f"/api/agent/sessions/{session['id']}/queue").json()] == ["two"]
+    finally:
+        release.set()
     assert wait_idle(client, session["id"]) == "idle"
 
 

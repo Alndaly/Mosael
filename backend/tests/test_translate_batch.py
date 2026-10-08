@@ -177,23 +177,37 @@ def test_一句失败_还没开始的句子不再翻(monkeypatch) -> None:
     assert len(called) <= 2 * tr._MAX_PARALLEL, f"失败之后又翻了 {len(called)} 句"
 
 
+#: 第几句开始时说停。由替身自己在那一句里立信号,不用计时器:此前是 0.1 秒后的 Timer,计时器线程起得晚,
+#: 说停的那一刻就晚,后面数出来的句数跟着变。
+_STOP_AT = 16
+_SENTENCES = 400
+
+
+def _stopped_late(called: list[str]) -> None:
+    """说停之后还起了几句;线画在「不停的话会起几句」的一半(调用方每隔一拍才问一次停不停,在途的照样跑完)。"""
+    late = len(called) - _STOP_AT
+    assert late < (_SENTENCES - _STOP_AT) / 2, f"说停之后还翻了 {late} 句"
+
+
 def test_调用方说停_不再起新的句子(monkeypatch) -> None:
     """工作流里同一张图别的节点失败了(或这一轮被取消):翻译节点不该把剩下的句子一句句付费翻完。"""
     called: list[str] = []
     lock = threading.Lock()
+    stop = threading.Event()
 
     def fake_ai(chat_target, text, target, client=None, call=None):
         with lock:
             called.append(text)
+            if len(called) == _STOP_AT:
+                stop.set()
         time.sleep(0.05)
         return text
 
     _ai_batch(monkeypatch, fake_ai)
-    stop = threading.Event()
-    threading.Timer(0.1, stop.set).start()
     with pytest.raises(tr.TranslationStopped):
-        tr.translate_many(None, [f"c{i}" for i in range(400)], "en", user_id=None, engine="builtin:chat", stop=stop.is_set)
-    assert len(called) < 100, f"说停之后还翻了 {len(called)} 句"
+        tr.translate_many(None, [f"c{i}" for i in range(_SENTENCES)], "en", user_id=None, engine="builtin:chat",
+                          stop=stop.is_set)
+    _stopped_late(called)
 
 
 def test_逐句翻译节点_这一轮在停就停下_说的是在停(monkeypatch) -> None:
@@ -202,9 +216,22 @@ def test_逐句翻译节点_这一轮在停就停下_说的是在停(monkeypatch
     from app.domain.workflows.run_scope import halt_scope
 
     called: list[str] = []
-    _ai_batch(monkeypatch, lambda chat_target, text, target, client=None, call=None: called.append(text) or time.sleep(0.05) or text)
+    lock = threading.Lock()
+    halts: list[threading.Event] = []
+
+    def fake_ai(chat_target, text, target, client=None, call=None):
+        with lock:
+            called.append(text)
+            if len(called) == _STOP_AT:
+                halts[0].set()
+        time.sleep(0.05)
+        return text
+
+    _ai_batch(monkeypatch, fake_ai)
     with halt_scope() as halt:
-        threading.Timer(0.1, halt.set).start()
+        halts.append(halt)
         with pytest.raises(WorkflowDomainError) as stopped:
-            translate_lines(None, None, {"texts": [f"c{i}" for i in range(400)], "target_lang": "en", "engine": "builtin:chat"})
-    assert stopped.value.key == "wfErr_cancelled" and len(called) < 100
+            translate_lines(None, None, {"texts": [f"c{i}" for i in range(_SENTENCES)], "target_lang": "en",
+                                         "engine": "builtin:chat"})
+    assert stopped.value.key == "wfErr_cancelled"
+    _stopped_late(called)

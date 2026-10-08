@@ -212,7 +212,7 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
         )
         assert res.status_code == 200, res.text
         # Synthesis runs on a job thread; wait for it rather than racing it.
-        deadline = time.time() + 5
+        deadline = time.time() + 30
         while not seen and time.time() < deadline:
             time.sleep(0.02)
     finally:
@@ -257,7 +257,7 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
             },
         )
         assert res.status_code == 200, res.text
-        deadline = time.time() + 5
+        deadline = time.time() + 30
         while not seen and time.time() < deadline:
             time.sleep(0.02)
     finally:

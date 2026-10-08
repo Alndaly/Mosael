@@ -23,12 +23,12 @@ from app.core import abort, outbound_guard
 from app.core.db import SessionLocal
 from app.core.http_retry import RetryingClient
 from app.core.i18n import t
-from tests.util import add_provider, fresh_client, wait_status
+from tests.util import add_provider, fresh_client, until, wait_settled, wait_status
 
 #: 上游「生成」要多久才回。旧代码下取消之后连接一直挂到这时;新代码下取消后一秒内就断。
 GENERATE_SECONDS = 8.0
-#: 取消之后最多等多久看到断开。
-CLOSE_WITHIN_SECONDS = 1.5
+#: 取消之后最多等多久看到断开:线画在「不修的话要等多久」(生成完才断)的一半。此前是 1.5 秒,几套测试同时跑时不够。
+CLOSE_WITHIN_SECONDS = GENERATE_SECONDS / 2
 
 
 @pytest.fixture(autouse=True)
@@ -208,14 +208,15 @@ def test_取消工作流_在途的大模型请求当场断开_不重发_节点�
     assert held.bodies[0]["model"] == "qwen-local"
     assert held.bodies[0]["messages"][-1] == {"role": "user", "content": "写一首关于猫的长诗"}
 
-    assert held.closed.wait(CLOSE_WITHIN_SECONDS + 1), "取消之后上游的连接应该当场断开,而不是挂到生成完"
+    assert held.closed.wait(CLOSE_WITHIN_SECONDS), "取消之后上游的连接应该当场断开,而不是挂到生成完"
     assert held.closed_at - cancelled_at < CLOSE_WITHIN_SECONDS
     assert not held.answered
 
-    assert wait_status(client, job_id) == "failed"
+    #: 等到任务线程结束再数连接:重试只能从它发出去,它结束了就不会再有。此前是睡 0.3 秒再数 ——
+    #: 机器一忙,重试还没来得及发,断言照样成立。
+    assert wait_settled(client, job_id) == "failed"
     final = client.get(f"/api/jobs/{job_id}").json()
     assert final["error"] == t("jobErr_cancelled", "zh"), "取消的原因不被节点失败盖掉"
-    time.sleep(0.3)
     assert held.connections == 1, "取消之后不重试、不再发"
     finished = [one for one in _job_events(client, job_id) if one["type"] == "workflow.node.finished"]
     assert [one["payload"].get("node_id") for one in finished if one["payload"].get("node_id") == "write"] == []
@@ -235,7 +236,7 @@ def test_取消时_HTTP_请求节点等着的连接当场断开(held: _SlowUpstr
     }
     job_id, cancelled_at = _run_and_cancel(client, graph, held)
     assert held.bodies == [{"q": 1}]
-    assert held.closed.wait(CLOSE_WITHIN_SECONDS + 1)
+    assert held.closed.wait(CLOSE_WITHIN_SECONDS)
     assert held.closed_at - cancelled_at < CLOSE_WITHIN_SECONDS
     assert wait_status(client, job_id) == "failed"
     assert client.get(f"/api/jobs/{job_id}").json()["error"] == t("jobErr_cancelled", "zh")
@@ -259,10 +260,7 @@ def test_取消时正在读的流式响应当场停_之后一个字节都不再�
 
     reader = threading.Thread(target=read, daemon=True)
     reader.start()
-    deadline = time.monotonic() + 10
-    while len(received) < 5 and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert len(received) >= 5, "流式响应应该已经在往里吐了"
+    assert until(lambda: len(received) >= 5), "流式响应应该已经在往里吐了"
 
     aborted_at = time.monotonic()
     stop.kill()
@@ -270,20 +268,32 @@ def test_取消时正在读的流式响应当场停_之后一个字节都不再�
     assert not reader.is_alive(), "读的那个线程应该当场醒来"
     assert streaming.closed.wait(CLOSE_WITHIN_SECONDS), "上游应该看到连接断开"
     assert streaming.closed_at - aborted_at < CLOSE_WITHIN_SECONDS
-    assert [at for at, _ in received if at > aborted_at + 0.01] == [], "取消之后一个字节都不再流进来"
+    #: 取消那一刻手里正在交的那一块可以交完(至多一块);之后再进来的就是没停住 —— 上游每 50 毫秒一块,
+    #: 不停的话这里是几十块。此前要求「取消 10 毫秒之后一块都没有」:读线程拿到块之后要抢到 GIL 才记时间,满载下 10 毫秒不够。
+    late = [size for at, size in received if at > aborted_at]
+    assert len(late) <= 1, f"取消之后又流进来 {len(late)} 块"
     assert failure and isinstance(failure[0], httpx.HTTPError), "被掐断的流不能装成「读完了」"
     assert sum(size for _, size in received) > 0 and streaming.chunks_sent < GENERATE_SECONDS / 0.05 / 2, \
         "上游在断开时就停了,没有生成到底"
 
 
-def test_已经取消的活不再发新的请求_一个连接都不建(held: _SlowUpstream) -> None:
+def test_已经取消的活不再发新的请求_一个连接都不建(held: _SlowUpstream, monkeypatch) -> None:
+    #: 在发起连接的那一处数(httpcore 建 TCP 连接走的是 socket.create_connection),不在上游数:
+    #: 上游那边要等接受连接的线程转一圈才数得到,此前只好睡 0.2 秒再看 —— 机器一忙,连上了也还没数到。
+    dialed: list[object] = []
+    real_create_connection = socket.create_connection
+
+    def create_connection(address, *args, **kwargs):
+        dialed.append(address)
+        return real_create_connection(address, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "create_connection", create_connection)
     stop = abort.AbortScope()
     stop.kill()
     with abort.scope(stop), RetryingClient(timeout=5) as client:
         with pytest.raises(abort.RequestAborted):
             client.post(f"http://127.0.0.1:{held.port}/v1/chat/completions", json={})
-    time.sleep(0.2)
-    assert held.connections == 0
+    assert dialed == []
 
 
 def test_不在任务里的请求不受影响(monkeypatch) -> None:
@@ -327,14 +337,12 @@ def test_订阅授权那条路_取消时掐掉一次性的_sidecar(monkeypatch) 
 
     worker = threading.Thread(target=complete, daemon=True)
     worker.start()
-    deadline = time.monotonic() + 5
-    while not started and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert started
-    time.sleep(0.2)
+    #: 等它真的在「等供应商」了(取消的回调已经登记上)再取消。此前是起了进程之后再睡 0.2 秒。
+    assert until(lambda: started and stop._hooks), "补全一直没开始等供应商"
     stop.kill()
-    assert started[0].wait(timeout=CLOSE_WITHIN_SECONDS) is not None, "取消之后那个 sidecar 进程应该没了"
-    worker.join(CLOSE_WITHIN_SECONDS)
+    #: sidecar 要等 60 秒才自己退:线画在它的一半。此前是 1.5 秒。
+    assert started[0].wait(timeout=30) is not None, "取消之后那个 sidecar 进程应该没了"
+    worker.join(30)
     assert not worker.is_alive()
     assert isinstance(outcome[0], pi_client.SidecarError) and outcome[0].key == "aiErr_gatewayCancelled"
 

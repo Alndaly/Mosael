@@ -26,6 +26,7 @@ from app.ai import media_transfer
 from app.core.http_retry import RetryingClient as RealClient
 from app.core.db import SessionLocal
 from app.db.models import GeneratedAsset, GenerationJob, Job, ProviderUsageEvent
+from tests.util import module_time
 
 SEEDANCE = "doubao-seedance-2-0-260128"
 VIDEO = bytes(range(256)) * 4096  # 1 MiB 的「成片」
@@ -37,9 +38,9 @@ def _no_sleep(monkeypatch):
     import app.ai.providers.adapters.shared.polling as polling
     import app.core.http_retry as http_retry
 
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(polling.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(media_transfer.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *_: None))
+    monkeypatch.setattr(polling, "time", module_time(sleep=lambda *_: None))
+    monkeypatch.setattr(media_transfer, "time", module_time(sleep=lambda *_: None))
 
 
 class _Breaks(httpx.SyncByteStream):

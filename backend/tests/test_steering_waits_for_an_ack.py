@@ -61,7 +61,7 @@ def test_对面说没接住时返回False_哪怕管道写成功了() -> None:
         # sidecar:那一轮刚好结束了 —— pending=False。
         _wait_until(lambda: bool(live._ack_type))
         live.ack("queued", False)
-        caller.join(timeout=5)
+        caller.join(timeout=30)
 
         assert result == [False], "写成功被当成了插进去 —— 这条消息会被摘掉队列标然后蒸发"
     finally:
@@ -76,7 +76,7 @@ def test_对面说接住了才返回True() -> None:
         caller.start()
         _wait_until(lambda: bool(live._ack_type))
         live.ack("queued", True)
-        caller.join(timeout=5)
+        caller.join(timeout=30)
 
         assert result == [True]
     finally:
@@ -91,7 +91,7 @@ def test_那一轮当场结束时_等回执的人立刻拿到False_而不是干�
         caller.start()
         _wait_until(lambda: bool(live._ack_type))
         live.close()  # `_run_pi` 的 finally 走到了这里
-        caller.join(timeout=5)
+        caller.join(timeout=30)
 
         assert result == [False]
     finally:
@@ -116,7 +116,7 @@ def test_停止也等回执_一轮刚开始时按下不算数() -> None:
         caller.start()
         _wait_until(lambda: live._ack_type == "aborted_ack")
         live.ack("aborted_ack", False)  # 那一轮已经结束了,没有东西可停
-        caller.join(timeout=5)
+        caller.join(timeout=30)
 
         assert result == [False]
     finally:
@@ -129,13 +129,17 @@ def test_回执认类型_别人的回执不算数() -> None:
         result: list[bool] = []
         caller = threading.Thread(
             target=lambda: result.append(
-                live.send_awaiting_ack({"type": "abort"}, ack_type="aborted_ack", timeout=0.4)
+                live.send_awaiting_ack({"type": "abort"}, ack_type="aborted_ack", timeout=30)
             )
         )
         caller.start()
         _wait_until(lambda: live._ack_type == "aborted_ack")
         live.ack("queued", True)  # 另一种回执:不该唤醒这个等待
-        caller.join(timeout=5)
+        #: 收不收是 ack() 当场定的:看那一下之后等待有没有被唤醒。此前是等的一方只等 0.4 秒,别人的回执晚到也是 False ——
+        #: 机器一忙,类型不对的回执被收下了也看不出来。
+        assert not live._ack.is_set(), "别人的回执把等待唤醒了"
+        live.ack("aborted_ack", False)
+        caller.join(timeout=30)
 
         assert result == [False]
     finally:

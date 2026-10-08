@@ -21,7 +21,7 @@ def _run(client, graph: dict) -> dict:
     workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "长文", "graph": graph})
     assert workflow.status_code == 200, workflow.text
     job_id = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}}).json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):

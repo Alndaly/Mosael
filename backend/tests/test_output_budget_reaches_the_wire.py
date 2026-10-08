@@ -22,6 +22,7 @@ import pytest
 
 from app.core import http_retry
 from app.domain.ai_chat import ChatTarget, chat
+from tests.util import module_time
 
 
 def _req() -> httpx.Request:
@@ -45,7 +46,7 @@ def _install(monkeypatch, seen: list[dict]) -> None:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *a, **k: None))
 
 
 def test_解析出来的输出上限真的发出去了(monkeypatch) -> None:

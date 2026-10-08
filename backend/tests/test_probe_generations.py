@@ -83,7 +83,7 @@ def test_上一代的结果不许写回来(module, engine, resolver, stale, fres
 
     def slow(_arg):
         started.set()
-        release.wait(3)
+        release.wait(30)  # 测试放它走之前一直卡着:上限只在测试自己出错时用得上
         return stale
 
     monkeypatch.setattr(module, resolver, slow)

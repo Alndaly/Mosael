@@ -197,7 +197,7 @@ def test_取回时不再提交_成片照常入库(quiet_runner, monkeypatch, tmp
 
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: _adapter(generate=generate, resume=resume))
     assert runner.resume_generation(job_id) is True
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         with SessionLocal() as db:
             if db.get(Job, job_id).status != "running":

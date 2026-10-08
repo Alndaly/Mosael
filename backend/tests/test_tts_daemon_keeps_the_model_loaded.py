@@ -159,7 +159,7 @@ def test_an_idle_worker_is_released(tmp_path) -> None:
     try:
         pool.request("fish-speech", sys.executable, {"output_path": "/tmp/a.wav"})
         assert pool.alive("fish-speech", sys.executable)
-        deadline = time.time() + 5
+        deadline = time.time() + 30
         while pool.alive("fish-speech", sys.executable) and time.time() < deadline:
             time.sleep(0.1)
         assert not pool.alive("fish-speech", sys.executable), "闲了很久还占着 18 GB"

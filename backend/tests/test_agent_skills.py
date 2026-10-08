@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from pathlib import Path
 
 import pytest
@@ -374,15 +373,25 @@ def test_YAML子集读出来和PyYAML一样(head: str) -> None:
     assert ours == as_strings(yaml.safe_load(head))
 
 
-def test_计时不出问题() -> None:
-    """列技能每轮都要做一遍:几十个技能也该是毫秒级(解析按修改时间缓存)。"""
+def test_计时不出问题(monkeypatch) -> None:
+    """列技能每轮都要做一遍:几十个技能也该是毫秒级 —— 靠的是解析按修改时间缓存。
+
+    钉住的是缓存本身:第一轮之后,文件没变就一份都不再解析。此前量的是「平均每轮 < 0.2 秒」,机器一忙就不止。
+    """
     client = fresh_client()
     ws = _workspace(client)
     for index in range(20):
         _create(ws, f"fast-{index:02d}")
     _system_prompt(ws)
-    started = time.perf_counter()
+    parsed: list[str] = []
+    real_parse = catalog.parse_skill_md
+
+    def counting_parse(text, *args, **kwargs):
+        parsed.append(text)
+        return real_parse(text, *args, **kwargs)
+
+    monkeypatch.setattr(catalog, "parse_skill_md", counting_parse)
     for _ in range(10):
         _system_prompt(ws)
-    assert (time.perf_counter() - started) / 10 < 0.2
+    assert parsed == [], f"文件没变,却又解析了 {len(parsed)} 份"
     assert settings.data_dir in catalog.workspace_dir(ws).parents

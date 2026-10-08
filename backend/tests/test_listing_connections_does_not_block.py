@@ -21,7 +21,7 @@ import threading
 import time
 
 from app.domain.providers import auth as provider_auth
-from tests.util import add_provider, fresh_client
+from tests.util import add_provider, fresh_client, until
 from app.core.db import SessionLocal
 
 
@@ -45,13 +45,21 @@ def _expired_subscription(client) -> None:
 
 
 def test_a_slow_refresh_does_not_hold_up_the_list(monkeypatch) -> None:
-    """刷新卡住时,列表照样立刻返回。"""
+    """刷新卡住时,列表照样返回。
+
+    不量时间(此前是「< 2 秒」,机器一忙一次请求就不止):刷新一直卡着,直到列表回来之后才放它走 ——
+    列表要是在等刷新,它回来的时候刷新必然已经结束了。
+    """
     started = threading.Event()
     release = threading.Event()
+    refresh_done = threading.Event()
 
     def slow_refresh(**kwargs):
         started.set()
-        release.wait(10)  # 模拟 fetch 卡到超时
+        try:
+            release.wait(30)  # 模拟 fetch 卡到超时
+        finally:
+            refresh_done.set()
         return True
 
     monkeypatch.setattr(provider_auth, "refresh_oauth_credential", slow_refresh)
@@ -60,13 +68,14 @@ def test_a_slow_refresh_does_not_hold_up_the_list(monkeypatch) -> None:
     client = fresh_client()
     _expired_subscription(client)
 
-    began = time.monotonic()
-    listed = client.get("/api/settings/providers")
-    elapsed = time.monotonic() - began
-    release.set()
-
-    assert listed.status_code == 200, listed.text
-    assert elapsed < 2.0, f"列连接等了 {elapsed:.1f} 秒 —— 它卡在刷新上了"
+    try:
+        listed = client.get("/api/settings/providers")
+        assert listed.status_code == 200, listed.text
+        assert not refresh_done.is_set(), "列连接等到刷新结束才回来 —— 它卡在刷新上了"
+        assert started.wait(30), "刷新压根没开始,上面那条就什么都没证明"
+    finally:
+        release.set()
+    assert refresh_done.wait(30)
 
 
 def test_the_refresh_still_happens(monkeypatch) -> None:
@@ -84,10 +93,7 @@ def test_the_refresh_still_happens(monkeypatch) -> None:
     _expired_subscription(client)
     client.get("/api/settings/providers")
 
-    deadline = time.time() + 5
-    while not calls and time.time() < deadline:
-        time.sleep(0.05)
-    assert calls, "刷新没被触发 —— 挪到后台之后它就没人做了"
+    assert until(lambda: calls), "刷新没被触发 —— 挪到后台之后它就没人做了"
 
 
 def test_a_failing_refresh_never_reaches_the_response(monkeypatch) -> None:
@@ -150,10 +156,7 @@ def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> Non
     profile_id = _listed(client)["id"]
 
     # 第一次拉列表只是**触发**后台刷新,那时还没有"刷不动"这个事实 —— 所以先等它失败。
-    deadline = time.time() + 5
-    while time.time() < deadline and profile_id not in provider_auth._refresh_failed_at:
-        time.sleep(0.02)
-    assert profile_id in provider_auth._refresh_failed_at, "后台刷新压根没跑"
+    assert until(lambda: profile_id in provider_auth._refresh_failed_at), "后台刷新压根没跑"
 
     assert _listed(client)["oauth_expired"] is True, "刷不动了却不说,用户无从知道要重新授权"
 

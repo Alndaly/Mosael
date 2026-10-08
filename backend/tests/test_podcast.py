@@ -357,7 +357,7 @@ class TestTheJobEndpoint:
         assert res.status_code == 200, res.text
         job_id = res.json()["id"]
 
-        deadline = time.time() + 5
+        deadline = time.time() + 60
         while time.time() < deadline:
             with SessionLocal() as db:
                 job = db.get(Job, job_id)

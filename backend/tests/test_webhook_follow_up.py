@@ -24,7 +24,7 @@ def _hooked(client, *, slow: bool = False):
 
 
 def _wait(client, url: str) -> dict:
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     body = client.get(url).json()
     while body["status"] not in ("succeeded", "failed", "cancelled") and time.monotonic() < deadline:
         time.sleep(0.2)

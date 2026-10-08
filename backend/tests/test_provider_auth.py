@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +14,7 @@ from app.domain.providers.auth import (
     release_lease,
 )
 from app.domain.providers.selection import auth_types_for_vendor, normalize_auth_type, pi_provider_id
+from tests.util import until
 
 """OAuth 凭据的互斥刷新。
 
@@ -95,24 +97,35 @@ def test_a_dead_holder_does_not_lock_the_provider_forever(monkeypatch) -> None:
     release_lease("p-dead", "u", revived)
 
 
-def test_waiter_gets_in_as_soon_as_the_holder_releases() -> None:
+def test_waiter_gets_in_as_soon_as_the_holder_releases(monkeypatch) -> None:
     """不是靠轮询超时才进去,而是持有者一放手就进 —— 否则每轮对话要白等一个 TTL。"""
+    import app.domain.providers.auth as mod
+
+    #: 等待者真的在等(轮询过一拍)之后再放手:数它睡了几拍。此前是睡 0.15 秒,赌它这时已经在等了。
+    polls: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        polls.append(seconds)
+        time.sleep(seconds)
+
+    monkeypatch.setattr(mod, "time", SimpleNamespace(sleep=sleep, monotonic=time.monotonic))
     held = acquire_lease("p-wait", "u")
     entered: list[float] = []
 
     def waiter() -> None:
-        token = acquire_lease("p-wait", "u", timeout=3.0)
+        token = acquire_lease("p-wait", "u")
         entered.append(time.monotonic())
         release_lease("p-wait", "u", token)
 
     thread = threading.Thread(target=waiter)
     thread.start()
-    time.sleep(0.15)
+    assert until(lambda: polls), "等待者一直没开始等"
     released_at = time.monotonic()
     release_lease("p-wait", "u", held)
-    thread.join(timeout=3)
+    thread.join(timeout=30)
     assert entered, "等待者没能进入临界区"
-    assert entered[0] - released_at < 0.5, "释放后进入得太慢,说明是靠超时而不是靠让位"
+    #: 靠超时才进去的话,要等满一个 TTL:线画在它的一半(此前是 0.5 秒,机器一忙线程排不上就不止)。
+    assert entered[0] - released_at < mod.LEASE_TTL_SECONDS / 2, "释放后进入得太慢,说明是靠超时而不是靠让位"
 
 
 def test_stale_lease_cannot_overwrite_the_new_holders_credential(client_fixture) -> None:

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-import time
+import threading
 
 import pytest
 
@@ -296,23 +296,33 @@ def test_a_card_under_review_is_not_shown_yet(monkeypatch) -> None:
 
     # 签名同样要跟着真的 `ask` 走 —— 少一个参数,线程里就是一个 TypeError,卡当场被退回待办,
     # 而这条测试断言的正是"它不在待办里",于是失败的原因看起来完全不相干。
+    #: 判断者一直看到测试放它走。此前它睡 0.4 秒就放行:机器一忙,断言时卡已经执行掉了,「不在待办里」照样成立 ——
+    #: 撤掉「看的时候先压着」也是绿的。
+    judging = threading.Event()
+    release = threading.Event()
+
     def slow(request, *, user_id, workspace_id="", source_type="", source_id=""):
-        time.sleep(0.4)
+        judging.set()
+        release.wait(30)
         return ALLOW
 
     monkeypatch.setattr(judge_module, "ask", slow)
     chat.as_turn()
-    created = chat.client.post(
-        "/api/confirmations",
-        json={
-            "workspace_id": chat.workspace_id,
-            "tool": "run_code",
-            "payload": {"code": "output = 1", "inputs": {}},
-        },
-    ).json()
-    chat.client.headers["Authorization"] = chat.login_token
+    try:
+        created = chat.client.post(
+            "/api/confirmations",
+            json={
+                "workspace_id": chat.workspace_id,
+                "tool": "run_code",
+                "payload": {"code": "output = 1", "inputs": {}},
+            },
+        ).json()
+        chat.client.headers["Authorization"] = chat.login_token
+        assert judging.wait(30), "判断者一直没开始看"
 
-    assert created["id"] not in chat.pending_ids(), "判断者还在看,这张卡不该出现在待办里"
+        assert created["id"] not in chat.pending_ids(), "判断者还在看,这张卡不该出现在待办里"
+    finally:
+        release.set()
     wait_for_idle_autopilot()
 
 

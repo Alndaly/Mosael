@@ -37,9 +37,10 @@ def test_no_more_than_the_limit_run_at_once() -> None:
 
     for index in range(6):
         runner.submit(f"j{index}", body(f"j{index}"))
+    #: 放不放行是在 submit 里(锁内)当场定的:提交完就看得到谁进了、谁在排。此前是睡 0.05 秒再看「在跑的还是两个」——
+    #: 机器一忙,多放进来的那个线程还没跑起来,断言照样成立。
+    assert len(runner._queue) == 4, "名额满了,其余的排队"
     assert _until(lambda: len(running) == 2)
-    time.sleep(0.05)
-    assert len(running) == 2, "名额满了,其余的排队"
     release.set()
     assert _until(runner.idle)
     assert peak[0] == 2

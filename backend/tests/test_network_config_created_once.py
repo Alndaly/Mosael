@@ -28,7 +28,7 @@ def test_同时第一次读_只建一行_谁都拿得到() -> None:
 
     def read() -> None:
         try:
-            start.wait()
+            start.wait(timeout=30)
             with SessionLocal() as db:
                 seen.append(network.get_config(db).id)
         except BaseException as exc:  # noqa: BLE001 — 收起来在主线程断言
@@ -38,7 +38,8 @@ def test_同时第一次读_只建一行_谁都拿得到() -> None:
     for thread in threads:
         thread.start()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=30)
+        assert not thread.is_alive(), "读配置的线程 30 秒还没回来"
 
     assert not errors, errors
     assert seen == ["default"] * 6

@@ -24,7 +24,7 @@ from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import browser as bx
 from types import SimpleNamespace
 from app.domain.workflows.run_scope import halt_scope
-from tests.util import fresh_client, worker_client
+from tests.util import fresh_client, until, worker_client
 
 
 def _workspaces(count: int = 1) -> list[str]:
@@ -41,6 +41,23 @@ def _named(ws: str, name: str, owner: str = "run-1") -> browser.BrowserSession:
 
 def _claim(worker) -> dict | None:
     return worker.post("/api/browser/worker/claim", json={"worker": "test"}).json().get("action")
+
+
+def _claim_when_queued(worker) -> dict:
+    """调用方的线程排进去之后再领,领到为止。此前是睡 0.3 秒、只领一次 —— 线程起得晚就领了个空。"""
+    box: dict = {}
+
+    def claimed() -> bool:
+        box["action"] = _claim(worker)
+        return box["action"] is not None
+
+    assert until(claimed, interval=0.05), "没领到动作"
+    return box["action"]
+
+
+def _queued_on(session_id: str) -> bool:
+    with SessionLocal() as db:
+        return db.query(BrowserAction).filter_by(session_id=session_id, status="queued").first() is not None
 
 
 def _queue(session_id: str, ws: str, action: str = "wait") -> str:
@@ -152,26 +169,30 @@ def test_一直没人领_报没被领走_不是执行超时(monkeypatch) -> None
     with SessionLocal() as db:
         sid = browser.open_session(db, workspace_id=ws, actor=None).id
     holder = _call(sid, timeout=30)
-    holder["thread"].join(timeout=5)
+    holder["thread"].join(timeout=30)
+    assert not holder["thread"].is_alive()
     assert holder["error"].key == "browserErr_actionNotClaimed"
     assert "没被领走" in t(holder["error"].key, "zh")
 
 
 def test_执行超时从认领算_排队的时间不算进去(monkeypatch) -> None:
-    """前面排了 1 秒,执行上限 0.6 秒:领走的那一刻它还活着,领走 0.6 秒后才报执行超时。"""
+    """排了 1 秒以上,执行上限 0.6 秒:排着的时候不算超时(还领得到),领走之后才报执行超时。"""
     monkeypatch.setattr(browser, "QUEUE_TIMEOUT_SECONDS", 10)
     [ws] = _workspaces()
     worker = worker_client()
     with SessionLocal() as db:
         sid = browser.open_session(db, workspace_id=ws, actor=None).id
     holder = _call(sid, timeout=0.6)
+    #: 从它**排进去**算起至少排 1 秒(比执行上限长)。此前从起线程算:线程起得晚,排的就不到 0.6 秒,测的不是这件事。
+    assert until(lambda: _queued_on(sid)), "动作一直没排进去"
     time.sleep(1.0)
     action = _claim(worker)
-    assert action is not None  # 排了比执行上限还久,也没被判超时
-    claimed_at = time.monotonic()
-    holder["thread"].join(timeout=5)
+    #: 领得到 = 排了比执行上限还久也没被判超时(要是从排队算,它 0.6 秒时就已经落了失败,领不到)。
+    #: 此前还量了「领走之后过了 ≥ 0.4 秒才报超时」:量的起点是领取的响应回来那一刻,响应慢 0.2 秒就不成立。
+    assert action is not None
+    holder["thread"].join(timeout=30)
+    assert not holder["thread"].is_alive()
     assert holder["error"].key == "browserErr_actionTimeout"
-    assert time.monotonic() - claimed_at >= 0.4
     with SessionLocal() as db:
         assert db.get(BrowserAction, action["id"]).status == "failed"
 
@@ -186,10 +207,10 @@ def test_调用方说不等了_动作落失败_执行器下次心跳就知道() 
         sid = browser.open_session(db, workspace_id=ws, actor=None).id
     stop = threading.Event()
     holder = _call(sid, timeout=30, should_stop=stop.is_set)
-    time.sleep(0.3)
-    action = _claim(worker)
+    action = _claim_when_queued(worker)
     stop.set()
-    holder["thread"].join(timeout=5)
+    holder["thread"].join(timeout=30)
+    assert not holder["thread"].is_alive()
     assert holder["error"].key == "browserErr_actionHalted"
     body = {"worker": "test", "claims": [{"action_id": action["id"], "lease_token": action["lease_token"]}]}
     assert worker.post("/api/browser/worker/heartbeat", json=body).json()["renewed"] == []
@@ -218,9 +239,9 @@ def test_兄弟节点失败后_在飞的浏览器节点当场放手_不取证(mo
     holder: dict = {}
     thread = threading.Thread(target=node)
     thread.start()
-    time.sleep(0.3)
-    assert _claim(worker) is not None
+    _claim_when_queued(worker)
     holder["halt"].set()
-    thread.join(timeout=5)
+    thread.join(timeout=30)
+    assert not thread.is_alive()
     assert errors and errors[0].key == "wfErr_cancelled"
     assert shots == []

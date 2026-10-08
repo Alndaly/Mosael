@@ -115,7 +115,7 @@ def test_在工作流里跑_存下来再按上游的_id_取() -> None:
     wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "存资产", "graph": graph})
     assert wf.status_code == 200, wf.text
     job_id = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}}).json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -173,7 +173,7 @@ def test_整片模板的角色循环_库里有的直接用_没有的画完存成
     wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "认角色", "graph": graph})
     assert wf.status_code == 200, wf.text
     job_id = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}}).json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):

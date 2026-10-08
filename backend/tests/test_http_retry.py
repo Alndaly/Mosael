@@ -21,7 +21,7 @@ from app.db.models import AiRuntimeConfig
 from app.domain.ai_chat import AiChatError, ChatTarget, chat
 from app.core import http_retry
 from app.domain import ai_runtime
-from tests.util import fresh_client
+from tests.util import fresh_client, module_time
 
 
 def _target() -> ChatTarget:
@@ -38,7 +38,7 @@ def _ok() -> httpx.Response:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)  # 别在测试里真退避
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *a, **k: None))  # 别在测试里真退避
 
 
 def _install(monkeypatch, handler) -> None:

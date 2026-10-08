@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import GeneratedAsset, GenerationJob, Job, ProviderUsageEvent
+from tests.util import module_time
 
 SEEDANCE = "doubao-seedance-2-0-260128"
 
@@ -29,8 +30,8 @@ def _no_sleep(monkeypatch):
     import app.ai.providers.adapters.shared.polling as polling
     import app.core.http_retry as http_retry
 
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(polling.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *_: None))
+    monkeypatch.setattr(polling, "time", module_time(sleep=lambda *_: None))
 
 
 def _video_generation() -> tuple[str, str]:
@@ -156,7 +157,7 @@ def test_断网时点了停止_不再干等退避(monkeypatch) -> None:
     from app.ai.providers.contracts.generation import GenerationAdapterError, RemoteTaskWatch, watching_remote_tasks
 
     slept: list[float] = []
-    monkeypatch.setattr(polling.time, "sleep", lambda seconds: slept.append(seconds))
+    monkeypatch.setattr(polling, "time", module_time(sleep=lambda seconds: slept.append(seconds)))
     state = {"cancelled": False, "asks": 0}
 
     class Offline:

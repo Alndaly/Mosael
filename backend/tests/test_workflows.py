@@ -20,7 +20,7 @@ from app.domain.workflows import (
     update_workflow,
     validate_graph,
 )
-from tests.util import user_id, acting_as, add_provider, fresh_client, create_asset
+from tests.util import user_id, acting_as, add_provider, fresh_client, create_asset, until, wait_settled, module_time
 
 #: 跑到 code 节点的任务最多等多久。code 节点每跑一次要建、起、删一个 Docker 容器 —— 本机空闲时三四秒,并行跑测试套时
 #: 守护进程被十几个 worker 一起用,十几秒也正常(此前写死 10 秒,满载时任务还在 running 就判了失败)。
@@ -214,7 +214,7 @@ def test_workflow_crud_and_run() -> None:
     assert run.status_code == 200, run.text
     job_id = run.json()["id"]
 
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     status = "queued"
     while time.monotonic() < deadline:
         status = client.get(f"/api/jobs/{job_id}").json()["status"]
@@ -544,7 +544,7 @@ def test_loop_while_repeats_until_condition_false() -> None:
     assert workflow.status_code == 200, workflow.text
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -570,7 +570,7 @@ def test_loop_while_respects_max_iterations() -> None:
     workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "兜底", "graph": graph})
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -1197,7 +1197,7 @@ def test_failed_llm_run_keeps_raw_response_in_job_events(monkeypatch) -> None:
     ).json()
     job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
 
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in {"succeeded", "failed"}:
@@ -1373,7 +1373,7 @@ def test_workflow_tools_via_confirmations() -> None:
     assert run_approved.json()["status"] == "executed"
     job_id = run_approved.json()["result"]["job_id"]
 
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     status = "queued"
     while time.monotonic() < deadline:
         status = client.get(f"/api/jobs/{job_id}").json()["status"]
@@ -1408,7 +1408,7 @@ def test_scheduled_task_dispatches_workflow() -> None:
     assert fired.status_code == 200, fired.text
     job_id = fired.json()["job"]["id"]
 
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     status = "queued"
     while time.monotonic() < deadline:
         status = client.get(f"/api/jobs/{job_id}").json()["status"]
@@ -1439,15 +1439,21 @@ def test_cancel_running_workflow() -> None:
     ).json()
     job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
 
-    time.sleep(0.3)  # 让引擎进入 slow 节点
+    def slow_started() -> bool:
+        events = client.get(f"/api/jobs/{job_id}/events").json()
+        return any(e["type"] == "workflow.node.started" and (e.get("payload") or {}).get("node_id") == "slow"
+                   for e in events)
+
+    #: 等引擎真的进了 slow 节点再取消。此前是睡 0.3 秒:引擎起得晚,取消时 slow 还没开始,下面「在飞的节点有终态事件」就无从谈起。
+    assert until(slow_started), "引擎一直没进 slow 节点"
     cancelled = client.post(f"/api/jobs/{job_id}/cancel")
     assert cancelled.status_code == 200
     assert cancelled.json()["error"] == "已取消"
 
-    # 引擎在节点边界停下:job 保持取消态,不会被后续节点改写成 succeeded
-    for _ in range(60):
-        job = client.get(f"/api/jobs/{job_id}").json()
-        time.sleep(0.1)
+    # 引擎在节点边界停下:job 保持取消态,不会被后续节点改写成 succeeded。
+    # 等到执行它的线程结束再看(之后不会再有谁写它);此前是无条件睡满 6 秒。
+    assert wait_settled(client, job_id) == "failed"
+    job = client.get(f"/api/jobs/{job_id}").json()
     assert job["status"] == "failed"
     assert job["error"] == "已取消"
 
@@ -1565,11 +1571,19 @@ def test_延时节点等着的时候_取消立刻生效(monkeypatch) -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     graph = {"nodes": [{"id": "d", "type": "delay", "name": "等一会", "config": {"seconds": 30}}], "edges": []}
     outcome, job_id, thread = _run_graph_in_thread(graph, workspace_id=ws)
-    time.sleep(0.3)
+
+    def delaying() -> bool:
+        with SessionLocal() as db:
+            return any(event.type == "workflow.node.started" and event.payload.get("node_id") == "d"
+                       for event in db.query(TaskEvent).filter(TaskEvent.job_id == job_id))
+
+    #: 等它真的在延时里了再取消(此前是睡 0.3 秒)。
+    assert until(delaying), "延时节点一直没开始"
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
         db.commit()  # 测试是入口:cancel_job 不提交
-    thread.join(timeout=5)
+    # 不修的话要睡满 30 秒:线画在它的一半。
+    thread.join(timeout=15)
     stuck = thread.is_alive()
     assert not stuck, "取消了,延时节点还在睡"
     _context, cancelled = outcome["result"]
@@ -1587,7 +1601,7 @@ def test_取消之后才失败的节点_执行历史里记的是已取消_不是
 
     def waits_then_loses_its_resource(db, scope, config):
         entered.set()
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             with SessionLocal() as check:
                 if check.get(Job, job_id).status != "running":
@@ -1633,7 +1647,7 @@ def test_工作流的失败原因不按位置截断_带着文案_key(monkeypatch
     }
     workflow = client.post("/api/workflows", json={"workspace_id": ws["id"], "name": "长原因", "graph": graph}).json()
     job_id = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}}).json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -1706,7 +1720,7 @@ def test_parallel_fanout_and_join() -> None:
     assert wf.status_code == 200, wf.text
     run = client.post(f"/api/workflows/{wf.json()['id']}/run", json={"params": {}})
     job_id = run.json()["id"]
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         job = client.get(f"/api/jobs/{job_id}").json()
         if job["status"] in ("succeeded", "failed"):
@@ -2148,7 +2162,7 @@ def test_没被强制过的Schema_报错时要说出来(monkeypatch) -> None:
         http_retry, "RetryingClient",
         lambda *a, **k: real(*a, **{**k, "transport": httpx.MockTransport(handler)}),
     )
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *a, **k: None))
 
     with SessionLocal() as db:
         profile = add_provider(

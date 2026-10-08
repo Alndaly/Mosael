@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import threading
-import time
 
 import pytest
 from sqlalchemy import select
@@ -22,7 +21,8 @@ from app.domain.jobs import create_job
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows import engine as wf_engine
 from app.domain.workflows.executors import get_executor
-from tests.util import fresh_client
+from app.domain.workflows.run_scope import halted
+from tests.util import fresh_client, until
 
 
 def _workflow_and_job() -> tuple[str, str]:
@@ -44,11 +44,20 @@ def _fakes(monkeypatch, fakes: dict) -> None:
 
 
 def test_循环被别的节点失败叫停时_报的是已取消_不是第几次迭代失败(monkeypatch) -> None:
+    #: 隔壁要在循环里的延时**已经开始**之后才失败 —— 不然循环还没进门,没有「循环失败」这一条事件可看。
+    #: 此前是隔壁先睡 0.3 秒、赌循环那条线程这时已经起来了。
+    waiting = threading.Event()
+    real_delay = get_executor("delay")
+
+    def delay(db, scope, config):
+        waiting.set()
+        return real_delay(db, scope, config)
+
     def boom(db, scope, config):
-        time.sleep(0.3)
+        assert waiting.wait(30), "循环里的延时一直没开始"
         raise WorkflowDomainError("隔壁失败了")
 
-    _fakes(monkeypatch, {"x_boom": boom})
+    _fakes(monkeypatch, {"x_boom": boom, "delay": delay})
     workflow_id, job_id = _workflow_and_job()
     graph = {
         "nodes": [
@@ -80,11 +89,11 @@ def test_并发遍历一项失败_其余在跑的项不再开始下一个节点(
     lock = threading.Lock()
 
     def first(db, scope, config):
-        # 第一项很快失败;其余几项的第一个节点还在跑 —— 它们跑完之后,下一个(付费)节点不该再开始。
+        # 第一项失败;其余几项的第一个节点等到「停」的信号立起来才跑完 —— 它们跑完之后,下一个(付费)节点不该再开始。
+        # 此前是第一项睡 0.05 秒、其余睡 0.4 秒,赌第一项的线程不比其余几项晚起 0.35 秒。
         if config.get("item") == 0:
-            time.sleep(0.05)
             raise WorkflowDomainError("第一项失败")
-        time.sleep(0.4)
+        until(halted)  # 等不到(信号没压进各项自己的图)也照样往下:那时付费节点会开,下面的断言就红
         return {"text": "ok"}
 
     def pay(db, scope, config):

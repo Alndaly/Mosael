@@ -268,7 +268,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
     import time as _time
 
     client.get("/api/settings/providers")
-    deadline = _time.time() + 5
+    deadline = _time.time() + 30
     row = None
     while _time.time() < deadline:
         row = next(r for r in client.get("/api/settings/providers").json() if r["id"] == profile_id)
@@ -297,7 +297,7 @@ def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
     # 第一次拉列表只是把刷新放到后台(列表不等它):这一次说「已授权」还是「需重新授权」都行 —— 看后台那次刷新
     # 跑得多快(见 refresh_recently_failed)。此前这里从第一次就要「需重新授权」,CI 上测试并行跑、机器一忙就红。
     client.get("/api/settings/providers")
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while not provider_auth.refresh_recently_failed(profile_id) and time.monotonic() < deadline:
         time.sleep(0.01)
     for _ in range(3):

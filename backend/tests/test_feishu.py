@@ -369,7 +369,7 @@ def test_飞书消息走主进程的同一条管线_忙时排队而不是丢掉(
     inbound.handle_incoming(bot["id"], "oc_q", "msg-q2", "ou_img", content_json=json.dumps({"text": "第二条"}))
     assert sent == [], "第一轮还没跑完,第二条不该被一句「稍等」打发"
     gate.set()
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while len(sent) < 2 and time.monotonic() < deadline:
         host.wait_for_idle_turns(1)
     assert sent == [("oc_q", "回复1"), ("oc_q", "回复2")]

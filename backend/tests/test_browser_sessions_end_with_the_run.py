@@ -53,7 +53,9 @@ def _start(ws: str, graph: dict) -> str:
 
 
 def _settle(job_id: str) -> str:
-    for _ in range(100):
+    #: 上限 60 秒:状态一落就返回,给多大都不花钱;此前 10 秒,几套测试同时跑时会在没跑完的工作流上判红。
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
         with SessionLocal() as db:
             status = db.get(Job, job_id).status
         if status in ("succeeded", "failed"):
@@ -103,15 +105,16 @@ def test_取消时正在等的那一步当场放手_排着的动作不再执行(
     job_id = _start(ws, _graph(OPEN, {"id": "wait", "type": "browser_wait", "config": {
         "session": "{{open.session}}", "selector": "#never", "timeout_ms": 60000,
     }}))
-    for _ in range(100):
+    deadline = time.monotonic() + 60
+    action_id = None
+    while action_id is None and time.monotonic() < deadline:
         with SessionLocal() as db:
             pending = db.query(BrowserAction).filter(BrowserAction.action == "wait").first()
             if pending is not None:
                 action_id = pending.id
                 break
         time.sleep(0.1)
-    else:
-        raise AssertionError("等待动作一直没入队")
+    assert action_id is not None, "等待动作一直没入队"
 
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))

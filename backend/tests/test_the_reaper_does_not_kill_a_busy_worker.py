@@ -56,7 +56,7 @@ def test_it_is_still_reaped_once_it_goes_idle(tmp_path) -> None:
     pool = tts_daemon.WorkerPool(worker_path=_slow_worker(tmp_path), idle_seconds=0.3)
     try:
         pool.request("fish-speech", sys.executable, {"output_path": "/tmp/a.wav"}, timeout=30)
-        deadline = time.time() + 6
+        deadline = time.time() + 30
         while pool.alive("fish-speech", sys.executable) and time.time() < deadline:
             time.sleep(0.1)
         assert not pool.alive("fish-speech", sys.executable)

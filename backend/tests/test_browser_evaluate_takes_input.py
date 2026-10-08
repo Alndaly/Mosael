@@ -46,7 +46,7 @@ def _claimed_args(run) -> dict:
 
     thread = threading.Thread(target=node)
     thread.start()
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 30
     action = None
     while action is None and time.monotonic() < deadline:
         action = worker.post("/api/browser/worker/claim", json={"worker": "t"}).json().get("action")

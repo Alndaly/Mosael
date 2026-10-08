@@ -14,7 +14,9 @@ import time
 import pytest
 
 from app.ai.providers.contracts.generation import GenerationAdapterError
+from app.ai.providers.adapters.shared import polling
 from app.ai.providers.adapters.shared.polling import poll_until_ready
+from tests.util import module_time
 
 
 class _FakeResponse:
@@ -79,8 +81,10 @@ def test_用单调时钟计时_墙钟跳了也不受影响(monkeypatch) -> None:
     calls: list[str] = []
     real_monotonic = time.monotonic
 
-    monkeypatch.setattr(time, "time", lambda: calls.append("wall") or 0.0)
-    monkeypatch.setattr(time, "monotonic", lambda: calls.append("mono") or real_monotonic())
+    #: 只换轮询那个模块的钟。此前换的是整个进程的 time.time / time.monotonic:同一进程里别的线程读一下钟,
+    #: 也记成了这里的一笔「读了墙钟」。
+    monkeypatch.setattr(polling, "time", module_time(time=lambda: calls.append("wall") or 0.0,
+                                                     monotonic=lambda: calls.append("mono") or real_monotonic()))
 
     client = _FakeClient([{"status": "done", "url": "https://x/a.mp4"}])
     poll_until_ready(client, "/tasks/1", _extract, interval=0)

@@ -20,7 +20,7 @@ from app.core import http_retry
 from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Transcript, TranscriptSegment, TranscriptToken
 from app.domain.workflows.executors.subjobs import _compact_timed_text, _kept_text
-from tests.util import add_provider, fresh_client, wait_status
+from tests.util import add_provider, fresh_client, wait_status, module_time
 
 #: 一整段连续的口播(没有一处 ≥0.6 秒的停顿),夹着三处口头禅;标点只在正文里,词级 token 不带标点。
 TEXT = "大家好,嗯,今天我们就是说来聊一聊剪辑。然后呃这个工具真的很好用。"
@@ -158,7 +158,7 @@ def studio(monkeypatch):
     real = http_retry.RetryingClient
     monkeypatch.setattr(http_retry, "RetryingClient",
                         lambda *a, **k: real(*a, **{**k, "transport": httpx.MockTransport(handler)}))
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *a, **k: None))
     ids.llm_requests = seen
     return ids
 

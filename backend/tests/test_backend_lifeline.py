@@ -27,7 +27,7 @@ def test_data_dir_id_matches_the_shell() -> None:
 
 def test_a_dead_parent_is_noticed() -> None:
     child = subprocess.Popen([sys.executable, "-c", "pass"])
-    child.wait()
+    child.wait(timeout=30)
     assert lifeline.parent_alive(child.pid) is False
     import os
 

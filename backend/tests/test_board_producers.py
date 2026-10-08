@@ -1045,7 +1045,7 @@ def test_停止会杀掉正在跑的插件进程(tmp_path) -> None:
     assert time.monotonic() - started < 15, "插件进程比取消它的任务活得久"
     slot = next(one for one in canvas["items"] if one["id"] == "a1")
     assert slot["run"]["status"] == "cancelled"
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while jobs._CHILDREN.get(job_id) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert job_id not in jobs._CHILDREN, "被杀掉的插件进程还挂在任务名下"

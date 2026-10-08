@@ -1,6 +1,5 @@
 import subprocess
 import sys
-import time
 
 import pytest
 from app.core.child_process import ProcessOutputLimitExceeded, run_bounded
@@ -8,10 +7,10 @@ from app.core.child_process import ProcessOutputLimitExceeded, run_bounded
 
 @pytest.mark.parametrize("fd", [1, 2])
 def test_unterminated_output_is_bounded_while_the_child_is_running(fd):
-    started = time.monotonic()
+    # 子进程一直写、永不自己结束:能让它停下的只有输出上限 —— 要是上限等子进程退出才看,先到的就是 30 秒的超时,
+    # pytest.raises 拿到的是 TimeoutExpired,这条就红。此前子进程写一秒就退,再量「< 1 秒」,里面还包着起一个 Python。
     with pytest.raises(ProcessOutputLimitExceeded):
-        run_bounded([sys.executable, "-c", f"import os,time\nfor i in range(100):\n os.write({fd},b'x'*4096)\n time.sleep(.01)"], timeout=2, max_output_bytes=8192, what="test")
-    assert time.monotonic() - started < 1
+        run_bounded([sys.executable, "-c", f"import os,time\nwhile True:\n os.write({fd},b'x'*4096)\n time.sleep(.01)"], timeout=30, max_output_bytes=8192, what="test")
 
 
 def test_deadline_applies_when_child_never_reads_stdin():

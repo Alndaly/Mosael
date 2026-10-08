@@ -19,7 +19,8 @@ from app.db.models import Workflow
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows import engine as wf_engine
 from app.domain.workflows.executors import get_executor
-from tests.util import fresh_client
+from app.domain.workflows.run_scope import halted
+from tests.util import fresh_client, until
 
 
 def _workflow_id() -> str:
@@ -33,18 +34,25 @@ def _workflow_id() -> str:
 
 
 def _patch_executors(monkeypatch) -> dict:
-    """「失败」和「计一项」两种节点。只换掉叶子的行为 —— 调度、循环、体的内核都是真的。"""
-    runs = {"n": 0}
+    """「失败」和「计一项」两种节点。只换掉叶子的行为 —— 调度、循环、体的内核都是真的。
+
+    先后用事件排定,不靠睡:循环的第一项开始了,兄弟节点才失败;在跑的那一项一直跑到「停」的信号立起来才跑完。
+    于是失败那一刻在跑的项是确定的(顺序跑一项、并发 2 就至多两项),之后再开始的每一项都是没停住。
+    此前是兄弟节点睡 0.3 秒、每项睡 0.2 秒,再断言总耗时 < 3 秒。
+    """
+    runs = {"n": 0, "saw_halt": []}
     lock = threading.Lock()
+    first_started = threading.Event()
 
     def fail(db, scope, config):
-        time.sleep(0.3)
+        assert first_started.wait(30), "循环的第一项一直没开始"
         raise WorkflowDomainError("兄弟节点失败了")
 
     def count(db, scope, config):
         with lock:
             runs["n"] += 1
-        time.sleep(0.2)
+        first_started.set()
+        runs["saw_halt"].append(until(halted))
         return {"text": "ok"}
 
     fakes = {"x_fail": fail, "x_count": count}
@@ -76,12 +84,12 @@ def _graph(loop_config: dict, loop_type: str = "loop_foreach") -> dict:
 def test_兄弟节点失败后循环不再开始下一项(monkeypatch, loop_type: str, loop_config: dict) -> None:
     runs = _patch_executors(monkeypatch)
     wf_id = _workflow_id()
-    started = time.monotonic()
     with pytest.raises(WorkflowDomainError, match="兄弟节点失败了"):
         wf_engine.execute_graph(_graph(loop_config, loop_type), wf_id=wf_id)
-    # 0.3 秒失败,每项 0.2 秒:失败那一刻在跑的那一两项跑完就停。此前是 20 项全跑完(4 秒)。
-    assert runs["n"] <= 4, f"兄弟节点失败后循环仍跑了 {runs['n']}/20 项"
-    assert time.monotonic() - started < 3
+    assert runs["saw_halt"] and all(runs["saw_halt"]), "在跑的那一项一直没看到「停」的信号"
+    # 失败那一刻在跑的那一两项跑完就停。此前是 20 项全跑完。
+    in_flight = loop_config.get("concurrency", 1)
+    assert runs["n"] <= in_flight, f"兄弟节点失败后循环仍跑了 {runs['n']}/20 项"
 
 
 def test_一项都没失败_却有没开始的_不交出缺了几项的结果(monkeypatch) -> None:

@@ -552,10 +552,22 @@ def test_排到去取时人已经走了_不取也不记成没有(library) -> Non
     assert len(previews.requests) == 1
 
 
-def test_排队等那台服务器的请求_不攥着数据库连接(library) -> None:
+def test_排队等那台服务器的请求_不攥着数据库连接(library, monkeypatch) -> None:
     """第一次打开模型库,一屏的缩略图请求同时到(滚一下又是一屏):它们排队等取图名额、等那台服务器的时候,数据库连接
     已经交还了 —— 此前每个都攥着一条排着,连接池(5 + 10)空了,详情、任务列表这些请求要等满 30 秒才报错。"""
     client, instance_id, previews = library
+    #: 数有几个请求已经走到「排队取这张图」那一步(同一个地址一把锁,先到的那个去等取图名额,其余的等它)。
+    #: 十二个都到了再数连接;此前是睡 0.8 秒就数 —— 机器一忙请求还没走到排队那一步,数出来也是 0,断言照样成立。
+    from app.domain import model_previews as previews_module
+
+    at_the_gate: list[str] = []
+    real_gate = previews_module.PreviewSource._gate
+
+    def gate(self, media):
+        at_the_gate.append(media.url)
+        return real_gate(self, media)
+
+    monkeypatch.setattr(previews_module.PreviewSource, "_gate", gate)
     import asyncio
 
     import httpx
@@ -579,7 +591,10 @@ def test_排队等那台服务器的请求_不攥着数据库连接(library) -> 
             held = engine.pool.checkedout()
             pending = asyncio.gather(*(http.get(url, params=params) for _ in range(12)))
             try:
-                await asyncio.sleep(0.8)
+                deadline = asyncio.get_running_loop().time() + 30
+                while len(at_the_gate) < 12 and asyncio.get_running_loop().time() < deadline:
+                    await asyncio.sleep(0.01)
+                assert len(at_the_gate) == 12, f"只有 {len(at_the_gate)} 个请求走到了排队那一步"
                 queued = engine.pool.checkedout() - held
             finally:
                 for _ in range(model_previews.SERVER_FETCHES):
@@ -688,7 +703,7 @@ def test_下载_取消经取消文件传到插件(library) -> None:
         "workspace_id": workspace, "url": "https://huggingface.co/a/b/resolve/main/slow.safetensors",
         "folder": "loras", "filename": "slow.safetensors",
     }).json()
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         current = client.get(f"/api/jobs/{job['id']}").json()
         if current["progress"] and current["progress"] >= 0.25:

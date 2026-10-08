@@ -78,6 +78,15 @@ def _starts(count: Path) -> list[str]:
     return count.read_text(encoding="utf-8").splitlines() if count.exists() else []
 
 
+def _supervision_over(service: ServiceProcess) -> None:
+    """等看护线程结束:重起只能由它发起,它结束了就不会再有。数「起了几次」之前先等这个 ——
+    此前是睡 0.5 秒再数,机器一忙,该有的那次重起还没来得及发生,「不重起」照样成立。"""
+    thread = service._thread
+    if thread is not None:
+        thread.join(timeout=30)
+        assert not thread.is_alive(), "看护线程 30 秒还没结束"
+
+
 # ---- 起、就绪、日志、停 ----------------------------------------------------------
 
 
@@ -127,7 +136,7 @@ def test_还没就绪就退出_不重试(tmp_path: Path) -> None:
     assert service.error is not None and service.error.key == "localServiceErr_exitedDuringStart"
     assert service.error.params["code"] == "3"
     assert any("缺了一个依赖" in line for line in service.failure_lines)
-    time.sleep(0.5)
+    _supervision_over(service)
     assert len(_starts(count)) == 1, "第一次就没起来的(参数不对、缺依赖)每次都一样,不重试"
 
 
@@ -236,7 +245,7 @@ def test_停下的时候不算崩溃_不重起(tmp_path: Path) -> None:
     service.launch(spec, respawn=lambda: spec)
     assert service.wait_settled(15) == RUNNING
     service.stop()
-    time.sleep(0.5)
+    _supervision_over(service)
     assert service.state == STOPPED and len(_starts(count)) == 1
 
 

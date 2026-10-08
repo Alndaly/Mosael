@@ -878,8 +878,11 @@ def test_有活不停_问不到也不停_保持运行和_0_不停(plugged, tmp_p
     plugged.put(url, json={"idle_stop_minutes": 1})
     _busy(busy=True)
     time.sleep(0.1)
+    #: 比的是「钟是在这一问里重新拨的」(拨到的时刻不早于问之前),不比「闲了不到 0.05 秒」:
+    #: 问一次要起一回插件进程,机器一忙就不止 0.05 秒。
+    asked_at = time.monotonic()
     assert local_services.check_idle() == [], "队列里有在跑、在排的:不停"
-    assert supervisor.get(instance_id).idle_seconds() < 0.05, "有活就当它在用:钟重新算"
+    assert supervisor.get(instance_id).last_used >= asked_at, "有活就当它在用:钟重新算"
     _busy(fail=True)
     time.sleep(0.1)
     assert local_services.check_idle() == [], "问不到它有没有活:不停"
@@ -901,12 +904,16 @@ def test_插件调用用完了_工作台开着时告诉一声_闲置的钟都重
     _busy(busy=False)
     process = supervisor.get(instance_id)
     time.sleep(0.1)
+    called_at = time.monotonic()
     with SessionLocal() as db:
         assert tools.invoke(db, instance_id, "slow", {}).status == "succeeded"
-    assert process.idle_seconds() < 0.2, "一次跑了 0.4 秒的调用用完:从它跑完算,不从它开始算"
+    #: 那次调用里插件睡了 0.4 秒:从开始算的话钟拨在 called_at 之后不远,从跑完算就至少晚 0.4 秒。
+    #: 此前比的是「用完时闲了不到 0.2 秒」,机器一忙,收尾就不止 0.2 秒。
+    assert process.last_used >= called_at + 0.4, "一次跑了 0.4 秒的调用用完:从它跑完算,不从它开始算"
     time.sleep(0.1)
+    touched_at = time.monotonic()
     assert plugged.post(f"/api/plugins/instances/{instance_id}/local-service/touch").status_code == 204
-    assert process.idle_seconds() < 0.05, "工作台开着:告诉一声就重新算"
+    assert process.last_used >= touched_at, "工作台开着:告诉一声就重新算"
     assert local_services.check_idle() == []
     other = _connection(plugged)
     assert plugged.post(f"/api/plugins/instances/{other}/local-service/touch").status_code == 204, "没有本机服务:什么都不做"
@@ -972,7 +979,7 @@ def test_进程在却不应答_说看日志_不说检查地址(plugged, tmp_path
     _configure(plugged, instance_id, _folder(tmp_path, flags=["--mute-after", "0.3"]))
     plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
     assert _wait_state(plugged, instance_id, "running")["state"] == "running"
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while (_status(plugged, instance_id)["issue"] or {}).get("kind") != "unresponsive" and time.monotonic() < deadline:
         time.sleep(0.1)
     status = _status(plugged, instance_id)

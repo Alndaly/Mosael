@@ -50,7 +50,7 @@ def test_the_reaper_survives_a_bad_worker_entry(tmp_path) -> None:
         time.sleep(1.5)  # 让回收线程撞上它几次
 
         pool.request("fish-speech", sys.executable, {"output_path": "/tmp/a.wav"}, timeout=20)
-        deadline = time.time() + 6
+        deadline = time.time() + 30
         while pool.alive("fish-speech", sys.executable) and time.time() < deadline:
             time.sleep(0.1)
 

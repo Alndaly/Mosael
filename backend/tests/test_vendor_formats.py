@@ -24,8 +24,13 @@ def test_配音转单声道_mp3(tmp_path) -> None:
 
 
 def test_图片转_png(tmp_path) -> None:
+    #: 原图用 Pillow 造:要测的是「ffmpeg 把 webp 转成 png」(读 webp 用的是 ffmpeg 自带的解码器),
+    #: 而**写** webp 要 libwebp 编码器 —— Homebrew 的 core ffmpeg 没有它,此前用 ffmpeg 造原图,在没有 backend/.env
+    #: 指向完整版 ffmpeg 的 worktree 里这条必红。
+    from PIL import Image
+
     source = tmp_path / "face.webp"
-    _make(["-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1"], source)
+    Image.new("RGB", (64, 64), "red").save(source, "WEBP")
     out = still_png(source, tmp_path / "face.png")
     assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 

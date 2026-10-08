@@ -69,7 +69,7 @@ def _grandchild_gone(pid_file: Path, within: float = 5.0) -> bool:
 
 
 def _wait_for(pid_file: Path) -> None:
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while not pid_file.is_file() and time.monotonic() < deadline:
         time.sleep(0.05)
 

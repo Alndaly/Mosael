@@ -39,7 +39,7 @@ def test_webhook_trigger_flow() -> None:
     assert fired.status_code == 200, fired.text
     job_id = fired.json()["job_id"]
 
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 60
     status = "queued"
     while time.monotonic() < deadline:
         status = client.get(f"/api/jobs/{job_id}").json()["status"]

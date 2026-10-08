@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import threading
-import time
 
 import pytest
 from sqlalchemy import select, text
@@ -57,7 +56,8 @@ def _one_round(open_one, round_no: int) -> tuple[list[str], list[str], list[str]
     for thread in threads:
         thread.start()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=30)
+        assert not thread.is_alive(), "打开会话的线程 30 秒还没回来"
     return opened, errors, crashes
 
 
@@ -112,38 +112,54 @@ def test_同一个owner同一拍打开两次_拿到的是同一个会话() -> No
         assert crashes == [] and errors == [] and len(opened) == 2 and len(set(opened)) == 1
 
 
-def _hold_write_lock(seconds: float) -> threading.Thread:
-    """另一个连接拿着写锁 `seconds` 秒(满负载下别的写事务就是这样把库占住的)。"""
-    started = threading.Event()
+class _WriteLockHolder:
+    """另一个连接拿着写锁,直到测试 `release()`(满负载下别的写事务就是这样把库占住的)。
 
-    def hold() -> None:
-        with engine.connect() as conn:
-            conn.exec_driver_sql("BEGIN IMMEDIATE")
-            started.set()
-            time.sleep(seconds)
-            conn.rollback()
+    此前是拿着固定的几秒、且不看「真的拿到了没有」:拿锁的线程 5 秒内没拿到时照样往下走,「占着时打开会话」
+    就成了「没人占时打开会话」(假绿);「一直占着」那条拿 6.5 秒对 5 秒的 busy_timeout,打开会话起得晚 1.5 秒就等到了锁。
+    """
 
-    thread = threading.Thread(target=hold)
-    thread.start()
-    started.wait(timeout=5)
-    return thread
+    def __init__(self) -> None:
+        self._release = threading.Event()
+        started = threading.Event()
+
+        def hold() -> None:
+            with engine.connect() as conn:
+                conn.exec_driver_sql("BEGIN IMMEDIATE")
+                started.set()
+                self._release.wait(60)
+                conn.rollback()
+
+        self._thread = threading.Thread(target=hold)
+        self._thread.start()
+        assert started.wait(30), "拿写锁的连接一直没拿到锁"
+
+    def release(self) -> None:
+        self._release.set()
+        self._thread.join(timeout=30)
+        assert not self._thread.is_alive()
 
 
 def test_库被别的写事务占着一会儿_打开会话等它放手_不报database_is_locked() -> None:
     ws = _ws()
-    holder = _hold_write_lock(1.0)
-    with SessionLocal() as db:
-        session = browser.open_session(
-            db, workspace_id=ws, kind="named", name="xhs", owner_kind="workflow", owner_id="run-1", actor=None
-        )
-    holder.join()
+    holder = _WriteLockHolder()
+    #: 占一秒再放手:打开会话在这一秒里等着(busy_timeout 5 秒)。计时器晚了只是占得更久一点。
+    letting_go = threading.Timer(1.0, holder.release)
+    letting_go.start()
+    try:
+        with SessionLocal() as db:
+            session = browser.open_session(
+                db, workspace_id=ws, kind="named", name="xhs", owner_kind="workflow", owner_id="run-1", actor=None
+            )
+    finally:
+        letting_go.join(timeout=30)
     assert [row.id for row in _open_rows(browser.named_partition(ws, "xhs"))] == [session.id]
 
 
 def test_库一直被占着_重试完按被占用报_不是sqlite的错(monkeypatch) -> None:
     ws = _ws()
     monkeypatch.setattr(browser, "LEASE_ATTEMPTS", 1)
-    holder = _hold_write_lock(6.5)  # 比 busy_timeout(5 秒)长
+    holder = _WriteLockHolder()  # 打开会话报错之前一直占着:比 busy_timeout(5 秒)长
     try:
         with SessionLocal() as db, pytest.raises(browser.BrowserDomainError) as caught:
             browser.open_session(
@@ -151,7 +167,7 @@ def test_库一直被占着_重试完按被占用报_不是sqlite的错(monkeypa
             )
         assert caught.value.key == "browserErr_sessionBusy"
     finally:
-        holder.join()
+        holder.release()
 
 
 def test_库里直接插第二个开着的具名会话_被索引拒绝() -> None:

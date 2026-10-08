@@ -19,14 +19,15 @@ import pytest
 
 from app.ai.providers.contracts.generation import GenerationAdapterContext, GenerationAdapterError, GenerationRequest
 from app.core import http_retry
+from tests.util import module_time
 
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
     import app.ai.providers.adapters.shared.polling as polling
 
-    monkeypatch.setattr(http_retry.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(polling.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(http_retry, "time", module_time(sleep=lambda *_: None))
+    monkeypatch.setattr(polling, "time", module_time(sleep=lambda *_: None))
 
 
 def _route(module, monkeypatch, handler) -> None:
