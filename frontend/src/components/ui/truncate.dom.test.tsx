@@ -168,8 +168,8 @@ describe("截断的字在一条 Hint 的触发区里", () => {
         </Hint>
       </TooltipProvider>,
     );
-    //: React 的 context 会穿过 portal;浮层内容把范围清掉了,所以它自己是一个说明的触发器(Radix 给触发器挂 data-state)。
-    expect(screen.getByText(NAME).hasAttribute("data-state")).toBe(true);
+    //: React 的 context 会穿过 portal;浮层内容把范围清掉了,所以它自己是一个说明的触发器(触发器上挂 data-hint-trigger)。
+    expect(screen.getByText(NAME).hasAttribute("data-hint-trigger")).toBe(true);
   });
 
   it("在 Hint 的触发区里时自己不挂说明的触发器", () => {
@@ -178,8 +178,8 @@ describe("截断的字在一条 Hint 的触发区里", () => {
         <Truncate>{NAME}</Truncate>
       </Hint>,
     );
-    //: 这个 span 就是 Hint 的触发器(data-state 来自 Hint),里面不再有第二个。
-    expect(document.querySelectorAll("[data-state]")).toHaveLength(1);
+    //: 这个 span 就是 Hint 的触发器(data-hint-trigger 来自 Hint),里面不再有第二个。
+    expect(document.querySelectorAll("[data-hint-trigger]")).toHaveLength(1);
   });
 
   //: 插件页连接的标题行:整行是一个「展开」按钮(Hint),出错原因那一行只显示人话、原文(errno、地址)给在 Truncate 的 hint 里。
@@ -215,7 +215,7 @@ describe("截断的字在一条 Hint 的触发区里", () => {
     const tooltips = await screen.findAllByRole("tooltip");
     expect(tooltips.map((one) => one.textContent)).toEqual([`${SUMMARY}${DETAIL}展开「ComfyUI」`]);
     //: 里面的 Truncate 还是不挂自己的触发器。
-    expect(text.hasAttribute("data-state")).toBe(false);
+    expect(text.hasAttribute("data-hint-trigger")).toBe(false);
   });
 
   it("Hint 没有自己的话时,只凭 Truncate 的 hint 也出说明(和单独的 Truncate 一样)", async () => {

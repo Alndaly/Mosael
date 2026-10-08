@@ -65,7 +65,7 @@ it("字段帮助和节点说明里的记号渲染成格式", async () => {
   expect(container.textContent).not.toMatch(/\*\*|`/);
 
   // 节点说明在图标的提示气泡里:指针移上去把它打开(图标拿不到焦点;说明因聚焦而出只认键盘切过来的)。
-  const trigger = container.querySelector("[data-state][class*='cursor-help']") as HTMLElement;
+  const trigger = container.querySelector("[data-hint-trigger][class*='cursor-help']") as HTMLElement;
   fireEvent.pointerEnter(trigger);
   fireEvent.pointerMove(trigger);
   const strong = await screen.findAllByText("新素材");

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readHint } from "@/test/hint";
 
+import { Switch } from "./switch";
 import { Hint, HintRegion, TooltipProvider } from "./tooltip";
 import { Truncate } from "./truncate";
 
@@ -131,6 +132,28 @@ describe("点不了的按钮说出为什么", () => {
       </Hint>,
     );
     expect(screen.getByRole("button", { name: "撤销" }).parentElement?.hasAttribute("data-hint-disabled")).toBe(false);
+  });
+});
+
+describe("说明套在有自己状态的控件上", () => {
+  it("开关的 checked / unchecked 不被说明的 closed / delayed-open 盖掉 —— 否则开关只剩一个看不见状态的淡点(浏览器池卡片)", async () => {
+    function Toggle() {
+      const [on, setOn] = React.useState(true);
+      return (
+        <TooltipProvider delayDuration={0}>
+          <Hint label="启用这个账号">
+            <Switch checked={on} onCheckedChange={setOn} aria-label="启用" />
+          </Hint>
+        </TooltipProvider>
+      );
+    }
+    render(<Toggle />);
+    const toggle = screen.getByRole("switch", { name: "启用" });
+    expect(toggle.getAttribute("data-state")).toBe("checked");
+    expect(await readHint(toggle)).toBe("启用这个账号");
+    expect(toggle.getAttribute("data-state")).toBe("checked");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("data-state")).toBe("unchecked");
   });
 });
 

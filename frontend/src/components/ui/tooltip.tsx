@@ -170,7 +170,12 @@ const claimed = new WeakSet<Event>()
  * 闸只拦它自己身后那一个 Radix 触发器,事件照常往上走。
  */
 const OpenGate = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement> & { canOpen?: () => boolean }>(
-  function OpenGate({ canOpen, onPointerMove, onFocus, ...props }, ref) {
+  function OpenGate({ canOpen, onPointerMove, onFocus, ...forwarded }, ref) {
+    //: Radix 往触发器上写自己的 `data-state`(closed / delayed-open / instant-open)。asChild 时它落在**控件本身**上,
+    //: 盖掉控件自己的那一个 —— Switch 的 checked / unchecked、Checkbox、Toggle 的样式都按它画,于是浏览器池卡片上的
+    //: 启用开关只剩一个看不见状态的淡点(体检 UM-05)。没有哪里按说明的开合来画触发器,这一个就不往下交了;
+    //: 「这是一条说明的触发器」改由 `data-hint-trigger` 标出来。
+    const { "data-state": _hintState, ...props } = forwarded as typeof forwarded & { "data-state"?: string };
     const admit = (event: React.SyntheticEvent<HTMLElement>, wanted: boolean) => {
       if (!wanted || claimed.has(event.nativeEvent)) return false
       //: 事件目标不在这块元素里:它是从 portal 里(这个控件自己弹出来的下拉、菜单)顺着 React 的树冒上来的
@@ -183,6 +188,7 @@ const OpenGate = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>
       <Slot
         ref={ref}
         {...props}
+        data-hint-trigger=""
         onPointerMove={(event: React.PointerEvent<HTMLElement>) => {
           if (admit(event, event.pointerType !== "touch")) onPointerMove?.(event)
         }}
