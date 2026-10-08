@@ -87,9 +87,10 @@ class Settings(BaseSettings):
     #: 智能体用完多半不发「关闭」;具名 / 池档案会话一时刻只归一个 owner,没人关的那个会一直占着那份登录。
     browser_session_idle_minutes: int = 15
 
-    # ffmpeg/ffprobe binaries. Default to PATH; override (MOSAEL_FFMPEG / MOSAEL_FFPROBE) to
-    # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
-    # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.
+    #: 起 ffmpeg / ffprobe 一律读这两项(tests/test_ffmpeg_comes_from_settings 钉着)。缺省是 PATH 上的程序名。
+    #: 它们是**这个进程正在用的那一份**:「管理 → 引擎 → FFmpeg」里填的路径(存库,ADR 0048)由 domain/media_tools
+    #: 在启动时、保存后写进来;环境变量 MOSAEL_FFMPEG / MOSAEL_FFPROBE 给了的那项以环境变量为准,填的那格不动它
+    #: (见下面的 FFMPEG_FIELDS_FROM_ENVIRONMENT)。Homebrew 的 core `ffmpeg` 是精简版(没有 libass),烧字幕要完整版。
     ffmpeg: str = "ffmpeg"
     ffprobe: str = "ffprobe"
 
@@ -144,6 +145,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+#: 启动时环境变量(或 .env)给定了 ffmpeg / ffprobe 里的哪几项。这一刻就要记下:之后 `settings.ffmpeg` 会被
+#: 设置页那一格改写(domain/media_tools),到时候分不出是谁给的了。
+FFMPEG_FIELDS_FROM_ENVIRONMENT = frozenset(settings.model_fields_set & {"ffmpeg", "ffprobe"})
 
 
 def app_version() -> str:

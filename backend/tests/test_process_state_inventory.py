@@ -157,6 +157,7 @@ _MUST_BE_RESTORED = {
     "app/core/outbound_guard.py:_allowlist": "内网访问的允许名单;一条测试放行了 127.0.0.1,后面「默认拒」的测试全都跟着放行",
     "app/ai/runtime/config.py:_cached": "TTS 运行时配置的缓存:一条测试装配过之后,后面的测试读到的是它那一份",
     "app/ai/runtime/config.py:_source": "那份配置是从哪儿来的(库 / 环境变量 / 默认),同上",
+    "app/domain/media_tools.py:_status": "上次探 ffmpeg 的结果;同一个 ffmpeg 不重探,一条测试关掉了浏览器那条路,后面读到的还是它那一份",
 }
 
 

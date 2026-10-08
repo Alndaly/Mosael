@@ -42,7 +42,7 @@ from app.db.model_slices.sequences import Clip, Sequence, SequenceOperation, Seq
 from app.db.model_slices.voices import AgentVoicePref, Voice, VoiceEnrollment  # noqa: E402,F401
 from app.db.model_slices.providers import GenerationCapabilityDeclaration, GenerationCapabilityProfile, ProviderCredential, ProviderDefault, ProviderModel, ProviderProfile  # noqa: E402,F401
 from app.db.model_slices.usage import ProviderPricingRule, ProviderUsageEvent  # noqa: E402,F401
-from app.db.model_slices.runtime_config import AiRuntimeConfig, DeploymentConfig, NetworkConfig, TtsConfig  # noqa: E402,F401
+from app.db.model_slices.runtime_config import AiRuntimeConfig, DeploymentConfig, MediaToolsConfig, NetworkConfig, TtsConfig  # noqa: E402,F401
 from app.db.model_slices.generation import GeneratedAsset, GenerationJob, GenerationSession  # noqa: E402,F401
 from app.db.model_slices.agent import SESSION_GROUP_KINDS, AgentMemory, AgentMessage, AgentSkill, AgentQuestion, AgentSession, SessionGroup, ToolConfirmation  # noqa: E402,F401
 from app.db.model_slices.feishu import FeishuBindCode, FeishuBinding, FeishuBot  # noqa: E402,F401

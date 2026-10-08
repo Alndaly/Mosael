@@ -5912,6 +5912,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ffmpeg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ffmpeg Settings
+         * @description 「管理 → 引擎 → FFmpeg」(ADR 0048):用哪个 ffmpeg,和启动时(或上次重新检测时)探出来的样子。
+         *     只给部署管理员:里面是这台机器上的程序路径。
+         */
+        get: operations["get_ffmpeg_settings_api_settings_ffmpeg_get"];
+        /**
+         * Set Ffmpeg Settings
+         * @description 填 ffmpeg 的路径(空 = PATH 上的)。填的是这台机器上要执行的程序 —— 和装本机引擎同一条权限。
+         *     不是一个能跑的 ffmpeg 就 422,什么都不存;存下之后对本进程立刻生效并重探一次。
+         *
+         *     自己提交而不用 Tx:回给界面的要是**生效之后**探出来的样子,而生效挂在提交之后(media_tools.save_path)。
+         */
+        put: operations["set_ffmpeg_settings_api_settings_ffmpeg_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/ffmpeg/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recheck Ffmpeg
+         * @description 重新检测:装了 / 换了 ffmpeg 之后不用重启。
+         */
+        post: operations["recheck_ffmpeg_api_settings_ffmpeg_recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/install-source": {
         parameters: {
             query?: never;
@@ -12600,6 +12648,46 @@ export interface components {
             error?: string | null;
             /** App Id */
             app_id?: string | null;
+        };
+        /**
+         * FfmpegSettingsOut
+         * @description 「管理 → 引擎 → FFmpeg」(ADR 0048):填的路径,和正在用的那个 ffmpeg 探出来的样子。
+         */
+        FfmpegSettingsOut: {
+            /**
+             * Path
+             * @default
+             */
+            path: string;
+            /** In Use */
+            in_use: string;
+            /**
+             * Pinned By Environment
+             * @default false
+             */
+            pinned_by_environment: boolean;
+            /** Found */
+            found: boolean;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Libass
+             * @default false
+             */
+            libass: boolean;
+            /** Text Burn In */
+            text_burn_in?: string | null;
+        };
+        /** FfmpegSettingsUpdate */
+        FfmpegSettingsUpdate: {
+            /**
+             * Path
+             * @default
+             */
+            path: string;
         };
         /** FontOut */
         FontOut: {
@@ -32324,6 +32412,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiRuntimeConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ffmpeg_settings_api_settings_ffmpeg_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FfmpegSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_ffmpeg_settings_api_settings_ffmpeg_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FfmpegSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FfmpegSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recheck_ffmpeg_api_settings_ffmpeg_recheck_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FfmpegSettingsOut"];
                 };
             };
             /** @description Validation Error */

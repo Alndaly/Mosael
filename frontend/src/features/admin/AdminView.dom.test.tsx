@@ -191,10 +191,12 @@ describe("结构", () => {
     expect(sections(container)).toEqual(["pricing"]);
 
     // 本机引擎的安装与下载源:后端只许部署管理员装(ensure_deployment_admin),所以在这里、不在设置页。
-    // 下载源排在最前 —— 它只管装这几个引擎的依赖,先选好从哪儿拉,再点下面的安装。
+    // 最前是 FFmpeg(导出、缩略图、转写都靠它;带字的导出被拒时报错让人来这里填路径,ADR 0048);
+    // 接着是下载源 —— 它只管装下面这几个引擎的依赖,先选好从哪儿拉,再点下面的安装。
     fireEvent.click(screen.getByRole("tab", { name: "adminTabEngines" }));
     await screen.findByText("asrModelsTitle");
     expect(sections(container)).toEqual([
+      "ffmpeg",
       "install-source",
       "engine-transcribe",
       "engine-clone",

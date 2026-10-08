@@ -27,6 +27,26 @@ class AiRuntimeConfigUpdate(ApiModel):
     max_retries: int = Field(ge=0, le=10)
 
 
+class FfmpegSettingsOut(ApiModel):
+    """「管理 → 引擎 → FFmpeg」(ADR 0048):填的路径,和正在用的那个 ffmpeg 探出来的样子。"""
+
+    #: 填的路径;空 = 用 PATH 上的 `ffmpeg`。
+    path: str = ""
+    #: 正在用的那一个在哪(填的路径、环境变量给的、或按 PATH 找到的那个文件;找不到时是程序名本身)。
+    in_use: str
+    #: 环境变量 MOSAEL_FFMPEG 给了:填的路径不生效。
+    pinned_by_environment: bool = False
+    found: bool
+    version: str = ""
+    libass: bool = False
+    #: 带字幕 / 花字 / AI 标识的导出走哪条路:browser、libass;null = 两条都不通,这类导出会被拒。
+    text_burn_in: str | None = None
+
+
+class FfmpegSettingsUpdate(ApiModel):
+    path: str = Field(default="", max_length=1000)
+
+
 class TtsEngineOut(ApiModel):
     id: str
     label: str

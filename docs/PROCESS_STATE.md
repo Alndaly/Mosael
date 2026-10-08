@@ -91,6 +91,9 @@
 - `app/core/logging.py:_configured` — 日志装配一次的闸。
 - `app/ai/runtime/config.py:_cached`、`app/ai/runtime/config.py:_source` — TTS 运行时配置及其来源。
 - `app/ai/sidecar/pi_client.py:_proxy_source` — 出站代理来源。
+- 用哪个 ffmpeg:「管理 → 引擎 → FFmpeg」填的路径由 `app/domain/media_tools.py` 写进 `settings` 的 ffmpeg / ffprobe 两项
+  (起 ffmpeg 的四十多处都读这两项,不少拿不到 db 会话;ADR 0048)。不是模块级名字,上面的棘轮看不见它,
+  `tests/conftest.py::_restore_process_snapshots` 单独还原。
 - 代理环境变量本身写在 `app/domain/network.py`(改的是**本进程**的 env,而不是给十几处 `httpx.Client` 逐个传 `proxy=`)。
 
 ## 四、纯缓存与去重
@@ -119,6 +122,8 @@
 - `app/media/render_executor.py:_FILTER_SCRIPT_FLAGS`(本机 ffmpeg 从文件读滤镜图用哪种写法)、
   `app/media/render_executor.py:_HW_SELF_TESTED`(硬件编码小样自检通过过的分辨率与参数)——
   都是"问过 ffmpeg 了"。只记成功的探测,重启后第一次导出再问一遍,多花零点几秒。
+- `app/domain/media_tools.py:_status` — 上次探 ffmpeg 的结果(找不找得到、版本、有没有 libass、带字的导出走哪条路),给管理页显示。
+  启动时在后台探一次、保存路径和点「重新检测」时重探;生效的 ffmpeg 换了就现探。重启后重探,多进程下各探各的。
 - `app/core/db.py:_writers` — 这个进程里谁正攥着 SQLite 的写锁(第一句写在什么时候、哪个线程、从哪一行开始写),只用来在
   database is locked 的报错和「写锁攥太久」的警告里点名,不参与任何判断。重启后是空的,那时也没有在攥锁的事务;多进程下各记各的,
   攥锁的要是另一个进程,报错里说「锁在别的进程手里」。
@@ -187,7 +192,8 @@
   `app/domain/voices/remote.py:_locks_guard`(守 `_copy_locks` 这张表本身)
 - `app/domain/local_services/installer.py:_registry_lock`、`app/domain/local_services/supervisor.py:_registry_lock`
 - `app/domain/model_library.py:_lock`、`app/domain/model_nsfw_local.py:_lock`、`app/domain/model_previews.py:_lock`、
-  `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`
+  `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
+  `app/domain/media_tools.py:_status_lock`(探 ffmpeg 一次一个:启动时的后台探测和管理页的「重新检测」可能撞上)
 - `app/integrations/feishu/client.py:_token_lock`、`app/integrations/feishu/connections.py:_process_lock`、
   `app/integrations/feishu/inbound.py:_seen_lock`、`app/integrations/feishu/inbound.py:_awaiting_lock`、`app/integrations/feishu/onboarding.py:_onboard_lock`
 

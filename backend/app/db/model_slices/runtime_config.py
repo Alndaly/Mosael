@@ -1,4 +1,4 @@
-"""这台机器上的配置:本机 AI 运行时、部署、网络出口、TTS。
+"""这台机器上的配置:本机 AI 运行时、部署、网络出口、TTS、用哪个 ffmpeg。
 
 都是**单例行**(每张表只有一行),所以它们不带 workspace_id —— 它们描述的是部署,不是工作区。
 """
@@ -51,6 +51,21 @@ class DeploymentConfig(Base):
     #: 成员用浏览器打开 Mosael 的地址(`https://studio.example.com`)。填了,邀请链接就带一个网页地址(ADR 0054):
     #: 对方可能还没装客户端。桌面单机版没有网页,空着,邀请只给 `mosael://` 深链。
     web_url: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class MediaToolsConfig(Base):
+    """Singleton (id='default') 这台机器用哪个 ffmpeg(ADR 0048 §3)。
+
+    发布版的后端从 Finder 起,读不到 shell rc 里的环境变量 —— 「设 MOSAEL_FFMPEG」在那里做不到,所以路径要能在
+    界面上填、存在库里。怎么生效、环境变量给了时听谁的,见 app/domain/media_tools.py。
+    """
+
+    __tablename__ = "media_tools_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    #: ffmpeg 可执行文件的绝对路径;空串 = 用 PATH 上的 `ffmpeg`。
+    ffmpeg_path: Mapped[str] = mapped_column(String(1000), nullable=False, default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

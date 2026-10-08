@@ -18164,6 +18164,110 @@
         }
       }
     },
+    "/api/settings/ffmpeg": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Ffmpeg Settings",
+        "description": "「管理 → 引擎 → FFmpeg」(ADR 0048):用哪个 ffmpeg,和启动时(或上次重新检测时)探出来的样子。\n只给部署管理员:里面是这台机器上的程序路径。",
+        "operationId": "get_ffmpeg_settings_api_settings_ffmpeg_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FfmpegSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Set Ffmpeg Settings",
+        "description": "填 ffmpeg 的路径(空 = PATH 上的)。填的是这台机器上要执行的程序 —— 和装本机引擎同一条权限。\n不是一个能跑的 ffmpeg 就 422,什么都不存;存下之后对本进程立刻生效并重探一次。\n\n自己提交而不用 Tx:回给界面的要是**生效之后**探出来的样子,而生效挂在提交之后(media_tools.save_path)。",
+        "operationId": "set_ffmpeg_settings_api_settings_ffmpeg_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FfmpegSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FfmpegSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/ffmpeg/recheck": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Recheck Ffmpeg",
+        "description": "重新检测:装了 / 换了 ffmpeg 之后不用重启。",
+        "operationId": "recheck_ffmpeg_api_settings_ffmpeg_recheck_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FfmpegSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/install-source": {
       "get": {
         "tags": [
@@ -34913,6 +35017,68 @@
           "phase"
         ],
         "title": "FeishuOnboardingOut"
+      },
+      "FfmpegSettingsOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "default": ""
+          },
+          "in_use": {
+            "type": "string",
+            "title": "In Use"
+          },
+          "pinned_by_environment": {
+            "type": "boolean",
+            "title": "Pinned By Environment",
+            "default": false
+          },
+          "found": {
+            "type": "boolean",
+            "title": "Found"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          },
+          "libass": {
+            "type": "boolean",
+            "title": "Libass",
+            "default": false
+          },
+          "text_burn_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Burn In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "in_use",
+          "found"
+        ],
+        "title": "FfmpegSettingsOut",
+        "description": "「管理 → 引擎 → FFmpeg」(ADR 0048):填的路径,和正在用的那个 ffmpeg 探出来的样子。"
+      },
+      "FfmpegSettingsUpdate": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Path",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "FfmpegSettingsUpdate"
       },
       "FontOut": {
         "properties": {

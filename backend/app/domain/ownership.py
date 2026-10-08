@@ -95,6 +95,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ProviderPricingRule": ("app/domain/billing/usage.py",),
     "ProviderUsageEvent": ("app/domain/billing/usage.py",),
     "AiRuntimeConfig": ("app/domain/ai_runtime.py",),
+    #: 用哪个 ffmpeg(ADR 0048):存与推都在 media_tools。
+    "MediaToolsConfig": ("app/domain/media_tools.py",),
     # 单例行由 network 域按需创建(get_config),路由只负责改值。
     "NetworkConfig": ("app/domain/network.py",),
     "TtsConfig": ("app/domain/voices/tts_settings.py",),

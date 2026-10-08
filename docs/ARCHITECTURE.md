@@ -591,7 +591,9 @@ qwen 和 GLM 用的不是 `reasoning_effort`(前者 `enable_thinking`、后者 `
   预览显示不了的效果在 UI 明示(LUT 选择器下方的提示)。
 - **文字 —— 已经同源一致**:导出侧 `text_render.TextRasterizer` 用无头 Chromium 加载
   **app 自己构建出的 CSS 与 @font-face** 渲成透明 PNG 再由 ffmpeg 叠加,字体环境与预览完全相同。
-  拿不到 Chromium / 前端 dist 时优雅回落 libass。
+  拿不到 Chromium / 前端 dist 时回落 libass;libass 也没有(Homebrew 默认的精简版 ffmpeg)就在建任务之前说清楚。
+  用哪个 ffmpeg 在「管理 → 引擎 → FFmpeg」里填,那一节也显示这台机器上带字的导出走哪条路
+  ([ADR 0048](adr/0048-packaged-text-burn-in.md);打包版带上 Chromium 和前端 dist 是它的后两步)。
 
 **预览侧不再有第二条画法**。曾经并存一条 `<video>`/`<img>` 元素路作兜底,两条路的取景、层级与
 调色都对不齐,「预览长什么样」于是取决于当时走了哪条。现在画不出来时**明说**而不是降级——

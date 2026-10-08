@@ -186,12 +186,11 @@ def _warm_engine_probes() -> None:
     from app.domain.voices.transcription import LOCAL_ENGINES
 
     def probe() -> None:
-        from app.media.render_executor import ffmpeg_has_libass
+        from app.domain import media_tools
 
-        #: 没有 libass 的 ffmpeg(Homebrew 的 core 版)烧不了 ASS:文字只能走浏览器渲 PNG 那条路。启动时记一笔,
-        #: 真导出时 ensure_text_can_burn 会在建任务之前把话说清楚。
-        if not ffmpeg_has_libass(settings.ffmpeg):
-            logger.warning("ffmpeg %s has no libass (subtitles filter); text burn-in relies on the browser path", settings.ffmpeg)
+        #: ffmpeg 找不找得到、有没有 libass、带字的导出走哪条路:结果显示在「管理 → 引擎 → FFmpeg」(ADR 0048),
+        #: 不只记日志。真导出时 ensure_text_can_burn 照样在建任务之前把话说清楚。
+        media_tools.recheck()
         for engine in LOCAL_ENGINES:
             asr_models.resolve_engine_python(engine)
         for adapter in (*DENOISE_ADAPTERS.values(), *SEPARATION_ADAPTERS.values()):
@@ -231,6 +230,10 @@ def _prepare_network() -> None:
         from app.domain import outbound_allowlist
 
         outbound_allowlist.apply_to_process(db)
+        # 用哪个 ffmpeg 同理(ADR 0048):管理页填的路径写进 settings.ffmpeg / ffprobe。要排在探测之前(_warm_engine_probes)。
+        from app.domain import media_tools
+
+        media_tools.apply_to_process(db)
 
 
 def _install_permission_handlers(app: FastAPI) -> None:

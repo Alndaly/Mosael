@@ -389,7 +389,12 @@ _SNAPSHOT_STATE = (
     ("app.core.outbound_guard", "_allowlist"),
     ("app.ai.runtime.config", "_cached"),
     ("app.ai.runtime.config", "_source"),
+    ("app.domain.media_tools", "_status"),
 )
+
+#: `settings` 上由启动装配改写的几项(不是模块属性,上面那张表还原不了):管理页填的 ffmpeg 路径写进这里(domain/media_tools)。
+#: 一条测试 PUT 了一个假 ffmpeg,后面所有起 ffmpeg 的测试都会去跑它。
+_SETTINGS_SNAPSHOT = ("ffmpeg", "ffprobe")
 
 
 @pytest.fixture(autouse=True)
@@ -413,6 +418,10 @@ def _restore_process_snapshots(request):
         except ImportError:  # pragma: no cover —— 模块搬家时不该让整套测试炸掉
             continue
         saved.append((module, attribute, getattr(module, attribute, None)))
+    from app.core.config import settings
+
+    for attribute in _SETTINGS_SNAPSHOT:
+        saved.append((settings, attribute, getattr(settings, attribute)))
     yield
     _let_the_body_threads_finish(request.node)
     for module, attribute, value in saved:

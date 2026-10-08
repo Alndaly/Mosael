@@ -5,6 +5,7 @@ import contextlib
 import functools
 import logging
 import math
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator
@@ -17,7 +18,7 @@ import numpy as np
 from app.core.i18n import LocalizedError
 from app.core.child_process import ChildProcess, popen_text, run_logged
 
-from app.core.config import settings
+from app.core.config import FFMPEG_FIELDS_FROM_ENVIRONMENT, settings
 from app.core.text import blame_line
 from app.media.probe import guess_kind, probe_has_audio_many
 from app.media.tempo import atempo_filters
@@ -1096,12 +1097,33 @@ def _has_text(plan: RenderPlan) -> bool:
     return bool(plan.subtitles or plan.text_overlays or plan.ai_labels)
 
 
+def text_burn_path() -> str | None:
+    """有字要烧时走哪条路:'browser'(按预览 CSS 渲 PNG,首选)/ 'libass'(回落)/ None(两条都不通)。
+
+    建任务前那一道(ensure_text_can_burn)和管理页上的探测结果(domain/media_tools)问的是同一个问题,答案只在这里算。"""
+    if _text_rasterizer_available():
+        return "browser"
+    if ffmpeg_has_libass(settings.ffmpeg):
+        return "libass"
+    return None
+
+
+def _no_libass() -> RenderExecutionError:
+    """缺 libass 时那句话:原因(哪个 ffmpeg、为什么没有)+ 怎么办。怎么办取决于 ffmpeg 是谁指定的 ——
+    「管理 → 引擎 → FFmpeg」那一格,还是环境变量(那时那一格不生效,改它没用,见 domain/media_tools)。"""
+    #: 说实际是哪个文件:「ffmpeg(ffmpeg)」认不出是不是 Homebrew 装的那个,「/opt/homebrew/bin/ffmpeg」认得出。
+    where = shutil.which(settings.ffmpeg) or settings.ffmpeg
+    if "ffmpeg" in FFMPEG_FIELDS_FROM_ENVIRONMENT:
+        return RenderExecutionError("renderErr_noLibassPinnedByEnvironment", ffmpeg=where)
+    return RenderExecutionError("renderErr_noLibass", ffmpeg=where)
+
+
 def ensure_text_can_burn(plan: RenderPlan) -> None:
     """有字要烧,而两条路(浏览器渲 PNG、libass 烧 ASS)都走不通时,**在建任务之前**就说清楚。
 
     此前要等任务跑起来、ffmpeg 报「No such filter」才失败,失败原因是一串滤镜图。"""
-    if _has_text(plan) and not _text_rasterizer_available() and not ffmpeg_has_libass(settings.ffmpeg):
-        raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
+    if _has_text(plan) and text_burn_path() is None:
+        raise _no_libass()
 
 
 def target_bitrate_kbps(output) -> int:
@@ -1951,7 +1973,7 @@ def _text_for_burn(plan: RenderPlan, workdir: Path) -> BurnedText | None:
     text_pngs = _rasterize_text(plan, workdir)
     if text_pngs is None:
         if _has_text(plan) and not ffmpeg_has_libass(settings.ffmpeg):
-            raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
+            raise _no_libass()
         return None
     return compose_text_layers(plan, text_pngs, workdir)
 

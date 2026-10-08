@@ -17,6 +17,7 @@ import { AsrModelsSection } from "./AsrModelsSection";
 import { DataDiagnosticsSection } from "./DataDiagnosticsSection";
 import { StorageCleanupSection } from "./StorageCleanupSection";
 import { DenoiseEnginesSection } from "./DenoiseEnginesSection";
+import { FfmpegSection } from "./FfmpegSection";
 import { InstallSourceSection } from "./InstallSourceSection";
 import { ProviderPricingSection } from "./ProviderPricingSection";
 import { ProxySection } from "./ProxySection";
@@ -45,8 +46,8 @@ import { VoiceCloneSection } from "./VoiceCloneSection";
  * 成本规则单独一个 tab:它是一整张可筛选、可批量删的表,挤进部署设置会把其余几节压到很下面。
  * 引擎也单独一个 tab,理由相同而更甚:转写、声音克隆、人声分离、降噪四节各是一张带进度条的清单,
  * 克隆还有一张表单,合起来比部署设置其余几节加在一起还长;来这里的人要做的也是另一件事 ——
- * 点下载、盯着几个 GB 走完,而不是改一个开关。下载源(pip 镜像)只管装这些引擎的依赖,跟着引擎走,
- * 排在最前:先选好从哪儿拉,再点下面的安装。
+ * 点下载、盯着几个 GB 走完,而不是改一个开关。最前面是 FFmpeg:导出、缩略图、转写都靠它,带字的导出被拒时
+ * 报错让人来这里填路径(ADR 0048)。接着是下载源(pip 镜像),只管装下面这些引擎的依赖:先选好从哪儿拉,再点下面的安装。
  *
  * 版式上,页面本身是 STUDIO_PAGE —— 一条 flex 列,子项一律 `shrink-0`;每个 tab 的内容是一个
  * **不定高**的网格。行高只由内容决定,没有哪一节能被压扁、让下一节画到它身上(见 adminLayout)。
@@ -99,6 +100,7 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
         {tab === "pricing" && <ProviderPricingSection workspace={workspace} />}
         {tab === "engines" && (
           <>
+            <FfmpegSection />
             <InstallSourceSection />
             <AsrModelsSection />
             <VoiceCloneSection />

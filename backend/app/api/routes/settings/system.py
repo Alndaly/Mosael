@@ -3,18 +3,21 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     AiRuntimeConfigOut,
     AiRuntimeConfigUpdate,
+    FfmpegSettingsOut,
+    FfmpegSettingsUpdate,
     InstallSourceOut,
     InstallSourceUpdate,
     NetworkConfigOut,
     NetworkConfigUpdate,
 )
 from app.db.models import NetworkConfig
-from app.domain import ai_runtime
+from app.domain import ai_runtime, media_tools
 from app.domain.network import apply_to_process, get_config as get_network
 from app.domain.voices import tts_settings
 from app.domain.permissions import ensure_deployment_admin
@@ -67,6 +70,48 @@ def set_ai_runtime(body: AiRuntimeConfigUpdate, db: Tx, user: CurrentUser) -> Ai
     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(core/http_retry)。"""
     ensure_deployment_admin(db, user)
     return AiRuntimeConfigOut(max_retries=ai_runtime.save_max_retries(db, body.max_retries))
+
+
+def _ffmpeg_out(db: Session, status: media_tools.FfmpegStatus) -> FfmpegSettingsOut:
+    return FfmpegSettingsOut(
+        path=media_tools.saved_path(db),
+        in_use=status.location,
+        pinned_by_environment=media_tools.pinned_by_environment(),
+        found=status.found,
+        version=status.version,
+        libass=status.libass,
+        text_burn_in=status.text_burn_in,
+    )
+
+
+@router.get("/settings/ffmpeg", response_model=FfmpegSettingsOut)
+def get_ffmpeg_settings(db: DbSession, user: CurrentUser) -> FfmpegSettingsOut:
+    """「管理 → 引擎 → FFmpeg」(ADR 0048):用哪个 ffmpeg,和启动时(或上次重新检测时)探出来的样子。
+    只给部署管理员:里面是这台机器上的程序路径。"""
+    ensure_deployment_admin(db, user)
+    return _ffmpeg_out(db, media_tools.status())
+
+
+@router.put("/settings/ffmpeg", response_model=FfmpegSettingsOut)
+def set_ffmpeg_settings(body: FfmpegSettingsUpdate, db: DbSession, user: CurrentUser) -> FfmpegSettingsOut:
+    """填 ffmpeg 的路径(空 = PATH 上的)。填的是这台机器上要执行的程序 —— 和装本机引擎同一条权限。
+    不是一个能跑的 ffmpeg 就 422,什么都不存;存下之后对本进程立刻生效并重探一次。
+
+    自己提交而不用 Tx:回给界面的要是**生效之后**探出来的样子,而生效挂在提交之后(media_tools.save_path)。"""
+    ensure_deployment_admin(db, user)
+    try:
+        media_tools.save_path(db, body.path)
+    except media_tools.FfmpegPathError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    return _ffmpeg_out(db, media_tools.status())
+
+
+@router.post("/settings/ffmpeg/recheck", response_model=FfmpegSettingsOut)
+def recheck_ffmpeg(db: DbSession, user: CurrentUser) -> FfmpegSettingsOut:
+    """重新检测:装了 / 换了 ffmpeg 之后不用重启。"""
+    ensure_deployment_admin(db, user)
+    return _ffmpeg_out(db, media_tools.recheck())
 
 
 @router.get("/settings/install-source", response_model=InstallSourceOut)

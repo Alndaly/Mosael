@@ -108,11 +108,42 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Grabbing the current frame timed out (not done within {seconds} s).",
     },
     "renderErr_noLibass": {
-        "zh": "烧不了字幕和花字:这台机器上的 ffmpeg({ffmpeg})没有 libass,用浏览器渲染文字那条路也不可用。"
-              "请装带 libass 的完整版 ffmpeg(macOS:brew install ffmpeg-full),并用环境变量 MOSAEL_FFMPEG 指向它。",
-        "en": "Can't burn in subtitles or titles: this machine's ffmpeg ({ffmpeg}) has no libass, and rendering the text "
-              "in the browser isn't available either. Install a full ffmpeg build with libass (macOS: brew install "
-              "ffmpeg-full) and point the MOSAEL_FFMPEG environment variable at it.",
+        "zh": "带字幕、花字或 AI 标识的导出做不了:这台机器上的 ffmpeg({ffmpeg})没有 libass,烧不了字 —— "
+              "Homebrew 默认装的 ffmpeg 就是这种精简版;在这里用浏览器渲染文字那条路也走不通。"
+              "怎么办:装一个带 libass 的完整版 ffmpeg(macOS 在终端运行 brew install ffmpeg-full),"
+              "再到「管理 → 引擎 → FFmpeg」把路径填成它(通常是 /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg),保存后重新导出。",
+        "en": "Exports with subtitles, titles or AI labels can't be made: this machine's ffmpeg ({ffmpeg}) has no libass, "
+              "so it can't burn in text. The ffmpeg Homebrew installs by default is this slimmed-down build, and rendering "
+              "the text in the browser isn't available here either. To fix it, install a full ffmpeg build with libass "
+              "(on macOS, run brew install ffmpeg-full in Terminal), then set its path under Admin → Engines → FFmpeg "
+              "(usually /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg), save, and export again.",
+    },
+    "renderErr_noLibassPinnedByEnvironment": {
+        "zh": "带字幕、花字或 AI 标识的导出做不了:环境变量 MOSAEL_FFMPEG 指定的 ffmpeg({ffmpeg})没有 libass,烧不了字;"
+              "在这里用浏览器渲染文字那条路也走不通。怎么办:把 MOSAEL_FFMPEG 改成一个带 libass 的完整版 ffmpeg"
+              "(macOS:brew install ffmpeg-full,路径通常是 /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg),重启 Mosael。"
+              "设了这个环境变量时,「管理 → 引擎 → FFmpeg」里填的路径不生效。",
+        "en": "Exports with subtitles, titles or AI labels can't be made: the ffmpeg set by the MOSAEL_FFMPEG environment "
+              "variable ({ffmpeg}) has no libass, so it can't burn in text, and rendering the text in the browser isn't "
+              "available here either. To fix it, point MOSAEL_FFMPEG at a full ffmpeg build with libass (macOS: brew "
+              "install ffmpeg-full, usually /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg) and restart Mosael. While that "
+              "variable is set, the path under Admin → Engines → FFmpeg has no effect.",
+    },
+    "ffmpegPath_notAbsolute": {
+        "zh": "要填完整路径(以 / 开头,Windows 上带盘符):{path}",
+        "en": "Enter the full path (starting with /, or with a drive letter on Windows): {path}",
+    },
+    "ffmpegPath_missing": {
+        "zh": "这个位置没有文件:{path}",
+        "en": "There's no file at {path}",
+    },
+    "ffmpegPath_notExecutable": {
+        "zh": "这个文件不能执行:{path}",
+        "en": "This file can't be run: {path}",
+    },
+    "ffmpegPath_notFfmpeg": {
+        "zh": "这个程序跑起来不像 ffmpeg(ffmpeg -version 没认出来):{path}",
+        "en": "This program doesn't look like ffmpeg (ffmpeg -version didn't recognise it): {path}",
     },
     "renderErr_ffmpegExit": {
         "zh": "FFmpeg 异常退出,退出码 {code}",
