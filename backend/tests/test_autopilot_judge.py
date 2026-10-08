@@ -58,7 +58,8 @@ class Chat:
             json={"workspace_id": self.workspace_id, "tool": tool, "payload": payload},
         )
         assert response.status_code == 200, response.text
-        wait_for_idle_autopilot()
+        # 放行之后的执行(run_code 要起一个 Docker 容器)在满载的机器上常常超过默认的 5 秒:等到它真跑完,等不到就当场说
+        assert wait_for_idle_autopilot(timeout=60), "自动放行的执行线程 60 秒还没跑完"
         self.client.headers["Authorization"] = self.login_token
         with SessionLocal() as db:
             row = db.get(ToolConfirmation, response.json()["id"])
