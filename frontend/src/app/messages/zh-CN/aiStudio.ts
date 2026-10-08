@@ -317,6 +317,7 @@ export const aiStudio = {
   genRepeatFailed: "没能再来一次",
   genStopped: "已停止",
   genStoppedBody: "在生成完之前停下了,没有产出。",
+  genStoppedCharged: "可能已扣费,成片未保留 —— 停下之前服务商已经开始生成了。",
   separationTitle: "人声与背景音分离",
   separationDesc: "把一段音频拆成「人声」和「背景音」两条(背景音 = 音乐、环境声、音效)。译配时用它保住背景:只丢掉原来的说话声,其余留着。模型在这台机器上跑 —— 运行环境(几 GB 的 Python 依赖)要在这里点一次装好,权重第一次分离时自动拉。选择「只去掉人声」前必须装好;不可用时任务会明确失败,不会静默改成整轨静音。",
   separationEngineDetail: "四分离模型,人声之外的三条合成背景音。有独立显卡时快得多,纯 CPU 也能跑,只是慢。",

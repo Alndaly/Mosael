@@ -2176,7 +2176,7 @@ function GenerationTurn({
             ))}
           </div>
         ) : status === "stopped" ? (
-          <GenerationStoppedCard meta={meta} />
+          <GenerationStoppedCard meta={meta} charged={generation.charged_after_stop} />
         ) : status === "failed" ? (
           //: 原因读**生成记录自己**存的那份 —— 任务会被清掉,记录不会(见后端 generation.runner.record_failure)。
           //: 那一句人话、原文、认得出的原因都由后端出(error_summary / error_detail / error_hint,和画板格子同一个来源,见后端

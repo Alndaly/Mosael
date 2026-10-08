@@ -12739,6 +12739,16 @@ export interface components {
              *     (generation.runner.record_failure),任务被清掉之后也还在。
              */
             readonly stopped: boolean;
+            /**
+             * Charged After Stop
+             * @description 停下了、服务商那边**可能已经扣过费**(D58):「已停止」那张卡上写明「可能已扣费,成片未保留」—— 维持 ADR 0019,停下就是
+             *     不要这一份,成片不留;但钱的事要说清。
+             *
+             *     判据看这一条记下的账(用量事件,由列表贴上 `cost_confidence`,见 sessions._attach_costs):停下之后远端照样做完、或者撤不掉
+             *     没了结的,runner._settle_after_cancel / _record_settled 会记一笔 —— 记了价(估的、服务商报的)或者有账没定价,都算「可能扣过」;
+             *     没交出去就停了、或者服务商那边撤掉了的,没有这一笔(或者只有「没扣费」「免费」),不写。
+             */
+            readonly charged_after_stop: boolean;
         };
         /**
          * GenerationMissingOut

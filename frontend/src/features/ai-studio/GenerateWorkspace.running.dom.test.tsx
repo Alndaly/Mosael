@@ -189,6 +189,22 @@ describe("在跑的那一条:按产出的样子占位,说清走到哪儿了,能�
     expect(screen.queryByText("generationFailedTitle")).toBeNull();
     expect(card.closest("article")!.textContent).toContain("usageCostNotBilled");
     expect(screen.queryByRole("button", { name: /genStop/ }), "停下了就没有「停止」").toBeNull();
+    expect(card.querySelector("[data-stopped-charged]"), "没扣费:不写「可能已扣费」").toBeNull();
+  });
+
+  //: D58:维持 ADR 0019(停下就是不要这一份),但服务商可能已经扣了钱的,卡上写明
+  it("停下了、服务商可能已经扣过费:卡上写「可能已扣费,成片未保留」", async () => {
+    renderStudio({
+      generations: [generation({ job_id: null, stopped: true, error: "已取消", cost_confidence: "estimated",
+                                 costs: [{ currency: "CNY", micros: 1_870_000 }], charged_after_stop: true })],
+    });
+    const card = await waitFor(() => {
+      const found = document.querySelector("[data-generation-stopped]");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(card.querySelector("[data-stopped-charged]")?.textContent).toBe("genStoppedCharged");
+    expect(card.getAttribute("data-failure-status"), "还是「已停止」,不是失败").toBe("stopped");
   });
 });
 

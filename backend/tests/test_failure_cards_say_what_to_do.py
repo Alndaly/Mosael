@@ -161,3 +161,22 @@ def test_工作台画布上跑的_数字人生成_不能照原样再来(connecte
         assert records[generation_id]["repeatable"] is False
         refused = client.post(f"/api/generation/jobs/{generation_id}/again")
         assert refused.status_code == 422 and "不能照原样再来一次" in refused.json()["detail"]
+
+
+@pytest.mark.parametrize("stopped, confidence, expected", [
+    (True, "estimated", True),       # 停下之后远端照样做完,按价目估了一笔
+    (True, "reported", True),        # 服务商回包报了实扣
+    (True, "unknown", True),         # 有账、没定价:可能扣过
+    (True, "not_billed", False),     # 撤掉了 / 没交出去:没扣
+    (True, "free", False),
+    (True, None, False),             # 一笔账都没有
+    (False, "estimated", False),     # 没停下(成了或者跑挂了)不说这一句
+])
+def test_停下了_可能已扣费才写那一句(stopped: bool, confidence: str | None, expected: bool) -> None:
+    """D58:维持 ADR 0019(停下就是不要这一份),但服务商那边可能已经扣过费的,「已停止」卡上写「可能已扣费,成片未保留」。"""
+    from app.api.schemas.generation import GenerationJobOut
+    from app.domain.jobs import CANCELLED_ERROR_KEY
+
+    record = GenerationJobOut.model_construct(error_key=CANCELLED_ERROR_KEY if stopped else "providerErr_pluginFailed",
+                                              cost_confidence=confidence, request={})
+    assert record.charged_after_stop is expected
