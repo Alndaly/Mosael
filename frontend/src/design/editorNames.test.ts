@@ -15,11 +15,8 @@ import { describe, expect, it } from "vitest";
 
 import { SRC, blankComments, tsxSources } from "@/design/jsxSource";
 
-/**
- * 已知的、还没补的。只许减少。
- * ChatComposer 交给智能体那一路(它和 ChatWorkspace / CanvasAgentChat 是同一批正在改的文件),补上之后从这里删掉。
- */
-const KNOWN = new Set(["features/agent/ChatComposer.tsx"]);
+/** 已知的、还没补的。只许减少(ChatComposer 已由智能体那一路补上,清单空了)。 */
+const KNOWN = new Set<string>();
 
 /** `useEditor(` 那一次调用的参数原文(按括号配对;注释已经抹掉,字符串里的括号可能让它多吞一点,不影响判断)。 */
 function editorCalls(code: string): string[] {
