@@ -1,14 +1,14 @@
 ---
 title: AI Studio & agents
-description: Talk to an agent that uses your creative tools; generate images and video from text, first/last frames or references, compose music and sound effects, and synthesize speech and podcasts.
+description: Talk to an agent that uses your creative tools; under Create, generate images and video from text, first/last frames or references, compose music and sound effects, and make speech and podcasts.
 seo_title: AI Studio: text-to-video, image-to-video and music
 keywords: text-to-video, image-to-video, first and last frame, AI image generation, AI music generation, AI agent
 order: 3
-updated: 2026-10-05
+updated: 2026-10-08
 version: 1.9.3
 ---
 
-**AI Studio** switches between **Chat**, **Generate** and **Audio** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
+**AI Studio** switches between **Chat** and **Create** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
 
 ## Chat: the agent operates your project
 
@@ -196,24 +196,30 @@ Agents in different sessions can also **@-notify each other**. An idle recipient
 a busy one queues the message and picks it up when it is free. Messages that arrive this way carry a
 "from another agent" badge, so a conversation never looks like it talked to itself.
 
-## Generate: text-to-image / text-to-video
+## Create: image, video, speech, podcast, music
 
-In **Generate** mode the left column is the **generation model** catalog, the middle is the results feed, and the composer takes your prompt:
+![AI Studio Create: no generation jobs yet; the right column holds the selected model’s engine settings (the demo’s placeholder connection, which cannot generate)](/media/screens/en/ai-generate.png)
 
-![AI Studio Generate: no generation jobs yet; the right column holds the selected model’s engine settings (the demo’s placeholder connection, which cannot generate)](/media/screens/en/ai-generate.png)
-
-**Switch between chat and generate in one click** — describe the shot in the bottom input, tune engine parameters on the right; results can be sent straight to the media library:
+**Create** keeps images, video, music & sound, speech and podcasts in **one workspace**: creation sessions on the left, the
+back-and-forth of the open session in the middle, the composer at the bottom and engine settings on the right. Results land in the media library.
 
 <Loop src="/media/videos/en/ai-studio.mp4" poster="/media/screens/en/ai-chat.png" alt="Demo: switch between Chat, Trace, Generate and Audio" />
 
+- **Show by type**: a row of filters above the session list — All, Image, Video, Speech, Podcast, Music — remembered on this device;
+  every session is tagged with its type.
+- **The model decides the type**: a new session is whatever the chosen model makes. The model list is grouped into Image, Video,
+  Music & sound, Speech (each voice engine) and Podcast; with a type filter selected, only that type is listed.
+- **One family per session**: image and video are one family (you can turn the last image into a video), music, speech and podcasts are
+  one each. Once a session has results, the list offers only that family; for another type, start a new session with + at the top left.
+- The placeholder while it runs, **Stop**, **Stopped**, the failure card, time taken and cost work the same for all five.
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library. Your **default model** from Settings is preselected; with no default set the picker shows "Choose a model" and you pick one before sending.
-- Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
+- Whether a model can run depends on **its vendor's key** being configured; with no usable model, the right panel links to settings.
 - **@ Asset** under the prompt names a character, location or prop from the asset library: its description joins the prompt and its references attach, as many as the model takes (see [Asset library](/docs/guides/assets)).
 - Attaching driving audio makes it a digital-human generation (talking photo, lip-sync), which needs **I have the pictured person's consent** ticked first — see [Digital humans](/docs/guides/digital-humans).
 - **Once submitted, it waits for the result.** Video generation often takes minutes, longer when the vendor is busy. Mosael never
   gives up on a task you have already paid for because it took "too long" — it ends only when the vendor reports it finished (or
   failed), or when you cancel it in the task center. The same holds across a backend restart: the result is **picked up again**
-  instead of asking you to start over (which would charge you twice).
+  instead of asking you to start over (which would charge you twice). **Go to** on the task in the task center opens this creation session.
 
 ### The controls follow the model
 
@@ -253,7 +259,7 @@ does not accept is rejected outright rather than quietly producing something els
 
 ### Music and sound effects
 
-The model picker on the Generate page has a third group: **Music & sound**. Pick an audio model to generate a song
+The **Music & sound** group in the model list: pick an audio model to generate a song
 (with vocals), an instrumental / background track, a sound effect, or a soundtrack for a video. It runs on the same
 generation pipeline as images and video — same session, same parameter descriptors; results land in the media
 library, usage is metered, and paid asynchronous tasks are collected again after a backend restart.
@@ -270,26 +276,41 @@ library, usage is metered, and paid asynchronous tasks are collected again after
 What each vendor supports, and what is wired from documentation only, is in the "Music and sound" section of
 [Providers](/docs/guides/providers).
 
-## Audio: speech and podcasts
+### Speech
 
-> This page reads text aloud (speech synthesis) and makes podcasts. Music, background tracks and sound effects are generated on the Generate page with an audio model — see the section above.
+- Type the text in the composer (up to 2,000 characters; the corner shows the count) and pick a voice (with **Hear a sample**) and speed on
+  the right. The engines are the same as on the editor's Voice tab: local voice cloning (F5-TTS / Fish Speech) or any remote engine; a new
+  speech session starts on Edge (built in, free, nothing to set up).
+- Local cloning needs a voice first — without one, a notice on the right takes you to Settings → Dubbing & voices to upload or record a
+  reference clip; it also says when the local cloning engine isn't installed. With **Alibaba Bailian (CosyVoice)** you can also pick a
+  library voice, spoken from its copy in your Bailian account; the first time, you're asked whether its reference clip may be uploaded —
+  see [Editing → Your own voice through Bailian](/docs/guides/editing).
+- The result card is the same as for music: waveform, real duration, download, open in the media library; the title is the voice and
+  the footnote the engine and time taken. The asset is named "voice · start of the text".
+- Opening a speech session puts the right panel back on the voice and speed that session used last.
 
-**Audio** produces standalone audio assets. They land in the media library, and the most recent ones
-are listed below the form so you can play them in place.
+### Podcast
 
-- **Speech**: pick an engine and a voice, then read a piece of text. The engines are the same as on the
-  editor's Voice tab: local voice cloning (F5-TTS / Fish Speech) or any remote engine. Local cloning
-  needs a voice first — upload or record a reference clip under Settings → Dubbing & voices. With
-  **Alibaba Bailian (CosyVoice)** you can also pick a library voice, spoken from its copy in your Bailian
-  account; the first time, you're asked whether its reference clip may be uploaded — see
-  [Editing → Your own voice through Bailian](/docs/guides/editing).
-- **Podcast**: two speakers **rewrite** some material as a dialogue, **read** it as written, or
-  **research** a topic on the web and discuss it. Connect Volcano Podcast under Settings → AI audio first;
-  until then this tab shows a link to set it up.
+- Three modes above the composer: **Rewrite material** (paste some material and the two speakers talk it through), **Discuss a topic**
+  (researched on the web, then discussed) and **Read a script** (you write it).
+- **Read a script** is one line per turn: click A / B on the left to switch speaker, Enter starts the next line (read by the other
+  speaker), Backspace on an empty line removes it; pasting several lines splits them, recognising lines that start with "A:", "B:" or a
+  speaker's name. Up to 60 lines of 280 characters each (Volcano Podcast's limits); longer lines turn red right away.
+- Pick speakers A and B (each with a sample) and the speed on the right. Connect Volcano Podcast under Settings → AI audio first; until
+  then the right panel links to it.
+- A finished podcast shows its **Script** (each line tagged with the speaker). **Edit and read again** loads it into Read a script so you
+  can change it and read it again — this time only synthesis is billed. The asset is named "topic · Podcast", and the script is stored
+  with that audio.
 
-![Speech on the Audio page: pick a voice engine and voice, then type the text; with no cloned voice yet it points to Dubbing & voices](/media/screens/en/ai-audio.png)
+### Speech and podcasts made earlier
 
-Dubbing the subtitles on a timeline happens on the editor's Voice tab — see [Editing](/docs/guides/editing).
+After the update, speech and podcasts made on the old Audio page are part of creation sessions: one "Earlier speech" and one "Earlier
+podcasts" session per person (titled in Chinese, 以前的语音 / 以前的播客). Only the beginning of the text was stored back then, and those
+records say so. Old outputs whose task records were already cleared stay in the media library, outside any session.
+
+Speech made by a board's **Read aloud**, a workflow's voice node, subtitle dubbing or note read-aloud doesn't go into creation sessions —
+it belongs to that board, timeline or note. Dubbing the subtitles on a timeline happens on the editor's Voice tab — see
+[Editing](/docs/guides/editing).
 
 ## Feishu (Lark) binding
 

@@ -201,7 +201,7 @@ None of the four deletes anything: they flip the track's mute/duck switch, or pl
 - **Text to dub**: bilingual cues ask whether to read the **Full cue (both lines)**, the **First line** or the **Second line**. Feeding the whole cue reads the source and then the translation.
 - **Engines**: local voice cloning, Edge free voices, OpenAI, Volcano, Alibaba Bailian, plus any voiceover plugin. Remote voices are fetched per engine (Volcano's catalogue follows your account). Local cloning also picks a **Clone engine** (F5-TTS / Fish Speech); the voice library is under **Settings → Dubbing & voices**.
 
-Reading arbitrary text aloud and making a podcast produce standalone audio assets that have nothing to do with the timeline; they live in [AI Studio → Audio](/docs/guides/ai-studio).
+Reading arbitrary text aloud and making a podcast produce standalone audio assets that have nothing to do with the timeline; they live in [AI Studio → Create](/docs/guides/ai-studio).
 
 > **When the language does not match, the engine does not error** — it reads the text with the rules
 > it knows, produces gibberish, and reports success. So it is caught at the moment you pick the engine,
@@ -224,7 +224,7 @@ A voice from the library can also be spoken by **Alibaba Cloud Bailian's CosyVoi
 - Copies follow the key: on a shared connection everyone uses their own key, and a cloned voice lives only in that person's account. Each clone is recorded in usage (free), so you can see when, which voice and which connection.
 - A voice is tied to the model it was built on: when the CosyVoice model on the connection changes, a new copy is cloned on the new model the next time it's used, and the old one is left alone.
 
-AI Studio's **Audio**, speaking on a board, the workflow dubbing node and the **Spoken replies** voice can all pick library voices once CosyVoice is the engine.
+Speech under AI Studio's **Create**, speaking on a board, the workflow dubbing node and the **Spoken replies** voice can all pick library voices once CosyVoice is the engine.
 Workflows and a character's "Make it talk" run in the background and can't ask you, so click **Clone on Bailian** before the first use; without that agreement they stop at the voicing step and say why. The agent can name CosyVoice with a library voice too; if you haven't agreed yet, it says so the moment it opens the confirmation card and asks you to click **Clone on Bailian** first.
 
 To see what CosyVoice costs in your usage, run **Prefill prices** once for the Bailian connection under **Admin → Cost rules** (see [Model connections → Cost rules](/docs/guides/providers)). When synthesis fails, the error carries Bailian's own words from the response (a missing voice, the wrong model).
