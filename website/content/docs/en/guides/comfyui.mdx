@@ -413,10 +413,10 @@ generation model), **Open in workbench** (**Open in ComfyUI** in the web app) an
 ![A workflow missing a node and models: the node graph on the left; the right column scrolled down a little — what you can tune, what it produces, models it uses (missing ones flagged), missing nodes (from Frame Tools, not installed, Install), missing models (one with a huggingface.co address, one without), and what in Mosael uses it](/media/screens/en/workflow-library-detail.png)
 
 **The context menu**: right-click a card (or a row in the list), click the **⋯** that appears in its corner on hover, or select it
-and press Shift+F10 / the menu key — it's the same menu: Open details, Open in workbench (Open in ComfyUI in the web app) | Edit simplified form… |
+and press Shift+F10 / the menu key — it's the same menu: Open details, Open in workbench (Open in ComfyUI in the web app) | Edit forms… |
 Copy…, Rename…, Move to…, Export JSON | Copy path | Download missing models, Install missing nodes (only when something is missing;
 they open the details at that section) | Delete…. Items that can't be used right now are greyed out with the reason underneath
-(the connection didn't report ComfyUI's address, a workflow that can't be converted has no simplified form to edit yet…). **More actions** in the details
+(the connection didn't report ComfyUI's address, a workflow that can't be converted has no forms to edit yet…). **More actions** in the details
 header has Copy, Rename, Move, Export, Copy path and Delete as well.
 
 **Changing files on that machine** is always confirmed first, naming the server whose `workflows/` folder is being changed:
@@ -476,11 +476,18 @@ this connection in Mosael**: ComfyUI keeps this setting on the server, so Mosael
 Switching to Trackpad on your Mac while using someone's ComfyUI on a Windows machine leaves their own setting untouched. It is set again
 every time the ComfyUI page reloads. If the ComfyUI frontend is too old to have this setting, the switch is hidden and a small icon says why.
 
-### Apps: pick the items others fill in
+### Forms: pick the items others fill in
 
-A workflow can have dozens of parameters while whoever fills it in only needs three or five. In a workflow's detail, click
-**Edit simplified form** in the **Simplified form** section and build the form the way you would build any form. At the top are the **form title**
-and a **description** (one line for whoever fills it in), with a small line below saying where it is kept. Under that:
+A workflow can have dozens of parameters while whoever fills it in only needs three or five. In a workflow's detail, click **New form**
+in the **Forms** section (or click an existing form) and build it the way you would build any form. **A workflow can have several
+forms** (say "Quick" exposes just the prompt and "Fine-tune" also exposes size and steps), each one an entry of that workflow.
+
+At the top of the editor are **Results from** (see below) and **the row of forms**: click one to switch to it; **New form** starts
+blank, from a suggested set, or as a copy of the form you're editing; the "⋯" copies or deletes the current one. Before deleting, it
+lists where this workspace still uses the form (boards, workflows, AI Studio sessions) — afterwards those places say "This form no
+longer exists" and are not switched to the full workflow for you. Below that are the form's **title** (required: several forms all
+called "Form" can't be told apart) and a **description** (one line for whoever fills it in), with a small line saying where it is kept.
+Under that:
 
 - **From the workflow** (left): everything the workflow can take, **grouped by node**. A group is named after its node: the
   title you gave it in ComfyUI, or else ComfyUI's own name for that kind of node ("KSampler", "Lora Loader 🐍"), never an
@@ -495,30 +502,38 @@ and a **description** (one line for whoever fills it in), with a small line belo
   or remove it. While the form is empty, **Start with a suggested set** picks the prompt, negative prompt, main model, seed,
   size, runs and every image / video / audio input; adjust it from there. Leaving the form empty is fine too: people then see
   everything that can be filled in.
-- **Results from** (below the form): when the workflow has several nodes that produce images, click **Only this node's
-  images** on the one you want. From then on, when the workflow is used in AI Studio, boards or workflow nodes, only
-  images from the marked nodes are kept and the other preview nodes are left out; with none marked, Mosael guesses the final
-  result. A marked node says "Results come from this node" and can be undone. "Results from" can still be changed every time.
+- **Results from** (above the row of forms; it belongs to the workflow, not to one form): when the workflow has several nodes that
+  produce images, click **Only this node's images** on the one you want. From then on, when the workflow is used in AI Studio, boards
+  or workflow nodes (the full workflow and every form), only images from the marked nodes are kept and the other preview nodes are
+  left out; with none marked, Mosael guesses the final result. A marked node says "Results come from this node" and can be undone.
+  "Results from" can still be changed every time.
 - **Preview** (right): exactly what people will see, drawn with the generation panel's own controls; you can try filling it
   in and nothing is saved. While the form is empty it shows what people see today (everything that can be filled in).
 
 The footer says when there are unsaved changes, and closing with changes asks first. **Save to workflow…** asks first, naming
-the server and the file: the simplified form is **saved inside this workflow file**, so it travels with copies, exports and other
-ComfyUI servers, and everyone using the same ComfyUI sees the same form. Only the simplified form changes; nothing else in the
-workflow is touched. If the workflow is open in ComfyUI with unsaved changes, saving it there will undo this change; if it was
-just saved in ComfyUI, Mosael doesn't write and asks you to open it again. With nothing picked, the simplified form is removed.
+the server and the file: the forms are **saved inside this workflow file** (all of them at once), so they travel with copies, exports
+and other ComfyUI servers, and everyone using the same ComfyUI sees the same ones. Only the forms change; nothing else in the workflow
+is touched. If the workflow is open in ComfyUI with unsaved changes, saving it there will undo this change; if it was just saved in
+ComfyUI, Mosael doesn't write and asks you to open it again. With no form left, the forms are removed.
 
-The workbench's **Simplified form** panel uses the same editor; the column is narrow, so the three parts become the **Available / Selected /
+The workbench's **Forms** tab uses the same editor; the column is narrow, so the three parts become the **Available / Selected /
 Preview** tabs. The dialog does the same in a narrow window.
 
-Once a workflow has an simplified form:
+Once a workflow has forms:
 
-- **The form is one more entry of the workflow; the full workflow stays.** In AI Studio, boards, workflow nodes and the
-  default-model picker, the workflow shows up twice, side by side: the form, named after its title, with a faint second line
-  “From krea2-text-2-image · connection name”, and the full workflow, named after the file, with “Full workflow · connection
-  name” — pick it for every fillable item (no need to edit the form to tweak steps or the seed once). Searching by the form
-  title, the workflow name or the file name finds them. In the workflow library the workflow gets one more line, “Form: …”.
-  The agent in the workbench gets the form's entry; on the Plugins page the full workflow's tool is marked “Not for the agent”.
+- **Each form is one more entry of the workflow; the full workflow stays.** In AI Studio, boards, workflow nodes and the
+  default-model picker, the workflow is a small group: a heading with the workflow's name and the server, then **Full workflow**
+  (every fillable item — no need to edit a form to tweak steps or the seed once) and each form on its own row, in your order.
+  Searching by a form title, the workflow name or the file name finds them; a hit keeps the whole group and the matching row is bold.
+  Once picked, the button under the prompt box shows the name, and hovering says which workflow it comes from. In the workflow library
+  the workflow gets one more line, “Forms: Quick, Fine-tune”, and searching a form title finds the workflow too. The agent in the
+  workbench gets the forms; on the Plugins page the full workflow's tool is marked “Not for the agent”.
+- **Forms saved earlier need one upgrade.** Forms made before use an older format that the current plugin doesn't read: those
+  workflows show no forms until upgraded, and cells or sessions pointing at them say "the forms are in the old format; upgrade them in
+  the workflow library" when run. You get a notification after connecting, and a banner at the top of the workflow library: **Review
+  and upgrade** lists the files to rewrite on that server — only Mosael's marks in each file change, not a byte else, and any file just
+  changed in ComfyUI is skipped. One confirmation upgrades the whole server and tells you how many were upgraded and which were
+  skipped. Afterwards the places that used a form still use it.
 - The form shows only the items you picked, in your order, with your names; the tool "Workflow · name" takes only those
   items too.
 - **Items you didn't pick run as authored**: a prompt field that isn't the main prompt keeps the text saved in the
@@ -591,9 +606,9 @@ beside it:
   (the full name first, then without the extension) and lists the site, repository, exact file name, size and base model, exact names
   first and never picking a similar one for you; click one to confirm in place and download it into that folder, or paste a link right
   there when nothing turns up. After a download or install finishes it checks again by itself.
-- **Simplified form**: the editor from the workflow library, bound to the graph on the canvas. **Sync to canvas** only puts the form onto the
-  nodes on the canvas — **nothing is saved yet**; **Save** in the top bar then stores it in the workflow file, together with any other
-  change on the canvas.
+- **Forms**: the editor from the workflow library, bound to the graph on the canvas (several forms, new, copy and delete work the same).
+  **Sync to canvas** only puts the forms onto the nodes on the canvas — **nothing is saved yet**; **Save** in the top bar then stores them
+  in the workflow file, together with any other change on the canvas.
 - **Run & results**: **Run** runs **the graph on the canvas right now (including unsaved changes)** as an ordinary generation task (it
   shows in the task center, can be cancelled, is resumed after Mosael restarts, and its results go into the asset library). The canvas
   highlights the running node as usual and the panel says which node is running and at which step; finished results are **grouped by

@@ -1288,11 +1288,11 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
       "models": [{"folder": "checkpoints", "name": "…", "present": true}],
       "missing_nodes": [{"type": "CR Prompt Text", "count": 2, "packs": [{"id": "…", "title": "…", "installed": false}]}],
       "missing_models": [{"folder": "vae", "name": "ae.safetensors", "url": "https://huggingface.co/…"}],
-      "app": {                                                    // 可选:它的应用表单(ADR 0038),见下
-        "status": "ok", "app": true, "title": "换装", "description": "", "fields": 2, "invalid": 1,
-        "items": [{"key": "10.image", "node": "10", "input": "image", "label": "人物", "main": false},
-                  {"key": "3.cfg", "node": "3", "input": "cfg", "label": "", "problem": "给人看的原因"}],
-        "results": ["17"]
+      "app": {                                                    // 可选:它的表单(ADR 0038、0045),见下
+        "status": "ok", "upgradable": false, "invalid": 1, "stray": 0, "results": ["17"],
+        "forms": [{"id": "app", "title": "换装", "description": "", "fields": 2, "invalid": 1,
+                   "items": [{"key": "10.image", "node": "10", "input": "image", "label": "人物", "main": false},
+                             {"key": "3.cfg", "node": "3", "input": "cfg", "label": "", "problem": "给人看的原因"}]}]
       }
     }],
     "folders": ["sub", "sub/草稿"],                                // 可选:workflows/ 里的子目录(相对 workflows/),空的也报
@@ -1318,10 +1318,12 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   **只删空的**:里面还有文件回 `{"not_empty": true, "count": 3}`(宿主翻成 409 `not_empty`)。文件夹路径和工作流路径同一套分段规则,
   不以 `.json` 结尾;宿主先查一遍,挪进自己里面的不交给插件。改名、删除之后宿主让目录重拉(里面的工作流换了路径),新建不拉。
 
-**应用表单**(ADR 0038 §2):作者从一张工作流全部能填的项里挑几项、起名、排序、收窄可选值、标哪个输出节点是结果,存进那张工作流
-自己的文件。`workflows` 里每一张可以带 `app`(上面那样):`status` 是 `none`(没有)/ `ok` / `unsupported`(版本不认识,带 `version`,
-按没有处理),`items` 是文件里的每一项(锚点 `node` + `input`,图级的种子 / 尺寸 / 跑几遍 `node` 是空串;对不上的带 `problem`),
-`results` 是标成结果的输出节点,`invalid` / `fields` 是对不上的和有效的各几项。宿主只认根图上的节点号(数字)。
+**表单**(ADR 0038 §2、ADR 0045 §7):作者从一张工作流全部能填的项里挑几项、起名、排序、收窄可选值,存进那张工作流自己的文件;
+一张工作流可以有几张表单(最多 20 张),各是它的一个入口;标哪个输出节点是结果按工作流记。`workflows` 里每一张可以带 `app`(上面
+那样):`status` 是 `none`(没有标记)/ `ok` / `unsupported`(版本不认识,带 `version`,按没有处理;`upgradable: true` 是上一版的格式,
+能经 `upgrade_marks` 改写),`forms` 是每张表单(`id` 是 1–8 位小写字母和数字;`items` 是文件里的每一项 —— 锚点 `node` + `input`,
+图级的种子 / 尺寸 / 跑几遍 `node` 是空串,对不上的带 `problem`;`invalid` / `fields` 是对不上的和有效的各几项),`results` 是标成结果的
+输出节点,`invalid` 是全部对不上的几项,`stray` 是对不上任何一张表单的标记几处(下次保存时清掉)。宿主只认根图上的节点号(数字)。
 
 - `{"op": "app", "path"}` → 不留调用记录,给编辑器:
 
@@ -1338,17 +1340,27 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
       "schema": {"type": "string", "enum": ["…"], "x-model-folder": "checkpoints"}  // 进参数表时的 JSON Schema 片段,同 op: models
     }],
     "outputs": [{"node": "17", "title": "高清", "class_type": "SaveImage", "media": "image"}],  // 交回结果的输出节点
-    "app": {"status": "none", "items": [], "results": []}         // 同 workflows 里的 app
+    "app": {"status": "ok", "upgradable": false, "forms": [{"id": "app", "title": "换装", "description": "", "items": […],
+            "fields": 2, "invalid": 0, "model": "portrait.json#app", "tool": "wf_3f2b1c9e8d7a_app"}],
+            "results": ["17"], "invalid": 0, "stray": 0}            // 同 workflows 里的 app,每张表单多带它的模型 id 和工具名
   }
   ```
   宿主把 `title` / `schema` 里给人看的字按读的人的语言挑好,`schema` 过一遍和 `op: models` 同一套规整;节点号不是根图上的
-  (`12:5`)照样列出来,标着这一版不能放进应用表单。
-- `{"op": "annotate", "path", "modified", "app": {"title", "description", "items": [{"node", "input", "label", "main"?, "choices"?}]} | null,
-  "results": ["17"]}` → `{"path", "modified": 写完之后的改动时间}`。`items` 的顺序就是表单的顺序;`app: null` 去掉应用表单(结果标记照写)。
-  **只改你自己的标记**,别的一个字都不动;这是工作流库里**唯一许覆盖写**的 op:先核对 `modified` 和那台机器上的改动时间,对不上
-  (在这之间被改过)就什么都不写、回 `{"stale": true, "modified": 现在的}`,宿主翻成 409 `stale`。宿主先查过形状(根图上的节点号、
-  图级只认 `seed` / `size` / `runs`、最多 200 项、每项最多 1000 个可选值、最多 64 个结果),界面每次都先确认;写成了宿主让这个连接的
-  目录重拉一遍。
+  (`12:5`)照样列出来,标着这一版不能放进表单。`app.status` 是 `unsupported`、`upgradable: true` 的是**上一版格式**的标记(这一版
+  不读,能经 `upgrade_marks` 改写过来);`upgradable: false` 的 `unsupported` 是更新的插件写的,只能升级插件。每张表单的 `model` /
+  `tool` 是它的模型 id 和工具名(说不出来是空串):宿主据此数「这个工作区里有几处在用它」,删表单之前说给作者听。带着 `content`
+  (工作台画布上那张)来问时宿主也带上 `path`(画布开的是哪张),只用来起这两个名字,不读文件。
+- `{"op": "annotate", "path", "modified", "forms": [{"id"?, "title", "description", "items": [{"node", "input", "label", "main"?,
+  "choices"?}]}], "results": ["17"]}` → `{"path", "modified": 写完之后的改动时间}`。`forms` 是**全部**表单(ADR 0045 §7:编辑器每次
+  交全部),顺序就是列出来的顺序,每张 `items` 的顺序就是表单的顺序;没给 `id` 的是新表单,插件起 id;`forms: []` 一张都不要(结果标记
+  照写)。**只改你自己的标记**,别的一个字都不动;这是工作流库里许覆盖写的两个 op 之一:先核对 `modified` 和那台机器上的改动时间,
+  对不上(在这之间被改过)就什么都不写、回 `{"stale": true, "modified": 现在的}`,宿主翻成 409 `stale`。宿主先查过形状(根图上的
+  节点号、图级只认 `seed` / `size` / `runs`、最多 20 张表单、id 是 1–8 位小写字母和数字且不重复、每张最多 200 项、每项最多 1000 个
+  可选值、最多 64 个结果),界面每次都先确认;写成了宿主让这个连接的目录重拉一遍。
+- `{"op": "upgrade_marks", "paths": [{"path", "modified"}]}` → `{"upgraded": [路径], "stale": [路径], "skipped": [路径], "gone": [路径],
+  "failed": [{"path", "reason"}]}`:把**上一版格式**的标记改写成这一版(ADR 0045 §7,维护者在工作流库的「查看并升级」里确认过一次)。
+  逐张:核对改动时间(对不上的 `stale`,不写)、只动你自己的标记、照原来的排版写回;已经不是上一版的 `skipped`;不在了的 `gone`;
+  一张出错不拦别的。宿主只认它问过的那几张,有改成的就让这个连接的目录重拉一遍(表单入口出来、一次性的改名照做)。
 
 **导入并补齐**(ADR 0035 §5):
 
@@ -1422,10 +1434,12 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
       "items": [{"key": "reference_image", "label": "人物照片"}, {"key": "prompt", "label": {"zh": "提示词", "en": "Prompt"}},
                 {"key": "3.steps", "label": "步数"}]
     },
-    "group": {"id": "portrait.json", "label": "portrait", "entry": "form"}  // 可选:是哪样东西的哪个入口,见下
+    "group": {"id": "portrait.json", "label": "portrait", "entry": "form", "order": 1}  // 可选:是哪样东西的哪个入口,见下
   }
 ],
  "moved": [{"key": "form-entries", "from": "portrait.json", "to": "portrait.json#app"}],  // 可选:一次性的改名,见下
+ "unavailable": [{"id": "old.json#app", "reason": {"zh": "…到工作流库里升级…", "en": "…"}}],  // 可选:认得、现在用不了的,见下
+ "library_upgrades": 1,                   // 可选:工作流库里有几张的标记是上一版的格式,见下
  "fingerprint": "9f2c…"                   // 可选:这份清单的指纹,见下面「目录变了就刷新」
 }
 ```
@@ -1468,11 +1482,18 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   就照这张表摆 —— 表上的项、表上的顺序、表上的名字,主提示词那一项说明它就是下面的输入框;`parameters` 里不在表上的
   (ComfyUI 的「结果取自」)另起一栏放在表后面。对不上的项(描述符里没有那个键)宿主丢掉。没有就按参数各自的样子分栏摆。
 - `group`(可选):这个模型是**哪样东西的哪个入口**(ADR 0045)—— `id`(那样东西的编号,同一组的几个模型这一格相同)、`label`
-  (它自己的名字,可以按语言分)、`entry`(`full` 是这样东西本身、全部参数;`form` 是它上面的一张表单)。ComfyUI:一张工作流有一个
+  (它自己的名字,可以按语言分)、`entry`(`full` 是这样东西本身、全部参数;`form` 是它上面的一张表单)、`order`(在这一组里排第几,
+  作者排的顺序;不给就是本身 0、表单 1)。ComfyUI:一张工作流有一个
   完整工作流入口(模型 id 是路径)和它上面每张表单各一个入口(`<路径>#<表单 id>`),`group.id` 都是路径。宿主不拼字符串:模型行
   存着它(`declared_group`),生成选项原样带出去(`group`,名字按看的人的语言挑好),界面主名写 `label`、第二行写「来自
-  {group.label} · 连接名」(表单入口)或「完整工作流 · 连接名」(有表单的完整入口),同一组的排在一起、按 `group.label` 也搜得到。
+  {group.label} · 连接名」(表单入口)或「完整工作流 · 连接名」(有表单的完整入口),同一组的排在一起(按 `order`)、按 `group.label`
+  也搜得到;下拉、添加节点、画板能力里有表单的那一组是一小组 —— 小标题 `group.label` + 连接名,下面「完整工作流」和每张表单各一行。
   形状不对的整条当没说。
+- `unavailable`(可选,在 `models` 旁边):你**认得、现在用不了**的模型 id 和为什么(`reason` 是一句话或按语言分的话;ComfyUI:表单
+  还是上一版格式的那几张工作流,它们的 `<路径>#app`)。不进目录;宿主记在连接上,有人拿这个 id 生成时照这句说(「现在用不了:……」),
+  不说「模型未启用或不存在」。清单里有的 id 写在这里也不认。
+- `library_upgrades`(可选,非负整数):这个连接的工作流库里有几张工作流的标记是**上一版格式**(要经 `upgrade_marks` 改写)。从 0
+  变成大于 0 的那一次,宿主给连接的主人发一条通知(他在的每个工作区一条),指去插件页 → 工作流库的「查看并升级」;不是每次刷新都发。
 - `moved`(可选,在 `models` 旁边):一次性的改名,和工具清单的 `moved` 同一个意思(见「运行时报出的工具」)。宿主每个连接每个
   `key` 做一次,在对齐目录**之前**:模型行**原地**改名(行 id 不变,默认模型、停用跟着新名字走),再改存着的 (连接, 模型) 引用 ——
   生成会话、生成记录和产出的素材、任务回执、用量和定价规则、定时任务、画板格子、工作流的生成节点和按生成选项 id 选的那几格
