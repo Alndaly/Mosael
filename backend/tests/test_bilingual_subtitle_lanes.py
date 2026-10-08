@@ -199,6 +199,12 @@ def _frame(stage: Path, plan, name: str, *, png_path: bool, monkeypatch: pytest.
     return np.asarray(Image.open(out).convert("RGB")).astype(int)
 
 
+#: 一行字里面也可能有整行空白:Linux 上的中文字体(CI 装 Chromium 依赖时带进来的文泉驿)把「字」顶上那一点
+#: 和下面的笔画隔开一两像素,按空白行切就把一行字切成了两带。行与行之间隔着十来像素(字号 32、行高 1.4),
+#: 比这宽的空白才算换行。
+_GLYPH_GAP_PX = 4
+
+
 def _line_bands(frame: np.ndarray) -> list[dict]:
     """白色墨迹按行带切开:每一带 = 一行字,记它的上下沿(行)和左右沿(列)。"""
     ink = (frame[..., 0] > 200) & (frame[..., 2] > 200)
@@ -212,6 +218,13 @@ def _line_bands(frame: np.ndarray) -> list[dict]:
             start = None
     if start is not None:
         bands.append((start, len(rows) - 1))
+    merged: list[tuple[int, int]] = []
+    for top, bottom in bands:
+        if merged and top - merged[-1][1] - 1 <= _GLYPH_GAP_PX:
+            merged[-1] = (merged[-1][0], bottom)
+        else:
+            merged.append((top, bottom))
+    bands = merged
     out = []
     for top, bottom in bands:
         cols = np.nonzero(ink[top : bottom + 1].any(axis=0))[0]
