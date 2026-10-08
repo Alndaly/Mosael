@@ -112,10 +112,11 @@ describe("时间线虚拟化", () => {
     expect(large.rendered).toBeLessThan(400);
 
     // 修之前(单机,jsdom,3000 段):拖动 ~280、点选 ~260、缩放 ~310ms;修之后 300 段和 3000 段都是 3 / 3 / 13ms
-    // 上下。整树协调时 3000 段是 300 段的十来倍;留三倍,再加 5ms 吸收亚毫秒那几步的抖动(比的是各自最快的那次)。
+    // 上下 —— 退化是几十倍。线画在十倍再加 20ms(比的是各自最快的那次):此前画在三倍 + 5ms,几个测试套同时在这台机器上
+    // 跑(负载 300)时,没退化的 3000 段拖动也量出 29ms 对 5ms,红了;而真退化的那种,十倍也拦得住。
     for (const step of ["drag", "select", "zoom"] as const) {
       expect(large[step], `${step}:300 段 ${small[step].toFixed(1)}ms,3000 段 ${large[step].toFixed(1)}ms`).toBeLessThan(
-        small[step] * 3 + 5,
+        small[step] * 10 + 20,
       );
     }
   }, 60_000);

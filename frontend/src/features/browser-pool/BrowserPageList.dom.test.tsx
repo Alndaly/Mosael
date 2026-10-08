@@ -29,13 +29,15 @@ const bridge = {
   closePage: vi.fn(async () => true),
   reorderPages: vi.fn(async () => true),
   newPage: vi.fn(async () => true),
-  setPagesInset: vi.fn(async () => undefined),
+  setPagesInset: vi.fn(async (_inset: number) => undefined),
   focusPage: vi.fn(async () => undefined),
 };
 
 beforeEach(() => {
   for (const fn of Object.values(bridge)) fn.mockClear();
   bridge.snapshotPage.mockImplementation(async () => SNAPSHOT);
+  bridge.setPagesInset.mockImplementation(async () => undefined);
+  bridge.coverPage.mockImplementation(async () => undefined);
   window.localStorage.clear();
   Object.defineProperty(window, "mosaelPublish", { configurable: true, value: bridge });
 });
@@ -284,6 +286,19 @@ describe("收起时临时展开(像 Arc)", () => {
 
 describe("展开、收起的过渡", () => {
   it("固定展开 → 收起:先拍下画面盖住网页,再让网页左侧变窄;列表和画面一起滑过去,走完才揭开", async () => {
+    //: 「网页变窄」那一刻的样子在那一刻记下来:滑动只有 180ms,事后再看,机器一忙(waitFor 隔 50ms 才看一眼、线程被抢)
+    //: 看到时已经滑完、揭开了 —— 并行满载时实测 `coverPage` 已经被叫过 false。
+    let sliding: Record<string, unknown> | null = null;
+    bridge.setPagesInset.mockImplementation(async (inset: number) => {
+      if (inset !== PAGE_LIST_COLLAPSED_WIDTH || sliding) return;
+      sliding = {
+        navWidth: nav().style.width,
+        navTransition: nav().style.transition,
+        frameLeft: backdropFrame()?.style.left,
+        frameTransition: backdropFrame()?.style.transition,
+        uncovered: bridge.coverPage.mock.calls.some(([covered]) => covered === false),
+      };
+    });
     render(<BrowserPageList state={state()} top={56} />);
     bridge.snapshotPage.mockImplementation(async () => ({ ...SNAPSHOT, bounds: { ...SNAPSHOT.bounds, x: 220, width: 1220 } }));
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
@@ -293,12 +308,14 @@ describe("展开、收起的过渡", () => {
     await coverLoads();
     // 画面先铺在网页原来的位置,对齐到像素。
     await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH));
-    // 盖着的时候列表和画面的左沿一起往回滑(同一条过渡)。
-    expect(nav().style.width).toBe(`${PAGE_LIST_COLLAPSED_WIDTH}px`);
-    expect(nav().style.transition).toContain("width 180ms");
-    expect(backdropFrame()!.style.left).toBe(`${PAGE_LIST_COLLAPSED_WIDTH}px`);
-    expect(backdropFrame()!.style.transition).toContain("left 180ms");
-    expect(bridge.coverPage).not.toHaveBeenCalledWith(false);
+    // 盖着的时候列表和画面的左沿一起往回滑(同一条过渡),那时还没揭开。
+    expect(sliding).toEqual({
+      navWidth: `${PAGE_LIST_COLLAPSED_WIDTH}px`,
+      navTransition: expect.stringContaining("width 180ms"),
+      frameLeft: `${PAGE_LIST_COLLAPSED_WIDTH}px`,
+      frameTransition: expect.stringContaining("left 180ms"),
+      uncovered: false,
+    });
     await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
     await waitFor(() => expect(backdrop()).toBeNull());
     expect(order(bridge.snapshotPage)).toBeLessThan(order(bridge.coverPage, true));
@@ -335,9 +352,11 @@ describe("展开、收起的过渡", () => {
     await peekOut(() => fireEvent.mouseEnter(nav()));
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
     await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH));
-    expect(bridge.coverPage).not.toHaveBeenCalledWith(false);
     expect(bridge.snapshotPage).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    //: 中途一次都没揭开:揭开只有最后那一次,排在网页挪好之后。按调用先后判,不在「看见网页挪好」那一刻去看还没揭开 ——
+    //: 那一刻之后只剩 180ms 的滑动,机器一忙,看的时候已经滑完、揭开了(并行满载时实测)。
+    expect(bridge.coverPage.mock.calls.filter(([covered]) => covered === false)).toHaveLength(1);
     expect(order(bridge.setPagesInset, PAGE_LIST_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
   });
 
@@ -346,10 +365,15 @@ describe("展开、收起的过渡", () => {
     render(<BrowserPageList state={state()} top={56} />);
     await peekOut(() => fireEvent.mouseEnter(nav()));
     expect(nav().style.transition).toContain("width 180ms");
+    //: 揭开那一刻列表是什么样子,在那一刻记下来(同上:不在事后去看「还没揭开」)。
+    const atUncover: (string | null)[] = [];
+    bridge.coverPage.mockImplementation(async (covered: boolean) => {
+      if (!covered) atUncover.push(listState());
+    });
     fireEvent.mouseLeave(nav());
     await waitFor(() => expect(listState()).toBe("collapsed"));
-    expect(bridge.coverPage).not.toHaveBeenCalledWith(false);
     await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    expect(atUncover, "揭开时列表已经收回了,不是一边揭开一边还在临时展开").toEqual(["collapsed"]);
   });
 
   it("要求减少动态:不过渡,但照样先盖后揭", async () => {

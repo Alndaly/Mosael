@@ -228,7 +228,8 @@ describe("工作台模型库里的模型详情", () => {
         return found!;
       });
       await new Promise((resolve) => setTimeout(resolve, 10));
-      const copy = within(dialog).getByRole("button", { name: /modelCopyName/ });
+      //: 详情的内容是另拉的(模型详情接口):等它画出来再点。此前同步取,机器一忙就「找不到复制名字」。
+      const copy = await within(dialog).findByRole("button", { name: /modelCopyName/ });
       fireEvent.pointerDown(copy);
       fireEvent.click(copy);
       fireEvent.keyDown(dialog, { key: "Escape" });
