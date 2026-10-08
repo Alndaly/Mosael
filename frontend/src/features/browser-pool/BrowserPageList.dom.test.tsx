@@ -262,7 +262,8 @@ describe("收起时临时展开(像 Arc)", () => {
     fireEvent.click(toggle);
     await waitFor(() => expect(listState()).toBe("expanded"));
     expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBeNull();
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH);
+    //: 让出多宽跟着动画的形状(usePageListMotion 的 shape)走,比 listState 晚一步;慢机器上晚得更多 —— 等它,不量先后。
+    await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH));
     await waitFor(() => expect(backdrop()).toBeNull());
     expect(bridge.coverPage).toHaveBeenLastCalledWith(false);
   });
