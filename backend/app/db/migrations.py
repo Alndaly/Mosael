@@ -8431,6 +8431,48 @@ def _migrate_webhook_secrets_are_hashed() -> None:
             )
 
 
+def _migrate_applied_moves_remember_old_names() -> None:
+    """`plugin_instances.applied_moves` 从 `{能力: [key…]}` 改成 `{能力: {key: [旧名字…]}}`(见 domain/plugins/moves,PLG-2):
+    一次性的改名按 key **和旧名字**记账 —— 同一批改名的几个名字不一定同一次报出来,只按 key 记,晚来的那几条会被当成做过了。
+
+    老账只说「这个 key 做过」,没说做了哪几个名字。那一次是按当时插件报的全部名字做的(1.20 读得懂当时每一张表单),所以换成
+    「这个连接现在有的全部名字」:生成目录是它的模型行的 id,工具清单是存着的工具名 —— 现在有的名字都已经是它们现在的意思,
+    以后报上来的、这里没有的旧名字(之后才升级上来的那几张)照样改一次。别的能力(插件以后自己报的)没有可数的名字,记成空的
+    一串。幂等:已经是新形状的那几格不动。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(plugin_instances)"))}
+        if "applied_moves" not in columns:
+            return
+        for instance_id, raw_moves, raw_tools in conn.execute(
+            text("SELECT id, applied_moves, discovered_tools FROM plugin_instances")
+        ).fetchall():
+            try:
+                ledger = json.loads(raw_moves) if isinstance(raw_moves, str) else (raw_moves or {})
+            except ValueError:
+                ledger = {}
+            if not isinstance(ledger, dict) or not any(isinstance(keys, list) for keys in ledger.values()):
+                continue
+            names: dict[str, list[str]] = {
+                "generation": sorted({str(row[0]) for row in conn.execute(text(
+                    "SELECT m.model_id FROM provider_models m JOIN provider_profiles p ON p.id = m.provider_profile_id"
+                    " WHERE p.plugin_instance_id = :i"), {"i": instance_id})}),
+            }
+            try:
+                tools = json.loads(raw_tools) if isinstance(raw_tools, str) else (raw_tools or [])
+            except ValueError:
+                tools = []
+            names["tools"] = sorted({str(one["name"]) for one in tools if isinstance(one, dict) and one.get("name")}) \
+                if isinstance(tools, list) else []
+            converted = {
+                capability: ({key: names.get(capability, []) for key in keys if isinstance(key, str)}
+                             if isinstance(keys, list) else keys)
+                for capability, keys in ledger.items()
+            }
+            conn.execute(text("UPDATE plugin_instances SET applied_moves = :m WHERE id = :i"),
+                         {"m": json.dumps(converted, ensure_ascii=False), "i": instance_id})
+
+
 def _drop_empty_agent_sessions() -> None:
     """删掉从没说过话的那些空对话(维护者 2026-10-07 确认)。
 
@@ -8982,6 +9024,8 @@ def migration_plan() -> MigrationPlan:
             #: 升级之前一轮结束时留下的、还挂在对话上等人的确认卡作废(此后由 host 在每一轮收尾时结掉,ADR 0007 修订)。
             #: 排在删空对话之后:被删的那些本来就没有卡。
             *_steps(MigrationPhase.AFTER_SCHEMA, _expire_orphaned_session_confirmations),
+            #: 一次性改名的老账按 key 记,换成按 key 和旧名字记(PLG-2):数的是这个连接现在的模型行和工具名。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_applied_moves_remember_old_names),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

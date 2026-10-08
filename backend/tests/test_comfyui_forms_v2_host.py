@@ -118,7 +118,8 @@ def test_查看并升级_改完表单入口出来_老引用改到表单入口(ol
         assert db.scalar(select(GenerationSession.model).where(GenerationSession.workspace_id == ws)) == \
             "portrait.json#app", "从 1.20 之前直接升上来的:改写之后照样做一次改名"
         instance = db.get(PluginInstance, instance_id)
-        assert instance.applied_moves == {"generation": ["form-entries"], "tools": ["form-entries"]}
+        assert instance.applied_moves == {"generation": {"form-entries": ["portrait.json"]},
+                                          "tools": {"form-entries": [FULL_TOOL]}}, "按 key 和旧名字记账(PLG-2)"
         assert instance.capability_status["generation"]["library_upgrades"] == 0
 
 

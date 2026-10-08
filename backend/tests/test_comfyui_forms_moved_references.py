@@ -19,9 +19,9 @@ import copy
 from typing import Any
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, engine
 from app.db.models import (
     Board, GenerationJob, GenerationSession, PluginCapability, PluginInstance, ProviderModel, ProviderProfile, Workflow,
     WorkflowRevision,
@@ -59,8 +59,9 @@ def upgraded():
         ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         with SessionLocal() as db:
             instance = db.get(PluginInstance, instance_id)
-            assert instance.applied_moves == {"generation": ["form-entries"], "tools": ["form-entries"]}, \
-                "新接上的连接第一次刷新就记了账(那时一条引用都没有)"
+            assert instance.applied_moves == {"generation": {"form-entries": ["portrait.json"]},
+                                              "tools": {"form-entries": [FULL_TOOL]}}, \
+                "新接上的连接第一次刷新就记了账(那时一条引用都没有):按 key 和旧名字记"
             instance.applied_moves = {}
             profile = db.scalar(select(ProviderProfile).where(ProviderProfile.plugin_instance_id == instance_id))
             db.execute(delete(ProviderModel).where(ProviderModel.provider_profile_id == profile.id,
@@ -135,7 +136,7 @@ def test_升级后第一次刷新_老引用改到表单入口_只做一次(upgra
             select(PluginCapability).where(PluginCapability.instance_id == ids["instance"]))}
         assert toggles[FORM_TOOL] is False and toggles[FULL_TOOL] is False, "用户关掉的那个开关,跟着新名字照旧关着"
         assert db.get(PluginInstance, ids["instance"]).applied_moves == {
-            "generation": ["form-entries"], "tools": ["form-entries"]}
+            "generation": {"form-entries": ["portrait.json"]}, "tools": {"form-entries": [FULL_TOOL]}}
 
         # 之后特意选的完整工作流:再刷新也不会被改走
         session = GenerationSession(workspace_id=ids["ws"], owner_user_id=user_id(), provider_profile_id=ids["profile"],
@@ -179,6 +180,78 @@ def test_工具改名有一处没改成_整批撤掉不记账_清单照样存下
     monkeypatch.undo()
     _refresh(client, ids["instance"])
     with SessionLocal() as db:
-        assert db.get(PluginInstance, ids["instance"]).applied_moves["tools"] == ["form-entries"]
+        assert db.get(PluginInstance, ids["instance"]).applied_moves["tools"] == {"form-entries": [FULL_TOOL]}
         nodes = {node["id"]: node for node in db.get(Workflow, ids["workflow"]).graph["nodes"]}
         assert nodes["tool"]["type"] == f"plugin.{PACKAGE}.{FORM_TOOL}"
+
+
+def test_同一批改名分两次报上来_后报的那张照样改_先改过的不再改(upgraded) -> None:
+    """PLG-2:从 1.20 之前直接升到 1.21 的人,上一版格式的表单要在工作流库里「查看并升级」之后插件才报那条改名;「查看并升级」时
+    一张刚在 ComfyUI 里改过被跳过、下次再升级,它的改名就晚一次才来。账只按 key 记的话,先来的那张做了、记了 key,晚来的那张被当成
+    「做过了」—— 它的老引用(那时指的是表单)悄悄变成跑完整工作流。现在按 key 和旧名字记。"""
+    client, comfy, ids = upgraded
+    # 第二张有表单的工作流先还是上一版格式(这一版不读,不报改名),第一次刷新只改 portrait.json 那张
+    later = copy.deepcopy(comfy.state.workflows["portrait.json"])
+    later["id"] = "b2f4c3e8-1111-4222-8333-944455556666"
+    later_v1 = copy.deepcopy(later)
+    later_v1["extra"] = {"mosael": {"version": 1, "app": {"title": "晚升级的", "description": "", "graph_items": {}}}}
+    next(one for one in later_v1["nodes"] if one["id"] == 6)["properties"] = {
+        "mosael": {"expose": {"text": {"order": 0, "main": True}}}}
+    comfy.state.workflows["later.json"] = later_v1
+    with SessionLocal() as db:
+        db.add(GenerationSession(workspace_id=ids["ws"], owner_user_id=user_id(), provider_profile_id=ids["profile"],
+                                 model="later.json", kind="image", title="晚升级那张的老会话"))
+        db.commit()
+    _refresh(client, ids["instance"])
+    with SessionLocal() as db:
+        sessions = {one.title: one.model for one in db.scalars(
+            select(GenerationSession).where(GenerationSession.workspace_id == ids["ws"]))}
+        assert sessions["晚升级那张的老会话"] == "later.json", "还是上一版格式:插件不报它的改名,不动"
+        assert db.get(PluginInstance, ids["instance"]).applied_moves["generation"] == {"form-entries": ["portrait.json"]}
+
+    # 后来升级了(改写成第 2 版,id 是 app 的那张照报改名)
+    comfy.state.workflows["later.json"] = _formed(later)
+    _refresh(client, ids["instance"])
+    with SessionLocal() as db:
+        sessions = {one.title: one.model for one in db.scalars(
+            select(GenerationSession).where(GenerationSession.workspace_id == ids["ws"]))}
+        assert sessions["晚升级那张的老会话"] == "later.json#app", "同一个 key 下晚报上来的旧名字照样改一次"
+        assert db.scalar(select(GenerationSession.model).where(GenerationSession.workspace_id == ids["ws"],
+                                                               GenerationSession.title != "晚升级那张的老会话")) \
+            == "portrait.json#app", "先改过的不再改"
+        moves = db.get(PluginInstance, ids["instance"]).applied_moves
+        assert moves["generation"] == {"form-entries": ["later.json", "portrait.json"]}
+        assert sorted(moves["tools"]["form-entries"]) == sorted([FULL_TOOL, "wf_b2f4c3e81111"])
+
+
+def test_老账只按_key_记的_迁成按旧名字记_那时有的名字都算做过_再跑一次不变(upgraded) -> None:
+    """迁移(PLG-2):老账 `{"generation": ["form-entries"]}` 没说做了哪几个名字。那一次是按当时插件报的全部名字做的,所以换成这个
+    连接现在有的全部名字(模型行的 id、存着的工具名)—— 之后特意选的完整工作流不会因为换了记账的形状被改走。"""
+    from app.db.migrations import _migrate_applied_moves_remember_old_names
+
+    client, _, ids = upgraded
+    _refresh(client, ids["instance"])
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE plugin_instances SET applied_moves = :m WHERE id = :i"),
+                     {"m": '{"generation": ["form-entries"], "tools": ["form-entries"]}', "i": ids["instance"]})
+    with SessionLocal() as db:
+        session = GenerationSession(workspace_id=ids["ws"], owner_user_id=user_id(), provider_profile_id=ids["profile"],
+                                    model="portrait.json", kind="image", title="之后特意选的完整工作流")
+        db.add(session)
+        db.commit()
+        session_id = session.id
+        models = sorted(db.scalars(select(ProviderModel.model_id).where(ProviderModel.provider_profile_id == ids["profile"])))
+        tools = sorted({tool["name"] for tool in db.get(PluginInstance, ids["instance"]).discovered_tools})
+
+    _migrate_applied_moves_remember_old_names()
+    with SessionLocal() as db:
+        moves = db.get(PluginInstance, ids["instance"]).applied_moves
+    assert moves == {"generation": {"form-entries": models}, "tools": {"form-entries": tools}}
+    assert "portrait.json" in models and FULL_TOOL in tools
+
+    _refresh(client, ids["instance"])
+    with SessionLocal() as db:
+        assert db.get(GenerationSession, session_id).model == "portrait.json", "那时有的名字算做过:不再改"
+    _migrate_applied_moves_remember_old_names()
+    with SessionLocal() as db:
+        assert db.get(PluginInstance, ids["instance"]).applied_moves == moves, "已经是新形状:再跑一次不变"

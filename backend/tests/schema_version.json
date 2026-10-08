@@ -39,6 +39,7 @@
     "migrate-agent-sessions-remember-where-they-were-opened",
     "migrate-agent-skills-remember-the-drafting-session",
     "migrate-agent-thinking-level",
+    "migrate-applied-moves-remember-old-names",
     "migrate-asset-extractions-remember-page-images",
     "migrate-assets-get-a-name-sort-key",
     "migrate-assets-know-if-they-are-intermediate",

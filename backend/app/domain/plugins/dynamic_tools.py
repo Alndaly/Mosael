@@ -243,7 +243,7 @@ def _apply_moves(db: Session, instance: PluginInstance, raw: Any, names: set[str
         with db.begin_nested():
             inst.carry_capabilities(db, instance, renames)
             plugin_moves.tools_moved(db, instance, renames)
-            plugin_moves.record(db, instance, TOOLS, list(moves))
+            plugin_moves.record(db, instance, TOOLS, moves)
     except Exception:  # noqa: BLE001 — 跟着动的那一侧出错,不让清单刷新本身失败
         logger.exception("插件实例 %s 的工具改名没做成,下次刷新再来", instance.id)
 

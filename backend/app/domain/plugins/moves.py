@@ -2,14 +2,18 @@
 
 和 `replaces`(见 domain/workflows/plugin_references)不一样:那是「老工具不在了 / 换了写法,存着的老节点改写过来」,每次清单
 刷新都对一遍账;这里的 `from` **还在**,只是意思变了 —— ComfyUI 一张有表单的工作流,它的路径、工具名以前指那张表单,从插件
-1.20 起指完整工作流,表单搬到 `<路径>#app` / `wf_<id>_app`。所以只能做**一次**:做两次的话,升级之后才有人特意选的完整工作流
-也会被改走。插件每次都报(它不知道宿主做没做过),宿主按 `key` 记账,每个连接、每种清单(生成目录 / 工具清单)只做一次:
+1.20 起指完整工作流,表单搬到 `<路径>#app` / `wf_<id>_app`。所以每个名字只能改**一次**:改两次的话,改过之后才有人特意选的
+完整工作流也会被改走。插件每次都报(它不知道宿主做没做过),宿主按 `key` **和旧名字**记账,每个连接、每种清单(生成目录 /
+工具清单)、每个旧名字只做一次:
 
     {"op": "models"} → {"models": [...], "moved": [{"key": "form-entries", "from": "a.json", "to": "a.json#app"}], ...}
     {"op": "tools"}  → {"tools": [...],  "moved": [{"key": "form-entries", "from": "wf_x", "to": "wf_x_app"}], ...}
 
-账记在连接上(`plugin_instances.applied_moves`:`{"generation": [key…], "tools": [key…]}`)。存着的引用怎么改由各个领域自己做
-(生成目录的见 providers.moved_models,工具的由这里的监听转给工作流、画板),插件域不认识它们。
+账记在连接上(`plugin_instances.applied_moves`:`{"generation": {key: [旧名字…]}, "tools": {key: [旧名字…]}}`)。**按旧名字记,
+不只按 key**:同一批改名的几个名字不一定同一次报出来 —— 从 1.20 之前直接升到 1.21 的人,上一版格式的表单要在工作流库里
+「查看并升级」之后才报,一张刚在 ComfyUI 里改过被跳过、下次再升级,它的那条改名晚一次才来;只按 key 记的话,先来的那张做了、
+记了 key,晚来的那张被当成「做过了」,它的老引用悄悄变成跑完整工作流(PLG-2)。存着的引用怎么改由各个领域自己做(生成目录
+的见 providers.moved_models,工具的由这里的监听转给工作流、画板),插件域不认识它们。
 """
 
 from __future__ import annotations
@@ -29,6 +33,8 @@ _MAX_NAME = 600
 
 #: 改名:key → {旧名字: 新名字}。
 Moves = dict[str, dict[str, str]]
+#: 一种清单上一个 key 最多记多少个旧名字(同 MAX_MOVES:一次清单最多报这么多条)。
+MAX_RECORDED = MAX_MOVES
 
 
 def clean_moves(raw: Any, known: set[str]) -> Moves:
@@ -49,16 +55,32 @@ def clean_moves(raw: Any, known: set[str]) -> Moves:
     return found
 
 
+def _done(instance: PluginInstance, capability: str) -> dict[str, set[str]]:
+    ledger = (instance.applied_moves or {}).get(capability)
+    if not isinstance(ledger, dict):
+        return {}
+    return {key: {one for one in names if isinstance(one, str)} for key, names in ledger.items() if isinstance(names, list)}
+
+
 def pending(instance: PluginInstance, capability: str, moves: Moves) -> Moves:
-    """这个连接在这种清单上还没做过的那几批。"""
-    done = set((instance.applied_moves or {}).get(capability) or [])
-    return {key: renames for key, renames in moves.items() if key not in done}
+    """这个连接在这种清单上还没做过的那几条:按 key 和旧名字认,同一个 key 下没改过的旧名字照样做(见模块说明)。"""
+    done = _done(instance, capability)
+    out: Moves = {}
+    for key, renames in moves.items():
+        left = {source: target for source, target in renames.items() if source not in done.get(key, set())}
+        if left:
+            out[key] = left
+    return out
 
 
-def record(db: Session, instance: PluginInstance, capability: str, keys: list[str]) -> None:
-    """记下这几批在这个连接上做过了(不提交:和改写本身在同一个事务里)。整份换掉:JSON 列上的就地修改 ORM 看不见。"""
-    applied = {name: list(value) for name, value in (instance.applied_moves or {}).items()}
-    applied[capability] = sorted(set(applied.get(capability) or []) | set(keys))
+def record(db: Session, instance: PluginInstance, capability: str, moves: Moves) -> None:
+    """记下这几条在这个连接上做过了(不提交:和改写本身在同一个事务里)。整份换掉:JSON 列上的就地修改 ORM 看不见。"""
+    applied = {name: (dict(value) if isinstance(value, dict) else value)
+               for name, value in (instance.applied_moves or {}).items()}
+    ledger = {key: list(names) for key, names in _done(instance, capability).items()}
+    for key, renames in moves.items():
+        ledger[key] = sorted(set(ledger.get(key, [])) | set(renames))[-MAX_RECORDED:]
+    applied[capability] = ledger
     instance.applied_moves = applied
     db.flush()
 

@@ -231,7 +231,7 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
         # 停用跟着走 —— 再对齐目录(旧名字那一行由目录重新建出来,是它现在指的那件事)。和目录在同一个事务里提交。
         try:
             moved_models.apply(db, profile, plugin_moves.merged(moves))
-            plugin_moves.record(db, instance, GENERATION, list(moves))
+            plugin_moves.record(db, instance, GENERATION, moves)
         except Exception as exc:  # noqa: BLE001 — 改不成就整个不动,下次刷新再来:目录和引用不能一半新一半旧
             db.rollback()
             from app.domain.jobs import blame
