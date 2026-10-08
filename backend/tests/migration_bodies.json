@@ -167,6 +167,7 @@
   "migrate-prompt-requirement-becomes-one-field": "77ebf38260052f65",
   "migrate-provider-capabilities": "078521db72c4dc2e",
   "migrate-provider-credentials": "e1ec21bd2b2a1506",
+  "migrate-provider-credentials-remember-rejected-refresh": "db36f7164024ffe3",
   "migrate-provider-default-model-fk": "720f912cf23d4bb2",
   "migrate-provider-defaults-per-person": "106eac96ef194094",
   "migrate-provider-model-capability-ref": "8d845ad1603e6504",

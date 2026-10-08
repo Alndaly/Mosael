@@ -18,10 +18,10 @@ from app.core.i18n import LocalizedError
 from app.db.models import ProviderCredential, ProviderProfile
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
-from app.domain.providers.auth import read_credential, refresh_recently_failed
+from app.domain.providers.auth import needs_reauthorization
 from app.domain.providers.plugin_vendor import package_of
 from app.domain.providers.presets import ProviderField, provider_definition
-from app.domain.providers.quota import is_expired, supports_quota
+from app.domain.providers.quota import supports_quota
 from app.domain.providers.selection import normalize_auth_type, pi_provider_id
 
 
@@ -140,12 +140,11 @@ def describe_connection(db: Session, profile: ProviderProfile, user_id: str) -> 
         "oauth_linked": oauth_linked,
         "quota_supported": supports_quota(pi_provider_id(profile.vendor)),
         # **「过期」不等于「要你重新授权」。** 订阅计划的 access token 普遍只有几小时,刷新是协议
-        # 里就有的一步,后台会自己做(见 provider_auth.refresh_expired_in_background)。只按
-        # is_expired 报的话,任何人只要在过期窗口里打开设置页,就会看到一行红字说「需重新授权」
-        # —— 而它几秒后自己就好了。过期**且**最近真的刷不动,才是需要人来处理的事。
-        "oauth_expired": (
-            oauth_linked and is_expired(read_credential(credential)) and refresh_recently_failed(profile.id)
-        ),
+        # 里就有的一步,后台会自己做(见 provider_auth.refresh_expired_in_background)。要人来处理的只有一种:
+        # 对方明确拒绝了刷新(invalid_grant、400/401……)—— 那一刻记在钥匙上(provider_auth.note_refresh_failure),
+        # 重启也不丢;网络不通、对方 5xx 不算。此前按「进程内存里最近刷不动」判:对话里刷新被拒不会记进去,
+        # 重启又清空,于是授权早失效了,连接行还写「已授权」。
+        "oauth_expired": oauth_linked and needs_reauthorization(credential),
     }
 
 

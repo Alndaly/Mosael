@@ -29,6 +29,7 @@ from app.domain.providers.auth import (
     CredentialLeaseError,
     acquire_lease,
     commit_credential,
+    note_refresh_failure,
     read_credential,
     release_lease,
     renew_lease,
@@ -52,6 +53,8 @@ class CommitIn(BaseModel):
     #: acquire 时拿到的版本号。租约过期时靠它判断「这期间有没有别人写过」——
     #: 没人写过就照写,因为手上这份是刚换出来的唯一有效凭据(见 commit_credential)。
     base_version: int | None = None
+    #: release 时:刷新为什么失败(pi 那句错误连同它的 cause,原文)。对方明确拒绝的,凭据记成要重新授权。
+    refresh_error: str | None = None
 
 
 class CommitOut(BaseModel):
@@ -108,7 +111,12 @@ def renew_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user:
 
 
 @router.post("/agent/provider-credentials/{profile_id}/release", status_code=204)
-def release_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user: CurrentUser) -> None:
-    """刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。"""
+def release_credential_lease(profile_id: str, body: CommitIn, db: Tx, user: CurrentUser) -> None:
+    """刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。
+
+    带着失败原因(`refresh_error`)来的:对方明确拒绝了,就在这里把凭据记成要重新授权(见 note_refresh_failure)——
+    所有刷新都从这条路过,这是唯一的判点。"""
     _require_owned_profile(db, profile_id, user.id)
+    if body.refresh_error:
+        note_refresh_failure(db, profile_id, user.id, body.refresh_error)
     release_lease(profile_id, user.id, body.lease)

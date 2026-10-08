@@ -88,6 +88,9 @@ class ProviderCredential(Base):
     #: 同一份 OAuth 凭据,后写的会把已被服务端轮换作废的 refresh token 覆盖回去 ——
     #: 表现为用户莫名其妙被登出。写入时带上读到的版本,不匹配就拒绝(见 credentials 路由)。
     credential_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    #: 存着的这份 OAuth 凭据,对方上一次明确说不认了是什么时候(刷新被拒:invalid_grant、400/401…,见
+    #: providers.auth.refresh_was_rejected)。有值 = 要重新授权。写进新凭据(重新授权、刷新成功)时清掉。
+    oauth_rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

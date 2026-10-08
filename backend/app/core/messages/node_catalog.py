@@ -39,6 +39,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "aiErr_compactFailed": {"zh": "压缩失败", "en": "Compaction failed"},
     "aiErr_compactNoResult": {"zh": "压缩没有返回结果", "en": "Compaction returned no result"},
     "aiErr_refreshFailed": {"zh": "刷新凭据失败", "en": "Could not refresh the credentials"},
+    "aiErr_oauthExpired": {
+        "zh": "这条订阅连接的授权已经过期(对方不再接受存着的令牌)。去「设置 → 模型供应商」点「重新授权」,再发一次。",
+        "en": "This subscription connection's sign-in has expired (the provider no longer accepts the saved token). "
+              "Go to Settings → Model providers, choose Re-authorize, then send again.",
+    },
     "aiErr_refreshNoResult": {"zh": "刷新凭据没有返回结果", "en": "Refreshing the credentials returned no result"},
     "wfNode_ai_generate_source_assets": {"zh": "每行一条 `素材id` 或 `素材id:角色`。角色:{roles_zh};不写角色时图生视频按首帧、图生图按参考图。", "en": "One `asset_id` or `asset_id:role` per line. Roles: {roles}. With no role, image-to-video treats it as the first frame and image-to-image as a reference image."},
     "wfNode_publish": {"zh": "发布", "en": "Publish"},

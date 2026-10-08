@@ -5480,6 +5480,18 @@ def _migrate_plugin_authorization_rejected() -> None:
             conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN authorization_rejected_at DATETIME"))
 
 
+def _migrate_provider_credentials_remember_rejected_refresh() -> None:
+    """`provider_credentials.oauth_rejected_at`:对方上一次明确拒绝刷新这份订阅凭据是什么时候(要重新授权)。
+
+    `create_all` 不给已有的表加列,所以在它之前。表不在的跳过 —— 那种库由 `create-current-schema` 直接建成带这一列的
+    样子。可空、没有缺省:老凭据一律「没被拒过」;真被拒的,下一次刷新撞上时当场记下。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_credentials)"))}
+        if columns and "oauth_rejected_at" not in columns:
+            conn.execute(text("ALTER TABLE provider_credentials ADD COLUMN oauth_rejected_at DATETIME"))
+
+
 def _migrate_plugin_connections_choose_package_sources() -> None:
     """包镜像由宿主给:`tts_config.npm_registry`(管理 → 下载源的 npm 那一行)、`plugin_instances.package_sources`
     (连接自己的覆盖,见 domain/plugins/package_sources)。
@@ -9468,6 +9480,7 @@ def migration_plan() -> MigrationPlan:
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
+                _migrate_provider_credentials_remember_rejected_refresh,
                 _migrate_plugin_connections_choose_their_network,
                 _migrate_plugin_connections_choose_package_sources,
                 _migrate_drop_the_community_integration,

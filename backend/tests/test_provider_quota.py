@@ -283,15 +283,16 @@ def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
     """刷不动才是用户需要知道的事(refresh token 被吊销、账号在别处登出)—— 那时前端用
     警告色说"需重新授权"。同时:失败不该让最常被拉的这个接口每次都去起一次 node 撞同一堵墙。"""
     from app.domain.providers import auth as provider_auth
-    from app.ai.sidecar.pi_client import SidecarError
+    from tests.refusing_sidecar import KIMI_REJECTED, refusing
 
     client, profile_id, _ = _expired_oauth_client("掉线的订阅")
 
     attempts = {"n": 0}
+    refuse = refusing(KIMI_REJECTED)
 
     def failing_refresh(**kwargs):
         attempts["n"] += 1
-        raise SidecarError("refresh token 已失效")
+        refuse(**kwargs)
 
     monkeypatch.setattr(provider_auth, "refresh_oauth_credential", failing_refresh)
     # 第一次拉列表只是把刷新放到后台(列表不等它):这一次说「已授权」还是「需重新授权」都行 —— 看后台那次刷新

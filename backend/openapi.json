@@ -26063,7 +26063,7 @@
           "agent-credentials"
         ],
         "summary": "Release Credential Lease",
-        "description": "刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。",
+        "description": "刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。\n\n带着失败原因(`refresh_error`)来的:对方明确拒绝了,就在这里把凭据记成要重新授权(见 note_refresh_failure)——\n所有刷新都从这条路过,这是唯一的判点。",
         "operationId": "release_credential_lease_api_agent_provider_credentials__profile_id__release_post",
         "parameters": [
           {
@@ -32947,6 +32947,17 @@
               }
             ],
             "title": "Base Version"
+          },
+          "refresh_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Error"
           }
         },
         "type": "object",

@@ -16,6 +16,7 @@
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 
 import { log } from "./protocol.js";
+import { describeError } from "./errors";
 
 /**
  * acquire 撞上别人持锁时的重试。
@@ -102,9 +103,10 @@ export class BackendCredentialStore implements CredentialStore {
       // 用旧的去换只会拿到 invalid_grant。
       next = await fn(lease.credential ?? undefined);
     } catch (error) {
-      // 刷新失败就立刻放手,不然下一轮对话要白等一个 TTL。
+      // 刷新失败就立刻放手,不然下一轮对话要白等一个 TTL。带上为什么失败:对方明确不认这份凭据了(invalid_grant、400/401),
+      // 后端在这里把它记成「要重新授权」—— 所有刷新都从这一处过(对话、设置页续期、查额度、拉模型目录)。
       clearInterval(renewing);
-      await this.post("/release", { lease: lease.lease }).catch(() => undefined);
+      await this.post("/release", { lease: lease.lease, refresh_error: describeError(error) }).catch(() => undefined);
       throw error;
     }
     clearInterval(renewing);

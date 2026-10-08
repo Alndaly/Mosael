@@ -15,7 +15,8 @@ token 通常是**一次性**的 —— 换出新 access token 的同时旧 refre
 被杀、超时),不能让一次崩溃把某个供应商永久锁死。
 
 后半截是**设置页上的自动续期**(`refresh_expired_in_background`):列连接时顺手把过期的订阅令牌
-在后台刷一遍,刷不动的记进一张冷却表(`refresh_recently_failed`),界面据此才说「需重新授权」。
+在后台刷一遍;刷不动的进一张冷却表(`refresh_recently_failed`),免得每次进设置页都去撞同一堵墙。要不要重新授权
+不看它,看对方有没有明确拒绝(见「刷新被对方拒绝」那一节)。
 """
 
 from __future__ import annotations
@@ -29,11 +30,12 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.pi_client import SidecarError, refresh_oauth_credential
+from app.ai.sidecar.pi_client import SidecarError, refresh_oauth_credential, refresh_was_rejected
 from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
 from app.db.models import ProviderCredential, ProviderProfile
+from app.db.models import now as models_now
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers.quota import is_expired
 from app.domain.providers.selection import pi_provider_id
@@ -193,6 +195,8 @@ def commit_credential(
             raise CredentialLeaseError("credLeaseErr_badCredential")
     row = provider_credentials.upsert(db, profile_id, user_id)
     row.oauth_credential = credential
+    #: 写进来的是一份新凭据(刷新成功、重新授权、登出):对方拒绝的是**上一份**,那句「要重新授权」跟着它走。
+    row.oauth_rejected_at = None
     row.credential_version = (row.credential_version or 0) + 1
     db.flush()
     db.refresh(row)
@@ -200,6 +204,34 @@ def commit_credential(
     # 提交归入口(路由的 Tx);没提交成(回滚)就不放,等 TTL 收回 —— 和此前提交失败时一样。
     after_commit(db, lambda: release_lease(profile_id, user_id, lease_token))
     return row
+
+
+# ---------------- 刷新被对方拒绝:要重新授权 ----------------
+#
+# 订阅凭据的刷新都由 pi 在 sidecar 里做,而且都走同一条路:CredentialStore.modify → acquire → 刷新 → commit;刷新抛错时
+# sidecar 带着那句错误来 release(见 agent-sidecar/src/credentials.ts)。对话、设置页的自动续期、查额度、拉模型目录 ——
+# 谁触发的刷新都从这一处过,所以「刷不动了」在这一处判、在这一处记,不按触发的入口、也不按供应商各写一遍。
+#
+# **只认对方明确的拒绝。** 网络不通、超时、对方 5xx 不是「授权失效」—— 下次多半就好,把它说成要重新授权是在没坏的时候
+# 喊坏。判据只有一份:pi_client.refresh_was_rejected(对话那一路把同一种失败说成「去重新授权」,用的也是它)。
+
+def note_refresh_failure(db: Session, profile_id: str, user_id: str, error: str) -> bool:
+    """记下一次刷新失败。对方明确拒绝的,这份凭据记成「要重新授权」(不提交);返回记了没有。"""
+    if not refresh_was_rejected(error):
+        logger.warning("provider %s 的订阅凭据这次没刷成(不是对方拒绝,不改状态):%s", profile_id, error[:300])
+        return False
+    row = provider_credentials.get(db, profile_id, user_id)
+    if row is None or row.oauth_credential is None:
+        return False
+    if row.oauth_rejected_at is None:
+        row.oauth_rejected_at = models_now()
+        logger.warning("provider %s 的订阅凭据被对方拒绝,记成要重新授权:%s", profile_id, error[:300])
+    return True
+
+
+def needs_reauthorization(credential: ProviderCredential | None) -> bool:
+    """这把钥匙上的订阅凭据是不是被对方拒绝过、还没重新授权。"""
+    return credential is not None and credential.oauth_credential is not None and credential.oauth_rejected_at is not None
 
 
 # ---------------- 设置页上的自动续期 ----------------
@@ -245,7 +277,8 @@ def refresh_expired_in_background(
     oauth = [
         (profile, credential)
         for profile, row in connections
-        if profile.auth_type == "oauth" and (credential := read_credential(row)) is not None
+        #: 被对方拒绝过的不再去刷:换不出来,只会再撞一次同一堵墙。重新授权会清掉那个标记。
+        if profile.auth_type == "oauth" and not needs_reauthorization(row) and (credential := read_credential(row)) is not None
     ]
     for profile, credential in oauth:
         if not is_expired(credential):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import logging
 import threading
 import os
@@ -526,6 +527,11 @@ def _run_pi(
                 }
                 if error_code in TURN_CUT_SHORT:
                     raise SidecarError(detail, failed_state, human=detail, **error_kwargs)
+                if OAUTH_REFRESH_FAILED in detail and refresh_was_rejected(detail):
+                    # 订阅连接的授权失效了(对方拒绝刷新):说清楚、给去处(界面认 code),原文收进详情。凭据已经在 sidecar
+                    # 放手时记成要重新授权(见 providers.auth.note_refresh_failure),设置页那一行同时变成「授权过期」。
+                    error_kwargs["code"] = "oauth_expired"
+                    raise SidecarError(detail, failed_state, human=tr("aiErr_oauthExpired"), **error_kwargs)
                 if not saw_tool:
                     raise SidecarError(
                         "aiErr_turnFailedCheckProvider", failed_state, detail=detail,
@@ -649,6 +655,30 @@ def compact_session(
             child.finish()
             raise _reported(event, "aiErr_compactFailed")
     raise SidecarError(_tail(child.finish()) or "aiErr_compactNoResult")
+
+
+#: pi 刷新订阅凭据失败时包的那一层(auth/resolve:`OAuth refresh failed for <provider>`),后面跟着各家自己的原话。
+OAUTH_REFRESH_FAILED = "OAuth refresh failed"
+_REJECTED = re.compile(
+    r"invalid_grant|authorization grant is invalid|unauthori[sz]ed|refresh token (?:is )?(?:invalid|expired|revoked)|revoked",
+    re.IGNORECASE,
+)
+_STATUS = re.compile(r"(?:status|failed|\()\s*(?:code\s*)?:?\s*([1-5]\d\d)\b", re.IGNORECASE)
+
+
+def refresh_was_rejected(error: str) -> bool:
+    """一次订阅凭据的刷新失败,是不是**对方明确不认这份凭据了**(要重新授权)。网络不通、超时、对方 5xx 不算 —— 下次多半就好,
+    说成要重新授权是在没坏的时候喊坏。
+
+    各家的错误原文不一样(pi 按供应商各写各的),认的是它们共有的那几样:OAuth 的 invalid_grant、「unauthorized」、
+    令牌端点回的 400 / 401 / 403。网络错误(fetch failed、超时)、5xx 里没有这几样,自然不算。
+    `error` 是连同 cause 的整句(sidecar 的 describeError)。**判据只有这一份**:
+    凭据记成要重新授权(providers.auth.note_refresh_failure)和对话里那句「去重新授权」都用它。
+    """
+    if not error:
+        return False
+    statuses = {int(code) for code in _STATUS.findall(error)}
+    return bool(_REJECTED.search(error)) or bool(statuses & {400, 401, 403})
 
 
 def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, profile_id: str, credential: dict | None) -> bool:

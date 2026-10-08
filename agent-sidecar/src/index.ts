@@ -24,6 +24,7 @@ import { watchParent } from "./lifetime.js";
 import { installProxyFromEnv } from "./proxy.js";
 import { refreshCredential, runCompaction, runGatewayCompletion, runPiTurn } from "./pi.js";
 import { buildAllTools } from "./tools.js";
+import { describeError } from "./errors";
 
 /**
  * Turns currently running, so a later frame can reach into one.
@@ -209,7 +210,7 @@ async function main(): Promise<void> {
         // turn is running — impossible to deliver.
         running.add(msg.turnId);
         void handleRunTurn(msg)
-          .catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) }))
+          .catch((err) => send({ type: "error", turnId: msg.turnId, message: describeError(err) }))
           .finally(() => {
             active.delete(msg.turnId);
             abortPending.delete(msg.turnId);
@@ -218,7 +219,7 @@ async function main(): Promise<void> {
           });
       } else if (msg.type === "gateway_complete") {
         oneShot(
-          handleGatewayCompletion(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })),
+          handleGatewayCompletion(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: describeError(err) })),
         );
       } else if (msg.type === "steer") {
         const agent = active.get(msg.turnId);
@@ -243,11 +244,11 @@ async function main(): Promise<void> {
         send({ type: "queued", turnId: msg.turnId, mode: "steer", pending: Boolean(agent) && msg.prompts.length > 0 });
       } else if (msg.type === "refresh_credential") {
         oneShot(
-          handleRefreshCredential(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })),
+          handleRefreshCredential(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: describeError(err) })),
         );
       } else if (msg.type === "compact") {
         // 同样不 await:压缩要调一次模型做摘要,期间 stdin 仍要能收 abort。
-        oneShot(handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: String(err) })));
+        oneShot(handleCompact(msg).catch((err) => send({ type: "error", turnId: msg.turnId, message: describeError(err) })));
       } else if (msg.type === "abort") {
         const agent = active.get(msg.turnId);
         if (running.has(msg.turnId)) stopped.add(msg.turnId);
@@ -265,7 +266,7 @@ async function main(): Promise<void> {
             // 授权失败的原因往往在栈里(某一步 pi 内部拿不到东西),而协议帧只带 message。
             // stderr 是调试通道,不进协议,所以这里可以放全量。
             log("auth login failed:", (err as Error)?.stack ?? String(err));
-            send({ type: "error", turnId: msg.loginId, message: String(err) });
+            send({ type: "error", turnId: msg.loginId, message: describeError(err) });
           })
           .finally(() => logins.delete(msg.loginId));
       } else if (msg.type === "auth_answer") {
@@ -278,7 +279,7 @@ async function main(): Promise<void> {
         log("unknown message type:", (msg as { type?: string }).type ?? "(none)");
       }
     } catch (err) {
-      send({ type: "error", turnId: (msg as { turnId?: string }).turnId ?? null, message: String(err) });
+      send({ type: "error", turnId: (msg as { turnId?: string }).turnId ?? null, message: describeError(err) });
     }
   }
   // **真的退出**,而不是让 main() 返回。轮次是故意不 await 的,读循环结束时可能还挂着一次

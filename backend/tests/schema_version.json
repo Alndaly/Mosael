@@ -1,5 +1,5 @@
 {
-  "version": 17,
+  "version": 18,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -169,6 +169,7 @@
     "migrate-prompt-requirement-becomes-one-field",
     "migrate-provider-capabilities",
     "migrate-provider-credentials",
+    "migrate-provider-credentials-remember-rejected-refresh",
     "migrate-provider-default-model-fk",
     "migrate-provider-defaults-per-person",
     "migrate-provider-model-capability-ref",

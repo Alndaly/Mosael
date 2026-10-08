@@ -142,13 +142,10 @@ def test_an_expired_token_being_refreshed_does_not_cry_wolf(monkeypatch) -> None
 
 
 def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> None:
-    """反过来:真的刷不动就必须说。不然「需重新授权」这个状态等于没有了。"""
-    from app.ai.sidecar.pi_client import SidecarError
+    """反过来:对方明确拒绝了刷新(invalid_grant、400/401)就必须说。不然「需重新授权」这个状态等于没有了。"""
+    from tests.refusing_sidecar import KIMI_REJECTED, refusing
 
-    def refuse(**kwargs):
-        raise SidecarError("OAuth refresh failed for anthropic: fetch failed")
-
-    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", refuse)
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", refusing(KIMI_REJECTED))
     provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
@@ -159,6 +156,20 @@ def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> Non
     assert until(lambda: profile_id in provider_auth._refresh_failed_at), "后台刷新压根没跑"
 
     assert _listed(client)["oauth_expired"] is True, "刷不动了却不说,用户无从知道要重新授权"
+
+
+def test_a_network_failure_does_not_ask_to_reauthorize(monkeypatch) -> None:
+    """断网、对方 5xx 不是授权失效:下次多半就好。说成「需重新授权」是在没坏的时候喊坏。"""
+    from tests.refusing_sidecar import NETWORK_DOWN, refusing
+
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", refusing(NETWORK_DOWN))
+    provider_auth._refresh_failed_at.clear()
+
+    client = fresh_client()
+    _expired_subscription(client)
+    profile_id = _listed(client)["id"]
+    assert until(lambda: profile_id in provider_auth._refresh_failed_at), "后台刷新压根没跑"
+    assert _listed(client)["oauth_expired"] is False
 
 
 def test_a_healthy_subscription_is_never_flagged(monkeypatch) -> None:

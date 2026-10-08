@@ -116,15 +116,22 @@ const NEW = { type: "oauth", access: "新", refresh: "r2", expires: 3 };
   const store = new BackendCredentialStore(base, "tok", "prof-2", OLD);
   await assert.rejects(
     store.modify("prof-2", async () => {
-      throw new Error("invalid_grant");
+      throw new Error("OAuth refresh failed for kimi-coding", {
+        cause: new Error("Kimi Code token refresh unauthorized (status 400): invalid_grant"),
+      });
     }),
-    /invalid_grant/,
+    /OAuth refresh failed/,
     "刷新失败必须原样抛出,让上层知道要重新登录",
   );
   assert.deepEqual(
     calls.map((c) => c.step),
     ["acquire", "release"],
     "刷新失败没有放手 —— 下一轮对话要白等一个 TTL",
+  );
+  assert.equal(
+    calls[1].body.refresh_error,
+    "Error: OAuth refresh failed for kimi-coding: Kimi Code token refresh unauthorized (status 400): invalid_grant",
+    "release 要带上失败原因连同 cause —— 后端靠里面那句(400、invalid_grant)判要不要重新授权",
   );
   server.close();
 }

@@ -125,6 +125,19 @@ describe("配置类的失败(UC-05)", () => {
     expect(settings.opened).toEqual(["providers:chat"]);
   });
 
+  it("订阅连接授权过期:气泡说去重新授权,给一颗去模型供应商那一页的按钮,原文收进详情", () => {
+    render(
+      <AgentErrorCard
+        content="这条订阅连接的授权已经过期(对方不再接受存着的令牌)。去「设置 → 模型供应商」点「重新授权」,再发一次。"
+        error="ModelsError: OAuth refresh failed for kimi-coding: Kimi Code token refresh unauthorized (status 400)"
+        code="oauth_expired"
+      />,
+    );
+    expect(screen.getByText(/授权已经过期/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /agentReauthorize/ }));
+    expect(settings.opened.at(-1)).toBe("providers:chat");
+  });
+
   it("别的失败不冒出这颗按钮", () => {
     render(<AgentErrorCard content="智能体执行失败，请稍后重试。" error="Connection error." code="output_limit" />);
     expect(screen.queryByRole("button", { name: /agentConfigureModel/ })).toBeNull();

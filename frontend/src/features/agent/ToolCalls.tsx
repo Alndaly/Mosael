@@ -684,9 +684,11 @@ export function AgentTurnContent({
 
 /** 失败轮的错误卡:标题 + 可展开的原始错误,而不是把「执行失败」当正常回答铺开。 */
 /** 后端在失败的那一轮上记的机器原因(`payload.error_code`):这几种在气泡上给一个能点的去处。 */
-const ERROR_FIXES: Record<string, { label: "agentConfigureModel"; go: () => void }> = {
+const ERROR_FIXES: Record<string, { label: "agentConfigureModel" | "agentReauthorize"; go: () => void }> = {
   //: 没有可用的对话模型:去设置里配一个(和模型选择器空着时那颗按钮同一个去处)。
   no_chat_model: { label: "agentConfigureModel", go: () => gotoSettings("providers:chat") },
+  //: 订阅连接的授权过期了(对方拒绝刷新):去模型供应商那一页,那条连接上就是「授权过期 · 重新授权」。
+  oauth_expired: { label: "agentReauthorize", go: () => gotoSettings("providers:chat") },
 };
 
 /**

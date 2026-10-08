@@ -223,7 +223,10 @@ def test_the_migration_adds_missing_columns_to_an_existing_credential_table() ->
     from sqlalchemy import text
 
     from app.core.db import engine
-    from app.db.migrations import _migrate_provider_credentials
+    from app.db.migrations import (
+        _migrate_provider_credentials,
+        _migrate_provider_credentials_remember_rejected_refresh,
+    )
 
     admin, _mate = _deployment_admin_and_member()
     profile_id = _connection(admin)
@@ -245,6 +248,7 @@ def test_the_migration_adds_missing_columns_to_an_existing_credential_table() ->
         conn.execute(text("UPDATE provider_profiles SET api_key = 'sk-LEGACY' WHERE id = :i"), {"i": profile_id})
 
     _migrate_provider_credentials()  # 不该抛
+    _migrate_provider_credentials_remember_rejected_refresh()  # 计划里排在它后面,补上后来加的列
 
     from app.domain.providers import credentials as provider_credentials
 

@@ -8709,6 +8709,9 @@ export interface paths {
         /**
          * Release Credential Lease
          * @description 刷新失败时主动放手,不必等 TTL 到期 —— 否则下一轮对话要白等半分钟。
+         *
+         *     带着失败原因(`refresh_error`)来的:对方明确拒绝了,就在这里把凭据记成要重新授权(见 note_refresh_failure)——
+         *     所有刷新都从这条路过,这是唯一的判点。
          */
         post: operations["release_credential_lease_api_agent_provider_credentials__profile_id__release_post"];
         delete?: never;
@@ -11715,6 +11718,8 @@ export interface components {
             } | null;
             /** Base Version */
             base_version?: number | null;
+            /** Refresh Error */
+            refresh_error?: string | null;
         };
         /** CommitOut */
         CommitOut: {
