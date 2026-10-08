@@ -10,7 +10,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuItemBody } from "@/components/ui/menu";
 import { Truncate } from "@/components/ui/truncate";
-import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { ConfirmDialog, NoticeDialog, RenameDialog } from "@/components/app/modals";
 import { TagsDialog } from "@/components/app/TagsDialog";
 import { ActiveTagChips, TagFilter } from "@/components/app/TagFilter";
 import { TagChips } from "@/features/media/TagChips";
@@ -56,7 +56,8 @@ export function MediaPool({
   const [renaming, setRenaming] = React.useState<AssetCard | null>(null);
   const [editingTags, setEditingTags] = React.useState<AssetCard | null>(null);
   const [deleting, setDeleting] = React.useState<AssetCard | null>(null);
-  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  //: 删不掉时的原因(还在发布的素材删不了、没有权限……),单独一个框说,不留在「确认删除?」里。
+  const [deleteRefused, setDeleteRefused] = React.useState<string | null>(null);
   // 人声分离 / 降噪处理的是整份素材、产出进素材库 —— 和素材库那边是同一个实现。
   const audioActions = useAssetAudioActions();
   // 类型、标签筛选和素材库一个规矩:记住,切走再回来还在。键和素材库分开 —— 这里看的是
@@ -121,12 +122,10 @@ export function MediaPool({
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteAsset(id),
-    onSuccess: () => {
-      setDeleting(null);
-      setDeleteError(null);
-      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-    },
-    onError: (error) => setDeleteError(String((error as Error).message)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() }),
+    //: 成没成都先关掉确认框:没成的话再点「确认」只是又被拒一次。
+    onSettled: () => setDeleting(null),
+    onError: (error) => setDeleteRefused(String((error as Error).message)),
   });
   return (
     // 三行:头 / 筛选条 / 列表(列表占满余高并自滚)。头和筛选条左右都是 px-3;列表的左右留白
@@ -248,13 +247,16 @@ export function MediaPool({
       <ConfirmDialog
         open={deleting !== null}
         title={t("deleteConfirmTitle")}
-        body={deleteError ?? t("deleteAssetBody")}
-        onCancel={() => {
-          setDeleting(null);
-          setDeleteError(null);
-        }}
+        body={t("deleteAssetBody")}
+        onCancel={() => setDeleting(null)}
         pending={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
+      />
+      <NoticeDialog
+        open={deleteRefused !== null}
+        title={t("deleteAssetRefusedTitle")}
+        body={deleteRefused ?? ""}
+        onClose={() => setDeleteRefused(null)}
       />
     </section>
   );

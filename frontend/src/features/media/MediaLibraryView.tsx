@@ -27,7 +27,7 @@ import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { SearchInput } from "@/components/ui/search-input";
-import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
+import { ConfirmDialog, NoticeDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/recordingContext";
@@ -100,7 +100,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [deleting, setDeleting] = React.useState<ActionTarget | null>(null);
   //: 详情按 id 开(AssetPreviewModalById 自己取完整字段):列表只带卡片字段,深链点名的那一份也不一定在已经翻到的几页里。
   const [previewingId, setPreviewingId] = React.useState<string | null>(null);
-  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  //: 删不掉时给人看的那一句(还在发布的素材删不了、没有权限……):标题说删了几份没成,正文是后端说的原因。
+  const [deleteRefused, setDeleteRefused] = React.useState<{ title: string; body: string } | null>(null);
   const [editingTags, setEditingTags] = React.useState<ActionTarget | null>(null);
   //: 右键「设为某个资产的参考图…」(ADR 0027):图片和视频能当参考图。
   const [referencing, setReferencing] = React.useState<ActionTarget | null>(null);
@@ -251,7 +252,6 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const remove = useMutation({
     mutationFn: (id: string) => deleteAsset(id),
     onSuccess: (_, id) => {
-      setDeleteError(null);
       //: 从详情里删的:那一份没了,详情跟着关。
       setPreviewingId((current) => (current === id ? null : current));
       void refresh();
@@ -262,7 +262,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     onSettled: () => {
       setDeleting(null);
     },
-    onError: (error) => setDeleteError(String((error as Error).message)),
+    onError: (error) => setDeleteRefused({ title: t("deleteAssetRefusedTitle"), body: String((error as Error).message) }),
   });
   const saveTags = useMutation({
     mutationFn: ({ id, tags }: { id: string; tags: string[] }) => setAssetTags(id, tags),
@@ -306,7 +306,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     onSuccess: (failures) => {
       setBatchDeleting(false);
       clearSelection();
-      if (failures.length > 0) setDeleteError(failures.join("\n"));
+      if (failures.length > 0) {
+        setDeleteRefused({
+          title: t("deleteAssetsPartlyRefusedTitle").replace("{n}", String(failures.length)),
+          body: failures.join("\n"),
+        });
+      }
       void refresh();
     },
   });
@@ -689,18 +694,18 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         onSubmit={(tags) => tags.length > 0 && batchAddTags.mutate(tags)}
       />
       <ConfirmDialog
-        open={deleting !== null || (deleteError !== null && !batchDeleting)}
+        open={deleting !== null}
         title={t("deleteConfirmTitle")}
-        body={deleteError ?? t("deleteAssetBody")}
-        onCancel={() => {
-          setDeleting(null);
-          setDeleteError(null);
-        }}
+        body={t("deleteAssetBody")}
+        onCancel={() => setDeleting(null)}
         pending={remove.isPending}
-        onConfirm={() => {
-          if (deleting) remove.mutate(deleting.id);
-          else setDeleteError(null);
-        }}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+      />
+      <NoticeDialog
+        open={deleteRefused !== null}
+        title={deleteRefused?.title ?? ""}
+        body={deleteRefused?.body ?? ""}
+        onClose={() => setDeleteRefused(null)}
       />
       <ConfirmDialog
         open={batchDeleting}

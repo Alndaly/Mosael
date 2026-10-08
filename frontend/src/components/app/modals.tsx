@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useI18n } from "@/app/preferences";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -321,6 +322,40 @@ export function ConfirmDialog({
           >
             {confirmLabel ?? t("confirm")}
           </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+/**
+ * 只告诉人一件事 —— 做不了、为什么 —— 只有一个「知道了」。
+ *
+ * 和 ConfirmDialog 分开:那边的标题是「确认删除?」、按钮是一颗红的「确认」。一次删除被拒之后此前就在那个框里换上原因,
+ * 标题还问着「确认删除?」,再点「确认」只是又被拒一次。被拒了就换成这个:说清是什么、为什么,点了就关。
+ */
+export function NoticeDialog({
+  open,
+  title,
+  body,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  body: string;
+  onClose: () => void;
+}) {
+  const t = useI18n();
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          {/* 一次删好几份时一行一份,原因各写各的。 */}
+          <AlertDialogDescription className="whitespace-pre-line">{body}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={onClose}>{t("noticeGotIt")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
