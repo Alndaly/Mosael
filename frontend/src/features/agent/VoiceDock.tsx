@@ -162,7 +162,6 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     >
       <IconButton
         unstyled
-        type="button"
         className={cn(
           "relative grid size-[52px] cursor-grab touch-none place-items-center rounded-full p-0",
           "border border-floating-border bg-panel/90 shadow-[var(--shadow-panel)] backdrop-blur-xl",
@@ -205,7 +204,6 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
           那一下开关 —— 于是"收起来"变成了"先开始对话再收起来"。 */}
       <IconButton
         unstyled
-        type="button"
         data-no-drag
         className="absolute -right-1 -top-1 z-[1] hidden size-[18px] cursor-pointer place-items-center rounded-full border border-floating-border bg-panel text-muted-foreground hover:text-destructive group-hover/dock:grid"
         label={t("voiceDockHide")}

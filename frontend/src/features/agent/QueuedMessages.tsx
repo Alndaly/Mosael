@@ -58,7 +58,6 @@ export function QueuedMessages({
           </Hint>
           <IconButton
             unstyled
-            type="button"
             className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-[7px] py-[3px] text-ui-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             disabled={cancelling}
             onClick={() => onCancel(message.id)}

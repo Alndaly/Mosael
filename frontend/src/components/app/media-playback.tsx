@@ -391,7 +391,6 @@ export function VideoPlayer({
       {!playing && (
         <IconButton
           unstyled
-          type="button"
           label={t("boardPlay")}
           onClick={toggle}
           className="absolute inset-0 grid cursor-pointer place-items-center bg-black/10 transition-colors hover:bg-black/20"
@@ -406,16 +405,16 @@ export function VideoPlayer({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white opacity-0 transition-[opacity,transform] duration-160 group-hover/player:pointer-events-auto group-hover/player:translate-y-0 group-hover/player:opacity-100 group-focus-within/player:pointer-events-auto group-focus-within/player:translate-y-0 group-focus-within/player:opacity-100">
         <Scrubber media={ref} at={at} total={total} className="mb-0.5" trackClassName="bg-white/30" />
         <div className="flex items-center gap-1.5">
-          <IconButton unstyled type="button" label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
+          <IconButton unstyled label={t(playing ? "boardPause" : "boardPlay")} onClick={toggle} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             {playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           </IconButton>
           <span className="text-ui-2xs tabular-nums opacity-90">
             {compact ? mediaClock(total) : `${mediaClock(at)} / ${mediaClock(total)}`}
           </span>
-          <IconButton unstyled type="button" label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
+          <IconButton unstyled label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="ml-auto grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
           </IconButton>
-          <IconButton unstyled type="button" label={t("boardFullscreen")} onClick={() => onExpand ? onExpand() : void ref.current?.requestFullscreen?.()} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
+          <IconButton unstyled label={t("boardFullscreen")} onClick={() => onExpand ? onExpand() : void ref.current?.requestFullscreen?.()} className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md opacity-90 hover:bg-white/10 hover:opacity-100">
             <Maximize2 size={13} />
           </IconButton>
         </div>
@@ -470,7 +469,6 @@ export function AudioPlayerBar({
       />
       <IconButton
         unstyled
-        type="button"
         label={t(playing ? "boardPause" : "boardPlay")}
         onClick={toggle}
         className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full bg-action text-action-foreground transition-opacity hover:opacity-90"
@@ -483,7 +481,7 @@ export function AudioPlayerBar({
       <span className="shrink-0 text-ui-2xs tabular-nums">
         {mediaClock(at)} / {mediaClock(total)}
       </span>
-      <IconButton unstyled type="button" label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="shrink-0 cursor-pointer hover:text-foreground">
+      <IconButton unstyled label={t(muted ? "boardUnmute" : "boardMute")} onClick={toggleMute} className="shrink-0 cursor-pointer hover:text-foreground">
         {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
       </IconButton>
     </div>

@@ -73,7 +73,6 @@ function Chips({
           {String(value)}
           <IconButton
             unstyled
-            type="button"
             label={`${t("genFormRemoveChip")} ${value}`}
             hint={ariaLabel}
             className="cursor-pointer text-muted-foreground hover:text-foreground"
@@ -211,7 +210,6 @@ export function ProfileField({ label, children, onRemove }: { label: string; chi
         {onRemove && (
           <IconButton
             unstyled
-            type="button"
             label={`${label} ${t("genFormRemoveField")}`}
             /* 包一个圆框:光秃秃一个叉在一行文字右端,既看不出是可点的,也没有可点的边界。 */
             className="grid size-5 shrink-0 cursor-pointer place-items-center rounded-full border border-border text-faint transition-colors hover:border-border-strong hover:bg-secondary hover:text-foreground"

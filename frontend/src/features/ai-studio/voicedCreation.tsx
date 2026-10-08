@@ -506,7 +506,6 @@ function ScriptEditor({ draft, onSubmitChord }: { draft: PodcastDraft; onSubmitC
       </ol>
       <div className="flex items-center gap-2">
         <Button
-          type="button"
           variant="ghost"
           size="xs"
           className="text-muted-foreground"
@@ -694,13 +693,13 @@ export function PodcastDialogue({
   return (
     <div className={DIALOGUE_BLOCK_CLASS} data-podcast-dialogue="">
       <div className={DIALOGUE_ROW_CLASS}>
-        <Button type="button" variant="ghost" size="xs" className="text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Button variant="ghost" size="xs" className="text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
           <ChevronDown size={12} className={cn("transition-transform duration-100", !open && "-rotate-90")} />
           {t("createDialogueShow").replace("{n}", String(dialogue.length))}
         </Button>
         {onRescript && (
           <Hint label={t("createRescriptHint")}>
-            <Button type="button" variant="outline" size="xs" onClick={() => onRescript(scriptFromDialogue(dialogue, order), order)}>
+            <Button variant="outline" size="xs" onClick={() => onRescript(scriptFromDialogue(dialogue, order), order)}>
               <PenLine size={12} />
               {t("createRescript")}
             </Button>

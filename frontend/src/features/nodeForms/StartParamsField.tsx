@@ -222,7 +222,6 @@ export function StartParamsField({
                 />
               )}
               <IconButton
-                type="button"
                 variant="ghost"
                 size="icon-xs"
                 label={t("wfStartParamRequiredOf").replace("{name}", name)}
@@ -235,7 +234,6 @@ export function StartParamsField({
                 <Asterisk size={13} strokeWidth={row.required ? 2.75 : 2} />
               </IconButton>
               <IconButton
-                type="button"
                 variant="ghost"
                 size="icon-xs"
                 label={t("wfStartParamRemove").replace("{name}", name)}

@@ -186,7 +186,6 @@ export function EntityDetail({
         {/* 有封面就放大看它;还没有图就带去参考图那一页传一张。 */}
         <IconButton
           unstyled
-          type="button"
           onClick={() => (cover ? openCover(cover) : setTab("references"))}
           label={t(cover ? "imagePreviewTitle" : "entityReferences")}
           className={cn("relative grid aspect-[4/5] w-full max-w-[180px] place-items-center overflow-hidden rounded-xl border border-border bg-panel-inset p-0 text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", cover ? "cursor-zoom-in" : "cursor-pointer")}
@@ -514,7 +513,6 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
       {value && (
         <IconButton
           unstyled
-          type="button"
           label={t("entityClear")}
           onClick={(event) => {
             event.preventDefault();

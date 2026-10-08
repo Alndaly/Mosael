@@ -301,7 +301,7 @@ function MemoryRow({
             </time>
           </Hint>
           {(clipped || expanded) && (
-            <Button type="button" variant="inline" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+            <Button variant="inline" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
               {expanded ? t("collapse") : t("expand")}
               <ChevronDown className={cn("transition-transform", expanded && "rotate-180")} aria-hidden />
             </Button>
@@ -373,7 +373,7 @@ function MemoryEditorDialog({
       className="w-[480px]"
       footer={
         <>
-          <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>
+          <Button variant="outline" disabled={pending} onClick={onCancel}>
             {t("cancel")}
           </Button>
           <Button type="submit" form={formId} disabled={!canSave} loading={pending}>

@@ -103,7 +103,7 @@ function AdvancedToggle({
           {label}
           {/* 设过之后才给「跟随默认」——没设过时它本来就是跟随,常驻只会让人以为漏了什么。 */}
           {set && (
-            <Button type="button" variant="inline" onClick={() => onChange(null)}>
+            <Button variant="inline" onClick={() => onChange(null)}>
               {t("modelSettingsFollowDefault")}
             </Button>
           )}
@@ -198,11 +198,11 @@ function CapabilityRefField({
           管理入口仍然只从**用它的那个模型**进入:参数组本来就是为某个模型建的,
           单开一页的结果是那一页永远空着,而入口还挡在路上。 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button type="button" variant="inline" onClick={() => onDescribe(null)}>
+        <Button variant="inline" onClick={() => onDescribe(null)}>
           {t("modelGenerationRefDescribe")}
         </Button>
         {editableProfile && (
-          <Button type="button" variant="inline" onClick={() => onDescribe(editableProfile.id ?? null)}>
+          <Button variant="inline" onClick={() => onDescribe(editableProfile.id ?? null)}>
             {t("modelGenerationRefEditThis")}
           </Button>
         )}
@@ -329,7 +329,7 @@ export function ModelSettingsDialog({
       title={t("modelSettingsTitle")}
       footer={
         <>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
           <Button type="submit" form={formId} size="sm" disabled={!current} loading={save.isPending}>{t("save")}</Button>
         </>
       }
@@ -422,7 +422,7 @@ export function ModelSettingsDialog({
                 : t("modelCapabilitiesInheritNone")}
             </span>
           ) : (
-            <Button type="button" variant="inline" className="justify-self-start" onClick={() => setDraft((prev) => (prev ? { ...prev, capability_ids: [] } : prev))}>
+            <Button variant="inline" className="justify-self-start" onClick={() => setDraft((prev) => (prev ? { ...prev, capability_ids: [] } : prev))}>
               {t("modelCapabilitiesFollowPreset")}
             </Button>
           )}
@@ -682,7 +682,6 @@ function ProfileBody({
           {/* 返回,不是关闭 —— 关掉会把用户正在配的那个模型一起丢了。 */}
           <IconButton
             unstyled
-            type="button"
             label={t("back")}
             className="-ml-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             onClick={onBack}
@@ -697,8 +696,7 @@ function ProfileBody({
         <>
           {/* 删除只在编辑已有的那一份时出现,而且靠左 —— 和"保存"分开站,别让人误点。 */}
           {rowId && (
-            <Button
-              type="button" variant="ghost" size="sm"
+            <Button variant="ghost" size="sm"
               className="mr-auto text-destructive hover:text-destructive"
               loading={remove.isPending}
               onClick={() => remove.mutate()}
@@ -706,9 +704,8 @@ function ProfileBody({
               {t("delete")}
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={onBack}>{t("back")}</Button>
-          <Button
-            type="button" size="sm"
+          <Button variant="outline" size="sm" onClick={onBack}>{t("back")}</Button>
+          <Button size="sm"
             disabled={!name.trim()}
             loading={save.isPending}
             onClick={() => save.mutate({ name: name.trim(), capabilities: descriptor })}

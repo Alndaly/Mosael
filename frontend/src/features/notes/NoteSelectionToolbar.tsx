@@ -192,7 +192,6 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   const iconButton = (item: Item) => (
     <IconButton
       key={item.id}
-      type="button"
       variant="ghost"
       size="icon-xs"
       label={item.label}
@@ -217,7 +216,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   //: 按钮上只写「问 AI」,它会带上什么(选中的这段)悬停说一声。
   const askButton = onAskAi ? (
     <Hint label={s.askAiHint}>
-      <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()} onClick={() => withSelection(onAskAi)}>
+      <Button variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()} onClick={() => withSelection(onAskAi)}>
         <Bot />{s.askAi}
       </Button>
     </Hint>
@@ -274,7 +273,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
           {askButton}
           <Popover open={menu === "more"} onOpenChange={(open) => setMenu(open ? "more" : null)}>
             <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()}><MoreHorizontal />{ss.more}</Button>
+              <Button variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()}><MoreHorizontal />{ss.more}</Button>
             </PopoverTrigger>
             <MenuContent label={ss.more} align="start" className="max-h-[var(--radix-popover-content-available-height)] overflow-y-auto">
               {toolMenuItems(formats)}
@@ -290,7 +289,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
           {aiItems.length > 0 && (
             <Popover open={menu === "ai"} onOpenChange={(open) => setMenu(open ? "ai" : null)}>
               <PopoverTrigger asChild>
-                <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()}><Sparkles />{ss.ai}<ChevronDown /></Button>
+                <Button variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()}><Sparkles />{ss.ai}<ChevronDown /></Button>
               </PopoverTrigger>
               <MenuContent label={ss.ai} align="start" className="max-h-[var(--radix-popover-content-available-height)] overflow-y-auto">
                 {aiMenuItems()}

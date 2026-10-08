@@ -207,7 +207,6 @@ export function Inspector({
         <div className="flex items-center gap-0.5">
           <IconButton
             unstyled
-            type="button"
             className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
             label={t("deleteClip")}
             onClick={() => onDeleteClip(selectedClip.id)}
@@ -217,7 +216,6 @@ export function Inspector({
           {onClose && (
             <IconButton
               unstyled
-              type="button"
               className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
               label={t("close")}
               onClick={onClose}
@@ -343,7 +341,6 @@ export function Inspector({
                     <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(shownGain * 100)}%</span>
                     <IconButton
                       unstyled
-                      type="button"
                       label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
                       disabled={selectedClip.muted}
                       disabledReason={t("clipMuted")}
@@ -459,7 +456,6 @@ export function Inspector({
                     {row.kf ? (
                       <IconButton
                         unstyled
-                        type="button"
                         label={onKf ? t("kfRemoveHere") : t("kfAddHere")}
                         className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent", onKf ? "text-primary" : keyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
                         onClick={() => toggleProp(row.key as KfProp)}
@@ -792,15 +788,15 @@ function TextStylePanel({
       ))}
       {strokeCapped && <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{t("textStrokeCapped")}</p>}
       <div className="flex items-center gap-1">
-        <IconButton unstyled type="button" className={iconBtn(style.bold)} aria-pressed={style.bold} onClick={() => set({ bold: !style.bold })} label={t("textBold")}>
+        <IconButton unstyled className={iconBtn(style.bold)} aria-pressed={style.bold} onClick={() => set({ bold: !style.bold })} label={t("textBold")}>
           <Bold size={13} />
         </IconButton>
-        <IconButton unstyled type="button" className={iconBtn(style.italic)} aria-pressed={style.italic} onClick={() => set({ italic: !style.italic })} label={t("textItalic")}>
+        <IconButton unstyled className={iconBtn(style.italic)} aria-pressed={style.italic} onClick={() => set({ italic: !style.italic })} label={t("textItalic")}>
           <Italic size={13} />
         </IconButton>
         <span className="mx-0.5 h-4 w-px bg-border" />
         {([["left", AlignLeft, "textAlignLeft"], ["center", AlignCenter, "textAlignCenter"], ["right", AlignRight, "textAlignRight"]] as const).map(([align, Icon, labelKey]) => (
-          <IconButton key={align} unstyled type="button" className={iconBtn(style.align === align)} aria-pressed={style.align === align} onClick={() => set({ align })} label={t(labelKey)}>
+          <IconButton key={align} unstyled className={iconBtn(style.align === align)} aria-pressed={style.align === align} onClick={() => set({ align })} label={t(labelKey)}>
             <Icon size={13} />
           </IconButton>
         ))}

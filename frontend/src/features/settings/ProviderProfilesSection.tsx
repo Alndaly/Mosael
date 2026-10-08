@@ -318,7 +318,7 @@ export function ProviderProfilesSection({
         title={editing ? t("providerEdit") : t("providerAdd")}
         footer={
           <>
-            <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
+            <Button variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
             <Button type="submit" form={profileFormId} size="sm" loading={editing ? update.isPending : create.isPending}>
               {editing ? t("save") : <><Plus size={13} /> {t("providerAdd")}</>}
             </Button>

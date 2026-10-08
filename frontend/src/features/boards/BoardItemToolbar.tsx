@@ -179,7 +179,6 @@ export function ItemToolbar({
               <IconButton
                 unstyled
                 key={color}
-                type="button"
                 label={t(NOTE_COLOR_LABEL[color])}
                 aria-pressed={item.color === color}
                 className={cn(
@@ -415,7 +414,7 @@ export function ItemToolbar({
                   </a>
                 </Hint>
               ) : (
-                <IconButton key={marker} unstyled type="button" label={label} data-board-sequence-action={marker}
+                <IconButton key={marker} unstyled label={label} data-board-sequence-action={marker}
                         disabled={disabled} disabledReason={disabledReason} onClick={onClick}
                         className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">
                   {icon}
@@ -439,7 +438,6 @@ export function ItemToolbar({
         {single && item && onRename && (
           <IconButton
             unstyled
-            type="button"
             label={t("rename")}
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() => onRename(item.id)}
@@ -449,7 +447,6 @@ export function ItemToolbar({
         )}
         <IconButton
           unstyled
-          type="button"
           label={t("copy")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={onCopySelected}
@@ -458,7 +455,6 @@ export function ItemToolbar({
         </IconButton>
         <IconButton
           unstyled
-          type="button"
           label={t("delete")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
           onClick={onRemoveSelected}
@@ -508,7 +504,6 @@ function ToolbarIcon({
   return (
     <IconButton
       unstyled
-      type="button"
       label={label}
       hint={hint}
       aria-pressed={pressed === undefined ? undefined : pressed}
@@ -541,7 +536,6 @@ const MoreButton = React.forwardRef<HTMLButtonElement, { label: string } & Omit<
     <IconButton
       unstyled
       ref={ref}
-      type="button"
       label={label}
       aria-haspopup="menu"
       {...rest}

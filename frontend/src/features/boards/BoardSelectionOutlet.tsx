@@ -203,7 +203,6 @@ export function BoardSelectionOutlet({
       {sources.length > 0 && (
         <IconButton
           unstyled
-          type="button"
           data-selection-outlet=""
           label={label}
           onPointerDown={begin}

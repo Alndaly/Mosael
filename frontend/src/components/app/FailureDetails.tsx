@@ -83,7 +83,6 @@ export function WorkflowFailureDetails({ details }: { details: Details | undefin
           {/* 失败那一刻的画面。截图在执行器侧就缩到了 480 宽,这里按容器宽度显示即可;窄栏里看不清字,点开看大图。 */}
           <IconButton
             unstyled
-            type="button"
             label={t("viewFullSizeOf").replace("{name}", t("jobDetailScreenshot"))}
             className="block w-fit min-w-0 max-w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-transparent p-0"
             onClick={() =>

@@ -176,12 +176,12 @@ export function SkillEditorDialog({
       className="w-[720px] max-w-[calc(100vw-32px)]"
       footer={
         readOnly ? (
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose}>
             {t("close")}
           </Button>
         ) : (
           <>
-            <Button type="button" variant="outline" disabled={save.isPending} onClick={onClose}>
+            <Button variant="outline" disabled={save.isPending} onClick={onClose}>
               {t("cancel")}
             </Button>
             <Button type="submit" form={formId} disabled={!canSave} loading={save.isPending}>
@@ -305,7 +305,7 @@ function SkillFiles({ workspaceId, skill }: { workspaceId: string; skill: AgentS
               size="sm"
               className="w-[140px] font-mono text-ui-xs"
             />
-            <Button type="button" variant="outline" size="sm" loading={upload.isPending} onClick={() => input.current?.click()}>
+            <Button variant="outline" size="sm" loading={upload.isPending} onClick={() => input.current?.click()}>
               <Plus size={12} /> {t("agentSkillsAddFile")}
             </Button>
             <input

@@ -200,7 +200,6 @@ function CodeBlockView(labels: ReturnType<typeof nodeLabels>) {
           <span className="note-code-status" role="status">{status}</span>
           <IconButton
             unstyled
-            type="button"
             className="note-node-button"
             label={labels.copy}
             onClick={() => void copy()}

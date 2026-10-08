@@ -198,7 +198,6 @@ function OutputTile({ output, asset, treatment, alt, actions, onOpen, onReveal }
           ) : (
             <IconButton
               unstyled
-              type="button"
               label={t("viewFullSizeOf").replace("{name}", name)}
               className="block size-full cursor-zoom-in border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               onClick={onOpen}

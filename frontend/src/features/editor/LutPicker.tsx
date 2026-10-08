@@ -69,7 +69,6 @@ export function LutPicker({
         />
         <IconButton
           unstyled
-          type="button"
           className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
           label={t("lutUpload")}
           loading={upload.isPending}
@@ -80,7 +79,6 @@ export function LutPicker({
         {selectValue !== NONE && (
           <IconButton
             unstyled
-            type="button"
             className="inline-flex h-[22px] w-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border border-border bg-transparent text-muted-foreground enabled:hover:bg-muted enabled:hover:text-foreground disabled:cursor-default disabled:opacity-40"
             label={t("lutDelete")}
             loading={remove.isPending}

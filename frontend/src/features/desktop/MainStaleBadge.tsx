@@ -17,7 +17,6 @@ export function MainStaleBadge() {
   return (
     <IconButton
       unstyled
-      type="button"
       data-main-stale-badge=""
       className="relative inline-flex h-7 w-7 flex-none cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground [-webkit-app-region:no-drag] enabled:hover:bg-secondary enabled:hover:text-foreground disabled:cursor-default"
       label={t(canRestart ? "mainStaleText" : "mainStaleManual")}

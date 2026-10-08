@@ -64,7 +64,6 @@ export function BrowserPreview() {
         {!frame.label && <span className="min-w-0 flex-1" />}
         <IconButton
           unstyled
-          type="button"
           className="grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
           label={t("close")}
           onClick={() => setDismissedSession(frame.sessionId)}

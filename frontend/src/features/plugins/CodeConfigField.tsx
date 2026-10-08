@@ -149,7 +149,6 @@ export function CodeFieldEditor({
             <span className="flex-1" />
             {field.type === "json" && (
               <Button
-                type="button"
                 size="xs"
                 variant="ghost"
                 className="text-muted-foreground"
@@ -161,13 +160,12 @@ export function CodeFieldEditor({
               </Button>
             )}
             {canUndo ? (
-              <Button type="button" size="xs" variant="ghost" className="text-muted-foreground" disabled={disabled} onClick={undoClear}>
+              <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={disabled} onClick={undoClear}>
                 <Undo2 />
                 {t("undo")}
               </Button>
             ) : (
               <Button
-                type="button"
                 size="xs"
                 variant="ghost"
                 className="text-muted-foreground"

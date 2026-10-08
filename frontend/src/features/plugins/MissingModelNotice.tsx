@@ -39,7 +39,7 @@ export function MissingModelNotice({
         <>
           {upgradeIn && <UpgradeInLibraryButton instanceId={upgradeIn} workspaceId={workspaceId} />}
           {onPickAnother && (
-            <Button type="button" size="xs" variant="ghost" onClick={onPickAnother} data-model-missing-pick="">
+            <Button size="xs" variant="ghost" onClick={onPickAnother} data-model-missing-pick="">
               {t("genModelMissingPickAnother")}
             </Button>
           )}
@@ -57,7 +57,7 @@ export function UpgradeInLibraryButton({ instanceId, workspaceId }: { instanceId
   const instance = (packages.data ?? []).flatMap((one) => one.instances ?? []).find((one) => one.id === instanceId) ?? null;
   return (
     <>
-      <Button type="button" size="xs" variant="outline" loading={packages.isPending} disabled={!instance}
+      <Button size="xs" variant="outline" loading={packages.isPending} disabled={!instance}
               onClick={() => setOpen(true)} data-model-missing-upgrade="">
         {t("genModelMissingUpgrade")}
       </Button>

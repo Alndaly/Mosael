@@ -220,7 +220,6 @@ function FailureBody({
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
             {detail ? (
               <Button
-                type="button"
                 variant="inline"
                 aria-expanded={open}
                 aria-controls={detailId}
@@ -264,7 +263,7 @@ function MoreDetails(props: FailureCardProps & { centered?: boolean }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="inline" className="nodrag nopan shrink-0" data-failure-more="">
+        <Button variant="inline" className="nodrag nopan shrink-0" data-failure-more="">
           {t("failureDetail")}
         </Button>
       </PopoverTrigger>

@@ -74,7 +74,6 @@ export function JobResult({ job }: { job: Job }) {
               <IconButton
                 unstyled
                 key={id}
-                type="button"
                 label={asset?.name || t("imagePreviewTitle")}
                 onClick={() => openImagePreview({ ...gallery[index], gallery })}
                 className="relative aspect-square cursor-zoom-in overflow-hidden rounded-md border border-border bg-panel-inset p-0 hover:border-border-strong"

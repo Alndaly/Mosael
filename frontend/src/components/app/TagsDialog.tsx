@@ -51,10 +51,10 @@ export function TagsDialog({
       title={title}
       footer={
         <>
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+          <Button variant="outline" size="sm" onClick={onCancel}>
             {t("cancel")}
           </Button>
-          <Button type="button" size="sm" onClick={() => onSubmit(commitDraft())}>
+          <Button size="sm" onClick={() => onSubmit(commitDraft())}>
             {t("confirm")}
           </Button>
         </>
@@ -72,7 +72,6 @@ export function TagsDialog({
                 {tag}
                 <IconButton
                   unstyled
-                  type="button"
                   label={t("mediaRemoveTag").replace("{tag}", tag)}
                   className="ml-px grid place-items-center border-0 bg-transparent p-0 text-inherit opacity-70 hover:opacity-100"
                   onClick={() => setTags((current) => current.filter((item) => item !== tag))}

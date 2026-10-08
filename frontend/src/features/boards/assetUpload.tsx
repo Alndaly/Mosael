@@ -164,13 +164,12 @@ export function AssetUploadStatus({ upload, className }: { upload: AssetUpload; 
         </>
       )}
       {state.status === "failed" && (
-        <Button type="button" size="xs" variant="ghost" className="shrink-0 gap-1" onClick={upload.retry}>
+        <Button size="xs" variant="ghost" className="shrink-0 gap-1" onClick={upload.retry}>
           <RotateCcw size={12} />
           {t("retry")}
         </Button>
       )}
       <IconButton
-        type="button"
         size="icon-xs"
         variant="ghost"
         label={state.status === "uploading" ? t("assetUploadCancel") : t("close")}

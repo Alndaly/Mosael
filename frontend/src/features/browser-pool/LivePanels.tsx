@@ -151,7 +151,6 @@ export function LivePanels() {
               {isTop && (
                 <IconButton
                   unstyled
-                  type="button"
                   label={t(card.muted ? "livePanelUnmute" : "livePanelMute")}
                   aria-pressed={!card.muted}
                   className="pointer-events-auto grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
@@ -163,7 +162,6 @@ export function LivePanels() {
 
               <IconButton
                 unstyled
-                type="button"
                 label={t("close")}
                 className="pointer-events-auto grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => void window.mosaelPublish?.closePanel?.(card.id)}

@@ -26,7 +26,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { ConfirmDialog, DIALOG_FIELD, ModalShell, RenameDialog } from "@/components/app/modals";
+import { ConfirmDialog, DIALOG_FIELD, ModalShell, ModalSubmit, RenameDialog } from "@/components/app/modals";
 import { AddAccountDialog } from "@/features/publish/AddAccountDialog";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +34,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { isImeKeystroke } from "@/lib/shortcuts";
 
 // 过渡态:后台复检/登录在改登录态时轮询把徽标拉回真实值。
 const TRANSITIONAL = new Set(["checking", "unknown"]);
@@ -562,10 +561,11 @@ function OpenSiteDialog({
       open
       onOpenChange={(next) => !next && onCancel()}
       title={t("poolOpenTitle").replace("{name}", profile.name)}
+      onSubmit={() => void open()}
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" disabled={!url.trim()} loading={pending} onClick={open}>{t("poolOpen")}</Button>
+          <ModalSubmit size="sm" disabled={!url.trim()} loading={pending}>{t("poolOpen")}</ModalSubmit>
         </>
       }
     >
@@ -575,7 +575,6 @@ function OpenSiteDialog({
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com"
           autoFocus
-          onKeyDown={(e) => { if (!isImeKeystroke(e) && e.key === "Enter") open(); }}
         />
         <small className="text-ui-xs text-muted-foreground">{t("poolOpenHint")}</small>
       </div>
@@ -600,10 +599,13 @@ function CreateProfileDialog({
       open
       onOpenChange={(next) => !next && onCancel()}
       title={t("poolCreate")}
+      onSubmit={() => {
+        if (name.trim() && !pending) onCreate({ name: name.trim(), proxy: proxy.trim() || null });
+      }}
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" disabled={!name.trim()} loading={pending} onClick={() => onCreate({ name: name.trim(), proxy: proxy.trim() || null })}>{t("poolCreate")}</Button>
+          <ModalSubmit size="sm" disabled={!name.trim()} loading={pending}>{t("poolCreate")}</ModalSubmit>
         </>
       }
     >
@@ -639,10 +641,13 @@ function ProxyDialog({
       open
       onOpenChange={(next) => !next && onCancel()}
       title={t("publishProxySet")}
+      onSubmit={() => {
+        if (!pending) onSave(proxy.trim() || null);
+      }}
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onCancel}>{t("cancel")}</Button>
-          <Button size="sm" loading={pending} onClick={() => onSave(proxy.trim() || null)}>{t("save")}</Button>
+          <ModalSubmit size="sm" loading={pending}>{t("save")}</ModalSubmit>
         </>
       }
     >

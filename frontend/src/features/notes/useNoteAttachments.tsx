@@ -35,7 +35,7 @@ export function useNoteAttachments(workspaceId: string) {
     // `text-muted-foreground`,而同排的回形针、话筒走 Button 的默认前景色 —— 三个并排的图标
     // 里这一个明显暗一截,读起来像是禁用的。尺寸本来就一样(icon-xs = size-7)。
     //: 在输入框里打 @ 也是打开它,键帽画在说明里。
-    trigger: <IconButton ref={trigger} type="button" variant="ghost" size="icon-xs" label={s.addReference} shortcut="@" onClick={() => show(trigger.current)}><BookOpen size={14} /></IconButton>,
+    trigger: <IconButton ref={trigger} variant="ghost" size="icon-xs" label={s.addReference} shortcut="@" onClick={() => show(trigger.current)}><BookOpen size={14} /></IconButton>,
     // 小条自己不画了 —— 和附件拼在同一排里,由 ComposerChips 统一渲染(见那边的注释)。
     // 正文点开就能看:listNotes 返回的就是完整的笔记,不必为了预览再问一次服务端。
     chips: selected.map<ComposerChip>(note => ({

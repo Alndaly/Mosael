@@ -156,7 +156,6 @@ export function ItemsField({
             </span>
             <Truncate className="flex-1 text-ui-xs text-foreground">{preview(row.item, fields)}</Truncate>
             <IconButton
-              type="button"
               variant="ghost"
               size="icon-xs"
               label={t("wfItemsMoveUp")}
@@ -166,7 +165,6 @@ export function ItemsField({
               <ArrowUp size={12} />
             </IconButton>
             <IconButton
-              type="button"
               variant="ghost"
               size="icon-xs"
               label={t("wfItemsMoveDown")}
@@ -176,7 +174,6 @@ export function ItemsField({
               <ArrowDown size={12} />
             </IconButton>
             <IconButton
-              type="button"
               variant="ghost"
               size="icon-xs"
               label={t("delete")}

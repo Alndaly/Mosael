@@ -183,7 +183,6 @@ export function PanelResizeHandles({
         <IconButton
           unstyled
           key={corner}
-          type="button"
           label={t(CORNER_LABEL[corner])}
           aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
           data-resize-handle={corner}

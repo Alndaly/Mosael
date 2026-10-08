@@ -91,7 +91,6 @@ export function ListField({
             onValueChange={(next: string) => push(rows.map((one, i) => (i === index ? next : one)))}
           />
           <IconButton
-            type="button"
             variant="ghost"
             size="icon-xs"
             label={t("delete")}

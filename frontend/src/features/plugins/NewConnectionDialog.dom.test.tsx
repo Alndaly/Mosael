@@ -15,6 +15,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -155,6 +156,22 @@ describe("在哪跑", () => {
     fireEvent.click(addButton());
     await waitFor(() => expect(api.createPluginInstance).toHaveBeenCalledWith(COMFY.id, {
       config: { server_url: "http://192.168.1.5:8188" },
+    }));
+  });
+});
+
+describe("按回车", () => {
+  //: 此前是一组散的输入框 + 右下角一颗点击的按钮,在「服务器地址」里按回车什么也不做。
+  it("在配置项里敲回车就是「新建」;点「在哪跑」这种表单里的普通按钮不新建", async () => {
+    const user = userEvent.setup();
+    dialog();
+    await user.click(radio("localServiceModeServer"));
+    expect(api.createPluginInstance).not.toHaveBeenCalled();
+    const address = screen.getAllByRole("textbox")[0];
+    await user.clear(address);
+    await user.type(address, "http://192.168.1.6:8188{Enter}");
+    await waitFor(() => expect(api.createPluginInstance).toHaveBeenCalledWith(COMFY.id, {
+      config: { server_url: "http://192.168.1.6:8188" },
     }));
   });
 });

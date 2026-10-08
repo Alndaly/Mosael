@@ -70,7 +70,7 @@ export function GenerationFailureCard({
     <>
       {repeat ? (
         <Hint label={t("genRepeatHint")}>
-          <Button type="button" variant="outline" size="xs" loading={repeat.pending} onClick={repeat.run} data-failure-repeat="">
+          <Button variant="outline" size="xs" loading={repeat.pending} onClick={repeat.run} data-failure-repeat="">
             <RotateCw size={12} />
             {t("genRepeat")}
           </Button>
@@ -78,7 +78,7 @@ export function GenerationFailureCard({
       ) : null}
       {retrieve ? (
         <Hint label={t("genRetrieveHint")}>
-          <Button type="button" variant="outline" size="xs" loading={retrieve.pending} onClick={retrieve.run} data-failure-retrieve="">
+          <Button variant="outline" size="xs" loading={retrieve.pending} onClick={retrieve.run} data-failure-retrieve="">
             <RotateCcw size={12} />
             {t("genRetrieve")}
           </Button>

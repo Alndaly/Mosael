@@ -138,7 +138,6 @@ export function AssetPickerDialog({
           {/* 「这张画板上的」和按种类筛是两件事(可以叠着用):它是一枚开关,不进分段那一组。 */}
           {boardSet.size > 0 && (
             <Button
-              type="button"
               size="sm"
               variant="outline"
               aria-pressed={boardOnly}
@@ -150,7 +149,7 @@ export function AssetPickerDialog({
               {t("boardsPickOnBoard")}
             </Button>
           )}
-          <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => chooser.current?.click()}>
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => chooser.current?.click()}>
             <Upload />
             {t("boardsUploadLocal")}
           </Button>

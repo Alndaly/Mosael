@@ -84,10 +84,10 @@ export function SkillImportDialog({
       className="w-[760px] max-w-[calc(100vw-32px)]"
       footer={
         <>
-          <Button type="button" variant="outline" disabled={commit.isPending} onClick={onClose}>
+          <Button variant="outline" disabled={commit.isPending} onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button type="button" disabled={!canCommit} loading={commit.isPending} onClick={() => commit.mutate()}>
+          <Button disabled={!canCommit} loading={commit.isPending} onClick={() => commit.mutate()}>
             {t("agentSkillsImportConfirm")}
           </Button>
         </>

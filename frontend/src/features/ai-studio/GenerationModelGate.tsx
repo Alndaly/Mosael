@@ -26,7 +26,6 @@ export function GenerationModelGate({
 
   return (
     <Button
-      type="button"
       variant="outline"
       size="xs"
       className="gap-1 text-muted-foreground hover:text-foreground"

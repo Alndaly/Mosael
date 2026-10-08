@@ -108,7 +108,6 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
       {session.is_mine ? (
         <IconButton
           unstyled
-          type="button"
           className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-default disabled:opacity-45"
           label={`${t("delete")}: ${session.title}`}
           disabled={deleting}

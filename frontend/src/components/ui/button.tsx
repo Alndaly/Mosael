@@ -77,8 +77,14 @@ export interface ButtonProps
   loading?: boolean
 }
 
+/**
+ * **不写 `type` 就是 `type="button"`**:点了只做 onClick 里写的那件事。要提交表单的那一颗显式写 `type="submit"`
+ * (表单外面的用 `form={id}` 指过去)。HTML 的默认是 submit —— 那时 `<form>` 里任何一颗没写 type 的按钮(展开、清空、
+ * 换一个选项)点了都会顺带把整张表单交出去,换基础件时踩到过(模型设置里点「自己描述这个端点」把整张表单存了)。
+ * 棘轮:`design/buttonTypes.test.ts`。`asChild` 时不加:那时它把样子借给别的元素(`<a>`、`<label>`),type 由那个元素自己定。
+ */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, type, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
     // asChild 时不动 children:那时候 Button 只是把样式借给别人(<label>、<a>),
     // 塞一个 spinner 进去会破坏调用方自己的结构。
@@ -86,6 +92,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       loading && !asChild ? <BusyChildren>{children}</BusyChildren> : children
     return (
       <Comp
+        type={asChild ? type : (type ?? "button")}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || (loading && !asChild)}

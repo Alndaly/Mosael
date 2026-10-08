@@ -1038,7 +1038,7 @@ export function EntityNode({ data, selected }: NodeProps) {
             <AlertTriangle size={22} strokeWidth={1.4} />
             <span className="text-ui-xs">{t(gone ? "boardEntityMissing" : "boardEntityLoadFailed")}</span>
             {!gone && (
-              <Button type="button" size="xs" variant="outline" className="nodrag nopan" loading={entity.isFetching} onClick={() => void entity.refetch()}>
+              <Button size="xs" variant="outline" className="nodrag nopan" loading={entity.isFetching} onClick={() => void entity.refetch()}>
                 {t("retry")}
               </Button>
             )}
@@ -1059,7 +1059,7 @@ export function EntityNode({ data, selected }: NodeProps) {
         <KindIcon size={15} className="shrink-0 text-muted-foreground" />
         <Truncate className="flex-1 text-ui-sm">{found?.name || t("boardKindEntity")}</Truncate>
         {found && !commentMode && (
-          <IconButton unstyled type="button" className="nodrag nopan inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground" label={t("boardEntityOpen")} onClick={open}>
+          <IconButton unstyled className="nodrag nopan inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground" label={t("boardEntityOpen")} onClick={open}>
             <ExternalLink size={13} />
           </IconButton>
         )}

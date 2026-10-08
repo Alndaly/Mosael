@@ -70,7 +70,6 @@ export function ComposerChips({
               </button>
               <IconButton
                 unstyled
-                type="button"
                 className="inline-flex cursor-pointer border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground"
                 label={`${t("close")} ${chip.label}`}
                 onClick={chip.onRemove}

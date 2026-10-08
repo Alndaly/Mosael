@@ -1168,7 +1168,6 @@ export function GenerateWorkspace({
       />
       {latestImageResult?.result_asset_id && !generationConfig.frames.reference_image[0]?.assetId && (
         <Button
-          type="button"
           variant={generationConfig.usePreviousImage ? "outline" : "ghost"}
           size="sm"
           onClick={generationConfig.usePreviousImage ? clearReferenceImage : usePreviousImageAsReference}
@@ -1245,12 +1244,11 @@ export function GenerateWorkspace({
             </Truncate>
           ) : null}
           <div className="flex flex-wrap gap-1">
-            <Button type="button" variant="ghost" size="xs" onClick={() => composer.current?.focus()}>
+            <Button variant="ghost" size="xs" onClick={() => composer.current?.focus()}>
               {t("genFormPromptWrite")}
             </Button>
             {optional && stored ? (
               <Button
-                type="button"
                 variant="ghost"
                 size="xs"
                 onClick={() => {
@@ -1516,7 +1514,6 @@ export function GenerateWorkspace({
                 )}
                 {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
                   <IconButton
-                    type="button"
                     variant="ghost"
                     size="icon-xs"
                     // createGeneration 是**别的**操作在跑,那是 disable;自己在跑才是 loading。
@@ -2196,7 +2193,6 @@ function GenerationTurn({
               <IconButton
                 unstyled
                 key={assetId}
-                type="button"
                 label={t("imagePreviewTitle")}
                 className={cn(
                   "cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-ring",
@@ -2373,7 +2369,7 @@ function GenerationProgress({
         ) : null}
         {onStop ? (
           <Hint label={t("genStopHint")}>
-            <Button type="button" variant="outline" size="xs" className="shrink-0" loading={stopping} onClick={onStop}>
+            <Button variant="outline" size="xs" className="shrink-0" loading={stopping} onClick={onStop}>
               <Square size={10} fill="currentColor" />
               {t("genStop")}
             </Button>

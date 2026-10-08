@@ -360,7 +360,6 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
             {running && onCancel && (
               <IconButton
                 unstyled
-                type="button"
                 className="ml-[3px] inline-grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-destructive"
                 label={t("jobCancel")}
                 hint={t("jobCancelHint")}

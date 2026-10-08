@@ -41,9 +41,9 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     let button: React.ReactNode
     if (unstyled) {
       //: 在跑时和 Button 一样把图标换成转圈(大小沿用那个图标的);没有图标的(头像那种自绘的内容)不补,转圈由调用方画
-      const { loading, asChild: _asChild, disabled, children, ...rest } = props
+      const { loading, asChild: _asChild, disabled, children, type = "button", ...rest } = props
       button = (
-        <button ref={ref} aria-label={label} aria-busy={loading || undefined} disabled={disabled || loading} {...rest}>
+        <button ref={ref} type={type} aria-label={label} aria-busy={loading || undefined} disabled={disabled || loading} {...rest}>
           {loading ? <BusyChildren prepend={false}>{children}</BusyChildren> : children}
         </button>
       )

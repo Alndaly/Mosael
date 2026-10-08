@@ -542,6 +542,13 @@ export function NewConnectionDialog({
       : t("pluginNewConnectionSimple");
   const title = declared?.title ?? pkg.name;
   const machine = t(machineKey());
+  const formId = React.useId();
+  //: 点「新建」和在任一格里按回车走同一条路(本机目录的先确认一次)
+  const submit = () => {
+    if (!ready || create.isPending) return;
+    if (local && where === "directory") setConfirming(true);
+    else create.mutate(body());
+  };
   return (
     <ModalShell
       open={open}
@@ -552,17 +559,22 @@ export function NewConnectionDialog({
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" disabled={create.isPending} onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
-          <Button
-            loading={create.isPending && !confirming}
-            disabled={!ready}
-            onClick={() => (local && where === "directory" ? setConfirming(true) : create.mutate(body()))}
-          >
+          <Button type="submit" form={formId} loading={create.isPending && !confirming} disabled={!ready}>
             <Plus size={13} /> {t("pluginAddConnection")}
           </Button>
         </div>
       }
     >
-      <div className="grid gap-4">
+      {/* 一张真的表单:在配置项里按回车就是「新建」(此前回车什么也不做,只能去点右下角)。多行的说明、代码编辑器里回车照旧换行。 */}
+      <form
+        id={formId}
+        data-new-connection-form=""
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
+      >
         <p className="m-0 text-ui-sm leading-[1.6] text-muted-foreground">{hint}</p>
         {declared && <NewConnectionWhere title={title} where={where} onChoose={setWhere} />}
         {local && where === "directory" && (
@@ -646,7 +658,7 @@ export function NewConnectionDialog({
             <small className="text-ui-xs leading-[1.5] text-muted-foreground">{t("localServiceNewPermissionsDesc")}</small>
           </div>
         )}
-      </div>
+      </form>
       {/* 用我自己装的:新建之前确认一次(和连接页上「检查并使用」同一句);建好之后认目录、起它都不再问 */}
       <ConfirmDialog
         open={confirming}
@@ -1627,7 +1639,6 @@ function InvocationRow({ invocation, onDelete }: { invocation: PluginInvocation;
         </button>
         <IconButton
           unstyled
-          type="button"
           className="grid w-8 flex-none cursor-pointer place-items-center border-0 bg-transparent text-muted-foreground transition-colors duration-100 hover:bg-secondary hover:text-destructive"
           label={t("delete")}
           onClick={onDelete}

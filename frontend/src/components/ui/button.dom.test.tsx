@@ -135,3 +135,60 @@ describe("Button 的方钮和图标跟着档位", () => {
     }
   });
 });
+
+/**
+ * 不写 type 就是 `type="button"`:表单里的普通按钮(展开、清空、换一个选项)点了不提交;要提交的那颗写 `type="submit"`。
+ * `asChild` 时不加 type(那时样子借给 `<a>` / `<label>`)。棘轮:design/buttonTypes.test.ts。
+ */
+describe("Button 的 type", () => {
+  it("不写就是 button;写了 submit 就是 submit", () => {
+    const { getAllByRole } = render(
+      <>
+        <Button>展开</Button>
+        <Button type="submit">保存</Button>
+      </>,
+    );
+    const [plain, submit] = getAllByRole("button");
+    expect(plain.getAttribute("type")).toBe("button");
+    expect(submit.getAttribute("type")).toBe("submit");
+  });
+
+  it("表单里:点普通按钮不提交,点 submit 的那颗提交", () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+    const { getByRole } = render(
+      <form onSubmit={onSubmit}>
+        <input aria-label="名字" />
+        <Button>清空</Button>
+        <Button type="submit">保存</Button>
+      </form>,
+    );
+    getByRole("button", { name: "清空" }).click();
+    expect(onSubmit).not.toHaveBeenCalled();
+    getByRole("button", { name: "保存" }).click();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("asChild 时不加 type", () => {
+    const { getByRole } = render(
+      <Button asChild>
+        <a href="#x">链接</a>
+      </Button>,
+    );
+    expect(getByRole("link").hasAttribute("type")).toBe(false);
+  });
+
+  it("只有图标的按钮(含不要外观的那种)也一样", async () => {
+    const { IconButton } = await import("@/components/ui/icon-button");
+    const { getAllByRole } = render(
+      <>
+        <IconButton label="更多">
+          <svg />
+        </IconButton>
+        <IconButton unstyled label="头像">
+          <svg />
+        </IconButton>
+      </>,
+    );
+    for (const button of getAllByRole("button")) expect(button.getAttribute("type")).toBe("button");
+  });
+});

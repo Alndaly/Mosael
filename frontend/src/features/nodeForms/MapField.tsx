@@ -143,7 +143,6 @@ export function MapField({
             }
           />
           <IconButton
-            type="button"
             variant="ghost"
             size="icon-xs"
             label={t("delete")}

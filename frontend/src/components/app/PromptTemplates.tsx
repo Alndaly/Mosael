@@ -87,7 +87,6 @@ export function PromptTemplateButton({ onPick, className }: { onPick: (prompt: s
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <IconButton
-          type="button"
           variant="ghost"
           size="icon-xs"
           className={className}

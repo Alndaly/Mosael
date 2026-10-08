@@ -362,7 +362,6 @@ function SlotPicker({
                     {previewable(model) ? (
                       <IconButton
                         unstyled
-                        type="button"
                         data-model-preview=""
                         label={t("workbenchModelsPreview").replace("{name}", name)}
                         className="size-11 shrink-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&>*]:size-full"
@@ -408,7 +407,6 @@ function SlotPicker({
                         (不另定一档高度:旁边是 44 的缩略图) */}
                     <IconButton
                       unstyled
-                      type="button"
                       data-model-detail={keyOf(model)}
                       label={t("workbenchModelDetailOpen").replace("{name}", name)}
                       className={cn(

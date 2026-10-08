@@ -1185,7 +1185,6 @@ export function Timeline({
                 <span className="ml-auto inline-flex gap-px">
                   <IconButton
                     unstyled
-                    type="button"
                     className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
                     label={t("trackMoveUp")}
                     hint={t("trackMoveHint")}
@@ -1196,7 +1195,6 @@ export function Timeline({
                   </IconButton>
                   <IconButton
                     unstyled
-                    type="button"
                     className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100"
                     label={t("trackMoveDown")}
                     hint={t("trackMoveHint")}
@@ -1265,7 +1263,6 @@ export function Timeline({
               {onRemoveTrack && (
                 <IconButton
                   unstyled
-                  type="button"
                   className="grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 hover:bg-destructive hover:text-white group-hover/label:opacity-100"
                   label={(track.clips ?? []).length > 0 ? t("removeTrackWithClips") : t("removeTrack")}
                   onClick={() => onRemoveTrack(track.id, (track.clips ?? []).length)}
@@ -1621,7 +1618,6 @@ function TrackToggle({
   return (
     <IconButton
       unstyled
-      type="button"
       className={cn("grid h-4 w-4 cursor-pointer place-items-center rounded-sm border-0 bg-transparent text-muted-foreground opacity-0 transition-[opacity,color] duration-100 enabled:hover:text-foreground disabled:cursor-default disabled:opacity-25 group-hover/label:opacity-100 focus-visible:opacity-100", active && cn("opacity-100", activeClassName))}
       label={label}
       hint={hint}

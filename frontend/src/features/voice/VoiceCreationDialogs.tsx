@@ -108,7 +108,7 @@ export function UploadVoiceDialog({
       className="sm:max-w-md"
       footer={
         <>
-          <Button type="button" size="sm" variant="outline" disabled={upload.isPending} onClick={close}>
+          <Button size="sm" variant="outline" disabled={upload.isPending} onClick={close}>
             {t("cancel")}
           </Button>
           <Hint disabledReason={blocked}>
@@ -174,7 +174,6 @@ export function UploadVoiceDialog({
         >
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              type="button"
               size="sm"
               variant="outline"
               disabled={referenceRecorder.recording || referenceRecorder.starting}
@@ -183,12 +182,11 @@ export function UploadVoiceDialog({
               <Upload size={12} /> {file ? t("voiceReplaceFile") : t("voicePickFile")}
             </Button>
             {referenceRecorder.recording ? (
-              <Button type="button" size="sm" variant="destructive" onClick={referenceRecorder.stop}>
+              <Button size="sm" variant="destructive" onClick={referenceRecorder.stop}>
                 <Square size={11} /> {referenceRecorder.seconds}s
               </Button>
             ) : (
               <Button
-                type="button"
                 size="sm"
                 variant="ghost"
                 loading={referenceRecorder.starting}
@@ -205,7 +203,6 @@ export function UploadVoiceDialog({
               <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">{formatBytes(file.size)}</span>
               <IconButton
                 unstyled
-                type="button"
                 className="shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0.5 leading-none text-muted-foreground hover:text-destructive"
                 label={t("voiceClearFile")}
                 onClick={() => {
@@ -287,7 +284,7 @@ export function VoiceFromSpeakerDialog({
       className="sm:max-w-md"
       footer={
         <>
-          <Button type="button" size="sm" variant="outline" disabled={create.isPending} onClick={close}>
+          <Button size="sm" variant="outline" disabled={create.isPending} onClick={close}>
             {t("cancel")}
           </Button>
           <Button

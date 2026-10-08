@@ -77,6 +77,10 @@ token 取值,业务代码只挑档位和变体,不在 className 里改高度、�
   同一件事的第二颗;空状态里有几个动作时只有一颗实心。
 - **只有图标的按钮走 `IconButton`**:名字只写一次(它既是读屏念的 `aria-label`,也是悬停说明的第一行),点不了时说为什么
   (`disabledReason`)。不靠原生 `title`。
+- **type**:`Button` / `IconButton` 不写 type 就是 `type="button"`(点了只做 onClick 那件事)。**要提交表单的那一颗写
+  `type="submit"`**(在表单外面的用 `form={id}` 指过去),其余不写。填值的弹窗、设置里的一组输入框做成真的 `<form>`:
+  在任一格里按回车就是提交 —— 弹窗给 `ModalShell` 传 `onSubmit`,footer 里的提交键用 `ModalSubmit`。只有一个输入框的表单
+  (地址栏、改名)不用按钮,回车靠浏览器的隐式提交。棘轮:`design/buttonTypes.test.ts`。
 - **在跑**:点下去会发请求、又没有别的即时反馈的按钮接 `loading` —— 第一个图标换成转圈,宽度不变,不能再点。
 - 按钮里的图标大小由档位定(上面那张表),**在图标上写 `size={12}` 不生效**,别写。
 - `link` 变体不用:要一个文字样子的动作,用 `inline`。

@@ -136,7 +136,6 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
             <IconButton
               unstyled
               ref={closeButton}
-              type="button"
               label={t("imagePreviewClose")}
               shortcut="Esc"
               data-image-preview-close=""

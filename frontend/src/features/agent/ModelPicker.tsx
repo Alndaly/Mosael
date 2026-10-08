@@ -100,7 +100,6 @@ export function ModelPicker({ workspaceId, place, session }: { workspaceId: stri
   if (options.length === 0) {
     return (
       <Button
-        type="button"
         variant="outline"
         size="xs"
         className="gap-1 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"

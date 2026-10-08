@@ -13,7 +13,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { ModalFormContext, useModalFormId } from "@/components/app/modalForm";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -57,12 +58,23 @@ export const DIALOG_FIELD =
  *
  * 头尾在滚动区之外，不会被正文穿过；各段保持透明，共享外壳的一层磨砂背景。
  */
+/**
+ * 填值弹窗底部那颗提交键:`type="submit"`,用 `form=` 指着 ModalShell 里那张表单 —— 点它、在任一格里按回车,走的是同一条
+ * `onSubmit`。只能放在给了 `onSubmit` 的 ModalShell 的 footer 里。
+ */
+export function ModalSubmit(props: Omit<ButtonProps, "type" | "form">) {
+  const formId = useModalFormId();
+  if (!formId) throw new Error("ModalSubmit belongs in the footer of a ModalShell that has onSubmit");
+  return <Button {...props} type="submit" form={formId} />;
+}
+
 export function ModalShell({
   open,
   onOpenChange,
   title,
   header,
   footer,
+  onSubmit,
   children,
   className,
   bodyClassName,
@@ -78,6 +90,12 @@ export function ModalShell({
   header?: React.ReactNode;
   /** 钉在底部的动作区。表单的「取消 / 确定」放这里,长表单滚动时它仍然在。 */
   footer?: React.ReactNode;
+  /**
+   * 填值的弹窗给它:正文包进一张真的 `<form>`,在任一格里按回车就是提交(多行的文本框里回车照旧换行);footer 里的提交键用
+   * `ModalSubmit`。此前这类弹窗是一组散的输入框 + 一颗点击的按钮,回车什么也不做(浏览器池「新建档案」、改代理……)。
+   * 没填齐不该提交时,这里自己判(和提交键的 disabled 同一个条件)。
+   */
+  onSubmit?: () => void;
   children: React.ReactNode;
   /** Override the default width (w-[360px]) for wider dialogs, e.g. the recorder. */
   className?: string;
@@ -95,6 +113,7 @@ export function ModalShell({
   /** 整个弹窗收拖进来的文件(挑素材时直接传一个):拖放的事件摊在弹窗上,`overlay` 盖住整个弹窗(「松手上传」)。 */
   dropzone?: { handlers: React.HTMLAttributes<HTMLDivElement>; overlay: React.ReactNode };
 }) {
+  const formId = React.useId();
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={modal}>
       <DialogContent
@@ -137,14 +156,29 @@ export function ModalShell({
             bodyClassName,
           )}
         >
-          {children}
+          {onSubmit ? (
+            <form
+              id={formId}
+              noValidate
+              data-slot="modal-form"
+              className="contents"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSubmit();
+              }}
+            >
+              {children}
+            </form>
+          ) : (
+            children
+          )}
         </div>
         {footer && (
           <DialogFooter
             data-slot="modal-footer"
             className="sticky bottom-0 z-10 shrink-0 gap-2 px-6 pb-6 pt-5 sm:items-center"
           >
-            {footer}
+            <ModalFormContext.Provider value={onSubmit ? formId : null}>{footer}</ModalFormContext.Provider>
           </DialogFooter>
         )}
         {dropzone?.overlay}
@@ -198,7 +232,7 @@ export function RenameDialog({
       title={title}
       footer={
         <>
-          <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>
+          <Button variant="outline" disabled={pending} onClick={onCancel}>
             {t("cancel")}
           </Button>
           <Button type="submit" form={formId} loading={pending}>

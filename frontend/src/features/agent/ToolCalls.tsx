@@ -159,7 +159,6 @@ function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePr
       {asset.data.kind === "image" ? (
         <IconButton
           unstyled
-          type="button"
           label={asset.data.name}
           className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           //: 点开不是孤零零一张 —— 同一个工具结果里的全部图/视频装进画廊,
@@ -705,7 +704,7 @@ export function AgentErrorCard({ content, error, code }: { content: string; erro
       detail={error && error.trim() !== summary ? error : null}
       copyText={error || summary}
       actions={fix ? (
-        <Button type="button" variant="outline" size="xs" className="gap-1" onClick={fix.go}>
+        <Button variant="outline" size="xs" className="gap-1" onClick={fix.go}>
           <Settings2 size={13} />
           {t(fix.label)}
         </Button>

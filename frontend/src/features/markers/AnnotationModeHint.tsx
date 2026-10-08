@@ -23,6 +23,6 @@ export function AnnotationModeHint({ kind, onExit }: { kind: "comment" | "marker
     <span className="mx-1.5 text-muted-foreground">·</span>
     <Truncate className="text-muted-foreground">{t(kind === "comment" ? "boardCommentModeHint" : "markerModeHint")}</Truncate>
     <Kbd className="ml-2">Esc</Kbd>
-    <IconButton unstyled type="button" className="ml-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground" label={exitLabel} shortcut="Esc" onClick={onExit}><X size={14} /></IconButton>
+    <IconButton unstyled className="ml-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground" label={exitLabel} shortcut="Esc" onClick={onExit}><X size={14} /></IconButton>
   </div>;
 }

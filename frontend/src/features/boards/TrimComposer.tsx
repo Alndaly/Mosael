@@ -98,7 +98,6 @@ export function TrimComposer({
           {controls.mute && (
             <IconButton
               unstyled
-              type="button"
               aria-pressed={mute}
               label={t(mute ? "boardDropSound" : "boardKeepSound")}
               onClick={() => setMute((on) => !on)}

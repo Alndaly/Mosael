@@ -46,7 +46,6 @@ function EventLine({ event }: { event: Record<string, unknown> }) {
             {code}
           </code>
           <Button
-            type="button"
             variant="outline"
             size="sm"
             onClick={() => {
@@ -178,7 +177,7 @@ export function AuthPromptField({
             }}
           />
           {/* 与旁边的输入框同高(40px);size="sm" 是 32px,贴着输入框会矮一截。 */}
-          <Button type="button" disabled={!answer.trim()} loading={pending} onClick={() => onSubmit(answer.trim())}>
+          <Button disabled={!answer.trim()} loading={pending} onClick={() => onSubmit(answer.trim())}>
             {submitLabel}
           </Button>
         </div>
@@ -252,7 +251,7 @@ export function ProviderOAuthDialog({
       onOpenChange={(next) => !next && close()}
       title={`${t("providerOauthTitle")} · ${profileName}`}
       footer={
-        <Button type="button" variant={status === "done" ? "default" : "outline"} size="sm" onClick={close}>
+        <Button variant={status === "done" ? "default" : "outline"} size="sm" onClick={close}>
           {status === "done" ? t("close") : t("cancel")}
         </Button>
       }

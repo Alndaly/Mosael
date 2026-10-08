@@ -41,7 +41,6 @@ export function AssetListField({
               <Truncate>{names.get(id) ?? id}</Truncate>
               <IconButton
                 unstyled
-                type="button"
                 label={t("wfAssetListRemove").replace("{name}", names.get(id) ?? id)}
                 className="grid size-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
                 onClick={() => onChange(picked.filter((_, at) => at !== index))}

@@ -138,7 +138,6 @@ export function AccountSection() {
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
           <IconButton
             unstyled
-            type="button"
             className="group/avatar relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 bg-accent p-0 font-bold text-accent-foreground shadow-[var(--shadow-panel)]"
             label={t("avatarChange")}
             loading={avatarPending}
@@ -198,7 +197,6 @@ export function AccountSection() {
               />
               {usernameChanged && (
                 <Button
-                  type="button"
                   variant="outline"
                   className="shrink-0"
                   data-username-change=""
@@ -238,41 +236,50 @@ export function AccountSection() {
             <strong className="text-ui-lg font-semibold leading-snug">{t("settingsPassword")}</strong>
             <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsPasswordDesc")}</small>
           </div>
-          <SettingsForm>
-            {/* 当前密码是这次变更的前提，不是两个新值中的一个；单独成行后，阅读顺序与验证逻辑一致。 */}
-            <SettingsField label={t("currentPassword")}>
-              <Input
-                type="password"
-                value={passwords.current}
-                autoComplete="current-password"
-                onChange={(event) => setPasswords((current) => ({ ...current, current: event.target.value }))}
-              />
-            </SettingsField>
-            <div data-slot="password-pair" className="grid grid-cols-2 gap-3 max-[720px]:grid-cols-1">
-              <SettingsField label={t("newPassword")}>
+          {/* 一张真的表单:在任一个密码框里按回车就是「更新密码」(此前是一组散的输入框 + 一颗点击的按钮,回车什么也不做)。 */}
+          <form
+            data-password-form=""
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canUpdatePassword) void submitPassword();
+            }}
+          >
+            <SettingsForm>
+              {/* 当前密码是这次变更的前提，不是两个新值中的一个；单独成行后，阅读顺序与验证逻辑一致。 */}
+              <SettingsField label={t("currentPassword")}>
                 <Input
                   type="password"
-                  value={passwords.next}
-                  autoComplete="new-password"
-                  onChange={(event) => setPasswords((current) => ({ ...current, next: event.target.value }))}
+                  value={passwords.current}
+                  autoComplete="current-password"
+                  onChange={(event) => setPasswords((current) => ({ ...current, current: event.target.value }))}
                 />
               </SettingsField>
-              <SettingsField label={t("confirmPassword")}>
-                <Input
-                  type="password"
-                  value={passwords.confirm}
-                  autoComplete="new-password"
-                  onChange={(event) => setPasswords((current) => ({ ...current, confirm: event.target.value }))}
-                />
-              </SettingsField>
-            </div>
-            <div className="flex items-end justify-end">
-              {/* 和上面的密码框同一档(md):设置页填值那一行的字段和按钮同高。 */}
-              <Button disabled={!canUpdatePassword} loading={passwordPending} onClick={() => void submitPassword()}>
-                {t("updatePassword")}
-              </Button>
-            </div>
-          </SettingsForm>
+              <div data-slot="password-pair" className="grid grid-cols-2 gap-3 max-[720px]:grid-cols-1">
+                <SettingsField label={t("newPassword")}>
+                  <Input
+                    type="password"
+                    value={passwords.next}
+                    autoComplete="new-password"
+                    onChange={(event) => setPasswords((current) => ({ ...current, next: event.target.value }))}
+                  />
+                </SettingsField>
+                <SettingsField label={t("confirmPassword")}>
+                  <Input
+                    type="password"
+                    value={passwords.confirm}
+                    autoComplete="new-password"
+                    onChange={(event) => setPasswords((current) => ({ ...current, confirm: event.target.value }))}
+                  />
+                </SettingsField>
+              </div>
+              <div className="flex items-end justify-end">
+                {/* 和上面的密码框同一档(md):设置页填值那一行的字段和按钮同高。 */}
+                <Button type="submit" disabled={!canUpdatePassword} loading={passwordPending}>
+                  {t("updatePassword")}
+                </Button>
+              </div>
+            </SettingsForm>
+          </form>
         </div>
       </SettingsBlock>
       <ConfirmDialog

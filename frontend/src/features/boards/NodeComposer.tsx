@@ -952,7 +952,6 @@ export function NodeComposer({
                   <PopoverTrigger asChild>
                     <IconButton
                       unstyled
-                      type="button"
                       label={t("boardAddSource")}
                       aria-haspopup="menu"
                       className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
@@ -1002,7 +1001,6 @@ export function NodeComposer({
                 // 首帧和尾帧之间那个交换 —— 摆反了是最常见的手误,而重挂两次很烦。
                 <IconButton
                   unstyled
-                  type="button"
                   label={t("boardSwapFrames")}
                   className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
                   onClick={() =>
@@ -1042,7 +1040,6 @@ export function NodeComposer({
                 <SlotDrop onFiles={(files) => attachFiles(files, [slot.role])}>
                   <IconButton
                     unstyled
-                    type="button"
                     label={slotLabel(t, slot, mine.length)}
                     onClick={() =>
                       onPickAsset(roleAccepts(slot.role), (assetId) =>

@@ -227,7 +227,6 @@ export function PublishViewBar() {
       <div className="[-webkit-app-region:no-drag] inline-flex items-center gap-0.5">
         <IconButton
           unstyled
-          type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoBack}
           onClick={(event) => {
@@ -240,7 +239,6 @@ export function PublishViewBar() {
         </IconButton>
         <IconButton
           unstyled
-          type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           disabled={!state.canGoForward}
           onClick={(event) => {
@@ -253,7 +251,6 @@ export function PublishViewBar() {
         </IconButton>
         <IconButton
           unstyled
-          type="button"
           className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-foreground enabled:hover:bg-secondary disabled:cursor-default disabled:opacity-35"
           onClick={(event) => {
             void window.mosaelPublish?.reload();

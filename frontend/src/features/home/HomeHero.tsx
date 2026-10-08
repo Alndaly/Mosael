@@ -142,7 +142,6 @@ export function HomeHero({
           {!poemEgg && poem.author && <figcaption className="shrink-0 whitespace-nowrap text-ui-xs text-muted-foreground">{poem.author}</figcaption>}
           <IconButton
             unstyled
-            type="button"
             className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
             label={t("homePoemRefresh")}
             onClick={onRefreshPoem}

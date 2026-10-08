@@ -327,7 +327,6 @@ function RunCard({
                   <li key={asset}>
                     <IconButton
                       unstyled
-                      type="button"
                       label={t("workbenchPreviewOpen").replace("{title}", title)}
                       className="block w-full cursor-zoom-in rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       onClick={() => open(asset)}

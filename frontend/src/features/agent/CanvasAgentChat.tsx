@@ -503,7 +503,6 @@ export function CanvasAgentChat({
         {/* 「新对话」只换这一处:换成一段草稿,什么都不建 —— 第一句话发出去才建,家在这里。 */}
         <IconButton
           unstyled
-          type="button"
           className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
           label={t("chatNewSession")}
           hint={t("agentNewSessionHint")}
@@ -514,7 +513,6 @@ export function CanvasAgentChat({
         {onModeChange && (
           <IconButton
             unstyled
-            type="button"
             className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
             label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
             onClick={() => onModeChange(isFloating ? "docked" : "floating")}
@@ -523,7 +521,7 @@ export function CanvasAgentChat({
           </IconButton>
         )}
         {onClose && (
-          <IconButton unstyled type="button" className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
+          <IconButton unstyled className="grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
             <X size={13} />
           </IconButton>
         )}

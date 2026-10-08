@@ -540,7 +540,6 @@ export function ChatWorkspace({
                 />
                 {!readOnly && (
                   <Button
-                    type="button"
                     variant="outline"
                     size="xs"
                     className="shrink-0"
@@ -724,7 +723,6 @@ export function ChatWorkspace({
                     <DraftBlank draft={draft}>
                     {(blank) => running && blank && attach.isEmpty && !noteAttach.hasNotes ? (
                       <IconButton
-                        type="button"
                         variant="default"
                         size="icon-sm"
                         className="shrink-0 rounded-full"

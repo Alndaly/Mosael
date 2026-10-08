@@ -220,14 +220,13 @@ export function WorkflowRunHistory({
         </h2>
         <IconButton
           unstyled
-          type="button"
           className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground"
           label={isFloating ? t("wfAgentDock") : t("wfAgentFloat")}
           onClick={() => onModeChange(isFloating ? "docked" : "floating")}
         >
           {isFloating ? <PanelRight size={13} /> : <Move size={13} />}
         </IconButton>
-        <IconButton unstyled type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
+        <IconButton unstyled className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive" label={t("close")} onClick={onClose}>
           <X size={13} />
         </IconButton>
       </div>

@@ -194,7 +194,6 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
                 <figcaption className="text-ui-2xs tabular-nums text-muted-foreground">{pageLabel(index)}</figcaption>
                 <IconButton
                   unstyled
-                  type="button"
                   className="block w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-white p-0 shadow-sm"
                   label={pageLabel(index)}
                   hint={t("assetClickToZoom")}

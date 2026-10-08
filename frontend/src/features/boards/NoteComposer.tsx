@@ -202,7 +202,6 @@ export function NoteComposer({
                 {/* 缩略图按钮:名字是素材名(没起名就用种类),悬停也看得到。 */}
                 <IconButton
                   unstyled
-                  type="button"
                   label={asset.name || asset.original_filename || t(asset.kind === "video" ? "boardKindVideo" : asset.kind === "audio" ? "boardKindAudio" : "boardKindImage")}
                   onClick={() => openReferenced(asset)}
                   className={cn("block h-8 w-8 overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong", asset.kind === "audio" ? "cursor-pointer" : "cursor-zoom-in")}
@@ -220,7 +219,6 @@ export function NoteComposer({
                 {mentioned.includes(asset.id) && (
                   <IconButton
                     unstyled
-                    type="button"
                     label={t("boardRemove")}
                     onClick={() => setMentioned((all) => all.filter((one) => one !== asset.id))}
                     className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"

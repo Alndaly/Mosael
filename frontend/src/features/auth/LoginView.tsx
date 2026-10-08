@@ -120,7 +120,6 @@ export function LoginView() {
       {/* 按钮上写的是要换成的语言名;悬停说清这一下是「切换到它」。 */}
       <Hint label={locale === "zh-CN" ? t("languageSwitchToEn") : t("languageSwitchToZh")} side="bottom">
         <Button
-          type="button"
           variant="ghost"
           size="sm"
           className="absolute right-4 top-4 z-10 gap-1.5 text-muted-foreground [-webkit-app-region:no-drag]"
@@ -338,7 +337,7 @@ function InviteNotice({
       <span className="font-[550] text-foreground">{body}</span>
       {next && <span className="text-ui-xs text-muted-foreground">{next}</span>}
       {!usable && (
-        <Button type="button" variant="inline" className="justify-self-start" onClick={onDismiss}>
+        <Button variant="inline" className="justify-self-start" onClick={onDismiss}>
           {t("loginInviteDismiss")}
         </Button>
       )}

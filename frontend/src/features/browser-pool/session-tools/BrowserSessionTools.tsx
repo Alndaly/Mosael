@@ -131,7 +131,6 @@ function SessionTools({
     return (
       <IconButton
         key={key}
-        type="button"
         data-page-tool={key}
         aria-pressed={active}
         label={t(label)}
@@ -149,7 +148,6 @@ function SessionTools({
   const choice = (key: string, icon: React.ReactNode, label: MessageKey, onClick: () => void) => (
     <Button
       key={key}
-      type="button"
       variant="outline"
       size="xs"
       data-page-choice={key}
@@ -186,7 +184,7 @@ function SessionTools({
             </button>
           )}
           {shown.tone !== "busy" && (
-            <IconButton unstyled type="button" className="flex-none cursor-pointer border-0 bg-transparent p-0 text-muted-foreground" onClick={() => say(null)} label={t("browserToolsClose")}>
+            <IconButton unstyled className="flex-none cursor-pointer border-0 bg-transparent p-0 text-muted-foreground" onClick={() => say(null)} label={t("browserToolsClose")}>
               <X size={12} />
             </IconButton>
           )}
@@ -232,7 +230,7 @@ function SessionTools({
           </>
         )}
         {group && (
-          <IconButton type="button" size="icon-xs" onClick={() => setGroup(null)} label={t("browserToolsCollapse")} shortcut="Esc">
+          <IconButton size="icon-xs" onClick={() => setGroup(null)} label={t("browserToolsCollapse")} shortcut="Esc">
             <X />
           </IconButton>
         )}

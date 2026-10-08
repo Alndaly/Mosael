@@ -441,9 +441,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         className="w-[560px] max-w-[calc(100vw-24px)]"
         footer={
           <>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>{t("close")}</Button>
+            <Button variant="outline" size="sm" onClick={() => setPrefillOpen(false)}>{t("close")}</Button>
             <Button
-              type="button"
               size="sm"
               loading={prefillingAll}
               disabled={prefillBusy || (profiles.data ?? []).length === 0}
@@ -469,7 +468,6 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                     <Truncate as="small" className="text-ui-xs text-muted-foreground">{profile.vendor}</Truncate>
                   </div>
                   <Button
-                    type="button"
                     variant="outline"
                     size="sm"
                     // **只转点的那一行。** 此前所有行共用一个 isPending,点一家,整列一起转圈变灰。
@@ -506,7 +504,6 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
           <>
             {editing && (
               <Button
-                type="button"
                 variant="ghost"
                 size="sm"
                 className="mr-auto text-destructive hover:text-destructive"
@@ -519,7 +516,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
                 <Trash2 size={13} /> {t("pricingRuleDeleteOne")}
               </Button>
             )}
-            <Button type="button" variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
+            <Button variant="outline" size="sm" onClick={closeModal}>{t("cancel")}</Button>
             <Button type="submit" form={pricingFormId} size="sm" disabled={!canSubmit} loading={create.isPending || update.isPending}>
               {editing ? t("save") : t("pricingRuleAdd")}
             </Button>

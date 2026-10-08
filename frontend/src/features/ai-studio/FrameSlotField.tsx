@@ -104,7 +104,6 @@ function Tile({
           //: 只有一张缩略图:名字放进悬停说明(也是读屏念的名字)。
           <IconButton
             unstyled
-            type="button"
             className={`${TILE} cursor-zoom-in p-0`}
             label={named}
             onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: named })}
@@ -119,7 +118,6 @@ function Tile({
         )}
         {onClear && !disabled && (
           <IconButton
-            type="button"
             variant="ghost"
             size="icon"
             className="absolute right-1 top-1 h-5 w-5 rounded-full bg-background/85 hover:bg-background"
@@ -164,7 +162,6 @@ function Tile({
         //: 只有一个加号:角色名放进悬停说明(也是读屏念的名字)。
         <IconButton
           unstyled
-          type="button"
           disabled={disabled}
           label={t(copy.label)}
           className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
@@ -310,7 +307,6 @@ export function KeyframePairField({
             name={names.first}
           />
           <IconButton
-            type="button"
             variant="ghost"
             size="icon"
             className="mx-auto h-6 w-6"

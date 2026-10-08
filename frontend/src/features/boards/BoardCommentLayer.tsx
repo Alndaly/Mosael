@@ -275,7 +275,6 @@ export function BoardCommentLayer({
         >
           <IconButton
             unstyled
-            type="button"
             data-comment-drag-handle=""
             className="pointer-events-auto grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
             label={t("comments")}

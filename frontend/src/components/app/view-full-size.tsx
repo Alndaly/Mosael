@@ -30,7 +30,6 @@ export function ViewFullSizeButton({
   return (
     <IconButton
       unstyled
-      type="button"
       data-view-full-size=""
       label={t("viewFullSizeOf").replace("{name}", name)}
       //: **按下不拦。** 拖进时间线、拖着排序的那一格里,从这颗上按下去拖照样拖得动(dnd-kit 要挪够 6px 才算拖,

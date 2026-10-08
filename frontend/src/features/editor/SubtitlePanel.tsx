@@ -307,7 +307,6 @@ const SubtitleRow = React.memo(function SubtitleRow({
           {canEditTiming && (
             <IconButton
               unstyled
-              type="button"
               className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
               label={t("subtitleEditTiming")}
               aria-pressed={editingTiming}
@@ -320,7 +319,6 @@ const SubtitleRow = React.memo(function SubtitleRow({
           {canDub && (
             <IconButton
               unstyled
-              type="button"
               className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
               label={t("subtitleDubThis")}
               onClick={() => actions.dub(clip.id)}
@@ -330,7 +328,6 @@ const SubtitleRow = React.memo(function SubtitleRow({
           )}
           <IconButton
             unstyled
-            type="button"
             className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
             label={t("deleteClip")}
             onClick={() => actions.remove(clip.id)}

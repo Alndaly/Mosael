@@ -147,7 +147,6 @@ function PageList({
             </button>
             <IconButton
               unstyled
-              type="button"
               data-page-list-toggle
               className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
               label={t(!collapsed ? "browserPagesCollapse" : shape.peek ? "browserPagesPin" : "browserPagesExpand")}
@@ -323,7 +322,6 @@ function PageRow({
       {closable && !compact && (
         <IconButton
           unstyled
-          type="button"
           data-page-close
           label={closeLabel}
           className="mr-1 inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"

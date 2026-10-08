@@ -145,7 +145,6 @@ export function Tool({
   return (
     <IconButton
       unstyled
-      type="button"
       className="scene-tool"
       label={label}
       shortcut={shortcut}

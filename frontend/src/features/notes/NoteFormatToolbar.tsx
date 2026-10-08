@@ -171,7 +171,7 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
   const openLink = () => setUrl(String(editor.getAttributes("link").href || ""));
 
   const button = (action: Action) => (
-    <IconButton unstyled key={action.name} type="button" label={action.name} shortcut={action.shortcut && formatCombo(action.shortcut)}
+    <IconButton unstyled key={action.name} label={action.name} shortcut={action.shortcut && formatCombo(action.shortcut)}
       aria-pressed={action.active} disabled={action.disabled} disabledReason={action.disabledReason}
       onMouseDown={(event) => event.preventDefault()} onClick={action.run}>
       <action.icon size={16} strokeWidth={1.7} />
@@ -215,11 +215,11 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
           <MenuContent label={s.insert} align="start">{actionItems(inserts)}</MenuContent>
         </Popover>
         <Popover open={open === "link"} onOpenChange={(next) => { setOpen(next ? "link" : null); if (next) openLink(); }}>
-          <PopoverTrigger asChild><IconButton unstyled type="button" label={s.link}><Link size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
+          <PopoverTrigger asChild><IconButton unstyled label={s.link}><Link size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
           <PopoverContent className="w-80 p-3">{linkForm}</PopoverContent>
         </Popover>
         <Popover open={open === "table"} onOpenChange={(next) => setOpen(next ? "table" : null)}>
-          <PopoverTrigger asChild><IconButton unstyled type="button" label={state.table ? s.table : s.insertTable} aria-pressed={state.table}><Table2 size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
+          <PopoverTrigger asChild><IconButton unstyled label={state.table ? s.table : s.insertTable} aria-pressed={state.table}><Table2 size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
           {state.table
             ? <MenuContent label={s.table} align="start">{tableEdits.map(([label, run]) => item(label, label, null, run))}</MenuContent>
             : <PopoverContent align="start" className="w-auto p-3" onCloseAutoFocus={keepEditorFocus}><TableSizePicker onPick={insertTable} /></PopoverContent>}
@@ -256,7 +256,7 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
       {collapsed.length > 0 && (
         <div className="note-format-group">
           <Popover open={open === "more"} onOpenChange={(next) => { setOpen(next ? "more" : null); if (!next) { setMoreLink(false); setMoreTable(false); } }}>
-            <PopoverTrigger asChild><IconButton unstyled type="button" label={s.moreFormats}><MoreVertical size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
+            <PopoverTrigger asChild><IconButton unstyled label={s.moreFormats}><MoreVertical size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
             <MenuContent label={s.moreFormats} align="end" onCloseAutoFocus={keepEditorFocus}>
               {collapsed.map((id, index) => (
                 <React.Fragment key={id}>

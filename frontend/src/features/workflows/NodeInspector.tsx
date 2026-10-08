@@ -536,7 +536,6 @@ export function NodeInspector({
         {onDrillIn && (
           <IconButton
             unstyled
-            type="button"
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground"
             label={t("wfaEnterSubgraph")}
             onClick={onDrillIn}
@@ -547,7 +546,6 @@ export function NodeInspector({
         {onDelete && (
           <IconButton
             unstyled
-            type="button"
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
             label={t("delete")}
             onClick={onDelete}
@@ -620,7 +618,7 @@ export function NodeInspector({
         </div>
         {/* 删除在上方悬浮键的操作组里 —— 一个动作只该有一个入口。 */}
         {onClose && (
-          <IconButton unstyled type="button" className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" label={t("close")} shortcut="Esc" onClick={onClose}>
+          <IconButton unstyled className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-secondary hover:text-foreground" label={t("close")} shortcut="Esc" onClick={onClose}>
             <X size={14} />
           </IconButton>
         )}
@@ -717,7 +715,6 @@ export function NodeInspector({
                   <IconButton
                     unstyled
                     key={output}
-                    type="button"
                     className="cursor-copy rounded-md border-0 bg-transparent p-0"
                     label={t("wfCopyRef").replace("{name}", name)}
                     onClick={() => {

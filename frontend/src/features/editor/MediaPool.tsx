@@ -292,7 +292,6 @@ function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => 
       {kindIsVisual(asset.kind) ? (
         <IconButton
           unstyled
-          type="button"
           label={t("viewFullSizeOf").replace("{name}", asset.name)}
           data-pool-preview={asset.id}
           className={cn(POOL_THUMB, "cursor-zoom-in p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
@@ -319,7 +318,6 @@ function PoolItem({ asset, onAdd, onPreview }: { asset: AssetCard; onAdd: () => 
       </div>
       <IconButton
         unstyled
-        type="button"
         className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 cursor-pointer place-items-center rounded-md bg-popover text-muted-foreground opacity-0 transition-[opacity,color,background-color] duration-160 hover:text-primary group-hover/pool:opacity-100 group-focus-within/pool:opacity-100"
         label={t("addToTimeline")}
         onClick={(event) => {

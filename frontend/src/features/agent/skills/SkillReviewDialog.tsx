@@ -48,10 +48,10 @@ export function SkillReviewDialog({
       className="w-[720px] max-w-[calc(100vw-32px)]"
       footer={
         <>
-          <Button type="button" variant="outline" disabled={enable.isPending} onClick={onClose}>
+          <Button variant="outline" disabled={enable.isPending} onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button type="button" disabled={!skill || Boolean(skill.problem)} loading={enable.isPending} onClick={() => enable.mutate()}>
+          <Button disabled={!skill || Boolean(skill.problem)} loading={enable.isPending} onClick={() => enable.mutate()}>
             {t("agentSkillsReviewEnable")}
           </Button>
         </>

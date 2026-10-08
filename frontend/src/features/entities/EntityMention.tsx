@@ -111,7 +111,7 @@ export function EntityMentionButton({
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <IconButton type="button" variant="ghost" size="icon-xs" label={t("entityMention")} data-entity-mention="">
+          <IconButton variant="ghost" size="icon-xs" label={t("entityMention")} data-entity-mention="">
             <AtSign size={14} />
           </IconButton>
         </PopoverTrigger>

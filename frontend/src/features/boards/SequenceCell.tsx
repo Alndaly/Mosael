@@ -225,7 +225,6 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   const addButton = addToSequence ? (
     <IconButton
       unstyled
-      type="button"
       data-sequence-add=""
       label={t("boardSequenceAdd")}
       onClick={() => addToSequence(sequenceId)}
@@ -262,7 +261,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
       >
         {t(gone ? "boardSequenceMissing" : "boardSequenceLoadFailed")}
         {!gone && (
-          <Button type="button" size="xs" variant="outline" className="nodrag nopan" loading={sequence.isFetching} onClick={() => void sequence.refetch()}>
+          <Button size="xs" variant="outline" className="nodrag nopan" loading={sequence.isFetching} onClick={() => void sequence.refetch()}>
             {t("retry")}
           </Button>
         )}
@@ -314,7 +313,6 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
           <div className="nodrag nopan absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-8 text-white">
             <IconButton
               unstyled
-              type="button"
               label={playing ? t("boardSequencePause") : t("boardSequencePlay")}
               onClick={() => {
                 if (!playing && time >= total) setTime(0);
@@ -331,7 +329,6 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
             <Truncate className="text-ui-2xs text-white/55">{t("boardSequenceRoughCut")}</Truncate>
             <IconButton
               unstyled
-              type="button"
               label={muted ? t("boardSequenceUnmute") : t("boardSequenceMute")}
               onClick={() => setMuted((on) => !on)}
               className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-white hover:bg-white/15"

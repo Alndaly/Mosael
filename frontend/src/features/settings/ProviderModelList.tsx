@@ -250,7 +250,6 @@ export function ProviderModelList({
                   用户得一眼看到"它现在被当成什么",并且点一下就能改。自动识别的用虚线框,和"我标过的"分开。 */}
               <IconButton
                 unstyled
-                type="button"
                 className="flex cursor-pointer flex-wrap items-center gap-1 rounded border-0 bg-transparent p-0 hover:opacity-80"
                 label={t("modelCapabilitiesEdit")}
                 hint={(row.capability_ids ?? []).length === 0 ? t("modelCapabilitiesAuto") : null}

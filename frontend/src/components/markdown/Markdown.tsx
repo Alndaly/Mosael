@@ -73,7 +73,6 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
         <span className="ml-auto flex items-center gap-1.5">
           <IconButton
             unstyled
-            type="button"
             className={HEADER_ICON_BUTTON}
             label={wrap ? t("codeNoWrap") : t("codeWrap")}
             aria-pressed={wrap}

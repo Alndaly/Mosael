@@ -33,7 +33,6 @@ export function SourceAssetSlotPreview({
   const preview = kind === "audio" ? (
     <IconButton
       unstyled
-      type="button"
       label={previewLabel}
       onClick={() => setPreviewing(assetId)}
       className="grid h-8 w-8 place-items-center rounded-md border border-border bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
@@ -43,7 +42,6 @@ export function SourceAssetSlotPreview({
   ) : (
     <IconButton
       unstyled
-      type="button"
       label={previewLabel}
       onClick={() =>
         openImagePreview({
@@ -64,7 +62,6 @@ export function SourceAssetSlotPreview({
         {preview}
         <IconButton
           unstyled
-          type="button"
           label={`${t("boardRemove")}${label}`}
           onClick={onRemove}
           className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"

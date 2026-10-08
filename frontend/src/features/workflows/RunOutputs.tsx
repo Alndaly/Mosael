@@ -45,7 +45,6 @@ function CopyButton({ value }: { value: string | (() => Promise<string>) }) {
   return (
     <IconButton
       unstyled
-      type="button"
       className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
       label={t("copy")}
       onClick={async () => {
@@ -109,7 +108,6 @@ function DownloadButton({ name, load }: { name: string; load: () => Promise<stri
   return (
     <IconButton
       unstyled
-      type="button"
       className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
       label={t("wfOutputDownload")}
       onClick={async () => {

@@ -6,7 +6,8 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", async (importOriginal) => ({
@@ -20,9 +21,10 @@ import { declaresDrag, noDragAfter } from "@/test/dragRegions";
 
 type ViewListener = (state: PublishViewState) => void;
 
-function desktop() {
+function desktop(extra: Record<string, unknown> = {}) {
   let listener: ViewListener | null = null;
   vi.stubGlobal("mosaelPublish", {
+    ...extra,
     onViewState: (callback: ViewListener) => {
       listener = callback;
       return () => (listener = null);
@@ -55,5 +57,24 @@ describe("内嵌浏览器的顶栏拖得动窗口", () => {
     const bar = document.querySelector("[data-publish-back]")!.closest("[data-app-chrome]")!;
     expect(declaresDrag(bar), "顶栏是拖拽区").toBe(true);
     expect(noDragAfter(bar), "没有排在顶栏后面的 no-drag").toEqual([]);
+  });
+});
+
+//: 地址栏是只有一个输入框的表单(没有按钮):按回车靠浏览器的隐式提交,和按钮的 type 无关 —— 这里钉住它照样去那个网址。
+describe("内嵌浏览器的地址栏", () => {
+  it("改了地址敲回车就去那个网址", async () => {
+    const navigate = vi.fn(async () => undefined);
+    const show = desktop({ navigate, focusPage: vi.fn(async () => undefined) });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PublishViewBar />
+      </QueryClientProvider>,
+    );
+    show({ visible: true, accountId: "persist:pool-1", accountName: "档案", url: "https://example.com/", partition: "persist:pool-1", pages: [] });
+    const user = userEvent.setup();
+    const address = await screen.findByPlaceholderText("addressPlaceholder");
+    await user.clear(address);
+    await user.type(address, "https://mosael.app/{Enter}");
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("https://mosael.app/"));
   });
 });

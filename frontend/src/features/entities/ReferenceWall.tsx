@@ -399,7 +399,6 @@ function ReferenceCard({
           <PopoverTrigger asChild>
             <IconButton
               unstyled
-              type="button"
               label={`${t("studioActions")}: ${reference.asset_name}`}
               aria-haspopup="menu"
               className={cn(

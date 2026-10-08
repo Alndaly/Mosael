@@ -272,7 +272,6 @@ function SendButton({ label, onSend, disabled, working, icon: Icon = ArrowUp, hi
   return (
     <IconButton
       unstyled
-      type="button"
       data-board-composer-send=""
       label={label}
       hint={hint}

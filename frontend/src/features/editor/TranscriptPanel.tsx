@@ -257,7 +257,6 @@ const TranscriptRow = React.memo(function TranscriptRow({
           {canSplit && (
             <IconButton
               unstyled
-              type="button"
               className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--primary)_12%,transparent)] hover:text-primary"
               label={t("splitSentenceOut")}
               hint={t("splitSentenceOutHint")}
@@ -268,7 +267,6 @@ const TranscriptRow = React.memo(function TranscriptRow({
           )}
           <IconButton
             unstyled
-            type="button"
             className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive"
             label={t("cutSentence")}
             hint={t("cutSentenceHint")}

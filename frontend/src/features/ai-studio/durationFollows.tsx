@@ -71,7 +71,7 @@ export function TruncationHint({
           .replace("{cut}", String(Math.round((sourceSeconds - chosen) * 10) / 10))}
       </span>
       {fitted !== chosen && (
-        <Button type="button" size="sm" variant="outline" onClick={() => onUseSourceLength(fitted)}>
+        <Button size="sm" variant="outline" onClick={() => onUseSourceLength(fitted)}>
           {t("genDurationUseSource").replace("{seconds}", String(fitted))}
         </Button>
       )}
