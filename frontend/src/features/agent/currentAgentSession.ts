@@ -33,6 +33,7 @@ import {
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { STUDIO_PLACE, placeKey, placePayload, samePlace, type AgentPlace } from "@/features/agent/places";
+import { gotoAiChat } from "@/lib/aiStudioLink";
 import {
   type AgentDraftSettings,
   adoptAgentSession,
@@ -83,7 +84,8 @@ export class ViewOnlySessionError extends Error {
  */
 export function openAgentSession(workspaceId: string, sessionId: string): void {
   adoptAgentSession(workspaceId, STUDIO_PLACE, sessionId);
-  window.location.hash = "#/ai";
+  //: 对话分区,不是上次停的那个(ADR 0055 §9)
+  gotoAiChat();
 }
 
 /**

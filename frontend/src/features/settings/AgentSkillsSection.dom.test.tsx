@@ -223,7 +223,8 @@ describe("导入", () => {
     fireEvent.click(tag);
     //: 在 AI Studio 那一处接着它(ADR 0044:每一处各记各的,只记在这个窗口)。
     expect(window.sessionStorage.getItem("mosael.agent.session.ws-1.studio")).toBe("sess-9");
-    expect(window.location.hash).toBe("#/ai");
+    //: 落在对话分区,不是上次停的那个(ADR 0055 §9:上次停在创作的话,只跳 `#/ai` 会落错)
+    expect(window.location.hash).toBe("#/ai?tab=chat");
   });
 
   it("选一个文件夹也能导", async () => {

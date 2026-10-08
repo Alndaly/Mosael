@@ -18,7 +18,7 @@ export const mediaLibrary = {
   mediaKindGroup: "Media type",
   mediaNoMatchingAssets: "No matching assets",
   chatSessionsTitle: "Conversations",
-  generationSessionsTitle: "Generations",
+  generationSessionsTitle: "Creations",
   agentInspectorTitle: "Agent environment",
   agentInspectorOverview: "Overview",
   agentInspectorRecentTools: "Recent tools",

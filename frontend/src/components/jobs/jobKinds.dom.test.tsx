@@ -15,6 +15,7 @@ vi.mock("@/api/client", () => ({
     kinds: [
       entry("workflow", "工作流", "always", ["workflows"], "workflows", "workflow_id"),
       entry("proxy", "预览代理", "failures", ["assets"], "no-such-page"),
+      entry("tts", "配音", "always", ["assets", "generations"], "ai", "session_id"),
     ],
     fallback: entry("", "任务", "always", ["assets"]),
   }),
@@ -58,5 +59,7 @@ describe("任务种类", () => {
     expect(jobPage(job("workflow", { project_id: "p1" }), kindOf("workflow"))).toBe("/workflows?p=p1");
     expect(jobPage(job("proxy"), kindOf("proxy"))).toBeNull();
     expect(jobPage(job("mystery"), kindOf("mystery"))).toBeNull();
+    //: AI Studio 里任务的结果都在创作分区(ADR 0055);带着项目也不写 ?p=
+    expect(jobPage(job("tts", { project_id: "p1", session_id: "s1" }), kindOf("tts"))).toBe("/ai?tab=create");
   });
 });

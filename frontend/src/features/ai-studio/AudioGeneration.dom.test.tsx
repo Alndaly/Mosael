@@ -56,10 +56,10 @@ afterEach(() => {
 beforeEach(() => {
   localStorage.clear();
   // 直接落在「音频」页的「音乐与音效」。
-  localStorage.setItem("mosael:tab:ai-studio", "audio");
-  localStorage.setItem("mosael:tab:ai-studio-audio", "music");
+  localStorage.setItem("mosael:tab:ai-studio", "create");
+  localStorage.setItem("mosael:tab:ai-studio-create-filter", "audio");
   //: 上次开着的是 s1(没选过会话时停在「新的一条」,见 UC-03)
-  localStorage.setItem("mosael.generation.session.w1.audio", "s1");
+  localStorage.setItem("mosael.generation.session.w1.create", "s1");
 });
 
 function audioOption(capabilities: Record<string, unknown>) {
@@ -203,14 +203,12 @@ describe("音频生成的控件", () => {
   });
 });
 
-describe("音乐与音效在「音频」页", () => {
-  it("只拉音频模型和音频会话;新会话记成音频", async () => {
+describe("音乐在创作页的「音乐」筛选里(ADR 0055)", () => {
+  it("会话按 kind=audio 在服务端筛;新会话记成音频", async () => {
     const user = userEvent.setup();
     const { posts, gets } = renderStudio();
     await screen.findByRole("textbox", { name: "genLyrics" });
-    expect(screen.getByRole("tab", { name: /audioModeMusic/ })).toHaveAttribute("aria-selected", "true");
-    const options = gets.filter((url) => url.includes("/api/generation/options"));
-    expect(options.every((url) => url.includes("kind=audio"))).toBe(true);
+    expect(screen.getByRole("tab", { name: /createKindAudio/ })).toHaveAttribute("aria-selected", "true");
     expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("&kind=audio"))).toBe(true);
     expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("kind=image"))).toBe(false);
 
@@ -224,14 +222,16 @@ describe("音乐与音效在「音频」页", () => {
       kind: "audio", provider_profile_id: "p1", model: "suno-v5-beta" });
   });
 
-  it("「生成」页不再列音频模型:只拉图像和视频", async () => {
-    localStorage.setItem("mosael:tab:ai-studio", "generate");
+  it("「全部」:会话不按种类筛,三种生成模型都拉;点「音乐」只看音乐会话", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("mosael:tab:ai-studio-create-filter", "all");
     const { gets } = renderStudio();
-    await waitFor(() => expect(gets.some((url) => url.includes("/api/generation/options?kind=video"))).toBe(true));
-    expect(gets.some((url) => url.includes("/api/generation/options?kind=image"))).toBe(true);
-    expect(gets.some((url) => url.includes("/api/generation/options?kind=audio"))).toBe(false);
-    expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("&kind=image&kind=video"))).toBe(true);
-    expect(screen.queryByRole("textbox", { name: "genLyrics" })).toBeNull();
+    await waitFor(() => expect(gets.some((url) => url.includes("/api/generation/options?kind=audio"))).toBe(true));
+    for (const kind of ["image", "video"]) expect(gets.some((url) => url.includes(`/api/generation/options?kind=${kind}`))).toBe(true);
+    expect(gets.some((url) => url.includes("/api/generation/sessions") && !url.includes("kind="))).toBe(true);
+    await user.click(screen.getByRole("tab", { name: /createKindAudio/ }));
+    await waitFor(() => expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("&kind=audio"))).toBe(true));
+    expect(localStorage.getItem("mosael:tab:ai-studio-create-filter")).toBe("audio");
   });
 });
 

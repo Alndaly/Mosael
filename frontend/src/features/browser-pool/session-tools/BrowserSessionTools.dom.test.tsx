@@ -391,7 +391,8 @@ describe("用当前页开工", () => {
     show();
     fireEvent.click(toolButton("start"));
     fireEvent.click(choiceButton("agent"));
-    await waitFor(() => expect(links.gotoRecord).toHaveBeenCalledWith("/ai"));
+    //: 对话分区,不是上次停的那个(ADR 0055 §9)
+    await waitFor(() => expect(window.location.hash).toBe("#/ai?tab=chat"));
     expect(agent.startAgentDraft).toHaveBeenCalledWith("ws", { kind: "studio", id: "" });
     const [event, text] = links.emitOpenEvent.mock.calls[0];
     expect(event).toBe("mosael:agent-draft");

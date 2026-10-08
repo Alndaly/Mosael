@@ -16,7 +16,7 @@ export const CLONE_ENGINE = "builtin:clone";
 export const DEFAULT_MATCH_DURATION = true;
 /** Edge:不要钥匙,音色名里带着语言(见 editor/dubLanguage)。 */
 export const EDGE_ENGINE = "builtin:edge";
-/** 播客引擎。一次产出一整段双人对话 —— 它有自己的表单(AI 生成 → 音频 → 播客)。 */
+/** 播客引擎。一次产出一整段双人对话 —— 它在创作页里是自己的一种(播客,ADR 0055)。 */
 export const PODCAST_ENGINE = "builtin:volcano-podcast";
 
 export type AsrModel = components["schemas"]["AsrModelOut"];
@@ -155,18 +155,6 @@ export type TtsVoice = components["schemas"]["TtsVoiceOut"];
 export function listTtsVoices(engine: string, workspaceId?: string): Promise<TtsVoice[]> {
   const workspace = workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : "";
   return api<TtsVoice[]>(`/api/tts/voices?engine=${encodeURIComponent(engine)}${workspace}`);
-}
-
-export function generatePodcast(body: {
-  workspace_id: string;
-  project_id?: string | null;
-  text?: string;
-  topic?: string;
-  mode: "summarize" | "read" | "research";
-  speakers: string[];
-  speed?: number;
-}): Promise<Job> {
-  return api<Job>("/api/tts/podcast", { method: "POST", body: JSON.stringify(body) });
 }
 
 export function listTtsEngines(): Promise<TtsEngineChoice[]> {

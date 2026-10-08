@@ -48,6 +48,11 @@ export function useOpenRequest(event: string, onOpen: (id: string) => boolean | 
   }, [deliver, event]);
 }
 
+/** 信箱里还有没有等着这一类事件的请求(不取走)。要先切到某个分区、再由里面的页面来取的那一方用(AI Studio 的创作分区)。 */
+export function hasPendingOpenRequest(event: string): boolean {
+  return mailbox.has(event);
+}
+
 /** 深链通道:跳到业务页,并在页面挂载后用 mosael:open-* 事件打开指定记录。 */
 export function gotoRecord(route: string, event?: string, id?: unknown): void {
   window.location.hash = route.replace(/^#/, "");
@@ -268,7 +273,11 @@ export function parseWorkflowRunLink(link: string): { workflowId: string; runId:
 }
 
 /** 页面 → 打开单条记录的事件名(mosael:// 深链、任务中心「前往」共用)。没有对应事件的页面就只跳页。 */
+/** 「打开这条创作会话」(AI Studio 创作分区收,ADR 0055 §9)。任务中心「前往」、mosael://ai/<id> 都走它。 */
+export const OPEN_CREATION_SESSION_EVENT = "mosael:open-creation-session";
+
 export const VIEW_RECORD_EVENTS: Record<string, string> = {
+  ai: OPEN_CREATION_SESSION_EVENT,
   workflows: "mosael:open-workflow",
   entities: "mosael:open-entity",
   publish: "mosael:open-publish-task",

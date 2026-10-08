@@ -50,6 +50,26 @@ export function retrieveGeneration(generationId: string): Promise<GenerationCrea
   return api<GenerationCreateResponse>(`/api/generation/jobs/${encodeURIComponent(generationId)}/retrieve`, { method: "POST" });
 }
 
+type SpeechCreateIn = components["schemas"]["SpeechCreate"];
+type PodcastCreateIn = components["schemas"]["PodcastCreate"];
+/** 请求体:后端有缺省值的几格可以不给。 */
+export type SpeechCreate = Pick<SpeechCreateIn, "workspace_id" | "text" | "engine" | "voice">
+  & Partial<Omit<SpeechCreateIn, "workspace_id" | "text" | "engine" | "voice">>;
+export type PodcastCreate = Pick<PodcastCreateIn, "workspace_id" | "mode"> & Partial<Omit<PodcastCreateIn, "workspace_id" | "mode">>;
+
+/**
+ * 创作页「语音」:念一段字,记成会话里的一条(ADR 0055)。没带会话就由后端现开一条(回执里的 `generation.session_id`)。
+ * 远端引擎念配音库里的嗓子、这个账号还没同意上传时回 409(见 speech.ts 的 `remoteConsentRequest`)。
+ */
+export function createSpeech(body: SpeechCreate): Promise<GenerationCreateResponse> {
+  return api<GenerationCreateResponse>("/api/generation/speech", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** 创作页「播客」:改写材料、聊一个主题、照稿念(ADR 0055 §6)。 */
+export function createPodcast(body: PodcastCreate): Promise<GenerationCreateResponse> {
+  return api<GenerationCreateResponse>("/api/generation/podcast", { method: "POST", body: JSON.stringify(body) });
+}
+
 /** 这种生成能用哪些(连接 × 模型)。设置页里加了什么,这里就有什么。 */
 export function listGenerationOptions(kind: string): Promise<GenerationOption[]> {
   return api<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`);

@@ -28,6 +28,8 @@ import { toast } from "sonner";
 import {
   api,
   assetFileUrl,
+  createPodcast,
+  createSpeech,
   assetPreviewUrl,
   assetThumbnailUrl,
   cancelJob,
@@ -66,7 +68,6 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { VideoPlayer } from "@/components/app/media-playback";
-import { generationSessionSelectionKey } from "@/features/agent/sessionSelection";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import {
   DeclaredParameterControl,
@@ -142,6 +143,45 @@ import { SessionList } from "@/features/ai-studio/SessionList";
 import { GenerationModelGate } from "@/features/ai-studio/GenerationModelGate";
 import { AI_PANEL_BOUNDS } from "@/features/ai-studio/ChatWorkspace";
 import { takeGenerationHandoff } from "@/lib/generationHandoff";
+import {
+  CREATE_FILTERS,
+  CREATE_FILTER_KEY,
+  CREATION_FILTER_EVENT,
+  OPEN_CREATION_SESSION_EVENT,
+  creationSessionKey,
+  isCreateFilter,
+  type CreateFilter,
+} from "@/lib/aiStudioLink";
+import { useOpenRequest } from "@/lib/deepLink";
+import { usePersistentTab } from "@/lib/usePersistentTab";
+import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
+import { CreateFilterRow, KindBadge, emptySessionsKey, familyKinds, generationKindOf } from "@/features/ai-studio/createFilter";
+import {
+  PodcastComposerFields,
+  PodcastDialogue,
+  PodcastSettings,
+  SpeechComposerField,
+  SpeechSettings,
+  TruncatedNote,
+  defaultVoicedOption,
+  isAudibleKind,
+  isVoicedKind,
+  podcastReady,
+  podcastRequest,
+  speechReady,
+  speechRequest,
+  useVoiceLabels,
+  useSpeechDraft,
+  usePodcastDraft,
+  useVoicedOptions,
+  voicedBubbleText,
+  voicedCount,
+  voicedEngineName,
+  voicedPickerEntry,
+  voicedTitle,
+  type VoicedOption,
+} from "@/features/ai-studio/voicedCreation";
+import type { ScriptTurn } from "@/features/ai-studio/podcastScript";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
 import {
@@ -323,11 +363,8 @@ function findGenerationOption(
  * 两页是同一个组件、同一条生成管线 —— 差的只是列哪几种模型、列哪几条会话(会话按种类分页,见后端
  * `GET /generation/sessions?kind=`)。第一种是这一页的缺省:新会话记成它,没设默认时先挑它的默认模型。
  */
-export const GENERATION_MEDIA = {
-  visual: ["image", "video"],
-  audio: ["audio"],
-} as const satisfies Record<string, readonly string[]>;
-export type GenerationMedium = keyof typeof GENERATION_MEDIA;
+//: 生成管线的几种(ADR 0022):模型清单按它们各拉一份。语音、播客的引擎来自配音那一族(voicedCreation)。
+const GENERATION_KINDS = ["image", "video", "audio"] as const;
 
 /**
  * 生成的样子和对话一样:左边会话,中间这条会话的来回,右边模型与参数。
@@ -337,11 +374,9 @@ export type GenerationMedium = keyof typeof GENERATION_MEDIA;
  */
 export function GenerateWorkspace({
   workspace,
-  medium,
   switcher,
 }: {
   workspace: Workspace;
-  medium: GenerationMedium;
   switcher?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -356,9 +391,10 @@ export function GenerateWorkspace({
   const enginePanel = React.useRef<HTMLElement>(null);
   const enginePanelId = React.useId();
   const [engineFlash, setEngineFlash] = React.useState(0);
-  const kinds = GENERATION_MEDIA[medium];
-  //: 两页各记各的「上次开着哪条」—— 同一个键的话,切到另一页会先落在一条不属于它的会话上。
-  const sessionKey = `${generationSessionSelectionKey(workspace.id)}.${medium}`;
+  //: 创作页(ADR 0055):一份会话列表,上面一排筛选(全部 · 图像 · 视频 · 语音 · 播客 · 音乐),记在本机。
+  const [filter, setFilter] = usePersistentTab<CreateFilter>(CREATE_FILTER_KEY, "all", CREATE_FILTERS);
+  //: 「上次开着哪条」一个键:筛选只是看哪几条,不是另一页。
+  const sessionKey = creationSessionKey(workspace.id);
   const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
   const [prompt, setPrompt] = React.useState("");
   //: 这一次 `@` 到的资产(ADR 0027):提示词描述和参考图由服务端按所选模型收得下的张数挂上。
@@ -369,17 +405,31 @@ export function GenerateWorkspace({
 
   const sessions = useQuery({
     //: 键以 ["generation-sessions", 工作区] 开头:会话列表、共享菜单按这个前缀失效,两页一起刷。
-    queryKey: ["generation-sessions", workspace.id, medium],
+    queryKey: ["generation-sessions", workspace.id, filter],
+    //: 在服务端筛,不在界面上筛:列表有条数上限,界面筛的话一种会话能把另一种挤出去。
     queryFn: () =>
       api<GenerationSession[]>(
-        `/api/generation/sessions?workspace_id=${workspace.id}${kinds.map((kind) => `&kind=${kind}`).join("")}`,
+        `/api/generation/sessions?workspace_id=${workspace.id}${filter === "all" ? "" : `&kind=${filter}`}`,
       ),
   });
-  //: 这一页的几种生成各拉一份选项(音频和图像、视频是同一条管线,ADR 0022;只是不在同一页)。
-  const generationOptions = useGenerationOptions(kinds);
+  //: 别处要求打开某一条创作会话(任务中心「前往」、智能体 open_view("ai", id)、资产详情「在哪里用过」):筛选回到「全部」
+  //: (那一条是什么种类这边不知道),开着它。
+  useOpenRequest(OPEN_CREATION_SESSION_EVENT, (id) => {
+    setFilter("all");
+    setSessionId(id);
+    window.localStorage.setItem(sessionKey, id);
+  });
+  //: 「筛选换成这一种」(模型库「用它生成」带着种类过来)。
+  useOpenRequest(CREATION_FILTER_EVENT, (kind) => {
+    if (isCreateFilter(kind)) setFilter(kind);
+  });
+  //: 生成管线的几种各拉一份选项;语音、播客的引擎另拉(useVoicedOptions)。
+  const generationOptions = useGenerationOptions(GENERATION_KINDS);
+  const voicedOptions = useVoicedOptions();
+  //: 挂着创作记录的任务(生成、语音、播客):按种类列 `tts` 会把字幕配音的几百句零件一起拉回来。
   const jobs = useQuery({
-    queryKey: ["jobs", workspace.id, "ai_generation"],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&kind=ai_generation`),
+    queryKey: ["jobs", workspace.id, "creation"],
+    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&recorded=true`),
     refetchInterval: (query) =>
       query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1000 : false,
     refetchOnWindowFocus: true,
@@ -435,27 +485,70 @@ export function GenerateWorkspace({
   //: 「完整工作流」,和它的表单分得开。
   const formed = React.useMemo(() => formedGroups(modelOptions), [modelOptions]);
   const namesOf = (option: GenerationOption) => generationOptionNames(option, formed, t);
+  //: 会话锁「族」(ADR 0055 §2):有记录的会话,下拉只列同一族(视觉 = 图像 + 视频、音乐、语音、播客);想换族就新开一条。
+  //: 没有记录的(新的一条、刚开还空着的)按筛选列:选了「语音」就只列语音引擎,「全部」列全部。
+  const hasRecords = (sessionJobs.data ?? []).length > 0;
+  const familyLocked = Boolean(activeSession?.kind && hasRecords);
+  const pickerKinds: readonly string[] | null = familyLocked
+    ? familyKinds(activeSession!.kind!)
+    : filter === "all" ? null : [filter];
+  const pickerModelOptions = React.useMemo(
+    () => (pickerKinds ? modelOptions.filter((option) => pickerKinds.includes(option.kind)) : modelOptions),
+    // pickerKinds 每次是新数组;按它的内容比
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [modelOptions, pickerKinds?.join(",")],
+  );
+  const pickerVoicedOptions = pickerKinds
+    ? voicedOptions.options.filter((option) => pickerKinds.includes(option.kind))
+    : voicedOptions.options;
+  const voicedByValue = React.useMemo(
+    () => new Map(voicedOptions.options.map((option) => [option.value, option])),
+    [voicedOptions.options],
+  );
+  //: 语音、播客那一族选中的是哪个引擎:这次挑的 → 会话记着的(语音 / 播客会话的 model 是引擎 id)→ 新的一条按筛选落在默认引擎上
+  //: (语音先 Edge:内置、免费,不替人挑一个要花钱的)。挑了生成模型(modelId 不是语音 / 播客的值)就不是这一族。
+  const sessionVoicedKind = isVoicedKind(activeSession?.kind) ? activeSession!.kind as "speech" | "podcast" : null;
+  const pickedVoiced = modelId ? voicedByValue.get(modelId) ?? null : null;
+  const voicedChoice: VoicedOption | null =
+    pickedVoiced ??
+    (modelId
+      ? null
+      : sessionVoicedKind
+        ? voicedOptions.options.find((option) => option.kind === sessionVoicedKind && option.engine.id === activeSession?.model) ??
+          defaultVoicedOption(voicedOptions.options, sessionVoicedKind)
+        : !activeSession && isVoicedKind(filter)
+          ? defaultVoicedOption(voicedOptions.options, filter)
+          : null);
+  //: 生成管线那几种的「记着的」:语音、播客会话不算(它们的 model 是配音引擎,不在生成选项里)。
   const sessionEngine =
-    activeSession?.provider_profile_id && activeSession.model && activeSession.kind
+    !sessionVoicedKind && activeSession?.provider_profile_id && activeSession.model && activeSession.kind
       ? { provider_profile_id: activeSession.provider_profile_id, model: activeSession.model, kind: activeSession.kind }
       : null;
+  //: 新的一条先落在哪一种的默认上:筛选那一种;「全部」时图像。
+  const preferredKind = generationKindOf(pickerKinds?.[0]) ?? "image";
   //: 这次挑的 → 会话记着的 → (会话什么都没记着时)用户设的默认(先这一页的第一种,没有就这一页随便哪一种的默认)→ 没有。
   //: **不拿第一项顶上**:没设默认时选择器显示「选择模型」,等人选(见 pickGenerationOption)。**会话记着的不在选项里,也不拿
   //: 默认顶上**(见 chooseGenerationOption):此前顶上的是默认的按次付费模型,下拉、右栏、底下那枚按钮全是它,点发送就拿它去
   //: 生成了,而用户以为在用他的 ComfyUI 工作流。现在显示的是记着的那个、标着用不了、说原因,发送键灰着;自己挑了别的才换。
-  const sessionChoice = chooseGenerationOption(modelOptions, sessionEngine, { kind: kinds[0], loaded: generationOptions.loaded });
+  const sessionChoice = chooseGenerationOption(pickerModelOptions, sessionEngine, { kind: preferredKind, loaded: generationOptions.loaded });
   const pickedOption = modelId ? optionByValue.get(modelId) ?? null : null;
-  const selectedModel = pickedOption ?? sessionChoice.option ?? (sessionEngine ? null : pickGenerationOption(modelOptions));
+  const selectedModel = voicedChoice || sessionVoicedKind
+    ? pickedOption
+    : pickedOption ?? sessionChoice.option ?? (sessionEngine ? null : pickGenerationOption(pickerModelOptions));
   //: 会话记着的那个现在用不了(这次也没挑别的):它叫什么、为什么、怎么修
-  const missingEngine = pickedOption ? null : sessionChoice.missing;
+  const missingEngine = pickedOption || voicedChoice ? null : sessionChoice.missing;
   const missingModel = useMissingModel(missingEngine);
   const generationModelsLoading = generationOptions.pending;
   //: 这一页的几种生成一个模型都没有。选项在后端就只列启用连接下启用的模型(provider_models.models_for_capability),
   //: 所以「没配置」只有这一种样子 —— 不再拿设置页的连接列表另判一遍「选中的这个配没配」:
   //: 那一判只在连接列表还没到或取失败时为真,表现为提示条一闪、或一直挂着。
-  const noGenerationModels = modelOptions.length === 0 && !generationModelsLoading;
-  //: 去配置时落到哪一页:选中的模型是哪种能力就去哪种;一个都没选时看会话记着的能力,再没有才去图像。
-  const settingsSection = `providers:${selectedModel?.kind ?? activeSession?.kind ?? kinds[0]}`;
+  //: 下拉里这会儿能挑的(按筛选 / 会话那一族)一个都没有。
+  const noGenerationModels =
+    pickerModelOptions.length === 0 && pickerVoicedOptions.length === 0 && !generationModelsLoading && voicedOptions.loaded;
+  //: 去配置时落到哪一页:选中的模型是哪种能力就去哪种;一个都没选时看会话记着的、筛选的那种,再没有才去图像。语音、播客去配音那一页。
+  const settingsSection = voicedChoice || isVoicedKind(filter)
+    ? "provider-audio"
+    : `providers:${selectedModel?.kind ?? generationKindOf(activeSession?.kind) ?? preferredKind}`;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
   const selectedResolutions = videoResolutionOptions(selectedModel);
@@ -536,7 +629,7 @@ export function GenerateWorkspace({
   const handedOver = React.useRef<{ value: string; declared: Record<string, string> } | null>(null);
   React.useEffect(() => {
     if (generationModelsLoading || sessions.isPending) return;
-    const handoff = takeGenerationHandoff(kinds);
+    const handoff = takeGenerationHandoff();
     if (!handoff) return;
     const option = findGenerationOption(modelOptions, handoff.providerProfileId, handoff.kind, handoff.model);
     if (!option) return;
@@ -563,16 +656,26 @@ export function GenerateWorkspace({
   }, [selectedModel?.value]);
   const modelGroups = React.useMemo(() => {
     const grouped = new Map<string, GenerationEngineOption[]>();
-    for (const model of modelOptions) {
+    for (const model of pickerModelOptions) {
       grouped.set(model.kind, [...(grouped.get(model.kind) ?? []), model]);
     }
     const known = ["image", "video", "audio"];
     return [...known, ...[...grouped.keys()].filter((kind) => !known.includes(kind))]
       .filter((kind) => (grouped.get(kind) ?? []).length > 0)
       .map((kind) => ({ kind, models: grouped.get(kind) ?? [] }));
-  }, [modelOptions]);
+  }, [pickerModelOptions]);
   const capabilityLabel = (kind: string) =>
-    kind === "image" ? t("capImage") : kind === "video" ? t("capVideo") : kind === "audio" ? t("capAudio") : kind;
+    kind === "image"
+      ? t("capImage")
+      : kind === "video"
+        ? t("capVideo")
+        : kind === "audio"
+          ? t("capAudio")
+          : kind === "speech"
+            ? t("createKindSpeech")
+            : kind === "podcast"
+              ? t("createKindPodcast")
+              : kind;
   const canSubmitText = hasEnoughText(selectedModel, prompt, generationConfig.lyrics, generationConfig.instrumental);
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
@@ -591,21 +694,24 @@ export function GenerateWorkspace({
       usePreviousImage: true,
     }));
   const selectEngine = (value: string) => {
-    const option = optionByValue.get(value);
-    if (!option || readOnly) return;
+    if (readOnly) return;
+    //: 语音、播客:会话记着的「模型」是引擎 id(音色、语速接着最后一条记录用的,见 useSpeechDraft)
+    const voiced = voicedByValue.get(value);
+    const option = voiced ? null : optionByValue.get(value);
+    if (!voiced && !option) return;
     setModelId(value);
     if (activeSession) {
       updateSessionEngine.mutate({
         id: activeSession.id,
-        provider_profile_id: option.provider_profile_id,
-        model: option.model,
-        kind: option.kind,
+        provider_profile_id: voiced ? null : option!.provider_profile_id,
+        model: voiced ? voiced.engine.id : option!.model,
+        kind: voiced ? voiced.kind : option!.kind,
       });
     }
   };
 
-  //: 新会话记着种类:它决定会话在哪一页(见 GENERATION_MEDIA)。
-  const newSessionKind = selectedModel?.kind ?? kinds[0];
+  //: 新会话记着种类:它决定会话在筛选里归哪一种(ADR 0055)。
+  const newSessionKind = selectedModel?.kind ?? preferredKind;
   //: 「+」:换成新的一条(草稿先行,和对话那边一样,ADR 0044)—— 不在服务端建一条空会话,第一次提交时才建(createGeneration)。
   //: 此前每点一次就建一条,当「清空输入、换个思路」用的人列表里积满空的「新生成」(UC-10)。
   const startNewSession = () => {
@@ -613,6 +719,11 @@ export function GenerateWorkspace({
     window.localStorage.removeItem(sessionKey);
   };
   const ordered = React.useMemo(() => sessionJobs.data ?? [], [sessionJobs.data]);
+  //: 老的语音记录(迁移过来的)没记音色名:标题从这条会话所用引擎的音色目录里认
+  const voiceLabels = useVoiceLabels(
+    workspace.id,
+    ordered.filter((generation) => generation.kind === "speech" && !generation.request?.voice_label).map((generation) => generation.provider),
+  );
   // 会话画廊:点开任意一张图,可左右翻看本会话的全部图片产出。
   //: **每条生成摊平成它的全部产出** —— 一次出四张时,画廊里就该有四张;只收封面的话,
   //: 用户左右翻着翻着会发现刚看到的那三张翻不到。
@@ -714,6 +825,45 @@ export function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
     },
   });
+  //: 语音、播客(ADR 0055):谁来念、播客的稿子和发音人。音色、语速、发音人接着这条会话最后一条记录用的。
+  const lastOf = (kind: string) => [...(sessionJobs.data ?? [])].reverse().find((generation) => generation.kind === kind) ?? null;
+  const speech = useSpeechDraft(workspace.id, voicedChoice?.kind === "speech" ? voicedChoice.engine.id : null, lastOf("speech"));
+  const podcast = usePodcastDraft(voicedOptions.options.some((option) => option.kind === "podcast"), lastOf("podcast"));
+  const voicedCanSubmit = voicedChoice
+    ? voicedChoice.kind === "speech"
+      ? speechReady(speech, prompt)
+      : podcastReady(podcast, prompt, voicedChoice.engine)
+    : false;
+  //: 念 / 做播客:没带会话就由后端现开一条(回执里的 session_id),这边接着开着它。远端引擎念配音库里的嗓子、这个账号
+  //: 第一次用时先问要不要传上去(ADR 0037)。
+  const createVoiced = useMutation({
+    mutationFn: async () => {
+      const base = { workspace_id: workspace.id, session_id: activeSession?.id ?? null };
+      const created = voicedChoice!.kind === "speech"
+        ? await withRemoteVoiceConsent(() => createSpeech({ ...base, ...speechRequest(speech, prompt) }))
+        : await createPodcast({ ...base, ...podcastRequest(podcast, prompt) });
+      return created.generation.session_id ?? null;
+    },
+    onSuccess: (targetSessionId) => {
+      setPrompt("");
+      if (voicedChoice?.kind === "podcast" && podcast.mode === "read") podcast.setTurns([{ speaker: 0, text: "" }]);
+      if (targetSessionId) {
+        setSessionId(targetSessionId);
+        window.localStorage.setItem(sessionKey, targetSessionId);
+      }
+      void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
+      void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId ?? undefined] });
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
+    },
+    onError: (error) => {
+      if (!isConsentDeclined(error)) toast.error(errorText(error));
+    },
+  });
+  //: 「改稿再念」:那一份对谈稿装进照稿念,发音人换成那一次的两位;引擎留在播客上,滚到底下的输入框
+  const rescriptPodcast = (turns: ScriptTurn[], speakers: string[]) => {
+    podcast.rescript(turns, speakers);
+    stick.scrollToBottom();
+  };
   //: 优化走的是「对话」默认 LLM,不是图像模型(见下方 mutationFn):能不能点看对话默认模型在不在,
   //: 和图像模型的适配器可不可用无关。默认值还在路上时不算缺。
   const chatModel = useEffectiveChatModel(null);
@@ -749,7 +899,7 @@ export function GenerateWorkspace({
       kind,
     }: {
       id: string;
-      provider_profile_id: string;
+      provider_profile_id: string | null;
       model: string;
       kind: string;
     }) =>
@@ -767,7 +917,7 @@ export function GenerateWorkspace({
   const stopGeneration = useMutation({
     mutationFn: (jobId: string) => cancelJob(jobId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
     },
     onError: (error) => toast.error(t("genStopFailed"), { description: errorText(error) }),
@@ -778,7 +928,7 @@ export function GenerateWorkspace({
   const retrieveAgain = useMutation({
     mutationFn: (generationId: string) => retrieveGeneration(generationId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+      void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
     },
     onError: (error) => toast.error(t("genRetrieveFailed"), { description: errorText(error) }),
@@ -833,8 +983,22 @@ export function GenerateWorkspace({
     };
   }, [engineFlash]);
 
+  //: 输入框底下那枚模型按钮写什么:生成模型的两层名字,或者语音 / 播客的引擎名(副名说是哪一种)。
+  const chipName = selectedModel
+    ? namesOf(selectedModel)
+    : voicedChoice
+      ? { primary: voicedChoice.engine.label, secondary: capabilityLabel(voicedChoice.kind) }
+      : null;
+  //: 底栏右边那个数:要念的字数 / 上限,照稿念的段数 / 上限。
+  const voicedCounter = voicedChoice ? voicedCount(voicedChoice.kind, prompt, podcast, t) : null;
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (voicedChoice) {
+      if (readOnly || !voicedCanSubmit || createVoiced.isPending) return;
+      stick.scrollToBottom();
+      createVoiced.mutate();
+      return;
+    }
     if (readOnly || !canSubmitText || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
     if (needsDigitalHumanConsent && !digitalHumanConsent) {
       toast.error(t("genDigitalHumanConsentNeeded"));
@@ -1159,6 +1323,9 @@ export function GenerateWorkspace({
           }}
           onCreate={startNewSession}
           creating={false}
+          toolbar={<CreateFilterRow value={filter} onChange={setFilter} />}
+          emptyTitle={t(emptySessionsKey(filter))}
+          extras={(session) => ({ badge: <KindBadge kind={session.kind} /> })}
           onDeleted={(ids) => {
             // 删掉的里面有正开着的那个,就把视图放下 —— 否则右边还停在一个已经不存在的会话上。
             if (sessionId && ids.includes(sessionId)) {
@@ -1168,7 +1335,7 @@ export function GenerateWorkspace({
             // 会话没了,它那些生成记录也不该继续挂在任务列表里。SessionList 只管会话这一层,
             // 连带要刷的东西由调用方说 —— 它不认识生成任务。
             void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id] });
-            void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "ai_generation"] });
+            void qc.invalidateQueries({ queryKey: ["jobs", workspace.id, "creation"] });
           }}
         />
       </StudioIndex>
@@ -1196,16 +1363,30 @@ export function GenerateWorkspace({
           )}
           {!(activeSession && sessionJobs.isLoading) && ordered.length === 0 && (
             <div className="m-auto">
-              <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={selectedPromptMode === "none" ? undefined : t(promptHintKey)} />
+              <EmptyState
+                icon={<Sparkles size={22} />}
+                title={t("noGenerationJobs")}
+                body={
+                  voicedChoice
+                    ? t(voicedChoice.kind === "speech" ? "createSpeechEmptyHint" : "createPodcastEmptyHint")
+                    : selectedPromptMode === "none" ? undefined : t(promptHintKey)
+                }
+              />
             </div>
           )}
           {ordered.map((generation) => {
-            const used = findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model);
+            const voiced = isVoicedKind(generation.kind);
+            const used = voiced ? null : findGenerationOption(modelOptions, generation.provider_profile_id ?? "", generation.kind, generation.model);
             return (
             <GenerationTurn
               key={generation.id}
               generation={generation}
-              engineName={used ? namesOf(used) : null}
+              engineName={voiced ? voicedEngineName(generation, voicedOptions.options, t) : used ? namesOf(used) : null}
+              voiced={voiced ? {
+                title: voicedTitle(generation, voiceLabels),
+                bubble: voicedBubbleText(generation, podcast.labelOf),
+                onRescript: readOnly ? undefined : rescriptPodcast,
+              } : undefined}
               option={used}
               job={jobs.data?.find((item) => item.id === generation.job_id) ?? null}
               gallery={sessionGallery}
@@ -1238,8 +1419,15 @@ export function GenerateWorkspace({
           >
             {/* 这一次带上的资产排在输入卡顶上 —— 和对话页的附件同一排、同一种小条(ComposerChips)。
                 此前挑中的资产和「@ 资产」按钮自成一行,夹在正文和底栏中间(用户截图:位置很怪)。 */}
-            <ComposerChips chips={entityMentionChips(mentionedEntities, setMentionedEntities)} className="px-0.5" />
-            {selectedPromptMode === "none" ? (
+            {!voicedChoice && (
+              <ComposerChips chips={entityMentionChips(mentionedEntities, setMentionedEntities)} className="px-0.5" />
+            )}
+            {/* 语音、播客:同一个输入卡,里面换成要念的字 / 播客的三档(ADR 0055) */}
+            {voicedChoice?.kind === "speech" ? (
+              <SpeechComposerField value={prompt} onChange={setPrompt} onSubmit={submit} composer={composer} />
+            ) : voicedChoice?.kind === "podcast" ? (
+              <PodcastComposerFields draft={podcast} text={prompt} setText={setPrompt} onSubmit={submit} composer={composer} />
+            ) : selectedPromptMode === "none" ? (
               // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的框,
               // 说清楚该做什么 —— 挂素材、调参数,直接生成。
               <p className="m-0 min-h-11 px-0 py-0.5 pb-1.5 text-ui-sm leading-[1.55] text-muted-foreground">
@@ -1293,9 +1481,9 @@ export function GenerateWorkspace({
                 )}
                 {/* 模型是一个能点的东西(和对话页的模型选择器同一种样子):点开右边的「引擎参数」,焦点落到模型选择上;
                     栏开着时这枚按钮是「按下」的样子(和顶上那颗「引擎参数」一样),点它把模型那一块亮一下。 */}
-                {selectedModel && (
+                {chipName && (
                   //: 悬停说全名(按钮上的可能被截断)和点下去会去哪儿。
-                  <Hint label={twoLayerTitle(namesOf(selectedModel))} hint={t("generationEngineChipHint")}>
+                  <Hint label={twoLayerTitle(chipName)} hint={t("generationEngineChipHint")}>
                     <button
                       type="button"
                       onClick={showEngineSettings}
@@ -1305,13 +1493,13 @@ export function GenerateWorkspace({
                       data-active={panelOpen ? "" : undefined}
                       className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none data-[active]:border-primary/40 data-[active]:bg-accent data-[active]:text-foreground"
                     >
-                      <Truncate>{namesOf(selectedModel).primary}</Truncate>
+                      <Truncate>{chipName.primary}</Truncate>
                       <SlidersHorizontal size={12} className="shrink-0 opacity-60" />
                     </button>
                   </Hint>
                 )}
                 {/* 会话记着的模型用不了:按钮上照样写它(标着需要升级 / 用不了),点开右栏看原因和出路 */}
-                {!selectedModel && missingEngine && (
+                {!chipName && missingEngine && (
                   <Hint label={twoLayerTitle(missingModelNames(missingModel.missing, t))} hint={missingModel.missing?.reason ?? null}>
                     <button
                       type="button"
@@ -1329,11 +1517,20 @@ export function GenerateWorkspace({
                 )}
                 {/* 参数栏开着时,「一个模型都没有」由那边的提示条说,这里不再摆第二个入口。 */}
                 {!(noGenerationModels && parametersOpen) && !missingEngine && (
-                  <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} section={settingsSection} />
+                  <GenerationModelGate hasModel={Boolean(chipName)} loading={generationModelsLoading} section={settingsSection} />
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {/* 提交键说在输入框旁边:回车只是换行 */}
+                {voicedCounter && (
+                  <span
+                    className={cn("text-ui-2xs tabular-nums text-muted-foreground", voicedCounter.over && "font-semibold text-destructive")}
+                    data-voiced-count=""
+                    aria-live="polite"
+                  >
+                    {voicedCounter.label}
+                  </span>
+                )}
                 <span className="text-ui-2xs text-muted-foreground max-[640px]:hidden" data-submit-hint="">
                   {t("genSubmitHint").replace("{keys}", formatCombo(SUBMIT_COMBO))}
                 </span>
@@ -1344,7 +1541,8 @@ export function GenerateWorkspace({
                   className="shrink-0 rounded-full"
                   label={t("generate")}
                   shortcut={formatCombo(SUBMIT_COMBO)}
-                  disabled={!canSubmitText || !selectedModel || !selectedAdapterAvailable} loading={createGeneration.isPending}
+                  disabled={voicedChoice ? !voicedCanSubmit : !canSubmitText || !selectedModel || !selectedAdapterAvailable}
+                  loading={voicedChoice ? createVoiced.isPending : createGeneration.isPending}
                   disabledReason={missingEngine && !selectedModel ? t("genModelMissingCannotSend") : undefined}
                 >
                   <Send size={15} />
@@ -1396,7 +1594,7 @@ export function GenerateWorkspace({
           )}
           {/* 模型选择器**有模型就摆出来**,哪怕还没选中任何一个:没设默认时它显示「选择模型」等人选,
               而不是拿清单第一项顶上 —— 那样选中的就不是谁的选择(见 pickGenerationOption)。 */}
-          {modelOptions.length > 0 && (
+          {(pickerModelOptions.length > 0 || pickerVoicedOptions.length > 0) && (
             <div
               data-engine-section=""
               data-flash={engineFlash ? "" : undefined}
@@ -1409,17 +1607,25 @@ export function GenerateWorkspace({
                     每行的图标撤了:它编码的是"图片还是视频",而分组标题已经说了同一件事,
                     搜索框在的时候那枚重复的小图标只是占掉了名字的位置。 */}
                 <SearchableSelect
-                  value={selectedModel?.value ?? ""}
+                  value={selectedModel?.value ?? voicedChoice?.value ?? ""}
                   missingLabel={missingEngine ? missingModelLabel(missingModel.missing, t) : null}
                   onValueChange={selectEngine}
-                  options={modelGroups.flatMap((group) =>
-                    group.models.map((model) => ({
-                      value: model.value,
-                      //: 有表单的工作流是一小组:小标题工作流名 + 连接名,下面「完整工作流」和每张表单(后端已经把它们排在一起)
-                      ...generationPickerEntry(model, formed, t),
-                      group: capabilityLabel(group.kind),
+                  options={[
+                    ...modelGroups.flatMap((group) =>
+                      group.models.map((model) => ({
+                        value: model.value,
+                        //: 有表单的工作流是一小组:小标题工作流名 + 连接名,下面「完整工作流」和每张表单(后端已经把它们排在一起)
+                        ...generationPickerEntry(model, formed, t),
+                        group: capabilityLabel(group.kind),
+                      })),
+                    ),
+                    //: 语音(每个配音引擎)、播客(火山播客):引擎来自配音那一族,不进生成目录(ADR 0055)
+                    ...pickerVoicedOptions.map((option) => ({
+                      value: option.value,
+                      ...voicedPickerEntry(option, t),
+                      group: capabilityLabel(option.kind),
                     })),
-                  )}
+                  ]}
                   placeholder={t("genPickModel")}
                   emptyText={t("cmdkEmpty")}
                   className={PARAMETER_CONTROL_CLASS}
@@ -1428,6 +1634,12 @@ export function GenerateWorkspace({
                 {missingEngine && (
                   <MissingModelNotice missing={missingModel.missing} pending={missingModel.pending} workspaceId={workspace.id}
                                       onPickAnother={pickAnotherModel} className="mt-1.5" />
+                )}
+                {/* 会话锁族:有记录的会话下拉只列同一族,说一句为什么、想换怎么办 */}
+                {familyLocked && activeSession?.kind && (
+                  <span className="mt-1 block text-ui-2xs leading-[1.45] text-muted-foreground" data-family-locked="">
+                    {t("createFamilyLocked").replace("{kind}", capabilityLabel(activeSession.kind))}
+                  </span>
                 )}
               </ParameterField>
               {/* 选中的是某台 ComfyUI 上的一张工作流:在工作台里打开它(画布 + 模型库、缺失项、应用、运行,ADR 0038) */}
@@ -1442,6 +1654,10 @@ export function GenerateWorkspace({
               )}
             </ParameterSection>
             </div>
+          )}
+          {voicedChoice?.kind === "speech" && <SpeechSettings voice={speech} workspaceId={workspace.id} />}
+          {voicedChoice?.kind === "podcast" && (
+            <PodcastSettings draft={podcast} engine={voicedChoice.engine} workspaceId={workspace.id} />
           )}
           {/* 作者给这张工作流挑了一张表(精简表单):右栏就是那张表 —— 表上的项、表上的顺序、表上的名字,
               主提示词指向下面的输入框。和工作流库里那张表的「预览」说的是同一件事。 */}
@@ -1725,6 +1941,7 @@ function turnStatus(generation: GenerationJob, job: Job | null): TurnStatus {
 function GenerationTurn({
   generation,
   engineName: knownName,
+  voiced,
   option,
   job,
   gallery,
@@ -1740,6 +1957,8 @@ function GenerationTurn({
   /** 用的哪条连接上的哪个模型,两层名字(ADR 0045):脚注写主名,副名(来自哪张工作流、哪台服务器)在悬停里。连接或模型
    *  已经不在选项里了是 null:问一下它叫什么、现在怎么了(「krea2-text-2-image 的表单 · 需要升级」),不露编号。 */
   engineName: TwoLayerName | null;
+  /** 语音、播客的记录(ADR 0055):结果卡标题(音色名 / 播客主题)、气泡里写什么、「改稿再念」(只读的会话不给)。 */
+  voiced?: { title: string; bubble: string; onRescript?: (turns: ScriptTurn[], speakers: string[]) => void };
   /** 这条用的那个模型(还在选项里的话):占位按它说的「一遍交回几份」摆。 */
   option: GenerationOption | null;
   job: Job | null;
@@ -1782,10 +2001,11 @@ function GenerationTurn({
   const now = useNow(pending ? 1000 : 30_000);
   //: 音频可以只给歌词(或者给视频配声什么字都不给):气泡里就显示歌词,都没有时说「按素材生成」。
   const requestParameters = (generation.request.parameters ?? {}) as Record<string, unknown>;
-  const prompt =
-    String(generation.request.prompt ?? "").trim() ||
-    String(requestParameters.lyrics ?? "").trim() ||
-    (generation.kind === "audio" ? t("genAudioFromSources") : "");
+  const prompt = voiced
+    ? voiced.bubble
+    : String(generation.request.prompt ?? "").trim() ||
+      String(requestParameters.lyrics ?? "").trim() ||
+      (generation.kind === "audio" ? t("genAudioFromSources") : "");
   //: 还没结束的那一条,已用多久写在进度那一行里;结束了才进脚注(用了多久)。
   const elapsed = pending ? elapsedSecondsBetween(timestamp, now) : null;
   const finishedSeconds = pending ? null : elapsedSecondsBetween(timestamp, job?.updated_at ?? generation.updated_at);
@@ -1821,11 +2041,18 @@ function GenerationTurn({
         </MessageFooter>
         {/* `@` 到的资产挂了几张参考图、没挂上的为什么(ADR 0027)。全挂上了就什么都不写。 */}
         <EntityReceiptNote receipt={entityReceipt(generation.request)} />
+        {voiced && <TruncatedNote generation={generation} />}
       </div>
       <div className="grid min-h-7 justify-items-start gap-[7px] pb-2 pt-0.5">
-        {outputs.length > 0 && generation.kind === "audio" ? (
-          //: 一次可能交回几首(Suno 一次两首):每一首一张卡,而不是只放封面那一首。
-          <GeneratedAudioList assetIds={outputs} title={prompt.split("\n")[0]?.slice(0, 60) || generation.model} />
+        {outputs.length > 0 && isAudibleKind(generation.kind) ? (
+          //: 一次可能交回几首(Suno 一次两首):每一首一张卡,而不是只放封面那一首。语音、播客同一张卡(ADR 0055):
+          //: 波形、真时长、下载、在素材库里打开;播客下面多一块对谈稿和「改稿再念」。
+          <>
+            <GeneratedAudioList assetIds={outputs} title={voiced?.title || prompt.split("\n")[0]?.slice(0, 60) || generation.model} />
+            {generation.kind === "podcast" && (
+              <PodcastDialogue assetId={outputs[0]} generation={generation} onRescript={voiced?.onRescript} />
+            )}
+          </>
         ) : generation.result_asset_id && generation.kind === "video" ? (
           //: 全站共用的播放器(不是原生 controls):右下角那颗「全屏」开的是同一个灯箱,和本会话的其他产出一起左右翻。
           <GeneratedVideo
@@ -1982,7 +2209,7 @@ function GenerationProgress({
       className="grid w-full max-w-[min(560px,100%)] gap-2"
       data-generation-pending={running ? "running" : "queued"}
     >
-      {kind === "audio" ? (
+      {isAudibleKind(kind) ? (
         <PendingAudioList count={expected.count} running={running} />
       ) : (
         <PendingFrames kind={kind} expected={expected} running={running} fraction={fraction} />

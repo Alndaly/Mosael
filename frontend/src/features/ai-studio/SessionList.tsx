@@ -45,6 +45,8 @@ import { useDndAccessibility } from "@/components/app/dndAccessibility";
 export interface SessionRowExtras {
   subtitle?: string;
   goBack?: { label: string; hint: string; onClick: () => void };
+  /** 标题后面的小标(创作会话:这是哪一种 —— 图像、语音、播客……,ADR 0055)。 */
+  badge?: React.ReactNode;
 }
 
 /** 这个列表认得的会话:两种会话都有这三样,别的它不碰。 */
@@ -151,6 +153,8 @@ export function SessionList<S extends ListedSession>({
   creating,
   onDeleted,
   extras,
+  toolbar,
+  emptyTitle,
 }: {
   /** 对话还是生成 —— 两边各自一套分组,差异全在 SESSION_KINDS 那张表里。 */
   kind: SessionGroupKind;
@@ -165,6 +169,10 @@ export function SessionList<S extends ListedSession>({
   onDeleted: (ids: string[]) => void;
   /** 行上多说的一句、多出的一颗按钮(见 SessionRowExtras)。 */
   extras?: (session: S) => SessionRowExtras | null;
+  /** 标题行下面、搜索框上面的那一排(创作页的种类筛选)。 */
+  toolbar?: React.ReactNode;
+  /** 一条都没有时说什么。没给就是这一类会话的那句(SESSION_KINDS);创作页按筛选的种类说。 */
+  emptyTitle?: string;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -420,6 +428,7 @@ export function SessionList<S extends ListedSession>({
       {/* 搜索只在真有东西可搜时出现 —— 空列表上摆一个搜索框是纯占位。
           ⌘K 那个全局搜索**不覆盖对话**(只有导航/项目/素材/工作流/发布),所以这里是
           找回一次旧对话的唯一入口。 */}
+      {!selectMode && toolbar}
       {sessions.length > 0 && !selectMode && (
         <div className="relative shrink-0 px-3 py-3">
           <Search size={12} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -441,7 +450,7 @@ export function SessionList<S extends ListedSession>({
         )}
       >
         {loaded && sessions.length === 0 && groupList.length === 0 && (
-          <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={t(spec.empty)} />
+          <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={emptyTitle ?? t(spec.empty)} />
         )}
         {keyword && visible.length === 0 && (
           <EmptyState size="compact" icon={<SearchX size={15} />} title={t(spec.searchNoMatch)} />
@@ -650,8 +659,10 @@ function SessionRow({
       )}
       <span className="grid min-w-0 gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5">
-          <Truncate className="text-ui-sm">{session.title}</Truncate>
+          {/* 有小标时标题占满、小标靠右对齐成一列;没有时照旧(只读的那枚眼睛跟在标题后面) */}
+          <Truncate className={cn("text-ui-sm", extras?.badge && "min-w-0 flex-1")}>{session.title}</Truncate>
           {viewOnly && <Eye size={12} className="shrink-0 text-muted-foreground" aria-hidden />}
+          {extras?.badge}
         </span>
         {extras?.subtitle && <Truncate className="text-ui-xs text-muted-foreground">{extras.subtitle}</Truncate>}
       </span>

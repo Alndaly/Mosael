@@ -39,7 +39,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
-import { STUDIO_VIEWS } from "@/components/layout/navLabels";
+import { VALID_VIEWS, readHash, writeHash } from "@/app/hashRoute";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { LoadingState } from "@/components/layout/LoadingState";
@@ -77,6 +77,7 @@ import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
 import { VIEW_RECORD_EVENTS, gotoRecord, listenDesktopDeepLinks, openBoard } from "@/lib/deepLink";
+import { gotoAiChat, openCreationSession } from "@/lib/aiStudioLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { Hint, HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
@@ -467,26 +468,6 @@ function WorkspaceGate() {
   );
 }
 
-// 路由认哪些页面,和侧栏/面包屑认哪些页面,是同一件事 —— 手抄第三遍就会漏第三次。
-const VALID_VIEWS: readonly string[] = STUDIO_VIEWS;
-
-function readHash(): { view: StudioView; projectId: string | null } {
-  // Hash routing survives file:// packaging — the fragment never hits HTTP.
-  const raw = window.location.hash.replace(/^#\/?/, "");
-  const [path, query] = raw.split("?");
-  const view = VALID_VIEWS.includes(path) ? (path as StudioView) : "home";
-  const projectId = new URLSearchParams(query ?? "").get("p");
-  return { view, projectId };
-}
-
-function writeHash(view: StudioView, projectId: string | null) {
-  const noteQuery = ["notes", "scenes", "boards", "entities"].includes(view) && window.location.hash.startsWith(`#/${view}?`) ? window.location.hash.split("?")[1] : "";
-  const query = noteQuery ? `?${noteQuery}` : projectId ? `?p=${projectId}` : "";
-  const next = `#/${view}${query}`;
-  if (window.location.hash !== next)
-    window.history.replaceState(null, "", next);
-}
-
 function Studio({
   workspace,
   workspaces,
@@ -584,6 +565,11 @@ function Studio({
       else if (id && ["scenes", "notes", "entities"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : "entity"}=${encodeURIComponent(id)}`;
       //: 工作流的 id:和 mosael:// 深链、任务中心「前往」同一条路(打开那一条工作流)。
       else if (next === "workflows" && id) gotoRecord("/workflows", VIEW_RECORD_EVENTS.workflows, id);
+      //: AI Studio:带 id 是那条创作会话(generate_* 的回执里给的 session_id),不带是对话分区(ADR 0055 §9)
+      else if (next === "ai") {
+        if (id) openCreationSession(id);
+        else gotoAiChat();
+      }
       else navigate(next as StudioView);
     },
   });

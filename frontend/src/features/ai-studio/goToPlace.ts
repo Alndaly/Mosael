@@ -11,6 +11,7 @@ import { comfyParts, homeOf, type AgentPlace } from "@/features/agent/places";
 import type { SessionHome } from "@/features/agent/homeLabel";
 import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/workbenchSession";
 import { VIEW_RECORD_EVENTS, gotoRecord, openBoard, openNote } from "@/lib/deepLink";
+import { gotoAiChat } from "@/lib/aiStudioLink";
 
 async function openComfy(workspaceId: string, placeId: string): Promise<void> {
   const { connection, path } = comfyParts(placeId);
@@ -28,7 +29,8 @@ async function openComfy(workspaceId: string, placeId: string): Promise<void> {
 export function goToPlace(workspaceId: string, place: AgentPlace): Promise<void> | void {
   switch (place.kind) {
     case "studio":
-      window.location.hash = "#/ai";
+      //: 对话分区:只跳 `#/ai` 的话落在上次停的那个分区(上次在创作就落错,ADR 0055 §9)
+      gotoAiChat();
       return;
     case "project":
       gotoRecord(`/editor?p=${encodeURIComponent(place.id)}`);

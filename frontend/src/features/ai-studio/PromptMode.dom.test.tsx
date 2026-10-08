@@ -54,7 +54,7 @@ afterEach(() => {
 });
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("mosael:tab:ai-studio", "generate");
+  localStorage.setItem("mosael:tab:ai-studio", "create");
 });
 
 function imageOption(model: string, capabilities: Record<string, unknown>, kind = "image", adapterAvailable = true) {

@@ -98,8 +98,9 @@ function remoteVoiceChoices(voice: SpeechVoice, t: ReturnType<typeof useI18n>) {
   return { typing, choices, value, showInput: typing && !voice.speaksClonedVoice };
 }
 
-/** 引擎 → (克隆引擎 + 音色 | 发音人 | 手填 id) → 语速。状态全在 `voice` 里。 */
-export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
+/** 引擎 → (克隆引擎 + 音色 | 发音人 | 手填 id) → 语速。状态全在 `voice` 里。
+ *  `hideEngine`:引擎在别处挑(创作页的模型下拉,ADR 0055),这里只摆音色和语速;引擎用不了的那句也归那边说。 */
+export function SpeechVoiceFields({ voice, hideEngine = false }: { voice: SpeechVoice; hideEngine?: boolean }) {
   const t = useI18n();
   const { engine, activeEngine } = voice;
   const remote = remoteVoiceChoices(voice, t);
@@ -109,6 +110,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
   };
   return (
     <div className="grid gap-3">
+      {!hideEngine && (
       <VoiceField label={t("voiceEngine")}>
         <Select value={engine} onValueChange={voice.setEngine}>
           <SelectTrigger className="w-full min-w-0" aria-label={t("voiceEngine")}>
@@ -123,6 +125,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
           </SelectContent>
         </Select>
       </VoiceField>
+      )}
 
       {/* 本地克隆:**音色也在这里选**,和远端引擎的发音人同一个位置 ——
           此前唯一的选法是去下面的音色库点卡片,没点之前悄悄用第一个。 */}
@@ -222,7 +225,8 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
           {t("voiceClonedOnEngineHint")}
         </p>
       )}
-      {engine !== CLONE_ENGINE && activeEngine?.note && (
+      {/* 引擎在别处挑时(hideEngine),「用不了」由那边的提示条说(带去配置的出路),这里不再写一遍。 */}
+      {engine !== CLONE_ENGINE && activeEngine?.note && !(hideEngine && activeEngine.ready === false) && (
         <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>
           {activeEngine.note}
         </p>

@@ -57,9 +57,9 @@ afterEach(() => {
 });
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("mosael:tab:ai-studio", "generate");
+  localStorage.setItem("mosael:tab:ai-studio", "create");
   //: 上次开着的是 s1(没选过会话时停在「新的一条」,不落进最近那条,见 UC-03)
-  localStorage.setItem("mosael.generation.session.w1.visual", "s1");
+  localStorage.setItem("mosael.generation.session.w1.create", "s1");
 });
 
 const COMFY = {

@@ -54,7 +54,7 @@ afterEach(() => {
 });
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("mosael:tab:ai-studio", "generate");
+  localStorage.setItem("mosael:tab:ai-studio", "create");
 });
 
 const GPT_IMAGE_2 = {

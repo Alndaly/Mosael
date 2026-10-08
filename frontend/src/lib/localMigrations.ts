@@ -1,4 +1,5 @@
 import { migrateModelPreviewBlur } from "@/components/generation/modelPreviewSettings";
+import { migrateAiStudioCreate } from "@/lib/aiStudioLink";
 
 /**
  * **本机存的设置**(localStorage)换形状时的迁移,和后端的 `db/migrations.py` 同一个立场:旧形状一次性改成新形状,
@@ -10,6 +11,8 @@ import { migrateModelPreviewBlur } from "@/components/generation/modelPreviewSet
 const STEPS: readonly { id: string; run: (storage: Storage) => void }[] = [
   //: 模型库的「模糊预览图」开关换成预览图分档 + NSFW 单独管(ADR 0038 §9)
   { id: "model-preview-levels", run: migrateModelPreviewBlur },
+  //: AI Studio「对话 | 生成 | 音频」→「对话 | 创作」:分区、筛选、上次开着的会话(ADR 0055 §9)
+  { id: "ai-studio-create", run: migrateAiStudioCreate },
 ];
 
 export function runLocalMigrations(storage?: Storage): void {

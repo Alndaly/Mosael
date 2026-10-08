@@ -19,7 +19,7 @@ export const mediaLibrary = {
   mediaNoMatchingAssets: "没有匹配的素材",
   // 面板标题用内容名词(不复用侧栏/标签词),避免"对话/发布/批量"同名歧义。
   chatSessionsTitle: "对话记录",
-  generationSessionsTitle: "生成会话",
+  generationSessionsTitle: "创作会话",
   agentInspectorTitle: "智能体环境",
   agentInspectorOverview: "概览",
   agentInspectorRecentTools: "最近工具",

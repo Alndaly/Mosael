@@ -6,6 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { AGENT_DRAFT_EVENT, startAgentDraft } from "@/features/agent/currentAgentSession";
 import { STUDIO_PLACE } from "@/features/agent/places";
 import { emitOpenEvent, gotoRecord } from "@/lib/deepLink";
+import { gotoAiChat } from "@/lib/aiStudioLink";
 
 import type { PageInfo } from "./pageActions";
 import type { ToolNotice } from "./useToolNotice";
@@ -44,7 +45,8 @@ export function useStartTools(workspaceId: string, page: PageInfo, profileId: ()
     onSuccess: () => {
       emitOpenEvent(AGENT_DRAFT_EVENT, `${t("browserToolsAgentDraft")}\n${page.title || page.url}\n${page.url}\n`);
       void window.mosaelPublish?.hideView();
-      gotoRecord("/ai");
+      //: 草稿在对话分区(ADR 0055 §9)
+      gotoAiChat();
     },
     onError: failed,
   });

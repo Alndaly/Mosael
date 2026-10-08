@@ -58,9 +58,9 @@ afterEach(() => {
 });
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("mosael:tab:ai-studio", "generate");
+  localStorage.setItem("mosael:tab:ai-studio", "create");
   //: 上次开着的是 s1(没选过会话时停在「新的一条」,不落进最近那条,见 UC-03)
-  localStorage.setItem("mosael.generation.session.w1.visual", "s1");
+  localStorage.setItem("mosael.generation.session.w1.create", "s1");
 });
 
 const IMAGE_OPTION = {
@@ -503,7 +503,7 @@ describe("会话记着的模型用不了:显示的就是它,不拿默认模型�
 
 describe("没选过会话时停在「新的一条」;「+」不建空会话(UC-03、UC-10)", () => {
   it("有会话也不落进最近那一条:标题是「新生成」、没有那条的记录;第一次提交才建会话、记下用的模型", async () => {
-    localStorage.removeItem("mosael.generation.session.w1.visual");
+    localStorage.removeItem("mosael.generation.session.w1.create");
     const record = { id: "g1", workspace_id: "w1", session_id: "s1", job_id: null, provider_profile_id: "p1", provider: "openai",
                      model: "gpt-image-1", kind: "image", request: { prompt: "画板那一次" }, result_asset_id: "a1",
                      result_asset_ids: ["a1"], error: null, created_at: "2026-10-06T00:00:00Z", updated_at: "2026-10-06T00:00:11Z" };
@@ -533,7 +533,7 @@ describe("没选过会话时停在「新的一条」;「+」不建空会话(UC-0
 
 describe("生成框:⌘Enter / Ctrl+Enter 生成,回车换行(UC-04)", () => {
   it("回车不发;⌘Enter、Ctrl+Enter 发;输入框旁边说着快捷键", async () => {
-    localStorage.removeItem("mosael.generation.session.w1.visual");
+    localStorage.removeItem("mosael.generation.session.w1.create");
     const { writes } = renderStudio();
     const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
     fireEvent.change(box, { target: { value: "第一行" } });

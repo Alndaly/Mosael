@@ -41,7 +41,7 @@ beforeAll(() => {
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  takeGenerationHandoff(["image", "video", "audio"]);
+  takeGenerationHandoff();
 });
 beforeEach(() => {
   localStorage.clear();
@@ -112,7 +112,7 @@ describe("模型库交过来的「用它生成」", () => {
   });
 
   it("没人交东西过来:照旧落在默认模型上", async () => {
-    localStorage.setItem("mosael:tab:ai-studio", "generate");
+    localStorage.setItem("mosael:tab:ai-studio", "create");
     const { posts } = renderStudio();
     const prompt = (await screen.findByRole("textbox", { name: "genPromptLabel" })) as HTMLTextAreaElement;
     expect(prompt.value).toBe("");

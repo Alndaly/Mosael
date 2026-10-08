@@ -41,6 +41,7 @@ import { usePageTrail } from "@/components/layout/pageTrail";
 import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { openBoard } from "@/lib/deepLink";
+import { aiStudioHref, openCreationSession } from "@/lib/aiStudioLink";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
@@ -754,7 +755,8 @@ function UsageSection({ workspaceId, entityId }: { workspaceId: string; entityId
             }
             title={one.prompt || one.model}
             meta={`${one.model} · ${one.created_at.slice(0, 10)}`}
-            onOpen={() => go("#/ai")}
+            //: 打开那条创作会话(ADR 0055 §9);老记录没挂在会话上的去创作分区
+            onOpen={() => (one.session_id ? openCreationSession(one.session_id) : go(aiStudioHref("create")))}
             thumb={one.result_asset_id}
             session={one.session_id}
           />
