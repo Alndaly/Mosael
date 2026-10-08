@@ -515,6 +515,29 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
   });
 
+  //: PLG-10:「表单」页签此前按 workflow.key 重挂,一张没存过的工作流第一次存盘(或改名、挪文件夹)时 key 变了,没同步的草稿静默没了
+  it("表单:没同步到画布的草稿,在 ComfyUI 里第一次存盘 / 改名之后还在;换到别的一张才重读", async () => {
+    const unsaved = { path: "", name: "Unsaved Workflow", temporary: true, modified: true, key: "Unsaved Workflow", revision: 1 };
+    const saved = { path: "人像/新的.json", name: "新的", temporary: false, modified: false, key: "workflows/人像/新的.json",
+                    revision: 2 };
+    const bridge = await mount(state({ workflow: unsaved }));
+    api.getCanvasApp.mockResolvedValue(appData());
+    tab("workbenchTabApp");
+    await waitFor(() => expect(document.querySelector("[data-no-forms]")).toBeTruthy());
+    fireEvent.click(within(document.querySelector("[data-no-forms]") as HTMLElement).getByRole("button", { name: /workflowFormNew/ }));
+    fireEvent.change(screen.getByPlaceholderText("workflowAppNamePlaceholder"), { target: { value: "草稿里的" } });
+    expect(api.getCanvasApp).toHaveBeenCalledTimes(1);
+    bridge.emit(state({ workflow: saved, renames: [{ from: unsaved, to: saved }] }));
+    await waitFor(() => expect(screen.getByText("新的")).toBeTruthy());
+    expect((screen.getByPlaceholderText("workflowAppNamePlaceholder") as HTMLInputElement).value, "草稿还在").toBe("草稿里的");
+    expect(api.getCanvasApp, "同一张:不重读、不重挂").toHaveBeenCalledTimes(1);
+    const renamed = { ...saved, path: "归档/新的.json", key: "workflows/归档/新的.json", revision: 3 };
+    bridge.emit(state({ workflow: renamed, renames: [{ from: saved, to: renamed }] }));
+    expect((screen.getByPlaceholderText("workflowAppNamePlaceholder") as HTMLInputElement).value, "再改名也还在").toBe("草稿里的");
+    bridge.emit(state({ workflow: { ...GUFENG } }));
+    await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledTimes(2));
+  });
+
   //: PLG-1:上一版的表单这一版读成「没有表单」,此前照常摆编辑器、「结果取自」;写一次再一存盘,作者的表单就永久没了
   it("表单:画布上这张的表单是上一版的 —— 不摆编辑器、不给写,说清楚;「查看并升级」和工作流库同一个弹窗,压在外壳之上", async () => {
     const bridge = await mount(state({ workflow: { ...GUFENG, modified: false } }));

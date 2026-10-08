@@ -21,7 +21,7 @@ import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
 import { savedPath } from "@/features/plugins/workbench/workbenchLogic";
 import { PanelLoading, PanelNote } from "@/features/plugins/workbench/workbenchParts";
-import { useWorkbench, workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
+import { onWorkbenchPlaces, useWorkbench, workbenchCall, type WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { comboFromEvent, formatCombo, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -83,6 +83,19 @@ function useCatalogFollowsWorkbench(target: WorkbenchTarget | null, workflow: Co
 }
 
 /**
+ * 「表单」页签认的是**同一张**,不是它此刻的路径:同一张在 ComfyUI 里第一次存盘、改名、挪文件夹(桥报一次 `renames`),
+ * `workflow.key` 跟着变 —— 按 key 重挂的话,还没同步到画布的表单草稿(标题、挑的项、顺序)就静默没了(PLG-10)。地方变了的
+ * 消息和新快照在同一拍里交出来(见 workbenchSession.receive),这里先记下「新 key 还是那一张」,面板就不重挂;换到别的一张照旧重挂。
+ */
+function useSameWorkflowKey(workflowKey: string): string {
+  const [aliases] = React.useState(() => new Map<string, string>());
+  React.useEffect(() => onWorkbenchPlaces((news) => {
+    for (const { from, to } of news.renames) aliases.set(to.key, aliases.get(from.key) ?? from.key);
+  }), [aliases]);
+  return aliases.get(workflowKey) ?? workflowKey;
+}
+
+/**
  * ComfyUI 工作台(ADR 0038 §3):全屏,左边整块是那台 ComfyUI 自己的画布(内嵌视图,每个自定义节点照常能用),Mosael 的东西
  * 都画在它旁边 —— 顶栏(连接、工作流名、有没有没存的改动、操控方式、「保存」「运行」)和右边能收起、能拉宽拉窄的一列(模型库、
  * 缺失项、应用、运行与结果、助手 —— 智能体,ADR 0042)。网页是原生视图、盖在一切 DOM 上:顶栏占着视图上沿那 `barHeight`(和主进程 EMBED_HEADER_HEIGHT
@@ -107,6 +120,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const column = useColumnWidth(columnOpen && Boolean(target));
   const workflow = state?.workflow ?? null;
   const workflowKey = workflow?.key ?? "";
+  //: 表单页签按「同一张」挂:存盘、改名时不重挂,草稿不丢
+  const formsKey = useSameWorkflowKey(workflowKey);
   //: 工作台盖在页面上时,「眼下这一处」是这台 ComfyUI 上开着的那张(ADR 0044 §3、§11):助手接那一张的对话,换标签页
   //: 就换成那一张的;每条消息带着它,这一轮就有 ComfyUI 那份工具。关了工作台退回下面那一页。
   const agentPlace = useAgentPlace(target ? comfyPlace(target.instanceId, workflow) : null);
@@ -314,7 +329,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
                             revision={workflow?.revision ?? 0} />
             )}
             {one === "app" && (
-              <AppPanel key={workflowKey} target={target} path={path} canvasModified={Boolean(workflow?.modified)}
+              <AppPanel key={formsKey} target={target} path={path} canvasModified={Boolean(workflow?.modified)}
                         canExport={capabilities ? capabilities.export : false}
                         canMark={capabilities ? capabilities.marks : false} />
             )}
