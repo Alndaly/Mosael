@@ -1263,7 +1263,7 @@ function SceneEditor({
                   </MenuContent>
                 </Popover>
               )}
-              <CanvasInputModeSwitch />
+              <CanvasInputModeSwitch scene />
               {/* 它全屏的是**这个视口**,不是整个编辑器 —— 按钮本来就长在视口自己那条
                   工具栏上,而人按它是想把画面看大。全屏时说明只剩「退出」和它的键。 */}
               <Hint

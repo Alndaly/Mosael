@@ -464,10 +464,7 @@ export const plugins = {
   workflowMore: "更多操作",
   //: 网页版没有工作台:打开这一张就是新标签页里开这台 ComfyUI(桌面版只有「在工作台里打开」)
   workflowOpenInComfy: "在 ComfyUI 里打开",
-  comfyNavigation: "画布操控方式",
-  comfyNavigationTrackpad: "触控板",
-  comfyNavigationMouse: "鼠标",
-  comfyNavigationHint: "画布操控方式:触控板是双指滑动平移、捏合缩放;鼠标是滚轮缩放、拖动空白处平移。只在 Mosael 里这个连接上生效,不改那台 ComfyUI 上存的设置",
+  comfyNavigationScope: "只在 Mosael 里这个连接上生效,不改那台 ComfyUI 上存的设置",
   comfyNavigationUnsupported: "这版 ComfyUI 前端没有画布操控方式的设置,没法在这里切换触控板 / 鼠标",
   workflowOpenInWorkbench: "在工作台里打开",
   workflowOpenInWorkbenchHint: "全屏打开这张工作流:左边是这台 ComfyUI 自己的画布,右边是 Mosael 的模型库、缺失项、表单和运行;回到 Mosael 会自动刷新",

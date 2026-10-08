@@ -788,9 +788,8 @@ describe("版式:空的、在读的摆在面板正中;每个页签自己滚动;�
     const crumbs = bar.querySelector<HTMLElement>("h1")!.parentElement!;
     expect(crumbs.className).toMatch(/\bitems-center\b/);
     expect(crumbs.className).toMatch(/\btext-ui-sm\b/);
-    const toggle = within(bar).getByRole("radiogroup", { name: "comfyNavigation" });
-    expect(toggle.className, "操控方式:外框和按钮一样高").toMatch(/\bh-8\b/);
-    for (const one of within(toggle).getAllByRole("radio")) expect(one.className).toMatch(/\btext-ui-sm\b/);
+    const toggle = bar.querySelector<HTMLElement>("[data-canvas-input-trigger]")!;
+    expect(toggle.className, "操控方式:和别的按钮一样高(一颗小图标按钮,不再是一大段分段控件)").toMatch(/\bh-8\b/);
   });
 });
 
