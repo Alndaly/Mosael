@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/recordingContext";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
+import type { MenuAction } from "@/components/app/ActionMenu";
 import { useAssetDetails, useAssetFacets, useAssetPages } from "@/lib/assetQueries";
 import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
@@ -84,18 +85,21 @@ const PREFETCH_ROWS = 3;
  * 删项目只置空),所以这一页不带项目语境:列出整个工作区的素材,导入也不挂项目。
  * 需要"属于某个项目"的素材,从剪辑页导入。
  */
+/** 卡片和完整详情都认得出的那几项:⋯ 菜单、右键、详情头部的动作只用到这些(改名、打标签、设为参考图、下载、删除)。 */
+type ActionTarget = Pick<AssetCard, "id" | "name" | "original_filename" | "workspace_id" | "kind" | "tags">;
+
 export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
   const { openRecorder } = useRecorder();
-  const [renaming, setRenaming] = React.useState<AssetCard | null>(null);
-  const [deleting, setDeleting] = React.useState<AssetCard | null>(null);
+  const [renaming, setRenaming] = React.useState<ActionTarget | null>(null);
+  const [deleting, setDeleting] = React.useState<ActionTarget | null>(null);
   //: 详情按 id 开(AssetPreviewModalById 自己取完整字段):列表只带卡片字段,深链点名的那一份也不一定在已经翻到的几页里。
   const [previewingId, setPreviewingId] = React.useState<string | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
-  const [editingTags, setEditingTags] = React.useState<AssetCard | null>(null);
+  const [editingTags, setEditingTags] = React.useState<ActionTarget | null>(null);
   //: 右键「设为某个资产的参考图…」(ADR 0027):图片和视频能当参考图。
-  const [referencing, setReferencing] = React.useState<AssetCard | null>(null);
+  const [referencing, setReferencing] = React.useState<ActionTarget | null>(null);
   // 筛选和排序是**这个人怎么用素材库**的一部分,不是这一刻的临时值 —— 切走再回来不该重置。
   // 搜索词是另一回事:它是"我此刻在找什么",留着反而会让人以为库里只有这几条。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
@@ -242,8 +246,10 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteAsset(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       setDeleteError(null);
+      //: 从详情里删的:那一份没了,详情跟着关。
+      setPreviewingId((current) => (current === id ? null : current));
       void refresh();
     },
     // Closed in onSettled, not onSuccess: a failed request used to leave the dialog
@@ -323,6 +329,23 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     const item = assetPreviewItem(asset);
     if (item) openImagePreview({ ...item, gallery });
   };
+
+  //: 详情头部那一排操作:和卡片的 ⋯ / 右键同一组动作,详情里也能改名、打标签、删(体检 UM-13)。
+  const detailActions = (asset: ActionTarget): MenuAction[] => [
+    { label: t("assetSaveLocal"), icon: <Download />, onSelect: () => saveAssetToDisk(asset) },
+    { label: t("rename"), icon: <Pencil />, onSelect: () => setRenaming(asset) },
+    { label: t("editTags"), icon: <Tag />, onSelect: () => setEditingTags(asset) },
+    ...(kindIsVisual(asset.kind) ? [{ label: t("assetSetAsReference"), icon: <Layers />, onSelect: () => setReferencing(asset) }] : []),
+    ...(asset.kind === "document" ? [{ label: t("docSaveAsNote"), icon: <NotebookPen />, disabled: saveAsNote.isPending, onSelect: () => saveAsNote.mutate(asset.id) }] : []),
+    ...(asset.kind === "video" ? [{ label: t("assetConvertGif"), icon: <ImagePlus />, disabled: convertGif.isPending, onSelect: () => convertGif.mutate(asset.id) }] : []),
+    ...(kindHasSound(asset.kind)
+      ? [
+          { label: t("separateAudio"), icon: <Scissors />, disabled: separateAudio.isPending, onSelect: () => separateAudio.mutate(asset.id) },
+          { label: t("denoiseAction"), icon: <AudioWaveform />, onSelect: () => denoise(asset.id) },
+        ]
+      : []),
+    { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setDeleting(asset) },
+  ];
 
   /** 一张卡片(网格)或一行(列表):点开详情 / 选择模式下勾选,⋯ 和右键是同一张菜单;图和视频角上还有一颗「看大图」。 */
   const renderAsset = (asset: AssetCard) => (
@@ -628,7 +651,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         </div>
       )}
 
-      <AssetPreviewModalById id={previewingId} onClose={closePreview} />
+      <AssetPreviewModalById id={previewingId} onClose={closePreview} actions={detailActions} />
       <SetAsReferenceDialog asset={referencing} onClose={() => setReferencing(null)} />
       {denoiseDialog}
       <RenameDialog

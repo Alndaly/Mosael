@@ -1,7 +1,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { getAsset } from "@/api/client";
+import { getAsset, type Asset } from "@/api/client";
+import type { MenuAction } from "@/components/app/ActionMenu";
 import { assetKeys } from "@/api/queryKeys";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 
@@ -11,14 +12,23 @@ import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
  * 画板参考槽、智能体工具结果拿到的通常只是投影(id / kind / name)，而详情弹窗需要完整的
  * media_info。统一在这一层按 id 补齐，调用方不用各自维护一份“先查素材再开弹窗”的状态机。
  */
-export function AssetPreviewModalById({ id, onClose }: { id: string | null; onClose: () => void }) {
+export function AssetPreviewModalById({
+  id,
+  onClose,
+  actions,
+}: {
+  id: string | null;
+  onClose: () => void;
+  /** 见 AssetPreviewModal 的 `actions`。 */
+  actions?: (asset: Asset) => MenuAction[];
+}) {
   const asset = useQuery({
     queryKey: assetKeys.detail(id ?? ""),
     enabled: Boolean(id),
     queryFn: () => getAsset(id!),
   });
 
-  return <AssetPreviewModal asset={id ? asset.data ?? null : null} onClose={onClose} />;
+  return <AssetPreviewModal asset={id ? asset.data ?? null : null} onClose={onClose} actions={actions} />;
 }
 
 /**

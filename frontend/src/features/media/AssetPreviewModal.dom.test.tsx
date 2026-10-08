@@ -108,4 +108,27 @@ describe("AssetPreviewModal", () => {
 
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  //: 体检 UM-13:详情里此前一个操作都没有,从 ⌘K、深链、通知跳过来看完想改名、删掉,只能关掉再回网格里找。
+  it("给了动作就在头部摆出来:前三个是按钮,其余(含删除)收进 ⋯;不给就不画", () => {
+    const rename = vi.fn();
+    const remove = vi.fn();
+    const actions = vi.fn(() => [
+      { label: "assetSaveLocal", icon: null, onSelect: vi.fn() },
+      { label: "rename", icon: null, onSelect: rename },
+      { label: "editTags", icon: null, onSelect: vi.fn() },
+      { label: "assetSetAsReference", icon: null, onSelect: vi.fn() },
+      { label: "delete", icon: null, destructive: true, onSelect: remove },
+    ]);
+    const view = render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} actions={actions} />);
+    expect(actions).toHaveBeenCalledWith(imageAsset);
+    const bar = document.querySelector("[data-asset-detail-actions]") as HTMLElement;
+    expect([...bar.querySelectorAll(":scope > button")].map((one) => one.textContent)).toEqual(["assetSaveLocal", "rename", "editTags", ""]);
+    fireEvent.click(screen.getByRole("button", { name: "rename" }));
+    expect(rename).toHaveBeenCalled();
+    view.unmount();
+
+    render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
+    expect(document.querySelector("[data-asset-detail-actions]")).toBeNull();
+  });
 });

@@ -5,7 +5,9 @@ import { toast } from "sonner";
 import { assetFileUrl, assetPreviewUrl, getAsset, type Asset } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
+import { ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -48,7 +50,20 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
  * 素材详情预览:顶部标题和分类,下方媒体与元数据;窄窗口将元数据移到媒体下方。
  * 图片可继续点开全屏,视频和音频共用播放控件。
  */
-export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onClose: () => void }) {
+export function AssetPreviewModal({
+  asset,
+  onClose,
+  actions,
+}: {
+  asset: Asset | null;
+  onClose: () => void;
+  /**
+   * 这一份能做的事(下载、改名、打标签、设为参考图、删除……),和卡片的 ⋯ / 右键同一组。头部前三个摆成按钮,其余收进 ⋯。
+   * 此前详情里一个操作都没有:从 ⌘K、深链、通知跳过来看完想改名、删掉,只能关掉再去几百张的网格里找(体检 UM-13)。
+   * 不给就不画(这张弹窗在很多只读的地方也挂着)。只对打开的那一份给,顺着「来自」点进去看的出处不给。
+   */
+  actions?: (asset: Asset) => MenuAction[];
+}) {
   const t = useI18n();
   const { openImagePreview, isImagePreviewOpen } = useImagePreview();
   const [copied, setCopied] = React.useState(false);
@@ -110,10 +125,11 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
             </button>
           )}
           <DialogTitle className="min-w-0 max-h-24 overflow-y-auto whitespace-normal text-ui-lg leading-snug [overflow-wrap:anywhere]">{shown.name}</DialogTitle>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">{kindLabel}</Badge>
             <Badge variant="outline">{t(assetOriginKey(shown))}</Badge>
             {showsContainsAi(shown) && <Badge variant="outline">{t("mediaSourceContainsAi")}</Badge>}
+            {actions && shown.id === asset.id && <DetailActions actions={actions(asset)} label={t("studioActions")} />}
           </div>
         </header>
         <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(200px,1fr)_minmax(0,180px)] md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,1fr)]">
@@ -215,5 +231,22 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** 头部那一排:前三个(下载、改名、打标签)摆成按钮,其余收进 ⋯ —— 和卡片的菜单同一组,不另起一套。 */
+function DetailActions({ actions, label }: { actions: MenuAction[]; label: string }) {
+  const shown = actions.filter((action) => !action.destructive).slice(0, 3);
+  const rest = actions.filter((action) => !shown.includes(action));
+  return (
+    <div data-asset-detail-actions="" className="ml-auto flex flex-wrap items-center gap-1">
+      {shown.map((action) => (
+        <Button key={action.label} variant="outline" size="xs" disabled={action.disabled} onClick={action.onSelect}>
+          {action.icon}
+          {action.label}
+        </Button>
+      ))}
+      {rest.length > 0 && <ActionMenu label={label} actions={rest} />}
+    </div>
   );
 }

@@ -19,6 +19,7 @@ vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   listAssetPage: vi.fn(),
   getAssetFacets: vi.fn(),
+  deleteAsset: vi.fn(async () => undefined),
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => (key === "viewFullSizeOf" ? "看大图:{name}" : key),
@@ -28,10 +29,12 @@ vi.mock("@/features/media/recordingContext", () => ({ useRecorder: () => ({ open
 vi.mock("@/features/media/UrlImportDialog", () => ({ UrlImportDialog: () => null }));
 const detail = vi.hoisted(() => vi.fn());
 const closeDetail = vi.hoisted(() => ({ current: () => {} }));
+const detailActions = vi.hoisted(() => ({ current: null as null | ((asset: unknown) => Array<{ label: string; onSelect: () => void }>) }));
 vi.mock("@/features/media/AssetPreviewModalById", () => ({
-  AssetPreviewModalById: ({ id, onClose }: { id: string | null; onClose: () => void }) => {
+  AssetPreviewModalById: ({ id, onClose, actions }: { id: string | null; onClose: () => void; actions?: (asset: unknown) => Array<{ label: string; onSelect: () => void }> }) => {
     detail(id);
     closeDetail.current = onClose;
+    detailActions.current = actions ?? null;
     return null;
   },
 }));
@@ -108,4 +111,16 @@ it("勾选模式里点「看大图」只看,不勾选", async () => {
   expect(screen.getByRole("button", { name: "addTags" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "poster 名字" }));
   expect(screen.getByRole("button", { name: "addTags" })).toBeEnabled();
+});
+
+//: 体检 UM-13:详情头部的动作和卡片菜单同一组;从详情里删掉那一份,详情跟着关。
+it("详情拿到的是卡片菜单那一组动作;从详情里删掉,详情跟着关", async () => {
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "voice 名字" }));
+  await waitFor(() => expect(detail).toHaveBeenCalledWith("voice"));
+  const actions = detailActions.current!(card("voice", "audio"));
+  expect(actions.map((one) => one.label)).toEqual(["assetSaveLocal", "rename", "editTags", "separateAudio", "denoiseAction", "delete"]);
+  act(() => actions.at(-1)!.onSelect());
+  fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
+  await waitFor(() => expect(detail).toHaveBeenLastCalledWith(null));
 });
