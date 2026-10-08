@@ -47,8 +47,8 @@ from families import family_applies, family_of, refined_by_civitai
 from comfy_http import Comfy
 from sources import canonical_url
 from lines import ComfyError, say
-from model_files import HEADER_SUFFIXES, SKIPPED_FOLDERS, HeaderRoute, data_file, files_in, folder_info, load_json, \
-    metadata_of, save_json
+from model_files import HEADER_SUFFIXES, SKIPPED_FOLDERS, BrokenHeader, HeaderRoute, data_file, files_in, folder_info, \
+    load_json, metadata_of, save_json
 from model_files import norm as _norm
 #: 同时读几个文件头。ComfyUI 是别人的机器、可能正在出图:几个并发就够,别把它的事件循环堵满。
 METADATA_WORKERS = 4
@@ -171,6 +171,11 @@ def _inputs(meta: dict[str, Any], header: Any, folder: str = "") -> dict[str, An
         if header.architecture:
             entry["gguf"] = header.architecture[:80]
     return entry
+
+
+def _broken(folder: str) -> dict[str, Any]:
+    """文件头读不了的那个文件记下的原料:标着 `broken`,结构那一格是空串(见 `_header_known`:算读过,文件没变就不再读)。"""
+    return {"meta": {}, "broken": True, **({"encoder": ""} if encoders.applies(folder) else {"weights": ""})}
 
 
 def _cache_key(folder: str, item: dict[str, Any]) -> str:
@@ -390,13 +395,18 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
         folder, item, old = job
         name = str(item["name"])
         key = _cache_key(folder, item)
-        header = route.read(folder, name, tensors=not encoders.applies(folder)) if _reads_header(folder) else None
-        if header is not None:
-            meta = header.meta if header.meta is not None else metadata_of(comfy, folder, name)
-            return key, _inputs(meta or {}, header, folder)
-        if old is not None:
-            return key, old  # 元数据上次读过了;权重等有了读头的地址再认
-        return key, _inputs(metadata_of(comfy, folder, name) or {}, None)
+        try:
+            header = route.read(folder, name, tensors=not encoders.applies(folder)) if _reads_header(folder) else None
+            if header is not None:
+                meta = header.meta if header.meta is not None else metadata_of(comfy, folder, name)
+                return key, _inputs(meta or {}, header, folder)
+            if old is not None:
+                return key, old  # 元数据上次读过了;权重等有了读头的地址再认
+            return key, _inputs(metadata_of(comfy, folder, name) or {}, None)
+        except BrokenHeader:
+            # 这一个文件的头 ComfyUI 自己也读不了(0 字节、没下完、截断):标出来,别的照常列。记成「读过了」(结构那一格
+            # 是空的),文件没变就不再去撞 —— 它变了(下完了、换了一份)缓存的键跟着变,会重新读
+            return key, _broken(folder)
 
     # 第一个要读头的先单独读:顺便看清这台有没有能用的读头地址 —— 没有的话,别让几个线程一起去撞
     first = next((job for job in wanted if _reads_header(job[0])), None)
@@ -429,6 +439,8 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
                 if isinstance(item.get(field), (int, float)):
                     entry[field] = item[field]
             entry.update({key: value for key, value in summary.items() if value})
+            if (inputs or {}).get("broken"):
+                entry["broken"] = True
             users = used_by.get(_norm(name))
             if users:
                 entry["used_by"] = users
@@ -525,7 +537,13 @@ def known_families(comfy: Comfy, files: list[tuple[str, str]]) -> dict[tuple[str
 
 def detail(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     folder, name = str(payload.get("folder") or ""), str(payload.get("name") or "")
-    meta = metadata_of(comfy, folder, name)
+    try:
+        meta = metadata_of(comfy, folder, name)
+    except BrokenHeader:
+        why = say(locale, "这个文件的文件头读不了(ComfyUI 自己也读不了):多半是没下完、下坏了或者被截断了 —— 重新下一份",
+                  "This file's header can't be read (ComfyUI can't read it either): it's most likely an unfinished, corrupted "
+                  "or truncated download. Download it again.")
+        return {"folder": folder, "name": name, "metadata": {}, "tags": [], "note": why, "broken": True}
     if meta is None:
         why = say(locale, "这个文件没有可读的元数据:只有 safetensors 文件的文件头里有,而且作者不一定写了",
                   "This file has no readable metadata: only safetensors files carry it in their header, and not every author writes it")

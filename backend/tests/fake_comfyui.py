@@ -645,6 +645,9 @@ class State:
     model_path_index: dict[str, int] = field(default_factory=dict)
     model_sizes: dict[str, int] = field(default_factory=dict)
     model_metadata: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: 文件头 ComfyUI 自己也读不了的(0 字节、没下完、截断):`/view_metadata` 对它们回 500 —— 真 ComfyUI 的 safetensors_header
+    #: 读不出 8 个字节时抛 struct.error,aiohttp 回 500。键是「目录/名字」
+    broken_headers: set[str] = field(default_factory=set)
     model_previews: set[str] = field(default_factory=set)
     #: ComfyUI-Custom-Scripts 的 `/pysssss/view/{目录/名字}`(模型库按段读文件头):`range` = 装了、认 Range(回 206);
     #: `missing` = 没装(404);`ignore_range` = 不认 Range、回 200 把整个文件发过来。文件的字节在 `model_bytes`(键是
@@ -1011,7 +1014,9 @@ class _Handler(BaseHTTPRequestHandler):
             folder = unquote(path[len("/view_metadata/"):])
             name = query.get("filename", [""])[0]
             meta = state.model_metadata.get(f"{folder}/{name}")
-            if not name.endswith(".safetensors") or name not in state.model_folders.get(folder, []) or meta is None:
+            if f"{folder}/{name}" in state.broken_headers and name in state.model_folders.get(folder, []):
+                self._json({"error": "500 Internal Server Error"}, 500)
+            elif not name.endswith(".safetensors") or name not in state.model_folders.get(folder, []) or meta is None:
                 self.send_response(404)
                 self.send_header("Content-Length", "0")
                 self.end_headers()

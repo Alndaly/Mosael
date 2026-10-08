@@ -36451,6 +36451,17 @@
                 "type": "null"
               }
             ]
+          },
+          "broken": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broken"
           }
         },
         "type": "object",

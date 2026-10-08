@@ -13400,6 +13400,8 @@ export interface components {
             used_by?: components["schemas"]["ModelLibraryRefOut"][];
             nsfw?: components["schemas"]["ModelNsfwOut"];
             source?: components["schemas"]["ModelSourceOut"] | null;
+            /** Broken */
+            broken?: boolean | null;
         };
         /** ModelLibraryFolderOut */
         ModelLibraryFolderOut: {

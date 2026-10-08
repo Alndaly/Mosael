@@ -172,6 +172,7 @@ def _model(raw: Any, base: str = "") -> tuple[dict[str, Any], str] | None:
         "title": _text(raw.get("title"), 300),
         "has_preview": bool(preview),
         "used_by": _refs(raw.get("used_by")),
+        "broken": True if raw.get("broken") is True else None,
     }, preview
 
 

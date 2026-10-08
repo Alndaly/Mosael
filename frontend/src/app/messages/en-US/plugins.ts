@@ -339,6 +339,8 @@ export const plugins = {
   modelLibraryUnreadable: "The models on this server couldn't be read yet",
   modelLibraryErrorTitle: "Couldn't read the model library",
   modelLibraryCheckSettings: "Check connection settings",
+  modelBroken: "Unreadable file",
+  modelBrokenHint: "This file's header can't be read (that ComfyUI can't read it either): it's most likely an unfinished, corrupted or truncated download. Download it again; other files aren't affected.",
   workflowLibraryOpen: "Open workflow library",
   workflowLibraryDesc: "The workflows saved on this server: node graph, what they take, which models they use, what is missing",
   workflowLibraryTitle: "{name} · Workflow library",

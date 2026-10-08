@@ -344,6 +344,8 @@ export const plugins = {
   modelLibraryUnreadable: "这台服务器上的模型还没读出来",
   modelLibraryErrorTitle: "模型库没读出来",
   modelLibraryCheckSettings: "去检查连接设置",
+  modelBroken: "文件读不了",
+  modelBrokenHint: "这个文件的文件头读不了(那台 ComfyUI 自己也读不了):多半是没下完、下坏了或者被截断了。重新下一份;别的文件不受影响。",
   workflowLibraryOpen: "打开工作流库",
   workflowLibraryDesc: "这台服务器上存着的工作流:节点图、能填什么、用到哪些模型、缺什么",
   workflowLibraryTitle: "{name} · 工作流库",

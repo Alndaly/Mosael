@@ -587,6 +587,9 @@ class ModelFileOut(ApiModel):
     used_by: list[ModelLibraryRefOut] = Field(default_factory=list)
     nsfw: ModelNsfwOut = Field(default_factory=ModelNsfwOut)
     source: ModelSourceOut | None = None
+    #: 这个文件的文件头那台 ComfyUI 自己也读不了(0 字节、没下完、截断)时是 true:界面在这一项上说「可能没下完或已损坏」,
+    #: 别的文件照常列(一个坏文件不拖垮整个模型库)。读得了的是 null。
+    broken: bool | None = None
 
 
 class MissingModelOut(ApiModel):

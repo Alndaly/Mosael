@@ -74,7 +74,7 @@ elif op == "library":
                  {"url": f"http://127.0.0.1:{port}/elsewhere/spicy", "kind": "image", "site": "civitai", "level": 8, "nsfw": True},
                  {"url": f"http://127.0.0.1:{port}/elsewhere/safe", "kind": "image", "site": "civitai", "level": 1, "nsfw": False},
                  {"url": "file:///etc/passwd", "kind": "image", "site": "civitai", "level": 1}]},
-            {"folder": "loras", "name": "plain.safetensors", "size": None,
+            {"folder": "loras", "name": "plain.safetensors", "size": None, "broken": True,
              **({"sidecars": ["plain.mp4"]} if (data / "video-sidecar").exists() else {})},
             {"folder": "", "name": "no-folder.safetensors"},
             {"name": "no-folder-either"},
@@ -381,6 +381,7 @@ def test_列出插件报的模型_宿主规整字段_预览图换成宿主的地
     assert first["has_preview"] is True and third["has_preview"] is False
     assert second["triggers"] == ["1girl", "style"] and second["triggers_source"] == "tags"
     assert third["size"] is None and third["triggers"] == [] and third["family"] == ""
+    assert third["broken"] is True and first["broken"] is None, "文件头读不了的那一个照样列出来,只它带着标记"
     text = response.text
     assert f"127.0.0.1:{previews.port}" not in text, "插件那一头的地址不交给界面:界面拿宿主的预览地址"
     assert "secret-for-previews" not in text, "取预览图用的凭据不能出现在给界面的回答里"

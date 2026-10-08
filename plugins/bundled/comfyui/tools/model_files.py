@@ -59,8 +59,19 @@ def names_in(comfy: Comfy, folder: str) -> set[str]:
     return {norm(str(item["name"])) for item in files_in(comfy, folder)}
 
 
+class BrokenHeader(Exception):
+    """这个文件的文件头 ComfyUI 自己也读不了(`/view_metadata` 回 5xx:0 字节、没下完、截断、不是它说的格式)。只关这一个
+    文件的事 —— 调用方把它标成「文件头读不了」,别的照常列,不让一个坏文件拖垮整个模型库。"""
+
+    def __init__(self, folder: str, name: str) -> None:
+        super().__init__(f"{folder}/{name}")
+        self.folder = folder
+        self.name = name
+
+
 def metadata_of(comfy: Comfy, folder: str, name: str) -> dict[str, Any] | None:
-    """文件头里的 `__metadata__`。不是 safetensors、没有元数据 → None(ComfyUI 回 404)。"""
+    """文件头里的 `__metadata__`。不是 safetensors、没有元数据 → None(ComfyUI 回 404)。ComfyUI 读这个文件的头时自己出了错
+    (回 5xx)→ `BrokenHeader`;连不上之类别的错照常抛(那不是这一个文件的事)。"""
     if not name.lower().endswith(".safetensors"):
         return None
     try:
@@ -68,6 +79,8 @@ def metadata_of(comfy: Comfy, folder: str, name: str) -> dict[str, Any] | None:
     except ComfyError as exc:
         if exc.status in (400, 404):
             return None
+        if exc.status >= 500:
+            raise BrokenHeader(folder, name) from exc
         raise
     return found if isinstance(found, dict) else None
 

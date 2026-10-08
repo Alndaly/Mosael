@@ -267,6 +267,28 @@ describe("模型库", () => {
     expect(anima.textContent).toContain("loras/sub");
   });
 
+  //: PLG-3:一个 0 字节的 safetensors 此前让整个模型库报「ComfyUI 回了 HTTP 500」、引人去检查连接设置
+  it("文件头读不了的那一个:照样列出来,卡片和列表上标「文件读不了」、悬停说多半没下完;别的文件照常", async () => {
+    const models = library().models ?? [];
+    api.getModelLibrary.mockResolvedValue(library({
+      models: [...models, { folder: "loras", name: "zero-byte.safetensors", size: 0, modified: 1700000020, family: "",
+                            family_source: "", triggers: [], triggers_source: "", title: "", has_preview: false,
+                            preview_origin: "", preview_kind: "image", used_by: [], broken: true }],
+    }));
+    await openLibrary();
+    expect(screen.queryByText("modelLibraryErrorTitle")).toBeNull();
+    const broken = cards().find((item) => item.textContent?.includes("zero-byte.safetensors"))!;
+    const mark = broken.querySelector<HTMLElement>("[data-model-broken]")!;
+    expect(mark.textContent).toBe("modelBroken");
+    expect(await hoverHint(mark)).toBe("modelBrokenHint");
+    expect(cards().filter((item) => item.querySelector("[data-model-broken]")), "只标这一个").toHaveLength(1);
+    cleanup();
+    window.localStorage.setItem("mosael:tab:model-library.density", "list");
+    const table = await openLibraryAs("table");
+    const row = table.getAllByRole("row").find((one) => one.textContent?.includes("zero-byte.safetensors"))!;
+    expect(row.querySelector("[data-model-broken]")?.textContent).toBe("modelBroken");
+  });
+
   it("三档显示方式:默认小卡片;选了哪一档记在本机,下次打开还是它", async () => {
     await openLibrary();
     const group = screen.getByRole("radiogroup", { name: "libraryDensity" });

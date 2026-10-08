@@ -314,6 +314,26 @@ def test_元数据记在持久目录_第二次只读目录(comfy, data_dir) -> N
         [["detail.safetensors"]]
 
 
+def test_一个文件的头读不了_只标它_别的照常列_不再去撞_详情说清楚(comfy, data_dir) -> None:
+    """PLG-3:loras 里一个 0 字节的 .safetensors(下载中断留下的),ComfyUI 的 /view_metadata 对它回 500 —— 此前插件把 500 原样
+    抛出去,整个模型库(连同生成表单里带缩略图的模型选择器)都说「ComfyUI 回了 HTTP 500」,还引人去检查连接设置。"""
+    comfy.state.model_folders["loras"].append("zero-byte.safetensors")
+    comfy.state.model_sizes["loras/zero-byte.safetensors"] = 0
+    comfy.state.broken_headers.add("loras/zero-byte.safetensors")
+    out = _call(comfy, {"op": "library"}, data_dir)
+    by_key = {(one["folder"], one["name"]): one for one in out["models"]}
+    assert by_key[("loras", "zero-byte.safetensors")]["broken"] is True
+    assert by_key[("loras", "detail.safetensors")]["family"] == "Illustrious", "别的文件照常读"
+    assert not any(one.get("broken") for key, one in by_key.items() if key != ("loras", "zero-byte.safetensors"))
+    comfy.state.calls.clear()
+    again = _call(comfy, {"op": "library"}, data_dir)
+    assert {(one["folder"], one["name"]): one.get("broken") for one in again["models"]}[("loras", "zero-byte.safetensors")]
+    assert not [query for _, path, query in comfy.state.calls if path.startswith("/view_metadata/")], \
+        "记成读过了:文件没变就不再让那台机器为它报错"
+    detail = _call(comfy, {"op": "detail", "folder": "loras", "name": "zero-byte.safetensors"}, data_dir)
+    assert detail["broken"] is True and "没下完" in detail["note"]
+
+
 def test_详情_全部元数据_训练标签按次数_内嵌的图不交(comfy, data_dir) -> None:
     out = _call(comfy, {"op": "detail", "folder": "loras", "name": "detail.safetensors"}, data_dir)
     assert out["metadata"]["ss_output_name"] == "detail_tweaker"

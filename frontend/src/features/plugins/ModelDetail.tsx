@@ -335,6 +335,17 @@ function useLookupJobs(
 export function FamilyBadge({ model, pairs = false }: { model: ModelFile; pairs?: boolean }) {
   const t = useI18n();
   const source = familySource(model);
+  //: 文件头那台 ComfyUI 自己也读不了(0 字节、没下完、截断):只这一个文件说一句,别的照常列。叠在卡片名字那颗按钮盖满整张卡的
+  //: `after:` 上面,悬停得到说明(和卡片上「几张工作流在用」同一个做法)
+  if (model.broken) {
+    return (
+      <Hint label={t("modelBrokenHint")}>
+        <span className="relative z-10 inline-flex" data-model-broken="">
+          <CatalogBadge tone="warning">{t("modelBroken")}</CatalogBadge>
+        </span>
+      </Hint>
+    );
+  }
   //: 文本编码器不贴底模:写它是哪一种(列表里那一格接着写常配哪几种)
   if (model.encoder) return <EncoderBadge encoder={model.encoder} pairs={pairs} />;
   if (!model.family || !source) return null;
