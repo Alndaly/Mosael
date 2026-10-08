@@ -21,17 +21,29 @@ import torch 就能回答**。
 
 from __future__ import annotations
 
+import threading
 import time
+
+import pytest
 
 from app.ai.runtime import asr_models, tts_models
 
+#: 列表要是等了探测,就会一直等到测试放行它(远远超过这条线);没等的话,机器再忙也到不了这条线。
+#: 此前探测睡 5 秒、线画在 1 秒:CI 上测试并行跑、机器一忙,列表自己就走了 1.2 秒,红了。
+WAITED_FOR_PROBE = 5.0
 
-def test_listing_tts_models_does_not_wait_for_a_probe(monkeypatch) -> None:
-    slow = {"calls": 0}
 
+@pytest.fixture
+def stuck_probe():
+    """一个卡住的探测:一直等到这条测试结束才放行(不留一个睡着的后台线程拖到下一条测试)。"""
+    release = threading.Event()
+    yield lambda: release.wait(60)
+    release.set()
+
+
+def test_listing_tts_models_does_not_wait_for_a_probe(monkeypatch, stuck_probe) -> None:
     def slow_probe(engine_id: str) -> str | None:
-        slow["calls"] += 1
-        time.sleep(5)
+        stuck_probe()
         return "/usr/bin/python3"
 
     monkeypatch.setattr(tts_models, "_resolve_engine_python", slow_probe)
@@ -41,7 +53,7 @@ def test_listing_tts_models_does_not_wait_for_a_probe(monkeypatch) -> None:
     rows = tts_models.list_status()
     elapsed = time.monotonic() - began
 
-    assert elapsed < 1.0, f"列模型等了 {elapsed:.1f} 秒 —— 它卡在探测上了"
+    assert elapsed < WAITED_FOR_PROBE, f"列模型等了 {elapsed:.1f} 秒 —— 它卡在探测上了"
     assert rows, rows
 
 
@@ -78,10 +90,10 @@ def test_synthesis_still_gets_a_definite_answer(monkeypatch) -> None:
     assert tts_models.resolve_engine_python("f5-tts") == "/usr/bin/python3"
 
 
-def test_listing_asr_models_does_not_wait_either(monkeypatch) -> None:
+def test_listing_asr_models_does_not_wait_either(monkeypatch, stuck_probe) -> None:
     """转写那一页停在「正在连接后端…」的就是这个。"""
     def slow(engine: str):
-        time.sleep(5)
+        stuck_probe()
         return "/usr/bin/python3"
 
     monkeypatch.setattr(asr_models, "_resolve_python", slow)
@@ -91,4 +103,4 @@ def test_listing_asr_models_does_not_wait_either(monkeypatch) -> None:
     asr_models.list_status()
     elapsed = time.monotonic() - began
 
-    assert elapsed < 1.0, f"列转写模型等了 {elapsed:.1f} 秒"
+    assert elapsed < WAITED_FOR_PROBE, f"列转写模型等了 {elapsed:.1f} 秒"

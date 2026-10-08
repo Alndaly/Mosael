@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from app.domain.providers.quota import (
@@ -292,6 +294,12 @@ def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
         raise SidecarError("refresh token 已失效")
 
     monkeypatch.setattr(provider_auth, "refresh_oauth_credential", failing_refresh)
+    # 第一次拉列表只是把刷新放到后台(列表不等它):这一次说「已授权」还是「需重新授权」都行 —— 看后台那次刷新
+    # 跑得多快(见 refresh_recently_failed)。此前这里从第一次就要「需重新授权」,CI 上测试并行跑、机器一忙就红。
+    client.get("/api/settings/providers")
+    deadline = time.monotonic() + 10
+    while not provider_auth.refresh_recently_failed(profile_id) and time.monotonic() < deadline:
+        time.sleep(0.01)
     for _ in range(3):
         row = next(r for r in client.get("/api/settings/providers").json() if r["id"] == profile_id)
         assert row["oauth_linked"] is True
