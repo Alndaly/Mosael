@@ -205,9 +205,10 @@ describe("输入框底下那枚模型按钮", () => {
     expect(chip.hasAttribute("data-active"), "栏开着:按钮是按下的样子").toBe(true);
     expect(chip.getAttribute("aria-controls")).toBe(panel.id);
     fireEvent.click(chip);
+    //: 亮一下只亮 1.2 秒(到点自己熄):点下去当场就亮,就在这里看 —— 不放到等焦点之后,免得和熄灯的计时器比谁先到。
+    expect(panel.querySelector("[data-engine-section]")!.hasAttribute("data-flash")).toBe(true);
     const picker = panel.querySelector<HTMLElement>("[data-engine-picker] button")!;
     await waitFor(() => expect(document.activeElement).toBe(picker));
-    expect(panel.querySelector("[data-engine-section]")!.hasAttribute("data-flash")).toBe(true);
   });
 
   it("栏收着时点它:把栏打开,焦点照样过去", async () => {
