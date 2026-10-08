@@ -130,7 +130,7 @@ export function RunPanel({
   const [changed, setChanged] = React.useState<{ node: string; undo: boolean } | null>(null);
   const change = useMutation({
     mutationFn: ({ node, undo }: { node: string; undo: boolean }) =>
-      undo ? unmarkResult(target.instanceId, node) : markOnlyResult(target.instanceId, node),
+      undo ? unmarkResult(target.instanceId, workflowKey, node) : markOnlyResult(target.instanceId, workflowKey, node),
     onMutate: () => setChanged(null),
     onSuccess: (next: CanvasResults, asked) => {
       qc.setQueryData(resultsKey, next);

@@ -164,11 +164,20 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "setWidget", node: "4", widget: "w", value: Number.NaN })).toThrow(/value/);
     expect(() => callOf({ op: "setWidget", node: "4", widget: "w", value: "x".repeat(4001) })).toThrow(/value/);
     const marks = { nodes: { "4": { expose: { ckpt_name: { order: 0 } } } }, extra: { version: 1 } };
-    expect(callOf({ op: "setMarks", marks }).call).toEqual({ op: "setMarks", marks });
-    expect(callOf({ op: "setMarks", marks: { nodes: {}, extra: null } }).call).toEqual({ op: "setMarks", marks: { nodes: {}, extra: null } });
-    expect(() => callOf({ op: "setMarks", marks: { nodes: { "12:5": {} }, extra: null } }), "只认根图上的节点").toThrow(/top-level/);
-    expect(() => callOf({ op: "setMarks", marks: { nodes: { "4": "x" }, extra: null } })).toThrow(/object/);
-    expect(() => callOf({ op: "setMarks", marks: { nodes: {}, extra: null, more: 1 } })).toThrow(/unexpected/);
+    const expect_ = { key: "workflows/人像/古风.json", revision: 3 };
+    expect(callOf({ op: "setMarks", marks, expect: expect_ }).call).toEqual({ op: "setMarks", marks, expect: expect_ });
+    expect(callOf({ op: "setMarks", marks: { nodes: {}, extra: null }, expect: expect_ }).call)
+      .toEqual({ op: "setMarks", marks: { nodes: {}, extra: null }, expect: expect_ });
+    expect(() => callOf({ op: "setMarks", marks: { nodes: { "12:5": {} }, extra: null }, expect: expect_ }), "只认根图上的节点").toThrow(/top-level/);
+    expect(() => callOf({ op: "setMarks", marks: { nodes: { "4": "x" }, extra: null }, expect: expect_ })).toThrow(/object/);
+    expect(() => callOf({ op: "setMarks", marks: { nodes: {}, extra: null, more: 1 }, expect: expect_ })).toThrow(/unexpected/);
+    // PLG-17:写进画布的两样都得说写给哪一张(桥在页面里比);不说就不写
+    expect(() => callOf({ op: "setMarks", marks }), "不说写给哪一张").toThrow(/object/);
+    expect(() => callOf({ op: "setMarks", marks, expect: { key: "", revision: 1 } })).toThrow(/expect.key/);
+    expect(() => callOf({ op: "setMarks", marks, expect: { key: "a\nb", revision: 1 } })).toThrow(/expect.key/);
+    expect(() => callOf({ op: "setMarks", marks, expect: { key: "k", revision: -1 } })).toThrow(/expect.revision/);
+    expect(() => callOf({ op: "setMarks", marks, expect: { key: "k", revision: 1.5 } })).toThrow(/expect.revision/);
+    expect(() => callOf({ op: "setMarks", marks, expect: { ...expect_, path: "x" } })).toThrow(/unexpected/);
     expect(callOf({ op: "locate", node: "12" }).call, "根图上的节点").toEqual({ op: "locate", node: "12", subgraph: null });
     expect(callOf({ op: "locate", node: "-3", subgraph: "8f1c0e2a-9b7d-4c51" }).call)
       .toEqual({ op: "locate", node: "-3", subgraph: "8f1c0e2a-9b7d-4c51" });
@@ -209,9 +218,10 @@ describe("Electron IPC contract", () => {
       { op: "to_subgraph", layer: null, nodes: ["3", "8"], name: "采样" },
       { op: "unpack", layer: null, node: "12" },
     ];
-    expect(callOf({ op: "applyOps", ops }).call).toEqual({ op: "applyOps", ops });
-    expect(callOf({ op: "applyOps", ops: [{ op: "remove_node", node: "7" }] }).call.ops, "不给 layer 就是根图")
+    expect(callOf({ op: "applyOps", ops, expect: expect_ }).call).toEqual({ op: "applyOps", ops, expect: expect_ });
+    expect(callOf({ op: "applyOps", ops: [{ op: "remove_node", node: "7" }], expect: expect_ }).call.ops, "不给 layer 就是根图")
       .toEqual([{ op: "remove_node", layer: null, node: "7" }]);
+    expect(() => callOf({ op: "applyOps", ops }), "不说改给哪一张").toThrow(/object/);
     expect(() => callOf({ op: "applyOps", ops: [] })).toThrow(/empty/);
     expect(() => callOf({ op: "applyOps", ops: Array.from({ length: 201 }, () => ops[4]) })).toThrow(/at most/);
     expect(() => callOf({ op: "applyOps", ops: [{ op: "eval", layer: null }] })).toThrow(/op/);

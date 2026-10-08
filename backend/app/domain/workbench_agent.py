@@ -77,8 +77,10 @@ _NOT_OPEN = {"closed", "missing", "elsewhere", "notReady"}
 _NO_EXECUTOR = {"browserErr_actionNotClaimed", "browserErr_actionQueueTimeout", "browserErr_executorLost"}
 
 
-def _workbench(db: Session, user: User, workspace_id: str, instance: PluginInstance, call: dict[str, Any]) -> dict[str, Any]:
-    """在这个连接开着的工作台上做一件事,回桥的回答(`ok: true` 的那种)。"""
+def _workbench(db: Session, user: User, workspace_id: str, instance: PluginInstance, call: dict[str, Any],
+               *, name: str = "") -> dict[str, Any]:
+    """在这个连接开着的工作台上做一件事,回桥的回答(`ok: true` 的那种)。`name`:改的是画布上叫什么的那一张(桥说已经换了一张、
+    读过之后又改过的时候写进原因里)。"""
     ensure_workspace_access(db, user, workspace_id)
     session_id = browser.workbench_session(workspace_id=workspace_id, connection_id=instance.id)
     try:
@@ -109,6 +111,10 @@ def _workbench(db: Session, user: User, workspace_id: str, instance: PluginInsta
                                   detail=problems or str(answer.get("message") or error)[:500])
     if error == "invalid":
         raise WorkbenchAgentError("workbenchErr_editRefused", detail=problems)
+    if error == "otherWorkflow":
+        raise WorkbenchAgentError("workbenchErr_editOtherTab", name=name)
+    if error == "changed":
+        raise WorkbenchAgentError("workbenchErr_editStale", name=name)
     raise WorkbenchAgentError("workbenchErr_bridge", detail=str(answer.get("message") or error)[:500])
 
 
@@ -230,7 +236,8 @@ def propose_edit(db: Session, user: User, workspace_id: str, payload: dict[str, 
 
 def apply_edit(db: Session, user: User, workspace_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     """批准之后:对着**现在**的画布再算一遍 —— 换了一张、或者清单对不上了(批之前画布又改过)就不改;对得上才交给桥(一批一步
-    撤销)。改完再读一遍、诊断一遍,说修好了几个、多出来几个。"""
+    撤销),桥那边再核对一次画布上还是重读的那一张、重读之后没再改过(插件算的那一下里换了一张也不改)。改完再读一遍、诊断一遍,
+    说修好了几个、多出来几个。"""
     instance = connection(db, user, str(payload.get("instance_id") or ""))
     proposed = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else {}
     graph, plan = plan_edit(db, user, workspace_id, instance, payload.get("ops"))
@@ -239,7 +246,10 @@ def apply_edit(db: Session, user: User, workspace_id: str, payload: dict[str, An
         raise WorkbenchAgentError("workbenchErr_editOtherTab", name=str(proposed.get("name") or proposed.get("key") or ""))
     if (plan.get("changes") or []) != (payload.get("changes") or []):
         raise WorkbenchAgentError("workbenchErr_editStale", name=now["name"])
-    answer = _workbench(db, user, workspace_id, instance, {"op": "applyOps", "ops": plan["ops"]})
+    # 重读到交给桥之间还隔着插件算的那一下:桥在页面里再比一次还是不是读的那一张、读过之后改没改
+    expect = {"key": now["key"], "revision": int(graph.get("revision") or 0)}
+    answer = _workbench(db, user, workspace_id, instance, {"op": "applyOps", "ops": plan["ops"], "expect": expect},
+                        name=now["name"])
     after = read_graph(db, user, workspace_id, instance)
     checked = _ask(db, instance, {"op": "check_graph", "content": after["workflow"],
                                   "baseline": (plan.get("check") or {}).get("baseline") or []})

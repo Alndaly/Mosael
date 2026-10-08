@@ -329,7 +329,13 @@ async function installed() {
 }
 
 const call = (page: ReturnType<typeof editingPage>, one: WorkbenchCall) => page.run(workbenchCallScript(ORIGIN, one));
-const apply = (page: ReturnType<typeof editingPage>, ops: WorkbenchEditOp[]) => call(page, { op: "applyOps", ops });
+/** 画布上现在这张的 key 和改过几回(智能体改图之前 readGraph 读到的;改图时原样带上)。 */
+const here = async (page: ReturnType<typeof editingPage>) => {
+  const { workflow } = (await page.run(workbenchPollScript(ORIGIN))) as { workflow: { path: string; name: string; revision: number } };
+  return { key: workflow.path || workflow.name, revision: workflow.revision };
+};
+const apply = async (page: ReturnType<typeof editingPage>, ops: WorkbenchEditOp[]) =>
+  call(page, { op: "applyOps", ops, expect: await here(page) });
 const linkInto = (graph: FakeGraph, node: FakeNode, input: string) => graph.getLink(node.inputs.find((one) => one.name === input)!.link!);
 
 describe("桥第 5 版:智能体改图", () => {
@@ -390,7 +396,7 @@ describe("桥第 5 版:智能体改图", () => {
     expect(page.tracker.beforeChange).not.toHaveBeenCalled();
     expect(page.tracker.undoQueue).toEqual([]);
     expect(JSON.stringify(page.tracker.activeState)).toBe(before);
-    expect(parseWorkbenchResult({ op: "applyOps", ops: [] }, result)).toEqual({
+    expect(parseWorkbenchResult({ op: "applyOps", ops: [], expect: { key: "k", revision: 0 } }, result)).toEqual({
       ok: false, error: "invalid", problems: (result as { problems: string[] }).problems });
   });
 
@@ -487,6 +493,26 @@ describe("桥第 5 版:智能体改图", () => {
     expect(unpacked).toEqual({ ok: true, created: {} });
     expect(page.root.unpackSubgraph).toHaveBeenCalledWith(page.instance);
     expect(await apply(page, [{ op: "unpack", layer: null, node: "4" }])).toEqual({ error: "invalid", problems: ["#1 unpack: node 4 is not a subgraph"] });
+  });
+
+  //: PLG-17:后端重读画布、插件对着读到的那份算这一批、再交给桥 —— 中间这一下换到另一张(同一个模板改出来的,节点号一样),此前照改
+  it("交给桥之前画布上换了一张(otherWorkflow)、那一张读过之后又改过(changed):一样都不改,撤销里也不留一步", async () => {
+    const page = await installed();
+    const steps = page.sampler.widgets.find((one) => one.name === "steps")!;
+    const ops: WorkbenchEditOp[] = [{ op: "set_widget", layer: null, node: "3", widget: "steps", value: 30 }];
+    const read = await here(page);
+    page.store.activeWorkflow = { path: "workflows/人像/古风 2.json", filename: "古风 2", isTemporary: false, isModified: false,
+                                  changeTracker: page.tracker };
+    expect(await call(page, { op: "applyOps", ops, expect: read })).toEqual({ error: "otherWorkflow" });
+    page.store.activeWorkflow = page.store.getWorkflowByPath("workflows/人像/古风.json") as Record<string, unknown>;
+    const again = await here(page);
+    page.tracker.activeState = { nodes: [], links: [], edited: true };
+    expect(await call(page, { op: "applyOps", ops, expect: again })).toEqual({ error: "changed" });
+    expect(steps.value, "一样都没改").toBe(20);
+    expect(page.tracker.beforeChange).not.toHaveBeenCalled();
+    expect(page.tracker.undoQueue).toEqual([]);
+    expect(await call(page, { op: "applyOps", ops, expect: await here(page) })).toEqual({ ok: true, created: {} });
+    expect(steps.value).toBe(30);
   });
 
   it("这版前端没有改动跟踪的 beforeChange / undo(一批一步撤销做不到):不改,说不支持", async () => {

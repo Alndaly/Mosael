@@ -536,6 +536,8 @@ export const plugins = {
   workbenchCapMarks: "keeping forms on nodes",
   workbenchCapSave: "the save command (press Ctrl+S on the canvas to save)",
   workbenchCallFailed: "The canvas didn't do it: {why}",
+  workbenchCanvasSwitched: "The canvas is showing a different workflow now, so no marks were written. Switch back to this one and try again.",
+  workbenchCanvasBusy: "This workflow kept changing while the marks were being written, so none were written. Pause a moment and try again.",
   workbenchSave: "Save",
   workbenchSaveHint: "Saves into the workflow file on this ComfyUI, the same as Save in ComfyUI's menu (an unsaved one asks for a name)",
   workbenchRun: "Run",

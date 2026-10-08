@@ -100,6 +100,9 @@ async function installed(page = comfyPage()) {
 }
 
 const call = (page: ReturnType<typeof comfyPage>, one: WorkbenchCall) => page.run(workbenchCallScript(ORIGIN, one));
+/** 导出一次,拿到写标记要带的那一张(导出报的 `at`)。 */
+const readAt = async (page: ReturnType<typeof comfyPage>) =>
+  ((await call(page, { op: "export" })) as { at: { key: string; revision: number } }).at;
 
 describe("工作台的桥(注入的脚本)", () => {
   it("注入一次;同一版已经在就不再注入;页面自己占了这个名字(或别的版本)就当桥不在", async () => {
@@ -308,11 +311,11 @@ describe("工作台的桥(注入的脚本)", () => {
     page.app.canvas.selected_nodes = { 4: page.loader, 3: page.sampler };
     const raw = await call(page, { op: "readGraph" });
     expect(raw).toEqual({ ok: true, graph: {
-      workflow, selection: ["3", "4"], modified: true, layer: null,
+      workflow, selection: ["3", "4"], modified: true, revision: 1, layer: null,
       info: { name: "古风", path: "workflows/人像/古风.json", temporary: false },
     } });
     expect(parseWorkbenchResult({ op: "readGraph" }, raw)).toEqual({ ok: true, graph: {
-      workflow, selection: ["3", "4"], modified: true, layer: null,
+      workflow, selection: ["3", "4"], modified: true, revision: 1, layer: null,
       info: { path: "人像/古风.json", name: "古风", temporary: false, key: "workflows/人像/古风.json" },
     } });
     //: 停在子图里:选中的是那一层里的编号,layer 是子图的 id(后端据此换成从根图往里走的写法)
@@ -392,6 +395,7 @@ describe("工作台的桥(注入的脚本)", () => {
       workflow: { nodes: [{ id: 4 }, { id: 3 }], links: [], extra: {} },
       prompt: { "3": { class_type: "KSampler", inputs: { steps: 20 } } },
       clientId: "4f1c0e2a9b7d4c51a3e8",
+      at: { key: "workflows/人像/古风.json", revision: 1 },
     });
     expect(await call(page, { op: "save" })).toEqual({ ok: true });
     expect(page.execute).toHaveBeenCalledWith(SAVE_COMMAND);
@@ -401,15 +405,36 @@ describe("工作台的桥(注入的脚本)", () => {
     const page = await installed();
     const marks = { nodes: { "4": { expose: { ckpt_name: { order: 0, label: "模型" } } } },
                     extra: { version: 1, app: { title: "人像" } } };
-    expect(await call(page, { op: "setMarks", marks })).toEqual({ ok: true });
+    expect(await call(page, { op: "setMarks", marks, expect: await readAt(page) })).toEqual({ ok: true });
     expect(page.loader.properties.mosael).toEqual(marks.nodes["4"]);
     expect("mosael" in page.sampler.properties, "不在清单里的节点:标记摘掉").toBe(false);
     expect(page.graph.extra).toEqual({ ue_links: [], mosael: marks.extra });
     expect(page.tracker.captureCanvasState).toHaveBeenCalled();
-    expect(await call(page, { op: "setMarks", marks: { nodes: {}, extra: null } })).toEqual({ ok: true });
+    expect(await call(page, { op: "setMarks", marks: { nodes: {}, extra: null }, expect: await readAt(page) })).toEqual({ ok: true });
     expect(page.graph.extra).toEqual({ ue_links: [] });
-    expect(await call(page, { op: "setMarks", marks: { nodes: { "99": { result: true } }, extra: null } }))
+    expect(await call(page, { op: "setMarks", marks: { nodes: { "99": { result: true } }, extra: null }, expect: await readAt(page) }))
       .toEqual({ error: "noNode", nodes: ["99"] });
+  });
+
+  //: PLG-17:导出 → 插件算标记 → 写,中间隔着一次插件往返;这期间换到同一个模板改出来的另一张(节点号一样),此前标记写进那张
+  it("写标记之前核对画布上还是不是导出的那一张:换了一张回 otherWorkflow、那一张又改过回 changed,一处都不写", async () => {
+    const page = await installed();
+    const marks = { nodes: { "4": { result: true } }, extra: { version: 2 } };
+    const at = await readAt(page);
+    const other = { ...page.active, path: "workflows/人像/古风 2.json", filename: "古风 2",
+                    changeTracker: { ...page.tracker, activeState: { nodes: [] } } };
+    page.app.extensionManager.workflow.activeWorkflow = other;
+    expect(await call(page, { op: "setMarks", marks, expect: at })).toEqual({ error: "otherWorkflow" });
+    page.app.extensionManager.workflow.activeWorkflow = page.active;
+    expect(await call(page, { op: "setMarks", marks, expect: at }), "换回来也不算:中间换过一张就是又改过").toEqual({ error: "changed" });
+    const again = await readAt(page);
+    page.tracker.activeState = { nodes: [{ id: 4 }] };
+    expect(await call(page, { op: "setMarks", marks, expect: again }), "同一张,前端又认了一次改动").toEqual({ error: "changed" });
+    expect("mosael" in page.loader.properties, "一处都没写").toBe(false);
+    expect(page.graph.extra).toEqual({ ue_links: [] });
+    expect(page.tracker.captureCanvasState).not.toHaveBeenCalled();
+    expect(await call(page, { op: "setMarks", marks, expect: await readAt(page) })).toEqual({ ok: true });
+    expect(page.loader.properties.mosael).toEqual({ result: true });
   });
 
   it("「运行」前后:每个 widget(连同子图里的)走前端自己的 beforeQueued / afterQueued,提升出来的交给前端的 applyPromotedWidgetControl", async () => {
@@ -509,7 +534,7 @@ describe("页面交回来的一律当提示:规整", () => {
     const graph = { workflow: { nodes: [{ id: 1 }] }, selection: ["1", "x;y", 5, "-3"], modified: "yes",
                     layer: 'x"); alert(1)', info: { name: "Unsaved Workflow", path: "workflows/Unsaved Workflow.json", temporary: true } };
     expect(parseWorkbenchGraph(graph)).toEqual({
-      workflow: { nodes: [{ id: 1 }] }, selection: ["1", "-3"], modified: false, layer: null,
+      workflow: { nodes: [{ id: 1 }] }, selection: ["1", "-3"], modified: false, revision: 0, layer: null,
       info: { path: "", name: "Unsaved Workflow", temporary: true, key: "workflows/Unsaved Workflow.json" },
     });
     expect(parseWorkbenchGraph({ ...graph, layer: "8f1c0e2a-9b7d-4c51" })!.layer).toBe("8f1c0e2a-9b7d-4c51");
@@ -523,9 +548,13 @@ describe("页面交回来的一律当提示:规整", () => {
       .toEqual({ ok: false, error: "unsupported", message: "graphToPrompt" });
   });
 
-  it("导出:界面格式要有 nodes、API 图每个节点要有 class_type 和 inputs", () => {
-    const good = { workflow: { nodes: [] }, prompt: { "3": { class_type: "KSampler", inputs: {} } }, clientId: "abc" };
+  it("导出:界面格式要有 nodes、API 图每个节点要有 class_type 和 inputs;导出的是哪一张只收 key 和非负整数的改过几回", () => {
+    const good = { workflow: { nodes: [] }, prompt: { "3": { class_type: "KSampler", inputs: {} } }, clientId: "abc",
+                   at: { key: "workflows/a.json", revision: 3 } };
     expect(parseWorkbenchExport(good)).toEqual(good);
+    expect(parseWorkbenchExport({ ...good, at: { key: "workflows/a.json", revision: -1 } })!.at).toBeNull();
+    expect(parseWorkbenchExport({ ...good, at: { key: "", revision: 1 } })!.at).toBeNull();
+    expect(parseWorkbenchExport({ ...good, at: undefined })!.at, "前端没有开着的那张").toBeNull();
     expect(parseWorkbenchExport({ ...good, workflow: {} })).toBeNull();
     expect(parseWorkbenchExport({ ...good, prompt: { "3": { class_type: "KSampler" } } })).toBeNull();
     expect(parseWorkbenchExport({ ...good, clientId: "x y" })!.clientId).toBe("");

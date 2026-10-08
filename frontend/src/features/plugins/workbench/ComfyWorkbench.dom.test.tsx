@@ -56,7 +56,7 @@ vi.mock("@/app/preferences", async () => {
   //: 「结果取自 {nodes}」留着占位:看得出填进去的节点名
   const t = (key: string) => (key === "workbenchRunResultsFrom" ? "workbenchRunResultsFrom {nodes}"
     : key.startsWith("workbenchAssistant") || key.startsWith("workbenchFixThis") ? zh[key] : key);
-  return { useI18n: () => t, usePreferences: () => ({ locale: "zh" }) };
+  return { useI18n: () => t, translateNow: t, usePreferences: () => ({ locale: "zh" }) };
 });
 //: 智能体面板本身另有测试(features/agent):这里换成一个记下参数、把「回复」交给真的 Markdown 渲染的替身;一次工具调用的
 //: 结果交给这一页认得的画法(工具行怎么摆它见 features/agent 的 toolCallPageViews 测试)
@@ -102,6 +102,7 @@ const EXPORTED = {
                       { id: 17, type: "PreviewImage" }] },
   prompt: { "9": { class_type: "SaveImage", inputs: {} } },
   clientId: "4f1c0e2a9b7d4c51a3e8",
+  at: { key: "workflows/人像/古风.json", revision: 1 },
 };
 const GUFENG = { path: "人像/古风.json", name: "古风", temporary: false, modified: true, key: "workflows/人像/古风.json", revision: 1 };
 
@@ -486,7 +487,7 @@ describe("ComfyUI 工作台", () => {
     expect(body.forms[0].id, "新表单不带 id:插件起").toBe("");
     expect(body.forms[0].title).toBe("调步数");
     expect(body.forms[0].items.map((one: { node: string; input: string }) => `${one.node}.${one.input}`)).toEqual(["3.steps"]);
-    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks }));
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks, expect: EXPORTED.at }));
     expect(await screen.findByText("workbenchAppWritten")).toBeTruthy();
     await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole("tab", { name: "调步数" }), "重读之后:那张有了插件起的 id,还停在它").toBeTruthy();
@@ -536,6 +537,57 @@ describe("ComfyUI 工作台", () => {
     expect((screen.getByPlaceholderText("workflowAppNamePlaceholder") as HTMLInputElement).value, "再改名也还在").toBe("草稿里的");
     bridge.emit(state({ workflow: { ...GUFENG } }));
     await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledTimes(2));
+  });
+
+  /** 「表单」页签里新建一张、起好名字:草稿改过了,「同步到画布」点得了。 */
+  async function draftAForm() {
+    if (!screen.queryByRole("tab", { name: "workbenchTabApp", selected: true })) tab("workbenchTabApp");
+    await waitFor(() => expect(document.querySelector("[data-no-forms]")).toBeTruthy());
+    fireEvent.click(within(document.querySelector("[data-no-forms]") as HTMLElement).getByRole("button", { name: /workflowFormNew/ }));
+    fireEvent.change(screen.getByPlaceholderText("workflowAppNamePlaceholder"), { target: { value: "调步数" } });
+    return screen.findByRole("button", { name: /workbenchAppWrite/ });
+  }
+
+  //: PLG-17:导出 → 插件算标记 → 写进画布,此前写给「此刻」开着的那张;在 ComfyUI 里刚换到同一个模板改出来的另一张(节点号一样),
+  //: 这张的表单就写进了那张
+  it("表单:点「同步到画布」那一下画布上已经换了一张(面板还没跟上)—— 不拿这张的草稿去算那张,一处不写,说清楚", async () => {
+    const bridge = await mount();
+    api.getCanvasApp.mockResolvedValue(appData());
+    const write = await draftAForm();
+    bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) =>
+      call.op === "export" ? { ok: true, export: { ...EXPORTED, at: { key: "workflows/人像/古风 2.json", revision: 4 } } } : { ok: true });
+    fireEvent.click(write);
+    expect(await screen.findByText("workbenchCanvasSwitched")).toBeTruthy();
+    expect(api.getCanvasMarks, "不拿这张的草稿去算那张").not.toHaveBeenCalled();
+    expect(calls(bridge).some((one) => one.op === "setMarks")).toBe(false);
+    expect((screen.getByPlaceholderText("workflowAppNamePlaceholder") as HTMLInputElement).value, "草稿还在").toBe("调步数");
+  });
+
+  it("表单:插件算标记的那一下这张又改过(桥回 changed)—— 按改过的那份重算一次再写;换了一张(桥回 otherWorkflow)—— 不重试、一处不写", async () => {
+    const bridge = await mount();
+    api.getCanvasApp.mockResolvedValue(appData());
+    api.getCanvasMarks.mockResolvedValue({ nodes: {}, extra: { version: 2, forms: [] } });
+    const write = await draftAForm();
+    let revision = 1;
+    const answers: { ok: boolean; error?: string }[] = [{ ok: false, error: "changed" }, { ok: true }];
+    bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) => {
+      if (call.op === "export") return { ok: true, export: { ...EXPORTED, at: { key: GUFENG.key, revision: revision++ } } };
+      if (call.op === "setMarks") return answers.shift() ?? { ok: true };
+      return { ok: true };
+    });
+    fireEvent.click(write);
+    expect(await screen.findByText("workbenchAppWritten")).toBeTruthy();
+    const marked = calls(bridge).filter((one) => one.op === "setMarks");
+    expect(marked.map((one) => (one as { expect: unknown }).expect), "第二次按重新导出的那份写")
+      .toEqual([{ key: GUFENG.key, revision: 1 }, { key: GUFENG.key, revision: 2 }]);
+    expect(api.getCanvasMarks, "按改过的那份重算").toHaveBeenCalledTimes(2);
+    expect(api.getCanvasMarks.mock.calls[1][1].content).toEqual(EXPORTED.workflow);
+
+    //: 写完重读(插件那边这里还是没有表单):再新建一张、再写,这回插件算的那一下换了一张
+    answers.push({ ok: false, error: "otherWorkflow" });
+    fireEvent.click(await draftAForm());
+    expect(await screen.findByText("workbenchCanvasSwitched")).toBeTruthy();
+    expect(calls(bridge).filter((one) => one.op === "setMarks"), "换了一张:不重试").toHaveLength(3);
   });
 
   //: PLG-1:上一版的表单这一版读成「没有表单」,此前照常摆编辑器、「结果取自」;写一次再一存盘,作者的表单就永久没了
@@ -594,7 +646,7 @@ describe("ComfyUI 工作台", () => {
     expect(await screen.findByText("workbenchRunFormsOld")).toBeTruthy();
     expect(within(preview).queryByRole("button", { name: "workbenchRunOnlyThisLabel" })).toBeNull();
     //: 面板读完之前就点了(按钮还在的那一下):改标记那一步自己再看一眼,照样不写
-    await expect(markOnlyResult("i1", "17")).rejects.toBeInstanceOf(FormsLockedError);
+    await expect(markOnlyResult("i1", GUFENG.key, "17")).rejects.toBeInstanceOf(FormsLockedError);
     expect(api.getCanvasMarks).not.toHaveBeenCalled();
     expect(calls(bridge).some((one) => one.op === "setMarks")).toBe(false);
   });
@@ -616,7 +668,8 @@ describe("ComfyUI 工作台", () => {
     fireEvent.click(await within(preview).findByRole("button", { name: "workbenchRunOnlyThisLabel" }));
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     expect(api.getCanvasMarks.mock.calls[0][1].results, "只标这一个,清掉别的").toEqual(["17"]);
-    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks: { nodes: { "17": { result: true } }, extra: { version: 1 } } }));
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks: { nodes: { "17": { result: true } }, extra: { version: 1 } },
+                                                                expect: EXPORTED.at }));
     expect(await screen.findByText("workbenchRunMarked")).toBeTruthy();
   });
 
@@ -1029,7 +1082,8 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     fireEvent.click(within(saved).getByRole("button", { name: "workbenchRunUndoMarkLabel" }));
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     expect(api.getCanvasMarks.mock.calls[0][1].results, "撤销:只去掉这一个").toEqual(["5"]);
-    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks: { nodes: {}, extra: { version: 1 } } }));
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks: { nodes: {}, extra: { version: 1 } },
+                                                                expect: EXPORTED.at }));
     expect(await screen.findByText("workbenchRunUnmarked")).toBeTruthy();
     expect(await within(saved).findByRole("button", { name: "workbenchRunOnlyThisLabel" }), "撤销之后又是那个按钮").toBeTruthy();
     bridge.emit(state({ workflow: { ...GUFENG, key: "workflows/别的.json", name: "别的", path: "别的.json" } }));

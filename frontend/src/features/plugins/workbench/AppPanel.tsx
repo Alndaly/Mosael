@@ -35,8 +35,10 @@ import { WorkbenchCallError, type WorkbenchTarget } from "@/features/plugins/wor
  * 不写文件,存盘是 ComfyUI 自己的保存(顶栏的「保存」或在画布里 Ctrl+S),和用户在 ComfyUI 里改别的东西是同一次保存。
  * 写完重新读一遍画布:新表单的 id 是插件起的,下次再写带着它,不会又起一个。
  */
-export function AppPanel({ target, path = "", canvasModified, canExport, canMark }: {
+export function AppPanel({ target, workflowKey, path = "", canvasModified, canExport, canMark }: {
   target: WorkbenchTarget;
+  /** 画布上现在开着的那张认哪个 key(轮询报的;改名、第一次存盘跟着变):草稿只写给它,写的那一刻画布上换了一张就不写 */
+  workflowKey: string;
   /** 画布开的是哪张(存过的路径;新建没存的是空串):插件据此说出每张表单的模型 id 和工具名,删之前数在用的几处 */
   path?: string;
   /** 画布上这张有没存的改动(桥报的 `modified`):同步过之后一存盘,「还没保存」那句就收起来 */
@@ -65,7 +67,7 @@ export function AppPanel({ target, path = "", canvasModified, canExport, canMark
     },
   });
   const write = useMutation({
-    mutationFn: (next: FormsDraft) => writeCanvasApp(target.instanceId, next),
+    mutationFn: (next: FormsDraft) => writeCanvasApp(target.instanceId, workflowKey, next),
     onSuccess: () => {
       setWritten(true);
       read.mutate();

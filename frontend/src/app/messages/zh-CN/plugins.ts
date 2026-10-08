@@ -542,6 +542,8 @@ export const plugins = {
   workbenchCapMarks: "在节点上记表单",
   workbenchCapSave: "保存命令(在画布里按 Ctrl+S 存)",
   workbenchCallFailed: "画布那边没做成:{why}",
+  workbenchCanvasSwitched: "画布上开着的已经不是这一张了,一处标记都没写。回到这一张再点一次。",
+  workbenchCanvasBusy: "写标记的同时这一张接连又改过,一处标记都没写。停一下再点一次。",
   workbenchSave: "保存",
   workbenchSaveHint: "存进这台 ComfyUI 上的工作流文件,和 ComfyUI 菜单里的「保存」一样(没存过的会让你起个名字)",
   workbenchRun: "运行",

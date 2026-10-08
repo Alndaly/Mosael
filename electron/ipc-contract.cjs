@@ -309,6 +309,22 @@ function editEnd(value, key, channel) {
 }
 
 /**
+ * 写标记、改图之前要核对的那一张(桥在页面里比):`key` 是读的时候开着的那张(轮询报的 key,前端仓库里的路径),`revision`
+ * 是它那时改过几回(非负整数)。两样写进画布的调用都**必须**带着 —— 不说写给哪一张,就不写。
+ */
+function parseExpect(value, channel) {
+  const expect = record(value, channel);
+  onlyKeys(expect, ["key", "revision"], channel);
+  if (typeof expect.key !== "string" || !expect.key || expect.key.length > 600 || /[\x00-\x1f]/.test(expect.key)) {
+    throw new TypeError(`${channel}: expect.key must be the workflow key`);
+  }
+  if (!Number.isSafeInteger(expect.revision) || expect.revision < 0) {
+    throw new TypeError(`${channel}: expect.revision must be a non-negative integer`);
+  }
+  return { key: expect.key, revision: expect.revision };
+}
+
+/**
  * 智能体改图的一批(ADR 0042 第二步,插件 canvas_edit 规整过的)。每一条只认 EDIT_OPS 里那几个字段,逐项查形状;
  * 节点在不在、口对不对、类型配不配由桥在页面里再查一遍(一条不对整批不改)。
  */
@@ -393,11 +409,12 @@ function parseOpenWorkflow(call, channel) {
  *
  * - setWidget:节点号、widget 名字(不带控制字符)、值(字符串 / 有限的数 / 布尔);下拉里有没有它由桥查;
  * - refreshCombos / export / save:不带别的;
- * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null);
+ * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null),外加写给哪一张
+ *   (`expect`,见 parseExpect);
  * - locate:节点号加子图的 id(那一层里的编号),或者不给子图、节点写成从根图往里走的路径(`12:5`);
  * - readGraph:不带别的(整张图交给智能体读,ADR 0042;后端排的工作台动作也经这里查过才进桥,见 browserWorker);
  * - runControls:`phase` 只能是 before / after(「运行」前后照前端的「生成后怎样」换种子);
- * - applyOps:智能体改图的一批(见 parseEditOps);openWorkflow:在新标签页开一张(见 parseOpenWorkflow)。两样都是后端排的
+ * - applyOps:智能体改图的一批(见 parseEditOps)和改给哪一张(`expect`);openWorkflow:在新标签页开一张(见 parseOpenWorkflow)。两样都是后端排的
  *   工作台动作经执行器送进来的(ADR 0042 第二步),照样逐项查过。
  */
 function parseComfyWorkbenchCall(value) {
@@ -409,10 +426,10 @@ function parseComfyWorkbenchCall(value) {
   const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "readGraph", "runControls",
     "applyOps", "openWorkflow"], channel);
   if (op === "applyOps") {
-    onlyKeys(call, ["op", "ops"], channel);
+    onlyKeys(call, ["op", "ops", "expect"], channel);
     const ops = parseEditOps(call.ops, channel);
     if (!ops.length) throw new TypeError(`${channel}: ops must not be empty`);
-    return { partition, call: { op, ops } };
+    return { partition, call: { op, ops, expect: parseExpect(call.expect, channel) } };
   }
   if (op === "openWorkflow") return { partition, call: parseOpenWorkflow(call, channel) };
   if (op === "setWidget") {
@@ -427,7 +444,7 @@ function parseComfyWorkbenchCall(value) {
     return { partition, call: { op, node: call.node, widget: call.widget, value: v } };
   }
   if (op === "setMarks") {
-    onlyKeys(call, ["op", "marks"], channel);
+    onlyKeys(call, ["op", "marks", "expect"], channel);
     const marks = record(call.marks, channel);
     onlyKeys(marks, ["nodes", "extra"], channel);
     const nodes = record(marks.nodes, channel);
@@ -439,7 +456,7 @@ function parseComfyWorkbenchCall(value) {
     }
     const extra = marks.extra === null || marks.extra === undefined ? null : record(marks.extra, channel);
     if (JSON.stringify({ nodes, extra }).length > MAX_MARKS_CHARS) throw new TypeError(`${channel}: marks are too big`);
-    return { partition, call: { op, marks: JSON.parse(JSON.stringify({ nodes, extra })) } };
+    return { partition, call: { op, marks: JSON.parse(JSON.stringify({ nodes, extra })), expect: parseExpect(call.expect, channel) } };
   }
   if (op === "locate") {
     onlyKeys(call, ["op", "node", "subgraph"], channel);

@@ -45,6 +45,11 @@
  * **同一张换了地方**(ADR 0044 §9):前端仓库里的每一张(`workflows`,没开着的也算)桥都记着上次看到的「路径 + 存没存过」;
  * 同一个对象变了 —— 存一张没存过的(前端先给它改名、再存)、改名、挪文件夹 —— 就记一条 `renames`,随下一次轮询报一次,
  * 工作台据此把对话的家和这一处的选择挪过去。「另存为」是前端新建的一个对象、一个新地方,不算(对话留在原来那张)。
+ *
+ * **写之前核对还是不是那一张**:写标记(`setMarks`)和改图(`applyOps`)都是先读(导出 / readGraph)、再等插件对着读到的那份算、
+ * 最后才写 —— 中间隔着一次插件往返。这期间用户在 ComfyUI 的标签栏里换到另一张(同一个模板改出来的几张节点号都一样),写进去的
+ * 就是别人的表单、别人的图。所以这两样都带着读时的 `expect`(那一张的 key 和它当时改过几回,导出、readGraph 都报),桥在页面里
+ * 当场比:不是那一张回 `otherWorkflow`,是那一张但又改过回 `changed`,一处都不写。
  */
 
 /**
@@ -54,8 +59,9 @@
  * 先全查一遍再改、只占一步撤销,根图和子图的定义、边界口、提升控件、打包 / 拆开)、在新标签页开一张整图(openWorkflow,
  * 不存盘)(ADR 0042 第二步)。6:报同一张换了地方(renames:存没存过的那张、改名、挪文件夹,ADR 0044 第四步)。
  * 7:画布的 2D 上下文丢了又回来、设备像素比变了,替 ComfyUI 把画布重设一次大小(见 healCanvas)。
+ * 8:写标记、改图之前核对画布上还是不是读的那一张(`expect`;导出报 `at`、readGraph 报 `revision`)。
  */
-export const WORKBENCH_VERSION = 7;
+export const WORKBENCH_VERSION = 8;
 
 /** 一批改动最多几条(和 ipc-contract、插件的 canvas_edit 同一个数)。 */
 export const MAX_EDIT_OPS = 200;
@@ -69,13 +75,23 @@ export const MAX_RENAMES = 50;
 /** 保存用的前端命令(和 ComfyUI 菜单「工作流 → 保存」、Ctrl+S 同一条)。 */
 export const SAVE_COMMAND = "Comfy.SaveWorkflow";
 
+/**
+ * 写之前要核对的那一张:`key` 是读的时候开着的那张(和轮询的 `workflow.key` 同一种写法),`revision` 是它那时改过几回。
+ * 导出交回 `at`、readGraph 交回 `revision`,写的时候原样带上。
+ */
+export interface WorkbenchExpect {
+  key: string;
+  revision: number;
+}
+
 /** 渲染层能让桥做的事(轮询是主进程自己的,不在这里)。 */
 export type WorkbenchCall =
   | { op: "setWidget"; node: string; widget: string; value: string | number | boolean }
   | { op: "refreshCombos" }
   | { op: "export" }
   | { op: "save" }
-  | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null } }
+  | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null };
+      expect: WorkbenchExpect }
   /**
    * 在画布上找到这个节点:选中、移到画面中间;在子图里的先进那张子图。`subgraph` 是子图定义的 id(`node` 是那一层里的编号);
    * 或者 `subgraph` 为 null、`node` 写成从根图往里走的路径(`12:5`:根图 12 号节点那个子图里面的 5 号),一层层打开。
@@ -95,7 +111,7 @@ export type WorkbenchCall =
    * 智能体改当前这张(ADR 0042 第二步):插件规整过的一批(见插件的 canvas_edit)。**先把每一条都查一遍**(节点在不在、口叫不叫
    * 这个名字、类型配不配、下拉里有没有这个值),有一条不对就一样不改、把原因交回去;都对才改,整批只记一步撤销。
    */
-  | { op: "applyOps"; ops: WorkbenchEditOp[] }
+  | { op: "applyOps"; ops: WorkbenchEditOp[]; expect: WorkbenchExpect }
   /**
    * 在新标签页开一张(ADR 0042 第二步):给 `graph` 就是一张没存过的新工作流(名字是 `name`,和开着的不重名;`ops` 再在上面
    * 改一批),给 `path` 就是打开存着的那一张。都不存盘 —— 存不存是用户的事。`openedBy` 是哪段智能体对话开的:主进程留着
@@ -274,6 +290,20 @@ export function workbenchInstallScript(origin: string): string {
       revision += 1;
     }
     return revision;
+  };
+  //: 开着的那一张认哪个 key(和主进程规整轮询时同一种算法:前端仓库里的路径,没有就用名字)
+  const keyOf = (active) => text(active.path, 600) || text(active.filename, 300);
+  const here = () => {
+    const store = workflows();
+    const active = store && store.activeWorkflow;
+    return active ? { key: keyOf(active), revision: revisionOf(active) } : null;
+  };
+  //: 写之前:画布上还是读的那一张、读过之后没再改过,才回 null
+  const notAsRead = (expect) => {
+    const now = here();
+    if (!now || !expect || now.key !== expect.key) return { error: "otherWorkflow" };
+    if (now.revision !== expect.revision) return { error: "changed" };
+    return null;
   };
   const subgraphOf = (graph, id) => {
     const map = graph && graph.subgraphs;
@@ -702,14 +732,16 @@ export function workbenchInstallScript(origin: string): string {
     async exportGraph() {
       const result = await app.graphToPrompt();
       return JSON.parse(JSON.stringify({ workflow: result && result.workflow, prompt: result && result.output,
-        clientId: text(api && (api.clientId || api.initialClientId), 100) }));
+        clientId: text(api && (api.clientId || api.initialClientId), 100), at: here() }));
     },
     save() {
       // 不等它:存一张没起过名的,前端会在画布上弹框问名字。存没存成,下一次轮询的脏标记说
       Promise.resolve(commands().execute(${JSON.stringify(SAVE_COMMAND)})).catch(() => undefined);
       return { ok: true };
     },
-    setMarks(marks) {
+    setMarks(marks, expect) {
+      const moved = notAsRead(expect);
+      if (moved) return moved;
       const graph = rootGraph();
       const missing = Object.keys(marks.nodes).filter((id) => !findNode(graph, id));
       if (missing.length) return { error: "noNode", nodes: missing.slice(0, 20) };
@@ -764,16 +796,20 @@ export function workbenchInstallScript(origin: string): string {
       const store = workflows();
       const active = store && store.activeWorkflow;
       const layer = canvas && canvas.graph && canvas.graph !== root ? text(canvas.graph.id, 64) : "";
+      const now = here();
       return JSON.parse(JSON.stringify({ ok: true, graph: {
         workflow,
         selection: selected().slice(0, 1000).map((node) => text(String(node.id), 40)),
         modified: Boolean(active && active.isModified),
+        revision: now ? now.revision : 0,
         layer: layer || null,
         info: active ? { name: text(active.filename, 300), path: text(active.path, 600), temporary: Boolean(active.isTemporary) } : null,
       } }));
     },
-    async applyOps(ops) {
+    async applyOps(ops, expect) {
       if (!capabilities().applyOps) return { error: "unsupported", message: "applyOps" };
+      const moved = notAsRead(expect);
+      if (moved) return moved;
       const { problems, steps } = resolveOps(ops);
       if (problems.length) return { error: "invalid", problems: problems.slice(0, 20) };
       return applyResolved(steps);
@@ -875,11 +911,11 @@ export function workbenchCallScript(origin: string, call: WorkbenchCall): string
     refreshCombos: "return await bridge.refreshCombos();",
     export: "return await bridge.exportGraph();",
     save: "return bridge.save();",
-    setMarks: "return bridge.setMarks(call.marks);",
+    setMarks: "return bridge.setMarks(call.marks, call.expect);",
     locate: "return bridge.locate(call.node, call.subgraph);",
     readGraph: "return await bridge.readGraph();",
     runControls: "return bridge.runControls(call.phase);",
-    applyOps: "return await bridge.applyOps(call.ops);",
+    applyOps: "return await bridge.applyOps(call.ops, call.expect);",
     openWorkflow: "return await bridge.openWorkflow(call);",
   }[call.op];
   return callShell(origin, `const call = ${data};\n    ${body}`);
@@ -1082,6 +1118,16 @@ export interface WorkbenchExport {
   workflow: Record<string, unknown>;
   prompt: Record<string, unknown>;
   clientId: string;
+  /** 导出的是哪一张、它那时改过几回(写标记时原样带上,见 WorkbenchExpect);前端没有开着的那张时是 null */
+  at: WorkbenchExpect | null;
+}
+
+/** 页面报的「哪一张、改过几回」:key 和轮询的 key 一样截断,改过几回只收非负整数。形状不对就当没报。 */
+function parseExpect(raw: unknown): WorkbenchExpect | null {
+  if (!isRecord(raw)) return null;
+  const key = str(raw.key, 600);
+  const revision = raw.revision;
+  return key && typeof revision === "number" && Number.isSafeInteger(revision) && revision >= 0 ? { key, revision } : null;
 }
 
 export function parseWorkbenchExport(raw: unknown): WorkbenchExport | null {
@@ -1091,7 +1137,8 @@ export function parseWorkbenchExport(raw: unknown): WorkbenchExport | null {
   }
   if (JSON.stringify(raw.workflow).length + JSON.stringify(raw.prompt).length > MAX_EXPORT_CHARS) return null;
   const clientId = str(raw.clientId, 100);
-  return { workflow: raw.workflow, prompt: raw.prompt, clientId: /^[A-Za-z0-9_-]{1,100}$/.test(clientId) ? clientId : "" };
+  return { workflow: raw.workflow, prompt: raw.prompt, clientId: /^[A-Za-z0-9_-]{1,100}$/.test(clientId) ? clientId : "",
+           at: parseExpect(raw.at) };
 }
 
 /**
@@ -1102,6 +1149,8 @@ export interface WorkbenchGraph {
   workflow: Record<string, unknown>;
   selection: string[];
   modified: boolean;
+  /** 读的时候这一张改过几回(改图时连同 `info.key` 带回去,见 WorkbenchExpect) */
+  revision: number;
   layer: string | null;
   info: WorkbenchPlace | null;
 }
@@ -1116,6 +1165,7 @@ export function parseWorkbenchGraph(raw: unknown): WorkbenchGraph | null {
     workflow: raw.workflow,
     selection,
     modified: raw.modified === true,
+    revision: Math.max(0, Math.floor(num(raw.revision))),
     layer: /^[A-Za-z0-9_-]{1,64}$/.test(layer) ? layer : null,
     info: isRecord(raw.info) ? parseOpenWorkflow(raw.info) : null,
   };
@@ -1135,7 +1185,7 @@ export function placeOfOpened(opened: WorkbenchOpened): WorkbenchPlace {
 
 /**
  * 别的调用的回答:成了 / 一个原因码(noNode、noWidget、notInList、missing、elsewhere、failed、unsupported、invalid、
- * noWorkflow……)。改图成了带 `created`(临时名字 → 建出来的节点号;打包出来的那个子图节点是 `@subgraph`),开新标签带
+ * noWorkflow;写标记、改图时画布上已经不是读的那一张 otherWorkflow、读过之后又改过 changed……)。改图成了带 `created`(临时名字 → 建出来的节点号;打包出来的那个子图节点是 `@subgraph`),开新标签带
  * `workflow`;一批里有说不通的回 `invalid` 加每一条的原因(`problems`),画布一样没动。
  */
 export type WorkbenchCallResult =
@@ -1144,7 +1194,7 @@ export type WorkbenchCallResult =
   | { ok: false; error: string; message?: string; nodes?: string[]; problems?: string[]; workflow?: WorkbenchOpened };
 
 const ERRORS = new Set(["noNode", "noWidget", "notInList", "missing", "elsewhere", "failed", "notReady", "closed", "inSubgraph",
-  "unsupported", "invalid", "noWorkflow"]);
+  "unsupported", "invalid", "noWorkflow", "otherWorkflow", "changed"]);
 
 function parseOpened(raw: unknown): WorkbenchOpened | undefined {
   if (!isRecord(raw)) return undefined;

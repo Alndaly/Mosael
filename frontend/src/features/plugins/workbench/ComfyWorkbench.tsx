@@ -329,7 +329,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
                             revision={workflow?.revision ?? 0} />
             )}
             {one === "app" && (
-              <AppPanel key={formsKey} target={target} path={path} canvasModified={Boolean(workflow?.modified)}
+              <AppPanel key={formsKey} target={target} workflowKey={workflowKey} path={path} canvasModified={Boolean(workflow?.modified)}
                         canExport={capabilities ? capabilities.export : false}
                         canMark={capabilities ? capabilities.marks : false} />
             )}

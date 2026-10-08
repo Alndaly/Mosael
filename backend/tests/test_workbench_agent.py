@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import threading
 import time
@@ -241,20 +242,36 @@ def _simple() -> dict[str, Any]:
 
 
 class Canvas:
-    """画布上开着的那一张:读到的是它现在的样子;桥接了一批就换成改后的样子(这里由测试给)。记下每一次调用。"""
+    """画布上开着的那一张:读到的是它现在的样子;桥接了一批就换成改后的样子(这里由测试给)。记下每一次调用。
+
+    `revision` 是这一张改过几回(桥的轮询 / readGraph 报的);改图时和桥一样先比 `expect`:不是读的那一张、读过之后又改过就不改。
+    `after_next_read`:下一次读完之后画布上发生的事(重读和交给桥之间,用户在 ComfyUI 里换了一张、又改了一笔)。"""
 
     def __init__(self, graph: dict[str, Any], key: str = "workflows/人像.json", name: str = "人像",
                  after: dict[str, Any] | None = None) -> None:
         self.graph, self.key, self.name, self.after = graph, key, name, after
+        self.revision = 1
+        self.after_next_read: Any = None
         self.calls: list[dict[str, Any]] = []
 
     def __call__(self, call: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(call)
         if call["op"] == "readGraph":
-            return {"ok": True, "graph": {"workflow": self.graph, "selection": [], "modified": False, "layer": None,
-                                          "info": {"name": self.name, "path": self.key.removeprefix("workflows/"), "key": self.key,
-                                                   "temporary": False}}}
+            answer = {"ok": True, "graph": {"workflow": copy.deepcopy(self.graph), "selection": [], "modified": False,
+                                            "revision": self.revision, "layer": None,
+                                            "info": {"name": self.name, "path": self.key.removeprefix("workflows/"), "key": self.key,
+                                                     "temporary": False}}}
+            then, self.after_next_read = self.after_next_read, None
+            if then is not None:
+                then()
+            return answer
         if call["op"] == "applyOps":
+            expect = call.get("expect") or {}
+            if expect.get("key") != self.key:
+                return {"error": "otherWorkflow"}
+            if expect.get("revision") != self.revision:
+                return {"error": "changed"}
+            self.revision += 1
             if self.after is not None:
                 self.graph = self.after
             return {"ok": True, "created": {one["id"]: "21" for one in call["ops"] if one["op"] == "add_node"}}
@@ -366,6 +383,31 @@ def test_批之前换了一张_或者又改过_清单对不上_一样不改(conn
     assert other_tab["status"] == "failed" and "已经不是「人像」" in other_tab["error"]
     assert stale["status"] == "failed" and "对不上" in stale["error"]
     assert "applyOps" not in canvas.ops()
+
+
+def test_重读之后_插件算的那一下里换了一张_或者又改了一笔_桥那边一样不改(connected) -> None:
+    """PLG-17:批准之后重读画布、插件对着读到的那份算这一批、再交给桥 —— 中间这一下用户在 ComfyUI 里换到同一个模板改出来的
+    另一张(节点号一样),此前这一批照样改进那一张。现在改图带着重读时的 key 和改过几回,桥在页面里比。"""
+    client, _, instance_id, workspace = connected
+    canvas = Canvas(_simple())
+    with Executor(canvas):
+        first = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id, ops=LORA)["result"]
+        second = _tool(client, "comfy_canvas_edit", workspace, instance_id=instance_id, ops=LORA)["result"]
+
+        def switch() -> None:
+            canvas.key, canvas.name = "workflows/人像 2.json", "人像 2"
+
+        canvas.after_next_read = switch
+        other_tab = client.post(f"/api/confirmations/{first['confirmation_id']}/approve").json()
+        canvas.key, canvas.name = "workflows/人像.json", "人像"
+        canvas.after_next_read = lambda: setattr(canvas, "revision", canvas.revision + 1)
+        stale = client.post(f"/api/confirmations/{second['confirmation_id']}/approve").json()
+    applied = [call for call in canvas.calls if call["op"] == "applyOps"]
+    assert [call["expect"] for call in applied] == [{"key": "workflows/人像.json", "revision": 1},
+                                                   {"key": "workflows/人像.json", "revision": 1}], "带的是重读时的那一张"
+    assert other_tab["status"] == "failed" and "已经不是「人像」" in other_tab["error"], other_tab
+    assert stale["status"] == "failed" and "对不上" in stale["error"], stale
+    assert canvas.graph == _simple(), "一样都没改"
 
 
 def test_改子图的定义_卡上写明这张图里用了几处_都会变(connected) -> None:
