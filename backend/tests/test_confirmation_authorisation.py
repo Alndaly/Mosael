@@ -83,7 +83,7 @@ def test_viewer_cannot_approve_off_the_request_thread() -> None:
     error = _approve_off_the_request_thread(card_id, "mate")
 
     assert isinstance(error, PermissionDenied), f"viewer 的批准没有被挡住:{error!r}"
-    assert "Permission denied" in str(error), str(error)
+    assert error.key == "permErr_needsEditor", str(error)
     # 光看异常不够:门禁失效时卡片是**连同执行一起**通过的,时间线真的会多一条轨。
     assert _track_count(owner, sequence_id) == before, "viewer 的批准把编辑执行掉了"
     with SessionLocal() as db:

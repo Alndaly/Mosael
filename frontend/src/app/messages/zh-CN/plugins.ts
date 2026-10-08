@@ -8,7 +8,7 @@ export const plugins = {
   notifClearRead: "清空已读",
   notifEmptyTitle: "还没有通知",
   notifEmpty: "发布结果、工作流失败、协作申请都会出现在这里。",
-  noTasksGuide: "还没有定时任务。点击「新建任务」创建一个演示任务,或让智能体为你安排。",
+  noTasksGuide: "选一个工作流,让它每小时或每天定点跑;也可以在智能体对话里说「每天 9 点帮我跑……」。",
   runNow: "立即运行",
   taskSchedule: "计划",
   taskNextRun: "下次运行",

@@ -42,6 +42,7 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { Combobox } from "@/components/app/combobox";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
+import { atLeast } from "@/components/layout/workspaceMenu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BoundWorkflowRow as BoundWorkflowRowView, isBoundWorkflowGone } from "./boundWorkflowRow";
@@ -176,20 +177,27 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
     />
   );
 
+  //: 只读成员建不了定时任务(后端要 `schedule`,即编辑及以上):按钮灰掉、悬停说为什么,而不是点了才收到一句 403(体检 UM-20)。
+  const readOnly = !atLeast(workspace.role, "editor");
+  const createButton = (content: React.ReactNode) => (
+    <Hint disabledReason={readOnly ? t("roleReadOnlyHint") : undefined}>
+      <Button data-create-task="" disabled={readOnly} onClick={() => setCreating(true)}>
+        {content}
+      </Button>
+    </Hint>
+  );
+
+  //: 标题用「定时任务」:导航和面包屑都这么叫,而「任务」和顶栏的「任务中心」撞名(体检 UM-25)。
   if (tasks.isSuccess && (tasks.data ?? []).length === 0) {
     return (
       <div className={COLLECTION_DETAIL_PAGE}>
-        <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("tasks")} description={t("studioSchedulerDesc")} />
+        <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("schedulerTitle")} description={t("studioSchedulerDesc")} />
         <div className="flex min-h-0 flex-1 overflow-y-auto">
         <EmptyState
           icon={<Timer size={22} />}
           title={t("noTasks")}
           body={t("noTasksGuide")}
-          action={
-            <Button onClick={() => setCreating(true)}>
-              <CalendarClock size={15} /> {t("createTask")}
-            </Button>
-          }
+          action={createButton(<><CalendarClock size={15} /> {t("createTask")}</>)}
         />
         </div>
         {createDialog}
@@ -199,8 +207,8 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
 
   return (
     <div className={COLLECTION_DETAIL_PAGE}>
-      <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("tasks")} description={t("studioSchedulerDesc")} count={tasks.data?.length} actions={<Button onClick={() => setCreating(true)}><Plus />{t("createTask")}</Button>} />
-      <CollectionDetail storageKey="scheduler" label={t("tasks")} selected={!!selected} index={<>
+      <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("schedulerTitle")} description={t("studioSchedulerDesc")} count={tasks.data?.length} actions={createButton(<><Plus />{t("createTask")}</>)} />
+      <CollectionDetail storageKey="scheduler" label={t("schedulerTitle")} selected={!!selected} index={<>
             {tasks.isLoading &&
               (tasks.data ?? []).length === 0 &&
               [0, 1, 2, 3].map((i) => (

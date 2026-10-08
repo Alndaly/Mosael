@@ -8,7 +8,7 @@ export const plugins = {
   notifClearRead: "Clear read",
   notifEmptyTitle: "No notifications yet",
   notifEmpty: "Publish results, workflow failures and collaboration requests show up here.",
-  noTasksGuide: "No scheduled tasks yet. Create a demo task or let the agent schedule one.",
+  noTasksGuide: "Pick a workflow and run it every hour or at a set time each day — or ask the agent to schedule one for you.",
   runNow: "Run now",
   taskSchedule: "Schedule",
   taskNextRun: "Next run",

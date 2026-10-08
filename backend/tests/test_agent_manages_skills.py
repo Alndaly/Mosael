@@ -423,7 +423,8 @@ def test_看的人能列不能改(tool: str, arguments: dict) -> None:
     listed = viewer.post("/api/agent/tools/list_skills", json={"arguments": {"workspace_id": chat.workspace_id}}).json()
     assert "brand-rules" in {one["name"] for one in listed["result"]}
     out = viewer.post(f"/api/agent/tools/{tool}", json={"arguments": {**arguments, "workspace_id": chat.workspace_id}}).json()
-    assert "error" in out and "denied" in out["error"].lower(), out
+    #: 角色不够的那句话按界面语言说(要几档、找谁调),不再是英文的「Permission denied」。
+    assert "error" in out and "「编辑」" in out["error"], out
     with SessionLocal() as db:
         assert db.query(ToolConfirmation).count() == 0
 

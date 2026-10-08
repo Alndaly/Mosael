@@ -93,11 +93,24 @@ def workspace_role(db: Session, user: User, workspace_id: str) -> str | None:
     return member.role if member else None
 
 
+#: 角色不够时说什么:按**要的那一档**给一句人话,说清要几档、找谁调。此前回的是开发者原话「Permission denied: edit」
+#: 「Insufficient workspace role」,原样弹给只读成员(体检 UM-20)。
+_NEEDS_ROLE = {
+    "editor": "permErr_needsEditor",
+    "admin": "permErr_needsAdmin",
+    "owner": "permErr_needsOwner",
+}
+
+
+def _role_too_low(minimum: str) -> PermissionDenied:
+    return PermissionDenied(_NEEDS_ROLE.get(minimum, "permErr_needsAdmin"))
+
+
 def ensure_workspace_role(db: Session, user: User, workspace_id: str, minimum: str) -> str:
     """Member must hold at least `minimum` role. Returns the caller's role."""
     member = _membership(db, user, workspace_id)
     if not role_at_least(member.role, minimum):
-        raise PermissionDenied("Insufficient workspace role")
+        raise _role_too_low(minimum)
     return member.role
 
 
@@ -125,7 +138,7 @@ def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str)
     minimum = _PERM_ROLE.get(perm, "admin")
     member = _membership(db, user, workspace_id)
     if not role_at_least(member.role, minimum):
-        raise PermissionDenied(f"Permission denied: {perm}")
+        raise _role_too_low(minimum)
     bind_workspace(workspace_id)
 
 

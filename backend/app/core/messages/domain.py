@@ -272,6 +272,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "第 {index} 条的 {field} 在笔记里出现了 {count} 次,改哪一处说不清:把原文取长一点,带上前后文,让它只出现一次",
         "en": "Operation #{index}: {field} appears {count} times in the note, so which one is meant is unclear. Quote a longer passage with its surroundings so it appears only once.",
     },
+    "permErr_needsEditor": {
+        "zh": "你在这个工作区是「只读」,这一步要「编辑」或以上的角色。请工作区的管理员在「设置 → 团队与成员」里调整",
+        "en": "You're a Viewer in this workspace; this needs Editor or above. Ask a workspace admin to change your role in Settings → Team & members.",
+    },
+    "permErr_needsAdmin": {
+        "zh": "这一步要这个工作区的「管理员」或「所有者」来做。请找他们,或请他们在「设置 → 团队与成员」里调整你的角色",
+        "en": "This needs a workspace Admin or Owner. Ask one of them, or ask them to change your role in Settings → Team & members.",
+    },
+    "permErr_needsOwner": {
+        "zh": "这一步只有这个工作区的「所有者」能做",
+        "en": "Only the workspace Owner can do this.",
+    },
     "permErr_deploymentAdminOnly": {
         "zh": "这项设置属于整个部署,只有部署管理员能改",
         "en": "This setting applies to the whole deployment; only a deployment administrator can change it.",

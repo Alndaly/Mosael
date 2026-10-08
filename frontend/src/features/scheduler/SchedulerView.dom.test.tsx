@@ -88,13 +88,14 @@ vi.mock("@/api/client", async (importOriginal) => ({
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SchedulerView } from "./SchedulerView";
+import { readHint } from "@/test/hint";
 
-function mount() {
+function mount(role = "owner") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <SchedulerView workspace={{ id: "w1", name: "W" } as never} project={null} />
+        <SchedulerView workspace={{ id: "w1", name: "W", role } as never} project={null} />
       </TooltipProvider>
     </QueryClientProvider>,
   );
@@ -188,5 +189,14 @@ describe("任务详情", () => {
     await waitFor(() =>
       expect(h.update).toHaveBeenCalledWith("t1", { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     );
+  });
+
+  //: 体检 UM-20 / UM-25:只读成员此前看得到「新建任务」,点了收到一句英文 403;页面标题叫「任务」,和任务中心撞名。
+  it("只读成员的「新建任务」灰掉并说为什么;标题叫「定时任务」", async () => {
+    mount("viewer");
+    const create = await screen.findByRole("button", { name: /createTask/ });
+    expect(create.hasAttribute("disabled")).toBe(true);
+    expect(await readHint(create)).toBe("roleReadOnlyHint");
+    expect(screen.getByRole("heading", { level: 2, name: "schedulerTitle" })).toBeTruthy();
   });
 });
