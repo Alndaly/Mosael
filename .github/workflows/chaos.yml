@@ -1,0 +1,31 @@
+# 每天一次:把整道门禁(tests.yml)在「乱序 + 线程起步抖动」下跑一遍,找靠运气才绿的测试。
+#
+# 平时的门禁按固定顺序跑、线程一叫就起:「睡 0.3 秒,它应该已经……了」「耗时 < 1 秒」这类写法在那里永远是绿的,
+# 要等 CI 机器哪天忙了才随机红 —— 而红的往往是无辜的那一条。这里把这两种运气拿掉:
+# - 后端每条新线程起步前随机等 0–0.3 秒(backend/tests/thread_jitter.py),顺序按种子打乱(pytest-randomly);
+# - 前端 vitest --sequence.shuffle 按同一个种子打乱。
+# 种子就是这次运行的编号(日志开头、pytest 表头里都有):红了就在本机用同一个种子重放,
+#   cd backend && MOSAEL_TEST_THREAD_JITTER=0.3 MOSAEL_TEST_THREAD_JITTER_SEED=<n> \
+#     uv run --with pytest-randomly python -m pytest -p randomly --randomly-seed=<n>
+#   cd frontend && pnpm vitest run --sequence.shuffle --sequence.seed=<n>
+# 怎么修见 docs/CONVENTIONS.md「测试里怎么等」。它不挡合并、不改 main 的 CI 结论;红了 GitHub 会照常发通知。
+name: Timing chaos
+
+on:
+  schedule:
+    - cron: "17 19 * * *" # 北京时间每天 03:17,避开整点排队
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaos
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+    with:
+      thread-jitter: "0.3"
+      shuffle-seed: ${{ github.run_number }}

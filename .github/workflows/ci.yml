@@ -13,10 +13,14 @@ on:
     branches: [main]
   pull_request:
 
-# 同一个分支上新的推送作废旧的运行 —— PR 连推几次时不必把队列排满。
+# PR 上新的推送作废旧的运行 —— 连推几次时不必把队列排满。
+# **main 不作废**:每个提交都要跑出自己的结论。几个会话轮流推 main 时,此前后一次推送会把前一次的运行取消掉
+# (2026-10-07 16:03–16:45 连着四次 cancelled,那一小时 main 没有任何结论),哪个提交弄红的只能二分。
+# 推 main 时 group 带上提交:只关掉 cancel-in-progress 不够 —— 同一个 group 里排着等的那一个,会被更新的那次
+# 推送顶掉(GitHub 的 concurrency 只留一个 pending),照样拿不到结论。
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

@@ -76,6 +76,10 @@ pythonpath = ["."]
 # worksteal:谁先空下来就去别人手上还没开始的那一截里拿 —— 用例长短差得多(零点几秒到十几秒),
 # 本机同样负载下比默认的 load 快一成左右。
 addopts = "-n auto --dist worksteal"
+# 一条测试跑满这么久还没完,就把每个线程此刻的栈打出来(pytest 自带,不加依赖;只打栈、不杀进程)。
+# 测试里有大量 Event.wait、线程 join、子进程:哪天哪条死锁了,CI 日志里要看得到它卡在哪一行,而不是一个
+# 等满 job 上限才被掐掉、什么都没留下的运行。最慢的正常用例十几秒,十分钟远在它们之外。
+faulthandler_timeout = 600
 filterwarnings = [
   "error::pytest.PytestUnhandledThreadExceptionWarning",
 ]

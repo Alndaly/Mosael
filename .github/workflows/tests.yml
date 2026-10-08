@@ -7,7 +7,17 @@
 name: Tests
 
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      # 两项只给定时的「乱序 + 线程起步抖动」那一跑用(chaos.yml);平时的门禁都不带,行为和以前一样。
+      thread-jitter:
+        description: 每条新线程起步前随机等 0~这么多秒(backend/tests/thread_jitter.py);空 = 不抖
+        type: string
+        default: ""
+      shuffle-seed:
+        description: 后端用 pytest-randomly、前端用 vitest --sequence.shuffle 按这个种子打乱顺序;空 = 不打乱
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -15,6 +25,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # 正常一次二十分钟出头。上限是给「挂住」的:没有它,一条死锁的测试要占着 runner 等满默认的 6 小时。
+    # 挂住的那条会在 10 分钟时由 faulthandler 打出所有线程的栈(backend/pyproject.toml),日志里看得到卡在哪。
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -93,16 +106,53 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # `build` = `tsc --noEmit` + vite build。两件事都要:
+      # - 类型检查此前不在任何一道闸里(这里原先的注释说它由 build 阶段覆盖,但没有哪一步跑 build),
+      #   类型错进了 main,要到打 tag 发版时 release 的打包才炸;
+      # - 后端的烧字测试要真渲一遍产品默认的那条路(无头 Chromium 按预览 CSS 出 PNG),要找得到构建好的
+      #   frontend/dist(app/media/text_render.find_frontend_dist 从仓库结构里找)。没有它,那几条在 CI 上整片跳过。
+      - name: Frontend typecheck and build
+        run: pnpm --dir frontend build
+
+      # 烧字的浏览器那条路用 Playwright 自带的 Chromium。取舍:装它多花一两分钟(浏览器本体按 uv.lock 缓存,
+      # 系统依赖每次 apt 装),换来字幕 / 花字 / AI 标识的默认导出路径在 CI 上真渲一遍 —— 此前没有任何自动门禁渲过它。
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('backend/uv.lock') }}
+      - name: Headless Chromium for burned-in text
+        run: cd backend && uv run playwright install --with-deps chromium
+
       # 并行跑(pytest-xdist):`-n auto` 按核数开 worker,ubuntu-latest(公开仓库)是 4 核,就是 4 个。
       # pyproject 的 addopts 里本来就带着它,这里写出来是让读这一步的人知道日志里那几个 [gwN] 是怎么来的。
       # 每个 worker 有自己的数据目录和库(tests/conftest.py)。单进程时这一步要二十五分钟左右。
+      # 排查材料:`-rfEs` 把失败、出错和**跳过的原因**列在最后(此前日志里只有「29 skipped」);`--durations`
+      # 列出最慢的几条;junit 里每条用例记着跑在哪个 worker 上,失败时整份传上来(见最后一步)。
       - name: Backend tests
-        run: cd backend && uv run python -m pytest -q -n auto
+        env:
+          MOSAEL_TEST_THREAD_JITTER: ${{ inputs.thread-jitter }}
+          MOSAEL_TEST_THREAD_JITTER_SEED: ${{ inputs.shuffle-seed }}
+          SHUFFLE_SEED: ${{ inputs.shuffle-seed }}
+        run: |
+          cd backend
+          args=(-q -n auto -rfEs --durations=25 --junitxml="$GITHUB_WORKSPACE/.ci/junit-backend.xml")
+          if [ -n "$SHUFFLE_SEED" ]; then
+            uv run --with pytest-randomly python -m pytest "${args[@]}" -p randomly --randomly-seed="$SHUFFLE_SEED"
+          else
+            uv run python -m pytest "${args[@]}"
+          fi
 
-      # frontend 的 build 脚本本身带 `tsc --noEmit`(见 package.json),所以类型检查
-      # 由 build 阶段覆盖,这里只跑单测。
+      # 类型检查在上面的 build 里跑过了,这里只跑单测。
       - name: Frontend tests
-        run: cd frontend && pnpm vitest run
+        env:
+          SHUFFLE_SEED: ${{ inputs.shuffle-seed }}
+        run: |
+          cd frontend
+          if [ -n "$SHUFFLE_SEED" ]; then
+            pnpm vitest run --sequence.shuffle --sequence.seed="$SHUFFLE_SEED"
+          else
+            pnpm vitest run
+          fi
 
       # 契约链快照的新鲜度:openapi.json 必须是 app 此刻的形状,schema.d.ts 必须是从它
       # 再生成出来的那份。此前两端靠手工同步,漂移没有任何闸 —— 已经实测漂过一次
@@ -147,6 +197,14 @@ jobs:
           pnpm --dir website test
           pnpm --dir website build
 
+      - name: Upload backend test report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-backend-${{ github.run_attempt }}
+          path: .ci/junit-backend.xml
+          if-no-files-found: ignore
+
   # 社区服务眼下不在产品里(桌面端的接入已拿掉,见 2d1378623),代码留在仓库里等以后接回。它的整套测试要起一个
   # Postgres 容器,没必要每次提交都付这个钱:只在这次改动碰到它自己、它依赖的格式包或这份工作流时跑;发版(打 tag、
   # 手动触发)和算不出改了什么的时候照跑,宁可多跑不漏跑。ruff 仍由 test job 的 `pnpm lint` 每次都跑。
@@ -180,6 +238,7 @@ jobs:
     needs: [community-changed]
     if: ${{ needs.community-changed.outputs.run == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -216,6 +275,7 @@ jobs:
   # 插件包 / 工作流文件 / 画板快照的格式校验:桌面后端和社区服务共用的那一份。
   formats:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
