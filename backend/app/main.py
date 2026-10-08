@@ -452,6 +452,10 @@ def _wire_seams() -> None:
     asset_plugin_bridge.install()
     board_receipts.install()
     browser_sessions.install()
+    # 取消发布任务时撤它的发布单 —— 同样是「任务不认识发布,发布认识任务」。
+    from app.domain.publish import worker as publish_worker
+
+    publish_worker.install()
     tts_runtime_config.use_source(tts_settings.load)
     pi_client.use_proxy_source(subprocess_env_for_child)
 

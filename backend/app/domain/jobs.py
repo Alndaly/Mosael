@@ -957,8 +957,19 @@ def _resume(resumes: list[tuple[str, str]]) -> None:
     logger.info("resumed %d job(s) whose remote work outlived the restart", len(resumes))
 
 
+#: 「这种任务被取消时,外面还有一张单要跟着撤」(任务种类 → 撤单的那一步)。和取消在**同一个事务**里做:任务落了取消,
+#: 那张单也就撤了,没有中间态。任务这一层不认识持有那张单的领域(发布任务交给桌面发布器去点,见 publish.worker),
+#: 是那一域在装配时登记进来(app/main._wire_seams)—— 和回执、落终态的收拾同一个方向。
+_CANCEL_LISTENERS: dict[str, Callable[[Session, Job], None]] = {}
+
+
+def register_cancel_listener(kind: str, listener: Callable[[Session, Job], None]) -> None:
+    """登记 `kind` 这种任务被取消时要跟着撤的东西。不提交,跟着取消的那个事务走。同一种后登记的覆盖先登记的。"""
+    _CANCEL_LISTENERS[kind] = listener
+
+
 def _cancel_job_row(db: Session, job: Job) -> bool:
-    """把单个 job 落取消态 + 掐子进程 + 撤发布单(不 commit)。返回它是否原本还在跑。"""
+    """把单个 job 落取消态 + 掐子进程 + 撤登记过的外部单(不 commit)。返回它是否原本还在跑。"""
     if job.status not in ("queued", "running") or not lock_active_job(db, job):
         return False
     job.status = "failed"
@@ -969,12 +980,9 @@ def _cancel_job_row(db: Session, job: Job) -> bool:
     # Stop the actual work, not just the row describing it.
     if kill_job_child(job.id):
         db.add(TaskEvent(job_id=job.id, type="job.child_killed", payload={}))
-    if job.kind == "publish":
-        from app.db.models import PublishTask
-
-        task = db.scalar(select(PublishTask).where(PublishTask.job_id == job.id))
-        if task is not None and task.status not in ("success", "failed", "cancelled"):
-            task.status = "cancelled"  # 桌面发布器下次 report/heartbeat 读到 cancelled 即中止自动化
+    withdraw = _CANCEL_LISTENERS.get(job.kind)
+    if withdraw is not None:
+        withdraw(db, job)
     return True
 
 
@@ -1176,7 +1184,12 @@ def report_job(
         if message is not None:
             say(job, message)
         if status == "failed":
-            job.error = (error or message or "worker 报告失败")[:500]
+            if error or message:
+                #: 执行器自己说的原因是它的原话(另一个进程、另一种语言),原样留着,不截半句(同 blame)。
+                job.error, job.error_key, job.error_params = error or message, "", {}
+            else:
+                job.error_key, job.error_params = "jobErr_workerReportedFailure", {}
+                job.error = t("jobErr_workerReportedFailure", DEFAULT_LOCALE)
             logger.warning("job %s [%s] failed (external worker): %s", job.id, job.kind, job.error)
         else:
             job.progress = 1.0

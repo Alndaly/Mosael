@@ -115,6 +115,28 @@ def tick(db: Session) -> list[str]:
             notify_run_failed(db, task, None, str(exc), disabled=True)
             db.commit()
             continue
+        except Exception as exc:  # noqa: BLE001 — 一个任务炸了,不带走这一拍后面到点的
+            # 别的异常(插件、权限、库忙……):这一个任务这一次没跑起来,排在它后面的照跑。此前它冒到 _loop:同一个会话里
+            # flush 了一半的运行记录没回滚、它的 next_run_at 没往后推 —— 这一拍后面到点的全跳过,而它每 5 秒再炸一次。
+            logger.exception("定时任务 %s 这一次没跑起来", task.id)
+            db.rollback()
+            _skip_this_run(db, task, str(exc))
+            db.commit()
+            continue
         db.commit()
         created.append(run.id)
     return created
+
+
+def _skip_this_run(db: Session, task: ScheduledTask, reason: str) -> None:
+    """这一次跳过:周期任务排到下一次,说一声;只跑一次的(或者排不出下一次的)停用,也说一声。不提交。"""
+    try:
+        upcoming = None if task.trigger_type == "once" else compute_next_run_at(
+            task.trigger_type, task.schedule, timezone=task.timezone
+        )
+    except SchedulerDomainError:
+        upcoming = None
+    if upcoming is None:
+        task.enabled = False
+    task.next_run_at = upcoming
+    notify_run_failed(db, task, None, reason, disabled=upcoming is None)

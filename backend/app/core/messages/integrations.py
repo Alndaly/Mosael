@@ -651,6 +651,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "原声只去掉人声、留背景音(需要本机已装好分离引擎)",
         "en": "strip only the voice from the original, keeping the background (needs the separation engine installed locally)",
     },
+    "jobErr_workerReportedFailure": {
+        "zh": "执行器报告失败,没有说原因",
+        "en": "The worker reported a failure without saying why",
+    },
     "jobErr_leaseExpired": {
         "zh": "执行器失联,任务已停止;请检查产出后重新发起",
         "en": "The worker went away and the task stopped; check the output and start it again",

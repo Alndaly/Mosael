@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import re
 import shutil
-import tempfile
 from pathlib import Path
 from typing import BinaryIO
 
 from sqlalchemy.orm import Session
 
+from app.media.scratch import WEB_DOWNLOAD, scratch_dir
 from app.db.models import Asset
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.web_capture import RunOrigin, WebCaptureError, WebSource, remember_run_origin, remember_web_source
@@ -89,7 +89,7 @@ def register_web_download(
 ) -> Asset:
     """一份下载下来的文件入库,带着出处(哪一页、下载地址、什么时候;自动化里还有哪次运行 / 哪个节点)。"""
     name = check_download_name(filename)
-    workdir = Path(tempfile.mkdtemp(prefix="mosael-web-download-"))
+    workdir = scratch_dir(WEB_DOWNLOAD)
     try:
         path = workdir / name
         save_capped(stream, path)

@@ -453,6 +453,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_proxyRunning": {"zh": "生成预览代理中", "en": "Generating the preview proxy"},
     "jobMsg_proxyDone": {"zh": "预览代理完成", "en": "Preview proxy ready"},
     "jobMsg_proxyFailed": {"zh": "预览代理生成失败", "en": "Preview proxy generation failed"},
+    #: 预览代理没转成的原因(任务的 error_key)。画面、声音两样各自的原因是 proxyErr_* 那几个半句,拼进 proxyErr_failed。
+    "proxyErr_sourceMissing": {"zh": "素材文件缺失", "en": "The asset's file is missing"},
+    "proxyErr_failed": {"zh": "预览代理没转成:{reasons}", "en": "The preview proxy wasn't built: {reasons}"},
+    "proxyErr_videoTimedOut": {
+        "zh": "画面代理转码超时({minutes} 分钟内没转完;片子太长或解码太慢,可以稍后重试)",
+        "en": "the picture proxy timed out (not done within {minutes} minutes; the clip is long or slow to decode, try again later)",
+    },
+    "proxyErr_videoFailed": {"zh": "ffmpeg 画面代理转码失败", "en": "ffmpeg couldn't build the picture proxy"},
+    "proxyErr_videoFailedSaid": {
+        "zh": "ffmpeg 画面代理转码失败({detail})",
+        "en": "ffmpeg couldn't build the picture proxy ({detail})",
+    },
+    "proxyErr_audioFailed": {"zh": "ffmpeg 音频代理转码失败", "en": "ffmpeg couldn't build the audio proxy"},
     # ---- 下载/安装过程中的进度句 ----
     # 带 {} 的是**模板**:参数在产生它的地方算好、跟着 key 传出来,不把值拼进句子(拼进去就没法翻了)。
     "dlMsg_preparing": {"zh": "准备下载…", "en": "Preparing the download…"},

@@ -129,6 +129,33 @@ class TestReport:
             assert job.status == "succeeded" and job.progress == 1.0
             assert job.result == {"asset_id": "a1"}
 
+    def test_执行器报失败却没说原因_原因按读的人的语言说(self, external_demo) -> None:
+        """此前兜底的是一句写死的中文「worker 报告失败」,英文界面里也是它。"""
+        from app.api.schemas import JobOut
+        from app.core.i18n import set_current_locale
+
+        workspace_id = _workspace()
+        _make_job(workspace_id)
+        with SessionLocal() as db:
+            job = claim_next_job(db)
+            report_job(db, job, lease_token=job.lease_token, status="failed")
+            db.refresh(job)
+            assert job.status == "failed" and job.error_key == "jobErr_workerReportedFailure"
+            set_current_locale("en")
+            try:
+                assert JobOut.model_validate(job).error == "The worker reported a failure without saying why"
+            finally:
+                set_current_locale("zh")
+
+    def test_执行器说了原因_原样留着(self, external_demo) -> None:
+        workspace_id = _workspace()
+        _make_job(workspace_id)
+        with SessionLocal() as db:
+            job = claim_next_job(db)
+            report_job(db, job, lease_token=job.lease_token, status="failed", error="upload button not found")
+            db.refresh(job)
+            assert (job.error, job.error_key) == ("upload button not found", "")
+
     def test_a_cancelled_job_is_not_resurrected_by_a_late_report(self, external_demo) -> None:
         """worker 是在为一个已经不存在的意图干活——与发布器同一条规则。"""
         workspace_id = _workspace()

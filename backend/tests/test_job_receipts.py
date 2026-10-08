@@ -314,5 +314,15 @@ class Test方向是反的:
         """不在 import 时自动生效 —— 那样测试和脚本会拿到一个自己没要求过的副作用。"""
         from pathlib import Path
 
-        main = Path(__file__).resolve().parents[1] / "app" / "main.py"
-        assert "agent_receipts.install()" in main.read_text(encoding="utf-8")
+        main = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
+        assert "agent_receipts.install()" in main
+        assert "publish_worker.install()" in main
+
+    def test_任务域不认识发布单(self) -> None:
+        """取消发布任务时撤发布单,由发布域登记进来(publish.worker.install)。此前总线自己 `if job.kind == "publish"` 去改
+        发布单的状态 —— 下一种「取消时要撤外部单」的任务照抄这个 if,总线就一域一域地认识下去。"""
+        from pathlib import Path
+
+        source = Path(jobs_domain.__file__).read_text(encoding="utf-8")
+        code = "\n".join(line for line in source.splitlines() if not line.strip().startswith("#"))
+        assert "PublishTask" not in code and "domain.publish" not in code

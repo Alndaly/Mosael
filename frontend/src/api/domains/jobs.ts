@@ -2,6 +2,8 @@ import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
 
 export type Job = components["schemas"]["JobOut"];
+/** 列表里的一行:除了 `result` 什么都有。做出了什么只在详情里给(`getJob`)—— 工作流的结果一条几百 KB,列表一处都不读它。 */
+export type JobSummary = components["schemas"]["JobSummaryOut"];
 export type TaskEvent = components["schemas"]["TaskEventOut"];
 
 /**
@@ -15,8 +17,24 @@ export type TaskEvent = components["schemas"]["TaskEventOut"];
 export function topLevelJobsQuery(workspaceId: string) {
   return {
     queryKey: ["jobs", workspaceId, "top-level"] as const,
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${encodeURIComponent(workspaceId)}&top_level=true`),
+    queryFn: () => listJobs(workspaceId, { topLevel: true }),
   };
+}
+
+/**
+ * 工作区的任务:最近的两百条,**加上全部还在跑的**(后端定的,见 job_center.list_jobs),新的在前。每一行不带 `result`。
+ * 此前整表全拉、每行带着结果:578 个顶层任务 2.4 MB,有任务在跑时每 1.5 秒一遍。
+ */
+export function listJobs(
+  workspaceId: string,
+  { kind, topLevel = false, recorded = false }: { kind?: string; topLevel?: boolean; recorded?: boolean } = {},
+): Promise<JobSummary[]> {
+  const query = new URLSearchParams({ workspace_id: workspaceId });
+  if (kind) query.set("kind", kind);
+  if (topLevel) query.set("top_level", "true");
+  //: 只列挂着创作记录的(生成、语音、播客,ADR 0055)。
+  if (recorded) query.set("recorded", "true");
+  return api<JobSummary[]>(`/api/jobs?${query.toString()}`);
 }
 
 export function getJob(jobId: string): Promise<Job> {

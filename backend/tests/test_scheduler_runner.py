@@ -214,3 +214,49 @@ class Test三个触发入口是同一个:
         for relative in ("api/routes/hooks.py", "api/routes/scheduler.py", "workers/scheduler.py"):
             text = (app / relative).read_text(encoding="utf-8")
             assert "dispatch_scheduled_job" not in text and "has_active_run" not in text, relative
+
+
+def _dispatch_breaks_for(monkeypatch, task_id: str) -> None:
+    """派发这一步本身炸了(运行记录和包装任务已经 flush 进会话之后):执行体的异常派发会接住、写进运行记录,
+    走不到调度循环;能走到的是派发之外的那几步 —— 就绪检查里的插件、权限,派发写失败记录时库忙……"""
+    from app.domain.scheduler import executors
+
+    real = executors.dispatch_scheduled_job
+
+    def dispatch(db, task, run, job):
+        if task.id == task_id:
+            raise RuntimeError("插件那边炸了")
+        real(db, task, run, job)
+
+    monkeypatch.setattr(executors, "dispatch_scheduled_job", dispatch)
+
+
+def test_一个任务触发时炸了_这一拍后面到点的照跑_它排到下一次并说一声(monkeypatch) -> None:
+    """此前只接 SchedulerBusy / SchedulerDomainError:别的异常冒出 tick,排在它后面的到点任务这一拍全跳过,
+    同一个会话里 flush 了一半的运行记录也没回滚;它的 next_run_at 没往后推,每 5 秒再炸一次。"""
+    from app.db.models import Notification
+
+    client = fresh_client()
+    broken = make_due_task(client)
+    fine = make_due_task(client)
+    _dispatch_breaks_for(monkeypatch, broken)
+    with SessionLocal() as db:
+        created = tick(db)
+        assert [db.get(ScheduledTaskRun, run_id).scheduled_task_id for run_id in created] == [fine]
+        assert db.query(ScheduledTaskRun).filter(ScheduledTaskRun.scheduled_task_id == broken).count() == 0, \
+            "炸了的那一次 flush 了一半的运行记录要回滚掉"
+        task = db.get(ScheduledTask, broken)
+        assert task.enabled and task.next_run_at > now(), "周期任务排到下一次,不在下一拍又炸"
+        said = [n for n in db.query(Notification).all() if (n.payload or {}).get("scheduled_task_id") == broken]
+        assert len(said) == 1 and "插件那边炸了" in said[0].body
+        assert tick(db) == [], "下一拍不再碰它"
+
+
+def test_只跑一次的任务触发时炸了_停用并说一声(monkeypatch) -> None:
+    client = fresh_client()
+    task_id = make_due_task(client, trigger_type="once")
+    _dispatch_breaks_for(monkeypatch, task_id)
+    with SessionLocal() as db:
+        assert tick(db) == []
+        task = db.get(ScheduledTask, task_id)
+        assert task.enabled is False and task.next_run_at is None

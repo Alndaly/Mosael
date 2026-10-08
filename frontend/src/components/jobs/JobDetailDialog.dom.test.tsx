@@ -2,7 +2,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Job } from "@/api/client";
 
@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
     "ARK request failed: https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks; " +
     '{"code":"InputImageSensitiveContentDetected.PrivacyInformation","request_id":"021788160646919b9f489096afc36acf450c00ec3935d23a968bb2"}',
   events: [] as Array<Record<string, unknown>>,
+  //: 详情接口交回的那一份(带 `result`);列表里点开的那一行不带它。
+  full: null as Record<string, unknown> | null,
   cancelled: [] as string[],
   regenerated: [] as string[],
 }));
@@ -29,7 +31,7 @@ vi.mock("@/api/client", () => ({
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   assetFileUrl: (id: string) => `/file/${id}`,
-  getJob: async () => null,
+  getJob: async () => h.full,
   listJobChildren: async () => [],
   listJobEvents: async () => h.events,
   cancelJob: async (id: string) => {
@@ -47,6 +49,10 @@ const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
 
 import { JobDetailDialog } from "./JobDetailDialog";
+
+beforeEach(() => {
+  h.full = null;
+});
 
 const job = {
   id: "job-1",
@@ -151,11 +157,14 @@ describe("运行中的任务能在详情里停下", () => {
 
 
 describe("任务执行详情:做出了什么", () => {
+  //: 点开的是列表里那一行(不带 `result`,见后端 JobSummaryOut);做出了什么由详情接口现取。
   const mountJob = (over: Partial<Job>) => {
+    const { result, ...row } = { ...job, status: "succeeded", error: null, ...over } as Job;
+    h.full = { ...row, result };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
       <QueryClientProvider client={client}>
-        <JobDetailDialog job={{ ...job, status: "succeeded", error: null, ...over } as Job} onClose={vi.fn()} />
+        <JobDetailDialog job={row as Job} onClose={vi.fn()} />
       </QueryClientProvider>,
     );
   };

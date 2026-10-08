@@ -20,7 +20,7 @@ const source = readFileSync(join(import.meta.dirname, "TranscriptPanel.tsx"), "u
 
 describe("逐字稿面板的进行中状态", () => {
   it("按后端任务表判断有没有在转,而不是只认自己发起的那一次", () => {
-    expect(source).toContain('kind=transcribe');
+    expect(source).toContain('listJobs(sequence.workspace_id, { kind: "transcribe" })');
     // 光有 asrRunning(本地)不够,必须把后端那份也算进去。
     expect(source).toMatch(/const busy = asrRunning \|\| Boolean\(runningJob\)/);
   });

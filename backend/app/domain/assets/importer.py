@@ -45,14 +45,22 @@ def _probe_with_duration_repair(target: Path, kind: str) -> dict:
     return media_info
 
 
+#: 启动兜底补过、仍量不出时长的素材,`media_info` 里记这个键(值是 "failed",和 `proxy_status` 的 failed 同一个规矩:终态)。
+DURATION_STATUS = "duration_status"
+
+
 def reconcile_broken_media_info(db: Session) -> int:
     """启动兜底:修复 remux 修复上线前导入的坏素材(摄像头/录音直录 webm,
     media_info 缺 duration)。remux 是 `-c copy` 的 I/O 级操作,坏素材通常
-    也只有零星几条,同步跑完即可;顺带补缺失的缩略图/波形。"""
+    也只有零星几条,同步跑完即可;顺带补缺失的缩略图/波形。
+
+    **每条最多试一次。** 补头、逐包量都量不出时长的(110 字节的坏录音),记 `duration_status: failed`,之后的启动跳过。
+    此前没有「试过了」这回事:每次启动都对它跑两遍 ffmpeg 重封装、原地改写一遍这份文件 —— 换成一个几 GB、量不出时长的
+    录屏,每次启动多等两遍整文件拷贝,壳一直转圈。"""
     repaired = 0
     for asset in db.scalars(select(Asset).where(Asset.kind.in_(("audio", "video")))):
         info = asset.media_info or {}
-        if info.get("duration") is not None or not asset.file_key:
+        if info.get("duration") is not None or info.get(DURATION_STATUS) == "failed" or not asset.file_key:
             continue
         source = resolve_key(asset.file_key)
         if not source.is_file():
@@ -61,6 +69,7 @@ def reconcile_broken_media_info(db: Session) -> int:
         remux_in_place(source)
         probed = probe_media(source)
         if probed.get("duration") is None:
+            asset.media_info = {**info, DURATION_STATUS: "failed"}
             continue
         directory = source.parent
         extras: dict = {}

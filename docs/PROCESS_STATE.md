@@ -38,6 +38,10 @@
 | `app/domain/voices/remote.py:_copy_locks` | 每份克隆音色远端副本(嗓子 × 引擎 × 连接 × 钥匙主人 × 模型)一把锁,保证同一份副本同时只有一个线程在建(ADR 0037) | 两个进程各锁各的,配音库的「复刻到百炼」和一次配音同时要同一份副本时会在远端**各建一个**:多出来的那个没人登记、白占账号的复刻名额(一个账号最多 1000 个)。它们名字里带着这把嗓子的前缀,删嗓子时按前缀列出来一起删,所以不会永远留着;但多进程下这里该换成库里的租约。 |
 | `app/domain/local_services/supervisor.py:_services`、`app/domain/local_services/supervisor.py:_directories` | 本机服务的进程(ADR 0041):每个连接一个看护对象(子进程句柄、状态、崩溃重启的计数、日志缓冲、上一次有人用它的时刻 —— 闲置自动停按它算,看护线程每分钟看一遍),以及「同一个目录只起一份」的那把目录锁 | 两个后端进程各起各的:同一个连接的 ComfyUI 起两份,第二份撞端口起不来、却被当成「崩了」反复重启;目录锁各锁各的,拦不住两个连接起同一个目录。重启时进程内的这份没了,但子进程自成一组还活着 —— 下次启动按 pid 文件(`<数据目录>/local-services/pids/`)核对后接回来(见 `local_services/pidfiles`),对不上的不碰。 |
 | `app/domain/local_services/installer.py:_runs` | 「让 Mosael 装」的每个连接最近一次安装或换版本(更新、回到上一版;ADR 0041 §4):后台线程、到了哪一步、字节和速度、取消开关 | 两个进程各起各的安装:「已经在装」只拦得住同一个进程里的;两份写同一个安装目录时插件那边攥着 `install.lock`,第二份会直说「另一次安装在用」。重启时进度没了、安装线程跟着停(退出时先取消),磁盘上的安装记录还在 —— 安装计划据此打勾,「接着装」从没做完的那一步开始。 |
+| `app/domain/members.py:_lock` | 成员变动的「先查再改」(最后一个所有者、重复邀请、邀请已处理)排成一队,锁里提交 | 两个进程各锁各的:两个人同时把最后两个所有者降级或移出,两边都查到「还剩一个所有者」,工作区就一个所有者都没有了;同一个人也会被邀请两次。多进程下要换成库里的条件更新(按剩下几个所有者判)。 |
+| `app/domain/agent/autopilot.py:ALLOWANCE_LOCK` | 「本会话始终允许」是读出整份、加一条、写回 —— 这把锁把它排成一队 | 两张卡同时在两个进程里点了「始终允许」:两边读到同一份,后写的盖掉先写的,一条允许悄悄没了,下次又来问。 |
+| `app/domain/plugins/registry.py:_INSTALL_LOCK` | 同一时刻只换一个插件目录 | 两个进程同时装同一个插件:两边都判「还没装」,一个把目录挪进另一个里面去。 |
+| `app/core/secrets_at_rest.py:_lock` | 第一次取主密钥(标准输入只读一次;没配也没交的话在数据目录建一把) | 两个进程都没找到密钥文件时各建一把,盘上留下后写的那把 —— 先写那把加密进库的凭据从此解不开。配了 `MOSAEL_SECRET_KEY`(或桌面版从标准输入交)就没有这件事。 |
 | `app/core/rate_limit.py:WindowLimiter._events` | 远程部署的登录、OAuth 与计费操作限流窗口 | 两个进程各有自己的计数，同一客户端可在每个进程分别用满额度。当前单进程拓扑下限额准确；横向扩展时必须先把这份窗口搬到共享存储或入口网关。 |
 
 ## 二、单进程是**功能在场**的前提
@@ -52,6 +56,7 @@
 | `app/domain/jobs.py:_KILLED` | 取消已经掐过、执行体还在跑的任务 | 取消在提交之前就掐子进程;执行体恰好在那一刻起的新子进程去库里查还是 running,没人掐它。登记时先看这里。执行体结束就忘掉,重启后没有执行体可言。 |
 | `app/domain/jobs.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
 | `app/domain/jobs.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
+| `app/domain/jobs.py:RENDER_SLOTS`、`app/domain/jobs.py:ASR_SLOTS`、`app/domain/jobs.py:TTS_SLOTS`、`app/domain/jobs.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/engine.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
 | `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
 | `app/integrations/feishu/connections.py:_pumps` | 还活着的泵线程(读 worker 输出、写最后一次状态) | 和 `_processes` 同属一个进程。子进程自己退出时连接先从表里摘掉、泵还在写,停机要等的是它们全部 —— 不等就会在库关掉之后才写(测试里写进下一条用例清过的库)。重启时随进程一起没了,不需要恢复。 |
@@ -139,6 +144,7 @@
 - `app/domain/jobs.py:_EXECUTION_MODES`(每个 kind 在进程内跑还是交给外部执行器)、
   `app/domain/jobs.py:_RECEIPT_DELIVERERS`、
   `app/domain/jobs.py:_SETTLE_LISTENERS`(任务落终态后谁跟着收拾,目前是浏览器:工作流一次运行开的会话随它关)、
+  `app/domain/jobs.py:_CANCEL_LISTENERS`(某种任务被取消时,外面跟着要撤的那张单,和取消同一个事务 —— 目前是发布单)、
   `app/domain/jobs.py:_RESUMERS`(重启后哪一类任务能**接着干**而不是判失败 —— 目前只有生成:
   提交给供应商之后远端照样在生成、照样扣费。回执本身落在 `Job.payload.remote_task`,不在内存里)
 - `app/domain/sequences/undo/registry.py:_REGISTRY`
@@ -165,6 +171,27 @@
   画板、工作流里存着的引用跟着改。组装根在导入期登记,运行时只读;做过哪几批记在库里(`plugin_instances.applied_moves`)。
 - `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
   供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。
+
+## 六、守着上面那些状态的锁
+
+这些锁自己不存东西,只让同一个进程里的几条线程轮流碰上面某一份状态:那份状态归哪一类,锁就归哪一类,不另成约束。
+
+- `app/ai/model_catalog.py:_cache_lock`、`app/ai/runtime/remote_size.py:_lock`、`app/ai/runtime/config.py:_lock`、
+  `app/ai/runtime/tts_daemon.py:_POOL_LOCK`、`app/ai/runtime/asr_daemon.py:_POOL_LOCK`、`app/ai/sidecar/pi_client.py:_LIVE_LOCK`
+- `app/api/routes/oauth.py:_pending_lock`、`app/domain/agent/login.py:_sessions_lock`、`app/domain/agent/stream.py:_streams_lock`、
+  `app/domain/blender/bridge.py:_guard`(守 `_locks` 这张表本身)、`app/domain/jobs.py:_CHILDREN_LOCK`、`app/domain/providers/auth.py:_lock`、
+  `app/domain/voices/remote.py:_locks_guard`(守 `_copy_locks` 这张表本身)
+- `app/domain/local_services/installer.py:_registry_lock`、`app/domain/local_services/supervisor.py:_registry_lock`
+- `app/domain/model_library.py:_lock`、`app/domain/model_nsfw_local.py:_lock`、`app/domain/model_previews.py:_lock`、
+  `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`
+- `app/integrations/feishu/client.py:_token_lock`、`app/integrations/feishu/connections.py:_process_lock`、
+  `app/integrations/feishu/inbound.py:_seen_lock`、`app/integrations/feishu/inbound.py:_awaiting_lock`、`app/integrations/feishu/onboarding.py:_onboard_lock`
+
+不守状态、也不构成部署约束的两把:
+
+- `app/domain/documents/local.py:_PDFIUM` —— pdfium 有全局状态、不是线程安全的,本进程里碰它的地方排成一队。每个进程各有一份 pdfium,
+  第二个进程互不相干。
+- `app/integrations/feishu/worker.py:_write_lock` —— 在飞书机器人的**子进程**里,让几条线程写到标准输出的协议行不交错。
 
 ---
 

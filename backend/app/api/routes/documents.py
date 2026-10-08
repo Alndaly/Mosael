@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from app.api.responses import file_response
 
 from app.api.deps import CurrentUser, DbSession, Tx
+from app.core.i18n import tr
 from app.api.schemas import AssetExtractionOut, DocumentNoteOut, DocumentTextOut, DocumentPagesRequest, DocumentParseRequest, ExtractionSectionsOut
 from app.db.models import AssetExtraction
 from app.domain.capabilities import CapabilityUnavailable
@@ -39,7 +40,7 @@ def get_extraction_sections(asset_id: str, extraction_id: str, db: DbSession, us
     """第 first–last 段的正文(不给 last 就到最后一段)。读的人按段取 —— 几百页的文档不必一次拿全。"""
     extraction = documents.readable_extraction(db, user, asset_id, extraction_id)
     if extraction.status != "succeeded":
-        raise HTTPException(status_code=409, detail="Extraction not finished")
+        raise HTTPException(status_code=409, detail=tr("routeErr_extractionNotFinished"))
     return {"total": extraction.sections, "unit": extraction.unit,
             "sections": read_sections(extraction, first, last or extraction.sections)}
 

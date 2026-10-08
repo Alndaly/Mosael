@@ -18,7 +18,7 @@ import {
   setResourceShared,
   topLevelJobsQuery,
   updateScheduledTask,
-  type Job,
+  type JobSummary,
   type Project,
   type ScheduledTask,
   type ScheduledTaskRun,
@@ -832,7 +832,7 @@ function TaskParamsRow({ task, workspaceId }: { task: ScheduledTask; workspaceId
   );
 }
 
-function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
+function RunRow({ run, job }: { run: ScheduledTaskRun; job: JobSummary | null }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const running = run.status === "queued" || run.status === "running";

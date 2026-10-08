@@ -34,6 +34,7 @@ import {
   assetThumbnailUrl,
   cancelJob,
   entityReceipt,
+  listJobs,
   optimizeImagePrompt,
   repeatGeneration,
   retrieveGeneration,
@@ -41,7 +42,7 @@ import {
   type GenerationCreateResponse,
   type GenerationJob,
   type GenerationOption,
-  type Job,
+  type JobSummary,
   type Workspace,
 } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -429,7 +430,7 @@ export function GenerateWorkspace({
   //: 挂着创作记录的任务(生成、语音、播客):按种类列 `tts` 会把字幕配音的几百句零件一起拉回来。
   const jobs = useQuery({
     queryKey: ["jobs", workspace.id, "creation"],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&recorded=true`),
+    queryFn: () => listJobs(workspace.id, { recorded: true }),
     refetchInterval: (query) =>
       query.state.data?.some((job) => job.status === "queued" || job.status === "running") ? 1000 : false,
     refetchOnWindowFocus: true,
@@ -949,14 +950,16 @@ export function GenerateWorkspace({
 
   //: 一条任务落了终态就重拉这条会话的记录:成功的带回产出,失败的带回**记录自己存的**失败原因
   //: (生成记录在任务失败那一刻抄下它,任务之后会被清掉,见后端 generation.runner.record_failure)。
-  const settledCount = (jobs.data ?? []).filter((job) => job.status === "succeeded" || job.status === "failed").length;
+  //: 按「哪几条落了终态」认,不按条数:列表只给最近的两百条加上在跑的(后端定的),新建一条把最老的一条挤出去、同一拍里
+  //: 另一条落了终态,条数不变 —— 按条数认的话这一次就不重拉了。
+  const settled = (jobs.data ?? []).filter((job) => job.status === "succeeded" || job.status === "failed").map((job) => job.id).join(",");
   React.useEffect(() => {
-    if (settledCount > 0) {
+    if (settled) {
       void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, activeSession?.id] });
       void qc.invalidateQueries({ queryKey: ["generation-sessions", workspace.id] });
     }
-  }, [settledCount, qc, workspace.id, activeSession?.id]);
+  }, [settled, qc, workspace.id, activeSession?.id]);
 
   //: 输入框底下那枚模型按钮:打开右边的「引擎参数」,焦点落到模型选择上。**已经开着也要有反应** —— 此前它只会
   //: setParametersOpen(true),栏开着时点了什么都不发生(维护者:「点击底部这个 ComfyUI 开头的这一串没有任何反应」)。
@@ -1929,7 +1932,7 @@ function settlingAfterStop(generation: GenerationJob): boolean {
   return Date.now() - parseServerTime(generation.updated_at).getTime() < STOP_SETTLE_MS;
 }
 
-function turnStatus(generation: GenerationJob, job: Job | null): TurnStatus {
+function turnStatus(generation: GenerationJob, job: JobSummary | null): TurnStatus {
   if (generation.stopped) return "stopped";
   // job 行可能已被任务中心「清空已结束」删掉(记录长存、job_id 置空):有产物即成功;记录上记着失败原因、
   // 或者任务已经不在了,即失败;只有任务还在而列表没拉到时才视作排队中。
@@ -1961,7 +1964,7 @@ function GenerationTurn({
   voiced?: { title: string; bubble: string; onRescript?: (turns: ScriptTurn[], speakers: string[]) => void };
   /** 这条用的那个模型(还在选项里的话):占位按它说的「一遍交回几份」摆。 */
   option: GenerationOption | null;
-  job: Job | null;
+  job: JobSummary | null;
   gallery?: ImagePreviewItem[];
   /** 停下这一条(取消它的任务);只读的会话不给。 */
   onStop?: (jobId: string) => void;

@@ -23,6 +23,12 @@ GENERATION = "gen"
 PLUGIN_OUTPUT = "plugin-out"
 #: 导出时 ffmpeg 写的成片,编完搬进素材库(见 domain/render)。
 EXPORT = "export"
+#: 从链接导入时 yt-dlp 下回来的文件,和借出来的登录态(cookies.txt —— 留在系统临时目录里就是一份没人收的登录凭据)。
+URL_IMPORT = "url-import"
+#: 浏览器自动化下载下来、入库之前的那一份(见 domain/assets/web_download)。
+WEB_DOWNLOAD = "web-download"
+#: 装插件时 zip 解开的那一份,验过之后整个挪进插件目录(见 domain/plugins/registry)。
+PLUGIN_INSTALL = "plugin-install"
 
 
 def scratch_root() -> Path:

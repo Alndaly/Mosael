@@ -4,7 +4,7 @@ import { Activity, Ban, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, 
 
 import { toast } from "sonner";
 
-import { api, clearFinishedJobs, getJob, previewClearFinished, topLevelJobsQuery, type ClearFinishedPreview, type Job } from "@/api/client";
+import { api, clearFinishedJobs, getJob, previewClearFinished, topLevelJobsQuery, type ClearFinishedPreview, type JobSummary } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
 import { ConfirmDialog } from "@/components/app/modals";
@@ -32,7 +32,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   // 深链通道(与 mosael:open-* 约定一致):首页任务磁贴等入口用事件打开任务中心弹层。
-  const [detailJob, setDetailJob] = React.useState<Job | null>(null);
+  const [detailJob, setDetailJob] = React.useState<JobSummary | null>(null);
   const { kindOf, ready: kindsReady } = useJobKinds();
   React.useEffect(() => {
     const onOpen = (event: Event) => {
@@ -89,7 +89,7 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   // 是一件事发生了五次,不是五件事 —— 平铺成五行只会把别的任务挤出视野。
   // 代表取最新一条(点开看的详情、行上的时间都是它的),其余只留一个 ×N。
   const finished = React.useMemo(() => {
-    const groups = new Map<string, { job: Job; count: number }>();
+    const groups = new Map<string, { job: JobSummary; count: number }>();
     for (const job of all.filter((item) => !ACTIVE.has(item.status))) {
       const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
       const key = `${job.kind}|${job.status}|${subject}|${job.error ?? job.message}`;
@@ -101,13 +101,13 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   }, [all]);
 
   // 点任务行 → 打开该 job 的执行详情弹层(状态 + 事件时间线)。
-  const openJob = (job: Job) => {
+  const openJob = (job: JobSummary) => {
     setDetailJob(job);
     setOpen(false);
   };
 
   // 详情弹层里「前往对应页面」:去哪一页、打开哪条记录,由任务目录声明。
-  const gotoDetailPage = (job: Job) => {
+  const gotoDetailPage = (job: JobSummary) => {
     gotoJobPage(job, kindOf(job.kind));
     setDetailJob(null);
   };
@@ -280,7 +280,7 @@ function clearEndedBody(
   );
 }
 
-function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number; onOpen?: () => void; onCancel?: () => void }) {
+function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?: number; onOpen?: () => void; onCancel?: () => void }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const meta = useJobKinds().kindOf(job.kind);

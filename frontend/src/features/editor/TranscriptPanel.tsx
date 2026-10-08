@@ -5,7 +5,7 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
-import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type Clip, type Job, type Sequence } from "@/api/client";
+import { getAssetTranscript, getJob, listAsrModels, listJobs, transcribeAsset, type Clip, type Sequence } from "@/api/client";
 import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
@@ -490,7 +490,7 @@ export function TranscriptPanel({
   // 状态的真相在服务端(它有这些任务),所以挂载时去认领:这个工作区里还在跑的转写任务。
   const runningTranscribes = useQuery({
     queryKey: ["jobs", sequence.workspace_id, "transcribe"],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${sequence.workspace_id}&kind=transcribe`),
+    queryFn: () => listJobs(sequence.workspace_id, { kind: "transcribe" }),
     refetchInterval: (query) =>
       (query.state.data ?? []).some((job) => job.status === "running" || job.status === "queued") ? 1500 : false,
   });
@@ -512,7 +512,7 @@ export function TranscriptPanel({
    */
   const transcribeJobs = useQuery({
     queryKey: ["jobs", sequence.workspace_id, "transcribe"],
-    queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${sequence.workspace_id}&kind=transcribe`),
+    queryFn: () => listJobs(sequence.workspace_id, { kind: "transcribe" }),
     // **一直轮询,不是"有在跑才轮询"。** 后者是个死结:挂载那一刻没有在跑的任务,它就再也不查了,
     // 而"转写是在面板挂载之后才开始的"恰恰是最常见的情形 —— 从素材页发起,或者切一下标签页
     // (这个面板在标签里,切走即卸载)。跑起来之后收紧到 1.5 秒,好让进度看着是活的。

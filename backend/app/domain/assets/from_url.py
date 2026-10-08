@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import tempfile
 import threading
 from datetime import timezone
 from pathlib import Path
@@ -29,6 +28,7 @@ from urllib.parse import urlsplit
 import httpx
 from sqlalchemy.orm import Session
 
+from app.media.scratch import URL_IMPORT, scratch_dir
 from app.core import outbound_guard
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
@@ -165,7 +165,7 @@ def _run(job_id: str) -> None:
     failures: list[tuple[str, str]] = []
     asset_ids: list[str] = []
     total = len(items)
-    workdir = Path(tempfile.mkdtemp(prefix="mosael-url-import-"))
+    workdir = scratch_dir(URL_IMPORT)
     try:
         cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if profile_id else None
         for index, item in enumerate(items):
@@ -325,12 +325,11 @@ def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int =
     `actor` 是谁在探:借的是档案主人的登录态,别人的私有档案被拒(`sharing.NotUsableError`)。
     """
     import shutil
-    import tempfile
 
     from app.media import ytdlp
 
     ensure_public_link(url)
-    workdir = Path(tempfile.mkdtemp(prefix="mosael-probe-")) if profile_id else None
+    workdir = scratch_dir(URL_IMPORT) if profile_id else None
     try:
         cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if workdir is not None else None
         return ytdlp.probe(url.strip(), cookie_file=cookie_file, start=start)

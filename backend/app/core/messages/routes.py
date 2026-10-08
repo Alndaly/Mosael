@@ -15,6 +15,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "账号不存在",
         "en": "Account not found.",
     },
+    "routeErr_currentPasswordWrong": {
+        "zh": "当前密码不对",
+        "en": "The current password is incorrect.",
+    },
+    "routeErr_publishAccountNotInWorkspace": {
+        "zh": "这个工作区里没有这个发布账号",
+        "en": "This publishing account isn't in this workspace.",
+    },
+    "routeErr_assetNotInWorkspace": {
+        "zh": "这个工作区里没有这个素材",
+        "en": "This asset isn't in this workspace.",
+    },
+    "routeErr_extractionNotFinished": {
+        "zh": "这份文档还没解析完",
+        "en": "This document hasn't finished parsing yet.",
+    },
     "routeErr_resetOwnPassword": {
         "zh": "改自己的密码在「设置 → 账户」里(要输入当前密码);在这里重置会把你自己踢下线",
         "en": "Change your own password in Settings → Account (it asks for the current one); resetting it here would sign you out.",

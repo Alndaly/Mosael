@@ -48,8 +48,11 @@ class TaskEventOut(OrmModel):
     created_at: datetime
 
 
-class JobOut(OrmModel):
-    """任务出口。**message 在这里按请求方的语言翻**。
+class JobSummaryOut(OrmModel):
+    """任务列表里的一行:除了 `result` 什么都有(`JobOut` 是它加上 `result`)。**message 在这里按请求方的语言翻**。
+
+    结果只在详情里给(`GET /api/jobs/{id}`)。工作流任务的 `result` 是整次运行的上下文,一条几十到几百 KB:维护者库里
+    578 个顶层任务的列表 2.4 MB,其中 3 MB 量级的是工作流的结果 —— 而列表一处都不读它,有任务在跑时却每 1.5 秒拉一遍。
 
     翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,
     漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。
@@ -69,7 +72,6 @@ class JobOut(OrmModel):
     message_params: dict = Field(default_factory=dict, exclude=True)
     message: str
     payload: dict
-    result: dict
     #: 同 message_key/params:只为翻译服务,必须声明在 error 之前。
     error_key: str = Field(default="", exclude=True)
     error_params: dict = Field(default_factory=dict, exclude=True)
@@ -118,6 +120,12 @@ class JobOut(OrmModel):
     def _translate_error(cls, value: object, info: ValidationInfo) -> object:
         """失败原因同样按请求方的语言翻。没有 key 的(第三方原话)原样返回。"""
         return _rendered(value, info, "error_key", "error_params")
+
+
+class JobOut(JobSummaryOut):
+    """一个任务的全部:列表里那一行,加上它做出了什么(`result`)。详情、取消、子任务这些一次只出几个的出口用它。"""
+
+    result: dict
 
 
 def _rendered(value: object, info: ValidationInfo, key_field: str, params_field: str) -> object:

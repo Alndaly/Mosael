@@ -258,7 +258,7 @@ def get_user_avatar(user_id: str, db: DbSession, user: CurrentUser) -> FileRespo
 def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser, token: PresentedToken) -> dict:
     """改密码,并把这个人**别处的登录**都踢下线(当前这一份留着,改完不用重新登录)。"""
     if not verify_password(body.current_password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+        raise HTTPException(status_code=401, detail=tr("routeErr_currentPasswordWrong"))
     user.password_hash = hash_password(body.new_password)
     signed_out = revoke_other_logins(db, user.id, token)
     db.commit()

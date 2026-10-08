@@ -95,3 +95,34 @@ def test_startup_reconcile_repairs_legacy_recordings() -> None:
     assert info.get("duration") == pytest.approx(1.0, abs=0.35), info
     assert info.get("has_thumbnail") is True, info
     assert resolve_key("media/legacy-rec/cam.webm").is_file()
+
+
+def test_启动兜底补不出时长的_记成失败_之后的启动不再碰它(monkeypatch) -> None:
+    """维护者库里就有两条 110 字节的坏录音:此前每次启动各跑两遍 ffmpeg 重封装、原地改写一遍文件。"""
+    from app.core.config import settings
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+    from app.domain.assets import importer, reconcile_broken_media_info
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    media = settings.media_dir / "broken-rec"
+    media.mkdir(parents=True, exist_ok=True)
+    (media / "rec.webm").write_bytes(b"\x1aE\xdf\xa3" + b"\0" * 106)  # 110 字节,EBML 头之后什么都没有
+    created = create_asset(client, {"workspace_id": ws["id"], "kind": "audio", "name": "录音", "file_key": "media/broken-rec/rec.webm"})
+
+    remuxed: list[str] = []
+    real = importer.remux_in_place
+    monkeypatch.setattr(importer, "remux_in_place", lambda path: remuxed.append(path.name) or real(path))
+    with SessionLocal() as db:
+        assert reconcile_broken_media_info(db) == 0
+        db.commit()
+    assert remuxed == ["rec.webm"]
+    with SessionLocal() as db:
+        info = db.get(Asset, created["id"]).media_info
+    assert info.get("duration_status") == "failed", info
+
+    with SessionLocal() as db:  # 下一次启动
+        assert reconcile_broken_media_info(db) == 0
+        db.commit()
+    assert remuxed == ["rec.webm"], "试过一次、记成失败的,之后的启动不再重封装、不再改写这份文件"

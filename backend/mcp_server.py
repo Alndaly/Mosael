@@ -3292,8 +3292,10 @@ def list_jobs(workspace_id: str = "", kind: str = "", limit: int = 20) -> list[d
     from app.api.schemas import JobOut
     from app.domain.job_center import use_cases
 
-    jobs = _use_case(use_cases.list_jobs, workspace_id or _default_workspace_id(), kind=kind or None, top_level=True, out=JobOut)
-    return [_job_brief(job) for job in jobs[: max(1, min(int(limit), 100))]]
+    wanted = max(1, min(int(limit), 100))
+    jobs = _use_case(use_cases.list_jobs, workspace_id or _default_workspace_id(), kind=kind or None, top_level=True,
+                     limit=wanted, out=JobOut)
+    return [_job_brief(job) for job in jobs[:wanted]]
 
 
 #: 列任务时每一条说明 / 错误最多留多少字。

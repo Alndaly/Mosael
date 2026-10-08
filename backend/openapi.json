@@ -9458,7 +9458,7 @@
           "jobs"
         ],
         "summary": "List Jobs",
-        "description": "`recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的\n几百句零件一起拉回来。别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。",
+        "description": "最近的 `limit` 条加上全部还在跑的;每一行不带 `result`(详情里才有,见 JobSummaryOut)。\n\n`recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的\n几百句零件一起拉回来。别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。",
         "operationId": "list_jobs_api_jobs_get",
         "parameters": [
           {
@@ -9505,6 +9505,18 @@
               "default": false,
               "title": "Recorded"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -9515,7 +9527,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/JobOut"
+                    "$ref": "#/components/schemas/JobSummaryOut"
                   },
                   "title": "Response List Jobs Api Jobs Get"
                 }
@@ -35436,10 +35448,98 @@
             "type": "object",
             "title": "Payload"
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
           "result": {
             "additionalProperties": true,
             "type": "object",
             "title": "Result"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled",
+            "description": "被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "kind",
+          "status",
+          "progress",
+          "message",
+          "payload",
+          "error",
+          "created_at",
+          "updated_at",
+          "result",
+          "cancelled"
+        ],
+        "title": "JobOut",
+        "description": "一个任务的全部:列表里那一行,加上它做出了什么(`result`)。详情、取消、子任务这些一次只出几个的出口用它。"
+      },
+      "JobSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "parent_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
           },
           "error": {
             "anyOf": [
@@ -35478,14 +35578,13 @@
           "progress",
           "message",
           "payload",
-          "result",
           "error",
           "created_at",
           "updated_at",
           "cancelled"
         ],
-        "title": "JobOut",
-        "description": "任务出口。**message 在这里按请求方的语言翻**。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。"
+        "title": "JobSummaryOut",
+        "description": "任务列表里的一行:除了 `result` 什么都有(`JobOut` 是它加上 `result`)。**message 在这里按请求方的语言翻**。\n\n结果只在详情里给(`GET /api/jobs/{id}`)。工作流任务的 `result` 是整次运行的上下文,一条几十到几百 KB:维护者库里\n578 个顶层任务的列表 2.4 MB,其中 3 MB 量级的是工作流的结果 —— 而列表一处都不读它,有任务在跑时却每 1.5 秒拉一遍。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。"
       },
       "Keyframe": {
         "properties": {

@@ -21,11 +21,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.i18n import LocalizedError, fragment
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import (
     JobCancelled,
+    blame,
     create_job,
     dispatch_job,
     emit_job_event,
@@ -200,11 +202,12 @@ def _transcode(job_id: str, asset_id: str) -> None:
 
             asset = db.get(Asset, asset_id)
             if asset is None or not asset.file_key:
-                _fail(db, job_id, asset_id, "素材文件缺失", video=video, audio=audio)
+                _fail(db, job_id, asset_id, LocalizedError("proxyErr_sourceMissing"), video=video, audio=audio)
                 return
             source = resolve_key(asset.file_key)
             result: dict[str, str] = {}
-            failures: list[str] = []
+            #: 两样各自没转成的原因(文案片段,读的时候按读的人的语言翻,见 core/i18n.fragment)。
+            failures: list[dict] = []
             # 两样各自落各自的状态:画面代理转坏了,声音照样能听;反过来也一样。
             if video:
                 #: 时限按时长放宽(见 media/proxy.proxy_timeout);超时和转坏分开说 —— 超时的换个时候重试多半转得出来。
@@ -225,8 +228,9 @@ def _transcode(job_id: str, asset_id: str) -> None:
                 else:
                     _set_proxy_meta(db, asset_id, "failed")
                     failures.append(
-                        f"代理转码超时({limit / 60:.0f} 分钟内没转完;片子太长或解码太慢,可以稍后重试)"
-                        if timed_out else (f"ffmpeg 代理转码失败:{ffmpeg_said}" if ffmpeg_said else "ffmpeg 代理转码失败")
+                        fragment("proxyErr_videoTimedOut", minutes=f"{limit / 60:.0f}") if timed_out
+                        else fragment("proxyErr_videoFailedSaid", detail=ffmpeg_said) if ffmpeg_said
+                        else fragment("proxyErr_videoFailed")
                     )
             if audio:
                 if not probe_has_audio(source):
@@ -239,10 +243,10 @@ def _transcode(job_id: str, asset_id: str) -> None:
                         _set_audio_proxy_meta(db, asset_id, "ready", key=result["audio_proxy_key"])
                     else:
                         _set_audio_proxy_meta(db, asset_id, "failed")
-                        failures.append("ffmpeg 音频代理转码失败")
+                        failures.append(fragment("proxyErr_audioFailed"))
             job = db.get(Job, job_id)
             if failures:
-                _fail_job(db, job, ";".join(failures))
+                _fail_job(db, job, LocalizedError("proxyErr_failed", reasons=failures))
                 return
             if finish_job(db, job, status="succeeded", progress=1.0, result=result):
                 say(job, "jobMsg_proxyDone")
@@ -251,7 +255,7 @@ def _transcode(job_id: str, asset_id: str) -> None:
             raise
         except Exception as exc:  # a worker thread must record failure, never die silently
             db.rollback()
-            _fail(db, job_id, asset_id, str(exc)[:500], video=video, audio=audio)
+            _fail(db, job_id, asset_id, exc, video=video, audio=audio)
 
 
 def _drop_pending(db: Session, job_id: str, asset_id: str) -> None:
@@ -268,7 +272,7 @@ def _drop_pending(db: Session, job_id: str, asset_id: str) -> None:
         _set_audio_proxy_meta(db, asset_id, "failed")
 
 
-def _fail(db: Session, job_id: str, asset_id: str, reason: str, *, video: bool, audio: bool) -> None:
+def _fail(db: Session, job_id: str, asset_id: str, reason: Exception, *, video: bool, audio: bool) -> None:
     """整次任务没跑完:点名要转、而此刻还挂在 pending 的那几样记成 failed(已经落了终态的不动)。"""
     asset = db.get(Asset, asset_id)
     if video and (asset is None or proxy_status(asset) == "pending"):
@@ -278,10 +282,11 @@ def _fail(db: Session, job_id: str, asset_id: str, reason: str, *, video: bool, 
     _fail_job(db, db.get(Job, job_id), reason)
 
 
-def _fail_job(db: Session, job: Job | None, reason: str) -> None:
-    if job is not None and finish_job(db, job, status="failed", error=reason):
+def _fail_job(db: Session, job: Job | None, reason: Exception) -> None:
+    """落失败。原因经 `blame`:带文案 key 的(proxyErr_*)按读的人的语言翻,别的异常留它自己的那句话。"""
+    if job is not None and finish_job(db, job, status="failed", **blame(reason)):
         say(job, "jobMsg_proxyFailed")
-        emit_job_event(db, job.id, "job.failed", {"reason": reason})
+        emit_job_event(db, job.id, "job.failed", {"reason": job.error})
 
 
 def reconcile_missing_proxies(db: Session) -> int:

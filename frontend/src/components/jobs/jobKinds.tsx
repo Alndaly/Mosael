@@ -113,7 +113,7 @@ export function shouldAnnounce(meta: JobKind, status: string): boolean {
 const KNOWN_VIEWS = new Set<string>(STUDIO_VIEWS);
 
 /** 这条任务的结果在哪一页看;没有就返回 null。payload 里带着 project_id 时编辑器直接落到那个项目。 */
-export function jobPage(job: Job, meta: JobKind): string | null {
+export function jobPage(job: Pick<Job, "payload">, meta: JobKind): string | null {
   if (!meta.view || !KNOWN_VIEWS.has(meta.view)) return null;
   //: AI Studio 里任务的结果(生成、念的字、播客)都在创作分区(ADR 0055 §9);那一条会话由记录字段打开。
   if (meta.view === "ai") return "/ai?tab=create";
@@ -122,7 +122,7 @@ export function jobPage(job: Job, meta: JobKind): string | null {
 }
 
 /** 跳到这条任务的结果;目录声明了记录字段时直接打开那条记录。 */
-export function gotoJobPage(job: Job, meta: JobKind): void {
+export function gotoJobPage(job: Pick<Job, "payload">, meta: JobKind): void {
   const page = jobPage(job, meta);
   if (!page) return;
   const payload = (job.payload ?? {}) as Record<string, unknown>;

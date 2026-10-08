@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.job_center import use_cases as job_center
-from app.api.schemas import ClearFinishedPreviewOut, JobKindCatalogOut, JobOut, TaskEventOut
+from app.api.schemas import ClearFinishedPreviewOut, JobKindCatalogOut, JobOut, JobSummaryOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
 from app.db.models import Job, TaskEvent
 from app.domain import job_catalog
@@ -13,7 +13,7 @@ from app.domain import job_catalog
 router = APIRouter(tags=["jobs"])
 
 
-@router.get("/jobs", response_model=list[JobOut])
+@router.get("/jobs", response_model=list[JobSummaryOut])
 def list_jobs(
     workspace_id: str,
     db: DbSession,
@@ -21,10 +21,13 @@ def list_jobs(
     kind: str | None = None,
     top_level: bool = False,
     recorded: bool = False,
+    limit: int = Query(job_center.LIST_LIMIT, ge=1, le=1000),
 ) -> list[Job]:
-    """`recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的
+    """最近的 `limit` 条加上全部还在跑的;每一行不带 `result`(详情里才有,见 JobSummaryOut)。
+
+    `recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的
     几百句零件一起拉回来。别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。"""
-    return job_center.list_jobs(db, user, workspace_id, kind=kind, top_level=top_level, recorded=recorded)
+    return job_center.list_jobs(db, user, workspace_id, kind=kind, top_level=top_level, recorded=recorded, limit=limit)
 
 
 def _kind_out(entry: job_catalog.JobKind, label_key: str, locale: str) -> dict:

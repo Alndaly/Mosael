@@ -19,13 +19,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Job, PublishAccount, PublishTask, now
-from app.domain.jobs import emit_job_event, say, start_job
+from app.domain.jobs import emit_job_event, register_cancel_listener, say, start_job
 from app.domain.notifications import notify
 from app.domain.publish.post import published_post
 from app.domain.publish import (
     BINDING_STATUSES,
     PUBLISH_PLATFORMS,
     TASK_STATUSES,
+    TERMINAL_TASK_STATUSES,
     PublishDomainError,
 )
 from app.media.paths import resolve_key
@@ -159,6 +160,19 @@ def claim_next_pending(
         "options": dict(task.options or {}),
         "status": task.status,
     }
+
+
+def withdraw_cancelled(db: Session, job: Job) -> None:
+    """发布任务被取消:它那张还没结束的发布单落 cancelled(不提交,跟着取消的那个事务走)。
+    桌面发布器下一次 report / heartbeat 读到 cancelled 就中止自动化,不会照样点下「发布」。"""
+    task = db.scalar(select(PublishTask).where(PublishTask.job_id == job.id))
+    if task is not None and task.status not in TERMINAL_TASK_STATUSES:
+        task.status = "cancelled"
+
+
+def install() -> None:
+    """装配(app/main._wire_seams):任务总线取消发布任务时,由这里撤发布单 —— 总线不认识发布单。"""
+    register_cancel_listener("publish", withdraw_cancelled)
 
 
 def report_task(

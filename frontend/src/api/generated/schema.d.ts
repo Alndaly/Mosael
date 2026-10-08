@@ -3189,7 +3189,9 @@ export interface paths {
         };
         /**
          * List Jobs
-         * @description `recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的
+         * @description 最近的 `limit` 条加上全部还在跑的;每一行不带 `result`(详情里才有,见 JobSummaryOut)。
+         *
+         *     `recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的
          *     几百句零件一起拉回来。别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。
          */
         get: operations["list_jobs_api_jobs_get"];
@@ -12834,12 +12836,7 @@ export interface components {
         };
         /**
          * JobOut
-         * @description 任务出口。**message 在这里按请求方的语言翻**。
-         *
-         *     翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,
-         *     漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。
-         *
-         *     没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。
+         * @description 一个任务的全部:列表里那一行,加上它做出了什么(`result`)。详情、取消、子任务这些一次只出几个的出口用它。
          */
         JobOut: {
             /** Id */
@@ -12860,8 +12857,57 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+            /** Error */
+            error: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Result */
             result: {
+                [key: string]: unknown;
+            };
+            /**
+             * Cancelled
+             * @description 被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。
+             */
+            readonly cancelled: boolean;
+        };
+        /**
+         * JobSummaryOut
+         * @description 任务列表里的一行:除了 `result` 什么都有(`JobOut` 是它加上 `result`)。**message 在这里按请求方的语言翻**。
+         *
+         *     结果只在详情里给(`GET /api/jobs/{id}`)。工作流任务的 `result` 是整次运行的上下文,一条几十到几百 KB:维护者库里
+         *     578 个顶层任务的列表 2.4 MB,其中 3 MB 量级的是工作流的结果 —— 而列表一处都不读它,有任务在跑时却每 1.5 秒拉一遍。
+         *
+         *     翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,
+         *     漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。
+         *
+         *     没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。
+         */
+        JobSummaryOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Kind */
+            kind: string;
+            /** Parent Job Id */
+            parent_job_id?: string | null;
+            /** Status */
+            status: string;
+            /** Progress */
+            progress: number;
+            /** Message */
+            message: string;
+            /** Payload */
+            payload: {
                 [key: string]: unknown;
             };
             /** Error */
@@ -25980,6 +26026,7 @@ export interface operations {
                 kind?: string | null;
                 top_level?: boolean;
                 recorded?: boolean;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -25993,7 +26040,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobOut"][];
+                    "application/json": components["schemas"]["JobSummaryOut"][];
                 };
             };
             /** @description Validation Error */

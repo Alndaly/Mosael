@@ -66,3 +66,8 @@ def test_任务失败原因里写着那一行(monkeypatch, tmp_path: Path) -> No
     with SessionLocal() as db:
         job = db.get(Job, job_id)
         assert job.status == "failed" and "moov atom not found" in (job.error or ""), job.error
+    #: 原因按读的人的语言翻(带文案 key),ffmpeg 的原话原样夹在里面。此前写进去的是一句中文,英文界面里也是它。
+    english = client.get(f"/api/jobs/{job_id}", headers={"Accept-Language": "en-US"}).json()["error"]
+    assert english == "The preview proxy wasn't built: ffmpeg couldn't build the picture proxy (moov atom not found)", english
+    chinese = client.get(f"/api/jobs/{job_id}", headers={"Accept-Language": "zh-CN"}).json()["error"]
+    assert chinese == "预览代理没转成:ffmpeg 画面代理转码失败(moov atom not found)", chinese

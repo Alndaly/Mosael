@@ -13,6 +13,11 @@ OAuth 的待完成流。这些说明此前各自躺在自己文件的注释里:�
 generation/catalog.py 就几十个),把它们算进来的话这份清单会淹掉,而淹掉的清单没人看。
 所以只认两种 —— 被 `global` 重新绑定过的,和被下标赋值 / `append`、`pop`、`clear` 这类
 方法改过的。
+
+**还有模块级的锁和名额**(`Lock` / `RLock` / `Semaphore` / `BoundedSemaphore` / `Condition`)。它们自己不存东西,
+却可能正是「单进程才对」的那道闸:成员域那把锁守着「最后一个所有者不被同时降级」,多进程下各锁各的,工作区就能
+降到一个所有者都没有 —— 而此前它不在清单里,照清单逐条处理的人会漏掉它。守着别的状态的锁也要写上一句,和它守的
+那份同类。
 """
 
 from __future__ import annotations
@@ -86,13 +91,32 @@ def _mutated_names(tree: ast.Module) -> set[str]:
     return touched
 
 
+#: 模块级的这几种同步原语算进程内状态(见模块说明)。
+LOCKS = frozenset({"Lock", "RLock", "Semaphore", "BoundedSemaphore", "Condition"})
+
+
+def _module_locks(tree: ast.Module) -> set[str]:
+    """模块级绑到一把锁 / 一份名额上的名字(`threading.Lock()`、`Semaphore(4)`……)。"""
+    names: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)) or not isinstance(node.value, ast.Call):
+            continue
+        func = node.value.func
+        if (getattr(func, "attr", "") or getattr(func, "id", "")) not in LOCKS:
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names |= {target.id for target in targets if isinstance(target, ast.Name)}
+    return names
+
+
 def _live_state() -> set[str]:
     """代码里现有的进程内状态,写成 `app/x.py:_name`。"""
     found: set[str] = set()
     for path in sorted(APP.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         relative = path.relative_to(ROOT / "backend").as_posix()
-        for name in (_module_level_names(tree) & _mutated_names(tree)) - _context_vars(tree):
+        state = (_module_level_names(tree) & _mutated_names(tree)) - _context_vars(tree)
+        for name in state | _module_locks(tree):
             found.add(f"{relative}:{name}")
     return found
 

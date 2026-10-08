@@ -19,6 +19,10 @@
 指纹里没有排序:步骤在计划里的**位置**不受这条约束(这一轮就把 `migrate-deployment-admin`
 往前挪过 —— 它加的列被三条更早的迁移读,老库启动直接炸)。位置由
 `test_schema_migrations_cover_the_models` 那条端到端升级测试守着。
+
+**函数名也不能改。** 步骤名由函数名派生(`migrations._steps`),而步骤名就是账本那一行的 key:改了名,已经升过的
+库查不到这一行账,会把它当成新的一步再跑一遍。所以指纹里不含函数名 —— 只改了名的那一步,指纹和消失的那一步一模一样,
+这里当场认出来、叫人改回去;此前它表现成「少了一步、多了一步」,提示还是「跑 freeze 补上」,照做就是给每台老机器重跑一遍。
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from __future__ import annotations
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
 
+import ast
 import hashlib
 import json
 import pathlib
@@ -36,41 +41,87 @@ from tests.util import executable_source
 FINGERPRINTS = pathlib.Path(__file__).parent / "migration_bodies.json"
 
 
+def _digest(operation: object) -> str:
+    """函数体的指纹:可执行源码,函数名换成同一个(改名不算改身体 —— 改名另有一条规矩,见 `_problems`)。"""
+    tree = ast.parse(executable_source(operation))
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            node.name = "step"
+    return hashlib.sha256(ast.unparse(tree).encode()).hexdigest()[:16]
+
+
 def _fingerprints() -> dict[str, str]:
-    return {
-        step.name: hashlib.sha256(executable_source(step.operation).encode()).hexdigest()[:16]
-        for step in migration_plan().steps
-        if step.once
-    }
+    return {step.name: _digest(step.operation) for step in migration_plan().steps if step.once}
+
+
+def _problems(recorded: dict[str, str], current: dict[str, str]) -> list[str]:
+    """记下的指纹和现在的对一遍,交回要说给人听的几段话;对得上就是空的。"""
+    added = sorted(set(current) - set(recorded))
+    gone = sorted(set(recorded) - set(current))
+    renamed = [(old, new) for new in added for old in gone if current[new] == recorded[old]]
+    if renamed:
+        return [
+            "这些一次性迁移只改了函数名(函数体一模一样):\n  "
+            + "\n  ".join(f"{old} → {new}" for old, new in renamed)
+            + "\n步骤名由函数名派生,而它就是 schema_migrations 里那一行账的 key:改了名,已经升过的库会把它当成新的一步"
+            "**再跑一遍** —— 一次性迁移不保证能重跑(搬文件、按旧形状回填、重算账)。把函数名改回去。"
+        ]
+    problems = []
+    changed = sorted(name for name, digest in current.items() if name in recorded and recorded[name] != digest)
+    if changed:
+        problems.append(
+            "这些一次性迁移的函数体变了 —— 已经记过账的机器**不会重跑它们**,所以这次修改对"
+            "真正需要修的那些库无效:\n  "
+            + "\n  ".join(changed)
+            + "\n要改行为就新开一个步骤名(新名字 = 新的一行账);确属无害的重构(换等价写法)"
+            "再更新 tests/migration_bodies.json,并在提交信息里说明为什么结果不变。"
+        )
+    if gone:
+        problems.append(
+            "这些步骤已经不在计划里了:\n  "
+            + "\n  ".join(gone)
+            + "\n步骤名就是账本那一行的 key:要是改了函数名(顺手改了身体),改回去 —— 改名等于让老库再跑一遍。"
+            "确实是删掉了这一步,再把它从 tests/migration_bodies.json 里删掉。"
+        )
+    elif added:
+        problems.append(
+            "新的一次性迁移还没记进 tests/migration_bodies.json:\n  "
+            + "\n  ".join(added)
+            + "\n跑 `python -m tests.freeze_migration_bodies` 补上。"
+        )
+    return problems
 
 
 def test_一次性迁移的身体没有被改过() -> None:
     recorded: dict[str, str] = json.loads(FINGERPRINTS.read_text(encoding="utf-8"))
-    current = _fingerprints()
+    problems = _problems(recorded, _fingerprints())
+    assert not problems, "\n\n".join(problems)
 
-    changed = sorted(
-        name for name, digest in current.items() if name in recorded and recorded[name] != digest
-    )
-    assert not changed, (
-        "这些一次性迁移的函数体变了 —— 已经记过账的机器**不会重跑它们**,所以这次修改对"
-        "真正需要修的那些库无效:\n  "
-        + "\n  ".join(changed)
-        + "\n要改行为就新开一个步骤名(新名字 = 新的一行账);确属无害的重构(纯改名/换等价写法)"
-        "再更新 tests/migration_bodies.json,并在提交信息里说明为什么结果不变。"
-    )
 
-    added = sorted(set(current) - set(recorded))
-    assert not added, (
-        "新的一次性迁移还没记进 tests/migration_bodies.json:\n  "
-        + "\n  ".join(added)
-        + "\n跑 `python -m tests.freeze_migration_bodies` 补上。"
-    )
+def test_只改了函数名的一步_认得出是改名_不让跑freeze() -> None:
+    recorded = {"backfill-usage-costs": "aaaa", "reprice-usage": "bbbb"}
+    renamed = {"backfill-provider-usage-costs": "aaaa", "reprice-usage": "bbbb"}
+    [said] = _problems(recorded, renamed)
+    assert "backfill-usage-costs → backfill-provider-usage-costs" in said and "改回去" in said
+    assert "freeze" not in said
 
-    gone = sorted(set(recorded) - set(current))
-    assert not gone, (
-        "这些步骤已经不在计划里了,指纹该跟着删(留着就是在守一个不存在的约定):\n  "
-        + "\n  ".join(gone)
-    )
+
+def test_改了名又改了身体_也不叫人跑freeze() -> None:
+    """名字和身体一起变:指纹对不上,认不出是改名 —— 那就按「少了一步」说,不给「跑 freeze 补上」那条路。"""
+    said = "\n".join(_problems({"backfill-usage-costs": "aaaa"}, {"backfill-provider-usage-costs": "cccc"}))
+    assert "backfill-usage-costs" in said and "改回去" in said
+    assert "freeze" not in said
+
+
+def test_指纹不含函数名(tmp_path: pathlib.Path) -> None:
+    import importlib.util
+
+    module = tmp_path / "steps.py"
+    module.write_text("def _backfill_a(db):\n    db.run(1)\n\n\ndef _backfill_b(db):\n    db.run(1)\n", encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("steps_for_digest", module)
+    loaded = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded)
+    assert _digest(loaded._backfill_a) == _digest(loaded._backfill_b)
 
 
 def test_注释和格式不算改动(tmp_path: pathlib.Path) -> None:

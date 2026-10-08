@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import tempfile
 import threading
 import uuid
 from pathlib import Path
@@ -39,6 +38,7 @@ import httpx
 from sqlalchemy.orm import Session
 from mosael_formats import plugin_archive
 
+from app.media.scratch import PLUGIN_INSTALL, scratch_dir
 from app.core.http_retry import RetryingClient
 from app.domain import deployment
 from app.domain.effects import plugin_tool_effects
@@ -214,7 +214,7 @@ def inspect_archive(data: bytes) -> tuple[dict[str, Any], Path, Path]:
         )
     except plugin_archive.ArchiveError as exc:
         raise PluginDomainError.relay(exc) from exc
-    workdir = Path(tempfile.mkdtemp(prefix="mosael-plugin-install-"))
+    workdir = scratch_dir(PLUGIN_INSTALL)
     try:
         with plugin_archive.open_archive(data, max_archive_bytes=None) as archive:
             plugin_archive.safe_extract(archive, workdir, max_unpacked_bytes=MAX_UNPACKED_BYTES)

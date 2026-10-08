@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Ban, CheckCircle2, CircleAlert, ExternalLink, Loader2, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
 
-import { cancelJob, getJob, listJobEvents, regenerateAssetProxy, type Job } from "@/api/client";
+import { cancelJob, getJob, listJobEvents, regenerateAssetProxy, type JobSummary } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { JobEventList } from "@/components/jobs/JobEvents";
@@ -25,7 +25,7 @@ const ACTIVE = new Set(["queued", "running", "pending"]);
  * 失败了能就地重来的任务种类:怎么重来由那一种自己说(拿载荷里的什么、调哪个接口)。此前失败的任务只有「前往对应页面 / 关闭」,
  * 想重试得自己去找入口(体检 UM-33)。没列在这里的种类不摆「重试」—— 重跑会不会再花钱、要不要换参数,得在它自己的页面里定。
  */
-const RETRY: Record<string, (job: Job) => Promise<unknown> | null> = {
+const RETRY: Record<string, (job: JobSummary) => Promise<unknown> | null> = {
   proxy: (job) => (typeof job.payload?.asset_id === "string" ? regenerateAssetProxy(job.payload.asset_id) : null),
 };
 
@@ -37,7 +37,8 @@ export function JobDetailDialog({
   onGoto,
   gotoLabel,
 }: {
-  job: Job | null;
+  /** 点开的那一行(列表里的,不带 `result`);详情现取。 */
+  job: JobSummary | null;
   onClose: () => void;
   onGoto?: () => void;
   gotoLabel?: string;
@@ -49,14 +50,15 @@ export function JobDetailDialog({
   // `job` is a snapshot copied out of the list when the row was clicked and never re-synced,
   // so deriving "is it still running" from it left the dialog spinning on a stale progress bar
   // — and polling every 1.5s — for as long as it stayed open. Track the live row instead.
+  //: 列表里那一行不带 `result`(做出了什么),所以不拿它当这个查询的初始数据 —— 那样「做出了什么」要等下一次轮询才出来,
+  //: 而已经结束的任务不轮询。没取回来之前,状态那几行先用列表里那一行。
   const live = useQuery({
     queryKey: ["job", job?.id],
     queryFn: () => getJob(job!.id),
     enabled: !!job,
     refetchInterval: (query) => (ACTIVE.has(query.state.data?.status ?? "") ? 1500 : false),
-    initialData: job ?? undefined,
   });
-  const current = live.data ?? job;
+  const current: JobSummary | null = live.data ?? job;
   const active = current ? ACTIVE.has(current.status) : false;
 
   const events = useQuery({
@@ -169,7 +171,7 @@ export function JobDetailDialog({
           )}
 
           {/* 做出了什么:写出来的字、生成的图、写成的笔记 —— 此前这里只有状态和一串 job.* 事件,看不到结果。 */}
-          <JobResult job={current} />
+          {live.data && <JobResult job={live.data} />}
 
           {(children.data ?? []).length > 0 && (
             <div className="grid min-w-0 gap-1 border-t border-border pt-2">

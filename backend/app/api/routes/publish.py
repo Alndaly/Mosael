@@ -17,7 +17,7 @@ from app.api.schemas import (
 from app.domain.publish import use_cases as publish_uc
 from app.domain.publish import worker as publish_worker
 from app.db.models import Asset, PublishAccount
-from app.core.i18n import get_current_locale, t
+from app.core.i18n import get_current_locale, t, tr
 from app.domain.publish import (
     PUBLISH_PLATFORMS,
     PublishDomainError,
@@ -133,10 +133,10 @@ def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
     account = db.get(PublishAccount, body.account_id)
     if account is None or account.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail="Account not found in this workspace")
+        raise HTTPException(status_code=404, detail=tr("routeErr_publishAccountNotInWorkspace"))
     asset = db.get(Asset, body.asset_id)
     if asset is None or asset.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail="Asset not found in this workspace")
+        raise HTTPException(status_code=404, detail=tr("routeErr_assetNotInWorkspace"))
     try:
         task = start_publish(
             db,
