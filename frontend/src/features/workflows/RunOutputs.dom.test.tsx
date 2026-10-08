@@ -19,6 +19,7 @@ vi.mock("@/components/app/asset-preview", async (importOriginal) => ({
 }));
 
 import { RunOutputs } from "@/features/workflows/RunOutputs";
+import { failureFields } from "@/components/failure/FailureCard";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import type { Step } from "@/features/workflows/runSteps";
 
@@ -66,8 +67,10 @@ describe("这一步给了什么", () => {
 
   it("失败时把错误原文摆出来,而不是只标一个红点", () => {
     // 只标状态的话,用户得去翻执行历史才知道为什么 —— 而那正是他此刻在看的这个节点。
-    mount({ ...base, status: "failed", error: "上游返回 429", outputs: undefined });
-    expect(screen.getByText("上游返回 429")).toBeTruthy();
+    mount({ ...base, status: "failed", error: "上游返回 429", outputs: undefined,
+            failure: failureFields({ error: "上游返回 429" }, "上游返回 429") });
+    //: 全应用那一份失败展示:那一句在卡上
+    expect(screen.getByText("上游返回 429").closest("[data-failure]")).toBeTruthy();
   });
 
   it("没有产出时说一句,而不是留一片空白", () => {

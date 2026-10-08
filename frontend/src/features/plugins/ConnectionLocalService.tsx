@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { Check, CircleAlert, CircleCheck, FileText, Info, Library, Play, RotateCw, Square, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -481,11 +482,11 @@ function ManagedInstall({
   const where = t(machineKey());
   return (
     <div className="grid gap-4 py-5">
+      {/* 装到哪一步挂了是标题,那一句在卡上、整段输出在「详情」里;「继续安装」在下面那一排 */}
       {run?.state === "failed" && (
-        <div role="alert" className="grid gap-1 text-ui-sm text-destructive">
-          <span className="font-medium">{t("localServiceInstallFailed").replace("{step}", stopped ?? "")}</span>
-          <span className="whitespace-pre-wrap break-words">{run.error}</span>
-        </div>
+        <FailureCard title={t("localServiceInstallFailed").replace("{step}", stopped ?? "")}
+                     {...rawFailureFields(run.error ?? "", t("localServiceInstallFailed").replace("{step}", stopped ?? ""))}
+                     data-local-install-failed="" />
       )}
       {run?.state === "cancelled" && (
         <p className="m-0 text-ui-sm text-muted-foreground">{t("localServiceInstallCancelled").replace("{step}", stopped ?? "")}</p>

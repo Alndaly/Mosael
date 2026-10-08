@@ -374,7 +374,7 @@ export const publish = {
   publishPostOpen: "View on the platform",
   publishPostAt: "Published",
   publishPostMissing: "The platform's post ID was not read at publish time (its interface may have changed). The post itself went out.",
-  publishError: "Failure reason",
+  publishFailedTitle: "Publishing failed",
   publishDeleteBody: "The record is removed; produced files are untouched.",
   publishDeleteBodyPublished: "This one was actually published. Deleting removes only the local record — the post stays up on the platform, and your own account of what you published is gone.",
   publishNeedDesktop: "Browser-platform publishing runs in the Mosael desktop app",

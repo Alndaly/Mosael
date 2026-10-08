@@ -1,4 +1,5 @@
 import type { TaskEvent } from "@/api/client";
+import { failureFields, type FailureFix } from "@/components/failure/FailureCard";
 import type { MessageKey } from "@/app/messages";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
 import { outputType, type RegistryLike } from "@/features/workflows/analyze";
@@ -26,6 +27,8 @@ export type Step = {
   /** 这一步属于哪一次运行。 */
   jobId?: string;
   error?: string;
+  /** 跑挂了给人看的那几样(那一句、原文、原因和怎么修):后端在节点失败的事件上按读的人的语言出(TaskEventOut)。 */
+  failure?: ReturnType<typeof failureFields>;
   details?: Record<string, unknown>;
   /** 跑着的时候节点自己报的进度(插件跑一张 ComfyUI 工作流:「采样 12/20」)。跑完就不再显示。 */
   progress?: number;
@@ -70,6 +73,9 @@ export function toSteps(events: TaskEvent[]): Step[] {
       outputs?: Record<string, unknown>;
       truncated?: Record<string, number>;
       error?: string;
+      error_summary?: string | null;
+      error_detail?: string | null;
+      error_hint?: FailureFix | null;
       details?: Record<string, unknown>;
       progress?: number;
       message?: string;
@@ -100,6 +106,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
       }
       s.status = "failed";
       s.error = p.error;
+      s.failure = failureFields(p, p.error ?? "");
       s.details = p.details;
       if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseServerTime(e.created_at).getTime() - s.startAt);
     } else if (e.type === "workflow.node.progress") {

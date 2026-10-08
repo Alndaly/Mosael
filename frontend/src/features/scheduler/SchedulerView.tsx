@@ -1,4 +1,5 @@
 import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import React from "react";
 import { PageHeading } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -874,7 +875,9 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: JobSummary | null })
   // 耗时:两端都有才算;运行中显示已流逝。
   const seconds = elapsedSecondsBetween(run.started_at, run.finished_at ?? new Date());
   const durationText = seconds == null ? null : formatElapsedSeconds(seconds);
-  const message = run.error ?? (running ? job?.message : null);
+  const message = running ? job?.message : null;
+  //: 跑挂了:全应用那一份失败展示(一行档)。这一次运行的任务还在时读任务的(工作流的照跑挂的那个子任务说),清掉了读运行记录上那句原文
+  const failure = run.status === "failed" && run.error ? failureFields(job?.error ? job : run, run.error) : null;
   const attest = run.status === "failed" ? attestRequestOf((run.result as Record<string, unknown> | undefined)?.attest) : null;
   //: 这一次运行派生的子任务。**只在跑着的时候拉** —— 历史里几十条各拉一次是白花请求,
   //: 而"它到底在动没动"这个问题只有当下那一条会问。
@@ -913,11 +916,13 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: JobSummary | null })
             <span className="timecode text-ui-xs text-muted-foreground">{runClock(run.started_at, locale)}</span>
           )}
         </div>
-        {message && (
+        {failure ? (
+          <FailureCard size="inline" title={t("failureCause")} {...failure} data-run-failed={run.id} />
+        ) : message ? (
           <Truncate as="small" className="text-ui-xs text-muted-foreground">
             {message}
           </Truncate>
-        )}
+        ) : null}
       </div>
       {/* 停在「这一版工作流是别人改的,要主人认可」:认可那一版之后,下次运行就借得到了。 */}
       {attest && <AttestRevisionButton attest={attest} />}

@@ -363,7 +363,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
         </div>
         {running && job.progress > 0 && <Progress value={Math.round(job.progress * 100)} />}
         <Truncate as="small" className={cn("text-ui-xs text-muted-foreground", failed && "text-destructive")}>
-          {status === "failed" ? (job.error ?? job.message) : job.message}
+          {status === "failed" ? (job.error_summary ?? job.error ?? job.message) : job.message}
         </Truncate>
       </div>
     </div>

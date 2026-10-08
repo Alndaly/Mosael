@@ -7,9 +7,10 @@
  * - 「重新解析」列出能用的几家(本地解析 + 配好了的插件,和「设置 → 能力提供方」同一张表);「存成笔记」把全文建成一篇笔记。
  * - 在解析就说在解析(每 1.5 秒看一次);失败了说原因、能重来。
  */
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, FileText, Loader2, NotebookPen, RefreshCw, Square } from "lucide-react";
+import { FileText, Loader2, NotebookPen, RefreshCw, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { listCapabilityChoices } from "@/api/domains/capabilities";
@@ -126,13 +127,12 @@ export function DocumentReader({ assetId }: { assetId: string }) {
   );
 }
 
+/** 解析失败:全应用那一份失败展示 —— 哪个解析器没解出来是标题,它说的那一句在卡上、原文在「详情」里;换一个解析器在页头的菜单里。 */
 function Failed({ extraction }: { extraction: AssetExtraction }) {
   const t = useI18n();
+  const title = t("docParseFailed").replace("{parser}", extraction.parser_name);
   return (
-    <p role="alert" data-document-failed="" className="m-0 mb-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-ui-xs leading-relaxed text-destructive">
-      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-      <span className="min-w-0 [overflow-wrap:anywhere]">{t("docParseFailed").replace("{parser}", extraction.parser_name)} {extraction.error}</span>
-    </p>
+    <FailureCard className="mb-3" title={title} {...rawFailureFields(extraction.error ?? "", title)} data-document-failed="" />
   );
 }
 

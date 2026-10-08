@@ -376,7 +376,7 @@ export const publish = {
   publishPostOpen: "在平台上查看",
   publishPostAt: "发布时间",
   publishPostMissing: "发布时没读到平台返回的作品 ID(平台可能改了接口)。作品本身已经发出去了。",
-  publishError: "失败原因",
+  publishFailedTitle: "发布失败",
   publishDeleteBody: "发布记录将被删除,已产出的文件不受影响。",
   publishDeleteBodyPublished: "这条已经发出去了。删掉的只是本地这本账 —— 平台上的内容不会被撤下,而「我发过什么」就此只剩记忆。",
   publishNeedDesktop: "浏览器平台发布需要在桌面端 Mosael 中操作",

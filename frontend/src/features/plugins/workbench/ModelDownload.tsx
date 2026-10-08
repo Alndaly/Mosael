@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation } from "@tanstack/react-query";
 import { Download, Link2, Loader2, Search } from "lucide-react";
 
@@ -98,11 +99,12 @@ export function ModelDownload({
 
   if (jobId) {
     const status = job.data?.status ?? "queued";
+    if (status === "failed" && job.data) {
+      return <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(job.data, t("workbenchDownloadFailed"))} />;
+    }
     return (
-      <PanelNote tone={status === "failed" ? "error" : "info"}>
-        {status === "succeeded" ? doneLabel
-          : status === "failed" ? job.data?.error || t("workbenchDownloadFailed")
-          : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
+      <PanelNote>
+        {status === "succeeded" ? doneLabel : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
       </PanelNote>
     );
   }

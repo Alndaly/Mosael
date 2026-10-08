@@ -17,6 +17,7 @@
  * 就地展开而不是另开一层弹窗:你看的自始至终是同一次运行,叠一层会把这件事推到背景里。
  */
 
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import React from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -93,10 +94,9 @@ function ChildRow({ child }: { child: Job }) {
       {open && (
         <div className="ml-5 mt-1.5 grid min-w-0 gap-2 pb-1">
           {/* 失败原因先说。它此前整条藏在钻不进去的那一层里,行上只剩一个红色的「失败」。 */}
-          {child.error && (
-            <p className="m-0 min-w-0 whitespace-pre-wrap text-ui-xs text-destructive [overflow-wrap:anywhere]">
-              {child.error}
-            </p>
+          {child.error && child.status === "failed" && (
+            <FailureCard title={t("failureOfKind").replace("{kind}", kindOf(child.kind).label)}
+                         {...failureFields(child, child.error)} data-job-failed={child.id} />
           )}
           {events.isPending ? (
             <span className="inline-flex items-center gap-1.5 text-ui-2xs text-muted-foreground">

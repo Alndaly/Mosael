@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, History, Loader2, Pin, Square, Undo2 } from "lucide-react";
 
@@ -281,7 +282,10 @@ function RunCard({
             : job?.message || t("workbenchRunQueued")}
         </p>
       )}
-      {job?.status === "failed" && <PanelNote tone="error">{job.error || t("workbenchRunFailed")}</PanelNote>}
+      {/* 这一次跑挂了:全应用那一份失败展示 —— ComfyUI 那句「执行到「KSampler」这一步出错」、认得出时的原因和升级命令、原话在「详情」里 */}
+      {job?.status === "failed" && (
+        <FailureCard title={t("workbenchRunFailed")} {...failureFields(job, t("workbenchRunFailed"))} data-workbench-run-failed={run.jobId} />
+      )}
       {job?.status === "cancelled" && <PanelNote>{t("workbenchRunCancelled")}</PanelNote>}
       {groups.map((group) => {
         const name = group.node ? nodeName(group.node) : t("workbenchRunUnknownNode");

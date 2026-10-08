@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, CheckCircle2, CircleAlert, Crosshair, ExternalLink, RefreshCcw } from "lucide-react";
 
@@ -326,13 +327,13 @@ function PackRow({
         />
       )}
       {start.isError && <PanelNote tone="error">{errorText(start.error)}</PanelNote>}
-      {jobId && (
-        <PanelNote tone={status === "failed" ? "error" : "info"}>
-          {status === "succeeded" ? t("workbenchInstallDone")
-            : status === "failed" ? job.data?.error || t("workbenchInstallFailed")
-            : `${t("workbenchInstalling")} ${job.data?.message ?? ""}`}
+      {jobId && status === "failed" && job.data ? (
+        <FailureCard size="inline" lines={2} title={t("workbenchInstallFailed")} {...failureFields(job.data, t("workbenchInstallFailed"))} />
+      ) : jobId ? (
+        <PanelNote>
+          {status === "succeeded" ? t("workbenchInstallDone") : `${t("workbenchInstalling")} ${job.data?.message ?? ""}`}
         </PanelNote>
-      )}
+      ) : null}
     </div>
   );
 }

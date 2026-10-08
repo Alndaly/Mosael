@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useQuery } from "@tanstack/react-query";
 import { Ban, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
@@ -296,17 +297,18 @@ export function WorkflowRunHistory({
             )
           ) : (
             <>
+              {/* 这一轮跑挂了:全应用那一份失败展示 —— 那一句、原因和怎么修照跑挂的那个子任务说(后端解开「子任务失败」那层壳),
+                  原文在「详情」里;停在「这一版是别人改的,要主人认可」时就地给认可那一版的按钮(见 AttestRevisionButton)。 */}
               {selected.error && (
-                <div
-                  role="alert"
-                  className="mb-2 flex items-start gap-2 rounded-md border border-[color-mix(in_srgb,var(--destructive)_32%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2.5 py-2 text-ui-xs leading-[1.5] text-destructive"
-                >
-                  <XCircle size={13} className="mt-0.5 shrink-0" />
-                  <p className="m-0 min-w-0 whitespace-pre-wrap break-words">{selected.error}</p>
-                </div>
+                <FailureCard
+                  className="mb-2"
+                  title={t("wfRunFailed")}
+                  {...failureFields(selected, selected.error)}
+                  actions={runAttest(selected) ? <AttestRevisionButton attest={runAttest(selected)!} /> : undefined}
+                  data-run-failed=""
+                />
               )}
-              {/* 这次停在「这一版是别人改的,要主人认可」:就地给认可那一版的按钮(见 AttestRevisionButton)。 */}
-              {runAttest(selected) && (
+              {!selected.error && runAttest(selected) && (
                 <div className="mb-2 flex justify-end">
                   <AttestRevisionButton attest={runAttest(selected)!} />
                 </div>
@@ -361,10 +363,10 @@ export function WorkflowRunHistory({
                           <ChevronDown size={11} className={cn("shrink-0 text-muted-foreground transition-transform duration-100", !open && "-rotate-90")} />
                         )}
                       </button>
-                      {open && s.error && (
-                        <p className="mx-1.5 mb-1 mt-0.5 whitespace-pre-wrap break-words rounded-md bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-destructive">
-                          {s.error}
-                        </p>
+                      {/* 跑挂的那一步:一行档(那一句 + 「详情」浮层),整轮的失败已经在上面那张卡里说过一遍 */}
+                      {open && s.failure && (
+                        <FailureCard size="inline" lines={2} className="mx-1.5 mb-1 mt-0.5 w-auto" title={t(STEP_STATUS_LABELS.failed)}
+                                     {...s.failure} data-step-failed={s.nid} />
                       )}
                       {open && s.details && (
                         <div className="mx-1.5 mb-1 mt-1">

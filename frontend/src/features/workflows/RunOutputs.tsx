@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard } from "@/components/failure/FailureCard";
 import { Check, ChevronRight, Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 
@@ -254,11 +255,7 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
           {step.ms != null && ` · ${step.ms < 1000 ? `${step.ms}ms` : `${(step.ms / 1000).toFixed(1)}s`}`}
         </span>
       </div>
-      {step.error && (
-        <pre className="whitespace-pre-wrap break-words rounded-md border border-destructive/40 bg-destructive/10 p-1.5 text-ui-xs text-destructive">
-          {step.error}
-        </pre>
-      )}
+      {step.failure && <FailureCard title={t("wfRunFailed")} {...step.failure} data-step-failed={step.nid} />}
       <WorkflowFailureDetails details={step.details} />
       {assets.length > 0 && <OutputAssets items={assets} density="panel" className="gap-2" />}
       {rows.flatMap((row) => {

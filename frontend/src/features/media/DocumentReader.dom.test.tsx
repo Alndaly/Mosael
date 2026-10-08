@@ -81,7 +81,8 @@ it("原版那一栏点开一页,灯箱里左右翻的是这份文档的每一页
 it("解析失败说原因", async () => {
   docs.listExtractions.mockResolvedValue([{ ...done, id: "x2", status: "failed", error: "文件坏了" }]);
   mount();
-  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("文件坏了"));
+  //: 全应用那一份失败展示:标题说哪个解析器没解出来,那一句是它说的
+  await waitFor(() => expect(document.querySelector("[data-document-failed] [data-failure-summary]")?.textContent).toBe("文件坏了"));
 });
 
 it("只改 Markdown 里相对解析目录的地址,外链不动", () => {

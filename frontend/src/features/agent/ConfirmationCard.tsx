@@ -16,6 +16,7 @@ import { PermissionBadge, permissionTone, type PermissionTone } from "@/features
 import { SKILL_CARD_PREVIEWS } from "@/features/agent/skills/SkillCardPreviews";
 import { CanvasEditPreview } from "@/features/agent/CanvasEditPreview";
 import { cn } from "@/lib/utils";
+import { FailureCard } from "@/components/failure/FailureCard";
 
 /**
  * 一张确认卡 —— 聊天里的内联卡(InlineConfirmations,摆在发起它的那次工具调用下面)和右上角的全局中心
@@ -100,13 +101,25 @@ function SettledLine({ item, onDismiss }: { item: Confirmation; onDismiss?: () =
   const t = useI18n();
   const { icon: Icon, label, className } = SETTLED[item.status as keyof typeof SETTLED] ?? SETTLED.approved;
   const expired = item.status === EXPIRED;
+  if (item.status === "failed" && item.error) {
+    //: 批准后执行失败:和别处同一份失败展示(一行档),那一句是后端摘好的,原文在点开的「详情」里
+    return (
+      <div className="flex min-w-0 items-start gap-2 border-t border-divider pt-2.5" data-confirmation-failed="">
+        <FailureCard size="inline" lines={2} title={t(label)} summary={item.error_summary || item.error} detail={item.error_detail}
+                     fix={item.error_hint} copyText={item.error} />
+        {onDismiss ? (
+          <IconButton variant="ghost" size="icon-xs" className="-my-1 shrink-0" label={t("confirmDismiss")} onClick={onDismiss}>
+            <X />
+          </IconButton>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="flex min-w-0 items-start gap-2 border-t border-divider pt-2.5 text-ui-xs" role="status">
       <Icon size={14} className={cn("mt-[2px] shrink-0", className, item.status === "approved" && "animate-spin")} aria-hidden />
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className={cn("font-medium", className)}>{t(expired ? expiryLabel(item.error) : label)}</span>
-        {/* 作废卡的 `error` 是由头的码,已经说在上面那一句里了。 */}
-        {item.error && !expired ? <FailureReason text={item.error} /> : null}
       </div>
       {onDismiss ? (
         <IconButton variant="ghost" size="icon-xs" className="-my-1 shrink-0" label={t("confirmDismiss")} onClick={onDismiss}>
@@ -114,38 +127,6 @@ function SettledLine({ item, onDismiss }: { item: Confirmation; onDismiss?: () =
         </IconButton>
       ) : null}
     </div>
-  );
-}
-
-/** 失败原因折叠时露出的行数与字数。够读出「哪儿出了问题」,又不至于一大段把对话栏撑满。 */
-export const REASON_PREVIEW_LINES = 4;
-const REASON_PREVIEW_CHARS = 280;
-
-/**
- * 失败原因:**后端整句存下**(不再按第 500 个字截成半句),长短在这里排 —— 长的先露前几行,点开看全文。
- * 截在前面的只是显示,不是数据:「展开」之后读到的就是后端存的那一整句。
- */
-export function FailureReason({ text }: { text: string }) {
-  const t = useI18n();
-  const [open, setOpen] = React.useState(false);
-  const preview = text.split("\n").slice(0, REASON_PREVIEW_LINES).join("\n").slice(0, REASON_PREVIEW_CHARS);
-  const folded = preview.length < text.length;
-  return (
-    <>
-      <span className="whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
-        {open || !folded ? text : `${preview}…`}
-      </span>
-      {folded ? (
-        <button
-          type="button"
-          aria-expanded={open}
-          className="w-fit cursor-pointer border-0 bg-transparent p-0 text-ui-xs text-primary hover:underline"
-          onClick={() => setOpen((value) => !value)}
-        >
-          {open ? t("confirmCollapse") : t("confirmErrorShowAll")}
-        </button>
-      ) : null}
-    </>
   );
 }
 

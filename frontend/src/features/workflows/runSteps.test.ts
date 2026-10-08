@@ -69,6 +69,8 @@ describe("工作流失败步骤", () => {
         startAt: Date.parse("2026-09-04T08:00:00Z"),
         ms: 1000,
         error: "LLM 未返回合法 JSON",
+        //: 给人看的那几样(那一句、原文、原因和怎么修):事件上没有后端摘好的,就是原文本身
+        failure: { summary: "LLM 未返回合法 JSON", detail: null, fix: null, copyText: "LLM 未返回合法 JSON" },
         details: { raw_response: "not json", response_format: "json_object" },
       },
     ]);

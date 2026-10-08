@@ -24,7 +24,7 @@ export const bulkSelection = {
   docStopParse: "停止",
   docParseStopped: "{parser} · 解析已停止,还没有正文。可以重新解析。",
   docParsedBy: "{parser} · {count} {unit}",
-  docParseFailed: "{parser}没解析成:",
+  docParseFailed: "{parser}没解析成",
   assetFormat: "格式",
   docReparse: "重新解析",
   docSaveAsNote: "转为笔记",

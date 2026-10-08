@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 
@@ -95,7 +96,7 @@ export function NodeInstallNote({
           </span>
           {installActive(job) && <Progress value={Math.round((job.progress ?? 0) * 100)} className="h-1.5" />}
           {job.status === "failed" && job.error && (
-            <p className="m-0 whitespace-pre-line break-words leading-relaxed text-destructive">{job.error}</p>
+            <FailureCard size="inline" lines={2} title={t("failureCause")} {...failureFields(job, job.error)} data-node-install-failed={job.id} />
           )}
         </div>
       ))}

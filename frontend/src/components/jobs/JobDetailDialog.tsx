@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Ban, CheckCircle2, CircleAlert, ExternalLink, Loader2, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
@@ -163,10 +164,10 @@ export function JobDetailDialog({
               </span>
             )}
           </div>
+          {/* 跑挂了:全应用那一份失败展示 —— 那一句(工作流的照跑挂的那个子任务说)、原因和怎么修、原文在「详情」里 */}
           {current.error && (
-            <p className="m-0 min-w-0 whitespace-pre-wrap text-ui-xs text-destructive [overflow-wrap:anywhere]">
-              {current.error}
-            </p>
+            <FailureCard title={t("failureOfKind").replace("{kind}", kindOf(current.kind).label)}
+                         {...failureFields(current, current.error)} data-job-failed={current.id} />
           )}
 
           {/* 做出了什么:写出来的字、生成的图、写成的笔记 —— 此前这里只有状态和一串 job.* 事件,看不到结果。 */}

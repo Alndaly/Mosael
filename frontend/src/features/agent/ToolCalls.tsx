@@ -19,10 +19,10 @@ import { NOISE_KEYS } from "@/features/agent/machineFields";
 import { gotoSettings } from "@/lib/deepLink";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
 import { CitationContext } from "@/components/markdown/CitationLink";
 import { collectCitations } from "@/features/agent/citations";
-import { FailureReason } from "@/features/agent/ConfirmationCard";
 import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { useToolCallConfirmation } from "@/features/agent/decisionsContext";
@@ -289,8 +289,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   //: 是他做的决定。不标红、不自动摊开那句错误。
   const declined = decision?.status === "rejected" || decision?.status === EXPIRED;
   const failed = tool.status === "error" && !declined;
-  // 失败默认展开(让人一眼看到出错原因),其余默认折叠。
-  const [open, setOpen] = React.useState(failed);
+  //: 默认折叠:失败的原因不在明细里,在这一行下面那张失败展示里(不跟着折叠)。
+  const [open, setOpen] = React.useState(false);
   const preview = summarize(tool.args);
   // 明细里也去噪:workspace_id 那几个占的行常常比真正的参数还多,而它们对读的人没有任何意义。
   const cleanArgs = React.useMemo(() => withoutNoise(tool.args), [tool.args]);
@@ -313,7 +313,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // 富卡认得出这份数据的形状时,**下面那块裸 JSON 就是同一份东西再摆一遍**。
   // 判据用 detectShape 而不是 card:card 是 JSX 元素,恒为真。
   const richShape = tool.status !== "error" && detectShape(data) !== null;
-  const resultText = richShape ? null : format(data ?? tool.result);
+  const resultText = richShape || failed ? null : format(data ?? tool.result);
   // 富卡也算"有内容" —— 少了它这一项,一个「参数就是摘要 + 结果是富卡」的调用会算成没内容,
   // 整行不可展开,而那张富卡就永远看不到了。原注释警告过的正是这个陷阱(card 恒为真不能当判据),
   // 现在有了 richShape 这个真正的布尔值。
@@ -330,20 +330,17 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // **成功时不写「已完成」** —— 那个 ✓ 已经说过一遍了,再写一次只是在占地方。
   // 运行中和失败时保留:那两个词带的信息,图标传达不了全部(尤其失败,它要把视线拉过去)。
   // 开了确认卡的调用改说卡走到了哪一步:「已批准 · 已执行」比一个 ✓ 多说了一件事 —— 这一步是问过人的。
-  const statusWord = decision
-    ? null
-    : tool.status === "running"
-      ? t("toolRunning")
-      : tool.status === "error"
-        ? t("toolFailed")
-        : null;
-  const statusText = decision ? (
-    <span data-decision={decision.status} className={cn(decision.status === "failed" && "text-destructive")}>
-      {decisionWord(decision, t)}
-    </span>
-  ) : (
-    statusWord
-  );
+  const statusWord = decision ? null : tool.status === "running" ? t("toolRunning") : null;
+  //: 跑挂了的那一步:状态词不写在行里 —— 下面那张失败展示的标题就是它(「失败」「手动 · 执行失败」),写两遍只是重复
+  const decisionFailed = decision?.status === "failed";
+  const statusText = decision && !decisionFailed ? <span data-decision={decision.status}>{decisionWord(decision, t)}</span> : statusWord;
+  //: 出了什么事:批准后执行失败的看确认卡(后端摘好的那一句和原文),工具自己挂了看它交回的那段话
+  const failure = decisionFailed && decision.error
+    ? { summary: decision.error_summary || decision.error, detail: decision.error_detail ?? null, fix: decision.error_hint ?? null,
+        copyText: decision.error }
+    : failed
+      ? rawFailureFields(format(data ?? tool.result) ?? "", t("toolFailed"))
+      : null;
 
   return (
     // 一次工具调用是对话里的**一条行内标记**,不是一张与正文并列的卡片 —— 所以用 Marker:
@@ -356,7 +353,6 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           AGENT_ROW_CLASS,
           "transition-colors duration-100",
           hasBody && "enabled:cursor-pointer enabled:hover:bg-muted",
-          failed && "text-destructive",
         )}
       >
         <button
@@ -406,10 +402,10 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
         </button>
       </Marker>
-      {/* 执行失败的原因**不跟着折叠**:卡收成一行之后,这是它留下的唯一一处能读到「为什么没成」的地方。 */}
-      {decision?.status === "failed" && decision.error ? (
-        <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1 grid min-w-0 gap-0.5 text-ui-xs")}>
-          <FailureReason text={decision.error} />
+      {/* 失败**不跟着折叠**:这一行收起来之后,它是唯一一处能读到「为什么没成」的地方。和别处同一份失败展示。 */}
+      {failure ? (
+        <div className="mt-1.5 min-w-0">
+          <FailureCard title={decisionFailed ? decisionWord(decision, t) : t("toolFailed")} {...failure} data-tool-failure={tool.id} />
         </div>
       ) : null}
       {/* 等人拍板的卡就摆在发起它的这一行下面 —— 不是统一堆在对话末尾。 */}
@@ -423,11 +419,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           结果可能几十条 → 封顶高度、内部滚动,别把一步撑到几屏高。 */}
       {open && hasBody && (
         <div
-          className={cn(
-            AGENT_ROW_BODY_CLASS,
-            "mt-1 flex min-w-0 flex-col gap-2",
-            tool.status === "error" && "border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))]",
-          )}
+          className={cn(AGENT_ROW_BODY_CLASS, "mt-1 flex min-w-0 flex-col gap-2")}
         >
           {card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
           {argText && !argsAreJustPreview && (
@@ -698,30 +690,27 @@ const ERROR_FIXES: Record<string, { label: "agentConfigureModel"; go: () => void
   no_chat_model: { label: "agentConfigureModel", go: () => gotoSettings("providers:chat") },
 };
 
+/**
+ * 一轮没跑完:和别处同一份失败展示 —— 标题「智能体执行失败」,那一句是这一轮记下的说法(后端写好的人话),原文(上游的原话)收进
+ * 「详情」;认得出的原因给一颗能点的去处(没有对话模型 → 去配一个)。
+ */
 export function AgentErrorCard({ content, error, code }: { content: string; error?: string | null; code?: string | null }) {
   const t = useI18n();
-  const [open, setOpen] = React.useState(false);
   const fix = code ? ERROR_FIXES[code] : undefined;
+  const summary = content.trim() || t("agentFailedTitle");
   return (
-    <div className="flex flex-col gap-[5px] rounded-lg border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,var(--muted))] px-2.5 py-2">
-      <div className="flex items-start gap-1.5 text-ui-sm text-destructive">
-        <CircleAlert size={14} className="mt-[3px] shrink-0" />
-        <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{content || t("agentFailedTitle")}</span>
-      </div>
-      {fix && (
-        <Button type="button" variant="outline" size="xs" className="self-start gap-1" onClick={fix.go}>
+    <FailureCard
+      title={t("agentFailedTitle")}
+      summary={summary}
+      detail={error && error.trim() !== summary ? error : null}
+      copyText={error || summary}
+      actions={fix ? (
+        <Button type="button" variant="outline" size="xs" className="gap-1" onClick={fix.go}>
           <Settings2 size={13} />
           {t(fix.label)}
         </Button>
-      )}
-      {error && (
-        <>
-          <button type="button" className="self-start text-ui-xs text-muted-foreground underline" onClick={() => setOpen((value) => !value)}>
-            {t("chatErrorDetail")}
-          </button>
-          {open && <pre className="m-0 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-panel px-2 py-1.5 font-mono text-ui-xs leading-[1.5] text-foreground [word-break:break-word]">{error}</pre>}
-        </>
-      )}
-    </div>
+      ) : undefined}
+      data-agent-turn-failed=""
+    />
   );
 }

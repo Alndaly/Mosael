@@ -1,5 +1,6 @@
 import React from "react";
 
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
 import { Maximize2, Play } from "lucide-react";
 
 import { assetThumbnailUrl } from "@/api/client";
@@ -480,7 +481,9 @@ function PluginOutput({ value }: { value: Record<string, unknown> }) {
         <Truncate className="flex-1 text-foreground">{t("agentResultPluginTool")}</Truncate>
         <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{String(value.status ?? "done")}</span>
       </div>
-      {error ? <LongText text={errorText(error)} /> : <ToolResultCard value={output} />}
+      {/* 插件说它没做成:和别处同一份失败展示(那一句 + 原文进详情),不是一段和正常结果一样的灰字 */}
+      {error ? <FailureCard title={t("toolFailed")} {...rawFailureFields(errorText(error), t("toolFailed"))} data-plugin-output-failed="" />
+        : <ToolResultCard value={output} />}
     </div>
   );
 }

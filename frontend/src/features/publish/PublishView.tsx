@@ -1,4 +1,5 @@
 import { LoadingState } from "@/components/layout/LoadingState";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import React from "react";
 import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -338,7 +339,11 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
       <div className="grid min-w-0 gap-2">
         <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
         <Truncate className="text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</Truncate>
-        {task.status === "failed" && task.error && <Truncate as="p" lines={2} className="text-ui-sm text-destructive">{task.error}</Truncate>}
+        {task.status === "failed" && task.error && (
+          <Truncate as="p" lines={2} className="text-ui-sm text-muted-foreground" data-publish-failed-summary="">
+            {task.error_summary || task.error}
+          </Truncate>
+        )}
       </div>
       <div className={cn("grid gap-2 text-right", selecting && "pr-7")}>
         <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
@@ -475,12 +480,11 @@ function PublishDetail({
               </time>
             </InfoRow>
           )}
-          {task.status === "failed" && task.error && (
-            <InfoRow label={t("publishError")}>
-              <p className="m-0 whitespace-pre-wrap text-destructive [overflow-wrap:anywhere]">{task.error}</p>
-            </InfoRow>
-          )}
         </dl>
+        {/* 发布失败:全应用那一份失败展示 —— 那一句(去掉自动化脚本的套话、日志),原文(Playwright 的整段)在「详情」里 */}
+        {task.status === "failed" && task.error ? (
+          <FailureCard className="mt-3" title={t("publishFailedTitle")} {...failureFields(task, task.error)} data-publish-failed="" />
+        ) : null}
       </section>
     </div>
   );

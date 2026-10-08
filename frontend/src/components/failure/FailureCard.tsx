@@ -53,6 +53,20 @@ export function failureFields(source: FailureSource, fallback: string) {
   };
 }
 
+/** 那一句最长多少字(和后端 failure_summary.SUMMARY_DETAIL_CHARS 一样):再长就是原文了,原文在「详情」里。 */
+const SUMMARY_CHARS = 160;
+
+/**
+ * 只有原文的失败(工具调用交回的那段话、前端自己接到的报错 —— 没经过后端的失败归类):第一行当那一句(长了截到一句的长度),
+ * 原文比它多出东西时进「详情」,复制的是整段原文。
+ */
+export function rawFailureFields(text: string, fallback: string) {
+  const raw = text.trim();
+  const first = raw.split(/\r?\n/)[0]?.trim() ?? "";
+  const summary = first.length > SUMMARY_CHARS ? `${first.slice(0, SUMMARY_CHARS - 1).trimEnd()}…` : first;
+  return { summary: summary || fallback, detail: raw && raw !== summary ? raw : null, fix: null, copyText: raw || summary };
+}
+
 type DataAttributes = { [key: `data-${string}`]: string | undefined };
 
 export type FailureCardProps = {
@@ -158,7 +172,7 @@ function FailureBody({
       {said ? (
         <p
           className={cn(
-            "m-0 leading-[1.5] text-foreground [overflow-wrap:anywhere]",
+            "m-0 whitespace-pre-wrap leading-[1.5] text-foreground [overflow-wrap:anywhere]",
             status === "stopped" ? "text-ui-sm" : "text-ui-md font-medium",
           )}
           data-failure-summary=""

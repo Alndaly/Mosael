@@ -8,6 +8,7 @@
  * 失败的那条**默认展开**:打开详情就是为了看它,再让人点一下没有道理。
  */
 
+import { FailureCard, failureFields, type FailureSource } from "@/components/failure/FailureCard";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
@@ -86,6 +87,8 @@ function EventRow({ event, locale }: { event: JobEvent; locale: string }) {
   //: 认得出的类型,原名和载荷都收进「开发者信息」,所以总有东西可展开;认不出的照旧。
   const hasDetails = Boolean(details) || Object.keys(remainder).length > 0 || Boolean(label);
   const failed = event.type.endsWith(".failed");
+  //: 失败的事件(节点失败、工作流失败):后端在事件上出了那一句、原文、原因和怎么修(按读的人的语言,见 TaskEventOut)
+  const failure = failed && (payload.error_summary || payload.error) ? failureFields(payload as FailureSource, String(payload.error ?? "")) : null;
 
   return (
     <li className="min-w-0 py-[5px] [&+&]:border-t [&+&]:border-border">
@@ -111,6 +114,7 @@ function EventRow({ event, locale }: { event: JobEvent; locale: string }) {
         </summary>
         {hasDetails && (
           <div className="ml-5 mt-2 grid min-w-0 gap-2 pb-1">
+            {failure ? <FailureCard size="inline" lines={3} title={t("failureCause")} {...failure} data-event-failed={event.id} /> : null}
             <WorkflowFailureDetails details={details} />
             {/* 原始事件名和完整载荷是排查用的:收起来,要看再展开。 */}
             <details data-event-developer="" className="min-w-0">
@@ -145,6 +149,7 @@ function eventPayloadRemainder(payload: Record<string, unknown>): Record<string,
 function eventText(payload: Record<string, unknown> | null | undefined): string | null {
   if (!payload) return null;
   const p = payload as Record<string, unknown>;
-  const candidate = p.name ?? p.message ?? p.error ?? p.status;
+  //: 失败的原因不在这一行里写原文:没有名字的(工作流失败)写后端摘好的那一句,整段在展开的失败展示里
+  const candidate = p.name ?? p.message ?? p.error_summary ?? p.error ?? p.status;
   return typeof candidate === "string" ? candidate : null;
 }

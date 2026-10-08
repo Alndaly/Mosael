@@ -1,4 +1,5 @@
 import React from "react";
+import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -709,14 +710,13 @@ function DownloadList({ jobs }: { jobs: Job[] }) {
                 )}
               </div>
               {active && <Progress value={Math.round((job.progress || 0) * 100)} aria-label={name} />}
-              <p
-                className={cn(
-                  "m-0 min-w-0 break-words text-ui-xs leading-relaxed",
-                  job.status === "failed" ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {job.status === "failed" ? job.error || job.message : job.message}
-              </p>
+              {/* 下载挂了:全应用那一份失败展示(一行档),那一句、原文在「详情」里 */}
+              {job.status === "failed" ? (
+                <FailureCard size="inline" lines={2} title={t("modelDownloadFailedLabel")}
+                             {...failureFields(job, job.message || t("modelDownloadFailedLabel"))} />
+              ) : (
+                <p className="m-0 min-w-0 break-words text-ui-xs leading-relaxed text-muted-foreground">{job.message}</p>
+              )}
             </li>
           );
         })}

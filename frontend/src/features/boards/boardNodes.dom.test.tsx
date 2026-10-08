@@ -48,7 +48,6 @@ vi.mock("@/features/boards/BoardPlayer", () => ({
 }));
 
 import { BOARD_NODE_TYPES, BOARD_TEXT_MAX } from "./boardNodes";
-import { hoverHint } from "@/test/hint";
 
 const STATUS_LABEL = {
   queued: "等待执行",

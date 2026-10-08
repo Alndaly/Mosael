@@ -144,32 +144,25 @@ describe("终态", () => {
     expect(screen.getByRole("status").textContent).toContain(label);
   });
 
-  it("执行失败把原因写在状态行里,可以移走", () => {
+  it("执行失败:全应用那一份失败展示(一行档),那一句是后端摘好的,可以移走", () => {
     const dismiss = vi.fn();
-    renderCard(card({ status: "failed", error: "manim 没装" }), { onDismiss: dismiss });
-    const line = screen.getByRole("status");
-    expect(line.textContent).toContain("confirmStatusFailed");
-    expect(line.textContent).toContain("manim 没装");
+    renderCard(card({ status: "failed", error: "manim 没装", error_summary: "manim 没装" }), { onDismiss: dismiss });
+    const failure = screen.getByRole("group", { name: "confirmStatusFailed" });
+    expect(failure.getAttribute("data-failure-size")).toBe("inline");
+    expect(failure.querySelector("[data-failure-summary]")!.textContent).toBe("manim 没装");
+    expect(failure.querySelector("[data-failure-more]"), "本来就是一句话:没有详情可点").toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "confirmDismiss" }));
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
-  it("长原因先折起来,点开读到的是整句 —— 后端不再截成半句,排版归这里", () => {
+  it("长原因:卡上是后端摘好的那一句,整句原文在点开的「详情」里 —— 不再在卡上折一大段", async () => {
     const reason = Array.from({ length: 30 }, (_, index) => `节点 n${index} 缺少必填项「提示词」`).join(";") + "。最后一句才说怎么修。";
-    renderCard(card({ status: "failed", error: reason }));
-    const line = screen.getByRole("status");
-    expect(line.textContent).not.toContain("最后一句才说怎么修");
-    const toggle = screen.getByRole("button", { name: "confirmErrorShowAll" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
-    expect(line.textContent).toContain(reason);
-    fireEvent.click(screen.getByRole("button", { name: "confirmCollapse" }));
-    expect(line.textContent).not.toContain("最后一句才说怎么修");
-  });
-
-  it("短原因不折,也没有展开按钮", () => {
-    renderCard(card({ status: "failed", error: "manim 没装" }));
-    expect(screen.queryByRole("button", { name: "confirmErrorShowAll" })).toBeNull();
+    renderCard(card({ status: "failed", error: reason, error_summary: "节点 n0 缺少必填项「提示词」…", error_detail: reason }));
+    const failure = screen.getByRole("group", { name: "confirmStatusFailed" });
+    expect(failure.textContent).not.toContain("最后一句才说怎么修");
+    fireEvent.click(failure.querySelector<HTMLButtonElement>("[data-failure-more]")!);
+    const detail = (await screen.findByText(reason)).closest("[data-failure-detail]");
+    expect(detail, "点开的详情里是整句原文").not.toBeNull();
   });
 });
 

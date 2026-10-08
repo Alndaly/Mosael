@@ -25,7 +25,7 @@ export const bulkSelection = {
   docParseStopped: "{parser} · parsing was stopped, so there is no text yet. You can re-parse it.",
   docParsedBy: "{parser} · {count} {unit}",
   assetFormat: "Format",
-  docParseFailed: "{parser} couldn't parse it:",
+  docParseFailed: "{parser} couldn't parse it",
   docReparse: "Parse again",
   docSaveAsNote: "Save as note",
   documentParsing: "Parsing…",

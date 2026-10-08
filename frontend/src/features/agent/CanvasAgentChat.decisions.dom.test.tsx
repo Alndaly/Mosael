@@ -277,10 +277,13 @@ it("执行失败:那一行写明失败原因", async () => {
   mocks.cards = [{ id: "card-a1", tool_call_id: "a1", status: "failed", error: "磁盘满了" }];
   const { container } = await mount();
 
-  await waitFor(() => expect(row(container, "a1")!.querySelector("[data-decision='failed']")).toBeTruthy());
-  const line = row(container, "a1")!.querySelector("[data-decision='failed']")!;
-  expect(line.textContent).toContain("confirmOutcomeFailed");
-  expect(row(container, "a1")!.textContent).toContain("磁盘满了");
+  //: 那一行下面是全应用那一份失败展示:标题是「手动 · 执行失败」,那一句是原因(行里不再重复写一遍状态)
+  await waitFor(() => expect(row(container, "a1")!.querySelector("[data-tool-failure='a1']")).toBeTruthy());
+  const failure = row(container, "a1")!.querySelector<HTMLElement>("[data-tool-failure='a1']")!;
+  expect(failure.getAttribute("role")).toBe("group");
+  expect(failure.textContent).toContain("confirmOutcomeFailed");
+  expect(failure.querySelector("[data-failure-summary]")!.textContent).toBe("磁盘满了");
+  expect(row(container, "a1")!.querySelector("[data-decision='failed']"), "状态不在行里再写一遍").toBeNull();
   expect(container.querySelector("article")).toBeNull();
 });
 
