@@ -3,7 +3,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
 
-import { CONTROL_HEIGHT, CONTROL_ICON, CONTROL_SQUARE, INLINE_ACTION_SIZE } from "@/components/ui/control-size"
+import { CONTROL_HEIGHT, CONTROL_ICON, CONTROL_SQUARE, INLINE_ACTION_SIZE, PRESSED, PRESSED_BORDER } from "@/components/ui/control-size"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -18,11 +18,13 @@ const buttonVariants = cva(
         //: 描边和输入框、下拉框是**同一种描边**(field-border):一行里的输入框、下拉框、描边按钮
         //: 外轮廓一样清楚。此前用的是分隔线色,在弹窗里几乎看不见,按钮的可见轮廓比旁边的
         //: 实心按钮小一圈 —— 两个 40px 的按钮看起来不一样高。
+        //: 按下(aria-pressed)的样子三种一样:强调底色 + 强调色前景(control-size 的 PRESSED)。别在调用处另写「开着」的颜色,
+        //: 也别用 `variant={on ? "secondary" : "ghost"}` 切变体 —— 写 aria-pressed 就够了(棘轮 design/pressedState.test.ts)。
         outline:
-          "border border-field-border bg-control hover:bg-secondary hover:text-foreground",
+          `border border-field-border bg-control hover:bg-secondary hover:text-foreground ${PRESSED} ${PRESSED_BORDER}`,
         secondary:
-          "bg-secondary text-secondary-foreground  hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+          `bg-secondary text-secondary-foreground  hover:bg-secondary/80 ${PRESSED}`,
+        ghost: `hover:bg-accent hover:text-accent-foreground ${PRESSED}`,
         link: "text-primary underline-offset-4 hover:underline",
         //: **行内动作**:放在一个值旁边、一行说明里的次要动作 ——「在 Civitai 上找」「标为 NSFW」「改回自动判断」「显示全部」。
         //: 比正文小一档(text-ui-xs)、次要色、不加粗,悬停才显出底色;图标跟着缩成 14px;高 24px、上下各收 2px,

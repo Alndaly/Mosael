@@ -90,6 +90,14 @@ export const SEARCH_FIELD: Record<FieldSize, { icon: string; pad: string; traili
   md: { icon: "left-3 size-4", pad: "pl-9", trailing: "right-2.5" },
 };
 
+/**
+ * **按下 / 选中**的样子(`aria-pressed="true"` 的切换按钮,分段控件和胶囊筛选的选中项同一种):强调底色 + 强调色前景;带描边的
+ * 那种描边换成强调色的淡一档。悬停时不变回去。此前各处自己写:`bg-secondary text-foreground`、`border-primary/40 bg-accent text-primary`、
+ * 主色 12% 的底……同一个「开着」在画板、工作流、剪辑的工具条上三个样子。Button 的 ghost / outline / secondary 三种自带它。
+ */
+export const PRESSED = "aria-pressed:bg-accent aria-pressed:text-accent-foreground aria-pressed:hover:bg-accent aria-pressed:hover:text-accent-foreground"
+export const PRESSED_BORDER = "aria-pressed:border-[color-mix(in_srgb,var(--primary)_40%,transparent)]"
+
 /** 行内动作(Button `variant="inline"`):高 24、上下各收 2px(不撑高所在的那一行),12px 字、14px 图标。 */
 export const INLINE_ACTION_SIZE = "h-6 -my-0.5 gap-1 rounded-sm px-1.5 py-0 text-ui-xs [&_svg]:size-3.5";
 

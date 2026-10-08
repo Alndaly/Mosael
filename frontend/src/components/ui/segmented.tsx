@@ -3,6 +3,8 @@ import * as React from "react"
 import { type ControlTier, SEGMENTED_SIZE } from "@/components/ui/control-size"
 import { cn } from "@/lib/utils"
 
+import { Hint } from "./tooltip"
+
 /**
  * 分段控件:两到五个互斥选项、选项短、切换立刻生效(「对话 / 创作」「近 7 天 / 30 天」「网格 / 列表」)。
  * 选项要说明、要提交才生效、或超过五个 → 单选(radio-group)/ 下拉。规格见 docs/DESIGN_LANGUAGE.md「选择类控件」。
@@ -41,15 +43,24 @@ const KEY_STEPS: Record<string, 1 | -1 | "first" | "last" | undefined> = {
   End: "last",
 }
 
-export type SegmentedOption<T extends string> = {
-  value: T
-  label: React.ReactNode
-  /** 选项前面的图标(大小跟着档位)。 */
-  icon?: React.ReactNode
-  disabled?: boolean
-  /** 只有图标、或者名字放不下时给读屏的名字。 */
-  ariaLabel?: string
-}
+export type SegmentedOption<T extends string> =
+  | {
+      value: T
+      label: React.ReactNode
+      /** 选项前面的图标(大小跟着档位)。 */
+      icon?: React.ReactNode
+      disabled?: boolean
+      /** 名字放不下时给读屏的名字。 */
+      ariaLabel?: string
+    }
+  | {
+      value: T
+      /** 只有图标的一项(网格 / 列表):名字给读屏,也是悬停说明。 */
+      label?: undefined
+      icon: React.ReactNode
+      disabled?: boolean
+      ariaLabel: string
+    }
 
 export function Segmented<T extends string>({
   value,
@@ -91,7 +102,8 @@ export function Segmented<T extends string>({
     <div role="radiogroup" aria-label={ariaLabel} className={cn(segmentedListClass(size, { fill }), className)} {...rest}>
       {options.map((option, index) => {
         const active = option.value === value
-        return (
+        const iconOnly = option.label === undefined
+        const item = (
           <button
             key={option.value}
             ref={(element) => {
@@ -116,6 +128,13 @@ export function Segmented<T extends string>({
             {option.icon}
             {option.label}
           </button>
+        )
+        return iconOnly ? (
+          <Hint key={option.value} label={option.ariaLabel}>
+            {item}
+          </Hint>
+        ) : (
+          item
         )
       })}
     </div>
