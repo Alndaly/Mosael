@@ -11,7 +11,7 @@ from uuid import uuid4
 import time
 from typing import Any
 
-from sqlalchemy import event as orm_event, func, inspect, or_, select, update
+from sqlalchemy import event as orm_event, func, or_, select, update
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.usage_scope import current_workspace
@@ -400,17 +400,25 @@ def record_usage(
     currency: str = "USD",
     cost_confidence: str = "unknown",
     occurred_at: datetime | None = None,
+    supersedes: str | None = None,
 ) -> ProviderUsageEvent:
-    """Record one billable interaction.
+    """记一次可计费调用的账。**`db` 只拿来读**(价目、这一笔记过没有);这条账由记账这一层在 `db` 的事务结束之后
+    自己写(见下面「账在调用方的事务结束之后写」那一节的契约)。
 
-    The idempotency key is part of the Interface: source modules can safely call this after a
-    retry or crash recovery without double-booking the same provider interaction.
+    交回算好的那一条:**还没落库**的对象(`id` 为空),成本那几格(`cost_micros` / `currency` / `cost_confidence`)
+    已经算好,调用方读它们就够了(智能体把成本写进消息)。同一个 `idempotency_key` 已经记过(库里有、或者这个会话里
+    已经排着)就交回那一条,不重记 —— 键是接口的一部分:重试、崩溃后接着干都不会把同一次调用记两遍。
 
     `occurred_at`(UTC,缺省为现在)是这次调用**发生的时刻**:挑哪条规则(生效期)、按哪一档
     时段价计,都按它;它也就是这条账的 `created_at` —— 账上记的时间和算价用的时间是同一个,
     事后对着时段价目核一笔账才对得上。
+
+    `supersedes`:这一条接替的那一条账的键(见 superseded_attempt)。写这一条的同一个事务里把那一条撤下。
     """
     moment = occurred_at or now()
+    queued = _queued_usage(db, idempotency_key)
+    if queued is not None:
+        return queued
     existing = db.scalar(select(ProviderUsageEvent).where(ProviderUsageEvent.idempotency_key == idempotency_key))
     if existing is not None:
         return existing
@@ -448,7 +456,7 @@ def record_usage(
         else:
             unpriced_reason = pricing.unpriced_reason
 
-    event = ProviderUsageEvent(
+    values = dict(
         workspace_id=workspace_id,
         provider_profile_id=provider_profile_id,
         provider=provider,
@@ -471,15 +479,13 @@ def record_usage(
         idempotency_key=idempotency_key,
         created_at=moment,
     )
-    db.add(event)
-    db.flush()
-    _announce(db, event)
-    _hold_until_durable(db, event)
-    return event
+    _write_after_caller(db, values, supersedes=supersedes)
+    return ProviderUsageEvent(**values)
 
 
-def retire_usage(db: Session, idempotency_key: str) -> dict[str, Any] | None:
-    """撤下一条已经记过的账,交回它原来的样子(写进接替它的那一条的注解里);没有这一条就是 None。不提交。
+def superseded_attempt(db: Session, idempotency_key: str) -> dict[str, Any] | None:
+    """要被接替的那一条账原来的样子(写进接替它的那一条的注解里);没有这一条就是 None。只读 —— 撤下它的是
+    写接替那一条的同一个事务(`record_usage(..., supersedes=键)`)。
 
     **只为一种情形存在:同一次服务商调用先被记成了失败,后来又拿到了结果。** 生成在下载成片时断了、或者等远端时出了确定性
     的错,运行器按「成片没拿到」记一笔(服务商回报的扣费,或者远端任务没了结时的请求侧估价);之后用户点「重新取回」,拿到了
@@ -490,7 +496,7 @@ def retire_usage(db: Session, idempotency_key: str) -> dict[str, Any] | None:
     event = db.scalar(select(ProviderUsageEvent).where(ProviderUsageEvent.idempotency_key == idempotency_key))
     if event is None:
         return None
-    summary = {
+    return {
         "status": event.status,
         "cost_micros": event.cost_micros,
         "currency": event.currency,
@@ -498,9 +504,6 @@ def retire_usage(db: Session, idempotency_key: str) -> dict[str, Any] | None:
         "recorded_at": event.created_at.isoformat() if event.created_at else None,
         "units": dict(event.units or {}),
     }
-    db.delete(event)
-    db.flush()
-    return summary
 
 
 @dataclass(frozen=True)
@@ -600,58 +603,70 @@ def _announce(db: Session, event: ProviderUsageEvent) -> None:
     )
 
 
-# ---------- 账比调用方的事务活得久 ----------
+# ---------- 账在调用方的事务结束之后写(D66) ----------
 #
-# 账先写进**调用方的**会话:`job_id` / `agent_message_id` 是外键,常常指向调用方刚 flush、还没
-# commit 的行,独立事务看不见它们;SQLite 又只有一个写者,调用方 flush 过就攥着写锁,另开
-# 一条连接去写只会等到 busy_timeout 然后失败。所以"当场另开事务写"这条路是走不通的。
+# **契约**:可计费调用的账(provider_usage_events 的一行)**一律由记账这一层自己写**,写在调用方会话的根事务结束
+# (提交、回滚、没提交就关)之后,用一个新会话、一个短事务。调用方的会话里不写账 —— 不 add、不 flush、不发
+# `usage.recorded` 事件。调用方那边看到的是:
 #
-# 可**钱已经花出去了**,调用方的事务成不成跟这件事无关。失败的工作流节点会回滚(引擎只在
-# 成功时提交,半途 flush 的东西不该留下),会话用完没提交就关也是回滚(智能体的放行判断就是
-# 这样一条账都没留下)—— 此前这两种情况下,付过费的调用在账上凭空消失。
+# 1. **调用方从不因为记账攥写锁。** SQLite 只有一个写者,flush 一次就攥着写锁直到那个事务结束。此前账写进调用方的事务:
+#    一个会话里接连几次付费调用(工作流的「口播收紧」一个节点里两三轮大模型、批量翻译……),第一笔账 flush 之后,
+#    后面每一次大模型请求都攥着写锁 —— 别的节点、任务进度、请求都在排队,超过等锁的上限就是 database is locked。
+# 2. **调用方的事务里看不见这条账**:它在那个事务结束之后才落库。要读成本就读 `record_usage` / `billable` 交回的那一条
+#    (`BillableCall.event`:成本已经算好、还没落库的对象,`id` 为空);要查账就在调用方提交之后查。
+# 3. **钱花了就有账,跟调用方的事务成不成无关。** 失败的工作流节点会回滚、会话用完没提交就关 —— 账照写。账上的引用
+#    (`job_id`、`agent_message_id`)指向的行没能活下来时置空,和 schema 里 `ondelete="SET NULL"` 同一个语义;
+#    工作区都没了(CASCADE)的不写。
+# 4. **同一个键只记一条**:库里有、或者这个会话里已经排着,`record_usage` 交回那一条;写的时候库里已经有了就跳过。
+# 5. **接替**(`supersedes`,见 superseded_attempt):撤下被接替的那一条和写这一条在同一个事务里。
+# 6. 写在事务结束那一个跳变上(`after_transaction_end`),不挂在某个调用点上 —— 和 jobs._note_settled_jobs 同一个理由:
+#    调用方有十几处,各自记得做某件事的做法已经证明靠不住。保存点结束不算:外层事务还没完。
 #
-# 所以落库分两步:照旧先写进调用方的事务;调用方的事务**结束之后**(那时写锁已经放了),再用
-# 一个新会话确认这条账在库里,不在就补写。外键指向的行没能活下来时,引用置空 —— 和 schema
-# 里 `ondelete="SET NULL"` 是同一个语义:被引用的东西没了,账留着、链接断开。工作区那条是
-# CASCADE,工作区都没了的账不补。
+# 归属(这条账记在谁、哪个工作区名下)按调用发生时定:`workspace_id` 显式给的优先,否则取环境上下文;`job_id` 同理
+# (见 billable)。写入时间推迟,归属不跟着变。
 #
-# 挂在事务结束这一个跳变上,不挂在某个调用点上 —— 和 jobs._note_settled_jobs 同一个理由:
-# 调用方有十几处,各自记得 commit 的做法已经证明靠不住。
+# 代价:进程在调用之后、调用方事务结束之前没了,这一笔账就没了 —— 和此前一样(那时账在调用方没提交的事务里,同样丢)。
 
-#: 这个会话当前事务里记下、还没确认落库的账(列值快照)。挂在 session.info 上而不是模块级 ——
+#: 这个会话里排着、等它的事务结束之后写的账(列值,外加 `supersedes`)。挂在 session.info 上而不是模块级 ——
 #: 后台线程各有各的会话。
-_UNSETTLED = "mosael_unsettled_usage"
+_QUEUED = "mosael_queued_usage"
 
 
-def _hold_until_durable(db: Session, event: ProviderUsageEvent) -> None:
-    snapshot = {attr.key: getattr(event, attr.key) for attr in inspect(ProviderUsageEvent).column_attrs}
-    db.info.setdefault(_UNSETTLED, []).append(snapshot)
+def _write_after_caller(db: Session, values: dict[str, Any], *, supersedes: str | None) -> None:
+    db.info.setdefault(_QUEUED, []).append({"values": values, "supersedes": supersedes})
+
+
+def _queued_usage(db: Session, idempotency_key: str) -> ProviderUsageEvent | None:
+    for queued in db.info.get(_QUEUED, ()):
+        if queued["values"]["idempotency_key"] == idempotency_key:
+            return ProviderUsageEvent(**queued["values"])
+    return None
 
 
 @orm_event.listens_for(Session, "after_transaction_end")
 def _settle_usage(session: Session, transaction: SessionTransaction) -> None:
-    """调用方的根事务结束(提交、回滚、没提交就关)之后,确认这一轮记下的账都在库里。"""
+    """调用方的根事务结束(提交、回滚、没提交就关)之后,把这一轮排着的账写进库。"""
     if transaction.parent is not None:
-        return  # 保存点结束不算:外层事务还可能把它带走,也还可能把它带进库
-    pending = session.info.pop(_UNSETTLED, None)
-    if not pending:
+        return  # 保存点结束不算:外层事务还没完
+    queued = session.info.pop(_QUEUED, None)
+    if not queued:
         return
     from app.core.unit_of_work import unit_of_work
 
     try:
         with unit_of_work() as fresh:
-            for snapshot in pending:
-                _restore(fresh, snapshot)
-    except Exception:  # noqa: BLE001 — 记账是旁路,补写失败也不该把调用方带下水(unit_of_work 已回滚)
-        logger.warning("用量补记失败,已忽略", exc_info=True)
+            for one in queued:
+                _write(fresh, one["values"], supersedes=one["supersedes"])
+    except Exception:  # noqa: BLE001 — 记账是旁路,写失败也不该把调用方带下水(unit_of_work 已回滚)
+        logger.warning("用量入账失败,已忽略", exc_info=True)
 
 
-def _restore(db: Session, snapshot: dict[str, Any]) -> None:
-    """补写一条随调用方事务回滚掉的账。已经在库里(调用方提交了)就什么都不做。"""
-    key = snapshot["idempotency_key"]
+def _write(db: Session, values: dict[str, Any], *, supersedes: str | None) -> None:
+    """写一条账(已经在库里就什么都不做)。引用的行没了的置空;被接替的那一条在同一个事务里撤下。"""
+    key = values["idempotency_key"]
     if db.scalar(select(ProviderUsageEvent.id).where(ProviderUsageEvent.idempotency_key == key)) is not None:
         return
-    values = dict(snapshot)
+    values = dict(values)
     for fk in ProviderUsageEvent.__table__.foreign_keys:
         column = fk.parent.key
         if values.get(column) is None:
@@ -660,9 +675,14 @@ def _restore(db: Session, snapshot: dict[str, Any]) -> None:
         if db.scalar(select(target).where(target == values[column])) is not None:
             continue
         if fk.ondelete != "SET NULL":
-            logger.warning("用量补记跳过:%s=%s 已不存在(idempotency_key=%s)", column, values[column], key)
+            logger.warning("用量入账跳过:%s=%s 已不存在(idempotency_key=%s)", column, values[column], key)
             return
         values[column] = None
+    if supersedes:
+        replaced = db.scalar(select(ProviderUsageEvent).where(ProviderUsageEvent.idempotency_key == supersedes))
+        if replaced is not None:
+            db.delete(replaced)
+            db.flush()
     event = ProviderUsageEvent(**values)
     db.add(event)
     db.flush()
@@ -1087,17 +1107,17 @@ def billable(
     job_id: str | None = None,
     agent_message_id: str | None = None,
     started: float | None = None,
+    supersedes: str | None = None,
 ) -> Iterator[BillableCall]:
     """包住一次供应商调用,结束时记一条账。
 
     - **归属**:显式 workspace_id 优先;没给就取环境上下文(权限闸门绑的,见 core/usage_scope)。`job_id` 同理:
       没给就挂在当前正在执行的任务上(见 jobs.current_parent_job_id)。
       两个都没有时不记账,但会 warning 出来 —— 静默漏记正是这次要终结的毛病。
-    - **先进调用方的事务,但不随它回滚**:落库用调用方的 Session —— `job_id` /
-      `agent_message_id` 是外键,指向调用方**刚 flush 还没 commit** 的行,独立事务看不见。
-      而钱已经花了:调用方的事务结束后,这条账没进库(回滚了、或者会话没提交就关了)就由
-      `_settle_usage` 补写,引用的行没活下来时引用置空(同 schema 的 SET NULL)。调用方
-      照常提交或回滚,不必为账操心。
+    - **不写进调用方的会话**(D66):`db` 只拿来读价目;这条账在 `db` 的事务结束之后由记账这一层自己写
+      (契约见上面「账在调用方的事务结束之后写」)。调用方照常提交或回滚,不必为账操心,也不会因为记账而攥着写锁
+      跨过下一次供应商调用。块结束之后 `call.event` 是算好成本、还没落库的那一条。
+    - `supersedes`:这一条接替的那一条账的键(见 superseded_attempt),写这一条时一并撤下。
     - **成败**:块里抛异常就记 failed 再原样抛出。失败的调用照样记一条 ——"最近失败了多少次"
       本身就是用户想在账上看到的;服务商回报了用量或扣费的照它计价,什么都没回的记 0
       (`not_billed`,见 record_usage)。
@@ -1163,6 +1183,7 @@ def billable(
                     cost_micros=call.cost_micros,
                     currency=call.currency,
                     cost_confidence=call.cost_confidence,
+                    supersedes=supersedes,
                 )
             except Exception:  # noqa: BLE001 — 记账是旁路,不该把主流程带下水
                 logger.warning("用量入账失败(%s),已忽略", operation, exc_info=True)

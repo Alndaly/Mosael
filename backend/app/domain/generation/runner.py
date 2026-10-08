@@ -66,7 +66,7 @@ from app.domain.jobs import (
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.media.scratch import GENERATION as GENERATION_SCRATCH, scratch_dir
-from app.domain.billing.usage import billable, price_usage, retire_usage, usage_mismatches
+from app.domain.billing.usage import billable, price_usage, superseded_attempt, usage_mismatches
 
 """
 Generation runner: executes a generation job off-thread. Results always land
@@ -407,7 +407,7 @@ def _record_failed_or_cancelled(
 
     **没被取消、却在远端任务交出去之后失败的**(等远端时出了确定性的错、六小时上限,或者 `result_not_collected`:服务商做完了、
     成片没下载回来),远端多半照样扣钱:有服务商的终态回包就照它记;没有回包、或者回包里没报用量,按请求侧计量估一笔并写明
-    为什么 —— 不再记成「未扣费」(ADR 0019 修订)。之后「重新取回」拿到了成片,成功那一条接替这一条(见 billing.retire_usage)。"""
+    为什么 —— 不再记成「未扣费」(ADR 0019 修订)。之后「重新取回」拿到了成片,成功那一条接替这一条(见 billing.superseded_attempt)。"""
     if result is not None:
         _record_generation_usage(db, generation, job, adapter, request, context, result, started, "failed")
         return
@@ -939,9 +939,10 @@ def _record_generation_usage(
 
     `source_images`:接着取时请求里没有素材(见 _run_generation),交进去几张图按提交时那一份数记。
 
-    **成功的一条接替同一次生成先前记下的失败那一条**(「重新取回」拿到了成片,见 billing.retire_usage):那是同一次服务商
+    **成功的一条接替同一次生成先前记下的失败那一条**(「重新取回」拿到了成片,见 billing.superseded_attempt):那是同一次服务商
     调用,不是又花了一次钱 —— 两条都留着,这次生成的花费会被加两遍。"""
-    replaced = retire_usage(db, f"generation:{generation.id}:failed") if status == "succeeded" else None
+    supersedes = f"generation:{generation.id}:failed" if status == "succeeded" else None
+    replaced = superseded_attempt(db, supersedes) if supersedes else None
     # 服务商在回包里报的(实际计费的 token 数、平台回报的扣费)叠在请求侧计量上,以它为准。读法由适配器
     # 说了算(GenerationAdapter.reported_usage),补算老账的迁移对着库里存的回包读的是同一个函数。
     payload = result.raw_usage if result is not None else (settled or {})
@@ -978,6 +979,7 @@ def _record_generation_usage(
         job_id=job.id,
         idempotency_key=f"generation:{generation.id}:{status}",
         started=started,
+        supersedes=supersedes if replaced is not None else None,
     ) as call:
         call.meter(units, raw=raw)
         if reported.cost_micros is not None:
