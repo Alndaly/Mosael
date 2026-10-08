@@ -87,7 +87,6 @@ const STOCK: Record<string, number> = {
   "features/ai-studio/ChatWorkspace.tsx": 3,
   "features/ai-studio/FrameSlotField.tsx": 4,
   "features/ai-studio/GenerateWorkspace.tsx": 3,
-  "features/ai-studio/GenerationFailureCard.tsx": 1,
   "features/ai-studio/voicedCreation.tsx": 3,
   "features/auth/LoginView.tsx": 1,
   "features/boards/BoardCommentLayer.tsx": 1,

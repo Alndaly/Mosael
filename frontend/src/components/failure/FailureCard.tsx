@@ -221,9 +221,7 @@ function FailureBody({
             {detail ? (
               <Button
                 type="button"
-                variant="ghost"
-                size="xs"
-                className="gap-1 px-2 text-muted-foreground"
+                variant="inline"
                 aria-expanded={open}
                 aria-controls={detailId}
                 onClick={() => setOpen((value) => !value)}
@@ -266,13 +264,9 @@ function MoreDetails(props: FailureCardProps & { centered?: boolean }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="nodrag nopan shrink-0 cursor-pointer rounded-sm border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline decoration-dotted underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          data-failure-more=""
-        >
+        <Button type="button" variant="inline" className="nodrag nopan shrink-0" data-failure-more="">
           {t("failureDetail")}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align={centered ? "center" : "start"}

@@ -338,13 +338,9 @@ function InviteNotice({
       <span className="font-[550] text-foreground">{body}</span>
       {next && <span className="text-ui-xs text-muted-foreground">{next}</span>}
       {!usable && (
-        <button
-          type="button"
-          className="justify-self-start cursor-pointer border-0 bg-transparent p-0 text-ui-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          onClick={onDismiss}
-        >
+        <Button type="button" variant="inline" className="justify-self-start" onClick={onDismiss}>
           {t("loginInviteDismiss")}
-        </button>
+        </Button>
       )}
     </div>
   );
