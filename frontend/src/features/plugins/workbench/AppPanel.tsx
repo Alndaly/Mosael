@@ -91,9 +91,14 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
   const current = draft?.forms.find((one) => one.key === selected) ?? null;
   //: 上一版 / 更新版插件写的表单:这一版读成「没有表单」,照空草稿写进画布再一存盘就把它们抹掉了 —— 只说清楚、不给写
   const lock = data ? formsLock(data) : null;
+  //: 一屏一个视觉焦点(维护者 2026-10-09):还没有表单、也没改什么时,焦点是空状态里那颗「新表单」—— 那几行怎么同步、怎么存的说明
+  //: 和「同步到画布」都还用不上,不摆;有了表单(或者刚删光、还没同步)再出来。「同步到画布」只在点得了时是实心主按钮
+  const authoring = Boolean(draft && (draft.forms.length > 0 || dirty));
+  //: 点得了才是实心(有改动、每张都起了标题):点不了的实心主按钮也在抢焦点 —— 那时焦点是起标题、挑项
+  const canWrite = Boolean(draft) && dirty && nameless === 0;
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3">
-      <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workbenchAppHint")}</p>
+      {authoring && <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground" data-app-hint="">{t("workbenchAppHint")}</p>}
       <div className="flex flex-wrap items-center justify-end gap-2">
         {dirty && (
           <span role="status" data-app-dirty="" className="mr-auto inline-flex items-center gap-1.5 text-ui-xs font-medium text-warning">
@@ -108,9 +113,9 @@ export function AppPanel({ target, workflowKey, path = "", canvasModified, canEx
           <RefreshCcw size={12} />
           {t("workbenchAppReload")}
         </Button>
-        {!lock && (
-          <Button size="xs" disabled={!draft || !dirty || nameless > 0} loading={write.isPending}
-                  onClick={() => draft && write.mutate(draft)}>
+        {!lock && authoring && (
+          <Button size="xs" variant={canWrite ? "default" : "outline"} disabled={!canWrite}
+                  loading={write.isPending} onClick={() => draft && write.mutate(draft)}>
             {t("workbenchAppWrite")}
           </Button>
         )}

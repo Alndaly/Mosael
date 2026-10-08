@@ -434,6 +434,9 @@ describe("几张表单", () => {
       return found!;
     });
     expect(within(empty).getByText(t("workflowFormsEmpty"))).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: t("workflowFormNew") }), "一屏只有空状态里那一个「新表单」入口(维护者 2026-10-09)")
+      .toHaveLength(1);
+    expect(document.querySelector("[data-forms-bar]"), "表单那一排没有表单时不出来").toBeNull();
     fireEvent.click(within(empty).getByRole("button", { name: t("workflowFormNew") }));
     expect(await screen.findByRole("region", { name: t("workflowAppSource") })).toBeTruthy();
   });

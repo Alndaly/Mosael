@@ -465,10 +465,11 @@ describe("ComfyUI 工作台", () => {
     api.getCanvasMarks.mockResolvedValue(marks);
     tab("workbenchTabApp");
     await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledWith("i1", EXPORTED.workflow, "人像/古风.json"));
-    const write = await screen.findByRole("button", { name: /workbenchAppWrite/ });
-    expect(write.hasAttribute("disabled"), "没改过不用写").toBe(true);
+    await waitFor(() => expect(document.querySelector("[data-no-forms]")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: /workbenchAppWrite/ }), "一张表单都没有、也没改过:没东西可同步").toBeNull();
     //: 一张表单都没有:用的人看到的是完整工作流;「新表单」加一张空白的
     fireEvent.click(within(document.querySelector("[data-no-forms]") as HTMLElement).getByRole("button", { name: /workflowFormNew/ }));
+    const write = await screen.findByRole("button", { name: /workbenchAppWrite/ });
     expect(write.hasAttribute("disabled"), "新表单还没起标题:写不了").toBe(true)
     fireEvent.change(screen.getByPlaceholderText("workflowAppNamePlaceholder"), { target: { value: "调步数" } });
     //: 面板窄:编辑器是「挑项 / 表单 / 预览」三个标签,先到「挑项」里点「+」
@@ -490,10 +491,43 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks, expect: EXPORTED.at }));
     expect(await screen.findByText("workbenchAppWritten")).toBeTruthy();
     await waitFor(() => expect(api.getCanvasApp).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("button", { name: /workbenchAppWrite/ }).className,
+                               "同步完了没东西可同步:不再是实心主按钮").not.toMatch(/\bbg-action\b/));
     expect(await screen.findByRole("tab", { name: "调步数" }), "重读之后:那张有了插件起的 id,还停在它").toBeTruthy();
     //: 桌面版真机走查:按了顶栏「保存」、画布报存好了,「已同步到画布,但还没保存」还挂着
     bridge.emit(state({ workflow: { ...GUFENG, modified: false, revision: 2 } }));
     await waitFor(() => expect(screen.queryByText("workbenchAppWritten"), "存好了:那句收起来").toBeNull());
+  });
+
+  //: 维护者 2026-10-09:「这里这个新表单的交互入口重复累赘了」—— 没有表单时上面那一排一颗、空状态里又一颗;顶上四行说明比空状态还重,
+  //: 「同步到画布」没东西可同步时是一颗灰掉的实心主按钮
+  it("表单:还没有表单时只有空状态里那一颗「新表单」,它是这一屏的焦点;有了表单入口回到表单那一排,说明和「同步到画布」才出来", async () => {
+    await mount();
+    api.getCanvasApp.mockResolvedValue(appData());
+    tab("workbenchTabApp");
+    const empty = await waitFor(() => {
+      const found = document.querySelector("[data-no-forms]") as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const entries = within(shownPanel()).getAllByRole("button", { name: /workflowFormNew/ });
+    expect(entries, "一屏只有一个「新表单」入口").toHaveLength(1);
+    expect(empty.contains(entries[0]), "放在空状态里").toBe(true);
+    expect(entries[0].className, "它是这一屏的焦点:实心主按钮").toMatch(/\bbg-action\b/);
+    expect(shownPanel().querySelector("[data-forms-bar]"), "表单那一排还没有东西,不出来").toBeNull();
+    expect(shownPanel().querySelector("[data-app-hint]"), "怎么同步、怎么存的说明这时还用不上").toBeNull();
+    expect(within(shownPanel()).queryByRole("button", { name: /workbenchAppWrite/ }), "没东西可同步").toBeNull();
+
+    fireEvent.click(entries[0]);
+    await waitFor(() => expect(shownPanel().querySelector("[data-no-forms]")).toBeNull());
+    expect(shownPanel().querySelector("[data-forms-bar] [data-forms-new]"), "有了表单:入口回到表单那一排").toBeTruthy();
+    expect(within(shownPanel()).getAllByRole("button", { name: /workflowFormNew/ })).toHaveLength(1);
+    expect(shownPanel().querySelector("[data-app-hint]")).toBeTruthy();
+    const write = within(shownPanel()).getByRole("button", { name: /workbenchAppWrite/ });
+    expect(write.hasAttribute("disabled")).toBe(true);
+    expect(write.className, "新表单还没起标题、点不了:不是实心的(焦点在起标题、挑项)").not.toMatch(/\bbg-action\b/);
+    fireEvent.change(screen.getByPlaceholderText("workflowAppNamePlaceholder"), { target: { value: "调步数" } });
+    expect(write.className, "点得了:它成了主按钮").toMatch(/\bbg-action\b/);
   });
 
   //: 桌面版真机走查:确认框是普通弹窗(z-50)时,中间被画布盖着、两边被外壳盖着,在用的那几处一处都看不见

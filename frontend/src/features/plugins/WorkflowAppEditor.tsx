@@ -224,7 +224,6 @@ export function WorkflowAppEditor({
   );
 }
 
-/** 一张表单都没有:用的人看到的是完整工作流(全部能填的项);给一颗「新表单」。 */
 /** 「结果取自」那一行的节点:插件报的输出节点名(和工作流库其余地方同一种叫法)后面带节点号 —— 此前只写一个「#9」。 */
 export function markedResults(results: readonly string[], outputs: readonly { node?: string; title?: string }[], separator: string): string {
   return results.map((one) => {
@@ -233,12 +232,16 @@ export function markedResults(results: readonly string[], outputs: readonly { no
   }).join(separator);
 }
 
+/**
+ * 一张表单都没有:用的人看到的是完整工作流(全部能填的项);给一颗「新表单」。这时它是这一屏**唯一**的「新表单」入口、也是
+ * 视觉焦点(实心):表单那一排(FormsBar)没有表单时不出来。
+ */
 export function NoForms({ onNew }: { onNew: () => void }) {
   const t = useI18n();
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center" data-no-forms="">
       <p className="m-0 max-w-md text-ui-sm leading-relaxed text-muted-foreground">{t("workflowFormsEmpty")}</p>
-      <Button variant="outline" size="sm" onClick={onNew}>
+      <Button size="sm" onClick={onNew}>
         <Plus size={14} />
         {t("workflowFormNew")}
       </Button>

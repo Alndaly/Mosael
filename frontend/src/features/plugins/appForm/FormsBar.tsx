@@ -72,6 +72,9 @@ export function FormsBar({
     const next = removeForm(draft, form.key);
     onChange(next, next.forms[Math.min(index, next.forms.length - 1)]?.key ?? "");
   };
+  //: 一张表单都没有时,「新表单」只在空状态里那一颗(NoForms):这一排此前照样摆一颗,一屏两个一样的入口(维护者 2026-10-09)。
+  //: 有了表单,入口回到这一排、挨着表单那几颗
+  if (draft.forms.length === 0) return null;
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2" data-forms-bar="">
