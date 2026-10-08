@@ -258,7 +258,6 @@ export const scene3d = {
   sceneLoadFailed: "Can't load scenes right now",
   sceneEmptyTitle: "Start with a space",
   sceneEmptyBody: "Add shapes, import models, or start designing camera moves in three connected halls.",
-  sceneTrySample: "Try the sample scene",
   sceneRenamed: "Scene renamed",
   sceneDeletedCount: "Deleted {n} scenes",
   sceneDeletePartialFailed: "Some scenes couldn't be deleted: {reason}",

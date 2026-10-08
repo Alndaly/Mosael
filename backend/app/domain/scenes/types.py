@@ -174,6 +174,9 @@ class SceneContent(SceneValue):
     #: SceneOut 每次读都过一遍这个模型,老场景自动拿到默认的 lighting。
     ambient: float = Field(1.5, ge=0, le=10)
     lighting: SceneLighting = Field(default_factory=SceneLighting)
+    #: 这份场景从哪个示例建出来的。3D 场景页的「三间展厅示例」认它:这个工作区已经有一份就打开那份,不再每点一次
+    #: 复制一份同名的。带默认值的新键,老场景读出来是 None,不需要迁移(和上面 ambient 那条同一个道理)。
+    template: Literal["three_halls"] | None = None
 
     @model_validator(mode="after")
     def valid_hierarchy(self):

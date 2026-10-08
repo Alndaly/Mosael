@@ -42,7 +42,7 @@ export type Scene = Omit<components["schemas"]["SceneOut"], "content"> & {
 export type SceneSummary = Pick<
   Scene,
   "id" | "name" | "revision" | "updated_at"
-> & { object_count: number; shot_count: number; preview?: ScenePreviewData };
+> & { object_count: number; shot_count: number; preview?: ScenePreviewData; template?: SceneContent["template"] };
 const query = (ws: string) => `workspace_id=${encodeURIComponent(ws)}`;
 export const listScenes = (ws: string) =>
   api<SceneSummary[]>(`/api/scenes?${query(ws)}`);

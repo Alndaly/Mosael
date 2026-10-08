@@ -92,6 +92,9 @@ export function cameraOfShot(content: SceneContent, shot: SceneShot): SceneObjec
 const DEFAULT_LIGHTING = { preset: "studio-soft", ...presetById("studio-soft")!.values };
 
 /** 新场景里各样东西的名字是**存进场景的数据**,按创建时的界面语言起名。 */
+/** 三间展厅示例建出来的场景在 content 上带的标记(后端 SceneContent.template)。 */
+export const SAMPLE_TEMPLATE = "three_halls" as const;
+
 export function initialScene(t: (key: MessageKey) => string, demo = false): SceneContent {
   const { camera, shot } = makeShot(t("sceneShotName").replace("{n}", "1"));
   if (!demo)
@@ -113,6 +116,7 @@ export function initialScene(t: (key: MessageKey) => string, demo = false): Scen
       shots: [shot],
       background: "#20242c",
       ambient: 1.5,
+      template: null,
     };
   const rooms = [0, 1, 2].map((i) =>
     makeObject("room", {
@@ -165,6 +169,8 @@ export function initialScene(t: (key: MessageKey) => string, demo = false): Scen
     shots: [shot],
     background: "#20242c",
     ambient: 1.8,
+    //: 场景页的「打开三间展厅示例」认这一位:这个工作区已经有一份就打开它,不再每点一次复制一份。
+    template: SAMPLE_TEMPLATE,
   };
 }
 /**

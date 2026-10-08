@@ -42422,6 +42422,18 @@
           },
           "lighting": {
             "$ref": "#/components/schemas/SceneLighting"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "three_halls"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
           }
         },
         "additionalProperties": false,

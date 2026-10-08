@@ -258,7 +258,6 @@ export const scene3d = {
   sceneLoadFailed: "暂时无法加载场景",
   sceneEmptyTitle: "从一个空间开始",
   sceneEmptyBody: "添加几何体、导入模型，或从三间相连的展厅开始设计运镜。",
-  sceneTrySample: "体验示例场景",
   sceneRenamed: "场景已重命名",
   sceneDeletedCount: "已删除 {n} 个场景",
   sceneDeletePartialFailed: "部分场景未能删除：{reason}",

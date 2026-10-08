@@ -131,6 +131,7 @@ import {
   objectTree,
   removeObjects,
   removeShot,
+  SAMPLE_TEMPLATE,
   uid,
 } from "./sceneGraph";
 import { SHOT_FPS } from "./encodeVideo";
@@ -202,6 +203,15 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
     queryFn: () => getScene(workspace.id, id!),
     enabled: !!id,
   });
+  /**
+   * 「打开三间展厅示例」:这个工作区已经有一份(content.template 认得出,改过名、改过内容都算)就打开那份,
+   * 没有才建。此前每点一次复制一份,点几次就有几份同名的场景 —— 按钮说的是「打开」。
+   */
+  function openSample() {
+    const existing = (list.data ?? []).find((one) => one.template === SAMPLE_TEMPLATE);
+    if (existing) location.hash = `#/scenes?scene=${existing.id}`;
+    else void create(true);
+  }
   async function create(demo: boolean) {
     setCreating(true);
     try {
@@ -269,13 +279,13 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
                 location.hash = `#/scenes?scene=${sceneId}`;
               }}
             />
-            <Button
-              variant="outline"
-              disabled={creating}
-              onClick={() => void create(true)}
-            >
-              {t("scenesOpenSample")}
-            </Button>
+            {/* 空着的时候这一颗在正中的空状态里,页头不再摆第二颗同一件事的。清单没到之前点不了:
+                还不知道有没有那一份,点了就可能又复制一份。 */}
+            {!!list.data?.length && (
+              <Button variant="outline" disabled={creating} onClick={openSample}>
+                {t("scenesOpenSample")}
+              </Button>
+            )}
             <Button disabled={creating} onClick={() => void create(false)}>
               <Plus size={16} />
               {t("scenesNew")}
@@ -291,7 +301,7 @@ export function SceneStudio({ workspace }: { workspace: Workspace }) {
         </div>
       ) : !list.data?.length ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <EmptyState icon={<Box />} title={t("sceneEmptyTitle")} body={t("sceneEmptyBody")} action={<Button disabled={creating} onClick={() => void create(true)}>{t("sceneTrySample")}</Button>} />
+          <EmptyState icon={<Box />} title={t("sceneEmptyTitle")} body={t("sceneEmptyBody")} action={<Button disabled={creating} onClick={openSample}>{t("scenesOpenSample")}</Button>} />
         </div>
       ) : (
         <SceneList

@@ -32,7 +32,7 @@ def list_scenes(db: Session, user: User, workspace_id: str) -> list[dict[str, An
         {
             "id": r.id, "name": r.name, "revision": r.revision, "updated_at": r.updated_at,
             "object_count": len(r.content.get("objects", [])), "shot_count": len(r.content.get("shots", [])),
-            "preview": ops.scene_preview(r.content),
+            "preview": ops.scene_preview(r.content), "template": r.content.get("template"),
         }
         for r in rows
     ]

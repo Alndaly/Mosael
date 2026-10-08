@@ -16247,6 +16247,8 @@ export interface components {
              */
             ambient: number;
             lighting?: components["schemas"]["SceneLighting"];
+            /** Template */
+            template?: "three_halls" | null;
         };
         /** SceneCreate */
         SceneCreate: {
