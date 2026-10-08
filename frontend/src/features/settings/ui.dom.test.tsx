@@ -140,6 +140,9 @@ describe("settings section layout", () => {
     expect(block).toBeInTheDocument();
     expect(block?.className).not.toMatch(/\bpy-/);
     expect(block?.querySelector('[data-slot="settings-list-item"]')).toHaveClass("py-5");
+    //: 列表不许被压得比自己的行还矮:一页只有一节时,那一节被钉成整列高(SettingsSectionStack 的 only-child 规则),
+    //: 列表带着 min-h-0 就被压扁,行画到下面的「邀请成员」上(团队页四五个成员时实测)。长了就让整列滚动。
+    expect(block?.className).not.toMatch(/\bmin-h-0\b/);
   });
 
   it("keeps optional list tools inside the same spacing contract", () => {

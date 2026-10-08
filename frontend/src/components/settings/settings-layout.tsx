@@ -402,7 +402,7 @@ export function SettingsListBlock({
   toolbar?: React.ReactNode;
 }) {
   return (
-    <div data-slot="settings-list-block" className={cn("grid min-h-0 gap-1.5", className)}>
+    <div data-slot="settings-list-block" className={cn("grid gap-1.5", className)}>
       {toolbar && (
         <div data-slot="settings-list-toolbar" className="px-0.5 pt-3">
           {toolbar}
