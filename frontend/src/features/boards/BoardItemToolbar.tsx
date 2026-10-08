@@ -17,6 +17,7 @@ import type { MessageKey } from "@/app/messages";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { useImagePreview } from "@/components/app/image-preview";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -193,19 +194,16 @@ export function ItemToolbar({
               没有它的话,想把一组想法整体挪个位置就得一个个拖。 */}
           {item?.kind === "frame" && (
             <Hint label={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
+              shape="round"
               aria-pressed={Boolean(item.move_children)}
-              className={cn(
-                "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
-                item.move_children
-                  ? "bg-primary/12 text-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-              )}
+              className="shrink-0 text-muted-foreground"
               onClick={() => patch(item.id, { move_children: !item.move_children })}
             >
-              <Group size={13} /> {t("boardMoveChildren")}
-            </button>
+              <Group /> {t("boardMoveChildren")}
+            </Button>
             </Hint>
           )}
         </ToolbarCluster>
@@ -358,15 +356,17 @@ export function ItemToolbar({
               label={t("boardGrowLabel")}
               align="start"
               trigger={
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  shape="round"
                   aria-label={t("boardGrowLabel")}
                   aria-haspopup="menu"
                   data-board-grow-menu=""
-                  className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                  className="shrink-0 gap-1 text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
                 >
-                  <Plus size={13} /> {t("boardGrowLabel")} <ChevronDown size={12} className="opacity-60" />
-                </button>
+                  <Plus /> {t("boardGrowLabel")} <ChevronDown className="opacity-60" />
+                </Button>
               }
               actions={GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
                 const Icon = kindIcon(kind);
@@ -389,16 +389,11 @@ export function ItemToolbar({
         {/* 去编辑器改这个场景。**入口挂在格子上,不挂在面板里** —— 面板随挑的那一种填法换(渲白模 / 按文字搭),
             此前它只在「渲白模参考」的面板头上,切到「按文字搭」就找不到了(用户截图)。 */}
         {single && item?.kind === "scene" && item.scene_id && (
-          <Hint label={t("boardSceneOpen")}>
-            <a
-              aria-label={t("boardSceneOpen")}
-              data-board-scene-open=""
-              href={`#/scenes?scene=${encodeURIComponent(item.scene_id)}`}
-              className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              <ExternalLink size={13} />
+          <IconButton asChild size="icon-xs" shape="round" label={t("boardSceneOpen")} className="text-muted-foreground">
+            <a data-board-scene-open="" href={`#/scenes?scene=${encodeURIComponent(item.scene_id)}`}>
+              <ExternalLink />
             </a>
-          </Hint>
+          </IconButton>
         )}
         {/* 时间线格(ADR 0030)的剪刀、删除、在剪辑里打开 —— 放在操作条上,不占格子里的地方(用户:「这些按钮放到上方弹窗中去」)。 */}
         {single && item?.kind === "sequence" && item.sequence_id && (
@@ -408,16 +403,14 @@ export function ItemToolbar({
             sequenceId={item.sequence_id}
             button={({ label, icon, onClick, disabled, disabledReason, href, marker }) =>
               href !== undefined ? (
-                <Hint key={marker} label={label}>
-                  <a aria-label={label} data-board-sequence-action={marker} href={href}
-                     className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
+                <IconButton key={marker} asChild size="icon-xs" shape="round" label={label} className="text-muted-foreground">
+                  <a data-board-sequence-action={marker} href={href}>
                     {icon}
                   </a>
-                </Hint>
+                </IconButton>
               ) : (
-                <IconButton key={marker} unstyled label={label} data-board-sequence-action={marker}
-                        disabled={disabled} disabledReason={disabledReason} onClick={onClick}
-                        className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">
+                <IconButton key={marker} size="icon-xs" shape="round" label={label} data-board-sequence-action={marker}
+                        disabled={disabled} disabledReason={disabledReason} onClick={onClick} className="text-muted-foreground">
                   {icon}
                 </IconButton>
               )}
@@ -438,26 +431,29 @@ export function ItemToolbar({
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
         {single && item && onRename && (
           <IconButton
-            unstyled
+            size="icon-xs"
+            shape="round"
             label={t("rename")}
-            className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="text-muted-foreground"
             onClick={() => onRename(item.id)}
           >
             <PencilLine size={13} />
           </IconButton>
         )}
         <IconButton
-          unstyled
+          size="icon-xs"
+          shape="round"
           label={t("copy")}
-          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+          className="text-muted-foreground"
           onClick={onCopySelected}
         >
           <Copy size={13} />
         </IconButton>
         <IconButton
-          unstyled
+          size="icon-xs"
+          shape="round"
           label={t("delete")}
-          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
+          className="text-muted-foreground hover:text-destructive"
           onClick={onRemoveSelected}
         >
           <Trash2 size={13} />
@@ -504,19 +500,17 @@ function ToolbarIcon({
 }) {
   return (
     <IconButton
-      unstyled
+      size="icon-xs"
+      shape="round"
       label={label}
       hint={hint}
       aria-pressed={pressed === undefined ? undefined : pressed}
       data-board-action={ability ? undefined : name}
       data-board-ability={ability ? name : undefined}
-      className={cn(
-        "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full transition-colors hover:bg-secondary hover:text-foreground",
-        pressed ? "bg-secondary text-foreground" : "text-muted-foreground",
-      )}
+      className="shrink-0 text-muted-foreground"
       onClick={onClick}
     >
-      <Icon size={14} />
+      <Icon />
     </IconButton>
   );
 }

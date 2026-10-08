@@ -94,7 +94,7 @@ function SourceRow({ item, added, onAdd, onRemove }: {
       </Hint>
       {!item.common && <CatalogBadge tone="muted">{t("workflowAppAdvanced")}</CatalogBadge>}
       {added ? (
-        <IconButton label={t("workflowAppAdded").replace("{name}", item.title)} aria-pressed className="shrink-0 text-primary"
+        <IconButton label={t("workflowAppAdded").replace("{name}", item.title)} aria-pressed className="shrink-0"
                     onClick={onRemove}>
           <Check />
         </IconButton>

@@ -51,6 +51,12 @@ const buttonVariants = cva(
         "icon-sm": `${CONTROL_SQUARE.sm} rounded-md ${CONTROL_ICON.square}`,
         "icon-xs": `${CONTROL_SQUARE.xs} rounded-md ${CONTROL_ICON.square}`,
       },
+      //: 形状:默认圆角 8px;`round` 是全圆 —— 胶囊形的浮动工具条(画板格子上方那一条)里的按钮、输入框底栏的发送键、
+      //: 播放键。挑这一项,别在 className 里写 rounded-full(棘轮 design/controlOverrides.test.ts)。
+      shape: {
+        square: "",
+        round: "rounded-full",
+      },
     },
     compoundVariants: [
       //: 行内动作自带尺寸:不论调用处写没写 size,都是这一套(写在最后,cn 合并时盖过 size 那一档的高度、留白和字号)。
@@ -59,6 +65,7 @@ const buttonVariants = cva(
     defaultVariants: {
       variant: "default",
       size: "default",
+      shape: "square",
     },
   }
 )
@@ -86,7 +93,7 @@ export interface ButtonProps
  * 棘轮:`design/buttonTypes.test.ts`。`asChild` 时不加:那时它把样子借给别的元素(`<a>`、`<label>`),type 由那个元素自己定。
  */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading = false, disabled, children, type, ...props }, ref) => {
+  ({ className, variant, size, shape, asChild = false, loading = false, disabled, children, type, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
     // asChild 时不动 children:那时候 Button 只是把样式借给别人(<label>、<a>),
     // 塞一个 spinner 进去会破坏调用方自己的结构。
@@ -95,7 +102,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         type={asChild ? type : (type ?? "button")}
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(buttonVariants({ variant, size, shape, className }))}
         ref={ref}
         disabled={disabled || (loading && !asChild)}
         aria-busy={loading || undefined}

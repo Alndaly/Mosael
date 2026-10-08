@@ -61,7 +61,6 @@ import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
 import { useGenerationOptions } from "@/lib/generationOptions";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
-import { cn } from "@/lib/utils";
 import { formatCombo, listenKeys } from "@/lib/shortcuts";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { SectionBoundary } from "@/components/app/errorBoundary";
@@ -1127,7 +1126,7 @@ function BoardDetail({
             <>
               <CanvasToolbarGroup label={t("wfAgentTitle")}>
                 <IconButton
-                  className={cn(agentOpen === "on" && "bg-secondary text-foreground")}
+                  
                   label={t("wfAgentTitle")}
                   aria-pressed={agentOpen === "on"}
                   onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
@@ -1263,7 +1262,7 @@ function BoardDetail({
             <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
             <CanvasInputModeSwitch />
             <IconButton
-              className={cn(showMinimap && "bg-secondary text-foreground")}
+              
               label={t("wfMinimap")}
               aria-pressed={showMinimap}
               onClick={() => setMinimap(showMinimap ? "off" : "on")}

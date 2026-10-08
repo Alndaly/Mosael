@@ -5,6 +5,7 @@ import type { PricingRule } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { BulkCheckbox } from "@/components/app/bulkSelection";
 import type { useMultiSelect } from "@/lib/useMultiSelect";
+import { Segmented } from "@/components/ui/segmented";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -157,28 +158,16 @@ export function PricingRuleFilters({
             ...distinct(groups.flatMap((group) => group.rules.map((rule) => rule.currency))).map((currency) => ({ value: currency, label: currency })),
           ]}
         />
-        <div className="ml-auto flex items-center gap-1" role="group" aria-label={t("pricingViewLabel")}>
-          <IconButton
-            variant="outline"
-            size="default"
-            className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")}
-            label={t("studioGridView")}
-            aria-pressed={display === "grid"}
-            onClick={() => onDisplay("grid")}
-          >
-            <LayoutGrid />
-          </IconButton>
-          <IconButton
-            variant="outline"
-            size="default"
-            className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")}
-            label={t("studioListView")}
-            aria-pressed={display === "list"}
-            onClick={() => onDisplay("list")}
-          >
-            <List />
-          </IconButton>
-        </div>
+        <Segmented
+          className="ml-auto"
+          aria-label={t("pricingViewLabel")}
+          value={display}
+          onValueChange={onDisplay}
+          options={[
+            { value: "grid", icon: <LayoutGrid />, ariaLabel: t("studioGridView") },
+            { value: "list", icon: <List />, ariaLabel: t("studioListView") },
+          ]}
+        />
       </div>
       <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
         <span>

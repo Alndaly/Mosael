@@ -3,7 +3,6 @@ import { Spline, Waypoints, type LucideIcon } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { IconButton } from "@/components/ui/icon-button";
 import { usePersistentTab } from "@/lib/usePersistentTab";
-import { cn } from "@/lib/utils";
 
 /**
  * 画布连线的走线方式。**工作流和创意画板共用这一份。**
@@ -60,9 +59,9 @@ export function EdgeShapeToggle({ value, onChange }: { value: EdgeShape; onChang
         return (
           <IconButton
             key={shape}
-            variant={value === shape ? "secondary" : "ghost"}
+            variant="ghost"
             size="icon-sm"
-            className={cn(value === shape && "bg-secondary text-foreground")}
+            
             label={t(EDGE_SHAPE_LABEL[shape])}
             aria-pressed={value === shape}
             onClick={() => onChange(shape)}

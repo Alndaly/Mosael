@@ -10,7 +10,6 @@ import { placedAsset, type PlacedAsset } from "@/features/boards/boardPlacement"
 import { AssetUploadStatus, acceptFor, fileKind, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
 import { useAssetDetails, useAssetSearch } from "@/lib/assetQueries";
 import { useFileDrop } from "@/lib/useFileDrop";
-import { cn } from "@/lib/utils";
 
 /**
  * 往画板上贴一份现成素材:从素材库里挑(网格的样子见 AssetGridPicker,全应用挑媒体是同一个弹窗)。
@@ -142,7 +141,7 @@ export function AssetPickerDialog({
               variant="outline"
               aria-pressed={boardOnly}
               data-pick-on-board=""
-              className={cn(boardOnly && "border-primary/40 bg-accent text-primary hover:bg-accent hover:text-primary")}
+              
               onClick={() => setBoardOnly((on) => !on)}
             >
               <LayoutGrid />

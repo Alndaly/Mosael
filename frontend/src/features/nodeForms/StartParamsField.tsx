@@ -228,7 +228,7 @@ export function StartParamsField({
                 hint={row.required ? t("wfStartParamRequiredOn") : t("wfStartParamRequiredOff")}
                 aria-pressed={row.required}
                 data-start-param-required={row.required ? "" : undefined}
-                className={cn(row.required ? "text-primary" : "text-muted-foreground/45 hover:text-muted-foreground")}
+                className={cn(!row.required && "text-muted-foreground/45 hover:text-muted-foreground")}
                 onClick={() => patchRow(index, { required: !row.required }, false)}
               >
                 <Asterisk size={13} strokeWidth={row.required ? 2.75 : 2} />

@@ -59,7 +59,7 @@ export function TagFilter({ counts, value, onChange, match, onMatchChange, compa
       <PopoverContent align="end" className="w-64 p-2">
         <Input aria-label={t("mediaSearchTags")} placeholder={t("mediaSearchTags")} value={search} onChange={event => setSearch(event.target.value)} />
         <div className="mt-2 grid max-h-64 gap-1 overflow-y-auto" role="group" aria-label={t("filterByTag")}>
-          {matches.map(tag => <Button key={tag} variant="ghost" className={cn("min-w-0 justify-start", chosen.has(tag) && "text-primary hover:text-primary")} aria-pressed={chosen.has(tag)} onClick={() => toggle(tag)}>
+          {matches.map(tag => <Button key={tag} variant="ghost" className="min-w-0 justify-start" aria-pressed={chosen.has(tag)} onClick={() => toggle(tag)}>
             <Truncate className="flex-1 text-left">{tag}</Truncate>
             <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{counts.get(tag)}</span>
             {/* 勾没勾都占一格,数字才不会随着勾选左右跳。 */}

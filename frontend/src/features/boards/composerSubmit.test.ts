@@ -38,6 +38,7 @@ describe("画板表单的提交状态", () => {
     //: 操作条(ItemToolbar)从 BoardCanvas 拆到了 BoardItemToolbar。
     const source = fs.readFileSync(path.join(HERE, "BoardItemToolbar.tsx"), "utf8");
     expect(source).toMatch(/rounded-full[^"\n]*\bp-1\.5/);
-    expect(source).toContain('h-7 w-7 cursor-pointer');
+    //: 按钮走 IconButton 的 icon-xs(28px)圆钮档,不再手写 h-7 w-7
+    expect(source).toMatch(/size="icon-xs"\s+shape="round"/);
   });
 });

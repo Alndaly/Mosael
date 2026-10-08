@@ -1021,7 +1021,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <div role="toolbar" aria-label={t("editTools")} className="editor-commandbar flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider p-2">
         <LeftTabs tab={panels.tab} onChange={panels.setTab} />
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" aria-label={t("wfAgentTitle")} aria-pressed={agentOpen === "on"} onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")} className={cn(agentOpen === "on" && "bg-accent text-accent-foreground")}><Bot />{t("wfAgentTitle")}</Button>
+          <Button variant="ghost" size="sm" aria-label={t("wfAgentTitle")} aria-pressed={agentOpen === "on"} onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")} ><Bot />{t("wfAgentTitle")}</Button>
 
           <IconButton
             variant="ghost"

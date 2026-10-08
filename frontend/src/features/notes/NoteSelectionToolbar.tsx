@@ -197,7 +197,7 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
       label={item.label}
       shortcut={item.shortcut && formatCombo(item.shortcut)}
       aria-pressed={item.pressed}
-      className={cn(item.pressed && "bg-accent text-accent-foreground")}
+      
       onMouseDown={(event) => event.preventDefault()}
       onClick={item.run}
     >

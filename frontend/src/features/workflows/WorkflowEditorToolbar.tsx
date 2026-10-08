@@ -178,7 +178,7 @@ export function workflowEditorToolbar({
         <>
           <CanvasToolbarGroup label={t("wfAgentTitle")}>
             <IconButton
-              className={cn(agentOpen && "bg-secondary text-foreground")}
+              
               label={t("wfAgentTitle")}
               aria-pressed={agentOpen}
               onClick={() => {
@@ -258,7 +258,7 @@ export function workflowEditorToolbar({
             <IconButton
               label={t("wfHistory")}
               aria-pressed={showHistory}
-              className={cn(showHistory && "bg-secondary text-foreground")}
+              
               onClick={() => setShowHistory((v) => !v)}
             >
               <History size={14} />
@@ -411,7 +411,7 @@ export function workflowEditorToolbar({
         <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
         <CanvasInputModeSwitch />
         <IconButton
-          className={cn(showMinimap && "bg-secondary text-foreground")}
+          
           label={t("wfMinimap")}
           aria-pressed={showMinimap}
           onClick={() => setShowMinimap(showMinimap ? "off" : "on")}

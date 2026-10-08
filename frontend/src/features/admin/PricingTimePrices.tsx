@@ -243,7 +243,7 @@ export function TimePricesEditor({
                     size="sm"
                     variant="outline"
                     aria-pressed={on}
-                    className={on ? "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary" : "text-muted-foreground"}
+                    className={on ? undefined : "text-muted-foreground"}
                     onClick={() => set(index, { weekdays: [...days] })}
                   >
                     {t(key)}
@@ -260,7 +260,7 @@ export function TimePricesEditor({
                       size="sm"
                       variant="outline"
                       aria-pressed={on}
-                      className={on ? "border-primary/50 bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary" : "text-muted-foreground"}
+                      className={on ? undefined : "text-muted-foreground"}
                       onClick={() => toggleDay(index, day)}
                     >
                       {dayName(day)}

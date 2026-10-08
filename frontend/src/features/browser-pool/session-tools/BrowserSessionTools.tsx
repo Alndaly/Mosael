@@ -138,7 +138,7 @@ function SessionTools({
         disabled={reason !== null}
         disabledReason={reason ? t(reason) : undefined}
         onClick={onClick}
-        className={cn(active && "bg-secondary")}
+        
       >
         {icon}
       </IconButton>

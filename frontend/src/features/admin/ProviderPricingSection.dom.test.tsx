@@ -254,9 +254,9 @@ it("卡片 / 列表可以切,选择记住到下次", async () => {
   mount(undefined, [INPUT, OUTPUT, OTHER]);
   await screen.findByText("qwen-flash");
   expect(screen.getAllByRole("article")).toHaveLength(2);
-  fireEvent.click(screen.getByRole("button", { name: "studioListView" }));
+  fireEvent.click(screen.getByRole("radio", { name: "studioListView" }));
   expect(screen.queryAllByRole("article")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "studioListView" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("radio", { name: "studioListView" })).toHaveAttribute("aria-checked", "true");
   cleanup();
   mount(undefined, [INPUT, OUTPUT, OTHER]);
   await screen.findByText("qwen-flash");

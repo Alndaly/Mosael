@@ -1,6 +1,7 @@
 import { assetKeys } from "@/api/queryKeys";
 import { PageHeading, CollectionTabs } from "@/components/layout/StudioPage";
 import { LayoutGrid, List, MoreHorizontal } from "lucide-react";
+import { Segmented } from "@/components/ui/segmented";
 import { Popover, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
@@ -535,7 +536,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 size="default"
                 aria-pressed={shelf === kind}
                 aria-label={`${t(INTERMEDIATE_COPY[kind].label)} ${count}`}
-                className={cn("shrink-0 border-border bg-control", shelf === kind && "border-primary/40 bg-accent text-primary")}
+                className="shrink-0"
                 onClick={() => setShelf((current) => (current === kind ? "" : kind))}
               >
                 <Layers size={13} />
@@ -560,10 +561,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
             </div>
             {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
             <div className={cn("flex items-center gap-2 border-divider max-lg:w-full", intermediates.length > 0 ? "lg:ml-auto" : "lg:border-l lg:pl-4")}>
-              <div role="group" className="flex gap-1" aria-label={t("studioGridView")}>
-                <IconButton variant="outline" size="default" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></IconButton>
-                <IconButton variant="outline" size="default" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></IconButton>
-              </div>
+<Segmented
+                aria-label={t("studioGridView")}
+                value={display}
+                onValueChange={setDisplay}
+                options={[
+                  { value: "grid", icon: <LayoutGrid />, ariaLabel: t("studioGridView") },
+                  { value: "list", icon: <List />, ariaLabel: t("studioListView") },
+                ]}
+              />
               <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : enterSelectMode()}>
                 {selectMode ? <X /> : <Check />}{selectMode ? t("cancel") : t("mediaSelectMode")}
               </Button>

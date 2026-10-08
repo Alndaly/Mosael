@@ -11,7 +11,6 @@ import { Hint } from "@/components/ui/tooltip";
 import { TrimTrack } from "@/features/boards/TrimTrack";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
-import { cn } from "@/lib/utils";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 
 /** 能剪的两种媒体。 */
@@ -97,16 +96,14 @@ export function TrimComposer({
         <>
           {controls.mute && (
             <IconButton
-              unstyled
+              size="icon-sm"
+              shape="round"
               aria-pressed={mute}
               label={t(mute ? "boardDropSound" : "boardKeepSound")}
               onClick={() => setMute((on) => !on)}
-              className={cn(
-                "grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full transition-colors hover:bg-secondary",
-                mute ? "text-foreground" : "text-muted-foreground/60 hover:text-foreground",
-              )}
+              className="shrink-0 text-muted-foreground"
             >
-              {mute ? <VolumeX size={13} /> : <Volume2 size={13} />}
+              {mute ? <VolumeX /> : <Volume2 />}
             </IconButton>
           )}
           {/* 取一帧:**用起点那个把手的位置** —— 轨已经在那儿了,再给一个「取帧位置」等于

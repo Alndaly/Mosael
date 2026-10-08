@@ -232,7 +232,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
                   <Truncate className="timecode text-ui-2xs text-muted-foreground">{metaOf(asset)}</Truncate>
                 </div>
                 <IconButton
-                  variant={audible ? "secondary" : "ghost"}
+                  variant="ghost"
                   size="icon-xs"
                   aria-pressed={audible}
                   label={`${t(audible ? "videoCompareMute" : "videoCompareListen")}: ${asset.name}`}
@@ -283,7 +283,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
             </Button>
           ))}
         </div>
-        <Button variant={loop ? "secondary" : "outline"} size="sm" aria-pressed={loop} onClick={() => setLoop((current) => !current)}>
+        <Button variant="outline" size="sm" aria-pressed={loop} onClick={() => setLoop((current) => !current)}>
           <Repeat size={13} /> {t("videoCompareLoop")}
         </Button>
       </div>

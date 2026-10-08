@@ -135,7 +135,7 @@ export function SceneDopeSheet({ content, shot, time, selectedId, playing, disab
           <PopoverTrigger asChild><IconButton size="icon-xs" variant={query || animatedOnly ? "secondary" : "ghost"} label={t("sceneAnimSearch")}><ListFilter /></IconButton></PopoverTrigger>
           <PopoverContent align="end" className="grid w-64 gap-3 p-3">
             <SearchInput size="xs" className="w-full" aria-label={t("sceneAnimSearch")} placeholder={t("sceneAnimSearch")} value={query} onChange={e => setQuery(e.target.value)} />
-            <Button size="xs" variant={animatedOnly ? "secondary" : "outline"} aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
+            <Button size="xs" variant="outline" aria-pressed={animatedOnly} onClick={() => setAnimatedOnly(!animatedOnly)}>{t("sceneAnimAnimated")}</Button>
           </PopoverContent>
         </Popover>
         <span className="scene-tool-divider" aria-hidden="true" />

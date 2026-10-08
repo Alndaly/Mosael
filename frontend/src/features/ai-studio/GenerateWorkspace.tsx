@@ -1391,7 +1391,7 @@ export function GenerateWorkspace({
           {switcher}
           <Truncate className="flex-1 text-ui-sm font-medium">{activeSession ? sessionTitle(t, activeSession) : t("generationNewSession")}</Truncate>
           {!readOnly && (
-            <Button variant={parametersOpen ? "secondary" : "ghost"} size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
+            <Button variant="ghost" size="sm" onClick={() => setParametersOpen(!parametersOpen)} aria-pressed={parametersOpen}><SlidersHorizontal />{t("generationEngineSettings")}</Button>
           )}
         </div>
         <div className="relative grid min-h-0 min-w-0">

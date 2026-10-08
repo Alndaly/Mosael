@@ -168,7 +168,7 @@ export function CanvasNodeSearch({
         <IconButton
           variant="ghost"
           size="icon-sm"
-          className={cn("text-muted-foreground hover:text-foreground", open && "bg-secondary text-foreground")}
+          className="text-muted-foreground hover:text-foreground"
           label={t("wfNodeSearch")}
           shortcut={formatCombo("Mod+F")}
           aria-pressed={open}

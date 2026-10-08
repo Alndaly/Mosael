@@ -975,46 +975,50 @@ export function Timeline({
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
             <Hint label={t("toolSelectHint")} shortcut="A">
-              <button
-                type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", tool === "select" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-muted-foreground"
                 aria-pressed={tool === "select"}
                 onClick={() => useEditorStore.getState().setTool("select")}
               >
-                <MousePointer2 size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("toolSelect")}</span>
-              </button>
+                <MousePointer2 /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("toolSelect")}</span>
+              </Button>
             </Hint>
             <Hint label={t("toolBladeHint")} shortcut="B">
-              <button
-                type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", tool === "blade" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-muted-foreground"
                 aria-pressed={tool === "blade"}
                 onClick={() => useEditorStore.getState().setTool("blade")}
               >
-                <Slice size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("toolBlade")}</span>
-              </button>
+                <Slice /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("toolBlade")}</span>
+              </Button>
             </Hint>
           </div>
           <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editMode")}>
             <Hint label={t("editModeOverwriteHint")}>
-              <button
-                type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", editMode === "overwrite" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-muted-foreground"
                 aria-pressed={editMode === "overwrite"}
                 onClick={() => useEditorStore.getState().setEditMode("overwrite")}
               >
-                <Replace size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editModeOverwrite")}</span>
-              </button>
+                <Replace /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editModeOverwrite")}</span>
+              </Button>
             </Hint>
             <Hint label={t("editModeInsertHint")}>
-              <button
-                type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-2 py-1 text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", editMode === "insert" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-muted-foreground"
                 aria-pressed={editMode === "insert"}
                 onClick={() => useEditorStore.getState().setEditMode("insert")}
               >
-                <BetweenHorizontalStart size={12} /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editModeInsert")}</span>
-              </button>
+                <BetweenHorizontalStart /><span className="sr-only @[1120px]/timeline-bar:not-sr-only">{t("editModeInsert")}</span>
+              </Button>
             </Hint>
           </div>
         </div>
@@ -1102,7 +1106,7 @@ export function Timeline({
           <IconButton
             variant="ghost"
             size="icon-sm"
-            className={cn(snapEnabled && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+            
             onClick={() => useEditorStore.getState().toggleSnap()}
             aria-pressed={snapEnabled}
             label={t("timelineSnap")}
