@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { refreshPluginInstance } from "@/api/client";
-import { generationKeys, providerKeys } from "@/api/queryKeys";
+import { boardKeys, generationKeys, providerKeys } from "@/api/queryKeys";
 
 /**
  * **跟着插件连接走的那些缓存**:装、卸、建连接、改配置、启停、授权、刷新之后都要失效。
@@ -28,6 +28,14 @@ export const PLUGIN_DEPENDENT_KEYS = [
   providerKeys.defaults(),
   providerKeys.models(),
   providerKeys.capabilityModels(),
+  // 存着 (连接, 模型) 或插件工具名的那几处:目录重拉时插件报的改名(`moved`,ADR 0045 §6)、在工作流库里改名挪目录
+  // (修订之二)都会在后端当场改写它们 —— 生成会话、生成记录、画板格子、工作流节点、定时任务。只失效选项的话,
+  // 界面拿着改名前的那一份:刚升级完的会话还指着完整工作流、刚改了名的画板格子说「用不了」,要等一分钟的 staleTime。
+  ["generation-sessions"],
+  ["generation-jobs"],
+  boardKeys.everywhere(),
+  ["workflows"],
+  ["scheduled-tasks"],
 ] as const;
 
 export function invalidatePluginDependents(qc: QueryClient): void {
