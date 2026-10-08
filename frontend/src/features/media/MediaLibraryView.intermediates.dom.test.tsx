@@ -81,7 +81,7 @@ it("按下去看的是配音片段:页签数字跟着变,说清它们在时间�
   expect(await screen.findByRole("button", { name: /control net$/ })).toBeInTheDocument();
   expect(vi.mocked(listAssetPage).mock.calls.at(-1)?.[0]).toMatchObject({ intermediate: "dub_line" });
   expect(vi.mocked(getAssetFacets).mock.calls.at(-1)?.[2]).toBe("dub_line");
-  expect(await screen.findByRole("button", { name: "kindAll 2" })).toBeInTheDocument();
+  expect(await screen.findByRole("tab", { name: "kindAll 2" })).toBeInTheDocument();
   //: 标题旁的数说的还是素材库:看配音片段时写着「素材 985」,会让人以为素材库里就是这些。
   expect(screen.getByRole("heading", { name: "navMedia" }).nextElementSibling).toHaveTextContent("3");
   expect(screen.getByRole("button", { name: "mediaIntermediate_dub_line 985" })).toHaveAttribute("aria-pressed", "true");

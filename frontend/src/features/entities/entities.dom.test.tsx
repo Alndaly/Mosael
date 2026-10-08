@@ -67,6 +67,7 @@ const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
 
 import { toast } from "sonner";
+import { WithPageTrail } from "@/test/pageTrail";
 import { EntitiesView } from "./EntitiesView";
 import { AssetEntitiesList, SetAsReferenceDialog } from "./AssetEntities";
 
@@ -188,10 +189,22 @@ describe("资产页", () => {
     expect(within(tile).getByText(/entityRefCount/)).toBeTruthy();
     expect(screen.queryByText("老街")).toBeNull();
 
-    const tabs = screen.getByRole("group", { name: "entitiesKinds" });
-    fireEvent.click(within(tabs).getByRole("button", { name: /场景/ }));
+    const tabs = screen.getByRole("tablist", { name: "entitiesKinds" });
+    fireEvent.click(within(tabs).getByRole("tab", { name: /场景/ }));
     expect(await screen.findByText("老街")).toBeTruthy();
     expect(screen.queryByText("张三")).toBeNull();
+  });
+
+  //: 体检 UM-34:点开资产后地址此前仍是 `#/entities`,刷新回到列表、地址也没法分享。
+  it("开着哪个资产写进地址,回到列表时拿掉", async () => {
+    api.listEntities.mockResolvedValue([summary()]);
+    api.getEntity.mockResolvedValue(entity());
+    mount(<WithPageTrail><EntitiesView workspace={WORKSPACE} /></WithPageTrail>);
+    fireEvent.click(await screen.findByText("张三"));
+    await waitFor(() => expect(window.location.hash).toBe("#/entities?entity=e1"));
+    await screen.findByRole("region", { name: "entityReferences" });
+    fireEvent.click(screen.getByRole("button", { name: "trail-root" }));
+    await waitFor(() => expect(window.location.hash).toBe("#/entities"));
   });
 
   it("搜索在路上说在加载、搜挂了说出错 —— 都不是「没有匹配的内容」", async () => {
@@ -512,7 +525,7 @@ describe("真人 / 虚构与授权声明", () => {
     api.getEntity.mockResolvedValue(entity({ attributes: { real_person: true }, usable_for_digital_human: false }));
     api.updateEntity.mockResolvedValue(entity());
     mount(<EntitiesView workspace={WORKSPACE} />);
-    fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "entitySettings" }));
     const consent = await screen.findByRole("radiogroup", { name: "entityConsentTitle" });
     expect(consent.textContent).toContain("肖像是你自己的");
     expect(consent.textContent).toContain("取得了本人单独同意");
@@ -537,7 +550,7 @@ describe("音色", () => {
     mount(<EntitiesView workspace={WORKSPACE} />);
     const facts = await screen.findByText(/entityVoice · 我的声音/);
     expect(facts).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "entitySettings" }));
+    fireEvent.click(screen.getByRole("tab", { name: "entitySettings" }));
     const engine = await screen.findByRole("combobox", { name: "entityVoiceEngine" });
     fireEvent.keyDown(engine, { key: "Enter" });
     fireEvent.click(await screen.findByRole("option", { name: "Edge" }));
@@ -570,7 +583,7 @@ describe("变体页签", () => {
     }));
     api.deleteEntity.mockResolvedValue(undefined);
     mount(<EntitiesView workspace={WORKSPACE} />);
-    fireEvent.click(await screen.findByRole("button", { name: /entityVariants/ }));
+    fireEvent.click(await screen.findByRole("tab", { name: /entityVariants/ }));
     const tile = (await screen.findByText("冬装")).closest("[data-entity-tile]") as HTMLElement;
     fireEvent.contextMenu(tile);
     expect(await screen.findByRole("menuitem", { name: /rename/ })).toBeTruthy();
@@ -599,7 +612,7 @@ describe("音色试听", () => {
     const audio = new Blob(["x"], { type: "audio/wav" });
     api.fetchVoicePreview.mockResolvedValue(audio);
     mount(<EntitiesView workspace={WORKSPACE} />);
-    fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "entitySettings" }));
     const preview = await screen.findByRole("button", { name: "voicePreview" });
     fireEvent.click(preview);
     await waitFor(() =>
@@ -615,7 +628,7 @@ describe("音色试听", () => {
     api.listEntities.mockResolvedValue([summary()]);
     api.getEntity.mockResolvedValue(entity({ attributes: { real_person: false } }));
     mount(<EntitiesView workspace={WORKSPACE} />);
-    fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "entitySettings" }));
     expect(((await screen.findByRole("button", { name: "voicePreview" })) as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -631,7 +644,7 @@ describe("在哪里用过", () => {
       workflows: [{ id: "w1", name: "出图流程" }],
     });
     mount(<EntitiesView workspace={WORKSPACE} />);
-    fireEvent.click(await screen.findByRole("button", { name: "entityUsage" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "entityUsage" }));
     const usage = await screen.findByRole("region", { name: "entityUsage" });
     await within(usage).findByText("分镜板");
     expect(within(usage).getByText("entityUsageCell")).toBeTruthy();

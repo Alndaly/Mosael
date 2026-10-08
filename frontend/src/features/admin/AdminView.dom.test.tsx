@@ -155,17 +155,17 @@ describe("结构", () => {
     await screen.findByText("adminStatUsers");
     expect(sections(container)).toEqual(["range", "stats", "activity", "spend"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "adminTabMembers" }));
+    fireEvent.click(screen.getByRole("tab", { name: "adminTabMembers" }));
     await screen.findByText("Demo");
     expect(sections(container)).toEqual(["accounts", "invites"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "adminTabPricing" }));
+    fireEvent.click(screen.getByRole("tab", { name: "adminTabPricing" }));
     await screen.findByText("pricingRulesTitle");
     expect(sections(container)).toEqual(["pricing"]);
 
     // 本机引擎的安装与下载源:后端只许部署管理员装(ensure_deployment_admin),所以在这里、不在设置页。
     // 下载源排在最前 —— 它只管装这几个引擎的依赖,先选好从哪儿拉,再点下面的安装。
-    fireEvent.click(screen.getByRole("button", { name: "adminTabEngines" }));
+    fireEvent.click(screen.getByRole("tab", { name: "adminTabEngines" }));
     await screen.findByText("asrModelsTitle");
     expect(sections(container)).toEqual([
       "install-source",
@@ -176,7 +176,7 @@ describe("结构", () => {
     ]);
 
     // 只有部署管理员写得了的设置都在这里,不在设置页(见 AdminView 的说明)。
-    fireEvent.click(screen.getByRole("button", { name: "adminTabDeployment" }));
+    fireEvent.click(screen.getByRole("tab", { name: "adminTabDeployment" }));
     await screen.findByRole("switch", { name: "deployRegistrationOpen" });
     expect(sections(container)).toEqual(["registration", "shared-folders", "outbound-allowlist", "proxy", "ai-runtime", "data", "storage"]);
     // 选中的 tab 活过导航。
@@ -284,7 +284,7 @@ describe("概览", () => {
     const { container } = show();
     expect(screen.getByText("adminOnlyTitle")).toBeInTheDocument();
     expect(container.querySelector("[data-admin-forbidden]")).not.toBeNull();
-    expect(screen.queryByRole("group", { name: "adminTabsLabel" })).toBeNull();
+    expect(screen.queryByRole("tablist", { name: "adminTabsLabel" })).toBeNull();
     expect(calls.overview).not.toHaveBeenCalled();
   });
 

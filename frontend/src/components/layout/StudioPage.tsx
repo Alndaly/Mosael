@@ -22,11 +22,41 @@ export const CARD_GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px
 export const STUDIO_PAGE = "flex h-full min-h-0 flex-col gap-7 overflow-auto px-6 py-7 xl:px-9 xl:py-8 [&>*]:shrink-0";
 
 /** A compact, keyboard-accessible choice strip; selection is explicit even without color. */
+/**
+ * 页面顶上那一排页签(管理、统计、素材、首页、资产……)。**和插件详情、资产详情用的 Radix Tabs 同一种语义**:
+ * 读屏念成「页签 · 已选中」,Tab 只停在选中的那一个,左右方向键换、Home / End 到头尾,换到哪个就切到哪个。
+ * 此前这里是一组 `aria-pressed` 按钮:相邻页面上键盘要换两套操作、读屏念成两种东西(体检 UM-34)。
+ */
 export function CollectionTabs<T extends string>({ value, onChange, items, label }: {
   value: T; onChange: (value: T) => void; items: { value: T; label: string; count?: number }[]; label: string;
 }) {
-  return <div role="group" aria-label={label} className="flex min-w-0 gap-5 overflow-x-auto">
-    {items.map(item => <button key={item.value} type="button" aria-label={`${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`} aria-pressed={value === item.value} onClick={() => onChange(item.value)} className={cn("flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 border-transparent px-1 text-ui-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", value === item.value && "border-primary text-primary")}>
+  const refs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  //: 值不在清单里(还没归一化的那一帧)时,让第一个能被 Tab 到 —— 否则整排都是 -1,键盘进不来。
+  const focusable = Math.max(0, items.findIndex((item) => item.value === value));
+  const select = (index: number) => {
+    const at = (index + items.length) % items.length;
+    onChange(items[at].value);
+    refs.current[at]?.focus();
+  };
+  const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const target = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: items.length - 1 }[event.key];
+    if (target === undefined) return;
+    event.preventDefault();
+    select(target);
+  };
+  return <div role="tablist" aria-label={label} aria-orientation="horizontal" className="flex min-w-0 gap-5 overflow-x-auto">
+    {items.map((item, index) => <button
+      key={item.value}
+      ref={(element) => { refs.current[index] = element; }}
+      type="button"
+      role="tab"
+      aria-label={`${item.label}${item.count !== undefined ? ` ${item.count}` : ""}`}
+      aria-selected={value === item.value}
+      tabIndex={index === focusable ? 0 : -1}
+      onClick={() => onChange(item.value)}
+      onKeyDown={(event) => onKeyDown(event, index)}
+      className={cn("flex h-10 shrink-0 cursor-pointer items-center gap-2 border-b-2 border-transparent px-1 text-ui-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset", value === item.value && "border-primary text-primary")}
+    >
       {item.label}{item.count !== undefined && <span className="text-ui-xs tabular-nums text-muted-foreground">{item.count}</span>}
     </button>)}
   </div>;

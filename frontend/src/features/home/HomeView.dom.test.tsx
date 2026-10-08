@@ -45,7 +45,7 @@ it("opens and filters projects in both presentations and draws the cover the bac
   fireEvent.error(view.container.querySelector('img[src="/thumbnail/cover"]')!);
   fireEvent.click(screen.getByRole("button", { name: "homeOpenEditor: Newer film" }));
   expect(open).toHaveBeenLastCalledWith("newer");
-  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeAll" }));
   fireEvent.click(screen.getByRole("button", { name: "Older film" }));
   expect(open).toHaveBeenLastCalledWith("older");
   fireEvent.change(screen.getByRole("textbox", { name: "searchProjects" }), { target: { value: "newer" } });
@@ -80,7 +80,7 @@ it("能批量选中项目一起删 —— 选择模式下点卡片是勾选,不�
 
 it("选择模式下点这一行的空白处也能勾上", () => {
   render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
-  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeAll" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   const row = screen.getByRole("button", { name: "mediaSelectMode: Older film" }).closest("article")!;
   fireEvent.click(row);
@@ -93,7 +93,7 @@ it("选择模式下点这一行的空白处也能勾上", () => {
 it("点这一行的空白处就打开项目;点「…」菜单不会顺带打开", () => {
   const open = vi.fn();
   render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={open} />));
-  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeAll" }));
   const row = screen.getByRole("button", { name: "homeOpenEditor: Older film" }).closest("article")!;
   fireEvent.click(row);
   expect(open).toHaveBeenLastCalledWith("older");
@@ -116,7 +116,7 @@ it("刚建好的项目亮的样子和选中一样:卡片圈封面、列表行铺
   expect(card.className).not.toMatch(/\bring-/);
   expect(within(card as HTMLElement).getByRole("button", { name: "homeOpenEditor: Brand new" })).toHaveClass("ring-2", "ring-primary");
 
-  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeAll" }));
   const row = view.container.querySelector('[data-project-id="brand-new"]')!;
   expect(row.className).not.toMatch(/\bring-/);
   expect(row.className).toContain("var(--primary)_8%");
@@ -126,7 +126,7 @@ it("刚建好的项目亮的样子和选中一样:卡片圈封面、列表行铺
 //: 此前多选着右键一项,菜单给的是单条的重命名 / 删除 —— 看着像批量删,实际只删了被点的那一条。
 it("多选时右键选区里的一项:菜单作用于整个选区;右键选区外的一项只作用于它自己", async () => {
   render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
-  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeAll" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
 
@@ -149,9 +149,9 @@ it("切到「最近」再回「全部」,排序还是人选的那一种", () => 
   localStorage.setItem("mosael:tab:home-collection", "all");
   localStorage.setItem("mosael:tab:home-sort", "name");
   render(provider(<HomeView workspace={workspace} projects={projects} load={loaded} onOpenProject={vi.fn()} />));
-  fireEvent.click(screen.getByRole("button", { name: "homeRecent" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeRecent" }));
   expect(localStorage.getItem("mosael:tab:home-sort")).toBe("name");
-  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("tab", { name: "homeAll" }));
   expect(screen.getByRole("combobox", { name: "sortUpdated" })).toHaveTextContent("sortName");
 });
 

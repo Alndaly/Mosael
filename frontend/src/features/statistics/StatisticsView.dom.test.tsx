@@ -55,11 +55,11 @@ it("splits the page into overview, publishing and AI usage tabs, each with its o
   const charts = () => screen.queryAllByText(/chart$/).map((el) => el.textContent);
   expect(charts()).toEqual(["Activity chart", "Asset chart"]);
 
-  fireEvent.click(screen.getByRole("button", { name: "statsTabPublish" }));
+  fireEvent.click(screen.getByRole("tab", { name: "statsTabPublish" }));
   expect(charts()).toEqual(["Publishing chart", "Platforms chart"]);
   expect(screen.queryByText("homeStatProjects")).toBeNull(); // 读数只在概览
 
-  fireEvent.click(screen.getByRole("button", { name: "statsTabUsage" }));
+  fireEvent.click(screen.getByRole("tab", { name: "statsTabUsage" }));
   expect(charts()).toEqual(["Cost chart", "Provider chart", "Tokens chart"]);
   expect(localStorage.getItem("mosael:tab:statistics")).toBe("usage");
 });

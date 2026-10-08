@@ -38,11 +38,11 @@ it("selects only visible publish records and drops selections hidden by a status
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa" } as Workspace} /></QueryClientProvider>);
   await screen.findByRole("button", { name: /Published film/ });
-  fireEvent.click(screen.getByRole("button", { name: "studioNeedsAttention" }));
+  fireEvent.click(screen.getByRole("tab", { name: "studioNeedsAttention" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectAll" }));
   expect(screen.getByText("Selected 1")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "batchStatus_succeeded" }));
+  fireEvent.click(screen.getByRole("tab", { name: "batchStatus_succeeded" }));
   await waitFor(() => expect(screen.getByText("Selected 0")).toBeInTheDocument());
   expect(screen.getByRole("button", { name: "delete" })).toBeDisabled();
   client.clear();

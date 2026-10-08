@@ -117,7 +117,7 @@ describe("工作流社区弹窗的版式", () => {
     const user = userEvent.setup();
     renderDialog();
     await screen.findByText("wfCommunityReqReady");
-    await user.click(screen.getByRole("button", { name: "wfCommunityFilterReady 1" }));
+    await user.click(screen.getByRole("tab", { name: "wfCommunityFilterReady 1" }));
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(card("从主题到完整视频")).toBeTruthy();
   });

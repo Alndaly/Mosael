@@ -68,16 +68,16 @@ it("首屏只取第一页,页签上的数字来自另取的计数", async () => 
   expect(listAssetPage).toHaveBeenCalledTimes(1);
   expect(vi.mocked(listAssetPage).mock.calls[0][0]).toMatchObject({ workspace_id: "ws", sort: "created" });
   expect(vi.mocked(listAssetPage).mock.calls[0][1]).toBeNull();
-  expect(screen.getByRole("button", { name: "kindAll 130" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "kindVideo 30" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "kindAudio 0" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "kindAll 130" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "kindVideo 30" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "kindAudio 0" })).toBeInTheDocument();
 });
 
 it("按种类筛、换排序都交给服务端", async () => {
   vi.mocked(listAssetPage).mockResolvedValue(pageOf(0, 60, null, 60));
   renderLibrary();
   await screen.findByRole("button", { name: "a0" });
-  await userEvent.click(screen.getByRole("button", { name: "kindVideo 30" }));
+  await userEvent.click(screen.getByRole("tab", { name: "kindVideo 30" }));
   await waitFor(() => expect(vi.mocked(listAssetPage).mock.calls.at(-1)?.[0]).toMatchObject({ kind: ["video"] }));
 });
 

@@ -112,10 +112,14 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     },
     onError: fail,
   });
-  const close = () => {
-    setOpenId(null);
-    if (entityFromHash()) window.history.replaceState(null, "", "#/entities");
-  };
+  const close = () => setOpenId(null);
+  //: 开着哪个资产写进地址(`#/entities?entity=<id>`):刷新还在、地址能分享 —— 此前点开之后地址仍是 `#/entities`,
+  //: 刷新回到列表,而这个深链本来就认(体检 UM-34)。只在还停在资产页时改,不碰别的页的地址。
+  React.useEffect(() => {
+    if (!window.location.hash.startsWith("#/entities")) return;
+    const wanted = openId ? `#/entities?entity=${encodeURIComponent(openId)}` : "#/entities";
+    if (window.location.hash !== wanted) window.history.replaceState(null, "", wanted);
+  }, [openId]);
 
   if (openId) {
     return (

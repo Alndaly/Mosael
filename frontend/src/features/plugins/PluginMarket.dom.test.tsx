@@ -148,7 +148,7 @@ describe("插件市场的卡片网格", () => {
     await user.type(screen.getByRole("textbox", { name: "pluginMarketSearch" }), "pan_list");
     expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘"]);
     await user.clear(screen.getByRole("textbox", { name: "pluginMarketSearch" }));
-    await user.click(screen.getByRole("button", { name: "pluginMarketFilterInstalled 2" }));
+    await user.click(screen.getByRole("tab", { name: "pluginMarketFilterInstalled 2" }));
     expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘", "MCP Sample"]);
   });
 });
@@ -310,9 +310,9 @@ describe("随应用内置的插件", () => {
     const user = userEvent.setup();
     renderMarket();
     await screen.findByRole("list", { name: "pluginMarket" });
-    await user.click(screen.getByRole("button", { name: "pluginMarketFilterInstalled 3" }));
+    await user.click(screen.getByRole("tab", { name: "pluginMarketFilterInstalled 3" }));
     expect(cards().map((one) => within(one).getByRole("heading").textContent)).toContain("ComfyUI");
-    await user.click(screen.getByRole("button", { name: "pluginMarketFilterUpdates 1" }));
+    await user.click(screen.getByRole("tab", { name: "pluginMarketFilterUpdates 1" }));
     expect(cards().map((one) => within(one).getByRole("heading").textContent)).toEqual(["百度网盘"]);
   });
 

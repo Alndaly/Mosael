@@ -11,9 +11,30 @@ describe("studio browsing controls", () => {
   it("exposes the selected filter and forwards a different choice", () => {
     const change = vi.fn();
     render(<CollectionTabs label="Media types" value="all" onChange={change} items={[{ value:"all", label:"All", count:2 }, { value:"video", label:"Video", count:0 }]} />);
-    expect(screen.getByRole("button", { name:"All 2" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name:"Video 0" }));
+    expect(screen.getByRole("tab", { name:"All 2" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name:"Video 0" }));
     expect(change).toHaveBeenCalledWith("video");
+  });
+  //: 体检 UM-34:和插件详情、资产详情的 Radix Tabs 同一种语义 —— Tab 只停在选中的那一个,方向键 / Home / End 换。
+  it("is a tablist: only the selected tab is in the Tab order, arrow keys and Home / End move and select", () => {
+    function Harness() {
+      const [value, setValue] = React.useState("b");
+      return <CollectionTabs label="Kinds" value={value} onChange={setValue} items={[{ value: "a", label: "A" }, { value: "b", label: "B" }, { value: "c", label: "C" }]} />;
+    }
+    render(<Harness />);
+    expect(screen.getByRole("tablist", { name: "Kinds" })).toBeInTheDocument();
+    const tab = (name: string) => screen.getByRole("tab", { name });
+    expect([tab("A"), tab("B"), tab("C")].map((one) => one.tabIndex)).toEqual([-1, 0, -1]);
+    fireEvent.keyDown(tab("B"), { key: "ArrowRight" });
+    expect(tab("C")).toHaveAttribute("aria-selected", "true");
+    expect(document.activeElement).toBe(tab("C"));
+    fireEvent.keyDown(tab("C"), { key: "ArrowRight" });
+    expect(tab("A")).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(tab("A"), { key: "End" });
+    expect(tab("C")).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(tab("C"), { key: "Home" });
+    expect(tab("A")).toHaveAttribute("aria-selected", "true");
+    expect(tab("A").tabIndex).toBe(0);
   });
   it("renders real canvas positions, assets and valid connections without inventing missing nodes", () => {
     const { container } = render(<CanvasPreview items={[{ id:"a", x:-200, y:-100, assetId:"owned-image" }, { id:"b", x:300, y:120, label:"Draft" }]} edges={[{source:"a", target:"b"}, {source:"missing", target:"b"}]} />);
