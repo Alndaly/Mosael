@@ -25,12 +25,15 @@ from app.domain.plugins.runtime import PluginCancelled, PluginTimeout, StreamHoo
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="用 POSIX 的 pid 探活")
 
 #: 入口脚本:起一个继承 stdout 的孙进程,把它的 pid 记下来,然后自己也不退。
+#: pid 先写进临时文件再改名:文件一出现,里面就是完整的 pid。此前直接写目标文件,测试看到「文件在了」就取消,
+#: 入口进程可能还没来得及写进去就被杀了 —— 文件是空的,读 pid 时 `int('')` 红(全量跑时撞上过),孙进程也没人收。
 ENTRY = textwrap.dedent(
     """
     import os, subprocess, sys, time
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-    with open(os.environ["PID_FILE"], "w") as handle:
+    with open(os.environ["PID_FILE"] + ".tmp", "w") as handle:
         handle.write(str(child.pid))
+    os.replace(os.environ["PID_FILE"] + ".tmp", os.environ["PID_FILE"])
     time.sleep(60)
     """
 )
