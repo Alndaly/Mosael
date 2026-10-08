@@ -13,6 +13,7 @@ from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import AgentSession, ToolConfirmation, User
 from app.domain.agent.autopilot import wait_for_idle_autopilot
+from app.domain.agent.host import wait_for_idle_turns
 from app.domain.jobs import wait_for_idle_jobs
 from tests.util import fresh_client
 
@@ -65,6 +66,9 @@ def test_在只花钱的那一档点过始终允许_对外的那一档照样问�
     # 用户在这张卡上点「本会话始终允许」:前端先写白名单(工具 + 这张卡的档位)再批准。
     assert chat.allow({"tool": "run_workflow", "permission": first.permission}).status_code == 200
     chat.client.post(f"/api/confirmations/{first.id}/approve")
+    # 批出来的那次运行交回一张回执,回执在这段对话里起一轮;那一轮收尾时作废这段对话还在等的卡(ADR 0007 修订)。
+    # 这里的卡不是哪一轮开的(测试直接拿凭据开),所以等那一轮收完再开下一张 —— 否则下一张在自动放行判完之前就被它作废了。
+    assert wait_for_idle_jobs(timeout=30) and wait_for_idle_turns(timeout=30)
 
     again = chat.run_card(harmless)
     assert (again.status, again.decision_mode) == ("executed", "session-allow"), "同一档的照样不再问"
