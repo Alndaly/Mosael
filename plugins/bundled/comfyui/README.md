@@ -477,7 +477,7 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
 - **Files in the previous format**: this version only reads version 2 (no branch on the reading side for old formats). A version-1 file
   is treated as having no forms and reported as `unsupported` (`upgradable: true`); its form entries are absent until upgraded. Cells
   and sessions pointing at `#app` say "the forms are in the old format; upgrade them in the workflow library" when run, not "model not
-  found" (the catalog carries that sentence in `unavailable`). The catalog also reports how many workflows on the server need upgrading
+  found" (the host asks `explain`, see the next section). The catalog also reports how many workflows on the server need upgrading
   (`library_upgrades`); the host sends one notification and shows a banner at the top of the workflow library.
 - **`upgrade_marks`**: `{"op": "upgrade_marks", "paths": [{path, modified}]}` reads each file, rewrites it as version 2 and overwrites
   it with the modification time it was read at — the same rules as `annotate`: only the `mosael` parts change, keys keep their place,
@@ -501,6 +501,22 @@ workflow in model pickers, workflow nodes and boards, in the author's order (`gr
   safetensors; the plugin used to pass that on and the whole model library (and the thumbnail model pickers in generation forms) failed.
   Now that file is listed with `broken: true` (shown as "Unreadable file") and the rest as usual; it counts as read, so that machine isn't
   asked again until the file changes (size or modification time), e.g. once the download finishes.
+
+## Why a remembered entry is missing (1.21.2)
+
+A model id saved on a session, a board cell or a workflow node may later be gone from the catalog. The host keeps showing the saved one,
+says why and refuses to run it (no default model stands in); it asks the plugin for the reason:
+`{"op": "explain", "ids": [...]}` → `{"models": [{"id", "label", "group", "reason", "upgrade"}]}`. Read-only, at most 50 ids per call;
+ids that aren't this ComfyUI's and entries that still exist are not returned. The cases are told apart:
+
+- the workflow's forms are still in the previous format: the reason above (Review and upgrade in the workflow library), `upgrade: true`;
+- the workflow exists but this form is gone: "The workflow “X” no longer has this form (it was deleted)";
+- the workflow is gone: "This ComfyUI no longer has the workflow “X”: it may have been renamed, moved to another folder or deleted";
+- the workflow and the entry exist but it doesn't convert or produces no media: the reason found while reading it.
+
+`label` is the entry's main name — by then the form's title usually can't be read, so it says "Form of X" (the previous format's form
+isn't read); `group` has the same shape as in the catalog. The catalog no longer carries `unavailable` (the 1.21.0 field); this is the
+only place reasons come from.
 
 ## Simplified forms (1.13.0; formerly "app forms")
 

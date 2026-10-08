@@ -28,13 +28,24 @@ class SourceAssetRef(ApiModel):
     role: str = Field(default=FIRST_FRAME, pattern=f"^({'|'.join(SOURCE_ROLES)})$")
 
 
-class GenerationUnavailableOut(ApiModel):
-    """插件连接上「认得、现在用不了」的一个模型(ComfyUI:表单还是旧格式、要先升级的那几张工作流的表单入口)。"""
+class GenerationMissingOut(ApiModel):
+    """一个记着的生成模型(会话、画板格子、工作流节点存着的)现在不在生成选项里:叫什么、为什么、怎么修(ADR 0045 修订之一)。
+    名字和生成选项同几格(`model_label`、`profile_name`、`group`),界面照样摆成两层;给人看的字按看的人的语言挑好。"""
 
     provider_profile_id: str
     model: str
-    #: 为什么、该去哪(按看的人的语言挑好)
+    #: 主名:插件说的(ComfyUI「krea2-text-2-image 的表单」)、模型行的显示名,或者说不上来时的「之前选的模型」
+    model_label: str
+    #: 连接名;连接已经删了是空串
+    profile_name: str
+    #: 来自哪样东西(ComfyUI:哪张工作流);不属于哪一组是 null
+    group: EntryGroupOut | None = None
+    #: 为什么、该去哪
     reason: str
+    #: 修法是到插件自己的库里升级(ComfyUI:工作流库的「查看并升级」)
+    upgrade: bool = False
+    #: 是插件连接时,它是哪个插件实例(「去工作流库升级」开的是这个连接的工作流库);不是是空串
+    plugin_instance_id: str = ""
 
 
 class GenerationOptionOut(ApiModel):

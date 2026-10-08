@@ -13,13 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import get_generation_adapter
-from app.core.i18n import LocalizedError, authored_text, get_current_locale, pick_text
+from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import (
     GenerationCapabilityDeclaration,
     GenerationCapabilityProfile,
-    PluginInstance,
     ProviderModel,
-    ProviderProfile,
 )
 from app.domain.providers import models as provider_models
 from app.domain.generation.catalog import (
@@ -183,41 +181,10 @@ def resolve_generation_model(
             db, user_id=user_id, provider=provider, model=model, provider_profile_id=provider_profile_id
         ):
             raise GenerationResolutionError(f"genErr_modelLacksKind_{kind}", model=model)
-        # 插件认得这个 id、只是现在用不了(ComfyUI 上那张工作流的表单还是旧格式,要先升级):照它说的那句说
-        reason = _unavailable_reason(db, provider_profile_id, model) if provider_profile_id else None
-        if reason:
-            raise GenerationResolutionError("genErr_modelUnavailable", model=model, reason=authored_text(reason))
         raise GenerationResolutionError("genErr_modelNotEnabled")
     if len(matches) > 1:
         raise GenerationResolutionError("genErr_modelAmbiguous")
     return resolve_row(db, matches[0], kind)
-
-
-def unavailable_models(db: Session, *, user_id: str | None) -> list[dict[str, Any]]:
-    """这个人的插件连接上「认得、现在用不了」的模型(连接 id、模型 id、为什么 —— 按看的人的语言挑好)。选着它们的格子、会话
-    不在生成选项里,界面据此说清楚为什么、该去哪(ComfyUI:表单还是旧格式,到工作流库里升级),不只显示「选择模型」。"""
-    locale = get_current_locale()
-    query = select(ProviderProfile, PluginInstance).join(PluginInstance, PluginInstance.id == ProviderProfile.plugin_instance_id)
-    if user_id is not None:
-        query = query.where(ProviderProfile.owner_user_id == user_id)
-    out: list[dict[str, Any]] = []
-    for profile, instance in db.execute(query):
-        status = (instance.capability_status or {}).get("generation") or {}
-        unavailable = status.get("unavailable") if isinstance(status, dict) else None
-        for model, reason in (unavailable.items() if isinstance(unavailable, dict) else ()):
-            out.append({"provider_profile_id": profile.id, "model": model, "reason": pick_text(reason, locale)})
-    return out
-
-
-def _unavailable_reason(db: Session, provider_profile_id: str, model: str) -> Any:
-    """这条连接的插件上次刷新目录时说过「`model` 认得、现在用不了」的那句原因(记在连接的生成目录状态里,见
-    plugin_connections.sync);没说过是 None。"""
-    profile = db.get(ProviderProfile, provider_profile_id)
-    instance = db.get(PluginInstance, profile.plugin_instance_id) if profile is not None and profile.plugin_instance_id \
-        else None
-    status = ((instance.capability_status or {}).get("generation") or {}) if instance is not None else {}
-    unavailable = status.get("unavailable") if isinstance(status, dict) else None
-    return unavailable.get(model) if isinstance(unavailable, dict) else None
 
 
 def _owned_row_lacks_kind(

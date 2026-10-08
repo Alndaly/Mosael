@@ -182,22 +182,23 @@ def stored_param(value: Any) -> Any:
     return str(value)
 
 
+def read_param(value: Any, locale: str) -> Any:
+    """一个留着没翻的参数(文案片段 `fragment`、按语言分的话 `authored_text`、它们的列表)按这个语言读成字;别的原样。"""
+    if isinstance(value, dict) and "__key" in value:
+        return render_message(str(value["__key"]), locale, value.get("params") or {})
+    if isinstance(value, dict) and "__text" in value:
+        return pick_text(value["__text"], locale)
+    if isinstance(value, list):
+        # **连接号也随语言变**:中文用顿号,英文用逗号加空格。先翻每一段,再按读的人的
+        # 习惯连起来 —— 反过来(先连再翻)得到的是一串翻不动的拼接物。
+        return _text("punct_listSep", locale).join(str(read_param(one, locale)) for one in value)
+    return value
+
+
 def _resolve_params(params: dict[str, Any] | None, locale: str) -> dict[str, Any]:
     """参数里带 `__key` 的那些(见 fragment)先各自按这个语言渲染、带 `__text` 的(见 authored_text)
     按这个语言挑一句,再交给外层去填。"""
-
-    def resolve(value: Any) -> Any:
-        if isinstance(value, dict) and "__key" in value:
-            return render_message(str(value["__key"]), locale, value.get("params") or {})
-        if isinstance(value, dict) and "__text" in value:
-            return pick_text(value["__text"], locale)
-        if isinstance(value, list):
-            # **连接号也随语言变**:中文用顿号,英文用逗号加空格。先翻每一段,再按读的人的
-            # 习惯连起来 —— 反过来(先连再翻)得到的是一串翻不动的拼接物。
-            return _text("punct_listSep", locale).join(str(resolve(one)) for one in value)
-        return value
-
-    return {name: resolve(value) for name, value in (params or {}).items()}
+    return {name: read_param(value, locale) for name, value in (params or {}).items()}
 
 
 def render_message(key: str, locale: str = DEFAULT_LOCALE, params: dict[str, Any] | None = None) -> str:

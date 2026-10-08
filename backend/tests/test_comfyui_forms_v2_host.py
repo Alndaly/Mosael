@@ -70,7 +70,7 @@ def test_旧格式_没有表单入口_通知只发一次_指着app的说清楚�
     assert set(_options(client)) == {"builtin:txt2img", "portrait.json"}, "上一版的表单这一版不读:只有完整工作流"
     with SessionLocal() as db:
         status = db.get(PluginInstance, instance_id).capability_status["generation"]
-        assert status["library_upgrades"] == 1 and "portrait.json#app" in status["unavailable"]
+        assert status["library_upgrades"] == 1
         notes = db.scalars(select(Notification).where(Notification.workspace_id == ws)).all()
     assert [(one.type, one.link) for one in notes] == [("system", "#/plugins")], "从没有到有:告诉连接的主人一次"
     assert "1 张工作流" in notes[0].body and "查看并升级" in notes[0].body
@@ -85,6 +85,12 @@ def test_旧格式_没有表单入口_通知只发一次_指着app的说清楚�
     assert created.status_code == 422, created.text
     said = str(created.json()["detail"])
     assert "旧格式" in said and "工作流库" in said and "升级" in said, "不说「模型未启用或不存在」"
+    assert "portrait 的表单" in said and "#app" not in said, "说的是人话的名字,不是编号"
+    missing = client.get("/api/generation/missing", params={
+        "provider_profile_id": profile_id, "model": "portrait.json#app", "kind": "image"}).json()
+    assert missing["model_label"] == "portrait 的表单" and missing["upgrade"] is True
+    assert missing["group"]["label"] == "portrait" and missing["group"]["entry"] == "form"
+    assert missing["plugin_instance_id"] == instance_id and "查看并升级" in missing["reason"]
 
     listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()
     flow = next(one for one in listed["workflows"] if one["path"] == "portrait.json")

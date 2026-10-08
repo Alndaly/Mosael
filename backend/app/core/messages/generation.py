@@ -277,6 +277,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{model}」现在用不了:{reason}",
         "en": "“{model}” can't be used right now: {reason}",
     },
+    "genMissing_someModel": {"zh": "之前选的模型", "en": "The model chosen earlier"},
+    "genMissing_connectionGone": {
+        "zh": "它所在的那条连接已经删掉了 —— 换一个模型",
+        "en": "The connection it was on has been deleted. Choose another model.",
+    },
+    "genMissing_connectionOff": {
+        "zh": "连接「{name}」现在用不了(停用了或还没配好)—— 到设置或插件页打开它,或者换一个模型",
+        "en": "The connection “{name}” can't be used right now (it's turned off or not set up). Turn it on in Settings or "
+              "on the Plugins page, or choose another model.",
+    },
+    "genMissing_modelOff": {
+        "zh": "「{model}」在连接「{name}」上停用了 —— 到设置里打开它,或者换一个模型",
+        "en": "“{model}” is turned off on the connection “{name}”. Turn it on in Settings, or choose another model.",
+    },
+    "genMissing_modelGone": {
+        "zh": "连接「{name}」上已经没有它了(改了名、挪了位置或删掉了)—— 换一个模型",
+        "en": "The connection “{name}” no longer has it (it was renamed, moved or deleted). Choose another model.",
+    },
     "genErr_modelNotEnabled": {
         "zh": "生成模型未启用或不存在",
         "en": "The generation model isn't enabled or doesn't exist.",

@@ -264,7 +264,6 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
             "refreshed_at": _now(),
             "fingerprint": found.fingerprint,
             "library_upgrades": found.library_upgrades,
-            "unavailable": found.unavailable,
             "error": "",
             "error_key": "",
             "error_params": {},

@@ -270,22 +270,17 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
     「一段提示词 → 一份成片」,它们交不出成片。它们照样是工具(每个入口一个,见 tooling),在工作流里、画板上用。
 
     `library_upgrades`:这台服务器上有几张工作流的表单还是上一版的格式(app_form.upgradable,交不交出文件都算)—— 宿主据此
-    发一次通知,工作流库里「查看并升级」(见 workflow_library.upgrade_marks、docs/PLUGIN_MANIFEST)。`unavailable`:那几张上
-    一版的表单入口(`<路径>#app`)现在为什么不在 —— 指着它的格子、会话跑的时候,宿主照这句说清楚去升级,不说「模型不存在」。
+    发一次通知,工作流库里「查看并升级」(见 workflow_library.upgrade_marks、docs/PLUGIN_MANIFEST)。那几张上一版的表单入口
+    (`<路径>#app`)现在为什么不在,宿主问 `explain`。
     """
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
     listed: list[Entry] = []
     upgrades = 0
-    unavailable: list[dict[str, Any]] = []
     for workflow in each(comfy, object_info, locale):
         upgrades += workflow.marks.upgradable
         if workflow.problem or not graph.media_outputs(workflow.api, object_info, workflow.titles):
             continue
-        if workflow.marks.upgradable:
-            reason = outdated(workflow.id, locale)
-            unavailable += [{"id": entry_id(workflow.id, form_id), "reason": reason.said}
-                            for form_id in workflow.marks.legacy_forms]
         for entry in entries(workflow, object_info):
             model = graph.describe(entry.id, entry.name, workflow.api, object_info, workflow.titles, entry.form)
             if entry.id == BUILTIN:
@@ -296,7 +291,75 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
                 model["group"] = group
             models.append(model)
             listed.append(entry)
-    return {"models": models, "moved": moved(listed), "library_upgrades": upgrades, "unavailable": unavailable}
+    return {"models": models, "moved": moved(listed), "library_upgrades": upgrades}
+
+
+#: 一次最多解释几个模型 id(宿主问的是界面上正指着的那几个,一般一两个)。
+MAX_EXPLAIN = 50
+
+
+def _form_of(label: str) -> dict[str, str]:
+    """一张读不到标题的表单叫什么(上一版格式的、已经删掉的):「X 的表单」。"""
+    return {"zh": f"{label} 的表单", "en": f"Form of {label}"}
+
+
+def explain(comfy: Comfy, ids: Any, locale: str) -> dict[str, Any]:
+    """宿主记着、目录里没有的几个模型 id 现在为什么不在(ADR 0045):每个一条 `{id, label, group, reason, upgrade}`。`label`
+    是这个入口的主名(表单这时多半读不到标题了,写「X 的表单」),`group` 和目录里的一样(来自哪张工作流),`reason` 是给人看的
+    一句(按语言分),`upgrade` 为真表示修法是到工作流库里「查看并升级」。不是这台 ComfyUI 的 id(内置文生图、认不出的)不回。
+
+    分开说的几种:那张工作流的表单还是上一版的格式(要升级);工作流还在、这张表单没了(删掉了);工作流不在了(改了名、
+    挪了文件夹或删掉了);工作流在、入口也在文件里,只是转不过来或交不出成片(照读它时的原因说)。只读,不写那台机器。"""
+    if not isinstance(ids, list) or any(not isinstance(one, str) for one in ids):
+        raise ComfyError(say(locale, "要解释的模型 id 形状不对", "The model ids to explain are malformed."))
+    saved = set(comfy.saved_files()[0])
+    object_info: dict[str, Any] | None = None
+    out: list[dict[str, Any]] = []
+    for model_id in dict.fromkeys(ids[:MAX_EXPLAIN]):
+        path, form_id = split_id(model_id)
+        if not is_workflow_path(path):
+            continue
+        label = label_of(path)
+        found = {"id": model_id, "label": _form_of(label) if form_id else label,
+                 "group": {"id": path, "label": label, "entry": "form" if form_id else "full"}, "upgrade": False}
+        try:
+            ui_graph = comfy.fetch_workflow(path) if path in saved else None
+        except ComfyError as exc:
+            if exc.status != 404:
+                raise
+            ui_graph = None
+        marks = app_form.read(ui_graph) if ui_graph is not None else app_form.NONE
+        if ui_graph is None:
+            found["reason"] = {
+                "zh": f"这台 ComfyUI 上已经没有工作流「{label}」了 —— 可能改了名、挪了文件夹或删掉了。到工作流库里找到它,"
+                      "再在这里重新选一次",
+                "en": f"This ComfyUI no longer has the workflow “{label}”: it may have been renamed, moved to another folder "
+                      "or deleted. Find it in the workflow library and choose it here again."}
+        elif form_id and marks.upgradable:
+            found["reason"], found["upgrade"] = outdated(path, locale).said, True
+        elif form_id and form_id not in {one.id for one in marks.forms}:
+            found["reason"] = {
+                "zh": f"工作流「{label}」上已经没有这张表单了(删掉了)—— 换成它别的表单或完整工作流",
+                "en": f"The workflow “{label}” no longer has this form (it was deleted). Choose another of its forms or the "
+                      "full workflow."}
+        else:
+            object_info = object_info if object_info is not None else comfy.object_info()
+            problem: dict[str, str] | str = ""
+            try:
+                api = graph.live(convert.to_api(ui_graph, object_info, locale), object_info)
+                if not api or not graph.media_outputs(api, object_info, convert.titles_of(api)):
+                    problem = {"zh": f"工作流「{label}」交不出图片、视频或声音,不能拿来生成",
+                               "en": f"The workflow “{label}” produces no image, video or audio, so it can't be used for "
+                                     "generation."}
+            except ComfyError as exc:
+                problem = exc.said
+            except Exception as exc:  # noqa: BLE001 — 转不过来就照它的原因说
+                problem = str(exc) or type(exc).__name__
+            if not problem:
+                continue
+            found["reason"] = problem
+        out.append(found)
+    return {"models": out}
 
 
 #: 判「模型清单有没有变」时顺带看的模型目录:换了一个 checkpoint / LoRA,参数里的下拉就该跟着变。

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from app.core.i18n import tr
+from app.core.i18n import get_current_locale, tr
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     CapabilityProfileSchemaOut,
@@ -12,7 +12,7 @@ from app.api.schemas import (
     GenerationJobOut,
     GenerationOptionOut,
     GenerationSessionCreate,
-    GenerationUnavailableOut,
+    GenerationMissingOut,
     GenerationSessionOut,
     GenerationSessionUpdate,
     PromptOptimizeRequest,
@@ -92,12 +92,20 @@ def list_generation_options(db: DbSession, user: CurrentUser, kind: str = "image
     return [GenerationOptionOut(**option) for option in generation_options(db, kind, user_id=user.id)]
 
 
-@router.get("/generation/unavailable", response_model=list[GenerationUnavailableOut])
-def list_unavailable_models(db: DbSession, user: CurrentUser) -> list[GenerationUnavailableOut]:
-    """插件连接上「认得、现在用不了」的模型和为什么:选着它们的格子、会话据此说清楚该去哪(ADR 0045 §7)。"""
-    from app.domain.generation.resolution import unavailable_models
+@router.get("/generation/missing", response_model=GenerationMissingOut)
+def explain_missing_model(
+    db: DbSession,
+    user: CurrentUser,
+    provider_profile_id: str = Query(max_length=64),
+    model: str = Query(min_length=1, max_length=160),
+    kind: str = Query(default="image", pattern="^(image|video|audio)$"),
+) -> GenerationMissingOut:
+    """记着的 (连接, 模型) 不在生成选项里时:它叫什么、为什么不在、怎么修。会话、画板格子、工作流节点据此照常显示记着的
+    那个、说原因、不让跑(ADR 0045 修订之一)。插件连接会去问插件(ComfyUI 要列一次目录)。"""
+    from app.domain.generation.missing import explain_missing
 
-    return [GenerationUnavailableOut(**one) for one in unavailable_models(db, user_id=user.id)]
+    found = explain_missing(db, user_id=user.id, provider_profile_id=provider_profile_id, model=model, kind=kind)
+    return GenerationMissingOut(**found.read(get_current_locale()))
 
 
 @router.get("/generation/capability-profile-schema", response_model=CapabilityProfileSchemaOut)

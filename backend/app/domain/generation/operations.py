@@ -32,6 +32,7 @@ from app.domain.generation.catalog import (
     outputs_per_run,
     prompt_mode,
 )
+from app.domain.generation.missing import explain_missing
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.core.i18n import LocalizedError, pick_text, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
@@ -267,6 +268,10 @@ def _create_generation_job(
             provider_profile_id=provider_profile_id,
         )
     except GenerationResolutionError as exc:
+        # 点名的那一对解析不出来(记着的模型后来用不了了):说清楚是哪个、为什么 —— 不说一句笼统的「未启用或不存在」
+        if exc.key == "genErr_modelNotEnabled" and provider_profile_id:
+            missing = explain_missing(db, user_id=created_by, provider_profile_id=provider_profile_id, model=model, kind=kind)
+            raise GenerationDomainError("genErr_modelUnavailable", model=missing.label, reason=missing.reason) from exc
         raise GenerationDomainError(exc.key, **exc.params) from exc
     provider_profile = resolved.row.profile
     provider = resolved.provider

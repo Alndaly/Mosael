@@ -3,6 +3,7 @@
 认领了 `generation` 能力的那个工具收两种 `op`:
 
     {"op": "models"}                      → {"models": [...]}      一问一答,问这个实例有哪些模型
+    {"op": "explain", "ids": [...]}       → {"models": [...]}      一问一答,宿主记着、目录里没有的几个模型 id 为什么不在
     {"op": "generate", "model": …, …}     → 流式:进度、回执,最后给产出
 
 这里只做**插件那一侧**的事:把插件说的话收成规整的形状(模型清单里什么该认、什么该丢),把输入
@@ -96,8 +97,6 @@ class Catalog:
     fingerprint: str = ""
     moved: Moves = field(default_factory=dict)
     library_upgrades: int = 0
-    #: 插件认得、现在用不了的模型 id → 为什么(`{"zh", "en"}` 或一句话):指着它的地方跑的时候照这句说,不说「模型不存在」
-    unavailable: dict[str, Any] = field(default_factory=dict)
 
 
 #: 指纹最长多少。它只拿来比「变没变」,不是存档。
@@ -121,29 +120,45 @@ def catalog(db: Session, instance: PluginInstance) -> Catalog:
     upgrades = output.get("library_upgrades")
     return Catalog(models=models, fingerprint=_fingerprint(output), moved=clean_moves(output.get("moved"), seen),
                    library_upgrades=upgrades if isinstance(upgrades, int) and not isinstance(upgrades, bool)
-                   and upgrades > 0 else 0,
-                   unavailable=_unavailable(output.get("unavailable"), seen))
+                   and upgrades > 0 else 0)
 
 
-#: 最多记多少个「认得、现在用不了」的模型;一句原因最长多少字。
-_MAX_UNAVAILABLE = 500
+@dataclass(frozen=True)
+class Explained:
+    """插件说的「这个模型 id 为什么不在目录里」(`op: explain`,见 docs/PLUGIN_MANIFEST):主名、来自哪样东西(同目录里的
+    `group`)、一句原因、修法是不是「到插件自己的库里升级」。给人看的字按语言分的原样留着,给人看时再挑。"""
+
+    id: str
+    label: str | dict[str, str]
+    group: dict[str, Any] | None
+    reason: str | dict[str, str]
+    upgrade: bool = False
+
+
+#: 问一次「为什么不在」最多等多久:插件要列一次目录、读那几张图。
+EXPLAIN_TIMEOUT_SECONDS = 20.0
+#: 一次最多问几个;一句原因最长多少字。
+MAX_EXPLAIN = 50
 _MAX_REASON = 500
 
 
-def _unavailable(raw: Any, listed: set[str]) -> dict[str, Any]:
-    """插件说的「这几个模型 id 现在用不了、为什么」:id 合规、不在这份清单里(在的就是用得了)、原因是一句话或按语言分的话。"""
-    out: dict[str, Any] = {}
-    for one in raw if isinstance(raw, list) else []:
-        model_id = str(one.get("id") or "").strip() if isinstance(one, dict) else ""
-        reason = one.get("reason") if isinstance(one, dict) else None
-        if not _MODEL_ID.match(model_id) or model_id in listed or len(out) >= _MAX_UNAVAILABLE:
+def explain(db: Session, instance: PluginInstance, ids: list[str]) -> list[Explained]:
+    """问这个实例:这几个模型 id(宿主记着、目录里没有)为什么不在。插件认不出的不回;回来的条目里认不出的丢掉。
+    插件不支持这一问、或者这会儿问不到,照常抛(调用方退回自己能说的那一句)。"""
+    asked = [one for one in dict.fromkeys(ids) if _MODEL_ID.match(one)][:MAX_EXPLAIN]
+    if not asked:
+        return []
+    output = tools.invoke_host(db, instance.id, GENERATION, {"op": "explain", "ids": asked}, timeout=EXPLAIN_TIMEOUT_SECONDS)
+    text = inst.manifest_for(db, instance).text
+    out: list[Explained] = []
+    for entry in output.get("models") or []:
+        if not isinstance(entry, dict) or entry.get("id") not in asked or any(one.id == entry["id"] for one in out):
             continue
-        if isinstance(reason, dict):
-            reason = {str(lang): text[:_MAX_REASON] for lang, text in reason.items() if isinstance(text, str) and text.strip()}
-        elif isinstance(reason, str):
-            reason = reason[:_MAX_REASON]
-        if reason:
-            out[model_id] = reason
+        reason = _localizable(entry.get("reason"), text, _MAX_REASON)
+        if not reason:
+            continue
+        out.append(Explained(id=entry["id"], label=_localizable(entry.get("label"), text, 160) or entry["id"],
+                             group=clean_group(entry.get("group")), reason=reason, upgrade=entry.get("upgrade") is True))
     return out
 
 
@@ -462,11 +477,13 @@ def generate(
 __all__ = [
     "CATALOG_TIMEOUT_SECONDS",
     "Catalog",
+    "Explained",
     "GENERATION",
     "GenerationCall",
     "GenerationOutcome",
     "MODEL_KINDS",
     "PluginModel",
     "catalog",
+    "explain",
     "generate",
 ]

@@ -5,6 +5,7 @@
 - `upgrade` / `upgrade_marks`:上一版(第 1 版)改写过来,**只动 mosael 那几处**(逐字节核对),那台机器上刚改过的跳过;
 - 入口:每张表单一个(`<路径>#<id>` / `wf_<12 位>_<id>`),按存的顺序挨在完整工作流后面;一次性的改名只报 id 是 `app` 的那张;
 - 上一版的文件还没改写时,指着 `#app` 的格子和工具说清楚「到工作流库里升级」,不说成「表单没了」;目录报这台上还有几张要升级。
+- `explain`:宿主记着、目录里没有的入口为什么不在 —— 表单是旧格式(要升级)、表单删了、工作流不在了,各说各的。
 
 纯函数的部分不连任何服务;要写文件的对着 tests/fake_comfyui.py。
 """
@@ -297,3 +298,24 @@ def test_没起标题的表单叫未命名表单(comfy) -> None:
     _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[QUICK | {"title": ""}], results=[])
     model = next(one for one in _host("models", comfy.url)["models"] if one["id"] == "multi.json#app")
     assert model["label"] == {"zh": "未命名表单", "en": "Untitled form"}
+
+
+def test_explain_记着的入口为什么不在_旧格式_表单删了_工作流不在了_各说各的(comfy) -> None:
+    _stored_as(comfy, "old.json", _v1(multi_reference_ui()))
+    seen = _host("app", comfy.url, path="multi.json")
+    _host("annotate", comfy.url, path="multi.json", modified=seen["modified"], forms=[QUICK], results=[])
+    before = len(comfy.state.calls)
+    said = {one["id"]: one for one in _host("explain", comfy.url, ids=[
+        "old.json#app", "multi.json#k3x9a2", "gone.json", "gone.json#app", "multi.json", "multi.json#app",
+        "builtin:txt2img", "不是这台的"])["models"]}
+    assert set(said) == {"old.json#app", "multi.json#k3x9a2", "gone.json", "gone.json#app"}, \
+        "还在的入口、内置文生图、认不出的 id 不回"
+    old = said["old.json#app"]
+    assert old["upgrade"] is True and "旧格式" in old["reason"]["zh"] and "查看并升级" in old["reason"]["zh"]
+    assert old["label"] == {"zh": "old 的表单", "en": "Form of old"}, "不读上一版的表单内容:标题照「X 的表单」说"
+    assert old["group"] == {"id": "old.json", "label": "old", "entry": "form"}
+    deleted = said["multi.json#k3x9a2"]
+    assert deleted["upgrade"] is False and "已经没有这张表单" in deleted["reason"]["zh"]
+    assert "已经没有工作流「gone」" in said["gone.json"]["reason"]["zh"] and said["gone.json"]["label"] == "gone"
+    assert said["gone.json#app"]["label"] == {"zh": "gone 的表单", "en": "Form of gone"}
+    assert all(call[0] == "GET" for call in comfy.state.calls[before:]), "只读"

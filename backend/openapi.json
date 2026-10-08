@@ -10575,25 +10575,55 @@
         }
       }
     },
-    "/api/generation/unavailable": {
+    "/api/generation/missing": {
       "get": {
         "tags": [
           "generation"
         ],
-        "summary": "List Unavailable Models",
-        "description": "插件连接上「认得、现在用不了」的模型和为什么:选着它们的格子、会话据此说清楚该去哪(ADR 0045 §7)。",
-        "operationId": "list_unavailable_models_api_generation_unavailable_get",
+        "summary": "Explain Missing Model",
+        "description": "记着的 (连接, 模型) 不在生成选项里时:它叫什么、为什么不在、怎么修。会话、画板格子、工作流节点据此照常显示记着的\n那个、说原因、不让跑(ADR 0045 修订之一)。插件连接会去问插件(ComfyUI 要列一次目录)。",
+        "operationId": "explain_missing_model_api_generation_missing_get",
+        "parameters": [
+          {
+            "name": "provider_profile_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "title": "Provider Profile Id"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "title": "Model"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(image|video|audio)$",
+              "default": "image",
+              "title": "Kind"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/GenerationUnavailableOut"
-                  },
-                  "type": "array",
-                  "title": "Response List Unavailable Models Api Generation Unavailable Get"
+                  "$ref": "#/components/schemas/GenerationMissingOut"
                 }
               }
             }
@@ -34145,6 +34175,60 @@
         ],
         "title": "GenerationJobOut"
       },
+      "GenerationMissingOut": {
+        "properties": {
+          "provider_profile_id": {
+            "type": "string",
+            "title": "Provider Profile Id"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "model_label": {
+            "type": "string",
+            "title": "Model Label"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "upgrade": {
+            "type": "boolean",
+            "title": "Upgrade",
+            "default": false
+          },
+          "plugin_instance_id": {
+            "type": "string",
+            "title": "Plugin Instance Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider_profile_id",
+          "model",
+          "model_label",
+          "profile_name",
+          "reason"
+        ],
+        "title": "GenerationMissingOut",
+        "description": "一个记着的生成模型(会话、画板格子、工作流节点存着的)现在不在生成选项里:叫什么、为什么、怎么修(ADR 0045 修订之一)。\n名字和生成选项同几格(`model_label`、`profile_name`、`group`),界面照样摆成两层;给人看的字按看的人的语言挑好。"
+      },
       "GenerationOptionOut": {
         "properties": {
           "id": {
@@ -34436,30 +34520,6 @@
         },
         "type": "object",
         "title": "GenerationSessionUpdate"
-      },
-      "GenerationUnavailableOut": {
-        "properties": {
-          "provider_profile_id": {
-            "type": "string",
-            "title": "Provider Profile Id"
-          },
-          "model": {
-            "type": "string",
-            "title": "Model"
-          },
-          "reason": {
-            "type": "string",
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "provider_profile_id",
-          "model",
-          "reason"
-        ],
-        "title": "GenerationUnavailableOut",
-        "description": "插件连接上「认得、现在用不了」的一个模型(ComfyUI:表单还是旧格式、要先升级的那几张工作流的表单入口)。"
       },
       "HTTPValidationError": {
         "properties": {

@@ -3533,7 +3533,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/generation/unavailable": {
+    "/api/generation/missing": {
         parameters: {
             query?: never;
             header?: never;
@@ -3541,10 +3541,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Unavailable Models
-         * @description 插件连接上「认得、现在用不了」的模型和为什么:选着它们的格子、会话据此说清楚该去哪(ADR 0045 §7)。
+         * Explain Missing Model
+         * @description 记着的 (连接, 模型) 不在生成选项里时:它叫什么、为什么不在、怎么修。会话、画板格子、工作流节点据此照常显示记着的
+         *     那个、说原因、不让跑(ADR 0045 修订之一)。插件连接会去问插件(ComfyUI 要列一次目录)。
          */
-        get: operations["list_unavailable_models_api_generation_unavailable_get"];
+        get: operations["explain_missing_model_api_generation_missing_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12298,6 +12299,34 @@ export interface components {
             readonly stopped: boolean;
         };
         /**
+         * GenerationMissingOut
+         * @description 一个记着的生成模型(会话、画板格子、工作流节点存着的)现在不在生成选项里:叫什么、为什么、怎么修(ADR 0045 修订之一)。
+         *     名字和生成选项同几格(`model_label`、`profile_name`、`group`),界面照样摆成两层;给人看的字按看的人的语言挑好。
+         */
+        GenerationMissingOut: {
+            /** Provider Profile Id */
+            provider_profile_id: string;
+            /** Model */
+            model: string;
+            /** Model Label */
+            model_label: string;
+            /** Profile Name */
+            profile_name: string;
+            group?: components["schemas"]["EntryGroupOut"] | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Upgrade
+             * @default false
+             */
+            upgrade: boolean;
+            /**
+             * Plugin Instance Id
+             * @default
+             */
+            plugin_instance_id: string;
+        };
+        /**
          * GenerationOptionOut
          * @description 一个「用哪条连接的哪个模型来生成」的选项。
          *
@@ -12415,18 +12444,6 @@ export interface components {
             model?: string | null;
             /** Kind */
             kind?: string | null;
-        };
-        /**
-         * GenerationUnavailableOut
-         * @description 插件连接上「认得、现在用不了」的一个模型(ComfyUI:表单还是旧格式、要先升级的那几张工作流的表单入口)。
-         */
-        GenerationUnavailableOut: {
-            /** Provider Profile Id */
-            provider_profile_id: string;
-            /** Model */
-            model: string;
-            /** Reason */
-            reason: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -26407,9 +26424,13 @@ export interface operations {
             };
         };
     };
-    list_unavailable_models_api_generation_unavailable_get: {
+    explain_missing_model_api_generation_missing_get: {
         parameters: {
-            query?: never;
+            query: {
+                provider_profile_id: string;
+                model: string;
+                kind?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -26422,7 +26443,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GenerationUnavailableOut"][];
+                    "application/json": components["schemas"]["GenerationMissingOut"];
                 };
             };
             /** @description Validation Error */
