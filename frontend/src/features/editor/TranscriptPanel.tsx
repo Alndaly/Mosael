@@ -388,6 +388,9 @@ export function TranscriptPanel({
     })),
   });
 
+  //: 依赖写成**定长**的一串:各条逐字稿何时取回的时间戳拼成一个字符串。此前是 `[assetIds, ...每条的 data]` ——
+  //: 素材从 0 条变成 7 条时依赖数组的长度跟着变,React 每次打开剪辑页都在控制台报「changed size between renders」。
+  const transcriptStamp = transcriptQueries.map((query) => query.dataUpdatedAt).join(",");
   const segmentsByAsset = React.useMemo(() => {
     const map = new Map<string, SegmentLike[]>();
     transcriptQueries.forEach((query, index) => {
@@ -395,7 +398,7 @@ export function TranscriptPanel({
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assetIds, ...transcriptQueries.map((query) => query.data)]);
+  }, [assetIds, transcriptStamp]);
 
   const projected = React.useMemo(
     () => projectTranscript(videoClips, segmentsByAsset),

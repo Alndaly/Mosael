@@ -415,6 +415,8 @@ export function Timeline({
       staleTime: Infinity,
     })),
   });
+  //: 定长的依赖:各条波形何时取回的时间戳(见逐字稿面板同一处的说明 —— 变长的依赖数组 React 会报错)。
+  const waveformStamp = waveformQueries.map((query) => query.dataUpdatedAt).join(",");
   const waveformByAsset = React.useMemo(() => {
     const map = new Map<string, WaveformData>();
     waveformQueries.forEach((query, index) => {
@@ -422,7 +424,7 @@ export function Timeline({
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waveformAssetIds, ...waveformQueries.map((query) => query.data)]);
+  }, [waveformAssetIds, waveformStamp]);
 
   const duration = sequenceDuration(allClips) + 10;
   const contentWidth = timeToPx(duration, pxPerSecond) + 120;

@@ -82,6 +82,34 @@ function renderPanel() {
   );
 }
 
+describe("打开剪辑页时 React 不报错", () => {
+  //: 此前 segmentsByAsset 的依赖写成 `[assetIds, ...每条逐字稿的 data]`:素材从 0 条变成 N 条时依赖数组跟着变长,
+  //: React 每次打开剪辑页都在控制台报「The final argument passed to useMemo changed size between renders」。
+  it("片段从没有到有:依赖数组是定长的", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const empty = { id: "s1", workspace_id: "w1", revision: 1, tracks: [{ id: "t1", kind: "video", clips: [] }] } as never;
+      const view = render(
+        <QueryClientProvider client={client}>
+          <TranscriptPanel sequence={empty} onCutSegment={vi.fn()} />
+        </QueryClientProvider>,
+      );
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <TranscriptPanel sequence={sequenceWith("c1")} onCutSegment={vi.fn()} />
+        </QueryClientProvider>,
+      );
+      await screen.findByText("第0句");
+      const sized = errors.mock.calls.map((call) => String(call[0])).filter((message) => message.includes("changed size between renders"));
+      expect(sized).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
+
 describe("逐字稿列表", () => {
   it("只有一个说话人时不挂说话人标签 —— 每行都一样的东西不是信息", async () => {
     serveTranscript(["SPEAKER_00", "SPEAKER_00"]);

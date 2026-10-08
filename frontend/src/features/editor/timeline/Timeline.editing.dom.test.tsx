@@ -495,3 +495,34 @@ describe("窄的时候工具条不折成两行", () => {
     }
   });
 });
+
+describe("波形的依赖数组是定长的", () => {
+  //: 此前 waveformByAsset 的依赖是 `[ids, ...每条波形的 data]`:有声片段从 0 段变成 N 段时 React 报
+  //: 「changed size between renders」(打开剪辑页就报)。
+  it("有声片段从没有到有:React 不报 changed size between renders", () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(() => new Promise<Response>(() => undefined)) as never;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const sequence = (tracks: Track[]) => ({ id: "s", name: "S", width: 1920, height: 1080, fps: 30, tracks }) as unknown as Sequence;
+      const assets = [{ id: "a1", kind: "video", name: "a1", media_info: { has_waveform: true, duration: 10 } }] as never;
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const view = (tracks: Track[]) => (
+        <QueryClientProvider client={client}>
+          <TooltipProvider>
+            <DndContext>
+              <Timeline sequence={sequence(tracks)} assets={assets} onInsertClip={vi.fn()} onMoveClip={vi.fn()} onTrimClip={vi.fn()} />
+            </DndContext>
+          </TooltipProvider>
+        </QueryClientProvider>
+      );
+      const rendered = render(view([track("v1", "video", 0)]));
+      rendered.rerender(view([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 4, { asset_id: "a1", asset_kind: "video" })])]));
+      const sized = errors.mock.calls.map((call) => String(call[0])).filter((message) => message.includes("changed size between renders"));
+      expect(sized).toEqual([]);
+    } finally {
+      errors.mockRestore();
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
