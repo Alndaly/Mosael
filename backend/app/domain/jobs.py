@@ -388,11 +388,15 @@ def blame(exc: Exception) -> dict[str, Any]:
     from app.core.i18n import is_message_key, stored_param
 
     key = str(getattr(exc, "key", "") or "")
+    if not is_message_key(key):
+        #: 参数只跟着 key 才有意义。别处的异常也可能有个叫 `params` 的属性 —— SQLAlchemy 的
+        #: 数据库错误把那条 SQL 的参数元组挂在上面,此前拿它当文案参数,失败现场自己先崩了。
+        return {"error": str(exc), "error_key": "", "error_params": {}}
     params = getattr(exc, "params", None)
     return {
         "error": str(exc),
         #: 不截断:截断的 key 就不是 key 了。此前的 `[:80]` 正是一句 403 报错被切成"半截 key"的地方。
-        "error_key": key if is_message_key(key) else "",
+        "error_key": key,
         #: 参数里的文案片段(字段名之类,见 core/i18n.fragment)原样留着,读的时候一起翻。
         "error_params": {k: stored_param(v) for k, v in (params or {}).items()},
     }

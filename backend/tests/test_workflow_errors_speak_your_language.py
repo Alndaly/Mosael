@@ -90,6 +90,19 @@ def test_领域异常自己就说得出缺省语言那一句() -> None:
     assert blame(ValueError("对方服务 502"))["error_key"] == ""
 
 
+def test_数据库报错也记得下来_它身上的_params_是_SQL_参数不是文案参数() -> None:
+    """SQLAlchemy 的错误把那条 SQL 的参数元组挂在 `params` 上。此前拿它当文案参数取 `.items()`,
+    工作流节点碰上「database is locked」时,记失败原因那一步先崩成 AttributeError,真正的原因丢了。"""
+    from sqlalchemy.exc import OperationalError
+
+    from app.domain.jobs import blame
+
+    exc = OperationalError("INSERT INTO notes (id) VALUES (?)", ("n1",), Exception("database is locked"))
+    blamed = blame(exc)
+    assert "database is locked" in blamed["error"]
+    assert (blamed["error_key"], blamed["error_params"]) == ("", {})
+
+
 def test_报错里提到的字段名也跟着读的人的语言走() -> None:
     """知识库节点把「返回条数」「起始位置」这样的中文字段名当参数塞进报错:外层句子按 key 翻成了
     英文,嵌在里面的字段名还是中文。字段名也是文案 —— 以 key 的形状(fragment)进参数,
