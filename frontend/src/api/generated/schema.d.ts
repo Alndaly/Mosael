@@ -19648,6 +19648,16 @@ export interface components {
             type: string;
             /** Reason */
             reason: string;
+            /**
+             * Upgrade
+             * @default false
+             */
+            upgrade: boolean;
+            /**
+             * Instance Id
+             * @default
+             */
+            instance_id: string;
         };
         /** WorkflowUpdate */
         WorkflowUpdate: {

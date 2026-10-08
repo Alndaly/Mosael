@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -228,6 +229,41 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
             logger.exception("插件实例 %s 的工具清单刷新之后,跟着动的那一侧出错", instance.id)
 
 
+@dataclass(frozen=True)
+class ExplainedTool:
+    """插件说的「这个工具名为什么不在清单上」(`op: explain` 带 `tools`,见 docs/PLUGIN_MANIFEST):主名、来自哪样东西(同清单里的
+    `group`)、一句原因、修法是不是到插件自己的库里升级。和模型的那一问(plugins.generation.Explained)同一套,给人看的字按语言分的
+    原样留着,给人看时再挑。"""
+
+    name: str
+    label: str | dict[str, str]
+    group: dict[str, Any] | None
+    reason: str | dict[str, str]
+    upgrade: bool = False
+
+
+def explain(db: Session, instance: PluginInstance, names: list[str]) -> list[ExplainedTool]:
+    """问这个实例:这几个工具名(工作流节点记着、清单上没有)为什么不在 —— 工作流里用不了的插件节点据此说原因(ADR 0045 修订之二)。
+    插件认不出的不回;回来的条目里认不出的丢掉。插件不支持这一问、或者这会儿问不到,照常抛(调用方退回自己能说的那一句)。"""
+    from app.domain.plugins.generation import EXPLAIN_TIMEOUT_SECONDS, MAX_EXPLAIN, localizable
+
+    asked = [one for one in dict.fromkeys(names) if TOOL_NAME_RE.match(one)][:MAX_EXPLAIN]
+    if not asked:
+        return []
+    output = tools.invoke_host(db, instance.id, TOOLS, {"op": "explain", "tools": asked}, timeout=EXPLAIN_TIMEOUT_SECONDS)
+    text = inst.manifest_for(db, instance).text
+    out: list[ExplainedTool] = []
+    for entry in output.get("tools") or []:
+        if not isinstance(entry, dict) or entry.get("name") not in asked or any(one.name == entry["name"] for one in out):
+            continue
+        reason = localizable(entry.get("reason"), text, 500)
+        if not reason:
+            continue
+        out.append(ExplainedTool(name=entry["name"], label=localizable(entry.get("label"), text, 160) or entry["name"],
+                                 group=clean_group(entry.get("group")), reason=reason, upgrade=entry.get("upgrade") is True))
+    return out
+
+
 def _apply_moves(db: Session, instance: PluginInstance, raw: Any, names: set[str]) -> None:
     """插件说有几个工具名改了意思(一次性的改名,ADR 0045,见 plugins.moves):这个连接上没做过的那几批做一次 —— 开关
     跟着新名字(在按推荐补开关之前,不然新名字先被补成推荐的那一档),存着的工作流节点、画板格子改到新名字,记账。
@@ -245,4 +281,4 @@ def _apply_moves(db: Session, instance: PluginInstance, raw: Any, names: set[str
         logger.exception("插件实例 %s 的工具改名没做成,下次刷新再来", instance.id)
 
 
-__all__ = ["CATALOG_TIMEOUT_SECONDS", "clean_mirror", "on_refreshed", "refresh"]
+__all__ = ["CATALOG_TIMEOUT_SECONDS", "ExplainedTool", "clean_mirror", "explain", "on_refreshed", "refresh"]

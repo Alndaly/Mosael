@@ -113,6 +113,13 @@ class Marks:
         """是上一版的标记、能由 `upgrade` 改写过来(工作流库里「查看并升级」)。"""
         return self.status == "unsupported" and self.version == LEGACY_VERSION
 
+    @property
+    def forms_await_upgrade(self) -> bool:
+        """上一版的标记,而且上面有表单(ADR 0045 修订之二,D1):升级之前这张图的完整入口不报。老引用(画板格子、会话、工作流
+        节点、定时任务记着的 `<路径>` / `wf_<id>`)那时指的是表单 —— 按完整工作流跑,提示词落的格子、固定种子、参数都可能变了样;
+        不报它,它们就落进「记着的用不了 · 需要升级」。只有结果标记、没有表单的上一版文件照常报:它的完整入口一直就是完整工作流。"""
+        return self.upgradable and bool(self.legacy_forms)
+
 
 NONE = Marks()
 

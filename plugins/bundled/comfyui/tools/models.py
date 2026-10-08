@@ -202,6 +202,9 @@ def pick(comfy: Comfy, model_id: str, object_info: dict[str, Any], locale: str) 
     workflow = Workflow(path, label, loaded.api, loaded.titles, "", loaded.ident, loaded.marks)
     for one in entries(workflow, object_info):
         if one.id == entry_id(path, form_id):
+            if not one.form_id and loaded.marks.forms_await_upgrade:
+                # 上一版格式、带表单的那张:完整入口升级之前不跑(和目录里不报同一条,见 catalog)—— 记着它的老引用那时指的是表单
+                raise outdated(path, locale)
             return loaded, one
     if loaded.marks.upgradable:
         raise outdated(path, locale)
@@ -272,6 +275,9 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
     `library_upgrades`:这台服务器上有几张工作流的表单还是上一版的格式(app_form.upgradable,交不交出文件都算)—— 宿主据此
     发一次通知,工作流库里「查看并升级」(见 workflow_library.upgrade_marks、docs/PLUGIN_MANIFEST)。那几张上一版的表单入口
     (`<路径>#app`)现在为什么不在,宿主问 `explain`。
+
+    上一版格式、**带表单**的工作流,升级之前一个入口都不报(app_form.Marks.forms_await_upgrade):它的完整入口 `<路径>` 就是
+    老引用记着的那个 id,报了就是按完整工作流跑。宿主问 `explain`,这里说「表单是旧格式,先升级」。
     """
     object_info = comfy.object_info()
     models: list[dict[str, Any]] = []
@@ -279,6 +285,8 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
     upgrades = 0
     for workflow in each(comfy, object_info, locale):
         upgrades += workflow.marks.upgradable
+        if workflow.marks.forms_await_upgrade:
+            continue
         if workflow.problem or not graph.media_outputs(workflow.api, object_info, workflow.titles):
             continue
         for entry in entries(workflow, object_info):
@@ -335,7 +343,8 @@ def explain(comfy: Comfy, ids: Any, locale: str) -> dict[str, Any]:
                       "再在这里重新选一次",
                 "en": f"This ComfyUI no longer has the workflow “{label}”: it may have been renamed, moved to another folder "
                       "or deleted. Find it in the workflow library and choose it here again."}
-        elif form_id and marks.upgradable:
+        elif (form_id and marks.upgradable) or marks.forms_await_upgrade:
+            # 表单那个入口要升级;上一版格式、带表单的那张,完整入口也等升级之后才报(见 catalog)
             found["reason"], found["upgrade"] = outdated(path, locale).said, True
         elif form_id and form_id not in {one.id for one in marks.forms}:
             found["reason"] = {

@@ -338,6 +338,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "画布导出的 API 图形状不对,没有运行",
         "en": "The API graph exported from the canvas is malformed, so it wasn't run",
     },
+    "workflowLibErr_runFormsOld": {
+        "zh": "「{path}」的表单还是旧格式:升级之前这张工作流不能在 Mosael 里跑 —— 到这个连接的工作流库里点「查看并升级」,升级之后再运行",
+        "en": "The forms on “{path}” are in the old format, so this workflow can't run in Mosael until it's upgraded: open this connection's workflow library, click “Review and upgrade”, then run it",
+    },
     "workflowLibErr_runNotModel": {
         "zh": "「{path}」还不是这个连接下的生成模型:先在 ComfyUI 里保存这张工作流(新建的要起个名字存一次),回到工作流库刷新出来再运行",
         "en": "“{path}” isn't a generation model on this connection yet: save the workflow in ComfyUI first (a new one needs a name), refresh the workflow library, then run it",

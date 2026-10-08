@@ -101,6 +101,9 @@ class WorkflowUnusableNodeOut(ApiModel):
 
     type: str
     reason: str
+    #: 修法是到 `instance_id` 那个连接自己的库里升级(ComfyUI:那张工作流的表单还是上一版格式,工作流库里「查看并升级」)
+    upgrade: bool = False
+    instance_id: str = ""
 
 
 class WorkflowNodeTypeOut(ApiModel):

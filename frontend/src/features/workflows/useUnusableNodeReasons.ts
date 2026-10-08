@@ -16,7 +16,7 @@ import { fetchUnusableNodeTypes, type WorkflowUnusableNode } from "@/api/client"
  * 不是插件节点的不问;问不到(还在路上、接口失败)就没有原因,调用方退回那句笼统的话。
  * 插件连接一变(装、卸、启停、勾选工具)这份缓存跟着失效(plugins/pluginCaches)。
  */
-export function useUnusableNodeReasons(nodeTypes: readonly string[]): ReadonlyMap<string, string> {
+export function useUnusableNodeReasons(nodeTypes: readonly string[]): ReadonlyMap<string, WorkflowUnusableNode> {
   const types = React.useMemo(
     () => [...new Set(nodeTypes.filter((type) => type.startsWith("plugin.")))].sort(),
     [nodeTypes],
@@ -63,9 +63,9 @@ async function flush(): Promise<void> {
   }
 }
 
-/** 模块级:combine 引用稳定,react-query 才只在结果变了的时候重算。 */
-function reasonsOf(results: Array<{ data?: Array<{ type: string; reason: string }> }>): ReadonlyMap<string, string> {
-  const reasons = new Map<string, string>();
-  for (const result of results) for (const one of result.data ?? []) reasons.set(one.type, one.reason);
+/** 模块级:combine 引用稳定,react-query 才只在结果变了的时候重算。修法是升级的那几个带着 `upgrade` 和连接(检查器给「去工作流库升级」)。 */
+function reasonsOf(results: Array<{ data?: WorkflowUnusableNode[] }>): ReadonlyMap<string, WorkflowUnusableNode> {
+  const reasons = new Map<string, WorkflowUnusableNode>();
+  for (const result of results) for (const one of result.data ?? []) reasons.set(one.type, one);
   return reasons;
 }

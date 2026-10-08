@@ -70,7 +70,8 @@ def old_library():
 
 def test_旧格式_没有表单入口_通知只发一次_指着app的说清楚去升级(old_library) -> None:
     client, comfy, instance_id, ws = old_library
-    assert set(_options(client)) == {"builtin:txt2img", "portrait.json"}, "上一版的表单这一版不读:只有完整工作流"
+    assert set(_options(client)) == {"builtin:txt2img"}, \
+        "上一版的表单这一版不读;带表单的那张,升级之前完整入口也不报(ADR 0045 修订之二 D1)"
     with SessionLocal() as db:
         status = db.get(PluginInstance, instance_id).capability_status["generation"]
         assert status["library_upgrades"] == 1
@@ -98,6 +99,37 @@ def test_旧格式_没有表单入口_通知只发一次_指着app的说清楚�
     listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()
     flow = next(one for one in listed["workflows"] if one["path"] == "portrait.json")
     assert flow["app"]["status"] == "unsupported" and flow["app"]["upgradable"] is True
+
+
+def test_升级之前的空档_老引用记着的完整入口和工具都说需要升级_不按完整工作流跑(old_library) -> None:
+    """ADR 0045 修订之二 D1(维护者 2026-10-09 按推荐拍板):从 1.19 或更早直接升到 1.21+、还没点「查看并升级」的人,老引用记着的
+    `portrait.json`、工作流节点记着的 `wf_<id>` 那时指的是表单 —— 此前这段空档里它们悄悄按完整工作流跑。现在落进「记着的用不了 ·
+    需要升级」:显示原因、不能跑。"""
+    client, comfy, instance_id, ws = old_library
+    profile_id = _profile_id(instance_id)
+    created = client.post("/api/generation/jobs", json={
+        "workspace_id": ws, "kind": "image", "provider": VENDOR, "provider_profile_id": profile_id,
+        "model": "portrait.json", "prompt": "柴犬"})
+    assert created.status_code == 422, "完整入口也不跑:老引用那时指的是表单"
+    assert "旧格式" in str(created.json()["detail"])
+    missing = client.get("/api/generation/missing", params={
+        "provider_profile_id": profile_id, "model": "portrait.json", "kind": "image"}).json()
+    assert missing["upgrade"] is True and missing["plugin_instance_id"] == instance_id
+    assert missing["model_label"] == "portrait" and missing["group"]["entry"] == "full"
+
+    unusable = {one["type"]: one for one in client.get("/api/workflows/node-types/unusable", params={
+        "types": [f"plugin.{PACKAGE}.{FULL_TOOL}", f"plugin.{PACKAGE}.{FULL_TOOL}_app"]}).json()}
+    for tool in (FULL_TOOL, f"{FULL_TOOL}_app"):
+        found = unusable[f"plugin.{PACKAGE}.{tool}"]
+        assert found["upgrade"] is True and found["instance_id"] == instance_id, tool
+        assert "旧格式" in found["reason"] and "查看并升级" in found["reason"], tool
+        assert tool not in found["reason"], "说人话的名字,不露工具名"
+    assert "portrait 的表单" in unusable[f"plugin.{PACKAGE}.{FULL_TOOL}_app"]["reason"]
+
+    ran = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/run", json={
+        "workspace_id": ws, "path": "portrait.json", "prompt": {"3": {"class_type": "KSampler", "inputs": {}}},
+        "workflow": comfy.state.workflows["portrait.json"], "client_id": "c1"})
+    assert ran.status_code == 422 and "旧格式" in str(ran.json()["detail"]), "工作台的「运行」说先升级,不说「还不是生成模型」"
 
 
 def test_查看并升级_改完表单入口出来_老引用改到表单入口(old_library) -> None:

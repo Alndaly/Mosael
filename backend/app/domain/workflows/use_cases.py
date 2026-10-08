@@ -77,13 +77,15 @@ def node_types(db: Session, user: User, locale: str) -> list[dict[str, Any]]:
 MAX_UNUSABLE_QUERY = 100
 
 
-def unusable_node_types(db: Session, user: User, types: list[str]) -> list[dict[str, str]]:
-    """这些节点类型里他用不了的插件节点,各自为什么(见 plugins.nodes.why_unusable)。按请求方的语言说。"""
-    from app.domain.plugins.nodes import why_unusable
+def unusable_node_types(db: Session, user: User, types: list[str]) -> list[dict[str, Any]]:
+    """这些节点类型里他用不了的插件节点,各自为什么(见 plugins.nodes.unusable)。按请求方的语言说。修法是到某个连接的库里升级的
+    (ComfyUI 上那张工作流的表单还是上一版格式)带上 `upgrade` 和那个连接:画布上标「用不了 · 需要升级」,检查器给「去工作流库升级」。"""
+    from app.domain.plugins.nodes import unusable
 
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for node_type in dict.fromkeys(types[:MAX_UNUSABLE_QUERY]):
-        reason = why_unusable(db, node_type, user.id)
-        if reason is not None:
-            out.append({"type": node_type, "reason": str(reason)})
+        found = unusable(db, node_type, user.id)
+        if found is not None:
+            out.append({"type": node_type, "reason": str(found.error), "upgrade": bool(found.upgrade_in),
+                        "instance_id": found.upgrade_in})
     return out

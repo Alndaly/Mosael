@@ -199,13 +199,22 @@ function fieldLabels(issue: NodeIssue, registry: NodeRegistry): string {
 
 /** Structured readiness issue → localized text for badges and the checklist. */
 /** 节点类型不在目录里时怎么说。插件节点说清是插件的事(没装、停用、工具没了),别的就是认不出的类型。 */
+/** 一个插件节点为什么用不了(见 useUnusableNodeReasons):后端那句,和修法是不是到某个连接自己的库里升级。 */
+export interface UnusableNodeReason {
+  reason: string;
+  /** 修法是到 `instance_id` 那个连接的库里升级(ComfyUI 上那张工作流的表单还是上一版格式,ADR 0045 修订之二) */
+  upgrade?: boolean;
+  instance_id?: string;
+}
+
 /**
  * 节点类型不在目录里时说什么。插件节点有后端给的真实原因(`reasons`,见 useUnusableNodeReasons)就说它 ——
- * 没装、没接、连接停用、工具没勾选,该去的地方各不相同;还没问到才退回那句笼统的话。
+ * 没装、没接、连接停用、工具没勾选,该去的地方各不相同;修法是升级的说「用不了 · 需要升级」;还没问到才退回那句笼统的话。
  */
-export function unknownNodeTypeText(t: Translate, nodeType: string, reasons?: ReadonlyMap<string, string>): string {
-  const reason = reasons?.get(nodeType);
-  if (reason) return t("wfIssuePluginUnusable").replace("{reason}", reason);
+export function unknownNodeTypeText(t: Translate, nodeType: string, reasons?: ReadonlyMap<string, UnusableNodeReason>): string {
+  const found = reasons?.get(nodeType);
+  if (found?.upgrade) return t("wfIssuePluginNeedsUpgrade").replace("{reason}", found.reason);
+  if (found) return t("wfIssuePluginUnusable").replace("{reason}", found.reason);
   return t(nodeType.startsWith("plugin.") ? "wfIssuePluginUnavailable" : "wfIssueUnknownType").replace("{type}", nodeType);
 }
 
@@ -213,7 +222,7 @@ export function workflowIssueText(
   t: Translate,
   issue: NodeIssue,
   registry: NodeRegistry,
-  reasons?: ReadonlyMap<string, string>,
+  reasons?: ReadonlyMap<string, UnusableNodeReason>,
   /** 提示里提到的引用怎么说(见 workflowRefNamer):「节点标题 · 输出」。不给就按路径分段 —— 都不摆 `{{…}}`。 */
   refName: (ref: string, path: ScopePath) => string = plainRefName,
 ): string {

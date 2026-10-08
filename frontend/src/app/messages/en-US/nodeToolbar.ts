@@ -138,6 +138,7 @@ export const nodeToolbar = {
   wfIssueTypeMismatch: "Type mismatch: expects {expected}, got {actual}",
   wfIssuePluginUnavailable: "Plugin node unavailable ({type}): the plugin that provides it isn't installed, is disabled, or no longer has this tool",
   wfIssuePluginUnusable: "Plugin node unavailable: {reason}",
+  wfIssuePluginNeedsUpgrade: "Unavailable · needs upgrade: {reason}",
   wfIssueUnknownType: "Unknown node type: {type}",
   wfType_text: "text",
   wfType_asset: "asset",

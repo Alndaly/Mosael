@@ -49275,6 +49275,16 @@
           "reason": {
             "type": "string",
             "title": "Reason"
+          },
+          "upgrade": {
+            "type": "boolean",
+            "title": "Upgrade",
+            "default": false
+          },
+          "instance_id": {
+            "type": "string",
+            "title": "Instance Id",
+            "default": ""
           }
         },
         "type": "object",

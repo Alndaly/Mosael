@@ -35,11 +35,11 @@ it("缺的几个类型一个请求问完,按类型分给各自的缓存", async 
   const { result } = renderHook(() => useUnusableNodeReasons(types), { wrapper: wrapper(client) });
   await waitFor(() => expect(result.current.size).toBe(2));
   expect(asked).toEqual([["plugin.a.x", "plugin.b.y", "plugin.ok.fine"]]);
-  expect(result.current.get("plugin.b.y")).toBe("plugin.b.y 没接");
+  expect(result.current.get("plugin.b.y")?.reason).toBe("plugin.b.y 没接");
   expect(result.current.has("plugin.ok.fine")).toBe(false);
 
   // 检查器只问选中的那一个:缓存里有,不再发请求
   const inspector = renderHook(() => useUnusableNodeReasons(["plugin.a.x"]), { wrapper: wrapper(client) });
-  expect(inspector.result.current.get("plugin.a.x")).toBe("plugin.a.x 没接");
+  expect(inspector.result.current.get("plugin.a.x")?.reason).toBe("plugin.a.x 没接");
   expect(asked).toHaveLength(1);
 });

@@ -154,10 +154,10 @@ def explain(db: Session, instance: PluginInstance, ids: list[str]) -> list[Expla
     for entry in output.get("models") or []:
         if not isinstance(entry, dict) or entry.get("id") not in asked or any(one.id == entry["id"] for one in out):
             continue
-        reason = _localizable(entry.get("reason"), text, _MAX_REASON)
+        reason = localizable(entry.get("reason"), text, _MAX_REASON)
         if not reason:
             continue
-        out.append(Explained(id=entry["id"], label=_localizable(entry.get("label"), text, 160) or entry["id"],
+        out.append(Explained(id=entry["id"], label=localizable(entry.get("label"), text, 160) or entry["id"],
                              group=clean_group(entry.get("group")), reason=reason, upgrade=entry.get("upgrade") is True))
     return out
 
@@ -218,11 +218,11 @@ def _form(raw: Any, text: Any) -> dict[str, Any] | None:
         if not isinstance(key, str) or not _FORM_KEY.match(key) or key in seen:
             continue
         seen.add(key)
-        items.append({"key": key, "label": _localizable(entry.get("label"), text, 120)})
-    title = _localizable(raw.get("title"), text, _MAX_FORM_TITLE)
+        items.append({"key": key, "label": localizable(entry.get("label"), text, 120)})
+    title = localizable(raw.get("title"), text, _MAX_FORM_TITLE)
     if not items and not title:
         return None
-    return {"title": title, "description": _localizable(raw.get("description"), text, _MAX_FORM_DESCRIPTION), "items": items}
+    return {"title": title, "description": localizable(raw.get("description"), text, _MAX_FORM_DESCRIPTION), "items": items}
 
 
 def _scalar(value: Any) -> bool:
@@ -244,10 +244,10 @@ def parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
         clean: dict[str, Any] = {"type": kind}
         # 名字和说明**按语言分的就原样留着**,到给人看的那一刻再挑(见 generation/resolution):
         # 目录是在后台刷新的(启动时、隔一会儿),刷新那一刻的语言不是看的人的语言。
-        title = _localizable(spec.get("title"), text, 120)
+        title = localizable(spec.get("title"), text, 120)
         if title:
             clean["title"] = title
-        description = _localizable(spec.get("description"), text, 500)
+        description = localizable(spec.get("description"), text, 500)
         if description:
             clean["description"] = description
         enum = spec.get("enum")
@@ -289,7 +289,7 @@ def parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
         labels = spec.get("x-enum-labels")
         if isinstance(labels, dict) and choices:
             named = {str(value): label for value, one in labels.items()
-                     if str(value) in choices and (label := _localizable(one, text, 120))}
+                     if str(value) in choices and (label := localizable(one, text, 120))}
             if named:
                 clean["x-enum-labels"] = named
         counts = spec.get("x-outputs-per-run")
@@ -302,7 +302,7 @@ def parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _localizable(value: Any, text: Any, limit: int) -> str | dict[str, str]:
+def localizable(value: Any, text: Any, limit: int) -> str | dict[str, str]:
     """一段给人看的字:普通字符串,或 `{"zh": …, "en": …}`(只留字符串值)。空的回空串。"""
     if isinstance(value, dict):
         kept = {str(lang)[:16]: one.strip()[:limit] for lang, one in value.items() if isinstance(one, str) and one.strip()}
@@ -324,7 +324,7 @@ def _inputs(raw: Any, text: Any) -> tuple[dict[str, Any], ...]:
         limit = int(count) if isinstance(count, int) and not isinstance(count, bool) else 1
         most = min(max(limit, 1), _MAX_INPUT_COUNT)
         raw_labels = entry.get("labels")
-        labels = [_localizable(one, text, 120) for one in raw_labels[:most]] if isinstance(raw_labels, list) else []
+        labels = [localizable(one, text, 120) for one in raw_labels[:most]] if isinstance(raw_labels, list) else []
         out.append(
             {
                 "role": role,

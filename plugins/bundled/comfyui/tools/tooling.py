@@ -505,14 +505,20 @@ def all_entries(comfy: Comfy, object_info: dict[str, Any], locale: str) -> list[
     return [entry for workflow in models.each(comfy, object_info, locale) for entry in models.entries(workflow, object_info)]
 
 
+def _listed(entry: models.Entry, names: dict[str, str], object_info: dict[str, Any]) -> bool:
+    """这个入口报不报成工具:有名字、跑得起来,而且不是「上一版格式、带表单」那张图的完整入口(升级之前不报,见
+    app_form.Marks.forms_await_upgrade —— 工作流里记着 `wf_<id>` 的老节点那时指的是表单)。"""
+    return entry.id in names and runnable(entry.workflow, object_info) and not entry.workflow.marks.forms_await_upgrade
+
+
 def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
     """`op: tools`:每张跑得起来的工作流(和内置文生图)的每个入口一个工具(`tools`),加上一次性的改名(`moved`,见
-    models.MOVED_KEY:以前指着表单的工具名,改到表单入口的工具名)。"""
+    models.MOVED_KEY:以前指着表单的工具名,改到表单入口的工具名)。名字照全部入口起(撞 id 要看每一张),报的是 `_listed` 的那些。"""
     object_info = comfy.object_info()
     entries = all_entries(comfy, object_info, locale)
     names = tool_names(entries)
     _remember(comfy, names)
-    listed = [entry for entry in entries if entry.id in names and runnable(entry.workflow, object_info)]
+    listed = [entry for entry in entries if _listed(entry, names, object_info)]
     return {
         "tools": [tool_for(entry, names[entry.id], object_info) for entry in listed],
         "moved": models.moved(listed, lambda entry: names[entry.id]),
@@ -549,6 +555,55 @@ def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) 
             raise models.outdated(entry.workflow.id, locale)
     raise ComfyError(say(locale, f"ComfyUI 里已经没有这张工作流了({name})—— 到插件页点「刷新模型」",
                          f"ComfyUI no longer has this workflow ({name}). Click Refresh models on the Plugins page."))
+
+
+#: 一次最多解释几个工具名(宿主问的是画布上用不了的那几个插件节点)。
+MAX_EXPLAIN = models.MAX_EXPLAIN
+
+
+def explain(comfy: Comfy, asked: Any, locale: str) -> dict[str, Any]:
+    """宿主记着、工具清单里没有的几个工具名现在为什么不在(工作流里用不了的插件节点,ADR 0045 修订之二):每个一条
+    `{name, label, group, reason, upgrade}`,和模型的 `explain`(models.explain)同一套说法 —— 那张图的表单还是上一版格式、要升级
+    (表单的工具,和带表单那张图的完整入口);工作流还在、这张表单没了;工作流不在了(改名、挪走、删了);入口在、只是跑不起来。
+    名字不是这台 ComfyUI 起的(不以 `wf_` 开头)不回。只读,不写那台机器。"""
+    if not isinstance(asked, list) or any(not isinstance(one, str) for one in asked):
+        raise ComfyError(say(locale, "要解释的工具名形状不对", "The tool names to explain are malformed."))
+    object_info = comfy.object_info()
+    entries = all_entries(comfy, object_info, locale)
+    names = tool_names(entries)
+    by_name = {names[entry.id]: entry for entry in entries if entry.id in names}
+    fulls = {names[entry.id]: entry for entry in entries if entry.id in names and not entry.form_id}
+    out: list[dict[str, Any]] = []
+    for name in dict.fromkeys(asked[:MAX_EXPLAIN]):
+        if not name.startswith("wf_"):
+            continue
+        entry = by_name.get(name)
+        if entry is not None and _listed(entry, names, object_info):
+            continue
+        base = next((full for prefix, full in fulls.items() if name == prefix or name.startswith(f"{prefix}_")), None)
+        if base is None:
+            out.append({"name": name, "label": _pair("这张工作流", "This workflow"), "group": None, "upgrade": False,
+                        "reason": _pair("这台 ComfyUI 上已经没有这张工作流了 —— 可能改了名、挪了文件夹或删掉了。到工作流库里找到它,"
+                                        "在节点上重新选一次",
+                                        "This ComfyUI no longer has this workflow: it may have been renamed, moved to another "
+                                        "folder or deleted. Find it in the workflow library and choose it on the node again.")})
+            continue
+        workflow = base.workflow
+        form_id = name[len(names[base.id]) + 1:] if name != names[base.id] else ""
+        label = workflow.label
+        found = {"name": name, "label": _pair(f"{label} 的表单", f"Form of {label}") if form_id else _pair(label, label),
+                 "group": {"id": workflow.id, "label": label, "entry": "form" if form_id else "full"}, "upgrade": False}
+        if (form_id and workflow.marks.upgradable) or (not form_id and workflow.marks.forms_await_upgrade):
+            found["reason"], found["upgrade"] = models.outdated(workflow.id, locale).said, True
+        elif form_id and entry is None:
+            found["reason"] = _pair(f"工作流「{label}」上已经没有这张表单了(删掉了)—— 换成它别的表单或完整工作流",
+                                    f"The workflow “{label}” no longer has this form (it was deleted). Choose another of its "
+                                    "forms or the full workflow.")
+        else:
+            found["reason"] = _pair(f"工作流「{label}」跑不起来:里面没有交出结果的节点",
+                                    f"The workflow “{label}” can't run: it has no node that produces a result.")
+        out.append(found)
+    return {"tools": out}
 
 
 def _typed(value: Any, kind: str) -> Any:

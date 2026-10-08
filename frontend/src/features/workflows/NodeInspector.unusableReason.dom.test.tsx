@@ -14,7 +14,8 @@ vi.mock("@xyflow/react", async (original) => ({
   NodeToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => (key === "wfIssuePluginUnusable" ? "插件节点不可用:{reason}" : key),
+  useI18n: () => (key: string) => (key === "wfIssuePluginUnusable" ? "插件节点不可用:{reason}"
+    : key === "wfIssuePluginNeedsUpgrade" ? "用不了 · 需要升级:{reason}" : key),
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
@@ -31,14 +32,16 @@ beforeAll(() => {
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = String(input);
     const body = url.includes("/api/workflows/node-types/unusable")
-      ? (asked.push(url), [{ type: "plugin.comfy.upscale", reason: "连接「我的 ComfyUI」没有勾选这个工具" }])
+      ? (asked.push(url), [{ type: "plugin.comfy.upscale", reason: "连接「我的 ComfyUI」没有勾选这个工具" },
+                           { type: "plugin.comfy.wf_0ef16828a002_app", reason: "krea2 的表单还是旧格式", upgrade: true,
+                             instance_id: "i1" }])
+      : url.includes("/api/plugins") ? [{ id: "dev.mosael.comfyui", instances: [{ id: "i1", name: "我的 ComfyUI" }] }]
       : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   });
 });
 
-it("检查器顶部说后端给的真实原因", async () => {
-  const node = { id: "p1", type: "plugin.comfy.upscale", config: {} };
+function inspect(node: { id: string; type: string; config: Record<string, unknown> }) {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <TooltipProvider>
@@ -56,6 +59,19 @@ it("检查器顶部说后端给的真实原因", async () => {
       </TooltipProvider>
     </QueryClientProvider>,
   );
+}
+
+it("检查器顶部说后端给的真实原因", async () => {
+  inspect({ id: "p1", type: "plugin.comfy.upscale", config: {} });
   expect(await screen.findByText("插件节点不可用:连接「我的 ComfyUI」没有勾选这个工具")).toBeTruthy();
   expect(asked.some((url) => url.includes("types=plugin.comfy.upscale"))).toBe(true);
+  expect(document.querySelector("[data-node-upgrade]"), "修法不是升级:不给升级的按钮").toBeNull();
+});
+
+//: ADR 0045 修订之二(D1 / D64):工作流里指着旧格式表单工具的节点,标成「用不了 · 需要升级」,就地给去工作流库升级的那颗
+it("修法是升级的:说「用不了 · 需要升级」,给「去工作流库升级」", async () => {
+  inspect({ id: "p2", type: "plugin.comfy.wf_0ef16828a002_app", config: {} });
+  expect(await screen.findByText("用不了 · 需要升级:krea2 的表单还是旧格式")).toBeTruthy();
+  const button = await screen.findByRole("button", { name: "genModelMissingUpgrade" });
+  expect(button.closest("[data-node-upgrade]")).toBeTruthy();
 });

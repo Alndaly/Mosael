@@ -40,7 +40,7 @@ import { scopeId, type ScopePath } from "@/features/workflows/scope";
 import type { WorkflowRunState } from "@/features/workflows/useWorkflowRun";
 import type { WorkflowSaveState } from "@/features/workflows/useWorkflowSave";
 import type { useWorkflowComments } from "@/features/workflows/WorkflowComments";
-import { workflowIssueText } from "@/features/workflows/workflowCanvasModel";
+import { workflowIssueText, type UnusableNodeReason } from "@/features/workflows/workflowCanvasModel";
 import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +56,7 @@ export interface WorkflowEditorToolbarProps
   workflow: Workflow;
   registry: Map<string, WorkflowNodeType>;
   /** 认不出的插件节点为什么用不了(见 useUnusableNodeReasons)。 */
-  unusableReasons: ReadonlyMap<string, string>;
+  unusableReasons: ReadonlyMap<string, UnusableNodeReason>;
   /** 提示里提到的引用怎么说:「节点标题 · 输出」(见 workflowRefNamer)。 */
   refName: (ref: string, path: ScopePath) => string;
   agentOpen: boolean;

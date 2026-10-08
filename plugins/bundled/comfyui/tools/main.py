@@ -8,8 +8,8 @@
                             每张表单,ADR 0045)+ 一次性的改名 `moved` + 指纹
     {"op": "tools"}       → 一行结果:每个入口一个工具(入参、输出都从那张图推出来)+ 一次性的改名 `moved` + 指纹
     {"op": "fingerprint"} → 一行结果:清单的指纹(宿主隔一会儿问一次,变了才重新拉目录)
-    {"op": "explain", "ids"} → 一行结果:宿主记着、目录里没有的几个模型 id 为什么不在(表单是旧格式要升级 / 表单删了 /
-                            工作流改名挪走删了),每个带主名和来自哪张工作流
+    {"op": "explain", "ids"?, "tools"?} → 一行结果:宿主记着、目录里没有的几个模型 id(`models`)/ 工具清单里没有的几个工具名
+                            (`tools`)为什么不在(表单是旧格式要升级 / 表单删了 / 工作流改名挪走删了),每个带主名和来自哪张工作流
     {"op": "generate", …} → 一行一个事件(进度、回执),最后一行是结果;带 `graph` 跑工作台画布上现在这张(见 run)
 
 **本机服务**(ADR 0041,清单 `services` 里的那一种归这个工具,见 service):
@@ -129,7 +129,10 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         # 模型清单和工具清单出自同一批图,指纹是同一个(请求里的 `capability` 说问的是哪一份)
         return {"fingerprint": models.fingerprint(comfy)}
     if op == "explain":
-        return models.explain(comfy, payload.get("ids"), locale)
+        if "tools" in payload and "ids" not in payload:
+            return tooling.explain(comfy, payload.get("tools"), locale)
+        explained = models.explain(comfy, payload.get("ids"), locale)
+        return {**explained, **tooling.explain(comfy, payload["tools"], locale)} if "tools" in payload else explained
     if op == "generate":
         return run.generate(payload, comfy, locale, emit)
     if op == "library":

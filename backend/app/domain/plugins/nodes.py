@@ -32,6 +32,8 @@
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
@@ -42,6 +44,8 @@ from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT, schema_type
 from app.domain.plugins.manifest import TOOLS, text_of, tool_label
+
+logger = logging.getLogger(__name__)
 
 PLUGIN_NODE_PREFIX = "plugin."
 
@@ -458,12 +462,29 @@ def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list
     ]
 
 
+@dataclass(frozen=True)
+class Unusable:
+    """一个插件节点为什么用不了(`error`,给人看的那句),和修法是不是到某个连接自己的库里升级(`upgrade_in`:那个连接的 id;
+    不是就空串 —— ComfyUI 上那张工作流的表单还是上一版格式,工作流库里「查看并升级」,ADR 0045 修订之二)。"""
+
+    error: PluginDomainError
+    upgrade_in: str = ""
+
+
 def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDomainError | None:
+    """这个插件节点**这个人**为什么用不了;用得了回 None(详见 unusable)。"""
+    found = unusable(db, node_type, user_id)
+    return found.error if found is not None else None
+
+
+def unusable(db: Session, node_type: str, user_id: str | None) -> Unusable | None:
     """这个插件节点**这个人**为什么用不了;用得了回 None。
 
     `exposed` 把用不了的连接、没勾选的工具一律滤掉,于是此前所有情况只剩一句「没有可用的连接」(还报的是
     包 id):插件被删了、连接停用了、凭据过期了、工具没勾选、插件升级后这个工具没了 —— 该去的地方各不相同。
-    这里按真实原因说:插件不在 → 没装;没有他的连接 → 去接一个;有连接 → 逐条说每个连接卡在哪。
+    这里按真实原因说:插件不在 → 没装;没有他的连接 → 去接一个;有连接 → 逐条说每个连接卡在哪。连接好好的、清单上就是
+    没有它:运行时才知道工具的插件(ComfyUI 每张工作流一个)问插件为什么(`op: explain`,见 _explained)—— 表单是旧格式要升级、
+    表单删了、工作流改名挪走了,各说各的;问不到才说「插件更新后去掉了它」。
     """
     from app.db.models import PluginInstance, PluginPackage
     from app.domain.plugins import instances as inst
@@ -476,7 +497,7 @@ def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDoma
     package_id, tool_name = parsed
     package = db.get(PluginPackage, package_id)
     if package is None:
-        return PluginDomainError("pluginErr_nodePluginMissing", plugin=package_id)
+        return Unusable(PluginDomainError("pluginErr_nodePluginMissing", plugin=package_id))
     try:
         plugin = manifest_of(package).name or package_id
     except ValueError:  # 清单坏了(ManifestError):照包 id 说
@@ -486,8 +507,9 @@ def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDoma
         stmt = stmt.where(PluginInstance.owner_user_id == user_id)
     connections = list(db.scalars(stmt))
     if not connections:
-        return PluginDomainError("pluginErr_nodeNoConnection", plugin=plugin)
+        return Unusable(PluginDomainError("pluginErr_nodeNoConnection", plugin=plugin))
     tool_shown = tool_name
+    upgrade_in = ""
     details: list[str] = []
     for instance in connections:
         # 先认出工具叫什么,再看连接卡在哪:被挡的连接缓存着的清单里也有它的名字 —— 此前被挡就直接跳过,
@@ -501,9 +523,17 @@ def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDoma
             continue
         if tool is None:
             # 清单上没有它:清单上一次没拉下来时说那个原因(服务没开、超时)—— 那时说「插件更新后去掉了它」是错的,
-            # 该去的地方是把服务开起来、再刷新一次,不是换一个工具。
+            # 该去的地方是把服务开起来、再刷新一次,不是换一个工具。清单好好的,问插件为什么(见 _explained)。
             failed = _tool_list_failure(instance)
-            reason = tr("pluginWhy_toolListFailed", reason=failed) if failed else tr("pluginWhy_toolGone")
+            explained = None if failed else _explained(db, instance, tool_name)
+            if failed:
+                reason = tr("pluginWhy_toolListFailed", reason=failed)
+            elif explained is not None:
+                reason = text_of(explained.reason)
+                tool_shown = text_of(explained.label) or tool_shown
+                upgrade_in = upgrade_in or (instance.id if explained.upgrade else "")
+            else:
+                reason = tr("pluginWhy_toolGone")
             details.append(tr("pluginWhy_connection", name=instance.name, reason=reason))
             continue
         if tool["internal"]:
@@ -512,9 +542,25 @@ def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDoma
             details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolNotExposed")))
         else:
             return None
-    return PluginDomainError(
+    return Unusable(PluginDomainError(
         "pluginErr_nodeUnusable", plugin=plugin, tool=tool_shown, details=tr("punct_listSep").join(details)
-    )
+    ), upgrade_in)
+
+
+def _explained(db: Session, instance: Any, tool_name: str) -> Any:
+    """问这个连接的插件:清单上为什么没有这个工具(只问运行时才报工具的那种插件,见 dynamic_tools.explain)。不支持这一问、
+    这会儿问不到都是 None —— 退回宿主自己能说的那句,不让一句解释拖垮整件事。"""
+    from app.domain.plugins import dynamic_tools
+    from app.domain.plugins import instances as inst
+
+    try:
+        manifest = inst.manifest_for(db, instance)
+        if TOOLS not in manifest.provides or manifest.is_mcp:
+            return None
+        return next((one for one in dynamic_tools.explain(db, instance, [tool_name]) if one.name == tool_name), None)
+    except Exception:  # noqa: BLE001 — 解释不出来不是错
+        logger.info("插件实例 %s 解释不了工具 %s 为什么不在", getattr(instance, "id", ""), tool_name, exc_info=True)
+        return None
 
 
 def _tools_of(db: Session, instance: Any, all_tools: Any) -> list[dict[str, Any]]:
@@ -613,6 +659,7 @@ def _plugin_name(db: Session, package_id: str) -> str:
 __all__ = [
     "PLUGIN_NODE_CATEGORY",
     "PLUGIN_NODE_PREFIX",
+    "Unusable",
     "check_plugin_node_instance",
     "declared_outputs",
     "node_meta",
@@ -620,5 +667,6 @@ __all__ = [
     "parse_node_type",
     "plugin_node_types",
     "resolve_instance",
+    "unusable",
     "why_unusable",
 ]

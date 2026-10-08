@@ -168,10 +168,14 @@ describe("workflow canvas model", () => {
     const issue: NodeIssue = {
       nodeId: "p1", path: [], nodeName: "放大", nodeType: "plugin.comfy.upscale", severity: "error", code: "unknown-type",
     };
-    const say = ((key: MessageKey) => (key === "wfIssuePluginUnusable" ? "不可用:{reason}" : key)) as (key: MessageKey) => string;
-    const reasons = new Map([["plugin.comfy.upscale", "你还没有接「ComfyUI」"]]);
+    const say = ((key: MessageKey) => (key === "wfIssuePluginUnusable" ? "不可用:{reason}"
+      : key === "wfIssuePluginNeedsUpgrade" ? "用不了 · 需要升级:{reason}" : key)) as (key: MessageKey) => string;
+    const reasons = new Map([["plugin.comfy.upscale", { reason: "你还没有接「ComfyUI」" }]]);
     expect(workflowIssueText(say, issue, new Map(), reasons)).toBe("不可用:你还没有接「ComfyUI」");
     expect(workflowIssueText(say, issue, new Map())).toBe("wfIssuePluginUnavailable");
+    //: ADR 0045 修订之二:ComfyUI 上那张工作流的表单还是上一版格式 —— 节点标成「用不了 · 需要升级」
+    const outdated = new Map([["plugin.comfy.upscale", { reason: "表单还是旧格式", upgrade: true, instance_id: "i1" }]]);
+    expect(workflowIssueText(say, issue, new Map(), outdated)).toBe("用不了 · 需要升级:表单还是旧格式");
   });
 
   it("被引用着却不会跑:点名谁引用了它、怎么引用的", () => {

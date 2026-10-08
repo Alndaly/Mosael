@@ -238,32 +238,68 @@ def test_upgrade_marks_只动mosael那几处_刚改过的跳过_不是上一版�
     assert writes == ["workflows/multi.json"], "只写改成了的那一张"
 
 
-def test_上一版的文件_入口只剩完整工作流_指着app的说清楚去升级_目录报几张要升级(comfy, tmp_path: Path) -> None:
+#: multi_reference_ui 那张图里 ComfyUI 存的 id 起的工具名(完整工作流入口)
+MULTI_TOOL = "wf_7c1d2e3f4a5b"
+
+
+def _results_only(ui: dict[str, Any]) -> dict[str, Any]:
+    """上一版、只有结果标记、没有表单的另一张(换一个图 id,不和 multi.json 撞名)。"""
+    stored = _v1(ui, app=False)
+    stored["id"] = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+    return stored
+
+
+def test_上一版带表单的文件_升级之前一个入口都不报_老引用说清楚去升级_只有结果标记的照常报(comfy, tmp_path: Path) -> None:
+    """ADR 0045 修订之二 D1(维护者 2026-10-09 按推荐拍板):从 1.19 或更早直接升上来、还没点「查看并升级」的那几张,老引用记着的
+    `multi.json` / `wf_<id>` 那时指的是表单 —— 此前这段空档里它们悄悄按完整工作流跑(提示词落的格子、固定种子、参数都变了样)。"""
     _stored_as(comfy, "multi.json", _v1(multi_reference_ui()))
+    _stored_as(comfy, "results-only.json", _results_only(multi_reference_ui()))
     catalog = _host("models", comfy.url)
-    assert [one["id"] for one in catalog["models"] if one["id"].startswith("multi.json")] == ["multi.json"]
-    assert catalog["library_upgrades"] == 1 and catalog["moved"] == [], "还没改写:没有表单入口,也不报改名"
+    ids = [one["id"] for one in catalog["models"]]
+    assert not [one for one in ids if one.startswith("multi.json")], "带表单的那张:完整入口也不报"
+    assert "results-only.json" in ids, "只有结果标记的上一版文件照常报:它的完整入口一直就是完整工作流"
+    assert catalog["library_upgrades"] == 2 and catalog["moved"] == [], "还没改写:不报改名"
+    tools = {one["name"] for one in _host("tools", comfy.url)["tools"]}
+    assert MULTI_TOOL not in tools and f"{MULTI_TOOL}_app" not in tools, "工具也一样:记着 wf_<id> 的老节点那时指的是表单"
+    assert "wf_1a2b3c4d5e6f" in tools
+
+    said = {one["id"]: one for one in _host("explain", comfy.url, ids=["multi.json", "multi.json#app"])["models"]}
+    assert said["multi.json"]["upgrade"] is True and "旧格式" in said["multi.json"]["reason"]["zh"], \
+        "完整入口为什么不在:表单是旧格式,先升级"
+    assert said["multi.json"]["label"] == "multi" and said["multi.json"]["group"]["entry"] == "full"
+    assert said["multi.json#app"]["upgrade"] is True
+    named = {one["name"]: one for one in _host("explain", comfy.url, tools=[MULTI_TOOL, f"{MULTI_TOOL}_app", "wf_1a2b3c4d5e6f",
+                                                                             "wf_000000000000", "comfyui_generation"])["tools"]}
+    assert set(named) == {MULTI_TOOL, f"{MULTI_TOOL}_app", "wf_000000000000"}, "还在清单上的、不是这台起的名字不回"
+    assert named[MULTI_TOOL]["upgrade"] is True and "查看并升级" in named[MULTI_TOOL]["reason"]["zh"]
+    assert named[MULTI_TOOL]["group"] == {"id": "multi.json", "label": "multi", "entry": "full"}
+    assert named[f"{MULTI_TOOL}_app"]["upgrade"] is True and named[f"{MULTI_TOOL}_app"]["label"]["zh"] == "multi 的表单"
+    assert named["wf_000000000000"]["upgrade"] is False and "已经没有这张工作流" in named["wf_000000000000"]["reason"]["zh"]
+
     scratch = tmp_path / "out"
     scratch.mkdir()
     hooks = runtime.StreamHooks(on_progress=lambda *_: None, on_task=lambda _: None, is_cancelled=lambda: False)
-    request = {"op": "generate", "kind": "image", "model": "multi.json#app", "prompt": "a cat", "parameters": {},
-               "inputs": [], "resume": None}
-    with pytest.raises(runtime.PluginRuntimeError, match="旧格式.*工作流库.*升级"):
-        runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", request, {"SERVER_URL": comfy.url},
-                            hooks=hooks, scratch_dir=scratch, timeout=60)
-    full_tool = next(one["name"] for one in _host("tools", comfy.url)["tools"]
-                     if one.get("workflow", {}).get("path") == "multi.json")
-    with pytest.raises(runtime.PluginRuntimeError, match="旧格式"):
-        runtime.stream_tool(PLUGIN, ENTRY, full_tool + "_app", {"prompt": "a cat"}, {"SERVER_URL": comfy.url},
-                            hooks=hooks, scratch_dir=scratch, timeout=60)
+    for model in ("multi.json#app", "multi.json"):
+        request = {"op": "generate", "kind": "image", "model": model, "prompt": "a cat", "parameters": {}, "inputs": [],
+                   "resume": None}
+        with pytest.raises(runtime.PluginRuntimeError, match="旧格式.*工作流库.*升级"):
+            runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", request, {"SERVER_URL": comfy.url},
+                                hooks=hooks, scratch_dir=scratch, timeout=60)
+    for tool in (MULTI_TOOL, f"{MULTI_TOOL}_app"):
+        with pytest.raises(runtime.PluginRuntimeError, match="旧格式"):
+            runtime.stream_tool(PLUGIN, ENTRY, tool, {"prompt": "a cat"}, {"SERVER_URL": comfy.url},
+                                hooks=hooks, scratch_dir=scratch, timeout=60)
 
     listed = {one["path"]: one["modified"] for one in _host("workflows", comfy.url)["workflows"]}
     _host("upgrade_marks", comfy.url, paths=[{"path": "multi.json", "modified": listed["multi.json"]}])
     catalog = _host("models", comfy.url)
     assert [one["id"] for one in catalog["models"] if one["id"].startswith("multi.json")] == ["multi.json", "multi.json#app"]
-    assert catalog["library_upgrades"] == 0
+    assert catalog["library_upgrades"] == 1, "只剩那张只有结果标记的"
     assert catalog["moved"] == [{"key": "form-entries", "from": "multi.json", "to": "multi.json#app"}], \
-        "从 1.20 之前直接升上来的:改写之后照样报这条,宿主没做过就做一次"
+        "升级之后:两个入口都回来,照样报这条改名 —— 宿主把老引用改到表单入口"
+    tools = {one["name"] for one in _host("tools", comfy.url)["tools"]}
+    assert {MULTI_TOOL, f"{MULTI_TOOL}_app"} <= tools
+    assert _host("explain", comfy.url, tools=[MULTI_TOOL])["tools"] == [], "回到清单上的不再解释"
 
 
 def test_几张表单几个入口_挨在完整工作流后面_改名只报app那张_app回答带着模型id和工具名(comfy) -> None:

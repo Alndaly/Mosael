@@ -152,6 +152,7 @@ export const nodeToolbar = {
   wfIssueTypeMismatch: "类型不匹配:需要{expected},接的是{actual}",
   wfIssuePluginUnavailable: "插件节点不可用({type}):提供它的插件没装、已停用,或这个工具已经不在了",
   wfIssuePluginUnusable: "插件节点不可用:{reason}",
+  wfIssuePluginNeedsUpgrade: "用不了 · 需要升级:{reason}",
   wfIssueUnknownType: "未知的节点类型:{type}",
   wfType_text: "文本",
   wfType_asset: "素材",

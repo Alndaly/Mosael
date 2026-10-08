@@ -1092,10 +1092,21 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
         if profile is not None else None
     kinds = [kind for kind in (row.capability_ids or []) if kind in ("image", "video", "audio")] if row is not None else []
     if profile is None or row is None or not row.enabled or not kinds:
+        if row is None and _forms_await_upgrade(db, instance, path):
+            raise WorkflowLibraryError("workflowLibErr_runFormsOld", path=path)
         raise WorkflowLibraryError("workflowLibErr_runNotModel", path=path)
     return generate(db, user, workspace_id, session_id=None, project_id=project_id, provider=profile.vendor, model=path,
                     kind=kinds[0], prompt="", negative_prompt="", parameters={}, source_assets=[],
                     provider_profile_id=profile.id, workbench_graph=graph)
+
+
+def _forms_await_upgrade(db: Session, instance: PluginInstance, path: str) -> bool:
+    """这张不在目录里,是不是因为它的表单还是上一版格式、等着升级(ADR 0045 修订之二 D1:那几张升级之前一个入口都不报)。
+    问插件(`op: explain`);问不到当不是 —— 照原来那句说。"""
+    try:
+        return any(one.id == path and one.upgrade for one in plugin_generation.explain(db, instance, [path]))
+    except Exception:  # noqa: BLE001 — 解释不出来不是错,照原来那句说
+        return False
 
 
 # --- 导入 ---------------------------------------------------------------------
