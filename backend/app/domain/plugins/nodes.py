@@ -403,16 +403,39 @@ def plugin_node_types(db: Session, user_id: str | None = None) -> dict[str, dict
     **节点类型按包聚合,不按实例**:同一个包的两个实例(B站 / 抖音)提供的是同一批节点,
     选哪个实例是节点 config 里的一个字段。工作流会被导出到别的机器,而实例是本机事实 ——
     绑包的话,导出的图在别人机器上缺的是"连接"(可以现场建);绑实例的话缺的是"节点类型",
-    图直接打不开。
+    图直接打不开。几条连接报的同一个节点入参不一样时怎么合,见 _across_connections。
     """
     from app.domain.plugins.tools import exposed
 
-    out: dict[str, dict[str, Any]] = {}
+    reported: dict[str, list[dict[str, Any]]] = {}
     for tool in exposed(db, user_id):
-        key = node_type_id(tool["package_id"], tool["name"])
-        if key not in out:
-            out[key] = node_meta(tool)
-    return out
+        reported.setdefault(node_type_id(tool["package_id"], tool["name"]), []).append(tool)
+    return {key: _across_connections(tools) for key, tools in reported.items()}
+
+
+def _across_connections(tools: list[dict[str, Any]]) -> dict[str, Any]:
+    """同一个节点类型在几条连接上各报了一份 —— 运行时报的工具名可能撞上:ComfyUI 的工具名取自工作流的图 id,同一个文件
+    拷到两台 ComfyUI 上、各自改过,入参就不一样。此前只留第一条连接的那份:绑在第二条上的节点,表单里是第一条的那几格
+    (填了插件丢掉、不生效),它自己多出来的那几格填不了。
+
+    现在表单取各条连接的入参的**并集**;只有部分连接上有的那几格,标上 `active_when: {instance_id: [这几条连接]}` ——
+    节点选了那几条之一才出现、才参与校验(和别的条件字段同一条规矩,前后端都认,见 workflows.field_activation)。
+    同名的一格在几条连接上声明得不一样(选项、默认值)时,照第一条的。名字、说明、输出也照第一条的。
+    """
+    meta = node_meta(tools[0])
+    if len(tools) == 1:
+        return meta
+    configs = [(str(tool.get("instance_id") or ""), node_meta(tool)["config"]) for tool in tools]
+    config = dict(meta["config"])
+    for _, own in configs[1:]:
+        for name, spec in own.items():
+            config.setdefault(name, spec)
+    for name, spec in list(config.items()):
+        having = [instance for instance, own in configs if name in own]
+        if name != "instance_id" and len(having) < len(configs):
+            conditions = spec.get("active_when") if isinstance(spec.get("active_when"), dict) else {}
+            config[name] = {**spec, "active_when": {**conditions, "instance_id": having}}
+    return {**meta, "config": config}
 
 
 def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list[dict[str, str]]:
