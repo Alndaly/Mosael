@@ -23,6 +23,7 @@ function card(operations: unknown[]): Confirmation {
     workspace_id: "w1",
     session_id: "s1",
     tool: "edit_note",
+    writes: ["notes"],
     allow_tool: "edit_note",
     permission: "edit",
     summary: "修改笔记「周报」:替换 1 处、插入 1 处",

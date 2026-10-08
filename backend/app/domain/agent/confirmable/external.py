@@ -220,6 +220,7 @@ confirmable_tool(ConfirmableTool(
     name="publish_asset",
     permission="external",
     cost="none",
+    writes=("publish_tasks",),
     gate="publish",
     gate_label="公开发布",
     summarize=_summarize_publish_asset,
@@ -231,6 +232,8 @@ confirmable_tool(ConfirmableTool(
     name="http_request",
     permission="external",
     cost="none",
+    #: 后果在应用之外
+    writes=(),
     gate="http_request",
     gate_label="对外请求",
     summarize=_summarize_http_request,
@@ -243,6 +246,8 @@ confirmable_tool(ConfirmableTool(
     name="run_code",
     permission="external",
     cost="none",
+    #: 跑在隔离环境里,结果交回给智能体
+    writes=(),
     gate="run_code",
     gate_label="沙箱执行代码",
     summarize=_summarize_run_code,
@@ -255,6 +260,8 @@ confirmable_tool(ConfirmableTool(
     name="run_host_code",
     permission="external",
     cost="none",
+    #: 后果在应用之外(这台电脑上)
+    writes=(),
     gate="run_host_code",
     gate_label="不隔离执行代码",
     summarize=_summarize_run_host_code,
@@ -267,6 +274,8 @@ confirmable_tool(ConfirmableTool(
     name="browser_open",
     permission="edit",
     cost="none",
+    #: 浏览器池的网页列表自己跟着会话走,不在缓存里
+    writes=(),
     summarize=_summarize_browser_open,
     execute=_execute_browser_open,
     validate=_validate_browser_open,
@@ -277,6 +286,8 @@ confirmable_tool(ConfirmableTool(
     name="browser_pool_open",
     permission="external",
     cost="none",
+    #: 同上
+    writes=(),
     summarize=_summarize_browser_pool_open,
     execute=_execute_browser_pool_open,
     validate=_validate_browser_pool_open,

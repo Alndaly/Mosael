@@ -12,21 +12,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from app.domain.resources import Resource
+
 #: 做完之后要不要告诉用户。always:弹提示、发系统通知;failures:只有失败才说
 #: (没人主动要的维护活,比如预览代理);never:只在任务中心里看得到。
 #: 只对**顶层**任务生效 —— 子任务由它的父任务替它说。
 Announce = Literal["always", "failures", "never"]
-
-#: 任务做完后可能变了的东西。前端把每一种映射到自己的缓存键,后端不知道 React Query。
-Resource = Literal[
-    "assets", "sequences", "transcripts", "workflows", "publish_tasks", "generations", "boards", "entities", "voices",
-]
 
 
 @dataclass(frozen=True)
 class JobKind:
     kind: str
     announce: Announce
+    #: 做完之后可能变了的数据 —— 和需要确认的工具同一套词(domain/resources,ADR 0053),前端换成自己的缓存键。
     affects: tuple[Resource, ...]
     #: 在哪一页看这条任务的结果(前端的页面 id);None 表示没有专门的页面。
     view: str | None = None

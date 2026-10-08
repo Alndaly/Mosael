@@ -46,7 +46,7 @@ const api = vi.fn(async (path: string, _init?: unknown) => {
   await new Promise<void>((resolve) => {
     releaseDecision = resolve;
   });
-  return { ...pendingCards[0], status: "failed", error: "磁盘满了" };
+  return { ...pendingCards[0], status: "failed", error: "磁盘满了", writes: ["sequences"] };
 });
 
 vi.mock("@/api/transport", async (importOriginal) => ({
@@ -55,8 +55,7 @@ vi.mock("@/api/transport", async (importOriginal) => ({
 import { PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
 
 /** 对话里没有任何一行对得上这几张卡(夹具的卡不带 tool_call_id):它们全摆在列表末尾那一叠里。 */
-function renderCards({ readOnly = false }: { readOnly?: boolean } = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderCards({ readOnly = false, client = new QueryClient({ defaultOptions: { queries: { retry: false } } }) }: { readOnly?: boolean; client?: QueryClient } = {}) {
   return render(
     <QueryClientProvider client={client}>
       <SessionDecisions workspaceId="w1" sessionId="s1" readOnly={readOnly}>
@@ -166,6 +165,21 @@ it("拍板之后卡就离开这一叠 —— 待决列表还没刷新也不再�
   await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(pendingCards.length - 1));
   expect(container.querySelector("article[data-status='failed']")).toBeNull();
   expect(screen.queryByRole("button", { name: "confirmDismiss" })).toBeNull();
+});
+
+/**
+ * 批完刷新的是这张卡声明改了的那几样(ADR 0053)。夹具里那张 edit_timeline 执行失败了 —— 失败的也可能做了一半,照样按它说的刷。
+ */
+it("拍板之后按批准接口回来的那张卡声明改了的数据刷新", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["sequences", "seq1"], {});
+  client.setQueryData(["projects", "w1"], []);
+  renderCards({ client });
+  (await screen.findAllByText("允许一次"))[0].click();
+  await waitFor(() => expect(api.mock.calls.some(([path]) => String(path).endsWith("/approve"))).toBe(true));
+  releaseDecision();
+  await waitFor(() => expect(client.getQueryState(["sequences", "seq1"])?.isInvalidated).toBe(true));
+  expect(client.getQueryState(["projects", "w1"])?.isInvalidated, "卡没说改了项目").toBe(false);
 });
 
 it("权限徽标不跟着长摘要换行 —— 两个字被压成一列竖排就没法读了", async () => {

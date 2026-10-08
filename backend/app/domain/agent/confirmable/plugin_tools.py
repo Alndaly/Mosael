@@ -109,6 +109,8 @@ def _bind(name: str) -> ConfirmableTool:
         #: 下限。实际那一档按工具的后果升(escalate);none 的根本不问人(needs_card)。
         permission="edit",
         cost="none",
+        #: 插件交出的文件收进这个工作区的素材库(_run);别的后果在插件那一侧,不在 Mosael 的库里。
+        writes=("assets",),
         summarize=_summarize,
         execute=_execute,
         validate=validate,
@@ -210,6 +212,8 @@ confirmable_tool(ConfirmableTool(
     name="run_plugin_tool",
     permission="edit",
     cost="none",
+    #: 插件交出的文件收进这个工作区的素材库
+    writes=("assets",),
     summarize=_summarize,
     execute=_on_behalf_execute,
     validate=_on_behalf_validate,

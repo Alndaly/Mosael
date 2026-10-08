@@ -36,7 +36,7 @@ def probe(monkeypatch):
     executed.clear()
     spec = ConfirmableTool(
         name=FAKE, permission="edit", cost="none", always_asks=True, choices=("enable",),
-        summarize=lambda db, payload: ("confirm_noteUntitled", {}), execute=_execute,
+        summarize=lambda db, payload: ("confirm_noteUntitled", {}), execute=_execute, writes=(),
     )
     monkeypatch.setitem(registry._TOOLS, FAKE, spec)
     return spec
@@ -66,7 +66,7 @@ def _card(card_id: str) -> ToolConfirmation:
 
 
 def test_声明和自动放行的口子互斥() -> None:
-    noop = dict(summarize=lambda db, payload: ("", {}), execute=_execute)
+    noop = dict(summarize=lambda db, payload: ("", {}), execute=_execute, writes=())
     with pytest.raises(ValueError):
         ConfirmableTool(name="x", permission="edit", cost="none", always_asks=True, gate="g", gate_label="G", **noop)
     with pytest.raises(ValueError):

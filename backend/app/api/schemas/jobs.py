@@ -9,6 +9,7 @@ from pydantic import Field, ValidationInfo, field_serializer, field_validator
 
 from app.api.schemas.base import ApiModel, OrmModel
 from app.api.schemas.failures import FailureReadout
+from app.domain.resources import Resource
 
 
 class JobKindOut(ApiModel):
@@ -17,7 +18,7 @@ class JobKindOut(ApiModel):
     kind: str
     label: str
     announce: Literal["always", "failures", "never"]
-    affects: list[str]
+    affects: list[Resource]
     view: str | None = None
     record_field: str | None = None
 

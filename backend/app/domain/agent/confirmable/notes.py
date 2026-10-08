@@ -81,6 +81,7 @@ confirmable_tool(ConfirmableTool(
     name="edit_note",
     permission="edit",
     cost="none",
+    writes=("notes",),
     summarize=_summarize_edit_note,
     execute=_execute_edit_note,
     validate=_validate_edit_note,

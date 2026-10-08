@@ -132,6 +132,7 @@ def _card(name: str, action: str, summarize, *, permission: str = "edit", choice
         name=name,
         permission=permission,
         cost="none",
+        writes=("skills",),
         summarize=summarize,
         execute=_executor(action),
         validate=_validator(action),

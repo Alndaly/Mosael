@@ -59,6 +59,8 @@ confirmable_tool(ConfirmableTool(
     name="comfy_canvas_edit",
     permission="edit",
     cost="none",
+    #: 改的是 ComfyUI 画布上开着的那一张,不在 Mosael 的库里
+    writes=(),
     summarize=_summarize,
     execute=_execute,
     validate=_validate,

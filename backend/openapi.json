@@ -32880,6 +32880,28 @@
             "title": "Allow Tool",
             "default": ""
           },
+          "writes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "assets",
+                "sequences",
+                "transcripts",
+                "workflows",
+                "publish_tasks",
+                "generations",
+                "boards",
+                "entities",
+                "voices",
+                "projects",
+                "notes",
+                "skills"
+              ]
+            },
+            "type": "array",
+            "title": "Writes",
+            "default": []
+          },
           "error_summary": {
             "anyOf": [
               {
@@ -36252,7 +36274,21 @@
           },
           "affects": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "assets",
+                "sequences",
+                "transcripts",
+                "workflows",
+                "publish_tasks",
+                "generations",
+                "boards",
+                "entities",
+                "voices",
+                "projects",
+                "notes",
+                "skills"
+              ]
             },
             "type": "array",
             "title": "Affects"

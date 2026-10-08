@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from pydantic import Field, StrictBool, ValidationInfo, computed_field, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
+from app.domain.resources import Resource
 from app.api.schemas.failures import FailureReadout
 
 class AgentContextPart(ApiModel):
@@ -379,6 +380,9 @@ class ConfirmationOut(FailureReadout, OrmModel):
     #: 点「本会话始终允许」时记在哪个工具名下(白名单里的 `tool`)。多数卡就是 `tool`;`run_plugin_tool` 是它替调的那个插件工具
     #: (见 ConfirmableTool.allowance_tool)。
     allow_tool: str = ""
+    #: 批准执行之后这张卡改了哪几种数据(ConfirmableTool.writes,ADR 0053)。界面按它刷新缓存(api/resourceKeys)。
+    #: 认不出的工具(老卡、插件被卸掉)是空的 —— 界面照样刷新卡本身。
+    writes: list[Resource] = []
 
     @model_validator(mode="after")
     def _split_for_the_card(self) -> ConfirmationOut:
@@ -393,6 +397,7 @@ class ConfirmationOut(FailureReadout, OrmModel):
         self.always_asks = bool(spec is not None and spec.always_asks)
         self.choices = {name: bool((self.payload or {}).get(name)) for name in (spec.choices if spec is not None else ())}
         self.allow_tool = allowance_name(self.tool, self.payload)
+        self.writes = list(spec.writes) if spec is not None else []
         return self
 
 

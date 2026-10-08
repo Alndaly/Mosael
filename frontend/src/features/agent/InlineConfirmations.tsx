@@ -185,7 +185,7 @@ export function ConfirmationsProvider({
         scope: sessionId,
         cards: [...(prev.scope === sessionId ? prev.cards : []).filter((one) => one.id !== card.id), card],
       }));
-      invalidateAfterDecision(qc, workspaceId);
+      invalidateAfterDecision(qc, workspaceId, card);
     },
   });
   // 此刻在飞的是哪一张卡的哪一档。没有就是 null。

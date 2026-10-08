@@ -480,6 +480,7 @@ confirmable_tool(ConfirmableTool(
     name="edit_timeline",
     permission="edit",
     cost="none",
+    writes=("sequences",),
     summarize=_summarize_edit_timeline,
     execute=_execute_edit_timeline,
     validate=_validate_edit_timeline,
@@ -490,6 +491,8 @@ confirmable_tool(ConfirmableTool(
     name="render_sequence",
     permission="render-cost",
     cost="render",
+    #: 只起导出任务;成片由任务做完时刷新
+    writes=(),
     summarize=_summarize_render_sequence,
     execute=_execute_render_sequence,
     validate=_validate_render_sequence,
@@ -500,6 +503,8 @@ confirmable_tool(ConfirmableTool(
     name="dub_subtitles",
     permission="ai-cost",
     cost="ai",
+    #: 只起配音任务;时间线、素材由任务做完时刷新
+    writes=(),
     summarize=_summarize_dub_subtitles,
     execute=_execute_dub_subtitles,
     validate=_validate_dub_subtitles,
@@ -511,6 +516,8 @@ confirmable_tool(ConfirmableTool(
     name="separate_audio",
     permission="render-cost",
     cost="render",
+    #: 只起任务
+    writes=(),
     capability="audio_separation",
     summarize=_summarize_separate_audio,
     execute=_execute_separate_audio,
@@ -522,6 +529,8 @@ confirmable_tool(ConfirmableTool(
     name="denoise_audio",
     permission="render-cost",
     cost="render",
+    #: 只起任务
+    writes=(),
     capability="audio_denoise",
     summarize=_summarize_denoise_audio,
     execute=_execute_denoise_audio,
@@ -582,6 +591,8 @@ confirmable_tool(ConfirmableTool(
     name="import_from_url",
     permission="external",
     cost="none",
+    #: 只起任务
+    writes=(),
     summarize=_summarize_import_from_url,
     execute=_execute_import_from_url,
     validate=_validate_import_from_url,
@@ -592,6 +603,8 @@ confirmable_tool(ConfirmableTool(
     name="convert_video_to_gif",
     permission="render-cost",
     cost="render",
+    #: 只起任务
+    writes=(),
     summarize=_summarize_convert_video_to_gif,
     execute=_execute_convert_video_to_gif,
     validate=_validate_convert_video_to_gif,
@@ -602,6 +615,7 @@ confirmable_tool(ConfirmableTool(
     name="split_image_grid",
     permission="edit",
     cost="none",
+    writes=("assets",),
     summarize=_summarize_split_image_grid,
     execute=_execute_split_image_grid,
     validate=_validate_split_image_grid,
@@ -612,6 +626,8 @@ confirmable_tool(ConfirmableTool(
     name="reparse_document",
     permission="edit",
     cost="none",
+    #: 那份文档当场变成「解析中」
+    writes=("assets",),
     capability="document_parse",
     summarize=_summarize_reparse_document,
     execute=_execute_reparse_document,

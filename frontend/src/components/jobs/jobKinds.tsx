@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 
 import { fetchJobKinds, type Job, type JobKind } from "@/api/client";
+import { queryKeysFor } from "@/api/resourceKeys";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { gotoRecord, VIEW_RECORD_EVENTS } from "@/lib/deepLink";
 
@@ -66,21 +67,6 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   model_previews: ImageDown,
 };
 
-/** 后端说"改动了哪种资源",这里说"那是哪些缓存"。 */
-const RESOURCE_QUERY_KEYS: Record<string, readonly string[]> = {
-  assets: ["assets", "asset", "waveform"],
-  sequences: ["sequences"],
-  transcripts: ["transcript"],
-  workflows: ["workflows", "workflow-runs"],
-  publish_tasks: ["publish-tasks"],
-  generations: ["generation-jobs", "generation-sessions"],
-  boards: ["boards"],
-  //: 资产库:参考图挂上了新的(资产格的能力、详情页的「补全多角度」「生成表情」)。
-  entities: ["entities"],
-  //: 配音库:一把嗓子复刻到了百炼(每一行显示它在哪儿能念)。
-  voices: ["voices"],
-};
-
 export type JobKindMeta = JobKind & { icon: LucideIcon };
 
 const LOADING: JobKind = { kind: "", label: "", announce: "never", affects: [], view: null, record_field: null };
@@ -99,9 +85,9 @@ export function useJobKinds() {
   return { kindOf: lookup, ready: catalog.isSuccess };
 }
 
-/** 这种任务做完后该作废的缓存键(第一段)。 */
+/** 这种任务做完后该作废的缓存键(第一段)。词换成键只有一张表(api/resourceKeys,和确认卡共用,ADR 0053)。 */
 export function queryKeysAffectedBy(meta: JobKind): string[] {
-  return meta.affects.flatMap((resource) => RESOURCE_QUERY_KEYS[resource] ?? []);
+  return queryKeysFor(meta.affects);
 }
 
 /** 这种任务做完要不要说一声。 */

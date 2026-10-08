@@ -152,6 +152,8 @@ confirmable_tool(ConfirmableTool(
     name="delete_assets",
     permission="destroy",
     cost="none",
+    #: 时间线上用到它的片段跟着变成离线
+    writes=("assets", "sequences"),
     summarize=_summarize_delete_assets,
     execute=_execute_delete_assets,
     validate=_validate_delete_assets,
@@ -162,6 +164,8 @@ confirmable_tool(ConfirmableTool(
     name="delete_projects",
     permission="destroy",
     cost="none",
+    #: 项目的时间线一起删;素材不删,回到工作区级
+    writes=("projects", "assets", "sequences"),
     summarize=_summarize_delete_projects,
     execute=_execute_delete_projects,
     validate=_validate_delete_projects,

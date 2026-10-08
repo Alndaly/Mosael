@@ -63,6 +63,8 @@ confirmable_tool(ConfirmableTool(
     name="blender_execute",
     permission="external",
     cost="none",
+    #: 改的是 Blender 里的场景,不是 Mosael 的数据
+    writes=(),
     gate="blender",
     gate_label="Blender 建模",
     summarize=_summarize_blender_execute,

@@ -34,7 +34,7 @@ const cards = [
 
 //: 卡挂着的那段对话(卡上那一行「在…里开的」读它)。
 const session = { id: "s-mine", workspace_id: "w1", title: "我的对话", is_mine: true, home_kind: "note", home_id: "n1", home_name: "周报", home_state: "ok" };
-const api = vi.fn(async (path: string) => (path.startsWith("/api/agent/sessions/") ? session : [...cards]));
+const api = vi.fn(async (path: string): Promise<unknown> => (path.startsWith("/api/agent/sessions/") ? session : [...cards]));
 
 vi.mock("@/api/transport", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/transport")>()),
@@ -49,8 +49,7 @@ import { resetNativeViewForTests } from "@/lib/nativeView";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
 
-function renderCenter({ header = false }: { header?: boolean } = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderCenter({ header = false, client = new QueryClient({ defaultOptions: { queries: { retry: false } } }) }: { header?: boolean; client?: QueryClient } = {}) {
   return render(
     <QueryClientProvider client={client}>
       {/* 应用顶栏里留的那个位(AppShell 画它);收起来的胶囊住进去。 */}
@@ -247,3 +246,24 @@ describe("原生视图在前台时,卡收在外壳顶栏上", () => {
   });
 });
 
+
+/**
+ * 批完一张卡,刷新的是**它声明改了的那几样**(卡上的 `writes`,ADR 0053)—— 用批准接口回来的那张卡,不是一份手写清单。
+ */
+it("批完一张卡,按批准接口回来的那张卡声明改了的数据刷新", async () => {
+  const fallback = api.getMockImplementation()!;
+  api.mockImplementation(async (path: string) =>
+    path.endsWith("/approve") ? { ...cards[0], status: "executed", writes: ["projects"] } : fallback(path));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["projects", "w1"], []);
+  client.setQueryData(["boards", "w1"], []);
+  try {
+    renderCenter({ client });
+    await screen.findByText("不隔离");
+    fireEvent.click(screen.getAllByRole("button", { name: /confirmApprove/ })[0]);
+    await waitFor(() => expect(client.getQueryState(["projects", "w1"])?.isInvalidated).toBe(true));
+    expect(client.getQueryState(["boards", "w1"])?.isInvalidated, "卡没说改了画板").toBe(false);
+  } finally {
+    api.mockImplementation(fallback);
+  }
+});

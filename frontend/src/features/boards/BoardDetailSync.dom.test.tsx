@@ -586,10 +586,10 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     mount();
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
     act(() => props().onChange({ items: [{ ...note, text: "我刚改的" }], edges: [], markers: [] }));
-    //: 智能体加了一张便签(确认卡批准、服务端执行),确认卡那边照例作废缓存。
+    //: 智能体加了一张便签(确认卡批准、服务端执行),确认卡那边按卡声明的 `writes`(edit_board → boards)作废缓存。
     server.serverWrite((canvas) => ({ ...canvas, items: [...canvas.items, { id: "agent", kind: "note", x: 0, y: 300, text: "智能体加的" }] }));
     await act(async () => {
-      invalidateAfterDecision(queryClient, "w1");
+      invalidateAfterDecision(queryClient, "w1", { status: "executed", writes: ["boards"] });
       await vi.advanceTimersByTimeAsync(10);
     });
 

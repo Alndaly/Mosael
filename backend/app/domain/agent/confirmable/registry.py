@@ -8,6 +8,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.resources import RESOURCES, Resource
+
 #: 权限档次(plan §17.4)。"edit" 最坏也撤得回;"render-cost"/"ai-cost" 花的是时间或钱;
 #: "external" 的后果在这个应用之外 —— 发出去的帖子、别人服务器上的改动、本机跑过的代码。
 #:
@@ -42,6 +44,8 @@ class ConfirmableTool:
       **确认卡尤其不能含糊**:它是授权界面 —— 用户点「批准」之前唯一会读的就是这一行。
       一个英文用户读不懂的授权提示,等于没有提示。
     - `execute(db, confirmation, actor)` —— 批准之后干活,返回写进卡里的结果。
+    - `writes` —— `execute` **自己**改了哪几种数据(ADR 0053)。界面批完一张卡按它刷新缓存,不再靠前端一份手写清单
+      (那份清单漏过项目、发布任务)。没有缺省值:新加一个工具不写它,这个模块一导入就报错。
     """
 
     name: str
@@ -49,6 +53,9 @@ class ConfirmableTool:
     cost: str
     summarize: Callable[[Session, dict[str, Any]], tuple[str, dict[str, Any]]]
     execute: Callable[[Session, Any, str | None], dict[str, Any]]
+    #: 批准执行之后**这一下**改了哪几种数据(词见 domain/resources)。只算 execute 当场写的:起的后台任务做完由任务那一侧
+    #: 按 `JobKind.affects` 刷新,这里不重复;后果在应用之外的(发请求、跑代码、改 Blender / ComfyUI 画布、开浏览器)写 `()`。
+    writes: tuple[Resource, ...]
     validate: Callable[[Session, str, dict[str, Any], str | None], None] | None = None
     #: 这一次调用**要不要问人**。None = 总要问(绝大多数工具)。返回 False 的调用照样开一张卡
     #: (留痕、同一条等待协议),但不等人点 —— 判定见 autopilot.decide 的第一条。
@@ -82,6 +89,9 @@ class ConfirmableTool:
     def __post_init__(self) -> None:
         if self.permission not in PERMISSIONS or self.cost not in COSTS:
             raise ValueError(f"{self.name}: unknown permission/cost tier")
+        unknown = [kind for kind in self.writes if kind not in RESOURCES]
+        if not isinstance(self.writes, tuple) or unknown:
+            raise ValueError(f"{self.name}: writes must be a tuple of domain/resources words, got {self.writes!r}")
         if bool(self.gate) != bool(self.gate_label):
             raise ValueError(f"{self.name}: a gate needs a gate_label (and vice versa)")
         if self.always_asks and (self.gate or self.needs_card is not None):

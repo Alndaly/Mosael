@@ -63,7 +63,7 @@ export function ConfirmationCenter({
       //    (用户:「智能体审批通过后那个卡片不需要继续保留着的」);
       //  - 外部智能体的卡执行失败:原因只有这里看得到(它没有对话可收),留着等人读完移走。
       if (!card.session_id && card.status === "failed") settled.remember(card);
-      invalidateAfterDecision(qc, workspaceId);
+      invalidateAfterDecision(qc, workspaceId, card);
     },
   });
 

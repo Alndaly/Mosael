@@ -44,7 +44,7 @@ const NOTES: Record<string, MessageKey> = {
   docNote_tableTruncated: "docNote_tableTruncated",
 };
 
-/** 挂在 `asset` 底下:解析任务做完时,任务中心按「改动了素材」失效的键里有它(见 jobKinds 的 RESOURCE_QUERY_KEYS)。 */
+/** 挂在 `asset` 底下:解析任务做完时,任务中心按「改动了素材」失效的键里有它(见 api/resourceKeys 的 RESOURCE_QUERY_KEYS)。 */
 export const extractionsKey = (assetId: string) => ["asset", assetId, "extractions"] as const;
 
 /** Markdown 里的插图地址是相对解析目录的(`images/…`):换成带令牌的文件地址,`<img>` 才取得到。 */

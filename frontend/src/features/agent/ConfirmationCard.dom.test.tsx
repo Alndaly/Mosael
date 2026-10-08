@@ -22,6 +22,7 @@ function card(overrides: Partial<Confirmation> = {}): Confirmation {
     session_id: "s1",
     tool: "plugin__manim__custom_animation",
     allow_tool: "plugin__manim__custom_animation",
+    writes: ["assets"],
     permission: "external",
     summary: "运行插件工具「Manim 自定义动画」(连接「Manim 教学动画」),参数:`code=import numpy as np…`  ⚠️ 会在你的电脑上运行代码",
     headline: "运行插件工具「Manim 自定义动画」(连接「Manim 教学动画」)",
