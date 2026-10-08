@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -192,6 +192,7 @@
     "migrate-tts-pip-index",
     "migrate-usage-unpriced-reason",
     "migrate-voices-declare-consent",
+    "migrate-webhook-secrets-are-hashed",
     "migrate-workflow-revisions",
     "migrate-workflow-source-assets",
     "remove-minimax-music-models",
