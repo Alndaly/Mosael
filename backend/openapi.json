@@ -34841,6 +34841,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled",
+            "description": "被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -34855,7 +34861,8 @@
           "result",
           "error",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "cancelled"
         ],
         "title": "JobOut",
         "description": "任务出口。**message 在这里按请求方的语言翻**。\n\n翻译放在序列化这一层,而不是十二个返回 JobOut 的路由里各翻一次 —— 那是同一个问题十二个答案,\n漏一个,那一屏的任务就还是另一种语言。语言由中间件放进 ContextVar(见 core/i18n)。\n\n没有 key 的是一句现成的话(子任务转述的消息、第三方的原话),原样返回 —— 我们翻不了它。"

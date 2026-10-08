@@ -12605,6 +12605,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Cancelled
+             * @description 被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。
+             */
+            readonly cancelled: boolean;
         };
         /**
          * Keyframe

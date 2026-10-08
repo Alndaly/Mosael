@@ -9,7 +9,7 @@
  * 让每个页面各自轮询是同一件事写十遍,而漏掉一个页面就是一个"要刷新才看得见"的 bug。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,7 +20,7 @@ vi.mock("@/app/preferences", () => ({
 // vi.mock 的工厂会被提升到文件顶部,所以共享状态要走 vi.hoisted,否则工厂执行时它还不存在。
 const h = vi.hoisted(() => ({
   apiMock: vi.fn(),
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() },
   state: { jobs: [] as any[] },
 }));
 vi.mock("sonner", () => ({ toast: h.toast }));
@@ -73,6 +73,7 @@ beforeEach(() => {
   h.apiMock.mockReset();
   h.toast.success.mockReset();
   h.toast.error.mockReset();
+  h.toast.message.mockReset();
   h.apiMock.mockImplementation(async () => h.state.jobs);
 });
 
@@ -89,11 +90,12 @@ const running = (kind: string) =>
  * 不能只 sleep 一下就翻:第一次拉取要是直接拿到终态,组件只会把它记进基线而不认为
  * 「刚刚完成」,于是什么都不刷新 —— 那是测试自己的竞态。判据用任务中心按钮上的转圈图标,
  * 它就是"running 已经进到组件里了"。 */
-async function finish(kind: string, status: "succeeded" | "failed", error: string | null = null) {
+async function finish(kind: string, status: "succeeded" | "failed", error: string | null = null, extra: object = {}) {
   await waitFor(() => expect(document.querySelector(".animate-mosael-spin")).not.toBeNull(), {
     timeout: 4000,
   });
-  h.state.jobs = [{ id: "j1", kind, status, progress: 1, message: null, error, payload: {} }];
+  const stamp = "2026-10-08T03:00:00";
+  h.state.jobs = [{ id: "j1", kind, status, progress: 1, message: null, error, payload: {}, created_at: stamp, updated_at: stamp, ...extra }];
 }
 
 describe("任务完成后刷新它改动过的数据", () => {
@@ -214,5 +216,47 @@ describe("每个任务最多说一次,历史任务不说", () => {
     ]);
     await waitFor(() => expect(h.toast.success).toHaveBeenCalledTimes(1), { timeout: 4000 });
     expect(h.toast.success.mock.calls[0][0]).toBe("链接导入 · jobDone");
+  });
+});
+
+describe("被停下的任务不是失败", () => {
+  //: 取消在库里落成 failed + jobErr_cancelled,后端用 cancelled 这一位说出来。此前任务中心只看 status:
+  //: 用户在 AI 工作台点了「停止」,原位写「已停止」,右下角却弹红色的「AI 生成 · 失败 / 已取消」。
+  it("做完总要说的种类:中性地说一句「已取消」,不弹红色失败,系统通知也这么说", async () => {
+    const notifyTask = vi.fn();
+    (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = { notifyTask };
+    try {
+      mount(running("subtitle_dub"));
+      await finish("subtitle_dub", "failed", "已取消", { message: "已取消", cancelled: true });
+      await waitFor(() => expect(h.toast.message).toHaveBeenCalledTimes(1), { timeout: 4000 });
+      expect(h.toast.message.mock.calls[0][0]).toBe("字幕配音 · runStatus_cancelled");
+      expect(h.toast.error).not.toHaveBeenCalled();
+      expect(notifyTask).toHaveBeenCalledWith({ title: "字幕配音 · runStatus_cancelled", body: "" });
+      // 任务行上也不是红色的失败:打开任务中心,那一行写的是任务自己那句「已取消」,行里没有红色。
+      fireEvent.click(screen.getByRole("button", { name: "taskCenter" }));
+      const row = (await screen.findByText("已取消")).closest("[role=button]");
+      expect(row).not.toBeNull();
+      expect(row!.textContent).toContain("字幕配音");
+      expect(row!.querySelector(".text-destructive")).toBeNull();
+    } finally {
+      delete (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop;
+    }
+  });
+
+  it("只报失败的种类:被停下的不说", async () => {
+    const invalidated = mount(running("proxy"));
+    await finish("proxy", "failed", "已取消", { message: "已取消", cancelled: true });
+    await waitFor(() => expect(invalidated.some((key) => key[0] === "assets")).toBe(true), { timeout: 4000 });
+    expect(h.toast.error).not.toHaveBeenCalled();
+    expect(h.toast.message).not.toHaveBeenCalled();
+  });
+
+  it("真失败照旧红色地说(cancelled 为假),行里是红色的失败原因", async () => {
+    mount(running("proxy"));
+    await finish("proxy", "failed", "ffmpeg 退出码 1", { cancelled: false });
+    await waitFor(() => expect(h.toast.error).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    fireEvent.click(screen.getByRole("button", { name: "taskCenter" }));
+    const row = (await screen.findByText("ffmpeg 退出码 1")).closest("[role=button]");
+    expect(row!.querySelector(".text-destructive")).not.toBeNull();
   });
 });

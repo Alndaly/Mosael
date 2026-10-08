@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, X } from "lucide-react";
+import { Activity, Ban, CheckCircle2, CircleAlert, ListChecks, Loader2, Trash2, X } from "lucide-react";
 
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
+import { jobDisplayStatus, runStatusText } from "@/components/jobs/runStatus";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -151,11 +152,16 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
       }
       // **只有这里说"做完了"**(ADR-0018)。发起任务的组件只说"排上了";子任务不在这个列表里,
       // 由父任务替它说。
-      if (!shouldAnnounce(meta, job.status) || announced.current.has(job.id)) continue;
+      //: **被停下的不是失败。** 库里它是 failed(见 runStatus.jobDisplayStatus):只在「做完总要说一声」的种类上中性地说
+      //: 一句「已取消」,「只报失败」的种类不说 —— 停是人自己按的,原位已经写着了。
+      const status = jobDisplayStatus(job);
+      if (status === "cancelled" ? meta.announce !== "always" : !shouldAnnounce(meta, job.status)) continue;
+      if (announced.current.has(job.id)) continue;
       announced.current.add(job.id);
-      const outcome = job.status === "succeeded" ? t("jobDone") : t("jobFailed");
-      const detail = (job.status === "failed" ? job.error : job.message) ?? undefined;
-      if (job.status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
+      const outcome = status === "succeeded" ? t("jobDone") : status === "cancelled" ? runStatusText(t, status) : t("jobFailed");
+      const detail = status === "cancelled" ? undefined : ((job.status === "failed" ? job.error : job.message) ?? undefined);
+      if (status === "succeeded") toast.success(`${meta.label} · ${outcome}`, { description: detail });
+      else if (status === "cancelled") toast.message(`${meta.label} · ${outcome}`);
       else toast.error(`${meta.label} · ${outcome}`, { description: detail });
       // 同一件事也告诉系统层。这里无条件调用、由主进程决定发不发:窗口收进托盘或切到别的
       // app 时,上面这个 toast 弹在一个看不见的窗口里等于没弹,那时才需要系统通知。
@@ -233,7 +239,8 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
   const { locale } = usePreferences();
   const meta = useJobKinds().kindOf(job.kind);
   const running = ACTIVE.has(job.status);
-  const failed = !running && job.status === "failed";
+  const status = jobDisplayStatus(job);
+  const failed = !running && status === "failed";
   const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
   return (
     <div
@@ -277,9 +284,11 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
                 <span>{relativeTime(job.updated_at, locale)}</span>
               </Hint>
             )}
-            {job.status === "succeeded" ? (
+            {status === "succeeded" ? (
               <CheckCircle2 size={12} className="text-success" />
-            ) : job.status === "failed" ? (
+            ) : status === "cancelled" ? (
+              <Ban size={12} />
+            ) : status === "failed" ? (
               <CircleAlert size={12} className="text-destructive" />
             ) : job.progress > 0 ? (
               `${Math.round(job.progress * 100)}%`
@@ -310,7 +319,7 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: Job; count?: number
         </div>
         {running && job.progress > 0 && <Progress value={Math.round(job.progress * 100)} />}
         <Truncate as="small" className={cn("text-ui-xs text-muted-foreground", failed && "text-destructive")}>
-          {job.status === "failed" ? (job.error ?? job.message) : job.message}
+          {status === "failed" ? (job.error ?? job.message) : job.message}
         </Truncate>
       </div>
     </div>

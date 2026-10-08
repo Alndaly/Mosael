@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, computed_field, field_validator
 
 from app.api.schemas.base import ApiModel, OrmModel
 
@@ -63,6 +63,17 @@ class JobOut(OrmModel):
     error: str | None
     created_at: datetime
     updated_at: datetime
+
+    #: 库里取消落的是 `status=failed` + `jobErr_cancelled`(见 domain/jobs._cancel_job_row)。任务中心此前只看 status,
+    #: 用户亲手点的「停止」原位写着「已停止」,右下角却弹红色的「失败」。这一位替它说,不把内部的文案 key 交出去;
+    #: 真正的 cancelled 终态是另一件事(要迁移,待 ADR)。
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cancelled(self) -> bool:
+        """被停下的任务(取消 / 停止 / 上游停下连带),不是失败。status 仍是 failed。"""
+        from app.domain.jobs import CANCELLED_ERROR_KEY
+
+        return self.status == "failed" and self.error_key == CANCELLED_ERROR_KEY
 
     @field_validator("payload", mode="before")
     @classmethod

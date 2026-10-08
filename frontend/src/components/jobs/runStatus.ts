@@ -27,3 +27,12 @@ export function runStatusText(t: (key: MessageKey) => string, status: string): s
   const key = runStatusLabelKey(status);
   return key ? t(key) : status;
 }
+
+/**
+ * 一个任务**落在哪种状态上**,给界面看的那一种。被停下的任务库里是 `failed`(带 `jobErr_cancelled`,后端用
+ * `cancelled` 这一位说出来),界面按「已取消」说、不按失败画红 —— 用户刚亲手点了停止,右下角弹「失败」是两处各说各的。
+ * 任务中心的提示、任务行、任务详情、子任务清单都走这里,不各自去看 status。
+ */
+export function jobDisplayStatus(job: { status: string; cancelled?: boolean }): string {
+  return job.status === "failed" && job.cancelled ? "cancelled" : job.status;
+}

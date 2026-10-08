@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, CheckCircle2, CircleAlert, ExternalLink, Loader2, Square } from "lucide-react";
+import { Activity, Ban, CheckCircle2, CircleAlert, ExternalLink, Loader2, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { cancelJob, getJob, listJobEvents, type Job } from "@/api/client";
@@ -10,7 +10,7 @@ import { JobEventList } from "@/components/jobs/JobEvents";
 import { JobResult } from "@/components/jobs/JobResult";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useJobKinds } from "@/components/jobs/jobKinds";
-import { runStatusText } from "@/components/jobs/runStatus";
+import { jobDisplayStatus, runStatusText } from "@/components/jobs/runStatus";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
@@ -113,17 +113,19 @@ export function JobDetailDialog({
                 (active || current.status === "running" || current.status === "pending" || current.status === "queued") &&
                   "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
                 !active && current.status === "succeeded" && "bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success",
-                !active && current.status === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
+                !active && jobDisplayStatus(current) === "failed" && "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive",
               )}
             >
               {active ? (
                 <Loader2 size={13} className="animate-mosael-spin" />
               ) : current.status === "succeeded" ? (
                 <CheckCircle2 size={13} />
+              ) : jobDisplayStatus(current) === "cancelled" ? (
+                <Ban size={13} />
               ) : (
                 <CircleAlert size={13} />
               )}
-              {runStatusText(t, active ? "running" : current.status)}
+              {runStatusText(t, active ? "running" : jobDisplayStatus(current))}
             </span>
             <Truncate className="text-ui-xs text-muted-foreground">{kindOf(current.kind).label}</Truncate>
           </div>
@@ -137,7 +139,8 @@ export function JobDetailDialog({
               </span>
             )}
           </div>
-          {current.error && (
+          {/* 被停下的任务 error 里只是「已取消」那句,状态那一行已经说了,不再画一行红字。 */}
+          {current.error && jobDisplayStatus(current) !== "cancelled" && (
             <p className="m-0 min-w-0 whitespace-pre-wrap text-ui-xs text-destructive [overflow-wrap:anywhere]">
               {current.error}
             </p>
