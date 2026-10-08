@@ -288,6 +288,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{model}」现在用不了:{reason}",
         "en": "“{model}” can't be used right now: {reason}",
     },
+    #: 会话锁族(ADR 0055 §2)。
+    "genErr_sessionFamilyLocked": {
+        "zh": "这条是{session}会话,换成{kind}要新开一条会话",
+        "en": "This is a {session} session. Start a new session for {kind}.",
+    },
+    "genFamily_visual": {"zh": "图像 / 视频", "en": "image / video"},
+    "genFamily_music": {"zh": "音乐", "en": "music"},
+    "genFamily_speech": {"zh": "语音", "en": "speech"},
+    "genFamily_podcast": {"zh": "播客", "en": "podcast"},
     "genMissing_someModel": {"zh": "之前选的模型", "en": "The model chosen earlier"},
     "genMissing_connectionGone": {
         "zh": "它所在的那条连接已经删掉了 —— 换一个模型",

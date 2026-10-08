@@ -19,9 +19,12 @@ from app.ai.providers.adapters.bytedance.volcano.speech import (
 )
 from app.ai.providers.adapters.bytedance.volcano.speakers import VolcOpenAPIError, list_all_speakers
 from app.ai.providers.adapters.bytedance.volcano.podcast import (
+    MAX_ROUND_CHARS as MAX_PODCAST_ROUND_CHARS,
+    MAX_ROUNDS as MAX_PODCAST_ROUNDS,
     PodcastAction,
     PodcastSynthesisError,
     PodcastSynthesisResult,
+    split_to_rounds as split_podcast_rounds,
     synthesize_volcano_podcast,
 )
 from app.ai.providers.contracts.generation import (
@@ -85,7 +88,10 @@ __all__ = [
     "LAST_FRAME",
     "MASK",
     "PODCAST_SPEAKERS",
+    "MAX_PODCAST_ROUNDS",
+    "MAX_PODCAST_ROUND_CHARS",
     "PodcastAction",
+    "split_podcast_rounds",
     "PodcastSynthesisError",
     "PodcastSynthesisResult",
     "REFERENCE_AUDIO",

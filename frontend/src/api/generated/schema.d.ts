@@ -2087,26 +2087,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/tts/podcast": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate Podcast
-         * @description Queue a podcast. Same permission as any other AI spend in the workspace.
-         */
-        post: operations["generate_podcast_api_tts_podcast_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/tts/voices": {
         parameters: {
             query?: never;
@@ -3207,7 +3187,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Jobs */
+        /**
+         * List Jobs
+         * @description `recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的
+         *     几百句零件一起拉回来。别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。
+         */
         get: operations["list_jobs_api_jobs_get"];
         put?: never;
         post?: never;
@@ -3666,6 +3650,47 @@ export interface paths {
         put?: never;
         /** Create Generation */
         post: operations["create_generation_api_generation_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generation/speech": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Speech
+         * @description 创作页「语音」(ADR 0055):念一段字,记成会话里的一条。活儿由配音那一族做(任务种类还是 `tts`)。
+         *     远端引擎念配音库里的嗓子、这个账号还没同意上传时回 409 `remote_voice_consent_required`(ADR 0037),界面弹确认框。
+         */
+        post: operations["create_speech_api_generation_speech_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/generation/podcast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Podcast
+         * @description 创作页「播客」(ADR 0055 §6):改写材料、聊一个主题、照稿念,记成会话里的一条(任务种类还是 `podcast`)。
+         */
+        post: operations["create_podcast_api_generation_podcast_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15366,38 +15391,54 @@ export interface components {
             used_by?: components["schemas"]["PluginCapabilityUseOut"][];
         };
         /**
-         * PodcastRequest
-         * @description A 火山 podcast: two voices reading or discussing the given material.
+         * PodcastCreate
+         * @description 创作页「播客」(ADR 0055 §6):改写材料(`text` 是材料)、聊一个主题(`text` 是主题)、照稿念(`turns`)。
          */
-        PodcastRequest: {
+        PodcastCreate: {
             /** Workspace Id */
             workspace_id: string;
+            /** Session Id */
+            session_id?: string | null;
             /** Project Id */
             project_id?: string | null;
             /** Provider Profile Id */
             provider_profile_id?: string | null;
+            /** Mode */
+            mode: string;
             /**
              * Text
              * @default
              */
             text: string;
-            /**
-             * Topic
-             * @default
-             */
-            topic: string;
-            /**
-             * Mode
-             * @default summarize
-             */
-            mode: string;
+            /** Turns */
+            turns?: components["schemas"]["PodcastTurnIn"][];
             /** Speakers */
-            speakers?: string[];
+            speakers?: components["schemas"]["PodcastSpeakerIn"][];
             /**
              * Speed
              * @default 1
              */
             speed: number;
+        };
+        /** PodcastSpeakerIn */
+        PodcastSpeakerIn: {
+            /** Value */
+            value: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+        };
+        /**
+         * PodcastTurnIn
+         * @description 照稿念的一段:`speaker` 是 `speakers` 里的第几位。
+         */
+        PodcastTurnIn: {
+            /** Speaker */
+            speaker: number;
+            /** Text */
+            text: string;
         };
         /**
          * PoemOut
@@ -17239,6 +17280,62 @@ export interface components {
              * @default first_frame
              */
             role: string;
+        };
+        /**
+         * SpeechCreate
+         * @description 创作页「语音」(ADR 0055):念一段字。音色一格和工作流、画板、智能体同一个口径 —— 克隆引擎是配音库里的嗓子 id,别的引擎是
+         *     它自己的音色(能复刻的引擎点配音库里的嗓子时也是嗓子 id)。
+         */
+        SpeechCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Session Id */
+            session_id?: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /** Text */
+            text: string;
+            /** Engine */
+            engine: string;
+            /** Voice */
+            voice: string;
+            /**
+             * Voice Label
+             * @default
+             */
+            voice_label: string;
+            /**
+             * Engine Label
+             * @default
+             */
+            engine_label: string;
+            /**
+             * Engine Voice Resource
+             * @default
+             */
+            engine_voice_resource: string;
+            /** Provider Profile Id */
+            provider_profile_id?: string | null;
+            /**
+             * Engine Model
+             * @default
+             */
+            engine_model: string;
+            /**
+             * Clone Engine
+             * @default
+             */
+            clone_engine: string;
+            /**
+             * Clone Model
+             * @default
+             */
+            clone_model: string;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
         };
         /**
          * SplitClipPointsBatchRequest
@@ -23600,39 +23697,6 @@ export interface operations {
             };
         };
     };
-    generate_podcast_api_tts_podcast_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PodcastRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_tts_voices_api_tts_voices_get: {
         parameters: {
             query: {
@@ -25915,6 +25979,7 @@ export interface operations {
                 workspace_id: string;
                 kind?: string | null;
                 top_level?: boolean;
+                recorded?: boolean;
             };
             header?: never;
             path?: never;
@@ -26859,6 +26924,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GenerationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_speech_api_generation_speech_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpeechCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_podcast_api_generation_podcast_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PodcastCreate"];
             };
         };
         responses: {

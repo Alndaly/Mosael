@@ -8722,6 +8722,141 @@ def _recurring(phase: MigrationPhase, *operations: Any) -> tuple[MigrationStep, 
     )
 
 
+def _migrate_speech_and_podcast_join_creation_sessions() -> None:
+    """创作页之前做的语音、播客并进创作会话(ADR 0055 §8):每人每种一条「以前的语音」/「以前的播客」。
+
+    此前它们只有任务行(`kind` 为 tts / podcast)和产出的素材,没有会话、没有记录;请求只在任务的 payload 里,文字只存了
+    前 200 字(播客 500 字)。收的是:成功了的、顶层的(工作流派的子任务不收)、有人发起的、不是零件的(字幕配音逐句的
+    `intermediate`)、产出还在而且不是零件、还没有记录指着它的任务。按(工作区、发起人、种类)各开一条会话,主人是发起人;
+    每个任务一条记录,时间照任务的;文字只剩开头的,记录上标 `truncated`。补上 `generated_assets` 那一行;播客的对谈稿
+    (`result.texts`)抄进素材的 `media_info.dialogue`、发音人抄进 `media_info.speakers`(还没有才抄)。
+
+    任务行已经被「清空已结束」删掉的老产出,素材上没记是谁做的,开不了私人会话:**留在素材库里,不进会话**。分不出来源的
+    顶层任务(画板「念出来」、笔记朗读)一并收进来 —— 宁可多收几条,不丢。音色名不在这里查(内置音色表是会变的代码),
+    配音库里的嗓子写它的名字,别的留给界面按引擎的音色目录认。
+    """
+    needed = {"jobs", "generation_sessions", "generation_jobs", "generated_assets", "assets", "users"}
+    tables = set(inspect(engine).get_table_names())
+    if not needed <= tables:
+        return
+    titles = {"speech": "以前的语音", "podcast": "以前的播客"}
+    kinds = {"tts": "speech", "podcast": "podcast"}
+    limits = {"speech": 200, "podcast": 500}
+
+    def _object(raw: Any) -> dict[str, Any]:
+        try:
+            value = json.loads(raw) if isinstance(raw, str) else raw
+        except ValueError:
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            "SELECT j.id, j.workspace_id, j.kind, j.created_by, j.payload, j.result, j.created_at, j.updated_at "
+            "FROM jobs j WHERE j.kind IN ('tts', 'podcast') AND j.status = 'succeeded' AND j.parent_job_id IS NULL "
+            "AND j.created_by IS NOT NULL "
+            "AND NOT EXISTS (SELECT 1 FROM generation_jobs g WHERE g.job_id = j.id) "
+            "ORDER BY j.created_at, j.id"
+        )).all()
+        if not rows:
+            return
+        users = {one for (one,) in conn.execute(text("SELECT id FROM users"))}
+        profiles = (
+            {one for (one,) in conn.execute(text("SELECT id FROM provider_profiles"))}
+            if "provider_profiles" in tables else set()
+        )
+        voice_names = (
+            {one: name for one, name in conn.execute(text("SELECT id, name FROM voices"))} if "voices" in tables else {}
+        )
+        sessions: dict[tuple[str, str, str], str] = {}
+        for job_id, workspace_id, job_kind, created_by, raw_payload, raw_result, created_at, updated_at in rows:
+            payload, result = _object(raw_payload), _object(raw_result)
+            if str(payload.get("intermediate") or "") or created_by not in users:
+                continue
+            asset_id = str(result.get("asset_id") or "")
+            asset = conn.execute(
+                text("SELECT media_info, intermediate FROM assets WHERE id = :id AND workspace_id = :ws"),
+                {"id": asset_id, "ws": workspace_id},
+            ).first() if asset_id else None
+            if asset is None or asset[1]:
+                continue
+            kind = kinds[job_kind]
+            if kind == "speech":
+                voice_id = str(payload.get("voice_id") or "")
+                provider = str(payload.get("engine") or "") or "builtin:clone"
+                model = voice_id or str(payload.get("engine_voice") or "")
+                prompt = str(payload.get("text") or "")
+                request: dict[str, Any] = {"prompt": prompt, "voice": model}
+                if voice_id in voice_names:
+                    request["voice_label"] = voice_names[voice_id]
+                if payload.get("clone_engine"):
+                    request["clone_engine"] = str(payload["clone_engine"])
+            else:
+                provider, model = "builtin:volcano-podcast", "dialogue"
+                mode = str(payload.get("mode") or "summarize")
+                prompt = str(payload.get("topic") or "") if mode == "research" else str(payload.get("text") or "")
+                speakers = [str(one) for one in payload.get("speakers") or [] if one]
+                request = {"mode": mode, "prompt": prompt, "speakers": [{"value": one, "label": ""} for one in speakers]}
+                media_info = _object(asset[0])
+                texts = result.get("texts")
+                if isinstance(texts, list) and texts and "dialogue" not in media_info:
+                    media_info["dialogue"] = [
+                        {"speaker": str(one.get("speaker") or ""), "text": str(one.get("text") or "")}
+                        for one in texts if isinstance(one, dict)
+                    ]
+                    media_info.setdefault("speakers", [{"value": one, "label": ""} for one in speakers])
+                    conn.execute(
+                        text("UPDATE assets SET media_info = :info WHERE id = :id"),
+                        {"info": json.dumps(media_info, ensure_ascii=False), "id": asset_id},
+                    )
+            #: payload 只存了开头(主题例外,它存的是全文):够长的就是被截过的,界面写「只保留了开头」。
+            if len(prompt) >= limits[kind] and request.get("mode") != "research":
+                request["truncated"] = True
+            key = (workspace_id, created_by, kind)
+            session_id = sessions.get(key)
+            if session_id is None:
+                session_id = uuid.uuid4().hex
+                sessions[key] = session_id
+                conn.execute(
+                    text(
+                        "INSERT INTO generation_sessions (id, workspace_id, owner_user_id, title, group_id, "
+                        "provider_profile_id, model, kind, created_at, updated_at) "
+                        "VALUES (:id, :ws, :owner, :title, NULL, NULL, :model, :kind, :created, :updated)"
+                    ),
+                    {"id": session_id, "ws": workspace_id, "owner": created_by, "title": titles[kind],
+                     "model": provider, "kind": kind, "created": created_at, "updated": updated_at},
+                )
+            else:
+                conn.execute(
+                    text("UPDATE generation_sessions SET updated_at = :updated, model = :model WHERE id = :id"),
+                    {"updated": updated_at, "model": provider, "id": session_id},
+                )
+            profile = str(payload.get("provider_profile_id") or "")
+            conn.execute(
+                text(
+                    "INSERT INTO generation_jobs (id, workspace_id, session_id, job_id, provider_profile_id, provider, "
+                    "model, kind, request, result_asset_id, error, error_key, error_params, created_at, updated_at) "
+                    "VALUES (:id, :ws, :session, :job, :profile, :provider, :model, :kind, :request, :asset, NULL, '', "
+                    "'{}', :created, :updated)"
+                ),
+                {"id": uuid.uuid4().hex, "ws": workspace_id, "session": session_id, "job": job_id,
+                 "profile": profile if profile in profiles else None, "provider": provider, "model": model,
+                 "kind": kind, "request": json.dumps(request, ensure_ascii=False), "asset": asset_id,
+                 "created": created_at, "updated": updated_at},
+            )
+            if conn.execute(text("SELECT 1 FROM generated_assets WHERE asset_id = :id"), {"id": asset_id}).first() is None:
+                conn.execute(
+                    text(
+                        "INSERT INTO generated_assets (asset_id, provider, model, prompt, parameters, job_id) "
+                        "VALUES (:asset, :provider, :model, :prompt, :parameters, :job)"
+                    ),
+                    {"asset": asset_id, "provider": provider, "model": model, "prompt": prompt,
+                     "parameters": json.dumps({key: value for key, value in request.items() if key != "prompt"},
+                                              ensure_ascii=False),
+                     "job": job_id},
+                )
+
+
 def migration_plan() -> MigrationPlan:
     """Declare startup migration order in one validated plan.
 
@@ -9056,6 +9191,8 @@ def migration_plan() -> MigrationPlan:
             #: 删素材不再连带删掉发布记录(MED-3):外键改 SET NULL 只能重建表。要在 SCHEMA 之后 —— 新表照现在的 ORM 建,
             #: 那时 publish_tasks 上 ORM 要的其余列(options、claimed_by、post)都已由上面那几步补上。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_publish_records_outlive_their_asset),
+            #: 创作页之前做的语音、播客并进创作会话(ADR 0055 §8)。要在 SCHEMA 之后:会话、记录的表照现在的 ORM 建好了。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_speech_and_podcast_join_creation_sessions),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

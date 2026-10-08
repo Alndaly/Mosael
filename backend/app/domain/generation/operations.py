@@ -34,9 +34,9 @@ from app.domain.generation.catalog import (
 )
 from app.domain.generation.missing import explain_missing
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
-from app.core.i18n import LocalizedError, pick_text, tr
+from app.core.i18n import LocalizedError, fragment, pick_text, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
-from app.domain.generation.sessions import ensure_writable, new_session
+from app.domain.generation.sessions import SESSION_FAMILIES, ensure_writable, has_records, new_session, same_family
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
@@ -222,6 +222,7 @@ def _create_generation_job(
     digital_human_consent: bool = False,
     workbench_graph: dict[str, Any] | None = None,
     carried_notes: Sequence[str] = (),
+    lock_family: bool = False,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
@@ -238,6 +239,9 @@ def _create_generation_job(
     授权」(ADR 0028 §5),否则当场拒 —— AI 工作台、智能体、画板、工作流、定时任务都从这里过,一处都漏不掉。
     工作流里人物说话 / 图片说话 / 对口型的节点在自己那一层已经查过(资产声明或面板上的确认),传 True 进来。
 
+    `lock_family`:点了名的会话锁「族」(ADR 0055 §2)—— 创作页的规矩,只有创作页的入口传 True。别处(画板、工作流、智能体、
+    以后按出处归的会话,ADR 0052)往自己那条会话里放什么种类都行:一块画板的会话本来就有图有歌。
+
     `workbench_graph`:ComfyUI 工作台跑**画布上现在这张**(ADR 0038 §6):前端 `graphToPrompt` 出来的 API 图、界面格式、前端的
     `clientId`(工作流库那一侧规整过,见 workflow_library.run_canvas)。图就是用户要跑的样子 —— 不补声明的默认值、不按模型的
     提示词 / 参数 / 素材规矩判(那些说的是存着的那张),调用方也不给提示词、参数和素材。它放在**任务的载荷**里交给执行器
@@ -248,7 +252,11 @@ def _create_generation_job(
     我们替他补的那几段。"""
     #: 点了名的会话**先**过写闸:共享给他的会话只能看。放在渲 3D 参考、把本地素材传上公网这些
     #: 花时间(可能花钱)的事之前 —— 一个注定被拒的请求不该先把那些做完。
-    named = _named_session(db, workspace_id=workspace_id, session_id=session_id, actor=created_by) if session_id else None
+    named = (
+        _named_session(db, workspace_id=workspace_id, session_id=session_id, actor=created_by,
+                       family_of=kind if lock_family else None)
+        if session_id else None
+    )
     #: 数字人的授权同样在花钱(上传、渲参考)之前问。
     talking = is_digital_human_request(source_assets, parameters)
     if talking and not digital_human_consent:
@@ -394,6 +402,8 @@ def _create_generation_job(
         payload={
             #: 没写提示词时写模型叫什么(主名:表单入口是表单标题,ADR 0045),不写模型 id —— 表单入口的 id 是 `路径#app`
             "subject": (prompt or prompt_for_provider(request_text))[:80] or (resolved.row.display_name or model)[:80],
+            #: 任务中心「前往」打开的是这条创作会话(job_catalog 的 record_field,ADR 0055 §9)。
+            "session_id": session.id,
             "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,
             "model": model,
@@ -606,14 +616,32 @@ def _resolve_provider_profile(
     return profile
 
 
-def _named_session(db: Session, *, workspace_id: str, session_id: str, actor: str | None) -> GenerationSession:
+def _named_session(
+    db: Session, *, workspace_id: str, session_id: str, actor: str | None, family_of: str | None = None
+) -> GenerationSession:
     """调用方点了名的那条会话:得在这个工作区里,而且得是**他自己的** —— 共享给他的会话只能看
-    (见 generation/sessions)。"""
+    (见 generation/sessions)。`family_of`:创作页的入口要求这一次的种类和会话同一族(`ensure_same_family`);
+    别的入口不传。语音、播客的入口(generation.voiced)也过这里。"""
     session = db.get(GenerationSession, session_id)
     if session is None or session.workspace_id != workspace_id:
         raise GenerationDomainError("Generation session not found in this workspace")
     ensure_writable(db, session, actor)
+    if family_of is not None:
+        ensure_same_family(db, session, family_of)
     return session
+
+
+def ensure_same_family(db: Session, session: GenerationSession, kind: str) -> None:
+    """会话锁「族」(ADR 0055 §2):创作页里有了记录的会话,换种类只能在同一族里换 —— 在创作页往里生成、改它记着的种类都过这里。
+    没有记录的(刚开、还空着)随便换:那时它还不是任何东西的会话。这是创作页的规矩,不是会话本身的:按出处归的会话(一块画板一条,
+    ADR 0052)有图有歌,画板往里放什么不受它管。"""
+    if same_family(session.kind, kind) or not has_records(db, session):
+        return
+    raise GenerationDomainError(
+        "genErr_sessionFamilyLocked",
+        session=fragment(f"genFamily_{SESSION_FAMILIES[session.kind or '']}"),
+        kind=fragment(f"genFamily_{SESSION_FAMILIES[kind]}"),
+    )
 
 
 def _resolve_session(
@@ -627,8 +655,8 @@ def _resolve_session(
 ) -> GenerationSession:
     """这一次生成收在哪条会话线程里:点了名的(已经过了 `_named_session`)就是那条,没点名就现开一条。
 
-    现开的那条记下这次的连接、模型和种类(`engine`):AI 工作台按种类把会话分到「生成」和「音频」两页,
-    不记的话,从画板生成的一首歌会出现在「生成」页里;记下模型,打开这条会话时选择器停在它用过的那个上。
+    现开的那条记下这次的连接、模型和种类(`engine`):创作页按种类筛会话(ADR 0055),不记的话,从画板生成的一首歌
+    会出现在「图像」那一栏里;记下模型,打开这条会话时选择器停在它用过的那个上。点了名的那条也记下这一次的种类。
 
     **现开的那条必须有主。** 生成会话和对话一样是某人的私人线程,列表按
     `owner_user_id == 我 或 被共享` 过滤 —— 不设主人的话它是 NULL,谁都匹配不上,
@@ -638,11 +666,13 @@ def _resolve_session(
     界面那条路一直是传 session_id 的,所以这件事只在**另外四个入口**上发生:从画板生成、
     工作流的 ai_generate、智能体生成、定时任务 —— 它们都传 session_id=None。
     """
+    provider_profile_id, model, kind = engine
     if named is not None:
         if named.title == "新生成":
             named.title = _title_from_prompt(prompt)
+        #: 会话记着最后一次用的种类(ADR 0055 §2):创作页的筛选按它归 —— 先出图、后生视频的会话归到「视频」。
+        named.kind = kind
         return named
-    provider_profile_id, model, kind = engine
     return new_session(
         db,
         workspace_id=workspace_id,

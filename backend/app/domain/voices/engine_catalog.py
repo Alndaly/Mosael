@@ -41,6 +41,8 @@ from app.ai.providers import (
     connection_vendor_for_speech_engine,
 )
 
+from app.domain.voices.voice_labels import builtin_voice_label
+
 logger = logging.getLogger(__name__)
 
 def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
@@ -169,6 +171,22 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
     return engines + _plugin_engines(db, user_id)
 
 
+def engine_label(db: Session, engine: str, user_id: str | None) -> str:
+    """一个配音引擎给人看的名字(按当前语言)。不问插件要音色 —— 只认名字,所以不起插件调用。认不出就是 id 本身。"""
+    from app.core.i18n import tr
+
+    for row in describe_engines(None, user_id):
+        if row["id"] == engine:
+            return tr(str(row["label"]))
+    if is_plugin(engine):
+        from app.domain import capabilities
+
+        for provider in capabilities.plugin_providers(db, user_id, CAPABILITY):
+            if provider.id == engine:
+                return provider.name
+    return engine
+
+
 def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, object]]:
     """认领 `speech` 的插件连接,和内置引擎同一个形状。音色问插件要(`op: voices`);没配好的照列,`ready` 为假。"""
     if db is None:
@@ -281,8 +299,7 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dic
         # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——
         # 只查 edge 的话,播客那四个会显示成 `zh_male_dayixiansheng_v2_saturn_bigtts`
         # 这种一眼认不出谁是谁的原始 id(真机截图)。
-        labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
-        return [{"value": voice, "label": labels.get(voice, voice)} for voice in voices]
+        return [{"value": voice, "label": builtin_voice_label(voice) or voice} for voice in voices]
 
     # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/providers/credentials) ——
     # 列音色用的是我的账号,不是"这个部署里随便谁的"。
@@ -392,7 +409,6 @@ def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> lis
     from app.core.i18n import tr
     from app.domain.voices.voices import list_voices
 
-    labels = {**dict(EDGE_BUILTIN_VOICES), **dict(VOLCANO_BUILTIN_VOICES)}
     found: list[dict[str, Any]] = []
     for engine in describe_engines(db, user_id):
         if engine["id"] == PODCAST_ENGINE:
@@ -400,7 +416,7 @@ def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> lis
         if engine["id"] == CLONE_ENGINE:
             voices = [{"id": voice.id, "name": voice.name} for voice in list_voices(db, workspace_id)]
         else:
-            voices = [{"id": str(voice), "name": labels.get(str(voice), str(voice))} for voice in engine["voices"]]
+            voices = [{"id": str(voice), "name": builtin_voice_label(str(voice)) or str(voice)} for voice in engine["voices"]]
             if _clones_remotely(str(engine["id"])):
                 #: 能复刻的引擎(CosyVoice)也念得了配音库里的嗓子(念它的远端副本,第一次要用户同意上传)。
                 voices += [{"id": one["value"], "name": one["label"], "cloned": True} for one in cloned_voices(db, workspace_id)]

@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Job, User
+from app.db.models import GenerationJob, Job, User
 from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter, jobs_writable_filter
 from app.core.unit_of_work import unit_of_work
 from app.domain.jobs import DELETE_JOBS_BATCH, cancel_job, delete_jobs, plan_clear_finished
@@ -17,12 +17,18 @@ from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_w
 
 
 def list_jobs(
-    db: Session, user: User, workspace_id: str, *, kind: str | None = None, top_level: bool = False
+    db: Session, user: User, workspace_id: str, *, kind: str | None = None, top_level: bool = False,
+    recorded: bool = False,
 ) -> list[Job]:
     ensure_workspace_access(db, user, workspace_id)
     stmt = select(Job).where(Job.workspace_id == workspace_id, jobs_filter(Job.id, user, workspace_id))
     if kind:
         stmt = stmt.where(Job.kind == kind)
+    if recorded:
+        #: 挂着创作记录的(生成、创作页的语音和播客,ADR 0055):创作页只要这些的进度。
+        stmt = stmt.where(Job.id.in_(
+            select(GenerationJob.job_id).where(GenerationJob.workspace_id == workspace_id, GenerationJob.job_id.is_not(None))
+        ))
     # 任务中心传 top_level:只列顶层任务,工作流派生的子任务(parent_job_id 非空)收到父下,不再平铺。
     if top_level:
         stmt = stmt.where(Job.parent_job_id.is_(None))

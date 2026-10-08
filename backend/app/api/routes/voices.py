@@ -19,7 +19,6 @@ from app.api.schemas import (
     VoiceDeleteOut,
     VoicePreviewRequest,
     TtsEngineChoiceOut,
-    PodcastRequest,
     TtsVoiceOut,
     JobOut,
     SynthesizeRequest,
@@ -243,27 +242,6 @@ def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
 
     locale = get_current_locale()
     return [translate_fields(row, ("label", "note"), locale) for row in describe_engines(db, user.id)]
-
-
-@router.post("/tts/podcast", response_model=JobOut)
-def generate_podcast(body: PodcastRequest, db: Tx, user: CurrentUser) -> Job:
-    """Queue a podcast. Same permission as any other AI spend in the workspace."""
-    voice_uc.ensure_can_speak(db, user, body.workspace_id)
-    try:
-        return voices.start_podcast(
-            db,
-            workspace_id=body.workspace_id,
-            project_id=body.project_id,
-            created_by=user.id,
-            text=body.text,
-            topic=body.topic,
-            mode=body.mode,
-            speakers=body.speakers,
-            speed=body.speed,
-            provider_profile_id=body.provider_profile_id,
-        )
-    except voices.VoiceError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/tts/voices", response_model=list[TtsVoiceOut])

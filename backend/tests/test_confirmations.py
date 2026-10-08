@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -273,13 +272,18 @@ def test_配音按音色认出配好了的云端引擎_不看语音合成默认�
     """配音没有默认(引擎和音色成对选):此前留空引擎就去查「语音合成的默认模型」,把连接的 vendor(`openai`)
     当引擎 id 传下去 —— 合成那一步不认它,而界面上根本设不了那一格。现在按音色认:`nova` 是 OpenAI 的。
     合成本身会联网,这里只截住任务的起点,看它拿到的是不是一对认得出的 (引擎 id, 音色)。"""
+    from app.domain.jobs import create_job
+
     captured: dict = {}
+    made: list[str] = []
 
-    def fake_start_synthesis(**kwargs):
+    def fake_start_synthesis(db, **kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(id="tts-job-1")
+        job = create_job(db, workspace_id=kwargs["workspace_id"], kind="tts", payload={}, created_by=None)
+        made.append(job.id)
+        return job
 
-    monkeypatch.setattr("app.domain.voices.voices.start_synthesis", lambda _db, **kwargs: fake_start_synthesis(**kwargs))
+    monkeypatch.setattr("app.domain.voices.voices.start_synthesis", fake_start_synthesis)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     profile = client.post(
@@ -302,7 +306,8 @@ def test_配音按音色认出配好了的云端引擎_不看语音合成默认�
     assert data["payload"]["engine"] == "builtin:openai"
     approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
-    assert approved["result"]["job_id"] == "tts-job-1"
+    assert approved["result"]["job_id"] == made[0]
+    assert approved["result"]["session_id"], "念的那一段记成创作页里的一条新会话(ADR 0055)"
     assert captured["engine"] == "builtin:openai"
     assert captured["engine_voice"] == "nova"
     assert "engine_model" not in captured, "没点名模型就用连接自己的,不去套「默认模型」那一格"

@@ -113,6 +113,55 @@ class GenerationCreate(ApiModel):
     digital_human_consent: bool = False
 
 
+class SpeechCreate(ApiModel):
+    """创作页「语音」(ADR 0055):念一段字。音色一格和工作流、画板、智能体同一个口径 —— 克隆引擎是配音库里的嗓子 id,别的引擎是
+    它自己的音色(能复刻的引擎点配音库里的嗓子时也是嗓子 id)。"""
+
+    workspace_id: str
+    session_id: str | None = None
+    project_id: str | None = None
+    text: str = Field(min_length=1, max_length=2000)
+    engine: str = Field(min_length=1, max_length=80)
+    voice: str = Field(min_length=1, max_length=120)
+    #: 界面那份目录里的名字(火山按账号现拉的音色只有界面知道名字):记录、产出的素材名用它。没给就由后端查。
+    voice_label: str = Field(default="", max_length=120)
+    engine_label: str = Field(default="", max_length=120)
+    #: 火山:音色的资源族(只有目录知道)。
+    engine_voice_resource: str = Field(default="", max_length=60)
+    provider_profile_id: str | None = None
+    engine_model: str = Field(default="", max_length=120)
+    #: 本机克隆这一次用哪个引擎、哪份权重(空 = 部署配置里的默认)。
+    clone_engine: str = Field(default="", max_length=40)
+    clone_model: str = Field(default="", max_length=40)
+    speed: float = Field(default=1.0, ge=0.25, le=3.0)
+
+
+class PodcastTurnIn(ApiModel):
+    """照稿念的一段:`speaker` 是 `speakers` 里的第几位。"""
+
+    speaker: int = Field(ge=0, le=1)
+    text: str = Field(min_length=1, max_length=280)
+
+
+class PodcastSpeakerIn(ApiModel):
+    value: str = Field(min_length=1, max_length=120)
+    label: str = Field(default="", max_length=120)
+
+
+class PodcastCreate(ApiModel):
+    """创作页「播客」(ADR 0055 §6):改写材料(`text` 是材料)、聊一个主题(`text` 是主题)、照稿念(`turns`)。"""
+
+    workspace_id: str
+    session_id: str | None = None
+    project_id: str | None = None
+    provider_profile_id: str | None = None
+    mode: str = Field(pattern="^(summarize|read|research)$")
+    text: str = Field(default="", max_length=20000)
+    turns: list[PodcastTurnIn] = Field(default_factory=list, max_length=60)
+    speakers: list[PodcastSpeakerIn] = Field(default_factory=list, max_length=2)
+    speed: float = Field(default=1.0, ge=0.25, le=3.0)
+
+
 class GenerationJobOut(OrmModel):
     id: str
     workspace_id: str
@@ -240,8 +289,8 @@ class GenerationSessionCreate(ApiModel):
     title: str = Field(default="新生成", max_length=200)
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=160)
-    #: 会话一定有种类:AI 工作台按它分页(图像 / 视频在「生成」页,音频在「音频」页)。没说就是图像。
-    kind: str = Field(default="image", pattern="^(image|video|audio)$")
+    #: 会话一定有种类:创作页按它筛(ADR 0055)。没说就是图像。
+    kind: str = Field(default="image", pattern="^(image|video|audio|speech|podcast)$")
 
 
 class GenerationSessionUpdate(ApiModel):
@@ -250,7 +299,8 @@ class GenerationSessionUpdate(ApiModel):
     group_id: str | None = None
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=160)
-    kind: str | None = Field(default=None, pattern="^(image|video|audio)$")
+    #: 有记录的会话只在同一族里换(ADR 0055 §2),不同族 422。
+    kind: str | None = Field(default=None, pattern="^(image|video|audio|speech|podcast)$")
 
 
 class GenerationSessionOut(OrmModel):

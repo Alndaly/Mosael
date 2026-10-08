@@ -1084,8 +1084,10 @@ def record_failure(db, job: Job) -> None:
     挂在任务**落终态**那一刻(jobs.register_settle_listener),而不是写在 `_fail` 里:让任务失败的不止执行体
     自己 —— 用户取消(cancel_job)、重启时接不回来(reconcile_orphaned_jobs)、外部 worker 租约过期,这几条都不经过
     `_fail`,而它们都经过这一道。存的是 key 加参数,读的时候按读的人的语言翻(GenerationJobOut),和任务同一条规矩。
+
+    **不看任务种类,看有没有记录挂着它**:创作页的语音、播客记录挂的是 `tts` / `podcast` 任务(ADR 0055 §5)。
     """
-    if job.kind != "ai_generation" or job.status != "failed":
+    if job.status != "failed":
         return
     for generation in db.scalars(select(GenerationJob).where(GenerationJob.job_id == job.id)):
         generation.error = job.error

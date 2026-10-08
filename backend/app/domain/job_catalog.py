@@ -46,9 +46,11 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("render", "always", ("assets", "sequences"), view="editor"),
         JobKind("transcribe", "always", ("assets", "transcripts"), view="editor"),
         JobKind("subtitle_dub", "always", ("assets", "sequences"), view="editor"),
-        JobKind("ai_generation", "always", ("assets", "generations"), view="ai"),
-        JobKind("tts", "always", ("assets",), view="ai"),
-        JobKind("podcast", "always", ("assets",), view="ai"),
+        #: 「前往」打开那条创作会话(ADR 0055 §9)。
+        JobKind("ai_generation", "always", ("assets", "generations"), view="ai", record_field="session_id"),
+        #: 创作页的语音、播客挂着生成记录(ADR 0055):落终态时生成会话、记录也要刷。
+        JobKind("tts", "always", ("assets", "generations"), view="ai", record_field="session_id"),
+        JobKind("podcast", "always", ("assets", "generations"), view="ai", record_field="session_id"),
         # 把配音库里的一把嗓子复刻到百炼(ADR 0037):上传、建、等它就绪,十来秒;改动的是配音库那一行显示的「在哪儿能念」。
         JobKind("voice_enroll", "always", ("voices",)),
         JobKind("url_import", "always", ("assets",), view="media"),

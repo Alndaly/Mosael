@@ -107,7 +107,7 @@ def classify(method: str, path: str, settings: RateLimitSettings) -> LimitRule |
         return LimitRule("auth", max(1, settings.rate_limit_auth_per_minute))
     tail = path.rsplit("/", 1)[-1]
     billable = (
-        path == "/api/generation/jobs"
+        path in {"/api/generation/jobs", "/api/generation/speech", "/api/generation/podcast"}
         or path == "/api/generation/optimize-prompt"
         or path == "/api/confirmations"
         or (path.startswith("/api/confirmations/") and path.endswith("/approve"))

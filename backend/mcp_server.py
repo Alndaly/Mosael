@@ -669,7 +669,8 @@ def open_view(view: str, id: str = "") -> dict[str, Any]:
     `view` is one of: home, statistics, media, entities, notes, scenes, editor, ai, publish, settings,
     workflows, boards, scheduler, plugins, browser-pool, admin. `id` selects a project in
     editor, a note in notes, a 3D scene in scenes, an asset-library entry in entities, a board in
-    boards, or a workflow in workflows. Other pages ignore id.
+    boards, a workflow in workflows, or a creation session in ai (the `session_id` a generate_* card
+    returned); ai without id opens the chat. Other pages ignore id.
 
     Do NOT use it to shuffle the user around while you work — a page that changes under
     someone reading it is worse than no navigation at all. One destination, once you have one.

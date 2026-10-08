@@ -21,6 +21,28 @@ from app.domain.permissions import NotVisible
 #: 共享记录里这一类叫什么(见 domain/sharing.KINDS)。
 SHARE_KIND = "generation_session"
 
+#: 创作会话的种类和它们各属哪一「族」(ADR 0055 §2):生成管线的三种(ADR 0022),加上由配音那一族做的语音、播客。
+#: 一条会话有了记录之后只在同一族里换模型 —— 视觉一族保留「拿上一张图生视频」;要念字、要出歌就新开一条。
+SESSION_FAMILIES: dict[str, str] = {
+    "image": "visual",
+    "video": "visual",
+    "audio": "music",
+    "speech": "speech",
+    "podcast": "podcast",
+}
+SESSION_KINDS: tuple[str, ...] = tuple(SESSION_FAMILIES)
+
+
+def same_family(one: str | None, other: str | None) -> bool:
+    """两种是不是同一族。认不出的种类(老库里的空值)不拦。"""
+    if not one or not other or one not in SESSION_FAMILIES or other not in SESSION_FAMILIES:
+        return True
+    return SESSION_FAMILIES[one] == SESSION_FAMILIES[other]
+
+
+def has_records(db: Session, session: GenerationSession) -> bool:
+    return db.scalar(select(GenerationJob.id).where(GenerationJob.session_id == session.id).limit(1)) is not None
+
 
 def readable_session(db: Session, user: User, session_id: str) -> GenerationSession:
     """他看得见的那条会话。看不见 = 不存在(404)。"""

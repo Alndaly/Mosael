@@ -52,7 +52,8 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起;执行体后面炸了、整个回滚,它就不起。
     generation_id = generation.id
     after_commit(db, lambda: start_generation_thread(generation_id))
-    result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id}
+    #: `session_id`:open_view("ai", 它) 把人带到这条创作会话(ADR 0055 §9)。
+    result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id, "session_id": generation.session_id}
     #: `@` 到的资产挂了哪几张参考图、哪几张没挂上(ADR 0027)—— 模型据此如实告诉用户,而不是以为全挂上了。
     if generation.request.get("entities"):
         result["entities"] = generation.request["entities"]
@@ -154,28 +155,24 @@ def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateAudio", {"asked": _asked_for(payload)}
 
 def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
-    """念卡上定好的那一对。参数经 synthesis_params 拼,和工作流、画板、字幕配音同一条路。"""
+    """念卡上定好的那一对,记成创作页里的一条新会话(ADR 0055 §4,和它出图一样)。参数经 synthesis_params 拼,和工作流、
+    画板、字幕配音同一条路。"""
     payload = confirmation.payload
-    from app.domain.voices.engine_catalog import synthesis_params
-    from app.domain.voices.voices import start_synthesis
+    from app.domain.generation.voiced import create_speech
 
-    params = synthesis_params(
+    record, job = create_speech(
         db,
-        engine=str(payload.get("engine") or ""),
-        voice=str(payload.get("voice") or ""),
-        speed=float(payload.get("speed") or 1.0),
-        user_id=actor,
         workspace_id=confirmation.workspace_id,
-        engine_model=str(payload.get("model") or "").strip(),
-    )
-    job = start_synthesis(
-        db,
-        text=str(payload.get("text") or ""),
+        session_id=None,
         project_id=payload.get("project_id"),
         created_by=actor,
-        **params,
+        text=str(payload.get("text") or ""),
+        engine=str(payload.get("engine") or ""),
+        voice=str(payload.get("voice") or ""),
+        engine_model=str(payload.get("model") or "").strip(),
+        speed=float(payload.get("speed") or 1.0),
     )
-    return {"job_id": job.id}
+    return {"job_id": job.id, "generation_id": record.id, "session_id": record.session_id}
 
 def _validate_generate_podcast(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     mode = str(payload.get("mode") or "summarize")
@@ -192,28 +189,34 @@ def _summarize_generate_podcast(db: Session, payload: dict[str, Any]) -> Summary
     return "confirm_generatePodcast", {"asked": _asked_for(payload)}
 
 def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """一段双人播客,记成创作页里的一条新会话(ADR 0055 §4)。「照读」给的是一段字(不是逐段的稿子):按句拆成两人轮流的几段
+    再交进去 —— 领域只认逐段的稿子(`turns`)。"""
     payload = confirmation.payload
-    from app.domain.voices.voices import start_podcast
-    from app.domain.providers import models as provider_models
+    from app.ai.providers import split_podcast_rounds
+    from app.domain.generation.voiced import create_podcast
 
-    profile_id = str(payload.get("provider_profile_id") or "").strip()
-    if not profile_id:
-        default = provider_models.resolve_default(db, "podcast", actor)
-        if default is not None:
-            profile_id = default.provider_profile_id
-    job = start_podcast(
+    mode = str(payload.get("mode") or "summarize")
+    text = str(payload.get("text") or payload.get("prompt") or "")
+    speakers = [str(one) for one in (payload.get("speakers") or []) if str(one or "").strip()]
+    turns = None
+    if mode == "read":
+        dual = len(speakers) != 1
+        turns = [{"speaker": index % 2 if dual else 0, "text": line}
+                 for index, line in enumerate(split_podcast_rounds(text, dual=dual))]
+    record, job = create_podcast(
         db,
         workspace_id=confirmation.workspace_id,
+        session_id=None,
         project_id=payload.get("project_id"),
         created_by=actor,
-        text=str(payload.get("text") or payload.get("prompt") or ""),
-        topic=str(payload.get("topic") or ""),
-        mode=str(payload.get("mode") or "summarize"),
-        speakers=list(payload.get("speakers") or []),
+        mode=mode,
+        text=str(payload.get("topic") or "") if mode == "research" else text,
+        turns=turns,
+        speakers=[{"value": one} for one in speakers],
         speed=float(payload.get("speed") or 1.0),
-        provider_profile_id=profile_id or None,
+        provider_profile_id=str(payload.get("provider_profile_id") or "").strip() or None,
     )
-    return {"job_id": job.id}
+    return {"job_id": job.id, "generation_id": record.id, "session_id": record.session_id}
 
 confirmable_tool(ConfirmableTool(
     name="generate_image",

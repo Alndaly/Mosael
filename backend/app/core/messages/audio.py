@@ -105,6 +105,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "voiceErr_referenceMissing": {"zh": "音色参考音频缺失", "en": "This voice's reference audio is missing."},
     "voiceErr_unknownPodcastMode": {"zh": "未知的播客模式:{mode}", "en": "Unknown podcast mode: {mode}"},
     "voiceErr_podcastWorkspaceRequired": {"zh": "播客需要指定工作区", "en": "A podcast needs a workspace."},
+    "voiceErr_podcastTurnSpeaker": {"zh": "照稿念里有一段没说清是哪位发音人念", "en": "A line of the script does not say which speaker reads it"},
+    #: 播客产出的素材名(ADR 0055 §7):「主题或材料开头 · 播客」。
+    "podcastAssetName": {"zh": "{subject} · 播客", "en": "{subject} · Podcast"},
+    "podcastAssetUntitled": {"zh": "未命名", "en": "Untitled"},
     "voiceErr_noVoiceSelected": {"zh": "没有选音色", "en": "No voice was selected."},
     "voiceErr_voiceNotInWorkspace": {
         "zh": "这个工作区的配音库里没有这个音色",

@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,7 +28,7 @@ from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 from app.media.probe import probe_media
 from app.core.child_process import run_logged
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line, strip_ansi
 from app.core.config import settings
 from app.domain.voices.errors import VoiceError
@@ -40,6 +41,45 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 REFERENCE_MAX_SECONDS = 15
+
+#: 产出登记成素材之后、任务落「成功」之前,调用方要接着做的那一步(同一个事务):`(db, 素材 id)`。
+#: 创作页的记录靠它挂上产出(generation.voiced,ADR 0055 §5);配音这一族不知道有生成记录。
+OnAsset = Callable[[Session, str], None]
+
+#: 素材名里文本开头取几个字(ADR 0055 §7)。西文一个词好几个字母,同样的长度只够半句,多给一些。
+NAME_HEAD_CHARS = 16
+NAME_HEAD_CHARS_LATIN = 28
+
+
+def _text_head(text: str) -> str:
+    flat = " ".join(text.split())
+    limit = NAME_HEAD_CHARS_LATIN if flat.isascii() else NAME_HEAD_CHARS
+    return flat if len(flat) <= limit else f"{flat[:limit].rstrip()}…"
+
+
+def _short_voice_name(label: str) -> str:
+    """「晓晓(女·温暖)」→「晓晓」:括号里是给挑音色的人看的说明,素材名里只要名字。"""
+    return re.split(r"[((]", label, maxsplit=1)[0].strip() or label.strip()
+
+
+def speech_asset_name(voice_label: str, text: str) -> str:
+    """念出来的那一段叫「音色名 · 文本开头」(ADR 0055 §7)。此前是 `zh-CN-XiaoxiaoNeural · 配音`:
+    露的是音色 id,而且每一段都一样,素材库里认不出哪段念的是什么。"""
+    name = _short_voice_name(voice_label)
+    head = _text_head(text)
+    return f"{name} · {head}" if head else name
+
+
+def podcast_asset_name(subject: str) -> str:
+    """播客叫「主题或材料开头 · 播客」(按发起时的语言,ADR 0055 §7)。此前一律是「播客对话」。"""
+    return tr("podcastAssetName", subject=_text_head(subject) or tr("podcastAssetUntitled"))
+
+
+def _voice_label(engine_voice: str, given: str = "") -> str:
+    """远端引擎的音色叫什么:调用方给的(界面上那份目录 —— 火山按账号现拉的音色只有它知道名字)→ 内置音色表 → 音色 id。"""
+    from app.domain.voices.voice_labels import builtin_voice_label
+
+    return given.strip() or builtin_voice_label(engine_voice) or engine_voice
 #: 零样本克隆靠这几秒把音色条件化。给不够就条件化不起来,模型会一路漫游到 token 上限,
 #: 出来是几十秒的胡话 —— 用户实测:2.6 秒的参考,换来四十多秒听不懂的东西。
 #: 这个下限本来就写在界面提示里(「5–15 秒」),只是从来没有人执行它。
@@ -419,6 +459,9 @@ def start_synthesis(
     clone_engine: str = "",
     clone_model: str = "",
     intermediate: str = "",
+    voice_label: str = "",
+    usage_source: tuple[str, str] | None = None,
+    on_asset: OnAsset | None = None,
 ) -> Job:
     """Queue a synthesis job.
 
@@ -429,6 +472,10 @@ def start_synthesis(
     `intermediate`: the caller is making a part, not a result — each line of a subtitle dub is one
     (see domain/assets/intermediates). The produced asset is registered as that kind, so the library
     leaves it out; whoever makes the part says so here, the synthesis itself does not guess.
+
+    `voice_label`:远端引擎的音色叫什么(界面那份目录里的名字),只用来给产出起名(`speech_asset_name`);没给就查内置音色表。
+    `usage_source`:这次合成的用量记在谁名下,默认是这个任务(`("job", 任务 id)`);创作页的记录传它自己(ADR 0055 §5)。
+    `on_asset`:产出登记之后、任务落「成功」之前在同一个事务里调(见 `OnAsset`)。
     """
     if not text.strip():
         raise VoiceError("voiceErr_textEmpty")
@@ -463,7 +510,7 @@ def start_synthesis(
     else:
         if not workspace_id:
             raise VoiceError("voiceErr_workspaceRequired")
-        label = engine_voice or engine
+        label = _voice_label(engine_voice, voice_label) or engine
         if voice_id:
             # 配音库里的一把嗓子,用远端引擎念(ADR 0037):嗓子在这个工作区、声明过是谁的、这个账号同意过上传 ——
             # 建任务之前问,没同意就回 409 让界面弹确认框,而不是排上队再失败。
@@ -497,6 +544,7 @@ def start_synthesis(
         message="jobMsg_ttsRunning", message_params={"voice": label},
     )
     job_id = job.id
+    asset_name = speech_asset_name(label, text)
     dispatch_job(
         db,
         job,
@@ -514,6 +562,10 @@ def start_synthesis(
             engine_model,
             clone_engine,
             clone_model,
+            asset_name=asset_name,
+            voice_label=label,
+            usage_source=usage_source,
+            on_asset=on_asset,
         ),
     )
     return job
@@ -533,6 +585,11 @@ def _run_synthesis(
     engine_model: str = "",
     clone_engine: str = "",
     clone_model: str = "",
+    *,
+    asset_name: str = "",
+    voice_label: str = "",
+    usage_source: tuple[str, str] | None = None,
+    on_asset: OnAsset | None = None,
 ) -> None:
     """Take an admission slot before touching the database — see run_job_guarded(派发处已经替它套上了兜底).
 
@@ -555,11 +612,12 @@ def _run_synthesis(
         clone_engine,
         clone_model,
     )
+    extra = {"asset_name": asset_name, "voice_label": voice_label, "usage_source": usage_source, "on_asset": on_asset}
     if engine == CLONE_ENGINE:
         with TTS_SLOTS:
-            _run_synthesis_body(*args)
+            _run_synthesis_body(*args, **extra)
     else:
-        _run_synthesis_body(*args)
+        _run_synthesis_body(*args, **extra)
 
 
 def _intermediate_of(job: Job) -> str:
@@ -599,6 +657,11 @@ def _run_synthesis_body(
     engine_model: str = "",
     clone_engine: str = "",
     clone_model: str = "",
+    *,
+    asset_name: str = "",
+    voice_label: str = "",
+    usage_source: tuple[str, str] | None = None,
+    on_asset: OnAsset | None = None,
 ) -> None:
     with unit_of_work() as db:
         job = db.get(Job, job_id)
@@ -612,7 +675,8 @@ def _run_synthesis_body(
             # 状态经总线写:排队时(等本机合成名额、派发器名额)被取消的,不在这里被写回「在跑」、照样去念。
             if not start_job(db, job, progress=0.2):
                 return
-            say(job, "jobMsg_ttsRunning", voice=voice.name if voice else (engine_voice or engine))
+            #: 任务上说「合成《晓晓》配音中」,不说音色 id(建任务时那一句同样用的是名字)
+            say(job, "jobMsg_ttsRunning", voice=voice_label or (voice.name if voice else _voice_label(engine_voice) or engine))
             emit_job_event(db, job.id, "job.running", {})
             # 「在念」先落库:合成要一阵(本机克隆十几分钟),界面要马上看得到。
             db.commit()
@@ -625,6 +689,9 @@ def _run_synthesis_body(
                     provider_profile_id=provider_profile_id,
                     model_override=engine_model,
                     voice=voice,
+                    asset_name=asset_name,
+                    usage_source=usage_source,
+                    on_asset=on_asset,
                 )
                 return
 
@@ -685,7 +752,7 @@ def _run_synthesis_body(
                     workspace_id=voice.workspace_id,
                     project_id=project_id,
                     source_path=out_wav,
-                    name=f"{voice.name} · 配音",
+                    name=asset_name or speech_asset_name(voice.name, text),
                     source="tts",
                     #: 合成人声(克隆的嗓子也是):成片里有它就要加 AI 标识(《深度合成管理规定》第十七条)。
                     ai_generated=True,
@@ -694,6 +761,8 @@ def _run_synthesis_body(
                 #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
                 #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
                 patch_media_info(db, asset.id, {"voice_id": voice.id})
+                if on_asset is not None:
+                    on_asset(db, asset.id)
             job = db.get(Job, job_id)
             result = {"asset_id": asset.id, "engine": used}
             if finish_job(db, job, status="succeeded", progress=1.0, result=result):
@@ -902,6 +971,9 @@ def _synthesize_remote(
     provider_profile_id: str | None = None,
     model_override: str = "",
     voice: Voice | None = None,
+    asset_name: str = "",
+    usage_source: tuple[str, str] | None = None,
+    on_asset: OnAsset | None = None,
 ) -> None:
     """Synthesise through a remote engine and register the result, mirroring the clone path.
 
@@ -909,7 +981,9 @@ def _synthesize_remote(
     but the outcome has to look identical to the caller: an audio asset on the job's result.
 
     `voice`: a cloned voice from the library, spoken through its remote copy (ADR 0037).
+    `asset_name` / `usage_source` / `on_asset`: see start_synthesis.
     """
+    source_type, source_id = usage_source or ("job", job.id)
     with tempfile.TemporaryDirectory(prefix="mosael-tts-") as tmp:
         out = speak_to_file(
             db,
@@ -923,8 +997,8 @@ def _synthesize_remote(
             provider_profile_id=provider_profile_id,
             model_override=model_override,
             out_dir=Path(tmp),
-            source_type="job",
-            source_id=job.id,
+            source_type=source_type,
+            source_id=source_id,
             job_id=job.id,
             voice_id=voice.id if voice is not None else None,
         )
@@ -938,7 +1012,7 @@ def _synthesize_remote(
             workspace_id=workspace_id,
             project_id=project_id,
             source_path=out,
-            name=f"{voice.name if voice is not None else (engine_voice or engine)} · 配音",
+            name=asset_name or speech_asset_name(voice.name if voice is not None else _voice_label(engine_voice) or engine, text),
             source="tts",
             ai_generated=True,
             intermediate=_intermediate_of(job),
@@ -946,10 +1020,19 @@ def _synthesize_remote(
         if voice is not None:
             # 和本机克隆那条同一个记法:这段音频是这把嗓子的克隆,拿去做数字人时照它查授权声明。
             patch_media_info(db, asset.id, {"voice_id": voice.id})
+        if on_asset is not None:
+            on_asset(db, asset.id)
     job = db.get(Job, job.id)
     if finish_job(db, job, status="succeeded", progress=1.0, result={"asset_id": asset.id, "engine": engine}):
         say(job, "jobMsg_ttsDone")
         emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
+
+
+def podcast_speakers(speakers: list[str] | None) -> list[str]:
+    """播客的发音人:给了用给的,没给用目录里的前两位 —— 发音人不花钱,不是替人挑一个要付费的东西(ADR 0055 §6)。"""
+    from app.ai.providers import PODCAST_SPEAKERS
+
+    return [voice for voice in (speakers or []) if voice] or [voice for voice, _ in PODCAST_SPEAKERS[:2]]
 
 
 def start_podcast(
@@ -961,23 +1044,57 @@ def start_podcast(
     text: str = "",
     topic: str = "",
     mode: str = "summarize",
+    turns: list[dict] | None = None,
     speakers: list[str] | None = None,
     speed: float = 1.0,
     provider_profile_id: str | None = None,
+    usage_source: tuple[str, str] | None = None,
+    on_asset: OnAsset | None = None,
 ) -> Job:
     """Queue a 火山 podcast job: two voices reading or discussing the given material.
 
     Separate from start_synthesis because it is a different product with a different
     credential and a different shape of request — one call produces a whole dialogue, not one
     utterance in a chosen voice.
+
+    三档(ADR 0055 §6):`summarize` 把 `text` 改写成对谈,`research` 联网查 `topic` 再讨论,`read` 照 `turns` 念 ——
+    `[{"speaker": 0|1, "text": ...}]`,`speaker` 是 `speakers` 里的第几位,一段一轮,原样交出去。发音人没给就用目录里的前两位
+    (发音人不花钱)。这几条规矩在**建任务之前**判:建了任务再失败,用户已经等了一阵、记录上多一张失败卡。
+
+    `usage_source` / `on_asset`:同 start_synthesis。
     """
-    from app.ai.providers import PodcastAction
+    from app.ai.providers import MAX_PODCAST_ROUNDS, MAX_PODCAST_ROUND_CHARS, PodcastAction
 
     actions = {"summarize": PodcastAction.SUMMARIZE, "read": PodcastAction.READ, "research": PodcastAction.RESEARCH}
     if mode not in actions:
         raise VoiceError("voiceErr_unknownPodcastMode", mode=mode)
     if not workspace_id:
         raise VoiceError("voiceErr_podcastWorkspaceRequired")
+    chosen = podcast_speakers(speakers)
+    script: list[dict] = []
+    if mode == "read":
+        for turn in turns or []:
+            line = str(turn.get("text") or "").strip()
+            if not line:
+                continue
+            index = turn.get("speaker")
+            if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(chosen):
+                raise VoiceError("voiceErr_podcastTurnSpeaker")
+            if len(line) > MAX_PODCAST_ROUND_CHARS:
+                raise VoiceError("providerErr_podcastTurnTooLong", limit=MAX_PODCAST_ROUND_CHARS)
+            script.append({"speaker": chosen[index], "text": line})
+        if not script:
+            raise VoiceError("providerErr_podcastReadNeedsText")
+        if len(script) > MAX_PODCAST_ROUNDS:
+            raise VoiceError("providerErr_podcastTooManyTurns", limit=MAX_PODCAST_ROUNDS)
+    else:
+        if len(chosen) != 2 or chosen[0] == chosen[1]:
+            raise VoiceError("providerErr_podcastNeedsTwoSpeakers")
+        if mode == "summarize" and not text.strip():
+            raise VoiceError("providerErr_podcastNeedsInputText")
+        if mode == "research" and not topic.strip():
+            raise VoiceError("providerErr_podcastNeedsTopic")
+    subject = topic if mode == "research" else script[0]["text"] if script else text
 
     job = create_job(
         db,
@@ -985,17 +1102,20 @@ def start_podcast(
         kind="podcast",
         created_by=created_by,
         payload={
+            "subject": " ".join(subject.split())[:80],
             "project_id": project_id,
             "mode": mode,
-            "speakers": speakers or [],
+            "speakers": chosen,
             "text": text[:500],
             "topic": topic,
+            "turns": len(script),
             "provider_profile_id": provider_profile_id,
         },
         message="jobMsg_podcastRunning",
     )
     job_id = job.id
     action = actions[mode]
+    asset_name = podcast_asset_name(subject)
     dispatch_job(
         db,
         job,
@@ -1006,9 +1126,13 @@ def start_podcast(
             text,
             topic,
             action,
-            speakers or [],
+            chosen,
             speed,
             provider_profile_id,
+            turns=script,
+            asset_name=asset_name,
+            usage_source=usage_source,
+            on_asset=on_asset,
         ),
     )
     return job
@@ -1024,8 +1148,14 @@ def _run_podcast_body(
     speakers: list[str],
     speed: float,
     provider_profile_id: str | None = None,
+    *,
+    turns: list[dict] | None = None,
+    asset_name: str = "",
+    usage_source: tuple[str, str] | None = None,
+    on_asset: OnAsset | None = None,
 ) -> None:
     from app.ai.providers import synthesize_volcano_podcast
+    from app.domain.voices.voice_labels import builtin_voice_label
     from app.domain.providers.selection import resolve_connection
 
     with unit_of_work() as db:
@@ -1044,6 +1174,9 @@ def _run_podcast_body(
         # and neither is the v3 speech API Key.
         token = (profile.api_key if profile else None) or ""
         appid = str((profile.extra if profile else {}).get("appid") or "")
+        source_type, source_id = usage_source or ("job", job_id)
+        #: 按交出去的字数计:改写是材料、讨论是主题、照稿念是每一段加起来。
+        characters = sum(len(turn["text"]) for turn in turns) if turns else len(text or topic or "")
 
         with tempfile.TemporaryDirectory(prefix="mosael-podcast-") as tmp:
             out = Path(tmp) / "podcast.mp3"
@@ -1054,20 +1187,21 @@ def _run_podcast_body(
                 workspace_id=workspace_id,
                 provider="volcano-podcast",
                 provider_profile_id=profile.id if profile else None,
-                source_type="job",
-                source_id=job_id,
+                source_type=source_type,
+                source_id=source_id,
                 job_id=job_id,
                 # 一个播客任务只合成一次,任务 id 就是那个稳定的工作单元 —— 崩了重跑不会重复计费。
                 idempotency_key=f"podcast:{job_id}",
             ) as call:
                 # 播客按输入文本量计费,和 TTS 同一类;说话人数会影响时长,一并记下来。
-                call.meter(characters=len(text or topic or ""), speakers=len(speakers or []), requests=1)
+                call.meter(characters=characters, speakers=len(speakers or []), requests=1)
                 result = synthesize_volcano_podcast(
                     appid,
                     token,
                     action=action,
                     input_text=text,
                     prompt_text=topic,
+                    turns=turns,
                     speakers=speakers,
                     speed=speed,
                     out_path=out,
@@ -1082,10 +1216,18 @@ def _run_podcast_body(
                 workspace_id=workspace_id,
                 project_id=project_id,
                 source_path=out,
-                name="播客对话",
+                name=asset_name or podcast_asset_name(topic or text),
                 source="podcast",
                 ai_generated=True,
             )
+            #: 对谈稿跟着这段音频走(ADR 0055 §6):任务会被清掉,素材不会;「改稿再念」、以后转字幕都从这里读。
+            patch_media_info(db, asset.id, {
+                "dialogue": [{"speaker": str(one.get("speaker") or ""), "text": str(one.get("text") or "")}
+                             for one in result.texts],
+                "speakers": [{"value": voice, "label": builtin_voice_label(voice) or voice} for voice in speakers],
+            })
+            if on_asset is not None:
+                on_asset(db, asset.id)
 
         job = db.get(Job, job_id)
         # The dialogue text is returned without timings, and inventing them from character

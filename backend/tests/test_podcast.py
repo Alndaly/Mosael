@@ -121,9 +121,26 @@ class TestArgumentChecks:
         with pytest.raises(podcast.PodcastSynthesisError, match="检索"):
             podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.RESEARCH, speakers=["1", "2"])
 
-    def test_read_mode_needs_a_speaker(self) -> None:
+    def test_read_mode_needs_a_speaker_on_every_line(self) -> None:
         with pytest.raises(podcast.PodcastSynthesisError, match="发音人"):
-            podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.READ, input_text="x", speakers=[])
+            podcast.synthesize_volcano_podcast(
+                "a", "b", action=podcast.PodcastAction.READ, turns=[{"speaker": "", "text": "x"}], speakers=[],
+            )
+
+    def test_read_mode_needs_a_script(self) -> None:
+        """照稿念收的是逐段的稿子(ADR 0055 §6),不再把一大段字在这里按句拆开。"""
+        with pytest.raises(podcast.PodcastSynthesisError, match="朗读的文本"):
+            podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.READ, input_text="一句。两句。",
+                                               speakers=["one"])
+
+    def test_read_mode_keeps_the_rounds_of_the_vendor(self) -> None:
+        """60 段、每段 280 字是接口的上限:超了在这里说清,不交给服务端回一句笼统的错。"""
+        too_many = [{"speaker": "one", "text": "句。"}] * (podcast.MAX_ROUNDS + 1)
+        with pytest.raises(podcast.PodcastSynthesisError, match="60"):
+            podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.READ, turns=too_many)
+        too_long = [{"speaker": "one", "text": "字" * (podcast.MAX_ROUND_CHARS + 1)}]
+        with pytest.raises(podcast.PodcastSynthesisError, match="280"):
+            podcast.synthesize_volcano_podcast("a", "b", action=podcast.PodcastAction.READ, turns=too_long)
 
 
 class TestSessionPayload:
@@ -338,31 +355,33 @@ class TestTheJobEndpoint:
         client = self._client()
         workspace_id = client.get("/api/workspaces").json()[0]["id"]
         res = client.post(
-            "/api/tts/podcast",
+            "/api/generation/podcast",
             json={"workspace_id": workspace_id, "text": "x", "mode": "nonsense"},
         )
         assert res.status_code == 422
 
     def test_missing_credentials_fail_the_job_with_a_readable_reason(self) -> None:
-        """Not a stack trace: the fix is in Settings, and the message has to say so."""
+        """Not a stack trace: the fix is in Settings, and the message has to say so —— on the record too, which outlives
+        the job (ADR 0055 §5)."""
         import time
 
         from app.core.db import SessionLocal
-        from app.db.models import Job
+        from app.db.models import GenerationJob, Job
+        from tests.util import until
 
         client = self._client()
         workspace_id = client.get("/api/workspaces").json()[0]["id"]
         res = client.post(
-            "/api/tts/podcast",
+            "/api/generation/podcast",
             json={
                 "workspace_id": workspace_id,
                 "text": "第一句。第二句。",
                 "mode": "summarize",
-                "speakers": ["a", "b"],
+                "speakers": [{"value": "a"}, {"value": "b"}],
             },
         )
         assert res.status_code == 200, res.text
-        job_id = res.json()["id"]
+        job_id = res.json()["job"]["id"]
 
         deadline = time.time() + 60
         while time.time() < deadline:
@@ -376,3 +395,11 @@ class TestTheJobEndpoint:
             job = db.get(Job, job_id)
             assert job.status == "failed"
             assert "App ID" in (job.error or ""), job.error
+
+        def copied() -> bool:
+            # 落终态之后的收拾(把原因抄到记录上)在那次提交之后
+            with SessionLocal() as db:
+                record = db.get(GenerationJob, res.json()["generation"]["id"])
+                return bool(record.error_key) and record.error_key == db.get(Job, job_id).error_key
+
+        assert until(copied, timeout=10), "失败原因没抄到记录上"

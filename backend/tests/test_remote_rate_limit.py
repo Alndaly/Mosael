@@ -45,7 +45,8 @@ def test_policy_limits_auth_oauth_and_billable_mutations_only():
     assert classify("POST", "/api/plugins/instances/p1/tools/tool/invoke", settings).name == "billable"
     assert classify("POST", "/api/sequences/s1/subtitles/generate", settings).name == "billable"
     assert classify("POST", "/api/tts/synthesize", settings).name == "billable"
-    assert classify("POST", "/api/tts/podcast", settings).name == "billable"
+    assert classify("POST", "/api/generation/speech", settings).name == "billable"
+    assert classify("POST", "/api/generation/podcast", settings).name == "billable"
     assert classify("POST", "/api/settings/providers/p1/quota", settings).name == "billable"
     assert classify("GET", "/api/generation/jobs", settings) is None
     assert classify("PATCH", "/api/notes/n1", settings) is None

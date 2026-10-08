@@ -20,9 +20,11 @@ def list_jobs(
     user: CurrentUser,
     kind: str | None = None,
     top_level: bool = False,
+    recorded: bool = False,
 ) -> list[Job]:
-    # 别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。
-    return job_center.list_jobs(db, user, workspace_id, kind=kind, top_level=top_level)
+    """`recorded`:只列挂着创作记录的任务(AI Studio 创作页:生成、语音、播客,ADR 0055)—— 按种类列 `tts` 会把字幕配音的
+    几百句零件一起拉回来。别人私有会话里的生成不列 —— 规矩在 domain/job_center/use_cases。"""
+    return job_center.list_jobs(db, user, workspace_id, kind=kind, top_level=top_level, recorded=recorded)
 
 
 def _kind_out(entry: job_catalog.JobKind, label_key: str, locale: str) -> dict:

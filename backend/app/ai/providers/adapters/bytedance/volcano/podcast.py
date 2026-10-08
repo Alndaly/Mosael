@@ -68,7 +68,8 @@ class PodcastSynthesisResult:
 
 
 def split_to_rounds(text: str, *, dual: bool) -> list[str]:
-    """Chop text into rounds.
+    """Chop a plain text into rounds for READ (callers that have prose, not a script — the agent's
+    `generate_podcast` reading a passage; the script editor sends its own rounds).
 
     With two speakers a round is one sentence, so the voices actually alternate; packing
     several sentences into a round would have one speaker read a paragraph and the other
@@ -212,6 +213,7 @@ def synthesize_volcano_podcast(
     action: int = PodcastAction.SUMMARIZE,
     input_text: str = "",
     prompt_text: str = "",
+    turns: list[dict] | None = None,
     speakers: list[str] | None = None,
     speed: float = 1.0,
     out_path: Path | None = None,
@@ -222,6 +224,10 @@ def synthesize_volcano_podcast(
 
     Synchronous on purpose: every caller is already a job thread, and handing them a coroutine
     would mean each of them running its own event loop anyway.
+
+    `turns` is the script for READ: `[{"speaker": <voice>, "text": ...}]`, one entry per round, sent as `nlp_texts`
+    verbatim. Who reads which line is the caller's decision (the script editor in AI Studio, ADR 0055); a plain text is
+    turned into alternating rounds by the caller with `split_to_rounds`, not here.
     """
     if not appid or not token:
         raise PodcastSynthesisError("providerErr_podcastCredentialsMissing")
@@ -235,16 +241,19 @@ def synthesize_volcano_podcast(
 
     nlp_texts = None
     if action == PodcastAction.READ:
-        if not chosen:
-            raise PodcastSynthesisError("providerErr_podcastReadNeedsSpeaker")
-        rounds = split_to_rounds(input_text, dual=len(chosen) > 1)
-        if not rounds:
-            raise PodcastSynthesisError("providerErr_podcastReadNeedsText")
-        # Speakers alternate round by round, which is what makes a two-voice read sound like
-        # a conversation rather than one voice with interruptions.
         nlp_texts = [
-            {"text": text, "speaker": chosen[index % len(chosen)]} for index, text in enumerate(rounds)
+            {"text": str(turn.get("text") or "").strip(), "speaker": str(turn.get("speaker") or "")}
+            for turn in (turns or [])
         ]
+        nlp_texts = [turn for turn in nlp_texts if turn["text"]]
+        if not nlp_texts:
+            raise PodcastSynthesisError("providerErr_podcastReadNeedsText")
+        if not all(turn["speaker"] for turn in nlp_texts):
+            raise PodcastSynthesisError("providerErr_podcastReadNeedsSpeaker")
+        if len(nlp_texts) > MAX_ROUNDS:
+            raise PodcastSynthesisError("providerErr_podcastTooManyTurns", limit=MAX_ROUNDS)
+        if any(len(turn["text"]) > MAX_ROUND_CHARS for turn in nlp_texts):
+            raise PodcastSynthesisError("providerErr_podcastTurnTooLong", limit=MAX_ROUND_CHARS)
 
     payload = _session_payload(
         action=action,

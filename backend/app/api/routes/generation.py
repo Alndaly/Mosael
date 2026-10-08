@@ -15,10 +15,14 @@ from app.api.schemas import (
     GenerationMissingOut,
     GenerationSessionOut,
     GenerationSessionUpdate,
+    PodcastCreate,
     PromptOptimizeRequest,
     PromptOptimizeResponse,
+    SpeechCreate,
 )
+from app.domain.capabilities import CapabilityUnavailable
 from app.domain.permissions import require_own_profile
+from app.domain.voices.errors import VoiceError
 from app.db.models import GenerationJob, GenerationSession
 from app.domain import session_groups, sharing
 from app.domain.generation import generation_options
@@ -70,7 +74,11 @@ def update_generation_session(
     if "model" in fields:
         session.model = body.model
     if "kind" in fields and body.kind is not None:
-        session.kind = body.kind
+        try:
+            generation.change_session_kind(db, session, body.kind)
+        except GenerationDomainError as exc:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     if organising_only:
         session_groups.restore_updated_at(db, session, kept_updated_at)
@@ -165,6 +173,29 @@ def create_generation(body: GenerationCreate, db: Tx, user: CurrentUser) -> Gene
         generation=GenerationJobOut.model_validate(created),
         job=job,
     )
+
+
+@router.post("/generation/speech", response_model=GenerationCreateResponse)
+def create_speech(body: SpeechCreate, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
+    """创作页「语音」(ADR 0055):念一段字,记成会话里的一条。活儿由配音那一族做(任务种类还是 `tts`)。
+    远端引擎念配音库里的嗓子、这个账号还没同意上传时回 409 `remote_voice_consent_required`(ADR 0037),界面弹确认框。"""
+    fields = body.model_dump()
+    try:
+        created, job = generation.speak(db, user, fields.pop("workspace_id"), **fields)
+    except (GenerationDomainError, VoiceError, CapabilityUnavailable) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return GenerationCreateResponse(generation=GenerationJobOut.model_validate(created), job=job)
+
+
+@router.post("/generation/podcast", response_model=GenerationCreateResponse)
+def create_podcast(body: PodcastCreate, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
+    """创作页「播客」(ADR 0055 §6):改写材料、聊一个主题、照稿念,记成会话里的一条(任务种类还是 `podcast`)。"""
+    fields = body.model_dump()
+    try:
+        created, job = generation.podcast(db, user, fields.pop("workspace_id"), **fields)
+    except (GenerationDomainError, VoiceError, CapabilityUnavailable) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return GenerationCreateResponse(generation=GenerationJobOut.model_validate(created), job=job)
 
 
 @router.post("/generation/jobs/{generation_id}/retrieve", response_model=GenerationCreateResponse)

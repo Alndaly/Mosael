@@ -89,10 +89,35 @@ def start_session(
 def generate(db: Session, user: User, workspace_id: str, **request: Any) -> tuple[GenerationJob, Any]:
     """建一次生成;提交之后再派发(派发那边重开会话去读刚写的行)。"""
     ensure_workspace_perm(db, user, workspace_id, "ai")
-    generation, job = create_generation_job(db, created_by=user.id, workspace_id=workspace_id, **request)
+    #: 创作页的入口:点了名的会话锁族(ADR 0055 §2)
+    generation, job = create_generation_job(db, created_by=user.id, workspace_id=workspace_id, lock_family=True, **request)
     generation_id = generation.id
     after_commit(db, lambda: start_generation_thread(generation_id))
     return generation, job
+
+
+def speak(db: Session, user: User, workspace_id: str, **request: Any) -> tuple[GenerationJob, Job]:
+    """创作页「语音」:念一段字,记成会话里的一条(ADR 0055)。任务由配音那一族在提交之后派发。"""
+    from app.domain.generation.voiced import create_speech
+
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    return create_speech(db, workspace_id=workspace_id, created_by=user.id, lock_family=True, **request)
+
+
+def podcast(db: Session, user: User, workspace_id: str, **request: Any) -> tuple[GenerationJob, Job]:
+    """创作页「播客」:一段双人对谈,记成会话里的一条(ADR 0055)。"""
+    from app.domain.generation.voiced import create_podcast
+
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    return create_podcast(db, workspace_id=workspace_id, created_by=user.id, lock_family=True, **request)
+
+
+def change_session_kind(db: Session, session: GenerationSession, kind: str) -> None:
+    """改会话记着的种类(选了另一种模型):有记录的会话只在同一族里换(ADR 0055 §2)。"""
+    from app.domain.generation.operations import ensure_same_family
+
+    ensure_same_family(db, session, kind)
+    session.kind = kind
 
 
 def retrieve(db: Session, user: User, generation_id: str) -> tuple[GenerationJob, Job]:

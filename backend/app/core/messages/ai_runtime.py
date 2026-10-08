@@ -260,6 +260,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "providerErr_podcastNeedsTopic": {"zh": "请提供要检索并讨论的主题", "en": "Provide a topic to research and discuss"},
     "providerErr_podcastReadNeedsSpeaker": {"zh": "朗读模式需要至少一个发音人", "en": "Read-aloud mode needs at least one speaker"},
     "providerErr_podcastReadNeedsText": {"zh": "请提供要朗读的文本", "en": "Provide the text to read aloud"},
+    "providerErr_podcastTooManyTurns": {"zh": "照稿念最多 {limit} 段", "en": "A script can have at most {limit} lines"},
+    "providerErr_podcastTurnTooLong": {"zh": "照稿念每段最多 {limit} 字", "en": "Each line of a script can have at most {limit} characters"},
     # ---- 降噪 / 人声分离(本机引擎) ----
     "providerErr_denoiseUnknownStrength": {
         "zh": "不认识的降噪档位:{strength}(可选:{choices})",
