@@ -103,13 +103,9 @@ function AdvancedToggle({
           {label}
           {/* 设过之后才给「跟随默认」——没设过时它本来就是跟随,常驻只会让人以为漏了什么。 */}
           {set && (
-            <button
-              type="button"
-              className="cursor-pointer border-0 bg-transparent p-0 text-ui-2xs font-normal text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={() => onChange(null)}
-            >
+            <Button type="button" variant="inline" onClick={() => onChange(null)}>
               {t("modelSettingsFollowDefault")}
-            </button>
+            </Button>
           )}
         </span>
         <span className="text-ui-xs leading-[1.45] text-muted-foreground">{hint}</span>
@@ -202,21 +198,13 @@ function CapabilityRefField({
           管理入口仍然只从**用它的那个模型**进入:参数组本来就是为某个模型建的,
           单开一页的结果是那一页永远空着,而入口还挡在路上。 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <button
-          type="button"
-          className="cursor-pointer text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          onClick={() => onDescribe(null)}
-        >
+        <Button type="button" variant="inline" onClick={() => onDescribe(null)}>
           {t("modelGenerationRefDescribe")}
-        </button>
+        </Button>
         {editableProfile && (
-          <button
-            type="button"
-            className="cursor-pointer text-ui-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            onClick={() => onDescribe(editableProfile.id ?? null)}
-          >
+          <Button type="button" variant="inline" onClick={() => onDescribe(editableProfile.id ?? null)}>
             {t("modelGenerationRefEditThis")}
-          </button>
+          </Button>
         )}
       </div>
       {/* 落到兜底时要出声。静默地什么都不显示,正是让人以为"这个模型就是没参数"的那种沉默。
@@ -434,13 +422,9 @@ export function ModelSettingsDialog({
                 : t("modelCapabilitiesInheritNone")}
             </span>
           ) : (
-            <button
-              type="button"
-              className="justify-self-start cursor-pointer border-0 bg-transparent p-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={() => setDraft((prev) => (prev ? { ...prev, capability_ids: [] } : prev))}
-            >
+            <Button type="button" variant="inline" className="justify-self-start" onClick={() => setDraft((prev) => (prev ? { ...prev, capability_ids: [] } : prev))}>
               {t("modelCapabilitiesFollowPreset")}
-            </button>
+            </Button>
           )}
         </div>
 

@@ -149,13 +149,9 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
               <Truncate className="text-ui-2xs uppercase tracking-wide text-muted-foreground">
                 {quota.data?.plan ? humanizePlan(quota.data.plan) : t("agentContextTitle")}
               </Truncate>
-              <button
-                type="button"
-                className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-ui-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                onClick={() => void quota.refetch()}
-              >
+              <Button type="button" variant="inline" className="shrink-0" onClick={() => void quota.refetch()}>
                 {t("quotaRefresh")}
-              </button>
+              </Button>
             </div>
             {(quota.data?.metrics ?? []).map((metric) => (
               <MetricRow key={metric.key} metric={metric} />

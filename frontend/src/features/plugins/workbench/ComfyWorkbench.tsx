@@ -16,6 +16,7 @@ import { AppPanel } from "@/features/plugins/workbench/AppPanel";
 import { AssistantPanel } from "@/features/plugins/workbench/AssistantPanel";
 import { DRAG_GUARD, useColumnWidth } from "@/features/plugins/workbench/columnWidth";
 import { useFollowWorkbenchPlaces } from "@/features/plugins/workbench/followPlaces";
+import { WorkbenchTabs } from "@/features/plugins/workbench/WorkbenchTabs";
 import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
 import { ModelsPanel } from "@/features/plugins/workbench/ModelsPanel";
 import { RunPanel, useCanvasRun } from "@/features/plugins/workbench/RunPanel";
@@ -288,28 +289,13 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           className={cn("absolute inset-y-0 z-10 focus-visible:outline-none focus-visible:before:bg-primary", HANDLE_COLUMN,
                         HANDLE_ON_LEFT_EDGE, column.dragging && "before:bg-primary")}
         />
-        <div role="tablist" aria-label={t("workbenchColumn")} className="flex h-11 flex-none items-stretch gap-1 border-b border-border px-2">
-          {TABS.map((one) => (
-            <button
-              key={one}
-              type="button"
-              role="tab"
-              id={`comfy-workbench-tab-${one}`}
-              aria-selected={tab === one}
-              aria-controls={`comfy-workbench-panel-${one}`}
-              className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 border-0 border-b-2 bg-transparent px-2 text-ui-xs",
-                tab === one ? "border-primary font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => setTab(one)}
-            >
-              {one === "models" ? <Boxes size={13} aria-hidden /> : one === "missing" ? <TriangleAlert size={13} aria-hidden />
-                : one === "app" ? <ListChecks size={13} aria-hidden /> : one === "run" ? <Play size={13} aria-hidden />
-                : <Bot size={13} aria-hidden />}
-              {tabLabel[one]}
-            </button>
-          ))}
-        </div>
+        <WorkbenchTabs
+          label={t("workbenchColumn")}
+          idPrefix="comfy-workbench"
+          active={tab}
+          onSelect={setTab}
+          tabs={TABS.map((one) => ({ value: one, label: tabLabel[one], icon: <TabIcon tab={one} /> }))}
+        />
         {saveNote && <p role="alert" className="m-0 flex-none px-3 pt-3 text-ui-xs text-destructive">{saveNote}</p>}
         {!state && (
           <div className={TAB_PANEL}>
@@ -363,4 +349,10 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
       {aside}
     </ChromeAboveDialogs>
   );
+}
+
+/** 页签前面的图标(大小跟着页签那一档,16px)。 */
+function TabIcon({ tab }: { tab: (typeof TABS)[number] }) {
+  const Icon = { models: Boxes, missing: TriangleAlert, app: ListChecks, run: Play, assistant: Bot }[tab];
+  return <Icon aria-hidden />;
 }

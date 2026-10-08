@@ -197,8 +197,8 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
 function FindPlugins({ capability }: { capability: string }) {
   const t = useI18n();
   return (
-    <Button size="xs" variant="ghost" onClick={() => findPluginsFor(capability)}>
-      <Store size={12} aria-hidden />
+    <Button size="sm" variant="ghost" onClick={() => findPluginsFor(capability)}>
+      <Store aria-hidden />
       {t("capabilityFindPlugins")}
     </Button>
   );

@@ -140,7 +140,6 @@ const STOCK: Record<string, number> = {
   "features/plugins/WorkflowOutputs.tsx": 1,
   "features/scenes/SceneDopeSheet.tsx": 1,
   "features/settings/AccountSection.tsx": 1,
-  "features/settings/AutopilotRulesSection.tsx": 1,
   "features/settings/GenerationProfileForm.tsx": 2,
   "features/settings/ModelSettingsDialog.tsx": 1,
   "features/settings/ProviderModelList.tsx": 1,

@@ -301,15 +301,10 @@ function MemoryRow({
             </time>
           </Hint>
           {(clipped || expanded) && (
-            <button
-              type="button"
-              aria-expanded={expanded}
-              className="inline-flex cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-transparent p-0 text-ui-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => setExpanded((value) => !value)}
-            >
+            <Button type="button" variant="inline" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
               {expanded ? t("collapse") : t("expand")}
-              <ChevronDown size={12} className={cn("transition-transform", expanded && "rotate-180")} aria-hidden />
-            </button>
+              <ChevronDown className={cn("transition-transform", expanded && "rotate-180")} aria-hidden />
+            </Button>
           )}
         </div>
       </div>

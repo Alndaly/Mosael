@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { ChevronRight, CornerUpLeft, Eye, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
+import { CornerUpLeft, Eye, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -17,6 +17,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { GroupToggle } from "@/components/ui/group-toggle";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ContextMenu,
@@ -488,9 +489,10 @@ export function SessionList<S extends ListedSession>({
             <GroupSection key={group.id} groupId={group.id}>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex w-full cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-ui-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-muted"
+                  <GroupToggle
+                    open={!isCollapsed}
+                    label={group.name}
+                    count={members.length}
                     onClick={() =>
                       setCollapsed((current) => {
                         const next = new Set(current);
@@ -499,15 +501,7 @@ export function SessionList<S extends ListedSession>({
                         return next;
                       })
                     }
-                  >
-                    <ChevronRight
-                      size={11}
-                      className={cn("shrink-0 transition-transform duration-100", !isCollapsed && "rotate-90")}
-                      aria-hidden
-                    />
-                    <Truncate className="flex-1 normal-case">{group.name}</Truncate>
-                    <span className="shrink-0 tabular-nums">{members.length}</span>
-                  </button>
+                  />
                 </ContextMenuTrigger>
                 <ContextMenuContent>
                   <ContextMenuItem onSelect={() => setRenamingGroup(group)}>
@@ -541,20 +535,7 @@ export function SessionList<S extends ListedSession>({
         {byGroup.main.map(renderSession)}
         {aside && byGroup.aside.length > 0 && (
           <div className="grid gap-1 pt-1" data-session-aside="">
-            <button
-              type="button"
-              aria-expanded={asideShown}
-              className="flex w-full cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-ui-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-muted"
-              onClick={() => setAsideOpen(!asideOpen)}
-            >
-              <ChevronRight
-                size={11}
-                className={cn("shrink-0 transition-transform duration-100", asideShown && "rotate-90")}
-                aria-hidden
-              />
-              <Truncate className="flex-1">{aside.title}</Truncate>
-              <span className="shrink-0 tabular-nums">{byGroup.aside.length}</span>
-            </button>
+            <GroupToggle open={asideShown} label={aside.title} count={byGroup.aside.length} onClick={() => setAsideOpen(!asideOpen)} />
             {asideShown && byGroup.aside.map(renderSession)}
           </div>
         )}

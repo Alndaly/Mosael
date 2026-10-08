@@ -8,8 +8,8 @@ import { AudioLines, Film, Image as ImageIcon, Mic, Music, type LucideIcon } fro
 
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { Chip } from "@/components/ui/chip";
 import { CREATE_FILTERS, type CreateFilter } from "@/lib/aiStudioLink";
-import { cn } from "@/lib/utils";
 
 export const CREATION_KINDS = ["image", "video", "speech", "podcast", "audio"] as const;
 export type CreationKind = (typeof CREATION_KINDS)[number];
@@ -99,22 +99,9 @@ export function CreateFilterRow({ value, onChange }: { value: CreateFilter; onCh
         const badge = filter === "all" ? null : KIND_BADGES[filter];
         const Icon = badge?.icon;
         return (
-          <button
-            key={filter}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(filter)}
-            className={cn(
-              "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full border px-2 text-ui-xs font-medium transition-colors",
-              active
-                ? "border-[color-mix(in_srgb,var(--primary)_40%,transparent)] bg-accent text-accent-foreground"
-                : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            {Icon && <Icon size={12} aria-hidden />}
+          <Chip key={filter} role="tab" selected={active} icon={Icon && <Icon aria-hidden />} onClick={() => onChange(filter)}>
             {t(FILTER_LABELS[filter])}
-          </button>
+          </Chip>
         );
       })}
     </div>

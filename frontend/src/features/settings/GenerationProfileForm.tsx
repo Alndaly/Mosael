@@ -16,6 +16,7 @@ import { X } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
+import { Chip } from "@/components/ui/chip";
 import { AddRow } from "@/components/ui/add-row";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,6 @@ import { Switch } from "@/components/ui/switch";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { GenerationKind } from "@/lib/generationCapabilities";
-import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
 type Schema = components["schemas"]["CapabilityProfileSchemaOut"];
@@ -439,19 +439,9 @@ export function CapabilityProfileForm({
           {(schema.data?.parameters ?? []).map((parameter) => (
             // 按钮上是人话的名字,悬停给端点认的那个参数名(两者一样时不重复)。
             <Hint key={parameter} label={parameterLabel(parameter) !== parameter ? parameter : undefined}>
-            <button
-              type="button"
-              aria-pressed={parameters.includes(parameter)}
-              onClick={() => toggleParameter(parameter)}
-              className={cn(
-                "cursor-pointer rounded-md border px-1.5 py-0.5 text-ui-xs transition-colors",
-                parameters.includes(parameter)
-                  ? "border-primary bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-foreground"
-                  : "border-border bg-panel text-muted-foreground hover:text-foreground",
-              )}
-            >
+            <Chip selected={parameters.includes(parameter)} onClick={() => toggleParameter(parameter)}>
               {parameterLabel(parameter)}
-            </button>
+            </Chip>
             </Hint>
           ))}
         </div>

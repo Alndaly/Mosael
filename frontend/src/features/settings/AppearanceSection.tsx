@@ -8,6 +8,7 @@ import { useCustomCss } from "@/app/customCss";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { THEME_ICONS, THEME_LABEL_KEYS, THEMES } from "@/components/layout/themeCycle";
+import { Segmented } from "@/components/ui/segmented";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
@@ -21,40 +22,29 @@ export function AppearanceSection() {
   }, []);
   return (
     <SettingsGroup title={t("settingsAppearance")} description={t("settingsAppearanceDesc")}>
+      {/* 设置页填值的那一行是 md 档(docs/DESIGN_LANGUAGE.md「场景 → 档位」):和别的行里 40px 的下拉同高。
+          此前这三处是手搓的 28px 胶囊组,没有单选语义,读屏念成三个普通按钮。 */}
       <SettingsRow label={t("settingsTheme")} description={t("settingsThemeDesc")}>
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
-          {THEMES.map((option) => {
+        <Segmented
+          aria-label={t("settingsTheme")}
+          value={theme}
+          onValueChange={setTheme}
+          options={THEMES.map((option) => {
             const Icon = THEME_ICONS[option];
-            return (
-              <button
-                key={option}
-                type="button"
-                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", theme === option && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-                onClick={() => setTheme(option)}
-              >
-                <Icon size={13} /> {t(THEME_LABEL_KEYS[option])}
-              </button>
-            );
+            return { value: option, label: t(THEME_LABEL_KEYS[option]), icon: <Icon aria-hidden /> };
           })}
-        </div>
+        />
       </SettingsRow>
       <SettingsRow label={t("settingsLanguage")} description={t("settingsLanguageDesc")}>
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
-          <button
-            type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", locale === "zh-CN" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setLocale("zh-CN")}
-          >
-            {t("languageZh")}
-          </button>
-          <button
-            type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", locale === "en-US" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setLocale("en-US")}
-          >
-            {t("languageEn")}
-          </button>
-        </div>
+        <Segmented
+          aria-label={t("settingsLanguage")}
+          value={locale}
+          onValueChange={setLocale}
+          options={[
+            { value: "zh-CN", label: t("languageZh") },
+            { value: "en-US", label: t("languageEn") },
+          ]}
+        />
       </SettingsRow>
       <SettingsBlock>
         <div className="grid gap-1">
@@ -146,28 +136,26 @@ export function BackgroundSection() {
   return (
     <SettingsGroup title={t("appearanceBgTitle")} description={t("appearanceBgDesc")}>
       <SettingsRow label={t("appearanceBgSource")} description={t("appearanceBgSourceDesc")}>
-        <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
-          {(["none", "preset", "image"] as BackgroundKind[]).map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground", appearance.kind === kind && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-              onClick={() => chooseKind(kind)}
-            >
-              {kind === "none" ? t("appearanceBgNone") : kind === "preset" ? t("appearanceBgPreset") : t("appearanceBgImage")}
-            </button>
-          ))}
-          <input
+        <Segmented
+          aria-label={t("appearanceBgSource")}
+          value={appearance.kind}
+          onValueChange={chooseKind}
+          options={[
+            { value: "none", label: t("appearanceBgNone") },
+            { value: "preset", label: t("appearanceBgPreset") },
+            { value: "image", label: t("appearanceBgImage") },
+          ]}
+        />
+        <input
             ref={fileRef}
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={(event) => {
-              void pickImage(event.target.files?.[0]);
-              event.target.value = "";
-            }}
-          />
-        </div>
+          onChange={(event) => {
+            void pickImage(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
       </SettingsRow>
 
       {appearance.kind === "preset" && (
@@ -201,13 +189,13 @@ export function BackgroundSection() {
                 <ImageIcon size={16} /> {t("appearanceBgNoImage")}
               </div>
             )}
-            <div className="flex flex-col items-start gap-1.5">
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-                <Upload size={13} /> {appearance.image ? t("appearanceBgReplace") : t("appearanceBgUpload")}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={() => fileRef.current?.click()}>
+                <Upload /> {appearance.image ? t("appearanceBgReplace") : t("appearanceBgUpload")}
               </Button>
               {appearance.image && (
-                <Button variant="ghost" size="sm" onClick={() => appearance.clearImage()}>
-                  <X size={13} /> {t("appearanceBgRemove")}
+                <Button variant="ghost" onClick={() => appearance.clearImage()}>
+                  <X /> {t("appearanceBgRemove")}
                 </Button>
               )}
             </div>
@@ -248,8 +236,8 @@ export function BackgroundSection() {
       )}
 
       <SettingsRow label={t("appearanceReset")} description={t("appearanceResetDesc")}>
-        <Button variant="outline" size="sm" onClick={() => appearance.reset()}>
-          <RotateCcw size={13} /> {t("appearanceReset")}
+        <Button variant="outline" onClick={() => appearance.reset()}>
+          <RotateCcw /> {t("appearanceReset")}
         </Button>
       </SettingsRow>
     </SettingsGroup>

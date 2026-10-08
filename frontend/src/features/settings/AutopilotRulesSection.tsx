@@ -124,7 +124,7 @@ export function AutopilotRulesSection({ workspace }: { workspace: Workspace }) {
       ))}
       <SettingsRow label={t("autopilotNotes")} description={t("autopilotNotesDesc")} stacked>
         <Textarea
-          className="min-h-24 text-ui-sm"
+          className="min-h-24"
           readOnly={!canEdit}
           value={draft.notes}
           placeholder={t("autopilotNotesPlaceholder")}
