@@ -26,7 +26,7 @@ from pathlib import Path
 # project_id):用 v1.9.3 打开 main 迁过的库,`init_db` 照常通过,智能体页随即报 `no such column`。
 # 靠人记得改的数守不住,所以有测试看着:`tests/test_schema_version_follows_the_migrations.py` 对着
 # `tests/schema_version.json`(这个数当时认得的那几步),多出一步而这个数没动就红。
-DATABASE_SCHEMA_VERSION = 7
+DATABASE_SCHEMA_VERSION = 8
 
 
 class DatabaseVersionTooNew(RuntimeError):
