@@ -429,7 +429,7 @@ function SourceRow({ model }: { model: ModelFile }) {
   const why = actions?.lookupUnavailable(model);
   const find = actions && (
     <Hint label={t("modelLookupHint")} disabledReason={why}>
-      <Button variant="ghost" size="sm" disabled={Boolean(why)} loading={actions.lookupRunning(model)}
+      <Button variant="inline" disabled={Boolean(why)} loading={actions.lookupRunning(model)}
               onClick={() => actions.lookUp(model)}>
         <SearchCheck size={13} />
         {t(model.has_preview ? "modelLookup" : "modelLookupPreview")}
@@ -469,12 +469,12 @@ function NsfwRow({ model }: { model: ModelFile }) {
         <CatalogBadge tone={nsfw.flagged ? "warning" : "muted"}>{summary.label}</CatalogBadge>
         {actions && (
           <>
-            <Button variant="ghost" size="sm" onClick={() => actions.markNsfw(model, !nsfw.flagged)}>
+            <Button variant="inline" onClick={() => actions.markNsfw(model, !nsfw.flagged)}>
               {nsfw.flagged ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
               {t(nsfw.flagged ? "modelNsfwUnmark" : "modelNsfwMark")}
             </Button>
             {nsfw.manual != null && (
-              <Button variant="ghost" size="sm" onClick={() => actions.markNsfw(model, null)}>
+              <Button variant="inline" onClick={() => actions.markNsfw(model, null)}>
                 <RotateCcw size={13} />
                 {t("modelNsfwClearMark")}
               </Button>
@@ -559,7 +559,7 @@ function MetadataRow({ name, value }: { name: string; value: string }) {
               </span>
             )}
             <span className="flex flex-wrap items-center gap-1">
-              <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" aria-expanded={open} onClick={() => setOpen(!open)}>
+              <Button variant="inline" className="-ml-1.5" aria-expanded={open} onClick={() => setOpen(!open)}>
                 <ChevronDown className={cn("transition-transform duration-100", open && "rotate-180")} />
                 {open ? t("modelMetaCollapse") : t("modelMetaExpand")}
               </Button>
@@ -972,7 +972,7 @@ export function ModelDetail({
           count={tags.length}
           action={
             tags.length > TAGS_SHOWN ? (
-              <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={allTags} onClick={() => setAllTags(!allTags)}>
+              <Button variant="inline" aria-expanded={allTags} onClick={() => setAllTags(!allTags)}>
                 {allTags ? t("modelMetaCollapse") : t("modelTagsAll").replace("{n}", String(tags.length))}
               </Button>
             ) : undefined

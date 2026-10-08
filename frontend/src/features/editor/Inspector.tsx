@@ -1,5 +1,5 @@
 import React from "react";
-import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, RotateCcw, Trash2, Upload, X } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, RotateCcw, Trash2, Upload, X } from "lucide-react";
 
 import type { Asset, Clip, Font } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -724,14 +724,12 @@ function TextStylePanel({
       </div>
       {onUploadFont && (
         <div className="flex items-center gap-1 pl-[48px]">
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-ui-xs" disabled={uploadingFont} onClick={() => fileRef.current?.click()}>
-            {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />} {t("subFontUpload")}
+          <Button variant="inline" loading={uploadingFont} onClick={() => fileRef.current?.click()}>
+            <Upload size={12} /> {t("subFontUpload")}
           </Button>
           {style.font_id && onDeleteFont && (
             <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-ui-xs"
+              variant="inline"
               onClick={() => {
                 const removing = style.font_id;
                 set({ font_id: "", font_family: SUBTITLE_FONTS[0].value });

@@ -62,3 +62,26 @@ describe("Button 的 loading", () => {
     expect(wrap.querySelector("svg")).toBeNull();
   });
 });
+
+/**
+ * 行内动作(`variant="inline"`):挨着一个值、一行说明的次要动作。比正文小一档、次要色、图标缩小、不撑高那一行 ——
+ * 维护者截图里「在 Civitai 上找」「标为 NSFW」用的是 sm 档、正文字号,比旁边的值还醒目。
+ */
+describe("Button 的行内动作那一档", () => {
+  it("小一档的字、次要色、24px 高(上下各收 2px)、14px 图标;写了 size 也是这一套", () => {
+    for (const size of [undefined, "sm", "default"] as const) {
+      const { getByRole, unmount } = render(<Button variant="inline" size={size}>在 Civitai 上找</Button>);
+      const classes = getByRole("button").className.split(/\s+/);
+      expect(classes).toEqual(expect.arrayContaining(["text-ui-xs", "text-muted-foreground", "font-normal", "h-6", "-my-0.5", "px-1.5", "[&_svg]:size-3.5"]));
+      for (const gone of ["text-ui-sm", "h-8", "h-10", "px-3", "px-4", "font-medium", "[&_svg]:size-4"]) expect(classes, `${size}: ${gone}`).not.toContain(gone);
+      unmount();
+    }
+  });
+
+  it("别的档位一个类都没变(行内动作只是新增的一档)", () => {
+    const { getByRole } = render(<Button variant="ghost" size="sm">展开</Button>);
+    const classes = getByRole("button").className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(["h-8", "px-3", "text-ui-sm", "font-medium", "[&_svg]:size-4"]));
+    expect(classes).not.toContain("text-muted-foreground");
+  });
+});

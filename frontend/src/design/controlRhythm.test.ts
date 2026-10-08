@@ -199,6 +199,8 @@ const classOf = (attrs: string) => {
  */
 const SIZED_BY_UTILITY = new Set(["Button", ...FIELD]);
 function measure(tag: string, attrs: string, parentClass: string | undefined): number | null {
+  //: 行内动作(`<Button variant="inline">`)不参与比高:它是挨着值的那一小颗,上下各收 2px,本来就不撑那一行(见 button.tsx)。
+  if (tag === "Button" && /\bvariant="inline"/.test(attrs)) return null;
   for (const name of SIZED_BY_UTILITY.has(tag) ? [] : (parentClass ?? "").split(/\s+/).filter(Boolean)) {
     const scoped = height(`${name} ${tag}`)
       ?? (tag === "Pick" || tag === "SelectTrigger" ? height(`${name} [role="combobox"]`) : null);

@@ -24,6 +24,15 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground  hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        //: **行内动作**:放在一个值旁边、一行说明里的次要动作 ——「在 Civitai 上找」「标为 NSFW」「改回自动判断」「显示全部」。
+        //: 比正文小一档(text-ui-xs)、次要色、不加粗,悬停才显出底色;图标跟着缩成 14px;高 24px、上下各收 2px,
+        //: 不撑高所在的那一行。尺寸由这一档自己定(见下面的 compoundVariants),调用处不写 size。
+        //:
+        //: 什么时候**不**用它:一页 / 一个弹窗的主动作用 default(实心);和主动作并排的次要动作用 outline / secondary;
+        //: 工具栏、卡片角上不带边框的文字按钮用 ghost;只有图标的用 IconButton。判据是「它挨着的是一段值或说明,而不是
+        //: 别的按钮」—— 挨着值的按钮用正文字号,就比值本身还醒目,一行里视觉最重的反倒成了次要动作。
+        //: 棘轮:`design/inlineActions.test.ts`。
+        inline: "font-normal text-muted-foreground hover:bg-secondary hover:text-foreground",
       },
       size: {
         default: `${CONTROL_HEIGHT.md} rounded-md px-4 py-2`,
@@ -44,6 +53,10 @@ const buttonVariants = cva(
         "icon-xs": `${CONTROL_SQUARE.xs} rounded-md`,
       },
     },
+    compoundVariants: [
+      //: 行内动作自带尺寸:不论调用处写没写 size,都是这一套(写在最后,cn 合并时盖过 size 那一档的高度、留白和字号)。
+      { variant: "inline", class: "h-6 -my-0.5 gap-1 rounded px-1.5 py-0 text-ui-xs [&_svg]:size-3.5" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

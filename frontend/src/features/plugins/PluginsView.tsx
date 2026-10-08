@@ -1681,12 +1681,7 @@ function ResultBlock({ ok, body }: { ok: boolean; body: unknown }) {
               .replace("{shown}", String(RESULT_RENDER_LIMIT))
               .replace("{total}", full.length.toLocaleString())}
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-ui-xs"
-            onClick={() => void navigator.clipboard?.writeText(full)}
-          >
+          <Button variant="inline" onClick={() => void navigator.clipboard?.writeText(full)}>
             <Copy size={11} /> {t("pluginResultCopyAll")}
           </Button>
         </div>

@@ -46,8 +46,6 @@ const GRANDFATHERED = new Set<string>([
   "features/ai-studio/FrameSlotField.tsx: h-5 w-5",
   "features/ai-studio/FrameSlotField.tsx: h-6 w-6",
   "features/agent/trace/TraceView.tsx: h-6 w-6",
-  "features/editor/Inspector.tsx: h-6",
-  "features/plugins/PluginsView.tsx: h-6",
   // 分时段价格表单里和 40px 输入框、时间选择并排的删除钮。方形档最大只到 36(icon),为这一处
   // 加一档 40 的方形不值;此前它是没写 size 的 Button 加 size-10,换成 IconButton 后才被这条看见。
   "features/admin/PricingTimePrices.tsx: size-10",

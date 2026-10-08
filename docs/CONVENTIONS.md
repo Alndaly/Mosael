@@ -20,6 +20,11 @@
   `sm`/`icon-sm` 32px、`default`/`icon` 36px、`lg` 40px。缺一档就往 `buttonVariants` 里加一档 ——
   就地写 `h-7 w-7` 盖住 `size="icon"` 的代价是漏一处就露 8px,智能体输入框栽过这一下。
   棘轮:`components/ui/buttonScale.test.ts`,一次性尺寸列在它的 `GRANDFATHERED` 里。
+- **按钮的分量跟着它的地位走。** 一页 / 一个弹窗只有一个实心的主动作(`default`);和它并排的次要动作用
+  `outline` / `secondary`;工具栏、卡片角上不带边框的文字按钮用 `ghost`;只有图标的用 `IconButton`。
+  **挨着一个值、一行说明的次要动作用 `variant="inline"`(行内动作)**:比正文小一档、次要色、悬停才显出底色、
+  图标 14px、不撑高那一行,不写 `size`。挨着值的按钮用正文字号,就比值本身还醒目 —— 模型详情里「在 Civitai 上找」
+  「标为 NSFW」就是这样喧宾夺主的。棘轮:`design/inlineActions.test.ts`(值那一格里的按钮、手搓的 `h-6` / `text-ui-xs`)。
 - 设置页只保留页面主面板这一层容器。section 使用 `components/settings/settings-layout.tsx` 的平面
   `SettingsGroup`(设置、插件、定时任务、管理四页共用),相邻 section 之间那条线由
   `SettingsSectionStack` 用**相邻兄弟选择器**画在后一节身上 —— 不插独立元素:此前是「index > 0
@@ -422,6 +427,7 @@ python3 scripts/sync-ratchet-docs.py
 | 锁了行轴就得锁列轴 —— 只写 `grid-rows` 会让隐式列按 max-content 定尺。 | `frontend/src/design/gridAxes.test.ts` |
 | 只有图标的按钮必须有名字:读屏念的 `aria-label`,和悬停时看得见的说明。 | `frontend/src/design/iconButtons.test.ts` |
 | 「导入」「导出」的图标方向和字对得上:导入是箭头**进来**,导出是箭头**出去**。 | `frontend/src/design/importExportIcons.test.ts` |
+| 挨着一个值、一行说明的次要动作走 Button 的 `variant="inline"`(行内动作),不摆正文字号的按钮。 | `frontend/src/design/inlineActions.test.ts` |
 | 键帽只有一种长相:`<kbd>` 只在 components/ui/kbd.tsx 里写。 | `frontend/src/design/keycaps.test.ts` |
 | 棘轮:**底下那几层不许认识功能模块**。 | `frontend/src/design/layering.test.ts` |
 | 同级元素的重复间距只由父容器控制。 | `frontend/src/design/layoutRhythm.test.ts` |
