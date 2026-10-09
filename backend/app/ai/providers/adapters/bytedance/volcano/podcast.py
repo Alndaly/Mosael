@@ -207,6 +207,37 @@ async def _run(
     return result
 
 
+def probe_connection(profile) -> str:
+    """健康探针:只握手,连上即断 —— 不发合成请求,不产生音频、不计费。
+
+    回 "ok"(握手成了,或服务回了别的 HTTP 错但确实活着)/ "credential_rejected"(401/403);
+    网络层的失败上抛,由 health 记成离线。合成同一条路:经出站守卫的代理连过去。
+    """
+    import websockets
+
+    from app.core.outbound_guard import Origin
+    from app.core.outbound_proxy import ticket
+
+    headers = {
+        "X-Api-App-Id": str(profile.extra.get("appid") or ""),
+        "X-Api-App-Key": APP_KEY,
+        "X-Api-Access-Key": profile.api_key,
+        "X-Api-Resource-Id": RESOURCE_ID,
+        "X-Api-Connect-Id": uuid.uuid4().hex,
+    }
+
+    async def _once(proxy: str) -> str:
+        try:
+            async with websockets.connect(ENDPOINT, additional_headers=headers, max_size=None, proxy=proxy, open_timeout=6):
+                return "ok"
+        except websockets.exceptions.InvalidStatus as exc:
+            # 握手被 HTTP 拒:401/403 是钥匙的事;别的状态(400/426 等)说明端点活着。
+            return "credential_rejected" if exc.response.status_code in (401, 403) else "ok"
+
+    with ticket(Origin.CONFIGURED) as issued:
+        return asyncio.run(_once(issued.url))
+
+
 def synthesize_volcano_podcast(
     appid: str,
     token: str,

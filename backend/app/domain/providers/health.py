@@ -44,15 +44,51 @@ class HealthResult:
     detail: str = ""
 
 
+def _probe_declared(kind: str, profile: ResolvedConnection) -> HealthResult:
+    """定义点名的探针。**失败是结果不是异常**(任何错都记成离线,细节带上),延迟照样量。"""
+    impl = _custom_probe(kind)
+    started = time.monotonic()
+    try:
+        # 探针实现收 (profile) —— 各家要的东西不一样(钥匙、appid、base_url 都可能在)。
+        outcome = impl(profile)  # type: ignore[operator]
+    except Exception as exc:
+        return HealthResult(supported=True, online=False, detail=_short(str(exc) or exc.__class__.__name__))
+    latency = int((time.monotonic() - started) * 1000)
+    if outcome == "credential_rejected":
+        return HealthResult(supported=True, online=True, latency_ms=latency, detail=tr("providerHealth_credentialRejected"))
+    return HealthResult(supported=True, online=True, latency_ms=latency)
+
+
 def health_path_for(vendor: str) -> str:
     definition = provider_definition(vendor)
     return definition.health_path if definition and definition.health_path else DEFAULT_HEALTH_PATH
+
+
+#: 探针种类 → 实现(在适配器里;「怎么跟它说话」住适配器,这里只登记名字,延迟装载免得
+#: 探个活就把全部适配器 import 一遍)。定义里点名了却没登记的,是 bug,测试钉着。
+_PROBE_IMPLEMENTATIONS = {
+    "volcano_tts": "app.ai.providers.adapters.bytedance.volcano.speech:probe_connection",
+    "volcano_podcast": "app.ai.providers.adapters.bytedance.volcano.podcast:probe_connection",
+}
+
+
+def _custom_probe(kind: str) -> object:
+    import importlib
+
+    target = _PROBE_IMPLEMENTATIONS.get(kind, "")
+    if not target:
+        raise ValueError(f"health probe {kind!r} 没有登记实现(加进 _PROBE_IMPLEMENTATIONS)")
+    module, _, name = target.partition(":")
+    return getattr(importlib.import_module(module), name)
 
 
 def probe(profile: ResolvedConnection) -> HealthResult:
     """打一次探针。**任何失败都是结果而不是异常** —— 探活本身失败就是"离线"这个答案。"""
     if profile.auth_type == "oauth":
         return HealthResult(supported=False)
+    definition = provider_definition(profile.vendor)
+    if definition and definition.health_probe:
+        return _probe_declared(definition.health_probe, profile)
     base = (profile.base_url or "").strip().rstrip("/")
     if not base:
         # 没有 base_url 又不是订阅制:多半是还没配完,说不出在线与否。

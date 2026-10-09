@@ -106,6 +106,26 @@ class VolcanoSpeechAdapter:
         out_path.write_bytes(b"".join(chunks))
 
 
+def probe_connection(profile) -> str:
+    """健康探针:往合成端点发一次最小请求,只看钥匙收不收(空文本,服务在鉴权那一步就回话,
+    不产生音频、不计费)。
+
+    回 "ok"(钥匙被收下)/ "credential_rejected"(401/403);网络层的失败上抛,由 health 记成离线。
+    实测(2026-10):错的 X-Api-Key 回来的是 401 + code 45000010 "Invalid X-Api-Key"。
+    """
+    url = f"{(profile.base_url or 'https://openspeech.bytedance.com').rstrip('/')}/api/v3/tts/unidirectional"
+    headers = {
+        "X-Api-Key": profile.api_key,
+        "X-Api-Resource-Id": "seed-tts-2.0",
+        "X-Api-Request-Id": uuid.uuid4().hex,
+        "Content-Type": "application/json",
+    }
+    body = {"req_params": {"text": "", "speaker": "zh_female_vv_uranus_bigtts", "audio_params": {"format": "mp3"}}}
+    with RetryingClient(timeout=6, max_retries=0) as client:
+        response = client.post(url, headers=headers, json=body)
+    return "credential_rejected" if response.status_code in (401, 403) else "ok"
+
+
 #: The voices to offer when the account's AK/SK are not configured, so synthesis is usable
 #: without them. Deliberately excludes the emo_v2 multi-emotion voices: their resource family
 #: cannot be inferred from the id, and guessing produces an opaque 55000000 at synthesis time.

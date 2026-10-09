@@ -75,6 +75,9 @@ class ProviderDefinition:
     #: 由 pi 的哪个原生 Provider 承载对话(见 `served_by_pi`)。空 = 后端自己按 OpenAI 兼容协议调。
     pi_provider: str = ""
     health_path: str = ""
+    #: 没有可 GET 的只读探针的供应商(火山的合成是 POST 流式、播客是 WebSocket)点名一个探针种类,
+    #: 实现在 health 的登记处(那边再转到适配器 —— 怎么跟它说话,住适配器)。
+    health_probe: str = ""
     #: 这家的模型目录说哪种话(`KNOWN_CATALOG_PROTOCOLS`)。
     model_catalog: str = "openai"
 
@@ -110,6 +113,7 @@ class ProviderDefinition:
         health_path = str(value.get("health_path") or "")
         if health_path and not health_path.startswith("/"):
             raise ValueError(f"Provider {vendor!r}: health_path must start with /")
+        health_probe = str(value.get("health_probe") or "")
         model_catalog = str(value.get("model_catalog") or "openai")
         if model_catalog not in KNOWN_CATALOG_PROTOCOLS:
             raise ValueError(f"Provider {vendor!r} declares unknown model catalog {model_catalog!r}")
@@ -124,6 +128,7 @@ class ProviderDefinition:
             auth_types=auth_types,
             pi_provider=str(value.get("pi_provider") or ""),
             health_path=health_path,
+            health_probe=health_probe,
             model_catalog=model_catalog,
         )
 
@@ -316,6 +321,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "volcano": {
         "label": "火山引擎语音合成(豆包 TTS)",
         "base_url": "https://openspeech.bytedance.com",
+        # 探针:合成端点没有可 GET 的只读入口(/models 是 404)—— POST 合成端点看钥匙收不收。
+        "health_probe": "volcano_tts",
         # Deliberately separate from "bytedance": ARK and the speech service issue different
         # keys from different consoles, so one profile cannot serve both.
         "capabilities": "语音合成(大模型 TTS,需语音技术控制台的 API Key)",
@@ -351,6 +358,8 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
     "volcano-podcast": {
         "label": "火山引擎播客(双人对话)",
         "base_url": "wss://openspeech.bytedance.com",
+        # 探针:wss 没法 GET —— 握手一次(连上即断,不合成、不计费)。
+        "health_probe": "volcano_podcast",
         # A third 火山 adapter config, again not interchangeable: the podcast WebSocket authenticates
         # with appid + access token, and rejects the v3 API Key outright.
         "capabilities": "播客式双人对话音频(WebSocket,配置是 appid + Access Token,不是方舟 API Key)",
