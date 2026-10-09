@@ -767,6 +767,19 @@ body {
     border-radius: 9999px;
     background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
   }
+
+  /* Windows / Linux 的原生滚动条**占布局宽度**:悬停显形那套(0 → 6px)在那边会把内容
+     挤窄再弹回来,整个 UI 跟着跳。macOS 的悬浮条不占宽度,没有这个问题。
+     所以非 Mac(is-win = 一切非 darwin)上滚动条常驻细条:它一开始就在那儿,
+     悬停不再改变任何宽度。样子照样是安静的细条,只是不玩捉迷藏。 */
+  .is-win * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 35%, transparent) transparent;
+  }
+  .is-win *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
 }
 
 ::selection {
