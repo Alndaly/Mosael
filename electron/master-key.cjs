@@ -56,9 +56,10 @@ function shellToken(key) {
  *
  * @param {string} dataDir
  * @param {{ isEncryptionAvailable(): boolean, encryptString(s: string): Buffer, decryptString(b: Buffer): string }} safeStorage
+ * @param {(error: Error) => void} [log] 封存失败这一笔写哪(启动那步把它接到 main.log)。
  * @returns {{ key: string, sealed: boolean }}
  */
-function resolveMasterKey(dataDir, safeStorage) {
+function resolveMasterKey(dataDir, safeStorage, log = () => undefined) {
   const sealed = path.join(dataDir, SEALED_NAME);
   const plain = path.join(dataDir, PLAIN_NAME);
   if (fs.existsSync(sealed)) {
@@ -87,8 +88,10 @@ function resolveMasterKey(dataDir, safeStorage) {
       fs.rmSync(plain, { force: true });
       return { key, sealed: true };
     }
-  } catch {
+  } catch (error) {
     //: 第一次封存就出错:落到下面,明文是唯一的那一把。
+    //: 这是安全相关的降级,得留一笔 —— 「我以为钥匙是封存的」不能靠猜。
+    log(error instanceof Error ? error : new Error(String(error)));
   }
   fs.rmSync(sealed, { force: true });
   if (!fs.existsSync(plain)) writePrivate(plain, key);
@@ -120,7 +123,7 @@ class SealedKeyUnavailableError extends Error {
 async function unlockMasterKey({ dataDir, safeStorage, ask, openKeychain = () => undefined, log = () => undefined }) {
   for (;;) {
     try {
-      return resolveMasterKey(dataDir, safeStorage);
+      return resolveMasterKey(dataDir, safeStorage, log);
     } catch (error) {
       log(error);
       const choice = await ask(error);

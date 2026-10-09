@@ -433,8 +433,10 @@ async function spawnBackendProcess() {
       rotateLogIfLarge(backendLogPath, 10 * 1024 * 1024);
       const fd = fs.openSync(backendLogPath, "a", 0o600);
       stdio = ["ignore", fd, fd];
-    } catch {
+    } catch (error) {
+      //: backend.log 打不开,后端的全部输出就没有任何地方可看了 —— 至少 main.log 里要有一笔。
       stdio = "ignore";
+      appendMainLog("backend-log-unwritable", error);
     }
   }
   // LOCAL_DESKTOP 标记后端「和用户文件在同一台机器上」,门控 /api/assets/import-local

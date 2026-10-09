@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // CommonJS is intentional: Electron main loads this exact module.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { resolveMasterKey, unlockMasterKey, generateFernetKey, shellToken, PLAIN_NAME, SEALED_NAME } = require("./master-key.cjs") as {
-  resolveMasterKey: (dataDir: string, safeStorage: FakeSafeStorage) => { key: string; sealed: boolean };
+  resolveMasterKey: (dataDir: string, safeStorage: FakeSafeStorage, log?: (error: Error) => void) => { key: string; sealed: boolean };
   unlockMasterKey: (options: {
     dataDir: string;
     safeStorage: FakeSafeStorage;
@@ -95,7 +95,10 @@ describe("主密钥由系统钥匙串保管", () => {
     const old = generateFernetKey();
     fs.writeFileSync(path.join(dir, PLAIN_NAME), old);
     const broken = { ...keychain(), encryptString: () => { throw new Error("keychain write denied"); } };
-    expect(resolveMasterKey(dir, broken)).toEqual({ key: old, sealed: false });
+    const logged: Error[] = [];
+    expect(resolveMasterKey(dir, broken, (error) => logged.push(error))).toEqual({ key: old, sealed: false });
+    //: 降级成明文是安全相关的降级 —— 必须在日志里有一笔,不能只在返回值里少一个 sealed。
+    expect(logged.map((one) => one.message)).toEqual(["keychain write denied"]);
     expect(fs.readFileSync(path.join(dir, PLAIN_NAME), "utf8")).toBe(old);
     expect(fs.existsSync(path.join(dir, SEALED_NAME))).toBe(false);
   });
