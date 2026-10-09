@@ -253,7 +253,6 @@ export const aiStudio = {
   genReferenceHint: "参考素材不会出现在成片里,只影响风格与主体。",
   genKeyframeHint: "首尾帧决定成片的第一格和最后一格。",
   genSourceGroupsExclusive: "首尾帧和参考素材是两条路,同一次生成只能用一组。",
-  genUsePreviousImage: "使用上一张结果",
   models: "模型",
   noGenerationJobs: "还没有生成任务",
   promptPlaceholder: "描述你想生成的画面…",

@@ -224,7 +224,6 @@ type GenerationConfig = {
   aspectRatio: string;
   /** 带角色的输入素材:首帧 / 尾帧 / 参考图。它们是同一种东西,差的只是用途。 */
   frames: FrameSlots;
-  usePreviousImage: boolean;
   /** 模型自己声明的参数(`parameter_schema`)里**用户动过的**那些,存控件里的原文。没动过的不发。 */
   declared: Record<string, string>;
   /** 音频:歌词(和提示词分开的一段长文字)与纯音乐开关。见 audioGeneration.tsx。 */
@@ -283,10 +282,6 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
     resolution: capabilityString(model, "default_resolution", resolutions[0] ?? ""),
     aspectRatio: capabilityString(model, "default_aspect_ratio", ratios[0] ?? ""),
     frames: emptyFrames(),
-    // **默认不带参考图**。此前默认 true,于是每次生成都会悄悄把上一张结果当参考图喂进去 ——
-    // 用户输入一句全新的提示词,出来的图却还带着上一张的人和构图,而参考图那一栏他从没碰过。
-    // 想接着上一张改的时候,右栏有「用上一张结果」一键设上。
-    usePreviousImage: false,
     declared: {},
     lyrics: "",
     instrumental: capabilityBoolean(model, "default_instrumental"),
@@ -707,18 +702,6 @@ export function GenerateWorkspace({
     setGenerationConfig((current) => ({ ...current, [key]: value }));
   const setFrames = (role: SourceRole, slots: FrameSlot[]) =>
     setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, [role]: slots } }));
-  const clearReferenceImage = () =>
-    setGenerationConfig((current) => ({
-      ...current,
-      frames: { ...current.frames, reference_image: [{ ...EMPTY_SLOT }] },
-      usePreviousImage: false,
-    }));
-  const usePreviousImageAsReference = () =>
-    setGenerationConfig((current) => ({
-      ...current,
-      frames: { ...current.frames, reference_image: [{ ...EMPTY_SLOT }] },
-      usePreviousImage: true,
-    }));
   const selectEngine = (value: string) => {
     if (readOnly) return;
     //: 语音、播客:会话记着的「模型」是引擎 id(音色、语速接着最后一条记录用的,见 useSpeechDraft)
@@ -777,15 +760,10 @@ export function GenerateWorkspace({
         }),
     [ordered],
   );
-  const latestImageResult = React.useMemo(
-    () => [...ordered].reverse().find((generation) => generation.kind === "image" && generation.result_asset_id) ?? null,
-    [ordered],
-  );
+  //: 参考图就是格子里挂的那张(没有「用上一张结果」这条路了 —— 悄悄把上一张喂进去这种事,
+  //: 界面上看不见,出来的图却带着上一张的人和构图)。
   const effectiveReferenceImageAssetId =
-    selectedModel?.kind === "image"
-      ? generationConfig.frames.reference_image[0]?.assetId ||
-        (generationConfig.usePreviousImage ? latestImageResult?.result_asset_id ?? "" : "")
-      : "";
+    selectedModel?.kind === "image" ? generationConfig.frames.reference_image[0]?.assetId || "" : "";
 
   const createGeneration = useMutation({
     mutationFn: async () => {
@@ -1161,20 +1139,10 @@ export function GenerateWorkspace({
           setGenerationConfig((current) => ({
             ...current,
             frames: { ...current.frames, reference_image: slots },
-            usePreviousImage: slots.some((one) => one.assetId || one.url.trim()) ? false : current.usePreviousImage,
           }))
         }
         workspaceId={workspace.id}
       />
-      {latestImageResult?.result_asset_id && !generationConfig.frames.reference_image[0]?.assetId && (
-        <Button
-          variant={generationConfig.usePreviousImage ? "outline" : "ghost"}
-          size="sm"
-          onClick={generationConfig.usePreviousImage ? clearReferenceImage : usePreviousImageAsReference}
-        >
-          {t("genUsePreviousImage")}
-        </Button>
-      )}
     </div>
   );
   const keyframesField = (model: GenerationEngineOption) => {
