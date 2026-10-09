@@ -104,11 +104,14 @@ function Tile({
           //: 只有一张缩略图:名字放进悬停说明(也是读屏念的名字)。
           <IconButton
             unstyled
-            className={`${TILE} cursor-zoom-in p-0`}
+            className={`${TILE} relative cursor-zoom-in p-0`}
             label={named}
             onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: named })}
           >
-            <img className="block h-full w-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
+            {/* 绝对定位填满:此前是 h-full —— 而这颗按钮是 grid + place-items-center 的行,
+                行高由内容定、内容的 100% 又指着行高,百分比没着落,缩略图按原图比例渲染
+                (实测 68px 的格里画了张 149px 的图,只看得见中间一截)。 */}
+            <img className="absolute inset-0 block size-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
           </IconButton>
         )}
         {name && (
