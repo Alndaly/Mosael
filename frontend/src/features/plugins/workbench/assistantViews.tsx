@@ -54,12 +54,21 @@ const CARD = "grid min-w-0 gap-1.5 rounded-md border border-border bg-panel p-2 
 
 function FindingsCard({ findings, counts }: { findings: AssistantFinding[]; counts: { error: number; warning: number } }) {
   const t = useI18n();
+  //: 零发现不是一张卡:检查确实跑了这件事要留痕(对话里看得见),但一行安静的确认就够,
+  //: 卡片的边框造型留给真有问题的时候 —— 否则「没查出问题」在对话里和答案一样抢眼。
+  if (findings.length === 0) {
+    return (
+      <span role="status" data-comfy-findings="" className="inline-flex items-center gap-1 text-ui-xs text-muted-foreground">
+        <Wrench size={11} aria-hidden />
+        {t("workbenchFindingsNone")}
+      </span>
+    );
+  }
   return (
     <section className={CARD} aria-label={t("workbenchFindingsTitle")} data-comfy-findings="">
       <header className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
         <Wrench size={12} aria-hidden />
-        <span>{findings.length === 0 ? t("workbenchFindingsNone")
-          : t("workbenchFindingsSummary").replace("{errors}", String(counts.error)).replace("{warnings}", String(counts.warning))}</span>
+        <span>{t("workbenchFindingsSummary").replace("{errors}", String(counts.error)).replace("{warnings}", String(counts.warning))}</span>
       </header>
       {findings.length > 0 && (
         <ul className="m-0 grid max-h-[320px] min-w-0 list-none gap-1 overflow-y-auto p-0">

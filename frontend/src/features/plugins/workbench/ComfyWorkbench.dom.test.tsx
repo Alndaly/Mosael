@@ -1427,6 +1427,18 @@ describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、�
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "locate", node: "459:451", subgraph: null }));
   });
 
+  it("没查出问题不是一张卡:一行安静的确认,没有列表、没有边框造型", async () => {
+    agent.tool = "comfy_check";
+    agent.data = { findings: [], counts: { error: 0, warning: 0 } };
+    await mount();
+    tab("workbenchTabAssistant");
+    const el = result().querySelector<HTMLElement>("[data-comfy-findings]")!;
+    //: 留痕但不抢眼:role=status 的一行,不是 section 卡片,没有列表。
+    expect(el.tagName).toBe("SPAN");
+    expect(el.textContent).toBe("workbenchFindingsNone");
+    expect(el.querySelector("ul")).toBeNull();
+  });
+
   it("「照这个改」替用户发一句(带着这一条),智能体据此提一次 comfy_canvas_edit;面板接走就清掉", async () => {
     agent.tool = "comfy_check";
     agent.data = { findings: [MISSING], counts: { error: 1, warning: 0 } };
