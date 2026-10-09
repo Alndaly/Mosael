@@ -175,6 +175,9 @@ def gateway_complete(
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
+                #: 解不出来的行不能无声丢:sidecar 协议漂移或往 stdout 打了非 JSON 行时,
+                #: 事件(含 credential_refreshed / gateway_done)就这么丢了,只能靠超时兜底。
+                logger.debug("sidecar 交来一行解不出 JSON 的输出,跳过: %.200r", line)
                 continue
             if event.get("type") == "gateway_done":
                 child.finish()
@@ -473,6 +476,9 @@ def _run_pi(
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
+                #: 解不出来的行不能无声丢:sidecar 协议漂移或往 stdout 打了非 JSON 行时,
+                #: 事件(含 credential_refreshed / gateway_done)就这么丢了,只能靠超时兜底。
+                logger.debug("sidecar 交来一行解不出 JSON 的输出,跳过: %.200r", line)
                 continue
             kind = event.get("type")
             if kind == "text_delta" and on_delta is not None:
@@ -643,6 +649,8 @@ def compact_session(
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            #: 同上 —— 一行解不出 JSON 的输出不能无声丢(协议漂移时只能靠超时兜底)。
+            logger.debug("sidecar 交来一行解不出 JSON 的输出,跳过: %.200r", line)
             continue
         if event.get("type") == "compacted":
             child.finish()
@@ -708,6 +716,8 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            #: 同上 —— 一行解不出 JSON 的输出不能无声丢(协议漂移时只能靠超时兜底)。
+            logger.debug("sidecar 交来一行解不出 JSON 的输出,跳过: %.200r", line)
             continue
         if event.get("type") == "credential_refreshed":
             child.finish()

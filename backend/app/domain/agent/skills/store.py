@@ -10,9 +10,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 from dataclasses import replace
 from pathlib import Path
 
@@ -139,7 +142,10 @@ def _clean_staging() -> None:
         try:
             if child.stat().st_mtime < cutoff:
                 shutil.rmtree(child, ignore_errors=True) if child.is_dir() else child.unlink(missing_ok=True)
-        except OSError:
+        except OSError as exc:
+            #: 清不掉不能无声:暂存目录只涨不消,磁盘缓慢上涨没人知道。debug 级 —— 它在后台跑,
+            #: 不是用户等着的事。
+            logger.debug("技能暂存目录 %s 清不掉: %s", child, exc)
             continue
 
 

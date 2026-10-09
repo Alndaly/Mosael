@@ -37,6 +37,8 @@ def extract_text(content_json: str) -> str:
     try:
         parsed = json.loads(content_json or "{}")
     except ValueError:
+        #: 用户发的这条消息内容解不开,bot 表现得像没收到 —— 静默丢消息是最坏的,留痕。
+        logger.warning("飞书消息的 content 解不开,这条按没有文本处理: %.200r", content_json)
         return ""
     if isinstance(parsed.get("text"), str):
         return MENTION_RE.sub("", parsed["text"]).strip()
@@ -82,6 +84,7 @@ def _image_keys(message_type: str, content_json: str) -> list[str]:
     try:
         parsed = json.loads(content_json or "{}")
     except ValueError:
+        logger.warning("飞书消息的 content 解不开,这条按没有图片处理: %.200r", content_json)
         return []
     if message_type == "image":
         key = str(parsed.get("image_key") or "")

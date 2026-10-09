@@ -310,4 +310,11 @@ def _refresh_in_background(token: str, pending: list[tuple[str, str, str, dict]]
             logger.warning("刷新 %s 的订阅令牌失败:%s", name, exc)
             _refresh_failed_at[profile_id] = now
             continue
+        except Exception:
+            #: SidecarError 之外的(比如 spawn 子进程的 OSError):此前线程无声死掉,后面排着的
+            #: 连接全部不刷、也没人知道 —— 界面上那条连接永远停在「过期」而不是「需要重新授权」。
+            #: 记全堆栈、给它置上失败标记,然后接着刷后面排着的。
+            logger.exception("刷新 %s 的订阅令牌时出了预想不到的错", name)
+            _refresh_failed_at[profile_id] = now
+            continue
         _refresh_failed_at.pop(profile_id, None)

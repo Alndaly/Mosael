@@ -16,9 +16,12 @@ MAX_BYTES 时,把当前内容抄进 `.1` 再截断(子进程是追加写,截断�
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import threading
+
+logger = logging.getLogger(__name__)
 from collections import deque
 from pathlib import Path
 from typing import BinaryIO
@@ -151,8 +154,9 @@ class ServiceLog:
                 newer = self.path.with_name(f"{self.path.name}.{index - 1}") if index > 1 else self.path
                 if newer.exists():
                     os.replace(newer, older)
-        except OSError:
-            pass  # 滚不动(Windows 上别的进程还开着它)就接着往同一个文件里写
+        except OSError as exc:
+            #: 轮转失败 = 这个服务的日志从此无限增长(兄弟函数 _rotate 有注释,这条补留痕)。
+            logger.debug("服务日志 %s 轮转失败: %s(日志会继续往大长)", self.path, exc)  # 滚不动(Windows 上别的进程还开着它)就接着往同一个文件里写
 
     def _copy_truncate(self) -> None:
         try:
@@ -165,8 +169,9 @@ class ServiceLog:
             with open(self.path, "r+b") as handle:
                 handle.truncate(0)
             self._offset, self._pending = 0, b""
-        except OSError:
-            pass
+        except OSError as exc:
+            #: 轮转失败 = 这个服务的日志从此无限增长(兄弟函数 _rotate 有注释,这条补留痕)。
+            logger.debug("服务日志 %s 轮转失败: %s(日志会继续往大长)", self.path, exc)
 
 
 def _split_keeping_breaks(text: str) -> list[str]:

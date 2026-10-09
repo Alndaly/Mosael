@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 import tempfile
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import IO
 
@@ -46,7 +49,10 @@ def generate_thumbnail(source: Path, kind: str, asset_directory: Path) -> Path |
         try:
             with Image.open(compatible[0]) as image:
                 write_thumbnail(image, target)
-        except Exception:
+        except Exception as exc:
+            #: 不上抛是对的(导入不该因缩略图失败而失败),但失败要去日志 ——
+            #: 不然损坏的图每次被访问都静默重试、静默失败,谁也看不见。
+            logger.warning("缩略图没生成(素材 %s): %s", asset_directory.name, exc)
             return None
         return target if target.is_file() and target.stat().st_size > 0 else None
     # 视频:ffmpeg 取一帧成 PNG,再走同一个写法。0.5s 跳过片头黑场;超短片段 seek 会落在

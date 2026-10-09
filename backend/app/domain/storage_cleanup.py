@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import time
 from dataclasses import dataclass
@@ -21,6 +22,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.db.models import Asset, Font, Lut, User, Voice, Workspace
 from app.media.paths import WORKSPACE_MEDIA_CATEGORIES, workspace_media_dirs
 
@@ -44,10 +47,18 @@ class Orphan:
 
 
 def delete_workspace_files(workspace_id: str) -> None:
-    """删工作区之后,它在 media/ 下的全部目录一起删。由 `members.delete_workspace` 在**提交之后**调。"""
+    """删工作区之后,它在 media/ 下的全部目录一起删。由 `members.delete_workspace` 在**提交之后**调。
+
+    rmtree 失败(占用/权限)要留痕:确认框承诺的是「永久移除」,清不掉却没人知道,那批文件就
+    永远留在盘上 —— 这正是孤儿扫描存在的理由,它会发现它们。
+    """
     for directory in workspace_media_dirs(workspace_id):
-        if directory.is_dir():
-            shutil.rmtree(directory, ignore_errors=True)
+        if not directory.is_dir():
+            continue
+        try:
+            shutil.rmtree(directory)
+        except OSError as exc:
+            logger.warning("删工作区 %s 的目录 %s 没删干净: %s(孤儿扫描会再发现它们)", workspace_id, directory, exc)
 
 
 def delete_user_files(avatar_key: str) -> None:
@@ -104,10 +115,17 @@ def delete_orphans(db: Session, keys: list[str]) -> tuple[list[str], list[str]]:
             skipped.append(key)
             continue
         target = settings.data_dir / key
-        if target.is_dir():
-            shutil.rmtree(target, ignore_errors=True)
-        else:
-            target.unlink(missing_ok=True)
+        try:
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("孤儿 %s 没删掉: %s", key, exc)
+        # 没删成的**不许**报「已删除」—— 控制台说删了而文件还在,那是说谎;归进跳过,管理员看得见。
+        if target.exists():
+            skipped.append(key)
+            continue
         deleted.append(key)
     return deleted, skipped
 
