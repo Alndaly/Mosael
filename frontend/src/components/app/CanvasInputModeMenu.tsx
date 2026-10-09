@@ -38,6 +38,7 @@ export function CanvasInputModeMenu({
   descriptions,
   disabledReason,
   overNativeView = false,
+  variant = "ghost",
   className,
 }: {
   mode: CanvasInputMode;
@@ -50,6 +51,9 @@ export function CanvasInputModeMenu({
   descriptions?: Partial<Record<CanvasInputMode, string>>;
   disabledReason?: string | null;
   overNativeView?: boolean;
+  /** 挨着的那排是什么,它就是什么:画布工具条、内嵌浏览器顶栏的图标堆用 ghost(默认);
+      工作台顶栏挨着「保存」「运行」那两颗带框的,用 outline。 */
+  variant?: "ghost" | "outline";
   className?: string;
 }) {
   const t = useI18n();
@@ -61,7 +65,7 @@ export function CanvasInputModeMenu({
     <Popover open={open && !disabledReason} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <IconButton
-          variant="ghost"
+          variant={variant}
           size={size}
           label={label}
           hint={disabledReason ? null : scope}

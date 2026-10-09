@@ -20,6 +20,17 @@ const trigger = () => document.querySelector<HTMLButtonElement>("[data-canvas-in
 beforeEach(() => window.localStorage.clear());
 afterEach(() => vi.unstubAllGlobals());
 
+describe("按钮外观跟着挨着的那一排走", () => {
+  it("默认 ghost(画布工具条、浏览器顶栏);工作台顶栏那颗传 outline,和「保存」「运行」同有边框", () => {
+    vi.stubGlobal("mosaelDesktop", { platform: "darwin" });
+    bridge("applied");
+    const { rerender } = render(<ComfyNavigationSwitch connectionId="c1" />);
+    expect(trigger().className, "默认是 ghost(无框)").toContain("border-transparent");
+    rerender(<ComfyNavigationSwitch connectionId="c1" variant="outline" />);
+    expect(trigger().className, "outline 有边框").toContain("border-field-border");
+  });
+});
+
 describe("工作台的画布操控方式(样子是画布那一份,存储只对这个连接)", () => {
   it("挂上就按记着的(没记过按平台:Mac 是触控板)交给主进程;从菜单换一个就记下、再设", async () => {
     vi.stubGlobal("mosaelDesktop", { platform: "darwin" });

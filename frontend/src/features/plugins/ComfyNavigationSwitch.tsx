@@ -12,10 +12,12 @@ import { navigationBridge, useComfyNavigation } from "@/features/plugins/comfyNa
 export function ComfyNavigationSwitch({
   connectionId,
   size = "sm",
+  variant,
   className,
 }: {
   connectionId: string;
   size?: "xs" | "sm";
+  variant?: "ghost" | "outline";
   className?: string;
 }) {
   const t = useI18n();
@@ -29,6 +31,7 @@ export function ComfyNavigationSwitch({
       scope={t("comfyNavigationScope")}
       disabledReason={supported === false ? t("comfyNavigationUnsupported") : null}
       overNativeView
+      variant={variant}
       className={className}
     />
   );
