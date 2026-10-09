@@ -85,7 +85,7 @@ import { resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nat
 import { comboFromEvent, listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, HANDLE_ON_LEFT_EDGE } from "@/lib/useResizableSidebar";
 import { declaresDrag, noDragAfter } from "@/test/dragRegions";
-import { COLUMN_DEFAULT, COLUMN_MIN, DRAG_GUARD } from "./columnWidth";
+import { COLUMN_DEFAULT, COLUMN_MIN } from "./columnWidth";
 import { FormsLockedError, markOnlyResult } from "./canvasMarks";
 import { ComfyWorkbench } from "./ComfyWorkbench";
 import { RECHECK_DELAY_MS } from "./MissingPanel";
@@ -844,18 +844,14 @@ describe("右边那一列拉宽拉窄", () => {
     expect(handle().getAttribute("aria-valuemax")).toBe("720");
     drag(1000, 900);
     expect(width()).toBe(COLUMN_DEFAULT + 100);
-    const guard = document.querySelector<HTMLElement>("[data-workbench-drag-guard]");
-    expect(guard, "让出来的那一截铺一块底色").not.toBeNull();
-    //: 它背后是页面自己的背景,透明就融进去了 —— 不铺任何颜色,只留画布边上的分割线。
-    expect(guard!.className).toContain("bg-transparent");
-    expect(guard!.className).toContain("border-l");
-    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT + 100 + DRAG_GUARD));
+    //: 拖动期间视图边完全跟手,不再多让出一截(实测指针捕获已足够,DRAG_GUARD 保险拆了)。
+    expect(document.querySelector("[data-workbench-drag-guard]")).toBeNull();
+    await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT + 100));
     fireEvent.pointerMove(window, { clientX: 100, buttons: 1, pointerId: 1 });
     expect(width(), "最宽是窗口的一半(主进程也最多让出一半)").toBe(720);
     fireEvent.pointerMove(window, { clientX: 1400, buttons: 1, pointerId: 1 });
     expect(width(), "最窄 300").toBe(COLUMN_MIN);
     fireEvent.pointerUp(window, { pointerId: 1 });
-    expect(document.querySelector("[data-workbench-drag-guard]")).toBeNull();
     await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_MIN));
   });
 
@@ -875,7 +871,6 @@ describe("右边那一列拉宽拉窄", () => {
     drag(1000, 950);
     fireEvent.pointerMove(window, { clientX: 700, buttons: 0, pointerId: 1 });
     expect(width(), "没按着键:不再跟着指针").toBe(COLUMN_DEFAULT + 50);
-    expect(document.querySelector("[data-workbench-drag-guard]")).toBeNull();
     drag(1000, 990);
     fireEvent.blur(window);
     fireEvent.pointerMove(window, { clientX: 500, buttons: 1, pointerId: 1 });

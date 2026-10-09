@@ -12,22 +12,16 @@ import { clampSize, type SidebarBounds } from "@/lib/useResizableSidebar";
  * - 让出的宽按动画帧报给主进程(一帧最多一次),拖的时候视图边跟着走。
  *
  * **拖到原生视图上的坑**:原生视图盖在一切 DOM 上,指针一进去,渲染层就收不到 pointermove / pointerup —— 拖着拖着
- * 停住,或者松了手还在拖。所以:
- * - 拖动期间网页多让出一截(`DRAG_GUARD`):视图边退到指针左边这么远,指针一帧跑不出去;让出来的那条画一块底色,
- *   光标照样是左右拉的;
- * - 按下时 `setPointerCapture`(指针还归这条边);
- * - 收不到 pointerup 也能收住:下一个 pointermove 已经没按着键(`buttons === 0`)、pointercancel、失去捕获、窗口失焦,
- *   都当松手。
+ * 停住,或者松了手还在拖。所以按下时 `setPointerCapture`(指针还归这条边);收不到 pointerup 也能收住:
+ * 下一个 pointermove 已经没按着键(`buttons === 0`)、pointercancel、失去捕获、窗口失焦,都当松手。
+ * 此前还怕捕获不可靠,拖动期间让视图多退 96px 防指针闯进去(「DRAG_GUARD」);实测(2026-10,当前
+ * Chromium)捕获已足够,保险拆了 —— 视图边完全跟手。哪天发现拖到画布上会断,git 里找回来。
  */
 
 export const COLUMN_DEFAULT = 420;
 export const COLUMN_MIN = 300;
 /** 方向键一下挪多少(按住 Shift 四倍)。 */
 export const COLUMN_STEP = 16;
-/** 拖动时网页多让出的那截(像素)。**实测中:0** —— 指针捕获(setPointerCapture)在当前的
- *  Chromium/Electron 里即使指针越过原生视图也照常把事件送回渲染层,多让的那一截只会留一条
- *  多余的空白。如果哪天发现拖到画布上会断(快速甩、慢机器),把它调回 96 就回到旧行为。 */
-export const DRAG_GUARD = 0;
 
 /** 窗口这么宽时,列最宽能到多少(和主进程「最多让出一半」同一条)。 */
 export const columnMax = (windowWidth: number) => Math.max(COLUMN_MIN, Math.floor(windowWidth / 2));
@@ -134,7 +128,7 @@ export function useColumnWidth(open: boolean): ColumnWidth {
     [bounds],
   );
 
-  useInsetReporter(open ? width + (dragging ? DRAG_GUARD : 0) : 0);
+  useInsetReporter(open ? width : 0);
   React.useEffect(() => () => stopDrag.current?.(), []);
 
   const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {

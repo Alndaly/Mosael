@@ -15,7 +15,7 @@ import { useAgentPlace } from "@/features/agent/activePlace";
 import { comfyPlace } from "@/features/agent/places";
 import { AppPanel } from "@/features/plugins/workbench/AppPanel";
 import { AssistantPanel } from "@/features/plugins/workbench/AssistantPanel";
-import { DRAG_GUARD, useColumnWidth } from "@/features/plugins/workbench/columnWidth";
+import { useColumnWidth } from "@/features/plugins/workbench/columnWidth";
 import { useFollowWorkbenchPlaces } from "@/features/plugins/workbench/followPlaces";
 import { WorkbenchTabs } from "@/features/plugins/workbench/WorkbenchTabs";
 import { MissingPanel } from "@/features/plugins/workbench/MissingPanel";
@@ -332,18 +332,6 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           </div>
         ))}
       </aside>
-      {/* 拖着那条边时网页多让出的那一截(见 columnWidth 的 DRAG_GUARD)。它背后就是工作台页面自己的
-          背景(原生视图让开之后露出来的那部分),**透明**就融进页面了 —— 此前铺一层灰(panel-inset),
-          夹在画布和列中间,读作「多出来一块空白」。只在画布那条边上留一根分割线当视觉锚点。 */}
-      {column.dragging && (
-        <div
-          {...APP_CHROME}
-          aria-hidden
-          data-workbench-drag-guard=""
-          style={{ top: barHeight, right: column.width, width: DRAG_GUARD }}
-          className="fixed bottom-0 z-[200] cursor-col-resize border-l border-border bg-transparent"
-        />
-      )}
     </HintRegion.Provider>
   ) : null;
 
