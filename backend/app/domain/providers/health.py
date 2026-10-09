@@ -77,7 +77,7 @@ def _custom_probe(kind: str) -> object:
 
     target = _PROBE_IMPLEMENTATIONS.get(kind, "")
     if not target:
-        raise ValueError(f"health probe {kind!r} 没有登记实现(加进 _PROBE_IMPLEMENTATIONS)")
+        raise ValueError(f"health probe {kind!r} has no registered implementation (add it to _PROBE_IMPLEMENTATIONS)")
     module, _, name = target.partition(":")
     return getattr(importlib.import_module(module), name)
 
