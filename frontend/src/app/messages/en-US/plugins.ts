@@ -500,7 +500,6 @@ export const plugins = {
   workbenchAssistantInSubgraph: "It's inside a subgraph: this ComfyUI frontend can't open subgraphs from here; double-click that subgraph node on the canvas",
   workbenchFindingsTitle: "Diagnosis",
   workbenchFindingsSummary: "{errors} errors, {warnings} warnings",
-  workbenchFindingsNone: "No problems found",
   workbenchSeverityError: "Error",
   workbenchSeverityWarning: "Warning",
   workbenchFixThis: "Fix this",

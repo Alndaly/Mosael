@@ -509,7 +509,6 @@ export const plugins = {
   workbenchAssistantInSubgraph: "它在子图里:这版 ComfyUI 前端没法从这里进子图,在画布上双击那个子图节点打开它",
   workbenchFindingsTitle: "诊断",
   workbenchFindingsSummary: "{errors} 个错误、{warnings} 个提醒",
-  workbenchFindingsNone: "没查出问题",
   workbenchSeverityError: "错误",
   workbenchSeverityWarning: "提醒",
   workbenchFixThis: "照这个改",

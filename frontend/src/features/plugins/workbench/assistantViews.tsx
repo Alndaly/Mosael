@@ -39,6 +39,9 @@ export function assistantToolResult(tool: string, data: unknown): React.ReactNod
   if (!isRecord(data)) return null;
   if (tool === "comfy_check") {
     const findings = findingsOf(data.findings);
+    //: 零发现不画任何结果行:工具行(✓ comfy_check · 0.6s)已经证明检查跑过了,
+    //: 「没查出问题」智能体自己会回答 —— 再单独来一行,是把工具的回包当成内容播。
+    if (findings && findings.length === 0) return null;
     return findings ? <FindingsCard findings={findings} counts={counted(data.counts)} /> : null;
   }
   if (tool === "comfy_canvas_edit" && typeof data.applied === "number") {
@@ -54,16 +57,6 @@ const CARD = "grid min-w-0 gap-1.5 rounded-md border border-border bg-panel p-2 
 
 function FindingsCard({ findings, counts }: { findings: AssistantFinding[]; counts: { error: number; warning: number } }) {
   const t = useI18n();
-  //: 零发现不是一张卡:检查确实跑了这件事要留痕(对话里看得见),但一行安静的确认就够,
-  //: 卡片的边框造型留给真有问题的时候 —— 否则「没查出问题」在对话里和答案一样抢眼。
-  if (findings.length === 0) {
-    return (
-      <span role="status" data-comfy-findings="" className="inline-flex items-center gap-1 text-ui-xs text-muted-foreground">
-        <Wrench size={11} aria-hidden />
-        {t("workbenchFindingsNone")}
-      </span>
-    );
-  }
   return (
     <section className={CARD} aria-label={t("workbenchFindingsTitle")} data-comfy-findings="">
       <header className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
