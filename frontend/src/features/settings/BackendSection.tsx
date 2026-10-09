@@ -64,7 +64,9 @@ function UpdateCheckButton() {
         setChecking(true);
         try {
           const info = await check();
-          if (info.error) toast.error(t("updateCheckFailed"));
+          // 主进程把真实原因放在 info.error 里(GitHub 状态码、解析失败、网络错误)——
+          // 带出来。光说「稍后再试」的话,代理挂了和真的没新版看上去一模一样。
+          if (info.error) toast.error(t("updateCheckFailed"), { description: String(info.error) });
           else if (info.hasUpdate) {
             toast(t("updateAvailable").replace("{version}", info.latest ?? ""), {
               duration: 12000,
