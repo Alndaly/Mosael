@@ -4,7 +4,9 @@ import { ChevronDown, Mouse, Touchpad } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import type { CanvasInputMode } from "@/components/app/canvasInputMode";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { StepNativeViewAside } from "@/components/ui/nativeViewAside";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
@@ -39,6 +41,7 @@ export function CanvasInputModeMenu({
   disabledReason,
   overNativeView = false,
   variant = "ghost",
+  labeled = false,
   className,
 }: {
   mode: CanvasInputMode;
@@ -54,6 +57,9 @@ export function CanvasInputModeMenu({
   /** 挨着的那排是什么,它就是什么:画布工具条、内嵌浏览器顶栏的图标堆用 ghost(默认);
       工作台顶栏挨着「保存」「运行」那两颗带框的,用 outline。 */
   variant?: "ghost" | "outline";
+  /** 图标旁边写上现在那一种的名字(「触控板 / 鼠标」):挨着「图标+文字」的按钮排时用,
+      画布上的图标堆里照旧只给图标。 */
+  labeled?: boolean;
   className?: string;
 }) {
   const t = useI18n();
@@ -63,27 +69,48 @@ export function CanvasInputModeMenu({
   const label = disabledReason ? t("canvasInputMode") : t("canvasInputCurrent").replace("{mode}", t(current.label));
   return (
     <Popover open={open && !disabledReason} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <IconButton
-          variant={variant}
-          size={size}
-          label={label}
-          hint={disabledReason ? null : scope}
-          disabled={Boolean(disabledReason)}
-          disabledReason={disabledReason}
-          aria-haspopup="menu"
-          data-canvas-input-trigger=""
-          data-canvas-input-mode={mode}
-          className={cn(
-            //: 和工具条上别的图标同一个颜色(此前那颗是次要色,比旁边的图标淡一截,像是点不了);下拉箭头淡一档,主次在图标上
-            "nodrag nopan nowheel [-webkit-app-region:no-drag] shrink-0 gap-0.5 px-1.5",
-            className,
-          )}
-        >
-          <Icon aria-hidden />
-          <ChevronDown aria-hidden className="size-3! opacity-70" />
-        </IconButton>
-      </PopoverTrigger>
+      {labeled ? (
+        //: 悬停说明在最外层:PopoverTrigger(asChild)的直接孩子必须是能接 ref 的按钮,Hint 隔着就收不到点击。
+        <Hint label={label} hint={disabledReason ? null : scope} disabledReason={disabledReason ? disabledReason : undefined}>
+          <PopoverTrigger asChild>
+            <Button
+              variant={variant}
+              size={size}
+              disabled={Boolean(disabledReason)}
+              aria-haspopup="menu"
+              data-canvas-input-trigger=""
+              data-canvas-input-mode={mode}
+              className={cn("nodrag nopan nowheel [-webkit-app-region:no-drag] shrink-0", className)}
+            >
+              <Icon aria-hidden />
+              {t(current.label)}
+              <ChevronDown aria-hidden className="size-3! opacity-70" />
+            </Button>
+          </PopoverTrigger>
+        </Hint>
+      ) : (
+        <PopoverTrigger asChild>
+          <IconButton
+            variant={variant}
+            size={size}
+            label={label}
+            hint={disabledReason ? null : scope}
+            disabled={Boolean(disabledReason)}
+            disabledReason={disabledReason}
+            aria-haspopup="menu"
+            data-canvas-input-trigger=""
+            data-canvas-input-mode={mode}
+            className={cn(
+              //: 和工具条上别的图标同一个颜色(此前那颗是次要色,比旁边的图标淡一截,像是点不了);下拉箭头淡一档,主次在图标上
+              "nodrag nopan nowheel [-webkit-app-region:no-drag] shrink-0 gap-0.5 px-1.5",
+              className,
+            )}
+          >
+            <Icon aria-hidden />
+            <ChevronDown aria-hidden className="size-3! opacity-70" />
+          </IconButton>
+        </PopoverTrigger>
+      )}
       <MenuContent label={t("canvasInputMode")} align="end" className="nodrag nopan nowheel">
         {overNativeView && <StepNativeViewAside />}
         {MODES.map((one) => (

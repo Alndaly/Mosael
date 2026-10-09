@@ -20,6 +20,18 @@ const trigger = () => document.querySelector<HTMLButtonElement>("[data-canvas-in
 beforeEach(() => window.localStorage.clear());
 afterEach(() => vi.unstubAllGlobals());
 
+describe("按钮上写现在那一种", () => {
+  it("labeled:图标旁边就是模式名,换了模式按钮上的字跟着换", async () => {
+    vi.stubGlobal("mosaelDesktop", { platform: "darwin" });
+    bridge("applied");
+    render(<ComfyNavigationSwitch connectionId="c1" labeled />);
+    await waitFor(() => expect(trigger().textContent).toContain("canvasInputTrackpad"));
+    fireEvent.click(trigger());
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /canvasInputMouse/ }));
+    await waitFor(() => expect(trigger().textContent).toContain("canvasInputMouse"));
+  });
+});
+
 describe("按钮外观跟着挨着的那一排走", () => {
   it("默认 ghost(画布工具条、浏览器顶栏);工作台顶栏那颗传 outline,和「保存」「运行」同有边框", () => {
     vi.stubGlobal("mosaelDesktop", { platform: "darwin" });

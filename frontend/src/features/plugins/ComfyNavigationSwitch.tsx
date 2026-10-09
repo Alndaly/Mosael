@@ -13,11 +13,14 @@ export function ComfyNavigationSwitch({
   connectionId,
   size = "sm",
   variant,
+  labeled,
   className,
 }: {
   connectionId: string;
   size?: "xs" | "sm";
   variant?: "ghost" | "outline";
+  /** 图标旁边写上现在那一种的名字:挨着「图标+文字」的按钮排时用。 */
+  labeled?: boolean;
   className?: string;
 }) {
   const t = useI18n();
@@ -32,6 +35,7 @@ export function ComfyNavigationSwitch({
       disabledReason={supported === false ? t("comfyNavigationUnsupported") : null}
       overNativeView
       variant={variant}
+      labeled={labeled}
       className={className}
     />
   );

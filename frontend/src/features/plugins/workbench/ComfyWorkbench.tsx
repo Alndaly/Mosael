@@ -244,7 +244,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
         </div>
         {/* 等人拍板的卡、免提浮标:画布在前台时收在这里(ADR 0051,见 ChromeStatusSlot) */}
         <ChromeStatusSlot size="sm" />
-        <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" variant="outline" />
+        <ComfyNavigationSwitch connectionId={target.instanceId} size="sm" variant="outline" labeled />
         <Hint label={canSave ? t("workbenchSaveHint") : t("workbenchUnsupported").replace("{what}", t("workbenchCapSave"))}
               shortcut={canSave ? formatCombo(SAVE_KEY) : null}>
           <Button variant="outline" size="sm" data-bar-control="" className="[-webkit-app-region:no-drag] shrink-0"
