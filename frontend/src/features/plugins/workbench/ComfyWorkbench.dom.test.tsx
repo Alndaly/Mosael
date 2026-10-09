@@ -844,7 +844,11 @@ describe("右边那一列拉宽拉窄", () => {
     expect(handle().getAttribute("aria-valuemax")).toBe("720");
     drag(1000, 900);
     expect(width()).toBe(COLUMN_DEFAULT + 100);
-    expect(document.querySelector("[data-workbench-drag-guard]"), "让出来的那一截铺一块底色").not.toBeNull();
+    const guard = document.querySelector<HTMLElement>("[data-workbench-drag-guard]");
+    expect(guard, "让出来的那一截铺一块底色").not.toBeNull();
+    //: 它要读作「那一列自己的延伸」(和 aside 同色、带分割线),不是画布旁边一条颜色对不上的空白。
+    expect(guard!.className).toContain("bg-panel");
+    expect(guard!.className).toContain("border-l");
     await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT + 100 + DRAG_GUARD));
     fireEvent.pointerMove(window, { clientX: 100, buttons: 1, pointerId: 1 });
     expect(width(), "最宽是窗口的一半(主进程也最多让出一半)").toBe(720);

@@ -332,14 +332,16 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           </div>
         ))}
       </aside>
-      {/* 拖着那条边时网页多让出的那一截(见 columnWidth 的 DRAG_GUARD):铺一块底色,光标照样是左右拉的 */}
+      {/* 拖着那条边时网页多让出的那一截(见 columnWidth 的 DRAG_GUARD):**长得要像那一列自己的延伸**
+          (同 bg-panel、左边沿一条分割线)—— 此前铺 bg-panel-inset,左边是深色的 ComfyUI 画布,
+          一条颜色对不上的带子夹在中间,看起来就是「多出来一块空白」。光标照样是左右拉的。 */}
       {column.dragging && (
         <div
           {...APP_CHROME}
           aria-hidden
           data-workbench-drag-guard=""
           style={{ top: barHeight, right: column.width, width: DRAG_GUARD }}
-          className="fixed bottom-0 z-[200] cursor-col-resize bg-panel-inset"
+          className="fixed bottom-0 z-[200] cursor-col-resize border-l border-border bg-panel"
         />
       )}
     </HintRegion.Provider>
