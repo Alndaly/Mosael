@@ -846,8 +846,8 @@ describe("右边那一列拉宽拉窄", () => {
     expect(width()).toBe(COLUMN_DEFAULT + 100);
     const guard = document.querySelector<HTMLElement>("[data-workbench-drag-guard]");
     expect(guard, "让出来的那一截铺一块底色").not.toBeNull();
-    //: 它要读作「那一列自己的延伸」(和 aside 同色、带分割线),不是画布旁边一条颜色对不上的空白。
-    expect(guard!.className).toContain("bg-panel");
+    //: 它背后是页面自己的背景,透明就融进去了 —— 不铺任何颜色,只留画布边上的分割线。
+    expect(guard!.className).toContain("bg-transparent");
     expect(guard!.className).toContain("border-l");
     await waitFor(() => expect(bridge.mosaelPageTools.setInset).toHaveBeenLastCalledWith(COLUMN_DEFAULT + 100 + DRAG_GUARD));
     fireEvent.pointerMove(window, { clientX: 100, buttons: 1, pointerId: 1 });
