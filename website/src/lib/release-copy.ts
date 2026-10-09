@@ -1,5 +1,22 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.4": {
+    zh: [
+      "**设计语言定稿,全站照它改完。** 按钮、输入框、下拉同一把尺;「开着」的状态只有一个样子(按下态落进基础组件,画布工具条、编辑器、画板不再各写各的颜色);设置页、AI Studio、ComfyUI 工作台、搜索框都换成了这套。失败也长一个样子:智能体、画板、工作流、任务详情、发布、定时任务共用同一张失败卡,写着「那一句 · 原文 · 原因和怎么修」。",
+      "**智能体更听得懂「停」。** 按了停止,排在后面的那句不再自己接着跑;批完一张卡后界面刷新什么由工具自己声明;每一次创作会话记着是从哪儿开的(画板、工作流、资产、定时任务……),一处一条、能回去。技能可以建、改、复制、开关、删、从链接导入,每一样都过你的眼。",
+      "**ComfyUI 一连串修复。** 在工作流库里改名、挪文件夹,Mosael 里用着它的地方跟着改;从老版本升上来的旧格式表单不再悄悄按完整工作流跑;一张工作流的名字到处一致;经端口转发(UU 远程、frp、SSH)连 ComfyUI 不再时好时坏;插件页上 ComfyUI 那一行叫「工作流」,连不上时说清列着的是上一次的清单。",
+      "**权限与记账收紧。** 只读成员不再到处看得见写按钮、点了才挨一句报错;「清空已结束」只收拾你自己的任务中心,不再删掉整个工作区的历史,花的钱记得是谁花的;定时任务要花别人的连接时,先让主人认可;订阅连接的授权失效了,设置页和对话里都会说。",
+      "**其余修复。** 出站代理「留空」说对了:跟随系统代理,本机地址始终直连;「添加节点」里有表单的工作流每个入口一行、各自能选;编辑者自己发起的「在 Civitai 上找」能看到结果;带字的导出被拒时说清原因和怎么办。",
+    ],
+    en: [
+      "**The design language is final, and the whole app follows it.** Buttons, inputs and selects share one ruler; the on state has exactly one look (pressed states live in the base components — canvas toolbars, the editor and boards no longer paint their own); settings, AI Studio, the ComfyUI workbench and search boxes all moved over. Failures look the same everywhere too: agent, boards, workflows, task details, publishing and scheduled runs share one failure card with the message, the original text, the reason and how to fix it.",
+      "**The agent actually stops when you say stop.** Queued messages no longer run on their own after you stop; which parts of the UI refresh after a card is approved is now declared by the tool itself; every creative session remembers where it was opened (boards, workflows, assets, scheduled runs…), one entry each with a way back. Skills can be created, edited, duplicated, toggled, deleted and imported from a link, each with your review.",
+      "**A string of ComfyUI fixes.** Renaming or moving a workflow in its library updates everywhere Mosael uses it; old-format forms from older versions no longer silently run as the full workflow; a workflow's name is consistent everywhere; connecting through port forwarding (UU, frp, SSH) works reliably; the ComfyUI row on the plugins page is called Workflows, and a broken connection says the list shown is from last time.",
+      "**Permissions and billing tightened.** Read-only members no longer see write buttons everywhere only to be rejected on click; Clear finished only tidies your own task center instead of wiping the whole workspace's history, and spending remembers who paid; scheduled runs that would spend someone else's connection first ask the owner to vouch; when a subscription connection's authorization expires, both settings and the chat say so.",
+      "**More fixes.** An empty outbound-proxy field now tells the truth (follow the system proxy, local addresses always direct); workflow entries with forms in Add node each get their own selectable row; Civitai searches started by editors themselves show results; and when a watermarked export is rejected, the error says why and what to do.",
+    ],
+  },
+
   "v1.9.3": {
     zh: [
       "**ComfyUI 可以装在 Mosael 里了。** 自己装过的,选目录、指一个 Python,Mosael 替你起停、看日志,用到时自动启动,闲置一会儿自动停下释放显存;没装过的,选「让 Mosael 装」,先看安装计划(这台机器装哪种 PyTorch、要多大空间、从哪儿下、走不走代理),再一步步装,能取消、能接着装。支持 Apple 芯片 Mac、Windows 和 Linux + NVIDIA,装好的能更新、能回到上一版,卸载时可以留下模型;别处已有的模型文件夹也能直接共用,不拷第二份。升级后 ComfyUI 连接要先在插件页授予三项新的联网权限才恢复。",
