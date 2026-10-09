@@ -24,8 +24,10 @@ export const COLUMN_DEFAULT = 420;
 export const COLUMN_MIN = 300;
 /** 方向键一下挪多少(按住 Shift 四倍)。 */
 export const COLUMN_STEP = 16;
-/** 拖动时网页多让出的那截(像素)。 */
-export const DRAG_GUARD = 96;
+/** 拖动时网页多让出的那截(像素)。**实测中:0** —— 指针捕获(setPointerCapture)在当前的
+ *  Chromium/Electron 里即使指针越过原生视图也照常把事件送回渲染层,多让的那一截只会留一条
+ *  多余的空白。如果哪天发现拖到画布上会断(快速甩、慢机器),把它调回 96 就回到旧行为。 */
+export const DRAG_GUARD = 0;
 
 /** 窗口这么宽时,列最宽能到多少(和主进程「最多让出一半」同一条)。 */
 export const columnMax = (windowWidth: number) => Math.max(COLUMN_MIN, Math.floor(windowWidth / 2));
