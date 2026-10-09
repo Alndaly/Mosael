@@ -5,11 +5,12 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
-### Windows / Linux:滚动条不再玩捉迷藏
+### Windows / Linux:滚动条也是悬浮的了
 
 - 此前滚动条是「悬停才显形」:macOS 的悬浮条不占宽度,这么做没事;Windows/Linux 的原生滚动条
-  占布局宽度,悬停显形(0 → 6px)会把内容挤窄再弹回来,整个界面跟着跳。非 Mac 上滚动条改为
-  常驻细条 —— 一开始就在那儿,悬停不再改变任何宽度。
+  占布局宽度,悬停显形(0 → 6px)会把内容挤窄再弹回来,整个界面跟着跳。现在桌面壳在非 Mac 平台
+  给 Chromium 打开 OverlayScrollbars,滚动条在那边同样悬浮在内容上 —— 悬停显形全平台一致,
+  不再有任何宽度跳变。
 
 
 ## [1.9.4] - 2026-10-09

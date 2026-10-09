@@ -88,6 +88,10 @@ app.commandLine.appendSwitch("disable-blink-features", "AutomationControlled");
 // 不再出帧,scroll 事件和 IntersectionObserver 都停,滚动加载的列表 / 评论区就不往下加载了 —— 而工作流正是让人
 // 切走去干别的时候在跑(实测:B 站评论区读页面那一路从 33 条一级评论掉到 3 条)。只关这一条,最小化照旧按隐藏。
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+// Windows / Linux 的滚动条默认是占布局宽度的「经典」条;Chromium 的 OverlayScrollbars 让它们在
+// 这些平台上也悬浮在内容上(macOS 的默认行为)。开着它,界面的悬停显形滚动条在非 Mac 上
+// 才不会把内容挤窄再弹回(0 → 6px 的宽度跳变)。
+if (process.platform !== "darwin") app.commandLine.appendSwitch("enable-features", "OverlayScrollbars");
 
 const BACKEND_PORT = Number(process.env.MOSAEL_BACKEND_PORT || 8800);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
