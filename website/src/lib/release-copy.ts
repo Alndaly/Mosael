@@ -3,15 +3,15 @@ export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
   "v1.9.5": {
     zh: [
       "**工作台顶栏顺手了。** 画布操控钮(触控板/鼠标)写上现在那一种的名字,和「保存」「运行」同有边框;拖右边列宽时画布边完全跟手,中间不再多出一截空白;助手的诊断没查出问题时不再单出一行——工具行已证明跑过,回答由智能体自己说。",
-      "**断句不再劈词劈句。** 行宽触顶时改成「选切点」:延长到前方标点、回退到最近逗号、绝不劈开 controlnet 这种词;讲话人句中换气不再断行(停顿只认以标点结尾的行)。剪辑台逐字稿、生成字幕、译配配音同一条路,一处修三处好。",
-      "**评论区洞察:有多少条就分析多少条。** 浏览器路对已知平台(B 站先行)在页面里直接调它的评论接口翻全页,楼中楼自带;接口回来的清单不再让模型抄一遍;分析按 80 条一批逐批留笔记、最后综合——评论再多也装得下。附表仍按「评论数」参数给按赞前几条。",
-      "**检查更新失败会说真实原因。** 代理挂了、限流撞上和「已是最新」不再长一个样;失败写进 main.log,后台静默检查也留痕——对用户静默,对日志不静默。另有八处静默失败补上留痕(清理没删干净、订阅令牌后台刷新、缩略图、sidecar 坏行等)。",
+      "**Windows / Linux 的滚动条也是悬浮的了。** 此前悬停显形在这两个平台上会把内容挤窄再弹回(原生滚动条占布局宽度);现在桌面壳给 Chromium 打开悬浮滚动条,全平台一致,不再有任何宽度跳变。",
+      "**库详情页顺眼了。** 模型库、工作流库详情页左栏的预览从顶对齐改成上下左右居中,内容比栏高时仍从顶部起正常滚动。",
+      "**检查更新失败会说真实原因。** 代理挂了、限流撞上和「已是最新」不再长一个样;失败写进 main.log,后台静默检查也留痕。另有八处静默失败补上留痕(清理没删干净、订阅令牌后台刷新、缩略图、sidecar 坏行等)。",
     ],
     en: [
-      "**The workbench top bar is tidier.** The canvas-input button now names the current mode (trackpad/mouse) and matches Save and Run with the same outlined frame; dragging the right column's edge keeps the canvas edge exactly under your pointer with no extra blank strip; and a diagnostic that finds nothing no longer adds its own row—the tool row already proves it ran, and the agent answers in its own words.",
-      "**Sentence splitting no longer cuts words or sentences in half.** Hitting the line-width cap now picks a proper break: extend to nearby punctuation ahead, fall back to the latest comma, and never split a word like controlnet; a speaker's mid-sentence breath no longer splits the line (pauses only break on lines that end with punctuation). The editor's transcript, generated subtitles and dubbing share this one path—fix once, all three improve.",
-      "**Comment insights now analyse every comment there is.** For known platforms (Bilibili first) the browser path calls the platform's own comment API from the page and pages through everything, reply threads included; API results no longer get transcribed by the model (which used to drop entries); analysis runs in batches of 80 with a final synthesis, so long threads fit. The appendix table still honours the comment-count parameter.",
-      "**Update checks say the real reason they fail.** A dead proxy or a rate-limit collision no longer looks identical to “you’re up to date”; failures are written to main.log, including the silent background checks—quiet for you, on the record for the log. Eight more silent-failure paths now leave a trace (incomplete cleanups, background token refresh, thumbnails, sidecar lines and more).",
+      "**The workbench top bar is tidier.** The canvas-input button now names the current mode (trackpad/mouse) and shares the outlined frame with Save and Run; dragging the right column's edge keeps the canvas edge exactly under your pointer with no extra blank strip; and a diagnostic that finds nothing no longer adds its own row—the tool row already proves it ran, and the agent answers in its own words.",
+      "**Scrollbars overlay on Windows and Linux too.** Hover-to-reveal used to squeeze content narrower and back on those platforms (their native scrollbars take layout width); the desktop shell now enables Chromium's overlay scrollbars there, so behaviour matches macOS with no width jumps.",
+      "**Library detail pages look right.** The preview in the left pane of model and workflow detail pages is now centred both ways instead of stuck to the top, and still scrolls normally from the top when the content is taller than the pane.",
+      "**Update checks say the real reason they fail.** A dead proxy or a rate-limit collision no longer looks identical to “you're up to date”; failures are written to main.log, including the silent background checks. Eight more silent-failure paths now leave a trace (incomplete cleanups, background token refresh, thumbnails, sidecar lines and more).",
     ],
   },
 
