@@ -1213,6 +1213,7 @@ app.whenReady().then(async () => {
     try {
       return await checkForUpdates();
     } catch (error) {
+      appendMainLog("update-check-failed", error);
       return { error: error.message };
     }
   });
@@ -1314,9 +1315,12 @@ app.whenReady().then(async () => {
         const info = await checkForUpdates();
         if (!info.hasUpdate || info.latest === announced) return;
         announced = info.latest;
+        appendMainLog("update-available", `${info.current} -> ${info.latest}`);
         for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.updateAvailable, info);
-      } catch {
-        /* 静默 */
+      } catch (error) {
+        //: 对用户静默(后台检查失败不该弹窗),但对**日志**不静默 —— 代理挂了、限流撞上了,
+        //: 这种事只有写出来,下次「怎么很久没提示更新」才查得回来。
+        appendMainLog("update-check-failed", error);
       }
     };
     setTimeout(checkAndAnnounce, 5000);
