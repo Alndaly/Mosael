@@ -417,7 +417,10 @@ export function LibraryDetail({
             data-library-detail-pane="media"
             className="min-h-0 min-w-0 overflow-y-auto overscroll-contain border-r border-divider p-6"
           >
-            {media}
+            {/* 预览在左栏上下左右居中:内容比栏矮时居中(min-h-full 撑满栏高),比栏高时
+                从顶部起照常滚(safe center,不让上半截滚不到)。详情页看着像一页纸,
+                顶上对齐的预览在大块留白上显得格外孤。 */}
+            <div className="grid min-h-full [place-items:safe_center]">{media}</div>
           </section>
           <div data-library-detail-pane="info" className="grid min-h-0 min-w-0 content-start gap-7 overflow-y-auto overscroll-contain p-6">
             {children}
