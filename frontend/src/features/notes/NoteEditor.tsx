@@ -183,7 +183,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   {boarding !== null && <AddToBoardDialog workspaceId={workspaceId} text={boarding} source={saveSource} onClose={() => setBoarding(null)} />}
   {saving && <SaveToNote workspaceId={workspaceId} content={saving.markdown} sources={saveSource ? [{ ...saveSource, quote: saving.markdown.slice(0, 280) }] : []}
     trigger={({ open }) => { openSave.current = open; return null; }} />}
-  <menu.Portal className="fixed z-[80] w-[340px] max-w-[calc(100vw-24px)] rounded-xl p-1.5" header={<div className="px-3 py-2 text-xs text-muted-foreground">{s.addReference}</div>}>
+  <menu.Portal className="fixed z-[80] max-h-[min(60vh,320px)] w-[340px] max-w-[calc(100vw-24px)] rounded-xl p-1.5" header={<div className="px-3 py-2 text-xs text-muted-foreground">{s.addReference}</div>}>
     {(note, index) => <button type="button" key={note.id} role="option" aria-selected={menu.menu?.active === index} className={`note-list-row ${menu.menu?.active === index ? "bg-secondary" : ""}`} onMouseDown={e => e.preventDefault()} onClick={() => menu.choose(note)}><strong>{note.title || s.untitled}</strong><p>{note.markdown.slice(0,100)}</p></button>}
   </menu.Portal></>;
 }
