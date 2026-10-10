@@ -44,6 +44,10 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
     queryFn: () => listNotifications(workspaceId),
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
+    //: 桌面壳的窗口被原生视图(工作台)盖住、或应用在后台时,react-query 默认按 unfocused 停轮询 ——
+    //: 而 Electron 的遮挡不保证把 visibilitychange 发回来,轮询就永远停着:智能体推的通知,
+    //: 角标要到人亲手点铃(refetch)才动。后台也照轮(工作流运行那两处早就是这么干的)。
+    refetchIntervalInBackground: true,
   });
   const invalidate = () => void qc.invalidateQueries({ queryKey: ["notifications", workspaceId] });
   const readOne = useMutation({ mutationFn: readNotification, onSuccess: invalidate });
@@ -62,6 +66,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
     queryFn: myInvitations,
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
   const respond = useMutation({
     mutationFn: ({ id, accept }: { id: string; accept: boolean }) => respondInvitation(id, accept),
