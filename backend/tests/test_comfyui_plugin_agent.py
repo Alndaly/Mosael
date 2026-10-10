@@ -103,6 +103,9 @@ def test_画布摘要_每一层的节点_控件的值_谁连着谁_子图的口_
     root, inner = out["layers"]
     nodes = {one["ref"]: one for one in root["nodes"]}
     instance = nodes["459"]
+    source_instance = next(one for one in QWEN["nodes"] if one["id"] == 459)
+    assert instance["position"] == [float(source_instance["pos"][0]), float(source_instance["pos"][1])]
+    assert instance["size"] == [float(source_instance["size"][0]), float(source_instance["size"][1])]
     assert instance["type"] == "subgraph" and instance["subgraph"] == "Image Edit (Qwen Image 2.1)"
     assert instance["subgraph_id"] == SUB
     assert instance["widgets"]["unet_name"] == "qwen_image_2.1_int8_convrot.safetensors", "提升出来的控件按名字"
@@ -112,6 +115,9 @@ def test_画布摘要_每一层的节点_控件的值_谁连着谁_子图的口_
     assert nodes["470"]["widgets"] == {"image": "portrait_model_denim.png"}
     assert nodes["463"]["title"] == "Note: Usage" and nodes["463"]["widgets"]["text"].startswith("## Size")
     assert inner["layer"] == "subgraph" and inner["id"] == SUB and inner["instances"] == ["459"]
+    assert inner["groups"][0] == {"ref": "g1", "title": "Models", "position": [-200.0, 300.0],
+                                    "size": [530.0, 590.0], "color": "#3f789e"}
+    assert [one["ref"] for one in inner["groups"]] == ["g1", "g2", "g3", "g4", "g5"]
     assert "unet_name" in inner["inputs"] and inner["outputs"] == ["IMAGE"]
     loader = next(one for one in inner["nodes"] if one["type"] == "UNETLoader")
     assert loader["ref"] == "459:451", "子图里的节点按从根图往里走的写法"
@@ -558,6 +564,74 @@ def test_改图的计划_交给桥的一批_改动清单_改前改后各诊断�
     check = out["check"]
     assert check["before"]["error"] == 0 and check["after"]["error"] == 0 and check["introduced"] == []
     assert check["baseline"] == [], "改之前没有问题:应用之后没有「修好了的」"
+
+
+def test_连上原本未使用的输出_ComfyUI_写的_null_links_先规整成空列表(plugin) -> None:
+    graph = _txt2img()
+    latent = next(one for one in graph["nodes"] if one["id"] == 5)
+    latent["outputs"][0]["links"] = None
+    out = _plan(plugin, graph, [
+        {"op": "add_node", "id": "$decode", "type": "VAEDecode"},
+        {"op": "connect", "from": "5.LATENT", "to": "$decode.samples"},
+    ])
+    assert out["ops"][1] == {
+        "op": "connect", "from": {"node": "5", "name": "LATENT"},
+        "to": {"node": "$decode", "name": "samples"}, "layer": None,
+    }
+
+
+def test_移动节点_根图和子图都规整成交给桥的绝对坐标(plugin) -> None:
+    from lines import ComfyError
+
+    graph = copy.deepcopy(QWEN)
+    root = next(one for one in graph["nodes"] if one["id"] == 459)
+    inner = next(one for one in graph["definitions"]["subgraphs"][0]["nodes"] if one["id"] == 451)
+    out = _plan(plugin, graph, [
+        {"op": "set_position", "node": "459", "x": 120, "y": -40.5},
+        {"op": "set_position", "node": "459:451", "x": 880.25, "y": 320},
+    ])
+    assert out["ops"] == [
+        {"op": "set_position", "node": "459", "x": 120.0, "y": -40.5, "layer": None},
+        {"op": "set_position", "node": "451", "x": 880.25, "y": 320.0, "layer": SUB},
+    ]
+    assert out["changes"][0]["before"] == list(root["pos"][:2]) and out["changes"][0]["after"] == [120.0, -40.5]
+    assert out["changes"][1]["before"] == list(inner["pos"][:2]) and out["changes"][1]["after"] == [880.25, 320.0]
+    with pytest.raises(ComfyError, match="有限数字"):
+        _plan(plugin, graph, [{"op": "set_position", "node": "459", "x": float("nan"), "y": 0}])
+
+
+def test_空间分组_新建修改删除_根图和子图都走同一批原子改图(plugin) -> None:
+    from lines import ComfyError
+
+    graph = copy.deepcopy(QWEN)
+    graph["groups"] = [
+        {"id": 1, "title": "旧分组", "bounding": [0, 0, 100, 100], "color": "#123", "flags": {}},
+        {"id": 2, "title": "要删除", "bounding": [200, 0, 100, 100], "color": "#456", "flags": {}},
+    ]
+    out = _plan(plugin, graph, [
+        {"op": "set_group", "group": "g1", "title": "输入素材", "x": -80, "width": 480, "color": "#2457AA"},
+        {"op": "remove_group", "group": "g2"},
+        {"op": "add_group", "title": "输出", "x": 800, "y": 100, "width": 360, "height": 240},
+        {"op": "set_group", "graph": "459", "group": "g4", "title": "采样阶段", "y": 260, "height": 900},
+    ])
+    assert out["ops"] == [
+        {"op": "set_group", "group": "g1", "title": "输入素材", "x": -80.0, "y": 0.0, "width": 480.0,
+         "height": 100.0, "color": "#2457AA", "layer": None},
+        {"op": "remove_group", "group": "g2", "layer": None},
+        {"op": "add_group", "title": "输出", "x": 800.0, "y": 100.0, "width": 360.0, "height": 240.0,
+         "color": "#3f789e", "layer": None},
+        {"op": "set_group", "group": "g4", "title": "采样阶段", "x": 1090.0, "y": 260.0, "width": 470.0,
+         "height": 900.0, "color": "#3f789e", "layer": SUB},
+    ]
+    assert out["changes"][0]["before"]["bounds"] == [0.0, 0.0, 100.0, 100.0]
+    assert out["changes"][1]["title"] == "要删除"
+    assert out["subgraphs"] == [{"id": SUB, "name": "Image Edit (Qwen Image 2.1)", "uses": 1}]
+    with pytest.raises(ComfyError, match="大于 0"):
+        _plan(plugin, graph, [{"op": "add_group", "title": "坏分组", "x": 0, "y": 0, "width": 0, "height": 100}])
+    with pytest.raises(ComfyError, match="g1、g2"):
+        _plan(plugin, graph, [{"op": "remove_group", "group": "1"}])
+    with pytest.raises(ComfyError, match="#RGB"):
+        _plan(plugin, graph, [{"op": "set_group", "group": "g1", "color": "red"}])
 
 
 def test_说不通的一条不落_每一条的原因都列出来(plugin) -> None:

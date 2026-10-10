@@ -1,5 +1,5 @@
 /**
- * 「助手」页签认得的几种工具结果(ADR 0042 §5),画在对话里那一步的下面、不跟着折叠(见 features/agent/pageViews):
+ * 「助手」页签认得的几种工具结果(ADR 0042 §5),画在对话里这次工具调用的展开明细里(见 features/agent/pageViews):
  *
  * - `comfy_check` 的诊断:一条一条,每条带「定位」(在画布上选中那个节点)和「照这个改」(替用户说一句,让智能体把这一条转成
  *   一次 comfy_canvas_edit 的提议 —— 改不改仍是用户在确认卡上点「应用」);
@@ -53,7 +53,7 @@ export function assistantToolResult(tool: string, data: unknown): React.ReactNod
   return null;
 }
 
-const CARD = "grid min-w-0 gap-1.5 rounded-md border border-border bg-panel p-2 text-ui-xs";
+const CARD = "grid min-w-0 gap-1.5 py-1 text-ui-xs";
 
 function FindingsCard({ findings, counts }: { findings: AssistantFinding[]; counts: { error: number; warning: number } }) {
   const t = useI18n();

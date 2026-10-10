@@ -41,6 +41,7 @@ const api = vi.hoisted(() => ({
   runCanvas: vi.fn(),
   refreshPluginInstance: vi.fn(),
   getJob: vi.fn(),
+  getAsset: vi.fn(),
   cancelJob: vi.fn(),
   assetThumbnailUrl: (id: string) => `thumb://${id}`,
   assetPreviewUrl: (id: string) => `preview://${id}`,
@@ -215,6 +216,7 @@ beforeEach(() => {
   });
   api.getWorkflowLibrary.mockResolvedValue({ workflows: [], manager: { version: "V4.0" } });
   api.inspectWorkflowImport.mockResolvedValue({ missing_nodes: [], missing_models: [] });
+  api.getAsset.mockImplementation(async (id: string) => ({ id, kind: "image" }));
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
@@ -678,7 +680,7 @@ describe("ComfyUI 工作台", () => {
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
     expect(await screen.findByText("workbenchRunFormsOld")).toBeTruthy();
-    expect(within(preview).queryByRole("button", { name: "workbenchRunOnlyThisLabel" })).toBeNull();
+    expect(within(preview).queryByRole("button", { name: "workbenchRunOnlyThisImageLabel" })).toBeNull();
     //: 面板读完之前就点了(按钮还在的那一下):改标记那一步自己再看一眼,照样不写
     await expect(markOnlyResult("i1", GUFENG.key, "17")).rejects.toBeInstanceOf(FormsLockedError);
     expect(api.getCanvasMarks).not.toHaveBeenCalled();
@@ -699,7 +701,7 @@ describe("ComfyUI 工作台", () => {
     const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
     expect(within(preview).getAllByRole("img")[0].getAttribute("src")).toBe("thumb://a1");
     expect(screen.getByRole("region", { name: "高清 #9" })).toBeTruthy();
-    fireEvent.click(await within(preview).findByRole("button", { name: "workbenchRunOnlyThisLabel" }));
+    fireEvent.click(await within(preview).findByRole("button", { name: "workbenchRunOnlyThisImageLabel" }));
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     expect(api.getCanvasMarks.mock.calls[0][1].results, "只标这一个,清掉别的").toEqual(["17"]);
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks: { nodes: { "17": { result: true } }, extra: { version: 1 } },
@@ -732,18 +734,6 @@ describe("ComfyUI 工作台", () => {
     await act(async () => undefined);
     expect(calls(bridge).filter((one) => one.op === "runControls"), "没排上:种子不换(ComfyUI 自己也是)")
       .toEqual([{ op: "runControls", phase: "before" }]);
-  });
-
-  it("运行:刚存的那张宿主的目录还没刷新到(422)就刷新一次再试", async () => {
-    await mount();
-    api.runCanvas.mockRejectedValueOnce(Object.assign(new Error("还不是生成模型"), { status: 422 }))
-      .mockResolvedValueOnce({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
-    api.refreshPluginInstance.mockResolvedValue({});
-    api.getJob.mockResolvedValue({ id: "job-9", status: "running", message: "ComfyUI 生成中" });
-    fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
-    await waitFor(() => expect(api.runCanvas).toHaveBeenCalledTimes(2));
-    expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1");
-    expect(await screen.findByText("ComfyUI 生成中")).toBeTruthy();
   });
 
   it("这版前端缺了哪一样,那一处说「不支持」,别的照常", async () => {
@@ -1095,6 +1085,25 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
   });
 
+  it("产物类型以素材详情为准:视频用播放语义和文件流,不被运行记录的 image 类型误画成大图", async () => {
+    await mount();
+    api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
+    api.getJob.mockResolvedValue(SUCCEEDED);
+    api.getAsset.mockImplementation(async (id: string) => ({ id, kind: id === "a1" ? "video" : "image" }));
+    api.getCanvasApp.mockResolvedValue(appData());
+    fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
+    const preview = await screen.findByRole("region", { name: "PreviewImage #17" });
+    const play = await within(preview).findByRole("button", { name: /workbenchPreviewVideo/ });
+    expect(within(preview).getAllByRole("button", { name: /workbenchPreviewOpen/ })).toHaveLength(1);
+    fireEvent.click(play);
+    const frame = await waitFor(() => {
+      const element = document.querySelector<HTMLElement>("[data-video-frame]");
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    expect(frame.querySelector("video")?.getAttribute("src")).toContain("file://a1");
+  });
+
   it("标着的那一组写「结果取自这个节点」和「撤销」,别的组是「只要这个节点的图」;上面说清楚现在取自哪几个;撤销走同一条路", async () => {
     const bridge = await mount();
     api.runCanvas.mockResolvedValue({ generation: { id: "g1", kind: "image" }, job: { id: "job-9", status: "queued" } });
@@ -1106,18 +1115,18 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     fireEvent.click(screen.getByRole("button", { name: /workbenchRun/ }));
     const saved = await screen.findByRole("region", { name: "高清 #9" });
     expect(await within(saved).findByText("workbenchRunIsResult")).toBeTruthy();
-    expect(within(saved).queryByRole("button", { name: "workbenchRunOnlyThisLabel" }), "已经标着的不再给这个按钮").toBeNull();
+    expect(within(saved).queryByRole("button", { name: "workbenchRunOnlyThisImageLabel" }), "已经标着的不再给这个按钮").toBeNull();
     const preview = screen.getByRole("region", { name: "PreviewImage #17" });
-    expect(within(preview).getByRole("button", { name: "workbenchRunOnlyThisLabel" })).toBeTruthy();
+    expect(within(preview).getByRole("button", { name: "workbenchRunOnlyThisImageLabel" })).toBeTruthy();
     expect(within(preview).queryByText("workbenchRunIsResult")).toBeNull();
     expect(document.querySelector("[data-results-from]")!.textContent, "两个都标着:都说出来").toContain("workbenchRunResultsFrom");
-    fireEvent.click(within(saved).getByRole("button", { name: "workbenchRunUndoMarkLabel" }));
+    fireEvent.click(within(saved).getByRole("button", { name: "workbenchRunUndoImageLabel" }));
     await waitFor(() => expect(api.getCanvasMarks).toHaveBeenCalled());
     expect(api.getCanvasMarks.mock.calls[0][1].results, "撤销:只去掉这一个").toEqual(["5"]);
     await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "setMarks", marks: { nodes: {}, extra: { version: 1 } },
                                                                 expect: EXPORTED.at }));
     expect(await screen.findByText("workbenchRunUnmarked")).toBeTruthy();
-    expect(await within(saved).findByRole("button", { name: "workbenchRunOnlyThisLabel" }), "撤销之后又是那个按钮").toBeTruthy();
+    expect(await within(saved).findByRole("button", { name: "workbenchRunOnlyThisImageLabel" }), "撤销之后又是那个按钮").toBeTruthy();
     bridge.emit(state({ workflow: { ...GUFENG, key: "workflows/别的.json", name: "别的", path: "别的.json" } }));
     expect(screen.queryByText("workbenchRunUnmarked"), "换了一张:上一张的那句话不带过来").toBeNull();
   });

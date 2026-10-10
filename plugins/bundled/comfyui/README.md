@@ -567,6 +567,18 @@ besides the failure text, so the host's AI Studio failure card and board cells s
 - The manifest gains `generation_noun` (`{"zh": "工作流", "en": "workflows"}`): the Plugins page row, the list dialog, its
   search box and the refresh button say “workflows”, not “models” — what it hands over is workflows and their forms.
 
+## Fixes (1.23.3)
+
+- Canvas editing now normalises nullable collections in ComfyUI's current workflow format before planning a batch. Connecting an
+  unused output whose `outputs[].links` was `null` used to fail during planning with `AttributeError: 'NoneType' object has no
+  attribute 'append'`. Root graphs and subgraphs share the same normalisation boundary; the live canvas is still changed only after
+  the whole batch is approved.
+- Canvas summaries now include node position and size. `set_position` can move multiple root-graph or subgraph nodes in one batch, so
+  the Assistant can arrange a workflow from its connections while preserving the single-step undo contract.
+- Canvas summaries also include native ComfyUI spatial groups. The Assistant can create, rename, move, resize and remove groups in root
+  graphs or subgraphs with `add_group`, `set_group` and `remove_group`; grouping shares the same confirmation and one-step undo as node
+  movement, and removing a group leaves its nodes intact.
+
 ## Fixes (1.21.1)
 
 - **Form marks that aren't version 2 are refused on write**: `annotate` and the workbench's `app_marks` change nothing when the graph's
@@ -827,7 +839,9 @@ plugin side:
 - `edit_plan`: the agent's batch of changes is checked op by op against the workflow on the canvas and this ComfyUI's node
   definitions, and applied to a copy. The ops: `add_node` (a temporary name like `$a`, widget values, which node to sit next to),
   `remove_node`, `connect` / `disconnect` (by input and output **names**, not slot numbers; connecting into an input that is already
-  wired replaces that link), `set_widget`, `set_title`, `bypass` / `mute`; nodes inside a subgraph are written `12:5` — that changes the
+  wired replaces that link), `set_widget`, `set_title`, `set_position` (absolute canvas coordinates, so a batch can arrange nodes),
+  `add_group` / `set_group` / `remove_group` (native spatial groups),
+  `bypass` / `mute`; nodes inside a subgraph are written `12:5` — that changes the
   subgraph's **definition**, so every place it is used in the workflow changes; subgraph boundary slots with `add_subgraph_input` /
   `add_subgraph_output` / `remove_subgraph_io`, wired inside as `@in.<name>` / `@out.<name>`; `promote_widget` / `unpromote_widget` (the
   way frontend 1.53 does it: a same-named input on the boundary wired to that widget); `to_subgraph` / `unpack_subgraph` (structure

@@ -4,7 +4,6 @@ import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowDownLeft,
   ClipboardList,
   Clock3,
   Cpu,
@@ -1191,44 +1190,19 @@ export function GenerateWorkspace({
             : undefined;
     return slotsField(model, role, hint);
   };
-  /**
-   * 表单上的主提示词:它就是下面那个输入框,这里说清楚 —— 去那儿写;可以不写的,说清不写用哪一句(工作流里存着的那句),
-   * 一键填进输入框改。此前右栏对这一项一个字都没有,看着和工作流库里那张表(标题、说明、「提示词」)对不上。
-   */
+  /** 表单上的主提示词与底部输入框共用 prompt state；两处改动立即同步。 */
   const formPromptField = (model: GenerationEngineOption, label: string) => {
     const stored = promptDefault(model);
     const optional = promptMode(model) === "optional";
     return (
       <div key="prompt" className="grid gap-1.5 text-ui-sm text-muted-foreground" data-form-prompt="">
-        <span>{label}</span>
-        <div className="grid gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-2">
-          <span className="flex items-center gap-1.5 text-ui-xs font-medium text-foreground">
-            <ArrowDownLeft size={13} className="shrink-0 text-muted-foreground" aria-hidden />
-            {t(optional ? "genFormPromptOptional" : "genFormPromptInComposer")}
+        <label htmlFor="generation-form-prompt">{label}</label>
+        <Textarea id="generation-form-prompt" rows={4} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+        {optional && stored ? (
+          <span className="text-ui-xs leading-relaxed text-muted-foreground">
+            {t("genFormPromptStored").replace("{prompt}", stored)}
           </span>
-          {optional && stored ? (
-            <Truncate lines={3} className="text-ui-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-              {t("genFormPromptStored").replace("{prompt}", stored)}
-            </Truncate>
-          ) : null}
-          <div className="flex flex-wrap gap-1">
-            <Button variant="ghost" size="xs" onClick={() => composer.current?.focus()}>
-              {t("genFormPromptWrite")}
-            </Button>
-            {optional && stored ? (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => {
-                  setPrompt(stored);
-                  composer.current?.focus();
-                }}
-              >
-                {t("genFormPromptUseStored")}
-              </Button>
-            ) : null}
-          </div>
-        </div>
+        ) : null}
       </div>
     );
   };
@@ -1258,9 +1232,6 @@ export function GenerateWorkspace({
         <ParameterSection icon={ClipboardList} title={t("genAppFormSection")}>
           {/* 列宽 minmax(0,1fr):长的副名截断,不把整栏撑出右边 */}
           <div key="head" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5" data-app-form-head="">
-            <span className="text-ui-md font-semibold text-foreground">
-              <Truncate>{form.title || model.model_label}</Truncate>
-            </span>
             {/* 副名:这张表来自哪张工作流、哪台服务器(ADR 0045)—— 出了问题知道该去改哪张 */}
             <span className="text-ui-xs text-muted-foreground" data-entry-origin="">
               <Truncate>{namesOf(model).secondary}</Truncate>

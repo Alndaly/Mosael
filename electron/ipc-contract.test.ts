@@ -215,6 +215,10 @@ describe("Electron IPC contract", () => {
       { op: "disconnect", layer: sub, to: { node: "@out", name: "IMAGE" } },
       { op: "set_widget", layer: null, node: "3", widget: "steps", value: 30 },
       { op: "set_title", layer: null, node: "3", title: "采样" },
+      { op: "set_position", layer: null, node: "3", x: 240.5, y: -80 },
+      { op: "set_group", layer: null, group: "g1", title: "采样", x: 200, y: -100, width: 600, height: 400, color: "#2457AA" },
+      { op: "add_group", layer: sub, title: "输出", x: 900, y: 0, width: 300, height: 200, color: "#3f789e" },
+      { op: "remove_group", layer: sub, group: "g2" },
       { op: "mode", layer: null, node: "8", mode: 4 },
       { op: "add_io", layer: sub, side: "output", name: "LATENT", type: "LATENT" },
       { op: "remove_io", layer: sub, side: "input", name: "negative" },
@@ -236,8 +240,13 @@ describe("Electron IPC contract", () => {
     expect(() => callOf({ op: "applyOps", ops: [{ ...ops[4], layer: 'x"); alert(1)' }] })).toThrow(/layer/);
     expect(() => callOf({ op: "applyOps", ops: [{ ...ops[0], id: "l" }] }), "临时名字以 $ 开头").toThrow(/temporary/);
     expect(() => callOf({ op: "applyOps", ops: [{ ...ops[1], to: { node: "$l", name: "model", slot: 0 } }] })).toThrow(/unexpected/);
-    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[6], mode: 1 }] })).toThrow(/mode/);
-    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[7], side: "both" }] })).toThrow(/side/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[10], mode: 1 }] })).toThrow(/mode/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[7], group: "1" }] })).toThrow(/group/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[7], width: 0 }] })).toThrow(/width/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[7], color: "blue" }] })).toThrow(/color/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[11], side: "both" }] })).toThrow(/side/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[6], x: Number.NaN }] })).toThrow(/coordinate/);
+    expect(() => callOf({ op: "applyOps", ops: [{ ...ops[6], y: 1_000_001 }] })).toThrow(/coordinate/);
     // 在新标签页开一张:整图 + 名字(+ 一批改动),或者存着的那一张的路径
     const graph = { nodes: [{ id: 3, type: "KSampler" }], links: [] };
     expect(callOf({ op: "openWorkflow", graph, name: "Qwen 编辑" }).call)

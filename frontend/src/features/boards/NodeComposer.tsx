@@ -28,6 +28,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { OptionPicker, type PickerOption } from "@/components/ui/option-picker";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
@@ -35,6 +36,7 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import {
   DURATION_UNSET,
+  appForm,
   aspectRatioOptions,
   booleanParameterKeys,
   capabilityBoolean,
@@ -52,6 +54,7 @@ import {
   parameterChoiceEntries,
   chooseGenerationOption,
   promptMode,
+  promptDefault,
   sizeOptions,
   customSizeRule,
   sourceLabels,
@@ -70,6 +73,7 @@ import { AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText }
 import { useFileDrop } from "@/lib/useFileDrop";
 import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 
 /**
  * 挂在节点**下方**的提示词面板 —— 「节点本身就是生成单元」这件事的那一半。
@@ -607,6 +611,9 @@ export function NodeComposer({
     () => generationSettingBlocks(current, { modes: modes.length, durations: durations.length }),
     [current, modes.length, durations.length],
   );
+  //: ComfyUI 的精简表单也是模型契约的一部分。画板此前只看通用参数块,把表单里的
+  //: prompt / reference_image 漏掉了,于是「只有文案和参考图」的表单连参数入口都没有。
+  const selectedForm = React.useMemo(() => appForm(current), [current]);
 
   //: 这个模型认哪几种输入素材,各能挂几份。首尾帧和参考图**分属互斥的两组**(厂商硬约束),
   //: 描述符里已经声明过 —— 这里只按它出格子,不自己判。
@@ -623,6 +630,11 @@ export function NodeComposer({
   //: 同类型两个角色的组合仍旧一格一个,那时候格子数量是真的在表达信息。
   const mergedSlots = React.useMemo(() => mergeableSourceSlots(displaySlots), [displaySlots]);
   const [addOpen, setAddOpen] = React.useState(false);
+  const formHasVisibleItem = Boolean(selectedForm?.items.some((item) =>
+    (item.key === "prompt" && promptMode(current) !== "none")
+    || ((SOURCE_ROLES as readonly string[]).includes(item.key) && supportsParameter(current, item.key)),
+  ));
+  const hasSettings = settingBlocks.length > 0 || formHasVisibleItem;
 
   /**
    * 本地文件**直接挂进槽**(拖到「+」上、面板里 ⌘V,见 assetUpload):挑第一个这几个槽收得下的文件(按它自己的种类
@@ -1039,14 +1051,15 @@ export function NodeComposer({
               {mine.length < slot.limit && (
                 <SlotDrop onFiles={(files) => attachFiles(files, [slot.role])}>
                   <IconButton
-                    unstyled
+                    size="icon-sm"
+                    variant="outline"
                     label={slotLabel(t, slot, mine.length)}
                     onClick={() =>
                       onPickAsset(roleAccepts(slot.role), (assetId) =>
                         setSources((all) => [...all, { role: slot.role, assetId }]),
                       )
                     }
-                    className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                    className="shrink-0 cursor-pointer rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                   >
                     <Plus size={13} />
                   </IconButton>
@@ -1080,6 +1093,80 @@ export function NodeComposer({
         <AssetUploadStatus upload={upload} className="basis-full" />
       </>
     ) : null;
+
+  /** 精简表单里的提示词和素材角色,读写的就是底部编辑器的同一份 state。表单只决定顺序和名字,
+   * 不另建一份 prompt / sources —— 两处显示不同正是这次问题的根。 */
+  const appFormContext = selectedForm && formHasVisibleItem ? (
+    <section className="grid gap-2.5 border-b border-border pb-3" data-board-app-form="">
+      {selectedForm.description.trim() ? (
+        <span className="text-ui-xs leading-relaxed text-muted-foreground">
+          <InlineMarkdown text={selectedForm.description} />
+        </span>
+      ) : null}
+      {selectedForm.items.map((formItem) => {
+        const label = formItem.label || (formItem.key === "prompt" ? t("genPromptLabel") : roleLabel(t, formItem.key));
+        if (formItem.key === "prompt" && currentPromptMode !== "none") {
+          const stored = promptDefault(current);
+          return (
+            <div key="prompt" className="grid gap-1.5" data-board-form-prompt="">
+              <label htmlFor={`board-form-prompt-${item.id}`} className="text-ui-xs text-muted-foreground">{label}</label>
+              <Textarea
+                id={`board-form-prompt-${item.id}`}
+                rows={4}
+                value={prompt}
+                onChange={(event) => {
+                  setPrompt(event.target.value);
+                  setPromptDocument(textDocument(event.target.value));
+                }}
+              />
+              {currentPromptMode === "optional" && stored ? (
+                <span className="text-ui-2xs leading-relaxed text-muted-foreground">
+                  {t("genFormPromptStored").replace("{prompt}", stored)}
+                </span>
+              ) : null}
+            </div>
+          );
+        }
+        if (!(SOURCE_ROLES as readonly string[]).includes(formItem.key) || !supportsParameter(current, formItem.key)) return null;
+        const slot = sourceSlots(current).find((one) => one.role === formItem.key);
+        if (!slot) return null;
+        const mine = sources.filter((one) => one.role === slot.role);
+        return (
+          <div key={formItem.key} className="grid gap-1.5" data-board-form-source={formItem.key}>
+            <span className="text-ui-xs text-muted-foreground">{label}</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {mine.map((one, index) => {
+                const known = assetKindById.get(one.assetId);
+                return (
+                  <SourceAssetSlotPreview
+                    key={one.assetId}
+                    assetId={one.assetId}
+                    kind={known === "image" || known === "video" || known === "audio" ? known : roleAccepts(slot.role)}
+                    label={slotLabel(t, slot, index)}
+                    onRemove={() => setSources((all) => all.filter((source) => source.assetId !== one.assetId))}
+                  />
+                );
+              })}
+              {mine.length < slot.limit ? (
+                <SlotDrop onFiles={(files) => attachFiles(files, [slot.role])}>
+                  <IconButton
+                    size="icon-sm"
+                    variant="outline"
+                    label={slotLabel(t, slot, mine.length)}
+                    onClick={() => onPickAsset(roleAccepts(slot.role), (assetId) =>
+                      setSources((all) => [...all, { role: slot.role, assetId }]))}
+                    className="cursor-pointer border-dashed border-border-strong text-muted-foreground hover:border-primary hover:text-foreground"
+                  >
+                    <Plus size={13} />
+                  </IconButton>
+                </SlotDrop>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  ) : null;
 
   return (
     <BoardComposerShell
@@ -1125,7 +1212,7 @@ export function NodeComposer({
             {/* **分开两种零。**「这个模型确实没有可调参数」就不摆按钮;「我们不认识这个模型」
                 (手填的别名、经另一条中转配的同一个模型)要说出来 —— 静默地什么都不显示,
                 用户会以为这个模型就是没参数。显隐和弹层内容共用 settingBlocks。 */}
-            {settingBlocks.length === 0 && current?.capabilities_known === false && (
+            {!hasSettings && current?.capabilities_known === false && (
               <Truncate className="px-1 text-ui-2xs text-muted-foreground">
                 {t("boardGenerationUnknownParams")}
               </Truncate>
@@ -1134,10 +1221,11 @@ export function NodeComposer({
         )
       }
       settings={
-        options.length > 0 && settingBlocks.length > 0
+        options.length > 0 && hasSettings
           ? {
               content: (
                 <>
+                  {appFormContext}
                   {/* 生成方式排第一格:它决定上面那排槽位是首尾帧还是参考,后面几项都在它之下。 */}
                 {modes.length > 0 && (
                   <Pick
@@ -1348,32 +1436,34 @@ export function NodeComposer({
         // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的编辑器。
         <p className="m-0 px-1 py-2 text-ui-sm text-muted-foreground">{t("genPromptNotUsed")}</p>
       ) : (
-        <PromptEditor
-          value={prompt}
-          document={promptDocument}
-          onChange={(next, assets, document, entityIds) => {
-            setPrompt(next);
-            setMentioned(assets);
-            setPromptDocument(document);
-            setMentionedEntities(entityIds);
-          }}
-          placeholder={t(
-            currentPromptMode === "optional"
-              ? "boardPromptPlaceholderOptional"
-              : slots.length > 0
-                ? "boardPromptPlaceholderMention"
-                : "boardPromptPlaceholder",
-          )}
-          candidates={candidates}
-          //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
-          //: 正是这句话十有八九要指的东西。
-          linked={feed.map((one) => one.assetId)}
-          //: 资产库里的人物 / 场景 / 道具也在同一个 `@` 菜单里;连进来的资产格排在最前。
-          entities={entityCandidates}
-          linkedEntities={upstreamEntities}
-          onSubmit={send}
-          emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
-        />
+        <div className="contents">
+          <PromptEditor
+            value={prompt}
+            document={promptDocument}
+            onChange={(next, assets, document, entityIds) => {
+              setPrompt(next);
+              setMentioned(assets);
+              setPromptDocument(document);
+              setMentionedEntities(entityIds);
+            }}
+            placeholder={t(
+              currentPromptMode === "optional"
+                ? "boardPromptPlaceholderOptional"
+                : slots.length > 0
+                  ? "boardPromptPlaceholderMention"
+                  : "boardPromptPlaceholder",
+            )}
+            candidates={candidates}
+            //: 连进这个节点的那几份排最前,并单独给一个「已连接」筛选钮 —— 刚接进来的那张,
+            //: 正是这句话十有八九要指的东西。
+            linked={feed.map((one) => one.assetId)}
+            //: 资产库里的人物 / 场景 / 道具也在同一个 `@` 菜单里;连进来的资产格排在最前。
+            entities={entityCandidates}
+            linkedEntities={upstreamEntities}
+            onSubmit={send}
+            emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
+          />
+        </div>
       )}
       {needsDigitalHumanConsent && (
         <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />

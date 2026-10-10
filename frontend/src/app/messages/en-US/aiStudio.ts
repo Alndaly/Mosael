@@ -316,11 +316,7 @@ export const aiStudio = {
   //: 生成框的提交键(⌘Enter / Ctrl+Enter;回车换行)
   genSubmitHint: "{keys} to generate, Enter for a new line",
   genAppFormMore: "Other options",
-  genFormPromptInComposer: "Write it in the box below",
-  genFormPromptOptional: "Write it in the box below, or leave it empty",
   genFormPromptStored: "Left empty, it uses the prompt saved in the workflow: “{prompt}”",
-  genFormPromptWrite: "Go to the box",
-  genFormPromptUseStored: "Put this in to edit",
   genPromptNotUsed: "This model takes no prompt — attach the inputs, set the parameters and generate.",
   generate: "Generate",
   optimizePrompt: "Optimize prompt",

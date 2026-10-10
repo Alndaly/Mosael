@@ -261,15 +261,15 @@ describe("输入框底下那枚模型按钮", () => {
 });
 
 describe("有精简表单的工作流:右栏就是那张表", () => {
-  it("表的标题、说明,表上的每一项按表上的顺序和名字;主提示词指向输入框、说清不写用哪一句;表外的另起一栏", async () => {
+  it("不重复表单标题;说明和表项按顺序显示;侧栏提示词与主输入框实时同步", async () => {
     renderStudio({ option: WITH_FORM });
     const panel = screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true });
-    await waitFor(() => expect(panel.textContent).toContain("快速用krea2生图"));
+    await waitFor(() => expect(panel.textContent).toContain("只写一句话就能出图"));
+    expect(panel.textContent).not.toContain("快速用krea2生图");
     expect(panel.textContent).toContain("只写一句话就能出图");
     expect(panel.textContent).toContain("genAppFormSection");
     const prompt = panel.querySelector<HTMLElement>("[data-form-prompt]")!;
     expect(prompt.textContent).toContain("提示词");
-    expect(prompt.textContent).toContain("genFormPromptOptional");
     expect(prompt.textContent).toContain("湖边的清晨,薄雾");
     //: 表上的顺序:提示词在前、画幅在后
     const text = panel.textContent ?? "";
@@ -282,10 +282,12 @@ describe("有精简表单的工作流:右栏就是那张表", () => {
     //: 输入框的占位说的是同一件事
     const box = screen.getByRole("textbox", { name: "genPromptLabel" });
     expect(box.getAttribute("placeholder")).toBe("promptPlaceholderStored");
-    //: 「把这句填进去改」:填进输入框、焦点过去
-    fireEvent.click(within(prompt).getByRole("button", { name: "genFormPromptUseStored" }));
-    expect(box).toHaveValue("湖边的清晨,薄雾");
-    expect(document.activeElement).toBe(box);
+    const side = within(prompt).getByRole("textbox", { name: "提示词" });
+    expect(side).toHaveValue("");
+    fireEvent.change(side, { target: { value: "湖边日出" } });
+    expect(box).toHaveValue("湖边日出");
+    fireEvent.change(box, { target: { value: "林间日出" } });
+    expect(side).toHaveValue("林间日出");
   });
 
   it("没有表的照旧按参数分栏", async () => {

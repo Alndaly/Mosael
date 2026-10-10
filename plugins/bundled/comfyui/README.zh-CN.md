@@ -461,6 +461,16 @@ HTTP 404。
 - 清单多一项 `generation_noun`(`{"zh": "工作流", "en": "workflows"}`):插件页上它那一行、清单弹窗、搜索框、刷新按钮
   叫「工作流」,不叫「模型」—— 交出来的是工作流和表单。
 
+## 修补(1.23.3)
+
+- 画布编辑先把 ComfyUI 当前工作流格式中可为空的集合规整成空列表,再做整批计划。此前从一个尚未接线、因此写成
+  `outputs[].links: null` 的输出口新连线时,会在计划阶段报 `AttributeError: 'NoneType' object has no attribute 'append'`;
+  根图和子图现在走同一个规整入口,原画布仍只在整批获批之后才改。
+- 画布摘要带上节点位置和大小;`set_position` 可把根图或子图的多个节点作为一批移动,所以助手现在能按连接关系整理布局,
+  整批仍只占一步撤销。
+- 画布摘要也带上 ComfyUI 原生空间分组。助手可以用 `add_group`、`set_group`、`remove_group` 新建、重命名、移动、缩放和删除
+  根图或子图中的分组；分组与节点移动共用同一批确认和一次撤销，删除分组不会删除框内节点。
+
 ## 精简表单(1.13.0;此前叫「应用表单」)
 
 对应 RunningHub 的「AI 应用」(ADR 0038 第一刀):作者从一张工作流**全部能填的项**里挑出要给别人填的几项、起名、排序、
@@ -623,7 +633,8 @@ ADR 0042 第二步。「助手」能改画布上开着的这张、能在新标�
 
 - `edit_plan`:智能体写的一批改动对着画布上这张和这台 ComfyUI 的节点定义逐条查,在一份拷贝上照着改一遍。能写的改动:`add_node`(临时
   名字 `$a`、控件的值、放在谁旁边)、`remove_node`、`connect` / `disconnect`(按输入输出的**名字**,不按槽位号;接进一格已经连着的
-  输入会换掉原来那根)、`set_widget`、`set_title`、`bypass` / `mute`;子图里的节点按 `12:5` 写 —— 改的是那份子图的**定义**,这张图里用
+  输入会换掉原来那根)、`set_widget`、`set_title`、`set_position`(绝对画布坐标,可整批整理节点)、`add_group` / `set_group` /
+  `remove_group`(原生空间分组)、`bypass` / `mute`;子图里的节点按 `12:5` 写 —— 改的是那份子图的**定义**,这张图里用
   它的每一处都会变;子图边界的口 `add_subgraph_input` / `add_subgraph_output` / `remove_subgraph_io`,里面连到边界用 `@in.<名字>` /
   `@out.<名字>`;`promote_widget` / `unpromote_widget`(照前端 1.53 自己的做法:边界上加一个同名的输入口接到里面那一格);`to_subgraph`
   / `unpack_subgraph`(只改结构,只能放在一批的最后)。查的是:节点在不在、口叫不叫这个名字、类型配不配、下拉里有没有、数在不在

@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, Check, GripVertical, ListPlus, SlidersHorizontal, Sparkles, TriangleAlert, X } from "lucide-react";
 
 import type { WorkflowApp, WorkflowAppOutput, WorkflowFillable } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Button } from "@/components/ui/button";
@@ -407,6 +408,18 @@ function outputName(output: WorkflowAppOutput): string {
   return output.node ? `${name} #${output.node}` : name;
 }
 
+function outputCopy(media: string): { mark: MessageKey; label: MessageKey; undo: MessageKey } {
+  if (media === "video") return {
+    mark: "workflowAppResultsMarkVideo", label: "workflowAppResultsMarkVideoLabel", undo: "workflowAppResultsUndoVideoLabel",
+  };
+  if (media === "audio") return {
+    mark: "workflowAppResultsMarkAudio", label: "workflowAppResultsMarkAudioLabel", undo: "workflowAppResultsUndoAudioLabel",
+  };
+  return {
+    mark: "workflowAppResultsMarkImage", label: "workflowAppResultsMarkImageLabel", undo: "workflowAppResultsUndoImageLabel",
+  };
+}
+
 /**
  * 「结果取自」:这张工作流有几个出图的节点时,标哪几个出的图才算结果(插件记在那个节点上,ADR 0038 §5)。说的是节点,不是某一张图:
  * 「只要这个节点的图」;标了的写「结果取自这个节点」,能撤销。**按工作流记,不按表单**(ADR 0045 §7):完整工作流和每张表单
@@ -431,6 +444,7 @@ export function ResultsSection({ outputs, results, onToggle }: {
           const node = output.node ?? "";
           const name = outputName(output);
           const marked = results.includes(node);
+          const copy = outputCopy(output.media);
           return (
             <li key={node} data-result-node={node}
                 className={cn("flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5",
@@ -446,14 +460,14 @@ export function ResultsSection({ outputs, results, onToggle }: {
                 )}
               </span>
               {marked ? (
-                <Button variant="ghost" size="sm" aria-label={t("workflowAppResultsUndoLabel").replace("{name}", name)}
+                <Button variant="ghost" size="sm" aria-label={t(copy.undo).replace("{name}", name)}
                         onClick={() => onToggle(node)}>
                   {t("workflowAppResultsUndo")}
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" aria-label={t("workflowAppResultsMarkLabel").replace("{name}", name)}
+                <Button variant="outline" size="sm" aria-label={t(copy.label).replace("{name}", name)}
                         onClick={() => onToggle(node)}>
-                  {t("workflowAppResultsMark")}
+                  {t(copy.mark)}
                 </Button>
               )}
             </li>

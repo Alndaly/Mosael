@@ -60,8 +60,9 @@
  * 不存盘)(ADR 0042 第二步)。6:报同一张换了地方(renames:存没存过的那张、改名、挪文件夹,ADR 0044 第四步)。
  * 7:画布的 2D 上下文丢了又回来、设备像素比变了,替 ComfyUI 把画布重设一次大小(见 healCanvas)。
  * 8:写标记、改图之前核对画布上还是不是读的那一张(`expect`;导出报 `at`、readGraph 报 `revision`)。
+ * 9:智能体改图支持 `set_position`,显式排好的新节点不再被自动排位覆盖。10:读取和原子编辑 LiteGraph 空间分组。
  */
-export const WORKBENCH_VERSION = 8;
+export const WORKBENCH_VERSION = 10;
 
 /** 一批改动最多几条(和 ipc-contract、插件的 canvas_edit 同一个数)。 */
 export const MAX_EDIT_OPS = 200;
@@ -122,6 +123,8 @@ export type WorkbenchCall =
 
 /** 改动里指一个节点:那一层里的编号,或者这一批里新加的临时名字(`$a`)。 */
 type EditNode = string;
+/** 画布摘要中这一层的空间分组编号。 */
+type EditGroup = string;
 /** 连线的一头:节点(或子图边界的 `@in` / `@out`)加口的名字。 */
 interface EditEnd {
   node: EditNode | "@in" | "@out";
@@ -135,6 +138,10 @@ export type WorkbenchEditOp = { layer: string | null } & (
   | { op: "disconnect"; to: EditEnd }
   | { op: "set_widget"; node: EditNode; widget: string; value: string | number | boolean }
   | { op: "set_title"; node: EditNode; title: string }
+  | { op: "set_position"; node: EditNode; x: number; y: number }
+  | { op: "add_group"; title: string; x: number; y: number; width: number; height: number; color: string }
+  | { op: "set_group"; group: EditGroup; title: string; x: number; y: number; width: number; height: number; color: string }
+  | { op: "remove_group"; group: EditGroup }
   | { op: "mode"; node: EditNode; mode: 0 | 2 | 4 }
   | { op: "add_io"; side: "input" | "output"; name: string; type: string }
   | { op: "remove_io"; side: "input" | "output"; name: string }
@@ -209,6 +216,7 @@ export function workbenchInstallScript(origin: string): string {
   const canvasGraph = () => (app.canvas && app.canvas.graph) || app.graph;
   const rootGraph = () => app.rootGraph || app.graph;
   const nodesOf = (graph) => (graph ? (Array.isArray(graph.nodes) ? graph.nodes : Array.isArray(graph._nodes) ? graph._nodes : []) : []);
+  const groupsOf = (graph) => (graph ? (Array.isArray(graph.groups) ? graph.groups : Array.isArray(graph._groups) ? graph._groups : []) : []);
   const findNode = (graph, id) => nodesOf(graph).find((node) => node && String(node.id) === String(id)) || null;
   const valuesOf = (widget) => {
     const values = widget && widget.options ? widget.options.values : undefined;
@@ -393,6 +401,14 @@ export function workbenchInstallScript(origin: string): string {
     if (typeof node.setPos === "function") node.setPos(x, y);
     else node.pos = [x, y];
   };
+  const setGroup = (group, op) => {
+    group.title = op.title;
+    group.color = op.color;
+    if ("pos" in group || !("_pos" in group)) group.pos = [op.x, op.y];
+    else group._pos = [op.x, op.y];
+    if ("size" in group || !("_size" in group)) group.size = [op.width, op.height];
+    else group._size = [op.width, op.height];
+  };
   //: 一批改动先逐条查(不碰画布),查出来的每一条变成一个「怎么改」的步骤;有一条不对就只回原因
   const resolveOps = (ops) => {
     const problems = [];
@@ -402,6 +418,15 @@ export function workbenchInstallScript(origin: string): string {
     const ioAdded = new Map();
     const ioRemoved = new Set();
     const wired = new Set();
+    // 摘要里的 gN 绑定读图时第 N 个对象。先全部绑定,同一批删除 g1 不会让 g2 漂成新的 g1。
+    const groupRefs = new Map();
+    for (const op of ops) {
+      const layer = op.layer || null;
+      const graph = layerOf(layer);
+      if (!graph) continue;
+      groupsOf(graph).forEach((group, index) => groupRefs.set((layer || "") + "|g" + (index + 1), group));
+    }
+    const removedGroups = new Set();
     ops.forEach((op, index) => {
       const fail = (message) => problems.push("#" + (index + 1) + " " + op.op + ": " + message);
       const layer = op.layer || null;
@@ -423,6 +448,26 @@ export function workbenchInstallScript(origin: string): string {
         return ioAdded.has(key(side + ":" + name)) ? { type: ioAdded.get(key(side + ":" + name)), linked: false } : null;
       };
       const isSubgraph = graph !== rootGraph() && typeof graph.addInput === "function";
+      if (op.op === "add_group") {
+        const Group = window.LiteGraph && window.LiteGraph.LGraphGroup;
+        if (typeof Group !== "function") return fail("groups unsupported");
+        const group = new Group(op.title);
+        setGroup(group, op);
+        steps.push(() => graph.add(group));
+        return;
+      }
+      if (op.op === "set_group" || op.op === "remove_group") {
+        const groupKey = key(op.group);
+        const group = groupRefs.get(groupKey);
+        if (!group || removedGroups.has(groupKey) || !groupsOf(graph).includes(group)) return fail("no group " + op.group);
+        if (op.op === "set_group") {
+          steps.push(() => setGroup(group, op));
+        } else {
+          removedGroups.add(groupKey);
+          steps.push(() => graph.remove(group));
+        }
+        return;
+      }
       if (op.op === "add_node") {
         if (temps.has(op.id)) return fail("temporary name used twice: " + op.id);
         const node = window.LiteGraph.createNode(op.type);
@@ -558,6 +603,12 @@ export function workbenchInstallScript(origin: string): string {
         steps.push(() => {
           node.title = op.title;
         });
+      } else if (op.op === "set_position") {
+        steps.push((created) => {
+          if (typeof node.setPos === "function") node.setPos(op.x, op.y);
+          else node.pos = [op.x, op.y];
+          if (String(op.node).charAt(0) === "$" && created[op.node]) created[op.node].positioned = true;
+        });
       } else if (op.op === "mode") {
         steps.push(() => {
           if (typeof node.changeMode === "function") node.changeMode(op.mode);
@@ -612,7 +663,7 @@ export function workbenchInstallScript(origin: string): string {
     try {
       for (const step of steps) step(created);
       for (const entry of Object.values(created)) {
-        if (entry.packed) continue;
+        if (entry.packed || entry.positioned) continue;
         const near = entry.near || neighbour(entry.graph, entry.node);
         place(entry.graph, entry.node, near && near.node, near && near.downstream);
       }

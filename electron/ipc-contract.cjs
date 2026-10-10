@@ -264,6 +264,8 @@ const MAX_EDIT_VALUE = 20000;
 const MAX_OPEN_GRAPH_CHARS = 16 * 1024 * 1024;
 //: 这一批里新加的节点的临时名字
 const TEMP_NODE = /^\$[A-Za-z0-9_]{1,32}$/;
+const CANVAS_GROUP = /^g[1-9]\d*$/;
+const GROUP_COLOR = /^#[0-9A-Fa-f]{3}(?:[0-9A-Fa-f]{3})?$/;
 //: 智能体对话的 id(后端的会话 id 是 32 位十六进制;留宽一点,只挡形状)
 const AGENT_SESSION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 //: 一批改动每一种带哪些字段(插件 canvas_edit 规整过的那一份;字段的形状下面逐项查)
@@ -274,6 +276,10 @@ const EDIT_OPS = {
   disconnect: ["op", "layer", "to"],
   set_widget: ["op", "layer", "node", "widget", "value"],
   set_title: ["op", "layer", "node", "title"],
+  set_position: ["op", "layer", "node", "x", "y"],
+  add_group: ["op", "layer", "title", "x", "y", "width", "height", "color"],
+  set_group: ["op", "layer", "group", "title", "x", "y", "width", "height", "color"],
+  remove_group: ["op", "layer", "group"],
   mode: ["op", "layer", "node", "mode"],
   add_io: ["op", "layer", "side", "name", "type"],
   remove_io: ["op", "layer", "side", "name"],
@@ -295,6 +301,18 @@ function editName(value, key, channel, limit = 200) {
 function editNode(value, key, channel) {
   if (typeof value !== "string" || !(CANVAS_NODE.test(value) || TEMP_NODE.test(value))) {
     throw new TypeError(`${channel}: ${key} must be a node id or a temporary name`);
+  }
+  return value;
+}
+
+function editGroup(value, key, channel) {
+  if (typeof value !== "string" || !CANVAS_GROUP.test(value)) throw new TypeError(`${channel}: ${key} must be a group ref like g1`);
+  return value;
+}
+
+function editCoordinate(value, key, channel, positive = false) {
+  if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 1_000_000 || (positive && value <= 0)) {
+    throw new TypeError(`${channel}: ${key} must be a finite ${positive ? "positive size" : "coordinate"} within 1000000`);
   }
   return value;
 }
@@ -367,6 +385,17 @@ function parseEditOps(value, channel) {
       if (!Array.isArray(op.nodes) || !op.nodes.length || op.nodes.length > 500) throw new TypeError(`${channel}: nodes must be a list`);
       out.nodes = op.nodes.map((one) => editNode(one, "nodes", channel));
       if (op.name !== undefined) out.name = editName(op.name, "name", channel, 100);
+    } else if (kind === "add_group" || kind === "set_group" || kind === "remove_group") {
+      if (kind !== "add_group") out.group = editGroup(op.group, "group", channel);
+      if (kind !== "remove_group") {
+        out.title = editName(op.title, "title", channel);
+        out.x = editCoordinate(op.x, "x", channel);
+        out.y = editCoordinate(op.y, "y", channel);
+        out.width = editCoordinate(op.width, "width", channel, true);
+        out.height = editCoordinate(op.height, "height", channel, true);
+        if (typeof op.color !== "string" || !GROUP_COLOR.test(op.color)) throw new TypeError(`${channel}: color must be #RGB or #RRGGBB`);
+        out.color = op.color;
+      }
     } else {
       out.node = editNode(op.node, "node", channel);
       if (kind === "set_widget") {
@@ -374,6 +403,9 @@ function parseEditOps(value, channel) {
         out.value = editValue(op.value, "value", channel);
       } else if (kind === "set_title") {
         out.title = editName(op.title, "title", channel);
+      } else if (kind === "set_position") {
+        out.x = editCoordinate(op.x, "x", channel);
+        out.y = editCoordinate(op.y, "y", channel);
       } else if (kind === "mode") {
         out.mode = oneOf(op, "mode", [0, 2, 4], channel);
       } else if (kind === "promote" || kind === "unpromote") {

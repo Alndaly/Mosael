@@ -156,7 +156,7 @@ describe("同一张工作流的完整工作流和表单:一小组,名字分两�
     const panel = screen.getByRole("complementary", { name: "generationEngineSettings", hidden: true });
     await waitFor(() => expect(panel.textContent).toContain("genAppFormSection"));
     const head = panel.querySelector<HTMLElement>("[data-app-form-head]")!;
-    expect(head.textContent).toContain("快速用krea2生图");
+    expect(head.textContent).not.toContain("快速用krea2生图");
     expect(within(head).getByText(`来自 krea2-text-2-image · ${SERVER}`)).toBeTruthy();
     expect(panel.textContent, "表单只露画幅").not.toContain("步数");
 

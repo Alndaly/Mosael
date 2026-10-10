@@ -317,19 +317,25 @@ function appWith(keys: string[], extra: Partial<FormOut> = {}, results: string[]
 }
 
 describe("结果取自(按工作流记,在表单那一排上面)", () => {
-  it("说的是节点:只要这个节点的图;标了写「结果取自这个节点」,能撤销;写进去的是工作流的结果标记", async () => {
-    api.getWorkflowApp.mockResolvedValue(data({ app: appWith(["3.steps"], { title: "调步数" }) }));
+  it("按输出媒体说图或视频;标了写「结果取自这个节点」,能撤销;写进去的是工作流的结果标记", async () => {
+    api.getWorkflowApp.mockResolvedValue(data({
+      outputs: [
+        { node: "9", title: "SaveImage", label: "保存图像", class_type: "SaveImage", media: "image" },
+        { node: "17", title: "高清", label: "高清", class_type: "VideoCombine", media: "video" },
+      ],
+      app: appWith(["3.steps"], { title: "调步数" }),
+    }));
     api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 2 });
     mount(vi.fn(), vi.fn(), null);
     const results = await screen.findByRole("region", { name: t("workflowAppResults") });
     expect(within(results).getByText(t("workflowAppResultsHint"))).toBeTruthy();
     expect(within(results).getByText("保存图像 #9"), "节点给人看的名字加节点号").toBeTruthy();
-    fireEvent.click(within(results).getByRole("button", { name: t("workflowAppResultsMarkLabel", "高清 #17") }));
+    fireEvent.click(within(results).getByRole("button", { name: t("workflowAppResultsMarkVideoLabel", "高清 #17") }));
     const marked = results.querySelector("[data-result-node='17']") as HTMLElement;
     expect(within(marked).getByText(t("workflowAppResultsChosen"))).toBeTruthy();
-    fireEvent.click(within(marked).getByRole("button", { name: t("workflowAppResultsUndoLabel", "高清 #17") }));
+    fireEvent.click(within(marked).getByRole("button", { name: t("workflowAppResultsUndoVideoLabel", "高清 #17") }));
     expect(within(marked).queryByText(t("workflowAppResultsChosen"))).toBeNull();
-    fireEvent.click(within(results).getByRole("button", { name: t("workflowAppResultsMarkLabel", "高清 #17") }));
+    fireEvent.click(within(results).getByRole("button", { name: t("workflowAppResultsMarkVideoLabel", "高清 #17") }));
     fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
     await act(async () => {
       fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: t("workflowAppSaveConfirm") }));
@@ -502,7 +508,7 @@ describe("存", () => {
     fireEvent.keyDown(model, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: t("workflowAppSettings", "模型") })).toBeNull());
     fireEvent.change(screen.getByRole("textbox", { name: t("workflowAppLabel", "参考图 · 人物") }), { target: { value: "人物照片" } });
-    fireEvent.click(screen.getByRole("button", { name: t("workflowAppResultsMarkLabel", "高清 #17") }));
+    fireEvent.click(screen.getByRole("button", { name: t("workflowAppResultsMarkImageLabel", "高清 #17") }));
 
     fireEvent.click(screen.getByRole("button", { name: t("workflowAppSave") }));
     const confirm = await screen.findByRole("alertdialog");

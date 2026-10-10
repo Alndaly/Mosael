@@ -13,7 +13,12 @@ vi.mock("@tanstack/react-query", () => ({
   useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
-vi.mock("./PromptEditor", () => ({ PromptEditor: () => <div />, restorePromptDocument: vi.fn(), textDocument: vi.fn(), collect: () => [] }));
+vi.mock("./PromptEditor", () => ({
+  PromptEditor: ({ value }: { value: string }) => <div contentEditable data-prompt-editor="">{value}</div>,
+  restorePromptDocument: vi.fn(),
+  textDocument: (value: string) => ({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: value }] }] }),
+  collect: () => [],
+}));
 
 /**
  * ComfyUI 的一张工作流有两个保存节点(「原图」「高清」):一次运行各交回一份。插件在描述符里给一项「结果取自」——
@@ -40,15 +45,64 @@ function twoSaves(extra: Record<string, unknown> = {}): GenerationOption {
   } as GenerationOption;
 }
 
-function renderComposer(model: GenerationOption, onSubmit = vi.fn(), onFormChange = vi.fn()) {
+function renderComposer(
+  model: GenerationOption,
+  onSubmit = vi.fn(),
+  onFormChange = vi.fn(),
+  item: BoardItem = { id: "image", kind: "image", text: "" } as BoardItem,
+  onPickAsset = vi.fn(),
+) {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   render(<NodeComposer
-    item={{ id: "image", kind: "image", text: "" } as BoardItem}
+    item={item}
     models={[model]}
-    busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={onFormChange} onSubmit={onSubmit}
+    busy={false} workspaceId="w" onPickAsset={onPickAsset} onFormChange={onFormChange} onSubmit={onSubmit}
   />);
-  return { onSubmit, onFormChange };
+  return { onSubmit, onFormChange, onPickAsset };
 }
+
+it("精简表单只有提示词时也有参数入口,不重复表单标题,文本框与底部编辑器共用文案", async () => {
+  const model = twoSaves({
+    parameter_keys: [],
+    parameter_schema: {},
+    form: { title: "快速用 Krea 2 生图", description: "只留下这次要填的内容", items: [{ key: "prompt", label: "提示词" }] },
+  });
+  renderComposer(model, vi.fn(), vi.fn(), {
+    id: "image", kind: "image", text: "", form: { prompt: "海边日落的电影画面" },
+  } as BoardItem);
+
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerationSettings" }));
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).queryByText("快速用 Krea 2 生图")).toBeNull();
+  const field = within(dialog).getByRole("textbox", { name: "提示词" });
+  expect(field).toHaveValue("海边日落的电影画面");
+  fireEvent.change(field, { target: { value: "潮湿礁石上的日落" } });
+  expect(field).toHaveValue("潮湿礁石上的日落");
+});
+
+it("精简表单的参考图与节点下方素材槽共用状态,表单里可以直接添加", async () => {
+  const model = twoSaves({
+    parameter_keys: ["reference_image"],
+    parameter_schema: {},
+    source_limits: { reference_image: 1 },
+    form: {
+      title: "千问编辑图片",
+      items: [{ key: "reference_image", label: "参考图" }, { key: "prompt", label: "修改要求" }],
+    },
+  });
+  const onPickAsset = vi.fn();
+  renderComposer(model, vi.fn(), vi.fn(), undefined, onPickAsset);
+
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerationSettings" }));
+  const formSource = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>("[data-board-form-source='reference_image']");
+    expect(found).toBeTruthy();
+    return found!;
+  });
+  expect(within(formSource).getByText("参考图")).toBeInTheDocument();
+  fireEvent.click(within(formSource).getByRole("button", { name: "genReferenceImage" }));
+  expect(onPickAsset).toHaveBeenCalledWith("image", expect.any(Function));
+});
 
 it("「结果取自」列出每个保存节点的标题,缺省是「全部」;选了一个就只发它", async () => {
   const { onSubmit, onFormChange } = renderComposer(twoSaves());

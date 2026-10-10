@@ -305,9 +305,10 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // Structure first: the runtimes hand us the result pre-stringified, so without unwrapping
   // there is nothing to render but the string.
   const data = React.useMemo(() => toolResultData(tool.result), [tool.result]);
-  //: 这一页认得这次的结果(工作台「助手」的诊断、新标签页):画这一页给的,摆在行下面、不跟着折叠(见 pageViews)
+  //: 这一页认得这次的结果(工作台「助手」的诊断、新标签页):画这一页给的,但仍属于这次工具调用的明细。
   const pageViews = React.useContext(AgentPageViewsContext);
   const pageCard = tool.status === "error" || !pageViews ? null : pageViews.toolResult(tool.name, data);
+  const hasPageCard = pageCard !== null;
   const card = tool.status === "error" ? null : <ToolResultCard value={data} />;
   // 富卡认得出这份数据的形状时,**下面那块裸 JSON 就是同一份东西再摆一遍**。
   // 判据用 detectShape 而不是 card:card 是 JSX 元素,恒为真。
@@ -316,7 +317,6 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   // 富卡也算"有内容" —— 少了它这一项,一个「参数就是摘要 + 结果是富卡」的调用会算成没内容,
   // 整行不可展开,而那张富卡就永远看不到了。原注释警告过的正是这个陷阱(card 恒为真不能当判据),
   // 现在有了 richShape 这个真正的布尔值。
-  const hasBody = Boolean((argText && !argsAreJustPreview) || resultText || richShape);
   const elapsed =
     typeof tool.usage?.duration_seconds === "number" ? formatElapsedSeconds(tool.usage.duration_seconds) : null;
   // Media the tool touched (an analyzed image, a generated clip, synthesized audio…) — shown as
@@ -340,6 +340,15 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
     : failed
       ? rawFailureFields(format(data ?? tool.result) ?? "", t("toolFailed"))
       : null;
+  const hasBody = Boolean(
+    (argText && !argsAreJustPreview) || resultText || richShape || hasPageCard || failure || assetIds.length > 0,
+  );
+  // 页面专用结果和失败原因原先作为工具行的兄弟卡一直摊开,看起来像第二条消息。
+  // 现在它们进这次调用的明细,结果刚到或失败时自动展开,仍然不会把重要回包藏起来。
+  const revealResult = hasPageCard || Boolean(failure) || assetIds.length > 0;
+  React.useEffect(() => {
+    if (revealResult) setOpen(true);
+  }, [revealResult]);
 
   return (
     // 一次工具调用是对话里的**一条行内标记**,不是一张与正文并列的卡片 —— 所以用 Marker:
@@ -401,12 +410,6 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
         </button>
       </Marker>
-      {/* 失败**不跟着折叠**:这一行收起来之后,它是唯一一处能读到「为什么没成」的地方。和别处同一份失败展示。 */}
-      {failure ? (
-        <div className="mt-1.5 min-w-0">
-          <FailureCard title={decisionFailed ? decisionWord(decision, t) : t("toolFailed")} {...failure} data-tool-failure={tool.id} />
-        </div>
-      ) : null}
       {/* 等人拍板的卡就摆在发起它的这一行下面 —— 不是统一堆在对话末尾。 */}
       {decision?.status === "pending" ? (
         <div className="mt-1.5 min-w-0">
@@ -419,8 +422,12 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
       {open && hasBody && (
         <div
           className={cn(AGENT_ROW_BODY_CLASS, "mt-1 flex min-w-0 flex-col gap-2")}
+          data-tool-details=""
         >
-          {card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
+          {failure ? (
+            <FailureCard title={decisionFailed ? decisionWord(decision, t) : t("toolFailed")} {...failure} data-tool-failure={tool.id} />
+          ) : null}
+          {hasPageCard ? pageCard : card && <div className="max-h-[360px] min-w-0 overflow-y-auto overflow-x-hidden">{card}</div>}
           {argText && !argsAreJustPreview && (
             <div className="flex flex-col gap-[3px]">
               <span className="text-ui-2xs uppercase tracking-[0.04em] text-muted-foreground">{t("toolInput")}</span>
@@ -439,11 +446,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               />
             </div>
           )}
+          {assetIds.length > 0 && <MediaPreviewGrid assetIds={assetIds} />}
         </div>
       )}
-      {/* 媒体产出**不跟着折叠** —— 生成出来的那张图是这一步的成果,不是它的明细。这一页认得的结果也一样。 */}
-      {pageCard ? <div className="mt-1.5 min-w-0">{pageCard}</div> : null}
-      {assetIds.length > 0 && <MediaPreviewGrid assetIds={assetIds} />}
     </div>
   );
 }

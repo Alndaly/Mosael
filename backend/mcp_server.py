@@ -2015,7 +2015,8 @@ def run_plugin_tool(tool: str, arguments: dict[str, Any] | None = None, workspac
 @tool(effect="reads", needs="workflow_library", kit="comfyui")
 def comfy_canvas_read(instance_id: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Read-only summary of the ComfyUI workbench canvas (unsaved edits included): per layer (root graph, each
-    subgraph) the nodes with ref, type, widget values and inputs (`in`: "<ref>.<output>"), plus selection, modified flag
+    subgraph) the nodes with ref, type, position, size, widget values and inputs (`in`: "<ref>.<output>"), spatial groups
+    (`groups`: g1/g2 with title, position and size), plus selection, modified flag
     and missing node types. Refs: "12" at top level, "12:5" inside the subgraph of node 12; mention nodes as #12 / #12:5
     (the user can click them). Needs the workbench open."""
     from app.domain import workbench_agent
@@ -2050,7 +2051,9 @@ def comfy_canvas_edit(ops: list[dict[str, Any]], instance_id: str = "", workspac
     ("12"; "12:5" edits the subgraph definition, i.e. every use), new nodes by temporary id:
     add_node {id:"$a",type,widgets?,title?,near?,graph?} | remove_node {node} |
     connect {from:"<node>.<output>"|"@in.<name>", to:"<node>.<input>"|"@out.<name>"} | disconnect {to} |
-    set_widget {node,widget,value} | set_title {node,title} | bypass|mute {node,on?} |
+    set_widget {node,widget,value} | set_title {node,title} | set_position {node,x,y} | bypass|mute {node,on?} |
+    add_group {title,x,y,width,height,color?,graph?} | set_group {group,title?,x?,y?,width?,height?,color?,graph?} |
+    remove_group {group,graph?} |
     add_subgraph_input|add_subgraph_output {graph,name,type} | remove_subgraph_io {graph,name,side?} |
     promote_widget|unpromote_widget {node,widget} | to_subgraph {nodes,name?} | unpack_subgraph {node} (these two last).
     graph = a subgraph node path ("12") or subgraph id."""
@@ -3484,4 +3487,3 @@ ANSWER_TOOLS = frozenset(_AWAITS_ANSWER)
 TOOL_NEEDS: dict[str, str] = dict(_TOOL_NEEDS)
 #: 工具 → 它属于哪一份(见 tool 的 `kit`)。不在里面的是通用的。
 TOOL_KITS: dict[str, str] = dict(_TOOL_KITS)
-

@@ -74,9 +74,10 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 ### 2. 桥多三样(`WORKBENCH_VERSION` 升到 4)
 
 - **`readGraph`**:当前这张的界面格式整图(子图的定义在 `definitions.subgraphs` 里,一并读出)(`graphToPrompt().workflow`)加选中的节点、改没改。智能体读到的是插件压缩过的一份摘要
-  (节点号、类型、标题、控件的值、谁连着谁),不是几百 KB 的原文。
+  (节点号、类型、标题、位置、大小、控件的值、谁连着谁、原生空间分组),不是几百 KB 的原文。
 - **`applyOps`**:一批改动(每一条可以带 `graph`:改哪一层,缺省是根图,子图按 §6 的写法指)—— `add_node`(类型、临时名、控件值、放在谁旁边)、`remove_node`、`connect` / `disconnect`(按输入输出的
-  **名字**,不按槽位号)、`set_widget`、`set_title`、`bypass` / `mute`。整批要么全成、要么一样不改;成了只记**一步**撤销(`checkState`);
+  **名字**,不按槽位号)、`set_widget`、`set_title`、`set_position`、`add_group` / `set_group` / `remove_group`、`bypass` / `mute`。
+  分组沿用 LiteGraph 的空间矩形语义,不另存节点成员。整批要么全成、要么一样不改;成了只记**一步**撤销(`checkState`);
   新节点按连着的节点就近排开,不叠在一起。每批改动先经插件对着 `/object_info` 校验(类型在不在、输入输出名字对不对、类型配不配、
   下拉值在不在列表里),不过就不往页面里送。
 - **`openWorkflow`**:新开一张空白画布(`Comfy.NewBlankWorkflow`),把一整张界面格式的图载进去(`loadGraphData`),起个名字,**不存盘**。
@@ -261,7 +262,8 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 
 - **插件先算**(§2「每批改动先经插件对着 `/object_info` 校验」):新 op `edit_plan` 把智能体写的一批改动对着画布上这张和这台 ComfyUI 的节点
   定义逐条查,在一份拷贝上照着改一遍(`canvas_edit.py`)。改动的写法就是 §2、§6 那一套:`add_node`(临时名字 `$a`)、`remove_node`、
-  `connect` / `disconnect`(按名字;接进一格已经连着的输入会换掉原来那根,清单上写明换掉了谁)、`set_widget`、`set_title`、`bypass` / `mute`,
+  `connect` / `disconnect`(按名字;接进一格已经连着的输入会换掉原来那根,清单上写明换掉了谁)、`set_widget`、`set_title`、`set_position`、
+  `add_group` / `set_group` / `remove_group`、`bypass` / `mute`,
   子图里的节点写 `12:5`(改的是定义)、`graph` 写 `"12"` / `["12"]` / 子图 id,边界口 `@in.<名字>` / `@out.<名字>`、`add_subgraph_input` /
   `add_subgraph_output` / `remove_subgraph_io`、`promote_widget` / `unpromote_widget`、`to_subgraph` / `unpack_subgraph`。有一条说不通整批不交、
   每一条的原因(中英)都列出来;都过了交回规整过的那一批(每条带 `layer`,节点是那一层里的编号,新节点仍用临时名字,口仍按名字 —— 桥自己
@@ -293,9 +295,9 @@ ComfyUI 的保存或工作台顶栏的「保存」。
     改动单独一组、写明这张图里用了几处;改前改后的诊断、会修好的、会多出来的提醒。清单里的节点在「助手」里能点了定位,全局确认中心里是字。
     这张卡的按钮是「**应用**」(内联卡和全局中心同一份,`approveLabels`)。
   - 工具行多一层「这一页认得的结果」(`features/agent/pageViews`):`comfy_check` 的诊断画成一条条问题,每条带「定位」和「照这个改」;应用之后
-    画改了几处、修好了几个、多出来的提醒;`comfy_canvas_new` 画开了哪一张、没存盘、还缺几个模型合计多大和「去下载」(换到缺失项)。这几张不跟着
-    工具行折叠(它们是这一步的成果,收着的话按钮没人看得见)。「照这个改」经面板的 `outbox` 替用户发一句、带着那一条(JSON),智能体只为它提一次
-    `comfy_canvas_edit`。
+    画改了几处、修好了几个、多出来的提醒;`comfy_canvas_new` 画开了哪一张、没存盘、还缺几个模型合计多大和「去下载」(换到缺失项)。结果仍属于
+    发起它的那次工具调用:放进该工具行的展开明细,结果到达时自动展开,收起工具行就一起收起,不再另画一张兄弟卡。「照这个改」经面板的 `outbox`
+    替用户发一句、带着那一条(JSON),智能体只为它提一次 `comfy_canvas_edit`。
   - 页面上下文、空态那句话改成能改、能新建、都不存盘。
 - **技能**(§8):先读再改、一件事一批、点「应用」才改、被拒在开卡之前就照原因改了再提(别原样重发)、子图改的是定义(只想改一处先拆开)、
   新建模板优先、从不存盘;改动的写法一张表加一个例子。
@@ -322,4 +324,3 @@ ComfyUI 的保存或工作台顶栏的「保存」。
 **留给第三步**:由智能体起头的下载模型(确认卡写多大、下到哪台)、装节点包(`install_nodes`,卡上写 `node_pack_info` 的 `install_version` 和
 `dependency_risk`、要不要重启)、试跑(确认卡;跑完把结果和报错交回来接着改)。**留给 ADR 0044 第 4 步**:桥报 `renamedFrom` / `openedBy`、
 工作台调 `/agent/homes/move`、工作流库改名挪动时挪家、新标签页接住发起它的那段对话。
-

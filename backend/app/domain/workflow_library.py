@@ -1156,8 +1156,14 @@ def run_canvas(db: Session, user: User, instance: PluginInstance, *, workspace_i
         **({"client_id": client_id} if _CLIENT_ID.fullmatch(client_id or "") else {}),
     }
     profile = _profile(db, instance)
-    row = next((one for one in provider_models.list_models(db, profile.id) if one.model_id == path), None) \
-        if profile is not None else None
+    row = provider_models.get_model(db, profile.id, path) if profile is not None else None
+    # 工作台跑的是这台 ComfyUI 此刻打开的图。目录只是它在宿主里的镜像，可能刚存盘、刚改名，或者应用在目录巡检前
+    # 重启过；不能把镜像的一次短暂落后说成“工作流不存在”。在命令边界针对**这个连接**主动对账一次，再作最终判定。
+    # 这也让 API、桌面工作台和以后的调用方共用同一条一致性规则，不靠前端遇到 422 后猜着刷新。
+    if profile is None or row is None or not (row.capability_ids or []):
+        host_capabilities.refresh(db, instance, GENERATION)
+        profile = _profile(db, instance)
+        row = provider_models.get_model(db, profile.id, path) if profile is not None else None
     kinds = [kind for kind in (row.capability_ids or []) if kind in ("image", "video", "audio")] if row is not None else []
     if profile is None or row is None or not row.enabled or not kinds:
         if row is None and _forms_await_upgrade(db, instance, path):

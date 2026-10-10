@@ -22,7 +22,7 @@ metadata:
 
 | 要做什么 | 工具 |
 | --- | --- |
-| 看画布上这张图 | `comfy_canvas_read`:每一层的节点、控件的值、谁连着谁、子图;选中了谁、改没改 |
+| 看画布上这张图 | `comfy_canvas_read`:每一层的节点、位置和大小、控件的值、谁连着谁、子图;选中了谁、改没改 |
 | 这张图有什么问题 | `comfy_check`:按节点列的问题单(严重程度、原因、改法);上次运行报错了就带上 `job_id`(上下文里有) |
 | 指给用户看某个节点 | `comfy_locate`:在画布上选中、移到中间;子图里的先打开那一层 |
 | 改画布上这张 | `comfy_canvas_edit`:一批改动(`ops`),开一张确认卡;用户点「应用」才改,结果里说修好了几个、多出来几个 |
@@ -86,6 +86,10 @@ metadata:
 | `disconnect` | `to` | 断开接进这一格的那根线(`"8.vae"`) |
 | `set_widget` | `node`、`widget`、`value` | 下拉的值要是列表里的那一项(原样);连着线的那一格改不了值,先 `disconnect` |
 | `set_title` | `node`、`title` | |
+| `set_position` | `node`、`x`、`y` | 把节点移到这一层画布的绝对坐标;可在同一批里移动多个节点,一次撤销 |
+| `add_group` | `title`、`x`、`y`、`width`、`height`、`color`?、`graph`? | 新建 ComfyUI 原生空间分组;范围内的节点属于它 |
+| `set_group` | `group`、`title`?、`x`?、`y`?、`width`?、`height`?、`color`?、`graph`? | 用摘要里的 `g1` / `g2` 重命名、移动、缩放或改色 |
+| `remove_group` | `group`、`graph`? | 删除分组框,不删除框内节点 |
 | `bypass` / `mute` | `node`、`on`? | 旁路 / 静音;`on: false` 恢复正常 |
 | `add_subgraph_input` / `add_subgraph_output` | `graph`、`name`、`type` | 子图边界上加一个口 |
 | `remove_subgraph_io` | `graph`、`name`、`side`? | 删掉一个口,里外连着的线一起断;输入输出重名时给 `side`(`input` / `output`) |
@@ -104,6 +108,14 @@ metadata:
  {"op": "connect", "from": "$lora.CLIP", "to": "6.clip"},
  {"op": "set_widget", "node": "3", "widget": "steps", "value": 30}]
 ```
+
+### 整理节点布局
+
+用户说“整理节点”时，先读画布拿到每个节点的 `position`、`size`、连接关系和已有 `groups`，再用一批 `set_position` 完成。按数据流从左到右分层，
+同层节点上下排列；默认水平留 120、垂直留 60 画布单位，避免节点外框重叠。保持已有分组的相对顺序，笔记靠近它说明的节点，输出节点放在最右。
+只移动位置，不顺手改连线、值或标题；根图和每份子图分别整理，子图里的节点仍用 `12:5` 这类引用。用户要求“分组”时，再按整理后的
+节点外框计算包围矩形（四周默认留 40）,用同一批的 `add_group` 创建原生空间分组；已有分组用 `set_group` 调整。分组没有节点成员列表，
+节点是否在组内由位置落入矩形决定。
 
 ### 子图
 

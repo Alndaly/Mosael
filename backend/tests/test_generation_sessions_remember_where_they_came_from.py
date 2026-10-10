@@ -196,7 +196,7 @@ def test_每个入口说自己是哪一处() -> None:
     with SessionLocal() as db, \
             mock_patch.object(workflow_library, "_require", lambda *_a: None), \
             mock_patch.object(workflow_library, "_profile", lambda *_a: profile), \
-            mock_patch.object(workflow_library.provider_models, "list_models", lambda *_a: [row]), \
+            mock_patch.object(workflow_library.provider_models, "get_model", lambda *_a: row), \
             mock_patch("app.domain.generation.use_cases.generate", side_effect=_spy(seen)):
         with pytest.raises(_Seen):
             workflow_library.run_canvas(db, SimpleNamespace(id="u1"), SimpleNamespace(id="c1"), workspace_id=ws,

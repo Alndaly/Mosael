@@ -29,9 +29,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
-from app.db.models import PluginPackage
+from app.db.models import PluginPackage, ProviderModel, ProviderProfile
 from app.domain.plugins import runtime
 from tests.util import fresh_client, wait_status
 
@@ -860,3 +861,23 @@ def test_工作台_跑画布上的图_普通的生成任务_图在任务载荷�
     assert sent["graph"] == {"prompt": CANVAS_PROMPT, "workflow": CANVAS, "client_id": "4f1c0e2a9b7d4c51a3e8"}
     assert sent["parameters"] == {} and sent["prompt"] == ""
     assert "画布上的图" in client.get(f"/api/jobs/{job['id']}").json()["error"]
+
+
+def test_工作台运行前主动对账连接目录_不把已保存工作流误报成非模型(library) -> None:
+    client, instance_id = library
+    workspace_id = client.post("/api/workspaces", json={"name": "工作台"}).json()["id"]
+    with SessionLocal() as db:
+        profile = db.scalar(select(ProviderProfile).where(ProviderProfile.plugin_instance_id == instance_id))
+        row = db.scalar(select(ProviderModel).where(
+            ProviderModel.provider_profile_id == profile.id,
+            ProviderModel.model_id == "portrait.json",
+        ))
+        db.delete(row)
+        db.commit()
+    before = len([one for one in _ops() if one["op"] == "models"])
+    response = client.post(
+        f"/api/plugins/instances/{instance_id}/workflow-library/run",
+        json={"workspace_id": workspace_id, "path": "portrait.json", "prompt": CANVAS_PROMPT},
+    )
+    assert response.status_code == 200, response.text
+    assert len([one for one in _ops() if one["op"] == "models"]) > before, "运行命令自己对账这一台连接的目录"

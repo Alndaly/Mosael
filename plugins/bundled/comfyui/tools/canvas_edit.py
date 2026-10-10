@@ -14,6 +14,10 @@
     disconnect {to: "<节点>.<输入名>" | "@out.<口>"}               断开接进这一格的那根线
     set_widget {node, widget, value}                              改一格控件(子图节点上提升出来的那几格也是这样改)
     set_title {node, title}
+    set_position {node, x, y}                                    移动节点到画布绝对坐标
+    add_group {title, x, y, width, height, color?, graph?}        新建空间分组;节点落在矩形里就属于它
+    set_group {group, title?, x?, y?, width?, height?, color?}    重命名 / 移动 / 缩放分组(`group` 用摘要里的 g1)
+    remove_group {group}                                         删除分组(不删除里面的节点)
     bypass / mute {node, on?}                                     旁路 / 静音(on: false 恢复成正常)
     add_subgraph_input / add_subgraph_output {graph, name, type}  子图边界上加一个口,用它的节点跟着多一个
     remove_subgraph_io {graph, name, side?}                       删掉一个口(里外连着的线一起断)
@@ -37,6 +41,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import re
 import uuid
 from typing import Any
@@ -56,11 +61,14 @@ MAX_OPS = 200
 MAX_PROBLEMS = 20
 #: 一格控件的值最多多长(提示词)。
 MAX_VALUE = 20000
+MAX_COORDINATE = 1_000_000
 _PATH = re.compile(r"^-?\d{1,10}(?::\d{1,10}){0,16}$")
 _LOCAL = re.compile(r"^-?\d{1,10}$")
 _SUBGRAPH_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _TEMP = re.compile(r"^\$[A-Za-z0-9_]{1,32}$")
 _NAME = re.compile(r"^[^\x00-\x1f]{1,100}$")
+_GROUP_REF = re.compile(r"^g([1-9]\d*)$")
+_COLOR = re.compile(r"^#[0-9A-Fa-f]{3}(?:[0-9A-Fa-f]{3})?$")
 _MODES = {"bypass": 4, "mute": 2}
 _MODE_NAMES = {0: "normal", 2: "muted", 4: "bypassed"}
 #: 只在前端、但能加的节点:笔记(正文是它唯一的那一格)。
@@ -69,7 +77,8 @@ _NOTES = canvas.NOTE_TYPES
 _BASELINE_KEYS = ("ref", "type", "title", "severity", "kind", "input", "cause")
 #: 只改结构的两种(不模拟,只能放在最后)。
 STRUCTURAL = ("to_subgraph", "unpack_subgraph")
-OPS = ("add_node", "remove_node", "connect", "disconnect", "set_widget", "set_title", "bypass", "mute", "add_subgraph_input",
+OPS = ("add_node", "remove_node", "connect", "disconnect", "set_widget", "set_title", "set_position", "add_group", "set_group", "remove_group",
+       "bypass", "mute", "add_subgraph_input",
        "add_subgraph_output", "remove_subgraph_io", "promote_widget", "unpromote_widget", *STRUCTURAL)
 
 
@@ -101,15 +110,45 @@ class _Planner:
         self.graph = copy.deepcopy(content)
         self.info = object_info
         self.defs = canvas.definitions(self.graph)
+        self._normalize_collections()
         #: 每份子图在这张图里被哪几个节点用着(改之前的;改动清单上说「用了 N 处」、子图里的节点按第一处写)
         self.paths = canvas.instance_paths(content)
         self.temps: dict[str, tuple[str | None, dict[str, Any]]] = {}
+        self.group_refs: dict[tuple[str | None, str], dict[str, Any]] = {}
+        for layer in [None, *self.defs]:
+            for index, group in enumerate(canvas.groups_of(self.scope(layer))):
+                self.group_refs[(layer, f"g{index + 1}")] = group
         self.node_seq = self._max_id("nodes") + 1
         self.link_seq = self._max_id("links") + 1
+        self.group_seq = self._max_id("groups") + 1
         self.bridge: list[dict[str, Any]] = []
         self.changes: list[dict[str, Any]] = []
         self.touched: list[str] = []
         self.structural = False
+
+    def _normalize_collections(self) -> None:
+        """把 ComfyUI 界面图里 ``list | null`` 的集合规整成可编辑的列表。
+
+        当前保存格式会把未接线的输出写成 ``{"links": null}``，接上线以后同一字段才是数组。
+        读图时两者都表示“没有线”；规划器要接第一根线时必须先落成数组。这里只改深拷贝，
+        不改桥交来的原图。
+        """
+        for scope in [self.graph, *self.defs.values()]:
+            for key in ("nodes", "links", "groups"):
+                if scope.get(key) is None:
+                    scope[key] = []
+            for node in canvas.nodes_of(scope):
+                for key in ("inputs", "outputs"):
+                    if node.get(key) is None:
+                        node[key] = []
+                for output in node.get("outputs") or []:
+                    if isinstance(output, dict) and output.get("links") is None:
+                        output["links"] = []
+            # 子图边界的 linkIds 也使用同一套 list | null 表示法。
+            for side in ("inputs", "outputs"):
+                for slot in scope.get(side) or []:
+                    if isinstance(slot, dict) and slot.get("linkIds") is None:
+                        slot["linkIds"] = []
 
     # --- 哪一层、哪个节点 -----------------------------------------------------------------
 
@@ -127,7 +166,9 @@ class _Planner:
                 except (TypeError, ValueError):
                     continue
             state = scope.get("state") if isinstance(scope.get("state"), dict) else {}
-            for key in (("last_node_id", "lastNodeId") if what == "nodes" else ("last_link_id", "lastLinkId")):
+            state_keys = (("last_node_id", "lastNodeId") if what == "nodes"
+                          else ("last_link_id", "lastLinkId") if what == "links" else ())
+            for key in state_keys:
                 value = scope.get(key) if key.startswith("last_") else state.get(key)
                 if isinstance(value, int):
                     found.append(value)
@@ -192,6 +233,17 @@ class _Planner:
         if raw is None:
             raise _Bad(f"#{text} 不在画布上", f"#{text} is not on the canvas")
         return layer, parts[-1], raw
+
+    def group(self, ref: Any, graph: Any = None) -> tuple[str | None, str, dict[str, Any]]:
+        """摘要里的 ``gN``。引用绑定到读图时的对象,同一批先删前一个也不会让后面的编号漂移。"""
+        text = _str(ref, 40).lower()
+        if not _GROUP_REF.match(text):
+            raise _Bad("分组要写成画布摘要里的 g1、g2", "Refer to a group as shown in the canvas summary: g1, g2")
+        layer = self.layer_arg(graph)
+        raw = self.group_refs.get((layer, text))
+        if raw is None or raw not in canvas.groups_of(self.scope(layer)):
+            raise _Bad(f"分组 {text} 不在这一层", f"Group {text} is not in this layer")
+        return layer, text, raw
 
     def ref(self, layer: str | None, local: str) -> str:
         """给人看(也给「定位」用)的写法:子图里的按第一处用它的节点写;新节点是临时名字。"""
@@ -727,6 +779,103 @@ class _Planner:
         raw["title"] = title
         change = {"op": "set_title", "node": self.ref(layer, local), "type": self._type_name(raw), "before": before, "after": title}
         self._record({"op": "set_title", "node": local, "title": title}, change, layer)
+
+    def op_set_position(self, op: dict[str, Any]) -> None:
+        """Move any node in its own layer. Layout is graph data, so it follows the same atomic/undoable edit path as values and links."""
+        layer, local, raw = self.node(op.get("node"), op.get("graph"))
+        values = (op.get("x"), op.get("y"))
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in values):
+            raise _Bad("set_position 的 x / y 要有限数字", "set_position x / y must be finite numbers")
+        if any(abs(float(value)) > MAX_COORDINATE for value in values):
+            raise _Bad(f"set_position 的 x / y 不能超过 ±{MAX_COORDINATE}",
+                       f"set_position x / y must stay within ±{MAX_COORDINATE}")
+        before_raw = raw.get("pos")
+        before = list(before_raw[:2]) if isinstance(before_raw, (list, tuple)) and len(before_raw) >= 2 else [0, 0]
+        after = [float(values[0]), float(values[1])]
+        raw["pos"] = after
+        change = {"op": "set_position", "node": self.ref(layer, local), "type": self._type_name(raw),
+                  "before": before, "after": after}
+        self._record({"op": "set_position", "node": local, "x": after[0], "y": after[1]}, change, layer)
+
+    # --- 空间分组 ---------------------------------------------------------------------------
+
+    @staticmethod
+    def _coordinate(value: Any, name: str, *, positive: bool = False) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise _Bad(f"分组的 {name} 要有限数字", f"Group {name} must be a finite number")
+        number = float(value)
+        if abs(number) > MAX_COORDINATE or (positive and number <= 0):
+            rule = f"大于 0 且不超过 {MAX_COORDINATE}" if positive else f"不能超过 ±{MAX_COORDINATE}"
+            en = f"greater than 0 and at most {MAX_COORDINATE}" if positive else f"within ±{MAX_COORDINATE}"
+            raise _Bad(f"分组的 {name} 要{rule}", f"Group {name} must be {en}")
+        return number
+
+    @staticmethod
+    def _group_bounds(raw: dict[str, Any]) -> list[float]:
+        bounding = raw.get("bounding")
+        if isinstance(bounding, (list, tuple)) and len(bounding) >= 4:
+            return [float(value) for value in bounding[:4]]
+        pos, size = raw.get("pos"), raw.get("size")
+        if isinstance(pos, (list, tuple)) and len(pos) >= 2 and isinstance(size, (list, tuple)) and len(size) >= 2:
+            return [float(pos[0]), float(pos[1]), float(size[0]), float(size[1])]
+        return [0.0, 0.0, 400.0, 300.0]
+
+    @staticmethod
+    def _group_title(value: Any) -> str:
+        title = _str(value)
+        if not title or any(ord(char) < 32 for char in title):
+            raise _Bad("分组要有标题(不超过 200 字)", "A group needs a title (at most 200 characters)")
+        return title
+
+    @staticmethod
+    def _group_color(value: Any) -> str:
+        color = _str(value, 20)
+        if not _COLOR.match(color):
+            raise _Bad("分组颜色要写成 #RGB 或 #RRGGBB", "Group color must be #RGB or #RRGGBB")
+        return color
+
+    def op_add_group(self, op: dict[str, Any]) -> None:
+        layer = self.layer_arg(op.get("graph"))
+        title = self._group_title(op.get("title"))
+        bounds = [self._coordinate(op.get("x"), "x"), self._coordinate(op.get("y"), "y"),
+                  self._coordinate(op.get("width"), "width", positive=True),
+                  self._coordinate(op.get("height"), "height", positive=True)]
+        color = self._group_color(op.get("color", "#3f789e"))
+        raw = {"id": self.group_seq, "title": title, "bounding": bounds, "color": color, "flags": {}}
+        self.group_seq += 1
+        self.scope(layer).setdefault("groups", []).append(raw)
+        payload = {"op": "add_group", "title": title, "x": bounds[0], "y": bounds[1], "width": bounds[2], "height": bounds[3],
+                   "color": color}
+        self._record(payload, {**payload, "bounds": bounds}, layer)
+
+    def op_set_group(self, op: dict[str, Any]) -> None:
+        layer, ref, raw = self.group(op.get("group"), op.get("graph"))
+        fields = ("title", "x", "y", "width", "height", "color")
+        if not any(field in op for field in fields):
+            raise _Bad("set_group 至少要改标题、位置、大小或颜色中的一项",
+                       "set_group must change at least one of title, position, size or color")
+        before_bounds = self._group_bounds(raw)
+        bounds = list(before_bounds)
+        for index, name in enumerate(("x", "y", "width", "height")):
+            if name in op:
+                bounds[index] = self._coordinate(op[name], name, positive=name in ("width", "height"))
+        before_title = str(raw.get("title") or "Group")
+        title = self._group_title(op["title"]) if "title" in op else before_title
+        before_color = str(raw.get("color") or "#3f789e")
+        color = self._group_color(op["color"]) if "color" in op else before_color
+        raw.update(title=title, bounding=bounds, color=color)
+        payload = {"op": "set_group", "group": ref, "title": title, "x": bounds[0], "y": bounds[1], "width": bounds[2],
+                   "height": bounds[3], "color": color}
+        change = {**payload, "before": {"title": before_title, "bounds": before_bounds, "color": before_color},
+                  "after": {"title": title, "bounds": bounds, "color": color}}
+        self._record(payload, change, layer)
+
+    def op_remove_group(self, op: dict[str, Any]) -> None:
+        layer, ref, raw = self.group(op.get("group"), op.get("graph"))
+        self.scope(layer)["groups"] = [one for one in canvas.groups_of(self.scope(layer)) if one is not raw]
+        change = {"op": "remove_group", "group": ref, "title": str(raw.get("title") or "Group"),
+                  "bounds": self._group_bounds(raw)}
+        self._record({"op": "remove_group", "group": ref}, change, layer)
 
     def _mode(self, op: dict[str, Any], what: str) -> None:
         layer, local, raw = self.node(op.get("node"), op.get("graph"))

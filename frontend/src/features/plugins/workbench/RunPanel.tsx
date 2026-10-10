@@ -1,20 +1,22 @@
 import React from "react";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, History, Loader2, Pin, Square, Undo2 } from "lucide-react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight, History, Loader2, Pin, Play, Square, Undo2 } from "lucide-react";
 
 import {
   assetFileUrl,
   assetPreviewUrl,
   assetThumbnailUrl,
   cancelJob,
+  getAsset,
   getCanvasApp,
-  refreshPluginInstance,
   runCanvas,
   type Job,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { assetKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -42,7 +44,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * 跑画布上现在这张(ADR 0038 §6,含没存的改动):经桥导出(API 格式 + 界面格式 + 前端的 clientId),建一个普通的生成任务
- * (模型 = 这张工作流,图在任务的载荷里)。新存的那张宿主的目录还没刷新到就刷新一次再试。记下跑的是画布上的哪一张。
+ * (模型 = 这张工作流,图在任务的载荷里)。模型目录的一致性由运行命令在后端收口；这里不把所有 422 都猜成目录落后。
+ * 记下跑的是画布上的哪一张。
  *
  * 和在 ComfyUI 里点「运行」一样:导出之前、任务建好之后各让桥走一遍前端自己的「生成后怎样」(runControls)—— 种子设成
  * randomize 的,连点两次运行此前用的是同一个存着的种子,出同一张图(沙盒实测)。桥做不了(主进程是旧的)不拦着跑。
@@ -58,15 +61,7 @@ export function useCanvasRun(target: WorkbenchTarget | null) {
       const exported = await exportCanvas();
       const body = { workspace_id: target.workspaceId, path, prompt: exported.prompt, workflow: exported.workflow,
                      client_id: exported.clientId };
-      let created;
-      try {
-        created = await runCanvas(target.instanceId, body);
-      } catch (error) {
-        if ((error as { status?: number })?.status !== 422) throw error;
-        // 刚在 ComfyUI 里存的那张:宿主的目录可能还没刷新到它 —— 重拉一次再试
-        await refreshPluginInstance(target.instanceId);
-        created = await runCanvas(target.instanceId, body);
-      }
+      const created = await runCanvas(target.instanceId, body);
       void workbenchCall({ op: "runControls", phase: "after" });
       const labels = nodeLabels(exported.workflow);
       rememberRun({ jobId: created.job.id, path, workflowKey, workflowName, kind: created.generation.kind ?? "image",
@@ -246,20 +241,34 @@ function RunCard({
   const job = useJobWatch(run.jobId).data as Job | undefined;
   const labels = React.useMemo(() => new Map(run.labels), [run.labels]);
   const groups = job?.status === "succeeded" ? outputGroups(job, labels) : [];
+  const assetIds = React.useMemo(() => groups.flatMap((group) => group.assets), [groups]);
+  const assets = useQueries({
+    queries: assetIds.map((asset) => ({
+      queryKey: assetKeys.detail(asset),
+      queryFn: () => getAsset(asset),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const kindByAsset = new Map(assetIds.map((asset, index) => [asset, assets[index]?.data?.kind ?? run.kind]));
   const cancel = useMutation({ mutationFn: () => cancelJob(run.jobId) });
   const running = !jobDone(job);
   const nodeName = (node: string) => `${labels.get(node) || t("workbenchNode")} #${node}`;
-  const video = run.kind === "video";
-  //: 这一次的全部产出成组翻(按回执里的顺序),标题带来源节点和第几张
+  const resultCopy = (media: string): { button: MessageKey; label: MessageKey; hint: MessageKey; undo: MessageKey } => {
+    if (media === "video") return { button: "workbenchRunOnlyThisVideo", label: "workbenchRunOnlyThisVideoLabel", hint: "workbenchRunOnlyThisVideoHint", undo: "workbenchRunUndoVideoLabel" };
+    if (media === "audio") return { button: "workbenchRunOnlyThisAudio", label: "workbenchRunOnlyThisAudioLabel", hint: "workbenchRunOnlyThisAudioHint", undo: "workbenchRunUndoAudioLabel" };
+    return { button: "workbenchRunOnlyThisImage", label: "workbenchRunOnlyThisImageLabel", hint: "workbenchRunOnlyThisImageHint", undo: "workbenchRunUndoImageLabel" };
+  };
+  //: 生成记录的 kind 只说明这次运行的主能力；一轮里可以混出图片和视频。预览逐份以素材自己的 kind 为准。
   const gallery = runGallery(groups, nodeName, t("workbenchRunUnknownNode")).map((one) => ({
-    src: video ? assetFileUrl(one.asset) : assetPreviewUrl(one.asset),
+    src: kindByAsset.get(one.asset) === "video" ? assetFileUrl(one.asset) : assetPreviewUrl(one.asset),
     title: one.title,
-    video,
+    video: kindByAsset.get(one.asset) === "video",
     asset: one.asset,
   }));
   const open = (asset: string) => {
     const at = gallery.find((one) => one.asset === asset);
-    if (at) openImagePreview({ src: at.src, title: at.title, video, gallery: gallery.map(({ asset: _asset, ...item }) => item) });
+    if (at) openImagePreview({ src: at.src, title: at.title, video: at.video, gallery: gallery.map(({ asset: _asset, ...item }) => item) });
   };
   return (
     <li className="grid gap-2 rounded-lg border border-border p-2.5" data-run={run.jobId}>
@@ -284,12 +293,14 @@ function RunCard({
       )}
       {/* 这一次跑挂了:全应用那一份失败展示 —— ComfyUI 那句「执行到「KSampler」这一步出错」、认得出时的原因和升级命令、原话在「详情」里 */}
       {job?.status === "failed" && (
-        <FailureCard title={t("workbenchRunFailed")} {...failureFields(job, t("workbenchRunFailed"))} data-workbench-run-failed={run.jobId} />
+        <FailureCard title={t("workbenchRunFailed")} {...failureFields(job, t("workbenchRunFailed"))}
+                     summaryClassName="text-ui-sm font-normal" data-workbench-run-failed={run.jobId} />
       )}
       {job?.status === "cancelled" && <PanelNote>{t("workbenchRunCancelled")}</PanelNote>}
       {groups.map((group) => {
         const name = group.node ? nodeName(group.node) : t("workbenchRunUnknownNode");
         const isResult = Boolean(group.node && marks?.results?.includes(group.node));
+        const copy = resultCopy(kindByAsset.get(group.assets[0] ?? "") ?? run.kind);
         return (
           <section key={group.node || "unknown"} aria-label={name} className="grid gap-1.5">
             <div className="flex min-h-7 min-w-0 items-center gap-2 text-ui-xs">
@@ -303,36 +314,44 @@ function RunCard({
                     {t("workbenchRunIsResult")}
                   </span>
                   <Button variant="ghost" size="xs" className="shrink-0" loading={marks.pending === group.node}
-                          aria-label={t("workbenchRunUndoMarkLabel").replace("{node}", name)}
+                          aria-label={t(copy.undo).replace("{node}", name)}
                           onClick={() => marks.unmark(group.node)}>
                     <Undo2 size={11} />
                     {t("workbenchRunUndoMark")}
                   </Button>
                 </>
               ) : (
-                <Hint label={t("workbenchRunOnlyThisHint").replace("{node}", name)}>
+                <Hint label={t(copy.hint).replace("{node}", name)}>
                   <Button variant="outline" size="xs" className="shrink-0" loading={marks.pending === group.node}
-                          aria-label={t("workbenchRunOnlyThisLabel").replace("{node}", name)}
+                          aria-label={t(copy.label).replace("{node}", name)}
                           onClick={() => marks.mark(group.node)}>
                     <Pin size={11} />
-                    {t("workbenchRunOnlyThis")}
+                    {t(copy.button)}
                   </Button>
                 </Hint>
               ))}
             </div>
             <ul className="m-0 grid list-none grid-cols-3 gap-1.5 p-0">
               {group.assets.map((asset) => {
-                const title = gallery.find((one) => one.asset === asset)?.title ?? name;
+                const item = gallery.find((one) => one.asset === asset);
+                const title = item?.title ?? name;
+                const isVideo = item?.video === true;
                 return (
                   <li key={asset}>
                     <IconButton
                       unstyled
-                      label={t("workbenchPreviewOpen").replace("{title}", title)}
-                      className="block w-full cursor-zoom-in rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      label={t(isVideo ? "workbenchPreviewVideo" : "workbenchPreviewOpen").replace("{title}", title)}
+                      className={cn("relative block w-full rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                                    isVideo ? "cursor-pointer" : "cursor-zoom-in")}
                       onClick={() => open(asset)}
                     >
-                      <img src={assetThumbnailUrl(asset)} alt={t("workbenchRunOutputAlt").replace("{node}", name)}
+                      <img src={assetThumbnailUrl(asset)} alt={t(isVideo ? "workbenchRunVideoOutputAlt" : "workbenchRunOutputAlt").replace("{node}", name)}
                            loading="lazy" className="block aspect-square w-full rounded-md bg-secondary object-cover" />
+                      {isVideo && (
+                        <span aria-hidden className="absolute inset-0 grid place-items-center rounded-md bg-black/15">
+                          <span className="grid size-7 place-items-center rounded-full bg-background/85 text-foreground shadow-sm"><Play size={13} fill="currentColor" /></span>
+                        </span>
+                      )}
                     </IconButton>
                   </li>
                 );

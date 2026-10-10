@@ -25,6 +25,12 @@ Accepted — 2026-10-05。1.10.0 的主功能,1.9.1 发版之后开工。维护�
 | 「能填的项」 | `plugins/bundled/comfyui/tools/graph.py` 的 `describe` | **全自动**:写提示词的格(`text_slots`)、种子、画布尺寸、跑几遍(`counts_runs`)、读素材的节点(`slots`)、其余每个字面量输入(`tunable`,名字和常用与否看 `labels.py`)、输出节点(`output_nodes`)和缺省结果(`final_outputs`) |
 | 表单 | 插件目录 → `backend/app/domain/plugins/generation.py` 收形状 → `backend/app/domain/generation/plugin_connections.py` 的 `descriptor` 变成描述符 → 前端 `frontend/src/lib/generationCapabilities.ts` 的 `declaredParameters` / `frontend/src/components/generation/parameterPanel.tsx` 渲染 | AI 工作台、画板、工作流节点三处同一个描述符、同一套控件,参数键是 `<节点 id>.<输入名>` |
 | 工具 | `plugins/bundled/comfyui/tools/tooling.py` | 每张工作流一个工具,入参同一套推导;`mirrors` 让画板只留生成那一个入口 |
+
+表单里的宿主字段同样服从这条单事实源:`prompt` 与素材角色(`reference_image` 等)不是“只在 AI 工作台显示的说明”。
+无限画布的参数弹层按 `capabilities.form.items` 决定入口、顺序和名字,并直接读写节点下方编辑器使用的 `prompt` / `source_assets`。
+AI Studio 右栏遵守同一条规则：提示词用可编辑控件直接绑定主输入状态；精简表单的标题只用于入口命名,不在参数区重复显示；可选提示词
+留空时用工作流内保存值的语义必须留在字段附近。因此只含提示词和参考图的精简表单也必须有参数入口；任何界面不得为弹层另存一份
+提示词或素材列表。
 | 跑 | `plugins/bundled/comfyui/tools/run.py` | 提交、WebSocket / 轮询进度、只停自己的任务(`stop`)、带回执重启后接着等、跑几遍(`run_repeated`) |
 | 内嵌编辑器(2026-10-07 起并进工作台,见 §10) | `electron/publish/comfyEditor.ts`(写死的脚本)、`electron/publish/publishWorker.ts` 的 `openComfyWorkflow`、契约 `electron/ipc-contract.cjs` 的 `parseComfyWorkflow`、前端 `frontend/src/features/plugins/workflowEditor.ts` | 浏览器池那套内嵌视图(`electron/publish/accountViews.ts`,分区 `persist:pool-comfyui-<连接 id>`)打开这台 ComfyUI,主进程注入脚本:等 `window.app.extensionManager.workflow` 就绪,`getWorkflowByPath` 取那一张,`app.loadGraphData` 打开 |
 | 存回 ComfyUI | 同上 | **Mosael 自己不写这张图**:用户在内嵌的 ComfyUI 里 Ctrl+S,是 ComfyUI 前端自己覆盖写回 `workflows/`。视图收起时 Mosael 重拉一遍目录、工作流库、模型库(`workflowEditor.ts` 的 `onReturn`;ADR 0035 §4 写的「每 5 秒看一次改动时间」实际没做成这样)。Mosael 经插件写的(导入、复制)一律 `overwrite=false` |
@@ -162,7 +168,8 @@ Accepted — 2026-10-05。1.10.0 的主功能,1.9.1 发版之后开工。维护�
 - 每份产出带上它来自的节点(插件已经知道,`all_outputs` 里有 `node`):产出的 `parameters` 里多一格 `source_node`,
   宿主照记进生成记录(`output_parameters`)和素材的生成参数;界面按目录里的节点名字标「来自 PreviewImage #17」。不叫
   `output_node`:那是「结果取自」的参数键,记进素材的生成参数后,「用同样的参数再来一次」会被当成选了那一个节点。
-- 「以后只要这张」:在那个输出节点上记 `properties.mosael.result = true`、清掉别的节点上的(写法见 §2)。
+- 「以后只要这个节点的结果」:在那个输出节点上记 `properties.mosael.result = true`、清掉别的节点上的(写法见 §2)。界面按输出节点
+  的 `media` 分别写“图 / 视频 / 音频”,不能把视频结果描述成图。
 - 和缺省规则的关系:**有标记就听标记**,「结果取自」的缺省是标了的那几个(选项名「你选的结果(节点名)」),
   `final_outputs` 的猜测只在一个都没标时用;保存节点也能标(两个保存节点只要高清那张)。「结果取自」照旧能每次改。
   缺省结果从「猜一次」变成「猜一次、用户改一次就记住」。
@@ -359,3 +366,5 @@ LoRA 读到了旁边的图。那台服务器上没有「缺预览图又能在 Ci
 - 内嵌画布从「打开一下」变成长时间协作的界面,依赖 ComfyUI 前端的 `window.app` 那一套;探测失败时退回成普通的 ComfyUI,
   不会更糟。前端大改时,桥是唯一要跟着改的地方。
 - 经工作台跑出来的图带上了界面格式的工作流,拖回 ComfyUI 有布局。
+- 工作台的运行命令在后端以当前插件实例为边界对账生成目录一次,再判断画布上的已保存路径是不是模型。目录镜像的一次短暂落后
+  不由前端用“遇到任意 422 就刷新重试”补救;真实的表单、图或权限错误只返回一次原错误。

@@ -93,6 +93,8 @@ export type FailureCardProps = {
   lines?: 1 | 2 | 3 | 4;
   /** 一句话下面再补的内容(「已停止」那张的说明) */
   children?: React.ReactNode;
+  /** 少数高密度容器可把主摘要收紧；状态、原因和修法仍沿用同一份失败组件。 */
+  summaryClassName?: string;
   className?: string;
 } & DataAttributes;
 
@@ -163,6 +165,7 @@ function FailureBody({
   fix,
   copyText,
   actions,
+  summaryClassName,
   detailOpen = false,
 }: FailureCardProps & { detailOpen?: boolean }) {
   const t = useI18n();
@@ -180,6 +183,7 @@ function FailureBody({
           className={cn(
             "m-0 whitespace-pre-wrap leading-[1.5] text-foreground [overflow-wrap:anywhere]",
             status === "stopped" ? "text-ui-sm" : "text-ui-md font-medium",
+            summaryClassName,
           )}
           data-failure-summary=""
         >

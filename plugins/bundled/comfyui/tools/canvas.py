@@ -2,7 +2,7 @@
 「图里有哪几层、节点叫什么」。
 
     {"op": "canvas_summary", "content": 界面格式的图}  → 每一层(根图、每一份子图定义)的节点:编号、类型、标题、控件的值、
-                                                         谁连着谁;子图在这张图里被哪几个节点用着、边界上有哪些口
+                                                         谁连着谁、有哪些空间分组;子图在这张图里被哪几个节点用着、边界上有哪些口
 
 **节点怎么指**:根图上的节点就是它的编号(`12`);子图里的节点用 ComfyUI 执行时的写法 —— 从根图往里走的节点号,冒号隔开
 (`12:5` 是根图 12 号节点那个子图里面的 5 号)。工作台的「定位」(桥的 `locate`)认的就是这个写法,会先打开那一层。
@@ -53,6 +53,31 @@ def definitions(graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def nodes_of(scope: dict[str, Any]) -> list[dict[str, Any]]:
     return [node for node in scope.get("nodes") or [] if isinstance(node, dict) and node.get("id") is not None]
+
+
+def groups_of(scope: dict[str, Any]) -> list[dict[str, Any]]:
+    """这一层的空间分组。ComfyUI 原生分组按矩形覆盖节点,不另存节点成员。"""
+    return [group for group in scope.get("groups") or [] if isinstance(group, dict)]
+
+
+def _group(group: dict[str, Any], index: int) -> dict[str, Any] | None:
+    bounding = group.get("bounding")
+    if not isinstance(bounding, (list, tuple)) or len(bounding) < 4:
+        pos, size = group.get("pos"), group.get("size")
+        if not (isinstance(pos, (list, tuple)) and len(pos) >= 2 and isinstance(size, (list, tuple)) and len(size) >= 2):
+            return None
+        bounding = [pos[0], pos[1], size[0], size[1]]
+    if not all(isinstance(value, (int, float)) for value in bounding[:4]):
+        return None
+    out: dict[str, Any] = {
+        "ref": f"g{index + 1}",
+        "title": str(group.get("title") or "Group")[:200],
+        "position": [round(float(bounding[0]), 2), round(float(bounding[1]), 2)],
+        "size": [round(float(bounding[2]), 2), round(float(bounding[3]), 2)],
+    }
+    if isinstance(group.get("color"), str) and group["color"]:
+        out["color"] = group["color"][:20]
+    return out
 
 
 def instance_paths(graph: dict[str, Any]) -> dict[str, list[str]]:
@@ -162,6 +187,12 @@ def _node(node: dict[str, Any], scope: dict[str, Any], links: dict[str, Any], de
     kind = str(node.get("type") or "")
     by_id = {str(one["id"]): one for one in nodes_of(scope)}
     out: dict[str, Any] = {"ref": f"{prefix}{node['id']}", "type": kind}
+    pos = node.get("pos")
+    if isinstance(pos, (list, tuple)) and len(pos) >= 2 and all(isinstance(value, (int, float)) for value in pos[:2]):
+        out["position"] = [round(float(pos[0]), 2), round(float(pos[1]), 2)]
+    size = node.get("size")
+    if isinstance(size, (list, tuple)) and len(size) >= 2 and all(isinstance(value, (int, float)) for value in size[:2]):
+        out["size"] = [round(float(size[0]), 2), round(float(size[1]), 2)]
     if node.get("title") and node.get("title") != kind:
         out["title"] = str(node["title"])[:200]
     if _mode(node):
@@ -216,6 +247,9 @@ def summarize(content: dict[str, Any], object_info: dict[str, Any]) -> dict[str,
             listed, truncated = listed[:budget], True
         budget -= len(listed)
         layer: dict[str, Any] = {"nodes": [_node(node, scope, links, defs, object_info, prefix) for node in listed]}
+        groups = [shown for index, group in enumerate(groups_of(scope)) if (shown := _group(group, index)) is not None]
+        if groups:
+            layer["groups"] = groups
         if definition is None:
             layer["layer"] = "root"
         else:
@@ -251,5 +285,5 @@ def canvas_summary(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
     return summarize(content, object_info)
 
 
-__all__ = ["MAX_NODES", "canvas_summary", "class_types", "definitions", "instance_paths", "locate_ref", "nodes_of", "refs_by_type",
+__all__ = ["MAX_NODES", "canvas_summary", "class_types", "definitions", "groups_of", "instance_paths", "locate_ref", "nodes_of", "refs_by_type",
            "summarize"]

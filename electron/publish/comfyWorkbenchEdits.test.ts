@@ -107,21 +107,41 @@ class FakeNode {
   }
 }
 
+class FakeGroup {
+  title: string;
+  color = "#3f789e";
+  pos: number[] = [0, 0];
+  size: number[] = [400, 300];
+
+  constructor(title: string) {
+    this.title = title;
+  }
+}
+
 class FakeGraph {
   nodes: FakeNode[] = [];
+  groups: FakeGroup[] = [];
   links = new Map<number, Link>();
   //: 测试用:让下一次连线被拒(真前端里扩展的 onConnectInput 可以这样做)—— 改到一半出错
   refuseNextLink = false;
 
   constructor(readonly state: { lastNodeId: number; lastLinkId: number }) {}
 
-  add(node: FakeNode) {
+  add(node: FakeNode | FakeGroup) {
+    if (node instanceof FakeGroup) {
+      this.groups.push(node);
+      return;
+    }
     if (node.id === -1) node.id = ++this.state.lastNodeId;
     node.graph = this;
     this.nodes.push(node);
   }
 
-  remove(node: FakeNode) {
+  remove(node: FakeNode | FakeGroup) {
+    if (node instanceof FakeGroup) {
+      this.groups = this.groups.filter((one) => one !== node);
+      return;
+    }
     for (const link of [...this.links.values()]) if (link.origin_id === node.id || link.target_id === node.id) this.removeLink(link.id);
     this.nodes = this.nodes.filter((one) => one !== node);
   }
@@ -216,6 +236,7 @@ function serialize(root: FakeGraph): string {
   const one = (graph: FakeGraph) => ({
     nodes: graph.nodes.map((node) => ({ id: node.id, type: node.type, title: node.title, mode: node.mode,
                                          widgets: node.widgets.map((widget) => widget.value), inputs: node.inputs.map((slot) => slot.link) })),
+    groups: graph.groups.map((group) => ({ title: group.title, color: group.color, pos: group.pos, size: group.size })),
     links: [...graph.links.values()],
     io: graph instanceof FakeSubgraph ? [graph.inputs.map((io) => io.name), graph.outputs.map((io) => io.name)] : [],
   });
@@ -235,6 +256,10 @@ function editingPage() {
   const ckpt = node("CheckpointLoaderSimple", 4, 0, 0);
   const sampler = node("KSampler", 3, 400, 0);
   const decode = node("VAEDecode", 8, 800, 0);
+  const existingGroup = new FakeGroup("采样区");
+  existingGroup.pos = [350, -40];
+  existingGroup.size = [500, 220];
+  root.add(existingGroup);
   ckpt.connect(0, sampler, 0);
   sampler.connect(0, decode, 0);
   ckpt.connect(2, decode, 1);
@@ -313,13 +338,14 @@ function editingPage() {
     extensionManager: { workflow: store, command: { commands: [{ id: SAVE_COMMAND }], execute } },
   });
   const LiteGraph = {
+    LGraphGroup: FakeGroup,
     createNode: vi.fn((type: string) => (TYPES[type] ? new FakeNode(type) : null)),
     isValidConnection: (left: string, right: string) => left === right || left === "*" || right === "*",
   };
   const window: Record<string, unknown> = { app, LiteGraph };
   const context = vm.createContext({ window, location: { origin: ORIGIN } });
   const run = <T = unknown>(script: string) => vm.runInContext(script, context) as Promise<T> | T;
-  return { app, root, subgraph, ckpt, sampler, decode, innerSampler, instance, tracker, store, execute, loadGraphData, LiteGraph, run };
+  return { app, root, subgraph, ckpt, sampler, decode, innerSampler, instance, existingGroup, tracker, store, execute, loadGraphData, LiteGraph, run };
 }
 
 async function installed() {
@@ -349,10 +375,12 @@ describe("桥第 5 版:智能体改图", () => {
     const page = await installed();
     const result = await apply(page, [
       { op: "add_node", layer: null, id: "$l", type: "LoraLoader", widgets: { lora_name: "pony\\style.safetensors", strength_model: 0.6 } },
+      { op: "set_position", layer: null, node: "$l", x: 910, y: 330 },
       { op: "connect", layer: null, from: { node: "4", name: "MODEL" }, to: { node: "$l", name: "model" } },
       { op: "connect", layer: null, from: { node: "$l", name: "MODEL" }, to: { node: "3", name: "model" } },
       { op: "set_widget", layer: null, node: "3", widget: "steps", value: 30 },
       { op: "set_title", layer: null, node: "3", title: "采样" },
+      { op: "set_position", layer: null, node: "3", x: 640, y: 240 },
       { op: "mode", layer: null, node: "8", mode: 4 },
     ]);
     expect(result).toEqual({ ok: true, created: { $l: "21" } });
@@ -362,14 +390,32 @@ describe("桥第 5 版:智能体改图", () => {
     expect(linkInto(page.root, page.sampler, "model")?.origin_id, "原来 4 → 3 那根被换掉").toBe(21);
     expect(page.sampler.widgets.find((one) => one.name === "steps")!.value).toBe(30);
     expect([page.sampler.title, page.decode.mode]).toEqual(["采样", 4]);
+    expect(Array.from(page.sampler.pos)).toEqual([640, 240]);
     expect(page.tracker.undoQueue, "整批只记一步撤销").toHaveLength(1);
     expect(page.tracker.beforeChange).toHaveBeenCalledTimes(1);
     expect(page.tracker.captureCanvasState).toHaveBeenCalledTimes(1);
     expect(page.tracker.changeCount).toBe(0);
-    // 新节点挨着它的上游(4)放在右边,不和 3 号叠在一起
-    expect(lora.pos[0]).toBeGreaterThan(page.ckpt.pos[0]);
-    const overlapping = page.root.nodes.filter((one) => one !== lora && Math.abs(one.pos[0] - lora.pos[0]) < 200 && Math.abs(one.pos[1] - lora.pos[1]) < 100);
-    expect(overlapping).toEqual([]);
+    expect(Array.from(lora.pos), "显式位置不被新节点的自动排位覆盖").toEqual([910, 330]);
+  });
+
+  it("一批里可新建、重命名移动缩放和删除空间分组,仍然只占一步撤销", async () => {
+    const page = await installed();
+    const removable = new FakeGroup("待删除");
+    page.root.add(removable);
+    page.tracker.activeState = serialize(page.root);
+    const result = await apply(page, [
+      { op: "set_group", layer: null, group: "g1", title: "生成阶段", x: 320, y: -80, width: 620, height: 300, color: "#2457AA" },
+      { op: "remove_group", layer: null, group: "g2" },
+      { op: "add_group", layer: null, title: "输出", x: 760, y: -40, width: 360, height: 240, color: "#3f789e" },
+      { op: "add_group", layer: page.subgraph.id, title: "子图采样", x: -20, y: -30, width: 320, height: 220, color: "#789E3F" },
+    ]);
+    expect(result).toEqual({ ok: true, created: {} });
+    expect(page.root.groups).toHaveLength(2);
+    expect(page.root.groups[0]).toMatchObject({ title: "生成阶段", color: "#2457AA", pos: [320, -80], size: [620, 300] });
+    expect(page.root.groups[1]).toMatchObject({ title: "输出", pos: [760, -40], size: [360, 240] });
+    expect(page.subgraph.groups[0]).toMatchObject({ title: "子图采样", pos: [-20, -30], size: [320, 220] });
+    expect(page.tracker.undoQueue).toHaveLength(1);
+    expect(page.tracker.beforeChange).toHaveBeenCalledTimes(1);
   });
 
   it("有一条说不通(节点不在、口不叫这个名字、类型不配、下拉里没有、临时名字没起):一样不改,把每一条的原因交回去", async () => {
@@ -452,6 +498,7 @@ describe("桥第 5 版:智能体改图", () => {
       { op: "promote", layer, node: "5", widget: "cfg", name: "cfg" },
       { op: "connect", layer, from: { node: "@in", name: "cfg" }, to: { node: "5", name: "denoise" } },
       { op: "unpromote", layer, node: "5", widget: "steps" },
+      { op: "set_position", layer, node: "5", x: 360, y: 180 },
     ]);
     expect(result).toEqual({ ok: true, created: { $p: "21" } });
     const sub = page.subgraph;
@@ -461,6 +508,7 @@ describe("桥第 5 版:智能体改图", () => {
     expect(sub.inputs.map((io) => io.name), "steps 收回去了(那个口删掉),cfg 提升出来").toEqual(["cfg"]);
     expect(linkInto(sub, page.innerSampler, "cfg")?.origin_id, "提升 = 边界上的口接到里面那一格").toBe(-10);
     expect(page.innerSampler.inputs.find((one) => one.name === "steps")!.link).toBeNull();
+    expect(Array.from(page.innerSampler.pos)).toEqual([360, 180]);
     expect(page.tracker.undoQueue).toHaveLength(1);
   });
 
