@@ -61,6 +61,9 @@
 .note-prose input[type=checkbox] { accent-color:var(--primary); }
 .note-prose hr { border:0; height:1px; background:var(--divider,var(--border)); margin:24px 0; }
 .note-prose :not(pre) > code { background:var(--secondary); border-radius:4px; padding:2px 5px; font-size:.9em; font-family:var(--font-mono); }
+/* 删除线穿过内联代码时:父级 <s> 的线画在代码自己的背景**下面**,那一段的线就被盖没了。
+   让代码元素自己也带删除线 —— 画在它自己的背景上面。 */
+.note-prose s :not(pre) > code, .note-prose del :not(pre) > code { text-decoration: line-through; }
 .note-prose a.note-reference { display:inline-block; max-width:100%; vertical-align:bottom; border-radius:5px; padding:0 6px; background:var(--secondary); color:var(--primary); text-decoration:none; font-size:.92em; }
 .note-prose { min-height:300px; font-size:var(--text-ui-md); line-height:1.85; overflow-wrap:anywhere; }
 .note-prose p { margin:0 0 1em; }
