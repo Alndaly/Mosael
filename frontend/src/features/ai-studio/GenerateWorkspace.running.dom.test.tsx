@@ -192,6 +192,22 @@ describe("在跑的那一条:按产出的样子占位,说清走到哪儿了,能�
     expect(card.querySelector("[data-stopped-charged]"), "没扣费:不写「可能已扣费」").toBeNull();
   });
 
+  it("产出那份素材被删了:说「这份产出已被删除」,不是排队、不是失败、没有「停止」", async () => {
+    renderStudio({
+      generations: [generation({ job_id: null, result_asset_id: null, result_deleted_at: "2026-10-10T09:20:19Z" })],
+    });
+    const card = await waitFor(() => {
+      const found = document.querySelector("[data-generation-deleted]");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(card.textContent).toContain("genResultDeleted");
+    expect(card.closest("article")!.getAttribute("data-generation-status")).toBe("deleted");
+    expect(screen.queryByRole("status", { name: "genQueued" }), "删了产出不是还在排队").toBeNull();
+    expect(screen.queryByText("generationFailedTitle"), "也不是失败").toBeNull();
+    expect(screen.queryByRole("button", { name: /genStop/ }), "没有按了也没用的「停止」").toBeNull();
+  });
+
   //: D58:维持 ADR 0019(停下就是不要这一份),但服务商可能已经扣了钱的,卡上写明
   it("停下了、服务商可能已经扣过费:卡上写「可能已扣费,成片未保留」", async () => {
     renderStudio({

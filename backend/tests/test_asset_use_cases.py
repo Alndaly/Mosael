@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -82,6 +83,33 @@ def test_a_batch_delete_is_all_or_nothing_and_files_go_only_after_commit() -> No
         assert first_dir.is_dir(), "提交之前文件还在"
     assert not first_dir.is_dir(), "提交之后清掉"
     assert second_dir.is_dir()
+
+
+def test_删产出素材会把生成记录标成产出已被删除() -> None:
+    """生成完成 → 删掉那份产出:记录上得有 result_deleted_at —— 不然它和「还在排队」长得一模一样
+    (没结果、没失败、任务行也没了),界面上是永远「排队中」加一个按了没用的「停止」。"""
+    from app.db.models import GeneratedAsset, GenerationJob, Job
+
+    workspace_id, editor = _workspace_with("editor")
+    cover, _dir = _asset_with_file(workspace_id, "cover")
+    extra, _dir2 = _asset_with_file(workspace_id, "extra")
+    job_id = "job-for-deleted-result"
+    with unit_of_work() as db:
+        who = _user(db, editor)
+        db.add(Job(id=job_id, workspace_id=workspace_id, kind="generation"))
+        db.flush()
+        gen = GenerationJob(workspace_id=workspace_id, session_id=None, job_id=job_id, provider="test",
+                            model="m", kind="image", request={}, result_asset_id=cover)
+        db.add(gen)
+        db.add(GeneratedAsset(asset_id=extra, provider="test", model="m", prompt="", parameters={}, job_id=job_id))
+        db.flush()
+        use_cases.delete_asset(db, who, cover)
+        use_cases.delete_asset(db, who, extra)
+
+    with SessionLocal() as db:
+        gen = db.scalars(select(GenerationJob).where(GenerationJob.job_id == job_id)).one()
+        assert gen.result_deleted_at is not None, "删了产出,记录上要留下被删的时间"
+        assert gen.result_asset_id is None, "封面引用照常被 SET NULL"
 
 
 def test_update_tidies_tags_and_leaves_the_commit_to_the_caller() -> None:

@@ -342,6 +342,8 @@ export const aiStudio = {
   genRepeatFailed: "Couldn't run it again",
   genStopped: "Stopped",
   genStoppedBody: "Stopped before it finished, so nothing was produced.",
+  genResultDeleted: "Output deleted",
+  genResultDeletedBody: "The generated asset was deleted; this record stays, and generating again makes a new one.",
   genStoppedCharged: "You may have been charged, and the result wasn't kept — the provider had already started generating.",
   separationTitle: "Voice and background separation",
   separationDesc: "Split audio into a voice stem and a background stem (music, ambience, effects). Dubbing uses it to keep the background: only the original speech goes, the rest stays. The model runs on this machine \u2014 install the runtime (a few GB of Python dependencies) here once; weights are pulled on the first separation. Remove voice requires it to be ready; otherwise the task fails explicitly instead of silently muting the whole track.",

@@ -180,6 +180,9 @@ class GenerationJobOut(FailureReadout, OrmModel):
     #: 界面照这一串出图,不然用户选了 4 张、只看得见 1 张(另外 3 张确实在素材库里,他不知道)。
     #: 封面排在第一。由路由从 generated_assets 贴上来。
     result_asset_ids: list[str] = []
+    #: 产出那份素材被删了的时间;None = 还在(或这条本来就没交回产出)。界面据此说「这份产出已被删除」,
+    #: 而不是把「没结果 + 没失败 + 任务行没了」当成还在排队。
+    result_deleted_at: datetime | None = None
     #: 失败原因(生成记录自己存的一份,任务被清掉之后还在)。和 JobOut.error 同一套:key 与参数只为翻译服务,
     #: **必须声明在 error 之前**;error 按请求方的语言翻好,没有 key 的(第三方原话)原样返回。
     error_key: str = Field(default="", exclude=True)

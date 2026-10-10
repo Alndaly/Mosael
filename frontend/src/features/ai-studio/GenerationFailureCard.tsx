@@ -32,6 +32,15 @@ export function GenerationStoppedCard({ meta, charged = false }: { meta?: React.
   );
 }
 
+/** 产出那份素材被删了的那一条:不是失败也不是在跑 —— 素材是自己删的,记录如实说。 */
+export function GenerationDeletedCard({ meta }: { meta?: React.ReactNode }) {
+  const t = useI18n();
+  return (
+    <FailureCard status="stopped" title={t("genResultDeleted")} summary={t("genResultDeletedBody")} meta={meta}
+                 className={RECORD_WIDTH} data-generation-deleted="" />
+  );
+}
+
 /** 一颗失败卡上的动作:再来一次、重新取回。`run` 不给就不摆。 */
 export type FailureAction = { run: () => void; pending?: boolean };
 

@@ -12853,6 +12853,8 @@ export interface components {
              * @default []
              */
             result_asset_ids: string[];
+            /** Result Deleted At */
+            result_deleted_at?: string | null;
             /** Error */
             error?: string | null;
             /**

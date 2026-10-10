@@ -35514,6 +35514,18 @@
             "title": "Result Asset Ids",
             "default": []
           },
+          "result_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Deleted At"
+          },
           "error": {
             "anyOf": [
               {

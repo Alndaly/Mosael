@@ -4071,6 +4071,22 @@ def _migrate_publish_task_post() -> None:
             conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN post JSON NOT NULL DEFAULT '{}'"))
 
 
+def _migrate_generation_result_deleted_mark() -> None:
+    """已装机的库补上 generation_jobs.result_deleted_at(产出素材被删的时间)。
+
+    `create_all` 只建缺失的**表**,不给已存在的表加列 —— 少了这一步,升级的机器上后端起不来
+    (no such column)。
+    """
+
+    inspector = inspect(engine)
+    if "generation_jobs" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("generation_jobs")}
+    if "result_deleted_at" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN result_deleted_at DATETIME"))
+
+
 def _migrate_agent_pending_view() -> None:
     """已装机的库补上 agent_sessions.pending_view。
 
@@ -9541,6 +9557,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_revision,
                 _migrate_comment_canvas_context,
                 _migrate_agent_pending_view,
+                _migrate_generation_result_deleted_mark,
                 _migrate_publish_task_claimed_by,
                 _migrate_publish_task_post,
                 _migrate_confirmation_summary_i18n,

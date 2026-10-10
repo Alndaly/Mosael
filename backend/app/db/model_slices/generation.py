@@ -77,6 +77,9 @@ class GenerationJob(Base):
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     request: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     result_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    #: 产出那份素材被删了(assets.delete_asset 记的):SET NULL 之后,没有这一笔的话这条生成和「还在排队」
+    #: 长得一模一样 —— 没结果、没失败、任务行也没了。有它,界面才说得出「这份产出已被删除」。
+    result_deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     #: 失败原因,和 Job 的那三列同形(`blame` 的产物:原话 + 文案 key + 参数,读的时候按读的人的语言翻)。
     #: 任务落「失败」时由 generation.runner.record_failure 抄过来 —— 任务会被「清空已结束」删掉,记录不会。
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

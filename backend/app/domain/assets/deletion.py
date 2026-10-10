@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import after_commit
-from app.db.models import Asset, Clip, PublishAccount
+from app.db.models import Asset, Clip, GeneratedAsset, GenerationJob, PublishAccount
 from app.db.models import Sequence as SequenceModel
 from app.domain.sequences.offline import offline_snapshot
 from app.media.paths import resolve_key
@@ -54,6 +54,30 @@ class Deleted:
     offline_clips: int
 
 
+def _mark_generations_result_deleted(db: Session, asset: Asset) -> None:
+    """产出是这份素材的那些生成,记上「产出已被删除」的时间。
+
+    两个外键替我们清引用:generation_jobs.result_asset_id 是 SET NULL、generated_assets 是 CASCADE ——
+    都不留痕迹,于是这条生成和「还在排队」长得一模一样(没结果、没失败、任务行也没了),界面说
+    「排队中」还摆着一个按了也没用的「停止」。记上这一笔,界面才说得出「这份产出已被删除」。
+    必须在 db.delete(asset) **之前**,同一个事务里 —— 之后那两个键已经空了。
+    """
+    refs = set(
+        db.scalars(select(GenerationJob.id).where(GenerationJob.result_asset_id == asset.id))
+    )
+    refs |= set(
+        db.scalars(
+            select(GenerationJob.id).where(
+                GenerationJob.job_id.in_(select(GeneratedAsset.job_id).where(GeneratedAsset.asset_id == asset.id))
+            )
+        )
+    )
+    if refs:
+        from app.db.model_base import now
+
+        db.execute(update(GenerationJob).where(GenerationJob.id.in_(refs)).values(result_deleted_at=now()))
+
+
 def delete_asset(db: Session, asset: Asset) -> Deleted:
     """删掉这份素材。**调用方负责鉴权**,这里只管后果。
 
@@ -66,6 +90,7 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
     **还在发布的不删**(见 ensure_not_being_published);发完的照删,发布记录留着、`asset_id` 置空。
     """
     ensure_not_being_published(db, asset)
+    _mark_generations_result_deleted(db, asset)
     snapshot = offline_snapshot(asset)
     touched: set[str] = set()
     count = 0
