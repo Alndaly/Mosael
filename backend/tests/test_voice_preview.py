@@ -37,3 +37,27 @@ def test_克隆音色听参考录音_不在这里合成() -> None:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     refused = client.post("/api/tts/preview", json={"workspace_id": ws, "engine": "builtin:clone", "voice": "v1", "text": "你好"})
     assert refused.status_code == 422
+
+
+def test_播客音色试听走播客协议_不当成普通配音引擎(monkeypatch) -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    calls: list[dict] = []
+
+    def fake_preview(db, **kwargs):  # noqa: ANN001
+        calls.append(kwargs)
+        out = Path(kwargs["out_dir"]) / "podcast-preview.mp3"
+        out.write_bytes(b"ID3podcast")
+        return out
+
+    monkeypatch.setattr(voices, "preview_podcast_to_file", fake_preview)
+    heard = client.post("/api/tts/preview", json={
+        "workspace_id": ws,
+        "engine": "builtin:volcano-podcast",
+        "voice": "zh_male_dayixiansheng_v2_saturn_bigtts",
+        "text": "你好,我是大壹。",
+    })
+    assert heard.status_code == 200, heard.text
+    assert heard.headers["content-type"] == "audio/mpeg" and heard.content == b"ID3podcast"
+    [call] = calls
+    assert (call["voice"], call["text"]) == ("zh_male_dayixiansheng_v2_saturn_bigtts", "你好,我是大壹。")

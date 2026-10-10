@@ -266,12 +266,28 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
     """
     from app.domain.voices.engine_catalog import synthesis_params
     from app.domain.voices.remote import RemoteConsentRequired
-    from app.domain.voices.speech import CLONE_ENGINE
+    from app.domain.voices.speech import CLONE_ENGINE, PODCAST_ENGINE
 
     # 念一句是花钱的(各家 TTS 按字符计费),和配音同一档权限;记账挂在这个工作区上。
     voice_uc.ensure_can_speak(db, user, body.workspace_id)
     if body.engine == CLONE_ENGINE:
         raise HTTPException(status_code=422, detail=tr("routeErr_previewCloneUsesSample"))
+    if body.engine == PODCAST_ENGINE:
+        with tempfile.TemporaryDirectory(prefix="mosael-podcast-preview-") as tmp:
+            try:
+                out = voices.preview_podcast_to_file(
+                    db,
+                    text=body.text,
+                    voice=body.voice,
+                    workspace_id=body.workspace_id,
+                    user_id=user.id,
+                    out_dir=Path(tmp),
+                )
+            except Exception as exc:  # noqa: BLE001 — 与普通音色试听一样,失败是可读结果
+                raise HTTPException(status_code=422, detail=str(exc)[:300]) from exc
+            audio = out.read_bytes()
+            media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
+        return Response(content=audio, media_type=media_type, headers={"Cache-Control": "no-store"})
     try:
         params = synthesis_params(
             db, engine=body.engine, voice=body.voice, user_id=user.id, workspace_id=body.workspace_id

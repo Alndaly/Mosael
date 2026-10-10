@@ -874,6 +874,56 @@ def speak_to_file(
     return out
 
 
+def preview_podcast_to_file(
+    db,
+    *,
+    text: str,
+    voice: str,
+    workspace_id: str,
+    user_id: str | None,
+    out_dir: Path,
+) -> Path:
+    """用播客协议试听一位播客发音人,不建任务、不登记素材。
+
+    播客音色只存在于 PodcastTTS WebSocket,不能交给普通 TTS 的引擎目录。试听用一轮
+    ``READ`` 稿件,因此和正式「照稿念」经过同一个协议适配器；连接解析和计费也在这里
+    收口,路由只负责把临时音频交回浏览器。
+    """
+    from app.ai.providers import PodcastAction, synthesize_volcano_podcast
+    from app.domain.providers.selection import resolve_connection
+
+    spoken = text.strip()
+    if not spoken:
+        raise VoiceError("providerErr_podcastReadNeedsText")
+    profile = resolve_connection(db, "volcano-podcast", user_id=user_id)
+    token = (profile.api_key if profile else None) or ""
+    appid = str((profile.extra if profile else {}).get("appid") or "")
+    out = out_dir / "podcast-preview.mp3"
+    with billable(
+        db,
+        user_id=user_id,
+        capability="podcast",
+        operation="preview_podcast_voice",
+        idempotency_key=once("preview_podcast_voice"),
+        workspace_id=workspace_id,
+        provider="volcano-podcast",
+        provider_profile_id=profile.id if profile else None,
+        source_type="voice_preview",
+        source_id=user_id or "",
+    ) as call:
+        call.meter(characters=len(spoken), speakers=1, requests=1)
+        synthesize_volcano_podcast(
+            appid,
+            token,
+            action=PodcastAction.READ,
+            input_text=spoken,
+            turns=[{"speaker": voice, "text": spoken}],
+            speakers=[voice],
+            out_path=out,
+        )
+    return out
+
+
 def _speak_through_copy(speak, *, voice_id: str, engine: str, profile, user_id: str | None, model: str,
                         job_id: str | None) -> None:
     """用一把嗓子的远端副本念(ADR 0037):找(或建)副本 → 念 → 念不出来、而副本在远端已经没了 → 标 missing、

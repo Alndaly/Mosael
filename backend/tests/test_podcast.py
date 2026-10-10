@@ -155,7 +155,9 @@ class TestSessionPayload:
             speech_rate=0,
             audio_format="mp3",
         )
-        assert "speaker_info" not in payload["req_params"]
+        assert "req_params" not in payload, "StartSession 的正文就是参数，不能再套一层信封"
+        assert "speaker_info" not in payload
+        assert payload["input_text"] == "hi", "火山仍校验 input_text；它必须由同一份逐轮稿件派生"
 
     def test_speaker_info_is_present_for_generated_dialogue(self) -> None:
         payload = podcast._session_payload(
@@ -167,7 +169,7 @@ class TestSessionPayload:
             speech_rate=0,
             audio_format="mp3",
         )
-        assert payload["req_params"]["speaker_info"]["speakers"] == ["a", "b"]
+        assert payload["speaker_info"]["speakers"] == ["a", "b"]
 
     @pytest.mark.parametrize("speed,expected", [(1.0, 0), (2.0, 100), (0.5, -50), (1.25, 25)])
     def test_speed_maps_to_the_int_speech_rate(self, speed: float, expected: int) -> None:
@@ -176,7 +178,7 @@ class TestSessionPayload:
         captured = {}
 
         def fake_run(appid, token, payload, *, endpoint, proxy=""):
-            captured.update(payload["req_params"]["audio_config"])
+            captured.update(payload["audio_config"])
             raise podcast.PodcastSynthesisError("stop")
 
         original = podcast.asyncio.run

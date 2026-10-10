@@ -105,6 +105,11 @@ def _session_payload(
     speech_rate: int,
     audio_format: str,
 ) -> dict:
+    # 火山现在会先校验 ``input_text`` 非空,再按 action 读取 ``nlp_texts``。照稿念的
+    # 真正事实源仍是逐轮稿件;这里由它派生一份纯文本,而不是让调用方再维护第二份内容。
+    # 这样既满足协议校验,也不会出现编辑了逐轮稿件却把旧 input_text 发出去的分叉。
+    if action == PodcastAction.READ and not input_text.strip() and nlp_texts:
+        input_text = "\n".join(str(turn.get("text") or "").strip() for turn in nlp_texts).strip()
     params: dict = {
         # 调用方自取的请求标识(火山不校验其内容);改名一并跟上。
         "input_id": "mosael",
@@ -120,7 +125,10 @@ def _session_payload(
     # along with each nlp_text, and sending speaker_info there is rejected.
     if action in (PodcastAction.SUMMARIZE, PodcastAction.RESEARCH):
         params["speaker_info"] = {"random_order": False, "speakers": list(speakers)}
-    return {"req_params": params}
+    # StartSession 的 payload 本身就是 req_params。这里曾误套一层
+    # {"req_params": ...}，服务端因此看不到 input_text / nlp_texts，所有模式都会被
+    # 当作空输入。协议帧已经负责标明这是 StartSession，不需要再加信封。
+    return params
 
 
 def _control(event: int, payload: bytes, session_id: str = "") -> bytes:
