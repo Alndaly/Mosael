@@ -22,7 +22,10 @@ export const FLOATING_COLLISION_PADDING = { top: WINDOW_CHROME_HEIGHT + 8, right
 export const FLOATING_SURFACE = "floating-surface rounded-lg border border-floating-border bg-popover text-popover-foreground shadow-[var(--shadow-floating)]";
 export const FLOATING_MOTION = "duration-160 ease-enter data-[state=closed]:ease-exit data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 motion-reduce:animate-none motion-reduce:transition-none";
 export const MODAL_SURFACE = "modal-surface rounded-2xl border border-[var(--modal-border)] bg-[var(--modal-surface)] text-popover-foreground shadow-[var(--shadow-modal)]";
-export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-50 bg-[var(--overlay-modal)]";
+//: z-70:浮卡(等人拍板的确认卡 z-[60])必须**在模态之下** —— 模态被一张浮卡盖住,模态就名存实亡
+//: (真机:AI Studio 开着确认卡时点「全部放行」,确认弹窗被卡盖住,「取消」「我明白」都点不到)。
+//: 菜单(z-[120])和工作台外壳(z-[200])照旧在它上面,那两层的秩序不变。
+export const MODAL_OVERLAY = "modal-overlay [.is-desktop_&]:[-webkit-app-region:no-drag] fixed inset-0 z-70 bg-[var(--overlay-modal)]";
 export const MODAL_TITLE = "m-0 text-ui-lg font-semibold leading-snug tracking-tight break-words";
 export const MODAL_DESCRIPTION = "text-ui-sm leading-relaxed text-muted-foreground break-words";
 const MENU_ITEM_SHAPE = "relative flex min-h-9 cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-ui-sm leading-5 outline-none transition-colors";

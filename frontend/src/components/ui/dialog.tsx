@@ -59,7 +59,7 @@ const DialogContent = React.forwardRef<
       // **宽度由 w 定,max-w 只管不出屏幕。** 此前默认宽写在 max-w 上(32rem),调用方给的 w-[…] 再宽也被它压回
       // 512px —— 挑素材、从社区导入、发布这几个弹窗都以为自己变宽了,其实没有。
       className={cn(
-        "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[min(32rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
+        "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-70 grid min-w-0 w-[min(32rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
           MODAL_SURFACE, FLOATING_MOTION,
           showClose && "[&_[data-slot=dialog-title]]:pr-8",
         layer,
