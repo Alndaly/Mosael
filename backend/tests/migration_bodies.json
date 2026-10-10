@@ -119,6 +119,7 @@
   "migrate-generation-jobs-keep-their-failure": "7222fc9de2883eca",
   "migrate-generation-prompts-drop-the-reference-documents": "18b069959a9a7646",
   "migrate-generation-prompts-drop-the-source-legend": "2909f384bbc4800d",
+  "migrate-generation-result-deleted-mark": "8966fc96244055e8",
   "migrate-generation-results-keep-output-parameters-apart": "f191edaccee3ff85",
   "migrate-generation-sessions-get-an-origin": "938cc0f611381bd2",
   "migrate-generation-sessions-know-their-kind": "82010a15aaf5402c",

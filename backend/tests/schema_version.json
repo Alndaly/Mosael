@@ -1,5 +1,5 @@
 {
-  "version": 18,
+  "version": 19,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -121,6 +121,7 @@
     "migrate-generation-jobs-keep-their-failure",
     "migrate-generation-prompts-drop-the-reference-documents",
     "migrate-generation-prompts-drop-the-source-legend",
+    "migrate-generation-result-deleted-mark",
     "migrate-generation-results-keep-output-parameters-apart",
     "migrate-generation-sessions-get-an-origin",
     "migrate-generation-sessions-know-their-kind",
