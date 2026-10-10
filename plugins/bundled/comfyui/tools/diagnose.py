@@ -29,6 +29,7 @@ from typing import Any
 
 import canvas
 import convert
+import graph
 import labels
 import library
 import node_catalog
@@ -59,7 +60,9 @@ _EXECUTION_FAILED = re.compile(r"(?:ComfyUI 执行失败|ComfyUI execution faile
 
 #: ComfyUI 新式节点(V3)的三种特殊输入:跟着连进来的类型走的(`MATCHTYPE`,模板里写着能收哪几种)、能一格格往下长的一组插口
 #: (`AUTOGROW`,API 图里是 `images.image_1`、`images.image_2`……)、选了哪一项再多出几格的下拉(`DYNAMICCOMBO`,值是选项的 key)。
-V3_MATCH, V3_GROW, V3_COMBO = "COMFY_MATCHTYPE_V3", "COMFY_AUTOGROW_V3", "COMFY_DYNAMICCOMBO_V3"
+V3_MATCH, V3_COMBO = "COMFY_MATCHTYPE_V3", "COMFY_DYNAMICCOMBO_V3"
+#: AUTOGROW 的判定在 graph.required_input_present(graph.py)—— 这里只用它的类型名做展示分支。
+V3_GROW = graph.AUTOGROW_TYPE
 #: 读素材的那几种上传控件(LoadImage 的 image……):值是 input 目录里的文件名
 _UPLOADS = ("image_upload", "video_upload", "audio_upload", "animated_image_upload")
 
@@ -204,7 +207,7 @@ def _value_findings(found: _Findings, ref: str, node: dict[str, Any], spec: dict
         kind_of_input = _type_of(definition)
         if kind_of_input == V3_COMBO or not (_is_socket(definition) or kind_of_input == V3_MATCH):
             continue
-        present = name in inputs or (kind_of_input == V3_GROW and any(key.startswith(f"{name}.") for key in inputs))
+        present = graph.required_input_present(inputs, name, definition)
         if not present:
             shown = _input_type(definition) if kind_of_input != V3_GROW else name
             upstream = _cut_upstream(found, ref, name)

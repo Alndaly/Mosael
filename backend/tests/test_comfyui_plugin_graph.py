@@ -71,6 +71,57 @@ def convert(tools):
     return tools[1]
 
 
+# --- AUTOGROW 输入(COMFY_AUTOGROW_V3):`values` 落到图上是 `values.a`… -------------------------
+
+#: ComfyMathExpression 的定义(8120 真机读到的形状):必填的 values 是 AUTOGROW ——
+#: 定义里一格,图上一格格 `values.a`、`values.b`。
+_COMFY_MATH_INFO = {
+    "input": {"required": {
+        "expression": ["STRING", {"default": "a + b", "multiline": True}],
+        "values": ["COMFY_AUTOGROW_V3", {"template": {"input": {"required": {"value": ["FLOAT,INT,BOOLEAN", {}]}},
+                                             "names": ["a", "b"], "min": 1}}],
+    }},
+    "output": ["FLOAT"],
+    "output_name": ["value"],
+}
+
+
+def test_autogrow的具体化输入不算缺插口_视频管线不会被整支剪掉(graph) -> None:
+    """真机形状(minimax-text-image-2-video):ComfyMathExpression 连的是 values.a,
+    此前 _missing_socket 按名字查 values 判它「缺必填插口」→ 输出节点的上游闭包含 broken
+    → graph.live 把整支管线剪掉 → 目录里没有这张图。"""
+    api = {
+        "1": {"class_type": "PrimitiveFloat", "inputs": {"value": 24.0}},
+        "2": {"class_type": "ComfyMathExpression",
+              "inputs": {"expression": "max(5, round(a*24))", "values.a": ["1", 0]}},
+        "3": {"class_type": "ConsumeFloat", "inputs": {"x": ["2", 0]}},
+        "4": {"class_type": "FakeVideoOutput", "inputs": {"images": ["3", 0]}},
+    }
+    info = {
+        "PrimitiveFloat": {"input": {"required": {}}, "output": ["FLOAT"], "output_name": ["value"]},
+        "ComfyMathExpression": _COMFY_MATH_INFO,
+        "ConsumeFloat": {"input": {"required": {"x": ["FLOAT"]}}, "output": ["IMAGE"], "output_name": ["out"]},
+        "FakeVideoOutput": {"input": {"required": {"images": ["IMAGE"]}}, "output_node": True},
+    }
+    assert not graph._missing_socket(api["2"], info), "values.a 就是 values,不是「没接上」"
+    live = graph.live(api, info)
+    assert set(live) == {"1", "2", "3", "4"}, "整支管线都该留着"
+    assert graph.media_outputs(live, info), "交出文件的输出还在"
+
+
+def test_autogrow一格都没接才是缺插口(graph) -> None:
+    """判定的另一半:values.a/values.b 一个都没有时,照样算「没接上」 —— 不能放宽过头。"""
+    node = {"class_type": "ComfyMathExpression", "inputs": {"expression": "a"}}
+    assert graph._missing_socket(node, {"ComfyMathExpression": _COMFY_MATH_INFO})
+
+
+def test_普通必填输入不吃前缀那套(graph) -> None:
+    """foo.bar 不能满足普通必填的 foo —— 前缀规则只对 AUTOGROW 开(用插口型输入,widget 本就不查)。"""
+    node = {"class_type": "PlainNode", "inputs": {"model.a": ["9", 0]}}
+    info = {"PlainNode": {"input": {"required": {"model": ["MODEL"]}}, "output": [], "output_name": []}}
+    assert graph._missing_socket(node, info)
+
+
 # --- UI 图 → API 图 ----------------------------------------------------------
 
 

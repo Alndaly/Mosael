@@ -522,11 +522,30 @@ def _is_socket(definition: Any) -> bool:
     return not (isinstance(kind, list) or kind in convert.WIDGET_TYPES)
 
 
+#: 能一格格往下长的一组插口(`COMFY_AUTOGROW_V3`):定义里是 `values` 一格,落到图上是
+#: `values.a`、`values.b`……(diagnose 认这个类型的另两种特殊输入是 MATCHTYPE / DYNAMICCOMBO,见那里)。
+AUTOGROW_TYPE = "COMFY_AUTOGROW_V3"
+
+
+def required_input_present(inputs: dict[str, Any], name: str, definition: Any) -> bool:
+    """一个必填输入算不算「接着 / 有值」:原样有这一格;AUTOGROW 落到图上是 `名字.a`、`名字.b`……
+    的具体化,有任何一个也算 —— ComfyUI 就是这么认的。不认的话,ComfyMathExpression 这类节点的
+    `values.a` 会被当成「必填的 values 没接上」,它所在的整支上游闭包被剪掉(真机:
+    minimax-text-image-2-video 因此从模型目录里消失)。**诊断用的也是这一条**(diagnose)。"""
+    if name in inputs:
+        return True
+    #: 懒装载:顶层 import workflow_import 会圈出 graph → workflow_import → run → models → app_form → graph。
+    from workflow_import import _type_of
+
+    return _type_of(definition) == AUTOGROW_TYPE and any(key.startswith(f"{name}.") for key in inputs)
+
+
 def _missing_socket(node: dict[str, Any], object_info: dict[str, Any]) -> bool:
     """一格必填的插口没接上(上游被静音,线随之断了):ComfyUI 校验这个节点必然失败,靠它的输出节点出不来。"""
     required = ((object_info.get(str(node.get("class_type", ""))) or {}).get("input") or {}).get("required") or {}
     inputs = node.get("inputs") or {}
-    return any(name not in inputs and _is_socket(definition) for name, definition in required.items())
+    return any(not required_input_present(inputs, name, definition) and _is_socket(definition)
+               for name, definition in required.items())
 
 
 def live(api: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
