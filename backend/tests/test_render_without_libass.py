@@ -82,6 +82,10 @@ def test_文字走浏览器那条路时_不碰_libass_真跑得通(slim_ffmpeg, 
 
 
 def test_两条路都不通_说清楚缺什么(slim_ffmpeg, monkeypatch, tmp_path) -> None:
+    # 这条验证「由设置页选中的 ffmpeg」的报错。开发机的 backend/.env 可能配了
+    # MOSAEL_FFMPEG，不能让机器自己的启动配置改变这条用例的语义。环境变量锁定的分支在
+    # test_ffmpeg_path_is_a_setting.py 单独验证。
+    monkeypatch.setattr(render_executor, "FFMPEG_FIELDS_FROM_ENVIRONMENT", frozenset())
     monkeypatch.setattr(settings, "text_rasterize", False)
     plan = _plan_with_subtitle("src.mp4")
     with pytest.raises(RenderExecutionError) as caught:
