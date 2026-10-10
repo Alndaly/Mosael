@@ -50,7 +50,7 @@ import { jobSettled } from "@/components/jobs/runStatus";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { MissingModelNotice, UpgradeInLibraryButton } from "@/features/plugins/MissingModelNotice";
-import { GenerationFailureCard, GenerationStoppedCard } from "@/features/ai-studio/GenerationFailureCard";
+import { GenerationDeletedCard, GenerationFailureCard, GenerationStoppedCard } from "@/features/ai-studio/GenerationFailureCard";
 import { OpenInWorkbench } from "@/features/plugins/workbench/OpenInWorkbench";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { IconButton } from "@/components/ui/icon-button";
@@ -1998,7 +1998,7 @@ function GenerationTurnSkeleton({ kind, bubble }: { kind: string; bubble: string
 }
 
 /** 一条生成走到哪儿了。`stopped`:有人把它停下了(不是跑挂了,见后端 GenerationJobOut.stopped)。 */
-type TurnStatus = "queued" | "running" | "succeeded" | "failed" | "stopped";
+type TurnStatus = "queued" | "running" | "succeeded" | "failed" | "stopped" | "deleted";
 
 /** 停下之后多久之内还等它的账(插件停远端那一次 + 宽限,见后端 plugins.runtime.CANCEL_GRACE_SECONDS)。 */
 const STOP_SETTLE_MS = 90_000;
@@ -2012,6 +2012,9 @@ function settlingAfterStop(generation: GenerationJob): boolean {
 function turnStatus(generation: GenerationJob, job: JobSummary | null): TurnStatus {
   //: 任务已经落了「已取消」、记录还没抄下「已停止」(抄在落终态之后的收拾里,见后端 record_failure)的那一下,也是停下了。
   if (generation.stopped || job?.status === "cancelled") return "stopped";
+  //: 产出那份素材被删了(后端 delete_asset 记的):它和「还在排队」长得一模一样 —— 没结果、没失败、
+  //: 任务行也没了。不说清的话,界面上是永远「排队中」加一个按了没用的「停止」。
+  if (generation.result_deleted_at) return "deleted";
   // job 行可能已被任务中心「清空已结束」删掉(记录长存、job_id 置空):有产物即成功;记录上记着失败原因、
   // 或者任务已经不在了,即失败;只有任务还在而列表没拉到时才视作排队中。
   const status =
@@ -2105,7 +2108,7 @@ function GenerationTurn({
           : "";
   //: 没交回产出的那一条(停下的、跑挂了的)是一张卡:这一条的元信息(模型、用时、费用、时间)收进卡头右边,不在卡外另起一行,
   //: 时间也不再单独飘在提示词下面 —— 此前看不出那行小字和那个「30 分钟前」是谁的。
-  const noOutput = outputs.length === 0 && (status === "stopped" || status === "failed");
+  const noOutput = outputs.length === 0 && (status === "stopped" || status === "failed" || status === "deleted");
   const meta = (
     <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput ? timestamp : null} />
   );
@@ -2186,6 +2189,8 @@ function GenerationTurn({
               </IconButton>
             ))}
           </div>
+        ) : status === "deleted" ? (
+          <GenerationDeletedCard meta={meta} />
         ) : status === "stopped" ? (
           <GenerationStoppedCard meta={meta} charged={generation.charged_after_stop} />
         ) : status === "failed" ? (
