@@ -462,8 +462,8 @@ function parseComfyWorkbenchCall(value) {
   onlyKeys(payload, ["connectionId", "call"], channel);
   const partition = comfyPartition(payload, channel);
   const call = record(payload.call, channel);
-  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "export", "save", "setMarks", "locate", "readGraph", "runControls",
-    "applyOps", "openWorkflow"], channel);
+  const op = oneOf(call, "op", ["setWidget", "refreshCombos", "reloadPage", "export", "save", "setMarks", "locate", "readGraph",
+    "runControls", "applyOps", "openWorkflow"], channel);
   if (op === "applyOps") {
     onlyKeys(call, ["op", "ops", "expect"], channel);
     const ops = parseEditOps(call.ops, channel);

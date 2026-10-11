@@ -88,10 +88,14 @@ function comfyPage(origin = ORIGIN) {
       command: { commands: [{ id: SAVE_COMMAND }, { id: "Comfy.NewBlankWorkflow" }], execute },
     },
   };
-  const window: Record<string, unknown> = { app };
-  const context = vm.createContext({ window, location: { origin } });
+  const reload = vi.fn();
+  //: 页面是个浏览器:`window.location`、全局的 setTimeout 都在(reloadPage 先回执、随后换页就靠这两样)。
+  const location = { origin, reload };
+  const window: Record<string, unknown> = { app, location };
+  Object.assign(window, { setTimeout: globalThis.setTimeout.bind(globalThis) });
+  const context = vm.createContext({ window, location, setTimeout: globalThis.setTimeout.bind(globalThis) });
   const run = <T = unknown>(script: string) => vm.runInContext(script, context) as Promise<T> | T;
-  return { app, window, fire, tracker, active, ckpt, steps, loader, sampler, save, graph, subgraph, inner, execute, run };
+  return { app, window, reload, fire, tracker, active, ckpt, steps, loader, sampler, save, graph, subgraph, inner, execute, run };
 }
 
 async function installed(page = comfyPage()) {
@@ -399,6 +403,14 @@ describe("工作台的桥(注入的脚本)", () => {
     });
     expect(await call(page, { op: "save" })).toEqual({ ok: true });
     expect(page.execute).toHaveBeenCalledWith(SAVE_COMMAND);
+  });
+
+  it("重新载入页面:先把回执交出去,再换页 —— 立刻 reload 的话调用方等的应答永远不回来", async () => {
+    const page = await installed();
+    expect(await call(page, { op: "reloadPage" })).toEqual({ ok: true });
+    expect(page.reload, "回执回来之前不换页").not.toHaveBeenCalled();
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
+    expect(page.reload, "随后换页一次(重新拉 /object_info,新装的节点才认得)").toHaveBeenCalledTimes(1);
   });
 
   it("写标记:清单里的节点换上 `properties.mosael`,别的节点上的去掉,图上的 `extra.mosael` 换掉;别的键不动", async () => {

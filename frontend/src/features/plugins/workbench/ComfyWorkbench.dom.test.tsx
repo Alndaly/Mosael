@@ -1251,6 +1251,13 @@ describe("缺失项:定位到节点;按节点包装;找下载地址", () => {
     expect(within(prompt).getByRole("button", { name: "workbenchLocateLabel" }).textContent).toContain("2/2");
   });
 
+  it("「重新载入画布页面」:装完包、服务器重启之后,页面里的节点定义还是旧的 —— 一键换页重新拉", async () => {
+    const bridge = await missingTab();
+    const row = column().querySelector("[data-workbench-reload]")!;
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "workbenchReloadPage" }));
+    await waitFor(() => expect(calls(bridge)).toContainEqual({ op: "reloadPage" }));
+  });
+
   it("缺的模型:点卡片也能定位;在子图里而这版前端进不了子图,就说在哪张子图里", async () => {
     const bridge = await missingTab();
     const card = within(column()).getByText("i2v-high.safetensors").closest("li")!;
