@@ -1,12 +1,13 @@
 import React from "react";
 import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Music, Plus, X } from "lucide-react";
+import { ArrowLeftRight, Music, Pencil, Plus, X } from "lucide-react";
 
 import { assetPreviewUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
+import { cn } from "@/lib/utils";
 import { Truncate } from "@/components/ui/truncate";
 import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, slotColumns, type FrameSlot, type SourceRole } from "@/lib/sourceFrames";
 
@@ -67,6 +68,8 @@ function Tile({
   multiple,
   label,
   name,
+  onDraw,
+  onEdit,
 }: {
   slot: FrameSlot | null;
   role: SourceRole;
@@ -77,6 +80,10 @@ function Tile({
   label?: string;
   /** 这一格叫什么(模型给的槽位名字,见 sourceLabels):填了的那一格角上标着它,悬停说明里也有。 */
   name?: string;
+  /** 空槽旁边的第二格「画一张」(只有调用方说这一格能画时才有,见 FrameSlotField)。 */
+  onDraw?: () => void;
+  /** 填了的那一格角上的「编辑」入口。 */
+  onEdit?: () => void;
 }) {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
@@ -114,6 +121,20 @@ function Tile({
             <Truncate>{name}</Truncate>
           </span>
         )}
+        {onEdit && !disabled && (
+          //: 蒙版的「编辑」:不占新的格,压在缩略图左上角 —— 右上角是移除,右下角是名字。
+          <IconButton
+            variant="ghost"
+            size="icon-xs"
+            shape="round"
+            className="absolute left-1 top-1 bg-background/85 hover:bg-background"
+            onClick={onEdit}
+            label={t("maskEdit")}
+            hint={t("maskEditHint")}
+          >
+            <Pencil size={13} />
+          </IconButton>
+        )}
         {onClear && !disabled && (
           <IconButton
             variant="ghost"
@@ -143,32 +164,61 @@ function Tile({
           if (files.length) onPick(files);
         }}
       />
-      {label ? (
-        <button
-          type="button"
-          disabled={disabled}
-          className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
-          onClick={() => inputRef.current?.click()}
-        >
-          {/* 加号和名字**排一行**。竖着摞的时候,两者之间那道空白比它俩加起来还高。 */}
-          <span className="flex min-w-0 items-center gap-1 px-1.5">
-            <Plus size={14} className="shrink-0" />
-            <Truncate>{label}</Truncate>
-          </span>
-        </button>
-      ) : (
-        //: 只有一个加号:角色名放进悬停说明(也是读屏念的名字)。
-        <IconButton
-          unstyled
-          disabled={disabled}
-          label={t(copy.label)}
-          className={`${TILE} cursor-pointer border-dashed text-ui-xs font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60`}
-          onClick={() => inputRef.current?.click()}
-        >
-          <Plus size={14} />
-        </IconButton>
+      <EmptyTile
+        disabled={disabled}
+        label={label}
+        //: 没有名字的格子(多数角色):只有一个加号,角色名放进悬停说明(也是读屏念的名字)。
+        name={t(copy.label)}
+        icon={<Plus size={14} />}
+        onActivate={() => inputRef.current?.click()}
+      />
+      {onDraw && (
+        //: 「画一张」:和上传那一格并排的第二格。上传还是原来那一格(点它照旧选文件),这里只是多一条路。
+        <EmptyTile disabled={disabled} label={t("maskDraw")} icon={<Pencil size={14} />} hint={t("maskDrawHint")} onActivate={onDraw} />
       )}
     </>
+  );
+}
+
+/** 空槽那一格:一根虚线框 + 图标 + 名字,点一下做一件事(选文件、或者开蒙版编辑器)。
+ *
+ * 上传那一格和「画一张」那一格长得一样(并排的两格,一大一小才怪),所以只有这一份实现:
+ * 有名字就是一颗带字按钮,只有图标就是 IconButton(名字给读屏和悬停说明)。
+ */
+function EmptyTile({
+  label,
+  name,
+  icon,
+  hint,
+  disabled,
+  onActivate,
+}: {
+  label?: string;
+  name?: string;
+  icon: React.ReactNode;
+  hint?: string;
+  disabled: boolean;
+  onActivate: () => void;
+}) {
+  const className = cn(
+    TILE,
+    "cursor-pointer border-dashed font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60",
+  );
+  if (!label) {
+    return (
+      <IconButton unstyled disabled={disabled} label={name ?? ""} hint={hint} className={className} onClick={onActivate}>
+        {icon}
+      </IconButton>
+    );
+  }
+  return (
+    <button type="button" disabled={disabled} className={className} onClick={onActivate}>
+      {/* 图标和名字**排一行**。竖着摞的时候,两者之间那道空白比它俩加起来还高。 */}
+      <span className="flex min-w-0 items-center gap-1 px-1.5">
+        <span className="shrink-0">{icon}</span>
+        <Truncate>{label}</Truncate>
+      </span>
+    </button>
   );
 }
 
@@ -183,6 +233,8 @@ export function FrameSlotField({
   disabled = false,
   disabledReason,
   names = [],
+  onDrawMask,
+  onEditMask,
 }: {
   role: SourceRole;
   slots: FrameSlot[];
@@ -194,6 +246,13 @@ export function FrameSlotField({
   disabledReason?: string;
   /** 槽位按顺序叫什么(描述符的 `source_labels`):第 i 格标第 i 个名字,加号上写下一格的名字。 */
   names?: string[];
+  /**
+   * **这一格能画** —— 由调用方说(蒙版角色 + 调用方给了这个回调):空槽多一格「画一张」,点它开蒙版编辑器
+   * (ADR 0056 第二步)。控件自己不发明这条路:不传就是原来那一个加号格。
+   */
+  onDrawMask?: () => void;
+  /** 已经填了的那一格能改时给这个:缩略图左上角多一个「编辑蒙版」。 */
+  onEditMask?: (slot: FrameSlot) => void;
 }) {
   const t = useI18n();
   const copy = ROLE_COPY[role];
@@ -203,6 +262,10 @@ export function FrameSlotField({
     onChange([...filled, ...assets.map(slotOf)].slice(0, limit)),
   );
   const canAdd = !disabled && filled.length < limit;
+  //: 画蒙版只对**蒙版**这一格成立:传错了(或者在音频格上顺手传了一个)也不至于在一格音频旁边长出一支笔。
+  const maskRole = role === "mask" && !disabled;
+  const canDraw = maskRole && canAdd && Boolean(onDrawMask);
+  const canEdit = maskRole && Boolean(onEditMask);
 
   return (
     <div className={`grid gap-1.5 text-ui-xs font-semibold text-muted-foreground ${disabled ? "opacity-45" : ""}`}>
@@ -220,7 +283,8 @@ export function FrameSlotField({
       )}
       <div
         className="grid gap-1.5"
-        style={{ gridTemplateColumns: slotColumns(filled.length + (canAdd ? 1 : 0)) }}
+        //: 列数跟着**实际会画出来的格子数**走(上传那一格 + 「画一张」那一格),不写死。
+        style={{ gridTemplateColumns: slotColumns(filled.length + (canAdd ? 1 : 0) + (canDraw ? 1 : 0)) }}
       >
         {filled.map((slot, index) => (
           <Tile
@@ -232,6 +296,7 @@ export function FrameSlotField({
             onPick={() => undefined}
             onClear={() => onChange(filled.filter((_, i) => i !== index))}
             name={names[index] || undefined}
+            onEdit={canEdit && onEditMask ? () => onEditMask(slot) : undefined}
           />
         ))}
         {canAdd && (
@@ -241,7 +306,9 @@ export function FrameSlotField({
             disabled={upload.isPending}
             multiple={limit > 1}
             onPick={(files) => upload.mutate(files)}
-            label={upload.isPending ? t(copy.uploading) : names[filled.length] || undefined}
+            //: 能画的时候,上传那一格也写清楚自己是哪一条路(两格并排,"+"和"画笔"光看图标分不出来)。
+            label={upload.isPending ? t(copy.uploading) : names[filled.length] || (canDraw ? t("maskUpload") : undefined)}
+            onDraw={canDraw ? onDrawMask : undefined}
           />
         )}
       </div>

@@ -95,4 +95,11 @@ ComfyUI 里加 —— 表单编辑器只挑已有节点,这是既有约定(ADR 0
 
 ## 实现记录
 
-- 待补:第二步(MaskEditor)、第一步(属性归组)。
+- **第二步(编辑)已实现**(2026-10-12):`components/generation/MaskEditor.tsx`(全屏对话框:笔刷/橡皮/矩形/椭圆、
+  撤销重做、清空、反选、羽化、按亮度/alpha 从底图起手、显示底图开关),像素运算全在纯函数 `lib/maskPixels.ts` 里
+  (`r=g=b`、alpha 填满 255 —— 契约那两条就守在这里);导出走离屏画布,落成素材(名字「蒙版 · <原图名>」)。
+  入口:`FrameSlotField` 的可选 `onDrawMask` / `onEditMask`(空槽多一格「画一张」,已填的格子角上一支铅笔),
+  由 `GenerateWorkspace` 在 `role === "mask"` 时接上;底图取同一组里第一张已填的素材。
+  底图经 fetch → blob → 对象 URL 再进画布:直接把后端源给 `<img>` 会污染画布,`getImageData` / `toBlob` 全抛
+  SecurityError,而"按阈值初始化"和导出两件事都要它。
+- 第一步(属性归组)待做。

@@ -80,7 +80,9 @@ const STOCK: Record<string, number> = {
   "features/agent/VoiceDock.tsx": 2,
   "features/ai-studio/audioGeneration.tsx": 2,
   "features/ai-studio/ChatWorkspace.tsx": 3,
-  "features/ai-studio/FrameSlotField.tsx": 4,
+  //: 4 → 3:空槽那一格原本两处各写一遍同一串覆盖(有名字的 / 只有图标的),收进 EmptyTile 之后只剩一份,
+  //: 而 EmptyTile 自己的 className 走 cn(TILE, …) —— 格子的高、圆角在那一份 TILE 里,不再是调用处的覆盖。
+  "features/ai-studio/FrameSlotField.tsx": 3,
   "features/ai-studio/GenerateWorkspace.tsx": 3,
   "features/ai-studio/voicedCreation.tsx": 3,
   "features/auth/LoginView.tsx": 1,

@@ -134,8 +134,75 @@ describe("参考图槽位", () => {
   });
 });
 
-describe("视频输入槽位", () => {
-  it("待编辑的视频收 video/*,不是 image/*", () => {
+describe("蒙版那一格", () => {
+  /**
+   * 蒙版能**画出来**(ADR 0056 第二步):空槽那一格并排多一格「画一张」——上传那条路原样留着。
+   *
+   * 「这一格能画」由调用方说(onDrawMask / onEditMask):控件自己不发明这条路,也不在别的角色上长出一支笔。
+   */
+  it("调用方说能画:空槽多一格「画一张」,上传那一格照旧", () => {
+    const onDrawMask = vi.fn();
+    const { container } = mount(
+      <FrameSlotField
+        role="mask"
+        slots={[{ ...EMPTY_SLOT }]}
+        limit={1}
+        onChange={vi.fn()}
+        workspaceId="w"
+        onDrawMask={onDrawMask}
+      />,
+    );
+    //: 上传那一格还在(点它还是选文件),「画一张」是并排的第二格。
+    expect(container.querySelector("input[type=file]")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "maskUpload" })).toBeTruthy();
+    screen.getByRole("button", { name: "maskDraw" }).click();
+    expect(onDrawMask).toHaveBeenCalledTimes(1);
+  });
+
+  it("别的角色没有这一格 —— 哪怕调用方把回调传下来了", () => {
+    //: 传错角色(或者在音频格上顺手传一个)时不该在旁边长出一支笔。
+    mount(
+      <FrameSlotField
+        role="reference_image"
+        slots={[{ ...EMPTY_SLOT }]}
+        limit={9}
+        onChange={vi.fn()}
+        workspaceId="w"
+        onDrawMask={vi.fn()}
+        onEditMask={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "maskDraw" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "maskEdit" })).toBeNull();
+  });
+
+  it("没人说能画时,还是原来那一个加号(控件不自己发明入口)", () => {
+    mount(
+      <FrameSlotField role="mask" slots={[{ ...EMPTY_SLOT }]} limit={1} onChange={vi.fn()} workspaceId="w" />,
+    );
+    expect(screen.queryByRole("button", { name: "maskDraw" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "maskUpload" })).toBeNull();
+  });
+
+  it("已经填了的那一格:角一个「编辑蒙版」,点它把那一格交回调用方(带着它当底稿)", () => {
+    const onEditMask = vi.fn();
+    const slot = { url: "", assetId: "m1", assetName: "蒙版 · scene.png" };
+    mount(
+      <FrameSlotField
+        role="mask"
+        slots={[slot]}
+        limit={1}
+        onChange={vi.fn()}
+        workspaceId="w"
+        onEditMask={onEditMask}
+      />,
+    );
+    screen.getByRole("button", { name: "maskEdit" }).click();
+    expect(onEditMask).toHaveBeenCalledWith(slot);
+  });
+});
+
+describe("视频输入槽位", () => {  it("待编辑的视频收 video/*,不是 image/*", () => {
     // 收 image/* 的话,用户在系统文件面板里一个视频都点不亮。
     const { container } = mount(
       <FrameSlotField role="source_video" slots={[{ ...EMPTY_SLOT }]} limit={1} onChange={vi.fn()} workspaceId="w" />,

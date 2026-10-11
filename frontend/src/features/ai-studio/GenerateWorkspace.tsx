@@ -38,6 +38,7 @@ import {
   optimizeImagePrompt,
   repeatGeneration,
   retrieveGeneration,
+  type Asset,
   type EntitySummary,
   type GenerationCreateResponse,
   type GenerationJob,
@@ -129,6 +130,7 @@ import {
   type DeclaredParameter,
 } from "@/lib/generationCapabilities";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
+import { MaskEditor } from "@/components/generation/MaskEditor";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS, generationParameterLabel } from "@/lib/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
@@ -701,6 +703,32 @@ export function GenerateWorkspace({
     setGenerationConfig((current) => ({ ...current, [key]: value }));
   const setFrames = (role: SourceRole, slots: FrameSlot[]) =>
     setGenerationConfig((current) => ({ ...current, frames: { ...current.frames, [role]: slots } }));
+  /**
+   * 蒙版编辑器(ADR 0056 第二步)开着:改哪一格(空槽 = 新画一张,已经填了 = 拿它当底稿)、底稿是哪一份。
+   *
+   * 上传一张现成的蒙版那条路一直在,这里多的是「画一张」。
+   */
+  const [maskEditing, setMaskEditing] = React.useState<{ index: number; draft: FrameSlot | null } | null>(null);
+  /**
+   * 蒙版要改的那张原图:同一组里第一张挂上的参考图 / 首帧 / 待编辑的视频(ADR 0056 决定 2:蒙版和它的源图是一对)。
+   *
+   * 找不到就不给底图 —— 编辑器照样能画,只是画布上没有参考、也没有像素可以拿来做阈值初始化。
+   */
+  const maskSource = React.useMemo(() => {
+    const slot = (["reference_image", "first_frame", "source_video"] as const)
+      .flatMap((role) => generationConfig.frames[role])
+      .find((one) => Boolean(one.assetId));
+    return slot ? { assetId: slot.assetId, name: slot.assetName } : null;
+  }, [generationConfig.frames]);
+  /** 画完 / 改完的那张蒙版落进那一格(一次编辑 = 一张新素材,ADR 0056 决定 5)。 */
+  const takeMaskAsset = (asset: Asset) => {
+    const index = maskEditing?.index ?? 0;
+    const slots = [...generationConfig.frames.mask];
+    while (slots.length <= index) slots.push({ ...EMPTY_SLOT });
+    slots[index] = { url: "", assetId: asset.id, assetName: asset.name };
+    setFrames("mask", slots);
+    setMaskEditing(null);
+  };
   const selectEngine = (value: string) => {
     if (readOnly) return;
     //: 语音、播客:会话记着的「模型」是引擎 id(音色、语速接着最后一条记录用的,见 useSpeechDraft)
@@ -1177,6 +1205,13 @@ export function GenerateWorkspace({
       hint={hint}
       disabled={lockedRoles.has(role)}
       disabledReason={t("genSourceGroupsExclusive")}
+      //: 蒙版这一格多一条路「画一张」(ADR 0056 第二步)。空槽的下标就是下一格;已经填了的那一格带着自己当底稿。
+      onDrawMask={role === "mask" ? () => setMaskEditing({ index: filledCount(generationConfig.frames, "mask"), draft: null }) : undefined}
+      onEditMask={
+        role === "mask"
+          ? (slot) => setMaskEditing({ index: Math.max(0, generationConfig.frames.mask.indexOf(slot)), draft: slot })
+          : undefined
+      }
     />
   );
   /** 表单上的一个素材角色:和通用那一栏同一个控件、同一句提示(图像的参考图带「用上一张结果」,首尾帧成一对)。 */
@@ -1875,6 +1910,17 @@ export function GenerateWorkspace({
           )}
         </div>
       </aside>
+      {/* 蒙版编辑器:画出来的是**一份新素材**,存好就进蒙版那一格(ADR 0056 决定 5)。 */}
+      <MaskEditor
+        open={maskEditing !== null}
+        onOpenChange={(next) => {
+          if (!next) setMaskEditing(null);
+        }}
+        workspaceId={workspace.id}
+        source={maskSource}
+        initial={maskEditing?.draft ? { assetId: maskEditing.draft.assetId, name: maskEditing.draft.assetName } : null}
+        onDone={takeMaskAsset}
+      />
     </div>
   );
 }
