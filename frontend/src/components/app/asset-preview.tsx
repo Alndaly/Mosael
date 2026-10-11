@@ -74,7 +74,8 @@ function MissingImage({ name, label, className, plain }: {
       >
         <span className="flex min-w-0 max-w-full flex-col items-center gap-1 px-2 text-center">
           <ImageOff size={16} aria-hidden />
-          <span className="max-w-full truncate">{label}</span>
+          {/* 截断走全站那一个(见 components/ui/truncate):真被截断时悬停能看全 */}
+          <Truncate>{label}</Truncate>
         </span>
       </div>
     </Hint>
