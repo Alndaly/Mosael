@@ -2087,27 +2087,30 @@ function GenerationTurn({
   //: 没交回产出的那一条(停下的、跑挂了的)是一张卡:这一条的元信息(模型、用时、费用、时间)收进卡头右边,不在卡外另起一行,
   //: 时间也不再单独飘在提示词下面 —— 此前看不出那行小字和那个「30 分钟前」是谁的。
   const noOutput = outputs.length === 0 && (status === "stopped" || status === "failed" || status === "deleted");
+  //: 时间挂在**提示词那一行**的脚注上(复制 + 时间)。没有提示词的那一轮(不填字、用工作流自己存着的那句)没有这一行,
+  //: 时间就归下面那行元信息 —— 否则剩下一个「只有时间、什么也没有」的空行(维护者截图)。
   const meta = (
-    <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput ? timestamp : null} />
+    <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput || !prompt ? timestamp : null} />
   );
   return (
     <article className={TURN_CLASS} data-generation-status={status}>
       <div className={TURN_PROMPT_ROW_CLASS}>
-        {/* 不收提示词的工作流(放大、抠图、一张不填字的 ComfyUI 图)这一轮没写字:不摆一个空气泡,时间照旧在 */}
+        {/* 不收提示词的工作流(放大、抠图、一张不填字的 ComfyUI 图、用工作流自己存着那句的)这一轮没写字:
+            气泡和它的脚注**一起**不摆 —— 只留脚注就是一个「复制空气、只剩时间」的空行。 */}
         {prompt ? (
-          <div className={TURN_PROMPT_BUBBLE_CLASS} data-generation-prompt="">
-            {prompt}
-          </div>
-        ) : null}
-        {/* 和对话页的用户气泡同一个脚注:复制 + 时间。此前这里只有一个裸 <time>,
-            没法把提示词捞出来 —— 而提示词正是最常要复制去改一版再生成的东西。没交回产出的那一条,时间在卡头里。 */}
-        {prompt || !noOutput ? (
-          <MessageFooter
-            content={prompt}
-            className="justify-end opacity-0 transition-opacity duration-100 group-hover/gen:opacity-100"
-          >
-            {noOutput ? null : <MessageTime iso={timestamp} />}
-          </MessageFooter>
+          <>
+            <div className={TURN_PROMPT_BUBBLE_CLASS} data-generation-prompt="">
+              {prompt}
+            </div>
+            {/* 和对话页的用户气泡同一个脚注:复制 + 时间。此前这里只有一个裸 <time>,
+                没法把提示词捞出来 —— 而提示词正是最常要复制去改一版再生成的东西。没交回产出的那一条,时间在卡头里。 */}
+            <MessageFooter
+              content={prompt}
+              className="justify-end opacity-0 transition-opacity duration-100 group-hover/gen:opacity-100"
+            >
+              {noOutput ? null : <MessageTime iso={timestamp} />}
+            </MessageFooter>
+          </>
         ) : null}
         {/* `@` 到的资产挂了几张参考图、没挂上的为什么(ADR 0027)。全挂上了就什么都不写。 */}
         <EntityReceiptNote receipt={entityReceipt(generation.request)} />

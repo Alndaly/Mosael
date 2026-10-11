@@ -384,6 +384,25 @@ describe("失败卡写后端那一句人话,原文收在折起的「详情」里
   });
 });
 
+describe("没写字的那一轮(用工作流自己存着的提示词)", () => {
+  const done = (ids: string[]) => ({
+    id: "g1", workspace_id: "w1", session_id: "s1", job_id: null, provider: "comfyui", model: "krea2-text-2-image.json",
+    kind: "image", request: { prompt: "" }, result_asset_id: ids[0] ?? null, result_asset_ids: ids, error: null,
+    created_at: "2026-10-05T00:00:00Z", updated_at: "2026-10-05T00:00:11Z", costs: [], cost_confidence: null,
+  });
+
+  //: 维护者截图:创作页里不填提示词(用工作流里存着的那句)发出去的那一轮,气泡下只剩一个「时间」,看着就是一行空的。
+  it("不摆一行空的:没有气泡就没有那行脚注,时间归元信息那一行", async () => {
+    renderStudio({ generations: [done(["a1"])] });
+    const image = await screen.findByRole("button", { name: "imagePreviewTitle" }, { timeout: 5000 });
+    const turn = image.closest("article")!;
+    expect(turn.querySelector("[data-generation-prompt]"), "没写字:不摆空气泡").toBeNull();
+    expect(within(turn as HTMLElement).queryByRole("button", { name: "复制" }), "也没有空的「复制」").toBeNull();
+    const meta = turn.querySelector("[data-generation-meta]")!;
+    expect(meta.querySelector("time")?.textContent, "时间挪进元信息,不丢").toBeTruthy();
+  });
+});
+
 describe("花费那一句照实说:花了多少 / 未定价 / 未扣费", () => {
   const generation = (id: string, prompt: string, extra: Record<string, unknown>) => ({
     id, workspace_id: "w1", session_id: "s1", job_id: null, provider: "plugin:dev.mosael.comfyui", model: "girl.json",
