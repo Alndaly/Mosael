@@ -143,6 +143,18 @@ describe("提示词要不要写,照模型说的摆", () => {
     expect(await sentBody(posts)).toMatchObject({ prompt: "" });
   });
 
+  //: 维护者:「没有输入内容使用默认值……这一条发送的消息卡片会变成空的一行」。默认值不能只活在插件那一侧 ——
+  //: 发出去的就是它,记录里看得到这一轮用的什么。
+  it("可以不写的模型、自己存着一句:空着提交,发出去的是那一句", async () => {
+    const user = userEvent.setup();
+    const { posts } = renderStudio({ modes: ["text-to-image"], parameter_keys: [], prompt: "optional",
+                                    prompt_default: "工作流里存着的那句" });
+    const submit = screen.getByRole("button", { name: "generate" });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await user.click(submit);
+    expect(await sentBody(posts)).toMatchObject({ prompt: "工作流里存着的那句" });
+  });
+
   it("没说的照旧要写:空着不能提交,写了才行", async () => {
     const user = userEvent.setup();
     renderStudio({ modes: ["text-to-image"], parameter_keys: [] });

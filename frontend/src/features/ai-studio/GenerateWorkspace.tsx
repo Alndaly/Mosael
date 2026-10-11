@@ -2111,7 +2111,13 @@ function GenerationTurn({
               {noOutput ? null : <MessageTime iso={timestamp} />}
             </MessageFooter>
           </>
-        ) : null}
+        ) : (
+          /* 这一轮没有提示词可摆(不填字、又没有存着的那句;放大 / 抠图这类根本不收的也在内):**说一句**,
+             不留下一个说不出所以然的空行(维护者截图)。 */
+          <p className="m-0 max-w-[min(560px,100%)] text-ui-xs leading-relaxed text-muted-foreground" data-generation-no-prompt="">
+            {t("genNoPromptUsed")}
+          </p>
+        )}
         {/* `@` 到的资产挂了几张参考图、没挂上的为什么(ADR 0027)。全挂上了就什么都不写。 */}
         <EntityReceiptNote receipt={entityReceipt(generation.request)} />
         {voiced && <TruncatedNote generation={generation} />}

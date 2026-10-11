@@ -316,6 +316,7 @@ export const aiStudio = {
   //: 生成框的提交键(⌘Enter / Ctrl+Enter;回车换行)
   genSubmitHint: "{keys} 生成,回车换行",
   genAppFormMore: "其他选项",
+  genNoPromptUsed: "这一轮没有提示词:用的是这张工作流自己的设置。",
   genFormPromptStored: "不写就用工作流里存的这句:「{prompt}」",
   genPromptNotUsed: "这个模型不需要提示词 —— 挂上素材、调好参数就能生成。",
   generate: "生成",

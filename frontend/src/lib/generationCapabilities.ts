@@ -229,9 +229,19 @@ export function appForm(model: GenerationOption | null): AppForm | null {
   };
 }
 
-/** 真正发出去的提示词:不收提示词的模型发空串 —— 框藏起来之前写过的字不该悄悄跟着发出去。 */
+/**
+ * 真正发出去的提示词。
+ *
+ * - 不收提示词的模型发空串 —— 框藏起来之前写过的字不该悄悄跟着发出去;
+ * - **没写字、而这张图自己有存着的一句**(可以不写的模型,描述符的 `prompt_default`)就发那一句:插件本来也会
+ *   拿它去填图,但那样这一条消息在界面上是空的 —— 发出去的是什么、这一轮用的什么提示词,记录里得看得见
+ *   (维护者:「没有输入内容使用默认值……这一条发送的消息卡片会变成空的一行」)。
+ */
 export function promptToSend(model: GenerationOption | null, prompt: string): string {
-  return promptMode(model) === "none" ? "" : prompt;
+  if (promptMode(model) === "none") return "";
+  const typed = prompt.trim();
+  if (typed) return prompt;
+  return promptDefault(model) || prompt;
 }
 
 /**

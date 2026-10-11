@@ -391,13 +391,14 @@ describe("没写字的那一轮(用工作流自己存着的提示词)", () => {
     created_at: "2026-10-05T00:00:00Z", updated_at: "2026-10-05T00:00:11Z", costs: [], cost_confidence: null,
   });
 
-  //: 维护者截图:创作页里不填提示词(用工作流里存着的那句)发出去的那一轮,气泡下只剩一个「时间」,看着就是一行空的。
-  it("不摆一行空的:没有气泡就没有那行脚注,时间归元信息那一行", async () => {
+  //: 维护者截图:创作页里不填提示词的那一轮,气泡下只剩一个「时间」,看着就是一行空的。
+  it("没有提示词就说一句:不摆空的复制键,时间归元信息那一行", async () => {
     renderStudio({ generations: [done(["a1"])] });
     const image = await screen.findByRole("button", { name: "imagePreviewTitle" }, { timeout: 5000 });
     const turn = image.closest("article")!;
     expect(turn.querySelector("[data-generation-prompt]"), "没写字:不摆空气泡").toBeNull();
     expect(within(turn as HTMLElement).queryByRole("button", { name: "复制" }), "也没有空的「复制」").toBeNull();
+    expect(turn.querySelector("[data-generation-no-prompt]")?.textContent, "说清这一轮没有提示词").toBe("genNoPromptUsed");
     const meta = turn.querySelector("[data-generation-meta]")!;
     expect(meta.querySelector("time")?.textContent, "时间挪进元信息,不丢").toBeTruthy();
   });
