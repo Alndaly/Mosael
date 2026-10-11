@@ -25,9 +25,9 @@ import { NOTE_PASSAGE_EVENT, parseNotePassage, useOpenRequest } from "@/lib/deep
 import { NoteFormatToolbar } from "./NoteFormatToolbar";
 
 /** `previewImages`:正文里的图点开看大图(版本记录里)。画板卡片上不给 —— 那里整块不接指针,点它是选中格子。 */
-export function NoteReader({ markdown, previewImages = false }: { markdown: string; previewImages?: boolean }) {
+export function NoteReader({ markdown, previewImages = false, workspaceId = "" }: { markdown: string; previewImages?: boolean; workspaceId?: string }) {
   const { locale } = usePreferences();
-  const editor = useEditor({ extensions: noteExtensions(true, locale, { previewImages }), content: markdown, contentType: "markdown", editable: false,
+  const editor = useEditor({ extensions: noteExtensions(true, locale, { previewImages, workspaceId }), content: markdown, contentType: "markdown", editable: false,
     editorProps: { attributes: { class: "note-prose" } } });
   useExternalContent(editor, (instance) => { instance.commands.setContent(markdown, {contentType:"markdown", emitUpdate:false}); }, [markdown]);
   return <EditorContent editor={editor} />;
@@ -73,7 +73,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   const upload = React.useRef<(files: File[], at?: number) => void>(() => {});
   const markdownPaste = React.useRef<(text: string) => void>(() => {});
   const editor = useEditor({
-    extensions: [...noteExtensions(!editable, locale, { previewImages: true }), InactiveSelection, Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
+    extensions: [...noteExtensions(!editable, locale, { previewImages: true, workspaceId }), InactiveSelection, Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
       char: "@", allowedPrefixes: null,
       items: async ({ query }) => { try { return (await listNotes(workspaceId, query)).filter(n => n.id !== noteId).slice(0, 12); } catch { return []; } },
       command: ({ editor: instance, range, props }) => {

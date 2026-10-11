@@ -26,6 +26,7 @@ export const canvasMarkers = {
   shortcutOwnerGroup: "编组",
   shortcutOwnerAdd: "添加",
   shortcutOwnerCommand: "命令面板",
+  shortcutOwnerNoteSource: "看文档的 Markdown 源码",
   shortcutOwnerSearch: "搜索",
   shortcutOwnerSendBack: "置于底层",
   shortcutOwnerBringFront: "置于顶层",

@@ -8,9 +8,16 @@ import { NoteTable } from "./NoteTable";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { NoteHighlight, NoteMarkdown } from "./NoteHighlight";
+import { noteReferenceNodeView } from "@/features/notes/NoteReferenceView";
 export const NoteReference = Node.create({
   name: "noteReference", priority: 1100, inline: true, group: "inline", atom: true,
+  addOptions: () => ({ workspaceId: "" }),
   addAttributes: () => ({ href: { default: "" }, label: { default: "" } }),
+  //: 悬停给一块预览(标题 + 那一版正文的开头,见 NoteReferenceView)。工作区由 noteExtensions 传进来 ——
+  //: 预览要按工作区问那篇笔记。
+  addNodeView() {
+    return noteReferenceNodeView((this.options as { workspaceId?: string }).workspaceId ?? "");
+  },
   parseHTML: () => [{ tag: "a[data-note-reference]", getAttrs: el => ({ href: el.getAttribute("href"), label: el.textContent }) }],
   renderHTML: ({ node }) => ["a", { href: node.attrs.href, "data-note-reference": "", class: "note-reference", title: node.attrs.label }, `@${node.attrs.label}`],
   renderText: ({ node }) => `@${node.attrs.label}`,
@@ -51,7 +58,8 @@ export const notePlaceholder =
     node.type.name === "paragraph" ? text : "";
 
 /** `previewImages`:正文里的图能点开看大图(笔记页、版本记录)。画板上的笔记卡片不开,见 createNoteImage。 */
-export function noteExtensions(readonly = false, locale = "zh-CN", { previewImages = false }: { previewImages?: boolean } = {}) {
-  return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference, createNoteImage(locale, { preview: previewImages }), createNoteCodeBlock(locale),
+export function noteExtensions(readonly = false, locale = "zh-CN",
+                               { previewImages = false, workspaceId = "" }: { previewImages?: boolean; workspaceId?: string } = {}) {
+  return [StarterKit.configure({ codeBlock: false, link: { openOnClick: readonly } }), NoteReference.configure({ workspaceId }), createNoteImage(locale, { preview: previewImages }), createNoteCodeBlock(locale),
     TableKit.configure({ table: false }), NoteTable, TaskList, TaskItem.configure({ nested: true }), NoteHighlight, NoteMarkdown];
 }

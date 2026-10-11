@@ -71,6 +71,33 @@ it("只剩编辑和 Markdown:没有「阅读」,Markdown 是一颗能按下的�
   await waitFor(() => expect(format()).not.toBeNull());
 });
 
+//: 维护者:「文档支持快捷键 command/ctrl + / 切换 markdown 源码和非源码模式」。那颗按钮一直在页头,
+//: 写得久了手要离开键盘去点它。
+it("⌘/ (Ctrl+/) 切换 Markdown 源码,和点那颗按钮一样", async () => {
+  mount();
+  await waitFor(() => expect(format()).not.toBeNull());
+  const markdown = within(header()).getByRole("button", { name: "Markdown" });
+  expect(markdown).toHaveAttribute("aria-pressed", "false");
+
+  fireEvent.keyDown(window, { key: "/", code: "Slash", metaKey: true });
+  expect(markdown, "macOS 的 ⌘/").toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("textbox", { name: "笔记正文" }).tagName).toBe("TEXTAREA");
+
+  fireEvent.keyDown(window, { key: "/", code: "Slash", ctrlKey: true });
+  expect(markdown, "别处的 Ctrl+/").toHaveAttribute("aria-pressed", "false");
+  await waitFor(() => expect(format()).not.toBeNull());
+});
+
+it("在输入框里打字时 ⌘/ 不抢(助手的输入框、搜索框)", async () => {
+  mount();
+  await waitFor(() => expect(format()).not.toBeNull());
+  const box = document.createElement("input");
+  document.body.append(box);
+  fireEvent.keyDown(box, { key: "/", code: "Slash", metaKey: true });
+  expect(within(header()).getByRole("button", { name: "Markdown" }), "焦点在输入框里:这一下归它").toHaveAttribute("aria-pressed", "false");
+  box.remove();
+});
+
 it("左边全是编辑格式(含高亮,和选区工具条一致),右边依次是保存状态、Markdown、AI 助手、收藏、笔记操作", async () => {
   mount();
   await waitFor(() => expect(format()).not.toBeNull());

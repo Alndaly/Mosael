@@ -47,7 +47,7 @@ import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
 import { mergeAppendedNote } from "./appendMerge";
-import { isImeKeystroke } from "@/lib/shortcuts";
+import { NOTE_SOURCE_COMBO, comboFromEvent, formatCombo, isImeKeystroke, listenKeys } from "@/lib/shortcuts";
 import { useSaveShortcut } from "@/lib/saveShortcut";
 import "./notes.css";
 type NoteController = { id:string; read:()=>Note; update:(patch:Partial<NoteContent>)=>Promise<Note> };
@@ -327,6 +327,17 @@ export function NoteDocument({ note, readOnly = null, controller, focus, onFocus
   const [mode, setMode] = React.useState<"edit" | "raw">("edit"); const [properties, setProperties] = React.useState(false);
   //: 换了看的方式,编辑器重建、选区没了 —— 助手那边也别再带着上一个模式里的那段。
   React.useEffect(() => { onSelectionChange?.(null); }, [mode, onSelectionChange]);
+  /** 看源码 / 回到编辑的键(⌘/):页头那颗按钮一直在,只是没有键。 */
+  const toggleMode = React.useCallback(() => setMode((current) => (current === "raw" ? "edit" : "raw")), []);
+  React.useEffect(() => listenKeys(window, (event) => {
+    if (comboFromEvent(event) !== NOTE_SOURCE_COMBO) return;
+    //: 在别的输入框里打字时不抢这一下(助手的输入框、搜索框);正文是 contenteditable,照旧认。
+    const target = event.target as HTMLElement | null;
+    const tag = target?.tagName;
+    if (!target?.isContentEditable && (tag === "INPUT" || tag === "TEXTAREA")) return;
+    event.preventDefault();
+    toggleMode();
+  }), [toggleMode]);
   const [history, setHistory] = React.useState(false);
   //: 版本记录打开时选中哪一版:「查看引用版本」进来的是引用的那一版,从菜单进来的是当前版本。
   const [historyFocus, setHistoryFocus] = React.useState<number | null>(null);
@@ -419,7 +430,7 @@ export function NoteDocument({ note, readOnly = null, controller, focus, onFocus
           夹在收起按钮和格式工具之间时像是格式工具的一部分。图标和左边格式按钮同一个规格(16、描边 1.7)。 */}
       <div className="note-header-actions"><NoteStatusBadge status={status} label={s[status]} />
       {/* Markdown 只剩一个选项:一颗能按下的切换(按下看源码,再点回到编辑)。 */}
-      <IconButton unstyled className="note-icon note-source-toggle" label={s.raw} hint={s.rawHint} aria-pressed={mode === "raw"} onClick={() => setMode(mode === "raw" ? "edit" : "raw")}><FileCode size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
+      <IconButton unstyled className="note-icon note-source-toggle" label={s.raw} hint={s.rawHint} shortcut={formatCombo(NOTE_SOURCE_COMBO)} aria-pressed={mode === "raw"} onClick={toggleMode}><FileCode size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
       {/* 窄了只剩图标(文字收起),名字靠 IconButton 的 aria-label 和悬停说明。 */}
       {onToggleAgent && <IconButton unstyled className="note-agent-toggle" label={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={16} strokeWidth={1.7} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></IconButton>}
       <IconButton unstyled className="note-icon" label={s.favorite} aria-pressed={draft.favorite} disabled={Boolean(readOnly)} disabledReason={readOnly?.reason} onClick={() => change({favorite: !draft.favorite})}><Star size={16} strokeWidth={1.7} fill={draft.favorite ? "currentColor" : "none"} /></IconButton>

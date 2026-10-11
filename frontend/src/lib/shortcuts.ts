@@ -112,6 +112,14 @@ export function isImeKeystroke(
   return native.isComposing || native.keyCode === 229;
 }
 
+/**
+ * 文档(笔记)页的「看 Markdown 源码 / 回到编辑」:⌘/ (macOS)、Ctrl+/ (别处)。
+ *
+ * 这个键本来是浏览器/编辑器里"注释"的位置,应用里没人用;文档页那颗切换按钮一直在页头,
+ * 只是没有键 —— 写得久了,手要离开键盘去点它。
+ */
+export const NOTE_SOURCE_COMBO: Combo = "Mod+/";
+
 /** 「写生成提示词」那几处的提交键(给人看的样子见 `formatCombo(SUBMIT_COMBO)`)。 */
 export const SUBMIT_COMBO: Combo = "Mod+Enter";
 
@@ -229,6 +237,7 @@ export const RESERVED_COMBOS: ReadonlyArray<{ combo: Combo; owner: MessageKey }>
   { combo: "Mod+N", owner: "shortcutOwnerAdd" },
   { combo: "Mod+S", owner: "save" },
   { combo: "Mod+K", owner: "shortcutOwnerCommand" },
+  { combo: "Mod+/", owner: "shortcutOwnerNoteSource" },
   { combo: "Mod+F", owner: "shortcutOwnerSearch" },
   { combo: "Mod+[", owner: "shortcutOwnerSendBack" },
   { combo: "Mod+]", owner: "shortcutOwnerBringFront" },

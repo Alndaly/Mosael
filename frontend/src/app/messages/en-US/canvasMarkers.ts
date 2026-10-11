@@ -26,6 +26,7 @@ export const canvasMarkers = {
   shortcutOwnerGroup: "Group",
   shortcutOwnerAdd: "Add",
   shortcutOwnerCommand: "Command palette",
+  shortcutOwnerNoteSource: "View a note's Markdown source",
   shortcutOwnerSearch: "Search",
   shortcutOwnerSendBack: "Send to back",
   shortcutOwnerBringFront: "Bring to front",

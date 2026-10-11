@@ -15,8 +15,12 @@ describe("note Markdown persistence", () => {
     expect(saved).toContain('![视觉参考](mosael-asset:abc123)');
     expect(saved).toContain('- [x] 完成');
     expect(saved).toContain('[@参考](#/notes?note=abc&revision=3)');
-    expect(reopened.view.dom.querySelectorAll('[data-note-reference]')).toHaveLength(1);
-    expect(reopened.view.dom.querySelectorAll('table')).toHaveLength(1);
+    //: 引用和表格是**节点**,直接问文档模型。DOM 那一层由 React 渲染(节点视图交给 EditorContent,见
+    //: ReactRenderer),而这个文件里的编辑器是裸的 `new Editor(...)` —— 没有 EditorContent 就没有 DOM,
+    //: 断言 DOM 只会断言到一个空 span。渲染出来的样子(含悬停预览)在 noteReferenceHint.dom.test 里钉。
+    const kinds = JSON.stringify(reopened.getJSON());
+    expect(kinds).toContain('"type":"noteReference"');
+    expect(kinds).toContain('"type":"table"');
     expect(saved).not.toContain('token=');
     editor.destroy(); reopened.destroy();
   });
@@ -43,7 +47,7 @@ describe("note Markdown persistence", () => {
       content: "[@参考](#/notes?note=abc&revision=3)",
       contentType: "markdown",
     });
-    expect(editor.view.dom.querySelectorAll("[data-note-reference]")).toHaveLength(1);
+    expect(JSON.stringify(editor.getJSON()), "引用是那个原子节点,不是普通链接").toContain('"type":"noteReference"');
     expect(editor.getMarkdown().trim()).toBe("[@参考](#/notes?note=abc&revision=3)");
     editor.destroy();
   });
