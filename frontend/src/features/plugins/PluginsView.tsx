@@ -1,5 +1,4 @@
 import { CollectionDetail, COLLECTION_DETAIL_PAGE, COLLECTION_DETAIL_HEADING, DETAIL_INDEX_ITEM, DETAIL_INDEX_SELECTED, DETAIL_INDEX_TEXT } from "@/components/layout/CollectionDetail";
-import { assetKeys } from "@/api/queryKeys";
 import { invalidateResources } from "@/api/resourceKeys";
 import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
@@ -1473,7 +1472,7 @@ export const ToolRow = React.memo(function ToolRow({
       if (invocation.status === "succeeded" && invocation.output.asset_id) {
         //: 这一跑产出的是**素材**(工作流跑出来的图 / 视频)。走过的不是任务那一条(工具是同步调用的),
         //: 所以这里照同一张表作废:assets 这一族 —— 素材库、工作流库详情、详情里「最近的产出」那一组
-        //: (它说的正是"这张工作流产出过什么",而这里是别处产出的一种)。只作废 `assetKeys.all()` 的话,
+        //: (它说的正是"这张工作流产出过什么",而这里是别处产出的一种)。只手刷素材库那一棵子树的话,
         //: 素材库刷新了,插件里那两组照旧是旧的(维护者:工作流详情里的生成历史不会自动同步别处跑出来的)。
         invalidateResources(qc, ["assets"]);
       }
