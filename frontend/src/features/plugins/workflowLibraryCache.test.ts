@@ -21,14 +21,16 @@ import {
 
 const KEY = ["workflow-library", "i1", "w1"] as const;
 
+/** 一份够用的库(字段按 schema 给全;列表那几栏只是读路径,别的照实留空)。 */
+type LibraryWorkflow = NonNullable<WorkflowLibrary["workflows"]>[number];
+const flow = (path: string, label: string, folder: string): LibraryWorkflow =>
+  ({ path, label, folder, kind: "image", problem: "", node_count: 0 });
+
 const data: WorkflowLibrary = {
-  workflows: [
-    { path: "a.json", label: "A", folder: "", kind: "image" },
-    { path: "组/一.json", label: "一", folder: "组", kind: "image" },
-    { path: "组/子/二.json", label: "二", folder: "组/子", kind: "image" },
-  ],
+  workflows: [flow("a.json", "A", ""), flow("组/一.json", "一", "组"), flow("组/子/二.json", "二", "组/子")],
   folders: ["组", "组/子", "别的"],
-  others: [{ path: "组/说明.txt", label: "说明" }],
+  //: 「别的文件」那一栏只有路径和读不出来的原因(没有 label)。
+  others: [{ path: "组/说明.txt", reason: "" }],
   trash: [{ path: "组/.trash/三.json", original: "组/三.json", label: "三" }],
 };
 

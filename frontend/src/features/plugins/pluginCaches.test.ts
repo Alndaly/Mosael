@@ -107,7 +107,8 @@ describe("连接改动的乐观写入", () => {
     expect(after.instances[0]).toMatchObject({ enabled: true, blocked_reason: "" });
 
     //: 关掉的时候不动它:那句「未启用」正是这次要落到的状态,而且请求在飞的那一段卡片说的是「正在停用…」。
-    qc.setQueryData(PLUGIN_PACKAGES_KEY, [{ ...pkg("p", [instance("i1", true)]), instances: [{ ...instance("i1", true), blocked_reason: "缺配置" }] }]);
+    //: (这一格另有原因时也一样 —— 别把「缺配置」这种和开关无关的原因抹掉。)
+    qc.setQueryData(PLUGIN_PACKAGES_KEY, [{ id: "p", name: "p", instances: [{ id: "i1", name: "i1", enabled: true, blocked_reason: "缺配置" }] }]);
     patchPluginInstance(qc, "i1", { enabled: false });
     const [off] = qc.getQueryData<{ instances: { enabled: boolean; blocked_reason: string }[] }[]>(PLUGIN_PACKAGES_KEY)!;
     expect(off.instances[0]).toMatchObject({ enabled: false, blocked_reason: "缺配置" });
