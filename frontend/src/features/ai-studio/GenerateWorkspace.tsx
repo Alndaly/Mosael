@@ -92,6 +92,7 @@ import { formatCombo, isSubmitChord, SUBMIT_COMBO } from "@/lib/shortcuts";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
+import { appFormFields, type AppField } from "@/lib/appFormFields";
 import {
   appForm,
   aspectRatioOptions,
@@ -116,7 +117,6 @@ import {
   runsHint,
   supportsParameter,
   sourceLabels,
-  sourceRoleOfKey,
   sourceLimit,
   exclusiveSourceGroups,
   hasEnoughText,
@@ -126,7 +126,6 @@ import {
   videoResolutionOptions,
   withTriggerWords,
   type AppForm,
-  type AppFormItem,
   type DeclaredParameter,
 } from "@/lib/generationCapabilities";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
@@ -1215,25 +1214,19 @@ export function GenerateWorkspace({
     const parameters = new Map(declaredParameters(model).map((parameter) => [parameter.key, parameter]));
     const inForm = new Set(form.items.map((item) => item.key));
     const rest = [...parameters.values()].filter((parameter) => !inForm.has(parameter.key));
-    const field = (item: AppFormItem) => {
-      if (item.key === "prompt") return selectedPromptMode === "none" ? null : formPromptField(model, item.label || t("genPromptLabel"));
-      if (item.key === "negative_prompt") return negativePromptField(item.label || undefined);
-      if (item.key === "seed") return seedField(item.label || undefined);
-      if (item.key === "size") return sizeField(model, item.label || undefined);
-      if (item.key === "num_images") return numImagesField(model, item.label || undefined);
-      if ((SOURCE_ROLES as readonly string[]).includes(item.key)) return sourceField(model, item.key as SourceRole);
-      //: 表单上挑的这一格其实是读素材的槽位(`49.image` 这种):画成传图 / 传视频的那一格,不是文件名下拉。
-      const role = sourceRoleOfKey(model, item.key);
-      if (role && (SOURCE_ROLES as readonly string[]).includes(role)) return sourceField(model, role as SourceRole);
-      const parameter = parameters.get(item.key);
-      return parameter ? declaredField(model, parameter, item.label || undefined) : null;
+    //: 「哪一格」和「按表上的顺序」都归 lib/appFormFields 管(预览那一栏也读它):这里只剩按 kind 挑控件。
+    const field = (one: AppField) => {
+      const label = one.label || undefined;
+      if (one.kind === "prompt") return selectedPromptMode === "none" ? null : formPromptField(model, one.label || t("genPromptLabel"));
+      if (one.kind === "negative_prompt") return negativePromptField(label);
+      if (one.kind === "seed") return seedField(label);
+      if (one.kind === "size") return sizeField(model, label);
+      if (one.kind === "num_images") return numImagesField(model, label);
+      if (one.kind === "source") return sourceField(model, one.role as SourceRole);
+      const parameter = parameters.get(one.parameterKey ?? one.key);
+      return parameter ? declaredField(model, parameter, label) : null;
     };
-    //: 表单每一项是哪个角色(作者挑的 key 认不出时按 key 本身算)——
-    //: 首帧和尾帧是一对、一个控件:表上两项都在时只摆一次。
-    const roleOf = (item: AppFormItem): string => sourceRoleOfKey(model, item.key) ?? item.key;
-    const shown = form.items.filter((item, index, all) =>
-      !(roleOf(item) === "last_frame" && model.kind === "video"
-        && all.slice(0, index).some((one) => roleOf(one) === "first_frame")));
+    const shown = appFormFields(model, form.items);
     return (
       <>
         <ParameterSection icon={ClipboardList} title={t("genAppFormSection")}>

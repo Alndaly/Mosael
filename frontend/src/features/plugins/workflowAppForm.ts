@@ -349,10 +349,22 @@ export function itemsByKey(data: WorkflowApp): Map<string, WorkflowFillable> {
  * 按一张表单的草稿拼一份和生成目录同形的描述符,给预览用:主提示词 → 宿主的提示词框(`prompt`),标了主提示词的反向提示词 →
  * `negative_prompt`,素材 → 每个角色几份、按顺序叫什么(`source_limits` / `source_labels`),种子 / 尺寸 / 跑几遍 →
  * 宿主自己的控件,其余 → `parameter_schema`(作者起的名字、收窄的可选值、都摆在第一屏)。对不上的项不进。
+ *
+ * 还拼上 `form`:表上每一项的键、表上的顺序(和插件交上来的那份同一个形状,见 graph.form_items)。预览就是靠它
+ * 用**生成面板同一个判据**(lib/appFormFields)决定每一项画成哪一格 —— 两边各排一套序的话,作者在中间跨类拖动
+ * (把「参考图」拖到「放大倍数」下面)预览里看不出变化。
  */
 export function previewOption(data: WorkflowApp, draft: FormDraft, instanceId: string): GenerationOption {
   const found = itemsByKey(data);
-  const keys: string[] = [];
+  /** 表上的每一项,写成宿主描述符认得的键:主提示词 → `prompt`、反向 → `negative_prompt`、种子 / 尺寸 / 跑几遍 →
+   *  `seed` / `size` / `num_images`、读素材的槽位 → 它的角色(同一角色只列一次,在第一格的位置)、其余 → 参数键。 */
+  const items: { key: string; label: string }[] = [];
+  const seen = new Set<string>();
+  const push = (key: string, label: string) => {
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    items.push({ key, label });
+  };
   const schema: Record<string, Record<string, unknown>> = {};
   const limits: Record<string, number> = {};
   const labels: Record<string, string[]> = {};
@@ -366,37 +378,40 @@ export function previewOption(data: WorkflowApp, draft: FormDraft, instanceId: s
     const spec = (item.spec ?? {}) as Record<string, unknown>;
     if (item.kind === "text" && one.main) {
       if (item.role === "negative") {
-        if (!keys.includes("negative_prompt")) keys.push("negative_prompt");
+        push("negative_prompt", one.label);
       } else {
+        push("prompt", one.label);
         prompted = true;
         promptEmpty ||= !(typeof spec.default === "string" && spec.default.trim());
       }
     } else if (item.kind === "media") {
       const role = item.role ?? "";
       if (!role) continue;
-      if (!(role in limits)) keys.push(role);
+      push(role, one.label);
       limits[role] = (limits[role] ?? 0) + 1;
       labels[role] = [...(labels[role] ?? []), one.label || item.node_title || `${item.node_label || item.class_type} #${item.node}`];
-    } else if (item.kind === "seed") {
-      keys.push("seed");
-    } else if (item.kind === "size") {
-      keys.push("size");
-      const examples = Array.isArray(spec.examples) ? spec.examples.map(String) : [];
-      capabilities.sizes = examples;
-      if (typeof spec.default === "string") capabilities.default_size = spec.default;
+    } else if (item.kind === "seed" || item.kind === "size") {
+      push(item.kind, one.label);
+      if (item.kind === "size") {
+        const examples = Array.isArray(spec.examples) ? spec.examples.map(String) : [];
+        capabilities.sizes = examples;
+        if (typeof spec.default === "string") capabilities.default_size = spec.default;
+      }
     } else if (item.kind === "runs") {
-      keys.push("num_images");
+      push("num_images", one.label);
       capabilities.max_num_images = typeof spec.maximum === "number" ? spec.maximum : 4;
       capabilities.num_images_unit = "runs";
     } else if (VALUE_KINDS.has(item.kind)) {
       const own: Record<string, unknown> = { ...spec, title: one.label || item.title };
       delete own["x-advanced"];
       if (one.choices && one.choices.length > 0 && CHOICE_KINDS.has(item.kind)) own.enum = one.choices;
-      keys.push(one.key);
+      push(one.key, one.label);
       schema[one.key] = own;
     }
   }
-  capabilities.parameter_keys = keys;
+  //: 提示词走 `prompt` 那一项(描述符的 `prompt`),不在参数键里 —— 和插件交上来的那份一样。
+  capabilities.parameter_keys = items.map((one) => one.key).filter((key) => key !== "prompt");
+  capabilities.form = { title: draft.title.trim(), description: draft.description.trim(), items };
   if (Object.keys(schema).length > 0) capabilities.parameter_schema = schema;
   if (Object.keys(limits).length > 0) capabilities.source_limits = limits;
   if (Object.keys(labels).length > 0) capabilities.source_labels = labels;

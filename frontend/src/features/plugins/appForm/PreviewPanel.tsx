@@ -9,16 +9,17 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Truncate } from "@/components/ui/truncate";
+import { appFormFields, type AppField } from "@/lib/appFormFields";
 import { defaultDraft, previewOption, type FormDraft } from "@/features/plugins/workflowAppForm";
 import {
+  appForm,
   declaredParameters,
   promptMode,
   sizeOptions,
   sourceLabels,
   sourceLimit,
-  supportsParameter,
 } from "@/lib/generationCapabilities";
-import { ROLE_COPY, SOURCE_ROLES, slotColumns, type SourceRole } from "@/lib/sourceFrames";
+import { ROLE_COPY, slotColumns, type SourceRole } from "@/lib/sourceFrames";
 
 type Translate = ReturnType<typeof useI18n>;
 
@@ -52,14 +53,78 @@ export function PreviewPanel({ instanceId, data, draft }: { instanceId: string; 
   );
 }
 
-/** 预览本身:提示词框、素材槽位(每格的名字)、尺寸、张数、种子、参数表。值只在这里改着看,不存。 */
+/**
+ * 预览本身:**表上的每一项,按表上的顺序** —— 哪一格、第几格都由 lib/appFormFields 说了算,和生成面板同一份判据
+ * (此前这里按自己分好的类摆:提示词 → 反向提示词 → 素材槽 → 尺寸 → 张数 → 种子 → 参数,于是作者在中间跨类拖动
+ * ——把「参考图」拖到「放大倍数」下面——预览里什么都看不出变化)。用的人把值填着看看,不存:
+ * 每一格的值只在这个组件的 `values` 里,真实配置在右栏那一份。
+ */
 function AppPreview({ option, title, note }: { option: GenerationOption; title: string; note: string }) {
   const t = useI18n();
   const [values, setValues] = React.useState<Record<string, string>>({});
   const set = (key: string, value: string) => setValues((current) => ({ ...current, [key]: value }));
   const mode = promptMode(option);
-  const roles = SOURCE_ROLES.filter((role) => supportsParameter(option, role));
   const sizes = sizeOptions(option);
+  const parameters = new Map(declaredParameters(option).map((parameter) => [parameter.key, parameter]));
+  //: 表上的顺序,就是描述符 `form` 的顺序(previewOption 照草稿拼的)—— 表上没有的格子这里也不画。
+  const fields = appFormFields(option, appForm(option)?.items ?? []);
+  const control = (field: AppField) => {
+    if (field.kind === "prompt") {
+      return (
+        <ParameterField label={field.label || t("genPromptLabel")}>
+          <Textarea className="min-h-20 text-foreground" value={values[field.key] ?? ""}
+                    onChange={(event) => set(field.key, event.target.value)} />
+        </ParameterField>
+      );
+    }
+    if (field.kind === "negative_prompt") {
+      return (
+        <ParameterField label={field.label || t("genNegativePrompt")}>
+          <Textarea className="min-h-14 text-foreground" value={values[field.key] ?? ""}
+                    onChange={(event) => set(field.key, event.target.value)} />
+        </ParameterField>
+      );
+    }
+    if (field.kind === "source") {
+      const role = field.role as SourceRole;
+      return <PreviewSlots role={role} t={t} names={sourceLabels(option, role)} count={sourceLimit(option, role)} />;
+    }
+    if (field.kind === "size") {
+      /* 描述符没给可选值(目录没声明)就没有可挑的,和生成面板那边的尺寸栏一个判据 */
+      if (sizes.length === 0) return null;
+      return (
+        <ParameterField label={field.label || t("genSize")}>
+          <OptionPicker className={PARAMETER_CONTROL_CLASS} value={values[field.key] ?? sizes[0]}
+                        onChange={(next) => set(field.key, next)} options={sizes.map((one) => ({ value: one, label: one }))} />
+        </ParameterField>
+      );
+    }
+    if (field.kind === "num_images") {
+      return (
+        <ParameterField label={field.label || t("genRuns")}>
+          <Input className={PARAMETER_CONTROL_CLASS} type="number" min={1} max={4} value={values[field.key] ?? "1"}
+                 onChange={(event) => set(field.key, event.target.value)} />
+        </ParameterField>
+      );
+    }
+    if (field.kind === "seed") {
+      return (
+        <ParameterField label={field.label || t("genSeed")}>
+          <Input className={PARAMETER_CONTROL_CLASS} type="number" placeholder="auto" value={values[field.key] ?? ""}
+                 onChange={(event) => set(field.key, event.target.value)} />
+        </ParameterField>
+      );
+    }
+    //: 描述符声明的参数:按 parameterKey 查表,认不出就不画(和面板那边的 declaredField 一样)。
+    const parameter = field.parameterKey ? parameters.get(field.parameterKey) : undefined;
+    if (!parameter) return null;
+    return (
+      <ParameterField label={parameter.label} title={parameter.description || undefined}>
+        <DeclaredParameterControl parameter={parameter} value={values[field.key] ?? ""}
+                                  onChange={(next) => set(field.key, next)} />
+      </ParameterField>
+    );
+  };
   return (
     <div className="grid gap-3" data-app-preview>
       <div className="grid gap-0.5">
@@ -69,47 +134,18 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
           <span className="text-ui-xs leading-relaxed text-muted-foreground"><InlineMarkdown text={note} /></span>
         )}
       </div>
+      {/* 这个模型不收提示词:表上没有提示词那一格(它就是「照工作流里存的那句跑」),说清楚这件事 */}
       {mode === "none" ? (
         <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workflowAppPromptNone")}</p>
-      ) : (
-        <ParameterField label={t("genPromptLabel")}>
-          <Textarea className="min-h-20 text-foreground" value={values.prompt ?? ""}
-                    onChange={(event) => set("prompt", event.target.value)} />
-        </ParameterField>
-      )}
-      {supportsParameter(option, "negative_prompt") && (
-        <ParameterField label={t("genNegativePrompt")}>
-          <Textarea className="min-h-14 text-foreground" value={values.negative ?? ""}
-                    onChange={(event) => set("negative", event.target.value)} />
-        </ParameterField>
-      )}
-      {roles.map((role) => (
-        <PreviewSlots key={role} role={role} t={t} names={sourceLabels(option, role)} count={sourceLimit(option, role)} />
-      ))}
-      {sizes.length > 0 && (
-        <ParameterField label={t("genSize")}>
-          <OptionPicker className={PARAMETER_CONTROL_CLASS} value={values.size ?? sizes[0]}
-                        onChange={(next) => set("size", next)} options={sizes.map((one) => ({ value: one, label: one }))} />
-        </ParameterField>
-      )}
-      {supportsParameter(option, "num_images") && (
-        <ParameterField label={t("genRuns")}>
-          <Input className={PARAMETER_CONTROL_CLASS} type="number" min={1} max={4} value={values.runs ?? "1"}
-                 onChange={(event) => set("runs", event.target.value)} />
-        </ParameterField>
-      )}
-      {supportsParameter(option, "seed") && (
-        <ParameterField label={t("genSeed")}>
-          <Input className={PARAMETER_CONTROL_CLASS} type="number" placeholder="auto" value={values.seed ?? ""}
-                 onChange={(event) => set("seed", event.target.value)} />
-        </ParameterField>
-      )}
-      {declaredParameters(option).map((parameter) => (
-        <ParameterField key={parameter.key} label={parameter.label} title={parameter.description || undefined}>
-          <DeclaredParameterControl parameter={parameter} value={values[parameter.key] ?? ""}
-                                    onChange={(next) => set(parameter.key, next)} />
-        </ParameterField>
-      ))}
+      ) : null}
+      {fields.map((field) => {
+        const drawn = control(field);
+        return drawn ? (
+          <div key={field.key} data-app-field={field.key}>
+            {drawn}
+          </div>
+        ) : null;
+      })}
     </div>
   );
 }
