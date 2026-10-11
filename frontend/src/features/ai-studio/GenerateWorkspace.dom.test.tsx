@@ -392,15 +392,20 @@ describe("没写字的那一轮(用工作流自己存着的提示词)", () => {
   });
 
   //: 维护者截图:创作页里不填提示词的那一轮,气泡下只剩一个「时间」,看着就是一行空的。
-  it("没有提示词就说一句:不摆空的复制键,时间归元信息那一行", async () => {
+  it("没有提示词也照消息的样子:一个气泡说清这一轮,底下还是那行时间;没有空的「复制」", async () => {
     renderStudio({ generations: [done(["a1"])] });
     const image = await screen.findByRole("button", { name: "imagePreviewTitle" }, { timeout: 5000 });
-    const turn = image.closest("article")!;
-    expect(turn.querySelector("[data-generation-prompt]"), "没写字:不摆空气泡").toBeNull();
-    expect(within(turn as HTMLElement).queryByRole("button", { name: "复制" }), "也没有空的「复制」").toBeNull();
-    expect(turn.querySelector("[data-generation-no-prompt]")?.textContent, "说清这一轮没有提示词").toBe("genNoPromptUsed");
-    const meta = turn.querySelector("[data-generation-meta]")!;
-    expect(meta.querySelector("time")?.textContent, "时间挪进元信息,不丢").toBeTruthy();
+    const turn = image.closest("article") as HTMLElement;
+    expect(turn.querySelector("[data-generation-prompt]"), "没有用户写的字:不冒充提示词气泡").toBeNull();
+    const bubble = turn.querySelector<HTMLElement>("[data-generation-no-prompt]")!;
+    expect(bubble.textContent, "说清这一轮没有提示词").toBe("genNoPromptUsed");
+    //: 和真气泡同一个壳子(右侧、圆角、底色),不是一行飘着的说明
+    for (const one of ["justify-self-end", "rounded-br", "bg-secondary"]) {
+      expect(bubble.className.split(/\s+/), one).toContain(one);
+    }
+    expect(within(turn).queryByRole("button", { name: "复制" }), "没有东西可复制").toBeNull();
+    const time = [...turn.querySelectorAll("time")];
+    expect(time.length, "底下那行脚注里有时间").toBeGreaterThan(0);
   });
 });
 

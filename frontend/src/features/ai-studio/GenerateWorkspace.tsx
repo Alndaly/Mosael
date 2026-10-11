@@ -2087,10 +2087,8 @@ function GenerationTurn({
   //: 没交回产出的那一条(停下的、跑挂了的)是一张卡:这一条的元信息(模型、用时、费用、时间)收进卡头右边,不在卡外另起一行,
   //: 时间也不再单独飘在提示词下面 —— 此前看不出那行小字和那个「30 分钟前」是谁的。
   const noOutput = outputs.length === 0 && (status === "stopped" || status === "failed" || status === "deleted");
-  //: 时间挂在**提示词那一行**的脚注上(复制 + 时间)。没有提示词的那一轮(不填字、用工作流自己存着的那句)没有这一行,
-  //: 时间就归下面那行元信息 —— 否则剩下一个「只有时间、什么也没有」的空行(维护者截图)。
   const meta = (
-    <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput || !prompt ? timestamp : null} />
+    <TurnMeta engineName={engineName} parts={[durationLabel, costLabel]} time={noOutput ? timestamp : null} />
   );
   return (
     <article className={TURN_CLASS} data-generation-status={status}>
@@ -2112,11 +2110,23 @@ function GenerationTurn({
             </MessageFooter>
           </>
         ) : (
-          /* 这一轮没有提示词可摆(不填字、又没有存着的那句;放大 / 抠图这类根本不收的也在内):**说一句**,
-             不留下一个说不出所以然的空行(维护者截图)。 */
-          <p className="m-0 max-w-[min(560px,100%)] text-ui-xs leading-relaxed text-muted-foreground" data-generation-no-prompt="">
-            {t("genNoPromptUsed")}
-          </p>
+          /* 这一轮没有提示词可摆(不填字、又没有存着的那句;放大 / 抠图这类根本不收的也在内):照**消息**的样子摆 ——
+             同一个气泡壳子说清这一轮用的是什么,底下那一行脚注还是时间。不是一行飘在结果旁边的说明文字
+             (维护者:「不要用这么简单的文案提醒,应该和消息框类似,下方的时间之类的信息也得有的」)。 */
+          <>
+            <div
+              className={cn(TURN_PROMPT_BUBBLE_CLASS, "text-muted-foreground")}
+              data-generation-no-prompt=""
+            >
+              {t("genNoPromptUsed")}
+            </div>
+            <MessageFooter
+              content=""
+              className="justify-end opacity-0 transition-opacity duration-100 group-hover/gen:opacity-100"
+            >
+              {noOutput ? null : <MessageTime iso={timestamp} />}
+            </MessageFooter>
+          </>
         )}
         {/* `@` 到的资产挂了几张参考图、没挂上的为什么(ADR 0027)。全挂上了就什么都不写。 */}
         <EntityReceiptNote receipt={entityReceipt(generation.request)} />
