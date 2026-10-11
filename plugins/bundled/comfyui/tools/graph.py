@@ -368,6 +368,21 @@ def _frame_role(api: dict[str, Any], node_id: str) -> str:
     return "reference_image"
 
 
+def loader_inputs(api: dict[str, Any]) -> set[tuple[str, str]]:
+    """哪些输入是**读素材的节点的槽位**(`{(节点号, 输入名)}`)。
+
+    这些格的值由插件自己写(上传回来的文件名,见 wire_inputs),而它们的下拉是那台服务器上**目录里的文件** ——
+    提交前「这个值不在下拉里」的判定必须跳过它们:用户刚传上去的那份还没进 object_info 的列表,那不是旧值。
+    和 `slots()` 同一张表,不另抄一份。
+    """
+    found: set[tuple[str, str]] = set()
+    for node_id, node in api.items():
+        loader = _LOADERS.get(str(node.get("class_type", "")))
+        if loader is not None:
+            found.add((str(node_id), loader[1]))
+    return found
+
+
 def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) -> list[dict[str, str]]:
     """读素材的节点 → 输入槽位 `{node, class_type, title, media, field, role}`,按节点顺序。
 

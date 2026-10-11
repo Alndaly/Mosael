@@ -521,6 +521,24 @@ def test_缺节点缺模型文件_提交之前一次说全_说人话(comfy, tmp_
     assert not comfy.posted("/prompt") and not comfy.posted("/upload/image"), "缺东西的图不提交、不传素材"
 
 
+def test_存的旧值已经不在下拉里了_提交前说清是哪一格(comfy, tmp_path: Path) -> None:
+    """真机(2026-10-11,常用/krea2-text-2-image):「easy prompt」的 prefix 存的是节点包上一版的占位符
+    `Select the prefix to add to the text`,而这台 ComfyUI 的选项已经变成 `Select the prefix add to the text` ——
+    ComfyUI 提交后只回一句 `Value not in list: prefix: 'X' not in [...]`,看着像它自相矛盾(那串字明明在列表里),
+    其实列表里的是**另一个**字符串。插件手里有 object_info,提交之前就能指出是哪一格、存的是什么、去哪儿改。"""
+    comfy.state.workflows["stale.json"] = {
+        **TWO_SAVES_API,
+        "3": {**TWO_SAVES_API["3"], "inputs": {**TWO_SAVES_API["3"]["inputs"],
+                                              "sampler_name": "Select the sampler to add to the text"}},
+    }
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "stale.json"})
+    said = str(caught.value)
+    assert "#3 KSampler · sampler_name" in said and "Select the sampler to add to the text" in said
+    assert "旧值" in said, "说清这是存的旧值,而不是这台机器缺东西"
+    assert not comfy.posted("/prompt"), "说不通的图不提交"
+
+
 def test_那个目录一个文件都没有_下拉是空的_也照样说缺(comfy, tmp_path: Path) -> None:
     """沙盒实测(ComfyUI 0.39 刚装好):维护者的「girl」要 4x-UltraSharp.pth,upscale_models 里一个文件都没有 —— object_info
     里那一格是 `["COMBO", {"options": []}]`。此前「下拉是空的」当成「不是下拉、不判」,照样提交,回来一句英文的

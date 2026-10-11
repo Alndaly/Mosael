@@ -143,10 +143,20 @@ def _same_file(name: str) -> str:
     return name.replace("\\", "/")
 
 
-def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[str], list[str]]:
-    """这张图要、这台 ComfyUI 上没有的东西:(没装的节点类型, 「模型文件(#节点 类型 · 输入名)」)。"""
+def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[str], list[str], list[str]]:
+    """这张图要、而这台 ComfyUI 上没有 / 已经对不上的东西:
+
+    (没装的节点类型, 「模型文件(#节点 类型 · 输入名)」, 「下拉里没有的值(#节点 类型 · 输入名)」)。
+
+    第三类是**存的图和当前的节点对不上**:节点包更新过之后,下拉的选项会变(占位符改个词、选项多一个少一个),
+    而工作流里存的是当初那个字符串 —— ComfyUI 到提交时才回一句「Value not in list: prefix: 'X' not in [...]」,
+    看着像它自己自相矛盾(那串字明明在列表里),其实列表里的是**另一个**字符串。在这里说清楚。
+    """
     nodes: list[str] = []
     files: list[str] = []
+    stale: list[str] = []
+    #: 读素材的节点的槽位不看「值在不在下拉里」:那几格是插件自己写上上传回来的文件名的,下拉是服务器目录里的文件。
+    loaders = graph.loader_inputs(prompt)
     for node_id in sorted(prompt, key=graph._node_order):  # noqa: SLF001 — 同一个插件里的模块
         node = prompt[node_id]
         class_type = str(node.get("class_type", ""))
@@ -156,12 +166,23 @@ def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[s
             continue
         defs = graph._input_defs(object_info, class_type)  # noqa: SLF001
         for name, value in (node.get("inputs") or {}).items():
-            if not (isinstance(value, str) and name.endswith("_name") and value.lower().endswith(_MODEL_SUFFIXES)):
+            if (str(node_id), name) in loaders:
                 continue
             choices = _options(defs.get(name))
-            if choices is not None and _same_file(value) not in {_same_file(one) for one in choices}:
-                files.append(f"「{value}」(#{node_id} {class_type} · {name})")
-    return nodes, files
+            if choices is None:
+                continue
+            if not isinstance(value, str):
+                continue
+            normalized = {_same_file(one) for one in choices}
+            if value in choices or _same_file(value) in normalized:
+                continue
+            #: 模型文件名那条单独说(它有自己的去处:放进模型目录或换一个)—— 已经在 files 里的不重复报。
+            marker = f"#{node_id} {class_type} · {name}"
+            if name.endswith("_name") and value.lower().endswith(_MODEL_SUFFIXES):
+                files.append(f"「{value}」({marker})")
+                continue
+            stale.append(f"「{value}」({marker})")
+    return nodes, files, stale
 
 
 def _named(names: list[str], sep: str) -> str:
@@ -177,7 +198,7 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
     (object_info 拿不到)就不判,交给 ComfyUI 去说。"""
     if not object_info:
         return
-    nodes, files = missing(prompt, object_info)
+    nodes, files, stale = missing(prompt, object_info)
     zh: list[str] = []
     en: list[str] = []
     if nodes:
@@ -191,6 +212,14 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
                   "或者在参数里换成已有的文件再试。")
         en.append(f"This ComfyUI doesn't have the model files this workflow needs: {_named(files, ', ')}. Put them in the "
                   "matching ComfyUI models folder, or pick a file it has in the parameters, and try again.")
+    if stale:
+        zh.append(f"这张工作流里有几格存的还是**旧值**,现在这台 ComfyUI 的下拉里没有它:{_named(stale, '、')}。"
+                  "节点包更新过之后选项会变(占位符改个词也算),而存下来的是当初那个字符串。"
+                  "打开这张工作流、把这几格重选一次再保存,或者在参数里换一个它现在有的值。")
+        en.append("Some stored values in this workflow are no longer among this ComfyUI's options: "
+                  f"{_named(stale, ', ')}. A node pack update changes the option strings (even a reworded placeholder), "
+                  "while the workflow keeps the old one. Open the workflow, re-pick those fields, and save it — "
+                  "or set a value it currently offers in the parameters.")
     if zh:
         raise ComfyError(say(locale, "".join(zh), " ".join(en)))
 
