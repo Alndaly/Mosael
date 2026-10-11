@@ -224,6 +224,44 @@ def test_新版的动态下拉_API里是值的也排回widget(plugin, comfy) -> 
     assert back["2"]["inputs"] == api["2"]["inputs"]
 
 
+def test_新版下拉存着上一版节点包的值_按定义缺省复位_和页面一样(plugin, comfy) -> None:
+    """真机(2026-10-11,常用/krea2-text-2-image):「easy prompt」的 prefix 存着节点包上一版的占位符
+    `Select the prefix to add to the text`,而这台 ComfyUI 的选项已经变成 `Select the prefix add to the text`。
+
+    实测(真机页面):这种**新版**下拉(`["COMBO", {"options": [...]}]`)渲染之后会把不认识的值换回定义里的
+    默认值 —— 所以同一张图在 ComfyUI 界面里跑得通。我们照同一套语义办,并把复位过的那几格记进 `_meta`。
+    """
+    comfy.state.object_info["EasyPrompt"] = {"input": {"required": {
+        "text": ["STRING", {"multiline": True}],
+        "prefix": ["COMBO", {"default": "Select the prefix add to the text", "options": [
+            "Select the prefix add to the text", "Detailed photo of"]}]}}, "output": ["STRING"], "output_node": True}
+    ui = {"nodes": [{"id": 30, "type": "EasyPrompt", "pos": [0, 0], "size": [240, 120], "flags": {}, "order": 0, "mode": 0,
+                     "outputs": [{"name": "STRING", "type": "STRING", "links": []}],
+                     "inputs": [{"name": "text", "type": "STRING", "widget": {"name": "text"}},
+                                {"name": "prefix", "type": "COMBO", "widget": {"name": "prefix"}}],
+                     "widgets_values": ["一个好看的女孩子", "Select the prefix to add to the text"]}], "links": []}
+    _module, _Comfy, convert = plugin
+    node = convert.to_api(ui, comfy.state.object_info)["30"]
+    assert node["inputs"]["prefix"] == "Select the prefix add to the text", "按定义缺省复位"
+    assert node["_meta"][convert.RESET_COMBOS] == ["prefix"], "复位过哪几格留个痕迹"
+
+
+def test_老式列表下拉存着没有的文件_照样原样交出去_由提交前检查说话(plugin, comfy) -> None:
+    """模型文件那种下拉是老式列表(`[["a.safetensors", ...]]`)。实测:前端**不**纠正它,原样提交、后端回
+    `Value not in list: unet_name: ...` —— 圈里常见的那个报错。所以我们也不换(换一个模型就是另一件事了),
+    交给 run.preflight 在提交前说清缺哪个文件。"""
+    comfy.state.object_info["UNETLoader"] = {"input": {"required": {
+        "unet_name": [["krea2_turbo.safetensors", "flux1-dev.safetensors"]]}}, "output": ["MODEL"], "output_node": True}
+    ui = {"nodes": [{"id": 1, "type": "UNETLoader", "pos": [0, 0], "size": [240, 60], "flags": {}, "order": 0, "mode": 0,
+                     "outputs": [{"name": "MODEL", "type": "MODEL", "links": []}],
+                     "inputs": [{"name": "unet_name", "type": "COMBO", "widget": {"name": "unet_name"}}],
+                     "widgets_values": ["gone-model.safetensors"]}], "links": []}
+    _module, _Comfy, convert = plugin
+    node = convert.to_api(ui, comfy.state.object_info)["1"]
+    assert node["inputs"]["unet_name"] == "gone-model.safetensors", "老式下拉不动它"
+    assert convert.RESET_COMBOS not in (node.get("_meta") or {})
+
+
 def test_动态下拉展开出来的子输入_读值时就排在模板那一格后面(plugin, comfy) -> None:
     """真机(2026-10-11,常用/minimax-text-image-2-video 的「提示词优化(Qwen3VL)」):`TextGenerate` 的
     `sampling_mode` 是 COMFY_DYNAMICCOMBO_V3,选了 on 之后长出 temperature/top_k/top_p/min_p/repetition_penalty/

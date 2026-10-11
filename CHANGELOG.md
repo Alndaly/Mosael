@@ -5,6 +5,12 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### 新版下拉存着上一版节点包的值时,按定义缺省复位(和 ComfyUI 界面一致)
+
+- 新版下拉(`["COMBO", {options}]`)里存的值已经不在选项里时,ComfyUI 自己的页面会把它换回定义默认值 ——
+  所以同一张图在界面里跑得通、在 Mosael 里被后端拒。现在 Mosael 照同一套语义办,复位过哪几格记在节点的
+  `_meta` 里。老式列表下拉(模型文件那种)照旧不换,由提交前检查说清缺哪个文件。
+
 ### 新式节点(V3)的格子读值不再错位
 
 - `COMFY_DYNAMICCOMBO_V3` / `COMFY_AUTOGROW_V3` 展开出来的子输入(`sampling_mode.temperature` 这类)

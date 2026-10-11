@@ -80,6 +80,8 @@ _FRONTEND_WIDGETS = frozenset({"upload", "audioUI"})
 #: 转换时写进 `_meta` 的:每个带「生成后怎样」的 widget 存着的设定(randomize / fixed / increment / decrement)。
 #: API 图里没有这一格(它是前端的行为),可「这张图的种子每次换不换」只有它说得清。
 CONTROLS = "control_after_generate"
+#: 写进 `_meta` 的:哪几格下拉存的值已经不在选项里、按定义缺省复位过(见 _restore_stale_combo)。
+RESET_COMBOS = "reset_stale_combos"
 
 #: 子图输入口 / 输出口的节点 id 缺省值(前端的 SUBGRAPH_INPUT_ID / SUBGRAPH_OUTPUT_ID)。
 _SUBGRAPH_INPUT, _SUBGRAPH_OUTPUT = -10, -20
@@ -289,7 +291,8 @@ class _Converter:
 
     def _emit(self, node: _Node) -> dict[str, Any]:
         controls: dict[str, str] = {}
-        inputs = self._widget_values(node, controls)
+        resets: list[str] = []
+        inputs = self._widget_values(node, controls, resets)
         for entry in node.inputs:
             name = entry.get("name")
             if not name or entry.get("link") is None:
@@ -307,6 +310,10 @@ class _Converter:
         if controls:
             # 后端不看 _meta;插件据此在没给种子时照工作流的设定办(见 graph.fill)
             meta[CONTROLS] = controls
+        if resets:
+            #: 哪几格的下拉存的是节点包上一版的值、已经按定义缺省复位(和 ComfyUI 页面的行为一致):
+            #: 留在图上是个痕迹,不至于「跑出来的东西和文件里存的不一样」而没人说得清为什么。
+            meta[RESET_COMBOS] = resets
         return {"class_type": node.type, "inputs": inputs, "_meta": meta}
 
     def _widget_specs(self, node: _Node) -> list[tuple[str, Any, int]]:
@@ -430,6 +437,35 @@ class _Converter:
         options = self._options(definition)
         return any(options.get(flag) for flag in _MEDIA_UPLOAD_OPTIONS) or bool(options.get("audio_upload"))
 
+    @staticmethod
+    def _v2_combo_options(definition: Any) -> list[str] | None:
+        """**新版下拉**的选项(`["COMBO", {"options": [...]}]`)。老式的(`[["a.safetensors", ...]]`)返回 None ——
+        两者在 ComfyUI 前端里行为不同,不能一样对待(见 _restore_stale_combo)。"""
+        if not isinstance(definition, list) or len(definition) < 2 or definition[0] != "COMBO":
+            return None
+        if not isinstance(definition[1], dict):
+            return None
+        options = definition[1].get("options")
+        return [str(one) for one in options] if isinstance(options, list) else None
+
+    def _restore_stale_combo(self, definition: Any, value: Any) -> tuple[Any, bool]:
+        """**新版下拉**里存的值已经不在选项里了:按节点定义里的缺省值复位 —— 和 ComfyUI 自己的页面一样。
+
+        实测(2026-10-11,真机 8120):这种下拉在页面上渲染后会把不认识的值换回定义里的默认值(工作流文件里
+        存着上一版节点包的占位符,工作台照样跑得通就是这个原因);而**老式列表下拉**(模型文件那种)前端
+        原样提交、后端回 `Value not in list` —— 那种我们自己会在提交前说清缺什么(见 run.preflight),
+        不能在这里悄悄换一个模型。
+
+        返回 (值, 是否复位过)。
+        """
+        options = self._v2_combo_options(definition)
+        if options is None or not isinstance(value, str) or value in options:
+            return value, False
+        default = self._options(definition).get("default")
+        if isinstance(default, str) and default in options:
+            return default, True
+        return (options[0] if options else value), True
+
     def _extra_slots(self, name: str, definition: Any) -> int:
         """「生成后怎样」那一格:显式写了就照它,INT 的 seed / noise_seed 没写也有(老规矩)。"""
         options = self._options(definition)
@@ -451,7 +487,8 @@ class _Converter:
             return True, choices[0]
         return False, None
 
-    def _widget_values(self, node: _Node, controls: dict[str, str]) -> dict[str, Any]:
+    def _widget_values(self, node: _Node, controls: dict[str, str],
+                       resets: list[str] | None = None) -> dict[str, Any]:
         """widget 的值;顺手把「生成后怎样」那一格(randomize / fixed / …)记进 `controls`。"""
         stored = node.raw.get("widgets_values")
         values: dict[str, Any] = {}
@@ -474,6 +511,9 @@ class _Converter:
                 present, value = self._default(definition)
                 if not present:
                     continue
+            value, restored = self._restore_stale_combo(definition, value)
+            if restored and resets is not None:
+                resets.append(name)
             values[name] = _wrap(value)
         #: 定义里有、文件里没有的(节点包新加了一格):它不是这些值里的一个,用定义里的缺省值 ——
         #: 此前按位置硬走,新加的格子会顶掉下一个值(和上面 V3 那张错位是同一类)。文件自己标着的
