@@ -59,6 +59,23 @@ it("falls back to original image bytes and shows a helpful state if both endpoin
 });
 
 //: 素材被删掉之后:两个地址都 404。此前这里留着一张浏览器的破图(界面上就是个「坏了的图片」)。
+//: 维护者截图:无限画布、工作流节点里的产出被删之后,占位是一大块空盒子 —— 图标在上、字在下,中间一片空。
+//: 原因:调用方给的是照 `<img>` 写的类(`object-cover`),而 `place-items-center` 在高的盒子里会把两个网格行拉开。
+it("占位不照抄图片的类,内容整块居中(尺寸照旧,不跳版)", () => {
+  const { container } = render(
+    <AssetInlinePreview assetId="gone" name="被删的那张" kind="image" preview="off" plain
+                        className="h-[72px] w-full overflow-hidden object-cover rounded-xl" />);
+  fireEvent.error(container.querySelector("img")!);
+  fireEvent.error(container.querySelector("img")!);
+  const placeholder = container.querySelector<HTMLElement>("[data-asset-missing]")!;
+  const classes = placeholder.className.split(/\s+/);
+  expect(classes, "整块居中,不是把两行撑开").toContain("place-content-center");
+  expect(classes.some((one) => one.startsWith("object-")), "图片专有的类对块没有意义").toBe(false);
+  expect(classes, "尺寸和圆角照旧 —— 占的还是原来那张图的位置").toEqual(
+    expect.arrayContaining(["h-[72px]", "w-full", "rounded-xl"]));
+  expect(placeholder.textContent).toBe("assetPreviewGone");
+});
+
 it("两个地址都不通:默认给一块「素材已删除」的占位,不是破图", () => {
   const { container } = render(<AssetInlinePreview assetId="gone" name="被删的那张" kind="image" preview="off" />);
   fireEvent.error(container.querySelector("img")!);

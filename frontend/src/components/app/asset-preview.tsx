@@ -38,18 +38,44 @@ export function assetGallery(assets: readonly Parameters<typeof assetPreviewItem
  *
  * 尺寸交给调用方(`className`):对话气泡里可以铺得大些,历史面板那种窄列要压扁。
  */
-/** 取不到的素材占位:一块安静的底 + 一个断图图标 + 一句「素材已删除」,尺寸跟着调用方给的 className。 */
-function MissingImage({ name, label, className }: { name: string; label: string; className?: string }) {
+/** 从 `<img>` 的尺寸类里挑出能用在块上的:`object-*`(`object-cover` 这类只对替换元素有意义)和 `block` 去掉,
+ *  高宽圆角那些照旧 —— 占位仍占着原来那张图的位置,不跳版。 */
+function boxClasses(className?: string): string {
+  return (className ?? "")
+    .split(/\s+/)
+    .filter((one) => one && one !== "block" && !one.startsWith("object-"))
+    .join(" ");
+}
+
+/**
+ * 取不到的素材占位:一块安静的底 + 一个断图图标 + 一句「素材已删除」。
+ *
+ * 两点是按维护者截图定的(无限画布、工作流节点里的产出被删之后):调用方给的是**照 `<img>` 写的**类,
+ * 照单全收会连 `object-cover` 一起吃进来;而内容用 `place-items-center` 时,高的盒子里两个网格行会被拉开 ——
+ * 图标在上、字在下,中间一大片空。所以:尺寸类留下、图片专有的去掉,内容用 `place-content-center`
+ * **当一整块居中**,窄的格子里字截断(完整名字在悬停说明里)。
+ */
+function MissingImage({ name, label, className, plain }: {
+  name: string; label: string; className?: string;
+  /** 画布节点里由外层容器统一收边(和图片那条路一致):不自己再描一圈。 */
+  plain?: boolean;
+}) {
   return (
     <Hint label={name}>
       <div
         data-asset-missing=""
         role="img"
         aria-label={`${name}: ${label}`}
-        className={cn("grid place-items-center gap-1 bg-control text-ui-2xs text-muted-foreground", className)}
+        className={cn(
+          "grid min-h-0 place-content-center overflow-hidden bg-control text-ui-2xs text-muted-foreground",
+          !plain && "rounded-lg border border-border",
+          boxClasses(className) || "min-h-16 w-full",
+        )}
       >
-        <ImageOff size={16} aria-hidden />
-        <span>{label}</span>
+        <span className="flex min-w-0 max-w-full flex-col items-center gap-1 px-2 text-center">
+          <ImageOff size={16} aria-hidden />
+          <span className="max-w-full truncate">{label}</span>
+        </span>
       </div>
     </Hint>
   );
@@ -116,7 +142,7 @@ export function AssetInlinePreview({
     //: **默认就有**,不靠调用方传 —— 破图不是「一种样式选择」,是界面坏了;要让某个调用方自己画(能力面板那张
     //: 认脸的小图),用 imageFallback 覆盖。
     if (stage >= 2) {
-      return <>{imageFallback ?? <MissingImage name={name} label={t("assetPreviewGone")} className={className} />}</>;
+      return <>{imageFallback ?? <MissingImage name={name} label={t("assetPreviewGone")} className={className} plain={plain} />}</>;
     }
     const picture = (
       <img
