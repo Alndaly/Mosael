@@ -149,4 +149,49 @@ describe("创作会话的出处", () => {
     expect(gets.some((url) => url.includes("limit=81"))).toBe(true);
     expect(screen.queryByRole("button", { name: "createShowEarlier" })).toBeNull();
   });
+
+describe("选中那一行是整行,「回到那里」独立", () => {
+  /**
+   * 最下面那一摞「来自别处」(画板 / 工作流 / 对话开出来的都在里面)展开着。
+   *
+   * **只在合着时才点**:当前开着的那条会话就在这一摞里时,它本来就是展开的
+   * (ADR 0052 §3)——照点一下反而把它合上,后面就找不到那一行了。
+   */
+  async function expand() {
+    await screen.findByRole("button", { name: /海边的灯塔/ });
+    const aside = document.querySelector("[data-session-aside]") as HTMLElement;
+    const toggle = within(aside).getByRole("button", { name: /createFromElsewhere/ });
+    if (toggle.getAttribute("aria-expanded") === "false") fireEvent.click(toggle);
+    return screen.findByRole("button", { name: /画板《镜头与灵感》/ });
+  }
+
+  it("底色铺在整行上(连右侧「回到那里」一起),不是只在标题那一格", async () => {
+    localStorage.setItem("mosael.generation.session.w1.create", "s-board");
+    renderStudio();
+    const title = await expand();
+    //: 有那句副标题 / 那颗按钮时,「整行」是外面那一层(底色、左边那条竖条、拖影都在它身上)。
+    const line = title.closest("[data-session-row]") as HTMLElement;
+    expect(line, "整行那一层要认得出来(data-session-row)").toBeTruthy();
+    expect(line.className, "选中底色在整行那一层上").toContain("color-mix(in_srgb,var(--primary)_9%");
+    expect(line.className, "左边那条圆角竖条也在整行那一层上").toContain("before:bg-primary");
+    //: 那颗「回到那里」在整行**里面** —— 底色盖住它,而不是把它落在外面。
+    expect(line.contains(within(line).getByRole("button", { name: "createGoToOrigin" }))).toBe(true);
+    //: 标题那颗按钮自己不再画一层底色(两处都画的话,右边那颗又落回"没盖住")。
+    expect(title.className, "底色只画一层(在整行上)").not.toContain("color-mix(in_srgb,var(--primary)_9%");
+  });
+
+  it("点「回到那里」:走它自己那一条,不连带打开这一行", async () => {
+    //: 当前开着的是「海边的灯塔」;去点**另一条**(画板那条)的「回到那里」——
+    //: 若那一行也被点开了,当前会话会被换成 s-board,这条断言就红。
+    localStorage.setItem("mosael.generation.session.w1.create", "s-mine");
+    renderStudio();
+    const title = await expand();
+    const goBack = within(title.closest("[data-session-row]") as HTMLElement).getByRole("button", { name: "createGoToOrigin" });
+
+    fireEvent.click(goBack);
+
+    //: 它去那一处(画板),但没把这一条打开成当前会话 —— 两个是兄弟按钮,点击互不牵连。
+    await waitFor(() => expect(localStorage.getItem("mosael.generation.session.w1.create")).toBe("s-mine"));
+  });
+});
 });

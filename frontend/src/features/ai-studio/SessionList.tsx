@@ -665,20 +665,29 @@ function SessionRow({
   const t = useI18n();
   // 选择模式下不许拖:那时的点击是"勾选",两种手势叠在一起谁都做不好。只能看的也不许拖(拖动是换分组)。
   const { attributes, listeners, setNodeRef } = useDraggable({ id: session.id, disabled: selectMode || Boolean(viewOnly) });
-  const row = (
+  //: 行那一层的样子(圆角、底色、左边那条短竖条、拖起来的淡影)。**贴在最外层** ——
+  //: 铺满整行才叫「这一行被选中了」,包括右边那颗「回到那里」(维护者:「背景要覆盖整一行,
+  //: 右侧回到那里没有被包裹进去」)。
+  const chrome = cn(
+    "w-full rounded-md transition-colors duration-100",
+    // 选中态:一条**圆角短竖条**贴在左边 + 一层很淡的底色。此前是
+    // `shadow-[inset_2px_0_0]` —— 直角、贯穿整行高、颜色还是实心 primary,
+    // 在一堆圆角行里显得很硬。圆角竖条是本仓库已有的做法(剪辑页字幕条同款)。
+    active
+      ? "relative bg-[color-mix(in_srgb,var(--primary)_9%,transparent)] before:absolute before:inset-y-1.5 before:left-0.5 before:w-0.5 before:rounded-full before:bg-primary before:content-[''] hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]"
+      : "hover:bg-muted",
+    // 拖起来的那一条留个淡影占位,别让列表塌下去。
+    dragging && "opacity-40",
+  );
+  //: 里面那颗按钮只管内容与点击(内边距留在它身上:连它一起可点)。行那一层的样子由外层给。
+  const rowButton = (extra: string) => (
     <button
       ref={setNodeRef}
       type="button"
       className={cn(
-        "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted",
+        "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px border-0 bg-transparent px-3 py-3 text-left",
         selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
-        // 选中态:一条**圆角短竖条**贴在左边 + 一层很淡的底色。此前是
-        // `shadow-[inset_2px_0_0]` —— 直角、贯穿整行高、颜色还是实心 primary,
-        // 在一堆圆角行里显得很硬。圆角竖条是本仓库已有的做法(剪辑页字幕条同款)。
-        active &&
-          "relative bg-[color-mix(in_srgb,var(--primary)_9%,transparent)] before:absolute before:inset-y-1.5 before:left-0.5 before:w-0.5 before:rounded-full before:bg-primary before:content-[''] hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]",
-        // 拖起来的那一条留个淡影占位,别让列表塌下去。
-        dragging && "opacity-40",
+        extra,
       )}
       onClick={onOpen}
       {...attributes}
@@ -701,6 +710,8 @@ function SessionRow({
     </button>
   );
   //: 「回到那里」和这一行并排,不塞进行按钮里(按钮里套按钮,读屏念成一个、点它连带打开这一行)。
+  //: 两个都是**兄弟**按钮,点它不会连带打开这一行(维护者:「点击回到那里...点击还是独立的」);
+  //: 行那一层的样子在外层 div 上,所以选中底色照样盖住它。
   const goBack = extras?.goBack && !selectMode ? (
     <IconButton
       variant="ghost"
@@ -713,28 +724,23 @@ function SessionRow({
       <CornerUpLeft size={13} />
     </IconButton>
   ) : null;
+  //: 有一句话 / 一颗按钮要多说时:外面那一格拿行样子(chrome),里面那颗按钮只管自己的内容。
+  //: `data-session-row` 挂在「整行」那一层上(底色、竖条、拖影都在它身上)。
   const line = goBack ? (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-0.5">
-      {row}
+    <div data-session-row className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-0.5", chrome)}>
+      {viewOnly ? (
+        <Hint label={session.title} hint={t(viewOnly)}>
+          {rowButton("")}
+        </Hint>
+      ) : (
+        rowButton("")
+      )}
       {goBack}
     </div>
-  ) : row;
+  ) : rowButton(chrome);
   //: 只能看的没有右键菜单:改名、收纳、删除都是主人的事,共享与否也是(SessionShareMenuItem 本来就藏)。
-  //: 悬停说全名和「为什么只能看」。
-  if (viewOnly) {
-    return goBack ? (
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-0.5">
-        <Hint label={session.title} hint={t(viewOnly)}>
-          {row}
-        </Hint>
-        {goBack}
-      </div>
-    ) : (
-      <Hint label={session.title} hint={t(viewOnly)}>
-        {row}
-      </Hint>
-    );
-  }
+  //: 悬停说全名和「为什么只能看」。(有「回到那里」时那一层已经套在按钮外面了,见上面的 line。)
+  if (viewOnly) return goBack ? line : <Hint label={session.title} hint={t(viewOnly)}>{line}</Hint>;
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{line}</ContextMenuTrigger>
