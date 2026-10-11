@@ -99,23 +99,12 @@ export function MissingPanel({
   const noManager = library.data ? !library.data.manager?.version : false;
   const [installed, setInstalled] = React.useState(false);
   const [restartAsk, setRestartAsk] = React.useState(false);
-  //: 服务器重启过:画布那个页面的节点定义还是旧的,新装的节点它不认识(画布上画成 UNKNOWN)。
-  const [restarted, setRestarted] = React.useState(false);
-  const reloadPage = useMutation({
-    mutationFn: () => workbenchCall({ op: "reloadPage" }),
-    onSuccess: (result) => {
-      if (!result.ok) setReloadNote(t("workbenchReloadFailed"));
-    },
-    onError: () => setReloadNote(t("workbenchReloadFailed")),
-  });
-  const [reloadNote, setReloadNote] = React.useState("");
   const restart = useMutation({
     mutationFn: () => rebootWorkflowServer(target.instanceId),
     onSuccess: () => {
       setRestartAsk(false);
       setInstalled(false);
-      //: 重启之后**页面必须重新载入**才认得到新节点 —— 页面里的定义是打开它时拉的,服务器换了它不知道。
-      setRestarted(true);
+
       invalidatePluginDependents(qc);
       void qc.invalidateQueries({ queryKey: ["workflow-library", target.instanceId] });
       void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
@@ -200,19 +189,6 @@ export function MissingPanel({
         )
       )}
       {restart.isError && <PanelNote tone="error">{errorText(restart.error)}</PanelNote>}
-      {/* 画布缺节点、这里却查不出?那是页面自己的定义比服务器旧(装完包、重启过那台 ComfyUI 之后就会这样)。
-          重载页面 = 重新拉一次 /object_info,画布上的 UNKNOWN 就没了。未保存的改动会丢,所以先说清。 */}
-      <div className="flex flex-wrap items-center justify-between gap-2" data-workbench-reload="">
-        <p className="m-0 min-w-0 text-ui-2xs leading-relaxed text-muted-foreground">
-          {restarted ? t("workbenchReloadAfterRestart") : t("workbenchReloadHint")}
-        </p>
-        <Button variant={restarted ? "default" : "outline"} size="xs" className="shrink-0"
-                loading={reloadPage.isPending} onClick={() => reloadPage.mutate()}>
-          <RefreshCcw size={12} />
-          {t("workbenchReloadPage")}
-        </Button>
-      </div>
-      {reloadNote && <PanelNote tone="error">{reloadNote}</PanelNote>}
       {models.length > 0 && (
         <section aria-label={t("workbenchMissingModels")} className="grid gap-2">
           <h3 className="m-0 flex items-center gap-1.5 text-ui-sm font-semibold text-foreground">

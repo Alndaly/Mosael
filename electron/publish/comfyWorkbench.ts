@@ -75,6 +75,9 @@ export const MAX_RENAMES = 50;
 
 /** 保存用的前端命令(和 ComfyUI 菜单「工作流 → 保存」、Ctrl+S 同一条)。 */
 export const SAVE_COMMAND = "Comfy.SaveWorkflow";
+//: 前端「刷新节点定义」那条命令(界面上那个刷新的正身):重新拉 /object_info、把画布上认不出的
+//: 占位节点换成真的。重启服务器之后由重连事件触发,见 refreshDefinitions。
+const REFRESH_DEFINITIONS_COMMAND = "Comfy.RefreshNodeDefinitions";
 
 /**
  * 写之前要核对的那一张:`key` 是读的时候开着的那张(和轮询的 `workflow.key` 同一种写法),`revision` 是它那时改过几回。
@@ -89,16 +92,6 @@ export interface WorkbenchExpect {
 export type WorkbenchCall =
   | { op: "setWidget"; node: string; widget: string; value: string | number | boolean }
   | { op: "refreshCombos" }
-  /**
-   * 重新载入画布这个页面。**装完节点包、重启过那台 ComfyUI 之后要用它**:页面里的节点定义是
-   * 打开这个页面时拉的(`GET /object_info`),服务器那边后来长出来的节点它不认识 —— 画布把那些
-   * 节点画成 UNKNOWN(前端自己的 Missing node 提示),`graphToPrompt` 也跟着失败(面板上是
-   * 「画布那边没做成:malformed export」)。新开一个页面就正常(内嵌浏览器就是这么好的)。
-   *
-   * 为什么不能只刷新下拉(`refreshCombos`):那只重取下拉的候选值,不动节点定义注册表。
-   * 未保存的改动会丢 —— 页面按 ComfyUI 自己的状态恢复,但没存过的那一份不保证。
-   */
-  | { op: "reloadPage" }
   | { op: "export" }
   | { op: "save" }
   | { op: "setMarks"; marks: { nodes: Record<string, Record<string, unknown>>; extra: Record<string, unknown> | null };
@@ -181,6 +174,33 @@ export function workbenchInstallScript(origin: string): string {
   };
   const api = app.api;
   const nodeOf = (detail) => (detail && typeof detail === "object" ? text(detail.display_node || detail.node, 40) : text(detail, 40));
+  /**
+   * 服务器回来了(WS 重连)—— 就地刷新节点定义。
+   *
+   * 页面里的节点定义是打开这个页面时拉的(GET /object_info)。装完节点包、重启那台 ComfyUI 之后,
+   * 服务器长了新节点而**这个页面不认识**:画布把它们画成 UNKNOWN(前端自己的 Missing node 提示),
+   * graphToPrompt 跟着失败(面板上是「画布那边没做成:malformed export」)。内嵌浏览器新开一页就正常,
+   * 是这个长命页面旧了。
+   *
+   * 用前端自己的那条命令(Comfy.RefreshNodeDefinitions,和界面上那个刷新是同一件事):定义重新拉、
+   * 画布上那些 UNKNOWN 的占位节点就地换成真的 —— 不重载页面,未保存的改动不动。
+   * 只在**重连**时做(首次打开不算,那时页面刚拉过定义)。
+   */
+  const refreshDefinitions = () => {
+    try {
+      const store = commands();
+      const knows = store && typeof store.execute === "function" && Array.isArray(store.commands)
+        && store.commands.some((one) => one && one.id === ${JSON.stringify(REFRESH_DEFINITIONS_COMMAND)});
+      if (!knows) return false;
+      Promise.resolve(store.execute(${JSON.stringify(REFRESH_DEFINITIONS_COMMAND)})).catch(() => undefined);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+  if (api && typeof api.addEventListener === "function") {
+    api.addEventListener("reconnected", () => { refreshDefinitions(); });
+  }
   const listen = (type, pick) => {
     if (!api || typeof api.addEventListener !== "function") return false;
     api.addEventListener(type, (event) => {
@@ -790,11 +810,6 @@ export function workbenchInstallScript(origin: string): string {
       await app.refreshComboInNodes();
       return { ok: true };
     },
-    reloadPage() {
-      //: 先把这个回执交出去,再换页 —— 立刻 reload 的话调用方等的是一个永远不会回来的应答。
-      setTimeout(() => { try { window.location.reload(); } catch { /* 页面正在走,忽略 */ } }, 50);
-      return { ok: true };
-    },
     async exportGraph() {
       const result = await app.graphToPrompt();
       return JSON.parse(JSON.stringify({ workflow: result && result.workflow, prompt: result && result.output,
@@ -975,7 +990,6 @@ export function workbenchCallScript(origin: string, call: WorkbenchCall): string
   const body = {
     setWidget: "return bridge.setWidget(call.node, call.widget, call.value);",
     refreshCombos: "return await bridge.refreshCombos();",
-    reloadPage: "return bridge.reloadPage();",
     export: "return await bridge.exportGraph();",
     save: "return bridge.save();",
     setMarks: "return bridge.setMarks(call.marks, call.expect);",

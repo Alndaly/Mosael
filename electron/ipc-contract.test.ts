@@ -159,10 +159,7 @@ describe("Electron IPC contract", () => {
       partition: "persist:pool-comfyui-c1", call: { op: "setWidget", node: "4", widget: "ckpt_name", value: "sdxl.safetensors" },
     });
     expect(callOf({ op: "setWidget", node: "-3", widget: "steps", value: 30 }).call.value).toBe(30);
-    for (const op of ["refreshCombos", "export", "save", "reloadPage"]) {
-      expect(callOf({ op })).toEqual({ partition: "persist:pool-comfyui-c1", call: { op } });
-    }
-    expect(() => callOf({ op: "reloadPage", url: "https://example.com" }), "重载不带参数").toThrow(/unexpected/);
+    for (const op of ["refreshCombos", "export", "save"]) expect(callOf({ op })).toEqual({ partition: "persist:pool-comfyui-c1", call: { op } });
     expect(() => callOf({ op: "poll" }), "轮询是主进程自己的").toThrow(/op/);
     expect(() => callOf({ op: "eval", code: "alert(1)" })).toThrow(/op/);
     expect(() => callOf({ op: "save", script: "alert(1)" })).toThrow(/unexpected/);

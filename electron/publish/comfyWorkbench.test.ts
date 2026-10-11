@@ -85,17 +85,14 @@ function comfyPage(origin = ORIGIN) {
     })),
     extensionManager: {
       workflow: { activeWorkflow: active },
-      command: { commands: [{ id: SAVE_COMMAND }, { id: "Comfy.NewBlankWorkflow" }], execute },
+      command: { commands: [{ id: SAVE_COMMAND }, { id: "Comfy.NewBlankWorkflow" },
+                            { id: "Comfy.RefreshNodeDefinitions" }], execute },
     },
   };
-  const reload = vi.fn();
-  //: 页面是个浏览器:`window.location`、全局的 setTimeout 都在(reloadPage 先回执、随后换页就靠这两样)。
-  const location = { origin, reload };
-  const window: Record<string, unknown> = { app, location };
-  Object.assign(window, { setTimeout: globalThis.setTimeout.bind(globalThis) });
-  const context = vm.createContext({ window, location, setTimeout: globalThis.setTimeout.bind(globalThis) });
+  const window: Record<string, unknown> = { app };
+  const context = vm.createContext({ window, location: { origin } });
   const run = <T = unknown>(script: string) => vm.runInContext(script, context) as Promise<T> | T;
-  return { app, window, reload, fire, tracker, active, ckpt, steps, loader, sampler, save, graph, subgraph, inner, execute, run };
+  return { app, window, fire, tracker, active, ckpt, steps, loader, sampler, save, graph, subgraph, inner, execute, run };
 }
 
 async function installed(page = comfyPage()) {
@@ -405,12 +402,20 @@ describe("工作台的桥(注入的脚本)", () => {
     expect(page.execute).toHaveBeenCalledWith(SAVE_COMMAND);
   });
 
-  it("重新载入页面:先把回执交出去,再换页 —— 立刻 reload 的话调用方等的应答永远不回来", async () => {
+  //: 装完节点包、重启那台 ComfyUI 之后:页面里的定义还是旧的(画布把新节点画成 UNKNOWN、导出失败)。
+  //: 服务器回来就是一次 WS 重连 —— 那一下就地刷新定义,不重载页面、不丢未保存的改动。
+  it("服务器回来(WS 重连)就地刷新节点定义;首次打开不动它", async () => {
     const page = await installed();
-    expect(await call(page, { op: "reloadPage" })).toEqual({ ok: true });
-    expect(page.reload, "回执回来之前不换页").not.toHaveBeenCalled();
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
-    expect(page.reload, "随后换页一次(重新拉 /object_info,新装的节点才认得)").toHaveBeenCalledTimes(1);
+    expect(page.execute, "打开页面不算重连").not.toHaveBeenCalled();
+    page.fire("reconnected", undefined);
+    expect(page.execute, "重连那一下就把定义刷了(不等任何人)").toHaveBeenCalledWith("Comfy.RefreshNodeDefinitions");
+  });
+
+  it("这版前端没有那条刷新命令时:不假装成功(什么都不做)", async () => {
+    const page = await installed();
+    page.app.extensionManager.command.commands = [{ id: SAVE_COMMAND }];
+    page.fire("reconnected", undefined);
+    expect(page.execute).not.toHaveBeenCalled();
   });
 
   it("写标记:清单里的节点换上 `properties.mosael`,别的节点上的去掉,图上的 `extra.mosael` 换掉;别的键不动", async () => {
