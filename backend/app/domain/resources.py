@@ -14,6 +14,9 @@ from typing import Literal, get_args
 Resource = Literal[
     "assets", "sequences", "transcripts", "workflows", "publish_tasks", "generations", "boards", "entities", "voices",
     "projects", "notes", "skills",
+    #: 插件那边这台服务器上的模型文件(下载下来的、装上预览图的):改它的活不在这几个页面里发起,
+    #: 所以「下完了」得让别处开着的模型库跟着刷新(JobKind.affects)。
+    "models",
 ]
 
 RESOURCES: tuple[str, ...] = get_args(Resource)

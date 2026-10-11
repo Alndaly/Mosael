@@ -51,7 +51,13 @@ describe("任务种类", () => {
 
   it("资源换成缓存键", async () => {
     const kindOf = await kinds();
-    expect(queryKeysAffectedBy(kindOf("workflow"))).toEqual(["workflows", "workflow-runs"]);
+    //: workflows 这一族还带着插件那边的节点包(装完,这张工作流缺哪些节点就变了)。
+    expect(queryKeysAffectedBy(kindOf("workflow"))).toEqual(["workflows", "workflow-runs", "node-installs"]);
+    //: 而「这张工作流产出过什么」(插件里工作流库详情 + 详情里「最近的产出」)挂在 assets 那一族下 ——
+    //: 产出是别处(创作页、工作台、画板、工具)跑出来的,一次生成做完就该跟着刷新(api/resourceKeys)。
+    expect(queryKeysAffectedBy(kindOf("tts"))).toEqual([
+      "assets", "asset", "waveform", "workflow-library", "workflow-outputs", "generation-jobs", "generation-sessions",
+    ]);
   });
 
   it("跳转只去前端确实有的页面,带上项目", async () => {

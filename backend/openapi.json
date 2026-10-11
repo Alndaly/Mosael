@@ -33239,7 +33239,8 @@
                 "voices",
                 "projects",
                 "notes",
-                "skills"
+                "skills",
+                "models"
               ]
             },
             "type": "array",
@@ -36808,7 +36809,8 @@
                 "voices",
                 "projects",
                 "notes",
-                "skills"
+                "skills",
+                "models"
               ]
             },
             "type": "array",

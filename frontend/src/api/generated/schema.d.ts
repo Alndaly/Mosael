@@ -11867,7 +11867,7 @@ export interface components {
              * Writes
              * @default []
              */
-            writes: ("assets" | "sequences" | "transcripts" | "workflows" | "publish_tasks" | "generations" | "boards" | "entities" | "voices" | "projects" | "notes" | "skills")[];
+            writes: ("assets" | "sequences" | "transcripts" | "workflows" | "publish_tasks" | "generations" | "boards" | "entities" | "voices" | "projects" | "notes" | "skills" | "models")[];
             /**
              * Error Summary
              * @description 出了什么事,一句话(按请求方的语言):失败卡上最醒目的那一行,原文 `error` 在「详情」和「复制错误」里。
@@ -13467,7 +13467,7 @@ export interface components {
              */
             announce: "always" | "failures" | "never";
             /** Affects */
-            affects: ("assets" | "sequences" | "transcripts" | "workflows" | "publish_tasks" | "generations" | "boards" | "entities" | "voices" | "projects" | "notes" | "skills")[];
+            affects: ("assets" | "sequences" | "transcripts" | "workflows" | "publish_tasks" | "generations" | "boards" | "entities" | "voices" | "projects" | "notes" | "skills" | "models")[];
             /** View */
             view?: string | null;
             /** Record Field */

@@ -18,15 +18,18 @@ import type { components } from "@/api/generated/schema";
 export type Resource = components["schemas"]["ConfirmationOut"]["writes"][number];
 
 export const RESOURCE_QUERY_KEYS: Record<Resource, readonly string[]> = {
-  //: 素材库、单份素材(`["assets", "detail", id]`)、文档阅读器挂在 `asset` 下的那几份、波形。
-  assets: ["assets", "asset", "waveform"],
+  //: 素材库、单份素材(`["assets", "detail", id]`)、文档阅读器挂在 `asset` 下的那几份、波形;
+  //: 还有插件那边**按产出看的两份**:工作流库详情(大卡片上「最近的那一份产出」)和详情里「最近的产出」那一组。
+  //: 它们说的是"这张工作流产出过什么",而产出是别处(创作页、工作台、画板、工作流节点、智能体)跑出来的 ——
+  //: 不挂在这里的话,别处跑完这边照旧是旧的一组(维护者:工作流详情里的生成历史不会自动同步)。
+  assets: ["assets", "asset", "waveform", "workflow-library", "workflow-outputs"],
   sequences: ["sequences"],
   transcripts: ["transcript"],
-  //: 工作流列表、编辑器里开着的那张,和它的运行记录。
-  workflows: ["workflows", "workflow-runs"],
+  //: 工作流列表、编辑器里开着的那张,和它的运行记录;节点包装完之后这张工作流缺什么也跟着变。
+  workflows: ["workflows", "workflow-runs", "node-installs"],
   publish_tasks: ["publish-tasks"],
-  //: 生成记录和创作会话(ADR 0055)。
-  generations: ["generation-jobs", "generation-sessions"],
+  //: 生成记录和创作会话(ADR 0055);同上,一次生成也是一份产出。
+  generations: ["generation-jobs", "generation-sessions", "workflow-library", "workflow-outputs"],
   //: 画板列表和开着的那张板的详情(BoardsView 按版本号合进本地,见 queryKeys 的 boardKeys)。
   boards: ["boards"],
   //: 资产库:参考图挂上了新的(资产格的能力、详情页的「补全多角度」「生成表情」)。
@@ -39,6 +42,8 @@ export const RESOURCE_QUERY_KEYS: Record<Resource, readonly string[]> = {
   notes: ["notes", "note"],
   //: 设置页的技能列表、「/」菜单、开着的编辑表单(ADR 0040)。
   skills: ["agent-skills"],
+  //: 插件那台服务器上的模型文件:模型库、单个模型的详情、连接提供的模型清单。
+  models: ["model-library", "model-library-detail", "plugin-models"],
 };
 
 /** 这几种数据对应的缓存键(第一段),去重。认不出的词跳过 —— 新前端遇上更老的后端时不该炸。 */

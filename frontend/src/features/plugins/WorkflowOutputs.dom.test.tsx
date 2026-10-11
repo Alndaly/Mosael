@@ -28,6 +28,7 @@ vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh" }) }));
 vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => false }));
 
+import { queryKeysFor, invalidateResources } from "@/api/resourceKeys";
 import { setModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { WorkflowOutputs } from "./WorkflowOutputs";
 
@@ -38,11 +39,12 @@ const output = (id: string, nsfw: typeof clean | typeof flagged = clean, kind = 
 
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <WorkflowOutputs instanceId="i1" workspaceId="w1" path="krea2-text-2-image.json" label="快速用krea2生图" />
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 const tile = (id: string) => document.querySelector<HTMLElement>(`[data-workflow-output="${id}"]`)!;
@@ -123,4 +125,32 @@ describe("最近的产出", () => {
     expect(tile("s1").tagName).toBe("LI");
     expect(tile("s1").querySelector("img")).toBeNull();
   });
+
+/**
+ * 别处跑了这张工作流,这一组得跟着变。
+ *
+ * 维护者:「ComfyUI 插件内的工作流详情弹窗内的生成历史不会自动同步别的地方用到这条工作流的时候的产出记录」。
+ * 产出是别处跑出来的(创作页、工作台、画板、工作流节点、智能体),而**"哪个任务刚做完"只有任务中心知道** ——
+ * 它按任务目录的 `affects` 作废缓存(components/jobs/TaskCenter)。所以这里钉的是:那几种数据被作废时,
+ * 这一组也在作废范围内(api/resourceKeys 那张表),而不是各自去轮询。
+ */
+it("别处用它产出了新的:那种数据一作废,这一组立刻重问", async () => {
+  api.getWorkflowOutputs.mockResolvedValue({ outputs: [output("a1")], more: false, problem: "" });
+  const { client } = mount();
+  await screen.findByRole("region", { name: "workflowLastOutput" });
+  expect(tile("a1")).toBeTruthy();
+  expect(api.getWorkflowOutputs).toHaveBeenCalledTimes(1);
+
+  //: 一次生成做完,任务中心做的就是这一句(affects: assets / generations)。
+  await act(() => invalidateResources(client, ["assets", "generations"]));
+
+  await waitFor(() => expect(api.getWorkflowOutputs).toHaveBeenCalledTimes(2));
+});
+
+it("这一组挂在 assets / generations 下 —— 换掉那两个词它就不会刷新了", () => {
+  expect(queryKeysFor(["assets"])).toContain("workflow-outputs");
+  expect(queryKeysFor(["generations"])).toContain("workflow-outputs");
+  //: 工作流库那份(大卡片上「最近的那一份产出」)同理。
+  expect(queryKeysFor(["assets"])).toContain("workflow-library");
+});
 });

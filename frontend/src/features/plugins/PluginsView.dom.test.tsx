@@ -276,7 +276,10 @@ describe("素材工具的工作区归属", () => {
     fireEvent.click(screen.getByRole("button", { name: "运行" }));
     await waitFor(() => expect(invokePluginTool).toHaveBeenCalledWith("i1", name, { input, workspace_id: "workspace-a" }));
     if (name === "pan_import") {
-      await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["assets", "workspace-a"] }));
+      //: 产出的是素材:**按资源族作废**(api/resourceKeys 那张表),不是只作废这一个工作区的素材列表 ——
+      //: 插件里那两组「这张工作流产出过什么」(工作流库详情、详情里「最近的产出」)也挂在这一族下,
+      //: 只刷素材库的话它们照旧是旧的(维护者:工作流详情里的生成历史不会自动同步别处跑出来的)。
+      await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["assets"] }));
     }
     await waitFor(() => expect(screen.getByRole("button", { name: "运行" })).not.toBeDisabled());
 
