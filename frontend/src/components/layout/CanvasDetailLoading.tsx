@@ -1,10 +1,13 @@
 import { LoadingState } from "./LoadingState";
-import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
-/** Restore a saved canvas in place: the loading surface has the same full-bleed
- * bounds and toolbar inset as the editor, without flashing a framed list page. */
+/**
+ * Restore a saved canvas in place: the loading surface has the same full-bleed
+ * bounds and toolbar inset as the editor, without flashing a framed list page.
+ *
+ * 这里此前还在左上角摆一块玻璃条(骨架图标 + 骨架标题)——那是「画布自己报名字」那个年代的东西。
+ * 名字现在在页头(分级面包屑)里,画布上再摆一个占位就是同一个信息两处;它又只在载入时闪一下,
+ * 看着像旧版残留。载入这件事由 LoadingState 说。
+ */
 export function CanvasDetailLoading({ testId }: { testId: string }) {
   return (
     <div
@@ -13,13 +16,6 @@ export function CanvasDetailLoading({ testId }: { testId: string }) {
       aria-busy="true"
     >
       <LoadingState />
-      <div
-        className={cn("absolute left-2 top-2 flex h-[42px] items-center gap-2 rounded-lg p-1 pr-3", CANVAS_GLASS_SURFACE_CLASS)}
-        aria-hidden="true"
-      >
-        <Skeleton className="size-8 shrink-0" />
-        <Skeleton className="h-3.5 w-28" />
-      </div>
     </div>
   );
 }
