@@ -27,10 +27,16 @@ def _configured(client):
         db.commit()
 
 
+#: 等一轮 agent 跑完的预算(秒)。CI 上后端是 `-n auto`(4 个 worker)在跑,机器满负载时一轮要十几秒 ——
+#: 10 秒那种预算会偶发地红(`test_中断说明只发一次…` 就是这么红的:断言本身没问题,是等不到)。
+#: 卡死才算输:真挂了照样在预算内失败,只是不再因为「机器忙」失败。
+_TURN_BUDGET = 60
+
+
 def _incoming(*args, **kwargs) -> None:
     """handle_incoming 把消息交给 host 的 turn 线程;回复在那一轮收尾时才发出,所以等它跑完再断言。"""
     inbound.handle_incoming(*args, **kwargs)
-    assert host.wait_for_idle_turns(10)
+    assert host.wait_for_idle_turns(_TURN_BUDGET)
 
 
 def test_extract_text_strips_mentions() -> None:

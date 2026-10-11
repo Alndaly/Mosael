@@ -303,7 +303,9 @@ def test_run_logged_inside_a_job_is_stopped_with_its_whole_tree_on_cancel(tmp_pa
     worker.start()
     pid = int(_wait_for(grandchild_pid))
     scope.kill()
-    worker.join(timeout=10)
+    #: 预算要经得住 CI 的满负载(后端 `-n auto`,4 个 worker):这条在 CI 上偶发红过 —— 不是没停,
+    #: 是 10 秒不够。卡死才算输,机器忙不算。
+    worker.join(timeout=60)
     assert not worker.is_alive(), "取消之后 run_logged 还在等子进程"
     assert outcome["result"].returncode != 0
     assert outcome["took"] < FAKE_SECONDS / 2
@@ -340,7 +342,7 @@ def test_a_resident_worker_request_is_killed_when_its_job_is_cancelled(tmp_path:
     asking.start()
     time.sleep(0.5)
     scope.kill()
-    asking.join(timeout=10)
+    asking.join(timeout=60)  # 同上:满负载的 CI 上 10 秒会偶发不够
     assert not asking.is_alive(), "取消之后还在等常驻进程回话(占着 ASR / TTS 名额)"
     assert outcome.get("key") == CANCELLED_ERROR_KEY
     assert _gone_within(worker.process.pid, 5)
