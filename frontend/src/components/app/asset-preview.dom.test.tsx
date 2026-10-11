@@ -57,3 +57,13 @@ it("falls back to original image bytes and shows a helpful state if both endpoin
   rerender(<AssetInlinePreview assetId="new-frame" name="Scene" kind="image" preview="off" imageFallback={<span>Preview unavailable</span>} />);
   expect(container.querySelector("img")?.getAttribute("src")).toBe("/preview/new-frame");
 });
+
+//: 素材被删掉之后:两个地址都 404。此前这里留着一张浏览器的破图(界面上就是个「坏了的图片」)。
+it("两个地址都不通:默认给一块「素材已删除」的占位,不是破图", () => {
+  const { container } = render(<AssetInlinePreview assetId="gone" name="被删的那张" kind="image" preview="off" />);
+  fireEvent.error(container.querySelector("img")!);
+  fireEvent.error(container.querySelector("img")!);
+  expect(container.querySelector("img"), "不再留着一张取不到的图").toBeNull();
+  const placeholder = container.querySelector("[data-asset-missing]")!;
+  expect(placeholder.getAttribute("aria-label")).toBe("被删的那张: assetPreviewGone");
+});

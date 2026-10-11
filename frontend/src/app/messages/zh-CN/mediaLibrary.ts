@@ -1,6 +1,7 @@
 export const mediaLibrary = {
   // Media library
   mediaTitle: "素材库",
+  assetPreviewGone: "素材已删除",
   agentRefGone: "「{name}」已经不在了",
   agentRefGoneHint: "它可能已被删除。这条消息里的引用保留着当时的名字。",
   mediaEmptyTitle: "素材库是空的",

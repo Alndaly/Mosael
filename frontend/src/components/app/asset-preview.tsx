@@ -1,7 +1,8 @@
 import React from "react";
-import { Paperclip } from "lucide-react";
+import { ImageOff, Paperclip } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
+import { useI18n } from "@/app/preferences";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,23 @@ export function assetGallery(assets: readonly Parameters<typeof assetPreviewItem
  *
  * 尺寸交给调用方(`className`):对话气泡里可以铺得大些,历史面板那种窄列要压扁。
  */
+/** 取不到的素材占位:一块安静的底 + 一个断图图标 + 一句「素材已删除」,尺寸跟着调用方给的 className。 */
+function MissingImage({ name, label, className }: { name: string; label: string; className?: string }) {
+  return (
+    <Hint label={name}>
+      <div
+        data-asset-missing=""
+        role="img"
+        aria-label={`${name}: ${label}`}
+        className={cn("grid place-items-center gap-1 bg-control text-ui-2xs text-muted-foreground", className)}
+      >
+        <ImageOff size={16} aria-hidden />
+        <span>{label}</span>
+      </div>
+    </Hint>
+  );
+}
+
 export function AssetInlinePreview({
   assetId,
   name,
@@ -80,6 +98,7 @@ export function AssetInlinePreview({
    *  详情弹窗住在素材功能里,这一层不认识它,所以由调用方传进来。 */
   onOpenFile?: () => void;
 }) {
+  const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const [imageFailure, setImageFailure] = React.useState({ assetId: "", stage: 0 });
   const stage = imageFailure.assetId === assetId ? imageFailure.stage : 0;
@@ -93,7 +112,12 @@ export function AssetInlinePreview({
     });
 
   if (kind === "image") {
-    if (stage >= 2 && imageFallback) return <>{imageFallback}</>;
+    //: 预览地址和原文件都取不到(素材被删了、或文件不在盘上):给一块正经的占位,不要浏览器那张破图。
+    //: **默认就有**,不靠调用方传 —— 破图不是「一种样式选择」,是界面坏了;要让某个调用方自己画(能力面板那张
+    //: 认脸的小图),用 imageFallback 覆盖。
+    if (stage >= 2) {
+      return <>{imageFallback ?? <MissingImage name={name} label={t("assetPreviewGone")} className={className} />}</>;
+    }
     const picture = (
       <img
         src={src}

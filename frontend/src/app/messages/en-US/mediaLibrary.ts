@@ -1,6 +1,7 @@
 export const mediaLibrary = {
   // Media library
   mediaTitle: "Media library",
+  assetPreviewGone: "Asset deleted",
   agentRefGone: "“{name}” is gone",
   agentRefGoneHint: "It was probably deleted. The message keeps the name it had at the time.",
   mediaEmptyTitle: "The library is empty",
