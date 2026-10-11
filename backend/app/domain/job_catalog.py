@@ -51,6 +51,9 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("podcast", "always", ("assets", "generations"), view="ai", record_field="session_id"),
         # 把配音库里的一把嗓子复刻到百炼(ADR 0037):上传、建、等它就绪,十来秒;改动的是配音库那一行显示的「在哪儿能念」。
         JobKind("voice_enroll", "always", ("voices",)),
+        #: 装一个自带的家什(今天只有带 libass 的完整版 ffmpeg):改了这台机器上的工具链,
+        #: 但不改任何一份工作区数据 —— `affects` 因此是空的。
+        JobKind("media_tool_install", "always", ()),
         JobKind("url_import", "always", ("assets",), view="media"),
         JobKind("video_to_gif", "always", ("assets",), view="media"),
         JobKind("denoise_audio", "always", ("assets",), view="media"),

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, RotateCw } from "lucide-react";
+import { CheckCircle2, Download, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api/client";
@@ -27,7 +27,7 @@ const ENDPOINT = "/api/settings/ffmpeg";
  *
  * 找没找到、有没有 libass、带字的导出走哪条路,都是后端探的(domain/media_tools),这里只照着说。
  */
-export function FfmpegSection() {
+export function FfmpegSection({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const config = useQuery({ queryKey: QUERY_KEY, queryFn: () => api<FfmpegSettings>(ENDPOINT) });
@@ -67,6 +67,7 @@ export function FfmpegSection() {
     >
       <div className={ADMIN_CARD}>
         {data ? <InUseRow data={data} /> : <AdminRow label={t("connecting")} />}
+        {data?.install?.available && !data.libass && <InstallRow workspaceId={workspaceId} install={data.install} onDone={() => qc.invalidateQueries({ queryKey: QUERY_KEY })} />}
         <AdminRow
           stacked
           label={t("ffmpegPathLabel")}
@@ -112,6 +113,72 @@ export function FfmpegSection() {
 }
 
 /** 正在用的那个 ffmpeg:在哪、什么版本、带字的导出能不能做。做不了的时候说原因和怎么办。 */
+/**
+ * 「让 Mosael 装一个完整版」。**只在现在这个烧不了字、而清单里又有对得上的构建时才摆**:
+ * 能用的时候摆一颗按钮只会让人以为要手动做点什么。
+ *
+ * 装是一次后台任务(后端 domain/media_tools_install):下载、核对 sha256、解包、验一遍(跑得起来 +
+ * 能烧字),验过了才写进上面那一格。这里只跟着那颗任务的进度说话 —— 进度、取消都在任务中心。
+ */
+function InstallRow({ workspaceId, install, onDone }: {
+  workspaceId: string;
+  install: NonNullable<FfmpegSettings["install"]>;
+  onDone: () => void;
+}) {
+  const t = useI18n();
+  const [jobId, setJobId] = React.useState<string | null>(null);
+  const start = useMutation({
+    mutationFn: () => api<{ id: string }>(`${ENDPOINT}/install`, { method: "POST", body: JSON.stringify({ workspace_id: workspaceId }) }),
+    onSuccess: (job) => setJobId(job.id),
+    onError: (error) => toast.error(errorText(error)),
+  });
+  //: 装的时候盯那颗任务:成了就重问这一格(路径和后端探出来的结论都会变),没成就把原因摆出来。
+  const job = useQuery({
+    queryKey: ["job", jobId] as const,
+    //: 和这一页别的请求同一个口(`api`),不另引一个客户端的封装 —— 这一页只关心状态和进度。
+    queryFn: () => api<{ status: string; progress: number; error: string | null }>(`/api/jobs/${jobId}`),
+    enabled: Boolean(jobId),
+    refetchInterval: (query) => (query.state.data && ["succeeded", "failed", "cancelled"].includes(query.state.data.status) ? false : 1000),
+  });
+  const status = job.data?.status;
+  React.useEffect(() => {
+    if (status === "succeeded") {
+      setJobId(null);
+      onDone();
+    }
+  }, [status, onDone]);
+  return (
+    <AdminRow
+      label={t("ffmpegInstallLabel")}
+      description={t("ffmpegInstallDesc").replace("{version}", install.version || t("ffmpegInstallUnknownVersion"))}
+      notes={
+        <>
+          {jobId && status && status !== "succeeded" && (
+            <AdminRowNote>
+              {status === "failed" ? t("ffmpegInstallFailed") : t("ffmpegInstallWorking").replace("{percent}", String(Math.round((job.data?.progress ?? 0) * 100)))}
+            </AdminRowNote>
+          )}
+          {job.data?.status === "failed" && job.data.error && <AdminRowNote tone="destructive">{job.data.error}</AdminRowNote>}
+        </>
+      }
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <Button
+          size="sm"
+          disabled={Boolean(jobId)}
+          loading={start.isPending || Boolean(jobId)}
+          onClick={() => start.mutate()}
+        >
+          <Download size={13} /> {t("ffmpegInstallAction")}
+        </Button>
+        <span className="min-w-0 text-ui-xs text-muted-foreground">
+          {t("ffmpegInstallTarget").replace("{target}", install.target).replace("{archives}", String(install.archives))}
+        </span>
+      </div>
+    </AdminRow>
+  );
+}
+
 function InUseRow({ data }: { data: FfmpegSettings }) {
   const t = useI18n();
   const refused = data.found && data.text_burn_in == null;
@@ -129,6 +196,8 @@ function InUseRow({ data }: { data: FfmpegSettings }) {
             </AdminRowNote>
           )}
           {data.found && !data.libass && data.text_burn_in === "browser" && <AdminRowNote>{t("ffmpegTextByBrowser")}</AdminRowNote>}
+          {/* 正在用的这一份就是 Mosael 装的那个:说清楚,免得下次升级时以为是系统里那个。 */}
+          {data.install?.installed && data.in_use === data.install.installed && <AdminRowNote>{t("ffmpegInstalledByMosael")}</AdminRowNote>}
         </>
       }
     >

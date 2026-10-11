@@ -9,15 +9,18 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     AiRuntimeConfigOut,
     AiRuntimeConfigUpdate,
+    FfmpegInstallOut,
+    FfmpegInstallRequest,
     FfmpegSettingsOut,
     FfmpegSettingsUpdate,
+    JobOut,
     InstallSourceOut,
     InstallSourceUpdate,
     NetworkConfigOut,
     NetworkConfigUpdate,
 )
-from app.db.models import NetworkConfig
-from app.domain import ai_runtime, media_tools
+from app.db.models import Job, NetworkConfig
+from app.domain import ai_runtime, media_tools, media_tools_install
 from app.domain.network import apply_to_process, get_config as get_network
 from app.domain.voices import tts_settings
 from app.domain.permissions import ensure_deployment_admin
@@ -81,7 +84,19 @@ def _ffmpeg_out(db: Session, status: media_tools.FfmpegStatus) -> FfmpegSettings
         version=status.version,
         libass=status.libass,
         text_burn_in=status.text_burn_in,
+        install=_ffmpeg_install_out(),
     )
+
+
+def _ffmpeg_install_out() -> FfmpegInstallOut:
+    """「让 Mosael 自己装」那一行要的东西:这台机器上装哪个构建、能不能装、装好了在哪。"""
+    from app.domain import media_tools_install
+
+    chosen = media_tools_install.plan()
+    installed = media_tools_install.already_installed()
+    return FfmpegInstallOut(available=chosen.available, target=chosen.target, version=chosen.version,
+                            archives=chosen.archives, reason=chosen.reason, detail=chosen.detail,
+                            installed=str(installed[0]) if installed else "")
 
 
 @router.get("/settings/ffmpeg", response_model=FfmpegSettingsOut)
@@ -112,6 +127,20 @@ def recheck_ffmpeg(db: DbSession, user: CurrentUser) -> FfmpegSettingsOut:
     """重新检测:装了 / 换了 ffmpeg 之后不用重启。"""
     ensure_deployment_admin(db, user)
     return _ffmpeg_out(db, media_tools.recheck())
+
+
+@router.post("/settings/ffmpeg/install", response_model=JobOut)
+def install_ffmpeg(body: FfmpegInstallRequest, db: Tx, user: CurrentUser) -> Job:
+    """让 Mosael 自己装一个**带 libass 的完整版 FFmpeg**(清单里钉死的构建,按 sha256 核对)。
+
+    这是一个后台任务(任务中心里看得见、能停):下载、核对、解包、验一遍(跑得起来 + 能烧字),
+    验过了才把路径写进「管理 → 引擎 → FFmpeg」那一格。这个平台没有对得上的构建就在起任务之前说。
+    """
+    ensure_deployment_admin(db, user)
+    try:
+        return media_tools_install.start(db, workspace_id=body.workspace_id, created_by=user.id)
+    except media_tools_install.MediaToolError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/settings/install-source", response_model=InstallSourceOut)

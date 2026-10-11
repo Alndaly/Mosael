@@ -5964,6 +5964,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ffmpeg/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Ffmpeg
+         * @description 让 Mosael 自己装一个**带 libass 的完整版 FFmpeg**(清单里钉死的构建,按 sha256 核对)。
+         *
+         *     这是一个后台任务(任务中心里看得见、能停):下载、核对、解包、验一遍(跑得起来 + 能烧字),
+         *     验过了才把路径写进「管理 → 引擎 → FFmpeg」那一格。这个平台没有对得上的构建就在起任务之前说。
+         */
+        post: operations["install_ffmpeg_api_settings_ffmpeg_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/install-source": {
         parameters: {
             query?: never;
@@ -12669,6 +12692,55 @@ export interface components {
             app_id?: string | null;
         };
         /**
+         * FfmpegInstallOut
+         * @description 这台机器上能不能让 Mosael 自己把完整版 FFmpeg 装上(清单里有没有对得上的构建)。
+         */
+        FfmpegInstallOut: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /**
+             * Target
+             * @default
+             */
+            target: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Archives
+             * @default 0
+             */
+            archives: number;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Installed
+             * @default
+             */
+            installed: string;
+        };
+        /**
+         * FfmpegInstallRequest
+         * @description 装是一次后台任务,任务要挂在一个工作区上(任务中心按工作区看)。
+         */
+        FfmpegInstallRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /**
          * FfmpegSettingsOut
          * @description 「管理 → 引擎 → FFmpeg」(ADR 0048):填的路径,和正在用的那个 ffmpeg 探出来的样子。
          */
@@ -12699,6 +12771,7 @@ export interface components {
             libass: boolean;
             /** Text Burn In */
             text_burn_in?: string | null;
+            install?: components["schemas"]["FfmpegInstallOut"];
         };
         /** FfmpegSettingsUpdate */
         FfmpegSettingsUpdate: {
@@ -32555,6 +32628,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FfmpegSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_ffmpeg_api_settings_ffmpeg_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FfmpegInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

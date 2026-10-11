@@ -100,7 +100,7 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
         {tab === "pricing" && <ProviderPricingSection workspace={workspace} />}
         {tab === "engines" && (
           <>
-            <FfmpegSection />
+            <FfmpegSection workspaceId={workspace.id} />
             <InstallSourceSection />
             <AsrModelsSection />
             <VoiceCloneSection />

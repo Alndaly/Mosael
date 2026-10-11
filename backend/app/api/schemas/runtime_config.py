@@ -41,6 +41,31 @@ class FfmpegSettingsOut(ApiModel):
     libass: bool = False
     #: 带字幕 / 花字 / AI 标识的导出走哪条路:browser、libass;null = 两条都不通,这类导出会被拒。
     text_burn_in: str | None = None
+    #: 让 Mosael 自己装一个带 libass 的完整版:「这台机器上装哪个构建、能不能装、装好了在哪」。
+    install: "FfmpegInstallOut" = Field(default_factory=lambda: FfmpegInstallOut())
+
+
+class FfmpegInstallOut(ApiModel):
+    """这台机器上能不能让 Mosael 自己把完整版 FFmpeg 装上(清单里有没有对得上的构建)。"""
+
+    available: bool = False
+    #: 清单里的平台键(darwin-arm64、win32-x86_64……)。
+    target: str = ""
+    version: str = ""
+    #: 要下几个包(Windows 一个装全,macOS / Linux 是 ffmpeg 和 ffprobe 两个)。
+    archives: int = 0
+    #: 不能装时的原因(`mediaToolErr_*`,前端按读的人的语言翻);能装时为空。
+    reason: str = ""
+    #: 原因里的补充(哪个平台)。
+    detail: str = ""
+    #: 已经装好了的那一份 ffmpeg 的路径(有就说明装过)。
+    installed: str = ""
+
+
+class FfmpegInstallRequest(ApiModel):
+    """装是一次后台任务,任务要挂在一个工作区上(任务中心按工作区看)。"""
+
+    workspace_id: str
 
 
 class FfmpegSettingsUpdate(ApiModel):

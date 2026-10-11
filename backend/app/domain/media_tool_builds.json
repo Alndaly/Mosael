@@ -1,0 +1,92 @@
+{
+  "_comment": "由 scripts/sync-ffmpeg-builds.py 生成,不要手改。装的是带 libass 的静态构建,摘要对不上就拒。",
+  "targets": {
+    "darwin-arm64": {
+      "version": "9.0.2",
+      "source": "ffmpeg.martin-riedl.de",
+      "archives": [
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip",
+          "sha256": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924"
+        },
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffprobe.zip",
+          "sha256": "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6"
+        }
+      ],
+      "binaries": {
+        "ffmpeg": "ffmpeg",
+        "ffprobe": "ffprobe"
+      }
+    },
+    "darwin-x86_64": {
+      "version": "9.0.2",
+      "source": "ffmpeg.martin-riedl.de",
+      "archives": [
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/macos/amd64/1789931006_9.0.2/ffmpeg.zip",
+          "sha256": "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4"
+        },
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/macos/amd64/1789931006_9.0.2/ffprobe.zip",
+          "sha256": "2322438ed2f6319a691291b247d09c69dcaa3a982460d1f269a7e1af335cfdfd"
+        }
+      ],
+      "binaries": {
+        "ffmpeg": "ffmpeg",
+        "ffprobe": "ffprobe"
+      }
+    },
+    "linux-arm64": {
+      "version": "9.0.2",
+      "source": "ffmpeg.martin-riedl.de",
+      "archives": [
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/linux/arm64/1789931697_9.0.2/ffmpeg.zip",
+          "sha256": "93a76ae90db5474eecdf951a729857c64f3de23567228d6a7d5e6e8e3cd1021b"
+        },
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/linux/arm64/1789931697_9.0.2/ffprobe.zip",
+          "sha256": "bcbe80fb741c180083327afaf5434812e006b33cacde2016b9aeaf6936128330"
+        }
+      ],
+      "binaries": {
+        "ffmpeg": "ffmpeg",
+        "ffprobe": "ffprobe"
+      }
+    },
+    "linux-x86_64": {
+      "version": "9.0.2",
+      "source": "ffmpeg.martin-riedl.de",
+      "archives": [
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/linux/amd64/1789931100_9.0.2/ffmpeg.zip",
+          "sha256": "fa8ecf4abbd290d98f7d188b8649cc6b391ae209a98452be955a15aab1909d7f"
+        },
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/linux/amd64/1789931100_9.0.2/ffprobe.zip",
+          "sha256": "3f428c49070be3d24ec338602b76d412e401ffcb8a5641ef0e729181a232fc32"
+        }
+      ],
+      "binaries": {
+        "ffmpeg": "ffmpeg",
+        "ffprobe": "ffprobe"
+      }
+    },
+    "win32-x86_64": {
+      "version": "autobuild-2026-10-11-13-04",
+      "source": "github.com/BtbN/FFmpeg-Builds",
+      "archives": [
+        {
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-11-13-04/ffmpeg-N-127367-gb5902e69c7-win64-gpl.zip",
+          "sha256": "e7a10f6e0a9c19d91ec4979ba60fe415a7da8588520bc46d75fec03d94fb9033"
+        }
+      ],
+      "binaries": {
+        "ffmpeg": "bin/ffmpeg.exe",
+        "ffprobe": "bin/ffprobe.exe"
+      },
+      "release_asset": "ffmpeg-N-127367-gb5902e69c7-win64-gpl.zip"
+    }
+  }
+}

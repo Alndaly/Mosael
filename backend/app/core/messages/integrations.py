@@ -110,24 +110,64 @@ MESSAGES: dict[str, dict[str, str]] = {
     "renderErr_noLibass": {
         "zh": "带字幕、花字或 AI 标识的导出做不了:这台机器上的 ffmpeg({ffmpeg})没有 libass,烧不了字 —— "
               "Homebrew 默认装的 ffmpeg 就是这种精简版;在这里用浏览器渲染文字那条路也走不通。"
-              "怎么办:装一个带 libass 的完整版 ffmpeg(macOS 在终端运行 brew install ffmpeg-full),"
-              "再到「管理 → 引擎 → FFmpeg」把路径填成它(通常是 /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg),保存后重新导出。",
+              "怎么办:到「管理 → 引擎 → FFmpeg」点「下载并安装」,让 Mosael 自己装一个带 libass 的完整版"
+              "(也可以自己装,比如 brew install ffmpeg-full),"
+              "装完重新导出。",
         "en": "Exports with subtitles, titles or AI labels can't be made: this machine's ffmpeg ({ffmpeg}) has no libass, "
               "so it can't burn in text. The ffmpeg Homebrew installs by default is this slimmed-down build, and rendering "
               "the text in the browser isn't available here either. To fix it, install a full ffmpeg build with libass "
-              "(on macOS, run brew install ffmpeg-full in Terminal), then set its path under Admin → Engines → FFmpeg "
-              "(usually /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg), save, and export again.",
+              "(click “Download and install” under Admin → Engines → FFmpeg, or install one yourself), "
+              "then export again.",
     },
     "renderErr_noLibassPinnedByEnvironment": {
         "zh": "带字幕、花字或 AI 标识的导出做不了:环境变量 MOSAEL_FFMPEG 指定的 ffmpeg({ffmpeg})没有 libass,烧不了字;"
               "在这里用浏览器渲染文字那条路也走不通。怎么办:把 MOSAEL_FFMPEG 改成一个带 libass 的完整版 ffmpeg"
-              "(macOS:brew install ffmpeg-full,路径通常是 /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg),重启 Mosael。"
+              "(可以在「管理 → 引擎 → FFmpeg」让 Mosael 装一个,也可以自己装,比如 brew install ffmpeg-full),重启 Mosael。"
               "设了这个环境变量时,「管理 → 引擎 → FFmpeg」里填的路径不生效。",
         "en": "Exports with subtitles, titles or AI labels can't be made: the ffmpeg set by the MOSAEL_FFMPEG environment "
               "variable ({ffmpeg}) has no libass, so it can't burn in text, and rendering the text in the browser isn't "
-              "available here either. To fix it, point MOSAEL_FFMPEG at a full ffmpeg build with libass (macOS: brew "
-              "install ffmpeg-full, usually /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg) and restart Mosael. While that "
+              "available here either. To fix it, point MOSAEL_FFMPEG at a full ffmpeg build with libass (let Mosael "
+              "install one under Admin → Engines → FFmpeg, or install one yourself) and restart Mosael. While that "
               "variable is set, the path under Admin → Engines → FFmpeg has no effect.",
+    },
+    "mediaToolErr_noBuild": {
+        "zh": "这个平台({detail})上还没有我们对得上的完整版 FFmpeg 构建。请自行装一个带 libass 的版本,"
+              "再把上面的路径填成它。",
+        "en": "There's no full FFmpeg build pinned for this platform ({detail}). Install a build with libass yourself "
+              "and point the path above at it.",
+    },
+    "mediaToolErr_badUrl": {
+        "zh": "下载地址不能用:{url}",
+        "en": "That download address can't be used: {url}",
+    },
+    "mediaToolErr_downloadFailed": {
+        "zh": "下载没成:{detail}",
+        "en": "The download failed: {detail}",
+    },
+    "mediaToolErr_digestMismatch": {
+        "zh": "下下来的东西和清单里的 sha256 对不上({name}),没有安装。",
+        "en": "What came down doesn't match the sha256 in our manifest ({name}); nothing was installed.",
+    },
+    "mediaToolErr_badArchive": {
+        "zh": "包解不开({name}),可能下坏了。",
+        "en": "The archive can't be opened ({name}); the download may be corrupt.",
+    },
+    "mediaToolErr_tooLarge": {
+        "zh": "包解出来比预期大得多,停下没有继续。",
+        "en": "The archive unpacks to far more than expected; stopping there.",
+    },
+    "mediaToolErr_missingBinary": {
+        "zh": "包里没有 {name}({path})。",
+        "en": "The archive has no {name} ({path}).",
+    },
+    "mediaToolErr_notRunnable": {
+        "zh": "下下来的这个跑不起来:{path}",
+        "en": "What came down can't be run: {path}",
+    },
+    "mediaToolErr_noLibass": {
+        "zh": "装上的是个没有 libass 的 FFmpeg({path}):带字幕、花字或 AI 标识的导出照样做不了,所以没有把它设成在用的那个。",
+        "en": "The build that came down has no libass ({path}), so exports with subtitles or titles still wouldn't work; "
+              "it was not set as the ffmpeg in use.",
     },
     "ffmpegPath_notAbsolute": {
         "zh": "要填完整路径(以 / 开头,Windows 上带盘符):{path}",

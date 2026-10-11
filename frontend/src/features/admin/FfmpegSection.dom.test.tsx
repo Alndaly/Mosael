@@ -26,6 +26,15 @@ type Settings = {
   version: string;
   libass: boolean;
   text_burn_in: string | null;
+  install?: {
+    available: boolean;
+    target: string;
+    version: string;
+    archives: number;
+    reason: string;
+    detail: string;
+    installed: string;
+  };
 };
 
 const BREW: Settings = {
@@ -36,12 +45,16 @@ const BREW: Settings = {
   version: "9.0.2",
   libass: false,
   text_burn_in: null,
+  install: { available: true, target: "darwin-arm64", version: "9.0.2", archives: 2, reason: "", detail: "", installed: "" },
 };
 const FULL = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg";
 
 let stored: Settings = BREW;
 const puts: string[] = [];
 let rechecks = 0;
+let installs = 0;
+//: 那颗安装任务:起来之后按 running → succeeded 走一遍(进度那一行据此说话)。
+let task: { id: string; status: string; progress: number; error: string | null } = { id: "j1", status: "running", progress: 0.4, error: null };
 vi.mock("@/api/client", () => ({
   api: (url: string, init?: { method?: string; body?: string }) => {
     if (url === "/api/settings/ffmpeg" && !init) return Promise.resolve(stored);
@@ -56,6 +69,14 @@ vi.mock("@/api/client", () => ({
       rechecks += 1;
       return Promise.resolve(stored);
     }
+    if (url === "/api/settings/ffmpeg/install") {
+      installs += 1;
+      return Promise.resolve({ id: task.id });
+    }
+    if (url === "/api/jobs/j1") {
+      if (!task) return Promise.reject(new Error("no task"));
+      return Promise.resolve({ ...task, message_key: "jobMsg_mediaToolDownloading" });
+    }
     return Promise.reject(new Error(`unexpected ${url}`));
   },
 }));
@@ -66,7 +87,7 @@ function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <FfmpegSection />
+      <FfmpegSection workspaceId="w1" />
     </QueryClientProvider>,
   );
 }
@@ -75,6 +96,39 @@ beforeEach(() => {
   stored = BREW;
   puts.length = 0;
   rechecks = 0;
+  installs = 0;
+  task = { id: "j1", status: "running", progress: 0.4, error: null };
+});
+
+//: 维护者:「Mosael 不具备主动下载 ffmpeg-full 的能力,应该补充这部分能力,否则用户必须自行在别处下载」。
+it("现在这个烧不了字、清单里又有构建:摆「让 Mosael 装一个完整版」,按下之后跟着那颗任务走", async () => {
+  show();
+  const button = await screen.findByRole("button", { name: "ffmpegInstallAction" });
+  //: 这一行的说明与「装的是哪个构建」两处文案都在(文案里的 {version} / {target} 由真文案渲染)
+  expect(screen.getByText("ffmpegInstallDesc")).toBeInTheDocument();
+  expect(screen.getByText("ffmpegInstallTarget")).toBeInTheDocument();
+
+  fireEvent.click(button);
+  await waitFor(() => expect(installs).toBe(1));
+  expect(await screen.findByText("ffmpegInstallWorking")).toBeInTheDocument();
+
+  task = { id: "j1", status: "failed", progress: 0.4, error: "摘要对不上(ffmpeg.zip)" };
+  expect(await screen.findByText("ffmpegInstallFailed", {}, { timeout: 4000 })).toBeInTheDocument();
+  expect(await screen.findByText(/摘要对不上/, {}, { timeout: 4000 })).toBeInTheDocument();
+});
+
+it("现在这个就能烧字:不摆那一行 —— 能用的时候摆一颗按钮只会让人以为要手动做点什么", async () => {
+  stored = { ...BREW, libass: true, text_burn_in: "libass" };
+  show();
+  await screen.findByText("ffmpegHasLibass");
+  expect(screen.queryByRole("button", { name: "ffmpegInstallAction" })).toBeNull();
+});
+
+it("这个平台没有对得上的构建:也不摆(后端那句话留给手填路径那条路)", async () => {
+  stored = { ...BREW, install: { available: false, target: "freebsd-x86_64", version: "", archives: 0, reason: "mediaToolErr_noBuild", detail: "freebsd", installed: "" } };
+  show();
+  await screen.findByText("ffmpegNoTextBurnIn");
+  expect(screen.queryByRole("button", { name: "ffmpegInstallAction" })).toBeNull();
 });
 
 it("Homebrew 的精简版、浏览器那条路又不通:说带字的导出会被拒,和怎么办", async () => {

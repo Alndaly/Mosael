@@ -137,6 +137,14 @@ def recheck() -> FfmpegStatus:
     return result
 
 
+def version_of(ffmpeg: str) -> str | None:
+    """这个可执行文件报的 ffmpeg 版本(跑不起来、或者说的不是 ffmpeg 就是 None)。
+
+    装完的校验(domain/media_tools_install)要问一句「刚下下来的那个真的跑得起来吗」——
+    那是它验完才写配置的最后一关之一。"""
+    return _version(ffmpeg)
+
+
 def _version(ffmpeg: str) -> str | None:
     """`ffmpeg -version` 第一行里的版本号;跑不起来、或者说的不是 ffmpeg,返回 None。"""
     try:

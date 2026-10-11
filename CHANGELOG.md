@@ -5,6 +5,20 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### Mosael 自己下载带 libass 的完整版 FFmpeg
+
+- 「管理 → 引擎 → FFmpeg」多了一行:**下载并安装**。此前它只告诉你「自己去装一个完整版(brew install ffmpeg-full)
+  再把路径填进来」—— 用户必须自己去别处下载,而 macOS 上也不一定装了 Homebrew。
+- 装的是清单里**钉死**的静态构建(macOS / Linux:ffmpeg.martin-riedl.de 的发行构建,两个包;
+  Windows:GitHub 上 BtbN/FFmpeg-Builds 按日期打标签的 release,一个包里 `bin/ffmpeg.exe` 与 `bin/ffprobe.exe`),
+  带 sha256。清单由 `scripts/sync-ffmpeg-builds.py` 生成,发版前刷新。
+- 「下载完了没有」按平台各判各的:两边都先核对 sha256(**对不上一个字节都不落地**),再确认那个可执行文件在、
+  跑得起来(macOS / Linux 还要补上可执行位 —— zipfile 不还原),最后一关是**能不能烧字**(`subtitles` 滤镜);
+  装上一个没有 libass 的等于没装,那种不写进配置。
+- 一次安装是一个后台任务(任务中心里看得见、能停),装到 Mosael 自己的数据目录(`<数据目录>/tools/ffmpeg/<版本>/`),
+  验过了才把路径写进原来那一格 —— 生效、重探、界面显示都是既有那一条路。
+
+
 ### 文档:⌘/ 看源码、引用悬停出预览
 
 - **⌘/ (Ctrl+/) 在文档里切换 Markdown 源码与编辑**(页头那颗按钮一直在,只是没有键);焦点在别的输入框里时不抢。

@@ -51,6 +51,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   tts: AudioLines,
   podcast: Radio,
   voice_enroll: CloudUpload,
+  media_tool_install: HardDriveDownload,
   url_import: LinkIcon,
   video_to_gif: Film,
   denoise_audio: AudioWaveform,
