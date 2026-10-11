@@ -182,8 +182,8 @@ def _body(job_id: str, target: str) -> None:
         version = str(entry.get("version") or "")
         say(job, "jobMsg_mediaToolDownloading", params={"version": version})
         emit_job_event(db, job.id, "job.running", {})
-        #: 「正在下载」先落库:几十兆要下一阵,任务中心要马上看得到;也把写锁放掉(下载期间不攥着)。
-        db.commit()
+    # ↑ 这个短会话退出来就提交了:「正在下载」先落库(任务中心马上看得到),写锁也放掉 ——
+    #   几十兆要下一阵,下载期间不攥着任何会话(提交本身归 unit_of_work,领域层不自己 commit)。
 
     workdir = scratch_dir(SCRATCH)
     try:
