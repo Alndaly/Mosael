@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { refreshPluginInstance } from "@/api/client";
+import type { PluginPackage } from "@/api/domains/plugins";
 import { boardKeys, generationKeys, providerKeys } from "@/api/queryKeys";
 
 /**
@@ -65,4 +66,32 @@ export function refreshConnectionCatalog(qc: QueryClient, instanceId: string): P
     });
   refreshing.set(instanceId, done);
   return done;
+}
+
+/** 连接列表住在插件目录那一份缓存里(`["plugins"]`,每个包里一串 `instances`)。 */
+export const PLUGIN_PACKAGES_KEY = ["plugins"] as const;
+
+/**
+ * 把一个连接的改动**当场**写进插件目录那份缓存,返回改动前的数据(失败时回滚用)。
+ *
+ * 启停此前只有「成功之后再失效、重问一遍」:而那份缓存重问要走一趟插件(能力、状态、目录)——
+ * 用户点一下开关,要等它回来才动(维护者:「点击会有很久的卡顿」)。乐观更新让开关先动;
+ * 服务器那一份回来照旧覆盖它(两边说的是同一件事,看不出差别)。
+ */
+export function patchPluginInstance(
+  qc: QueryClient,
+  instanceId: string,
+  body: Record<string, unknown>,
+): PluginPackage[] | undefined {
+  const previous = qc.getQueryData<PluginPackage[]>(PLUGIN_PACKAGES_KEY);
+  if (!previous) return undefined;
+  qc.setQueryData<PluginPackage[]>(
+    PLUGIN_PACKAGES_KEY,
+    previous.map((pkg) => {
+      const instances = pkg.instances ?? [];
+      if (!instances.some((instance) => instance.id === instanceId)) return pkg;
+      return { ...pkg, instances: instances.map((instance) => (instance.id === instanceId ? { ...instance, ...body } : instance)) };
+    }),
+  );
+  return previous;
 }

@@ -82,7 +82,7 @@ import { PathField } from "@/components/settings/PathField";
 import { useIsDeploymentAdmin } from "@/app/auth";
 import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
-import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { PLUGIN_PACKAGES_KEY, invalidatePluginDependents, patchPluginInstance } from "@/features/plugins/pluginCaches";
 import { ToolRowFrame } from "@/features/plugins/ToolRowFrame";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
 import { CapabilityUseList, type CapabilityUse } from "@/components/settings/CapabilityUseList";
@@ -816,6 +816,12 @@ export function ConnectionCard({
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       updatePluginInstance(instance.id, body),
+    //: **先动开关,再发请求**:这份缓存重问要走一趟插件(能力、状态、目录),等它回来才动开关就是
+    //: 「点了很久才反应」(维护者报的)。失败回滚,成功照旧让依赖它的那些缓存重问。
+    onMutate: (body) => ({ snapshot: patchPluginInstance(qc, instance.id, body) }),
+    onError: (_error, _body, context) => {
+      if (context?.snapshot) qc.setQueryData(PLUGIN_PACKAGES_KEY, context.snapshot);
+    },
     onSuccess: () => invalidatePluginDependents(qc),
   });
   const refresh = useMutation({
