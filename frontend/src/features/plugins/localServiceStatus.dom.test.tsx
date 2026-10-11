@@ -214,4 +214,16 @@ describe("ComfyUI 的视图亮着时告诉宿主「还在用」(闲置自动停)
       vi.useRealTimers();
     }
   });
+
+describe("开关点下去到服务端那句话回来之间", () => {
+  it("说「正在启用…」,不照旧态说(开着却说未启用、或者沿用上一态的原因)", () => {
+    const one = { ...instance(), enabled: true, blocked_reason: "未启用" };
+    const idle = connectionIssue(PKG, one, null);
+    expect(idle.label, "重问还没回来:那句原因是上一态的").toBe("pluginConnStateAction");
+
+    const pending = connectionIssue(PKG, one, null, "pluginConnStateEnabling");
+    expect(pending).toMatchObject({ tone: "primary", label: "pluginConnStateEnabling", detail: "" });
+    expect(connectionIssue(PKG, one, null, "pluginConnStateDisabling").label).toBe("pluginConnStateDisabling");
+  });
+});
 });

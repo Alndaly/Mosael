@@ -1164,6 +1164,8 @@ export const plugins = {
   pluginCollapseAll: "Collapse all",
   pluginExpandAll: "Expand all",
   pluginConnStateOk: "Ready",
+  pluginConnStateEnabling: "Enabling…",
+  pluginConnStateDisabling: "Disabling…",
   pluginConnStateOff: "Off",
   pluginConnStateReauth: "Needs re-authorization",
   pluginConnStatePending: "Needs permission",

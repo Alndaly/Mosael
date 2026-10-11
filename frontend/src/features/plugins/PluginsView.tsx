@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { FieldBox } from "@/components/ui/field-box";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Loader2, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
@@ -876,7 +876,11 @@ export function ConnectionCard({
   })();
 
   //: 收起时那一行说的话:这个连接此刻怎么样(可用 / 已停用 / 要处理的原因)、开了几个工具或几个模型。
-  const issue = connectionIssue(pkg, instance, localService.data);
+  //: 开关点下去到服务端那句话回来之间:卡片上说「正在启用… / 正在停用…」,而不是照旧态说一句话。
+  const pendingState: MessageKey | null = patch.isPending
+    ? (patch.variables as { enabled?: boolean } | undefined)?.enabled === false ? "pluginConnStateDisabling" : "pluginConnStateEnabling"
+    : null;
+  const issue = connectionIssue(pkg, instance, localService.data, pendingState);
   const summaryText = ((): string => {
     if (generates && tools.length === 0) {
       const models = instance.capability_status?.generation?.models;
@@ -971,7 +975,9 @@ export function ConnectionCard({
                 {address && <Truncate className="timecode shrink-[2] text-ui-xs text-muted-foreground">{address}</Truncate>}
               </span>
               <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground">
-                <CatalogBadge tone={issue.tone}>{t(issue.label)}</CatalogBadge>
+                <CatalogBadge tone={issue.tone} icon={pendingState ? <Loader2 className="animate-spin" /> : undefined}>
+                  {t(issue.label)}
+                </CatalogBadge>
                 {summaryText && <span>{summaryText}</span>}
               </span>
               {issue.detail && (
@@ -1158,7 +1164,11 @@ export function connectionIssue(
   pkg: PluginPackage,
   instance: PluginInstance,
   service?: LocalService | null,
+  pending?: MessageKey | null,
 ): { tone: IssueTone; label: MessageKey; detail: string; target: string } {
+  //: 正在启用 / 停用:开关是乐观动的(点下去就动),而这个连接此刻到底怎么样要等服务端那句话回来 ——
+  //: 那一段里**别照旧态说**(开着却说未启用、或者沿用上一态的原因),说「正在…」。
+  if (pending) return { tone: "primary", label: pending, detail: "", target: "" };
   if (!instance.enabled) return { tone: "muted", label: "pluginConnStateOff", detail: "", target: "" };
   const config = (instance.config ?? {}) as Record<string, unknown>;
   const missing = (pkg.config_fields ?? []).find((field) => field.required && !String(config[field.key] ?? "").trim());

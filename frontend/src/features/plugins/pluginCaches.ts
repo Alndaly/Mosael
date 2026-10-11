@@ -90,7 +90,17 @@ export function patchPluginInstance(
     previous.map((pkg) => {
       const instances = pkg.instances ?? [];
       if (!instances.some((instance) => instance.id === instanceId)) return pkg;
-      return { ...pkg, instances: instances.map((instance) => (instance.id === instanceId ? { ...instance, ...body } : instance)) };
+      return {
+        ...pkg,
+        instances: instances.map((instance) =>
+          instance.id === instanceId
+            //: 开了的时候那颗「需要处理」要一起放掉:服务端那句 `blocked_reason`(未启用)说的是**上一态**,
+            //: 留着它就会出现「开关是开的、左边写着未启用」那种自相矛盾(维护者报的)。真还有别的堵着
+            //: (缺配置、没授权),重问回来的那一份会照实说 —— 请求在飞的那一段由卡片上的「正在启用…」顶着。
+            ? { ...instance, ...body, ...(body.enabled === true ? { blocked_reason: "" } : {}) }
+            : instance,
+        ),
+      };
     }),
   );
   return previous;

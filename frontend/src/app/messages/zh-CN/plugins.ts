@@ -1173,6 +1173,8 @@ export const plugins = {
   pluginCollapseAll: "全部收起",
   pluginExpandAll: "全部展开",
   pluginConnStateOk: "可用",
+  pluginConnStateEnabling: "正在启用…",
+  pluginConnStateDisabling: "正在停用…",
   pluginConnStateOff: "已停用",
   pluginConnStateReauth: "需要重新授权",
   pluginConnStatePending: "待授权",

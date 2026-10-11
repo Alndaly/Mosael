@@ -138,6 +138,7 @@ import {
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
+import { libraryAddFolder, libraryMovePath, libraryRemoveFolder, libraryRenameFolder } from "@/features/plugins/workflowLibraryCache";
 import { gotoRecord, openBoard } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
@@ -189,8 +190,10 @@ export function WorkflowLibraryDialog({
   onCheckSettings?: () => void;
 }) {
   const t = useI18n();
+  //: 这一份列表的键:重问和「先就地改」都用它(键里有连接和工作区)。
+  const libraryKey = React.useMemo(() => ["workflow-library", instance.id, workspaceId] as const, [instance.id, workspaceId]);
   const library = useQuery({
-    queryKey: ["workflow-library", instance.id, workspaceId],
+    queryKey: libraryKey,
     queryFn: () => getWorkflowLibrary(instance.id, workspaceId),
     enabled: open,
     staleTime: 30_000,
@@ -808,6 +811,7 @@ export function WorkflowLibraryDialog({
               onSubmit={async (path) => {
                 try {
                   const done = await renameWorkflow(instance.id, moving.flow.path, path);
+                  libraryMovePath(qc, libraryKey, moving.flow.path, done.path);
                   if (detailKey === moving.flow.path) setDetailKey(done.path);
                 } finally {
                   //: 成了要重新列;没成(那张已经不在了、目标被占了)也重新列 —— 手里这份列表旧了
@@ -825,7 +829,10 @@ export function WorkflowLibraryDialog({
               onClose={() => setFolderAsk(null)}
               onSubmit={async (path) => {
                 const done = await createWorkflowFolder(instance.id, path);
-                void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
+                //: **先摆上再重问**:那一份要问那台机器扫一遍整个目录(几秒),等它回来才显示的话就是
+                //: 「弹窗关了、左边还是原来那几个」(维护者报的)。改的是同一件事,重问回来对得上。
+                libraryAddFolder(qc, libraryKey, done.path);
+                void qc.invalidateQueries({ queryKey: libraryKey });
                 setView(folderView(done.path));
               }}
             />
@@ -842,6 +849,8 @@ export function WorkflowLibraryDialog({
                 if (path === folderAsk.path) return;
                 try {
                   const done = await renameWorkflowFolder(instance.id, folderAsk.path, path);
+                  //: 名字一变,里面每一个文件的路径也跟着变 —— 列表上当场改过来(服务端做的就是这件事)。
+                  libraryRenameFolder(qc, libraryKey, folderAsk.path, done.path);
                   followFolder(folderAsk.path, done.path);
                 } finally {
                   changed();
@@ -858,6 +867,7 @@ export function WorkflowLibraryDialog({
               onConfirm={async () => {
                 try {
                   await trashWorkflowFolder(instance.id, folderAsk.path);
+                  libraryRemoveFolder(qc, libraryKey, folderAsk.path);
                   followFolder(folderAsk.path, null);
                 } finally {
                   changed();
