@@ -68,6 +68,13 @@ _MEDIA_UPLOAD_OPTIONS = ("image_upload", "video_upload", "animated_image_upload"
 _AUDIO_UI_CLASSES = frozenset({"LoadAudio", "SaveAudio", "PreviewAudio", "SaveAudioMP3", "SaveAudioOpus",
                                "SaveAudioAdvanced"})
 #: 只在前端的 widget:它们在 `widgets_values` 里占位置,但不进 API 图。
+#: ComfyUI 新式节点(V3)的模板输入:定义里只有**一格**,展开出来的具体输入叫 `名字.子名`
+#: (`sampling_mode.temperature`、`values.a`……)。读 `widgets_values` 时它们是**占位置的 widget**,
+#: 而且位置就在模板那一格**后面** —— 排到最后会把后面的值全挤错位(真机:TextGenerate 的
+#: temperature/top_k/… 顶掉了 thinking/use_default_template/mtp)。
+_V3_MATCH, _V3_AUTOGROW, _V3_DYNAMIC = "COMFY_MATCHTYPE_V3", "COMFY_AUTOGROW_V3", "COMFY_DYNAMICCOMBO_V3"
+_V3_TEMPLATES = (_V3_AUTOGROW, _V3_DYNAMIC)
+
 _FRONTEND_WIDGETS = frozenset({"upload", "audioUI"})
 
 #: 转换时写进 `_meta` 的:每个带「生成后怎样」的 widget 存着的设定(randomize / fixed / increment / decrement)。
@@ -303,7 +310,15 @@ class _Converter:
         return {"class_type": node.type, "inputs": inputs, "_meta": meta}
 
     def _widget_specs(self, node: _Node) -> list[tuple[str, Any, int]]:
-        """这个节点的 widget,按它们在 `widgets_values` 里的顺序:(名字, 定义, 后面多占几格)。"""
+        """这个节点的 widget,按它们在 `widgets_values` 里的顺序:(名字, 定义, 后面多占几格)。
+
+        顺序**和前端一致**:定义里声明的格子按定义顺序,其中 V3 模板(`COMFY_DYNAMICCOMBO_V3` /
+        `COMFY_AUTOGROW_V3`)展开出来的子输入**紧跟在模板那一格后面**(名字前缀 `模板名.`),
+        定义里没有、文件里却标着 widget 的(动态加出来的)排在最后。
+
+        此前子输入被排到最后,于是模板之后的值整体错位(真机:TextGenerate 的 sampling_mode.temperature
+        顶掉了 thinking,mtp 拿到了 top_p 的 0.95)。
+        """
         marked = [str(entry.get("name")) for entry in node.inputs if "widget" in entry and entry.get("name")]
         spec = self.object_info.get(node.type)
         if not isinstance(spec, dict):
@@ -314,6 +329,11 @@ class _Converter:
         order = spec.get("input_order") if isinstance(spec.get("input_order"), dict) else {}
         found: list[tuple[str, Any, int]] = []
         seen: set[str] = set()
+
+        def add(name: str, definition: Any) -> None:
+            found.append((name, definition, self._extra_slots(name, definition) if definition is not None else 0))
+            seen.add(name)
+
         for section in ("required", "optional"):
             defs = declared.get(section) or {}
             if not isinstance(defs, dict):
@@ -322,17 +342,74 @@ class _Converter:
             names += [one for one in defs if one not in names]
             for name in names:
                 definition = defs[name]
-                seen.add(name)
                 if name in marked or self._is_widget(definition):
-                    found.append((name, definition, self._extra_slots(name, definition)))
+                    add(name, definition)
+                    #: 这一格是模板时,紧跟它后面、以 `名字.` 开头的标记就是它这次展开出来的子输入。
+                    for sub in self._v3_children(marked, name):
+                        if sub not in seen:
+                            add(sub, self._definition_of(node.type, sub))
             if section == "required":
                 if node.type in _AUDIO_UI_CLASSES:
-                    found.append(("audioUI", None, 0))
+                    add("audioUI", None)
                 if any(self._uploads(definition) for definition in defs.values()):
-                    found.append(("upload", None, 0))
-        # 定义里没有、存下来却标着 widget 的(动态加出来的输入):排在最后
-        found += [(name, None, 0) for name in marked if name not in seen]
+                    add("upload", None)
+        # 定义里没有、存下来却标着 widget 的(动态加出来的输入):按文件顺序排在最后
+        for name in marked:
+            if name not in seen:
+                add(name, None)
         return found
+
+    @staticmethod
+    def _v3_children(marked: list[str], base: str) -> list[str]:
+        """文件里紧跟在 `base` 之后、名字是 `base.子名` 的那几格 —— V3 模板这次展开出来的子输入。"""
+        children: list[str] = []
+        if base not in marked:
+            return children
+        prefix = f"{base}."
+        for name in marked[marked.index(base) + 1:]:
+            if not name.startswith(prefix):
+                break
+            children.append(name)
+        return children
+
+    def _definition_of(self, node_type: str, name: str) -> Any:
+        """一个 widget 名字在这台 ComfyUI 上的定义:顶层声明里的,或者 V3 模板展开出来的。
+
+        `sampling_mode.temperature` 这种在顶层声明里找不到 —— 它在 `sampling_mode` 那一格
+        的选项里。认不出来就当它已经不存在了(节点包删掉过这个格子):那个值要**跳过**,
+        不能让后面的值往前挤一格。
+        """
+        spec = self.object_info.get(node_type)
+        declared = (spec or {}).get("input") if isinstance(spec, dict) else None
+        if not isinstance(declared, dict):
+            return None
+        for section in ("required", "optional"):
+            defs = declared.get(section) or {}
+            if isinstance(defs, dict) and name in defs:
+                return defs[name]
+        base, _, rest = name.partition(".")
+        if not rest:
+            return None
+        base_definition = None
+        for section in ("required", "optional"):
+            defs = declared.get(section) or {}
+            if isinstance(defs, dict) and base in defs:
+                base_definition = defs[base]
+                break
+        kind = base_definition[0] if isinstance(base_definition, list) and base_definition else None
+        options = self._options(base_definition)
+        if kind == _V3_DYNAMIC:
+            for option in options.get("options") or []:
+                found = ((option.get("inputs") or {}).get("required") or {})
+                found.update((option.get("inputs") or {}).get("optional") or {})
+                if rest in found:
+                    return found[rest]
+            return None
+        if kind == _V3_AUTOGROW:
+            template = ((options.get("template") or {}).get("input") or {})
+            merged = {**(template.get("required") or {}), **(template.get("optional") or {})}
+            return merged.get(rest)
+        return None
 
     @staticmethod
     def _options(definition: Any) -> dict[str, Any]:
@@ -379,7 +456,9 @@ class _Converter:
         stored = node.raw.get("widgets_values")
         values: dict[str, Any] = {}
         index = 0
-        for name, definition, extra in self._widget_specs(node):
+        specs = self._widget_specs(node)
+        in_file = {str(entry.get("name")) for entry in node.inputs if "widget" in entry}
+        for name, definition, extra in specs:
             if isinstance(stored, dict):
                 present, value = name in stored, stored.get(name)
             else:
@@ -396,6 +475,15 @@ class _Converter:
                 if not present:
                     continue
             values[name] = _wrap(value)
+        #: 定义里有、文件里没有的(节点包新加了一格):它不是这些值里的一个,用定义里的缺省值 ——
+        #: 此前按位置硬走,新加的格子会顶掉下一个值(和上面 V3 那张错位是同一类)。文件自己标着的
+        #: 格子(哪怕当前定义里查不到,如 API 里有值的 V3 子输入)照旧算数:它才是这些值的作者。
+        for name, definition, _extra in self._widget_specs(node):
+            if not in_file or name in in_file or name in values or name in _FRONTEND_WIDGETS:
+                continue
+            present, value = self._default(definition)
+            if present:
+                values[name] = _wrap(value)
         return values
 
     # --- 顺着连线找到真正的上游 ----------------------------------------------

@@ -5,6 +5,12 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### 新式节点(V3)的格子读值不再错位
+
+- `COMFY_DYNAMICCOMBO_V3` / `COMFY_AUTOGROW_V3` 展开出来的子输入(`sampling_mode.temperature` 这类)
+  此前被排到 `widgets_values` 的最后,于是模板之后的值整体错一位(真机:提示词优化节点的 temperature 落到
+  thinking、top_p 落到 mtp,ComfyUI 回「mtp: 0.95 not in [...]」)。现在按前端自己的顺序读:子输入紧跟模板那一格。
+
 ### 提交前说清「这一格存的旧值已经不在下拉里了」
 
 - 节点包更新过之后下拉的选项会变(占位符改个词也算),而工作流里存的是当初那个字符串 —— ComfyUI 到提交时才回一句

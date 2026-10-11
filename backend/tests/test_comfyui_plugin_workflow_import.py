@@ -224,6 +224,53 @@ def test_新版的动态下拉_API里是值的也排回widget(plugin, comfy) -> 
     assert back["2"]["inputs"] == api["2"]["inputs"]
 
 
+def test_动态下拉展开出来的子输入_读值时就排在模板那一格后面(plugin, comfy) -> None:
+    """真机(2026-10-11,常用/minimax-text-image-2-video 的「提示词优化(Qwen3VL)」):`TextGenerate` 的
+    `sampling_mode` 是 COMFY_DYNAMICCOMBO_V3,选了 on 之后长出 temperature/top_k/top_p/min_p/repetition_penalty/
+    seed/presence_penalty 七格,它们在 `widgets_values` 里**紧跟模板那一格**,后面才是 thinking/use_default_template/mtp。
+
+    此前转换器把「定义里没有、文件里标着 widget」的那几格一律排到最后,于是这些子输入抢了后面三格的位子:
+    temperature 的值落到 thinking、top_k 落到 use_default_template、top_p 落到 mtp,而 presence_penalty 拿到了
+    mtp 的 'auto' —— ComfyUI 回一句「mtp: 0.95 not in ['auto', ...]」「presence_penalty, auto, could not convert
+    string to float」。认值的顺序必须和前端一致。"""
+    comfy.state.object_info["TextGenerate"] = {"input": {
+        "required": {"clip": ["CLIP"], "prompt": ["STRING", {"multiline": True}], "max_length": ["INT", {"default": 1024}],
+                     "sampling_mode": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+                         {"key": "on", "inputs": {"required": {"temperature": ["FLOAT", {"default": 0.7}],
+                                                               "top_k": ["INT", {"default": 64}],
+                                                               "top_p": ["FLOAT", {"default": 0.95}],
+                                                               "presence_penalty": ["FLOAT", {"default": 0.0}]}}},
+                         {"key": "off", "inputs": {"required": {}}}]}]},
+        "optional": {"thinking": ["BOOLEAN", {"default": False}], "use_default_template": ["BOOLEAN", {"default": True}],
+                     "mtp": [["auto", "off", "2", "3", "4", "5"]]}},
+        "output": ["STRING"], "output_node": True}
+    comfy.state.object_info["LoadClip"] = {"input": {"required": {"clip_name": [["qwen3vl.safetensors"]]}}, "output": ["CLIP"]}
+    ui = {"nodes": [
+        {"id": 1, "type": "LoadClip", "pos": [0, 0], "size": [200, 60], "flags": {}, "order": 0, "mode": 0,
+         "outputs": [{"name": "CLIP", "type": "CLIP", "links": [1]}], "widgets_values": ["qwen3vl.safetensors"]},
+        {"id": 22, "type": "TextGenerate", "pos": [300, 0], "size": [240, 300], "flags": {}, "order": 1, "mode": 0,
+         "outputs": [{"name": "STRING", "type": "STRING", "links": []}],
+         "inputs": [{"name": "clip", "type": "CLIP", "link": 1},
+                    {"name": "prompt", "type": "STRING", "widget": {"name": "prompt"}},
+                    {"name": "max_length", "type": "INT", "widget": {"name": "max_length"}},
+                    {"name": "sampling_mode", "type": "COMBO", "widget": {"name": "sampling_mode"}},
+                    {"name": "sampling_mode.temperature", "type": "FLOAT", "widget": {"name": "sampling_mode.temperature"}},
+                    {"name": "sampling_mode.top_k", "type": "INT", "widget": {"name": "sampling_mode.top_k"}},
+                    {"name": "sampling_mode.top_p", "type": "FLOAT", "widget": {"name": "sampling_mode.top_p"}},
+                    {"name": "sampling_mode.presence_penalty", "type": "FLOAT", "widget": {"name": "sampling_mode.presence_penalty"}},
+                    {"name": "thinking", "type": "BOOLEAN", "widget": {"name": "thinking"}},
+                    {"name": "use_default_template", "type": "BOOLEAN", "widget": {"name": "use_default_template"}},
+                    {"name": "mtp", "type": "COMBO", "widget": {"name": "mtp"}}],
+         "widgets_values": ["一个好看的女孩子", 1024, "on", 0.7, 64, 0.95, 0, False, True, "auto"]}],
+        "links": [[1, 1, 0, 22, 0, "CLIP"]]}
+    _module, _Comfy, convert = plugin
+    inputs = convert.to_api(ui, comfy.state.object_info)["22"]["inputs"]
+    assert inputs["sampling_mode.temperature"] == 0.7 and inputs["sampling_mode.top_k"] == 64
+    assert inputs["sampling_mode.top_p"] == 0.95 and inputs["sampling_mode.presence_penalty"] == 0
+    assert inputs["thinking"] is False and inputs["use_default_template"] is True and inputs["mtp"] == "auto", \
+        "模板之后的那三格拿的是自己的值"
+
+
 def test_缺节点的API格式_值和连线也留着(plugin, comfy) -> None:
     api = {"1": {"class_type": "CR Prompt Text", "inputs": {"prompt": "猫", "extra": 3}},
            "2": {"class_type": "CLIPTextEncode", "inputs": {"text": ["1", 0], "clip": ["3", 1]}},
