@@ -54,7 +54,7 @@ const SheetContent = React.forwardRef<
         ref={ref}
         data-slot="sheet-content"
         className={cn(
-          "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed z-50 grid min-h-0 w-[min(30rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]",
+          "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed z-70 grid min-h-0 w-[min(30rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]",
           "modal-surface border-[var(--modal-border)] bg-[var(--modal-surface)] text-popover-foreground shadow-[var(--shadow-modal)]",
           "duration-240 ease-enter data-[state=closed]:ease-exit data-[state=open]:animate-in data-[state=closed]:animate-out motion-reduce:animate-none motion-reduce:transition-none",
           SIDES[side],
