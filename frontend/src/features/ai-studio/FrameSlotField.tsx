@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
-import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } from "@/lib/sourceFrames";
+import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, slotColumns, type FrameSlot, type SourceRole } from "@/lib/sourceFrames";
 
 /**
  * 「带角色的输入素材」在面板里的样子:**一格一格的缩略图**,不是一行一行的表单。
@@ -39,11 +39,6 @@ import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } f
  * 是同一种东西,只是宽窄不同。
  */
 const TILE = "grid h-[68px] w-full place-items-center overflow-hidden rounded-lg border border-border bg-muted/40";
-
-/** 一行**铺满**:少于三份就按份数均分,而不是留着两个空位。 */
-function columnsFor(count: number): string {
-  return `repeat(${Math.min(Math.max(count, 1), 3)}, minmax(0, 1fr))`;
-}
 
 function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
   const qc = useQueryClient();
@@ -225,7 +220,7 @@ export function FrameSlotField({
       )}
       <div
         className="grid gap-1.5"
-        style={{ gridTemplateColumns: columnsFor(filled.length + (canAdd ? 1 : 0)) }}
+        style={{ gridTemplateColumns: slotColumns(filled.length + (canAdd ? 1 : 0)) }}
       >
         {filled.map((slot, index) => (
           <Tile

@@ -7,14 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { exclusiveSourceGroups, sourceLimit } from "@/lib/generationCapabilities";
-import {
-  emptyFrames,
-  filledCount,
-  frameUrlParameters,
-  sourceAssetsFrom,
-  withSlot,
-  type SourceRole,
-} from "@/lib/sourceFrames";
+import { filledCount, frameUrlParameters, emptyFrames, slotColumns, sourceAssetsFrom, type SourceRole, withSlot } from "@/lib/sourceFrames";
 
 const anyRole = () => true;
 const model = (capabilities: Record<string, unknown>) =>
@@ -113,5 +106,23 @@ describe("filledCount 只数真的填了东西的槽位", () => {
     const frames = emptyFrames();
     frames.reference_image = [{ url: "https://x/a.png", assetId: "", assetName: "" }];
     expect(filledCount(frames, "reference_image")).toBe(1);
+  });
+});
+
+describe("一行素材槽铺满整行", () => {
+  //: 维护者:「右侧这个预览 同一行应该撑满宽度」。预览原先自己写了一套(auto-fill + 88px 一格):
+  //: 600px 的列里一份素材只有 95px 宽,而用的人真正看到的是铺满整行的那一格。规则现在只在这一处。
+  it("一份占满整行,最多三份", () => {
+    expect(slotColumns(1)).toBe("repeat(1, minmax(0, 1fr))");
+    expect(slotColumns(2)).toBe("repeat(2, minmax(0, 1fr))");
+    expect(slotColumns(3)).toBe("repeat(3, minmax(0, 1fr))");
+  });
+
+  it("再多也不缩成邮票:第四份起还是三份一行(真控件那边溢出的由上限管)", () => {
+    expect(slotColumns(9)).toBe("repeat(3, minmax(0, 1fr))");
+  });
+
+  it("零份也占一行 —— 空着的那一格要等着人来填,不能塌成 0 宽", () => {
+    expect(slotColumns(0)).toBe("repeat(1, minmax(0, 1fr))");
   });
 });

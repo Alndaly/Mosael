@@ -18,7 +18,7 @@ import {
   sourceLimit,
   supportsParameter,
 } from "@/lib/generationCapabilities";
-import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
+import { ROLE_COPY, SOURCE_ROLES, slotColumns, type SourceRole } from "@/lib/sourceFrames";
 
 type Translate = ReturnType<typeof useI18n>;
 
@@ -114,15 +114,22 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
   );
 }
 
-/** 一个角色的槽位:几格虚线框,每格写着它的名字(`source_labels`)。 */
+/**
+ * 一个角色的槽位:几格虚线框,每格写着它的名字(`source_labels`)。**和真控件同一套装法** ——
+ * 一行铺满、最多三份(`sourceFrames.slotColumns`),格子的高度、圆角、虚线也和那边一致。
+ * 此前这里是 `auto-fill minmax(88px,1fr)`:一份素材缩成一个小方块,而用的人真正看到的是铺满整行的那一格
+ * (维护者:「右侧这个预览 同一行应该撑满宽度」)。预览说的就是"看到的就是这样",两处不能各画一套。
+ */
 function PreviewSlots({ role, names, count, t }: { role: SourceRole; names: string[]; count: number; t: Translate }) {
   const label = t(ROLE_COPY[role].label);
+  const slots = Math.max(count, 1);
   return (
     <div className="grid gap-1.5 text-ui-xs font-semibold text-muted-foreground">
       <span>{label}</span>
-      <ul aria-label={label} className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-1.5 p-0">
-        {Array.from({ length: count }, (_, index) => (
-          <li key={index} className="grid h-14 place-items-center rounded-lg border border-dashed border-border bg-muted/40 px-1.5">
+      <ul aria-label={label} className="m-0 grid list-none gap-1.5 p-0" style={{ gridTemplateColumns: slotColumns(slots) }}>
+        {Array.from({ length: slots }, (_, index) => (
+          <li key={index}
+              className="grid h-[68px] place-items-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/40 px-1.5">
             <Truncate className="max-w-full text-ui-xs font-medium text-foreground">{names[index] || `${label} ${index + 1}`}</Truncate>
           </li>
         ))}

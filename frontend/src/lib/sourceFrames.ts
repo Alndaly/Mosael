@@ -125,6 +125,15 @@ export const ROLE_COPY: Record<SourceRole, RoleCopy> = {
 };
 
 /** 这个槽位是空的吗 —— 素材和外链都没有。 */
+/**
+ * 一行素材槽分几列 —— **一份就占满整行**,最多三份。真控件(ai-studio/FrameSlotField)和表单预览
+ * (plugins/appForm/PreviewPanel)都从这里拿:预览要是自己定一套(比如 auto-fill + 88px 一格),
+ * 一份素材在预览里就缩成一个小方块,而用的人真正看到的是铺满整行的那一格 —— 预览的意义正是"看到的就是这样"。
+ */
+export function slotColumns(count: number): string {
+  return `repeat(${Math.min(Math.max(count, 1), 3)}, minmax(0, 1fr))`;
+}
+
 export function isEmptySlot(slot: FrameSlot): boolean {
   return !slot.assetId && !slot.url.trim();
 }
