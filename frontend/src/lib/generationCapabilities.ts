@@ -133,6 +133,22 @@ export function sourceLabels(model: GenerationOption | null, role: string): stri
 }
 
 /**
+ * 表单里这一项是哪个素材角色的读入槽位(描述符的 `source_keys`):是就返回那个角色。
+ *
+ * 表单项的 key 是 `<节点>.<输入名>`(作者在 ComfyUI 里挑的那一格),光看 key 认不出「这一格是传图的」——
+ * 于是它一直被画成一个文件名下拉(维护者截图:「首帧」是个只有 none 的下拉)。插件把每个角色的槽位
+ * 在这张表单上叫什么一并报上来(见 graph 的 inputs),这里按它认。
+ */
+export function sourceRoleOfKey(model: GenerationOption | null, key: string): string | null {
+  const table = model?.capabilities?.source_keys;
+  if (!table || typeof table !== "object") return null;
+  for (const [role, keys] of Object.entries(table as Record<string, unknown>)) {
+    if (Array.isArray(keys) && keys.some((one) => one === key)) return role;
+  }
+  return null;
+}
+
+/**
  * 互斥的角色分组。同一次生成只能用其中一组。
  *
  * 首尾帧决定成片的第一格和最后一格;参考素材一帧都不出现在成片里,只影响风格与主体 ——

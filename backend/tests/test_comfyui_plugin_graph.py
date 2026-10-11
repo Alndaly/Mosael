@@ -567,17 +567,51 @@ def test_没有种子的图没有跑几遍_视频图也没有(graph) -> None:
     assert not graph.counts_runs(UPSCALE_API) and not graph.counts_runs(WAN_API)
 
 
+def roles(model: dict) -> list[dict]:
+    """描述符的 `inputs`,去掉 `keys` —— 那是「这个角色的槽位在这张表单上叫什么」(`<节点>.<输入名>`),
+    各图不同、和角色/上限/必填是两件事(界面拿它把表单上那一项画成传图的那一格)。单独一条测试钉它。"""
+    return [{key: value for key, value in one.items() if key != "keys"} for one in model["inputs"]]
+
+
 def test_LoadImage_变成参考图槽位(graph, convert) -> None:
     model = _portrait(graph, convert)
-    assert model["inputs"] == [{"role": "reference_image", "max": 1}], "有提示词和画布的图:参考图可给可不给"
+    assert roles(model) == [{"role": "reference_image", "max": 1}], "有提示词和画布的图:参考图可给可不给"
+    assert model["inputs"][0]["keys"] == ["10.image"], "keys 说这一格在这张表单上叫什么(界面据此把它画成传图的那一格)"
     assert model["modes"] == ["text-to-image", "image-to-image"]
     assert model["prompt_dialect"] == "sd-tags"
+
+
+def test_靠上传标记认出来的读图节点_也算首帧槽位(graph) -> None:
+    """维护者截图(2026-10-11,`常用/minimax-text-image-2-video`):表单上「首帧」「尾帧」是两个只有 none 的下拉。
+
+    那张图用的是自家节点包的 `Optional Load Image` —— 它不在「读素材的节点」那张硬编码表里,于是不算素材槽位:
+    描述符里没有这一格、界面只好画成文件名下拉,给它挑的图也没地方接(生成时不会写进图里)。
+
+    现在按 ComfyUI 自己的上传标记(`image_upload`,前端就是照它给下拉加一个上传按钮)通用地认:自定义节点包不必
+    逐个登记。这一条钉住「表里没有、但定义说了它读图」的节点同样成为槽位,而且是首帧。
+    """
+    info = {**OBJECT_INFO,
+            "Optional Load Image": {"input": {"required": {"image": [["none", "a.png"], {"image_upload": True}],
+                                                            "allow_none": ["BOOLEAN", {"default": True}]}},
+                                    "output": ["IMAGE"]},
+            "MiniMaxH3ImageToVideo": {"input": {"required": {
+                "first_frame": ["IMAGE"], "last_frame": ["IMAGE"], "prompt": ["STRING", {"multiline": True}]}}, "output": ["VIDEO"]}}
+    api = {"49": {"class_type": "Optional Load Image", "inputs": {"image": "none", "allow_none": True}},
+           "50": {"class_type": "Optional Load Image", "inputs": {"image": "none", "allow_none": True}},
+           "2": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {"first_frame": ["49", 0], "last_frame": ["50", 0],
+                                                                   "prompt": "一只猫"}},
+           "20": {"class_type": "SaveVideo", "inputs": {"video": ["2", 0], "filename_prefix": "v"}}}
+    model = graph.describe("minimax-text-image-2-video.json", "video", api, info)
+    assert [(one["role"], one.get("keys")) for one in model["inputs"]] == \
+        [("first_frame", ["49.image"]), ("last_frame", ["50.image"])], \
+        "两格各归各的角色,而且带着它们在表单上的 key"
+    assert roles(model)[0]["required"] is True, "图生视频:首帧必须给"
 
 
 def test_视频图_接到start_image的是首帧(graph) -> None:
     model = graph.describe("video/wan.json", "wan", WAN_API, OBJECT_INFO)
     assert model["kind"] == "video"
-    assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}], "图生视频:首帧必须给"
+    assert roles(model) == [{"role": "first_frame", "max": 1, "required": True}], "图生视频:首帧必须给"
     assert model["modes"] == ["image-to-video"]
     assert model["parameters"]["size"]["default"] == "832x480", "WanImageToVideo 决定成片尺寸"
     assert model["parameters"]["20.length"]["default"] == 81
@@ -593,7 +627,7 @@ def test_首帧先过一道缩放再进图生视频节点_照样是首帧_而且
     api["13"] = {"class_type": "BatchResizeWithLanczos", "inputs": {"image": ["12", 0], "width": 1280, "height": 1280}}
     api["20"]["inputs"]["start_image"] = ["13", 0]
     model = graph.describe("dasiwa.json", "dasiwa", graph.live(api, info), info)
-    assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}]
+    assert roles(model) == [{"role": "first_frame", "max": 1, "required": True}]
     assert model["modes"] == ["image-to-video"]
     uploaded = graph.wire_inputs(api, "video", {"first_frame": ["mosael/start.png"]})
     assert uploaded["12"]["inputs"]["image"] == "mosael/start.png", "给的首帧接到那个 LoadImage 上"
@@ -603,7 +637,7 @@ def test_放大这类处理一张图的工作流_图必须给(graph) -> None:
     model = graph.describe("upscale.json", "upscale", UPSCALE_API, OBJECT_INFO)
     assert model["kind"] == "image"
     assert model["modes"] == ["image-to-image"], "没有提示词、没有画布:它不是文生图"
-    assert model["inputs"] == [{"role": "reference_image", "max": 1, "required": True}]
+    assert roles(model) == [{"role": "reference_image", "max": 1, "required": True}]
     assert model["parameters"]["2.model_name"]["title"] == {"zh": "放大模型", "en": "Upscale model"}
     assert "upscale" in graph.features(UPSCALE_API)
 
@@ -624,7 +658,7 @@ def test_没接到能跑的输出上的节点不算_局部重绘图没有假的�
     assert "x-batch" not in model["parameters"]["num_images"], "上游没有存着的批量:一遍几张判不出来,不报"
     assert model["outputs_per_run"] == 1 and "output_node" not in model["parameters"]
     assert "6.text" not in model["parameters"], "没接上的那句提示词不是一个可调的参数"
-    assert model["inputs"] == [{"role": "reference_image", "max": 1, "required": True}, {"role": "mask", "max": 1}], (
+    assert roles(model) == [{"role": "reference_image", "max": 1, "required": True}, {"role": "mask", "max": 1}], (
         "没有自己的画布:图必须给,否则拿工作流里存着的那张跑"
     )
     assert model["modes"] == ["image-to-image"]
@@ -658,7 +692,7 @@ def test_只预览预处理结果的预览节点不是产出(graph) -> None:
     assert not {"39", "41", "42"} & set(kept), "骨架那一路不跑"
     model = graph.describe("beautiful girl.json", "beautiful girl", kept, info)
     assert model["outputs_per_run"] == 4, "画布上存着一次 4 张:跑一遍交回 4 张"
-    assert model["inputs"] == [] and model["modes"] == ["text-to-image"]
+    assert roles(model) == [] and model["modes"] == ["text-to-image"]
     assert [one["node"] for one in graph.output_nodes(UPSCALE_API, OBJECT_INFO)] == ["4", "5"], (
         "没有解码的图(放大):预览照旧是产出")
 
@@ -741,7 +775,7 @@ def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> Non
     model = graph.describe("inpaint.json", "inpaint", api, OBJECT_INFO)
     assert {"role": "mask", "max": 2, "required": True, "labels": [
         {"zh": "加载图像(作为蒙版) #11", "en": "LoadImageMask #11"}, {"zh": "加载图像 #12", "en": "LoadImage #12"},
-    ]} in model["inputs"], "一个角色几个槽位:按槽位顺序带名字(没起名的是「节点名 #节点」)"
+    ]} in roles(model), "一个角色几个槽位:按槽位顺序带名字(没起名的是「节点名 #节点」)"
     assert model["modes"] == ["image-to-image"]
     assert "11.channel" not in model["parameters"], "读蒙版的节点是槽位,不是参数"
     assert "inpaint" in graph.features(api)
@@ -757,7 +791,7 @@ def test_视频输入是待编辑的视频_音频是驱动音频(graph) -> None:
     assert [(slot["role"], slot["field"]) for slot in slots] == [("source_video", "file"), ("driving_audio", "audio")]
     model = graph.describe("v2v.json", "v2v", api, OBJECT_INFO)
     assert model["kind"] == "video" and model["modes"] == ["video-edit"]
-    assert {"role": "source_video", "max": 1, "required": True} in model["inputs"]
+    assert {"role": "source_video", "max": 1, "required": True} in roles(model)
 
 
 def test_核心的_Advanced_保存节点也是成品_文生音乐是音频模型(graph) -> None:
@@ -1014,7 +1048,7 @@ def test_API节点的文生视频_提示词是它自己的prompt_text(graph) -> 
 def test_API节点的图生视频_接到image和first_frame_image上的是首帧(graph) -> None:
     for api in (MINIMAX_I2V_API, HAILUO_API):
         model = graph.describe("i2v.json", "i2v", api, VIDEO_INFO)
-        assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}], api["1"]["class_type"]
+        assert roles(model) == [{"role": "first_frame", "max": 1, "required": True}], api["1"]["class_type"]
         assert model["modes"] == ["image-to-video"]
     assert graph.describe("hailuo.json", "h", HAILUO_API, VIDEO_INFO)["prompt"] == "required", "存的是空串:要写"
     assert graph.fill(HAILUO_API, {"prompt": "P"}, {}, VIDEO_INFO)["1"]["inputs"]["prompt_text"] == "P"
@@ -1026,7 +1060,7 @@ def test_正反两句在同一个节点上_各归各的(graph) -> None:
     assert slots == {("1", "prompt"): "prompt", ("1", "negative_prompt"): "negative"}
     model = graph.describe("kling.json", "kling", KLING_I2V_API, VIDEO_INFO)
     assert model["prompt"] == "optional" and "negative_prompt" in model["parameters"]
-    assert model["inputs"] == [{"role": "first_frame", "max": 1, "required": True}], "Kling 的首帧叫 start_frame"
+    assert roles(model) == [{"role": "first_frame", "max": 1, "required": True}], "Kling 的首帧叫 start_frame"
     assert not {"1.prompt", "1.negative_prompt"} & set(model["parameters"])
     filled = graph.fill(KLING_I2V_API, {"prompt": "P", "negative": "N"}, {}, VIDEO_INFO)
     assert (filled["1"]["inputs"]["prompt"], filled["1"]["inputs"]["negative_prompt"]) == ("P", "N")
@@ -1038,7 +1072,7 @@ def test_正反两句在同一个节点上_各归各的(graph) -> None:
 
     wan = graph.describe("wan_wrapper.json", "wan", WAN_WRAPPER_API, VIDEO_INFO)
     assert wan["prompt"] == "optional" and "negative_prompt" in wan["parameters"]
-    assert wan["inputs"] == [{"role": "first_frame", "max": 1, "required": True}] and wan["modes"] == ["image-to-video"]
+    assert roles(wan) == [{"role": "first_frame", "max": 1, "required": True}] and wan["modes"] == ["image-to-video"]
     filled = graph.fill(WAN_WRAPPER_API, {"prompt": "P", "negative": "N"}, {}, VIDEO_INFO)
     assert filled["11"]["inputs"] == {"positive_prompt": "P", "negative_prompt": "N"}
 
@@ -1127,7 +1161,7 @@ def test_多参考生视频_提示词写在连进来的文字节点上(graph) ->
     assert model["prompt"] == "optional"
     #: 接在 `ref_*` 上的是参考:参考视频不是「要改的那段视频」(那是必给的),参考音频也不是驱动口型的音频
     #: (那要数字人授权)。有提示词:都可给可不给。
-    assert model["inputs"] == [{"role": "reference_video", "max": 1}, {"role": "reference_audio", "max": 1},
+    assert roles(model) == [{"role": "reference_video", "max": 1}, {"role": "reference_audio", "max": 1},
                                {"role": "reference_image", "max": 1}]
     assert model["modes"] == ["text-to-video", "reference-to-video"]
     assert graph.fill(api, {"prompt": "P"}, {}, VIDEO_INFO)["263"]["inputs"]["text"] == "P"

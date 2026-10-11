@@ -676,7 +676,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
                                  + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))
         for role, names in uploads.items():
             if role == "mask":
-                prompt = graph.wire_inputs(prompt, kind, {"mask": names}, shape.slots)
+                prompt = graph.wire_inputs(prompt, kind, {"mask": names}, shape.slots, object_info)
                 continue
             node = role.removeprefix("slot:")
             if node in prompt:

@@ -39,6 +39,11 @@ ENTRY = "tools/main.py"
 TOOL = "comfyui_generation"
 
 
+def roles(model: dict) -> list[dict]:
+    """描述符的 `inputs`,去掉 `keys`(那是「这一格在这张表单上叫什么」,各图不同)。"""
+    return [{key: value for key, value in one.items() if key != "keys"} for one in model["inputs"]]
+
+
 @pytest.fixture
 def comfy():
     with FakeComfyUI() as server:
@@ -95,7 +100,7 @@ def test_目录列出内置文生图和每张保存的工作流_不再有API模�
     assert models["builtin:txt2img"]["parameters"]["size"]["default"] == "1024x1024"
     assert models["builtin:txt2img"]["parameters"]["4.ckpt_name"]["default"] == "sd_xl_base.safetensors"
     assert models["portrait.json"]["label"] == "portrait" and models["portrait.json"]["kind"] == "image"
-    assert models["portrait.json"]["inputs"] == [{"role": "reference_image", "max": 1}]
+    assert roles(models["portrait.json"]) == [{"role": "reference_image", "max": 1}]
     assert models["video/wan.json"]["kind"] == "video"
 
 
@@ -526,7 +531,7 @@ def test_新版下拉的旧值被复位_这次生成的说明里说一句(comfy,
 
     `output["note"]` 是现成的那条路(宿主把它当这次任务的最后一句话,并落进生成记录,
     见 domain/plugins/generation + domain/generation/runner):这里钉住插件确实交了这句话。"""
-    from tests.fake_comfyui import PORTRAIT_UI, conn, widget
+    from tests.fake_comfyui import PORTRAIT_UI, widget
     comfy.state.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"] = [
         "COMBO", {"default": "sd_xl_base.safetensors", "options": ["sd_xl_base.safetensors", "v1-5.ckpt"]}]
     comfy.state.workflows["stale-combo.json"] = {

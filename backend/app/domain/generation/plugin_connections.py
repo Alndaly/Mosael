@@ -139,6 +139,9 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
             schema[key] = dict(spec)
     limits: dict[str, int] = {}
     labels: dict[str, list[Any]] = {}
+    #: 每个角色的槽位在**这张工作流的表单上**叫哪几个 key(`<节点>.<输入名>`)。界面据此把表单里那一项认成
+    #: 读素材的那一格、画成传图 / 传视频的控件,而不是一个文件名下拉(见 plugins.bundled.comfyui 的 graph.inputs)。
+    slot_keys: dict[str, list[str]] = {}
     required: list[list[str]] = []
     for slot in model.inputs:
         role = slot["role"]
@@ -150,6 +153,8 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         if slot.get("labels"):
             # 槽位按顺序叫什么(ADR 0038 §4):三处界面的第 i 格用第 i 个名字当提示。通用的 —— 哪个插件给了都用
             labels[role] = list(slot["labels"])
+        if slot.get("keys"):
+            slot_keys[role] = [str(one) for one in slot["keys"]]
         if slot.get("required"):
             required.append([role])
     caps["parameter_keys"] = keys
@@ -159,6 +164,8 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         caps["source_limits"] = limits
     if labels:
         caps["source_labels"] = labels
+    if slot_keys:
+        caps["source_keys"] = slot_keys
     if required:
         caps["requires_source"] = required
     if model.prompt_dialect:

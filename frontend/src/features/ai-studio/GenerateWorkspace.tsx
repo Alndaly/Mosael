@@ -116,6 +116,7 @@ import {
   runsHint,
   supportsParameter,
   sourceLabels,
+  sourceRoleOfKey,
   sourceLimit,
   exclusiveSourceGroups,
   hasEnoughText,
@@ -1221,12 +1222,18 @@ export function GenerateWorkspace({
       if (item.key === "size") return sizeField(model, item.label || undefined);
       if (item.key === "num_images") return numImagesField(model, item.label || undefined);
       if ((SOURCE_ROLES as readonly string[]).includes(item.key)) return sourceField(model, item.key as SourceRole);
+      //: 表单上挑的这一格其实是读素材的槽位(`49.image` 这种):画成传图 / 传视频的那一格,不是文件名下拉。
+      const role = sourceRoleOfKey(model, item.key);
+      if (role && (SOURCE_ROLES as readonly string[]).includes(role)) return sourceField(model, role as SourceRole);
       const parameter = parameters.get(item.key);
       return parameter ? declaredField(model, parameter, item.label || undefined) : null;
     };
-    //: 首帧和尾帧是一对、一个控件:表上两项都在时只摆一次
+    //: 表单每一项是哪个角色(作者挑的 key 认不出时按 key 本身算)——
+    //: 首帧和尾帧是一对、一个控件:表上两项都在时只摆一次。
+    const roleOf = (item: AppFormItem): string => sourceRoleOfKey(model, item.key) ?? item.key;
     const shown = form.items.filter((item, index, all) =>
-      !(item.key === "last_frame" && model.kind === "video" && all.slice(0, index).some((one) => one.key === "first_frame")));
+      !(roleOf(item) === "last_frame" && model.kind === "video"
+        && all.slice(0, index).some((one) => roleOf(one) === "first_frame")));
     return (
       <>
         <ParameterSection icon={ClipboardList} title={t("genAppFormSection")}>

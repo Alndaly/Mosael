@@ -156,7 +156,7 @@ def missing(prompt: dict[str, Any], object_info: dict[str, Any]) -> tuple[list[s
     files: list[str] = []
     stale: list[str] = []
     #: 读素材的节点的槽位不看「值在不在下拉里」:那几格是插件自己写上上传回来的文件名的,下拉是服务器目录里的文件。
-    loaders = graph.loader_inputs(prompt)
+    loaders = graph.loader_inputs(prompt, object_info)
     for node_id in sorted(prompt, key=graph._node_order):  # noqa: SLF001 — 同一个插件里的模块
         node = prompt[node_id]
         class_type = str(node.get("class_type", ""))
@@ -744,7 +744,8 @@ def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) ->
         preflight(prompt, object_info, locale)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
-            prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None)
+            prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None,
+                                       object_info)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
     delivered = _delivered(comfy, entry, kind, wanted, prompt_id, locale)
     #: 接着等上一次提交的那个任务时没有「读工作流」这一步(提交是上一个进程做的),不会有复位要报。
@@ -846,7 +847,8 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
             uploaded = upload(comfy, request.get("inputs") or [])
         if not uploaded:
             return prompt
-        return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None)
+        return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None,
+                                 object_info)
 
     result = run_repeated(comfy, build, runs, given, emit, locale, titles, request.get("resume"))
     if not result.runs:

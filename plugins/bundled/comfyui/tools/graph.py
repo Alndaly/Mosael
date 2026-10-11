@@ -66,6 +66,11 @@ _SAVE_NODE_TYPES = _VIDEO_OUTPUT_TYPES | _AUDIO_OUTPUT_TYPES | _IMAGE_OUTPUT_TYP
 #: 放大图里预览的是读进来的原图,ControlNet 图里预览的是预处理出来的线稿 / 深度图。
 _PREVIEW_OUTPUT_TYPES = frozenset({"PreviewImage", "PreviewAudio"})
 
+#: ComfyUI 给「这个下拉是让人传文件的」打的标记 → 传上来的是什么素材。**前端就是照它给下拉旁边加一个上传按钮**
+#: (`image_upload` 那套),所以自定义节点包不必逐个登记到下面的表里(见 _loader_of)。
+_UPLOAD_MEDIA: dict[str, str] = {"image_upload": "image", "video_upload": "video", "audio_upload": "audio",
+                                  "animated_image_upload": "image"}
+
 #: 读入一份素材的节点 → (它读的是什么, 文件名写在哪个输入里)。
 #: LoadImage 读图;它的第二个输出是 alpha 通道当蒙版 —— 只接了那一路的,当蒙版槽位用。
 _LOADERS: dict[str, tuple[str, str]] = {
@@ -368,7 +373,37 @@ def _frame_role(api: dict[str, Any], node_id: str) -> str:
     return "reference_image"
 
 
-def loader_inputs(api: dict[str, Any]) -> set[tuple[str, str]]:
+def _upload_media(definition: Any) -> str:
+    """这一格是不是「传文件的」下拉:`["COMBO", {"image_upload": true}]` 这种。是哪种素材也由它说了算。"""
+    extra = definition[1] if isinstance(definition, list) and len(definition) > 1 else None
+    if not isinstance(extra, dict):
+        return ""
+    for flag, media in _UPLOAD_MEDIA.items():
+        if extra.get(flag):
+            return media
+    return ""
+
+
+def _loader_of(class_type: str, object_info: dict[str, Any] | None) -> tuple[str, str] | None:
+    """这个节点读哪种素材、读在哪个输入上。
+
+    先看上面的表(那几处有额外的意思:alpha 当蒙版、VHS 的输入叫 `video`);表里没有的,**看节点定义自己的上传标记** ——
+    `Optional Load Image` 这类自家/第三方的读图节点就是这样认出来的。此前只认表里的类名,于是这些节点不算素材槽位:
+    表单上「首帧」只好给一个文件名下拉(维护者截图),给它的素材也没地方接。
+    """
+    known = _LOADERS.get(class_type)
+    if known is not None:
+        return known
+    declared = ((object_info or {}).get(class_type) or {}).get("input") or {}
+    for section in ("required", "optional"):
+        for name, definition in (declared.get(section) or {}).items():
+            media = _upload_media(definition)
+            if media:
+                return media, name
+    return None
+
+
+def loader_inputs(api: dict[str, Any], object_info: dict[str, Any] | None = None) -> set[tuple[str, str]]:
     """哪些输入是**读素材的节点的槽位**(`{(节点号, 输入名)}`)。
 
     这些格的值由插件自己写(上传回来的文件名,见 wire_inputs),而它们的下拉是那台服务器上**目录里的文件** ——
@@ -377,13 +412,14 @@ def loader_inputs(api: dict[str, Any]) -> set[tuple[str, str]]:
     """
     found: set[tuple[str, str]] = set()
     for node_id, node in api.items():
-        loader = _LOADERS.get(str(node.get("class_type", "")))
+        loader = _loader_of(str(node.get("class_type", "")), object_info)
         if loader is not None:
             found.add((str(node_id), loader[1]))
     return found
 
 
-def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) -> list[dict[str, str]]:
+def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
+          object_info: dict[str, Any] | None = None) -> list[dict[str, str]]:
     """读素材的节点 → 输入槽位 `{node, class_type, title, media, field, role}`,按节点顺序。
 
     角色看它**接到哪儿**(宿主的素材角色,见 ai/providers/contracts/generation.SOURCE_ROLES):
@@ -404,7 +440,7 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
     for node_id in sorted(api, key=_node_order):
         node = api[node_id]
         class_type = str(node.get("class_type", ""))
-        loader = _LOADERS.get(class_type)
+        loader = _loader_of(class_type, object_info)
         if loader is None:
             continue
         media, field_name = loader
@@ -452,7 +488,7 @@ def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = Non
     for tag, marks in _FEATURE_MARKS:
         if any(mark in class_type for class_type in types for mark in marks):
             tags.append(tag)
-    found_slots = found_slots if found_slots is not None else slots(api, kind_of(api))
+    found_slots = found_slots if found_slots is not None else slots(api, kind_of(api), object_info=object_info)
     if any(slot["role"] == "mask" for slot in found_slots) and "inpaint" not in tags:
         tags.append("inpaint")
     if "VAEEncode" in types and any(slot["media"] == "image" for slot in found_slots):
@@ -856,7 +892,7 @@ def _tunable_entries(api: dict[str, Any], object_info: dict[str, Any],
     prompts = text_slots(api, object_info)
     seeds = set(seed_inputs(api))
     sized = size_node(api)
-    slot_fields = {(slot["node"], slot["field"]) for slot in slots(api, kind_of(api))}
+    slot_fields = {(slot["node"], slot["field"]) for slot in slots(api, kind_of(api), object_info=object_info)}
     found: list[tuple[labels.Parameter, dict[str, Any]]] = []
     order = 0
     for node_id in sorted(api, key=_node_order):
@@ -1023,7 +1059,7 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
                              "title": _pair(zh, en), "node_title": custom, "node_label": where,
                              "class_type": class_type, "common": True, "schema": schema}, class_type, field))
 
-    for slot in slots(api, kind, titles):
+    for slot in slots(api, kind, titles, object_info):
         _, custom, where = node_facts(slot["node"])
         name = slot_name({**slot, "label": where})
         zh, en = labels.ROLE_NAMES.get(slot["role"], ("素材", "Input"))
@@ -1417,6 +1453,11 @@ def describe(
         entry: dict[str, Any] = {"role": role, "max": count}
         if named.get(role):
             entry["labels"] = named[role]
+        #: 这个角色的槽位在表单上叫什么 key(`<节点>.<输入名>`)—— 宿主据此把「49.image 这一项」认成首帧的
+        #: 读图槽位,画成传图的那一格,而不是一个文件名下拉。认出来的槽位才写(蒙版那种另起节点接 alpha 的没有 key)。
+        keys = [f"{slot['node']}.{slot['field']}" for slot in found_slots if slot["role"] == role]
+        if keys:
+            entry["keys"] = keys
         if needs_image and role in image_roles and not first_image_marked:
             entry["required"] = True
             first_image_marked = True
@@ -1542,7 +1583,8 @@ def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any],
 
 
 def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]],
-                found: list[dict[str, str]] | None = None) -> dict[str, Any]:
+                found: list[dict[str, str]] | None = None,
+                object_info: dict[str, Any] | None = None) -> dict[str, Any]:
     """把传上去的素材接到读素材的节点上:每个角色的第 i 份给这个角色的第 i 个槽位。
 
     槽位是表单上的那几个、按表单的顺序(`found`,见 Form.slots);不给就是图里每一个读素材的节点,按节点顺序。
@@ -1554,7 +1596,7 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]],
     """
     graph = copy.deepcopy(api)
     used: dict[str, int] = {}
-    found = slots(graph, kind) if found is None else [slot for slot in found if slot["node"] in graph]
+    found = slots(graph, kind, object_info=object_info) if found is None else [slot for slot in found if slot["node"] in graph]
     for slot in found:
         names = uploaded.get(slot["role"]) or []
         index = used.get(slot["role"], 0)

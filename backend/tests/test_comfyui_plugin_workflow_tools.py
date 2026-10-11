@@ -44,6 +44,12 @@ def _tools(url: str, data_dir: Path, **env: str) -> dict[str, dict[str, Any]]:
     return {tool["name"]: tool for tool in output["tools"]}
 
 
+def roles(model: dict) -> list[dict]:
+    """描述符的 `inputs`,去掉 `keys` —— 那是「这个角色的槽位在这张表单上叫什么」(`<节点>.<输入名>`),各图不同,
+    和角色 / 上限 / 必填是两件事(界面拿它把表单上那一项画成传图的那一格)。"""
+    return [{key: value for key, value in one.items() if key != "keys"} for one in model["inputs"]]
+
+
 def test_每张工作流一个工具_名字稳(comfy, tmp_path: Path) -> None:
     template = ('{"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "{{prompt}}"}}, '
                 '"9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0]}}}')
@@ -499,7 +505,7 @@ def test_能当生成模型用的每张图_都声明它和生成模型是同一�
         assert tools[name]["mirrors"]["generation_model"] == path, path
         assert path in models, path
     #: alpha 当蒙版:模型那一边有一个蒙版槽(生成会另起一个读红色通道的 LoadImageMask 接上 alpha 那一路)。
-    assert {"role": "mask", "max": 1} in models["alpha.json"]["inputs"]
+    assert {"role": "mask", "max": 1} in roles(models["alpha.json"])
     assert tools[ALPHA_TOOL]["mirrors"]["sources"] == {"image_1": "reference_image", "mask": "mask"}
     #: 只交出一段字的:不在模型目录里,不是同一件事。
     assert "tagger.json" not in models and "mirrors" not in tools[TAGGER_TOOL]

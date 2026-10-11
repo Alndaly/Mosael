@@ -108,6 +108,12 @@ def _strip(ui: dict[str, Any]) -> dict[str, Any]:
 # --- 能填的项 -------------------------------------------------------------------
 
 
+def roles(model: dict) -> list[dict]:
+    """描述符的 `inputs`,去掉 `keys` —— 那是「这个角色的槽位在这张表单上叫什么」(`<节点>.<输入名>`),各图不同,
+    和角色 / 上限 / 必填是两件事(界面拿它把表单上那一项画成传图的那一格)。"""
+    return [{key: value for key, value in one.items() if key != "keys"} for one in model["inputs"]]
+
+
 def test_能填的项_一份推导_提示词_素材_图级的项_其余按常用程度(plugin) -> None:
     graph, _, _ = plugin
     api, titles = _api(plugin, multi_reference_ui())
@@ -255,7 +261,7 @@ def test_缺省的目录_一个角色几个槽位按顺序带名字(plugin) -> N
     graph, _, _ = plugin
     api, titles = _api(plugin, multi_reference_ui())
     model = graph.describe("multi.json", "multi", api, OBJECT_INFO, titles)
-    assert model["inputs"] == [{"role": "reference_image", "max": 3,
+    assert roles(model) == [{"role": "reference_image", "max": 3,
                                 "labels": ["人物", {"zh": "加载图像 #13", "en": "LoadImage #13"}, "背景"]}]
     assert list(model["parameters"]) == [
         "negative_prompt", "seed", "size", "num_images", "output_node", "4.ckpt_name", "20.lora_name",
@@ -267,7 +273,7 @@ def test_缺省的目录_一个角色几个槽位按顺序带名字(plugin) -> N
 def test_缺省的目录_唯一一个没起名的槽位不挂名字(plugin) -> None:
     graph, _, _ = plugin
     api, titles = _api(plugin, PORTRAIT_UI)
-    assert graph.describe("portrait.json", "portrait", api, OBJECT_INFO, titles)["inputs"] == [
+    assert roles(graph.describe("portrait.json", "portrait", api, OBJECT_INFO, titles)) == [
         {"role": "reference_image", "max": 1}], "一个角色就一格、也没起名:给它挂一个「加载图像 #10」没有用"
 
 
@@ -287,7 +293,7 @@ def test_应用表单_目录里只有作者挑的那几项_按作者排的顺序
     assert lora["title"] == "风格" and lora["enum"] == ["detail.safetensors"] and lora["x-model-folder"] == "loras"
     assert "x-advanced" not in model["parameters"]["3.steps"], "作者挑出来的每一项都在第一屏"
     assert model["parameters"]["3.steps"]["title"] == {"zh": "步数", "en": "Steps"}, "没起名就用这一项自己的名字"
-    assert model["inputs"] == [{"role": "reference_image", "max": 2, "labels": ["人物照片", "背景"]}], \
+    assert roles(model) == [{"role": "reference_image", "max": 2, "labels": ["人物照片", "背景"]}], \
         "#13 没挑:它照工作流原样读 style.png;槽位按表单的顺序、用作者起的名字(没起名的用节点名)"
     assert model["prompt"] == "optional"
     choice = model["parameters"]["output_node"]
@@ -355,7 +361,7 @@ def test_节点删了_标记一起没_别的照旧(plugin) -> None:
             link[1] = 13  # 背景那一路改接 #13
     api, titles, _, form, invalid = _form(plugin, ui)
     assert invalid == [] and "14.image" not in [field.key for field in form.fields]
-    assert graph.describe("m.json", "m", api, OBJECT_INFO, titles, form)["inputs"] == [
+    assert roles(graph.describe("m.json", "m", api, OBJECT_INFO, titles, form)) == [
         {"role": "reference_image", "max": 1, "labels": ["人物照片"]}]
 
 
@@ -540,7 +546,7 @@ def test_annotate_写回_目录和工具只剩表单那几项(comfy, tmp_path: P
     assert list(models) == ["multi.json", "multi.json#app"], "完整工作流在前,表单入口挨着它"
     model = models["multi.json#app"]
     assert model["label"] == "换装" and list(model["parameters"]) == ["seed", "output_node", "20.lora_name", "3.steps"]
-    assert model["inputs"] == [{"role": "reference_image", "max": 2, "labels": ["人物照片", "背景"]}]
+    assert roles(model) == [{"role": "reference_image", "max": 2, "labels": ["人物照片", "背景"]}]
     assert model["group"] == {"id": "multi.json", "label": "multi", "entry": "form", "order": 1}
     full = models["multi.json"]
     assert full["label"] == "multi" and "form" not in full and full["group"]["entry"] == "full"
