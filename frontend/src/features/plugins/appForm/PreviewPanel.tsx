@@ -63,7 +63,8 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
   return (
     <div className="grid gap-3" data-app-preview>
       <div className="grid gap-0.5">
-        <span className="text-ui-md font-semibold text-foreground"><Truncate>{title}</Truncate></span>
+        {/* 同上:表单名长度不由我们定,外面这一层得能收缩,否则 `Truncate` 拿不到宽度。 */}
+        <span className="min-w-0 text-ui-md font-semibold text-foreground"><Truncate>{title}</Truncate></span>
         {note.trim() && (
           <span className="text-ui-xs leading-relaxed text-muted-foreground"><InlineMarkdown text={note} /></span>
         )}

@@ -315,7 +315,11 @@ function FieldSettings({
       </PopoverTrigger>
       <PopoverContent align="end" className="grid w-80 gap-3 p-3" aria-label={t("workflowAppSettings").replace("{name}", name)}>
         <div className="grid gap-0.5">
-          <span className="text-ui-sm font-semibold text-foreground"><Truncate>{name}</Truncate></span>
+          {/* 外面这一层**才是 grid 子项**:不写 min-w-0 它就不肯收缩(`min-width:auto`),里面的
+              `Truncate` 于是拿不到宽度 —— 名字长过面板就被面板边缘硬裁掉,连省略号都没有
+              (维护者截图:「弹窗内容宽度会超限没有自动省略号」)。在真页面量过:不加这三位数
+              那一格是 326 > 面板 320,加上才是 296 并出省略号。 */}
+          <span className="min-w-0 text-ui-sm font-semibold text-foreground"><Truncate>{name}</Truncate></span>
           {tech && <span className="break-all text-ui-2xs text-muted-foreground">{tech}</span>}
           {item.hint && <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{item.hint}</p>}
           {hostControl && <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("workflowAppHostControlHint")}</p>}
