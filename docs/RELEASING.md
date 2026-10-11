@@ -111,6 +111,15 @@ spctl --assess --type open --context context:primary-signature --verbose=2 /path
 - 同一构建的 Windows x64 `.exe`（云端已验证启动和数据库升级；不要把它描述为 Windows 代码签名包）。
 - `mosael-browser-extension.zip`：从同一源码提交构建 `pnpm build:extension` 后，将 `browser-extension/dist` **内部文件**打成 ZIP。
 - `plugins/examples/` 下**每一个**插件各一个 ZIP（有几个目录就有几个包，别照上一次发布的数目核对）：包名取各自 `mosael.plugin.json` 的 `id`，manifest 位于 ZIP 根目录。只打 git 跟踪的文件，排除 `__pycache__`、`*.pyc`、`.DS_Store`。打完用应用自己的安装器 `app.domain.plugins.registry.install_archive` 装进一个临时目录验一遍 —— 那是用户点「从文件安装」时走的同一段代码。
+- `backend/app/domain/media_tool_builds.json`：**「让 Mosael 装一个完整版 FFmpeg」装的那个构建**（每个平台一条，钉死地址和 sha256）。发版前刷新一次，让用户装到的是当版上游：
+
+  ```bash
+  python3 scripts/sync-ffmpeg-builds.py            # 重新生成清单
+  python3 scripts/sync-ffmpeg-builds.py --check     # 只核对仓库里那份和上游是否一致
+  ```
+
+  上游是哪两个见脚本开头的说明（macOS / Linux 与 Windows 不是同一个来源，归档形状也不同）。清单里换了版本就要重新跑测试（`backend/tests/test_media_tool_install.py`）并提交。
+
 - `registry.json`：**应用里插件市场读的索引**，见下面「插件市场索引」。插件 ZIP 先单独放在一个只装它们的目录里（比如 `dist/plugins-VERSION/`，别和扩展包的 ZIP 混在一起），然后在同一个 checkout 里生成：
 
   ```bash
