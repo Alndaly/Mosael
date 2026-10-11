@@ -701,6 +701,8 @@ def _split(exc: ComfyError) -> dict[str, Any]:
 def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
     kind = str(request.get("kind") or "image")
     resume = request.get("resume")
+    #: 「接着等」那条路没有读工作流的这一步(提交是上一个进程做的):没有复位要报。
+    resume_ask = not (isinstance(resume, dict) and resume.get("prompt_id") and not resume.get("repeat"))
     #: 「结果取自」(见 graph._output_choice):没选就是缺省的「最终结果」,中间一步的预览不交回、不跑;选了一个节点
     #: 只要它的;「全部」是这一种交回的每一个。
     choice = str((request.get("parameters") or {}).get(graph.OUTPUT_CHOICE) or "")
@@ -744,7 +746,39 @@ def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) ->
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
-    return _delivered(comfy, entry, kind, wanted, prompt_id, locale)
+    delivered = _delivered(comfy, entry, kind, wanted, prompt_id, locale)
+    #: 接着等上一次提交的那个任务时没有「读工作流」这一步(提交是上一个进程做的),不会有复位要报。
+    return _with_resets(delivered, api, locale) if resume_ask else delivered
+
+
+def resets_note(api: dict[str, Any], locale: str) -> str:
+    """这张图里哪几格下拉存的是**节点包上一版的值**、已经按节点定义缺省复位(`#节点 类型 · 输入名`)。
+
+    新版下拉(`["COMBO", {...}]`)在 ComfyUI 自己的页面上也是这么办的(真机实测,见 convert._restore_stale_combo)——
+    但「跑出来的参数和文件里存的不是同一个」这件事得看得见:这句话会作为这次生成的说明落进记录里。
+    痕迹由转换那一步写进节点的 `_meta`(见 convert.RESET_COMBOS)。
+    """
+    fields: list[str] = []
+    for node_id in sorted(api, key=graph._node_order):  # noqa: SLF001 — 同一个插件里的模块
+        node = api[node_id]
+        for name in (node.get("_meta") or {}).get(convert.RESET_COMBOS) or []:
+            fields.append(f"#{node_id} {node.get('class_type')} · {name}")
+    if not fields:
+        return ""
+    return say(
+        locale,
+        f"这张工作流里有 {len(fields)} 格下拉存的还是上一版节点包的值,已按节点默认值复位:{_named(fields, '、')}。",
+        f"{len(fields)} dropdown value(s) in this workflow came from an older node pack and were reset to the "
+        f"node default: {_named(fields, ', ')}.",
+    )
+
+
+def _with_resets(output: dict[str, Any], api: dict[str, Any], locale: str) -> dict[str, Any]:
+    """把「哪几格下拉的旧值被复位了」并进这次交回的那句说明里(循环那条路径可能已经有话了)。"""
+    note = resets_note(api, locale)
+    if not note:
+        return output
+    return {**output, "note": " ".join(one for one in (output.get("note"), note) if one)}
 
 
 def _delivered(comfy: Comfy, entry: dict[str, Any] | None, kind: str, wanted: set[str] | None, prompt_id: str,
@@ -835,4 +869,4 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
     note = repeat_note(result, locale)
     if note:
         output["note"] = note
-    return output
+    return _with_resets(output, api, locale)

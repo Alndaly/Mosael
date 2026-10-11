@@ -696,12 +696,17 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
                          titles, locale, entry.workflow.id, include_previews=include_previews, workflow=entry.workflow.id,
                          one_workflow=True)
         result["seeds"] = [seed for _, _, seed in repeated.runs]
-        note = run.repeat_note(repeated, locale)
+        note = " ".join(one for one in (run.repeat_note(repeated, locale), run.resets_note(api, locale)) if one)
         if note:
             result["note"] = note
             result["summary"] = f"{result['summary']}({note})"
         return result
     prompt = build(None)
     prompt_id, finished = run.run_prompt(comfy, prompt, emit, locale, titles)
-    return deliver(comfy, [(prompt_id, finished or {})], prompt, titles, locale, entry.workflow.id,
-                   include_previews=include_previews, workflow=entry.workflow.id)
+    result = deliver(comfy, [(prompt_id, finished or {})], prompt, titles, locale, entry.workflow.id,
+                     include_previews=include_previews, workflow=entry.workflow.id)
+    resets = run.resets_note(api, locale)
+    if resets:
+        result["note"] = " ".join(one for one in (result.get("note"), resets) if one)
+        result["summary"] = f"{result['summary']}({resets})"
+    return result

@@ -521,6 +521,33 @@ def test_缺节点缺模型文件_提交之前一次说全_说人话(comfy, tmp_
     assert not comfy.posted("/prompt") and not comfy.posted("/upload/image"), "缺东西的图不提交、不传素材"
 
 
+def test_新版下拉的旧值被复位_这次生成的说明里说一句(comfy, tmp_path: Path) -> None:
+    """复位不能悄悄发生:跑出来的参数和文件里存的不是一个东西时,人得看得见。
+
+    `output["note"]` 是现成的那条路(宿主把它当这次任务的最后一句话,并落进生成记录,
+    见 domain/plugins/generation + domain/generation/runner):这里钉住插件确实交了这句话。"""
+    from tests.fake_comfyui import PORTRAIT_UI, conn, widget
+    comfy.state.object_info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"] = [
+        "COMBO", {"default": "sd_xl_base.safetensors", "options": ["sd_xl_base.safetensors", "v1-5.ckpt"]}]
+    comfy.state.workflows["stale-combo.json"] = {
+        "id": "stale-combo", "nodes": [
+            *[node for node in PORTRAIT_UI["nodes"] if node["id"] != 4],
+            {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["gone-from-old-pack.safetensors"],
+             "inputs": [widget("ckpt_name")]}],
+        "links": PORTRAIT_UI["links"],
+    }
+    output, _hooks, _scratch = _generate(comfy.url, tmp_path, {"model": "stale-combo.json"})
+    said = str(output.get("note") or "")
+    assert "上一版节点包" in said and "#4 CheckpointLoaderSimple · ckpt_name" in said, said
+    [submitted] = comfy.posted("/prompt")
+    assert submitted["prompt"]["4"]["inputs"]["ckpt_name"] == "sd_xl_base.safetensors", "交上去的是复位后的值"
+
+
+def test_没有旧下拉要复位_就没有那句说明(comfy, tmp_path: Path) -> None:
+    output, _hooks, _scratch = _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    assert not output.get("note"), "正常运行不硬塞一句"
+
+
 def test_存的旧值已经不在下拉里了_提交前说清是哪一格(comfy, tmp_path: Path) -> None:
     """真机(2026-10-11,常用/krea2-text-2-image):「easy prompt」的 prefix 存的是节点包上一版的占位符
     `Select the prefix to add to the text`,而这台 ComfyUI 的选项已经变成 `Select the prefix add to the text` ——
