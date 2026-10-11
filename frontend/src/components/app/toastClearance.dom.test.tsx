@@ -2,6 +2,9 @@
 
 /**
  * 提示条让开贴底的输入区。维护者截图:AI Studio 里「语音合成 · 已完成」盖在输入框右下角的发送键和「⌘Enter 生成」上。
+ *
+ * 触发条件是**挡掉那一列的大半**(见 toastClearance 的模块说明):只压到一角不抬 ——
+ * 真机:AI Studio 创作页输入卡右缘只压进那一列 64px(18%),抬起来会让提示条飘到输入框上方。
  */
 import React from "react";
 import { act, cleanup, render, screen } from "@testing-library/react";
@@ -18,9 +21,13 @@ describe("toastBottomOffset", () => {
     expect(toastBottomOffset([], VIEWPORT)).toBe(TOAST_EDGE);
   });
 
-  it("AI Studio 的输入卡右缘伸进右下角那一列:抬到它上沿之上,留 12px", () => {
-    // 截图里的样子:输入卡 480–1124 × 744–886,提示条那一列 1060–1416。
-    expect(toastBottomOffset([box(480, 744, 1124, 886)], VIEWPORT)).toBe(900 - 744 + 12);
+  it("输入卡只压到那一列一角(18%):不抬 —— 提示条待在右下角", () => {
+    // 真机:AI Studio 创作页输入卡,右缘 1124 压进那一列(1060–1416)64px。
+    expect(toastBottomOffset([box(480, 744, 1124, 886)], VIEWPORT)).toBe(TOAST_EDGE);
+  });
+
+  it("输入卡挡掉大半(挡住整个发送键那一片):抬到它上沿之上,留 12px", () => {
+    expect(toastBottomOffset([box(900, 744, 1400, 886)], VIEWPORT)).toBe(900 - 744 + 12);
   });
 
   it("输入区不在那一列(窗口宽、输入框在左半边):不动", () => {
@@ -35,8 +42,8 @@ describe("toastBottomOffset", () => {
     expect(toastBottomOffset([box(1200, 900, 1200, 900)], VIEWPORT)).toBe(TOAST_EDGE);
   });
 
-  it("几处都伸进来:按最高的那一处抬", () => {
-    expect(toastBottomOffset([box(480, 744, 1124, 886), box(1100, 700, 1430, 890)], VIEWPORT)).toBe(900 - 700 + 12);
+  it("几处都挡着:按最高的那一处抬", () => {
+    expect(toastBottomOffset([box(900, 744, 1400, 886), box(1100, 700, 1430, 890)], VIEWPORT)).toBe(900 - 700 + 12);
   });
 
   it("输入区长得很高也不把提示条顶出窗口", () => {
@@ -49,7 +56,7 @@ function Probe() {
 }
 
 describe("useToastClearance", () => {
-  let rect = box(480, 744, 1124, 886);
+  let rect = box(900, 744, 1400, 886);
   beforeEach(() => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       return (this.hasAttribute("data-toast-avoid") ? rect : box(0, 0, 0, 0)) as DOMRect;
@@ -77,17 +84,18 @@ describe("useToastClearance", () => {
     await settle();
     expect(offset()).toBe(TOAST_EDGE);
 
+    rect = box(900, 744, 1400, 886);
     view.rerender(<Page composer />);
     await settle();
     await settle();
-    expect(offset()).toBe(900 - 744 + 12);
+    expect(offset(), "挡掉大半:抬起来").toBe(900 - 744 + 12);
 
     rect = box(240, 744, 1000, 886);
     act(() => void window.dispatchEvent(new Event("resize")));
     await settle();
     expect(offset()).toBe(TOAST_EDGE);
 
-    rect = box(480, 744, 1124, 886);
+    rect = box(900, 744, 1400, 886);
     view.rerender(<Page composer={false} />);
     await settle();
     await settle();

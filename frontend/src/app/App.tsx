@@ -342,7 +342,7 @@ function AuthGateOrDesignSheet() {
 /** Sonner 跟随应用主题;样式对齐全平面(细边框、无投影由 CSS 覆盖)。 */
 export function AppToaster() {
   const { theme } = usePreferences();
-  //: 贴底的输入区(AI Studio、智能体面板)伸进右下角那一列时整体抬到它上沿之上,不盖住发送键(见 toastClearance)。
+  //: 贴底的输入区(AI Studio、智能体面板)挡掉右下角那一列的大半时,提示条抬到它上沿之上(见 toastClearance)。
   const bottom = useToastClearance();
   //: 内嵌浏览器、工作台在前台时,提示条画进浮层视图、按钮点得到(ADR 0051 D33,见 toastMirror)
   const [host, setHost] = React.useState<HTMLDivElement | null>(null);

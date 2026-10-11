@@ -6,7 +6,8 @@
  * 「刚好有一条提示」的那几秒里看得见。这条盯两类:
  * - 渲染智能体输入框(`<DraftComposer`)的文件 —— AI Studio 的对话、各页的智能体面板(画板、工作流、笔记、3D 场景、剪辑、工作台);
  * - AI Studio 创作那一栏的输入卡(图像、视频、音乐、语音、播客共用的那一张)。
- * 以及提示条那一头确实在用这条规则(Toaster 的 offset 跟着 useToastClearance 走)。
+ * 以及提示条那一头确实在用这条规则(Toaster 的 offset 跟着 useToastClearance 走;触发条件是挡掉那一列的大半,
+ * 见 components/app/toastClearance —— 只压到一角不抬,提示条才待在右下角)。
  */
 // 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 export const RATCHET = true;
