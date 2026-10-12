@@ -248,6 +248,36 @@ export function workbenchInstallScript(origin: string): string {
   const nodesOf = (graph) => (graph ? (Array.isArray(graph.nodes) ? graph.nodes : Array.isArray(graph._nodes) ? graph._nodes : []) : []);
   const groupsOf = (graph) => (graph ? (Array.isArray(graph.groups) ? graph.groups : Array.isArray(graph._groups) ? graph._groups : []) : []);
   const findNode = (graph, id) => nodesOf(graph).find((node) => node && String(node.id) === String(id)) || null;
+  //: 子图节点展开出来的那一层(这份定义);前端没有时按根图上记着的 subgraphs 表找(和 runControls、locate 同一套)
+  const innerGraphOf = (node) => {
+    const inner = node && (node.subgraph || subgraphOf(rootGraph(), node.type));
+    return inner && inner !== node ? inner : null;
+  };
+  /** 写法 → 画布上那个节点:12 是根图上的,12:5 是 12 号那个子图里面的 5(ADR 0042;子图节点上提升出来的格子仍是
+   *  外面那个节点上的,写的是 12)。指不到回 null。 */
+  const nodeByRef = (graph, id) => {
+    const parts = String(id).split(":");
+    let scope = graph;
+    for (let depth = 0; depth < parts.length; depth += 1) {
+      const node = findNode(scope, parts[depth]);
+      if (!node) return null;
+      if (depth === parts.length - 1) return node;
+      scope = innerGraphOf(node);
+      if (!scope) return null;
+    }
+    return null;
+  };
+  /** 这张图里**每一层**的节点(根图 + 每一份子图定义,套多深走多深),连同它的写法(12、12:5):标记跟着节点走,
+   *  摘和写都要走到每一层,而清单里的键就是那个写法(见插件 app_form 的 nodes_with_refs,同一套)。 */
+  const everyNode = (graph, visit, depth, prefix) => {
+    if (!graph || depth > 16) return;
+    for (const node of nodesOf(graph)) {
+      if (!node) continue;
+      visit(node, prefix + String(node.id));
+      const inner = innerGraphOf(node);
+      if (inner) everyNode(inner, visit, depth + 1, prefix + node.id + ":");
+    }
+  };
   const valuesOf = (widget) => {
     const values = widget && widget.options ? widget.options.values : undefined;
     try {
@@ -824,18 +854,18 @@ export function workbenchInstallScript(origin: string): string {
       const moved = notAsRead(expect);
       if (moved) return moved;
       const graph = rootGraph();
-      const missing = Object.keys(marks.nodes).filter((id) => !findNode(graph, id));
+      //: 写法带子图路径的(12:5)先解到画布上那个节点;解不到的照原样报出来(清单上写的是插件给的写法)
+      const missing = Object.keys(marks.nodes).filter((id) => !nodeByRef(graph, id));
       if (missing.length) return { error: "noNode", nodes: missing.slice(0, 20) };
-      for (const node of nodesOf(graph)) {
-        if (!node) continue;
-        const own = marks.nodes[String(node.id)];
+      everyNode(graph, (node, ref) => {
+        const own = marks.nodes[ref];
         if (own) {
           if (!node.properties || typeof node.properties !== "object") node.properties = {};
           node.properties.mosael = own;
         } else if (node.properties && typeof node.properties === "object" && "mosael" in node.properties) {
           delete node.properties.mosael;
         }
-      }
+      }, 0, "");
       if (marks.extra) {
         if (!graph.extra || typeof graph.extra !== "object") graph.extra = {};
         graph.extra.mosael = marks.extra;

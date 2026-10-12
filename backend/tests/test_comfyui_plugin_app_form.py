@@ -31,6 +31,8 @@ from tests.fake_comfyui import (
     FakeComfyUI,
     fixture_workflow,
     multi_reference_ui,
+    subgraph_promoting,
+    subgraph_sampler_ui,
 )
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
@@ -90,14 +92,23 @@ def _form(plugin, ui: dict[str, Any], object_info: dict[str, Any] = OBJECT_INFO)
 
 
 def _strip(ui: dict[str, Any]) -> dict[str, Any]:
-    """去掉 Mosael 的标记(空出来的 properties / extra 当没有):两张图除了标记一样,就是只改了标记。"""
+    """去掉 Mosael 的标记(空出来的 properties / extra 当没有):两张图除了标记一样,就是只改了标记。
+
+    **每一层都摘**(子图定义里的节点也带标记):只摘根图的话,「只改了标记」这句话对带子图的图就是空话。
+    """
+    def strip_scope(scope: dict[str, Any]) -> None:
+        for node in scope.get("nodes") or []:
+            props = node.get("properties") if isinstance(node, dict) else None
+            if isinstance(props, dict):
+                props.pop("mosael", None)
+                if not props:
+                    node.pop("properties")
+        for one in ((scope.get("definitions") or {}).get("subgraphs") or []):
+            if isinstance(one, dict):
+                strip_scope(one)
+
     out = copy.deepcopy(ui)
-    for node in out.get("nodes") or []:
-        props = node.get("properties")
-        if isinstance(props, dict):
-            props.pop("mosael", None)
-            if not props:
-                node.pop("properties")
+    strip_scope(out)
     if isinstance(out.get("extra"), dict):
         out["extra"].pop("mosael", None)
         if not out["extra"]:
@@ -502,11 +513,98 @@ def test_写标记_只改mosael那几处_别的扩展写的键原样留着(plugi
     assert "mosael" not in app_form.apply(again, [], [])["extra"], "一张表单都没有、也没有结果标记:图上那一份也没了"
 
 
-def test_写标记_指着不存在的节点或子图里的节点就拒_什么都不写(plugin) -> None:
+def test_子图里面的节点能放进表单_标记写在那份定义里那个节点上(plugin) -> None:
+    """子图里面的节点和根图上的节点一样放得进表单(ADR 0042 §6 的写法 `12:5`);标记写在**子图定义里那个节点自己的
+    `properties.mosael`** 上 —— 根图上那个子图节点(12)一个字都不带,根图别的节点也只有自己那一格。"""
+    _, _, app_form = plugin
+    ui = subgraph_sampler_ui()
+    marked = app_form.apply(ui, [{"id": "app", "items": [{"node": "12:3", "input": "steps", "label": "步数"},
+                                                         {"node": "4", "input": "ckpt_name"}]}], [])
+    assert _strip(marked) == _strip(ui) == ui, "只改了 mosael 那几处"
+    inner = marked["definitions"]["subgraphs"][0]["nodes"][0]
+    assert inner["id"] == 3 and inner["properties"]["mosael"] == {"forms": {"app": {"steps": {"order": 0, "label": "步数"}}}}, \
+        "标记落在子图定义里的 3 号(执行时是 12:3)自己的 properties 上"
+    by_id = {node["id"]: node for node in marked["nodes"]}
+    assert "mosael" not in (by_id[12].get("properties") or {}), "没写到外面那个子图节点(12)上 —— 那是提升出来的控件,另一件事"
+    assert by_id[4]["properties"]["mosael"] == {"forms": {"app": {"ckpt_name": {"order": 1}}}}
+    assert sum(1 for node in marked["nodes"] if "mosael" in (node.get("properties") or {})) == 1, "外面的节点不受影响"
+
+    ui = subgraph_sampler_ui()
+    #: 同一份定义里别的格子、别的表单再来一次:摘和写都走到定义里
+    read = app_form.read(app_form.apply(ui, [{"id": "app", "items": [{"node": "12:3", "input": "cfg"}]},
+                                             {"id": "fine", "items": [{"node": "12:3", "input": "denoise"}]}], []))
+    assert [(one.id, [mark.key for mark in one.exposed]) for one in read.forms] == \
+        [("app", ["12:3.cfg"]), ("fine", ["12:3.denoise"])]
+    assert _strip(app_form.apply(app_form.apply(ui, [{"id": "app", "items": [{"node": "12:3", "input": "cfg"}]}], []),
+                                 [], [])) == _strip(ui)
+
+
+def test_子图里面的节点_读回来是同一个键_值写进里面那个节点(plugin) -> None:
+    """读回来的键和写下去的键是同一个(`12:3.steps`),而值进的是**子图内部那个节点**的输入 —— API 图里它是 `12:3`,
+    外面那个子图节点(12)在 API 图里根本不存在(它展开掉了)。"""
+    graph, convert, app_form = plugin
+    ui = subgraph_sampler_ui()
+    marked = app_form.apply(ui, [{"id": "app", "items": [{"node": "12:3", "input": "steps"}]}], [])
+    marks = app_form.read(marked)
+    assert [mark.key for mark in marks.forms[0].exposed] == ["12:3.steps"]
+    api, titles = _api(plugin, marked)
+    assert "12" not in api and "12:3" in api, "API 图里只有展开出来的那些节点"
+    resolved = app_form.resolve(marks, api, OBJECT_INFO, titles)
+    assert [one.key for one in resolved.forms["app"].fields] == ["12:3.steps"], "那一项对得上,进得了表单"
+    filled = graph.fill(api, {}, {"12:3.steps": 30}, OBJECT_INFO, resolved.forms["app"].prompts())
+    assert filled["12:3"]["inputs"]["steps"] == 30
+    assert (filled["12:3"]["inputs"]["cfg"], filled["6"]["inputs"]["text"]) == (7.0, "a cat"), "同一张图别的格子没动"
+
+
+def test_提升出来的格子和里面没提升的_各是各的(plugin) -> None:
+    """子图里面的节点在 API 图里就是 `12:3` 这种节点,能填的项也挂在它上面 —— **不管那一格有没有被提升到外面**:
+
+    - 没提升的(`subgraph_sampler_ui` 里的 KSampler):值是那份定义里存的,项是 `12:3.steps`;
+    - 提升出来的(`subgraph_promoting`:外面那个节点上选着 `picked`):值取**外面那个节点**上存的那一格
+      (ComfyUI 前端的行为,convert._from_subgraph_input),项仍是里面那个节点上的 `30:4.ckpt_name` —— 两者写的都是
+      「子图内部那个节点的输入」,没有一条路是把它展平到外面那个节点上的。
+    """
+    graph, convert, app_form = plugin
+    ui = subgraph_sampler_ui()
+    api, titles = _api(plugin, ui)
+    items = {one["key"]: one for one in graph.items(api, OBJECT_INFO, titles)}
+    assert "12:3.steps" in items and "12.steps" not in items, "没提升的格子只在里面那个节点上"
+    assert api["12:3"]["inputs"]["steps"] == 20, "值是那份定义里存着的"
+
+    promoted = subgraph_promoting("picked.safetensors")
+    api2, titles2 = _api(plugin, promoted)
+    assert set(api2) == {"30:4"} and api2["30:4"]["inputs"]["ckpt_name"] == "picked.safetensors", \
+        "提升出来的那一格:值取外面那个子图节点上选着的(不是定义里存的 template_default)"
+    assert [one["key"] for one in graph.items(api2, OBJECT_INFO, titles2)] == ["30:4.ckpt_name"]
+    assert app_form.addressable(promoted) == {"30", "30:4"}
+
+
+def test_一份子图用了不止一处_里面的节点指不明是哪一处_标着不能填(plugin) -> None:
+    """同一份定义在这张图里用了两处时,文件里只有**一处**地方放标记(那份定义里的那个节点)—— 两处实例说的是同一条
+    路径,写下去、读回来是另一个键。这样的节点不进表单,理由说清为什么、该怎么办。"""
     _, _, app_form = plugin
     from lines import ComfyError
 
-    for bad in ("99", "12:5"):
+    ui = subgraph_sampler_ui(twice=True)
+    items = [{"key": "12:3.steps", "node": "12:3"}, {"key": "20:3.steps", "node": "20:3"}]
+    why = app_form.unaddressable(ui, items)
+    assert list(why) == ["20:3.steps"], "第一处(12:3)照常能填;第二处(20:3)不能"
+    assert "用了 2 处" in why["20:3.steps"]["zh"] and "#12:3" in why["20:3.steps"]["zh"] and \
+        "拆开" in why["20:3.steps"]["zh"], "说清为什么、该怎么办"
+    assert "used 2 times" in why["20:3.steps"]["en"] and "#12:3" in why["20:3.steps"]["en"]
+    assert app_form.addressable(ui) >= {"12", "12:3", "20"}
+    assert "20:3" not in app_form.addressable(ui)
+    app_form.apply(ui, [{"items": [{"node": "12:3", "input": "steps"}]}], []), "第一处写得进去"
+    with pytest.raises(ComfyError, match="用了 2 处"):
+        app_form.apply(ui, [{"items": [{"node": "20:3", "input": "steps"}]}], [])
+
+
+def test_写标记_指着不存在的节点就拒_什么都不写(plugin) -> None:
+    """指不到就拒(根图上的 99、子图路径里对不上的 12:5 —— 那张图的 12 号不是子图节点、里面没有 5)"""
+    _, _, app_form = plugin
+    from lines import ComfyError
+
+    for bad in ("99", "12:5", "12:5:3"):
         with pytest.raises(ComfyError):
             app_form.apply(multi_reference_ui(), [{"items": [{"node": bad, "input": "text"}]}], [])
     with pytest.raises(ComfyError):
@@ -526,7 +624,8 @@ def comfy(monkeypatch, tmp_path):
         monkeypatch.delenv(key.lower(), raising=False)
     with FakeComfyUI() as server:
         server.state.object_info = json.loads(json.dumps(OBJECT_INFO))
-        server.state.workflows = {"multi.json": multi_reference_ui()}
+        server.state.workflows = {"multi.json": multi_reference_ui(), "subgraph.json": subgraph_sampler_ui(),
+                                  "twice.json": subgraph_sampler_ui(twice=True)}
         yield server
 
 
@@ -659,6 +758,58 @@ def test_annotate_文件在这之间被改过_不写(comfy) -> None:
 def test_annotate_没有这张了说清楚(comfy) -> None:
     with pytest.raises(runtime.PluginRuntimeError, match="已经没有工作流"):
         _host("annotate", comfy.url, path="gone.json", modified=1, forms=[], results=[])
+
+
+def test_annotate_子图里面的节点写进那份定义_读回来还是同一个键(comfy) -> None:
+    """对着假 ComfyUI 走一遍真的写回:表单上那一项 `12:3.steps` 落在**子图定义里的 3 号**自己的 `properties` 上,外面那个
+    子图节点(12)一个字都不带;再读回来时它还是 `12:3.steps`(键前后一致)。"""
+    seen = _host("app", comfy.url, path="subgraph.json")
+    by_key = {one["key"]: one for one in seen["items"]}
+    assert "exposable" not in by_key["12:3.steps"] and "unexposable" not in by_key["12:3.steps"], \
+        "子图里面的节点能放进表单:插件这一层什么都不用标(不带 = 能填)"
+    written = _host("annotate", comfy.url, path="subgraph.json", modified=seen["modified"],
+                    forms=[{"id": "app", "title": "采样", "items": [{"node": "12:3", "input": "steps", "label": "步数"},
+                                                                     {"node": "6", "input": "text", "main": True}]}],
+                    results=["9"])
+    assert written["path"] == "subgraph.json"
+    stored = comfy.state.workflows["subgraph.json"]
+    inner = stored["definitions"]["subgraphs"][0]["nodes"][0]
+    assert inner["id"] == 3 and inner["properties"]["mosael"]["forms"]["app"]["steps"] == {"order": 0, "label": "步数"}
+    by_id = {node["id"]: node for node in stored["nodes"]}
+    assert "mosael" not in (by_id[12].get("properties") or {}), "没写到外面那个子图节点上"
+    assert sorted(node["id"] for node in stored["nodes"] if "mosael" in (node.get("properties") or {})) == [6, 9], \
+        "外面的节点:只有表单上真的挑了的那一个(6)和被标成结果的(9),别的没被顺手改掉"
+    assert inner["widgets_values"][2] == 20, "改写的是标记,不是那份定义里存着的值"
+
+    again = _host("app", comfy.url, path="subgraph.json")
+    form = again["app"]["forms"][0]
+    assert (form["fields"], form["invalid"]) == (2, 0)
+    assert [(one["key"], one["label"]) for one in form["items"]] == [("12:3.steps", "步数"), ("6.text", "")], \
+        "读回来还是同一个键(哪个键写下去,哪个键读回来)"
+    assert again["app"]["invalid"] == 0 and again["app"]["stray"] == 0
+
+
+def test_生成_表单上那一项写进子图内部那个节点_外面的节点不受影响(comfy, tmp_path: Path) -> None:
+    """跑起来真的生效:表单里挑了 `12:3.steps`,交给 ComfyUI 的那张 API 图里 `12:3` 那个节点的 `steps` 就是它;同一张图别的
+    格子(没挑的 CFG、外面的尺寸、提示词)照工作流原样 —— 没被顺手展平到外面那个子图节点上。"""
+    seen = _host("app", comfy.url, path="subgraph.json")
+    _host("annotate", comfy.url, path="subgraph.json", modified=seen["modified"],
+          forms=[{"id": "app", "title": "采样", "items": [{"node": "12:3", "input": "steps"}]}], results=["9"])
+    comfy.state.outputs = {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}}
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    request = {"op": "generate", "kind": "image", "model": "subgraph.json#app", "prompt": "", "negative_prompt": "",
+               "parameters": {"12:3.steps": 30}, "inputs": [], "resume": None}
+    hooks = runtime.StreamHooks(on_progress=lambda *_: None, on_task=lambda _: None, is_cancelled=lambda: False)
+    result = runtime.stream_tool(PLUGIN, ENTRY, "comfyui_generation", request, {"SERVER_URL": comfy.url},
+                                 hooks=hooks, scratch_dir=scratch, timeout=60).output
+    submitted = next(call[2]["prompt"] for call in comfy.state.calls if call[1] == "/prompt")
+    assert "12" not in submitted, "外面那个子图节点在 API 图里展开掉了"
+    assert submitted["12:3"]["inputs"]["steps"] == 30, "值进的是子图**内部**那个节点"
+    assert submitted["12:3"]["inputs"]["cfg"] == 7.0, "同一张图别的格子没动"
+    assert (submitted["5"]["inputs"]["width"], submitted["5"]["inputs"]["height"]) == (832, 1216), "外面的节点不受影响"
+    assert submitted["6"]["inputs"]["text"] == "a cat", "提示词没挑:照工作流原样"
+    assert [one["parameters"] for one in result["outputs"]] == [{"source_node": "9"}]
 
 
 def test_生成_表单入口只认表单里的键_没挑的照工作流原样跑_产出标来源节点(comfy, tmp_path: Path) -> None:

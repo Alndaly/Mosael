@@ -724,10 +724,11 @@ def _read(comfy: Comfy, path: str, locale: str) -> tuple[dict[str, Any], float]:
 def _item_out(item: dict[str, Any]) -> dict[str, Any]:
     """编辑器要的那一项:锚点、种类、名字(`title` / `node_label` —— `{"zh", "en"}` 一对,宿主按读的人的语言挑一句,
     见 graph.items)、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的说明、常用与否、JSON Schema 片段
-    (下拉的全部可选值,收窄时从里面挑)。
+    (下拉的全部可选值,收窄时从里面挑)。`exposable` / `unexposable`(**子图定义用了不止一处**时里面的节点放不进表单,
+    见 app_form.unaddressable)只有在这一项不能填时才带。
     """
     return {key: item[key] for key in ("key", "node", "input", "kind", "role", "media", "folder", "title", "node_title",
-                                       "node_label", "hint", "class_type", "common", "schema")
+                                       "node_label", "hint", "class_type", "common", "schema", "exposable", "unexposable")
             if key in item}
 
 
@@ -759,6 +760,9 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     api = graph.live(convert.to_api(source, object_info, locale), object_info)
     titles = convert.titles_of(api)
     found = graph.items(api, object_info, titles)
+    #: 子图里面的节点也能放进表单(见 app_form);**定义在这张图里用了不止一处**的那几项除外 —— 写下去、读回来是另一个键,
+    #: 标着不能填、说清为什么、该怎么办
+    restricted = app_form.unaddressable(source, found)
     marks = app_form.read(source)
     resolved = app_form.resolve(marks, api, object_info, titles, found)
     kind = graph.kind_of(api)
@@ -767,7 +771,8 @@ def app(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
         "modified": modified,
         "kind": kind,
         "editable": isinstance(source.get("nodes"), list),
-        "items": [_item_out(item) for item in found],
+        "items": [_item_out({**item, "exposable": False, "unexposable": restricted[item["key"]]})
+                  if item["key"] in restricted else _item_out(item) for item in found],
         "outputs": graph.generation_nodes(api, kind, object_info, titles),
         "names": {node_id: labels.node_name(str(node.get("class_type", "")), titles.get(node_id, ""), object_info)
                   for node_id, node in api.items()},
@@ -807,8 +812,8 @@ def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, An
     带着读到时的改动时间(`modified`)来:那台机器上的文件在这之间被改过(在 ComfyUI 里存过、别人改过)就不写,回
     `{"stale": true, "modified": 现在的}` —— 宿主翻成 409,界面说「它刚在 ComfyUI 里改过,重新打开再改」。
     `forms`:**全部**表单(`[{id?, title, description, items: [{node, input, label?, main?, choices?}]}]`,没给 id 的是新表单;
-    空列表 = 一张都不要)。`results`:标成结果的输出节点(「以后只要这张」)。成了回 `{"path", "modified"}`(写完之后的
-    改动时间,接着改用它)。
+    空列表 = 一张都不要;`node` 是根图上的节点号,或者子图里面那个节点的写法 `105:9`,见 app_form)。`results`:标成结果的
+    输出节点(「以后只要这张」)。成了回 `{"path", "modified"}`(写完之后的改动时间,接着改用它)。
     """
     path = check_path(payload.get("path"), locale)
     forms, results = _forms(payload, locale), _results(payload, locale)

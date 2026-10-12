@@ -142,7 +142,9 @@ elif op == "reboot":
     emit({"ok": True, "output": {"back": True}})
 elif op == "app_marks":
     if payload["content"].get("evil"):
-        emit({"ok": True, "output": {"nodes": {"12:5": {"result": True}}, "extra": None}})
+        emit({"ok": True, "output": {"nodes": {"../evil": {"result": True}}, "extra": None}})
+    elif payload["content"].get("inside"):
+        emit({"ok": True, "output": {"nodes": {"12:5": {"forms": {"app": {"steps": {"order": 0}}}}}, "extra": None}})
     else:
         emit({"ok": True, "output": {"nodes": {"9": {"result": True}, "10": {"forms": {"app": {"image": {"order": 0}}}}},
                                      "extra": {"version": 2, "forms": [{"id": "app", "title": "人像应用"}]}, "ignored": 1}})
@@ -702,7 +704,8 @@ def test_列出来的每一张带着它的应用表单_宿主规整一遍(librar
         "id 不合规、重复的表单不要(插件那一侧本来就不报,这里再挡一道)"
     form = app["forms"][0]
     assert (form["fields"], form["invalid"], form["model"], form["tool"]) == (1, 1, "portrait.json#app", "wf_0123456789ab_app")
-    assert [one["key"] for one in form["items"]] == ["10.image", "3.cfg"], "子图里的节点、没写是哪一格的丢掉"
+    assert [one["key"] for one in form["items"]] == ["10.image", "3.cfg", "12:5.text"], \
+        "子图里面的节点(12:5)也在,没写是哪一格的丢掉"
     assert form["items"][0]["label"] == "人物" and form["items"][1]["problem"] == "节点 #3 上没有「cfg」"
     assert app["results"] == ["9"], "结果标记只认根图上的节点号"
     assert sketch["app"] is None, "插件没说(转不过来的那张)就没有"
@@ -725,8 +728,8 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert by_key["6.text"]["spec"] == {"type": "string", "x-multiline": True, "default": "a cat"}, "认不得的字段不留"
     assert by_key["10.image"]["spec"] is None and by_key["10.image"]["node_title"] == "人物"
     assert by_key["4.ckpt_name"]["spec"]["x-model-folder"] == "checkpoints" and by_key["4.ckpt_name"]["folder"] == "checkpoints"
-    assert by_key["12:5.steps"]["exposable"] is False and by_key["12:5.steps"]["spec"]["title"] == "步数", \
-        "子图里面的节点照样列出来,标着这一版不能放进应用表单"
+    assert by_key["12:5.steps"]["exposable"] is True and by_key["12:5.steps"]["unexposable_reason"] == "" and \
+        by_key["12:5.steps"]["spec"]["title"] == "步数", "子图里面的节点和根图上的一样能放进应用表单"
     assert by_key["seed"]["exposable"] is True
     assert by_key["4.ckpt_name"]["node_label"] == "Checkpoint 加载器", "节点给人看的名字也按同一种语言挑好"
     assert by_key["10.image"]["node_label"] == "加载图像"
@@ -770,16 +773,27 @@ def test_写表单_宿主先查形状_改动时间对不上回409_成了让目�
         {"input": "seed", "main": True, "choices": ["x"]},
         {"node": "4", "input": "ckpt_name", "choices": ["a.safetensors"]},
     ]}
-    for bad in ({"node": "12:5", "input": "text"}, {"input": "steps"}, {"node": "10", "input": "image"}):
+    for bad in ({"node": "12-5", "input": "text"}, {"node": "12:", "input": "text"}, {"input": "steps"},
+                {"node": "10", "input": "image"}):
         response = client.post(url, json={"path": "portrait.json", "modified": 5,
                                           "forms": [{**app, "items": [*app["items"], bad]}]})
         assert response.status_code == 422, (bad, response.text)
     assert client.post(url, json={"path": "portrait.json", "modified": 5, "forms": [],
-                                  "results": ["12:5"]}).status_code == 422
+                                  "results": ["12:5"]}).status_code == 422, \
+        "「结果取自」仍只认根图上的节点(产出按执行节点号收,子图里的算在内部节点上是另一件事)"
     for forms in ([app, app], [{**app, "id": "Bad-Id"}], [{"title": str(n)} for n in range(21)]):
         assert client.post(url, json={"path": "portrait.json", "modified": 5, "forms": forms}).status_code == 422, \
             "id 重复、不合规、超过 20 张"
     assert not [op for op in _ops() if op["op"] == "annotate"], "形状不对的不交给插件"
+
+    #: 子图里面的节点(`12:5`)和根图上的节点一样能写进表单;两层的(`12:5:3`)也一样
+    inside = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "results": ["9"],
+                                    "forms": [{**app, "items": [*app["items"], {"node": "12:5", "input": "steps"},
+                                                                {"node": "12:5:3", "input": "denoise"}]}]})
+    assert inside.status_code == 200, inside.text
+    assert [op for op in _ops() if op["op"] == "annotate"][-1]["forms"][0]["items"][-2:] == \
+        [{"node": "12:5", "input": "steps", "label": ""}, {"node": "12:5:3", "input": "denoise", "label": ""}], \
+        "子图里面的节点照样交给插件写(写法原样带过去)"
 
     stale = client.post(url, json={"path": "portrait.json", "modified": 1.0, "forms": [app], "results": ["9"]})
     assert stale.status_code == 409
@@ -862,10 +876,16 @@ def test_工作台_写进画布的标记_宿主先查形状_规整插件交回�
     assert sent["forms"][0]["title"] == "人像应用" and sent["results"] == ["9"]
     assert not [op for op in _ops() if op["op"] == "annotate"], "画布开着时不写文件"
     calls = len(_ops())
-    assert client.post(url, json={"content": CANVAS, "results": ["12:5"]}).status_code == 422, "子图里的节点不能标"
-    assert len(_ops()) == calls, "形状不对的不交给插件"
+    assert client.post(url, json={"content": CANVAS, "results": ["12:5"]}).status_code == 422, \
+        "「结果取自」还是只认根图上的节点"
+    assert client.post(url, json={"content": CANVAS, "forms": [{"items": [{"node": "12:5:3", "input": "x"}]}]}
+                       ).status_code == 200, "子图里面(套两层)的节点:表单拿它,桥按路径改画布上那一个"
+    assert len(_ops()) == calls + 1, "形状不对的不交给插件"
+    inside = client.post(url, json={"content": {**CANVAS, "inside": True}, "results": []})
+    assert inside.status_code == 200 and inside.json()["nodes"] == {"12:5": {"forms": {"app": {"steps": {"order": 0}}}}}, \
+        "插件交回子图里面的节点(`12:5`):原样交给界面去改画布"
     evil = client.post(url, json={"content": {**CANVAS, "evil": True}, "results": []})
-    assert evil.status_code == 422, "插件交回的节点号不是根图上的:不交给界面去改画布"
+    assert evil.status_code == 422, "插件交回的写法不成样子:不交给界面去改画布"
 
 
 def test_工作台_跑画布上的图_普通的生成任务_图在任务载荷里_出口不带(library) -> None:

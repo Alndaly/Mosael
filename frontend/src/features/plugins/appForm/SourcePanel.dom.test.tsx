@@ -49,11 +49,12 @@ beforeEach(() => {
 import type { WorkflowApp } from "@/api/client";
 import { SourcePanel } from "@/features/plugins/appForm/SourcePanel";
 import type { FormDraft } from "@/features/plugins/workflowAppForm";
+import { readHint } from "@/test/hint";
 
 /** 这张工作流:两个节点各有一项能填的(名字是用户起的标题),加上「整张图」那一组的两项。 */
 function data(): WorkflowApp {
   const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
-                 common: true, exposable: true };
+                 common: true, exposable: true, unexposable_reason: "" };
   return {
     path: "遮罩.json",
     modified: 1,
@@ -162,7 +163,7 @@ describe("「工作流里能填的」:节点分组标题上的节点号能在画
  */
 function maskItems(): WorkflowApp["items"] {
   const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
-                 common: true, exposable: true };
+                 common: true, exposable: true, unexposable_reason: "" };
   return [
     { ...base, key: "11.image", node: "11", input: "image", kind: "media", role: "mask", media: "mask",
       title: "蒙版 · 加载图像(作为蒙版) #11", node_label: "加载图像(作为蒙版)", class_type: "LoadImageMask",
@@ -215,5 +216,63 @@ describe("「蒙版属性」自成一组", () => {
   it("没有蒙版属性时不多出这一组", () => {
     const { group } = show();
     expect(group("mask")).toBeNull();
+  });
+});
+
+/**
+ * 子图里面的节点(`12:5`,ADR 0042 的写法)和根图上的节点一样能放进表单 —— 维护者报的那条能力缺口就是它。
+ * 灰着的只剩插件说**不能**的那几项(那份子图在这张图里用了不止一处,节点指不明是哪一处),而且理由由插件给:
+ * 说清为什么、该怎么办,不是界面上一句「这一版不支持」。
+ */
+function subgraphItems(): NonNullable<WorkflowApp["items"]> {
+  const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
+                 common: true, exposable: true, unexposable_reason: "" };
+  return [
+    { ...base, key: "12:5.steps", node: "12:5", input: "steps", kind: "number", title: "步数", node_label: "采样 · 采样",
+      class_type: "KSampler", spec: { type: "integer", default: 20 } },
+    { ...base, key: "12:5.cfg", node: "12:5", input: "cfg", kind: "number", title: "CFG", node_label: "采样 · 采样",
+      class_type: "KSampler", spec: { type: "number", default: 7 } },
+    { ...base, key: "20:5.steps", node: "20:5", input: "steps", kind: "number", title: "步数", node_label: "采样 2 · 采样",
+      class_type: "KSampler", exposable: false,
+      unexposable_reason: "子图「采样」在这张图里用了 2 处,里面的节点只能按第一处写(#12:5)—— 要放进表单:先在画布上把它拆开,或者只留一处",
+      spec: { type: "integer", default: 20 } },
+  ];
+}
+
+describe("子图里面的节点也能放进表单", () => {
+  it("加得进去,键就是那个节点路径(12:5.steps)", () => {
+    const added: string[] = [];
+    const base = data();
+    render(<SourcePanel data={{ ...base, items: subgraphItems() }} draft={draft()}
+                        onAdd={(item) => added.push(item.key)} onRemove={() => {}} />);
+    const row = (key: string) => document.querySelector(`[data-source-item="${key}"]`) as HTMLElement;
+    const plus = (key: string) => row(key).querySelector("button") as HTMLButtonElement;
+
+    expect(plus("12:5.steps").disabled, "子图里面的节点不再是灰的").toBe(false);
+    fireEvent.click(plus("12:5.steps"));
+    expect(added, "加的是里面那个节点上的那一格,不是外面那个子图节点上的").toEqual(["12:5.steps"]);
+  });
+
+  it("插件说不能的那一项灰着,理由说的是为什么、该怎么办(不是「这一版不支持」)", async () => {
+    const base = data();
+    render(<SourcePanel data={{ ...base, items: subgraphItems() }} draft={draft()} onAdd={() => {}} onRemove={() => {}} />);
+    const row = document.querySelector('[data-source-item="20:5.steps"]') as HTMLElement;
+    const plus = row.querySelector("button") as HTMLButtonElement;
+
+    expect(plus.disabled).toBe(true);
+    const said = await readHint(plus);
+    expect(said).toContain("用了 2 处");
+    expect(said).toContain("#12:5");
+    expect(said).toContain("拆开");
+  });
+
+  it("插件没给理由时说一句通用的,不把按钮留成哑的", async () => {
+    const base = data();
+    const bare = { ...subgraphItems()[2]!, unexposable_reason: "" };
+    render(<SourcePanel data={{ ...base, items: [bare] }} draft={draft()} onAdd={() => {}} onRemove={() => {}} />);
+    const plus = document.querySelector('[data-source-item="20:5.steps"] button') as HTMLButtonElement;
+
+    expect(plus.disabled).toBe(true);
+    expect(await readHint(plus)).toContain("workflowAppNotExposable");
   });
 });

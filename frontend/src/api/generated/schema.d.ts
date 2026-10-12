@@ -19577,6 +19577,11 @@ export interface components {
              * @default true
              */
             exposable: boolean;
+            /**
+             * Unexposable Reason
+             * @default
+             */
+            unexposable_reason: string;
             /** Spec */
             spec?: {
                 [key: string]: unknown;

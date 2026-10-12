@@ -19,7 +19,7 @@ from typing import Any
 import pytest
 
 from app.domain.plugins import runtime
-from tests.fake_comfyui import OBJECT_INFO, FakeComfyUI, multi_reference_ui
+from tests.fake_comfyui import OBJECT_INFO, FakeComfyUI, multi_reference_ui, subgraph_sampler_ui
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -83,6 +83,23 @@ def test_写进画布的标记_和annotate写文件的一模一样_只交回标�
     assert marks["extra"] == stored["extra"]["mosael"]
     assert set(marks["nodes"]) == {"10", "6", "17"}
     assert marks["nodes"]["17"] == {"result": True}
+
+
+def test_写进画布的标记_子图里面的节点按路径交回_桥照路径改那一层(comfy) -> None:
+    """画布上这张的表单挑了子图**内部**那个节点(`12:3.steps`):交回的键就是那个路径,而且**每一层都列出来** ——
+    桥按这份清单改画布(不在清单里的节点,连同子图定义里的,把 `mosael` 那一格摘掉)。"""
+    live = subgraph_sampler_ui()
+    marks = _host("app_marks", comfy.url, content=live,
+                  forms=[{"id": "app", "items": [{"node": "12:3", "input": "steps", "label": "步数"},
+                                                  {"node": "6", "input": "text", "main": True}]}], results=["9"])
+    assert set(marks["nodes"]) == {"12:3", "6", "9"}, "子图里面那个节点按路径(第一处)写,根图上的写节点号"
+    assert marks["nodes"]["12:3"] == {"forms": {"app": {"steps": {"order": 0, "label": "步数"}}}}
+    assert marks["nodes"]["9"] == {"result": True}
+    assert "mosael" not in marks["nodes"] and live["definitions"]["subgraphs"][0]["nodes"][0].get("properties") is None, \
+        "交回的是要改的那几处,不改画布上的图"
+    again = _host("app_marks", comfy.url, content=live, forms=[{"id": "app", "items": [{"node": "6", "input": "text"}]}],
+                  results=[])
+    assert set(again["nodes"]) == {"6"}, "子图里那一项不挑了:那份定义里的标记也要摘掉(桥按「不在清单里」摘)"
 
 
 def test_写进画布的标记_一张表单都不要只留结果_指着不存在的节点就拒(comfy) -> None:

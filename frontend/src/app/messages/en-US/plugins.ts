@@ -775,7 +775,7 @@ export const plugins = {
   workflowAppAdvanced: "Advanced",
   workflowAppAdd: "Add “{name}” to the form",
   workflowAppAdded: "“{name}” is on the form; click to take it off",
-  workflowAppSubgraph: "Nodes inside a subgraph can't be on a form yet",
+  workflowAppNotExposable: "This item can't go on a form right now",
   workflowAppForm: "Selected items",
   workflowAppChosen: "Items on the form",
   workflowAppEmptyTitle: "The form is empty",

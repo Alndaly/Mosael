@@ -990,8 +990,11 @@ class WorkflowFillableOut(ApiModel):
     #: 0 / 不带 = 不在这条路上(ADR 0056 第一步)。给的是位置不是一个是非:能填的项本身的顺序是常用程度,
     #: 不是这条线的先后,而那一组要按沿线摆。
     mask_property: int | None = None
-    #: 能不能放进应用表单(子图里面的节点这一版不能)
+    #: 能不能放进应用表单:根图上的节点和子图里面的节点(写法 `105:9`)都能;插件说不能的(那份子图在这张图里用了不止
+    #: 一处,里面的节点指不明是哪一处)在这里是 False
     exposable: bool = True
+    #: 放不进表单时的那句悬停说明(为什么、该怎么办,按看的人的语言挑好);能填的是空串
+    unexposable_reason: str = ""
     #: 它进参数表时的 JSON Schema 片段(和生成目录同一套规整);读素材的项没有
     spec: dict[str, Any] | None = None
 

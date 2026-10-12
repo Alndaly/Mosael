@@ -49,7 +49,7 @@ beforeAll(() => {
 /** 这张工作流:一个读图的槽位(参考图)和一个数字参数(放大倍数)。 */
 function data(): WorkflowApp {
   const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
-                 common: true, exposable: true };
+                 common: true, exposable: true, unexposable_reason: "" };
   return {
     path: "放大.json",
     modified: 1,
@@ -84,7 +84,7 @@ function draft(keys: string[]): FormDraft {
  */
 function videoData(): WorkflowApp {
   const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
-                 common: true, exposable: true };
+                 common: true, exposable: true, unexposable_reason: "" };
   return {
     path: "video_minimax_h3_i2v.json",
     modified: 1,

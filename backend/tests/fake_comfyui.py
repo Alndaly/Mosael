@@ -405,6 +405,69 @@ def subgraph_promoting(picked: str) -> dict[str, Any]:
     }
 
 
+SUBGRAPH_SAMPLER_ID = "a1b2c3d4-0000-4000-8000-0000000000ff"
+
+
+def subgraph_sampler_ui(*, twice: bool = False) -> dict[str, Any]:
+    """一张文生图,但**采样那一步包在子图里**(ADR 0042 §6 那种):根图上 12 号是那份「采样」子图的实例,里面 3 号才是
+    KSampler —— 执行时它的节点号是 `12:3`(`twice=True` 时同一份定义再用一处,根图上 20 号)。
+
+    里面的 KSampler 那几格(步数、CFG、采样器……)**没有**提升到子图节点上:它们是子图内部那个节点自己的 widget。
+    边界上的四个口接的是外面连进来的线(模型、正反条件、latent),出来的 LATENT 交给外面的 VAEDecode。
+    """
+    boundary = [("model", "MODEL"), ("positive", "CONDITIONING"), ("negative", "CONDITIONING"),
+                ("latent_image", "LATENT")]
+    definition = {
+        "id": SUBGRAPH_SAMPLER_ID, "name": "采样",
+        "inputNode": {"id": -10, "bounding": [0, 0, 1, 1]}, "outputNode": {"id": -20, "bounding": [0, 0, 1, 1]},
+        "inputs": [{"id": f"i{at}", "name": name, "type": kind, "linkIds": [201 + at]}
+                   for at, (name, kind) in enumerate(boundary)],
+        "outputs": [{"id": "o0", "name": "LATENT", "type": "LATENT", "linkIds": [205]}],
+        "nodes": [{"id": 3, "type": "KSampler", "title": "采样",
+                   "widgets_values": [42, "randomize", 20, 7.0, "euler", "normal", 1.0],
+                   "inputs": [*(conn(name, 201 + at) for at, (name, _kind) in enumerate(boundary)),
+                              widget("seed"), widget("steps"), widget("cfg"), widget("sampler_name"),
+                              widget("scheduler"), widget("denoise")]}],
+        "links": [{"id": 201 + at, "origin_id": -10, "origin_slot": at, "target_id": 3, "target_slot": at, "type": kind}
+                  for at, (_name, kind) in enumerate(boundary)]
+                 + [{"id": 205, "origin_id": 3, "origin_slot": 0, "target_id": -20, "target_slot": 0, "type": "LATENT"}],
+    }
+
+    def instance(node_id: int, title: str, first_link: int, out_link: int) -> dict[str, Any]:
+        return {"id": node_id, "type": SUBGRAPH_SAMPLER_ID, "title": title,
+                "inputs": [conn(name, first_link + at) for at, (name, _kind) in enumerate(boundary)],
+                "outputs": [{"name": "LATENT", "type": "LATENT", "links": [out_link]}], "widgets_values": []}
+
+    nodes = [
+        {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["sd_xl_base.safetensors"],
+         "inputs": [widget("ckpt_name")]},
+        {"id": 5, "type": "EmptyLatentImage", "widgets_values": [832, 1216, 1],
+         "inputs": [widget("width"), widget("height"), widget("batch_size")]},
+        {"id": 6, "type": "CLIPTextEncode", "widgets_values": ["a cat"],
+         "inputs": [conn("clip", 5), widget("text")]},
+        {"id": 7, "type": "CLIPTextEncode", "widgets_values": ["blurry"],
+         "inputs": [conn("clip", 6), widget("text")]},
+        {"id": 8, "type": "VAEDecode", "inputs": [conn("samples", 9), conn("vae", 10)]},
+        {"id": 9, "type": "SaveImage", "widgets_values": ["mosael"],
+         "inputs": [conn("images", 11), widget("filename_prefix")]},
+        instance(12, "采样", 1, 9),
+    ]
+    links = [[1, 4, 0, 12, 0, "MODEL"], [2, 6, 0, 12, 1, "CONDITIONING"], [3, 7, 0, 12, 2, "CONDITIONING"],
+             [4, 5, 0, 12, 3, "LATENT"], [5, 4, 1, 6, 0, "CLIP"], [6, 4, 1, 7, 0, "CLIP"], [9, 12, 0, 8, 0, "LATENT"],
+             [10, 4, 2, 8, 1, "VAE"], [11, 8, 0, 9, 0, "IMAGE"]]
+    if twice:
+        #: 同一份定义再用一处:里面的节点在 API 图里多出一份(`20:3`),而文件里只有一处放标记
+        nodes += [instance(20, "采样 2", 21, 29),
+                  {"id": 18, "type": "VAEDecode", "inputs": [conn("samples", 29), conn("vae", 30)]},
+                  {"id": 19, "type": "SaveImage", "widgets_values": ["copy"],
+                   "inputs": [conn("images", 31), widget("filename_prefix")]}]
+        links += [[21, 4, 0, 20, 0, "MODEL"], [22, 6, 0, 20, 1, "CONDITIONING"], [23, 7, 0, 20, 2, "CONDITIONING"],
+                  [24, 5, 0, 20, 3, "LATENT"], [29, 20, 0, 18, 0, "LATENT"], [30, 4, 2, 18, 1, "VAE"],
+                  [31, 18, 0, 19, 0, "IMAGE"]]
+    return {"id": "5f0a1b2c-3d4e-4f50-8a9b-0c1d2e3f4a5b", "nodes": nodes, "links": links,
+            "definitions": {"subgraphs": [definition]}}
+
+
 #: 本地 MiniMax H3 文生视频的那张图(照用户 ComfyUI 里的「video_minimax_h3_t2v.json」缩出来的):整条流程包在**子图**
 #: 「Image to Video (MiniMax H3)」里,提示词是子图节点上提升出来的一格;子图里 BasicGuider 的条件来自
 #: MiniMaxH3ImageToVideo(提示词就是它的 `prompt`),帧和声音由 CreateVideo 合成交出子图,外面的 SaveVideo 存下来。

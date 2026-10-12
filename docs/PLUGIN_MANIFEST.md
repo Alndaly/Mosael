@@ -1425,8 +1425,10 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   维护者撤掉了那一套 ——「为了 ComfyUI 和 Mosael 的语言不匹配问题特地兼容做一套方案是不合理的」。代价写在
   `frontend/src/features/plugins/workflowLibraryView.test.ts` 里:中文界面显示「加载图像」时,画布上另起的英文名搜不到
   (它不在交回的数据里)。`schema` 里给人看的字(`title` / `description`)和 `hint`
-  也按读的人的语言挑好,`schema` 过一遍和 `op: models` 同一套规整;节点号不是根图上的
-  (`12:5`)照样列出来,标着这一版不能放进表单。`app.status` 是 `unsupported`、`upgradable: true` 的是**上一版格式**的标记(这一版
+  也按读的人的语言挑好,`schema` 过一遍和 `op: models` 同一套规整;**子图里面的节点也算一种节点**
+  (`12:5`:根图 12 号那个子图里面的 5 号),和根图上的节点一样能放进表单 —— 值写进的是子图内部那个节点自己的输入,标记写在
+  那份子图定义里那个节点自己的 `properties` 上。一份子图在这张图里用了不止一处时,里面的节点只有第一处那条路径说得清:
+  插件把别的几处标成 `exposable: false`,并给一句 `unexposable`(`{"zh", "en"}`,为什么、该怎么办)。`app.status` 是 `unsupported`、`upgradable: true` 的是**上一版格式**的标记(这一版
   不读,能经 `upgrade_marks` 改写过来);`upgradable: false` 的 `unsupported` 是更新的插件写的,只能升级插件。每张表单的 `model` /
   `tool` 是它的模型 id 和工具名(说不出来是空串):宿主据此数「这个工作区里有几处在用它」,删表单之前说给作者听。带着 `content`
   (工作台画布上那张)来问时宿主也带上 `path`(画布开的是哪张),只用来起这两个名字,不读文件。

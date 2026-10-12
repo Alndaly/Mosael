@@ -49,16 +49,17 @@ def node_folders(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str
 
 def app_marks(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     """表单和结果标记写进**画布上现在这张**要改成的样子:按 `forms`(全部表单,没给 id 的是新表单)/ `results` 换上新标记
-    (app_form.apply,和 annotate 写文件同一个函数),交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`
-    (新表单的 id 就在 `extra.mosael.forms` 里)。别的节点上的标记要摘掉 —— 宿主那一侧的桥按这份清单改画布(不在清单里的节点
+    (app_form.apply,和 annotate 写文件同一个函数),交回**每一层**带标记的节点上的 `properties.mosael`(根图上的写节点号,
+    子图定义里的写第一个用它的那个节点到它的路径 `12:5`,见 app_form)和图上的 `extra.mosael`(新表单的 id 就在
+    `extra.mosael.forms` 里)。别的节点上的标记要摘掉 —— 宿主那一侧的桥按这份清单改画布(不在清单里的节点,连同子图定义里的,
     去掉 `mosael` 那一格,别的一个字都不动)。"""
     content = live_graph(payload, locale)
     updated = app_form.apply(content, _forms(payload, locale), _results(payload, locale), locale)
     nodes: dict[str, Any] = {}
-    for node in updated.get("nodes") or []:
-        props = node.get("properties") if isinstance(node, dict) else None
+    for node, ref in app_form.nodes_with_refs(updated):
+        props = node.get("properties")
         if isinstance(props, dict) and isinstance(props.get(app_form.KEY), dict):
-            nodes[str(node.get("id"))] = props[app_form.KEY]
+            nodes[ref] = props[app_form.KEY]
     extra = updated.get("extra") if isinstance(updated.get("extra"), dict) else {}
     head = extra.get(app_form.KEY)
     return {"nodes": nodes, "extra": head if isinstance(head, dict) else None}

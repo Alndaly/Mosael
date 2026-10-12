@@ -335,8 +335,12 @@ MAX_FORMS = 20
 _MAX_APP_LABEL = 120
 _MAX_APP_DESCRIPTION = 1000
 _GRAPH_ITEMS = {"seed", "size", "runs"}
-#: 根图上的节点号(子图里面的节点 —— `12:5` 这种 —— 这一版不能放进表单)。
+#: 根图上的节点号(「结果取自」只认它:交回产出的是哪几个节点,而产出按**执行节点号**收,子图里的算在内部的节点上)。
 _ROOT_NODE = re.compile(r"\d{1,9}")
+#: 能放进表单的节点写法:根图上的节点号,或者子图里面那个节点 —— `105:9` 是根图 105 号那个子图里面的 9 号(`12:5:3` 再往里
+#: 一层;和画布摘要、插件的 `convert`、ComfyUI 执行时是同一套写法,ADR 0042 §6)。值写进的是**子图内部那个节点自己的输入**,
+#: 不是外面那个子图节点上的格子。
+_ANY_NODE = re.compile(r"\d{1,9}(?::\d{1,9})*")
 #: 一格输入的名字:不收控制字符,不太长。
 _INPUT_NAME = re.compile(r"[^\x00-\x1f]{1,200}")
 #: 表单 id:小写字母和数字,1–8 位(插件起的,只在一张工作流里唯一;ADR 0045 §1)。
@@ -352,7 +356,7 @@ def _app_items(raw: Any) -> list[dict[str, Any]]:
         if not isinstance(one, dict) or len(items) >= MAX_APP_ITEMS:
             continue
         node, name = _text(one.get("node"), 20), _text(one.get("input"), 200)
-        if not name or (node and not _ROOT_NODE.fullmatch(node)):
+        if not name or (node and not _ANY_NODE.fullmatch(node)):
             continue
         item: dict[str, Any] = {"key": f"{node}.{name}" if node else name, "node": node, "input": name,
                                 "label": _text(one.get("label"), _MAX_APP_LABEL), "main": one.get("main") is True,
@@ -806,13 +810,17 @@ def _picked(value: Any, limit: int) -> str:
 def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁(给人看的节点名、类名)、
     ComfyUI 给这一格的说明、常用与否、JSON Schema 片段(和生成目录同一套规整,见 plugins/generation.parameters ——
-    预览和真的表单是同一个形状)、它在「蒙版属性」那一组里排第几位(ADR 0056 第一步)。
+    预览和真的表单是同一个形状)、它在「蒙版属性」那一组里排第几位(ADR 0056 第一步)、能不能放进表单。
 
     **只认一种形状**(ADR 0006):插件交回来的这一项里,`title` / `node_label` / `hint` 是 `{"zh", "en"}` 一对
     (或者本来就是一句) —— 宿主在这一层按读的人的语言挑一句;**不再另带一条"英文那份"**(`node_label_en` 那个
     设计被否掉了)。`mask_property` 是一个位置(1 起数的整数),不是一个 `true`、不是一份键的列表 —— 不在这条路上的
     写 0。插件和宿主同属一次发布(内置插件随后端一起打包),读的又是现问现算、不落盘的回答 —— 没有旧数据可迁,
     也就不在读取期认第二种形状。
+
+    **能不能放进表单**:根图上的节点和子图里面的节点(`105:9`)都能(见 `_ANY_NODE`)。插件说不能的照它说的 ——
+    那份子图在这张图里用了不止一处时,里面的节点写下去、读回来是另一个键(见插件 `app_form.addressable`),插件
+    在 `unexposable` 里给两种语言的「为什么、该怎么办」,宿主按读的人的语言挑一句当悬停说明。
     """
     if not isinstance(raw, dict):
         return None
@@ -822,6 +830,7 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     key = f"{node}.{name}" if node else name
     title = raw.get("title")
     at = raw.get("mask_property")
+    exposable = raw.get("exposable") is not False and (not node or bool(_ANY_NODE.fullmatch(node)))
     item: dict[str, Any] = {
         "key": key, "node": node, "input": name, "kind": kind,
         "title": _picked(title, 200) or key,
@@ -835,8 +844,9 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
         "folder": _text(raw.get("folder"), 64),
         #: 沿 MASK 走出来的第几位(插件按连线上的类型认的,见 graph.mask_property);0 = 不在这条路上
         "mask_property": at if isinstance(at, int) and not isinstance(at, bool) and at > 0 else 0,
-        # 子图里面的节点(`12:5`)这一版不能放进应用表单(ADR 0038「这一版不做」),照样列出来、标着
-        "exposable": not node or bool(_ROOT_NODE.fullmatch(node)),
+        "exposable": exposable,
+        # 放不进表单时的那句悬停说明(为什么、该怎么办);能填的是空串
+        "unexposable_reason": "" if exposable else _picked(raw.get("unexposable"), 500),
     }
     if isinstance(raw.get("schema"), dict):
         schema = plugin_generation.parameters({key: raw["schema"]}, text).get(key)
@@ -910,8 +920,8 @@ def _results_payload(results: list[str]) -> list[str]:
 
 
 def _form_payload(form: dict[str, Any]) -> dict[str, Any]:
-    """要写进去的一张表单先在这里过一遍:id(新表单不给)、几项、每项是根图上的节点(或图级的种子 / 尺寸 / 跑几遍)、
-    名字多长、可选值几个。"""
+    """要写进去的一张表单先在这里过一遍:id(新表单不给)、几项、每项是根图上的节点或子图里面的节点(`12:5`;图级的
+    种子 / 尺寸 / 跑几遍不带节点)、名字多长、可选值几个。"""
     form_id = str(form.get("id") or "")
     if form_id and not _FORM_ID.fullmatch(form_id):
         raise WorkflowLibraryError("workflowLibErr_badFormId", form=form_id[:40])
@@ -925,7 +935,7 @@ def _form_payload(form: dict[str, Any]) -> dict[str, Any]:
         name = str(entry.get("input") or "") if isinstance(entry, dict) else ""
         key = f"{node}.{name}" if node else name
         if not isinstance(entry, dict) or not _INPUT_NAME.fullmatch(name) or key in seen or (
-                node and not _ROOT_NODE.fullmatch(node)) or (not node and name not in _GRAPH_ITEMS):
+                node and not _ANY_NODE.fullmatch(node)) or (not node and name not in _GRAPH_ITEMS):
             raise WorkflowLibraryError("workflowLibErr_badAppItem", item=key[:200])
         seen.add(key)
         item: dict[str, Any] = {"node": node, "input": name, "label": _text(entry.get("label"), _MAX_APP_LABEL)}
@@ -1121,9 +1131,10 @@ _MAX_MARK_CHARS = 2 * 1024 * 1024
 def app_marks(db: Session, instance: PluginInstance, content: dict[str, Any], *, forms: list[dict[str, Any]],
               results: list[str]) -> dict[str, Any]:
     """表单和结果标记写进画布要改成的样子(工作台的「表单」页签、「以后只要这张」):`forms` 是**全部**表单(没给 id 的是
-    新表单),插件按和 `annotate` 同一个函数算,交回每个带标记的根图节点上的 `properties.mosael` 和图上的 `extra.mosael`
-    (新表单的 id 在里面);界面经桥改画布上的节点,存盘是 ComfyUI 自己的保存。插件交回的先规整:只认根图节点号、值是
-    对象、大小有上限。"""
+    新表单),插件按和 `annotate` 同一个函数算,交回每一层带标记的节点上的 `properties.mosael`(子图定义里的写成 `12:5`)
+    和图上的 `extra.mosael`
+    (新表单的 id 在里面);界面经桥改画布上的节点,存盘是 ComfyUI 自己的保存。插件交回的先规整:节点写法认根图和子图里的
+    (`12`、`12:5`)、值是对象、大小有上限。"""
     _require(db, instance)
     results = _results_payload([str(one) for one in results])
     clean = _forms_payload(forms)
@@ -1135,7 +1146,7 @@ def app_marks(db: Session, instance: PluginInstance, content: dict[str, Any], *,
         raise WorkflowLibraryError("workflowLibErr_badMarks", name=instance.name)
     nodes: dict[str, Any] = {}
     for node, marks in raw_nodes.items():
-        if not isinstance(node, str) or not _ROOT_NODE.fullmatch(node) or not isinstance(marks, dict) \
+        if not isinstance(node, str) or not _ANY_NODE.fullmatch(node) or not isinstance(marks, dict) \
                 or len(json.dumps(marks, ensure_ascii=False)) > _MAX_MARK_CHARS:
             raise WorkflowLibraryError("workflowLibErr_badMarks", name=instance.name)
         nodes[node] = marks

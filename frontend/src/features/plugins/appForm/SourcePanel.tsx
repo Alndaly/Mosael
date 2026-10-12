@@ -16,7 +16,8 @@ import { cn } from "@/lib/utils";
 /**
  * 「工作流里能填的」:这张图全部能填的项,**按节点分组**(组名是节点给人看的名字 —— 用户起的标题,没起就是 ComfyUI 给这类
  * 节点的名字;节点号、类名在悬停说明里),种子 / 尺寸 / 跑几遍是「整张图」那一组,蒙版属性是**头一组**。每一行:种类图标、
- * 名字、现在的值,右边一颗「+」放进表单;已经在表单上的打勾,再点一下拿掉。子图里面的节点灰着、说为什么。
+ * 名字、现在的值,右边一颗「+」放进表单;已经在表单上的打勾,再点一下拿掉。**子图里面的节点和根图上的一样能放进表单**;
+ * 灰着的只剩插件说不能的那几项(那份子图在这张图里用了不止一处),悬停说明写的是为什么、该怎么办。
  *
  * 「蒙版属性」那一组是插件沿 MASK 这条线走到的几格(见 workflowAppForm.maskOrder、插件 graph.mask_path),**不按节点分** ——
  * 它按沿线的先后摆(来源 → 蒙版运算 → 送给采样器),所以那几行的名字照 title 显示:节点名不能像别的组那样去掉,不然几格
@@ -132,7 +133,8 @@ function SourceRow({ item, added, name, onAdd, onRemove }: {
         </IconButton>
       ) : (
         <IconButton label={t("workflowAppAdd").replace("{name}", item.title)} className="shrink-0 text-muted-foreground"
-                    disabled={!allowed} disabledReason={t("workflowAppSubgraph")} onClick={onAdd}>
+                    disabled={!allowed}
+                    disabledReason={item.unexposable_reason || t("workflowAppNotExposable")} onClick={onAdd}>
           <Plus />
         </IconButton>
       )}

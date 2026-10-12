@@ -133,7 +133,8 @@ export function untitled(draft: FormsDraft): FormDraft[] {
   return draft.forms.filter((one) => !one.title.trim());
 }
 
-/** 一项能不能放进表单:子图里面的节点这一版不能(ADR 0038「这一版不做」)。 */
+/** 一项能不能放进表单:根图上的节点和**子图里面的节点**(`105:9`)都能。灰着的只剩一种 —— 那份子图在这张图里用了不止
+ *  一处,里面的节点指不明是哪一处(原因由插件按读的人的语言给,见 `WorkflowFillable.unexposable_reason`)。 */
 export function exposable(item: WorkflowFillable): boolean {
   return item.exposable !== false;
 }
@@ -154,7 +155,8 @@ const MAIN_MODEL_FOLDERS = ["checkpoints", "diffusion_models", "unet", "unet_ggu
 
 /**
  * 「按推荐先挑一版」挑哪几项,按表单上的顺序:主提示词(认出来的提示词格,几处同一句)、反向提示词、主模型(第一个选大模型 /
- * 扩散模型文件的下拉)、种子、尺寸、跑几遍,和每一个读图 / 视频 / 音频 / 蒙版的槽位。子图里面的节点不挑(这一版放不进表单)。
+ * 扩散模型文件的下拉)、种子、尺寸、跑几遍,和每一个读图 / 视频 / 音频 / 蒙版的槽位。放不进表单的那几项(`exposable` 是
+ * false:那份子图在这张图里用了不止一处)不挑。
  */
 export function recommendedItems(data: WorkflowApp): WorkflowFillable[] {
   const items = (data.items ?? []).filter(exposable);

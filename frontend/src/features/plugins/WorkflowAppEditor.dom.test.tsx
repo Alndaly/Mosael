@@ -43,7 +43,7 @@ const flow = { path: "换装.json", label: "换装" } as WorkflowFile;
 
 function data(overrides: Partial<WorkflowApp> = {}): WorkflowApp {
   const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
-                 common: true, exposable: true };
+                 common: true, exposable: true, unexposable_reason: "" };
   return {
     path: "换装.json",
     modified: 1776098682.9,
@@ -69,7 +69,7 @@ function data(overrides: Partial<WorkflowApp> = {}): WorkflowApp {
       { ...base, key: "3.steps", node: "3", input: "steps", kind: "number", title: "步数", node_title: "采样", node_label: "采样",
         class_type: "KSampler", spec: { type: "integer", minimum: 1, maximum: 150, default: 20 } },
       { ...base, key: "12:5.cfg", node: "12:5", input: "cfg", kind: "number", title: "CFG", node_label: "K 采样器",
-        class_type: "KSampler", exposable: false, spec: { type: "number" } },
+        class_type: "KSampler", spec: { type: "number" } },
     ],
     outputs: [
       { node: "9", title: "SaveImage", label: "保存图像", class_type: "SaveImage", media: "image" },
@@ -136,7 +136,7 @@ describe("表单弹窗的高度", () => {
 });
 
 describe("表单编辑器:三块", () => {
-  it("工作流里能填的按节点分组、用人话名字、带着现在的值;类名只在悬停的技术名里;子图里的节点灰着", async () => {
+  it("工作流里能填的按节点分组、用人话名字、带着现在的值;类名只在悬停的技术名里;子图里面的节点也能加", async () => {
     api.getWorkflowApp.mockResolvedValue(data());
     mount();
     const source = await screen.findByRole("region", { name: t("workflowAppSource") });
@@ -148,7 +148,11 @@ describe("表单编辑器:三块", () => {
            "组里的名字去掉重复的节点名(组名就是「人物」)").toBeTruthy();
     expect(source.textContent, "类名不当名字").not.toContain("LoraLoader|pysssss");
     const subgraph = screen.getByRole("button", { name: t("workflowAppAdd", "CFG") }) as HTMLButtonElement;
-    expect(subgraph.disabled).toBe(true);
+    expect(subgraph.disabled, "子图里面那个节点(12:5)上的 CFG:和根图上的一样加得进去").toBe(false);
+    fireEvent.click(subgraph);
+    expect(chosenKeys()).toEqual(["12:5.cfg"]);
+    fireEvent.click(screen.getByRole("button", { name: t("workflowAppAdded", "CFG") }));
+    expect(chosenKeys(), "再点一下拿掉:后面那几条看的是空表单").toEqual([]);
     expect(screen.getByRole("button", { name: t("workflowAppSave") }).hasAttribute("disabled")).toBe(true);
     // 空着的表单不是一块死框:说怎么加、给「按推荐先挑一版」;预览画的是现在用的人看到的那张(全部能填的项)
     expect(screen.getByRole("button", { name: /workflowAppRecommend/ })).toBeTruthy();
@@ -171,19 +175,23 @@ describe("表单编辑器:三块", () => {
     expect(chosenKeys()).toEqual([]);
   });
 
-  it("按推荐先挑一版:提示词、反向提示词、主模型、种子、读图的槽位;子图里的不挑,别的不碰", async () => {
+  it("按推荐先挑一版:提示词、反向提示词、主模型、种子、读图的槽位(子图里面的也算);挑不了的项不碰", async () => {
     const base = data();
-    //: 子图里面一个读图节点:推荐本来会挑读图的槽位,但它这一版放不进表单
+    //: 子图里面一个读图节点(能填,和根图上的一样)+ 一个**挑不了**的(那份子图在这张图里用了两处,里面的节点指不明是哪一处)
     api.getWorkflowApp.mockResolvedValue(data({ items: [...(base.items ?? []), {
       key: "12:7.image", node: "12:7", input: "image", kind: "media", role: "reference_image", media: "image", title: "参考图 · 子图",
       node_title: "", node_label: "加载图像", hint: "", class_type: "LoadImage", common: true,
-      folder: "", exposable: false, spec: null,
+      folder: "", exposable: true, unexposable_reason: "", spec: null,
+    }, {
+      key: "20:7.image", node: "20:7", input: "image", kind: "media", role: "reference_image", media: "image", title: "参考图 · 子图 2",
+      node_title: "", node_label: "加载图像", hint: "", class_type: "LoadImage", common: true, folder: "",
+      exposable: false, unexposable_reason: "子图「高清修复」在这张图里用了 2 处", spec: null,
     }] }));
     mount();
     const recommend = await screen.findByRole("button", { name: /workflowAppRecommend/ });
     expect(screen.getByText(t("workflowAppRecommendWhat")), "按钮下面写明会挑哪几项").toBeTruthy();
     fireEvent.click(recommend);
-    expect(chosenKeys()).toEqual(["6.text", "7.text", "4.ckpt_name", "seed", "10.image", "14.image"]);
+    expect(chosenKeys()).toEqual(["6.text", "7.text", "4.ckpt_name", "seed", "10.image", "14.image", "12:7.image"]);
     expect(within(card("6.text")).getByText(t("workflowAppMainShort")), "认出来的提示词格是主提示词").toBeTruthy();
     expect(within(preview()).getByText(t("genNegativePrompt"))).toBeTruthy();
     expect(within(preview()).queryByText(t("workflowAppPreviewDefault")), "有表单了:预览是这张表").toBeNull();

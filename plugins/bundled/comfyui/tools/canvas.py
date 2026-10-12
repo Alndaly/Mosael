@@ -19,6 +19,7 @@ import convert
 import node_catalog
 from comfy_http import Comfy
 from lines import ComfyError, say
+from subgraphs import MAX_DEPTH, definitions, instance_paths, locate_ref, nodes_of
 from workflow_library import VIRTUAL_NODES, live_graph
 
 #: 摘要里最多列多少个节点(各层加起来)。见过的最大的工作流两百来个。
@@ -27,32 +28,10 @@ MAX_NODES = 400
 MAX_TEXT = 400
 #: 笔记节点(Note、MarkdownNote)最多留多少字:模板里的使用说明在里面,值得读。
 MAX_NOTE = 1200
-#: 子图套得再深也只走这么多层(坏文件可能套了它自己)。
-MAX_DEPTH = 16
 #: 只在前端的笔记节点:正文就是它唯一的 widget。
 NOTE_TYPES = frozenset({"Note", "MarkdownNote"})
 #: 子图边界上的两个虚拟节点(ComfyUI 前端的 SUBGRAPH_INPUT_ID / SUBGRAPH_OUTPUT_ID)。
 SUBGRAPH_INPUT, SUBGRAPH_OUTPUT = -10, -20
-
-
-def definitions(graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """子图定义:id → 那一份(套在定义里的定义也收)。"""
-    found: dict[str, dict[str, Any]] = {}
-
-    def collect(scope: dict[str, Any], depth: int) -> None:
-        if depth > MAX_DEPTH:
-            return
-        for one in ((scope.get("definitions") or {}).get("subgraphs") or []):
-            if isinstance(one, dict) and one.get("id") and str(one["id"]) not in found:
-                found[str(one["id"])] = one
-                collect(one, depth + 1)
-
-    collect(graph, 0)
-    return found
-
-
-def nodes_of(scope: dict[str, Any]) -> list[dict[str, Any]]:
-    return [node for node in scope.get("nodes") or [] if isinstance(node, dict) and node.get("id") is not None]
 
 
 def groups_of(scope: dict[str, Any]) -> list[dict[str, Any]]:
@@ -80,27 +59,6 @@ def _group(group: dict[str, Any], index: int) -> dict[str, Any] | None:
     return out
 
 
-def instance_paths(graph: dict[str, Any]) -> dict[str, list[str]]:
-    """每份子图定义在这张图里被哪几个节点用着:从根图往里走的节点号路径(`12`、`12:5`),按先后。"""
-    defs = definitions(graph)
-    found: dict[str, list[str]] = {}
-
-    def walk(scope: dict[str, Any], prefix: str, depth: int) -> None:
-        if depth > MAX_DEPTH:
-            return
-        for node in nodes_of(scope):
-            kind = str(node.get("type") or "")
-            if kind in defs:
-                path = f"{prefix}{node['id']}"
-                paths = found.setdefault(kind, [])
-                if path not in paths and len(paths) < 50:
-                    paths.append(path)
-                    walk(defs[kind], f"{path}:", depth + 1)
-
-    walk(graph, "", 0)
-    return found
-
-
 def class_types(graph: dict[str, Any]) -> set[str]:
     """图里用到的节点类型(各层),不含子图实例和只在前端的节点。"""
     defs = definitions(graph)
@@ -126,25 +84,6 @@ def refs_by_type(graph: dict[str, Any]) -> dict[str, list[str]]:
             if kind and kind not in defs and kind not in VIRTUAL_NODES:
                 found.setdefault(kind, []).append(f"{prefix}{node['id']}")
     return found
-
-
-def locate_ref(graph: dict[str, Any], ref: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """`12:5` → (那一层子图定义(根图上的是 None), 节点)。指不到 → (None, None)。"""
-    defs = definitions(graph)
-    parts = str(ref or "").split(":")
-    scope: dict[str, Any] = graph
-    layer: dict[str, Any] | None = None
-    for depth, part in enumerate(parts):
-        node = next((one for one in nodes_of(scope) if str(one["id"]) == part), None)
-        if node is None:
-            return None, None
-        if depth == len(parts) - 1:
-            return layer, node
-        layer = defs.get(str(node.get("type") or ""))
-        if layer is None:
-            return None, None
-        scope = layer
-    return None, None
 
 
 def _text(value: Any, limit: int) -> Any:
@@ -285,5 +224,5 @@ def canvas_summary(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
     return summarize(content, object_info)
 
 
-__all__ = ["MAX_NODES", "canvas_summary", "class_types", "definitions", "groups_of", "instance_paths", "locate_ref", "nodes_of", "refs_by_type",
-           "summarize"]
+__all__ = ["MAX_DEPTH", "MAX_NODES", "canvas_summary", "class_types", "definitions", "groups_of", "instance_paths", "locate_ref",
+           "nodes_of", "refs_by_type", "summarize"]

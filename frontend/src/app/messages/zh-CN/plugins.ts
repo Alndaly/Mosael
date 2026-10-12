@@ -784,7 +784,7 @@ export const plugins = {
   workflowAppAdvanced: "高级",
   workflowAppAdd: "把「{name}」加到表单",
   workflowAppAdded: "「{name}」在表单上了,点一下拿掉",
-  workflowAppSubgraph: "子图里面的节点这一版不能放进表单",
+  workflowAppNotExposable: "这一项现在放不进表单",
   workflowAppForm: "已选的项",
   workflowAppChosen: "表单上的项",
   workflowAppEmptyTitle: "表单还是空的",

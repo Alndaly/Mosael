@@ -14,7 +14,15 @@
 ADR 0045 第一步就把 `#app` / `_app` 定死了);新建的表单由插件起 6 位随机的(不按标题、不按序号:标题会改,序号删一张就让
 存着的引用悄悄指向另一张)。
 
-参数键不变:目录里仍是 `<节点 id>.<输入名>`。标记跟着节点走 —— 复制、改节点号、挪进别的工作流都还在,节点删了标记一起没。
+参数键不变:目录里仍是 `<节点 id>.<输入名>` —— **子图里面的节点也算一种节点**(`105:9.steps`:根图 105 号那个子图里面的 9
+号,和画布摘要、`convert`、ComfyUI 执行时的写法是同一套,ADR 0042 §6)。标记跟着节点走 —— 复制、改节点号、挪进别的工作流都
+还在,节点删了标记一起没。
+
+**子图里面的节点**:一份子图定义在这张图里只用了一处时,里面的节点照根图上的节点一样放得进表单 —— 标记写在**定义里那个节点**
+自己的 `properties` 上(ComfyUI 原样存回,和根图上的节点同一个地方),写法是「第一个用它的那个节点」到它的路径(`105:9`)。
+用了不止一处时,这份定义只有一个地方放标记,而两处说的是同一条路径 —— 那时里面的节点**放不进表单**,`unaddressable` 说清
+为什么、该怎么办(见 `addressable`)。值写进的是**子图内部那个节点自己的输入**,不是外面那个子图节点上的格子 —— 后者是
+ComfyUI 前端「提升出来的控件」,另一件事。
 
 **版本只认当前这一版**(`VERSION`)。别的版本按「没有表单」处理、报 `unsupported`:读的这一侧不留认旧版的分支(ADR 0038
 §2)。第 1 版能由 `upgrade` 改写过来(插件的 `upgrade_marks`,宿主确认一次整台改写,见 workflow_library);更新的版本是
@@ -39,6 +47,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 import graph
+import subgraphs
 from lines import ComfyError, say
 
 #: 表单的存储格式是第几版。只认这一版。
@@ -63,6 +72,72 @@ FORM_ID_PATTERN = re.compile(r"^[a-z0-9]{1,8}$")
 #: 新表单的 id 几位:智能体工具名 `plugin__<32 位连接 id>__wf_<12 位>_<表单 id>` 不超过 64,6 位是放得下的最长(ADR 0045 §1)。
 NEW_ID_LENGTH = 6
 _ID_ALPHABET = string.ascii_lowercase + string.digits
+
+
+def canonical_paths(ui_graph: dict[str, Any]) -> dict[str, str]:
+    """每份子图定义**按哪一条路径写**:第一个用它的那个节点(`105`、`105:9`),见 subgraphs.instance_paths。
+
+    一份定义在这张图里用了几处时,里面的节点只有这一条写法说得清是哪一个 —— 标记只有一处地方放(那张定义里的那个节点),
+    而两处实例说的是同一条路径。
+    """
+    return {def_id: paths[0] for def_id, paths in subgraphs.instance_paths(ui_graph).items() if paths}
+
+
+def addressable(ui_graph: dict[str, Any]) -> set[str]:
+    """这张图里**放得进表单**的节点写法:根图上的编号(`12`),加上每一层都走「第一个用它的那个节点」能到的子图内部编号
+    (`12:5`、`12:5:3`)。
+
+    子图定义用了不止一处时,只有第一处那条路径在(见 canonical_paths);别的写法(`200:9`)写下去、读回来是**另一个键**,
+    所以不算数 —— 界面把这几项灰着,`unaddressable` 说清为什么。
+    """
+    return {ref for _node, ref in nodes_with_refs(ui_graph)}
+
+
+def nodes_with_refs(ui_graph: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:
+    """这张图里能带标记的每个节点和它的写法:根图 + 每份子图定义按第一处往里走(见 addressable)。"""
+    defs = subgraphs.definitions(ui_graph)
+    canonical = canonical_paths(ui_graph)
+    found: list[tuple[dict[str, Any], str]] = []
+
+    def walk(scope: dict[str, Any], prefix: str, depth: int) -> None:
+        if depth > subgraphs.MAX_DEPTH:
+            return
+        for node in subgraphs.nodes_of(scope):
+            ref = f"{prefix}{node['id']}"
+            found.append((node, ref))
+            kind = str(node.get("type") or "")
+            if kind in defs and canonical.get(kind) == ref:
+                walk(defs[kind], f"{ref}:", depth + 1)
+
+    walk(ui_graph, "", 0)
+    return found
+
+
+def _why_unaddressable(ui_graph: dict[str, Any], ref: str) -> dict[str, str]:
+    """这一项为什么放不进表单(两种语言),外加该怎么办:它的那份子图在这张图里用了几处。"""
+    holder, _ = subgraphs.locate_ref(ui_graph, ref)
+    definition = holder or {}
+    name = _text(definition.get("name"), MAX_LABEL) or ref.rpartition(":")[0]
+    uses = len(subgraphs.instance_paths(ui_graph).get(str(definition.get("id") or ""), ()))
+    where = canonical_paths(ui_graph).get(str(definition.get("id") or "")) or ref.rpartition(":")[0]
+    inner = ref.rpartition(":")[2]
+    return {
+        "zh": f"子图「{name}」在这张图里用了 {uses} 处,里面的节点只能按第一处写(#{where}:{inner})—— 要放进表单:先在画布上"
+              "把它拆开,或者只留一处",
+        "en": f"Subgraph “{name}” is used {uses} times in this workflow, so its inner nodes can only be written through the "
+              f"first one (#{where}:{inner}). To put it on a form, unpack it on the canvas, or keep a single instance.",
+    }
+
+
+def unaddressable(ui_graph: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+    """这几项说的节点**写不成标记**(子图定义用了不止一处):这一项的键 → 为什么、该怎么办。别的项不在里面。"""
+    ok = addressable(ui_graph)
+    found: dict[str, dict[str, str]] = {}
+    for item in items:
+        ref = str(item.get("node") or "")
+        if ref and ":" in ref and ref not in ok:
+            found[str(item.get("key") or ref)] = _why_unaddressable(ui_graph, ref)
+    return found
 
 
 @dataclass(frozen=True)
@@ -153,7 +228,11 @@ def _version(head: Any) -> Any:
 
 
 def read(ui_graph: Any) -> Marks:
-    """文件里写着的标记。API 格式的图(没有 `nodes`)没有地方放标记。"""
+    """文件里写着的标记。API 格式的图(没有 `nodes`)没有地方放标记。
+
+    根图和**子图定义里**的节点都读(后者按第一个用它的那个节点写成 `105:9`,见 addressable)。`result` 只认根图上的节点:
+    「结果取自」选的是交回产出的是哪几个节点,而 Mosael 按执行节点号收产出(子图里的产出算在内部的执行节点上,是另一件事)。
+    """
     if not isinstance(ui_graph, dict) or not isinstance(ui_graph.get("nodes"), list):
         return NONE
     extra = ui_graph.get("extra")
@@ -174,15 +253,13 @@ def read(ui_graph: Any) -> Marks:
         heads[form_id] = raw
     exposed: dict[str, list[Mark]] = {form_id: [] for form_id in heads}
     results: list[str] = []
-    for node in ui_graph["nodes"]:
-        if not isinstance(node, dict) or node.get("id") is None:
-            continue
+    for node, node_id in nodes_with_refs(ui_graph):
         props = node.get("properties")
         mark = props.get(KEY) if isinstance(props, dict) else None
         if not isinstance(mark, dict):
             continue
-        node_id = str(node["id"])
-        if mark.get("result") is True:
+        #: 前面那几项是根图上的(`nodes_with_refs` 先走根图),`result` 只从它们里收
+        if mark.get("result") is True and ":" not in node_id:
             results.append(node_id)
         per_form = mark.get("forms")
         for form_id, expose in (per_form.items() if isinstance(per_form, dict) else ()):
@@ -377,8 +454,9 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     写回。一张表单都没有、也没标结果就不留 `extra.mosael`。**别的一个字都不动** —— 别的扩展写的键、节点的位置、widget 的值
     照原样。
 
-    只认根图上的节点(子图里面的节点这一版不能放进表单);指着不存在的节点、id 重复或不合规、形状不对就拒,什么都不写。
-    图上的标记不是这一版的也拒(`refuse_other_version`):照「没有表单」重写会把那几张表单抹掉。
+    认根图上的节点,也认**子图里面的节点**(`105:9`,写法见模块说明);指着不存在的节点、子图定义用了不止一处所以指不明是哪
+    一处的写法、id 重复或不合规、形状不对就拒,什么都不写。图上的标记不是这一版的也拒(`refuse_other_version`):照「没有表单」
+    重写会把那几张表单抹掉。
     """
     if not isinstance(ui_graph.get("nodes"), list):
         raise _bad(locale, "这不是界面格式的工作流,没有地方放表单", "This is not a UI-format workflow, so there is nowhere to "
@@ -390,8 +468,8 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     if any(not isinstance(one, str) or not FORM_ID_PATTERN.match(one) for one in given) or len(set(given)) != len(given):
         raise _bad(locale, "表单的 id 不合规或重复了", "A form id is malformed or used twice.")
     out = copy.deepcopy(ui_graph)
-    nodes = {str(node["id"]): node for node in out["nodes"] if isinstance(node, dict) and node.get("id") is not None}
-    for node in nodes.values():
+    #: 根图和每一层子图定义里的节点:标记跟着节点走,摘和写都要走到每一层
+    for node, _ref in nodes_with_refs(out):
         props = node.get("properties")
         if isinstance(props, dict):
             props.pop(KEY, None)
@@ -401,10 +479,20 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     if not forms and not results:
         return out
 
+
+    #: 写法 → 那个节点(根图和每一层子图里的;节点是 `out` 里的那一个,写进去就写进图里了)
+    by_ref = {ref: node for node, ref in nodes_with_refs(out)}
+
     def marks_of(node_id: str) -> dict[str, Any]:
-        node = nodes.get(node_id)
+        node = by_ref.get(node_id)
+        if node is None and ":" in node_id:
+            #: 图上**指得到**、只是不按它写(那份子图用了不止一处):说清为什么、该怎么办,别当成「没这个节点」
+            _layer, elsewhere = subgraphs.locate_ref(out, node_id)
+            if elsewhere is not None:
+                why = _why_unaddressable(out, node_id)
+                raise _bad(locale, why["zh"], why["en"])
         if node is None:
-            raise _bad(locale, f"这张工作流的根图上没有节点 #{node_id}", f"This workflow has no node #{node_id} at the top level.")
+            raise _bad(locale, f"这张工作流里没有节点 #{node_id}", f"This workflow has no node #{node_id}.")
         props = node.setdefault("properties", {})
         if not isinstance(props, dict):
             raise _bad(locale, f"节点 #{node_id} 的 properties 不是一个对象", f"Node #{node_id} has malformed properties.")
@@ -488,4 +576,5 @@ def upgrade(ui_graph: Any) -> dict[str, Any] | None:
 
 
 __all__ = ["FORM_ID", "FORM_ID_PATTERN", "FormMarks", "KEY", "LEGACY_VERSION", "MAX_FORMS", "Mark", "Marks", "NONE",
-           "Resolved", "VERSION", "apply", "new_form_id", "read", "refuse_other_version", "resolve", "summary", "upgrade"]
+           "Resolved", "VERSION", "addressable", "apply", "canonical_paths", "new_form_id", "nodes_with_refs",
+           "read", "refuse_other_version", "resolve", "summary", "unaddressable", "upgrade"]

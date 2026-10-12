@@ -49437,6 +49437,11 @@
             "title": "Exposable",
             "default": true
           },
+          "unexposable_reason": {
+            "type": "string",
+            "title": "Unexposable Reason",
+            "default": ""
+          },
           "spec": {
             "anyOf": [
               {

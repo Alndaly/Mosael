@@ -433,6 +433,32 @@ describe("工作台的桥(注入的脚本)", () => {
       .toEqual({ error: "noNode", nodes: ["99"] });
   });
 
+  it("写标记:子图里面的节点按路径(12:5)写进那一层里那个节点,别的层的照旧摘掉", async () => {
+    //: 应用表单挑了子图内部那个节点上的格子(插件交回 `12:5`,`12` 是根图上那个子图实例、`5` 是里面的 LoRA 节点)
+    const page = await installed();
+    const holder = { id: 12, type: page.subgraph.id, subgraph: page.subgraph, properties: {}, widgets: [] };
+    page.graph.nodes.push(holder as never);
+    page.inner.properties.mosael = { forms: { app: { lora_name: { order: 3 } } } };
+    const marks = { nodes: { "12:5": { forms: { app: { strength_model: { order: 0, label: "强度" } } } },
+                             "4": { forms: { app: { ckpt_name: { order: 1 } } } } },
+                    extra: { version: 2, forms: [{ id: "app", title: "换装" }] } };
+    expect(await call(page, { op: "setMarks", marks, expect: await readAt(page) })).toEqual({ ok: true });
+    expect(page.inner.properties.mosael, "写的是子图里那个节点自己的 properties").toEqual(marks.nodes["12:5"]);
+    expect(page.loader.properties.mosael).toEqual(marks.nodes["4"]);
+    expect(page.sampler.properties.mosael, "根图上不在清单里的:摘掉").toBeUndefined();
+    expect(page.graph.extra).toEqual({ ue_links: [], mosael: marks.extra });
+
+    //: 再算一次、这一项不挑了:壳上那张过期的标记也得摘掉(摘的时候每一层都要走到)
+    expect(await call(page, { op: "setMarks", marks: { nodes: {}, extra: null }, expect: await readAt(page) })).toEqual({ ok: true });
+    expect("mosael" in page.inner.properties, "子图定义里的标记也摘掉了").toBe(false);
+    expect("mosael" in holder.properties).toBe(false);
+    expect(page.graph.extra).toEqual({ ue_links: [] });
+
+    expect(await call(page, { op: "setMarks", marks: { nodes: { "12:99": { result: true } }, extra: null },
+                             expect: await readAt(page) }), "路径指不到那一个:照原样报出来")
+      .toEqual({ error: "noNode", nodes: ["12:99"] });
+  });
+
   //: PLG-17:导出 → 插件算标记 → 写,中间隔着一次插件往返;这期间换到同一个模板改出来的另一张(节点号一样),此前标记写进那张
   it("写标记之前核对画布上还是不是导出的那一张:换了一张回 otherWorkflow、那一张又改过回 changed,一处都不写", async () => {
     const page = await installed();
