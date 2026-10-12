@@ -143,7 +143,7 @@ class Shape:
     def __init__(self) -> None:
         self.properties: dict[str, dict[str, Any]] = {}
         self.required: list[str] = []
-        #: 键 → ("text", 角色) | ("slot", 节点, 输入名) | ("alpha_mask",) | ("param", 节点, 输入名, 类型) |
+        #: 键 → ("text", 角色) | ("slot", 节点, 输入名, 角色) | ("alpha_mask",) | ("param", 节点, 输入名, 类型) |
         #: ("value", 名字, 类型) | ("flag", 名字)
         self.bindings: dict[str, tuple] = {}
         self.outputs: list[str] = []
@@ -219,7 +219,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             "title": labelled.get((slot["node"], slot["field"])) or _pair(zh, en),
             "description": f"{slot['title']} · {slot['field']}",
         }
-        shape.bindings[key] = ("slot", slot["node"], slot["field"])
+        shape.bindings[key] = ("slot", slot["node"], slot["field"], slot["role"])
         if slot["role"] in required_roles and slot["role"] not in marked:
             shape.required.append(key)
             marked.add(slot["role"])
@@ -364,7 +364,9 @@ def _mirror(entry: models.Entry, kind: str, shape: Shape, found: list[dict[str, 
         return None
     parameters: dict[str, str] = {}
     sources: dict[str, str] = {}
-    roles = {slot["node"]: slot["role"] for slot in found}
+    #: 槽位按**哪一格**认(节点 + 输入名):一个节点可以有两个槽位(参考图和它自己 MASK 输出上的蒙版,见 graph.slots),
+    #: 只按节点认的话那两格会塌成一个角色。
+    roles = {(slot["node"], slot["field"]): slot["role"] for slot in found}
     for key, binding in shape.bindings.items():
         how = binding[0]
         if how == "param":
@@ -373,8 +375,8 @@ def _mirror(entry: models.Entry, kind: str, shape: Shape, found: list[dict[str, 
             parameters[key] = binding[1]
         elif how == "text" and binding[1] == "negative":
             parameters[key] = "negative_prompt"
-        elif how == "slot" and binding[1] in roles:
-            sources[key] = roles[binding[1]]
+        elif how == "slot" and (binding[1], binding[2]) in roles:
+            sources[key] = roles[(binding[1], binding[2])]
         elif how == "alpha_mask":
             sources[key] = "mask"
     mirror: dict[str, Any] = {"generation_model": entry.id, "kind": kind}
@@ -635,6 +637,8 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
     parameters: dict[str, Any] = {}
     overrides: dict[str, Any] = {}
     texts: dict[str, Any] = {}
+    #: 给了的槽位:工具入参名 → 传上去的那条路径。**按入参名记,不按节点** —— 一个节点可以有两个槽位(参考图和它自己
+    #: MASK 输出上的蒙版,见 graph.slots),按节点记的话后一个会把前一个顶掉。
     slots: dict[str, str] = {}
     alpha_mask = ""
     include_previews = False
@@ -647,7 +651,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
             if how == "text":
                 texts[binding[1]] = str(value)
             elif how == "slot":
-                slots[binding[1]] = str(value)
+                slots[key] = str(value)
             elif how == "alpha_mask":
                 alpha_mask = str(value)
             elif how == "param":
@@ -672,15 +676,15 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
         prompt = graph.fill(api, filled, overrides, object_info, shape.prompts)
         if uploads is None:
             run.preflight(prompt, object_info, locale)
-            uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
+            uploads = run.upload(comfy, [{"role": f"slot:{key}", "path": path} for key, path in slots.items()]
                                  + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))
         for role, names in uploads.items():
             if role == "mask":
                 prompt = graph.wire_inputs(prompt, kind, {"mask": names}, shape.slots, object_info)
                 continue
-            node = role.removeprefix("slot:")
-            if node in prompt:
-                graph.put_input(prompt, node, names[0])
+            binding = shape.bindings.get(role.removeprefix("slot:")) or ()
+            if len(binding) == 4 and binding[1] in prompt:
+                graph.put_input(prompt, binding[1], names[0], binding[3], object_info)
         return prompt
 
     from workflows import deliver  # 避免循环 import:workflows 也用这里的 output_key

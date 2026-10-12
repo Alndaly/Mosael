@@ -932,6 +932,62 @@ def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> Non
     assert "inpaint" in graph.features(api)
 
 
+def test_一张图两用_IMAGE喂参考图_MASK输出喂蒙版_两个槽位并存(graph) -> None:
+    """维护者那张 Qwen 图的排法:一个 `LoadImage` 的 IMAGE 输出喂参考图、MASK 输出喂 Inpaint Crop 那一格 `mask`。
+
+    此前只在「这张图**只**被当蒙版用」时才认成蒙版来源,于是它只落成了参考图 —— 表单上没有能换蒙版的那一格。
+    判据是**连线两头的类型**(object_info 里声明了什么就是什么,见 wired_mask_sources):同一个节点两个角色并存,
+    不是二选一;既有那条(alpha 那一路,见 alpha_masks)照旧。
+    """
+    api = {
+        "674": {"class_type": "LoadImage", "inputs": {"image": "ref.png"}},
+        "720": {"class_type": "MyCustomInpaintCrop", "inputs": {"image": ["674", 0], "mask": ["674", 1]}},
+        "706": {"class_type": "SaveImage", "inputs": {"images": ["720", 0]}},
+    }
+    info = {**MASK_INFO, "MyCustomInpaintCrop": {"input": {"required": {"image": ["IMAGE"], "mask": ["MASK"]}},
+                                                 "output": ["IMAGE"]}}
+    assert [(one["node"], one["role"], one["media"], one["field"]) for one in graph.slots(api, "image", {}, info)] == [
+        ("674", "reference_image", "image", "image"), ("674", "mask", "mask", "mask")], "参考图那格照旧在,多出来的是蒙版"
+    assert graph.mask_sources(api, info) == [("674", 1)] and graph.mask_path(api, info) == ["674", "720"]
+    by_key = {one["key"]: one for one in graph.items(api, info, {})}
+    assert by_key["674.image"]["role"] == "reference_image" and by_key["674.mask"]["role"] == "mask", (
+        "两格是两个 key(`<节点>.<输入名>`):同一个 key 的话应用表单的标记和描述符的 source_keys 都分不出这俩")
+    assert by_key["674.mask"]["title"] == {"zh": "蒙版 · 加载图像 #674", "en": "Mask · LoadImage #674"}, "名字照既有的取名链"
+    assert [one for one in graph.describe("inpaint.json", "inpaint", api, info)["inputs"]
+            if one["role"] == "mask"] == [{"role": "mask", "max": 1, "keys": ["674.mask"]}], (
+        "不给也能跑(那张图自己的 alpha 就是它,见 alpha_masks):不是「必须给」")
+
+    wired = graph.wire_inputs(api, "image", {"reference_image": ["mosael/ref.png"], "mask": ["mosael/m.png"]},
+                              graph.slots(api, "image", {}, info), info)
+    [new_id] = [node_id for node_id, node in wired.items() if node["class_type"] == "LoadImageMask"]
+    assert wired[new_id]["inputs"] == {"image": "mosael/m.png", "channel": "red"}, "宿主的蒙版读红通道(白色是要改的地方)"
+    assert wired["720"]["inputs"]["mask"] == [new_id, 0], "蒙版那一路改接给的蒙版"
+    assert wired["720"]["inputs"]["image"] == ["674", 0], "图那一路不动"
+    assert wired["674"]["class_type"] == "LoadImage" and wired["674"]["inputs"]["image"] == "mosael/ref.png", (
+        "那张图自己的那一格照旧接参考图 —— 只有 MASK 那个输出另有去处")
+
+
+def test_MASK输出没接到任何MASK输入时_不冒出蒙版槽位(graph) -> None:
+    """反例:蒙版槽位是**走连线两头的类型**认出来的,不是「第二个输出被用上了」:
+
+    - 一根线都没接出去的(674 的 MASK 输出悬着)—— 不算;
+    - 接进了吃 IMAGE 的那一格的(675 的 MASK 输出接在 `ImageScale.image` 上)—— 也不算(名字里带不带 mask 都一样)。
+
+    675 那两个输出**都接出去了**(不是「只用了 alpha 那一路」,见 alpha_masks),所以这里量到的就是新判据本身。
+    """
+    api = {
+        "674": {"class_type": "LoadImage", "inputs": {"image": "ref.png"}},
+        "675": {"class_type": "LoadImage", "inputs": {"image": "other.png"}},
+        "720": {"class_type": "ImageScale", "inputs": {"image": ["674", 0], "scale": 1.5}},
+        "721": {"class_type": "ImageScale", "inputs": {"image": ["675", 0], "scale": 0.5}},
+        "722": {"class_type": "ImageScale", "inputs": {"image": ["675", 1], "scale": 0.25}},
+    }
+    assert graph.wired_mask_sources(api, MASK_INFO) == set()
+    assert [(one["node"], one["role"]) for one in graph.slots(api, "image", {}, MASK_INFO)] == [
+        ("674", "reference_image"), ("675", "reference_image")], "一条 MASK 线都没有:一个蒙版槽位都不多"
+    assert not [one for one in graph.items(api, MASK_INFO, {}) if one.get("role") == "mask"]
+
+
 # --- 蒙版属性(ADR 0056 第一步):沿 MASK 走,不认名字 -------------------------------------
 #
 # 维护者否掉的正是「按控件名硬编码一张表」:「这就必须要根据控件名称 一旦控件名称变了就出问题了」。所以下面这份
@@ -1019,7 +1075,11 @@ def test_蒙版属性_顺序按沿线先后_不是节点号也不是常用程度
 
 def test_蒙版属性_alpha那一路上_图那一路的格子不算(graph) -> None:
     """图和 alpha 两路都接下去时(见 alpha_masks):蒙版从 LoadImage 的第二个输出走。图那一支接到缩放上,
-    那一格不是蒙版属性 —— 跟的是 MASK 那个输出接出去的线,不是「这个节点碰过蒙版」。"""
+    那一格不是蒙版属性 —— 跟的是 MASK 那个输出接出去的线,不是「这个节点碰过蒙版」。
+
+    这个 LoadImage 就是**两用**的(IMAGE 喂缩放、MASK 喂扩张,见 slots):它身上两格都在蒙版这条线上(参考图那格
+    是那张文件的锚点、蒙版那格是同一张文件的 alpha),所以都在「蒙版属性」那一组里、都在前面;缩放的 `scale` 不在。
+    """
     api = {
         "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}},
         "12": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
@@ -1029,7 +1089,7 @@ def test_蒙版属性_alpha那一路上_图那一路的格子不算(graph) -> No
                                                                "mask": ["30", 0], "grow_mask_by": 6}},
     }
     at = _on_line(graph.items(api, MASK_INFO, {}))
-    assert at == {"12.image": 1, "30.grow_px": 2, "50.grow_mask_by": 3}, "蒙版来源就是那个 LoadImage,它在前"
+    assert at == {"12.image": 1, "12.mask": 2, "30.grow_px": 3, "50.grow_mask_by": 4}, "蒙版来源就是那个 LoadImage,它在前"
     assert graph.mask_path(api, MASK_INFO) == ["12", "30", "50"], "图那一路(缩放)不在蒙版这条线上"
 
 

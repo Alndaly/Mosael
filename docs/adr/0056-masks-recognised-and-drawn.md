@@ -109,3 +109,11 @@ ComfyUI 里加 —— 表单编辑器只挑已有节点,这是既有约定(ADR 0
   界面那一组要按沿线摆)。名字一个都不新起:还是既有的命名链(见 labels)。宿主 `WorkflowFillableOut.mask_property` 原样透出;
   前端精简表单的「工作流里能填的」那一列把这几格归成头一组「蒙版属性」(SourcePanel / `workflowAppForm.sourceGroups`)。
   测试:改了类名和控件名的节点照样进组、只是名字里带 mask 的不进、顺序按沿线。
+- **补:一张图两用时的蒙版槽**(2026-10-12):维护者那张 Qwen 图里 `LoadImage` 一个节点两用 —— IMAGE 输出喂参考图、
+  MASK 输出喂 Inpaint Crop 的 `mask`;此前只在「这张图**只**被当蒙版用」时才认成蒙版来源,于是它只落成了参考图,
+  表单上没有能换蒙版的那一格。判据改成**连线两头的声明类型**(`graph.wired_mask_sources`:`mask_outputs` 那一头是
+  MASK、`mask_inputs` 那一头也是 MASK 就算,不记类名/控件名/中文词),`graph.slots` 于是给同一个节点**两格**
+  (参考图那格指着 `image`、蒙版那格指着 `mask` —— 两格两个 key,应用表单的标记和描述符的 `source_keys` 才分得开),
+  既有那条(alpha 那一路,`alpha_masks`)不回退,没接到任何 MASK 输入的图不多出蒙版槽。给的蒙版另起一个读红通道的
+  `LoadImageMask` 接在**那个节点声明成 MASK 的输出**上(那张图自己的那一格不动,`wire_inputs` / `put_input`),
+  跟着图一起来的蒙版不给也能跑(不是「必须给」)。

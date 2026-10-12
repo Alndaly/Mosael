@@ -609,3 +609,40 @@ def test_只交出一段字的图不是生成模型_照样是工具(comfy, tmp_p
     assert kinds["tagger.json"] == "text" and kinds["portrait.json"] == "image" and kinds["alpha.json"] == "image"
     agent = runtime.execute_tool(PLUGIN, ENTRY, "list_workflows", {}, {"SERVER_URL": comfy.url}, timeout=60).output
     assert {one["id"]: one["kind"] for one in agent["workflows"]}["tagger.json"] == "text"
+
+
+def test_一张图两用_工具上的蒙版另起一个LoadImageMask_参考图那一路不动(comfy, tmp_path: Path) -> None:
+    """`LoadImage` 的 IMAGE 输出喂编码、MASK 输出喂 `SetLatentNoiseMask`(维护者那张 Qwen 图的排法):对象
+    声明了两个输出之后,这个节点在工具上**两格都有** —— 参考图一格、蒙版一格(见 graph.slots)。
+
+    给蒙版时另起一个读红色通道的 `LoadImageMask` 接在原来那一路的 MASK 输出上:那张图自己的那一格照旧接给的
+    参考图。此前按节点记槽位的话那两格会塌成一格,给的蒙版会写进 `LoadImage.image`,把参考图替成蒙版。
+    """
+    _with_tagger_and_alpha(comfy)
+    comfy.state.object_info["LoadImage"] = {**comfy.state.object_info["LoadImage"], "output": ["IMAGE", "MASK"]}
+    comfy.state.object_info["LoadImageMask"] = {"input": {"required": {"image": [["mask.png"]],
+                                                                      "channel": [["alpha", "red"]]}}}
+    comfy.state.workflows["alpha.json"] = ALPHA_API
+    comfy.state.outputs = {"9": {"images": [{"filename": "alpha_00001_.png", "subfolder": "", "type": "output"}]}}
+    tool = _tools(comfy.url, tmp_path)[ALPHA_TOOL]
+    assert {"image_1", "mask_1"} <= set(tool["input_schema"]["properties"]), "一个节点两个槽位:参考图和蒙版各一格"
+    assert tool["mirrors"]["sources"] == {"image_1": "reference_image", "mask_1": "mask"}
+    assert [(one["role"], bool(one.get("required"))) for one in roles(_models(comfy)["alpha.json"])] == [
+        ("reference_image", True), ("mask", False)], "两个角色都在;蒙版不给也能跑(那张图自己的 alpha 就是它)"
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    image, mask = tmp_path / "pic.png", tmp_path / "mask.png"
+    image.write_bytes(PNG)
+    mask.write_bytes(PNG)
+    runtime.stream_tool(
+        PLUGIN, ENTRY, ALPHA_TOOL, {"image_1": str(image), "mask_1": str(mask)}, {"SERVER_URL": comfy.url},
+        hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False),
+        scratch_dir=scratch, timeout=60,
+    )
+    prompt = comfy.posted("/prompt")[0]["prompt"]
+    [added] = [node_id for node_id, node in prompt.items() if node["class_type"] == "LoadImageMask"]
+    assert prompt[added]["inputs"]["channel"] == "red", "宿主的蒙版是黑白图:读红色通道"
+    assert prompt[added]["inputs"]["image"].endswith("mask.png")
+    assert prompt["6"]["inputs"]["mask"] == [added, 0], "蒙版那一路改接给的蒙版"
+    assert prompt["5"]["inputs"]["pixels"] == ["1", 0] and prompt["1"]["class_type"] == "LoadImage"
+    assert prompt["1"]["inputs"]["image"].endswith("pic.png"), "那张图自己的那一格接的是参考图,不是蒙版"

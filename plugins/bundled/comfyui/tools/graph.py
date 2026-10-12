@@ -427,15 +427,21 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
     - 图:视频图里接到 start_image 这类输入的是首帧、接到 end_image 的是尾帧(先过一道缩放、裁切再接进去的也算,
       见 _frame_role),其余是参考图;
       只用了 LoadImage 的第二个输出(alpha 当蒙版)的,是蒙版;
+      **MASK 输出接进了别人的 MASK 输入**的(见 wired_mask_sources),除了它原来那个角色**另有一格蒙版槽** ——
+      一个节点两用(`LoadImage` 的 IMAGE 喂参考图、MASK 喂局部重绘那一格)时两个槽位并存,不是一个顶掉另一个;
     - LoadImageMask:蒙版;
     - 视频(LoadVideo / VHS_LoadVideo):被改的那一段(源视频);
     - 音频:视频图里是驱动音频(口型、卡点),别的图里是参考音频;
     - 接在**参考**那几格上的(MiniMax H3 多参考生视频的 `ref_images.*` / `ref_videos.*` / `ref_audios.*`,
       `reference_video` 这类)就是参考:参考视频不是要改的那一段(那是必给的),参考音频也不是驱动口型的音频
       (那要数字人授权)。
+
+    两用节点的蒙版槽落在 `field` = "mask" 上(见 MASK_FIELD):蒙版是从**声明的输出**上接出去的,没有自己那一格
+    输入可以指,这一格是那个输出的锚点(参考图那一格照旧指着 `image`)。
     """
     titles = titles or {}
     consumers = _consumers(api)
+    wired = wired_mask_sources(api, object_info)
     found: list[dict[str, str]] = []
     for node_id in sorted(api, key=_node_order):
         node = api[node_id]
@@ -459,14 +465,17 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None,
             role = "reference_video" if referenced else "source_video"
         elif media == "audio":
             role = "driving_audio" if kind == "video" and not referenced else "reference_audio"
-        found.append({
+        slot = {
             "node": node_id,
             "class_type": class_type,
             "title": titles.get(node_id) or class_type,
             "media": media,
             "field": field_name,
             "role": role,
-        })
+        }
+        found.append(slot)
+        if role != "mask" and node_id in wired:
+            found.append({**slot, "media": "mask", "role": "mask", "field": MASK_FIELD})
     return found
 
 
@@ -487,6 +496,17 @@ def alpha_masks(api: dict[str, Any], found_slots: list[dict[str, str]]) -> list[
 #: 蒙版这一路的类型名。ComfyUI 的 object_info 里输入、输出就是这么写的(维护者那台机器上输入或输出带它的类有几百个)。
 _MASK_TYPE = "MASK"
 
+#: 两用节点那一格蒙版槽的锚点(见 slots):蒙版是从**声明的输出**上接出去的,没有自己那一格输入可以指。和参考图那一格
+#: (`image`)分开是必须的 —— 表单上的项、应用表单的标记、描述符的 `source_keys` 都按 `<节点 id>.<输入名>` 认那一格,
+#: 两格同名的话「参考图」和「蒙版」就分不出来了。
+MASK_FIELD = "mask"
+
+
+def _declared_type(definition: Any) -> str:
+    """一格输入**声明**的类型(`["MASK"]` / `["MASK", {...}]` → `MASK`;下拉 `[["a.png", "b.png"]]` 没有类型名)。"""
+    first = definition[0] if isinstance(definition, list) and definition else None
+    return first if isinstance(first, str) else ""
+
 
 def mask_outputs(object_info: dict[str, Any] | None, class_type: str) -> list[int]:
     """这一类节点上**哪几个输出是 MASK**:看 object_info 里声明的类型,不看类名。
@@ -501,12 +521,43 @@ def mask_outputs(object_info: dict[str, Any] | None, class_type: str) -> list[in
     return [index for index, kind in enumerate(declared) if kind == _MASK_TYPE]
 
 
+def mask_inputs(object_info: dict[str, Any] | None, class_type: str) -> set[str]:
+    """这一类节点上**哪几格输入是 MASK**:看 object_info 里声明的类型,不看控件名(和 mask_outputs 同一条读法)。
+
+    这一类不在 object_info 里(没装)就不知道,交回空的。
+    """
+    return {name for name, definition in _input_defs(object_info or {}, class_type).items()
+            if _declared_type(definition) == _MASK_TYPE}
+
+
+def wired_mask_sources(api: dict[str, Any], object_info: dict[str, Any] | None) -> set[str]:
+    """哪几个节点把**声明成 MASK 的输出**接到了**别人声明成 MASK 的输入**上 —— 这就是「蒙版来源」。
+
+    判据全在连线两头的类型里(object_info 声明了什么就是什么,见 mask_outputs / mask_inputs):不记类名、不记控件名、
+    不记节点标题,也不管这个节点还干着什么别的。**一个节点可以同时是两个角色**:`LoadImage` 的 IMAGE 输出喂参考图、
+    MASK 输出喂局部重绘那一格是常见的排法(维护者那张 Qwen 图就是这样),它既是参考图、又是蒙版的来源。
+
+    这一头或那一头不在 object_info 里(没装的自定义节点)就不知道,不算 —— 不知道就不替它猜(见 mask_path)。
+    """
+    consumers = _consumers(api)
+    found: set[str] = set()
+    for node_id, node in api.items():
+        outputs = mask_outputs(object_info, str(node.get("class_type", "")))
+        if not outputs:
+            continue
+        if any(slot in outputs and name in mask_inputs(object_info, class_type)
+               for class_type, name, slot in consumers.get(str(node_id), ())):
+            found.add(str(node_id))
+    return found
+
+
 def mask_sources(api: dict[str, Any], object_info: dict[str, Any],
                  titles: dict[str, str] | None = None) -> list[tuple[str, int]]:
     """这张工作流的**蒙版从哪儿来**:`[(节点, 它的第几个输出是 MASK)]`。
 
-    就是已经认成蒙版的那几个槽位(见 slots:`LoadImageMask`,或只用了 alpha 那一路的 `LoadImage`),加上拿 alpha
-    当蒙版的 `LoadImage`(见 alpha_masks)。哪个输出是 MASK 也按 object_info 声明的类型认。
+    就是已经认成蒙版的那几个槽位(见 slots:`LoadImageMask`、只用了 alpha 那一路的 `LoadImage`,以及 MASK 输出接进了
+    别人 MASK 输入的两用节点),加上拿 alpha 当蒙版的 `LoadImage`(见 alpha_masks)。哪个输出是 MASK 也按 object_info
+    声明的类型认。
     """
     found = slots(api, kind_of(api), titles, object_info)
     from_slots = [slot for slot in found if slot["role"] == "mask"]
@@ -1525,6 +1576,11 @@ def describe(
     if alpha_masks(api, found_slots):
         # 局部重绘拿 alpha 当蒙版:收一份蒙版(白色是要改的地方),替掉 alpha 那一路。不给就用图自己的 alpha。
         counts["mask"] = 1
+    #: 蒙版里哪几个是**跟着另一份素材一起来的**(两用节点:图和它的 alpha 是同一个文件,见 slots)。单独一份的蒙版槽
+    #: (`LoadImageMask`)是「必须给」—— 不给就重绘工作流里存着的那一块;跟着图一起来的不是:不给就用那张图自己的
+    #: alpha(alpha 那一路的规矩,见 alpha_masks)。
+    mask_nodes = {slot["node"] for slot in found_slots if slot["role"] == "mask"}
+    derived_masks = mask_nodes & {slot["node"] for slot in found_slots if slot["role"] != "mask"}
     named = form.slot_labels()
     requirement = prompt_requirement(api, prompts, auto)
     #: 图有没有提示词(判「处理一张图」的工作流)看整张图;表单收不收提示词看主提示词
@@ -1552,7 +1608,8 @@ def describe(
             # 图生视频:首帧接在生成节点上,不给的话 ComfyUI 拿工作流里存着的那张图生成一段(模式里也没有文生视频)
             entry["required"] = True
         if role in ("mask", "source_video") and role in {slot["role"] for slot in found_slots}:
-            entry["required"] = True
+            if role != "mask" or mask_nodes - derived_masks:
+                entry["required"] = True
         inputs.append(entry)
 
     if kind == "video":
@@ -1679,7 +1736,8 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]],
 
     **蒙版没有自己的槽位**时(局部重绘图常见的做法:LoadImage 的 alpha 就是蒙版,用户在 ComfyUI 的
     蒙版编辑器里画),给的蒙版另起一个 LoadImageMask,把原来接在 alpha 那一路上的下游改接过去 ——
-    否则单独给的蒙版无处可去,重绘的还是工作流里存着的那一块。
+    否则单独给的蒙版无处可去,重绘的还是工作流里存着的那一块。**有**蒙版槽位时走每张槽位那条路(见 put_input):
+    两用节点(参考图和蒙版是同一张图的两个输出)照样只把蒙版那一路改接过去,那张图自己的那一格不动。
     """
     graph = copy.deepcopy(api)
     used: dict[str, int] = {}
@@ -1688,21 +1746,14 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]],
         names = uploaded.get(slot["role"]) or []
         index = used.get(slot["role"], 0)
         if index < len(names):
-            put_input(graph, slot["node"], names[index])
+            put_input(graph, slot["node"], names[index], slot["role"], object_info)
             used[slot["role"]] = index + 1
     masks = uploaded.get("mask") or []
     if masks and not any(slot["role"] == "mask" for slot in found):
-        mask_sources = {slot["node"] for slot in found if slot["class_type"] == "LoadImage" and slot["media"] == "image"}
-        rewired = False
-        new_id = str(max((_node_order(one)[0] for one in graph if _node_order(one)[0] < 1 << 30), default=0) + 1)
-        for node in graph.values():
-            for name, value in (node.get("inputs") or {}).items():
-                if isinstance(value, list) and len(value) >= 2 and str(value[0]) in mask_sources and value[1] == 1:
-                    node["inputs"][name] = [new_id, 0]
-                    rewired = True
-        if rewired:
-            graph[new_id] = {"class_type": "LoadImageMask", "inputs": {"image": masks[0], "channel": _MASK_CHANNEL},
-                             "_meta": {"title": "Mosael mask"}}
+        alpha = {slot["node"]: {1} for slot in found
+                 if slot["class_type"] == "LoadImage" and slot["media"] == "image"}
+        if alpha:
+            _inject_mask(graph, masks[0], alpha)
     return graph
 
 
@@ -1711,25 +1762,53 @@ def wire_inputs(api: dict[str, Any], kind: str, uploaded: dict[str, list[str]],
 _MASK_CHANNEL = "red"
 
 
-def put_input(api: dict[str, Any], node_id: str, name: str) -> dict[str, Any]:
+def _inject_mask(api: dict[str, Any], name: str, moved: dict[str, set[int]]) -> bool:
+    """另起一个读红色通道的 `LoadImageMask` 接这份蒙版:`moved`(节点 → 它哪几个输出上的下游)改接过去。
+
+    几个来源共用同一个注入的节点(一张图里几处 alpha 当蒙版时就是一个替掉几处);一处都没改到就不加这个节点
+    (悬空的 `LoadImageMask` 什么都不影响,白白多一个节点)。改到了回 True。
+    """
+    rewired = False
+    new_id = str(max((_node_order(one)[0] for one in api if _node_order(one)[0] < 1 << 30), default=0) + 1)
+    for node in api.values():
+        for key, value in (node.get("inputs") or {}).items():
+            outputs = moved.get(str(value[0])) if isinstance(value, list) and len(value) >= 2 else None
+            if outputs is not None and value[1] in outputs:
+                node["inputs"][key] = [new_id, 0]
+                rewired = True
+    if rewired:
+        api[new_id] = {"class_type": "LoadImageMask", "inputs": {"image": name, "channel": _MASK_CHANNEL},
+                       "_meta": {"title": "Mosael mask"}}
+    return rewired
+
+
+def put_input(api: dict[str, Any], node_id: str, name: str, role: str = "",
+              object_info: dict[str, Any] | None = None) -> dict[str, Any]:
     """把传上去的一份素材(ComfyUI input 目录里的名字)接到读素材的节点 `node_id` 上。就地改,也交回这张图。
 
     蒙版按宿主的规矩读(白色是要改的地方):LoadImageMask 改读红色通道;只用了 alpha 那一路的 LoadImage
     (蒙版槽位)就地换成读红色通道的 LoadImageMask,下游改接它唯一的那个输出。
+
+    这一份是**蒙版**(`role="mask"`)、而这个节点两用时(它的 IMAGE 输出另有去处,见 wired_mask_sources),
+    它自己那一格不动:另起一个 LoadImageMask,只把接在**它声明成 MASK 的输出**上的那几处改接过去。
     """
     node = api[node_id]
     class_type = str(node.get("class_type", ""))
     inputs = node.setdefault("inputs", {})
     field_name = _LOADERS[class_type][1] if class_type in _LOADERS else "image"
+    outputs_used = {slot for _, _, slot in _consumers(api).get(node_id, [])}
+    masked = outputs_used & set(mask_outputs(object_info, class_type)) if role == "mask" else set()
     if class_type == "LoadImageMask":
         inputs.update({field_name: name, "channel": _MASK_CHANNEL})
-    elif class_type == "LoadImage" and {slot for _, _, slot in _consumers(api).get(node_id, [])} == {1}:
+    elif class_type == "LoadImage" and outputs_used == {1}:
         node["class_type"] = "LoadImageMask"
         node["inputs"] = {"image": name, "channel": _MASK_CHANNEL}
         for other in api.values():
             for key, value in (other.get("inputs") or {}).items():
                 if isinstance(value, list) and len(value) >= 2 and str(value[0]) == node_id and value[1] == 1:
                     other["inputs"][key] = [value[0], 0]
+    elif masked:
+        _inject_mask(api, name, {node_id: masked})
     else:
         inputs[field_name] = name
     return api
