@@ -56,12 +56,15 @@ import {
   type WorkflowTrashed,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Highlight } from "@/components/app/Highlight";
 import {
   LIBRARY_DENSITIES,
+  LIBRARY_DENSITY_ICONS,
+  LIBRARY_DENSITY_LABELS,
   LIBRARY_TABLE_HEAD,
   LibraryDensitySwitch,
   LibraryDetail,
@@ -80,6 +83,8 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger, openContextMenuFromKeyboard } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Hint } from "@/components/ui/tooltip";
@@ -172,6 +177,36 @@ import { cn } from "@/lib/utils";
  */
 
 const keyOf = (flow: WorkflowFile) => flow.path;
+
+/**
+ * 工具条那一行:一排、**不换行**,搜索框吃掉剩下的宽度,别的按内容宽(维护者:加了「用到模型」之后
+ * 「导入」「刷新」被挤到了第二行)。换成 `flex-wrap` 就又回去了,所以这一条是写死的 `flex-nowrap`。
+ */
+const TOOLBAR_ROW = "flex min-w-0 flex-1 flex-nowrap items-center gap-2 @container/workflow-toolbar";
+
+/**
+ * 一行放不下时怎么退让。看的是**这一行自己**有多宽(它是 `@container/workflow-toolbar`),不是窗口:
+ * 左边那列目录、窄窗口下目录收成的那个下拉各占掉多少,窗口宽度看不出来。879 以下:排序和显示方式
+ * 收进「视图」那颗菜单(同一份状态,不是另一套设置),「导入」只剩图标;搜索框和「新建」一直在。
+ *
+ * 两个方向都写成**整串字面量**:Tailwind 扫源码里的候选类名生成样式,拼出来的类名它看不见。
+ */
+const TOOLBAR_FOLD = {
+  /** 宽的一档才有(排序下拉、那组显示方式图标键、「导入」那两个字)。 */
+  wide: "@max-[880px]/workflow-toolbar:hidden",
+  /**
+   * 窄的一档才有(「视图」那颗菜单)。基类是 `hidden`:容器查询在 jsdom 里量不出来,测试看到的是宽的那一档
+   * (和 DOM 测试里那些控件能点得到是同一件事)。`inline-flex` 是按钮自己的排法(见 button.tsx)。
+   */
+  narrow: "hidden @max-[880px]/workflow-toolbar:inline-flex",
+} as const;
+
+/** 三种排序的名字:那颗下拉和它收进「视图」菜单时的条目用同一份。 */
+const SORT_LABELS = {
+  name: "workflowLibrarySortName",
+  modified: "workflowLibrarySortModified",
+  nodes: "workflowLibrarySortNodes",
+} as const satisfies Record<WorkflowSort, MessageKey>;
 
 export function WorkflowLibraryDialog({
   open,
@@ -334,12 +369,17 @@ export function WorkflowLibraryDialog({
   ];
 
   const importButton = (
-    <Hint label={t("workflowImportDesc")}>
-      <Button variant="outline" onClick={() => setImporting({})}>
-        <Import size={13} />
-        {t("workflowImport")}
-      </Button>
-    </Hint>
+    <IconButton
+      variant="outline"
+      size="default"
+      label={t("workflowImport")}
+      hint={t("workflowImportDesc")}
+      onClick={() => setImporting({})}
+    >
+      <Import size={13} />
+      {/* 一行放得下时带着字;窄了只剩图标 —— 名字在 aria-label 和悬停说明里(见 IconButton),功能不丢。 */}
+      <span className={TOOLBAR_FOLD.wide}>{t("workflowImport")}</span>
+    </IconButton>
   );
   //: 「新建」:在这台 ComfyUI 自己的画布上开一张新的(插件报了编辑器才有)
   const newButton = editorTarget ? (
@@ -537,67 +577,76 @@ export function WorkflowLibraryDialog({
     ];
   };
 
-  const toolbar = current === TRASH_VIEW ? (
-    <>
-      <div className="grid min-w-0 flex-1 basis-[240px] gap-0.5">
-        <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("workflowLibraryTrash")}</h3>
-        <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowLibraryTrashDesc")}</p>
-      </div>
-      {refresh}
-    </>
-  ) : !library.data ? (
-    <SearchInput className="min-w-[180px] flex-1 basis-[220px]" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
-  ) : (
-    <>
-      <SearchInput className="min-w-[180px] flex-1 basis-[220px]"
-          placeholder={searchLabel}
-          aria-label={searchLabel}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)} />
-      <OptionPicker
-        className="w-[132px]"
-        ariaLabel={t("workflowLibraryKind")}
-        value={kind}
-        onChange={(next) => setKind(WORKFLOW_KINDS.includes(next as WorkflowKindFilter) ? (next as WorkflowKindFilter) : "all")}
-        options={WORKFLOW_KINDS.map((one) => ({
-          value: one,
-          label: one === "all" ? t("workflowLibraryKindAll") : one === "broken" ? t("workflowLibraryKindBroken") : kindName(t, one),
-        }))}
-      />
-      {/* 「用到模型」:用到的模型名不在搜索里(见 workflowLibraryView 的 searchHaystackOf),这里就是它的路。
-          选项是整座库里 `models[].name` 的并集(`modelCounts`),多的在前、带张数;走 OptionPicker ——
-          同一个组件按项数自己决定要不要可搜索的那一版(库里几十个模型是常态)。 */}
-      <OptionPicker
-        className="w-[168px]"
-        ariaLabel={t("workflowLibraryModel")}
-        value={model}
-        onChange={setModel}
-        disabled={usedModels.length === 0}
-        hint={usedModels.length === 0 ? t("workflowLibraryModelNone") : undefined}
-        options={[
-          { value: ALL_MODELS, label: t("workflowLibraryModelAll") },
-          ...usedModels.map(([name, count]) => ({
-            value: name,
-            label: name,
-            description: t("workflowLibraryModelUses").replace("{n}", String(count)),
-          })),
-        ]}
-      />
-      <OptionPicker
-        className="w-[140px]"
-        ariaLabel={t("workflowLibrarySort")}
-        value={sort}
-        onChange={(next) => setSort(WORKFLOW_SORTS.includes(next as WorkflowSort) ? (next as WorkflowSort) : "name")}
-        options={WORKFLOW_SORTS.map((one) => ({
-          value: one,
-          label: t(one === "name" ? "workflowLibrarySortName" : one === "modified" ? "workflowLibrarySortModified" : "workflowLibrarySortNodes"),
-        }))}
-      />
-      <LibraryDensitySwitch value={density} onChange={setDensity} />
-      {newButton}
-      {importButton}
-      {refresh}
-    </>
+  //: **这一行永不换行**(维护者:加了「用到模型」之后「导入」「刷新」被挤到了第二行)。搜索框吃掉剩下的宽度,
+  //: 别的按内容宽;一行放不下时按优先级退让,见 TOOLBAR_FOLD。容器是**这一行自己**(不是窗口,也不是工具条):
+  //: 左边那列目录、窄窗口下目录收成的那个下拉各占掉多少,只有这一行知道。
+  const toolbar = (
+    <div data-workflow-toolbar-row="" className={TOOLBAR_ROW}>
+      {current === TRASH_VIEW ? (
+        <>
+          <div className="grid min-w-0 flex-1 gap-0.5">
+            <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("workflowLibraryTrash")}</h3>
+            <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowLibraryTrashDesc")}</p>
+          </div>
+          {refresh}
+        </>
+      ) : !library.data ? (
+        <SearchInput className="min-w-0 flex-1" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
+      ) : (
+        <>
+          <SearchInput className="min-w-0 flex-1"
+              placeholder={searchLabel}
+              aria-label={searchLabel}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)} />
+          <OptionPicker
+            className="w-[112px]"
+            ariaLabel={t("workflowLibraryKind")}
+            value={kind}
+            onChange={(next) => setKind(WORKFLOW_KINDS.includes(next as WorkflowKindFilter) ? (next as WorkflowKindFilter) : "all")}
+            options={WORKFLOW_KINDS.map((one) => ({
+              value: one,
+              label: one === "all" ? t("workflowLibraryKindAll") : one === "broken" ? t("workflowLibraryKindBroken") : kindName(t, one),
+            }))}
+          />
+          {/* 「用到模型」:用到的模型名不在搜索里(见 workflowLibraryView 的 searchHaystackOf),这里就是它的路。
+              选项是整座库里 `models[].name` 的并集(`modelCounts`),多的在前、带张数;走 OptionPicker ——
+              同一个组件按项数自己决定要不要可搜索的那一版(库里几十个模型是常态)。 */}
+          <OptionPicker
+            className="w-[120px]"
+            ariaLabel={t("workflowLibraryModel")}
+            value={model}
+            onChange={setModel}
+            disabled={usedModels.length === 0}
+            hint={usedModels.length === 0 ? t("workflowLibraryModelNone") : undefined}
+            options={[
+              { value: ALL_MODELS, label: t("workflowLibraryModelAll") },
+              ...usedModels.map(([name, count]) => ({
+                value: name,
+                label: name,
+                description: t("workflowLibraryModelUses").replace("{n}", String(count)),
+              })),
+            ]}
+          />
+          {/* 排序和显示方式是一行的**偏好**,不是筛掉哪几张:一行放不下时先退让的是它们两个(见 TOOLBAR_FOLD),
+              收进「视图」那一颗菜单 —— 状态同一份,宽回来之后这两处显示的就是菜单里选的那个。 */}
+          <OptionPicker
+            className={cn("w-[120px]", TOOLBAR_FOLD.wide)}
+            ariaLabel={t("workflowLibrarySort")}
+            value={sort}
+            onChange={(next) => setSort(WORKFLOW_SORTS.includes(next as WorkflowSort) ? (next as WorkflowSort) : "name")}
+            options={WORKFLOW_SORTS.map((one) => ({ value: one, label: t(SORT_LABELS[one]) }))}
+          />
+          <span className={cn("flex items-center", TOOLBAR_FOLD.wide)}>
+            <LibraryDensitySwitch value={density} onChange={setDensity} />
+          </span>
+          <WorkflowViewMenu className={TOOLBAR_FOLD.narrow} sort={sort} onSort={setSort} density={density} onDensity={setDensity} />
+          {newButton}
+          {importButton}
+          {refresh}
+        </>
+      )}
+    </div>
   );
 
   const content = (openItem: (key: string) => void) => {
@@ -941,6 +990,66 @@ export function WorkflowLibraryDialog({
     >
       {content}
     </LibraryDialog>
+  );
+}
+
+/**
+ * 窄工具条上的「视图」:排序和显示方式收在这一颗里(一行放得下时,这两样各自在工具条上摆着,见 TOOLBAR_FOLD)。
+ *
+ * **同一份状态**:这里选了,窗口拉宽之后那颗排序下拉、那组显示方式图标键显示的就是刚选的这一项 —— 不是两套设置,
+ * 也不需要哪一边去同步。条目是单选(`role="menuitemradio"` + `checked`),和画布工具条那颗输入模式菜单同一个形状
+ * (见 components/app/CanvasInputModeMenu)。
+ */
+function WorkflowViewMenu({ sort, onSort, density, onDensity, className }: {
+  sort: WorkflowSort;
+  onSort: (next: WorkflowSort) => void;
+  density: LibraryDensity;
+  onDensity: (next: LibraryDensity) => void;
+  className?: string;
+}) {
+  const t = useI18n();
+  const label = t("workflowLibraryView");
+  //: 选了就收起(和 ActionMenu 的条目一样):菜单里的单选不是开关,收起才看得见列表变了
+  const [open, setOpen] = React.useState(false);
+  const pick = (run: () => void) => () => {
+    run();
+    setOpen(false);
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <IconButton variant="outline" size="default" label={label} aria-haspopup="menu" className={className}>
+          <SlidersHorizontal />
+        </IconButton>
+      </PopoverTrigger>
+      <MenuContent label={label} align="end">
+        {/* 两组小标题各写着自己是什么:排序 / 显示方式 —— 收起来的这两个控件原来各自有名字(下拉的 aria-label、
+            那组图标键的 aria-label),进了同一张菜单还得看得出来哪几行是一组。 */}
+        <MenuLabel>{t("workflowLibrarySort")}</MenuLabel>
+        {WORKFLOW_SORTS.map((one) => (
+          <MenuItem
+            key={one}
+            role="menuitemradio"
+            inset
+            checked={one === sort}
+            label={t(SORT_LABELS[one])}
+            onClick={pick(() => onSort(one))}
+          />
+        ))}
+        <MenuSeparator />
+        <MenuLabel>{t("libraryDensity")}</MenuLabel>
+        {LIBRARY_DENSITIES.map((one) => (
+          <MenuItem
+            key={one}
+            role="menuitemradio"
+            checked={one === density}
+            icon={LIBRARY_DENSITY_ICONS[one]}
+            label={t(LIBRARY_DENSITY_LABELS[one])}
+            onClick={pick(() => onDensity(one))}
+          />
+        ))}
+      </MenuContent>
+    </Popover>
   );
 }
 

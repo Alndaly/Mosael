@@ -416,6 +416,7 @@ export const plugins = {
   workflowLibrarySortName: "按名称",
   workflowLibrarySortModified: "按改动时间",
   workflowLibrarySortNodes: "按节点数",
+  workflowLibraryView: "视图",
   workflowLibraryRefresh: "重新读一遍",
   workflowLibraryLoading: "正在读这台服务器上存着的工作流…",
   workflowLibraryErrorTitle: "工作流库没读出来",

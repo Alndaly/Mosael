@@ -1,6 +1,7 @@
 import React from "react";
 import { Grid2x2, Grid3x3, List, X } from "lucide-react";
 
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { DETAIL_HEAD, DETAIL_SCROLL, DetailBackButton } from "@/components/app/DetailHead";
 import { ModalShell } from "@/components/app/modals";
@@ -472,26 +473,37 @@ export const LIBRARY_TABLE_HEAD =
 export const LIBRARY_DENSITIES = ["large", "small", "list"] as const;
 export type LibraryDensity = (typeof LIBRARY_DENSITIES)[number];
 
+/**
+ * 三档显示方式的名字和图标 —— **一份**。工具条上那组图标键用它;工具条窄了、这组键收进「视图」菜单里
+ * (见 WorkflowLibrary 的 WorkflowViewMenu)时也用它:同一个选项在宽窄两种排版下是同一个名字、同一个图标。
+ */
+export const LIBRARY_DENSITY_LABELS = {
+  large: "libraryDensityLarge",
+  small: "libraryDensitySmall",
+  list: "libraryDensityList",
+} as const satisfies Record<LibraryDensity, MessageKey>;
+
+export const LIBRARY_DENSITY_ICONS: Record<LibraryDensity, React.ReactNode> = {
+  large: <Grid2x2 />,
+  small: <Grid3x3 />,
+  list: <List />,
+};
+
 /** 三档显示方式:一组单选的图标按钮。选了哪一档由调用方记(各个库各记各的,见 usePersistentTab)。 */
 export function LibraryDensitySwitch({ value, onChange }: { value: LibraryDensity; onChange: (value: LibraryDensity) => void }) {
   const t = useI18n();
-  const options: { value: LibraryDensity; label: string; icon: React.ReactNode }[] = [
-    { value: "large", label: t("libraryDensityLarge"), icon: <Grid2x2 /> },
-    { value: "small", label: t("libraryDensitySmall"), icon: <Grid3x3 /> },
-    { value: "list", label: t("libraryDensityList"), icon: <List /> },
-  ];
   return (
     <div role="radiogroup" aria-label={t("libraryDensity")} className="flex h-10 shrink-0 items-center gap-0.5 rounded-md border border-border p-1">
-      {options.map((one) => (
+      {LIBRARY_DENSITIES.map((one) => (
         <IconButton
-          key={one.value}
+          key={one}
           role="radio"
-          aria-checked={value === one.value}
-          label={one.label}
-          className={cn("text-muted-foreground", value === one.value && "bg-accent text-primary hover:bg-accent hover:text-primary")}
-          onClick={() => onChange(one.value)}
+          aria-checked={value === one}
+          label={t(LIBRARY_DENSITY_LABELS[one])}
+          className={cn("text-muted-foreground", value === one && "bg-accent text-primary hover:bg-accent hover:text-primary")}
+          onClick={() => onChange(one)}
         >
-          {one.icon}
+          {LIBRARY_DENSITY_ICONS[one]}
         </IconButton>
       ))}
     </div>

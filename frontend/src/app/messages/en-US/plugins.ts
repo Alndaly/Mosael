@@ -408,6 +408,7 @@ export const plugins = {
   workflowLibrarySortName: "By name",
   workflowLibrarySortModified: "By date modified",
   workflowLibrarySortNodes: "By node count",
+  workflowLibraryView: "View",
   workflowLibraryRefresh: "Read again",
   workflowLibraryLoading: "Reading the workflows saved on this server…",
   workflowLibraryErrorTitle: "Couldn't read the workflow library",

@@ -30,6 +30,7 @@ const openImagePreview = vi.hoisted(() => vi.fn());
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }) }));
 
 import { installAppChromeGuards } from "@/components/ui/appChrome";
+import { readHint } from "@/test/hint";
 
 const api = vi.hoisted(() => ({
   getWorkflowLibrary: vi.fn(),
@@ -259,6 +260,96 @@ describe("工作流库", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[1].textContent)).toEqual(["sketch", "wan", "portrait"]);
     expect(window.localStorage.getItem("mosael:tab:workflow-library.density")).toBe("list");
+  });
+
+  /**
+   * 维护者(截图):加了「用到模型」之后「导入」「刷新」被挤到了第二行 —— 这些交互要在**同一行**里。
+   *
+   * jsdom 没有排版,量不了坐标,所以这一条按**结构和 class** 判(和仓库里别的布局用例一样):
+   * 那一排是一个写了 `flex-nowrap` 的行、搜索框和另外八样控件都是它的直接子项、只有搜索框吃 `flex-1`。
+   * 真浏览器里量过(1600/1200/900 三个宽度,每个控件 left/right 的 top 都是同一个值、横向溢出 0)。
+   */
+  it("工具条:搜索、种类、用到模型、排序、显示方式、新建、导入、刷新在同一行里(不换行;搜索框吃掉剩下的宽度)", async () => {
+    //: 「新建」要有(插件报了编辑器才有那一颗):维护者截图里那一行是带它的
+    api.getWorkflowLibrary.mockResolvedValue(library({ editor: EDITOR }));
+    await openLibrary();
+    const bar = document.querySelector<HTMLElement>("[data-library-toolbar]")!;
+    const row = bar.querySelector<HTMLElement>("[data-workflow-toolbar-row]")!;
+    //: 这一行自己就是那个容器:「窄了才收」看的是**它**有多宽,不是窗口(左边那列目录、窄窗口下目录收成的
+    //: 那个下拉各占掉多少,窗口宽度看不出来)。
+    expect(row.className).toContain("@container/workflow-toolbar");
+    expect(row.className, "一行 = 一个不换行的 flex 行").toContain("flex");
+    expect(row.className).toContain("flex-nowrap");
+    expect(row.className, "写成 flex-wrap 就又会折到第二行").not.toMatch(/(?:^|\s)flex-wrap(?:\s|$)/);
+    expect(row.className, "自己占掉剩下的宽(工具条里那条目录下拉排在外面)").toContain("flex-1");
+    //: 搜索框 + 八样控件排成这一排 —— 谁被裹进另一层盒子里,谁就可能自己另起一行
+    const shape = (el: Element) =>
+      el.matches("[data-search-input]") ? "search"
+        : el.getAttribute("role") === "combobox" ? el.getAttribute("aria-label")
+          : el.querySelector("[role='radiogroup']") ? "libraryDensity"
+            : el.tagName === "BUTTON" ? el.getAttribute("aria-label") ?? el.textContent?.trim()
+              : el.tagName.toLowerCase();
+    expect([...row.children].map(shape)).toEqual([
+      "search", "workflowLibraryKind", "workflowLibraryModel", "workflowLibrarySort", "libraryDensity",
+      "workflowLibraryView", "workflowNew", "workflowImport", "workflowLibraryRefresh",
+    ]);
+    //: 搜索框吃掉剩下的宽度;别的按内容宽(再有一个 flex-1 就和它抢了)
+    const search = row.querySelector<HTMLElement>("[data-search-input]")!;
+    expect(search.className).toContain("flex-1");
+    expect(search.className).toContain("min-w-0");
+    expect([...row.children].filter((el) => el !== search && el.className.includes("flex-1"))).toEqual([]);
+    //: 三个下拉收窄成写死的宽度(此前 132/168/140 各占很宽),选中的那一项交给 Truncate 画:
+    //: 真放不下时是省略号 + 悬停看全文,不是把那一格硬裁掉(见 components/ui/truncate)。
+    for (const [name, width] of [["workflowLibraryKind", 112], ["workflowLibraryModel", 120], ["workflowLibrarySort", 120]] as const) {
+      const trigger = within(row).getByRole("combobox", { name });
+      expect(trigger.className, `${name} 收窄到写死的宽度,不再按最长选项撑开`).toContain(`w-[${width}px]`);
+      expect(trigger.querySelector("[class~='truncate']"), `${name} 选中的那一项走 Truncate(悬停看全文)`).toBeTruthy();
+    }
+    //: 「导入」「刷新」各让出一截宽(收窄、导入的字在窄的一档才收),但功能一点不少:名字、悬停说明、
+    //: 点了会怎样,都还在(见下面那条「收成图标也点得到」)。
+    expect(within(row).getByRole("button", { name: "workflowLibraryRefresh" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "workflowImport" })).toBeTruthy();
+  });
+
+  it("工具条窄了:「导入」只剩图标但点得到(名字、说明都在);排序和显示方式收进「视图」,状态还是同一份", async () => {
+    await openLibrary();
+    const row = document.querySelector<HTMLElement>("[data-workflow-toolbar-row]")!;
+    const imports = within(row).getByRole("button", { name: "workflowImport" });
+    //: 宽的一档带着「导入」两个字;窄的一档只剩图标 —— 字收在哪一档由**这一行**自己有多宽说(容器查询)。
+    //: 收起来之后名字仍在:读屏念 aria-label,悬停说明第一行也是它,第二行接着说这是干什么的。
+    expect(imports.querySelector("span")!.className).toContain("@max-[880px]/workflow-toolbar:hidden");
+    expect(await readHint(imports)).toContain("workflowImport");
+
+    //: 排序和显示方式是一行的**偏好**,不是筛掉哪几张:一行放不下时先收它们两个(收进「视图」)。
+    //: 它们在 jsdom 里是 `hidden`(容器查询量不出来,看到的是宽的那一档),所以按 aria-label 找、显式带上 hidden。
+    const view = within(row).getByRole("button", { name: "workflowLibraryView", hidden: true });
+    expect(view.className).toContain("@max-[880px]/workflow-toolbar:inline-flex");
+    fireEvent.click(view);
+    const menu = await screen.findByRole("menu", { name: "workflowLibraryView" });
+    expect(within(menu).getAllByRole("menuitemradio").map((one) => one.textContent)).toEqual([
+      "workflowLibrarySortName", "workflowLibrarySortModified", "workflowLibrarySortNodes",
+      "libraryDensityLarge", "libraryDensitySmall", "libraryDensityList",
+    ]);
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "workflowLibrarySortModified" }));
+    //: **同一份状态**:菜单里选的那个,就是拉开窗口之后那颗排序下拉上写的那个 —— 不是两套设置
+    expect(within(row).getByRole("combobox", { name: "workflowLibrarySort" }).textContent).toBe("workflowLibrarySortModified");
+    fireEvent.click(within(row).getByRole("radio", { name: "libraryDensityList" }));
+    fireEvent.click(within(row).getByRole("button", { name: "workflowLibraryView", hidden: true }));
+    expect(
+      within(await screen.findByRole("menu", { name: "workflowLibraryView" }))
+        .getByRole("menuitemradio", { name: "libraryDensityList" }).getAttribute("aria-checked"),
+    ).toBe("true");
+
+    //: 收成图标也点得到:点了照样开导入框(这一步放最后 —— 那个框是模态的,开着的时候后面那几处找不着了)
+    fireEvent.click(imports);
+    expect(await screen.findByRole("dialog", { name: "workflowImportTitle" })).toBeTruthy();
+  });
+
+  it("工具条上的「刷新」重新问一遍这家插件", async () => {
+    await openLibrary();
+    const before = api.getWorkflowLibrary.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryRefresh" }));
+    await waitFor(() => expect(api.getWorkflowLibrary.mock.calls.length).toBeGreaterThan(before));
   });
 
   it("「用到模型」筛选:选中一个模型只剩用到它的那些,和搜索、种类叠加;清除后全回来", async () => {
