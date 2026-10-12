@@ -1,7 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-
 /**
  * 蒙层和它的内容**必须同一层**。
  *
@@ -10,6 +6,12 @@ import { describe, expect, it } from "vitest";
  * 盖住(设置页那个弹窗整块变灰、点不动)。jsdom 里没有 Tailwind,取不到算出来的 z-index,
  * 所以这里按**源码**钉:三个用同一份 MODAL_OVERLAY 的原语,内容层要和它同一个 z。
  */
+// 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
+export const RATCHET = true;
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
 const ui = (name: string) => readFileSync(join(import.meta.dirname, "../components/ui", name), "utf8");
 
 /** 一份源码里第一处 `z-数字` 工具类。 */

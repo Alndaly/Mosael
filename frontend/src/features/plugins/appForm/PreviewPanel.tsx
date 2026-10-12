@@ -222,17 +222,35 @@ function KeyframesPreview({
 }
 
 /**
- * 预览里的一格首帧 / 尾帧:虚线框 + 名字 —— 和面板那一格**同一个壳**(`SLOT_TILE`)与同一行写法(`SlotTileText`),
- * 名字也走**同一条链**(`slotName` ← 描述符的 `source_labels`:有节点名就写节点名,取不到才回落角色名),
- * 长了同样出省略号。只有一点不同:这里按不动 —— 预览不存值,没有可传的图,也就不摆那个加号。
+ * 预览里的一格素材 —— 首帧 / 尾帧那一格和普通素材槽的每一格**都是它**:虚线框 + 名字。
+ *
+ * 壳和名字那一行不是这里写的:壳是 `components/generation/slotTiles.SLOT_TILE`(真面板那一格、预览这一格、
+ * 首尾帧那一格都是它 —— 高度、圆角、虚线、`content-center`、`min-w-0` 只有一份),名字那一行是 `SlotTileText`
+ * (同一份居中与截断写法)。只有一点不同:这里按不动 —— 预览不存值,没有可传的图,也就不摆那个加号。
+ *
+ * **为什么是 `<li>`**:这一格始终在一条列表里(一个角色的几格、首尾帧那一组里的一格),列表语义留给外面那一层
+ * `<ul>`。两处的 `<ul>` **不合成一个组件**:它们不是同一样东西 —— 一个带着角色的标题、列宽由 `slotColumns` 定
+ * (一个角色的几格),另一个只是给这一格一个列表里的位置(首尾帧那一组),而真面板那一侧的组壳(标题 + 计数 +
+ * 提示 + 锁住原因)两边都用不上。合出来的只会是一个到处是可选开关的壳,而真正要防的"两处各画一套"发生在
+ * **面板 ↔ 预览**之间(那一份由 `SLOT_TILE` / `SlotTileText` / `slotName` 收口),不在预览内部这两条列表之间。
+ */
+function PreviewTile({ name }: { name: string }) {
+  return (
+    <li className={cn(SLOT_TILE, "border-dashed")}>
+      <SlotTileText name={name} />
+    </li>
+  );
+}
+
+/**
+ * 预览里的一格首帧 / 尾帧:和别处那一格同一份(`PreviewTile`),名字走**同一条链**
+ * (`slotName` ← 描述符的 `source_labels`:有节点名就写节点名,取不到才回落角色名),长了同样出省略号。
  */
 function KeyframesTile({ field, name }: { field?: AppField; name: string }) {
   return (
     <div data-app-field={field?.key}>
       <ul className="m-0 grid list-none p-0">
-        <li className={cn(SLOT_TILE, "border-dashed")}>
-          <SlotTileText name={name} />
-        </li>
+        <PreviewTile name={name} />
       </ul>
     </div>
   );
@@ -240,9 +258,15 @@ function KeyframesTile({ field, name }: { field?: AppField; name: string }) {
 
 /**
  * 一个角色的槽位:几格虚线框,每格写着它的名字(`source_labels`)。**和真控件同一套装法** ——
- * 一行铺满、最多三份(`sourceFrames.slotColumns`),格子的高度、圆角、虚线也和那边一致。
+ * 一行铺满、最多三份(`sourceFrames.slotColumns`),格子由共用的 `PreviewTile` 画出来(壳、名字那一行、
+ * 名字那条链 `slotName` 都和面板那一格同一份),格子的高度、圆角、虚线也和那边一致。
  * 此前这里是 `auto-fill minmax(88px,1fr)`:一份素材缩成一个小方块,而用的人真正看到的是铺满整行的那一格
  * (维护者:「右侧这个预览 同一行应该撑满宽度」)。预览说的就是"看到的就是这样",两处不能各画一套。
+ *
+ * 那套壳此前还有第二份抄写:少了 `w-full` / `min-w-0` / `content-center`,却把 `content-center` 换成了
+ * `place-items-center` —— 里面的行会被按 max-content 定宽,`Truncate` 拿不到宽度、省略号永远不触发,
+ * 两头硬裁(实测与理由见 `SLOT_TILE` 上头那段,断言见 `FrameSlotField.dom.test.tsx`);名字也自己编了
+ * 一套「角色名 + 第几格」。现在两边只剩同一份。
  */
 function PreviewSlots({ role, names, count, t }: { role: SourceRole; names: string[]; count: number; t: Translate }) {
   const label = t(ROLE_COPY[role].label);
@@ -252,10 +276,7 @@ function PreviewSlots({ role, names, count, t }: { role: SourceRole; names: stri
       <span>{label}</span>
       <ul aria-label={label} className="m-0 grid list-none gap-1.5 p-0" style={{ gridTemplateColumns: slotColumns(slots) }}>
         {Array.from({ length: slots }, (_, index) => (
-          <li key={index}
-              className="grid h-[68px] place-items-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/40 px-1.5">
-            <Truncate className="max-w-full text-ui-xs font-medium text-foreground">{names[index] || `${label} ${index + 1}`}</Truncate>
-          </li>
+          <PreviewTile key={index} name={slotName(role, names, index, t)} />
         ))}
       </ul>
     </div>
