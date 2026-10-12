@@ -305,8 +305,10 @@ def test_模型一路传到调用目标(monkeypatch) -> None:
     )
 
     #: 点名的连接是他自己的(别人的连接会换成他自己的默认,见 providers/chat_connection.runner_choice)。
+    #: `deleted_at` 是**真实的列**(可空,见 db.model_slices.providers),不是能省的一格:挑连接那一步先看它
+    #: 立没立碑 —— 假对象少了这一列,走到的就不是判据而是 AttributeError。
     from types import SimpleNamespace
 
-    own = SimpleNamespace(get=lambda _model, _id: SimpleNamespace(owner_user_id="u1"))
+    own = SimpleNamespace(get=lambda _model, _id: SimpleNamespace(owner_user_id="u1", deleted_at=None))
     assert tr.resolve_ai_chat_target(own, "p1", "u1", "kimi-k3") == "target"
     assert seen["model"] == "kimi-k3"
