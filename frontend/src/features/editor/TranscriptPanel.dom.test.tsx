@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -177,6 +177,72 @@ describe("逐字稿列表", () => {
     expect(actionRail?.className).toContain("absolute");
     expect(actionRail?.className).toContain("opacity-0");
     expect(actionRail?.className).not.toContain("group-focus-within/sentence:opacity-100");
+  });
+});
+
+describe("逐字稿后到:列表挂上之后,滚动还唤得动它", () => {
+  /**
+   * 用户的截图:页眉写着「198 句 · 3889 字」,正文只到 `01:24.4` 就断了,下面一整片空白。
+   *
+   * 句子的确是**虚拟化**画的(一小时的稿子上万个词按钮,不能不虚拟化),但这里画不动:逐字稿在接口
+   * 那头,面板先渲染空状态 —— 列表那棵子树(连同滚动容器)比这个组件晚一拍才挂上。容器一直用同一个
+   * ref 对象的话,`useVirtualRows` 只在第一次、元素还不在的时候看过一眼:此后滚动、改高度都唤不动它,
+   * 列表就停在最初算出来的那几十行,往下滚只剩占位的空白。
+   *
+   * jsdom 不排版:照真浏览器的样子给容器一个高度,往下滚多少、清单的顶边就往上移多少(同
+   * MediaLibraryView.virtual.dom.test)。
+   */
+  it("往下滚:前面的句子收回去,后面的补上来", async () => {
+    const transcript = {
+      id: "tr1",
+      language: "zh",
+      segments: Array.from({ length: 60 }, (_, index) => ({
+        id: `seg${index}`,
+        start_time: index * 10,
+        end_time: index * 10 + 5,
+        text: `第${index}句`,
+        speaker: null,
+        tokens: [{ start_time: index * 10, end_time: index * 10 + 5, text: `第${index}句` }],
+      })),
+    };
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const body = String(input).includes("/transcript") ? transcript : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as never;
+    const long = {
+      id: "s1",
+      workspace_id: "w1",
+      revision: 1,
+      tracks: [
+        {
+          id: "t1",
+          kind: "video",
+          clips: [{ id: "c1", asset_id: "a1", asset_kind: "video", timeline_start: 0, src_in: 0, src_out: 600 }],
+        },
+      ],
+    } as never;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TranscriptPanel sequence={long} onCutSegment={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("第0句");
+    const scroller = document.querySelector<HTMLElement>("[data-transcript-scroll]")!;
+    const rows = document.querySelector<HTMLElement>("[data-transcript-rows]")!;
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 600 });
+    rows.getBoundingClientRect = () => ({
+      top: -scroller.scrollTop, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}),
+    });
+    scroller.scrollTop = 2000;
+    await act(async () => {
+      fireEvent.scroll(scroller);
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    });
+
+    expect(screen.queryByText("第0句")).toBeNull();
+    expect(screen.getByText("第40句")).toBeInTheDocument();
   });
 });
 

@@ -784,7 +784,13 @@ export function TranscriptPanel({
   );
 
   // 长逐字稿只渲染视口里的几十句(一小时是上万个词按钮)。
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  //
+  // **滚动容器存进 state、挂上时换一个 ref 对象。** 逐字稿在接口那头:读回来之前这里渲染的是上面那个
+  // 空状态分支,列表(连同滚动容器)比这个组件晚一拍才挂上。一直拿同一个 ref 对象的话,useVirtualRows
+  // 只在第一次、元素还不在的时候看过一眼 —— 此后滚动和改高度都唤不动它,列表停在最初算出来的那几十行,
+  // 往下滚只剩一整片占位的空白:页眉写着「198 句」,正文却断在半路(和 AssetGridPicker 同一条)。
+  const [scroller, setScroller] = React.useState<HTMLDivElement | null>(null);
+  const scrollRef = React.useMemo(() => ({ current: scroller }), [scroller]);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   //: 量高用的键:同一个 key 但内容变了(重断句、改了词)不能沿用旧高度 —— 带上内容长度当签名,
   //: 变了就重新量。注意这不是 React key(那个还是 docItemKey,改字不该让行重挂载丢焦点)。
@@ -920,7 +926,8 @@ export function TranscriptPanel({
       )}
       <p className="m-0 px-3 pb-0.5 pt-2 text-ui-xs leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
       <div
-        ref={scrollRef}
+        ref={setScroller}
+        data-transcript-scroll
         className="flex min-h-0 flex-1 select-none flex-col overflow-y-auto px-2 pb-3 pt-2"
         onPointerOver={(event) => {
           if (!(event.buttons & 1) || !dragRef.current) return;
@@ -930,7 +937,7 @@ export function TranscriptPanel({
       >
         {/* 视口外的句子不渲染,上下留白按(量过的 / 估计的)行高占位。行间距放在每行自己的下内边距里
             (而不是容器的 gap),量到的行高才包含它,占位才对得上。 */}
-        <div ref={listRef} className="flex flex-col" style={{ paddingTop: rows.padTop, paddingBottom: rows.padBottom }}>
+        <div ref={listRef} data-transcript-rows className="flex flex-col" style={{ paddingTop: rows.padTop, paddingBottom: rows.padBottom }}>
           {docItems.slice(rows.start, rows.end).map((item) => {
             const key = docItemKey(item);
             return (
