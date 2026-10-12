@@ -38,10 +38,12 @@ const F = {
     "startPluginsDirectoryDiagnostics",
   ),
   // 「那 9 秒里页面在后端要什么」那一档(和上面那一个共用同一个 webRequest 回调)。
-  httpConstants: extract(/\nconst HTTP_TRACE_WINDOW_MS = [^\n]*\n[\s\S]*?const HTTP_TRACE_TOP = [^\n]*\n/, "HTTP_TRACE_* 常量"),
+  httpConstants: extract(/\nconst HTTP_TRACE_WINDOW_MS = [^\n]*\n[\s\S]*?const HTTP_TRACE_TYPES = [^\n]*\n/, "HTTP_TRACE_* 常量"),
   httpState: extract(/\nconst httpTracePaths = new Map\(\);\n[\s\S]*?let httpTraceDropped = 0;\n/, "httpTrace 状态"),
   httpTracePath: extract(/\nfunction httpTracePath\(raw\) \{[\s\S]*?\n\}\n/, "httpTracePath"),
   httpTraceBytes: extract(/\nfunction httpTraceBytes\(details\) \{[\s\S]*?\n\}\n/, "httpTraceBytes"),
+  httpTraceAdd: extract(/\nfunction httpTraceAdd\(table, key, bytes, type\) \{[\s\S]*?\n\}\n/, "httpTraceAdd"),
+  httpTraceTypeRows: extract(/\nfunction httpTraceTypeRows\(table, limit\) \{[\s\S]*?\n\}\n/, "httpTraceTypeRows"),
   traceHttpRequest: extract(/\nfunction traceHttpRequest\(details\) \{[\s\S]*?\n\}\n/, "traceHttpRequest"),
   httpTraceRows: extract(/\nfunction httpTraceRows\(entries, crashAt, limit\) \{[\s\S]*?\n\}\n/, "httpTraceRows"),
   httpTraceSessionTop: extract(/\nfunction httpTraceSessionTop\(limit\) \{[\s\S]*?\n\}\n/, "httpTraceSessionTop"),
@@ -66,6 +68,8 @@ const WATCHER_SANDBOX = [
   F.httpState,
   F.httpTracePath,
   F.httpTraceBytes,
+  F.httpTraceAdd,
+  F.httpTraceTypeRows,
   F.traceHttpRequest,
   F.httpTraceRows,
   F.httpTraceSessionTop,
@@ -729,6 +733,38 @@ describe("那 9 秒里页面在后端要什么", () => {
     expect(payload.ring.at(-1)).toMatchObject({ path: "/api/plugins", type: "xhr", status: 200, bytes: 1636452, from: 1, t: -200 });
   });
 
+  it("一两百条「各只出现一次」的模块路径不会把字节数藏起来:类型榜 + 字节榜 + 谁在要", () => {
+    // 真实那一次的形状:窗口里 205 条 / 197 条路径,前 5 榜上只有 5 条(第 5 条还是靠字节数并列才挤进来的),
+    // 而 5 MB 的 lucide-react.js 就藏在剩下的一百多条里。这一条钉住「那之后补的三样读数」。
+    const w = start();
+    const POLLS = 6;
+    const MODULES = 190;
+    const MODULE_BYTES = 100 * 1024;
+    const BIG_BYTES = 5 * 1024 * 1024;
+    for (let i = 0; i < POLLS; i += 1) {
+      w.clock.now += 100;
+      // 主进程自己的 worker 轮询:没有 webContentsId(不是哪块页面发的),响应十几字节。
+      w.fire({ url: "http://127.0.0.1:8800/api/browser/worker/claim", statusCode: 200, fromCache: false, resourceType: "other", responseHeaders: { "Content-Length": ["15"] } });
+    }
+    for (let i = 0; i < MODULES; i += 1) w.fire(req(`/node_modules/.vite/deps/mod-${i}.js`, MODULE_BYTES, "script"));
+    w.fire(req("/node_modules/.vite/deps/lucide-react.js", BIG_BYTES, "script"));
+    w.clock.now += 9000; // 之后 9 秒一个字都没有
+
+    const payload = crash(w);
+    expect(payload.inWindow).toMatchObject({ count: POLLS + MODULES + 1, paths: MODULES + 2, main: POLLS, renderer: MODULES + 1 }); // 6 条轮询打在同一条路径上
+    expect(payload.inWindow.bytes).toBe(MODULES * MODULE_BYTES + BIG_BYTES + POLLS * 15);
+    expect(payload.inWindow.types).toEqual([
+      { type: "script", n: MODULES + 1, bytes: MODULES * MODULE_BYTES + BIG_BYTES },
+      { type: "other", n: POLLS, bytes: POLLS * 15 },
+    ]);
+    // 按次数的榜在这时候几乎没用(195 条并列 n=1);字节榜直接点名那个 5 MB 的。
+    expect(payload.inWindow.top).toHaveLength(5);
+    expect(payload.inWindow.biggest[0]).toMatchObject({ path: "/node_modules/.vite/deps/lucide-react.js", n: 1, bytes: BIG_BYTES });
+    expect(payload.inWindow.biggest[1]).toMatchObject({ path: "/node_modules/.vite/deps/mod-0.js", bytes: MODULE_BYTES });
+    // /api/ 那一列在这时候只有主进程那几条小请求 —— 正是「API 不是它」的读法。
+    expect(payload.api.map((row: { path: string; n: number }) => [row.path, row.n])).toEqual([["/api/browser/worker/claim", POLLS]]);
+  });
+
   it("窗口外的请求不计入 inWindow,但计入 session(窗口是崩前那一段,不是整轮)", () => {
     const w = start();
     w.fire(req("/api/plugins", 1000));
@@ -749,7 +785,16 @@ describe("那 9 秒里页面在后端要什么", () => {
     w.clock.now += 60_000;
 
     const payload = crash(w);
-    expect(payload.inWindow).toEqual({ count: 0, paths: 0, top: [] });
+    expect(payload.inWindow).toEqual({
+      count: 0,
+      paths: 0,
+      bytes: 0,
+      main: 0,
+      renderer: 0,
+      types: [],
+      top: [],
+      biggest: [],
+    });
     expect(payload.api).toEqual([]);
     expect(payload.lastAgoMs).toBe(60_000);
     expect(payload.last).toBe("/api/plugins"); // 最后一次是一分钟前那一条
@@ -767,12 +812,14 @@ describe("那 9 秒里页面在后端要什么", () => {
 
   it("表满了、环塞满了都要说出来:dropped 与 partial(这只是下界,不许当成精确值)", () => {
     const w = start();
-    for (let i = 0; i < 220; i += 1) w.fire(req(`/api/thing/${i}`, 10)); // 200 条进表,20 条被丢
-    for (let i = 0; i < 320; i += 1) w.fire(req("/api/thing/0", 10)); // 打在已经在表里的那条上
+    for (let i = 0; i < 1020; i += 1) w.fire(req(`/api/thing/${i}`, 10, "script")); // 1000 条进表,20 条被丢
+    for (let i = 0; i < 320; i += 1) w.fire(req("/api/thing/0", 10, "script")); // 打在已经在表里的那条上
     w.clock.now += 500;
 
     const payload = crash(w);
-    expect(payload.session).toMatchObject({ paths: 200, dropped: 20, total: 200 + 320 });
+    expect(payload.session).toMatchObject({ paths: 1000, dropped: 20, total: 1000 + 320 });
+    // 路径表满了,类型表**不满**:「字节去哪了」永远准。
+    expect(payload.session.types).toEqual([{ type: "script", n: 1340, bytes: 1340 * 10 }]);
     expect(payload.partial).toBe(true);
     expect(payload.inWindow.count).toBe(300); // 环的容量,不是窗口里的真实条数
   });

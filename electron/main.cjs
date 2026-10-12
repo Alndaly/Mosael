@@ -636,13 +636,23 @@ const HTTP_TRACE_WINDOW_MS = 10 * 1000;
 /** 内存里留最近多少条(算窗口 top5 用)。崩的时候只逐条打最后 `HTTP_TRACE_DUMP` 条。 */
 const HTTP_TRACE_RING = 300;
 const HTTP_TRACE_DUMP = 20;
-/** 路径表上限:dev server 的模块路径可以很多,记得住才有意义(超了计入 `dropped`,不假装是全部)。 */
-const HTTP_TRACE_MAX_PATHS = 200;
-/** 崩溃汇总里每条榜单列几行。 */
+/** 路径表上限。dev 下 Vite 不打包,一次重载就是一两百条模块路径,整个模块图上千条 —— 上限给到 1000,
+ *  超了仍计入 `dropped`(不假装是全部);真正不会满的是**类型表**,所以「字节去哪了」永远准。 */
+const HTTP_TRACE_MAX_PATHS = 1000;
+/** 崩溃汇总里每条榜单列几行(路径榜、字节榜、/api/ 榜都是它)。 */
 const HTTP_TRACE_TOP = 5;
+/** 类型榜列几行(resourceType 一共就那么几种,不会长)。 */
+const HTTP_TRACE_TYPES = 8;
 
 /** 路径表:path → { n, bytes, max, type }。`bytes` 只累加报了 Content-Length 的那些,没报的仍计数。 */
 const httpTracePaths = new Map();
+/**
+ * 类型表:resourceType → { n, bytes }。**为什么不能只看路径榜**:dev 下 Vite 是**不打包**的,一次重载就是
+ * 一两百条**各只出现一次**的模块路径(`/src/**`、`/node_modules/.vite/deps/**`)—— 按路径取 top5 时这些
+ * 全被「次数」挤出去,而它们才是字节数的大头。第一次真跑就是这样:窗口里 205 条 / 197 条路径,榜上只有
+ * 5 条,剩下的 192 条一条都看不见。类型这一档把「字节到底去哪了」压成一行。
+ */
+const httpTraceTypes = new Map();
 /** 最近 `HTTP_TRACE_RING` 条(按时间),算窗口 top5 与逐条现场都靠它。 */
 const httpTraceRing = [];
 /** 路径表满了以后没再进表的条数。 */
@@ -666,6 +676,21 @@ function httpTraceBytes(details) {
   return Number.isFinite(size) ? size : null;
 }
 
+/** 往一张 { n, bytes, max } 的表里加一笔。 */
+function httpTraceAdd(table, key, bytes, type) {
+  let counter = table.get(key);
+  if (!counter) {
+    counter = { n: 0, bytes: 0, max: 0, type };
+    table.set(key, counter);
+  }
+  counter.n += 1;
+  if (typeof bytes === "number") {
+    counter.bytes += bytes;
+    counter.max = Math.max(counter.max, bytes);
+  }
+  return counter;
+}
+
 /**
  * 一条本机请求记一笔。**只记账,不写日志** —— 插件页静置时本机请求不算少,逐条写就是又一套刷屏
  * (`plugins-dir-fetch` 那一行照旧只数 `/api/plugins`,一行不多一行不少)。
@@ -676,29 +701,31 @@ function traceHttpRequest(details) {
   const path = httpTracePath(details?.url);
   if (!path) return;
   const bytes = httpTraceBytes(details);
-  let counter = httpTracePaths.get(path);
-  if (!counter) {
-    if (httpTracePaths.size >= HTTP_TRACE_MAX_PATHS) {
-      httpTraceDropped += 1;
-      return;
-    }
-    counter = { n: 0, bytes: 0, max: 0, type: String(details?.resourceType ?? "") };
-    httpTracePaths.set(path, counter);
-  }
-  counter.n += 1;
-  if (bytes !== null) {
-    counter.bytes += bytes;
-    counter.max = Math.max(counter.max, bytes);
+  const type = String(details?.resourceType ?? "");
+  // 类型表**没有上限**:值的种类就那么几种,它必须永远准(路径表会满,满了之后 top5 就只是下界)。
+  httpTraceAdd(httpTraceTypes, type, bytes, type);
+  if (!httpTracePaths.has(path) && httpTracePaths.size >= HTTP_TRACE_MAX_PATHS) {
+    httpTraceDropped += 1;
+  } else {
+    httpTraceAdd(httpTracePaths, path, bytes, type);
   }
   httpTraceRing.push({
     at: Date.now(),
     path,
-    type: String(details?.resourceType ?? ""),
+    type,
     status: details?.statusCode ?? null,
     bytes,
     from: typeof details?.webContentsId === "number" ? details.webContentsId : null,
   });
   if (httpTraceRing.length > HTTP_TRACE_RING) httpTraceRing.shift();
+}
+
+/** 类型表 → 按字节排序的前几行(`[{ type, n, bytes }]`)。 */
+function httpTraceTypeRows(table, limit) {
+  return [...table]
+    .map(([type, counter]) => ({ type, n: counter.n, bytes: counter.bytes }))
+    .sort((a, b) => b.bytes - a.bytes || b.n - a.n)
+    .slice(0, limit);
 }
 
 /**
@@ -709,10 +736,19 @@ function traceHttpRequest(details) {
  */
 function httpTraceRows(entries, crashAt, limit) {
   const byPath = new Map();
+  const byType = new Map();
   let count = 0;
+  let bytes = 0;
+  let main = 0;
+  let renderer = 0;
   for (const entry of entries) {
     if (!entry || crashAt - entry.at > HTTP_TRACE_WINDOW_MS) continue;
     count += 1;
+    if (typeof entry.bytes === "number") bytes += entry.bytes;
+    // `from` 为空 = 不是某块页面发的(主进程自己的 worker 轮询就走这条路)—— 这一栏一眼分开「谁在要」。
+    if (entry.from === null || entry.from === undefined) main += 1;
+    else renderer += 1;
+    httpTraceAdd(byType, entry.type, entry.bytes ?? null, entry.type);
     let row = byPath.get(entry.path);
     if (!row) {
       row = { path: entry.path, n: 0, bytes: 0, max: 0, type: entry.type, firstT: 0, lastT: 0 };
@@ -731,7 +767,14 @@ function httpTraceRows(entries, crashAt, limit) {
   return {
     count,
     paths: byPath.size,
+    bytes,
+    main,
+    renderer,
+    types: httpTraceTypeRows(byType, HTTP_TRACE_TYPES),
     top: rows.slice(0, limit),
+    // 按字节排的另一榜:路径一多(dev 下一次重载一两百条模块路径,每条只出现一次),按次数的榜会把
+    // 「拉了几个 MB 的那几条」整个挤掉 —— 这一榜才是「字节去哪了」。
+    biggest: [...rows].sort((a, b) => b.bytes - a.bytes).slice(0, limit),
     api: rows.filter((row) => row.path.startsWith("/api/")).slice(0, limit),
   };
 }
@@ -762,9 +805,24 @@ function appendHttpTraceAtCrash(details, view) {
       exitCode: details?.exitCode ?? null,
       view: view ?? null,
       windowMs: HTTP_TRACE_WINDOW_MS,
-      inWindow: { count: window.count, paths: window.paths, top: window.top },
+      inWindow: {
+        count: window.count,
+        paths: window.paths,
+        bytes: window.bytes,
+        main: window.main,
+        renderer: window.renderer,
+        types: window.types,
+        top: window.top,
+        biggest: window.biggest,
+      },
       api: window.api,
-      session: { total, paths: httpTracePaths.size, dropped: httpTraceDropped, top: httpTraceSessionTop(HTTP_TRACE_TOP) },
+      session: {
+        total,
+        paths: httpTracePaths.size,
+        dropped: httpTraceDropped,
+        types: httpTraceTypeRows(httpTraceTypes, HTTP_TRACE_TYPES),
+        top: httpTraceSessionTop(HTTP_TRACE_TOP),
+      },
       // ring 被塞满、而最老那条还在窗口里 ⇒ 窗口 top5 只是下界;这个标记必须跟着走出去,不然会被当成精确值。
       partial: httpTraceRing.length >= HTTP_TRACE_RING && now - httpTraceRing[0].at <= HTTP_TRACE_WINDOW_MS,
       lastAgoMs: recent.length ? now - recent[recent.length - 1].at : null,
