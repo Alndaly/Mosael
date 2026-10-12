@@ -35,7 +35,7 @@ def expand(output: dict[str, Any]) -> dict[str, Any]:
         return output
     tables = output.pop(TABLE_KEY)
     if not isinstance(tables, dict):
-        raise PluginDomainError("pluginErr_sharedTablesBadShape", shape='{"<id>": [值, …]}')
+        raise PluginDomainError("pluginErr_sharedTablesBadShape", shape='{"<id>": [value, …]}')
     _inline(output, tables)
     return output
 
