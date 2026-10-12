@@ -573,10 +573,23 @@ export function MaskEditor({
     syncHistory();
   };
 
+  /**
+   * 把一份单通道快照写回蒙版。
+   *
+   * **尺寸对不上就整张不动**:那份快照说的是另一张画布(拖动途中底图读进来、文档换了尺寸,见下面那条
+   * `drag.before` 的重取)。这条不是洁癖 —— `createImageData` 是**零填充**的,`writeGrayscale` 只写
+   * 它覆盖得到的那一段:差一个像素,剩下的就全是 `alpha 0`。蒙版一旦有透明像素:
+   *
+   * - 屏幕上那两张派生层(`maskInverse` / `maskTint`)遇到透明像素会**保持底色**(`difference` /
+   *   `multiply` 都按源的 alpha 加权)—— 没画过的地方不再等于原图、**整块画布被蒙版色糊住**;
+   * - **导出的 PNG 带上 alpha 通道** —— 插件那条 `LoadImageMask(channel="red")` 读出来整块不透明,
+   *   静默地什么都不重绘(见文件头那条契约)。
+   */
   const restore = (channel: Uint8ClampedArray) => {
     const ctx = maskContext();
     if (!ctx) return;
     const { width, height } = doc.current;
+    if (channel.length !== width * height) return;
     const image = ctx.createImageData(width, height);
     writeGrayscale(channel, image.data);
     ctx.putImageData(image, 0, 0);
@@ -713,6 +726,9 @@ export function MaskEditor({
       );
     } else {
       //: 形状工具每一帧都从按下时那份像素重来:看到的是「松手后会是这样」,不是一层层叠上去的边。
+      //: **按下之后底图才读进来**(文档换了尺寸)的话,那份快照已经作废 —— 重取一份当前的,
+      //: 否则 `restore` 会把整张挡掉(它拒绝写尺寸对不上的快照),预览就从"每帧重来"变成"一层层叠"。
+      if (drag.before && drag.before.length !== doc.current.width * doc.current.height) drag.before = snapshot();
       if (drag.before) restore(drag.before);
       paintShape(ctx, drag.tool, drag.from, at);
     }

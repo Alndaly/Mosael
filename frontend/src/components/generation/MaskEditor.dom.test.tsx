@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +39,8 @@ class FakeContext2D {
   globalCompositeOperation: GlobalCompositeOperation = "source-over";
   /** 它被要求做过什么(断言「黑底」那一层、以及合成的顺序用)。 */
   calls: string[] = [];
+  /** `putImageData` 交出去的那几份像素 —— 蒙版的透明像素就是从这条路上写进去的。 */
+  written: ImageData[] = [];
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -65,7 +67,9 @@ class FakeContext2D {
   getImageData(_x: number, _y: number, width: number, height: number) {
     return this.createImageData(width, height);
   }
-  putImageData() {}
+  putImageData(image: ImageData) {
+    this.written.push(image);
+  }
 }
 
 /** 一张画布一个上下文(真环境就是这样;测试要回头查那张画布被要求画过什么)。 */
@@ -398,7 +402,7 @@ describe("蒙版编辑器", () => {
    * 盒子量出 320×240、ResizeObserver 首次观测当场回调、fetch 给一个 blob、Image 由返回的数组决定
    * 什么时候 onload。**着色那一层只在有底图时才在层表里**,所以这一格必须先真的有一张底图。
    */
-  function stubUnderlayPlatform(): (() => void)[] {
+  function stubUnderlayPlatform(size: { width: number; height: number } = { width: 64, height: 64 }): (() => void)[] {
     vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(320);
     vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(240);
     vi.stubGlobal(
@@ -422,8 +426,8 @@ describe("蒙版编辑器", () => {
     vi.stubGlobal(
       "Image",
       class {
-        naturalWidth = 64;
-        naturalHeight = 64;
+        naturalWidth = size.width;
+        naturalHeight = size.height;
         onload: (() => void) | null = null;
         onerror: (() => void) | null = null;
         set src(_value: string) {
@@ -483,5 +487,57 @@ describe("蒙版编辑器", () => {
     //: 而且是**重画**:可见那张先清了一整张再按层表叠(不是别处顺手画了一下)。
     expect(visible.calls[0]).toBe("clearRect");
     expect(scratch.calls).not.toContain(`fillRect ${LIGHT_TINT}`);
+  });
+
+  /**
+   * ## 形状工具的预览会把蒙版写成透明的(维护者:「矩形 / 椭圆工具会让整块画布变灰」)
+   *
+   * 形状工具的每一帧都是「从按下时那份像素重来」(`restore(drag.before)`),而**按下之后底图才读进来**
+   * 的话,文档会从默认的 1024² 换成源图那个尺寸(维护者的图 1624×2880)—— 那份快照就对不上了。
+   * 此前 `restore` 照写不误:`createImageData` 是**零填充**的、`writeGrayscale` 只写它覆盖得到的那一段,
+   * 于是剩下的像素全是 `alpha 0`。蒙版一旦有透明像素:
+   *
+   * - 屏幕上那两张派生层(`maskInverse` / `maskTint`)遇到透明像素会**保持底色**(`difference` /
+   *   `multiply` 按源的 alpha 加权)⇒ 没画过的地方不再等于原图、**整块画布被蒙版色糊住**;
+   * - **导出的 PNG 带上 alpha 通道** ⇒ 插件那条 `LoadImageMask(channel="red")` 静默什么都不重绘。
+   *
+   * 笔刷不走 `restore`,所以笔刷没有这个问题 —— 这正是「形状工具 vs 笔刷」的分叉点。
+   *
+   * 这里钉住不变量:**写进蒙版的每一份 `ImageData` 都必须每个像素 `alpha 255`**,而且那一帧**真的写了**
+   * (预览仍然是「每帧重来」,不是被整张挡掉、变成一层层叠)。真 Chromium 的像素实测见报告。
+   */
+  it("拖动途中底图才读进来:蒙版不会被写成透明的,预览照旧每帧重来", async () => {
+    //: 源图比默认文档(1024²)大 —— 文档是**长大**的,快照才会比文档短,正好踩中那一段零填充。
+    const decoded = stubUnderlayPlatform({ width: 2000, height: 1500 });
+    //: 拖动落点要真的算得出来:jsdom 没有版面,`docPoint` 读的是元素自己的矩形。
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 320, 240));
+    //: jsdom 的指针捕获是空壳:真点下去时 `setPointerCapture` 由 Canvas 收走指针(见组件)。
+    Object.assign(Element.prototype, { setPointerCapture: () => {}, releasePointerCapture: () => {}, hasPointerCapture: () => false });
+    mount();
+    const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
+    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
+
+    //: 选矩形,在底图还没到的时候按下 —— 这一份快照是 1024² 那张文档的。
+    fireEvent.click(screen.getByRole("radio", { name: "矩形" }));
+    fireEvent.pointerDown(view, { clientX: 100, clientY: 80, pointerId: 1, button: 0, buttons: 1 });
+
+    //: 现在底图到了:文档换成 2000×1500。
+    await waitFor(() => expect(decoded.length).toBeGreaterThan(0));
+    for (const fire of decoded) fire();
+    await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
+
+    fireEvent.pointerMove(view, { clientX: 160, clientY: 120, pointerId: 1, button: 0, buttons: 1 });
+    fireEvent.pointerUp(view, { clientX: 160, clientY: 120, pointerId: 1, button: 0, buttons: 0 });
+
+    const written = everyContext.flatMap((ctx) => ctx.written);
+    expect(written.length, "这一帧真的把「按下时那份」写回去过(预览没被整张挡掉)").toBeGreaterThan(0);
+    const transparent = written
+      .map((image) => {
+        let count = 0;
+        for (let at = 3; at < image.data.length; at += 4) if (image.data[at] !== 255) count += 1;
+        return `${image.width}×${image.height}: ${count}`;
+      })
+      .filter((line) => !line.endsWith(": 0"));
+    expect(transparent, "写进蒙版的像素必须全不透明(蒙版契约:每个像素 alpha 255)").toEqual([]);
   });
 });
