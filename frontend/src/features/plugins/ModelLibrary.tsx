@@ -50,6 +50,7 @@ import {
   type LibraryReturn,
 } from "@/components/app/LibraryBrowser";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
+import { Highlight } from "@/components/app/Highlight";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ import { Progress } from "@/components/ui/progress";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus } from "@/features/plugins/libraryLinks";
+import { LibrarySearchContext } from "@/features/plugins/librarySearchContext";
 import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { FamilyBadge, ModelDetail, placeOf, useModelActionsHost } from "@/features/plugins/ModelDetail";
 import { ModelActionsContext } from "@/features/plugins/modelActions";
@@ -130,6 +132,11 @@ type Translate = ReturnType<typeof useI18n>;
 const keyOf = (model: { folder: string; name: string }) => `${model.folder}/${model.name}`;
 const norm = normModelName;
 const baseName = modelBaseName;
+
+/** 一个文件名:命中的那几个字标出来(同一份实现,见 lib/highlight),查询空着时原样渲染。 */
+function ModelFileName({ name }: { name: string }) {
+  return <Highlight text={name} query={React.useContext(LibrarySearchContext)} />;
+}
 
 /** 一个不撞名的建议:`x.safetensors` → `x (1).safetensors`、`x (2).safetensors`……按用户此刻选的目录算(他可能改了目录)。 */
 export function freeName(name: string, taken: Set<string>): string {
@@ -430,6 +437,7 @@ export function ModelLibraryDialog({
   return (
     <ModelActionsContext.Provider value={actions}>
     <ActiveFamiliesContext.Provider value={activeFamilies}>
+    <LibrarySearchContext.Provider value={query}>
     <LibraryDialog
       open={open}
       onOpenChange={onOpenChange}
@@ -502,6 +510,7 @@ export function ModelLibraryDialog({
     >
       {content}
     </LibraryDialog>
+    </LibrarySearchContext.Provider>
     </ActiveFamiliesContext.Provider>
     </ModelActionsContext.Provider>
   );
@@ -841,7 +850,8 @@ function useFocusReturned(
  * 卡片网格:**只画看得见的那几行**(上下各留一段缓冲,见 useVirtualRows),其余的用留白占着高度 —— 滚动条说的还是整份
  * 清单。五百多个文件全挂在页面上时,一次换目录、一次悬停都要浏览器过一遍六千多个节点、解几十张原图。一行几张按网格
  * 的宽度算,每行一个键(行首那个文件加一行几张)。卡片记忆化:换目录、搜索、下载进度这些让弹窗重渲的事,已经画着的卡
- * 不跟着重画;悬停、看清(模糊预览图)都是每张卡自己的 CSS。
+ * 不跟着重画;悬停、看清(模糊预览图)都是每张卡自己的 CSS。搜索框里那串字例外:**只有名字**跟着标(见
+ * librarySearchContext 与 ModelFileName),卡片其余部分照旧不重画。
  */
 function ModelGrid({
   label,
@@ -925,6 +935,10 @@ function ModelGrid({
  * 偏上取景(人像的脸在上半截);用的是宿主缩好的缩略图,框先占好位置,图到了淡入。名字一行截断、悬停看全名;底模在左、
  * 大小在右,位置固定 —— 认不出底模时左边空着,大小不跟着挪。大卡片多一行:目录(和子目录)、几张工作流在用。
  * **整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
+ *
+ * 名字里命中的那几个字由里面的 `ModelFileName` 自己跟着搜索框标(见 librarySearchContext)—— 底模徽标、大小不是名字,
+ * 不标(见 lib/highlight)。名字那一行是 `Truncate`,里面塞了 `<mark>` 之后悬停说明里的全文得用 `text` 单独给没加
+ * 标记的原文。
  */
 const ModelCard = React.memo(function ModelCard({
   instanceId,
@@ -986,7 +1000,9 @@ const ModelCard = React.memo(function ModelCard({
               openMenu(event.currentTarget);
             }}
           >
-            <Truncate hint={large ? undefined : placeOf(model)}>{baseName(model.name)}</Truncate>
+            <Truncate text={baseName(model.name)} hint={large ? undefined : placeOf(model)}>
+              <ModelFileName name={baseName(model.name)} />
+            </Truncate>
           </button>
         </h3>
         <div className="flex h-6 min-w-0 items-center justify-between gap-2">
@@ -1186,7 +1202,9 @@ const ModelRow = React.memo(function ModelRow({
               openMenu(event.currentTarget);
             }}
           >
-            <Truncate>{baseName(model.name)}</Truncate>
+            <Truncate text={baseName(model.name)}>
+              <ModelFileName name={baseName(model.name)} />
+            </Truncate>
           </button>
           <NsfwMark nsfw={model.nsfw} className="shrink-0" />
           <PreviewOriginMark origin={model.preview_origin} className="shrink-0 shadow-none" />

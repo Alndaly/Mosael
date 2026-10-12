@@ -59,6 +59,7 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
+import { Highlight } from "@/components/app/Highlight";
 import {
   LIBRARY_DENSITIES,
   LIBRARY_TABLE_HEAD,
@@ -609,6 +610,7 @@ export function WorkflowLibraryDialog({
           label={listLabel}
           workflows={shown}
           menuOf={menuOf}
+          query={query}
           onDragEnd={() => setDropTarget(null)}
           onOpen={(flow) => openItem(keyOf(flow))}
         />
@@ -632,6 +634,7 @@ export function WorkflowLibraryDialog({
               flow={flow}
               large={density === "large"}
               menu={menuOf(flow)}
+              query={query}
               onDragEnd={() => setDropTarget(null)}
               onOpen={() => openItem(keyOf(flow))}
             />
@@ -975,13 +978,15 @@ function formTitles(flow: WorkflowFile, untitled: string): string[] {
 }
 
 /** 名字下面一行淡色小字「表单:快速用krea2生图、精调」—— AI Studio、画板里看到的表单名,在库里找得到是哪张工作流。 */
-function FormTitleLine({ flow }: { flow: WorkflowFile }) {
+function FormTitleLine({ flow, query }: { flow: WorkflowFile; query: string }) {
   const t = useI18n();
   const titles = formTitles(flow, t("workflowFormUntitled"));
   if (titles.length === 0) return null;
+  const line = t("workflowFormTitleLine").replace("{title}", titles.join(t("listSeparator")));
   return (
     <span data-workflow-form-title="" className="block min-w-0 text-ui-2xs text-muted-foreground">
-      <Truncate>{t("workflowFormTitleLine").replace("{title}", titles.join(t("listSeparator")))}</Truncate>
+      {/* 高亮把这一行切成好几段,悬停里的全文得另外给(见 Truncate):给的是没加标记的原文 */}
+      <Truncate text={line}><Highlight text={line} query={query} /></Truncate>
     </span>
   );
 }
@@ -991,11 +996,15 @@ function FormTitleLine({ flow }: { flow: WorkflowFile }) {
  * 大卡片多一行:最近一次的产出、Mosael 里几处在用。**整张可点**:名字那颗按钮用 `after:` 盖满整张卡。
  *
  * 右键、右上角悬停出现的 ⋯、在卡片上按 Shift+F10 / 菜单键,开的是同一份菜单;整张卡能拖,拖到左边的文件夹上就是移过去。
+ *
+ * `query` 是顶上搜索框里当前的字:命中的那几个字标出来(同一份实现,见 lib/highlight)。名字那一行是 `Truncate`,
+ * 里面塞了 `<mark>` 就不是纯文字了 —— 悬停说明里的全文用 `text` 单独给没加标记的原文(截断的判据还是这一行的实际宽度)。
  */
-function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
+function WorkflowCard({ flow, large, menu, query, onOpen, onDragEnd }: {
   flow: WorkflowFile;
   large: boolean;
   menu: CardMenu;
+  query: string;
   onOpen: () => void;
   onDragEnd: () => void;
 }) {
@@ -1024,10 +1033,12 @@ function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
             className="block max-w-full cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none"
             onClick={onOpen}
           >
-            <Truncate hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>{flow.label}</Truncate>
+            <Truncate text={flow.label} hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>
+              <Highlight text={flow.label} query={query} />
+            </Truncate>
           </button>
         </h3>
-        <FormTitleLine flow={flow} />
+        <FormTitleLine flow={flow} query={query} />
         <div className="flex h-6 min-w-0 items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1">
             <CatalogBadge tone={flow.problem ? "warning" : flow.kind ? "primary" : "muted"}>{kindName(t, flow.kind)}</CatalogBadge>
@@ -1081,10 +1092,11 @@ function WorkflowCard({ flow, large, menu, onOpen, onDragEnd }: {
  *   「缺什么」那一列摆一枚「转不过来」,原因在悬停里;
  * - 全在根目录时不摆「目录」那一列(一整列空着);窄的时候先收掉「目录」「节点」「改动时间」,名字那一列留着。
  */
-function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
+function WorkflowTable({ label, workflows, menuOf, query, onOpen, onDragEnd }: {
   label: string;
   workflows: WorkflowFile[];
   menuOf: (flow: WorkflowFile) => CardMenu;
+  query: string;
   onOpen: (flow: WorkflowFile) => void;
   onDragEnd: () => void;
 }) {
@@ -1144,9 +1156,11 @@ function WorkflowTable({ label, workflows, menuOf, onOpen, onDragEnd }: {
                     onOpen(flow);
                   }}
                 >
-                  <Truncate hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>{flow.label}</Truncate>
+                  <Truncate text={flow.label} hint={flow.path !== `${flow.label}.json` ? flow.path : undefined}>
+                    <Highlight text={flow.label} query={query} />
+                  </Truncate>
                 </button>
-                <FormTitleLine flow={flow} />
+                <FormTitleLine flow={flow} query={query} />
                 {/* 卡片上那枚「标记是旧格式」列表里写在名字下面那一行(和「表单:…」同一处,行高不变):不然这一档里看不出哪几张要升级 */}
                 {flow.app?.upgradable && (
                   <span data-workflow-old-marks="" className="block min-w-0 text-ui-2xs text-warning">

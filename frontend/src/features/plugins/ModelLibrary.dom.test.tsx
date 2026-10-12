@@ -127,6 +127,8 @@ async function openLibraryAs(role: "list" | "table") {
 
 const cards = () => within(screen.getByRole("list", { name: "modelLibraryTitle" })).getAllByRole("listitem");
 const names = () => cards().map((card) => card.querySelector("[data-library-open]")?.textContent);
+/** 这一段里被标出来的那几个字(高亮用 `<mark>`,见 components/app/Highlight)。 */
+const marked = (root: Element) => [...root.querySelectorAll("mark")].map((one) => one.textContent);
 const folderTab = (name: string) => within(screen.getByRole("tablist", { name: "modelLibraryFolders" })).getByRole("tab", { name });
 
 function pickFamilies(...labels: string[]) {
@@ -481,6 +483,29 @@ describe("模型库", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "modelLibrarySearch" }), { target: { value: "anima" } });
     fireEvent.click(screen.getByRole("button", { name: "libraryClearAll" }));
     expect(cards()).toHaveLength(5);
+  });
+
+  it("搜索命中的那几个字在文件名上标出来,底模徽标不标;查询清空了一个字都不标", async () => {
+    await openLibrary();
+    const search = screen.getByRole("textbox", { name: "modelLibrarySearch" });
+
+    //: 大小写不敏感(筛选用的是 toLowerCase):敲大写的 BASE 也命中,标出来的是原文里那几个字
+    fireEvent.change(search, { target: { value: "BASE" } });
+    const name = cards()[0].querySelector("[data-library-open]")!;
+    expect(names()).toEqual(["sd_xl_base.safetensors"]);
+    expect(marked(name)).toEqual(["base"]);
+    expect(name.textContent).toBe("sd_xl_base.safetensors");
+
+    //: 底模徽标不是名字:搜「Illustrious」筛中的是徽标那一格,卡片上不标
+    fireEvent.change(search, { target: { value: "Illustrious" } });
+    expect(names()).toEqual(["AWPainting_IL.safetensors", "detail.safetensors"]);
+    for (const card of cards()) {
+      expect(card.textContent).toContain("Illustrious");
+      expect(card.querySelector("mark")).toBeNull();
+    }
+
+    fireEvent.change(search, { target: { value: "" } });
+    expect(cards().some((card) => card.querySelector("mark")), "查询清空了:一个字都不标").toBe(false);
   });
 
   it("排序:名字按自然顺序,大小和改动时间大的 / 新的在前", async () => {

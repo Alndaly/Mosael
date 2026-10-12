@@ -66,8 +66,10 @@ const api = vi.hoisted(() => ({
 const saved = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/download", () => ({ saveJsonToDisk: saved }));
 vi.mock("@/api/client", () => api);
+//: 「表单:…」那一行要拼进表单标题才看得出标出来的是哪几个字:这两条给真文案,别的照旧回键名
+const FORM_TEXT = vi.hoisted((): Record<string, string> => ({ workflowFormTitleLine: "表单:{title}", listSeparator: "、" }));
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  useI18n: () => (key: string) => FORM_TEXT[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
 const handoff = vi.hoisted(() => vi.fn());
@@ -145,6 +147,8 @@ async function openLibrary() {
 
 const cards = () => within(screen.getByRole("list", { name: "workflowLibraryTitle" })).getAllByRole("listitem");
 const names = () => cards().map((card) => card.querySelector("[data-library-open]")?.textContent);
+/** 这一段里被标出来的那几个字(高亮用 `<mark>`,见 components/app/Highlight)。 */
+const marked = (root: Element) => [...root.querySelectorAll("mark")].map((one) => one.textContent);
 const folderTab = (name: string) => within(screen.getByRole("tablist", { name: "workflowLibraryFolders" })).getByRole("tab", { name });
 
 async function openDetail(name: string) {
@@ -251,6 +255,35 @@ describe("工作流库", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[1].textContent)).toEqual(["sketch", "wan", "portrait"]);
     expect(window.localStorage.getItem("mosael:tab:workflow-library.density")).toBe("list");
+  });
+
+  it("搜索命中的那几个字在卡片上标出来(名字、副行「表单:…」都算),查询清空了一个字都不标", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(library({
+      workflows: [
+        flow({
+          path: "krea2-text-2-image.json", label: "krea2-text-2-image",
+          app: {
+            status: "ok", version: "1", upgradable: false, results: [], invalid: 0, stray: 0,
+            forms: [{ id: "f1", title: "快速用krea2生图", description: "", fields: 1, invalid: 0, model: "", tool: "" }],
+          },
+        }),
+      ],
+    }));
+    await openLibrary();
+    const search = screen.getByRole("textbox", { name: "workflowLibrarySearch" });
+
+    //: 大小写不敏感(筛选用的是 toLowerCase):敲大写的 KREA2 也命中,标出来的是原文里那几个字
+    fireEvent.change(search, { target: { value: "KREA2" } });
+    const card = cards()[0];
+    const name = card.querySelector("[data-library-open]")!;
+    expect(marked(name)).toEqual(["krea2"]);
+    expect(name.textContent).toBe("krea2-text-2-image");
+    const formLine = card.querySelector("[data-workflow-form-title]")!;
+    expect(formLine.textContent).toBe("表单:快速用krea2生图");
+    expect(marked(formLine)).toEqual(["krea2"]);
+
+    fireEvent.change(search, { target: { value: "" } });
+    expect(cards()[0].querySelectorAll("mark"), "查询清空了:一个字都不标").toHaveLength(0);
   });
 
   it("列表:表头不透明、压在行上面;每行一样高,缺东西的只摆一枚;种类一律灰字;全在根目录时不摆「目录」那一列", async () => {
