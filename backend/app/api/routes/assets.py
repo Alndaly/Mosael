@@ -52,9 +52,17 @@ def import_asset(
     workspace_id: str = Form(...),
     project_id: str | None = Form(None),
     name: str | None = Form(None),
+    #: 调用方知道的出处,JSON 文本(`[{"asset_id": …, "op": "mask"}]`)。**可选**:不给就是一次普通导入,
+    #: 与这条接口此前逐字一致(挑素材、槽位上传、桌面端导入都在用这条路)。
+    #: 浏览器里画出来的蒙版从这里说它是从哪张图画的 —— 此前这条路没有出处,画出来的蒙版 `derived_from`
+    #: 一直是空的,「来自」空着、AI 标识也跟着漏(见 domain/assets/lineage)。
+    #: 形状在领域层判(未知的 op 响亮拒绝),不在这里判:入库的入口有十几个,闸收在 domain 一处。
+    derived_from: str | None = Form(None, max_length=4000),
     file: UploadFile = File(...),
 ) -> Asset:
-    return use_cases.import_upload(db, user, workspace_id, project_id=project_id, name=name, upload=file)
+    return use_cases.import_upload(
+        db, user, workspace_id, project_id=project_id, name=name, upload=file, derived_from=derived_from,
+    )
 
 
 @router.post("/assets/capture", response_model=AssetOut)

@@ -5,6 +5,9 @@ import { API_BASE, ApiError, api, apiUpload, getAuthToken } from "@/api/transpor
 
 export type Asset = components["schemas"]["AssetOut"];
 
+/** 一项出处:从哪份素材、经过什么操作(op 的取值见后端 domain/assets/lineage.OPS)。 */
+export type AssetDerivation = components["schemas"]["AssetDerivationOut"];
+
 export function getAsset(assetId: string): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`);
 }
@@ -248,6 +251,13 @@ export async function importAsset(params: {
   projectId?: string;
   file: File;
   name?: string;
+  /**
+   * 这份素材是从哪几份做出来的(**可选**;不给就是一次普通导入)。走这条路进来的大部分东西本来就没有
+   * 出处 —— 上传一份实拍、生成面板的槽位传一张图 —— 但**在浏览器里画出来的蒙版有**:它取自某一张素材。
+   * 不说的话存下来的蒙版 `derived_from` 是空的:素材详情「来自」空着,从一张 AI 图画的蒙版也不会被标含 AI
+   * (见后端 domain/assets/lineage)。op 的取值照后端那张封闭的表。
+   */
+  derivedFrom?: AssetDerivation[];
   /** 给了就说传了多少(0..1)—— 挑素材弹窗、生成面板的槽位上传一段大视频时看得见进度。 */
   onProgress?: (fraction: number) => void;
   /** 给了就停得下来(取消上传)。 */
@@ -257,6 +267,8 @@ export async function importAsset(params: {
   form.set("workspace_id", params.workspaceId);
   if (params.projectId) form.set("project_id", params.projectId);
   if (params.name) form.set("name", params.name);
+  //: 有出处才带这一栏。空数组也**不带**:不给这一栏的请求,与这条接口收出处之前逐字节相同。
+  if (params.derivedFrom?.length) form.set("derived_from", JSON.stringify(params.derivedFrom));
   form.set("file", params.file);
   if (params.onProgress || params.signal) {
     return apiUpload<Asset>("/api/assets/import", form, { signal: params.signal, onProgress: params.onProgress });

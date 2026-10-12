@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import io
+import json
 import wave
 
 import numpy as np
@@ -343,3 +344,126 @@ def test_智能体那张卡对不是图片的素材根本不开() -> None:
     )
     assert refused.status_code == 422, refused.text
     assert "只有图片素材" in refused.json()["detail"]
+
+
+# ---------------- 在浏览器里画出来的蒙版:导入这条路上带着出处 ----------------
+
+
+def _import_mask(client, workspace_id: str, data: bytes, derived_from: str | None = None, name: str = "mask.png"):
+    """`POST /api/assets/import` —— 浏览器里画完蒙版存下来的那条路(见 MaskEditor 的 importAsset)。
+
+    `derived_from` 是**可选**的表单栏:不给就是一次普通导入(挑素材、槽位上传、桌面端导入都在用这条路)。
+    """
+    form: dict[str, str] = {"workspace_id": workspace_id}
+    if derived_from is not None:
+        form["derived_from"] = derived_from
+    return client.post("/api/assets/import", data=form, files={"file": (name, data, "image/png")})
+
+
+def test_导入时说了出处_存下来的素材就记着是哪张图画的() -> None:
+    """画出来的蒙版此前是**没有出处**的:它在导入这条路上进来,而这条路不收出处 ⇒ 素材详情「来自」
+    永远空着、AI 标识也跟着漏。现在调用方说得出源素材,存下来的素材就得记着它。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")
+
+    made = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": source["id"], "op": "mask"}]))
+    assert made.status_code == 200, made.text
+    mask = made.json()
+    assert mask["derived_from"] == [{"asset_id": source["id"], "op": "mask"}]
+    #: `derived` 是后端算的那一格:素材详情据它决定「来自」那一行出不出现(见 api/schemas/media 的 AssetOut)。
+    assert mask["derived"] is True
+
+    #: 「来自」那条链读得到出处本身(不是只存了一个 id)。
+    lineage = client.get(f"/api/assets/{mask['id']}/lineage")
+    assert lineage.status_code == 200, lineage.text
+    parents = lineage.json()["parents"]
+    assert [(one["asset_id"], one["op"]) for one in parents] == [(source["id"], "mask")]
+    assert parents[0]["name"] == source["name"] and parents[0]["kind"] == "image"
+
+
+def test_出处里认不得的op_响亮拒绝而不是静默丢掉() -> None:
+    """写路径严格:`op` 不在 lineage.OPS 里就拒绝这次导入。
+
+    静默丢掉的话,一份「从某张图画的蒙版」会悄悄登记成一张没有出处的普通素材 —— 界面看不出哪里错了,
+    正是这条来源链要修的病。**而且一个字节都不落盘**(先过闸、再看出处、最后才读字节)。
+    """
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")
+
+    bad = [
+        json.dumps([{"asset_id": source["id"], "op": "画个圈"}]),
+        #: 形状也不放行:不是列表、不是一项一项的、缺 asset_id(见 lineage.parse_derived_from)。
+        json.dumps({"asset_id": source["id"], "op": "mask"}),
+        json.dumps([source["id"]]),
+        json.dumps([{"op": "mask"}]),
+        "{not json",
+    ]
+    for payload in bad:
+        refused = _import_mask(client, workspace, _png_bytes(), payload)
+        assert refused.status_code == 422, f"{payload} → {refused.status_code}: {refused.text}"
+        assert refused.json()["detail"]
+    #: 认不得的那个 op 要点名说出来,不能只说一句"请求不对"。
+    named = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": source["id"], "op": "画个圈"}]))
+    assert "画个圈" in named.json()["detail"], named.text
+
+    listed = client.get(f"/api/assets?workspace_id={workspace}")
+    assert [one["id"] for one in listed.json()["items"]] == [source["id"]], "拒掉的导入一份都不该落进素材库"
+
+
+def test_不带出处时_和加这个字段之前逐字相同() -> None:
+    """这条路别处也在用(挑素材、生成面板的槽位、桌面端导入):不给 `derived_from`(或者给一个空串)
+    入库的那份素材与加这个字段之前一模一样 —— 没有出处、不含 AI、来源还是「导入的」。"""
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    for derived_from in (None, ""):
+        made = _import_mask(client, workspace, _png_bytes(), derived_from)
+        assert made.status_code == 200, made.text
+        bare = made.json()
+        assert bare["derived_from"] == [], f"derived_from={derived_from!r}"
+        assert bare["derived"] is False
+        assert bare["ai_generated"] is False
+        assert bare["source"] == "imported"
+        assert client.get(f"/api/assets/{bare['id']}/lineage").json()["parents"] == []
+
+
+def test_从AI生成的图画的蒙版_被标含AI(tmp_path) -> None:
+    """**AI 继承这条线**:出处里有一份含 AI 的,产出就含 AI(`importer` 的 `ai_generated or inherits_ai(...)`)。
+
+    标识办法认的正是这一步加工:一张 AI 生成图上画出来的蒙版,进成片时它自己就得带着标识 ——
+    此前这条路没有出处,继承无从谈起(`inherits_ai` 拿到的是空列表)。
+    """
+    from app.core.db import SessionLocal
+    from app.domain.assets import register_file_asset
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+    generated = tmp_path / "ai.png"
+    generated.write_bytes(_png_bytes())
+    with SessionLocal() as db:
+        #: 生成任务交回的一份素材(见 generation.runner 的登记那一步)。
+        ai_source = register_file_asset(
+            db, workspace_id=workspace, project_id=None, source_path=generated, name="AI 图.png",
+            source="generated", ai_generated=True,
+        ).id
+
+    made = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": ai_source, "op": "mask"}]))
+    assert made.status_code == 200, made.text
+    assert made.json()["ai_generated"] is True, "从 AI 生成图画的蒙版没被标含 AI"
+
+    #: 反面照:从一份普通导入的图画的蒙版**不**含 AI —— 否则上面那条可能只是恒真。
+    plain_source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")
+    plain = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": plain_source["id"], "op": "mask"}]))
+    assert plain.status_code == 200, plain.text
+    assert plain.json()["ai_generated"] is False
+    assert plain.json()["derived_from"] == [{"asset_id": plain_source["id"], "op": "mask"}]

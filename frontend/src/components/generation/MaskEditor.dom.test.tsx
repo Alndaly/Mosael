@@ -205,6 +205,32 @@ describe("蒙版编辑器", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalledWith(SAVED));
   });
 
+  /**
+   * 画出来的蒙版要**说得出出处**:编辑器知道自己在给哪张素材画,那就得把那一项跟着上传交给后端
+   * (见后端 domain/assets/lineage)。此前这条路没有出处 —— 素材详情「来自」永远空着,从一张 AI 图
+   * 画的蒙版也不会被标含 AI(`inherits_ai` 拿到的是空列表)。
+   */
+  it("保存:带上出处 —— 这份蒙版是从哪张素材画出来的", async () => {
+    vi.mocked(importAsset).mockResolvedValue(SAVED);
+    mount();
+
+    screen.getByRole("button", { name: "存成蒙版" }).click();
+
+    await waitFor(() => expect(importAsset).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(importAsset).mock.calls[0][0].derivedFrom).toEqual([{ asset_id: SOURCE.assetId, op: "mask" }]);
+  });
+
+  it("没有源素材(新建一张空蒙版):不带出处", async () => {
+    vi.mocked(importAsset).mockResolvedValue(SAVED);
+    mount({ source: null });
+
+    screen.getByRole("button", { name: "存成蒙版" }).click();
+
+    await waitFor(() => expect(importAsset).toHaveBeenCalledTimes(1));
+    //: 不派生自任何一份时**一个字都不说** —— 与这条接口收出处之前的形状完全一样。
+    expect(vi.mocked(importAsset).mock.calls[0][0].derivedFrom).toBeUndefined();
+  });
+
   it("打开时就有一张蒙版(继续在它上面画):也是这一套;没有底图时名字里写清楚", async () => {
     //: ADR 0056 决定 5:不引入「蒙版文档」——第一次保存就是那张 PNG,要改就在它上面继续画。
     vi.mocked(importAsset).mockResolvedValue(SAVED);

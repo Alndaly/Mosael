@@ -82,6 +82,27 @@ describe("素材详情的来源链", () => {
     expect(getAssetLineage).not.toHaveBeenCalled();
     expect(screen.getByText("mediaSourceImported")).toBeTruthy();
   });
+
+  /**
+   * 在编辑器里画出来的蒙版走的也是这条链(它从导入那条路进来,带着 `op: "mask"` 的出处)。
+   * 这一条钉两件事:那个 op **有名字**(不是把 `mask` 原样露出来),以及从一张 AI 图上画的蒙版
+   * 带着「含 AI 生成内容」—— 此前它两边都没有(出处是空的)。
+   */
+  it("画出来的蒙版:出处是那张源图(生成蒙版);源图含 AI 就挂含 AI 那枚", async () => {
+    const drawn = { ...base, id: "drawn", name: "蒙版 · AI 图.png", kind: "image", source: "imported",
+                    ai_generated: true, derived_from: [{ asset_id: "ai", op: "mask" }], derived: true };
+    getAssetLineage.mockImplementation(async () => ({
+      asset_id: "drawn", ai_generated: true, parents: [
+        { asset_id: "ai", op: "mask", name: "AI 图.png", kind: "image", ai_generated: true, parents: [] },
+      ],
+    }));
+    getAsset.mockResolvedValue(drawn);
+    show(drawn);
+
+    expect(await screen.findByRole("button", { name: "AI 图.png" })).toBeTruthy();
+    expect(screen.getByText("(assetLineageOpMask)")).toBeTruthy();
+    expect(screen.getByText("mediaSourceContainsAi")).toBeTruthy();
+  });
 });
 
 describe("来源标签", () => {

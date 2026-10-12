@@ -838,7 +838,15 @@ export function MaskEditor({
       }
       const file = new File([blob], MASK_FILE_NAME, { type: "image/png" });
       const name = t("maskAssetName").replace("{source}", source?.name || t("maskAssetNoSource"));
-      importAsset({ workspaceId, file, name, signal: controller.signal })
+      importAsset({
+        workspaceId,
+        file,
+        name,
+        signal: controller.signal,
+        //: 出处:这份蒙版是从**哪张素材**画出来的(op `mask`,见后端 domain/assets/lineage 的 OPS)。
+        //: 没有源素材(新建一张空蒙版)就**不带这一栏** —— 那时它不派生自任何一份,而这正是接口此前的形状。
+        derivedFrom: source ? [{ asset_id: source.assetId, op: "mask" }] : undefined,
+      })
         .then((asset) => {
           abortRef.current = null;
           setSaving(false);

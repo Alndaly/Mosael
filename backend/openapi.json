@@ -31450,6 +31450,18 @@
             ],
             "title": "Name"
           },
+          "derived_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From"
+          },
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",

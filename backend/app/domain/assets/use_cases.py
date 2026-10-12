@@ -229,11 +229,26 @@ def make_mask(
 # ---------------- 导入 ----------------
 
 
-def import_upload(db: Session, user: User, workspace_id: str, *, project_id: str | None, name: str | None, upload) -> Asset:
+def import_upload(
+    db: Session, user: User, workspace_id: str, *, project_id: str | None, name: str | None, upload,
+    derived_from: str | None = None,
+) -> Asset:
+    """浏览器上传的一份素材入库(见 domain/assets/importer)。
+
+    `derived_from`:调用方说的出处,JSON 文本(`[{"asset_id": …, "op": "mask"}]`)—— 浏览器里画出来的
+    蒙版就是它(编辑器知道自己在给哪张图画面)。不给 = 一次普通导入,与这条接口此前逐字一致。
+
+    **先过闸、再看出处、最后才读字节**:与 web_capture 同一个次序 —— 没权限或出处不像样的请求,
+    一个字节都不落盘。
+    """
     from app.domain.assets.importer import import_uploaded_asset
+    from app.domain.assets.lineage import parse_derived_from
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
-    return import_uploaded_asset(db, workspace_id=workspace_id, project_id=project_id, name=name, upload=upload)
+    parents = parse_derived_from(derived_from)
+    return import_uploaded_asset(
+        db, workspace_id=workspace_id, project_id=project_id, name=name, upload=upload, derived_from=parents,
+    )
 
 
 def import_web_capture(
