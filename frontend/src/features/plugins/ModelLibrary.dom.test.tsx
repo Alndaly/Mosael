@@ -496,8 +496,14 @@ describe("模型库", () => {
     expect(marked(name)).toEqual(["base"]);
     expect(name.textContent).toBe("sd_xl_base.safetensors");
 
-    //: 底模徽标不是名字:搜「Illustrious」筛中的是徽标那一格,卡片上不标
+    //: 底模徽标不是名字,**也不再是搜索词**:文件名里没有 Illustrious 的一张都不剩(那是顶栏那个「底模」筛选器
+    //: 的事,见下面一段)。搜索只管卡上看得见的字里的文件名,两条路不重叠。
     fireEvent.change(search, { target: { value: "Illustrious" } });
+    expect(screen.getByText("modelLibraryNoMatchTitle")).toBeTruthy();
+
+    //: 交给「底模」筛选器就筛得到那两张;徽标那一格照样不标 —— 高亮只认文件名
+    fireEvent.change(search, { target: { value: "" } });
+    fireEvent.keyDown(pickFamilies("Illustrious 2"), { key: "Escape" });
     expect(names()).toEqual(["AWPainting_IL.safetensors", "detail.safetensors"]);
     for (const card of cards()) {
       expect(card.textContent).toContain("Illustrious");

@@ -12,6 +12,7 @@ import {
   filterModels,
   pairedWith,
   pairsFirst,
+  searchHaystackOf,
 } from "./modelLibraryView";
 
 const file = (name: string, family: string, family_source: string): ModelFile => ({
@@ -115,9 +116,45 @@ describe("文本编码器的「常配」", () => {
     ]);
   });
 
-  it("搜索看得到是哪一种编码器;「常配」先写勾着的那几种", () => {
-    expect(filterModels(models, { families: [], query: "t5-x" }).map((one) => one.name)).toEqual(["t5xxl.safetensors"]);
+  it("「常配」先写勾着的那几种", () => {
     expect(pairsFirst(["Flux", "SD 3", "HiDream"], ["HiDream"])).toEqual(["HiDream", "Flux", "SD 3"]);
     expect(pairsFirst(["Flux", "SD 3"], [])).toEqual(["Flux", "SD 3"]);
+  });
+});
+
+/**
+ * 边界就是这条:**搜索只管卡上看得见的字**(文件名,连子目录 —— 见 searchHaystackOf)。底模徽标、编码器那一行、
+ * 触发词在卡片和详情里各有自己的位置,搜索再认一遍,就和顶栏的「底模」筛选器成了同一件事的两种干法。
+ */
+describe("搜索", () => {
+  const model = (name: string, over: Partial<ModelFile> = {}) =>
+    ({ ...file(name, "Krea 2", "weights"), triggers: ["krea style"], ...over }) as ModelFile;
+
+  it("文件名命中;子目录写在名字里的那一段也算", () => {
+    expect(filterModels([model("krea.safetensors")], { families: [], query: "KREA" })).toHaveLength(1);
+    expect(filterModels([model("pony/style.safetensors")], { families: [], query: "pony" })).toHaveLength(1);
+    //: 筛的是整个文件名里的一段,不是「开头就是它」
+    expect(filterModels([model("pony/style.safetensors")], { families: [], query: "style" })).toHaveLength(1);
+    expect(searchHaystackOf(model("pony/style.safetensors"))).toBe("pony/style.safetensors");
+  });
+
+  it("底模里有、文件名里没有的:搜不到;顶栏那个「底模」筛选器筛得到(不重复造)", () => {
+    const krea = model("plain.safetensors");           // family: "Krea 2"
+    expect(searchHaystackOf(krea)).not.toContain("krea");
+    expect(filterModels([krea], { families: [], query: "krea" }), "底模不再是搜索词").toEqual([]);
+    expect(filterModels([krea], { families: ["Krea 2"], query: "" }).map((one) => one.name), "筛选器照旧").toEqual([
+      "plain.safetensors",
+    ]);
+  });
+
+  it("文件标题、编码器标签、触发词都不再是搜索词", () => {
+    const t5 = model("t5xxl.safetensors", {
+      title: "T5 文本编码器", triggers: ["triggerword"],
+      encoder: { kind: "t5_xxl", label: "T5-XXL", source: "weights", pairs: [] },
+    } as Partial<ModelFile>);
+    for (const word of ["T5 文本编码器", "t5-x", "triggerword"]) {
+      expect(filterModels([t5], { families: [], query: word }), word).toEqual([]);
+    }
+    expect(filterModels([t5], { families: [], query: "t5xxl" }), "文件名照旧").toHaveLength(1);
   });
 });

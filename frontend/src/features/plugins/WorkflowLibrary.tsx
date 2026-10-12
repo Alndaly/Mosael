@@ -117,6 +117,7 @@ import {
   type WorkflowEditor,
 } from "@/features/plugins/workflowEditor";
 import {
+  ALL_MODELS,
   ALL_WORKFLOWS,
   PROBLEMS_VIEW,
   TRASH_VIEW,
@@ -134,6 +135,7 @@ import {
   inView,
   joinPath,
   lacksSomething,
+  modelCounts,
   parentOf,
   sortWorkflows,
   type WorkflowKindFilter,
@@ -202,6 +204,9 @@ export function WorkflowLibraryDialog({
   const [view, setView] = React.useState(ALL_WORKFLOWS);
   const [query, setQuery] = React.useState("");
   const [kind, setKind] = React.useState<WorkflowKindFilter>("all");
+  //: 顶栏「用到模型」:选一个模型名,只留用到它的工作流(`ALL_MODELS` = 没挑)。用到的模型名不在搜索里(见
+  //: workflowLibraryView 的 searchHaystackOf),这里就是它的那条路。
+  const [model, setModel] = React.useState<string>(ALL_MODELS);
   const [sort, setSort] = React.useState<WorkflowSort>("name");
   //: 显示方式记在本机,和模型库各记各的
   const [density, setDensity] = usePersistentTab<LibraryDensity>("workflow-library.density", "small", LIBRARY_DENSITIES);
@@ -299,7 +304,10 @@ export function WorkflowLibraryDialog({
   //: 选中的文件夹(`""` = 没选文件夹:全部、缺东西的、回收站)
   const selectedFolder = folderOfView(current) ?? "";
   const scope = inView(workflows, current);
-  const shown = sortWorkflows(filterWorkflows(scope, { kind, query }), sort);
+  //: 「用到模型」的选项是**整座库**的并集,不是当前这一页的:挑了模型再换文件夹(或走「缺节点或模型」那一页),
+  //: 挑中的那项还在清单里,下拉不会变成一个空壳。
+  const usedModels = React.useMemo(() => modelCounts(workflows), [workflows]);
+  const shown = sortWorkflows(filterWorkflows(scope, { kind, model, query }), sort);
   const detail = detailKey ? workflows.find((flow) => keyOf(flow) === detailKey) ?? null : null;
 
   //: 「在工作台里打开」(网页版「在 ComfyUI 里打开」)、「新建」开的是哪里(插件报了编辑器才有)
@@ -308,6 +316,7 @@ export function WorkflowLibraryDialog({
   const clearFilters = () => {
     setQuery("");
     setKind("all");
+    setModel(ALL_MODELS);
   };
   const chips: LibraryChip[] = [
     ...(query.trim()
@@ -317,6 +326,10 @@ export function WorkflowLibraryDialog({
     ...(kind !== "all"
       ? [{ key: "kind", label: kind === "broken" ? t("workflowLibraryKindBroken") : kindName(t, kind),
            removeLabel: t("workflowLibraryChipRemoveKind"), onRemove: () => setKind("all") }]
+      : []),
+    ...(model !== ALL_MODELS
+      ? [{ key: "model", label: model, removeLabel: t("workflowLibraryChipRemoveModel").replace("{name}", model),
+           onRemove: () => setModel(ALL_MODELS) }]
       : []),
   ];
 
@@ -550,6 +563,25 @@ export function WorkflowLibraryDialog({
           value: one,
           label: one === "all" ? t("workflowLibraryKindAll") : one === "broken" ? t("workflowLibraryKindBroken") : kindName(t, one),
         }))}
+      />
+      {/* 「用到模型」:用到的模型名不在搜索里(见 workflowLibraryView 的 searchHaystackOf),这里就是它的路。
+          选项是整座库里 `models[].name` 的并集(`modelCounts`),多的在前、带张数;走 OptionPicker ——
+          同一个组件按项数自己决定要不要可搜索的那一版(库里几十个模型是常态)。 */}
+      <OptionPicker
+        className="w-[168px]"
+        ariaLabel={t("workflowLibraryModel")}
+        value={model}
+        onChange={setModel}
+        disabled={usedModels.length === 0}
+        hint={usedModels.length === 0 ? t("workflowLibraryModelNone") : undefined}
+        options={[
+          { value: ALL_MODELS, label: t("workflowLibraryModelAll") },
+          ...usedModels.map(([name, count]) => ({
+            value: name,
+            label: name,
+            description: t("workflowLibraryModelUses").replace("{n}", String(count)),
+          })),
+        ]}
       />
       <OptionPicker
         className="w-[140px]"

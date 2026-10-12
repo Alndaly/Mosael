@@ -238,7 +238,11 @@ describe("工作流库", () => {
 
   it("搜索、按种类筛、排序;列表一行一张", async () => {
     await openLibrary();
+    //: 搜索只管卡上看得见的字(名字、路径、表单标题):「CR Prompt Text」是 sketch 缺的节点类型,只在点开之后的详情
+    //: 里、卡面上没有 —— 缺的归左栏「缺节点或模型」那一页,搜索里不再认它
     fireEvent.change(screen.getByRole("textbox", { name: "workflowLibrarySearch" }), { target: { value: "CR Prompt" } });
+    expect(screen.getByText("workflowLibraryNoMatchTitle")).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "workflowLibrarySearch" }), { target: { value: "sketch" } });
     expect(names()).toEqual(["sketch"]);
     fireEvent.change(screen.getByRole("textbox", { name: "workflowLibrarySearch" }), { target: { value: "" } });
     fireEvent.keyDown(screen.getByRole("combobox", { name: "workflowLibraryKind" }), { key: "Enter" });
@@ -255,6 +259,55 @@ describe("工作流库", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[1].textContent)).toEqual(["sketch", "wan", "portrait"]);
     expect(window.localStorage.getItem("mosael:tab:workflow-library.density")).toBe("list");
+  });
+
+  it("「用到模型」筛选:选中一个模型只剩用到它的那些,和搜索、种类叠加;清除后全回来", async () => {
+    const qwen = { folder: "diffusion_models", name: "qwen_2.5_vl_7b.safetensors", present: true };
+    api.getWorkflowLibrary.mockResolvedValue(library({
+      workflows: [
+        flow({ path: "krea2.json", label: "krea2", models: [qwen] }),
+        flow({ path: "wan.json", label: "wan", kind: "video",
+               models: [qwen, { folder: "vae", name: "ae.safetensors", present: true }] }),
+        flow({ path: "portrait.json", label: "portrait", models: [{ folder: "checkpoints", name: "sdxl.safetensors", present: true }] }),
+      ],
+    }));
+    await openLibrary();
+    const search = () => screen.getByRole("textbox", { name: "workflowLibrarySearch" });
+    const pickModel = async (name: string | RegExp) => {
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "workflowLibraryModel" }), { key: "Enter" });
+      fireEvent.click(await screen.findByRole("option", { name }));
+    };
+    expect(names()).toEqual(["krea2", "portrait", "wan"]);
+
+    //: 用到的模型名不在搜索里(卡面上没有这几个字):搜 qwen 一张都不剩 —— 那是下面这个筛选器的事
+    fireEvent.change(search(), { target: { value: "qwen" } });
+    expect(screen.getByText("workflowLibraryNoMatchTitle")).toBeTruthy();
+    fireEvent.change(search(), { target: { value: "" } });
+
+    //: 选项是各张工作流用到的模型的并集(qwen、ae、sdxl)加「全部模型」,带张数;选一个只剩用到它的那两张
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "workflowLibraryModel" }), { key: "Enter" });
+    expect((await screen.findAllByRole("option")).length, "三个模型 + 「全部模型」").toBe(4);
+    const row = await screen.findByRole("option", { name: /qwen_2\.5_vl_7b\.safetensors/ });
+    expect(row.textContent, "每一项带张数").toContain("workflowLibraryModelUses");
+    fireEvent.click(row);
+    expect(names()).toEqual(["krea2", "wan"]);
+
+    //: 和搜索框叠加:两个都算
+    fireEvent.change(search(), { target: { value: "krea" } });
+    expect(names()).toEqual(["krea2"]);
+    //: 和种类也叠加
+    await pickModel("workflowLibraryModelAll");
+    fireEvent.change(search(), { target: { value: "" } });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "workflowLibraryKind" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "workflowKind_video" }));
+    await pickModel(/qwen_2\.5_vl_7b\.safetensors/);
+    expect(names(), "视频里用到它的只有 wan").toEqual(["wan"]);
+
+    //: 清除:那一条筛选上的 ×(种类还在)
+    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryChipRemoveModel" }));
+    expect(names()).toEqual(["wan"]);
+    fireEvent.click(screen.getByRole("button", { name: "libraryClearAll" }));
+    expect(names()).toEqual(["krea2", "portrait", "wan"]);
   });
 
   it("搜索命中的那几个字在卡片上标出来(名字、副行「表单:…」都算),查询清空了一个字都不标", async () => {

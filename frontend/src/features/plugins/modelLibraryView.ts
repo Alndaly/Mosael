@@ -90,8 +90,26 @@ export function inFolder(models: readonly ModelFile[], folder: string): ModelFil
 }
 
 /**
- * 按底模(勾了几种就是其中任一)和搜索词筛:常配勾着的底模的文本编码器也留下(界面标「常配」)。搜索看文件名、标题、底模、
- * 文本编码器是哪一种和触发词。
+ * **搜索比哪些字段 —— 全库只此一处。** 规矩一句话:**搜索只管卡片上看得见的字**。
+ *
+ * 那串字就是文件名(**连子目录**:ComfyUI 的 loras 子目录写在 `name` 里,如 `pony/style.safetensors`;
+ * 卡片上「在哪个目录」那一行是 `folder` + 这一段)。**`folder` 这一级目录名不进这里** —— 左栏已经在按它
+ * 分了,连它一起搜的话在「loras」里打一个 `loras` 会一张不落地全留着。
+ *
+ * 其余维度**不在这里**,各归各的控件:底模是顶栏那个「底模」筛选器(`familyCounts` / `filterModels` 的
+ * `families`)、目录是左栏。文件标题、编码器是哪一种、触发词都不算 —— 底模徽标、编码器那一行、触发词都在
+ * 卡片和详情里各有自己的位置,搜索再认一遍就和「底模」筛选器成了同一件事的两种干法(功能重叠)。
+ *
+ * 将来要让用户自己配「搜哪些字段」,改的就是这一处(现在写死;不做设置项)。
+ * 返回的已经是小写:搜索不比大小写,调用方直接 `includes`。
+ */
+export function searchHaystackOf(model: ModelFile): string {
+  return model.name.toLowerCase();
+}
+
+/**
+ * 按底模(勾了几种就是其中任一)和搜索词筛:常配勾着的底模的文本编码器也留下(界面标「常配」)。搜索只比
+ * `searchHaystackOf` 那一处;底模、编码器标签、触发词各有各的控件,不在搜索里。
  */
 export function filterModels(models: readonly ModelFile[], { families, query }: { families: readonly string[]; query: string }): ModelFile[] {
   const wanted = new Set(families);
@@ -99,9 +117,7 @@ export function filterModels(models: readonly ModelFile[], { families, query }: 
   return models.filter((model) => {
     if (wanted.size > 0 && !wanted.has(familyOf(model)) && pairedWith(model, families).length === 0) return false;
     if (!needle) return true;
-    return `${model.name} ${model.title ?? ""} ${model.family ?? ""} ${model.encoder?.label ?? ""} ${(model.triggers ?? []).join(" ")}`
-      .toLowerCase()
-      .includes(needle);
+    return searchHaystackOf(model).includes(needle);
   });
 }
 

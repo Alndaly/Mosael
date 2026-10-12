@@ -11,6 +11,9 @@ export const PROBLEMS_VIEW = "__problems__";
 export const TRASH_VIEW = "__trash__";
 const FOLDER_VIEW = "folder:";
 
+/** 顶栏「用到模型」筛选里「不挑模型」的那一项(下拉里的「全部模型」)。模型名不会长这样,和它们撞不上。 */
+export const ALL_MODELS = "__all_models__";
+
 /** 左栏里一个文件夹的值;反过来认出是哪个文件夹(不是文件夹回 null)。 */
 export const folderView = (path: string) => `${FOLDER_VIEW}${path}`;
 export const folderOfView = (view: string): string | null => (view.startsWith(FOLDER_VIEW) ? view.slice(FOLDER_VIEW.length) : null);
@@ -66,25 +69,58 @@ export function inView(workflows: readonly WorkflowFile[], view: string): Workfl
   return folder === null ? [] : workflows.filter((flow) => inFolder(flow.path, folder));
 }
 
-/** 按种类(转不过来的单算一类)和搜索词筛。搜索看名字、路径、表单标题、出了什么问题、用到的模型、缺的节点类型、输入输出的名字。 */
+/**
+ * **搜索比哪些字段 —— 全库只此一处。** 规矩一句话:**搜索只管卡片上看得见的字**。
+ *
+ * 那串字就是这里列的三个:名字、路径,和每张表单的标题(ADR 0045:AI Studio 里看到「快速用krea2生图」,
+ * 在库里搜得到是哪张工作流)。
+ *
+ * 其余维度**不在这里**,各归各的筛选器:种类是顶栏的「种类」(`kind`)、用到的模型是顶栏的「用到模型」
+ * (`modelCounts` + `filterWorkflows` 的 `model`)、缺节点 / 缺模型是左栏的「缺节点或模型」那一页
+ * (`lacksSomething`)。用到的模型名、缺的节点类型、输入输出的名字都只画在卡片点开之后的详情里,卡面上没有 ——
+ * 搜索里再认一遍,就和筛选器成了同一件事的两种干法(功能重叠)。
+ *
+ * 将来要让用户自己配「搜哪些字段」,改的就是这一处(现在写死;不做设置项)。
+ * 返回的已经是小写:搜索不比大小写,调用方直接 `includes`。
+ */
+export function searchHaystackOf(flow: WorkflowFile): string {
+  return [flow.label, flow.path, ...(flow.app?.forms ?? []).map((one) => one.title)].join(" ").toLowerCase();
+}
+
+/**
+ * 按种类(转不过来的单算一类)、用到的模型和搜索词筛。搜索只比 `searchHaystackOf` 那一处;用到的模型是
+ * **筛选器**的事(选定一个模型名就只留用到它的):从搜索里去掉的那条召回,交回给筛选器。
+ */
 export function filterWorkflows(
   workflows: readonly WorkflowFile[],
-  { kind, query }: { kind: WorkflowKindFilter; query: string },
+  { kind, model = ALL_MODELS, query }: { kind: WorkflowKindFilter; model?: string; query: string },
 ): WorkflowFile[] {
   const needle = query.trim().toLowerCase();
   return workflows.filter((flow) => {
     if (kind === "broken" ? !flow.problem : kind !== "all" && flow.kind !== kind) return false;
+    if (model !== ALL_MODELS && !(flow.models ?? []).some((one) => one.name === model)) return false;
     if (!needle) return true;
-    const haystack = [
-      //: 每张表单的标题也算(ADR 0045):AI Studio 里看到「快速用krea2生图」,在库里搜得到是哪张工作流
-      flow.label, flow.path, flow.problem, ...(flow.app?.forms ?? []).map((one) => one.title),
-      ...(flow.models ?? []).map((one) => one.name),
-      ...(flow.missing_nodes ?? []).map((one) => one.type),
-      ...(flow.inputs ?? []).map((one) => one.title),
-      ...(flow.outputs ?? []).map((one) => one.title),
-    ].join(" ").toLowerCase();
-    return haystack.includes(needle);
+    return searchHaystackOf(flow).includes(needle);
   });
+}
+
+/** 「用到模型」筛选里的一种模型:这个库里用到它的工作流有几张。 */
+export type ModelUseCount = [name: string, count: number];
+
+/**
+ * 「用到模型」筛选的选项:这个库里各工作流 `models[].name` 的并集,带张数(同一张工作流里同一个模型出现两次只算一张)。
+ * 多的在前、一样多按名字的自然顺序(和「底模」筛选同一个排法):挑一个模型多半是想看「还有哪几张用到它」,用得多的
+ * 先看见;真知道名字的话下拉本来就能搜。
+ */
+export function modelCounts(workflows: readonly WorkflowFile[]): ModelUseCount[] {
+  const counts = new Map<string, number>();
+  for (const flow of workflows) {
+    //: 一张工作流里同一个模型出现两次(两个节点各加载一次)只算一张
+    for (const name of new Set((flow.models ?? []).map((one) => one.name))) {
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || natural(a[0], b[0]));
 }
 
 const byName = (a: WorkflowFile, b: WorkflowFile) =>

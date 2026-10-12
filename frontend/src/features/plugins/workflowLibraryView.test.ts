@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkflowFile } from "@/api/client";
 import {
+  ALL_MODELS,
   ALL_WORKFLOWS,
   conflictOf,
   filterWorkflows,
@@ -12,7 +13,9 @@ import {
   folderView,
   freeFolderPath,
   inView,
+  modelCounts,
   notEmptyOf,
+  searchHaystackOf,
   validFolderPath,
   WORKFLOW_KINDS,
 } from "./workflowLibraryView";
@@ -93,6 +96,68 @@ describe("搜索", () => {
     expect(filterWorkflows([formed, other], { kind: "all", query: "快速" })).toEqual([formed]);
     expect(filterWorkflows([formed, other], { kind: "all", query: "精调" })).toEqual([formed]);
     expect(filterWorkflows([formed, other], { kind: "all", query: "krea2" })).toEqual([formed]);
+  });
+
+  //: 边界就是这条:**搜索只管卡上看得见的字**(名字、路径、表单标题,见 searchHaystackOf)。用到的模型名只在
+  //: 卡片点开之后的详情里,卡面上没有 —— 搜索里再认一遍,就和顶栏的「用到模型」筛选器成了同一件事的两种干法。
+  it("只在用到的模型名里出现的词搜不到(那条召回交给「用到模型」筛选器)", () => {
+    const krea = {
+      ...flow("krea2-text-2-image.json"), label: "krea2-text-2-image",
+      models: [{ folder: "diffusion_models", name: "qwen_2.5_vl_7b.safetensors", present: true }],
+    } as WorkflowFile;
+    const other = flow("girl.json");
+    expect(searchHaystackOf(krea), "就是名字、路径、表单标题这几样").toBe("krea2-text-2-image krea2-text-2-image.json");
+    expect(filterWorkflows([krea, other], { kind: "all", query: "qwen" }), "模型名不再是搜索词").toEqual([]);
+    expect(filterWorkflows([krea, other], { kind: "all", query: "krea2" }), "名字里的词照旧命中").toEqual([krea]);
+    //: 同一条召回,筛选器能办到:选中那个模型只剩用到它的
+    expect(filterWorkflows([krea, other], { kind: "all", model: "qwen_2.5_vl_7b.safetensors", query: "" })).toEqual([krea]);
+    expect(filterWorkflows([krea, other], { kind: "all", model: ALL_MODELS, query: "" })).toHaveLength(2);
+    //: 两个叠加:都要满足
+    expect(filterWorkflows([krea, other], { kind: "all", model: "qwen_2.5_vl_7b.safetensors", query: "girl" })).toEqual([]);
+    expect(filterWorkflows([krea, other], { kind: "all", model: "qwen_2.5_vl_7b.safetensors", query: "krea2" })).toEqual([krea]);
+  });
+
+  it("出了什么问题、缺的节点类型、输入输出的名字也不算:缺的归左栏「缺节点或模型」那一页", () => {
+    const broken = {
+      ...flow("sketch.json"),
+      problem: "这台 ComfyUI 上没有这几种节点:CR Prompt Text",
+      missing_nodes: [{ type: "CR Prompt Text", count: 1, packs: [] }],
+      missing_models: [{ folder: "loras", name: "gone.safetensors", url: "" }],
+      inputs: [{ node: "10", title: "LoadImage", media: "image", role: "reference_image" }],
+      outputs: [{ node: "9", title: "保存图像", media: "image" }],
+    } as WorkflowFile;
+    for (const word of ["CR Prompt Text", "gone", "LoadImage", "保存图像"]) {
+      expect(filterWorkflows([broken], { kind: "all", query: word }), word).toEqual([]);
+    }
+    expect(filterWorkflows([broken], { kind: "all", query: "sketch" }), "名字照旧").toEqual([broken]);
+  });
+});
+
+describe("「用到模型」筛选", () => {
+  const withModels = (path: string, names: string[]) =>
+    ({ ...flow(path), models: names.map((name) => ({ folder: "loras", name, present: true })) }) as WorkflowFile;
+
+  it("选项是各张工作流 models[].name 的并集,带张数;一张里同一个模型出现两次只算一张", () => {
+    const one = withModels("a.json", ["qwen_2.5_vl.safetensors", "qwen_2.5_vl.safetensors", "ae.safetensors"]);
+    const two = withModels("b.json", ["qwen_2.5_vl.safetensors"]);
+    expect(modelCounts([one, two])).toEqual([
+      ["qwen_2.5_vl.safetensors", 2],
+      ["ae.safetensors", 1],
+    ]);
+    expect(modelCounts([flow("plain.json")]), "一张都没用到就没有选项").toEqual([]);
+    //: 选项的值就是模型名,拿去筛的时候按整个名字比(前缀相同的不算)
+    expect(filterWorkflows([one, two], { kind: "all", model: "ae.safetensors", query: "" })).toEqual([one]);
+    expect(filterWorkflows([one, two], { kind: "all", model: "qwen_2.5_vl", query: "" })).toEqual([]);
+  });
+
+  it("多的在前,一样多按名字的自然顺序(和「底模」筛选同一个排法)", () => {
+    const one = withModels("a.json", ["m10.safetensors", "m9.safetensors", "rare.safetensors"]);
+    const two = withModels("b.json", ["m10.safetensors", "m9.safetensors"]);
+    expect(modelCounts([one, two])).toEqual([
+      ["m9.safetensors", 2],
+      ["m10.safetensors", 2],
+      ["rare.safetensors", 1],
+    ]);
   });
 });
 
