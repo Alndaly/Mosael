@@ -336,6 +336,11 @@ export function MaskEditor({
   const queryClient = useQueryClient();
   /** 看得见的那张画布(底图 + 蒙版,只给人看)。它铺满自己的盒子,位图尺寸由 fit() 按盒子写。 */
   const viewRef = React.useRef<HTMLCanvasElement>(null);
+  /**
+   * 画布外面那个盒子。**量的对象是它**:画布的 CSS 尺寸是 `fit()` 按 contain 写下去的,
+   * 量画布自己就成了自己咬自己(写一次尺寸 → ResizeObserver 又叫一次 → 尺寸再变)。
+   */
+  const frameRef = React.useRef<HTMLDivElement>(null);
   /** 正在画一笔。见 fit():拖动期间不重量(每一次量都要读版面,而拖动每秒几十次)。 */
   const drawingRef = React.useRef(false);
   /** 蒙版本身 —— 离屏、不进 DOM、导出的就是它。 */
@@ -421,28 +426,48 @@ export function MaskEditor({
   }, []);
 
   /**
-   * 把可见的那张画布量成**盒子的尺寸**,再把当前蒙版重画上去。
+   * 把画布量成**「按原始比例缩进盒子」的那块矩形**(contain),再把当前蒙版重画上去。
    *
-   * 元素本身铺满盒子(`h-full w-full`),所以这里写的位图尺寸就是盒子的 CSS 尺寸 × devicePixelRatio ——
-   * 位图和元素同一个宽高比,画上去的蒙版 1:1 不变形,也**没有黑边**:此前是按比例缩出元素自己的宽高
-   * 再居中,文档比盒子"方"的时候两侧各留一条黑边。
+   * 维护者:「注意图片应该是原先的比例」。此前画布元素铺满盒子(`h-full w-full`)、位图也按盒子的
+   * 尺寸写 —— 源图不是盒子那个比例时**被拉伸/压扁**(竖幅 1624×2880 放进横幅的盒子几乎认不出来)。
+   * 现在这里同时定下两件事,两者永远同一个宽高比:
    *
-   * 位图尺寸不变就不用重画(重设 `canvas.width` 会清空整张位图,白画一遍几百兆像素)。
-   * 比例封在 MAX_VIEW_EDGE 和 dpr ≤ 2 上,见那两个常数的说明。
+   * - **CSS 尺寸** = contain 之后那块矩形(居中由外层的 `place-items-center` 做)。画布元素自己就是
+   *   那个矩形,所以**四周的留白是弹窗自己的底色**(不是把画布刷黑 —— 那正是上一轮抱怨的"两条大黑边"),
+   *   而矩形四条边由画布自己的 `border` 画出来,用户知道能画到哪。
+   * - **位图尺寸** = 上面那块 × devicePixelRatio(封在 MAX_VIEW_EDGE 里),和文档同一个宽高比 ⇒
+   *   底图与蒙版 1:1 画上去,不变形。
+   *
+   * 所以**量的必须是外面那个盒子**(`frameRef`),不能再量画布自己:画布的 CSS 尺寸是这里写下去的,
+   * 量它就成了自己咬自己。
    */
   const fit = React.useCallback(() => {
+    const frame = frameRef.current;
     const view = viewRef.current;
-    if (!view) return;
+    if (!frame || !view) return;
     //: 拖笔途中不重量(下面几处按指针维护 drawingRef):读 clientWidth 会让浏览器先把版面算一遍,
     //: 而这里每帧都会被 ResizeObserver 叫一次。
     if (drawingRef.current) return;
-    const width = view.clientWidth;
-    const height = view.clientHeight;
+    const boxWidth = frame.clientWidth;
+    const boxHeight = frame.clientHeight;
     //: jsdom 里量出来是 0(没有版面);真实环境里也可能是对话框刚挂上、还没量到的那一帧。
-    if (!width || !height) return;
+    if (!boxWidth || !boxHeight) return;
+    const { width: docWidth, height: docHeight } = doc.current;
+    //: contain:两个方向的缩放比取小的那个 —— 长边贴住盒子,短边按原始比例留白。
+    const scale = Math.min(boxWidth / docWidth, boxHeight / docHeight);
+    const css = { width: Math.max(1, Math.round(docWidth * scale)), height: Math.max(1, Math.round(docHeight * scale)) };
+    const width = `${css.width}px`;
+    const height = `${css.height}px`;
+    if (view.style.width !== width || view.style.height !== height) {
+      view.style.width = width;
+      view.style.height = height;
+    }
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const scale = Math.min(1, MAX_VIEW_EDGE / Math.max(width * ratio, height * ratio));
-    const next = { width: Math.max(1, Math.round(width * ratio * scale)), height: Math.max(1, Math.round(height * ratio * scale)) };
+    const cap = Math.min(1, MAX_VIEW_EDGE / Math.max(css.width * ratio, css.height * ratio));
+    const next = {
+      width: Math.max(1, Math.round(css.width * ratio * cap)),
+      height: Math.max(1, Math.round(css.height * ratio * cap)),
+    };
     if (view.width === next.width && view.height === next.height) return;
     view.width = next.width;
     view.height = next.height;
@@ -537,17 +562,20 @@ export function MaskEditor({
     };
   }, [open, source?.assetId, initial?.assetId, rebuild]);
 
-  /** 画布元素一换大小(对话框尺寸变了、右栏收窄了)就重量一遍。 */
+  /**
+   * 放画布的那个盒子一换大小(窗口变了、右栏收窄了)就重量一遍 —— 按新盒子重算 contain 那块矩形,
+   * **比例跟着走**(小窗口里竖幅图整张看得全,不溢出)。
+   */
   React.useEffect(() => {
     if (!open || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => fit());
-    //: **不能在 effect 里读 `viewRef.current`**:这一条 effect 排在那几条铺文档的 effect 后面,
-    //: 而它们那一轮跑的时候 ref 还没挂上(`<DialogContent>` 是 portal,子树先于父 ref 落地)——
-    //: 读到 null 就 return 的话,这一整条 observer 永远不会登记(实测:窗口拖大、对话框换尺寸,
-    //: 位图一直停在第一次量到的那个尺寸上)。下一帧再登记,那时画布一定在文档里。
+    //: **不能在 effect 里读 ref**:这一条 effect 排在那几条铺文档的 effect 后面,而它们那一轮跑的
+    //: 时候 ref 还没挂上(`<DialogContent>` 是 portal,子树先于父 ref 落地)—— 读到 null 就 return
+    //: 的话,这一整条 observer 永远不会登记(实测:窗口拖大、对话框换尺寸,位图一直停在第一次量到
+    //: 的那个尺寸上)。下一帧再登记,那时盒子一定在文档里。观的是**盒子**,画布自己的尺寸是写下去的。
     const frame = requestAnimationFrame(() => {
-      const view = viewRef.current;
-      if (view) observer.observe(view);
+      const box = frameRef.current;
+      if (box) observer.observe(box);
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -806,21 +834,28 @@ export function MaskEditor({
 
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_var(--mask-rail)] gap-4">
           {/*
-            * 看得见的画布:底图(半透明)+ 蒙版。导出的不是这一张 —— 见文件头那三张画布。
+            * 看得见的画布:底图 + 蒙版。导出的不是这一张 —— 见文件头那三张画布。
             *
-            * **画布元素铺满整个盒子**(`h-full w-full`),位图尺寸由 fit() 按盒子写。此前是按比例
-            * 缩出元素本身的宽高再居中:文档比盒子"方"的时候(3:2 的图放进接近正方的盒子),元素左右
-            * 各留一条黑边,画布只占了盒子中间那一块。现在盒子里只有这一张画布,笔迹和底图铺到边上,
-            * 落点换算(docPoint)读的仍是这个元素自己的矩形,不受影响。
+            * **画布元素自己就是那块「按原始比例缩进盒子」的矩形**(contain):CSS 尺寸由 fit() 写,
+            * 宽高比 = 文档的宽高比,`place-items-center` 把它摆在盒子中间。于是:
+            *
+            * - 源图不会被拉扁/拉长(维护者:「注意图片应该是原先的比例」);
+            * - 四周的留白是**弹窗自己的底色** —— 盒子上没有背景色,不是把画布刷黑(那两条"大黑边"
+            *   正是上一轮的抱怨);矩形四条边由画布自己的 `border` 画出来,用户知道能画到哪;
+            * - 落点换算(`docPoint`)读的仍是这个元素自己的矩形 —— 元素和画出来的图同一个宽高比,
+            *   屏幕坐标到蒙版像素的换算不用另外加偏移(拖动中途指针跑到留白上也只是落在文档外,
+            *   `fillRect` / 圆的裁剪照旧)。
             *
             * 行轨写成 `minmax(0,1fr)` 而不是让它自己算:画布有固有宽高比,`auto` 那一档会按内容
             * (也就是位图本身)反推出一个更高的行,盒子只有 519 高、行却长到 546,画布就溢出到边框
             * 外面去了 —— 单列 grid 想收缩要写 `minmax(0,…)`,和 CONVENTIONS 里那条是同一件事。
             */}
-          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-black">
+          {/*: 留白(contain 出来的那两条边)就是这一格的底色 —— 弹窗自己的,不刷黑。没有 padding:
+               `fit()` 量的 `clientWidth` 含 padding,量出来的"盒子"会比能用的那一块大。 */}
+          <div ref={frameRef} className="grid min-h-0 min-w-0 place-items-center overflow-hidden">
             <canvas
               ref={viewRef}
-              className="h-full w-full cursor-crosshair touch-none"
+              className="block max-h-full max-w-full cursor-crosshair touch-none rounded-[2px] border border-border-strong"
               aria-label={t("maskCanvasLabel")}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}

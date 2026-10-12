@@ -347,8 +347,9 @@ describe("蒙版编辑器", () => {
     mount();
     const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
     const ctx = contextOf(view);
-    //: 位图先按盒子的尺寸量好(首次观测那一趟)。
-    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
+    //: 位图先按**含住盒子那块矩形**量好(首次观测那一趟):文档这时还是默认的 1024²(方),
+    //: 盒子 320×240 ⇒ contain 出来是 240×240(边长取盒子的高)。
+    await waitFor(() => expect([view.width, view.height]).toEqual([240, 240]));
     ctx.calls.length = 0;
 
     //: 现在让底图"解码完" —— 这一趟重铺文档,尺寸一点没变。
@@ -401,6 +402,9 @@ describe("蒙版编辑器", () => {
    * 让底图读得进来 —— 和「底图读进来」那条同一套平台打桩(jsdom 里没有版面、也没有图片解码):
    * 盒子量出 320×240、ResizeObserver 首次观测当场回调、fetch 给一个 blob、Image 由返回的数组决定
    * 什么时候 onload。**着色那一层只在有底图时才在层表里**,所以这一格必须先真的有一张底图。
+   *
+   * 注意尺寸:默认那张 64×64 的底图是**方**的,在 320×240 的盒子里 contain 出来是 240×240
+   * (位图尺寸见 fit();底图到之前文档还是默认的 1024²,同样 contain 成 240×240 —— 两条一样)。
    */
   function stubUnderlayPlatform(size: { width: number; height: number } = { width: 64, height: 64 }): (() => void)[] {
     vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(320);
@@ -443,7 +447,7 @@ describe("蒙版编辑器", () => {
     const decoded = stubUnderlayPlatform();
     mount();
     const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
-    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
+    await waitFor(() => expect([view.width, view.height]).toEqual([240, 240]));
     await waitFor(() => expect(decoded.length).toBeGreaterThan(0));
     for (const fire of decoded) fire();
     await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
@@ -467,7 +471,7 @@ describe("蒙版编辑器", () => {
     screen.getByRole("button", { name: "反选" }).click();
     expect(scratch.calls).toContain(`fillRect ${LIGHT_TINT}`);
     expect(reads.reads).toBe(before);
-    expect(view.width).toBe(320);
+    expect(view.width).toBe(240);
   });
 
   it("主题切到深色:当场重画,用的是新颜色 —— 不用等用户下一次动手", async () => {
@@ -515,7 +519,7 @@ describe("蒙版编辑器", () => {
     Object.assign(Element.prototype, { setPointerCapture: () => {}, releasePointerCapture: () => {}, hasPointerCapture: () => false });
     mount();
     const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
-    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
+    await waitFor(() => expect([view.width, view.height]).toEqual([240, 240]));
 
     //: 选矩形,在底图还没到的时候按下 —— 这一份快照是 1024² 那张文档的。
     fireEvent.click(screen.getByRole("radio", { name: "矩形" }));
@@ -539,5 +543,35 @@ describe("蒙版编辑器", () => {
       })
       .filter((line) => !line.endsWith(": 0"));
     expect(transparent, "写进蒙版的像素必须全不透明(蒙版契约:每个像素 alpha 255)").toEqual([]);
+  });
+  /**
+   * ## 画布按原始比例(维护者:「**注意图片应该是原先的比例**」)
+   *
+   * 此前画布元素铺满盒子、位图也按盒子的尺寸写 —— 源图不是盒子那个比例时**被拉伸/压扁**
+   * (竖幅 1624×2880 放进横幅的盒子几乎认不出来)。现在按 contain 缩:长边贴住盒子、短边按原始
+   * 比例留白;**留白是弹窗自己的底色**(画布那一格不再有 `bg-black` —— 那正是"两条大黑边"的来源),
+   * 矩形四条边由画布自己的 `border` 画出来。
+   *
+   * 这里钉的是**等比**那一件事(维护者那种竖幅图放进 320×240 的盒子):绘制矩形的宽高比 ==
+   * 图的宽高比,1px 取整之内;以及"留白不是黑"。真 Chromium 的四角落点实测见报告。
+   */
+  it("盒子比例 ≠ 图比例:按原始比例缩进去(contain),留白不是黑", async () => {
+    const decoded = stubUnderlayPlatform({ width: 1624, height: 2880 });
+    mount();
+    const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
+    await waitFor(() => expect(decoded.length).toBeGreaterThan(0));
+    for (const fire of decoded) fire();
+    await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
+
+    //: 等比:绘制矩形的宽高比 == 图的宽高比(1px 取整之内)。拉伸的话这里差 0.7 以上。
+    expect(Math.abs(view.width - view.height * (1624 / 2880)), "1px 取整之内").toBeLessThanOrEqual(1);
+    //: 高占满盒子(240),宽按比例 ⇒ 元素自己也是那块矩形(CSS 尺寸是 fit() 写下去的)。
+    expect(view.style.height).toBe("240px");
+    expect(Number.parseInt(view.style.width, 10)).toBeLessThanOrEqual(136);
+    //: 留白不是黑:画布那一格不刷黑;四条边看得到(画布自己的 border)。
+    const frame = view.parentElement as HTMLElement;
+    expect(frame.className).not.toContain("bg-black");
+    expect(frame.className).not.toMatch(/bg-\[#0{3}/);
+    expect(view.className).toContain("border");
   });
 });
