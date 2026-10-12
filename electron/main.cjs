@@ -612,6 +612,169 @@ function startMemorySpikeWatch() {
 }
 
 /**
+ * 「那 9 秒里,页面在后端反复要什么」—— IPC 追踪给出的结论是「桥上一片安静」(实测:崩前最后一条 IPC 距崩溃
+ * 9.0 秒,`skipped=0` 全程),于是唯一还剩的去处就是**不过桥的那些请求**:本机后端(8800)与 dev server(5173)。
+ *
+ * 记在**同一个** webRequest 观察者里(见下面 startPluginsDirectoryDiagnostics) —— Electron 的 webRequest
+ * **每个事件只保留最后一个 listener**(文档原话:Only the last attached listener will be used),另挂一个观察者
+ * 挂不上,只会把前面那个顶掉。所以这里是「那一个回调多记一笔」,`plugins-dir-fetch` 的 filter 与 `n=` 语义一字不动。
+ *
+ * **只记在内存里,崩的那一刻才汇总成一行 `http-at-crash`**(形状照 `ipc-at-crash`):
+ *   - `inWindow`:崩溃前 `HTTP_TRACE_WINDOW_MS` 内按路径的 top5 —— 次数 / 累计字节 / 单次最大 / `resourceType` /
+ *     首末两条距崩溃多少毫秒。`n=7` 且 `firstT=-9200 lastT=-300` 读出来就是「每 1.3 秒要一次」;
+ *   - `api`:同一窗口里 `/api/*` 的 top5 —— 那一族 1200/1500 毫秒轮询就在这里面,响应大小也在这里;
+ *   - `session`:本次运行至今的累计 top5(跨崩溃,回答「是不是一直在反复要」);
+ *   - `ring`:最近 `HTTP_TRACE_DUMP` 条逐条(哪条路径、什么类型、多大、距崩溃多少毫秒、谁要的);
+ *   - **窗口里一条本机请求都没有时也写一行**:`inWindow.count = 0` 同样是结论(那 9 秒的增长与后端无关)。
+ *
+ * 计数是**全进程一份**,不按 webContents 拆表:这里要回答的是「本机上被反复要的是哪个路径」,而每条在 ring 里
+ * 都带 `from`(webContentsId),要分辨是哪块视图要的看 ring 就够 —— 按视图拆会让 top5 被六块发布账号视图稀释,
+ * 那正好是这次不关心的东西。
+ */
+/** 崩溃前看多长一段。(实测那一簇:load-finish 之后 8.94–9.24 秒 trap,所以 10 秒能把整段罩住。) */
+const HTTP_TRACE_WINDOW_MS = 10 * 1000;
+/** 内存里留最近多少条(算窗口 top5 用)。崩的时候只逐条打最后 `HTTP_TRACE_DUMP` 条。 */
+const HTTP_TRACE_RING = 300;
+const HTTP_TRACE_DUMP = 20;
+/** 路径表上限:dev server 的模块路径可以很多,记得住才有意义(超了计入 `dropped`,不假装是全部)。 */
+const HTTP_TRACE_MAX_PATHS = 200;
+/** 崩溃汇总里每条榜单列几行。 */
+const HTTP_TRACE_TOP = 5;
+
+/** 路径表:path → { n, bytes, max, type }。`bytes` 只累加报了 Content-Length 的那些,没报的仍计数。 */
+const httpTracePaths = new Map();
+/** 最近 `HTTP_TRACE_RING` 条(按时间),算窗口 top5 与逐条现场都靠它。 */
+const httpTraceRing = [];
+/** 路径表满了以后没再进表的条数。 */
+let httpTraceDropped = 0;
+
+/** URL → 路径(去 origin、去 query 与 hash)。`/api/plugins?p=x` 与 `/api/plugins` 是同一条。 */
+function httpTracePath(raw) {
+  const url = String(raw ?? "");
+  const cut = url.search(/[?#]/);
+  const head = cut === -1 ? url : url.slice(0, cut);
+  const scheme = head.indexOf("://");
+  const slash = head.indexOf("/", scheme === -1 ? 0 : scheme + 3);
+  return slash === -1 ? head : head.slice(slash);
+}
+
+/** 响应体多大。报不了就是 null —— 别拿 0 顶替,那读起来像「它没有响应体」。 */
+function httpTraceBytes(details) {
+  const headers = details?.responseHeaders ?? {};
+  const raw = (headers["Content-Length"] ?? headers["content-length"] ?? [])[0];
+  const size = Number(raw);
+  return Number.isFinite(size) ? size : null;
+}
+
+/**
+ * 一条本机请求记一笔。**只记账,不写日志** —— 插件页静置时本机请求不算少,逐条写就是又一套刷屏
+ * (`plugins-dir-fetch` 那一行照旧只数 `/api/plugins`,一行不多一行不少)。
+ * 已经销毁的请求、读不出来的字段都只是少记一笔,绝不许把 webRequest 的回调带走。
+ */
+function traceHttpRequest(details) {
+  if (IPC_TRACE_MODE === "off") return;
+  const path = httpTracePath(details?.url);
+  if (!path) return;
+  const bytes = httpTraceBytes(details);
+  let counter = httpTracePaths.get(path);
+  if (!counter) {
+    if (httpTracePaths.size >= HTTP_TRACE_MAX_PATHS) {
+      httpTraceDropped += 1;
+      return;
+    }
+    counter = { n: 0, bytes: 0, max: 0, type: String(details?.resourceType ?? "") };
+    httpTracePaths.set(path, counter);
+  }
+  counter.n += 1;
+  if (bytes !== null) {
+    counter.bytes += bytes;
+    counter.max = Math.max(counter.max, bytes);
+  }
+  httpTraceRing.push({
+    at: Date.now(),
+    path,
+    type: String(details?.resourceType ?? ""),
+    status: details?.statusCode ?? null,
+    bytes,
+    from: typeof details?.webContentsId === "number" ? details.webContentsId : null,
+  });
+  if (httpTraceRing.length > HTTP_TRACE_RING) httpTraceRing.shift();
+}
+
+/**
+ * 落在 `crashAt` 之前 `HTTP_TRACE_WINDOW_MS` 内的那些,按路径汇总、按次数取前 `limit`。
+ * 纯函数(只吃传进来的数组与时刻),单独跑见 memoryDiagnostics.test.ts。
+ * `firstT` / `lastT` 是这条路径在这一窗口里首末两次距崩溃多少毫秒(负数 = 崩之前)——
+ * 「每 1.2 秒要一次」由 `(lastT - firstT) / (n - 1)` 直接读得出来,不用再猜。
+ */
+function httpTraceRows(entries, crashAt, limit) {
+  const byPath = new Map();
+  let count = 0;
+  for (const entry of entries) {
+    if (!entry || crashAt - entry.at > HTTP_TRACE_WINDOW_MS) continue;
+    count += 1;
+    let row = byPath.get(entry.path);
+    if (!row) {
+      row = { path: entry.path, n: 0, bytes: 0, max: 0, type: entry.type, firstT: 0, lastT: 0 };
+      byPath.set(entry.path, row);
+    }
+    row.n += 1;
+    if (typeof entry.bytes === "number") {
+      row.bytes += entry.bytes;
+      row.max = Math.max(row.max, entry.bytes);
+    }
+    if (row.n === 1) row.firstT = Math.round(entry.at - crashAt);
+    row.lastT = Math.round(entry.at - crashAt);
+  }
+  // 次数一样多的按累计字节排:同样被叫 6 次,拉 500 KB 的那个才是嫌疑。
+  const rows = [...byPath.values()].sort((a, b) => b.n - a.n || b.bytes - a.bytes);
+  return {
+    count,
+    paths: byPath.size,
+    top: rows.slice(0, limit),
+    api: rows.filter((row) => row.path.startsWith("/api/")).slice(0, limit),
+  };
+}
+
+/** 本次运行至今的累计 top5(跨崩溃)。 */
+function httpTraceSessionTop(limit) {
+  return [...httpTracePaths]
+    .map(([path, counter]) => ({ path, n: counter.n, bytes: counter.bytes, max: counter.max, type: counter.type }))
+    .sort((a, b) => b.n - a.n || b.bytes - a.bytes)
+    .slice(0, limit);
+}
+
+/**
+ * 崩的那一刻把「最近那几秒页面在后端要什么」打出来。和 `ipc-at-crash` 同一个形状、同一个时刻、同一份 local 时钟,
+ * 两条对着看就能回答「这 9 秒它是隔桥说话,还是在跟后端要东西,还是两样都没有」。
+ */
+function appendHttpTraceAtCrash(details, view) {
+  if (IPC_TRACE_MODE === "off") return;
+  appendDiagnosticLog("http-at-crash", () => {
+    const now = Date.now();
+    const window = httpTraceRows(httpTraceRing, now, HTTP_TRACE_TOP);
+    const recent = httpTraceRing.slice(-HTTP_TRACE_DUMP);
+    let total = 0;
+    for (const counter of httpTracePaths.values()) total += counter.n;
+    return JSON.stringify({
+      local: localClock(),
+      reason: details?.reason ?? null,
+      exitCode: details?.exitCode ?? null,
+      view: view ?? null,
+      windowMs: HTTP_TRACE_WINDOW_MS,
+      inWindow: { count: window.count, paths: window.paths, top: window.top },
+      api: window.api,
+      session: { total, paths: httpTracePaths.size, dropped: httpTraceDropped, top: httpTraceSessionTop(HTTP_TRACE_TOP) },
+      // ring 被塞满、而最老那条还在窗口里 ⇒ 窗口 top5 只是下界;这个标记必须跟着走出去,不然会被当成精确值。
+      partial: httpTraceRing.length >= HTTP_TRACE_RING && now - httpTraceRing[0].at <= HTTP_TRACE_WINDOW_MS,
+      lastAgoMs: recent.length ? now - recent[recent.length - 1].at : null,
+      last: recent.length ? recent[recent.length - 1].path : null,
+      ring: recent.map(({ at, ...rest }) => ({ ...rest, t: Math.round(at - now) })),
+    });
+  });
+}
+
+/**
  * 插件页会不会**反复**把整份目录拉回来 —— 「一进插件页就崩」最直接的对账口径:目录一份好几 MB,
  * 每重拉一次就是一棵全新的对象图,旧的那份还挂在 react-query 的缓存里。
  *
@@ -630,6 +793,9 @@ function startPluginsDirectoryDiagnostics() {
         // host 在这里再判一遍,是为了让这个函数自己不依赖调用方给的 filter —— 少一处「改了 filter、
         // 忘了这里」的暗雷。
         if (!/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//i.test(details.url)) return;
+        // 每一条本机请求都记一笔(只在内存里;崩的那一刻才汇总成 http-at-crash,见 appendHttpTraceAtCrash)。
+        // 放在这里、`/api/plugins` 那个判断之前:下面那一档只管那一个路径,这一档要的是全部。
+        traceHttpRequest(details);
         if (details.url.replace(/^[a-z]+:\/\/[^/]*/i, "").split("?")[0] !== "/api/plugins") return;
         count += 1;
         const headers = details.responseHeaders ?? {};
@@ -680,6 +846,8 @@ app.on("render-process-gone", (_event, webContents, details) => {
   }
   // 崩的那一刻的「最近 40 条 IPC」:同步写完就走,不受上面那几个异步读数影响(见 appendIpcTraceAtCrash)。
   appendIpcTraceAtCrash(details);
+  // 同一个时刻的另一半现场:那几秒里页面往后端要了什么(见 appendHttpTraceAtCrash)。
+  appendHttpTraceAtCrash(details, ipcContentsId(webContents));
 });
 app.on("child-process-gone", (_event, details) => {
   appendMainLog("child-process-gone", JSON.stringify(details));
@@ -972,6 +1140,10 @@ function traceIpc(direction, channel, peer, url, payload) {
 /**
  * 处理器跑完(或抛了)之后补一笔。慢的和报错的**单独**一行 —— 它们的量本来就小,而且正是要找的东西。
  * 慢/错行有自己的聚合门(每秒每条通道每种结局最多一行),但**不受**到店行的门影响。
+ *
+ * 结局有四种:`ok`(处理器回来了)、`sent`(push:交给 Electron 就算完,它没有回话)、`throw` / `error`。
+ * **push 必须有自己的名字**:不然环里那一条的 `ms` 永远是空的,读起来像「处理器一直没回来」——
+ * 而它压根没有往返(这一条是第一次真跑时看出来的:jq 把 4 条 push 全打成了 `ms=pending`)。
  */
 function traceIpcDone(entry, startedAt, outcome, error) {
   if (!entry) return;
@@ -979,17 +1151,18 @@ function traceIpcDone(entry, startedAt, outcome, error) {
   entry.ms = ms;
   entry.outcome = outcome;
   if (IPC_TRACE_MODE !== "trace") return;
-  if (outcome === "ok" && ms < IPC_TRACE_SLOW_MS) return;
+  const settled = outcome === "ok" || outcome === "sent";
+  if (settled && ms < IPC_TRACE_SLOW_MS) return;
   const now = Date.now();
   const gate = `${outcome}\u0000${entry.channel}`;
   const last = ipcTraceDoneAt.get(gate) ?? 0;
   if (last !== 0 && now - last < IPC_TRACE_MIN_GAP_MS) return;
   ipcTraceDoneAt.set(gate, now);
-  if (outcome === "ok") {
+  if (settled) {
     appendDiagnosticLog(
       "ipc-slow",
       () =>
-        `local=${localClock()} seq=${entry.seq} dir=${entry.dir} channel=${entry.channel} ms=${ms} ${peerOf(entry)} ` +
+        `local=${localClock()} seq=${entry.seq} dir=${entry.dir} channel=${entry.channel} ms=${ms} outcome=${outcome} ${peerOf(entry)} ` +
         `bytes=${entry.bytes}${entry.capped ? "+" : ""} url=${entry.url || "-"}`,
     );
     return;
@@ -1027,8 +1200,13 @@ function traceIpcResult(entry, startedAt, result) {
  */
 function sendToRenderer(contents, channel, ...payload) {
   if (IPC_TRACE_MODE === "off") return contents.send(channel, ...payload);
-  traceIpc("push", channel, ipcContentsId(contents), ipcContentsUrl(contents), payload);
-  return contents.send(channel, ...payload);
+  const startedAt = Date.now();
+  const entry = traceIpc("push", channel, ipcContentsId(contents), ipcContentsUrl(contents), payload);
+  const result = contents.send(channel, ...payload);
+  // 推出去没有回话:`sent` 就是它的结局,`ms` 是这一次序列化 + 投递在主进程花掉的时间
+  // (推一份几 MB 的载荷时,这个数会立刻变难看 —— 那正是要看见的东西)。
+  traceIpcDone(entry, startedAt, "sent");
+  return result;
 }
 
 /**

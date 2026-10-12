@@ -37,8 +37,77 @@ const F = {
     /\nfunction startPluginsDirectoryDiagnostics\(\) \{[\s\S]*?\n\}\n/,
     "startPluginsDirectoryDiagnostics",
   ),
+  // 「那 9 秒里页面在后端要什么」那一档(和上面那一个共用同一个 webRequest 回调)。
+  httpConstants: extract(/\nconst HTTP_TRACE_WINDOW_MS = [^\n]*\n[\s\S]*?const HTTP_TRACE_TOP = [^\n]*\n/, "HTTP_TRACE_* 常量"),
+  httpState: extract(/\nconst httpTracePaths = new Map\(\);\n[\s\S]*?let httpTraceDropped = 0;\n/, "httpTrace 状态"),
+  httpTracePath: extract(/\nfunction httpTracePath\(raw\) \{[\s\S]*?\n\}\n/, "httpTracePath"),
+  httpTraceBytes: extract(/\nfunction httpTraceBytes\(details\) \{[\s\S]*?\n\}\n/, "httpTraceBytes"),
+  traceHttpRequest: extract(/\nfunction traceHttpRequest\(details\) \{[\s\S]*?\n\}\n/, "traceHttpRequest"),
+  httpTraceRows: extract(/\nfunction httpTraceRows\(entries, crashAt, limit\) \{[\s\S]*?\n\}\n/, "httpTraceRows"),
+  httpTraceSessionTop: extract(/\nfunction httpTraceSessionTop\(limit\) \{[\s\S]*?\n\}\n/, "httpTraceSessionTop"),
+  appendHttpTraceAtCrash: extract(/\nfunction appendHttpTraceAtCrash\(details, view\) \{[\s\S]*?\n\}\n/, "appendHttpTraceAtCrash"),
+  ipcTraceMode: extract(/\nfunction ipcTraceMode\(env\) \{[\s\S]*?\n\}\n/, "ipcTraceMode"),
   localClock: extract(/\nfunction localClock\(date = new Date\(\)\) \{[\s\S]*?\n\}\n/, "localClock"),
 };
+
+/**
+ * webRequest 那一个回调连同它点名的每一段代码,凑成一个**能整跑**的沙箱。
+ *
+ * 为什么要连 `traceHttpRequest` 一起 extract、而不是只 extract `startPluginsDirectoryDiagnostics`:
+ * 回调自带 `try/catch`(「一条数不出来,不影响别的请求」),沙箱里少一个函数不会报错,只会**静默**少写几行 ——
+ * 那正是「测试全绿、真机才炸」的雷。所以这里把用到的都装进来,并且有一条用例专门盯着「回调点名的每个函数
+ * 是不是都真的在沙箱里」(见 `missingFromSanbox`)。
+ */
+const WATCHER_SANDBOX = [
+  F.localClock,
+  F.ipcTraceMode,
+  "const IPC_TRACE_MODE = ipcTraceMode(process.env);",
+  F.httpConstants,
+  F.httpState,
+  F.httpTracePath,
+  F.httpTraceBytes,
+  F.traceHttpRequest,
+  F.httpTraceRows,
+  F.httpTraceSessionTop,
+  F.appendHttpTraceAtCrash,
+  F.startPluginsDirectoryDiagnostics,
+].join("\n");
+
+/** 桩的名字 + 语言关键字 + 宿主全局:它们不是「沙箱里少了一个函数」。 */
+const CALL_ALLOWED = new Set([
+  ...["appendDiagnosticLog", "session", "process"],
+  ...["Number", "String", "Boolean", "Math", "JSON", "Object", "Array", "Map", "Set", "RegExp", "Date", "Error"],
+  ...["if", "for", "while", "switch", "catch", "return", "typeof", "new", "function", "do", "else"],
+]);
+
+/**
+ * 去掉注释。三步的顺序都是踩出来的,换一步就会把**代码**当注释吃掉(扫描结果就成了「什么都没调用」,
+ * 这条断言于是永远绿 —— 正是它要防的那种静默):
+ *   1. 先抠字符串字面量:`["*://127.0.0.1/*", "*://localhost/*"]` 里那对斜杠星号不是注释开头,
+ *      而 `*://` 里那对斜杠也不是;
+ *   2. 再去 `//` 行注释,**必须在块注释之前** —— 注释里写着「别的 /api/ 通配不记」那种字眼时,注释里那个
+ *      斜杠星号会跟后面代码里 `[^/]*` 结尾的星号加斜杠配成一对,把中间的真代码整段删掉(实测:这一段
+ *      1379 字节会只剩 708);
+ *   3. 最后去块注释(这一段的文档注释在这一步)。
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+    .replace(/\/\/[^\n]*/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+function missingFromSandbox(sandbox: string = WATCHER_SANDBOX): string[] {
+  const source = stripComments(sandbox);
+  const declared = new Set(
+    [...source.matchAll(/(?:function\s+([A-Za-z_$][\w$]*)|(?:const|let|var)\s+([A-Za-z_$][\w$]*))/g)]
+      .flatMap((match) => [match[1], match[2]])
+      .filter((name): name is string => Boolean(name)),
+  );
+  const called = new Set([...source.matchAll(/(?:^|[^\w.$])([A-Za-z_$][\w$]*)\s*\(/g)].map((match) => match[1]));
+  return [...called].filter((name) => !declared.has(name) && !CALL_ALLOWED.has(name)).sort();
+}
 
 /** 采样链上「读状态」的那几段 + 记日志那一段,凑成一条能整跑的链。 */
 const SAMPLING_CHAIN = [
@@ -461,34 +530,50 @@ describe("尖峰探测器(5 秒一格,只在暴涨时写)", () => {
   });
 });
 
-describe("插件页在反复拉整份目录吗", () => {
-  /** 把 webRequest 的观察者接下来,喂它几条完成的请求。 */
-  function runWatcher(stubs: Record<string, unknown> = {}) {
-    const written: string[] = [];
-    const filters: unknown[] = [];
-    let handler: ((details: unknown) => void) | null = null;
-    const context: Record<string, unknown> = {
-      appendDiagnosticLog: (kind: string, detail: string | (() => string)) => written.push(`${kind} ${typeof detail === "function" ? detail() : detail}`),
-      session: {
-        defaultSession: {
-          webRequest: {
-            onCompleted: (filter: unknown, callback: (details: unknown) => void) => {
-              filters.push(filter);
-              handler = callback;
-            },
+/**
+ * 把 webRequest 的观察者接下来,喂它几条完成的请求。
+ * 时钟是假的:窗口 top5 与 `t=` 偏移要钉死,真时钟下这些断言只能靠 sleep。
+ */
+function runWatcher(stubs: Record<string, unknown> = {}) {
+  const written: string[] = [];
+  const filters: unknown[] = [];
+  const clock = { now: Date.UTC(2026, 0, 2, 3, 4, 5) };
+  let handler: ((details: unknown) => void) | null = null;
+  class FakeDate extends Date {
+    constructor(value?: number) {
+      super(value ?? clock.now);
+    }
+    static now(): number {
+      return clock.now;
+    }
+  }
+  const context: Record<string, unknown> = {
+    Date: FakeDate,
+    appendDiagnosticLog: (kind: string, detail: string | (() => string)) => written.push(`${kind} ${typeof detail === "function" ? detail() : detail}`),
+    session: {
+      defaultSession: {
+        webRequest: {
+          onCompleted: (filter: unknown, callback: (details: unknown) => void) => {
+            filters.push(filter);
+            handler = callback;
           },
         },
       },
-      ...stubs,
-    };
-    vm.runInNewContext(`${F.localClock}\n${F.startPluginsDirectoryDiagnostics}`, context);
-    return {
-      written,
-      filters,
-      context,
-      fire: (details: unknown) => handler?.(details),
-    };
-  }
+    },
+    process: { env: {} },
+    ...stubs,
+  };
+  vm.runInNewContext(WATCHER_SANDBOX, context);
+  return {
+    written,
+    filters,
+    clock,
+    context,
+    fire: (details: unknown) => handler?.(details),
+  };
+}
+
+describe("插件页在反复拉整份目录吗", () => {
 
   it("只数那一份整目录,带 n / 字节数 / 状态码 / 本地时间", () => {
     const w = runWatcher();
@@ -538,5 +623,181 @@ describe("接进 main.cjs", () => {
     expect(MAIN).toMatch(/memory: memorySnapshot\(\)/);
     expect(MAIN).toMatch(/\nfunction memorySnapshot\(\) \{/);
     expect(MAIN).not.toMatch(/function memorySnapshot\(\) \{[\s\S]{0,400}?summarizeAppMemory/);
+  });
+});
+
+/**
+ * 「那 9 秒里,页面在后端反复要什么」—— IPC 追踪给出的结论是「桥上一片安静」(崩前最后一条 IPC 距崩溃 9.0 秒),
+ * 于是问题落到不过桥的那些请求上。这一档与上面那一个**共用同一个 webRequest 回调**(Electron 每个事件只保留
+ * 最后一个 listener),所以这里的桩、沙箱、`plugins-dir-fetch` 的既有断言都在上面那一个 describe 里,两处共用。
+ */
+describe("那 9 秒里页面在后端要什么", () => {
+  /** 一条本机请求。`bytes` 不给就等同于「响应没报 Content-Length」。 */
+  const req = (path: string, bytes?: number, type = "xhr") => ({
+    url: `http://127.0.0.1:8800${path}`,
+    statusCode: 200,
+    fromCache: false,
+    resourceType: type,
+    webContentsId: 1,
+    responseHeaders: bytes === undefined ? {} : { "Content-Length": [String(bytes)] },
+  });
+
+  /** 起观察者。 */
+  const start = (stubs: Record<string, unknown> = {}) => {
+    const w = runWatcher(stubs);
+    (w.context.startPluginsDirectoryDiagnostics as () => void)();
+    return w;
+  };
+
+  /** 崩一次,把 http-at-crash 那一行解出来。 */
+  const crash = (w: ReturnType<typeof start>, details: unknown = { reason: "crashed", exitCode: 5 }) => {
+    (w.context.appendHttpTraceAtCrash as (d: unknown, v: unknown) => void)(details, 1);
+    const line = w.written.filter((entry) => entry.startsWith("http-at-crash ")).at(-1);
+    if (!line) throw new Error("没有写出 http-at-crash 那一行");
+    return JSON.parse(line.slice("http-at-crash ".length));
+  };
+
+  it("回调点名的每个函数都真的在沙箱里 —— 否则会被那个 try/catch 静默吞掉(测试全绿、真机才炸)", () => {
+    expect(missingFromSandbox()).toEqual([]);
+    // 反面自检:故意抽掉一段就该点名它 —— 证明这条断言不是摆设(而不是「永远绿」)。
+    expect(missingFromSandbox(WATCHER_SANDBOX.replace(F.traceHttpRequest, ""))).toEqual(["traceHttpRequest"]);
+    // 间接被调用的那一段一样抓得到(httpTracePath 只被 traceHttpRequest 叫)。
+    expect(missingFromSandbox(WATCHER_SANDBOX.replace(F.httpTracePath, ""))).toEqual(["httpTracePath"]);
+    // 模板字符串里的调用也数得到(localClock 就在 `local=${localClock()}` 里)。
+    expect(missingFromSandbox(WATCHER_SANDBOX.replace(F.localClock, ""))).toEqual(["localClock"]);
+  });
+
+  it("只记账、不写日志:本机请求再多,这一档一行都不多写(plugins-dir-fetch 照旧只数那一个路径)", () => {
+    const w = start();
+    for (let i = 0; i < 8; i += 1) w.fire(req("/api/plugins/local-service/comfy", 300 * 1024));
+    w.fire(req("/api/plugins", 1_636_452));
+    w.fire(req("/src/main.tsx", 4096, "script"));
+    w.fire({ url: "https://creator.douyin.com/api/plugins", statusCode: 200, fromCache: false, responseHeaders: {} });
+
+    expect(w.written).toEqual([
+      expect.stringMatching(/^plugins-dir-fetch n=1 local=\d\d:\d\d:\d\d status=200 bytes=1636452 fromCache=false$/),
+    ]);
+  });
+
+  it("崩的那一刻给窗口 top5:次数 / 累计字节 / 单次最大 / resourceType / 首末两条距崩溃多久", () => {
+    const w = start();
+    // 9 秒窗口里的那一族 1200 毫秒轮询:7 次,每次 300 KB。
+    for (let i = 0; i < 7; i += 1) {
+      w.clock.now += 1200;
+      w.fire(req("/api/plugins/local-service/comfy", 300 * 1024));
+    }
+    w.fire(req("/api/state", 500));
+    w.clock.now += 300;
+    w.fire(req("/api/plugins", 1_636_452));
+    w.clock.now += 200;
+
+    const payload = crash(w);
+    expect(payload).toMatchObject({
+      local: expect.stringMatching(/^\d\d:\d\d:\d\d$/),
+      reason: "crashed",
+      exitCode: 5,
+      view: 1,
+      windowMs: 10_000,
+      inWindow: { count: 9, paths: 3 },
+      partial: false,
+      lastAgoMs: 200,
+      last: "/api/plugins",
+    });
+    expect(payload.inWindow.top).toEqual([
+      {
+        path: "/api/plugins/local-service/comfy",
+        n: 7,
+        bytes: 7 * 300 * 1024,
+        max: 300 * 1024,
+        type: "xhr",
+        firstT: -7700,
+        lastT: -500,
+      },
+      { path: "/api/plugins", n: 1, bytes: 1636452, max: 1636452, type: "xhr", firstT: -200, lastT: -200 },
+      { path: "/api/state", n: 1, bytes: 500, max: 500, type: "xhr", firstT: -500, lastT: -500 },
+    ]);
+    // 「每 1.2 秒一次」由这两个数直接读得出来:(lastT - firstT) / (n - 1) = 7200 / 6 = 1200 毫秒。
+    expect((payload.inWindow.top[0].lastT - payload.inWindow.top[0].firstT) / (payload.inWindow.top[0].n - 1)).toBe(1200);
+    // /api/ 单独一列,只有 /api/ 开头的。
+    expect(payload.api.map((row: { path: string }) => row.path)).toEqual([
+      "/api/plugins/local-service/comfy",
+      "/api/plugins",
+      "/api/state",
+    ]);
+    expect(payload.session).toMatchObject({ total: 9, paths: 3, dropped: 0 });
+    expect(payload.session.top[0]).toMatchObject({ path: "/api/plugins/local-service/comfy", n: 7 });
+    expect(payload.ring.at(-1)).toMatchObject({ path: "/api/plugins", type: "xhr", status: 200, bytes: 1636452, from: 1, t: -200 });
+  });
+
+  it("窗口外的请求不计入 inWindow,但计入 session(窗口是崩前那一段,不是整轮)", () => {
+    const w = start();
+    w.fire(req("/api/plugins", 1000));
+    w.clock.now += 4000;
+    w.fire(req("/api/plugins", 1000));
+    w.clock.now += 30_000; // 中间隔了 30 秒,前面两条都掉出 10 秒窗口
+    w.fire(req("/api/plugins", 1000));
+
+    const payload = crash(w);
+    expect(payload.inWindow).toMatchObject({ count: 1, paths: 1 });
+    expect(payload.session).toMatchObject({ total: 3, paths: 1 });
+    expect(payload.ring).toHaveLength(3); // 逐条现场不受窗口限制
+  });
+
+  it("窗口里一条本机请求都没有:也写一行,inWindow.count=0 —— 那 9 秒与后端无关也是结论", () => {
+    const w = start();
+    w.fire(req("/api/plugins", 1000));
+    w.clock.now += 60_000;
+
+    const payload = crash(w);
+    expect(payload.inWindow).toEqual({ count: 0, paths: 0, top: [] });
+    expect(payload.api).toEqual([]);
+    expect(payload.lastAgoMs).toBe(60_000);
+    expect(payload.last).toBe("/api/plugins"); // 最后一次是一分钟前那一条
+    expect(payload.session).toMatchObject({ total: 1, paths: 1, dropped: 0 });
+  });
+
+  it("响应没报 Content-Length 的仍然计数,但不假装它有大小", () => {
+    const w = start();
+    w.fire(req("/api/stream"));
+    w.fire(req("/api/stream"));
+
+    const payload = crash(w);
+    expect(payload.inWindow.top[0]).toMatchObject({ path: "/api/stream", n: 2, bytes: 0, max: 0 });
+  });
+
+  it("表满了、环塞满了都要说出来:dropped 与 partial(这只是下界,不许当成精确值)", () => {
+    const w = start();
+    for (let i = 0; i < 220; i += 1) w.fire(req(`/api/thing/${i}`, 10)); // 200 条进表,20 条被丢
+    for (let i = 0; i < 320; i += 1) w.fire(req("/api/thing/0", 10)); // 打在已经在表里的那条上
+    w.clock.now += 500;
+
+    const payload = crash(w);
+    expect(payload.session).toMatchObject({ paths: 200, dropped: 20, total: 200 + 320 });
+    expect(payload.partial).toBe(true);
+    expect(payload.inWindow.count).toBe(300); // 环的容量,不是窗口里的真实条数
+  });
+
+  it("总闸拉掉(MOSAEL_IPC_TRACE=0):不记账、不写行,但既有那条 plugins-dir-fetch 一字不动", () => {
+    const w = start({ process: { env: { MOSAEL_IPC_TRACE: "0" } } });
+    w.fire(req("/api/plugins/local-service/comfy", 300 * 1024));
+    w.fire(req("/api/plugins", 1000));
+    (w.context.appendHttpTraceAtCrash as (d: unknown, v: unknown) => void)({ reason: "crashed" }, 1);
+
+    expect(w.written.filter((line) => line.startsWith("http-at-crash"))).toEqual([]);
+    expect(w.written).toHaveLength(1);
+    expect(w.written[0]).toMatch(/^plugins-dir-fetch n=1 /);
+  });
+
+  it("接法:记一笔在 /api/plugins 那个判断之前;崩的时候写 http-at-crash;filter 与 n= 一字不动", () => {
+    expect(F.startPluginsDirectoryDiagnostics).toMatch(
+      /if \(!\/\^https\?:\\\/\\\/\(\?:127\\\.0\\\.0\\\.1\|localhost\)[\s\S]{0,200}?traceHttpRequest\(details\);\n\s*if \(details\.url\.replace/,
+    );
+    expect(F.startPluginsDirectoryDiagnostics).toMatch(/\{ urls: \["\*:\/\/127\.0\.0\.1\/\*", "\*:\/\/localhost\/\*"\] \}/);
+    expect(F.startPluginsDirectoryDiagnostics).toMatch(
+      /`n=\$\{count\} local=\$\{localClock\(\)\} status=\$\{details\.statusCode\} bytes=\$\{length \?\? "\?"\} fromCache=\$\{Boolean\(details\.fromCache\)\}`/,
+    );
+    expect(MAIN).toMatch(/appendIpcTraceAtCrash\(details\);\n\s*\/\/[^\n]*\n\s*appendHttpTraceAtCrash\(details, ipcContentsId\(webContents\)\);/);
+    // webRequest 每个事件只保留最后一个 listener:只许有一个观察者。
+    expect(MAIN.match(/webRequest\.onCompleted\(/g)).toHaveLength(1);
   });
 });

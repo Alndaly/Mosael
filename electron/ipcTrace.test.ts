@@ -127,9 +127,17 @@ function harness(mode: string | undefined) {
     /** 页面经 `ipcRenderer.send` 打过来的一次单向消息。 */
     send: (channel: string, ...args: unknown[]) => callWith(listeners, channel, eventFor("http://127.0.0.1:5173/#/plugins"), args),
     invokeFrom: (event: unknown, channel: string, ...args: unknown[]) => callWith(handlers, channel, event, args),
-    push: (contents: unknown, channel: string, ...payload: unknown[]) => {
-      const clone = { id: (contents as { id: number }).id, getURL: () => "http://127.0.0.1:5173/#/plugins", send: (sent2: string, ...rest: unknown[]) => sent.push({ channel: sent2, payload: rest }) };
-      return globals.sendToRenderer(contents === null ? null : clone, channel, ...payload);
+    push: (contents: { id: number; holdMs?: number }, channel: string, ...payload: unknown[]) => {
+      const clone = {
+        id: contents.id,
+        getURL: () => "http://127.0.0.1:5173/#/plugins",
+        // holdMs 模拟「这一次投递本身很贵」(推一份大载荷):send 花掉的时间要落到 ms 上。
+        send: (name: string, ...rest: unknown[]) => {
+          if (typeof contents.holdMs === "number") clock.now += contents.holdMs;
+          sent.push({ channel: name, payload: rest });
+        },
+      };
+      return globals.sendToRenderer(clone, channel, ...payload);
     },
     crash: (details: unknown = { reason: "crashed", exitCode: 5 }) => globals.appendIpcTraceAtCrash(details),
   };
@@ -206,6 +214,19 @@ describe("IPC 追踪:一行里有什么", () => {
     h.push({ id: 3 }, "comfyui:workbench", { state: "dirty" });
     expect(h.first("ipc")?.text).toContain("dir=push channel=comfyui:workbench to=3 bytes=10");
     expect(h.sent).toEqual([{ channel: "comfyui:workbench", payload: [{ state: "dirty" }] }]);
+    // push 没有回话,但**必须有结局**:不然环里那条读起来像「处理器一直没回来」。
+    expect(h.of("ipc-error")).toEqual([]);
+    expect(h.of("ipc-slow")).toEqual([]);
+  });
+
+  it("push 的结局是 sent、耗时也算得出来(大载荷推出去贵不贵看得到)", () => {
+    const h = harness(undefined);
+    h.push({ id: 3 }, "browser:frame", { dataUrl: "x".repeat(100) }); // 键 7 + 值 100
+    h.push({ id: 3, holdMs: 400 }, "browser:frame", { dataUrl: "x".repeat(100) });
+    h.crash();
+    const ring = JSON.parse(h.first("ipc-at-crash")?.text ?? "{}").ring;
+    expect(ring[0]).toMatchObject({ dir: "push", to: 3, outcome: "sent", ms: 0, bytes: 107 });
+    expect(ring[1]).toMatchObject({ outcome: "sent", ms: 400, bytes: 107 });
   });
 });
 
@@ -361,7 +382,7 @@ describe("IPC 追踪:慢的、报错的", () => {
     await Promise.resolve();
 
     expect(h.of("ipc-slow")).toHaveLength(1);
-    expect(h.first("ipc-slow")?.text).toMatch(/local=\d\d:\d\d:\d\d seq=1 dir=invoke channel=data:createBackup ms=300 from=7 bytes=0 url=/);
+    expect(h.first("ipc-slow")?.text).toMatch(/local=\d\d:\d\d:\d\d seq=1 dir=invoke channel=data:createBackup ms=300 outcome=ok from=7 bytes=0 url=/);
   });
 
   it("同步抛:记一行 outcome=throw,然后原样抛回去", () => {
