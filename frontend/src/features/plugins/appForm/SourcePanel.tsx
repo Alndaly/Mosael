@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { KindIcon, techText, valueText, visualOf } from "@/features/plugins/appForm/fieldFacts";
+import { LocateNodeButton } from "@/features/plugins/workbench/LocateNodeButton";
 import { exposable, matchesSource, shortTitle, sourceGroups, type FormDraft } from "@/features/plugins/workflowAppForm";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,9 @@ import { cn } from "@/lib/utils";
  * 「工作流里能填的」:这张图全部能填的项,**按节点分组**(组名是节点给人看的名字 —— 用户起的标题,没起就是 ComfyUI 给这类
  * 节点的名字;节点号、类名在悬停说明里),种子 / 尺寸 / 跑几遍是「整张图」那一组。每一行:种类图标、名字、现在的值,右边一颗
  * 「+」放进表单;已经在表单上的打勾,再点一下拿掉。子图里面的节点灰着、说为什么。
+ *
+ * 组标题右边的 `#节点号` 是一颗按钮(和助手回复里的 `#12` 同一颗):点了在画布上定位这个节点 —— 名字是用户起的,
+ * 光看名字对不上画布上哪一个(维护者提的)。「整张图」那一组没有节点,不给按钮。
  */
 export function SourcePanel({
   data,
@@ -51,10 +55,26 @@ export function SourcePanel({
         const name = group.node ? group.label : t("workflowAppGraphGroup");
         return (
           <div key={group.node || "graph"} className="grid min-w-0 gap-1" data-source-group={group.node}>
+            {/*
+              这一处只留一条说明:说的是这个节点**是什么**(节点号 · 类名),挂在标题这一条上 —— 名字和节点号都归它管。
+              定位那颗按钮自己不挂说明(两处的说法不一样,一处挂两条是噪音),它的名字走 aria-label(「在画布上定位 #706」)。
+            */}
             <Hint label={group.node ? t("workflowAppNodeDetail").replace("{node}", group.node).replace("{class}", group.classType || "?") : undefined}>
               <h5 className="m-0 flex min-w-0 items-baseline gap-1.5 px-1 text-ui-xs font-semibold text-muted-foreground">
                 <Truncate className="min-w-0">{name}</Truncate>
-                {group.node && <span className="shrink-0 font-normal tabular-nums">#{group.node}</span>}
+                {group.node && (
+                  /*
+                    按钮和它失败时那句话装在一个会折行的盒子里(见 LocateNodeButton):「画布上没有节点 #706」这种话说得长,
+                    让它在这一行里折到下一行,而不是把标题顶宽、挤出这一列。
+                  */
+                  <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5">
+                    <LocateNodeButton
+                      node={group.node}
+                      ariaLabel={t("workbenchAssistantLocate").replace("{node}", group.node)}
+                      className="shrink-0 font-sans text-ui-xs font-normal tabular-nums text-muted-foreground hover:text-foreground"
+                    />
+                  </span>
+                )}
               </h5>
             </Hint>
             <ul aria-label={group.node ? `${name} #${group.node}` : name} className="m-0 grid list-none gap-0.5 p-0">

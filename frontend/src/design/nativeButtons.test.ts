@@ -133,7 +133,9 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/plugins/PluginsView.tsx": 3,
   "features/plugins/ProvidedModels.tsx": 1,
   "features/plugins/ToolRowFrame.tsx": 1,
-  "features/plugins/workbench/AssistantPanel.tsx": 1,
+  //: 助手回复里的 `#12` 是正文当中的一个引用(字号跟着正文、虚线下划线、没有盒子的高和留白),套不进 Button 的档位;
+  //: 「工作流里能填的」那一列标题上的 `#706` 是同一颗(原先长在 AssistantPanel 里,数没变,挪了个文件)。
+  "features/plugins/workbench/LocateNodeButton.tsx": 1,
   "features/plugins/workbench/ModelDownload.tsx": 1,
   "features/plugins/workbench/ModelsPanel.tsx": 2,
   "features/plugins/workbench/RunPanel.tsx": 1,

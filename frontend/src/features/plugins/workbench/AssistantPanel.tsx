@@ -10,10 +10,11 @@ import { AgentPageViewsContext, type AgentPageViews } from "@/features/agent/pag
 import { WorkbenchAssistantContext, type AssistantFinding, type WorkbenchAssistantActions } from "@/features/plugins/workbench/assistantActions";
 import { assistantToolResult } from "@/features/plugins/workbench/assistantViews";
 import type { AgentPlace } from "@/features/agent/places";
+import { LocateNodeButton } from "@/features/plugins/workbench/LocateNodeButton";
+import { locateNode } from "@/features/plugins/workbench/locateNode";
 import { linkNodeRefs } from "@/features/plugins/workbench/nodeRefs";
 import { useJobWatch } from "@/features/plugins/workbench/workbenchParts";
 import {
-  workbenchCall,
   workbenchSnapshot,
   type WorkbenchRun,
   type WorkbenchTarget,
@@ -89,39 +90,15 @@ function lastRunLine(t: Translate, events: readonly ComfyWorkbenchEvent[], lastR
 
 /**
  * 回复里的 `#12`、`#12:5`:点了在画布上选中那个节点、移到中间(子图里的桥先一层层打开),和缺失项的「定位」同一个桥调用。
- * 没找到就在旁边说一句。
+ * 没找到就在旁边说一句。按钮本身是共用的那颗(见 LocateNodeButton):表单那一列的节点号也用它。
  */
 function NodeRef({ node, children }: { node: string; children: React.ReactNode }) {
   const t = useI18n();
-  const [note, setNote] = React.useState("");
-  const locate = async () => {
-    setNote("");
-    setNote(await locateNode(t, node));
-  };
   return (
-    <>
-      <Hint label={t("workbenchAssistantLocate").replace("{node}", node)}>
-        <button
-          type="button"
-          data-comfy-node={node}
-          className="cursor-pointer rounded-sm border-0 bg-transparent p-0 font-mono text-[0.95em] text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
-          onClick={() => void locate()}
-        >
-          {children}
-        </button>
-      </Hint>
-      {note && <span role="status" className="ml-1 text-ui-xs text-destructive">{note}</span>}
-    </>
+    <Hint label={t("workbenchAssistantLocate").replace("{node}", node)}>
+      <LocateNodeButton node={node} label={children} />
+    </Hint>
   );
-}
-
-/** 在画布上定位一个节点(`12`、子图里的 `12:5`,桥先一层层打开)。成了回空串,没成回一句给人看的原因。 */
-async function locateNode(t: Translate, node: string): Promise<string> {
-  const result = await workbenchCall({ op: "locate", node, subgraph: null });
-  if (result.ok) return "";
-  return result.error === "noNode" ? t("workbenchAssistantNoNode").replace("{node}", node)
-    : result.error === "inSubgraph" ? t("workbenchAssistantInSubgraph")
-    : t("workbenchCallFailed").replace("{why}", "message" in result && result.message ? result.message : result.error);
 }
 
 /** 工具行里这一页认得的结果:诊断、改完的、新标签页(见 assistantViews)。 */
