@@ -62,4 +62,20 @@ export const mediaLibrary = {
   assetLineageOpExtract: "from document",
   assetLineageOpMask: "mask",
   assetLineageOpPlugin: "plugin",
+  // "Make a mask" (ADR 0056 decision 6): one step from an image already in the library to a stored mask asset.
+  // Threshold / invert / feather radius reuse the aiStudio entries — same thing as MaskEditor, same words.
+  assetMakeMask: "Make a mask…",
+  assetMaskTitle: "Make a mask",
+  assetMaskHint: "Compute a mask from \"{name}\": white marks what should change. You get a new asset; the source image stays untouched.",
+  assetMaskSource: "Source",
+  assetMaskSourceLuminance: "By brightness",
+  assetMaskSourceAlpha: "By alpha",
+  assetMaskSourceHint: "Brightness takes the Rec.601 weighted grey; alpha takes what is opaque — an image with no transparency comes out all white.",
+  assetMaskThresholdHint: "0…1: brightness / alpha at or above it turns white.",
+  assetMaskGrow: "Grow",
+  assetMaskGrowHint: "Pixel radius: positive grows, negative shrinks (−256…256).",
+  assetMaskFeatherHint: "Feather radius in pixels; 0 leaves it hard-edged.",
+  assetMaskNote: "Grow and feather are computed by the backend (pixel-for-pixel is not something the browser gets right), and so is the order threshold → invert → grow → feather.",
+  assetMaskStart: "Make mask",
+  assetMaskDone: "Made \"{name}\"",
 } as const;

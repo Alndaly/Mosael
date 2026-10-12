@@ -63,4 +63,20 @@ export const mediaLibrary = {
   assetLineageOpExtract: "从文档取出",
   assetLineageOpMask: "生成蒙版",
   assetLineageOpPlugin: "插件加工",
+  // 「生成蒙版」(ADR 0056 决定 6):对素材库里已有的一张图,一步得到一张存下来的蒙版素材。
+  // 阈值 / 反选 / 羽化半径复用 aiStudio 那几条 —— 和 MaskEditor 是同一种东西,说法也该是同一种。
+  assetMakeMask: "生成蒙版…",
+  assetMaskTitle: "生成蒙版",
+  assetMaskHint: "从「{name}」算一张蒙版：白色是要改的地方。产出一份新素材，原图不动。",
+  assetMaskSource: "来源",
+  assetMaskSourceLuminance: "按亮度",
+  assetMaskSourceAlpha: "按 alpha",
+  assetMaskSourceHint: "按亮度取加权灰度（Rec.601）；按 alpha 取不透明的地方 —— 源图没有透明通道时整块都是白的。",
+  assetMaskThresholdHint: "0…1：亮度 / alpha 不低于它的地方变白。",
+  assetMaskGrow: "扩张",
+  assetMaskGrowHint: "像素半径：正数扩张、负数收缩（−256…256）。",
+  assetMaskFeatherHint: "羽化半径（像素），0 就是不羽化。",
+  assetMaskNote: "扩张与羽化由后端算（浏览器里逐像素算不准），阈值 → 反选 → 扩张 → 羽化的先后也由它定。",
+  assetMaskStart: "生成蒙版",
+  assetMaskDone: "已生成「{name}」",
 } as const;

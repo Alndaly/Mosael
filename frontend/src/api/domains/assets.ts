@@ -114,6 +114,22 @@ export function grabSequenceFrame(sequenceId: string, at: number): Promise<Asset
   return api<Asset>(`/api/sequences/${sequenceId}/frame`, { method: "POST", body: JSON.stringify({ at }) });
 }
 
+/** 「生成蒙版」那一次要给的五个参数(生成的类型,见 api/generated/schema 的 MaskAssetRequest)。 */
+export type MaskAssetRequest = components["schemas"]["MaskAssetRequest"];
+
+/**
+ * 按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原素材不动(ADR 0056 决定 6)。
+ *
+ * 形状四步的先后(**阈值 → 反选 → 扩张/收缩 → 羽化**)由后端定死,不交给调用方 —— 同一组参数在两个入口上
+ * 得到同一张图。扩张 / 羽化只有后端算得对(形态学 + 盒式模糊,见后端 media/masks),所以这条路是
+ * 「对素材库里已有的一张图,一步得到一张存下来的蒙版」;在画布上刷那一套走 MaskEditor。
+ *
+ * 产出的名字由后端定(「蒙版 · <原图名>」),`project_id` 留空就跟着原素材。
+ */
+export function makeAssetMask(assetId: string, body: MaskAssetRequest): Promise<Asset> {
+  return api<Asset>(`/api/assets/${assetId}/mask`, { method: "POST", body: JSON.stringify(body) });
+}
+
 export function fetchWaveform(assetId: string): Promise<WaveformData> {
   return api<WaveformData>(`/api/assets/${assetId}/waveform`);
 }

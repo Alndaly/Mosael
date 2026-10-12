@@ -10,7 +10,7 @@ import { Truncate } from "@/components/ui/truncate";
 import React from "react";
 import { OPEN_ASSET_EVENT, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, NotebookPen, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Contrast, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, NotebookPen, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
 import { assetThumbnailUrl, convertVideoToGif, deleteAsset, renameAsset, setAssetTags, type AssetCard, type AssetQuery, type AssetSort, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
@@ -39,6 +39,7 @@ import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { TagFilter } from "@/components/app/TagFilter";
 import { SetAsReferenceDialog } from "@/features/entities/AssetEntities";
+import { MaskFromAssetDialog } from "@/features/media/MaskFromAssetDialog";
 import { TAG_MATCHES, tagsOf, sortedTagCounts, type TagMatch } from "@/lib/tags";
 import { TagChips } from "./TagChips";
 import { TagsDialog } from "@/components/app/TagsDialog";
@@ -106,6 +107,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
   const [editingTags, setEditingTags] = React.useState<ActionTarget | null>(null);
   //: 右键「设为某个资产的参考图…」(ADR 0027):图片和视频能当参考图。
   const [referencing, setReferencing] = React.useState<ActionTarget | null>(null);
+  //: 「生成蒙版」(ADR 0056 决定 6):对这张图算一张蒙版、落成新素材。图片才有这一步。
+  const [masking, setMasking] = React.useState<ActionTarget | null>(null);
   // 筛选和排序是**这个人怎么用素材库**的一部分,不是这一刻的临时值 —— 切走再回来不该重置。
   // 搜索词是另一回事:它是"我此刻在找什么",留着反而会让人以为库里只有这几条。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("media-kind", "all", KIND_FILTERS);
@@ -349,6 +352,8 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     { label: t("rename"), icon: <Pencil />, disabledReason: writeBlocked?.brief, onSelect: () => setRenaming(asset) },
     { label: t("editTags"), icon: <Tag />, disabledReason: writeBlocked?.brief, onSelect: () => setEditingTags(asset) },
     ...(kindIsVisual(asset.kind) ? [{ label: t("assetSetAsReference"), icon: <Layers />, disabledReason: writeBlocked?.brief, onSelect: () => setReferencing(asset) }] : []),
+    //: 算蒙版要读原图的像素,所以只有图片走得到这一步(视频先取帧、音频没有画面,那是另外的事)。
+    ...(asset.kind === "image" ? [{ label: t("assetMakeMask"), icon: <Contrast />, disabledReason: writeBlocked?.brief, onSelect: () => setMasking(asset) }] : []),
     ...(asset.kind === "document" ? [{ label: t("docSaveAsNote"), icon: <NotebookPen />, disabled: saveAsNote.isPending, disabledReason: writeBlocked?.brief, onSelect: () => saveAsNote.mutate(asset.id) }] : []),
     ...(asset.kind === "video" ? [{ label: t("assetConvertGif"), icon: <ImagePlus />, disabled: convertGif.isPending, disabledReason: writeBlocked?.brief, onSelect: () => convertGif.mutate(asset.id) }] : []),
     ...(kindHasSound(asset.kind)
@@ -388,6 +393,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <PopoverClose asChild><MenuItem icon={<Pencil />} label={t("rename")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setRenaming(asset)} /></PopoverClose>
               <PopoverClose asChild><MenuItem icon={<Tag />} label={t("editTags")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setEditingTags(asset)} /></PopoverClose>
               {kindIsVisual(asset.kind) && <PopoverClose asChild><MenuItem icon={<Layers />} label={t("assetSetAsReference")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setReferencing(asset)} /></PopoverClose>}
+              {asset.kind === "image" && <PopoverClose asChild><MenuItem icon={<Contrast />} label={t("assetMakeMask")} disabled={Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => setMasking(asset)} /></PopoverClose>}
               {asset.kind === "document" && <PopoverClose asChild><MenuItem icon={saveAsNote.isPending ? <Loader2 className="animate-spin" /> : <NotebookPen />} label={t("docSaveAsNote")} disabled={saveAsNote.isPending || Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => saveAsNote.mutate(asset.id)} /></PopoverClose>}
               {asset.kind === "video" && <PopoverClose asChild><MenuItem icon={convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} label={t("assetConvertGif")} disabled={convertGif.isPending || Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => convertGif.mutate(asset.id)} /></PopoverClose>}
               {kindHasSound(asset.kind) && <PopoverClose asChild><MenuItem icon={separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} label={t("separateAudio")} disabled={separateAudio.isPending || Boolean(writeBlocked)} description={writeBlocked?.brief} onClick={() => separateAudio.mutate(asset.id)} /></PopoverClose>}
@@ -411,6 +417,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         {kindIsVisual(asset.kind) && (
           <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setReferencing(asset)}>
             <MenuItemBody icon={<Layers />} label={t("assetSetAsReference")} description={writeBlocked?.brief} />
+          </ContextMenuItem>
+        )}
+        {asset.kind === "image" && (
+          <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setMasking(asset)}>
+            <MenuItemBody icon={<Contrast />} label={t("assetMakeMask")} description={writeBlocked?.brief} />
           </ContextMenuItem>
         )}
         {asset.kind === "document" && (
@@ -678,6 +689,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
       <AssetPreviewModalById id={previewingId} onClose={closePreview} actions={detailActions} />
       <SetAsReferenceDialog asset={referencing} onClose={() => setReferencing(null)} />
+      <MaskFromAssetDialog
+        asset={masking}
+        //: 算出来的蒙版直接开在详情里:它是"看一眼、接着用"的东西(进蒙版槽、当局部重绘的输入)。
+        onMade={(made) => setPreviewingId(made.id)}
+        onClose={() => setMasking(null)}
+      />
       {denoiseDialog}
       <RenameDialog
         open={renaming !== null}
