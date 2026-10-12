@@ -82,14 +82,16 @@ def big() -> dict[str, Any]:
     return graph
 
 
-def workflows() -> dict[str, Any]:
-    found = {f"人像/LoRA 组合 {index + 1:02d}.json": plain(index) for index in range(PLAIN_WORKFLOWS)}
+def workflows(plain_workflows: int = PLAIN_WORKFLOWS) -> dict[str, Any]:
+    """`plain_workflows` 可以多给几张:维护者那台报 42 个工具(见 test_plugin_catalog_fits_the_output_limit),
+    量「清单装不装得下」时要凑到那个数 —— 17 个工具的清单 93 万字节,还差一点才撞上 1MB 的线。"""
+    found = {f"人像/LoRA 组合 {index + 1:02d}.json": plain(index) for index in range(plain_workflows)}
     found[BIG_WORKFLOW] = big()
-    found[TINY_WORKFLOW] = plain(PLAIN_WORKFLOWS)
+    found[TINY_WORKFLOW] = plain(plain_workflows)
     return found
 
 
-def install(state: Any) -> None:
+def install(state: Any, *, plain_workflows: int = PLAIN_WORKFLOWS) -> None:
     """把这台「像真的」装进一个 FakeComfyUI 的状态里(替换掉默认的工作流和节点定义)。"""
     state.object_info = object_info()
-    state.workflows = workflows()
+    state.workflows = workflows(plain_workflows)

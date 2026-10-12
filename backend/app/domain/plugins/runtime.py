@@ -52,6 +52,7 @@ from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV, ca
 from app.domain.plugins.child_env import base_env
 from app.domain.plugins.egress import UNDECIDED, Egress
 from app.domain.plugins.manifest import LOCALE_ENV
+from app.domain.plugins.shared_tables import ACCEPTS as SHARED_TABLES, expand as expand_shared_tables
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,18 @@ def check_required_input(tool: dict[str, Any], input_payload: dict[str, Any]) ->
         raise PluginRuntimeError("pluginErr_missingInput", keys=", ".join(missing))
 
 
+def _request(tool_name: str, input_payload: dict[str, Any], locale: str) -> str:
+    """这一行的请求。**一问一答和流式两条路共用一份**,别各拼一份 —— 加一格只加在一处。
+
+    `locale` 是这次调用要说哪种语言(见 execute_tool)。`accepts` 是宿主这一版**收得下**的回答扩展:插件据此决定
+    回答里要不要共享重复的大表(见 shared_tables;没说的宿主收到的还是逐格写全的那一份,照旧按 1MB 的线报错)。
+    """
+    return json.dumps(
+        {"tool": tool_name, "input": input_payload, "locale": locale, "accepts": [SHARED_TABLES]},
+        ensure_ascii=False,
+    )
+
+
 def execute_tool(
     plugin_dir: Path,
     entry: str,
@@ -199,7 +212,7 @@ def execute_tool(
     #: 的那些字(摘要、失败原因、枚举出来的项目名)只有插件自己写得出 —— 不告诉它读的人用什么
     #: 语言,它就只能压一种。请求体和环境变量都给一份:进程插件读哪个都行,而 MCP 那条只有环境变量。
     locale = get_current_locale()
-    request = json.dumps({"tool": tool_name, "input": input_payload, "locale": locale}, ensure_ascii=False)
+    request = _request(tool_name, input_payload, locale)
     env = _env(locale, credentials, scratch_dir, data_dir, egress)
     started = time.monotonic()
     #: **跑在一个任务里时,这个进程归那个任务。** 取消任务要真的停下它,而不只是改一行状态 ——
@@ -365,6 +378,9 @@ def _final_response(response: Any) -> ToolResult:
     output = response.get("output")
     if not isinstance(output, dict):
         raise PluginRuntimeError("pluginErr_outputNoOutput")
+    # 插件说了它共享了重复的大表(请求的 `accepts`):在这里展平回每一格,下游看到的形状和逐格写全时一模一样
+    # (见 shared_tables)。没共享过的原样不动。
+    output = expand_shared_tables(output)
     if state is not None and not isinstance(state, dict):
         raise PluginRuntimeError("pluginErr_stateNotObject")
     return ToolResult(output=output, state=dict(state or {}))
@@ -462,7 +478,7 @@ def stream_tool(
     """
     entry_path = resolve_entry(plugin_dir, entry)
     locale = get_current_locale()
-    request = json.dumps({"tool": tool_name, "input": input_payload, "locale": locale}, ensure_ascii=False)
+    request = _request(tool_name, input_payload, locale)
     cancel_file = cancel_file_for(scratch_dir) if scratch_dir is not None else None
     env = _env(locale, credentials, scratch_dir, data_dir, egress)
     if cancel_file is not None:

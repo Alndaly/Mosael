@@ -581,6 +581,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件输出必须是 JSON 对象",
         "en": "The plugin output must be a JSON object.",
     },
+    "pluginErr_sharedTablesBadShape": {
+        "zh": "插件说它共享了大表,但交上来的不是一张「id → 值」的表(应为 {shape})",
+        "en": "The plugin says it shared tables, but what it sent isn't an id → values map (expected {shape}).",
+    },
+    "pluginErr_sharedTableMissing": {
+        "zh": "插件指着一张没交上来的表({table}):这份回答没收 —— 让它把那张表一起交回,或者逐格写全",
+        "en": "The plugin points at a table it never sent ({table}), so this response was not accepted: it has to send "
+              "that table too, or write every cell out in full.",
+    },
     "pluginErr_failedNoReason": {
         "zh": "插件返回失败但未说明原因",
         "en": "The plugin reported a failure without giving a reason.",

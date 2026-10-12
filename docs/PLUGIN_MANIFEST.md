@@ -70,7 +70,7 @@ def count_words(payload):
 
 TOOLS = {"count_words": count_words}
 
-request = json.loads(sys.stdin.read())          # {"tool": …, "input": {…}, "locale": "zh"}
+request = json.loads(sys.stdin.read())          # {"tool": …, "input": {…}, "locale": "zh", "accepts": ["shared_tables"]}
 try:
     output = TOOLS[request["tool"]](request.get("input") or {})
     json.dump({"ok": True, "output": output}, sys.stdout, ensure_ascii=False)
@@ -81,6 +81,10 @@ except Exception as exc:
 规矩:进程 60 秒超时,stdout 上限 1MB,`output` 必须是个对象。进程崩了、超时了、吐了非 JSON ——
 失败的是那一次调用记录,不是应用。
 
+请求里的 `accepts` 是**宿主这一版收得下哪些回答扩展**(没有这一格就是都不收):今天只有一个 `shared_tables`
+(见下)。照它决定怎么交,**别假定宿主一定认得** —— 插件可能比应用新(从市场升上来的),那时收到的是交得多的那一份,
+`1MB` 的线照旧。
+
 `error` 的**第一行是给人看的那句话**(出了什么事、下一步怎么办),原文(异常、errno、对方回的正文)换行写在
 后面:界面把第一行当正文,其余收进「详情」或悬停说明。`连不上这台 ComfyUI,确认它在运行、地址填对` 后面一行
 `http://127.0.0.1:8188:[Errno 61] Connection refused` —— 用户先读到的是该做什么,排查的人展开还看得到原文。
@@ -89,6 +93,31 @@ except Exception as exc:
 给人看的文字一样,见「多语言」)。失败原因会被**存下来** —— 插件页连接卡片上的出错原因就是上一次刷新时你说的那句,
 而刷新可能是另一种界面语言下点的,也可能是后台(启动时、目录变了)刷的;只给一种语言的话,换了界面语言它也不跟着换。
 按语言分着给,宿主原样存着,给人看时按读的人的语言挑。
+
+### 一两张大表在一次回答里只搬一次
+
+一份**目录类**的回答(`op: tools` 的工具清单、`op: models` 的模型清单)常常带着同一张大表几十遍:ComfyUI 每个节点的
+输入里有一类几百项的下拉(LoRA、大模型、VAE、文本编码器),一张图里好几个节点共用同一张,每张工作流又是一个工具、
+每个工具的每一格都带着自己那张。维护者那台(42 个工具)的工具清单因此 1.06MB,撞上 1MB 的线 —— 整份不收,而里面
+58 万字节是重复的同一批表(403 份、只有 77 张不同的表)。
+
+宿主在请求里说了 `accepts` 里有 `shared_tables` 时,可以把**重复的**表挪到 `output` 顶层一次,格子上指过去:
+
+```jsonc
+{"tools": [ {"name": "wf_…", "input_schema": {"properties": {
+              "lora_01_236": {"type": "string", "x-shared-table": "t1"},   // ← 这一格的可选值在下面那张表里
+              "steps_3":     {"type": "integer"}}}},
+            "…"],
+ "shared_tables": {"t1": ["style/lora_001.safetensors", "…"]}}              // 整份回答里只出现一次
+```
+
+- 只有**重复出现**的表值得这么做(只出现一次的原地留着就行);宿主在收的时候展平回每一格
+  (`backend/app/domain/plugins/shared_tables.py`),再往下的每一处 —— 存下来的工具清单、工作流节点的 config、
+  画板、插件页「试一下」的表单、发给智能体的那一份 —— 看到的形状和逐格写全时**一模一样**:下拉照样是整张;
+- 指到一张没交上来的表是**回答不对**:宿主报 `pluginErr_sharedTableMissing`、不收这一份,而不是收下一份少几张
+  下拉的清单。所以别省那一张;
+- 宿主没在 `accepts` 里说收得下(旧版应用)时**不要**这么交:那一份会照旧撞线、照旧响亮地报错。悄悄少几张下拉是
+  这套东西唯一不能出的错。
 
 ### 要交出一个**文件**
 

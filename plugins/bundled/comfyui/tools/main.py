@@ -102,6 +102,7 @@ import run
 import server
 import service
 import shared_models
+import shared_tables
 import sources
 import templates
 import tooling
@@ -226,26 +227,31 @@ def main() -> None:
     payload = request.get("input") or {}
     locale = str(request.get("locale") or os.environ.get("MOSAEL_LOCALE") or "zh")
     tool = request.get("tool")
+
+    def result(output: dict) -> None:
+        """交回这一行的结果。宿主说了它收得下时,回答里重复的大表只搬一次(见 shared_tables)—— 工具清单和模型
+        清单里同一张几百项的下拉会重复几十次,一次回答的上限是 1MB。没说的宿主收到的是逐格写全的那一份。"""
+        emit({"ok": True, "output": shared_tables.share(output) if shared_tables.accepted(request) else output})
+
     comfy: Comfy | None = None
     try:
         if tool == "comfyui_generation" and payload.get("op") in _SERVICE:
             # 本机服务的操作(ADR 0041):只描述、不起进程,也不和那台服务器说话 —— 问怎么起的时候它当然还没起
-            output = _SERVICE[payload["op"]](payload, locale)
-            emit({"ok": True, "output": output})
+            result(_SERVICE[payload["op"]](payload, locale))
             return
         if tool == "comfyui_generation" and payload.get("op") == "service_model_folders":
             # 共用的模型文件夹:认每一处;它在跑的话顺带问那台 ComfyUI 加载了没有、从那里看到几个模型
             comfy = Comfy(env_base_url(), locale, env_access_token()) if env_base_url() else None
-            emit({"ok": True, "output": shared_models.model_folders(payload, locale, comfy=comfy)})
+            result(shared_models.model_folders(payload, locale, comfy=comfy))
             return
         if tool == "comfyui_generation" and payload.get("op") == "service_busy":
             # 闲置自动停之前:它的任务队列里有没有在跑、在排的
             comfy = Comfy(env_base_url(), locale, env_access_token())
-            emit({"ok": True, "output": service.busy(payload, locale, comfy=comfy)})
+            result(service.busy(payload, locale, comfy=comfy))
             return
         if tool == "comfyui_generation" and payload.get("op") in _SERVICE_STREAMING:
             # 让 Mosael 装、换版本(流式:一步一行,宿主建取消文件就停在那一步,下次接着来)
-            emit({"ok": True, "output": _SERVICE_STREAMING[payload["op"]](payload, locale, emit)})
+            result(_SERVICE_STREAMING[payload["op"]](payload, locale, emit))
             return
         comfy = Comfy(env_base_url(), locale, env_access_token())
         if tool == "comfyui_generation":
@@ -259,7 +265,7 @@ def main() -> None:
             output = tooling.run_tool(tool, payload, comfy, locale, emit)
         else:
             raise ComfyError(say(locale, f"不认识的工具:{tool}", f"Unknown tool: {tool}"))
-        emit({"ok": True, "output": output})
+        result(output)
     except ComfyError as exc:
         #: 两种语言都交:连接的出错原因会被宿主存下来,给人看时按读的人的语言挑(见 lines)。失败的样子(远端明确失败了还是没拿到、
         #: 一句人话、原话、提示)有就一起交(见 lines.ComfyError.failure)。

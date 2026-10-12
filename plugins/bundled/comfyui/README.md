@@ -567,6 +567,18 @@ besides the failure text, so the host's AI Studio failure card and board cells s
 - The manifest gains `generation_noun` (`{"zh": "工作流", "en": "workflows"}`): the Plugins page row, the list dialog, its
   search box and the refresh button say “workflows”, not “models” — what it hands over is workflows and their forms.
 
+## Fixes (1.23.4)
+
+- **A 42-tool catalog no longer trips the host's 1 MB line.** The tool list carries a few-hundred-option dropdown for every node input
+  that loads a model file (LoRA, checkpoint, VAE, text encoder), and one graph has several nodes sharing the very same table — the
+  maintainer's tool list had grown to 1.06 MB, of which 580 KB were the same 77 tables repeated 403 times. The whole response used to
+  be refused (`pluginErr_outputTooLarge`, the Plugins page row read “The plugin output exceeds the size limit (1 MB)”), leaving the
+  previous tool list in place. Repeated tables now travel once, in the response's `shared_tables`, with every cell pointing at them
+  (`x-shared-table`); the host expands them back cell by cell, so the stored `input_schema` — the one workflow nodes, boards and the
+  Plugins page's “Try it” form read — is byte for byte what it was, whole dropdown included. Plugins may only do this when the host
+  says it accepts it (`accepts` in the request, see docs/PLUGIN_MANIFEST); an older host still receives every table in full and still
+  reports the oversize response loudly. The model catalog travels the same way (892 KB → 370 KB on the maintainer's server).
+
 ## Fixes (1.23.3)
 
 - Canvas editing now normalises nullable collections in ComfyUI's current workflow format before planning a batch. Connecting an
