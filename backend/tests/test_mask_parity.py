@@ -11,6 +11,14 @@
 
 `grow` 那一组(扩张 / 收缩)只有这里跑:前端编辑器没有这一步,素材库对话框把 grow 交给后端算。
 两侧都断言「跑不动的用例**正好**是 grow ≠ 0 那一组」,免得哪天多出一条静默少跑的用例。
+
+**同一个形状的第二处**:`grow_mask` 那一句此前是 `int(radius)`(向零截断:`0.5 → 0`、`2.5 → 2`、
+`-1.7 → 1`),而契约定的规则是**半数进位** —— 用户侧三条入口今天都送不进小数(grow 在 HTTP schema 与
+MCP 签名上都是 `int`、素材库对话框那格先 `Math.round`;确认卡那条路能送进来,那处的 `int()` 是同一个
+形状的第三处,见语料的 `why`),所以那几条 `grow` 小数用例是**预先钉住**的:哪天有人把 grow 放成
+float,规则与用例都已经在那儿。取整表因此分两张:`rounding`(feather,两侧都读)与 `grow_rounding`
+(grow,只有后端读),条目同形 —— 不并成一张是因为前端那份循环按 `feather` 读它,并进去要么把前端
+拖进 grow,要么让前端在那几行上**空跑**成一个永远绿的断言。
 """
 
 from __future__ import annotations
@@ -57,11 +65,15 @@ def _pipeline(case: dict) -> bytes:
 def _first_difference(case: dict, got: bytes) -> str:
     want = bytes.fromhex(case["expected_hex"])
     at = next((index for index, (a, b) in enumerate(zip(got, want)) if a != b), None)
+    #: 两处半径都写进失败信息里:这一条红的时候,先要知道它是被取整的哪一处拽偏的。
+    radii = f"羽化 {case['feather']} 该取整成 {case['expected_reach']} 格"
+    if case["grow"]:
+        radii += f"、扩张/收缩 {case['grow']} 该取整成 {case['expected_grow_reach']} 格"
     if at is None:
         return f"{case['name']}:长度 {len(got)} ≠ 语料 {len(want)}"
     return (
         f"{case['name']}:第 {at} 格(第 {at // WIDTH} 行第 {at % WIDTH} 列)语料是 {want[at]},这里算出 {got[at]}"
-        f" —— 羽化 {case['feather']} 该取整成 {case['expected_reach']} 格"
+        f" —— {radii}"
     )
 
 
@@ -105,3 +117,40 @@ def test_前端跑不动的用例正好是_grow_非零那一组() -> None:
     grows = [case["grow"] for case in CONTRACT["cases"] if case["grow"] != 0]
     assert any(value > 0 for value in grows), "没有一条扩张用例"
     assert any(value < 0 for value in grows), "没有一条收缩用例"
+
+
+def test_扩张半径也按半数进位取整_和羽化同一条规则() -> None:
+    """`grow_rounding` 那张表(后端独有)跑一遍:`grow` 此前是 `int(radius)`,向零截断。
+
+    `reach` 是窗口半宽(取绝对值),方向看 `grow` 的符号 —— 所以负半径拿 `-reach` 去比。
+    """
+    tabled = {one["grow"]: one["reach"] for one in CONTRACT["grow_rounding"]}
+    #: 用一条真实的硬边当被扩张 / 收缩的底(语料的第一条用例):缩一格与缩两格在它上面看得出分别。
+    base = _pipeline({**CONTRACT["cases"][0], "grow": 0, "feather": 0})
+    for radius, reach in tabled.items():
+        signed = -reach if radius < 0 else reach
+        assert grow_mask(base, SIZE, radius) == grow_mask(base, SIZE, signed), (
+            f"半径 {radius} 没有取整成 {signed} 格 —— 语料的意思是 reach = floor(x + 0.5)"
+        )
+    #: 这几条是**真的分岔**:截断那条规则(`int(radius)`)在它们上面给的是另一格。
+    for radius in (0.5, 1.5, 2.5, -1.7):
+        assert grow_mask(base, SIZE, radius) != grow_mask(base, SIZE, float(int(radius))), (
+            f"{radius} 在向零截断与半数进位下是同一张图 —— 这条用例钉不住那次分岔"
+        )
+    assert grow_mask(base, SIZE, 0.5) != base, "0.5 该扩一格(截断是 0 格 = 原样)"
+    assert grow_mask(base, SIZE, 0.4) == base, "取整后不足一格,原样返回"
+
+
+def test_语料里那几条扩张小数用例真的能分出两种取整() -> None:
+    """一条永远绿的语料比没有更糟:截断与半数进位给出**不同**格的那几条,必须真有用例。"""
+    for one in CONTRACT["grow_rounding"]:
+        assert one["reach"] == abs(math.floor(one["grow"] + 0.5)), f"取整表这一行和规则各说各话:{one}"
+    divergent = [one for one in CONTRACT["grow_rounding"] if int(one["grow"]) != math.floor(one["grow"] + 0.5)]
+    assert divergent, "扩张取整表里一条分岔的都没有 —— 这张表钉不住任何东西"
+    used = {case["grow"] for case in CONTRACT["cases"]}
+    assert {one["grow"] for one in divergent} <= used, "分岔的半径没有对应用例,等于没测"
+    #: 每一条扩张用例都写明了它该取整成几格(带符号:`Math.round(-1.7) == -2`),别让它跟表各说各话。
+    for case in CONTRACT["cases"]:
+        if case["grow"] == 0:
+            continue
+        assert case["expected_grow_reach"] == math.floor(case["grow"] + 0.5), case["name"]

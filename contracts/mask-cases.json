@@ -1,8 +1,8 @@
 {
   "contract": "mask-cases",
   "version": 1,
-  "why": "羽化半径的取整两侧不同:后端 int(round(radius)) 是 Python 的半数取偶(round(0.5) = 0、round(2.5) = 2),前端 Math.round 是半数进位(1 / 3)。feather 是浮点、三条入口(dialog 的输入格、HTTP schema、MCP 工具签名)都能到 2.5,于是同一组参数在后端与编辑器里出两张图 —— 而两侧的单元测试各自都是绿的,因为没有一条测试同时看两边。",
-  "semantics": "四步顺序定死:阈值 → 反选 → 扩张/收缩 → 羽化。输出是单通道灰度字节(r = g = b、alpha 不透明),即蒙版本身那一串字节。羽化半径按**半数进位**取整:reach = floor(feather + 0.5)(与 JS 的 Math.round 同一条规则,不是 Python / numpy 缺省的半数取偶);reach < 1 原样返回。羽化是三遍盒式模糊(一横一纵 = 一遍),每趟落回 float32、四边夹取,往回写 floor(x + 0.5)。",
+  "why": "羽化半径的取整两侧不同:后端 int(round(radius)) 是 Python 的半数取偶(round(0.5) = 0、round(2.5) = 2),前端 Math.round 是半数进位(1 / 3)。feather 是浮点、三条入口(dialog 的输入格、HTTP schema、MCP 工具签名)都能到 2.5,于是同一组参数在后端与编辑器里出两张图 —— 而两侧的单元测试各自都是绿的,因为没有一条测试同时看两边。grow 是**同一个形状的第二处**:后端那一句是 int(radius) 向零截断(0.5 → 0、2.5 → 2、-1.7 → 1),截断比半数进位小一格 —— 用户侧三条入口今天都送不进小数(grow 在 HTTP schema 与 MCP 签名上都是 int,素材库对话框那格先 Math.round),所以 grow 这一组主要是**预先钉住**的:哪天有人把 grow 放成 float,规则已经在那儿。但「够不着」只对这三条入口成立:智能体的工具调用把参数原样交给工具体(只按名字收敛,不按类型校验),确认卡的 payload 是普通 dict,`backend/app/domain/agent/confirmable/media.py` 那两处 `int(payload.get(\"grow\") or 0)` 同样向零截断 —— 那一处是同一个形状的第三处,**已单独报出、这次没动**(它是「grow 变 float」那一笔该一起改的:卡的文案与落库的 payload 都读同一份规范化结果,两处要一起走)。两处半径此后只走同一条规则(见 semantics)。",
+  "semantics": "四步顺序定死:阈值 → 反选 → 扩张/收缩 → 羽化。输出是单通道灰度字节(r = g = b、alpha 不透明),即蒙版本身那一串字节。**半径类参数只有一条取整规则**:grow 与 feather 都按**半数进位**取整,reach = floor(x + 0.5) —— 与 JS 的 Math.round 同一条规则(负数也一样:Math.round(-1.5) = -1、Math.round(-1.7) = -2),既不是 Python / numpy 缺省的半数取偶,也不是向零截断;取整后不足一格(0.4 → 0)原样返回。半径按图像长边封顶。羽化是三遍盒式模糊(一横一纵 = 一遍),每趟落回 float32、四边夹取,往回写 floor(x + 0.5)(同一条规则)。",
   "frame": {
     "width": 7,
     "height": 5
@@ -20,7 +20,7 @@
       "feather"
     ]
   },
-  "grow_is_backend_only": "前端编辑器没有扩张 / 收缩那一步(素材库对话框把 grow 交给后端算),所以 grow ≠ 0 的用例只有后端跑。两侧的测试都断言:跑不动的用例**正好**是 grow ≠ 0 那一组 —— 不许静默跳过,新加一条前端跑不了的用例会红。",
+  "grow_is_backend_only": "前端编辑器没有扩张 / 收缩那一步(素材库对话框把 grow 交给后端算),所以 grow ≠ 0 的用例只有后端跑。两侧的测试都断言:跑不动的用例**正好**是 grow ≠ 0 那一组 —— 不许静默跳过,新加一条前端跑不了的用例会红。取整表也因此分两张:`rounding` 是两侧都读的 feather 表,`grow_rounding` 是只有后端读的 grow 表(同一条规则、同一种条目形状;不并进 `rounding` 是因为前端那份循环按 `feather` 读它 —— 并进去要么把前端拖进 grow,要么让前端在那几行上**空跑**成一个永远绿的断言)。",
   "rounding": [
     {
       "feather": 0.4,
@@ -56,6 +56,38 @@
       "feather": 6.5,
       "reach": 7,
       "note": "半数进位 7;半数取偶 6"
+    }
+  ],
+  "grow_rounding": [
+    {
+      "grow": 0.4,
+      "reach": 0,
+      "note": "取整后 0 格:原样(0.4px 的扩张看不出来)。截断也是 0 —— 对照组"
+    },
+    {
+      "grow": 0.5,
+      "reach": 1,
+      "note": "半数进位扩张 1 格;向零截断是 0 —— 此前后端就是一格都不扩"
+    },
+    {
+      "grow": 1.5,
+      "reach": 2,
+      "note": "半数进位 2 格(与整数半径 2 同一张图);向零截断 1 格。注意 grow 与 feather 不同:feather 此前是半数取偶,分岔的只有「奇数 + 0.5」;截断是每个小数都少一格,所以每一个 .5 都分岔"
+    },
+    {
+      "grow": 2.5,
+      "reach": 3,
+      "note": "半数进位 3 格;向零截断 2 格"
+    },
+    {
+      "grow": -1.5,
+      "reach": 1,
+      "note": "负数是收缩,reach 是窗口半宽(取绝对值)、方向看 grow 的符号。Math.round(-1.5) = -1:与向零截断同值 —— 对照组(负数的半格两条规则本来就同值)"
+    },
+    {
+      "grow": -1.7,
+      "reach": 2,
+      "note": "半数进位收缩 2 格(Math.round(-1.7) = -2);向零截断 1 格 —— 负半径同样偏小,截断不是「半边才分岔」"
     }
   ],
   "sources": {
@@ -187,7 +219,8 @@
       "grow": 2,
       "feather": 0,
       "expected_hex": "00ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff00",
-      "expected_reach": 0
+      "expected_reach": 0,
+      "expected_grow_reach": 2
     },
     {
       "name": "白点 · 扩张 1 再羽化 2.5",
@@ -199,7 +232,8 @@
       "grow": 1,
       "feather": 2.5,
       "expected_hex": "2828282828282828282828282828282828282828282828282828282828282828282828",
-      "expected_reach": 3
+      "expected_reach": 3,
+      "expected_grow_reach": 1
     },
     {
       "name": "白点 · 收缩 -1(黑白都缩一圈)",
@@ -211,7 +245,86 @@
       "grow": -1,
       "feather": 0,
       "expected_hex": "0000000000000000000000000000000000000000000000000000000000000000000000",
-      "expected_reach": 0
+      "expected_reach": 0,
+      "expected_grow_reach": -1
+    },
+    {
+      "name": "白点 · 扩张 0.4(取整后 0 格 ⇒ 原样)",
+      "note": "「取整后不足一格就什么都不做」对 grow 同样成立:0.4 → 0 格原样返回,0.5 → 1 格真的扩。向零截断在这条上同值 —— 对照组。只有后端跑。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0.4,
+      "feather": 0,
+      "expected_hex": "0000000000000000000000000000000000ff0000000000000000000000000000000000",
+      "expected_reach": 0,
+      "expected_grow_reach": 0
+    },
+    {
+      "name": "白点 · 扩张 0.5(半数进位 ⇒ 1 格)",
+      "note": "同一形状的第二处入口:0.5 按半数进位是 1 格(一个 3×3 的块),而 int(0.5) = 0 是一格都不扩(还是那个孤点)—— 差的就是这一格。只有后端跑。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0.5,
+      "feather": 0,
+      "expected_hex": "000000000000000000ffffff00000000ffffff00000000ffffff000000000000000000",
+      "expected_reach": 0,
+      "expected_grow_reach": 1
+    },
+    {
+      "name": "白点 · 扩张 1.5(半数进位 ⇒ 2 格)",
+      "note": "1.5 → 2 格,和「白点 · 扩张 2」那条**逐字节同一张图**(取整表那条 grow: 1.5 / reach: 2 说的就是它);int(1.5) = 1 只给一格。注意 grow 与 feather 的分岔集合不同:feather 此前是半数取偶,`1.5` 是两条规则同值的对照组;截断是每个小数都少一格,所以 `1.5` 在 grow 这里**真分岔**。只有后端跑。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 1.5,
+      "feather": 0,
+      "expected_hex": "00ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff00",
+      "expected_reach": 0,
+      "expected_grow_reach": 2
+    },
+    {
+      "name": "白点 · 扩张 2.5(半数进位 ⇒ 3 格)",
+      "note": "2.5 → 3 格:一个白点在 7×5 上扩三格已经是整张全白;int(2.5) = 2 给的是「边缘一圈黑」(与上面 1.5 那条同形)。只有后端跑。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 2.5,
+      "feather": 0,
+      "expected_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expected_reach": 0,
+      "expected_grow_reach": 3
+    },
+    {
+      "name": "硬边 · 收缩 -1.5(半数进位 ⇒ 1 格)",
+      "note": "负数的半格:Math.round(-1.5) = -1、int(-1.5) = -1 —— 两条规则同值,对照组(截断不是「负数都分岔」)。白的一侧少一列。只有后端跑。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": -1.5,
+      "feather": 0,
+      "expected_hex": "00000000ffffff00000000ffffff00000000ffffff00000000ffffff00000000ffffff",
+      "expected_reach": 0,
+      "expected_grow_reach": -1
+    },
+    {
+      "name": "硬边 · 收缩 -1.7(半数进位 ⇒ 2 格)",
+      "note": "负数非半格才是分岔的那一半:-1.7 按半数进位(Math.round(-1.7) = -2)收缩 2 格,白的一侧少两列;int(-1.7) = -1 只少一列 —— 负半径的截断同样偏小。只有后端跑。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": -1.7,
+      "feather": 0,
+      "expected_hex": "0000000000ffff0000000000ffff0000000000ffff0000000000ffff0000000000ffff",
+      "expected_reach": 0,
+      "expected_grow_reach": -2
     },
     {
       "name": "斑驳 · 羽化 2.5(写回那一格贴在半整数上)",

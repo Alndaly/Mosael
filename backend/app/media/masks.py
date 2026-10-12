@@ -79,6 +79,12 @@ def _flat(mask) -> bytes:
 
 
 def _size_of(size: tuple[int, int]) -> tuple[int, int]:
+    """宽高收成 int,`0` / 负数报错。
+
+    这里的 `int()` **不是**「取整规则」,是尺寸的类型收口:宽高是**像素的个数**,不是半径 ——
+    「7.5 列」这种尺寸不存在,而它上游(`Image.size`、画布的 `width` / `height`)本来就只给整数。
+    半径类的取整规则只有一条,写在 `_half_up` 那一处;别把这里也一起"统一"过去。
+    """
     width, height = int(size[0]), int(size[1])
     if width < 1 or height < 1:
         raise MaskError("maskErr_badSize", width=width, height=height)
@@ -178,13 +184,21 @@ def _extremum_along(mask: np.ndarray, reach: int, axis: int, *, maximum: bool) -
     return result
 
 
-def grow_mask(mask, size: tuple[int, int], radius: int) -> bytes:
+def grow_mask(mask, size: tuple[int, int], radius: float) -> bytes:
     """扩张(`radius` > 0)/ 收缩(`radius` < 0)`|radius|` 个像素,**形态学**。
 
     扩张取窗口最大值,收缩取窗口最小值,窗口是 `(2r+1)×(2r+1)` 的正方形。两轴**分开跑** ——
     正方形结构元是可分离的(两轴各自夹取,合起来就是二维那个窗口),结果和不分开一样,代价从
     r² 遍降到 2r 遍。灰的(羽化过的边)照灰的取最大 / 最小,不先二值化:那一圈软边是用户自己
     调出来的,不该被这一步啃掉。
+
+    半径是「半径类参数」,和 `feather_mask` 走**同一条规则**(写在一处:见 `_half_up`)——
+    一律**半数进位**、对齐前端与契约那边的 `Math.round`:`0.5` 扩张 1 格、`2.5` 扩张 3 格、
+    `-1.7` 收缩 2 格,`0.4` 取整成 0 格 ⇒ 原样。此前这里是 `int(radius)`(**向零截断**:
+    `0.5 → 0`、`2.5 → 2`、`-1.7 → 1`),同一个形状的坑 —— 今天**用户侧**够不着(`grow` 三条入口都是
+    整数:HTTP schema 与 MCP 签名是 `int`,素材库对话框那格先 `Math.round`),但两处半径各说各话时,
+    同一组参数会在后端与编辑器里出来两张图(见 `contracts/mask-cases.json` 的 `grow_rounding`
+    与那几条 `grow` 小数用例)。
 
     半径按图像的长边封顶:扩张半个图宽和扩张整个图宽是同一个结果(全白 / 全黑),再往上只是
     白算一遍。`radius == 0` 原样返回。
@@ -193,7 +207,7 @@ def grow_mask(mask, size: tuple[int, int], radius: int) -> bytes:
         return _flat(mask)
     source = _array(mask, size)
     maximum = radius > 0
-    reach = min(abs(int(radius)), max(source.shape))
+    reach = min(abs(_half_up(radius)), max(source.shape))
     grown = _extremum_along(source, reach, 1, maximum=maximum)
     grown = _extremum_along(grown, reach, 0, maximum=maximum)
     return grown.astype(np.uint8).tobytes()
@@ -222,12 +236,15 @@ def _box_blur_axis(channel: np.ndarray, reach: int, axis: int) -> np.ndarray:
 
 
 def _half_up(value: float) -> int:
-    """四舍五入,**半数进位**(`floor(x + 0.5)`),不是 Python 内建 `round` 的「半数取偶」。
+    """四舍五入,**半数进位**(`floor(x + 0.5)`)—— **`masks.py` 里所有半径类参数只走这一处**。
 
-    `round(0.5) == 0`、`round(2.5) == 2`,而前端那句 `Math.round` 是半数进位(`0.5 → 1`、`2.5 → 3`):
-    差这一格,`feather = 2.5` 在后端是 2 个像素、在编辑器里是 3 个 —— 同一组参数、两张图,而两边都
-    看不出错(见 `contracts/mask-cases.json` 里那几条 `.5`)。同一个规则在 `feather_mask` 里用了两次:
-    半径(这里)和往回写(那里末尾那一句 `floor(x + 0.5)`)。
+    半径有两个:`grow`(扩张 / 收缩)和 `feather`(羽化)。两个都对齐前端 / 契约那边的 `Math.round`
+    (`0.5 → 1`、`2.5 → 3`;负数也一样:`Math.round(-1.5) == -1`),也和羽化往回写那一处的
+    `floor(x + 0.5)` 同一条规则。差一格看着无所谓,但同一组参数该在两侧出来同一串字节 ——
+    而两边都看不出错:Python 内建 `round` 是「半数取偶」(`round(0.5) == 0`、`round(2.5) == 2`),
+    向零截断(`int(0.5) == 0`、`int(2.5) == 2`)更是每个小数都少一格。前者在这里真发生过一次
+    (`feather`),后者是同一个形状的坑(`grow` 此前就是它)—— 两条都钉在 `contracts/mask-cases.json`
+    的 `rounding` / `grow_rounding` 上。
     """
     return math.floor(value + 0.5)
 
@@ -239,10 +256,10 @@ def feather_mask(mask, size: tuple[int, int], radius: float) -> bytes:
     四通道各跑一遍是四倍工作量、结果还一样。边缘夹取,理由同 `grow_mask`。`radius < 1` 什么都不做
     (0.4px 的模糊看不出来,却是六遍全画布扫描)。
 
-    `radius` 是浮点,**决定结果的是取整后的那一格** `reach = floor(radius + 0.5)` —— 和往回写
-    (`floor(x + 0.5)`)同一条规则,都对齐前端的 `Math.round`,不是 numpy / Python 缺省的「半数取偶」。
-    半格的差看着无所谓,但同一张蒙版在两边该是同一串字节:所以 `feather = 0.5` 两边都是 1 格
-    (不是"后端不羽化、编辑器羽化"),`feather = 2.5` 两边都是 3 格。
+    `radius` 是浮点,**决定结果的是取整后的那一格** `reach = _half_up(radius)`:半径类参数的同一条
+    规则写在 `_half_up` 那一处(`grow` 与 `feather` 都半数进位、都对齐前端的 `Math.round`),
+    往回写那一处 `floor(x + 0.5)` 也是它 —— 不是 numpy / Python 缺省的「半数取偶」。所以
+    `feather = 0.5` 两边都是 1 格(不是"后端不羽化、编辑器羽化"),`feather = 2.5` 两边都是 3 格。
     """
     reach = _half_up(radius)
     if reach < 1:
