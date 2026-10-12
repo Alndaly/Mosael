@@ -4087,6 +4087,54 @@ def _migrate_generation_result_deleted_mark() -> None:
             conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN result_deleted_at DATETIME"))
 
 
+def _migrate_generation_result_deleted_backfill() -> None:
+    """`5b7cfd418` 之前就被删掉产出的那些生成记录,补上「产出已被删除」。
+
+    `result_deleted_at` 是那一次修法**从那一刻起**才记的账(`delete_asset` 在删素材之前写下它),
+    而它要治的恰恰是已经发生过的事:产出删了、任务行也被「清空已结束」删过,两个外键
+    (`result_asset_id` / `job_id`,都是 SET NULL)把痕迹清得干干净净 —— 记录上没结果、没失败,
+    和「还在排队」长得一模一样。所以列加了还不够,存量得自己认出来。
+
+    **判据是可证的,不是猜的**:`job_id` 只在任务行被物理删除时置空,而删任务行的两条路
+    (旧版「清空已结束」`domain.jobs.clear_finished_jobs`、保留清理 `domain.jobs.expired_job_trees`)
+    **都只删已经落终态的任务** —— 还在排队 / 正在跑的生成一定有 job 行。所以「没有 job 行、
+    也没有产出素材」= 这一次生成早就结束了,结束之后那份产出被删了。有产出素材的不动(那是成功的)。
+
+    已经自己记着失败 / 已停止的(`error` / `error_key`)同样不动:`record_failure` 会把原因抄在记录
+    自己身上,而界面先看「产出被删」这一列(GenerateWorkspace 的 turnStatus,deleted 态排在失败之前)
+    —— 把「失败」改写成「产出已被删除」,是拿一句不真的话盖掉一句真的。
+
+    时间照记录自己的 `updated_at`,**不取 `now()`**:删产出那一刻没有任何地方记下来过(这一列本来就是
+    为了从这一刻起才记),`updated_at` 是这条记录最后一次真的被写过的时间(登记产出那一刻)。
+    填 `now()` 等于把几个月前发生的事报成刚刚发生的。判据里有 `result_deleted_at IS NULL`,
+    所以再跑一次一行都不匹配 —— 除了记账,它自己也幂等。
+
+    **这条判据分不出的那一种**(写在这里,免得下一个人以为是漏了):失败原因当时只在任务行上
+    (`record_failure` 把原因抄进记录是后来才有的)的老失败,任务行一删,形状与上面一模一样 ——
+    它会被一并标成「产出已被删除」。真机那 13 行里有 11 行 `updated_at` 与 `created_at` 相差不到
+    1ms(记录建起来之后再没被写过),而登记过产出的记录一定会被写一次(`generation.runner`
+    成功那一刻写 `result_asset_id`,`updated_at` 的 `onupdate` 跟着走;库里 116 行有产出的记录
+    无一例外)—— 它们更像老失败。但「用户停止恰好落在登记产出那几秒里」也留下同一个形状,那里
+    产出是真的删了,而两者在库里长得一样,谁也分不出来。所以判据就按「早就结束了、没有产出、
+    没有失败」写,不替产品口径多切一刀。
+    """
+    inspector = inspect(engine)
+    if "generation_jobs" not in set(inspector.get_table_names()):
+        return
+    #: 它写的这一列由上面加列那一步补上(`migrate-generation-result-deleted-mark`,在同一相里排在前面):
+    #: 老库里那一步要是失败了,这里就不该接着写一个不存在的列。
+    if "result_deleted_at" not in {column["name"] for column in inspector.get_columns("generation_jobs")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE generation_jobs SET result_deleted_at = updated_at "
+                "WHERE result_asset_id IS NULL AND job_id IS NULL AND result_deleted_at IS NULL "
+                "AND updated_at IS NOT NULL AND COALESCE(error, '') = '' AND COALESCE(error_key, '') = ''"
+            )
+        )
+
+
 def _migrate_agent_pending_view() -> None:
     """已装机的库补上 agent_sessions.pending_view。
 
@@ -9558,6 +9606,10 @@ def migration_plan() -> MigrationPlan:
                 _migrate_comment_canvas_context,
                 _migrate_agent_pending_view,
                 _migrate_generation_result_deleted_mark,
+                # 紧跟着上一步,而且**不能**挪到 SCHEMA 之前:它写的这一列正是上一步在 SCHEMA 之后补上的
+                # (create_all 不给已有的表加列),排到前面去会在最需要它的老库上找不到列、当场 no-op,
+                # 而一次性迁移记过账就不再重跑 —— 静默地什么都没补。
+                _migrate_generation_result_deleted_backfill,
                 _migrate_publish_task_claimed_by,
                 _migrate_publish_task_post,
                 _migrate_confirmation_summary_i18n,
