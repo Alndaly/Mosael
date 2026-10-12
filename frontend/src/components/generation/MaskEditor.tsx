@@ -8,7 +8,7 @@ import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
 import { Segmented } from "@/components/ui/segmented";
 import { Slider } from "@/components/ui/slider";
@@ -820,19 +820,21 @@ export function MaskEditor({
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent
-        //: 全屏尺寸的弹窗:画布要尽可能大,底图和笔迹才看得清。三段(头 / 两栏 / 尾)。
+        //: 全屏尺寸的弹窗:画布要尽可能大,底图和笔迹才看得清。**两栏一封**:左边画布、右边控制栏,
+        //: 取消 / 存成蒙版落在右栏最底 —— 不再横跨一条底栏(维护者:「排版优化 除去 header,左右分栏,
+        //: 右下角按钮放到右侧分栏去」)。
         //
-        // 两栏的**列宽写在一处**(`--mask-rail`):正文那两栏和底下那排动作都读它,所以「存成蒙版」
-        // 永远落在右栏这条竖线上,而不是自己另算一个右边距。第一列是 `minmax(0,1fr)`,画布再怎么
-        // 宽也顶不开这一栏(见 CONVENTIONS「单列 grid 想收缩要写 minmax(0,1fr)」)。
-        className="w-[min(1180px,calc(100vw-32px))] max-w-none h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden p-5 [--mask-rail:18rem]"
+        // 列宽写在一处(`--mask-rail`):右栏和它里面的动作组都读它,所以「存成蒙版」永远落在右栏这条
+        // 竖线上,而不是自己另算一个右边距。第一列是 `minmax(0,1fr)`,画布再怎么宽也顶不开这一栏
+        // (见 CONVENTIONS「单列 grid 想收缩要写 minmax(0,1fr)」)。
+        className="w-[min(1180px,calc(100vw-32px))] max-w-none h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] grid-cols-[minmax(0,1fr)_var(--mask-rail)] grid-rows-[minmax(0,1fr)] gap-4 overflow-hidden p-5 [--mask-rail:18rem]"
       >
-        <DialogHeader>
-          <DialogTitle>{t("maskEditorTitle")}</DialogTitle>
-          <DialogDescription>{t("maskEditorHint")}</DialogDescription>
-        </DialogHeader>
-
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_var(--mask-rail)] gap-4">
+        {/*
+          * 标题还在、**只是看不见**(`sr-only`):无障碍名 —— 以及既有测试找它的 `role=dialog` + 名字
+          * 「画蒙版」—— 都靠它,radix 少了 `DialogTitle` 也会告警。视觉上不再占顶部那一条:整个弹窗就是
+          * 「画布 + 右栏」两块。`pt-8` 是给右上角那颗 ✕ 让位(它离弹窗顶 16px、高 32px,压在右栏顶上)。
+          */}
+        <DialogTitle className="sr-only">{t("maskEditorTitle")}</DialogTitle>
           {/*
             * 看得见的画布:底图 + 蒙版。导出的不是这一张 —— 见文件头那三张画布。
             *
@@ -870,7 +872,17 @@ export function MaskEditor({
             * 三节的节奏由 ToolGroup 一处管:节标题同一个字重,节与节之间同一条 1px 分隔线 + 同一段
             * 留白(和设置页的分节同一种做法)。此前三节各写各的间距,只有靠加粗小标题硬分。
             */}
-          <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
+          {/*
+            * 右栏三段:顶上那行说明(它解释的是「白色是要改的地方」这条契约 —— 所以留下、缩小、
+            * 次要色,而**不是**再变回一条 header)+ 三节控件(唯一会滚的地方)+ 底盘的动作组。
+            * `pt-8` 让开右上角那颗关闭键(见 DialogTitle 那句);两个轴一起锁 —— 只写 `grid-rows` 的话
+            * 隐式列按 max-content 定尺,右栏会被内容顶宽(见 design/gridAxes.test.ts 那条棘轮)。
+            */}
+          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-3 pt-8">
+            <DialogDescription className="m-0 text-ui-xs leading-relaxed text-muted-foreground">
+              {t("maskEditorHint")}
+            </DialogDescription>
+            <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
             <ToolGroup label={t("maskTool")} icon={<Brush size={13} />}>
               <Segmented
                 aria-label={t("maskTool")}
@@ -946,33 +958,28 @@ export function MaskEditor({
                 </IconButton>
               </div>
             </ToolGroup>
-          </div>
-        </div>
+            </div>
 
-        {/*
-          * 底部:和上面两栏**同一条竖线** —— 取消 / 存成蒙版落在右栏那条线上(读同一个 `--mask-rail`),
-          * 左边那一段留给失败说明。不自己另写一个右边距。
-          */}
-        <DialogFooter className="items-center gap-2">
-          {failure && (
-            <FailureCard
-              size="inline"
-              className="mr-auto max-w-[28rem]"
-              title={t("maskSaveFailed")}
-              summary={failure}
-              copyText={failure}
-            />
-          )}
-          <div className="grid w-(--mask-rail) shrink-0 grid-cols-2 gap-2">
-            <Button variant="outline" className="w-full" onClick={close}>
-              {t("cancel")}
-            </Button>
-            <Button loading={saving} className="w-full" onClick={save}>
-              <Check />
-              {t("maskSave")}
-            </Button>
+            {/*
+              * 动作组钉在右栏**最底**:上面那一行才是唯一滚动的地方 ⇒ 小窗口里它也**始终可见**
+              * (不会被滚走)。分隔节奏和上面各节同一条(`border-t border-divider pt-4`,见 ToolGroup)。
+              * 两个键并排等宽、**铺满右栏** —— 和这条列里其它行的左右边界对齐。
+              */}
+            <div className="grid gap-3 border-t border-divider pt-4">
+              {failure && (
+                <FailureCard size="inline" className="max-w-full" title={t("maskSaveFailed")} summary={failure} copyText={failure} />
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" className="w-full" onClick={close}>
+                  {t("cancel")}
+                </Button>
+                <Button loading={saving} className="w-full" onClick={save}>
+                  <Check />
+                  {t("maskSave")}
+                </Button>
+              </div>
+            </div>
           </div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
