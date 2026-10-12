@@ -156,15 +156,17 @@ elif op == "app":
              "title": {"zh": "提示词", "en": "Prompt"}, "common": True,
              "schema": {"type": "string", "x-multiline": True, "default": "a cat", "onclick": "x"}},
             {"key": "10.image", "node": "10", "input": "image", "kind": "media", "role": "reference_image",
-             "media": "image", "title": "参考图 · 人物", "node_title": "人物", "class_type": "LoadImage", "common": True},
+             "media": "image", "title": "参考图 · 人物", "node_title": "人物", "class_type": "LoadImage",
+             "node_label": {"zh": "加载图像", "en": "LoadImage"}, "node_label_en": "LoadImage", "common": True},
             {"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": {"zh": "种子", "en": "Seed"},
              "schema": {"type": "integer", "minimum": 0}},
             {"key": "4.ckpt_name", "node": "4", "input": "ckpt_name", "kind": "model", "folder": "checkpoints",
              "title": {"zh": "模型", "en": "Checkpoint"}, "class_type": "CheckpointLoaderSimple",
-             "node_label": {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"},
+             "node_label": {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"}, "node_label_en": "Load Checkpoint",
              "hint": {"zh": "要加载的模型", "en": "The name of the checkpoint (model) to load."},
              "schema": {"type": "string", "enum": ["a.safetensors", "b.safetensors"], "x-model-folder": "checkpoints"}},
             {"key": "12:5.steps", "node": "12:5", "input": "steps", "kind": "number", "title": "步数",
+             "node_label": {"zh": "K 采样器", "en": "KSampler"}, "node_label_en": "KSampler",
              "schema": {"type": "integer", "title": {"zh": "步数", "en": "Steps"}}},
             {"key": "x", "node": "3", "input": "x", "kind": "weird", "title": "?"},
         ],
@@ -722,8 +724,9 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert by_key["4.ckpt_name"]["node_label"] == "Checkpoint 加载器" and by_key["4.ckpt_name"]["hint"] == "要加载的模型", \
         "节点给人看的名字、ComfyUI 的说明也按语言挑好"
     assert by_key["4.ckpt_name"]["node_label_en"] == "Load Checkpoint", \
-        "插件交回的是一对,显示挑了中文;英文那份固定挑英文,界面搜索才搜得到(中文界面显示「Checkpoint 加载器」)"
-    assert by_key["10.image"]["node_label_en"] == "", "插件在这一项上没给节点名(这一条是老版本插件的形状):空串,不是挑不出来"
+        "显示的那一份挑了中文;插件另给的英文那份原样透出,界面搜索才搜得到(ADR 0006:只认这一种形状,不从一对里现挑)"
+    assert by_key["10.image"]["node_label_en"] == "LoadImage", "起了标题的读图节点:两种语言都是它"
+    assert by_key["12:5.steps"]["node_label_en"] == "KSampler", "子图里的节点也带着"
     assert by_key["seed"]["node_label_en"] == "", "图级的项没有节点"
     assert by_key["4.ckpt_name"]["class_type"] == "CheckpointLoaderSimple", "类名留着给悬停说明排错"
     assert by_key["seed"]["node_label"] == "" and by_key["seed"]["hint"] == ""

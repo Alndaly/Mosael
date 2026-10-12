@@ -141,12 +141,12 @@ describe("精简表单里搜「工作流里能填的」", () => {
     expect(matchesSource(masked, "")).toBe(true);
   });
 
-  it("插件没给英文那份(老版本)、或者根本没有节点时,照旧搜原来那几样", () => {
-    const without = { key: "674.image", node: "674", input: "image", kind: "media", title: "加载图像",
-                      node_title: "", node_label: "加载图像", node_label_en: "", class_type: "LoadImage",
-                      hint: "" } as never;
-    expect(matchesSource(without, "as Mask")).toBe(false);
-    expect(matchesSource(without, "加载图像")).toBe(true);
-    expect(matchesSource(without, "LoadImage")).toBe(true);
+  it("没有节点的项(种子、尺寸、跑几遍)英文那份是空串,照旧搜原来那几样", () => {
+    const graphLevel = { key: "seed", node: "", input: "seed", kind: "seed", title: "种子",
+                         node_title: "", node_label: "", node_label_en: "", class_type: "",
+                         hint: "" } as never;
+    expect(matchesSource(graphLevel, "as Mask")).toBe(false);
+    expect(matchesSource(graphLevel, "种子")).toBe(true);
+    expect(matchesSource(graphLevel, "Seed")).toBe(true);
   });
 });
