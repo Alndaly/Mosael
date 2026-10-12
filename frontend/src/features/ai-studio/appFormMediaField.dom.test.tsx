@@ -77,9 +77,45 @@ const ENGINE = {
   },
 };
 
-function renderStudio() {
+/**
+ * 维护者那张表(2026-10-12):`video_minimax_h3_i2v` 的「首尾帧生成视频」—— 表上四项,首帧、尾帧是**两条**。
+ * 角色、槽位名、项的名字都照插件在那台 ComfyUI(8120)上报的抄。
+ */
+const H3_ENGINE = {
+  ...ENGINE,
+  id: "p1:video:video_minimax_h3_i2v.json#k0a1nq",
+  model: "video_minimax_h3_i2v.json#k0a1nq",
+  model_label: "首尾帧生成视频",
+  group: "video_minimax_h3_i2v",
+  capabilities: {
+    modes: ["keyframes-to-video"],
+    parameter_keys: ["first_frame", "last_frame", "115.aspect_ratio", "115.megapixels"],
+    prompt: "none",
+    source_limits: { first_frame: 1, last_frame: 1 },
+    source_labels: { first_frame: ["Optional Load Image #127"], last_frame: ["Optional Load Image #128"] },
+    source_keys: { first_frame: ["127.image"], last_frame: ["128.image"] },
+    requires_source: [["first_frame"]],
+    parameter_schema: {
+      "115.aspect_ratio": { type: "string", title: "Resolution Selector · Aspect ratio", default: "2:3 (Portrait Photo)",
+                            enum: ["1:1 (Square)", "2:3 (Portrait Photo)"] },
+      "115.megapixels": { type: "number", title: "像素量(百万)", default: 0.6 },
+    },
+    form: {
+      title: "首尾帧生成视频",
+      description: "",
+      items: [
+        { key: "first_frame", label: "首帧 · Optional Load Image #127" },
+        { key: "last_frame", label: "尾帧 · Optional Load Image #128" },
+        { key: "115.aspect_ratio", label: "Resolution Selector · Aspect ratio" },
+        { key: "115.megapixels", label: "像素量(百万)" },
+      ],
+    },
+  },
+};
+
+function renderStudio(engine: typeof ENGINE = ENGINE) {
   const session = {
-    id: "s1", workspace_id: "w1", title: "video", kind: "video", provider_profile_id: "p1", model: ENGINE.model,
+    id: "s1", workspace_id: "w1", title: "video", kind: "video", provider_profile_id: "p1", model: engine.model,
     origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok", is_mine: true, shared: false,
     created_at: "2026-10-11T00:00:00Z", updated_at: "2026-10-11T00:00:00Z",
   };
@@ -87,7 +123,7 @@ function renderStudio() {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-    if (url.includes("/api/generation/options")) return json([ENGINE]);
+    if (url.includes("/api/generation/options")) return json([engine]);
     if (url.includes("/api/generation/sessions")) return json([session]);
     if (url.includes("/api/tts/engines")) return json([]);
     if (url.includes("/api/tts/voices")) return json([]);
@@ -123,5 +159,24 @@ describe("引擎参数:表单上的读图槽位", () => {
     const selects = [...panel.querySelectorAll("[role=combobox]")].map((one) => one.textContent ?? "");
     expect(selects.some((text) => text.includes("49.image") || text.includes("50.image"))).toBe(false);
     expect(panel.textContent).not.toContain("49.image");
+  });
+
+  /**
+   * 表上四项、其中两条是素材的那张表(维护者截图):首帧、尾帧在表上是**两条**,在面板里仍然是**一个控件、两格** ——
+   * 不是把这个控件画两遍(四格)。两格各自带着自己的槽位名,谁也没被吞掉。
+   */
+  it("表上首帧、尾帧两条(还有两个参数):首尾帧仍然是一个控件里的两格", async () => {
+    renderStudio(H3_ENGINE);
+    const panel = await screen.findByRole("complementary", { name: "generationEngineSettings" });
+    await waitFor(() => expect(panel.querySelectorAll('input[type="file"]').length).toBe(2));
+    //: 一个「首尾帧」控件,不是两个
+    expect(within(panel).getAllByText("genKeyframes")).toHaveLength(1);
+    //: 两格各带自己的名字(描述符的 source_labels),一条都没少
+    for (const name of ["Optional Load Image #127", "Optional Load Image #128"]) {
+      expect(within(panel).getByText(name), `「${name}」这一格该在`).toBeTruthy();
+    }
+    //: 表上另外两个参数照旧画出来(这两条是参数,不是素材)
+    expect(within(panel).getByText("Resolution Selector · Aspect ratio")).toBeTruthy();
+    expect(within(panel).getByText("像素量(百万)")).toBeTruthy();
   });
 });

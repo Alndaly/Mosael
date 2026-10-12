@@ -77,13 +77,45 @@ function draft(keys: string[]): FormDraft {
   };
 }
 
-function previewOf(keys: string[]) {
-  render(<PreviewPanel instanceId="i1" data={data()} draft={draft(keys)} />);
+/**
+ * 维护者那张表(`video_minimax_h3_i2v` 的「首尾帧生成视频」,2026-10-12 的截图):两条读图槽位 + 两个参数。
+ * 两条素材项的角色和名字都照插件在那台 ComfyUI(8120)上报的抄:`first_frame` → `127.image`(Optional Load Image #127)、
+ * `last_frame` → `128.image`(Optional Load Image #128)。
+ */
+function videoData(): WorkflowApp {
+  const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
+                 common: true, exposable: true };
+  return {
+    path: "video_minimax_h3_i2v.json",
+    modified: 1,
+    kind: "video",
+    editable: true,
+    items: [
+      { ...base, key: "127.image", node: "127", input: "image", kind: "media", role: "first_frame", media: "image",
+        title: "首帧 · Optional Load Image #127", node_label: "Optional Load Image", class_type: "Optional Load Image",
+        spec: null },
+      { ...base, key: "128.image", node: "128", input: "image", kind: "media", role: "last_frame", media: "image",
+        title: "尾帧 · Optional Load Image #128", node_label: "Optional Load Image", class_type: "Optional Load Image",
+        spec: null },
+      { ...base, key: "115.aspect_ratio", node: "115", input: "aspect_ratio", kind: "choice",
+        title: "Resolution Selector · Aspect ratio", node_label: "ResolutionSelector", class_type: "ResolutionSelector",
+        spec: { type: "string", default: "2:3 (Portrait Photo)", enum: ["1:1 (Square)", "2:3 (Portrait Photo)"] } },
+    ],
+    outputs: [],
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+  } as WorkflowApp;
+}
+
+function previewOf(keys: string[], app: WorkflowApp = data()) {
+  render(<PreviewPanel instanceId="i1" data={app} draft={draft(keys)} />);
   const container = document.querySelector("[data-app-preview]") as HTMLElement;
   const order = () => Array.from(container.querySelectorAll("[data-app-field]"))
     .map((one) => one.getAttribute("data-app-field"));
   const at = (text: string) => (container.textContent ?? "").indexOf(text);
-  return { container, order, at };
+  /** 某一格里的素材框(虚线格):预览画了几个框,这里就数出几个。 */
+  const boxes = (key: string) =>
+    Array.from(container.querySelectorAll(`[data-app-field="${key}"] li`)).map((one) => one.textContent ?? "");
+  return { container, order, at, boxes };
 }
 
 describe("右侧预览:顺序就是表上的顺序", () => {
@@ -106,5 +138,24 @@ describe("右侧预览:顺序就是表上的顺序", () => {
     const preview = previewOf(["10.image"]);
     expect(preview.order()).toEqual(["reference_image"]);
     expect(preview.at("放大倍数")).toBe(-1);
+  });
+});
+
+describe("右侧预览:视频的首帧、尾帧是两格,两格都要画", () => {
+  it("表上首帧、尾帧两条都在 → 预览里两个素材框都在,各自带着自己的名字(此前只剩首帧那一格)", () => {
+    const preview = previewOf(["127.image", "128.image", "115.aspect_ratio"], videoData());
+    //: 两格都在,而且就是表上的位置(尾帧那一项此前被「首尾帧是一个控件」那条规则吞掉)
+    expect(preview.order()).toEqual(["first_frame", "last_frame", "115.aspect_ratio"]);
+    //: 首帧那一格:一个框,名字是它自己的槽位名
+    expect(preview.boxes("first_frame")).toEqual(["Optional Load Image #127"]);
+    //: 尾帧那一格:也在,名字也是它自己的 —— 用的人看到两格,预览里就是两格
+    expect(preview.boxes("last_frame")).toEqual(["Optional Load Image #128"]);
+  });
+
+  it("两条素材项的名字由各自的项决定,不会两格写成同一个", () => {
+    const preview = previewOf(["127.image", "128.image"], videoData());
+    const shown = [...preview.boxes("first_frame"), ...preview.boxes("last_frame")];
+    expect(shown).toHaveLength(2);
+    expect(new Set(shown).size).toBe(2);
   });
 });

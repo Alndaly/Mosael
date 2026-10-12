@@ -93,7 +93,7 @@ import { formatCombo, isSubmitChord, SUBMIT_COMBO } from "@/lib/shortcuts";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
-import { appFormFields, type AppField } from "@/lib/appFormFields";
+import { appFormFields, type AppField, type AppFieldPair } from "@/lib/appFormFields";
 import {
   appForm,
   aspectRatioOptions,
@@ -1249,8 +1249,16 @@ export function GenerateWorkspace({
     const parameters = new Map(declaredParameters(model).map((parameter) => [parameter.key, parameter]));
     const inForm = new Set(form.items.map((item) => item.key));
     const rest = [...parameters.values()].filter((parameter) => !inForm.has(parameter.key));
+    //: 表上那几格是「一个控件里的两格」的,由先出现的那一格画出来(见 lib/appFormFields 的 AppFieldPair)。
+    const drawnPairs = new Set<AppFieldPair>();
     //: 「哪一格」和「按表上的顺序」都归 lib/appFormFields 管(预览那一栏也读它):这里只剩按 kind 挑控件。
     const field = (one: AppField) => {
+      //: 首帧、尾帧是一个控件里的两格(见 FrameSlotField.KeyframePairField):表上两格都在,画出来仍然是一个控件 ——
+      //: 分类把两格都留在表上(预览要照着画两格),画成一个控件是这一侧的事,所以后一格在这里跳过。
+      if (one.pair) {
+        if (drawnPairs.has(one.pair)) return null;
+        drawnPairs.add(one.pair);
+      }
       const label = one.label || undefined;
       if (one.kind === "prompt") return selectedPromptMode === "none" ? null : formPromptField(model, one.label || t("genPromptLabel"));
       if (one.kind === "negative_prompt") return negativePromptField(label);

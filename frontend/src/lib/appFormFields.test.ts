@@ -4,7 +4,8 @@
  * 「放大倍数」下面,预览里看不出任何变化 —— 而用的人看到的偏偏是面板那一份。
  *
  * 顺带钉住两条容易被改错的老规矩:表上那一格可以写成角色,也可以写成 `<节点>.<输入名>`(按 `source_keys` 认);
- * 视频模型上首帧、尾帧是一个控件,表里两项都在时尾帧那一项跳过。
+ * 视频模型上首帧、尾帧在生成面板里是一个控件里的两格 —— 两格**都留在表上**、各盖一枚配对标记,由面板按它只画一次
+ * (预览没有那个控件,它照表画两格;此前这里把尾帧那一项整个丢掉,预览里就少了一格)。
  */
 
 import { describe, expect, it } from "vitest";
@@ -92,31 +93,40 @@ describe("表上的一项用哪一格画", () => {
 });
 
 describe("视频模型上的首帧、尾帧", () => {
-  it("首帧在前时,尾帧那一项跳过(表里两项 = 一个控件)", () => {
-    expect(kinds(video, [{ key: "prompt" }, { key: "49.image" }, { key: "50.image" }])).toEqual([
-      ["prompt", "prompt"],
-      ["49.image", "source"],
+  it("两格都在表上:两格都留下,各盖一枚配对标记(面板按它画一个控件,预览照表画两格)", () => {
+    const items = [{ key: "prompt" }, { key: "49.image" }, { key: "50.image" }];
+    expect(appFormFields(video, items)).toEqual([
+      { key: "prompt", label: "", kind: "prompt" },
+      { key: "49.image", label: "", kind: "source", role: "first_frame", pair: "keyframes" },
+      { key: "50.image", label: "", kind: "source", role: "last_frame", pair: "keyframes" },
     ]);
-    //: 表上写的是角色也一样
-    expect(appFormFields(video, [{ key: "first_frame" }, { key: "last_frame" }]).map((one) => one.key))
-      .toEqual(["first_frame"]);
+    //: 表上写的是角色也一样 —— 这是维护者那张表(`video_minimax_h3_i2v` 的「首尾帧生成视频」):两格都在,谁也不少
+    expect(appFormFields(video, [{ key: "first_frame" }, { key: "last_frame" }]).map((one) => [one.key, one.role, one.pair]))
+      .toEqual([["first_frame", "first_frame", "keyframes"], ["last_frame", "last_frame", "keyframes"]]);
   });
 
-  it("没有首帧就不跳:尾帧单独在表上也照样画", () => {
+  it("只有一格就没有配对标记:它自己就是一个控件", () => {
     expect(appFormFields(video, [{ key: "50.image" }, { key: "prompt" }])).toEqual([
       { key: "50.image", label: "", kind: "source", role: "last_frame" },
       { key: "prompt", label: "", kind: "prompt" },
     ]);
+    expect(appFormFields(video, [{ key: "49.image" }])).toEqual([
+      { key: "49.image", label: "", kind: "source", role: "first_frame" },
+    ]);
   });
 
-  it("尾帧排在首帧前面时两个都在(作者就是那么排的)", () => {
-    expect(appFormFields(video, [{ key: "50.image" }, { key: "49.image" }]).map((one) => one.role))
-      .toEqual(["last_frame", "first_frame"]);
+  it("尾帧排在首帧前面时两个都在,顺序照样是表上的顺序(作者就是那么排的)", () => {
+    expect(appFormFields(video, [{ key: "50.image" }, { key: "49.image" }]).map((one) => [one.role, one.pair])).toEqual([
+      ["last_frame", "keyframes"],
+      ["first_frame", "keyframes"],
+    ]);
   });
 
-  it("不是视频就没有这条规矩(图像工作流里首尾帧只是两个槽位)", () => {
+  it("不是视频就没有配对标记(图像工作流里首尾帧只是两个槽位)", () => {
     const image = { kind: "image", capabilities: video.capabilities } as unknown as Descriptor;
-    expect(appFormFields(image, [{ key: "49.image" }, { key: "50.image" }]).map((one) => one.role))
-      .toEqual(["first_frame", "last_frame"]);
+    expect(appFormFields(image, [{ key: "49.image" }, { key: "50.image" }]).map((one) => [one.role, one.pair])).toEqual([
+      ["first_frame", undefined],
+      ["last_frame", undefined],
+    ]);
   });
 });

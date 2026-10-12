@@ -10,12 +10,21 @@
  * 所以这里只做**归类**:一项是提示词、反向提示词、种子、尺寸、张数、某个素材角色,还是描述符声明的参数。
  * 控件仍由各自那一侧提供 —— 面板那份状态是右栏正在编辑的配置,预览那份是本地试填、不存的,把 JSX 抽成公共组件
  * 只会把两套状态也搅在一起(见 PreviewPanel)。
+ *
+ * 归类之外只有一件事:表上首帧、尾帧两格都在时给它俩盖同一枚配对标记(见 AppFieldPair)——它在面板里是一个控件,
+ * 在预览里是两格。**两格都留着**,谁也不少:归类不该替调用方决定少画一格(预览没有那个成对的控件,少画一格就是骗人)。
  */
 import type { GenerationOption } from "@/api/client";
 import { sourceRoleOfKey } from "@/lib/generationCapabilities";
 import { SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
 
 export type AppFieldKind = "prompt" | "negative_prompt" | "seed" | "size" | "num_images" | "source" | "parameter";
+
+/**
+ * 成对的两格由**同一个控件**画出来 —— 现在只有视频的首帧与尾帧:左边首帧、右边尾帧,中间一个对调箭头
+ * (见 ai-studio/FrameSlotField.KeyframePairField)。表上两格都在时两格都盖这枚标记。
+ */
+export type AppFieldPair = "keyframes";
 
 export interface AppField {
   /** 表单上那一项的 key(表里怎么写就怎么算) */
@@ -27,6 +36,11 @@ export interface AppField {
   role?: SourceRole;
   /** kind === "parameter":在描述符 `parameter_schema` / `declaredParameters` 里的键 */
   parameterKey?: string;
+  /**
+   * kind === "source":这一格和表上另一格是**一个控件里的两格**(见 AppFieldPair)。两格都留在表上,
+   * 由「画成一个控件」的那一侧按它只画一次(生成面板);没这个控件的调用方(预览)照旧一格一格画。
+   */
+  pair?: AppFieldPair;
 }
 
 /** 宿主自己的那几格:表上写这个键就是对到宿主的控件上(和后端 catalog 的宿主键同名)。 */
@@ -43,7 +57,7 @@ function isSourceRole(key: string): key is SourceRole {
 }
 
 /**
- * 表上每一项该用哪一格画,**顺序就是表上的顺序**。
+ * 表上每一项该用哪一格画,**顺序就是表上的顺序**,而且**一项都不少**。
  *
  * 判据和 GenerateWorkspace.appFormPanel 原来的 `field(item)` 逐条一致:
  * 五个宿主键 → 同名 kind;key 本身就是角色(插件把读素材的槽位直接写成了角色)→ `source`;
@@ -51,8 +65,11 @@ function isSourceRole(key: string): key is SourceRole {
  * 再认不出就是描述符声明的参数(`parameterKey` 就是表上的 key)——**参数键在描述符里有没有,这里不判**:
  * 认不出就不画是调用方的事(面板 `declaredField` 那边查 `parameter_schema`,预览那边查 `declaredParameters`)。
  *
- * 还有一条摆法上的规则也在这里:视频模型上首帧、尾帧是一个控件,表里两项都在时**尾帧那一项跳过**
- * (和面板原来的判据一样,先出现的首帧算数)。
+ * 视频模型上首帧、尾帧在生成面板里是**一个控件里的两格**(见 FrameSlotField.KeyframePairField)。此前这里为了那一件事
+ * 把尾帧那一项**丢掉**,可预览没有那个成对的控件、它一格一格画 —— 于是作者表上明明有「首帧」「尾帧」两格(维护者截图:
+ * 视频工作流 `video_minimax_h3_i2v` 的「首尾帧生成视频」),预览里只剩首帧那一格,说的「看到的就是这样」当场落空。
+ * 归类不该替调用方决定少画一格:两格都留着,只在两格都在时给它们盖同一枚 `pair`(见 AppFieldPair),
+ * 由有那个控件的调用方按它只画一次(生成面板),预览照表画两格 —— 用的人看到几格,预览里就是几格。
  */
 export function appFormFields(
   model: GenerationOption | null,
@@ -69,12 +86,19 @@ export function appFormFields(
     //: 表单上挑的这一格其实是读素材的槽位(`49.image` 这种):画成传图 / 传视频的那一格,不是文件名下拉。
     const role = isSourceRole(item.key) ? item.key : sourceRoleOfKey(model, item.key);
     if (role && isSourceRole(role)) {
-      //: 首帧和尾帧是一对、一个控件:表上两项都在时只摆一次。
-      if (role === "last_frame" && model?.kind === "video" && fields.some((one) => one.role === "first_frame")) continue;
       fields.push({ key: item.key, label, kind: "source", role });
       continue;
     }
     fields.push({ key: item.key, label, kind: "parameter", parameterKey: item.key });
+  }
+  //: 表上首帧、尾帧两格都在 → 它俩在生成面板里是同一个控件里的两格(见 AppFieldPair)。顺序不动,位置也不动。
+  if (model?.kind === "video") {
+    const first = fields.find((one) => one.role === "first_frame");
+    const last = fields.find((one) => one.role === "last_frame");
+    if (first && last) {
+      first.pair = "keyframes";
+      last.pair = "keyframes";
+    }
   }
   return fields;
 }
