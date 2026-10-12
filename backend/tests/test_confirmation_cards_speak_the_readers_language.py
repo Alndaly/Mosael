@@ -112,3 +112,62 @@ def test_卡上的后果提示是独立的一句_两种语言都是() -> None:
     assert warning == "会产生费用或占用付费算力"
     assert headline == "运行插件工具「渲染」(连接「我的」)"
     assert card_parts("confirm_runPluginTool", params, "en")[1] == "This costs money or paid compute"
+
+
+def test_同一张卡两种语言各拿各的() -> None:
+    """同一张卡,`Accept-Language` 说哪种语言就拿哪种 —— `summary` 和 `headline` 都是。
+
+    修之前这条是红的,而且只有一半红:`headline` 一直对(它走 `mode="after"`,看得见全部字段),
+    `summary` 恒为中文 —— 它的校验器是 `mode="before"`,而 `info.data` 里只有**先于它**验证过的项,
+    `summary_key` 恰好声明在它后面,于是永远读不到 key,一路走「老卡,原样返回」,把领域层按默认
+    语言落库的那句话端出去。**界面上看不出来**(前端读 headline),受影响的是飞书卡片、MCP /
+    sidecar 那些只有一行字、直接读 `summary` 的出口:一个英文用户拿到的是中文授权提示。
+    """
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    card = client.post(
+        "/api/confirmations",
+        json={"workspace_id": ws["id"], "tool": "run_code", "requested_by": "pi",
+              "payload": {"code": "print(1)"}},
+    ).json()
+    assert card["summary_key"] == "confirm_runCode"
+
+    def read(lang: str) -> dict:
+        return client.get(f"/api/confirmations/{card['id']}", headers={"Accept-Language": lang}).json()
+
+    zh, en = read("zh-CN"), read("en-US")
+    assert "在隔离沙箱里运行一段 Python" in zh["summary"]
+    assert "Run Python in an isolated sandbox" in en["summary"]
+    # headline 本来就对,这两条钉住它别在修 summary 的时候被带坏。
+    assert zh["headline"].startswith("在隔离沙箱里运行一段 Python")
+    assert en["headline"].startswith("Run Python in an isolated sandbox")
+
+
+def test_摘要按key渲染而不是照着落库那句抄(monkeypatch) -> None:
+    """**钉的是行为,不是字段顺序。** 给一张卡一个**只有英文**的 key,而落库的 `summary` 那一格
+    故意写成一句别的话:英文请求拿到的必须是 key 里那句英文 —— 说明出来的是**按 key 现渲染**的。
+
+    坏掉时这条也是红的:那种情况下 `summary` 就是落库那句原话,和 key、和请求的语言都不相干。
+    (中文下这句话会原样显示成 key 本身 —— 这条只存在于本用例,`_text` 查不到就返回 key。)
+    """
+    from datetime import datetime
+
+    from app.api.schemas.agent import ConfirmationOut
+    from app.core import i18n
+
+    monkeypatch.setitem(i18n.MESSAGES, "confirm_testOnlyEnglish", {"en": "A card only English knows"})
+    stored = "落库那一刻按默认语言渲染的那句话 —— 坏掉时端出去的就是它"
+
+    def card_for_locale(locale: str) -> ConfirmationOut:
+        with i18n.speaking(locale):
+            return ConfirmationOut.model_validate({
+                "id": "c1", "workspace_id": "w", "session_id": None, "tool": "run_code",
+                "permission": "external", "summary": stored, "summary_key": "confirm_testOnlyEnglish",
+                "summary_params": {}, "payload": {}, "status": "pending", "result": {}, "error": None,
+                "requested_by": "pi", "created_at": datetime.now(), "resolved_at": None,
+            })
+
+    assert card_for_locale("en").summary == "A card only English knows"
+    assert card_for_locale("zh").summary == "confirm_testOnlyEnglish"

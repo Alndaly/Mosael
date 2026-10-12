@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
-from pydantic import Field, StrictBool, ValidationInfo, computed_field, field_validator, model_validator
+from pydantic import Field, StrictBool, computed_field, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
 from app.domain.resources import Resource
 from app.api.schemas.failures import FailureReadout
@@ -352,22 +352,6 @@ class ConfirmationOut(FailureReadout, OrmModel):
     created_at: datetime
     resolved_at: datetime | None
 
-    @field_validator("summary", mode="before")
-    @classmethod
-    def _translate_summary(cls, value: object, info: ValidationInfo) -> object:
-        """卡上那句话按**读的人**的语言翻,与 JobOut 同构。
-
-        确认卡是授权界面:一个英文用户读不懂的授权提示,等于没有提示。
-        老卡没有 key,那时 `summary` 就是它自己的原话,原样返回。
-        """
-        from app.core.i18n import get_current_locale, render_message
-
-        data = info.data if isinstance(info.data, dict) else {}
-        key = str(data.get("summary_key") or "")
-        if not key:
-            return value
-        return render_message(key, get_current_locale(), data.get("summary_params") or {})
-
     #: 应用里那张卡的标题:同一句摘要,去掉卡上另有位置摆的两段(后果提示、参数一行摘要)。
     #: 老卡没有 key 时就是 `summary` 本身。见 domain/agent/confirmations.card_parts。
     headline: str = ""
@@ -386,13 +370,39 @@ class ConfirmationOut(FailureReadout, OrmModel):
 
     @model_validator(mode="after")
     def _split_for_the_card(self) -> ConfirmationOut:
-        from app.core.i18n import get_current_locale
+        """同一句话,按**读的人**的语言拆成卡上那几格。
+
+        确认卡是授权界面:一个英文用户读不懂的授权提示,等于没有提示。而 `summary` 这一列
+        落库、活得比一次请求久,写入时翻就把语言冻死在那一刻(见 domain/agent/confirmations.
+        request_confirmation),所以翻的时机只能是出口、只能是这里。
+
+        **翻译为什么在这儿、而不是 `summary` 的字段校验器里**:那个校验器只能是 `mode="before"`,
+        而 `info.data` 里**只有先于本字段验证过的项** —— `summary_key` 恰好声明在 `summary`
+        后面,于是它读到的 key 恒为空,一路走「老卡,原样返回」那条分支,把领域层按默认语言落库的
+        那句话原样端出去。这是个**静默**的错:不报错、不抛异常,只是语言错了。界面上也看不出来
+        (前端读 `headline`,它一直是对的),真正受影响的是飞书卡片、MCP / sidecar 那些**只有一行
+        字、直接读 `summary`** 的出口 —— 那里一个英文用户拿到的是中文。
+
+        换句话说,坏掉的是「两个字段谁先声明」这种看不见的东西,而修法如果只是把它俩换个位置,
+        同一个坑还在(`JobSummaryOut` 的 `message_key` 就靠一句注释守着同样的顺序)。放到
+        `mode="after"` 里,顺序就不再是任何东西的前提,以后谁重排字段都不会把语言弄丢。
+        """
+        from app.core.i18n import get_current_locale, render_message
         from app.domain.agent.confirmable import allowance_name, tool_spec
         from app.domain.agent.confirmations import card_parts
 
-        headline, warning = card_parts(self.summary_key, self.summary_params, get_current_locale())
+        locale = get_current_locale()
+        #: 标题先算:老卡没有 key 时它回落到 `summary`,那正是下面还没翻的**原话**(有 key 才有
+        #: headline,没 key 才回落到 summary —— 两条互斥,所以这个先后不改变任何结果)。
+        headline, warning = card_parts(self.summary_key, self.summary_params, locale)
         self.headline = headline or self.summary
         self.warning = warning
+        #: 卡上那句话本身。没有 key 的是存量卡 —— 它的 `summary` 就是当时那句话,原样留着不动
+        #: (和 JobOut 对老任务的处理一字不差)。有 key 的一律按 key 现渲染;认不出的 key 由 `_text`
+        #: 原样返回它自己 —— 难看,但**和 headline 一致**(那是既有行为),而且看得见:棘轮(23 个
+        #: `_summarize_*` 的返回值都必须落在 MESSAGES 里)保证它进不了主干。
+        if self.summary_key:
+            self.summary = render_message(self.summary_key, locale, self.summary_params)
         spec = tool_spec(self.tool)
         self.always_asks = bool(spec is not None and spec.always_asks)
         self.choices = {name: bool((self.payload or {}).get(name)) for name in (spec.choices if spec is not None else ())}
