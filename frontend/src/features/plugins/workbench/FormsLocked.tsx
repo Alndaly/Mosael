@@ -66,7 +66,8 @@ export function FormsLocked({ target, lock, path, canvasModified }: {
             onClose={() => setWorkflows(null)}
             onDone={() => {
               setDone(true);
-              void qc.invalidateQueries({ queryKey: ["workflow-library", target.instanceId] });
+              //: 改的是那台机器上的工作流文件:目录重拉、工作流库那份列表(缺什么、表单)按 api/resourceKeys 那张表作废
+              //: —— 都在 refreshConnectionCatalog 一处说了算(ADR 0053),这里不再逐个 key 地拼。
               void refreshConnectionCatalog(qc, target.instanceId);
             }}
           />

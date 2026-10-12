@@ -26,7 +26,12 @@ export const RESOURCE_QUERY_KEYS: Record<Resource, readonly string[]> = {
   sequences: ["sequences"],
   transcripts: ["transcript"],
   //: 工作流列表、编辑器里开着的那张,和它的运行记录;节点包装完之后这张工作流缺什么也跟着变。
-  workflows: ["workflows", "workflow-runs", "node-installs"],
+  //: 还有**插件连接上那张工作流自己的文件**:库详情里的「表单」「能填什么」「能调什么」「交出什么」「用到的模型」
+  //: 全从这一份列表来(`["workflow-library", 连接, 工作区]`)。写它的路不止一条 —— 库里存表单、导入、改名、复制、
+  //: 恢复、升级旧格式标记,以及**工作台里 ComfyUI 自己存盘**(桥报的 `modified` 从有到无,见 pluginCaches 的
+  //: refreshConnectionCatalog)。少挂这一个键:库详情停在改之前那一份上(维护者:在工作台改完表单回到详情页,
+  //: 「表单 1 · 4 项」「能填什么 2」还是旧的),而它 staleTime 30 秒、又不在获焦时重拉。
+  workflows: ["workflows", "workflow-runs", "node-installs", "workflow-library"],
   publish_tasks: ["publish-tasks"],
   //: 生成记录和创作会话(ADR 0055);同上,一次生成也是一份产出。
   generations: ["generation-jobs", "generation-sessions", "workflow-library", "workflow-outputs"],

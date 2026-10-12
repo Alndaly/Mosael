@@ -170,7 +170,7 @@ async function mount(first: ComfyWorkbenchState | null = state(), extra: React.R
     </QueryClientProvider>,
   );
   if (first) bridge.emit(first);
-  return { ...bridge, view };
+  return { ...bridge, view, client };
 }
 
 const calls = (bridge: { comfyWorkbench: ReturnType<typeof vi.fn> }) =>
@@ -184,10 +184,10 @@ const appData = (overrides: Partial<WorkflowApp> = {}): WorkflowApp => ({
   items: [
     { key: "6.text", node: "6", input: "text", kind: "text", role: "prompt", title: "提示词", node_title: "", node_label: "CLIP 文本编码",
       hint: "", class_type: "CLIPTextEncode", common: true, media: "", folder: "",
-      exposable: true, spec: { type: "string", default: "a girl" } },
+      exposable: true, unexposable_reason: "", spec: { type: "string", default: "a girl" } },
     { key: "3.steps", node: "3", input: "steps", kind: "number", title: "步数", node_title: "采样", node_label: "采样",
       hint: "", class_type: "KSampler", common: true, role: "", media: "", folder: "",
-      exposable: true, spec: { type: "integer", default: 20 } },
+      exposable: true, unexposable_reason: "", spec: { type: "integer", default: 20 } },
   ],
   outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },
             { node: "17", title: "", label: "PreviewImage", class_type: "PreviewImage", media: "image" }],
@@ -265,12 +265,20 @@ describe("ComfyUI 工作台", () => {
     //: 维护者的路径:从 AI 工作台的「在工作台里打开」进来,在精简表单里加一项、存好、直接回去 —— 此前只有工作流库回来时才重拉。
     api.refreshPluginInstance.mockResolvedValue({});
     const bridge = await mount(state());
+    //: 工作流库那份列表(详情页的「表单」「能填什么」「能调什么」「交出什么」「用到的模型」全从它来)也在这一条路上:
+    //: 此前这里只重拉目录,库详情停在改之前那一份上 —— 维护者:「在工作台改完表单回到详情页,数字和列表还是旧的,
+    //: 连『能填什么』也没变」。作废的是那个键(不是「调了一次函数」)。
+    const library = ["workflow-library", "i1", "w1"];
+    bridge.client.setQueryData(library, { workflows: [] });
+    expect(bridge.client.getQueryState(library)?.isInvalidated, "还没存:不能白刷").toBe(false);
     expect(api.refreshPluginInstance, "还有没存的改动:不拉").not.toHaveBeenCalled();
     bridge.emit(state({ workflow: { ...GUFENG, revision: 2 } }));
     expect(api.refreshPluginInstance, "改着,还没存:不拉").not.toHaveBeenCalled();
+    expect(bridge.client.getQueryState(library)?.isInvalidated, "改着,还没存:工作流库那份照旧").toBe(false);
     bridge.emit(state({ workflow: { ...GUFENG, modified: false, revision: 2 } }));
     await waitFor(() => expect(api.refreshPluginInstance).toHaveBeenCalledWith("i1"));
     expect(api.refreshPluginInstance).toHaveBeenCalledTimes(1);
+    expect(bridge.client.getQueryState(library)?.isInvalidated, "存好了:工作流库那份列表作废").toBe(true);
     bridge.emit(state({ workflow: { ...GUFENG, key: "workflows/别的.json", modified: false } }));
     expect(api.refreshPluginInstance, "换了一张、它本来就存好的:不是存了一张").toHaveBeenCalledTimes(1);
     bridge.emit(null);

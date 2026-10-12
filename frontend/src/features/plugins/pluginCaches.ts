@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { refreshPluginInstance } from "@/api/client";
 import type { PluginPackage } from "@/api/domains/plugins";
 import { boardKeys, generationKeys, providerKeys } from "@/api/queryKeys";
+import { invalidateResources } from "@/api/resourceKeys";
 
 /**
  * **跟着插件连接走的那些缓存**:装、卸、建连接、改配置、启停、授权、刷新之后都要失效。
@@ -51,10 +52,19 @@ const refreshing = new Map<string, Promise<void>>();
  * 查询重问。精简表单、工作流的名字都住在那张图里,AI 工作台的「引擎参数」、画板的提示词面板、工作流节点读的是后端按
  * 连接存着的那份目录(ADR 0020)—— 只让界面重问,拿到的还是旧的。
  *
+ * **工作流库那份列表也在这里作废**(`workflows` → api/resourceKeys 那张表,ADR 0053):库详情里的「表单」「能填什么」
+ * 「能调什么」「交出什么」「用到的模型」全从 `["workflow-library", 连接, 工作区]` 那一份来,而写这张图的路不止一条
+ * —— 库里存表单、导入、改名、复制、恢复、升级旧格式标记,以及**工作台里 ComfyUI 自己存盘**(桥报的 `modified` 从有
+ * 到无,见 ComfyWorkbench 的 useCatalogFollowsWorkbench)。此前这条路上只有目录重拉:在工作台改完表单回到库详情,
+ * 数字和列表还是改之前那一份(维护者报的) —— 那一份 staleTime 30 秒、又不在获焦时重拉,弹窗挂着就一直是旧的。
+ * 写在**等目录回来之前**:那次要问插件把每张工作流拉一遍,等它回来再失效,回来的人先看到的还是旧数字。
+ * 换成键只有那张表,这里不逐个 key 地拼。
+ *
  * 同一个连接正在拉的,后来的那一处接着等同一次,不再叫一遍(插件一次要把那台机器上的每张工作流拉一遍)。拉不成也照样让
  * 界面重问:目录留着上一份,原因在插件页上。
  */
 export function refreshConnectionCatalog(qc: QueryClient, instanceId: string): Promise<void> {
+  invalidateResources(qc, ["workflows"]);
   const running = refreshing.get(instanceId);
   if (running) return running;
   const done = Promise.resolve()

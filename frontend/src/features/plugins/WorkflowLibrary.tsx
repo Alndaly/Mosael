@@ -56,6 +56,7 @@ import {
   type WorkflowTrashed,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { invalidateResources } from "@/api/resourceKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
@@ -286,28 +287,28 @@ export function WorkflowLibraryDialog({
   );
   const restart = useMutation({
     mutationFn: () => rebootWorkflowServer(instance.id),
-    //: 宿主已经让这个连接的目录重拉过:新装的节点包这时才加载,工作流库、模型库、生成选项重新问
+    //: 宿主已经让这个连接的目录重拉过:新装的节点包这时才加载。工作流库那份列表(缺什么、能填什么都从它来)和那台机器上
+    //: 的模型文件都变了 —— 按 api/resourceKeys 那张表作废(ADR 0053),不在这一处逐个 key 地拼。
     onSuccess: () => {
       setRestartedAt(Date.now());
-      void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
-      void qc.invalidateQueries({ queryKey: ["model-library", instance.id] });
+      invalidateResources(qc, ["workflows", "models"]);
       invalidatePluginDependents(qc);
     },
   });
   const qc = useQueryClient();
-  //: 改完一张:工作流库重新问一遍;生成选项、工具清单里的那张也跟着变(宿主已经让这个连接的目录重拉过)
-  //: 这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、能填什么都跟着变。那份目录是后端按这个
-  //: 连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。所以和从编辑器回来一样,先让目录重拉。
+  //: 改完一张:工作流库那份列表重新问一遍(跟着连接走的那一份,含表单、能填什么);生成选项、工具清单里的那张也跟着变
+  //: (宿主已经让这个连接的目录重拉过)。这里改了工作流(存了精简表单、导入、改名、复制、恢复):模型下拉里它叫什么、
+  //: 能填什么都跟着变。那份目录是后端按这个连接存着的,只让界面重问拿到的还是旧的 —— 画板里搜不到刚起的表单标题。
+  //: 所以和从编辑器回来一样,先让目录重拉;作废哪些缓存由 refreshConnectionCatalog 那一处按表说了算。
   const changed = () => {
-    void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
     void refreshConnectionCatalog(qc, instance.id);
   };
-  //: 从编辑器回来:那边可能存了改动、换了模型 —— 先让这个连接的目录重拉,再让工作流库、模型库和生成选项重新问
-  //: (工作台关上时它自己也会让目录重拉,见 ComfyWorkbench 的 useCatalogFollowsWorkbench —— 同一时刻的两次并成一次)
+  //: 从编辑器回来:那边可能存了改动、换了模型 —— 先让这个连接的目录重拉,再让模型库和生成选项重新问
+  //: (工作流库那份列表在 refreshConnectionCatalog 里当场作废了;工作台关上时它自己也会让目录重拉,
+  //: 见 ComfyWorkbench 的 useCatalogFollowsWorkbench —— 同一时刻的两次并成一次)
   const editorReturned = React.useCallback(() => {
     void refreshConnectionCatalog(qc, instance.id).finally(() => {
-      void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
-      void qc.invalidateQueries({ queryKey: ["model-library", instance.id] });
+      invalidateResources(qc, ["models"]);
     });
   }, [instance.id, qc]);
   const editor = useWorkflowEditor(instance, editorReturned, workspaceId);

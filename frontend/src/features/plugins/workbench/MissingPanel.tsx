@@ -12,6 +12,7 @@ import {
   type WorkflowNodePack,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
+import { invalidateResources } from "@/api/resourceKeys";
 import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { modelBaseName } from "@/components/generation/ModelThumb";
@@ -106,8 +107,9 @@ export function MissingPanel({
       setInstalled(false);
 
       invalidatePluginDependents(qc);
-      void qc.invalidateQueries({ queryKey: ["workflow-library", target.instanceId] });
-      void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });
+      //: 重启完新装的节点包才加载:工作流库那份列表(缺什么、能填什么)和那台机器上的模型文件都变了 ——
+      //: 按 api/resourceKeys 那张表作废(ADR 0053),不在这一处逐个 key 地拼。
+      invalidateResources(qc, ["workflows", "models"]);
       run();
     },
   });

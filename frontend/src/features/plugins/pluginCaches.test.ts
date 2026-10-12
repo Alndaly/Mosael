@@ -1,7 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { invalidatePluginDependents, PLUGIN_PACKAGES_KEY, patchPluginInstance } from "./pluginCaches";
+const api = vi.hoisted(() => ({ refreshPluginInstance: vi.fn(async () => ({})) }));
+vi.mock("@/api/client", () => api);
+
+import { queryKeysFor } from "@/api/resourceKeys";
+import { invalidatePluginDependents, PLUGIN_PACKAGES_KEY, patchPluginInstance, refreshConnectionCatalog } from "./pluginCaches";
+
+beforeEach(() => api.refreshPluginInstance.mockClear());
 
 describe("插件连接变了,跟着它走的缓存一起失效", () => {
   it("AI 工作台的模型选择器、画板工具格、节点表单都不停在旧的那一份", () => {
@@ -112,5 +118,41 @@ describe("连接改动的乐观写入", () => {
     patchPluginInstance(qc, "i1", { enabled: false });
     const [off] = qc.getQueryData<{ instances: { enabled: boolean; blocked_reason: string }[] }[]>(PLUGIN_PACKAGES_KEY)!;
     expect(off.instances[0]).toMatchObject({ enabled: false, blocked_reason: "缺配置" });
+  });
+});
+
+/**
+ * 这个连接上的**工作流文件**变了:工作流库那份列表(`["workflow-library", 连接, 工作区]`)也要重问。
+ *
+ * 维护者报的现象:在工作台的「表单」页签里改完这张工作流(标题、项、顺序),存盘回到工作流库那张详情页,
+ * 面板上的数字和列表还是旧的 —— 「表单 1 · 4 项」「能填什么 2」都没变。详情页那几样(表单、能填什么、能调什么、
+ * 交出什么、用到的模型)全从这一份列表来,而它此前**不在**跟着连接走的那一摞里:存盘那条路只让后端重拉了目录
+ * (refreshConnectionCatalog),工作流库那一份没人让它过期 —— 那一份 staleTime 30 秒、又不在获焦时重拉,
+ * 弹窗一直挂着就是旧数字。
+ *
+ * 写这张图的路不止一条(库里的「编辑表单」、导入、改名、复制、恢复、升级旧格式标记,以及**工作台里 ComfyUI
+ * 自己存盘**:桥报的 `modified` 从有到无),所以声明写在 refreshConnectionCatalog 这一处 —— 它就是「这个连接上的
+ * 工作流变了」,换成缓存键的是 api/resourceKeys 那张表(ADR 0053),不在哪个组件里逐个 key 地拼。
+ */
+describe("这个连接上的工作流变了:工作流库那份列表一起重问", () => {
+  it("作废的是那个键(不是「调了一次」) —— 详情里的表单、能填什么都从它来", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const library = ["workflow-library", "i1", "w1"];
+    qc.setQueryData(library, { workflows: [] });
+    qc.setQueryData(["assets", "w1"], []);
+
+    await refreshConnectionCatalog(qc, "i1");
+
+    expect(api.refreshPluginInstance, "目录照旧重拉").toHaveBeenCalledWith("i1");
+    expect(qc.getQueryState(library)?.isInvalidated, "工作流库那份列表").toBe(true);
+    expect(qc.getQueryState(["assets", "w1"])?.isInvalidated, "工作流文件变了不是「素材变了」").toBe(false);
+  });
+
+  it("挂在 workflows 这个词下面 —— 换掉那个词,详情页就又是旧数字了", async () => {
+    expect(queryKeysFor(["workflows"])).toContain("workflow-library");
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData(["workflow-library", "i1", "w1"], { workflows: [] });
+    await refreshConnectionCatalog(qc, "i1");
+    expect(qc.getQueryState(["workflow-library", "i1", "w1"])?.isInvalidated).toBe(true);
   });
 });

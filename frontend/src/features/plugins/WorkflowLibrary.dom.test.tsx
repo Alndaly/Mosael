@@ -63,12 +63,18 @@ const api = vi.hoisted(() => ({
   getLocalNsfw: vi.fn(async () => ({ status: "missing", size_bytes: 0, pending: 0, scored: 0, message: "" })),
   installLocalNsfw: vi.fn(),
   upgradeWorkflowMarks: vi.fn(),
+  //: 「编辑表单」那一份(ADR 0045):详情里点某一张表单 / 「新表单」打开它
+  getWorkflowApp: vi.fn(),
+  annotateWorkflow: vi.fn(),
+  getFormUsages: vi.fn(),
 }));
 const saved = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/download", () => ({ saveJsonToDisk: saved }));
 vi.mock("@/api/client", () => api);
-//: 「表单:…」那一行要拼进表单标题才看得出标出来的是哪几个字:这两条给真文案,别的照旧回键名
-const FORM_TEXT = vi.hoisted((): Record<string, string> => ({ workflowFormTitleLine: "表单:{title}", listSeparator: "、" }));
+//: 「表单:…」那一行要拼进表单标题才看得出标出来的是哪几个字;「4 项」那一行要看到数字。别的照旧回键名
+const FORM_TEXT = vi.hoisted((): Record<string, string> => ({
+  workflowFormTitleLine: "表单:{title}", listSeparator: "、", workflowFormFields: "{n} 项",
+}));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => FORM_TEXT[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
@@ -76,7 +82,8 @@ vi.mock("@/app/preferences", () => ({
 const handoff = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
 
-import type { PluginInstance, WorkflowFile, WorkflowLibrary } from "@/api/client";
+import type { PluginInstance, WorkflowApp, WorkflowFile, WorkflowLibrary } from "@/api/client";
+import { invalidateResources } from "@/api/resourceKeys";
 import { ConnectionLibraries } from "./ConnectionLibraries";
 import { WorkflowLibraryDialog } from "./WorkflowLibrary";
 import { resetWorkbench } from "./workbench/workbenchSession";
@@ -1280,5 +1287,114 @@ describe("上一版格式的表单(ADR 0045 §7)", () => {
     const outcome = await within(dialog).findByRole("status");
     expect(outcome.textContent).toContain("workflowFormsUpgraded");
     expect(outcome.textContent, "刚改过的那张跳过了,说出来").toContain("workflowFormsUpgradeStale");
+  });
+});
+
+/**
+ * 改完表单回到这张详情页:面板上就该是新的。
+ *
+ * 维护者报的:在工作台的「表单」页签里改完这张工作流(标题、项、顺序),回到库详情,面板上的数字和列表还是旧的 ——
+ * 「表单 1 · 4 项」「能填什么 2」都没变,而且**不只是表单标题那一份**,连「能填什么」(插件交回的项)也陈旧。原因正是它们
+ * 是**同一份**:详情里那几样全是 `["workflow-library", 连接, 工作区]` 那份列表的不同切面,而写这张图的路此前只做了
+ * 一半 —— 目录重拉了,工作流库那一份没人让它过期(它 staleTime 30 秒、又不在获焦时重拉,弹窗挂着就一直是旧数字)。
+ *
+ * 所以这里钉两件事:那张表(api/resourceKeys)里 `workflows` 认这个键;以及按那个键作废之后,详情当场按新数据重画 ——
+ * 数字、列表、能填什么都算。不在这里逐个 key 地拼,也不靠「函数被调了一次」。
+ */
+describe("改完表单回到详情页:面板上就是新的", () => {
+  /** 详情里那一张:带一张表单、一项能填的;数字和列表都从它来。 */
+  const dressed = (over: Partial<WorkflowFile> = {}) => flow({
+    path: "换装.json", label: "换装", modified: 1776098690,
+    inputs: [{ node: "10", title: "参考图 · 人物", media: "image", role: "reference_image" }],
+    app: {
+      status: "ok", version: "2", upgradable: false, results: [], invalid: 0, stray: 0,
+      forms: [{ id: "f1", title: "旧标题", description: "", fields: 1, invalid: 0, model: "", tool: "" }],
+    },
+    ...over,
+  });
+  /** 改完(存完)之后再问这一份列表:标题换了、多了一张表单,能填的也多两项。 */
+  const changed = () => library({
+    workflows: [dressed({
+      inputs: [
+        { node: "10", title: "参考图 · 人物", media: "image", role: "reference_image" },
+        { node: "11", title: "参考图 · 背景", media: "image", role: "reference_image" },
+        { node: "3", title: "步数", media: "", role: "parameter" },
+      ],
+      app: {
+        status: "ok", version: "2", upgradable: false, results: [], invalid: 0, stray: 0,
+        forms: [
+          { id: "f1", title: "快速换装", description: "", fields: 2, invalid: 0, model: "", tool: "" },
+          { id: "f2", title: "精调", description: "", fields: 1, invalid: 0, model: "", tool: "" },
+        ],
+      },
+    })],
+  });
+  /** 「编辑表单」读的那一份(`/workflow-library/app`)。 */
+  const appPayload = (): WorkflowApp => ({
+    path: "换装.json", modified: 1776098682.9, kind: "image", editable: true,
+    items: [{
+      key: "6.text", node: "6", input: "text", kind: "text", role: "prompt", title: "提示词", node_title: "", node_label: "CLIP 文本编码",
+      hint: "", class_type: "CLIPTextEncode", common: true, media: "", folder: "", exposable: true, unexposable_reason: "",
+      spec: { type: "string", default: "a girl" },
+    }],
+    outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" }],
+    app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
+  });
+  const libraryKey = ["workflow-library", "i1", "w1"] as const;
+  const titleLine = () => document.querySelector("[data-workflow-form-title]")?.textContent;
+  const fillable = () => within(screen.getByRole("region", { name: "workflowInputs" })).getAllByRole("listitem");
+  const formCounts = () => [...screen.getByRole("region", { name: "workflowApp" }).querySelectorAll("[data-detail-form]")]
+    .map((one) => one.textContent?.match(/\d+ 项/)?.[0]);
+
+  async function openTheDetail() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<WorkflowLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1" />,
+           { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+    const card = (await screen.findAllByRole("listitem")).find((one) => one.textContent?.includes("换装"))!;
+    fireEvent.click(within(card).getByRole("button", { name: "换装" }));
+    await screen.findByRole("button", { name: "workflowLibraryBack" });
+    return client;
+  }
+
+  it("别处写了这张工作流(工作台里存盘 / 另一个客户端):workflows 那个词一作废,详情当场是新数字、新列表", async () => {
+    api.getWorkflowLibrary.mockResolvedValueOnce(library({ workflows: [dressed()] })).mockResolvedValue(changed());
+    const client = await openTheDetail();
+    expect(titleLine()).toBe("表单:旧标题");
+    expect(fillable()).toHaveLength(1);
+    expect(formCounts()).toEqual(["1 项"]);
+
+    //: 「这个连接上的工作流变了」做的就是这个(refreshConnectionCatalog / 任务中心按那张表作废)
+    await act(() => invalidateResources(client, ["workflows"]));
+
+    await waitFor(() => expect(titleLine()).toBe("表单:快速换装、精调"));
+    expect(fillable().map((one) => one.textContent), "「能填什么」也换了")
+      .toEqual(["参考图 · 人物workflowMedia_image", "参考图 · 背景workflowMedia_image", "步数"]);
+    expect(formCounts(), "「表单」那几行的项数也换了").toEqual(["2 项", "1 项"]);
+  });
+
+  it("在库里保存表单之后:工作流库那份列表按 key 重问,详情当场是新的(不是「函数被调了一次」)", async () => {
+    api.getWorkflowLibrary.mockResolvedValueOnce(library({ workflows: [dressed()] })).mockResolvedValue(changed());
+    api.getWorkflowApp.mockResolvedValue(appPayload());
+    api.annotateWorkflow.mockResolvedValue({ path: "换装.json", modified: 1776098699.5 });
+    const client = await openTheDetail();
+    expect(titleLine()).toBe("表单:旧标题");
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowFormNew" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "workflowAppName" }), { target: { value: "快速换装" } });
+    fireEvent.click(screen.getByRole("button", { name: "workflowAppSave" }));
+    const confirm = await screen.findByRole("alertdialog");
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole("button", { name: "workflowAppSaveConfirm" }));
+    });
+    expect(api.annotateWorkflow).toHaveBeenCalledWith("i1", expect.objectContaining({
+      path: "换装.json", modified: 1776098682.9,
+    }));
+
+    //: 断言的是**那个键底下**换了数据 —— 不是「失效函数被调了一次」
+    await waitFor(() => expect(client.getQueryData<WorkflowLibrary>([...libraryKey])?.workflows?.[0]?.app?.forms?.[0]?.title)
+      .toBe("快速换装"));
+    await waitFor(() => expect(titleLine()).toBe("表单:快速换装、精调"));
+    expect(fillable(), "「能填什么」那两条也在").toHaveLength(3);
+    expect(formCounts()).toEqual(["2 项", "1 项"]);
   });
 });
