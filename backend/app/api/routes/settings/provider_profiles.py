@@ -89,9 +89,11 @@ def delete_my_credential(profile_id: str, db: DbSession, user: CurrentUser) -> R
 def list_provider_profiles(db: DbSession, user: CurrentUser) -> list[ProviderProfileOut]:
     # **只给他自己的**。连接归人(见 db.models.ProviderProfile):此前这里不做任何过滤,
     # 于是新账号一进设置页就看到八条别人建的连接,每条底下一行「未配置你的密钥」。
+    # 删掉的连接也不在这里:那一行还在(生成历史要认得出处,见 connections.delete_connection),
+    # 但"连接列表"问的是他现在有哪些连接。
     profiles = db.scalars(
         select(ProviderProfile)
-        .where(ProviderProfile.owner_user_id == user.id)
+        .where(ProviderProfile.owner_user_id == user.id, ProviderProfile.deleted_at.is_(None))
         .order_by(ProviderProfile.created_at)
     ).all()
     # 自动续期只碰**我自己**那把钥匙 —— 过期的是谁的,谁登录的时候才刷得动。

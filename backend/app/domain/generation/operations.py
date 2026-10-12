@@ -616,7 +616,10 @@ def _resolve_provider_profile(
     if not provider_profile_id:
         return None
     profile = db.get(ProviderProfile, provider_profile_id)
-    if profile is None or not profile.enabled or (owner_user_id is not None and profile.owner_user_id != owner_user_id):
+    # 删掉的连接不能拿来生成:碑还在(历史认得出处,见 providers.connections.delete_connection),
+    # 而它的模型行、钥匙已经跟着清了 —— 这里放行的话,报出来的是「模型不对」而不是「连接没了」。
+    if (profile is None or profile.deleted_at is not None or not profile.enabled
+            or (owner_user_id is not None and profile.owner_user_id != owner_user_id)):
         raise GenerationDomainError("genErr_connectionUnavailable")
     return profile
 

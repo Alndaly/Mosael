@@ -25,6 +25,13 @@ class ProviderProfile(Base):
 
     现在钥匙和连接归同一个人,所以它们其实是一件事的两半;ProviderCredential 仍然单独一张表,
     因为它装的是 oauth 令牌、模型目录这些**会变**的东西,而连接是用户填的那份配置。
+
+    **删连接是立碑,不是抹除**(`deleted_at`,见 domain/providers/connections.delete_connection)。
+    这一行同时是生成历史的**出处**:`generation_jobs` / `agent_sessions` / `provider_usage_events`
+    各有一列指着它,而那几个外键写的都是 `ondelete="SET NULL"` —— 行真被删掉的那一刻,那些记录上的
+    出处一起变成 NULL,没有任何代码回填,「这条产出是哪条连接做的」就永久没有答案了。同一个仓库里
+    早有这条判断:GenerationSession 的 `origin_kind`/`origin_id` **故意不设外键**,要的正是
+    「东西删了,会话照旧」。所以行留着,读侧一律只认 `deleted_at IS NULL` 的连接。
     """
 
     __tablename__ = "provider_profiles"
@@ -50,6 +57,10 @@ class ProviderProfile(Base):
     plugin_instance_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("plugin_instances.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    #: 立碑的时刻。有值 = 这条连接**已经删了**:它不再出现在任何列表、选择器、默认值解析里,
+    #: 也不能再拿来生成(读侧统一看 `deleted_at IS NULL`,见 domain/providers/selection)。
+    #: 而历史那一侧照旧按 id 找得到它 —— 行不在,才是真的找不回来了。
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

@@ -4087,6 +4087,26 @@ def _migrate_generation_result_deleted_mark() -> None:
             conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN result_deleted_at DATETIME"))
 
 
+def _migrate_provider_profiles_get_a_tombstone() -> None:
+    """已装机的库补上 provider_profiles.deleted_at(删连接立碑的时刻,见 db.model_slices.providers)。
+
+    `create_all` 只建缺失的**表**,不给已存在的表加列 —— 少了这一步,升级的机器上后端起不来
+    (no such column)。老库里的连接全部是「还在」的(`deleted_at IS NULL`),这一步不搬任何数据:
+    真正的删除改成立碑是**从这一刻起**的事,此前被删掉的那些连接行已经不在库里,
+    没有可恢复的信息源(谁的 id 都没留下)。
+
+    幂等:列在就不动。
+    """
+
+    inspector = inspect(engine)
+    if "provider_profiles" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("provider_profiles")}
+    if "deleted_at" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE provider_profiles ADD COLUMN deleted_at DATETIME"))
+
+
 def _migrate_generation_result_deleted_backfill() -> None:
     """`5b7cfd418` 之前就被删掉产出的那些生成记录,补上「产出已被删除」。
 
@@ -9601,6 +9621,10 @@ def migration_plan() -> MigrationPlan:
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
+                # 加列:provider_profiles.deleted_at(删连接立碑)。**排在所有 AFTER_SCHEMA 的最前面** ——
+                # 模型上已经有这一列了,而这一相里有用 ORM 读 ProviderProfile 的迁移(下面补参考价那几步),
+                # 排到它们后面,老库会在 `no such column: provider_profiles.deleted_at` 上当场炸。
+                _migrate_provider_profiles_get_a_tombstone,
                 _migrate_drop_local_publish_accounts,
                 _migrate_board_revision,
                 _migrate_comment_canvas_context,

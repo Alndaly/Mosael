@@ -186,7 +186,9 @@ def commit_credential(
             profile_id, exc.code, current_version,
         )
     profile = db.get(ProviderProfile, profile_id)
-    if profile is None or profile.owner_user_id != user_id:
+    # 删掉的连接不再收凭据:行留着只为让历史认得出处(见 connections.delete_connection),
+    # 钥匙已经跟着它清掉了 —— 再写回去等于给一条不存在的连接留一把钥匙。
+    if profile is None or profile.deleted_at is not None or profile.owner_user_id != user_id:
         release_lease(profile_id, user_id, lease_token)
         raise CredentialLeaseError("credLeaseErr_providerNotFound")
     if credential is not None:

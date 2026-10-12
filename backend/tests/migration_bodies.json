@@ -174,6 +174,7 @@
   "migrate-provider-defaults-per-person": "106eac96ef194094",
   "migrate-provider-model-capability-ref": "8d845ad1603e6504",
   "migrate-provider-models-remember-their-group": "3cde557dd5642e58",
+  "migrate-provider-profiles-get-a-tombstone": "ffdb2e1ea071c3a1",
   "migrate-publish-records-outlive-their-asset": "365a141ceb195777",
   "migrate-publish-task-claimed-by": "ef8d7de889838e90",
   "migrate-publish-task-options": "4f162320e16cadaa",

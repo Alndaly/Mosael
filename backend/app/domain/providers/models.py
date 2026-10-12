@@ -232,9 +232,13 @@ def models_for_capability(
 
     `user_id` 是必要的:连接归人(见 db.models.ProviderProfile),不过滤的话选择器会列出别人
     连接下的模型 —— 选中一个之后调用必然失败,因为那条连接他根本看不到、也没有钥匙。
+
+    **删掉的连接也不列**(见 connections.delete_connection):它的模型行已经跟着清掉了,
+    这一句是给"行还留着的"兜底 —— 选择器里摆一条用不了的连接,选中必然失败。
     """
     stmt = select(ProviderModel).join(ProviderProfile).where(
-        ProviderModel.enabled.is_(True), ProviderProfile.enabled.is_(True)
+        ProviderModel.enabled.is_(True), ProviderProfile.enabled.is_(True),
+        ProviderProfile.deleted_at.is_(None),
     )
     if user_id is not None:
         stmt = stmt.where(ProviderProfile.owner_user_id == user_id)

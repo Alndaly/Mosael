@@ -68,7 +68,9 @@ def runner_choice(db: Session, profile_id: str | None, model: str, *, user_id: s
     if not profile_id or user_id is None:
         return profile_id or None, model, False
     profile = db.get(ProviderProfile, str(profile_id))
-    if profile is None or profile.owner_user_id == user_id:
+    # 删掉的连接和「不在的」是同一件事(见 connections.delete_connection):碑还在,但它不再是
+    # 一条能拿来对话的连接 —— 原样交回,由后面报「连接不在了」,而不是报一句看不出所以然的「没有钥匙」。
+    if profile is None or profile.deleted_at is not None or profile.owner_user_id == user_id:
         return str(profile_id), model, False
     return None, "", True
 
@@ -107,7 +109,10 @@ def require_connection(
     """
     if profile_id:
         profile = db.get(ProviderProfile, str(profile_id))
-        if profile is None or not profile.enabled or (user_id is not None and profile.owner_user_id != user_id):
+        # 「删掉的」算「不在的」:碑还立着(历史认得出处),但它不能拿来对话 —— 不挡的话下面
+        # 那句会说成「没有可用的钥匙」(钥匙是跟着删连接清的),而真正的原因是连接已经不在了。
+        if (profile is None or profile.deleted_at is not None or not profile.enabled
+                or (user_id is not None and profile.owner_user_id != user_id)):
             raise _connection_error(error, "providerErr_connectionMissing")
     else:
         profile = default_chat_connection(db, owner_user_id=user_id, surface=surface)

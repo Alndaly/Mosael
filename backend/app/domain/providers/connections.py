@@ -12,10 +12,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.db.models import ProviderCredential, ProviderProfile
+from app.db.model_base import now
+from app.db.models import (
+    GenerationCapabilityProfile,
+    ProviderCredential,
+    ProviderModel,
+    ProviderPricingRule,
+    ProviderProfile,
+)
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
 from app.domain.providers.auth import needs_reauthorization
@@ -116,8 +124,34 @@ def _switch_auth_type(db: Session, profile: ProviderProfile, next_auth: str, use
 
 
 def delete_connection(db: Session, profile: ProviderProfile) -> None:
-    """删连接。钥匙、模型行、参数组跟着外键级联删掉。"""
-    db.delete(profile)
+    """删连接:**立碑,不抹除**。
+
+    此前这里是 `db.delete(profile)`,而「这一行是生成历史的出处」这件事没人管:几个外键
+    (`generation_jobs` / `agent_sessions` / `provider_usage_events`.provider_profile_id)写的都是
+    `ondelete="SET NULL"`,行一没,那些记录上的出处当场变成 NULL,而且**没有任何代码回填**。
+    代价跑出来过:工作流详情的「最近的产出」拿 `provider_profile_id == profile.id` 查
+    (domain/workflow_library._runs),从此再也认不出那些产出;用量记录也不再说得清钱花在哪条连接上。
+
+    同一个仓库里早有正解:GenerationSession 的 `origin_kind`/`origin_id` **故意不设外键**,注释写着
+    「要的正是『东西删了,会话照旧』」。连接也是同一回事 —— 它是历史的出处,删掉它不该连带抹掉
+    「这是谁做的」。所以这一行留着,`deleted_at` 记下什么时候删的;读侧一律只认
+    `deleted_at IS NULL` 的连接(列表、可选连接、生成时挑 profile),而按 id 查历史的那几处照旧找得到它。
+
+    **跟着清掉的是「这条连接现在怎么用」**,不是历史:钥匙、模型行、参数组、价目规则。此前这四样靠
+    外键级联跟着行一起没(FK 不再有机会触发,所以显式删,和那时删的是同一批)。删掉才有人收拾:
+    留着的话,某个人「这项能力的默认模型」会一直指着一条已经删掉的连接。
+    """
+    profile.deleted_at = now()
+    # 顺序要紧:模型行先删(挂在它下面的 generation_capability_declarations 靠外键跟着走),
+    # 参数组后删 —— 反过来的话,还指着参数组的那几行声明会把删除挡在 RESTRICT 上。
+    for statement in (
+        delete(ProviderModel).where(ProviderModel.provider_profile_id == profile.id),
+        delete(GenerationCapabilityProfile).where(GenerationCapabilityProfile.provider_profile_id == profile.id),
+        delete(ProviderPricingRule).where(ProviderPricingRule.provider_profile_id == profile.id),
+        delete(ProviderCredential).where(ProviderCredential.profile_id == profile.id),
+    ):
+        db.execute(statement.execution_options(synchronize_session=False))
+    db.flush()
 
 
 def describe_connection(db: Session, profile: ProviderProfile, user_id: str) -> dict[str, Any]:

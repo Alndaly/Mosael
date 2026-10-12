@@ -74,14 +74,16 @@ def checked_profile_id(db: Session, user: User, profile_id: str | None) -> str |
     一个裸 500,既不说是哪个字段,也不说该怎么办,还会在监控里记成服务端故障。
 
     **不要求它是启用的**:停用只是「暂时别用」,把会话钉在上面仍然合理(运行时 resolve_chat_provider
-    自己会回退到默认连接)。这里挡的只是「指向一条根本不存在、或者不属于你的连接」。
+    自己会回退到默认连接)。这里挡的只是「指向一条根本不存在、不属于你的、或者已经删掉的连接」——
+    删掉的那一行还在(生成历史要认得出处,见 providers.connections.delete_connection),但它不再是一条
+    能用来对话的连接。
     """
     wanted = (profile_id or "").strip()
     if not wanted:
         return None
     profile = db.get(ProviderProfile, wanted)
     # 连接归人。别人的和不存在的对他是同一件事 —— 分开说等于确认了这个 id 有效。
-    if profile is None or (profile.owner_user_id is not None and profile.owner_user_id != user.id):
+    if profile is None or profile.deleted_at is not None or (profile.owner_user_id is not None and profile.owner_user_id != user.id):
         raise UnknownConnection("routeErr_aiConnectionNotFound")
     return profile.id
 

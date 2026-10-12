@@ -53,8 +53,13 @@ def attach_output(record_id: str, db: Session, asset_id: str) -> None:
 
 
 def _existing_profile(db: Session, provider_profile_id: str | None) -> str | None:
-    """记录上的连接一格有外键:给的 id 不在(界面带了一条删掉的)就不记,合成时照常由配音那一族自己解析。"""
-    if provider_profile_id and db.get(ProviderProfile, provider_profile_id) is not None:
+    """记录上的连接一格有外键:给的 id 不在(界面带了一条删掉的)就不记,合成时照常由配音那一族自己解析。
+
+    **删掉的也算「不在」**:立了碑的那一行还在(让历史认得出处,见 providers.connections.delete_connection),
+    但新记一条语音不该把出处记在一条已经删掉的连接上。
+    """
+    profile = db.get(ProviderProfile, provider_profile_id) if provider_profile_id else None
+    if profile is not None and profile.deleted_at is None:
         return provider_profile_id
     return None
 

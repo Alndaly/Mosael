@@ -60,7 +60,9 @@ class MissingModel:
 def explain_missing(db: Session, *, user_id: str | None, provider_profile_id: str, model: str, kind: str) -> MissingModel:
     """`(provider_profile_id, model)` 为什么不在 `kind` 这种生成的选项里。调用方已经知道它不在(选项里没有、解析不出来)。"""
     profile = db.get(ProviderProfile, provider_profile_id) if provider_profile_id else None
-    if profile is None or (user_id is not None and profile.owner_user_id != user_id):
+    # 删掉的连接就是「连接不在了」:行还在(历史认得出它,见 connections.delete_connection),
+    # 但它的模型行一并清了 —— 不在这里挡,用户看到的会是「这个模型认不出来」,而不是真正的原因。
+    if profile is None or profile.deleted_at is not None or (user_id is not None and profile.owner_user_id != user_id):
         return MissingModel(provider_profile_id, model, fragment("genMissing_someModel"), "", None,
                             fragment("genMissing_connectionGone"))
     instance_id = profile.plugin_instance_id or ""

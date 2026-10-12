@@ -65,10 +65,14 @@ def find_enabled_connection(
     *,
     owner_user_id: str | None = None,
 ) -> ProviderProfile | None:
-    """查找启用的连接；给出用户时绝不跨用户回退。"""
+    """查找启用的连接；给出用户时绝不跨用户回退。
+
+    **删掉的连接不算连接**(见 connections.delete_connection):行还在,但那只是历史认得出的
+    一块碑 —— 拿它去请求、去当默认、去列进选择器,都是"用一条已经不存在的连接"。
+    """
     if profile_id:
         profile = db.get(ProviderProfile, profile_id)
-        if profile is None or not profile.enabled:
+        if profile is None or profile.deleted_at is not None or not profile.enabled:
             return None
         if vendor and profile.vendor != vendor:
             return None
@@ -78,6 +82,7 @@ def find_enabled_connection(
     stmt = select(ProviderProfile).where(
         ProviderProfile.vendor == vendor,
         ProviderProfile.enabled.is_(True),
+        ProviderProfile.deleted_at.is_(None),
     )
     if owner_user_id is not None:
         stmt = stmt.where(ProviderProfile.owner_user_id == owner_user_id)
@@ -127,6 +132,10 @@ def adopt_plugin_connection(
         profile.name = name[:_NAME_LIMIT]
         profile.vendor = vendor
         profile.enabled = enabled
+        #: 实例还在,这条连接就得在。碑只由「删连接」立(见 connections.delete_connection),
+        #: 而插件连接是实例在生成领域的把手 —— 实例在,把手拔掉没有意义。此前删掉的(实例删一半、
+        #: 手写过库)在这里复活,免得一条看不见的连接永远当不了它的把手。
+        profile.deleted_at = None
     db.flush()
     return profile
 
@@ -137,8 +146,13 @@ def list_enabled_connections(
     owner_user_id: str | None = None,
     auth_type: str | None = None,
 ) -> list[ProviderProfile]:
-    """列出启用连接；owner 与鉴权方式在查询阶段过滤，调用方不再先看见别人的连接再补救。"""
-    stmt = select(ProviderProfile).where(ProviderProfile.enabled.is_(True))
+    """列出启用连接；owner 与鉴权方式在查询阶段过滤，调用方不再先看见别人的连接再补救。
+
+    删掉的连接不在这里 —— 立了碑的行还在(历史要认得出它),但那不是一条能选的连接。
+    """
+    stmt = select(ProviderProfile).where(
+        ProviderProfile.enabled.is_(True), ProviderProfile.deleted_at.is_(None)
+    )
     if owner_user_id is not None:
         stmt = stmt.where(ProviderProfile.owner_user_id == owner_user_id)
     if auth_type is not None:

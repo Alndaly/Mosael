@@ -1,5 +1,5 @@
 {
-  "version": 20,
+  "version": 21,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -176,6 +176,7 @@
     "migrate-provider-defaults-per-person",
     "migrate-provider-model-capability-ref",
     "migrate-provider-models-remember-their-group",
+    "migrate-provider-profiles-get-a-tombstone",
     "migrate-publish-records-outlive-their-asset",
     "migrate-publish-task-claimed-by",
     "migrate-publish-task-options",
