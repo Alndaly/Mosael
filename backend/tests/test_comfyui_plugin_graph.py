@@ -643,21 +643,24 @@ def test_认得的那几格照旧用表里的名字_标签只管不认得的输�
     assert parameters["720.grow_mask_by"]["x-advanced"] is True, "排序和「收不收进高级」照旧(见 common / rank)"
 
 
-def test_名字是一句就照一句交回_是一张表就按表交回(labels) -> None:
-    """名字的形状是**数据**说了算(见 frontend lib/pickLabel):工作流存的那份标签是一句,`title` 就是那一句;
-    按语言分的那一份(节点名、`/i18n` 的)交回的是一张表。挑哪一句是界面的事,插件不替一句标签编一门语言。"""
+def test_名字一律交一对_画布上那句标签是一句就并进去两种语言同值(labels) -> None:
+    """插件交给宿主的名字**一律是 `{"zh", "en"}` 一对**(挑哪一句显示是宿主按读的人的语言做的事,见 backend
+    `app/domain/workflow_library._picked`)。工作流自己存的那份标签是**一句、不带语言**:并进这一对时两种语言里
+    都写它 —— 插件不替一句标签编一门语言,也不把一对塌成一句。"""
 
-    def cell(name) -> "labels.Parameter":
+    def cell(zh, en) -> "labels.Parameter":
         return labels.Parameter(key="720.mask_expand_pixels", node="720", input="mask_expand_pixels",
                                 class_type="InpaintCropImproved", node_title="Inpaint Crop", rank=1000,
-                                common=False, name=name, names_node=True)
+                                common=False, zh=zh, en=en, names_node=True)
 
-    assert labels.titled([cell("遮罩像素扩展")])["720.mask_expand_pixels"] == "遮罩像素扩展"
-    assert labels.titled([cell({"zh": "步数", "en": "Steps"})])["720.mask_expand_pixels"] == {"zh": "步数", "en": "Steps"}
-    assert labels.phrases("遮罩像素扩展") == {"zh": "遮罩像素扩展", "en": "遮罩像素扩展"}, "一句在哪种语言里都写它"
-    assert labels.said({"zh": "步数", "en": "Steps"}, "en") == "Steps" and labels.said("一句", "en") == "一句"
-    #: 撞名了才要接节点名,那一刻按语言各拼一份 —— 一句标签也照样拼得出来
-    assert labels.numbered({"a": "遮罩像素扩展", "b": "遮罩像素扩展"}, {"a": "720", "b": "721"}) == {
+    #: 画布上那份标签(一句)走的就是这一条:describe 把它并进一对里,两种语言同值
+    assert labels.titled([cell("遮罩像素扩展", "遮罩像素扩展")])["720.mask_expand_pixels"] == {
+        "zh": "遮罩像素扩展", "en": "遮罩像素扩展"}
+    #: 按语言分的那一份(节点名、`/i18n` 的)各是各的,原样交回
+    assert labels.titled([cell("步数", "Steps")])["720.mask_expand_pixels"] == {"zh": "步数", "en": "Steps"}
+    #: 撞名了才要接节点名,那一刻按语言各拼一份 —— 同值时两份都一样
+    assert labels.numbered({"a": {"zh": "遮罩像素扩展", "en": "遮罩像素扩展"},
+                            "b": {"zh": "遮罩像素扩展", "en": "遮罩像素扩展"}}, {"a": "720", "b": "721"}) == {
         "a": {"zh": "遮罩像素扩展 #720", "en": "遮罩像素扩展 #720"},
         "b": {"zh": "遮罩像素扩展 #721", "en": "遮罩像素扩展 #721"},
     }
