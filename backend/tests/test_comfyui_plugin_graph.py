@@ -8,6 +8,8 @@ muted 跳过、提示词递归穿过 ControlNet、占位符在解析之后填 �
 
 from __future__ import annotations
 
+from typing import Any
+
 import json
 import sys
 from pathlib import Path
