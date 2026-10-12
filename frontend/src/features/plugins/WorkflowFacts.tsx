@@ -7,7 +7,6 @@ import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { LibrarySection } from "@/components/app/LibraryBrowser";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { ModelFocus } from "@/features/plugins/libraryLinks";
 import { cn } from "@/lib/utils";
@@ -15,16 +14,16 @@ import { cn } from "@/lib/utils";
 type Translate = ReturnType<typeof useI18n>;
 
 /** 一张工作流「是什么样」的那几样:工作流库的详情、导入前的预览是同一份。 */
-export type WorkflowFactsSource = Pick<WorkflowFile, "inputs" | "parameters" | "outputs" | "models" | "missing_nodes" | "missing_models">;
+export type WorkflowFactsSource = Pick<WorkflowFile, "models" | "missing_nodes" | "missing_models">;
 
 export const kindName = (t: Translate, kind: string) =>
   kind === "image" || kind === "video" || kind === "audio" || kind === "text" ? t(`workflowKind_${kind}`) : t("workflowKind_unknown");
 
-export const mediaName = (t: Translate, media: string) =>
-  media === "image" || media === "video" || media === "audio" || media === "text" ? t(`workflowMedia_${media}`) : media;
-
 /**
- * 能填什么 / 能调什么 / 交出什么、用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)、缺的模型(声明的下载地址)。
+ * 用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)、缺的模型(声明的下载地址)。
+ *
+ * 「能填什么 / 能调什么 / 交出什么」不列在这里 —— 点那张表单进详情页就看得到(见 WorkflowLibrary 里表单那一行);
+ * `outputs` 这份数据照旧有人读(表单编辑器的「结果取自」,见 WorkflowAppEditor),只是不再在这儿列一遍。
  *
  * `onShowModel` 给了才有跳到模型库的入口(在的停到那一项,缺的打开下载框);`packAction` 给了,「缺的节点」每个节点包后面
  * 放它交回的东西(装节点包的按钮),`missingNodesNote` 放在那一节底下(装到哪了、要不要重启)。导入前的预览都不给 ——
@@ -42,60 +41,8 @@ export function WorkflowFacts({
   missingNodesNote?: React.ReactNode;
 }) {
   const t = useI18n();
-  const parameters = facts.parameters ?? [];
-  const [allParameters, setAllParameters] = React.useState(false);
   return (
     <>
-      {(facts.inputs?.length ?? 0) > 0 && (
-        <LibrarySection title={t("workflowInputs")} count={facts.inputs?.length}>
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {(facts.inputs ?? []).map((one) => (
-              <li key={`${one.node}-${one.role}`} className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                <Truncate className="min-w-0 flex-1">{one.title}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{mediaName(t, one.media)}</span>
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
-      {parameters.length > 0 && (
-        <LibrarySection
-          title={t("workflowParameters")}
-          count={parameters.length}
-          action={
-            parameters.length > 12 ? (
-              <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={allParameters}
-                      onClick={() => setAllParameters(!allParameters)}>
-                {allParameters ? t("modelMetaCollapse") : t("modelTagsAll").replace("{n}", String(parameters.length))}
-              </Button>
-            ) : undefined
-          }
-        >
-          <ul className="m-0 flex min-w-0 list-none flex-wrap gap-1.5 p-0">
-            {(allParameters ? parameters : parameters.slice(0, 12)).map((one) => (
-              <li key={one.key} className="min-w-0 max-w-full">
-                <Hint label={one.key}>
-                  <span className="inline-flex h-7 max-w-full items-center rounded-full bg-secondary px-2.5 text-ui-xs text-foreground">
-                    <Truncate>{one.title}</Truncate>
-                  </span>
-                </Hint>
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
-      {(facts.outputs?.length ?? 0) > 0 && (
-        <LibrarySection title={t("workflowOutputs")} count={facts.outputs?.length}>
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {(facts.outputs ?? []).map((one) => (
-              <li key={one.node} className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                <Truncate className="min-w-0 flex-1">{one.title}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{mediaName(t, one.media)}</span>
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
       <LibrarySection title={t("workflowModels")} count={facts.models?.length ?? 0}>
         {(facts.models?.length ?? 0) > 0 ? (
           <ul className={FACT_LIST}>

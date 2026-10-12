@@ -11,8 +11,8 @@
  * - 卡片 / 列表的一行:右键、悬停出现的 ⋯、Shift+F10 / 菜单键打开同一份菜单,分组摆好,点不了的写着为什么;
  *   「移动到…」挑文件夹;「下载缺的模型」「装缺的节点」打开详情停到那一节;
  * - 一张卡:节点图缩略预览(照图摘要画成 SVG)、名字、种类、节点数、缺什么;
- * - 点开是详情:能填什么 / 参数 / 交出什么、用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)和缺的模型、
- *   最近的产出、Mosael 里谁在用它(点了跳过去);「用它生成」交给 AI 工作台,不是生成模型的点不了并说为什么;
+ * - 点开是详情:用到的模型(在不在)、缺的节点(出自哪个节点包、装没装)和缺的模型、最近的产出、
+ *   Mosael 里谁在用它(点了跳过去);「用它生成」交给 AI 工作台,不是生成模型的点不了并说为什么;
  * - 改那台机器上的文件(复制、改名、删除、恢复)每次都先确认、写明改哪台服务器的哪个文件;撞名(409)不覆盖,给建议名;
  *   删除是挪进回收目录,确认框里说清楚 Mosael 里谁在用它;「回收站」里能恢复;导出 JSON 只是下载到本机;
  * - 打开一张只有一个入口:桌面版「在工作台里打开」(工作台里开 ComfyUI 的画布并打开这一张),网页版「在 ComfyUI 里打开」
@@ -480,13 +480,10 @@ describe("工作流库", () => {
            "全在根目录:一整列空着就不摆").toBeNull();
   });
 
-  it("详情:能填什么、参数、交出什么、用到的模型在不在、缺的模型、最近的产出、谁在用它(点了跳过去)", async () => {
+  it("详情:用到的模型在不在、缺的模型、最近的产出、谁在用它(点了跳过去)", async () => {
     const back = await openDetail("portrait");
     const head = back.closest("[data-library-detail-head]") as HTMLElement;
     expect(within(head).getByRole("heading", { name: "portrait" })).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "workflowInputs" })).getByText("LoadImage")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "workflowParameters" })).getByText("步数")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "workflowOutputs" })).getByText("保存图像")).toBeTruthy();
     const usedModels = screen.getByRole("region", { name: "workflowModels" });
     expect(within(usedModels).getByText("sdxl.safetensors").closest("li")?.textContent).toContain("workflowModelPresent");
     expect(within(usedModels).getByText("gone.safetensors").closest("li")?.textContent).toContain("workflowModelMissing");
@@ -1297,9 +1294,10 @@ describe("上一版格式的表单(ADR 0045 §7)", () => {
  * 「表单 1 · 4 项」「能填什么 2」都没变,而且**不只是表单标题那一份**,连「能填什么」(插件交回的项)也陈旧。原因正是它们
  * 是**同一份**:详情里那几样全是 `["workflow-library", 连接, 工作区]` 那份列表的不同切面,而写这张图的路此前只做了
  * 一半 —— 目录重拉了,工作流库那一份没人让它过期(它 staleTime 30 秒、又不在获焦时重拉,弹窗挂着就一直是旧数字)。
+ * (这里举的「能填什么」那一节,后来按维护者的减法从详情删了 —— 当时它是同一个毛病的证据,表单那几行、用到的模型照旧。)
  *
  * 所以这里钉两件事:那张表(api/resourceKeys)里 `workflows` 认这个键;以及按那个键作废之后,详情当场按新数据重画 ——
- * 数字、列表、能填什么都算。不在这里逐个 key 地拼,也不靠「函数被调了一次」。
+ * 表单标题、那几行的项数、用到的模型都算。不在这里逐个 key 地拼,也不靠「函数被调了一次」。
  */
 describe("改完表单回到详情页:面板上就是新的", () => {
   /** 详情里那一张:带一张表单、一项能填的;数字和列表都从它来。 */
@@ -1342,7 +1340,6 @@ describe("改完表单回到详情页:面板上就是新的", () => {
   });
   const libraryKey = ["workflow-library", "i1", "w1"] as const;
   const titleLine = () => document.querySelector("[data-workflow-form-title]")?.textContent;
-  const fillable = () => within(screen.getByRole("region", { name: "workflowInputs" })).getAllByRole("listitem");
   const formCounts = () => [...screen.getByRole("region", { name: "workflowApp" }).querySelectorAll("[data-detail-form]")]
     .map((one) => one.textContent?.match(/\d+ 项/)?.[0]);
 
@@ -1360,15 +1357,12 @@ describe("改完表单回到详情页:面板上就是新的", () => {
     api.getWorkflowLibrary.mockResolvedValueOnce(library({ workflows: [dressed()] })).mockResolvedValue(changed());
     const client = await openTheDetail();
     expect(titleLine()).toBe("表单:旧标题");
-    expect(fillable()).toHaveLength(1);
     expect(formCounts()).toEqual(["1 项"]);
 
     //: 「这个连接上的工作流变了」做的就是这个(refreshConnectionCatalog / 任务中心按那张表作废)
     await act(() => invalidateResources(client, ["workflows"]));
 
     await waitFor(() => expect(titleLine()).toBe("表单:快速换装、精调"));
-    expect(fillable().map((one) => one.textContent), "「能填什么」也换了")
-      .toEqual(["参考图 · 人物workflowMedia_image", "参考图 · 背景workflowMedia_image", "步数"]);
     expect(formCounts(), "「表单」那几行的项数也换了").toEqual(["2 项", "1 项"]);
   });
 
@@ -1394,7 +1388,6 @@ describe("改完表单回到详情页:面板上就是新的", () => {
     await waitFor(() => expect(client.getQueryData<WorkflowLibrary>([...libraryKey])?.workflows?.[0]?.app?.forms?.[0]?.title)
       .toBe("快速换装"));
     await waitFor(() => expect(titleLine()).toBe("表单:快速换装、精调"));
-    expect(fillable(), "「能填什么」那两条也在").toHaveLength(3);
     expect(formCounts()).toEqual(["2 项", "1 项"]);
   });
 });
