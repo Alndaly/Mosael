@@ -383,7 +383,7 @@ export const plugins = {
   modelBroken: "Unreadable file",
   modelBrokenHint: "This file's header can't be read (that ComfyUI can't read it either): it's most likely an unfinished, corrupted or truncated download. Download it again; other files aren't affected.",
   workflowLibraryOpen: "Open workflow library",
-  workflowLibraryDesc: "The workflows saved on this server: node graph, what they take, which models they use, what is missing",
+  workflowLibraryDesc: "The workflows saved on this server: the node graph, forms, the models they use (and what is missing), recent outputs, and who uses them in Mosael",
   workflowLibraryTitle: "{name} · Workflow library",
   workflowLibraryFolders: "Workflow folders",
   workflowLibraryAll: "All",

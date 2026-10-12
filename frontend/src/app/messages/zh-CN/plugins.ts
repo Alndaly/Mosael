@@ -391,7 +391,7 @@ export const plugins = {
   modelBroken: "文件读不了",
   modelBrokenHint: "这个文件的文件头读不了(那台 ComfyUI 自己也读不了):多半是没下完、下坏了或者被截断了。重新下一份;别的文件不受影响。",
   workflowLibraryOpen: "打开工作流库",
-  workflowLibraryDesc: "这台服务器上存着的工作流:节点图、能填什么、用到哪些模型、缺什么",
+  workflowLibraryDesc: "这台服务器上存着的工作流:节点图、表单、用到的模型(缺什么)、最近的产出,以及 Mosael 里谁在用它",
   workflowLibraryTitle: "{name} · 工作流库",
   workflowLibraryFolders: "工作流目录",
   workflowLibraryAll: "全部",
