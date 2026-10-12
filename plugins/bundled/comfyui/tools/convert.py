@@ -82,6 +82,10 @@ _FRONTEND_WIDGETS = frozenset({"upload", "audioUI"})
 CONTROLS = "control_after_generate"
 #: 写进 `_meta` 的:哪几格下拉存的值已经不在选项里、按定义缺省复位过(见 _restore_stale_combo)。
 RESET_COMBOS = "reset_stale_combos"
+#: 写进 `_meta` 的:这一格在**画布上**叫什么(`<输入名> → <一句名字>`,见 `_own_labels`)。API 图里没有这一格
+#: (它是界面上的一个显示名),可「维护者在 ComfyUI 右侧 Parameters 里把 `mask_expand_pixels` 叫成『遮罩像素扩展』」
+#: 只有它说得清 —— 取名时排在 `/i18n` 前面(见 labels.describe)。
+INPUT_LABELS = "input_labels"
 
 #: 子图输入口 / 输出口的节点 id 缺省值(前端的 SUBGRAPH_INPUT_ID / SUBGRAPH_OUTPUT_ID)。
 _SUBGRAPH_INPUT, _SUBGRAPH_OUTPUT = -10, -20
@@ -216,6 +220,30 @@ def _wrap(value: Any) -> Any:
     return {"__value__": value} if isinstance(value, list) else value
 
 
+def _own_labels(node: _Node) -> dict[str, str]:
+    """画布上这个节点**每一格写着的名字**:输入名 → 那一句(`inputs[].label`)。
+
+    这一格是**界面上改出来的名字**:维护者在 ComfyUI 右侧「Parameters」里直接改那一格的标题(前端的
+    `WidgetItem.vue` → `widgetUtil.renameWidget` 写 `input.label`),随工作流一起存下来;节点包自己给了
+    `display_name` 时前端也往这里写(见 litegraphService 的 `addInputWidget`)。同一个输入名在不同节点上
+    可以是不同的名字,所以它挂在**节点**上,不是挂在节点类上。
+
+    和输入名一模一样的那一句**不是名字,是身份**(真机上存下来的过半都是这种:`MiniMaxH3SigmaShift` 的
+    `model` 存的就是 `"model"`):收进来只会让 `mask_expand_pixels` 顶掉「Mask expand pixels」。空白的、不是
+    一句字符串的也不收。
+    """
+    found: dict[str, str] = {}
+    for entry in node.inputs:
+        name = entry.get("name")
+        label = entry.get("label")
+        if not isinstance(name, str) or not name or not isinstance(label, str):
+            continue
+        label = label.strip()
+        if label and label != name:
+            found[name] = label
+    return found
+
+
 class _Converter:
     def __init__(self, ui_graph: dict[str, Any], object_info: dict[str, Any], locale: str) -> None:
         self.ui = ui_graph
@@ -307,6 +335,9 @@ class _Converter:
             else:
                 inputs[name] = [resolved[1], resolved[2]]
         meta: dict[str, Any] = {"title": str(node.raw.get("title") or node.type)}
+        labels = _own_labels(node)
+        if labels:
+            meta[INPUT_LABELS] = labels
         if controls:
             # 后端不看 _meta;插件据此在没给种子时照工作流的设定办(见 graph.fill)
             meta[CONTROLS] = controls

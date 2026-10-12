@@ -955,7 +955,8 @@ def _tunable_entries(api: dict[str, Any], object_info: dict[str, Any],
     """这张图里**给人调的**那些字面量输入:(描述好的参数, JSON Schema 片段, 人话名字),按常用程度排好。
 
     宿主自己有控件的(提示词、种子、尺寸)、画布上的批量(按工作流原样,见 counts_runs)、读素材的槽位、不该在 Mosael 里调的(文件名前缀)
-    都不在这里。名字是人话(见 labels),原始的「节点 · 输入名」在 description 里。
+    都不在这里。名字是人话(见 labels):**工作流自己存着的那份 widget 标签排最前**(`_meta` 的 `INPUT_LABELS`,
+    维护者在 ComfyUI 右侧 Parameters 里改出来的名字),原始的「节点 · 输入名」在 description 里。
     """
     prompts = text_slots(api, object_info)
     seeds = set(seed_inputs(api))
@@ -967,6 +968,10 @@ def _tunable_entries(api: dict[str, Any], object_info: dict[str, Any],
         node = api[node_id]
         class_type = str(node.get("class_type", ""))
         defs = _input_defs(object_info, class_type)
+        #: 画布上这个节点每一格写着的名字(维护者在 ComfyUI 右侧 Parameters 里改出来的):取名时排最前,见 labels.describe
+        meta = node.get("_meta") if isinstance(node.get("_meta"), dict) else {}
+        own = meta.get(convert.INPUT_LABELS)
+        own = own if isinstance(own, dict) else {}
         for name, value in (node.get("inputs") or {}).items():
             order += 1
             if not isinstance(value, (str, int, float, bool)) or name in labels.HIDDEN_INPUTS:
@@ -990,7 +995,8 @@ def _tunable_entries(api: dict[str, Any], object_info: dict[str, Any],
             folder = labels.model_folder(class_type, name)
             if folder and "enum" in spec:
                 spec["x-model-folder"] = folder
-            described = labels.describe(node_id, name, class_type, titles.get(node_id, ""), order, object_info)
+            described = labels.describe(node_id, name, class_type, titles.get(node_id, ""), order, object_info,
+                                       own=own.get(name))
             if not described.common or class_type in _SAVE_NODE_TYPES:
                 spec["x-advanced"] = True
             spec["description"] = f"{titles.get(node_id) or class_type} · {name}"

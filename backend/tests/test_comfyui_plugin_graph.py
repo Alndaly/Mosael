@@ -71,6 +71,14 @@ def convert(tools):
     return tools[1]
 
 
+@pytest.fixture(scope="module")
+def labels(tools):
+    """取名的那些表(`/i18n` 并进 object_info 也在这儿,见 `with_i18n`)。"""
+    import labels
+
+    return labels
+
+
 # --- AUTOGROW 输入(COMFY_AUTOGROW_V3):`values` 落到图上是 `values.a`… -------------------------
 
 #: ComfyMathExpression 的定义(8120 真机读到的形状):必填的 values 是 AUTOGROW ——
@@ -527,6 +535,144 @@ def test_几个节点标题一样_名字里不重复节点名_各带上节点号
     assert found["16.text"] == {"zh": f"提示词 · {detailer} #16", "en": f"Prompt · {detailer} #16"}
     assert found["7.text"] == {"zh": "反向提示词", "en": "Negative prompt"}
     assert found["730.wording"]["zh"] == f"{detailer} · Wording #730"
+
+
+# --- 画布上那一格叫什么:工作流自己存的那份 widget 标签排最前 ---------------------------------------
+
+#: 维护者画布上的那个 `Inpaint Crop`(`InpaintCropImproved`)。他在 ComfyUI 右侧的「Parameters」里把
+#: `mask_expand_pixels` 叫成「遮罩像素扩展」,前端把这一句写进节点的 `inputs[].label` 随工作流存下来
+#: (`name` / `localized_name` 还是英文的输入名,见 frontend widgetUtil.renameWidget)。`/i18n` 和 object_info
+#: 都不带这套中文(8120 上解码搜过:命中 0),所以 Mosael 此前只能照输入名显示「Mask expand pixels」——
+#: 和画布上写着的对不上。
+_CROP_INFO: dict[str, Any] = {
+    "InpaintCropImproved": {
+        "display_name": "Inpaint Crop",
+        "input": {"required": {
+            "image": ["IMAGE"],
+            "mask": ["MASK"],
+            "downscale_algorithm": [["lanczos", "bicubic"], {"default": "lanczos"}],
+            "mask_expand_pixels": ["INT", {"default": 0, "min": 0, "max": 512}],
+            "mask_fill_holes": ["BOOLEAN", {"default": True}],
+            "mask_hipass_filter": ["FLOAT", {"default": 0.1, "min": 0.0, "max": 1.0}],
+            "mask_blend_pixels": ["INT", {"default": 8, "min": 0, "max": 256}],
+            "grow_mask_by": ["INT", {"default": 6, "min": 0, "max": 64}],
+        }},
+        "output": ["IMAGE", "MASK"],
+        "output_name": ["cropped_image", "cropped_mask"],
+    },
+}
+#: 这张图用到的节点包里**真有**的那几格翻译:另外那一半(降采样算法 / 遮罩像素扩展 / 遮罩增长)哪一路都没有。
+_CROP_I18N: dict[str, Any] = {
+    "zh": {"nodeDefs": {"InpaintCropImproved": {"inputs": {"mask_fill_holes": {"name": "遮罩孔洞填充"},
+                                                           "mask_hipass_filter": {"name": "遮罩高通滤波"}}}}},
+    "en": {"nodeDefs": {"InpaintCropImproved": {"inputs": {"mask_fill_holes": {"name": "Mask fill holes"},
+                                                           "mask_hipass_filter": {"name": "Mask hipass filter"}}}}},
+}
+
+
+def _crop_ui() -> dict[str, Any]:
+    """维护者那张工作流的相关部分(照真机存下来的形状):`inputs[]` 上有 `label` 的就是他在 Parameters 里改过名字的,
+    没有的照旧。`mask_fill_holes` 那一格存着一句和输入名一样的标签 —— **那不是名字,是身份**(真机上过半都长这样)。"""
+
+    def slot(name: str, kind: str, label: str | None = None) -> dict[str, Any]:
+        return {"name": name, "type": kind, "widget": {"name": name}, "link": None,
+                "localized_name": name, **({"label": label} if label else {})}
+
+    return {
+        "id": "b1a2c3d4-1111-4222-8333-444455556666",
+        "nodes": [
+            {"id": 10, "type": "LoadImage", "widgets_values": ["photo.png", "image"], "inputs": [widget("image")],
+             "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [1]},
+                         {"name": "MASK", "type": "MASK", "links": [2]}]},
+            {"id": 720, "type": "InpaintCropImproved", "title": "Inpaint Crop",
+             "widgets_values": ["lanczos", 24, True, 0.1, 8, 6],
+             "inputs": [conn("image", 1), conn("mask", 2),
+                        slot("downscale_algorithm", "COMBO", "降采样算法"),
+                        slot("mask_expand_pixels", "INT", "遮罩像素扩展"),
+                        slot("mask_fill_holes", "BOOLEAN", "mask_fill_holes"),
+                        slot("mask_hipass_filter", "FLOAT"),
+                        slot("mask_blend_pixels", "INT"),
+                        slot("grow_mask_by", "INT", "遮罩增长")],
+             "outputs": [{"name": "cropped_image", "type": "IMAGE", "links": [3]},
+                         {"name": "cropped_mask", "type": "MASK", "links": None}]},
+            {"id": 9, "type": "SaveImage", "widgets_values": ["mosael"],
+             "inputs": [conn("images", 3), widget("filename_prefix")]},
+        ],
+        "links": [[1, 10, 0, 720, 0, "IMAGE"], [2, 10, 1, 720, 1, "MASK"], [3, 720, 0, 9, 0, "IMAGE"]],
+    }
+
+
+def _crop(graph, convert, labels):
+    info = labels.with_i18n({**OBJECT_INFO, **_CROP_INFO}, _CROP_I18N)
+    api = convert.to_api(_crop_ui(), info)
+    return api, info, graph.describe("crop.json", "crop", api, info, convert.titles_of(api))["parameters"]
+
+
+def test_画布上改过的名字排最前_没有才回落官方翻译再回落到输入名(graph, convert, labels) -> None:
+    """维护者:「节点的属性名称在 ComfyUI 右侧这个 Parameters 中可以编辑」—— 他在那儿把这一格改叫「遮罩像素扩展」,
+    Mosael 里此前显示的是输入名拆出来的「Mask expand pixels」。画布上写着什么,Mosael 里就该写什么。"""
+    _, _, parameters = _crop(graph, convert, labels)
+    assert parameters["720.mask_expand_pixels"]["title"] == {"zh": "Inpaint Crop · 遮罩像素扩展",
+                                                             "en": "Inpaint Crop · 遮罩像素扩展"}, \
+        "工作流自己存的那份标签排最前;它是一句、不带语言,两种语言里都写这一句"
+    assert parameters["720.downscale_algorithm"]["title"] == {"zh": "Inpaint Crop · 降采样算法",
+                                                              "en": "Inpaint Crop · 降采样算法"}
+    assert parameters["720.mask_hipass_filter"]["title"] == {"zh": "Inpaint Crop · 遮罩高通滤波",
+                                                             "en": "Inpaint Crop · Mask hipass filter"}, \
+        "没有标签:回落 /i18n 里那个包自己的官方翻译"
+    assert parameters["720.mask_blend_pixels"]["title"] == {"zh": "Inpaint Crop · Mask blend pixels",
+                                                            "en": "Inpaint Crop · Mask blend pixels"}, \
+        "标签和官方翻译都没有:才把输入名拆成人话"
+    assert parameters["720.mask_expand_pixels"]["default"] == 24, "名字换了,值还是画布上那一格(按输入名对上的)"
+
+
+def test_标签和输入名一样的那一句不算名字_回落照旧(graph, convert, labels) -> None:
+    """真机上存下来的标签过半都是这种(`MiniMaxH3SigmaShift` 的 `model` 存的就是 `"model"`):一句和输入名一样的话
+    什么都没说,收下它只会让 `mask_fill_holes` 顶掉「遮罩孔洞填充」。"""
+    _, _, parameters = _crop(graph, convert, labels)
+    assert parameters["720.mask_fill_holes"]["title"] == {"zh": "Inpaint Crop · 遮罩孔洞填充",
+                                                          "en": "Inpaint Crop · Mask fill holes"}
+
+
+def test_认得的那几格照旧用表里的名字_标签只管不认得的输入(graph, convert, labels) -> None:
+    """`grow_mask_by` 在 `KNOWN` 里(「蒙版外扩」):那是 Mosael 自己给常见输入起的人话名字,比节点包的一句话准
+    —— 真机上 `VHS_VideoCombine` 的 `pingpong` 存着 `"Ping-Pong"`,表里是「往返播放」。标签补的是**不认得**的那一档。"""
+    _, _, parameters = _crop(graph, convert, labels)
+    assert parameters["720.grow_mask_by"]["title"] == {"zh": "蒙版外扩", "en": "Grow mask by"}, \
+        "认得的那几格不因为画布上改了名字就跟着改"
+    assert parameters["720.grow_mask_by"]["x-advanced"] is True, "排序和「收不收进高级」照旧(见 common / rank)"
+
+
+def test_名字是一句就照一句交回_是一张表就按表交回(labels) -> None:
+    """名字的形状是**数据**说了算(见 frontend lib/pickLabel):工作流存的那份标签是一句,`title` 就是那一句;
+    按语言分的那一份(节点名、`/i18n` 的)交回的是一张表。挑哪一句是界面的事,插件不替一句标签编一门语言。"""
+
+    def cell(name) -> "labels.Parameter":
+        return labels.Parameter(key="720.mask_expand_pixels", node="720", input="mask_expand_pixels",
+                                class_type="InpaintCropImproved", node_title="Inpaint Crop", rank=1000,
+                                common=False, name=name, names_node=True)
+
+    assert labels.titled([cell("遮罩像素扩展")])["720.mask_expand_pixels"] == "遮罩像素扩展"
+    assert labels.titled([cell({"zh": "步数", "en": "Steps"})])["720.mask_expand_pixels"] == {"zh": "步数", "en": "Steps"}
+    assert labels.phrases("遮罩像素扩展") == {"zh": "遮罩像素扩展", "en": "遮罩像素扩展"}, "一句在哪种语言里都写它"
+    assert labels.said({"zh": "步数", "en": "Steps"}, "en") == "Steps" and labels.said("一句", "en") == "一句"
+    #: 撞名了才要接节点名,那一刻按语言各拼一份 —— 一句标签也照样拼得出来
+    assert labels.numbered({"a": "遮罩像素扩展", "b": "遮罩像素扩展"}, {"a": "720", "b": "721"}) == {
+        "a": {"zh": "遮罩像素扩展 #720", "en": "遮罩像素扩展 #720"},
+        "b": {"zh": "遮罩像素扩展 #721", "en": "遮罩像素扩展 #721"},
+    }
+
+
+def test_能填的项和给人调的那几格是同一份名字(graph, convert, labels) -> None:
+    """表单编辑器(`items`)和工具入参(`tunable`)读的是同一份名字 —— 标签只在取名那一处落,别处不各写一遍。"""
+    api, info, _ = _crop(graph, convert, labels)
+    titles = convert.titles_of(api)
+    wanted = {"zh": "Inpaint Crop · 遮罩像素扩展", "en": "Inpaint Crop · 遮罩像素扩展"}
+    assert graph.tunable(api, info, titles)["720.mask_expand_pixels"]["title"] == wanted
+    found = {one["key"]: one["title"] for one in graph.items(api, info, titles)}
+    assert found["720.mask_expand_pixels"] == wanted
+    assert found["720.mask_blend_pixels"] == {"zh": "Inpaint Crop · Mask blend pixels",
+                                              "en": "Inpaint Crop · Mask blend pixels"}
 
 
 def test_LoRA和checkpoint是下拉_选项来自object_info(graph) -> None:
