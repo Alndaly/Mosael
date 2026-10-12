@@ -1411,3 +1411,66 @@ describe("改完表单回到详情页:面板上就是新的", () => {
     expect(formCounts()).toEqual(["2 项", "1 项"]);
   });
 });
+
+describe("工作流库 · 大卡片上「最近的那一份产出」那一枚小图", () => {
+  /**
+   * 音频**没有缩略图**:后端 `media/thumbnails.generate_thumbnail` 对 audio / document 直接回 None,
+   * `GET /assets/{id}/thumbnail` 于是 404 —— 前端再画一枚 `<img>`,用户看到的就是一张加载失败的破图,
+   * 底下露着那块 `bg-secondary` 的白底(维护者截图)。按产出的种类画种类占位,别画破图。
+   *
+   * 只有大卡片那一档摆这一枚(见 WorkflowCard 的 `large`)。
+   */
+  const openLarge = async () => {
+    window.localStorage.setItem("mosael:tab:workflow-library.density", "large");
+    const list = await openLibrary();
+    expect(list.getAttribute("data-density"), "这一组量的是大卡片上那一枚").toBe("large");
+    return list;
+  };
+  const cardOf = (path: string) => screen.getByRole("list", { name: "workflowLibraryTitle" })
+    .querySelector<HTMLElement>(`[data-library-item="${path}"]`)!;
+  /** 一张音频卡、一张图片卡、一张视频卡(后两张后端确实转得出缩略图)。 */
+  const withOutputs = () => library({
+    workflows: [
+      flow({ path: "music.json", label: "music", kind: "audio", node_count: 9,
+             last_output: { asset_id: "au1", kind: "audio", created_at: "2026-10-09T15:28:57" } }),
+      flow({ path: "photo.json", label: "photo",
+             last_output: { asset_id: "im1", kind: "image", created_at: "2026-10-09T15:00:00" } }),
+      flow({ path: "movie.json", label: "movie", kind: "video",
+             last_output: { asset_id: "vi1", kind: "video", created_at: "2026-10-09T14:00:00" } }),
+    ],
+  });
+  /** 那一枚占位:共用件 `KindIcon`(和表单里「音频」那枚同一个),读屏念的种类名。 */
+  const placeholder = (card: HTMLElement) => card.querySelector<HTMLElement>("[data-field-kind]");
+
+  beforeEach(() => api.getWorkflowLibrary.mockResolvedValue(withOutputs()));
+
+  it("音频产出:没有缩略图可画,画的是「音频」那一枚占位,不是一张 <img>", async () => {
+    await openLarge();
+    const music = cardOf("music.json");
+    expect(music.querySelector("img"), "音频那一格不该有 <img> —— 后端对这个素材就是 404").toBeNull();
+    expect(music.querySelector("[data-hidden-preview]")).toBeNull();
+    const icon = placeholder(music);
+    expect(icon?.dataset.fieldKind).toBe("audio");
+    expect(icon?.getAttribute("aria-label")).toBe("workflowAppKind_audio");
+  });
+
+  it("图片和视频照旧走 <img>,src 就是那两份产出的缩略图地址", async () => {
+    await openLarge();
+    const srcs = (path: string) => [...cardOf(path).querySelectorAll("img")].map((img) => img.getAttribute("src"));
+    expect(srcs("photo.json")).toEqual(["thumb://im1"]);
+    expect(srcs("movie.json")).toEqual(["thumb://vi1"]);
+    expect(placeholder(cardOf("photo.json"))).toBeNull();
+    expect(placeholder(cardOf("movie.json"))).toBeNull();
+  });
+
+  it("缩略图加载失败:兜底成同一枚种类占位,界面上不留破图", async () => {
+    await openLarge();
+    const photo = cardOf("photo.json");
+    const img = photo.querySelector("img")!;
+    fireEvent.error(img);
+    expect(photo.querySelector("img"), "挂过一次就不再画 <img>").toBeNull();
+    expect(placeholder(photo)?.dataset.fieldKind).toBe("image");
+    //: 另一张卡上的产出不受影响(挂的是哪一份记在哪一份上,不是一个全局的布尔)
+    expect(cardOf("movie.json").querySelector("img")?.getAttribute("src")).toBe("thumb://vi1");
+  });
+});

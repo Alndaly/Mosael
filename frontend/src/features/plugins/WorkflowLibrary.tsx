@@ -90,6 +90,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { KindIcon, type FieldVisual } from "@/features/plugins/appForm/fieldFacts";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { ConnectionFailureActions } from "@/features/plugins/localServiceStatus";
 import { invalidatePluginDependents, refreshConnectionCatalog } from "@/features/plugins/pluginCaches";
@@ -148,6 +149,7 @@ import {
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
 import { libraryAddFolder, libraryMovePath, libraryRemoveFolder, libraryRenameFolder } from "@/features/plugins/workflowLibraryCache";
+import { kindIsVisual } from "@/lib/assetKinds";
 import { gotoRecord, openBoard } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
@@ -1073,12 +1075,29 @@ function LackBadges({ flow }: { flow: WorkflowFile }) {
 }
 
 /**
+ * 一份产出在缩略图那一格里算哪种「画面」:图、视频、音频。后端 `WorkflowRecentOutputOut.kind` 给的就是素材那几种
+ * (image / video / audio,别的照样交出、界面当文件)。和 `FormBuilder` 里「交出什么」那一行同一个映射。
+ */
+function outputVisual(kind: string): FieldVisual {
+  return kind === "image" || kind === "video" || kind === "audio" ? kind : "text";
+}
+
+/**
  * 大卡片上「最近的那一份产出」那一枚小图:和详情里那一组同一套 NSFW 规矩(modelPreviewSettings)—— 判成 NSFW 的按设置模糊
  * (悬停卡片看清)或只剩一枚「已隐藏」的眼睛。
+ *
+ * **没有画面的产出不画 `<img>`**:音频(还有文档)后端本来就不给缩略图 —— `media/thumbnails.generate_thumbnail` 对
+ * audio / document 直接回 None,`GET /assets/{id}/thumbnail` 于是 404,`<img>` 拿到的是一张加载失败的破图,
+ * 底下露着那块 `bg-secondary` 的白底(维护者截图)。按产出的种类画种类图标(共用件 `KindIcon`,和表单里「音频」那枚一样)。
+ *
+ * 图和视频照旧走 `<img>`;取不到时(素材被删了、文件不在盘上、后端没转出缩略图)**兜底成同一枚占位** ——
+ * 破图不是「一种样式选择」,是界面坏了(同 `components/app/asset-preview` 的 MissingImage、`e1b5b2e81`)。
  */
 function CardOutputThumb({ output }: { output: NonNullable<WorkflowFile["last_output"]> }) {
   const t = useI18n();
   const [settings] = useModelPreviewSettings();
+  //: 记着**哪一份**产出的图挂了,不是一个布尔:换了一份产出(重标 NSFW 之后列表会重拉)就该重新试一次。
+  const [broken, setBroken] = React.useState("");
   const treatment = previewTreatment(settings, Boolean(output.nsfw?.flagged));
   if (treatment === "hidden") {
     return (
@@ -1088,10 +1107,16 @@ function CardOutputThumb({ output }: { output: NonNullable<WorkflowFile["last_ou
       </span>
     );
   }
+  const thumb = kindIsVisual(output.kind) && broken !== output.asset_id;
   return (
     <span className="group/thumb size-8 shrink-0 overflow-hidden rounded-md bg-secondary" data-treatment={treatment}>
-      <img src={assetThumbnailUrl(output.asset_id)} alt="" loading="lazy" draggable={false}
-           className={cn("size-full object-cover", previewBlurClass(treatment))} />
+      {thumb ? (
+        <img src={assetThumbnailUrl(output.asset_id)} alt="" loading="lazy" draggable={false}
+             onError={() => setBroken(output.asset_id)}
+             className={cn("size-full object-cover", previewBlurClass(treatment))} />
+      ) : (
+        <KindIcon visual={outputVisual(output.kind)} className="size-full" />
+      )}
     </span>
   );
 }
