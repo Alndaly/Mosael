@@ -48,9 +48,6 @@ vi.mock("@/api/domains/sessions", async (importOriginal) => ({
   streamAgentTurn: vi.fn(async () => new Response("data: {\"text\":\"\",\"done\":true,\"timeline\":[]}\n\n")),
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh-CN" }) }));
-vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
-}));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_MESSAGE_CHARS: 8000,
   textAttachmentBlock: () => "",

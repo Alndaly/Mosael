@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import type { Editor, JSONContent } from "@tiptap/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { NO_REFERENCES } from "@/features/agent/references";
+
 /**
  * 输入框里的「/」:点名一个技能,这一轮照它做(ADR 0040 §4)。
  *
@@ -58,7 +60,7 @@ function mount() {
           onChange(next);
         }}
         onSubmit={onSubmit}
-        search={async () => []}
+        search={async () => NO_REFERENCES}
         skills={skills}
       />
     );

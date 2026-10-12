@@ -11,20 +11,27 @@ import { useExternalContent } from "@/components/app/useExternalContent";
 import { ReferenceChip, ReferenceThumb, REFERENCE_NODE } from "@/features/agent/ReferenceChip";
 import { MAX_FORCED_SKILLS, SKILL_NODE, SkillChip, collectSkills, searchSkills, type SkillOption } from "@/features/agent/SkillChip";
 import {
-  REFERENCE_MENU_LIMIT,
+  NO_REFERENCES,
+  REFERENCE_KINDS,
   REFERENCE_META,
   searchReferences,
   type AgentReference,
+  type ReferenceCandidates,
   type ReferenceKind,
 } from "@/features/agent/references";
 import { Truncate } from "@/components/ui/truncate";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { cn } from "@/lib/utils";
 
-/** `@` 菜单只摆前几条。**模块级、身份不变**:`useSuggestionMenu` 的 `view` 一换身份就重算一遍可见列表(见那里的说明),
- *  写成行内箭头函数就是每次渲染都换 —— 打 `@` 时菜单开着,渲染就停不下来。 */
-function firstReferences(items: AgentReference[]): AgentReference[] {
-  return items.slice(0, REFERENCE_MENU_LIMIT);
+/** 还没摆出来的条数。菜单底部那行说它 —— **按类成段给的那份候选已经截过断**,真数只有查的时候知道
+ *  (`matched`;素材是服务端按 limit 取的,`items.length` 根本不是匹配数)。 */
+function hiddenCount(matched: Record<ReferenceKind, number>, shown: number): number {
+  return Math.max(0, REFERENCE_KINDS.reduce((sum, kind) => sum + matched[kind], 0) - shown);
+}
+
+/** 两次匹配数算不算同一批:一样就交回原来那个对象,不白白多渲染一次(同 useSuggestionMenu 里那条)。 */
+function sameMatchCounts(a: Record<ReferenceKind, number>, b: Record<ReferenceKind, number>): boolean {
+  return REFERENCE_KINDS.every((kind) => a[kind] === b[kind]);
 }
 
 /** 从文档里收出所有引用,按出现顺序去重。 */
@@ -168,7 +175,7 @@ export function ChatComposer({
   className?: string;
   /** 候选从哪儿来。默认问工作区;**留这个口子是为了测得动** —— 菜单的排版和键盘行为
    *  不该为了验证一次就得起一个后端。 */
-  search?: (workspaceId: string, query: string) => Promise<AgentReference[]>;
+  search?: (workspaceId: string, query: string) => Promise<ReferenceCandidates>;
   /** 「/」点名技能的候选从哪儿来(ADR 0040 §4)。默认问工作区里开着的技能;同上,留口子是为了测得动。 */
   skills?: (workspaceId: string, query: string) => Promise<SkillOption[]>;
   /** 变一次就把光标放到末尾(页面上的「问 AI」把人带到这里)。0 / 不给 = 不动。 */
@@ -186,11 +193,12 @@ export function ChatComposer({
   skillsRef.current = skills;
   //: handleKeyDown 在创建时装好,闭包住的是那一刻的状态 —— 用 ref 读"菜单现在开着没有"。
   const menuOpenRef = React.useRef(false);
+  //: 每一类匹配到多少条(`searchReferences` 连真数一起交回来)。菜单底部那行说"还有 N 个"要用它。
+  const [matched, setMatched] = React.useState<Record<ReferenceKind, number>>(NO_REFERENCES.matched);
 
   const menu = useSuggestionMenu<AgentReference>({
     emptyHint: () => t("boardNoAssetsToMention"),
     sameItems: (a, b) => a.length === b.length && a.every((one, at) => one.id === b[at].id),
-    view: firstReferences,
   });
 
   //: 「/」的那一份菜单:候选是技能,不是对象。两份菜单各管各的,回车让路的判据是「任何一份开着」。
@@ -254,7 +262,13 @@ export function ChatComposer({
           //: **`@` 前面是什么都认**。默认要求它跟在空格后面,而中文正文里不打空格 ——
           //: 那条规则等于让这个功能在中文下时灵时不灵(画布那边同一段说明)。
           allowedPrefixes: null,
-          items: ({ query }) => searchRef.current(workspaceRef.current, query),
+          items: async ({ query }) => {
+            const found = await searchRef.current(workspaceRef.current, query);
+            //: 真数交给底部那行("还有 N 个")。**同一批就交回原来那个对象** —— 每问一次都塞个新对象
+            //: 进去的话,菜单开着时就是白渲染一轮(上面那条用例盯着这个)。
+            setMatched((prev) => (sameMatchCounts(prev, found.matched) ? prev : found.matched));
+            return found.items;
+          },
           command: ({ editor: instance, range, props }) => {
             const picked = props as unknown as AgentReference;
             //: 换成胶囊之后补一个空格 —— 不补的话光标紧贴原子节点,接着打字会被当成还在挑。
@@ -320,12 +334,36 @@ export function ChatComposer({
     if (focusSignal && editor && !editor.isDestroyed) editor.commands.focus("end");
   }, [editor, focusSignal]);
 
+  //: 一份候选里摆出来的条数(每类各自封顶,见 references 的 REFERENCE_KIND_LIMIT)。
+  const shown = menu.all.length;
+  //: 还有多少条没摆出来。**这里说的必须是真数,不是"这一份里有几条"** —— 素材那类是从服务端
+  //: 按 limit 取的,312 份的工作区只取回 6 条,拿 items.length 顶替就会说成"一条都不多"。
+  const hidden = hiddenCount(matched, shown);
+  //: 键盘走到屏幕外的那几条时把高亮带回来。列表比一屏长(上限 360px、一行 40px),没有这一下
+  //: 就成了"选中的"和"看得见的"不是同一条:上下键还在走,眼睛跟丢了。
+  const activeRef = React.useRef<HTMLButtonElement | null>(null);
+  React.useEffect(() => {
+    activeRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [menu.menu?.active, menu.menu?.items]);
+
   return (
     <>
       <EditorContent editor={editor} />
       {/* 版式照画布那份提示词框(features/boards/PromptEditor):同样的宽度、同样的行高、
-          同样的分组标题。同一个动作在两个地方长得不一样,用户会以为是两个不同的东西。 */}
-      <menu.Portal className="fixed left-0 top-0 z-50 max-h-[min(360px,calc(100dvh-16px))] w-[360px] max-w-[calc(100vw-16px)] rounded-xl p-1.5">
+          同样的分组标题,连"还有 N 个"那一行也一样。同一个动作在两个地方长得不一样,
+          用户会以为是两个不同的东西。 */}
+      <menu.Portal
+        className="fixed left-0 top-0 z-50 max-h-[min(360px,calc(100dvh-16px))] w-[360px] max-w-[calc(100vw-16px)] rounded-xl p-1.5"
+        footer={
+          //: **截断不许无声。** 摆不下的条数如实写在列表下面(和画布那份同一个说法)。菜单上限只管
+          //: 高度、不管条数,所以这一行是"还有别的"的凭据,而不是"只能看这么多"的托词。
+          hidden > 0 ? (
+            <div className="border-t border-border px-2 pb-0.5 pt-1 text-ui-2xs text-muted-foreground">
+              {t("boardPickMore").replace("{n}", String(hidden))}
+            </div>
+          ) : null
+        }
+      >
         {(item, index) => (
           <React.Fragment key={`${item.kind}:${item.id}`}>
             {/* 分组标题**由列表自己长出来**,不另存一份结构:上一条和这一条不同类时画一行。
@@ -337,6 +375,10 @@ export function ChatComposer({
             )}
             <button
               type="button"
+              //: 高亮的那一条是**当前选中的那一条**(上下键和回车都对着它),说给读屏听 —— 和画布那份一样。
+              role="option"
+              aria-selected={index === (menu.menu?.active ?? 0)}
+              ref={index === (menu.menu?.active ?? 0) ? activeRef : undefined}
               className={cn(
                 "flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors",
                 index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",

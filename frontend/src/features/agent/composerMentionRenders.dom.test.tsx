@@ -30,7 +30,7 @@ vi.mock("@floating-ui/dom", () => ({
 }));
 
 import { ChatComposer, emptyDocument } from "@/features/agent/ChatComposer";
-import type { AgentReference } from "@/features/agent/references";
+import { NO_REFERENCES, type AgentReference } from "@/features/agent/references";
 
 afterEach(() => {
   cleanup();
@@ -41,6 +41,9 @@ const NOTES: AgentReference[] = [
   { kind: "note", id: "n1", name: "第二篇笔记" },
   { kind: "note", id: "n2", name: "第三篇笔记" },
 ];
+
+/** 两类都够得着(真数=摆出来的条数),菜单底部不该多说什么。 */
+const FEW_NOTES = { items: NOTES, matched: { ...NO_REFERENCES.matched, note: NOTES.length } };
 
 it("菜单开着时只渲染有限几次,控制台没有 Maximum update depth exceeded", async () => {
   const errors = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -56,7 +59,7 @@ it("菜单开着时只渲染有限几次,控制台没有 Maximum update depth ex
           if (commits > 200) throw new Error("render loop: the composer never stops re-rendering");
         }}
       >
-        <ChatComposer workspaceId="ws-1" value={value} onChange={setValue} onSubmit={() => {}} search={async () => NOTES} />
+        <ChatComposer workspaceId="ws-1" value={value} onChange={setValue} onSubmit={() => {}} search={async () => FEW_NOTES} />
       </React.Profiler>
     );
   }
@@ -81,7 +84,7 @@ it("输入区有可访问名称:读屏念得出这是给智能体写的消息", 
   const { screen } = await import("@testing-library/react");
   function Harness() {
     const [value, setValue] = React.useState<JSONContent>(emptyDocument);
-    return <ChatComposer workspaceId="ws-1" value={value} onChange={setValue} onSubmit={() => {}} search={async () => []} />;
+    return <ChatComposer workspaceId="ws-1" value={value} onChange={setValue} onSubmit={() => {}} search={async () => NO_REFERENCES} />;
   }
   render(<Harness />);
   expect(screen.getByRole("textbox", { name: "给智能体的消息" })).toBeTruthy();

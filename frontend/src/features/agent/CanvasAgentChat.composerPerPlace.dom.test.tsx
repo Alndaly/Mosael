@@ -4,8 +4,11 @@
  * 输入框里没发出去的东西按地方分(ADR 0044「每一处各接各的」,智能体那一路 AGENT-9)。
  *
  * 现场:笔记 A 的面板里打了「把这篇笔记的第一段删掉」没发,点开笔记 B —— 面板换成 B 的新对话,输入框里还是那句话;
- * 页面上下文在发送那一刻读的是 B,发出去就是对 B。这里断言**输入框里画出来的字**和**挂着的引用**跟着地方走、回来还在,
+ * 页面上下文在发送那一刻读的是 B,发出去就是对 B。这里断言**输入框里画出来的字**跟着地方走、回来还在,
  * 发出去的那一条用的是这一处的字。
+ *
+ * (输入框里挂着的**笔记引用**曾经也在这一份里,后来那个入口去掉了:引用笔记走 `@` 菜单,见 ChatComposer。
+ *  挂着的附件仍旧按地方分 —— 那是 attach 那一份,这里换成字来验同一条规矩。)
  */
 
 import React from "react";
@@ -40,21 +43,6 @@ vi.mock("@/api/client", () => ({
   stopAgentSession: vi.fn(),
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-//: 引用的笔记:一份有状态的假 hook(和真的一样只认 clear / selected / restore),「加一篇」由触发键做。
-vi.mock("@/features/notes/useNoteAttachments", async () => {
-  const ReactModule = await import("react");
-  return {
-    useNoteAttachments: () => {
-      const [selected, setSelected] = ReactModule.useState<{ id: string; title: string }[]>([]);
-      return {
-        hasNotes: selected.length > 0, context: "", summary: selected.map((n) => `@${n.title}`).join(" "), chips: [],
-        dialog: <span data-testid="attached-notes">{selected.map((n) => n.title).join(",")}</span>,
-        trigger: <button type="button" onClick={() => setSelected((old) => [...old, { id: "n9", title: "参考笔记" }])}>attach-note</button>,
-        clear: () => setSelected([]), selected, restore: (notes: { id: string; title: string }[]) => setSelected(notes),
-      };
-    },
-  };
-});
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 4000,
   MAX_MESSAGE_CHARS: 8000,
@@ -135,22 +123,17 @@ function mount() {
 }
 
 const box = () => screen.getByLabelText("composer") as HTMLTextAreaElement;
-const notes = () => screen.getByTestId("attached-notes").textContent;
 
-it("在 A 打了一半的话、挂的引用,换到 B 不跟着走;回到 A 还在", async () => {
+it("在 A 打了一半的话,换到 B 不跟着走;回到 A 还在", async () => {
   const { show } = mount();
   fireEvent.change(box(), { target: { value: "把这篇笔记的第一段删掉" } });
-  fireEvent.click(screen.getByRole("button", { name: "attach-note" }));
-  expect(notes()).toBe("参考笔记");
 
   act(() => show(NOTE_B));
   await waitFor(() => expect(box().value).toBe(""));
-  expect(notes(), "A 挂的引用跟到了 B").toBe("");
   fireEvent.change(box(), { target: { value: "B 的问题" } });
 
   act(() => show(NOTE_A));
   await waitFor(() => expect(box().value).toBe("把这篇笔记的第一段删掉"));
-  expect(notes()).toBe("参考笔记");
 
   act(() => show(NOTE_B));
   await waitFor(() => expect(box().value).toBe("B 的问题"));

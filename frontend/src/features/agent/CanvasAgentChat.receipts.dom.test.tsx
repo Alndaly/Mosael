@@ -66,9 +66,6 @@ vi.mock("@/features/agent/useAgentTurnStream", () => ({
   }),
 }));
 vi.mock("@/features/agent/messageUsage", () => ({ MessageUsageFooter: () => null }));
-vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {}, selected: [], restore() {} }),
-}));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 1e6,
   MAX_MESSAGE_CHARS: 1e6,

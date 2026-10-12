@@ -65,9 +65,6 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "zh-CN" }) }));
 vi.mock("@/features/agent/messageUsage", () => ({ MessageUsageFooter: () => null, MessageFooter: () => null, MessageTime: () => null }));
-vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
-}));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_MESSAGE_CHARS: 1e6,
   textAttachmentBlock: () => "",

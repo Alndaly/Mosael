@@ -1,4 +1,3 @@
-import { useNoteAttachments } from "@/features/notes/useNoteAttachments";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -26,7 +25,6 @@ import { DictateButton } from "@/features/agent/DictateButton";
 
 import {
   type Asset,
-  type Note,
   compactAgentSession,
   deleteAgentSession,
   dropQueuedMessage,
@@ -160,7 +158,6 @@ export function CanvasAgentChat({
     },
     [draft, workspaceId, place],
   );
-  const noteAttach = useNoteAttachments(workspaceId);
   // 这一处的当前对话:和免提浮标、页面跳转在同一处时读的是同一个答案(见 currentAgentSession)——
   // 选择、草稿、删后回到草稿都在那里,这里不再各写一份。
   const current = useCurrentAgentSession(workspaceId, place, { pollList: 4000 });
@@ -181,24 +178,23 @@ export function CanvasAgentChat({
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspaceId);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
-  //: 换地方:上一处挂着的附件 / 引用暂存起来,这一处先前的取回来;打的字换成这一处的。见上面 `draft` 那段。
+  //: 换地方:上一处挂着的附件暂存起来,这一处先前的取回来;打的字换成这一处的。见上面 `draft` 那段。
+  //: (笔记引用不在这里 —— 它是正文里的原子节点,跟着草稿走;入口是 `@`,见 ChatComposer。)
   const composerShownFor = React.useRef({ workspaceId, place, key: `${workspaceId}|${here}` });
-  const composerLatest = React.useRef({ media: attach.media, files: attach.files, notes: noteAttach.selected });
-  composerLatest.current = { media: attach.media, files: attach.files, notes: noteAttach.selected };
+  const composerLatest = React.useRef({ media: attach.media, files: attach.files });
+  composerLatest.current = { media: attach.media, files: attach.files };
   const { restore: restoreAttachments } = attach;
-  const { restore: restoreNotes } = noteAttach;
   React.useEffect(() => {
     const key = `${workspaceId}|${here}`;
     const previous = composerShownFor.current;
     if (previous.key === key) return;
-    const { media, files, notes } = composerLatest.current;
-    stashComposerExtras(previous.workspaceId, previous.place, media.length || files.length || notes.length ? { media, files, notes } : null);
+    const { media, files } = composerLatest.current;
+    stashComposerExtras(previous.workspaceId, previous.place, media.length || files.length ? { media, files } : null);
     composerShownFor.current = { workspaceId, place, key };
-    const saved = takeComposerExtras<{ media: Asset[]; files: { name: string; content: string }[]; notes: Note[] }>(workspaceId, place);
+    const saved = takeComposerExtras<{ media: Asset[]; files: { name: string; content: string }[] }>(workspaceId, place);
     restoreAttachments({ media: saved?.media ?? [], files: saved?.files ?? [] });
-    restoreNotes(saved?.notes ?? []);
     draft.set(readComposerDraft<JSONContent>(workspaceId, place) ?? emptyDocument);
-  }, [workspaceId, place, here, restoreAttachments, restoreNotes, draft]);
+  }, [workspaceId, place, here, restoreAttachments, draft]);
 
   const isFloating = mode === "floating";
 
@@ -388,7 +384,7 @@ export function CanvasAgentChat({
       files: { name: string; content: string }[];
       mediaAssets: Asset[];
       quote: AgentMessageQuote | null;
-      /** 页面投递的那一条(见 PageOutbox)带的说明。有它就说明这条不是输入框里的:输入框挂着的附件、笔记引用不跟着走。 */
+      /** 页面投递的那一条(见 PageOutbox)带的说明。有它就说明这条不是输入框里的:输入框挂着的附件不跟着走。 */
       outboxContext?: string;
     }) => {
       const fromPage = outboxContext !== undefined;
@@ -396,10 +392,9 @@ export function CanvasAgentChat({
       const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
       let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
       for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
-      if (noteAttach.hasNotes && !fromPage) visibleContent += `\n${noteAttach.summary}`;
       visibleContent = visibleContent.trim();
       const page = typeof contextLine === "function" ? contextLine() : contextLine;
-      const context = [page, outboxContext, fileBlock, fromPage ? "" : noteAttach.context].filter(Boolean).join("\n\n");
+      const context = [page, outboxContext, fileBlock].filter(Boolean).join("\n\n");
       //: 先在这里说,不等后端回一句英文的「at most 4000 characters」(见 composerAttachments 的 MAX_*_CHARS)。
       if (visibleContent.length > MAX_MESSAGE_CHARS || context.length > MAX_CONTEXT_CHARS) {
         throw new Error(t("composerMessageTooLong"));
@@ -420,7 +415,6 @@ export function CanvasAgentChat({
       //: 页面投递的那条不经输入框:输入框里正写着的草稿、挂着的附件都不是它的,不动。
       if (!fromPage) {
         setDraft(emptyDocument);
-        noteAttach.clear();
         attach.clear();
       }
       onSent?.();
@@ -449,7 +443,7 @@ export function CanvasAgentChat({
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
     const draftText = draft.text().trim();
-    if ((!draftText && attach.isEmpty && !noteAttach.hasNotes) || send.isPending) return;
+    if ((!draftText && attach.isEmpty) || send.isPending) return;
     send.mutate({
       text: draftText,
       references: collectReferences(draft.get()),
@@ -696,10 +690,9 @@ export function CanvasAgentChat({
               }}
             />
             {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
-            {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
-            <ComposerChips chips={[...(contextChips ?? []), ...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
+            {/* 附件就是「这条消息里带了什么」,一排摆在输入卡里(笔记引用是正文里的节点,走 `@`)。 */}
+            <ComposerChips chips={[...(contextChips ?? []), ...attach.chips]} uploading={attach.uploading} />
             {attach.previewModal}
-            {noteAttach.dialog}
             {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
             <DraftComposer
               draft={draft}
@@ -712,7 +705,6 @@ export function CanvasAgentChat({
             />
             <div className="flex items-center justify-between gap-1.5">
               <div className="flex min-w-0 items-center gap-1">
-                {noteAttach.trigger}
                 {/* icon-xs(28px)是工具栏那一档,整行统一走它。默认的 icon 是 36px,
                     在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
                 <IconButton
@@ -749,7 +741,7 @@ export function CanvasAgentChat({
                 />
               </div>
               <DraftBlank draft={draft}>
-              {(blank) => running && blank && attach.isEmpty && !noteAttach.hasNotes ? (
+              {(blank) => running && blank && attach.isEmpty ? (
                 <IconButton
                   variant="default"
                   size="icon-sm"
@@ -767,7 +759,7 @@ export function CanvasAgentChat({
                   className="rounded-full"
                   label={running ? t("chatSteer") : t("chatSend")}
                   hint={running ? t("chatSteerHint") : undefined}
-                  disabled={(blank && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
+                  disabled={(blank && attach.isEmpty) || attach.uploading} loading={send.isPending}
                   disabledReason={attach.uploading ? t("composerUploading") : undefined}
                   onClick={submit}
                 >

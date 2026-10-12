@@ -103,14 +103,14 @@ describe("候选清单的配额", () => {
    *
    * 两个数各自看都合理,凑一起才出事。**所以这条不测"函数在某个参数下对不对"** —— 那样测
    * 恰好会漏掉真正出错的地方(调用点),我第一版就是这么写的,把调用点改回四倍它照样绿。
-   * 现在配额和截断共用 REFERENCE_MENU_LIMIT,这条钉的是"素材再多,四类也都在结果里"。
+   * 现在取和摆共用 REFERENCE_KIND_LIMIT,这条钉的是"素材再多,四类也都在结果里、每类都封了顶"。
    */
   it("素材再多也留得下另外三类的位置", async () => {
     const many = (n: number, prefix: string) =>
       Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix}-${i}` }));
     vi.resetModules();
     vi.doMock("@/api/client", () => ({
-      //: 素材在服务端搜、按配额取:交回的条数就是要的那么多(limit)。
+      //: 素材在服务端搜、按配额取:交回的条数就是要的那么多(limit),**匹配数在 total 里**(不只这一页)。
       listAssetPage: async ({ limit }: { limit: number }) => ({ items: many(50, "a").slice(0, limit), next_cursor: "more", total: 50 }),
       listBoards: async () => many(50, "b"),
       listWorkflows: async () => many(50, "w"),
@@ -120,11 +120,16 @@ describe("候选清单的配额", () => {
     vi.doMock("@/api/domains/notes", () => ({
       listNotes: async () => many(50, "n").map((x) => ({ id: x.id, title: x.name })),
     }));
-    const { searchReferences, REFERENCE_MENU_LIMIT } = await import("./references");
+    const { searchReferences, REFERENCE_KIND_LIMIT, REFERENCE_KINDS } = await import("./references");
 
-    const out = await searchReferences("ws", "");
-    expect([...new Set(out.map((one) => one.kind))].sort()).toEqual(["asset", "board", "note", "workflow"]);
-    expect(out.length).toBeLessThanOrEqual(REFERENCE_MENU_LIMIT);
+    const found = await searchReferences("ws", "");
+    expect([...new Set(found.items.map((one) => one.kind))].sort()).toEqual(["asset", "board", "note", "workflow"]);
+    for (const kind of REFERENCE_KINDS) {
+      expect(found.items.filter((one) => one.kind === kind).length, kind).toBeLessThanOrEqual(REFERENCE_KIND_LIMIT);
+    }
+    //: **匹配到的真数也带回来** —— 底部那行「还有 N 个」要的是它。素材的 50 只在服务端的 total 里,
+    //: 取回来的 6 条顶替不了:此前那句提示说不出话,就是因为真数在 slice 那一步被丢掉了。
+    expect(found.matched).toEqual({ asset: 50, note: 50, board: 50, workflow: 50 });
   });
 });
 

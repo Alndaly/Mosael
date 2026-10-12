@@ -1,4 +1,3 @@
-import { useNoteAttachments } from "@/features/notes/useNoteAttachments";
 import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
@@ -127,7 +126,6 @@ export function ChatWorkspace({
       content: text.split("\n").map((line) => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
     });
   });
-  const noteAttach = useNoteAttachments(workspace.id);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与工作流助手共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspace.id);
   const manifest = useQuery({
@@ -248,14 +246,13 @@ export function ChatWorkspace({
       //: 「/」点名的技能(ADR 0040 §4)跟着这条消息走,后端把全文挂到这一轮。
       const skills = collectSkills(document);
       const message = await sendAgentMessage(targetId, {
-        content, context: noteAttach.context, references, body_document: document, ...(skills.length ? { skills } : {}),
+        content, references, body_document: document, ...(skills.length ? { skills } : {}),
         place: placePayload(STUDIO_PLACE),
       });
       return { message, targetId };
     },
     onSuccess: ({ targetId }, _content, _ctx) => {
       draft.set(emptyDocument);
-      noteAttach.clear();
       // 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了(画布助手一直是这样)。
       attach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
@@ -276,13 +273,12 @@ export function ChatWorkspace({
     // `running` is deliberately NOT a guard any more: a message typed while the agent works
     // is a correction, and the backend injects it into the running turn (pi steering queue).
     const draftText = draft.text();
-    if ((!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || sendMessage.isPending) return;
+    if ((!draftText.trim() && attach.isEmpty) || sendMessage.isPending) return;
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     // 文本文件内联成围栏上下文、媒体编码成附件标记 —— 与工作流助手同一种拼法,
     // 于是两边发出来的气泡也长得一样。
     const fileBlock = textAttachmentBlock(attach.files, t("chatAttached"));
     let content = draftText.trim() || attach.files.map((file) => `[${t("chatAttached")} ${file.name}]`).join("\n");
-    if (noteAttach.hasNotes) content += `\n${noteAttach.summary}`;
     for (const asset of attach.media) content += attachmentToken(asset);
     const full = [content.trim(), fileBlock].filter(Boolean).join("\n\n");
     //: 先在这里说,不等后端回一句英文的「at most 8000 characters」(见 composerAttachments 的 MAX_MESSAGE_CHARS)。
@@ -676,10 +672,9 @@ export function ChatWorkspace({
                   onSubmit={submit}
                 >
                   {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
-                  {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
-                  <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} className="px-0.5" />
+                  {/* 附件就是「这条消息里带了什么」,一排摆在输入卡里(笔记引用是正文里的节点,走 `@`)。 */}
+                  <ComposerChips chips={attach.chips} uploading={attach.uploading} className="px-0.5" />
                   {attach.previewModal}
-                  {noteAttach.dialog}
                   {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
                       地方能力不同的话,用户没有任何办法预期哪个能干什么(附件那条也是这个理由)。 */}
                   <DraftComposer
@@ -692,7 +687,6 @@ export function ChatWorkspace({
                   />
                   <div className="flex items-center justify-between gap-1.5 pt-0.5">
                     <div className="flex items-center gap-1.5">
-                      {noteAttach.trigger}
                       {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
                       <IconButton asChild variant="ghost" size="icon-xs" label={t("attachFile")} disabled={attach.uploading}>
                         <label>
@@ -734,7 +728,7 @@ export function ChatWorkspace({
                         works it stops the turn, and the moment you type something it becomes send
                         again — because then the obvious intent is to say that, not to stop. */}
                     <DraftBlank draft={draft}>
-                    {(blank) => running && blank && attach.isEmpty && !noteAttach.hasNotes ? (
+                    {(blank) => running && blank && attach.isEmpty ? (
                       <IconButton
                         variant="default"
                         size="icon-sm"
@@ -753,7 +747,7 @@ export function ChatWorkspace({
                         className="shrink-0 rounded-full"
                         label={running ? t("chatSteer") : t("chatSend")}
                         hint={running ? t("chatSteerHint") : undefined}
-                        disabled={(blank && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
+                        disabled={(blank && attach.isEmpty) || attach.uploading} loading={sendMessage.isPending}
                         disabledReason={attach.uploading ? t("composerUploading") : undefined}
                       >
                         <Send size={15} />

@@ -15,7 +15,7 @@ import { adoptAgentSession } from "@/features/agent/sessionSelection";
 
 const mocks = vi.hoisted(() => ({
   sendAgentMessage: vi.fn(async () => ({ id: "m1" })),
-  clearNotes: vi.fn(),
+  clearAttachments: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
@@ -37,9 +37,6 @@ vi.mock("@/api/client", () => ({
   stopAgentSession: vi.fn(),
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear: mocks.clearNotes, selected: [], restore() {} }),
-}));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 4000,
   MAX_MESSAGE_CHARS: 8000,
@@ -54,7 +51,7 @@ vi.mock("@/features/agent/composerAttachments", () => ({
     onPaste() {},
     drop: { handlers: {}, overlay: null },
     accept() {},
-    clear() {}, restore() {},
+    clear: mocks.clearAttachments, restore() {},
   }),
 }));
 vi.mock("@/features/agent/ChatComposer", () => ({
@@ -82,7 +79,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
   adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
   mocks.sendAgentMessage.mockClear();
-  mocks.clearNotes.mockClear();
+  mocks.clearAttachments.mockClear();
 });
 
 it("上下文给成函数:发送那一刻才取;页面的小条和附件一排,焦点信号交给输入框", async () => {
@@ -153,6 +150,6 @@ it("页面投递的一条(选区工具条上的 AI 动作):当场发出去,带�
   expect(body.context).toBe("这一篇笔记的上下文\n\n这是选区工具条上的「润色」");
   expect(body.quote).toEqual({ kind: "note", note_id: "n1", title: "周报", text: "选中的那段", start: 3 });
   await waitFor(() => expect(sent).toHaveBeenCalled());
-  //: 输入框里挂着的笔记引用不是这一条的,不该被它带走、也不该被清掉。
-  expect(mocks.clearNotes).not.toHaveBeenCalled();
+  //: 输入框里挂着的东西(附件那一样)不是这一条的,不该被它带走、也不该被清掉。
+  expect(mocks.clearAttachments).not.toHaveBeenCalled();
 });

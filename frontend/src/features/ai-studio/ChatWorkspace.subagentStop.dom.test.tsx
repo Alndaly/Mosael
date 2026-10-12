@@ -39,9 +39,6 @@ vi.mock("@/api/client", () => ({
   stopAgentSession: mocks.stopAgentSession,
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
-}));
 vi.mock("@/features/agent/composerAttachments", () => ({
   textAttachmentBlock: () => "",
   useComposerAttachments: () => ({

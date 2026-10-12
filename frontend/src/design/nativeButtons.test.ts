@@ -125,7 +125,6 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/notes/NotesView.tsx": 6,
   "features/notes/SaveToNote.tsx": 2,
   "features/notes/TableSizePicker.tsx": 1,
-  "features/notes/useNoteAttachments.tsx": 1,
   "features/plugins/appForm/FormsBar.tsx": 1,
   "features/plugins/ConnectionLocalService.tsx": 4,
   "features/plugins/ModelDetail.tsx": 2,
