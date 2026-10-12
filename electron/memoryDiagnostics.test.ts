@@ -748,21 +748,33 @@ describe("那 9 秒里页面在后端要什么", () => {
     }
     for (let i = 0; i < MODULES; i += 1) w.fire(req(`/node_modules/.vite/deps/mod-${i}.js`, MODULE_BYTES, "script"));
     w.fire(req("/node_modules/.vite/deps/lucide-react.js", BIG_BYTES, "script"));
-    w.clock.now += 9000; // 之后 9 秒一个字都没有
+    w.clock.now += 8700; // 页面之后 8.7 秒一个字都没要
+    // 而主进程自己的 worker 轮询一直在走 —— 崩前 300 毫秒还来了一条(实测就是这么被误读的)。
+    w.fire({ url: "http://127.0.0.1:8800/api/browser/worker/claim", statusCode: 200, fromCache: false, resourceType: "other", responseHeaders: { "Content-Length": ["15"] } });
+    w.clock.now += 300;
 
     const payload = crash(w);
-    expect(payload.inWindow).toMatchObject({ count: POLLS + MODULES + 1, paths: MODULES + 2, main: POLLS, renderer: MODULES + 1 }); // 6 条轮询打在同一条路径上
-    expect(payload.inWindow.bytes).toBe(MODULES * MODULE_BYTES + BIG_BYTES + POLLS * 15);
+    expect(payload.inWindow).toMatchObject({ count: POLLS + MODULES + 2, paths: MODULES + 2, main: POLLS + 1, renderer: MODULES + 1 }); // 轮询打在同一条路径上
+    expect(payload.inWindow.bytes).toBe(MODULES * MODULE_BYTES + BIG_BYTES + (POLLS + 1) * 15);
     expect(payload.inWindow.types).toEqual([
       { type: "script", n: MODULES + 1, bytes: MODULES * MODULE_BYTES + BIG_BYTES },
-      { type: "other", n: POLLS, bytes: POLLS * 15 },
+      { type: "other", n: POLLS + 1, bytes: (POLLS + 1) * 15 },
     ]);
     // 按次数的榜在这时候几乎没用(195 条并列 n=1);字节榜直接点名那个 5 MB 的。
     expect(payload.inWindow.top).toHaveLength(5);
     expect(payload.inWindow.biggest[0]).toMatchObject({ path: "/node_modules/.vite/deps/lucide-react.js", n: 1, bytes: BIG_BYTES });
     expect(payload.inWindow.biggest[1]).toMatchObject({ path: "/node_modules/.vite/deps/mod-0.js", bytes: MODULE_BYTES });
     // /api/ 那一列在这时候只有主进程那几条小请求 —— 正是「API 不是它」的读法。
-    expect(payload.api.map((row: { path: string; n: number }) => [row.path, row.n])).toEqual([["/api/browser/worker/claim", POLLS]]);
+    expect(payload.api.map((row: { path: string; n: number }) => [row.path, row.n])).toEqual([["/api/browser/worker/claim", POLLS + 1]]);
+    // 「崩前 300 毫秒还在要东西」是**主进程**要的:渲染进程最后一次是 8.7 秒前。两个数必须分开给。
+    expect(payload.lastAgoMs).toBe(300);
+    expect(payload.lastMainMs).toBe(-300);
+    expect(payload.lastMainPath).toBe("/api/browser/worker/claim");
+    expect(payload.lastRendererMs).toBe(-9000);
+    expect(payload.lastRendererPath).toBe("/node_modules/.vite/deps/lucide-react.js");
+    // 窗口真的覆盖了 10 秒(环没被塞满时不带 partial)。
+    expect(payload.partial).toBe(false);
+    expect(payload.inWindow.coveredMs).toBe(9500); // 第一条在 100ms、崩在 9600ms
   });
 
   it("窗口外的请求不计入 inWindow,但计入 session(窗口是崩前那一段,不是整轮)", () => {
@@ -789,6 +801,7 @@ describe("那 9 秒里页面在后端要什么", () => {
       count: 0,
       paths: 0,
       bytes: 0,
+      coveredMs: 0,
       main: 0,
       renderer: 0,
       types: [],
@@ -813,15 +826,15 @@ describe("那 9 秒里页面在后端要什么", () => {
   it("表满了、环塞满了都要说出来:dropped 与 partial(这只是下界,不许当成精确值)", () => {
     const w = start();
     for (let i = 0; i < 1020; i += 1) w.fire(req(`/api/thing/${i}`, 10, "script")); // 1000 条进表,20 条被丢
-    for (let i = 0; i < 320; i += 1) w.fire(req("/api/thing/0", 10, "script")); // 打在已经在表里的那条上
+    for (let i = 0; i < 3200; i += 1) w.fire(req("/api/thing/0", 10, "script")); // 打在已经在表里的那条上,顺带塞满环
     w.clock.now += 500;
 
     const payload = crash(w);
-    expect(payload.session).toMatchObject({ paths: 1000, dropped: 20, total: 1000 + 320 });
+    expect(payload.session).toMatchObject({ paths: 1000, dropped: 20, total: 1000 + 3200 });
     // 路径表满了,类型表**不满**:「字节去哪了」永远准。
-    expect(payload.session.types).toEqual([{ type: "script", n: 1340, bytes: 1340 * 10 }]);
+    expect(payload.session.types).toEqual([{ type: "script", n: 4220, bytes: 42200 }]);
     expect(payload.partial).toBe(true);
-    expect(payload.inWindow.count).toBe(300); // 环的容量,不是窗口里的真实条数
+    expect(payload.inWindow.count).toBe(3000); // 环的容量,不是窗口里的真实条数(所以要看 partial)
   });
 
   it("总闸拉掉(MOSAEL_IPC_TRACE=0):不记账、不写行,但既有那条 plugins-dir-fetch 一字不动", () => {

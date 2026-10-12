@@ -611,6 +611,261 @@ function startMemorySpikeWatch() {
   }
 }
 
+// ─────────────────────────── 渲染进程内部采样(只读诊断)───────────────────────────
+/**
+ * 「那 9 秒里在涨什么」。主进程这一侧已经量到底了:零 IPC(最后一条距崩溃 8.85–9.15 秒、`skipped=0`)、渲染进程零 HTTP
+ * (最后一次请求距崩溃 8.99 秒),而那块视图从 169 MB 涨到 374–388 MB(有一轮 678 MB)。桥和网络都排除掉之后,增长
+ * 只剩一个去处:**渲染进程自己内部**在分配 —— 而那件事只有页面自己说得清(`getAppMetrics()` 只按进程给一个数字,
+ * 看不到堆里是 DOM 节点还是 JS 对象,更看不到渲染循环还跑不跑)。
+ *
+ * 所以每 `RENDERER_SAMPLE_MS` 往主窗口注入**同一段只读脚本**(见 RENDERER_SAMPLE_SCRIPT),把页面自己说的读数写成一行。
+ * 三条纪律,一条都不能松:
+ *   1. **幂等**:脚本靠 `Symbol.for("mosael.renderer-sample")` 认领那一个计数器,第二次注入只读它、不再装 —— 500 ms 一次
+ *      的注入绝不能叠成一堆 rAF 链(那正好会把「帧数异常」这件事自己造出来,把靶子打歪);
+ *   2. **只读**:脚本只读 `performance.memory` / DOM 节点数 / `readyState` / `visibilityState`,页面上的东西一样都不改。
+ *      唯一新增的是那个 rAF 计数器,而一个计数器就是一帧一次,不放大帧数;
+ *   3. **不许把观测变成事故**:`executeJavaScript` 的 promise **必须** catch(页面正在崩时它 reject,或者干脆永不
+ *      resolve);同一块视图上一次还没回来时不再注入(主线程卡住时不能把 promise 越堆越多);定时器 unref、回调整体兜住。
+ *
+ * 三个读数怎么读(报告里要能一眼分开):
+ *   - `nodes` **阶梯式**上涨 ⇒ 「DOM 只增不减」;平 ⇒ 增长在纯 JS 堆里;
+ *   - `frames`(这 500 ms 内跑了几帧)正常约 30(60 Hz)/ 60(120 Hz ProMotion);**0** ⇒ 主线程卡住或被节流
+ *     (主进程已经用 `disable-backgrounding-occluded-windows` 关掉了「被挡住算隐藏」,见 occludedWindow.test.ts,所以 0
+ *     更像真的卡住 —— 和 `visibilityState` 一起看);**远超 60 不可能**,rAF 受 vsync 限,真出现只有一种解释:注入被叠了;
+ *   - `lastFrameAgoMs` 在崩前突然变大 ⇒ 卡住的时间点就在那儿。
+ *
+ * **为什么这一步不做 V8 堆快照**(那是最想要的下一步,但这里只留方案,不接线):`--remote-debugging-port` 要重启才生效
+ * (用户正在跑的应用不许重启),而 docs/PUBLISHING.md 写明它与 `wc.debugger`(发布执行器按需 attach 的那条)争用,能把
+ * `sendCommand` 拖到 20+ 秒;`webContents.debugger` 那条路同样要 `attach("1.3")`,同一份文档里那份代价是实测出来的
+ * (给账号视图常驻 attach,重前端 SPA 直接渲染坏掉、页面空白)。主窗口虽然不在那条规则的字面范围内,但
+ * `HeapProfiler.takeHeapSnapshot` 在 300+ MB 的堆上要停顿数秒、还会把堆本身撑大一大截,正好加在一个**正在涨、
+ * 马上就要 trap** 的渲染进程上 —— 那既会改掉人正在用的界面,也会把「9 秒后崩」变成一个由观测造成的结果,
+ * 连「9 秒」这个数都作废。只加诊断、不改行为 ⇒ 不接线(方案写在报告里)。
+ */
+/** 取样周期(毫秒)。500 ms 在崩前那 9 秒里给 18 个点:既看得出斜率,又小到不可能自己把页面压垮。 */
+const RENDERER_SAMPLE_MS = 500;
+/** 每块视图在内存里留最近多少条(崩的那一刻用它算最近这一段)。40 × 500 ms = 20 秒。 */
+const RENDERER_SAMPLE_RING = 40;
+/** 崩的那一刻「最近这一段」有多长(和 HTTP_TRACE_WINDOW_MS 同宽,两条诊断对着看)。 */
+const RENDERER_SAMPLE_WINDOW_MS = 10 * 1000;
+
+/** 采样开关。默认开 —— 这一条就是这次要的曲线;`MOSAEL_RENDERER_SAMPLE=0` 关掉时**一行都不写**、定时器也不起。 */
+function rendererSampleMode(env) {
+  return env?.MOSAEL_RENDERER_SAMPLE === "0" ? "off" : "on";
+}
+const RENDERER_SAMPLE_MODE = rendererSampleMode(process.env);
+
+/**
+ * 注入页面里的那一段。**幂等**由 `Symbol.for("mosael.renderer-sample")` 保证:`Symbol.for` 走全局符号注册表,同一份文档里
+ * 第二次注入拿到的还是同一个 symbol ⇒ `window[key]` 判得到,于是只装一条 rAF 链、只数一份计数器。(命名空间字符串也行,
+ * 但符号键不出现在 `Object.keys` / `for…in` / `JSON.stringify` 里,页面自己遍历看不见它。)
+ * 返回值是**纯数据**,由主进程折成日志行(见 rendererSampleLine)—— 行的形状因此能在测试里单独跑,不用真开浏览器。
+ */
+const RENDERER_SAMPLE_SCRIPT = `(() => {
+  const key = Symbol.for("mosael.renderer-sample");
+  const now = Date.now();
+  let probe = window[key];
+  if (!probe) {
+    // framesAt 是**上一次读走的帧数**(不是时刻):这一行写错的话,第一次采样会算出「0 - 时间戳」那种垃圾值。
+    probe = { frames: 0, framesAt: 0, lastFrameAt: 0 };
+    const tick = () => {
+      probe.lastFrameAt = Date.now();
+      probe.frames += 1;
+      window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+    window[key] = probe;
+  }
+  const frames = probe.frames - probe.framesAt;
+  probe.framesAt = probe.frames;
+  const memory = performance && performance.memory ? performance.memory : null;
+  return {
+    at: now,
+    heapUsedBytes: memory ? memory.usedJSHeapSize : null,
+    heapLimitBytes: memory ? memory.jsHeapSizeLimit : null,
+    nodes: document.getElementsByTagName("*").length,
+    frames: frames,
+    framesSinceInstall: probe.frames,
+    lastFrameAgoMs: probe.lastFrameAt ? now - probe.lastFrameAt : null,
+    readyState: String(document.readyState),
+    visibilityState: String(document.visibilityState)
+  };
+})()`;
+
+/** id → 最近的读数(`[{ at, line }]`,定长环)。崩的那一刻就用它算走势。 */
+const rendererSamples = new Map();
+/** 正在注入的 id:上一次还没回来就不重复注入(主线程卡住时 executeJavaScript 会一直挂着)。 */
+const rendererSamplePending = new Set();
+
+/** 一个有限数就是它,别的一律 null —— 「读不到」不许拿 0 顶替(同 summarizeAppMemory 里 privateBytes 那条)。 */
+function finiteOrNull(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** 字节 → MB(一位小数)。`performance.memory` 是 Chromium 的非标准接口、百 KB 级量化,对这一条 200 MB 量级的曲线够用。 */
+function bytesToMb(value) {
+  const bytes = finiteOrNull(value);
+  return bytes === null ? null : Math.round((bytes / 1048576) * 10) / 10;
+}
+
+/**
+ * 把页面自己说的那一份读数折成日志里那一行(**纯函数**,单独跑见 rendererSample.test.ts)。
+ * 就是报告里点名的那几个字段(local / uptimeSec / heapUsedMB / heapLimitMB / nodes / frames / lastFrameAgoMs),
+ * 外加 `readyState` / `visibilityState`(和「被挡住 ⇒ 停帧」对照)与 `id` / `url`(分得清是哪块视图在涨)。
+ * 读不到的字段是 null 而不是 0:`heapUsedMB: 0` 会被读成「堆是空的」,那是假数据。
+ */
+function rendererSampleLine(identity, sample) {
+  return {
+    local: localClock(),
+    id: identity?.id ?? null,
+    url: identity?.url ?? null,
+    uptimeSec: Math.round(process.uptime()),
+    heapUsedMB: bytesToMb(sample?.heapUsedBytes),
+    heapLimitMB: bytesToMb(sample?.heapLimitBytes),
+    nodes: finiteOrNull(sample?.nodes),
+    frames: finiteOrNull(sample?.frames),
+    lastFrameAgoMs: finiteOrNull(sample?.lastFrameAgoMs),
+    // 装到现在一共数了多少帧:它比上一行小 ⇒ 页面重新载入过(崩后自动重载 / ⌘R),环里的旧文档读数不能再混着算。
+    framesSinceInstall: finiteOrNull(sample?.framesSinceInstall),
+    readyState: typeof sample?.readyState === "string" ? sample.readyState : null,
+    visibilityState: typeof sample?.visibilityState === "string" ? sample.visibilityState : null,
+  };
+}
+
+/**
+ * 崩的那一刻要的那份走势:最近 `RENDERER_SAMPLE_WINDOW_MS` 里堆涨了多少、DOM 节点多了几个、帧率掉没掉(**纯函数**)。
+ * 一条都没有时返回 null —— 「一条都没采到」和「这一段没变」是两回事,前者必须看得出来(不然会被读成「很稳」)。
+ */
+function rendererSampleTrend(entries, crashAt) {
+  const recent = (entries ?? []).filter((entry) => crashAt - entry.at <= RENDERER_SAMPLE_WINDOW_MS);
+  if (recent.length === 0) return null;
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  const heaps = recent.map((entry) => entry.line.heapUsedMB).filter((mb) => typeof mb === "number");
+  const nodes = recent.map((entry) => entry.line.nodes).filter((count) => typeof count === "number");
+  const frames = recent.map((entry) => entry.line.frames).filter((count) => typeof count === "number");
+  const spanSec = Math.round((last.at - first.at) / 100) / 10;
+  const heapDeltaMB = heaps.length > 1 ? Math.round((heaps[heaps.length - 1] - heaps[0]) * 10) / 10 : null;
+  return {
+    samples: recent.length,
+    spanSec,
+    heapFromMB: heaps.length ? heaps[0] : null,
+    heapToMB: heaps.length ? heaps[heaps.length - 1] : null,
+    heapMaxMB: heaps.length ? Math.max(...heaps) : null,
+    heapDeltaMB,
+    // 「涨多快」:这一个数就是这次要的量化口径(20 MB/s 和 0.2 MB/s 的下一步完全不同)。
+    heapPerSecMB: heapDeltaMB === null || spanSec <= 0 ? null : Math.round((heapDeltaMB / spanSec) * 10) / 10,
+    nodesFrom: nodes.length ? nodes[0] : null,
+    nodesTo: nodes.length ? nodes[nodes.length - 1] : null,
+    nodesDelta: nodes.length > 1 ? nodes[nodes.length - 1] - nodes[0] : null,
+    framesMin: frames.length ? Math.min(...frames) : null,
+    framesMax: frames.length ? Math.max(...frames) : null,
+  };
+}
+
+/**
+ * 采样目标:**BrowserWindow** 里那块停在应用自己地址上的页面(主窗口,`#/plugins` 就在它里面;判据同 app-origin.cjs)。
+ * 按窗口而不是按 `webContents.getAllWebContents()` 挑:浮层、发布账号视图、ComfyUI 工作台都是 WebContentsView,
+ * 它们和主窗口**同源**(浮层页就是 frontend/float-layer.html),只按 URL 拦会把它们一起采进来 —— 曲线一稀释,
+ * 「那 9 秒」就看不出来了。启动小窗不是应用地址,自然也不在里面。
+ */
+function rendererSampleTargets() {
+  const targets = [];
+  for (const win of BrowserWindow.getAllWindows()) {
+    try {
+      if (win.isDestroyed()) continue;
+      if (!isAppUrl(win.webContents.getURL())) continue;
+      targets.push(win.webContents);
+    } catch {
+      // 已销毁的那一块:跳过,别让它带走这一轮。
+    }
+  }
+  return targets;
+}
+
+/**
+ * 注入一次、记一行。**这个 promise 不会 reject 出去**:页面正在崩的时候 executeJavaScript 会 reject(或者永远不
+ * resolve),而观测失败绝不许变成第二次崩溃 —— 这是这一整块唯一的硬约束(同「记日志不能变成第二次崩溃」)。
+ * `RENDERER_SAMPLE_MODE` 在这里再判一次:定时器在关掉时根本不起来,这一句是「关掉 ⇒ 零输出」的第二道锁。
+ */
+async function sampleRendererOnce(contents) {
+  if (RENDERER_SAMPLE_MODE === "off") return;
+  const identity = { id: ipcContentsId(contents), url: ipcContentsUrl(contents) };
+  if (identity.id === null || rendererSamplePending.has(identity.id)) return;
+  rendererSamplePending.add(identity.id);
+  try {
+    const sample = await contents.executeJavaScript(RENDERER_SAMPLE_SCRIPT);
+    const entry = { at: Date.now(), line: rendererSampleLine(identity, sample) };
+    const ring = rendererSamples.get(identity.id) ?? [];
+    const previous = ring[ring.length - 1];
+    // 页面重新载入过(崩后自动重载 / ⌘R):计数器从头数起 ⇒ 环里的旧文档读数要丢掉,否则崩那一刻的走势会跨文档。
+    const restarted =
+      previous &&
+      typeof entry.line.framesSinceInstall === "number" &&
+      typeof previous.line.framesSinceInstall === "number" &&
+      entry.line.framesSinceInstall < previous.line.framesSinceInstall;
+    if (restarted) ring.length = 0;
+    ring.push(entry);
+    if (ring.length > RENDERER_SAMPLE_RING) ring.splice(0, ring.length - RENDERER_SAMPLE_RING);
+    rendererSamples.set(identity.id, ring);
+    appendDiagnosticLog("renderer-sample", () => JSON.stringify(entry.line));
+  } catch {
+    // 页面正在崩 / 已销毁 / 注入被拒:这一次就算了,下一轮再来。
+  } finally {
+    rendererSamplePending.delete(identity.id);
+  }
+}
+
+/** 每 500 ms 采一次(默认开)。定时器不拖住退出、回调整体兜住;关掉时一行不写、定时器也不起(零足迹,连横幅也不留)。 */
+function startRendererSampleWatch() {
+  if (RENDERER_SAMPLE_MODE === "off") return;
+  try {
+    appendDiagnosticLog(
+      "renderer-sample",
+      `mode=on everyMs=${RENDERER_SAMPLE_MS} ring=${RENDERER_SAMPLE_RING} local=${localClock()} pid=${process.pid}`,
+    );
+    const timer = setInterval(() => {
+      try {
+        for (const contents of rendererSampleTargets()) void sampleRendererOnce(contents);
+      } catch {
+        // 采样失败不许把定时器变成第二次崩溃。
+      }
+    }, RENDERER_SAMPLE_MS);
+    // 这个定时器不许拖住退出(同 GPU / 内存那几条)。
+    timer.unref?.();
+  } catch (error) {
+    appendDiagnosticLog("renderer-sample", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 崩的那一刻:页面最后说的那句话。形状照 `memory-at-crash` / `ipc-at-crash` —— 同一个时刻、同一份 local 时钟,
+ * 三条对着看就能回答「那 9 秒它对外一句话没说,内部在涨什么」。
+ * `trend` 是最近这一段(默认 10 秒)的走势;`last` 是最后一次快照原文。一条都没采到时两个都是 null,这一行**照写**
+ * (同 `http-at-crash` 的 `inWindow.count=0`)。
+ */
+function appendRendererSampleAtCrash(details, contents) {
+  if (RENDERER_SAMPLE_MODE === "off") return;
+  appendDiagnosticLog("renderer-at-crash", () => {
+    const id = ipcContentsId(contents);
+    const entries = (id === null ? null : rendererSamples.get(id)) ?? [];
+    const last = entries.length ? entries[entries.length - 1] : null;
+    const crashAt = Date.now();
+    return JSON.stringify({
+      local: localClock(),
+      reason: details?.reason ?? null,
+      exitCode: details?.exitCode ?? null,
+      id,
+      url: last?.line?.url ?? ipcContentsUrl(contents),
+      samples: entries.length,
+      lastAgoMs: last ? crashAt - last.at : null,
+      last: last?.line ?? null,
+      trend: rendererSampleTrend(entries, crashAt),
+    });
+  });
+}
+// ─────────────────────────── 渲染进程内部采样结束 ───────────────────────────
+
 /**
  * 「那 9 秒里,页面在后端反复要什么」—— IPC 追踪给出的结论是「桥上一片安静」(实测:崩前最后一条 IPC 距崩溃
  * 9.0 秒,`skipped=0` 全程),于是唯一还剩的去处就是**不过桥的那些请求**:本机后端(8800)与 dev server(5173)。
@@ -633,8 +888,13 @@ function startMemorySpikeWatch() {
  */
 /** 崩溃前看多长一段。(实测那一簇:load-finish 之后 8.94–9.24 秒 trap,所以 10 秒能把整段罩住。) */
 const HTTP_TRACE_WINDOW_MS = 10 * 1000;
-/** 内存里留最近多少条(算窗口 top5 用)。崩的时候只逐条打最后 `HTTP_TRACE_DUMP` 条。 */
-const HTTP_TRACE_RING = 300;
+/**
+ * 内存里留最近多少条(算窗口汇总用)。崩的时候只逐条打最后 `HTTP_TRACE_DUMP` 条。
+ * 第一次给 300 不够:dev 下 Vite 不打包,一次重载就能在几百毫秒里拉几百条模块 —— 实测 8.5 秒就塞满,
+ * 于是「10 秒窗口」其实只覆盖了 8.5 秒,而 `partial` 为真(那次的 20 MB 只是下界)。3000 条约 270 KB,
+ * 换的是「窗口真的是那个窗口」。
+ */
+const HTTP_TRACE_RING = 3000;
 const HTTP_TRACE_DUMP = 20;
 /** 路径表上限。dev 下 Vite 不打包,一次重载就是一两百条模块路径,整个模块图上千条 —— 上限给到 1000,
  *  超了仍计入 `dropped`(不假装是全部);真正不会满的是**类型表**,所以「字节去哪了」永远准。 */
@@ -741,13 +1001,22 @@ function httpTraceRows(entries, crashAt, limit) {
   let bytes = 0;
   let main = 0;
   let renderer = 0;
+  let oldest = 0;
+  const last = { renderer: null, main: null };
   for (const entry of entries) {
     if (!entry || crashAt - entry.at > HTTP_TRACE_WINDOW_MS) continue;
+    // 窗口里**最老**那一条的时刻(entries 按时间排,第一条命中的就是它)。
+    if (count === 0) oldest = entry.at;
     count += 1;
     if (typeof entry.bytes === "number") bytes += entry.bytes;
     // `from` 为空 = 不是某块页面发的(主进程自己的 worker 轮询就走这条路)—— 这一栏一眼分开「谁在要」。
-    if (entry.from === null || entry.from === undefined) main += 1;
+    const fromMain = entry.from === null || entry.from === undefined;
+    if (fromMain) main += 1;
     else renderer += 1;
+    // 「崩之前页面还在要东西吗」只有分开发问才答得准:主进程的 worker 轮询一直在走,
+    // 混在一起看会读成「页面 362 毫秒前还在请求」(第一次真跑就是这么被误读的)。
+    const slot = fromMain ? "main" : "renderer";
+    last[slot] = { t: Math.round(entry.at - crashAt), path: entry.path };
     httpTraceAdd(byType, entry.type, entry.bytes ?? null, entry.type);
     let row = byPath.get(entry.path);
     if (!row) {
@@ -770,6 +1039,9 @@ function httpTraceRows(entries, crashAt, limit) {
     bytes,
     main,
     renderer,
+    // 这一窗口**实际**覆盖了多长:环被塞满时它小于 `windowMs`,是「这几行只是下界」的第二个凭据。
+    coveredMs: count === 0 ? 0 : crashAt - oldest,
+    last,
     types: httpTraceTypeRows(byType, HTTP_TRACE_TYPES),
     top: rows.slice(0, limit),
     // 按字节排的另一榜:路径一多(dev 下一次重载一两百条模块路径,每条只出现一次),按次数的榜会把
@@ -809,6 +1081,7 @@ function appendHttpTraceAtCrash(details, view) {
         count: window.count,
         paths: window.paths,
         bytes: window.bytes,
+        coveredMs: window.coveredMs,
         main: window.main,
         renderer: window.renderer,
         types: window.types,
@@ -825,8 +1098,14 @@ function appendHttpTraceAtCrash(details, view) {
       },
       // ring 被塞满、而最老那条还在窗口里 ⇒ 窗口 top5 只是下界;这个标记必须跟着走出去,不然会被当成精确值。
       partial: httpTraceRing.length >= HTTP_TRACE_RING && now - httpTraceRing[0].at <= HTTP_TRACE_WINDOW_MS,
+      // 谁在要、最近一次是什么时候:**必须分开**。主进程自己的 worker 轮询一直不停(约 1.5 秒一次、十几字节),
+      // 混着看会把「页面还在请求」当成事实 —— 实测那一次 `lastAgoMs` 是 362 毫秒,而那是主进程的轮询。
       lastAgoMs: recent.length ? now - recent[recent.length - 1].at : null,
       last: recent.length ? recent[recent.length - 1].path : null,
+      lastRendererMs: window.last.renderer?.t ?? null,
+      lastRendererPath: window.last.renderer?.path ?? null,
+      lastMainMs: window.last.main?.t ?? null,
+      lastMainPath: window.last.main?.path ?? null,
       ring: recent.map(({ at, ...rest }) => ({ ...rest, t: Math.round(at - now) })),
     });
   });
@@ -906,6 +1185,8 @@ app.on("render-process-gone", (_event, webContents, details) => {
   appendIpcTraceAtCrash(details);
   // 同一个时刻的另一半现场:那几秒里页面往后端要了什么(见 appendHttpTraceAtCrash)。
   appendHttpTraceAtCrash(details, ipcContentsId(webContents));
+  // 还有页面**自己**最后说的那句话(堆 / DOM 节点 / 帧):对外一片安静时,涨的东西只在这里看得见。
+  appendRendererSampleAtCrash(details, webContents);
 });
 app.on("child-process-gone", (_event, details) => {
   appendMainLog("child-process-gone", JSON.stringify(details));
@@ -2226,6 +2507,8 @@ app.whenReady().then(async () => {
   startPluginsDirectoryDiagnostics();
   // 「进插件页静置 60 秒,IPC 一共多少次、最多的前 5 个通道是谁」:每 30 秒一行(trace 档才有;安静时不写)。
   startIpcRateWatch();
+  // 渲染进程**内部**的曲线(堆 / DOM 节点 / 帧):主进程侧量不到的那一半,只有页面自己说得清。
+  startRendererSampleWatch();
   // 最先定语言:下面起后端时的小窗、失败时弹的错误框就要用到它。getLocale 要等 ready。
   applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
