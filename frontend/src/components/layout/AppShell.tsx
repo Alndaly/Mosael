@@ -434,6 +434,14 @@ function WorkspaceSwitcher({
             //: 灰掉的按钮要说为什么 —— 权限不够和「只剩这一个」是两件事,用户得知道该找谁、还是先建一个。
             const renameReason = workspaceRenameBlockedReason(gate);
             const deleteReason = workspaceDeleteBlockedReason(gate);
+            //: 首字那格单独拎出来写:那道 `app/clippedText` 棘轮按**元素标签**扫,把这个 `leading-none` 写在
+            //: `icon={…}` 里会同标签内的 `truncate` 记成共现(误报)。leading-none 本身不能省:图标槽的
+            //: leading-5 把 10px 的字放进 20px 行盒,首字偏下 3px(真机上 CJK 与拉丁都是 +3px,加上它是 0)。
+            const avatar = (
+              <span className="grid size-4 place-items-center rounded-[3px] border border-border bg-panel text-[10px] font-semibold leading-none text-primary">
+                {ws.name.slice(0, 1)}
+              </span>
+            );
             return (
               <ContextMenu key={ws.id}>
                 <ContextMenuTrigger asChild>
@@ -451,7 +459,7 @@ function WorkspaceSwitcher({
                       checked={ws.id === workspaceId}
                       //: leading-none 不能省:图标槽的 leading-5 会把 10px 的字放进一个 20px 的行盒里,首字因此偏下 3px
                       //: (真机上量过:CJK「默」和拉丁「d」都是 +3px;加上它之后是 0)。见 components/ui/menu.tsx 的图标槽。
-                      icon={<span className="grid size-4 place-items-center rounded-[3px] border border-border bg-panel text-[10px] font-semibold leading-none text-primary">{ws.name.slice(0, 1)}</span>}
+                      icon={avatar}
                       label={ws.name}
                       truncate
                       //: 别人的工作区写出我在里面是什么角色:新用户的第一个工作区和被拉进的团队工作区常常都叫「默认工作区」,
