@@ -237,9 +237,12 @@ def require_own_profile(db: Session, user: User, profile_id: str, *, editing: bo
     `editing=True`:要**改**这条连接本身(名字、端点、钥匙、模型行、参数模板)。插件连接改不得
     (ADR 0020)—— 它是插件实例在生成领域的把手,名字、地址、模型都跟着实例和插件目录走,
     在这里改了下次对齐就被冲掉,而用户会以为改成功了。去插件页改。
+
+    **删掉的连接也是"不存在"**(见 connections.delete_connection):那一行留着只是为了让历史
+    认得出处,不是一条还能读钥匙、改端点、拿来生成的连接。所以这里一并当它没有。
     """
     profile = db.get(ProviderProfile, profile_id)
-    if profile is None or profile.owner_user_id != user.id:
+    if profile is None or profile.deleted_at is not None or profile.owner_user_id != user.id:
         raise NotVisible("permErr_providerNotFound")
     if editing and profile.plugin_instance_id:
         raise PermissionDenied("permErr_providerManagedByPlugin")

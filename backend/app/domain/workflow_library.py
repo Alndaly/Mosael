@@ -341,8 +341,10 @@ _GRAPH_ITEMS = {"seed", "size", "runs"}
 #:
 #: **这是全链唯一一套节点号形状判据**:表单里那一项的 `node`、「结果取自」的每一项、`app_marks` 交回的 `marks.nodes` 的键
 #: 都按它;标记过桥时 electron 那一侧按同一个判据再查一遍(`electron/ipc-contract.cjs` 的 `ANY_NODE`)—— 那边曾经只认顶层
-#: 节点号,表单里一有子图项就整条链断在桥上。跨语言共用不了一份正则,就共用同一份用例:`NODE_KEYS_OK` / `NODE_KEYS_BAD`
-#: (本文件用它的地方在 `tests/test_plugin_workflow_library.py`,TS 那边在 `electron/ipc-contract.test.ts`;改判据两边一起改)。
+#: 节点号,表单里一有子图项就整条链断在桥上。跨语言共用不了一份正则,就共用同一份语料:
+#: **`contracts/node-shapes.json` 的 `any_node`**(这一处和桥那一处在契约里各是一个 `implementations` 落点;
+#: 两侧的跑手读的是同一份文件 —— 这边在 `tests/test_node_shapes_parity.py` 与 `tests/test_plugin_workflow_library.py`,
+#: TS 那边在 `electron/ipc-contract.test.ts`)。用例不再各抄一份:`NODE_KEYS_OK` / `NODE_KEYS_BAD` 就是从那契约里取的。
 #:
 #: 「结果取自」用的也是它:那儿说的是**执行节点号**,子图展开出来的节点号就是 `12:9` 这种 —— 产出本来就是按它收的。
 #: 曾经这里另有一份只认根图的正则(`_ROOT_NODE`),于是子图里的保存节点在这一栏里看得见、选它就 422;而且插件报回来的
@@ -433,6 +435,13 @@ def _trash(value: Any) -> list[dict[str, Any]]:
 
 
 def _profile(db: Session, instance: PluginInstance) -> ProviderProfile | None:
+    """这个插件实例对应的那条连接。
+
+    **这里不筛「删掉的连接」(`deleted_at`),故意的**:这个方法要回答的是「这张工作流的产出该按谁
+    去找」,而那些产出记的就是这个 profile.id(`GenerationJob.provider_profile_id`)。删连接改成立碑
+    (见 providers.connections.delete_connection)正是为了这一刻 —— 碑还在,`_runs()` 就还认得出
+    三年前那次运行是哪条连接做的;筛掉它,「最近的产出」会安静地变成空,而且没有任何东西会报错。
+    """
     return db.scalar(select(ProviderProfile).where(ProviderProfile.plugin_instance_id == instance.id))
 
 
