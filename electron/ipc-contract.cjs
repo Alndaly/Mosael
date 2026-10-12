@@ -248,15 +248,21 @@ function parseComfyWorkbenchOpen(value) {
   return { ...comfyConnection(payload, channel), path, fresh };
 }
 
-//: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)
+//: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)。
+//: 三种节点形状都归 **`contracts/node-shapes.json`**(`canvas_node` / `any_node` / `subgraph_path`),
+//: 逐条用例由 `electron/ipc-contract.test.ts` 读那份文件跑;Python 侧读的是同一份
+//: (`backend/tests/test_node_shapes_parity.py`)。跨语言各写一份正则,语料只有一份。
 const CANVAS_NODE = /^-?\d{1,10}$/;
 //: **文件 / 执行图里的节点号**:`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层
 //: (ADR 0042 §6 的写法)。应用表单的项、`marks.nodes` 的键都按它 —— 子图里面的节点一样放得进表单。
-//: 和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是**同一套判据**(跨语言各写一份正则,同一份用例:
-//: `12` / `12:5` / `12:5:3` 收,`abc` / `12:` / `12:5:` / `-3` 拒;两边都有钉住这几条的测试)。
+//: 和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是**同一套判据** —— 契约里是 `any_node`
+//: (那一处和这一处在契约里各是一个 `implementations` 落点)。
 const ANY_NODE = /^\d{1,9}(?::\d{1,9})*$/;
 //: 从根图往里走的节点路径(`12:5`:根图 12 号节点那个子图里面的 5 号;ADR 0042 智能体指节点的写法),最多 16 层。
 //: 定位(`locate`)走的是**画布上那一层**的节点号,可以是负的 —— 和 `ANY_NODE` 不是同一个空间,别混用。
+//: 契约里是 `subgraph_path`:**它不收裸的 `12`**(那一半归上面的 `CANVAS_NODE`),和 `canvas_path`
+//: (`canvas_edit._PATH` / `workbench_agent._NODE_REF` / 前端 `nodeRefs.NODE_REF`)只差这一点下界 ——
+//: 那处既成的差异记在契约的 `divergence` 里。
 const NODE_PATH = /^-?\d{1,10}(?::\d{1,10}){1,16}$/;
 //: 子图的 id(前端给的是 UUID 那样的串)
 const SUBGRAPH_ID = /^[A-Za-z0-9_-]{1,64}$/;

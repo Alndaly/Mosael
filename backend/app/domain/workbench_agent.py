@@ -34,7 +34,10 @@ from app.domain.plugins.manifest import WORKFLOW_LIBRARY
 
 #: 问插件的上限:取模板要把几张模板的整图取一遍、问下载地址多大;注册表在公网上。
 PLUGIN_TIMEOUT_SECONDS = 120
-#: 画布上节点的写法:根图上的编号,子图里的从根图往里走的编号(冒号隔开)。
+#: 画布上节点的写法:根图上的编号,子图里的从根图往里走的编号(冒号隔开,最多 16 段;只有第一段可以带负号)。
+#: 它是 **`contracts/node-shapes.json` 的 `canvas_path`** —— 插件 `canvas_edit._PATH`、前端 `nodeRefs.NODE_REF`
+#: 和这里是同一套判据,两侧的跑手读同一份语料(`backend/tests/test_node_shapes_parity.py`)。桥那一侧把它
+#: 拆成了 `CANVAS_NODE` + `NODE_PATH` 两条(见契约的 `divergence`)。
 _NODE_REF = re.compile(r"^-?\d{1,10}(?::\d{1,10}){0,16}$")
 #: 子图定义的 id(前端给的是 UUID 那样的串)。
 _SUBGRAPH_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")

@@ -61,6 +61,13 @@ MAX_PROBLEMS = 20
 #: 一格控件的值最多多长(提示词)。
 MAX_VALUE = 20000
 MAX_COORDINATE = 1_000_000
+#: 一个节点引用:`12`(这一层)或者 `12:5`(根图 12 号那个子图里面的 5 号),最多 16 段;只有第一段可以带负号。
+#: **这是 `contracts/node-shapes.json` 的 `canvas_path`** —— 宿主 `workbench_agent._NODE_REF`、前端
+#: `nodeRefs.NODE_REF` 和这里是同一套判据,两侧的跑手读同一份语料(`backend/tests/test_node_shapes_parity.py`
+#: 逐条喂这一处,`nodeRefs.parity.test.ts` 喂前端那一处)。
+#:
+#: **这一处读不到那份契约**:插件在一个沙盒子进程里跑,宿主管的是它的 stdio 和几个环境变量,`contracts/`
+#: 不在它的可见范围里 —— 所以它带字面量,由那条 parity 断言 `_PATH.pattern` 就是契约那一串。
 _PATH = re.compile(r"^-?\d{1,10}(?::\d{1,10}){0,16}$")
 _LOCAL = re.compile(r"^-?\d{1,10}$")
 _SUBGRAPH_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")

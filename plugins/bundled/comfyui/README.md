@@ -924,6 +924,8 @@ definition.
 - `models.py`: which models exist, which graph is behind a model id, and the list's fingerprint;
 - `run.py`: uploading assets, submitting, following progress, cancelling and fetching results (shared by generation and
   the workflow tools);
+- `layouts.py`: where an installed ComfyUI sits (`Layout`, `find_layout`) and the two shapes' names — shared by
+  `service.py` and `shared_models.py`, so it lives below both;
 - `service.py`: the local service: recognising a folder (portable build, venv, trial torch import), the launch command,
   adding pysssss, finding a local server, moving data when the port changes;
 - `managed.py` / `versions.py` / `pinned.py`: letting Mosael install it: the plan, installing (or resuming), saying where the
@@ -933,12 +935,16 @@ definition.
   counting what each folder contributes;
 - `workflows.py`: `list_workflows` / `import_outputs`, and the part that returns outputs;
 - `tooling.py`: one tool per workflow: derives inputs and outputs from the graph and runs the current graph;
+- `tool_registry.py`: what a tool is called (`tool_names`, `path_name`, `output_key`) and whether a graph can run —
+  the read-only face of the registry, used by `tooling.py` and `workflows.py`;
 - `server.py`: `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `weights.py` / `model_files.py`: the model library (model files, file headers with
   metadata and tensor tables, base-model families from metadata, weights and file names, which workflows use a file
   and which models they miss);
 - `sources.py` / `install.py`: resolving HuggingFace / Civitai / ModelScope / direct links and downloading in the
   same machine → Manager → explain order;
+- `civitai_urls.py`: Civitai's address shapes (the version id inside a download / API / model-page link, the version's
+  page URL) — pure parsing, no network;
 - `civitai.py` / `lookup.py` / `nsfw.py` / `provenance.py` / `previews.py`: model info: Civitai's API and answer shapes,
   finding by hash or file name, NSFW signals, source, preview files next to the model and saving a preview back;
 - `json_style.py`: writing a workflow back in its own formatting (`annotate` changes only the `mosael` marks, every

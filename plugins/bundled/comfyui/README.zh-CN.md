@@ -700,6 +700,10 @@ workflows 目录里没多文件;子图里加节点、加输出口接出来、提
 - `run.py` —— 传素材、提交、跟进度、取消、取回(生成与工作流的工具共用);
 - `workflows.py` —— `list_workflows` / `import_outputs`,以及交回产出的那一段;
 - `tooling.py` —— 每张工作流一个工具:从图推入参和输出、按当前的图跑;
+- `tool_registry.py` —— 工具叫什么(`tool_names`、`path_name`、`output_key`)、这张图跑不跑得起来:`tooling.py`
+  与 `workflows.py` 共用的注册表只读面;
+- `layouts.py` —— 一个装好的 ComfyUI 摆在哪(`Layout`、`find_layout`)、那两种样子叫什么;`service.py` 与
+  `shared_models.py` 共用,所以住在两者下面;
 - `service.py` —— 本机服务:认目录(便携版、venv、试跑 torch)、给出启动命令、补装 pysssss、本机发现、改端口时搬数据;
 - `managed.py` / `versions.py` / `pinned.py` —— 让 Mosael 装:安装计划、装(或接着装)、卸载前说模型在哪;换版本(更新、回到上一版、
   被打断之后收拾);钉死的压缩包(下载、按 sha256 校验、解开不越界);
@@ -707,6 +711,7 @@ workflows 目录里没多文件;子图里加节点、加输出口接出来、提
 - `server.py` —— `server_status` / `list_models` / `interrupt` / `clear_queue` / `free_memory`;
 - `library.py` / `families.py` / `weights.py` / `model_files.py` —— 模型库:列出模型文件、读文件头(元数据、张量表)、认底模家族(元数据、权重结构、文件名)、找在用的和缺的;
 - `sources.py` / `install.py` —— 解析 HuggingFace / Civitai / ModelScope / 直链,按 同一台机器 → Manager → 说清楚 的顺序下载;
+- `civitai_urls.py` —— Civitai 的地址形状(下载 / 接口 / 模型页链接里的版本号、版本页的地址):纯解析,不连网;
 - `civitai.py` / `lookup.py` / `nsfw.py` / `provenance.py` / `previews.py` —— 模型信息:Civitai 的接口和回答的形状、按哈希或
   文件名找、NSFW 依据、出处、旁边的预览文件和写回预览图;
 - `json_style.py` —— 照工作流原来的排版写回(`annotate` 只改 `mosael` 那几处标记,别的字节一个不变);
