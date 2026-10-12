@@ -14,7 +14,7 @@ import { app, type BaseWindow } from "electron";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-import { t as tr } from "../i18n.cjs";
+import { getLocale, t as tr } from "../i18n.cjs";
 import {
   createSharedViews,
   destroySharedViews,
@@ -29,6 +29,7 @@ import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
 import type { ComfyNavigation, NavigationOutcome } from "./comfyNavigation";
+import { matchComfyLocaleInPage, setComfyLocaleOnServer } from "./comfyLocale";
 import { comfyViewOpening, comfyViewShown, setComfyNavigation } from "./comfyViews";
 import type { WorkbenchCall, WorkbenchCallResult, WorkbenchState } from "./comfyWorkbench";
 import { WorkbenchSessions } from "./comfyWorkbenchSessions";
@@ -699,11 +700,19 @@ export function comfyWorkbenchCall(opts: { partition: string; call: WorkbenchCal
 }
 
 
-/** 亮出一个 ComfyUI 连接的内嵌视图(还开着就接着用):先记下来源、装上设置写回的闸,亮出来之后挂上「载入完」的监听。 */
+/**
+ * 亮出一个 ComfyUI 连接的内嵌视图(还开着就接着用):先记下来源、装上设置写回的闸、把这台 ComfyUI 的语言设成 Mosael
+ * 的(载入之前设好,这一页打开时读到的就是它);亮出来之后挂上「载入完」的监听,并把已经开着的那一页当场调过来 ——
+ * 不为了语言重新载入它(见 comfyLocale)。
+ */
 async function showComfyView(opts: { partition: string; url: string; name: string }) {
   comfyViewOpening(opts.partition, opts.url);
+  const locale = getLocale();
+  await setComfyLocaleOnServer({ partition: opts.partition, url: opts.url, locale });
   await openPoolLogin({ partition: opts.partition, url: opts.url, name: opts.name || undefined, resume: true });
   comfyViewShown(opts.partition);
+  // 已经开着的那一页:走前端自己的设置当场换过来(不重新载入);前端就绪之前它自己会等
+  void matchComfyLocaleInPage({ partition: opts.partition, locale }).catch(() => undefined);
   return views?.existingDriver(opts.partition) ?? null;
 }
 

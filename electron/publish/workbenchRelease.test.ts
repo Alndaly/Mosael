@@ -31,6 +31,11 @@ vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 vi.mock("./accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
 vi.mock("./floatLayer", () => ({ FloatLayer: class { warm() {} hide() {} destroy() {} } }));
 vi.mock("./comfyViews", () => ({ comfyViewOpening: vi.fn(), comfyViewShown: vi.fn(), setComfyNavigation: vi.fn() }));
+// 语言那两件事自己的行为在 comfyLocale.test.ts 里测;这里只钉「打开工作台时它被摆在哪儿」(先设语言、再亮视图)。
+vi.mock("./comfyLocale", () => ({
+  setComfyLocaleOnServer: vi.fn(async () => "applied"),
+  matchComfyLocaleInPage: vi.fn(async () => "applied"),
+}));
 vi.mock("./comfyEditor", () => ({ comfyReady: () => "true", openWorkflowInPage: vi.fn(), newWorkflowInPage: vi.fn() }));
 vi.mock("./adapters", () => ({ createAdapter: vi.fn() }));
 vi.mock("./log", () => ({ plog: vi.fn() }));
@@ -47,6 +52,7 @@ import {
   startPublishWorker,
   stopPublishWorker,
 } from "./publishWorker";
+import { matchComfyLocaleInPage, setComfyLocaleOnServer } from "./comfyLocale";
 
 const PARTITION = "persist:pool-comfyui-c1";
 
@@ -90,4 +96,13 @@ it("前台是普通网页(没有工作台会话):留着,它的顶栏照补播的
 it("什么都没亮着:什么都不做", () => {
   releaseWorkbenchView();
   expect(mocks.views.hide).not.toHaveBeenCalled();
+});
+
+it("打开工作台:亮视图**之前**先把这台 ComfyUI 的语言设成 Mosael 的;亮出来之后把已经开着的那一页当场调过来", async () => {
+  await openComfyWorkbench({ partition: PARTITION, url: "http://127.0.0.1:28188", name: "ComfyUI", path: null, fresh: false });
+  expect(setComfyLocaleOnServer).toHaveBeenCalledWith({ partition: PARTITION, url: "http://127.0.0.1:28188", locale: "zh" });
+  expect(matchComfyLocaleInPage).toHaveBeenCalledWith({ partition: PARTITION, locale: "zh" });
+  const order = (one: { mock: { invocationCallOrder: number[] } }) => one.mock.invocationCallOrder[0];
+  expect(order(setComfyLocaleOnServer), "载入之前才好使").toBeLessThan(order(mocks.views.openView));
+  expect(order(mocks.views.openView), "页面在视图亮出来之后才有").toBeLessThan(order(matchComfyLocaleInPage));
 });
