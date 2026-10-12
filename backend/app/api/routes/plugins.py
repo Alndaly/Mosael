@@ -105,6 +105,7 @@ from app.domain.plugins import install as installer
 from app.domain.plugins import oauth as plugin_oauth
 from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
+from app.domain.plugins import shared_tables
 from app.domain.plugins import tools as tools_domain
 from app.domain.plugins import updates
 from app.domain.plugins import use_cases as plugin_use_cases
@@ -390,7 +391,12 @@ def _instance(db: DbSession, instance) -> dict:
         "authorization": inst.authorization_state(db, instance),
         # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。认领调用类能力的
         # (MinerU 的解析)是普通工具,在这张表里,带着能力和「也用在」(ADR 0033)。
-        "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool), "used_by": _used_by(tool["provides"])}
+        #: `input_schema` 里重复的大表按内容收一次(见 domain/plugins/shared_tables):界面读的是 `form`,
+        #: 这份原始的声明一个字段都不读它 —— 收完这一份 2,929,540 字节的工具清单少 23 万字节,而展平回来
+        #: 逐字节相同。`form` 原样不动(界面按它的 `options` 直接画下拉)。
+        "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool),
+                   "used_by": _used_by(tool["provides"]),
+                   "input_schema": shared_tables.share(tool["input_schema"] or {})}
                   for tool in tools if not tool["internal"]],
         "capability_status": {
             capability: _capability_status(status)

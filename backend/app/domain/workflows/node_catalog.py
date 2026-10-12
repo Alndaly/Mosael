@@ -145,8 +145,15 @@ def translated_spec(key: str, spec: dict, locale: str) -> dict:
     #: 名字按语言翻 —— 此前界面上直接摆着 `duck` / `separate`,中文界面里也是这样。
     #: 键名是 `wfOpt_<字段>_<值>`,回落到各字段通用的 `wfOpt__<值>`(是/否),再回落到值本身
     #: (插件节点的选项没有登记处,照原样显示)。
+    #: **回落到值本身的那几项不写进来**:`{值: 值}` 一个字节的信息都没有,而界面读的是
+    #: `option_labels?.[值] ?? 值`(NodeConfigForm / ItemsField / 画板那几个 composer 同一句)——
+    #: 少写一项,屏幕上那行字一个像素都不动。这一格此前是**整份插件页载荷里最大的一块**:ComfyUI
+    #: 那 46 个工具的清单里 `form.option_labels` 1,216,752 字节,其中 98.4% 的项 label 就是 value
+    #: (几百项的 LoRA / 大模型下拉各把自己那份文件名又抄了一遍),而 587 个带下拉的字段里 431 个
+    #: 整张表全是这种恒等项。键照旧在(空表就是「这一格没有要另写的显示名」)。
     if isinstance(out.get("options"), list):
-        out["option_labels"] = {str(option): option_label(key, str(option), locale) for option in out["options"]}
+        labels = {str(option): option_label(key, str(option), locale) for option in out["options"]}
+        out["option_labels"] = {value: label for value, label in labels.items() if label != value}
     #: 一项一张卡(插件数组里每一项是一块结构)的那几格也是给人看的:名字、下拉同一套规矩,一层层往里翻。
     if isinstance(out.get("fields"), dict):
         out["fields"] = {
