@@ -454,8 +454,10 @@ def _in_mosael(db: Session, instance: PluginInstance, workspace_id: str, workflo
             flow["generation"] = {"provider_profile_id": profile.id, "kind": kinds[0], "model": row.model_id}
         if not workspace_id:
             continue
-        latest, _ = _produced(db, _runs(db, instance, profile, workspace_id, row.model_id,
-                                       mirrored.get(row.model_id, []), limit=1), workspace_id, limit=1)
+        #: 这张工作流的**全部入口**:完整工作流和它上面每张表单是一回事,从精简表单跑出来的也是它最近的产出(ADR 0045)
+        entries = _entries(db, instance, profile, row.model_id, rows=list(rows.values()))
+        latest, _ = _produced(db, _runs(db, instance, profile, workspace_id, entries,
+                                       _mirrored_tools(mirrored, entries), limit=1), workspace_id, limit=1)
         flow["last_output"] = latest[0] if latest else None
         key = generation_model_key(profile.id, row.model_id)
         uses: list[dict[str, str]] = [
@@ -511,7 +513,8 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
 
 def _mirroring_tools(instance: PluginInstance) -> dict[str, list[str]]:
     """生成模型 id → 和它是同一件事的那几个工具(插件报的 `mirrors`)。工作流在工作流节点、智能体里是当工具跑的,产出记在
-    工具调用上 —— 只看生成任务的话,维护者在工作流里跑出来的那几张在这里看不见。"""
+    工具调用上 —— 只看生成任务的话,维护者在工作流里跑出来的那几张在这里看不见。说的都是**一个入口**(ADR 0045:一张工作流
+    有几个入口就有几个工具,表单入口的工具 `mirrors` 指的是那个表单入口)。"""
     out: dict[str, list[str]] = {}
     for tool in instance.discovered_tools or []:
         mirror = tool.get("mirrors") if isinstance(tool, dict) else None
@@ -520,17 +523,57 @@ def _mirroring_tools(instance: PluginInstance) -> dict[str, list[str]]:
     return out
 
 
-def _runs(db: Session, instance: PluginInstance, profile: ProviderProfile, workspace_id: str, model_id: str,
+def _form_entry_of(group: Any, path: str) -> bool:
+    """这一项是不是 `path` 这张工作流上的**一张表单**:`group`(plugins.groups 收过的形状)说它和这张工作流是同一组 ——
+    组号就是那张图的路径 —— 而且报的是「表单」那一格。组里「本身」那一格是这张工作流自己。"""
+    return (isinstance(group, dict) and str(group.get("id") or "") == path
+            and str(group.get("entry") or "") == "form")
+
+
+def _entries(db: Session, instance: PluginInstance, profile: ProviderProfile, path: str, *,
+             rows: list[ProviderModel] | None = None) -> list[str]:
+    """这张工作流的**全部入口**(模型 id,ADR 0045):完整工作流自己,加它上面每张表单。
+
+    同一张工作流的几个入口共用一个组号(那张图的路径),所以清单从插件报的两处取:`provider_models` 行上的
+    `declared_group`(目录刷新时写的)和运行时报出的工具上的 `group`。**不拿 `path + "#"` 去前缀匹配**:路径本身可以带 `#`
+    —— 一张叫 `a.json#b.json` 的工作流,它的完整入口和工作流 `a.json` 的一张表单长得一样(插件的 `models.split_id` 就是
+    为此先看 `.json` 结尾),前缀匹配会把别人跑出来的算到这张头上。
+
+    目录里认不出是这张工作流的表单的(表单被删了、连接还没刷过目录)不算 —— 那时只有完整工作流自己,和此前一样。
+    `rows` 是已经查出来的这一列的模型行(列一页工作流时,每张再查一遍是白费的,见 _in_mosael)。
+    """
+    if rows is None:
+        rows = provider_models.list_models(db, profile.id)
+    pairs: list[tuple[Any, Any]] = [(row.model_id, row.declared_group) for row in rows]
+    for tool in instance.discovered_tools or []:
+        if not isinstance(tool, dict):
+            continue
+        mirror = tool.get("mirrors") if isinstance(tool.get("mirrors"), dict) else None
+        pairs.append(((mirror or {}).get("generation_model"), tool.get("group")))
+    found = [path]
+    for model_id, group in pairs:
+        if isinstance(model_id, str) and model_id and model_id not in found and _form_entry_of(group, path):
+            found.append(model_id)
+    return found
+
+
+def _mirrored_tools(mirrored: dict[str, list[str]], entries: list[str]) -> list[str]:
+    """这几个入口的镜像工具(一个入口一个工具,名字各不相同;去重只是顺手)。"""
+    return list(dict.fromkeys(tool for entry in entries for tool in mirrored.get(entry, [])))
+
+
+def _runs(db: Session, instance: PluginInstance, profile: ProviderProfile, workspace_id: str, entries: list[str],
           tools: list[str], *, limit: int) -> list[tuple[datetime, list[str]]]:
     """这张工作流最近的几次运行(新的在前):每次 `(什么时候, 交出的素材 id —— 一批几张都在)`。
 
-    两种运行:用它**生成**(这个工作区、这个连接、这个模型的生成任务;每一份产出各有一行 GeneratedAsset,任务被「清空已结束」
-    删掉的只剩封面那一张)和当**工具**跑(和它是同一件事的工具在这个连接上成功的调用,交出的 `asset_ids`;调用不记工作区,
+    两种运行:用它**生成**(这个工作区、这个连接、这几**个入口**的生成任务 —— 完整工作流和它上面每张表单各是一个入口,
+    从精简表单跑出来的产出就是这张工作流的产出,ADR 0045;每一份产出各有一行 GeneratedAsset,任务被「清空已结束」删掉的
+    只剩封面那一张)和当**工具**跑(和这些入口是同一件事的工具在这个连接上成功的调用,交出的 `asset_ids`;调用不记工作区,
     素材按工作区筛,见 _produced)。"""
     jobs = list(db.scalars(
         select(GenerationJob)
         .where(GenerationJob.workspace_id == workspace_id, GenerationJob.provider_profile_id == profile.id,
-               GenerationJob.model == model_id, GenerationJob.result_asset_id.is_not(None))
+               GenerationJob.model.in_(entries), GenerationJob.result_asset_id.is_not(None))
         .order_by(GenerationJob.created_at.desc())
         .limit(limit)
     ))
@@ -599,14 +642,19 @@ def _output_nsfw(asset: Asset, manual: bool | None) -> dict[str, Any]:
 
 def outputs(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, path: str) -> dict[str, Any]:
     """一张工作流在这个工作区里最近的产出(详情里那一组图):用它生成的、当工具跑的,一批出的每一张都算,新的在前,
-    最多 RECENT_OUTPUTS 份;每份带着 NSFW 的判断。不是这个连接下的生成模型的,没有。"""
+    最多 RECENT_OUTPUTS 份;每份带着 NSFW 的判断。不是这个连接下的生成模型的,没有。
+
+    「这张工作流」是它的**全部入口**(ADR 0045):完整工作流和它上面每张表单各是一个模型,从精简表单跑出来的产出是
+    这张工作流的产出,不是别人的(见 _entries)。"""
     ensure_workspace_access(db, user, workspace_id)
     _require(db, instance)
     path = workflow_path(path)
     profile = _profile(db, instance)
     if profile is None or provider_models.get_model(db, profile.id, path) is None:
         return {"outputs": [], "more": False}
-    runs = _runs(db, instance, profile, workspace_id, path, _mirroring_tools(instance).get(path, []), limit=_RECENT_RUNS)
+    entries = _entries(db, instance, profile, path)
+    mirrored = _mirroring_tools(instance)
+    runs = _runs(db, instance, profile, workspace_id, entries, _mirrored_tools(mirrored, entries), limit=_RECENT_RUNS)
     found, more = _produced(db, runs, workspace_id, limit=RECENT_OUTPUTS)
     return {"outputs": found, "more": more}
 

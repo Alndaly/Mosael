@@ -415,6 +415,165 @@ def test_最近的产出_一批的每一张都在_新的在前_生成的和当�
         "别的工作区的素材标不了")
 
 
+def _declare_entries(db, instance_id: str, extra: list[tuple[str, str, str]]) -> str:
+    """把这个连接的模型目录写成:完整入口 portrait.json,加 `extra` 里的几个入口(元组是「模型 id, 组号, 入口格子」)。
+
+    目录是插件刷新时写的(见 plugin_connections 的 `DeclaredModel` / `declared_group`,ADR 0045):同一张工作流的完整入口
+    和它的表单入口共用一个组号(那张图的路径)。这里照着写一遍,不去跑一次真刷新。
+    """
+    from app.domain.providers import models as provider_models
+
+    profile = db.scalar(select(ProviderProfile).where(ProviderProfile.plugin_instance_id == instance_id))
+    entries = [provider_models.DeclaredModel(
+        model_id="portrait.json", display_name="portrait", capability_ids=["image"], capabilities={"image": {}},
+        group={"id": "portrait.json", "label": "portrait", "entry": "full", "order": 0})]
+    for model_id, group_id, entry in extra:
+        entries.append(provider_models.DeclaredModel(
+            model_id=model_id, display_name=model_id, capability_ids=["image"], capabilities={"image": {}},
+            group={"id": group_id, "label": group_id, "entry": entry, "order": 1}))
+    provider_models.replace_declared_catalog(db, profile, entries)
+    db.commit()
+    return profile.id
+
+
+def _made(db, workspace: str, names: list[str]) -> dict[str, str]:
+    """一次生成交出来的那几张素材(名 → id)。"""
+    from app.db.models import Asset
+
+    out: dict[str, str] = {}
+    for name in names:
+        row = Asset(workspace_id=workspace, name=name, original_filename=name, kind="image")
+        db.add(row)
+        db.flush()
+        out[name] = row.id
+    return out
+
+
+def test_表单入口跑出来的也算这张工作流的产出(library) -> None:
+    """维护者:「ComfyUI 工作流的精简表单的输入结果没被同步到最近的产出」。同一张工作流的完整工作流入口和它上面的表单入口
+    是**一回事**(ADR 0045 §1):从精简表单跑出来的那些是**这张工作流**的产出,不是别人的。此前生成任务只按
+    `GenerationJob.model == <完整工作流路径>` 精确等值收,表单入口(`<路径>#<表单 id>`)跑的全都漏了 —— 而实测里表单入口
+    才是主要跑法。"""
+    from app.db.models import GenerationJob
+
+    client, instance_id = library
+    workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
+    with SessionLocal() as db:
+        profile_id = _declare_entries(db, instance_id, [("portrait.json#app", "portrait.json", "form")])
+        ids = _made(db, workspace, ["表单-1.png", "完整-1.png", "别的工作流的.png", "表单-2.png"])
+        for minute, name, model in ((1, "表单-1.png", "portrait.json#app"), (2, "完整-1.png", "portrait.json"),
+                                    (3, "别的工作流的.png", "sub/sketch.json#app"), (4, "表单-2.png", "portrait.json#app")):
+            db.add(GenerationJob(workspace_id=workspace, provider=f"plugin:{PACKAGE_ID}", provider_profile_id=profile_id,
+                                 model=model, kind="image", request={}, result_asset_id=ids[name],
+                                 created_at=datetime(2026, 10, 5, 10, minute)))
+        db.commit()
+
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/outputs"
+    body = client.get(url, params={"workspace_id": workspace, "path": "portrait.json"}).json()
+    assert [one["asset_id"] for one in body["outputs"]] == [ids["表单-2.png"], ids["完整-1.png"], ids["表单-1.png"]], \
+        "表单入口跑的是这张工作流的产出;别的工作流的表单入口不是"
+    listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
+    assert listed["workflows"][0]["last_output"]["asset_id"] == ids["表单-2.png"], "卡片上那一张也是全部入口里最新的那一份"
+
+
+def test_只跑过表单入口时那一栏照样画得出(library) -> None:
+    """最严重的那条:一张工作流**只在表单里**跑过(实测 `video_minimax_h3_i2v.json` 完整入口 0 次成功、表单入口成功 1 次),
+    此前卡片上的 `last_output` 是 NULL,而界面是「`last_output` 非空才画这一栏」—— 整栏「最近的产出」都不出现。"""
+    from app.db.models import GenerationJob
+
+    client, instance_id = library
+    workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
+    with SessionLocal() as db:
+        profile_id = _declare_entries(db, instance_id, [("portrait.json#k0a1nq", "portrait.json", "form")])
+        ids = _made(db, workspace, ["表单跑出来的.png"])
+        db.add(GenerationJob(workspace_id=workspace, provider=f"plugin:{PACKAGE_ID}", provider_profile_id=profile_id,
+                             model="portrait.json#k0a1nq", kind="image", request={}, result_asset_id=ids["表单跑出来的.png"],
+                             created_at=datetime(2026, 10, 5, 10, 3)))
+        db.commit()
+
+    listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
+    card = listed["workflows"][0]
+    assert card["last_output"] is not None and card["last_output"]["asset_id"] == ids["表单跑出来的.png"], \
+        "只在表单里跑过:这一栏照样画得出,不是空的"
+    assert card["generation"]["model"] == "portrait.json", "「用它生成」还是那个完整工作流入口,没被表单入口顶掉"
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/outputs"
+    body = client.get(url, params={"workspace_id": workspace, "path": "portrait.json"}).json()
+    assert [one["asset_id"] for one in body["outputs"]] == [ids["表单跑出来的.png"]]
+
+
+def test_路径里带井号的另一张工作流不是这张的表单入口(library) -> None:
+    """插件的 `models.split_id` 说得很清楚:路径本身可以带 `#`,所以先看 `.json` 结尾 —— 一张叫
+    `portrait.json#copy.json` 的工作流,它的**完整入口**和工作流 `portrait.json` 的一张表单长得一模一样。拿
+    `path + "#"` 去前缀匹配就会把这张拷贝跑出来的算到原版头上。认的是组号(那张图的路径),不是字符串前缀。"""
+    from app.db.models import GenerationJob
+
+    client, instance_id = library
+    workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
+    with SessionLocal() as db:
+        profile_id = _declare_entries(db, instance_id, [
+            ("portrait.json#app", "portrait.json", "form"),
+            ("portrait.json#copy.json", "portrait.json#copy.json", "full"),
+        ])
+        ids = _made(db, workspace, ["原版的表单.png", "拷贝的.png"])
+        for minute, name, model in ((3, "原版的表单.png", "portrait.json#app"),
+                                    (5, "拷贝的.png", "portrait.json#copy.json")):
+            db.add(GenerationJob(workspace_id=workspace, provider=f"plugin:{PACKAGE_ID}", provider_profile_id=profile_id,
+                                 model=model, kind="image", request={}, result_asset_id=ids[name],
+                                 created_at=datetime(2026, 10, 5, 10, minute)))
+        db.commit()
+
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/outputs"
+    body = client.get(url, params={"workspace_id": workspace, "path": "portrait.json"}).json()
+    assert [one["asset_id"] for one in body["outputs"]] == [ids["原版的表单.png"]], "拷贝那张是它自己，不是原版的表单入口"
+    listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
+    assert listed["workflows"][0]["last_output"]["asset_id"] == ids["原版的表单.png"]
+    own = client.get(url, params={"workspace_id": workspace, "path": "portrait.json#copy.json"}).json()
+    assert [one["asset_id"] for one in own["outputs"]] == [ids["拷贝的.png"]], "带井号的路径自己那一张照样查得到"
+
+
+def test_表单入口的工具调用也算这张工作流的产出(library) -> None:
+    """同一张工作流在智能体 / 工作流节点里是当工具跑的,每个入口一个工具(表单入口的工具 `mirrors` 指的是**那个**表单入口)。
+    只看生成任务的话,维护者用表单工具跑出来的那几张在这里看不见。入口清单也认插件报的 `group`(目录还没刷到时)。"""
+    from app.db.models import GenerationJob, PluginInstance, PluginInvocation
+
+    client, instance_id = library
+    workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
+    form_group = {"id": "portrait.json", "label": "portrait", "entry": "form", "order": 1}
+    with SessionLocal() as db:
+        instance = db.get(PluginInstance, instance_id)
+        instance.discovered_tools = [
+            {"name": "wf_portrait_app", "mirrors": {"generation_model": "portrait.json#app", "kind": "image"},
+             "group": form_group},
+            #: 这一张表单只在工具清单里(模型行还没刷出来):入口清单也认插件报的组
+            {"name": "wf_portrait_k3x9a2", "mirrors": {"generation_model": "portrait.json#k3x9a2", "kind": "image"},
+             "group": form_group},
+            {"name": "wf_elsewhere", "mirrors": {"generation_model": "elsewhere.json", "kind": "image"},
+             "group": {"id": "elsewhere.json", "label": "elsewhere", "entry": "full", "order": 0}},
+        ]
+        profile_id = _declare_entries(db, instance_id, [("portrait.json#app", "portrait.json", "form")])
+        ids = _made(db, workspace, ["表单工具跑的.png", "别的工具跑的.png", "表单工具-2.png"])
+        for minute, name, model in ((2, "表单工具跑的.png", "portrait.json#app"),
+                                    (5, "别的工具跑的.png", "elsewhere.json"),
+                                    (6, "表单工具-2.png", "portrait.json#k3x9a2")):
+            db.add(GenerationJob(workspace_id=workspace, provider=f"plugin:{PACKAGE_ID}", provider_profile_id=profile_id,
+                                 model=model, kind="image", request={}, result_asset_id=ids[name],
+                                 created_at=datetime(2026, 10, 5, 10, minute)))
+        db.add(PluginInvocation(instance_id=instance_id, tool_name="wf_portrait_app", status="succeeded",
+                                output={"asset_ids": [ids["表单工具跑的.png"]]}, created_at=datetime(2026, 10, 5, 10, 3)))
+        db.add(PluginInvocation(instance_id=instance_id, tool_name="wf_elsewhere", status="succeeded",
+                                output={"asset_ids": [ids["别的工具跑的.png"]]}, created_at=datetime(2026, 10, 5, 10, 4)))
+        db.add(PluginInvocation(instance_id=instance_id, tool_name="wf_portrait_k3x9a2", status="succeeded",
+                                output={"asset_ids": [ids["表单工具-2.png"]]}, created_at=datetime(2026, 10, 5, 10, 7)))
+        db.commit()
+
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/outputs"
+    body = client.get(url, params={"workspace_id": workspace, "path": "portrait.json"}).json()
+    assert [one["asset_id"] for one in body["outputs"]] == [ids["表单工具-2.png"], ids["表单工具跑的.png"]], \
+        "表单入口的工具调用算这张的;别的入口的工具不算"
+    listed = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
+    assert listed["workflows"][0]["last_output"]["asset_id"] == ids["表单工具-2.png"]
+
+
 def test_谁在用它_这个工作区里选了它的工作流和画板(library) -> None:
     client, instance_id = library
     workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
