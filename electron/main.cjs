@@ -123,6 +123,9 @@ if (isSmokeTest) {
 
 const electronLogDir = path.join(app.getPath("userData"), "logs");
 const mainLogPath = path.join(electronLogDir, "main.log");
+// 渲染进程 / Chromium 自己的日志落点(和 main.log、backend.log 同一个目录、同一套 .1 轮转)。
+// 目录不写死:冒烟测试上面已经把 userData 换到临时目录,这里跟着走。开关见 startChromiumLogging()。
+const chromiumLogPath = path.join(electronLogDir, "chromium.log");
 const configuredDataDir = process.env.MOSAEL_DATA_DIR
   ? path.resolve(process.env.MOSAEL_DATA_DIR)
   : path.join(os.homedir(), ".mosael");
@@ -185,6 +188,46 @@ function appendDiagnosticLog(kind, detail) {
 function localClock(date = new Date()) {
   return date.toTimeString().slice(0, 8);
 }
+
+/**
+ * 把 Chromium 自己的日志(渲染进程 `CHECK` 崩之前那句 `Check failed: <表达式> (<文件>:<行>)` 就在里面)接到文件上。
+ *
+ * 为什么需要它:那一句默认只走 stderr —— 打包版从 Finder 启动时 stderr 是 /dev/null,dev 里也在终端里滚过去了;
+ * 而 main.log 记的全是主进程自己写的东西,渲染进程的 CHECK 文案一个字都不在里面(实测:14 次崩溃、
+ * `main.log` 里零条 `Check failed`)。想要「崩了之后还能回看」,只能给它一条文件通道。
+ *
+ * 接口照 Electron 自己的那套(`shell/common/logging.cc`,语义和 Chromium 相反,不能想当然):
+ *   - 落文件要 `--enable-logging=file`(`--enable-logging` 单独用是 stderr);
+ *   - 只要给了 `--log-file`,目标就是文件,而且**对已有文件是追加** —— 多进程共写、跨重启保留,
+ *     这正是「崩完还能回看」的前提(`delete_old` 只在没给显式文件名时才开)。
+ * 两个开关都从 JS 里加:Electron 跑完主脚本会**再 init 一次日志**,所以主进程自己和此后 fork 的渲染进程
+ * 都吃得到(渲染进程 argv 里能查到这两个开关);走 env(`ELECTRON_ENABLE_LOGGING` / `ELECTRON_LOG_FILE`)
+ * 则要求启动方导出变量、还得把路径写死在启动脚本里 —— 打包版从 Finder 启动就没人设,那条路覆盖不到,
+ * 所以这里不用它。
+ *
+ * 有节制:默认只留 ERROR 及以上 —— CHECK 走的是 FATAL(比 ERROR 高,不受这一档影响),而 dev 里每个
+ * `console.log` 都会变成一条 INFO:CONSOLE,不加这一档会把文件刷满。要看全量再 `MOSAEL_CHROMIUM_LOG=1`。
+ */
+function startChromiumLogging() {
+  try {
+    const verbose = process.env.MOSAEL_CHROMIUM_LOG === "1";
+    // 先轮转:此刻 Chromium 还没打开这个文件(开关是下面才加的),重命名不会把正在写的 fd 甩掉。
+    rotateLogIfLarge(chromiumLogPath);
+    app.commandLine.appendSwitch("enable-logging", "file");
+    app.commandLine.appendSwitch("log-file", chromiumLogPath);
+    // `--v=1` 会自己把最低级别压到 VERBOSE,两档只能二选一。
+    if (verbose) app.commandLine.appendSwitch("v", "1");
+    else app.commandLine.appendSwitch("log-level", "2");
+    appendMainLog(
+      "chromium-log",
+      `file=${chromiumLogPath} level=${verbose ? "verbose" : "error"} local=${localClock()} pid=${process.pid}`,
+    );
+  } catch (error) {
+    // 开关加不上只是少一条线索,不能拦住启动(同 crash-reporter 那一段)。
+    appendMainLog("chromium-log", `failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+startChromiumLogging();
 
 /**
  * 当时各进程占了多少内存:渲染进程崩多半是内存(大工程剪辑、一堆素材页),事后只有这一笔能回看当时有多挤。
