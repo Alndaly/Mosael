@@ -5,6 +5,7 @@ import { ArrowLeftRight, Music, Pencil, Plus, X } from "lucide-react";
 
 import { assetPreviewUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,28 @@ function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
 
 function slotOf(asset: Asset): FrameSlot {
   return { url: "", assetId: asset.id, assetName: asset.name };
+}
+
+/** 空格子里**要写出来的那个名字** —— 命名链的最后一段,取不到就往回落,不回落到空。
+ *
+ * 维护者截图(暗色主题:「快速去水印」那张表单的参考图那一格):**一个虚线框加一个加号,没有名字**,
+ * 而首/尾帧那两格写着「首帧」「Optional Load Image #127」。这一格的名字此前只有**一条**来源 ——
+ * 描述符的 `source_labels`,于是那条链断在哪儿,哪儿就是一个纯图标格,而面板上别的每一格都有字。
+ *
+ * 链子本身没坏,是**它本来就会缺**:插件只在自己的表单上给每个槽位都报名字,缺省的表单只在"名字说得出
+ * 东西"时才报(`Form.slot_labels`:一个角色一格、节点又没起过名就不报),连起来的模型这一格就是没有名字。
+ * 界面上再撞一次(表单项的 key 认得出的角色、但描述符没给这一格的名字)就是截图里那一格。
+ *
+ * 回落的顺序就是既有的那几套文案,这里**不发明**新的说法:
+ *
+ * 1. 模型给这一格的名字(`source_labels[i]`,比如「加载图像 #15」);
+ * 2. 这一格自己是「上传」那一条路时的说法(蒙版那一格并排两格:「上传」/「画一张」);
+ * 3. 角色名(`ROLE_COPY` 的 `label`:参考图、蒙版、首帧……)—— 同一份文案就在上面那行角色标题里
+ *    (见 `FrameSlotField` 的表头),读屏念的、悬停说明里写的也一直是它。
+ */
+export function slotName(role: SourceRole, names: string[], index: number, t: (key: MessageKey) => string, uploadName?: MessageKey): string {
+  const copy = ROLE_COPY[role];
+  return names[index] || (uploadName ? t(uploadName) : "") || t(copy.label);
 }
 
 /** 一格:空的是个加号,填了的是缩略图 + 一个移除角标。 */
@@ -321,7 +344,12 @@ export function FrameSlotField({
             multiple={limit > 1}
             onPick={(files) => upload.mutate(files)}
             //: 能画的时候,上传那一格也写清楚自己是哪一条路(两格并排,"+"和"画笔"光看图标分不出来)。
-            label={upload.isPending ? t(copy.uploading) : names[filled.length] || (canDraw ? t("maskUpload") : undefined)}
+            //: 名字取不到就往回落(见 slotName):一格素材**没有名字**在面板上是看不出来"这一格是干什么的"的。
+            label={
+              upload.isPending
+                ? t(copy.uploading)
+                : slotName(role, names, filled.length, t, canDraw ? "maskUpload" : undefined)
+            }
             onDraw={canDraw ? onDrawMask : undefined}
           />
         )}
@@ -417,7 +445,8 @@ export function KeyframePairField({
             multiple={false}
             onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
             onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
-            label={names.first}
+            //: 只有首帧这一格时(有些模型只认首帧)也照上面那一支回落 —— 名字取不到就不是"没有名字的那一格"。
+            label={names.first || t("genFirstFrame")}
             name={names.first}
           />
         </div>

@@ -19,7 +19,7 @@ vi.mock("@/api/client", () => ({
   importAsset: vi.fn(),
 }));
 
-import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
+import { FrameSlotField, KeyframePairField, slotName } from "@/features/ai-studio/FrameSlotField";
 import { EMPTY_SLOT } from "@/lib/sourceFrames";
 
 function mount(ui: React.ReactElement) {
@@ -59,6 +59,57 @@ describe("参考图槽位", () => {
     expect(container.querySelector("[data-slot-name]")?.getAttribute("data-slot-name")).toBe("人物");
     expect(screen.getByRole("button", { name: "人物 · a.png" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "背景" })).toBeTruthy();
+  });
+
+  /**
+   * 维护者截图(暗色主题:「快速去水印」那张表单的参考图那一格):**一个虚线框加一个加号,没有名字**。
+   * 同一位置上别的格子是带名字的(「首帧」「Optional Load Image #127」)—— 所以不是排版被切没了,
+   * 是**这一项的名字本来就是空的**。
+   *
+   * 名字只有一条来源(描述符的 `source_labels`),而模型不给这一格名字是**正常**的:插件只在自己的表单上
+   * 给每个槽位都报名字,缺省的表单只在"名字说得出东西"时才报(见插件 `Form.slot_labels`)。链子断在哪儿,
+   * 哪儿就是一个看不出是干什么的格子 —— 而面板上别的每一格都有字。
+   *
+   * 量出来的前后(真挂载,见这一条):`names=[]` 时那一格 `textContent === ""`;
+   * 现在它是「参考图」(角色名,和那一行标题、读屏念的名字同一份文案)。
+   */
+  it("模型没给这一格名字时,空格子里也有名字 —— 不许只剩一个加号", () => {
+    const { container } = mount(
+      <FrameSlotField role="reference_image" slots={[{ ...EMPTY_SLOT }]} limit={1} onChange={vi.fn()} workspaceId="w" />,
+    );
+    const tile = container.querySelector("button")!;
+    expect(tile.textContent).toBe("genReferenceImage");
+    //: 名字是**看得见的字**,不是只给读屏的 aria-label(那一格此前正是 aria-label 有、屏上什么都没有)。
+    expect(tile.querySelector("span")?.textContent).toBe("genReferenceImage");
+    expect(screen.getByRole("button", { name: "genReferenceImage" })).toBeTruthy();
+  });
+
+  it("这一格的名字是空串时同样回落 —— 空串不是名字", () => {
+    const { container } = mount(
+      <FrameSlotField
+        role="reference_image"
+        slots={[{ ...EMPTY_SLOT }]}
+        limit={1}
+        names={[""]}
+        onChange={vi.fn()}
+        workspaceId="w"
+      />,
+    );
+    expect(container.querySelector("button")?.textContent).toBe("genReferenceImage");
+  });
+
+  it("模型给了名字时一个字都不动 —— 回落不许压过模型自己的说法", () => {
+    const { container } = mount(
+      <FrameSlotField
+        role="reference_image"
+        slots={[{ ...EMPTY_SLOT }]}
+        limit={1}
+        names={["加载图像 #15"]}
+        onChange={vi.fn()}
+        workspaceId="w"
+      />,
+    );
+    expect(container.querySelector("button")?.textContent).toBe("加载图像 #15");
   });
 
   /**
@@ -310,5 +361,46 @@ describe("首尾帧是一对", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "genSwapKeyframes" })).toBeNull();
+    //: 只有首帧这一格时也得有名字 —— 上头那一支的回落在这里也成立(见 slotName)。
+    expect(screen.getByRole("button", { name: "genFirstFrame" })).toBeTruthy();
+  });
+});
+
+/**
+ * 命名链的最后一段:**取不到就往回落,不回落到空**。
+ *
+ * 维护者截图(暗色主题:「快速去水印」那张表单的参考图那一格):一个虚线框加一个加号,**没有名字**,
+ * 而首/尾帧那两格写着「首帧」「Optional Load Image #127」。那一格的名字此前只有一条来源 ——
+ * 描述符的 `source_labels`;模型没给这一格名字时,它就成了面板上唯一一个看不出是干什么的格子。
+ *
+ * 回落用的是**既有的那几套文案**(角色名 / 「上传」那一条路的说法),这里不发明新的说法:
+ * 角色名本来就是那一行标题、读屏念的名字和悬停说明里的那一份(见 FrameSlotField 的 `copy.label`)。
+ */
+describe("槽位名取不到时回落", () => {
+  const t = (key: string) => key;
+
+  it("模型给了这一格的名字就用它 —— 回落的顺序不许压过模型自己的说法", () => {
+    expect(slotName("reference_image", ["加载图像 #15"], 0, t)).toBe("加载图像 #15");
+  });
+
+  it("模型没给这一格(source_labels 缺这一格)就落到角色名", () => {
+    expect(slotName("reference_image", [], 0, t)).toBe("genReferenceImage");
+  });
+
+  it("这一格的名字是空串也算没给 —— 空串不是名字", () => {
+    expect(slotName("mask", [""], 0, t)).toBe("genMask");
+  });
+
+  it("下一格没名字时落角色名,而不是把上一格的名字挪下来", () => {
+    //: 第 i 格说第 i 个槽位:第一格有名字、第二格没有时,第二格写「参考图」,不能顶着第一格的名字。
+    expect(slotName("reference_image", ["人物"], 1, t)).toBe("genReferenceImage");
+  });
+
+  it("「上传 / 画一张」并排时,上传那一格说自己是哪一条路", () => {
+    expect(slotName("mask", [], 0, t, "maskUpload")).toBe("maskUpload");
+  });
+
+  it("上传那条路的说法也不给时,还是落角色名 —— 任何一条路都不许是空", () => {
+    expect(slotName("mask", [], 0, t, undefined)).toBe("genMask");
   });
 });
