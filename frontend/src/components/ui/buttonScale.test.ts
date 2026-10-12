@@ -42,9 +42,12 @@ const SRC = join(import.meta.dirname, "..", "..");
  * 也会红。
  */
 const GRANDFATHERED = new Set<string>([
+  //: 这一处原先记在 `features/ai-studio/FrameSlotField.tsx` —— 对调箭头(和成对壳一起)挪去了两个功能
+  //: 共用的 `components/generation/slotTiles`(理由见 features/featureBoundaries.test.ts),
+  //: 条目跟着换家,总数没变。
+  "components/generation/slotTiles.tsx: h-6 w-6",
   "features/agent/SubagentPanel.tsx: h-6 w-6",
   "features/ai-studio/FrameSlotField.tsx: h-5 w-5",
-  "features/ai-studio/FrameSlotField.tsx: h-6 w-6",
   "features/agent/trace/TraceView.tsx: h-6 w-6",
 ]);
 

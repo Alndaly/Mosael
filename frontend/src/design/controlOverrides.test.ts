@@ -63,6 +63,7 @@ const STOCK: Record<string, number> = {
   "components/app/TagsDialog.tsx": 1,
   "components/app/view-full-size.tsx": 1,
   "components/generation/ModelPreviewSettingsButton.tsx": 1,
+  "components/generation/slotTiles.tsx": 1,
   "components/jobs/JobResult.tsx": 1,
   "components/jobs/TaskCenter.tsx": 1,
   "features/admin/PricingTimePrices.tsx": 1,
@@ -81,8 +82,10 @@ const STOCK: Record<string, number> = {
   "features/ai-studio/audioGeneration.tsx": 2,
   "features/ai-studio/ChatWorkspace.tsx": 3,
   //: 4 → 3:空槽那一格原本两处各写一遍同一串覆盖(有名字的 / 只有图标的),收进 EmptyTile 之后只剩一份,
-  //: 而 EmptyTile 自己的 className 走 cn(TILE, …) —— 格子的高、圆角在那一份 TILE 里,不再是调用处的覆盖。
-  "features/ai-studio/FrameSlotField.tsx": 3,
+  //: 而 EmptyTile 自己的 className 走 cn(SLOT_TILE, …) —— 格子的高、圆角在那一份 SLOT_TILE 里,不再是调用处的覆盖。
+  //: 3 → 2:对调箭头那一颗(`mx-auto h-6 w-6`)连同成对壳挪去了两个功能共用的 components/generation/slotTiles
+  //: (理由见 features/featureBoundaries.test.ts)—— 它那一处记在新文件名下,存量总数没变,只是换了家。
+  "features/ai-studio/FrameSlotField.tsx": 2,
   "features/ai-studio/GenerateWorkspace.tsx": 3,
   "features/ai-studio/voicedCreation.tsx": 3,
   "features/auth/LoginView.tsx": 1,

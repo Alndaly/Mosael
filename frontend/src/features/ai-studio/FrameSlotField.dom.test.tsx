@@ -19,8 +19,8 @@ vi.mock("@/api/client", () => ({
   importAsset: vi.fn(),
 }));
 
-import { FrameSlotField, KeyframePairField, slotName } from "@/features/ai-studio/FrameSlotField";
-import { EMPTY_SLOT } from "@/lib/sourceFrames";
+import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
+import { EMPTY_SLOT, slotName } from "@/lib/sourceFrames";
 
 function mount(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -121,7 +121,7 @@ describe("参考图槽位", () => {
    * 从**两边**硬裁;里面的 `Truncate` 拿到的是文字本身的宽度(`clientWidth == scrollWidth`),省略号永远不触发。
    *
    * jsdom 没有排版、量不了宽,所以这里按源码判(和 design/truncateNeedsShrinkableBox 同一种做法):那一格
-   * **不能**把里面的行按内容宽排版,那一行还得能收缩。真浏览器里前后量到的数写在 FrameSlotField.tsx 的 `TILE` 上头。
+   * **不能**把里面的行按内容宽排版,那一行还得能收缩。真浏览器里前后量到的数写在 components/generation/slotTiles 的 `SLOT_TILE` 上头。
    */
   it("长槽位名:那一格不按内容宽排版,标题真的会截断,悬停看得到全文", async () => {
     const NAME = "Optional Load Image : a very long node title #10";
@@ -140,7 +140,7 @@ describe("参考图槽位", () => {
     expect(title.className).toContain("truncate");
     const tile = title.closest("button")!;
     //: 按内容宽排版的那一格(justify-items: center)就是从两边硬裁 —— 名字只看得见中间一段,还没有省略号。
-    expect(tile.className, "那一格不能把里面的行按内容宽排版(见 FrameSlotField.tsx 的 TILE)").not.toContain("place-items-center");
+    expect(tile.className, "那一格不能把里面的行按内容宽排版(见 components/generation/slotTiles 的 SLOT_TILE)").not.toContain("place-items-center");
     expect(tile.className).toContain("min-w-0");
     //: `Truncate` 的父级:有宽度,而且能收缩(进 docs/CONVENTIONS 那条棘轮)。
     const row = title.parentElement!;
@@ -168,7 +168,7 @@ describe("参考图槽位", () => {
    * `Truncate` 才拿得到宽度)。
    *
    * jsdom 没有排版,这里按源码判(和 design/truncateNeedsShrinkableBox 同一种做法);真 Chromium 量到的数
-   * (面板 300px,写在 FrameSlotField.tsx 的 TILE 上头):一列那一格 288px、`图一` 左右留白**各 123px**;
+   * (面板 300px,写在 components/generation/slotTiles 的 SLOT_TILE 上头):一列那一格 288px、`图一` 左右留白**各 123px**;
    * 三列并排时那一格 92px、左右**各 25px**;长名字时那一行 90px(正好是格子宽)、标题 60/274 被截、省略号出来。
    */
   it("那一组在格子里居中 —— 但居中写在那一行上,不写在那一格上", () => {

@@ -72,6 +72,15 @@ ALLOWED: dict[str, str] = {
     # 与这里的 BUNDLE_ID,keychain group 拿它拼)。契约语料解决不了这个 —— 语料是"同一份输入
     # 两侧算出同一个答案",而这里根本没有算。盯着它不分岔的是 electron/webauthn.test.ts。
     "electron/webauthn.cjs": "同一个字面量的两处副本(非语义两份实现),由 electron/webauthn.test.ts 直接比对",
+    # 它说的不是"另一侧还有一份实现",是**同一份实现有两个调用方**:面板和表单预览画的是同一个组件
+    # (components/generation/slotTiles 的 KeyframePairFrame —— 此前住在 features/ai-studio/FrameSlotField,
+    # 预览只能反过来 import 它,才成了那两个功能互相依赖)。契约管不了这一类,contracts/README 的
+    # 「同一个实现,两个调用方」那节写的正是它:语料是「同一份输入、两侧各自算一遍再对答案」,
+    # 而这里只有一份代码,没有第二个答案可以对。盯着两边不分岔的是
+    # features/plugins/appForm/PreviewPanel.keyframes.dom.test.tsx —— 它把预览和**真渲染的**面板
+    # 按同一个壳的抓手(data-keyframe-pair / data-keyframe-row)拆成结构,逐项比。
+    "frontend/src/components/generation/slotTiles.tsx":
+        "同一份实现的两个调用方(面板 + 表单预览),由 plugins/appForm/PreviewPanel.keyframes.dom.test.tsx 直接比对两侧结构",
 }
 
 #: 契约自己的测试与语料里当然会提到这些词,不必再点名。

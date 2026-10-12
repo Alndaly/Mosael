@@ -5,11 +5,11 @@ import type { GenerationOption, WorkflowApp } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { DeclaredParameterControl, PARAMETER_CONTROL_CLASS, ParameterField } from "@/components/generation/parameterPanel";
+import { KeyframePairFrame, SLOT_TILE, SlotTileText } from "@/components/generation/slotTiles";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Truncate } from "@/components/ui/truncate";
-import { KeyframePairFrame, SLOT_TILE, SlotTileText, slotName } from "@/features/ai-studio/FrameSlotField";
 import { appFormFields, type AppField, type AppFieldPair } from "@/lib/appFormFields";
 import { defaultDraft, previewOption, type FormDraft } from "@/features/plugins/workflowAppForm";
 import {
@@ -21,7 +21,7 @@ import {
   sourceLimit,
   supportsParameter,
 } from "@/lib/generationCapabilities";
-import { ROLE_COPY, slotColumns, type SourceRole } from "@/lib/sourceFrames";
+import { ROLE_COPY, slotColumns, slotName, type SourceRole } from "@/lib/sourceFrames";
 import { cn } from "@/lib/utils";
 
 type Translate = ReturnType<typeof useI18n>;
@@ -190,7 +190,7 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
 }
 
 /**
- * 预览里的首尾帧 —— **一组**,和面板里那一组是同一个壳(ai-studio/FrameSlotField.KeyframePairFrame):
+ * 预览里的首尾帧 —— **一组**,和面板里那一组是同一个壳(components/generation/slotTiles.KeyframePairFrame):
  * 一行标题(「首尾帧」)、一句说明、左右两格并排、中间一个对调箭头。
  *
  * 此前这里是「一项一格」:同一对东西成了两个各自独立的竖框,既没并排、也没有那个箭头(维护者 2026-10-12 的截图),

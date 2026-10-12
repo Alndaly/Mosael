@@ -8,7 +8,7 @@
  * 表单编辑器的「预览」里,同一对东西却是**两个各自独立的竖框**(各自标「首帧」「尾帧」,里面是节点名),既不并排、也没有箭头。
  * 而预览那一栏自己的说明是「用的人看到的就是这样」—— 所以这里钉住:两边画的是同一组,而且逐项对得上。
  *
- * **怎么比**才不是"看起来差不多":两边都由同一个壳画出来(ai-studio/FrameSlotField.KeyframePairFrame),用例照那个壳的
+ * **怎么比**才不是"看起来差不多":两边都由同一个壳画出来(components/generation/slotTiles.KeyframePairFrame),用例照那个壳的
  * 抓手(`data-keyframe-pair` / `data-keyframe-row`)把两边的结构拆成一个对象逐项比 —— 面板那一侧是**真的**渲染
  * `AiStudio`(和 appFormMediaField.dom.test.tsx 同一套 fetch 替身),不是拿控件单独摆一个。
  */
@@ -231,7 +231,7 @@ function firstTile(root: ParentNode): HTMLElement {
   return (cell.matches("button, li") ? cell : cell.querySelector("li, button")) as HTMLElement;
 }
 
-/** 两边格子外壳上那几件事:固定高度、圆角、虚线、内容居中(写法见 FrameSlotField.SLOT_TILE)。 */
+/** 两边格子外壳上那几件事:固定高度、圆角、虚线、内容居中(写法见 components/generation/slotTiles.SLOT_TILE)。 */
 function tileShell(element: HTMLElement): string[] {
   const shared = ["grid", "h-[68px]", "w-full", "min-w-0", "content-center", "overflow-hidden",
                   "rounded-lg", "border", "border-border", "border-dashed", "bg-muted/40"];
@@ -330,7 +330,7 @@ describe("预览与真面板:同一组东西,逐项对上", () => {
     const panel = await renderPanel(H3_ENGINE);
     const preview = renderPreview(videoData(), ["127.image", "128.image", "115.aspect_ratio"]);
     expect(tileShell(firstTile(preview))).toEqual(tileShell(firstTile(panel)));
-    //: 名字那一行也是同一份写法(见 FrameSlotField.SlotTileText):居中那一行 + 截断那一格
+    //: 名字那一行也是同一份写法(见 components/generation/slotTiles.SlotTileText):居中那一行 + 截断那一格
     const nameRow = (root: ParentNode) => {
       const row = firstTile(root).querySelector("span") as HTMLElement;
       //: 面板那一格里这一行还有个加号(`shrink-0` 那个 span),预览那一格没有 —— 这里比的是名字那一格

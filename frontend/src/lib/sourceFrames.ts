@@ -134,6 +134,31 @@ export function slotColumns(count: number): string {
   return `repeat(${Math.min(Math.max(count, 1), 3)}, minmax(0, 1fr))`;
 }
 
+/** 空格子里**要写出来的那个名字** —— 命名链的最后一段,取不到就往回落,不回落到空。
+ *
+ * 维护者截图(暗色主题:「快速去水印」那张表单的参考图那一格):**一个虚线框加一个加号,没有名字**,
+ * 而首/尾帧那两格写着「首帧」「Optional Load Image #127」。这一格的名字此前只有**一条**来源 ——
+ * 描述符的 `source_labels`,于是那条链断在哪儿,哪儿就是一个纯图标格,而面板上别的每一格都有字。
+ *
+ * 链子本身没坏,是**它本来就会缺**:插件只在自己的表单上给每个槽位都报名字,缺省的表单只在"名字说得出
+ * 东西"时才报(`Form.slot_labels`:一个角色一格、节点又没起过名就不报),连起来的模型这一格就是没有名字。
+ * 界面上再撞一次(表单项的 key 认得出的角色、但描述符没给这一格的名字)就是截图里那一格。
+ *
+ * 回落的顺序就是既有的那几套文案,这里**不发明**新的说法:
+ *
+ * 1. 模型给这一格的名字(`source_labels[i]`,比如「加载图像 #15」);
+ * 2. 这一格自己是「上传」那一条路时的说法(蒙版那一格并排两格:「上传」/「画一张」);
+ * 3. 角色名(`ROLE_COPY` 的 `label`:参考图、蒙版、首帧……)—— 同一份文案就在上面那行角色标题里
+ *    (见 `ai-studio/FrameSlotField` 的表头),读屏念的、悬停说明里写的也一直是它。
+ *
+ * 真面板(ai-studio/FrameSlotField)和表单预览(plugins/appForm/PreviewPanel)都走这一条链 ——
+ * 和 `slotColumns` 一样,是两侧共用的**判据**,不是某一侧的画法。
+ */
+export function slotName(role: SourceRole, names: string[], index: number, t: (key: MessageKey) => string, uploadName?: MessageKey): string {
+  const copy = ROLE_COPY[role];
+  return names[index] || (uploadName ? t(uploadName) : "") || t(copy.label);
+}
+
 export function isEmptySlot(slot: FrameSlot): boolean {
   return !slot.assetId && !slot.url.trim();
 }
