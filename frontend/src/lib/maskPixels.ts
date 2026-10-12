@@ -159,7 +159,11 @@ const clampIndex = (index: number, length: number) => (index < 0 ? 0 : index >= 
  * | --- | --- | --- | --- |
  * | 底图 | 原图 | `source-over`,alpha 1 | 这张图**原样** —— 要改的地方在它上面标出来 |
  * | 蒙版反相 | 255 − 蒙版 | `multiply`,alpha `MASK_TINT_DIM` | 没画的地方是白(乘了等于没乘),画过的地方压暗 |
- * | 蒙版着色 | 蒙版 × 蒙版色 | `lighter` | 画过的地方加一层蒙版色 —— 底图再亮也认得出 |
+ * | 蒙版着色 | 蒙版 × **调用方给的颜色** | `lighter` | 画过的地方加一层蒙版色 —— 底图再亮也认得出 |
+ *
+ * 那个颜色**不是这里的常量**:它跟主题走(浅 / 深两套),而 canvas 2D 读不到 CSS 变量 —— 所以由调用方
+ * 按主题解析好、当参数传进 `maskViewLayers`(token 的名字在 `MASK_TINT_TOKEN`,解析与缓存见
+ * `lib/themeColor`)。这个文件仍然是纯函数,node 里能单测。
  *
  * 两笔都要的原因:只压暗的话,底图本来就黑的那一块看不出来;只着色的话,底图本来就白的那一块
  * 也看不出来 —— 压暗给暗处兜底、着色给亮处兜底,两头都认得出来。
@@ -169,8 +173,16 @@ const clampIndex = (index: number, length: number) => (index < 0 ? 0 : index >= 
  * 和这条合成没有任何关系。
  */
 
-/** 要改的地方在屏幕上着的色。照片里不常出现的饱和红 —— 「这一块选中了」,快速蒙版同一种读法。 */
-export const MASK_TINT = "#e5484d";
+/**
+ * 要改的地方在屏幕上着的色是**哪一个主题 token**。
+ *
+ * 用已有的语义色 `--destructive`(「这一块要动」),浅色 `#bd383e` / 深色 `#f28d96`(值是 tokens.css
+ * 的事,不抄到这里来)。此前这里是一个写死的红 `#e5484d`:浅深两套主题同一个红,深色主题上就糊了。
+ *
+ * 这里只留**名字**:值是调用方读计算样式解析出来的(2D 上下文不认 `var()`,理由见 lib/themeColor),
+ * 再当参数交给 `maskViewLayers`。
+ */
+export const MASK_TINT_TOKEN = "--destructive";
 /** 画过的地方压暗多少:1 = 压成纯黑,0 = 不压。压掉的底图正好让上面那层蒙版色认得出来。 */
 export const MASK_TINT_DIM = 0.7;
 
@@ -184,6 +196,8 @@ export interface MaskViewLayer {
   of: "underlay" | "mask" | "maskInverse" | "maskTint";
   op: GlobalCompositeOperation;
   alpha: number;
+  /** 只有 `maskTint` 那一层有:画过的地方要着的颜色(调用方按主题解析好传进来,见 `MASK_TINT_TOKEN`)。 */
+  tint?: string;
 }
 
 /**
@@ -191,13 +205,16 @@ export interface MaskViewLayer {
  *
  * 「显示底图」关掉、或者根本没有底图(读图失败、断网)时只剩蒙版本身:一张最朴素的黑白视图,
  * 和导出的那张一模一样 —— 所以那个开关是真的有用,不是空转。
+ *
+ * `tint` 是**要改的地方在屏幕上着的色**,由调用方给(它是主题色,见 `MASK_TINT_TOKEN` / `lib/themeColor`)。
+ * 这个函数不碰 DOM:给什么颜色就用什么颜色,两套主题各调一次就是两个不同的层表。
  */
-export function maskViewLayers(view: { hasUnderlay: boolean; showUnderlay: boolean }): MaskViewLayer[] {
+export function maskViewLayers(view: { hasUnderlay: boolean; showUnderlay: boolean; tint: string }): MaskViewLayer[] {
   if (!view.hasUnderlay || !view.showUnderlay) return [{ of: "mask", op: "source-over", alpha: 1 }];
   return [
     { of: "underlay", op: "source-over", alpha: 1 },
     { of: "maskInverse", op: "multiply", alpha: MASK_TINT_DIM },
-    { of: "maskTint", op: "lighter", alpha: 1 },
+    { of: "maskTint", op: "lighter", alpha: 1, tint: view.tint },
   ];
 }
 

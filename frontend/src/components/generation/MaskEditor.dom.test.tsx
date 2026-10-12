@@ -21,7 +21,15 @@ vi.mock("@/api/domains/assets", () => ({
 import { importAsset, type Asset } from "@/api/domains/assets";
 import { PreferencesProvider } from "@/app/preferences";
 import { drawMaskView, MaskEditor } from "@/components/generation/MaskEditor";
-import { MASK_TINT_DIM, maskViewLayers } from "@/lib/maskPixels";
+import { MASK_TINT_DIM, MASK_TINT_TOKEN, maskViewLayers } from "@/lib/maskPixels";
+
+/**
+ * 蒙版色那个 token 与它的两套值。**名字写死在这里**:组件要是去问别的名字,替身不会给值,
+ * 那几条断言就红 —— 而这个名字是 tokens.css 里真有的那一个(浅 / 深各一套,见 design/tokens.css)。
+ */
+const TINT_TOKEN = "--destructive";
+const LIGHT_TINT = "#bd383e";
+const DARK_TINT = "#f28d96";
 
 /** 一份最小的 2D 上下文:记下它被要求做什么,像素一律给全 0。 */
 class FakeContext2D {
@@ -62,12 +70,25 @@ class FakeContext2D {
 
 /** 一张画布一个上下文(真环境就是这样;测试要回头查那张画布被要求画过什么)。 */
 const contexts = new WeakMap<HTMLCanvasElement, FakeContext2D>();
+/** 建过的每一个假上下文 —— 要回头找那张**不在 DOM 里**的离屏画布(见 scratchContext)。 */
+const everyContext: FakeContext2D[] = [];
 function contextOf(canvas: HTMLCanvasElement): FakeContext2D {
   const found = contexts.get(canvas);
   if (found) return found;
   const created = new FakeContext2D(canvas);
   contexts.set(canvas, created);
+  everyContext.push(created);
   return created;
+}
+
+/**
+ * 铺派生层的那张**复用**的离屏画布(见 MaskEditor 的 maskLayer):唯一被要求铺过白底的一张 ——
+ * 可见的那张只有 clearRect / drawImage,离屏蒙版铺的是黑底。
+ */
+function scratchContext(): FakeContext2D {
+  const found = everyContext.find((ctx) => ctx.calls.includes("fillRect #ffffff"));
+  if (!found) throw new Error("没有哪张画布被铺过派生层的底 —— 层表里那两层没画?");
+  return found;
 }
 
 /** 被 toBlob 导出的那张画布(见下面那条断言:它必须不是看得见的那张)。 */
@@ -99,6 +120,12 @@ afterEach(() => {
   vi.restoreAllMocks();
   //: 按平台打桩的那几条(Image / ResizeObserver)自己收回去 —— 下一条用例不该看见它们。
   vi.unstubAllGlobals();
+  //: 切主题的用例把 `<html>` 拨到了深色(真应用也是这么切的)—— 收回来。
+  document.documentElement.classList.remove("dark");
+  delete document.documentElement.dataset.theme;
+  //: 上一批用例建的那些画布连上下文一起忘掉:scratchContext() 是"在**这一条**用例建过的画布里找",
+  //: 攒着找的话它会摸到上一条用例那张离屏画布(实测:清了自己的记录、断言却打在别人那张上)。
+  everyContext.length = 0;
 });
 
 const SOURCE = { assetId: "src-1", name: "scene.png" };
@@ -231,7 +258,7 @@ describe("蒙版编辑器", () => {
     //: 假 ctx 只记下"被要求画了什么",不是真的 2D 上下文(jsdom 里也没有);类型上过一道桥。
     const draw = (showUnderlay: boolean) =>
       drawMaskView(ctx as unknown as CanvasRenderingContext2D, {
-        plan: maskViewLayers({ hasUnderlay: true, showUnderlay }),
+        plan: maskViewLayers({ hasUnderlay: true, showUnderlay, tint: LIGHT_TINT }),
         mask,
         underlay,
         scratch,
@@ -332,5 +359,129 @@ describe("蒙版编辑器", () => {
       `drawImage multiply ${MASK_TINT_DIM}`,
       "drawImage lighter 1",
     ]);
+  });
+
+  /**
+   * ## 蒙版色从主题来
+   *
+   * 维护者:「`#e5484d` 是写死的字面量(canvas 读不到 CSS 变量)—— 浅 / 深主题都同一个红 这个得改改」。
+   *
+   * jsdom 里一个 token 也读不出来(没有样式表),所以按**平台**打桩:`getComputedStyle` 照
+   * truncate.dom.test.tsx 那样**代理真身**,只把那个 token 换掉,并按 `<html>` 上有没有 `.dark` 给浅 / 深
+   * 两套值 —— 真 CSS 走的就是同一个判据(preferences.tsx 把主题写在 class 上)。**读了几次也记下来**:
+   * 「按主题解析一次、缓存起来」就是看这个数会不会跟着每一帧涨。
+   */
+  function stubThemeToken() {
+    const state = { reads: 0 };
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element: Element, pseudo?: string | null) => {
+      const style = real(element, pseudo);
+      return new Proxy(style, {
+        get(target, key) {
+          if (key === "getPropertyValue") {
+            return (property: string) => {
+              if (property !== TINT_TOKEN) return target.getPropertyValue(property);
+              state.reads += 1;
+              return document.documentElement.classList.contains("dark") ? DARK_TINT : LIGHT_TINT;
+            };
+          }
+          const value = Reflect.get(target, key);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    });
+    return state;
+  }
+
+  /**
+   * 让底图读得进来 —— 和「底图读进来」那条同一套平台打桩(jsdom 里没有版面、也没有图片解码):
+   * 盒子量出 320×240、ResizeObserver 首次观测当场回调、fetch 给一个 blob、Image 由返回的数组决定
+   * 什么时候 onload。**着色那一层只在有底图时才在层表里**,所以这一格必须先真的有一张底图。
+   */
+  function stubUnderlayPlatform(): (() => void)[] {
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(320);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(240);
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly callback: () => void) {}
+        observe() {
+          this.callback();
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])]),
+    })) as never;
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:probe");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const decoded: (() => void)[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        naturalWidth = 64;
+        naturalHeight = 64;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          decoded.push(() => this.onload?.());
+        }
+      },
+    );
+    return decoded;
+  }
+
+  /** 挂上,并等到底图进来(层表那三层都在画)。 */
+  async function mountWithUnderlay(): Promise<HTMLCanvasElement> {
+    const decoded = stubUnderlayPlatform();
+    mount();
+    const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
+    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
+    await waitFor(() => expect(decoded.length).toBeGreaterThan(0));
+    for (const fire of decoded) fire();
+    await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
+    return view;
+  }
+
+  it("主题色交给合成:着色那一层铺的就是解析出来的那个颜色,而且不是每帧去读样式", async () => {
+    //: 组件问的就是 tokens.css 里那个 token(问别的名字,替身不给值,下面三条全红)。
+    expect(MASK_TINT_TOKEN).toBe(TINT_TOKEN);
+    const reads = stubThemeToken();
+    const view = await mountWithUnderlay();
+
+    //: 画过的那一层:底铺的就是主题给的颜色,再拿蒙版乘上去(见 MaskEditor 的 maskLayer)。
+    const scratch = scratchContext();
+    expect(scratch.calls).toContain(`fillRect ${LIGHT_TINT}`);
+
+    //: 再画一帧(「反选」走的就是 paint()):颜色还是那个,而样式**一次都没再读** —— 这就是「缓存」。
+    const before = reads.reads;
+    expect(before, "取色发生在挂载那几帧里").toBeGreaterThan(0);
+    scratch.calls.length = 0;
+    screen.getByRole("button", { name: "反选" }).click();
+    expect(scratch.calls).toContain(`fillRect ${LIGHT_TINT}`);
+    expect(reads.reads).toBe(before);
+    expect(view.width).toBe(320);
+  });
+
+  it("主题切到深色:当场重画,用的是新颜色 —— 不用等用户下一次动手", async () => {
+    stubThemeToken();
+    const view = await mountWithUnderlay();
+    const scratch = scratchContext();
+    expect(scratch.calls).toContain(`fillRect ${LIGHT_TINT}`);
+
+    //: 真应用切主题写的就是这两样(app/preferences.tsx):`class="dark"` + `data-theme`。
+    scratch.calls.length = 0;
+    const visible = contextOf(view);
+    visible.calls.length = 0;
+    document.documentElement.classList.add("dark");
+    document.documentElement.dataset.theme = "dark";
+
+    await waitFor(() => expect(scratch.calls).toContain(`fillRect ${DARK_TINT}`));
+    //: 而且是**重画**:可见那张先清了一整张再按层表叠(不是别处顺手画了一下)。
+    expect(visible.calls[0]).toBe("clearRect");
+    expect(scratch.calls).not.toContain(`fillRect ${LIGHT_TINT}`);
   });
 });

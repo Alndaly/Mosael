@@ -7,8 +7,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MASK_TINT,
   MASK_TINT_DIM,
+  MASK_TINT_TOKEN,
   alphaMask,
   featherMask,
   grayscaleOf,
@@ -206,11 +206,16 @@ describe("撤销栈那份单通道", () => {
  * 看得见那张画布的层表。这条守的是维护者报的那个 bug:蒙版是不透明的,`source-over` 整张盖上去
  * 就是一块黑板 —— 底图没了、画过和没画过也分不出来(清空 / 反选之后屏幕一个样)。
  *
- * 断言的是**层表本身**(顺序、混合方式、alpha):画布那头(`drawMaskView`)只照着它画,
+ * 断言的是**层表本身**(顺序、混合方式、alpha、颜色):画布那头(`drawMaskView`)只照着它画,
  * 真实像素另有 Chromium 里的探针实测。
+ *
+ * 蒙版色从这一轮起是**调用方给的**(主题色),所以这里的两个常量是「调用方解析出来的那个颜色」——
+ * tokens.css 里 `--destructive` 的浅 / 深两个值。
  */
 describe("看得见那张画布的层表", () => {
-  const shown = () => maskViewLayers({ hasUnderlay: true, showUnderlay: true });
+  const LIGHT_TINT = "#bd383e";
+  const DARK_TINT = "#f28d96";
+  const shown = (tint = LIGHT_TINT) => maskViewLayers({ hasUnderlay: true, showUnderlay: true, tint });
 
   it("底图在最下面,蒙版的两层叠在它上面 —— 顺序反了就是那个 bug", () => {
     const plan = shown();
@@ -230,24 +235,38 @@ describe("看得见那张画布的层表", () => {
     expect(shown()[2].alpha).toBe(1);
     expect(MASK_TINT_DIM).toBeGreaterThan(0);
     expect(MASK_TINT_DIM).toBeLessThan(1);
-    expect(MASK_TINT).toMatch(/^#[0-9a-f]{6}$/);
+    //: 蒙版色是**一个主题 token 的名字**,不是一个写死的颜色 —— 值在 tokens.css(浅 / 深各一套)。
+    expect(MASK_TINT_TOKEN).toMatch(/^--[a-z-]+$/);
+  });
+
+  /**
+   * 着色那一层的颜色**就是传进来的那个**:这个函数不碰 DOM、也没有自己的红。
+   * 两种颜色各断言一次(浅色 / 深色),第二遍顺带证明它不是哪个写死的字面量。
+   */
+  it("层表上的颜色 = 调用方传进来的那个(浅色主题)", () => {
+    expect(shown(LIGHT_TINT)[2].tint).toBe(LIGHT_TINT);
+  });
+
+  it("换一个颜色(深色主题)层表跟着换 —— 颜色不是这张表里的常量", () => {
+    expect(shown(DARK_TINT)[2].tint).toBe(DARK_TINT);
+    expect(shown(DARK_TINT)[2].tint).not.toBe(shown(LIGHT_TINT)[2].tint);
   });
 
   it("「显示底图」关掉:只剩蒙版本身,一张和导出的那张一样的黑白视图", () => {
-    expect(maskViewLayers({ hasUnderlay: true, showUnderlay: false })).toEqual([
+    expect(maskViewLayers({ hasUnderlay: true, showUnderlay: false, tint: LIGHT_TINT })).toEqual([
       { of: "mask", op: "source-over", alpha: 1 },
     ]);
   });
 
   it("开关真的换了一层表 —— 空转的开关就是关掉再打开屏幕一个像素都不动", () => {
-    expect(maskViewLayers({ hasUnderlay: true, showUnderlay: true })).not.toEqual(
-      maskViewLayers({ hasUnderlay: true, showUnderlay: false }),
+    expect(maskViewLayers({ hasUnderlay: true, showUnderlay: true, tint: LIGHT_TINT })).not.toEqual(
+      maskViewLayers({ hasUnderlay: true, showUnderlay: false, tint: LIGHT_TINT }),
     );
   });
 
   it("没有底图(读图失败、断网)时也是只剩蒙版,这时开关说了不算", () => {
     for (const showUnderlay of [true, false]) {
-      expect(maskViewLayers({ hasUnderlay: false, showUnderlay })).toEqual([
+      expect(maskViewLayers({ hasUnderlay: false, showUnderlay, tint: LIGHT_TINT })).toEqual([
         { of: "mask", op: "source-over", alpha: 1 },
       ]);
     }

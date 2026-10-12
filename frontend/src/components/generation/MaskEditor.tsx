@@ -14,7 +14,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
-  MASK_TINT,
+  MASK_TINT_TOKEN,
   alphaMask,
   featherMask,
   grayscaleOf,
@@ -25,6 +25,7 @@ import {
   type MaskPixels,
   type MaskViewLayer,
 } from "@/lib/maskPixels";
+import { useThemeColor } from "@/lib/themeColor";
 
 /**
  * 蒙版编辑器:在**浏览器 canvas** 上刷出「要改的那一块」,产出一张灰度 PNG(ADR 0056 决定 3 / 5 / 7 的第二步)。
@@ -52,6 +53,13 @@ import {
  * 盖掉、画过和没画过也分不出来(维护者看到的就是「清空 / 反选之后底图没了、图变成灰的」)。
  * 可见的那张照 `maskViewLayers` 给的那份层表画(`drawMaskView`):底图原样在下面,要改的地方
  * **压暗 + 着蒙版色**叠在上面。层表和理由都写在 lib/maskPixels 里,这边只管照着画。
+ *
+ * ## 蒙版色跟主题走
+ *
+ * 那个红**不是这里的常量**:2D 上下文读不到 CSS 变量(`fillStyle = "var(--destructive)"` 是不生效的),
+ * 所以颜色按主题从 token 解析一次、缓存在 ref 里(`lib/themeColor` 的 `useThemeColor`),`paint()` 每一帧
+ * 只读那个缓存 —— 每帧一次 `getComputedStyle` 是上一轮明确避开的代价。主题一切就重画一次那一趟,
+ * 屏幕上那一块颜色立刻跟上,不用等用户下一次动手(和「底图读进来」是同一个坑,见下面那条 effect)。
  *
  * ## 读底图像素为什么要绕一圈 fetch
  *
@@ -255,7 +263,9 @@ export function drawMaskView(
     const source = layer.of === "underlay" ? underlay : mask;
     if (!source) continue;
     const canvas =
-      layer.of === "maskInverse" || layer.of === "maskTint" ? maskLayer(scratch, layer.of, source, width, height) : source;
+      layer.of === "maskInverse" || layer.of === "maskTint"
+        ? maskLayer(scratch, layer.of, source, width, height, layer.tint ?? "")
+        : source;
     if (!canvas) continue;
     ctx.globalAlpha = layer.alpha;
     ctx.globalCompositeOperation = layer.op;
@@ -274,6 +284,10 @@ export function drawMaskView(
  * - 反相:白底上 `difference` 减一次蒙版 → 255 − 蒙版;
  * - 着色:蒙版色上 `multiply` 乘一次蒙版 → 没画的地方是黑(叠上去时 `lighter` 加零 = 什么都不加),
  *   画过的地方是蒙版色。
+ *
+ * `tint` 是层表带过来的那个颜色(调用方按主题解析好,见 MASK_TINT_TOKEN)。**空串就铺黑**:黑叠上去
+ * 还是「什么都不加」,这一层等于空转 —— 屏幕上还有压暗那一笔兜着。不这么办的话,`fillStyle = ""`
+ * 会被静默忽略,底色留在上一次那个**白**(反相那趟刚铺的),画过的地方就糊成一块白斑。
  */
 function maskLayer(
   scratch: HTMLCanvasElement,
@@ -281,6 +295,7 @@ function maskLayer(
   mask: CanvasImageSource,
   width: number,
   height: number,
+  tint: string,
 ): HTMLCanvasElement | null {
   //: 尺寸跟着可见画布走(对话框换大小、dpr 变了);重设 width 会清空整张位图,本来就该重铺。
   if (scratch.width !== width || scratch.height !== height) {
@@ -291,7 +306,7 @@ function maskLayer(
   if (!ctx) return null;
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
-  ctx.fillStyle = kind === "maskInverse" ? WHITE : MASK_TINT;
+  ctx.fillStyle = kind === "maskInverse" ? WHITE : tint || BLACK;
   ctx.fillRect(0, 0, width, height);
   ctx.globalCompositeOperation = kind === "maskInverse" ? "difference" : "multiply";
   ctx.drawImage(mask, 0, 0, width, height);
@@ -341,6 +356,12 @@ export function MaskEditor({
   /** 上一步是什么(用来把滑块的连续改动并成一步)。 */
   const lastStepRef = React.useRef<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  /**
+   * 要改的地方在屏幕上着的色。**按主题解析一次**(浅深两套值),`paint()` 只读这个缓存 ——
+   * 画布不认 `var()`,而这一个字符串在每一帧里都用得上(理由与订阅见 lib/themeColor)。
+   */
+  const tint = useThemeColor(MASK_TINT_TOKEN);
+  const tintRef = React.useRef(tint);
 
   const [tool, setTool] = React.useState<Tool>("brush");
   const [radius, setRadius] = React.useState(48);
@@ -379,8 +400,9 @@ export function MaskEditor({
    * 把当前状态画到看得见的那张画布上:底图原样在下面,要改的地方压暗 + 着蒙版色叠上去。
    *
    * **只读 ref** —— 所以这个函数在整个生命周期里是同一个,几个 effect 不会因为它的身份变化而重跑。
-   * 层表由 `showUnderlayRef` 决定(「显示底图」关掉就只剩蒙版本身),合成方式全在
-   * lib/maskPixels 的 `maskViewLayers` 里,这边只负责把它交给 `drawMaskView`。
+   * 层表由 `showUnderlayRef` 决定(「显示底图」关掉就只剩蒙版本身),颜色由 `tintRef` 给(主题色,
+   * 每帧读样式是不行的 —— 见 lib/themeColor),合成方式全在 lib/maskPixels 的 `maskViewLayers` 里,
+   * 这边只负责把它交给 `drawMaskView`。
    */
   const paint = React.useCallback(() => {
     const view = viewRef.current;
@@ -389,7 +411,7 @@ export function MaskEditor({
     const underlay = underlayRef.current?.image ?? null;
     const scratch = scratchRef.current ?? (scratchRef.current = document.createElement("canvas"));
     drawMaskView(ctx, {
-      plan: maskViewLayers({ hasUnderlay: Boolean(underlay), showUnderlay: showUnderlayRef.current }),
+      plan: maskViewLayers({ hasUnderlay: Boolean(underlay), showUnderlay: showUnderlayRef.current, tint: tintRef.current }),
       mask: maskRef.current,
       underlay,
       scratch,
@@ -473,6 +495,16 @@ export function MaskEditor({
     showUnderlayRef.current = showUnderlay;
     if (open) paint();
   }, [open, showUnderlay, paint]);
+
+  /**
+   * 主题色变了就重画 —— **缓存更新之后必须自己画一次**:`paint()` 每一帧只读 `tintRef`,不会反过来
+   * 发现主题变过。少了这一趟,浅 ↔ 深切过去(或者切回来)屏幕上还是上一个主题那个红,要等用户下一次
+   * 动手才跟上 —— 和刚修过的「底图读进来要等下一次动手」是同一个坑,不再造一个。
+   */
+  React.useEffect(() => {
+    tintRef.current = tint;
+    if (open) paint();
+  }, [open, tint, paint]);
 
   React.useEffect(() => {
     if (!open) return;

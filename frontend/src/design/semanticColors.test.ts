@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { MASK_TINT_TOKEN } from "@/lib/maskPixels";
+
 const css = readFileSync(join(import.meta.dirname, "tokens.css"), "utf8");
 
 function block(selector: string): string {
@@ -88,6 +90,17 @@ describe("semantic status colors", () => {
         expect(run.toLowerCase(), other).not.toBe(token(theme, other).toLowerCase());
       }
     }
+  });
+
+  it("「要改的那一块」的蒙版色是语义 token:浅 / 深各一个**十六进制**值,而且两套不同", () => {
+    //: 维护者报的那一条:「#e5484d 是写死的字面量,浅 / 深主题都同一个红」。蒙版把它当**主题色**用
+    //: (canvas 那头解析的就是这个 token,见 lib/themeColor / lib/maskPixels 的 MASK_TINT_TOKEN),
+    //: 所以这里钉两头:它在两种主题里都定义着,而且两条值不一样 —— 同一个红就等于没跟主题走。
+    //: `token()` 只认 `#rrggbb`:写成 color-mix 那种表达式 canvas 的 fillStyle 会静默不生效。
+    const name = MASK_TINT_TOKEN.replace(/^--/, "");
+    const light = token(block(":root"), name);
+    const dark = token(block(".dark"), name);
+    expect(light.toLowerCase()).not.toBe(dark.toLowerCase());
   });
 
 });
