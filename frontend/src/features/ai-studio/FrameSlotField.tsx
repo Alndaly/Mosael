@@ -68,7 +68,25 @@ import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, slotColumns, type FrameSlot, type S
  * `min-w-0` 留着:`Truncate` 的父级得能收缩,这条进 docs/CONVENTIONS 的「字段名 / 表单名外面
  * 那一层必须能收缩」。
  */
-const TILE = "grid h-[68px] w-full min-w-0 content-center overflow-hidden rounded-lg border border-border bg-muted/40";
+export const SLOT_TILE = "grid h-[68px] w-full min-w-0 content-center overflow-hidden rounded-lg border border-border bg-muted/40";
+
+/** 一格里的「图标 + 名字」那一行 —— 面板那一格和预览那一格**共用这一份**(名字长了的截法就同一条)。
+ *
+ * 居中由**这一行自己**做(`justify-center`),不是由那一格做(见 SLOT_TILE 上头那段):这一行是那一格的网格子项、
+ * 照旧被 stretch 铺满,`Truncate` 才能拿到正确的宽度、名字长了才出省略号。短名字时多出来的空位由 `justify-center`
+ * 分给两边;名字长到放不下时这一行**不溢出**:`Truncate` 带 `min-w-0`、`flex-shrink` 是默认的 1,它一路收缩到
+ * 剩下的宽度(图标 `shrink-0` 不动),自由空间正好为零 —— 居中没有可以挪的余量,也就不会两头露出去。
+ *
+ * 图标可以没有 —— 预览里那一格按不动,没有可点的东西,就不摆那个加号。
+ */
+export function SlotTileText({ icon, name }: { icon?: React.ReactNode; name: string }) {
+  return (
+    <span className="flex min-w-0 items-center justify-center gap-1 px-1.5">
+      {icon ? <span className="shrink-0">{icon}</span> : null}
+      <Truncate>{name}</Truncate>
+    </span>
+  );
+}
 
 function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
   const qc = useQueryClient();
@@ -147,7 +165,7 @@ function Tile({
     return (
       <div className="relative" data-slot-name={name || undefined}>
         {isAudio ? (
-          <button type="button" className={`${TILE} cursor-zoom-in p-0`}>
+          <button type="button" className={`${SLOT_TILE} cursor-zoom-in p-0`}>
             {/* 和空槽那一格同一件事(见 EmptyTile):图标 + 名字这一组由**这一行自己**居中,格子照旧
                 铺满它 —— 音频那一格的名字是文件名,更长,但裁法一样:`Truncate` 收缩、省略号收尾。 */}
             <span className="flex min-w-0 items-center justify-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
@@ -159,7 +177,7 @@ function Tile({
           //: 只有一张缩略图:名字放进悬停说明(也是读屏念的名字)。
           <IconButton
             unstyled
-            className={`${TILE} relative cursor-zoom-in p-0`}
+            className={`${SLOT_TILE} relative cursor-zoom-in p-0`}
             label={named}
             onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: named })}
           >
@@ -254,7 +272,7 @@ function EmptyTile({
   onActivate: () => void;
 }) {
   const className = cn(
-    TILE,
+    SLOT_TILE,
     "cursor-pointer border-dashed font-semibold text-muted-foreground hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60",
   );
   if (!label) {
@@ -268,19 +286,13 @@ function EmptyTile({
     <button type="button" disabled={disabled} className={className} onClick={onActivate}>
       {/* 图标和名字**排一行**,而且这一组在这一格里**居中**。竖着摞的时候,两者之间那道空白比它俩加起来还高。
        *
-       * 居中由**这一行自己**做(`justify-center`),不是由那一格做(`justify-items: center` 会把这一行按
-       * max-content 定宽,截断就永远不触发 —— 见 TILE 上头那段)。这一行是那一格的网格子项、照旧被 stretch
-       * 铺满,所以它的宽度等于格子宽:`Truncate` 拿到正确的 `clientWidth`,名字长了照旧出省略号。
-       * 短名字时多出来的空位由 `justify-center` 分给两边(真 Chromium:一列那一格 288px 时 `图一` 左右
-       * 留白**各 123px**;三列并排、格子 92px 时**各 25px**)。
-       *
-       * 名字长到放不下时这一行**不溢出**:`Truncate` 带 `min-w-0`、`flex-shrink` 是默认的 1,它一路收缩到
-       * 剩下的宽度(图标 `shrink-0` 不动),自由空间正好为零 —— 居中没有可以挪的余量,也就不会两头露出去。
+       * 那一行的写法在 `SlotTileText` 里(预览那一格也用同一份):居中由**这一行自己**做(`justify-center`),
+       * 不是由那一格做(`justify-items: center` 会把这一行按 max-content 定宽,截断就永远不触发 —— 见
+       * SLOT_TILE 上头那段)。这一行是那一格的网格子项、照旧被 stretch 铺满,所以它的宽度等于格子宽:
+       * `Truncate` 拿到正确的 `clientWidth`,名字长了照旧出省略号。短名字时多出来的空位由 `justify-center`
+       * 分给两边(真 Chromium:一列那一格 288px 时 `图一` 左右留白**各 123px**;三列并排、格子 92px 时**各 25px**)。
        */}
-      <span className="flex min-w-0 items-center justify-center gap-1 px-1.5">
-        <span className="shrink-0">{icon}</span>
-        <Truncate>{label}</Truncate>
-      </span>
+      <SlotTileText icon={icon} name={label} />
     </button>
   );
 }
@@ -385,10 +397,102 @@ export function FrameSlotField({
 }
 
 /**
+ * 「对调首尾帧」那一颗箭头 —— 首尾帧那一组的**中间那一格**。
+ *
+ * 面板和预览里是同一颗:预览里按不动(预览没有可对调的东西,值都不存),面板里两边都挂上了才按得动。
+ * 两处各画一颗的话,位置(中间那一列 28px)、尺寸(24×24)、图标迟早不一样。
+ */
+export function KeyframeSwapButton({
+  canSwap,
+  onSwap,
+  groupDisabled = false,
+}: {
+  /** 两边都挂上了才换得动 —— 只挂了一边那不是对调,是搬家。 */
+  canSwap: boolean;
+  onSwap?: () => void;
+  groupDisabled?: boolean;
+}) {
+  const t = useI18n();
+  return (
+    <IconButton
+      variant="ghost"
+      size="icon"
+      className="mx-auto h-6 w-6"
+      disabled={groupDisabled || !canSwap}
+      onClick={() => onSwap?.()}
+      label={t("genSwapKeyframes")}
+      //: 「少了一张」这一句两边都写:面板里空着的时候也是这一句,预览里那一组和面板空着时长得一样。
+      //: (整组被锁住时上面已经写了原因,这里不再重复 —— `Hint` 只在 `disabled` 时看这一条。)
+      disabledReason={!groupDisabled && !canSwap ? t("genSwapKeyframesNeedsBoth") : undefined}
+    >
+      <ArrowLeftRight size={13} />
+    </IconButton>
+  );
+}
+
+/**
+ * 首尾帧那一**组**:一行标题、一句说明,然后是左右两格并排、中间一个对调箭头(模型只认首帧时只有左边一格)。
+ *
+ * 这一组有**两处**要画:生成面板的「引擎参数」和表单编辑器的预览。维护者 2026-10-12 的截图:同一张表单,
+ * 面板里是一组(「首尾帧」+ 并排两格 + 中间那个箭头),预览里却是两个各自独立的竖框 —— 而预览那一栏写的是
+ * 「用的人看到的就是这样」。所以标题、说明、并排的列宽、箭头的位置与尺寸**只有这一份**:
+ * 两处各自给的只有格子里的东西 —— 面板给的是能传图的那一格(ai-studio/FrameSlotField.Tile),
+ * 预览给的是画着名字、按不动的静态格(plugins/appForm/PreviewPanel)。
+ *
+ * 它是**纯摆样子**的:状态(挂了哪几张、能不能对调)全在调用方,所以两个界面能共用它而不搅在一起。
+ */
+export function KeyframePairFrame({
+  showLast,
+  first,
+  last,
+  hint,
+  note,
+  disabled = false,
+  swap,
+}: {
+  /** 尾帧那一格画不画:模型只认首帧时就没有右边那一格,也没有箭头(见 GenerateWorkspace 的 withLast)。 */
+  showLast: boolean;
+  first: React.ReactNode;
+  last: React.ReactNode;
+  /** 这一组的说明那句话;不传就按 showLast 取既有文案(和面板传的是同一句)。 */
+  hint?: string;
+  /** 整组被锁住时写出来的那句原因(面板:首尾帧和参考素材互斥)。 */
+  note?: string;
+  disabled?: boolean;
+  /** 对调那一下。预览不传:箭头照旧在,但是按不动(和面板里一张都没挂时同一个样子)。 */
+  swap?: { canSwap: boolean; onSwap?: () => void };
+}) {
+  const t = useI18n();
+  const hintText = hint ?? (showLast ? t("genLastFrameHint") : t("genKeyframeHint"));
+  return (
+    <div
+      //: 这一组的抓手:面板与预览里都是它(用例和探针照它比两边的结构 —— 见 docs/CONVENTIONS 那条「预览必须与真面板一致」)。
+      data-keyframe-pair={showLast ? "both" : "first"}
+      className={`grid gap-1.5 text-ui-xs font-semibold text-muted-foreground ${disabled ? "opacity-45" : ""}`}
+    >
+      <span>{showLast ? t("genKeyframes") : t("genFirstFrame")}</span>
+      {hintText && <span className="font-normal leading-[1.5] text-muted-foreground/80">{hintText}</span>}
+      {disabled && note && <span className="font-normal leading-[1.5] text-muted-foreground/80">{note}</span>}
+      {showLast ? (
+        <div data-keyframe-row="" className="grid grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-center gap-1">
+          {first}
+          <KeyframeSwapButton canSwap={swap?.canSwap ?? false} onSwap={swap?.onSwap} groupDisabled={disabled} />
+          {last}
+        </div>
+      ) : (
+        <div className="grid gap-1.5">{first}</div>
+      )}
+    </div>
+  );
+}
+
+/**
  * 首帧和尾帧并排,中间一个交换箭头。
  *
  * 它俩是一对:成片从左边那一格动到右边那一格。竖着排的时候这层关系完全看不出来,而"拍反了"
  * 又是最常见的手误 —— 所以给一个原地对调,而不是删掉两张重传。
+ *
+ * 摆样子那部分在 KeyframePairFrame 里(预览那一栏也用同一份);这里只有状态与那两格。
  */
 export function KeyframePairField({
   first,
@@ -418,65 +522,43 @@ export function KeyframePairField({
   const lastSlot = last[0] ?? EMPTY_SLOT;
   const uploadFirst = useUpload(workspaceId, (assets) => onChange({ first: [slotOf(assets[0])], last }));
   const uploadLast = useUpload(workspaceId, (assets) => onChange({ first, last: [slotOf(assets[0])] }));
-  const canSwap = !disabled && !isEmptySlot(firstSlot) && !isEmptySlot(lastSlot);
+  const bothFilled = !isEmptySlot(firstSlot) && !isEmptySlot(lastSlot);
+
+  const firstTile = (
+    <Tile
+      slot={firstSlot}
+      role="first_frame"
+      disabled={disabled || uploadFirst.isPending}
+      multiple={false}
+      onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
+      onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
+      //: 名字取不到就回落角色名 —— 名字链的写法见 slotName。
+      label={names.first || t("genFirstFrame")}
+      name={names.first}
+    />
+  );
+  const lastTile = (
+    <Tile
+      slot={lastSlot}
+      role="last_frame"
+      disabled={disabled || uploadLast.isPending}
+      multiple={false}
+      onPick={(files) => uploadLast.mutate(files.slice(0, 1))}
+      onClear={() => onChange({ first, last: [{ ...EMPTY_SLOT }] })}
+      label={names.last || t("genLastFrame")}
+      name={names.last}
+    />
+  );
 
   return (
-    <div className={`grid gap-1.5 text-ui-xs font-semibold text-muted-foreground ${disabled ? "opacity-45" : ""}`}>
-      <span>{showLast ? t("genKeyframes") : t("genFirstFrame")}</span>
-      {hint && <span className="font-normal leading-[1.5] text-muted-foreground/80">{hint}</span>}
-      {disabled && disabledReason && (
-        <span className="font-normal leading-[1.5] text-muted-foreground/80">{disabledReason}</span>
-      )}
-      {showLast ? (
-        <div className="grid grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-center gap-1">
-          <Tile
-            slot={firstSlot}
-            role="first_frame"
-            disabled={disabled || uploadFirst.isPending}
-            multiple={false}
-            onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
-            onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
-            label={names.first || t("genFirstFrame")}
-            name={names.first}
-          />
-          <IconButton
-            variant="ghost"
-            size="icon"
-            className="mx-auto h-6 w-6"
-            disabled={!canSwap}
-            onClick={() => onChange({ first: last, last: first })}
-            label={t("genSwapKeyframes")}
-            //: 整组被锁住时上面已经写了原因;这里只说「少了一张」这一种。
-            disabledReason={!disabled && !canSwap ? t("genSwapKeyframesNeedsBoth") : undefined}
-          >
-            <ArrowLeftRight size={13} />
-          </IconButton>
-          <Tile
-            slot={lastSlot}
-            role="last_frame"
-            disabled={disabled || uploadLast.isPending}
-            multiple={false}
-            onPick={(files) => uploadLast.mutate(files.slice(0, 1))}
-            onClear={() => onChange({ first, last: [{ ...EMPTY_SLOT }] })}
-            label={names.last || t("genLastFrame")}
-            name={names.last}
-          />
-        </div>
-      ) : (
-        <div className="grid gap-1.5">
-          <Tile
-            slot={firstSlot}
-            role="first_frame"
-            disabled={disabled || uploadFirst.isPending}
-            multiple={false}
-            onPick={(files) => uploadFirst.mutate(files.slice(0, 1))}
-            onClear={() => onChange({ first: [{ ...EMPTY_SLOT }], last })}
-            //: 只有首帧这一格时(有些模型只认首帧)也照上面那一支回落 —— 名字取不到就不是"没有名字的那一格"。
-            label={names.first || t("genFirstFrame")}
-            name={names.first}
-          />
-        </div>
-      )}
-    </div>
+    <KeyframePairFrame
+      showLast={showLast}
+      first={firstTile}
+      last={lastTile}
+      hint={hint}
+      note={disabledReason}
+      disabled={disabled}
+      swap={{ canSwap: bothFilled, onSwap: () => onChange({ first: last, last: first }) }}
+    />
   );
 }

@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Truncate } from "@/components/ui/truncate";
-import { appFormFields, type AppField } from "@/lib/appFormFields";
+import { KeyframePairFrame, SLOT_TILE, SlotTileText, slotName } from "@/features/ai-studio/FrameSlotField";
+import { appFormFields, type AppField, type AppFieldPair } from "@/lib/appFormFields";
 import { defaultDraft, previewOption, type FormDraft } from "@/features/plugins/workflowAppForm";
 import {
   appForm,
@@ -18,8 +19,10 @@ import {
   sizeOptions,
   sourceLabels,
   sourceLimit,
+  supportsParameter,
 } from "@/lib/generationCapabilities";
 import { ROLE_COPY, slotColumns, type SourceRole } from "@/lib/sourceFrames";
+import { cn } from "@/lib/utils";
 
 type Translate = ReturnType<typeof useI18n>;
 
@@ -68,6 +71,27 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
   const parameters = new Map(declaredParameters(option).map((parameter) => [parameter.key, parameter]));
   //: 表上的顺序,就是描述符 `form` 的顺序(previewOption 照草稿拼的)—— 表上没有的格子这里也不画。
   const fields = appFormFields(option, appForm(option)?.items ?? []);
+  //: 首帧、尾帧是**一个控件里的两格**(见 lib/appFormFields 的 AppFieldPair):表上两格都在时,画出来仍然是一组 ——
+  //: 和面板 appFormPanel 的 `drawnPairs` 同一条规矩:先出现的那一格画出来,后一格跳过。
+  const drawnPairs = new Set<AppFieldPair>();
+  /**
+   * 尾帧那一格画不画 —— 和面板**同一条判据**(GenerateWorkspace.keyframesField 的 `withLast`:
+   * `kind === "video" && supportsParameter(model, "last_frame")`),只是"哪个模型"不同:面板问引擎描述符,
+   * 预览手里那份是照草稿拼的(`parameter_keys` 就是表上的项)。于是:
+   *
+   * - 「模型只认首帧」那种工作流:两边都只画左边一格(没有箭头)—— 这正是 showLast 管的那件事;
+   * - 「表上只留了首帧、工作流里其实有尾帧」:面板照描述符**照旧画两格**(多出一格表上没有的),
+   *   预览不画 —— 预览这份描述符里没有尾帧,而且「表上没有的格子这里不画」是这一栏自己的规矩。
+   *   两种都说得通,选了跟**表**一致的那一种(见报告:这一条是面板那一侧多画一格)。
+   */
+  const showLast = option.kind === "video" && supportsParameter(option, "last_frame");
+  /** 这一项是不是首尾帧那一组里的(视频模型上的首帧 / 尾帧):是就成对画,不是就照旧一格一格画。 */
+  const frameRole = (field: AppField): SourceRole | null => {
+    if (field.role !== "first_frame" && field.role !== "last_frame") return null;
+    //: 面板按角色 + `kind === "video"` 挑控件(GenerateWorkspace.sourceField):不是视频就照旧一格一格画。
+    return field.pair === "keyframes" || option.kind === "video" ? field.role : null;
+  };
+  const frames = new Set(fields.filter((field) => frameRole(field)).map((field) => field.key));
   const control = (field: AppField) => {
     if (field.kind === "prompt") {
       return (
@@ -87,6 +111,20 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
     }
     if (field.kind === "source") {
       const role = field.role as SourceRole;
+      if (frameRole(field)) {
+        //: 一组只画一次:表上两格都在时画在**先出现**的那一格的位置(后一格跳过),和面板那一侧一样。
+        if (drawnPairs.has("keyframes")) return null;
+        drawnPairs.add("keyframes");
+        return (
+          <KeyframesPreview
+            option={option}
+            showLast={showLast}
+            t={t}
+            first={fields.find((one) => one.role === "first_frame")}
+            last={fields.find((one) => one.role === "last_frame")}
+          />
+        );
+      }
       return <PreviewSlots role={role} t={t} names={sourceLabels(option, role)} count={sourceLimit(option, role)} />;
     }
     if (field.kind === "size") {
@@ -140,12 +178,62 @@ function AppPreview({ option, title, note }: { option: GenerationOption; title: 
       ) : null}
       {fields.map((field) => {
         const drawn = control(field);
-        return drawn ? (
-          <div key={field.key} data-app-field={field.key}>
-            {drawn}
-          </div>
-        ) : null;
+        if (!drawn) return null;
+        //: 成对的那一组**自己**给两格各标一个 `data-app-field`(见 KeyframesPreview):外面再套一层的话,
+        //: 首帧那一格就成了尾帧那一格的祖先,「这一格是表上的第几项」就分不出来了。
+        return frames.has(field.key)
+          ? <React.Fragment key={field.key}>{drawn}</React.Fragment>
+          : <div key={field.key} data-app-field={field.key}>{drawn}</div>;
       })}
+    </div>
+  );
+}
+
+/**
+ * 预览里的首尾帧 —— **一组**,和面板里那一组是同一个壳(ai-studio/FrameSlotField.KeyframePairFrame):
+ * 一行标题(「首尾帧」)、一句说明、左右两格并排、中间一个对调箭头。
+ *
+ * 此前这里是「一项一格」:同一对东西成了两个各自独立的竖框,既没并排、也没有那个箭头(维护者 2026-10-12 的截图),
+ * 而这一栏写的是「用的人看到的就是这样」。现在两边共用同一个壳 —— 标题、说明、并排的列宽、箭头的位置与尺寸
+ * 都是同一份代码画出来的,预览里再摆错也摆不出第二种样子。
+ */
+function KeyframesPreview({
+  option,
+  showLast,
+  first,
+  last,
+  t,
+}: {
+  option: GenerationOption;
+  /** 尾帧那一格画不画(和面板同一条判据,见 AppPreview)。 */
+  showLast: boolean;
+  /** 表上的首帧 / 尾帧那两项(表上可能只留了一格 —— 面板照旧画两格,见 showLast)。 */
+  first?: AppField;
+  last?: AppField;
+  t: Translate;
+}) {
+  return (
+    <KeyframePairFrame
+      showLast={showLast}
+      first={<KeyframesTile field={first} name={slotName("first_frame", sourceLabels(option, "first_frame"), 0, t)} />}
+      last={<KeyframesTile field={last} name={slotName("last_frame", sourceLabels(option, "last_frame"), 0, t)} />}
+    />
+  );
+}
+
+/**
+ * 预览里的一格首帧 / 尾帧:虚线框 + 名字 —— 和面板那一格**同一个壳**(`SLOT_TILE`)与同一行写法(`SlotTileText`),
+ * 名字也走**同一条链**(`slotName` ← 描述符的 `source_labels`:有节点名就写节点名,取不到才回落角色名),
+ * 长了同样出省略号。只有一点不同:这里按不动 —— 预览不存值,没有可传的图,也就不摆那个加号。
+ */
+function KeyframesTile({ field, name }: { field?: AppField; name: string }) {
+  return (
+    <div data-app-field={field?.key}>
+      <ul className="m-0 grid list-none p-0">
+        <li className={cn(SLOT_TILE, "border-dashed")}>
+          <SlotTileText name={name} />
+        </li>
+      </ul>
     </div>
   );
 }
