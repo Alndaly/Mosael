@@ -14,6 +14,12 @@
 Python 侧的值用 import 拿(那是真正跑的那个);TS/Electron 侧没有 Python 能直接执行的入口,
 所以按契约里记的 `symbol` 从源码里取字面量。取不到就报错,**不是跳过** —— 一条悄悄跳过的
 契约测试比没有更糟。
+
+`protocol` 那一节是**宿主 ↔ 插件**那套形状(表单的几项上限、`shared_tables` 的三个名字)。
+它不是「谁下发谁」:宿主先查一遍、插件写进去之前再查一遍,而插件在沙盒子进程里跑、
+连 `contracts/` 都读不到 —— 两边各有一份同样的数字,谁也看不见谁。错开时同样一声不吭:
+多出来的项被宿主静静截掉(而插件已经在界面上说过「这张表单有 24 项」),或者插件替宿主
+拒掉一项它其实收得下的东西。
 """
 
 from __future__ import annotations
@@ -53,7 +59,14 @@ def _as_value(literal: str) -> object:
     text = literal.strip()
     if text.startswith(('"', "'")):
         return text[1:-1]
+    if text.endswith((",",)):
+        text = text[:-1].rstrip()
     text = text.replace("_", "")  # TS 里的 10_000
+    #: 一组值:`("seed", "size", "runs")`、`{"seed", "size"}`、`["seed", "size"]` —— 三侧写法不同、
+    #: 说的是同一张表,所以比之前先摊成列表(顺序不当判据,下面按集合比)。
+    if text[:1] in "([{" and text[-1:] in ")]}":
+        inner = text[1:-1].strip()
+        return [one.strip().strip("\"'") for one in inner.split(",") if one.strip()]
     for cast in (int, float):
         try:
             return cast(text)
@@ -76,6 +89,47 @@ def test_every_runtime_agrees(constant: dict) -> None:
         path = REPO / impl["location"]
         assert path.is_file(), f"{constant['name']}:契约记的位置不存在了 —— {impl['location']}"
         actual = _as_value(_literal_from_source(path, impl["symbol"]))
+        assert actual == expected, (
+            f"{constant['name']} 在 {impl['runtime']}({impl['location']})里是 {actual!r},"
+            f"契约说是 {expected!r}\n  为什么要紧:{constant['why']}"
+        )
+
+
+def _protocol() -> list[dict]:
+    return _load().get("protocol", [])
+
+
+def _protocol_ids() -> list[str]:
+    return [item["name"] for item in _protocol()]
+
+
+def test_有协议这一节() -> None:
+    """宿主和插件之间那套形状此前**一条都不在契约里**:两边各有一份同样的数字,谁也看不见谁。
+
+    这一节和 `constants` 分开写,不是因为它们长得不一样,而是因为**读者不一样**:`constants`
+    是「两个运行时里同一件事」,这里是「宿主和它拉起来的那个子进程之间同一件事」—— 而插件在
+    沙盒里跑,是这份仓库里唯一读不到 `contracts/` 的运行时。
+    """
+    assert len(_protocol()) >= 8, "protocol 一节空了或缩水了 —— 那正是这一节要防的"
+
+
+@pytest.mark.parametrize("constant", _protocol(), ids=_protocol_ids())
+def test_宿主和插件说的是同一件事(constant: dict) -> None:
+    if "values" in constant:
+        expected: object = [str(one) for one in constant["values"]]
+    else:
+        expected = constant["value"]
+    for impl in constant["implementations"]:
+        path = REPO / impl["location"]
+        assert path.is_file(), f"{constant['name']}:契约记的位置不存在了 —— {impl['location']}"
+        actual = _as_value(_literal_from_source(path, impl["symbol"]))
+        if isinstance(expected, list):
+            #: 一组值:插件的元组、宿主的 set、契约里的数组说的是同一张表 —— 按集合比,顺序不当判据。
+            assert isinstance(actual, list) and sorted(map(str, actual)) == sorted(expected), (
+                f"{constant['name']} 在 {impl['location']} 的 {impl['symbol']} 里是 {actual!r},"
+                f"契约说是 {expected!r}\n  为什么要紧:{constant['why']}"
+            )
+            continue
         assert actual == expected, (
             f"{constant['name']} 在 {impl['runtime']}({impl['location']})里是 {actual!r},"
             f"契约说是 {expected!r}\n  为什么要紧:{constant['why']}"

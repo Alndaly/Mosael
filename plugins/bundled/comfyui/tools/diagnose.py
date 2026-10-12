@@ -62,8 +62,10 @@ _EXECUTION_FAILED = re.compile(r"(?:ComfyUI 执行失败|ComfyUI execution faile
 V3_MATCH, V3_COMBO = "COMFY_MATCHTYPE_V3", "COMFY_DYNAMICCOMBO_V3"
 #: AUTOGROW 的判定在 graph.required_input_present(graph.py)—— 这里只用它的类型名做展示分支。
 V3_GROW = graph.AUTOGROW_TYPE
-#: 读素材的那几种上传控件(LoadImage 的 image……):值是 input 目录里的文件名
-_UPLOADS = ("image_upload", "video_upload", "audio_upload", "animated_image_upload")
+#: 读素材的那几种上传控件(LoadImage 的 image……):值是 input 目录里的文件名。
+#: **从 `graph` 那张唯一的表取**,不再抄一遍 —— 此前这里和 `convert` 各有一份,而 `convert` 那份少了
+#: `audio_upload`,于是同一张图「缺什么」和「能填什么」两处说的不是一件事(见 graph.UPLOAD_MEDIA_FLAGS)。
+_UPLOADS = graph.UPLOAD_FLAGS
 
 
 def _is_link(value: Any, api: dict[str, Any]) -> bool:

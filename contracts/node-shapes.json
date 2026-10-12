@@ -1,0 +1,118 @@
+{
+  "contract": "node-shapes",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "「一个节点号长什么样」—— 跨语言、跨进程的四种形状。同一个字符串要在 ComfyUI 工作流的文件里、执行图里、画布上、标记桥上、智能体回复里说的是同一件事,而正则本身各写一份(沙盒里的插件读不到这个仓库)。所以这里放的不是文档,是**两侧测试跑同一份用例**:改一侧的正则而没改另一侧,两侧同时红。",
+  "notes": [
+    "`pattern` 是唯一的判据文本。四处实现各带一份正则,由各侧的测试断言「我这一份(去掉首尾的 `^` / `$`)== 契约那一串」,再逐条跑下面的用例 —— 这就是「两侧必然同时红」的机制。锚是各自的写法(`workflow_library._ANY_NODE` 不带锚、调用点用 `fullmatch`;桥的 `ANY_NODE` 带),不影响任何一条用例。",
+    "**为什么不让实现自己去读这个文件**:`contracts/` 眼下**不进任何产物**(PyInstaller 的 `--add-data` 没有它,electron-builder 的 `files` 也没有它)—— 运行时读它得先把整份契约搬进后端和 Electron 包里,那是打包形状的改动,不属于「把判据收进契约」。仓库里已有的十几份契约都是这个分工:**实现带字面量,各侧测试读同一份语料**。",
+    "每条用例都点名它属于哪条形状,不是笼统的「合法 / 非法」:`12` 是节点号、不是节点路径,所以它在 `subgraph_path` 的 `bad` 里不代表谁错了(见 `divergence`)。",
+    "`divergence` 那一段记的是**既成事实**,不是理想答案。改判据的人必须先读它。"
+  ],
+  "shapes": [
+    {
+      "name": "any_node",
+      "pattern": "\\d{1,9}(?::\\d{1,9})*",
+      "meaning": "**文件 / 执行图里的节点号**:根图上的节点(`12`),或者从根图往里走的路径(`12:5`、`12:5:3`)。非负,每一段 1–9 位,段数不限。",
+      "why": "这是全链唯一一套节点号形状:应用表单里那一项的 `node`、「结果取自」的每一项、插件 `app_marks` 交回的 `marks.nodes` 的键、过桥写进画布的那份标记,都按它。不一致的后果是**整条链断在桥上** —— 桥曾经只认顶层节点号,表单里一有子图项就报 `marks.nodes keys must be top-level node ids`,而维护者那张表单 18 项里有 6 项是子图里的。",
+      "cases": {
+        "ok": ["12", "12:5", "12:5:3", "105:9", "0", "999999999"],
+        "bad": ["abc", "12:", "12:5:", "12::5", "-3", "9999999999", "12.5", " 12", "12 ", "", "12:5:3:", ":12", "$a", "12;-alert(1)"],
+        "note": "用例都短(最长的 `12:5:3`):宿主的 HTTP 入口另外限 `node` 最长 20 字,而**这一节量的是形状**。深的那一档在 `subgraph_path` / `canvas_path` 里(`subgraphs.MAX_DEPTH = 16` 那一条),那边没有这一层入参长度。"
+      }
+    },
+    {
+      "name": "canvas_node",
+      "pattern": "-?\\d{1,10}",
+      "meaning": "**画布上那一层图里的**单个节点号。可以是负的:ComfyUI 画布上子图自己的输入 / 输出口是负数(`-10` 是子图输入口、`-20` 是输出口;见 `subgraphs.py` 的 `_SUBGRAPH_INPUT` / `_SUBGRAPH_OUTPUT`)。",
+      "why": "定位(`locate`)走的是画布上那一层,不是文件里的执行节点号 —— 和 `any_node` **不是同一个空间**,别混用:负号只在画布上那一层成立,写进表单或标记里就是错的。",
+      "cases": {
+        "ok": ["12", "-3", "0", "-0", "459", "9999999999"],
+        "bad": ["12:5", "abc", "12.5", " 12", "12 ", "", "+3", "--3"]
+      }
+    },
+    {
+      "name": "subgraph_path",
+      "pattern": "-?\\d{1,10}(?::\\d{1,10}){1,16}",
+      "meaning": "**从根图往里走的节点路径,至少两层**:`12:5` 是根图 12 号那个子图里面的 5 号。最多 16 个冒号段(共 17 层)。**只有第一段可以带负号** —— 往里走的每一段是子图定义里的节点号,那些是正的。",
+      "why": "它**故意不收**裸的 `12`(旁边另有一份 `canvas_node` 管那一层里的单号):`locate` 的 `node` 要么是画布上那一层的一个号,要么是从根图往里走的一条路径,两样各有各的判据,合成一份就分不出「根图上的 12」和「只有一层的路径」。16 段是 ADR 0042 §6 定的「最多 16 层」。",
+      "cases": {
+        "ok": ["12:5", "12:5:3", "459:12:5", "-3:5", "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15:16"],
+        "bad": ["12", "-3", "12:", "12::5", "12:-5", "-3:-5", "abc", "12.5", " 12", "12 ", "", "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15:16:17:18:19:20"],
+        "note": "`12` 拒、`12:5` 收,是这一条的目的;`ok` 最后那条正好 16 段(收),`bad` 最后那条 20 段(拒)。`12:-5` / `-3:-5` 在 `bad` 里钉的是「负号只在第一段」。"
+      }
+    },
+    {
+      "name": "canvas_path",
+      "pattern": "-?\\d{1,10}(?::\\d{1,10}){0,16}",
+      "meaning": "**画布上的节点引用**:`12`(根图这一层)或者 `12:5`(往里走),最多 16 个冒号段;只有第一段可以带负号。",
+      "why": "它是 `canvas_node` 与 `subgraph_path` 的**并集**:画布上的引用本来就允许「这一层的 `-3`」和「往里走的 `12:5`」两种写法,所以它比 `subgraph_path` 宽一格 —— **`{0,16}` vs `{1,16}`,只在下界上**,深度上限两侧相同。这一格差异是实测存在的既成事实,契约只把它摊到用例上(见 `divergence`)。",
+      "cases": {
+        "ok": ["12", "-3", "12:5", "459:451", "-3:5", "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15:16"],
+        "bad": ["12:", "12::5", "12:-5", "-3:-5", "abc", "12.5", " 12", "12 ", "", "1:2:3:4:5:6:7:8:9:10:11:12:13:14:15:16:17:18:19:20"],
+        "note": "和 `subgraph_path` 名义上只差 `12` / `-3` 那两条(见 `divergence`);这一组用例是**照着这个形状自己的边界**列的:`459:451` 是宿主那条链上真用到的写法,深度那两条钉住上限。"
+      }
+    }
+  ],
+  "divergence": {
+    "title": "`{0,16}` vs `{1,16}`:谁更宽、谁在用",
+    "finding": "**存在,而且只在「只有一段」这一点上。** `canvas_path`(`{0,16}`)收 `12` 和 `-3`;`subgraph_path`(`{1,16}`)拒它们。深度上限两侧相同(16 个冒号段),所以「更宽」说的是**下界**,不是上限。两处对「负号只在第一段」的看法一致 —— 那个维度上没有差异。",
+    "wider": "canvas_path",
+    "in_use": [
+      "canvas_path 的三处 —— `plugins/bundled/comfyui/tools/canvas_edit.py` 的 `_PATH`(没给 `graph` 时那个节点指哪一层)、`backend/app/domain/workbench_agent.py` 的 `_NODE_REF`(`comfy_locate` 的 `node`)、`frontend/src/features/plugins/workbench/nodeRefs.ts` 的 `NODE_REF`(助手回复里的 `#12`)。三处说的都是「画布上的引用」,而 `#12` 就是根图节点 —— 拒了它才是错的。",
+      "subgraph_path 的一处 —— `electron/ipc-contract.cjs` 的 `NODE_PATH`。它只在 `locate` 上、和子图 id 二选一时用,管的是「路径」那一半;不带冒号的单号由同一个文件里的 `CANVAS_NODE` 收。所以**桥那一侧不是漏了一条**:两条正则合起来覆盖的和 `canvas_path` 一样,只是它那边分成了两份。",
+      "深度上限 16 还有第四处背书:`plugins/bundled/comfyui/tools/subgraphs.py` 的 `MAX_DEPTH = 16`(子图递归最多 16 层),而画布摘要、应用表单都是照它枚举节点的 —— 第 17 层根本不是画布上叫得出的位置。"
+    ],
+    "decision": "**不改语义。** `locate` 的 `node` 要么是画布上那一层的一个号(负号在这里合法且必需,子图输入口就是 `-10`),要么是从根图往里走的一条路径;合成一份正则就分不出这两种写法。差异写进用例,两侧读同一份 —— 谁想把它们合成一个正则,先得把这一段读完。"
+  },
+  "implementations": [
+    {
+      "shape": "any_node",
+      "runtime": "python",
+      "location": "backend/app/domain/workflow_library.py",
+      "symbol": "_ANY_NODE",
+      "note": "「同步到画布」那条链的宿主一侧:表单里那一项的 `node`、`results` 的每一项、插件交回的 `marks.nodes` 的键。"
+    },
+    {
+      "shape": "any_node",
+      "runtime": "electron",
+      "location": "electron/ipc-contract.cjs",
+      "symbol": "ANY_NODE",
+      "note": "同一个键过桥时再查一遍。它曾经只认顶层节点号 —— 那是整条链断掉的那一次。"
+    },
+    {
+      "shape": "canvas_node",
+      "runtime": "electron",
+      "location": "electron/ipc-contract.cjs",
+      "symbol": "CANVAS_NODE",
+      "note": "`locate` / 改图操作里「画布上那一层的单号」;`ANY_NODE` 的兄弟,不是同一个空间。"
+    },
+    {
+      "shape": "subgraph_path",
+      "runtime": "electron",
+      "location": "electron/ipc-contract.cjs",
+      "symbol": "NODE_PATH"
+    },
+    {
+      "shape": "canvas_path",
+      "runtime": "python",
+      "location": "backend/app/domain/workbench_agent.py",
+      "symbol": "_NODE_REF",
+      "note": "`comfy_locate` 的 `node`。"
+    },
+    {
+      "shape": "canvas_path",
+      "runtime": "python-plugin",
+      "location": "plugins/bundled/comfyui/tools/canvas_edit.py",
+      "symbol": "_PATH",
+      "note": "`_Planner.layer_arg` / `node` 的节点引用。**这一处读不到契约**:插件在沙盒子进程里跑,宿主管的是它的 stdio 和几个环境变量 —— 所以它带字面量,由测试锁住。"
+    },
+    {
+      "shape": "canvas_path",
+      "runtime": "frontend",
+      "location": "frontend/src/features/plugins/workbench/nodeRefs.ts",
+      "symbol": "NODE_REF",
+      "note": "它把契约的 `pattern` **嵌进**自己的模式里(外面还有 `#` 前缀和「别把代码块 / 网址 / 连着单词的算进来」那几层),所以断言的是「里面那一截就是契约那一串」,不是整条相等。"
+    }
+  ]
+}

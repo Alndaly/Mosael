@@ -1030,11 +1030,16 @@ def test_工作台_画布上这张的应用表单_没有路径和改动时间_�
     assert len(_ops()) == calls
 
 
-#: 一个节点号的形状:`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层(ADR 0042 §6)。
-#: **和 electron 桥 `electron/ipc-contract.cjs` 的 `ANY_NODE` 是同一套判据** —— 跨语言共用不了一份正则,就共用同一份用例:
-#: TS 那边是 `electron/ipc-contract.test.ts` 的 `NODE_KEYS_OK` / `NODE_KEYS_BAD`(改判据时这两份一起改)。
-NODE_KEYS_OK = ["12", "12:5", "12:5:3"]
-NODE_KEYS_BAD = ["abc", "12:", "12:5:", "12::5", "-3", "9999999999", "12.5", " 12", "12 "]
+#: 一个节点号的形状(`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层,ADR 0042 §6)。
+#: 用例**不在这里抄**:它住在 `contracts/node-shapes.json` 的 `any_node`,宿主 `_ANY_NODE`
+#: (`backend/app/domain/workflow_library.py`)和桥的 `ANY_NODE`(`electron/ipc-contract.cjs`)说的都是它,
+#: 而两侧的跑手读的是同一份文件(这边 + `electron/ipc-contract.test.ts`)。
+#:
+#: **抄一份的代价是「改判据」变成两处编辑,而两边都能各自变绿** —— 这正是桥曾经只认顶层节点号、而宿主
+#: 早就在收子图节点号的那次。跨语言共用不了一份正则,就共用同一份用例。
+_NODE_SHAPES = json.loads((Path(__file__).resolve().parents[2] / "contracts" / "node-shapes.json").read_text(encoding="utf-8"))
+NODE_KEYS_OK = next(one for one in _NODE_SHAPES["shapes"] if one["name"] == "any_node")["cases"]["ok"]
+NODE_KEYS_BAD = next(one for one in _NODE_SHAPES["shapes"] if one["name"] == "any_node")["cases"]["bad"]
 
 
 def test_工作台_同步标记的节点号_子图里的和根图上的一样收_不成样子的两头都拒(library) -> None:
@@ -1049,7 +1054,6 @@ def test_工作台_同步标记的节点号_子图里的和根图上的一样收
     for key in NODE_KEYS_OK:
         response = client.post(url, json={"content": CANVAS, "forms": [{"items": [{"node": key, "input": "steps"}]}]})
         assert response.status_code == 200, f"{key} 是一个节点号(子图里的照样放行):{response.text}"
-        #: 插件交回同一个键:宿主也只按这一套判据规整,原样交给界面去改画布
         back = client.post(url, json={"content": {**CANVAS, "keys": [key]}})
         assert back.status_code == 200 and list(back.json()["nodes"]) == [key], back.text
         marked = client.post(url, json={"content": CANVAS, "results": [key]})

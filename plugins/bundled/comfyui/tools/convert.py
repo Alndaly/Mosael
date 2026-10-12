@@ -32,6 +32,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+import subgraphs
 from lines import ComfyError, say
 
 #: 前端节点的 mode:2 = 静音(不跑,下游断开)、4 = 旁路(不跑,下游从它的输入直通)。
@@ -62,8 +63,13 @@ WIDGET_TYPES = frozenset({
 })
 #: 老规矩:名字叫这两个的 INT 没写 control_after_generate 也带「生成后怎样」那一格(useIntWidget)。
 _LEGACY_SEEDS = ("seed", "noise_seed")
-#: 这几种选项说明一个下拉读的是 input 目录里的文件:前端在必填输入之后给它加一个上传按钮(uploadImage.ts)。
-_MEDIA_UPLOAD_OPTIONS = ("image_upload", "video_upload", "animated_image_upload")
+#: 这几种选项说明一个下拉读的是 input 目录里的文件:前端在必填输入之后给它加一个**上传按钮**。
+#: **少了 `audio_upload` 是有意的**(见下面的 `_AUDIO_UPLOAD`):音频那一格前端加的是一个播放器 widget,
+#: 排在必填输入之后的另一件事。四处标记的**全集**在 `graph.UPLOAD_MEDIA_FLAGS`(`graph` import 着这个模块,
+#: 所以这里不能反过来 import 它)—— 由 `backend/tests/test_comfyui_upload_markers.py` 钉住这两者的关系。
+_UPLOAD_BUTTON_OPTIONS = ("image_upload", "video_upload", "animated_image_upload")
+#: 同上的第四种:它也说明这一格在读 input 目录里的文件(值一样是文件名),只是前端给它的是播放器。
+_AUDIO_UPLOAD = "audio_upload"
 #: 前端给这些音频节点加一个播放器 widget(uploadAudio.ts),同样排在必填输入之后。
 _AUDIO_UI_CLASSES = frozenset({"LoadAudio", "SaveAudio", "PreviewAudio", "SaveAudioMP3", "SaveAudioOpus",
                                "SaveAudioAdvanced"})
@@ -132,7 +138,15 @@ INPUT_LABELS = "input_labels"
 #: 子图输入口 / 输出口的节点 id 缺省值(前端的 SUBGRAPH_INPUT_ID / SUBGRAPH_OUTPUT_ID)。
 _SUBGRAPH_INPUT, _SUBGRAPH_OUTPUT = -10, -20
 #: 子图最多套几层(一个子图里又放了它自己 —— 坏文件 —— 不该让转换转到栈溢出)。
-_MAX_DEPTH = 32
+#:
+#: **就是 `subgraphs.MAX_DEPTH`(16),不是另一个数。** 这里的 32 是第二份独立的实现:两处量的是同一件事
+#: (「一张图里的子图定义往下能走几层」),`convert` 这一份管采集定义与展开,`subgraphs` 那一份管画布摘要、
+#: 应用表单和路径定位。两份值不同时**不会有任何报错**:`subgraphs` 在 16 层停,`convert` 走到 32,
+#: 于是 17 层往里的那些定义里,画布摘要看不见、应用表单放不进去、`12:5:3…` 也指不到(ADR 0042 §6 的 16 层、
+#: 以及三处节点路径正则的 `{0,16}`,说的都是 16)—— 而转换照样把它们展开发给 ComfyUI。
+#: 值取 16 而不是 32,是因为**16 是那个已经被三处实现认下来的上限**(画布摘要、表单、路径判据),
+#: 而转换是链路里最下游、该跟着它们走的那一环。
+MAX_DEPTH = subgraphs.MAX_DEPTH
 
 
 def is_api_graph(graph: Any) -> bool:
@@ -298,7 +312,7 @@ class _Converter:
         self.api: dict[str, Any] = {}
 
     def _collect_definitions(self, graph: dict[str, Any], depth: int = 0) -> None:
-        if depth > _MAX_DEPTH:
+        if depth > MAX_DEPTH:
             return
         for definition in ((graph.get("definitions") or {}).get("subgraphs") or []):
             if isinstance(definition, dict) and definition.get("id"):
@@ -333,7 +347,7 @@ class _Converter:
                     ))
 
     def _walk(self, scope: _Scope, depth: int) -> None:
-        if depth > _MAX_DEPTH:
+        if depth > MAX_DEPTH:
             raise ComfyError(say(self.locale, "子图套得太深(或者套了它自己)", "Subgraphs are nested too deeply (or contain themselves)"))
         for raw in scope.nodes.values():
             node = _Node(scope, raw)
@@ -509,7 +523,7 @@ class _Converter:
 
     def _uploads(self, definition: Any) -> bool:
         options = self._options(definition)
-        return any(options.get(flag) for flag in _MEDIA_UPLOAD_OPTIONS) or bool(options.get("audio_upload"))
+        return any(options.get(flag) for flag in _UPLOAD_BUTTON_OPTIONS) or bool(options.get(_AUDIO_UPLOAD))
 
     @staticmethod
     def _v2_combo_options(definition: Any) -> list[str] | None:

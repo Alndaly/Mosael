@@ -68,8 +68,14 @@ _PREVIEW_OUTPUT_TYPES = frozenset({"PreviewImage", "PreviewAudio"})
 
 #: ComfyUI 给「这个下拉是让人传文件的」打的标记 → 传上来的是什么素材。**前端就是照它给下拉旁边加一个上传按钮**
 #: (`image_upload` 那套),所以自定义节点包不必逐个登记到下面的表里(见 _loader_of)。
-_UPLOAD_MEDIA: dict[str, str] = {"image_upload": "image", "video_upload": "video", "audio_upload": "audio",
-                                  "animated_image_upload": "image"}
+#:
+#: **这是这四种标记唯一的表。** 此前它有三份、而且已经漂移:`convert` 那份少了 `audio_upload`(它把「传文件」
+#: 和「音频节点多一个播放器」分开是对的,只是表本身另抄了一份)、`diagnose` 那份又抄了一遍四元组。
+#: 现在后两处都从下面两个名字取:`UPLOAD_FLAGS`(四种都算传文件)和 `UPLOAD_MEDIA_FLAGS`(带素材类型)。
+UPLOAD_MEDIA_FLAGS: dict[str, str] = {"image_upload": "image", "video_upload": "video", "audio_upload": "audio",
+                                      "animated_image_upload": "image"}
+#: 上面那张表的键:任一为真就说明「这一格是在传文件」。**顺序就是判定的先后**(和 `_upload_media` 一样)。
+UPLOAD_FLAGS: tuple[str, ...] = tuple(UPLOAD_MEDIA_FLAGS)
 
 #: 读入一份素材的节点 → (它读的是什么, 文件名写在哪个输入里)。
 #: LoadImage 读图;它的第二个输出是 alpha 通道当蒙版 —— 只接了那一路的,当蒙版槽位用。
@@ -378,7 +384,7 @@ def _upload_media(definition: Any) -> str:
     extra = definition[1] if isinstance(definition, list) and len(definition) > 1 else None
     if not isinstance(extra, dict):
         return ""
-    for flag, media in _UPLOAD_MEDIA.items():
+    for flag, media in UPLOAD_MEDIA_FLAGS.items():
         if extra.get(flag):
             return media
     return ""

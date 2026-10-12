@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import contractFile from "../contracts/node-shapes.json";
+
 // CommonJS is intentional: main.cjs and preload.cjs load this exact runtime contract.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const contract = require("./ipc-contract.cjs") as {
@@ -57,13 +59,25 @@ const contract = require("./ipc-contract.cjs") as {
 const ROOT = path.resolve(__dirname);
 
 /**
- * 一个节点号的形状(`marks.nodes` 的键、应用表单里那一项的 `node`):`12` 是根图上的,`12:5` 是根图 12 号那个子图里面的
- * 5 号,`12:5:3` 再往里一层。**和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是同一套判据** ——
- * 跨语言共用不了一份正则,就共用同一份用例:Python 那边是 `backend/tests/test_plugin_workflow_library.py` 的
- * `NODE_KEYS_OK` / `NODE_KEYS_BAD`(两边改了判据都要同时改这两份)。
+ * 节点形状的**语言中立语料**:`contracts/node-shapes.json`。
+ *
+ * 这一个字符串要在四个地方说的是同一件事:宿主 `workflow_library._ANY_NODE`(表单里那一项的 `node`)、
+ * 这个文件守着的桥(`ANY_NODE` / `CANVAS_NODE` / `NODE_PATH`)、插件的 `canvas_edit._PATH`、以及助手回复里的
+ * `#12`(`features/plugins/workbench/nodeRefs`)。四份正则各自手写 —— 插件在沙盒子进程里跑,连这个文件都读不到。
+ *
+ * **所以这里不再抄一份 `NODE_KEYS_OK` / `NODE_KEYS_BAD`**:抄一份的时候,「改判据」是两处编辑,
+ * 而两边都能各自变绿。现在用例来自契约,`backend/tests/test_node_shapes_parity.py` 读的是同一份
+ * —— 改一侧没改另一侧时两侧同时红。契约里还记着 `{0,16}` vs `{1,16}` 那处既成的差异(见 `divergence`)。
  */
-const NODE_KEYS_OK = ["12", "12:5", "12:5:3"];
-const NODE_KEYS_BAD = ["abc", "12:", "12:5:", "12::5", "-3", "9999999999", "12.5", " 12", "12 "];
+const shapes = contractFile.shapes;
+const shapeNamed = (name: string) => {
+  const found = shapes.find((one) => one.name === name);
+  if (!found) throw new Error(`contracts/node-shapes.json 里没有 ${name} —— 它被删了还是改名了?`);
+  return found;
+};
+/** 一个节点号的形状:`marks.nodes` 的键、应用表单里那一项的 `node`。 */
+const ANY_NODE_CASES = shapeNamed("any_node").cases;
+const SUBGRAPH_PATH_CASES = shapeNamed("subgraph_path").cases;
 
 describe("Electron IPC contract", () => {
   it("assigns every channel one name and one direction", () => {
@@ -183,13 +197,13 @@ describe("Electron IPC contract", () => {
     expect(callOf({ op: "setMarks", marks: { nodes: {}, extra: null }, expect: expect_ }).call)
       .toEqual({ op: "setMarks", marks: { nodes: {}, extra: null }, expect: expect_ });
     //: 表单里有子图项时「同步到画布」:交回的键是**路径式**节点号(`12:5` 是根图 12 号那个子图里面的 5 号,`12:5:3` 再往里一层)。
-    //: 这几条和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是同一套判据、同一份用例
-    //: (`backend/tests/test_plugin_workflow_library.py` 的 `NODE_KEYS_OK` / `NODE_KEYS_BAD`)—— 两边各写一份正则,用例别只写一半。
-    for (const key of NODE_KEYS_OK) {
+    //: 用例来自 `contracts/node-shapes.json` 的 `any_node` —— 和宿主 `workflow_library._ANY_NODE`、
+    //: `backend/tests/test_node_shapes_parity.py` 读的是同一份文件。
+    for (const key of ANY_NODE_CASES.ok) {
       expect(callOf({ op: "setMarks", marks: { nodes: { [key]: { result: true } }, extra: null }, expect: expect_ }).call.marks,
         `子图里的节点 ${key} 和根图上的节点一样收`).toEqual({ nodes: { [key]: { result: true } }, extra: null });
     }
-    for (const key of NODE_KEYS_BAD) {
+    for (const key of ANY_NODE_CASES.bad) {
       expect(() => callOf({ op: "setMarks", marks: { nodes: { [key]: {} }, extra: null }, expect: expect_ }),
         `${key} 不是一个节点号`).toThrow(/marks\.nodes keys must be node ids/);
     }
@@ -212,9 +226,6 @@ describe("Electron IPC contract", () => {
     expect(callOf({ op: "locate", node: "12:5" }).call).toEqual({ op: "locate", node: "12:5", subgraph: null });
     expect(callOf({ op: "locate", node: "459:12:5", subgraph: null }).call.node).toBe("459:12:5");
     expect(() => callOf({ op: "locate", node: "12:5", subgraph: "8f1c0e2a" }), "路径和子图 id 不能一起给").toThrow(/node/);
-    expect(() => callOf({ op: "locate", node: "12:" })).toThrow(/node/);
-    expect(() => callOf({ op: "locate", node: "12:-5" }), "子图里没有负的编号").toThrow(/node/);
-    expect(() => callOf({ op: "locate", node: Array.from({ length: 18 }, () => "1").join(":") }), "最多 16 层").toThrow(/node/);
     expect(() => callOf({ op: "locate", node: 12 })).toThrow(/node/);
     expect(callOf({ op: "readGraph" })).toEqual({ partition: "persist:pool-comfyui-c1", call: { op: "readGraph" } });
     expect(() => callOf({ op: "readGraph", depth: 2 })).toThrow(/unexpected/);
@@ -419,5 +430,41 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseSaveDownload({ ...request, token: "" })).toThrow(/token/);
     expect(() => contract.parseSaveDownload({ ...request, token: "x".repeat(20_000) })).toThrow(/token/);
     expect(() => contract.parseSaveDownload({ ...request, path: "/etc/passwd" })).toThrow(/unexpected field path/);
+  });
+
+  /**
+   * 桥这一侧的三种节点形状逐条跑契约(`contracts/node-shapes.json`)。
+   *
+   * `locate` 的 `node` 是**两种写法二选一**:画布上那一层的一个号(`canvas_node`,可以是负的 —— 子图输入口就是 `-10`),
+   * 或者从根图往里走的一条路径(`subgraph_path`,至少两段、最多 16 段)。两条正则各管一半,所以这里量的是**并集**:
+   * 契约说它属于哪一条形状,桥就必须收/拒。这正是 `divergence` 记的那处既成差异(`{0,16}` vs `{1,16}`)
+   * 在 TS 这一侧的跑手 —— Python 那侧读的是同一份文件(`backend/tests/test_node_shapes_parity.py`)。
+   */
+  it("accepts exactly the node shapes the contract names (locate's node is canvas_node or subgraph_path)", () => {
+    const locate = (node: unknown) =>
+      contract.parseComfyWorkbenchCall({ connectionId: "c1", call: { op: "locate", node, subgraph: null } });
+    const accepts = (value: string) => {
+      try {
+        locate(value);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    for (const name of ["canvas_node", "subgraph_path"] as const) {
+      const { cases } = shapeNamed(name);
+      for (const good of cases.ok) expect(accepts(good), `${name} 说 ${good} 收`).toBe(true);
+    }
+    //: 两条形状的 `bad` 并起来,才是桥该拒的:一条拒的可能是另一条收的(`subgraph_path` 拒 `12`,
+    //: 而 `12` 是 `canvas_node` 的正当写法)。所以先算「两条都不收」的那些。
+    const inEitherShape = (value: string) =>
+      [
+        new RegExp(`^(?:${shapeNamed("canvas_node").pattern})$`),
+        new RegExp(`^(?:${shapeNamed("subgraph_path").pattern})$`),
+      ].some((one) => one.test(value));
+    const refused = [...shapeNamed("canvas_node").cases.bad, ...shapeNamed("subgraph_path").cases.bad];
+    for (const bad of refused.filter((one) => !inEitherShape(one))) {
+      expect(accepts(bad), `${bad} 哪条形状都不收,桥不该放行`).toBe(false);
+    }
   });
 });

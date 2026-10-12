@@ -29,11 +29,18 @@ import re
 REPO = pathlib.Path(__file__).resolve().parents[2]
 
 #: 扫这些目录里的源码(node_modules / 生成物除外)。
+#:
+#: **`plugins/bundled` 此前不在表里,于是整条棘轮在插件那一侧是瞎的** —— 而插件的实现
+#: (`plugins/bundled/comfyui/tools/`)正是「跨语言各写一份」最多的地方:节点号形状、画布路径族、
+#: 宿主↔插件那六七个协议常量、四张表单上限,全在那儿各有一份。宿主那一侧的同一处注释
+#: (`workflow_library._ANY_NODE`)写着「跨语言共用不了一份正则」而在扫描范围内,插件那一侧
+#: (`canvas_edit._PATH`)写着同一件事却没人看得见 —— 一处被要求点名契约、另一处不用,靠的不是判据,是**目录**。
 ROOTS = [
     REPO / "backend" / "app",
     REPO / "frontend" / "src",
     REPO / "agent-sidecar" / "src",
     REPO / "electron",
+    REPO / "plugins" / "bundled",
 ]
 
 SUFFIXES = {".py", ".ts", ".tsx", ".cjs", ".mjs"}
@@ -60,6 +67,11 @@ CLAIMS = [
     "一一对照",
     "对照前端",
     "对照工作台",
+    # 插件那一侧(以及宿主说插件)用的是「跨语言」:「跨语言共用不了一份正则,就共用同一份用例」。
+    # 这句话**宿主与插件各写了一遍**(`workflow_library._ANY_NODE` / `canvas_edit._PATH`),
+    # 而此前只有宿主那一遍在扫描范围内 —— 见上面 ROOTS 的说明。收这一条是收那句「另一侧还有一份」
+    # 的意思,不是收「跨语言」这三个字本身。
+    "跨语言",
 ]
 
 #: 认定"已经点名契约"的写法。

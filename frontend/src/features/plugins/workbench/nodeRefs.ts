@@ -6,8 +6,14 @@
  */
 import { MARKDOWN_REF } from "@/components/markdown/markdownRefs";
 
-/** 和后端 `comfy_locate` 认的写法一致:根图编号可以是负的,子图里的每一段不带负号,最多 16 层。 */
-const NODE_REF = /(^|[^\w&#/[\]`])#(-?\d{1,10}(?::\d{1,10}){0,16})(?!\w|:\d)/g;
+/**
+ * 和后端 `comfy_locate` 认的写法一致:根图编号可以是负的,子图里的每一段不带负号,最多 16 层。
+ *
+ * 那一套判据在 **`contracts/node-shapes.json` 的 `canvas_path`**(和宿主 `workbench_agent._NODE_REF`、
+ * 插件的 `canvas_edit._PATH` 同一份语料):这里把契约那一串**嵌进**自己的模式里,外面再套 `#` 前缀和
+ * 「别把代码块 / 网址 / 连着单词的算进来」那几层。两侧都由 `nodeRefs.parity.test.ts` 读同一份文件比对。
+ */
+export const NODE_REF = /(^|[^\w&#/[\]`])#(-?\d{1,10}(?::\d{1,10}){0,16})(?!\w|:\d)/g;
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 const INLINE_CODE = /(`+)[^`]*?\1/g;
 

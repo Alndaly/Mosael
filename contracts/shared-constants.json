@@ -5,7 +5,8 @@
   "description": "少数几个「两个运行时都要认、而谁也不拥有」的常量。不一致时没有任何报错 —— 只是行为悄悄错开,所以每一条都写清了错开之后用户会看到什么。",
   "notes": [
     "只放**没法单向下发**的常量。能由一侧算出来再传给另一侧的(例如面板圆角经 IPC 下发)不属于这里 —— 那种本来就只有一份。",
-    "常量说的是「两边必须**相等**」;`budgets` 说的是「一边必须**装得下**另一边」—— 跨进程的时间预算属于后者,而这份契约里此前一条都没有。它们错开时同样没有任何报错,只是等待在两侧的含义悄悄不同。"
+    "常量说的是「两边必须**相等**」;`budgets` 说的是「一边必须**装得下**另一边」—— 跨进程的时间预算属于后者,而这份契约里此前一条都没有。它们错开时同样没有任何报错,只是等待在两侧的含义悄悄不同。",
+    "同一份文件里还有一节 `protocol`:宿主和**插件**之间那套形状。它不是「谁下发谁」—— 宿主先查一遍、插件写进去之前再查一遍,两处各有一份同样的数字,而两份都在对方的视野之外(插件在沙盒子进程里,连 `contracts/` 都读不到)。错开之后**不会有任何报错**:多出来的那几项被宿主静静截掉,或者插件替宿主拒掉一项它其实收得下的东西。"
   ],
   "constants": [
     {
@@ -152,6 +153,98 @@
           "location": "electron/publish/downloadRules.ts",
           "symbol": "MAX_DOWNLOAD_BYTES"
         }
+      ]
+    }
+  ],
+  "protocol": [
+    {
+      "name": "app_form_items",
+      "value": 200,
+      "why": "一张应用表单最多几项。插件在**交给宿主之前**拿它拦(`app_form` 的 `MAX_ITEMS`),宿主在**收下来的时候**再截一次(`workflow_library` 的 `MAX_APP_ITEMS`)。两边不等时插件会把宿主收不下的那份交上去:多出来的项被宿主静静截掉,而插件已经在界面上说过「这张表单有 24 项」—— 用户在表单里配好的那一项下次打开就没了,没有任何报错。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "MAX_APP_ITEMS"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/app_form.py", "symbol": "MAX_ITEMS"}
+      ]
+    },
+    {
+      "name": "app_form_choices",
+      "value": 1000,
+      "why": "一项下拉最多几个可选值。插件交之前截(`MAX_CHOICES`),宿主收下来再截一遍(`MAX_APP_CHOICES`)。两边不等时这一项的可选值在宿主那一侧被悄悄削短 —— 存进去之后作者在下拉里找不到自己刚才选的那个值。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "MAX_APP_CHOICES"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/app_form.py", "symbol": "MAX_CHOICES"}
+      ]
+    },
+    {
+      "name": "app_form_results",
+      "value": 64,
+      "why": "「结果取自」最多收几个节点号。插件交之前截(`MAX_RESULTS`),宿主收下来再截(`MAX_APP_RESULTS`)。**这一条错开的方向最难受**:宿主那份小了,作者标在后面的结果被截掉,而插件那边记着「标上了」—— 下一次保存就把作者标的那个结果抹掉了(和 `_ROOT_NODE` 那次的症状一样)。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "MAX_APP_RESULTS"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/app_form.py", "symbol": "MAX_RESULTS"}
+      ]
+    },
+    {
+      "name": "app_form_label_chars",
+      "value": 120,
+      "why": "表单项的名字、标题最长多少字。插件写进标记之前截(`MAX_LABEL`),宿主读回来再截(`_MAX_APP_LABEL`)。两边不等时名字在**读回来的那一步**被削短 —— 界面上的下拉和作者起的名对不上,而两份代码各自都觉得自己是对的。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "_MAX_APP_LABEL"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/app_form.py", "symbol": "MAX_LABEL"}
+      ]
+    },
+    {
+      "name": "app_form_description_chars",
+      "value": 1000,
+      "why": "表单的说明最长多少字。同 `app_form_label_chars`,只是量的是那一段说明:宿主那份小了,作者写的说明在下拉旁边被截在半句上。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "_MAX_APP_DESCRIPTION"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/app_form.py", "symbol": "MAX_DESCRIPTION"}
+      ]
+    },
+    {
+      "name": "app_forms_per_graph",
+      "value": 20,
+      "why": "一张工作流最多几张表单。两边**都会拒**(不是截):插件在写之前拒(`MAX_FORMS`),宿主在读的时候拒(`MAX_FORMS`)。数字不一致时会出现「插件放行、宿主 422」—— 作者点了保存,回来一句 `workflowLibErr_tooManyForms`,而插件刚刚才说这张图没问题。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "MAX_FORMS"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/app_form.py", "symbol": "MAX_FORMS"}
+      ]
+    },
+    {
+      "name": "app_form_graph_items",
+      "values": ["seed", "size", "runs"],
+      "why": "「这张图自己那几项」:它们不属于任何一个节点(没有节点号),表单项的 `node` 空着时只有这三项收得下。插件照这张表挑(`app_form` 把 `graph.GRAPH_ITEMS` 写进 `graph_items`),宿主照它校验(`workflow_library` 的 `_GRAPH_ITEMS`)。**两边不等时这一类项会被静默丢掉**:宿主不认那个名字、`node` 又空着,于是它既不在表单里、也不在任何「失效项」清单里 —— 用户看到的是「我配的这一项不见了」,而两处代码都没有半句报错。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/workflow_library.py", "symbol": "_GRAPH_ITEMS"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/graph.py", "symbol": "GRAPH_ITEMS"}
+      ]
+    },
+    {
+      "name": "shared_tables_accepts",
+      "value": "shared_tables",
+      "why": "宿主在请求的 `accepts` 里报出这个名字,插件据此决定「回答里重复的大表要不要只搬一次」。插件那一侧**按字符串比**(`shared.tables.ACCEPTS in request[\"accepts\"]`),所以一个字母不同就是「宿主没说过」—— 插件退回逐格写全,36 个工具的工具清单撞上 1MB 的线,**整份清单不收**(插件页那一行是「插件输出超过大小限制 (1MB)」,工具清单保留上一份)。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/plugins/shared_tables.py", "symbol": "ACCEPTS"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/shared_tables.py", "symbol": "ACCEPTS"}
+      ]
+    },
+    {
+      "name": "shared_tables_key",
+      "value": "shared_tables",
+      "why": "回答顶层那张表挂在哪个键上。宿主在 `expand_shared_tables` 里按它取,插件在 `share` 里按它放。不一致时宿主拿不到那些表:格子上留着 `{\"x-shared-table\": \"t1\"}` 而展平的那一步什么都没找到 —— 下游(工作流节点、画板、插件页「试一下」、发给智能体的那一份)看到的下拉是**一个指不到任何东西的引用**,而清单照旧超线。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/plugins/shared_tables.py", "symbol": "TABLE_KEY"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/shared_tables.py", "symbol": "TABLE_KEY"}
+      ]
+    },
+    {
+      "name": "shared_tables_ref_key",
+      "value": "x-shared-table",
+      "why": "格子上指过去的那一格。宿主展平时找的是它,插件搬表时写的是它。不一致时那些格子原样留着这一个陌生键,于是整格下拉消失 —— 用户看到的是「这个控件不见了」,而不是一个错误。",
+      "implementations": [
+        {"runtime": "python", "location": "backend/app/domain/plugins/shared_tables.py", "symbol": "REF_KEY"},
+        {"runtime": "python-plugin", "location": "plugins/bundled/comfyui/tools/shared_tables.py", "symbol": "REF_KEY"}
       ]
     }
   ],
