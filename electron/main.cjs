@@ -3,10 +3,12 @@ const {
   BrowserWindow,
   Menu,
   Notification,
+  crashReporter,
   dialog,
   ipcMain,
   nativeImage,
   net,
+  powerMonitor,
   safeStorage,
   screen,
   session,
@@ -149,6 +151,196 @@ function appendMainLog(kind, detail) {
   }
 }
 
+// 崩溃现场:Electron 的 crashpad **必须在 app ready 之前**启动 —— 它只接管此后创建的进程,而所有渲染进程都是
+// whenReady 里才建的(见下面 app.whenReady),ready 之后再 start,一个渲染进程都接不上。绝不外传:uploadToServer: false,
+// dump 只落本地。落点由 app.getPath("crashDumps") 决定(Crashpad 数据库目录;crashReporter.start 本身没有指定目录的参数,
+// 要换目录只能 app.setPath("crashDumps"))。冒烟测试上面已经把 userData 换到临时目录,这里读到的就是换过之后的值。
+const crashDumpsDir = app.getPath("crashDumps");
+try {
+  crashReporter.start({ uploadToServer: false, productName: app.name });
+  appendMainLog("crash-reporter", `started dumps=${crashDumpsDir}`);
+} catch (error) {
+  // 起不来也照常跑:只是下次崩溃继续没有现场,不能让应用死在这一句上。
+  appendMainLog("crash-reporter", `start failed: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+/**
+ * 记一行诊断日志,连「读状态」一起兜住:监听器里抛出去就是一条未捕获异常 —— 记日志不能变成第二次崩溃。
+ * @param {string} kind
+ * @param {string | (() => string)} detail  传函数时,读状态、拼字符串都在 try 里做
+ */
+function appendDiagnosticLog(kind, detail) {
+  try {
+    const line = typeof detail === "function" ? detail() : detail;
+    // 空内容不写:10 秒一次的轮询绝大多数时候什么都没变,不能拿空行刷日志。
+    if (!line) return;
+    appendMainLog(kind, line);
+  } catch {
+    // 窗口已销毁 / GPU 还没起来:这一条就算了。
+  }
+}
+
+/** 本地墙钟 HH:MM:SS。main.log 的时间戳是 UTC(见 appendMainLog),和用户看到的钟差一个时区 —— 诊断行带上本地时间,
+ *  「闪的那一下大概是几点几分」才对齐得上。 */
+function localClock(date = new Date()) {
+  return date.toTimeString().slice(0, 8);
+}
+
+/**
+ * 当时各进程占了多少内存:渲染进程崩多半是内存(大工程剪辑、一堆素材页),事后只有这一笔能回看当时有多挤。
+ * 拿不到就返回 null —— 但不能因此少记崩溃本身那一行。
+ */
+function memorySnapshot() {
+  try {
+    const metrics = app.getAppMetrics();
+    /** @type {Record<string, number>} */
+    const byType = {};
+    let workingSetKb = 0;
+    for (const metric of metrics) {
+      const kb = metric.memory?.workingSetSize ?? 0;
+      workingSetKb += kb;
+      byType[metric.type] = (byType[metric.type] ?? 0) + kb;
+    }
+    return { processes: metrics.length, workingSetKb, byType };
+  } catch {
+    return null;
+  }
+}
+
+/** 两份 GPU 特性状态之间的差量(每项 [旧值, 新值]);没有变化返回 null。纯函数:单独跑见 mainDiagnostics.test.ts。 */
+function gpuStatusDelta(previous, current) {
+  const before = previous ?? {};
+  const after = current ?? {};
+  /** @type {Record<string, (string | null)[]>} */
+  const changed = {};
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (before[key] !== after[key]) changed[key] = [before[key] ?? null, after[key] ?? null];
+  }
+  return Object.keys(changed).length > 0 ? changed : null;
+}
+
+/** getGPUInfo("basic") 里真正能说明问题的那几项 —— 整份 basic 信息很长,不进日志。 */
+function gpuInfoSummary(info) {
+  const aux = (info && info.auxAttributes) || {};
+  const devices = Array.isArray(info?.gpuDevice) ? info.gpuDevice : [];
+  const active = devices.find((device) => device?.active) ?? devices[0] ?? {};
+  return {
+    machine: `${info?.machineModelName ?? "?"} ${info?.machineModelVersion ?? ""}`.trim(),
+    activeDevice: {
+      vendorId: active.vendorId ?? null,
+      deviceId: active.deviceId ?? null,
+      deviceString: active.deviceString ?? null,
+      driverVersion: active.driverVersion ?? null,
+    },
+    glImplementation: aux.glImplementationParts ?? null,
+    inProcessGpu: aux.inProcessGpu ?? null,
+    sandboxed: aux.sandboxed ?? null,
+    skiaBackend: aux.skiaBackendType ?? null,
+  };
+}
+
+/** 窗口当时的可见性状态。窗口已销毁时这里会抛,由 appendDiagnosticLog 兜住。 */
+function windowSnapshot(win) {
+  return {
+    id: win.id,
+    title: win.getTitle(),
+    visible: win.isVisible(),
+    focused: win.isFocused(),
+    minimized: win.isMinimized(),
+    fullscreen: win.isFullScreen(),
+    bounds: win.getBounds(),
+  };
+}
+
+/** 显示器的关键几何:整窗闪如果跟着显示器事件来,bounds / scaleFactor / rotation 会一起变。 */
+function displaySnapshot(display) {
+  return {
+    id: display.id,
+    bounds: display.bounds,
+    workArea: display.workArea,
+    scaleFactor: display.scaleFactor,
+    rotation: display.rotation,
+    internal: display.internal,
+  };
+}
+
+/**
+ * 启动时的 GPU 事实,之后每 10 秒看一次、**只在值变了时**记一行。
+ * 「整窗闪」在没有 DOM 变化、没有子进程崩的前提下,最像硬件/软件合成来回切 —— 那正是 gpu_compositing 这类
+ * 特性的值在翻,而它翻一次就是整窗重绘一次。只读不改:不动硬件加速开关(见报告)。
+ */
+function startGpuDiagnostics() {
+  /** @type {Record<string, string> | null} */
+  let last = null;
+  /** 读一次当前特性,顺带给出与上一次的差量(没变就是 null),并把基线推到当前值。 */
+  const readFeatures = () => {
+    const features = app.getGPUFeatureStatus();
+    const changed = gpuStatusDelta(last, features);
+    last = features;
+    return { features, changed };
+  };
+  try {
+    appendDiagnosticLog("gpu-facts", () => {
+      const { features } = readFeatures();
+      return JSON.stringify({
+        local: localClock(),
+        switches: {
+          disableGpu: app.commandLine.hasSwitch("disable-gpu"),
+          disableGpuCompositing: app.commandLine.hasSwitch("disable-gpu-compositing"),
+        },
+        features,
+      });
+    });
+    // getGPUInfo 是异步的,单独一行:设备和驱动。
+    void app
+      .getGPUInfo("basic")
+      .then((info) => appendDiagnosticLog("gpu-device", () => JSON.stringify({ ...gpuInfoSummary(info), local: localClock() })))
+      .catch(() => undefined);
+    // Chromium 自己重算了一遍 GPU 信息(刚初始化完、GPU 进程重来、显示器变了都会):这一行带上与上一次的差量,
+    // 并把基线推过去 —— 「启动时那一次初始化翻转」在这里就说清楚了,10 秒轮询只管之后没人预告的变化。
+    app.on("gpu-info-update", () =>
+      appendDiagnosticLog("gpu-info-update", () => {
+        const { features, changed } = readFeatures();
+        return JSON.stringify({ local: localClock(), uptimeSec: Math.round(process.uptime()), changed, features });
+      }),
+    );
+    const timer = setInterval(() => {
+      appendDiagnosticLog("gpu-feature-status", () => {
+        const { changed } = readFeatures();
+        // uptimeSec 用来分辨「刚启动时 GPU 初始化完的那一次翻转」和「跑了半小时后突然翻」——后者才是事故。
+        return changed ? `changed=${JSON.stringify(changed)} local=${localClock()} uptimeSec=${Math.round(process.uptime())}` : "";
+      });
+    }, 10_000);
+    // 这个定时器不许拖住退出。
+    timer.unref?.();
+  } catch (error) {
+    // 诊断只许失败,不许拦路:它跑在 whenReady 的最前面,抛出去后面起后端、建窗口就都走不到了。
+    appendDiagnosticLog("gpu-facts", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** 电源 / 锁屏 / 显示器事件:用户看到的「闪」如果正好落在这些事件旁边,原因基本就定了。 */
+function startPowerAndDisplayDiagnostics() {
+  try {
+    for (const name of ["suspend", "resume", "lock-screen", "unlock-screen", "on-ac", "on-battery"]) {
+      powerMonitor.on(name, () => appendDiagnosticLog("power", `${name} local=${localClock()}`));
+    }
+    appendDiagnosticLog("display", () => `startup local=${localClock()} ${JSON.stringify(screen.getAllDisplays().map(displaySnapshot))}`);
+    screen.on("display-metrics-changed", (_event, display, changedMetrics) =>
+      appendDiagnosticLog("display", `metrics-changed local=${localClock()} ${JSON.stringify({ ...displaySnapshot(display), changedMetrics })}`),
+    );
+    screen.on("display-added", (_event, display) =>
+      appendDiagnosticLog("display", `added local=${localClock()} ${JSON.stringify(displaySnapshot(display))}`),
+    );
+    screen.on("display-removed", (_event, display) =>
+      appendDiagnosticLog("display", `removed local=${localClock()} ${JSON.stringify(displaySnapshot(display))}`),
+    );
+  } catch (error) {
+    // 同上:诊断只许失败,不许拦路(whenReady 最前面抛出去,后面的启动就全断了)。
+    appendDiagnosticLog("display", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 process.on("uncaughtExceptionMonitor", (error) => appendMainLog("uncaught-exception", error));
 process.on("unhandledRejection", (reason) => appendMainLog("unhandled-rejection", reason));
 app.on("render-process-gone", (_event, webContents, details) => {
@@ -158,10 +350,52 @@ app.on("render-process-gone", (_event, webContents, details) => {
   } catch {
     // A destroyed WebContents may no longer expose its last URL.
   }
-  appendMainLog("render-process-gone", JSON.stringify({ url, ...details }));
+  // 崩的是哪一块视图(主窗口 / 发布账号视图 / 工作台)+ 当时整个应用的内存分布。都是同步读数,
+  // 读不到就少几个字段 —— 原有的 url/reason/exitCode 那一行照样写出去。
+  appendDiagnosticLog("render-process-gone", () =>
+    JSON.stringify({
+      url,
+      local: localClock(),
+      view: { id: webContents.id, type: webContents.getType() },
+      memory: memorySnapshot(),
+      ...details,
+    }),
+  );
+  // 主进程自己那份内存读数(Electron 这个 API 是异步的),补一行;失败就当没记。
+  try {
+    void process
+      .getProcessMemoryInfo()
+      .then((info) => appendDiagnosticLog("main-memory", () => JSON.stringify({ ...info, local: localClock() })))
+      .catch(() => undefined);
+  } catch {
+    // 没有这个 API 就没有。
+  }
 });
 app.on("child-process-gone", (_event, details) => {
   appendMainLog("child-process-gone", JSON.stringify(details));
+});
+// 窗口自身的显隐 / 焦点 / 全屏:整窗闪最直接的候选(macOS 进全屏会换 Space)。browser-window-created 早于
+// 所有窗口创建(小窗、主窗口都在内),一个订阅全覆盖,不碰窗口的任何参数。
+app.on("browser-window-created", (_event, win) => {
+  for (const name of ["show", "hide", "focus", "blur", "minimize", "restore", "enter-full-screen", "leave-full-screen"]) {
+    win.on(name, () => appendDiagnosticLog("window", `${name} local=${localClock()} ${JSON.stringify(windowSnapshot(win))}`));
+  }
+});
+// 任何一块 webContents(主窗口、内嵌发布视图、工作台)卡住/恢复:合成层的事故常从这里开始。
+app.on("web-contents-created", (_event, contents) => {
+  for (const name of ["unresponsive", "responsive"]) {
+    contents.on(name, () =>
+      appendDiagnosticLog(`web-contents-${name}`, () => {
+        let url = "";
+        try {
+          url = contents.getURL();
+        } catch {
+          // 已销毁。
+        }
+        return `local=${localClock()} ${JSON.stringify({ id: contents.id, url })}`;
+      }),
+    );
+  }
 });
 
 /** 同一句只记一次:网页可能一遍遍地要同一个权限,别把日志刷满。 */
@@ -1021,6 +1255,9 @@ function createWindow() {
 app.whenReady().then(async () => {
   // 应用自己的页面(主窗口、浮层视图)用默认会话:换成应用那一档权限(session-created 先给它装的是内嵌网页那一档)。
   installPermissionPolicy(session.defaultSession, { isAppUrl, log: (line) => appendMainLogOnce("permission", line) });
+  // 「整窗闪」的现场:GPU 事实(要 ready 之后才拿得到)+ 之后的特性变化,以及电源/锁屏/显示器事件。只记日志。
+  startGpuDiagnostics();
+  startPowerAndDisplayDiagnostics();
   // 最先定语言:下面起后端时的小窗、失败时弹的错误框就要用到它。getLocale 要等 ready。
   applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
