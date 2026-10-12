@@ -70,6 +70,13 @@ const HISTORY_BYTES = 96 * 1024 * 1024;
  * 而局部重绘最终按潜空间尺寸用它,多出来那几千万像素换不来任何东西。
  */
 const MAX_DOC_EDGE = 4096;
+/**
+ * **可见那张**画布的位图上限(长边)。它现在铺满整个盒子、还带 devicePixelRatio,不封顶的话
+ * 4K 屏上一个 1180×820 的弹窗就是 2360×1640、约 15MB —— 一张两张还好,而浏览器的画布内存
+ * 是**所有**画布共用的(这个对话框里还有底稿、临时画布、导出用的那张),超了之后新建画布会
+ * 静默地画不出东西。2048 换到屏幕上早就看不出软(它是给人看着画的,不是导出的那一张)。
+ */
+const MAX_VIEW_EDGE = 2048;
 const TAU = Math.PI * 2;
 const BLACK = "#000000";
 const WHITE = "#ffffff";
@@ -226,10 +233,10 @@ export function MaskEditor({
 }) {
   const t = useI18n();
   const queryClient = useQueryClient();
-  /** 看得见的那张画布(底图 + 蒙版,只给人看)。 */
+  /** 看得见的那张画布(底图 + 蒙版,只给人看)。它铺满自己的盒子,位图尺寸由 fit() 按盒子写。 */
   const viewRef = React.useRef<HTMLCanvasElement>(null);
-  /** 画布外面那个盒子:按它算等比适配。 */
-  const boxRef = React.useRef<HTMLDivElement>(null);
+  /** 正在画一笔。见 fit():拖动期间不重量(每一次量都要读版面,而拖动每秒几十次)。 */
+  const drawingRef = React.useRef(false);
   /** 蒙版本身 —— 离屏、不进 DOM、导出的就是它。 */
   const maskRef = React.useRef<HTMLCanvasElement | null>(null);
   /** 底图像素(按亮度 / 按 alpha 初始化读的就是它)和那张图(画在看得见的画布上)。 */
@@ -296,21 +303,32 @@ export function MaskEditor({
     if (mask) ctx.drawImage(mask, 0, 0, view.width, view.height);
   }, []);
 
-  /** 按容器等比适配:整张图看得见,不缩放也不平移(第一版不做那两件事)。 */
+  /**
+   * 把可见的那张画布量成**盒子的尺寸**,再把当前蒙版重画上去。
+   *
+   * 元素本身铺满盒子(`h-full w-full`),所以这里写的位图尺寸就是盒子的 CSS 尺寸 × devicePixelRatio ——
+   * 位图和元素同一个宽高比,画上去的蒙版 1:1 不变形,也**没有黑边**:此前是按比例缩出元素自己的宽高
+   * 再居中,文档比盒子"方"的时候两侧各留一条黑边。
+   *
+   * 位图尺寸不变就不用重画(重设 `canvas.width` 会清空整张位图,白画一遍几百兆像素)。
+   * 比例封在 MAX_VIEW_EDGE 和 dpr ≤ 2 上,见那两个常数的说明。
+   */
   const fit = React.useCallback(() => {
-    const box = boxRef.current;
     const view = viewRef.current;
-    if (!box || !view) return;
-    const { width, height } = doc.current;
-    const scale = Math.min(box.clientWidth / width, box.clientHeight / height);
+    if (!view) return;
+    //: 拖笔途中不重量(下面几处按指针维护 drawingRef):读 clientWidth 会让浏览器先把版面算一遍,
+    //: 而这里每帧都会被 ResizeObserver 叫一次。
+    if (drawingRef.current) return;
+    const width = view.clientWidth;
+    const height = view.clientHeight;
     //: jsdom 里量出来是 0(没有版面);真实环境里也可能是对话框刚挂上、还没量到的那一帧。
-    if (!Number.isFinite(scale) || scale <= 0) return;
-    const ratio = window.devicePixelRatio || 1;
-    const shown = { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
-    view.style.width = `${shown.width}px`;
-    view.style.height = `${shown.height}px`;
-    view.width = Math.round(shown.width * ratio);
-    view.height = Math.round(shown.height * ratio);
+    if (!width || !height) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const scale = Math.min(1, MAX_VIEW_EDGE / Math.max(width * ratio, height * ratio));
+    const next = { width: Math.max(1, Math.round(width * ratio * scale)), height: Math.max(1, Math.round(height * ratio * scale)) };
+    if (view.width === next.width && view.height === next.height) return;
+    view.width = next.width;
+    view.height = next.height;
     paint();
   }, [paint]);
 
@@ -388,14 +406,22 @@ export function MaskEditor({
     };
   }, [open, source?.assetId, initial?.assetId, rebuild]);
 
-  /** 按容器大小重排 —— 对话框尺寸变了(用户拖窗口)也能整张看见。 */
+  /** 画布元素一换大小(对话框尺寸变了、右栏收窄了)就重量一遍。 */
   React.useEffect(() => {
-    if (!open) return;
-    const box = boxRef.current;
-    if (!box || typeof ResizeObserver === "undefined") return;
+    if (!open || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => fit());
-    observer.observe(box);
-    return () => observer.disconnect();
+    //: **不能在 effect 里读 `viewRef.current`**:这一条 effect 排在那几条铺文档的 effect 后面,
+    //: 而它们那一轮跑的时候 ref 还没挂上(`<DialogContent>` 是 portal,子树先于父 ref 落地)——
+    //: 读到 null 就 return 的话,这一整条 observer 永远不会登记(实测:窗口拖大、对话框换尺寸,
+    //: 位图一直停在第一次量到的那个尺寸上)。下一帧再登记,那时画布一定在文档里。
+    const frame = requestAnimationFrame(() => {
+      const view = viewRef.current;
+      if (view) observer.observe(view);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [open, fit]);
 
   /**
@@ -528,6 +554,7 @@ export function MaskEditor({
     const at = docPoint(event);
     if (!ctx || !at) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    drawingRef.current = true;
     const freehand = tool === "brush" || tool === "eraser";
     dragRef.current = { tool, from: at, last: at, before: freehand ? null : snapshot() };
     if (freehand) {
@@ -563,6 +590,7 @@ export function MaskEditor({
   };
 
   const onPointerUp = () => {
+    drawingRef.current = false;
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
@@ -617,20 +645,35 @@ export function MaskEditor({
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent
-        //: 全屏尺寸的弹窗:画布要尽可能大,底图和笔迹才看得清。网格三段(头 / 画布+工具条 / 尾)。
-        className="w-[min(1180px,calc(100vw-32px))] max-w-none h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden p-5"
+        //: 全屏尺寸的弹窗:画布要尽可能大,底图和笔迹才看得清。三段(头 / 两栏 / 尾)。
+        //
+        // 两栏的**列宽写在一处**(`--mask-rail`):正文那两栏和底下那排动作都读它,所以「存成蒙版」
+        // 永远落在右栏这条竖线上,而不是自己另算一个右边距。第一列是 `minmax(0,1fr)`,画布再怎么
+        // 宽也顶不开这一栏(见 CONVENTIONS「单列 grid 想收缩要写 minmax(0,1fr)」)。
+        className="w-[min(1180px,calc(100vw-32px))] max-w-none h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden p-5 [--mask-rail:18rem]"
       >
         <DialogHeader>
           <DialogTitle>{t("maskEditorTitle")}</DialogTitle>
           <DialogDescription>{t("maskEditorHint")}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_16rem] gap-4">
-          {/*: 看得见的画布:底图(半透明)+ 蒙版。导出的不是这一张 —— 见文件头那三张画布。 */}
-          <div ref={boxRef} className="grid min-h-0 place-items-center overflow-hidden rounded-lg border border-border bg-black">
+        <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_var(--mask-rail)] gap-4">
+          {/*
+            * 看得见的画布:底图(半透明)+ 蒙版。导出的不是这一张 —— 见文件头那三张画布。
+            *
+            * **画布元素铺满整个盒子**(`h-full w-full`),位图尺寸由 fit() 按盒子写。此前是按比例
+            * 缩出元素本身的宽高再居中:文档比盒子"方"的时候(3:2 的图放进接近正方的盒子),元素左右
+            * 各留一条黑边,画布只占了盒子中间那一块。现在盒子里只有这一张画布,笔迹和底图铺到边上,
+            * 落点换算(docPoint)读的仍是这个元素自己的矩形,不受影响。
+            *
+            * 行轨写成 `minmax(0,1fr)` 而不是让它自己算:画布有固有宽高比,`auto` 那一档会按内容
+            * (也就是位图本身)反推出一个更高的行,盒子只有 519 高、行却长到 546,画布就溢出到边框
+            * 外面去了 —— 单列 grid 想收缩要写 `minmax(0,…)`,和 CONVENTIONS 里那条是同一件事。
+            */}
+          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden rounded-lg border border-border bg-black">
             <canvas
               ref={viewRef}
-              className="max-h-full max-w-full cursor-crosshair touch-none"
+              className="h-full w-full cursor-crosshair touch-none"
               aria-label={t("maskCanvasLabel")}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
@@ -639,8 +682,14 @@ export function MaskEditor({
             />
           </div>
 
-          <div className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1">
-            <ToolGroup label={t("maskTool")}>
+          {/*
+            * 控制栏:固定宽度(和正文字体一样,由外壳上的 `--mask-rail` 定),里面三节。
+            *
+            * 三节的节奏由 ToolGroup 一处管:节标题同一个字重,节与节之间同一条 1px 分隔线 + 同一段
+            * 留白(和设置页的分节同一种做法)。此前三节各写各的间距,只有靠加粗小标题硬分。
+            */}
+          <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
+            <ToolGroup label={t("maskTool")} icon={<Brush size={13} />}>
               <Segmented
                 aria-label={t("maskTool")}
                 value={tool}
@@ -654,7 +703,7 @@ export function MaskEditor({
                   { value: "ellipse", icon: <Circle size={14} />, ariaLabel: t("maskEllipse") },
                 ]}
               />
-              <SliderField label={t("maskBrushSize")} value={radius} min={2} max={200} step={1} onChange={setRadius} />
+              <SliderField label={t("maskBrushSize")} value={radius} min={2} max={200} step={1} format={pixels} onChange={setRadius} />
               <SliderField
                 label={t("maskBrushHardness")}
                 value={hardness}
@@ -664,65 +713,65 @@ export function MaskEditor({
                 format={percent}
                 onChange={setHardness}
               />
-              <div className="flex items-center gap-1">
-                <IconButton label={t("maskUndo")} disabled={!canUndo} onClick={undo}>
+              {/*: 撤销 / 重做 / 清空:一排等宽铺满整行,不挤在左边留一截。 */}
+              <div className="grid grid-cols-3">
+                <IconButton label={t("maskUndo")} disabled={!canUndo} onClick={undo} className="w-full">
                   <Undo2 />
                 </IconButton>
-                <IconButton label={t("maskRedo")} disabled={!canRedo} onClick={redo}>
+                <IconButton label={t("maskRedo")} disabled={!canRedo} onClick={redo} className="w-full">
                   <Redo2 />
                 </IconButton>
-                <IconButton label={t("maskClear")} onClick={clear}>
+                <IconButton label={t("maskClear")} onClick={clear} className="w-full">
                   <Trash />
-                </IconButton>
-                <IconButton label={t("maskInvert")} onClick={invert}>
-                  <Contrast />
                 </IconButton>
               </div>
             </ToolGroup>
 
-            <ToolGroup label={t("maskFeather")}>
+            <ToolGroup label={t("maskFeather")} icon={<Feather size={13} />}>
               <SliderField label={t("maskFeatherRadius")} value={feather} min={1} max={64} step={1} format={pixels} onChange={setFeather} />
-              <Button variant="outline" size="sm" onClick={applyFeather}>
+              <Button variant="outline" size="sm" className="w-full" onClick={applyFeather}>
                 <Feather />
                 {t("maskFeather")}
               </Button>
             </ToolGroup>
 
-            <ToolGroup label={t("maskFromSource")}>
+            <ToolGroup label={t("maskFromSource")} icon={<SunMedium size={13} />}>
               {/*: 底图读到之前按了也没用 —— 说清楚为什么,而不是只灰掉。 */}
-              <span className="text-ui-xs leading-relaxed text-muted-foreground">{t("maskFromSourceHint")}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start"
-                disabled={!hasUnderlay}
-                onClick={() => pressFromSource("luminance")}
-              >
-                <SunMedium />
-                {t("maskFromLuminance")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start"
-                disabled={!hasUnderlay}
-                onClick={() => pressFromSource("alpha")}
-              >
-                <Droplets />
-                {t("maskFromAlpha")}
-              </Button>
+              <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("maskFromSourceHint")}</p>
+              {/*: 说明管着的就是下面这一排动作,所以两个初始化键并排铺满、和说明同宽。 */}
+              <div className="grid grid-cols-2">
+                <Button variant="outline" size="sm" disabled={!hasUnderlay} onClick={() => pressFromSource("luminance")}>
+                  <SunMedium />
+                  {t("maskFromLuminance")}
+                </Button>
+                <Button variant="outline" size="sm" disabled={!hasUnderlay} onClick={() => pressFromSource("alpha")}>
+                  <Droplets />
+                  {t("maskFromAlpha")}
+                </Button>
+              </div>
               <SliderField label={t("maskThreshold")} value={threshold} min={0} max={1} step={0.01} format={percent} onChange={changeThreshold} />
-              <label className="flex items-center gap-2 text-ui-xs font-semibold text-muted-foreground">
-                <Switch checked={showUnderlay} onCheckedChange={setShowUnderlay} />
-                {/*: 底图只是参考 —— 导出的是纯黑底 + 白笔迹,没有它。 */}
-                <span>{t("maskShowSource")}</span>
-              </label>
+              {/*
+                * **和上面四根滑块同一条竖线**:名字在 5rem 那一列,开关**铺满**中间那一列
+                * (它是这一行的"控件",不是跟在名字后面的一个小方块 —— 名字在左、控件在右,和四根
+                * 滑块读起来是同一种行),反选那颗方钮落在值那一列、和右值同一条右边线。
+                * `role="switch"` 自己挂 aria-label:套在 `<label>` 里读屏名字会是「显示底图 开关」。
+                */}
+              <div className="grid grid-cols-[5rem_minmax(0,1fr)_3.5rem] items-center gap-x-3">
+                <span className="min-w-0 text-ui-xs text-muted-foreground">{t("maskShowSource")}</span>
+                <Switch aria-label={t("maskShowSource")} checked={showUnderlay} onCheckedChange={setShowUnderlay} className="w-full" />
+                <IconButton label={t("maskInvert")} onClick={invert} className="justify-self-end">
+                  <Contrast />
+                </IconButton>
+              </div>
             </ToolGroup>
           </div>
         </div>
 
+        {/*
+          * 底部:和上面两栏**同一条竖线** —— 取消 / 存成蒙版落在右栏那条线上(读同一个 `--mask-rail`),
+          * 左边那一段留给失败说明。不自己另写一个右边距。
+          */}
         <DialogFooter className="items-center gap-2">
-          {/*: 失败展示全应用只有一份(components/failure):这里用一行档,不自己写一行红字。 */}
           {failure && (
             <FailureCard
               size="inline"
@@ -732,30 +781,54 @@ export function MaskEditor({
               copyText={failure}
             />
           )}
-          <Button variant="outline" onClick={close}>
-            {t("cancel")}
-          </Button>
-          <Button loading={saving} onClick={save}>
-            <Check />
-            {t("maskSave")}
-          </Button>
+          <div className="grid w-(--mask-rail) shrink-0 grid-cols-2 gap-2">
+            <Button variant="outline" className="w-full" onClick={close}>
+              {t("cancel")}
+            </Button>
+            <Button loading={saving} className="w-full" onClick={save}>
+              <Check />
+              {t("maskSave")}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-/** 工具条里的一组:一行小标题 + 内容。 */
-function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * 控制栏里的一节:**同一层级的小标题** + 内容。
+ *
+ * 节与节之间只有这一处节奏:一条 1px 分隔线(`--divider`,和设置页的分节同色)+ 同一段上留白。
+ * 此前是三节各写各的 gap,靠加粗小标题硬分,眼睛得自己找边界在哪。
+ *
+ * 分隔线用 `border-t` 画在**后一节自己身上**(不是插一个 `<hr>`):插独立元素的话,条件渲染的
+ * 那一节一走开,线上就会多出一条底下什么都没有的线(设置页踩过这一下,见 CONVENTIONS)。
+ */
+function ToolGroup({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1.5">
-      <span className="text-ui-xs font-semibold text-foreground">{label}</span>
-      {children}
-    </div>
+    <section className="grid gap-3 border-t border-divider pt-4 first:border-t-0 first:pt-0">
+      <h3 className="flex items-center gap-1.5 text-ui-xs font-semibold text-foreground">
+        <span className="text-muted-foreground" aria-hidden>
+          {icon}
+        </span>
+        {label}
+      </h3>
+      <div className="grid gap-3">{children}</div>
+    </section>
   );
 }
 
-/** 一根滑块 + 当前值。 */
+/**
+ * 一根滑块 + 名字 + 当前值。
+ *
+ * **五行带名字的一行对齐成一条竖线**:名字、控件、右值各占固定的一列 —— 名字 5rem,值 3.5rem
+ * (等宽数字,值变宽变窄不推控件),控件吃掉中间剩下的。此前是「名字和值一行、滑块另起一行」:
+ * 四行的名字左边距一样只是碰巧,滑块更是各走各的宽度,扫下来没有一条能对上的边。
+ *
+ * 名字和值都**不截断**:它们是固定文案和几字符的数(`200 px` / `100%`),5rem + 3.5rem 那一栏
+ * 放得下;真要放不下就折行,而不是把字切掉(切了要配 Truncate 的悬停全文,见 design/truncatedText)。
+ */
 function SliderField({
   label,
   value,
@@ -774,13 +847,11 @@ function SliderField({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="grid gap-1">
-      <div className="flex items-center justify-between gap-2 text-ui-xs text-muted-foreground">
-        <span>{label}</span>
-        <span className="tabular-nums">{format ? format(value) : String(value)}</span>
-      </div>
+    <label className="grid grid-cols-[5rem_minmax(0,1fr)_3.5rem] items-center gap-x-3 text-ui-xs text-muted-foreground">
+      <span className="min-w-0">{label}</span>
       <Slider value={[value]} min={min} max={max} step={step} onValueChange={([next]) => onChange(next)} />
-    </div>
+      <span className="text-right tabular-nums">{format ? format(value) : String(value)}</span>
+    </label>
   );
 }
 
