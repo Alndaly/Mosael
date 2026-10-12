@@ -799,8 +799,13 @@ def _picked(value: Any, limit: int) -> str:
 
 
 def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
-    """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的
-    说明、常用与否、JSON Schema 片段(和生成目录同一套规整,见 plugins/generation.parameters —— 预览和真的表单是同一个形状)。"""
+    """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁(给人看的节点名、**它的英文那份**、类名)、
+    ComfyUI 给这一格的说明、常用与否、JSON Schema 片段(和生成目录同一套规整,见 plugins/generation.parameters ——
+    预览和真的表单是同一个形状)。
+
+    **只认一种形状**(ADR 0006):插件交回来的这一项里,`node_label` 和 `node_label_en` 都是一句。插件和宿主同属一次发布
+    (内置插件随后端一起打包),读的又是现问现算、不落盘的回答 —— 没有旧数据可迁,也就不在读取期认第二种形状。
+    """
     if not isinstance(raw, dict):
         return None
     node, name, kind = _text(raw.get("node"), 40), _text(raw.get("input"), 200), _text(raw.get("kind"), 20)
@@ -813,6 +818,8 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
         "title": _picked(title, 200) or key,
         "node_title": _text(raw.get("node_title"), 200),
         "node_label": _picked(raw.get("node_label"), 200),
+        #: 搜索要按英文名也搜得到(显示那一份按看的人的语言挑好了,英文名得另带一条);图级的项没有节点,空串
+        "node_label_en": _text(raw.get("node_label_en"), 200),
         "hint": _picked(raw.get("hint"), 500),
         "class_type": _text(raw.get("class_type"), 200),
         "common": raw.get("common") is True,

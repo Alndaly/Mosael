@@ -291,11 +291,14 @@ function searchable(value: string): string {
   return value.toLowerCase().replace(/[\s_-]+/g, "");
 }
 
-/** 搜索「工作流里能填的」:名字、节点名、**节点号**、类名、输入名里有搜的字。 */
+/** 搜索「工作流里能填的」:名字、节点名(**英文那份也在**)、节点号、类名、输入名里有搜的字。
+ *
+ *  英文那份要单独算:插件交回的节点名是一对(`{"zh", "en"}`),`node_label` 只是按看的人的语言挑好的一条 ——
+ *  界面显示「加载图像」时,`Load Image` 在数据里根本不存在(维护者搜不到的就是它)。`node_label_en` 是原文的英文。 */
 export function matchesSource(item: WorkflowFillable, query: string): boolean {
   const needle = searchable(query.trim());
   if (!needle) return true;
-  const haystack = [item.title, item.node_label, item.node_title, item.class_type, item.key, item.input,
+  const haystack = [item.title, item.node_label, item.node_label_en, item.node_title, item.class_type, item.key, item.input,
                     //: 节点号也搜(`674`、`#674` 都行)—— 标题上那个 `#号` 现在可点着定位,想按它找是很自然的下一步。
                     item.node, `#${item.node}`];
   return haystack.some((one) => searchable(String(one ?? "")).includes(needle));

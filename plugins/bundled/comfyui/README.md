@@ -625,7 +625,11 @@ the workflow, and so does the agent when it calls it; a workflow without one sti
   `display_name` — and the class name only when there is nothing else. Reading object_info also fetches `/i18n` once and
   folds it in (`labels.with_i18n`), so fillable items, clash hints, input slots, "Results from" and tool output names all
   use the same name. Fillable items also carry `node_label` (the editor groups by it) and `hint` (ComfyUI's `tooltip` for
-  the input, per language); node number and class only appear in the hover detail for troubleshooting.
+  the input, per language), plus `node_label_en` — **the same node name in English**. `node_label` is a `{"zh", "en"}` pair
+  with one language already picked for display, so the English name was nowhere in the data: a Chinese UI shows 加载图像
+  while the canvas says `Load Image`, and searching the editor's left column by what it displays finds neither (the
+  maintainer's report: "the node is clearly named Load Image and searching for it finds nothing"). Node number and class
+  only appear in the hover detail for troubleshooting.
 - **What can be filled in** (`graph.items`): the derivation the generation catalog and the tool inputs used to do
   separately is now one. Each item is anchored on `<node id>.<input name>` (the graph-level seed, size and runs have no
   node), the same parameter keys as before, so values saved on boards and workflow nodes don't need migrating. Nodes

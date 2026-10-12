@@ -5,6 +5,17 @@ commit list and downloadable artifacts.
 
 ## [Unreleased]
 
+### 修:按节点名搜不到 —— 英文那一份根本没在数据里
+
+- 上一条只修了"按字面比"(去空格让 `Load Image` 撞上类名 `LoadImage`)—— **擦边**,不是正解,维护者当场指出来:
+  「搜索的是节点类而不是节点名」。
+- 真正的原因:插件交回的节点名是 `{"zh", "en"}` 一对(`labels.node_name`),**宿主按看的人的语言把它塌成了一条**
+  (`workflow_library._app_item` 的 `pick_text`)—— 界面上显示「加载图像」时,`Load Image` 在数据里**不存在**,
+  换个名字就搜不到(`LoadImageMask` 的显示名是「Load Image (as Mask)」,去空格也撞不上类名)。
+- 现在插件每一项另带 `node_label_en`(英文那份),宿主原样透出(老版本插件只给一对时从对里挑英文),搜索把它算进去。
+  显示照旧按语言走 —— 变的只是"能搜到什么"。
+
+
 ### 修:精简表单里按画布上的节点名搜不到
 
 - 搜「Load Image」一条都不出来,而画布上那个节点明明写着 `Load Image`(维护者截图)。原因:列表显示的是本地化的

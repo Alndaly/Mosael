@@ -49284,6 +49284,11 @@
             "title": "Node Label",
             "default": ""
           },
+          "node_label_en": {
+            "type": "string",
+            "title": "Node Label En",
+            "default": ""
+          },
           "hint": {
             "type": "string",
             "title": "Hint",

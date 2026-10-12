@@ -48,7 +48,8 @@ beforeAll(() => {
 
 /** 这张工作流:一个读图的槽位(参考图)和一个数字参数(放大倍数)。 */
 function data(): WorkflowApp {
-  const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "", common: true, exposable: true };
+  const base = { node_title: "", node_label: "", node_label_en: "", hint: "", role: "", media: "", folder: "",
+                 common: true, exposable: true };
   return {
     path: "放大.json",
     modified: 1,

@@ -52,7 +52,8 @@ import type { FormDraft } from "@/features/plugins/workflowAppForm";
 
 /** 这张工作流:两个节点各有一项能填的(名字是用户起的标题),加上「整张图」那一组的两项。 */
 function data(): WorkflowApp {
-  const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "", common: true, exposable: true };
+  const base = { node_title: "", node_label: "", node_label_en: "", hint: "", role: "", media: "", folder: "",
+                 common: true, exposable: true };
   return {
     path: "遮罩.json",
     modified: 1,

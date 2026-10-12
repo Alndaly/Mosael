@@ -19474,6 +19474,11 @@ export interface components {
              */
             node_label: string;
             /**
+             * Node Label En
+             * @default
+             */
+            node_label_en: string;
+            /**
              * Hint
              * @default
              */

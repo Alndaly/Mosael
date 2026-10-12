@@ -721,6 +721,10 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert by_key["seed"]["exposable"] is True
     assert by_key["4.ckpt_name"]["node_label"] == "Checkpoint 加载器" and by_key["4.ckpt_name"]["hint"] == "要加载的模型", \
         "节点给人看的名字、ComfyUI 的说明也按语言挑好"
+    assert by_key["4.ckpt_name"]["node_label_en"] == "Load Checkpoint", \
+        "插件交回的是一对,显示挑了中文;英文那份固定挑英文,界面搜索才搜得到(中文界面显示「Checkpoint 加载器」)"
+    assert by_key["10.image"]["node_label_en"] == "", "插件在这一项上没给节点名(这一条是老版本插件的形状):空串,不是挑不出来"
+    assert by_key["seed"]["node_label_en"] == "", "图级的项没有节点"
     assert by_key["4.ckpt_name"]["class_type"] == "CheckpointLoaderSimple", "类名留着给悬停说明排错"
     assert by_key["seed"]["node_label"] == "" and by_key["seed"]["hint"] == ""
     assert body["outputs"] == [

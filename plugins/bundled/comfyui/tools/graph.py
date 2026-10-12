@@ -1008,6 +1008,21 @@ def _pair(zh: str, en: str) -> dict[str, str]:
     return {"zh": zh, "en": en}
 
 
+def _label_en_of(item: dict[str, Any]) -> dict[str, Any]:
+    """给一项补上 `node_label_en` —— 节点名的**英文那一份**(`node_label` 是 `labels.node_name` 交回的 `{"zh", "en"}` 一对),
+    摆在 `node_label` 后面。界面按看的人的语言挑好一份显示,英文那份另带一路上:免得英文名在数据里根本不存在,搜索搜不到
+    它(显示是「加载图像」而画布上是 `Load Image`,只按显示的那一份比就搜不到 —— 见 items 的契约注释)。
+    图级的项(种子、尺寸、跑几遍,没有节点)没有这条名字,不补。"""
+    if not item.get("node_label"):
+        return item
+    out: dict[str, Any] = {}
+    for key, value in item.items():
+        out[key] = value
+        if key == "node_label":
+            out["node_label_en"] = value.get("en", "")
+    return out
+
+
 def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, str] | None = None) -> list[dict[str, Any]]:
     """这张图**全部能填的项**(ADR 0038 §1)。此前生成目录、工具入参各推各的那几步收在这一处:
 
@@ -1017,9 +1032,11 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
     - 其余给人调的字面量输入(见 _tunable_entries):选模型文件的下拉(`model`,带 `folder`)、别的下拉(`choice`)、
       开关(`toggle`)、数字(`number`)、文字(`text`,没有 `role`)。
 
-    每项 `{key, node, input, kind, title, node_title, node_label?, hint?, class_type, common, schema?}`:`key` 是锚点
+    每项 `{key, node, input, kind, title, node_title, node_label?, node_label_en?, hint?, class_type, common, schema?}`:`key` 是锚点
     (`<节点 id>.<输入名>`,图级的项就是它的名字),`title` 是人话名字(按语言分),`node_label` 是节点给人看的名字(用户起的
-    标题、ComfyUI 给这类节点的名字,见 labels.node_name —— 编辑器按节点分组用它),`hint` 是 ComfyUI 给这一格的说明,
+    标题、ComfyUI 给这类节点的名字,见 labels.node_name —— 编辑器按节点分组用它),`node_label_en` 是**同一个名字的英文那份**
+    (`node_label` 是 `{"zh", "en"}` 一对,界面显示只挑一种语言;英文那份另带一路上,搜索才搜得到 —— 显示是「加载图像」而画布上
+    是 `Load Image`,只按显示的那一份比就搜不到它),`hint` 是 ComfyUI 给这一格的说明,
     `schema` 是它进参数表时的 JSON Schema 片段(读素材的没有)。类名(`class_type`)只给排错的悬停说明用。
     顺序:提示词、素材、图级的项、其余按常用程度。生成目录(describe)、工具(tooling.shape_of)、应用表单(app_form)都从它出发。
     """
@@ -1055,18 +1072,18 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
         schema: dict[str, Any] = {"type": "string", "x-multiline": True}
         if isinstance(value, str):
             schema["default"] = value
-        found.append(hinted({"key": f"{node_id}.{field}", "node": node_id, "input": field, "kind": "text", "role": role,
-                             "title": _pair(zh, en), "node_title": custom, "node_label": where,
-                             "class_type": class_type, "common": True, "schema": schema}, class_type, field))
+        found.append(hinted(_label_en_of({"key": f"{node_id}.{field}", "node": node_id, "input": field, "kind": "text", "role": role,
+                                          "title": _pair(zh, en), "node_title": custom, "node_label": where,
+                                          "class_type": class_type, "common": True, "schema": schema}), class_type, field))
 
     for slot in slots(api, kind, titles, object_info):
         _, custom, where = node_facts(slot["node"])
         name = slot_name({**slot, "label": where})
         zh, en = labels.ROLE_NAMES.get(slot["role"], ("素材", "Input"))
-        found.append({"key": f"{slot['node']}.{slot['field']}", "node": slot["node"], "input": slot["field"],
-                      "kind": "media", "role": slot["role"], "media": slot["media"],
-                      "title": _pair(f"{zh} · {name['zh']}", f"{en} · {name['en']}"),
-                      "node_title": custom, "node_label": where, "class_type": slot["class_type"], "common": True})
+        found.append(_label_en_of({"key": f"{slot['node']}.{slot['field']}", "node": slot["node"], "input": slot["field"],
+                                   "kind": "media", "role": slot["role"], "media": slot["media"],
+                                   "title": _pair(f"{zh} · {name['zh']}", f"{en} · {name['en']}"),
+                                   "node_title": custom, "node_label": where, "class_type": slot["class_type"], "common": True}))
 
     if seed_inputs(api) or "seed" in placeholders:
         found.append({"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": _pair("种子", "Seed"),
@@ -1089,7 +1106,7 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
             item["hint"] = described.hint
         if spec.get("x-model-folder"):
             item["folder"] = spec["x-model-folder"]
-        found.append(item)
+        found.append(_label_en_of(item))
     # 几格写提示词的节点标题一样(复制出来的那种)、或者别的项和它们同名:各带上节点号,编辑器和右栏里分得清
     names = labels.numbered({one["key"]: one["title"] for one in found}, {one["key"]: one["node"] for one in found})
     return [{**one, "title": names[one["key"]]} for one in found]

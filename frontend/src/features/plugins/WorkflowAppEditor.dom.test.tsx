@@ -42,7 +42,8 @@ const instance = { id: "i1", name: "ComfyUI · 192.168.3.15" } as PluginInstance
 const flow = { path: "换装.json", label: "换装" } as WorkflowFile;
 
 function data(overrides: Partial<WorkflowApp> = {}): WorkflowApp {
-  const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "", common: true, exposable: true };
+  const base = { node_title: "", node_label: "", node_label_en: "", hint: "", role: "", media: "", folder: "",
+                 common: true, exposable: true };
   return {
     path: "换装.json",
     modified: 1776098682.9,
@@ -175,7 +176,8 @@ describe("表单编辑器:三块", () => {
     //: 子图里面一个读图节点:推荐本来会挑读图的槽位,但它这一版放不进表单
     api.getWorkflowApp.mockResolvedValue(data({ items: [...(base.items ?? []), {
       key: "12:7.image", node: "12:7", input: "image", kind: "media", role: "reference_image", media: "image", title: "参考图 · 子图",
-      node_title: "", node_label: "加载图像", hint: "", class_type: "LoadImage", common: true, folder: "", exposable: false, spec: null,
+      node_title: "", node_label: "加载图像", node_label_en: "LoadImage", hint: "", class_type: "LoadImage", common: true,
+      folder: "", exposable: false, spec: null,
     }] }));
     mount();
     const recommend = await screen.findByRole("button", { name: /workflowAppRecommend/ });

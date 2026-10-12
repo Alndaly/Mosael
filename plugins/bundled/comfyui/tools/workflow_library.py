@@ -722,10 +722,15 @@ def _read(comfy: Comfy, path: str, locale: str) -> tuple[dict[str, Any], float]:
 
 
 def _item_out(item: dict[str, Any]) -> dict[str, Any]:
-    """编辑器要的那一项:锚点、种类、名字、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的说明、常用与否、JSON Schema
-    片段(下拉的全部可选值,收窄时从里面挑)。"""
+    """编辑器要的那一项:锚点、种类、名字、节点是谁(给人看的节点名、**它的英文那份**、类名)、ComfyUI 给这一格的说明、
+    常用与否、JSON Schema 片段(下拉的全部可选值,收窄时从里面挑)。
+
+    `node_label_en`:`node_label` 是插件交回的 `{"zh", "en"}` 一对,宿主显示时只挑一种语言;英文那份另带一路上,
+    界面搜索才搜得到(编辑器左边那一列显示「加载图像」,而画布上写的是 `Load Image`,见 graph.items 的契约注释)。
+    """
     return {key: item[key] for key in ("key", "node", "input", "kind", "role", "media", "folder", "title", "node_title",
-                                       "node_label", "hint", "class_type", "common", "schema") if key in item}
+                                       "node_label", "node_label_en", "hint", "class_type", "common", "schema")
+            if key in item}
 
 
 def live_graph(payload: dict[str, Any], locale: str) -> dict[str, Any]:

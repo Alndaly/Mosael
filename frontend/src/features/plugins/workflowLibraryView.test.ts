@@ -120,4 +120,33 @@ describe("精简表单里搜「工作流里能填的」", () => {
     expect(matchesSource(item, "加载图像")).toBe(true);
     expect(matchesSource(item, "video")).toBe(false);
   });
+
+  it("英文节点名和本地化名字不是同一个词时也搜得到(搜索比的是节点名,不是类名)", () => {
+    //: 维护者搜的是节点名:`node_label` 只是按看的人的语言挑好的一条(中文界面显示「加载图像」),英文那份
+    //: `node_label_en` 才带着 `Load Image (as Mask)` —— 只按显示的那一份比,换个名字就废(类名归一只救得了
+    //: `LoadImage` 这种擦边命中的)。
+    const masked = {
+      key: "674.image", node: "674", input: "image", kind: "media", title: "参考图 · 加载图像 #674",
+      node_title: "", node_label: "加载图像", node_label_en: "Load Image (as Mask)",
+      class_type: "LoadImageMask", hint: "",
+    } as never;
+    expect(matchesSource(masked, "Load Image (as Mask)")).toBe(true);
+    expect(matchesSource(masked, "LoadImageMask")).toBe(true);
+    expect(matchesSource(masked, "加载图像")).toBe(true);
+    expect(matchesSource(masked, "Load - Image ( as  mask )")).toBe(true);
+    //: 「as Mask」只在这一份里才有:类名(LoadImageMask)和本地化的名字(加载图像)都比不出它来
+    expect(matchesSource(masked, "as Mask")).toBe(true);
+    expect(matchesSource(masked, "SaveImage")).toBe(false);
+    //: 空搜索不筛掉任何一项,照旧
+    expect(matchesSource(masked, "")).toBe(true);
+  });
+
+  it("插件没给英文那份(老版本)、或者根本没有节点时,照旧搜原来那几样", () => {
+    const without = { key: "674.image", node: "674", input: "image", kind: "media", title: "加载图像",
+                      node_title: "", node_label: "加载图像", node_label_en: "", class_type: "LoadImage",
+                      hint: "" } as never;
+    expect(matchesSource(without, "as Mask")).toBe(false);
+    expect(matchesSource(without, "加载图像")).toBe(true);
+    expect(matchesSource(without, "LoadImage")).toBe(true);
+  });
 });
