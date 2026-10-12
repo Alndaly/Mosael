@@ -1339,7 +1339,10 @@ export function GenerateWorkspace({
                 ? {
                     label: t("createGoToOrigin"),
                     hint: t("createGoToOriginHint"),
-                    onClick: () => void Promise.resolve(goToOrigin(workspace.id, session)).catch((error: Error) => toast.error(error.message)),
+                    //: 把 promise 交回去:这一行照着它转圈、转完收掉(见 SessionList 的 goBack);没成照旧在这里说原因
+                    onClick: (onStarting) =>
+                      Promise.resolve(goToOrigin(workspace.id, session, onStarting))
+                        .catch((error: Error) => toast.error(error.message)),
                   }
                 : undefined,
             };

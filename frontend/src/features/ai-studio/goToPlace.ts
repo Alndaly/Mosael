@@ -13,7 +13,7 @@ import { openWorkbench, workbenchAvailable } from "@/features/plugins/workbench/
 import { VIEW_RECORD_EVENTS, gotoRecord, openBoard, openNote } from "@/lib/deepLink";
 import { gotoAiChat } from "@/lib/aiStudioLink";
 
-async function openComfy(workspaceId: string, placeId: string): Promise<void> {
+async function openComfy(workspaceId: string, placeId: string, onStarting: () => void): Promise<void> {
   const { connection, path } = comfyParts(placeId);
   const [library, packages] = await Promise.all([getWorkflowLibrary(connection, workspaceId), listPluginPackages()]);
   const editor = library.editor;
@@ -22,11 +22,16 @@ async function openComfy(workspaceId: string, placeId: string): Promise<void> {
   const opened = await openWorkbench(
     { instanceId: connection, instanceName: instance?.name ?? "", workspaceId, url: editor.url },
     path ? { path } : {},
+    onStarting,
   );
   if (!opened.ok) throw new Error(opened.error || "workbench failed");
 }
 
-export function goToPlace(workspaceId: string, place: AgentPlace): Promise<void> | void {
+/**
+ * 跳到那一处。`onStarting` 透给工作台那一条(见下):那一处背后的本机服务真要起的时候叫一声 —— 点这一下的地方
+ * (列表行上的箭头)据此把「正在启动…」说出来。别处用不着,不给就行。
+ */
+export function goToPlace(workspaceId: string, place: AgentPlace, onStarting: () => void = () => {}): Promise<void> | void {
   switch (place.kind) {
     case "studio":
       //: 对话分区:只跳 `#/ai` 的话落在上次停的那个分区(上次在创作就落错,ADR 0055 §9)
@@ -49,13 +54,13 @@ export function goToPlace(workspaceId: string, place: AgentPlace): Promise<void>
       window.location.hash = `#/scenes?scene=${encodeURIComponent(place.id)}`;
       return;
     case "comfyui":
-      return openComfy(workspaceId, place.id);
+      return openComfy(workspaceId, place.id, onStarting);
   }
 }
 
 /** 在它的家那一处接着这段对话,再跳过去。 */
-export function goHome(workspaceId: string, session: SessionHome & { id: string }): Promise<void> | void {
+export function goHome(workspaceId: string, session: SessionHome & { id: string }, onStarting?: () => void): Promise<void> | void {
   const home = homeOf(session);
   adoptAgentSession(workspaceId, home, session.id);
-  return goToPlace(workspaceId, home);
+  return goToPlace(workspaceId, home, onStarting);
 }

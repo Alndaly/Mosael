@@ -46,7 +46,16 @@ import { useDndAccessibility } from "@/components/app/dndAccessibility";
  */
 export interface SessionRowExtras {
   subtitle?: string;
-  goBack?: { label: string; hint: string; onClick: () => void };
+  /**
+   * 「回到那里」:点了就去那一处开出来那条。
+   *
+   * 去 ComfyUI 工作台要好几步(读那台机器的工作流库、探/起它背后的本机服务、亮出视图、把那一张读进画布),几秒到一两分钟
+   * 都有;这一行自己把这段说出来:箭头转圈、名字换成「正在启动…」,转完(成败都算)恢复原样。真要去起本机服务时,那一处叫一声
+   * `onStarting` —— 这一行再把说明换成「第一次启动可能要一两分钟」(见 goToPlace 的 `onStarting`)。
+   *
+   * 失败由给这一颗的人说话(它知道那一处该怎么讲,见调用处的 `.catch(toast.error)`);这一行只保证圈一定收掉。
+   */
+  goBack?: { label: string; hint: string; onClick: (onStarting: () => void) => void | Promise<unknown> };
   /** 标题后面的小标(创作会话:这是哪一种 —— 图像、语音、播客……,ADR 0055)。 */
   badge?: React.ReactNode;
 }
@@ -663,6 +672,27 @@ function SessionRow({
   onNewGroup: () => void;
 }) {
   const t = useI18n();
+  //: 点下去到那一处真出现之间(ComfyUI 工作台:读那台机器的工作流库、起本机服务、亮视图、把那一张读进画布)可能好几秒到
+  //: 一两分钟 —— 这一行自己把这段说出来,不然点下去像没反应(维护者:「要过一阵子才会成功跳转,容易让人误解」)。
+  //: `opening` 是这一段本身,`starting` 是那台机器背后的本机服务真要起(第一次启动最久,说明里再补一句)。
+  const [going, setGoing] = React.useState<"idle" | "opening" | "starting">("idle");
+  const goingRef = React.useRef(false);
+  const goBackAction = extras?.goBack ?? null;
+  const goBackTo = () => {
+    //: 转着的时候再点不去第二次(禁用只管得住鼠标,这里再挡一道:连点只叫一次桥)
+    if (!goBackAction || goingRef.current) return;
+    goingRef.current = true;
+    setGoing("opening");
+    void (async () => {
+      try {
+        //: 失败由给这一颗的人说话(见 SessionRowExtras.goBack),这里只保证圈一定收掉 —— 不留一个转不完的圈
+        await goBackAction.onClick(() => setGoing("starting"));
+      } finally {
+        goingRef.current = false;
+        setGoing("idle");
+      }
+    })();
+  };
   // 选择模式下不许拖:那时的点击是"勾选",两种手势叠在一起谁都做不好。只能看的也不许拖(拖动是换分组)。
   const { attributes, listeners, setNodeRef } = useDraggable({ id: session.id, disabled: selectMode || Boolean(viewOnly) });
   //: 行那一层的样子(圆角、底色、左边那条短竖条、拖起来的淡影)。**贴在最外层** ——
@@ -717,9 +747,14 @@ function SessionRow({
       variant="ghost"
       size="icon-xs"
       className="mr-1 text-muted-foreground"
-      label={extras.goBack.label}
-      hint={extras.goBack.hint}
-      onClick={extras.goBack.onClick}
+      //: 在去的那段时间里,这一颗自己就是那句话说的地方:名字换成「正在启动…」,箭头换成转圈(一样高,行不跳);
+      //: 真要去起本机服务时(第一次启动可能要一两分钟)再把这话说全 —— 都是既有的文案(localServices)。
+      label={going === "idle" ? extras.goBack.label : t("localServiceOpenStarting")}
+      hint={going === "idle" ? extras.goBack.hint : null}
+      disabledReason={going === "starting" ? t("localServiceStartingNote") : undefined}
+      disabled={going !== "idle"}
+      loading={going !== "idle"}
+      onClick={goBackTo}
     >
       <CornerUpLeft size={13} />
     </IconButton>

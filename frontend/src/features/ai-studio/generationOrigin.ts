@@ -80,14 +80,15 @@ export function canGoToOrigin(session: GenerationSession): boolean {
   return session.origin_kind !== "comfyui" || workbenchAvailable();
 }
 
-/** 去这条会话开出来的那一处:画板、工作流、ComfyUI 那张走对话的家那一套(goToPlace);资产、定时任务各自的页;对话去 AI Studio 的对话分区。 */
-export function goToOrigin(workspaceId: string, session: GenerationSession): Promise<void> | void {
+/** 去这条会话开出来的那一处:画板、工作流、ComfyUI 那张走对话的家那一套(goToPlace);资产、定时任务各自的页;对话去 AI Studio 的对话分区。
+ *  `onStarting` 透给 ComfyUI 那一条:那一处背后的本机服务真要起时叫一声(列表行据此说「正在启动…」)。 */
+export function goToOrigin(workspaceId: string, session: GenerationSession, onStarting?: () => void): Promise<void> | void {
   const id = session.origin_id;
   switch (session.origin_kind) {
     case "board":
     case "workflow":
     case "comfyui":
-      return goToPlace(workspaceId, { kind: session.origin_kind, id });
+      return goToPlace(workspaceId, { kind: session.origin_kind, id }, onStarting);
     case "entity":
       gotoRecord("/entities", VIEW_RECORD_EVENTS.entities, id);
       return;
