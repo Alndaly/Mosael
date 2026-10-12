@@ -29,9 +29,9 @@ import os
 import re
 import subprocess
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import layouts
 import pinned
 import shared_models
 from comfy_http import Comfy
@@ -123,24 +123,8 @@ def _is_windows() -> bool:
 
 
 # --- 认目录 -------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Layout:
-    """认出来的 ComfyUI:`root` 是有 main.py 和 comfy/ 的那一层;便携版时 `portable` 是外层(有 python_embeded/)。"""
-
-    root: Path
-    portable: Path | None = None
-
-
-def find_layout(directory: Path) -> Layout | None:
-    """用户选的目录 → ComfyUI 在哪。Windows 便携版的两种选法都认:外层的 `ComfyUI_windows_portable`(里面是 `ComfyUI/`
-    和 `python_embeded/`),或者里面那层 `ComfyUI/`。"""
-    for candidate in (directory, directory / "ComfyUI"):
-        if (candidate / "main.py").is_file() and (candidate / "comfy").is_dir():
-            outer = candidate.parent if candidate == directory else directory
-            return Layout(candidate, outer if (outer / "python_embeded").is_dir() else None)
-    return None
+#: 认目录这件事本身(`Layout` / `find_layout` / `LAYOUT_LABELS`)在 layouts:它是 `service` 与
+#: `shared_models` 都要的东西,所以住在两者下面那个叶子里,不在这里。
 
 
 def venv_python(venv: Path, *, windows: bool) -> Path | None:
@@ -153,7 +137,7 @@ def venv_python(venv: Path, *, windows: bool) -> Path | None:
     return None
 
 
-def find_python(layout: Layout, given: str, *, windows: bool) -> tuple[Path | None, str]:
+def find_python(layout: layouts.Layout, given: str, *, windows: bool) -> tuple[Path | None, str]:
     """用哪个 Python 起它,和它是怎么认出来的(`user` / `portable` / `venv` / `none`)。
 
     用户指定了就用他指的(他知道 conda、系统 Python 在哪,也可能 venv 是坏的);没指定按顺序:便携版自带的
@@ -193,7 +177,7 @@ def _custom_node(root: Path, name: str) -> Path | None:
     return next((one for one in entries if one.is_dir() and one.name.lower() == name.lower()), None)
 
 
-def _old_manager_steps(layout: Layout, python: Path | None) -> tuple[str, str]:
+def _old_manager_steps(layout: layouts.Layout, python: Path | None) -> tuple[str, str]:
     """只有老 Manager 时怎么换成 pip 版(中、英):装 manager_requirements.txt、启动加 --enable-manager。ComfyUI 老到还没有
     那个文件(0.4.0 起才有)就先升级。"""
     requirements = layout.root / "manager_requirements.txt"
@@ -263,7 +247,7 @@ def detect(payload: dict[str, Any], locale: str, *, windows: bool | None = None)
     def problem(level: str, zh: str, en: str) -> None:
         problems.append({"level": level, "text": {"zh": zh, "en": en}})
 
-    layout = find_layout(Path(raw).expanduser()) if raw else None
+    layout = layouts.find_layout(Path(raw).expanduser()) if raw else None
     if layout is None:
         problem("error", f"这个目录里认不出 ComfyUI:要选有 main.py 和 comfy/ 的那一层(Windows 便携版选外层的 "
                          f"ComfyUI_windows_portable 也行)\n{raw}",
@@ -392,7 +376,7 @@ def launch(payload: dict[str, Any], locale: str, *, windows: bool | None = None,
            has_manager: Any = manager_pip) -> dict[str, Any]:
     windows = _is_windows() if windows is None else windows
     raw = str(payload.get("directory") or "").strip()
-    layout = find_layout(Path(raw).expanduser()) if raw else None
+    layout = layouts.find_layout(Path(raw).expanduser()) if raw else None
     if layout is None:
         raise ComfyError(say(locale, f"这个目录里认不出 ComfyUI:{raw}", f"No ComfyUI found in this folder: {raw}"))
     given = str(payload.get("python") or "").strip()
@@ -476,7 +460,7 @@ def install_pysssss(root: Path, locale: str, *, mirror: str = "", is_cancelled=p
 
 def add_nodes(payload: dict[str, Any], locale: str) -> dict[str, Any]:
     raw = str(payload.get("directory") or "").strip()
-    layout = find_layout(Path(raw).expanduser()) if raw else None
+    layout = layouts.find_layout(Path(raw).expanduser()) if raw else None
     if layout is None:
         raise ComfyError(say(locale, f"这个目录里认不出 ComfyUI:{raw}", f"No ComfyUI found in this folder: {raw}"))
     existing = _custom_node(layout.root, PYSSSSS_DIR)
@@ -551,6 +535,6 @@ def local_service() -> str:
     return os.environ.get("MOSAEL_LOCAL_SERVICE", "").strip()
 
 
-__all__ = ["HEALTH_PATH", "Layout", "OPS", "PYSSSSS", "PYSSSSS_DIR", "add_nodes", "busy", "comfyui_version", "detect", "discover",
-           "find_layout", "find_python", "github_mirror", "install_pysssss", "launch", "local_service", "readdress",
+__all__ = ["HEALTH_PATH", "OPS", "PYSSSSS", "PYSSSSS_DIR", "add_nodes", "busy", "comfyui_version", "detect", "discover",
+           "find_python", "github_mirror", "install_pysssss", "launch", "local_service", "readdress",
            "venv_python"]

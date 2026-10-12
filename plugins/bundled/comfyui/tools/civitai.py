@@ -20,6 +20,7 @@ import re
 from typing import Any
 from urllib import parse
 
+import civitai_urls
 import sources
 from lines import ComfyError, say
 
@@ -31,11 +32,6 @@ MEDIA_HOST = "image.civitai.com"
 NSFW_FROM_LEVEL = 4
 #: 一个 sha256 长什么样(Civitai 收大写、小写都行)。
 SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
-
-
-def page(model_id: Any, version_id: Any) -> str:
-    """一个版本在 Civitai 网站上的那一页。"""
-    return f"https://civitai.com/models/{int(model_id)}?modelVersionId={int(version_id)}"
 
 
 def _get(path: str, locale: str) -> dict[str, Any] | None:
@@ -131,7 +127,7 @@ def essentials(raw: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "model_id": model_id,
         "version_id": version_id,
-        "page": page(model_id, version_id),
+        "page": civitai_urls.page(model_id, version_id),
         "title": " · ".join(part for part in (str(model.get("name") or "").strip(),
                                               str(raw.get("name") or "").strip()) if part)[:300],
         "type": str(model.get("type") or "")[:40],
@@ -145,15 +141,3 @@ def essentials(raw: dict[str, Any]) -> dict[str, Any] | None:
 def flagged(level: int) -> bool:
     """一张示例图的分级算不算成人内容。"""
     return level >= NSFW_FROM_LEVEL
-
-
-def version_id_of(url: str) -> str:
-    """Civitai 的下载链接、版本接口、带 modelVersionId 的模型页 → 版本号;认不出是空串。"""
-    parts = parse.urlsplit(url)
-    if found := re.match(r"^/api/download/models/(\d+)", parts.path):
-        return found.group(1)
-    if found := re.match(r"^/api/v1/model-versions/(\d+)", parts.path):
-        return found.group(1)
-    if re.match(r"^/models/\d+", parts.path):
-        return (parse.parse_qs(parts.query).get("modelVersionId") or [""])[0]
-    return ""

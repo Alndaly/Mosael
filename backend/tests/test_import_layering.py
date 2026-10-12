@@ -1,17 +1,24 @@
+"""结构性约束:**模块依赖(分层 + 无环)** —— 底层不认识上层,谁也不许拿函数内的延迟导入把环藏起来。
+
+这几条约束是这套代码库现在真实成立的性质(实测:零反向依赖、顶层导入图无环、连函数体内的 import 一起算
+也只剩冻结在棘轮里的那些环),不是愿望。写成测试是因为它们**很容易在不知不觉中被破坏** —— 领域层想给
+飞书推个消息、随手 import 一下,环就成了;而循环依赖不会立刻报错,它只是逼着后来人到处写函数内延迟导入,
+直到某天导入顺序一变就炸。曾经就出现过 domain.agent.confirmations ⇄ integrations.feishu.service 这一个环
+(领域层回调集成层),靠把推送挪到路由层解掉。
+
+**延迟导入不是分层的解法** —— 为绕环而延迟只是把环藏进调用那一刻(模块图里那条边还在),判据写在
+`test_下层不认识上层`:两边互相引用永远说明有个东西站错了地方,正解是把它**下沉到叶子模块**。
+仍然允许的是「真的运行时才需要、且加载代价高」,那一条的说明里给了仓库里的真实例子与两者的分界。
+"""
+
 from __future__ import annotations
 
 import ast
 import collections
 from pathlib import Path
 
-"""模块依赖的结构性约束。
-
-这两条约束是这套代码库现在真实成立的性质(实测:零反向依赖、顶层导入图无环),不是愿望。
-写成测试是因为它们**很容易在不知不觉中被破坏** —— 领域层想给飞书推个消息、随手 import 一下,
-环就成了;而循环依赖不会立刻报错,它只是逼着后来人到处写函数内延迟导入,直到某天导入顺序
-一变就炸。曾经就出现过 domain.agent.confirmations ⇄ integrations.feishu.service 这一个环
-(领域层回调集成层),靠把推送挪到路由层解掉。
-"""
+#: 这份文件是一道**棘轮**:反向依赖一条都不许有,环里的模块只减不增(见 LAZY_CYCLE_MODULES)。
+RATCHET = True
 
 BACKEND = Path(__file__).resolve().parents[1]
 APP = "app"
@@ -165,9 +172,26 @@ def _layer_of(module: str) -> int:
 def test_下层不认识上层() -> None:
     """**只看顶层 import。**
 
-    函数内的延迟导入在这里是允许的 —— 那是"运行时才需要"的正当表达(迁移只在 init_db 那一刻
-    跑一次,它对上层的需要确实是运行时的)。而顶层 import 是**加载时的绑定**:它把两层焊死,
-    代价是 import 一个底层模块就要把上层整棵拉起来,而那恰恰是让循环依赖有机可乘的形状。
+    顶层 import 是**加载时的绑定**:它把两层焊死,代价是 import 一个底层模块就要把上层整棵拉起来,而那恰恰
+    是让循环依赖有机可乘的形状。
+
+    **函数内的延迟导入不是这一条的解法。** 为了让这条棘轮不红而把 import 挪进函数体,只是把那个环藏起来:
+    模块图里那条边照样在(文件末尾那两条棘轮建图时把函数体内的 import 也算上,就是这个道理),代价换成了
+    调用那一刻才炸、而且成不成看导入顺序 —— 直到某天一条毫不相干的路径上报出
+    `ImportError: cannot import name ... (most likely due to a circular import)`。
+
+    **正解是下沉。** 两边互相引用,永远说明有个东西站错了地方(和 `docs/CONVENTIONS.md` 里那条前端的同名
+    规矩同一条:「通用工具放 `lib/` 或 `components/`,属于某个领域的东西放回它的领域」):把两边都要的那个
+    东西挪到**叶子模块**去 —— 它只认识标准库或更下面的模块,谁也不认识上层,于是那条边从「反向」变成
+    「向下」。这套代码库一直这么做:引擎与执行器之间只有 `executors/registry.py` 一个面、`convert.type_of`
+    从 `workflow_import` 搬到了只依赖 `lines` 的 `convert`、插件那三个两模块环各自下沉成
+    `layouts` / `civitai_urls` / `tool_registry`。
+
+    **仍然允许的是「真的运行时才需要」** —— 那条路径本来就会用到它,而加载它的代价很高:几百 MB 的子进程
+    依赖(`ai/runtime/workers/asr.py` 的 `import whisperx`、`tts.py` 的 `from f5_tts.api import F5TTS` 与两处
+    `import torch` —— 都只在那个专用解释器里用)、可选依赖、平台兜底。
+    **两者的分界不在写在哪儿,而在为什么写在那儿**:说得出「用到它的那条路径之外不必付这个代价」是前者;
+    答不上来、只知道挪进去棘轮就不红了,就是后者 —— 后者该下沉,不该延迟。
     """
     graph = _graph(include_lazy=False)
     violations = []
@@ -181,17 +205,19 @@ def test_下层不认识上层() -> None:
                 violations.append(f"{src} → {dst}    ({LAYER_ORDER[src_layer]} 认识了 {LAYER_ORDER[dst_layer]})")
 
     assert not violations, (
-        "下层在**顶层** import 了上层。真的需要的话请挪进函数体 —— 那表示「运行时才需要」,"
-        "而不是「加载时就绑死」:\n  " + "\n  ".join(sorted(violations))
+        "下层在**顶层** import 了上层。挪进函数体不解决这件事 —— 那只是把环藏起来(模块图里那条边还在,"
+        "换成调用那一刻才炸、且成不成看导入顺序)。正解是**下沉**:把两边都要的那个东西挪到一个叶子模块"
+        "(只认识标准库或更下面的模块),两边都从那里取。只有「真的运行时才需要、且加载代价高」才留在函数体"
+        "(判据见这条测试的说明):\n  " + "\n  ".join(sorted(violations))
     )
 
 
 def test_领域连延迟导入也不认识集成层() -> None:
     """**这一条连函数内的延迟导入也不放过。**
 
-    上一条允许延迟导入,是因为「运行时才需要上层」有正当的场合(迁移)。领域层对集成层没有:领域要的外部
-    能力经 ai/providers 的公共入口拿,集成层(飞书这类)是**调用领域的一方**。此前唯一的一处是引擎目录
-    延迟 import integrations.volc_openapi 去拉火山账号的音色 —— 那是「怎么跟火山说话」,已经搬进
+    上一条只给「真的运行时才需要、且加载代价高」留了口子(分界写在那里)。领域层对集成层没有这样的场合:
+    领域要的外部能力经 ai/providers 的公共入口拿,集成层(飞书这类)是**调用领域的一方**。此前唯一的一处是
+    引擎目录延迟 import integrations.volc_openapi 去拉火山账号的音色 —— 那是「怎么跟火山说话」,已经搬进
     ai/providers/adapters/bytedance/volcano/speakers。
     """
     graph = _graph(include_lazy=True)

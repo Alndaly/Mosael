@@ -20,7 +20,7 @@ from typing import Any
 import graph
 import models
 import run
-import tooling
+import tool_registry
 from comfy_http import Comfy
 from lines import ComfyError, say
 
@@ -56,7 +56,7 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
     found: list[dict[str, Any]] = []
     workflows = list(models.each(comfy, object_info, locale))
     by_workflow = {workflow.id: models.entries(workflow, object_info) for workflow in workflows}
-    names = tooling.tool_names([entry for entries in by_workflow.values() for entry in entries])
+    names = tool_registry.tool_names([entry for entries in by_workflow.values() for entry in entries])
     for workflow in workflows:
         entries = by_workflow[workflow.id]
         name = _text(workflow.label, locale)
@@ -69,7 +69,7 @@ def list_workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[s
             continue
         full = entries[0]
         described = inspect(workflow.id, name, workflow.api, object_info, workflow.titles, locale, full.form)
-        runnable = tooling.runnable(workflow, object_info)
+        runnable = tool_registry.runnable(workflow, object_info)
         if workflow.id in names and runnable and not forms:
             # 跑它用的工具(输入就是它自己的节点);一个输出节点都没有的图没有工具
             described["tool"] = names[workflow.id]
@@ -239,7 +239,7 @@ def deliver(comfy: Comfy, entries: list[tuple[str, dict[str, Any]]], prompt: dic
 
 def _named_output(one: dict[str, Any], media: str) -> str:
     """一份产出记在哪个具名输出上:和声明输出同一个判据(graph.output_media),交出它的节点类型不知道时按它自己的种类。"""
-    return tooling.output_key(graph.output_media(one["class_type"]) if one["class_type"] else media, one["node"])
+    return tool_registry.output_key(graph.output_media(one["class_type"]) if one["class_type"] else media, one["node"])
 
 
 def _node_summary(one: dict[str, Any], titles: dict[str, str]) -> dict[str, Any]:

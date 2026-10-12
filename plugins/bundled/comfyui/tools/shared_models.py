@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import layouts
 from lines import ComfyError, say
 from model_files import files_in, folder_info
 
@@ -213,9 +214,6 @@ def refuse_write(location: Path, locale: str) -> ComfyError:
 
 # --- op: service_model_folders ----------------------------------------------------
 
-LAYOUT_LABELS = {"comfyui": {"zh": "ComfyUI 的模型文件夹", "en": "ComfyUI models folder"},
-                 "a1111": {"zh": "A1111 / Forge", "en": "A1111 / Forge"}}
-
 
 def _loaded_counts(comfy: Any, found: list[Shared]) -> dict[str, tuple[bool, int]] | None:
     """在跑的那台 ComfyUI 看到了哪几处、每处几个模型(按 `/experiment/models` 报的路径对:每个文件属于第几处路径)。
@@ -245,11 +243,9 @@ def _loaded_counts(comfy: Any, found: list[Shared]) -> dict[str, tuple[bool, int
 def model_folders(payload: dict[str, Any], locale: str, *, comfy: Any = None) -> dict[str, Any]:
     """连接页上「共用的模型文件夹」那一块:每一处认成什么、对上哪几个模型目录、有什么问题;在跑的话它加载了没有、看到几个模型
     (刚加的要重启才加载)。"""
-    import service  # service 也要用这里(起的时候写配置):在这里才取,不成环
-
     raw_folders = [str(one) for one in payload.get("shared_models") or [] if str(one).strip()][:MAX_FOLDERS]
     directory = str(payload.get("directory") or "").strip()
-    layout = service.find_layout(Path(directory).expanduser()) if directory else None
+    layout = layouts.find_layout(Path(directory).expanduser()) if directory else None
     own = layout.root / "models" if layout is not None else None
     found = [inspect(one, locale, own_models=own) for one in raw_folders]
     counts = _loaded_counts(comfy, found) if comfy is not None else None
@@ -259,7 +255,7 @@ def model_folders(payload: dict[str, Any], locale: str, *, comfy: Any = None) ->
         folders.append({
             "path": one.path,
             "ok": one.problem is None,
-            "layout": LAYOUT_LABELS.get(one.layout) or "",
+            "layout": layouts.LAYOUT_LABELS.get(one.layout) or "",
             "folders": sorted(one.folders),
             "problem": one.problem or "",
             "loaded": loaded,

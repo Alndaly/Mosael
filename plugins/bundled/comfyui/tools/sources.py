@@ -541,41 +541,6 @@ def direct_url(url: str, locale: str, folders: set[str]) -> str:
     return url
 
 
-def provenance_of(url: str, locale: str) -> dict[str, Any]:
-    """下载的这个链接是哪个站上的哪一页(经 Mosael 下载时记下,见 provenance):HuggingFace 的文件页、Civitai 的版本页
-    (连着那个版本的信息)、ModelScope 的文件页。别的直链只记站点,不记页 —— 下载地址不是介绍页。
-
-    尽力而为:问 Civitai 失败(断网、限流)不该挡住下载,那时只记站点。"""
-    import civitai
-
-    url = canonical_url(url)
-    host = _host(url)
-    if host in HF_HOSTS:
-        found = _HF_FILE.match(parse.urlsplit(url).path)
-        if found:
-            return {"site": "huggingface", "page": f"https://huggingface.co/{found.group('repo')}/blob/{found.group('rev')}/"
-                                                   f"{found.group('path')}"}
-        return {"site": "huggingface"}
-    if host in CIVITAI_HOSTS:
-        version_id = civitai.version_id_of(url)
-        try:
-            info = civitai.version(version_id, locale) if version_id else None
-        except (ComfyError, OSError):
-            info = None
-        return {"site": "civitai", "page": info["page"], "civitai": info} if info else {"site": "civitai"}
-    if host in MODELSCOPE_HOSTS:
-        try:
-            target = _ms_link(url, locale)
-        except ComfyError:
-            return {"site": "modelscope"}
-        base = f"https://{target.site}/models/{parse.quote(target.repo)}"
-        if target.path:
-            return {"site": "modelscope", "page": f"{base}/file/view/{parse.quote(target.revision or 'master', safe='')}/"
-                                                  f"{parse.quote(target.path)}"}
-        return {"site": "modelscope", "page": base}
-    return {"site": "direct"}
-
-
 def resolve(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
     url = str(payload.get("url") or "").strip()
     info = folder_info(comfy) or {}

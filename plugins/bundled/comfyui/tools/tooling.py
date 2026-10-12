@@ -31,22 +31,26 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 import graph
 import models
 import run
+import tool_registry
+import workflows
 from comfy_http import Comfy
 from lines import ComfyError, say
 
-BUILTIN_TOOL = "wf_builtin_txt2img"
 #: 工具一次最多跑多久(宿主的上限就是 1800 秒)。更长的走生成(6 小时、有回执、能续等)。
 TIMEOUT_SECONDS = 1800
+
+#: 工具名怎么起、哪些图算工具、一份产出记在哪个具名输出上在 `tool_registry`(`workflows` 也要那三样,
+#: 所以它们住在两个模块下面)。下面这一行**只为**一个还写着 `tooling.tool_names(...)` 的调用方:
+#: `workflow_library._Snapshot`(那个文件这一轮归别人改,不动)—— 等它改成 `tool_registry.tool_names` 之后删掉。
+tool_names = tool_registry.tool_names
 
 _ROLE_LABELS = {
     "reference_image": ("图", "Image"),
@@ -75,62 +79,6 @@ _FEATURE_LABELS = {
     "controlnet": ("ControlNet", "ControlNet"),
     "lora": ("LoRA", "LoRA"),
 }
-
-
-def safe(node: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]+", "_", str(node)).strip("_") or "0"
-
-
-def output_key(media: str, node: str) -> str:
-    prefix = media if media in ("image", "video", "audio", "text") else "output"
-    return f"{prefix}_{safe(node)}"
-
-
-def _hash(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
-
-
-def _ident_key(workflow: models.Workflow) -> str:
-    ident = re.sub(r"[^0-9a-fA-F]", "", workflow.ident).lower()
-    # 全零的 UUID 是老版本前端的占位(新版前端存盘前会换掉它),不是这张图自己的 id
-    return ident[:12] if len(ident) >= 12 and ident.strip("0") else ""
-
-
-#: 不在 ComfyUI 里存着的那张图(内置文生图):名字写死(它没有路径,也没有 ComfyUI 给的 id)。
-_FIXED_NAMES = {models.BUILTIN: BUILTIN_TOOL}
-
-
-def _workflow_names(workflows: list[models.Workflow]) -> dict[str, str]:
-    """图的 id → 它的完整工作流入口的工具名。转不过来的图没有工具。
-
-    **几张图带着同一个 id**(在 ComfyUI 外面拷了一份文件、老版本「另存为」带着原来的 id)时,它们都退到路径的
-    哈希:谁拿那个 id 的名字要是按路径顺序定,新拷出来的「a 副本.json」排在前面就抢走了原来那张的名字,存着的
-    工作流节点从此悄悄跑的是另一张图。宁可名字变了、调用时说「找不到」,也不张冠李戴。
-    """
-    counts: dict[str, int] = {}
-    for workflow in workflows:
-        key = _ident_key(workflow)
-        if key and not workflow.problem:
-            counts[key] = counts.get(key, 0) + 1
-    names: dict[str, str] = {}
-    for workflow in workflows:
-        if workflow.problem:
-            continue
-        if workflow.id in _FIXED_NAMES:
-            names[workflow.id] = _FIXED_NAMES[workflow.id]
-            continue
-        key = _ident_key(workflow)
-        names[workflow.id] = f"wf_{key}" if key and counts[key] == 1 else f"wf_{_hash(workflow.id)}"
-    return names
-
-
-def tool_names(entries: list[models.Entry]) -> dict[str, str]:
-    """入口 id(模型 id)→ 工具名。完整工作流入口是这张图的名字(见 `_workflow_names`),表单入口在它后面接 `_<表单 id>`:
-    一张图退到路径哈希时,它的表单入口跟着退。撞 id 要看同一台上的每一张图,所以 `entries` 要给全。"""
-    workflows = list({one.workflow.id: one.workflow for one in entries}.values())
-    base = _workflow_names(workflows)
-    return {one.id: f"{base[one.workflow.id]}_{one.form_id}" if one.form_id else base[one.workflow.id]
-            for one in entries if one.workflow.id in base}
 
 
 def _pair(zh: str, en: str) -> dict[str, str]:
@@ -209,7 +157,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     image_slots = [slot for slot in found if slot["media"] == "image"]
     for slot in found:
         media = slot["media"]
-        key = f"{'mask' if media == 'mask' else media}_{safe(slot['node'])}"
+        key = f"{'mask' if media == 'mask' else media}_{tool_registry.safe(slot['node'])}"
         zh, en = _ROLE_LABELS.get(slot["role"], ("素材", "Input"))
         custom = slot["title"] if slot["title"] != slot["class_type"] else ""
         if role_counts[slot["role"]] > 1 or custom:
@@ -249,9 +197,9 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
 
     for field in form.parameters():
         node, name = field.item["node"], field.item["input"]
-        key = f"{name}_{safe(node)}"
+        key = f"{name}_{tool_registry.safe(node)}"
         if key in shape.properties:
-            key = f"{key}_{_hash(field.key)[:4]}"
+            key = f"{key}_{tool_registry.short_hash(field.key)[:4]}"
         spec = {"title": field.title, **field.item["schema"]}
         if field.choices is not None:
             spec["enum"] = list(field.choices)
@@ -315,7 +263,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     nodes = graph.output_nodes(api, object_info, titles)
     shape.output_nodes = len(nodes)
     for node in nodes:
-        key = output_key(node["media"], node["node"])
+        key = tool_registry.output_key(node["media"], node["node"])
         zh, en = _OUTPUT_LABELS.get(node["media"], _OUTPUT_LABELS["any"])
         shape.outputs.append(key)
         shape.node_outputs.append(key)
@@ -459,8 +407,8 @@ def _replaces(entry: models.Entry, name: str, shape: Shape) -> list[dict[str, An
     if not entry.form_id:
         found.append({"tool": "run_workflow", "match": {"workflow": entry.id}, "rename": shape.rename,
                       "drop_if": {"wait": True}})
-    by_path = f"wf_{_hash(entry.workflow.id)}" + (f"_{entry.form_id}" if entry.form_id else "")
-    if name != by_path and name not in _FIXED_NAMES.values():
+    by_path = tool_registry.path_name(entry.workflow.id, entry.form_id)
+    if name != by_path and name not in tool_registry.FIXED_NAMES.values():
         found.append({"tool": by_path, "match": {}, "rename": {}, "drop_if": {}})
     return found
 
@@ -469,7 +417,7 @@ def _cache_path(comfy: Comfy) -> Path | None:
     """工具名 → 入口 id(模型 id;表单入口带 `#<表单 id>`)的对照表。**按服务器分开记**:持久目录是整个插件共用的,
     几台 ComfyUI 记在一个文件里就互相覆盖,每跑一次工具都得把那台服务器上的工作流整个重扫一遍。"""
     root = os.environ.get("MOSAEL_PLUGIN_DATA_DIR", "")
-    return Path(root) / f"tools-{_hash(comfy.base)}.json" if root else None
+    return Path(root) / f"tools-{tool_registry.short_hash(comfy.base)}.json" if root else None
 
 
 def _remember(comfy: Comfy, names: dict[str, str]) -> None:
@@ -493,13 +441,7 @@ def names_of(comfy: Comfy, workflow: models.Workflow, object_info: dict[str, Any
             known = {entry_id: tool for tool, entry_id in json.loads(path.read_text(encoding="utf-8")).items()}
         except (OSError, ValueError, AttributeError):
             known = {}
-    return {entry_id: known.get(entry_id, tool) for entry_id, tool in tool_names(models.entries(workflow, object_info)).items()}
-
-
-def runnable(workflow: models.Workflow, object_info: dict[str, Any]) -> bool:
-    """这张图跑得起来吗:一个输出节点(保存、预览、显示文字……)都没有的,ComfyUI 不跑(`Prompt has no outputs`),
-    原样跑一遍什么也交不回 —— 不做成工具(此前它的工具写着「交回它全部 0 个输出节点的产出」)。"""
-    return bool(graph.output_nodes(workflow.api, object_info, workflow.titles))
+    return {entry_id: known.get(entry_id, tool) for entry_id, tool in tool_registry.tool_names(models.entries(workflow, object_info)).items()}
 
 
 def all_entries(comfy: Comfy, object_info: dict[str, Any], locale: str) -> list[models.Entry]:
@@ -510,7 +452,7 @@ def all_entries(comfy: Comfy, object_info: dict[str, Any], locale: str) -> list[
 def _listed(entry: models.Entry, names: dict[str, str], object_info: dict[str, Any]) -> bool:
     """这个入口报不报成工具:有名字、跑得起来,而且不是「上一版格式、带表单」那张图的完整入口(升级之前不报,见
     app_form.Marks.forms_await_upgrade —— 工作流里记着 `wf_<id>` 的老节点那时指的是表单)。"""
-    return entry.id in names and runnable(entry.workflow, object_info) and not entry.workflow.marks.forms_await_upgrade
+    return entry.id in names and tool_registry.runnable(entry.workflow, object_info) and not entry.workflow.marks.forms_await_upgrade
 
 
 def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
@@ -518,7 +460,7 @@ def catalog(comfy: Comfy, locale: str) -> dict[str, Any]:
     models.MOVED_KEY:以前指着表单的工具名,改到表单入口的工具名)。名字照全部入口起(撞 id 要看每一张),报的是 `_listed` 的那些。"""
     object_info = comfy.object_info()
     entries = all_entries(comfy, object_info, locale)
-    names = tool_names(entries)
+    names = tool_registry.tool_names(entries)
     _remember(comfy, names)
     listed = [entry for entry in entries if _listed(entry, names, object_info)]
     return {
@@ -541,12 +483,12 @@ def _resolve(name: str, comfy: Comfy, object_info: dict[str, Any], locale: str) 
     if entry_id:
         try:
             loaded, entry = models.pick(comfy, entry_id, object_info, locale)
-            if tool_names(models.entries(entry.workflow, object_info)).get(entry_id) == name:
+            if tool_registry.tool_names(models.entries(entry.workflow, object_info)).get(entry_id) == name:
                 return loaded, entry
         except ComfyError:
             pass
     entries = all_entries(comfy, object_info, locale)
-    names = tool_names(entries)
+    names = tool_registry.tool_names(entries)
     _remember(comfy, names)
     for entry in entries:
         if names.get(entry.id) == name:
@@ -572,7 +514,7 @@ def explain(comfy: Comfy, asked: Any, locale: str) -> dict[str, Any]:
         raise ComfyError(say(locale, "要解释的工具名形状不对", "The tool names to explain are malformed."))
     object_info = comfy.object_info()
     entries = all_entries(comfy, object_info, locale)
-    names = tool_names(entries)
+    names = tool_registry.tool_names(entries)
     by_name = {names[entry.id]: entry for entry in entries if entry.id in names}
     fulls = {names[entry.id]: entry for entry in entries if entry.id in names and not entry.form_id}
     out: list[dict[str, Any]] = []
@@ -687,8 +629,6 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
                 graph.put_input(prompt, binding[1], names[0], binding[3], object_info)
         return prompt
 
-    from workflows import deliver  # 避免循环 import:workflows 也用这里的 output_key
-
     count = run.runs_from(parameters)
     if count > 1 and graph.counts_runs(api):
         # 跑 N 遍:循环提交 N 次,每次换一个种子(和生成那一路同一个 run.run_repeated)
@@ -696,7 +636,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
         repeated = run.run_repeated(comfy, build, count, given, emit, locale, titles)
         if not repeated.runs:
             raise ComfyError(repeated.failures[0][1])
-        result = deliver(comfy, [(prompt_id, finished) for prompt_id, finished, _ in repeated.runs], build(None),
+        result = workflows.deliver(comfy, [(prompt_id, finished) for prompt_id, finished, _ in repeated.runs], build(None),
                          titles, locale, entry.workflow.id, include_previews=include_previews, workflow=entry.workflow.id,
                          one_workflow=True)
         result["seeds"] = [seed for _, _, seed in repeated.runs]
@@ -707,7 +647,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
         return result
     prompt = build(None)
     prompt_id, finished = run.run_prompt(comfy, prompt, emit, locale, titles)
-    result = deliver(comfy, [(prompt_id, finished or {})], prompt, titles, locale, entry.workflow.id,
+    result = workflows.deliver(comfy, [(prompt_id, finished or {})], prompt, titles, locale, entry.workflow.id,
                      include_previews=include_previews, workflow=entry.workflow.id)
     resets = run.resets_note(api, locale)
     if resets:

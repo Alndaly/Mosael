@@ -123,14 +123,15 @@ def test_下载时记下来源_贴的是直链只记站点(comfy, data_dir, file
 
 def test_来源页_HuggingFace_ModelScope不联网_Civitai问一次版本(modules, monkeypatch) -> None:
     _library, sources = modules
+    import provenance  # 来源页那一步住在 provenance(它要问 Civitai,而 civitai 要从 sources 出网)
     web = _Web({("GET", "https://civitai.com/api/v1/model-versions/2107735"): (200, {}, json.dumps(CIVITAI_VERSION).encode())})
     monkeypatch.setattr(sources, "fetch", web)
-    assert sources.provenance_of("https://huggingface.co/Comfy-Org/z/resolve/main/split_files/vae/ae.safetensors", "zh") == \
+    assert provenance.provenance_of("https://huggingface.co/Comfy-Org/z/resolve/main/split_files/vae/ae.safetensors", "zh") == \
         {"site": "huggingface", "page": "https://huggingface.co/Comfy-Org/z/blob/main/split_files/vae/ae.safetensors"}
-    assert sources.provenance_of("https://www.modelscope.cn/models/A/B/resolve/master/sub/x.safetensors", "zh") == \
+    assert provenance.provenance_of("https://www.modelscope.cn/models/A/B/resolve/master/sub/x.safetensors", "zh") == \
         {"site": "modelscope", "page": "https://modelscope.cn/models/A/B/file/view/master/sub/x.safetensors"}
     assert not web.calls, "HuggingFace、ModelScope 的页从链接本身就看得出"
-    found = sources.provenance_of("https://civitai.red/api/download/models/2107735", "zh")
+    found = provenance.provenance_of("https://civitai.red/api/download/models/2107735", "zh")
     assert found["site"] == "civitai" and found["page"] == "https://civitai.com/models/1862320?modelVersionId=2107735"
     info = found["civitai"]
     assert (info["model_id"], info["version_id"], info["base_model"], info["nsfw"]) == \
@@ -146,13 +147,14 @@ def test_来源页_HuggingFace_ModelScope不联网_Civitai问一次版本(module
 
 def test_问Civitai失败不挡住下载_只记站点(modules, monkeypatch) -> None:
     _library, sources = modules
+    import provenance
     from lines import ComfyError
 
     def broken(*_args, **_kwargs):
         raise ComfyError("civitai.com: timed out")
 
     monkeypatch.setattr(sources, "fetch", broken)
-    assert sources.provenance_of("https://civitai.com/api/download/models/5", "zh") == {"site": "civitai"}
+    assert provenance.provenance_of("https://civitai.com/api/download/models/5", "zh") == {"site": "civitai"}
 
 
 # --- 在 Civitai 上找 -------------------------------------------------------------------

@@ -427,7 +427,7 @@ def download(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         raise ComfyError(_same_name(locale, folder, filename))
     direct = sources.direct_url(url, locale, set(info))
     # 来源页在开始下之前就问好(Civitai 的要问一次版本信息):下完才问的话,那几秒里用户以为卡住了
-    origin = sources.provenance_of(url, locale)
+    origin = provenance.provenance_of(url, locale)
     done = _download_by_route(comfy, info, direct, folder, filename, locale, emit)
     provenance.record(comfy, folder, str(done.get("name") or filename), done.get("size"), {"how": "download", **origin})
     return {**done, "page": origin.get("page", "")}

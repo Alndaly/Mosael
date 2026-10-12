@@ -30,7 +30,7 @@ PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 TOOLS = PLUGIN / "tools"
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="假解释器是 shell 脚本")
 #: 插件 tools/ 下这几个模块按顶层名字导入(插件进程里就是这样):测试之间换掉,免得拿到别的测试改过的那一份。
-_PLUGIN_MODULES = ("service", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed", "versions")
+_PLUGIN_MODULES = ("service", "layouts", "shared_models", "model_files", "comfy_http", "lines", "pinned", "managed", "versions")
 
 
 @pytest.fixture
@@ -46,6 +46,17 @@ def service(monkeypatch):
         for name in _PLUGIN_MODULES:
             sys.modules.pop(name, None)
         sys.modules.update(saved)
+
+
+@pytest.fixture
+def layouts(service):
+    """认目录那件事(`Layout` / `find_layout`)住在 layouts 这个叶子里,不在 service(见那里的说明)。
+
+    取的是 `service` 认的那一份(同一个模块对象):两个 `Layout` 类不算相等,各导一份的断言会假红。
+    """
+    import layouts as module
+
+    return module
 
 
 def _comfy(root: Path, version: str = "0.39.0") -> Path:
@@ -97,34 +108,34 @@ def test_随包的_ComfyUI_声明了本机服务_归生成那个工具() -> None
 # ---- 认出 ComfyUI、认出解释器 ----------------------------------------------------------
 
 
-def test_两种便携版选法都认_普通目录也认(service, tmp_path: Path) -> None:
+def test_两种便携版选法都认_普通目录也认(service, layouts, tmp_path: Path) -> None:
     portable = tmp_path / "ComfyUI_windows_portable"
     inner = _comfy(portable / "ComfyUI")
     (portable / "python_embeded").mkdir()
     for chosen in (portable, inner):
-        layout = service.find_layout(chosen)
-        assert layout == service.Layout(inner, portable), f"选 {chosen.name} 也认得出"
+        layout = layouts.find_layout(chosen)
+        assert layout == layouts.Layout(inner, portable), f"选 {chosen.name} 也认得出"
     plain = _comfy(tmp_path / "plain")
-    assert service.find_layout(plain) == service.Layout(plain, None)
-    assert service.find_layout(tmp_path / "plain" / "comfy") is None, "选错了一层就是认不出"
+    assert layouts.find_layout(plain) == layouts.Layout(plain, None)
+    assert layouts.find_layout(tmp_path / "plain" / "comfy") is None, "选错了一层就是认不出"
     (tmp_path / "empty").mkdir()
-    assert service.find_layout(tmp_path / "empty") is None
+    assert layouts.find_layout(tmp_path / "empty") is None
 
 
-def test_Windows_便携版用自带的_python_embeded(service, tmp_path: Path) -> None:
+def test_Windows_便携版用自带的_python_embeded(service, layouts, tmp_path: Path) -> None:
     portable = tmp_path / "ComfyUI_windows_portable"
     inner = _comfy(portable / "ComfyUI")
     embedded = portable / "python_embeded" / "python.exe"
     embedded.parent.mkdir()
     embedded.write_bytes(b"")
-    layout = service.find_layout(portable)
+    layout = layouts.find_layout(portable)
     assert service.find_python(layout, "", windows=True) == (embedded, "portable")
-    assert service.find_layout(inner) == layout
+    assert layouts.find_layout(inner) == layout
 
 
-def test_venv_在目录里或上一层_Windows_是_Scripts_python_exe(service, tmp_path: Path) -> None:
+def test_venv_在目录里或上一层_Windows_是_Scripts_python_exe(service, layouts, tmp_path: Path) -> None:
     root = _comfy(tmp_path / "ComfyUI")
-    layout = service.find_layout(root)
+    layout = layouts.find_layout(root)
     assert service.find_python(layout, "", windows=True) == (None, "none")
 
     parent_venv = tmp_path / ".venv" / "Scripts" / "python.exe"
@@ -139,9 +150,9 @@ def test_venv_在目录里或上一层_Windows_是_Scripts_python_exe(service, t
     assert service.find_python(layout, "", windows=True) == (own, "venv"), "目录里的排在上一层前面"
 
 
-def test_POSIX_的_venv_是_bin_python_没有就_bin_python3(service, tmp_path: Path) -> None:
+def test_POSIX_的_venv_是_bin_python_没有就_bin_python3(service, layouts, tmp_path: Path) -> None:
     root = _comfy(tmp_path / "ComfyUI")
-    layout = service.find_layout(root)
+    layout = layouts.find_layout(root)
     python3 = root / ".venv" / "bin" / "python3"
     python3.parent.mkdir(parents=True)
     python3.write_bytes(b"")
@@ -151,10 +162,10 @@ def test_POSIX_的_venv_是_bin_python_没有就_bin_python3(service, tmp_path: 
     assert service.find_python(layout, "", windows=False) == (python, "venv")
 
 
-def test_用户指定的解释器优先_不存在就说不存在(service, tmp_path: Path) -> None:
+def test_用户指定的解释器优先_不存在就说不存在(service, layouts, tmp_path: Path) -> None:
     root = _comfy(tmp_path / "ComfyUI")
     _fake_python(root / "venv" / "bin" / "python")
-    layout = service.find_layout(root)
+    layout = layouts.find_layout(root)
     conda = tmp_path / "conda" / "bin" / "python"
     conda.parent.mkdir(parents=True)
     conda.write_bytes(b"")
