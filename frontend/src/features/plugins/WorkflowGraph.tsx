@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
  *
  * 卡片上只画形状(几十个节点的字缩到卡片大小看不清,只是噪点);详情里大一号,带节点标题和分组名。
  * 颜色按种类:读素材、加载模型、采样、提示词、产出、缺的各一种,注释和别的是淡的;旁路 / 静音的节点画成半透明。
+ *
+ * 盒子多大由调用方给(`className` 的宽高);给了 `hug` 就由图自己的比例定高(见那个参数)。
  */
 
 const ROLE_FILL: Record<string, string> = {
@@ -49,12 +51,19 @@ const shortTitle = (title: string) => (title.length > 28 ? `${title.slice(0, 27)
 export function WorkflowGraphView({
   graph,
   detailed = false,
+  hug = false,
   label,
   className,
 }: {
   graph: WorkflowFileGraph | undefined;
   /** 详情里那一张:带节点标题和分组名。 */
   detailed?: boolean;
+  /**
+   * 盒子按**图自己**的比例走(详情页左栏那一张):吃满栏宽之后不再给自己留上下两条空 —— 图宽就矮、
+   * 图方就高,画出来的那一块和盒子一样大。卡片上**不给**:卡片是一样大的格子,一格一个比例对不齐。
+   * 给不出比例(空图)时退回 4:3,不然盒子没有高度。
+   */
+  hug?: boolean;
   /** 读屏念的(「人像的节点图」)。 */
   label: string;
   className?: string;
@@ -68,6 +77,7 @@ export function WorkflowGraphView({
       aria-label={label}
       viewBox={box ? `${box.x} ${box.y} ${box.w} ${box.h}` : "0 0 100 100"}
       preserveAspectRatio="xMidYMid meet"
+      style={hug ? { aspectRatio: box ? `${box.w} / ${box.h}` : "4 / 3" } : undefined}
       className={cn("block bg-panel-inset", className)}
     >
       {(graph?.groups ?? []).map((group, index) => (

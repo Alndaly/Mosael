@@ -1346,6 +1346,17 @@ function WorkflowTable({ label, workflows, menuOf, query, onOpen, onDragEnd }: {
 const WORKFLOW_ROW_HEIGHT = "h-[53px]";
 
 /**
+ * 详情左栏那张节点图的盒子:**吃满左栏的宽**,高由图自己的比例给(见 WorkflowGraphView 的 `hug`)。
+ *
+ * 高度两道上限,都是防"撑破"的:`640px` 和模型库详情那张预览同一个数(这一栏最宽也就 536−48,正常比例够不着它);
+ * `calc(100dvh-230px)` 管窗口矮的时候 —— 弹窗高是 `min(860px,100dvh-32px)`(见 LibraryBrowser 的 LIBRARY_DIALOG),
+ * 再扣掉弹窗外壳那条头和详情那条头(合起来量到 136)与左栏自己的内边距(48),留 46px 给头换行,
+ * 图就不会把左栏顶成滚动条。那条 `50dvh` 是窄窗口上下排时按模型库那套再收一档:那时整页一起滚,图不该独占一屏。
+ */
+const WORKFLOW_GRAPH_FRAME =
+  "max-h-[min(640px,calc(100dvh-230px))] w-full rounded-xl [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
+
+/**
  * 列表「缺什么」那一格:**只摆一枚**(「缺 4 种节点 · 3 个模型」「缺 2 种节点」),缺的是哪几样在悬停里 —— 两枚叠成两行
  * 会把那一行撑高。不缺东西、却转不过来的(别的原因)摆一枚「转不过来」,原因在悬停里。
  */
@@ -1483,12 +1494,15 @@ function WorkflowDetail({
   }, [focusSection, onFocused]);
 
   const media = (
-    <div className="grid gap-2">
+    //: `w-full` 这一层不能省:左栏那个格子是 `[place-items:safe_center]`(见 LibraryBrowser),网格项不拉伸、
+    //: 宽度按内容收缩 —— 里面那句 `w-full` 于是拿不到栏宽,盒子退回 svg 的默认 300px(量过:栏 534,盒子还是 300)。
+    <div className="grid w-full gap-2">
       <WorkflowGraphView
         graph={flow.graph}
         detailed
+        hug
         label={t("workflowGraphLabel").replace("{name}", flow.label)}
-        className="aspect-[4/3] w-full rounded-xl"
+        className={WORKFLOW_GRAPH_FRAME}
       />
       {flow.graph?.auto_layout && <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowGraphAuto")}</p>}
       {flow.graph?.truncated && <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowGraphTruncated")}</p>}

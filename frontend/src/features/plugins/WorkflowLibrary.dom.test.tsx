@@ -514,6 +514,26 @@ describe("工作流库", () => {
     expect(window.location.hash).toBe("#/workflows?workflow=w1");
   });
 
+  it("详情左栏:节点图吃满栏宽、高照图自己的比例(不再退回 svg 的默认 300px、不再留 4:3 的空)", async () => {
+    await openDetail("portrait");
+    const media = document.querySelector<SVGElement>("[data-library-detail-pane='media'] svg[data-workflow-graph]")!;
+    expect(media).toBeTruthy();
+    //: jsdom 没有排版,量不出宽高,只能按类名钉住这条链:左栏那个格子是 `[place-items:safe_center]`(见 LibraryBrowser),
+    //: 网格项不拉伸、宽度按内容收缩 —— 外面那层不写 `w-full`,`svg` 上那句 `w-full` 就拿不到栏宽,
+    //: 盒子退回 svg 的默认 300px(真 Chromium 里量到过:栏 534,盒子还是 300×225)。
+    expect(media.parentElement?.classList.contains("w-full"), "装预览的那一层要撑满左栏").toBe(true);
+    expect(media.classList.contains("w-full"), "图自己也要按栏宽").toBe(true);
+    //: 高度由图自己的比例给(见 WorkflowGraphView 的 hug);4:3 那个固定盒子正是"上下两条空"的来源
+    expect(media.classList.contains("aspect-[4/3]")).toBe(false);
+    const viewBox = (media.getAttribute("viewBox") ?? "").split(" ").map(Number);
+    expect(viewBox).toHaveLength(4);
+    expect(media.style.aspectRatio).toBe(`${viewBox[2]} / ${viewBox[3]}`);
+    //: 再怎么放大也只缩不裁:还是 `meet`
+    expect(media.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+    //: 高度有上限(窗口矮的时候不把左栏顶成滚动条)
+    expect(media.className.baseVal).toMatch(/max-h-\[/);
+  });
+
   it("缺的节点:出自哪个节点包、装没装(装了却没加载的另说)", async () => {
     await openDetail("sketch");
     expect(screen.getByRole("alert").textContent).toContain("CR Prompt Text");
