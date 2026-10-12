@@ -352,15 +352,19 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
              own: str | None = None) -> Parameter:
     """这一格叫什么。`own` 是**工作流自己存的那份标签**(画布上这一格写着的名字,见 convert 的 `INPUT_LABELS`)。
 
-    不认得的输入,名字按这个先后挑(`own` 排最前 —— 画布上写着什么,Mosael 里就写什么):
+    **有标签就用标签,`KNOWN` 表不压过它** —— 判据是「表单 = 画布」:画布上这一格写着什么,Mosael 里就写什么。
+    真机上 `VHS_VideoCombine` 的 `pingpong` 存着 `"Ping-Pong"`、表里是「往返播放」,表压过去就成了画布显示
+    `"Ping-Pong"`、中文界面显示「往返播放」,同一格两个名字。拿到这儿的 `own` 已经是**淘过一遍**的
+    (`convert._own_labels` 把「和输入名一样」的那句挡在门外:那不是名字,是身份),有它就一定是一句真名字。
 
-    1. `own`:工作流里存着的那份 widget 标签(维护者在 ComfyUI 右侧 Parameters 里改出来的名字);
-    2. `/i18n` 里那个节点包自己的官方翻译,其次是 object_info 的 `display_name`(见 `input_name`);
-    3. 输入名拆成人话(`mask_expand_pixels` → 「Mask expand pixels」)。
+    没有标签时,名字按这个先后挑:
 
-    认得的那几格(`KNOWN`)用表里的名字 —— 那是 Mosael 自己给常见输入起的人话名字,比节点包的一句话准
-    (真机上 `VHS_VideoCombine` 的 `pingpong` 存着 `"Ping-Pong"`,表里是「往返播放」);表只管名字,**排序和
-    「收不收进高级」照旧**(见 `common` / `rank`)。
+    1. `KNOWN` / `KNOWN_BY_CLASS` 认得的:用表里那份 Mosael 自己起的人话名字(**没有标签时它是这一格里
+       最好的名字** —— 表一个字没删,只是不再是「有标签」时的名字);
+    2. 不认得的:`/i18n` 里那个节点包自己的官方翻译,其次是 object_info 的 `display_name`(见 `input_name`);
+    3. 都没有:把输入名拆成人话(`mask_expand_pixels` → 「Mask expand pixels」)。
+
+    表照旧管**排序和「收不收进高级」**(`rank` / `common` / `KNOWN_BY_CLASS`):有没有标签都一样。
 
     交回的是一对 `{"zh", "en"}`:`own` 那份标签是一句、不带语言,并进这一对时两种语言里都写它。挑哪一句显示是
     宿主按**读的人的语言**做的事(见 backend `app/domain/workflow_library._picked`)—— 名字在这一层不塌成一句。
@@ -380,9 +384,11 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
             rank=1000 + order, common=False, zh=f"{where['zh']} · {one['zh']}", en=f"{where['en']} · {one['en']}",
             node_label=where, hint=hint, names_node=True,
         )
+    #: 画布上那份标签压过表(表单 = 画布):表只在**没有标签**时给名字,排序和「收不收进高级」照旧是它的
+    zh, en = (own, own) if own else (known.zh, known.en)
     return Parameter(
         key=f"{node}.{name}", node=node, input=name, class_type=class_type, node_title=custom,
-        rank=known.rank * 1000 + order, common=known.common and not advanced, zh=known.zh, en=known.en,
+        rank=known.rank * 1000 + order, common=known.common and not advanced, zh=zh, en=en,
         node_label=where, hint=hint,
     )
 

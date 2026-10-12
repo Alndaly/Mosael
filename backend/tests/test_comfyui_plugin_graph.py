@@ -636,13 +636,20 @@ def test_标签和输入名一样的那一句不算名字_回落照旧(graph, co
                                                           "en": "Inpaint Crop · Mask fill holes"}
 
 
-def test_认得的那几格照旧用表里的名字_标签只管不认得的输入(graph, convert, labels) -> None:
-    """`grow_mask_by` 在 `KNOWN` 里(「蒙版外扩」):那是 Mosael 自己给常见输入起的人话名字,比节点包的一句话准
-    —— 真机上 `VHS_VideoCombine` 的 `pingpong` 存着 `"Ping-Pong"`,表里是「往返播放」。标签补的是**不认得**的那一档。"""
+def test_标签压过内置表_有标签就用标签_没有才用表里的名字(graph, convert, labels) -> None:
+    """维护者这一轮的判据是**表单 = 画布**,所以画布上那份标签压过 `KNOWN` 表:`grow_mask_by` 表里是「蒙版外扩」,
+    可画布上这一格写着「遮罩增长」—— 表压过去,中文界面显示「蒙版外扩」、画布显示「遮罩增长」,同一格两个名字
+    (真机上的 `VHS_VideoCombine` 的 `pingpong` 就是这么对不上的:存着 `"Ping-Pong"`,表里是「往返播放」)。
+    表**一个字没删**:没有标签时照旧是它说了算,见本用例后半。"""
     _, _, parameters = _crop(graph, convert, labels)
-    assert parameters["720.grow_mask_by"]["title"] == {"zh": "蒙版外扩", "en": "Grow mask by"}, \
-        "认得的那几格不因为画布上改了名字就跟着改"
+    assert parameters["720.grow_mask_by"]["title"] == {"zh": "遮罩增长", "en": "遮罩增长"}, \
+        "有标签(且不等于输入名)就用标签,哪怕 KNOWN 表认得这一格;标签是一句、两种语言里都写它"
     assert parameters["720.grow_mask_by"]["x-advanced"] is True, "排序和「收不收进高级」照旧(见 common / rank)"
+    #: 没有标签时用的还是表里的名字 —— 表是「没有标签」那一档的回落,不是被拿掉了
+    api = {"3": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "positive": ["6", 0], "negative": ["7", 0]}},
+           "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "p"}},
+           "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "n"}}}
+    assert graph.describe("x.json", "x", api, OBJECT_INFO)["parameters"]["3.steps"]["title"] == {"zh": "步数", "en": "Steps"}
 
 
 def test_名字一律交一对_画布上那句标签是一句就并进去两种语言同值(labels) -> None:

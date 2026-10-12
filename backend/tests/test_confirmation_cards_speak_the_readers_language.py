@@ -170,4 +170,7 @@ def test_摘要按key渲染而不是照着落库那句抄(monkeypatch) -> None:
             })
 
     assert card_for_locale("en").summary == "A card only English knows"
+    #: 中文这一句**故意**是 key 字符串本身(和 `headline` 一样,见 `i18n._text`:查不到就返回 key)——「难看,
+    #: 但看得见」。**别把它当 bug 改回「回落到落库那句」**:那样这个 key 缺中文这件事就被一句看着正常的话盖住,
+    #: 下次再出语言缺陷没人看得出来。要修的是缺的那条翻译,不是这里。
     assert card_for_locale("zh").summary == "confirm_testOnlyEnglish"
