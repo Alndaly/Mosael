@@ -16,6 +16,7 @@ import {
   validFolderPath,
   WORKFLOW_KINDS,
 } from "./workflowLibraryView";
+import { matchesSource } from "@/features/plugins/workflowAppForm";
 
 /**
  * 工作流库左栏的文件夹树和改文件夹时的几样纯函数(ADR 0035 后续「文件夹」)。
@@ -92,5 +93,31 @@ describe("搜索", () => {
     expect(filterWorkflows([formed, other], { kind: "all", query: "快速" })).toEqual([formed]);
     expect(filterWorkflows([formed, other], { kind: "all", query: "精调" })).toEqual([formed]);
     expect(filterWorkflows([formed, other], { kind: "all", query: "krea2" })).toEqual([formed]);
+  });
+});
+
+describe("精简表单里搜「工作流里能填的」", () => {
+  //: 维护者:「节点名称明明是 Load Image,搜索这个却搜索不到」—— 列表上那一条显示的是本地化的「加载图像」,
+  //: 而画布上节点写的是 `Load Image`,类名是 `LoadImage`。按字面比的话带空格的那串一个都命不中。
+  const item = {
+    key: "674.image", node: "674", input: "image", kind: "media", title: "加载图像",
+    node_title: "Load Image", node_label: "加载图像", class_type: "LoadImage", hint: "",
+  } as never;
+
+  it("画布上看到的那串(带空格)命得中类名", () => {
+    expect(matchesSource(item, "Load Image")).toBe(true);
+    expect(matchesSource(item, "loadimage")).toBe(true);
+    expect(matchesSource(item, "Load-Image")).toBe(true);
+  });
+
+  it("节点号也搜得到(标题上那个 #号 现在可点着定位,按它找是自然的下一步)", () => {
+    expect(matchesSource(item, "674")).toBe(true);
+    expect(matchesSource(item, "#674")).toBe(true);
+    expect(matchesSource(item, "675")).toBe(false);
+  });
+
+  it("本地化的名字照旧搜得到;搜不到的还是搜不到", () => {
+    expect(matchesSource(item, "加载图像")).toBe(true);
+    expect(matchesSource(item, "video")).toBe(false);
   });
 });

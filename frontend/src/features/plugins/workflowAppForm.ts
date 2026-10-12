@@ -285,12 +285,20 @@ export function shortTitle(item: WorkflowFillable): string {
   return kept.length > 0 ? kept.join(" · ") : title;
 }
 
-/** 搜索「工作流里能填的」:名字、节点名、节点号、类名、输入名里有搜的字。 */
+/** 比的时候把空白、下划线、连字符都去掉:类名是 `LoadImage`,而画布上和节点标题里写的是「Load Image」——
+ *  维护者按画布上看到的那串搜,结果一个都搜不到(「节点名称明明是 Load Image,搜索这个却搜索不到」)。 */
+function searchable(value: string): string {
+  return value.toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+/** 搜索「工作流里能填的」:名字、节点名、**节点号**、类名、输入名里有搜的字。 */
 export function matchesSource(item: WorkflowFillable, query: string): boolean {
-  const needle = query.trim().toLowerCase();
+  const needle = searchable(query.trim());
   if (!needle) return true;
-  return [item.title, item.node_label, item.node_title, item.class_type, item.key, item.input]
-    .some((one) => (one ?? "").toLowerCase().includes(needle));
+  const haystack = [item.title, item.node_label, item.node_title, item.class_type, item.key, item.input,
+                    //: 节点号也搜(`674`、`#674` 都行)—— 标题上那个 `#号` 现在可点着定位,想按它找是很自然的下一步。
+                    item.node, `#${item.node}`];
+  return haystack.some((one) => searchable(String(one ?? "")).includes(needle));
 }
 
 /** 要写回去的样子:**全部**表单(按现在的顺序;新表单不带 id,插件起)和结果标记。没有项的表单照样是一张表单。 */
