@@ -1,0 +1,107 @@
+"""蒙版的形状运算 —— 和前端跑**同一份**语料(contracts/mask-cases.json),逐字节比。
+
+前端 `frontend/src/lib/maskPixels.parity.test.ts` 读同一个文件,把同一串源图小样、同一组参数
+(阈值 / 反选 / 扩张 / 羽化)再算一遍,拿**同一串期望字节**对。这里不看 `masks.py` 里写了哪一句
+取整,只看同一份输入两侧算出来的是不是同一串字节 —— 语料里那几条 `.5` 的羽化就是入口。
+
+为什么会漏掉:两侧各写了一句「逐位相等」(后端 `masks.py` 的文件头、前端 `maskPixels.ts` 的
+`Math.round`),却各测各的 —— 后端那处的半径是 `int(round(radius))`(半数取偶:`round(0.5) == 0`),
+前端是 `Math.round`(半数进位):`feather = 0.5` 时后端一格都不羽化、编辑器羽化了一格;`2.5` 一边
+2 格一边 3 格。两侧的单元测试当时都是绿的。经过见语料的 `why`。
+
+`grow` 那一组(扩张 / 收缩)只有这里跑:前端编辑器没有这一步,素材库对话框把 grow 交给后端算。
+两侧都断言「跑不动的用例**正好**是 grow ≠ 0 那一组」,免得哪天多出一条静默少跑的用例。
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+
+import pytest
+
+from app.media.masks import feather_mask, grow_mask, invert_mask, mask_from_alpha, mask_from_luminance
+
+CONTRACT = json.loads((Path(__file__).parents[2] / "contracts" / "mask-cases.json").read_text(encoding="utf-8"))
+
+WIDTH, HEIGHT = CONTRACT["frame"]["width"], CONTRACT["frame"]["height"]
+SIZE = (WIDTH, HEIGHT)
+
+
+def test_语料在_且带版本() -> None:
+    assert CONTRACT["contract"] == "mask-cases"
+    assert CONTRACT["version"] == 1
+    assert CONTRACT["cases"] and CONTRACT["sources"]
+
+
+def _source(case: dict) -> bytes:
+    return bytes.fromhex(CONTRACT["sources"][case["source"]]["rgba_hex"])
+
+
+def _pipeline(case: dict) -> bytes:
+    """语料说的那四步,按定死的先后:阈值 → 反选 → 扩张/收缩 → 羽化。"""
+    pixels = _source(case)
+    mask = (
+        mask_from_alpha(pixels, SIZE, case["threshold"])
+        if case["source_kind"] == "alpha"
+        else mask_from_luminance(pixels, SIZE, case["threshold"])
+    )
+    if case["invert"]:
+        mask = invert_mask(mask)
+    if case["grow"]:
+        mask = grow_mask(mask, SIZE, case["grow"])
+    return feather_mask(mask, SIZE, case["feather"])
+
+
+def _first_difference(case: dict, got: bytes) -> str:
+    want = bytes.fromhex(case["expected_hex"])
+    at = next((index for index, (a, b) in enumerate(zip(got, want)) if a != b), None)
+    if at is None:
+        return f"{case['name']}:长度 {len(got)} ≠ 语料 {len(want)}"
+    return (
+        f"{case['name']}:第 {at} 格(第 {at // WIDTH} 行第 {at % WIDTH} 列)语料是 {want[at]},这里算出 {got[at]}"
+        f" —— 羽化 {case['feather']} 该取整成 {case['expected_reach']} 格"
+    )
+
+
+@pytest.mark.parametrize("case", CONTRACT["cases"], ids=[case["name"] for case in CONTRACT["cases"]])
+def test_逐字节和语料一致(case: dict) -> None:
+    got = _pipeline(case)
+    assert got.hex() == case["expected_hex"], _first_difference(case, got)
+
+
+def test_半径按半数进位取整_不是半数取偶() -> None:
+    """语料那张取整表两侧各跑一遍:`feather = 0.5` 必须**和 1 格同一张图**(半数取偶会算成 0 格)。"""
+    tabled = {one["feather"]: one["reach"] for one in CONTRACT["rounding"]}
+    #: 用一条真实的边当被羽化的底(语料的第一条用例)。
+    base = _pipeline({**CONTRACT["cases"][0], "feather": 0})
+    for radius, reach in tabled.items():
+        assert feather_mask(base, SIZE, radius) == feather_mask(base, SIZE, reach), (
+            f"半径 {radius} 没有取整成 {reach} 格 —— 语料的意思是 reach = floor(feather + 0.5)"
+        )
+    #: 这几条是**真的分岔**:半数取偶在它们上面给的是另一格,所以语料能红(见下一条测试)。
+    assert feather_mask(base, SIZE, 0.5) != base, "0.5 也该羽化一格(半数取偶是 0 格 = 原样)"
+    assert feather_mask(base, SIZE, 2.5) == feather_mask(base, SIZE, 3)
+    assert feather_mask(base, SIZE, 2.5) != feather_mask(base, SIZE, 2)
+
+
+def test_语料里那几条半数用例真的能分出两种取整() -> None:
+    """一条永远绿的语料比没有更糟:半数进位与半数取偶给出**不同**格的那几条,必须真有用例。"""
+    divergent = [one for one in CONTRACT["rounding"] if round(one["feather"]) != math.floor(one["feather"] + 0.5)]
+    assert divergent, "取整表里一条分岔的都没有 —— 这张表钉不住任何东西"
+    used = {case["feather"] for case in CONTRACT["cases"]}
+    assert {one["feather"] for one in divergent} <= used, "分岔的半径没有对应用例,等于没测"
+    #: 每一条用例都写明了它该取整成几格,别让它跟取整表各说各话。
+    for case in CONTRACT["cases"]:
+        assert case["expected_reach"] == math.floor(case["feather"] + 0.5), case["name"]
+
+
+def test_前端跑不动的用例正好是_grow_非零那一组() -> None:
+    """前端编辑器没有扩张 / 收缩这一步(`sides` 里写着),所以那一组只有这里跑 —— 写成断言,
+    新加一条前端跑不了又没写清楚的用例时会红,而不是静默少跑一条。"""
+    assert CONTRACT["sides"]["backend/app/media/masks.py"] == ["threshold", "invert", "grow", "feather"]
+    assert "grow" not in CONTRACT["sides"]["frontend/src/lib/maskPixels.ts"]
+    grows = [case["grow"] for case in CONTRACT["cases"] if case["grow"] != 0]
+    assert any(value > 0 for value in grows), "没有一条扩张用例"
+    assert any(value < 0 for value in grows), "没有一条收缩用例"

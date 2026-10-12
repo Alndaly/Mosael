@@ -1,0 +1,301 @@
+{
+  "contract": "mask-cases",
+  "version": 1,
+  "why": "羽化半径的取整两侧不同:后端 int(round(radius)) 是 Python 的半数取偶(round(0.5) = 0、round(2.5) = 2),前端 Math.round 是半数进位(1 / 3)。feather 是浮点、三条入口(dialog 的输入格、HTTP schema、MCP 工具签名)都能到 2.5,于是同一组参数在后端与编辑器里出两张图 —— 而两侧的单元测试各自都是绿的,因为没有一条测试同时看两边。",
+  "semantics": "四步顺序定死:阈值 → 反选 → 扩张/收缩 → 羽化。输出是单通道灰度字节(r = g = b、alpha 不透明),即蒙版本身那一串字节。羽化半径按**半数进位**取整:reach = floor(feather + 0.5)(与 JS 的 Math.round 同一条规则,不是 Python / numpy 缺省的半数取偶);reach < 1 原样返回。羽化是三遍盒式模糊(一横一纵 = 一遍),每趟落回 float32、四边夹取,往回写 floor(x + 0.5)。",
+  "frame": {
+    "width": 7,
+    "height": 5
+  },
+  "sides": {
+    "backend/app/media/masks.py": [
+      "threshold",
+      "invert",
+      "grow",
+      "feather"
+    ],
+    "frontend/src/lib/maskPixels.ts": [
+      "threshold",
+      "invert",
+      "feather"
+    ]
+  },
+  "grow_is_backend_only": "前端编辑器没有扩张 / 收缩那一步(素材库对话框把 grow 交给后端算),所以 grow ≠ 0 的用例只有后端跑。两侧的测试都断言:跑不动的用例**正好**是 grow ≠ 0 那一组 —— 不许静默跳过,新加一条前端跑不了的用例会红。",
+  "rounding": [
+    {
+      "feather": 0.4,
+      "reach": 0,
+      "note": "取整后 < 1:原样"
+    },
+    {
+      "feather": 0.5,
+      "reach": 1,
+      "note": "半数进位 1;半数取偶 0(此前后端就是 0 —— 完全不羽化)"
+    },
+    {
+      "feather": 1.5,
+      "reach": 2,
+      "note": "两条规则同值(偶数 + 0.5)"
+    },
+    {
+      "feather": 2.5,
+      "reach": 3,
+      "note": "半数进位 3;半数取偶 2"
+    },
+    {
+      "feather": 3.5,
+      "reach": 4,
+      "note": "两条规则同值"
+    },
+    {
+      "feather": 4.5,
+      "reach": 5,
+      "note": "半数进位 5;半数取偶 4"
+    },
+    {
+      "feather": 6.5,
+      "reach": 7,
+      "note": "半数进位 7;半数取偶 6"
+    }
+  ],
+  "sources": {
+    "edge": {
+      "note": "硬边:左边三列黑、右边四列白,宽 7 高 5(都不是 2 的幂)",
+      "rgba_hex": "000000ff000000ff000000ffffffffffffffffffffffffffffffffff000000ff000000ff000000ffffffffffffffffffffffffffffffffff000000ff000000ff000000ffffffffffffffffffffffffffffffffff000000ff000000ff000000ffffffffffffffffffffffffffffffffff000000ff000000ff000000ffffffffffffffffffffffffffffffffff"
+    },
+    "dot": {
+      "note": "正中一个白点(第 3 行第 4 列),其余全黑",
+      "rgba_hex": "000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ffffffffff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff"
+    },
+    "alpha": {
+      "note": "颜色恒为 (10,20,30),透明度:前三列 0、第四列 128、其余 255 —— 只有 alpha 在分界",
+      "rgba_hex": "0a141e000a141e000a141e000a141e800a141eff0a141eff0a141eff0a141e000a141e000a141e000a141e800a141eff0a141eff0a141eff0a141e000a141e000a141e000a141e800a141eff0a141eff0a141eff0a141e000a141e000a141e000a141e800a141eff0a141eff0a141eff0a141e000a141e000a141e000a141e800a141eff0a141eff0a141eff"
+    },
+    "color": {
+      "note": "彩色的底图:纯红 / 纯绿 / 纯蓝 / 灰阶 / 混色都有一格 —— 按亮度阈值走的是 Rec.601 加权,加权是在双精度里算的,两侧必须是同一串",
+      "rgba_hex": "ff0000ff00ff00ff0000ffffffffffff000000ff808080ff64963cff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff0a141eff0a141eff0a141eff0a141eff0a141eff0a141eff0a141effc8325aff3c78f0fffafa0aff050505ff8000ffff008040ffff8000ff7f7f7fff808080ff818181ff00ff00ff00fe00ffff0000ff3cb44bff"
+    },
+    "mottle": {
+      "note": "斑驳灰度(含 0 / 255 两头):羽化后正好落在半整数上的格子 1 个、离半整数最近 0.000e+00",
+      "rgba_hex": "000000ffc8c8c8ffc8c8c8ff000000ff000000ff808080ffffffffffc8c8c8ff404040ff808080ffc8c8c8ffffffffffc8c8c8ff808080ff404040ff000000ff404040ffffffffff000000ff404040ffc8c8c8ff000000ffc8c8c8ff404040ffc8c8c8ffffffffffc8c8c8ff808080ff404040ffc8c8c8ff808080ff808080ff404040ff000000ff404040ff"
+    }
+  },
+  "cases": [
+    {
+      "name": "硬边 · 不羽化",
+      "note": "四步里只有阈值那一步:输出非黑即白,给后面几条做底。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 0,
+      "expected_hex": "000000ffffffff000000ffffffff000000ffffffff000000ffffffff000000ffffffff",
+      "expected_reach": 0
+    },
+    {
+      "name": "硬边 · 羽化 0.5(半数进位 ⇒ 1 格)",
+      "note": "这条是 bug 的入口:0.5 按半数进位取整是 1 格 —— 后端此前用 int(round(0.5)) = 0,一格都不羽化,而编辑器 Math.round(0.5) = 1 羽化了一格;同一组参数,两张图。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 0.5,
+      "expected_hex": "09265ea1d9f6ff09265ea1d9f6ff09265ea1d9f6ff09265ea1d9f6ff09265ea1d9f6ff",
+      "expected_reach": 1
+    },
+    {
+      "name": "硬边 · 羽化 2.5(半数进位 ⇒ 3 格)",
+      "note": "int(round(2.5)) = 2(半数取偶)、Math.round(2.5) = 3:一边 2 格一边 3 格。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 2.5,
+      "expected_hex": "58687b92a8bbcb58687b92a8bbcb58687b92a8bbcb58687b92a8bbcb58687b92a8bbcb",
+      "expected_reach": 3
+    },
+    {
+      "name": "硬边 · 羽化 4.5(半数进位 ⇒ 5 格)",
+      "note": "同上,换一个「奇数 + 0.5」:int(round(4.5)) = 4。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 4.5,
+      "expected_hex": "767d848b9299a0767d848b9299a0767d848b9299a0767d848b9299a0767d848b9299a0",
+      "expected_reach": 5
+    },
+    {
+      "name": "硬边 · 羽化 1.5(⇒ 2 格)",
+      "note": "对照组:「偶数 + 0.5」时半数取偶与半数进位同值 —— 这两条以前也是绿的,所以光看它们绿说明不了取整对齐了。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 1.5,
+      "expected_hex": "334b6c93b8d4e7334b6c93b8d4e7334b6c93b8d4e7334b6c93b8d4e7334b6c93b8d4e7",
+      "expected_reach": 2
+    },
+    {
+      "name": "硬边 · 羽化 3.5(⇒ 4 格)",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 3.5,
+      "note": "对照组,理由同上一条。",
+      "expected_hex": "6c76828e9aa5b06c76828e9aa5b06c76828e9aa5b06c76828e9aa5b06c76828e9aa5b0",
+      "expected_reach": 4
+    },
+    {
+      "name": "硬边 · 羽化 0.4(取整后 0 格 ⇒ 原样)",
+      "note": "「reach < 1 什么都不做」判的是**取整后**的那一格:0.4 → 0 原样返回,0.5 → 1 真的羽化。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 0.4,
+      "expected_hex": "000000ffffffff000000ffffffff000000ffffffff000000ffffffff000000ffffffff",
+      "expected_reach": 0
+    },
+    {
+      "name": "硬边 · 反选 + 羽化 2.5",
+      "note": "顺序:阈值 → 反选 → 扩张 → 羽化。反选之后要改的是左半张,半径那一格仍是 3。",
+      "source": "edge",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": true,
+      "grow": 0,
+      "feather": 2.5,
+      "expected_hex": "a797846d574434a797846d574434a797846d574434a797846d574434a797846d574434",
+      "expected_reach": 3
+    },
+    {
+      "name": "白点 · 扩张 2(不羽化)",
+      "note": "扩张是形态学(窗口取最大 / 最小),落回整数、没有浮点那一格;前端编辑器不实现这一步(对话框把 grow 交给后端),所以这条只有后端跑。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 2,
+      "feather": 0,
+      "expected_hex": "00ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff00",
+      "expected_reach": 0
+    },
+    {
+      "name": "白点 · 扩张 1 再羽化 2.5",
+      "note": "顺序的另一半:羽化吃的是**扩张之后**的形状。只有后端跑(同上)。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 1,
+      "feather": 2.5,
+      "expected_hex": "2828282828282828282828282828282828282828282828282828282828282828282828",
+      "expected_reach": 3
+    },
+    {
+      "name": "白点 · 收缩 -1(黑白都缩一圈)",
+      "note": "负半径是收缩:一个孤点收缩之后什么都不剩 —— 四边夹取不该把它留下来。只有后端跑。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": -1,
+      "feather": 0,
+      "expected_hex": "0000000000000000000000000000000000000000000000000000000000000000000000",
+      "expected_reach": 0
+    },
+    {
+      "name": "斑驳 · 羽化 2.5(写回那一格贴在半整数上)",
+      "note": "滚动窗口逐格加减(前端)与前缀和相减(后端)都在 float32 落回:这条小样里羽化后的值正好落在半整数上 / 紧贴着它,是那一格最容易分岔的地方。",
+      "source": "mottle",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 2.5,
+      "expected_hex": "747a828b949ba1747a818991979d747980878e949874797e858b909475797d83888c8f",
+      "expected_reach": 3
+    },
+    {
+      "name": "斑驳 · 反选 + 羽化 1.5",
+      "note": "灰色的边(255 − v)翻过来仍是同样软的一条边:反选不重新二值化。",
+      "source": "mottle",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": true,
+      "grow": 0,
+      "feather": 1.5,
+      "expected_hex": "8f877c6f62585090887e71665e58918980756d6763928a827973706f938b847d797879",
+      "expected_reach": 2
+    },
+    {
+      "name": "白点 · 羽化 6.5(半径比画布还大)",
+      "note": "reach 7 > 高 5:四边夹取撑住整张图,不越界、也不自己黑一圈。半数进位 6.5 → 7(半数取偶给 6)。",
+      "source": "dot",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 6.5,
+      "expected_hex": "0101010101010101010101010101010101010101010101010101010101010101010101",
+      "expected_reach": 7
+    },
+    {
+      "name": "彩色 · 阈值 0.587 正好切在纯绿的亮度上",
+      "note": "阈值那条线是 clamp01(threshold) × 255,纯绿(0,255,0)的亮度是 0.587 × 255 —— 两侧算的是同一个双精度数,判的是 `>=`,所以那一格**恰好**算白。哪一边把加权或那条线算得稍偏一点,这一格就翻过来。",
+      "source": "color",
+      "source_kind": "luminance",
+      "threshold": 0.587,
+      "invert": false,
+      "grow": 0,
+      "feather": 0,
+      "expected_hex": "00ff00ff000000ffffffffffffff000000000000000000ff000000ff000000ff000000",
+      "expected_reach": 0
+    },
+    {
+      "name": "彩色 · 反选 + 羽化 2.5",
+      "note": "彩色底图走完四步:加权阈值(128 那一格压在 127.5 之上)、反选、半径 2.5 取整成 3 格。",
+      "source": "color",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": true,
+      "grow": 0,
+      "feather": 2.5,
+      "expected_hex": "9794908c88858294918d8883807d928e89847f7a778f8b85807a75728c88827c75706c",
+      "expected_reach": 3
+    },
+    {
+      "name": "alpha 小样 · 按透明通道 + 羽化 1.5",
+      "note": "另一条阈值路(源图没有 alpha 时整块白)。alpha 128 在阈值 0.5 之上算不透明。",
+      "source": "alpha",
+      "source_kind": "alpha",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 0,
+      "feather": 1.5,
+      "expected_hex": "334b6c93b8d4e7334b6c93b8d4e7334b6c93b8d4e7334b6c93b8d4e7334b6c93b8d4e7",
+      "expected_reach": 2
+    },
+    {
+      "name": "alpha 小样 · 阈值 0.51 把半透明那列切掉",
+      "note": "128/255 ≈ 0.502:阈值 0.51 之后那一列变黑 —— 阈值判的是 `>=`。",
+      "source": "alpha",
+      "source_kind": "alpha",
+      "threshold": 0.51,
+      "invert": false,
+      "grow": 0,
+      "feather": 0.5,
+      "expected_hex": "0009265ea1d9f60009265ea1d9f60009265ea1d9f60009265ea1d9f60009265ea1d9f6",
+      "expected_reach": 1
+    }
+  ]
+}

@@ -18,7 +18,8 @@ ComfyUI 插件那条注入的路读的是**红通道**(`plugins/bundled/comfyui/
 
 画笔、橡皮、矩形/椭圆画出来的那份走的是同一套规则(阈值按 Rec.601 加权、`>=` 判白、羽化三遍盒式
 模糊、四边夹取),读它看 `frontend/src/lib/maskPixels.ts`。这里的阈值和羽化是照着它写的,不是另立
-一套:同一个阈值、同一张底图,两边该切出同一串字节。改这里之前先看那边,反过来也一样。
+一套:同一个阈值、同一张底图,两边该切出同一串字节。这条"同一串字节"由 `contracts/mask-cases.json`
+钉着(两侧读**同一份**语料、逐字节比),改这里之前先看那边,反过来也一样。
 
 ## 尺寸约定
 
@@ -220,6 +221,17 @@ def _box_blur_axis(channel: np.ndarray, reach: int, axis: int) -> np.ndarray:
     return ((upper - lower) / span).astype(np.float32)
 
 
+def _half_up(value: float) -> int:
+    """四舍五入,**半数进位**(`floor(x + 0.5)`),不是 Python 内建 `round` 的「半数取偶」。
+
+    `round(0.5) == 0`、`round(2.5) == 2`,而前端那句 `Math.round` 是半数进位(`0.5 → 1`、`2.5 → 3`):
+    差这一格,`feather = 2.5` 在后端是 2 个像素、在编辑器里是 3 个 —— 同一组参数、两张图,而两边都
+    看不出错(见 `contracts/mask-cases.json` 里那几条 `.5`)。同一个规则在 `feather_mask` 里用了两次:
+    半径(这里)和往回写(那里末尾那一句 `floor(x + 0.5)`)。
+    """
+    return math.floor(value + 0.5)
+
+
 def feather_mask(mask, size: tuple[int, int], radius: float) -> bytes:
     """羽化:把边晕开 `radius` 个像素。
 
@@ -227,10 +239,12 @@ def feather_mask(mask, size: tuple[int, int], radius: float) -> bytes:
     四通道各跑一遍是四倍工作量、结果还一样。边缘夹取,理由同 `grow_mask`。`radius < 1` 什么都不做
     (0.4px 的模糊看不出来,却是六遍全画布扫描)。
 
-    往回写时**四舍五入是「半数进位」**(`floor(x + 0.5)`),不是 numpy 缺省的「半数取偶」:
-    前端那句是 `Math.round`。半格的差看着无所谓,但同一张蒙版在两边该是同一串字节。
+    `radius` 是浮点,**决定结果的是取整后的那一格** `reach = floor(radius + 0.5)` —— 和往回写
+    (`floor(x + 0.5)`)同一条规则,都对齐前端的 `Math.round`,不是 numpy / Python 缺省的「半数取偶」。
+    半格的差看着无所谓,但同一张蒙版在两边该是同一串字节:所以 `feather = 0.5` 两边都是 1 格
+    (不是"后端不羽化、编辑器羽化"),`feather = 2.5` 两边都是 3 格。
     """
-    reach = int(round(radius))
+    reach = _half_up(radius)
     if reach < 1:
         return _flat(mask)
     channel = _array(mask, size).astype(np.float32)
