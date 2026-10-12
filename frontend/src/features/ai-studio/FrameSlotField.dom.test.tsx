@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -59,6 +59,53 @@ describe("参考图槽位", () => {
     expect(container.querySelector("[data-slot-name]")?.getAttribute("data-slot-name")).toBe("人物");
     expect(screen.getByRole("button", { name: "人物 · a.png" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "背景" })).toBeTruthy();
+  });
+
+  /**
+   * 槽位名字是**节点名**(ComfyUI 里用户自己起的,`Optional Load Image : …`),长度不由我们定。
+   *
+   * 维护者截图(暗色主题,首/尾帧那两格):标题左右各被切掉一截,连省略号都没有。量出来的原因是那一格的
+   * `place-items-center` —— 里面的 `justify-items: center` 把「图标 + 名字」那一行按 **max-content** 排版:
+   * 一行 300px 的面板里,120px 的格子里那一行量出来 310px(真浏览器实测),再由格子自己的 `overflow-hidden`
+   * 从**两边**硬裁;里面的 `Truncate` 拿到的是文字本身的宽度(`clientWidth == scrollWidth`),省略号永远不触发。
+   *
+   * jsdom 没有排版、量不了宽,所以这里按源码判(和 design/truncateNeedsShrinkableBox 同一种做法):那一格
+   * **不能**把里面的行按内容宽排版,那一行还得能收缩。真浏览器里前后量到的数写在 FrameSlotField.tsx 的 `TILE` 上头。
+   */
+  it("长槽位名:那一格不按内容宽排版,标题真的会截断,悬停看得到全文", async () => {
+    const NAME = "Optional Load Image : a very long node title #10";
+    mount(
+      <FrameSlotField
+        role="reference_image"
+        slots={[{ ...EMPTY_SLOT }]}
+        limit={2}
+        names={[NAME, NAME]}
+        onChange={vi.fn()}
+        workspaceId="w"
+      />,
+    );
+    const title = screen.getByText(NAME);
+    //: 截断走仓库的 `Truncate`(真被截断了悬停才出说明,说明里是全文)。
+    expect(title.className).toContain("truncate");
+    const tile = title.closest("button")!;
+    //: 按内容宽排版的那一格(justify-items: center)就是从两边硬裁 —— 名字只看得见中间一段,还没有省略号。
+    expect(tile.className, "那一格不能把里面的行按内容宽排版(见 FrameSlotField.tsx 的 TILE)").not.toContain("place-items-center");
+    expect(tile.className).toContain("min-w-0");
+    //: `Truncate` 的父级:有宽度,而且能收缩(进 docs/CONVENTIONS 那条棘轮)。
+    const row = title.parentElement!;
+    expect(row.className).toContain("min-w-0");
+    expect(row.className).toContain("flex");
+    //: 全文一直在 DOM 里 —— 读屏念的和悬停看到的是同一份,不是被切过的那一段。
+    expect(title.textContent).toBe(NAME);
+    //: 这一格自己就是一条说明的触发器(`Truncate` 只在真被截断时开,见 components/ui/truncate)。
+    expect(title.hasAttribute("data-hint-trigger")).toBe(true);
+
+    //: 真被截断时,悬停出的说明里是**全文**(量法照 components/ui/truncate.dom.test.tsx)。
+    Object.defineProperty(title, "scrollWidth", { value: 400, configurable: true });
+    Object.defineProperty(title, "clientWidth", { value: 120, configurable: true });
+    fireEvent.pointerEnter(title);
+    fireEvent.pointerMove(title);
+    expect((await screen.findByRole("tooltip")).textContent).toBe(NAME);
   });
 
   it("加到上限就不再给加号 —— 上限是接口的硬约束,不是建议", () => {

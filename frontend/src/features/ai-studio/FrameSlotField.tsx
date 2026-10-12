@@ -38,8 +38,22 @@ import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, slotColumns, type FrameSlot, type S
  * **固定高度而不是固定比例。** 用 aspect-video 的话,一行只挂一份时那一格会被拉成整个面板宽
  * (280×157),一个空的加号占掉半屏;而挂满三份时又缩成邮票。固定高度让"一份"和"三份"看起来
  * 是同一种东西,只是宽窄不同。
+ *
+ * **`content-center` 不是 `place-items-center`**(维护者截图:首/尾帧那一格的标题
+ * `Optional Load Image : …` 左右各被切掉一截、连省略号都没有)。这一格是网格子项,里面的
+ * 「图标 + 名字」那一行是它的网格项 —— 而 `place-items` 里的 `justify-items: center` 会把那一行
+ * 按 **max-content** 排版:一行 300px 的面板里,120px 的格子里那一行量出来 310px,再由
+ * `overflow-hidden` 从**两边**硬裁;里面的 `Truncate` 拿到的是 280px(正好等于文字宽度),
+ * `scrollWidth == clientWidth`,省略号永远不触发。实测(真浏览器,面板 300px):
+ * `place-items-center` → 格子 120px、那一行 310px、左右各被切掉 9 / 14 个字;
+ * `content-center`(justify-items 回到 stretch)→ 那一行 118px、标题 88px / 文字 280px、
+ * 省略号出来。`content-center` 只把格子里那一行**竖着**居中,横着照旧铺满 —— 图片那种要填满的
+ * 内容不受影响(它本来就是 `absolute inset-0`)。
+ *
+ * `min-w-0` 留着:`Truncate` 的父级得能收缩,这条进 docs/CONVENTIONS 的「字段名 / 表单名外面
+ * 那一层必须能收缩」。
  */
-const TILE = "grid h-[68px] w-full place-items-center overflow-hidden rounded-lg border border-border bg-muted/40";
+const TILE = "grid h-[68px] w-full min-w-0 content-center overflow-hidden rounded-lg border border-border bg-muted/40";
 
 function useUpload(workspaceId: string, onDone: (assets: Asset[]) => void) {
   const qc = useQueryClient();
