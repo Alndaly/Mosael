@@ -132,6 +132,42 @@ def test_普通必填输入不吃前缀那套(graph) -> None:
     assert graph._missing_socket(node, info)
 
 
+def test_模板格min是0时不算缺插口_会跑的那一支不被剪掉(graph) -> None:
+    """真机「快速去水印」:7 号节点的 `images` 是 `COMFY_AUTOGROW_V3`、`min` 是 0 —— 服务端收(见 `_template_needs_rows`),
+    跑前校验也这么算(`missing_required`)。可「这张图真会跑的部分」那一头(`_missing_socket`)照 `required` 硬判:
+    7 号算 broken ⇒ 靠它的输出节点被判成「跑不出来」⇒ `live` 把那一支连同 7 号一起剪掉(那张图的产出从目录里消失,
+    界面上什么都不说)。**两处必须同一套口径。**
+    """
+    min_zero = {"images": ["COMFY_AUTOGROW_V3", {"template": {"input": {"required": {"image": ["IMAGE", {}]}},
+                                                              "names": ["image_1", "image_2"], "min": 0}}],
+                "text": ["STRING", {"default": "x"}]}
+    info = {
+        "Encoder": {"input": {"required": min_zero}},
+        "SaveImage": {"input": {"required": {"images": ["IMAGE"]}}, "output_node": True},
+        "PreviewImage": {"input": {"required": {"images": ["IMAGE"]}}, "output_node": True},
+        "Source": {"input": {"required": {}}, "output": ["IMAGE"], "output_name": ["IMAGE"]},
+    }
+    #: 7 号一行 images.* 都没带:min 是 0,那本来就不必填
+    api = {"7": {"class_type": "Encoder", "inputs": {"text": "x"}},
+           "9": {"class_type": "SaveImage", "inputs": {"images": ["7", 0]}},
+           "10": {"class_type": "Source", "inputs": {}},
+           "12": {"class_type": "PreviewImage", "inputs": {"images": ["10", 0]}}}
+    assert not graph._missing_socket(api["7"], info), "min 是 0:一格都不必填,不是「缺插口」"
+    assert graph.missing_required(api, info) == [], "两处同一条判据:跑前校验也说它不缺"
+    live = graph.live(api, info)
+    assert {"7", "9", "10", "12"} <= set(live), "两个输出都在:7 号那一支不该被当成跑不出来"
+
+    #: 反向守卫:`min` > 0、声明在 `required` 下的照旧算缺(判定的边界不能放宽过头)
+    min_one = {"images": ["COMFY_AUTOGROW_V3", {"template": {"input": {"required": {"image": ["IMAGE", {}]}},
+                                                             "names": ["image_1"], "min": 1}}]}
+    required_info = {"Encoder": {"input": {"required": min_one}}}
+    assert graph._missing_socket({"class_type": "Encoder", "inputs": {}}, required_info)
+    assert graph.missing_required({"7": {"class_type": "Encoder", "inputs": {}}}, required_info) == \
+        ["#7 Encoder · images"], "两处同一条判据:跑前校验也说它缺"
+    assert not graph._missing_socket({"class_type": "Encoder", "inputs": {"images.image_1": ["5", 0]}}, required_info), \
+        "具体化出来的那一格在,就不缺"
+
+
 # --- UI 图 → API 图 ----------------------------------------------------------
 
 

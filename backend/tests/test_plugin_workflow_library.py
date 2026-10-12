@@ -710,7 +710,8 @@ def test_列出来的每一张带着它的应用表单_宿主规整一遍(librar
     assert [one["key"] for one in form["items"]] == ["10.image", "3.cfg", "12:5.text"], \
         "子图里面的节点(12:5)也在,没写是哪一格的丢掉"
     assert form["items"][0]["label"] == "人物" and form["items"][1]["problem"] == "节点 #3 上没有「cfg」"
-    assert app["results"] == ["9"], "结果标记只认根图上的节点号"
+    assert app["results"] == ["9", "12:5"], \
+        "结果标记收根图上的节点号,也收子图里面的(`12:5` —— 它说的是执行节点号);不是节点号的(7)丢掉"
     assert sketch["app"] is None, "插件没说(转不过来的那张)就没有"
 
 
@@ -781,22 +782,21 @@ def test_写表单_宿主先查形状_改动时间对不上回409_成了让目�
         response = client.post(url, json={"path": "portrait.json", "modified": 5,
                                           "forms": [{**app, "items": [*app["items"], bad]}]})
         assert response.status_code == 422, (bad, response.text)
-    assert client.post(url, json={"path": "portrait.json", "modified": 5, "forms": [],
-                                  "results": ["12:5"]}).status_code == 422, \
-        "「结果取自」仍只认根图上的节点(产出按执行节点号收,子图里的算在内部节点上是另一件事)"
     for forms in ([app, app], [{**app, "id": "Bad-Id"}], [{"title": str(n)} for n in range(21)]):
         assert client.post(url, json={"path": "portrait.json", "modified": 5, "forms": forms}).status_code == 422, \
             "id 重复、不合规、超过 20 张"
     assert not [op for op in _ops() if op["op"] == "annotate"], "形状不对的不交给插件"
 
-    #: 子图里面的节点(`12:5`)和根图上的节点一样能写进表单;两层的(`12:5:3`)也一样
-    inside = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "results": ["9"],
+    #: 子图里面的节点(`12:5`)和根图上的节点一样能写进表单,也一样能标成结果;两层的(`12:5:3`)也一样
+    inside = client.post(url, json={"path": "portrait.json", "modified": 1776098682.9, "results": ["9", "12:5"],
                                     "forms": [{**app, "items": [*app["items"], {"node": "12:5", "input": "steps"},
                                                                 {"node": "12:5:3", "input": "denoise"}]}]})
     assert inside.status_code == 200, inside.text
     assert [op for op in _ops() if op["op"] == "annotate"][-1]["forms"][0]["items"][-2:] == \
         [{"node": "12:5", "input": "steps", "label": ""}, {"node": "12:5:3", "input": "denoise", "label": ""}], \
         "子图里面的节点照样交给插件写(写法原样带过去)"
+    assert [op for op in _ops() if op["op"] == "annotate"][-1]["results"] == ["9", "12:5"], \
+        "「结果取自」里子图里面的输出节点(`12:5`)照样交给插件写 —— 从前这里 422,而界面上那一栏明明列着它"
 
     stale = client.post(url, json={"path": "portrait.json", "modified": 1.0, "forms": [app], "results": ["9"]})
     assert stale.status_code == 409
@@ -875,10 +875,11 @@ NODE_KEYS_BAD = ["abc", "12:", "12:5:", "12::5", "-3", "9999999999", "12.5", " 1
 
 
 def test_工作台_同步标记的节点号_子图里的和根图上的一样收_不成样子的两头都拒(library) -> None:
-    """「同步到画布」这条链上节点号只有**一套形状判据**:宿主 `_ANY_NODE`(表单里那一项的 `node`、插件交回的
-    `marks.nodes` 的键)和桥的 `ANY_NODE`(同一个键过桥时再查一遍)。表单里有**子图项**时两头都必须放行 ——
+    """「同步到画布」这条链上节点号只有**一套形状判据**:宿主 `_ANY_NODE`(表单里那一项的 `node`、「结果取自」的每一项、
+    插件交回的 `marks.nodes` 的键)和桥的 `ANY_NODE`(同一个键过桥时再查一遍)。表单里有**子图项**时两头都必须放行 ——
     桥那一侧曾经只认顶层节点号,整条链就断在它那一句话上(维护者截图:`marks.nodes keys must be top-level node ids`,
-    表单里 18 项有子图里的那几项)。用例与 TS 那边同一份(见 `NODE_KEYS_OK`)。
+    表单里 18 项有子图里的那几项)。**「结果取自」曾经另有一份只认根图的正则**(`_ROOT_NODE`):那一栏里看得见子图里的
+    保存节点,选它却 422 —— 现在三处共用这一套。用例与 TS 那边同一份(见 `NODE_KEYS_OK`)。
     """
     client, instance_id = library
     url = f"/api/plugins/instances/{instance_id}/workflow-library/app/marks"
@@ -888,12 +889,18 @@ def test_工作台_同步标记的节点号_子图里的和根图上的一样收
         #: 插件交回同一个键:宿主也只按这一套判据规整,原样交给界面去改画布
         back = client.post(url, json={"content": {**CANVAS, "keys": [key]}})
         assert back.status_code == 200 and list(back.json()["nodes"]) == [key], back.text
+        marked = client.post(url, json={"content": CANVAS, "results": [key]})
+        assert marked.status_code == 200, f"{key} 标得成结果(「结果取自」说的是执行节点号):{marked.text}"
+        assert [op for op in _ops() if op["op"] == "app_marks"][-1]["results"] == [key]
     for key in NODE_KEYS_BAD:
         assert client.post(url, json={"content": CANVAS,
                                       "forms": [{"items": [{"node": key, "input": "steps"}]}]}).status_code == 422, \
             f"{key} 不是一个节点号:别放水成什么都收"
         assert client.post(url, json={"content": {**CANVAS, "keys": [key]}}).status_code == 422, \
             f"插件交回 {key} 这种键:不交给界面去改画布"
+        bad = client.post(url, json={"content": CANVAS, "results": [key]})
+        assert bad.status_code == 422, f"「结果取自」收到 {key}:拒掉,别放水"
+        assert "12:5" in bad.json()["detail"], "说清它真正收的是什么(根图上的节点号、子图里面的 `12:5`)"
 
 
 def test_工作台_写进画布的标记_宿主先查形状_规整插件交回的(library) -> None:
@@ -908,11 +915,14 @@ def test_工作台_写进画布的标记_宿主先查形状_规整插件交回�
     assert sent["forms"][0]["title"] == "人像应用" and sent["results"] == ["9"]
     assert not [op for op in _ops() if op["op"] == "annotate"], "画布开着时不写文件"
     calls = len(_ops())
-    assert client.post(url, json={"content": CANVAS, "results": ["12:5"]}).status_code == 422, \
-        "「结果取自」还是只认根图上的节点"
+    marks = client.post(url, json={"content": CANVAS, "results": ["12:5"]})
+    assert marks.status_code == 200, marks.text
+    assert [op for op in _ops() if op["op"] == "app_marks"][-1]["results"] == ["12:5"], \
+        "「结果取自」里的子图输出节点(`12:5`)照样交给插件去改画布 —— 从前这里 422"
     assert client.post(url, json={"content": CANVAS, "forms": [{"items": [{"node": "12:5:3", "input": "x"}]}]}
                        ).status_code == 200, "子图里面(套两层)的节点:表单拿它,桥按路径改画布上那一个"
-    assert len(_ops()) == calls + 1, "形状不对的不交给插件"
+    assert client.post(url, json={"content": CANVAS, "results": ["abc"]}).status_code == 422
+    assert len(_ops()) == calls + 2, "形状不对的不交给插件"
     inside = client.post(url, json={"content": {**CANVAS, "inside": True}, "results": []})
     assert inside.status_code == 200 and inside.json()["nodes"] == {"12:5": {"forms": {"app": {"steps": {"order": 0}}}}}, \
         "插件交回子图里面的节点(`12:5`):原样交给界面去改画布"

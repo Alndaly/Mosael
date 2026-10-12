@@ -813,7 +813,9 @@ def annotate(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, An
     `{"stale": true, "modified": 现在的}` —— 宿主翻成 409,界面说「它刚在 ComfyUI 里改过,重新打开再改」。
     `forms`:**全部**表单(`[{id?, title, description, items: [{node, input, label?, main?, choices?}]}]`,没给 id 的是新表单;
     空列表 = 一张都不要;`node` 是根图上的节点号,或者子图里面那个节点的写法 `105:9`,见 app_form)。`results`:标成结果的
-    输出节点(「以后只要这张」)。成了回 `{"path", "modified"}`(写完之后的改动时间,接着改用它)。
+    输出节点(「以后只要这张」)—— 和表单项同一套写法,子图里的输出节点(`105:9`)照样标得,只是那份子图用了不止一处时
+    只有第一处那条写得进去(第二处拒掉、说清为什么,见 app_form.unaddressable_refs)。成了回 `{"path", "modified"}`
+    (写完之后的改动时间,接着改用它)。
     """
     path = check_path(payload.get("path"), locale)
     forms, results = _forms(payload, locale), _results(payload, locale)

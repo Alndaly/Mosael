@@ -410,6 +410,7 @@ def subgraph_promoting(picked: str) -> dict[str, Any]:
 
 
 SUBGRAPH_SAMPLER_ID = "a1b2c3d4-0000-4000-8000-0000000000ff"
+SUBGRAPH_OUTPUT_ID = "b2c3d4e5-1111-4222-8333-444455556666"
 
 
 def subgraph_sampler_ui(*, twice: bool = False) -> dict[str, Any]:
@@ -469,6 +470,66 @@ def subgraph_sampler_ui(*, twice: bool = False) -> dict[str, Any]:
                   [24, 5, 0, 20, 3, "LATENT"], [29, 20, 0, 18, 0, "LATENT"], [30, 4, 2, 18, 1, "VAE"],
                   [31, 18, 0, 19, 0, "IMAGE"]]
     return {"id": "5f0a1b2c-3d4e-4f50-8a9b-0c1d2e3f4a5b", "nodes": nodes, "links": links,
+            "definitions": {"subgraphs": [definition]}}
+
+
+def subgraph_output_ui(*, twice: bool = False) -> dict[str, Any]:
+    """一张文生图,而**存图那一步在子图里**(ADR 0042 §6):根图 12 号是那份「保存」子图的实例,里面 3 号采样、8 号解码、
+    **9 号是 SaveImage** —— 执行时它的节点号是 `12:9`(`twice=True` 时同一份定义再用一处,根图上 20 号)。
+
+    和 `subgraph_sampler_ui` 不同的就只有这一点:**输出节点在子图里面**。用它钉「结果取自」:标成结果的可以是子图里的那个
+    保存节点,而标记写在定义里那个节点上 —— 读回来还是同一个键(`12:9`),不会被下一次保存悄悄抹掉。
+    边界上的五个口接的是外面连进来的线(模型、正反条件、latent、VAE)。
+    """
+    boundary = [("model", "MODEL"), ("positive", "CONDITIONING"), ("negative", "CONDITIONING"),
+                ("latent_image", "LATENT"), ("vae", "VAE")]
+    definition = {
+        "id": SUBGRAPH_OUTPUT_ID, "name": "保存",
+        "inputNode": {"id": -10, "bounding": [0, 0, 1, 1]}, "outputNode": {"id": -20, "bounding": [0, 0, 1, 1]},
+        "inputs": [{"id": f"i{at}", "name": name, "type": kind, "linkIds": [101 + at]}
+                   for at, (name, kind) in enumerate(boundary)],
+        "outputs": [],
+        "nodes": [
+            {"id": 3, "type": "KSampler", "title": "采样",
+             "widgets_values": [42, "randomize", 20, 7.0, "euler", "normal", 1.0],
+             "inputs": [conn("model", 101), conn("positive", 102), conn("negative", 103), conn("latent_image", 104),
+                        widget("seed"), widget("steps"), widget("cfg"), widget("sampler_name"), widget("scheduler"),
+                        widget("denoise")]},
+            {"id": 8, "type": "VAEDecode", "inputs": [conn("samples", 106), conn("vae", 105)]},
+            {"id": 9, "type": "SaveImage", "widgets_values": ["mosael"],
+             "inputs": [conn("images", 107), widget("filename_prefix")]},
+        ],
+        "links": [{"id": 101 + at, "origin_id": -10, "origin_slot": at, "target_id": 3, "target_slot": at, "type": kind}
+                  for at, (_name, kind) in enumerate(boundary[:4])]
+                 + [{"id": 105, "origin_id": -10, "origin_slot": 4, "target_id": 8, "target_slot": 1, "type": "VAE"},
+                    {"id": 106, "origin_id": 3, "origin_slot": 0, "target_id": 8, "target_slot": 0, "type": "LATENT"},
+                    {"id": 107, "origin_id": 8, "origin_slot": 0, "target_id": 9, "target_slot": 0, "type": "IMAGE"}],
+    }
+
+    def instance(node_id: int, title: str, first_link: int) -> dict[str, Any]:
+        return {"id": node_id, "type": SUBGRAPH_OUTPUT_ID, "title": title,
+                "inputs": [conn(name, first_link + at) for at, (name, _kind) in enumerate(boundary)],
+                "outputs": [], "widgets_values": []}
+
+    nodes = [
+        {"id": 4, "type": "CheckpointLoaderSimple", "widgets_values": ["sd_xl_base.safetensors"],
+         "inputs": [widget("ckpt_name")]},
+        {"id": 5, "type": "EmptyLatentImage", "widgets_values": [832, 1216, 1],
+         "inputs": [widget("width"), widget("height"), widget("batch_size")]},
+        {"id": 6, "type": "CLIPTextEncode", "widgets_values": ["a cat"],
+         "inputs": [conn("clip", 6), widget("text")]},
+        {"id": 7, "type": "CLIPTextEncode", "widgets_values": ["blurry"],
+         "inputs": [conn("clip", 7), widget("text")]},
+        instance(12, "保存", 1),
+    ]
+    links = [[1, 4, 0, 12, 0, "MODEL"], [2, 6, 0, 12, 1, "CONDITIONING"], [3, 7, 0, 12, 2, "CONDITIONING"],
+             [4, 5, 0, 12, 3, "LATENT"], [5, 4, 2, 12, 4, "VAE"], [6, 4, 1, 6, 0, "CLIP"], [7, 4, 1, 7, 0, "CLIP"]]
+    if twice:
+        #: 同一份定义再用一处:里面的保存节点在 API 图里多出一份(`20:9`),而文件里只有一处放标记
+        nodes += [instance(20, "保存 2", 21)]
+        links += [[21, 4, 0, 20, 0, "MODEL"], [22, 6, 0, 20, 1, "CONDITIONING"], [23, 7, 0, 20, 2, "CONDITIONING"],
+                  [24, 5, 0, 20, 3, "LATENT"], [25, 4, 2, 20, 4, "VAE"]]
+    return {"id": "6a1b2c3d-4e5f-4071-8a9b-0c1d2e3f4a5b", "nodes": nodes, "links": links,
             "definitions": {"subgraphs": [definition]}}
 
 

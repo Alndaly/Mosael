@@ -710,11 +710,33 @@ def required_input_present(inputs: dict[str, Any], name: str, definition: Any) -
     return _type_of(definition) == AUTOGROW_TYPE and any(key.startswith(f"{name}.") for key in inputs)
 
 
+def _required_missing(inputs: dict[str, Any], name: str, definition: Any) -> bool:
+    """定义里写在 `required` 下的这一格,图上算不算真的**缺**。
+
+    **两处必须同一套口径**:跑前校验(`missing_required`)和「这张图真会跑的部分」(`_missing_socket`)对同一张图说的得是
+    同一句话 —— 一边说缺、另一边照样跑,或者反过来,都会出事。真机「快速去水印」就是后者:7 号节点的 `images` 是
+    `COMFY_AUTOGROW_V3` 且 `min` 是 0,服务端本来收,`_missing_socket` 却照着 `required` 硬判 ⇒ 靠它的输出节点被判成
+    「出不来」⇒ `live` 把那一支剪掉(见下)。
+
+    模板格(`COMFY_AUTOGROW_V3` 那几种)按 `_template_needs_rows` 判:`min` 是 0 的一格都不必填;`DYNAMICCOMBO` /
+    `DYNAMICSLOT` 只在图上已经有这一格时才算有(有就轮不到这里,没有也不必填);`DYNAMICGROUP` 的具体输入本地不猜。
+    **宁可漏报也不误报** —— 误报会把跑得通的图剪掉、把跑得通的图拦在门外。
+    """
+    if required_input_present(inputs, name, definition):
+        return False
+    return not (convert.is_template(definition) and not _template_needs_rows(definition))
+
+
 def _missing_socket(node: dict[str, Any], object_info: dict[str, Any]) -> bool:
-    """一格必填的插口没接上(上游被静音,线随之断了):ComfyUI 校验这个节点必然失败,靠它的输出节点出不来。"""
+    """一格**必填的插口**没接上(上游被静音,线随之断了):ComfyUI 校验这个节点必然失败,靠它的输出节点出不来。
+
+    「必填」和跑前校验同一条判据(见 `_required_missing`):模板格按 `_template_needs_rows` 算,不照 `object_info` 的
+    `required` 硬抄 —— 后者会把服务端本来收的图判成 broken(真机「快速去水印」:`min` 是 0 的 AUTOGROW),而 broken 的
+    上游那一支会被 `live` 整个剪掉:那张图的输出节点从目录里消失,界面上什么都没说。
+    """
     required = ((object_info.get(str(node.get("class_type", ""))) or {}).get("input") or {}).get("required") or {}
     inputs = node.get("inputs") or {}
-    return any(not required_input_present(inputs, name, definition) and _is_socket(definition)
+    return any(_required_missing(inputs, name, definition) and _is_socket(definition)
                for name, definition in required.items())
 
 
@@ -744,7 +766,8 @@ def missing_required(api: dict[str, Any], object_info: dict[str, Any]) -> list[s
     输入名在中间,看不出是哪个节点上的哪一格;跑完一遍才回来说更亏(真机:整张图跑完 7.8 秒才收到那句)。
     这里在本地按同一套定义核一遍,缺的**一次说全**(见 run.required_inputs)。
 
-    「必填」按 ComfyUI 服务端算的口径,不是照着 `object_info` 的 `required` 抄:
+    「必填」按 ComfyUI 服务端算的口径,不是照着 `object_info` 的 `required` 抄(同一条判据 `_required_missing`,「这张图真会
+    跑的部分」用的也是它):
 
     - `hidden` 不看:那几格是服务端自己塞的,图上本来就没有;
     - 模板格(`COMFY_AUTOGROW_V3` 那几种)按这次提交带了哪几格判,不是一律当必填(见 `_template_needs_rows`);
@@ -767,9 +790,7 @@ def missing_required(api: dict[str, Any], object_info: dict[str, Any]) -> list[s
         required = ((spec.get("input") or {}).get("required")) or {}
         inputs = node.get("inputs") or {}
         for name, definition in required.items():
-            if required_input_present(inputs, name, definition):
-                continue
-            if convert.is_template(definition) and not _template_needs_rows(definition):
+            if not _required_missing(inputs, name, definition):
                 continue
             found.append(f"#{node_id} {class_type} · {name}")
     return found

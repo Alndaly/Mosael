@@ -31,6 +31,7 @@ from tests.fake_comfyui import (
     FakeComfyUI,
     fixture_workflow,
     multi_reference_ui,
+    subgraph_output_ui,
     subgraph_promoting,
     subgraph_sampler_ui,
 )
@@ -599,8 +600,60 @@ def test_一份子图用了不止一处_里面的节点指不明是哪一处_标
         app_form.apply(ui, [{"items": [{"node": "20:3", "input": "steps"}]}], [])
 
 
+def test_子图里面的输出节点_标成结果_读回来还是同一个键(plugin) -> None:
+    """「结果取自」说的是**执行节点号**,子图展开出来的保存节点号就是 `12:9` —— 标得进去,而且读回来还是它。
+
+    这是那个静默丢数据坑的守卫:`read` 从前只从根图上的节点收 `result`(`":" not in node_id`),子图里的保存节点标了它
+    读回来是空的、也不报错;而工作流库的编辑器读完就照这份标记写回去 —— 下一次保存就把作者标的那个结果悄悄抹掉了。
+    """
+    graph, convert, app_form = plugin
+    ui = subgraph_output_ui()
+    assert app_form.read(ui).results == (), "还没标"
+    marked = app_form.apply(ui, [], ["12:9"])
+    marks = app_form.read(marked)
+    assert marks.results == ("12:9",), "读回来还是同一个键(从前这里是空的)"
+    inner = marked["definitions"]["subgraphs"][0]["nodes"][2]
+    assert inner["id"] == 9 and inner["properties"]["mosael"]["result"] is True, \
+        "标记写在子图定义里那个保存节点自己的 properties 上"
+    assert all("mosael" not in (node.get("properties") or {}) for node in marked["nodes"]), \
+        "外面那个子图节点上什么都不带(那是另一件事)"
+
+    api, titles = _api(plugin, marked)
+    assert "12:9" in api, "API 图里它是展开出来的执行节点"
+    resolved = app_form.resolve(marks, api, OBJECT_INFO, titles)
+    assert [one["node"] for one in graph.output_nodes(api, OBJECT_INFO, titles)] == ["12:9"]
+    assert resolved.invalid == [] and resolved.full.results == frozenset({"12:9"}), \
+        "核对得上:标着的那个就在「结果取自」的输出节点里(resolve 那条匹配对路径键一样成立)"
+    assert [one["node"] for one in graph.final_outputs(api, graph.generation_nodes(api, "image", OBJECT_INFO, titles),
+                                                       OBJECT_INFO, resolved.full.results)] == ["12:9"], \
+        "跑起来据它挑交回哪几个节点"
+
+    again = app_form.apply(marked, [], list(marks.results))
+    assert app_form.read(again).results == ("12:9",), "读回来是什么就写回去什么:再存一次还是它,不会被抹掉"
+
+
+def test_一份子图用了不止一处_标结果的第二处指不明是哪一处_拒绝并说清(plugin) -> None:
+    """标记只有一处地方放(那份定义里的那个保存节点),两处实例说的是同一条路径 —— 所以只有**第一处**那条(`12:9`)标得进去,
+    第二处那条(`20:9`)拒掉,并说清为什么、该怎么办。和表单项那一条是同一条决定、同一句话(`unaddressable`)。"""
+    _, _, app_form = plugin
+    from lines import ComfyError
+
+    ui = subgraph_output_ui(twice=True)
+    why = app_form.unaddressable_refs(ui, ["12:9", "20:9"])
+    assert list(why) == ["20:9"], "第一处(12:9)照常能标;第二处(20:9)不能"
+    assert "用了 2 处" in why["20:9"]["zh"] and "#12:9" in why["20:9"]["zh"] and "拆开" in why["20:9"]["zh"], \
+        "说清为什么、该怎么办"
+    assert "used 2 times" in why["20:9"]["en"] and "#12:9" in why["20:9"]["en"]
+    assert "12:9" in app_form.addressable(ui) and "20:9" not in app_form.addressable(ui)
+    app_form.apply(ui, [], ["12:9"]), "第一处标得进去"
+    with pytest.raises(ComfyError, match="用了 2 处"):
+        app_form.apply(ui, [], ["20:9"])
+    assert app_form.read(ui).results == () and all(
+        "mosael" not in (node.get("properties") or {}) for node in ui["nodes"]), "拒了就是一个字都不写(入参也没被动过)"
+
+
 def test_写标记_指着不存在的节点就拒_什么都不写(plugin) -> None:
-    """指不到就拒(根图上的 99、子图路径里对不上的 12:5 —— 那张图的 12 号不是子图节点、里面没有 5)"""
+    """指不到就拒(根图上的 99、子图路径里对不上的 12:5 —— 那张图的 12 号不是子图节点、里面没有 5);标结果也一样。"""
     _, _, app_form = plugin
     from lines import ComfyError
 
@@ -611,6 +664,9 @@ def test_写标记_指着不存在的节点就拒_什么都不写(plugin) -> Non
         app_form.apply(multi_reference_ui(), [{"items": [{"node": "", "input": "steps"}]}], [])
     with pytest.raises(ComfyError):
         app_form.apply({"3": {"class_type": "KSampler", "inputs": {}}}, [], ["3"])
+    for bad in ("abc", "12:", "12:5:", "12::5"):
+        with pytest.raises(ComfyError):
+            app_form.apply(subgraph_output_ui(), [], [bad])
 
 
 # --- 对着假 ComfyUI:app / annotate,和经插件进程跑的目录、工具、生成 --------------------------
@@ -625,7 +681,9 @@ def comfy(monkeypatch, tmp_path):
     with FakeComfyUI() as server:
         server.state.object_info = json.loads(json.dumps(OBJECT_INFO))
         server.state.workflows = {"multi.json": multi_reference_ui(), "subgraph.json": subgraph_sampler_ui(),
-                                  "twice.json": subgraph_sampler_ui(twice=True)}
+                                  "twice.json": subgraph_sampler_ui(twice=True),
+                                  "inside.json": subgraph_output_ui(),
+                                  "inside-twice.json": subgraph_output_ui(twice=True)}
         yield server
 
 
@@ -787,6 +845,41 @@ def test_annotate_子图里面的节点写进那份定义_读回来还是同一�
     assert [(one["key"], one["label"]) for one in form["items"]] == [("12:3.steps", "步数"), ("6.text", "")], \
         "读回来还是同一个键(哪个键写下去,哪个键读回来)"
     assert again["app"]["invalid"] == 0 and again["app"]["stray"] == 0
+
+
+def test_annotate_子图里面的输出节点标成结果_存回去读回来还是它(comfy) -> None:
+    """对着假 ComfyUI 走一遍真的写回:`results: ["12:9"]` 落在**子图定义里那个 SaveImage 自己的** `properties` 上,
+    再读回来时 `app.results` 还是 `["12:9"]` —— 编辑器拿着这一份再存一次,不会把作者标的结果抹掉。
+
+    (这是那条静默丢数据坑的端到端守卫:插件读不回来时这里第二段是红的,而且是**悄悄**红的 —— 不报错,标记没了。)
+    """
+    seen = _host("app", comfy.url, path="inside.json")
+    assert [one["node"] for one in seen["outputs"]] == ["12:9"], "子图里面的保存节点也是「结果取自」的一个选项"
+    assert seen["app"]["results"] == []
+    written = _host("annotate", comfy.url, path="inside.json", modified=seen["modified"], forms=[], results=["12:9"])
+    assert written["path"] == "inside.json"
+    stored = comfy.state.workflows["inside.json"]
+    assert _strip(stored) == subgraph_output_ui(), "只改了 mosael 那几处"
+    assert stored["definitions"]["subgraphs"][0]["nodes"][2]["properties"]["mosael"]["result"] is True
+
+    again = _host("app", comfy.url, path="inside.json")
+    assert again["app"]["results"] == ["12:9"], "读回来还是同一个键"
+    assert again["modified"] == written["modified"]
+    _host("annotate", comfy.url, path="inside.json", modified=again["modified"], forms=[],
+          results=again["app"]["results"])
+    assert _host("app", comfy.url, path="inside.json")["app"]["results"] == ["12:9"], "照读回来的那份再存一次,标记还在"
+
+
+def test_annotate_一份子图用了不止一处_标结果的第二处拒掉并说清为什么(comfy) -> None:
+    """两处实例各是一个输出节点(`12:9`、`20:9`),而标记只有一处地方放 —— 第二处那条拒掉,说的是为什么、该怎么办;
+    拒了就一个字节都不写。第一处那条照常标得进去(和表单项同一条决定)。"""
+    seen = _host("app", comfy.url, path="inside-twice.json")
+    assert [one["node"] for one in seen["outputs"]] == ["12:9", "20:9"]
+    with pytest.raises(runtime.PluginRuntimeError, match="用了 2 处"):
+        _host("annotate", comfy.url, path="inside-twice.json", modified=seen["modified"], forms=[], results=["20:9"])
+    assert not [call for call in comfy.state.calls if call[0] == "WRITE"], "拒了就不写"
+    _host("annotate", comfy.url, path="inside-twice.json", modified=seen["modified"], forms=[], results=["12:9"])
+    assert _host("app", comfy.url, path="inside-twice.json")["app"]["results"] == ["12:9"], "第一处那条标得进去"
 
 
 def test_生成_表单上那一项写进子图内部那个节点_外面的节点不受影响(comfy, tmp_path: Path) -> None:

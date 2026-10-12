@@ -303,8 +303,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{path}” was just changed in ComfyUI, so the forms weren't saved. Open it again and redo the change",
     },
     "workflowLibErr_badAppItem": {
-        "zh": "表单里的「{item}」不对:只认根图上的节点(节点号是数字)和图级的种子 / 尺寸 / 跑几遍",
-        "en": "“{item}” in the form won't do: only nodes on the top-level graph (numeric ids) and the graph-level seed / size / runs",
+        "zh": "表单里的「{item}」不对:节点号是数字,子图里面的节点写成 `12:5`(`12:5:3` 再往里一层);图级的只有种子 / 尺寸 / 跑几遍",
+        "en": "“{item}” in the form won't do: node ids are digits and a node inside a subgraph is written `12:5` (`12:5:3` is "
+              "one level deeper); the graph-level items are only seed / size / runs",
+    },
+    "workflowLibErr_badResult": {
+        "zh": "「结果取自」里的「{item}」不对:节点号是数字,子图里面的节点写成 `12:5`(`12:5:3` 再往里一层)",
+        "en": "“{item}” under “Results from” won't do: node ids are digits and a node inside a subgraph is written `12:5` "
+              "(`12:5:3` is one level deeper)",
     },
     "pluginNotice_formsOutdated": {
         "zh": "{name} 上有工作流里 Mosael 的标记是旧格式",

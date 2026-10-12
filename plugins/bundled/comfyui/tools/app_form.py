@@ -24,11 +24,16 @@ ADR 0045 第一步就把 `#app` / `_app` 定死了);新建的表单由插件起 
 为什么、该怎么办(见 `addressable`)。值写进的是**子图内部那个节点自己的输入**,不是外面那个子图节点上的格子 —— 后者是
 ComfyUI 前端「提升出来的控件」,另一件事。
 
+**「结果取自」同一条规矩**:`result` 标记也写在定义里那个节点上、也按「第一个用它的那个节点」读回来(`105:9`)——
+它说的是**执行节点号**,子图展开出来的节点号就是这个写法,产出本来就按它收。所以根图上的和子图里面的输出节点一样标得、
+一样读得回来;那份子图用了不止一处时同样只有第一处那条写得进去(`apply` 拒第二处的写法,理由和表单项是同一句)。
+
 **版本只认当前这一版**(`VERSION`)。别的版本按「没有表单」处理、报 `unsupported`:读的这一侧不留认旧版的分支(ADR 0038
 §2)。第 1 版能由 `upgrade` 改写过来(插件的 `upgrade_marks`,宿主确认一次整台改写,见 workflow_library);更新的版本是
 新插件写的,只能升级插件。没有 `extra.mosael` 的图,节点上的标记不算(从别的工作流拷过来的节点带着的)。
 
-- `read(ui_graph)` → Marks:文件里写着什么;
+- `read(ui_graph)` → Marks:文件里写着什么;**根图和每一层子图定义里的**标记都读(子图里的写成「第一个用它的那个节点」
+  到它的路径,`result` 也一样 —— 那里读不回来的话,编辑器下一次保存就会把作者标的结果悄悄抹掉);
 - `resolve(marks, api, …)` → Resolved:完整工作流的表单、每张表单、失效的项。每一项核对一遍 —— 节点还在会跑的那部分图里
   (graph.live)、那一格还是一个能填的字面量(没被拉成连线)、`choices` 还在下拉里;对不上的不进表单,列出来(工作流库里
   「一键去掉」);
@@ -122,22 +127,33 @@ def _why_unaddressable(ui_graph: dict[str, Any], ref: str) -> dict[str, str]:
     where = canonical_paths(ui_graph).get(str(definition.get("id") or "")) or ref.rpartition(":")[0]
     inner = ref.rpartition(":")[2]
     return {
-        "zh": f"子图「{name}」在这张图里用了 {uses} 处,里面的节点只能按第一处写(#{where}:{inner})—— 要放进表单:先在画布上"
-              "把它拆开,或者只留一处",
+        "zh": f"子图「{name}」在这张图里用了 {uses} 处,里面的节点只能按第一处写(#{where}:{inner})—— 要放进表单或标成结果:先在"
+              "画布上把它拆开,或者只留一处",
         "en": f"Subgraph “{name}” is used {uses} times in this workflow, so its inner nodes can only be written through the "
-              f"first one (#{where}:{inner}). To put it on a form, unpack it on the canvas, or keep a single instance.",
+              f"first one (#{where}:{inner}). To put it on a form or mark it as a result, unpack it on the canvas, or keep a "
+              "single instance.",
     }
+
+
+def unaddressable_refs(ui_graph: dict[str, Any], refs: list[str]) -> dict[str, dict[str, str]]:
+    """这几个写法**写不成标记**(子图定义用了不止一处):写法 → 为什么、该怎么办。别的写法不在里面。
+
+    和 `unaddressable` 是同一条决定的两头:表单项的 `node`、「结果取自」的每一项都按它 —— 一份定义只有一个地方放标记
+    (那份定义里的那个节点),两处实例说的是同一条路径,只有**第一处**那条(`canonical_paths`)写下去读回来还是它。
+    """
+    ok = addressable(ui_graph)
+    found: dict[str, dict[str, str]] = {}
+    for ref in refs:
+        if ref and ":" in ref and ref not in ok:
+            found[ref] = _why_unaddressable(ui_graph, ref)
+    return found
 
 
 def unaddressable(ui_graph: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     """这几项说的节点**写不成标记**(子图定义用了不止一处):这一项的键 → 为什么、该怎么办。别的项不在里面。"""
-    ok = addressable(ui_graph)
-    found: dict[str, dict[str, str]] = {}
-    for item in items:
-        ref = str(item.get("node") or "")
-        if ref and ":" in ref and ref not in ok:
-            found[str(item.get("key") or ref)] = _why_unaddressable(ui_graph, ref)
-    return found
+    reasons = unaddressable_refs(ui_graph, [str(item.get("node") or "") for item in items])
+    return {str(item.get("key") or item.get("node") or ""): reasons[str(item.get("node") or "")]
+            for item in items if str(item.get("node") or "") in reasons}
 
 
 @dataclass(frozen=True)
@@ -230,8 +246,12 @@ def _version(head: Any) -> Any:
 def read(ui_graph: Any) -> Marks:
     """文件里写着的标记。API 格式的图(没有 `nodes`)没有地方放标记。
 
-    根图和**子图定义里**的节点都读(后者按第一个用它的那个节点写成 `105:9`,见 addressable)。`result` 只认根图上的节点:
-    「结果取自」选的是交回产出的是哪几个节点,而 Mosael 按执行节点号收产出(子图里的产出算在内部的执行节点上,是另一件事)。
+    根图和**子图定义里**的节点都读(后者按第一个用它的那个节点写成 `105:9`,见 addressable)。`result` 也照读:
+    「结果取自」说的是**执行节点号**,子图展开出来的节点号就是 `12:9` 这种,产出本来就按它收。
+
+    `result` 从前只从根图上的节点收(`":" not in node_id`),子图里的保存节点标了它读回来却是空的 —— 而工作流库的编辑器
+    读完就照这份标记写回去,下一次保存就把作者标的那个结果**悄悄抹掉**了。标记跟着节点走(写在定义里那个节点自己的
+    `properties` 上),读回来必须还是同一个键。
     """
     if not isinstance(ui_graph, dict) or not isinstance(ui_graph.get("nodes"), list):
         return NONE
@@ -258,8 +278,7 @@ def read(ui_graph: Any) -> Marks:
         mark = props.get(KEY) if isinstance(props, dict) else None
         if not isinstance(mark, dict):
             continue
-        #: 前面那几项是根图上的(`nodes_with_refs` 先走根图),`result` 只从它们里收
-        if mark.get("result") is True and ":" not in node_id:
+        if mark.get("result") is True:
             results.append(node_id)
         per_form = mark.get("forms")
         for form_id, expose in (per_form.items() if isinstance(per_form, dict) else ()):
@@ -455,8 +474,9 @@ def apply(ui_graph: dict[str, Any], forms: list[dict[str, Any]], results: list[s
     照原样。
 
     认根图上的节点,也认**子图里面的节点**(`105:9`,写法见模块说明);指着不存在的节点、子图定义用了不止一处所以指不明是哪
-    一处的写法、id 重复或不合规、形状不对就拒,什么都不写。图上的标记不是这一版的也拒(`refuse_other_version`):照「没有表单」
-    重写会把那几张表单抹掉。
+    一处的写法、id 重复或不合规、形状不对就拒,什么都不写。**`results` 走同一条路**:子图里的输出节点标得进去,而那份子图
+    用了不止一处时,第二处那条写法(`200:9`)拒掉、理由是同一句(见 `unaddressable_refs`)。图上的标记不是这一版的也拒
+    (`refuse_other_version`):照「没有表单」重写会把那几张表单抹掉。
     """
     if not isinstance(ui_graph.get("nodes"), list):
         raise _bad(locale, "这不是界面格式的工作流,没有地方放表单", "This is not a UI-format workflow, so there is nowhere to "
@@ -577,4 +597,4 @@ def upgrade(ui_graph: Any) -> dict[str, Any] | None:
 
 __all__ = ["FORM_ID", "FORM_ID_PATTERN", "FormMarks", "KEY", "LEGACY_VERSION", "MAX_FORMS", "Mark", "Marks", "NONE",
            "Resolved", "VERSION", "addressable", "apply", "canonical_paths", "new_form_id", "nodes_with_refs",
-           "read", "refuse_other_version", "resolve", "summary", "unaddressable", "upgrade"]
+           "read", "refuse_other_version", "resolve", "summary", "unaddressable", "unaddressable_refs", "upgrade"]

@@ -335,16 +335,18 @@ MAX_FORMS = 20
 _MAX_APP_LABEL = 120
 _MAX_APP_DESCRIPTION = 1000
 _GRAPH_ITEMS = {"seed", "size", "runs"}
-#: 根图上的节点号(「结果取自」只认它:交回产出的是哪几个节点,而产出按**执行节点号**收,子图里的算在内部的节点上)。
-_ROOT_NODE = re.compile(r"\d{1,9}")
-#: 能放进表单的节点写法:根图上的节点号,或者子图里面那个节点 —— `105:9` 是根图 105 号那个子图里面的 9 号(`12:5:3` 再往里
+#: 一个节点号的写法:根图上的节点号,或者子图里面那个节点 —— `105:9` 是根图 105 号那个子图里面的 9 号(`12:5:3` 再往里
 #: 一层;和画布摘要、插件的 `convert`、ComfyUI 执行时是同一套写法,ADR 0042 §6)。值写进的是**子图内部那个节点自己的输入**,
 #: 不是外面那个子图节点上的格子。
 #:
-#: **这是全链唯一一套节点号形状判据**:表单里那一项的 `node`、`app_marks` 交回的 `marks.nodes` 的键都按它;标记过桥时
-#: electron 那一侧按同一个判据再查一遍(`electron/ipc-contract.cjs` 的 `ANY_NODE`)—— 那边曾经只认顶层节点号,表单里一有
-#: 子图项就整条链断在桥上。跨语言共用不了一份正则,就共用同一份用例:`NODE_KEYS_OK` / `NODE_KEYS_BAD`
+#: **这是全链唯一一套节点号形状判据**:表单里那一项的 `node`、「结果取自」的每一项、`app_marks` 交回的 `marks.nodes` 的键
+#: 都按它;标记过桥时 electron 那一侧按同一个判据再查一遍(`electron/ipc-contract.cjs` 的 `ANY_NODE`)—— 那边曾经只认顶层
+#: 节点号,表单里一有子图项就整条链断在桥上。跨语言共用不了一份正则,就共用同一份用例:`NODE_KEYS_OK` / `NODE_KEYS_BAD`
 #: (本文件用它的地方在 `tests/test_plugin_workflow_library.py`,TS 那边在 `electron/ipc-contract.test.ts`;改判据两边一起改)。
+#:
+#: 「结果取自」用的也是它:那儿说的是**执行节点号**,子图展开出来的节点号就是 `12:9` 这种 —— 产出本来就是按它收的。
+#: 曾经这里另有一份只认根图的正则(`_ROOT_NODE`),于是子图里的保存节点在这一栏里看得见、选它就 422;而且插件报回来的
+#: `12:9` 会被静静丢掉,下一次保存就把作者标的那个结果抹掉(见 `_app_summary`)。
 _ANY_NODE = re.compile(r"\d{1,9}(?::\d{1,9})*")
 #: 一格输入的名字:不收控制字符,不太长。
 _INPUT_NAME = re.compile(r"[^\x00-\x1f]{1,200}")
@@ -391,7 +393,12 @@ def _app_form(raw: Any) -> dict[str, Any] | None:
 
 def _app_summary(raw: Any) -> dict[str, Any] | None:
     """插件说的这张工作流的表单(有没有标记、版本、能不能升级、每张表单、标成结果的节点、对不上任何一张表单的标记几处),
-    规整一遍。没说就是 None。"""
+    规整一遍。没说就是 None。
+
+    标成结果的那几个是**执行节点号**(`9`、子图展开出来的 `12:9`,见 `_ANY_NODE`):插件报的是文件里那几个节点的写法,
+    这里照同一套判据查形状。查形状不是「只收根图上的」—— 子图里的保存节点标了结果同样要收下来透给界面,否则界面拿着
+    一份短了它的结果列去存,那个标记就被悄悄抹掉了(插件那一侧此前也读不回来,两处一起改)。
+    """
     if not isinstance(raw, dict):
         return None
     status = _text(raw.get("status"), 20)
@@ -404,7 +411,7 @@ def _app_summary(raw: Any) -> dict[str, Any] | None:
         "upgradable": raw.get("upgradable") is True,
         "forms": [one for index, one in enumerate(forms) if one["id"] not in {other["id"] for other in forms[:index]}],
         "results": [_text(one, 20) for one in raw.get("results") or []
-                    if isinstance(one, str) and _ROOT_NODE.fullmatch(one)][:MAX_APP_RESULTS],
+                    if isinstance(one, str) and _ANY_NODE.fullmatch(one)][:MAX_APP_RESULTS],
         "invalid": int(_number(raw.get("invalid")) or 0),
         "stray": int(_number(raw.get("stray")) or 0),
     }
@@ -916,11 +923,15 @@ def _too_big() -> WorkflowLibraryError:
 
 
 def _results_payload(results: list[str]) -> list[str]:
+    """「结果取自」要写进去的那几个节点:**执行节点号**(`9`,或者子图展开出来的 `12:9` —— 产出就是按它收的,
+    见 `_ANY_NODE`)。形状不对就拒,而且说清收的是什么(`workflowLibErr_badResult`)—— 从前这句说的是
+    「只认根图上的节点」,子图里的保存节点在这栏里看得见、选它却 422。
+    """
     if len(results) > MAX_APP_RESULTS:
         raise _too_big()
     for one in results:
-        if not _ROOT_NODE.fullmatch(one):
-            raise WorkflowLibraryError("workflowLibErr_badAppItem", item=one[:200])
+        if not _ANY_NODE.fullmatch(one):
+            raise WorkflowLibraryError("workflowLibErr_badResult", item=one[:200])
     return results
 
 
