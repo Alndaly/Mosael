@@ -12,6 +12,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { ChatComposer } from "@/features/agent/ChatComposer";
+import { NO_REFERENCES } from "@/features/agent/references";
 import { PromptEditor } from "@/features/boards/PromptEditor";
 import { NoteEditor } from "@/features/notes/NoteEditor";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
@@ -31,7 +32,7 @@ const EDITORS: Record<string, (text: string) => React.ReactElement> = {
   PromptEditor: (text) => (
     <PromptEditor value={text} onChange={() => undefined} placeholder="" candidates={async () => []} onSubmit={() => undefined} emptyHint={() => ""} />
   ),
-  ChatComposer: (text) => <ChatComposer workspaceId="w1" value={doc(text)} onChange={() => undefined} onSubmit={() => undefined} search={async () => []} />,
+  ChatComposer: (text) => <ChatComposer workspaceId="w1" value={doc(text)} onChange={() => undefined} onSubmit={() => undefined} search={async () => NO_REFERENCES} />,
   NoteEditor: (text) => <NoteEditor markdown={text} onChange={() => undefined} onReference={() => undefined} workspaceId="w1" noteId="n1" />,
 };
 
