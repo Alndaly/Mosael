@@ -685,8 +685,14 @@ function UseToGenerate({
 /**
  * 详情左栏的预览框:占满这一栏的宽,高度有上限 —— 并排时 640,上下排(整页一起滚)时半屏,不把概要顶到一屏以外。
  * 预览图按自己的比例收进去(object-contain);没有预览图的占位是和卡片一样的 3:4,也受这个上限。
+ *
+ * `calc(100dvh-230px)` 那一道管窗口矮的时候(和工作流库详情那张节点图同一个数,见 WORKFLOW_GRAPH_FRAME):
+ * 左栏内容高 = 弹窗高 `min(860px,100dvh-32px)` − 2(边框)− 68.75(弹窗外壳那条头)− 65.75(详情那条头)
+ * − 48(左栏内边距)= `min(860px,100dvh-32px)` − 184.5,窗口不到 892 高时就是 `100dvh-216.5` —— 这一道
+ * 比它小 13.5;窗口再高时左栏内容高封在 675.5,而这一道封在 640。两头都够不着左栏,预览就顶不出竖滚条。
+ * 光有 640 的时候会:实测 1600×620 的窗口左栏内容只有 403.5 高(640 的框溢出 236),1600×760 时是 543.5。
  */
-const DETAIL_PREVIEW_FRAME = "max-h-[640px] w-full [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
+const DETAIL_PREVIEW_FRAME = "max-h-[min(640px,calc(100dvh-230px))] w-full [[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
 
 /** 详情里的预览视频:框按片子自己的比例(元数据回来之前先按 16:9),静音、循环,第一帧是缩略图。 */
 function DetailVideo({ src, poster, label, onFailed }: { src: string; poster: string; label: string; onFailed: () => void }) {
@@ -792,7 +798,11 @@ export function ModelDetail({
       </Button>
     </div>
   ) : model.has_preview && !previewFailed ? (
-    <div className="group/thumb group/preview relative overflow-hidden rounded-xl bg-secondary">
+    //: `w-full` 这一层不能省:左栏那个格子是 `[place-items:safe_center]`(见 LibraryBrowser),网格项不拉伸、
+    //: 宽度按内容收缩 —— 里面那句 `w-full` 于是拿不到栏宽,预览盒退回"按图收缩"(量过:832×1216 的图 1600 的
+    //: 窗口下盒宽 437.9,栏内容宽 487.45;320×480 的图盒宽就是 320)。补上它,盒子永远等于栏宽,图照旧
+    //: `object-contain` 收在里面。
+    <div className="group/thumb group/preview relative w-full overflow-hidden rounded-xl bg-secondary">
       {actions && (
         //: 「看大图」:全站共用的灯箱,能左右翻当前筛出来的那一批;视频的那一枚抬到播放控件上面,不压着它
         <ViewFullSizeButton name={baseName(model.name)} onOpen={() => actions.showLarge(model)}

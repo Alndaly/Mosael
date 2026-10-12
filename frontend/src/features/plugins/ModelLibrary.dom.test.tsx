@@ -155,12 +155,19 @@ const detailMedia = () =>
   (document.querySelector("[data-library-detail-pane='media']") ?? document.querySelector("[data-library-detail-scroll='both']")) as HTMLElement;
 
 /**
- * 详情左栏的占位是一个真的框:和卡片一样 3:4、占满这一栏的宽、高度有上限(并排 640、上下排半屏)、描着边(浅色主题下
- * 底色和弹窗表面几乎一样),图标和字在框里居中。
+ * 预览框的高上限那一条:并排时 `min(640px, 100dvh−230px)`(窗口矮的时候不把左栏顶成滚动条,
+ * 和工作流库详情那张节点图同一个数),上下排(整页一起滚)时半屏。
+ */
+const PREVIEW_MAX_H = "max-h-[min(640px,calc(100dvh-230px))]";
+const PREVIEW_MAX_H_STACKED = "[[data-library-detail-scroll=both]_&]:max-h-[50dvh]";
+
+/**
+ * 详情左栏的占位是一个真的框:和卡片一样 3:4、占满这一栏的宽、高度有上限(并排 640 / 窗口矮时更少、上下排半屏)、
+ * 描着边(浅色主题下底色和弹窗表面几乎一样),图标和字在框里居中。
  */
 function expectPreviewFrame(frame: HTMLElement | null) {
   expect(frame).toBeTruthy();
-  for (const name of ["aspect-[3/4]", "w-full", "max-h-[640px]", "[[data-library-detail-scroll=both]_&]:max-h-[50dvh]",
+  for (const name of ["aspect-[3/4]", "w-full", PREVIEW_MAX_H, PREVIEW_MAX_H_STACKED,
     "border", "grid", "place-items-center", "content-center"]) {
     expect(frame!.classList.contains(name), name).toBe(true);
   }
@@ -575,7 +582,7 @@ describe("模型库", () => {
     window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "heavy", nsfw: "blur" }));
     await openDetail();
     const img = within(detailMedia()).getByRole("img");
-    for (const name of ["object-contain", "w-full", "max-h-[640px]", "[[data-library-detail-scroll=both]_&]:max-h-[50dvh]"]) {
+    for (const name of ["object-contain", "w-full", PREVIEW_MAX_H, PREVIEW_MAX_H_STACKED]) {
       expect(img.classList.contains(name), name).toBe(true);
     }
     expect(img.classList.contains("aspect-[3/4]")).toBe(false);
@@ -583,6 +590,23 @@ describe("模型库", () => {
     fireEvent.click(within(detailMedia()).getByRole("button", { name: "modelRevealPreview" }));
     expect(within(detailMedia()).getByRole("img").getAttribute("data-treatment")).toBe("clear");
     expect(within(detailMedia()).queryByRole("button", { name: "modelRevealPreview" })).toBeNull();
+  });
+
+  it("详情预览:预览盒吃满栏宽、不按图的内容收缩(图和占位同一个框),图照旧只缩不裁", async () => {
+    window.localStorage.setItem("mosael:model-previews", JSON.stringify({ level: "clear", nsfw: "blur" }));
+    await openDetail();
+    const img = within(detailMedia()).getByRole("img");
+    //: jsdom 没有排版,量不出宽高,只能按类名钉住这条链:左栏那个格子是 `[place-items:safe_center]`(见 LibraryBrowser),
+    //: 网格项不拉伸、宽度按内容收缩 —— 装预览的那一层不写 `w-full`,里面 img 那句 `w-full` 就拿不到栏宽,
+    //: 盒子退回"按图收缩"(真 Chromium 里量到过:图 832×1216、栏内容宽 487.45,盒子只有 437.9;图 320×480 的盒子就是 320)。
+    const box = img.parentElement!;
+    expect(box.classList.contains("w-full"), "装预览的那一层要撑满左栏").toBe(true);
+    expect(box.classList.contains("overflow-hidden"), "收进框里的部分裁掉,不外溢").toBe(true);
+    expect(img.classList.contains("w-full"), "图自己也要按栏宽").toBe(true);
+    expect(img.classList.contains("object-contain"), "只缩不裁不拉伸:按自己的比例收进去").toBe(true);
+    expect(img.classList.contains("aspect-[3/4]")).toBe(false);
+    //: 高度有上限(窗口矮的时候不把左栏顶成滚动条)
+    expect(img.className).toMatch(/max-h-\[/);
   });
 
   it("详情预览:没有预览图是一个 3:4 的框,图标和「没有预览图」在框里居中;没有「看清」", async () => {
