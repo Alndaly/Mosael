@@ -248,10 +248,15 @@ function parseComfyWorkbenchOpen(value) {
   return { ...comfyConnection(payload, channel), path, fresh };
 }
 
-//: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)、根图上的节点号(应用表单的标记只认根图)
+//: 画布上的节点号(当前显示的那一层图里的,可能是子图里的)
 const CANVAS_NODE = /^-?\d{1,10}$/;
-const ROOT_NODE = /^\d{1,9}$/;
-//: 从根图往里走的节点路径(`12:5`:根图 12 号节点那个子图里面的 5 号;ADR 0042 智能体指节点的写法),最多 16 层
+//: **文件 / 执行图里的节点号**:`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层
+//: (ADR 0042 §6 的写法)。应用表单的项、`marks.nodes` 的键都按它 —— 子图里面的节点一样放得进表单。
+//: 和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是**同一套判据**(跨语言各写一份正则,同一份用例:
+//: `12` / `12:5` / `12:5:3` 收,`abc` / `12:` / `12:5:` / `-3` 拒;两边都有钉住这几条的测试)。
+const ANY_NODE = /^\d{1,9}(?::\d{1,9})*$/;
+//: 从根图往里走的节点路径(`12:5`:根图 12 号节点那个子图里面的 5 号;ADR 0042 智能体指节点的写法),最多 16 层。
+//: 定位(`locate`)走的是**画布上那一层**的节点号,可以是负的 —— 和 `ANY_NODE` 不是同一个空间,别混用。
 const NODE_PATH = /^-?\d{1,10}(?::\d{1,10}){1,16}$/;
 //: 子图的 id(前端给的是 UUID 那样的串)
 const SUBGRAPH_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -448,8 +453,8 @@ function parseOpenWorkflow(call, channel) {
  *
  * - setWidget:节点号、widget 名字(不带控制字符)、值(字符串 / 有限的数 / 布尔);下拉里有没有它由桥查;
  * - refreshCombos / export / save:不带别的;
- * - setMarks:根图节点号 → 一个对象(那个节点上的 `properties.mosael`),和图上的 `extra.mosael`(对象或 null),外加写给哪一张
- *   (`expect`,见 parseExpect);
+ * - setMarks:节点号(根图上的 `12`,或子图里面的 `12:5`,见 `ANY_NODE`)→ 一个对象(那个节点上的 `properties.mosael`),
+ *   和图上的 `extra.mosael`(对象或 null),外加写给哪一张(`expect`,见 parseExpect);
  * - locate:节点号加子图的 id(那一层里的编号),或者不给子图、节点写成从根图往里走的路径(`12:5`);
  * - readGraph:不带别的(整张图交给智能体读,ADR 0042;后端排的工作台动作也经这里查过才进桥,见 browserWorker);
  * - runControls:`phase` 只能是 before / after(「运行」前后照前端的「生成后怎样」换种子);
@@ -490,7 +495,9 @@ function parseComfyWorkbenchCall(value) {
     const entries = Object.entries(nodes);
     if (entries.length > 1000) throw new TypeError(`${channel}: too many marked nodes`);
     for (const [id, own] of entries) {
-      if (!ROOT_NODE.test(id)) throw new TypeError(`${channel}: marks.nodes keys must be top-level node ids`);
+      if (!ANY_NODE.test(id)) {
+        throw new TypeError(`${channel}: marks.nodes keys must be node ids (12, or a subgraph path like 12:5)`);
+      }
       record(own, channel);
     }
     const extra = marks.extra === null || marks.extra === undefined ? null : record(marks.extra, channel);

@@ -56,6 +56,15 @@ const contract = require("./ipc-contract.cjs") as {
 
 const ROOT = path.resolve(__dirname);
 
+/**
+ * 一个节点号的形状(`marks.nodes` 的键、应用表单里那一项的 `node`):`12` 是根图上的,`12:5` 是根图 12 号那个子图里面的
+ * 5 号,`12:5:3` 再往里一层。**和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是同一套判据** ——
+ * 跨语言共用不了一份正则,就共用同一份用例:Python 那边是 `backend/tests/test_plugin_workflow_library.py` 的
+ * `NODE_KEYS_OK` / `NODE_KEYS_BAD`(两边改了判据都要同时改这两份)。
+ */
+const NODE_KEYS_OK = ["12", "12:5", "12:5:3"];
+const NODE_KEYS_BAD = ["abc", "12:", "12:5:", "12::5", "-3", "9999999999", "12.5", " 12", "12 "];
+
 describe("Electron IPC contract", () => {
   it("assigns every channel one name and one direction", () => {
     const channels = Object.values(contract.IPC).flatMap((group) => Object.values(group));
@@ -173,7 +182,17 @@ describe("Electron IPC contract", () => {
     expect(callOf({ op: "setMarks", marks, expect: expect_ }).call).toEqual({ op: "setMarks", marks, expect: expect_ });
     expect(callOf({ op: "setMarks", marks: { nodes: {}, extra: null }, expect: expect_ }).call)
       .toEqual({ op: "setMarks", marks: { nodes: {}, extra: null }, expect: expect_ });
-    expect(() => callOf({ op: "setMarks", marks: { nodes: { "12:5": {} }, extra: null }, expect: expect_ }), "只认根图上的节点").toThrow(/top-level/);
+    //: 表单里有子图项时「同步到画布」:交回的键是**路径式**节点号(`12:5` 是根图 12 号那个子图里面的 5 号,`12:5:3` 再往里一层)。
+    //: 这几条和宿主 `backend/app/domain/workflow_library.py` 的 `_ANY_NODE` 是同一套判据、同一份用例
+    //: (`backend/tests/test_plugin_workflow_library.py` 的 `NODE_KEYS_OK` / `NODE_KEYS_BAD`)—— 两边各写一份正则,用例别只写一半。
+    for (const key of NODE_KEYS_OK) {
+      expect(callOf({ op: "setMarks", marks: { nodes: { [key]: { result: true } }, extra: null }, expect: expect_ }).call.marks,
+        `子图里的节点 ${key} 和根图上的节点一样收`).toEqual({ nodes: { [key]: { result: true } }, extra: null });
+    }
+    for (const key of NODE_KEYS_BAD) {
+      expect(() => callOf({ op: "setMarks", marks: { nodes: { [key]: {} }, extra: null }, expect: expect_ }),
+        `${key} 不是一个节点号`).toThrow(/marks\.nodes keys must be node ids/);
+    }
     expect(() => callOf({ op: "setMarks", marks: { nodes: { "4": "x" }, extra: null }, expect: expect_ })).toThrow(/object/);
     expect(() => callOf({ op: "setMarks", marks: { nodes: {}, extra: null, more: 1 }, expect: expect_ })).toThrow(/unexpected/);
     // PLG-17:写进画布的两样都得说写给哪一张(桥在页面里比);不说就不写

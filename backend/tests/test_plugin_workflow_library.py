@@ -143,6 +143,9 @@ elif op == "reboot":
 elif op == "app_marks":
     if payload["content"].get("evil"):
         emit({"ok": True, "output": {"nodes": {"../evil": {"result": True}}, "extra": None}})
+    elif payload["content"].get("keys"):
+        #: 交回**它拿到的那几个键**:宿主规整插件交回的那一份,节点号的形状只按一套判据查
+        emit({"ok": True, "output": {"nodes": {one: {"result": True} for one in payload["content"]["keys"]}, "extra": None}})
     elif payload["content"].get("inside"):
         emit({"ok": True, "output": {"nodes": {"12:5": {"forms": {"app": {"steps": {"order": 0}}}}}, "extra": None}})
     else:
@@ -862,6 +865,35 @@ def test_工作台_画布上这张的应用表单_没有路径和改动时间_�
     calls = len(_ops())
     assert client.post(url, json={"content": {"3": {"class_type": "KSampler"}}}).status_code == 422
     assert len(_ops()) == calls
+
+
+#: 一个节点号的形状:`12` 是根图上的、`12:5` 是根图 12 号那个子图里面的 5 号、`12:5:3` 再往里一层(ADR 0042 §6)。
+#: **和 electron 桥 `electron/ipc-contract.cjs` 的 `ANY_NODE` 是同一套判据** —— 跨语言共用不了一份正则,就共用同一份用例:
+#: TS 那边是 `electron/ipc-contract.test.ts` 的 `NODE_KEYS_OK` / `NODE_KEYS_BAD`(改判据时这两份一起改)。
+NODE_KEYS_OK = ["12", "12:5", "12:5:3"]
+NODE_KEYS_BAD = ["abc", "12:", "12:5:", "12::5", "-3", "9999999999", "12.5", " 12", "12 "]
+
+
+def test_工作台_同步标记的节点号_子图里的和根图上的一样收_不成样子的两头都拒(library) -> None:
+    """「同步到画布」这条链上节点号只有**一套形状判据**:宿主 `_ANY_NODE`(表单里那一项的 `node`、插件交回的
+    `marks.nodes` 的键)和桥的 `ANY_NODE`(同一个键过桥时再查一遍)。表单里有**子图项**时两头都必须放行 ——
+    桥那一侧曾经只认顶层节点号,整条链就断在它那一句话上(维护者截图:`marks.nodes keys must be top-level node ids`,
+    表单里 18 项有子图里的那几项)。用例与 TS 那边同一份(见 `NODE_KEYS_OK`)。
+    """
+    client, instance_id = library
+    url = f"/api/plugins/instances/{instance_id}/workflow-library/app/marks"
+    for key in NODE_KEYS_OK:
+        response = client.post(url, json={"content": CANVAS, "forms": [{"items": [{"node": key, "input": "steps"}]}]})
+        assert response.status_code == 200, f"{key} 是一个节点号(子图里的照样放行):{response.text}"
+        #: 插件交回同一个键:宿主也只按这一套判据规整,原样交给界面去改画布
+        back = client.post(url, json={"content": {**CANVAS, "keys": [key]}})
+        assert back.status_code == 200 and list(back.json()["nodes"]) == [key], back.text
+    for key in NODE_KEYS_BAD:
+        assert client.post(url, json={"content": CANVAS,
+                                      "forms": [{"items": [{"node": key, "input": "steps"}]}]}).status_code == 422, \
+            f"{key} 不是一个节点号:别放水成什么都收"
+        assert client.post(url, json={"content": {**CANVAS, "keys": [key]}}).status_code == 422, \
+            f"插件交回 {key} 这种键:不交给界面去改画布"
 
 
 def test_工作台_写进画布的标记_宿主先查形状_规整插件交回的(library) -> None:

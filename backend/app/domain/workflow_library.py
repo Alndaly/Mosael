@@ -340,6 +340,11 @@ _ROOT_NODE = re.compile(r"\d{1,9}")
 #: 能放进表单的节点写法:根图上的节点号,或者子图里面那个节点 —— `105:9` 是根图 105 号那个子图里面的 9 号(`12:5:3` 再往里
 #: 一层;和画布摘要、插件的 `convert`、ComfyUI 执行时是同一套写法,ADR 0042 §6)。值写进的是**子图内部那个节点自己的输入**,
 #: 不是外面那个子图节点上的格子。
+#:
+#: **这是全链唯一一套节点号形状判据**:表单里那一项的 `node`、`app_marks` 交回的 `marks.nodes` 的键都按它;标记过桥时
+#: electron 那一侧按同一个判据再查一遍(`electron/ipc-contract.cjs` 的 `ANY_NODE`)—— 那边曾经只认顶层节点号,表单里一有
+#: 子图项就整条链断在桥上。跨语言共用不了一份正则,就共用同一份用例:`NODE_KEYS_OK` / `NODE_KEYS_BAD`
+#: (本文件用它的地方在 `tests/test_plugin_workflow_library.py`,TS 那边在 `electron/ipc-contract.test.ts`;改判据两边一起改)。
 _ANY_NODE = re.compile(r"\d{1,9}(?::\d{1,9})*")
 #: 一格输入的名字:不收控制字符,不太长。
 _INPUT_NAME = re.compile(r"[^\x00-\x1f]{1,200}")
