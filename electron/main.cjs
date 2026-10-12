@@ -14,6 +14,7 @@ const {
   session,
   shell,
   systemPreferences,
+  webContents,
 } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -384,6 +385,268 @@ function startPowerAndDisplayDiagnostics() {
   }
 }
 
+/**
+ * 「内存是怎么涨上去的」需要一条**曲线**:崩溃那一刻那一行(`render-process-gone` 里的 `memory`)只说得清
+ * 「当时有多挤」,说不清「怎么挤上去的」—— 而「随 reload 一截截涨」和「本来就这么大」在单个时间点上长得一模一样。
+ *
+ * **为什么恒定每 30 秒一行,而不是「只在变了时写」**:GPU 那一档可以只在变化时写(九项特性,翻一次就是一个事件);
+ * 内存不行 —— 它本身就是曲线,阈值策略会把它自己做没。实测:23:44:02–23:46:05 那 12 次崩溃里 `Tab` 合计一直在
+ * 1171–1211 MB 之间(±2%),按「变了一定比例才写」一条都不会写;而那一段正是 00:11 那一簇(2882–3178 MB)唯一的
+ * 对照基线 —— 没有基线就分不清「一直都这么大」和「涨上来了」。所以恒定写:连续、可对齐、能算斜率。
+ * 代价有界:一行约 0.8 KB,一天约 2.3 MB,和 main.log 现有的 5 MB 轮转同量级。
+ *
+ * `memorySnapshot()` 那一个不动:它的字段形状被崩溃行和 mainDiagnostics.test.ts 钉着,这里另给一个读数更全的。
+ */
+function summarizeAppMemory(metrics) {
+  const list = metrics ?? [];
+  /** @type {Record<string, number>} */
+  const byType = {};
+  let workingSetKb = 0;
+  let privateKb = 0;
+  let privateKnown = false;
+  for (const metric of list) {
+    const type = metric?.type ?? "?";
+    const kb = metric?.memory?.workingSetSize ?? 0;
+    workingSetKb += kb;
+    byType[type] = (byType[type] ?? 0) + kb;
+    // privateBytes 只有 Windows 报(Electron 的类型里就这么标);报不了就整个字段不写 —— 用 0 顶替会让人以为
+    // 「私有内存是 0」,那是假数据。
+    if (typeof metric?.memory?.privateBytes === "number") {
+      privateKb += metric.memory.privateBytes;
+      privateKnown = true;
+    }
+  }
+  return { processes: list.length, workingSetKb, ...(privateKnown ? { privateKb } : {}), byType };
+}
+
+/** pid → 那一条进程指标。`getAppMetrics()` 只按进程给,不按 webContents 给,所以要用 pid 把两边对上。 */
+function memoryByPid(metrics) {
+  const map = new Map();
+  for (const metric of metrics ?? []) {
+    if (typeof metric?.pid === "number") map.set(metric.pid, metric);
+  }
+  return map;
+}
+
+/** Tab 型(渲染进程)逐进程列一遍:视图那一栏只覆盖挂着 webContents 的那些,差值要看得见才追得下去。 */
+function tabProcessList(metrics) {
+  const list = [];
+  for (const metric of metrics ?? []) {
+    if (metric?.type !== "Tab") continue;
+    list.push({ pid: metric.pid ?? null, workingSetKb: metric.memory?.workingSetSize ?? null });
+  }
+  return list;
+}
+
+/** 一块 webContents 是谁(纯数据)。已经销毁的那块读不到,返回 null —— 别让它带走整行。 */
+function viewIdentity(contents) {
+  try {
+    return { id: contents.id, type: contents.getType(), pid: contents.getOSProcessId(), url: contents.getURL() };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 一块视图自己的私有内存。`getProcessMemoryInfo()` 是异步的,失败就当没有 ——
+ * 「少几个字段」和「少这一行」是两回事,前者可以接受。
+ * 键名按平台不同(`residentSet` 文档上只标了 linux/win32,实际 macOS 上叫 `resident`),两个都认。
+ */
+async function viewPrivateMemory(contents) {
+  try {
+    const info = await contents.getProcessMemoryInfo();
+    return { privateKb: info?.private ?? null, residentKb: info?.residentSet ?? info?.resident ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 把「这块视图是谁」和「它占了多少」并成一行。纯函数(只吃纯数据),单独跑见 mainDiagnostics.test.ts。
+ * 三处读数优先级:进程级 workingSet 从 `getAppMetrics()` 来(和合计同源,对得上账);私有内存优先用
+ * `getProcessMemoryInfo()`(macOS 上只有它报),拿不到再退回进程级的 `privateBytes`(Windows 有)。
+ */
+function viewMemoryEntry(identity, metric, priv) {
+  return {
+    ...identity,
+    workingSetKb: metric?.memory?.workingSetSize ?? null,
+    privateKb: priv?.privateKb ?? metric?.memory?.privateBytes ?? null,
+    residentKb: priv?.residentKb ?? null,
+  };
+}
+
+/** 现在活着的每一块 webContents + 它自己的读数(异步那部分读不到就少几个字段)。 */
+async function liveViewMemory() {
+  const pairs = [];
+  for (const contents of webContents.getAllWebContents()) {
+    const identity = viewIdentity(contents);
+    if (identity) pairs.push({ contents, identity });
+  }
+  const metrics = memoryByPid(app.getAppMetrics());
+  const privates = await Promise.all(pairs.map((pair) => viewPrivateMemory(pair.contents)));
+  return pairs.map((pair, index) => viewMemoryEntry(pair.identity, metrics.get(pair.identity.pid), privates[index]));
+}
+
+/** 每 30 秒那一条:整个应用按进程类型汇总 + 每一块 webContents 各是多少(带 url)。 */
+async function appendMemorySample(extra = {}, kind = "memory-sample") {
+  try {
+    const metrics = app.getAppMetrics();
+    const views = await liveViewMemory();
+    appendDiagnosticLog(kind, () =>
+      JSON.stringify({
+        local: localClock(),
+        uptimeSec: Math.round(process.uptime()),
+        ...summarizeAppMemory(metrics),
+        tabProcesses: tabProcessList(metrics),
+        views,
+        ...extra,
+      }),
+    );
+  } catch (error) {
+    // 诊断只许失败,不许拦路:定时器里抛出去就是一条未捕获异常。
+    appendDiagnosticLog(kind, `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 崩的**那一刻**再抓一条同样的读数。
+ *
+ * 为什么非要有它:30 秒的基线可能离崩溃很远 —— 实测 16:22:31 那次采样一切正常(Tab 2365 MB),
+ * **24 秒后**渲染进程就 trap 了。崩前那几十秒里某一两块视图涨了多少,只有崩的这一刻才可能抓到;
+ * 死掉的那个进程多半已经不在 `getAppMetrics()` 里了(所以它自己那一格常常是空的),但**别人当时多大**
+ * 以及「死者生前最后一次被记到的读数」,只有这里补得上。
+ */
+async function appendMemoryAtCrash(details) {
+  await appendMemorySample({ at: "crash", reason: details?.reason ?? null, exitCode: details?.exitCode ?? null }, "memory-at-crash");
+}
+
+/** reload / 导航各写一行:这一次跳变落在**哪一块视图**上、跳了多少。 */
+async function appendViewMemory(kind, contents, extra) {
+  try {
+    const identity = viewIdentity(contents);
+    if (!identity) return;
+    const metric = memoryByPid(app.getAppMetrics()).get(identity.pid);
+    const priv = await viewPrivateMemory(contents);
+    appendDiagnosticLog(kind, () => JSON.stringify({ local: localClock(), ...viewMemoryEntry(identity, metric, priv), ...extra }));
+  } catch {
+    // 视图已经销毁 / 读数失败:这一行就算了(不能因为观测把导航本身打断)。
+  }
+}
+
+/**
+ * 内存曲线本身:启动时先记一条基线,之后每 30 秒一条。
+ * 启动那条不是多余的 —— 最新那一簇崩溃是**启动后 17 秒**就在 `Tab` 合计 3178 MB 上崩的,
+ * 「一开机就这么大」和「跑了一阵涨上来」必须分得开。
+ */
+function startMemoryDiagnostics() {
+  try {
+    // 采样周期(秒)。写成「秒 × 1000」而不是把毫秒数直接写死:「多久一次」在代码里一眼读得出来,
+    // 也不用和 mainLifecycle.test.ts 里那条「main.cjs 里不许出现三十秒的毫秒字面量」的断言纠缠 ——
+    // 那条禁的是拿它当**后端就绪**的截止时间,和这条采样周期不是一件事。
+    const sampleSeconds = 30;
+    void appendMemorySample();
+    const timer = setInterval(() => void appendMemorySample(), sampleSeconds * 1000);
+    // 这个定时器不许拖住退出(同 GPU 那一档)。
+    timer.unref?.();
+  } catch (error) {
+    appendDiagnosticLog("memory-sample", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** 一次涨这么多(32 MB)才值得单独记一行。理由见 startMemorySpikeWatch。 */
+const MEMORY_SPIKE_STEP_KB = 32 * 1024;
+
+/**
+ * 这一轮该写出去的暴涨项。纯函数 —— 唯一的副作用是推进 `lastWritten`,那是它自己的状态。
+ * 基准只在**写出去**的时候才推进:所以慢慢涨也会攒够一格照样写,增长藏不住;而没涨够就一行不写。
+ */
+function spikeEntries(lastWritten, metrics, contentsList) {
+  const byPid = memoryByPid(metrics);
+  const spiked = [];
+  for (const contents of contentsList) {
+    const identity = viewIdentity(contents);
+    if (!identity) continue;
+    const kb = byPid.get(identity.pid)?.memory?.workingSetSize;
+    if (typeof kb !== "number") continue;
+    const before = lastWritten.get(identity.pid);
+    // 第一次见到这块视图:先记一条基线,否则「涨了多少」没有起点。
+    if (before === undefined) {
+      lastWritten.set(identity.pid, kb);
+      spiked.push({ pid: identity.pid, url: identity.url, fromKb: null, toKb: kb, deltaKb: null });
+      continue;
+    }
+    if (kb - before >= MEMORY_SPIKE_STEP_KB) {
+      lastWritten.set(identity.pid, kb);
+      spiked.push({ pid: identity.pid, url: identity.url, fromKb: before, toKb: kb, deltaKb: kb - before });
+    }
+  }
+  return spiked;
+}
+
+/**
+ * 尖峰探测器:5 秒一次,只在某一块视图比**上一次写出去**的读数涨了一格(32 MB)以上时才写一行。
+ *
+ * 为什么需要它(不是「再密一点更好」那种偏好):崩溃是**进插件页后 27–65 秒**发生的,而 30 秒的基线
+ * 只给这段窗口留 0–2 个读数 —— 实测 16:22:31 采样一切正常(Tab 2365 MB),24 秒后就 trap 了,
+ * 「崩前那几十秒谁涨的」整个落在采样缝里。5 秒一格才看得见斜率。
+ *
+ * 为什么不是「只在变化时写」那种会把曲线做没的策略:基线仍然是**恒定 30 秒一条**(那条曲线不依赖这里);
+ * 这里是**闹钟**,而且比较的基准只在写出去的时候才推进 —— 所以慢慢涨也会攒够一格照样写,
+ * 涨得快就 5 秒一个点,**任何增长都藏不住**。安静时一行不写,所以代价只在出事时产生。
+ */
+function startMemorySpikeWatch() {
+  try {
+    /** pid → 上一次**写出去**的读数(不写就不推,慢涨才攒得住)。 */
+    const lastWritten = new Map();
+    const timer = setInterval(() => {
+      appendDiagnosticLog("memory-spike", () => {
+        const spiked = spikeEntries(lastWritten, app.getAppMetrics(), webContents.getAllWebContents());
+        return spiked.length ? JSON.stringify({ local: localClock(), uptimeSec: Math.round(process.uptime()), spiked }) : "";
+      });
+    }, 5_000);
+    // 这个定时器不许拖住退出(同上面两条)。
+    timer.unref?.();
+  } catch (error) {
+    appendDiagnosticLog("memory-spike", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 插件页会不会**反复**把整份目录拉回来 —— 「一进插件页就崩」最直接的对账口径:目录一份好几 MB,
+ * 每重拉一次就是一棵全新的对象图,旧的那份还挂在 react-query 的缓存里。
+ *
+ * 数在**主进程**上:渲染侧要么动 frontend(这块不归这条线),要么只拿得到当前页面的 performance 条目。
+ * `webRequest` 是**只读观察**:不放行、不改写、不阻断任何请求。
+ * 只挂本机两个 host:发布账号视图要拉一堆外网资源,宽通配会让每个请求都回主进程一次。
+ * 代价写在明处:后端地址被配成远端时(见 frontend/src/api/transport.ts 的 VITE_MOSAEL_API_URL)这一档数不到。
+ */
+function startPluginsDirectoryDiagnostics() {
+  try {
+    let count = 0;
+    session.defaultSession.webRequest.onCompleted({ urls: ["*://127.0.0.1/*", "*://localhost/*"] }, (details) => {
+      try {
+        // 两层都要判:host 那一层交给 filter(宽通配会让发布账号视图拉的每个外网资源都回主进程一次),
+        // 路径这一层自己判(通配匹配器不认端口,而且只要那一份整目录,别的 /api/* 不记)。
+        // host 在这里再判一遍,是为了让这个函数自己不依赖调用方给的 filter —— 少一处「改了 filter、
+        // 忘了这里」的暗雷。
+        if (!/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//i.test(details.url)) return;
+        if (details.url.replace(/^[a-z]+:\/\/[^/]*/i, "").split("?")[0] !== "/api/plugins") return;
+        count += 1;
+        const headers = details.responseHeaders ?? {};
+        const length = (headers["Content-Length"] ?? headers["content-length"] ?? [])[0];
+        appendDiagnosticLog(
+          "plugins-dir-fetch",
+          `n=${count} local=${localClock()} status=${details.statusCode} bytes=${length ?? "?"} fromCache=${Boolean(details.fromCache)}`,
+        );
+      } catch {
+        // 一条数不出来,不影响别的请求。
+      }
+    });
+  } catch (error) {
+    appendDiagnosticLog("plugins-dir-fetch", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 process.on("uncaughtExceptionMonitor", (error) => appendMainLog("uncaught-exception", error));
 process.on("unhandledRejection", (reason) => appendMainLog("unhandled-rejection", reason));
 app.on("render-process-gone", (_event, webContents, details) => {
@@ -410,6 +673,8 @@ app.on("render-process-gone", (_event, webContents, details) => {
       .getProcessMemoryInfo()
       .then((info) => appendDiagnosticLog("main-memory", () => JSON.stringify({ ...info, local: localClock() })))
       .catch(() => undefined);
+    // 崩的那一刻的逐视图读数:30 秒的基线可能离得很远(实测差 24 秒),这一段只有这里补得上。
+    void appendMemoryAtCrash(details);
   } catch {
     // 没有这个 API 就没有。
   }
@@ -439,6 +704,16 @@ app.on("web-contents-created", (_event, contents) => {
       }),
     );
   }
+  // 导航 / reload 各一行,而且带的是**这一块视图**自己的内存:只看全局合计,涨的那一块会被另外七八块视图
+  // 的同时起伏淹掉。`did-start-navigation` 是跳之前那一行(此时量到的还是旧文档),`did-finish-load` 是载完之后
+  // 那一行 —— 相邻两行之差就是这一次导航的代价。
+  // 应用是 hash 路由(`#/plugins` → `#/ai`):那种跳 `isSameDocument` 为真、且**不会有** did-finish-load,
+  // 所以要把它记下来,免得把「换了个路由」读成「重新载入了一次」。
+  contents.on("did-start-navigation", (details) => {
+    if (!details?.isMainFrame) return;
+    void appendViewMemory("view-nav-start", contents, { to: details.url, inPlace: Boolean(details.isSameDocument) });
+  });
+  contents.on("did-finish-load", () => void appendViewMemory("view-load-finish", contents, {}));
 });
 
 /** 同一句只记一次:网页可能一遍遍地要同一个权限,别把日志刷满。 */
@@ -1301,6 +1576,10 @@ app.whenReady().then(async () => {
   // 「整窗闪」的现场:GPU 事实(要 ready 之后才拿得到)+ 之后的特性变化,以及电源/锁屏/显示器事件。只记日志。
   startGpuDiagnostics();
   startPowerAndDisplayDiagnostics();
+  // 内存曲线 +「插件页在反复拉整份目录吗」:两条都只写日志。
+  startMemoryDiagnostics();
+  startMemorySpikeWatch();
+  startPluginsDirectoryDiagnostics();
   // 最先定语言:下面起后端时的小窗、失败时弹的错误框就要用到它。getLocale 要等 ready。
   applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
