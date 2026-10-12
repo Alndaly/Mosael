@@ -146,6 +146,62 @@ function blurAxis(
 const clampIndex = (index: number, length: number) => (index < 0 ? 0 : index >= length ? length - 1 : index);
 
 /**
+ * ## 看得见那张画布怎么合成:蒙版是**不透明**的,不能整张盖上去
+ *
+ * 蒙版按契约是「黑底 + 白笔迹、每个像素都不透明」,所以 `source-over` 把它整张画上去就是一块黑板:
+ * 底图再怎么画也被盖掉,而且「画过」和「没画过」在屏幕上没有区别 —— 反选前后、清空前后一个样,
+ * 看着就像「底图没了」「源图被弄成灰度了」。
+ *
+ * 屏幕上的层数不写在组件里,写在这里:**哪几层、谁在下、各自怎么叠**是一份数据,画布那头照着画
+ * (组件里的 `drawMaskView`),于是这套合成在没有画布的环境里也能断言(见 maskPixels.test.ts)。
+ *
+ * | 层 | 像素从哪来 | 怎么叠 | 出来是什么 |
+ * | --- | --- | --- | --- |
+ * | 底图 | 原图 | `source-over`,alpha 1 | 这张图**原样** —— 要改的地方在它上面标出来 |
+ * | 蒙版反相 | 255 − 蒙版 | `multiply`,alpha `MASK_TINT_DIM` | 没画的地方是白(乘了等于没乘),画过的地方压暗 |
+ * | 蒙版着色 | 蒙版 × 蒙版色 | `lighter` | 画过的地方加一层蒙版色 —— 底图再亮也认得出 |
+ *
+ * 两笔都要的原因:只压暗的话,底图本来就黑的那一块看不出来;只着色的话,底图本来就白的那一块
+ * 也看不出来 —— 压暗给暗处兜底、着色给亮处兜底,两头都认得出来。
+ * 而压暗用的是**反相** `multiply`(不是把蒙版直接乘上去):直接乘是「没画的地方」变黑 —— 那是把底图抹掉。
+ *
+ * 屏幕上的事到此为止:导出的那张自始至终是蒙版本身(组件里 `save()` 走 maskRef 那张离屏画布),
+ * 和这条合成没有任何关系。
+ */
+
+/** 要改的地方在屏幕上着的色。照片里不常出现的饱和红 —— 「这一块选中了」,快速蒙版同一种读法。 */
+export const MASK_TINT = "#e5484d";
+/** 画过的地方压暗多少:1 = 压成纯黑,0 = 不压。压掉的底图正好让上面那层蒙版色认得出来。 */
+export const MASK_TINT_DIM = 0.7;
+
+/**
+ * 看得见那张画布上的一层。`of` 说这一层的像素从哪来,`op` / `alpha` 说它怎么叠上去。
+ *
+ * `maskInverse` / `maskTint` 是蒙版的两张派生(反相、着色),由画布那头先铺在一张离屏画布上再叠:
+ * 蒙版自己没有透明通道,不能直接当「只有画过的地方才画」的模板用。
+ */
+export interface MaskViewLayer {
+  of: "underlay" | "mask" | "maskInverse" | "maskTint";
+  op: GlobalCompositeOperation;
+  alpha: number;
+}
+
+/**
+ * 看得见那张画布要画的层,**先画的在下面**。
+ *
+ * 「显示底图」关掉、或者根本没有底图(读图失败、断网)时只剩蒙版本身:一张最朴素的黑白视图,
+ * 和导出的那张一模一样 —— 所以那个开关是真的有用,不是空转。
+ */
+export function maskViewLayers(view: { hasUnderlay: boolean; showUnderlay: boolean }): MaskViewLayer[] {
+  if (!view.hasUnderlay || !view.showUnderlay) return [{ of: "mask", op: "source-over", alpha: 1 }];
+  return [
+    { of: "underlay", op: "source-over", alpha: 1 },
+    { of: "maskInverse", op: "multiply", alpha: MASK_TINT_DIM },
+    { of: "maskTint", op: "lighter", alpha: 1 },
+  ];
+}
+
+/**
  * 一份像素的**单通道**灰度 —— 撤销栈按它存。
  *
  * 一步一份四通道的像素在 2048² 上是 16MB,三十步就是五百兆;蒙版本身是灰的,一像素一个字节就够。

@@ -20,14 +20,16 @@ vi.mock("@/api/domains/assets", () => ({
 
 import { importAsset, type Asset } from "@/api/domains/assets";
 import { PreferencesProvider } from "@/app/preferences";
-import { MaskEditor } from "@/components/generation/MaskEditor";
+import { drawMaskView, MaskEditor } from "@/components/generation/MaskEditor";
+import { MASK_TINT_DIM, maskViewLayers } from "@/lib/maskPixels";
 
 /** 一份最小的 2D 上下文:记下它被要求做什么,像素一律给全 0。 */
 class FakeContext2D {
   canvas: HTMLCanvasElement;
   fillStyle: string | CanvasGradient | CanvasPattern = "";
   globalAlpha = 1;
-  /** 它被要求做过什么(断言「黑底」那一层用)。 */
+  globalCompositeOperation: GlobalCompositeOperation = "source-over";
+  /** 它被要求做过什么(断言「黑底」那一层、以及合成的顺序用)。 */
   calls: string[] = [];
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -35,8 +37,13 @@ class FakeContext2D {
   fillRect() {
     this.calls.push(`fillRect ${String(this.fillStyle)}`);
   }
-  clearRect() {}
-  drawImage() {}
+  clearRect() {
+    this.calls.push("clearRect");
+  }
+  /** 叠上去的那一下:**顺序 + 混合方式 + 当时的 alpha**,这三样就是合成的全部。 */
+  drawImage() {
+    this.calls.push(`drawImage ${this.globalCompositeOperation} ${this.globalAlpha}`);
+  }
   beginPath() {}
   arc() {}
   ellipse() {}
@@ -90,6 +97,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  //: 按平台打桩的那几条(Image / ResizeObserver)自己收回去 —— 下一条用例不该看见它们。
+  vi.unstubAllGlobals();
 });
 
 const SOURCE = { assetId: "src-1", name: "scene.png" };
@@ -206,5 +215,122 @@ describe("蒙版编辑器", () => {
     screen.getByRole("button", { name: "存成蒙版" }).click();
 
     expect(await screen.findByText("磁盘满了")).toBeTruthy();
+  });
+
+  /**
+   * 可见那张画布的合成。蒙版是**不透明**的黑底 + 白笔迹,`source-over` 整张盖在底图上就是一块黑板:
+   * 维护者看到的就是「清空之后底图也没了、反选之后图变成灰的」。这里断言**执行的顺序与 alpha**
+   * (真实像素另有 Chromium 里的探针),也就是那个 bug 的形状不会再回来。
+   */
+  it("看得见的那张画布:底图先画,蒙版的两层后叠 —— 没有哪一下是把蒙版整张盖上去", () => {
+    const view = document.createElement("canvas");
+    const mask = document.createElement("canvas");
+    const underlay = document.createElement("canvas");
+    const scratch = document.createElement("canvas");
+    const ctx = contextOf(view);
+    //: 假 ctx 只记下"被要求画了什么",不是真的 2D 上下文(jsdom 里也没有);类型上过一道桥。
+    const draw = (showUnderlay: boolean) =>
+      drawMaskView(ctx as unknown as CanvasRenderingContext2D, {
+        plan: maskViewLayers({ hasUnderlay: true, showUnderlay }),
+        mask,
+        underlay,
+        scratch,
+        width: 8,
+        height: 8,
+      });
+
+    draw(true);
+    expect(ctx.calls).toEqual([
+      "clearRect",
+      "drawImage source-over 1", // 底图:原样在下面
+      `drawImage multiply ${MASK_TINT_DIM}`, // 画过的地方压暗
+      "drawImage lighter 1", // 画过的地方着蒙版色
+    ]);
+    //: 这一条是那个 bug 的形状:最后一次 drawImage 是蒙版自己、alpha 1 —— 前两次全被它抹掉。
+    expect(ctx.calls[ctx.calls.length - 1]).not.toBe("drawImage source-over 1");
+    //: `difference` / `multiply` 是铺派生层用的,不该落到可见的那张上(落上去就是把底图算没了)。
+    expect(ctx.calls.filter((call) => call.includes("difference"))).toEqual([]);
+
+    ctx.calls.length = 0;
+    draw(false);
+    expect(ctx.calls).toEqual(["clearRect", "drawImage source-over 1"]);
+  });
+
+  it("「反选」重画的是同一条路:可见画布先清、再按层表叠,不是另找一处自己拼一遍", () => {
+    mount();
+    const ctx = contextOf(screen.getByLabelText("蒙版画布") as HTMLCanvasElement);
+    ctx.calls.length = 0;
+
+    screen.getByRole("button", { name: "反选" }).click();
+
+    //: 这里没有底图(测试里 fetch 是失败的),所以层表只剩蒙版本身;重点是它**走了 paint()**。
+    expect(ctx.calls).toEqual(["clearRect", "drawImage source-over 1"]);
+  });
+
+  /**
+   * 底图读进来那一趟:位图尺寸没变,**内容**变了,照样得重画。
+   *
+   * `fit()` 在位图尺寸不变时早退(那条是留给 ResizeObserver 的:尺寸没变就没有新内容),而底图读进来
+   * 时盒子早被量过一次 —— 少了 rebuild 里那一次 paint,屏幕上就一直停着上一张蒙版,底图要等用户
+   * 下一次动手才出现。
+   *
+   * jsdom 里没有版面、也没有图片加载,所以按**平台**打桩:盒子量出 320×240、ResizeObserver 当场回调
+   * (真环境里是它的首次观测把位图定下来的)、fetch 给一个 blob、Image 由测试决定什么时候 onload ——
+   * 底图到之前要先把画布量好、把它的记录清干净。
+   */
+  it("底图读进来:位图尺寸没变也会按层表重画一次(底图先、蒙版后)", async () => {
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(320);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(240);
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly callback: () => void) {}
+        observe() {
+          this.callback();
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])]),
+    })) as never;
+    //: jsdom 的 createObjectURL 接不住 vitest 这份 Node 的 Blob(读 _bytes 直接抛,被 loadImage 吞掉)。
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:probe");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const decoded: (() => void)[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        naturalWidth = 64;
+        naturalHeight = 64;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          decoded.push(() => this.onload?.());
+        }
+      },
+    );
+
+    mount();
+    const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
+    const ctx = contextOf(view);
+    //: 位图先按盒子的尺寸量好(首次观测那一趟)。
+    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
+    ctx.calls.length = 0;
+
+    //: 现在让底图"解码完" —— 这一趟重铺文档,尺寸一点没变。
+    await waitFor(() => expect(decoded.length).toBeGreaterThan(0));
+    for (const fire of decoded) fire();
+    await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
+
+    //: 屏幕上必须已经是"底图 + 要改的地方"那一套,而不是停着上一张蒙版。
+    expect(ctx.calls).toEqual([
+      "clearRect",
+      "drawImage source-over 1",
+      `drawImage multiply ${MASK_TINT_DIM}`,
+      "drawImage lighter 1",
+    ]);
   });
 });

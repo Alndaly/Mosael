@@ -14,13 +14,16 @@ import { Segmented } from "@/components/ui/segmented";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
+  MASK_TINT,
   alphaMask,
   featherMask,
   grayscaleOf,
   invertMask,
+  maskViewLayers,
   thresholdMask,
   writeGrayscale,
   type MaskPixels,
+  type MaskViewLayer,
 } from "@/lib/maskPixels";
 
 /**
@@ -37,11 +40,18 @@ import {
  *
  * | 画布 | 在哪 | 装什么 |
  * | --- | --- | --- |
- * | 底图 | 只在看得见的这张上,半透明 | 要改的那张原图 —— **导出的蒙版里永远没有它** |
+ * | 底图 | 只在看得见的这张上 | 要改的那张原图 —— **导出的蒙版里永远没有它** |
  * | 蒙版(离屏) | 不进 DOM,和底图一样大 | 黑白笔迹。笔画累积在它上面,**导出的也是它** |
  * | 可见的那张 | 对话框里 | 底图 + 蒙版,按容器等比缩放到看得见的大小(devicePixelRatio 感知) |
  *
  * 三张分开是为了让「导出」这件事没有任何条件:导出的那张画布上从来没有底图,也不需要重新合成一遍。
+ *
+ * ## 可见的那张不能把蒙版整张盖上去
+ *
+ * 蒙版是**不透明**的(见 lib/maskPixels 文件头),`source-over` 整张画上去就是一块黑板 —— 底图被
+ * 盖掉、画过和没画过也分不出来(维护者看到的就是「清空 / 反选之后底图没了、图变成灰的」)。
+ * 可见的那张照 `maskViewLayers` 给的那份层表画(`drawMaskView`):底图原样在下面,要改的地方
+ * **压暗 + 着蒙版色**叠在上面。层表和理由都写在 lib/maskPixels 里,这边只管照着画。
  *
  * ## 读底图像素为什么要绕一圈 fetch
  *
@@ -83,8 +93,6 @@ const WHITE = "#ffffff";
 /** 软边渐变的外圈。画布是不透明的,所以"往回混"就够了,不需要 destination-out。 */
 const FADE_WHITE = "rgba(255, 255, 255, 0)";
 const FADE_BLACK = "rgba(0, 0, 0, 0)";
-/** 底图当参考时的透明度:看得清位置,又不至于和白色笔迹抢眼。 */
-const UNDERLAY_ALPHA = 0.45;
 /** 存下来的素材文件名(素材名另给,见 maskAssetName)。 */
 const MASK_FILE_NAME = "mask.png";
 
@@ -213,6 +221,84 @@ function paintShape(ctx: CanvasRenderingContext2D, tool: Tool, from: Point, to: 
   ctx.fill();
 }
 
+/**
+ * 把看得见的那张画布按层表画出来(层表见 lib/maskPixels 的 maskViewLayers)。
+ *
+ * 「哪几层、谁在下、各自怎么叠」只有层表那一处 —— 这里只管照着画,不自己决定合成方式:
+ * 屏幕上怎么画和导出的契约是两件事,分开写才改得动其中一件而不动另一件。
+ *
+ * `mask` / `underlay` 允许是 null(还没铺出蒙版、底图没读进来):缺哪层跳哪层。
+ */
+export function drawMaskView(
+  ctx: CanvasRenderingContext2D,
+  {
+    plan,
+    mask,
+    underlay,
+    scratch,
+    width,
+    height,
+  }: {
+    plan: MaskViewLayer[];
+    mask: CanvasImageSource | null;
+    underlay: CanvasImageSource | null;
+    /** 复用的一张离屏画布:蒙版那两层要先在它上面铺出来(见 maskLayer)。 */
+    scratch: HTMLCanvasElement;
+    width: number;
+    height: number;
+  },
+): void {
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.clearRect(0, 0, width, height);
+  for (const layer of plan) {
+    const source = layer.of === "underlay" ? underlay : mask;
+    if (!source) continue;
+    const canvas =
+      layer.of === "maskInverse" || layer.of === "maskTint" ? maskLayer(scratch, layer.of, source, width, height) : source;
+    if (!canvas) continue;
+    ctx.globalAlpha = layer.alpha;
+    ctx.globalCompositeOperation = layer.op;
+    ctx.drawImage(canvas, 0, 0, width, height);
+  }
+  //: 收尾复位:这张 ctx 还要接着给下一帧用,状态漏出去就是下一帧的第一层叠错了。
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+}
+
+/**
+ * 蒙版那一层的底:反相(未画 = 白)或着色(画过 = 蒙版色)。
+ *
+ * 蒙版自己是不透明的灰度图,两张派生各靠一次贴合得到,都不需要逐像素循环:
+ *
+ * - 反相:白底上 `difference` 减一次蒙版 → 255 − 蒙版;
+ * - 着色:蒙版色上 `multiply` 乘一次蒙版 → 没画的地方是黑(叠上去时 `lighter` 加零 = 什么都不加),
+ *   画过的地方是蒙版色。
+ */
+function maskLayer(
+  scratch: HTMLCanvasElement,
+  kind: "maskInverse" | "maskTint",
+  mask: CanvasImageSource,
+  width: number,
+  height: number,
+): HTMLCanvasElement | null {
+  //: 尺寸跟着可见画布走(对话框换大小、dpr 变了);重设 width 会清空整张位图,本来就该重铺。
+  if (scratch.width !== width || scratch.height !== height) {
+    scratch.width = width;
+    scratch.height = height;
+  }
+  const ctx = scratch.getContext("2d");
+  if (!ctx) return null;
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = kind === "maskInverse" ? WHITE : MASK_TINT;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = kind === "maskInverse" ? "difference" : "multiply";
+  ctx.drawImage(mask, 0, 0, width, height);
+  ctx.globalCompositeOperation = "source-over";
+  return scratch;
+}
+
 export function MaskEditor({
   open,
   onOpenChange,
@@ -239,6 +325,12 @@ export function MaskEditor({
   const drawingRef = React.useRef(false);
   /** 蒙版本身 —— 离屏、不进 DOM、导出的就是它。 */
   const maskRef = React.useRef<HTMLCanvasElement | null>(null);
+  /**
+   * 合成可见那张画布时复用的一张离屏画布(蒙版的反相 / 着色各要一整张,见 drawMaskView 的
+   * maskLayer)。每帧新建一张等于每帧要一块和可见画布一样大的画布内存 —— 浏览器的画布内存是
+   * 这个对话框里所有画布共用的,所以复用一张。
+   */
+  const scratchRef = React.useRef<HTMLCanvasElement | null>(null);
   /** 底图像素(按亮度 / 按 alpha 初始化读的就是它)和那张图(画在看得见的画布上)。 */
   const underlayRef = React.useRef<Loaded | null>(null);
   /** 底稿:打开时已经有的那张蒙版。 */
@@ -284,23 +376,26 @@ export function MaskEditor({
   };
 
   /**
-   * 把蒙版画到看得见的那张画布上:底图(半透明)在下面,蒙版在上面。
+   * 把当前状态画到看得见的那张画布上:底图原样在下面,要改的地方压暗 + 着蒙版色叠上去。
    *
-   * 只读 ref —— 所以这个函数在整个生命周期里是同一个,几个 effect 不会因为它的身份变化而重跑。
+   * **只读 ref** —— 所以这个函数在整个生命周期里是同一个,几个 effect 不会因为它的身份变化而重跑。
+   * 层表由 `showUnderlayRef` 决定(「显示底图」关掉就只剩蒙版本身),合成方式全在
+   * lib/maskPixels 的 `maskViewLayers` 里,这边只负责把它交给 `drawMaskView`。
    */
   const paint = React.useCallback(() => {
     const view = viewRef.current;
     const ctx = view?.getContext("2d") ?? null;
     if (!view || !ctx) return;
-    ctx.clearRect(0, 0, view.width, view.height);
-    const underlay = underlayRef.current;
-    if (underlay?.image && showUnderlayRef.current) {
-      ctx.globalAlpha = UNDERLAY_ALPHA;
-      ctx.drawImage(underlay.image, 0, 0, view.width, view.height);
-      ctx.globalAlpha = 1;
-    }
-    const mask = maskRef.current;
-    if (mask) ctx.drawImage(mask, 0, 0, view.width, view.height);
+    const underlay = underlayRef.current?.image ?? null;
+    const scratch = scratchRef.current ?? (scratchRef.current = document.createElement("canvas"));
+    drawMaskView(ctx, {
+      plan: maskViewLayers({ hasUnderlay: Boolean(underlay), showUnderlay: showUnderlayRef.current }),
+      mask: maskRef.current,
+      underlay,
+      scratch,
+      width: view.width,
+      height: view.height,
+    });
   }, []);
 
   /**
@@ -364,9 +459,13 @@ export function MaskEditor({
       historyRef.current = first ? { steps: [first], at: 0 } : { steps: [], at: -1 };
       lastStepRef.current = null;
       syncHistory();
+      //: `fit()` 在位图尺寸没变时**不会重画**(那条早退是留给 ResizeObserver 的:尺寸没变就没有新内容),
+      //: 而 rebuild 换的是**内容** —— 底图读进来那一趟尺寸常常和打开时那一趟一模一样,少了这一下,
+      //: 屏幕上就一直停着上一张蒙版,底图要等用户下一次动手才出现。
       fit();
+      paint();
     },
-    [fit],
+    [fit, paint],
   );
 
   //: 「显示底图」是个纯显示开关:它只重画看得见的那张,不碰撤销栈、不重铺文档。

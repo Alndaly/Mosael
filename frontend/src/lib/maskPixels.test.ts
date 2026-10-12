@@ -7,10 +7,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MASK_TINT,
+  MASK_TINT_DIM,
   alphaMask,
   featherMask,
   grayscaleOf,
   invertMask,
+  maskViewLayers,
   thresholdMask,
   writeGrayscale,
   type MaskPixels,
@@ -196,5 +199,64 @@ describe("撤销栈那份单通道", () => {
     const restored = pixels(3, 1, [0, 0, 0, 0]);
     writeGrayscale(new Uint8ClampedArray([255]), restored);
     expect([...restored]).toEqual([255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+});
+
+/**
+ * 看得见那张画布的层表。这条守的是维护者报的那个 bug:蒙版是不透明的,`source-over` 整张盖上去
+ * 就是一块黑板 —— 底图没了、画过和没画过也分不出来(清空 / 反选之后屏幕一个样)。
+ *
+ * 断言的是**层表本身**(顺序、混合方式、alpha):画布那头(`drawMaskView`)只照着它画,
+ * 真实像素另有 Chromium 里的探针实测。
+ */
+describe("看得见那张画布的层表", () => {
+  const shown = () => maskViewLayers({ hasUnderlay: true, showUnderlay: true });
+
+  it("底图在最下面,蒙版的两层叠在它上面 —— 顺序反了就是那个 bug", () => {
+    const plan = shown();
+    expect(plan.map((layer) => layer.of)).toEqual(["underlay", "maskInverse", "maskTint"]);
+    expect(plan[0]).toEqual({ of: "underlay", op: "source-over", alpha: 1 });
+  });
+
+  it("有底图时**没有**哪一层是蒙版整张盖上去:它不透明,盖上去就把底图抹了", () => {
+    //: 这一条是那个 bug 的形状:`{ of: "mask", op: "source-over", alpha: 1 }` 画在底图之上。
+    expect(shown().filter((layer) => layer.of === "mask")).toEqual([]);
+    expect(shown().map((layer) => layer.op)).toEqual(["source-over", "multiply", "lighter"]);
+  });
+
+  it("压暗那一层不是全黑,着色那一层不是空转:两笔都得在 0..1 之间真的发生", () => {
+    //: 只压暗 = 底图本来就黑的地方看不出来;只着色 = 底图本来就白的地方看不出来 —— 所以是两层。
+    expect(shown()[1].alpha).toBe(MASK_TINT_DIM);
+    expect(shown()[2].alpha).toBe(1);
+    expect(MASK_TINT_DIM).toBeGreaterThan(0);
+    expect(MASK_TINT_DIM).toBeLessThan(1);
+    expect(MASK_TINT).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("「显示底图」关掉:只剩蒙版本身,一张和导出的那张一样的黑白视图", () => {
+    expect(maskViewLayers({ hasUnderlay: true, showUnderlay: false })).toEqual([
+      { of: "mask", op: "source-over", alpha: 1 },
+    ]);
+  });
+
+  it("开关真的换了一层表 —— 空转的开关就是关掉再打开屏幕一个像素都不动", () => {
+    expect(maskViewLayers({ hasUnderlay: true, showUnderlay: true })).not.toEqual(
+      maskViewLayers({ hasUnderlay: true, showUnderlay: false }),
+    );
+  });
+
+  it("没有底图(读图失败、断网)时也是只剩蒙版,这时开关说了不算", () => {
+    for (const showUnderlay of [true, false]) {
+      expect(maskViewLayers({ hasUnderlay: false, showUnderlay })).toEqual([
+        { of: "mask", op: "source-over", alpha: 1 },
+      ]);
+    }
+  });
+
+  it("每一层的 alpha 都是 0..1 里的明确数字(漏了 globalAlpha 就是 1 或者 undefined)", () => {
+    for (const layer of shown()) {
+      expect(layer.alpha).toBeGreaterThan(0);
+      expect(layer.alpha).toBeLessThanOrEqual(1);
+    }
   });
 });
