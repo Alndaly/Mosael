@@ -678,6 +678,8 @@ app.on("render-process-gone", (_event, webContents, details) => {
   } catch {
     // 没有这个 API 就没有。
   }
+  // 崩的那一刻的「最近 40 条 IPC」:同步写完就走,不受上面那几个异步读数影响(见 appendIpcTraceAtCrash)。
+  appendIpcTraceAtCrash(details);
 });
 app.on("child-process-gone", (_event, details) => {
   appendMainLog("child-process-gone", JSON.stringify(details));
@@ -730,6 +732,389 @@ app.on("session-created", (created) => {
   installPermissionPolicy(created, { isAppUrl: null, log: (line) => appendMainLogOnce("permission", line) });
 });
 
+// ─────────────────────────── IPC 追踪(只读诊断)───────────────────────────
+/**
+ * 「进插件页后那 27 秒里,页面隔着 Electron 桥做了什么」—— 主进程这一侧只有三个口子,而且都在这个文件里:
+ * `handle()`(一问一答)、`listen()`(单向)、`sendToRenderer()`(主进程推给页面)。三处各加一层**只读**的
+ * 时间戳,崩了以后才回看得动:内存(已量过)、反复拉目录(已量过 n=1..10)、stderr / chromium.log(沙箱渲染进程
+ * 的致命输出确认不转发到父进程)、纯 Chrome(同一路由 12 分钟复现不了)都已经排除,剩下的正是「Electron 独有
+ * 的那条路径」—— 而桥就是它。查得出「页面在崩前还在隔桥说话吗、说的是哪条通道」,这一条就值了;查出来是
+ * 一片安静,那也同样值:桥被排除,靶子挪回渲染进程内部。
+ *
+ * 三档,理由是**观测本身不能改变被观测的东西**(这一条比「记全一点」重要):
+ *   - `MOSAEL_IPC_TRACE=1` → `trace`:既进环、也每次写一行,按通道聚合(同一通道最快 1 秒一行;那 1 秒里被
+ *     压掉几条记在 `skipped=` 上,累计次数在 `n=` 上)。不聚合的话插件页静置 60 秒就是几百行 —— 而
+ *     `appendMainLog` 是**同步** append,每一次调用都真的在主进程的时间线上插进去一段:观测噪声会污染
+ *     「崩前那 27 秒」本身,那正是要量的东西。
+ *   - 不设 → `ring`(默认):**只进环,一个字节都不写盘**,每次调用只多一次 `push`。换来的是「不用为了抓现场
+ *     而重启应用」—— 这次崩溃是随机来的(间隔 21–49 秒、首崩 19:44),第一次复现时不该先赌对开关。
+ *   - `MOSAEL_IPC_TRACE=0` → `off`:全关,连环也不记,每次调用只剩一次字符串比较。
+ *
+ * 环里**不记参数内容**:IPC 参数带着登录 token、整份插件目录 JSON(好几 MB),原样落盘等于把凭据抄进 main.log、
+ * 把日志撑爆。所以只记字节数(`ipcPayloadBytes`:结构化遍历 + 计数,预算封顶,超了标 `capped`)。URL 同理只留
+ * origin + path + hash(`#/plugins` 这个路由要留住),query 一律去掉 —— 壳令牌就在 query 里。
+ * 桥方法 ↔ channel 的对照表见 electron/ipcTrace.test.ts(它跑真的 preload.cjs 取出来,不靠手抄)。
+ */
+/** 环里留几条。崩的时候**整环**打出来:40 条够覆盖「临死前那几秒」,又不至于把 main.log 冲掉。 */
+const IPC_TRACE_RING = 40;
+/** 同一通道最快多久写一行(聚合窗口)。 */
+const IPC_TRACE_MIN_GAP_MS = 1000;
+/** 处理器跑多久算「慢」——单独补一行。慢调用不会多,而它是崩前最像线索的东西。 */
+const IPC_TRACE_SLOW_MS = 250;
+/** 字节数预算:节点数、深度、总量任一超了就停手并标 `capped`(参数是 MB 级时也不许把主进程拖在这里)。 */
+const IPC_TRACE_MAX_BYTES = 64 * 1024;
+const IPC_TRACE_MAX_NODES = 2000;
+const IPC_TRACE_MAX_DEPTH = 6;
+/** 崩溃汇总里列前几个通道。 */
+const IPC_TRACE_TOP = 5;
+
+/** off(全关)/ ring(默认,只记环)/ trace(再落盘)。三档的理由见上。 */
+function ipcTraceMode(env) {
+  if (env?.MOSAEL_IPC_TRACE === "0") return "off";
+  if (env?.MOSAEL_IPC_TRACE === "1") return "trace";
+  return "ring";
+}
+const IPC_TRACE_MODE = ipcTraceMode(process.env);
+
+/** 最近 `IPC_TRACE_RING` 条(定长,满了顶掉最老的)。 */
+const ipcTraceRing = [];
+/** channel → { calls, loggedAt, loggedCalls }:累计次数 + 上一次**写出去**的时刻/次数(算 dt 与 skipped)。 */
+const ipcTraceChannels = new Map();
+/** 慢/错行各自的聚合门:与到店行分开 —— 到店行被压掉,不该把「它其实很慢」也一起压掉。 */
+const ipcTraceDoneAt = new Map();
+/** 上一次频率汇总时的累计读数:channel → calls(见 appendIpcRateSummary)。 */
+const ipcTraceSummaryAt = new Map();
+/** 全局序号:`seq` 的最大值就是这次运行一共来过多少次 IPC。 */
+let ipcTraceSeq = 0;
+
+/**
+ * 一段文本贡献多少字节(带预算;超了就截断并标 `capped`)。**只读长度,不读内容** —— 这就是「只记大小」那一半。
+ * 纯函数(除了推进它自己的 budget),单独跑见 ipcTrace.test.ts。
+ */
+function ipcCountText(text, budget) {
+  const size = Buffer.byteLength(text, "utf8");
+  if (size > budget.left) {
+    budget.capped = true;
+    const kept = budget.left;
+    budget.left = 0;
+    return kept;
+  }
+  budget.left -= size;
+  return size;
+}
+
+/** `ipcPayloadBytes` 的递归体:字符串只贡献长度,别的按类型给个固定开销;对象按自己的键走一遍。 */
+function ipcPayloadSize(value, budget, depth, seen) {
+  if (budget.left <= 0 || budget.nodes <= 0) {
+    budget.capped = true;
+    return 0;
+  }
+  budget.nodes -= 1;
+  const type = typeof value;
+  if (type === "string") return ipcCountText(value, budget);
+  if (type === "number") return 8;
+  if (type === "boolean") return 5;
+  if (type === "bigint") return 8;
+  // null / undefined / 函数 / symbol:结构化克隆带不过去的也在内,一律算 0。
+  if (value === null || type !== "object") return 0;
+  if (depth >= IPC_TRACE_MAX_DEPTH || seen.has(value)) {
+    budget.capped = true;
+    return 0;
+  }
+  seen.add(value);
+  let total = 0;
+  if (Array.isArray(value)) {
+    for (const item of value) total += ipcPayloadSize(item, budget, depth + 1, seen);
+    return total;
+  }
+  for (const key of Object.keys(value)) {
+    const keyBytes = ipcCountText(key, budget);
+    if (budget.left <= 0) {
+      budget.capped = true;
+      break;
+    }
+    total += keyBytes + ipcPayloadSize(value[key], budget, depth + 1, seen);
+  }
+  return total;
+}
+
+/**
+ * 一份参数有多大(字节)。**只数大小,不记内容** —— 理由见这一块开头。预算封顶,由 `capped` 说清楚
+ * 「这只是个下界」。纯函数,单独跑见 ipcTrace.test.ts。
+ */
+function ipcPayloadBytes(payload) {
+  const budget = { left: IPC_TRACE_MAX_BYTES, nodes: IPC_TRACE_MAX_NODES, capped: false };
+  try {
+    return { bytes: ipcPayloadSize(payload, budget, 0, new Set()), capped: budget.capped };
+  } catch {
+    // 参数里带 getter / Proxy 时读属性会抛。记账失败**绝不能**把这次 IPC 本身弄挂。
+    return { bytes: 0, capped: true };
+  }
+}
+
+/** 去掉 query、留下 origin + path + hash,并截断。`#/plugins` 是这次要认的路由必须留住;`?token=…` 不能留。 */
+function ipcTraceUrl(raw) {
+  const url = String(raw ?? "");
+  const hash = url.indexOf("#");
+  const head = hash === -1 ? url : url.slice(0, hash);
+  const query = head.indexOf("?");
+  const shown = (query === -1 ? head : head.slice(0, query)) + (hash === -1 ? "" : url.slice(hash));
+  return shown.length > 200 ? `${shown.slice(0, 200)}…` : shown;
+}
+
+/** 一块 webContents 的 id(拿不到就是 null,不许抛 —— 记日志不能变成第二次崩溃)。 */
+function ipcContentsId(contents) {
+  try {
+    return typeof contents?.id === "number" ? contents.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 调用方那一刻停在哪。主框架优先;`senderFrame` 在框架已经没了时会抛,兜住。 */
+function ipcSenderUrl(event) {
+  let raw = "";
+  try {
+    raw = event?.senderFrame?.url ?? "";
+  } catch {
+    // 框架已经没了。
+  }
+  if (!raw) {
+    try {
+      raw = event?.sender?.getURL?.() ?? "";
+    } catch {
+      raw = "";
+    }
+  }
+  return ipcTraceUrl(raw);
+}
+
+/** 主进程要推到的那一块视图现在停在哪。 */
+function ipcContentsUrl(contents) {
+  try {
+    return ipcTraceUrl(contents?.getURL?.() ?? "");
+  } catch {
+    return ipcTraceUrl("");
+  }
+}
+
+/** 一条通道的计数。没有就建一个。 */
+function ipcTraceChannel(channel) {
+  let counter = ipcTraceChannels.get(channel);
+  if (!counter) {
+    counter = { calls: 0, loggedAt: 0, loggedCalls: 0 };
+    ipcTraceChannels.set(channel, counter);
+  }
+  return counter;
+}
+
+/** 进来的记 from、推出去的记 to(两处行格式化共用)。 */
+function peerOf(entry) {
+  return entry.dir === "push" ? `to=${entry.to ?? "-"}` : `from=${entry.from ?? "-"}`;
+}
+
+/**
+ * 写一行。行格式是紧凑的 `key=value` 而不是 JSON:这是高频行,JSON 序列化不值当,而且这样 grep 得动。
+ * 聚合在这里:同一通道最快 `IPC_TRACE_MIN_GAP_MS` 一行,`n=` 是**累计**次数,`skipped=` 是这一秒里被
+ * 压掉的条数 —— 于是「每秒几十次」在日志里是一个 `n` 飞涨的通道,而不是几百行噪声。
+ */
+function ipcTraceWrite(counter, entry, now) {
+  const first = counter.loggedAt === 0;
+  const dt = first ? 0 : now - counter.loggedAt;
+  if (!first && dt < IPC_TRACE_MIN_GAP_MS) return;
+  const skipped = counter.calls - counter.loggedCalls - 1;
+  counter.loggedAt = now;
+  counter.loggedCalls = counter.calls;
+  appendDiagnosticLog(
+    "ipc",
+    () =>
+      `local=${localClock()} seq=${entry.seq} dir=${entry.dir} channel=${entry.channel} ${peerOf(entry)} ` +
+      `bytes=${entry.bytes}${entry.capped ? "+" : ""} n=${entry.n} dt=${first ? "-" : dt} skipped=${skipped} url=${entry.url || "-"}`,
+  );
+}
+
+/**
+ * 记一条 IPC:进环(**始终**,除非总开关关掉),`trace` 档再写一行。
+ *
+ * 返回环里那一条 —— 处理器跑完之后调用方回来补 `ms` / `outcome`,于是「崩在处理器里」与「处理器自己就没回来」
+ * 在日志里是两件不同的事:前者有 `ms`,后者那一条永远停在 `pending`。
+ *
+ * @param {"invoke"|"send"|"push"} direction
+ * @param {number|null} peer 进来的记调用方(from),推出去的记目标(to)
+ * @param {unknown} payload 只用来数大小
+ */
+function traceIpc(direction, channel, peer, url, payload) {
+  if (IPC_TRACE_MODE === "off") return null;
+  const now = Date.now();
+  const counter = ipcTraceChannel(channel);
+  counter.calls += 1;
+  const size = ipcPayloadBytes(payload);
+  // `at` 只在环里:行里不写(appendMainLog 已经在行首给了 ISO 时间戳),崩溃汇总要拿它算
+  // 「距崩溃多少毫秒」——秒级的 local 答不了「崩前 200 毫秒它还在说话吗」。
+  const entry = {
+    at: now,
+    seq: (ipcTraceSeq += 1),
+    local: localClock(),
+    dir: direction,
+    channel,
+    ...(direction === "push" ? { to: peer } : { from: peer }),
+    url,
+    bytes: size.bytes,
+    ...(size.capped ? { capped: true } : {}),
+    n: counter.calls,
+  };
+  ipcTraceRing.push(entry);
+  if (ipcTraceRing.length > IPC_TRACE_RING) ipcTraceRing.shift();
+  if (IPC_TRACE_MODE === "trace") ipcTraceWrite(counter, entry, now);
+  return entry;
+}
+
+/**
+ * 处理器跑完(或抛了)之后补一笔。慢的和报错的**单独**一行 —— 它们的量本来就小,而且正是要找的东西。
+ * 慢/错行有自己的聚合门(每秒每条通道每种结局最多一行),但**不受**到店行的门影响。
+ */
+function traceIpcDone(entry, startedAt, outcome, error) {
+  if (!entry) return;
+  const ms = Date.now() - startedAt;
+  entry.ms = ms;
+  entry.outcome = outcome;
+  if (IPC_TRACE_MODE !== "trace") return;
+  if (outcome === "ok" && ms < IPC_TRACE_SLOW_MS) return;
+  const now = Date.now();
+  const gate = `${outcome}\u0000${entry.channel}`;
+  const last = ipcTraceDoneAt.get(gate) ?? 0;
+  if (last !== 0 && now - last < IPC_TRACE_MIN_GAP_MS) return;
+  ipcTraceDoneAt.set(gate, now);
+  if (outcome === "ok") {
+    appendDiagnosticLog(
+      "ipc-slow",
+      () =>
+        `local=${localClock()} seq=${entry.seq} dir=${entry.dir} channel=${entry.channel} ms=${ms} ${peerOf(entry)} ` +
+        `bytes=${entry.bytes}${entry.capped ? "+" : ""} url=${entry.url || "-"}`,
+    );
+    return;
+  }
+  // 报错这条带上原话(截断):「No handler registered for …」「refused」这类只有它说得清。参数内容仍然不进日志。
+  const message = error instanceof Error ? `${error.name}: ${String(error.message).slice(0, 160)}` : error ? String(error).slice(0, 160) : "";
+  appendDiagnosticLog(
+    "ipc-error",
+    () =>
+      `local=${localClock()} seq=${entry.seq} dir=${entry.dir} channel=${entry.channel} ms=${ms} outcome=${outcome} ${peerOf(entry)} ` +
+      `bytes=${entry.bytes}${entry.capped ? "+" : ""} url=${entry.url || "-"}${message ? ` error=${message}` : ""}`,
+  );
+}
+
+/**
+ * 处理器交回结果之后补一笔。异步的**不 await、也不把返回的 promise 换掉** —— 交还给 Electron 的必须还是处理器
+ * 自己那个 promise,否则「谁 reject 的、什么时候 reject 的」就被这一层悄悄改了。关掉追踪时(entry 为 null)
+ * 连 `.then` 都不挂:零开销是那一档的承诺。
+ */
+function traceIpcResult(entry, startedAt, result) {
+  if (!entry) return;
+  if (result && typeof result.then === "function") {
+    result.then(
+      () => traceIpcDone(entry, startedAt, "ok"),
+      (error) => traceIpcDone(entry, startedAt, "error", error),
+    );
+    return;
+  }
+  traceIpcDone(entry, startedAt, "ok");
+}
+
+/**
+ * 主进程推给页面的一条事件。原来那 9 处直接 `send(...)` 的地方都改走这里 —— 只多一行追踪,时机、参数、
+ * 返回值都原样。push 也进环:崩溃前主进程在往页面推什么(工作台状态、浏览器帧、提示条指针)同样是现场的一部分。
+ */
+function sendToRenderer(contents, channel, ...payload) {
+  if (IPC_TRACE_MODE === "off") return contents.send(channel, ...payload);
+  traceIpc("push", channel, ipcContentsId(contents), ipcContentsUrl(contents), payload);
+  return contents.send(channel, ...payload);
+}
+
+/**
+ * 「进插件页静置 60 秒,IPC 一共多少次、最多的前 5 个通道是谁」—— 逐条行回答不了这个:那些是**累计** `n`,
+ * 要一条条加;崩的那一条又只在崩的那一刻才有。所以每 30 秒汇总一次**这一窗口的增量**。
+ *
+ * 安静时一行不写(`total === 0` 返回空串,appendDiagnosticLog 不落盘):一个路由上没人说话不该留下痕迹。
+ * 「某个通道每秒几十次」在这种行里长成 `top=… =600`;「27 秒附近突然暴增」则长成相邻两行差一个量级。
+ */
+function appendIpcRateSummary() {
+  if (IPC_TRACE_MODE !== "trace") return;
+  appendDiagnosticLog("ipc-rate", () => {
+    const rows = [];
+    let total = 0;
+    for (const [channel, counter] of ipcTraceChannels) {
+      const delta = counter.calls - (ipcTraceSummaryAt.get(channel) ?? 0);
+      ipcTraceSummaryAt.set(channel, counter.calls);
+      if (delta > 0) {
+        rows.push({ channel, n: delta });
+        total += delta;
+      }
+    }
+    if (total === 0) return "";
+    rows.sort((a, b) => b.n - a.n);
+    const top = rows.slice(0, IPC_TRACE_TOP).map((row) => `${row.channel}=${row.n}`).join(" ");
+    return `local=${localClock()} calls=${total} channels=${rows.length} top=${top}`;
+  });
+}
+
+/** 每 30 秒一行频率汇总(只有 trace 档才写)。和其他诊断定时器一样,不许拖住退出。 */
+function startIpcRateWatch() {
+  try {
+    const timer = setInterval(appendIpcRateSummary, 30 * 1000);
+    timer.unref?.();
+  } catch (error) {
+    appendDiagnosticLog("ipc-rate", `unavailable local=${localClock()} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 崩的那一刻把**最近 40 条 IPC** 打出来 —— 这是这一整块的重点。
+ *
+ * 为什么只有这里能回答:「临死前那几秒页面在做什么」。main.log 里此前只有 30 秒一次的内存曲线(实测 16:22:31
+ * 采样一切正常、24 秒后就 trap 了,整段落在采样缝里),而渲染进程自己的 `Check failed` 又不转发到父进程。
+ *
+ * 逐条给的是**距崩溃多少毫秒**(`t=`,负数 = 崩之前),不是绝对时钟:要回答的是「崩前 200 毫秒它还在隔桥说话吗」。
+ * `lastAgoMs` 是最后一次 IPC 离崩溃多远(很大 = 崩之前桥早就安静了,那这条线可以排除);`windowSec` 是这 40 条
+ * 一共覆盖多长时间 —— IPC 稀疏时「最近 40 条」可能横跨好几分钟,那和「临死前那几秒」是两回事,必须分得开。
+ * 同步写完就走,不受同一个处理函数里那几个异步读数(内存)的影响。
+ */
+function appendIpcTraceAtCrash(details) {
+  if (IPC_TRACE_MODE === "off") return;
+  appendDiagnosticLog("ipc-at-crash", () => {
+    const now = Date.now();
+    const recent = ipcTraceRing.slice();
+    let total = 0;
+    for (const counter of ipcTraceChannels.values()) total += counter.calls;
+    const top = [...ipcTraceChannels]
+      .map(([channel, counter]) => ({ channel, n: counter.calls }))
+      .sort((a, b) => b.n - a.n)
+      .slice(0, IPC_TRACE_TOP);
+    return JSON.stringify({
+      local: localClock(),
+      reason: details?.reason ?? null,
+      exitCode: details?.exitCode ?? null,
+      mode: IPC_TRACE_MODE,
+      total,
+      channels: ipcTraceChannels.size,
+      top,
+      lastAgoMs: recent.length ? now - recent[recent.length - 1].at : null,
+      windowSec: recent.length > 1 ? Math.round((recent[recent.length - 1].at - recent[0].at) / 1000) : null,
+      ring: recent.map(({ at, ...rest }) => ({ ...rest, t: Math.round(at - now) })),
+    });
+  });
+}
+
+/**
+ * 开头报一行:开关到底生效了没有。没有这行,「追踪里什么都没有」分不清是「页面没调桥」还是「开关没开」——
+ * 而这两件事的下一步完全不同。始终写(连 `mode=off` 也写),一行而已。
+ */
+appendMainLog(
+  "ipc-trace",
+  `mode=${IPC_TRACE_MODE} ring=${IPC_TRACE_RING} gapMs=${IPC_TRACE_MIN_GAP_MS} slowMs=${IPC_TRACE_SLOW_MS} local=${localClock()} pid=${process.pid}`,
+);
+// ─────────────────────────── IPC 追踪结束 ───────────────────────────
+
 // IPC 只收主窗口自己那个主框架、停在应用地址上时发来的(见 app-origin.cjs)。所有处理器都经这两个注册,
 // 不直接用 ipcMain(electron/app-origin.test.ts 盯着)。
 const fromAppWindow = createSenderCheck({ isAppUrl, windowOf: (contents) => BrowserWindow.fromWebContents(contents) });
@@ -742,24 +1127,47 @@ function refusedSender(channel, event) {
   }
   appendMainLogOnce("ipc-refused", `${channel} from ${from}`);
 }
-/** 一问一答的处理器。调用方不是应用自己就拒绝(渲染层收到的是一个错误)。 */
+/**
+ * 一问一答的处理器。调用方不是应用自己就拒绝(渲染层收到的是一个错误)。
+ * IPC 追踪(见上面那一块)挂在这里 —— 这是所有一问一答**唯一**的入口,所以一层就够;行为一字未改:
+ * 处理器交回什么就返回什么,同步抛就照样抛。
+ */
 function handle(channel, listener) {
   ipcMain.handle(channel, (event, ...args) => {
     if (!fromAppWindow(event)) {
       refusedSender(channel, event);
       throw new Error(`${channel}: refused, the caller is not the Mosael window`);
     }
-    return listener(event, ...args);
+    const startedAt = Date.now();
+    const entry = traceIpc("invoke", channel, ipcContentsId(event.sender), ipcSenderUrl(event), args);
+    let result;
+    try {
+      result = listener(event, ...args);
+    } catch (error) {
+      traceIpcDone(entry, startedAt, "throw", error);
+      throw error;
+    }
+    traceIpcResult(entry, startedAt, result);
+    return result;
   });
 }
-/** 单向的消息。调用方不是应用自己就丢掉。 */
+/** 单向的消息。调用方不是应用自己就丢掉。追踪同 handle(这一侧没有回话,所以没有往返耗时)。 */
 function listen(channel, listener) {
   ipcMain.on(channel, (event, ...args) => {
     if (!fromAppWindow(event)) {
       refusedSender(channel, event);
       return;
     }
-    listener(event, ...args);
+    const startedAt = Date.now();
+    const entry = traceIpc("send", channel, ipcContentsId(event.sender), ipcSenderUrl(event), args);
+    let result;
+    try {
+      result = listener(event, ...args);
+    } catch (error) {
+      traceIpcDone(entry, startedAt, "throw", error);
+      throw error;
+    }
+    traceIpcResult(entry, startedAt, result);
   });
 }
 
@@ -1481,36 +1889,36 @@ function createWindow() {
       publish.startPublishWorker({
         window: win,
         onViewChanged: (state) => {
-          if (!win.isDestroyed()) win.webContents.send(IPC.event.publishView, state);
+          if (!win.isDestroyed()) sendToRenderer(win.webContents, IPC.event.publishView, state);
         },
         // 悬浮卡片几何:原生 WebContentsView 画不了圆角/阴影,所以渲染层照这些矩形在视图**下方**
         // 画卡片外壳(子视图永远盖在宿主页面之上,于是卡片的圆角边框会在视图四周露出来)。
         onPanels: (cards) => {
-          if (!win.isDestroyed()) win.webContents.send(IPC.event.publishPanels, cards);
+          if (!win.isDestroyed()) sendToRenderer(win.webContents, IPC.event.publishPanels, cards);
         },
         // 内嵌浏览器里点的下载(不弹系统保存框):进度与结果交给渲染层,由它存进素材库、在顶栏说一句。
         onDownload: (notice) => {
-          if (!win.isDestroyed()) win.webContents.send(IPC.event.pageToolsDownload, notice);
+          if (!win.isDestroyed()) sendToRenderer(win.webContents, IPC.event.pageToolsDownload, notice);
         },
         // 提示条那一块浮层视图上的指针(ADR 0051):渲染层据此点真的那条提示。
         onToastsPointer: (pointer) => {
-          if (!win.isDestroyed()) win.webContents.send(IPC.event.toastsPointer, pointer);
+          if (!win.isDestroyed()) sendToRenderer(win.webContents, IPC.event.toastsPointer, pointer);
         },
         // 网页在前台时按的 ⌘K:键盘交回 Mosael,开命令面板(ADR 0051)。
         onCommandPalette: () => {
           if (win.isDestroyed()) return;
           win.webContents.focus();
-          win.webContents.send(IPC.event.commandPalette);
+          sendToRenderer(win.webContents, IPC.event.commandPalette);
         },
         // ComfyUI 工作台:主进程轮询内嵌画布里的桥看到的(选中、脏标记、能力、事件),规整过才发;null 是会话结束了。
         onWorkbench: (update) => {
-          if (!win.isDestroyed()) win.webContents.send(IPC.event.comfyuiWorkbench, update);
+          if (!win.isDestroyed()) sendToRenderer(win.webContents, IPC.event.comfyuiWorkbench, update);
         },
         // 发布任务在后台不可见的账号视图里跑,用户否则完全看不到它在做什么。走与 RPA 相同的
         // browser:frame 通道和同一个前端面板——「自动化浏览器在干什么」对用户是一件事,不该
         // 因为内部分了两个 worker 就冒出两个窗口。
         onFrame: (frame) => {
-          if (!win.isDestroyed()) win.webContents.send(IPC.event.browserFrame, frame);
+          if (!win.isDestroyed()) sendToRenderer(win.webContents, IPC.event.browserFrame, frame);
         },
         // 只报**任务中心看不到的那些状态**。
         //
@@ -1580,6 +1988,8 @@ app.whenReady().then(async () => {
   startMemoryDiagnostics();
   startMemorySpikeWatch();
   startPluginsDirectoryDiagnostics();
+  // 「进插件页静置 60 秒,IPC 一共多少次、最多的前 5 个通道是谁」:每 30 秒一行(trace 档才有;安静时不写)。
+  startIpcRateWatch();
   // 最先定语言:下面起后端时的小窗、失败时弹的错误框就要用到它。getLocale 要等 ready。
   applyLocale(app.getLocale());
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
@@ -1768,7 +2178,7 @@ app.whenReady().then(async () => {
       dir: __dirname,
       onChange: (files) => {
         staleMainFiles = files;
-        for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.mainStale, mainStaleStatus());
+        for (const win of BrowserWindow.getAllWindows()) sendToRenderer(win.webContents, IPC.event.mainStale, mainStaleStatus());
       },
     });
   }
@@ -1881,7 +2291,7 @@ app.whenReady().then(async () => {
         if (!info.hasUpdate || info.latest === announced) return;
         announced = info.latest;
         appendMainLog("update-available", `${info.current} -> ${info.latest}`);
-        for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC.event.updateAvailable, info);
+        for (const win of BrowserWindow.getAllWindows()) sendToRenderer(win.webContents, IPC.event.updateAvailable, info);
       } catch (error) {
         //: 对用户静默(后台检查失败不该弹窗),但对**日志**不静默 —— 代理挂了、限流撞上了,
         //: 这种事只有写出来,下次「怎么很久没提示更新」才查得回来。
