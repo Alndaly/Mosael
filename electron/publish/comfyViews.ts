@@ -5,8 +5,7 @@
  * - **操控方式**(见 comfyNavigation):渲染层按连接记着「触控板 / 鼠标」,告诉这里;这里在页面就绪后设好,**每次载入 / 刷新之后
  *   再设一次**;
  * - **设置写回的闸**:只装在这个分区的会话上,拦下操控方式那几个键写回 ComfyUI 服务器(别的分区、别的键都不碰);
- * - **载入之后**还要做的事(工作台的桥):登记一个回调,每次这个视图的页面载入完都跑一遍;
- * - **载入之后要跑的脚本**(操控方式、语言):等前端就绪再跑的那一套只在 `runInComfyPage` 一处(见 comfyViews 里的说明)。
+ * - **载入之后**还要做的事(工作台的桥):登记一个回调,每次这个视图的页面载入完都跑一遍。
  */
 import { session, type Session, type WebContents } from "electron";
 
@@ -70,23 +69,12 @@ export async function setComfyNavigation(partition: string, mode: ComfyNavigatio
 }
 
 async function applyNavigation(partition: string): Promise<NavigationOutcome> {
-  const mode = modes.get(partition);
-  if (!mode) return "notReady";
-  return runInComfyPage<NavigationOutcome>(partition, (origin) => navigationScript(origin, mode));
-}
-
-/**
- * 在这个视图的页面里跑一段**写死的**脚本(脚本按打开时记下的来源现拼):前端就绪了才跑 —— 视图没经工作流库打开过
- * (不知道来源)、前端一直没就绪都回 `notReady`。
- *
- * 载入之后要做的几件事(操控方式、语言,见 comfyLocale)走同一条路:就绪的判定、两个超时、来源只写在这里一处。
- */
-export async function runInComfyPage<T>(partition: string, script: (origin: string) => string): Promise<T | "notReady"> {
   const origin = origins.get(partition);
+  const mode = modes.get(partition);
   const driver = sharedViews()?.existingDriver(partition);
-  if (!origin || !driver) return "notReady";
+  if (!origin || !mode || !driver) return "notReady";
   if (!(await driver.waitForFunction(comfyReady(origin), READY_TIMEOUT_MS))) return "notReady";
-  return driver.evaluate<T>(script(origin), SCRIPT_TIMEOUT_MS);
+  return driver.evaluate<NavigationOutcome>(navigationScript(origin, mode), SCRIPT_TIMEOUT_MS);
 }
 
 /**
