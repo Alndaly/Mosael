@@ -14,6 +14,7 @@ import {
   grayscaleOf,
   invertMask,
   maskViewLayers,
+  partialAllowed,
   thresholdMask,
   writeGrayscale,
   type MaskPixels,
@@ -278,4 +279,26 @@ describe("看得见那张画布的层表", () => {
       expect(layer.alpha).toBeLessThanOrEqual(1);
     }
   });
+});
+
+/**
+ * ## 写入口的那道闸:「整张写、尺寸不符就拒绝」
+ *
+ * 维护者报过四次同一族的 bug(清空之后底图没了 / 撤销变灰白 / 形状变灰 / 橡皮像在擦底图)。
+ * 它们全都从**蒙版里漏出 `alpha 0` 的像素**或者**写到错的缓冲**开始 —— 而这两件事现在结构上做不到:
+ * `createMaskWriter` 自己发画布、只交出被包过的上下文,每一次写先过 `partialAllowed`,
+ * 写完再逐像素验一遍。
+ *
+ * 这几条钉的就是那道闸本身(不画任何东西,纯算术 + 一个最小的假 ctx)。
+ */
+describe("蒙版写入口:整张写、尺寸不符就拒绝", () => {
+  it("partialAllowed:覆盖不满整张的一律拒绝,白/黑笔迹除外", () => {
+    expect(partialAllowed({ kind: "put", rect: { x: 0, y: 0, width: 4, height: 4 }, image: { width: 4, height: 4 } as ImageData }, 4, 4)).toBe(true);
+    expect(partialAllowed({ kind: "put", rect: { x: 0, y: 0, width: 2, height: 2 }, image: { width: 2, height: 2 } as ImageData }, 4, 4)).toBe(false);
+    expect(partialAllowed({ kind: "fill", rect: { x: 1, y: 1, width: 1, height: 1 }, color: "#ffffff" }, 4, 4)).toBe(true);
+    expect(partialAllowed({ kind: "fill", rect: { x: 1, y: 1, width: 1, height: 1 }, color: "#000000" }, 4, 4)).toBe(true);
+    //: 别的颜色没有豁免:它可能是半透明的,没碰到的地方就未必还是不透明。
+    expect(partialAllowed({ kind: "fill", rect: { x: 1, y: 1, width: 1, height: 1 }, color: "rgba(0,0,0,0.5)" }, 4, 4)).toBe(false);
+  });
+
 });

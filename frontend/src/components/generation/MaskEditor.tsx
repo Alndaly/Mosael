@@ -15,13 +15,16 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   MASK_TINT_TOKEN,
+  PASTE_DRAFT,
+  PASTE_PREVIOUS,
+  PASTE_THRESHOLD,
   alphaMask,
+  createMaskWriter,
   featherMask,
-  grayscaleOf,
   invertMask,
   maskViewLayers,
   thresholdMask,
-  writeGrayscale,
+  type MaskContext,
   type MaskPixels,
   type MaskViewLayer,
 } from "@/lib/maskPixels";
@@ -72,7 +75,31 @@ import { useThemeColor } from "@/lib/themeColor";
  *
  * 反选 / 阈值 / 羽化 / 撤销栈那份单通道全在 `lib/maskPixels`(纯函数,能单测;jsdom 里没有 canvas 2D)。
  * 这里只留「取像素 → 调它 → 写回」。
+ *
+ * ## 「只动蒙版」不是靠自觉,是靠拿不到别的口子
+ *
+ * 这个文件**没有** `maskContext().fillRect(...)` 这种写法了:蒙版那张画布由 `lib/maskPixels` 的
+ * `createMaskWriter()` 发,**交出来的只有那几个语义方法**(`read` / `write` / `clear` / `paste` /
+ * `snapshot` / `restore` / `stroke` / `preview`)。每一次写先过"覆盖不满整张就拒绝",写完的下一微任务
+ * 再逐像素验一遍不透明 —— 那三条把不变量踩坏的路(见 maskPixels 里那张表)全在那一个文件里堵住,
+ * 这里想绕开得先改那边。**加新动作时不要在这里要原始 ctx**:笔迹类走 `stroke` / `preview`,
+ * 整张类走 `write` / `clear` / `paste`,没有第三类。
+ *
+ * 「橡皮 = 写黑」也是这条不变量的一部分:蒙版按契约没有 alpha 可用(灰度、白 = 要改、全不透明),
+ * 所以"擦掉"在数据上只能是写黑;屏幕上"擦完露出原图"由**底图那一层**负责,与蒙版无关
+ * (见 maskPixels 的「橡皮为什么是写黑」)。
  */
+
+/**
+ * 这个模块**发出去的那几张蒙版画布**(每一个 `MaskWriter` 一张)。只给测试用:像素级的回归要能
+ * 从"一堆画布里"认出哪张是蒙版 —— 生产代码一行都不读它。
+ */
+const MASK_CANVASES = new WeakSet<HTMLCanvasElement>();
+
+/** 这张画布是不是「画蒙版」发出去的那张**蒙版**(不是可见那张、也不是派生层的临时画布)。 */
+export function isMaskCanvas(element: HTMLCanvasElement): boolean {
+  return MASK_CANVASES.has(element);
+}
 
 /** 没有底图、也没有底稿时的画布尺寸。 */
 const DEFAULT_DOC = 1024;
@@ -230,6 +257,20 @@ function paintShape(ctx: CanvasRenderingContext2D, tool: Tool, from: Point, to: 
 }
 
 /**
+ * `drawMaskView` 真正用到的那几样 —— 可见那张、派生层那张的上下文都满足它。
+ *
+ * 写成窄接口而不是直接要 `CanvasRenderingContext2D`:`src/test/pixelCanvas` 那份**像素替身**
+ * 只要实现这几样就能被断言,不必假装自己是一个完整的 2D 上下文。
+ */
+export interface MaskViewContext {
+  globalAlpha: number;
+  globalCompositeOperation: GlobalCompositeOperation;
+  clearRect(x: number, y: number, width: number, height: number): void;
+  drawImage(source: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
+  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
+}
+
+/**
  * 把看得见的那张画布按层表画出来(层表见 lib/maskPixels 的 maskViewLayers)。
  *
  * 「哪几层、谁在下、各自怎么叠」只有层表那一处 —— 这里只管照着画,不自己决定合成方式:
@@ -238,7 +279,7 @@ function paintShape(ctx: CanvasRenderingContext2D, tool: Tool, from: Point, to: 
  * `mask` / `underlay` 允许是 null(还没铺出蒙版、底图没读进来):缺哪层跳哪层。
  */
 export function drawMaskView(
-  ctx: CanvasRenderingContext2D,
+  ctx: MaskViewContext,
   {
     plan,
     mask,
@@ -343,8 +384,17 @@ export function MaskEditor({
   const frameRef = React.useRef<HTMLDivElement>(null);
   /** 正在画一笔。见 fit():拖动期间不重量(每一次量都要读版面,而拖动每秒几十次)。 */
   const drawingRef = React.useRef(false);
-  /** 蒙版本身 —— 离屏、不进 DOM、导出的就是它。 */
-  const maskRef = React.useRef<HTMLCanvasElement | null>(null);
+  /**
+   * 蒙版本身 —— 离屏、不进 DOM、导出的就是它。**由 `lib/maskPixels` 的 createMaskWriter 发**:
+   * 这里拿不到它的原始 2D 上下文,写它只能走那几个语义方法(见文件头「只动蒙版」那一节)。
+   */
+  const writerRef = React.useRef<ReturnType<typeof createMaskWriter> | null>(null);
+  if (!writerRef.current) writerRef.current = createMaskWriter();
+  React.useEffect(() => {
+    //: 发一次记一次(`resize` 会换画布)—— 测试按这张登记表认出蒙版那张。
+    const canvas = writer().canvas();
+    if (canvas) MASK_CANVASES.add(canvas);
+  });
   /**
    * 合成可见那张画布时复用的一张离屏画布(蒙版的反相 / 着色各要一整张,见 drawMaskView 的
    * maskLayer)。每帧新建一张等于每帧要一块和可见画布一样大的画布内存 —— 浏览器的画布内存是
@@ -382,10 +432,12 @@ export function MaskEditor({
   /** 没存上时那句给人看的话(后端那句,或者本地这一句兜底)。 */
   const [failure, setFailure] = React.useState<string | null>(null);
 
-  const doc = React.useRef<Size>({ width: DEFAULT_DOC, height: DEFAULT_DOC });
   const showUnderlayRef = React.useRef(showUnderlay);
 
-  const maskContext = () => maskRef.current?.getContext("2d") ?? null;
+  /** 文档尺寸只有一个来源:写入口自己。两边各记一份迟早分叉,而分叉的后果正是"只写了一半"。 */
+  const writer = () => writerRef.current as ReturnType<typeof createMaskWriter>;
+  const doc = () => writer().size;
+  const maskContext = (): MaskContext | null => writer().context();
 
   const syncHistory = () => {
     const { steps, at } = historyRef.current;
@@ -394,12 +446,7 @@ export function MaskEditor({
   };
 
   /** 当前蒙版的单通道快照(存撤销栈用)。 */
-  const snapshot = (): Uint8ClampedArray | null => {
-    const ctx = maskContext();
-    if (!ctx) return null;
-    const { width, height } = doc.current;
-    return grayscaleOf(ctx.getImageData(0, 0, width, height).data);
-  };
+  const snapshot = (): Uint8ClampedArray | null => maskContext()?.snapshot() ?? null;
 
   /**
    * 把当前状态画到看得见的那张画布上:底图原样在下面,要改的地方压暗 + 着蒙版色叠上去。
@@ -417,7 +464,7 @@ export function MaskEditor({
     const scratch = scratchRef.current ?? (scratchRef.current = document.createElement("canvas"));
     drawMaskView(ctx, {
       plan: maskViewLayers({ hasUnderlay: Boolean(underlay), showUnderlay: showUnderlayRef.current, tint: tintRef.current }),
-      mask: maskRef.current,
+      mask: writer().canvas(),
       underlay,
       scratch,
       width: view.width,
@@ -452,7 +499,7 @@ export function MaskEditor({
     const boxHeight = frame.clientHeight;
     //: jsdom 里量出来是 0(没有版面);真实环境里也可能是对话框刚挂上、还没量到的那一帧。
     if (!boxWidth || !boxHeight) return;
-    const { width: docWidth, height: docHeight } = doc.current;
+    const { width: docWidth, height: docHeight } = doc();
     //: contain:两个方向的缩放比取小的那个 —— 长边贴住盒子,短边按原始比例留白。
     const scale = Math.min(boxWidth / docWidth, boxHeight / docHeight);
     const css = { width: Math.max(1, Math.round(docWidth * scale)), height: Math.max(1, Math.round(docHeight * scale)) };
@@ -483,24 +530,15 @@ export function MaskEditor({
   const rebuild = React.useCallback(
     (size: Size, carry: boolean) => {
       const next = capsSize(size);
-      const previous = maskRef.current;
-      const canvas = document.createElement("canvas");
-      canvas.width = next.width;
-      canvas.height = next.height;
-      maskRef.current = canvas;
-      doc.current = next;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        //: 黑底不是装饰:导出的 PNG 要每个像素都不透明(带 alpha 的图在插件那条路上读出来是空的)。
-        ctx.fillStyle = BLACK;
-        ctx.fillRect(0, 0, next.width, next.height);
-        const draft = draftRef.current;
-        if (draft) {
-          //: 底稿铺满整张文档(尺寸不一致时缩放):继续画的就是它。
-          ctx.drawImage(draft, 0, 0, next.width, next.height);
-        } else if (carry && previous && (previous.width !== next.width || previous.height !== next.height)) {
-          ctx.drawImage(previous, 0, 0, next.width, next.height);
-        }
+      const previous = writer().canvas();
+      //: 黑底由写入口自己铺(`clear()` 那一下 —— 它是不透明那条底线,不是装饰)。
+      const ctx = writer().resize(next.width, next.height);
+      const draft = draftRef.current;
+      if (draft) {
+        //: 底稿铺满整张文档(尺寸不一致时缩放):继续画的就是它。
+        ctx.paste(draft, PASTE_DRAFT);
+      } else if (carry && previous && (previous.width !== next.width || previous.height !== next.height)) {
+        ctx.paste(previous, PASTE_PREVIOUS);
       }
       const first = snapshot();
       historyRef.current = first ? { steps: [first], at: 0 } : { steps: [], at: -1 };
@@ -614,14 +652,8 @@ export function MaskEditor({
    *   静默地什么都不重绘(见文件头那条契约)。
    */
   const restore = (channel: Uint8ClampedArray) => {
-    const ctx = maskContext();
-    if (!ctx) return;
-    const { width, height } = doc.current;
-    if (channel.length !== width * height) return;
-    const image = ctx.createImageData(width, height);
-    writeGrayscale(channel, image.data);
-    ctx.putImageData(image, 0, 0);
-    paint();
+    //: 「整张写、尺寸不符就拒绝」这一步在写入口里(`MaskContext.restore`):这里读不到"写了一半"的状态。
+    if (maskContext()?.restore(channel)) paint();
   };
 
   const undo = () => {
@@ -642,24 +674,26 @@ export function MaskEditor({
     restore(history.steps[history.at]);
   };
 
-  /** 取像素 → 调纯函数 → 写回,一步(反选、羽化都走它)。 */
+  /** 取像素 → 调纯函数 → **整张**写回,一步(反选、羽化都走它)。 */
   const transform = (run: (data: MaskPixels, size: Size) => void) => {
     const ctx = maskContext();
     if (!ctx) return;
-    const size = { ...doc.current };
-    const image = ctx.getImageData(0, 0, size.width, size.height);
-    run(image.data, size);
-    ctx.putImageData(image, 0, 0);
+    const image = ctx.read();
+    run(image.data, { ...ctx.size });
+    ctx.write(image);
     pushHistory(null);
     paint();
   };
 
+  /**
+   * 清空 = 整张铺黑(= "这块不改",和橡皮写进去的是同一个值)。
+   *
+   * 它**只碰蒙版那一张**:底图在另一张画布上(可见那张的层表第一层),这里连它的引用都拿不到。
+   */
   const clear = () => {
     const ctx = maskContext();
     if (!ctx) return;
-    const { width, height } = doc.current;
-    ctx.fillStyle = BLACK;
-    ctx.fillRect(0, 0, width, height);
+    ctx.clear();
     pushHistory(null);
     paint();
   };
@@ -690,10 +724,8 @@ export function MaskEditor({
     const image = scratchCtx.createImageData(underlay.width, underlay.height);
     image.data.set(copy);
     scratchCtx.putImageData(image, 0, 0);
-    const { width, height } = doc.current;
-    ctx.fillStyle = BLACK;
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(scratch, 0, 0, width, height);
+    //: 整张铺(先复位再画,见 MaskContext.paste)—— 部分覆盖会让没碰到的地方留下上一次的像素。
+    ctx.paste(scratch, PASTE_THRESHOLD);
     pushHistory(kind);
     paint();
   };
@@ -714,25 +746,36 @@ export function MaskEditor({
     if (!view) return null;
     const rect = view.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
-    const { width, height } = doc.current;
+    const { width, height } = doc();
     return {
       x: ((event.clientX - rect.left) / rect.width) * width,
       y: ((event.clientY - rect.top) / rect.height) * height,
     };
   };
 
+  /** 一笔的墨:笔刷写白(要改)、橡皮写黑(不改)。见文件头「橡皮 = 写黑」那一节。 */
+  const inkOf = (tool: Tool) => (tool === "brush" ? { ink: WHITE, fade: FADE_WHITE } : { ink: BLACK, fade: FADE_BLACK });
+
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const ctx = maskContext();
     const at = docPoint(event);
     if (!ctx || !at) return;
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    //: 指针捕获在合成事件 / 某些设备上是会抛的(没有活动指针)。它只是"手指滑出画布也算数"的便利,
+    //: 抛了不该让这一笔整个断掉 —— 拖动的状态机在下面,和它无关。
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      //: 拿不到就算了,拖动照旧。
+    }
     drawingRef.current = true;
     const freehand = tool === "brush" || tool === "eraser";
     dragRef.current = { tool, from: at, last: at, before: freehand ? null : snapshot() };
     if (freehand) {
-      paintLine(ctx, at, at, radius / 2, hardness, tool === "brush" ? WHITE : BLACK, tool === "brush" ? FADE_WHITE : FADE_BLACK);
+      const { ink, fade } = inkOf(tool);
+      ctx.stroke((raw) => paintLine(raw, at, at, radius / 2, hardness, ink, fade));
     } else {
-      paintShape(ctx, tool, at, at);
+      ctx.beginStroke();
+      ctx.preview((raw) => paintShape(raw, tool, at, at));
     }
     paint();
   };
@@ -743,22 +786,17 @@ export function MaskEditor({
     const at = docPoint(event);
     if (!drag || !ctx || !at) return;
     if (drag.tool === "brush" || drag.tool === "eraser") {
-      paintLine(
-        ctx,
-        drag.last,
-        at,
-        radius / 2,
-        hardness,
-        drag.tool === "brush" ? WHITE : BLACK,
-        drag.tool === "brush" ? FADE_WHITE : FADE_BLACK,
-      );
+      const { ink, fade } = inkOf(drag.tool);
+      ctx.stroke((raw) => paintLine(raw, drag.last, at, radius / 2, hardness, ink, fade));
     } else {
       //: 形状工具每一帧都从按下时那份像素重来:看到的是「松手后会是这样」,不是一层层叠上去的边。
       //: **按下之后底图才读进来**(文档换了尺寸)的话,那份快照已经作废 —— 重取一份当前的,
       //: 否则 `restore` 会把整张挡掉(它拒绝写尺寸对不上的快照),预览就从"每帧重来"变成"一层层叠"。
-      if (drag.before && drag.before.length !== doc.current.width * doc.current.height) drag.before = snapshot();
-      if (drag.before) restore(drag.before);
-      paintShape(ctx, drag.tool, drag.from, at);
+      if (drag.before && drag.before.length !== doc().width * doc().height) {
+        drag.before = snapshot();
+        ctx.beginStroke();
+      }
+      ctx.preview((raw) => paintShape(raw, drag.tool, drag.from, at));
     }
     drag.last = at;
     paint();
@@ -766,6 +804,7 @@ export function MaskEditor({
 
   const onPointerUp = () => {
     drawingRef.current = false;
+    maskContext()?.endStroke();
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
@@ -785,7 +824,7 @@ export function MaskEditor({
   };
 
   const save = () => {
-    const canvas = maskRef.current;
+    const canvas = writer().canvas();
     if (!canvas) return;
     setFailure(null);
     setSaving(true);
@@ -945,14 +984,17 @@ export function MaskEditor({
               </div>
               <SliderField label={t("maskThreshold")} value={threshold} min={0} max={1} step={0.01} format={percent} onChange={changeThreshold} />
               {/*
-                * **和上面四根滑块同一条竖线**:名字在 5rem 那一列,开关**铺满**中间那一列
-                * (它是这一行的"控件",不是跟在名字后面的一个小方块 —— 名字在左、控件在右,和四根
-                * 滑块读起来是同一种行),反选那颗方钮落在值那一列、和右值同一条右边线。
-                * `role="switch"` 自己挂 aria-label:套在 `<label>` 里读屏名字会是「显示底图 开关」。
+                * **和上面四根滑块同一条竖线**,而且**不把开关拉长**:名字在 5rem 那一列,开关按
+                * `Switch` 自己的尺寸(`h-5 w-9` = 36×20)落在控件列的**起点**上(`justify-self-start`)
+                * —— 排一行靠的是 grid 的列,不是把控件撑满。`w-full` 会把那颗开关拉成一条 124px 的长
+                * 胶囊(实测),而上面四根滑轨的起点在同一个 x 上,一眼就看出不是一套。
+                *
+                * 反选那颗方钮落在值那一列、和右值同一条右边线。`role="switch"` 自己挂 aria-label:
+                * 套在 `<label>` 里读屏名字会是「显示底图 开关」。
                 */}
               <div className="grid grid-cols-[5rem_minmax(0,1fr)_3.5rem] items-center gap-x-3">
                 <span className="min-w-0 text-ui-xs text-muted-foreground">{t("maskShowSource")}</span>
-                <Switch aria-label={t("maskShowSource")} checked={showUnderlay} onCheckedChange={setShowUnderlay} className="w-full" />
+                <Switch aria-label={t("maskShowSource")} checked={showUnderlay} onCheckedChange={setShowUnderlay} className="justify-self-start" />
                 <IconButton label={t("maskInvert")} onClick={invert} className="justify-self-end">
                   <Contrast />
                 </IconButton>

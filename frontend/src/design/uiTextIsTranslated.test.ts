@@ -80,6 +80,7 @@ const EXEMPT = new Map<string, string>([
   ["frontend/src/features/notes/strings.ts", "笔记自己的中英文案表(含编辑器节点文案)"],
   ["frontend/src/features/notes/useNoteAttachments.tsx", "发给模型的笔记引用说明,界面上不显示"],
   ["frontend/src/dev/DesignSheet.tsx", "设计语言的规格样张,只在开发构建里有、不进发行包,给维护者拍板看(docs/DESIGN_LANGUAGE.md)"],
+  ["frontend/src/test/maskEditorPixels.tsx", "测试台架:按**无障碍名**查界面上的控件(名字就是文案表里那几条)+ 自己 `throw` 的中文诊断,不是界面文字"],
 ]);
 
 /** 还没翻完的:文件 → 还剩几行。**只减不增。** */
