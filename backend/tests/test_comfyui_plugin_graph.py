@@ -1829,3 +1829,116 @@ def test_选模型文件的参数写明是哪个模型目录的文件(graph) -> 
     assert folders["5.model_name"] == "upscale_models"
     assert folders["6.sampler_name"] is None, "不是模型文件的下拉不写"
     assert folders["3.type"] is None
+
+
+# --- 交出去的图必须凑齐 ComfyUI 自己声明的必填项 -----------------------------------
+#
+# 起因(真机 8120,2026-10-12):「快速去水印」的精简版跑起来被拒 ——
+# `#3 Required input is missing: compare_view`。3 号是 ImageCompare,`compare_view` 在 object_info 里
+# 是 **required**,可它的值是前端 widget 自己写死的(`useImageCompareWidget` 的 `['', '']`),
+# 那个 widget 是 `options.serialize = true`(每次都进 API 图)配 `serialize = false`(**从不写进工作流文件**)
+# —— 于是文件里 `widgets_values` 是空的、它又没有插口可连,我们读文件永远读不到它。
+
+#: 真机 `/object_info` 上 ImageCompare 的形状(ComfyUI 0.39 + 前端 1.55.14,原样抄下来)。
+_IMAGE_COMPARE_INFO: dict[str, Any] = {
+    "ImageCompare": {
+        "input": {
+            "required": {"compare_view": ["IMAGECOMPARE", {"socketless": True}]},
+            "optional": {"image_a": ["IMAGE", {}], "image_b": ["IMAGE", {}]},
+            "hidden": {"prompt": ["PROMPT"], "extra_pnginfo": ["EXTRA_PNGINFO"]},
+        },
+        "output": [], "output_name": [], "output_node": True,
+    },
+}
+
+
+def test_必填的怪输入既没控件也没连线_用定义里的缺省值带上(convert, graph) -> None:
+    """定义里写 required、我们认不出那一格是什么控件、它也不在任何一条线上:此前它就这么没了 ——
+    交出去的图少一格,ComfyUI 只在 `/prompt` 回一句「Required input is missing」。"""
+    info = {"Mystery": {"input": {"required": {
+        "weird_key": ["SOME_PACK_TYPE", {"default": 7}],
+        "steps": ["INT", {"default": 20}],
+    }}}}
+    ui = {"nodes": [{"id": 1, "type": "Mystery", "widgets_values": [30]}], "links": []}
+    api = convert.to_api(ui, info)
+    assert api["1"]["inputs"] == {"steps": 30, "weird_key": 7}, "缺的那一格按定义里的缺省值补上"
+    assert graph.missing_required(api, info) == []
+
+
+def test_声明成必填的前端专用widget_文件里没存值也带上(convert, graph) -> None:
+    """真机 3 号节点的形状:`compare_view` 是 required 的 socketless widget,文件里 `widgets_values` 是空的、
+    也没有插口可连 —— 定义里连缺省值都没给(`{"socketless": true}`,没有 `default`)。
+    前端照样每次带一个值上去;我们按类型给个空,总比交一张会被拒的图强。"""
+    ui = {"nodes": [{"id": 3, "type": "ImageCompare",
+                     "inputs": [conn("image_a", 1), conn("image_b", 2), widget("compare_view")],
+                     "widgets_values": []}],
+          "links": []}
+    api = convert.to_api(ui, _IMAGE_COMPARE_INFO)
+    assert api["3"]["inputs"] == {"compare_view": ""}, "必填那一格带上;image_a / image_b 是可选、没接就不带"
+    assert graph.missing_required(api, _IMAGE_COMPARE_INFO) == []
+
+
+def test_必填输入补不出缺省值_跑之前就说清是哪个节点哪一格(convert, graph) -> None:
+    """补不出缺省值的**不硬塞一个猜的值**:留在缺的那一格,由 `graph.missing_required` 在提交之前说清。
+    ComfyUI 只会回一句英文的「Required input is missing: mystery」,看不出是哪个节点上的哪一格。
+    喊话的是 `run.required_inputs` —— 它在素材接线**之后**、POST 之前(接线会给读图节点那一格填上文件名,
+    早一步判会把「等一下就有值」的格子误报成缺)。"""
+    import run
+    from lines import ComfyError
+
+    info = {"Needy": {"input": {"required": {"mystery": ["SOME_PACK_TYPE", {}], "steps": ["INT", {"default": 20}]}}}}
+    ui = {"nodes": [{"id": 1, "type": "Needy", "widgets_values": [5]}], "links": []}
+    api = convert.to_api(ui, info)
+    assert api["1"]["inputs"] == {"steps": 5}, "不知道就不知道,不塞一个猜的值进去"
+    assert graph.missing_required(api, info) == ["#1 Needy · mystery"]
+    with pytest.raises(ComfyError) as caught:
+        run.required_inputs(api, info, "zh")
+    assert "#1 Needy · mystery" in str(caught.value)
+    assert run.required_inputs(api, {}, "zh") is None, "不知道节点定义(object_info 拿不到)就不判,交给 ComfyUI 说"
+
+
+def test_补必填不吃掉既有那几种输入(convert, graph) -> None:
+    """补的是**缺**的那一格:存下来的 widget 值(按位置对得上)、连上的线、可选的没给、前端专用的
+    `upload` / `audioUI`、以及 `hidden` 那几格 —— 一个都不动,一个都不多。"""
+    info = {"Kitchen": {"input": {
+        "required": {"text": ["STRING", {"multiline": True}], "temperature": ["FLOAT", {"default": 0.7}],
+                     "clip": ["CLIP"], "odd_key": ["SOME_PACK_TYPE", {"default": "d"}],
+                     "weird": ["ANOTHER_PACK_TYPE", {"socketless": True}]},
+        "optional": {"eta": ["FLOAT", {"default": 0.5}]},
+        "hidden": {"prompt": ["PROMPT"], "unique_id": ["UNIQUE_ID"]},
+    }}}
+    ui = {"nodes": [
+        {"id": 1, "type": "Kitchen", "widgets_values": ["hello", 0.9],
+         "inputs": [widget("text"), widget("temperature"), {"name": "upload", "widget": {"name": "upload"}, "link": None},
+                    conn("clip", 3)]},
+        {"id": 9, "type": "Source", "widgets_values": []},
+    ], "links": [[3, 9, 0, 1, 2, "CLIP"]]}
+    api = convert.to_api(ui, {**info, "Source": {"input": {"required": {}}, "output": ["CLIP"], "output_name": ["clip"]}})
+    assert api["1"]["inputs"] == {"text": "hello", "temperature": 0.9, "clip": ["9", 0],
+                                  "eta": 0.5, "odd_key": "d", "weird": ""}
+    assert api["1"]["inputs"]["temperature"] == 0.9, "存下来的值照旧,没被补进来的格子顶掉"
+    assert "upload" not in api["1"]["inputs"], "前端专用的上传按钮不进 API 图"
+    assert "prompt" not in api["1"]["inputs"] and "unique_id" not in api["1"]["inputs"], "hidden 是服务端自己塞的"
+
+
+def test_模板格不按required硬判_autogrow的min是0就一格都不必填(graph) -> None:
+    """真机同一张图上的另一半:`TextEncodeQwenImage21.images` 也在 `required` 下,可它是 `COMFY_AUTOGROW_V3`
+    的模板、`min` 是 0 —— 服务端把展开出来的每一格都放进 optional,交上去不带任何一行它照样收(实测 200)。
+    照着 `required` 抄一遍会把这张跑得通的图拦在门外,那比不查还糟。"""
+    info = {"Encoder": {"input": {"required": {
+        "images": ["COMFY_AUTOGROW_V3", {"template": {"input": {"required": {"image": ["IMAGE", {}]}},
+                                                      "names": ["image_1", "image_2"], "min": 0}}],
+        "text": ["STRING", {}],
+    }}}}
+    api = {"7": {"class_type": "Encoder", "inputs": {"text": "x"}}}
+    assert graph.missing_required(api, info) == [], "min 是 0:一格都不必填"
+
+    #: 另一半:`min` 是 1 的 AUTOGROW 一格都没有时才是真缺(判定的边界不能放宽过头)。
+    required_info = {"Encoder": {"input": {"required": {
+        "images": ["COMFY_AUTOGROW_V3", {"template": {"input": {"required": {"image": ["IMAGE", {}]}},
+                                                      "names": ["image_1"], "min": 1}}],
+    }}}}
+    assert graph.missing_required({"7": {"class_type": "Encoder", "inputs": {}}}, required_info) == \
+        ["#7 Encoder · images"]
+    assert graph.missing_required({"7": {"class_type": "Encoder", "inputs": {"images.image_1": ["9", 0]}}},
+                                  required_info) == [], "具体化出来的那一格在,就算有了"

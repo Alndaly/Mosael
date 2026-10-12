@@ -718,6 +718,63 @@ def _missing_socket(node: dict[str, Any], object_info: dict[str, Any]) -> bool:
                for name, definition in required.items())
 
 
+def _template_needs_rows(definition: Any) -> bool:
+    """这一格是 `COMFY_AUTOGROW_V3`,而且**至少要有几行**(模板的 `min` > 0)。
+
+    `min` 是 0 时服务端把展开出来的每一格都放进 optional(见 `_io.Autogrow._expand_schema_for_dynamic`),
+    交上去不带任何一行它照样收 —— 真机「快速去水印」的 `TextEncodeQwenImage21.images`(min 0)就是这样,
+    按 `required` 判会误报。min > 0 才是真缺。
+    """
+    if not isinstance(definition, list) or not definition or definition[0] != convert._V3_AUTOGROW:  # noqa: SLF001
+        return False
+    options = definition[1] if len(definition) > 1 and isinstance(definition[1], dict) else {}
+    template = options.get("template") if isinstance(options.get("template"), dict) else {}
+    if "required" not in (template.get("input") or {}):
+        return False
+    try:
+        return int(template.get("min") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def missing_required(api: dict[str, Any], object_info: dict[str, Any]) -> list[str]:
+    """这张图交出去 ComfyUI **一定**会拒的必填输入:`#节点 类 · 输入名`。
+
+    提交的时候它才说,而且只说一句英文的「Required input is missing: compare_view」—— 节点号在前缀里、
+    输入名在中间,看不出是哪个节点上的哪一格;跑完一遍才回来说更亏(真机:整张图跑完 7.8 秒才收到那句)。
+    这里在本地按同一套定义核一遍,缺的**一次说全**(见 run.required_inputs)。
+
+    「必填」按 ComfyUI 服务端算的口径,不是照着 `object_info` 的 `required` 抄:
+
+    - `hidden` 不看:那几格是服务端自己塞的,图上本来就没有;
+    - 模板格(`COMFY_AUTOGROW_V3` 那几种)按这次提交带了哪几格判,不是一律当必填(见 `_template_needs_rows`);
+      `COMFY_DYNAMICCOMBO_V3` / `COMFY_DYNAMICSLOT_V3` 只在图上**已经有这一格**时才进校验表,没有就是不必填;
+      `COMFY_DYNAMICGROUP_V3` 的具体输入叫 `<组>.<行号>.<字段>`,本地不猜 —— 这几类交给 ComfyUI 自己说,
+      宁可漏报也不误报(误报会把跑得通的图拦在门外)。
+    - 没装的节点(`object_info` 里没有它)不判:不知道它的必填项。
+
+    **不是**白名单重建:这里一个值都不改,只把「图上少了定义里写 required 的那几格」说出来。
+    """
+    found: list[str] = []
+    for node_id in sorted(api, key=_node_order):
+        node = api.get(node_id)
+        if not isinstance(node, dict):
+            continue
+        class_type = str(node.get("class_type", ""))
+        spec = object_info.get(class_type)
+        if not isinstance(spec, dict):
+            continue
+        required = ((spec.get("input") or {}).get("required")) or {}
+        inputs = node.get("inputs") or {}
+        for name, definition in required.items():
+            if required_input_present(inputs, name, definition):
+                continue
+            if convert.is_template(definition) and not _template_needs_rows(definition):
+                continue
+            found.append(f"#{node_id} {class_type} · {name}")
+    return found
+
+
 def live(api: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
     """ComfyUI **真会跑**的那部分图:能跑的输出节点和它们的上游,别的都不算(返回新图,不改入参)。
 

@@ -24,6 +24,7 @@ from tests.fake_comfyui import (
     INPAINT_NODE_INFO,
     MINIMAX_T2V_API,
     PNG,
+    PORTRAIT_UI,
     TWO_PASS_HAND_DEPTH,
     TWO_SAVES_API,
     UPSCALE_API,
@@ -651,3 +652,32 @@ def test_英文界面说英文(comfy, tmp_path: Path) -> None:
             _generate(comfy.url, tmp_path, {"model": "portrait.json"})
     finally:
         set_current_locale(before)
+
+
+# --- 交出去的图必须凑齐 ComfyUI 自己声明的必填项 -----------------------------------
+
+
+def test_必填的前端专用输入_跟着提交的图一起交出去(comfy, tmp_path: Path) -> None:
+    """真机形状(「快速去水印」的 3 号节点,2026-10-12):`compare_view` 在 `/object_info` 里是 **required**
+    的 socketless widget —— 前端那个控件是 `options.serialize = true`(每次都进 API 图)配
+    `serialize = false`(**从不写进工作流文件**),所以文件里 `widgets_values` 是空的,它又没有插口可连。
+    提交出去的图少这一格,ComfyUI 就回一句「#3 Required input is missing: compare_view」,整张图白跑。"""
+    comfy.state.object_info["ImageCompare"] = {
+        "input": {"required": {"compare_view": ["IMAGECOMPARE", {"socketless": True}]},
+                  "optional": {"image_a": ["IMAGE", {}], "image_b": ["IMAGE", {}]},
+                  "hidden": {"prompt": ["PROMPT"]}},
+        "output": [], "output_name": [], "output_node": True, "category": "image",
+    }
+    workflow = json.loads(json.dumps(PORTRAIT_UI))
+    workflow["nodes"].append({
+        "id": 90, "type": "ImageCompare", "pos": [0, 0], "size": [400, 350], "flags": {}, "order": 30, "mode": 0,
+        "widgets_values": [],
+        "inputs": [{"name": "image_a", "type": "IMAGE", "link": None},
+                   {"name": "image_b", "type": "IMAGE", "link": None},
+                   {"name": "compare_view", "type": "IMAGECOMPARE", "widget": {"name": "compare_view"}, "link": None}],
+        "outputs": [], "properties": {"Node name for S&R": "ImageCompare"},
+    })
+    comfy.state.workflows["compare.json"] = workflow
+    _generate(comfy.url, tmp_path, {"model": "compare.json", "parameters": {}})
+    [submitted] = comfy.posted("/prompt")
+    assert submitted["prompt"]["90"]["inputs"]["compare_view"] == "", "必填那一格跟着图一起交出去"

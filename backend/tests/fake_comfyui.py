@@ -336,9 +336,13 @@ VIDEO_NODE_INFO: dict[str, Any] = {
 
 
 def _api_video(node: str, class_type: str, inputs: dict[str, Any]) -> dict[str, Any]:
-    """一张最小的视频 API 图:`node` 交出一段视频,SaveVideo 存下来。"""
+    """一张最小的视频 API 图:`node` 交出一段视频,SaveVideo 存下来。
+
+    `format` / `codec` 跟着带上:下面 SaveVideo 的定义里这两格是**必填**的下拉,前端导出的 API 图一定带着它们
+    (不带的图真机会被 /prompt 以「Required input is missing」拒掉,插件提交之前也会先说出来)。"""
     return {node: {"class_type": class_type, "inputs": inputs},
-            "90": {"class_type": "SaveVideo", "inputs": {"video": [node, 0], "filename_prefix": "video/out"}}}
+            "90": {"class_type": "SaveVideo", "inputs": {"video": [node, 0], "filename_prefix": "video/out",
+                                                         "format": "auto", "codec": "auto"}}}
 
 
 #: MiniMax 文生视频(API 节点):提示词是 `prompt_text`。

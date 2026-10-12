@@ -73,9 +73,30 @@ _AUDIO_UI_CLASSES = frozenset({"LoadAudio", "SaveAudio", "PreviewAudio", "SaveAu
 #: 而且位置就在模板那一格**后面** —— 排到最后会把后面的值全挤错位(真机:TextGenerate 的
 #: temperature/top_k/… 顶掉了 thinking/use_default_template/mtp)。
 _V3_MATCH, _V3_AUTOGROW, _V3_DYNAMIC = "COMFY_MATCHTYPE_V3", "COMFY_AUTOGROW_V3", "COMFY_DYNAMICCOMBO_V3"
-_V3_TEMPLATES = (_V3_AUTOGROW, _V3_DYNAMIC)
+
+#: **定义里只是模板、自己不是一个格子**的那几种输入(服务端 `_io.DYNAMIC_INPUT_LOOKUP` 里登记的就是这四个,
+#: MATCHTYPE 不在里面 —— 它是个普通插口)。它们的具体输入是展开出来的 `名字.子名`,必填性要看这次提交带了哪几格:
+#: `COMFY_AUTOGROW_V3` 的 `min` 是 0 时**一格都不必填**,可它在 `object_info` 里照样挂在 `required` 下 ——
+#: 真机「快速去水印」的 `TextEncodeQwenImage21.images` 就是这样,照着 `required` 判会把它误报成缺失。
+#: 所以这两种地方都要绕开它们:补缺省值时不能补(模板格的值不是字符串),提交前校验时不能当必填。
+_TEMPLATE_INPUTS = (_V3_AUTOGROW, _V3_DYNAMIC, "COMFY_DYNAMICSLOT_V3", "COMFY_DYNAMICGROUP_V3")
+
+
+def is_template(definition: Any) -> bool:
+    """这一格在定义里是个**模板**(`COMFY_AUTOGROW_V3` 那几种),不是一个具体的格子。
+
+    `graph.missing_required` 也要问这一句:模板的必填性得看这次提交带了哪几格,照着 `required` 判会误报。
+    """
+    return isinstance(definition, list) and bool(definition) and definition[0] in _TEMPLATE_INPUTS
+
 
 _FRONTEND_WIDGETS = frozenset({"upload", "audioUI"})
+
+#: 声明成 widget 却**没给缺省值**时,那一格该带什么(`socketless` 的那几种,见 `_Converter._default`)。
+#: ComfyUI 的前端是照 widget 自己的实现给的初值(`useStringWidget` 的 `default ?? ''`、`useColorWidget` 的
+#: `'#000000'`、`useImageCompareWidget` 写死的 `['', '']`),这些都不在 `object_info` 里 —— 我们只知道类型,
+#: 就按类型给那个「空」。认不出的类型给 `''`:服务端对认不出的类型不做类型检查,空串是这类格子里最中性的一个。
+_EMPTY_WIDGET = {"STRING": "", "MARKDOWN": "", "TEXTAREA": "", "INT": 0, "FLOAT": 0.0, "BOOLEAN": False}
 
 #: 转换时写进 `_meta` 的:每个带「生成后怎样」的 widget 存着的设定(randomize / fixed / increment / decrement)。
 #: API 图里没有这一格(它是前端的行为),可「这张图的种子每次换不换」只有它说得清。
@@ -334,6 +355,7 @@ class _Converter:
                     controls[name] = resolved[2]  # PrimitiveNode 自己的「生成后怎样」说了算
             else:
                 inputs[name] = [resolved[1], resolved[2]]
+        self._complete(node, inputs)
         meta: dict[str, Any] = {"title": str(node.raw.get("title") or node.type)}
         labels = _own_labels(node)
         if labels:
@@ -508,7 +530,24 @@ class _Converter:
 
     @staticmethod
     def _default(definition: Any) -> tuple[bool, Any]:
+        """这一格在定义里写着的缺省值是什么:(有没有, 值)。
+
+        四种写法,从前到后:
+
+        1. 显式写了 `"default"`(`{"default": 1024, ...}`);
+        2. 老式下拉:定义的第 0 位**就是**选项表(`[["a.safetensors", "b.safetensors"], {...}]`),第一个选项;
+        3. 新式下拉 `["COMBO", {"options": [...]}]`,第一个选项;
+        4. **只声明成 widget、连缺省值都没给**(`["IMAGECOMPARE", {"socketless": true}]`):前端照样给这一格建控件、
+           `widget.options.serialize` 照样是 `true`,于是它每次提交都带着一个值 —— 可那个值是 widget 实现里写死的,
+           `object_info` 里查不到。给它一个按类型的「空」(见 `_EMPTY_WIDGET`),总比交一张少一格的图强:
+           服务端对认不出的类型不做类型检查,而这一格本来就是界面上的状态。
+
+        **模板不是格子**:`COMFY_DYNAMICCOMBO_V3` 的 `options` 是「选项对象」的列表(每个对象里才是它的子输入),
+        拿 `options[0]` 当缺省值会把一个 dict 塞进图里 —— 这里绕开它们(它们的具体输入是 `名字.子名`)。
+        """
         if not isinstance(definition, list) or not definition:
+            return False, None
+        if is_template(definition):
             return False, None
         options = _Converter._options(definition)
         if "default" in options:
@@ -516,7 +555,36 @@ class _Converter:
         choices = definition[0] if isinstance(definition[0], list) else options.get("options")
         if isinstance(choices, list) and choices:
             return True, choices[0]
+        if options.get("socketless") and isinstance(definition[0], str):
+            return True, _EMPTY_WIDGET.get(definition[0], "")
         return False, None
+
+    def _complete(self, node: _Node, inputs: dict[str, Any]) -> None:
+        """**定义里写 required 的,交出去就得有这一格。**这里把它补齐(就地改 `inputs`)。
+
+        为什么会有缺的:一张图交出去的值只有两个来源 —— `widgets_values` 里存着的、和连上的线。可 ComfyUI 的
+        前端有的格子**根本不往文件里存**:`compare_view` 的 widget 是 `options.serialize = true`(每次都进 API 图)
+        配 `serialize = false`(从不写进工作流文件),于是文件里 `widgets_values` 是空的、这一格又没有插口可连,
+        我们读文件就永远读不到它 —— 交出去的图少一格,ComfyUI 到 `/prompt` 才回一句
+        「#3 Required input is missing: compare_view」(真机 8120,2026-10-12)。节点包升级后新加的格子同理。
+
+        **这不是按白名单重建 `inputs`**:`inputs` 里已有的(存下来的 widget 值、连上的线、上游传下来的值)一个都不动,
+        这里只**补**定义里写了 required、而上面那两条路都没给出来的格子;补不出缺省值的原样留着,
+        由 `graph.missing_required` 在提交之前说清是哪个节点哪一格(见 run.required_inputs),不让 ComfyUI 跑到一半才拒。
+
+        `hidden` 不看:那几格(`prompt`、`extra_pnginfo`、`unique_id`……)是服务端自己塞的,图上带着反而多余。
+        """
+        spec = self.object_info.get(node.type)
+        declared = (spec.get("input") if isinstance(spec, dict) else None) or {}
+        required = declared.get("required") if isinstance(declared, dict) else None
+        if not isinstance(required, dict):
+            return
+        for name, definition in required.items():
+            if name in inputs or is_template(definition):
+                continue
+            present, value = self._default(definition)
+            if present:
+                inputs[name] = _wrap(value)
 
     def _widget_values(self, node: _Node, controls: dict[str, str],
                        resets: list[str] | None = None) -> dict[str, Any]:

@@ -195,7 +195,10 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
 
     ComfyUI 自己每次只说第一个没装的节点(「Node 'X' not found. The custom node may not be installed.」),装好一个才知道
     下一个;缺模型文件时回一句英文的「Value not in list」,有的加载节点还要执行到它才说找不到。不知道节点定义
-    (object_info 拿不到)就不判,交给 ComfyUI 去说。"""
+    (object_info 拿不到)就不判,交给 ComfyUI 去说。
+
+    必填输入那一关**不在这里**:这张图后面还要接上传回来的素材(`graph.wire_inputs` 把文件名写进读图节点那一格),
+    现在判会把「等一下就有值」的格子误报成缺 —— 那一关在接线之后、POST 出去之前(见 required_inputs)。"""
     if not object_info:
         return
     nodes, files, stale = missing(prompt, object_info)
@@ -222,6 +225,33 @@ def preflight(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) 
                   "or set a value it currently offers in the parameters.")
     if zh:
         raise ComfyError(say(locale, "".join(zh), " ".join(en)))
+
+
+def required_inputs(prompt: dict[str, Any], object_info: dict[str, Any], locale: str) -> None:
+    """这张图该带的必填输入带齐了吗;缺的现在就说,别交给 ComfyUI 去拒(见 `graph.missing_required`)。
+
+    ComfyUI 只在 `/prompt` 回一句英文的「Required input is missing: compare_view」—— 看不出是哪个节点上的哪一格,
+    而走到那一步我们的活已经干完了(读工作流、取 object_info、传素材;真机 8120 上这一趟 7.8 秒)。
+    真机那次是「快速去水印」的 3 号 ImageCompare:`compare_view` 前端是每次提交都带、却**从不写进工作流文件**的
+    一格(见 convert._complete),不补就会少。"""
+    if not object_info:
+        return
+    missing_required = graph.missing_required(prompt, object_info)
+    if not missing_required:
+        return
+    listed = _named(missing_required, "、")
+    english = _named(missing_required, ", ")
+    raise ComfyError(say(
+        locale,
+        f"这张工作流有几格**必填输入**既没有值、也没有连线:{listed}。"
+        "交上去 ComfyUI 会直接拒掉(「Required input is missing」),所以没有排上。"
+        "多半是这张图的文件里没存下那一格的值(有些控件每次提交都带、却不写进工作流文件),"
+        "在 ComfyUI 里打开它、把这几格填上(或者接上线)再保存;也可以换一张工作流。",
+        f"Some required inputs of this workflow have neither a value nor a link: {english}. "
+        "ComfyUI would reject the prompt outright (\"Required input is missing\"), so nothing was queued. "
+        "The workflow file often doesn't store a value for those fields (some widgets are sent with every prompt "
+        "but never written to the file). Open the workflow in ComfyUI, fill those fields in (or wire them up) and "
+        "save — or pick another workflow."))
 
 
 def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str,
@@ -746,6 +776,7 @@ def _generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) ->
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None,
                                        object_info)
+        required_inputs(prompt, object_info, locale)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
     delivered = _delivered(comfy, entry, kind, wanted, prompt_id, locale)
     #: 接着等上一次提交的那个任务时没有「读工作流」这一步(提交是上一个进程做的),不会有复位要报。
@@ -814,7 +845,9 @@ def _generate_canvas(canvas: dict[str, Any], comfy: Comfy, locale: str, emit: Em
     client_id = str(canvas.get("client_id") or "")
     if not _CLIENT_ID.match(client_id):
         client_id = uuid.uuid4().hex
-    preflight(prompt, comfy.object_info(), locale)
+    info = comfy.object_info()
+    preflight(prompt, info, locale)
+    required_inputs(prompt, info, locale)
     extra = ({"extra_pnginfo": {"workflow": workflow}}
              if isinstance(workflow, dict) and isinstance(workflow.get("nodes"), list) else None)
     prompt_id = submit(comfy, prompt, client_id, locale, extra)
@@ -845,10 +878,11 @@ def _generate_repeated(request: dict[str, Any], comfy: Comfy, locale: str, emit:
         if uploaded is None:  # 第一次提交之前查一遍、传一次素材,之后每次都接这一份
             preflight(prompt, object_info, locale)
             uploaded = upload(comfy, request.get("inputs") or [])
-        if not uploaded:
-            return prompt
-        return graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None,
-                                 object_info)
+        if uploaded:
+            prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded, form.slots() if form.app else None,
+                                       object_info)
+        required_inputs(prompt, object_info, locale)
+        return prompt
 
     result = run_repeated(comfy, build, runs, given, emit, locale, titles, request.get("resume"))
     if not result.runs:
