@@ -722,14 +722,19 @@ def _read(comfy: Comfy, path: str, locale: str) -> tuple[dict[str, Any], float]:
 
 
 def _item_out(item: dict[str, Any]) -> dict[str, Any]:
-    """编辑器要的那一项:锚点、种类、名字(`title` / `node_label` —— `{"zh", "en"}` 一对,宿主按读的人的语言挑一句,
-    见 graph.items)、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的说明、常用与否、JSON Schema 片段
-    (下拉的全部可选值,收窄时从里面挑)。`exposable` / `unexposable`(**子图定义用了不止一处**时里面的节点放不进表单,
-    见 app_form.unaddressable)只有在这一项不能填时才带。
+    """编辑器要的那一项:**除内部键(名字以 `_` 开头)外全透**。
+
+    一项是什么形状由 `graph.items` 一处说了算(见那里的 docstring:锚点、种类、名字 `title` / `node_label` 的
+    `{"zh", "en"}` 一对、节点是谁、ComfyUI 给这一格的说明、常用与否、JSON Schema 片段、`mask_property`……
+    `exposable` / `unexposable` 由这一层在**子图定义用了不止一处**时补上,见 app_form.unaddressable)。
+    这里**不再手抄一份键表**:抄的那份必然掉队 —— 曾经就是这样,ADR 0056 第一步的 `mask_property` 在 graph.items
+    里算了出来,却在这一跳被滤掉,宿主 `raw.get("mask_property")` 永远读到 None(见
+    tests/test_comfyui_plugin_workflow_library.py 里穿过这一跳的那条)。新加一格只要在 graph.items 里产出就到得了
+    宿主,不需要想起来改这里。
+
+    要挡的键在**产出那一侧**就不该有:这一层只挡内部键(`_` 开头,不是给宿主看的形状的一部分)。
     """
-    return {key: item[key] for key in ("key", "node", "input", "kind", "role", "media", "folder", "title", "node_title",
-                                       "node_label", "hint", "class_type", "common", "schema", "exposable", "unexposable")
-            if key in item}
+    return {key: value for key, value in item.items() if not key.startswith("_")}
 
 
 def live_graph(payload: dict[str, Any], locale: str) -> dict[str, Any]:

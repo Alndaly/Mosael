@@ -12,10 +12,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+import convert
 import node_catalog
 from comfy_http import Comfy
 from lines import ComfyError, say
-from workflow_import import _type_of
 from workflow_library import _choices
 
 #: 一次最多回多少类。
@@ -42,7 +42,7 @@ def describe(name: str, spec: dict[str, Any]) -> dict[str, Any]:
         defs = declared.get(section) if isinstance(declared.get(section), dict) else {}
         for input_name, definition in defs.items():
             options = definition[1] if isinstance(definition, list) and len(definition) > 1 and isinstance(definition[1], dict) else {}
-            entry: dict[str, Any] = {"name": input_name, "type": _type_of(definition), "required": section == "required"}
+            entry: dict[str, Any] = {"name": input_name, "type": convert.type_of(definition), "required": section == "required"}
             choices = _choices(definition)
             if choices is not None:
                 entry["options"] = [str(one) for one in choices[:MAX_OPTIONS]]

@@ -903,6 +903,10 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert all("node_label_en" not in one for one in body["items"]), \
         "那条「英文名另走一路」的设计被否掉了,不留兼容分支(ADR 0006)"
     assert by_key["seed"]["hint"] == ""
+    # 这里喂的是**打桩的插件回答**(上面那份 body),所以这一段只验宿主自己那一半:位置怎么规整。
+    # 插件那边算没算出来、有没有被 `workflow_library.app` 的 `_item_out` 滤掉,由
+    # tests/test_comfyui_plugin_workflow_library.py(`test_应用表单_蒙版属性穿过_item_out到得了宿主`)真的走一遍插件 ——
+    # 两边各测一半正是当初漏掉那一跳的形状。
     assert by_key["10.image"]["mask_property"] == 1, \
         "「蒙版属性」排第几位从插件原样透出(ADR 0056 第一步):沿 MASK 走出来的位置,界面那一组照它摆"
     assert by_key["seed"]["mask_property"] == 0, \

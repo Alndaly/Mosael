@@ -52,7 +52,6 @@ import diagnose
 import node_catalog
 from comfy_http import Comfy
 from lines import ComfyError, say
-from workflow_import import _type_of
 from workflow_library import _choices, live_graph
 
 #: 一批最多几条(再多就该拆成几批,或者从模板开始)。
@@ -439,7 +438,7 @@ class _Planner:
             raise _Bad(f"「{name}」的值要是文字、数或者真假", f"The value for “{name}” must be text, a number or a boolean")
         if definition is None:
             return value
-        kind = _type_of(definition)
+        kind = convert.type_of(definition)
         options = definition[1] if isinstance(definition, list) and len(definition) > 1 and isinstance(definition[1], dict) else {}
         if kind == diagnose.V3_COMBO:
             keys = [str(one.get("key")) for one in options.get("options") or [] if isinstance(one, dict) and one.get("key") is not None]
@@ -1017,7 +1016,7 @@ class _Planner:
             raise _Bad(f"#{ref} 的「{name}」已经连着线了", f"#{ref}.{name} is already wired")
         taken = [str(one.get("name")) for one in self.defs[layer].get("inputs") or [] if isinstance(one, dict)]
         unique = name if name not in taken else next(f"{name}_{n}" for n in range(1, 1000) if f"{name}_{n}" not in taken)
-        kind = "COMBO" if _choices(definition) is not None else _type_of(definition)
+        kind = "COMBO" if _choices(definition) is not None else convert.type_of(definition)
         current = self.current(raw, name)
         self.add_io(layer, "inputs", unique, kind, widget=True)
         for _, instance in self._instances(layer):

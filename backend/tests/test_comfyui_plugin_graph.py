@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import ast
 import json
 import sys
 from pathlib import Path
@@ -130,6 +131,28 @@ def test_普通必填输入不吃前缀那套(graph) -> None:
     node = {"class_type": "PlainNode", "inputs": {"model.a": ["9", 0]}}
     info = {"PlainNode": {"input": {"required": {"model": ["MODEL"]}}, "output": [], "output_name": []}}
     assert graph._missing_socket(node, info)
+
+
+def test_判这一格是不是autogrow不再懒装载整棵工作流库() -> None:
+    """`graph.py` **一个 import 都不许指向 workflow_import**(顶层和函数里都不许)。
+
+    判据本身只用纯函数(`convert.type_of`,convert 只依赖 lines)。此前 `required_input_present` 里写了一句
+    函数内 `from workflow_import import _type_of` —— 那条边把
+    `graph → workflow_import → workflow_library → models → app_form → graph` 圈成一个 **9 个模块的环**(ast 建图实测;
+    只删这一条边就回落到 base 的三个两模块小环),而且调一次这一句就从 4 个插件模块涨到 30 个:整棵工作流库
+    (workflow_import / workflow_library / run / models / tooling / app_form …26 个)都被拉起来。
+
+    这里不做全量 Tarjan(插件 import 图的结构检查是另一件事),只钉住那条被删掉的边:**别再加回来**。
+    """
+    tree = ast.parse((TOOLS / "graph.py").read_text(encoding="utf-8"))
+    reached: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            reached |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and not node.level:
+            reached.add((node.module or "").split(".")[0])
+    assert "workflow_import" not in reached, \
+        "graph 又 import 了 workflow_import(函数内也算):9 个模块的环和「一次判必填拉起整棵工作流库」都会回来"
 
 
 def test_模板格min是0时不算缺插口_会跑的那一支不被剪掉(graph) -> None:
@@ -1032,6 +1055,12 @@ def test_MASK输出没接到任何MASK输入时_不冒出蒙版槽位(graph) -> 
 
 
 # --- 蒙版属性(ADR 0056 第一步):沿 MASK 走,不认名字 -------------------------------------
+#
+# **这一节只到 `graph.items` 为止**(下面每一条都是直接调它)。`mask_property` 从这儿到宿主手里还要过
+# `workflow_library.app` 的 `_item_out` 那一跳 —— 那一跳曾经手抄一份键表、把这一格整格滤掉,而当时两边各测一半
+# (插件侧只测 graph.items、宿主侧喂打桩的回答)谁都没看见。穿过那一跳的用例在
+# tests/test_comfyui_plugin_workflow_library.py(`test_应用表单_蒙版属性穿过_item_out到得了宿主`)—— 改这一节的
+# 判据时它才是那个「宿主真的收得到」的证明。
 #
 # 维护者否掉的正是「按控件名硬编码一张表」:「这就必须要根据控件名称 一旦控件名称变了就出问题了」。所以下面这份
 # object_info 里**没有一个真实类名、真实控件名**:`MyCustomMaskGrow` 就是 GrowMask 改了类名、`grow_px` 就是它的

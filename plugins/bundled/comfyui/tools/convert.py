@@ -72,14 +72,35 @@ _AUDIO_UI_CLASSES = frozenset({"LoadAudio", "SaveAudio", "PreviewAudio", "SaveAu
 #: (`sampling_mode.temperature`、`values.a`……)。读 `widgets_values` 时它们是**占位置的 widget**,
 #: 而且位置就在模板那一格**后面** —— 排到最后会把后面的值全挤错位(真机:TextGenerate 的
 #: temperature/top_k/… 顶掉了 thinking/use_default_template/mtp)。
-_V3_MATCH, _V3_AUTOGROW, _V3_DYNAMIC = "COMFY_MATCHTYPE_V3", "COMFY_AUTOGROW_V3", "COMFY_DYNAMICCOMBO_V3"
+_V3_MATCH, _V3_DYNAMIC = "COMFY_MATCHTYPE_V3", "COMFY_DYNAMICCOMBO_V3"
+
+#: 能一格格往下长的一组插口(`COMFY_AUTOGROW_V3`):定义里是 `values` 一格,落到图上是 `values.a`、`values.b`……
+#: **这个名字只写在这一处**:`type_of` 按它认类型、`_TEMPLATE_INPUTS` 按它认模板、graph 的必填判定
+#: (`required_input_present`)和 diagnose 的展示分支(`V3_GROW`)都引它 —— 此前 graph 里另抄了一份字面量,
+#: 两处一起改才不会漏。
+AUTOGROW_TYPE = "COMFY_AUTOGROW_V3"
 
 #: **定义里只是模板、自己不是一个格子**的那几种输入(服务端 `_io.DYNAMIC_INPUT_LOOKUP` 里登记的就是这四个,
 #: MATCHTYPE 不在里面 —— 它是个普通插口)。它们的具体输入是展开出来的 `名字.子名`,必填性要看这次提交带了哪几格:
 #: `COMFY_AUTOGROW_V3` 的 `min` 是 0 时**一格都不必填**,可它在 `object_info` 里照样挂在 `required` 下 ——
 #: 真机「快速去水印」的 `TextEncodeQwenImage21.images` 就是这样,照着 `required` 判会把它误报成缺失。
 #: 所以这两种地方都要绕开它们:补缺省值时不能补(模板格的值不是字符串),提交前校验时不能当必填。
-_TEMPLATE_INPUTS = (_V3_AUTOGROW, _V3_DYNAMIC, "COMFY_DYNAMICSLOT_V3", "COMFY_DYNAMICGROUP_V3")
+_TEMPLATE_INPUTS = (AUTOGROW_TYPE, _V3_DYNAMIC, "COMFY_DYNAMICSLOT_V3", "COMFY_DYNAMICGROUP_V3")
+
+
+def type_of(definition: Any) -> str:
+    """一格输入在定义里的**类型名**:`definition[0]`(下拉是 `"COMBO"`,不是一份定义是 `"*"`)。
+
+    纯函数 —— 一个定义进去、一个字符串出来,不碰图也不碰 object_info,所以它住在这一层(叶子,只依赖 lines),
+    给 graph / canvas_edit / diagnose / node_types / workflow_import 一起用。此前它叫 `workflow_import._type_of`,
+    以私有名被四个模块跨模块 import;graph 还得在函数里懒装载它,于是
+    `graph → workflow_import → workflow_library → models → app_form → graph` 圈成一个 9 个模块的环 ——
+    调一次「这一格是不是 AUTOGROW」就把整棵工作流库拉起来。
+    """
+    if isinstance(definition, list) and definition:
+        kind = definition[0]
+        return "COMBO" if isinstance(kind, list) else str(kind)
+    return "*"
 
 
 def is_template(definition: Any) -> bool:
@@ -465,7 +486,7 @@ class _Converter:
                 if rest in found:
                     return found[rest]
             return None
-        if kind == _V3_AUTOGROW:
+        if kind == AUTOGROW_TYPE:
             template = ((options.get("template") or {}).get("input") or {})
             merged = {**(template.get("required") or {}), **(template.get("optional") or {})}
             return merged.get(rest)

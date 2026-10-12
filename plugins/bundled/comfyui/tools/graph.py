@@ -694,20 +694,25 @@ def _is_socket(definition: Any) -> bool:
 
 #: 能一格格往下长的一组插口(`COMFY_AUTOGROW_V3`):定义里是 `values` 一格,落到图上是
 #: `values.a`、`values.b`……(diagnose 认这个类型的另两种特殊输入是 MATCHTYPE / DYNAMICCOMBO,见那里)。
-AUTOGROW_TYPE = "COMFY_AUTOGROW_V3"
+#: 名字的**唯一一处**在 `convert.AUTOGROW_TYPE`(`type_of` 和 `_TEMPLATE_INPUTS` 都在那边引它);这里引它,
+#: 给 graph 和 diagnose(`V3_GROW = graph.AUTOGROW_TYPE`)一个稳定的名字,不另抄一份字面量。
+AUTOGROW_TYPE = convert.AUTOGROW_TYPE
 
 
 def required_input_present(inputs: dict[str, Any], name: str, definition: Any) -> bool:
     """一个必填输入算不算「接着 / 有值」:原样有这一格;AUTOGROW 落到图上是 `名字.a`、`名字.b`……
     的具体化,有任何一个也算 —— ComfyUI 就是这么认的。不认的话,ComfyMathExpression 这类节点的
     `values.a` 会被当成「必填的 values 没接上」,它所在的整支上游闭包被剪掉(真机:
-    minimax-text-image-2-video 因此从模型目录里消失)。**诊断用的也是这一条**(diagnose)。"""
+    minimax-text-image-2-video 因此从模型目录里消失)。**诊断用的也是这一条**(diagnose)。
+
+    判据只用一个纯函数(`convert.type_of`,和这一条一样住在叶子那一层)——这里**不再函数内懒装载
+    `workflow_import`**:那条边把 `graph → workflow_import → workflow_library → models → app_form → graph`
+    圈成一个 9 个模块的环,调一次这一句就把整棵工作流库拉起来(`test_comfyui_plugin_graph.py` 里那条结构检查
+    钉着「graph 不再 import workflow_import」)。
+    """
     if name in inputs:
         return True
-    #: 懒装载:顶层 import workflow_import 会圈出 graph → workflow_import → run → models → app_form → graph。
-    from workflow_import import _type_of
-
-    return _type_of(definition) == AUTOGROW_TYPE and any(key.startswith(f"{name}.") for key in inputs)
+    return convert.type_of(definition) == AUTOGROW_TYPE and any(key.startswith(f"{name}.") for key in inputs)
 
 
 def _required_missing(inputs: dict[str, Any], name: str, definition: Any) -> bool:
@@ -747,7 +752,7 @@ def _template_needs_rows(definition: Any) -> bool:
     交上去不带任何一行它照样收 —— 真机「快速去水印」的 `TextEncodeQwenImage21.images`(min 0)就是这样,
     按 `required` 判会误报。min > 0 才是真缺。
     """
-    if not isinstance(definition, list) or not definition or definition[0] != convert._V3_AUTOGROW:  # noqa: SLF001
+    if not isinstance(definition, list) or not definition or definition[0] != AUTOGROW_TYPE:
         return False
     options = definition[1] if len(definition) > 1 and isinstance(definition[1], dict) else {}
     template = options.get("template") if isinstance(options.get("template"), dict) else {}

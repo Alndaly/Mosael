@@ -36,7 +36,6 @@ import node_catalog
 from comfy_http import Comfy
 from families import BRANCHES
 from lines import ComfyError, say
-from workflow_import import _type_of
 from workflow_library import VIRTUAL_NODES, _choices, _packs, live_graph
 
 #: 报错原文最多读多少字(ComfyUI 的「Value not in list」带着整张可选值列表)。
@@ -103,7 +102,7 @@ def _output_type(spec: dict[str, Any], slot: int) -> Any:
 
 def _input_type(definition: Any) -> str:
     """这一格收什么类型。跟着连进来的走的(V3 的 MATCHTYPE)按模板里写的那几种,没写就是什么都收。"""
-    kind = _type_of(definition)
+    kind = convert.type_of(definition)
     if kind == V3_MATCH:
         allowed = (_options(definition).get("template") or {}).get("allowed_types")
         return str(allowed) if isinstance(allowed, str) and allowed.strip() else "*"
@@ -204,7 +203,7 @@ def _value_findings(found: _Findings, ref: str, node: dict[str, Any], spec: dict
     required, optional = _definitions(spec)
     inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
     for name, definition in required.items():
-        kind_of_input = _type_of(definition)
+        kind_of_input = convert.type_of(definition)
         if kind_of_input == V3_COMBO or not (_is_socket(definition) or kind_of_input == V3_MATCH):
             continue
         present = graph.required_input_present(inputs, name, definition)

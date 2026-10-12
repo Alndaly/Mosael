@@ -345,13 +345,6 @@ def _literal(value: Any) -> bool:
     return isinstance(value, (str, int, float, bool)) or (isinstance(value, dict) and set(value) == {"__value__"})
 
 
-def _type_of(definition: Any) -> str:
-    if isinstance(definition, list) and definition:
-        kind = definition[0]
-        return "COMBO" if isinstance(kind, list) else str(kind)
-    return "*"
-
-
 def _unwrap(value: Any) -> Any:
     return value["__value__"] if isinstance(value, dict) and set(value) == {"__value__"} else value
 
@@ -423,14 +416,14 @@ def api_to_ui(api: dict[str, Any], object_info: dict[str, Any], locale: str) -> 
             value = inputs.get(name)
             if converter._is_widget(definition):  # noqa: SLF001
                 if _is_link(value, api):
-                    entries.append({"name": name, "type": _type_of(definition), "widget": {"name": name}, "link": None,
+                    entries.append({"name": name, "type": convert.type_of(definition), "widget": {"name": name}, "link": None,
                                     "_from": value})
             elif _literal(value):
                 # 定义里不是常见 widget 类型、API 里却是一个值(新版的 COMFY_DYNAMICCOMBO_V3、自定义 widget):前端给它建的是
                 # widget —— 标成 widget,值才排得进 widgets_values
-                entries.append({"name": name, "type": _type_of(definition), "widget": {"name": name}, "link": None})
+                entries.append({"name": name, "type": convert.type_of(definition), "widget": {"name": name}, "link": None})
             else:
-                entries.append({"name": name, "type": _type_of(definition), "link": None,
+                entries.append({"name": name, "type": convert.type_of(definition), "link": None,
                                 "_from": value if _is_link(value, api) else None})
         for name, value in inputs.items():
             if name in known:
@@ -460,7 +453,7 @@ def api_to_ui(api: dict[str, Any], object_info: dict[str, Any], locale: str) -> 
                 values.append(str(controls.get(name) or "fixed"))
         types = spec.get("output") if spec and isinstance(spec.get("output"), list) else []
         names = spec.get("output_name") if spec and isinstance(spec.get("output_name"), list) else []
-        outputs = [{"name": str(names[index]) if index < len(names) else _type_of([kind]), "type": _type_of([kind]),
+        outputs = [{"name": str(names[index]) if index < len(names) else convert.type_of([kind]), "type": convert.type_of([kind]),
                     "links": []} for index, kind in enumerate(types)]
         while len(outputs) < consumers.get(key, 0):
             outputs.append({"name": f"output {len(outputs)}", "type": "*", "links": []})

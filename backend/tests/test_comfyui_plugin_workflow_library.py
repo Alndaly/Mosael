@@ -435,3 +435,94 @@ def test_删除文件夹_里面还有文件就不动_现查那台机器不照旧
     assert not [call for call in comfy.state.calls if call[0] == "MOVE"]
     with pytest.raises(ComfyError, match="已经没有文件夹"):
         module.trash_folder({"path": "不存在"}, client, "zh")
+
+
+# --- 应用表单的 `items`,以及它穿过「插件 → 宿主」的那一跳(ADR 0056 第一步) --------------------------
+#
+# 「蒙版属性」那一格曾经整格掉在两半之间:插件侧 test_comfyui_plugin_graph.py 只测到 `graph.items`(**它确实算出了**
+# `mask_property`),宿主侧 test_plugin_workflow_library.py 喂的是**打桩的插件回答**(**它确实把位置规整成了整数**)。
+# 中间那一跳 —— `workflow_library.app` 里那份手抄的键表(`_item_out`)—— 没人测,于是 `mask_property` 在那里被滤掉,
+# 宿主 `raw.get("mask_property")` 永远读到 None、「蒙版属性」那一组永远是空的。下面这几条**真的经过 `_item_out`**。
+
+#: 蒙版这一路的节点定义(裁到这条线要用的那几格;MASK 输入 / 输出照 object_info 声明,见 graph.mask_outputs)。
+MASK_INFO: dict[str, Any] = {
+    "LoadImageMask": {"input": {"required": {"image": [["mask.png"], {"image_upload": True}],
+                                             "channel": [["alpha", "red", "green", "blue"]]}},
+                      "output": ["MASK"]},
+    "LoadImage": {"input": {"required": {"image": [["a.png"], {"image_upload": True}]}}, "output": ["IMAGE"]},
+    "MyCustomMaskGrow": {"input": {"required": {"mask": ["MASK"],
+                                                "grow_px": ["INT", {"default": 6, "min": 0, "max": 64}]}},
+                         "output": ["MASK"]},
+    "MyCustomMaskFeather": {"input": {"required": {"mask": ["MASK"], "softness": ["FLOAT", {"default": 3.0}]}},
+                            "output": ["MASK"]},
+    "VAEEncodeForInpaint": {"input": {"required": {"pixels": ["IMAGE"], "vae": ["VAE"], "mask": ["MASK"],
+                                                   "grow_mask_by": ["INT", {"default": 6, "min": 0, "max": 64}]}},
+                            "output": ["LATENT"]},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["a.safetensors"]]}}, "output": ["MODEL", "CLIP", "VAE"]},
+    "CLIPTextEncode": {"input": {"required": {"text": ["STRING", {"multiline": True}], "clip": ["CLIP"]}},
+                       "output": ["CONDITIONING"]},
+    "KSampler": {"input": {"required": {"model": ["MODEL"], "positive": ["CONDITIONING"], "negative": ["CONDITIONING"],
+                                        "latent_image": ["LATENT"], "seed": ["INT", {"default": 0}],
+                                        "steps": ["INT", {"default": 20}]}},
+                 "output": ["LATENT"]},
+    "VAEDecode": {"input": {"required": {"samples": ["LATENT"], "vae": ["VAE"]}}, "output": ["IMAGE"]},
+    "SaveImage": {"input": {"required": {"images": ["IMAGE"], "filename_prefix": ["STRING", {"default": "ComfyUI"}]}},
+                  "output": [], "output_node": True},
+}
+
+#: 一条蒙版这一路的图(API 格式,和 test_comfyui_plugin_graph.py 的 MASK_API 同一个形状):读蒙版(11)→ 外扩(30)
+#: → 羽化(20)→ 送进采样器的那一格(50);参考图(10)接的是 IMAGE,不在这条线上。类名和控件名都是编的 ——
+#: 认的是连线上的类型(见 graph.mask_path),所以这条用例同时钉住「没有硬编码名字」。
+MASK_API: dict[str, Any] = {
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}},
+    "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a cat", "clip": ["4", 1]}},
+    "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry", "clip": ["4", 1]}},
+    "10": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+    "11": {"class_type": "LoadImageMask", "inputs": {"image": "mask.png", "channel": "alpha"}},
+    "30": {"class_type": "MyCustomMaskGrow", "inputs": {"mask": ["11", 0], "grow_px": 8}},
+    "20": {"class_type": "MyCustomMaskFeather", "inputs": {"mask": ["30", 0], "softness": 2.0}},
+    "50": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["10", 0], "vae": ["4", 2],
+                                                           "mask": ["20", 0], "grow_mask_by": 6}},
+    "3": {"class_type": "KSampler", "inputs": {"model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0],
+                                               "latent_image": ["50", 0], "seed": 42, "steps": 20}},
+    "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+    "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "mosael"}},
+}
+
+
+def _app(library, comfy, path: str) -> dict[str, Any]:
+    """插件侧对着假 ComfyUI 读一张应用表单(工作流库的 `app` op)—— 回答就是宿主拿到的那份。"""
+    module, Comfy = library
+    return module.app({"op": "app", "path": path}, Comfy(comfy.url), "zh")
+
+
+def test_应用表单_蒙版属性穿过_item_out到得了宿主(library, comfy) -> None:
+    """`graph.items` 算出来的 `mask_property` 得**原样穿过 `_item_out`** 到宿主手里。
+
+    这就是此前没人测的那一跳(见上面的说明):两边各测一半、中间那份手抄的键表掉队。这一条走的是
+    `workflow_library.app`(真的经过 `_item_out`),位置正好是沿 MASK 这条线走出来的先后(来源在前),
+    而且**不是**列表本身的顺序(提示词、素材、常用程度)。"""
+    comfy.state.object_info = json.loads(json.dumps(MASK_INFO))
+    comfy.state.workflows["蒙版/羽化.json"] = json.loads(json.dumps(MASK_API))
+    out = _app(library, comfy, "蒙版/羽化.json")
+    by_key = {one["key"]: one for one in out["items"]}
+    at = {key: one["mask_property"] for key, one in by_key.items() if "mask_property" in one}
+    assert at == {"11.image": 1, "30.grow_px": 2, "20.softness": 3, "50.grow_mask_by": 4}, \
+        "沿线走出来的第几位原样到得了宿主(被中间那一跳滤掉的话这里是空的)"
+    assert all(isinstance(value, int) and not isinstance(value, bool) and value > 0 for value in at.values()), \
+        "位置是 1 起数的正整数 —— 宿主只认这一种形状(写 true 那种不当成第 1 位)"
+    assert "10.image" in by_key and "mask_property" not in by_key["10.image"], "参考图不在蒙版这条线上"
+    assert [one["key"] for one in out["items"] if "mask_property" in one] != sorted(at, key=at.get), \
+        "这一列本身的顺序(提示词、素材、常用程度)不是这条线的先后 —— 界面那一组照给的位次摆"
+
+
+def test_应用表单_一项的形状不再手抄键表_新加一格照样到得了宿主(library) -> None:
+    """`_item_out` 这一跳的形状:**除内部键(`_` 开头)外全透**。
+
+    手抄的键表必然掉队 —— 它已经掉过一次(`mask_property`,见上一条)。这一条用一格**今天还不存在**的字段钉住:
+    以后在 `graph.items` 里新产出一格,不用想起来改这一跳就到得了宿主。"""
+    module, _ = library
+    item = {"key": "11.image", "node": "11", "input": "image", "kind": "media", "role": "mask", "media": "mask",
+            "title": {"zh": "蒙版", "en": "Mask"}, "mask_property": 1,
+            "以后 graph.items 新加的一格": {"zh": "新", "en": "new"}, "_内部": "不是给宿主的形状"}
+    assert module._item_out(item) == {key: value for key, value in item.items() if key != "_内部"}
