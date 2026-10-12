@@ -437,12 +437,21 @@ function WorkspaceSwitcher({
             return (
               <ContextMenu key={ws.id}>
                 <ContextMenuTrigger asChild>
-                  <div className={cn("flex items-center gap-1 rounded-md pr-1", ws.id === workspaceId && "bg-accent")}>
+                  {/*: 行那一层的样子(圆角、hover 底色、选中底色)贴在最外层 —— 铺满整行才叫「指到 / 选中了这一行」,
+                     包括右边那两颗按钮。此前 hover 底色来自里面的 MenuItem,只盖住名字那一段,铅笔和垃圾桶落在高亮外面
+                     (维护者截图)。同一类问题在会话列表里的做法见 features/ai-studio/SessionList.tsx 的 `chrome`。
+                     这一格**没有 onClick**:切工作区只有 MenuItem 那一颗负责,两颗 IconButton 是它的兄弟,点它们不会连带切走。 */}
+                  <div data-workspace-row className={cn("flex items-center gap-1 rounded-md pr-1 transition-colors duration-100 hover:bg-secondary has-[:focus-visible]:bg-secondary", ws.id === workspaceId && "bg-accent hover:bg-accent has-[:focus-visible]:bg-accent")}>
                     <MenuItem
-                      className="min-w-0 flex-1"
+                      //: 底色由上面那一格给,这一颗**不再自己画一层**。MENU_ITEM 里那几条定死了 hover / focus / data-highlighted,
+                      //: 用同名变体压回透明 —— 它照旧给圆角与内边距(键盘走到这一行时的焦点圈还落在名字这一颗上)。
+                      //: 压在这里而不是改 menu.tsx 的默认:别处的菜单没有外层那一格,改了它们就一起没了悬停反馈。
+                      className="min-w-0 flex-1 hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
                       role="menuitemradio"
                       checked={ws.id === workspaceId}
-                      icon={<span className="grid size-4 place-items-center rounded-[3px] border border-border bg-panel text-[10px] font-semibold text-primary">{ws.name.slice(0, 1)}</span>}
+                      //: leading-none 不能省:图标槽的 leading-5 会把 10px 的字放进一个 20px 的行盒里,首字因此偏下 3px
+                      //: (真机上量过:CJK「默」和拉丁「d」都是 +3px;加上它之后是 0)。见 components/ui/menu.tsx 的图标槽。
+                      icon={<span className="grid size-4 place-items-center rounded-[3px] border border-border bg-panel text-[10px] font-semibold leading-none text-primary">{ws.name.slice(0, 1)}</span>}
                       label={ws.name}
                       truncate
                       //: 别人的工作区写出我在里面是什么角色:新用户的第一个工作区和被拉进的团队工作区常常都叫「默认工作区」,

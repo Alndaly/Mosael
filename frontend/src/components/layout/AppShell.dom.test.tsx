@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { readHint } from "@/test/hint";
@@ -162,3 +162,96 @@ it("只读成员:项目切换器里「新建项目」是灰的并说为什么,�
   expect(switchTo).toHaveBeenCalledWith("b");
   expect(create).not.toHaveBeenCalled();
 });
+
+/**
+ * 工作区切换器里的一行(维护者截图:悬停底色只盖住名字,右边铅笔和垃圾桶落在高亮外面)。
+ *
+ * 行那一层的样子(圆角、悬停底色、选中底色)全写在**最外层**那一格 `[data-workspace-row]` 上,
+ * 里面的 MenuItem 拿同名变体把它自己那层压回透明。布局类是照 class 判的 —— jsdom 没有排版,
+ * 量不出来;真的量到过的是首字那 3px(见下面那条),量法写在 components/ui/menu.tsx 的图标槽上。
+ */
+const WORKSPACES = [
+  { id: "a", name: "Studio", role: "owner" },
+  { id: "b", name: "Second studio", role: "owner" },
+] as React.ComponentProps<typeof AppShell>["workspaces"];
+
+async function openWorkspaceMenu(overrides: Partial<React.ComponentProps<typeof AppShell>> = {}) {
+  //: 一条用例里要开三次菜单(三颗按钮各一次),上一次那套外壳得先拆掉 —— 不拆的话
+  //: 侧栏里会有两个「workspaceSwitch」按钮。
+  cleanup();
+  const select = vi.fn();
+  mount({ workspaceId: "a", workspaces: WORKSPACES, onSelectWorkspace: select, ...overrides });
+  fireEvent.click(screen.getByRole("button", { name: "workspaceSwitch" }));
+  const popup = await screen.findByRole("menu", { name: "workspaceSwitch" });
+  /** 菜单里的搜索框留在注册表里才叫「顺带检查过」:它在行那一层之外,不该被这一改牵连。 */
+  const search = within(popup).getByRole("textbox", { name: "workspaceSearch" });
+  expect(search).toBeVisible();
+  expect(within(popup).getByRole("menuitem", { name: "workspaceNew" })).toBeVisible();
+  return { popup, select };
+}
+
+it("悬停底色铺在整行那一格上,而不是名字那一段", async () => {
+  const { popup } = await openWorkspaceMenu();
+  const rows = within(popup).getAllByRole("menuitemradio");
+  expect(rows).toHaveLength(2);
+  const row = rows[1]!.closest("[data-workspace-row]")!;
+  // 整行那一格:悬停底色在它身上(右边的铅笔和垃圾桶是它的孩子,一起被盖住)。
+  expect(row).toHaveClass("hover:bg-secondary");
+  expect(within(row as HTMLElement).getByRole("button", { name: "rename: Second studio" })).toBeVisible();
+  expect(within(row as HTMLElement).getByRole("button", { name: "delete: Second studio" })).toBeVisible();
+  // 名字那一颗自己**不画**底色:两条都在就会叠出第二层(而且只盖住名字那一段,就是截图里那个样子)。
+  expect(rows[1]).not.toHaveClass("hover:bg-secondary");
+  expect(rows[1]).toHaveClass("hover:bg-transparent");
+  // 键盘走到这一行时也一样:一层,在外层。
+  expect(row).toHaveClass("has-[:focus-visible]:bg-secondary");
+  expect(rows[1]).toHaveClass("focus:bg-transparent");
+});
+
+it("选中那一行的底色在外层那一格上,和悬停那一层不是同一条", async () => {
+  const { popup } = await openWorkspaceMenu();
+  const rows = within(popup).getAllByRole("menuitemradio");
+  const selected = rows[0]!.closest("[data-workspace-row]")!;
+  const other = rows[1]!.closest("[data-workspace-row]")!;
+  expect(selected).toHaveClass("bg-accent");
+  expect(other).not.toHaveClass("bg-accent");
+  // 选中比悬停重一档(仓库既有的一对:选中 bg-accent、悬停 bg-secondary)——
+  // 选中的那一行悬停时不许掉到悬停那一档上。
+  expect(selected).toHaveClass("hover:bg-accent");
+  expect(selected).not.toHaveClass("hover:bg-secondary");
+  // 而它里面的名字那一颗,两种底色都不画。
+  expect(rows[0]).not.toHaveClass("bg-accent");
+  expect(rows[0]).not.toHaveClass("hover:bg-secondary");
+});
+
+it("点名字切工作区、点铅笔开改名、点垃圾桶开删除 —— 三颗互不牵连", async () => {
+  const first = await openWorkspaceMenu();
+  fireEvent.click(within(first.popup).getByRole("button", { name: "rename: Studio" }));
+  await waitFor(() => expect(screen.getByRole("dialog", { name: "renameWorkspace" })).toBeVisible());
+  // 铅笔只开改名:没顺手把工作区切走。
+  expect(first.select).not.toHaveBeenCalled();
+  fireEvent.click(within(screen.getByRole("dialog", { name: "renameWorkspace" })).getByRole("button", { name: "cancel" }));
+
+  const second = await openWorkspaceMenu();
+  fireEvent.click(within(second.popup).getByRole("button", { name: "delete: Studio" }));
+  await waitFor(() => expect(screen.getByRole("alertdialog", { name: "deleteWorkspace" })).toBeVisible());
+  expect(second.select).not.toHaveBeenCalled();
+  fireEvent.click(within(screen.getByRole("alertdialog", { name: "deleteWorkspace" })).getByRole("button", { name: "cancel" }));
+
+  const third = await openWorkspaceMenu();
+  fireEvent.click(within(third.popup).getByRole("menuitemradio", { name: "Second studio" }));
+  // 名字那一颗才是「切到那个工作区」:只调一次。
+  expect(third.select).toHaveBeenCalledTimes(1);
+  expect(third.select).toHaveBeenCalledWith("b");
+});
+
+//: 真机上量到的:图标槽是 leading-5 的 20px 行盒,10px 的首字放进去偏下 3px(CJK「默」和拉丁「d」都是);
+//: 加上 leading-none 之后是 0。只量到一次,之后按 class 守着它。
+it("工作区头像那一格:首字在正中", async () => {
+  const { popup } = await openWorkspaceMenu();
+  const avatar = popup.querySelector('[data-menu-icon] > span')!;
+  expect(avatar.textContent).toBe("S");
+  expect(avatar).toHaveClass("grid", "size-4", "place-items-center", "leading-none", "text-[10px]");
+  // 行盒就是字号本身,不再是被继承来的 leading-5(那正是偏下 3px 的来源)。
+  expect(avatar).not.toHaveClass("leading-5");
+});
+
