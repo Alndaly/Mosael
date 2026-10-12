@@ -42,7 +42,9 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const query = useQuery({
     queryKey: ["notifications", workspaceId],
     queryFn: () => listNotifications(workspaceId),
-    refetchInterval: 30000,
+    // 站内通知没有工作区级推送通道。铃铛常驻顶栏,由它用一条轻量查询接住智能体主动发来的通知。
+    // 30 秒对“主动提醒”已经等同于没提醒:人通常会先点铃,于是看起来又像只有点铃才刷新。
+    refetchInterval: 5000,
     refetchOnWindowFocus: true,
     //: 桌面壳的窗口被原生视图(工作台)盖住、或应用在后台时,react-query 默认按 unfocused 停轮询 ——
     //: 而 Electron 的遮挡不保证把 visibilitychange 发回来,轮询就永远停着:智能体推的通知,
@@ -84,6 +86,28 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const pendingInvites = invitations.data?.invitations ?? [];
 
   const items = query.data?.items ?? [];
+  const knownItems = React.useRef<{ workspaceId: string; ids: Set<string> } | null>(null);
+
+  React.useEffect(() => {
+    if (!query.data) return;
+    const current = new Set(query.data.items.map((item) => item.id));
+    const known = knownItems.current;
+    // 首次挂载和切换工作区只建立基线:旧通知不能在每次启动时重新提醒一遍。
+    if (!known || known.workspaceId !== workspaceId) {
+      knownItems.current = { workspaceId, ids: current };
+      return;
+    }
+    // 接口按新到旧返回。倒过来播报,同一次轮询收到多条时仍按发生顺序出现。
+    const arrived = query.data.items
+      .filter((item) => !item.read_at && !known.ids.has(item.id))
+      .reverse();
+    knownItems.current = { workspaceId, ids: current };
+    for (const item of arrived) {
+      toast.message(item.title, { description: item.body || undefined });
+      // 窗口在前台时主进程会略过系统通知,此时上面的轻提示已经可见；应用在后台时由系统接力。
+      window.mosaelDesktop?.notifyTask?.({ title: item.title, body: item.body || "" });
+    }
+  }, [query.data, workspaceId]);
   //: 角标 = 未读通知 + 待处理邀请:两样都等着人看。但「全部已读」只管通知 —— 邀请不是读了就算,
   //: 得接受或拒绝;此前按角标判,只有邀请时也摆着它,点了数字纹丝不动。
   const unreadNotifications = query.data?.unread ?? 0;
