@@ -51,6 +51,20 @@ import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, slotColumns, type FrameSlot, type S
  * 省略号出来。`content-center` 只把格子里那一行**竖着**居中,横着照旧铺满 —— 图片那种要填满的
  * 内容不受影响(它本来就是 `absolute inset-0`)。
  *
+ * **居中在那一行上做,不在这一格上做**(维护者截图:「参考图」那一格是 `+ 图一` **整行靠左**)。
+ * 这一格横着铺满那一行之后,那一行自己用 `justify-center` 把「图标 + 名字」这一组摆在中间
+ * (见 EmptyTile)。这是**唯一**两头都占的写法:`justify-items: center` 在这一格上会退回上面那个
+ * max-content 的坑(截断失效 + 两边硬裁),而只写 `justify-center` 在这一格上也一样 —— 它居中的是
+ * **网格轨道里的那一行**(那行本来就铺满,没有可挪的余量),不是在居**行里的两个子项**。
+ *
+ * 这一轮的实测(真 Chromium,面板 300px,同一份探针里还挂了一栏把格子改回 `place-items-center` 的对照):
+ *
+ * | 那一格 | 那一行 | `图一` 左右留白 | 长名字 `Optional Load Image : … #10` |
+ * | --- | --- | --- | --- |
+ * | 288px(一列) | 286px | 各 **123px** | 那一行 286px、标题 256/274 → 省略号 |
+ * | 92px(三列并排) | 90px | 各 **25px** | 那一行 90px、标题 60/274 → 省略号 |
+ * | 92px(对照:`place-items-center`) | **303.94px** | 各 −99.97px(两头都露出去) | 标题 274/274 → **没有省略号**,两头硬裁 |
+ *
  * `min-w-0` 留着:`Truncate` 的父级得能收缩,这条进 docs/CONVENTIONS 的「字段名 / 表单名外面
  * 那一层必须能收缩」。
  */
@@ -134,7 +148,9 @@ function Tile({
       <div className="relative" data-slot-name={name || undefined}>
         {isAudio ? (
           <button type="button" className={`${TILE} cursor-zoom-in p-0`}>
-            <span className="flex min-w-0 items-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
+            {/* 和空槽那一格同一件事(见 EmptyTile):图标 + 名字这一组由**这一行自己**居中,格子照旧
+                铺满它 —— 音频那一格的名字是文件名,更长,但裁法一样:`Truncate` 收缩、省略号收尾。 */}
+            <span className="flex min-w-0 items-center justify-center gap-1.5 px-2 text-ui-xs font-semibold text-muted-foreground">
               <Music size={13} className="shrink-0" />
               <Truncate>{slot.assetName}</Truncate>
             </span>
@@ -250,8 +266,18 @@ function EmptyTile({
   }
   return (
     <button type="button" disabled={disabled} className={className} onClick={onActivate}>
-      {/* 图标和名字**排一行**。竖着摞的时候,两者之间那道空白比它俩加起来还高。 */}
-      <span className="flex min-w-0 items-center gap-1 px-1.5">
+      {/* 图标和名字**排一行**,而且这一组在这一格里**居中**。竖着摞的时候,两者之间那道空白比它俩加起来还高。
+       *
+       * 居中由**这一行自己**做(`justify-center`),不是由那一格做(`justify-items: center` 会把这一行按
+       * max-content 定宽,截断就永远不触发 —— 见 TILE 上头那段)。这一行是那一格的网格子项、照旧被 stretch
+       * 铺满,所以它的宽度等于格子宽:`Truncate` 拿到正确的 `clientWidth`,名字长了照旧出省略号。
+       * 短名字时多出来的空位由 `justify-center` 分给两边(真 Chromium:一列那一格 288px 时 `图一` 左右
+       * 留白**各 123px**;三列并排、格子 92px 时**各 25px**)。
+       *
+       * 名字长到放不下时这一行**不溢出**:`Truncate` 带 `min-w-0`、`flex-shrink` 是默认的 1,它一路收缩到
+       * 剩下的宽度(图标 `shrink-0` 不动),自由空间正好为零 —— 居中没有可以挪的余量,也就不会两头露出去。
+       */}
+      <span className="flex min-w-0 items-center justify-center gap-1 px-1.5">
         <span className="shrink-0">{icon}</span>
         <Truncate>{label}</Truncate>
       </span>

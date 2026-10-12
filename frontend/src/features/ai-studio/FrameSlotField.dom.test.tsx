@@ -159,6 +159,60 @@ describe("参考图槽位", () => {
     expect((await screen.findByRole("tooltip")).textContent).toBe(NAME);
   });
 
+  /**
+   * 维护者截图(「引擎参数」里的「参考图」那一格):`+ 图一` **整行靠左**。这种格子里那一组应该居中。
+   *
+   * 居中**只能由那一行自己做**(`justify-center`),不能由那一格做 —— `justify-items: center`
+   * (`place-items-center` 的那一半)会把那一行按 max-content 定宽,上一轮就是这么把截断弄丢的(见上一条)。
+   * 所以这一条同时钉住两头:那一行带着居中,而且**照旧**是能收缩的 `flex`(`min-w-0` 在里面,
+   * `Truncate` 才拿得到宽度)。
+   *
+   * jsdom 没有排版,这里按源码判(和 design/truncateNeedsShrinkableBox 同一种做法);真 Chromium 量到的数
+   * (面板 300px,写在 FrameSlotField.tsx 的 TILE 上头):一列那一格 288px、`图一` 左右留白**各 123px**;
+   * 三列并排时那一格 92px、左右**各 25px**;长名字时那一行 90px(正好是格子宽)、标题 60/274 被截、省略号出来。
+   */
+  it("那一组在格子里居中 —— 但居中写在那一行上,不写在那一格上", () => {
+    mount(<FrameSlotField role="reference_image" slots={[{ ...EMPTY_SLOT }]} limit={1} names={["图一"]} onChange={vi.fn()} workspaceId="w" />);
+    const label = screen.getByText("图一");
+    const row = label.parentElement!;
+    const tile = row.closest("button")!;
+    //: 那一格:纵向居中 + 子项照旧 stretch(那一行铺满格子)。居中**不许**写在这里 —— 那会退回 max-content 的坑。
+    expect(tile.className).toContain("content-center");
+    expect(tile.className).toContain("min-w-0");
+    expect(tile.className).not.toContain("place-items-center");
+    expect(tile.className).not.toContain("justify-items-center");
+    //: 那一行:自己横向居中,而且仍然是一个能收缩的 flex(`Truncate` 的父级得能收缩)。
+    expect(row.className).toContain("flex");
+    expect(row.className).toContain("justify-center");
+    expect(row.className).toContain("min-w-0");
+    //: 居中不许把上一轮的守卫弄丢:名字照旧走 `Truncate`,图标照旧不许被挤扁。
+    expect(label.className).toContain("truncate");
+    expect((row.children[0] as HTMLElement).className).toContain("shrink-0");
+  });
+
+  /**
+   * 音频那一格是同一个形状(图标 + 文件名,一样的 `TILE`),所以同一件事也在那儿成立:
+   * 那一组居中、文件名长了照旧截断。文件名比槽位名更长,这一格最先被撑爆。
+   */
+  it("音频那一格同样:那一组居中,文件名照旧截断", () => {
+    mount(
+      <FrameSlotField
+        role="reference_audio"
+        slots={[{ url: "", assetId: "s1", assetName: "a-very-long-audio-file-name-that-should-be-truncated.wav" }]}
+        limit={1}
+        onChange={vi.fn()}
+        workspaceId="w"
+      />,
+    );
+    const label = screen.getByText("a-very-long-audio-file-name-that-should-be-truncated.wav");
+    const row = label.parentElement!;
+    expect(row.className).toContain("flex");
+    expect(row.className).toContain("justify-center");
+    expect(row.className).toContain("min-w-0");
+    expect(label.className).toContain("truncate");
+    expect(row.closest("button")!.className).toContain("content-center");
+  });
+
   it("加到上限就不再给加号 —— 上限是接口的硬约束,不是建议", () => {
     const { container } = mount(
       <FrameSlotField
