@@ -239,10 +239,12 @@ def test_能填的项_ComfyUI给的名字和说明_hidden的不列_advanced的�
     assert [(one["node"], one["label"]) for one in outputs] == [("9", {"zh": "保存图像", "en": "SaveImage"})]
 
 
-def test_每项另带节点名的英文那份_显示按语言_搜索才有英文名可比(plugin) -> None:
-    """编辑器左边那一列显示的是按语言挑好的 `node_label`(中文界面显示「花式模糊」),而画布上写的是 ComfyUI 的英文名
-    `Fancy Blur` —— 英文那份另带一路上(`node_label_en`),界面搜索才搜得到(维护者:「节点名称明明是 Load Image,
-    搜索这个却搜索不到」)。图级的项(种子、尺寸、跑几遍)没有节点,不带。"""
+def test_每项交回的节点名是一对_不再另带英文那份(plugin) -> None:
+    """节点名是**一组多语言的事实**:`node_label` 是 `{"zh", "en"}` 一对,插件把两种语言一起交上去、自己不挑一种。
+    此前另带过一条 `node_label_en`(挑一条显示、英文名另走一路),那个设计被否掉了 —— 挑语言是界面的事
+    (见 frontend lib/pickLabel:按界面语言挑一句显示,搜索拿表里全部语言去比)。图级的项(种子、尺寸、跑几遍)没有节点,不带。
+
+    本地化名字(花式模糊)和英文名(Fancy Blur)不是同一个词的那种最要看这一条:两种语言都在同一张表里。"""
     graph, _, _ = plugin
     sys.path.insert(0, str(TOOLS))
     try:
@@ -251,17 +253,16 @@ def test_每项另带节点名的英文那份_显示按语言_搜索才有英文
         sys.path.remove(str(TOOLS))
     info = labels.with_i18n({**OBJECT_INFO, **NAMED_INFO}, NAMED_I18N)
     found = {one["key"]: one for one in graph.items(_named_api(), info, {})}
-    assert found["20.blur_radius"]["node_label"] == {"zh": "花式模糊", "en": "Fancy Blur"}, "显示用的那条按语言挑"
-    assert found["20.blur_radius"]["node_label_en"] == "Fancy Blur", \
-        "本地化名字(花式模糊)和英文名(Fancy Blur)不是同一个词:英文那份照样在"
-    assert found["13.lora_name"]["node_label_en"] == "Lora Loader 🐍", \
-        "object_info 只有 display_name、没有 zh/i18n 中文:两种语言都是它,英文那份也是它(不是类名)"
-    assert found["4.ckpt_name"]["node_label_en"] == "CheckpointLoaderSimple", \
-        "英文只有类名可比时就是类名(和 labels.node_name 的 en 一致)"
-    assert found["6.text"]["node_label_en"] == "CLIPTextEncode"
-    assert all(one["node_label_en"] == one["node_label"]["en"] for one in found.values() if one.get("node_label")), \
-        "每一项的英文那份就是 labels.node_name 的 en,不另推一套"
-    assert all("node_label_en" not in one for one in found.values() if one["node"] == ""), \
+    assert found["20.blur_radius"]["node_label"] == {"zh": "花式模糊", "en": "Fancy Blur"}, \
+        "一对原样交上去:显示挑哪一条、搜索比哪几条都是界面的事"
+    assert found["13.lora_name"]["node_label"] == {"zh": "Lora Loader 🐍", "en": "Lora Loader 🐍"}, \
+        "object_info 只有 display_name、没有 zh/i18n 中文:两种语言都是它"
+    assert found["4.ckpt_name"]["node_label"] == {"zh": "Checkpoint 加载器", "en": "CheckpointLoaderSimple"}, \
+        "中文有翻译(Checkpoint 加载器)、英文只有类名可比:一对里各是各的"
+    assert found["6.text"]["node_label"] == {"zh": "CLIP 文本编码", "en": "CLIPTextEncode"}
+    assert all("node_label_en" not in one for one in found.values()), \
+        "上一轮那条「英文名的另一路」已经删掉,不留兼容分支(ADR 0006)"
+    assert all("node_label" not in one for one in found.values() if one["node"] == ""), \
         "图级的项(种子、尺寸、跑几遍)没有节点:不带节点名"
 
 
@@ -540,10 +541,9 @@ def test_读应用表单_全部能填的项和读到时的改动时间(comfy) ->
     assert out["modified"] == 1.0, "列目录给的改动时间(没存过的那张在假 ComfyUI 上是 1)"
     assert [one["key"] for one in out["items"]][:5] == ["6.text", "7.text", "10.image", "13.image", "14.image"]
     by_key = {one["key"]: one for one in out["items"]}
-    assert by_key["13.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}, "节点给人看的名字一路带到编辑器"
-    assert by_key["13.image"]["node_label_en"] == "LoadImage", \
-        "搜索要按英文名也搜得到:英文那份从 `{\"zh\", \"en\"}` 这一对里挑出来另带一路上"
-    assert "node_label" not in by_key["seed"] and "node_label_en" not in by_key["seed"], "图级的项没有节点"
+    assert by_key["13.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}, \
+        "节点给人看的名字是一对,一路带到编辑器(挑哪一种由界面做)"
+    assert "node_label" not in by_key["seed"], "图级的项没有节点"
     assert [one["node"] for one in out["outputs"]] == ["9", "17"]
     #: 每个节点给人看的名字(工作台「运行与结果」用):和「结果取自」同一种叫法,不是类名
     assert out["names"]["17"]["zh"] == "保存图像", "核心节点没起标题:ComfyUI 给这类节点的中文名,不是 SaveImage"

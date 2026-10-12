@@ -60,5 +60,6 @@ export const mediaLibrary = {
   assetLineageOpPad: "padded",
   assetLineageOpMix: "mixed",
   assetLineageOpExtract: "from document",
+  assetLineageOpMask: "mask",
   assetLineageOpPlugin: "plugin",
 } as const;

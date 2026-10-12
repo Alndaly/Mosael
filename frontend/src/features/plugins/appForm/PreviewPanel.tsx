@@ -2,7 +2,7 @@ import React from "react";
 import { Eye } from "lucide-react";
 
 import type { GenerationOption, WorkflowApp } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { DeclaredParameterControl, PARAMETER_CONTROL_CLASS, ParameterField } from "@/components/generation/parameterPanel";
 import { Input } from "@/components/ui/input";
@@ -29,9 +29,11 @@ type Translate = ReturnType<typeof useI18n>;
  */
 export function PreviewPanel({ instanceId, data, draft }: { instanceId: string; data: WorkflowApp; draft: FormDraft }) {
   const t = useI18n();
+  //: 作者没起名字的那几格用插件交回的名字:一句或一张语言表,按界面语言挑一句(见 lib/pickLabel)
+  const { locale } = usePreferences();
   const empty = draft.items.length === 0;
   const shown = React.useMemo(() => (empty ? defaultDraft(data) : draft), [empty, data, draft]);
-  const option = React.useMemo(() => previewOption(data, shown, instanceId), [data, shown, instanceId]);
+  const option = React.useMemo(() => previewOption(data, shown, instanceId, locale), [data, shown, instanceId, locale]);
   return (
     <aside aria-label={t("workflowAppPreview")} className="grid min-w-0 content-start gap-3" data-app-zone="preview">
       <div className="grid gap-0.5">

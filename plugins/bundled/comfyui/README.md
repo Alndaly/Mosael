@@ -624,12 +624,13 @@ the workflow, and so does the agent when it calls it; a workflow without one sti
   name of common core nodes (`CORE_NODE_ZH`; ComfyUI's API doesn't serve core nodes' Chinese names), the object_info
   `display_name` — and the class name only when there is nothing else. Reading object_info also fetches `/i18n` once and
   folds it in (`labels.with_i18n`), so fillable items, clash hints, input slots, "Results from" and tool output names all
-  use the same name. Fillable items also carry `node_label` (the editor groups by it), `hint` (ComfyUI's `tooltip` for
-  the input, per language), and `node_label_en` — **the same node name in English**. The plugin hands the node name over
-  as a `{"zh", "en"}` pair, and the host picks one language for display; that left the English name nowhere in the data, so
-  a Chinese UI showing `加载图像` could not be found by searching `Load Image`, the name the canvas actually uses (the
-  maintainer's report: "the node is clearly named Load Image and searching for it finds nothing"). `node_label_en` is the
-  search index for exactly that. Node number and class only appear in the hover detail for troubleshooting.
+  use the same name. Fillable items also carry `node_label` (the editor groups by it) and `hint` (ComfyUI's `tooltip` for
+  the input, per language). `title` and `node_label` are **either one string or a `{"zh", "en"}` table** — the plugin hands
+  the name over as a per-language fact and never picks a language: the host passes the table through untouched, and the
+  front end picks the language to display (`pickLabel`, it knows Mosael's UI language) while search matches **every**
+  language in the table (so a Chinese UI showing `加载图像` is still found by `Load Image`, the name the canvas uses — the
+  maintainer's report: "the node is clearly named Load Image and searching for it finds nothing"). Node number and class
+  only appear in the hover detail for troubleshooting.
 - **What can be filled in** (`graph.items`): the derivation the generation catalog and the tool inputs used to do
   separately is now one. Each item is anchored on `<node id>.<input name>` (the graph-level seed, size and runs have no
   node), the same parameter keys as before, so values saved on boards and workflow nodes don't need migrating. Nodes

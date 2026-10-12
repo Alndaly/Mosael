@@ -1582,6 +1582,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/mask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mask Asset
+         * @description 按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材(ADR 0056 决定 6)。
+         *
+         *     **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。
+         *     产出是灰度 PNG、白 = 要改的地方、**没有 alpha 通道**:带透明通道的图在 ComfyUI 那条注入的
+         *     `LoadImageMask(channel="red")` 上读出来是整块不透明,静默地什么都不重绘(见 media/masks)。
+         *
+         *     浏览器里画得出来的那些(画笔、橡皮、反选、羽化)不走这里;这条路是**前端读不到像素**的场景:
+         *     批量、智能体、按亮度/颜色自动生成。
+         */
+        post: operations["mask_asset_api_assets__asset_id__mask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/filmstrip": {
         parameters: {
             query?: never;
@@ -14238,6 +14265,43 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * MaskAssetRequest
+         * @description 按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。
+         *
+         *     形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.generate_mask)。
+         *     顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。
+         */
+        MaskAssetRequest: {
+            /**
+             * Source
+             * @default luminance
+             * @enum {string}
+             */
+            source: "luminance" | "alpha";
+            /**
+             * Threshold
+             * @default 0.5
+             */
+            threshold: number;
+            /**
+             * Invert
+             * @default false
+             */
+            invert: boolean;
+            /**
+             * Grow
+             * @default 0
+             */
+            grow: number;
+            /**
+             * Feather
+             * @default 0
+             */
+            feather: number;
+            /** Project Id */
+            project_id?: string | null;
+        };
         /** MembersOut */
         MembersOut: {
             /** Members */
@@ -19461,8 +19525,13 @@ export interface components {
              * @enum {string}
              */
             kind: "text" | "media" | "model" | "number" | "choice" | "toggle" | "seed" | "size" | "runs";
-            /** Title */
-            title: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string | {
+                [key: string]: string;
+            };
             /**
              * Node Title
              * @default
@@ -19472,12 +19541,9 @@ export interface components {
              * Node Label
              * @default
              */
-            node_label: string;
-            /**
-             * Node Label En
-             * @default
-             */
-            node_label_en: string;
+            node_label: string | {
+                [key: string]: string;
+            };
             /**
              * Hint
              * @default
@@ -23571,6 +23637,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AssetFrameRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mask_asset_api_assets__asset_id__mask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaskAssetRequest"];
             };
         };
         responses: {

@@ -2,7 +2,7 @@ import React from "react";
 import { Check, Plus } from "lucide-react";
 
 import type { WorkflowApp, WorkflowFillable } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { IconButton } from "@/components/ui/icon-button";
 import { SearchInput } from "@/components/ui/search-input";
@@ -11,6 +11,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { KindIcon, techText, valueText, visualOf } from "@/features/plugins/appForm/fieldFacts";
 import { LocateNodeButton } from "@/features/plugins/workbench/LocateNodeButton";
 import { exposable, matchesSource, shortTitle, sourceGroups, type FormDraft } from "@/features/plugins/workflowAppForm";
+import { pickLabel } from "@/lib/pickLabel";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,10 +38,12 @@ export function SourcePanel({
   onRemove: (key: string) => void;
 }) {
   const t = useI18n();
+  //: 名字按界面语言挑一句(一句或一张 `{"zh", "en"}` 表,见 lib/pickLabel);搜索不挑,表里全部语言都算(matchesSource)
+  const { locale } = usePreferences();
   const [query, setQuery] = React.useState("");
   const items = data.items ?? [];
   const chosen = new Set(draft.items.map((one) => one.key));
-  const groups = sourceGroups(items.filter((item) => matchesSource(item, query)));
+  const groups = sourceGroups(items.filter((item) => matchesSource(item, query)), locale);
   return (
     <section aria-label={t("workflowAppSource")} className="grid min-w-0 content-start gap-3" data-app-zone="source">
       <div className="grid gap-0.5">
@@ -90,7 +93,7 @@ export function SourcePanel({
             <ul aria-label={group.node ? `${name} #${group.node}` : name} className="m-0 grid list-none gap-0.5 p-0">
               {group.items.map((item) => (
                 <SourceRow key={item.key} item={item} added={chosen.has(item.key)}
-                           name={group.mask ? item.title || item.key : shortTitle(item)}
+                           name={group.mask ? pickLabel(item.title, locale) || item.key : shortTitle(item, locale)}
                            onAdd={() => onAdd(item)} onRemove={() => onRemove(item.key)} />
               ))}
             </ul>
@@ -110,9 +113,12 @@ function SourceRow({ item, added, name, onAdd, onRemove }: {
   onRemove: () => void;
 }) {
   const t = useI18n();
+  //: 读屏念的那句里也带名字:一样按界面语言挑(一句或一张表,见 lib/pickLabel)
+  const { locale } = usePreferences();
   const allowed = exposable(item);
   const tech = techText(item, t);
   const main = item.kind === "text" && Boolean(item.role);
+  const named = pickLabel(item.title, locale);
   return (
     <li data-source-item={item.key}
         className={cn("flex min-w-0 items-center gap-2 rounded-md px-1 py-1", added ? "bg-accent/40" : "hover:bg-secondary/60",
@@ -126,12 +132,12 @@ function SourceRow({ item, added, name, onAdd, onRemove }: {
       </Hint>
       {!item.common && <CatalogBadge tone="muted">{t("workflowAppAdvanced")}</CatalogBadge>}
       {added ? (
-        <IconButton label={t("workflowAppAdded").replace("{name}", item.title)} aria-pressed className="shrink-0"
+        <IconButton label={t("workflowAppAdded").replace("{name}", named)} aria-pressed className="shrink-0"
                     onClick={onRemove}>
           <Check />
         </IconButton>
       ) : (
-        <IconButton label={t("workflowAppAdd").replace("{name}", item.title)} className="shrink-0 text-muted-foreground"
+        <IconButton label={t("workflowAppAdd").replace("{name}", named)} className="shrink-0 text-muted-foreground"
                     disabled={!allowed} disabledReason={t("workflowAppSubgraph")} onClick={onAdd}>
           <Plus />
         </IconButton>

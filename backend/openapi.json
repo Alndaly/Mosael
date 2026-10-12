@@ -4204,6 +4204,59 @@
         }
       }
     },
+    "/api/assets/{asset_id}/mask": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Mask Asset",
+        "description": "按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材(ADR 0056 决定 6)。\n\n**原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。\n产出是灰度 PNG、白 = 要改的地方、**没有 alpha 通道**:带透明通道的图在 ComfyUI 那条注入的\n`LoadImageMask(channel=\"red\")` 上读出来是整块不透明,静默地什么都不重绘(见 media/masks)。\n\n浏览器里画得出来的那些(画笔、橡皮、反选、羽化)不走这里;这条路是**前端读不到像素**的场景:\n批量、智能体、按亮度/颜色自动生成。",
+        "operationId": "mask_asset_api_assets__asset_id__mask_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaskAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/filmstrip": {
       "get": {
         "tags": [
@@ -38435,6 +38488,59 @@
         ],
         "title": "LutUpdate"
       },
+      "MaskAssetRequest": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "luminance",
+              "alpha"
+            ],
+            "title": "Source",
+            "default": "luminance"
+          },
+          "threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Threshold",
+            "default": 0.5
+          },
+          "invert": {
+            "type": "boolean",
+            "title": "Invert",
+            "default": false
+          },
+          "grow": {
+            "type": "integer",
+            "maximum": 256.0,
+            "minimum": -256.0,
+            "title": "Grow",
+            "default": 0
+          },
+          "feather": {
+            "type": "number",
+            "maximum": 256.0,
+            "minimum": 0.0,
+            "title": "Feather",
+            "default": 0
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          }
+        },
+        "type": "object",
+        "title": "MaskAssetRequest",
+        "description": "按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。\n\n形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.generate_mask)。\n顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。"
+      },
       "MembersOut": {
         "properties": {
           "members": {
@@ -49271,8 +49377,19 @@
             "title": "Kind"
           },
           "title": {
-            "type": "string",
-            "title": "Title"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            ],
+            "title": "Title",
+            "default": ""
           },
           "node_title": {
             "type": "string",
@@ -49280,13 +49397,18 @@
             "default": ""
           },
           "node_label": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            ],
             "title": "Node Label",
-            "default": ""
-          },
-          "node_label_en": {
-            "type": "string",
-            "title": "Node Label En",
             "default": ""
           },
           "hint": {
@@ -49352,8 +49474,7 @@
         "required": [
           "key",
           "input",
-          "kind",
-          "title"
+          "kind"
         ],
         "title": "WorkflowFillableOut",
         "description": "一张工作流**能填的一项**(ADR 0038 §1,插件的 `items`):应用表单编辑器从这里挑。"

@@ -201,6 +201,31 @@ def grab_frame(db: Session, user: User, asset_id: str, at: float, *, project_id:
     return save_frame_as_asset(db, asset, at, project_id=project_id)
 
 
+def make_mask(
+    db: Session,
+    user: User,
+    asset_id: str,
+    *,
+    source: str = "luminance",
+    threshold: float = 0.5,
+    invert: bool = False,
+    grow: int = 0,
+    feather: float = 0,
+    project_id: str | None = None,
+) -> Asset:
+    """按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原素材不动(ADR 0056 决定 6)。
+
+    浏览器那块画布读不到原图的像素(批量给一批图配同一块区域、智能体说「按亮度抠个蒙版」),
+    所以这一条有后端的实现。
+    """
+    from app.domain.assets.masks import make_mask_asset
+
+    asset = require_asset(db, user, asset_id, perm="edit")
+    return make_mask_asset(
+        db, asset, source=source, threshold=threshold, invert=invert, grow=grow, feather=feather, project_id=project_id,
+    )
+
+
 # ---------------- 导入 ----------------
 
 

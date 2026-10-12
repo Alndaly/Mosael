@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, computed_field, field_validator
 from app.api.schemas.base import ApiModel, OrmModel
@@ -305,6 +305,27 @@ class AssetFrameRequest(ApiModel):
     """从一段视频里取某一时刻的一帧,存成一份新素材。"""
 
     at: float = 0
+    #: 落到哪个项目下。留空跟随原素材。
+    project_id: str | None = None
+
+
+class MaskAssetRequest(ApiModel):
+    """按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。
+
+    形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.generate_mask)。
+    顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。
+    """
+
+    #: 阈值按哪一样算:亮度(luminance)还是 alpha。取值就是 media.masks.SOURCES 那两个。
+    source: Literal["luminance", "alpha"] = "luminance"
+    #: 0..1;亮度 / alpha ≥ 它变白(白 = 要改的地方)。
+    threshold: float = Field(default=0.5, ge=0, le=1)
+    invert: bool = False
+    #: 像素半径:正数扩张、负数收缩。上限 256 —— 再大的半径 media.masks 也会按图像长边封顶,
+    #: 放进来只是让一份注定饱和的请求多花几秒。
+    grow: int = Field(default=0, ge=-256, le=256)
+    #: 羽化半径(像素)。0 = 不羽化。
+    feather: float = Field(default=0, ge=0, le=256)
     #: 落到哪个项目下。留空跟随原素材。
     project_id: str | None = None
 

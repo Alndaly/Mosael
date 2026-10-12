@@ -192,6 +192,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "只有图片素材可以切宫格",
         "en": "Only image assets can be split into a grid.",
     },
+    "confirmErr_maskNeedsImage": {
+        "zh": "只有图片素材可以算蒙版",
+        "en": "Only image assets can be turned into a mask.",
+    },
     "confirmErr_gifNeedsVideo": {
         "zh": "只有视频素材可以转换为 GIF",
         "en": "Only video assets can be converted to GIF.",

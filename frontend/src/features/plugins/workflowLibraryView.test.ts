@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowFile } from "@/api/client";
+import type { WorkflowFile, WorkflowFillable } from "@/api/client";
 import {
   ALL_WORKFLOWS,
   conflictOf,
@@ -97,12 +97,20 @@ describe("搜索", () => {
 });
 
 describe("精简表单里搜「工作流里能填的」", () => {
+  //: 一条能填的项:只有这几样非写不可,别的给缺省(读的字段就那么几栏)
+  const fillable = (one: Partial<WorkflowFillable> & Pick<WorkflowFillable, "key" | "input" | "kind" | "title">): WorkflowFillable =>
+    ({ node: "", node_title: "", node_label: "", hint: "", class_type: "", common: false, role: "", media: "",
+       folder: "", exposable: true, ...one });
+
   //: 维护者:「节点名称明明是 Load Image,搜索这个却搜索不到」—— 列表上那一条显示的是本地化的「加载图像」,
-  //: 而画布上节点写的是 `Load Image`,类名是 `LoadImage`。按字面比的话带空格的那串一个都命不中。
-  const item = {
-    key: "674.image", node: "674", input: "image", kind: "media", title: "加载图像",
-    node_title: "Load Image", node_label: "加载图像", class_type: "LoadImage", hint: "",
-  } as never;
+  //: 而画布上节点写的是 `Load Image`,类名是 `LoadImage`。名字现在是一张语言表(`title` / `node_label`),
+  //: 表里**每一种语言**都进 haystack —— 挑一条来比的话,没被挑中的那几种语言等于不存在。
+  const item = fillable({
+    key: "674.image", node: "674", input: "image", kind: "media",
+    title: { zh: "加载图像", en: "Load Image" },
+    node_title: "Load Image", node_label: { zh: "加载图像", en: "Load Image" },
+    class_type: "LoadImage",
+  });
 
   it("画布上看到的那串(带空格)命得中类名", () => {
     expect(matchesSource(item, "Load Image")).toBe(true);
@@ -116,35 +124,39 @@ describe("精简表单里搜「工作流里能填的」", () => {
     expect(matchesSource(item, "675")).toBe(false);
   });
 
-  it("本地化的名字照旧搜得到;搜不到的还是搜不到", () => {
+  it("表里两种语言都搜得到:中文那一份、英文那一份;搜不到的还是搜不到", () => {
     expect(matchesSource(item, "加载图像")).toBe(true);
+    expect(matchesSource(item, "Load Image")).toBe(true);
+    //: `title` 和 `node_label` 两张表都算数(两项写着一样,分开各验一遍)
+    expect(matchesSource({ ...item, node_label: "" }, "加载图像")).toBe(true);
+    expect(matchesSource({ ...item, node_label: "" }, "Load Image")).toBe(true);
+    expect(matchesSource({ ...item, title: "" }, "加载图像")).toBe(true);
+    expect(matchesSource({ ...item, title: "" }, "Load Image")).toBe(true);
     expect(matchesSource(item, "video")).toBe(false);
   });
 
   it("英文节点名和本地化名字不是同一个词时也搜得到(搜索比的是节点名,不是类名)", () => {
-    //: 维护者搜的是节点名:`node_label` 只是按看的人的语言挑好的一条(中文界面显示「加载图像」),英文那份
-    //: `node_label_en` 才带着 `Load Image (as Mask)` —— 只按显示的那一份比,换个名字就废(类名归一只救得了
-    //: `LoadImage` 这种擦边命中的)。
-    const masked = {
-      key: "674.image", node: "674", input: "image", kind: "media", title: "参考图 · 加载图像 #674",
-      node_title: "", node_label: "加载图像", node_label_en: "Load Image (as Mask)",
-      class_type: "LoadImageMask", hint: "",
-    } as never;
+    //: 维护者搜的是节点名:界面上显示本地化的「加载图像」,而画布上写的是 `Load Image (as Mask)` ——
+    //: 表里两种语言都带着,所以两边都搜得到(类名归一只救得了 `LoadImageMask` 这种擦边命中的)。
+    const masked = fillable({
+      key: "674.image", node: "674", input: "image", kind: "media",
+      title: { zh: "参考图 · 加载图像 #674", en: "Reference · Load Image (as Mask) #674" },
+      node_label: { zh: "加载图像", en: "Load Image (as Mask)" },
+      class_type: "LoadImageMask",
+    });
     expect(matchesSource(masked, "Load Image (as Mask)")).toBe(true);
     expect(matchesSource(masked, "LoadImageMask")).toBe(true);
     expect(matchesSource(masked, "加载图像")).toBe(true);
     expect(matchesSource(masked, "Load - Image ( as  mask )")).toBe(true);
-    //: 「as Mask」只在这一份里才有:类名(LoadImageMask)和本地化的名字(加载图像)都比不出它来
+    //: 「as Mask」只在英文那一份里才有:类名(LoadImageMask)和本地化的名字(加载图像)都比不出它来
     expect(matchesSource(masked, "as Mask")).toBe(true);
     expect(matchesSource(masked, "SaveImage")).toBe(false);
     //: 空搜索不筛掉任何一项,照旧
     expect(matchesSource(masked, "")).toBe(true);
   });
 
-  it("没有节点的项(种子、尺寸、跑几遍)英文那份是空串,照旧搜原来那几样", () => {
-    const graphLevel = { key: "seed", node: "", input: "seed", kind: "seed", title: "种子",
-                         node_title: "", node_label: "", node_label_en: "", class_type: "",
-                         hint: "" } as never;
+  it("没有节点的项(种子、尺寸、跑几遍)没有节点名,照旧搜原来那几样", () => {
+    const graphLevel = fillable({ key: "seed", input: "seed", kind: "seed", title: { zh: "种子", en: "Seed" } });
     expect(matchesSource(graphLevel, "as Mask")).toBe(false);
     expect(matchesSource(graphLevel, "种子")).toBe(true);
     expect(matchesSource(graphLevel, "Seed")).toBe(true);

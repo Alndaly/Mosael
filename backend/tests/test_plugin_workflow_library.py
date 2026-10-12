@@ -157,18 +157,18 @@ elif op == "app":
              "schema": {"type": "string", "x-multiline": True, "default": "a cat", "onclick": "x"}},
             {"key": "10.image", "node": "10", "input": "image", "kind": "media", "role": "reference_image",
              "media": "image", "title": "参考图 · 人物", "node_title": "人物", "class_type": "LoadImage",
-             "node_label": {"zh": "加载图像", "en": "LoadImage"}, "node_label_en": "LoadImage", "common": True,
+             "node_label": {"zh": "加载图像", "en": "LoadImage"}, "common": True,
              "mask_property": 1},
             {"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": {"zh": "种子", "en": "Seed"},
              "schema": {"type": "integer", "minimum": 0},
              "mask_property": True},
             {"key": "4.ckpt_name", "node": "4", "input": "ckpt_name", "kind": "model", "folder": "checkpoints",
              "title": {"zh": "模型", "en": "Checkpoint"}, "class_type": "CheckpointLoaderSimple",
-             "node_label": {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"}, "node_label_en": "Load Checkpoint",
+             "node_label": {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"},
              "hint": {"zh": "要加载的模型", "en": "The name of the checkpoint (model) to load."},
              "schema": {"type": "string", "enum": ["a.safetensors", "b.safetensors"], "x-model-folder": "checkpoints"}},
             {"key": "12:5.steps", "node": "12:5", "input": "steps", "kind": "number", "title": "步数",
-             "node_label": {"zh": "K 采样器", "en": "KSampler"}, "node_label_en": "KSampler",
+             "node_label": {"zh": "K 采样器", "en": "KSampler"},
              "schema": {"type": "integer", "title": {"zh": "步数", "en": "Steps"}}},
             {"key": "x", "node": "3", "input": "x", "kind": "weird", "title": "?"},
         ],
@@ -708,7 +708,11 @@ def test_列出来的每一张带着它的应用表单_宿主规整一遍(librar
     assert sketch["app"] is None, "插件没说(转不过来的那张)就没有"
 
 
-def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套规整(library) -> None:
+def test_编辑器读一张_名字不再被塌成一句_插件交回的那一对原样给出来(library) -> None:
+    """名字天生是**多语言的一组事实**,不是"后端挑好的一句话":插件交回 `{"zh", "en"}` 一对,接口给的就是那一对 ——
+    `zh` 与 `en` 都在。挑哪一种语言是前端的事(它知道 Mosael 的界面语言,搜索还要拿全部语言去比 —— 塌成一句,
+    没被挑中的那几种语言在数据里就没了,搜「加载图像」时画布上的 `LoadImage` 再也搜不到)。
+    """
     client, instance_id = library
     response = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "portrait.json"})
     assert response.status_code == 200, response.text
@@ -716,22 +720,25 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert body["path"] == "portrait.json" and body["modified"] == 1776098682.9 and body["editable"] is True
     by_key = {one["key"]: one for one in body["items"]}
     assert list(by_key) == ["6.text", "10.image", "seed", "4.ckpt_name", "12:5.steps"], "认不出种类的那一项丢掉"
-    assert by_key["6.text"]["title"] == "提示词" and by_key["6.text"]["role"] == "prompt"
+    assert by_key["6.text"]["title"] == {"zh": "提示词", "en": "Prompt"}, "名字原样透出:两种语言都在"
+    assert by_key["6.text"]["role"] == "prompt"
     assert by_key["6.text"]["spec"] == {"type": "string", "x-multiline": True, "default": "a cat"}, "认不得的字段不留"
     assert by_key["10.image"]["spec"] is None and by_key["10.image"]["node_title"] == "人物"
     assert by_key["4.ckpt_name"]["spec"]["x-model-folder"] == "checkpoints" and by_key["4.ckpt_name"]["folder"] == "checkpoints"
     assert by_key["12:5.steps"]["exposable"] is False and by_key["12:5.steps"]["spec"]["title"] == "步数", \
         "子图里面的节点照样列出来,标着这一版不能放进应用表单"
     assert by_key["seed"]["exposable"] is True
-    assert by_key["4.ckpt_name"]["node_label"] == "Checkpoint 加载器" and by_key["4.ckpt_name"]["hint"] == "要加载的模型", \
-        "节点给人看的名字、ComfyUI 的说明也按语言挑好"
-    assert by_key["4.ckpt_name"]["node_label_en"] == "Load Checkpoint", \
-        "显示的那一份挑了中文;插件另给的英文那份原样透出,界面搜索才搜得到(ADR 0006:只认这一种形状,不从一对里现挑)"
-    assert by_key["10.image"]["node_label_en"] == "LoadImage", "起了标题的读图节点:两种语言都是它"
-    assert by_key["12:5.steps"]["node_label_en"] == "KSampler", "子图里的节点也带着"
-    assert by_key["seed"]["node_label_en"] == "", "图级的项没有节点"
+    assert by_key["4.ckpt_name"]["node_label"] == {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"}, \
+        "节点给人看的名字也是一对,原样透出"
+    assert by_key["10.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}
+    assert by_key["12:5.steps"]["node_label"] == {"zh": "K 采样器", "en": "KSampler"}, "子图里的节点也带着"
+    assert by_key["seed"]["node_label"] == "", "图级的项没有节点"
+    assert by_key["4.ckpt_name"]["hint"] == "要加载的模型", \
+        "这一格的**说明**(不是名字)照旧按看的人的语言挑好:它不是一组多语言的事实,是 ComfyUI 给这一格的 tooltip"
     assert by_key["4.ckpt_name"]["class_type"] == "CheckpointLoaderSimple", "类名留着给悬停说明排错"
-    assert by_key["seed"]["node_label"] == "" and by_key["seed"]["hint"] == ""
+    assert all("node_label_en" not in one for one in body["items"]), \
+        "上一轮那条「英文名的另一路」已经删掉,不留兼容分支(ADR 0006)"
+    assert by_key["seed"]["hint"] == ""
     assert by_key["10.image"]["mask_property"] == 1, \
         "「蒙版属性」排第几位从插件原样透出(ADR 0056 第一步):沿 MASK 走出来的位置,界面那一组照它摆"
     assert by_key["seed"]["mask_property"] == 0, \
@@ -743,6 +750,17 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert (body["app"]["status"], body["app"]["version"], body["app"]["upgradable"]) == ("unsupported", "1", True)
     bad = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "../x.json"})
     assert bad.status_code == 422
+
+
+def test_编辑器读一张_插件只给一句时原样就是那一句(library) -> None:
+    """插件只交回一个字符串的名字(不是一对)时,那一句原样透出 —— 不硬凑成一张表,也不动它一个字。"""
+    client, instance_id = library
+    body = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "portrait.json"}).json()
+    by_key = {one["key"]: one for one in body["items"]}
+    assert by_key["10.image"]["title"] == "参考图 · 人物", "插件只给了一句:接口给的就是那一句"
+    assert by_key["12:5.steps"]["title"] == "步数"
+    assert isinstance(by_key["10.image"]["title"], str) and isinstance(by_key["12:5.steps"]["title"], str), \
+        "不是一张表(不硬凑成 `{\"zh\": …}`)"
 
 
 def test_写表单_宿主先查形状_改动时间对不上回409_成了让目录重拉(library) -> None:

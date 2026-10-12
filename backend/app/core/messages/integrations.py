@@ -562,6 +562,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Split this image into {count} new images ({rows} rows × {cols} columns); the original is unchanged",
     },
     "confirm_gifClip": {"zh": ",截取 {duration} 秒", "en": ", taking {duration}s"},
+    # ---- 蒙版的确认卡(ADR 0056 决定 6):从哪张图、按什么、切出什么形状,原图不变 ----
+    "confirm_createMask": {
+        "zh": "按{basis}从「{name}」算一张新蒙版(阈值 {threshold}{options}),原图不变",
+        "en": "Make a new mask from “{name}” by {basis} (threshold {threshold}{options}); the original is unchanged",
+    },
+    "confirm_maskBasisLuminance": {"zh": "亮度", "en": "luminance"},
+    #: 不写「alpha」:那张图上的东西叫「透明通道」,而这一行是给用户读的。
+    "confirm_maskBasisAlpha": {"zh": "透明通道", "en": "alpha"},
+    #: 形状那几项拼成的半句(见 confirmable/media 的 _mask_options):一项都没有时整句不出现,
+    #: 所以那个分号挂在这一层,不挂在每一项上。
+    "confirm_maskOptions": {"zh": ";{items}", "en": "; {items}"},
+    "confirm_maskInvert": {"zh": "反选", "en": "inverted"},
+    "confirm_maskGrow": {"zh": "扩张 {px} 像素", "en": "grown by {px} px"},
+    "confirm_maskShrink": {"zh": "收缩 {px} 像素", "en": "shrunk by {px} px"},
+    "confirm_maskFeather": {"zh": "羽化 {px} 像素", "en": "feathered by {px} px"},
     "confirm_originalDuck": {"zh": "配音说话时原声压低", "en": "duck the original while the dub speaks"},
     "confirm_originalMute": {"zh": "原声静音", "en": "mute the original"},
     "confirm_originalKeep": {"zh": "原声不动", "en": "leave the original as is"},
@@ -1055,6 +1070,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     "gridErr_notImage": {"zh": "「{name}」不是图片,切不了宫格", "en": "“{name}” isn't an image, so it can't be split"},
     "gridErr_fileMissing": {"zh": "「{name}」的文件找不到了", "en": "The file for “{name}” is missing"},
     "gridErr_tooSmall": {"zh": "这张图只有 {width}×{height},切成 {grid} 每张太小了", "en": "This image is only {width}×{height}; split {grid}, each tile would be too small"},
+    # ---- 蒙版(ADR 0056 决定 6):从源图算出来的那张灰度图,白 = 要改的地方 ----
+    #: 产出素材的名字。浏览器里画出来那张用的是同一个说法(前端 maskAssetName)—— 两条路各画各的,
+    #: 用户在素材库里看到的是同一种名字。
+    "maskAssetName": {"zh": "蒙版 · {source}", "en": "Mask · {source}"},
+    "maskErr_notImage": {"zh": "「{name}」不是图片,算不出蒙版", "en": "“{name}” isn't an image, so no mask can be made from it"},
+    "maskErr_fileMissing": {"zh": "「{name}」的文件找不到了", "en": "The file for “{name}” is missing"},
+    "maskErr_unreadable": {"zh": "「{name}」这张图打不开", "en": "“{name}” couldn't be opened as an image"},
+    "maskErr_unknownSource": {"zh": "不认识的蒙版来源「{source}」", "en": "Unknown mask source “{source}”"},
+    "maskErr_badSize": {"zh": "尺寸不合法:{width}×{height}", "en": "Invalid size: {width}×{height}"},
+    "maskErr_badPixels": {"zh": "像素数目不对:应有 {expected} 个,拿到 {got} 个", "en": "Wrong pixel count: expected {expected}, got {got}"},
     "wfNode_video_to_gif": {"zh": "视频转 GIF", "en": "Video to GIF"},
     "wfNode_video_to_gif_board": {"zh": "把一段视频做成 GIF 动图", "en": "Turn a video clip into an animated GIF."},
     "wfNode_video_to_gif_desc": {"zh": "把视频转换成一份新的 GIF 素材，原视频保持不变。", "en": "Convert a video into a new GIF asset while preserving the source video."},

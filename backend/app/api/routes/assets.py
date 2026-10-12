@@ -9,7 +9,7 @@ from app.api.responses import file_response
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
@@ -486,6 +486,28 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: Tx, user: Curre
     try:
         return use_cases.grab_frame(db, user, asset_id, body.at, project_id=body.project_id)
     except (AssetFrameError, StillError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/assets/{asset_id}/mask", response_model=AssetOut)
+def mask_asset(asset_id: str, body: MaskAssetRequest, db: Tx, user: CurrentUser) -> Asset:
+    """按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材(ADR 0056 决定 6)。
+
+    **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。
+    产出是灰度 PNG、白 = 要改的地方、**没有 alpha 通道**:带透明通道的图在 ComfyUI 那条注入的
+    `LoadImageMask(channel="red")` 上读出来是整块不透明,静默地什么都不重绘(见 media/masks)。
+
+    浏览器里画得出来的那些(画笔、橡皮、反选、羽化)不走这里;这条路是**前端读不到像素**的场景:
+    批量、智能体、按亮度/颜色自动生成。
+    """
+    from app.domain.assets.masks import MaskAssetError
+
+    try:
+        return use_cases.make_mask(
+            db, user, asset_id, source=body.source, threshold=body.threshold, invert=body.invert,
+            grow=body.grow, feather=body.feather, project_id=body.project_id,
+        )
+    except MaskAssetError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

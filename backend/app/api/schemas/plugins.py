@@ -966,15 +966,14 @@ class WorkflowFillableOut(ApiModel):
     input: str
     #: text / media / model / number / choice / toggle / seed / size / runs
     kind: Literal["text", "media", "model", "number", "choice", "toggle", "seed", "size", "runs"]
-    #: 人话名字(按看的人的语言挑好)
-    title: str
+    #: 人话名字:**一句,或者一张 `{语言: 名字}` 表**(插件按语言分好的,宿主原样透出)。挑哪一种语言是界面的事 ——
+    #: 它知道 Mosael 的界面语言,而搜索要拿**全部语言**去比(见 frontend lib/pickLabel)
+    title: str | dict[str, str] = ""
     #: 用户给节点起的名字;没起是空串
     node_title: str = ""
-    #: 节点给人看的名字(用户起的标题,没起就是 ComfyUI 给这类节点的名字,按看的人的语言);图级的项是空串
-    node_label: str = ""
-    #: 同一个节点名的**英文**那一份:上面那条是把 `{"zh", "en"}` 按看的人的语言挑好的一条,挑完英文名在数据里就没了 ——
-    #: 界面搜索还得比它(显示「加载图像」而画布上写的是 `Load Image`);图级的项是空串
-    node_label_en: str = ""
+    #: 节点给人看的名字(用户起的标题,没起就是 ComfyUI 给这类节点的名字):和 `title` 一样是「一句或一张语言表」;
+    #: 图级的项(种子、尺寸、跑几遍)没有节点,是空串
+    node_label: str | dict[str, str] = ""
     #: ComfyUI 给这一格的说明(按看的人的语言);没有是空串
     hint: str = ""
     #: 节点类名:只给排错的悬停说明用,界面上不当名字

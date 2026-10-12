@@ -182,11 +182,13 @@ const shownPanel = () => column().querySelector<HTMLElement>("[role=tabpanel]:no
 const appData = (overrides: Partial<WorkflowApp> = {}): WorkflowApp => ({
   path: "", modified: null, kind: "image", editable: true,
   items: [
-    { key: "6.text", node: "6", input: "text", kind: "text", role: "prompt", title: "提示词", node_title: "", node_label: "CLIP 文本编码",
-      node_label_en: "CLIPTextEncode", hint: "", class_type: "CLIPTextEncode", common: true, media: "", folder: "",
+    { key: "6.text", node: "6", input: "text", kind: "text", role: "prompt", title: { zh: "提示词", en: "Prompt" },
+      node_title: "", node_label: { zh: "CLIP 文本编码", en: "CLIPTextEncode" },
+      hint: "", class_type: "CLIPTextEncode", common: true, media: "", folder: "",
       exposable: true, spec: { type: "string", default: "a girl" } },
-    { key: "3.steps", node: "3", input: "steps", kind: "number", title: "步数", node_title: "采样", node_label: "采样",
-      node_label_en: "KSampler", hint: "", class_type: "KSampler", common: true, role: "", media: "", folder: "",
+    { key: "3.steps", node: "3", input: "steps", kind: "number", title: { zh: "步数", en: "Steps" },
+      node_title: "采样", node_label: { zh: "采样", en: "KSampler" },
+      hint: "", class_type: "KSampler", common: true, role: "", media: "", folder: "",
       exposable: true, spec: { type: "integer", default: 20 } },
   ],
   outputs: [{ node: "9", title: "高清", label: "高清", class_type: "SaveImage", media: "image" },

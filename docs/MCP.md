@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **125** 个工具,其中 **38** 个走确认卡、**1** 个停下来等用户作答。
+共 **126** 个工具,其中 **39** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -53,6 +53,7 @@
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
+| `create_mask` | 确认卡 | Confirmation required: turn an EXISTING image asset into a NEW greyscale mask asset (inpainting). |
 | `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
 | `create_project` | 直接执行 | Runs directly: create a project; returns its id. timeline=true also gives it an empty VIDEO TIMELINE. |
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |

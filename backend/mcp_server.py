@@ -573,6 +573,42 @@ def split_image_grid(
 
 
 @tool(effect="confirms")
+def create_mask(
+    asset_id: str,
+    source: str = "luminance",
+    threshold: float = 0.5,
+    invert: bool = False,
+    grow: int = 0,
+    feather: float = 0.0,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: turn an EXISTING image asset into a NEW greyscale mask asset (inpainting).
+
+    A mask says WHICH PART of the image to change: white = the area to redraw, black = keep. The result is a
+    greyscale PNG with no alpha channel, registered as a new asset named "Mask · <source>"; the source image is
+    never changed. Use it to hand the same region to many generations, or when the user asks for a mask by
+    description ("mask out the bright sky", "cut the subject out by its transparency").
+
+    source is "luminance" (brighter than `threshold` becomes white) or "alpha" (opaque pixels become white;
+    an image with no transparency comes back all white). threshold is 0..1. invert swaps white and black.
+    grow is a pixel radius: positive dilates the white area, negative shrinks it. feather softens the edge by
+    that many pixels. The order is fixed: threshold, invert, grow, feather.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "create_mask",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "asset_id": asset_id, "source": source, "threshold": threshold,
+                "invert": invert, "grow": grow, "feather": feather,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def generate_image(
     prompt: str = "",
     model: str = "",

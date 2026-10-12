@@ -61,5 +61,6 @@ export const mediaLibrary = {
   assetLineageOpPad: "补齐时长",
   assetLineageOpMix: "混音",
   assetLineageOpExtract: "从文档取出",
+  assetLineageOpMask: "生成蒙版",
   assetLineageOpPlugin: "插件加工",
 } as const;

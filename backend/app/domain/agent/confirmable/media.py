@@ -420,10 +420,99 @@ def _execute_split_image_grid(db: Session, confirmation: Any, actor: str | None)
     if asset is None or asset.workspace_id != confirmation.workspace_id:
         raise ConfirmationError("confirmErr_assetNotFound")
     try:
-        pieces = split_image_grid(db, asset, grid=str(payload.get("grid") or "3x3"), gutter=bool(payload.get("trim_gutter")))
+        pieces = split_image_grid(
+            db, asset, grid=str(payload.get("grid") or "3x3"), gutter=bool(payload.get("trim_gutter")),
+        )
     except ImageGridError as exc:
         raise ConfirmationError(exc.key, **exc.params) from exc
     return {"asset_ids": [piece.id for piece in pieces], "source_asset_id": asset.id}
+
+
+def _mask_options(payload: dict[str, Any]) -> Any:
+    """卡上「切成什么形状」那半句:反选、扩张 / 收缩、羽化,各自是一条文案,连起来说。
+
+    一项都没有时返回空串,整句就不出现(分号挂在 confirm_maskOptions 上,不挂在每一项上)——
+    挂错地方的话「没羽化」会变成一句「;」。
+    """
+    options = []
+    if payload.get("invert"):
+        options.append(fragment("confirm_maskInvert"))
+    grow = int(payload.get("grow") or 0)
+    if grow > 0:
+        options.append(fragment("confirm_maskGrow", px=grow))
+    elif grow < 0:
+        options.append(fragment("confirm_maskShrink", px=abs(grow)))
+    feather = float(payload.get("feather") or 0)
+    if feather:
+        #: 整数就不摆小数点:「羽化 1.0 像素」是机器写的,人写的是「羽化 1 像素」。
+        pixels = round(feather, 2)
+        options.append(fragment("confirm_maskFeather", px=int(pixels) if float(pixels).is_integer() else pixels))
+    return fragment("confirm_maskOptions", items=options) if options else ""
+
+
+def _mask_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """把这一次要算的几项**当成真要算的那几项**读出来:缺省值补齐、数按数读。
+
+    卡上写的是补齐之后的这一份,批准时算的也是这一份 —— 两边各读一遍 payload 迟早分叉。
+    """
+    from app.media.masks import LUMINANCE, SOURCES
+
+    source = str(payload.get("source") or LUMINANCE)
+    return {
+        "asset_id": str(payload.get("asset_id") or ""),
+        "source": source if source in SOURCES else LUMINANCE,
+        "threshold": float(payload.get("threshold") if payload.get("threshold") is not None else 0.5),
+        "invert": bool(payload.get("invert")),
+        "grow": int(payload.get("grow") or 0),
+        "feather": float(payload.get("feather") or 0),
+    }
+
+
+def _validate_create_mask(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.db.models import Asset
+    from app.media.masks import SOURCES
+
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    if asset.kind != "image":
+        raise ConfirmationError("confirmErr_maskNeedsImage")
+    if str(payload.get("source") or "luminance") not in SOURCES:
+        raise ConfirmationError("maskErr_unknownSource", source=str(payload.get("source")))
+    #: 认过之后的那一份写回卡上:卡上写的、批准后算的,是同一组参数。
+    payload.update(_mask_payload(payload))
+
+
+def _summarize_create_mask(db: Session, payload: dict[str, Any]) -> Summary:
+    from app.db.models import Asset
+
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    basis = "confirm_maskBasisAlpha" if payload.get("source") == "alpha" else "confirm_maskBasisLuminance"
+    return "confirm_createMask", {
+        "name": asset.name if asset is not None else str(payload.get("asset_id") or ""),
+        "basis": fragment(basis),
+        "threshold": f"{round(float(payload.get('threshold') or 0) * 100)}%",
+        "options": _mask_options(payload),
+    }
+
+
+def _execute_create_mask(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """本机算,一眨眼的事,不起后台任务:确认完直接交回那张新蒙版。原素材不动。"""
+    payload = _mask_payload(confirmation.payload)
+    from app.db.models import Asset
+    from app.domain.assets.masks import MaskAssetError, make_mask_asset
+
+    asset = db.get(Asset, payload["asset_id"])
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    try:
+        mask = make_mask_asset(
+            db, asset, source=payload["source"], threshold=payload["threshold"], invert=payload["invert"],
+            grow=payload["grow"], feather=payload["feather"],
+        )
+    except MaskAssetError as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+    return {"asset_id": mask.id, "source_asset_id": asset.id}
 
 def _named_provider(db: Session, actor: str | None, capability: Any, name_or_id: str):
     """智能体按名字点一家(ADR 0032 §3):认不出就说清楚配好了的有哪几家。"""
@@ -619,6 +708,18 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_split_image_grid,
     execute=_execute_split_image_grid,
     validate=_validate_split_image_grid,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="create_mask",
+    permission="edit",
+    cost="none",
+    #: 产出是**新的一份**素材,原素材一个字节都不动。
+    writes=("assets",),
+    summarize=_summarize_create_mask,
+    execute=_execute_create_mask,
+    validate=_validate_create_mask,
 ))
 
 

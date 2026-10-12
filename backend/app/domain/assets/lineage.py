@@ -40,8 +40,9 @@ PAD = "pad"  # 补静音补到某个时长
 MIX = "mix"  # 几段混成一段(对口型的配音)
 EXTRACT = "extract"  # 从文档里取出的插图
 PLUGIN = "plugin"  # 插件拿这几份做出来的
+MASK = "mask"  # 按亮度 / alpha 从这张图算出来的蒙版(ADR 0056 决定 6)
 
-OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN})
+OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN, MASK})
 
 #: 来源链往上追几级、最多交回多少个节点(界面上的来源链)。导出成片的出处可以有几十份,再往上一级就是几百。
 LINEAGE_DEPTH = 6
@@ -149,6 +150,7 @@ __all__ = [
     "GRID_SPLIT",
     "LINEAGE_DEPTH",
     "LINEAGE_NODES",
+    "MASK",
     "MIX",
     "OPS",
     "PAD",
