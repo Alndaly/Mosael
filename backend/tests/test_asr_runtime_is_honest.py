@@ -248,6 +248,58 @@ def test_the_two_probes_share_one_list() -> None:
     assert "candidate_pythons(engine)" in inspect.getsource(asr_models._resolve_python)
 
 
+# ---------------- 「答案定了」必须是**一个**答案 ----------------
+
+
+def test_a_settled_runtime_answer_is_the_one_the_list_uses(monkeypatch) -> None:
+    """「答案定了」和「跑得起来吗」必须是**同一个**答案 —— 这就是用户报的那一幕。
+
+    设置 → 引擎 → 转写 里 FunASR / WhisperX Small 一直挂着「模型已在磁盘上,但还没有能运行它的
+    Python 环境 —— 点右边装一次」,而环境其实是装好的,**刷新一次页面又对了**("服务端数据是对的,
+    客户端没作废"这个形状)。
+
+    两个问题此前各记各的缓存:列表读的 `runtime_ready` 是它自己的 lru(真探测),决定"还没测完吗"
+    的 `runtime_checked` 读 `_probes`。装环境那条路问的正是那个 lru —— 于是"已经跑得起来"时
+    `ensure_engine_runtime` 直接 return,`clear_runtime_probes()` 一次都不走,`_probes` 里装环境
+    **之前**那个 false 原样留着。
+
+    前端就此停住:它接着问的理由是"还有没答完的问题"(`runtime_checked=false`,或正在下),
+    而它拿到的是 `checked=true` 配 `ready=false` —— 一个**定了的、错的**答案(见 lib/pollWhileUnsettled)。
+    谁也不会再问一次,那句话就一直挂着,直到人刷新页面。
+    """
+    # 这条路真的会去建 venv、跑 pip 装 torch(几 GB、要出网),还会在用户的盘上留东西。
+    # 这个用例只关心**它留下了哪个答案**:装的那一段换成记账(这里根本走不到,环境已经好了)。
+    monkeypatch.setattr(asr_models, "_is_installed", lambda entry: True)
+
+    def not_yet(engine: str):
+        raise RuntimeError("还没有解释器装了它")
+
+    monkeypatch.setattr(asr_models, "_resolve_python", not_yet)
+    asr_models.clear_runtime_probes()
+
+    # 那一刻这台机器上还没有能跑它的解释器:列表如实说"跑不起来,而且是定了的" ——
+    # 用户看到的就是这一行,右边那颗「装一次」就是从这里点下去的。
+    assert asr_models.runtime_ready("funasr") is False
+    row = {r["id"]: r for r in asr_models.list_status()}["funasr"]
+    assert (row["runtime_ready"], row["runtime_checked"]) == (False, True), row
+
+    # 环境装好了 —— 用户自己装的、上一轮装的、别的工具装的都算。此时**没人清过缓存**。
+    monkeypatch.setattr(asr_models, "_resolve_python", lambda engine: "/usr/bin/python3")
+    asr_models.clear_runtime_probes()
+
+    # 用户点了那一行右边的「装一次」:走后端那条路,它要回答的正是"已经跑得起来了吗"。
+    asr_models.ensure_engine_runtime("funasr")
+
+    # 列表必须跟着说"能跑"。它若还端着装在之前的 false、还说"这个答案定了",界面就永远停在那句话上
+    # (见 docstring):轮询没有理由再问,谁也不会再探一次 —— 只有刷新页面(新进程、新缓存)才恢复。
+    # 用户原话就是「明明环境已经装好了 …… 刷新一下页面后就正常了」。
+    row = {r["id"]: r for r in asr_models.list_status()}["funasr"]
+    assert row["runtime_ready"] is True, (
+        "装环境这条路认定「已经跑得起来」,而列表还端着装在之前的 false,还说这个答案是定的 —— "
+        f"界面会永远停在那句话上,刷新才恢复:{row}"
+    )
+
+
 def test_the_error_is_plain_text(monkeypatch) -> None:
     """这句话会**原样**显示在界面上 —— markdown 在那儿只会以星号的样子出现。"""
     monkeypatch.setattr(asr_models, "candidate_pythons", lambda: [])

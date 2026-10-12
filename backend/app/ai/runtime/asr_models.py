@@ -334,7 +334,11 @@ def refresh_runtime_status(engine: str) -> bool:
 
 
 def runtime_status(engine: str) -> tuple[bool, bool]:
-    """(跑得起来吗, 测过了吗)。没测过就在后台起一次,先把已知的给出去。"""
+    """(跑得起来吗, 测过了吗)。没测过就在后台起一次,先把已知的给出去。
+
+    **只答 `_probes` 里的那一份答案** —— 那是"这个问题定了没有"的唯一记录,也是 `runtime_ready`
+    探到答案时会写进去的那一份(见它开头那段)。
+    """
     value, known = _probes.known(engine)
     if known:
         return bool(value), True
@@ -361,19 +365,28 @@ def runtime_ready(engine: str) -> bool:
     「未找到可用的转写环境」—— 两句话都没说谎,只是在回答不同的问题。
 
     缓存住:探测要起一次子进程,而这个函数在列表页每行都会被问一遍。装好环境之后调
-    `runtime_ready.cache_clear()`。
+    `clear_runtime_probes()`。
+
+    **探出来的答案同时记进 `_probes`**(列状态读的那一份)。此前这里只填自己的 lru,
+    两处于是各记各的,而它们会**不同步** —— 界面读到的那个组合
+    (`runtime_checked=true` 配 `runtime_ready=false`)恰好是"答案定了,但定在装环境之前":
+    轮询据此停下(见前端 lib/pollWhileUnsettled),那一页就永远写着「还没有能运行它的
+    Python 环境」,而刷新一次页面又对了(新进程重新探一遍)。装环境那条路更会把这个假答案
+    钉死:`ensure_engine_runtime` 开头问的正是这个 lru 缓存的 false,于是"已经有了就直接返回",
+    `clear_runtime_probes()` 一次都不走。用户原话就是「明明环境已经装好了」。
     """
     try:
         _resolve_python(engine)
     except Exception:  # noqa: BLE001 — 探测失败就是"跑不起来",原因由调用方另行呈现
-        return False
-    return True
+        return bool(_probes.remember(engine, False))
+    return bool(_probes.remember(engine, True))
 
 
 def _status_dict(entry: ModelEntry) -> dict[str, Any]:
     live = _store.get(entry.id)
     installed = _is_installed(entry)
     total, estimated = measured_total(entry)
+    ready, checked = runtime_status(entry.engine)
     base = {
         "id": entry.id,
         "engine": entry.engine,
@@ -384,8 +397,9 @@ def _status_dict(entry: ModelEntry) -> dict[str, Any]:
         # **两件事分开报**:文件在不在(status)、跑不跑得起来(runtime_ready)。
         # 把它们合成一个"已安装"是这一页此前说谎的原因。
         # **不等探测**:它要起子进程 import funasr。没测过就先说"还没测",后台去问。
-        "runtime_ready": runtime_status(entry.engine)[0],
-        "runtime_checked": runtime_status(entry.engine)[1],
+        # 一次问出来两个字段,而不是各问一遍 —— 两个答案必须来自同一次回答(见 runtime_ready)。
+        "runtime_ready": ready,
+        "runtime_checked": checked,
     }
     if live is not None and live.status == "downloading":
         return {
@@ -475,7 +489,11 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     (见 ai/runtime/tts_models.ensure_engine_runtime)。此前 ASR 没有这条路:模型下好了、页面写着
     「已安装」,而转写照样报「未找到可用的转写环境」,唯一的出路是自己去装 funasr 再设环境变量。
 
-    已经跑得起来就直接返回 —— **不碰用户自带的环境**。
+    已经跑得起来就直接返回 —— **不碰用户自带的环境**。但"跑得起来"这个答案要**留下来**
+    (见 `runtime_ready`):这一条路正是用户点「装一次」时走的,而它此前只是 return 出去 ——
+    `_probes` 里那个装环境**之前**的 false 原样留着。于是"已经能跑"和"列表说跑不起来"
+    两个答案同时成立,而后者带着 `runtime_checked=true`(定了),前端据此停住轮询
+    (见 lib/pollWhileUnsettled),那句「还没有能运行它的 Python 环境」就一直挂在那一页上。
 
     `progress_key` 是这次进度写在**哪一行**上(模型 id)。此前这里按引擎名写,而界面按模型 id 读,
     于是这两句阶段文字一次都没显示过 —— 用户看到的是一条不动的进度条配一句"准备下载…"。
@@ -485,6 +503,10 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
     就别共用一个进度条 —— 只报"在做哪一步"。
     """
     if runtime_ready(engine):
+        #: 这个 true 要落进 `_probes` —— 那是"答案定了没有"的唯一记录。lru 里之所以已经有一个 true,
+        #: 是因为上一次清过缓存之后探过(装环境、改解释器都会清,见 clear_runtime_probes),
+        #: 所以它就是当下这个答案,记下来不亏;不记的话,列表那边会一直停在装环境之前的 false。
+        refresh_runtime_status(engine)
         return
     key = progress_key or engine
     requirements = ENGINE_REQUIREMENTS.get(engine)

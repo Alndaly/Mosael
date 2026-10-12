@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,9 +21,14 @@ const base = {
 };
 let models: Array<Record<string, unknown>> = [];
 const downloads: string[] = [];
+//: 这份列表被问了几次。「装完之后界面跟着变」= 它再问了一次,而这一次后端答的是新状态。
+const reads: string[] = [];
 
 vi.mock("@/api/client", () => ({
-  listAsrModels: () => Promise.resolve(models),
+  listAsrModels: () => {
+    reads.push("read");
+    return Promise.resolve(models);
+  },
   downloadAsrModel: (id: string) => {
     downloads.push(id);
     return Promise.resolve(models[0]);
@@ -41,6 +46,7 @@ function renderSection(rows: Array<Record<string, unknown>>) {
       <AsrModelsSection />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 const rowOf = async (label: string) =>
@@ -48,6 +54,7 @@ const rowOf = async (label: string) =>
 
 beforeEach(() => {
   downloads.length = 0;
+  reads.length = 0;
 });
 
 describe("转写模型", () => {
@@ -135,5 +142,36 @@ describe("转写模型", () => {
     );
     await user.click(within(row).getByRole("button", { name: /asrModelRetry/ }));
     await waitFor(() => expect(downloads).toEqual(["funasr"]));
+  });
+
+  /**
+   * 用户报的那一幕:权重在盘上、环境其实也装好了,这一行却一直写着
+   * 「模型已在磁盘上,但还没有能运行它的 Python 环境 —— 点右边装一次」,**刷新一次页面又对了**。
+   *
+   * 界面在环境还没装好的那一刻看到的是 `runtime_checked=true, runtime_ready=false` —— 一个
+   * **定了的**答案。轮询的判据是"还有没答完的问题"(`runtime_checked=false`,或正在下,
+   * 见 lib/pollWhileUnsettled),于是它就此停住;这一行的话也就定在那儿了。
+   * 这正是用户说"刷新一下就好了"的形状:刷新之后整份列表重取一次,后端那时答的才是真答案。
+   *
+   * 所以这条钉的是那一半归前端的契约:**"定了"的答案变了之后,这一页必须再问一次,并照着新答案改口**。
+   * (让它有机会变的那一半在后端:装环境那条路必须把新答案记在 `_probes` 里,见
+   * backend/tests/test_asr_runtime_is_honest.py。)
+   */
+  it("那个「定了的」答案变了之后:再问一次就改口,不把旧话钉在页面上", async () => {
+    const client = renderSection([
+      { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed" },
+    ]);
+    const row = await rowOf("FunASR");
+    expect(within(row).getByText("asrModelNoRuntime")).toBeInTheDocument();
+    expect(reads).toHaveLength(1);
+
+    // 环境装好了(或后端重新探明白了):同一个模型,现在是「能跑」。
+    models = [{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true }];
+    await act(() => client.invalidateQueries({ queryKey: ["asr-models"] }));
+
+    // 再问一次 —— 而且要看到新答案,不是把上一轮那句话留在页面上。
+    await waitFor(() => expect(reads.length).toBeGreaterThan(1));
+    await waitFor(() => expect(within(row).getByText("asrModelInstalled")).toBeInTheDocument());
+    expect(within(row).queryByText("asrModelNoRuntime")).toBeNull();
   });
 });
