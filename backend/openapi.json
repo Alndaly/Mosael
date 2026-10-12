@@ -49377,17 +49377,7 @@
             "title": "Kind"
           },
           "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              }
-            ],
+            "type": "string",
             "title": "Title",
             "default": ""
           },
@@ -49397,17 +49387,7 @@
             "default": ""
           },
           "node_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "type": "object"
-              }
-            ],
+            "type": "string",
             "title": "Node Label",
             "default": ""
           },

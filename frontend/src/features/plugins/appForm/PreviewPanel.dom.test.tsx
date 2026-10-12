@@ -46,7 +46,7 @@ beforeAll(() => {
   });
 });
 
-/** 这张工作流:一个读图的槽位(参考图)和一个数字参数(放大倍数)。名字是「一句或一张语言表」,按界面语言挑。 */
+/** 这张工作流:一个读图的槽位(参考图)和一个数字参数(放大倍数)。 */
 function data(): WorkflowApp {
   const base = { node_title: "", node_label: "", hint: "", role: "", media: "", folder: "",
                  common: true, exposable: true };
@@ -57,32 +57,28 @@ function data(): WorkflowApp {
     editable: true,
     items: [
       { ...base, key: "10.image", node: "10", input: "image", kind: "media", role: "reference_image", media: "image",
-        title: { zh: "参考图 · 人物", en: "Reference · Person" }, node_title: "人物",
-        node_label: { zh: "加载图像", en: "LoadImage" }, class_type: "LoadImage", spec: null },
-      { ...base, key: "13.strength_model", node: "13", input: "strength_model", kind: "number",
-        title: { zh: "放大倍数", en: "Upscale factor" },
-        node_label: { zh: "放大", en: "Upscale" }, class_type: "Upscale", spec: { type: "number", default: 2 } },
+        title: "参考图 · 人物", node_title: "人物", node_label: "加载图像", class_type: "LoadImage", spec: null },
+      { ...base, key: "13.strength_model", node: "13", input: "strength_model", kind: "number", title: "放大倍数",
+        node_label: "放大", class_type: "Upscale", spec: { type: "number", default: 2 } },
     ],
     outputs: [],
     app: { status: "none", version: "", upgradable: false, forms: [], results: [], invalid: 0, stray: 0 },
   } as WorkflowApp;
 }
 
-/** 一张表单的草稿:作者起的名字、作者排的顺序。`named: false` 是作者没起名字的那一种(名字用插件交回的)。 */
-function draft(keys: string[], named = true): FormDraft {
+/** 一张表单的草稿:作者起的名字、作者排的顺序。 */
+function draft(keys: string[]): FormDraft {
   return {
     id: "", key: "new-1", title: "放大", description: "", model: "", tool: "",
     items: keys.map((key) => {
       const [node, input] = key.split(".");
-      const label = named && key === "13.strength_model" ? "放大倍数" : "";
-      return { key, node, input, label, main: false, choices: null, problem: "" };
+      return { key, node, input, label: key === "13.strength_model" ? "放大倍数" : "", main: false, choices: null, problem: "" };
     }),
   };
 }
 
-/** 渲染一份预览,`named: false` 时那一格的名字来自插件交回的那张语言表(见 lib/pickLabel)。 */
-function previewOf(keys: string[], named = true) {
-  render(<PreviewPanel instanceId="i1" data={data()} draft={draft(keys, named)} />);
+function previewOf(keys: string[]) {
+  render(<PreviewPanel instanceId="i1" data={data()} draft={draft(keys)} />);
   const container = document.querySelector("[data-app-preview]") as HTMLElement;
   const order = () => Array.from(container.querySelectorAll("[data-app-field]"))
     .map((one) => one.getAttribute("data-app-field"));
@@ -110,12 +106,5 @@ describe("右侧预览:顺序就是表上的顺序", () => {
     const preview = previewOf(["10.image"]);
     expect(preview.order()).toEqual(["reference_image"]);
     expect(preview.at("放大倍数")).toBe(-1);
-  });
-
-  it("作者没起名字的那一格:用插件交回的名字(表里按界面语言挑一句,见 lib/pickLabel)", () => {
-    const preview = previewOf(["13.strength_model"], false);
-    //: 插件交回的是 `{zh: "放大倍数", en: "Upscale factor"}` —— 界面是中文,挑的是中文那一份
-    expect(preview.at("放大倍数")).toBeGreaterThanOrEqual(0);
-    expect(preview.at("Upscale factor")).toBe(-1);
   });
 });

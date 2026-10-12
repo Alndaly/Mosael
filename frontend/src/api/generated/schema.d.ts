@@ -19529,9 +19529,7 @@ export interface components {
              * Title
              * @default
              */
-            title: string | {
-                [key: string]: string;
-            };
+            title: string;
             /**
              * Node Title
              * @default
@@ -19541,9 +19539,7 @@ export interface components {
              * Node Label
              * @default
              */
-            node_label: string | {
-                [key: string]: string;
-            };
+            node_label: string;
             /**
              * Hint
              * @default

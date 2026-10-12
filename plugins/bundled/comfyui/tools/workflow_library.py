@@ -722,9 +722,9 @@ def _read(comfy: Comfy, path: str, locale: str) -> tuple[dict[str, Any], float]:
 
 
 def _item_out(item: dict[str, Any]) -> dict[str, Any]:
-    """编辑器要的那一项:锚点、种类、名字(`title` / `node_label` —— 一句或一张 `{"zh", "en"}` 语言表,原样交上去,
-    按哪种语言显示、搜索比哪几种语言都是界面的事,见 graph.items)、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的
-    说明、常用与否、JSON Schema 片段(下拉的全部可选值,收窄时从里面挑)。
+    """编辑器要的那一项:锚点、种类、名字(`title` / `node_label` —— `{"zh", "en"}` 一对,宿主按读的人的语言挑一句,
+    见 graph.items)、节点是谁(给人看的节点名、类名)、ComfyUI 给这一格的说明、常用与否、JSON Schema 片段
+    (下拉的全部可选值,收窄时从里面挑)。
     """
     return {key: item[key] for key in ("key", "node", "input", "kind", "role", "media", "folder", "title", "node_title",
                                        "node_label", "hint", "class_type", "common", "schema")

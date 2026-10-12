@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkflowFile, WorkflowFillable } from "@/api/client";
+import type { WorkflowFile } from "@/api/client";
 import {
   ALL_WORKFLOWS,
   conflictOf,
@@ -97,20 +97,12 @@ describe("搜索", () => {
 });
 
 describe("精简表单里搜「工作流里能填的」", () => {
-  //: 一条能填的项:只有这几样非写不可,别的给缺省(读的字段就那么几栏)
-  const fillable = (one: Partial<WorkflowFillable> & Pick<WorkflowFillable, "key" | "input" | "kind" | "title">): WorkflowFillable =>
-    ({ node: "", node_title: "", node_label: "", hint: "", class_type: "", common: false, role: "", media: "",
-       folder: "", exposable: true, ...one });
-
   //: 维护者:「节点名称明明是 Load Image,搜索这个却搜索不到」—— 列表上那一条显示的是本地化的「加载图像」,
-  //: 而画布上节点写的是 `Load Image`,类名是 `LoadImage`。名字现在是一张语言表(`title` / `node_label`),
-  //: 表里**每一种语言**都进 haystack —— 挑一条来比的话,没被挑中的那几种语言等于不存在。
-  const item = fillable({
-    key: "674.image", node: "674", input: "image", kind: "media",
-    title: { zh: "加载图像", en: "Load Image" },
-    node_title: "Load Image", node_label: { zh: "加载图像", en: "Load Image" },
-    class_type: "LoadImage",
-  });
+  //: 而画布上节点写的是 `Load Image`,类名是 `LoadImage`。按字面比的话带空格的那串一个都命不中。
+  const item = {
+    key: "674.image", node: "674", input: "image", kind: "media", title: "加载图像",
+    node_title: "Load Image", node_label: "加载图像", class_type: "LoadImage", hint: "",
+  } as never;
 
   it("画布上看到的那串(带空格)命得中类名", () => {
     expect(matchesSource(item, "Load Image")).toBe(true);
@@ -124,39 +116,34 @@ describe("精简表单里搜「工作流里能填的」", () => {
     expect(matchesSource(item, "675")).toBe(false);
   });
 
-  it("表里两种语言都搜得到:中文那一份、英文那一份;搜不到的还是搜不到", () => {
+  it("本地化的名字照旧搜得到;搜不到的还是搜不到", () => {
     expect(matchesSource(item, "加载图像")).toBe(true);
-    expect(matchesSource(item, "Load Image")).toBe(true);
-    //: `title` 和 `node_label` 两张表都算数(两项写着一样,分开各验一遍)
-    expect(matchesSource({ ...item, node_label: "" }, "加载图像")).toBe(true);
-    expect(matchesSource({ ...item, node_label: "" }, "Load Image")).toBe(true);
-    expect(matchesSource({ ...item, title: "" }, "加载图像")).toBe(true);
-    expect(matchesSource({ ...item, title: "" }, "Load Image")).toBe(true);
     expect(matchesSource(item, "video")).toBe(false);
   });
 
-  it("英文节点名和本地化名字不是同一个词时也搜得到(搜索比的是节点名,不是类名)", () => {
-    //: 维护者搜的是节点名:界面上显示本地化的「加载图像」,而画布上写的是 `Load Image (as Mask)` ——
-    //: 表里两种语言都带着,所以两边都搜得到(类名归一只救得了 `LoadImageMask` 这种擦边命中的)。
-    const masked = fillable({
-      key: "674.image", node: "674", input: "image", kind: "media",
-      title: { zh: "参考图 · 加载图像 #674", en: "Reference · Load Image (as Mask) #674" },
-      node_label: { zh: "加载图像", en: "Load Image (as Mask)" },
-      class_type: "LoadImageMask",
-    });
-    expect(matchesSource(masked, "Load Image (as Mask)")).toBe(true);
-    expect(matchesSource(masked, "LoadImageMask")).toBe(true);
+  it("名字只有挑好的那一句:另一种语言里的写法搜不到(撤掉语言表之后的代价)", () => {
+    //: 撤语言表之前,插件另带一条 `node_label_en` 兜着这种情形(显示「加载图像」、搜索比 `Load Image (as Mask)`)。
+    //: 维护者否掉了那一套:「为了 ComfyUI 和 Mosael 的语言不匹配问题特地兼容做一套方案是不合理的」。现在名字是按请求
+    //: 语言挑好的**一句**,没被挑中的那门语言在数据里不存在 —— 这一条把这个代价写下来,免得以后当成 bug 又修回去。
+    //: `node_title` 有值时还救得回来(上面那条用例就是靠它命中的:画布上节点标题写的就是那串英文)。
+    const masked = {
+      key: "674.image", node: "674", input: "image", kind: "media", title: "参考图 · 加载图像 #674",
+      node_title: "", node_label: "加载图像",
+      class_type: "LoadImageMask", hint: "",
+    } as never;
     expect(matchesSource(masked, "加载图像")).toBe(true);
-    expect(matchesSource(masked, "Load - Image ( as  mask )")).toBe(true);
-    //: 「as Mask」只在英文那一份里才有:类名(LoadImageMask)和本地化的名字(加载图像)都比不出它来
-    expect(matchesSource(masked, "as Mask")).toBe(true);
+    expect(matchesSource(masked, "LoadImageMask")).toBe(true);
+    expect(matchesSource(masked, "Load - Image ( as  mask )")).toBe(false);
+    expect(matchesSource(masked, "as Mask")).toBe(false);
     expect(matchesSource(masked, "SaveImage")).toBe(false);
     //: 空搜索不筛掉任何一项,照旧
     expect(matchesSource(masked, "")).toBe(true);
   });
 
-  it("没有节点的项(种子、尺寸、跑几遍)没有节点名,照旧搜原来那几样", () => {
-    const graphLevel = fillable({ key: "seed", input: "seed", kind: "seed", title: { zh: "种子", en: "Seed" } });
+  it("没有节点的项(种子、尺寸、跑几遍)名字是空串,照旧搜原来那几样", () => {
+    const graphLevel = { key: "seed", node: "", input: "seed", kind: "seed", title: "种子",
+                         node_title: "", node_label: "", class_type: "",
+                         hint: "" } as never;
     expect(matchesSource(graphLevel, "as Mask")).toBe(false);
     expect(matchesSource(graphLevel, "种子")).toBe(true);
     expect(matchesSource(graphLevel, "Seed")).toBe(true);

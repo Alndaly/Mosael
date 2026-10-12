@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, Check, GripVertical, ListPlus, SlidersHorizontal, S
 
 import type { WorkflowApp, WorkflowAppOutput, WorkflowFillable } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
-import { useI18n, usePreferences } from "@/app/preferences";
+import { useI18n } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,7 +34,6 @@ import {
   type AppItemDraft,
 } from "@/features/plugins/workflowAppForm";
 import { cn } from "@/lib/utils";
-import { pickLabel } from "@/lib/pickLabel";
 
 type Patch = Partial<Pick<AppItemDraft, "label" | "main" | "choices">>;
 
@@ -56,8 +55,6 @@ export function FormBuilder({
   onChange: (next: FormDraft) => void;
 }) {
   const t = useI18n();
-  //: 作者没起名字的那几项用插件交回的名字:一句或一张语言表,按界面语言挑一句(见 lib/pickLabel)
-  const { locale } = usePreferences();
   const found = React.useMemo(() => itemsByKey(data), [data]);
   const [said, setSaid] = React.useState("");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }));
@@ -65,7 +62,7 @@ export function FormBuilder({
 
   const nameOf = (key: string) => {
     const one = draft.items.find((entry) => entry.key === key);
-    return one?.label || pickLabel(found.get(key)?.title, locale) || key;
+    return one?.label || found.get(key)?.title || key;
   };
   const announceMove = (next: FormDraft, key: string) => {
     const index = next.items.findIndex((one) => one.key === key);
@@ -145,7 +142,6 @@ const SILENT = {
 /** 空着的表单:不是一块死框 —— 说清楚怎么加,给「按推荐先挑一版」并写明会挑哪几项;一项都不挑也是一种选择。 */
 function EmptyForm({ data, onRecommend }: { data: WorkflowApp; onRecommend: () => void }) {
   const t = useI18n();
-  const { locale } = usePreferences();
   const picks = recommendedItems(data);
   return (
     <div data-app-empty="" className="grid justify-items-center gap-3 rounded-xl border border-dashed border-border-strong px-5 py-8 text-center">
@@ -164,7 +160,7 @@ function EmptyForm({ data, onRecommend }: { data: WorkflowApp; onRecommend: () =
       </Hint>
       {picks.length > 0 && (
         <p className="m-0 max-w-sm text-ui-2xs leading-relaxed text-muted-foreground">
-          {t("workflowAppRecommendWhat").replace("{what}", picks.map((one) => pickLabel(one.title, locale)).join(t("listSeparator")))}
+          {t("workflowAppRecommendWhat").replace("{what}", picks.map((one) => one.title).join(t("listSeparator")))}
         </p>
       )}
       <p className="m-0 max-w-sm text-ui-2xs leading-relaxed text-muted-foreground">{t("workflowAppEmptyNote")}</p>
@@ -193,9 +189,8 @@ function FieldCard({
   onFix: (options: string[]) => void;
 }) {
   const t = useI18n();
-  const { locale } = usePreferences();
   const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: one.key });
-  const name = pickLabel(item?.title, locale) || one.key;
+  const name = item?.title || one.key;
   const shown = one.label || name;
   //: 图级的项、主提示词用宿主自己的控件,名字跟着宿主走,不能改
   const hostControl = Boolean(item && (GRAPH_KINDS.has(item.kind) || (item.kind === "text" && one.main)));

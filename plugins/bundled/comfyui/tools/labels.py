@@ -324,9 +324,8 @@ class Parameter:
     node_title: str
     rank: int
     common: bool
-    #: 这一格给人看的名字:**一句**,或者一张 `{"zh", "en"}` 语言表(和 `items()` 的 `title` 同一种形状,挑哪一句是
-    #: 界面的事,见 frontend lib/pickLabel)。工作流自己存的那份标签是一句,就照一句交回 —— 不替它编一门语言。
-    name: str | dict[str, str]
+    zh: str
+    en: str
     #: 节点给人看的名字(`node_name`):撞名时带上它,而不是类名
     node_label: dict[str, str] = field(default_factory=dict)
     #: ComfyUI 给这一格的说明(按语言),没有是 None
@@ -340,27 +339,6 @@ def _humanize(name: str) -> str:
     return words[:1].upper() + words[1:] if words else name
 
 
-def phrases(name: str | dict[str, str]) -> dict[str, str]:
-    """一条名字里每种语言各是哪一句(**一句就是它自己**:工作流自己存的那份标签不带语言,每种语言里都写这一句)。
-
-    撞名和搜索要拿**每一种语言**去比,光比挑好的那一句就漏(见 frontend lib/pickLabel 的 labelValues)。
-    """
-    if isinstance(name, str):
-        return {locale: name for locale in LOCALES} if name else {}
-    return {locale: one for locale, one in name.items() if isinstance(one, str) and one}
-
-
-def said(name: str | dict[str, str], locale: str) -> str:
-    """一条名字按语言挑一句:这一门 → `en`(这一类数据的原文语言)→ 表里写在前面的那一句(和 frontend pickLabel 同一套退路)。"""
-    found = phrases(name)
-    return found.get(locale) or found.get("en") or next(iter(found.values()), "")
-
-
-def _named(prefix: dict[str, str], shown: str | dict[str, str]) -> dict[str, str]:
-    """把节点名接在一格自己的名字前面(`「Inpaint Crop」 · 「遮罩像素扩展」`):前缀按语言分,自己的名字是一句就每种语言都用它。"""
-    return {locale: f"{prefix[locale]} · {said(shown, locale)}" for locale in LOCALES}
-
-
 #: 同一个输入名在个别节点上是另一件事:UpscaleModelLoader 的 `model_name` 是放大模型,不是主模型。
 KNOWN_BY_CLASS: dict[tuple[str, str], Known] = {
     ("UpscaleModelLoader", "model_name"): Known("放大模型", "Upscale model", 13, True),
@@ -371,7 +349,7 @@ KNOWN_BY_CLASS: dict[tuple[str, str], Known] = {
 
 def describe(node: str, name: str, class_type: str, title: str, order: int,
              object_info: dict[str, Any] | None = None,
-             own: str | dict[str, str] | None = None) -> Parameter:
+             own: str | None = None) -> Parameter:
     """这一格叫什么。`own` 是**工作流自己存的那份标签**(画布上这一格写着的名字,见 convert 的 `INPUT_LABELS`)。
 
     不认得的输入,名字按这个先后挑(`own` 排最前 —— 画布上写着什么,Mosael 里就写什么):
@@ -383,6 +361,9 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
     认得的那几格(`KNOWN`)用表里的名字 —— 那是 Mosael 自己给常见输入起的人话名字,比节点包的一句话准
     (真机上 `VHS_VideoCombine` 的 `pingpong` 存着 `"Ping-Pong"`,表里是「往返播放」);表只管名字,**排序和
     「收不收进高级」照旧**(见 `common` / `rank`)。
+
+    交回的是一对 `{"zh", "en"}`:`own` 那份标签是一句、不带语言,并进这一对时两种语言里都写它。挑哪一句显示是
+    宿主按**读的人的语言**做的事(见 backend `app/domain/workflow_library._picked`)—— 名字在这一层不塌成一句。
     """
     known = KNOWN_BY_CLASS.get((class_type, name)) or KNOWN.get(name)
     custom = _custom_title(title, class_type)
@@ -393,14 +374,15 @@ def describe(node: str, name: str, class_type: str, title: str, order: int,
     if known is None:
         # 不认得的输入:名字里带上它是哪个节点的,否则两个自定义节点的 `strength` 分不清
         shown = own or input_name(class_type, name, object_info) or _humanize(name)
+        one = shown if isinstance(shown, dict) else {"zh": shown, "en": shown}
         return Parameter(
             key=f"{node}.{name}", node=node, input=name, class_type=class_type, node_title=custom,
-            rank=1000 + order, common=False, name=_named(where, shown),
+            rank=1000 + order, common=False, zh=f"{where['zh']} · {one['zh']}", en=f"{where['en']} · {one['en']}",
             node_label=where, hint=hint, names_node=True,
         )
     return Parameter(
         key=f"{node}.{name}", node=node, input=name, class_type=class_type, node_title=custom,
-        rank=known.rank * 1000 + order, common=known.common and not advanced, name={"zh": known.zh, "en": known.en},
+        rank=known.rank * 1000 + order, common=known.common and not advanced, zh=known.zh, en=known.en,
         node_label=where, hint=hint,
     )
 
@@ -411,41 +393,39 @@ def _ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
-def numbered(names: dict[str, str | dict[str, str]], nodes: dict[str, str]) -> dict[str, str | dict[str, str]]:
+def numbered(names: dict[str, dict[str, str]], nodes: dict[str, str]) -> dict[str, dict[str, str]]:
     """还是撞名的那几个(同一个标题的几个节点 —— 复制出来的那种):每个后面带上节点号(`#12`),和画布上节点角上的号对得上。
-    `names`:键 → 名字(一句或一张 `{"zh", "en"}` 表);`nodes`:键 → 节点号(图级的项没有节点,不带)。哪种语言撞了都算撞。"""
+    `names`:键 → 名字(`{"zh", "en"}`);`nodes`:键 → 节点号(图级的项没有节点,不带)。哪种语言撞了都算撞。"""
     count: dict[tuple[str, str], int] = {}
     for name in names.values():
-        for lang, one in phrases(name).items():
-            count[(lang, one)] = count.get((lang, one), 0) + 1
-    out: dict[str, str | dict[str, str]] = {}
+        for lang in ("zh", "en"):
+            count[(lang, name[lang])] = count.get((lang, name[lang]), 0) + 1
+    out: dict[str, dict[str, str]] = {}
     for key, name in names.items():
-        clash = any(count[(lang, one)] > 1 for lang, one in phrases(name).items())
-        out[key] = {lang: f"{one} #{nodes[key]}" for lang, one in phrases(name).items()} \
-            if clash and nodes.get(key) else name
+        clash = any(count[(lang, name[lang])] > 1 for lang in ("zh", "en"))
+        out[key] = {lang: f"{name[lang]} #{nodes[key]}" for lang in ("zh", "en")} if clash and nodes.get(key) else name
     return out
 
 
-def titled(parameters: list[Parameter]) -> dict[str, str | dict[str, str]]:
-    """每个参数最终的名字(**一句**,或者一张 `{"zh", "en"}` 表)。**只在撞名时**才带上是哪个节点 —— 用节点给人看的名字
-    (`node_name`),不用类名。
+def titled(parameters: list[Parameter]) -> dict[str, dict[str, str]]:
+    """每个参数最终的名字(`{"zh", "en"}`)。**只在撞名时**才带上是哪个节点 —— 用节点给人看的名字(`node_name`),不用类名。
 
     - 用户给节点起了名字 → 「采样器 · 精修」;
     - 没起名字 → 同一类节点里按出现顺序数,第一个不带尾巴,之后的「采样器 · 第 2 个 K 采样器」;
     - 不撞名 → 就是「采样器」,不带任何技术名词;
     - 名字里本来就带着节点名的(不认得的输入)不再接一遍;这样还撞的(几个节点标题一样)各带上节点号,见 numbered。
 
-    不撞名的就是参数自己那一条名字**原样**交回:工作流存的那份标签是一句,交回的也是一句(不替它编一门语言)。
-    撞上了才要拼节点名,那一刻按语言各拼一份。
+    交回的一律是**一对** `{"zh", "en"}`(画布上那份标签是一句,并进这一对时两种语言同值):挑哪一句显示是宿主
+    按读的人的语言做的事,插件在这一层不挑、也不把一对塌成一句。
     """
     seen: dict[str, list[Parameter]] = {}
     for one in parameters:
-        seen.setdefault(said(one.name, "zh"), []).append(one)
-    out: dict[str, str | dict[str, str]] = {}
+        seen.setdefault(one.zh, []).append(one)
+    out: dict[str, dict[str, str]] = {}
     for group in seen.values():
         if len(group) == 1:
             one = group[0]
-            out[one.key] = one.name
+            out[one.key] = {"zh": one.zh, "en": one.en}
             continue
         classes = [one.class_type for one in group]
         per_class: dict[str, int] = {}
@@ -453,23 +433,21 @@ def titled(parameters: list[Parameter]) -> dict[str, str | dict[str, str]]:
             per_class[one.class_type] = per_class.get(one.class_type, 0) + 1
             where = one.node_label or {"zh": one.class_type, "en": one.class_type}
             if one.names_node:
-                out[one.key] = one.name
+                out[one.key] = {"zh": one.zh, "en": one.en}
                 continue
             if one.node_title:
                 hint_zh = hint_en = one.node_title
             elif position == 0:
-                out[one.key] = one.name
+                out[one.key] = {"zh": one.zh, "en": one.en}
                 continue
             elif classes.count(one.class_type) > 1:
                 index = per_class[one.class_type]
                 hint_zh, hint_en = f"第 {index} 个 {where['zh']}", f"{_ordinal(index)} {where['en']}"
             else:
                 hint_zh, hint_en = where["zh"], where["en"]
-            out[one.key] = {locale: f"{said(one.name, locale)} · {hint}"
-                            for locale, hint in (("zh", hint_zh), ("en", hint_en))}
+            out[one.key] = {"zh": f"{one.zh} · {hint_zh}", "en": f"{one.en} · {hint_en}"}
     return numbered(out, {one.key: one.node for one in parameters})
 
 
 __all__ = ["CORE_NODE_ZH", "HIDDEN_INPUTS", "I18N_KEY", "KNOWN", "Known", "Parameter", "ROLE_NAMES", "advanced_input",
-           "describe", "hidden_input", "input_hint", "input_name", "node_name", "numbered", "phrases", "said",
-           "titled", "with_i18n"]
+           "describe", "hidden_input", "input_hint", "input_name", "node_name", "numbered", "titled", "with_i18n"]

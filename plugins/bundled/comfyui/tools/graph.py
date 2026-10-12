@@ -1092,10 +1092,10 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
       开关(`toggle`)、数字(`number`)、文字(`text`,没有 `role`)。
 
     每项 `{key, node, input, kind, title, node_title, node_label?, hint?, class_type, common, schema?, mask_property?}`:
-    `key` 是锚点(`<节点 id>.<输入名>`,图级的项就是它的名字),`title` 是人话名字、`node_label` 是节点给人看的名字
-    (用户起的标题、ComfyUI 给这类节点的名字,见 labels.node_name —— 编辑器按节点分组用它)。**两个都是一句或一张
-    `{"zh", "en"}` 语言表,按哪种语言显示由界面挑**(它知道 Mosael 的界面语言,搜索还要拿表里全部语言去比 ——
-    显示「加载图像」而画布上是 `Load Image` 时,光比挑好的那一句就搜不到,见 frontend lib/pickLabel)。
+    `key` 是锚点(`<节点 id>.<输入名>`,图级的项就是它的名字),`title` 是人话名字(`{"zh", "en"}` 一对)、`node_label`
+    是节点给人看的名字(用户起的标题、ComfyUI 给这类节点的名字,见 labels.node_name —— 编辑器按节点分组用它)。
+    **名字按语言分,挑哪一句是宿主的事**(它按读的人的语言挑好一句再交给界面,见 backend
+    `app/domain/workflow_library._picked`)—— 插件在这一层不挑一种、也不塌成一句。
     `hint` 是 ComfyUI 给这一格的说明,`schema` 是它进参数表时的 JSON Schema 片段(读素材的没有)。类名(`class_type`)
     只给排错的悬停说明用。`mask_property` 是这一项在「蒙版属性」那一组里排第几位(1 起数,按沿 MASK 这条线的先后,
     见 mask_path);不在这一路上没有这一格 —— 它给的是**位置**不是一个是非:这份列表本身的顺序是常用程度,不是

@@ -794,33 +794,23 @@ _MAX_APP_FOUND = 1000
 
 
 def _picked(value: Any, limit: int) -> str:
-    """一段给人看的字:按看的人的语言挑好(`{"zh", "en"}`),或者本来就是一句。"""
+    """一段给人看的字:按看的人的语言挑好(`{"zh", "en"}`),或者本来就是一句。
+
+    名字(`title` / `node_label`)和说明(`hint`)**走的是同一条路**:插件交回一对语言,宿主在边界上按请求的语言
+    塌成一句。曾经试过让名字带着语言表一路透到前端去挑(宿主原样透出、前端 `lib/pickLabel` 自己挑,好让搜索比得到
+    另一种语言里的写法),维护者撤掉了那一套:「为了 ComfyUI 和 Mosael 的语言不匹配问题特地兼容做一套方案是不合理的」。
+    """
     return _text(pick_text(value) if isinstance(value, dict) else value, limit)
 
 
-def _words(value: Any, limit: int) -> str | dict[str, str]:
-    """**名字**:插件交回一张语言表(`{"zh": "加载图像", "en": "LoadImage"}`)就原样透出那一张,本来就是一句就是那一句。
-
-    名字天生是多语言的一组事实,不是"后端挑好的一句话":挑哪种语言是**界面**的事 —— 它知道 Mosael 的界面语言,
-    而搜索要拿**全部语言**去比(见 frontend lib/pickLabel、workflowAppForm.matchesSource)。宿主在边界上塌成一句
-    才是设计错误:塌完那一种语言里的信息就没了,搜索再也搜不到另一种语言里的名字(维护者:「节点名称明明是
-    Load Image,搜索这个却搜索不到」/「通过加一个语言返回项的方式这个设计明显是不对且不合理的」)。
-
-    **只认这一种形状**(ADR 0006):表里每一条都得是非空的字符串;空表、坏条目当没给(回空串)。长度各按 `limit` 截。
-    """
-    if isinstance(value, dict):
-        table = {str(lang): _text(picked, limit) for lang, picked in value.items() if isinstance(picked, str)}
-        return {lang: picked for lang, picked in table.items() if picked} or ""
-    return _text(value, limit)
-
-
 def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
-    """编辑器要的一项能填的项:锚点、种类、名字(**一句或一张语言表**,原样透出)、节点是谁(给人看的节点名、类名)、
+    """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁(给人看的节点名、类名)、
     ComfyUI 给这一格的说明、常用与否、JSON Schema 片段(和生成目录同一套规整,见 plugins/generation.parameters ——
     预览和真的表单是同一个形状)、它在「蒙版属性」那一组里排第几位(ADR 0056 第一步)。
 
-    **只认一种形状**(ADR 0006):插件交回来的这一项里,`title` 和 `node_label` 是"一句或一张 `{语言: 名字}` 表"
-    (见 `_words`),`mask_property` 是一个位置(1 起数的整数),不是一个 `true`、不是一份键的列表 —— 不在这条路上的
+    **只认一种形状**(ADR 0006):插件交回来的这一项里,`title` / `node_label` / `hint` 是 `{"zh", "en"}` 一对
+    (或者本来就是一句) —— 宿主在这一层按读的人的语言挑一句;**不再另带一条"英文那份"**(`node_label_en` 那个
+    设计被否掉了)。`mask_property` 是一个位置(1 起数的整数),不是一个 `true`、不是一份键的列表 —— 不在这条路上的
     写 0。插件和宿主同属一次发布(内置插件随后端一起打包),读的又是现问现算、不落盘的回答 —— 没有旧数据可迁,
     也就不在读取期认第二种形状。
     """
@@ -834,9 +824,9 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     at = raw.get("mask_property")
     item: dict[str, Any] = {
         "key": key, "node": node, "input": name, "kind": kind,
-        "title": _words(title, 200) or key,
+        "title": _picked(title, 200) or key,
         "node_title": _text(raw.get("node_title"), 200),
-        "node_label": _words(raw.get("node_label"), 200),
+        "node_label": _picked(raw.get("node_label"), 200),
         "hint": _picked(raw.get("hint"), 500),
         "class_type": _text(raw.get("class_type"), 200),
         "common": raw.get("common") is True,

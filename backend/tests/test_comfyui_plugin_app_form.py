@@ -240,11 +240,11 @@ def test_能填的项_ComfyUI给的名字和说明_hidden的不列_advanced的�
 
 
 def test_每项交回的节点名是一对_不再另带英文那份(plugin) -> None:
-    """节点名是**一组多语言的事实**:`node_label` 是 `{"zh", "en"}` 一对,插件把两种语言一起交上去、自己不挑一种。
-    此前另带过一条 `node_label_en`(挑一条显示、英文名另走一路),那个设计被否掉了 —— 挑语言是界面的事
-    (见 frontend lib/pickLabel:按界面语言挑一句显示,搜索拿表里全部语言去比)。图级的项(种子、尺寸、跑几遍)没有节点,不带。
+    """节点名按语言分着交回(`{"zh", "en"}` 一对),插件自己不挑一种、也不塌成一句 —— 挑一句是**宿主按读的人的
+    语言**做的事(见 backend `app/domain/workflow_library._picked`)。此前另带过一条 `node_label_en`(挑一条显示、
+    英文名另走一路),那个设计被否掉了。图级的项(种子、尺寸、跑几遍)没有节点,不带。
 
-    本地化名字(花式模糊)和英文名(Fancy Blur)不是同一个词的那种最要看这一条:两种语言都在同一张表里。"""
+    本地化名字(花式模糊)和英文名(Fancy Blur)不是同一个词的那种最要看这一条:两种语言都在同一对里。"""
     graph, _, _ = plugin
     sys.path.insert(0, str(TOOLS))
     try:
@@ -254,7 +254,7 @@ def test_每项交回的节点名是一对_不再另带英文那份(plugin) -> N
     info = labels.with_i18n({**OBJECT_INFO, **NAMED_INFO}, NAMED_I18N)
     found = {one["key"]: one for one in graph.items(_named_api(), info, {})}
     assert found["20.blur_radius"]["node_label"] == {"zh": "花式模糊", "en": "Fancy Blur"}, \
-        "一对原样交上去:显示挑哪一条、搜索比哪几条都是界面的事"
+        "一对原样交上去:挑哪一句是宿主按读的人的语言做的事"
     assert found["13.lora_name"]["node_label"] == {"zh": "Lora Loader 🐍", "en": "Lora Loader 🐍"}, \
         "object_info 只有 display_name、没有 zh/i18n 中文:两种语言都是它"
     assert found["4.ckpt_name"]["node_label"] == {"zh": "Checkpoint 加载器", "en": "CheckpointLoaderSimple"}, \
@@ -542,7 +542,7 @@ def test_读应用表单_全部能填的项和读到时的改动时间(comfy) ->
     assert [one["key"] for one in out["items"]][:5] == ["6.text", "7.text", "10.image", "13.image", "14.image"]
     by_key = {one["key"]: one for one in out["items"]}
     assert by_key["13.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}, \
-        "节点给人看的名字是一对,一路带到编辑器(挑哪一种由界面做)"
+        "节点给人看的名字是一对,一路带到边界(挑一句是宿主按读的人的语言做的事)"
     assert "node_label" not in by_key["seed"], "图级的项没有节点"
     assert [one["node"] for one in out["outputs"]] == ["9", "17"]
     #: 每个节点给人看的名字(工作台「运行与结果」用):和「结果取自」同一种叫法,不是类名

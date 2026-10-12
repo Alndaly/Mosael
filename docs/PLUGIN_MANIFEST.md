@@ -1379,7 +1379,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
     "items": [{                                                   // 这张图全部能填的项
       "key": "4.ckpt_name", "node": "4", "input": "ckpt_name",
       "kind": "model",                                            // text / media / model / number / choice / toggle / seed / size / runs
-      "title": {"zh": "模型", "en": "Checkpoint"},                // 名字:一句,或者这样一张 {语言: 名字} 表
+      "title": {"zh": "模型", "en": "Checkpoint"},                // 名字:{"zh", "en"} 一对(宿主按读的人的语言挑好一句再给界面)
       "node_label": {"zh": "Checkpoint 加载器", "en": "CheckpointLoaderSimple"},  // 同上;图级的项(种子 / 尺寸 / 跑几遍)没有节点,不带
       "node_title": "", "class_type": "CheckpointLoaderSimple", "common": true,
       "role": "", "media": "", "folder": "checkpoints",           // 文字项的 prompt / negative、素材项的角色和种类、模型目录
@@ -1391,11 +1391,12 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
             "results": ["17"], "invalid": 0, "stray": 0}            // 同 workflows 里的 app,每张表单多带它的模型 id 和工具名
   }
   ```
-  名字(`title` 和 `node_label`)宿主**原样透出**你交的那一份 —— 一句或一张 `{语言: 名字}` 表都行,不在边界上替你挑一种:
-  名字天生是一组多语言的事实,挑哪一种语言**显示**、搜索拿哪几种语言去**比**都是界面的事(它知道 Mosael 的界面语言;
-  搜索比的是表里**全部**语言,所以中文界面显示「加载图像」时按画布上的 `Load Image` 照样搜得到 —— 同时交两种语言
-  才有这一条,只交一句就只搜得到那一句)。`schema` 里给人看的字(`title` / `description`)和 `hint` 还是宿主按读的人的语言挑好,
-  `schema` 过一遍和 `op: models` 同一套规整;节点号不是根图上的
+  名字(`title` 和 `node_label`)按 `{"zh", "en"}` 一对交上来、**由宿主按读的人的语言挑好一句**:挑语言贴着「读的是谁」做事,
+  插件这一层不挑一种、也不把一对塌成一句。曾经试过让宿主原样透出这对语言、由界面自己挑(好让搜索比得到另一种语言里的写法),
+  维护者撤掉了那一套 ——「为了 ComfyUI 和 Mosael 的语言不匹配问题特地兼容做一套方案是不合理的」。代价写在
+  `frontend/src/features/plugins/workflowLibraryView.test.ts` 里:中文界面显示「加载图像」时,画布上另起的英文名搜不到
+  (它不在交回的数据里)。`schema` 里给人看的字(`title` / `description`)和 `hint`
+  也按读的人的语言挑好,`schema` 过一遍和 `op: models` 同一套规整;节点号不是根图上的
   (`12:5`)照样列出来,标着这一版不能放进表单。`app.status` 是 `unsupported`、`upgradable: true` 的是**上一版格式**的标记(这一版
   不读,能经 `upgrade_marks` 改写过来);`upgradable: false` 的 `unsupported` 是更新的插件写的,只能升级插件。每张表单的 `model` /
   `tool` 是它的模型 id 和工具名(说不出来是空串):宿主据此数「这个工作区里有几处在用它」,删表单之前说给作者听。带着 `content`

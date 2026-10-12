@@ -6,12 +6,8 @@
  * 预览不另造一套:按一张表单的草稿拼出一份和生成目录**同形**的描述符(`parameter_keys` / `parameter_schema` / `source_limits` /
  * `source_labels` / `prompt`),交给 AI 工作台、画板、工作流节点用的同一组读法(lib/generationCapabilities)和同一组控件
  * (components/generation/parameterPanel)。插件那一侧怎么把表单变成目录,见 plugins/bundled/comfyui/tools/graph.describe。
- *
- * 名字(`title` / `node_label`)是**一句或一张语言表**:插件按语言交上来,挑哪一种由这里按调用的那一方给的界面语言做
- * (`lib/pickLabel`);搜索不挑,表里全部语言都算(见 matchesSource)。
  */
 import type { GenerationOption, WorkflowAnnotate, WorkflowApp, WorkflowFillable } from "@/api/client";
-import { labelValues, pickLabel } from "@/lib/pickLabel";
 
 /** 草稿里的一项:锚点、作者起的名字、是不是主提示词、收窄的可选值;`problem` 是读进来时就对不上的原因(工作流改过了)。 */
 export interface AppItemDraft {
@@ -279,8 +275,7 @@ export function maskProperty(item: WorkflowFillable): boolean {
   return maskOrder(item) > 0;
 }
 
-/** 按节点分成几组。`locale` 是**界面语言**:节点名是一句或一张语言表,挑哪一种由这一层按它做(见 lib/pickLabel)。 */
-export function sourceGroups(items: readonly WorkflowFillable[], locale: string): SourceGroup[] {
+export function sourceGroups(items: readonly WorkflowFillable[]): SourceGroup[] {
   const groups = new Map<string, SourceGroup>();
   //: 蒙版属性排在头一组(沿线的先后,来源在前),不按节点再分一次 —— 它们本来就是一条线上的几格
   const masks = items.filter(maskProperty).sort((left, right) => maskOrder(left) - maskOrder(right));
@@ -292,7 +287,7 @@ export function sourceGroups(items: readonly WorkflowFillable[], locale: string)
     const node = item.node ?? "";
     const group = groups.get(node) ?? {
       node,
-      label: pickLabel(item.node_label, locale) || item.node_title || item.class_type || "",
+      label: item.node_label || item.node_title || item.class_type || "",
       classType: item.class_type ?? "",
       items: [],
       mask: false,
@@ -305,10 +300,10 @@ export function sourceGroups(items: readonly WorkflowFillable[], locale: string)
 
 /** 一项在它那个节点的分组里叫什么:名字里重复的节点名(「参考图 · 人物」里的「人物」、「花式模糊 · 模糊半径」里的「花式模糊」)
  *  去掉;去完什么都不剩就照原样。**只在按节点分的那几组里用** —— 「蒙版属性」那一组是几个节点的格子混在一起,节点名不能去掉
- *  (哪一格属于哪个节点就看它,见 SourcePanel)。`locale` 是界面语言(名字是一句或一张语言表,见 lib/pickLabel)。 */
-export function shortTitle(item: WorkflowFillable, locale: string): string {
-  const title = pickLabel(item.title, locale) || item.key;
-  const node = pickLabel(item.node_label, locale);
+ *  (哪一格属于哪个节点就看它,见 SourcePanel)。 */
+export function shortTitle(item: WorkflowFillable): string {
+  const title = item.title || item.key;
+  const node = item.node_label || "";
   const drop = new Set([node, `${node} #${item.node}`, item.node_title || "", `${item.class_type} #${item.node}`].filter(Boolean));
   const kept = title.split(" · ").filter((part) => !drop.has(part));
   return kept.length > 0 ? kept.join(" · ") : title;
@@ -320,17 +315,18 @@ function searchable(value: string): string {
   return value.toLowerCase().replace(/[\s_-]+/g, "");
 }
 
-/** 搜索「工作流里能填的」:名字、节点名(**表里每一种语言都算**)、节点号、类名、输入名里有搜的字。
+/** 搜索「工作流里能填的」:名字、节点名、节点号、类名、输入名里有搜的字。
  *
- *  名字是一句或一张 `{语言: 名字}` 表,而这里**不挑**:表里每一种语言的写法都进 haystack —— 中文界面显示「加载图像」
- *  时,按画布上写着的 `Load Image` 照样搜得到(维护者搜不到的就是它)。挑一条来比的话,没被挑中的那几种语言等于不存在。 */
+ *  比的就是数据里那几个字符串字段 —— 名字在边界上已经按看的人的语言挑成一句了(宿主 `workflow_library._picked`),
+ *  这里不另认语言表:「名字带语言表、前端挑」那一套维护者撤掉了(「为了 ComfyUI 和 Mosael 的语言不匹配问题特地
+ *  兼容做一套方案是不合理的」)。 */
 export function matchesSource(item: WorkflowFillable, query: string): boolean {
   const needle = searchable(query.trim());
   if (!needle) return true;
   const haystack = [item.title, item.node_label, item.node_title, item.class_type, item.key, item.input,
                     //: 节点号也搜(`674`、`#674` 都行)—— 标题上那个 `#号` 现在可点着定位,想按它找是很自然的下一步。
-                    item.node, `#${item.node}`].flatMap((one) => labelValues(one));
-  return haystack.some((one) => searchable(one).includes(needle));
+                    item.node, `#${item.node}`];
+  return haystack.some((one) => searchable(String(one ?? "")).includes(needle));
 }
 
 /** 要写回去的样子:**全部**表单(按现在的顺序;新表单不带 id,插件起)和结果标记。没有项的表单照样是一张表单。 */
@@ -393,10 +389,8 @@ export function itemsByKey(data: WorkflowApp): Map<string, WorkflowFillable> {
  * 还拼上 `form`:表上每一项的键、表上的顺序(和插件交上来的那份同一个形状,见 graph.form_items)。预览就是靠它
  * 用**生成面板同一个判据**(lib/appFormFields)决定每一项画成哪一格 —— 两边各排一套序的话,作者在中间跨类拖动
  * (把「参考图」拖到「放大倍数」下面)预览里看不出变化。
- *
- * 作者没起名字的那几项,名字用插件交回的 `title`(`locale` 是界面语言,一句或一张表,见 lib/pickLabel)。
  */
-export function previewOption(data: WorkflowApp, draft: FormDraft, instanceId: string, locale: string): GenerationOption {
+export function previewOption(data: WorkflowApp, draft: FormDraft, instanceId: string): GenerationOption {
   const found = itemsByKey(data);
   /** 表上的每一项,写成宿主描述符认得的键:主提示词 → `prompt`、反向 → `negative_prompt`、种子 / 尺寸 / 跑几遍 →
    *  `seed` / `size` / `num_images`、读素材的槽位 → 它的角色(同一角色只列一次,在第一格的位置)、其余 → 参数键。 */
@@ -431,7 +425,7 @@ export function previewOption(data: WorkflowApp, draft: FormDraft, instanceId: s
       if (!role) continue;
       push(role, one.label);
       limits[role] = (limits[role] ?? 0) + 1;
-      labels[role] = [...(labels[role] ?? []), one.label || item.node_title || `${pickLabel(item.node_label, locale) || item.class_type} #${item.node}`];
+      labels[role] = [...(labels[role] ?? []), one.label || item.node_title || `${item.node_label || item.class_type} #${item.node}`];
     } else if (item.kind === "seed" || item.kind === "size") {
       push(item.kind, one.label);
       if (item.kind === "size") {
@@ -444,7 +438,7 @@ export function previewOption(data: WorkflowApp, draft: FormDraft, instanceId: s
       capabilities.max_num_images = typeof spec.maximum === "number" ? spec.maximum : 4;
       capabilities.num_images_unit = "runs";
     } else if (VALUE_KINDS.has(item.kind)) {
-      const own: Record<string, unknown> = { ...spec, title: one.label || pickLabel(item.title, locale) };
+      const own: Record<string, unknown> = { ...spec, title: one.label || item.title };
       delete own["x-advanced"];
       if (one.choices && one.choices.length > 0 && CHOICE_KINDS.has(item.kind)) own.enum = one.choices;
       push(one.key, one.label);

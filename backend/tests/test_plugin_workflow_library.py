@@ -708,10 +708,10 @@ def test_列出来的每一张带着它的应用表单_宿主规整一遍(librar
     assert sketch["app"] is None, "插件没说(转不过来的那张)就没有"
 
 
-def test_编辑器读一张_名字不再被塌成一句_插件交回的那一对原样给出来(library) -> None:
-    """名字天生是**多语言的一组事实**,不是"后端挑好的一句话":插件交回 `{"zh", "en"}` 一对,接口给的就是那一对 ——
-    `zh` 与 `en` 都在。挑哪一种语言是前端的事(它知道 Mosael 的界面语言,搜索还要拿全部语言去比 —— 塌成一句,
-    没被挑中的那几种语言在数据里就没了,搜「加载图像」时画布上的 `LoadImage` 再也搜不到)。
+def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套规整(library) -> None:
+    """插件交回的是一对 `{"zh", "en"}`,**宿主在边界上按读的人的语言挑成一句**再给界面(和 `hint` 走同一条路,
+    见 `_picked`)—— 「名字带着语言表透到前端去挑」那一套维护者撤掉了:「为了 ComfyUI 和 Mosael 的语言不匹配问题
+    特地兼容做一套方案是不合理的」。挑好的那一句也是搜索、撞名、显示都读的那一句。
     """
     client, instance_id = library
     response = client.get(f"/api/plugins/instances/{instance_id}/workflow-library/app", params={"path": "portrait.json"})
@@ -720,7 +720,7 @@ def test_编辑器读一张_名字不再被塌成一句_插件交回的那一对
     assert body["path"] == "portrait.json" and body["modified"] == 1776098682.9 and body["editable"] is True
     by_key = {one["key"]: one for one in body["items"]}
     assert list(by_key) == ["6.text", "10.image", "seed", "4.ckpt_name", "12:5.steps"], "认不出种类的那一项丢掉"
-    assert by_key["6.text"]["title"] == {"zh": "提示词", "en": "Prompt"}, "名字原样透出:两种语言都在"
+    assert by_key["6.text"]["title"] == "提示词", "一对里挑好的那一句(这个请求是中文界面)"
     assert by_key["6.text"]["role"] == "prompt"
     assert by_key["6.text"]["spec"] == {"type": "string", "x-multiline": True, "default": "a cat"}, "认不得的字段不留"
     assert by_key["10.image"]["spec"] is None and by_key["10.image"]["node_title"] == "人物"
@@ -728,16 +728,14 @@ def test_编辑器读一张_名字不再被塌成一句_插件交回的那一对
     assert by_key["12:5.steps"]["exposable"] is False and by_key["12:5.steps"]["spec"]["title"] == "步数", \
         "子图里面的节点照样列出来,标着这一版不能放进应用表单"
     assert by_key["seed"]["exposable"] is True
-    assert by_key["4.ckpt_name"]["node_label"] == {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"}, \
-        "节点给人看的名字也是一对,原样透出"
-    assert by_key["10.image"]["node_label"] == {"zh": "加载图像", "en": "LoadImage"}
-    assert by_key["12:5.steps"]["node_label"] == {"zh": "K 采样器", "en": "KSampler"}, "子图里的节点也带着"
+    assert by_key["4.ckpt_name"]["node_label"] == "Checkpoint 加载器", "节点给人看的名字也按同一种语言挑好"
+    assert by_key["10.image"]["node_label"] == "加载图像"
+    assert by_key["12:5.steps"]["node_label"] == "K 采样器", "子图里的节点也带着"
     assert by_key["seed"]["node_label"] == "", "图级的项没有节点"
-    assert by_key["4.ckpt_name"]["hint"] == "要加载的模型", \
-        "这一格的**说明**(不是名字)照旧按看的人的语言挑好:它不是一组多语言的事实,是 ComfyUI 给这一格的 tooltip"
+    assert by_key["4.ckpt_name"]["hint"] == "要加载的模型", "ComfyUI 给这一格的说明也按同一种语言挑好"
     assert by_key["4.ckpt_name"]["class_type"] == "CheckpointLoaderSimple", "类名留着给悬停说明排错"
     assert all("node_label_en" not in one for one in body["items"]), \
-        "上一轮那条「英文名的另一路」已经删掉,不留兼容分支(ADR 0006)"
+        "那条「英文名另走一路」的设计被否掉了,不留兼容分支(ADR 0006)"
     assert by_key["seed"]["hint"] == ""
     assert by_key["10.image"]["mask_property"] == 1, \
         "「蒙版属性」排第几位从插件原样透出(ADR 0056 第一步):沿 MASK 走出来的位置,界面那一组照它摆"
