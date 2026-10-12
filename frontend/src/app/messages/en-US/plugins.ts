@@ -762,6 +762,8 @@ export const plugins = {
   workflowAppSearch: "Search names or nodes",
   workflowAppSearchEmpty: "Nothing matches “{query}”",
   workflowAppGraphGroup: "Whole workflow",
+  workflowAppMaskGroup: "Mask properties",
+  workflowAppMaskGroupHint: "The controls along this workflow's mask path: mask source → mask ops → the sampler. Which ones count comes from the types on the wires, not from node names",
   workflowAppNodeDetail: "Node #{node} · {class}",
   workflowAppTech: "Node #{node} · {class} · {input}",
   workflowAppAdvanced: "Advanced",

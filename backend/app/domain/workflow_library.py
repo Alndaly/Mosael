@@ -801,9 +801,10 @@ def _picked(value: Any, limit: int) -> str:
 def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
     """编辑器要的一项能填的项:锚点、种类、名字(按看的人的语言挑好)、节点是谁(给人看的节点名、**它的英文那份**、类名)、
     ComfyUI 给这一格的说明、常用与否、JSON Schema 片段(和生成目录同一套规整,见 plugins/generation.parameters ——
-    预览和真的表单是同一个形状)。
+    预览和真的表单是同一个形状)、它在「蒙版属性」那一组里排第几位(ADR 0056 第一步)。
 
-    **只认一种形状**(ADR 0006):插件交回来的这一项里,`node_label` 和 `node_label_en` 都是一句。插件和宿主同属一次发布
+    **只认一种形状**(ADR 0006):插件交回来的这一项里,`node_label` 和 `node_label_en` 都是一句;`mask_property` 是
+    一个位置(1 起数的整数),不是一个 `true`、不是一份键的列表 —— 不在这条路上的写 0。插件和宿主同属一次发布
     (内置插件随后端一起打包),读的又是现问现算、不落盘的回答 —— 没有旧数据可迁,也就不在读取期认第二种形状。
     """
     if not isinstance(raw, dict):
@@ -813,6 +814,7 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
         return None
     key = f"{node}.{name}" if node else name
     title = raw.get("title")
+    at = raw.get("mask_property")
     item: dict[str, Any] = {
         "key": key, "node": node, "input": name, "kind": kind,
         "title": _picked(title, 200) or key,
@@ -826,6 +828,8 @@ def _app_item(raw: Any, text: Any) -> dict[str, Any] | None:
         "role": _text(raw.get("role"), 40),
         "media": _text(raw.get("media"), 20),
         "folder": _text(raw.get("folder"), 64),
+        #: 沿 MASK 走出来的第几位(插件按连线上的类型认的,见 graph.mask_property);0 = 不在这条路上
+        "mask_property": at if isinstance(at, int) and not isinstance(at, bool) and at > 0 else 0,
         # 子图里面的节点(`12:5`)这一版不能放进应用表单(ADR 0038「这一版不做」),照样列出来、标着
         "exposable": not node or bool(_ROOT_NODE.fullmatch(node)),
     }

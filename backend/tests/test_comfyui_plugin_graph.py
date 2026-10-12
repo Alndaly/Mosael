@@ -781,6 +781,116 @@ def test_蒙版_单独的蒙版节点和只接了alpha的LoadImage(graph) -> Non
     assert "inpaint" in graph.features(api)
 
 
+# --- 蒙版属性(ADR 0056 第一步):沿 MASK 走,不认名字 -------------------------------------
+#
+# 维护者否掉的正是「按控件名硬编码一张表」:「这就必须要根据控件名称 一旦控件名称变了就出问题了」。所以下面这份
+# object_info 里**没有一个真实类名、真实控件名**:`MyCustomMaskGrow` 就是 GrowMask 改了类名、`grow_px` 就是它的
+# 控件 `expand` 改了名,`MyCustomMaskFeather` 就是 FeatherMask 改了名。归组照样认得出 —— 认的是连线上的类型。
+
+#: 蒙版这一路的节点定义(裁到这条线要用的那几格)。
+MASK_INFO = {
+    "LoadImageMask": {"input": {"required": {"image": [["mask.png"], {"image_upload": True}],
+                                             "channel": [["alpha", "red", "green", "blue"]]}},
+                      "output": ["MASK"]},
+    "LoadImage": {"input": {"required": {"image": [["a.png"], {"image_upload": True}]}}, "output": ["IMAGE", "MASK"]},
+    "MyCustomMaskGrow": {"input": {"required": {"mask": ["MASK"],
+                                                "grow_px": ["INT", {"default": 6, "min": 0, "max": 64}]}},
+                         "output": ["MASK"]},
+    "MyCustomMaskFeather": {"input": {"required": {"mask": ["MASK"], "softness": ["FLOAT", {"default": 3.0}]}},
+                            "output": ["MASK"]},
+    "MaskToImage": {"input": {"required": {"mask": ["MASK"]}}, "output": ["IMAGE"]},
+    #: 只是**名字里带 mask**:吃的是 IMAGE、交的还是 IMAGE。按名字认会把它收进来,按类型走就不会。
+    "MaskSaver": {"input": {"required": {"image": ["IMAGE"], "quality": ["INT", {"default": 90}]}}, "output": []},
+    "ImageScale": {"input": {"required": {"image": ["IMAGE"], "scale": ["FLOAT", {"default": 1.0}]}}, "output": ["IMAGE"]},
+    "VAEEncodeForInpaint": {"input": {"required": {"pixels": ["IMAGE"], "vae": ["VAE"], "mask": ["MASK"],
+                                                   "grow_mask_by": ["INT", {"default": 6, "min": 0, "max": 64}]}},
+                            "output": ["LATENT"]},
+    "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["a.safetensors"]]}}},
+}
+
+#: 一条蒙版这一路的图:读蒙版(11)→ 扩张(30)→ 羽化(20)→ 送进采样器(50),旁边一支把蒙版画成图(31)、
+#: 那张图再交给名字里带 mask 的 MaskSaver(40)。**节点号故意不按沿线升序排**(先 30 后 20)。
+MASK_API = {
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}},
+    "10": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+    "11": {"class_type": "LoadImageMask", "inputs": {"image": "mask.png", "channel": "red"}},
+    "30": {"class_type": "MyCustomMaskGrow", "inputs": {"mask": ["11", 0], "grow_px": 8}},
+    "20": {"class_type": "MyCustomMaskFeather", "inputs": {"mask": ["30", 0], "softness": 2.0}},
+    "31": {"class_type": "MaskToImage", "inputs": {"mask": ["20", 0]}},
+    "40": {"class_type": "MaskSaver", "inputs": {"image": ["31", 0], "quality": 90}},
+    "50": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["10", 0], "vae": ["4", 2],
+                                                           "mask": ["20", 0], "grow_mask_by": 6}},
+}
+
+
+def _on_line(found: list[dict]) -> dict[str, int]:
+    """这一列里属于「蒙版属性」的那几项:键 → 它在这条线上的第几位。"""
+    return {one["key"]: one["mask_property"] for one in found if "mask_property" in one}
+
+
+def test_蒙版属性_类名和控件名都改了照样进组(graph) -> None:
+    """`GrowMask` 改名成 `MyCustomMaskGrow`、它的控件 `expand` 改名成 `grow_px` 之后,那一格照样是「蒙版属性」。
+
+    这就是「不硬编码名字」的证明:这条线上除了 MASK 这个类型,没有一个名字是 Mosael 认得的(类名、控件名、
+    节点标题全是编的),可它还是被认出来了。"""
+    found = graph.items(MASK_API, MASK_INFO, {})
+    by_key = {one["key"]: one for one in found}
+    at = _on_line(found)
+    assert sorted(at, key=at.get) == ["11.image", "30.grow_px", "20.softness", "50.grow_mask_by"], \
+        "改了名的那一格照样在组里;顺序是沿线的先后(来源在前)"
+    assert by_key["30.grow_px"]["title"] == {"zh": "MyCustomMaskGrow · Grow px", "en": "MyCustomMaskGrow · Grow px"}, \
+        "名字不另起一套:还是既有的命名链(节点名 · ComfyUI 给这一格的名字)"
+    assert by_key["50.grow_mask_by"]["title"] == {"zh": "蒙版外扩", "en": "Grow mask by"}, "认得的输入照旧用 Mosael 的名字"
+    assert "mask_property" not in by_key["10.image"], "参考图不在蒙版这条线上"
+    assert "mask_property" not in by_key["4.ckpt_name"], "选模型的格子也不是"
+    assert graph.mask_path(MASK_API, MASK_INFO) == ["11", "30", "20", "31", "50"], \
+        "沿 MASK 走到的节点:11 → 30 → 20,从 20 分两支(画成图的 31、送进采样器的 50),MaskToImage 到此为止"
+
+
+def test_蒙版属性_只是名字里带mask的不算_它吃的是IMAGE(graph) -> None:
+    """反例:`MaskSaver` 名字里带 mask,可它吃的是 IMAGE、交的还是 IMAGE,接在蒙版那条线的**下游**的图上。
+    按名字认会把它收进来;按类型走就不会。"""
+    found = graph.items(MASK_API, MASK_INFO, {})
+    by_key = {one["key"]: one for one in found}
+    assert "40.quality" in by_key, "它照样是这一列里的一个普通项(能调)"
+    assert "mask_property" not in by_key["40.quality"], "只是名字里带 mask:不在蒙版这条线上"
+
+
+def test_蒙版属性_顺序按沿线先后_不是节点号也不是常用程度(graph) -> None:
+    """沿线是 11(来源)→ 30 → 20 → 50,而节点号是乱的(30 在 20 前)、这一列本身的顺序又是常用程度
+    (`grow_mask_by` 是认得的输入,排得比两个不认得的靠前)—— 所以位置得插件给,界面才能照沿线摆。"""
+    found = graph.items(MASK_API, MASK_INFO, {})
+    at = _on_line(found)
+    assert at == {"11.image": 1, "30.grow_px": 2, "20.softness": 3, "50.grow_mask_by": 4}
+    listed = [one["key"] for one in found if "mask_property" in one]
+    assert listed != sorted(at, key=at.get), "列表本身的顺序(提示词、素材、常用程度)确实不是这条线的先后"
+
+
+def test_蒙版属性_alpha那一路上_图那一路的格子不算(graph) -> None:
+    """图和 alpha 两路都接下去时(见 alpha_masks):蒙版从 LoadImage 的第二个输出走。图那一支接到缩放上,
+    那一格不是蒙版属性 —— 跟的是 MASK 那个输出接出去的线,不是「这个节点碰过蒙版」。"""
+    api = {
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "a.safetensors"}},
+        "12": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+        "10": {"class_type": "ImageScale", "inputs": {"image": ["12", 0], "scale": 1.5}},
+        "30": {"class_type": "MyCustomMaskGrow", "inputs": {"mask": ["12", 1], "grow_px": 8}},
+        "50": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["10", 0], "vae": ["4", 2],
+                                                               "mask": ["30", 0], "grow_mask_by": 6}},
+    }
+    at = _on_line(graph.items(api, MASK_INFO, {}))
+    assert at == {"12.image": 1, "30.grow_px": 2, "50.grow_mask_by": 3}, "蒙版来源就是那个 LoadImage,它在前"
+    assert graph.mask_path(api, MASK_INFO) == ["12", "30", "50"], "图那一路(缩放)不在蒙版这条线上"
+
+
+def test_蒙版属性_图里没有蒙版来源时一个都没有(graph) -> None:
+    api = {
+        "10": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+        "40": {"class_type": "MaskSaver", "inputs": {"image": ["10", 0], "quality": 90}},
+    }
+    assert graph.mask_path(api, MASK_INFO) == []
+    assert _on_line(graph.items(api, MASK_INFO, {})) == {}, "没有蒙版这条线:一个蒙版属性都没有"
+
+
 def test_视频输入是待编辑的视频_音频是驱动音频(graph) -> None:
     api = {
         "1": {"class_type": "LoadVideo", "inputs": {"file": "clip.mp4"}},

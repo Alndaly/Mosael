@@ -251,23 +251,46 @@ export function fixableChoices(one: AppItemDraft, item: WorkflowFillable | undef
 }
 
 /** 编辑器左边「工作流里能填的」按节点分的一组:节点给人看的名字(插件给的,用户起的标题优先)、节点号、类名(悬停排错用)。
- *  图级的项(种子、尺寸、跑几遍)没有节点,自成一组(`node` 是空串)。按在图里第一次出现的顺序。 */
+ *  图级的项(种子、尺寸、跑几遍)没有节点,自成一组(`node` 是空串)。按在图里第一次出现的顺序。
+ *  「蒙版属性」自成一组(`mask`):那一组是沿 MASK 这条线走到的几个节点上的格子混在一起(见 maskOrder),不按节点分。 */
 export interface SourceGroup {
   node: string;
   label: string;
   classType: string;
   items: WorkflowFillable[];
+  /** 是不是「蒙版属性」那一组:它没有节点号(不挂定位按钮),名字是界面自己的 */
+  mask: boolean;
+}
+
+/** 这一项在「蒙版属性」那一组里排第几位(插件沿 MASK 走出来的:来源 → 蒙版运算 → 送给采样器);0 = 不在这条路上。
+ *
+ *  插件给的是**位置**不是一个是非:这份列表本身的顺序是常用程度,不是这条线的先后(见 graph.mask_path)。 */
+export function maskOrder(item: WorkflowFillable): number {
+  const at = item.mask_property;
+  return typeof at === "number" && at > 0 ? at : 0;
+}
+
+/** 这一项归不归「蒙版属性」那一组。 */
+export function maskProperty(item: WorkflowFillable): boolean {
+  return maskOrder(item) > 0;
 }
 
 export function sourceGroups(items: readonly WorkflowFillable[]): SourceGroup[] {
   const groups = new Map<string, SourceGroup>();
+  //: 蒙版属性排在头一组(沿线的先后,来源在前),不按节点再分一次 —— 它们本来就是一条线上的几格
+  const masks = items.filter(maskProperty).sort((left, right) => maskOrder(left) - maskOrder(right));
+  if (masks.length > 0) {
+    groups.set("mask", { node: "", label: "", classType: "", items: masks, mask: true });
+  }
   for (const item of items) {
+    if (maskProperty(item)) continue;
     const node = item.node ?? "";
     const group = groups.get(node) ?? {
       node,
       label: item.node_label || item.node_title || item.class_type || "",
       classType: item.class_type ?? "",
       items: [],
+      mask: false,
     };
     group.items.push(item);
     groups.set(node, group);
@@ -276,7 +299,8 @@ export function sourceGroups(items: readonly WorkflowFillable[]): SourceGroup[] 
 }
 
 /** 一项在它那个节点的分组里叫什么:名字里重复的节点名(「参考图 · 人物」里的「人物」、「花式模糊 · 模糊半径」里的「花式模糊」)
- *  去掉;去完什么都不剩就照原样。 */
+ *  去掉;去完什么都不剩就照原样。**只在按节点分的那几组里用** —— 「蒙版属性」那一组是几个节点的格子混在一起,节点名不能去掉
+ *  (哪一格属于哪个节点就看它,见 SourcePanel)。 */
 export function shortTitle(item: WorkflowFillable): string {
   const title = item.title || item.key;
   const node = item.node_label || "";

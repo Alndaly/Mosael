@@ -157,9 +157,11 @@ elif op == "app":
              "schema": {"type": "string", "x-multiline": True, "default": "a cat", "onclick": "x"}},
             {"key": "10.image", "node": "10", "input": "image", "kind": "media", "role": "reference_image",
              "media": "image", "title": "参考图 · 人物", "node_title": "人物", "class_type": "LoadImage",
-             "node_label": {"zh": "加载图像", "en": "LoadImage"}, "node_label_en": "LoadImage", "common": True},
+             "node_label": {"zh": "加载图像", "en": "LoadImage"}, "node_label_en": "LoadImage", "common": True,
+             "mask_property": 1},
             {"key": "seed", "node": "", "input": "seed", "kind": "seed", "title": {"zh": "种子", "en": "Seed"},
-             "schema": {"type": "integer", "minimum": 0}},
+             "schema": {"type": "integer", "minimum": 0},
+             "mask_property": True},
             {"key": "4.ckpt_name", "node": "4", "input": "ckpt_name", "kind": "model", "folder": "checkpoints",
              "title": {"zh": "模型", "en": "Checkpoint"}, "class_type": "CheckpointLoaderSimple",
              "node_label": {"zh": "Checkpoint 加载器", "en": "Load Checkpoint"}, "node_label_en": "Load Checkpoint",
@@ -730,6 +732,10 @@ def test_编辑器读一张_名字按语言挑好_片段和生成目录同一套
     assert by_key["seed"]["node_label_en"] == "", "图级的项没有节点"
     assert by_key["4.ckpt_name"]["class_type"] == "CheckpointLoaderSimple", "类名留着给悬停说明排错"
     assert by_key["seed"]["node_label"] == "" and by_key["seed"]["hint"] == ""
+    assert by_key["10.image"]["mask_property"] == 1, \
+        "「蒙版属性」排第几位从插件原样透出(ADR 0056 第一步):沿 MASK 走出来的位置,界面那一组照它摆"
+    assert by_key["seed"]["mask_property"] == 0, \
+        "只认一种形状(ADR 0006):位置是一个 1 起数的整数 —— 插件写 `true` 那种不当成第 1 位,当不在这一路上"
     assert body["outputs"] == [
         {"node": "9", "title": "SaveImage", "label": "保存图像", "class_type": "SaveImage", "media": "image"},
         {"node": "12", "title": "高清", "label": "高清", "class_type": "SaveImage", "media": "image"},

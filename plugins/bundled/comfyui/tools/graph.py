@@ -480,6 +480,74 @@ def alpha_masks(api: dict[str, Any], found_slots: list[dict[str, str]]) -> list[
             and {used for _, _, used in consumers.get(slot["node"], [])} >= {0, 1}]
 
 
+# ---------------------------------------------------------------------------
+# 蒙版属性(ADR 0056 第一步):哪些格子属于蒙版 —— 沿 MASK 这条线认,不认名字
+# ---------------------------------------------------------------------------
+
+#: 蒙版这一路的类型名。ComfyUI 的 object_info 里输入、输出就是这么写的(维护者那台机器上输入或输出带它的类有几百个)。
+_MASK_TYPE = "MASK"
+
+
+def mask_outputs(object_info: dict[str, Any] | None, class_type: str) -> list[int]:
+    """这一类节点上**哪几个输出是 MASK**:看 object_info 里声明的类型,不看类名。
+
+    记类名是不行的:几百个类带着 MASK,自定义节点包升级一次名字就变(ADR 0056:「一旦控件名称变了就出问题了」)。
+    这一类不在 object_info 里(没装)就不知道 —— 交回空的,这条线也就跟不下去。
+    """
+    info = (object_info or {}).get(class_type)
+    declared = info.get("output") if isinstance(info, dict) else None
+    if not isinstance(declared, list):
+        return []
+    return [index for index, kind in enumerate(declared) if kind == _MASK_TYPE]
+
+
+def mask_sources(api: dict[str, Any], object_info: dict[str, Any],
+                 titles: dict[str, str] | None = None) -> list[tuple[str, int]]:
+    """这张工作流的**蒙版从哪儿来**:`[(节点, 它的第几个输出是 MASK)]`。
+
+    就是已经认成蒙版的那几个槽位(见 slots:`LoadImageMask`,或只用了 alpha 那一路的 `LoadImage`),加上拿 alpha
+    当蒙版的 `LoadImage`(见 alpha_masks)。哪个输出是 MASK 也按 object_info 声明的类型认。
+    """
+    found = slots(api, kind_of(api), titles, object_info)
+    from_slots = [slot for slot in found if slot["role"] == "mask"]
+    return [(slot["node"], index) for slot in (*from_slots, *alpha_masks(api, found))
+            for index in mask_outputs(object_info, slot["class_type"])]
+
+
+def mask_path(api: dict[str, Any], object_info: dict[str, Any],
+              titles: dict[str, str] | None = None) -> list[str]:
+    """沿 MASK 走一遍:交回这条线上的节点 id,**按沿线的先后**(来源 → 蒙版运算 → 送给采样器)。
+
+    这是「哪几格是蒙版属性」的判据(见 items 的 `mask_property`)—— **不记类名、不记控件名、不记节点标题**:
+    从蒙版来源出发(见 mask_sources),顺着它**声明成 MASK 的输出**接出去的线走;走到的节点里,谁身上还有声明成 MASK
+    的输出就接着往下走,直到没人再接(蒙版交给了采样器:`VAEEncodeForInpaint` / `SetLatentNoiseMask` 那一格)。
+    一条线上分了岔的先后按离来源几步排(同一层按节点号),所以「来源在前」是走出来的,不是碰巧。
+
+    认不出类型的节点(这一类不在 object_info 里:没装的自定义节点)到此为止 —— 不知道它交出的是不是蒙版就不替它猜
+    (它本来也没有能在表单上调的格子)。
+    """
+    readers = _readers(api)
+    order: list[str] = []
+    seen: set[str] = set()
+    for node_id, _ in sorted(mask_sources(api, object_info, titles), key=lambda one: _node_order(one[0])):
+        if node_id in api and node_id not in seen:
+            seen.add(node_id)
+            order.append(node_id)
+    frontier = list(order)
+    while frontier:
+        following: list[str] = []
+        for node_id in frontier:
+            for slot in mask_outputs(object_info, str(api[node_id].get("class_type", ""))):
+                for reader in sorted(readers.get((node_id, slot), ()), key=_node_order):
+                    if reader in seen:
+                        continue
+                    seen.add(reader)
+                    order.append(reader)
+                    following.append(reader)
+        frontier = following
+    return order
+
+
 def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = None,
              object_info: dict[str, Any] | None = None) -> list[str]:
     """这张图在做什么(给人和智能体挑工作流用):upscale / inpaint / img2img / remove-background / …"""
@@ -1032,12 +1100,15 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
     - 其余给人调的字面量输入(见 _tunable_entries):选模型文件的下拉(`model`,带 `folder`)、别的下拉(`choice`)、
       开关(`toggle`)、数字(`number`)、文字(`text`,没有 `role`)。
 
-    每项 `{key, node, input, kind, title, node_title, node_label?, node_label_en?, hint?, class_type, common, schema?}`:`key` 是锚点
+    每项 `{key, node, input, kind, title, node_title, node_label?, node_label_en?, hint?, class_type, common, schema?,
+    mask_property?}`:`key` 是锚点
     (`<节点 id>.<输入名>`,图级的项就是它的名字),`title` 是人话名字(按语言分),`node_label` 是节点给人看的名字(用户起的
     标题、ComfyUI 给这类节点的名字,见 labels.node_name —— 编辑器按节点分组用它),`node_label_en` 是**同一个名字的英文那份**
     (`node_label` 是 `{"zh", "en"}` 一对,界面显示只挑一种语言;英文那份另带一路上,搜索才搜得到 —— 显示是「加载图像」而画布上
     是 `Load Image`,只按显示的那一份比就搜不到它),`hint` 是 ComfyUI 给这一格的说明,
     `schema` 是它进参数表时的 JSON Schema 片段(读素材的没有)。类名(`class_type`)只给排错的悬停说明用。
+    `mask_property` 是这一项在「蒙版属性」那一组里排第几位(1 起数,按沿 MASK 这条线的先后,见 mask_path);不在这一路上
+    没有这一格 —— 它给的是**位置**不是一个是非:这份列表本身的顺序是常用程度,不是这条线的先后(界面那一组要按沿线摆)。
     顺序:提示词、素材、图级的项、其余按常用程度。生成目录(describe)、工具(tooling.shape_of)、应用表单(app_form)都从它出发。
     """
     titles = titles or {}
@@ -1107,6 +1178,14 @@ def items(api: dict[str, Any], object_info: dict[str, Any], titles: dict[str, st
         if spec.get("x-model-folder"):
             item["folder"] = spec["x-model-folder"]
         found.append(_label_en_of(item))
+    # 沿 MASK 走到的那几格(ADR 0056 第一步):标上它在这条线上的第几位。哪几格算看的是连线上的类型(见 mask_path),
+    # 名字、值、顺序都不动 —— 只多一个位置,界面据此把它们归到「蒙版属性」那一组。
+    path = mask_path(api, object_info, titles)
+    if path:
+        at = {node_id: position for position, node_id in enumerate(path)}
+        on_line = sorted((one for one in found if one["node"] in at), key=lambda one: at[one["node"]])
+        for position, one in enumerate(on_line, start=1):
+            one["mask_property"] = position
     # 几格写提示词的节点标题一样(复制出来的那种)、或者别的项和它们同名:各带上节点号,编辑器和右栏里分得清
     names = labels.numbered({one["key"]: one["title"] for one in found}, {one["key"]: one["node"] for one in found})
     return [{**one, "title": names[one["key"]]} for one in found]

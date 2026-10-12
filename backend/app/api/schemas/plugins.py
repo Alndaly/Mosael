@@ -987,6 +987,10 @@ class WorkflowFillableOut(ApiModel):
     media: str = ""
     #: 选模型文件的项:模型目录(checkpoints、loras……)
     folder: str = ""
+    #: 这一项在「蒙版属性」那一组里排第几位(1 起数,按沿 MASK 这条线的先后:来源 → 蒙版运算 → 送给采样器);
+    #: 0 / 不带 = 不在这条路上(ADR 0056 第一步)。给的是位置不是一个是非:能填的项本身的顺序是常用程度,
+    #: 不是这条线的先后,而那一组要按沿线摆。
+    mask_property: int | None = None
     #: 能不能放进应用表单(子图里面的节点这一版不能)
     exposable: bool = True
     #: 它进参数表时的 JSON Schema 片段(和生成目录同一套规整);读素材的项没有

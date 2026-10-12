@@ -77,8 +77,9 @@ function draft(): FormDraft {
   return { id: "", key: "new-1", title: "遮罩", description: "", model: "", tool: "", items: [] };
 }
 
-function show() {
-  render(<SourcePanel data={data()} draft={draft()} onAdd={() => {}} onRemove={() => {}} />);
+function show(items?: WorkflowApp["items"]) {
+  const base = data();
+  render(<SourcePanel data={items ? { ...base, items } : base} draft={draft()} onAdd={() => {}} onRemove={() => {}} />);
   //: 一个节点一组;「整张图」那一组的节点号是空的(data-source-group="")
   const group = (node: string) => document.querySelector(`[data-source-group="${node}"]`) as HTMLElement;
   const chip = (container: HTMLElement) => container.querySelector("button[data-comfy-node]") as HTMLButtonElement | null;
@@ -151,5 +152,68 @@ describe("「工作流里能填的」:节点分组标题上的节点号能在画
     expect(heading(group("720")).hasAttribute("data-hint-trigger")).toBe(true);
     expect(heading(group("720")).querySelectorAll("[data-hint-trigger]")).toHaveLength(0);
     expect(chip(group("720"))!.hasAttribute("data-hint-trigger")).toBe(false);
+  });
+});
+
+/**
+ * 「蒙版属性」那一组:插件沿 MASK 这条线走出来的几格(ADR 0056 第一步,见 graph.mask_path)——
+ * `mask_property` 是它在**这条线上的第几位**(1 起数),不是一个是非:这一列本身的顺序是常用程度,
+ * 那一组要按沿线的先后摆(来源 → 蒙版运算 → 送给采样器)。名字照旧只用插件给的 `title` / `hint` / `node_label`。
+ */
+function maskItems(): WorkflowApp["items"] {
+  const base = { node_title: "", node_label: "", node_label_en: "", hint: "", role: "", media: "", folder: "",
+                 common: true, exposable: true };
+  return [
+    { ...base, key: "11.image", node: "11", input: "image", kind: "media", role: "mask", media: "mask",
+      title: "蒙版 · 加载图像(作为蒙版) #11", node_label: "加载图像(作为蒙版)", class_type: "LoadImageMask",
+      mask_property: 1, spec: null },
+    //: 类名和控件名都是插件那边编的:认的是连线上的类型,界面这边一个名字都不认
+    { ...base, key: "30.grow_px", node: "30", input: "grow_px", kind: "number", title: "MyCustomMaskGrow · Grow px",
+      node_label: "MyCustomMaskGrow", class_type: "MyCustomMaskGrow", mask_property: 2,
+      spec: { type: "integer", default: 8 } },
+    { ...base, key: "20.softness", node: "20", input: "softness", kind: "number", title: "MyCustomMaskFeather · Softness",
+      node_label: "MyCustomMaskFeather", class_type: "MyCustomMaskFeather", mask_property: 3,
+      spec: { type: "number", default: 2 } },
+    //: 名字里带 mask 的普通项(吃的是 IMAGE):它不进那一组,照旧在自己的节点分组里
+    { ...base, key: "40.quality", node: "40", input: "quality", kind: "number", title: "MaskSaver · Quality",
+      node_label: "MaskSaver", class_type: "MaskSaver", spec: { type: "integer", default: 90 } },
+    { ...base, key: "3.steps", node: "3", input: "steps", kind: "number", title: "步数", node_label: "K 采样器",
+      class_type: "KSampler", spec: { type: "integer", default: 20 } },
+  ];
+}
+
+describe("「蒙版属性」自成一组", () => {
+  it("在组里的是蒙版属性,普通项不在;顺序照插件给的第几位(不是节点号)", () => {
+    const { group, chip } = show(maskItems());
+
+    const mask = group("mask");
+    const rows = [...mask.querySelectorAll("[data-source-item]")].map((one) => one.getAttribute("data-source-item"));
+    //: 沿线是 11 → 30 → 20,而节点号是乱的(30 在 20 前面)、这一列里排的顺序也不是这个
+    expect(rows).toEqual(["11.image", "30.grow_px", "20.softness"]);
+    //: 那一组不是一个节点:标题是界面自己的那句话,没有可定位的节点号
+    expect(mask.querySelector("h5")!.textContent).toBe("workflowAppMaskGroup");
+    expect(chip(mask)).toBeNull();
+    //: 普通项照旧各在自己的节点分组里(MaskSaver 名字里带 mask 也不算)
+    expect(group("40").querySelectorAll("[data-source-item]")).toHaveLength(1);
+    expect(group("3").querySelectorAll("[data-source-item]")).toHaveLength(1);
+    expect(mask.querySelector('[data-source-item="40.quality"]')).toBeNull();
+    expect(mask.querySelector('[data-source-item="3.steps"]')).toBeNull();
+  });
+
+  it("那一组的行照 title 显示几个节点的格子混在一起,节点名不能像别的组那样去掉", () => {
+    const { group } = show(maskItems());
+    const shown = (key: string) => group("mask").querySelector(`[data-source-item="${key}"]`)!.textContent!;
+
+    expect(shown("30.grow_px")).toContain("MyCustomMaskGrow · Grow px");
+    expect(shown("20.softness")).toContain("MyCustomMaskFeather · Softness");
+    expect(shown("11.image")).toContain("蒙版 · 加载图像(作为蒙版) #11");
+    //: 按节点分的那几组照旧去掉名字里重复的节点名(MaskSaver · Quality → Quality)
+    expect(group("40").textContent).toContain("Quality");
+    expect(group("40").textContent).not.toContain("MaskSaver · Quality");
+  });
+
+  it("没有蒙版属性时不多出这一组", () => {
+    const { group } = show();
+    expect(group("mask")).toBeNull();
   });
 });

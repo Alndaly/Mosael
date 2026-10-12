@@ -771,6 +771,8 @@ export const plugins = {
   workflowAppSearch: "搜名字或节点",
   workflowAppSearchEmpty: "没有对得上「{query}」的项",
   workflowAppGraphGroup: "整张图",
+  workflowAppMaskGroup: "蒙版属性",
+  workflowAppMaskGroupHint: "沿这张工作流的蒙版这条路走到的几格:蒙版来源 → 蒙版运算 → 送给采样器。哪几格算看的是连线上的类型,不是节点名字",
   workflowAppNodeDetail: "节点 #{node} · {class}",
   workflowAppTech: "节点 #{node} · {class} · {input}",
   workflowAppAdvanced: "高级",

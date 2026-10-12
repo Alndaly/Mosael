@@ -19508,6 +19508,8 @@ export interface components {
              * @default
              */
             folder: string;
+            /** Mask Property */
+            mask_property?: number | null;
             /**
              * Exposable
              * @default true

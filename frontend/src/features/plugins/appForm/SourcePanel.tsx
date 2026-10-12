@@ -15,11 +15,15 @@ import { cn } from "@/lib/utils";
 
 /**
  * 「工作流里能填的」:这张图全部能填的项,**按节点分组**(组名是节点给人看的名字 —— 用户起的标题,没起就是 ComfyUI 给这类
- * 节点的名字;节点号、类名在悬停说明里),种子 / 尺寸 / 跑几遍是「整张图」那一组。每一行:种类图标、名字、现在的值,右边一颗
- * 「+」放进表单;已经在表单上的打勾,再点一下拿掉。子图里面的节点灰着、说为什么。
+ * 节点的名字;节点号、类名在悬停说明里),种子 / 尺寸 / 跑几遍是「整张图」那一组,蒙版属性是**头一组**。每一行:种类图标、
+ * 名字、现在的值,右边一颗「+」放进表单;已经在表单上的打勾,再点一下拿掉。子图里面的节点灰着、说为什么。
+ *
+ * 「蒙版属性」那一组是插件沿 MASK 这条线走到的几格(见 workflowAppForm.maskOrder、插件 graph.mask_path),**不按节点分** ——
+ * 它按沿线的先后摆(来源 → 蒙版运算 → 送给采样器),所以那几行的名字照 title 显示:节点名不能像别的组那样去掉,不然几格
+ * 「Expand」「Amount」分不出是哪个节点上的(节点号仍在悬停说明里)。
  *
  * 组标题右边的 `#节点号` 是一颗按钮(和助手回复里的 `#12` 同一颗):点了在画布上定位这个节点 —— 名字是用户起的,
- * 光看名字对不上画布上哪一个(维护者提的)。「整张图」那一组没有节点,不给按钮。
+ * 光看名字对不上画布上哪一个(维护者提的)。「整张图」和「蒙版属性」那两组没有节点,不给按钮。
  */
 export function SourcePanel({
   data,
@@ -52,14 +56,20 @@ export function SourcePanel({
         <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowAppSearchEmpty").replace("{query}", query.trim())}</p>
       )}
       {groups.map((group) => {
-        const name = group.node ? group.label : t("workflowAppGraphGroup");
+        const name = group.mask ? t("workflowAppMaskGroup") : group.node ? group.label : t("workflowAppGraphGroup");
+        //: 分组标出来的是**节点号**(「整张图」那一组是空串);「蒙版属性」不是某一个节点,标 `mask`
+        const where = group.mask ? "mask" : group.node;
+        //: 标题旁边那一条说明:节点分组说这个节点**是什么**(节点号 · 类名);蒙版属性那一组不是节点,说的是这几格怎么认出来的
+        const detail = group.mask ? t("workflowAppMaskGroupHint")
+                                  : group.node ? t("workflowAppNodeDetail").replace("{node}", group.node).replace("{class}", group.classType || "?")
+                                                : undefined;
         return (
-          <div key={group.node || "graph"} className="grid min-w-0 gap-1" data-source-group={group.node}>
+          <div key={group.mask ? "mask" : group.node || "graph"} className="grid min-w-0 gap-1" data-source-group={where}>
             {/*
-              这一处只留一条说明:说的是这个节点**是什么**(节点号 · 类名),挂在标题这一条上 —— 名字和节点号都归它管。
+              这一处只留一条说明,挂在标题这一条上 —— 名字和节点号都归它管。
               定位那颗按钮自己不挂说明(两处的说法不一样,一处挂两条是噪音),它的名字走 aria-label(「在画布上定位 #706」)。
             */}
-            <Hint label={group.node ? t("workflowAppNodeDetail").replace("{node}", group.node).replace("{class}", group.classType || "?") : undefined}>
+            <Hint label={detail}>
               <h5 className="m-0 flex min-w-0 items-baseline gap-1.5 px-1 text-ui-xs font-semibold text-muted-foreground">
                 <Truncate className="min-w-0">{name}</Truncate>
                 {group.node && (
@@ -80,6 +90,7 @@ export function SourcePanel({
             <ul aria-label={group.node ? `${name} #${group.node}` : name} className="m-0 grid list-none gap-0.5 p-0">
               {group.items.map((item) => (
                 <SourceRow key={item.key} item={item} added={chosen.has(item.key)}
+                           name={group.mask ? item.title || item.key : shortTitle(item)}
                            onAdd={() => onAdd(item)} onRemove={() => onRemove(item.key)} />
               ))}
             </ul>
@@ -90,15 +101,16 @@ export function SourcePanel({
   );
 }
 
-function SourceRow({ item, added, onAdd, onRemove }: {
+/** 一行能填的项。`name` 由调用方给(见 SourcePanel):按节点分的那几组去掉名字里重复的节点名,蒙版属性那一组照 title 显示。 */
+function SourceRow({ item, added, name, onAdd, onRemove }: {
   item: WorkflowFillable;
   added: boolean;
+  name: string;
   onAdd: () => void;
   onRemove: () => void;
 }) {
   const t = useI18n();
   const allowed = exposable(item);
-  const name = shortTitle(item);
   const tech = techText(item, t);
   const main = item.kind === "text" && Boolean(item.role);
   return (

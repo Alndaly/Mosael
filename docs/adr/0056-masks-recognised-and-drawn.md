@@ -102,4 +102,10 @@ ComfyUI 里加 —— 表单编辑器只挑已有节点,这是既有约定(ADR 0
   由 `GenerateWorkspace` 在 `role === "mask"` 时接上;底图取同一组里第一张已填的素材。
   底图经 fetch → blob → 对象 URL 再进画布:直接把后端源给 `<img>` 会污染画布,`getImageData` / `toBlob` 全抛
   SecurityError,而"按阈值初始化"和导出两件事都要它。
-- 第一步(属性归组)待做。
+- **第一步(属性归组)已实现**(2026-10-12):判据是**沿 MASK 这条线走**,不是一张「类名 → 属性名」的表(维护者否掉的正是后者:
+  「一旦控件名称变了就出问题了」)。插件 `graph.mask_path`(`mask_sources` 从已经认成蒙版的槽位出发:LoadImageMask/alpha 那一路,
+  `mask_outputs` 按 `object_info` 里声明的**类型**认哪个输出是 MASK)交回这条线上的节点,**按沿线先后**;`graph.items` 给这条线上
+  每个节点**能在表单上调的格子**标一个 `mask_property`(1 起数的位置 —— 位置而不是一个是非:items 本身的顺序是常用程度,
+  界面那一组要按沿线摆)。名字一个都不新起:还是既有的命名链(见 labels)。宿主 `WorkflowFillableOut.mask_property` 原样透出;
+  前端精简表单的「工作流里能填的」那一列把这几格归成头一组「蒙版属性」(SourcePanel / `workflowAppForm.sourceGroups`)。
+  测试:改了类名和控件名的节点照样进组、只是名字里带 mask 的不进、顺序按沿线。

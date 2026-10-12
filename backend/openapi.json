@@ -49319,6 +49319,17 @@
             "title": "Folder",
             "default": ""
           },
+          "mask_property": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask Property"
+          },
           "exposable": {
             "type": "boolean",
             "title": "Exposable",
