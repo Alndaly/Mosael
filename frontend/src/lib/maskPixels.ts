@@ -86,6 +86,80 @@ export function alphaMask(data: MaskPixels, value: number): void {
 }
 
 /**
+ * 半径类参数的取整:**半数进位**,`floor(x + 0.5)`(和 `Math.round` 同一条规则,负数也一样)。
+ * 扩张和羽化都走它,后端 `media/masks._half_up` 是同一句 —— 契约 contracts/mask-cases.json 钉着。
+ */
+export const halfUp = (value: number) => Math.floor(value + 0.5);
+
+/**
+ * 扩张(`radius` > 0)/ 收缩(`radius` < 0)`|radius|` 个像素,**形态学**:窗口 `(2r+1)×(2r+1)` 的正方形里
+ * 取最大值(扩张)/ 最小值(收缩)。灰的(羽化过的软边)照灰的取,不先二值化。
+ *
+ * 和后端 `media/masks.grow_mask` 逐字节相同(contracts/mask-cases.json):两轴分开跑(正方形结构元可分离)、
+ * 边界**夹取**(越界的取样点取边上那个像素,贴边那一圈不会自己缩掉)、半径按长边封顶。
+ *
+ * 每一行用单调队列求滑动窗口的极值 —— 每个像素进出队列各一次,和半径无关:编辑器里 4096 的文档、
+ * 半径 64 拖一下也是一眨眼。`radius` 取整后为 0 就原样不动。
+ */
+export function growMask(data: MaskPixels, width: number, height: number, radius: number): void {
+  const signed = halfUp(radius);
+  if (signed === 0 || width < 1 || height < 1 || data.length !== width * height * CHANNELS) return;
+  const reach = Math.min(Math.abs(signed), Math.max(width, height));
+  const keepFirst = signed > 0 ? (a: number, b: number) => a >= b : (a: number, b: number) => a <= b;
+  const channel = new Uint8ClampedArray(width * height);
+  for (let at = 0, i = 0; at < data.length; at += CHANNELS, i += 1) channel[i] = data[at];
+  const scratch = new Uint8ClampedArray(width * height);
+  extremumAxis(channel, scratch, width, height, reach, true, keepFirst);
+  extremumAxis(scratch, channel, width, height, reach, false, keepFirst);
+  for (let at = 0, i = 0; at < data.length; at += CHANNELS, i += 1) {
+    data[at] = channel[i];
+    data[at + 1] = channel[i];
+    data[at + 2] = channel[i];
+    data[at + 3] = 255;
+  }
+}
+
+/**
+ * 沿一个轴取 `[i-reach, i+reach]`(夹在 `[0, n-1]` 里)的极值。夹取等价于把窗口截到边界之内 ——
+ * 边上那个像素重复多少次都不改变最大 / 最小值。
+ *
+ * 队列里存下标,对应的值从队头到队尾按「谁更该留下」单调:新来的比队尾更该留下,队尾就再也当不上极值了。
+ */
+function extremumAxis(
+  from: Uint8ClampedArray,
+  to: Uint8ClampedArray,
+  width: number,
+  height: number,
+  reach: number,
+  horizontal: boolean,
+  keepFirst: (a: number, b: number) => boolean,
+): void {
+  const outer = horizontal ? height : width;
+  const inner = horizontal ? width : height;
+  const step = horizontal ? 1 : width;
+  const queue = new Int32Array(inner);
+  for (let line = 0; line < outer; line += 1) {
+    const base = horizontal ? line * width : line;
+    let head = 0;
+    let tail = 0;
+    let next = 0;
+    for (let i = 0; i < inner; i += 1) {
+      //: 窗口右端推进到 i + reach。
+      const right = Math.min(inner - 1, i + reach);
+      for (; next <= right; next += 1) {
+        const value = from[base + next * step];
+        while (tail > head && keepFirst(value, from[base + queue[tail - 1] * step])) tail -= 1;
+        queue[tail] = next;
+        tail += 1;
+      }
+      //: 窗口左端之外的出队。
+      while (queue[head] < i - reach) head += 1;
+      to[base + i * step] = from[base + queue[head] * step];
+    }
+  }
+}
+
+/**
  * 羽化:把边晕开 `radius` 个像素。三遍盒式模糊 ≈ 高斯(中心极限),够用而且没有系数要调。
  *
  * 为什么不用 canvas 的 `ctx.filter = "blur(Npx)"`:那要先把像素搬进一张画布、再搬回来,而且
@@ -95,7 +169,7 @@ export function alphaMask(data: MaskPixels, value: number): void {
  * 蒙版的边常常正是要改的地方。`radius < 1` 什么都不做(0.4px 的模糊看不出来,却是三遍全画布扫描)。
  */
 export function featherMask(data: MaskPixels, width: number, height: number, radius: number): void {
-  const reach = Math.round(radius);
+  const reach = halfUp(radius);
   //: 尺寸对不上就不动它:按错的宽度重排像素,出来的是一张谁也认不出的图 —— 宁可什么都不做。
   if (reach < 1 || width < 1 || height < 1 || data.length !== width * height * CHANNELS) return;
   //: 单通道跑:羽化只对灰度有定义,四通道各跑一遍是四倍工作量、结果还一样。
@@ -108,7 +182,7 @@ export function featherMask(data: MaskPixels, width: number, height: number, rad
     blurAxis(scratch, channel, width, height, reach, false);
   }
   for (let at = 0, i = 0; at < data.length; at += CHANNELS, i += 1) {
-    const value = Math.round(channel[i]);
+    const value = halfUp(channel[i]);
     data[at] = value;
     data[at + 1] = value;
     data[at + 2] = value;

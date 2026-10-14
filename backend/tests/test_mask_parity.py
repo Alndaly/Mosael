@@ -9,16 +9,14 @@
 前端是 `Math.round`(半数进位):`feather = 0.5` 时后端一格都不羽化、编辑器羽化了一格;`2.5` 一边
 2 格一边 3 格。两侧的单元测试当时都是绿的。经过见语料的 `why`。
 
-`grow` 那一组(扩张 / 收缩)只有这里跑:前端编辑器没有这一步,素材库对话框把 grow 交给后端算。
-两侧都断言「跑不动的用例**正好**是 grow ≠ 0 那一组」,免得哪天多出一条静默少跑的用例。
+`grow` 那一组(扩张 / 收缩)两侧都跑:ADR 0057 起编辑器也有这一步(`maskPixels.growMask`)。
 
 **同一个形状的第二处**:`grow_mask` 那一句此前是 `int(radius)`(向零截断:`0.5 → 0`、`2.5 → 2`、
 `-1.7 → 1`),而契约定的规则是**半数进位** —— 用户侧三条入口今天都送不进小数(grow 在 HTTP schema 与
 MCP 签名上都是 `int`、素材库对话框那格先 `Math.round`;确认卡那条路能送进来,那处的 `int()` 是同一个
 形状的第三处,见语料的 `why`),所以那几条 `grow` 小数用例是**预先钉住**的:哪天有人把 grow 放成
-float,规则与用例都已经在那儿。取整表因此分两张:`rounding`(feather,两侧都读)与 `grow_rounding`
-(grow,只有后端读),条目同形 —— 不并成一张是因为前端那份循环按 `feather` 读它,并进去要么把前端
-拖进 grow,要么让前端在那几行上**空跑**成一个永远绿的断言。
+float,规则与用例都已经在那儿。取整表分两张:`rounding`(按 feather 读)与 `grow_rounding`(按 grow 读),
+条目同形,两侧都读。
 """
 
 from __future__ import annotations
@@ -109,18 +107,17 @@ def test_语料里那几条半数用例真的能分出两种取整() -> None:
         assert case["expected_reach"] == math.floor(case["feather"] + 0.5), case["name"]
 
 
-def test_前端跑不动的用例正好是_grow_非零那一组() -> None:
-    """前端编辑器没有扩张 / 收缩这一步(`sides` 里写着),所以那一组只有这里跑 —— 写成断言,
-    新加一条前端跑不了又没写清楚的用例时会红,而不是静默少跑一条。"""
+def test_两侧都跑四步_扩张和收缩都有用例() -> None:
+    """ADR 0057 起编辑器也做扩张 / 收缩:`sides` 两侧是同一张表,扩张、收缩各自至少一条用例。"""
     assert CONTRACT["sides"]["backend/app/media/masks.py"] == ["threshold", "invert", "grow", "feather"]
-    assert "grow" not in CONTRACT["sides"]["frontend/src/lib/maskPixels.ts"]
+    assert CONTRACT["sides"]["frontend/src/lib/maskPixels.ts"] == CONTRACT["sides"]["backend/app/media/masks.py"]
     grows = [case["grow"] for case in CONTRACT["cases"] if case["grow"] != 0]
     assert any(value > 0 for value in grows), "没有一条扩张用例"
     assert any(value < 0 for value in grows), "没有一条收缩用例"
 
 
 def test_扩张半径也按半数进位取整_和羽化同一条规则() -> None:
-    """`grow_rounding` 那张表(后端独有)跑一遍:`grow` 此前是 `int(radius)`,向零截断。
+    """`grow_rounding` 那张表(前端那份读同一张)跑一遍:`grow` 此前是 `int(radius)`,向零截断。
 
     `reach` 是窗口半宽(取绝对值),方向看 `grow` 的符号 —— 所以负半径拿 `-reach` 去比。
     """

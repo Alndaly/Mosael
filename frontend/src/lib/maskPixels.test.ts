@@ -12,7 +12,9 @@ import {
   alphaMask,
   featherMask,
   grayscaleOf,
+  growMask,
   invertMask,
+  isOpaque,
   maskViewLayers,
   partialAllowed,
   thresholdMask,
@@ -301,4 +303,49 @@ describe("蒙版写入口:整张写、尺寸不符就拒绝", () => {
     expect(partialAllowed({ kind: "fill", rect: { x: 1, y: 1, width: 1, height: 1 }, color: "rgba(0,0,0,0.5)" }, 4, 4)).toBe(false);
   });
 
+});
+
+describe("扩张 / 收缩(growMask)", () => {
+  /** 照定义一格一格算:窗口 (2r+1)² 夹在图内取极值。慢,但一眼看得出是对的 —— 拿它对单调队列那一版。 */
+  function bruteForce(gray: number[], width: number, height: number, radius: number): number[] {
+    const reach = Math.abs(radius);
+    const pick = radius > 0 ? Math.max : Math.min;
+    return gray.map((_, i) => {
+      const x = i % width;
+      const y = Math.floor(i / width);
+      let best = gray[i];
+      for (let dy = -reach; dy <= reach; dy += 1) {
+        for (let dx = -reach; dx <= reach; dx += 1) {
+          const sx = Math.min(width - 1, Math.max(0, x + dx));
+          const sy = Math.min(height - 1, Math.max(0, y + dy));
+          best = pick(best, gray[sy * width + sx]);
+        }
+      }
+      return best;
+    });
+  }
+
+  it("随机灰度图上和照定义算的逐格相同(扩张、收缩、半径比图还大)", () => {
+    let seed = 7;
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    const shapes: Array<[number, number, number]> = [[13, 9, 1], [13, 9, 3], [9, 13, -2], [6, 4, 9], [17, 1, 4], [1, 11, -3]];
+    for (const [width, height, radius] of shapes) {
+      const gray = Array.from({ length: width * height }, () => Math.floor(random() * 256));
+      const data = new Uint8ClampedArray(width * height * 4);
+      writeGrayscale(new Uint8ClampedArray(gray), data);
+      growMask(data, width, height, radius);
+      expect([...grayscaleOf(data)], `${width}×${height} r=${radius}`).toEqual(bruteForce(gray, width, height, radius));
+      expect(isOpaque(data)).toBe(true);
+    }
+  });
+
+  it("尺寸对不上、或取整后 0 格:原样不动", () => {
+    const data = new Uint8ClampedArray([10, 10, 10, 255, 200, 200, 200, 255]);
+    growMask(data, 3, 1, 2);
+    growMask(data, 2, 1, 0.4);
+    expect([...data]).toEqual([10, 10, 10, 255, 200, 200, 200, 255]);
+  });
 });

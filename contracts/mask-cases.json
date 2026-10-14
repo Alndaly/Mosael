@@ -17,10 +17,11 @@
     "frontend/src/lib/maskPixels.ts": [
       "threshold",
       "invert",
+      "grow",
       "feather"
     ]
   },
-  "grow_is_backend_only": "前端编辑器没有扩张 / 收缩那一步(素材库对话框把 grow 交给后端算),所以 grow ≠ 0 的用例只有后端跑。两侧的测试都断言:跑不动的用例**正好**是 grow ≠ 0 那一组 —— 不许静默跳过,新加一条前端跑不了的用例会红。取整表也因此分两张:`rounding` 是两侧都读的 feather 表,`grow_rounding` 是只有后端读的 grow 表(同一条规则、同一种条目形状;不并进 `rounding` 是因为前端那份循环按 `feather` 读它 —— 并进去要么把前端拖进 grow,要么让前端在那几行上**空跑**成一个永远绿的断言)。",
+  "grow_both_sides": "ADR 0057 起编辑器也做扩张 / 收缩(lib/maskPixels.growMask:「应用到蒙版」那一步,先扩张再羽化),所以两侧都跑**全部**用例、都读两张取整表:`rounding` 按 feather 读,`grow_rounding` 按 grow 读(同一条规则、同一种条目形状)。此前 grow ≠ 0 的用例只有后端跑。",
   "rounding": [
     {
       "feather": 0.4,

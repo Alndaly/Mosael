@@ -10,14 +10,23 @@
  * 编辑器羽化了一格;`2.5` 一边 2 格一边 3 格 —— 同一组参数、两张图,而两侧的单元测试都还是绿的。
  * 语料里那几条 `.5` 就是入口。
  *
- * `grow ≠ 0` 的用例这里**不跑**(编辑器没有扩张 / 收缩那一步,素材库对话框把 grow 交给后端算):
- * 那些用例逐条显式列出来,而不是静默少跑一条。
+ * ADR 0057 起编辑器也做扩张 / 收缩(「应用到蒙版」那一步,先扩张再羽化),所以这里跑**全部**用例,
+ * 两张取整表(`rounding` 按 feather、`grow_rounding` 按 grow)都读。
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { alphaMask, featherMask, grayscaleOf, invertMask, isOpaque, thresholdMask, type MaskPixels } from "@/lib/maskPixels";
+import {
+  alphaMask,
+  featherMask,
+  grayscaleOf,
+  growMask,
+  invertMask,
+  isOpaque,
+  thresholdMask,
+  type MaskPixels,
+} from "@/lib/maskPixels";
 
 interface MaskCase {
   name: string;
@@ -39,6 +48,7 @@ const contract = JSON.parse(readFileSync(path, "utf8")) as {
   frame: { width: number; height: number };
   sides: Record<string, string[]>;
   rounding: Array<{ feather: number; reach: number; note: string }>;
+  grow_rounding: Array<{ grow: number; reach: number; note: string }>;
   sources: Record<string, { note: string; rgba_hex: string }>;
   cases: MaskCase[];
 };
@@ -50,13 +60,14 @@ function rgba(one: MaskCase): MaskPixels {
   return new Uint8ClampedArray(Buffer.from(contract.sources[one.source].rgba_hex, "hex"));
 }
 
-/** 四步里的前三步:阈值 → 反选 → 扩张。`grow ≠ 0` 的那几条走不到这里。 */
-function beforeFeather(one: MaskCase): MaskPixels {
+/** 语料说的那四步,按定死的先后:阈值 → 反选 → 扩张/收缩 → 羽化。 */
+function pipeline(one: MaskCase): MaskPixels {
   const data = rgba(one);
   if (one.source_kind === "alpha") alphaMask(data, one.threshold);
   else thresholdMask(data, one.threshold);
   if (one.invert) invertMask(data);
-  expect(one.grow, `${one.name}:这一条要用扩张 / 收缩,而编辑器没有这一步`).toBe(0);
+  growMask(data, width, height, one.grow);
+  featherMask(data, width, height, one.feather);
   return data;
 }
 
@@ -65,21 +76,25 @@ function bytesOf(data: MaskPixels): string {
   return Buffer.from(grayscaleOf(data)).toString("hex");
 }
 
-const runnable = contract.cases.filter((one) => one.grow === 0);
-const backendOnly = contract.cases.filter((one) => one.grow !== 0);
-
 describe("蒙版形状运算 · 前后端共用语料", () => {
   it("语料在,且带版本 —— 找不到就静默跳过是最坏的结果", () => {
     expect(contract.contract).toBe("mask-cases");
     expect(contract.version).toBe(1);
     expect(contract.cases.length).toBeGreaterThan(0);
     expect(contract.rounding.length).toBeGreaterThan(0);
+    expect(contract.grow_rounding.length).toBeGreaterThan(0);
   });
 
-  for (const one of runnable) {
+  it("两侧是同一张表:前端也跑扩张 / 收缩", () => {
+    expect(contract.sides["frontend/src/lib/maskPixels.ts"]).toEqual(["threshold", "invert", "grow", "feather"]);
+    expect(contract.sides["frontend/src/lib/maskPixels.ts"]).toEqual(contract.sides["backend/app/media/masks.py"]);
+    expect(contract.cases.some((one) => one.grow > 0)).toBe(true);
+    expect(contract.cases.some((one) => one.grow < 0)).toBe(true);
+  });
+
+  for (const one of contract.cases) {
     it(one.name, () => {
-      const data = beforeFeather(one);
-      featherMask(data, width, height, one.feather);
+      const data = pipeline(one);
 
       expect(bytesOf(data)).toBe(one.expected_hex);
       //: 交出去的是一张**灰度、不透明**的蒙版:带透明通道的图在插件那条路上读出来是整块不透明。
@@ -90,27 +105,12 @@ describe("蒙版形状运算 · 前后端共用语料", () => {
     });
   }
 
-  //: 前端跑不了的那几条**逐条列出**来(而不是跳过),连着为什么跑不了一起写在用例名里。
-  for (const one of backendOnly) {
-    it(`${one.name} · 前端不跑(grow = ${one.grow},编辑器没有这一步)`, () => {
-      expect(one.grow).not.toBe(0);
-      expect(contract.sides["frontend/src/lib/maskPixels.ts"]).not.toContain("grow");
-    });
-  }
+  /** 语料第一条那条硬边(不扩张、不羽化):两张取整表都在它上面比。 */
+  const base = () => pipeline({ ...contract.cases[0], grow: 0, feather: 0 });
 
-  it("跑不动的用例正好是 grow ≠ 0 那一组 —— 不许静默少跑一条", () => {
-    expect(contract.sides["backend/app/media/masks.py"]).toEqual(["threshold", "invert", "grow", "feather"]);
-    expect(contract.sides["frontend/src/lib/maskPixels.ts"]).toEqual(["threshold", "invert", "feather"]);
-    expect(backendOnly.length).toBeGreaterThan(0);
-    expect(runnable.length + backendOnly.length).toBe(contract.cases.length);
-    expect(backendOnly.every((one) => one.grow !== 0)).toBe(true);
-  });
-
-  it("半径按半数进位取整 —— 语料那张取整表", () => {
-    //: 底:语料第一条那条硬边(不羽化)。
-    const base = beforeFeather({ ...contract.cases[0], feather: 0 });
+  it("羽化半径按半数进位取整 —— 语料那张 rounding 表", () => {
     const feathered = (radius: number): MaskPixels => {
-      const data = new Uint8ClampedArray(base);
+      const data = base();
       featherMask(data, width, height, radius);
       return data;
     };
@@ -119,9 +119,28 @@ describe("蒙版形状运算 · 前后端共用语料", () => {
       expect([...feathered(one.feather)]).toEqual([...feathered(one.reach)]);
     }
     //: 这几条是**真的分岔**:`0.5` 按半数取偶是 0 格(原样),`2.5` 是 2 格 —— 语料能红靠的就是它们。
-    expect([...feathered(0.5)]).not.toEqual([...base]);
+    expect([...feathered(0.5)]).not.toEqual([...base()]);
     expect([...feathered(2.5)]).not.toEqual([...feathered(2)]);
     expect([...feathered(4.5)]).not.toEqual([...feathered(4)]);
+  });
+
+  it("扩张半径也按半数进位取整 —— 语料那张 grow_rounding 表", () => {
+    const grown = (radius: number): MaskPixels => {
+      const data = base();
+      growMask(data, width, height, radius);
+      return data;
+    };
+
+    for (const one of contract.grow_rounding) {
+      //: reach 是窗口半宽(取绝对值),方向看 grow 的符号。
+      const signed = one.grow < 0 ? -one.reach : one.reach;
+      expect([...grown(one.grow)], `${one.grow} → ${signed}`).toEqual([...grown(signed)]);
+    }
+    //: 向零截断(`Math.trunc`)在这几条上给的是另一格 —— 用例钉得住那次分岔。
+    for (const radius of [0.5, 1.5, 2.5, -1.7]) {
+      expect([...grown(radius)]).not.toEqual([...grown(Math.trunc(radius))]);
+    }
+    expect([...grown(0.4)]).toEqual([...base()]);
   });
 
   it("语料里那几条半数用例真的能分出两种取整", () => {
