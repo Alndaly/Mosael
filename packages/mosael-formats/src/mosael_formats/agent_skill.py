@@ -226,6 +226,45 @@ def _quote_key(key: str) -> str:
     return key if re.match(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$", key) else _quote(key)
 
 
+# ---------------------------------------------------------------- 别家约定的界面信息
+
+#: OpenAI Codex 的技能约定:技能文件夹里一份 `agents/openai.yaml`,`interface` 下写显示名、一句短说明、默认的开场话。
+#: 规范里没有它;Mosael 只拿显示名当 `metadata.mosael-title` 缺省时的显示名,文件本身作为附带文件原样留着。
+AGENT_INTERFACE_FILE = "agents/openai.yaml"
+
+
+@dataclass(frozen=True)
+class AgentInterface:
+    display_name: str = ""
+    short_description: str = ""
+    default_prompt: str = ""
+
+
+def read_agent_interface(data: bytes | None) -> AgentInterface:
+    """`agents/openai.yaml` 的内容 → 里面 `interface` 那几项。读不出来、写得不对就是空的 —— 它只是锦上添花,
+    一个技能不能因为它导不进来、显示不出来。和 SKILL.md 的头同一套 YAML 子集(同样挡锚点、别名)。"""
+    if not data or len(data) > MAX_SKILL_MD_BYTES:
+        return AgentInterface()
+    try:
+        loaded, _raw = load_frontmatter(data.decode("utf-8").replace("\r\n", "\n").lstrip("\ufeff"))
+    except (SkillError, UnicodeDecodeError):
+        return AgentInterface()
+    interface = loaded.get("interface")
+    if not isinstance(interface, dict):
+        return AgentInterface()
+
+    def text(key: str, limit: int) -> str:
+        value = interface.get(key)
+        value = " ".join(value.split()) if isinstance(value, str) else ""
+        return value if len(value) <= limit else ""
+
+    return AgentInterface(
+        display_name=text("display_name", MAX_TITLE_CHARS),
+        short_description=text("short_description", MAX_DESCRIPTION_CHARS),
+        default_prompt=text("default_prompt", MAX_DESCRIPTION_CHARS),
+    )
+
+
 # ---------------------------------------------------------------- YAML 子集
 
 
@@ -735,17 +774,28 @@ class SkillBundle:
     folder: str = ""
 
 
-def bundles_from_files(files: dict[str, bytes]) -> list[SkillBundle]:
-    """一堆文件(相对路径 → 内容,来自一个 `.zip` 或用户选的文件夹)→ 里面的技能。
-
-    认法:每一份 `SKILL.md` 所在的那一层是一个技能的根;嵌在另一个技能里面的 SKILL.md 不另算(那是它的参考文件)。
-    路径先过 `check_path`,系统塞进来的垃圾(`__MACOSX`、`.DS_Store`)丢掉。
-    """
+def clean_files(files: dict[str, bytes]) -> dict[str, bytes]:
+    """一堆收进来的文件(相对路径 → 内容):路径过 `check_path`,系统和压缩软件塞进来的垃圾(`__MACOSX`、`.DS_Store`)丢掉。"""
     clean: dict[str, bytes] = {}
     for raw_path, data in files.items():
         path = check_path(raw_path)
         if not is_junk(path):
             clean[path] = data
+    return clean
+
+
+def contains_skill(files: dict[str, bytes]) -> bool:
+    """这堆文件里有没有 `SKILL.md`(在哪一层都算)。对话里附上的压缩包 / 文件夹靠它分流:有就当技能包走导入。"""
+    return any(PurePosixPath(path).name == SKILL_FILENAME for path in files)
+
+
+def bundles_from_files(files: dict[str, bytes]) -> list[SkillBundle]:
+    """一堆文件(相对路径 → 内容,来自一个 `.zip` 或用户选的文件夹)→ 里面的技能。
+
+    认法:每一份 `SKILL.md` 所在的那一层是一个技能的根;嵌在另一个技能里面的 SKILL.md 不另算(那是它的参考文件)。
+    外面套几层目录、目录叫什么(带空格、中文都行)都无所谓 —— 技能的名字只认 SKILL.md 里的 `name`。
+    """
+    clean = clean_files(files)
     roots = sorted(
         {str(PurePosixPath(path).parent) if "/" in path else "" for path in clean if PurePosixPath(path).name == SKILL_FILENAME},
         key=lambda root: (root.count("/"), root),
@@ -777,7 +827,13 @@ def _inside(path: str, root: str) -> bool:
 
 
 def read_skill_archive(data: bytes) -> list[SkillBundle]:
-    """一个 `.zip` → 里面的技能。成员先查(符号链接、越界路径、声明的解压后大小),再读。"""
+    """一个 `.zip` → 里面的技能。"""
+    return bundles_from_files(read_archive_files(data))
+
+
+def read_archive_files(data: bytes) -> dict[str, bytes]:
+    """一个 `.zip` → 里面的文件(成员路径 → 内容)。成员先查(符号链接、越界路径、个数、声明的解压后大小),再读。
+    技能导入和对话里附上的压缩包都从这里解:压缩炸弹、路径穿越、符号链接只在这一处挡。"""
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except (zipfile.BadZipFile, ValueError) as exc:
@@ -798,7 +854,7 @@ def read_skill_archive(data: bytes) -> list[SkillBundle]:
             files = {info.filename: archive.read(info) for info in members}
         except (zipfile.BadZipFile, OSError, RuntimeError) as exc:
             raise SkillError("skillErr_notZip") from exc
-    return bundles_from_files(files)
+    return files
 
 
 def write_skill_archive(skills: list[tuple[str, dict[str, bytes]]]) -> bytes:
@@ -839,7 +895,10 @@ def plugin_skill_files(files: dict[str, bytes], *, root: str = "skills") -> list
 
 
 __all__ = [
+    "AGENT_INTERFACE_FILE",
+    "AgentInterface",
     "KNOWN_FIELDS",
+    "MAX_ARCHIVE_UNPACKED_BYTES",
     "MAX_DESCRIPTION_CHARS",
     "MAX_FILE_BYTES",
     "MAX_NAME_CHARS",
@@ -857,11 +916,15 @@ __all__ = [
     "check_files",
     "check_name",
     "check_path",
+    "clean_files",
+    "contains_skill",
     "is_junk",
     "is_text",
     "load_frontmatter",
     "parse_skill_md",
     "plugin_skill_files",
+    "read_agent_interface",
+    "read_archive_files",
     "read_skill_archive",
     "render_skill_md",
     "split_frontmatter",

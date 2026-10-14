@@ -34,6 +34,7 @@ from app.domain.agent.skills.catalog import (
     SkillDomainError,
 )
 from mosael_formats.agent_skill import (
+    AGENT_INTERFACE_FILE,
     MAX_FILE_BYTES,
     MAX_SKILL_BYTES,
     MAX_SKILL_FILES,
@@ -46,6 +47,7 @@ from mosael_formats.agent_skill import (
     check_path,
     is_text,
     parse_skill_md,
+    read_agent_interface,
     render_skill_md,
     validate,
     write_skill_archive,
@@ -414,7 +416,8 @@ def preview_import(db: Session, workspace_id: str, import_id: str) -> dict:
         skills.append(
             {
                 "name": name,
-                "title": doc.title,
+                #: 和装好之后列表里显示的同一个(catalog.Skill.title):SKILL.md 没写显示名就用 agents/openai.yaml 的。
+                "title": doc.title or read_agent_interface(files.get(AGENT_INTERFACE_FILE)).display_name,
                 "description": doc.description,
                 "license": doc.license,
                 "compatibility": doc.compatibility,

@@ -1,6 +1,8 @@
 """智能体技能:设置 → 智能体 → 技能,以及对话里的「/」菜单和「存成技能」(ADR 0040)。
 
 技能是工作区的;`{ref}` 是模型看到的名字(插件的技能写成 `插件 id:名字`)。看:工作区成员;改:编辑以上。
+
+对话里附上的压缩包 / 文件夹(ADR 0059)也在这里收:它和导入技能是同一种上传、同一套解包,里面有 SKILL.md 就走导入的暂存。
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from fastapi.responses import Response
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas.skills import (
+    AgentBundleOut,
     AgentSkillCopy,
     AgentSkillDetailOut,
     AgentSkillDraftOut,
@@ -19,6 +22,7 @@ from app.api.schemas.skills import (
     AgentSkillOut,
     AgentSkillWrite,
 )
+from app.domain.agent import bundles
 from app.domain.agent.skills import catalog, managing, use_cases
 from app.domain.agent.skills.catalog import Skill, SkillDomainError
 from mosael_formats.agent_skill import (
@@ -165,11 +169,21 @@ def stage_skill_import(
     """导入第一步:收一个 `.zip`(`archive`),或者一个文件夹里的全部文件(`files` 与同序的相对路径 `paths`)。
     读好、放进暂存,回**全文**给人审阅 —— 什么都还没装(ADR 0040 §6)。同步端点:解包、写库都不该在事件循环上做。"""
     if archive is not None:
-        data = archive.file.read(MAX_IMPORT_UPLOAD_BYTES + 1)
-        if len(data) > MAX_IMPORT_UPLOAD_BYTES:
-            raise SkillDomainError("skillErr_archiveTooLarge", limit=MAX_IMPORT_UPLOAD_BYTES // (1024 * 1024))
-        return use_cases.stage_import(db, user, workspace_id, archive=data,
+        return use_cases.stage_import(db, user, workspace_id, archive=_read_archive(archive),
                                       source_name=source_name or archive.filename or "skill.zip")
+    collected = _read_folder(files, paths)
+    return use_cases.stage_import(db, user, workspace_id, files=collected, source_name=source_name or _top_folder(paths))
+
+
+def _read_archive(archive: UploadFile) -> bytes:
+    data = archive.file.read(MAX_IMPORT_UPLOAD_BYTES + 1)
+    if len(data) > MAX_IMPORT_UPLOAD_BYTES:
+        raise SkillDomainError("skillErr_archiveTooLarge", limit=MAX_IMPORT_UPLOAD_BYTES // (1024 * 1024))
+    return data
+
+
+def _read_folder(files: list[UploadFile], paths: list[str]) -> dict[str, bytes]:
+    """一个文件夹里的文件和同序的相对路径 → {相对路径: 内容}。传上来的总字节和个数在这里就封顶。"""
     if not files or len(files) != len(paths):
         raise SkillDomainError("skillErr_noSkillMd")
     if len(files) > MAX_SKILL_FILES * MAX_SKILLS_PER_IMPORT:
@@ -182,8 +196,32 @@ def stage_skill_import(
         if total > MAX_IMPORT_UPLOAD_BYTES:
             raise SkillDomainError("skillErr_archiveTooLarge", limit=MAX_IMPORT_UPLOAD_BYTES // (1024 * 1024))
         collected[relative] = data
-    folder = source_name or (paths[0].split("/", 1)[0] if paths else "")
-    return use_cases.stage_import(db, user, workspace_id, files=collected, source_name=folder)
+    return collected
+
+
+def _top_folder(paths: list[str]) -> str:
+    return paths[0].split("/", 1)[0] if paths else ""
+
+
+@router.post("/workspaces/{workspace_id}/agent-bundles", response_model=AgentBundleOut)
+def unpack_agent_bundle(
+    workspace_id: str,
+    db: Tx,
+    user: CurrentUser,
+    archive: UploadFile | None = File(default=None),
+    files: list[UploadFile] = File(default=[]),
+    paths: list[str] = Form(default=[]),
+    source_name: str = Form(default=""),
+) -> dict:
+    """对话输入框里附上的一个 `.zip` 或一个文件夹(和技能导入同一种上传):解开、认一认(ADR 0059)。
+
+    里面有 SKILL.md:放进技能导入的暂存,回全文等人审阅,什么都还没装。别的:图片和文本合订本进素材库(当附件发),
+    其余列为跳过。同步端点:解包、入库都不该在事件循环上做。"""
+    if archive is not None:
+        return bundles.unpack(db, user, workspace_id, archive=_read_archive(archive),
+                              source_name=source_name or archive.filename or "attachment.zip")
+    collected = _read_folder(files, paths)
+    return bundles.unpack(db, user, workspace_id, files=collected, source_name=source_name or _top_folder(paths))
 
 
 @router.get("/workspaces/{workspace_id}/skill-imports/{import_id}", response_model=AgentSkillImportOut)

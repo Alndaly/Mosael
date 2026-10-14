@@ -30,6 +30,7 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.db.models import AgentSkill, PluginPackage
 from mosael_formats.agent_skill import (
+    AGENT_INTERFACE_FILE,
     MAX_FILE_BYTES,
     MAX_PATH_DEPTH,
     MAX_SKILL_FILES,
@@ -41,6 +42,7 @@ from mosael_formats.agent_skill import (
     is_junk,
     is_text,
     parse_skill_md,
+    read_agent_interface,
 )
 
 BUILTIN = "builtin"
@@ -85,6 +87,8 @@ class Skill:
     imported_from: str = ""
     #: 智能体在哪次对话里建的(新建、复制、导入经确认卡落地的);别的是空串。
     agent_session_id: str = ""
+    #: 别家约定里写的显示名(`agents/openai.yaml` 的 `interface.display_name`,见 display_name_of)。
+    display_name: str = ""
 
     @property
     def ref(self) -> str:
@@ -92,7 +96,8 @@ class Skill:
 
     @property
     def title(self) -> str:
-        return (self.doc.title if self.doc else "") or self.name
+        """显示名:SKILL.md 里的 `metadata.mosael-title` 优先,没写就用 `agents/openai.yaml` 里的,都没有是名字。"""
+        return (self.doc.title if self.doc else "") or self.display_name or self.name
 
     @property
     def description(self) -> str:
@@ -186,6 +191,30 @@ def _parse_cached(path: str, folder: str, _mtime: int, _size: int) -> tuple[Skil
         return None, exc
 
 
+def display_name_of(root: Path) -> str:
+    """技能文件夹里 `agents/openai.yaml` 写的显示名(OpenAI Codex 的技能约定);没有这份文件、读不出来就是空串。
+    不改 SKILL.md:导进来的技能原样落地,显示名在读的时候才拿。"""
+    path = root / AGENT_INTERFACE_FILE
+    try:
+        if path.is_symlink() or path.parent.is_symlink() or not path.is_file():
+            return ""
+        stat = path.stat()
+    except OSError:
+        return ""
+    return _display_name_cached(str(path), stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=512)
+def _display_name_cached(path: str, _mtime: int, size: int) -> str:
+    """和 SKILL.md 一样按 (路径, 修改时间, 大小) 缓存:清单每轮都要列一遍。"""
+    if size > MAX_FILE_BYTES:
+        return ""
+    try:
+        return read_agent_interface(Path(path).read_bytes()).display_name
+    except OSError:
+        return ""
+
+
 def list_skills(db: Session, workspace_id: str) -> list[Skill]:
     """这个工作区看得到的全部技能,按来源、插件、名字排好。"""
     rows = {
@@ -214,6 +243,7 @@ def list_skills(db: Session, workspace_id: str) -> list[Skill]:
             origin=row.origin if row is not None else (FOLDER if source == WORKSPACE else source),
             imported_from=row.imported_from if row is not None else "",
             agent_session_id=(row.agent_session_id or "") if row is not None else "",
+            display_name=display_name_of(root),
         )
 
     out = [make(BUILTIN, name, root) for name, root in _folders(BUILTIN_ROOT)]
@@ -353,6 +383,7 @@ __all__ = [
     "SkillFile",
     "active_skills",
     "default_enabled",
+    "display_name_of",
     "files_of",
     "find",
     "list_skills",

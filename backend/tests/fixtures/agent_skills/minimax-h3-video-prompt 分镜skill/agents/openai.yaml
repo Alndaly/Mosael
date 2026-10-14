@@ -1,0 +1,4 @@
+interface:
+  display_name: "minimax-h3-video-prompt"
+  short_description: "Turn an idea into assets, storyboard, and H3 prompts"
+  default_prompt: "Use $minimax-h3-video-prompt to turn my simple video idea into asset prompts, a storyboard, and H3-ready shots."

@@ -279,3 +279,42 @@ def test_按内容判文本() -> None:
     assert skill.is_text("中文".encode())
     assert not skill.is_text(b"\x89PNG\x00\x01")
     assert not skill.is_text(b"\xff\xfe\xfd")
+
+
+def test_文件夹名带空格和中文_不影响_技能名只认name() -> None:
+    root = "skills/authenticity-video-director 活人感skill"
+    files = {
+        f"{root}/SKILL.md": b"---\nname: authenticity-video-director\ndescription: d\n---\nbody\n",
+        f"{root}/references/a.md": b"ref",
+        f"{root}/agents/openai.yaml": b"interface:\n  display_name: X\n",
+    }
+    [bundle] = skill.bundles_from_files(files)
+    assert bundle.doc.name == "authenticity-video-director"
+    assert bundle.folder == "authenticity-video-director 活人感skill"
+    assert set(bundle.files) == {"SKILL.md", "references/a.md", "agents/openai.yaml"}
+
+
+def test_解开压缩包_技能导入和对话附件同一处挡() -> None:
+    archive = _zip({"pack/a.txt": b"x", "__MACOSX/pack/._a.txt": b"\x00", "pack/.DS_Store": b"\x00"})
+    files = skill.clean_files(skill.read_archive_files(archive))
+    assert files == {"pack/a.txt": b"x"}
+    assert not skill.contains_skill(files)
+    assert skill.contains_skill({"deep/er/SKILL.md": b""})
+    with pytest.raises(SkillError) as caught:
+        skill.read_archive_files(_zip({"a.txt": b"x"}, symlink="link"))
+    assert caught.value.key == "skillErr_symlink"
+
+
+def test_openai_yaml的界面信息_读不出来就是空的() -> None:
+    text = (
+        'interface:\n  display_name: "Authenticity Video Director"\n'
+        '  short_description: "为 Seedance 2.5 与 MiniMax H3 编写提示词"\n'
+        '  default_prompt: "使用 $authenticity-video-director"\n'
+    )
+    interface = skill.read_agent_interface(text.encode())
+    assert interface.display_name == "Authenticity Video Director"
+    assert interface.short_description.startswith("为 Seedance")
+    assert interface.default_prompt == "使用 $authenticity-video-director"
+    too_long = ("interface:\n  display_name: " + "长" * 81 + "\n").encode()
+    for broken in (None, b"", b"interface: &a\n  x: *a\n", b"\xff\xfe", b"interface: plain", b"other:\n  display_name: X\n", too_long):
+        assert skill.read_agent_interface(broken).display_name == ""

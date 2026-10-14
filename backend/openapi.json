@@ -25532,6 +25532,58 @@
         }
       }
     },
+    "/api/workspaces/{workspace_id}/agent-bundles": {
+      "post": {
+        "tags": [
+          "agent-skills"
+        ],
+        "summary": "Unpack Agent Bundle",
+        "description": "对话输入框里附上的一个 `.zip` 或一个文件夹(和技能导入同一种上传):解开、认一认(ADR 0059)。\n\n里面有 SKILL.md:放进技能导入的暂存,回全文等人审阅,什么都还没装。别的:图片和文本合订本进素材库(当附件发),\n其余列为跳过。同步端点:解包、入库都不该在事件循环上做。",
+        "operationId": "unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentBundleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workspaces/{workspace_id}/skill-imports/{import_id}": {
       "get": {
         "tags": [
@@ -27821,6 +27873,66 @@
         ],
         "title": "AdminUserOut",
         "description": "管理员看到的一个人。"
+      },
+      "AgentBundleOut": {
+        "properties": {
+          "source_name": {
+            "type": "string",
+            "title": "Source Name",
+            "default": ""
+          },
+          "skill_import": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentSkillImportOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/AssetOut"
+            },
+            "type": "array",
+            "title": "Assets"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/AgentBundleSkipped"
+            },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "title": "AgentBundleOut",
+        "description": "对话里附上的压缩包 / 文件夹解开之后(ADR 0059)。\n\n技能包:`skill_import` 是暂存好的导入(和设置页导入同一个),什么都还没装,`assets` 为空。\n别的:`assets` 是进了素材库的图片和文本合订本(当附件发出去),`skipped` 是没收的。"
+      },
+      "AgentBundleSkipped": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unsupported",
+              "too_large",
+              "too_many"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "reason"
+        ],
+        "title": "AgentBundleSkipped",
+        "description": "对话里附上的压缩包 / 文件夹里没收的一个文件。"
       },
       "AgentCompactOut": {
         "properties": {
@@ -31643,6 +31755,46 @@
         },
         "type": "object",
         "title": "Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post"
+      },
+      "Body_unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post": {
+        "properties": {
+          "archive": {
+            "anyOf": [
+              {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive"
+          },
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files",
+            "default": []
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paths",
+            "default": []
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Body_unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post"
       },
       "Body_upload_api_scene_models_post": {
         "properties": {

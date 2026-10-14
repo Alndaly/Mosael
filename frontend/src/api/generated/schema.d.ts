@@ -8547,6 +8547,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspaces/{workspace_id}/agent-bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unpack Agent Bundle
+         * @description 对话输入框里附上的一个 `.zip` 或一个文件夹(和技能导入同一种上传):解开、认一认(ADR 0059)。
+         *
+         *     里面有 SKILL.md:放进技能导入的暂存,回全文等人审阅,什么都还没装。别的:图片和文本合订本进素材库(当附件发),
+         *     其余列为跳过。同步端点:解包、入库都不该在事件循环上做。
+         */
+        post: operations["unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workspaces/{workspace_id}/skill-imports/{import_id}": {
         parameters: {
             query?: never;
@@ -9432,6 +9455,38 @@ export interface components {
              * @default 0
              */
             workspaces: number;
+        };
+        /**
+         * AgentBundleOut
+         * @description 对话里附上的压缩包 / 文件夹解开之后(ADR 0059)。
+         *
+         *     技能包:`skill_import` 是暂存好的导入(和设置页导入同一个),什么都还没装,`assets` 为空。
+         *     别的:`assets` 是进了素材库的图片和文本合订本(当附件发出去),`skipped` 是没收的。
+         */
+        AgentBundleOut: {
+            /**
+             * Source Name
+             * @default
+             */
+            source_name: string;
+            skill_import?: components["schemas"]["AgentSkillImportOut"] | null;
+            /** Assets */
+            assets?: components["schemas"]["AssetOut"][];
+            /** Skipped */
+            skipped?: components["schemas"]["AgentBundleSkipped"][];
+        };
+        /**
+         * AgentBundleSkipped
+         * @description 对话里附上的压缩包 / 文件夹里没收的一个文件。
+         */
+        AgentBundleSkipped: {
+            /** Path */
+            path: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "unsupported" | "too_large" | "too_many";
         };
         /**
          * AgentCompactOut
@@ -11185,6 +11240,26 @@ export interface components {
         };
         /** Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post */
         Body_stage_skill_import_api_workspaces__workspace_id__skill_imports_post: {
+            /** Archive */
+            archive?: string | null;
+            /**
+             * Files
+             * @default []
+             */
+            files: string[];
+            /**
+             * Paths
+             * @default []
+             */
+            paths: string[];
+            /**
+             * Source Name
+             * @default
+             */
+            source_name: string;
+        };
+        /** Body_unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post */
+        Body_unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post: {
             /** Archive */
             archive?: string | null;
             /**
@@ -37658,6 +37733,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSkillImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_unpack_agent_bundle_api_workspaces__workspace_id__agent_bundles_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentBundleOut"];
                 };
             };
             /** @description Validation Error */

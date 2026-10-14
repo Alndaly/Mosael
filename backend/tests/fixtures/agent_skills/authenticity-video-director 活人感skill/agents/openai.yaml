@@ -1,0 +1,4 @@
+interface:
+  display_name: "Authenticity Video Director"
+  short_description: "为 Seedance 2.5 与 MiniMax H3 编写自然真人表演提示词"
+  default_prompt: "使用 $authenticity-video-director，把这个创意改写为有活人感的视频提示词。"

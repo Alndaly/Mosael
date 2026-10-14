@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel
+from app.api.schemas.media import AssetOut
 
 
 class AgentSkillOut(ApiModel):
@@ -119,6 +120,27 @@ class AgentSkillImportChoice(ApiModel):
 
 class AgentSkillImportCommit(ApiModel):
     choices: list[AgentSkillImportChoice] = Field(min_length=1, max_length=20)
+
+
+class AgentBundleSkipped(ApiModel):
+    """对话里附上的压缩包 / 文件夹里没收的一个文件。"""
+
+    path: str
+    #: unsupported:不是文本也不是图片;too_large:单个文件太大;too_many:超出一次能收的个数。
+    reason: Literal["unsupported", "too_large", "too_many"]
+
+
+class AgentBundleOut(ApiModel):
+    """对话里附上的压缩包 / 文件夹解开之后(ADR 0059)。
+
+    技能包:`skill_import` 是暂存好的导入(和设置页导入同一个),什么都还没装,`assets` 为空。
+    别的:`assets` 是进了素材库的图片和文本合订本(当附件发出去),`skipped` 是没收的。
+    """
+
+    source_name: str = ""
+    skill_import: AgentSkillImportOut | None = None
+    assets: list[AssetOut] = Field(default_factory=list)
+    skipped: list[AgentBundleSkipped] = Field(default_factory=list)
 
 
 class AgentSkillDraftOut(ApiModel):
