@@ -118,6 +118,7 @@ ARGS: dict[str, dict[str, Any]] = {
     "update_asset_tags": {"asset_id": "no-such-asset", "tags": ["a"]},
     "forget": {"memory_id": "no-such-memory"},
     "update_plan": {"steps": [{"title": "第一步", "status": "pending"}]},
+    "show_widget": {"title": "冒烟", "html": "<p>hi</p>"},
     "browser_navigate": {"session_id": "no-such-session", "url": "https://example.test"},
     "browser_click": {"session_id": "no-such-session", "selector": "#x"},
     "browser_type": {"session_id": "no-such-session", "selector": "#x", "value": "hi"},

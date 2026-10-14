@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **126** 个工具,其中 **39** 个走确认卡、**1** 个停下来等用户作答。
+共 **127** 个工具,其中 **39** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -129,6 +129,7 @@
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
 | `set_skill_enabled` | 确认卡 | Confirmation required, every time: turn a skill on or off in this workspace (on shows its full text). |
+| `show_widget` | 直接执行 | Show an interactive HTML view (map, chart) in your answer. html ≤60k chars, sandboxed, no network; |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
 | `split_image_grid` | 确认卡 | Confirmation required: split an EXISTING grid image (a 3x3 sticker sheet, a 2x2 storyboard) into NEW images. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |

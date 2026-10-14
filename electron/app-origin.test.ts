@@ -95,6 +95,43 @@ describe("主窗口只许停在应用自己的地址上", () => {
   });
 });
 
+/** Electron 的 will-frame-navigate:事件对象带 url、isMainFrame。 */
+function navigateFrame(contents: EventEmitter, url: string, isMainFrame = false) {
+  const event = { url, isMainFrame, preventDefault: vi.fn() };
+  contents.emit("will-frame-navigate", event);
+  return event.preventDefault.mock.calls.length > 0;
+}
+
+describe("子框架(智能体给的小界面)只许停在 srcdoc 和应用地址上", () => {
+  const isAppUrl = (url: string) => url.startsWith("http://127.0.0.1:5173/");
+
+  it("srcdoc、空白页、应用地址放行", () => {
+    const contents = new EventEmitter();
+    guardNavigation(contents, { isAppUrl, openExternal: vi.fn() });
+    expect(navigateFrame(contents, "about:srcdoc")).toBe(false);
+    expect(navigateFrame(contents, "about:blank")).toBe(false);
+    expect(navigateFrame(contents, "http://127.0.0.1:5173/#/x")).toBe(false);
+  });
+
+  it("小界面把自己导航到外面(带着数据出去、换一张别人的页面):拦下,不开系统浏览器", () => {
+    const contents = new EventEmitter();
+    const openExternal = vi.fn();
+    const log = vi.fn();
+    guardNavigation(contents, { isAppUrl, openExternal, log });
+    expect(navigateFrame(contents, "https://evil.example/collect?data=secret")).toBe(true);
+    expect(navigateFrame(contents, "data:text/html,<h1>phish</h1>")).toBe(true);
+    expect(navigateFrame(contents, "javascript:alert(1)")).toBe(true);
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith("blocked subframe navigation to https://evil.example");
+  });
+
+  it("主框架不归这一道管(will-navigate 那一道管,而且会把 http(s) 交给系统浏览器)", () => {
+    const contents = new EventEmitter();
+    guardNavigation(contents, { isAppUrl, openExternal: vi.fn() });
+    expect(navigateFrame(contents, "https://evil.example/", true)).toBe(false);
+  });
+});
+
 describe("IPC 只收应用自己的主框架发来的", () => {
   const isAppUrl = (url: string) => url.startsWith("http://127.0.0.1:5173/");
   const host = { id: 1 };

