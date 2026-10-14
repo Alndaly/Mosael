@@ -153,7 +153,7 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
               <Info size={14} />
               <span className="grid gap-1 text-ui-sm">
                 {t("exportNoPicture")}
-                <Button variant="link" className="h-auto justify-self-start p-0" onClick={() => updateParams({ format: FORMATS.audio[0] })}>
+                <Button variant="inline" className="-ml-1.5 justify-self-start" onClick={() => updateParams({ format: FORMATS.audio[0] })}>
                   {t("exportSwitchToAudio")}
                 </Button>
               </span>
