@@ -658,7 +658,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "stop": {"advanced": True, "type": "template", "description": "wfNode_llm_stop"},
             #: 让模型**看着图**回答:这几张图和提示词一起发过去(多模态消息里的 image_url)。此前没有这一格,
             #: 在提示词里写 `{{画图.asset_id}}` 送过去的只是一串素材编号,模型从没见过那张图。
-            "image_asset_ids": {"type": "template", "media": ["image"], "description": "wfNode_llm_image_asset_ids"},
+            #: `editor: "asset_grid"`:紧凑的图片格子(前端 AssetGridField)——挑、拖排序、直接传,不是手填引用;
+            #: 值照旧是逗号分隔的素材 id 串,也能接上游(`{{…}}`)。顺序就是发给模型的顺序。
+            "image_asset_ids": {
+                "type": "template",
+                "media": ["image"],
+                "editor": "asset_grid",
+                "description": "wfNode_llm_image_asset_ids",
+            },
             #: **输出格式和 Schema 不标 advanced。** 「要一份 JSON、下游按字段取」是这个节点在做的事,不是微调:
             #: 藏在高级里时维护者翻了一圈以为大模型节点没有 JSON 模式。Schema 的名字和严格与否才是微调。
             "response_format": {

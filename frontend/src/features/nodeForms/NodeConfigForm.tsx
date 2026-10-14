@@ -6,6 +6,7 @@ import { fetchWorkflowFieldOptions, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
+import { AssetGridField } from "@/features/nodeForms/AssetGridField";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -440,6 +441,11 @@ export function NodeConfigForm({
                     )
                   }
                 />
+              ) : spec?.editor === "asset_grid" ? (
+                // 大模型节点「要模型看的图片」:紧凑的图片格子(挑、拖排序、直接传),由**后端的字段声明**点名
+                // (editor: "asset_grid"),不是一个手填引用的文本框。值是逗号分隔的素材 id 串;接上游
+                // (`{{上游}}`)的那一半由外面裹的绑定钮管,这里只管手动。
+                <AssetGridField value={value} workspaceId={workspaceId} max={8} onChange={(next) => setConfig(key, next)} />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
                 // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />

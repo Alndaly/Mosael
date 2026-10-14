@@ -2449,6 +2449,7 @@
       },
       "image_asset_ids": {
         "type": "template",
+        "editor": "asset_grid",
         "label": {
           "zh": "要模型看的图片",
           "en": "Images for the model"
