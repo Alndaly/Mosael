@@ -4,7 +4,6 @@ import {
   Background,
   ConnectionLineType,
   MiniMap,
-  Panel,
   ReactFlow,
   type ReactFlowInstance,
 } from "@xyflow/react";
@@ -720,7 +719,9 @@ export function WorkflowEditor({
             {atRoot && workflowComments.layer}
             {annotationMode && <AnnotationModeHint kind={markerMode ? "marker" : "comment"} onExit={() => { setMarkerMode(false); workflowComments.exit(); }} />}
             {selectedFlowIds.length >= 2 && !annotationMode && (
-              <Panel position="top-center">
+              // 落在顶上那条工具栏**下面**(和标注模式的提示同一个位置):此前用 Panel 的 top-center,
+              // 和工具栏同一高度,工具栏一长就把它盖住。
+              <div data-wf-collapse-hint="" className="absolute left-1/2 top-16 z-30 -translate-x-1/2">
                 <Hint label={t("wfCollapseHint")} shortcut={formatCombo("Mod+G")} side="bottom">
                   <button
                     type="button"
@@ -732,7 +733,7 @@ export function WorkflowEditor({
                     <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
                   </button>
                 </Hint>
-              </Panel>
+              </div>
             )}
             <Background gap={20} size={1.2} />
             {/* 缩放钮/预览图不吃应用主题(xyflow 默认一律白底),把 --xy-* 变量

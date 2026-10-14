@@ -144,6 +144,10 @@ it("⌘/Ctrl 点击是往选区里加,不是换成只选这一个", async () => 
   // 选了两个就不是在编辑某一个:检查器收起,换成「折叠为子图」。
   expect(screen.queryByLabelText("wfNodeName")).toBeNull();
   expect(screen.getByText("wfCollapseToSubgraph")).toBeTruthy();
+  //: 它落在顶栏下面(顶栏 top-2、高 42px),不和顶栏挤在同一高度被盖住 —— 和标注模式的提示同一个位置。
+  const hint = screen.getByText("wfCollapseToSubgraph").closest<HTMLElement>("[data-wf-collapse-hint]")!;
+  expect(hint.className.split(" ")).toEqual(expect.arrayContaining(["top-16", "z-30"]));
+  expect(hint.closest(".react-flow__panel")).toBeNull();
 });
 
 it("Shift 点击也是往选区里加(和画板、时间线、3D 关键帧同一条规则)", async () => {
