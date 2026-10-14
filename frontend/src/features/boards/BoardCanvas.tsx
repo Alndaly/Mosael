@@ -3,6 +3,7 @@ import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
 import { useCanvasInputMode, canvasWheelProps, CANVAS_POINTER_PROPS } from "@/components/app/canvasInputMode";
+import { emptyCanvasDoubleClick, type ScreenPoint } from "@/components/app/canvasPointPicker";
 import React from "react";
 import {
   Background,
@@ -116,10 +117,17 @@ const PENDING_GHOST_SIZE = DEFAULT_SIZE.image;
 
 /** 只放**数据**。回调在渲染时注入(见 baseNodes)—— 存进节点里的话,它们会闭包住
  *  还没声明的 setNodes,而这个顺序绕不开:节点的初值本身就要用到它们。 */
+/** 画布坐标(React Flow 的流坐标,跟着平移缩放走)。 */
+export interface FlowPoint {
+  x: number;
+  y: number;
+}
+
 /** 画布交出去的把手。**只此一处** —— 上层曾经自己抄了一份同样形状的类型,加一个动作
  *  (撤销)时抄的那份不会报错,只会让按钮点了没反应。 */
 export interface BoardCanvasApi {
-  add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => void;
+  /** 放一格并选中它。`at`(画布坐标):这一格的中心落在哪;不给就落在视野中心。 */
+  add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>, at?: FlowPoint) => void;
   /** 就地改某一项(填产出、写文字、标记开始生成)。**得走这条** —— 画布的节点只在挂载时
    *  从 canvas 建一次,回写上层的 canvas 状态它看不见,用户会以为「点了没反应」。
    *  值给 undefined 表示删掉那个字段。 */
@@ -219,9 +227,11 @@ interface Props {
   /** 把「加一项」交给上层 —— 顶栏那两组胶囊要摆在一起(和工作流详情页一致),
    *  而 add 依赖画布内部的 rf 实例和 setNodes,只能由画布提供。 */
   onReady?: (api: BoardCanvasApi) => void;
+  /** 双击了画布空白处:上层在 `screen` 弹出添加单子,选中的格子用 `flow` 交给 api.add 落在那儿。 */
+  onPaneDoubleClick?: (at: { screen: ScreenPoint; flow: FlowPoint }) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, producers, onStop, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, onRevealMarkers, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, producers, onStop, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, onRevealMarkers, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady, onPaneDoubleClick }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -657,12 +667,12 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   }, [stepBack, stepForward, groupSelection]);
 
   const add = React.useCallback(
-    (kind: BoardItem["kind"], extra: Partial<BoardItem> = {}) => {
+    (kind: BoardItem["kind"], extra: Partial<BoardItem> = {}, at?: FlowPoint) => {
       const instance = rf.current;
-      // 放在**视野中心**,不是原点:画板可以拖得很远,放原点等于放到看不见的地方。
-      const center = instance
+      // 没说放哪就放在**视野中心**,不是原点:画板可以拖得很远,放原点等于放到看不见的地方。
+      const center = at ?? (instance
         ? instance.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
-        : { x: 0, y: 0 };
+        : { x: 0, y: 0 });
       const size = DEFAULT_SIZE[kind];
       const item: BoardItem = {
         id: `${kind}-${Date.now().toString(36)}`,
@@ -945,23 +955,14 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           if (event) cancelPending();
         }}
         onMoveEnd={(_event, next) => viewport.remember(next)}
-        // 双击空白处直接加一张便签 —— 想法来的时候不该先去找按钮。
+        // 双击空白处弹出「添加」那份单子,选中的格子落在双击的地方 —— 想法来的时候不该先去找按钮。单子在上层
+        // (和工具栏的「添加」同一份,见 BoardsView),这里只交出双击的那一点。
         onDoubleClick={(event) => {
-          if (commentMode || markerMode) return;
-          if ((event.target as HTMLElement).closest(".react-flow__node")) return;
+          if (commentMode || markerMode || !onPaneDoubleClick) return;
+          const screen = emptyCanvasDoubleClick(event);
           const instance = rf.current;
-          if (!instance) return;
-          const point = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-          const item: BoardItem = {
-            id: `note-${Date.now().toString(36)}`,
-            kind: "note",
-            x: Math.round(point.x - DEFAULT_SIZE.note.width / 2),
-            y: Math.round(point.y - DEFAULT_SIZE.note.height / 2),
-            ...DEFAULT_SIZE.note,
-            color: "yellow",
-            ...newSlotForm("note"),
-          };
-          setNodes((current) => [...current, ...toNodes([item])]);
+          if (!screen || !instance) return;
+          onPaneDoubleClick({ screen, flow: instance.screenToFlowPosition(screen) });
         }}
         className={cn(!ready && "opacity-0", (commentMode || markerMode) && "cursor-crosshair")}
         proOptions={{ hideAttribution: false }}

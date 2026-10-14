@@ -2447,6 +2447,13 @@
           "en": "Stop sequences"
         }
       },
+      "image_asset_ids": {
+        "type": "template",
+        "label": {
+          "zh": "要模型看的图片",
+          "en": "Images for the model"
+        }
+      },
       "response_format": {
         "type": "string",
         "label": {

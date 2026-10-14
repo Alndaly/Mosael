@@ -18,6 +18,7 @@ import type { useI18n } from "@/app/preferences";
 import { issuesAtLayer } from "@/features/workflows/analyze";
 import { boundRunId, RUN_ACTIVE, viewedRunId } from "@/features/workflows/boundRun";
 import { useWorkflowAnalysis } from "@/features/workflows/readiness";
+import { type RunRefusal, runRefusalOf } from "@/features/workflows/runRefusal";
 import { runEventIsTerminal, stepsByNode } from "@/features/workflows/runSteps";
 import type { ScopePath } from "@/features/workflows/scope";
 import type { WorkflowSaveState } from "@/features/workflows/useWorkflowSave";
@@ -48,9 +49,13 @@ export function useWorkflowRun({
   const [startedJobId, setStartedJobId] = React.useState<string | null>(null);
   /** 用户在执行历史里点了哪一次(null = 没点过,跟随最新)。点「运行」、点「回到最新」都清掉它。 */
   const [pinnedRunId, setPinnedRunId] = React.useState<string | null>(null);
+  /** 上一次点运行被服务端拦下的原因(见 runRefusal)。编辑器摆成一张失败卡;再点运行、换工作流、关掉它时清掉。 */
+  const [refusal, setRefusal] = React.useState<RunRefusal | null>(null);
+  const dismissRefusal = React.useCallback(() => setRefusal(null), []);
   React.useEffect(() => {
     setStartedJobId(null);
     setPinnedRunId(null);
+    setRefusal(null);
   }, [workflow.id]);
   /** 这个工作流最近的几次运行。**不是为了历史面板**,是为了认出**别处发起的**那一次:
    *
@@ -110,6 +115,7 @@ export function useWorkflowRun({
   });
   const run = useMutation({
     mutationFn: () => runWorkflow(workflow.id),
+    onMutate: () => setRefusal(null),
     onSuccess: (job) => {
       setStartedJobId(job.id);
       // 刚点的这一次就是要看的那一次 —— 哪怕刚才正停在一次旧运行上。
@@ -117,7 +123,12 @@ export function useWorkflowRun({
       toast.success(t("wfRunQueued"));
       void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
     },
-    onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
+    onError: (error: Error) => {
+      const refused = runRefusalOf(error);
+      // 被拦下的那次说得出在哪、怎么修 —— 摆成一张留在画布上的失败卡,不是几秒就没的 toast
+      if (refused) setRefusal(refused);
+      else toast.error(t("wfRunFailed"), { description: error.message });
+    },
   });
 
   // 就绪度分析:和列表卡片的「运行」、检查器的提醒同一个判据(见 readiness / bindingReadiness)。
@@ -197,6 +208,8 @@ export function useWorkflowRun({
     checklistLabel,
     checklistOpen,
     setChecklistOpen,
+    refusal,
+    dismissRefusal,
   };
 }
 

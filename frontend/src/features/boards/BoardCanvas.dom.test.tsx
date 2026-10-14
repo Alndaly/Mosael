@@ -909,12 +909,13 @@ describe("停止属于运行态的外壳", () => {
   });
 });
 
-describe("双击空白处写一张便签", () => {
+describe("双击空白处:交出那一点,上层在那儿弹添加单子(不再直接落便签)", () => {
   //: 画布是真的 React Flow:它默认的双击缩放挂在 d3-zoom 上,处理双击时 stopImmediatePropagation,
   //: 画板自己的 onDoubleClick 收不到 —— 双击只是放大一倍(演示库、新画板上都复现过)。
   //: 不比视口前后:挂上时那次适配在下一帧,机器忙的时候晚到,前后一比就成了偶发的红。直接看事件有没有被吞。
-  it("空画布上双击空白:落下一张便签;双击没被 d3-zoom 吞掉(往上冒得到 document)", async () => {
-    const view = mount({ items: [], edges: [], markers: [] });
+  it("空画布上双击空白:交出屏幕坐标和画布坐标,不多出格子;双击没被 d3-zoom 吞掉(往上冒得到 document)", async () => {
+    const onPaneDoubleClick = vi.fn();
+    const view = mount({ items: [], edges: [], markers: [] }, { onPaneDoubleClick });
     //: 等画布挂好(onInit 交出实例之前双击落不了点)。
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50);
@@ -929,20 +930,37 @@ describe("双击空白处写一张便签", () => {
       document.removeEventListener("dblclick", reached);
     }
     expect(reached).toHaveBeenCalledTimes(1);
+    expect(onPaneDoubleClick).toHaveBeenCalledWith({
+      screen: { x: 300, y: 200 },
+      flow: { x: expect.any(Number), y: expect.any(Number) },
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(view.latest().items).toEqual([expect.objectContaining({ kind: "note", color: "yellow" })]);
+    expect(view.latest().items).toEqual([]);
   });
 
-  it("双击在格子上不算空白:不多出一张便签(格子自己的双击是改字)", async () => {
-    const view = mount({ items: [note("n1", "原来的")], edges: [], markers: [] });
+  it("双击在格子上不算空白:不交出去(格子自己的双击是改字)", async () => {
+    const onPaneDoubleClick = vi.fn();
+    mount({ items: [note("n1", "原来的")], edges: [], markers: [] }, { onPaneDoubleClick });
     const cell = document.querySelector<HTMLElement>('[data-id="n1"]');
     act(() => void fireEvent.doubleClick(cell!, { clientX: 10, clientY: 10 }));
+    expect(onPaneDoubleClick).not.toHaveBeenCalled();
+  });
+
+  it("api.add 给了 at:那一格的中心落在那一点", async () => {
+    const view = mount({ items: [], edges: [], markers: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    act(() => view.api().add("note", {}, { x: 500, y: 300 }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(view.latest().items.map((one) => one.id)).toEqual(["n1"]);
+    const [item] = view.latest().items;
+    expect(item).toMatchObject({ kind: "note" });
+    expect(item.x + (item.width ?? 0) / 2).toBeCloseTo(500, 0);
+    expect(item.y + (item.height ?? 0) / 2).toBeCloseTo(300, 0);
   });
 });
 

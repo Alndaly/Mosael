@@ -45,4 +45,4 @@ def test_只敲了空格的必填_点运行当场就拒() -> None:
     )}).json()
     refused = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {}})
     assert refused.status_code == 422, refused.text
-    assert refused.json()["detail"] == "「HTTP 请求」缺少必填:网址"
+    assert refused.json()["detail"]["message"] == "「HTTP 请求」缺少必填:网址"

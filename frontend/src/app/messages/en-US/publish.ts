@@ -18,7 +18,7 @@ export const publish = {
   scenesSelectDone: "Done selecting",
   scenesLoading: "Loading scenes…",
   boardsEmptyTitle: "No boards yet",
-  boardsEmptyHint: "A board is where ideas get spread out — double-click empty space for a note, drop in references, group what belongs together.",
+  boardsEmptyHint: "A board is where ideas get spread out — double-click empty space to add something, drop in references, group what belongs together.",
   boardsItemCount: "{n} items",
   boardsDeleteTitle: "Delete this board?",
   boardsDeleteManyTitle: "Delete {n} selected boards?",

@@ -229,15 +229,22 @@ def _fenced_json(text: str, *, default: Any) -> Any:
 
 @register("json_extract")
 def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """Walk a JSON string/object by a dot path (list indices as integers). Missing → None."""
+    """按路径从 JSON(一段 JSON 文本,或上游交回的对象 / 列表)里取一个值。路径写法见 parse_json_path。
+
+    **取不到就报错,说清在哪一段断的、那一层有什么。** 此前取不到静默交出 null:下游拿着空值往下跑,失败出现在隔了几个
+    节点、看不出原因的地方;`a.b[0].c` 这种最常见的写法也不认(`[0]` 被当成键名「b[0]」),于是「取不到值」。
+    `*` 收的是「每一项里有的那几个」,没有的不占位(见 _walk),不算取不到。
+    """
     source = config.get("source")
+    path = str(config.get("path") or "").strip()
     data: Any = source
     if isinstance(source, str):
         try:
             data = json.loads(source)
         except ValueError:
-            data = _fenced_json(source, default=source)  # not JSON — treat the raw string as the value
-    value = _walk(data, [p for p in str(config.get("path", "")).split(".") if p])
+            data = _fenced_json(source, default=source)  # 不是 JSON:整段文字就是那个值(路径为空时原样交出)
+    steps = parse_json_path(path)
+    value = _walk(data, steps, path=path)
     if value is None:
         text = ""
     elif isinstance(value, str):
@@ -247,26 +254,119 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     return {"value": value, "text": text}
 
 
-def _walk(value: Any, parts: list[str]) -> Any:
-    """按点路径往下走。`*` 是「这一串里的每一个」:余下的路径对每一项各走一遍,走不到的(没有那一格)不占位 ——
-    从循环交出的一串结果里取出每一项的某一格(模特上身图的 `*.on_model_clip.asset_id`)。"""
-    for index, part in enumerate(parts):
-        if part == "*":
-            items = value if isinstance(value, list) else list(value.values()) if isinstance(value, dict) else []
-            picked = [_walk(item, parts[index + 1:]) for item in items]
-            return [one for one in picked if one not in (None, "")]
-        if isinstance(value, dict):
-            value = value.get(part)
-        elif isinstance(value, list):
-            try:
-                value = value[int(part)]
-            except (ValueError, IndexError):
-                value = None
+#: 路径里的「这一串里的每一个」。
+WILDCARD = "*"
+_PATH_STEP = re.compile(
+    r"""\.?(?:
+        \[\s*(?P<index>-?\d+)\s*\]            # [0]、[-1]
+      | \[\s*(?P<star>\*)\s*\]                # [*]
+      | \[\s*"(?P<dq>(?:[^"\\]|\\.)*)"\s*\]   # ["带 . 的键"]
+      | \[\s*'(?P<sq>(?:[^'\\]|\\.)*)'\s*\]   # ['带 . 的键']
+      | (?P<key>[^.\[\]]+)                    # 键名、数字下标(items.0)、*
+    )""",
+    re.VERBOSE,
+)
+
+
+def parse_json_path(path: str) -> list[str | int]:
+    """把路径拆成一步一步:键名是 str,方括号里的下标是 int,`*` / `[*]` 是 WILDCARD。
+
+    认的写法:`data.items.0.title`、`data.items[0].title`、`[0].name`、`items[-1]`、`results.*.asset_id`、`results[*].id`、
+    `meta["a.b"]`;开头的 `$` / `$.`(JSONPath 的根)可写可不写。空路径 = 整个值。写坏了(方括号没闭合)就报错,不猜。
+    """
+    text = path.strip()
+    if text.startswith("$"):
+        text = text[1:]
+    steps: list[str | int] = []
+    position = 0
+    while position < len(text):
+        match = _PATH_STEP.match(text, position)
+        if not match or match.end() == position:
+            raise WorkflowDomainError("wfErr_jsonPathInvalid", params={"path": path, "at": text[position:][:40]})
+        if match.group("index") is not None:
+            steps.append(int(match.group("index")))
+        elif match.group("star") is not None:
+            steps.append(WILDCARD)
+        elif match.group("dq") is not None or match.group("sq") is not None:
+            quoted = match.group("dq") if match.group("dq") is not None else match.group("sq")
+            steps.append(re.sub(r"\\(.)", r"\1", quoted))
         else:
-            value = None
-        if value is None:
-            return None
+            steps.append(match.group("key").strip())
+        position = match.end()
+    return [step for step in steps if step != ""]
+
+
+def _step_text(steps: list[str | int]) -> str:
+    """走过的那几步写回路径的样子(报错里说「在哪一段断的」)。"""
+    out = ""
+    for step in steps:
+        out += f"[{step}]" if isinstance(step, int) else (f".{step}" if out else str(step))
+    return out
+
+
+def _available(value: Any) -> str:
+    """断的那一层长什么样 —— 报错里给人看,好知道该写哪个:对象写成 `{键, 键}`,列表写成 `[0..n]`,其余是那个值本身(截短)。"""
+    if isinstance(value, dict):
+        keys = [str(key) for key in value]
+        return "{" + ", ".join(keys[:20]) + (", …" if len(keys) > 20 else "") + "}"
+    if isinstance(value, list):
+        return f"[0..{len(value) - 1}]" if value else "[]"
+    shown = json.dumps(value, ensure_ascii=False)
+    return shown if len(shown) <= 60 else shown[:60] + "…"
+
+
+def _walk(value: Any, steps: list[str | int], *, path: str, done: list[str | int] | None = None) -> Any:
+    """按拆好的路径往下走;哪一步走不下去就报 wfErr_jsonPathMissing(在哪一段、那一层有什么)。
+
+    `*` 是「这一串里的每一个」:余下的路径对每一项各走一遍,走不到的(没有那一格)不占位 —— 从循环交出的一串结果里取出每一项的
+    某一格(模特上身图的 `*.on_model_clip.asset_id`)。
+    """
+    done = list(done or [])
+    for index, step in enumerate(steps):
+        if step == WILDCARD:
+            #: 空的(上游什么都没交)当空的一串:「每一个」就是一个都没有。别的单个值不是一串,报错。
+            items = [] if value in (None, "") else value if isinstance(value, list) else list(value.values()) if isinstance(value, dict) else None
+            if items is None:
+                raise _missing(path, done + [step], value)
+            picked = []
+            for item in items:
+                try:
+                    picked.append(_walk(item, steps[index + 1:], path=path, done=done + [step]))
+                except WorkflowDomainError:
+                    continue
+            return [one for one in picked if one not in (None, "")]
+        found, value = _step(value, step)
+        done.append(step)
+        if not found:
+            raise _missing(path, done, value)
     return value
+
+
+def _step(value: Any, step: str | int) -> tuple[bool, Any]:
+    """走一步:(走到了没有, 走到的值)。没走到时第二格是**这一层**(报错里列它有什么)。
+
+    列表认整数下标(`[0]`,也认 `items.0` 这种写成键名的数字);对象认键名(`[0]` 落在对象上就找键「0」)。
+    """
+    if isinstance(value, dict):
+        key = str(step)
+        return (True, value[key]) if key in value else (False, value)
+    if isinstance(value, list):
+        try:
+            position = step if isinstance(step, int) else int(step)
+        except ValueError:
+            return False, value
+        if -len(value) <= position < len(value):
+            return True, value[position]
+        return False, value
+    return False, value
+
+
+def _missing(path: str, done: list[str | int], level: Any) -> WorkflowDomainError:
+    """`done`:走到断的那一步为止(含那一步);`level`:断的那一层。"""
+    return WorkflowDomainError(
+        "wfErr_jsonPathMissing",
+        params={"path": path, "at": _step_text(done), "available": _available(level)},
+    )
 
 
 @register("text_transform")

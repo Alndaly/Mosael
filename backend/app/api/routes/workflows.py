@@ -40,6 +40,7 @@ from app.domain.workflows import (
     list_workflows,
     update_workflow,
 )
+from app.domain.failure_summary import detail_of, hint_of, summarize
 from app.domain.job_center import use_cases as job_center
 from app.domain.workflows.engine import start_workflow_job
 from app.domain.workflows.graph_upgrade import upgrade_graph
@@ -445,9 +446,35 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: Tx, user: CurrentUser) -
         attest_current_revision(db, workflow, attested_by=user.id)
         return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
     except WorkflowRevisionError as exc:
-        raise HTTPException(status_code=422, detail=_localized(WorkflowDomainError.from_error(exc))) from exc
+        raise _run_refused(WorkflowDomainError.from_error(exc)) from exc
     except WorkflowDomainError as exc:
-        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
+        raise _run_refused(exc) from exc
+
+
+def _run_refused(exc: WorkflowDomainError) -> HTTPException:
+    """开跑前被拦下(缺必填、引用指不到、插件连接落不到……)的 422:带结构的拒绝,和别处的 409 同一个形状
+    (`{code, message, …}`,`message` 是给人看的那一句,前端 humanError 认它)。
+
+    另外几格和一次跑失败的任务同一套(failure_summary:`error_summary` / `error_detail` / `error_hint`),编辑器摆成
+    同一张失败卡 —— 此前只有一句话,弹一下 toast 就没了:「有多个连接,请选一个」没说去哪选,也没说是哪个节点。
+    `scope` / `node_id`:拦在哪一层的哪个节点(preflight 带上的,见 executors.registry;整条流程的问题没有)。
+    `field`:认得出是哪一格时才有(插件节点的连接),编辑器据此把检查器翻到那一格所在的那一档。
+    """
+    locale = get_current_locale()
+    message = _localized(exc)
+    return HTTPException(
+        status_code=422,
+        detail={
+            "code": "workflow_run_refused",
+            "message": message,
+            "error_summary": summarize(message, exc.key, exc.params, locale),
+            "error_detail": detail_of(message, exc.key, exc.params, locale),
+            "error_hint": hint_of(exc.params, locale),
+            "scope": list(exc.details.get("scope") or []),
+            "node_id": exc.details.get("node_id"),
+            "field": exc.details.get("field"),
+        },
+    )
 
 
 @router.get("/workflows/{workflow_id}/runs", response_model=list[JobOut])

@@ -38,7 +38,7 @@ import { bodyScope, drivesDigitalHuman, extractRefs, isCodeConfig, isNestedScope
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { withDataInputBound } from "@/features/workflows/connections";
 import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSection } from "@/features/workflows/nodeInspectorGenerate";
-import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmPresetSection } from "@/features/workflows/nodeInspectorLlm";
+import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmMainSection } from "@/features/workflows/nodeInspectorLlm";
 import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
 import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
@@ -104,6 +104,7 @@ export function NodeInspector({
   onDelete,
   onDrillIn,
   onClose,
+  revealField = null,
 }: {
   /** 画布正在平移:此时面板不吃指针事件(见 WorkflowsView 里 panning 的说明)。 */
   inert?: boolean;
@@ -127,6 +128,9 @@ export function NodeInspector({
   /** 只有子图 / 循环节点给 —— 双击进子画布的那件事,在悬浮键上也给一个入口。 */
   onDrillIn?: () => void;
   onClose?: () => void;
+  /** 要人去看的那一格(点运行被拦下时,失败卡上的「去这个节点」):面板翻到它所在的那一档 —— 插件节点选连接的那一格
+   *  标着 advanced,停在「参数」上的人找不到它。之后点别的档照常换。 */
+  revealField?: { nodeId: string; field: string } | null;
 }) {
   const t = useI18n();
   //: 节点类型不在目录里:问后端为什么(就绪清单、画布角标问的是同一份,按类型缓存)。
@@ -412,9 +416,19 @@ export function NodeInspector({
   // 一打开就跳过基础参数，像是表单缺了一截。把节点 id 和选区一起存，派生时同步回第一块且不慢一帧。
   const [picked, setPicked] = React.useState<{ nodeId: string; area: string } | null>(null);
   const pickedArea = picked?.nodeId === node.id ? picked.area : null;
+  // 又要人去看某一格了:先前点过的档让位(渲染时调整,不用 effect —— 那样会先露一帧旧的档)。
+  const [lastReveal, setLastReveal] = React.useState(revealField);
+  if (lastReveal !== revealField) {
+    setLastReveal(revealField);
+    setPicked(null);
+  }
+  const revealKey = revealField?.nodeId === node.id ? revealField.field : null;
+  const revealedArea = revealKey === null
+    ? null
+    : advancedSpecs.some(([key]) => key === revealKey) ? "advanced" : "config";
   // 派生而不是同步:换节点时 areas 变了,上一个节点选中的那块可能根本不存在 —— 直接回落到
   // 第一块,不需要一个 effect 追着清空(那种 effect 总慢一帧,会先露出一个空面板)。
-  const area = pickedArea && areas.includes(pickedArea) ? pickedArea : areas[0];
+  const area = [pickedArea, revealedArea].find((one) => one && areas.includes(one)) ?? areas[0];
   const AREA_LABELS: Record<string, MessageKey> = { config: "wfaConfig", advanced: "wfAdvanced", outputs: "wfOutputs", run: "wfRunOutputs" };
 
 
@@ -690,13 +704,13 @@ export function NodeInspector({
             typingRun,
           })}
         {area === "config" && node.type === "llm" &&
-          llmPresetSection({ t, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
+          llmMainSection({ t, nodeId: node.id, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
         {/* **专区此前完全绕过了 advanced 声明。** llm 的十一个旋钮在 NODE_TYPES 里一直标着
             advanced,而专区把它们和 preset 一股脑铺开 —— 于是那个声明在最需要它的节点上
-            等于不存在,面板一打开就是满屏采样参数。这里按声明切开:preset 是"这个节点在做
-            什么"的那一档,其余进高级。 */}
+            等于不存在,面板一打开就是满屏采样参数。这里按声明切开:preset、输出格式和 JSON Schema 是
+            "这个节点在做什么"的那一档,其余进高级。 */}
         {area === "advanced" && node.type === "llm" &&
-          llmAdvancedSection({ t, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
+          llmAdvancedSection({ t, nodeId: node.id, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
         {/* 每一档里的表单**整份一起读**,不再切碎;分档只分到「参数 / 高级 / 输出变量 /
             本次产出」这一层。高级从正文底下的折叠块升成条上的一档 —— 折叠块把「还有没有
             更多可调的」藏在一次点击后面,而条上摆着一眼就看得见。 */}

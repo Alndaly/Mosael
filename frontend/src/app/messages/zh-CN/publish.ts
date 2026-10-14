@@ -19,7 +19,7 @@ export const publish = {
   scenesLoading: "正在加载场景…",
   //: 3D 工作台自己的代码(three.js)还在路上 —— 和上面"场景数据在路上"是两回事。
   boardsEmptyTitle: "还没有画板",
-  boardsEmptyHint: "画板是摊开想法的地方 —— 双击空白处写一张便签,贴几张参考图,把相关的圈到一起。",
+  boardsEmptyHint: "画板是摊开想法的地方 —— 双击空白处挑一样放下,贴几张参考图,把相关的圈到一起。",
   boardsItemCount: "{n} 项",
   boardsDeleteTitle: "删除这张画板?",
   boardsDeleteManyTitle: "删除选中的 {n} 张画板?",

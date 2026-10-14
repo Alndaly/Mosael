@@ -4,11 +4,10 @@ import {
   Background,
   ConnectionLineType,
   MiniMap,
-  Panel,
   ReactFlow,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { Boxes, FileUp, History, Loader2 } from "lucide-react";
+import { Boxes, FileUp, History, Loader2, LocateFixed, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -22,6 +21,7 @@ import {
 import { useI18n } from "@/app/preferences";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { useCanvasInputMode, canvasWheelProps, CANVAS_POINTER_PROPS } from "@/components/app/canvasInputMode";
+import { CanvasPointPicker, emptyCanvasDoubleClick, type ScreenPoint } from "@/components/app/canvasPointPicker";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { CANVAS_GLASS_SURFACE_CLASS, canvasDockedPanelEdges, canvasRightDockOcclusion } from "@/components/app/canvasPanelLayout";
 import { canvasInsets, centerCanvasViewport, fitCanvasViewport, visibleCanvasSize } from "@/components/app/fitCanvasViewport";
@@ -32,6 +32,7 @@ import type { CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import { blurFloatingPanels } from "@/components/app/useFloatingPanel";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { usePageTrail } from "@/components/layout/pageTrail";
+import { FailureCard } from "@/components/failure/FailureCard";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
@@ -52,6 +53,7 @@ import { useWorkflowPortNamer } from "@/features/workflows/useWorkflowPortNamer"
 import { workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 import { useWorkflowEditorShortcuts, useWorkflowNodeZ } from "@/features/workflows/useWorkflowEditorKeys";
 import { useWorkflowGraph } from "@/features/workflows/useWorkflowGraph";
+import type { RunRefusal } from "@/features/workflows/runRefusal";
 import { useWorkflowRun } from "@/features/workflows/useWorkflowRun";
 import { useWorkflowSave } from "@/features/workflows/useWorkflowSave";
 import { useWorkflowComments } from "./WorkflowComments";
@@ -113,6 +115,8 @@ export function WorkflowEditor({
   const qc = useQueryClient();
   const registry = React.useMemo(() => new Map(nodeTypes.map((item) => [item.type, item])), [nodeTypes]);
   const { options: nodeOptions } = useNodePicker(nodeTypes, t);
+  //: 双击画布空白处弹出的「添加节点」单子钉在哪(屏幕坐标)、节点落在哪(画布坐标)。见 components/app/canvasPointPicker。
+  const [addNodeAt, setAddNodeAt] = React.useState<{ screen: ScreenPoint; flow: { x: number; y: number } } | null>(null);
 
   const {
     graphStore,
@@ -388,7 +392,27 @@ export function WorkflowEditor({
     checklistLabel,
     checklistOpen,
     setChecklistOpen,
+    refusal,
+    dismissRefusal,
   } = useWorkflowRun({ workflow, qc, t, rootGraph, registry, scopePath, save, pendingSaveRef });
+  /** 失败卡上点了「去这个节点」:检查器翻到出问题的那一格所在的那一档(见 NodeInspector 的 revealField)。 */
+  const [revealField, setRevealField] = React.useState<{ nodeId: string; field: string } | null>(null);
+  /** 已经去过那个节点的那一次拦截:卡收成一行(详情浮层里原因、怎么修都还在)—— 聚焦把节点和检查器摆在画布正中,
+   *  整张卡留着会正好盖住节点和检查器的顶部。下一次拦截是另一个对象,自然又是整张。 */
+  const [visitedRefusal, setVisitedRefusal] = React.useState<RunRefusal | null>(null);
+  /** 去被拦下的那个节点:在别的层就先换过去,等那一层的画布挂好再聚焦(同就绪清单、节点搜索那条)。 */
+  const goToRefusedNode = React.useCallback(() => {
+    const nodeId = refusal?.nodeId;
+    if (!refusal || !nodeId) return;
+    setVisitedRefusal(refusal);
+    if (refusal.field) setRevealField({ nodeId, field: refusal.field });
+    if (scopeId(refusal.scope) === scopeKey) {
+      focusNode(nodeId);
+      return;
+    }
+    pendingFocusRef.current = { scope: scopeId(refusal.scope), nodeId };
+    enterScope(refusal.scope);
+  }, [refusal, scopeKey, focusNode, enterScope]);
   React.useEffect(() => {
     if (!openRunId) return;
     viewRun(openRunId);
@@ -701,6 +725,14 @@ export function WorkflowEditor({
               const g = graph.nodes.find((item) => item.id === node.id);
               if (g && bodyKey(registry, g.type)) enterScope([...scopePath, node.id]);
             }}
+            // 双击空白处:在那一点弹出「添加节点」的单子(和工具栏上那个同一份),选中的节点落在双击的地方。
+            onDoubleClick={(event) => {
+              if (annotationMode) return;
+              const screen = emptyCanvasDoubleClick(event);
+              const instance = rfRef.current;
+              if (!screen || !instance) return;
+              setAddNodeAt({ screen, flow: instance.screenToFlowPosition(screen) });
+            }}
             onPaneClick={(event) => {
               const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY });
               if (markerMode && point) { addMarker(point); return; }
@@ -719,20 +751,57 @@ export function WorkflowEditor({
           >
             {atRoot && workflowComments.layer}
             {annotationMode && <AnnotationModeHint kind={markerMode ? "marker" : "comment"} onExit={() => { setMarkerMode(false); workflowComments.exit(); }} />}
-            {selectedFlowIds.length >= 2 && !annotationMode && (
-              <Panel position="top-center">
-                <Hint label={t("wfCollapseHint")} shortcut={formatCombo("Mod+G")} side="bottom">
-                  <button
-                    type="button"
-                    onClick={() => handleCollapse(selectedFlowIds)}
-                    // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
-                    // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
-                    className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+            {!annotationMode && (refusal || selectedFlowIds.length >= 2) && (
+              // 画布上方的提示一列,落在顶上那条工具栏**下面**(和标注模式的提示同一个位置):此前「折叠为子图」用
+              // Panel 的 top-center,和工具栏同一高度,工具栏一长就把它盖住。两样同时有时上下摞着,不叠在一起。
+              <div data-wf-canvas-notices="" className="pointer-events-none absolute inset-x-4 top-16 z-30 flex flex-col items-center gap-2">
+                {refusal && (
+                  // 点运行被拦下:和跑失败同一张失败卡(为什么、怎么修、原文),留在画布上直到关掉或再点运行 ——
+                  // 此前是一条几秒就没的 toast,「有多个连接,请选一个」不说是哪个节点,也不说去「高级」里选。
+                  <div
+                    data-wf-run-refused=""
+                    className={visitedRefusal === refusal
+                      ? "pointer-events-auto max-w-[440px] rounded-full border border-field-border bg-card px-3 py-1.5 shadow-sm"
+                      : "pointer-events-auto w-full max-w-[440px] rounded-lg bg-card"}
                   >
-                    <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
-                  </button>
-                </Hint>
-              </Panel>
+                    <FailureCard
+                      size={visitedRefusal === refusal ? "inline" : "full"}
+                      title={t("wfRunRefused")}
+                      summary={refusal.summary}
+                      detail={refusal.detail}
+                      fix={refusal.fix}
+                      copyText={refusal.copyText}
+                      actions={
+                        <>
+                          {refusal.nodeId && (
+                            <Button size="sm" variant="outline" className="shrink-0" onClick={goToRefusedNode}>
+                              <LocateFixed size={13} /> {t("wfRunRefusedGoToNode")}
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="shrink-0" onClick={dismissRefusal}>
+                            <X size={13} /> {t("close")}
+                          </Button>
+                        </>
+                      }
+                    />
+                  </div>
+                )}
+                {selectedFlowIds.length >= 2 && (
+                  <div data-wf-collapse-hint="" className="pointer-events-auto">
+                    <Hint label={t("wfCollapseHint")} shortcut={formatCombo("Mod+G")} side="bottom">
+                      <button
+                        type="button"
+                        onClick={() => handleCollapse(selectedFlowIds)}
+                        // **select-none**:它出现的时机正是框选拖拽刚结束的那一刻,而那一下拖拽会把
+                        // 按钮上的字一起选中 —— 于是文字顶着一层系统选区的紫色,看着像坏了。
+                        className="inline-flex select-none items-center gap-1.5 rounded-full border border-field-border bg-card px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+                      >
+                        <Boxes size={13} /> {t("wfCollapseToSubgraph").replace("{n}", String(selectedFlowIds.length))}
+                      </button>
+                    </Hint>
+                  </div>
+                )}
+              </div>
             )}
             <Background gap={20} size={1.2} />
             {/* 缩放钮/预览图不吃应用主题(xyflow 默认一律白底),把 --xy-* 变量
@@ -786,10 +855,18 @@ export function WorkflowEditor({
               bodyKey(registry, selectedNode.type) ? () => enterScope([...scopePath, selectedNode.id]) : undefined
             }
             onClose={() => selectInspectorNode(null)}
+            revealField={revealField}
           />
         )}
           </ReactFlow>
           </MarkerEditorProvider>
+          <CanvasPointPicker
+            at={addNodeAt?.screen ?? null}
+            options={nodeOptions.filter((option) => option.value !== "start" || canAddStart)}
+            searchPlaceholder={t("wfAddNode")}
+            onPick={(type) => addNode(type, addNodeAt?.flow)}
+            onClose={() => setAddNodeAt(null)}
+          />
           {scopeNode && graph.nodes.length === 0 && (
             <div className="pointer-events-none absolute left-1/2 top-14 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
               {t(scopeNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}

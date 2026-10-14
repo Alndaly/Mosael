@@ -153,8 +153,8 @@ describe("共用的连线外观", () => {
       mismatch: "var(--warning)",
       taken: "var(--canvas-edge-run)",
       pending: "var(--primary)",
-      //: 引用提示:同一族颜色往底色退成实色(不用半透明),亮暗两套都跟着令牌走。
-      ref: "color-mix(in_oklab,var(--canvas-edge)_70%,var(--background))",
+      //: 引用提示:和数据线同一族颜色往底色退成实色(不用半透明),亮暗两套都跟着令牌走。
+      ref: "color-mix(in_oklab,var(--primary)_70%,var(--background))",
       "ref-never-runs": "color-mix(in_oklab,var(--destructive)_85%,var(--background))",
     };
     for (const [tone, token] of Object.entries(expected)) {

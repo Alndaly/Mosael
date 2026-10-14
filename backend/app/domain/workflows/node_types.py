@@ -184,6 +184,7 @@ _FIELD_LABELS = {
     "input": "wfField_input",
     "inputs": "wfField_inputs",
     "instance_id": "wfField_instance_id",
+    "image_asset_ids": "wfField_image_asset_ids",
     "items": "wfField_items",
     "json_schema": "wfField_json_schema",
     "json_schema_name": "wfField_json_schema_name",
@@ -655,13 +656,18 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "presence_penalty": {"advanced": True, "type": "number", "description": "wfNode_llm_presence_penalty"},
             "seed": {"advanced": True, "type": "number", "description": "wfNode_llm_seed"},
             "stop": {"advanced": True, "type": "template", "description": "wfNode_llm_stop"},
-            "response_format": {"advanced": True, 
+            #: 让模型**看着图**回答:这几张图和提示词一起发过去(多模态消息里的 image_url)。此前没有这一格,
+            #: 在提示词里写 `{{画图.asset_id}}` 送过去的只是一串素材编号,模型从没见过那张图。
+            "image_asset_ids": {"type": "template", "media": ["image"], "description": "wfNode_llm_image_asset_ids"},
+            #: **输出格式和 Schema 不标 advanced。** 「要一份 JSON、下游按字段取」是这个节点在做的事,不是微调:
+            #: 藏在高级里时维护者翻了一圈以为大模型节点没有 JSON 模式。Schema 的名字和严格与否才是微调。
+            "response_format": {
                 "type": "string",
                 "description": "wfNode_llm_response_format",
                 "options": ["text", "json_object", "json_schema"],
             },
             "json_schema_name": {"advanced": True, "type": "template", "description": "wfNode_llm_json_schema_name"},
-            "json_schema": {"advanced": True, "type": "object", "description": "wfNode_llm_json_schema"},
+            "json_schema": {"type": "object", "description": "wfNode_llm_json_schema"},
             "json_schema_strict": {"advanced": True, 
                 "type": "string",
                 "description": "wfNode_llm_json_schema_strict",
@@ -1165,6 +1171,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "path": {"type": "template", "description": "wfNode_json_extract_path"},
         },
         "outputs": ["value", "text"],
+        #: value 是什么由路径决定(对象、列表、文字都可能),不声明;text 永远是文字。
+        "output_types": {"text": "text"},
     },
     #: 把一串拆成等长的几批 —— 全量分析、分批拉取的公共积木。此前「分批」只有手写循环一条
     #: 路,而循环体拿不到「第几批的内容」;拆批之后 loop_foreach 直接逐批跑。

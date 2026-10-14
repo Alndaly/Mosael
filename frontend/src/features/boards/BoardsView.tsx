@@ -50,6 +50,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuItemBody } from "@/components/ui/menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { CanvasPointPicker, type ScreenPoint } from "@/components/app/canvasPointPicker";
 import { Truncate } from "@/components/ui/truncate";
 import { usePageTrail } from "@/components/layout/pageTrail";
 import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
@@ -74,7 +75,7 @@ import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { AnnotationControls } from "@/features/markers/AnnotationControls";
 import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { canvasInsets } from "@/components/app/fitCanvasViewport";
-import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
+import { BoardCanvas, type BoardCanvasApi, type FlowPoint } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/lib/useAutosave";
 import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
@@ -634,8 +635,11 @@ function BoardDetail({
   } | null>(null);
   //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards/canvas.py),
   //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
-  const [pickingScene, setPickingScene] = React.useState(false);
-  const [pickingEntity, setPickingEntity] = React.useState(false);
+  //: 挑完放在哪(`at`,画布坐标):从双击空白处的单子里点的,落在双击的地方;从工具栏点的不给,落在视野中心。
+  const [pickingScene, setPickingScene] = React.useState<{ at?: FlowPoint } | null>(null);
+  const [pickingEntity, setPickingEntity] = React.useState<{ at?: FlowPoint } | null>(null);
+  //: 双击画布空白处:在那一点弹出和工具栏「添加」同一份单子(见 components/app/canvasPointPicker)。
+  const [addAt, setAddAt] = React.useState<{ screen: ScreenPoint; flow: FlowPoint } | null>(null);
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
   const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
@@ -824,6 +828,35 @@ function BoardDetail({
     () => boardAddCatalog(t).map(({ icon: Icon, ...one }) => ({ ...one, icon: <Icon /> })),
     [t],
   );
+
+  /**
+   * 「添加」单子上选了一项 —— 工具栏上那个,和双击空白处弹的那个是同一份单子,走这同一条。`at`(画布坐标):格子落在哪;
+   * 不给就落在视野中心。要先挑的(素材、3D 场景、角色)挑完再按 `at` 放。
+   */
+  const addFromMenu = (kind: string, at?: FlowPoint) => {
+    setMarkerMode(false);
+    setCommentMode(false);
+    setActiveCommentId(null);
+    //: 「素材」一行挑三种:挑中哪一种就放哪一种格子。
+    if (kind === "pick-media") {
+      //: 和拖进来的文件写同样的字段(素材 + 它的名字,boardPlacement.assetFields)。
+      setPicking({ kind: "media", withDocuments: true, place: (asset) => api?.add(asset.kind, assetFields(asset), at) });
+    } else if (kind === "sequence-new") {
+      //: 时间线格背后是一条正常的时间线(ADR 0030):先建好(放进这张画板的同名项目),再放格子。
+      void createBoardSequence(board.id, workspaceId)
+        .then((made) => api?.add("sequence", { sequence_id: made.sequence_id, text: made.name }, at))
+        .catch((error: unknown) => toast.error(errorText(error)));
+    } else if (kind === "scene-new") {
+      //: 一格空的 3D 场景:连一段剧本进来,按剧本搭白模(场景格的这种填法就是它自己的产出者)。
+      api?.add("scene", { form: { producer: SCENE_FROM_TEXT } }, at);
+    } else if (kind === "scene") {
+      setPickingScene({ at });
+    } else if (kind === "entity") {
+      setPickingEntity({ at });
+    } else {
+      api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document", {}, at);
+    }
+  };
 
   /** 系统里拖进来 / 粘贴进来的文件:先传进素材库,再由画布按种类各放一格(图片、视频、音频都有自己的格子,
    *  见 boardPlacement.assetItem;文档落成一格文档格)。哪些种类放得上画板由 boardPlacement.placedAsset 判。
@@ -1153,30 +1186,7 @@ function BoardDetail({
           <CanvasToolbarGroup label={t("canvasEditTools")}>
             <SearchableSelect
               value=""
-              onValueChange={(kind) => {
-                setMarkerMode(false);
-                setCommentMode(false);
-                setActiveCommentId(null);
-                //: 「素材」一行挑三种:挑中哪一种就放哪一种格子。
-                if (kind === "pick-media") {
-                  //: 和拖进来的文件写同样的字段(素材 + 它的名字,boardPlacement.assetFields)。
-                  setPicking({ kind: "media", withDocuments: true, place: (asset) => api?.add(asset.kind, assetFields(asset)) });
-                } else if (kind === "sequence-new") {
-                  //: 时间线格背后是一条正常的时间线(ADR 0030):先建好(放进这张画板的同名项目),再放格子。
-                  void createBoardSequence(board.id, workspaceId)
-                    .then((made) => api?.add("sequence", { sequence_id: made.sequence_id, text: made.name }))
-                    .catch((error: unknown) => toast.error(errorText(error)));
-                } else if (kind === "scene-new") {
-                  //: 一格空的 3D 场景:连一段剧本进来,按剧本搭白模(场景格的这种填法就是它自己的产出者)。
-                  api?.add("scene", { form: { producer: SCENE_FROM_TEXT } });
-                } else if (kind === "scene") {
-                  setPickingScene(true);
-                } else if (kind === "entity") {
-                  setPickingEntity(true);
-                } else {
-                  api?.add(kind as "note" | "image" | "video" | "audio" | "frame" | "document");
-                }
-              }}
+              onValueChange={(kind) => addFromMenu(kind)}
               searchPlaceholder={t("boardsAddItem")}
               options={addOptions}
               //: 按钮上已经写着「添加」,说明里重复这两个字只是为了把快捷键挂上。
@@ -1319,6 +1329,7 @@ function BoardDetail({
         getInsets={getCanvasInsets}
         onChange={onCanvasChange}
         onPickAsset={(kind, place, options) => setPicking({ kind, place: (asset) => place(asset.id), onBoard: options?.onBoard })}
+        onPaneDoubleClick={setAddAt}
         onRun={run}
         onGrabFrame={grabFrame}
         models={models.options}
@@ -1404,11 +1415,11 @@ function BoardDetail({
 
           workspaceId={workspaceId}
 
-          open={pickingScene}
+          open={pickingScene !== null}
 
-          onOpenChange={setPickingScene}
+          onOpenChange={(next) => !next && setPickingScene(null)}
 
-          onPick={(scene) => api?.add("scene", { scene_id: scene.id, text: scene.name })}
+          onPick={(scene) => api?.add("scene", { scene_id: scene.id, text: scene.name }, pickingScene?.at)}
 
         />
 
@@ -1417,11 +1428,19 @@ function BoardDetail({
       {workspaceId && (
         <EntityPickerDialog
           workspaceId={workspaceId}
-          open={pickingEntity}
-          onOpenChange={setPickingEntity}
-          onPick={(entity) => api?.add("entity", { entity_id: entity.id })}
+          open={pickingEntity !== null}
+          onOpenChange={(next) => !next && setPickingEntity(null)}
+          onPick={(entity) => api?.add("entity", { entity_id: entity.id }, pickingEntity?.at)}
         />
       )}
+
+      <CanvasPointPicker
+        at={addAt?.screen ?? null}
+        options={addOptions}
+        searchPlaceholder={t("boardsAddItem")}
+        onPick={(kind) => addFromMenu(kind, addAt?.flow)}
+        onClose={() => setAddAt(null)}
+      />
 
       <AssetPickerDialog
         open={picking !== null}

@@ -140,3 +140,29 @@ def test_有好几条连接却没选_开跑前就报_循环体里的也算(tmp_p
         _start(ws, "", in_loop=True)
     assert nested.value.key == "pluginErr_manyInstances"
     assert _jobs() == before
+
+
+def test_经运行接口_好几条连接没选_回的是能落到那个节点的失败说明(tmp_path) -> None:
+    """点运行被拦,界面要能说「去哪儿、改什么」:422 带上一步一步的提示和是哪个节点(循环体里就带上外层)。"""
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _package(tmp_path)
+    _connection(user_id(), "B 站")
+    _connection(user_id(), "抖音")
+    say = {"id": "s", "type": f"plugin.{PACKAGE}.say", "config": {"text": "嗨", "instance_id": ""}}
+    loop = {"id": "loop", "type": "loop_foreach", "config": {"items": '["a"]', "body": {"nodes": [say], "edges": []}}}
+    graph = {"nodes": [{"id": "start", "type": "start", "config": {}}, loop],
+             "edges": [{"id": "e1", "source": "start", "target": "loop"}]}
+    saved = client.post("/api/workflows", json={"workspace_id": ws, "name": "回声", "graph": graph}).json()
+
+    before = _jobs()
+    refused = client.post(f"/api/workflows/{saved['id']}/run", json={"params": {}},
+                          headers={"Accept-Language": "zh-CN"})
+    assert refused.status_code == 422, refused.text
+    detail = refused.json()["detail"]
+    assert detail["code"] == "workflow_run_refused"
+    assert detail["node_id"] == "s" and detail["scope"] == ["loop"] and detail["field"] == "instance_id", detail
+    steps = [step["text"] for step in detail["error_hint"]["steps"]]
+    assert steps == ["打开这个节点的「高级选项」,在「连接」里选这次要用的那一条"], detail
+    assert detail["message"] and detail["error_summary"], detail
+    assert _jobs() == before
