@@ -109,8 +109,6 @@ class PluginProvidedModelOut(ApiModel):
     enabled: bool = True
     modes: list[str] = Field(default_factory=list)
     inputs: list[PluginProvidedInputOut] = Field(default_factory=list)
-    #: 宿主自己有控件的那几项(尺寸、种子、反向提示词、一次几张……)。
-    host_parameters: list[str] = Field(default_factory=list)
     #: 这个模型自己的参数(参数表里的那些)。
     parameters: list[PluginProvidedParameterOut] = Field(default_factory=list)
 

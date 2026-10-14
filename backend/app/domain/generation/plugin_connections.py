@@ -335,9 +335,6 @@ def provided_models(db: Session, instance: PluginInstance) -> list[dict[str, Any
                         {"role": role, "max": int(count), "required": role in required}
                         for role, count in limits.items()
                     ],
-                    "host_parameters": [
-                        key for key in caps.get("parameter_keys") or [] if key in _HOST_KEYS
-                    ],
                     "parameters": [
                         {
                             "key": key,

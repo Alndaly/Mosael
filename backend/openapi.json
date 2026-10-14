@@ -41928,13 +41928,6 @@
             "type": "array",
             "title": "Inputs"
           },
-          "host_parameters": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Host Parameters"
-          },
           "parameters": {
             "items": {
               "$ref": "#/components/schemas/PluginProvidedParameterOut"
