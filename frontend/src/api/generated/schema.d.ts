@@ -16095,8 +16095,6 @@ export interface components {
             modes?: string[];
             /** Inputs */
             inputs?: components["schemas"]["PluginProvidedInputOut"][];
-            /** Host Parameters */
-            host_parameters?: string[];
             /** Parameters */
             parameters?: components["schemas"]["PluginProvidedParameterOut"][];
         };
