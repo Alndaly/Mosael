@@ -122,7 +122,7 @@ def test_点运行时同一道_选浏览器照常跑完() -> None:
     client, workspace = _client_and_workspace()
     workflow = _save(client, workspace, _graph()).json()
     refused = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {"data_source": "tikhub"}})
-    assert refused.status_code == 422 and "TikHub" in refused.json()["detail"], refused.text
+    assert refused.status_code == 422 and "TikHub" in refused.json()["detail"]["message"], refused.text
     started = client.post(f"/api/workflows/{workflow['id']}/run", json={"params": {"data_source": "browser"}})
     assert started.status_code == 200, started.text
     assert wait_status(client, started.json()["id"]) == "succeeded"

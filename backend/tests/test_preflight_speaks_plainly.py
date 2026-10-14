@@ -74,8 +74,8 @@ def test_经运行接口按请求的语言回() -> None:
     zh = client.post(f"/api/workflows/{saved['id']}/run", json={"params": {}}, headers={"Accept-Language": "zh-CN"})
     en = client.post(f"/api/workflows/{saved['id']}/run", json={"params": {}}, headers={"Accept-Language": "en-US"})
     assert zh.status_code == en.status_code == 422
-    assert zh.json()["detail"] == "「逐镜生成 › 生成画面」缺少必填:生成模型"
-    assert en.json()["detail"] == "“逐镜生成 › 生成画面” is missing a required field: Generation model"
+    assert zh.json()["detail"]["message"] == "「逐镜生成 › 生成画面」缺少必填:生成模型"
+    assert en.json()["detail"]["message"] == "“逐镜生成 › 生成画面” is missing a required field: Generation model"
 
 
 # ---- 没起名的节点用节点类型的显示名;字段用界面标签 ----

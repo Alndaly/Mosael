@@ -23,6 +23,8 @@ export const nodeToolbar = {
   wfRun: "运行",
   wfRunQueued: "工作流已开始运行,进度见任务中心",
   wfRunFailed: "运行失败",
+  wfRunRefused: "没能开始运行",
+  wfRunRefusedGoToNode: "去这个节点",
   wfAddNode: "添加节点",
   wfNodeSearch: "查找节点",
   wfNodeSearchPlaceholder: "按名称或类型搜索…",

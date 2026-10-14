@@ -50,9 +50,9 @@ def test_引用了没有的输出_点运行当场拦下_不建任务_英文界�
 
     zh = client.post(f"/api/workflows/{workflow_id}/run", json={"params": {}})
     assert zh.status_code == 422, zh.text
-    assert zh.json()["detail"] == "「拼文案」引用了「写稿子」没有的输出 写稿子 · titel:它的输出有 文本"
+    assert zh.json()["detail"]["message"] == "「拼文案」引用了「写稿子」没有的输出 写稿子 · titel:它的输出有 文本"
     en = client.post(f"/api/workflows/{workflow_id}/run", json={"params": {}}, headers={"Accept-Language": "en"})
-    assert en.json()["detail"] == "“拼文案” references an output “写稿子” doesn't have: 写稿子 · titel. Its outputs are Text"
+    assert en.json()["detail"]["message"] == "“拼文案” references an output “写稿子” doesn't have: 写稿子 · titel. Its outputs are Text"
     with SessionLocal() as db:
         assert db.scalars(select(Job).where(Job.kind == "workflow")).all() == [], "拦在建任务之前,上游一个都没跑"
 

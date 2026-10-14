@@ -641,7 +641,7 @@ def test_loop_foreach_rejects_start_in_body() -> None:
     run = client.post(f"/api/workflows/{workflow.json()['id']}/run", json={"params": {"x": ["a"]}})
     # 在启动前就拒,而不是接了任务、跑到循环才失败。
     assert run.status_code == 422, run.text
-    assert run.json()["detail"] == "「循环·遍历 › 开始」:循环体和子图里不能放开始节点", run.text
+    assert run.json()["detail"]["message"] == "「循环·遍历 › 开始」:循环体和子图里不能放开始节点", run.text
 
 
 def test_asset_query_filters_and_feeds_loop() -> None:

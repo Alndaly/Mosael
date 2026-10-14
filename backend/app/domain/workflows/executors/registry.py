@@ -12,6 +12,8 @@ from typing import Any, Callable, Protocol
 
 from sqlalchemy.orm import Session
 
+from app.domain.workflows.errors import WorkflowDomainError
+
 
 class RunScope(Protocol):
     """执行器跑在**谁名下** —— 只有这三样,不是整个工作流。
@@ -196,7 +198,7 @@ def run_preflights(
         if isinstance(node, dict) and node.get("type") == "start":
             config = node.get("config") if isinstance(node.get("config"), dict) else {}
             known[str(node.get("id") or "")] = {**(config.get("params") or {}), **(params or {})}
-    _preflight_graph(db, graph, actor, workspace_id, known)
+    _preflight_graph(db, graph, actor, workspace_id, known, scope=())
 
 
 #: 「没法在跑之前知道」的哨兵。None / "" 都是合法的已知值,不能拿来当它。
@@ -226,8 +228,16 @@ def _known_value(value: Any, known: dict[str, dict[str, Any]]) -> Any:
 
 
 def _preflight_graph(
-    db: Session, graph: dict[str, Any], actor: str | None, workspace_id: str, known: dict[str, dict[str, Any]]
+    db: Session,
+    graph: dict[str, Any],
+    actor: str | None,
+    workspace_id: str,
+    known: dict[str, dict[str, Any]],
+    *,
+    scope: tuple[str, ...],
 ) -> None:
+    """`scope`:这张图在哪一层 —— 从主流程往里钻过的容器节点的 id(主流程是空的)。拦下来的报错带上它和节点 id
+    (`details` 的 `scope` / `node_id`),编辑器据此把人带到那一层的那个节点(和就绪清单的 issue.path 同一个形状)。"""
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict):
             continue
@@ -240,7 +250,7 @@ def _preflight_graph(
                 inputs = config.get("inputs") if isinstance(config.get("inputs"), dict) and not bare.bound("inputs") else {}
                 passed = {key: _known_value(one, known) for key, one in inputs.items()}
                 inner = {"input": {key: one for key, one in passed.items() if one is not _UNKNOWN}}
-                _preflight_graph(db, value, actor, workspace_id, inner)
+                _preflight_graph(db, value, actor, workspace_id, inner, scope=(*scope, str(node.get("id") or "")))
         check = _preflight_for(str(node.get("type") or ""))
         if check is None:
             continue
@@ -255,5 +265,10 @@ def _preflight_graph(
             given[key] = one
             if isinstance(value, str) and "{{" in value:
                 resolved_refs.add(key)
-        check(db, given, actor, PreflightNode(workspace_id=workspace_id, graph=graph, node=node,
-                                              known=frozenset(resolved_refs)))
+        try:
+            check(db, given, actor, PreflightNode(workspace_id=workspace_id, graph=graph, node=node,
+                                                  known=frozenset(resolved_refs)))
+        except WorkflowDomainError as exc:
+            exc.details.setdefault("scope", list(scope))
+            exc.details.setdefault("node_id", str(node.get("id") or ""))
+            raise

@@ -26,7 +26,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN", t: (key: string) => key }),
 }));
 
-import type { Workspace, WorkflowGraph } from "@/api/client";
+import { ApiError, type Workspace, type WorkflowGraph } from "@/api/client";
 import { readHint } from "@/test/hint";
 import { WithPageTrail } from "@/test/pageTrail";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -145,7 +145,7 @@ it("⌘/Ctrl 点击是往选区里加,不是换成只选这一个", async () => 
   expect(screen.queryByLabelText("wfNodeName")).toBeNull();
   expect(screen.getByText("wfCollapseToSubgraph")).toBeTruthy();
   //: 它落在顶栏下面(顶栏 top-2、高 42px),不和顶栏挤在同一高度被盖住 —— 和标注模式的提示同一个位置。
-  const hint = screen.getByText("wfCollapseToSubgraph").closest<HTMLElement>("[data-wf-collapse-hint]")!;
+  const hint = screen.getByText("wfCollapseToSubgraph").closest<HTMLElement>("[data-wf-canvas-notices]")!;
   expect(hint.className.split(" ")).toEqual(expect.arrayContaining(["top-16", "z-30"]));
   expect(hint.closest(".react-flow__panel")).toBeNull();
 });
@@ -703,5 +703,69 @@ describe("从别处打开某一次运行", () => {
     );
     await waitFor(() => expect(opened).toEqual(["job-9"]));
     window.removeEventListener("mosael:open-tasks", onTasks);
+  });
+});
+
+describe("点运行被服务端拦下", () => {
+  //: 此前只弹一条 toast:「有多个连接,请选一个」几秒就没了,不说是哪个节点,选连接的那一格又在「高级」里 ——
+  //: 维护者照着提示在节点上找了一圈没找到。现在是一张留在画布上的失败卡,带「去这个节点」。
+  const SAY = {
+    type: "say", label: "say", description: "", category: "",
+    config: { text: { type: "template" }, instance_id: { type: "string", advanced: true } },
+    outputs: ["said"], output_types: {}, output_labels: {},
+  };
+  const WITH_PLUGIN: WorkflowGraph = {
+    nodes: [
+      { id: "start", type: "start", position: { x: 0, y: 0 }, config: { params: {} } },
+      { id: "say", type: "say", position: { x: 240, y: 0 }, config: { text: "嗨" } },
+    ],
+    edges: [{ id: "e1", source: "start", target: "say" }],
+  } as WorkflowGraph;
+  const REFUSAL = {
+    code: "workflow_run_refused",
+    message: "「say」:有多个连接,请选一个",
+    error_summary: "「say」:有多个连接,请选一个",
+    error_detail: null,
+    error_hint: { cause: "接了好几条连接,这个节点没说用哪条", steps: [{ text: "打开这个节点的「高级选项」,在「连接」里选" }] },
+    scope: [],
+    node_id: "say",
+    field: "instance_id",
+  };
+
+  it("摆成失败卡(一句话 + 怎么修),去这个节点就翻到「高级」;关掉就没了", async () => {
+    apiMocks.fetchWorkflowNodeTypes.mockResolvedValue([...NODE_TYPES, SAY]);
+    apiMocks.runWorkflow.mockRejectedValue(new ApiError(REFUSAL.message, 422, JSON.stringify({ detail: REFUSAL })));
+    await renderEditor(WITH_PLUGIN);
+    await waitFor(() => nodeEl("say"));
+    fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+
+    const card = await screen.findByText("wfRunRefused", undefined, SLOW);
+    const refused = card.closest<HTMLElement>("[data-wf-run-refused]")!;
+    expect(within(refused).getByText(REFUSAL.error_summary)).toBeTruthy();
+    expect(within(refused).getByText(REFUSAL.error_hint.steps[0].text)).toBeTruthy();
+    expect(toastMocks.error).not.toHaveBeenCalled();
+
+    fireEvent.click(within(refused).getByRole("button", { name: /wfRunRefusedGoToNode/ }));
+    await waitFor(() => expect(nodeEl("say").className).toContain("selected"));
+    const advanced = await screen.findByRole("button", { name: "wfAdvanced" });
+    expect(advanced.getAttribute("aria-pressed")).toBe("true");
+    // 卡收成一行留着(不盖住刚聚焦的节点和检查器),原因和怎么修收进它的详情里
+    await waitFor(() => expect(document.querySelector('[data-wf-run-refused] [data-failure-size="inline"]')).not.toBeNull());
+
+    // 再点运行又被拦:这是新的一次,整张卡重新摆出来;关掉就没了
+    fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+    await waitFor(() => expect(apiMocks.runWorkflow).toHaveBeenCalledTimes(2));
+    const again = (await screen.findByText(REFUSAL.error_hint.steps[0].text, undefined, SLOW)).closest<HTMLElement>("[data-wf-run-refused]")!;
+    fireEvent.click(within(again).getByRole("button", { name: /close/ }));
+    await waitFor(() => expect(screen.queryByText("wfRunRefused")).toBeNull());
+  }, SLOW_TEST);
+
+  it("别的失败(不是开跑前被拦)照旧弹 toast", async () => {
+    apiMocks.runWorkflow.mockRejectedValue(new ApiError("500 Internal Server Error", 500, "oops"));
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+    await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("wfRunFailed", expect.anything()));
+    expect(screen.queryByText("wfRunRefused")).toBeNull();
   });
 });

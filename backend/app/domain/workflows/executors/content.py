@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import String, select, type_coerce, update
 from sqlalchemy.orm import Session
 
+from app.core.i18n import fragment
 from app.db.models import Asset, Project
 from app.domain.jobs import current_actor, current_parent_job_id
 from app.domain.notifications import notify
@@ -47,6 +48,26 @@ def _run_plugin_tool(
     return invocation.output
 
 
+def _connection_error(exc: Exception) -> WorkflowDomainError:
+    """插件节点落不到连接时,工作流里的那句报错。
+
+    **有好几条却没选**时多说一句「去哪选」:选连接的那一格(`instance_id`)标着 advanced —— 只接了一条时留空就能跑,
+    不该占第一屏 —— 于是接了第二条之后,用户读到「请选一个」却在节点上找不到选的地方。原因和步骤放进 `hint`,
+    失败卡(开跑前被拦、跑到这一步失败都是它)摆成「为什么 / 怎么修」。画板上的工具没有「高级选项」,所以不写进
+    plugins.nodes.resolve_instance 那句话本身。
+    """
+    error = WorkflowDomainError.from_error(exc)
+    if error.key != "pluginErr_manyInstances":
+        return error
+    hint = {
+        "cause": fragment("wfHint_manyConnections_cause"),
+        "steps": [{"text": fragment("wfHint_manyConnections_step")}],
+    }
+    #: `field`:编辑器据此把检查器翻到这一格所在的那一档(它标着 advanced,就是「高级」)。
+    return WorkflowDomainError(error.key, params={**error.params, "hint": hint},
+                               details={**error.details, "field": "instance_id"})
+
+
 def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str) -> str:
     """节点上选的连接,只在**跑这条流程的人**自己的连接里找(见 plugins.nodes.resolve_instance)。"""
     from app.domain.plugins import PluginDomainError
@@ -55,7 +76,7 @@ def _resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str)
     try:
         return resolve_instance(db, package_id, tool_name, chosen, current_actor(db))
     except PluginDomainError as exc:
-        raise WorkflowDomainError.from_error(exc) from exc
+        raise _connection_error(exc) from exc
 
 
 @register("plugin_tool")
@@ -117,7 +138,7 @@ def plugin_node_preflight(node_type: str) -> Preflight:
 
         problem = check_plugin_node_instance(db, {"type": node_type, "config": config}, actor)
         if problem is not None:
-            raise WorkflowDomainError.from_error(problem)
+            raise _connection_error(problem)
 
     return check
 

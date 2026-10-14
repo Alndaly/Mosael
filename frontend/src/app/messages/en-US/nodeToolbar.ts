@@ -23,6 +23,8 @@ export const nodeToolbar = {
   wfRun: "Run",
   wfRunQueued: "Workflow started — see task center",
   wfRunFailed: "Run failed",
+  wfRunRefused: "Couldn’t start the run",
+  wfRunRefusedGoToNode: "Go to this node",
   wfAddNode: "Add node",
   wfNodeSearch: "Find node",
   wfNodeSearchPlaceholder: "Search by name or type…",

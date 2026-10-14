@@ -73,11 +73,11 @@ def test_按下运行时空着拦下_带着参数跑就过了这一关() -> None
     made = client.post("/api/workflows", json={"workspace_id": workspace, "name": "带货", "template_id": "product_pitch_short"})
     assert made.status_code == 200, made.text
     blank = client.post(f"/api/workflows/{made.json()['id']}/run", json={"params": {}})
-    assert blank.status_code == 422 and "「填商品与卖点」缺少必填:selling_points" in blank.json()["detail"], blank.text
+    assert blank.status_code == 422 and "「填商品与卖点」缺少必填:selling_points" in blank.json()["detail"]["message"], blank.text
     given = client.post(f"/api/workflows/{made.json()['id']}/run",
                         json={"params": {"product_name": "开衫", "selling_points": "不起球"}})
     #: 商品图还没挑,照样拦 —— 但不再是因为这两个参数。
-    assert given.status_code == 422 and "「填商品与卖点」" not in given.json()["detail"], given.text
+    assert given.status_code == 422 and "「填商品与卖点」" not in given.json()["detail"]["message"], given.text
 
 
 def test_必填参数这一格是参数名的列表_不是能插值能接上游的模板() -> None:

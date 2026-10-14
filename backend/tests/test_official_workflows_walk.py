@@ -107,7 +107,7 @@ def test_什么都没配时_按下运行给的是一句话而不是一个死掉�
     run = client.post(f"/api/workflows/{made.json()['id']}/run", json={"params": {}})
     assert run.status_code in (200, 422), run.text
     if run.status_code == 422:
-        detail = run.json()["detail"]
+        detail = run.json()["detail"]["message"]
         assert "缺少必填" in detail, f"{template_id} 拒了,但没说清缺什么:{detail}"
         # 指得准:每一句都点名一个节点 —— 按标题(体里的带上外层,「逐镜生成 › 生成画面」),不是 id。
         for one in detail.split("；"):

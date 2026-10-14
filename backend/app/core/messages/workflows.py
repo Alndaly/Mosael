@@ -103,6 +103,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_llmImageNotImage": {"zh": "「{name}」是{kind},大模型节点只收图片:视频请先用「素材分析」看,或抽一帧成图片再接。", "en": "“{name}” is {kind}; the LLM node only takes images. Analyze a video with the asset-analysis step, or grab a frame as an image first."},
     "wfErr_llmImageUnreadable": {"zh": "图片「{name}」读不出来(文件缺失或格式坏了),没法发给模型。", "en": "The image “{name}” cannot be read (missing file or broken format), so it cannot be sent to the model."},
     "wfErr_llmTooManyImages": {"zh": "一次最多给模型看 {max} 张图,这里有 {count} 张:去掉几张,或拆成几次。", "en": "The model can look at {max} images at a time; this has {count}. Remove some or split them across steps."},
+    "wfHint_manyConnections_cause": {"zh": "这个插件你接了不止一个连接,节点上没选用哪一个 —— 不替你猜:不同的连接是不同的机器、不同的额度。", "en": "You have more than one connection for this plugin and the node doesn't say which to use. It won't guess: each connection is a different machine and a different quota."},
+    "wfHint_manyConnections_step": {"zh": "打开这个节点的「高级选项」,在「连接」里选这次要用的那一条", "en": "Open this node's Advanced tab and pick the one to use under “Connection”"},
     "wfErr_llmPromptEmpty": {"zh": "LLM 节点的提示词为空:请填写提示词,或把「引用」的上游接好、确认其有输出。", "en": "The LLM node has no prompt: write one, or connect an upstream reference and make sure it produces output."},
     "wfErr_generateNodeText": {"zh": "节点「{node}」还不能跑:{reason}", "en": "Node “{node}” can't run yet: {reason}"},
     "wfErr_llmNotJson": {"zh": "LLM 未返回合法 JSON", "en": "The model did not return valid JSON"},
