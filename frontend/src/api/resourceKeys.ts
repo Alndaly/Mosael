@@ -47,8 +47,8 @@ export const RESOURCE_QUERY_KEYS: Record<Resource, readonly string[]> = {
   notes: ["notes", "note"],
   //: 设置页的技能列表、「/」菜单、开着的编辑表单(ADR 0040)。
   skills: ["agent-skills"],
-  //: 插件那台服务器上的模型文件:模型库、单个模型的详情、连接提供的模型清单。
-  models: ["model-library", "model-library-detail", "plugin-models"],
+  //: 插件那台服务器上的模型文件:模型库、单个模型的详情。
+  models: ["model-library", "model-library-detail"],
 };
 
 /** 这几种数据对应的缓存键(第一段),去重。认不出的词跳过 —— 新前端遇上更老的后端时不该炸。 */

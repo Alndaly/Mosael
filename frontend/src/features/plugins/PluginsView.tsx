@@ -59,6 +59,7 @@ import { GenerationModelsRow, catalogNoun, withNoun } from "@/features/plugins/P
 import { Disclosure } from "@/components/ui/disclosure";
 import { DeleteConnectionDialog, UninstallPluginDialog } from "@/features/plugins/LocalServiceRemoval";
 import { ConnectionLibraries } from "@/features/plugins/ConnectionLibraries";
+import { OpenConnectionWorkbench } from "@/features/plugins/workbench/OpenConnectionWorkbench";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Hint } from "@/components/ui/tooltip";
 import { useConnectionOpen } from "@/features/plugins/connectionOpen";
@@ -1003,6 +1004,9 @@ export function ConnectionCard({
               <RefreshCcw size={13} />
             </IconButton>
           )}
+          {generates && (
+            <OpenConnectionWorkbench instance={instance} workspaceId={workspaceId} />
+          )}
           <ConnectionLibraries
             instance={instance}
             workspaceId={workspaceId}
@@ -1099,8 +1103,6 @@ export function ConnectionCard({
             noun={catalogNoun(pkg, t)}
             status={instance.capability_status?.generation}
             service={localService.data}
-            refreshing={refresh.isPending}
-            onRefresh={() => refresh.mutate()}
           />
         </div>
       )}

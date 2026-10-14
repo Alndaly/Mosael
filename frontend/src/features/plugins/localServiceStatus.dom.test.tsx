@@ -98,8 +98,7 @@ describe("连接卡片标题行", () => {
 describe("生成模型那一行", () => {
   function row(local: LocalService | null, error = UNREACHABLE) {
     const target = instance(error);
-    return mount(<GenerationModelsRow instance={target} noun="models" status={target.capability_status?.generation} service={local}
-                                      refreshing={false} onRefresh={vi.fn()} />);
+    return mount(<GenerationModelsRow instance={target} noun="models" status={target.capability_status?.generation} service={local} />);
   }
 
   it("连一台服务器:没刷出来照插件说的", () => {
