@@ -494,8 +494,6 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
     #: (见 media/scratch)。此前写在 <数据目录>/exports,编完再整份复制进素材库:几个 GB 的成片要占两倍的盘,复制到
     #: 一半盘满,刚编完的成片在 finally 里被删掉;后端在导出中途被杀,半截文件永远留在那里(MED-6)。
     workdir = scratch_dir(EXPORT_SCRATCH)
-    #: 扩展名就是用户选的格式 —— 素材库按它认种类(mp3 是音频),下载 / 另存的文件名和类型也跟着它走。
-    output_path = workdir / f"{job_id}.{plan.output.container}"
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -507,6 +505,9 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         # 「在导出」先落库:编码要几十秒到几分钟,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
         started = time.monotonic()
+        #: 扩展名就是用户选的格式 —— 素材库按它认种类(mp3 是音频),下载 / 另存的文件名和类型也跟着它走。
+        #: 在「真开始了」之后才读计划:排队时就被取消的任务从这里之前就返回了,不碰计划。
+        output_path = workdir / f"{job_id}.{plan.output.container}"
 
         phase = PHASE_PREPARE
         last_fraction = -1.0
