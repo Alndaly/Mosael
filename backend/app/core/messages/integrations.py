@@ -1074,10 +1074,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "gridErr_notImage": {"zh": "「{name}」不是图片,切不了宫格", "en": "“{name}” isn't an image, so it can't be split"},
     "gridErr_fileMissing": {"zh": "「{name}」的文件找不到了", "en": "The file for “{name}” is missing"},
     "gridErr_tooSmall": {"zh": "这张图只有 {width}×{height},切成 {grid} 每张太小了", "en": "This image is only {width}×{height}; split {grid}, each tile would be too small"},
-    # ---- 蒙版(ADR 0056 决定 6):从源图算出来的那张灰度图,白 = 要改的地方 ----
-    #: 产出素材的名字。浏览器里画出来那张用的是同一个说法(前端 maskAssetName)—— 两条路各画各的,
-    #: 用户在素材库里看到的是同一种名字。
+    # ---- 蒙版(ADR 0057):灰度图,白 = 要改的地方。画出来的、按配方算的都由同一个写出口起名 ----
     "maskAssetName": {"zh": "蒙版 · {source}", "en": "Mask · {source}"},
+    #: 没有源图(新建一张空白蒙版)时名字里的那一截。
+    "maskAssetNoSource": {"zh": "空白", "en": "Blank"},
     "maskErr_notImage": {"zh": "「{name}」不是图片,算不出蒙版", "en": "“{name}” isn't an image, so no mask can be made from it"},
     "maskErr_fileMissing": {"zh": "「{name}」的文件找不到了", "en": "The file for “{name}” is missing"},
     "maskErr_unreadable": {"zh": "「{name}」这张图打不开", "en": "“{name}” couldn't be opened as an image"},

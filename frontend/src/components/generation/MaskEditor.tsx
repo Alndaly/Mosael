@@ -2,7 +2,7 @@ import * as React from "react";
 import { Brush, Check, Circle, Contrast, Droplets, Eraser, Feather, Redo2, Square, SunMedium, Trash, Undo2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { assetPreviewUrl, importAsset, type Asset } from "@/api/domains/assets";
+import { assetPreviewUrl, savePaintedMask, type Asset } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
@@ -128,7 +128,7 @@ const WHITE = "#ffffff";
 /** 软边渐变的外圈。画布是不透明的,所以"往回混"就够了,不需要 destination-out。 */
 const FADE_WHITE = "rgba(255, 255, 255, 0)";
 const FADE_BLACK = "rgba(0, 0, 0, 0)";
-/** 存下来的素材文件名(素材名另给,见 maskAssetName)。 */
+/** 上传时的文件名(素材名由后端起,见后端 domain/assets/masks.write_mask_asset)。 */
 const MASK_FILE_NAME = "mask.png";
 
 type Tool = "brush" | "eraser" | "rect" | "ellipse";
@@ -816,7 +816,7 @@ export function MaskEditor({
   };
 
   const close = () => {
-    //: 上传中途关掉 = 不等它了(importAsset 收了 signal)。
+    //: 上传中途关掉 = 不等它了(savePaintedMask 收了 signal)。
     abortRef.current?.abort();
     abortRef.current = null;
     setSaving(false);
@@ -836,16 +836,12 @@ export function MaskEditor({
         setFailure(t("maskSaveFailed"));
         return;
       }
-      const file = new File([blob], MASK_FILE_NAME, { type: "image/png" });
-      const name = t("maskAssetName").replace("{source}", source?.name || t("maskAssetNoSource"));
-      importAsset({
+      //: 名字、出处、归一(红通道、去 alpha、缩放到源图尺寸)都是后端那个写出口的事(ADR 0057 决定 2)。
+      savePaintedMask({
         workspaceId,
-        file,
-        name,
+        sourceAssetId: source?.assetId,
+        file: new File([blob], MASK_FILE_NAME, { type: "image/png" }),
         signal: controller.signal,
-        //: 出处:这份蒙版是从**哪张素材**画出来的(op `mask`,见后端 domain/assets/lineage 的 OPS)。
-        //: 没有源素材(新建一张空蒙版)就**不带这一栏** —— 那时它不派生自任何一份,而这正是接口此前的形状。
-        derivedFrom: source ? [{ asset_id: source.assetId, op: "mask" }] : undefined,
       })
         .then((asset) => {
           abortRef.current = null;

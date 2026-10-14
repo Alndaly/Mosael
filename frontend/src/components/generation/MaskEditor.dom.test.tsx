@@ -15,10 +15,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 vi.mock("@/api/domains/assets", () => ({
   assetPreviewUrl: (id: string) => `/preview/${id}`,
-  importAsset: vi.fn(),
+  savePaintedMask: vi.fn(),
 }));
 
-import { importAsset, type Asset } from "@/api/domains/assets";
+import { savePaintedMask, type Asset } from "@/api/domains/assets";
 import { PreferencesProvider } from "@/app/preferences";
 import { drawMaskView, MaskEditor } from "@/components/generation/MaskEditor";
 import { MASK_TINT_DIM, MASK_TINT_TOKEN, maskViewLayers } from "@/lib/maskPixels";
@@ -117,7 +117,7 @@ beforeAll(() => {
 beforeEach(() => {
   globalThis.fetch = vi.fn(() => Promise.reject(new Error("offline"))) as never;
   exported = null;
-  vi.mocked(importAsset).mockReset();
+  vi.mocked(savePaintedMask).mockReset();
 });
 
 afterEach(() => {
@@ -174,23 +174,22 @@ describe("蒙版编辑器", () => {
     const { onOpenChange } = mount();
     screen.getByRole("button", { name: "取消" }).click();
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-    expect(importAsset).not.toHaveBeenCalled();
+    expect(savePaintedMask).not.toHaveBeenCalled();
   });
 
   it("保存:交上去的是一张 PNG File,名字带来源;成功之后回调拿到那份素材", async () => {
-    vi.mocked(importAsset).mockResolvedValue(SAVED);
+    vi.mocked(savePaintedMask).mockResolvedValue(SAVED);
     const { onDone } = mount();
 
     screen.getByRole("button", { name: "存成蒙版" }).click();
 
-    await waitFor(() => expect(importAsset).toHaveBeenCalledTimes(1));
-    const params = vi.mocked(importAsset).mock.calls[0][0];
+    await waitFor(() => expect(savePaintedMask).toHaveBeenCalledTimes(1));
+    const params = vi.mocked(savePaintedMask).mock.calls[0][0];
     expect(params.workspaceId).toBe("w1");
     expect(params.file).toBeInstanceOf(File);
     expect(params.file.type).toBe("image/png");
-    expect(params.file.name).toBe("mask.png");
-    //: 名字带来源(ADR 0056 的代价那一节:素材会变多,靠名字认得出来是哪张图的蒙版)。
-    expect(params.name).toBe("蒙版 · scene.png");
+    //: 名字由后端那个写出口起(「蒙版 · <源图名>」),编辑器只说在哪张图上画的。
+    expect(params.sourceAssetId).toBe(SOURCE.assetId);
     //: 可取消:signal 传下去了(关弹窗 = 不等它了)。
     expect(params.signal).toBeInstanceOf(AbortSignal);
 
@@ -211,40 +210,40 @@ describe("蒙版编辑器", () => {
    * 画的蒙版也不会被标含 AI(`inherits_ai` 拿到的是空列表)。
    */
   it("保存:带上出处 —— 这份蒙版是从哪张素材画出来的", async () => {
-    vi.mocked(importAsset).mockResolvedValue(SAVED);
+    vi.mocked(savePaintedMask).mockResolvedValue(SAVED);
     mount();
 
     screen.getByRole("button", { name: "存成蒙版" }).click();
 
-    await waitFor(() => expect(importAsset).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(importAsset).mock.calls[0][0].derivedFrom).toEqual([{ asset_id: SOURCE.assetId, op: "mask" }]);
+    await waitFor(() => expect(savePaintedMask).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(savePaintedMask).mock.calls[0][0].sourceAssetId).toBe(SOURCE.assetId);
   });
 
   it("没有源素材(新建一张空蒙版):不带出处", async () => {
-    vi.mocked(importAsset).mockResolvedValue(SAVED);
+    vi.mocked(savePaintedMask).mockResolvedValue(SAVED);
     mount({ source: null });
 
     screen.getByRole("button", { name: "存成蒙版" }).click();
 
-    await waitFor(() => expect(importAsset).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(savePaintedMask).toHaveBeenCalledTimes(1));
     //: 不派生自任何一份时**一个字都不说** —— 与这条接口收出处之前的形状完全一样。
-    expect(vi.mocked(importAsset).mock.calls[0][0].derivedFrom).toBeUndefined();
+    expect(vi.mocked(savePaintedMask).mock.calls[0][0].sourceAssetId).toBeUndefined();
   });
 
-  it("打开时就有一张蒙版(继续在它上面画):也是这一套;没有底图时名字里写清楚", async () => {
+  it("打开时就有一张蒙版(继续在它上面画):也是这一套;没有底图就不说源图", async () => {
     //: ADR 0056 决定 5:不引入「蒙版文档」——第一次保存就是那张 PNG,要改就在它上面继续画。
-    vi.mocked(importAsset).mockResolvedValue(SAVED);
+    vi.mocked(savePaintedMask).mockResolvedValue(SAVED);
     mount({ source: null, initial: { assetId: "mask-0", name: "旧的蒙版" } });
 
     screen.getByRole("button", { name: "存成蒙版" }).click();
 
-    await waitFor(() => expect(importAsset).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(importAsset).mock.calls[0][0].name).toBe("蒙版 · 没有底图");
+    await waitFor(() => expect(savePaintedMask).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(savePaintedMask).mock.calls[0][0].sourceAssetId).toBeUndefined();
   });
 
   it("上传期间保存键在转圈;这时取消能把它停下", async () => {
     const captured: { signal?: AbortSignal }[] = [];
-    vi.mocked(importAsset).mockImplementation((params) => {
+    vi.mocked(savePaintedMask).mockImplementation((params) => {
       captured.push({ signal: params.signal });
       return new Promise<Asset>(() => undefined);
     });
@@ -266,7 +265,7 @@ describe("蒙版编辑器", () => {
   });
 
   it("存不上时把后端那句话照实说出来(一行档,不是一行手写红字)", async () => {
-    vi.mocked(importAsset).mockRejectedValue(new Error("磁盘满了"));
+    vi.mocked(savePaintedMask).mockRejectedValue(new Error("磁盘满了"));
     mount();
 
     screen.getByRole("button", { name: "存成蒙版" }).click();

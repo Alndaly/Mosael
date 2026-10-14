@@ -2923,6 +2923,48 @@
         }
       }
     },
+    "/api/assets/masks": {
+      "post": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Save Painted Mask",
+        "description": "编辑器里画出来的蒙版入库(ADR 0057 决定 2)。\n\n上传的图由后端**归一**成蒙版唯一的形状:读红通道、透明当黑、缩放到源图尺寸、存成 `L` 模式 PNG ——\n浏览器只管画。按配方算的那条(`POST /assets/{id}/mask`)交给的是同一个写出口。",
+        "operationId": "save_painted_mask_api_assets_masks_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_save_painted_mask_api_assets_masks_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/capture": {
       "post": {
         "tags": [
@@ -4210,7 +4252,7 @@
           "assets"
         ],
         "summary": "Mask Asset",
-        "description": "按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材(ADR 0056 决定 6)。\n\n**原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。\n产出是灰度 PNG、白 = 要改的地方、**没有 alpha 通道**:带透明通道的图在 ComfyUI 那条注入的\n`LoadImageMask(channel=\"red\")` 上读出来是整块不透明,静默地什么都不重绘(见 media/masks)。\n\n浏览器里画得出来的那些(画笔、橡皮、反选、羽化)不走这里;这条路是**前端读不到像素**的场景:\n批量、智能体、按亮度/颜色自动生成。",
+        "description": "按配方(亮度 / alpha 阈值 → 反选 → 扩张 → 羽化)从这张图算一张蒙版,存成一份**新**素材。\n\n**原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。产出和编辑器画出来的那种\n是**同一种形状**(`L` 模式、和源图一样大,ADR 0057):两条路交给同一个写出口。",
         "operationId": "mask_asset_api_assets__asset_id__mask_post",
         "parameters": [
           {
@@ -31462,18 +31504,6 @@
             ],
             "title": "Name"
           },
-          "derived_from": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 4000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Derived From"
-          },
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
@@ -31661,6 +31691,48 @@
           "file"
         ],
         "title": "Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put"
+      },
+      "Body_save_painted_mask_api_assets_masks_post": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "source_asset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Asset Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "file"
+        ],
+        "title": "Body_save_painted_mask_api_assets_masks_post"
       },
       "Body_stage_restore_api_settings_data_restore_stage_post": {
         "properties": {
@@ -38576,7 +38648,7 @@
         },
         "type": "object",
         "title": "MaskAssetRequest",
-        "description": "按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。\n\n形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.generate_mask)。\n顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。"
+        "description": "按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。\n\n形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.recipe_mask)。\n顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。"
       },
       "MembersOut": {
         "properties": {

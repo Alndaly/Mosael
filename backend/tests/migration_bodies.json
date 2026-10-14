@@ -139,6 +139,7 @@
   "migrate-local-services-share-model-folders": "e8095ce176fb6967",
   "migrate-local-services-stop-when-idle": "5367062aa7473522",
   "migrate-loop-scopes-are-not-outer-data-edges": "809697a055e4c6b8",
+  "migrate-mask-files-are-one-shape": "5cebd6a77723515b",
   "migrate-migration-revisions-keep-their-vouchers": "358993fcef87c4ac",
   "migrate-model-structured-output": "04221f2dfb242e95",
   "migrate-mov-videos-become-mp4": "c8a946f11c8086d2",

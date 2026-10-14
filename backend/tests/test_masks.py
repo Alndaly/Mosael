@@ -1,4 +1,4 @@
-"""蒙版:从源图的像素算一张灰度蒙版,落成一份新素材(ADR 0056 决定 6)。
+"""蒙版:按配方算的、画出来的,都落成同一种形状的一份新素材(ADR 0056 决定 6、ADR 0057)。
 
 **契约是这一条,所有断言都绕着它**:灰度 PNG、白 = 要改的地方、**没有 alpha 通道**。带透明通道的
 图在 ComfyUI 那条注入的路(`LoadImageMask(channel="red")`)上读出来是整块不透明 —— **静默地什么都
@@ -346,101 +346,136 @@ def test_智能体那张卡对不是图片的素材根本不开() -> None:
     assert "只有图片素材" in refused.json()["detail"]
 
 
-# ---------------- 在浏览器里画出来的蒙版:导入这条路上带着出处 ----------------
+# ---------------- 画出来的蒙版:`POST /api/assets/masks`,和配方那条交给同一个写出口(ADR 0057) ----------------
 
 
-def _import_mask(client, workspace_id: str, data: bytes, derived_from: str | None = None, name: str = "mask.png"):
-    """`POST /api/assets/import` —— 浏览器里画完蒙版存下来的那条路(见 MaskEditor 的 importAsset)。
+def _rgba_png(size: tuple[int, int], white_box: tuple[int, int, int, int], *, alpha: int = 255) -> bytes:
+    """浏览器 `canvas.toBlob` 交上来的那种:RGBA、黑底,`white_box` 那一块是白的(alpha 为 `alpha`)。"""
+    image = Image.new("RGBA", size, (0, 0, 0, alpha))
+    image.paste(Image.new("RGBA", (white_box[2] - white_box[0], white_box[3] - white_box[1]), (255, 255, 255, alpha)), white_box[:2])
+    buffer = io.BytesIO()
+    image.save(buffer, "PNG")
+    return buffer.getvalue()
 
-    `derived_from` 是**可选**的表单栏:不给就是一次普通导入(挑素材、槽位上传、桌面端导入都在用这条路)。
-    """
+
+def _save_painted(client, workspace_id: str, data: bytes, *, source_asset_id: str | None = None):
     form: dict[str, str] = {"workspace_id": workspace_id}
-    if derived_from is not None:
-        form["derived_from"] = derived_from
-    return client.post("/api/assets/import", data=form, files={"file": (name, data, "image/png")})
+    if source_asset_id is not None:
+        form["source_asset_id"] = source_asset_id
+    return client.post("/api/assets/masks", data=form, files={"file": ("mask.png", data, "image/png")})
 
 
-def test_导入时说了出处_存下来的素材就记着是哪张图画的() -> None:
-    """画出来的蒙版此前是**没有出处**的:它在导入这条路上进来,而这条路不收出处 ⇒ 素材详情「来自」
-    永远空着、AI 标识也跟着漏。现在调用方说得出源素材,存下来的素材就得记着它。"""
+def _stored(asset_id: str):
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+    from app.media.paths import resolve_key
+
+    with SessionLocal() as db:
+        return resolve_key(db.get(Asset, asset_id).file_key)
+
+
+def test_画出来的蒙版_归一成L模式_尺寸跟源图_记着出处() -> None:
+    """编辑器交上来的是 RGBA、而且比源图小(文档长边封顶 4096):出口按源图尺寸缩回去、去掉 alpha。
+    「和源图一样大」「没有 alpha」这两条从此是**数据**的性质,不靠编辑器记得。"""
     from tests.util import fresh_client
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-    source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")
+    source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")  # 64×64
 
-    made = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": source["id"], "op": "mask"}]))
+    #: 画在 32×32 的文档上:右半边白。
+    made = _save_painted(client, workspace, _rgba_png((32, 32), (16, 0, 32, 32)), source_asset_id=source["id"])
     assert made.status_code == 200, made.text
     mask = made.json()
+    assert mask["name"] == f"蒙版 · {source['name']}"
     assert mask["derived_from"] == [{"asset_id": source["id"], "op": "mask"}]
-    #: `derived` 是后端算的那一格:素材详情据它决定「来自」那一行出不出现(见 api/schemas/media 的 AssetOut)。
-    assert mask["derived"] is True
+    assert mask["derived"] is True and mask["source"] == "generated" and mask["tags"] == []
+    assert (mask["media_info"]["width"], mask["media_info"]["height"]) == (64, 64)
 
-    #: 「来自」那条链读得到出处本身(不是只存了一个 id)。
-    lineage = client.get(f"/api/assets/{mask['id']}/lineage")
-    assert lineage.status_code == 200, lineage.text
-    parents = lineage.json()["parents"]
+    path = _stored(mask["id"])
+    with Image.open(path) as image:
+        mode, size = image.mode, image.size
+    assert mode == "L", f"画出来的蒙版也只有一种形状(实际 {mode})"
+    assert size == (64, 64), "按源图尺寸缩回去"
+    row = _flat_rgba(path)[32 * 64:(32 + 1) * 64, 0]
+    assert row[5] == 0 and row[60] == 255, "左黑右白,缩放没把它翻过来"
+
+    #: 「来自」那条链读得到出处本身。
+    parents = client.get(f"/api/assets/{mask['id']}/lineage").json()["parents"]
     assert [(one["asset_id"], one["op"]) for one in parents] == [(source["id"], "mask")]
-    assert parents[0]["name"] == source["name"] and parents[0]["kind"] == "image"
 
 
-def test_出处里认不得的op_响亮拒绝而不是静默丢掉() -> None:
-    """写路径严格:`op` 不在 lineage.OPS 里就拒绝这次导入。
+def test_透明的地方当黑_不改() -> None:
+    """契约读红通道;alpha 在出口这里就消化掉 —— 全透明的白也是"不改"。"""
+    from tests.util import fresh_client
 
-    静默丢掉的话,一份「从某张图画的蒙版」会悄悄登记成一张没有出处的普通素材 —— 界面看不出哪里错了,
-    正是这条来源链要修的病。**而且一个字节都不落盘**(先过闸、再看出处、最后才读字节)。
-    """
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    made = _save_painted(client, workspace, _rgba_png((16, 16), (0, 0, 16, 16), alpha=0))
+    assert made.status_code == 200, made.text
+    pixel = _flat_rgba(_stored(made.json()["id"]))
+    assert (pixel[:, 0] == 0).all(), "全透明的图存下来应当是全黑"
+
+
+def test_没有源图_是一张空白蒙版_自己的尺寸_不带出处() -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    made = _save_painted(client, workspace, _rgba_png((40, 24), (0, 0, 20, 24)))
+    assert made.status_code == 200, made.text
+    mask = made.json()
+    assert mask["name"] == "蒙版 · 空白"
+    assert mask["derived_from"] == [] and mask["derived"] is False
+    with Image.open(_stored(mask["id"])) as image:
+        assert (image.mode, image.size) == ("L", (40, 24))
+
+
+def test_源图不是图片_或者在别的工作区_一个字节都不落盘() -> None:
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    audio = _import(client, workspace, "tone.wav", _wav_bytes(), "audio/wav")
+    refused = _save_painted(client, workspace, _rgba_png((8, 8), (0, 0, 4, 8)), source_asset_id=audio["id"])
+    assert refused.status_code == 400, refused.text
+    assert "不是图片" in refused.json()["detail"]
+
+    other = client.post("/api/workspaces", json={"name": "Other"}).json()["id"]
+    foreign = _import(client, other, "scene.png", _png_bytes(), "image/png")
+    hidden = _save_painted(client, workspace, _rgba_png((8, 8), (0, 0, 4, 8)), source_asset_id=foreign["id"])
+    assert hidden.status_code == 404, hidden.text
+
+    missing = _save_painted(client, workspace, _rgba_png((8, 8), (0, 0, 4, 8)), source_asset_id="nope")
+    assert missing.status_code == 404, missing.text
+
+    #: 交上来的不是图:说清楚,不是"服务器错误"。
+    garbage = client.post("/api/assets/masks", data={"workspace_id": workspace}, files={"file": ("mask.png", b"not a png", "image/png")})
+    assert garbage.status_code == 400, garbage.text
+
+    listed = client.get(f"/api/assets?workspace_id={workspace}")
+    assert [one["id"] for one in listed.json()["items"]] == [audio["id"]], "拒掉的一份都不该落进素材库"
+
+
+def test_导入接口不再收出处() -> None:
+    """`derived_from` 是为蒙版加到通用导入上的后门:任何调用方都能把任何文件说成"从那张图画的蒙版"。
+    它撤掉之后,带着这一栏导入也只是一次普通导入。"""
     from tests.util import fresh_client
 
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")
-
-    bad = [
-        json.dumps([{"asset_id": source["id"], "op": "画个圈"}]),
-        #: 形状也不放行:不是列表、不是一项一项的、缺 asset_id(见 lineage.parse_derived_from)。
-        json.dumps({"asset_id": source["id"], "op": "mask"}),
-        json.dumps([source["id"]]),
-        json.dumps([{"op": "mask"}]),
-        "{not json",
-    ]
-    for payload in bad:
-        refused = _import_mask(client, workspace, _png_bytes(), payload)
-        assert refused.status_code == 422, f"{payload} → {refused.status_code}: {refused.text}"
-        assert refused.json()["detail"]
-    #: 认不得的那个 op 要点名说出来,不能只说一句"请求不对"。
-    named = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": source["id"], "op": "画个圈"}]))
-    assert "画个圈" in named.json()["detail"], named.text
-
-    listed = client.get(f"/api/assets?workspace_id={workspace}")
-    assert [one["id"] for one in listed.json()["items"]] == [source["id"]], "拒掉的导入一份都不该落进素材库"
-
-
-def test_不带出处时_和加这个字段之前逐字相同() -> None:
-    """这条路别处也在用(挑素材、生成面板的槽位、桌面端导入):不给 `derived_from`(或者给一个空串)
-    入库的那份素材与加这个字段之前一模一样 —— 没有出处、不含 AI、来源还是「导入的」。"""
-    from tests.util import fresh_client
-
-    client = fresh_client()
-    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
-
-    for derived_from in (None, ""):
-        made = _import_mask(client, workspace, _png_bytes(), derived_from)
-        assert made.status_code == 200, made.text
-        bare = made.json()
-        assert bare["derived_from"] == [], f"derived_from={derived_from!r}"
-        assert bare["derived"] is False
-        assert bare["ai_generated"] is False
-        assert bare["source"] == "imported"
-        assert client.get(f"/api/assets/{bare['id']}/lineage").json()["parents"] == []
+    made = client.post(
+        "/api/assets/import",
+        data={"workspace_id": workspace, "derived_from": json.dumps([{"asset_id": source["id"], "op": "mask"}])},
+        files={"file": ("mask.png", _png_bytes(), "image/png")},
+    )
+    assert made.status_code == 200, made.text
+    assert made.json()["derived_from"] == [] and made.json()["source"] == "imported"
 
 
 def test_从AI生成的图画的蒙版_被标含AI(tmp_path) -> None:
-    """**AI 继承这条线**:出处里有一份含 AI 的,产出就含 AI(`importer` 的 `ai_generated or inherits_ai(...)`)。
-
-    标识办法认的正是这一步加工:一张 AI 生成图上画出来的蒙版,进成片时它自己就得带着标识 ——
-    此前这条路没有出处,继承无从谈起(`inherits_ai` 拿到的是空列表)。
-    """
+    """**AI 继承这条线**:出处里有一份含 AI 的,产出就含 AI。反面照:普通导入的图上画的不含。"""
     from app.core.db import SessionLocal
     from app.domain.assets import register_file_asset
     from tests.util import fresh_client
@@ -451,19 +486,60 @@ def test_从AI生成的图画的蒙版_被标含AI(tmp_path) -> None:
     generated = tmp_path / "ai.png"
     generated.write_bytes(_png_bytes())
     with SessionLocal() as db:
-        #: 生成任务交回的一份素材(见 generation.runner 的登记那一步)。
         ai_source = register_file_asset(
             db, workspace_id=workspace, project_id=None, source_path=generated, name="AI 图.png",
             source="generated", ai_generated=True,
         ).id
 
-    made = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": ai_source, "op": "mask"}]))
+    made = _save_painted(client, workspace, _rgba_png((64, 64), (0, 0, 32, 64)), source_asset_id=ai_source)
     assert made.status_code == 200, made.text
     assert made.json()["ai_generated"] is True, "从 AI 生成图画的蒙版没被标含 AI"
 
-    #: 反面照:从一份普通导入的图画的蒙版**不**含 AI —— 否则上面那条可能只是恒真。
     plain_source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")
-    plain = _import_mask(client, workspace, _png_bytes(), json.dumps([{"asset_id": plain_source["id"], "op": "mask"}]))
+    plain = _save_painted(client, workspace, _rgba_png((64, 64), (0, 0, 32, 64)), source_asset_id=plain_source["id"])
     assert plain.status_code == 200, plain.text
     assert plain.json()["ai_generated"] is False
-    assert plain.json()["derived_from"] == [{"asset_id": plain_source["id"], "op": "mask"}]
+
+
+# ---------------- 迁移:老蒙版归一成同一种形状 ----------------
+
+
+def test_迁移_老的RGBA蒙版改写成L模式_尺寸跟源图_重跑不变(tmp_path) -> None:
+    """升级之前编辑器存的是 RGBA、文档封顶 4096:喂一份这种老形状(带出处、比源图小),迁移之后它就是
+    决定 1 那一种;已经是那个形状的(配方那条存的)不动;再跑一次什么都不变。"""
+    from app.core.db import SessionLocal
+    from app.db.migrations import _migrate_mask_files_are_one_shape
+    from app.db.models import Asset
+    from app.domain.assets import register_file_asset
+    from app.domain.assets.lineage import MASK, derived
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    source = _import(client, workspace, "scene.png", _png_bytes(), "image/png")  # 64×64
+    recipe = client.post(f"/api/assets/{source['id']}/mask", json={"source": "luminance"}).json()
+
+    old = tmp_path / "old-mask.png"
+    old.write_bytes(_rgba_png((32, 32), (16, 0, 32, 32)))
+    with SessionLocal() as db:
+        legacy = register_file_asset(
+            db, workspace_id=workspace, project_id=None, source_path=old, name="蒙版 · 老的",
+            source="imported", derived_from=derived(MASK, source["id"]),
+        ).id
+    with Image.open(_stored(legacy)) as image:
+        assert (image.mode, image.size) == ("RGBA", (32, 32)), "前提:喂进去的是老形状"
+    recipe_bytes = _stored(recipe["id"]).read_bytes()
+
+    _migrate_mask_files_are_one_shape()
+    with Image.open(_stored(legacy)) as image:
+        assert (image.mode, image.size) == ("L", (64, 64))
+    row = _flat_rgba(_stored(legacy))[32 * 64:(32 + 1) * 64, 0]
+    assert row[5] == 0 and row[60] == 255
+    with SessionLocal() as db:
+        info = db.get(Asset, legacy).media_info
+    assert (info["width"], info["height"]) == (64, 64), "media_info 里的宽高跟着改"
+    assert _stored(recipe["id"]).read_bytes() == recipe_bytes, "已经是那个形状的不动"
+
+    migrated = _stored(legacy).read_bytes()
+    _migrate_mask_files_are_one_shape()
+    assert _stored(legacy).read_bytes() == migrated, "再跑一次什么都不变"

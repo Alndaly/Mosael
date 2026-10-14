@@ -53,17 +53,35 @@ def import_asset(
     workspace_id: str = Form(...),
     project_id: str | None = Form(None),
     name: str | None = Form(None),
-    #: 调用方知道的出处,JSON 文本(`[{"asset_id": …, "op": "mask"}]`)。**可选**:不给就是一次普通导入,
-    #: 与这条接口此前逐字一致(挑素材、槽位上传、桌面端导入都在用这条路)。
-    #: 浏览器里画出来的蒙版从这里说它是从哪张图画的 —— 此前这条路没有出处,画出来的蒙版 `derived_from`
-    #: 一直是空的,「来自」空着、AI 标识也跟着漏(见 domain/assets/lineage)。
-    #: 形状在领域层判(未知的 op 响亮拒绝),不在这里判:入库的入口有十几个,闸收在 domain 一处。
-    derived_from: str | None = Form(None, max_length=4000),
     file: UploadFile = File(...),
 ) -> Asset:
-    return use_cases.import_upload(
-        db, user, workspace_id, project_id=project_id, name=name, upload=file, derived_from=derived_from,
-    )
+    return use_cases.import_upload(db, user, workspace_id, project_id=project_id, name=name, upload=file)
+
+
+@router.post("/assets/masks", response_model=AssetOut)
+def save_painted_mask(
+    db: Tx,
+    user: CurrentUser,
+    workspace_id: str = Form(...),
+    #: 这张蒙版是在**哪张图**上画的。给了:产出和它一样大、记它为出处、名字「蒙版 · <它的名字>」;
+    #: 不给:一张空白蒙版,尺寸就是画出来的那样。
+    source_asset_id: str | None = Form(None, max_length=64),
+    project_id: str | None = Form(None),
+    file: UploadFile = File(...),
+) -> Asset:
+    """编辑器里画出来的蒙版入库(ADR 0057 决定 2)。
+
+    上传的图由后端**归一**成蒙版唯一的形状:读红通道、透明当黑、缩放到源图尺寸、存成 `L` 模式 PNG ——
+    浏览器只管画。按配方算的那条(`POST /assets/{id}/mask`)交给的是同一个写出口。
+    """
+    from app.domain.assets.masks import MaskAssetError
+
+    try:
+        return use_cases.save_painted_mask(
+            db, user, workspace_id, source_asset_id=source_asset_id, project_id=project_id, upload=file,
+        )
+    except MaskAssetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/assets/capture", response_model=AssetOut)
@@ -513,14 +531,10 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: Tx, user: Curre
 
 @router.post("/assets/{asset_id}/mask", response_model=AssetOut)
 def mask_asset(asset_id: str, body: MaskAssetRequest, db: Tx, user: CurrentUser) -> Asset:
-    """按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材(ADR 0056 决定 6)。
+    """按配方(亮度 / alpha 阈值 → 反选 → 扩张 → 羽化)从这张图算一张蒙版,存成一份**新**素材。
 
-    **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。
-    产出是灰度 PNG、白 = 要改的地方、**没有 alpha 通道**:带透明通道的图在 ComfyUI 那条注入的
-    `LoadImageMask(channel="red")` 上读出来是整块不透明,静默地什么都不重绘(见 media/masks)。
-
-    浏览器里画得出来的那些(画笔、橡皮、反选、羽化)不走这里;这条路是**前端读不到像素**的场景:
-    批量、智能体、按亮度/颜色自动生成。
+    **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。产出和编辑器画出来的那种
+    是**同一种形状**(`L` 模式、和源图一样大,ADR 0057):两条路交给同一个写出口。
     """
     from app.domain.assets.masks import MaskAssetError
 

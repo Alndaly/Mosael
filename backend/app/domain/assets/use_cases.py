@@ -213,10 +213,9 @@ def make_mask(
     feather: float = 0,
     project_id: str | None = None,
 ) -> Asset:
-    """按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原素材不动(ADR 0056 决定 6)。
+    """按配方(亮度 / alpha 阈值 → 反选 → 扩张 → 羽化)从这张图算一张蒙版,存成一份**新**素材;原素材不动。
 
-    浏览器那块画布读不到原图的像素(批量给一批图配同一块区域、智能体说「按亮度抠个蒙版」),
-    所以这一条有后端的实现。
+    浏览器那块画布读不到原图像素的场景(批量、智能体)走这一条;交给的是蒙版唯一的写出口(ADR 0057)。
     """
     from app.domain.assets.masks import make_mask_asset
 
@@ -226,29 +225,48 @@ def make_mask(
     )
 
 
+def save_painted_mask(
+    db: Session,
+    user: User,
+    workspace_id: str,
+    *,
+    source_asset_id: str | None,
+    project_id: str | None,
+    upload,
+) -> Asset:
+    """编辑器里画出来的那张蒙版入库:归一成契约那个形状,交给蒙版唯一的写出口(ADR 0057 决定 2)。
+
+    **先过闸、再认源图、最后才读字节**:没权限、源图看不见或不在这个工作区的请求,一个字节都不落盘。
+    源图要**看得见**才行 —— 出处是一条会被导出时的 AI 标识读到的事实,不能对着别人工作区里的素材说。
+    """
+    from app.domain.assets.masks import save_painted_mask as save
+
+    ensure_workspace_perm(db, user, workspace_id, "upload")
+    source = None
+    if source_asset_id:
+        source = require_asset(db, user, source_asset_id)
+        if source.workspace_id != workspace_id:
+            raise NotVisible("Not found")
+    return save(
+        db, workspace_id=workspace_id, project_id=project_id, source=source, painted=upload.file,
+        filename=upload.filename or "",
+    )
+
+
 # ---------------- 导入 ----------------
 
 
 def import_upload(
     db: Session, user: User, workspace_id: str, *, project_id: str | None, name: str | None, upload,
-    derived_from: str | None = None,
 ) -> Asset:
     """浏览器上传的一份素材入库(见 domain/assets/importer)。
 
-    `derived_from`:调用方说的出处,JSON 文本(`[{"asset_id": …, "op": "mask"}]`)—— 浏览器里画出来的
-    蒙版就是它(编辑器知道自己在给哪张图画面)。不给 = 一次普通导入,与这条接口此前逐字一致。
-
-    **先过闸、再看出处、最后才读字节**:与 web_capture 同一个次序 —— 没权限或出处不像样的请求,
-    一个字节都不落盘。
+    这条路**不收出处**:派生素材由做它的那道工序登记(浏览器画出来的蒙版走 `save_painted_mask`)。
     """
     from app.domain.assets.importer import import_uploaded_asset
-    from app.domain.assets.lineage import parse_derived_from
 
     ensure_workspace_perm(db, user, workspace_id, "upload")
-    parents = parse_derived_from(derived_from)
-    return import_uploaded_asset(
-        db, workspace_id=workspace_id, project_id=project_id, name=name, upload=upload, derived_from=parents,
-    )
+    return import_uploaded_asset(db, workspace_id=workspace_id, project_id=project_id, name=name, upload=upload)
 
 
 def import_web_capture(

@@ -4426,6 +4426,56 @@ def _migrate_frame_rate_is_not_a_time_base() -> None:
                          {"info": json.dumps(info, ensure_ascii=False), "id": asset_id})
 
 
+def _migrate_mask_files_are_one_shape() -> None:
+    """已经存下来的蒙版归一成 ADR 0057 决定 1 那一种形状:`L` 模式 PNG、和摆正后的源图一样大。
+
+    此前编辑器画出来的那种是浏览器导出的 RGBA PNG,文档长边封顶 4096、源图更大时尺寸对不上。认法是**出处**
+    (`derived_from` 里有 `op = "mask"` 的图片素材)—— 两条写蒙版的路都记了它。做法住在 media/masks(函数内 import,
+    同 _migrate_shared_venvs 的理由)。已经是那个形状的、文件不在的跳过;改写了就更新宽高、重做缩略图。可以重复跑。
+    """
+    from app.media.masks import normalize_mask_file, oriented_size
+    from app.media.paths import resolve_key
+    from app.media.thumbnails import generate_thumbnail
+
+    inspector = inspect(engine)
+    if "assets" not in set(inspector.get_table_names()):
+        return
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, file_key, media_info, derived_from FROM assets WHERE kind = 'image' AND file_key != ''"
+        )).all()
+    images = {asset_id: file_key for asset_id, file_key, _info, _lineage in rows}
+    for asset_id, file_key, raw_info, raw_lineage in rows:
+        lineage = json.loads(raw_lineage) if isinstance(raw_lineage, str) else list(raw_lineage or [])
+        parents = [one.get("asset_id") for one in lineage if isinstance(one, dict) and one.get("op") == "mask"]
+        if not parents:
+            continue
+        path = resolve_key(file_key)
+        if not path.is_file():
+            continue
+        size = None
+        parent_key = images.get(parents[0])
+        if parent_key and resolve_key(parent_key).is_file():
+            try:
+                size = oriented_size(resolve_key(parent_key))
+            except OSError:
+                size = None
+        try:
+            changed = normalize_mask_file(path, size)
+        except OSError:
+            continue
+        if not changed:
+            continue
+        info = json.loads(raw_info) if isinstance(raw_info, str) else dict(raw_info or {})
+        width, height = oriented_size(path)
+        info.update(width=width, height=height)
+        if generate_thumbnail(path, "image", path.parent) is not None:
+            info["has_thumbnail"] = True
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE assets SET media_info = :info WHERE id = :id"),
+                         {"info": json.dumps(info, ensure_ascii=False), "id": asset_id})
+
+
 def _drop_venvs_built_on_another_python() -> None:
     """托管 venv 是用另一个次版本的解释器建的,就删掉,让引擎回到「未安装」。
 
@@ -9932,6 +9982,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_mov_videos_become_mp4,
                 _migrate_frame_rate_is_not_a_time_base,
                 _migrate_documents_are_not_videos,
+                # 蒙版只有一种形状(ADR 0057):老的 RGBA / 尺寸对不上的那些就地改写。
+                _migrate_mask_files_are_one_shape,
             ),
             #: 对账:随包解释器换次版本后,旧 venv 跑不起来了。放在搬共用 venv 之后,搬过来的也要过这一道。
             *_recurring(MigrationPhase.FILESYSTEM, _drop_venvs_built_on_another_python),

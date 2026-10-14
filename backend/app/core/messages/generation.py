@@ -535,12 +535,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "assetErr_unknownSort": {"zh": "不认得的排序「{sort}」:可选 created、updated、name、duration", "en": "Unknown sort “{sort}”: use created, updated, name or duration."},
     "assetErr_unknownIntermediate": {"zh": "不认得的中间产物「{kind}」:可选 dub_line(配音片段)、lipsync_chunk(对口型分块)", "en": "Unknown intermediate “{kind}”: use dub_line (dub lines) or lipsync_chunk (lip-sync chunks)."},
     "assetErr_unknownTagMatch": {"zh": "不认得的标签匹配方式「{match}」:可选 all(同时带有)、any(带有任一)", "en": "Unknown tag match “{match}”: use all or any."},
-    # 导入时调用方自己说的出处(见 domain/assets/lineage.parse_derived_from)。
-    "assetErr_badDerivedFrom": {
-        "zh": "出处不像样({detail}):要的是一项一项的出处 —— 每项一个 asset_id 和一个 op",
-        "en": "That provenance doesn't look right ({detail}): each source needs an asset_id and an op.",
-    },
-    "assetErr_unknownDerivationOp": {"zh": "不认得的派生操作「{op}」:可选 {ops}", "en": "Unknown derivation op “{op}”: use one of {ops}."},
     "assetKind_image": {"zh": "图片", "en": "an image"},
     "assetKind_video": {"zh": "视频", "en": "a video"},
     "assetKind_audio": {"zh": "音频", "en": "audio"},

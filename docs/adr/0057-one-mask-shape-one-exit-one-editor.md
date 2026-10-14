@@ -83,7 +83,7 @@ AI Studio 通用那一栏画哪几格素材,和提交发哪几格是**同一个�
 ## 迁移
 
 库里已有的蒙版(出处里有 `op = "mask"` 的图片素材)在启动时归一成决定 1 的形状(迁移步骤
-`normalize-mask-files`):读红通道、透明当黑、按源图尺寸缩放、写回 `L` 模式 PNG,更新 `media_info` 里的
+`migrate-mask-files-are-one-shape`,文件系统那一相):读红通道、透明当黑、按源图尺寸缩放、写回 `L` 模式 PNG,更新 `media_info` 里的
 宽高与大小,重做缩略图。已经是那个形状的跳过;文件不在的跳过 —— 可以重复跑。
 
 ## Consequences

@@ -148,10 +148,8 @@ def import_uploaded_asset(
     project_id: str | None,
     upload: UploadedFile,
     name: str | None = None,
-    derived_from: Sequence[Derivation] = (),
 ) -> Asset:
-    """浏览器传上来的字节入库。`derived_from` 是**调用方说的**出处(浏览器里画出来的蒙版取自哪张图),
-    形状由 `lineage.parse_derived_from` 判在门外(见 use_cases.import_upload)。"""
+    """浏览器传上来的字节入库。"""
     return _import_stream(
         db,
         workspace_id=workspace_id,
@@ -160,7 +158,6 @@ def import_uploaded_asset(
         original=Path(upload.filename or "upload.bin").name,
         content_type=upload.content_type,
         name=name,
-        derived_from=derived_from,
     )
 
 

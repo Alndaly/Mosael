@@ -312,7 +312,7 @@ class AssetFrameRequest(ApiModel):
 class MaskAssetRequest(ApiModel):
     """按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。
 
-    形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.generate_mask)。
+    形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.recipe_mask)。
     顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。
     """
 

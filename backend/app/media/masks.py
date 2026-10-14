@@ -16,10 +16,15 @@ ComfyUI 插件那条注入的路读的是**红通道**(`plugins/bundled/comfyui/
 
 ## 和前端画布那一份的关系
 
-画笔、橡皮、矩形/椭圆画出来的那份走的是同一套规则(阈值按 Rec.601 加权、`>=` 判白、羽化三遍盒式
-模糊、四边夹取),读它看 `frontend/src/lib/maskPixels.ts`。这里的阈值和羽化是照着它写的,不是另立
-一套:同一个阈值、同一张底图,两边该切出同一串字节。这条"同一串字节"由 `contracts/mask-cases.json`
-钉着(两侧读**同一份**语料、逐字节比),改这里之前先看那边,反过来也一样。
+编辑器(`frontend/src/lib/maskPixels.ts`)里的阈值、反选、扩张、羽化和这里是**同一套规则**(阈值按 Rec.601
+加权、`>=` 判白、扩张按正方形窗口取极值、羽化三遍盒式模糊、四边夹取、半径半数进位):同一张底图、同一组参数,
+两边该切出同一串字节。这条"同一串字节"由 `contracts/mask-cases.json` 钉着(两侧读**同一份**语料、逐字节比),
+改这里之前先看那边,反过来也一样。
+
+## 蒙版只有一种形状、一个写出口(ADR 0057)
+
+这里交出去的蒙版一律是**单通道字节 + 尺寸**:按配方算的(`recipe_mask`)、画出来再归一的(`painted_mask`)
+都一样。落盘(`write_mask_png`,`L` 模式)和登记成素材是 `app/domain/assets/masks.write_mask_asset` 一处的事。
 
 ## 尺寸约定
 
@@ -31,6 +36,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -50,6 +56,8 @@ LUMA_R, LUMA_G, LUMA_B = 0.299, 0.587, 0.114
 FEATHER_PASSES = 3
 
 MASK_FILENAME = "mask.png"
+#: EXIF 里「方向」那一项的标签号(PIL 的 `ExifTags.Base.Orientation`)。
+_EXIF_ORIENTATION = 0x0112
 
 
 class MaskError(LocalizedError, ValueError):
@@ -298,17 +306,29 @@ def read_rgba(source: Path) -> tuple[bytes, tuple[int, int]]:
         return image.tobytes(), image.size
 
 
-def generate_mask(
+def oriented_size(source: Path) -> tuple[int, int]:
+    """源图**摆正之后**的尺寸 —— 蒙版要和它一样大(ADR 0057 决定 1)。
+
+    浏览器按 EXIF 摆正了才显示(编辑器里画的就是摆正的那张),所以竖拍的 4000×3000 在这里是 3000×4000。
+    只读文件头,不解码像素。
+    """
+    with Image.open(source) as opened:
+        width, height = opened.size
+        orientation = opened.getexif().get(_EXIF_ORIENTATION, 1)
+    #: 5–8 是转了 90° / 270° 的那四种(含镜像):宽高互换。
+    return (height, width) if orientation in (5, 6, 7, 8) else (width, height)
+
+
+def recipe_mask(
     source: Path,
-    target: Path,
     *,
     source_kind: str = LUMINANCE,
     threshold: float = 0.5,
     invert: bool = False,
     grow: int = 0,
     feather: float = 0,
-) -> Path:
-    """源图 → 一张灰度蒙版 PNG,落在 `target`。**只碰这两个路径**,素材库那一层的事不在这里。
+) -> tuple[bytes, tuple[int, int]]:
+    """按配方从源图算一张蒙版:单通道字节 + 尺寸(和摆正后的源图一样大)。不落盘 —— 落盘是写出口的事。
 
     四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**。
 
@@ -316,6 +336,8 @@ def generate_mask(
     - 反选在扩张之前:反选和扩张换不了序(先扩后翻 = 先翻后缩),这里说的是「翻过来,再按这个半径
       长 / 缩」—— 用户点的是反选那一下,后面的形状是对反选后的结果说的;
     - 羽化一定在最后:它是唯一一个把边弄软的步骤,放前面会被后面的形态学再啃硬。
+
+    编辑器里「应用到蒙版」那一下也是先扩张、再羽化(`lib/maskPixels`,两侧由 contracts/mask-cases.json 钉成同一串字节)。
     """
     if source_kind not in SOURCES:
         raise MaskError("maskErr_unknownSource", source=source_kind)
@@ -330,7 +352,41 @@ def generate_mask(
         mask = grow_mask(mask, size, grow)
     if feather:
         mask = feather_mask(mask, size, feather)
-    return write_mask_png(target, mask, size)
+    return mask, size
+
+
+def painted_mask(painted: Path | BinaryIO, size: tuple[int, int] | None = None) -> tuple[bytes, tuple[int, int]]:
+    """一张**画出来的**蒙版图归一成契约那个形状:单通道字节 + 尺寸(ADR 0057 决定 2)。
+
+    - 读的是**红通道** —— 和 ComfyUI 那条注入的 `LoadImageMask(channel="red")` 读的是同一个通道;
+      灰度图(`L`)的红通道就是它自己。
+    - **透明的地方当黑**(= 不改):先铺在黑底上再取红通道。带 alpha 的图交到插件那边会被读成整块不透明,
+      所以 alpha 在这里就消化掉,不往后带。
+    - `size` 给了、又和画出来的不一样(编辑器的文档长边封顶 4096,源图比它大)就**双线性**缩放过去:
+      最近邻会在边上拉出锯齿,而羽化过的软边经双线性缩放仍是软边。
+    """
+    with Image.open(painted) as opened:
+        rgba = opened.convert("RGBA")
+    flattened = Image.alpha_composite(Image.new("RGBA", rgba.size, (0, 0, 0, 255)), rgba).getchannel("R")
+    if size is not None:
+        target = _size_of(size)
+        if flattened.size != target:
+            flattened = flattened.resize(target, Image.Resampling.BILINEAR)
+    return flattened.tobytes(), flattened.size
+
+
+def normalize_mask_file(path: Path, size: tuple[int, int] | None) -> bool:
+    """把一个已经存下来的蒙版文件**就地**归一成契约那个形状(迁移 `normalize-mask-files` 用)。
+
+    已经是 `L` 模式、尺寸也对(或者没有源图可对)就不动,返回 False;改写了返回 True。可以重复跑。
+    """
+    with Image.open(path) as opened:
+        already = opened.mode == "L" and (size is None or opened.size == tuple(size))
+    if already:
+        return False
+    mask, actual = painted_mask(path, size)
+    write_mask_png(path, mask, actual)
+    return True
 
 
 __all__ = [
@@ -343,11 +399,14 @@ __all__ = [
     "MaskError",
     "clamp01",
     "feather_mask",
-    "generate_mask",
     "grow_mask",
     "invert_mask",
     "mask_from_alpha",
     "mask_from_luminance",
+    "normalize_mask_file",
+    "oriented_size",
+    "painted_mask",
     "read_rgba",
+    "recipe_mask",
     "write_mask_png",
 ]

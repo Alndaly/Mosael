@@ -253,8 +253,6 @@ export const aiStudio = {
   genReferenceHint: "Reference material never appears in the video — it only shapes style and subject.",
   genKeyframeHint: "Key frames set the first and last frame of the video itself.",
   genSourceGroupsExclusive: "Key frames and reference material are two different routes — use only one per generation.",
-  maskAssetName: "Mask · {source}",
-  maskAssetNoSource: "no base image",
   maskBrush: "Brush",
   maskBrushHardness: "Brush hardness",
   maskBrushSize: "Brush size",

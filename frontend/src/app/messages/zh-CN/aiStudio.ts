@@ -253,8 +253,6 @@ export const aiStudio = {
   genReferenceHint: "参考素材不会出现在成片里,只影响风格与主体。",
   genKeyframeHint: "首尾帧决定成片的第一格和最后一格。",
   genSourceGroupsExclusive: "首尾帧和参考素材是两条路,同一次生成只能用一组。",
-  maskAssetName: "蒙版 · {source}",
-  maskAssetNoSource: "没有底图",
   maskBrush: "笔刷",
   maskBrushHardness: "笔刷硬度",
   maskBrushSize: "笔刷大小",

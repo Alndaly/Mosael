@@ -76,7 +76,6 @@ from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import AssetProjectError
 from app.domain.assets.deletion import AssetBeingPublished
 from app.domain.assets.importer import AssetFileTypeError
-from app.domain.assets.lineage import DerivationError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes.operations import SceneDomainError
 from app.domain.agent.skills.catalog import SkillDomainError
@@ -274,12 +273,6 @@ def _install_permission_handlers(app: FastAPI) -> None:
     @app.exception_handler(AssetFileTypeError)
     async def _asset_file_type_error(_request: Request, exc: AssetFileTypeError) -> JSONResponse:
         """素材库不收这种文件(ADR 0031)。和上面同一个理由:入库的入口很多,判断在 assets/importer 一处,翻成 415 也在这一处。"""
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(DerivationError)
-    async def _derivation_error(_request: Request, exc: DerivationError) -> JSONResponse:
-        """调用方给的出处不像样(422)。理由同上:出处是**导入**这一步的属性,判断在 assets/lineage 一处,
-        翻成 422 也收在这一处 —— 别处再开一条带出处的导入路时不必各自记得翻。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(AssetBeingPublished)

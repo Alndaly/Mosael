@@ -1,11 +1,10 @@
 /**
- * `importAsset` 交出去的那个表单:**有出处才带 `derived_from`,而且带的是后端认的那个形状**。
+ * 素材入库那两张表单的线上契约(ADR 0057 决定 2)。
  *
- * 这一条是编辑器那条路的线上契约 —— `MaskEditor` 那个只按调用参数断言的替身看不到它:
- * 后端收的是 JSON 文本、键是 `asset_id`(见 domain/assets/lineage.parse_derived_from),
- * 少一个下划线就是一次 422,而类型检查替这里兜不住(它是 FormData 里的一串字)。
- *
- * **不给就得与这条接口收出处之前逐字节相同**:没有这一栏,而不是一个空数组的 `"[]"`。
+ * - `savePaintedMask` 走 `POST /api/assets/masks`:键是后端认的 `workspace_id` / `source_asset_id` / `project_id` / `file`,
+ *   少一个下划线就是一次 422,而类型检查替这里兜不住(它是 FormData 里的一串字)。`MaskEditor` 那个只按调用参数
+ *   断言的替身看不到这一层。
+ * - `importAsset` **不再带出处**:那一栏是为蒙版加到通用导入上的后门,蒙版有了自己的出口之后撤掉。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,7 +19,7 @@ vi.mock("@/api/transport", () => ({
   getAuthToken: () => null,
 }));
 
-import { importAsset } from "./domains/assets";
+import { importAsset, savePaintedMask } from "./domains/assets";
 
 const file = new File([new Uint8Array([1, 2, 3])], "mask.png", { type: "image/png" });
 
@@ -35,30 +34,34 @@ beforeEach(() => {
   apiUpload.mockReset();
 });
 
-describe("导入时带着出处", () => {
-  it("给了出处:derived_from 是后端认的那串 JSON", async () => {
-    api.mockResolvedValue({ id: "mask-1" });
-    await importAsset({ workspaceId: "w1", file, derivedFrom: [{ asset_id: "src-1", op: "mask" }] });
-
-    expect(formOf(api.mock.calls[0]).get("derived_from")).toBe('[{"asset_id":"src-1","op":"mask"}]');
-  });
-
-  it("带 signal 的那一趟(编辑器走的正是它)也是同一张表单", async () => {
-    apiUpload.mockResolvedValue({ id: "mask-2" });
+describe("画出来的蒙版走自己的出口", () => {
+  it("在一张图上画的:带着源图,发到 /api/assets/masks", async () => {
+    apiUpload.mockResolvedValue({ id: "mask-1" });
     const controller = new AbortController();
-    await importAsset({
-      workspaceId: "w1", file, derivedFrom: [{ asset_id: "src-1", op: "mask" }], signal: controller.signal,
-    });
+    await savePaintedMask({ workspaceId: "w1", sourceAssetId: "src-1", projectId: "p1", file, signal: controller.signal });
 
-    expect(formOf(apiUpload.mock.calls[0]).get("derived_from")).toBe('[{"asset_id":"src-1","op":"mask"}]');
+    const [path, form, options] = apiUpload.mock.calls[0] as [string, FormData, { signal?: AbortSignal }];
+    expect(path).toBe("/api/assets/masks");
+    expect(form.get("workspace_id")).toBe("w1");
+    expect(form.get("source_asset_id")).toBe("src-1");
+    expect(form.get("project_id")).toBe("p1");
+    expect(form.get("file")).toBeInstanceOf(Blob);
+    expect(options.signal).toBe(controller.signal);
   });
 
-  it("没给 / 空数组:这一栏根本不出现(与收出处之前逐字节相同)", async () => {
+  it("空白蒙版:不带源图这一栏(后端据此不记出处、名字写「空白」)", async () => {
+    apiUpload.mockResolvedValue({ id: "mask-2" });
+    await savePaintedMask({ workspaceId: "w1", file });
+    const form = formOf(apiUpload.mock.calls[0]);
+    expect(form.has("source_asset_id")).toBe(false);
+    expect(form.has("project_id")).toBe(false);
+  });
+});
+
+describe("普通导入不带出处", () => {
+  it("表单里没有 derived_from 这一栏", async () => {
     api.mockResolvedValue({ id: "plain" });
     await importAsset({ workspaceId: "w1", file });
     expect(formOf(api.mock.calls[0]).has("derived_from")).toBe(false);
-
-    await importAsset({ workspaceId: "w1", file, derivedFrom: [] });
-    expect(formOf(api.mock.calls[1]).has("derived_from")).toBe(false);
   });
 });

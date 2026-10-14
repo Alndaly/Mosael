@@ -1139,6 +1139,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/masks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Painted Mask
+         * @description 编辑器里画出来的蒙版入库(ADR 0057 决定 2)。
+         *
+         *     上传的图由后端**归一**成蒙版唯一的形状:读红通道、透明当黑、缩放到源图尺寸、存成 `L` 模式 PNG ——
+         *     浏览器只管画。按配方算的那条(`POST /assets/{id}/mask`)交给的是同一个写出口。
+         */
+        post: operations["save_painted_mask_api_assets_masks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/capture": {
         parameters: {
             query?: never;
@@ -1593,14 +1616,10 @@ export interface paths {
         put?: never;
         /**
          * Mask Asset
-         * @description 按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材(ADR 0056 决定 6)。
+         * @description 按配方(亮度 / alpha 阈值 → 反选 → 扩张 → 羽化)从这张图算一张蒙版,存成一份**新**素材。
          *
-         *     **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。
-         *     产出是灰度 PNG、白 = 要改的地方、**没有 alpha 通道**:带透明通道的图在 ComfyUI 那条注入的
-         *     `LoadImageMask(channel="red")` 上读出来是整块不透明,静默地什么都不重绘(见 media/masks)。
-         *
-         *     浏览器里画得出来的那些(画笔、橡皮、反选、羽化)不走这里;这条路是**前端读不到像素**的场景:
-         *     批量、智能体、按亮度/颜色自动生成。
+         *     **原素材不动**,产出是新的一份 —— 蒙版是「这块地方要改」,不是「把原图变成蒙版」。产出和编辑器画出来的那种
+         *     是**同一种形状**(`L` 模式、和源图一样大,ADR 0057):两条路交给同一个写出口。
          */
         post: operations["mask_asset_api_assets__asset_id__mask_post"];
         delete?: never;
@@ -11124,8 +11143,6 @@ export interface components {
             project_id?: string | null;
             /** Name */
             name?: string | null;
-            /** Derived From */
-            derived_from?: string | null;
             /** File */
             file: string;
         };
@@ -11203,6 +11220,17 @@ export interface components {
         };
         /** Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put */
         Body_put_skill_file_api_workspaces__workspace_id__skills__ref__files__path__put: {
+            /** File */
+            file: string;
+        };
+        /** Body_save_painted_mask_api_assets_masks_post */
+        Body_save_painted_mask_api_assets_masks_post: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Source Asset Id */
+            source_asset_id?: string | null;
+            /** Project Id */
+            project_id?: string | null;
             /** File */
             file: string;
         };
@@ -14280,7 +14308,7 @@ export interface components {
          * MaskAssetRequest
          * @description 按亮度 / alpha 从这张图算一张蒙版,存成一份**新**素材;原图不动(ADR 0056 决定 6)。
          *
-         *     形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.generate_mask)。
+         *     形状四步的先后是定死的:**阈值 → 反选 → 扩张/收缩 → 羽化**(见 media/masks.recipe_mask)。
          *     顺序由后端定,不交给调用方 —— 同一组参数在两个入口上该得到同一张图。
          */
         MaskAssetRequest: {
@@ -22855,6 +22883,39 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_import_asset_api_assets_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_painted_mask_api_assets_masks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_save_painted_mask_api_assets_masks_post"];
             };
         };
         responses: {

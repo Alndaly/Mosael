@@ -19,14 +19,12 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sqlalchemy import ColumnElement, and_, func, select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError
 from app.db.models import Asset
 
 # 派生操作。界面按它显示「来自:xxx(截取)」(前端 assetLineage 的文案表),所以这是一张封闭的表。
@@ -42,7 +40,7 @@ PAD = "pad"  # 补静音补到某个时长
 MIX = "mix"  # 几段混成一段(对口型的配音)
 EXTRACT = "extract"  # 从文档里取出的插图
 PLUGIN = "plugin"  # 插件拿这几份做出来的
-MASK = "mask"  # 按亮度 / alpha 从这张图算出来的蒙版(ADR 0056 决定 6)
+MASK = "mask"  # 在这张图上画的、或按配方从它算的蒙版(只由 domain/assets/masks.write_mask_asset 登记,ADR 0057)
 
 OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN, MASK})
 
@@ -69,55 +67,6 @@ class Derivation:
 def derived(op: str, *parents: str | None) -> tuple[Derivation, ...]:
     """`op` 做出来的,出处是这几份(去重、保持先后,空的跳过)。"""
     return tuple(Derivation(asset_id=parent, op=op) for parent in dict.fromkeys(parents) if parent)
-
-
-class DerivationError(LocalizedError, ValueError):
-    """调用方给的出处不像样:不是一项一项的、缺 asset_id,或者 `op` 不在 OPS 里。
-
-    **响亮拒绝,不静默丢掉认不出的那一项。** 丢掉的话,一份「从这张 AI 图画的蒙版」会悄悄登记成
-    一张没有出处的普通素材 —— 界面上「来自」空着、AI 标识也跟着漏,正是这条来源链要修的病;
-    而错的那一半(调用方写错 op)没有任何人看得见。
-    """
-
-    status = 422
-
-
-#: 报错里原样带出多少字调用方给的东西。一份几 KB 的 JSON 全塞进 detail 只会把那句话淹掉。
-_BAD_SHAPE_SAMPLE = 120
-
-
-def _sample(text: str) -> str:
-    return text if len(text) <= _BAD_SHAPE_SAMPLE else f"{text[:_BAD_SHAPE_SAMPLE]}…"
-
-
-def parse_derived_from(raw: str | None) -> tuple[Derivation, ...]:
-    """把**调用方给的**出处读成派生项(JSON 文本:`[{"asset_id": …, "op": …}]`)。
-
-    此前出处只由后端自己登记(`register_file_asset` 收到的是 `Derivation`,op 由调用它的那段代码写死),
-    所以形状从来不用判。导入这条路上第一次有调用方说的出处(浏览器里画出来的蒙版说得出它取自哪张图),
-    于是形状在这里判:
-
-    - 没给 / 空的文本 ⇒ 没有出处 —— 和此前逐字一致的那个行为(这条路别处也在用);
-    - 给了就必须项项说得清,`op` 不在 OPS 里按 `Derivation` 自己的规矩拒绝(见 DerivationError)。
-    """
-    text = (raw or "").strip()
-    if not text:
-        return ()
-    try:
-        entries = json.loads(text)
-    except ValueError as exc:
-        raise DerivationError("assetErr_badDerivedFrom", detail=_sample(text)) from exc
-    if not isinstance(entries, list):
-        raise DerivationError("assetErr_badDerivedFrom", detail=_sample(text))
-    parsed: list[Derivation] = []
-    for entry in entries:
-        if not isinstance(entry, dict) or not str(entry.get("asset_id") or "").strip():
-            raise DerivationError("assetErr_badDerivedFrom", detail=_sample(text))
-        op = str(entry.get("op") or "")
-        if op not in OPS:
-            raise DerivationError("assetErr_unknownDerivationOp", op=op or "-", ops=", ".join(sorted(OPS)))
-        parsed.append(Derivation(asset_id=str(entry["asset_id"]).strip(), op=op))
-    return tuple(parsed)
 
 
 def made_from(asset_id: str, op: str) -> ColumnElement[bool]:
@@ -194,7 +143,6 @@ __all__ = [
     "CONCAT",
     "DENOISE",
     "Derivation",
-    "DerivationError",
     "EXPORT",
     "EXTRACT",
     "FRAME",
@@ -215,5 +163,4 @@ __all__ = [
     "lineage_tree",
     "made_by",
     "made_from",
-    "parse_derived_from",
 ]

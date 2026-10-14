@@ -1,5 +1,5 @@
 {
-  "version": 23,
+  "version": 24,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -141,6 +141,7 @@
     "migrate-local-services-share-model-folders",
     "migrate-local-services-stop-when-idle",
     "migrate-loop-scopes-are-not-outer-data-edges",
+    "migrate-mask-files-are-one-shape",
     "migrate-migration-revisions-keep-their-vouchers",
     "migrate-model-structured-output",
     "migrate-mov-videos-become-mp4",
