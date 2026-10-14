@@ -12578,6 +12578,12 @@ export interface components {
              * @default false
              */
             loudness_normalize: boolean;
+            /**
+             * Format
+             * @default mp4
+             * @enum {string}
+             */
+            format: "mp4" | "mov" | "webm" | "mp3" | "wav" | "m4a";
         };
         /** ExtractionSectionOut */
         ExtractionSectionOut: {

@@ -189,6 +189,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "FFmpeg 异常退出,退出码 {code}",
         "en": "FFmpeg exited with code {code}",
     },
+    "renderErr_nothingToExport": {
+        "zh": "时间线上还没有能导出的东西:先把素材、文字或声音放到轨道上(静音的轨道不算)。",
+        "en": "There's nothing on the timeline to export yet. Put footage, text or audio on a track first (muted tracks don't count).",
+    },
     # ---- 发布平台 ----
     "platformDesc_douyin": {
         "zh": "由桌面端发布器用你已登录的抖音创作者账号自动上传;首次使用需在弹出的窗口里登录。",

@@ -23,8 +23,8 @@ from app.media.render_plan import build_render_plan
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
 
-def _out(width=1920, height=1080, fps=30, crf=20, preset="veryfast"):
-    return SimpleNamespace(width=width, height=height, fps=fps, crf=crf, encode_preset=preset)
+def _out(width=1920, height=1080, fps=30, crf=20, preset="veryfast", container="mp4"):
+    return SimpleNamespace(width=width, height=height, fps=fps, crf=crf, encode_preset=preset, container=container)
 
 
 def test_bitrate_1080p30_is_high_quality_ballpark():
@@ -84,6 +84,16 @@ def test_video_encode_args_software_when_no_hw(monkeypatch):
     monkeypatch.setattr(rx, "_available_hw_encoder", lambda: None)
     args = rx._video_encode_args(_out())
     assert args[:2] == ["-c:v", "libx264"]
+
+
+def test_webm_走_VP9_不用硬件编码器(monkeypatch):
+    """硬件编码器都是 H.264,webm 装不了:有硬件也走 libvpx-vp9,CRF 按 ×1.5 对到 VP9 的刻度。"""
+    monkeypatch.setattr(rx.settings, "hw_encode", True)
+    monkeypatch.setattr(rx, "_available_hw_encoder", lambda: "h264_videotoolbox")
+    args = rx._video_encode_args(_out(crf=20, container="webm"))
+    assert args[:2] == ["-c:v", "libvpx-vp9"]
+    assert args[args.index("-crf") + 1] == "30"
+    assert args[args.index("-b:v") + 1] == "0"  # 恒定质量:没有它 -crf 只是码率上限
 
 
 def test_force_software_overrides_available_hw(monkeypatch):

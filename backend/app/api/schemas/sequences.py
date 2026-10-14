@@ -209,6 +209,9 @@ class ExportRequest(ApiModel):
     #: 响度标准化到 −14 LUFS / −1 dBTP。**默认关**:单遍 loudnorm 会改动混音的起伏、预览里听不到它;
     #: 平台播放时多半自己归一。限幅不受它影响,总是有(见 render_executor._master_bus)。
     loudness_normalize: bool = False
+    #: 成片的格式,就是文件的扩展名。mp4 / mov / webm 是视频;mp3 / wav / m4a 只导出声音(分辨率、帧率、画质、
+    #: AI 标识这几项对它不起作用)。取值和 render_plan 的 VIDEO_CONTAINERS + AUDIO_CONTAINERS 是同一份(测试钉着)。
+    format: Literal["mp4", "mov", "webm", "mp3", "wav", "m4a"] = "mp4"
 
 
 class CutClipRangeRequest(ApiModel):

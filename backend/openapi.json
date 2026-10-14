@@ -34828,6 +34828,19 @@
             "type": "boolean",
             "title": "Loudness Normalize",
             "default": false
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "mp4",
+              "mov",
+              "webm",
+              "mp3",
+              "wav",
+              "m4a"
+            ],
+            "title": "Format",
+            "default": "mp4"
           }
         },
         "type": "object",

@@ -29,6 +29,7 @@ from app.media.render_executor import (
     PHASE_PREPARE,
     RenderExecutionError,
     RenderProgress,
+    audio_bitrate_kbps,
     ensure_text_can_burn,
     execute_render,
     target_bitrate_kbps,
@@ -260,6 +261,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         metadata=metadata,
         loudness_normalize=bool((export_params or {}).get("loudness_normalize", False)),
         pixel_scale=pixel_scale,
+        container=str((export_params or {}).get("format") or "mp4"),
     )
 
 
@@ -379,8 +381,9 @@ def _export_sources(plan: RenderPlan) -> list[str]:
 def start_export(db: Session, sequence_id: str, export_params: dict | None = None, *, created_by: str | None) -> Job:
     """Validate the plan, create the render job, and run FFmpeg off-thread."""
     plan = build_plan_for_sequence(db, sequence_id, export_params)  # raises before job creation
-    #: 字烧不了(没有 libass、浏览器那条路也不通)在建任务之前就说,别等跑起来才失败。
-    ensure_text_can_burn(plan)
+    #: 字烧不了(没有 libass、浏览器那条路也不通)在建任务之前就说,别等跑起来才失败。只导出声音时不烧字。
+    if not plan.output.audio_only:
+        ensure_text_can_burn(plan)
     sequence = db.get(Sequence, sequence_id)
     assert sequence is not None
     job = create_job(
@@ -471,10 +474,10 @@ _EXPORT_SIZE_MARGIN = 1.25
 
 
 def export_size_estimate(plan: RenderPlan) -> int:
-    """这次导出大概要多少字节:目标码率 × 时长(视频)+ 一路 192 kbps 的音频,再留余量。只用来判盘够不够。"""
-    video_kbps = target_bitrate_kbps(plan.output)
+    """这次导出大概要多少字节:目标码率 × 时长(视频;只导出声音时没有)+ 声音的码率,再留余量。只用来判盘够不够。"""
+    video_kbps = 0 if plan.output.audio_only else target_bitrate_kbps(plan.output)
     seconds = max(float(plan.timeline_duration or 0.0), 0.0)
-    return int((video_kbps + 192) * 1000 / 8 * seconds * _EXPORT_SIZE_MARGIN)
+    return int((video_kbps + audio_bitrate_kbps(plan.output.container)) * 1000 / 8 * seconds * _EXPORT_SIZE_MARGIN)
 
 
 def _not_enough_disk(target_dir: Path, needed: int) -> str | None:
@@ -491,7 +494,8 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
     #: (见 media/scratch)。此前写在 <数据目录>/exports,编完再整份复制进素材库:几个 GB 的成片要占两倍的盘,复制到
     #: 一半盘满,刚编完的成片在 finally 里被删掉;后端在导出中途被杀,半截文件永远留在那里(MED-6)。
     workdir = scratch_dir(EXPORT_SCRATCH)
-    output_path = workdir / f"{job_id}.mp4"
+    #: 扩展名就是用户选的格式 —— 素材库按它认种类(mp3 是音频),下载 / 另存的文件名和类型也跟着它走。
+    output_path = workdir / f"{job_id}.{plan.output.container}"
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -584,6 +588,8 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 #: 成片的出处是它用到的每一份素材 —— 其中有 AI 内容的,成片也含 AI 内容(导出再拿去剪、再导出,照样认得出)。
                 derived_from=derived(EXPORT, *_export_sources(plan)),
                 move=True,
+                #: 用户选的就是 mov:别再像导入录屏那样原样换成 mp4,不然下载回来的又是 mp4。
+                repackage=False,
             )
             if finish_job(
                 db,

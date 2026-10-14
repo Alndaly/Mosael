@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -143,3 +144,20 @@ def test_分块渲出来的和一次渲完的逐帧逐采样一样(monkeypatch, 
     assert not differ, f"这些帧和一次渲完的不一样:{differ}(切点在 {[round(a * FPS) for a, _ in windows]})"
     assert len(chunked_audio) == len(whole_audio)
     assert np.array_equal(chunked_audio, whole_audio), "声音和一次渲完的不一样"
+
+
+def test_webm_分块渲_每块封进_webm_接出来是_VP9_加_Opus(monkeypatch, tmp_path: Path) -> None:
+    """VP9 装不进分块用的 mp4 中转;接起来那一步也得把声音编成 Opus(webm 不认 AAC)。"""
+    _sources(tmp_path)
+    plan = _plan()
+    plan = replace(plan, output=replace(plan.output, container="webm"))
+    monkeypatch.setattr(render_executor, "_rasterize_text", _rasterize)
+    monkeypatch.setattr(render_executor, "_CHUNK_LAYERS", 6)
+    out = tmp_path / "chunked.webm"
+    execute_render(plan, lambda key: tmp_path / key, out)
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_name:format=duration", "-of", "csv=p=0", str(out)],
+        capture_output=True, text=True, check=True,
+    ).stdout.split()
+    assert sorted(probe[:2]) == ["opus", "vp9"], probe
+    assert abs(float(probe[2]) - plan.timeline_duration) < 0.1, probe

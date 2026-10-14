@@ -35,7 +35,7 @@ def _plan() -> SimpleNamespace:
     # 成片登记时要记出处(计划里用到的素材,见 render._export_sources):这里一份都没有。
     return SimpleNamespace(render_plan_hash="test", sequence_id="seq-1", sequence_revision=1,
                            video_segments=(), overlays=(), audio_overlays=(), timeline_duration=1.0,
-                           output=SimpleNamespace(width=320, height=180, fps=30.0, crf=20))
+                           output=SimpleNamespace(width=320, height=180, fps=30.0, crf=20, container="mp4", audio_only=False))
 
 
 def _workspace() -> str:

@@ -36,12 +36,43 @@ from app.media.render_plan import (
 """
 RenderExecutor (plan §11): turns a RenderPlan into one FFmpeg invocation.
 Every segment yields a normalized [vN][aN] pair (scaled/padded to the output
-format, gaps as black + silence), concatenated and encoded to mp4.
+format, gaps as black + silence), concatenated and encoded to the chosen container
+(mp4 / mov / webm). An audio container (mp3 / wav / m4a) builds only the sound.
 """
 
 logger = logging.getLogger(__name__)
 
 AUDIO_RATE = 48000
+
+#: 各格式的声音编码。mp4 / mov / m4a 是 AAC;webm 只认 Opus / Vorbis,用 Opus;wav 是无损 PCM(16 bit)。
+_CONTAINER_AUDIO: dict[str, list[str]] = {
+    "mp4": ["-c:a", "aac", "-b:a", "192k"],
+    "mov": ["-c:a", "aac", "-b:a", "192k"],
+    "webm": ["-c:a", "libopus", "-b:a", "160k"],
+    "mp3": ["-c:a", "libmp3lame", "-b:a", "192k"],
+    "wav": ["-c:a", "pcm_s16le"],
+    "m4a": ["-c:a", "aac", "-b:a", "192k"],
+}
+#: 这几种是 MP4 一族:moov 挪到文件头(+faststart),边下边播、拖进度条不用先读到文件尾。
+_FASTSTART_CONTAINERS = frozenset({"mp4", "mov", "m4a"})
+
+
+def audio_bitrate_kbps(container: str) -> int:
+    """声音那一路大约多少 kbps(估盘用):wav 是 48 kHz × 16 bit × 2 声道,其余按编码给的码率。"""
+    return AUDIO_RATE * 16 * 2 // 1000 if container == "wav" else 192
+
+
+def _container_tail(output) -> list[str]:
+    """输出末尾那几项:声音编码、元数据、MP4 一族的 +faststart。
+
+    元数据(AI 生成内容的 AIGC 隐式标识)只用标准键,不开 use_metadata_tags:那样写出来的 mdta 键在 remux / 转码后
+    会丢,见 domain.render.aigc_metadata。comment / description 在 webm(Matroska 标签)、mp3(ID3)、wav(INFO)
+    里也各有对应,照写。"""
+    return [
+        *_CONTAINER_AUDIO[output.container],
+        *[part for key, value in output.metadata for part in ("-metadata", f"{key}={value}")],
+        *(["-movflags", "+faststart"] if output.container in _FASTSTART_CONTAINERS else []),
+    ]
 DUCK_GAIN = 0.3  # ≈ −10.5 dB: how far a ducked track drops under overlapping audio (闪避)
 
 
@@ -1231,8 +1262,8 @@ def _choose_hw_encoder(plan: RenderPlan) -> str | None:
 
     开关关着、没有硬件编码器、「高画质」档(_HW_MIN_CRF)、片子太短(_HW_MIN_DURATION)、
     小样自检没过,都走软件。"""
-    if not settings.hw_encode:
-        return None
+    if not settings.hw_encode or plan.output.audio_only or plan.output.container == "webm":
+        return None  # webm 是 VP9(硬件编码器都是 H.264);只导出声音没有画面要编
     encoder = _available_hw_encoder()
     if encoder is None or plan.output.crf < _HW_MIN_CRF or plan.timeline_duration < _HW_MIN_DURATION:
         return None
@@ -1242,7 +1273,9 @@ def _choose_hw_encoder(plan: RenderPlan) -> str | None:
 def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
     """导出的视频编码参数:能用硬件就用硬件(码率模式),否则回落 libx264+CRF。
 
-    force_software=True 用于硬件编码失败后的重试,强制走软件编码。"""
+    force_software=True 用于硬件编码失败后的重试,强制走软件编码。webm 装不了 H.264,走 VP9(_vp9_encode_args)。"""
+    if output.container == "webm":
+        return _vp9_encode_args(output)
     if settings.hw_encode and not force_software:
         encoder = _available_hw_encoder()
         if encoder:
@@ -1256,6 +1289,16 @@ def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
         str(output.crf),
         "-pix_fmt",
         "yuv420p",
+    ]
+
+
+def _vp9_encode_args(output) -> list[str]:
+    """webm 的画面:libvpx-vp9 恒定质量(-crf 配 -b:v 0)。x264 的 CRF 按 ×1.5 对到 VP9 的 0–63 刻度 —— 「高画质 /
+    标准 / 体积小」的 18 / 20 / 26 成了 27 / 30 / 39,落在 libvpx 文档给 1080p 推荐的 15–35 前后。
+    -deadline good + -cpu-used 5 + 行级多线程是速度和画质的折中:VP9 软件编码本来就比 x264 veryfast 慢得多。"""
+    return [
+        "-c:v", "libvpx-vp9", "-crf", str(min(63, round(int(output.crf) * 1.5))), "-b:v", "0",
+        "-deadline", "good", "-cpu-used", "5", "-row-mt", "1", "-pix_fmt", "yuv420p",
     ]
 
 
@@ -1425,7 +1468,7 @@ class _BaseSource(NamedTuple):
 
 def _base_sources(
     plan: RenderPlan, resolve: Callable[[str], Path], has_audio: dict, window: _Window | None, *, sound: bool,
-    frames: list[tuple[int, int]],
+    frames: list[tuple[int, int]], picture: bool = True,
 ) -> tuple[list[str], list[str], dict[int, _BaseSource]]:
     """基底轨各段的输入:返回 (输入参数, 分支滤镜, 每段 → _BaseSource)。
 
@@ -1435,7 +1478,9 @@ def _base_sources(
     只合并**源里的位置只往前走**的那几段(下一段的入点不早于上一段的出点,中间跳过的不超过 _SHARE_MAX_GAP):
     concat 是一段一段取的,解码器往前走时,还没轮到的那几支只会丢掉不归它的帧;要是后面的段倒回去用
     前面的内容,先解出来的帧就得一直攒在那一支里等 concat 轮到它 —— 那会攒下整段画面。倒回去的、
-    跳得太远的、图片(-loop 出来的流),都另开一路。"""
+    跳得太远的、图片(-loop 出来的流),都另开一路。
+
+    picture=False(只导出声音):没有声音的段不开输入、不进返回的表(调用方给它垫静音),画面那一路也不 split。"""
     runs: list[dict] = []
     by_source: dict[Path, list[dict]] = {}
     separate: list[tuple[int, Path, float, float]] = []
@@ -1450,6 +1495,8 @@ def _base_sources(
         skip = window.skip if window is not None and i == window.first and not image else 0.0
         src_in, src_out = segment.source.src_in + skip * segment.speed, segment.source.src_out
         audible = sound and has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted
+        if not picture and not audible:
+            continue
         member = (i, src_in, src_out, audible and not skip, skip, segment.source.src_in)
         if audible and skip:
             #: 声音不跟着画面跳:从段内某处快进起解的声音,aresample 的时间戳补偿会把开头那几秒拉伸一点点,
@@ -1477,7 +1524,7 @@ def _base_sources(
         base = round(run["seek"] - tin, 6)  # 这一路输入的 0 点在源里的位置(快进了就是快进点,否则是 0)
         args += _image_loop_args(run["path"], round(run["end"] - base, 6)) + seek + ["-i", str(run["path"])]
         videos = [f"[{index}:v]"] if len(members) == 1 else [f"[bv{index}_{k}]" for k in range(len(members))]
-        if len(members) > 1:
+        if len(members) > 1 and picture:
             splits.append(f"[{index}:v]split={len(members)}{''.join(videos)}")
         with_sound = [member for member in members if member[3]]
         audios = [f"[{index}:a]"] if len(with_sound) == 1 else [f"[ba{index}_{k}]" for k in range(len(with_sound))]
@@ -1492,6 +1539,25 @@ def _base_sources(
         sources[i] = sources[i]._replace(audio=f"[{index}:a]", sound_trim=(tin, tout, tin))
         args += seek + ["-i", str(path)]
     return args, splits, sources
+
+
+def _base_segment_sound(
+    i: int, segment: Segment, source: _BaseSource | None, frame_count: int, fps: float, span: float,
+) -> str:
+    """基底轨第 i 段的声音,出 [a{i}]:素材自己的声音(倍速、增益、淡入淡出,补齐 / 截到整帧);没有声音、被静音、
+    被别处的独奏关掉时是一样长的静音。导出视频和只导出声音走的是这同一条。"""
+    if source is None or source.audio is None:
+        return f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{span:.6f}[a{i}]"
+    tempo = atempo_filters(segment.speed)
+    audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
+    # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
+    gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
+    sound_in, sound_out, sound_zero = source.sound_trim
+    return (
+        f"{source.audio}atrim=start={sound_in}:end={sound_out},{_audio_from(sound_zero)}{tempo}"
+        f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}"
+        f"{_exact_span(frame_count, fps, audio=True)}[a{i}]"
+    )
 
 
 def build_ffmpeg_command(
@@ -1521,6 +1587,9 @@ def build_ffmpeg_command(
     """
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     still = still_at is not None
+    #: 只导出声音(mp3 / wav / m4a):底轨每段只建声音那一条,上层、字幕、花字、AI 标识整条不建,输出只有声音。
+    #: 声音的混法(增益、淡变、闪避、独奏、总线)和导出视频是同一份 —— 一行都不另写。
+    audio_only = plan.output.audio_only and not still
     window = (
         _window(plan, max(still_at, 0.0), max(still_at, 0.0)) if still_at is not None
         else _window(plan, *chunk) if chunk is not None else None
@@ -1535,7 +1604,9 @@ def build_ffmpeg_command(
     )
     args: list[str] = [settings.ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
     frames = _segment_frames(plan)
-    base_args, filters, sources = _base_sources(plan, resolve, has_audio, window, sound=not still, frames=frames)
+    base_args, filters, sources = _base_sources(
+        plan, resolve, has_audio, window, sound=not still, frames=frames, picture=not audio_only
+    )
     args += base_args
     video_labels: list[str] = []
     audio_labels: list[str] = []
@@ -1553,6 +1624,10 @@ def build_ffmpeg_command(
         #: 只渲一截时头一段从段内第 skip 秒(整帧)开始解码(见 _Window);整条渲恒为 0。
         skip = window.skip if window is not None and i == window.first else 0.0
         span = frames[i][1] / fps
+        if audio_only:
+            filters.append(_base_segment_sound(i, segment, sources.get(i), frames[i][1], fps, span))
+            audio_labels.append(f"[a{i}]")
+            continue
         #: 画面补齐 / 截到整帧;从段内第 skip 秒开始的那段再挪回 0 起 —— concat 按「这段从 0 开始」估长短。
         exact = _exact_span(frames[i][1], fps, audio=False) + _shift_pts(-skip)
         if segment.kind == "clip" and segment.source is not None:
@@ -1618,22 +1693,8 @@ def build_ffmpeg_command(
                 )
                 filters += shadow_filters
                 filters.append(f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1{exact}[v{i}]")
-            if still:
-                pass  # 一张图没有声音:音频那一路整条不建
-            elif source.audio is not None:
-                tempo = atempo_filters(segment.speed)
-                audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
-                # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
-                gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
-                sound_in, sound_out, sound_zero = source.sound_trim
-                filters.append(
-                    f"{source.audio}atrim=start={sound_in}:end={sound_out},{_audio_from(sound_zero)}{tempo}"
-                    f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}"
-                    f"{_exact_span(frames[i][1], fps, audio=True)}[a{i}]"
-                )
-            else:
-                # No source audio, or the base track is silenced by a solo elsewhere.
-                filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{span:.6f}[a{i}]")
+            if not still:  # 一张图没有声音:音频那一路整条不建
+                filters.append(_base_segment_sound(i, segment, source, frames[i][1], fps, span))
         else:
             #: 空档:正好这么多帧的黑(从段内 skip 起的那截已经挪回 0 起)。
             filters.append(
@@ -1655,6 +1716,8 @@ def build_ffmpeg_command(
         filters.append(f"{joined}{_frame_clock(fps)}{_shift_pts(round(window.base + window.skip, 6))}[vbase]")
         if not still:
             filters.append(f"{''.join(audio_labels)}concat=n={len(audio_labels)}:v=0:a=1[abase]")
+    elif audio_only:
+        filters.append(f"{''.join(audio_labels)}concat=n={len(audio_labels)}:v=0:a=1[abase]")
     else:
         pairs = "".join(v + a for v, a in zip(video_labels, audio_labels))
         filters.append(f"{pairs}concat=n={len(video_labels)}:v=1:a=1[vjoined][abase]")
@@ -1663,7 +1726,7 @@ def build_ffmpeg_command(
     # Upper-video-track clips composited over the base, each an element at its transform
     # (cover-fitted at the source's own aspect ratio, then scaled/rotated/faded — see _element_fit).
     video_label = "[vbase]"
-    for i, overlay in enumerate(plan.overlays):
+    for i, overlay in enumerate(() if audio_only else plan.overlays):
         if window is not None and not window.covers(overlay.start, overlay.duration):
             continue
         path = resolve(overlay.source.file_key)
@@ -1767,7 +1830,7 @@ def build_ffmpeg_command(
             )
             video_label = out_label
             input_index += 1
-    elif _has_text(plan):
+    elif _has_text(plan) and not audio_only:
         ass_path = (workdir or output_path.parent) / "subtitles.ass"
         ass_path.parent.mkdir(parents=True, exist_ok=True)
         ass_path.write_text(_build_ass(plan), encoding="utf-8")
@@ -1892,6 +1955,13 @@ def build_ffmpeg_command(
     )
     audio_label = "[amaster]"
 
+    if audio_only:
+        args += [
+            "-filter_complex", ";".join(filters), "-map", audio_label, "-t", str(plan.timeline_duration),
+            *_container_tail(plan.output), str(output_path),
+        ]
+        return args
+
     args += [
         "-filter_complex",
         ";".join(filters),
@@ -1907,15 +1977,7 @@ def build_ffmpeg_command(
         "-r",
         str(plan.output.fps),
         *_video_encode_args(plan.output, force_software=force_software),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        #: 写进文件的元数据(AI 生成内容的 AIGC 隐式标识)。只用 MP4 的标准键,不开 use_metadata_tags:
-        #: 那样写出来的 mdta 键在 remux / 转码后会丢,见 domain.render.aigc_metadata。
-        *[part for key, value in plan.output.metadata for part in ("-metadata", f"{key}={value}")],
-        "-movflags",
-        "+faststart",
+        *_container_tail(plan.output),
         str(output_path),
     ]
     return args
@@ -2133,7 +2195,7 @@ def _chunk_progress(block: dict[str, str], done_frames: int, total_frames: int, 
 
 def _chunk_mux_command(plan: RenderPlan, workdir: Path, videos: list[Path], audios: list[Path], output_path: Path) -> list[str]:
     """把各块接起来:画面原样拷贝(各块同一套编码参数,开头都是关键帧),声音的 PCM 按采样接上以后**整条**过
-    一遍总线(限幅 / 响度标准化跨整条才对),再编 AAC。"""
+    一遍总线(限幅 / 响度标准化跨整条才对),再按格式编码(见 _container_tail)。"""
     def listing(name: str, files: list[Path]) -> Path:
         script = workdir / name
         script.write_text("ffconcat version 1.0\n" + "".join(f"file '{file.name}'\n" for file in files), encoding="utf-8")
@@ -2144,10 +2206,9 @@ def _chunk_mux_command(plan: RenderPlan, workdir: Path, videos: list[Path], audi
         "-f", "concat", "-safe", "0", "-i", str(listing("video.ffconcat", videos)),
         "-f", "concat", "-safe", "0", "-i", str(listing("audio.ffconcat", audios)),
         "-filter_complex", f"[1:a]{_master_bus(plan.output.loudnorm)}[amaster]",
-        "-map", "0:v", "-map", "[amaster]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-map", "0:v", "-map", "[amaster]", "-c:v", "copy",
         "-t", str(plan.timeline_duration),
-        *[part for key, value in plan.output.metadata for part in ("-metadata", f"{key}={value}")],
-        "-movflags", "+faststart", str(output_path),
+        *_container_tail(plan.output), str(output_path),
     ]
 
 
@@ -2174,7 +2235,8 @@ def execute_render(
     hw_encoder = _choose_hw_encoder(plan)
     logger.info(
         "render start: encoder=%s output=%dx%d@%gfps duration=%.1fs → %s",
-        hw_encoder or "libx264",
+        "none (audio)" if plan.output.audio_only else "libvpx-vp9" if plan.output.container == "webm"
+        else hw_encoder or "libx264",
         plan.output.width,
         plan.output.height,
         plan.output.fps,
@@ -2185,9 +2247,10 @@ def execute_render(
     #: 中转文件(文字 PNG、.ass)都进这次渲染自己的目录,出了这个 with 就删,不管成败。
     with render_workdir() as workdir:
         # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
-        text_layers = _text_for_burn(plan, workdir)
+        # 只导出声音时不烧字,也不分块(分块是为了画面那几十层的内存和文件句柄,声音一次混得下)。
+        text_layers = None if plan.output.audio_only else _text_for_burn(plan, workdir)
 
-        windows = _chunk_windows(plan)
+        windows = None if plan.output.audio_only else _chunk_windows(plan)
         encoding = False
 
         def spawn(
@@ -2244,8 +2307,10 @@ def execute_render(
             total_frames = math.ceil(plan.timeline_duration * fps - 1e-6)
             videos: list[Path] = []
             audios: list[Path] = []
+            #: 各块的画面先各自封进一个文件,最后原样拷进成片:webm 的 VP9 封进 .webm,H.264 封进 .mp4(mov 也是它)。
+            chunk_suffix = "webm" if plan.output.container == "webm" else "mp4"
             for n, (start, end) in enumerate(windows):
-                videos.append(workdir / f"chunk{n}.mp4")
+                videos.append(workdir / f"chunk{n}.{chunk_suffix}")
                 audios.append(workdir / f"chunk{n}.wav")
                 command = build_ffmpeg_command(
                     plan, resolve, videos[-1], force_software=force_software, text_layers=text_layers,

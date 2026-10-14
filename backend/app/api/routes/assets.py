@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
@@ -440,14 +441,27 @@ def get_transcript(asset_id: str, db: DbSession, user: CurrentUser) -> Transcrip
     return transcript
 
 
+#: 系统自带的类型表各家不一样,有两种会给出浏览器不认的说法:macOS 上 .m4a 是 audio/mp4a-latm(裸 LATM 流的类型,
+#: 不是 MP4 容器)、.wav 是 audio/x-wav。导出能出这两种,下载 / 播放时按标准的说。
+_MEDIA_TYPES = {".m4a": "audio/mp4", ".wav": "audio/wav"}
+
+
+def _media_type(filename: str) -> str:
+    return (
+        _MEDIA_TYPES.get(Path(filename).suffix.lower())
+        or mimetypes.guess_type(filename)[0]
+        or "application/octet-stream"
+    )
+
+
 @router.get("/assets/{asset_id}/file")
 def get_asset_file(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     asset = use_cases.readable_file(db, user, asset_id)
     path = resolve_key(asset.file_key)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Asset file missing")
-    media_type = mimetypes.guess_type(asset.original_filename or path.name)[0] or "application/octet-stream"
-    return file_response(db, path, media_type=media_type, filename=asset.original_filename or path.name)
+    filename = asset.original_filename or path.name
+    return file_response(db, path, media_type=_media_type(filename), filename=filename)
 
 
 @router.get("/assets/{asset_id}/preview")

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.media.render_plan import RenderPlanError, build_render_plan
+from typing import get_args
+
+from app.api.schemas.sequences import ExportRequest
+from app.core.i18n import tr
+from app.media.render_plan import AUDIO_CONTAINERS, VIDEO_CONTAINERS, RenderPlanError, build_render_plan
 
 
 def make_plan(clips, assets=None):
@@ -55,8 +59,33 @@ def test_missing_asset_file_rejected():
 
 
 def test_empty_sequence_rejected():
-    with pytest.raises(RenderPlanError, match="no clips"):
+    """什么都没有的时间线才拒绝,报给人看的话(不是「no clips to render」那种内部的话)。"""
+    with pytest.raises(RenderPlanError) as caught:
         make_plan([])
+    assert str(caught.value) == tr("renderErr_nothingToExport")
+
+
+def test_export_formats_match_the_api():
+    """导出请求能选的格式 == 渲染计划认的格式:两边各写一份,靠这条钉住。"""
+    allowed = get_args(ExportRequest.model_fields["format"].annotation)
+    assert set(allowed) == set(VIDEO_CONTAINERS + AUDIO_CONTAINERS)
+
+
+def test_unknown_container_rejected():
+    with pytest.raises(RenderPlanError, match="Unknown export format"):
+        build_render_plan(
+            sequence_id="s", revision=1, width=320, height=180, fps=30.0, clips=[clip("c1", "a1", 0, 0, 1)],
+            assets={"a1": {"file_key": "media/a1.mp4"}}, container="avi",
+        )
+
+
+@pytest.mark.parametrize("container,audio_only", [("mp4", False), ("webm", False), ("mp3", True), ("wav", True)])
+def test_container_carried_to_output(container, audio_only):
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=320, height=180, fps=30.0, clips=[clip("c1", "a1", 0, 0, 1)],
+        assets={"a1": {"file_key": "media/a1.mp4"}}, container=container,
+    )
+    assert (plan.output.container, plan.output.audio_only) == (container, audio_only)
 
 
 def test_hash_changes_with_content():

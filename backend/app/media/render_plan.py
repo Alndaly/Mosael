@@ -6,6 +6,7 @@ import re
 
 from dataclasses import asdict, dataclass, field, replace
 
+from app.core.i18n import tr
 from app.media.scene import subtitle_frames, subtitle_text
 
 """
@@ -150,6 +151,12 @@ class Segment:
     gain_keyframes: tuple[tuple[float, float], ...] = ()
 
 
+#: 导出能选的格式。视频三种都带声音;音频三种只出整条时间线混好的声音 —— 画面那几层(底轨画面、上层、字幕、
+#: 花字、AI 标识)执行时整条不建,见 render_executor。各自的编码见 render_executor 的 _CONTAINER_AUDIO / _video_encode_args。
+VIDEO_CONTAINERS = ("mp4", "mov", "webm")
+AUDIO_CONTAINERS = ("mp3", "wav", "m4a")
+
+
 @dataclass(frozen=True)
 class OutputSettings:
     width: int
@@ -163,6 +170,12 @@ class OutputSettings:
     metadata: tuple[tuple[str, str], ...] = ()
     #: 响度标准化(导出对话框的开关):整条混音拉到 −14 LUFS / −1 dBTP。限幅不看它,总是有。
     loudnorm: bool = False
+    #: 成片的格式(就是扩展名)。视频那几种画面 + 声音;音频那几种只出混好的声音(见 AUDIO_CONTAINERS)。
+    container: str = "mp4"
+
+    @property
+    def audio_only(self) -> bool:
+        return self.container in AUDIO_CONTAINERS
 
 
 @dataclass(frozen=True)
@@ -429,6 +442,7 @@ def build_render_plan(
     metadata: tuple[tuple[str, str], ...] = (),
     loudness_normalize: bool = False,
     pixel_scale: float = 1.0,
+    container: str = "mp4",
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out, has_audio}] from the base video track.
@@ -441,6 +455,8 @@ def build_render_plan(
     pixel_scale: 输出画幅 ÷ 序列画幅(降分辨率导出时 < 1)。片段里以序列像素记的量 —— 字幕 / 花字的字号、描边、
         阴影,画面元素投影的模糊和偏移 —— 都乘它;位置、缩放这些按画幅比例记的量不用。
     """
+    if container not in VIDEO_CONTAINERS + AUDIO_CONTAINERS:
+        raise RenderPlanError(f"Unknown export format {container!r}")
     ordered = sorted(clips, key=lambda c: float(c["timeline_start"]))
     segments: list[Segment] = []
     #: 基底轨上有声音的那几段(时间线时间)。闪避轨要给它们让路,见下面的 key_spans。
@@ -483,9 +499,9 @@ def build_render_plan(
             base_sound_spans.append((start, start + duration))
         cursor = start + duration
 
-    if not segments:
-        raise RenderPlanError("Sequence has no clips to render")
-
+    # 基底轨空着(只有音频轨、只有字幕、只有上层画面)不是错:底下整条是黑场,和中间的空档、尾巴上的空档
+    # 同一种黑,由下面补尾巴那一步补上。此前这里直接拒绝(「Sequence has no clips to render」),
+    # 只有声音的时间线因此导不出来 —— 连导出音频都没有路走。真正什么都没有的,在算完时长之后拒绝。
     duration = cursor
     overlays: list[OverlayItem] = []
     for clip in sorted(overlay_clips or [], key=lambda c: float(c["timeline_start"])):
@@ -575,6 +591,8 @@ def build_render_plan(
     # 底轨(base = 最底有片段的视频轨)若比上层视频/音频/字幕短,给画面补一段尾部黑场,
     # 让视频延伸到整条时间线时长。否则视频在 base 结束处就截断——上层视频(叠加层)、音频、
     # 字幕还在往后走,画面却没了,导出比预览短一大截、内容对不上(用户报的「预览与导出完全不同」)。
+    if duration <= GAP_EPSILON:
+        raise RenderPlanError(tr("renderErr_nothingToExport"))
     if cursor < duration - GAP_EPSILON:
         segments.append(Segment(kind="gap", duration=round(duration - cursor, 6)))
 
@@ -588,6 +606,7 @@ def build_render_plan(
             crf=max(0, min(51, int(crf))), encode_preset=encode_preset if encode_preset in X264_PRESETS else "veryfast",
             metadata=tuple(metadata),
             loudnorm=loudness_normalize,
+            container=container,
         ),
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),

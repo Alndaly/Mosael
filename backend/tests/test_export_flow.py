@@ -165,3 +165,131 @@ def test_friendly_render_error_names_corrupt_input() -> None:
     # 完全认不出 → 退回原始错误
     msg3 = _friendly_render_error(RenderExecutionError("FFmpeg exited with code 8", stderr_tail="weird"))
     assert "code 8" in msg3
+
+
+def _audio_only_sequence(client, tmp_path: Path, seconds: float = 1.5) -> tuple[dict, dict]:
+    """只有音频轨上有一段声音、视频轨空着的时间线(用户:「视频轨为空时导出报错」)。返回 (工作区, 序列)。"""
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    source = tmp_path / "voice.mp3"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}", str(source)],
+        check=True, timeout=60,
+    )
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"], "project_id": project["id"]},
+        files={"file": ("voice.mp3", source.read_bytes(), "audio/mpeg")},
+    ).json()
+    sequence = client.post(
+        "/api/sequences",
+        json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main", "width": 320, "height": 180},
+    ).json()
+    audio_track = next(track for track in sequence["tracks"] if track["kind"] == "audio")
+    client.post(
+        f"/api/sequences/{sequence['id']}/clips",
+        json={"track_id": audio_track["id"], "asset_id": asset["id"], "timeline_start": 0, "src_in": 0, "src_out": seconds},
+    )
+    return ws, sequence
+
+
+def _wait(client, job: dict) -> dict:
+    deadline = time.time() + 90
+    while time.time() < deadline:
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] in {"succeeded", "failed"}:
+            break
+        time.sleep(0.5)
+    return job
+
+
+def _streams(path: Path) -> list[str]:
+    return subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True,
+    ).stdout.split()
+
+
+def test_只有声音的时间线导出视频_画面是黑场(tmp_path: Path) -> None:
+    """此前视频轨一空,导出就 422「Sequence has no clips to render」—— 那是渲染计划内部的话。
+    底下没有画面时整条就是黑场(和中间的空档、尾巴上的空档同一种黑),声音照常混进去。"""
+    client = fresh_client()
+    ws, sequence = _audio_only_sequence(client, tmp_path)
+    response = client.post(f"/api/sequences/{sequence['id']}/export")
+    assert response.status_code == 200, response.text
+    job = _wait(client, response.json())
+    assert job["status"] == "succeeded", job.get("error")
+    assert sorted(_streams(_exported_file(client, ws["id"], tmp_path))) == ["audio", "video"]
+
+
+def test_只有声音的时间线导出声音(tmp_path: Path) -> None:
+    """只有声音的时间线直接导出 mp3:没有画面那一路,也不起无头浏览器、不烧字。"""
+    client = fresh_client()
+    ws, sequence = _audio_only_sequence(client, tmp_path)
+    response = client.post(f"/api/sequences/{sequence['id']}/export", json={"format": "mp3"})
+    assert response.status_code == 200, response.text
+    job = _wait(client, response.json())
+    assert job["status"] == "succeeded", job.get("error")
+    assert _streams(_exported_file(client, ws["id"], tmp_path)) == ["audio"]
+
+
+def _video_sequence(client, tmp_path: Path) -> tuple[dict, dict]:
+    """视频轨上一段 1 秒带声音的测试画面。返回 (工作区, 序列)。"""
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()
+    project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
+    source = tmp_path / "src.mp4"
+    make_test_video(source, 1.0)
+    asset = client.post(
+        "/api/assets/import",
+        data={"workspace_id": ws["id"], "project_id": project["id"]},
+        files={"file": ("src.mp4", source.read_bytes(), "video/mp4")},
+    ).json()
+    sequence = client.post(
+        "/api/sequences",
+        json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main", "width": 320, "height": 180},
+    ).json()
+    video_track = next(track for track in sequence["tracks"] if track["kind"] == "video")
+    client.post(
+        f"/api/sequences/{sequence['id']}/clips",
+        json={"track_id": video_track["id"], "asset_id": asset["id"], "timeline_start": 0, "src_in": 0, "src_out": 1.0},
+    )
+    return ws, sequence
+
+
+def _codecs(path: Path) -> list[str]:
+    return subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,codec_type", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True,
+    ).stdout.split()
+
+
+@pytest.mark.parametrize(
+    "fmt,kind,codecs,media_type",
+    [
+        ("mp3", "audio", ["mp3,audio"], "audio/mpeg"),
+        ("wav", "audio", ["pcm_s16le,audio"], "audio/wav"),
+        ("m4a", "audio", ["aac,audio"], "audio/mp4"),
+        ("mov", "video", ["aac,audio", "h264,video"], "video/quicktime"),
+        ("webm", "video", ["opus,audio", "vp9,video"], "video/webm"),
+    ],
+)
+def test_导出的格式就是选的格式(tmp_path: Path, fmt: str, kind: str, codecs: list[str], media_type: str) -> None:
+    """选什么格式出什么文件:扩展名、编码、素材种类、下载时的类型都跟着走。音频格式只有声音(画面整条不建)。
+    mov 不能像导入录屏那样被换成 mp4 —— 那样用户下载回来的又是 mp4。"""
+    client = fresh_client()
+    ws, sequence = _video_sequence(client, tmp_path)
+    response = client.post(f"/api/sequences/{sequence['id']}/export", json={"format": fmt})
+    assert response.status_code == 200, response.text
+    job = _wait(client, response.json())
+    assert job["status"] == "succeeded", job.get("error")
+
+    assets = client.get(f"/api/assets?workspace_id={ws['id']}").json()["items"]
+    exported = next(item for item in assets if item["source"] == "exported")
+    assert exported["kind"] == kind
+    download = client.get(f"/api/assets/{exported['id']}/file")
+    assert download.headers["content-type"].startswith(media_type)
+    assert f".{fmt}" in download.headers["content-disposition"]
+    path = tmp_path / f"exported.{fmt}"
+    path.write_bytes(download.content)
+    assert sorted(_codecs(path)) == codecs
+    assert abs(exported["media_info"]["duration"] - 1.0) < 0.15
