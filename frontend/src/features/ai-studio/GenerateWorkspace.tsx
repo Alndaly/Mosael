@@ -140,7 +140,6 @@ import {
   GeneratedAudioList,
   LyricsField,
   PendingAudioList,
-  audioSourceRoles,
   lyricsLimit,
 } from "@/features/ai-studio/audioGeneration";
 import { SessionList } from "@/features/ai-studio/SessionList";
@@ -200,6 +199,8 @@ import {
   type FrameSlot,
   type SourceRole,
   type FrameSlots,
+  SOURCE_PANEL_ORDER,
+  panelSourceRoles,
 } from "@/lib/sourceFrames";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -610,21 +611,11 @@ export function GenerateWorkspace({
   const composer = React.useRef<HTMLTextAreaElement>(null);
   const supportsLyrics = isAudioModel && supportsParameter(selectedModel, "lyrics");
   const supportsInstrumental = isAudioModel && supportsParameter(selectedModel, "instrumental");
-  const selectedAudioRoles = audioSourceRoles(selectedModel);
   const supportsNegativePrompt = supportsParameter(selectedModel, "negative_prompt");
-  const supportsReferenceImage = supportsParameter(selectedModel, "reference_image");
-  const supportsFirstFrame = selectedModel?.kind === "video" && supportsParameter(selectedModel, "first_frame");
-  // 视频的参考素材:参考图/参考视频/参考音频。它们和首尾帧**不是一回事** —— 首尾帧决定
-  // 成片的第一格和最后一格,参考素材一帧都不出现在成片里,只影响风格与主体。
-  const videoReferenceRoles = (["reference_image", "reference_video", "reference_audio"] as const).filter(
-    (role) => selectedModel?.kind === "video" && supportsParameter(selectedModel, role),
-  );
-  // 拿一段现成的视频当输入,这是第三条路:编辑(输出就是这一段改过的样子)和续写(输出以它
-  // 开头再往下长)。它们既不是首尾帧也不是参考素材,所以单独列在最上面 —— 选了这类模型,
-  // 用户第一件要做的事就是把那段片子挂上去。
-  const videoInputRoles = (["source_video", "first_clip", "driving_audio"] as const).filter(
-    (role) => selectedModel?.kind === "video" && supportsParameter(selectedModel, role),
-  );
+  //: 通用那一栏挂哪几格素材:**和提交时发哪几格同一个判据**(描述符声明了这个角色,见 lib/sourceFrames 的
+  //: panelSourceRoles)。此前按模型种类手列,描述符声明了、手列里没有的角色(工作流完整入口的蒙版)画不出来。
+  const selectedSourceRoles = panelSourceRoles((role) => supportsParameter(selectedModel, role));
+  const isVideoKeyframePair = selectedModel?.kind === "video" && selectedSourceRoles.includes("first_frame");
   // 互斥由描述符说了算(各家接口的硬约束,不是我们的规矩):一组用上了,另一组就灰掉,
   // 而不是让用户挂满了才在提交时吃一个说着数组下标的英文 400。
   const lockedRoles = React.useMemo(() => {
@@ -644,7 +635,7 @@ export function GenerateWorkspace({
   //: 挂了驱动音频 = 数字人生成:提交前必须勾上授权(后端生成漏斗同一条,不勾就 422)。换模型时清掉,不替他带过去。
   const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
   const needsDigitalHumanConsent =
-    videoInputRoles.includes("driving_audio") && filledCount(generationConfig.frames, "driving_audio") > 0;
+    selectedSourceRoles.includes("driving_audio") && filledCount(generationConfig.frames, "driving_audio") > 0;
   //: 别的页面交过来的「用这个去生成」(模型库的「用它生成」,见 lib/generationHandoff):清单和会话列表都到了再接 ——
   //: 会话一到会把这一页的选择清回会话记着的那个(上面那条 effect),先接了也白接。选中的模型换了,参数会回到它的
   //: 默认(下面那条 effect),所以交过来的那几格记在这里,等换完再填上。
@@ -1214,14 +1205,23 @@ export function GenerateWorkspace({
       }
     />
   );
-  /** 表单上的一个素材角色:和通用那一栏同一个控件、同一句提示(图像的参考图带「用上一张结果」,首尾帧成一对)。 */
-  const sourceField = (model: GenerationEngineOption, role: SourceRole) => {
+  /**
+   * 一个素材角色的控件 —— 通用那一栏和精简表单**同一个**(图像的参考图带「用上一张结果」,首尾帧成一对,
+   * 蒙版带「画一张」)。两栏只在「哪几个角色、按什么顺序」上不同,画哪一种控件只有这一处说了算。
+   *
+   * `repeatReferenceHint: false`:通用那一栏三个参考控件挨在一起,「参考」那一句只在第一个下面说一遍。
+   */
+  const sourceField = (model: GenerationEngineOption, role: SourceRole, { repeatReferenceHint = true } = {}) => {
     if (role === "reference_image" && model.kind === "image") return referenceImageField(model);
     if ((role === "first_frame" || role === "last_frame") && model.kind === "video") return keyframesField(model);
+    const firstReference = !repeatReferenceHint && role.startsWith("reference_") &&
+      !SOURCE_PANEL_ORDER.slice(0, SOURCE_PANEL_ORDER.indexOf(role)).some(
+        (earlier) => earlier.startsWith("reference_") && supportsParameter(model, earlier),
+      );
     const hint =
       model.kind === "audio" && role in AUDIO_SOURCE_HINTS ? t(AUDIO_SOURCE_HINTS[role as keyof typeof AUDIO_SOURCE_HINTS])
         : role in VIDEO_INPUT_HINTS ? t(VIDEO_INPUT_HINTS[role as keyof typeof VIDEO_INPUT_HINTS])
-          : role.startsWith("reference_") ? t("genReferenceHint")
+          : role.startsWith("reference_") && (repeatReferenceHint || firstReference) ? t("genReferenceHint")
             : undefined;
     return slotsField(model, role, hint);
   };
@@ -1851,17 +1851,16 @@ export function GenerateWorkspace({
               {/* 挂进去的素材:首尾帧、参考图/视频/音频、要编辑或续写的那段片子。
                   它们都是"你给模型什么",和上面那块"模型给你什么"正好是两头。 */}
               <ParameterSection icon={Images} title={t("genSectionSources")}>
-                {isImageModel && supportsReferenceImage && referenceImageField(selectedModel)}
-                {supportsFirstFrame && keyframesField(selectedModel)}
-                {videoInputRoles.map((role) => slotsField(selectedModel, role, t(VIDEO_INPUT_HINTS[role])))}
-                {needsDigitalHumanConsent && (
-                  <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
-                )}
-                {/* 「参考」那一句只说一遍:三个参考控件挨在一起,每个都重复一次就成了噪音。 */}
-                {videoReferenceRoles.map((role, index) => slotsField(selectedModel, role, index === 0 ? t("genReferenceHint") : undefined))}
-                {/* 音频模型的输入:要配声的视频、参考 / 被翻唱的音频、图生音乐的图。同一个控件,
-                    提示语换成音频上的意思。 */}
-                {selectedAudioRoles.map((role) => slotsField(selectedModel, role, t(AUDIO_SOURCE_HINTS[role])))}
+                {/* 视频的首尾帧是一个控件:由首帧那一格画,尾帧那一格不再画第二遍。 */}
+                {selectedSourceRoles.filter((role) => !(role === "last_frame" && isVideoKeyframePair)).map((role) => (
+                  <React.Fragment key={role}>
+                    {sourceField(selectedModel, role, { repeatReferenceHint: false })}
+                    {/* 数字人的授权跟在驱动音频那一格后面:挂了驱动音频才问。 */}
+                    {role === "driving_audio" && needsDigitalHumanConsent && (
+                      <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
+                    )}
+                  </React.Fragment>
+                ))}
               </ParameterSection>
 
               {/* 调参:seed、反向提示词,以及各家自己加的开关和枚举。它们决定"怎么出",

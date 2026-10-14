@@ -98,16 +98,33 @@ const ENGINE = {
   },
 };
 
-function renderStudio() {
+/**
+ * 同一张工作流的「完整工作流」入口(ADR 0045):描述符**没有** `form`,右栏走通用那一栏。
+ * 插件给这张图配了参考图 + 蒙版两格(一张图两用时 `graph.slots` 给的就是这两格)。
+ */
+const FULL_ENTRY = {
+  ...ENGINE,
+  id: "p1:image:局部重绘.json",
+  model: "局部重绘.json",
+  capabilities: {
+    modes: [],
+    parameter_keys: ["prompt", "reference_image", "mask"],
+    prompt: "optional",
+    source_limits: { reference_image: 1, mask: 1 },
+    source_labels: { reference_image: ["原图"], mask: ["要改的地方"] },
+  },
+};
+
+function renderStudio(engine: typeof ENGINE | typeof FULL_ENTRY = ENGINE) {
   const session = {
-    id: "s1", workspace_id: "w1", title: "image", kind: "image", provider_profile_id: "p1", model: ENGINE.model,
+    id: "s1", workspace_id: "w1", title: "image", kind: "image", provider_profile_id: "p1", model: engine.model,
     origin_kind: "studio", origin_id: "", origin_name: "", origin_state: "ok", is_mine: true, shared: false,
     created_at: "2026-10-12T00:00:00Z", updated_at: "2026-10-12T00:00:00Z",
   };
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-    if (url.includes("/api/generation/options")) return json([ENGINE]);
+    if (url.includes("/api/generation/options")) return json([engine]);
     if (url.includes("/api/generation/sessions")) return json([session]);
     if (url.includes("/api/tts/engines")) return json([]);
     if (url.includes("/api/tts/voices")) return json([]);
@@ -144,5 +161,15 @@ describe("蒙版槽:能开到编辑器", () => {
 
     within(editor).getByRole("button", { name: "cancel" }).click();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "maskEditorTitle" })).toBeNull());
+  });
+
+  it("完整工作流入口(没有精简表单)的通用那一栏也有蒙版那一格,能画、能开到同一个编辑器", async () => {
+    renderStudio(FULL_ENTRY);
+    const panel = await screen.findByRole("complementary", { name: "generationEngineSettings" });
+    //: 此前通用那一栏按模型种类手列角色:图像只列参考图,描述符声明的蒙版画不出来(提交那一半却会发它)。
+    expect(await within(panel).findByRole("button", { name: "原图" })).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "要改的地方" })).toBeTruthy();
+    within(panel).getByRole("button", { name: "maskDraw" }).click();
+    expect(await screen.findByRole("dialog", { name: "maskEditorTitle" })).toBeTruthy();
   });
 });

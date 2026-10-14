@@ -168,6 +168,35 @@ export function filledCount(frames: FrameSlots, role: SourceRole): number {
   return frames[role].filter((slot) => !isEmptySlot(slot)).length;
 }
 
+/**
+ * 通用那一栏(没有精简表单的模型、工作流的「完整工作流」入口)摆素材角色的先后。
+ *
+ * 和 SOURCE_ROLES 是**同一组角色、换个次序**(测试钉着两者一一对应):拿现成片子当输入的
+ * 和首尾帧在上面,参考素材挨在一起,蒙版排最后、紧挨着它要改的那一组(ADR 0056 决定 2)。
+ */
+export const SOURCE_PANEL_ORDER: readonly SourceRole[] = [
+  "first_frame",
+  "last_frame",
+  "source_video",
+  "first_clip",
+  "driving_audio",
+  "reference_image",
+  "reference_video",
+  "reference_audio",
+  "mask",
+];
+
+/**
+ * 面板上画哪几格素材 —— **和提交时发哪几格是同一个判据**(`supported`,即描述符声明了这个角色)。
+ *
+ * 此前通用那一栏按模型种类手列角色(图像只列参考图、视频列首尾帧 / 输入 / 参考),而提交那一半
+ * (`sourceAssetsFrom`)按 SOURCE_ROLES 全量发:描述符声明了、手列里却没有的角色(工作流完整入口的
+ * 蒙版)就**画不出来,也就填不进去**,精简表单那一栏却能填 —— 同一个模型两个入口两种结果(ADR 0057)。
+ */
+export function panelSourceRoles(supported: (role: SourceRole) => boolean): SourceRole[] {
+  return SOURCE_PANEL_ORDER.filter(supported);
+}
+
 /** 提交时,把非空的槽位翻成接口要的 [{asset_id, role}]。外链走 parameters 的 <role>_url。 */
 export function sourceAssetsFrom(
   frames: FrameSlots,

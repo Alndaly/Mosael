@@ -7,7 +7,18 @@
 import { describe, expect, it } from "vitest";
 
 import { exclusiveSourceGroups, sourceLimit } from "@/lib/generationCapabilities";
-import { filledCount, frameUrlParameters, emptyFrames, slotColumns, sourceAssetsFrom, type SourceRole, withSlot } from "@/lib/sourceFrames";
+import {
+  SOURCE_PANEL_ORDER,
+  SOURCE_ROLES,
+  filledCount,
+  frameUrlParameters,
+  emptyFrames,
+  panelSourceRoles,
+  slotColumns,
+  sourceAssetsFrom,
+  type SourceRole,
+  withSlot,
+} from "@/lib/sourceFrames";
 
 const anyRole = () => true;
 const model = (capabilities: Record<string, unknown>) =>
@@ -124,5 +135,21 @@ describe("一行素材槽铺满整行", () => {
 
   it("零份也占一行 —— 空着的那一格要等着人来填,不能塌成 0 宽", () => {
     expect(slotColumns(0)).toBe("repeat(1, minmax(0, 1fr))");
+  });
+});
+
+describe("面板上画的角色和提交时发的角色是同一组", () => {
+  it("面板次序是 SOURCE_ROLES 的一个排列 —— 新加一种角色不会只发不画", () => {
+    expect([...SOURCE_PANEL_ORDER].sort()).toEqual([...SOURCE_ROLES].sort());
+    expect(new Set(SOURCE_PANEL_ORDER).size).toBe(SOURCE_PANEL_ORDER.length);
+  });
+
+  it("描述符声明了蒙版,面板上就有蒙版那一格(工作流完整入口的那一格曾经漏掉)", () => {
+    const declared = new Set<SourceRole>(["reference_image", "mask"]);
+    const supported = (role: SourceRole) => declared.has(role);
+    expect(panelSourceRoles(supported)).toEqual(["reference_image", "mask"]);
+    const frames = { ...emptyFrames(), reference_image: [slot("img")], mask: [slot("m")] };
+    //: 画出来的每一格都发得出去,发出去的每一格都画得出来。
+    expect(sourceAssetsFrom(frames, supported).map((one) => one.role).sort()).toEqual(panelSourceRoles(supported).sort());
   });
 });
