@@ -4,6 +4,7 @@ import type { WorkflowGraph } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { neverRunReferences } from "@/features/workflows/analyze";
+import { pasteNodes } from "@/features/workflows/clipboard";
 import {
   REFERENCE_HINT_EDGE_TYPE,
   isReferenceHintId,
@@ -110,7 +111,8 @@ describe("引用 → 提示线", () => {
       ["start", null, "c"],
       ["start", null, "t"],
       ["c", null, "t"],
-      //: plan → t 已经有控制线,{{plan.nope}} 不再画。start 的控制线只表达执行顺序，属性依赖仍然可见。
+      //: plan → t 已经有控制线,{{plan.nope}} 照画 —— 控制线只说先后,说不出哪个输出流到哪个属性。
+      ["plan", null, "t"],
     ]);
   });
 
@@ -158,7 +160,7 @@ describe("引用 → 提示线", () => {
     ]);
   });
 
-  it("两头之间已有真连线(控制或数据)的不重复画;反方向的连线不算", () => {
+  it("控制线不藏引用:只有两端属性都一致的数据连线不重复画;反方向的连线不算", () => {
     const hints = referenceHints(
       graph(
         [
@@ -178,7 +180,30 @@ describe("引用 → 提示线", () => {
       registry,
       top,
     );
-    expect(hints.map((hint) => [hint.source, hint.target])).toEqual([["plan", "c"]]);
+    //: plan → a 只有控制线,引用照画;plan.json → b.template 已有同口的数据线,不叠。
+    expect(hints.map((hint) => [hint.source, hint.target])).toEqual([
+      ["plan", "a"],
+      ["plan", "c"],
+    ]);
+  });
+
+  it("复制粘贴一组节点:副本和原件画出同一种提示线(控制线一起复制,也不会把引用藏掉)", () => {
+    const original = graph(
+      [start, plan, { id: "t", type: "template", config: { template: "{{plan.text}} {{start.topic}}" } }],
+      [
+        { id: "e1", source: "start", target: "plan" },
+        { id: "e2", source: "plan", target: "t" },
+      ],
+    );
+    const pasted = pasteNodes(original, { nodes: original.nodes.filter((one) => one.id !== "start"), edges: original.edges }, registry)!;
+    const shape = (hints: ReturnType<typeof referenceHints>, rename: (id: string) => string) =>
+      hints.map((hint) => [rename(hint.source), hint.sourceHandle, rename(hint.target), hint.targetHandle]);
+    const all = referenceHints(pasted.graph, registry, top);
+    const ofOriginal = all.filter((hint) => ["plan", "t"].includes(hint.target));
+    const ofCopy = all.filter((hint) => pasted.pastedIds.includes(hint.target));
+    const back = new Map(pasted.pastedIds.map((id, index) => [id, ["plan", "t"][index]]));
+    expect(ofCopy.length).toBeGreaterThan(0);
+    expect(shape(ofCopy, (id) => back.get(id) ?? id)).toEqual(shape(ofOriginal, (id) => id));
   });
 
   it("同一对节点接好一个属性，只隐藏那一项，其他属性提示线仍保留", () => {

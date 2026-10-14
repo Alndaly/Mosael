@@ -16,10 +16,10 @@ import { plainRefName, workflowRefNamer } from "@/features/workflows/workflowRef
  * 提示词里,画布上看不见。「从主题到完整视频」里「按画幅取尺寸 → 建项目」那几处先后只靠引用;「可用的 3D 道具」
  * 只靠一句引用挂着、没接进流程,从模板 v8 到 v11 一次都没跑过。画出来,谁等谁、谁根本不会跑,看图就知道。
  *
- * 它**不是连线**:不在图里(只在显示时叠上去),不能选中、删除、拖去重连,也不参与连线校验(连线校验读的是图);
- * 两头之间已有控制连线时不重复画执行依赖；数据连线则必须两端属性都一致才算已经画过。开始节点永远最先跑,它连出去的
- * 控制边(走顶上的控制出口)说不出「哪个参数流到哪个属性」,所以开始参数引用仍会画。被引用的节点一定不会跑、而引用方
- * 会跑时用错误色 —— 和就绪检查的
+ * 它**不是连线**:不在图里(只在显示时叠上去),不能选中、删除、拖去重连,也不参与连线校验(连线校验读的是图)。
+ * **每一处引用都画**,哪怕两头之间已有控制连线 —— 控制线只说「先后」,说不出「哪个输出流到哪个属性」;此前有控制线
+ * 就不画,于是接好流程的节点上引用反而看不见,复制粘贴出来(没带控制线)的却连上了。唯一不叠画的情形:两端属性都
+ * 一致的数据连线已经画着同一件事。被引用的节点一定不会跑、而引用方会跑时用错误色 —— 和就绪检查的
  * unwired-referenced、后端运行前拦的那一条是同一对(analyze.neverRunReferences)。长什么样见 components/app/canvasEdges。
  */
 
@@ -85,9 +85,6 @@ export function referenceHints(
   { entryIsRoot }: { entryIsRoot: boolean },
 ): ReferenceHint[] {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
-  const wiredByControl = new Set(
-    graph.edges.filter((edge) => edge.kind !== "data").map((edge) => pair(edge.source, edge.target)),
-  );
   // 数据边按两端属性算：同一对节点能同时传多项，接好一项不能把其余提示线一并藏掉。
   const wiredByPort = new Set(
     graph.edges
@@ -108,12 +105,8 @@ export function referenceHints(
       if (!source || sourceId === node.id) continue;
       const handle = outputHandle(registry, graph, source, ref.slice(2, -2).split(".").slice(1).join("."));
       const targetHandle = nodePorts(node, registry, graph.edges).inputs.includes(targetInput) ? `in:${targetInput}` : null;
-      const exactDataEdge = handle && targetHandle
-        ? wiredByPort.has(JSON.stringify([sourceId, handle, node.id, targetHandle]))
-        : false;
-      // 开始节点永远先跑，它的控制线只说顺序，不说哪个参数流向哪个属性。
-      const drawn = exactDataEdge || (source.type !== "start" && wiredByControl.has(pair(sourceId, node.id)));
-      if (drawn) continue;
+      //: 只有两端属性都一致的数据连线算「已经画过」;控制线只说先后,不算。
+      if (handle && targetHandle && wiredByPort.has(JSON.stringify([sourceId, handle, node.id, targetHandle]))) continue;
       const id = `${REFERENCE_HINT_ID_PREFIX}${sourceId}>${handle ?? ""}>${node.id}>${targetHandle ?? ""}`;
       const hint = hints.get(id) ?? {
         id,

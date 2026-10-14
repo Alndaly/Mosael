@@ -107,7 +107,7 @@ describe("编出来的层叠", () => {
       expect(utilities, edge).toMatch(new RegExp(`\\.${edge}[^{]*\\{[^}]*--xy-edge-stroke: var\\(${token}\\)`));
     }
     //: 引用提示线:颜色是令牌往底色退的实色;不可选的线也还能悬停(xyflow 的 .inactive 关掉了指针事件)。
-    expect(utilities).toMatch(/\.canvas-edge-ref[^-][^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--canvas-edge\) 70%, ?var\(--background\)\)/);
+    expect(utilities).toMatch(/\.canvas-edge-ref[^-][^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--primary\) 70%, ?var\(--background\)\)/);
     expect(utilities).toMatch(/\.canvas-edge-ref-never-runs[^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--destructive\) 85%, ?var\(--background\)\)/);
     expect(utilities).toMatch(/\.react-flow__edge\.canvas-edge-hint[^{]*\{[^}]*pointer-events: visibleStroke/);
     //: 流动虚线的动画确实生成了(它的 keyframes 在 tokens.css 的 @theme 里),而且只在不要求减少动态时跑。

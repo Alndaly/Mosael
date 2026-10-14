@@ -132,10 +132,12 @@ const GRAPH = {
   ],
 } as WorkflowGraph;
 
-it("主流程:引用画成提示线(已有真连线的不画),从输出口出发;被引用的没接进流程时是错误色,节点上挂 error 角标", async () => {
+it("主流程:每处引用都画成提示线(两头已有控制线也画),从输出口出发;被引用的没接进流程时是错误色,节点上挂 error 角标", async () => {
   await renderEditor(GRAPH);
-  await waitFor(() => expect(hints().size).toBe(2));
+  await waitFor(() => expect(hints().size).toBe(3));
   expect([...hints().values()].map((edge) => [edge.source, edge.sourceHandle, edge.target, edge.className])).toEqual([
+    //: llm-1 → set 已有控制线:它只说先后,「text 流进了 template」还得靠这根线说。
+    ["llm-1", "out:text", "set", canvasEdgeClass("ref", { hint: true })],
     ["start", "out:topic", "set", canvasEdgeClass("ref", { hint: true })],
     ["props", "out:text", "set", canvasEdgeClass("ref-never-runs", { hint: true })],
   ]);
@@ -178,22 +180,26 @@ it("开始节点每个参数一个输出口,引用从那个参数的口出发;�
   await waitFor(() => expect(hints().get("ref-hint:start>out:topic>set>in:template")?.sourceHandle).toBe("out:topic"));
 });
 
-it("连进流程之后:线变回淡色,角标消失;再接上真连线,那根提示线就不画了", async () => {
+it("连进流程之后:线变回淡色,角标消失;接控制线不藏提示线,接上同口的数据线才不叠画", async () => {
   await renderEditor({
     ...GRAPH,
     edges: [...GRAPH.edges, { id: "e-start-props", source: "start", target: "props" }],
   } as WorkflowGraph);
-  await waitFor(() => expect(hints().size).toBe(2));
+  await waitFor(() => expect(hints().size).toBe(3));
   expect(hints().get("ref-hint:props>out:text>set>in:template")?.className).toBe(canvasEdgeClass("ref", { hint: true }));
   expect(within(nodeEl("props")).queryByLabelText("wfIssueUnwiredReferenced")).toBeNull();
-  //: 画布上连一根 props → set 的真连线。
+  //: 画布上连一根 props → set 的控制线:提示线还在。
   act(() => flow.props?.onConnect?.({ source: "props", target: "set", sourceHandle: null, targetHandle: null }));
-  await waitFor(() => expect(hints().has("ref-hint:props>out:text>set")).toBe(false));
+  await waitFor(() => expect((flow.props?.edges ?? []).some((edge) => edge.source === "props" && edge.target === "set" && !isReferenceHintId(edge.id))).toBe(true));
+  expect(hints().has("ref-hint:props>out:text>set>in:template")).toBe(true);
+  //: 再从 text 口拉一根数据线到 template 属性:同一件事已经画着了,提示线不叠。
+  act(() => flow.props?.onConnect?.({ source: "props", target: "set", sourceHandle: "out:text", targetHandle: "in:template" }));
+  await waitFor(() => expect(hints().has("ref-hint:props>out:text>set>in:template")).toBe(false));
 });
 
 it("提示线不在图里:画布报来的删除落不到图上,也不触发保存", async () => {
   await renderEditor(GRAPH);
-  await waitFor(() => expect(hints().size).toBe(2));
+  await waitFor(() => expect(hints().size).toBe(3));
   act(() => flow.props?.onEdgesChange?.([{ type: "remove", id: "ref-hint:props>out:text>set" }]));
   await new Promise((resolve) => setTimeout(resolve, 1200));
   expect(apiMocks.updateWorkflow).not.toHaveBeenCalled();
