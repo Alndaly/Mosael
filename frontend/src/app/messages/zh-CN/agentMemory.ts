@@ -268,6 +268,10 @@ export const agentMemory = {
   agentContextTitle: "上下文",
   agentThinking: "思考中…",
   agentThought: "已思考",
+  //: 一轮回答的过程摘要(过程收起时那一行)和结果区
+  agentProcessRunning: "处理中 · {n} 步",
+  agentProcessDone: "已处理 · {n} 步",
+  agentOutputOpenInLibrary: "在素材库中打开",
   agentThinkingLevel: "思考",
   agentThinkingUnavailable: "这条连接发不出思考档位",
   agentThinkingUnavailableHint: "去「设置 → 供应商」把这个模型的 reasoning_effort 打开;在那之前,四个档位发出去的请求是一样的,模型按它自己的默认思考。",

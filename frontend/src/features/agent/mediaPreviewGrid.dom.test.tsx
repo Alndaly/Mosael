@@ -33,7 +33,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
-import { ToolCalls } from "@/features/agent/ToolCalls";
+import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
 
 function renderRows(ok: string[], missing: string[]) {
   gone.clear();
@@ -41,12 +41,7 @@ function renderRows(ok: string[], missing: string[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ToolCalls
-        tools={[{
-          id: "t1", name: "generate_image", status: "done",
-          args: {}, result: { asset_ids: [...ok, ...missing] },
-        }]}
-      />
+      <MediaPreviewGrid assetIds={[...ok, ...missing]} />
     </QueryClientProvider>,
   );
 }

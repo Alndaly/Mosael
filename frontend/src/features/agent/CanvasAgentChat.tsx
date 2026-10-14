@@ -53,6 +53,7 @@ import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/fe
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
@@ -297,6 +298,8 @@ export function CanvasAgentChat({
   //: 交出去之后它在对话里也排在这一轮的回答之后 —— 现在就按那个位置画,结束时不跳位。
   const transcript = visibleMessages.filter((message) => !isWaitingReceipt(message));
   const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
+  //: 回执带来的素材画进接着它的那一轮回答(见 turnOutputs);后面还没有回答的归正在跑的这一轮。
+  const received = receivedAssetIdsByMessage(transcript);
   //: 对话里画出来的工具调用:对得上其中一行的确认卡就摆在那一行里,对不上的才退回列表末尾。
   const placedToolCalls = toolCallIds([
     ...visibleMessages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline),
@@ -605,7 +608,12 @@ export function CanvasAgentChat({
               {message.role === "assistant" ? (
                 /* 和 ChatBubble 同一条:过程在上、失败原因在下,而不是二选一。 */
                 <>
-                  <AgentTurnContent timeline={payload?.timeline} />
+                  <AgentTurnContent
+                    timeline={payload?.timeline}
+                    failed={Boolean(message.error)}
+                    durationSeconds={duration}
+                    receivedAssetIds={received.byMessage.get(message.id)}
+                  />
                   {message.error && (
                     <div className={payload?.timeline?.length ? "mt-2" : undefined}>
                       <AgentErrorCard content={message.content} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />
@@ -634,13 +642,13 @@ export function CanvasAgentChat({
         })}
         {running && streamText && (
           <div className="relative w-full min-w-0 max-w-full text-ui-md leading-[1.65] [word-break:break-word]">
-            <AgentTurnContent timeline={streamTimeline} />
+            <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />
             <AgentStatusRow className="mt-1.5" meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
         {running && !streamText && (
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
-            <AgentTurnContent timeline={streamTimeline} />
+            <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />
             <AgentStatusRow label={t(compact.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}

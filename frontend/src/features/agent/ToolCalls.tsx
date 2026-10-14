@@ -1,16 +1,12 @@
 import React from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music, Settings2, Sparkles, X } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, Loader2, Settings2, Sparkles, X } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, getAsset, type Asset, type Confirmation } from "@/api/client";
-import { assetKeys } from "@/api/queryKeys";
+import type { Confirmation } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
-import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
-import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
+import { Disclosure } from "@/components/ui/disclosure";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Truncate } from "@/components/ui/truncate";
 import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS, AGENT_TURN_BLOCKS_CLASS } from "@/features/agent/agentRow";
@@ -25,7 +21,9 @@ import { CitationContext } from "@/components/markdown/CitationLink";
 import { collectCitations } from "@/features/agent/citations";
 import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
-import { useToolCallConfirmation } from "@/features/agent/decisionsContext";
+import { DecisionsContext, useToolCallConfirmation } from "@/features/agent/decisionsContext";
+import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
+import { turnOutputAssetIds } from "@/features/agent/turnOutputs";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -135,115 +133,6 @@ export function collectAssetIds(value: unknown, out: Set<string> = new Set()): S
   return out;
 }
 
-/** 媒体预览卡:按素材 kind 渲染图/视频/音频,让智能体「返回」的素材在聊天里可见可播。 */
-function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePreviewItem[] }) {
-  const { openImagePreview } = useImagePreview();
-  const asset = useQuery({
-    queryKey: assetKeys.detail(assetId),
-    queryFn: () => getAsset(assetId),
-    staleTime: 60_000,
-    retry: false,
-  });
-  if (asset.isLoading) {
-    return (
-      <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
-        <Loader2 size={13} className="animate-mosael-spin" />
-      </div>
-    );
-  }
-  //: 取不到的由 MediaPreviewGrid 统一收成一行,不在这里各画一张灰块(见那边的说明)。
-  if (asset.isError || !asset.data) return null;
-  const src = asset.data.kind === "image" ? assetPreviewUrl(asset.data.id) : assetFileUrl(asset.data.id);
-  return (
-    <figure className="m-0 flex max-w-[240px] flex-col gap-1">
-      {asset.data.kind === "image" ? (
-        <IconButton
-          unstyled
-          label={asset.data.name}
-          className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          //: 点开不是孤零零一张 —— 同一个工具结果里的全部图/视频装进画廊,
-          //: 灯箱里可以左右翻(单张结果时 gallery 为空,行为和原来一样)。
-          onClick={() => openImagePreview({ src, title: asset.data.name, gallery })}
-        >
-          <img className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} alt={asset.data.name} loading="lazy" />
-        </IconButton>
-      ) : asset.data.kind === "video" ? (
-        //: 不用原生 controls —— 全站共享的 VideoPlayer(画板节点、大图灯箱同一副面孔)。
-        //: 卡片尺寸与图/音频对齐(240×135):播放器悬停出控件,静止时压一枚大播放键。
-        //: 播放器右下角的「全屏」开的是同一个灯箱(和这一批的图一起左右翻),不是浏览器原生全屏。
-        <VideoPlayer
-          assetSrc={src}
-          className="h-[135px] w-[240px] rounded-lg border border-border"
-          onExpand={() => openImagePreview({ src, title: asset.data.name, video: true, gallery })}
-        />
-      ) : asset.data.kind === "audio" ? (
-        //: 不用原生 controls(各家各样、不吃主题)—— 全站共享的音频条,画板节点也是它。
-        //: **卡片轮廓与图/视频对齐**(同宽同高):音频没有画面,但一条 40px 的瘦条夹在一排
-        //: 200px 高的卡片中间,读着像渲染坏了。上面摆一枚音符占住画面位,控件条压在底部。
-        <div className="flex h-[135px] w-[240px] flex-col rounded-lg border border-border bg-muted">
-          <div className="grid min-h-0 flex-1 place-items-center text-muted-foreground">
-            <Music size={22} className="opacity-50" />
-          </div>
-          <AudioPlayerBar src={src} showIcon={false} className="h-10 shrink-0 border-t border-border" />
-        </div>
-      ) : (
-        <div className="m-0 flex max-w-[240px] items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-2 text-ui-xs text-muted-foreground">
-          <FileWarning size={13} /> {asset.data.name}
-        </div>
-      )}
-      <Truncate as="figcaption" className="text-ui-xs text-muted-foreground">{asset.data.name}</Truncate>
-    </figure>
-  );
-}
-
-/** 一个工具结果的全部媒体产出。画廊在这里拼:每张卡各自查自己的素材,
- *  但点开图片时要把**这一批**里的图/视频一起交给灯箱,才能左右翻。 */
-function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
-  const t = useI18n();
-  const queries = useQueries({
-    queries: assetIds.map((id) => ({
-      queryKey: assetKeys.detail(id),
-      queryFn: () => getAsset(id),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  const gallery: ImagePreviewItem[] = queries
-    .map((query) => query.data)
-    .filter((asset): asset is Asset => Boolean(asset))
-    .filter((asset) => asset.kind === "image" || asset.kind === "video")
-    .map((asset) => ({
-      src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
-      title: asset.name,
-      video: asset.kind === "video",
-    }));
-  /**
-   * **取不到的不占一张卡。**
-   *
-   * 聊天记录逐字留着工具结果,而里面的素材 id 是**当时的事实**:后来在素材库里删掉几个,
-   * 那条旧消息下面就挂出一片和成功卡一样大的灰块 —— 一次 42 步的长对话能挂出十几张,
-   * 看上去像"坏了一大片",而它说的只是"这些东西你后来删了"。
-   *
-   * 所以失败的收成一行小字。不完全藏起来:一份素材凭空消失和一份从来没生成出来,
-   * 对着历史记录排查时是两件事。
-   */
-  const resolved = assetIds.filter((_, index) => queries[index].data);
-  const missing = queries.filter((query) => query.isError).length;
-  if (resolved.length === 0 && missing === 0) return null;
-  return (
-    <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5 flex flex-wrap items-center gap-2")}>
-      {resolved.map((id) => (
-        <MediaPreview key={id} assetId={id} gallery={gallery} />
-      ))}
-      {missing > 0 && (
-        <span className="flex items-center gap-1 text-ui-xs text-muted-foreground">
-          <FileWarning size={12} /> {t("agentMediaDeleted").replace("{n}", String(missing))}
-        </span>
-      )}
-    </div>
-  );
-}
-
 /** 把 args/result 渲染成可读文本:字符串原样,其余美化成 JSON。 */
 function format(value: unknown): string {
   if (value == null) return "";
@@ -345,7 +234,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
   );
   // 页面专用结果和失败原因原先作为工具行的兄弟卡一直摊开,看起来像第二条消息。
   // 现在它们进这次调用的明细,结果刚到或失败时自动展开,仍然不会把重要回包藏起来。
-  const revealResult = hasPageCard || Boolean(failure) || assetIds.length > 0;
+  //: 素材**不再**让这一行自己摊开:这一轮做出来的图画在答案下面(结果区,见 AgentTurnContent),
+  //: 这里再摊一份就是同一张图摆两遍;碰过的素材(分析的原图)点开明细照样看得到。
+  const revealResult = hasPageCard || Boolean(failure);
   React.useEffect(() => {
     if (revealResult) setOpen(true);
   }, [revealResult]);
@@ -446,7 +337,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               />
             </div>
           )}
-          {assetIds.length > 0 && <MediaPreviewGrid assetIds={assetIds} />}
+          {assetIds.length > 0 && <MediaPreviewGrid assetIds={assetIds} className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5")} />}
         </div>
       )}
     </div>
@@ -649,13 +540,98 @@ function ThinkingBlock({ text, done, durationSeconds }: { text: string; done?: b
   );
 }
 
-/** Assistant answer renderer: preserves text/tool event order when payload.timeline exists. */
+/**
+ * 一轮回答里「过程」和「结果」的分界:**末尾连着的正文是结果,前面的全是过程**。
+ *
+ * 过程是智能体怎么做到的 —— 思考、工具调用、中途说的「我先查一下素材」;结果是它最后交给你的那段话。
+ * 判据只看形状:最后一个非正文块之后的正文。中途那几句话夹在工具中间,读起来是旁白,不是答案;
+ * 还在跑的时候也照这个切 —— 正在流出来的那段正文先当结果画,接着又调了工具,它就落回过程里。
+ */
+export function splitTurn(blocks: TurnBlock[]): { process: TurnBlock[]; result: TurnBlock[] } {
+  let cut = blocks.length;
+  while (cut > 0 && blocks[cut - 1].type === "text") cut -= 1;
+  return { process: blocks.slice(0, cut), result: blocks.slice(cut) };
+}
+
+/** 过程有几步:每次工具调用、每段思考各算一步。中途的旁白不算 —— 它不是一步动作。 */
+function processSteps(process: TurnBlock[]): number {
+  return process.reduce((sum, block) => sum + (block.type === "tools" ? block.tools.length : block.type === "thinking" ? 1 : 0), 0);
+}
+
+function TurnBlockView({ block, index }: { block: TurnBlock; index: number }) {
+  if (block.type === "tools") {
+    // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,
+    // 而不是外层这个"块与块之间"的 gap —— 见 turnBlocks 的说明。
+    return <ToolCalls key={`tools-${block.tools[0].id}-${index}`} tools={block.tools} />;
+  }
+  if (block.type === "thinking") {
+    return <ThinkingBlock text={block.text} done={block.done} durationSeconds={block.duration_seconds} />;
+  }
+  // 补上和标记行同一份上下内缩(见 AGENT_TEXT_BLOCK_CLASS):不然"一个空行"会有三种宽度。
+  return block.text ? (
+    <div className={AGENT_TEXT_BLOCK_CLASS}>
+      <AgentMarkdown>{decodeByteFallback(block.text)}</AgentMarkdown>
+    </div>
+  ) : null;
+}
+
+const NO_IDS: readonly string[] = [];
+
+/**
+ * 一轮回答:**过程在上、可以收起;结果在下、一直摊着**(和 ChatGPT / Codex 同一个形态)。
+ *
+ * 此前过程和结果是同一串块:一次调了十来个工具的回答,答案被挤在一屏工具行下面,要往下翻才找得到;
+ * 生成的图挂在 `get_job` 那一行的明细里,和「查了一下任务」混在一起。
+ *
+ * - **过程**收成一行摘要「已处理 · 6 步 · 32 秒」,点开是原样的那串步骤。还在跑的时候它摊着、实时在长
+ *   (「处理中 · 3 步」),这一轮有了结果它自己收起;用户手动开合过的就照他的来。
+ * - 三种时候**不收**:跑失败了(要看得见断在哪一步)、没有结果(这一轮就停在过程里,收起来什么都不剩)、
+ *   有确认卡在等人拍板(卡就挂在发起它的那一行下面,见 ToolCallCard;PendingDecisions 也按「那一行看得见」
+ *   决定要不要在对话末尾再摆一张)。
+ * - **结果**是末尾那段正文,加上这一轮做出来的素材(turnOutputs:任务产物、派生素材、回执带来的)。
+ *
+ * 过程只有一段思考时不套摘要:「已处理 · 1 步」包着「已思考」是同一件事说两遍,思考块自己会收起。
+ */
 export function AgentTurnContent({
   timeline,
+  running = false,
+  failed = false,
+  durationSeconds,
+  receivedAssetIds = NO_IDS,
 }: {
   timeline?: AgentTimelineItem[];
+  /** 这一轮还在跑(流式那一份)。 */
+  running?: boolean;
+  /** 这一轮以失败收场(消息带 error)。 */
+  failed?: boolean;
+  /** 这一轮的总用时(`payload.usage.duration_seconds`),写进过程摘要。 */
+  durationSeconds?: number;
+  /** 回执带来的素材(见 turnOutputs.receivedAssetIdsByMessage)。调用方要给稳定的数组:气泡是 memo 的。 */
+  receivedAssetIds?: readonly string[];
 }) {
+  const t = useI18n();
   const citations = React.useMemo(() => collectCitations(timeline), [timeline]);
+  const { process, result } = React.useMemo(() => splitTurn(turnBlocks(timeline)), [timeline]);
+  const outputs = React.useMemo(() => turnOutputAssetIds(timeline, receivedAssetIds), [timeline, receivedAssetIds]);
+  const decisions = React.useContext(DecisionsContext);
+  const awaitingDecision = process.some(
+    (block) => block.type === "tools" && block.tools.some((tool) => decisions?.byToolCall.get(tool.id)?.status === "pending"),
+  );
+  const hasResult = result.length > 0 || outputs.length > 0;
+  const settled = !running && !failed && hasResult;
+  //: 用户亲手开合过就听他的(null = 没碰过,跟着状态走)。不用 effect 去"在跑完那一刻收起":
+  //: 跟着状态算出来的开合,跑完自然就是收着的,而他点过的那一下也不会被下一次渲染抹掉。
+  const [chosenOpen, setChosenOpen] = React.useState<boolean | null>(null);
+  const processOpen = awaitingDecision || (chosenOpen ?? !settled);
+  const steps = processSteps(process);
+  const onlyThinking = process.length === 1 && process[0].type === "thinking";
+  const summary = [
+    (running ? t("agentProcessRunning") : t("agentProcessDone")).replace("{n}", String(steps)),
+    !running && typeof durationSeconds === "number" ? formatElapsedSeconds(durationSeconds) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     // **间距由容器统一给**。此前每种块自带下外边距(思考 10px、工具卡 8px),而正文的
     // 末段被 `last-child:mb-0` 清零 —— 于是三种块之间的缝隙各不相同,正文后面紧跟一张卡时
@@ -669,19 +645,33 @@ export function AgentTurnContent({
     // grid 里的其它块(思考、正文)跟着一起变宽**,看起来像"整条消息比别的宽"。子项自己的
     // truncate 救不了:truncate 要父级先有确定宽度,而这里父级宽度正是由它的内容定的。
     <CitationContext.Provider value={citations}><div className={AGENT_TURN_BLOCKS_CLASS}>
-      {turnBlocks(timeline).map((item, index) =>
-        item.type === "tools" ? (
-          // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,
-          // 而不是外层这个"块与块之间"的 gap-2.5 —— 见 turnBlocks 的说明。
-          <ToolCalls key={`tools-${item.tools[0].id}-${index}`} tools={item.tools} />
-        ) : item.type === "thinking" ? (
-          <ThinkingBlock key={`thinking-${index}`} text={item.text} done={item.done} durationSeconds={item.duration_seconds} />
-        ) : item.type === "text" && item.text ? (
-          // 补上和标记行同一份上下内缩(见 AGENT_TEXT_BLOCK_CLASS):不然"一个空行"会有三种宽度。
-          <div key={`text-${index}`} className={AGENT_TEXT_BLOCK_CLASS}>
-            <AgentMarkdown>{decodeByteFallback(item.text)}</AgentMarkdown>
+      {process.length > 0 && (onlyThinking ? (
+        <TurnBlockView block={process[0]} index={0} />
+      ) : (
+        <Disclosure
+          label={summary}
+          open={processOpen}
+          onOpenChange={setChosenOpen}
+          className="min-w-0"
+          triggerClassName="px-1.5 py-1"
+          //: 摊开的步骤挂在一条竖线下 —— 和工具行明细同一种"从这一行垂下来"的读法,
+          //: 一眼分得清哪些是过程、从哪儿起是答案。
+          contentClassName="ml-[13px] mt-1 border-l border-border pl-1.5"
+        >
+          <div className={AGENT_TURN_BLOCKS_CLASS} data-turn-process="">
+            {process.map((block, index) => (
+              <TurnBlockView key={`${block.type}-${index}`} block={block} index={index} />
+            ))}
           </div>
-        ) : null,
+        </Disclosure>
+      ))}
+      {hasResult && (
+        <div className={AGENT_TURN_BLOCKS_CLASS} data-turn-result="">
+          {result.map((block, index) => (
+            <TurnBlockView key={`result-${index}`} block={block} index={index} />
+          ))}
+          {outputs.length > 0 && <MediaPreviewGrid assetIds={outputs} reveal className="py-1" />}
+        </div>
       )}
     </div></CitationContext.Provider>
   );

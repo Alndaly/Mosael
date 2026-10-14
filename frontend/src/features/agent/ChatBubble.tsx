@@ -72,12 +72,15 @@ export const ChatBubble = React.memo(function ChatBubble({
   usageEvents,
   mediaGallery,
   workspaceId,
+  receivedAssetIds,
 }: {
   message: AgentMessage;
   usageEvents: AgentUsageEvent[];
   mediaGallery?: ImagePreviewItem[];
   /** 念这一条记在哪个工作区的账上,也决定要不要 ai 权限(见 routes/agent.speak)。 */
   workspaceId: string;
+  /** 助手消息:回执带来、该画进这一轮结果里的素材(见 turnOutputs.receivedAssetIdsByMessage)。 */
+  receivedAssetIds?: readonly string[];
 }) {
   const payload = message.payload as
     | {
@@ -140,7 +143,12 @@ export const ChatBubble = React.memo(function ChatBubble({
            只画错误卡 —— 一次跑了三分钟、调了十来次工具的对话,最后一步断线,用户看到的就只剩
            一句「执行失败」。过程在上、失败原因在下,顺序本身就说明了"跑到哪儿断的"。 */
         <>
-          <AgentTurnContent timeline={payload?.timeline} />
+          <AgentTurnContent
+            timeline={payload?.timeline}
+            failed={Boolean(message.error)}
+            durationSeconds={payload?.usage?.duration_seconds}
+            receivedAssetIds={receivedAssetIds}
+          />
           {message.error && (
             <div className={payload?.timeline?.length ? "mt-2" : undefined}>
               <AgentErrorCard content={message.content} error={message.error} code={(message.payload as { error_code?: string } | null)?.error_code} />

@@ -23,7 +23,7 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
-import { ToolCalls } from "@/features/agent/ToolCalls";
+import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
 
 afterEach(() => {
   cleanup();
@@ -34,7 +34,8 @@ function renderResult() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <ToolCalls tools={[{ id: "t1", name: "run_plugin_tool", status: "done", args: {}, result: { asset_ids: ["img-1", "vid-1"] } }]} />
+      {/* 工具行明细和结果区共用这一块(工具行的素材要点开明细才看得到,见 ToolCallCard 的 revealResult)。 */}
+      <MediaPreviewGrid assetIds={["img-1", "vid-1"]} />
     </QueryClientProvider>,
   );
 }

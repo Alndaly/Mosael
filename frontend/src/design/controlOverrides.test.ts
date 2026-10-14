@@ -72,11 +72,12 @@ const STOCK: Record<string, number> = {
   "features/agent/CanvasAgentChat.tsx": 5,
   "features/agent/ComposerChips.tsx": 1,
   "features/agent/ConfirmationCenter.tsx": 1,
+  //: 原在 ToolCalls.tsx:媒体预览卡搬进自己的文件(结果区也用它),那颗点开灯箱的透明图钮跟着搬过来。
+  "features/agent/MediaPreview.tsx": 1,
   "features/agent/PermissionModePicker.tsx": 1,
   "features/agent/QueuedMessages.tsx": 1,
   "features/agent/skills/SkillEditorDialog.tsx": 2,
   "features/agent/SubagentPanel.tsx": 1,
-  "features/agent/ToolCalls.tsx": 1,
   "features/agent/trace/TraceView.tsx": 1,
   "features/agent/VoiceDock.tsx": 2,
   "features/ai-studio/audioGeneration.tsx": 2,
