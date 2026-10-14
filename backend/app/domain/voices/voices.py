@@ -1002,7 +1002,7 @@ def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, 
 
     #: 可用性(启用、配置、凭据、授权)由 invoke_host 判,不在这里再判一遍。
     try:
-        invoke_host(db, engine, SPEECH, {"op": "speak", "text": text, "voice": voice, "speed": speed}, collect=collect)
+        invoke_host(db, engine, SPEECH, {"op": "speak", "text": text, "voice": voice, "speed": speed}, collect=collect, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise VoiceError("voiceErr_pluginFailed", plugin=name, detail=str(exc)[:500]) from exc
     return made[0]

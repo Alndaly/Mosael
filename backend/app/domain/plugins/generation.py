@@ -105,7 +105,7 @@ _MAX_FINGERPRINT = 200
 
 def catalog(db: Session, instance: PluginInstance) -> Catalog:
     """问这个实例现在有哪些模型。认不出的条目**丢掉**,不让一条坏条目拖垮整份清单。"""
-    output = tools.invoke_host(db, instance.id, GENERATION, {"op": "models"}, timeout=CATALOG_TIMEOUT_SECONDS)
+    output = tools.invoke_host(db, instance.id, GENERATION, {"op": "models"}, timeout=CATALOG_TIMEOUT_SECONDS, record=False)
     raw = output.get("models")
     if not isinstance(raw, list):
         raise PluginDomainError("pluginErr_generationBadModels", name=instance.name, shape='{"models": [...]}')
@@ -148,7 +148,7 @@ def explain(db: Session, instance: PluginInstance, ids: list[str]) -> list[Expla
     asked = [one for one in dict.fromkeys(ids) if _MODEL_ID.match(one)][:MAX_EXPLAIN]
     if not asked:
         return []
-    output = tools.invoke_host(db, instance.id, GENERATION, {"op": "explain", "ids": asked}, timeout=EXPLAIN_TIMEOUT_SECONDS)
+    output = tools.invoke_host(db, instance.id, GENERATION, {"op": "explain", "ids": asked}, timeout=EXPLAIN_TIMEOUT_SECONDS, record=False)
     text = inst.manifest_for(db, instance).text
     out: list[Explained] = []
     for entry in output.get("models") or []:
@@ -469,7 +469,7 @@ def generate(
             recorded_output["note"] = extras["note"]
         return recorded_output
 
-    tools.invoke_host(db, instance_id, GENERATION, recorded, prepare=prepare, collect=collect, hooks=hooks)
+    tools.invoke_host(db, instance_id, GENERATION, recorded, prepare=prepare, collect=collect, hooks=hooks, record=True)
     return GenerationOutcome(paths=collected, usage=extras.get("usage", {}), raw=extras.get("raw", {}),
                              output_parameters=parameters if any(parameters) else [], note=extras.get("note", ""))
 

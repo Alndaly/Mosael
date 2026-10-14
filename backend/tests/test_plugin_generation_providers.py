@@ -703,6 +703,6 @@ def test_插件跑着的时候不攥着数据库连接(plugged, monkeypatch: pyt
         monkeypatch.setattr(tools, "stream_tool", fake_run)
         monkeypatch.setattr(tools, "execute_tool", fake_run)
         hooks = StreamHooks(on_progress=lambda *_: None, on_task=lambda _t: None, is_cancelled=lambda: False)
-        tools.invoke_host(db, instance_id, "generation", {"op": "generate"}, hooks=hooks)
-        tools.invoke_host(db, instance_id, "generation", {"op": "models"})
+        tools.invoke_host(db, instance_id, "generation", {"op": "generate"}, hooks=hooks, record=True)
+        tools.invoke_host(db, instance_id, "generation", {"op": "models"}, record=False)
     assert seen == [False, False], "插件进程跑着的时候,会话还攥着一个读事务"

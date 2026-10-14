@@ -108,7 +108,7 @@ def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, so
     )
     try:
         invoke_host(db, extraction.parser, DOCUMENT_PARSE, {"filename": asset.original_filename or source.name},
-                    files={"file": source}, collect=collect, hooks=hooks)
+                    files={"file": source}, collect=collect, hooks=hooks, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise DocumentParseError("docErr_pluginFailed", plugin=extraction.parser_name, detail=str(exc)[:500]) from exc
     if "result" not in parsed:

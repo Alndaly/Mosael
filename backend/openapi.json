@@ -23073,7 +23073,7 @@
           "plugins"
         ],
         "summary": "List Invocations",
-        "description": "**我自己接的那些**的调用记录。\n\n记录里带着每次调用的 input/output —— 别人的请求参数和返回内容,没有任何理由出现在我这儿。\n此前这里不做过滤,因为那时接入本来就是所有人共用的一份。",
+        "description": "**我自己接的那些**的调用记录,最新的 `limit` 条。\n\n记录里带着每次调用的 input/output —— 别人的请求参数和返回内容,没有任何理由出现在我这儿。\n此前这里不做过滤,因为那时接入本来就是所有人共用的一份。\n\n**一定有上限。** 每条都带着完整输出,一条就可能上 MB;插件页只摆最近十条,却曾经一次拿回一个连接的全部\n上千条(七百多 MB),渲染进程解不动,界面反复崩溃(见 tools.invoke_host 的 `record`)。",
         "operationId": "list_invocations_api_plugins_invocations_get",
         "parameters": [
           {
@@ -23090,6 +23090,18 @@
                 }
               ],
               "title": "Instance Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
             }
           }
         ],

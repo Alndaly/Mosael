@@ -1,5 +1,5 @@
 {
-  "version": 21,
+  "version": 22,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -20,6 +20,7 @@
     "drop-invitations-and-notifications-of-people-who-are-gone",
     "drop-legacy-profile-columns",
     "drop-member-perm-overrides",
+    "drop-plugin-catalog-invocations",
     "drop-plugin-packages-that-break-the-manifest-rules",
     "drop-publish-account-profile-name",
     "drop-reviews-table",

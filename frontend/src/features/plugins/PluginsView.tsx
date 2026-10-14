@@ -1631,7 +1631,7 @@ function InvocationList({ instanceId }: { instanceId: string }) {
           <Trash2 size={13} /> {t("invocationsClear")}
         </Button>
       </div>
-      {rows.slice(0, 10).map((invocation) => (
+      {rows.map((invocation) => (
         <InvocationRow key={invocation.id} invocation={invocation} onDelete={() => remove.mutate(invocation.id)} />
       ))}
     </SettingsBlock>

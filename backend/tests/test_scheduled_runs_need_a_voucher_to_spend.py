@@ -347,7 +347,7 @@ def test_a_plugin_connection_is_a_connection_too(team, monkeypatch) -> None:
             with pytest.raises(SpendNotVouched):
                 tools.invoke(db, "inst", "draw", {})
             with pytest.raises(SpendNotVouched):
-                tools.invoke_host(db, "inst", "generation", {})
+                tools.invoke_host(db, "inst", "generation", {}, record=True)
         finally:
             reset_parent_job(token)
 

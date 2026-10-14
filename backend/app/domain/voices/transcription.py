@@ -141,7 +141,7 @@ class PluginTranscriber:
         try:
             with unit_of_work() as db:
                 invoke_host(db, self._provider.id, TRANSCRIPTION, {"filename": wav.name, "language": language},
-                            files={"file": wav}, collect=collect, hooks=quiet_hooks())
+                            files={"file": wav}, collect=collect, hooks=quiet_hooks(), record=True)
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise ASRError("asrErr_pluginFailed", plugin=self.name, detail=str(exc)[:500]) from exc
         return heard

@@ -190,7 +190,7 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
     if inst.blocked_reason(db, instance) or not (refresh or not previous.get("refreshed_at")):
         return
     try:
-        output = tools.invoke_host(db, instance.id, TOOLS, {"op": "tools"}, timeout=CATALOG_TIMEOUT_SECONDS)
+        output = tools.invoke_host(db, instance.id, TOOLS, {"op": "tools"}, timeout=CATALOG_TIMEOUT_SECONDS, record=False)
         raw = output.get("tools")
         if not isinstance(raw, list):
             raise PluginDomainError("pluginErr_toolsBadShape", name=instance.name, shape='{"tools": [...]}')
@@ -250,7 +250,7 @@ def explain(db: Session, instance: PluginInstance, names: list[str]) -> list[Exp
     asked = [one for one in dict.fromkeys(names) if TOOL_NAME_RE.match(one)][:MAX_EXPLAIN]
     if not asked:
         return []
-    output = tools.invoke_host(db, instance.id, TOOLS, {"op": "explain", "tools": asked}, timeout=EXPLAIN_TIMEOUT_SECONDS)
+    output = tools.invoke_host(db, instance.id, TOOLS, {"op": "explain", "tools": asked}, timeout=EXPLAIN_TIMEOUT_SECONDS, record=False)
     text = inst.manifest_for(db, instance).text
     out: list[ExplainedTool] = []
     for entry in output.get("tools") or []:

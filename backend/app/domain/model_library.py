@@ -490,7 +490,7 @@ def resolve(db: Session, instance: PluginInstance, url: str) -> dict[str, Any]:
     if not _http(url):
         raise ModelLibraryError("modelLibErr_badUrl")
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "resolve", "url": url.strip()},
-                               timeout=QUICK_TIMEOUT_SECONDS)
+                               timeout=QUICK_TIMEOUT_SECONDS, record=False)
     size = _number(output.get("size"))
     return {
         "source": _text(output.get("source"), 40),
@@ -521,7 +521,7 @@ def search_sources(db: Session, instance: PluginInstance, filename: str, folder:
     name = _text(filename, 300)
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY,
                                {"op": "search_sources", "filename": name, "folder": _text(folder, 200)},
-                               timeout=QUICK_TIMEOUT_SECONDS)
+                               timeout=QUICK_TIMEOUT_SECONDS, record=False)
     candidates = []
     for one in output.get("candidates") or []:
         if not isinstance(one, dict) or not _http(one.get("url")) or not _text(one.get("filename"), 300):
@@ -653,7 +653,7 @@ def _download(job_id: str) -> None:
     try:
         with unit_of_work() as db:
             output = tools.invoke_host(db, instance_id, MODEL_LIBRARY, request, hooks=hooks,
-                                       timeout=MAX_GENERATION_TIMEOUT_SECONDS)
+                                       timeout=MAX_GENERATION_TIMEOUT_SECONDS, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         from app.domain.jobs import blame
 
@@ -925,7 +925,7 @@ def _save_preview(db: Session, instance: PluginInstance, folder: str, name: str,
         return {"op": "save_preview", "folder": folder, "name": name, "path": str(target)}
 
     output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "save_preview", "folder": folder, "name": name},
-                               prepare=prepare, timeout=SAVE_TIMEOUT_SECONDS)
+                               prepare=prepare, timeout=SAVE_TIMEOUT_SECONDS, record=True)
     # 那台服务器上现在有了:它自己的那张取代别处的这张(列表马上标成「那台服务器上的」,取图时去问它)
     model_previews.note_server(instance.id, folder, name, "found", "video" if suffix == ".mp4" else "image")
     return {"folder": folder, "name": name, "saved": _text(output.get("saved"), 1000)}

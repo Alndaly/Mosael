@@ -125,7 +125,7 @@ class PluginDenoiseAdapter:
             with SessionLocal() as db:
                 invoke_host(db, self._provider.id, AUDIO_DENOISE,
                             {"filename": request.audio_path.name, "strength": request.strength},
-                            files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks())
+                            files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks(), record=True)
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise DenoiseError("denoiseErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
         return out_path
@@ -167,7 +167,7 @@ class PluginSeparationAdapter:
         try:
             with SessionLocal() as db:
                 invoke_host(db, self._provider.id, AUDIO_SEPARATION, {"filename": request.audio_path.name},
-                            files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks())
+                            files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks(), record=True)
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise SeparationError("separationErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
         return made

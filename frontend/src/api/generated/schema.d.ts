@@ -7771,10 +7771,13 @@ export interface paths {
         };
         /**
          * List Invocations
-         * @description **我自己接的那些**的调用记录。
+         * @description **我自己接的那些**的调用记录,最新的 `limit` 条。
          *
          *     记录里带着每次调用的 input/output —— 别人的请求参数和返回内容,没有任何理由出现在我这儿。
          *     此前这里不做过滤,因为那时接入本来就是所有人共用的一份。
+         *
+         *     **一定有上限。** 每条都带着完整输出,一条就可能上 MB;插件页只摆最近十条,却曾经一次拿回一个连接的全部
+         *     上千条(七百多 MB),渲染进程解不动,界面反复崩溃(见 tools.invoke_host 的 `record`)。
          */
         get: operations["list_invocations_api_plugins_invocations_get"];
         put?: never;
@@ -36025,6 +36028,7 @@ export interface operations {
         parameters: {
             query?: {
                 instance_id?: string | null;
+                limit?: number;
             };
             header?: never;
             path?: never;

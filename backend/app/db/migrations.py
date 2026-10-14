@@ -8676,6 +8676,27 @@ def _migrate_applied_moves_remember_old_names() -> None:
                          {"m": json.dumps(converted, ensure_ascii=False), "i": instance_id})
 
 
+def _drop_plugin_catalog_invocations() -> None:
+    """删掉宿主问目录留下的那些调用记录(工具清单、模型清单、explain、按地址解析 / 按文件名找下载源)。
+
+    它们本来就不该留:那是宿主自己问插件「你现在有什么」,不是谁跑了一次工具。当年 `invoke_host` 缺省留记录、靠调用处
+    记得写 `record=False`,工具清单和模型清单那两处漏了 —— 每刷一次目录就是一行,输出是整份清单(一份 ComfyUI 工具清单
+    约 1MB)。维护者的一个连接攒下上千行、七百多 MB,插件页拉调用记录时渲染进程解不动,界面反复崩溃。现在 `record`
+    每处都要明说,这几问都是 `False`;存量在这里清掉。
+
+    判据只认这几问的 `op`:只有宿主那一侧的目录类工具收 `op`,用户在插件页「试一下」的工具入参里不会是这几个值。
+    """
+    if "plugin_invocations" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "DELETE FROM plugin_invocations WHERE json_valid(input) "
+                "AND json_extract(input, '$.op') IN ('tools', 'models', 'explain', 'resolve', 'search_sources')"
+            )
+        )
+
+
 def _drop_empty_agent_sessions() -> None:
     """删掉从没说过话的那些空对话(维护者 2026-10-07 确认)。
 
@@ -9858,6 +9879,8 @@ def migration_plan() -> MigrationPlan:
             ),
             #: 老账补上是谁花的(ADR 0050):顺着任务、智能体消息、会话、生成会话找人,找不到的留空。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_usage_finds_who_spent_it),
+            #: 宿主问目录留下的调用记录清掉(工具清单、模型清单每刷一次一行、每行一整份清单,插件页拉记录时界面崩溃)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _drop_plugin_catalog_invocations),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

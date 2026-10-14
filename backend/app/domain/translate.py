@@ -372,7 +372,7 @@ def _plugin_translate(db, provider: Provider, texts: list[str], target: str) -> 
         return {"texts": len(got)}
 
     try:
-        invoke_host(db, provider.id, TRANSLATION, {"texts": texts, "target": target, "source": "auto"}, collect=collect)
+        invoke_host(db, provider.id, TRANSLATION, {"texts": texts, "target": target, "source": "auto"}, collect=collect, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise TranslateError("translateErr_pluginFailed", plugin=provider.name, detail=str(exc)[:500]) from exc
     return translated

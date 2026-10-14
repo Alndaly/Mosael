@@ -719,7 +719,7 @@ def _write(db: Session, instance: PluginInstance, request: dict[str, Any], *, wa
     """一次写操作:交给插件,撞名翻成 WorkflowConflict、要删的文件夹不空翻成 WorkflowFolderNotEmpty;成了先 `follow`(改名时
     把存着的引用跟过去,见 _follow_moved),再让这个连接的目录重拉一遍(`refresh`,新建空文件夹什么模型都没变就不拉)。回改完
     之后的路径。"""
-    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS, record=True)
     if output.get("conflict") is True:
         suggestion = _text(output.get("suggestion"), 500)
         raise WorkflowConflict(wanted, suggestion if _fits(suggestion, folder=folder) else "")
@@ -1048,7 +1048,7 @@ def annotate(db: Session, instance: PluginInstance, path: str, *, modified: floa
     clean = _forms_payload(forms)
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY,
                                {"op": "annotate", "path": path, "modified": modified, "forms": clean, "results": results},
-                               timeout=QUICK_TIMEOUT_SECONDS)
+                               timeout=QUICK_TIMEOUT_SECONDS, record=True)
     if output.get("stale") is True:
         raise WorkflowStale(path, _number(output.get("modified")))
     if _text(output.get("path"), 600) != path:
@@ -1071,7 +1071,7 @@ def upgrade_marks(db: Session, instance: PluginInstance, paths: list[dict[str, A
         raise WorkflowLibraryError("workflowLibErr_tooManyUpgrades", max=str(MAX_UPGRADES))
     wanted = [{"path": workflow_path(str(one.get("path") or "")), "modified": one.get("modified")} for one in paths]
     output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "upgrade_marks", "paths": wanted},
-                               timeout=LIBRARY_TIMEOUT_SECONDS)
+                               timeout=LIBRARY_TIMEOUT_SECONDS, record=True)
     asked = {one["path"] for one in wanted}
 
     def listed(key: str) -> list[str]:
@@ -1413,7 +1413,7 @@ def _install(job_id: str) -> None:
         with unit_of_work() as db:
             output = tools.invoke_host(db, str(payload["instance_id"]), WORKFLOW_LIBRARY,
                                        {"op": "install_nodes", "packs": payload["packs"]}, hooks=hooks,
-                                       timeout=MAX_GENERATION_TIMEOUT_SECONDS)
+                                       timeout=MAX_GENERATION_TIMEOUT_SECONDS, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         from app.domain.jobs import blame
 
@@ -1447,7 +1447,7 @@ def reboot(db: Session, instance: PluginInstance) -> dict[str, bool]:
     那台服务器是宿主起停的本机服务时(ADR 0041),插件不自己去重启它,交回 `host_restart`:由宿主停了再起、等它就绪。
     插件自己重启它(Windows 上是另起一个进程、旧的退出),宿主会以为它崩了,也就再也停不掉它。"""
     _require(db, instance)
-    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "reboot"}, timeout=REBOOT_TIMEOUT_SECONDS)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "reboot"}, timeout=REBOOT_TIMEOUT_SECONDS, record=True)
     if output.get("host_restart") is True:
         local_services.restart(db, instance, wait=True)
         back = True

@@ -546,7 +546,7 @@ def invoke_host(
     collect: Callable[[dict[str, Any], Path], dict[str, Any]] | None = None,
     hooks: StreamHooks | None = None,
     timeout: float | None = None,
-    record: bool = True,
+    record: bool,
 ) -> dict[str, Any]:
     """**宿主自己的入口**调一次认领了 `capability` 的那个工具。和 `invoke` 跑的是同一段(`_run_process`):
 
@@ -562,8 +562,10 @@ def invoke_host(
 
     `timeout` 不给就用工具自己声明的预算。
 
-    `record=False` 不留调用记录:宿主**隔一会儿就问一次**的那种(目录指纹,见 generation/plugin_connections)
-    不是一次「调用」,每分钟一行会把插件页的调用记录淹掉,真正的调用反而找不到。失败照样抛。
+    `record` **每个调用处都要明说**(没有缺省):`True` 留一条调用记录,`False` 不留。问目录、问描述的那些(工具清单、
+    模型清单、指纹、explain、模型库 / 工作流库的读)不是一次「调用」,而它们的输出常常是整份清单 —— 一份 ComfyUI 工具清单
+    约 1MB,目录每刷一次就是一行。当年缺省是 `True`、靠调用处记得写 `False`,工具清单和模型清单那两处漏了,一个连接
+    攒下上千行、七百多 MB,插件页去拉调用记录时渲染进程解不动那份回答,整个界面反复崩溃。失败照样抛。
 
     连接背后是本机服务时,停着就先起、等它就绪(用到时起,ADR 0041);后台刷新目录包在 `service_gate.no_autostart` 里,
     不替它起。

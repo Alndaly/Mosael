@@ -1072,16 +1072,21 @@ def invoke_tool(
 # --- 调用记录 -----------------------------------------------------------
 
 @router.get("/plugins/invocations", response_model=list[PluginInvocationOut])
-def list_invocations(db: DbSession, user: CurrentUser, instance_id: str | None = None) -> list[PluginInvocation]:
-    """**我自己接的那些**的调用记录。
+def list_invocations(
+    db: DbSession, user: CurrentUser, instance_id: str | None = None, limit: int = Query(10, ge=1, le=100)
+) -> list[PluginInvocation]:
+    """**我自己接的那些**的调用记录,最新的 `limit` 条。
 
     记录里带着每次调用的 input/output —— 别人的请求参数和返回内容,没有任何理由出现在我这儿。
     此前这里不做过滤,因为那时接入本来就是所有人共用的一份。
+
+    **一定有上限。** 每条都带着完整输出,一条就可能上 MB;插件页只摆最近十条,却曾经一次拿回一个连接的全部
+    上千条(七百多 MB),渲染进程解不动,界面反复崩溃(见 tools.invoke_host 的 `record`)。
     """
     stmt = select(PluginInvocation).where(PluginInvocation.instance_id.in_(_my_instance_ids(db, user)))
     if instance_id:
         stmt = stmt.where(PluginInvocation.instance_id == instance_id)
-    return list(db.scalars(stmt.order_by(PluginInvocation.created_at.desc())))
+    return list(db.scalars(stmt.order_by(PluginInvocation.created_at.desc()).limit(limit)))
 
 
 @router.delete("/plugins/invocations/{invocation_id}", status_code=204)
