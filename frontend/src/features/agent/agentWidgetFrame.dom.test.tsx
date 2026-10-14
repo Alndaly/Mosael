@@ -64,6 +64,9 @@ describe("AgentWidgetFrame", () => {
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
     expect(frames()).toHaveLength(1);
     expect(screen.getByRole("dialog").contains(frames()[0])).toBe(true);
+    //: 焦点不能落进框:落进去 Esc 就按在框里的文档上,弹窗关不掉。
+    expect(frames()[0].tabIndex).toBe(-1);
+    expect(document.activeElement?.tagName).not.toBe("IFRAME");
   });
 
   it("没标题时用通用名", () => {

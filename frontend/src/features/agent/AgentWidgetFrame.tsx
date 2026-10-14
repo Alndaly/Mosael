@@ -41,6 +41,9 @@ function WidgetIframe({ srcDoc, title, fill = false }: { srcDoc: string; title: 
       srcDoc={srcDoc}
       sandbox={WIDGET_SANDBOX}
       referrerPolicy="no-referrer"
+      //: 全屏时不进 Tab 序:弹窗打开会把焦点给第一个可 Tab 的元素,那就是这个框 —— 焦点一进框,Esc 按在框里的文档上,
+      //: 弹窗收不到,关不掉(真界面里撞到过)。这样焦点落在关闭钮上;框里照样能点、能拖。
+      tabIndex={fill ? -1 : undefined}
       data-agent-widget-frame=""
       className={cn("block w-full border-0 bg-card", fill ? "h-full min-h-0" : "rounded-b-lg")}
       style={fill ? undefined : { height }}
