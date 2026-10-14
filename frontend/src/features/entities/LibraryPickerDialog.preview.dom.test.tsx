@@ -31,7 +31,13 @@ const card = (id: string, kind: string): AssetCard => ({
 beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
 });
-afterEach(cleanup);
+// react-photo-view 关场/收尾用的是 0–4ms 的 setTimeout,卸载没清干净:测试一结束文件就拆,它们还没轮到跑、
+// window 已经没了 → vitest 抓一句「window is not defined」的未处理错误、把整个 frontend job 判红(用例本身全过)。
+// cleanup 后等一拍,让挂起的这几个计时器在 jsdom 还活着时落地。
+afterEach(async () => {
+  cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+});
 
 function mount() {
   const items = [card("front", "image"), card("side", "image"), card("turn", "video")];
