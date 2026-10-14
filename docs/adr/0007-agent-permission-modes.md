@@ -164,7 +164,7 @@
    (`/api/confirmations/{id}/expire`)、借还供应商凭据(`/api/agent/provider-credentials/{id}/acquire|commit|renew|release`)。批、拒、
    答选择卡都不在里面,403。新增一条 sidecar 要写的路由时在这里登记,测试(`test_service_token_cannot_decide.py`)钉着清单本身。
 2. **子智能体的「只读」再去掉两样**(`agent-sidecar/src/subagent.ts` 的 `readOnlyTools`):问用户的(工具清单里带 `awaits_answer` 的)和
-   `open_view`。
+   `open_view`。(`open_view` 已随 [ADR 0060](0060-agent-no-longer-switches-pages.md) 整个删掉,这里只剩问用户的那一样。)
 3. **「始终允许」加一条由服务端合并**:`POST /api/agent/sessions/{id}/allowances`(一条:工具 + 档位),在库里那一份上合并、和整份替换同一套
    校验;读 → 合并 → 提交在一把进程锁里(`autopilot.ALLOWANCE_LOCK`,后端只有一个进程),PATCH 整份替换也进同一把锁。界面卡上那颗按钮
    改走它。

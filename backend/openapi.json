@@ -24871,97 +24871,6 @@
         }
       }
     },
-    "/api/agent/sessions/{session_id}/view": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Set Pending View",
-        "description": "智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清。\n\n方向是反的:智能体跑在后端,而切页面是前端的事。落在会话行上而不是流里 —— 前端本来就在\n轮询会话状态,而免提浮标那种没开 SSE 的场景照样收得到,那恰恰是\"带我过去\"最有用的时候。",
-        "operationId": "set_pending_view_api_agent_sessions__session_id__view_post",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentPendingView"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Set Pending View Api Agent Sessions  Session Id  View Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Clear Pending View",
-        "description": "跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里\n只有先读到的那个会跳,而另一个永远不知道发生过什么。\n\n清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉(界面上只读会话不跳)。",
-        "operationId": "clear_pending_view_api_agent_sessions__session_id__view_delete",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/workspaces/{workspace_id}/skills": {
       "get": {
         "tags": [
@@ -28361,28 +28270,6 @@
         "title": "AgentMessageQuoteIn",
         "description": "消息带着的一段笔记摘录(笔记页的选区)。**只给界面画**:气泡下面一行可点的摘录,点了回到那篇笔记、\n定位到那段。模型读到的选区走 `context`,不靠这里。"
       },
-      "AgentPendingView": {
-        "properties": {
-          "view": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "View"
-          },
-          "id": {
-            "type": "string",
-            "maxLength": 64,
-            "title": "Id",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "required": [
-          "view"
-        ],
-        "title": "AgentPendingView",
-        "description": "智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。"
-      },
       "AgentPlanUpdate": {
         "properties": {
           "steps": {
@@ -28810,23 +28697,6 @@
             "type": "string",
             "title": "Status"
           },
-          "pending_view": {
-            "type": "string",
-            "title": "Pending View",
-            "default": ""
-          },
-          "pending_view_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pending View At"
-          },
           "context": {
             "anyOf": [
               {
@@ -28861,19 +28731,6 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
-          },
-          "pending_view_age_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pending View Age Seconds",
-            "description": "那次「带我过去」过去多久了 —— **按服务端的钟算**。前端拿自己的钟去减服务端的时间戳,两台机器差半分钟\n(网页版连远程服务器时很常见)就会把每一次都当成过期、或者永不过期(智能体那一路 AGENT-19)。",
-            "readOnly": true
           }
         },
         "type": "object",
@@ -28889,8 +28746,7 @@
           "adapter",
           "status",
           "created_at",
-          "updated_at",
-          "pending_view_age_seconds"
+          "updated_at"
         ],
         "title": "AgentSessionOut"
       },

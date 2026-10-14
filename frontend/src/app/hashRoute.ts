@@ -6,7 +6,7 @@ import { STUDIO_VIEWS } from "@/components/layout/navLabels";
  * 启动时读一次(哪一页、哪个项目),之后页面一换就把 hash 写回规范的样子。
  */
 // 路由认哪些页面,和侧栏/面包屑认哪些页面,是同一件事 —— 手抄第三遍就会漏第三次。
-export const VALID_VIEWS: readonly string[] = STUDIO_VIEWS;
+const VALID_VIEWS: readonly string[] = STUDIO_VIEWS;
 
 export function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.

@@ -323,7 +323,7 @@ export function SessionList<S extends ListedSession>({
   //: 这里开的一条都没有(「来自别处」那摞不算):空态照说
   const mainCount = aside ? sessions.filter((session) => !aside.isAside(session)).length : sessions.length;
   const asideShown = asideOpen || Boolean(keyword);
-  //: 开着的那条在「来自别处」里(从任务中心、智能体的 open_view、「回到」带过来的):展开,看得见它在哪一行;之后照样能合上
+  //: 开着的那条在「来自别处」里(从任务中心、「在哪里用过」、「回到」带过来的):展开,看得见它在哪一行;之后照样能合上
   const activeInAside = Boolean(activeSessionId) && byGroup.aside.some((session) => session.id === activeSessionId);
   React.useEffect(() => {
     if (activeInAside) setAsideOpen(true);

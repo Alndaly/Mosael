@@ -20,7 +20,6 @@ from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.agent import use_cases as agent_use_cases
 from app.api.schemas import (
-    AgentPendingView,
     AgentSpeechRequest,
     AgentManifestOut,
     AgentMemoryCreate,
@@ -526,23 +525,3 @@ def _audio(out: Path) -> Response:
     """原样回音频(临时目录删掉之前读出来)。"""
     media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
     return Response(content=out.read_bytes(), media_type=media_type, headers={"Cache-Control": "no-store"})
-
-
-@router.post("/agent/sessions/{session_id}/view")
-def set_pending_view(session_id: str, body: AgentPendingView, db: Tx, user: CurrentUser) -> dict[str, str]:
-    """智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清。
-
-    方向是反的:智能体跑在后端,而切页面是前端的事。落在会话行上而不是流里 —— 前端本来就在
-    轮询会话状态,而免提浮标那种没开 SSE 的场景照样收得到,那恰恰是"带我过去"最有用的时候。
-    """
-    return {"pending_view": agent_use_cases.set_pending_view(db, user, session_id, body.view, body.id)}
-
-
-@router.delete("/agent/sessions/{session_id}/view", status_code=204)
-def clear_pending_view(session_id: str, db: Tx, user: CurrentUser) -> Response:
-    """跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里
-    只有先读到的那个会跳,而另一个永远不知道发生过什么。
-
-    清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉(界面上只读会话不跳)。"""
-    agent_use_cases.clear_pending_view(db, user, session_id)
-    return Response(status_code=204)

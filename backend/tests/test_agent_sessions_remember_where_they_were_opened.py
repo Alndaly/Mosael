@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal, engine
 from app.core.security import mint_service_session
 from app.db.migrations import (
+    _drop_agent_pending_view,
     _drop_agent_sessions_project_id,
     _drop_dead_agent_session_columns,
     _drop_empty_agent_sessions,
@@ -41,7 +42,8 @@ from app.domain.agent.confirmations import request_confirmation
 from tests.util import fresh_client, second_client, user_id
 
 #: ADR 0044 之前的那张表:`project_id` 外键到 projects,没有家。从 Alembic 0008 那一代升上来的库里还带着两列死列:
-#: `adapter_session_id`(claude 适配器的,`4a2e51e4b` 删了读写)和没删掉的 `sort_order` —— 重建之前得先删掉它们。
+#: `adapter_session_id`(claude 适配器的,`4a2e51e4b` 删了读写)和没删掉的 `sort_order` —— 重建之前得先删掉它们;
+#: 智能体跳页撤掉之后(ADR 0060)的 `pending_view` 也是。
 _OLD_TABLE = """
 CREATE TABLE agent_sessions (
     id VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -177,10 +179,11 @@ EMPTY = {"empty", "wf-empty"}
 
 
 def _migrate() -> None:
-    """照迁移计划里的次序:两步在 SCHEMA 之前,三步在之后。"""
+    """照迁移计划里的次序:两步在 SCHEMA 之前,四步在之后。"""
     _migrate_agent_sessions_remember_where_they_were_opened()
     _migrate_agent_sessions_know_who_named_them()
     _drop_dead_agent_session_columns()
+    _drop_agent_pending_view()
     _drop_agent_sessions_project_id()
     _drop_empty_agent_sessions()
 
@@ -209,8 +212,10 @@ def test_重建删掉_project_id_之后_挂在对话上的东西一样都没少_
 
     with engine.connect() as conn:
         columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_sessions)"))}
-        assert not columns & {"project_id", "adapter_session_id", "sort_order"}, "死列和 project_id 都没了"
-        assert {"home_kind", "home_id", "pending_view_at"} <= columns
+        assert not columns & {"project_id", "adapter_session_id", "sort_order", "pending_view", "pending_view_at"}, (
+            "死列和 project_id 都没了"
+        )
+        assert {"home_kind", "home_id"} <= columns
         indexes = {row[1] for row in conn.execute(text("PRAGMA index_list(agent_sessions)"))}
         assert "idx_agent_sessions_ws_home" in indexes and "idx_agent_sessions_ws_updated" in indexes
         assert conn.execute(text("PRAGMA foreign_key_check")).all() == [], "外键检查干净"
@@ -245,6 +250,7 @@ def test_再跑一遍什么都不变_两步都在迁移计划里() -> None:
     assert steps["drop-empty-agent-sessions"].phase.name == "AFTER_SCHEMA"
     order = [step.name for step in migration_plan().steps]
     assert order.index("drop-dead-agent-session-columns") < order.index("drop-agent-sessions-project-id")
+    assert order.index("drop-agent-pending-view") < order.index("drop-agent-sessions-project-id")
     assert order.index("drop-agent-sessions-project-id") < order.index("drop-empty-agent-sessions")
 
 
@@ -263,6 +269,7 @@ def test_重建认不出的列就不动手_死列要先点名删掉() -> None:
     assert _counts() == before
 
     _drop_dead_agent_session_columns()
+    _drop_agent_pending_view()
     _drop_agent_sessions_project_id()
     assert _counts() == before
 

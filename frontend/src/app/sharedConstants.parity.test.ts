@@ -62,8 +62,8 @@ describe("shared-constants 的前端一侧", () => {
 });
 
 describe("contracts/studio-views.json 的前端一侧", () => {
-  it("导航里的页面就是契约里那一组 —— 深链和智能体 open_view 按它把关", () => {
-    // NAV_ITEMS 是 StudioView 的全部取值(每个页面一条);新加一页而契约没跟上,深链和智能体都跳不过去。
+  it("导航里的页面就是契约里那一组 —— mosael:// 深链按它把关", () => {
+    // NAV_ITEMS 是 StudioView 的全部取值(每个页面一条);新加一页而契约没跟上,深链就跳不过去。
     expect(NAV_ITEMS.map((item) => item.view).sort()).toEqual([...studioViews.views].sort());
   });
 });

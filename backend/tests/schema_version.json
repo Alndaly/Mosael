@@ -1,5 +1,5 @@
 {
-  "version": 24,
+  "version": 25,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -12,6 +12,7 @@
     "backfill-usage-costs",
     "backfill-workflow-revision-authors",
     "disable-tasks-bound-to-deleted-workflows",
+    "drop-agent-pending-view",
     "drop-agent-sessions-project-id",
     "drop-clip-linked-clip-id",
     "drop-dead-agent-session-columns",

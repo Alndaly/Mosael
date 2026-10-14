@@ -8401,36 +8401,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/agent/sessions/{session_id}/view": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Pending View
-         * @description 智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清。
-         *
-         *     方向是反的:智能体跑在后端,而切页面是前端的事。落在会话行上而不是流里 —— 前端本来就在
-         *     轮询会话状态,而免提浮标那种没开 SSE 的场景照样收得到,那恰恰是"带我过去"最有用的时候。
-         */
-        post: operations["set_pending_view_api_agent_sessions__session_id__view_post"];
-        /**
-         * Clear Pending View
-         * @description 跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里
-         *     只有先读到的那个会跳,而另一个永远不知道发生过什么。
-         *
-         *     清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉(界面上只读会话不跳)。
-         */
-        delete: operations["clear_pending_view_api_agent_sessions__session_id__view_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/workspaces/{workspace_id}/skills": {
         parameters: {
             query?: never;
@@ -9654,19 +9624,6 @@ export interface components {
              */
             start: number;
         };
-        /**
-         * AgentPendingView
-         * @description 智能体要求界面跳到哪一页。`view` 的合法值由 mcp_server._VIEWS 把关。
-         */
-        AgentPendingView: {
-            /** View */
-            view: string;
-            /**
-             * Id
-             * @default
-             */
-            id: string;
-        };
         /** AgentPlanUpdate */
         AgentPlanUpdate: {
             /** Steps */
@@ -9852,13 +9809,6 @@ export interface components {
             thinking_level: string;
             /** Status */
             status: string;
-            /**
-             * Pending View
-             * @default
-             */
-            pending_view: string;
-            /** Pending View At */
-            pending_view_at?: string | null;
             context?: components["schemas"]["AgentContextOut"] | null;
             /** Plan */
             plan?: {
@@ -9874,12 +9824,6 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-            /**
-             * Pending View Age Seconds
-             * @description 那次「带我过去」过去多久了 —— **按服务端的钟算**。前端拿自己的钟去减服务端的时间戳,两台机器差半分钟
-             *     (网页版连远程服务器时很常见)就会把每一次都当成过期、或者永不过期(智能体那一路 AGENT-19)。
-             */
-            readonly pending_view_age_seconds: number | null;
         };
         /** AgentSessionUpdate */
         AgentSessionUpdate: {
@@ -37303,72 +37247,6 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_pending_view_api_agent_sessions__session_id__view_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentPendingView"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clear_pending_view_api_agent_sessions__session_id__view_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {

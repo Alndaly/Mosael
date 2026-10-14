@@ -11,7 +11,7 @@ const studioViews = JSON.parse(
 ) as { views: string[] };
 
 describe("深链白名单 = contracts/studio-views.json", () => {
-  it("和前端导航、智能体 open_view 认同一组页面", () => {
+  it("和前端导航认同一组页面", () => {
     expect([...ALLOWED_VIEWS].sort()).toEqual([...studioViews.views].sort());
   });
 

@@ -85,7 +85,7 @@ graph TD
 
 - 应用内:`lib/deepLink.ts` 的 `mosael:open-*` CustomEvent(workflow / publish task / settings),`emitOpenEvent` 用 **80/300/800ms 三连发**兜底目标视图的挂载竞速(打开同一条记录幂等)。
 - 桌面外部唤起:preload 把主进程 IPC 转成同名 window 事件(`electron/preload.cjs:38-43`),渲染层 `listenDesktopDeepLinks` 落点复用同一套通道;`mosael://` **只导航不执行**(view 白名单、id 限字符集,`electron/system/deepLink.ts`)——任何网页都能触发协议,所以不能让它静默驱动自动化。
-- 智能体导航:`useAgentNavigation`(挂在 Studio 层,助手面板收起时也生效),视图白名单后端 `mcp_server._VIEWS` 与前端 `VALID_VIEWS` 双挡(`App.tsx:479-488`)。
+- 智能体导航:已撤掉(ADR 0060)—— 智能体不再带用户跳页,页面切换将来交给 Computer Use 能力。
 
 ### 1.6 任务中心 ↔ 系统层的单向推送
 
@@ -294,7 +294,6 @@ sequenceDiagram
 - **InlineQuestions**:ask_user 选择卡,2s 轮询;多选/单选统一为集合、「其它」是自由文本;**不能被「本会话始终允许」自动答掉**——自动回答等于让模型自己编一个。
 - **SubagentPanel**:子智能体跑在 sidecar、结束即散,会话视图由存档合成——从 timeline 挑 `run_subagent` 工具卡、解 `details.subagent`(存档**只进 details 不进 content**,省父模型上下文正是派子智能体的意义);渲染复用 ChatBubble + TraceView;「看得到全貌,不可继续」如实呈现。
 - **ContextMeter**:按实际占用 `used/window` 报「剩余」水位,WARN_RATIO=0.8 与 sidecar `COMPACT_RATIO` 逐字一致(不一致时用户看到的水位和真正触发压缩的时机对不上)。
-- **useAgentNavigation**:open_view 工具把跳转意图写在会话行 `pending_view`,前端轮询到后执行跳转并 `DELETE /view` 消费一次;doneRef 防 DELETE 在飞期间连跳;**刻意不走 SSE**——面板关了也要能跳。
 - **免提语音**:`useVoiceLoop` 接成环:麦克风 → `UtteranceDetector`(滞回阈值 startFactor 3.5/endFactor 2 + hangover 900ms + 最短 350ms 最长 110s,纯逻辑可测)→ `/api/asr/dictate` → 发消息 → `/api/agent/speech` 临时 TTS;barge-in 是同一 VAD 的副产品;`VoiceDock` 是应用级浮标(App.tsx:546 按本地偏好挂载)——「手在别处、面板收起来了的时候还叫得动」。
 - **trace/**:TraceView 是对话的排查视图,九类事件 KIND_LABEL,未知值一律「—」不显示 0。
 - **AiStudio**(1,411 行)三 tab:chat(= ChatWorkspace,agent 壳完整版 + SessionList)/ generate(图像视频生成,镜像 chat 的左右栏)/ audio;`GenerationModelGate` 在能力未配默认模型时做闸。

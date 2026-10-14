@@ -34,7 +34,7 @@ import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta
 type SortKey = "updated" | "name" | "references";
 const SORT_KEYS: readonly SortKey[] = ["updated", "name", "references"];
 
-/** 深链:`#/entities?entity=<id>`(智能体的 open_view、别处的「在哪里用过」都这么进来)。 */
+/** 深链:`#/entities?entity=<id>`(mosael:// 深链、别处的「在哪里用过」都这么进来)。 */
 function entityFromHash(): string | null {
   const query = window.location.hash.split("?")[1] ?? "";
   return new URLSearchParams(query).get("entity");

@@ -1,5 +1,5 @@
 """对话记住在哪开的(ADR 0044 §2):建会话必须带家、按家列、出参的家和名字(按看的人查)、消息的 `place`、
-ComfyUI 的家跟着挪、`open_view` 认工作流、死掉的三条工作流会话路由没了。
+ComfyUI 的家跟着挪、死掉的三条工作流会话路由没了。
 """
 
 from __future__ import annotations
@@ -261,28 +261,7 @@ def test_剪辑里开的对话带上那个项目的记忆_别处的不带() -> N
         assert "brand-intro.mp4" not in build_system_prompt(db, db.get(AgentSession, elsewhere))
 
 
-# ---------- open_view 认工作流、死路由 ----------
-
-
-def test_open_view_带工作流的_id_记下什么时候要求的_清掉时一起清() -> None:
-    from app.core.security import mint_service_session
-    from tests.util import user_id
-
-    client = fresh_client()
-    workspace = _workspace(client)
-    workflow = client.post("/api/workflows", json={"workspace_id": workspace, "name": "出海流程"}).json()["id"]
-    session = _session(client, workspace, STUDIO)["id"]
-    with SessionLocal() as db:
-        token = mint_service_session(db, user_id(), agent_session_id=session)
-        db.commit()
-    answer = client.post("/api/agent/tools/open_view", json={"arguments": {"view": "workflows", "id": workflow}},
-                         headers={"Authorization": f"Bearer {token}"})
-    assert answer.status_code == 200, answer.text
-    detail = client.get(f"/api/agent/sessions/{session}").json()
-    assert detail["pending_view"] == f"workflows:{workflow}" and detail["pending_view_at"]
-    client.delete(f"/api/agent/sessions/{session}/view")
-    detail = client.get(f"/api/agent/sessions/{session}").json()
-    assert (detail["pending_view"], detail["pending_view_at"]) == ("", None)
+# ---------- 死路由 ----------
 
 
 def test_工作流的三条会话路由没了() -> None:

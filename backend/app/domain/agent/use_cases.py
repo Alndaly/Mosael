@@ -151,22 +151,6 @@ def set_plan(db: Session, user: User, session_id: str, steps: list[Any]) -> Agen
     return annotate(db, user, session)
 
 
-def set_pending_view(db: Session, user: User, session_id: str, view: str, record_id: str = "") -> str:
-    """智能体要求界面跳到哪儿。**待消费一次**,前端跳完就清(见 clear_pending_view)。"""
-    session = writable_session(db, user, session_id)
-    session.pending_view = f"{view}:{record_id}" if record_id else view
-    #: 什么时候要求的:过了 30 秒前端不跟(ADR 0044 §6)。
-    session.pending_view_at = now()
-    return session.pending_view
-
-
-def clear_pending_view(db: Session, user: User, session_id: str) -> None:
-    """跳完了。清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉。"""
-    session = writable_session(db, user, session_id)
-    session.pending_view = ""
-    session.pending_view_at = None
-
-
 def cited_message(db: Session, user: User, workspace_id: str, message_id: str) -> tuple[AgentMessage, str]:
     """笔记引用的一条对话消息。得看得见它所在的那次对话:笔记是工作区的,引用的对话却可能是某人没共享的
     私人线程 —— 引用它不等于把它公开。看不见和不存在同一个回答。

@@ -10,6 +10,7 @@
   "backfill-usage-costs": "304e7d50d4496cd2",
   "backfill-workflow-revision-authors": "3e2f11f2ebc4c024",
   "disable-tasks-bound-to-deleted-workflows": "19564591f5119041",
+  "drop-agent-pending-view": "688e1e9c16ee2016",
   "drop-agent-sessions-project-id": "9ab1862a16d7daf5",
   "drop-clip-linked-clip-id": "8d026829ebfc6c66",
   "drop-dead-agent-session-columns": "d87c3a8a46c0536e",

@@ -65,17 +65,6 @@ class AgentSession(Base):
     #: 之后模型照实际内容起的、`manual` 人起的(改过名,或建的时候就给了名字)—— 人起的永远不碰。
     title_source: Mapped[str] = mapped_column(String(16), nullable=False, default="auto", server_default="auto")
     origin: Mapped[str] = mapped_column(String(24), nullable=False, default="ui")  # ui | feishu
-    #: 智能体要求界面跳到哪儿(`view` 或 `view:id`),**待消费一次**。
-    #:
-    #: 方向是反的:智能体跑在后端,而"切页面"是前端的事。放在会话行上是因为前端本来就在轮询
-    #: 会话状态(1.5s),不用新增一条通路;放进 SSE 流的话,免提浮标那种没开流的场景就收不到 ——
-    #: 而"手不在键盘上、让它带我过去"恰恰是这件事最有用的时候。
-    #:
-    #: 前端跳完就清空。不清的话,重开应用会再跳一次 —— 一个几天前说过的"打开工作流"。
-    pending_view: Mapped[str] = mapped_column(String(96), nullable=False, default="")
-    #: `pending_view` 是什么时候要求的。一段对话可能在你离开的那一处接着跑、要求跳转时没人盯着 —— 过了 30 秒的
-    #: 前端不跟(ADR 0044 §6):你一分钟后回去看结果,不该被拽走。
-    pending_view_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     external_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
     #: 跑这次会话的运行时。目前只有 "pi";留列是为了旧会话仍能被正确解读。
     adapter: Mapped[str] = mapped_column(String(40), nullable=False, default="pi")

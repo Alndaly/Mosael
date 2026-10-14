@@ -33,9 +33,9 @@
 
 ### `studio-views.json` —— 界面上能去的页面
 
-前端的 StudioView、`mosael://` 深链白名单(`electron/system/deepLink.ts`)、智能体 `open_view` 的白名单
-(`backend/mcp_server.py` 的 `_VIEWS`)必须是同一组。三份此前各自手写:深链还认早已不存在的 `kb`,却不认
-资产、笔记、场景、画板、管理 —— 从官网链过来,应用被唤起却停在原地。三侧各有一条测试比对这份清单。
+前端的 StudioView 和 `mosael://` 深链白名单(`electron/system/deepLink.ts`)必须是同一组。此前各自手写:深链还认
+早已不存在的 `kb`,却不认资产、笔记、场景、画板、管理 —— 从官网链过来,应用被唤起却停在原地。两侧各有一条测试比对
+这份清单。(智能体的 `open_view` 白名单曾是第三侧,随跳页能力一起撤掉了,见 ADR 0060。)
 
 ### `text-layer-cases.json` —— 文字层契约
 

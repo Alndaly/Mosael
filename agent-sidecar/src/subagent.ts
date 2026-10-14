@@ -48,12 +48,11 @@ export function readOnlyTools(tools: AgentTool[]): AgentTool[] {
     // 「只读」的里头还有两样不给(智能体那一路 AGENT-15):
     //   · 问用户的(ask_user,`awaitsAnswer`)—— 和不给它写工具同一个理由:用户看不见的子智能体问出来的选择卡,他没有上下文可答,
     //     而它阻塞时主智能体也跟着卡在那次调用里;
-    //   · open_view —— 它不改数据,却会把用户正在看的页面拽走;一次后台调查不该做这件事;
     //   · show_widget —— 界面画在调用它的那一轮回答里,子智能体的回答用户不看(主智能体只读它的报告),画了也是白画。
     return (
       flags.readOnly === true &&
       !flags.awaitsAnswer &&
-      !["run_subagent", "open_view", "show_widget"].includes(tool.name)
+      !["run_subagent", "show_widget"].includes(tool.name)
     );
   });
 }

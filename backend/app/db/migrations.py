@@ -8875,6 +8875,20 @@ def _drop_dead_agent_session_columns() -> None:
                 conn.execute(text(f"ALTER TABLE agent_sessions DROP COLUMN {dead}"))
 
 
+def _drop_agent_pending_view() -> None:
+    """删掉 `agent_sessions` 上的 `pending_view`、`pending_view_at`:智能体带用户跳页(`open_view`)撤掉了(ADR 0060)。
+
+    那两列是「智能体要求界面跳到哪儿、什么时候要求的」,前端轮询到就跳、跳完清空。跳页本身撤了,没人再写、没人再读。
+    两列都没有索引、外键和约束,`DROP COLUMN` 直接删。**排在重建这张表(`_drop_agent_sessions_project_id`)之前**:
+    还没删 `project_id` 的老库上,重建遇到模型上没有、又不在删除名单里的列会拒绝动手。表还没有就什么都不做。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_sessions)"))}
+        for dead in ("pending_view", "pending_view_at"):
+            if dead in columns:
+                conn.execute(text(f"ALTER TABLE agent_sessions DROP COLUMN {dead}"))
+
+
 def _drop_agent_sessions_project_id() -> None:
     """删掉 `agent_sessions.project_id`:它由家代替了(ADR 0044 §1,上一步已经把不空的那些转成家)。
 
@@ -9708,8 +9722,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_local_services_stop_when_idle,
                 # 同上:ORM 上的 AgentSkill 指望「智能体在哪次对话里建的」那一列在(ADR 0043)。
                 _migrate_agent_skills_remember_the_drafting_session,
-                # 同上:ORM 上的 AgentSession 指望「家」两列和 pending_view_at 在(ADR 0044)。读 project_id 和 origin='workflow'
-                # 那批转成家,所以排在 SCHEMA 之后删 project_id 的那一步之前。
+                # 同上:ORM 上的 AgentSession 指望「家」两列在(ADR 0044;它当年一并加的 pending_view_at 由 ADR 0060 删掉)。
+                # 读 project_id 和 origin='workflow' 那批转成家,所以排在 SCHEMA 之后删 project_id 的那一步之前。
                 _migrate_agent_sessions_remember_where_they_were_opened,
                 # 同上:ORM 上的 AgentSession 指望「名字是谁起的」那一列在。
                 _migrate_agent_sessions_know_who_named_them,
@@ -9936,8 +9950,14 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_gemini_chat_prices),
             #: `agent_sessions.project_id` 由家代替(ADR 0044):带外键的列删不掉,重建这张表。要在 SCHEMA 之后 —— 新表照现在的
             #: ORM 建,那时 ORM 要的列都已经在老表上;要在上面 BEFORE_SCHEMA 那一步把 project_id 转成家之后。
-            #: 重建之前先删老库里还留着的死列(`adapter_session_id`、没删掉的 `sort_order`),否则重建的守卫会拒绝动手。
-            *_steps(MigrationPhase.AFTER_SCHEMA, _drop_dead_agent_session_columns, _drop_agent_sessions_project_id),
+            #: 重建之前先删老库里还留着的死列(`adapter_session_id`、没删掉的 `sort_order`),否则重建的守卫会拒绝动手;
+            #: 智能体跳页撤掉之后的 `pending_view`、`pending_view_at`(ADR 0060)同理,也排在重建之前。
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _drop_dead_agent_session_columns,
+                _drop_agent_pending_view,
+                _drop_agent_sessions_project_id,
+            ),
             #: 从没说过话的空对话删掉(打开智能体是草稿之后,它们没有任何东西指着)。排在上一步之后:死路由那批这时已是 ui。
             *_steps(MigrationPhase.AFTER_SCHEMA, _drop_empty_agent_sessions),
             #: 升级之前一轮结束时留下的、还挂在对话上等人的确认卡作废(此后由 host 在每一轮收尾时结掉,ADR 0007 修订)。

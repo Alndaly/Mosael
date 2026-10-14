@@ -230,7 +230,7 @@ def test_comfy_工具在且只在工作台_画布那一份在且只在工作台�
         assert COMFY_TOOLS <= tools and not tools & CANVAS_TOOLS
     else:
         assert CANVAS_TOOLS <= tools and not tools & COMFY_TOOLS
-    assert {"list_assets", "open_view", "remember"} <= tools, "通用的哪儿都发"
+    assert {"list_assets", "update_plan", "remember"} <= tools, "通用的哪儿都发"
     assert ON_DEMAND <= tools, "工作台里有没发的工作流工具、别处有没发的通用插件工具:够得着它们的路要在"
 
 

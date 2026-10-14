@@ -61,7 +61,7 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起;执行体后面炸了、整个回滚,它就不起。
     generation_id = generation.id
     after_commit(db, lambda: start_generation_thread(generation_id))
-    #: `session_id`:open_view("ai", 它) 把人带到这条创作会话(ADR 0055 §9)。
+    #: `session_id`:这一张落在哪条创作会话里(ADR 0055 §9)—— 模型据此告诉用户去 AI Studio 的创作里看哪一条。
     result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id, "session_id": generation.session_id}
     #: `@` 到的资产挂了哪几张参考图、哪几张没挂上(ADR 0027)—— 模型据此如实告诉用户,而不是以为全挂上了。
     if generation.request.get("entities"):

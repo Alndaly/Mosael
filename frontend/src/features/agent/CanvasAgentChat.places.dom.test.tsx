@@ -4,8 +4,8 @@
  * 每一处各接各的对话(ADR 0044 §12 的 DOM 那一组)。断言的是**面板里画出来的那段对话**(消息正文)和**消息发进了哪段**
  * (发到哪个会话、带的 place)—— 不只看存储的键:标记落在空容器上,断言天然成立。
  *
- * 后端是内存里的一份假的:会话(带家)、消息、待跳转、挪家。页面就是一个登记了地方、挂着面板的组件;跳转由
- * useAgentNavigation 驱动,和 App 里一样。工作台那几条走真的工作台会话(主进程那一头换成假的桥)。
+ * 后端是内存里的一份假的:会话(带家)、消息、挪家。页面就是一个登记了地方、挂着面板的组件;换页是人点的。工作台那几条
+ * 走真的工作台会话(主进程那一头换成假的桥)。
  */
 
 import React from "react";
@@ -17,7 +17,6 @@ type Place = { kind: string; id: string };
 type Session = {
   id: string; workspace_id: string; title: string; is_mine: boolean; status: string;
   home_kind: string; home_id: string; home_name: string; home_state: string;
-  pending_view: string; pending_view_at: string | null; pending_view_age_seconds?: number | null;
 };
 type Message = { id: string; session_id: string; role: string; content: string; payload: Record<string, unknown>; error: null; created_at: string };
 
@@ -26,7 +25,6 @@ const backend = vi.hoisted(() => ({
   messages: {} as Record<string, Message[]>,
   created: [] as unknown[],
   sent: [] as [string, Record<string, unknown>][],
-  deletes: [] as string[],
   moves: [] as { from_id: string; to_id: string }[],
   //: 挪家要多久(毫秒,按挪出的地方):让先发的那一条慢一点,看后一条等不等它
   moveDelay: {} as Record<string, number>,
@@ -36,7 +34,7 @@ const backend = vi.hoisted(() => ({
 function newSession(id: string, home: Place, title = id): Session {
   return {
     id, workspace_id: "w1", title, is_mine: true, status: "idle", home_kind: home.kind, home_id: home.id,
-    home_name: "", home_state: "ok", pending_view: "", pending_view_at: null,
+    home_name: "", home_state: "ok",
   };
 }
 
@@ -74,15 +72,7 @@ vi.mock("@/api/client", () => ({
     backend.sent.push([id, body]);
     return say(id, body.content);
   }),
-  api: vi.fn(async (path: string, init?: { method?: string }) => {
-    if (init?.method === "DELETE") {
-      const id = path.split("/")[4];
-      backend.deletes.push(id);
-      const found = backend.sessions.find((one) => one.id === id);
-      if (found) Object.assign(found, { pending_view: "", pending_view_at: null });
-    }
-    return {};
-  }),
+  api: vi.fn(async () => ({})),
   moveAgentHomes: vi.fn(async (body: { from_id: string; to_id: string }) => {
     await new Promise((resolve) => setTimeout(resolve, backend.moveDelay[body.from_id] ?? 0));
     backend.moves.push({ from_id: body.from_id, to_id: body.to_id });
@@ -128,15 +118,12 @@ import { CanvasAgentChat } from "./CanvasAgentChat";
 import { resetActivePlaces, useAgentPlace } from "./activePlace";
 import type { AgentPlace } from "./places";
 import { adoptAgentSession, readChoice } from "./sessionSelection";
-import { useAgentNavigation } from "./useAgentNavigation";
 import { comfyPlace } from "./places";
 import { useFollowWorkbenchPlaces } from "@/features/plugins/workbench/followPlaces";
 import { openWorkbench, resetWorkbench, useWorkbench } from "@/features/plugins/workbench/workbenchSession";
 
 const PROJECT_A: AgentPlace = { kind: "project", id: "a" };
 const NOTE_B: AgentPlace = { kind: "note", id: "b" };
-const NOTE_C: AgentPlace = { kind: "note", id: "c" };
-const STUDIO: AgentPlace = { kind: "studio", id: "" };
 
 function Page({ place, testId = "panel" }: { place: AgentPlace; testId?: string }) {
   const registered = useAgentPlace(place);
@@ -155,15 +142,11 @@ function Page({ place, testId = "panel" }: { place: AgentPlace; testId?: string 
   );
 }
 
-/** 一个窗口:眼下这一页(没有就是素材页这种没有面板的页面)+ 智能体带你去。 */
+/** 一个窗口:眼下这一页(没有就是素材页这种没有面板的页面)。 */
 let goTo: (place: AgentPlace | null) => void = () => {};
 function Studio({ start }: { start: AgentPlace | null }) {
   const [page, setPage] = React.useState<AgentPlace | null>(start);
   goTo = setPage;
-  useAgentNavigation({
-    workspaceId: "w1",
-    onNavigate: (view, id) => setPage(view === "notes" ? { kind: "note", id } : view === "editor" ? { kind: "project", id } : null),
-  });
   return page ? <Page place={page} /> : null;
 }
 
@@ -182,7 +165,6 @@ beforeEach(() => {
   backend.messages = {};
   backend.created = [];
   backend.sent = [];
-  backend.deletes = [];
   backend.moves = [];
   backend.moveDelay = {};
   say("s1", "剪辑里说的话");
@@ -211,51 +193,6 @@ it("换页不带对话:剪辑里聊着的那段,到了笔记里是空的;在笔�
   act(() => goTo(PROJECT_A));
   expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
   expect(panel().queryByText("你好")).toBeNull();
-});
-
-it("智能体带着走:对话中途它带你去笔记 B,B 接着这段,下一句发进这段、带着 B;接着自己点开笔记 C,C 是空的", async () => {
-  adoptAgentSession("w1", PROJECT_A, "s1");
-  mount(<Studio start={PROJECT_A} />);
-  expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
-
-  Object.assign(backend.sessions[0], { pending_view: "notes:b", pending_view_at: new Date().toISOString().replace("Z", ""), pending_view_age_seconds: 0 });
-  await waitFor(() => expect(backend.deletes).toContain("s1"), { timeout: 4000 });
-  await waitFor(() => expect(readChoice("w1", NOTE_B)).toBe("s1"));
-  expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
-
-  fireEvent.click(panel().getByRole("button", { name: "chatSend" }));
-  await waitFor(() => expect(backend.sent).toHaveLength(1));
-  expect(backend.sent[0][0]).toBe("s1");
-  expect(backend.sent[0][1].place).toEqual(NOTE_B);
-  expect(backend.created).toEqual([]);
-
-  act(() => goTo(NOTE_C));
-  expect(await panel().findByText("empty-hint")).toBeTruthy();
-  expect(panel().queryByText("剪辑里说的话")).toBeNull();
-  expect(readChoice("w1", NOTE_C)).toBe("");
-});
-
-it("带到没有面板的页面(素材页):AI Studio 那一处接住这段", async () => {
-  adoptAgentSession("w1", PROJECT_A, "s1");
-  mount(<Studio start={PROJECT_A} />);
-  expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
-
-  Object.assign(backend.sessions[0], { pending_view: "media", pending_view_at: new Date().toISOString().replace("Z", ""), pending_view_age_seconds: 0 });
-  await waitFor(() => expect(screen.queryByTestId("panel")).toBeNull(), { timeout: 4000 });
-  await waitFor(() => expect(readChoice("w1", STUDIO)).toBe("s1"), { timeout: 4000 });
-});
-
-it("40 秒前要求的跳转:不跳,清掉", async () => {
-  adoptAgentSession("w1", PROJECT_A, "s1");
-  mount(<Studio start={PROJECT_A} />);
-  expect(await panel().findByText("剪辑里说的话")).toBeTruthy();
-
-  Object.assign(backend.sessions[0], {
-    pending_view: "notes:b", pending_view_at: new Date(Date.now() - 40_000).toISOString().replace("Z", ""), pending_view_age_seconds: 40,
-  });
-  await waitFor(() => expect(backend.deletes).toContain("s1"), { timeout: 4000 });
-  expect(panel().getByText("剪辑里说的话")).toBeTruthy();
-  expect(readChoice("w1", NOTE_B)).toBe("");
 });
 
 it("「其他对话」里挑一段:在这里接着它,它的家不变(一次 PATCH 都没有)", async () => {

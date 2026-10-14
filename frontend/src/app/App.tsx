@@ -40,7 +40,7 @@ import {
 import { Toaster, toast } from "sonner";
 import { LoginView } from "@/features/auth/LoginView";
 import { AppShell, type StudioView } from "@/components/layout/AppShell";
-import { VALID_VIEWS, readHash, writeHash } from "@/app/hashRoute";
+import { readHash, writeHash } from "@/app/hashRoute";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
@@ -49,7 +49,6 @@ import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 import { VoiceDock } from "@/features/agent/VoiceDock";
 import { RemoteVoiceConsentHost } from "@/features/voice/remoteVoiceConsent";
-import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { goHome } from "@/features/ai-studio/goToPlace";
 import { PlugZap } from "lucide-react";
 
@@ -83,8 +82,7 @@ import { StartupLoading } from "@/components/layout/StartupLoading";
 import { Input } from "@/components/ui/input";
 import { WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { cn } from "@/lib/utils";
-import { VIEW_RECORD_EVENTS, gotoRecord, listenDesktopDeepLinks, openBoard } from "@/lib/deepLink";
-import { gotoAiChat, openCreationSession } from "@/lib/aiStudioLink";
+import { listenDesktopDeepLinks } from "@/lib/deepLink";
 import { useCreateProject } from "@/lib/useCreateProject";
 import { Hint, HintRegion, TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
@@ -588,27 +586,6 @@ function Studio({
     setView("editor");
   };
 
-  // 智能体说"带你去看看"时,界面真的过去。挂在 Studio 这一层是因为它要跨页面生效,
-  // 而且**助手面板收起来时也要管用** —— 免提对话下这条路是唯一的一条。
-  useAgentNavigation({
-    workspaceId: workspace.id,
-    onNavigate: (next, id) => {
-      // 白名单在后端 mcp_server._VIEWS 那一侧,这里再挡一道:两边都可能先改。
-      if (!VALID_VIEWS.includes(next)) return;
-      if (next === "editor" && id) openProject(id);
-      //: 画板走信箱:人已经在画板页上时只改 hash 没反应(见 lib/deepLink 的 openBoard)。
-      else if (next === "boards" && id) openBoard(id);
-      else if (id && ["scenes", "notes", "entities"].includes(next)) window.location.hash = `#/${next}?${next === "scenes" ? "scene" : next === "notes" ? "note" : "entity"}=${encodeURIComponent(id)}`;
-      //: 工作流的 id:和 mosael:// 深链、任务中心「前往」同一条路(打开那一条工作流)。
-      else if (next === "workflows" && id) gotoRecord("/workflows", VIEW_RECORD_EVENTS.workflows, id);
-      //: AI Studio:带 id 是那条创作会话(generate_* 的回执里给的 session_id),不带是对话分区(ADR 0055 §9)
-      else if (next === "ai") {
-        if (id) openCreationSession(id);
-        else gotoAiChat();
-      }
-      else navigate(next as StudioView);
-    },
-  });
   // 新建项目的入口不止首页一处(顶栏切换器、剪辑页空态也有),所以在这里建一次往下传,
   // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
   const createProject = useCreateProject(workspace.id, openProject);

@@ -418,7 +418,7 @@ export function GenerateWorkspace({
         `/api/generation/sessions?workspace_id=${workspace.id}${filter === "all" ? "" : `&kind=${filter}`}`,
       ),
   });
-  //: 别处要求打开某一条创作会话(任务中心「前往」、智能体 open_view("ai", id)、资产详情「在哪里用过」):筛选回到「全部」
+  //: 别处要求打开某一条创作会话(任务中心「前往」、资产详情「在哪里用过」、mosael:// 深链):筛选回到「全部」
   //: (那一条是什么种类这边不知道),开着它。
   useOpenRequest(OPEN_CREATION_SESSION_EVENT, (id) => {
     setFilter("all");

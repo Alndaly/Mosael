@@ -68,13 +68,12 @@ test("drain 等未完成的跑完再返回", async () => {
   assert.equal(settled[0].outcome.report, "慢报告");
 });
 
-test("子智能体的工具:只读的里头也不给问用户的、不给拽页面的、不给画界面的(智能体那一路 AGENT-15)", async () => {
+test("子智能体的工具:只读的里头也不给问用户的、不给画界面的(智能体那一路 AGENT-15)", async () => {
   const { readOnlyTools } = await import(pathToFileURL(outFile).href);
   const tool = (name, flags = {}) => ({ name, readOnly: true, ...flags });
   const picked = readOnlyTools([
     tool("list_assets"),
     tool("ask_user", { awaitsAnswer: true }),
-    tool("open_view"),
     tool("show_widget"),
     tool("run_subagent"),
     tool("edit_note", { readOnly: false }),

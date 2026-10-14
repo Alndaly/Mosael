@@ -76,8 +76,6 @@ WRITES: list[tuple[str, str, dict | None]] = [
     ("delete", "/api/agent/sessions/{sid}/queue/{mid}", None),
     ("post", "/api/agent/sessions/{sid}/stop", None),
     ("put", "/api/agent/sessions/{sid}/plan", {"steps": ["改计划"]}),
-    ("post", "/api/agent/sessions/{sid}/view", {"view": "home"}),
-    ("delete", "/api/agent/sessions/{sid}/view", None),
     ("post", "/api/agent/questions", {"session_id": "{sid}", "questions": QUESTION}),
     ("delete", "/api/agent/sessions/{sid}", None),
 ]

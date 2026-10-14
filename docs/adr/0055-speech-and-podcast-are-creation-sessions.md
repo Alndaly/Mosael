@@ -157,6 +157,7 @@ AI Studio 顶上是「对话 | 生成 | 音频」三个分区,「音频」里又
   - 任务中心「前往」:生成、`tts`、`podcast` 任务的 payload 记着 `session_id`(`job_catalog` 的 `record_field`),落在 `?tab=create`、打开那条会话。
   - 资产详情「在哪里用过」→ 那条创作会话。
   - 智能体 `open_view("ai")` 去对话;`open_view("ai", <生成会话 id>)` 去那条创作会话。工具说明跟着改,`studio-views` 契约不动。
+    (`open_view` 已被 [ADR 0060](0060-agent-no-longer-switches-pages.md) 撤掉。)
 - ADR 0044 里 AI Studio 这个「地方」仍然只是对话分区;创作分区不是一个地方,语义不变。
 
 ## 否掉的备选

@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **127** 个工具,其中 **39** 个走确认卡、**1** 个停下来等用户作答。
+共 **126** 个工具,其中 **39** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -111,7 +111,6 @@
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |
 | `notify_agent_session` | 直接执行 | Runs directly: send a message to ANOTHER agent session (@-mention style). |
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
-| `open_view` | 直接执行 | Take the user to a page in Mosael — optionally to one specific record. |
 | `plugin_tools` | 直接执行 | Read-only: plugin tools not in your list this turn. No `tool`: find them by `query` words. With `tool` (its |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
 | `read_document` | 直接执行 | Read-only: read an imported DOCUMENT asset (PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB). |
