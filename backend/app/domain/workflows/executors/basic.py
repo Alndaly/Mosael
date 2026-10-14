@@ -244,6 +244,10 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         except ValueError:
             data = _fenced_json(source, default=source)  # 不是 JSON:整段文字就是那个值(路径为空时原样交出)
     steps = parse_json_path(path)
+    #: 来源是空的(上游没交出内容)而路径又要往里走:直说「来源是空的」,别走进 _walk 报一句
+    #: 「走到「0」那一段时没有它 · 那一层是:""」—— 那种写法把「上游没东西」藏成了「路径不对」,人照着路径改死也修不好。
+    if steps and (data is None or data == ""):
+        raise WorkflowDomainError("wfErr_jsonSourceEmpty", params={"path": path})
     value = _walk(data, steps, path=path)
     if value is None:
         text = ""

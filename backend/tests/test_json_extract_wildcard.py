@@ -46,3 +46,28 @@ def test_没有星号时取不到就报错_星号下没有的只是不占位() -
         _extract(RESULTS, "1.on_model_clip.asset_id")
     assert missing.value.params["at"] == "1.on_model_clip"
     assert _extract(RESULTS, "*.nothing")["value"] == []
+
+
+def test_来源是空的而路径要往里走_直说来源空() -> None:
+    """维护者踩过:来源(上游 JSON 输出)是空的,旧报错却丢一句「走到「0」那一段时没有它 · 那一层是:""」,
+    把「上游没东西」藏成了「路径不对」,人照着路径改死也修不好。现在来源空且要往里走时直说来源空。"""
+    import pytest
+
+    from app.domain.workflows import WorkflowDomainError
+
+    with pytest.raises(WorkflowDomainError) as empty:
+        _extract("", "0.name")
+    assert empty.value.key == "wfErr_jsonSourceEmpty"
+    assert empty.value.params["path"] == "0.name"
+    assert "来源是空的" in str(empty.value)
+    # None 来源同样
+    with pytest.raises(WorkflowDomainError):
+        _extract(None, "a.b")
+    # 路径留空 = 取整个值:来源空也照实交出空串,不报错
+    assert _extract("", "")["value"] == ""
+
+
+def test_顶层列表的裸下标和星号照旧取得到() -> None:
+    # 维护者误以为开头裸 0 不认 —— 它对列表就是 int(下标),等价 [0];提示里"也可以写 data.items.0.title"就是它。
+    assert _extract('[{"name": "林澜"}, {"name": "陈默"}]', "0.name")["value"] == "林澜"
+    assert _extract('[{"name": "林澜"}, {"name": "陈默"}]', "*.name")["value"] == ["林澜", "陈默"]

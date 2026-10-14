@@ -283,6 +283,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_nodeMissing": {"zh": "节点不存在:{id}", "en": "No such node: {id}"},
     "wfErr_jsonPathMissing": {"zh": "JSON 提取取不到「{path}」:走到「{at}」这一段时没有它。那一层是:{available}", "en": "JSON extract could not find \"{path}\": nothing at \"{at}\". That level is: {available}"},
     "wfErr_jsonPathInvalid": {"zh": "JSON 提取的路径「{path}」写得不对(从「{at}」起看不懂);写法如 data.items[0].title、results.*.id", "en": "The JSON extract path \"{path}\" is malformed (cannot read from \"{at}\"); write it like data.items[0].title or results.*.id"},
+    "wfErr_jsonSourceEmpty": {"zh": "JSON 提取的来源是空的:上游节点没有交出内容,按「{path}」取不到。先确认上游已运行、且它交出了 JSON;取整个列表时路径留空,取每一项的某格用 *。", "en": "The JSON extract source is empty: the upstream node produced nothing, so \"{path}\" cannot be read. Make sure the upstream ran and produced JSON; leave the path empty for the whole list, or use * for a field of each item."},
     "wfErr_listChunkNotAList": {"zh": "「拆成几批」收到的不是一串(是 {kind});给它一个列表或一段 JSON 数组文本", "en": "Split-into-batches received something that is not a list ({kind}); give it a list or JSON-array text"},
     "wfErr_unknownNodeType": {"zh": "未知的节点类型:{type}", "en": "Unknown node type: {type}"},
     "wfErr_nodeIdExists": {"zh": "节点 id 已存在:{id}", "en": "A node with id {id} already exists"},
