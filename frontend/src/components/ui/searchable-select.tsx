@@ -148,6 +148,8 @@ export function SearchableSelect({
   missingLabel,
   busy = false,
   ariaLabel,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -176,9 +178,13 @@ export function SearchableSelect({
   busy?: boolean;
   /** 默认触发器给读屏的名字(值本身不足以说明这一格是什么时)。 */
   ariaLabel?: string;
+  /** 由外面决定开没开(画布上双击空白处弹的那一份,见 components/app/CanvasPointPicker)。不给就自己管。 */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useI18n();
-  const [open, setOpen] = React.useState(false);
+  const [ownOpen, setOwnOpen] = React.useState(false);
+  const open = controlledOpen ?? ownOpen;
   /* ref 挂在 PopoverTrigger 上:asChild 的 Slot 把它合进触发器(自定义的 trigger 也一样 —— 浮层
      本来就要靠这个 ref 定位,接不住 ref 的触发器早就弹不出来)。**不在旁边另插一个探针元素**:
      下拉常是表单网格里的一格,多出来的兄弟会占掉一格 —— `[&>span]:flex` 这类行样式还会把
@@ -215,7 +221,8 @@ export function SearchableSelect({
     }
   };
   const openChange = (next: boolean) => {
-    setOpen(next);
+    setOwnOpen(next);
+    onOpenChange?.(next);
     if (!next) setSearch("");
   };
   return (
@@ -282,7 +289,7 @@ export function SearchableSelect({
                   value={item.value}
                   onSelect={() => {
                     onValueChange(item.value);
-                    setOpen(false);
+                    openChange(false);
                   }}
                   className={cn(query && item.section && item.hit && "font-semibold")}
                   data-section={item.section?.key}

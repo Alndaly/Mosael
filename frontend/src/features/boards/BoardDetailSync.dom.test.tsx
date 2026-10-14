@@ -809,7 +809,34 @@ describe("一格的能力(把它的内容变成新内容)", () => {
     });
     await vi.waitFor(() => expect(pickerHarness.props?.open).toBe(true));
     act(() => (pickerHarness.props!.onPick as (asset: unknown) => void)({ id: "a9", name: "海报.png", kind: "image" }));
-    expect(canvasHarness.api.add).toHaveBeenCalledWith("image", { asset_id: "a9", text: "海报.png" });
+    //: 从工具栏点的:不给落点,落在视野中心。
+    expect(canvasHarness.api.add).toHaveBeenCalledWith("image", { asset_id: "a9", text: "海报.png" }, undefined);
+  });
+
+  it("双击画布空白处:在那一点弹出同一份「添加」单子,选中的格子落在双击的地方(要先挑的,挑完也落在那儿)", async () => {
+    Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
+    opens(boardAt(3, { items: [], edges: [], markers: [] }));
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    const at = { screen: { x: 320, y: 240 }, flow: { x: 1200, y: -80 } };
+    act(() => (canvasHarness.props!.onPaneDoubleClick as (next: typeof at) => void)(at));
+    await vi.waitFor(() => expect(document.querySelector('[data-value="note"]')).not.toBeNull());
+    const anchor = document.querySelector<HTMLElement>("[data-canvas-point-picker]")!;
+    expect([anchor.style.left, anchor.style.top]).toEqual(["320px", "240px"]);
+    act(() => {
+      fireEvent.click(document.querySelector<HTMLElement>('[data-value="note"]')!);
+    });
+    expect(canvasHarness.api.add).toHaveBeenCalledWith("note", {}, at.flow);
+    await vi.waitFor(() => expect(document.querySelector('[data-value="note"]')).toBeNull());
+
+    act(() => (canvasHarness.props!.onPaneDoubleClick as (next: typeof at) => void)(at));
+    await vi.waitFor(() => expect(document.querySelector('[data-value="pick-media"]')).not.toBeNull());
+    act(() => {
+      fireEvent.click(document.querySelector<HTMLElement>('[data-value="pick-media"]')!);
+    });
+    await vi.waitFor(() => expect(pickerHarness.props?.open).toBe(true));
+    act(() => (pickerHarness.props!.onPick as (asset: unknown) => void)({ id: "a9", name: "海报.png", kind: "image" }));
+    expect(canvasHarness.api.add).toHaveBeenLastCalledWith("image", { asset_id: "a9", text: "海报.png" }, at.flow);
   });
 });
 

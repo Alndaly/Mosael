@@ -21,6 +21,7 @@ import {
 import { useI18n } from "@/app/preferences";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { useCanvasInputMode, canvasWheelProps, CANVAS_POINTER_PROPS } from "@/components/app/canvasInputMode";
+import { CanvasPointPicker, emptyCanvasDoubleClick, type ScreenPoint } from "@/components/app/canvasPointPicker";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { CANVAS_GLASS_SURFACE_CLASS, canvasDockedPanelEdges, canvasRightDockOcclusion } from "@/components/app/canvasPanelLayout";
 import { canvasInsets, centerCanvasViewport, fitCanvasViewport, visibleCanvasSize } from "@/components/app/fitCanvasViewport";
@@ -112,6 +113,8 @@ export function WorkflowEditor({
   const qc = useQueryClient();
   const registry = React.useMemo(() => new Map(nodeTypes.map((item) => [item.type, item])), [nodeTypes]);
   const { options: nodeOptions } = useNodePicker(nodeTypes, t);
+  //: 双击画布空白处弹出的「添加节点」单子钉在哪(屏幕坐标)、节点落在哪(画布坐标)。见 components/app/canvasPointPicker。
+  const [addNodeAt, setAddNodeAt] = React.useState<{ screen: ScreenPoint; flow: { x: number; y: number } } | null>(null);
 
   const {
     graphStore,
@@ -700,6 +703,14 @@ export function WorkflowEditor({
               const g = graph.nodes.find((item) => item.id === node.id);
               if (g && bodyKey(registry, g.type)) enterScope([...scopePath, node.id]);
             }}
+            // 双击空白处:在那一点弹出「添加节点」的单子(和工具栏上那个同一份),选中的节点落在双击的地方。
+            onDoubleClick={(event) => {
+              if (annotationMode) return;
+              const screen = emptyCanvasDoubleClick(event);
+              const instance = rfRef.current;
+              if (!screen || !instance) return;
+              setAddNodeAt({ screen, flow: instance.screenToFlowPosition(screen) });
+            }}
             onPaneClick={(event) => {
               const point = rfRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY });
               if (markerMode && point) { addMarker(point); return; }
@@ -791,6 +802,13 @@ export function WorkflowEditor({
         )}
           </ReactFlow>
           </MarkerEditorProvider>
+          <CanvasPointPicker
+            at={addNodeAt?.screen ?? null}
+            options={nodeOptions.filter((option) => option.value !== "start" || canAddStart)}
+            searchPlaceholder={t("wfAddNode")}
+            onPick={(type) => addNode(type, addNodeAt?.flow)}
+            onClose={() => setAddNodeAt(null)}
+          />
           {scopeNode && graph.nodes.length === 0 && (
             <div className="pointer-events-none absolute left-1/2 top-14 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
               {t(scopeNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}

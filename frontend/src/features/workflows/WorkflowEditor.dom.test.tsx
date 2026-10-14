@@ -178,6 +178,30 @@ it("双击画布空白处不缩放(两块画布同一份指针设置;缩放走�
   expect(reached).toHaveBeenCalledTimes(1);
 });
 
+it("双击画布空白处弹出「添加节点」的搜索单子,选一项就在双击的地方放下;双击节点不弹", async () => {
+  await renderEditor(CHAIN);
+  await waitFor(() => nodeEl("llm-1"));
+  fireEvent.doubleClick(nodeEl("llm-1"), { clientX: 120, clientY: 80 });
+  expect(screen.queryByPlaceholderText("wfAddNode")).toBeNull();
+
+  fireEvent.doubleClick(document.querySelector<HTMLElement>(".react-flow__pane")!, { clientX: 300, clientY: 200 });
+  const search = await screen.findByPlaceholderText("wfAddNode");
+  //: 锚钉在双击的那一点(屏幕坐标)。
+  const anchor = document.querySelector<HTMLElement>("[data-canvas-point-picker]")!;
+  expect([anchor.style.left, anchor.style.top]).toEqual(["300px", "200px"]);
+  fireEvent.change(search, { target: { value: "templ" } });
+  fireEvent.click(await screen.findByRole("option", { name: "template" }));
+
+  await waitFor(() => expect(apiMocks.updateWorkflow).toHaveBeenCalled(), { timeout: 3000 });
+  const graph = (apiMocks.updateWorkflow.mock.calls.at(-1)![1] as { graph: WorkflowGraph }).graph;
+  const added = graph.nodes.find((node) => node.id === "template-2")!;
+  expect(added).toBeTruthy();
+  //: 不是排在最右(maxX + 240),而是双击那一点换成画布坐标 —— 测试里视口没平移缩放,就是那一点减去画布的偏移。
+  const maxX = Math.max(...CHAIN.nodes.map((node) => node.position?.x ?? 0));
+  expect(added.position?.x).not.toBe(maxX + 240);
+  expect(screen.queryByPlaceholderText("wfAddNode")).toBeNull();
+});
+
 it("⌘S 在检查器的字段里也存(不等自动保存那 700ms),也不让浏览器弹「存储网页」", async () => {
   //: main.tsx 装的那一个全局监听(lib/saveShortcut);此前这里的 ⌘S 只在画布焦点时接,字段里让路。
   const uninstall = installSaveShortcut(window);

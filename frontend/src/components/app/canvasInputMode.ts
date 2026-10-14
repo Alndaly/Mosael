@@ -71,7 +71,7 @@ export function canvasWheelProps(mode: CanvasInputMode) {
  * 画布(画板、工作流)上的点击怎么算 —— 同样两块画布一份。
  *
  * **双击不缩放。** React Flow 缺省把双击交给 d3-zoom 放大一倍,而 d3-zoom 处理双击时
- * `stopImmediatePropagation`:画板上「双击空白处写一张便签」的 onDoubleClick 因此一次都没收到过,
+ * `stopImmediatePropagation`:画布上「双击空白处弹出添加单子」的 onDoubleClick 因此收不到(见 canvasPointPicker),
  * 双击只是把画布放大(画板列表的空状态正教新用户这么做)。缩放有捏合、滚轮和工具条,不缺这一条。
  *
  * **⌘ / Ctrl / Shift + 点击都是「加入 / 移出选择」。** 时间线片段、3D 关键帧上三个键都是加选;React Flow

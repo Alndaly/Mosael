@@ -344,15 +344,18 @@ export function useWorkflowCanvasEdits({
     [graph.edges, graph.nodes, registry],
   );
 
-  const addNode = (type: string) => {
+  /** 加一个节点并选中它。`at`(画布坐标):落在哪(双击空白处弹的单子给的就是双击那一点);不给就排在最右。 */
+  const addNode = (type: string, at?: { x: number; y: number }) => {
     const meta = registry.get(type);
     if (!meta) return;
     if (type === "start" && !canAddStart) return;
-    const node = newNode(graph, type, meta);
+    const node = newNode(graph, type, meta, at);
     const { id, position } = node;
     const next: WorkflowGraph = { ...graph, nodes: [...graph.nodes, node] };
     applyGraph(next);
     selectInspectorNode(id);
+    //: 落在双击的那一点:它本来就在眼前,不挪视口。
+    if (at) return;
     // 新节点排在最右、又会被右侧检查器盖住 → 加完把视口聚焦过去,别让人找不到。
     // 延后两帧 + 瞬时定位(duration 0):applyGraph 会替换整份节点数组触发重挂重测量,
     // 期间的重渲染会打断 setCenter 的 d3 过渡(动画停在起点=看似没动);瞬时定位无过渡可打断,
@@ -440,7 +443,12 @@ type GraphNode = WorkflowGraph["nodes"][number];
  * 「工作流 · 标题」):名字空着,画布、检查器、引用、执行历史就跟着节点目录的名字走;用户自己改了名才是用户的。
  * 内置节点照旧写上它的名字。
  */
-export function newNode(graph: WorkflowGraph, type: string, meta: Pick<WorkflowNodeType, "label" | "config">): GraphNode & {
+export function newNode(
+  graph: WorkflowGraph,
+  type: string,
+  meta: Pick<WorkflowNodeType, "label" | "config">,
+  at?: { x: number; y: number },
+): GraphNode & {
   position: { x: number; y: number };
 } {
   const base = type.replace(/[_.]/g, "-");
@@ -453,6 +461,6 @@ export function newNode(graph: WorkflowGraph, type: string, meta: Pick<WorkflowN
     // "graph"(循环体子图)必须种成空图,种成 "" 会让子画布打开时 body.nodes.length 崩掉。
     config[key] = spec?.type === "object" ? {} : spec?.type === "graph" ? { nodes: [], edges: [] } : "";
   }
-  const position = { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
+  const position = at ? { x: Math.round(at.x), y: Math.round(at.y) } : { x: maxX + 240, y: 140 + (graph.nodes.length % 3) * 90 };
   return { id, type, ...(type.startsWith("plugin.") ? {} : { name: meta.label }), position, config };
 }
