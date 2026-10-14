@@ -14,7 +14,8 @@ RATCHET = True
 #: 界面认得的控件名(frontend/src/features/nodeForms/NodeConfigForm.tsx 的 renderField)。
 #: 在这里多一个名字,界面那边就要多一个分支 —— 否则那个字段会悄悄退回普通输入框。
 #: start_params:开始节点的启动参数(一行一个:名字、默认值、必填),见 StartParamsField。
-KNOWN_EDITORS = {"map", "json", "scene_models", "note_ref", "id_list", "items", "start_params"}
+#: asset_grid:一串图片素材的紧凑格子(从素材库多选 + 本地上传 + 拖动排序),见 AssetGridField。
+KNOWN_EDITORS = {"map", "json", "scene_models", "note_ref", "id_list", "items", "start_params", "asset_grid"}
 
 
 def test_笔记读取的_note_id_声明用笔记选择器() -> None:
