@@ -1,20 +1,37 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileOutput } from "lucide-react";
+import { FileOutput, Info } from "lucide-react";
 
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
 import type { WriteBlock } from "@/components/layout/useWriteBlocked";
 import { getJob } from "@/api/domains/jobs";
 import { jobSettled } from "@/components/jobs/runStatus";
 import { useI18n } from "@/app/preferences";
-import { ModalShell } from "@/components/app/modals";
+import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EXPORT_PARAMS_KEY = "mosael.export.params";
 type RememberedExportParams = Omit<ExportParams, "ai_label">;
+type ExportFormat = ExportParams["format"];
+type ExportKind = "video" | "audio";
+
+//: 两类各自能选的格式,第一项是切过去时的默认。后端的表在 render_plan(VIDEO_CONTAINERS / AUDIO_CONTAINERS)。
+const FORMATS: Record<ExportKind, ExportFormat[]> = { video: ["mp4", "mov", "webm"], audio: ["mp3", "wav", "m4a"] };
+const kindOf = (format: ExportFormat): ExportKind => (FORMATS.audio.includes(format) ? "audio" : "video");
+
+/** 时间线上有没有画面:非音频轨上的视频 / 图片片段,或者文字(字幕、花字)。都没有时导出视频是一整条黑场。 */
+function hasPicture(sequence: Sequence): boolean {
+  return (sequence.tracks ?? []).some(
+    (track) =>
+      track.kind !== "audio" &&
+      (track.clips ?? []).some((clip) => clip.asset_kind === "video" || clip.asset_kind === "image" || Boolean(clip.text_override)),
+  );
+}
 
 /**
  * 导出按钮 + 进行中的进度。**做完了不在这里说**(ADR-0018):导出完成 / 失败由任务中心统一
@@ -38,9 +55,10 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
         fps: typeof saved.fps === "number" ? saved.fps : null,
         quality: ["high", "standard", "compact"].includes(saved.quality ?? "") ? saved.quality! : "standard",
         loudness_normalize: saved.loudness_normalize === true,
+        format: [...FORMATS.video, ...FORMATS.audio].includes(saved.format as ExportFormat) ? saved.format! : "mp4",
       };
     } catch {
-      return { resolution: "original", fps: null, quality: "standard", loudness_normalize: false };
+      return { resolution: "original", fps: null, quality: "standard", loudness_normalize: false, format: "mp4" };
     }
   });
   const updateParams = (patch: Partial<RememberedExportParams>) => {
@@ -61,6 +79,9 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
   React.useEffect(() => {
     if (configOpen) setAiLabel(false);
   }, [configOpen]);
+  const format = params.format;
+  const kind = kindOf(format);
+  const pictureless = React.useMemo(() => !hasPicture(sequence), [sequence]);
   const startExport = useMutation({
     mutationFn: (body: ExportParams) => exportSequence(sequenceId, body),
     // 导出任务建好了再关配置框 —— 此前先关再发请求,按下去到任务出现之间什么反馈都没有。
@@ -108,51 +129,90 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
         footer={
           <>
             <span className="mr-auto text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
-            <Button size="sm" loading={startExport.isPending} onClick={() => startExport.mutate({ ...params, ai_label: aiLabel })}>
-              <FileOutput size={13} /> {t("exportStart")}
+            {/* 只导出声音时画面上的标识无处可加:不带(文件里的 AIGC 隐式标识照写)。 */}
+            <Button loading={startExport.isPending} onClick={() => startExport.mutate({ ...params, ai_label: kind === "video" && aiLabel })}>
+              <FileOutput size={14} /> {t("exportStart")}
             </Button>
           </>
         }
       >
-        <div className="grid w-full gap-3.5">
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("exportResolution")}</span>
-            <Select value={params.resolution} onValueChange={(v) => updateParams({ resolution: v as ExportParams["resolution"] })}>
-              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
+        <div className="grid w-full gap-4">
+          <Segmented<ExportKind>
+            fill
+            aria-label={t("exportKind")}
+            value={kind}
+            onValueChange={(next) => updateParams({ format: FORMATS[next][0] })}
+            options={[
+              { value: "video", label: t("exportKindVideo") },
+              { value: "audio", label: t("exportKindAudio") },
+            ]}
+          />
+          {kind === "video" && pictureless && (
+            // 视频轨空着、也没有字:照样能导(整条黑场),但多半是想要声音 —— 说清楚,一下就能换过去。
+            <Alert role="status" data-export-no-picture="">
+              <Info size={14} />
+              <span className="grid gap-1 text-ui-sm">
+                {t("exportNoPicture")}
+                <Button variant="link" className="h-auto justify-self-start p-0" onClick={() => updateParams({ format: FORMATS.audio[0] })}>
+                  {t("exportSwitchToAudio")}
+                </Button>
+              </span>
+            </Alert>
+          )}
+          <div className={DIALOG_FIELD}>
+            <span>{t("exportFormat")}</span>
+            <Select value={format} onValueChange={(v) => updateParams({ format: v as ExportFormat })}>
+              <SelectTrigger aria-label={t("exportFormat")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="original">{t("exportResolutionOriginal")}({sequence.width}×{sequence.height})</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="480p">480p</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("exportFps")}</span>
-            <Select
-              value={params.fps == null ? "follow" : String(params.fps)}
-              onValueChange={(v) => updateParams({ fps: v === "follow" ? null : Number(v) })}
-            >
-              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="follow">{t("exportFpsFollow")}({sequence.fps}fps)</SelectItem>
-                {[24, 25, 30, 50, 60].map((rate) => (
-                  <SelectItem key={rate} value={String(rate)}>{rate} fps</SelectItem>
+                {FORMATS[kind].map((option) => (
+                  <SelectItem key={option} value={option}>{t(`exportFormat_${option}`)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("exportQuality")}</span>
-            <Select value={params.quality} onValueChange={(v) => updateParams({ quality: v as ExportParams["quality"] })}>
-              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="high">{t("exportQualityHigh")}</SelectItem>
-                <SelectItem value="standard">{t("exportQualityStandard")}</SelectItem>
-                <SelectItem value="compact">{t("exportQualityCompact")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* 只导出声音时没有画面:分辨率、帧率、画质都不摆。 */}
+          {kind === "video" && (
+            <>
+              <div className={DIALOG_FIELD}>
+                <span>{t("exportResolution")}</span>
+                <Select value={params.resolution} onValueChange={(v) => updateParams({ resolution: v as ExportParams["resolution"] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="original">{t("exportResolutionOriginal")}({sequence.width}×{sequence.height})</SelectItem>
+                    <SelectItem value="1080p">1080p</SelectItem>
+                    <SelectItem value="720p">720p</SelectItem>
+                    <SelectItem value="480p">480p</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className={DIALOG_FIELD}>
+                <span>{t("exportFps")}</span>
+                <Select
+                  value={params.fps == null ? "follow" : String(params.fps)}
+                  onValueChange={(v) => updateParams({ fps: v === "follow" ? null : Number(v) })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="follow">{t("exportFpsFollow")}({sequence.fps}fps)</SelectItem>
+                    {[24, 25, 30, 50, 60].map((rate) => (
+                      <SelectItem key={rate} value={String(rate)}>{rate} fps</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className={DIALOG_FIELD}>
+                <span>{t("exportQuality")}</span>
+                <Select value={params.quality} onValueChange={(v) => updateParams({ quality: v as ExportParams["quality"] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">{t("exportQualityHigh")}</SelectItem>
+                    <SelectItem value="standard">{t("exportQualityStandard")}</SelectItem>
+                    <SelectItem value="compact">{t("exportQualityCompact")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
           <label className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5" data-export-loudnorm="">
             <input
               type="checkbox"
@@ -165,7 +225,7 @@ export function ExportControl({ sequence, writeBlocked = null }: { sequence: Seq
           </label>
           {/* 只在时间线上真有 AI 生成的片段时出现,并说清是哪几段 —— 没有 AI 内容的片子摆一个「加 AI 标识」开关,
               只会让人以为自己的片子被当成了 AI 生成的。 */}
-          {aiClipCount > 0 && (
+          {kind === "video" && aiClipCount > 0 && (
             <label className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5" data-export-ai-label="">
               <input type="checkbox" className="mt-0.5" checked={aiLabel} onChange={(event) => setAiLabel(event.target.checked)} />
               <span className="text-ui-sm font-medium">{t("exportAiLabel")}</span>

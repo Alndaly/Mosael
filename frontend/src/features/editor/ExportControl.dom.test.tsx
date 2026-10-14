@@ -26,7 +26,18 @@ beforeEach(() => {
 //: 一段 AI 生成(数字人)的片段 + 一段自己拍的。
 const WITH_AI = {
   ai_asset_ids: ["talking"],
-  tracks: [{ id: "V1", kind: "video", clips: [{ id: "c1", asset_id: "talking" }, { id: "c2", asset_id: "shot" }] }],
+  tracks: [{
+    id: "V1", kind: "video",
+    clips: [{ id: "c1", asset_id: "talking", asset_kind: "video" }, { id: "c2", asset_id: "shot", asset_kind: "video" }],
+  }],
+};
+//: 视频轨空着,只有音频轨上一段声音(用户:「视频轨为空时导出报错」)。
+const AUDIO_ONLY = {
+  ai_asset_ids: [],
+  tracks: [
+    { id: "V1", kind: "video", clips: [] },
+    { id: "A1", kind: "audio", clips: [{ id: "a1", asset_id: "voice", asset_kind: "audio" }] },
+  ],
 };
 
 function mount(extra: Record<string, unknown> = WITH_AI) {
@@ -40,7 +51,7 @@ function mount(extra: Record<string, unknown> = WITH_AI) {
 
 it("时间线上没有 AI 生成的片段:不摆「AI 生成」标识开关", async () => {
   const user = userEvent.setup();
-  mount({ ai_asset_ids: [], tracks: [{ id: "V1", kind: "video", clips: [{ id: "c2", asset_id: "shot" }] }] });
+  mount({ ai_asset_ids: [], tracks: [{ id: "V1", kind: "video", clips: [{ id: "c2", asset_id: "shot", asset_kind: "video" }] }] });
   await user.click(screen.getByRole("button", { name: "exportVideo" }));
   expect(screen.queryByRole("checkbox", { name: /exportAiLabel/ })).toBeNull();
 });
@@ -86,4 +97,45 @@ it("响度标准化默认关;打开后导出带上 loudness_normalize: true,下�
 
   await user.click(await screen.findByRole("button", { name: "exportVideo" }));
   expect(screen.getByRole("checkbox", { name: /exportLoudnorm/ })).toBeChecked();
+});
+
+it("默认导出 MP4 视频;换成音频就只剩格式和响度两项,导出带上选的格式,下一次还记得", async () => {
+  const user = userEvent.setup();
+  mount();
+  await user.click(screen.getByRole("button", { name: "exportVideo" }));
+  expect(screen.getByRole("radio", { name: "exportKindVideo" })).toHaveAttribute("aria-checked", "true");
+  expect(screen.getByRole("combobox", { name: "exportFormat" })).toHaveTextContent("exportFormat_mp4");
+
+  await user.click(screen.getByRole("radio", { name: "exportKindAudio" }));
+  expect(screen.getByRole("combobox", { name: "exportFormat" })).toHaveTextContent("exportFormat_mp3");
+  expect(screen.queryByText("exportResolution"), "声音没有分辨率").toBeNull();
+  expect(screen.queryByRole("checkbox", { name: /exportAiLabel/ }), "画面上的标识无处可加").toBeNull();
+  expect(screen.getByRole("checkbox", { name: /exportLoudnorm/ })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("combobox", { name: "exportFormat" }));
+  await user.click(await screen.findByRole("option", { name: "exportFormat_wav" }));
+  await user.click(screen.getByRole("button", { name: "exportStart" }));
+  expect(exportSequence).toHaveBeenLastCalledWith("seq-1", expect.objectContaining({ format: "wav", ai_label: false }));
+
+  await user.click(await screen.findByRole("button", { name: "exportVideo" }));
+  expect(screen.getByRole("radio", { name: "exportKindAudio" })).toHaveAttribute("aria-checked", "true");
+  expect(screen.getByRole("combobox", { name: "exportFormat" })).toHaveTextContent("exportFormat_wav");
+});
+
+it("时间线上没有画面:导出视频前说清会是黑场,一下就能换成导出音频", async () => {
+  const user = userEvent.setup();
+  mount(AUDIO_ONLY);
+  await user.click(screen.getByRole("button", { name: "exportVideo" }));
+  expect(screen.getByRole("status")).toHaveTextContent("exportNoPicture");
+
+  await user.click(screen.getByRole("button", { name: "exportSwitchToAudio" }));
+  expect(screen.getByRole("radio", { name: "exportKindAudio" })).toHaveAttribute("aria-checked", "true");
+  expect(screen.queryByRole("status"), "换成音频后提示收起").toBeNull();
+});
+
+it("有画面的时间线不摆黑场提示", async () => {
+  const user = userEvent.setup();
+  mount();
+  await user.click(screen.getByRole("button", { name: "exportVideo" }));
+  expect(document.querySelector("[data-export-no-picture]")).toBeNull();
 });
