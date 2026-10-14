@@ -79,8 +79,10 @@ vi.mock("@/components/app/image-preview", () => ({
   useImagePreview: () => ({ openImagePreview: vi.fn(), isImagePreviewOpen: false }),
 }));
 
-vi.mock("@/features/boards/assetUpload", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/features/boards/assetUpload")>();
+//: 上传走 useAssetUpload;这里钉住它的协议(一次一个、done 回素材),不真的发请求。
+//: 它的家是中立的 components/generation/assetUpload(见 features/featureBoundaries.test.ts),不从 boards 绕。
+vi.mock("@/components/generation/assetUpload", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/generation/assetUpload")>();
   return { ...actual, useAssetUpload: () => uploadMock };
 });
 

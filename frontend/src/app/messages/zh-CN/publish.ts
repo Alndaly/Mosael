@@ -47,6 +47,8 @@ export const publish = {
   boardsPickEmptyHint: "可以上传本地文件,或者直接把文件拖进来。",
   assetUploading: "正在上传「{name}」",
   assetUploadFailed: "「{name}」没传上:{reason}",
+  assetUploadFailedTitle: "上传失败",
+  assetUploadRejectedTitle: "这个文件传不了",
   assetUploadCancel: "取消上传",
   assetUploadWrongKind: "「{name}」不是{kind},这里只收{kind}",
   assetUploadKind_image: "图片",

@@ -46,6 +46,8 @@ export const publish = {
   boardsPickEmptyHint: "Upload a file from this computer, or drop one here.",
   assetUploading: "Uploading “{name}”",
   assetUploadFailed: "“{name}” didn't upload: {reason}",
+  assetUploadFailedTitle: "Upload failed",
+  assetUploadRejectedTitle: "This file can't be uploaded",
   assetUploadCancel: "Cancel upload",
   assetUploadWrongKind: "“{name}” isn't {kind}; only {kind} goes here",
   assetUploadKind_image: "an image",

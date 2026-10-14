@@ -8,10 +8,12 @@ import { assetThumbnailUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useDndAccessibility } from "@/components/app/dndAccessibility";
 import { AssetGridPicker, type GridAsset } from "@/components/app/AssetGridPicker";
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
+import { acceptFor, AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText } from "@/components/generation/assetUpload";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { acceptFor, AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
 import { parseIds } from "@/features/nodeForms/ScenePropsField";
 import { useAssetDetails, useAssetSearch } from "@/lib/assetQueries";
 import { useFileDrop } from "@/lib/useFileDrop";
@@ -157,26 +159,29 @@ export function AssetGridField({
             {/* 满 max 张:两格虚线格消失,格子就此定死(先移除再改)。 */}
             {!full && (
               <>
-                <button
-                  type="button"
-                  data-upload-tile=""
-                  aria-label={t("wfAssetGridUpload")}
-                  title={t("wfAssetGridUpload")}
-                  onClick={() => chooser.current?.click()}
-                  className={cn(TILE_CLASS, "grid cursor-pointer place-items-center border-dashed bg-muted/40 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground")}
-                >
-                  <Upload size={16} strokeWidth={1.8} />
-                </button>
-                <button
-                  type="button"
-                  data-add-tile=""
-                  aria-label={t("wfAssetGridAdd")}
-                  title={t("wfAssetGridAdd")}
-                  onClick={() => setPicking(true)}
-                  className={cn(TILE_CLASS, "grid cursor-pointer place-items-center border-dashed bg-muted/40 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground")}
-                >
-                  <Plus size={16} strokeWidth={1.8} />
-                </button>
+                {/* 虚线格的外壳是格子(高、圆角是内容的,不是控件的);整格可点的部分走 IconButton,名字只写一次。 */}
+                <div className={cn(TILE_CLASS, "border-dashed bg-muted/40 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground")}>
+                  <IconButton
+                    unstyled
+                    data-upload-tile=""
+                    label={t("wfAssetGridUpload")}
+                    onClick={() => chooser.current?.click()}
+                    className="grid cursor-pointer place-items-center"
+                  >
+                    <Upload size={16} strokeWidth={1.8} />
+                  </IconButton>
+                </div>
+                <div className={cn(TILE_CLASS, "border-dashed bg-muted/40 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground")}>
+                  <IconButton
+                    unstyled
+                    data-add-tile=""
+                    label={t("wfAssetGridAdd")}
+                    onClick={() => setPicking(true)}
+                    className="grid cursor-pointer place-items-center"
+                  >
+                    <Plus size={16} strokeWidth={1.8} />
+                  </IconButton>
+                </div>
               </>
             )}
           </div>
@@ -184,41 +189,52 @@ export function AssetGridField({
       </DndContext>
 
       {/* 进度不占格子:下面一行小字。在传第 i 个 / 共 n 个;失败给重试/取消;收不了说为什么。 */}
-      {upload.state.status !== "idle" && (
-        <div
-          role={upload.state.status === "uploading" ? "status" : "alert"}
-          data-asset-grid-upload={upload.state.status}
-          className={cn(
-            "mt-1 flex min-w-0 items-center gap-1.5 text-ui-2xs",
-            upload.state.status === "uploading" ? "text-muted-foreground" : "text-destructive",
-          )}
-        >
+      {upload.state.status === "uploading" && (
+        <div role="status" data-asset-grid-upload="uploading" className="mt-1 flex min-w-0 items-center gap-1.5 text-ui-2xs text-muted-foreground">
           <Truncate className="min-w-0 flex-1">
-            {upload.state.status === "uploading"
-              ? t("wfAssetGridUploading")
-                  .replace("{name}", upload.state.name)
-                  .replace("{i}", String(Math.min(batch.done + 1, batch.total)))
-                  .replace("{n}", String(batch.total))
-              : upload.state.status === "failed"
-                ? t("assetUploadFailed").replace("{name}", upload.state.name).replace("{reason}", upload.state.reason)
-                : upload.state.message}
+            {t("wfAssetGridUploading")
+              .replace("{name}", upload.state.name)
+              .replace("{i}", String(Math.min(batch.done + 1, batch.total)))
+              .replace("{n}", String(batch.total))}
           </Truncate>
+          <IconButton
+            size="icon-xs"
+            variant="ghost"
+            label={t("assetUploadCancel")}
+            onClick={cancelUpload}
+            className="shrink-0 text-muted-foreground"
+          >
+            <X size={11} />
+          </IconButton>
+        </div>
+      )}
+      {/* 没传上 / 收不了:那一句走 FailureCard 一行档(棘轮:design/failureDisplays.test.ts);重试、关掉摆在同行 —— */}
+      {/* FailureCard 的 actions 收在「详情」浮层里,这种一行 alert 的地方要直接点得到(和 boards AssetUploadStatus 同一摆法)。 */}
+      {(upload.state.status === "failed" || upload.state.status === "rejected") && (
+        <div role="alert" data-asset-grid-upload={upload.state.status} className="mt-1 flex min-w-0 items-center gap-1 text-ui-2xs">
+          <FailureCard
+            size="inline"
+            className="min-w-0 flex-1"
+            title={upload.state.status === "failed" ? t("assetUploadFailedTitle") : t("assetUploadRejectedTitle")}
+            {...rawFailureFields(
+              upload.state.status === "failed"
+                ? t("assetUploadFailed").replace("{name}", upload.state.name).replace("{reason}", upload.state.reason)
+                : upload.state.message,
+              upload.state.status === "failed" ? t("assetUploadFailedTitle") : t("assetUploadRejectedTitle"),
+            )}
+          />
           {upload.state.status === "failed" && (
-            <button
-              type="button"
-              data-upload-retry=""
-              className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded text-muted-foreground transition-colors hover:text-foreground"
-              onClick={upload.retry}
-            >
+            <Button size="xs" variant="ghost" data-upload-retry="" className="shrink-0 gap-1" onClick={upload.retry}>
               <RotateCcw size={11} />
               {t("retry")}
-            </button>
+            </Button>
           )}
           <IconButton
-            unstyled
-            label={upload.state.status === "uploading" ? t("assetUploadCancel") : t("close")}
-            className="grid size-4 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground transition-colors hover:text-foreground"
-            onClick={upload.state.status === "uploading" ? cancelUpload : dismiss}
+            size="icon-xs"
+            variant="ghost"
+            label={t("close")}
+            onClick={dismiss}
+            className="shrink-0 text-muted-foreground"
           >
             <X size={11} />
           </IconButton>
@@ -287,46 +303,47 @@ function PickedTile({
   const failed = missing || imgFailed;
   const name = asset?.name || asset?.original_filename || id;
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
-      data-asset-tile={id}
-      data-dragging={isDragging}
-      title={missing ? t("wfAssetGridMissing") : name}
-      aria-label={missing ? `${name} · ${t("wfAssetGridMissing")}` : `${t("wfAssetGridImage")} ${index + 1}: ${name}`}
-      className={cn(
-        TILE_CLASS,
-        "group cursor-grab touch-none border-border bg-panel-inset text-muted-foreground active:cursor-grabbing",
-        isDragging && "z-20 opacity-70",
-      )}
-    >
-      {failed ? (
-        <span className="grid size-full place-items-center">
-          <ImageOff size={14} strokeWidth={1.6} />
-        </span>
-      ) : (
-        <img
-          src={assetThumbnailUrl(id)}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onError={() => setImgFailed(true)}
-          className="absolute inset-0 size-full object-cover"
-        />
-      )}
-      <IconButton
-        unstyled
-        label={t("wfAssetGridRemove").replace("{n}", String(index + 1))}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={onRemove}
-        className="absolute right-0.5 top-0.5 z-10 grid size-5 cursor-pointer place-items-center rounded-full bg-[rgba(10,12,15,0.72)] text-[#e8eaed] opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+    <Hint label={missing ? t("wfAssetGridMissing") : name}>
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Transform.toString(transform), transition }}
+        {...attributes}
+        {...listeners}
+        data-asset-tile={id}
+        data-dragging={isDragging}
+        aria-label={missing ? `${name} · ${t("wfAssetGridMissing")}` : `${t("wfAssetGridImage")} ${index + 1}: ${name}`}
+        className={cn(
+          TILE_CLASS,
+          "group cursor-grab touch-none border-border bg-panel-inset text-muted-foreground active:cursor-grabbing",
+          isDragging && "z-20 opacity-70",
+        )}
       >
-        <X size={12} />
-      </IconButton>
-    </div>
+        {failed ? (
+          <span className="grid size-full place-items-center">
+            <ImageOff size={14} strokeWidth={1.6} />
+          </span>
+        ) : (
+          <img
+            src={assetThumbnailUrl(id)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onError={() => setImgFailed(true)}
+            className="absolute inset-0 size-full object-cover"
+          />
+        )}
+        <IconButton
+          unstyled
+          label={t("wfAssetGridRemove").replace("{n}", String(index + 1))}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={onRemove}
+          className="absolute right-0.5 top-0.5 z-10 grid size-5 cursor-pointer place-items-center rounded-full bg-[rgba(10,12,15,0.72)] text-[#e8eaed] opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <X size={12} />
+        </IconButton>
+      </div>
+    </Hint>
   );
 }
 
@@ -433,9 +450,9 @@ function AssetGridDialog({
       }
       footer={
         <div className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-ui-xs text-muted-foreground">
+          <Truncate className="min-w-0 flex-1 text-ui-xs text-muted-foreground">
             {t("wfAssetGridPickedCount").replace("{n}", String(all.length)).replace("{max}", String(max))}
-          </span>
+          </Truncate>
           <Button size="sm" variant="outline" onClick={onClose}>
             {t("cancel")}
           </Button>

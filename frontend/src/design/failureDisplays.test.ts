@@ -30,7 +30,6 @@ const STOCK: Record<string, number> = {
   "features/agent/skills/SkillCardPreviews.tsx": 1,
   "features/ai-studio/ChatWorkspace.tsx": 1,
   "features/auth/LoginView.tsx": 1,
-  "features/boards/assetUpload.tsx": 1,
   "features/browser-pool/session-tools/BrowserSessionTools.tsx": 1,
   "features/browser-pool/session-tools/VideoPanel.tsx": 1,
   "features/editor/TranscriptPanel.tsx": 2,
