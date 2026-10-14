@@ -68,9 +68,12 @@ const flush = async () => {
   await act(async () => undefined);
 };
 
+/** 选一种工具:工具条上的一颗按下式按钮(`aria-pressed`)。 */
 async function pick(harness: PixelHarness, name: string) {
-  fireEvent.click(harness.scope().getByRole("radio", { name }));
+  const button = harness.scope().getByRole("button", { name });
+  fireEvent.click(button);
   await flush();
+  expect(button.getAttribute("aria-pressed")).toBe("true");
 }
 
 async function press(harness: PixelHarness, name: string) {
@@ -99,6 +102,21 @@ async function hardBrush(harness: PixelHarness) {
   }
   await flush();
   expect(slider.getAttribute("aria-valuenow")).toBe("1");
+}
+
+/** 把「羽化」滑块推到 `steps`(它是 0..64 那一根;「扩张」是 −64..64)。 */
+async function featherBy(harness: PixelHarness, steps: number) {
+  const slider = harness
+    .scope()
+    .getAllByRole("slider")
+    .find((one: HTMLElement) => one.getAttribute("aria-valuemax") === "64" && one.getAttribute("aria-valuemin") === "0") as
+    | HTMLElement
+    | undefined;
+  if (!slider) throw new Error("没有找到羽化滑块");
+  slider.focus();
+  for (let i = 0; i < steps; i += 1) fireEvent.keyDown(slider, { key: "ArrowRight", bubbles: true, cancelable: true });
+  await flush();
+  expect(slider.getAttribute("aria-valuenow")).toBe(String(steps));
 }
 
 /** 拖一笔:按下 → 移动 → 松手,每一步之间让 React 冲一次。 */
@@ -353,7 +371,8 @@ describe("蒙版编辑只动蒙版:清空 / 撤销 / 橡皮 / 形状(像素级)"
     const harness = await open();
     await press(harness, "按亮度初始化");
     await press(harness, "反选");
-    await press(harness, "羽化");
+    await featherBy(harness, 8);
+    await press(harness, "应用到蒙版");
     await harness.settle();
 
     expect(transparentInMask(harness)).toBe(0);
@@ -363,6 +382,59 @@ describe("蒙版编辑只动蒙版:清空 / 撤销 / 橡皮 / 形状(像素级)"
     const marked = paintedInMask(harness);
     expect(marked).toBeGreaterThan(0);
     expect(viewDelta(harness)).toBe(marked);
+  });
+});
+
+/** 屏幕坐标(相对画布元素左上角,CSS 像素)直接拖一笔 —— 放大 / 平移之后不能再按"文档 = 屏幕"换算。 */
+async function dragOnScreen(harness: PixelHarness, from: [number, number], to: [number, number], button = 0) {
+  const view = harness.view();
+  const rect = view.getBoundingClientRect();
+  const point = ([x, y]: [number, number]) => ({ clientX: rect.left + x, clientY: rect.top + y });
+  const buttons = button === 1 ? 4 : 1;
+  fireEvent.pointerDown(view, { ...point(from), pointerId: 2, button, buttons });
+  await flush();
+  fireEvent.pointerMove(view, { ...point(to), pointerId: 2, button, buttons });
+  await flush();
+  fireEvent.pointerUp(view, { ...point(to), pointerId: 2, button, buttons: 0 });
+  await flush();
+}
+
+/**
+ * ## 相机只改"怎么看",笔落在哪由相机反算(ADR 0057 决定 3)
+ *
+ * 放大 / 平移之后,同一个屏幕点对应的文档点变了:矩形落进蒙版的位置必须正好是 `(屏幕 − 偏移) / 缩放`。
+ * 把 `docPoint` 换回"按元素矩形等比换算"(放大之前那一版),这条立刻红 —— 笔会落在没放大时的位置。
+ */
+describe("放大与平移之后,笔落在指针下面那个文档像素上", () => {
+  it("放大一档(以画布中心为锚)、再中键平移:矩形在蒙版里的位置按相机反算", async () => {
+    const harness = await open();
+    const frame = () => document.querySelector<HTMLElement>("[data-mask-doc-frame]")!;
+    //: 盒子 = 文档,适应窗口那一档是恒等映射。
+    expect(frame().style.transform).toBe("translate(0px, 0px)");
+
+    await press(harness, "放大");
+    //: 以中心 (48, 60) 为锚放大 1.25 倍:偏移 = 中心 − 中心 × 1.25。
+    expect(frame().style.transform).toBe("translate(-12px, -15px)");
+    expect(frame().style.width).toBe(`${W * 1.25}px`);
+    expect(frame().style.height).toBe(`${H * 1.25}px`);
+    expect(harness.view().getAttribute("width"), "放大不改位图(只改相机)").toBe(String(W));
+
+    await pick(harness, "矩形");
+    await dragOnScreen(harness, [28, 35], [68, 80]);
+    await harness.settle();
+    //: (28 + 12) / 1.25 = 32,(35 + 15) / 1.25 = 40;(68 + 12) / 1.25 = 64,(80 + 15) / 1.25 = 76。
+    expect(paintedBounds(harness)).toEqual({ left: 32, top: 40, right: 63, bottom: 75 });
+
+    await press(harness, "清空");
+    await dragOnScreen(harness, [10, 10], [30, 20], 1);
+    expect(frame().style.transform, "中键拖动只平移").toBe("translate(8px, -5px)");
+    expect(paintedBounds(harness), "平移不画").toBeNull();
+
+    await dragOnScreen(harness, [28, 35], [68, 80]);
+    await harness.settle();
+    //: (28 − 8) / 1.25 = 16,(35 + 5) / 1.25 = 32;(68 − 8) / 1.25 = 48,(80 + 5) / 1.25 = 68。
+    expect(paintedBounds(harness)).toEqual({ left: 16, top: 32, right: 47, bottom: 67 });
+    expect(transparentInMask(harness)).toBe(0);
   });
 });
 

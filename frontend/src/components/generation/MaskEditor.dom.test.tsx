@@ -157,13 +157,16 @@ function mount(props: Partial<React.ComponentProps<typeof MaskEditor>> = {}) {
 }
 
 describe("蒙版编辑器", () => {
-  it("打开时工具条在:四种工具、撤销重做清空反选、羽化和从底图起手", () => {
+  it("打开时工具条在:四种工具、撤销重做清空反选、缩放、边缘和从底图起手", () => {
     mount();
     expect(screen.getByRole("dialog", { name: "画蒙版" })).toBeTruthy();
-    for (const tool of [["笔刷"], ["橡皮"], ["矩形"], ["椭圆"]]) {
-      expect(screen.getByRole("radio", { name: tool[0] })).toBeTruthy();
+    //: 工具是一组按下式按钮(`aria-pressed`),默认按下的是笔刷。
+    for (const tool of ["笔刷", "橡皮", "矩形", "椭圆"]) {
+      const button = screen.getByRole("button", { name: tool });
+      expect(button.getAttribute("aria-pressed"), tool).toBe(tool === "笔刷" ? "true" : "false");
     }
-    for (const action of ["撤销", "重做", "清空", "反选", "羽化", "按亮度初始化", "按 alpha 初始化", "存成蒙版", "取消"]) {
+    const actions = ["撤销", "重做", "清空", "反选", "放大", "缩小", "适应窗口", "实际像素", "应用到蒙版"];
+    for (const action of [...actions, "按亮度初始化", "按 alpha 初始化", "存成蒙版", "取消"]) {
       expect(screen.getByRole("button", { name: action }), action).toBeTruthy();
     }
     //: 画布也在(它是给人画的那一块)。
@@ -372,9 +375,8 @@ describe("蒙版编辑器", () => {
     mount();
     const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
     const ctx = contextOf(view);
-    //: 位图先按**含住盒子那块矩形**量好(首次观测那一趟):文档这时还是默认的 1024²(方),
-    //: 盒子 320×240 ⇒ contain 出来是 240×240(边长取盒子的高)。
-    await waitFor(() => expect([view.width, view.height]).toEqual([240, 240]));
+    //: 位图先按盒子量好(首次观测那一趟):位图 = 盒子 × dpr,文档在里面怎么摆由相机决定。
+    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
     ctx.calls.length = 0;
 
     //: 现在让底图"解码完" —— 这一趟重铺文档,尺寸一点没变。
@@ -428,8 +430,8 @@ describe("蒙版编辑器", () => {
    * 盒子量出 320×240、ResizeObserver 首次观测当场回调、fetch 给一个 blob、Image 由返回的数组决定
    * 什么时候 onload。**着色那一层只在有底图时才在层表里**,所以这一格必须先真的有一张底图。
    *
-   * 注意尺寸:默认那张 64×64 的底图是**方**的,在 320×240 的盒子里 contain 出来是 240×240
-   * (位图尺寸见 fit();底图到之前文档还是默认的 1024²,同样 contain 成 240×240 —— 两条一样)。
+   * 注意尺寸:位图 = 盒子(320×240,jsdom 的 dpr 是 1),和底图是什么比例无关 —— 文档在位图里
+   * 按相机摆(适应窗口那一档是 contain、居中)。
    */
   function stubUnderlayPlatform(size: { width: number; height: number } = { width: 64, height: 64 }): (() => void)[] {
     vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(320);
@@ -472,7 +474,7 @@ describe("蒙版编辑器", () => {
     const decoded = stubUnderlayPlatform();
     mount();
     const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
-    await waitFor(() => expect([view.width, view.height]).toEqual([240, 240]));
+    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
     await waitFor(() => expect(decoded.length).toBeGreaterThan(0));
     for (const fire of decoded) fire();
     await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
@@ -496,7 +498,7 @@ describe("蒙版编辑器", () => {
     screen.getByRole("button", { name: "反选" }).click();
     expect(scratch.calls).toContain(`fillRect ${LIGHT_TINT}`);
     expect(reads.reads).toBe(before);
-    expect(view.width).toBe(240);
+    expect(view.width).toBe(320);
   });
 
   it("主题切到深色:当场重画,用的是新颜色 —— 不用等用户下一次动手", async () => {
@@ -544,10 +546,10 @@ describe("蒙版编辑器", () => {
     Object.assign(Element.prototype, { setPointerCapture: () => {}, releasePointerCapture: () => {}, hasPointerCapture: () => false });
     mount();
     const view = screen.getByLabelText("蒙版画布") as HTMLCanvasElement;
-    await waitFor(() => expect([view.width, view.height]).toEqual([240, 240]));
+    await waitFor(() => expect([view.width, view.height]).toEqual([320, 240]));
 
     //: 选矩形,在底图还没到的时候按下 —— 这一份快照是 1024² 那张文档的。
-    fireEvent.click(screen.getByRole("radio", { name: "矩形" }));
+    fireEvent.click(screen.getByRole("button", { name: "矩形" }));
     fireEvent.pointerDown(view, { clientX: 100, clientY: 80, pointerId: 1, button: 0, buttons: 1 });
 
     //: 现在底图到了:文档换成 2000×1500。
@@ -575,7 +577,7 @@ describe("蒙版编辑器", () => {
    * 此前画布元素铺满盒子、位图也按盒子的尺寸写 —— 源图不是盒子那个比例时**被拉伸/压扁**
    * (竖幅 1624×2880 放进横幅的盒子几乎认不出来)。现在按 contain 缩:长边贴住盒子、短边按原始
    * 比例留白;**留白是弹窗自己的底色**(画布那一格不再有 `bg-black` —— 那正是"两条大黑边"的来源),
-   * 矩形四条边由画布自己的 `border` 画出来。
+   * 文档四条边由跟着相机走的那个边框 div 画出来(画布本身铺满盒子,文档在里面按相机摆)。
    *
    * 这里钉的是**等比**那一件事(维护者那种竖幅图放进 320×240 的盒子):绘制矩形的宽高比 ==
    * 图的宽高比,1px 取整之内;以及"留白不是黑"。真 Chromium 的四角落点实测见报告。
@@ -588,15 +590,17 @@ describe("蒙版编辑器", () => {
     for (const fire of decoded) fire();
     await waitFor(() => expect(screen.getByRole("button", { name: "按亮度初始化" }).hasAttribute("disabled")).toBe(false));
 
-    //: 等比:绘制矩形的宽高比 == 图的宽高比(1px 取整之内)。拉伸的话这里差 0.7 以上。
-    expect(Math.abs(view.width - view.height * (1624 / 2880)), "1px 取整之内").toBeLessThanOrEqual(1);
-    //: 高占满盒子(240),宽按比例 ⇒ 元素自己也是那块矩形(CSS 尺寸是 fit() 写下去的)。
-    expect(view.style.height).toBe("240px");
-    expect(Number.parseInt(view.style.width, 10)).toBeLessThanOrEqual(136);
-    //: 留白不是黑:画布那一格不刷黑;四条边看得到(画布自己的 border)。
-    const frame = view.parentElement as HTMLElement;
-    expect(frame.className).not.toContain("bg-black");
-    expect(frame.className).not.toMatch(/bg-\[#0{3}/);
-    expect(view.className).toContain("border");
+    //: 等比:文档那块矩形(边框 div 跟着相机走)的宽高比 == 图的宽高比(1px 取整之内)。拉伸的话这里差 0.7 以上。
+    const frame = document.querySelector<HTMLElement>("[data-mask-doc-frame]")!;
+    const width = Number.parseFloat(frame.style.width);
+    const height = Number.parseFloat(frame.style.height);
+    expect(Math.abs(width - height * (1624 / 2880)), "1px 取整之内").toBeLessThanOrEqual(1);
+    //: 适应窗口:高占满盒子(240),宽按比例,左右居中。
+    expect(height).toBe(240);
+    expect(frame.style.transform).toBe(`translate(${(320 - width) / 2}px, 0px)`);
+    //: 留白不是黑:画布那一格不刷黑;文档四条边看得到(边框 div 自己的 border)。
+    expect((view.parentElement as HTMLElement).className).not.toContain("bg-black");
+    expect((view.parentElement as HTMLElement).className).not.toMatch(/bg-\[#0{3}/);
+    expect(frame.className).toContain("border");
   });
 });

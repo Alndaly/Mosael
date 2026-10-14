@@ -1,16 +1,34 @@
 import * as React from "react";
-import { Brush, Check, Circle, Contrast, Droplets, Eraser, Feather, Redo2, Square, SunMedium, Trash, Undo2 } from "lucide-react";
+import {
+  Brush,
+  Check,
+  Circle,
+  Contrast,
+  Droplets,
+  Eraser,
+  Maximize2,
+  Redo2,
+  Square,
+  SunMedium,
+  Trash,
+  Undo2,
+  Wand2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { assetPreviewUrl, savePaintedMask, type Asset } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
+import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
+import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
+import { useCanvasInputMode } from "@/components/app/canvasInputMode";
 import { FailureCard } from "@/components/failure/FailureCard";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
-import { Segmented } from "@/components/ui/segmented";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -21,6 +39,7 @@ import {
   alphaMask,
   createMaskWriter,
   featherMask,
+  growMask,
   invertMask,
   maskViewLayers,
   thresholdMask,
@@ -28,66 +47,70 @@ import {
   type MaskPixels,
   type MaskViewLayer,
 } from "@/lib/maskPixels";
+import { formatCombo, isTypingTarget } from "@/lib/shortcuts";
 import { useThemeColor } from "@/lib/themeColor";
 
+import {
+  ZOOM_STEP,
+  center,
+  clampPan,
+  fitCamera,
+  panBy,
+  placement,
+  toDoc,
+  visiblePart,
+  wheelIntent,
+  zoomAround,
+  type Camera,
+  type Point,
+  type Rect,
+  type Size,
+} from "./maskCamera";
+
 /**
- * 蒙版编辑器:在**浏览器 canvas** 上刷出「要改的那一块」,产出一张灰度 PNG(ADR 0056 决定 3 / 5 / 7 的第二步)。
+ * 蒙版编辑器:在**浏览器 canvas** 上画出「要改的那一块」,存成一张蒙版素材(ADR 0056 第二步,ADR 0057 决定 3)。
  *
  * ## 产出的东西是一张黑白图,不是一张带 alpha 的图
  *
  * 契约在 `backend/app/ai/providers/contracts/generation.py` 的 MASK:**灰度图、白 = 要改的地方**。
  * ComfyUI 插件那条路注入的是 `LoadImageMask(image=…, channel="red")`,读的是**红通道**
- * (`plugins/bundled/comfyui/tools/graph.py` 的 `_MASK_CHANNEL`)。所以画布是**不透明的黑底 + 白笔迹**,
- * 导出的就是它:黑底那一层不是装饰 —— 带透明通道的 PNG 在那边读出来是整块不透明,**静默地什么都不重绘**。
+ * (`plugins/bundled/comfyui/tools/graph.py` 的 `_MASK_CHANNEL`)。所以蒙版画布是**不透明的黑底 + 白笔迹**,
+ * 导出的就是它:带透明通道的 PNG 在那边读出来是整块不透明,**静默地什么都不重绘**。存的时候交给后端那个
+ * 唯一的写出口(`POST /api/assets/masks` → `write_mask_asset`):名字、出处、归一成 L 模式、缩回源图尺寸
+ * 都是那边的事,这里只交像素。
  *
- * ## 三张画布,各干各的
+ * ## 文档与视口分开
  *
  * | 画布 | 在哪 | 装什么 |
  * | --- | --- | --- |
  * | 底图 | 只在看得见的这张上 | 要改的那张原图 —— **导出的蒙版里永远没有它** |
- * | 蒙版(离屏) | 不进 DOM,和底图一样大 | 黑白笔迹。笔画累积在它上面,**导出的也是它** |
- * | 可见的那张 | 对话框里 | 底图 + 蒙版,按容器等比缩放到看得见的大小(devicePixelRatio 感知) |
+ * | 蒙版(离屏,"文档") | 不进 DOM,和底图一样大(长边封顶 4096) | 黑白笔迹。笔画累积在它上面,**导出的也是它** |
+ * | 可见的那张 | 对话框里,铺满画布区 | 透过一台**相机**(`maskCamera`:缩放 + 平移)看底图 + 蒙版 |
  *
- * 三张分开是为了让「导出」这件事没有任何条件:导出的那张画布上从来没有底图,也不需要重新合成一遍。
+ * 适应窗口 / 100% / 放大缩小 / 滚轮 / 捏合 / 空格拖动 / 中键拖动都只改相机那三个数,不碰蒙版的一个像素;
+ * 底图永远按原始比例画(相机只有一个缩放)。滚轮的语义跟全局的画布操控方式走(触控板:双指平移、捏合缩放;
+ * 鼠标:滚轮缩放),这里只读不改。
  *
  * ## 可见的那张不能把蒙版整张盖上去
  *
- * 蒙版是**不透明**的(见 lib/maskPixels 文件头),`source-over` 整张画上去就是一块黑板 —— 底图被
- * 盖掉、画过和没画过也分不出来(维护者看到的就是「清空 / 反选之后底图没了、图变成灰的」)。
- * 可见的那张照 `maskViewLayers` 给的那份层表画(`drawMaskView`):底图原样在下面,要改的地方
- * **压暗 + 着蒙版色**叠在上面。层表和理由都写在 lib/maskPixels 里,这边只管照着画。
- *
- * ## 蒙版色跟主题走
- *
- * 那个红**不是这里的常量**:2D 上下文读不到 CSS 变量(`fillStyle = "var(--destructive)"` 是不生效的),
- * 所以颜色按主题从 token 解析一次、缓存在 ref 里(`lib/themeColor` 的 `useThemeColor`),`paint()` 每一帧
- * 只读那个缓存 —— 每帧一次 `getComputedStyle` 是上一轮明确避开的代价。主题一切就重画一次那一趟,
- * 屏幕上那一块颜色立刻跟上,不用等用户下一次动手(和「底图读进来」是同一个坑,见下面那条 effect)。
+ * 蒙版是**不透明**的,`source-over` 整张画上去就是一块黑板。可见的那张照 `maskViewLayers` 给的层表画
+ * (`drawMaskView`):底图原样在下面,要改的地方**压暗 + 着蒙版色**叠在上面。蒙版色是主题 token
+ * (2D 上下文读不到 CSS 变量),按主题解析一次缓存在 ref 里,主题一切就重画。
  *
  * ## 读底图像素为什么要绕一圈 fetch
  *
- * `assetPreviewUrl` 是**后端的源**(127.0.0.1:8800),直接把它给 `<img>` 再画进画布会把画布**污染**
- * (tainted canvas)—— 之后 `getImageData` / `toBlob` 一律 SecurityError,而这两步恰恰是「按阈值初始化」
- * 和「导出」必须做的。所以走 fetch → blob → 对象 URL:对象 URL 继承本文档的源,画上去干净。
- * 读不到(断网、不是图片、环境里没有 canvas)就是**没有底图**,编辑器照样能画。
- *
- * ## 像素运算不在这里
- *
- * 反选 / 阈值 / 羽化 / 撤销栈那份单通道全在 `lib/maskPixels`(纯函数,能单测;jsdom 里没有 canvas 2D)。
- * 这里只留「取像素 → 调它 → 写回」。
+ * `assetPreviewUrl` 是**后端的源**,直接给 `<img>` 再画进画布会把画布**污染**(tainted canvas)——
+ * 之后 `getImageData` / `toBlob` 一律 SecurityError。所以走 fetch → blob → 对象 URL。
+ * 读不到(断网、不是图片)就是**没有底图**,编辑器照样能画。
  *
  * ## 「只动蒙版」不是靠自觉,是靠拿不到别的口子
  *
- * 这个文件**没有** `maskContext().fillRect(...)` 这种写法了:蒙版那张画布由 `lib/maskPixels` 的
- * `createMaskWriter()` 发,**交出来的只有那几个语义方法**(`read` / `write` / `clear` / `paste` /
- * `snapshot` / `restore` / `stroke` / `preview`)。每一次写先过"覆盖不满整张就拒绝",写完的下一微任务
- * 再逐像素验一遍不透明 —— 那三条把不变量踩坏的路(见 maskPixels 里那张表)全在那一个文件里堵住,
- * 这里想绕开得先改那边。**加新动作时不要在这里要原始 ctx**:笔迹类走 `stroke` / `preview`,
- * 整张类走 `write` / `clear` / `paste`,没有第三类。
- *
- * 「橡皮 = 写黑」也是这条不变量的一部分:蒙版按契约没有 alpha 可用(灰度、白 = 要改、全不透明),
- * 所以"擦掉"在数据上只能是写黑;屏幕上"擦完露出原图"由**底图那一层**负责,与蒙版无关
- * (见 maskPixels 的「橡皮为什么是写黑」)。
+ * 蒙版那张画布由 `lib/maskPixels` 的 `createMaskWriter()` 发,**交出来的只有那几个语义方法**
+ * (`read` / `write` / `clear` / `paste` / `snapshot` / `restore` / `stroke` / `preview`)。
+ * 加新动作时不要在这里要原始 ctx:笔迹类走 `stroke` / `preview`,整张类走 `write` / `clear` / `paste`。
+ * 「橡皮 = 写黑」也是这条不变量的一部分:蒙版没有 alpha 可用,"擦掉"在数据上只能是写黑;屏幕上
+ * "擦完露出原图"由**底图那一层**负责。像素运算(反选 / 阈值 / 扩张 / 羽化)全在 `lib/maskPixels`,
+ * 和后端由 `contracts/mask-cases.json` 逐字节钉住。
  */
 
 /**
@@ -103,25 +126,28 @@ export function isMaskCanvas(element: HTMLCanvasElement): boolean {
 
 /** 没有底图、也没有底稿时的画布尺寸。 */
 const DEFAULT_DOC = 1024;
-/** 撤销栈最多几步(一次按下到松手算一步)。 */
+/** 撤销栈最多几步(一次按下到松手、一条命令各算一步)。 */
 const HISTORY_LIMIT = 30;
 /**
- * 撤销栈的总字节上限。一步是**一个像素一个字节**(见 lib/maskPixels 的 grayscaleOf):步数封顶 30,
- * 字节也封顶 —— 4096² 的一步就是 16MB,三十步五百兆,标签页会先卡住。
+ * 撤销栈的总字节上限。一步是**一个像素一个字节**(见 lib/maskPixels 的 grayscaleOf):4096² 的一步
+ * 就是 16MB,三十步五百兆,标签页会先卡住。
  */
 const HISTORY_BYTES = 96 * 1024 * 1024;
 /**
  * 蒙版文档的尺寸上限(长边)。底图比这还大就按比例缩下来:8000² 的一张 RGBA 画布是 256MB,
- * 而局部重绘最终按潜空间尺寸用它,多出来那几千万像素换不来任何东西。
+ * 出口那边会按源图尺寸缩回去(ADR 0057 决定 1)。
  */
 const MAX_DOC_EDGE = 4096;
 /**
- * **可见那张**画布的位图上限(长边)。它现在铺满整个盒子、还带 devicePixelRatio,不封顶的话
- * 4K 屏上一个 1180×820 的弹窗就是 2360×1640、约 15MB —— 一张两张还好,而浏览器的画布内存
- * 是**所有**画布共用的(这个对话框里还有底稿、临时画布、导出用的那张),超了之后新建画布会
- * 静默地画不出东西。2048 换到屏幕上早就看不出软(它是给人看着画的,不是导出的那一张)。
+ * **可见那张**画布的位图上限(长边)。浏览器的画布内存是**所有**画布共用的(这个对话框里还有底稿、
+ * 派生层、导出用的那张),超了之后新建画布会静默地画不出东西。2048 换到屏幕上看不出软。
  */
 const MAX_VIEW_EDGE = 2048;
+/** 笔刷大小的范围(文档像素,直径)。 */
+const BRUSH_MIN = 2;
+const BRUSH_MAX = 400;
+/** 扩张 / 羽化滑块的范围(文档像素)。 */
+const EDGE_MAX = 64;
 const TAU = Math.PI * 2;
 const BLACK = "#000000";
 const WHITE = "#ffffff";
@@ -132,17 +158,12 @@ const FADE_BLACK = "rgba(0, 0, 0, 0)";
 const MASK_FILE_NAME = "mask.png";
 
 type Tool = "brush" | "eraser" | "rect" | "ellipse";
-/** 初笔迹是从底图的什么量出来的 —— 阈值滑块改动时重算的就是这一种;null = 还没按过那两个按钮。 */
+/** 初笔迹是从底图的什么量出来的 —— 阈值滑块改动时重算的就是这一种。 */
 type FromSource = "luminance" | "alpha";
 
-interface Size {
-  width: number;
-  height: number;
-}
-interface Point {
-  x: number;
-  y: number;
-}
+/** 工具和它的单键快捷键(画图软件通行的那几个字母)。 */
+const TOOL_KEYS: Record<string, Tool> = { b: "brush", e: "eraser", r: "rect", o: "ellipse" };
+
 /** 一次拖动:按下在哪、上一次到哪、形状工具要用的「按下之前那份像素」。 */
 interface Drag {
   tool: Tool;
@@ -150,13 +171,19 @@ interface Drag {
   last: Point;
   before: Uint8ClampedArray | null;
 }
+/** 一次平移拖动(空格 + 左键,或中键):上一次指针在哪(屏幕坐标)。 */
+interface PanDrag {
+  pointerId: number;
+  x: number;
+  y: number;
+}
 /** 读进来的底图(像素 + 那张图本身,后者画在看得见的那张画布上当参考)。 */
 interface Loaded extends Size {
   data: MaskPixels;
   image: HTMLImageElement;
 }
 
-/** 一份底图 / 底稿:素材 id + 名字(名字进新素材的标题,见 ADR 0056 后果那一节)。 */
+/** 一份底图 / 底稿:素材 id + 名字。 */
 export interface MaskImage {
   assetId: string;
   name: string;
@@ -266,17 +293,49 @@ export interface MaskViewContext {
   globalAlpha: number;
   globalCompositeOperation: GlobalCompositeOperation;
   clearRect(x: number, y: number, width: number, height: number): void;
-  drawImage(source: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(
+    source: CanvasImageSource,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
   createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
+}
+
+/** 一个画布源自己的像素尺寸(`<img>` 读 natural 那一对)。 */
+function sourceSize(source: CanvasImageSource): Size {
+  const image = source as { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number };
+  return {
+    width: Number(image.naturalWidth || image.width || 0),
+    height: Number(image.naturalHeight || image.height || 0),
+  };
+}
+
+/** 一个源上对应 `fraction` 那一段的源矩形。 */
+function sourceRect(source: CanvasImageSource, fraction: Rect): Rect | null {
+  const size = sourceSize(source);
+  if (!size.width || !size.height) return null;
+  return {
+    x: fraction.x * size.width,
+    y: fraction.y * size.height,
+    width: fraction.width * size.width,
+    height: fraction.height * size.height,
+  };
 }
 
 /**
  * 把看得见的那张画布按层表画出来(层表见 lib/maskPixels 的 maskViewLayers)。
  *
- * 「哪几层、谁在下、各自怎么叠」只有层表那一处 —— 这里只管照着画,不自己决定合成方式:
- * 屏幕上怎么画和导出的契约是两件事,分开写才改得动其中一件而不动另一件。
+ * 「哪几层、谁在下、各自怎么叠」只有层表那一处 —— 这里只管照着画,不自己决定合成方式。
  *
- * `mask` / `underlay` 允许是 null(还没铺出蒙版、底图没读进来):缺哪层跳哪层。
+ * `place` 是整张文档落在这张位图上的矩形(相机给的,见 maskCamera 的 placement);没给就铺满整张。
+ * **只画落在位图之内的那一块**(`visiblePart`):放大之后整张文档是几万像素宽,派生层按它分配画布
+ * 就是几个 GB。`mask` / `underlay` 允许是 null(还没铺出蒙版、底图没读进来):缺哪层跳哪层。
  */
 export function drawMaskView(
   ctx: MaskViewContext,
@@ -287,6 +346,7 @@ export function drawMaskView(
     scratch,
     width,
     height,
+    place,
   }: {
     plan: MaskViewLayer[];
     mask: CanvasImageSource | null;
@@ -295,22 +355,26 @@ export function drawMaskView(
     scratch: HTMLCanvasElement;
     width: number;
     height: number;
+    place?: Rect;
   },
 ): void {
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0, 0, width, height);
-  for (const layer of plan) {
-    const source = layer.of === "underlay" ? underlay : mask;
-    if (!source) continue;
-    const canvas =
-      layer.of === "maskInverse" || layer.of === "maskTint"
-        ? maskLayer(scratch, layer.of, source, width, height, layer.tint ?? "")
-        : source;
-    if (!canvas) continue;
-    ctx.globalAlpha = layer.alpha;
-    ctx.globalCompositeOperation = layer.op;
-    ctx.drawImage(canvas, 0, 0, width, height);
+  const visible = visiblePart(place ?? { x: 0, y: 0, width, height }, { width, height });
+  if (visible) {
+    const { target, fraction } = visible;
+    for (const layer of plan) {
+      const source = layer.of === "underlay" ? underlay : mask;
+      if (!source) continue;
+      const derived = layer.of === "maskInverse" || layer.of === "maskTint";
+      const canvas = derived ? maskLayer(scratch, layer.of as "maskInverse" | "maskTint", source, fraction, target, layer.tint ?? "") : source;
+      const from = derived ? { x: 0, y: 0, width: target.width, height: target.height } : sourceRect(source, fraction);
+      if (!canvas || !from) continue;
+      ctx.globalAlpha = layer.alpha;
+      ctx.globalCompositeOperation = layer.op;
+      ctx.drawImage(canvas, from.x, from.y, from.width, from.height, target.x, target.y, target.width, target.height);
+    }
   }
   //: 收尾复位:这张 ctx 还要接着给下一帧用,状态漏出去就是下一帧的第一层叠错了。
   ctx.globalAlpha = 1;
@@ -318,27 +382,28 @@ export function drawMaskView(
 }
 
 /**
- * 蒙版那一层的底:反相(未画 = 白)或着色(画过 = 蒙版色)。
- *
- * 蒙版自己是不透明的灰度图,两张派生各靠一次贴合得到,都不需要逐像素循环:
+ * 蒙版那一层的底:反相(未画 = 白)或着色(画过 = 蒙版色),只铺看得见的那一块(`target` 那么大)。
  *
  * - 反相:白底上 `difference` 减一次蒙版 → 255 − 蒙版;
  * - 着色:蒙版色上 `multiply` 乘一次蒙版 → 没画的地方是黑(叠上去时 `lighter` 加零 = 什么都不加),
  *   画过的地方是蒙版色。
  *
- * `tint` 是层表带过来的那个颜色(调用方按主题解析好,见 MASK_TINT_TOKEN)。**空串就铺黑**:黑叠上去
- * 还是「什么都不加」,这一层等于空转 —— 屏幕上还有压暗那一笔兜着。不这么办的话,`fillStyle = ""`
- * 会被静默忽略,底色留在上一次那个**白**(反相那趟刚铺的),画过的地方就糊成一块白斑。
+ * `tint` 是层表带过来的那个颜色。**空串就铺黑**:黑叠上去还是「什么都不加」。不这么办的话,
+ * `fillStyle = ""` 会被静默忽略,底色留在上一次那个**白**,画过的地方就糊成一块白斑。
  */
 function maskLayer(
   scratch: HTMLCanvasElement,
   kind: "maskInverse" | "maskTint",
   mask: CanvasImageSource,
-  width: number,
-  height: number,
+  fraction: Rect,
+  target: Rect,
   tint: string,
 ): HTMLCanvasElement | null {
-  //: 尺寸跟着可见画布走(对话框换大小、dpr 变了);重设 width 会清空整张位图,本来就该重铺。
+  const from = sourceRect(mask, fraction);
+  if (!from) return null;
+  const width = Math.max(1, Math.ceil(target.width));
+  const height = Math.max(1, Math.ceil(target.height));
+  //: 尺寸跟着看得见的那一块走;重设 width 会清空整张位图,本来就该重铺。
   if (scratch.width !== width || scratch.height !== height) {
     scratch.width = width;
     scratch.height = height;
@@ -350,7 +415,7 @@ function maskLayer(
   ctx.fillStyle = kind === "maskInverse" ? WHITE : tint || BLACK;
   ctx.fillRect(0, 0, width, height);
   ctx.globalCompositeOperation = kind === "maskInverse" ? "difference" : "multiply";
-  ctx.drawImage(mask, 0, 0, width, height);
+  ctx.drawImage(mask, from.x, from.y, from.width, from.height, 0, 0, target.width, target.height);
   ctx.globalCompositeOperation = "source-over";
   return scratch;
 }
@@ -375,18 +440,18 @@ export function MaskEditor({
 }) {
   const t = useI18n();
   const queryClient = useQueryClient();
-  /** 看得见的那张画布(底图 + 蒙版,只给人看)。它铺满自己的盒子,位图尺寸由 fit() 按盒子写。 */
+  const [inputMode] = useCanvasInputMode();
+  /** 看得见的那张画布。它铺满画布区(CSS),位图尺寸由 measure() 按自己的盒子写。 */
   const viewRef = React.useRef<HTMLCanvasElement>(null);
-  /**
-   * 画布外面那个盒子。**量的对象是它**:画布的 CSS 尺寸是 `fit()` 按 contain 写下去的,
-   * 量画布自己就成了自己咬自己(写一次尺寸 → ResizeObserver 又叫一次 → 尺寸再变)。
-   */
+  /** 文档的边框(一个跟着相机走的 div):用户看得出图的边在哪、能画到哪。 */
   const frameRef = React.useRef<HTMLDivElement>(null);
-  /** 正在画一笔。见 fit():拖动期间不重量(每一次量都要读版面,而拖动每秒几十次)。 */
+  /** 笔刷的圈:跟着指针、按屏幕上的真实大小画(放大之后笔刷看上去也跟着大)。 */
+  const ringRef = React.useRef<HTMLDivElement>(null);
+  /** 正在画一笔:拖动期间不重量盒子(每一次量都要读版面,而拖动每秒几十次)。 */
   const drawingRef = React.useRef(false);
   /**
    * 蒙版本身 —— 离屏、不进 DOM、导出的就是它。**由 `lib/maskPixels` 的 createMaskWriter 发**:
-   * 这里拿不到它的原始 2D 上下文,写它只能走那几个语义方法(见文件头「只动蒙版」那一节)。
+   * 这里拿不到它的原始 2D 上下文,写它只能走那几个语义方法。
    */
   const writerRef = React.useRef<ReturnType<typeof createMaskWriter> | null>(null);
   if (!writerRef.current) writerRef.current = createMaskWriter();
@@ -395,33 +460,44 @@ export function MaskEditor({
     const canvas = writer().canvas();
     if (canvas) MASK_CANVASES.add(canvas);
   });
-  /**
-   * 合成可见那张画布时复用的一张离屏画布(蒙版的反相 / 着色各要一整张,见 drawMaskView 的
-   * maskLayer)。每帧新建一张等于每帧要一块和可见画布一样大的画布内存 —— 浏览器的画布内存是
-   * 这个对话框里所有画布共用的,所以复用一张。
-   */
+  /** 合成可见那张画布时复用的一张离屏画布(蒙版的反相 / 着色,见 drawMaskView 的 maskLayer)。 */
   const scratchRef = React.useRef<HTMLCanvasElement | null>(null);
   /** 底图像素(按亮度 / 按 alpha 初始化读的就是它)和那张图(画在看得见的画布上)。 */
   const underlayRef = React.useRef<Loaded | null>(null);
   /** 底稿:打开时已经有的那张蒙版。 */
   const draftRef = React.useRef<HTMLImageElement | null>(null);
   const dragRef = React.useRef<Drag | null>(null);
+  const panRef = React.useRef<PanDrag | null>(null);
+  /** 相机(见 maskCamera)。null = 还没量到盒子(jsdom、对话框刚挂上那一帧)。 */
+  const cameraRef = React.useRef<Camera | null>(null);
+  /** 相机是不是「适应窗口」那一档:是的话盒子一变就重新适应;用户缩放 / 平移过就不再自作主张。 */
+  const fittedRef = React.useRef(true);
+  /** 画布元素的 CSS 尺寸(相机的坐标系)。 */
+  const boxRef = React.useRef<Size | null>(null);
+  /** 指针在不在画布上 —— 空格平移只在这时候接管空格(否则空格还是「按下这颗按钮」)。 */
+  const hoverRef = React.useRef(false);
+  /** WebKit 的捏合手势:上一次的 scale(Chromium 给的是带 ctrlKey 的滚轮,走 wheelIntent)。 */
+  const gestureRef = React.useRef<number | null>(null);
   /** 撤销栈:每一步是**一整个蒙版的单通道灰度**(见 lib/maskPixels 的 grayscaleOf)。 */
   const historyRef = React.useRef<{ steps: Uint8ClampedArray[]; at: number }>({ steps: [], at: -1 });
   /** 上一步是什么(用来把滑块的连续改动并成一步)。 */
   const lastStepRef = React.useRef<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
-  /**
-   * 要改的地方在屏幕上着的色。**按主题解析一次**(浅深两套值),`paint()` 只读这个缓存 ——
-   * 画布不认 `var()`,而这一个字符串在每一帧里都用得上(理由与订阅见 lib/themeColor)。
-   */
+  /** 要改的地方在屏幕上着的色。**按主题解析一次**,`paint()` 只读这个缓存(理由与订阅见 lib/themeColor)。 */
   const tint = useThemeColor(MASK_TINT_TOKEN);
   const tintRef = React.useRef(tint);
+  const modeRef = React.useRef(inputMode);
+  React.useEffect(() => {
+    modeRef.current = inputMode;
+  }, [inputMode]);
 
   const [tool, setTool] = React.useState<Tool>("brush");
-  const [radius, setRadius] = React.useState(48);
+  /** 笔刷大小(直径,文档像素)。 */
+  const [brushSize, setBrushSize] = React.useState(48);
   const [hardness, setHardness] = React.useState(0.9);
-  const [feather, setFeather] = React.useState(8);
+  /** 扩张(正)/ 收缩(负),文档像素。 */
+  const [grow, setGrow] = React.useState(0);
+  const [feather, setFeather] = React.useState(0);
   const [threshold, setThreshold] = React.useState(0.5);
   const [fromSource, setFromSource] = React.useState<FromSource | null>(null);
   const [showUnderlay, setShowUnderlay] = React.useState(true);
@@ -429,10 +505,18 @@ export function MaskEditor({
   const [canUndo, setCanUndo] = React.useState(false);
   const [canRedo, setCanRedo] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  /** 底栏那一行:输出尺寸和当前缩放(只给人看;真值在 ref 里)。 */
+  const [readout, setReadout] = React.useState<{ size: Size; zoom: number | null }>({
+    size: { width: DEFAULT_DOC, height: DEFAULT_DOC },
+    zoom: null,
+  });
+  /** 空格按着(准备平移)/ 正在平移 —— 只决定指针的样子。 */
+  const [panMode, setPanMode] = React.useState<"off" | "ready" | "dragging">("off");
   /** 没存上时那句给人看的话(后端那句,或者本地这一句兜底)。 */
   const [failure, setFailure] = React.useState<string | null>(null);
 
   const showUnderlayRef = React.useRef(showUnderlay);
+  const spaceRef = React.useRef(false);
 
   /** 文档尺寸只有一个来源:写入口自己。两边各记一份迟早分叉,而分叉的后果正是"只写了一半"。 */
   const writer = () => writerRef.current as ReturnType<typeof createMaskWriter>;
@@ -448,13 +532,26 @@ export function MaskEditor({
   /** 当前蒙版的单通道快照(存撤销栈用)。 */
   const snapshot = (): Uint8ClampedArray | null => maskContext()?.snapshot() ?? null;
 
+  /** 文档边框那个 div 跟着相机走(CSS 像素,和相机同一个坐标系)。 */
+  const placeFrame = React.useCallback(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const camera = cameraRef.current;
+    if (!camera) {
+      frame.hidden = true;
+      return;
+    }
+    const { width, height } = writer().size;
+    frame.hidden = false;
+    frame.style.transform = `translate(${camera.x}px, ${camera.y}px)`;
+    frame.style.width = `${width * camera.scale}px`;
+    frame.style.height = `${height * camera.scale}px`;
+  }, []);
+
   /**
    * 把当前状态画到看得见的那张画布上:底图原样在下面,要改的地方压暗 + 着蒙版色叠上去。
    *
    * **只读 ref** —— 所以这个函数在整个生命周期里是同一个,几个 effect 不会因为它的身份变化而重跑。
-   * 层表由 `showUnderlayRef` 决定(「显示底图」关掉就只剩蒙版本身),颜色由 `tintRef` 给(主题色,
-   * 每帧读样式是不行的 —— 见 lib/themeColor),合成方式全在 lib/maskPixels 的 `maskViewLayers` 里,
-   * 这边只负责把它交给 `drawMaskView`。
    */
   const paint = React.useCallback(() => {
     const view = viewRef.current;
@@ -462,6 +559,8 @@ export function MaskEditor({
     if (!view || !ctx) return;
     const underlay = underlayRef.current?.image ?? null;
     const scratch = scratchRef.current ?? (scratchRef.current = document.createElement("canvas"));
+    const camera = cameraRef.current;
+    const box = boxRef.current;
     drawMaskView(ctx, {
       plan: maskViewLayers({ hasUnderlay: Boolean(underlay), showUnderlay: showUnderlayRef.current, tint: tintRef.current }),
       mask: writer().canvas(),
@@ -469,60 +568,62 @@ export function MaskEditor({
       scratch,
       width: view.width,
       height: view.height,
+      place: camera && box ? placement(camera, writer().size, view.width / box.width) : undefined,
     });
+    placeFrame();
+  }, [placeFrame]);
+
+  /** 换相机:记下来、底栏的缩放跟上。`fitted` = 这是不是「适应窗口」那一档。 */
+  const setCamera = React.useCallback((next: Camera, fitted: boolean) => {
+    cameraRef.current = next;
+    fittedRef.current = fitted;
+    setReadout((previous) => (previous.zoom === next.scale ? previous : { ...previous, zoom: next.scale }));
   }, []);
 
   /**
-   * 把画布量成**「按原始比例缩进盒子」的那块矩形**(contain),再把当前蒙版重画上去。
+   * 量盒子、写位图尺寸、按需要重新适应窗口。返回「有没有变」—— 没变就不必重画。
    *
-   * 维护者:「注意图片应该是原先的比例」。此前画布元素铺满盒子(`h-full w-full`)、位图也按盒子的
-   * 尺寸写 —— 源图不是盒子那个比例时**被拉伸/压扁**(竖幅 1624×2880 放进横幅的盒子几乎认不出来)。
-   * 现在这里同时定下两件事,两者永远同一个宽高比:
-   *
-   * - **CSS 尺寸** = contain 之后那块矩形(居中由外层的 `place-items-center` 做)。画布元素自己就是
-   *   那个矩形,所以**四周的留白是弹窗自己的底色**(不是把画布刷黑 —— 那正是上一轮抱怨的"两条大黑边"),
-   *   而矩形四条边由画布自己的 `border` 画出来,用户知道能画到哪。
-   * - **位图尺寸** = 上面那块 × devicePixelRatio(封在 MAX_VIEW_EDGE 里),和文档同一个宽高比 ⇒
-   *   底图与蒙版 1:1 画上去,不变形。
-   *
-   * 所以**量的必须是外面那个盒子**(`frameRef`),不能再量画布自己:画布的 CSS 尺寸是这里写下去的,
-   * 量它就成了自己咬自己。
+   * 量的是**画布元素自己**:它的 CSS 尺寸由版面给(铺满画布区),位图尺寸是这里写的,两者互不咬。
+   * 位图 = 盒子 × devicePixelRatio,封在 MAX_VIEW_EDGE 里。
    */
-  const fit = React.useCallback(() => {
-    const frame = frameRef.current;
-    const view = viewRef.current;
-    if (!frame || !view) return;
-    //: 拖笔途中不重量(下面几处按指针维护 drawingRef):读 clientWidth 会让浏览器先把版面算一遍,
-    //: 而这里每帧都会被 ResizeObserver 叫一次。
-    if (drawingRef.current) return;
-    const boxWidth = frame.clientWidth;
-    const boxHeight = frame.clientHeight;
-    //: jsdom 里量出来是 0(没有版面);真实环境里也可能是对话框刚挂上、还没量到的那一帧。
-    if (!boxWidth || !boxHeight) return;
-    const { width: docWidth, height: docHeight } = doc();
-    //: contain:两个方向的缩放比取小的那个 —— 长边贴住盒子,短边按原始比例留白。
-    const scale = Math.min(boxWidth / docWidth, boxHeight / docHeight);
-    const css = { width: Math.max(1, Math.round(docWidth * scale)), height: Math.max(1, Math.round(docHeight * scale)) };
-    const width = `${css.width}px`;
-    const height = `${css.height}px`;
-    if (view.style.width !== width || view.style.height !== height) {
-      view.style.width = width;
-      view.style.height = height;
-    }
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const cap = Math.min(1, MAX_VIEW_EDGE / Math.max(css.width * ratio, css.height * ratio));
-    const next = {
-      width: Math.max(1, Math.round(css.width * ratio * cap)),
-      height: Math.max(1, Math.round(css.height * ratio * cap)),
-    };
-    if (view.width === next.width && view.height === next.height) return;
-    view.width = next.width;
-    view.height = next.height;
-    paint();
-  }, [paint]);
+  const measure = React.useCallback(
+    (refit: boolean): boolean => {
+      const view = viewRef.current;
+      if (!view || drawingRef.current) return false;
+      const box = { width: view.clientWidth, height: view.clientHeight };
+      //: jsdom 里量出来是 0(没有版面);真实环境里也可能是对话框刚挂上、还没量到的那一帧。
+      if (!box.width || !box.height) return false;
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const cap = Math.min(1, MAX_VIEW_EDGE / Math.max(box.width * ratio, box.height * ratio));
+      const bitmap = { width: Math.max(1, Math.round(box.width * ratio * cap)), height: Math.max(1, Math.round(box.height * ratio * cap)) };
+      const previous = boxRef.current;
+      let changed = !previous || previous.width !== box.width || previous.height !== box.height;
+      boxRef.current = box;
+      if (view.width !== bitmap.width || view.height !== bitmap.height) {
+        view.width = bitmap.width;
+        view.height = bitmap.height;
+        changed = true;
+      }
+      const camera = cameraRef.current;
+      if (refit || fittedRef.current || !camera) {
+        const next = fitCamera(writer().size, box);
+        if (!camera || refit || next.scale !== camera.scale || next.x !== camera.x || next.y !== camera.y) changed = true;
+        setCamera(next, true);
+      } else if (changed) {
+        setCamera(clampPan(camera, writer().size, box), false);
+      }
+      return changed;
+    },
+    [setCamera],
+  );
+
+  /** 盒子换了大小(窗口变了):重量一遍,有变化才重画。 */
+  const refresh = React.useCallback(() => {
+    if (measure(false)) paint();
+  }, [measure, paint]);
 
   /**
-   * 重铺文档:一张和底图一样大的黑画布 + 底稿,撤销栈从头开始。
+   * 重铺文档:一张和底图一样大的黑画布 + 底稿,撤销栈从头开始,相机回到「适应窗口」。
    *
    * `carry` 是给「图读完、尺寸变了」那一趟用的:还没读完图就画了几笔的话,那几笔跟着换尺寸,
    * 不丢。打开时那一趟是 false —— 上一次打开留下的笔画不该跟到这一次来。
@@ -544,13 +645,13 @@ export function MaskEditor({
       historyRef.current = first ? { steps: [first], at: 0 } : { steps: [], at: -1 };
       lastStepRef.current = null;
       syncHistory();
-      //: `fit()` 在位图尺寸没变时**不会重画**(那条早退是留给 ResizeObserver 的:尺寸没变就没有新内容),
-      //: 而 rebuild 换的是**内容** —— 底图读进来那一趟尺寸常常和打开时那一趟一模一样,少了这一下,
-      //: 屏幕上就一直停着上一张蒙版,底图要等用户下一次动手才出现。
-      fit();
+      //: 底栏说的是**存下来的尺寸**:出口会缩回源图那么大,所以这里给封顶之前的那一对。
+      setReadout((previous) => ({ ...previous, size }));
+      //: 内容换了 —— 不管盒子变没变都要重画一次(底图读进来那一趟尺寸常常和打开时一模一样)。
+      measure(true);
       paint();
     },
-    [fit, paint],
+    [measure, paint],
   );
 
   //: 「显示底图」是个纯显示开关:它只重画看得见的那张,不碰撤销栈、不重铺文档。
@@ -559,11 +660,7 @@ export function MaskEditor({
     if (open) paint();
   }, [open, showUnderlay, paint]);
 
-  /**
-   * 主题色变了就重画 —— **缓存更新之后必须自己画一次**:`paint()` 每一帧只读 `tintRef`,不会反过来
-   * 发现主题变过。少了这一趟,浅 ↔ 深切过去(或者切回来)屏幕上还是上一个主题那个红,要等用户下一次
-   * 动手才跟上 —— 和刚修过的「底图读进来要等下一次动手」是同一个坑,不再造一个。
-   */
+  /** 主题色变了就重画 —— `paint()` 每一帧只读 `tintRef`,不会反过来发现主题变过。 */
   React.useEffect(() => {
     tintRef.current = tint;
     if (open) paint();
@@ -601,35 +698,109 @@ export function MaskEditor({
   }, [open, source?.assetId, initial?.assetId, rebuild]);
 
   /**
-   * 放画布的那个盒子一换大小(窗口变了、右栏收窄了)就重量一遍 —— 按新盒子重算 contain 那块矩形,
-   * **比例跟着走**(小窗口里竖幅图整张看得全,不溢出)。
+   * 缩放:以屏幕上某一点为锚(滚轮、捏合是指针所在,按钮和快捷键是画布中心)。
+   * 只改相机 —— 蒙版一个像素都不动。
+   */
+  const zoomBy = React.useCallback(
+    (factor: number, anchor?: Point) => {
+      const camera = cameraRef.current;
+      const box = boxRef.current;
+      if (!camera || !box) return;
+      setCamera(zoomAround(camera, factor, anchor ?? { x: box.width / 2, y: box.height / 2 }, writer().size, box), false);
+      paint();
+    },
+    [paint, setCamera],
+  );
+
+  const fitView = () => {
+    const box = boxRef.current;
+    if (!box) return;
+    setCamera(fitCamera(doc(), box), true);
+    paint();
+  };
+
+  /** 100%:一个文档像素一个屏幕像素(CSS),图居中。 */
+  const actualPixels = () => {
+    const box = boxRef.current;
+    if (!box) return;
+    setCamera(clampPan(center(doc(), box, 1), doc(), box), false);
+    paint();
+  };
+
+  /**
+   * 盒子一换大小就重量一遍;滚轮 / 捏合挂在画布上(要 `passive: false` 才能拦下页面自己的缩放和滚动,
+   * React 的 onWheel 是 passive 的)。
+   *
+   * **不能在 effect 里直接读 ref**:`<DialogContent>` 是 portal,这一轮 effect 跑的时候 ref 可能还没挂上
+   * —— 读到 null 就 return 的话,这一整条永远不会登记。下一帧再登记,那时画布一定在文档里。
    */
   React.useEffect(() => {
-    if (!open || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => fit());
-    //: **不能在 effect 里读 ref**:这一条 effect 排在那几条铺文档的 effect 后面,而它们那一轮跑的
-    //: 时候 ref 还没挂上(`<DialogContent>` 是 portal,子树先于父 ref 落地)—— 读到 null 就 return
-    //: 的话,这一整条 observer 永远不会登记(实测:窗口拖大、对话框换尺寸,位图一直停在第一次量到
-    //: 的那个尺寸上)。下一帧再登记,那时盒子一定在文档里。观的是**盒子**,画布自己的尺寸是写下去的。
+    if (!open) return;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => refresh());
+    let attached: HTMLCanvasElement | null = null;
+    const local = (event: { clientX: number; clientY: number }): Point | undefined => {
+      const rect = attached?.getBoundingClientRect();
+      if (!rect || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return undefined;
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    const wheel = (event: WheelEvent) => {
+      const camera = cameraRef.current;
+      const box = boxRef.current;
+      //: 预览里也不让滚轮把外面的页面缩放 / 滚走。
+      event.preventDefault();
+      if (!camera || !box || gestureRef.current !== null) return;
+      const intent = wheelIntent(event, modeRef.current, box.height);
+      if (!intent) return;
+      if (intent.kind === "zoom") {
+        zoomBy(intent.factor, local(event));
+        return;
+      }
+      setCamera(panBy(camera, intent.dx, intent.dy, writer().size, box), false);
+      paint();
+    };
+    //: WebKit 把捏合给成 gesture 事件,而不是 Chromium 那种带 ctrlKey 的滚轮。
+    const gestureStart = (event: Event) => {
+      event.preventDefault();
+      gestureRef.current = 1;
+    };
+    const gestureChange = (event: Event) => {
+      event.preventDefault();
+      const gesture = event as Event & { scale: number; clientX: number; clientY: number };
+      const previous = gestureRef.current;
+      if (previous === null || !Number.isFinite(gesture.scale) || gesture.scale <= 0) return;
+      zoomBy(gesture.scale / previous, local(gesture));
+      gestureRef.current = gesture.scale;
+    };
+    const gestureEnd = (event: Event) => {
+      event.preventDefault();
+      gestureRef.current = null;
+    };
     const frame = requestAnimationFrame(() => {
-      const box = frameRef.current;
-      if (box) observer.observe(box);
+      attached = viewRef.current;
+      if (!attached) return;
+      observer?.observe(attached);
+      attached.addEventListener("wheel", wheel, { passive: false });
+      attached.addEventListener("gesturestart", gestureStart, { passive: false });
+      attached.addEventListener("gesturechange", gestureChange, { passive: false });
+      attached.addEventListener("gestureend", gestureEnd, { passive: false });
     });
     return () => {
       cancelAnimationFrame(frame);
-      observer.disconnect();
+      observer?.disconnect();
+      attached?.removeEventListener("wheel", wheel);
+      attached?.removeEventListener("gesturestart", gestureStart);
+      attached?.removeEventListener("gesturechange", gestureChange);
+      attached?.removeEventListener("gestureend", gestureEnd);
     };
-  }, [open, fit]);
+  }, [open, refresh, zoomBy, paint, setCamera]);
 
-  /**
-   * 记一步。`kind` 相同就**并进上一步** —— 阈值滑块拖一下午不该攒出两百步撤销。
-   */
+  /** 记一步。`kind` 相同就**并进上一步** —— 阈值滑块拖一下午不该攒出两百步撤销。 */
   const pushHistory = (kind: string | null) => {
     const snap = snapshot();
     if (!snap) return;
     const history = historyRef.current;
     const coalesce = kind !== null && kind === lastStepRef.current && history.at > 0;
-    let steps = history.steps.slice(0, history.at + 1);
+    const steps = history.steps.slice(0, history.at + 1);
     if (coalesce) steps[steps.length - 1] = snap;
     else steps.push(snap);
     const bytes = steps[0]?.length ?? 0;
@@ -640,19 +811,11 @@ export function MaskEditor({
   };
 
   /**
-   * 把一份单通道快照写回蒙版。
-   *
-   * **尺寸对不上就整张不动**:那份快照说的是另一张画布(拖动途中底图读进来、文档换了尺寸,见下面那条
-   * `drag.before` 的重取)。这条不是洁癖 —— `createImageData` 是**零填充**的,`writeGrayscale` 只写
-   * 它覆盖得到的那一段:差一个像素,剩下的就全是 `alpha 0`。蒙版一旦有透明像素:
-   *
-   * - 屏幕上那两张派生层(`maskInverse` / `maskTint`)遇到透明像素会**保持底色**(`difference` /
-   *   `multiply` 都按源的 alpha 加权)—— 没画过的地方不再等于原图、**整块画布被蒙版色糊住**;
-   * - **导出的 PNG 带上 alpha 通道** —— 插件那条 `LoadImageMask(channel="red")` 读出来整块不透明,
-   *   静默地什么都不重绘(见文件头那条契约)。
+   * 把一份单通道快照写回蒙版。**尺寸对不上就整张不动**(写入口 `MaskContext.restore` 管):
+   * `createImageData` 是零填充的,差一个像素剩下的就全是 `alpha 0` —— 屏幕上整块被蒙版色糊住,
+   * 导出的 PNG 带上 alpha,插件那条路静默什么都不重绘。
    */
   const restore = (channel: Uint8ClampedArray) => {
-    //: 「整张写、尺寸不符就拒绝」这一步在写入口里(`MaskContext.restore`):这里读不到"写了一半"的状态。
     if (maskContext()?.restore(channel)) paint();
   };
 
@@ -674,7 +837,7 @@ export function MaskEditor({
     restore(history.steps[history.at]);
   };
 
-  /** 取像素 → 调纯函数 → **整张**写回,一步(反选、羽化都走它)。 */
+  /** 取像素 → 调纯函数 → **整张**写回,一步(反选、应用边缘都走它)。 */
   const transform = (run: (data: MaskPixels, size: Size) => void) => {
     const ctx = maskContext();
     if (!ctx) return;
@@ -685,11 +848,7 @@ export function MaskEditor({
     paint();
   };
 
-  /**
-   * 清空 = 整张铺黑(= "这块不改",和橡皮写进去的是同一个值)。
-   *
-   * 它**只碰蒙版那一张**:底图在另一张画布上(可见那张的层表第一层),这里连它的引用都拿不到。
-   */
+  /** 清空 = 整张铺黑(= "这块不改",和橡皮写进去的是同一个值)。只碰蒙版那一张。 */
   const clear = () => {
     const ctx = maskContext();
     if (!ctx) return;
@@ -700,10 +859,18 @@ export function MaskEditor({
 
   const invert = () => transform((data) => invertMask(data));
 
-  const applyFeather = () => transform((data, size) => featherMask(data, size.width, size.height, feather));
+  /**
+   * 「应用到蒙版」:先扩张 / 收缩、再羽化,作用在整张蒙版上,一步撤销(ADR 0057 决定 3)。
+   * 次序和后端配方一样(`contracts/mask-cases.json` 的 pipeline),两侧的结果逐字节相同。
+   */
+  const applyEdges = () =>
+    transform((data, size) => {
+      growMask(data, size.width, size.height, grow);
+      featherMask(data, size.width, size.height, feather);
+    });
 
   /**
-   * 从底图起手(ADR 0056 决定 5 的 MaskFromColor 等价物):底图像素复制一份 → 阈值二值化 → 变成初笔迹。
+   * 从底图起手:底图像素复制一份 → 阈值二值化 → 变成初笔迹。
    *
    * **算的底永远是底图那份像素**,不在已经画过的笔迹上再叠一次:阈值滑块来回拖是「重新决定这条线画在哪」,
    * 不是「越拖越白」。所以重算会**替换**当前笔迹(而不是叠上去)。
@@ -715,7 +882,7 @@ export function MaskEditor({
     const copy = new Uint8ClampedArray(underlay.data);
     if (mode === "luminance") thresholdMask(copy, value);
     else alphaMask(copy, value);
-    //: 先写进一张和底图同尺寸的画布,再铺到文档上 —— 两者尺寸不同(读图之前就按过)时也不会错位。
+    //: 先写进一张和底图同尺寸的画布,再铺到文档上 —— 两者尺寸不同(底图超过 4096)时也不会错位。
     const scratch = document.createElement("canvas");
     scratch.width = underlay.width;
     scratch.height = underlay.height;
@@ -741,38 +908,78 @@ export function MaskEditor({
     if (fromSource) initFromSource(fromSource, value, `threshold:${fromSource}`);
   };
 
-  const docPoint = (event: React.PointerEvent<HTMLCanvasElement>): Point | null => {
+  /** 指针在画布元素上的位置(CSS 像素)。 */
+  const localPoint = (event: React.PointerEvent<HTMLCanvasElement>): Point | null => {
     const view = viewRef.current;
     if (!view) return null;
     const rect = view.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
-    const { width, height } = doc();
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * width,
-      y: ((event.clientY - rect.top) / rect.height) * height,
-    };
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
-  /** 一笔的墨:笔刷写白(要改)、橡皮写黑(不改)。见文件头「橡皮 = 写黑」那一节。 */
-  const inkOf = (tool: Tool) => (tool === "brush" ? { ink: WHITE, fade: FADE_WHITE } : { ink: BLACK, fade: FADE_BLACK });
+  /** 指针落在文档的哪一点 —— 透过相机换算(放大、平移之后照样落在对的像素上)。 */
+  const docPoint = (event: React.PointerEvent<HTMLCanvasElement>): Point | null => {
+    const local = localPoint(event);
+    if (!local) return null;
+    const camera = cameraRef.current;
+    if (camera) return toDoc(camera, local);
+    //: 还没量到盒子(没有相机):整张画布当文档。
+    const rect = (viewRef.current as HTMLCanvasElement).getBoundingClientRect();
+    const { width, height } = doc();
+    return { x: (local.x / rect.width) * width, y: (local.y / rect.height) * height };
+  };
 
-  const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const ctx = maskContext();
-    const at = docPoint(event);
-    if (!ctx || !at) return;
-    //: 指针捕获在合成事件 / 某些设备上是会抛的(没有活动指针)。它只是"手指滑出画布也算数"的便利,
-    //: 抛了不该让这一笔整个断掉 —— 拖动的状态机在下面,和它无关。
+  /** 笔刷那个圈:屏幕上的真实大小(直径 × 相机缩放),只有画笔和橡皮有。 */
+  const moveRing = (event: React.PointerEvent<HTMLCanvasElement> | null) => {
+    const ring = ringRef.current;
+    if (!ring) return;
+    const local = event ? localPoint(event) : null;
+    const camera = cameraRef.current;
+    const freehand = tool === "brush" || tool === "eraser";
+    if (!local || !camera || !freehand || panMode !== "off") {
+      ring.hidden = true;
+      return;
+    }
+    const diameter = Math.max(4, brushSize * camera.scale);
+    ring.hidden = false;
+    ring.style.width = `${diameter}px`;
+    ring.style.height = `${diameter}px`;
+    ring.style.transform = `translate(${local.x - diameter / 2}px, ${local.y - diameter / 2}px)`;
+  };
+
+  /** 一笔的墨:笔刷写白(要改)、橡皮写黑(不改)。见文件头「橡皮 = 写黑」。 */
+  const inkOf = (kind: Tool) => (kind === "brush" ? { ink: WHITE, fade: FADE_WHITE } : { ink: BLACK, fade: FADE_BLACK });
+
+  const capture = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    //: 指针捕获在合成事件 / 某些设备上是会抛的。它只是"指针滑出画布也算数"的便利,抛了不该让这一笔断掉。
     try {
       event.currentTarget.setPointerCapture?.(event.pointerId);
     } catch {
       //: 拿不到就算了,拖动照旧。
     }
+  };
+
+  const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    //: 中键,或按着空格的左键:平移相机,不画。
+    if (event.button === 1 || (event.button === 0 && spaceRef.current)) {
+      event.preventDefault();
+      capture(event);
+      panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      setPanMode("dragging");
+      moveRing(null);
+      return;
+    }
+    if (event.button !== 0) return;
+    const ctx = maskContext();
+    const at = docPoint(event);
+    if (!ctx || !at) return;
+    capture(event);
     drawingRef.current = true;
     const freehand = tool === "brush" || tool === "eraser";
     dragRef.current = { tool, from: at, last: at, before: freehand ? null : snapshot() };
     if (freehand) {
       const { ink, fade } = inkOf(tool);
-      ctx.stroke((raw) => paintLine(raw, at, at, radius / 2, hardness, ink, fade));
+      ctx.stroke((raw) => paintLine(raw, at, at, brushSize / 2, hardness, ink, fade));
     } else {
       ctx.beginStroke();
       ctx.preview((raw) => paintShape(raw, tool, at, at));
@@ -781,13 +988,25 @@ export function MaskEditor({
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const pan = panRef.current;
+    if (pan) {
+      const camera = cameraRef.current;
+      const box = boxRef.current;
+      if (camera && box) setCamera(panBy(camera, event.clientX - pan.x, event.clientY - pan.y, doc(), box), false);
+      pan.x = event.clientX;
+      pan.y = event.clientY;
+      paint();
+      return;
+    }
+    moveRing(event);
     const drag = dragRef.current;
     const ctx = maskContext();
+    if (!drag || !ctx) return;
     const at = docPoint(event);
-    if (!drag || !ctx || !at) return;
+    if (!at) return;
     if (drag.tool === "brush" || drag.tool === "eraser") {
       const { ink, fade } = inkOf(drag.tool);
-      ctx.stroke((raw) => paintLine(raw, drag.last, at, radius / 2, hardness, ink, fade));
+      ctx.stroke((raw) => paintLine(raw, drag.last, at, brushSize / 2, hardness, ink, fade));
     } else {
       //: 形状工具每一帧都从按下时那份像素重来:看到的是「松手后会是这样」,不是一层层叠上去的边。
       //: **按下之后底图才读进来**(文档换了尺寸)的话,那份快照已经作废 —— 重取一份当前的,
@@ -803,16 +1022,72 @@ export function MaskEditor({
   };
 
   const onPointerUp = () => {
+    if (panRef.current) {
+      panRef.current = null;
+      setPanMode(spaceRef.current ? "ready" : "off");
+      return;
+    }
     drawingRef.current = false;
     maskContext()?.endStroke();
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
-    //: 形状工具**点一下没拖**(一个 0×0 的框,什么都没画上)不算一步:撤销栈里不该多出一条看不出变化,
-    //: 却要按一次才过得去的记录。画笔那支点一下就是一个点,是真的画上了。
+    //: 形状工具**点一下没拖**(一个 0×0 的框)不算一步:撤销栈里不该多出一条看不出变化的记录。
     const painted =
       drag.tool === "brush" || drag.tool === "eraser" || drag.last.x !== drag.from.x || drag.last.y !== drag.from.y;
     if (painted) pushHistory(null);
+  };
+
+  /** 笔刷大小一档:小笔刷细调、大笔刷粗调(按当前大小的一成半,至少 1)。 */
+  const nudgeBrush = (direction: 1 | -1) =>
+    setBrushSize((size) => Math.min(BRUSH_MAX, Math.max(BRUSH_MIN, size + direction * Math.max(1, Math.round(size * 0.15)))));
+
+  /**
+   * 快捷键。挂在弹窗上(焦点在弹窗里的任何地方都认),但焦点在能打字的地方时一律让路。
+   * 空格只在指针停在画布上时接管 —— 不然空格还是「按下焦点所在的那颗按钮」。
+   */
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (isTypingTarget(event.target)) return;
+    const key = event.key.toLowerCase();
+    if (event.metaKey || event.ctrlKey) {
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (key === "y") {
+        event.preventDefault();
+        redo();
+      }
+      return;
+    }
+    if (event.altKey) return;
+    if (key === " ") {
+      if (!hoverRef.current && !panRef.current) return;
+      event.preventDefault();
+      if (!spaceRef.current) {
+        spaceRef.current = true;
+        setPanMode(panRef.current ? "dragging" : "ready");
+        if (ringRef.current) ringRef.current.hidden = true;
+      }
+      return;
+    }
+    const nextTool = TOOL_KEYS[key];
+    if (nextTool) setTool(nextTool);
+    else if (key === "[") nudgeBrush(-1);
+    else if (key === "]") nudgeBrush(1);
+    else if (key === "0") fitView();
+    else if (key === "1") actualPixels();
+    else if (key === "=" || key === "+") zoomBy(ZOOM_STEP);
+    else if (key === "-") zoomBy(1 / ZOOM_STEP);
+    else return;
+    event.preventDefault();
+  };
+
+  const onKeyUp = (event: React.KeyboardEvent) => {
+    if (event.key !== " " || !spaceRef.current) return;
+    event.preventDefault();
+    spaceRef.current = false;
+    if (!panRef.current) setPanMode("off");
   };
 
   const close = () => {
@@ -860,209 +1135,228 @@ export function MaskEditor({
     }, "image/png");
   };
 
+  const tools: { value: Tool; label: string; key: string; icon: React.ReactNode }[] = [
+    { value: "brush", label: t("maskBrush"), key: "B", icon: <Brush /> },
+    { value: "eraser", label: t("maskEraser"), key: "E", icon: <Eraser /> },
+    { value: "rect", label: t("maskRect"), key: "R", icon: <Square /> },
+    { value: "ellipse", label: t("maskEllipse"), key: "O", icon: <Circle /> },
+  ];
+  const edgesIdle = grow === 0 && feather === 0;
+  const zoomText = readout.zoom === null ? "—" : `${Math.round(readout.zoom * 100)}%`;
+  const cursor =
+    panMode === "dragging" ? "cursor-grabbing" : panMode === "ready" ? "cursor-grab" : "cursor-crosshair";
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
       <DialogContent
-        //: 全屏尺寸的弹窗:画布要尽可能大,底图和笔迹才看得清。**两栏一封**:左边画布、右边控制栏,
-        //: 取消 / 存成蒙版落在右栏最底 —— 不再横跨一条底栏(维护者:「排版优化 除去 header,左右分栏,
-        //: 右下角按钮放到右侧分栏去」)。
-        //
-        // 列宽写在一处(`--mask-rail`):右栏和它里面的动作组都读它,所以「存成蒙版」永远落在右栏这条
-        // 竖线上,而不是自己另算一个右边距。第一列是 `minmax(0,1fr)`,画布再怎么宽也顶不开这一栏
-        // (见 CONVENTIONS「单列 grid 想收缩要写 minmax(0,1fr)」)。
-        className="w-[min(1180px,calc(100vw-32px))] max-w-none h-[min(820px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] grid-cols-[minmax(0,1fr)_var(--mask-rail)] grid-rows-[minmax(0,1fr)] gap-4 overflow-hidden p-5 [--mask-rail:18rem]"
+        //: 接近全屏:画布占满主体(左),参数一栏(右,md 档),底栏横跨两列(尺寸与缩放 | 取消、存成蒙版)。
+        //: 第一列 `minmax(0,1fr)`:画布再怎么宽也顶不开右栏(见 CONVENTIONS「单列 grid 想收缩要写 minmax(0,1fr)」)。
+        className="h-[min(880px,calc(100dvh-32px))] max-h-[calc(100dvh-32px)] w-[min(1320px,calc(100vw-32px))] max-w-none grid-cols-[minmax(0,1fr)_19rem] grid-rows-[minmax(0,1fr)_auto] gap-0 overflow-hidden p-0"
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
       >
         {/*
-          * 标题还在、**只是看不见**(`sr-only`):无障碍名 —— 以及既有测试找它的 `role=dialog` + 名字
-          * 「画蒙版」—— 都靠它,radix 少了 `DialogTitle` 也会告警。视觉上不再占顶部那一条:整个弹窗就是
-          * 「画布 + 右栏」两块。`pt-8` 是给右上角那颗 ✕ 让位(它离弹窗顶 16px、高 32px,压在右栏顶上)。
+          * 画布区:浮动工具条在上(它是 `CanvasToolbar`,和画板、工作流同一种),下面是画布。
+          * 画布元素铺满它那一格,文档透过相机画在里面 —— 四周的留白是画布区自己的底色,
+          * 图的四条边由跟着相机走的那个边框画出来。
           */}
-        <DialogTitle className="sr-only">{t("maskEditorTitle")}</DialogTitle>
-          {/*
-            * 看得见的画布:底图 + 蒙版。导出的不是这一张 —— 见文件头那三张画布。
-            *
-            * **画布元素自己就是那块「按原始比例缩进盒子」的矩形**(contain):CSS 尺寸由 fit() 写,
-            * 宽高比 = 文档的宽高比,`place-items-center` 把它摆在盒子中间。于是:
-            *
-            * - 源图不会被拉扁/拉长(维护者:「注意图片应该是原先的比例」);
-            * - 四周的留白是**弹窗自己的底色** —— 盒子上没有背景色,不是把画布刷黑(那两条"大黑边"
-            *   正是上一轮的抱怨);矩形四条边由画布自己的 `border` 画出来,用户知道能画到哪;
-            * - 落点换算(`docPoint`)读的仍是这个元素自己的矩形 —— 元素和画出来的图同一个宽高比,
-            *   屏幕坐标到蒙版像素的换算不用另外加偏移(拖动中途指针跑到留白上也只是落在文档外,
-            *   `fillRect` / 圆的裁剪照旧)。
-            *
-            * 行轨写成 `minmax(0,1fr)` 而不是让它自己算:画布有固有宽高比,`auto` 那一档会按内容
-            * (也就是位图本身)反推出一个更高的行,盒子只有 519 高、行却长到 546,画布就溢出到边框
-            * 外面去了 —— 单列 grid 想收缩要写 `minmax(0,…)`,和 CONVENTIONS 里那条是同一件事。
-            */}
-          {/*: 留白(contain 出来的那两条边)就是这一格的底色 —— 弹窗自己的,不刷黑。没有 padding:
-               `fit()` 量的 `clientWidth` 含 padding,量出来的"盒子"会比能用的那一块大。 */}
-          <div ref={frameRef} className="grid min-h-0 min-w-0 place-items-center overflow-hidden">
+        <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-3 bg-panel-inset p-3">
+          <CanvasToolbar label={t("maskToolbar")} className="justify-self-center">
+            <CanvasToolbarGroup label={t("maskTool")}>
+              {tools.map((one) => (
+                <IconButton
+                  key={one.value}
+                  label={one.label}
+                  shortcut={one.key}
+                  aria-pressed={tool === one.value}
+                  onClick={() => setTool(one.value)}
+                >
+                  {one.icon}
+                </IconButton>
+              ))}
+            </CanvasToolbarGroup>
+            <CanvasToolbarGroup label={t("maskHistory")}>
+              <IconButton
+                label={t("maskUndo")}
+                shortcut={formatCombo("Mod+Z")}
+                disabled={!canUndo}
+                disabledReason={t("nothingToUndo")}
+                onClick={undo}
+              >
+                <Undo2 />
+              </IconButton>
+              <IconButton
+                label={t("maskRedo")}
+                shortcut={formatCombo("Mod+Shift+Z")}
+                disabled={!canRedo}
+                disabledReason={t("nothingToRedo")}
+                onClick={redo}
+              >
+                <Redo2 />
+              </IconButton>
+            </CanvasToolbarGroup>
+            <CanvasToolbarGroup label={t("maskWholeMask")}>
+              <IconButton label={t("maskInvert")} onClick={invert}>
+                <Contrast />
+              </IconButton>
+              <IconButton label={t("maskClear")} onClick={clear}>
+                <Trash />
+              </IconButton>
+            </CanvasToolbarGroup>
+            <CanvasToolbarGroup label={t("maskView")}>
+              <IconButton label={t("maskZoomOut")} shortcut="-" onClick={() => zoomBy(1 / ZOOM_STEP)}>
+                <ZoomOut />
+              </IconButton>
+              <IconButton label={t("maskZoomIn")} shortcut="+" onClick={() => zoomBy(ZOOM_STEP)}>
+                <ZoomIn />
+              </IconButton>
+              <IconButton label={t("maskZoomFit")} shortcut="0" onClick={fitView}>
+                <Maximize2 />
+              </IconButton>
+              <IconButton label={t("maskZoomActual")} shortcut="1" size="sm" className="tabular-nums" onClick={actualPixels}>
+                100%
+              </IconButton>
+              <CanvasInputModeSwitch />
+            </CanvasToolbarGroup>
+          </CanvasToolbar>
+
+          <div className="relative min-h-0 min-w-0 overflow-hidden">
             <canvas
               ref={viewRef}
-              className="block max-h-full max-w-full cursor-crosshair touch-none rounded-[2px] border border-border-strong"
+              className={`block h-full w-full touch-none ${cursor}`}
               aria-label={t("maskCanvasLabel")}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
+              onPointerEnter={() => {
+                hoverRef.current = true;
+              }}
+              onPointerLeave={() => {
+                hoverRef.current = false;
+                moveRing(null);
+              }}
+              onAuxClick={(event) => event.preventDefault()}
+            />
+            {/*: 文档的边框与笔刷圈:纯显示,不接指针(事件全落在画布上)。位置由相机写(placeFrame / moveRing)。 */}
+            <div
+              ref={frameRef}
+              data-mask-doc-frame=""
+              hidden
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 origin-top-left rounded-[1px] outline outline-1 outline-border-strong shadow-[var(--shadow-panel)]"
+            />
+            <div
+              ref={ringRef}
+              hidden
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 rounded-full border border-white shadow-[0_0_0_1px_rgb(0_0_0/0.55)]"
             />
           </div>
+        </div>
 
-          {/*
-            * 控制栏:固定宽度(和正文字体一样,由外壳上的 `--mask-rail` 定),里面三节。
-            *
-            * 三节的节奏由 ToolGroup 一处管:节标题同一个字重,节与节之间同一条 1px 分隔线 + 同一段
-            * 留白(和设置页的分节同一种做法)。此前三节各写各的间距,只有靠加粗小标题硬分。
-            */}
-          {/*
-            * 右栏三段:顶上那行说明(它解释的是「白色是要改的地方」这条契约 —— 所以留下、缩小、
-            * 次要色,而**不是**再变回一条 header)+ 三节控件(唯一会滚的地方)+ 底盘的动作组。
-            * `pt-8` 让开右上角那颗关闭键(见 DialogTitle 那句);两个轴一起锁 —— 只写 `grid-rows` 的话
-            * 隐式列按 max-content 定尺,右栏会被内容顶宽(见 design/gridAxes.test.ts 那条棘轮)。
-            */}
-          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] gap-3 pt-8">
-            <DialogDescription className="m-0 text-ui-xs leading-relaxed text-muted-foreground">
-              {t("maskEditorHint")}
-            </DialogDescription>
-            <div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
-            <ToolGroup label={t("maskTool")} icon={<Brush size={13} />}>
-              <Segmented
-                aria-label={t("maskTool")}
-                value={tool}
-                onValueChange={setTool}
-                size="sm"
-                fill
-                options={[
-                  { value: "brush", icon: <Brush size={14} />, ariaLabel: t("maskBrush") },
-                  { value: "eraser", icon: <Eraser size={14} />, ariaLabel: t("maskEraser") },
-                  { value: "rect", icon: <Square size={14} />, ariaLabel: t("maskRect") },
-                  { value: "ellipse", icon: <Circle size={14} />, ariaLabel: t("maskEllipse") },
-                ]}
-              />
-              <SliderField label={t("maskBrushSize")} value={radius} min={2} max={200} step={1} format={pixels} onChange={setRadius} />
+        {/*
+          * 参数一栏(md 档):标题与说明在顶上,四节按「画笔 / 边缘 / 从底图起手 / 显示」分组。
+          * 两个轴一起锁 —— 只写 `grid-rows` 的话隐式列按 max-content 定尺,右栏会被内容顶宽
+          * (见 design/gridAxes.test.ts 那条棘轮)。
+          */}
+        <aside className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] border-l border-divider">
+          <div className="grid gap-1 px-5 pb-4 pr-12 pt-5">
+            <DialogTitle className="text-ui-md">{t("maskEditorTitle")}</DialogTitle>
+            <DialogDescription className="m-0 text-ui-xs">{t("maskEditorHint")}</DialogDescription>
+          </div>
+          <div className="grid min-h-0 content-start gap-5 overflow-y-auto px-5 pb-5">
+            <PanelSection label={t("maskBrushGroup")}>
               <SliderField
-                label={t("maskBrushHardness")}
-                value={hardness}
-                min={0}
-                max={1}
-                step={0.05}
-                format={percent}
-                onChange={setHardness}
+                label={t("maskBrushSize")}
+                value={brushSize}
+                min={BRUSH_MIN}
+                max={BRUSH_MAX}
+                step={1}
+                format={pixels}
+                onChange={setBrushSize}
               />
-              {/*: 撤销 / 重做 / 清空:一排等宽铺满整行,不挤在左边留一截。 */}
-              <div className="grid grid-cols-3">
-                <IconButton label={t("maskUndo")} disabled={!canUndo} onClick={undo} className="w-full">
-                  <Undo2 />
-                </IconButton>
-                <IconButton label={t("maskRedo")} disabled={!canRedo} onClick={redo} className="w-full">
-                  <Redo2 />
-                </IconButton>
-                <IconButton label={t("maskClear")} onClick={clear} className="w-full">
-                  <Trash />
-                </IconButton>
-              </div>
-            </ToolGroup>
+              <SliderField label={t("maskBrushHardness")} value={hardness} min={0} max={1} step={0.05} format={percent} onChange={setHardness} />
+            </PanelSection>
 
-            <ToolGroup label={t("maskFeather")} icon={<Feather size={13} />}>
-              <SliderField label={t("maskFeatherRadius")} value={feather} min={1} max={64} step={1} format={pixels} onChange={setFeather} />
-              <Button variant="outline" size="sm" className="w-full" onClick={applyFeather}>
-                <Feather />
-                {t("maskFeather")}
+            <PanelSection label={t("maskEdges")}>
+              <SliderField label={t("maskGrow")} value={grow} min={-EDGE_MAX} max={EDGE_MAX} step={1} format={signedPixels} onChange={setGrow} />
+              <SliderField label={t("maskFeather")} value={feather} min={0} max={EDGE_MAX} step={1} format={pixels} onChange={setFeather} />
+              <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("maskEdgesHint")}</p>
+              <Button variant="outline" className="w-full" disabled={edgesIdle} onClick={applyEdges}>
+                <Wand2 />
+                {t("maskApplyEdges")}
               </Button>
-            </ToolGroup>
+            </PanelSection>
 
-            <ToolGroup label={t("maskFromSource")} icon={<SunMedium size={13} />}>
-              {/*: 底图读到之前按了也没用 —— 说清楚为什么,而不是只灰掉。 */}
+            <PanelSection label={t("maskFromSource")}>
               <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("maskFromSourceHint")}</p>
-              {/*: 说明管着的就是下面这一排动作,所以两个初始化键并排铺满、和说明同宽。 */}
-              <div className="grid grid-cols-2">
-                <Button variant="outline" size="sm" disabled={!hasUnderlay} onClick={() => pressFromSource("luminance")}>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" disabled={!hasUnderlay} onClick={() => pressFromSource("luminance")}>
                   <SunMedium />
                   {t("maskFromLuminance")}
                 </Button>
-                <Button variant="outline" size="sm" disabled={!hasUnderlay} onClick={() => pressFromSource("alpha")}>
+                <Button variant="outline" disabled={!hasUnderlay} onClick={() => pressFromSource("alpha")}>
                   <Droplets />
                   {t("maskFromAlpha")}
                 </Button>
               </div>
               <SliderField label={t("maskThreshold")} value={threshold} min={0} max={1} step={0.01} format={percent} onChange={changeThreshold} />
-              {/*
-                * **和上面四根滑块同一条竖线**,而且**不把开关拉长**:名字在 5rem 那一列,开关按
-                * `Switch` 自己的尺寸(`h-5 w-9` = 36×20)落在控件列的**起点**上(`justify-self-start`)
-                * —— 排一行靠的是 grid 的列,不是把控件撑满。`w-full` 会把那颗开关拉成一条 124px 的长
-                * 胶囊(实测),而上面四根滑轨的起点在同一个 x 上,一眼就看出不是一套。
-                *
-                * 反选那颗方钮落在值那一列、和右值同一条右边线。`role="switch"` 自己挂 aria-label:
-                * 套在 `<label>` 里读屏名字会是「显示底图 开关」。
-                */}
-              <div className="grid grid-cols-[5rem_minmax(0,1fr)_3.5rem] items-center gap-x-3">
-                <span className="min-w-0 text-ui-xs text-muted-foreground">{t("maskShowSource")}</span>
-                <Switch aria-label={t("maskShowSource")} checked={showUnderlay} onCheckedChange={setShowUnderlay} className="justify-self-start" />
-                <IconButton label={t("maskInvert")} onClick={invert} className="justify-self-end">
-                  <Contrast />
-                </IconButton>
-              </div>
-            </ToolGroup>
-            </div>
+            </PanelSection>
 
-            {/*
-              * 动作组钉在右栏**最底**:上面那一行才是唯一滚动的地方 ⇒ 小窗口里它也**始终可见**
-              * (不会被滚走)。分隔节奏和上面各节同一条(`border-t border-divider pt-4`,见 ToolGroup)。
-              * 两个键并排等宽、**铺满右栏** —— 和这条列里其它行的左右边界对齐。
-              */}
-            <div className="grid gap-3 border-t border-divider pt-4">
-              {failure && (
-                <FailureCard size="inline" className="max-w-full" title={t("maskSaveFailed")} summary={failure} copyText={failure} />
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="w-full" onClick={close}>
-                  {t("cancel")}
-                </Button>
-                <Button loading={saving} className="w-full" onClick={save}>
-                  <Check />
-                  {t("maskSave")}
-                </Button>
+            <PanelSection label={t("maskDisplay")}>
+              {/*: `role="switch"` 自己挂 aria-label:套在 `<label>` 里读屏名字会是「显示底图 开关」。 */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 text-ui-sm text-foreground">{t("maskShowSource")}</span>
+                <Switch aria-label={t("maskShowSource")} checked={showUnderlay} onCheckedChange={setShowUnderlay} />
               </div>
-            </div>
+            </PanelSection>
           </div>
+        </aside>
+
+        {/*
+          * 底栏横跨两列:左边是输出尺寸、缩放和操作提示,右边是取消与唯一的主动作「存成蒙版」。
+          */}
+        <footer className="col-span-2 flex min-w-0 items-center gap-4 border-t border-divider px-5 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3 text-ui-xs text-muted-foreground">
+            <span className="shrink-0 tabular-nums text-foreground">{`${readout.size.width} × ${readout.size.height} px`}</span>
+            <span className="shrink-0 tabular-nums" aria-label={t("maskZoomLevel")}>
+              {zoomText}
+            </span>
+            <span className="hidden min-w-0 lg:inline">{t("maskNavigationHint")}</span>
+          </div>
+          {failure && <FailureCard size="inline" className="max-w-sm" title={t("maskSaveFailed")} summary={failure} copyText={failure} />}
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" onClick={close}>
+              {t("cancel")}
+            </Button>
+            <Button loading={saving} onClick={save}>
+              <Check />
+              {t("maskSave")}
+            </Button>
+          </div>
+        </footer>
       </DialogContent>
     </Dialog>
   );
 }
 
 /**
- * 控制栏里的一节:**同一层级的小标题** + 内容。
- *
- * 节与节之间只有这一处节奏:一条 1px 分隔线(`--divider`,和设置页的分节同色)+ 同一段上留白。
- * 此前是三节各写各的 gap,靠加粗小标题硬分,眼睛得自己找边界在哪。
- *
- * 分隔线用 `border-t` 画在**后一节自己身上**(不是插一个 `<hr>`):插独立元素的话,条件渲染的
- * 那一节一走开,线上就会多出一条底下什么都没有的线(设置页踩过这一下,见 CONVENTIONS)。
+ * 参数栏里的一节:**同一层级的小标题** + 内容。节与节之间只有这一处节奏:一条 1px 分隔线 + 同一段上留白。
+ * 分隔线画在**后一节自己身上**(`border-t`),不插独立的 `<hr>` —— 条件渲染的那一节一走开就不会多一条空线。
  */
-function ToolGroup({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
+function PanelSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section className="grid gap-3 border-t border-divider pt-4 first:border-t-0 first:pt-0">
-      <h3 className="flex items-center gap-1.5 text-ui-xs font-semibold text-foreground">
-        <span className="text-muted-foreground" aria-hidden>
-          {icon}
-        </span>
-        {label}
-      </h3>
+    <section className="grid gap-3 border-t border-divider pt-5 first:border-t-0 first:pt-0">
+      <h3 className="m-0 text-ui-xs font-semibold text-muted-foreground">{label}</h3>
       <div className="grid gap-3">{children}</div>
     </section>
   );
 }
 
 /**
- * 一根滑块 + 名字 + 当前值。
- *
- * **五行带名字的一行对齐成一条竖线**:名字、控件、右值各占固定的一列 —— 名字 5rem,值 3.5rem
- * (等宽数字,值变宽变窄不推控件),控件吃掉中间剩下的。此前是「名字和值一行、滑块另起一行」:
- * 四行的名字左边距一样只是碰巧,滑块更是各走各的宽度,扫下来没有一条能对上的边。
- *
- * 名字和值都**不截断**:它们是固定文案和几字符的数(`200 px` / `100%`),5rem + 3.5rem 那一栏
- * 放得下;真要放不下就折行,而不是把字切掉(切了要配 Truncate 的悬停全文,见 design/truncatedText)。
+ * 一根滑块 + 名字 + 当前值:名字、控件、右值各占固定的一列(名字 5rem,值 4rem 等宽数字),
+ * 几行对成一条竖线。名字和值都**不截断**:放不下就折行。
  */
 function SliderField({
   label,
@@ -1082,13 +1376,14 @@ function SliderField({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="grid grid-cols-[5rem_minmax(0,1fr)_3.5rem] items-center gap-x-3 text-ui-xs text-muted-foreground">
+    <label className="grid grid-cols-[5rem_minmax(0,1fr)_4rem] items-center gap-x-3 text-ui-sm text-foreground">
       <span className="min-w-0">{label}</span>
       <Slider value={[value]} min={min} max={max} step={step} onValueChange={([next]) => onChange(next)} />
-      <span className="text-right tabular-nums">{format ? format(value) : String(value)}</span>
+      <span className="text-right text-ui-xs tabular-nums text-muted-foreground">{format ? format(value) : String(value)}</span>
     </label>
   );
 }
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 const pixels = (value: number) => `${Math.round(value)} px`;
+const signedPixels = (value: number) => (value > 0 ? `+${Math.round(value)} px` : value < 0 ? `−${Math.abs(Math.round(value))} px` : "0 px");
