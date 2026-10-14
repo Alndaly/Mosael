@@ -1,12 +1,13 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * 大模型节点的**输出格式**在参数档,不在高级里:维护者翻了一圈以为这个节点没有 JSON 模式。选「按 Schema」时
- * Schema 编辑框跟着出现在参数档;Schema 的名字、严格与否这类微调留在高级。
+ * 大模型节点的**输出格式 + JSON Schema 收在「高级」档**(维护者拍板:JSON 是给下游按字段取的微调,不占基础档
+ * 第一眼);采样参数、Schema 名称、严格与否也在高级。回归钉:llm 的高级项全由专区渲染、被剔出通用
+ * advancedSpecs —— 「高级」这一档本身必须仍然出现(此前因此整个高级档丢了,维护者以为这个节点没有 JSON 模式)。
  */
 
 vi.mock("@xyflow/react", async (original) => ({
@@ -71,9 +72,18 @@ function renderLlm(config: Record<string, unknown>) {
   );
 }
 
-describe("大模型节点的输出格式", () => {
-  it("一打开就在参数档,底下说清下游怎么取", () => {
+describe("大模型节点的高级档", () => {
+  it("条上有「高级」这一档(回归:专区的高级项被剔出 advancedSpecs,档本身不能丢)", () => {
+    const view = renderLlm({ response_format: "text" });
+    expect(view.container.textContent).toContain("wfaConfig");
+    expect(view.container.textContent).toContain("wfAdvanced");
+  });
+
+  it("输出格式在高级档:默认停在参数档看不见,切过去才有,底下说清下游怎么取", () => {
     const view = renderLlm({ response_format: "json_object" });
+    // 默认停在参数档:输出格式不在
+    expect(view.container.querySelector("[data-llm-response-format]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "wfAdvanced" }));
     const format = view.container.querySelector("[data-llm-response-format]");
     expect(format).not.toBeNull();
     expect(format!.textContent).toContain("wfLlmResponseFormat");
@@ -82,11 +92,12 @@ describe("大模型节点的输出格式", () => {
     expect(view.container.textContent).not.toContain("wfLlmJsonSchema");
   });
 
-  it("选「按 Schema」:Schema 编辑框就在参数档,名字和严格与否不在这里", () => {
+  it("选「按 Schema」:Schema 编辑框、名字、严格与否都在高级档", () => {
     const view = renderLlm({ response_format: "json_schema", json_schema: { type: "object", properties: {} } });
+    fireEvent.click(screen.getByRole("button", { name: "wfAdvanced" }));
     expect(view.container.textContent).toContain("wfLlmJsonSchema");
     expect(view.container.textContent).toContain("wfLlmResponseSchemaHint");
-    expect(view.container.textContent).not.toContain("wfLlmJsonSchemaName");
-    expect(view.container.textContent).not.toContain("wfLlmJsonStrict");
+    expect(view.container.textContent).toContain("wfLlmJsonSchemaName");
+    expect(view.container.textContent).toContain("wfLlmJsonStrict");
   });
 });

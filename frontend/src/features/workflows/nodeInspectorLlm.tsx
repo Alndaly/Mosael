@@ -8,9 +8,10 @@ import { FIELD_BOX } from "@/features/nodeForms/NodeConfigForm";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 
-//: 节点检查器里「大模型」节点的专区:预设、输出格式和 JSON Schema 在参数档,采样参数、Schema 名称和严格与否在高级档。
-//: 输出格式此前也在高级里 —— 维护者翻了一圈以为大模型节点没有 JSON 模式。「要一份 JSON、下游按字段取」是这个
-//: 节点在做的事,不是微调。
+//: 节点检查器里「大模型」节点的专区:预设在参数档;输出格式、JSON Schema、采样参数、Schema 名称和严格与否在高级档。
+//: 输出格式此前在高级里(维护者一度以为没有 JSON 模式)、一度被挪去参数档(970ab0e58),维护者拍板:**收回高级** —
+//: 「要一份 JSON、下游按字段取」是微调,不该占基础档第一眼;挪去参数那阵还连带把「高级」tab 弄丢了(llm 的高级项
+//: 全在专区里、被剔出通用 advancedSpecs,areas 因此不含 advanced),这里一并修好(见 NodeInspector 的 areas)。
 //: 两块都是**返回元素的函数,不是组件** —— 检查器直接调,React 树和拆出来之前一样。
 
 //: 大模型节点里由专区自己渲染的配置项,不走通用字段列表。
@@ -40,8 +41,9 @@ interface LlmSectionProps {
   responseFormat: string;
 }
 
-/** 参数档:预设、输出格式、JSON Schema。 */
-export function llmMainSection({ t, nodeId, config, setConfig, responseFormat }: LlmSectionProps): React.ReactElement {
+/** 参数档:预设。「输出格式 / JSON Schema」按维护者的决定收在高级档(llmAdvancedSection)—— JSON 是给
+ *  下游按字段取的微调,不该占基础档的第一眼;采样参数、Schema 名称、严格与否本来就在高级。 */
+export function llmMainSection({ t, config, setConfig }: LlmSectionProps): React.ReactElement {
   return (
     <div // **不套框。** 检查器本身已经是一张卡片,里面再画一圈边框就是框中框,而那圈线不表示
       // 任何东西 —— 它只是让内容离两边更远、可读宽度更窄。
@@ -69,6 +71,25 @@ export function llmMainSection({ t, nodeId, config, setConfig, responseFormat }:
               : t("wfPresetBalancedHint")}
         </small>
       </div>
+    </div>
+  );
+}
+
+/** 高级档:输出格式、JSON Schema、采样参数、停止词、Schema 名称和严格与否。 */
+export function llmAdvancedSection({
+  t,
+  nodeId,
+  config,
+  variables,
+  setConfig,
+  setTextConfig,
+  typeConfig,
+  responseFormat,
+}: LlmSectionProps): React.ReactElement {
+  return (
+    <div className="grid gap-3">
+      {/* 输出格式 + JSON Schema 收在高级(维护者决定):JSON 模式是给下游按字段取的微调。放高级第一项,
+          「要 JSON、按 Schema」这件事一眼找得到,又不占基础档。 */}
       <div className={FIELD_BOX} data-llm-response-format="">
         <span>{t("wfLlmResponseFormat")}</span>
         <Select value={responseFormat} onValueChange={(next) => setConfig("response_format", next)}>
@@ -98,22 +119,6 @@ export function llmMainSection({ t, nodeId, config, setConfig, responseFormat }:
           />
         </div>
       )}
-    </div>
-  );
-}
-
-/** 高级档:采样参数、停止词、Schema 名称和严格与否。 */
-export function llmAdvancedSection({
-  t,
-  config,
-  variables,
-  setConfig,
-  setTextConfig,
-  typeConfig,
-  responseFormat,
-}: LlmSectionProps): React.ReactElement {
-  return (
-    <div className="grid gap-3">
       <div className="grid grid-cols-2 gap-2 max-[1180px]:grid-cols-1">
         <div className={FIELD_BOX}>
           <span>{t("wfLlmTemperature")}</span>

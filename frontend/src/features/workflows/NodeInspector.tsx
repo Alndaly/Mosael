@@ -406,7 +406,9 @@ export function NodeInspector({
   if (basicSpecs.length > 0) areas.push("config");
   // 「高级」自成一档,而不是正文底下一个折叠块:折叠块把「有没有更多可调的」藏在一次点击后面,
   // 而条上摆着就一眼看得见。**有才出** —— 没有高级项的节点条上不会多这一档。
-  if (advancedSpecs.length > 0) areas.push("advanced");
+  // llm 例外:它的采样参数 / 输出格式 / JSON Schema 全由 llmAdvancedSection 渲染、被 hidden() 剔出了
+  // advancedSpecs,但「高级」这一档本身必须在,否则那个专区无处可摆(维护者:LLM 节点没有「高级」一项)。
+  if (advancedSpecs.length > 0 || node.type === "llm") areas.push("advanced");
   //: 输出名按声明展开,和变量插入器(upstreamVariables)同一种取法:开始节点声明的是 `*params`
   //: (「params 里的每个键」),原样列出来就是一个引用不到任何东西的 `{{start.*params}}`。
   const outputNames = meta ? declaredFieldNames(meta.outputs, config) : [];
