@@ -11,15 +11,20 @@ from jsonschema import SchemaError, ValidationError, validate as validate_json_s
 from jsonschema.validators import validator_for
 from sqlalchemy.orm import Session
 
+from app.core.i18n import fragment
 from app.core.usage_scope import workspace_scope
+from app.db.models import Asset
 from app.domain.ai_runtime import configured_max_retries
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
+from app.domain.analysis.service import image_part
 from app.domain.billing.usage import billable, once
 from app.domain.providers.chat_connection import require_connection, runner_choice
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
-from app.domain.workflows.executors.common import stopping, text_lines
+from app.domain.workflows.executors.common import id_list, stopping, text_lines
+from app.media.image_preview import browser_compatible_image
+from app.media.paths import resolve_key
 
 LLM_TIMEOUT_SECONDS = 120
 #: 按要的输出长度放宽等待:按慢端点的出字速度(每秒约 25 个 token)算完 max_tokens 要多久,再加一段排队 / 首字的
@@ -356,6 +361,42 @@ def _json_result(
     return value
 
 
+#: 一次最多给模型看几张图。多了既贵又容易超上下文;多数视觉模型也有自己的张数上限。
+LLM_MAX_IMAGES = 8
+
+
+def _images_for_model(db: Session, scope: RunScope, asset_ids: list[str]) -> list[dict[str, Any]]:
+    """「要模型看的图片」那一格 → 多模态消息里的图片段(data URI)。
+
+    此前 LLM 节点只发一段文字:提示词里写 `{{画图.asset_id}}`,模型收到的是一串素材编号,从没见过那张图。
+    格式和画板上「连到便签让模型看着写」、素材分析是同一条路(analysis.image_part、browser_compatible_image:
+    HEIC 先转成 JPEG,WebP / AVIF 原样带真实 MIME)。
+
+    和画板那条不同,这里**不跳过**认不出的图:工作流是照着配置跑的,点名要看的图没送进去却照样出一段回答,
+    用户只会以为模型没看仔细。所以不在工作区、不是图片、读不出来都当场报,说清是哪一张。
+    """
+    if not asset_ids:
+        return []
+    if len(asset_ids) > LLM_MAX_IMAGES:
+        raise WorkflowDomainError("wfErr_llmTooManyImages", params={"count": len(asset_ids), "max": LLM_MAX_IMAGES})
+    parts: list[dict[str, Any]] = []
+    for asset_id in asset_ids:
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.workspace_id != scope.workspace_id:
+            raise WorkflowDomainError("wfErr_llmImageMissing", params={"asset_id": asset_id})
+        if asset.kind != "image":
+            raise WorkflowDomainError(
+                "wfErr_llmImageNotImage", params={"name": asset.name, "kind": fragment(f"assetKind_{asset.kind}")}
+            )
+        path = resolve_key(asset.file_key) if asset.file_key else None
+        compatible = browser_compatible_image(path, path.parent) if path is not None and path.is_file() else None
+        if compatible is None:
+            raise WorkflowDomainError("wfErr_llmImageUnreadable", params={"name": asset.name})
+        image_path, mime = compatible
+        parts.append(image_part(image_path.read_bytes(), mime))
+    return parts
+
+
 @register("llm")
 def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     actor = current_actor(db)
@@ -371,7 +412,11 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # 空提示词是最常见的一类 400(prompt 切了「引用」却没绑上游、或上游给了空):提前拦下,给准信。
     if not prompt.strip():
         raise WorkflowDomainError("wfErr_llmPromptEmpty")
-    messages.append({"role": "user", "content": prompt})
+    images = _images_for_model(db, scope, id_list(config.get("image_asset_ids")))
+    if images:
+        messages.append({"role": "user", "content": [{"type": "text", "text": prompt}, *images]})
+    else:
+        messages.append({"role": "user", "content": prompt})
     # **把 Schema 本身也给模型看。**
     #
     # 此前它只进 `payload.response_format`,而那一项能不能生效**完全看供应商**:DeepSeek 只支持
