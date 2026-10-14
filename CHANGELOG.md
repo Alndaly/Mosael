@@ -3,7 +3,7 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
-## [Unreleased]
+## [1.9.6] - 2026-10-13
 
 ### 修:打开插件页之后界面反复崩溃
 

@@ -1,5 +1,16 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.6": {
+    zh: [
+      "**插件页不再反复崩溃。** 打开插件页(尤其 ComfyUI 连接)过一会儿整个界面崩掉、反复崩,删掉连接重建就好一阵——原因是宿主每刷一次 ComfyUI 的工具清单/模型清单都留一条带整份清单(约 1MB)的调用记录,一个连接攒下上千条、七百多 MB,插件页拉调用记录时不分页、一次全拿,界面解不动就崩。现在问目录不再留调用记录,调用记录一次最多拿最近十条;升级时自动清掉已经攒下的目录记录,别的记录不动。",
+      "**剪辑导出能选格式、能只导出声音,视频轨空着也不再报错。** 导出框里先选「视频/音频」再选格式:视频 MP4/MOV/WebM,音频 MP3/WAV/M4A;选音频时分辨率、帧率、画质不摆。只有配音、音乐没有画面时导出不再报「Sequence has no clips to render」,整条是黑场、声音照常混进去,导出框会先说一句再让你换只导音频。",
+    ],
+    en: [
+      "**The plugins page no longer crash-loops.** Opening the plugins page (especially a ComfyUI connection) would crash the whole UI a few seconds later and keep crashing, and deleting then recreating the connection made it fine for a while. The cause: every refresh of a ComfyUI tool or model list left one invocation record carrying the whole list (~1 MB), so one connection accumulated thousands of records and 700+ MB, and the plugins page fetched them all at once without pagination. Directory refreshes no longer write invocation records, invocation records fetch at most the latest ten, and upgrading automatically clears the accumulated directory records (other records are untouched).",
+      "**Editing exports choose a format, can export audio only, and no longer fail on an empty video track.** The export dialog now asks video or audio first, then the format: MP4/MOV/WebM for video and MP3/WAV/M4A for audio, and the resolution, frame-rate and quality rows disappear for audio. Exporting with only voice and music but no picture no longer fails with \"Sequence has no clips to render\": the result is a black frame with the audio mixed in, and the dialog says so first and offers to switch to audio-only.",
+    ],
+  },
+
   "v1.9.5": {
     zh: [
       "**工作台顶栏顺手了。** 画布操控钮(触控板/鼠标)写上现在那一种的名字,和「保存」「运行」同有边框;拖右边列宽时画布边完全跟手,中间不再多出一截空白;助手的诊断没查出问题时不再单出一行——工具行已证明跑过,回答由智能体自己说。",
