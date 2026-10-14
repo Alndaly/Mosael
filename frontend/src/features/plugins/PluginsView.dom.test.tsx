@@ -12,17 +12,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 //: 路径在 api/domains/plugins 里,界面调的是**有名字的函数** —— 所以这里打桩的也是它们,
 //: 断言的是"带着哪个连接、哪个工具、哪些参数",而不是一串拼出来的 URL。
-const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssetPage } = vi.hoisted(() => ({
+const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssetPage, refreshPluginInstance } = vi.hoisted(() => ({
   listPluginCredentials: vi.fn(),
   savePluginCredentials: vi.fn(),
   invokePluginTool: vi.fn(),
   listAssetPage: vi.fn(),
+  refreshPluginInstance: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
   listPluginCredentials,
   savePluginCredentials,
   invokePluginTool,
   listAssetPage,
+  refreshPluginInstance,
   fetchWorkflowFieldOptions: vi.fn().mockResolvedValue([]),
   startPluginOauth: vi.fn(),
   finishPluginOauth: vi.fn(),
@@ -46,6 +48,7 @@ vi.mock("@/app/preferences", () => ({
       pluginToolMissingRequired: "还有必填参数没填",
       pluginToolsFetchFailed: "没拿到工具清单:{error}",
     })[key] ?? key,
+  usePreferences: () => ({ locale: "zh" }),
 }));
 
 import { ConnectionCard, CredentialRows, FieldInput, ToolRow } from "./PluginsView";
@@ -569,5 +572,40 @@ describe("MCP 连接的工具表是空的", () => {
     wrap(<ConnectionCard pkg={pkg} instance={{ ...instance, blocked_reason: "权限未授予" }} workspaceId="w1" />);
     expect(screen.getAllByText("权限未授予").length).toBeGreaterThan(0);
     expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
+  });
+});
+
+describe("点「刷新工作流」:服务端返回的新实例立刻写回缓存", () => {
+  //: 维护者:点了工具栏的「刷新工作流」,「可生成的工作流」那行的计数和刷新时间**不立刻变** —— 此前只在
+  //: settled 里作废重拉(又一趟往返),POST 其实已经同步返回了刷好的整个实例,白等。现在一回来就写进缓存。
+  const genPkg = {
+    id: "dev.mosael.comfyui", name: "ComfyUI", version: "1.23.4", kind: "comfyui", multiple: true,
+    permissions: [], provides: ["generation", "model_library", "workflow_library"],
+    config_fields: [], credential_fields: [], oauth: null, services: [], instances: [],
+  } as unknown as PluginPackage;
+  const genInstance = {
+    id: "c1", package_id: genPkg.id, name: "ComfyUI · 本机", enabled: true, config: {},
+    blocked_reason: "", permissions_added: false, authorization: "", tools: [],
+    capability_status: { generation: { models: 40, error: "", refreshed_at: "2026-10-14T15:00:00+00:00" } },
+  } as PluginInstance;
+
+  it("POST 一回来,缓存里那个连接就是新数 —— 不等作废重拉那一趟", async () => {
+    const fresh = {
+      ...genInstance,
+      capability_status: { generation: { models: 41, error: "", refreshed_at: "2026-10-14T15:52:00+00:00" } },
+    };
+    refreshPluginInstance.mockResolvedValue(fresh);
+    const { client } = wrap(<ConnectionCard pkg={genPkg} instance={genInstance} workspaceId="w1" />);
+    // 页面进来时缓存里已有旧目录(40 个);POST 返回 41 个。
+    client.setQueryData(["plugins"], [{ ...genPkg, instances: [genInstance] }]);
+    fireEvent.click(screen.getByRole("button", { name: "pluginRefreshModels" }));
+    await waitFor(() => expect(refreshPluginInstance).toHaveBeenCalledWith("c1"));
+    await waitFor(() => {
+      const found = client
+        .getQueryData<PluginPackage[]>(["plugins"])!
+        .flatMap((one) => one.instances ?? [])
+        .find((one) => one.id === "c1");
+      expect(found?.capability_status?.generation?.models).toBe(41);
+    });
   });
 });

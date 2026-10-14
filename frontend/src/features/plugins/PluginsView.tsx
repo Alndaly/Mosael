@@ -827,6 +827,18 @@ export function ConnectionCard({
   });
   const refresh = useMutation({
     mutationFn: () => refreshPluginInstance(instance.id),
+    //: 服务端**同步**重拉目录、POST 返回的就是刷好的整个新实例 —— 立刻写回 packages 缓存:这一行(几个、
+    //: 什么时候刷的)在 POST 回来的那一拍就动,不等 settled 里作废重拉的那一趟往返(维护者:点了「刷新工作流」,
+    //: 计数和刷新时间不立刻变)。整体替换、不走 patchPluginInstance:那个 helper 有个给「启用开关」用的
+    //: quirk(enabled 时强清 blocked_reason),刷新结果照实带 blocked_reason(连不上),被它抹掉就把真错误藏了。
+    onSuccess: (fresh) => {
+      qc.setQueryData<PluginPackage[]>(PLUGIN_PACKAGES_KEY, (previous) =>
+        previous?.map((pkg) => ({
+          ...pkg,
+          instances: (pkg.instances ?? []).map((one) => (one.id === instance.id ? fresh : one)),
+        })),
+      );
+    },
     // 失败也刷新:拉不到的原因记在连接上(capability_status.tools),卡片要跟着说出来。
     onSettled: () => invalidatePluginDependents(qc),
   });
