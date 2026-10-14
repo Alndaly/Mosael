@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -134,6 +134,7 @@
     "migrate-job-message-i18n",
     "migrate-job-parent",
     "migrate-job-receipts-get-their-own-role",
+    "migrate-job-receipts-name-their-assets",
     "migrate-job-worker-leases",
     "migrate-line-fields-are-lists",
     "migrate-local-services-remember-their-python",

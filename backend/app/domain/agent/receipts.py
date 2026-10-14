@@ -35,18 +35,27 @@ def receipt_to_session(session_id: str) -> dict[str, Any]:
     return {"kind": RECEIPT_KIND, "session_id": session_id}
 
 
+def produced_asset_ids(job: Job) -> list[str]:
+    """这个任务做出来的素材。没成功的什么都没做出来。
+
+    要覆盖**所有**任务种类,而它们的产出形状本来就不同:渲染、配音一次出一份(asset_id),生成可能出多份
+    (asset_ids —— 图像接口的 n)。两个都读,不是兼容旧字段,是这两种形状同时真实存在。
+    """
+    if job.status != "succeeded":
+        return []
+    result = job.result or {}
+    ids = [str(one) for one in (result.get("asset_ids") or []) if one]
+    if not ids and result.get("asset_id"):
+        ids = [str(result["asset_id"])]
+    return ids
+
+
 def _summarize(job: Job) -> str:
     """回执的正文 —— 用户在对话里看到的也是这一句,所以它要像人话。"""
     subject = str((job.payload or {}).get("subject") or "").strip()
     what = f"「{subject}」" if subject else "刚才那个任务"
     if job.status == "succeeded":
-        result = job.result or {}
-        # 这句摘要要覆盖**所有**任务种类,而它们的产出形状本来就不同:渲染、配音一次出一份
-        # (asset_id),生成可能出多份(asset_ids —— 图像接口的 n)。两个都读,不是兼容旧字段,
-        # 是这两种形状同时真实存在。
-        ids = [str(one) for one in (result.get("asset_ids") or []) if one]
-        if not ids and result.get("asset_id"):
-            ids = [str(result["asset_id"])]
+        ids = produced_asset_ids(job)
         # 素材 id 是模型下一步真正要用的东西(插进时间线、当下一次生成的首帧)。
         # 只说「完成了」的话,它还得再查一次任务才拿得到。
         tail = f",素材 id:{'、'.join(ids)}" if ids else ""
@@ -71,7 +80,7 @@ def deliver(db: Session, job: Job, receipt: dict[str, Any]) -> None:
     if owner is None:
         logger.warning("job %s 的回执没送:任务没有归属人", job.id)
         return
-    host.post_job_receipt(db, session, _summarize(job), owner, job_id=job.id)
+    host.post_job_receipt(db, session, _summarize(job), owner, job_id=job.id, asset_ids=produced_asset_ids(job))
 
 
 def acknowledge_seen(db: Session, _user: User, job_id: str, session_id: str) -> None:

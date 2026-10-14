@@ -177,6 +177,8 @@ def test_空闲时到的回执_直接起一轮_队列从头到尾看不到它(mo
     shown = [one for one in _messages(client, sid) if one["role"] == "job_receipt"]
     assert [one["content"] for one in shown] == ["「配音 1」已完成,素材 id:asset-1。"]
     assert not shown[0]["payload"].get("undelivered"), "已经交给智能体的回执还标着没送"
+    # 做出来的素材结构化地记在回执上:界面把它画进接着的那一轮回答里,不从正文那句人话里抠 id。
+    assert shown[0]["payload"]["asset_ids"] == ["asset-1"]
 
 
 def test_智能体自己get_job看到了终态_回执不再送_也不为它起一轮(model, written) -> None:
@@ -263,3 +265,46 @@ def test_存量回执迁成自己的角色_排着的那条迁成待送_重跑不
     assert rows["mine"] == ("user", {"queued": True, "queued_by": me})
     assert rows["agent"] == ("user", {"from_agent_session": "s2"})
     assert [one["content"] for one in _queue(client, sid)] == ["我自己说的"]
+
+
+def test_存量回执补上它的任务做出来的素材_没成功的和任务不在的记空表_重跑不动() -> None:
+    """回执记下 asset_ids 之前落库的那些,照它们的任务补:界面才画得出那一轮回答里的图。"""
+    from app.core.db import engine
+    from app.db import migrations
+
+    client = fresh_client()
+    sid = _session(client)
+    with SessionLocal() as db:
+        # 不挂回执:这里只要任务这一行,别让它落终态时真去送一条(那会起一轮、改掉下面那几条回执)。
+        made = [jobs_domain.create_job(db, workspace_id=_workspace(sid), kind="generation", created_by=_me(), payload={})
+                for _ in range(3)]
+        db.commit()
+        many, one, failed = (job.id for job in made)
+    with SessionLocal() as db:
+        for job_id, status, result in ((many, "succeeded", {"asset_ids": ["a1", "a2"]}),
+                                       (one, "succeeded", {"asset_id": "a3"}),
+                                       (failed, "failed", {"asset_id": "半截"})):
+            job = db.get(Job, job_id)
+            job.status, job.result = status, result
+        db.add_all([
+            AgentMessage(id="many", session_id=sid, role="job_receipt", content="「出图」已完成。", payload={"job_id": many}),
+            AgentMessage(id="one", session_id=sid, role="job_receipt", content="「配音」已完成。",
+                         payload={"job_id": one, "undelivered": True}),
+            AgentMessage(id="failed", session_id=sid, role="job_receipt", content="「失败的」失败了。", payload={"job_id": failed}),
+            AgentMessage(id="gone", session_id=sid, role="job_receipt", content="「清掉的」已完成。", payload={"job_id": "早没了"}),
+            AgentMessage(id="done", session_id=sid, role="job_receipt", content="「新的」已完成。",
+                         payload={"job_id": many, "asset_ids": ["只认这个"]}),
+        ])
+        db.commit()
+
+    migrations._migrate_job_receipts_name_their_assets()
+    migrations._migrate_job_receipts_name_their_assets()
+
+    with engine.begin() as conn:
+        rows = {row.id: __import__("json").loads(row.payload)
+                for row in conn.execute(sa.text("SELECT id, payload FROM agent_messages WHERE role = 'job_receipt'"))}
+    assert rows["many"] == {"job_id": many, "asset_ids": ["a1", "a2"]}
+    assert rows["one"] == {"job_id": one, "undelivered": True, "asset_ids": ["a3"]}
+    assert rows["failed"]["asset_ids"] == [], "没成功的任务什么都没做出来"
+    assert rows["gone"]["asset_ids"] == []
+    assert rows["done"]["asset_ids"] == ["只认这个"], "已经记过的不动"

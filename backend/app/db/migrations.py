@@ -2299,6 +2299,45 @@ def _migrate_job_receipts_get_their_own_role() -> None:
             )
 
 
+def _migrate_job_receipts_name_their_assets() -> None:
+    """回执记下它的任务做出来的素材(payload.asset_ids,见 domain/agent/host.JOB_RECEIPT_ROLE)。
+
+    界面把这些素材画进接着回执的那一轮回答里 —— 此前回执只记 job_id,素材 id 只写在正文那句人话里,智能体回一句
+    「图片已生成」,人在对话里看不到图。老回执照它的任务补:成功的读 result 里的 asset_ids / asset_id(两种形状
+    同时真实存在,和 receipts.produced_asset_ids 同一条规则,抄一份在这里:迁移不跟着领域代码变);没成功的、任务
+    已经不在的记空表。已经有 asset_ids 的不动,重跑什么都不做。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "agent_messages" not in tables or "jobs" not in tables:
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, payload FROM agent_messages WHERE role = 'job_receipt'")).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row.payload) if isinstance(row.payload, str) else (row.payload or {})
+            except ValueError:
+                continue
+            if not isinstance(payload, dict) or "asset_ids" in payload:
+                continue
+            ids: list[str] = []
+            job = conn.execute(
+                text("SELECT status, result FROM jobs WHERE id = :id"), {"id": str(payload.get("job_id") or "")}
+            ).first()
+            if job is not None and job.status == "succeeded":
+                try:
+                    result = json.loads(job.result) if isinstance(job.result, str) else (job.result or {})
+                except ValueError:
+                    result = {}
+                if isinstance(result, dict):
+                    ids = [str(one) for one in (result.get("asset_ids") or []) if one]
+                    if not ids and result.get("asset_id"):
+                        ids = [str(result["asset_id"])]
+            conn.execute(
+                text("UPDATE agent_messages SET payload = :p WHERE id = :i"),
+                {"p": json.dumps({**payload, "asset_ids": ids}, ensure_ascii=False), "i": row.id},
+            )
+
+
 def _migrate_agent_session_titles_drop_attachment_tokens() -> None:
     """会话标题里的附件标记去掉:此前标题直接截首条消息的前 60 个字,挂了附件的会话标题里就是一截
     `[附件 asset_id=… 名称=…`。照首条用户消息重算 —— 附件标记、文本附件的围栏块都不算;只发了附件的用附件名。
@@ -9762,6 +9801,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
             #: 后台任务的回执不再是用户消息:换成自己的角色,排着的那条改成「待送」。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_job_receipts_get_their_own_role),
+            #: 回执记下它的任务做出来的素材:界面把图画进接着回执的那一轮回答里。读的是上一步换好角色的回执。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_job_receipts_name_their_assets),
             #: 具名浏览器会话的登录分区按工作区分开:写下搬家单,由 Electron 执行器在磁盘上搬(新表由 SCHEMA 建)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
             #: 具名 / 池档案会话的租约落进库里(局部唯一索引);建之前先收掉已经撞上的。

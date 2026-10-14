@@ -132,6 +132,7 @@
   "migrate-job-message-i18n": "e227606c2e70766f",
   "migrate-job-parent": "2c98cd347bef4836",
   "migrate-job-receipts-get-their-own-role": "8a1883d1250d8833",
+  "migrate-job-receipts-name-their-assets": "824e0a13680a1f7c",
   "migrate-job-worker-leases": "59dea5b100214303",
   "migrate-line-fields-are-lists": "33325c28cee33030",
   "migrate-local-services-remember-their-python": "5cc7c7979bc9693e",

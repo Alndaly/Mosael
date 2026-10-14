@@ -357,8 +357,10 @@ def unseen_since_last_success(db: Session, session: AgentSession) -> str:
 #: 会话正忙时就带着 queued 进了排队 —— 输入框上方排出七八条「「配音 3」已完成」,带着 Steer 和删除,
 #: 这一轮结束后又每条各跑一轮(用户截图)。现在它有自己的角色:不进队列,界面画成一行任务通知。
 #:
-#: payload:`job_id`(哪个任务);还没交给智能体的另带 `undelivered: true` 和 `deliver_as`(以谁的身份跑
-#: 那一轮 —— 建任务的人,和排队消息的 queued_by 同一个理由:后台线程没有请求可以认人)。
+#: payload:`job_id`(哪个任务)、`asset_ids`(它做出来的素材,没做出来是空表 —— 界面把它们画进接着这条回执的
+#: 那一轮回答里:智能体说「图片已生成」,图就在那句话下面,见前端 turnOutputs.receivedAssetIds);还没交给智能体的
+#: 另带 `undelivered: true` 和 `deliver_as`(以谁的身份跑那一轮 —— 建任务的人,和排队消息的 queued_by 同一个理由:
+#: 后台线程没有请求可以认人)。
 JOB_RECEIPT_ROLE = "job_receipt"
 
 
@@ -431,7 +433,9 @@ def _with_receipts(prompt: str, receipts: str) -> str:
     return f"{receipts}\n\n{prompt}" if receipts else prompt
 
 
-def post_job_receipt(db: Session, session: AgentSession, content: str, owner: User, *, job_id: str) -> AgentMessage:
+def post_job_receipt(
+    db: Session, session: AgentSession, content: str, owner: User, *, job_id: str, asset_ids: list[str],
+) -> AgentMessage:
     """一个后台任务跑完了,把回执交给这次对话的智能体。
 
     **会话空闲**:回执落库(已送),直接起一轮,那一轮的提示词就是这条回执(连同此前没送出去的,如果有)。
@@ -448,7 +452,9 @@ def post_job_receipt(db: Session, session: AgentSession, content: str, owner: Us
         # 先交出此前没送出去的(如果有),这一条排在它们后面 —— 同一轮里一并交给智能体。
         earlier = _hand_over_receipts(db, session, before_user=False)
         prompt = _with_receipts(job_receipts_prompt([(job_id, content)], before_user=False), earlier)
-        message = AgentMessage(session_id=session.id, role=JOB_RECEIPT_ROLE, content=content, payload={"job_id": job_id})
+        message = AgentMessage(
+            session_id=session.id, role=JOB_RECEIPT_ROLE, content=content, payload={"job_id": job_id, "asset_ids": asset_ids},
+        )
         return _start_turn_with(db, session, message, _prompt_with_context(prompt, unseen), owner)
     return _wait_for_the_running_turn(
         db,
@@ -457,7 +463,7 @@ def post_job_receipt(db: Session, session: AgentSession, content: str, owner: Us
             session_id=session.id,
             role=JOB_RECEIPT_ROLE,
             content=content,
-            payload={"job_id": job_id, "undelivered": True, "deliver_as": owner.id},
+            payload={"job_id": job_id, "asset_ids": asset_ids, "undelivered": True, "deliver_as": owner.id},
         ),
     )
 
