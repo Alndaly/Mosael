@@ -275,6 +275,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_segmentTimecode": {"zh": "第 {index} 段的时间码不是数字", "en": "Segment {index} has a non-numeric timecode"},
     "wfErr_nestTooDeep": {"zh": "工作流嵌套过深(超过 {max} 层),已阻止", "en": "Blocked: workflows nested deeper than {max}"},
     "wfErr_nodeMissing": {"zh": "节点不存在:{id}", "en": "No such node: {id}"},
+    "wfErr_jsonPathMissing": {"zh": "JSON 提取取不到「{path}」:走到「{at}」这一段时没有它。那一层是:{available}", "en": "JSON extract could not find \"{path}\": nothing at \"{at}\". That level is: {available}"},
+    "wfErr_jsonPathInvalid": {"zh": "JSON 提取的路径「{path}」写得不对(从「{at}」起看不懂);写法如 data.items[0].title、results.*.id", "en": "The JSON extract path \"{path}\" is malformed (cannot read from \"{at}\"); write it like data.items[0].title or results.*.id"},
     "wfErr_listChunkNotAList": {"zh": "「拆成几批」收到的不是一串(是 {kind});给它一个列表或一段 JSON 数组文本", "en": "Split-into-batches received something that is not a list ({kind}); give it a list or JSON-array text"},
     "wfErr_unknownNodeType": {"zh": "未知的节点类型:{type}", "en": "Unknown node type: {type}"},
     "wfErr_nodeIdExists": {"zh": "节点 id 已存在:{id}", "en": "A node with id {id} already exists"},

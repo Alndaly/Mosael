@@ -1165,6 +1165,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "path": {"type": "template", "description": "wfNode_json_extract_path"},
         },
         "outputs": ["value", "text"],
+        #: value 是什么由路径决定(对象、列表、文字都可能),不声明;text 永远是文字。
+        "output_types": {"text": "text"},
     },
     #: 把一串拆成等长的几批 —— 全量分析、分批拉取的公共积木。此前「分批」只有手写循环一条
     #: 路,而循环体拿不到「第几批的内容」;拆批之后 loop_foreach 直接逐批跑。

@@ -34,4 +34,15 @@ def test_星号可以在路径中间_也收_JSON_文本() -> None:
 
 def test_没有星号照旧取一格() -> None:
     assert _extract(RESULTS, "0.on_model.asset_id")["value"] == "img-1"
-    assert _extract(RESULTS, "1.on_model_clip.asset_id")["value"] is None
+    assert _extract(RESULTS, "[2].on_model_clip.asset_id")["value"] == "clip-3"
+
+
+def test_没有星号时取不到就报错_星号下没有的只是不占位() -> None:
+    import pytest
+
+    from app.domain.workflows import WorkflowDomainError
+
+    with pytest.raises(WorkflowDomainError) as missing:
+        _extract(RESULTS, "1.on_model_clip.asset_id")
+    assert missing.value.params["at"] == "1.on_model_clip"
+    assert _extract(RESULTS, "*.nothing")["value"] == []

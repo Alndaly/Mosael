@@ -700,8 +700,9 @@ def test_json_extract_node() -> None:
     assert json_extract(None, None, {"source": src, "path": "data.items.0.title"}) == {
         "value": "hello", "text": "hello",
     }
-    # missing path → None/""; already-parsed dict source works too
-    assert json_extract(None, None, {"source": {"a": 1}, "path": "b"}) == {"value": None, "text": ""}
+    # 方括号下标是最常见的写法,和点号下标同一个意思
+    assert json_extract(None, None, {"source": src, "path": "data.items[1].title"})["value"] == "world"
+    assert json_extract(None, None, {"source": src, "path": "$.data.items[-1].title"})["value"] == "world"
     # whole object when path empty → JSON text
     out = json_extract(None, None, {"source": {"a": 1}, "path": ""})
     assert out["value"] == {"a": 1} and out["text"] == '{"a": 1}'
@@ -716,6 +717,42 @@ def test_json_extract_reads_fenced_json() -> None:
     assert json_extract(None, None, {"source": fenced, "path": "x.y"}) == {"value": "围栏里的值", "text": "围栏里的值"}
     # 不是 JSON 的文字照旧当一个值(路径为空时原样交出),不去里面捞片段。
     assert json_extract(None, None, {"source": "就是一句话 {不是 JSON}", "path": ""})["value"] == "就是一句话 {不是 JSON}"
+
+
+def test_json_extract_取不到就报错_说清在哪一段断的_那一层有什么() -> None:
+    """此前取不到静默交出 null:下游拿着空值往下跑,失败出现在隔了几个节点、看不出原因的地方。"""
+    import pytest
+
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors.basic import json_extract
+
+    src = {"data": {"items": [{"title": "hello"}]}}
+    with pytest.raises(WorkflowDomainError) as missing_key:
+        json_extract(None, None, {"source": src, "path": "data.itemz[0]"})
+    assert missing_key.value.key == "wfErr_jsonPathMissing"
+    assert missing_key.value.params == {"path": "data.itemz[0]", "at": "data.itemz", "available": "{items}"}
+    with pytest.raises(WorkflowDomainError) as out_of_range:
+        json_extract(None, None, {"source": src, "path": "data.items[3].title"})
+    assert out_of_range.value.params["at"] == "data.items[3]" and out_of_range.value.params["available"] == "[0..0]"
+    #: 不是 JSON 的文字带着路径:断在第一段,那一层就是那段文字。
+    with pytest.raises(WorkflowDomainError) as prose:
+        json_extract(None, None, {"source": "就是一句话", "path": "a"})
+    assert prose.value.params["available"] == '"就是一句话"'
+    with pytest.raises(WorkflowDomainError) as bad:
+        json_extract(None, None, {"source": src, "path": "data.items[0"})
+    assert bad.value.key == "wfErr_jsonPathInvalid"
+
+
+def test_json_extract_路径写法() -> None:
+    from app.domain.workflows.executors.basic import parse_json_path
+
+    assert parse_json_path("a.b[0].c") == ["a", "b", 0, "c"]
+    assert parse_json_path("$.a[*].id") == ["a", "*", "id"]
+    assert parse_json_path("[0].name") == [0, "name"]
+    assert parse_json_path('meta["a.b"].x') == ["meta", "a.b", "x"]
+    #: 「按画幅取尺寸」拿画幅当键:冒号不是分隔符。
+    assert parse_json_path("16:9") == ["16:9"]
+    assert parse_json_path("") == []
 
 
 def test_text_transform_node() -> None:
