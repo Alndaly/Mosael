@@ -23,7 +23,8 @@ import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { DecisionsContext, useToolCallConfirmation } from "@/features/agent/decisionsContext";
 import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
-import { turnOutputAssetIds } from "@/features/agent/turnOutputs";
+import { turnOutputAssetIds, turnWidgets } from "@/features/agent/turnOutputs";
+import { AgentWidgetFrame } from "@/features/agent/AgentWidgetFrame";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
@@ -588,7 +589,8 @@ const NO_IDS: readonly string[] = [];
  * - 三种时候**不收**:跑失败了(要看得见断在哪一步)、没有结果(这一轮就停在过程里,收起来什么都不剩)、
  *   有确认卡在等人拍板(卡就挂在发起它的那一行下面,见 ToolCallCard;PendingDecisions 也按「那一行看得见」
  *   决定要不要在对话末尾再摆一张)。
- * - **结果**是末尾那段正文,加上这一轮做出来的素材(turnOutputs:任务产物、派生素材、回执带来的)。
+ * - **结果**是末尾那段正文,加上这一轮做出来的素材(turnOutputs:任务产物、派生素材、回执带来的)和智能体给的
+ *   小界面(`show_widget`,关在沙箱 iframe 里,见 agentWidget.ts)。
  *
  * 过程只有一段思考时不套摘要:「已处理 · 1 步」包着「已思考」是同一件事说两遍,思考块自己会收起。
  */
@@ -613,11 +615,12 @@ export function AgentTurnContent({
   const citations = React.useMemo(() => collectCitations(timeline), [timeline]);
   const { process, result } = React.useMemo(() => splitTurn(turnBlocks(timeline)), [timeline]);
   const outputs = React.useMemo(() => turnOutputAssetIds(timeline, receivedAssetIds), [timeline, receivedAssetIds]);
+  const widgets = React.useMemo(() => turnWidgets(timeline), [timeline]);
   const decisions = React.useContext(DecisionsContext);
   const awaitingDecision = process.some(
     (block) => block.type === "tools" && block.tools.some((tool) => decisions?.byToolCall.get(tool.id)?.status === "pending"),
   );
-  const hasResult = result.length > 0 || outputs.length > 0;
+  const hasResult = result.length > 0 || outputs.length > 0 || widgets.length > 0;
   const settled = !running && !failed && hasResult;
   //: 用户亲手开合过就听他的(null = 没碰过,跟着状态走)。不用 effect 去"在跑完那一刻收起":
   //: 跟着状态算出来的开合,跑完自然就是收着的,而他点过的那一下也不会被下一次渲染抹掉。
@@ -671,6 +674,9 @@ export function AgentTurnContent({
             <TurnBlockView key={`result-${index}`} block={block} index={index} />
           ))}
           {outputs.length > 0 && <MediaPreviewGrid assetIds={outputs} reveal className="py-1" />}
+          {widgets.map((widget) => (
+            <AgentWidgetFrame key={widget.id} widget={widget} />
+          ))}
         </div>
       )}
     </div></CitationContext.Provider>
