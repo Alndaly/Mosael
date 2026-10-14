@@ -97,15 +97,13 @@ def test_目录变了自动刷新_生成模型和工具一起(connected) -> None
     from app.domain.plugins import catalog_watch
 
     client, comfy, instance_id = connected
-    with SessionLocal() as db:
-        before = db.query(PluginInvocation).filter_by(instance_id=instance_id).count()
     assert catalog_watch.check_for_changes() == 0
     comfy.state.workflows["new.json"] = UPSCALE_API
     assert catalog_watch.check_for_changes() == 2, "模型目录和工具清单各刷一次"
     names = {one["name"] for one in _instance(client)["tools"]}
     assert any(name.startswith("wf_") and name != PORTRAIT_TOOL for name in names)
     with SessionLocal() as db:
-        assert db.query(PluginInvocation).filter_by(instance_id=instance_id).count() == before + 2, "问指纹不留记录"
+        assert db.query(PluginInvocation).filter_by(instance_id=instance_id).count() == 0, "问指纹、刷目录都不留记录"
 
 
 def _workflow(ws: str, graph: dict) -> str:
