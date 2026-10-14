@@ -655,13 +655,15 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "presence_penalty": {"advanced": True, "type": "number", "description": "wfNode_llm_presence_penalty"},
             "seed": {"advanced": True, "type": "number", "description": "wfNode_llm_seed"},
             "stop": {"advanced": True, "type": "template", "description": "wfNode_llm_stop"},
-            "response_format": {"advanced": True, 
+            #: **输出格式和 Schema 不标 advanced。** 「要一份 JSON、下游按字段取」是这个节点在做的事,不是微调:
+            #: 藏在高级里时维护者翻了一圈以为大模型节点没有 JSON 模式。Schema 的名字和严格与否才是微调。
+            "response_format": {
                 "type": "string",
                 "description": "wfNode_llm_response_format",
                 "options": ["text", "json_object", "json_schema"],
             },
             "json_schema_name": {"advanced": True, "type": "template", "description": "wfNode_llm_json_schema_name"},
-            "json_schema": {"advanced": True, "type": "object", "description": "wfNode_llm_json_schema"},
+            "json_schema": {"type": "object", "description": "wfNode_llm_json_schema"},
             "json_schema_strict": {"advanced": True, 
                 "type": "string",
                 "description": "wfNode_llm_json_schema_strict",

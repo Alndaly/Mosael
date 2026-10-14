@@ -363,7 +363,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_preset_balanced": {"zh": "平衡", "en": "Balanced"},
     "wfOpt_preset_creative": {"zh": "发散", "en": "Creative"},
     "wfOpt_response_format_text": {"zh": "纯文本", "en": "Text"},
-    "wfOpt_response_format_json_object": {"zh": "JSON 对象", "en": "JSON object"},
+    "wfOpt_response_format_json_object": {"zh": "JSON(不限结构)", "en": "JSON (any shape)"},
     "wfOpt_response_format_json_schema": {"zh": "按 JSON Schema", "en": "JSON Schema"},
     "wfOpt_session_mode_ephemeral": {"zh": "临时", "en": "Throwaway"},
     "wfOpt_session_mode_named": {"zh": "具名持久", "en": "Named, persistent"},

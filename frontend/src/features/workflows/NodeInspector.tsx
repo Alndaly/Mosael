@@ -38,7 +38,7 @@ import { bodyScope, drivesDigitalHuman, extractRefs, isCodeConfig, isNestedScope
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { withDataInputBound } from "@/features/workflows/connections";
 import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSection } from "@/features/workflows/nodeInspectorGenerate";
-import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmPresetSection } from "@/features/workflows/nodeInspectorLlm";
+import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmMainSection } from "@/features/workflows/nodeInspectorLlm";
 import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
 import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
@@ -690,13 +690,13 @@ export function NodeInspector({
             typingRun,
           })}
         {area === "config" && node.type === "llm" &&
-          llmPresetSection({ t, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
+          llmMainSection({ t, nodeId: node.id, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
         {/* **专区此前完全绕过了 advanced 声明。** llm 的十一个旋钮在 NODE_TYPES 里一直标着
             advanced,而专区把它们和 preset 一股脑铺开 —— 于是那个声明在最需要它的节点上
-            等于不存在,面板一打开就是满屏采样参数。这里按声明切开:preset 是"这个节点在做
-            什么"的那一档,其余进高级。 */}
+            等于不存在,面板一打开就是满屏采样参数。这里按声明切开:preset、输出格式和 JSON Schema 是
+            "这个节点在做什么"的那一档,其余进高级。 */}
         {area === "advanced" && node.type === "llm" &&
-          llmAdvancedSection({ t, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
+          llmAdvancedSection({ t, nodeId: node.id, config, variables, setConfig, setTextConfig, typeConfig, responseFormat })}
         {/* 每一档里的表单**整份一起读**,不再切碎;分档只分到「参数 / 高级 / 输出变量 /
             本次产出」这一层。高级从正文底下的折叠块升成条上的一档 —— 折叠块把「还有没有
             更多可调的」藏在一次点击后面,而条上摆着一眼就看得见。 */}
