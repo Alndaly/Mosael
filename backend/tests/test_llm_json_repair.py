@@ -165,3 +165,39 @@ def test_契约只贴一次() -> None:
     #: 降级发生了(response_format 换档),但没有再多插一条契约。
     assert downgraded["response_format"] == {"type": "json_object"}
     assert len(downgraded["messages"]) == len(payload["messages"])
+
+
+def test_响应格式里的_Schema_三种不对分开说() -> None:
+    """维护者填了一份**数组数据**却报「不能为空」—— 三种「不对」要分开说,照着「不能为空」改永远修不好。
+
+    - 真没填 → schemaEmpty;
+    - 填了但不是对象(最常见:把手上的数据实例 [{…}] 当成了 Schema;Schema 描述结构,不是举例)→ schemaNotObject;
+    - 是对象但本身不是合法 JSON Schema → schemaInvalid(带 jsonschema 的原因)。
+    """
+    import pytest
+
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors.ai import _response_format
+
+    with pytest.raises(WorkflowDomainError) as missing:
+        _response_format({"response_format": "json_schema"})
+    assert missing.value.key == "wfErr_schemaEmpty"
+    with pytest.raises(WorkflowDomainError) as empty_obj:
+        _response_format({"response_format": "json_schema", "json_schema": {}})
+    assert empty_obj.value.key == "wfErr_schemaEmpty"
+    #: 维护者踩的正是这条:数组数据被当成 Schema,旧代码不分青红皂白报「不能为空」。
+    with pytest.raises(WorkflowDomainError) as data_instance:
+        _response_format({"response_format": "json_schema", "json_schema": [{"name": "", "age": 1}]})
+    assert data_instance.value.key == "wfErr_schemaNotObject"
+    with pytest.raises(WorkflowDomainError) as invalid:
+        _response_format({"response_format": "json_schema", "json_schema": {"type": "nonsense"}})
+    assert invalid.value.key == "wfErr_schemaInvalid"
+    assert "reason" in invalid.value.params
+    #: 合法的**数组 Schema** 照常通过 —— 数组的 Schema 长这样(描述结构),不是数据本身。
+    array_schema = {
+        "type": "array",
+        "items": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+    }
+    payload = _response_format({"response_format": "json_schema", "json_schema": array_schema})
+    assert payload["type"] == "json_schema"
+    assert payload["json_schema"]["schema"] == array_schema

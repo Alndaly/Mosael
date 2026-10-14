@@ -99,6 +99,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfErr_responseFormat": {"zh": "response_format 只能是 text/json_object/json_schema", "en": "response_format must be text, json_object or json_schema"},
     "wfErr_schemaEmpty": {"zh": "JSON Schema 不能为空", "en": "The JSON Schema cannot be empty"},
+    "wfErr_schemaNotObject": {"zh": "填进去的这份不是 JSON Schema,是一段数据(Schema 描述结构,不是举例)。数组写成 {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {…}}};对象写成 {\"type\": \"object\", \"properties\": {…}}。", "en": "What you entered is data, not a JSON Schema — a schema describes the shape; it is not an example. For an array write {\"type\": \"array\", \"items\": {…}}; for an object {\"type\": \"object\", \"properties\": {…}}."},
     "wfErr_llmImageMissing": {"zh": "要模型看的图片「{asset_id}」不在这个工作区里(可能已删除):重新选一张,或检查上游给的是不是素材编号。", "en": "The image “{asset_id}” for the model is not in this workspace (it may have been deleted): pick another, or check that the upstream step gives an asset ID."},
     "wfErr_llmImageNotImage": {"zh": "「{name}」是{kind},大模型节点只收图片:视频请先用「素材分析」看,或抽一帧成图片再接。", "en": "“{name}” is {kind}; the LLM node only takes images. Analyze a video with the asset-analysis step, or grab a frame as an image first."},
     "wfErr_llmImageUnreadable": {"zh": "图片「{name}」读不出来(文件缺失或格式坏了),没法发给模型。", "en": "The image “{name}” cannot be read (missing file or broken format), so it cannot be sent to the model."},

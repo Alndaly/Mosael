@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from jsonschema import SchemaError, ValidationError, validate as validate_json_schema
+from jsonschema import Draft7Validator, SchemaError, ValidationError, validate as validate_json_schema
 from jsonschema.validators import validator_for
 from sqlalchemy.orm import Session
 
@@ -104,8 +104,16 @@ def _response_format(config: dict[str, Any]) -> dict[str, Any] | None:
     if mode != "json_schema":
         raise WorkflowDomainError("wfErr_responseFormat")
     schema = config.get("json_schema")
-    if not isinstance(schema, dict) or not schema:
+    # 三种「不对」分开说,别都并成一句「不能为空」——维护者填了一份数组数据却报「不能为空」,照着改永远修不好。
+    # 最常见的是把手上的**数据实例**([{…}])当成了 Schema:Schema 要描述结构,不是举例。
+    if schema is None or schema == "" or schema == {}:
         raise WorkflowDomainError("wfErr_schemaEmpty")
+    if not isinstance(schema, dict):
+        raise WorkflowDomainError("wfErr_schemaNotObject")
+    try:
+        Draft7Validator.check_schema(schema)
+    except SchemaError as problem:
+        raise WorkflowDomainError("wfErr_schemaInvalid", params={"reason": str(problem).splitlines()[0][:120]}) from problem
     name = str(config.get("json_schema_name") or schema.get("title") or "workflow_output").strip() or "workflow_output"
     return {
         "type": "json_schema",
