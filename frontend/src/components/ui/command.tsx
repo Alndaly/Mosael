@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { type DialogProps } from "@radix-ui/react-dialog"
-import { Command as CommandPrimitive } from "cmdk"
+import { Command as CommandPrimitive, useCommandState } from "cmdk"
 import { Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -65,16 +65,35 @@ const CommandInput = React.forwardRef<
 
 CommandInput.displayName = CommandPrimitive.Input.displayName
 
+/**
+ * 列表。**搜索词一变就滚回顶上** —— 匹配项排在最前、第一项被选中,列表却还停在上次滚到的位置,
+ * 看起来像「什么都没搜到」。所有可搜索的下拉(SearchableSelect、Combobox、命令面板)都经这里,只修这一处。
+ */
 const CommandList = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn("max-h-[min(480px,60vh)] overflow-y-auto overflow-x-hidden", className)}
-    {...props}
-  />
-))
+>(({ className, ...props }, forwardedRef) => {
+  const listRef = React.useRef<HTMLDivElement | null>(null)
+  const search = useCommandState((state) => state.search)
+  React.useLayoutEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0
+  }, [search])
+  const ref = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      listRef.current = node
+      if (typeof forwardedRef === "function") forwardedRef(node)
+      else if (forwardedRef) forwardedRef.current = node
+    },
+    [forwardedRef]
+  )
+  return (
+    <CommandPrimitive.List
+      ref={ref}
+      className={cn("max-h-[min(480px,60vh)] overflow-y-auto overflow-x-hidden", className)}
+      {...props}
+    />
+  )
+})
 
 CommandList.displayName = CommandPrimitive.List.displayName
 
