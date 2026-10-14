@@ -30,6 +30,17 @@ def test_关联只在_mac_下声明_而且是备选() -> None:
     assert mac and all(one.get("rank") == "Alternate" for one in mac)
 
 
+def test_mac_上只当看的程序_不当编辑器() -> None:
+    """macOS 选默认程序时先比 LSHandlerRank,同档再看角色:Editor 压过 Viewer。QuickTime / 音乐声明的是 Viewer,
+    Mosael 写 Editor 就有机会在同档里赢过它们,双击 mp4 打开的成了 Mosael(用户报的就是这个)。
+    Mosael 也确实不在原文件上改 —— 拖进来是导入一份进素材库 —— 所以是 Viewer。
+
+    不写 None:那样「打开方式」菜单里就没有 Mosael 了,拖到程序坞图标上导入也可能不认。electron-builder 不写 rank
+    时默认是 Default(1.8.0 之前的包就是这样,本机老包至今还在抢 mp4),所以 rank 和 role 两样都钉住。"""
+    for one in _build()["mac"]["fileAssociations"]:
+        assert (one.get("rank"), one.get("role")) == ("Alternate", "Viewer"), one
+
+
 def test_安装脚本不写扩展名的默认值() -> None:
     script = _script()
     #: `WriteRegStr SHCTX "Software\Classes\.mp4" "" …` 这种写扩展名默认值的,一条都不许有。

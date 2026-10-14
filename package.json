@@ -104,7 +104,7 @@
             "webm"
           ],
           "name": "视频",
-          "role": "Editor",
+          "role": "Viewer",
           "rank": "Alternate"
         },
         {
@@ -116,7 +116,7 @@
             "flac"
           ],
           "name": "音频",
-          "role": "Editor",
+          "role": "Viewer",
           "rank": "Alternate"
         }
       ]
