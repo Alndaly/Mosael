@@ -63,6 +63,9 @@ def test_来源是空的而路径要往里走_直说来源空() -> None:
     # None 来源同样
     with pytest.raises(WorkflowDomainError):
         _extract(None, "a.b")
+    # wildcard 开头对**空来源**是故意宽容的:「每一个」就是零个,返回 [](真实模板 *.on_model.asset_id 靠这个)。
+    assert _extract("", "*.name")["value"] == []
+    assert _extract(None, "*")["value"] == []
     # 路径留空 = 取整个值:来源空也照实交出空串,不报错
     assert _extract("", "")["value"] == ""
 
