@@ -701,12 +701,13 @@ export function GenerateWorkspace({
    */
   const [maskEditing, setMaskEditing] = React.useState<{ index: number; draft: FrameSlot | null } | null>(null);
   /**
-   * 蒙版要改的那张原图:同一组里第一张挂上的参考图 / 首帧 / 待编辑的视频(ADR 0056 决定 2:蒙版和它的源图是一对)。
+   * 蒙版要改的那张原图:同一组里第一张挂上的参考图 / 首帧(ADR 0056 决定 2:蒙版和它的源图是一对)。
+   * 只认**图片**那两格:蒙版按源图的像素尺寸落盘,后端的写出口拒收视频源(ADR 0057 决定 1)。
    *
    * 找不到就不给底图 —— 编辑器照样能画,只是画布上没有参考、也没有像素可以拿来做阈值初始化。
    */
   const maskSource = React.useMemo(() => {
-    const slot = (["reference_image", "first_frame", "source_video"] as const)
+    const slot = (["reference_image", "first_frame"] as const)
       .flatMap((role) => generationConfig.frames[role])
       .find((one) => Boolean(one.assetId));
     return slot ? { assetId: slot.assetId, name: slot.assetName } : null;
