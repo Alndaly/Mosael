@@ -4433,6 +4433,7 @@ def _migrate_mask_files_are_one_shape() -> None:
     (`derived_from` 里有 `op = "mask"` 的图片素材)—— 两条写蒙版的路都记了它。做法住在 media/masks(函数内 import,
     同 _migrate_shared_venvs 的理由)。已经是那个形状的、文件不在的跳过;改写了就更新宽高、重做缩略图。可以重复跑。
     """
+    from app.domain.assets.lineage import MASK
     from app.media.masks import normalize_mask_file, oriented_size
     from app.media.paths import resolve_key
     from app.media.thumbnails import generate_thumbnail
@@ -4447,7 +4448,7 @@ def _migrate_mask_files_are_one_shape() -> None:
     images = {asset_id: file_key for asset_id, file_key, _info, _lineage in rows}
     for asset_id, file_key, raw_info, raw_lineage in rows:
         lineage = json.loads(raw_lineage) if isinstance(raw_lineage, str) else list(raw_lineage or [])
-        parents = [one.get("asset_id") for one in lineage if isinstance(one, dict) and one.get("op") == "mask"]
+        parents = [one.get("asset_id") for one in lineage if isinstance(one, dict) and one.get("op") == MASK]
         if not parents:
             continue
         path = resolve_key(file_key)
