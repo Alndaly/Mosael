@@ -235,6 +235,10 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
             data_sources.setdefault(str(edge.get("target", "")), set()).add(str(edge.get("source", "")))
     for source_id, _, target_id, _ in new_bindings:
         data_sources.setdefault(target_id, set()).add(source_id)
+    #: 只折「这一步刚从精确引用升级出来的数据边」造成的冗余。用户画布里**本来就有**的数据边
+    #: (画布上亲手连的)不让控制边被折 —— 折了画布就和库里分岔:本轮画布还在,下一次刷新
+    #: (或换台机器)控制边就没了(维护者 2026-10-15 两张截图对照报上来的 bug)。
+    upgraded_pairs = {(source_id, target_id) for source_id, _, target_id, _ in new_bindings}
 
     def routes(edge: dict[str, Any]) -> bool:
         """这条控制边带路由语义吗:从会分支的节点出发的,没写 handle 也是「真」那一支。"""
@@ -243,12 +247,13 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         return bool((node_types.get(source_type) or {}).get("branches"))
 
     def ordering_only(edge: dict[str, Any]) -> bool:
-        """只排先后的控制边:没写 handle、不从会分支的节点出发、同一对节点间另有数据边(数据边本身就排先后)。"""
+        """只排先后的控制边:没写 handle、不从会分支的节点出发、它的冗余是这一步升级数据边造成的
+        (数据边本身就排先后;用户自己连的数据边不折,见 upgraded_pairs)。"""
         return (
             edge.get("kind", "control") == "control"
             and not edge.get("source_handle")
             and not routes(edge)
-            and str(edge.get("source", "")) in data_sources.get(str(edge.get("target", "")), set())
+            and (str(edge.get("source", "")), str(edge.get("target", ""))) in upgraded_pairs
         )
 
     def routing(edge: dict[str, Any]) -> bool:
