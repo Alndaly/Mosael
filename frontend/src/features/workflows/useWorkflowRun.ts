@@ -114,7 +114,7 @@ export function useWorkflowRun({
     onError: (error: Error) => toast.error(errorText(error)),
   });
   const run = useMutation({
-    mutationFn: () => runWorkflow(workflow.id),
+    mutationFn: (targetNodeId?: string) => runWorkflow(workflow.id, {}, targetNodeId),
     onMutate: () => setRefusal(null),
     onSuccess: (job) => {
       setStartedJobId(job.id);
@@ -185,6 +185,34 @@ export function useWorkflowRun({
       launchingRef.current = false;
     }
   }, [run, save, analysis.runnable, running, t]);
+  /**
+   * 单跑一个节点(节点上的「▶ 运行此节点」)。和 startRun 同一套闸:先落没存完的改动(跑的
+   * 是服务端那一版)、一次只起一个;**不看整图的就绪清单** —— 预检只查目标的上游闭包,闭包外的
+   * 问题不拦这一次,闭包内的缺配/目标在循环体子图里由服务端拒下,走同一张失败卡(见 runRefusal)。
+   */
+  const runNode = React.useCallback(async (nodeId: string) => {
+    if (launchingRef.current || run.isPending) return;
+    if (running) {
+      toast.info(t("wfRunAlreadyRunning"));
+      return;
+    }
+    launchingRef.current = true;
+    try {
+      if (pendingSaveRef.current) {
+        setLaunching(true);
+        try {
+          await save.mutateAsync();
+        } catch {
+          return;
+        } finally {
+          setLaunching(false);
+        }
+      }
+      await run.mutateAsync(nodeId).catch(() => undefined);
+    } finally {
+      launchingRef.current = false;
+    }
+  }, [run, save, running, t]);
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
     ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
@@ -204,6 +232,7 @@ export function useWorkflowRun({
     layerIssues,
     launching,
     startRun,
+    runNode,
     checklistCount,
     checklistLabel,
     checklistOpen,

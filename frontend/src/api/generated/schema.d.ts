@@ -20260,12 +20260,18 @@ export interface components {
             /** Value */
             value: string;
         };
-        /** WorkflowRunRequest */
+        /**
+         * WorkflowRunRequest
+         * @description 运行一次工作流。`target_node_id` 给定时是「单跑一个节点」:只执行目标及其上游依赖闭包,
+         *     到目标即停,下游不跑(运行历史据此标注「部分运行」);目标在循环体/子图里会被拒。
+         */
         WorkflowRunRequest: {
             /** Params */
             params?: {
                 [key: string]: unknown;
             };
+            /** Target Node Id */
+            target_node_id?: string | null;
         };
         /**
          * WorkflowTemplateCheckOut

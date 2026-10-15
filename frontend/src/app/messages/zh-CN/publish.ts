@@ -470,6 +470,7 @@ export const publish = {
   wfNoDescription: "没有说明",
   wfSaving: "保存中…",
   wfHistory: "执行历史",
+  wfHistoryPartialRun: "部分运行(目标:{node})",
   wfHistoryEmpty: "暂无执行记录",
   wfHistoryPick: "选择一次运行查看步骤",
   wfHistoryCost: "花费 {cost} · {calls} 次计费调用",

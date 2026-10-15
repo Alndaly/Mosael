@@ -158,3 +158,27 @@ it("这一轮跑挂了:一张失败展示,写后端摘好的那一句、认得�
   expect(card.querySelector("[data-failure-detail]")?.textContent).toBe("KSampler: boom");
   expect(card.textContent, "原文那一整句不贴在卡上").not.toContain("http://x");
 });
+
+//: 单跑一个节点的那次运行:列表行标出「部分运行(目标:节点名)」—— 它和整跑长在同一张列表里,
+//: 不标的话看不出这次为什么只有几步;载荷里没有 target_node_name 的整跑不标。
+it("单跑一个节点的运行标注「部分运行(目标:节点名)」,整跑不标", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    {
+      id: "j1", kind: "workflow", status: "succeeded", message: "工作流完成:测试",
+      created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10",
+      payload: { target_node_id: "template-1", target_node_name: "润色文案" },
+    },
+    {
+      id: "j2", kind: "workflow", status: "succeeded", message: "工作流完成:测试",
+      created_at: "2026-09-19T03:00:00", updated_at: "2026-09-19T03:00:40",
+      payload: {},
+    },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory();
+
+  const badge = await screen.findByText("wfHistoryPartialRun");
+  expect(badge.getAttribute("data-run-partial")).not.toBeNull();
+  expect(document.querySelectorAll("[data-run-partial]")).toHaveLength(1);
+});

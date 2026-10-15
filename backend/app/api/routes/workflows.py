@@ -444,7 +444,9 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: Tx, user: CurrentUser) -
     try:
         #: 点运行即认可(ADR 0047 D6):有人看着的运行不该被「这一版要你认可」挡下。
         attest_current_revision(db, workflow, attested_by=user.id)
-        return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
+        return start_workflow_job(
+            db, workflow, created_by=user.id, params=body.params, target_node=body.target_node_id,
+        )
     except WorkflowRevisionError as exc:
         raise _run_refused(WorkflowDomainError.from_error(exc)) from exc
     except WorkflowDomainError as exc:

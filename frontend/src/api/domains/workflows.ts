@@ -98,8 +98,13 @@ export function importWorkflow(body: { workspace_id: string; data: Record<string
   return api<Workflow>("/api/workflows/import", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function runWorkflow(workflowId: string, params: Record<string, unknown> = {}): Promise<Job> {
-  return api<Job>(`/api/workflows/${workflowId}/run`, { method: "POST", body: JSON.stringify({ params }) });
+/** 运行一次工作流。`targetNodeId` 给定时是「单跑一个节点」:只执行目标及其上游依赖闭包,
+ *  到目标即停,下游不跑(运行历史据此标注「部分运行」);目标在循环体/子图里会被服务端拒绝。 */
+export function runWorkflow(workflowId: string, params: Record<string, unknown> = {}, targetNodeId?: string): Promise<Job> {
+  return api<Job>(`/api/workflows/${workflowId}/run`, {
+    method: "POST",
+    body: JSON.stringify({ params, ...(targetNodeId ? { target_node_id: targetNodeId } : {}) }),
+  });
 }
 
 /**

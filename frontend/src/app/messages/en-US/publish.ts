@@ -468,6 +468,7 @@ export const publish = {
   wfNoDescription: "No description",
   wfSaving: "Saving…",
   wfHistory: "Run history",
+  wfHistoryPartialRun: "Partial run (target: {node})",
   wfHistoryEmpty: "No runs yet",
   wfHistoryPick: "Pick a run to see its steps",
   wfHistoryCost: "Cost {cost} · {calls} billed calls",

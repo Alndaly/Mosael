@@ -80,6 +80,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_pickWorkflow": {"zh": "请选择要调用的工作流", "en": "Pick the workflow to call"},
     "wfErr_calledWorkflowMissing": {"zh": "被调用的工作流不存在", "en": "The workflow being called does not exist"},
     "wfErr_callNodeNotRunnable": {"zh": "「{node}」:{reason}", "en": "“{node}”: {reason}"},
+    # 单跑一个节点(以某节点为目标的子集运行):目标不在图里 / 在循环体、子图里(第一版只支持最外层)。
+    "wfErr_targetMissing": {"zh": "要单跑的节点「{node}」不在这张图里", "en": "The node “{node}” to run is not in this workflow"},
+    "wfErr_targetNotInScope": {
+        "zh": "「{node}」在循环体或子图里:单跑一个节点现在只支持最外层的节点 —— 先把它提到外层,或运行整条工作流",
+        "en": "“{node}” is inside a loop or a subgraph: running a single node is only supported for top-level nodes — move it out, or run the whole workflow",
+    },
     # 开跑前:这一次要花跑的人的连接,而这一版他没担保(ADR 0047,见 engine.unvouched_spend)。
     "wfErr_spendNotVouched": {
         "zh": "工作流「{workflow}」的 v{revision} 是别人改的,而这次运行要用跑的人自己的 AI 连接或插件连接(花他的钥匙和额度)。请跑的人打开这个工作流,确认改动后点「认可这一版」—— 认可之前不会开跑",

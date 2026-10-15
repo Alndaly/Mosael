@@ -45,7 +45,9 @@ from app.domain.workflows import (
     NESTED_BODY_TYPES,
     WorkflowDomainError,
     available_node_types,
+    closure_subgraph,
     reference_dependencies,
+    target_dependency_closure,
     topo_order,
     validate_graph,
     with_run_params,
@@ -83,9 +85,14 @@ NODE_CONNECTIONS = threading.Semaphore(max(1, pool_capacity() - POOL_RESERVE))
 
 
 def start_workflow_job(
-    db: Session, workflow: Workflow, *, created_by: str | None, params: dict[str, Any] | None = None, job: Job | None = None
+    db: Session, workflow: Workflow, *, created_by: str | None, params: dict[str, Any] | None = None, job: Job | None = None,
+    target_node: str | None = None,
 ) -> Job:
-    """创建(或复用)workflow job，并把它固定到启动瞬间的不可变修订。"""
+    """创建(或复用)workflow job，并把它固定到启动瞬间的不可变修订。
+
+    `target_node` 给定时是「单跑一个节点」:只执行目标及其上游闭包(见 run_graph),预检也只查
+    闭包内节点(见 _check_target_runnable);闭包外缺配置、缺连接不拦住这一次。
+    """
     try:
         revision = current_workflow_revision(db, workflow)
     except WorkflowRevisionError as exc:
@@ -93,13 +100,22 @@ def start_workflow_job(
     #: 开跑前的那一套检查(结构、必填、插件按跑的人、生成节点的文字、节点的运行前检查、字面量指定的
     #: 子工作流)只在 check_runnable 一处 —— 智能体开卡、定时任务启用与触发问的是同一个函数。
     actor = job.created_by if job is not None else created_by
-    check_runnable(db, workflow, params, actor)
+    target_sub: dict[str, Any] | None = None
+    if target_node is not None:
+        target_sub = _check_target_runnable(db, workflow, revision.graph, target_node, params, actor)
+    else:
+        check_runnable(db, workflow, params, actor)
     #: 这一次要花跑的人的连接(钥匙、额度),而被执行的某一版他没担保:不开跑、一分钱不花,失败现场带着要认可的
     #: 那一版(ADR 0047)。不放进 check_runnable:那是「图本身跑不跑得起来」,定时任务启用、到点触发前都问它,
     #: 不过就停用任务 —— 而这一条是「这一版等主人认可」,任务该照常到点、每次记一条带「认可这一版」的失败。
     #: 挂在哪条运行底下:定时任务复用的包装任务还没钉修订,从它的上一层问起;子流程在调用它的那一层里。
     above = run_authority(db, job.parent_job_id if job is not None else current_parent_job_id())
-    waiting = unvouched_spend(db, workflow, actor, above=above)
+    #: 单跑一个节点:只有闭包内(连同体里)有会花钱的节点,这次运行才花跑的人的钱 —— 闭包外一个 LLM
+    #: 不该让一次纯模板节点的单跑等认可。
+    if target_node is None or target_sub is None or spending_nodes_in_graph(target_sub):
+        waiting = unvouched_spend(db, workflow, actor, above=above)
+    else:
+        waiting = None
     if waiting is not None:
         raise WorkflowDomainError(
             "wfErr_spendNotVouched",
@@ -113,6 +129,10 @@ def start_workflow_job(
         "workflow_graph_hash": revision.graph_hash,
         "params": params or {},
         "subject": workflow.name,
+        #: 单跑一个节点:运行历史据此标注「部分运行(目标:节点名)」(不改正文 schema,载荷里多两格)。
+        **({"target_node_id": target_node, "target_node_name": node_title(
+            next(node for node in revision.graph.get("nodes") or [] if str(node.get("id")) == target_node),
+        )} if target_node is not None else {}),
         #: 发起运行的人的语言:运行时生成的那几句(用的是哪把嗓子、哪一项没做成……)照它说(见 i18n.speaking)。
         #: 定时任务这类没有请求的,是缺省语言。
         "locale": get_current_locale(),
@@ -138,7 +158,7 @@ def start_workflow_job(
     # 由 tests/test_jobs_are_dispatched_by_the_bus.py 守着。)
     workflow_id, revision_id, job_id, run_params = workflow.id, revision.id, job.id, params or {}
     locale = pinned_payload["locale"]
-    dispatch_job(db, job, lambda: _run_workflow_thread(workflow_id, revision_id, job_id, run_params, locale=locale))
+    dispatch_job(db, job, lambda: _run_workflow_thread(workflow_id, revision_id, job_id, run_params, locale=locale, target_node=target_node))
     return job
 
 
@@ -254,6 +274,43 @@ def check_runnable(
     _check_graph_runnable(db, target, workspace_id, params, actor, seen=frozenset())
 
 
+def _node_in_nested_body(graph: dict[str, Any], node_id: str) -> bool:
+    """这个节点 id 是不是出现在循环体/子图体里(任意深度)。单跑一个节点第一版只支持最外层:
+    目标在体里要给一句清晰的「在循环体/子图里」,而不是笼统的「找不到」。"""
+    for layer, node, _title in _nodes(graph):
+        if layer is not graph and str(node.get("id") or "") == node_id:
+            return True
+    return False
+
+
+def _check_target_runnable(
+    db: Session,
+    workflow: Workflow,
+    graph: dict[str, Any],
+    target_node: str,
+    params: dict[str, Any] | None,
+    actor: str | None,
+) -> dict[str, Any]:
+    """单跑一个节点的预检:只查目标及其上游闭包内的节点(同 engine.run_graph 的闭包口径)。
+
+    目标必须在这一层(根作用域):在循环体/子图体里第一版不支持,说清楚而不是跑空。闭包外的节点
+    缺配置、缺连接、有未接进流程的引用,都不拦住这一次 —— 它们根本不在本次运行里。返回闭包诱导
+    子图(调用方据此判断这次运行花不花跑的人的钱,见 start_workflow_job)。
+    """
+    root_ids = {str(node.get("id")) for node in graph.get("nodes") or [] if isinstance(node, dict)}
+    if target_node not in root_ids:
+        if _node_in_nested_body(graph, target_node):
+            raise WorkflowDomainError("wfErr_targetNotInScope", params={"node": target_node})
+        raise WorkflowDomainError("wfErr_targetMissing", params={"node": target_node})
+    sub = closure_subgraph(graph, target_dependency_closure(graph, target_node))
+    #: 闭包不一定含 start:允许存在、不强制(require_start=False 是循环体语义,会反过来禁 start)。
+    _check_graph_runnable(
+        db, sub, workflow.workspace_id, params, actor,
+        seen=frozenset({workflow.id}), require_start=False, allow_start=True,
+    )
+    return sub
+
+
 def _revision_graph(db: Session, workflow: Workflow) -> dict[str, Any]:
     try:
         return current_workflow_revision(db, workflow).graph
@@ -269,12 +326,16 @@ def _check_graph_runnable(
     actor: str | None,
     *,
     seen: frozenset[str],
+    require_start: bool = True,
+    allow_start: bool = False,
 ) -> None:
     from app.domain.plugins.nodes import plugin_node_types
 
     extra_types = plugin_node_types(db, actor)
     errors = validate_graph(
         with_run_params(graph, params),
+        require_start=require_start,
+        allow_start=allow_start,
         extra_types=extra_types,
         explain_plugin_node=lambda node_type: _why_plugin_node_unusable(db, node_type, actor),
     )
@@ -484,6 +545,7 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
 
 def _run_workflow_thread(
     workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any], *, locale: str | None = None,
+    target_node: str | None = None,
 ) -> None:
     # 线程就是入口:正常走完提交(失败也记在任务上、正常走完),真抛出去才回滚。
     with speaking(locale), unit_of_work() as db:
@@ -496,7 +558,7 @@ def _run_workflow_thread(
             if revision is None or revision.workflow_id != workflow.id:
                 raise WorkflowDomainError("wfErr_revisionMissing")
             logger.info("workflow job %s: running '%s'", job_id, workflow.name)
-            run_workflow(db, workflow, revision, job, params)
+            run_workflow(db, workflow, revision, job, params, target_node=target_node)
             db.refresh(job)
             logger.info("workflow job %s: '%s' finished (%s)", job_id, workflow.name, job.status)
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
@@ -530,6 +592,7 @@ def execute_graph(
     job: Job | None = None,
     db: Session | None = None,
     entry_is_root: bool = False,
+    target_node: str | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """跑一张图，有节点失败就把那个原因抛出来。返回 (最终上下文, 是否被取消)。
 
@@ -537,6 +600,7 @@ def execute_graph(
     """
     run = run_graph(
         graph, wf_id=wf_id, initial_context=initial_context, params=params, job=job, db=db, entry_is_root=entry_is_root,
+        target_node=target_node,
     )
     if run.error is not None:
         raise run.error
@@ -552,6 +616,7 @@ def run_graph(
     job: Job | None = None,
     db: Session | None = None,
     entry_is_root: bool = False,
+    target_node: str | None = None,
 ) -> GraphRun:
     """依赖驱动的并行执行内核(顶层工作流与循环体/子图共用):前驱全完成才可运行,彼此独立的
     分支**同时**跑(线程池)。条件分支按 source_handle 匹配才算活跃;未被活跃入边触达的节点整段
@@ -560,6 +625,9 @@ def run_graph(
     - 顶层:传 job + db,发事件/进度、支持取消;只有 start 类型是入口。
     - 子图(循环体等):不传 job;`entry_is_root=True` 让无入边节点也作为入口;用 initial_context
       播种(如 {loop:{item,index}})。子图捕获外层 parent job，并在每层线程池节点里恢复归属和取消边界。
+    - 单跑一个节点(`target_node`):只执行目标及其 waits_for 传递闭包(见 target_dependency_closure)
+      ——目标跑完即收(闭包里全是它的上游,它完成时闭包已落定),闭包外节点「不在本次运行」:
+      不执行、不计入进度 total、不算失败。闭包内无闭包依赖的节点作入口(等价 entry_is_root)。
     """
     order = topo_order(graph)  # 校验 DAG + 稳定顺序
     order_ids = [str(node["id"]) for node in order]
@@ -575,6 +643,17 @@ def run_graph(
     #: 见 workflows.reference_dependencies)。后者只管先后,不管该不该跑 —— 那是 incoming_active 的事。
     references = reference_dependencies(graph)
     waits_for = {nid: {str(edge.get("source")) for edge in incoming[nid]} | references.get(nid, set()) for nid in nodes_by_id}
+    if target_node is not None:
+        if target_node not in nodes_by_id:
+            raise WorkflowDomainError(
+                "wfErr_targetNotInScope" if _node_in_nested_body(graph, target_node) else "wfErr_targetMissing",
+                params={"node": target_node},
+            )
+        #: 单跑:闭包外整段「不在本次运行」。闭包的入边/引用来源全在闭包内(见 target_dependency_closure),
+        #: 所以 restrict 之后 waits_for/incoming/条件分支逻辑原样成立;无闭包内依赖的节点作入口。
+        closure = target_dependency_closure(graph, target_node)
+        order_ids = [nid for nid in order_ids if nid in closure]
+        entry_is_root = True
     total = max(len(order_ids), 1)
     wf_job_id = job.id if job is not None else current_parent_job_id()
     has_job = job is not None and db is not None
@@ -847,8 +926,11 @@ def run_workflow(
     revision: WorkflowRevision,
     job: Job,
     params: dict[str, Any],
+    *,
+    target_node: str | None = None,
 ) -> dict[str, Any]:
-    """执行固定修订；编辑当前工作流不会改变已排队任务的图。"""
+    """执行固定修订；编辑当前工作流不会改变已排队任务的图。`target_node` 给定时单跑这一个节点
+    (只执行它及其上游闭包,见 run_graph)。"""
     graph = revision.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
     if not finish_job(db, job, status="running"):
@@ -857,7 +939,7 @@ def run_workflow(
     say(job, "jobMsg_workflowRunning", name=workflow.name)
     db.commit()
 
-    run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db)
+    run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db, target_node=target_node)
     context = run.context
     if run.cancelled:
         return context

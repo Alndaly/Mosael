@@ -769,3 +769,27 @@ describe("点运行被服务端拦下", () => {
     expect(screen.queryByText("wfRunRefused")).toBeNull();
   });
 });
+
+describe("单跑一个节点(▶ 运行此节点)", () => {
+  it("最外层的节点悬停有「运行此节点」,点了带 target_node_id 起一次运行", async () => {
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    // 链上三个节点都有这个入口(start / llm-1 / template-1)。jsdom 里 React Flow 量不出节点
+    // 尺寸,节点一直 visibility:hidden、可访问名算不出来 —— 像 nodeEl 一样直接查 DOM。
+    const runButtons = () =>
+      [...document.querySelectorAll<HTMLElement>('.react-flow__node button[aria-label="wfRunThisNode"]')];
+    await waitFor(() => expect(runButtons()).toHaveLength(3));
+
+    fireEvent.click(runButtons().find((b) => b.closest('.react-flow__node')?.getAttribute("data-id") === "template-1")!);
+    await waitFor(() => expect(apiMocks.runWorkflow).toHaveBeenCalledWith("wf1", {}, "template-1"));
+    // 走运行 mutation 的同一条成功路:这次运行被认下、跟着看。
+    await waitFor(() => expect(apiMocks.listWorkflowRuns).toHaveBeenCalled());
+  });
+
+  it("循环体里的节点没有这个入口(第一版只支持最外层,后端也会拒)", async () => {
+    await renderEditor(LOOPED);
+    await drillInto("loop-1");
+    await waitFor(() => nodeEl("template-1"));
+    expect(document.querySelectorAll('.react-flow__node button[aria-label="wfRunThisNode"]')).toHaveLength(0);
+  });
+});

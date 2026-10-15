@@ -80,7 +80,11 @@ class WorkflowRevisionDetailOut(WorkflowRevisionOut):
 
 
 class WorkflowRunRequest(ApiModel):
+    """运行一次工作流。`target_node_id` 给定时是「单跑一个节点」:只执行目标及其上游依赖闭包,
+    到目标即停,下游不跑(运行历史据此标注「部分运行」);目标在循环体/子图里会被拒。"""
+
     params: dict = Field(default_factory=dict)
+    target_node_id: str | None = Field(default=None, max_length=120)
 
 
 class WorkflowRunOutputOut(ApiModel):

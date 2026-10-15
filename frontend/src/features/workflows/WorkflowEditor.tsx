@@ -396,6 +396,7 @@ export function WorkflowEditor({
     layerIssues,
     launching,
     startRun,
+    runNode,
     checklistCount,
     checklistLabel,
     checklistOpen,
@@ -515,6 +516,7 @@ export function WorkflowEditor({
     annotationMode,
     searchHit: layerSearchHit,
     atRoot,
+    runNode,
   });
 
   return (

@@ -21,6 +21,7 @@ export const nodeToolbar = {
   wfSaveConflict: "This workflow was updated elsewhere",
   wfSaveConflictDetail: "Loaded the latest version from the server. Please redo the changes that weren't saved.",
   wfRun: "Run",
+  wfRunThisNode: "Run this node",
   wfRunQueued: "Workflow started — see task center",
   wfRunFailed: "Run failed",
   wfRunRefused: "Couldn’t start the run",

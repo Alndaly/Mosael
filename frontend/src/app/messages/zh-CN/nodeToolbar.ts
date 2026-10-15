@@ -21,6 +21,7 @@ export const nodeToolbar = {
   wfSaveConflict: "工作流已在别处更新",
   wfSaveConflictDetail: "已载入服务器上的最新内容，刚才没存上的改动请重新做一遍。",
   wfRun: "运行",
+  wfRunThisNode: "运行此节点",
   wfRunQueued: "工作流已开始运行,进度见任务中心",
   wfRunFailed: "运行失败",
   wfRunRefused: "没能开始运行",

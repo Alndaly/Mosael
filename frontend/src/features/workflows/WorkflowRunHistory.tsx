@@ -53,6 +53,12 @@ function runAttest(job: Job) {
   return job.status === "failed" ? attestRequestOf(details?.attest) : null;
 }
 
+/** 单跑一个节点的那次运行:目标节点名(后端 engine.start_workflow_job 记在任务载荷里)。没有就不是部分运行。 */
+function partialRunTarget(job: Job): string | null {
+  const name = (job.payload as Record<string, unknown> | undefined)?.target_node_name;
+  return typeof name === "string" && name ? name : null;
+}
+
 /** 这次运行花了多少钱(后端 billing.usage.run_costs 记在 result.costs):大模型的调用挂在运行上、生成和配音挂在子任务上,
  *  一起算。一次计费调用都没有的(没花钱的流程)不说。 */
 function runCosts(job: Job): { amounts: CostAmount[]; calls: number; unpriced: number } | null {
@@ -268,6 +274,18 @@ export function WorkflowRunHistory({
               onClick={() => onViewRun(run.id)}
             >
               <RunIcon status={run.status} />
+              {partialRunTarget(run) && (
+                // 单跑一个节点的那一轮:行首标一句「部分运行(目标:节点名)」—— 它和整跑长在同一张
+                // 列表里,不标的话看不出这次为什么只有几步、钱花在哪儿。
+                <Truncate
+                  as="span"
+                  data-run-partial=""
+                  text={partialRunTarget(run)}
+                  className="max-w-[45%] shrink rounded-full border border-border bg-muted px-1.5 py-px text-ui-2xs text-muted-foreground"
+                >
+                  {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
+                </Truncate>
+              )}
               <span className="flex min-w-0 flex-1 flex-col gap-px">
                 {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
                 <Truncate className="text-xs">

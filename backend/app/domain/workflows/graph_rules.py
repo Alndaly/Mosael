@@ -295,6 +295,7 @@ def validate_graph(
     require_start: bool = True,
     require_config: bool = True,
     allow_missing_start: bool = False,
+    allow_start: bool = False,
     extra_types: dict[str, dict[str, Any]] | None = None,
     explain_plugin_node: Callable[[str], str | None] | None = None,
     unusable_plugin_nodes_ok: bool = False,
@@ -329,6 +330,10 @@ def validate_graph(
 
     require_start=False 用于循环体子图:子图没有 start 节点(执行时由循环上下文喂入
     {{loop.item}}),无入边的节点即为入口;若子图里出现 start 则报错。
+
+    allow_start=True 用于单跑一个节点的闭包子图:start **允许存在但可有可无**(闭包不一定
+    包含 start),存在时照查它的引用与参数,缺位时不报「缺少开始节点」;入口语义仍是
+    「无入边的节点即为入口」。
     """
     errors: list[str] = []
     nodes = graph.get("nodes")
@@ -436,8 +441,8 @@ def validate_graph(
                         explain_plugin_node=explain_plugin_node, _path=(*_path, titles[node_id]),
                     )
                 )
-    if require_start:
-        if not starts and not allow_missing_start:
+    if require_start or (allow_start and starts):
+        if require_start and not starts and not allow_missing_start:
             errors.append(tr("wfCheck_missingStart"))
         elif len(starts) > 1:
             errors.append(tr("wfCheck_tooManyStarts", count=len(starts)))
@@ -446,7 +451,7 @@ def validate_graph(
         #: 失效引用)。体内的引用另有作用域规则(见 validate_body_graph)。
         if require_config:
             errors.extend(_unresolved_reference_errors(nodes, edges, title, known_types))
-    else:
+    elif not allow_start:
         errors.extend(tr("wfCheck_startInBody", node=title(node)) for node in starts)
     #: 节点在、输出不在(`{{t.nokey}}`),或者输出声明了结构、那个字段不在里面 —— 运行时插值成空串。和上面那条一样只在
     #: **运行前**查;每一层(顶层、循环体、子图)各查各的,判据和画布同一条(见 output_reference_problems)。
@@ -465,7 +470,7 @@ def validate_graph(
                nodes=separator.join(tr("wfQuoted", name=title(by_id[one])) for one in found["referenced_by"]),
                refs=separator.join(reference_label(_bare(ref), by_id, known_types) for ref in found["refs"]),
                source=title(by_id[found["source"]]))
-            for found in never_run_references({"nodes": nodes, "edges": edges}, entry_is_root=not require_start)
+            for found in never_run_references({"nodes": nodes, "edges": edges}, entry_is_root=(not require_start) or allow_start)
         )
 
     node_types = {str(node.get("id", "")): str(node.get("type", "")) for node in nodes}
@@ -1054,6 +1059,50 @@ def never_run_references(graph: dict[str, Any], *, entry_is_root: bool = False) 
         {"source": source, "referenced_by": sorted(referenced_by), "refs": sorted(refs)}
         for source, (referenced_by, refs) in sorted(found.items())
     ]
+
+
+def target_dependency_closure(graph: dict[str, Any], target: str) -> set[str]:
+    """`target` 的 **waits_for 传递闭包**(含 target 自己):入边来源 ∪ `{{…}}` 引用,逐层向上收。
+
+    和引擎调度同一份口径(见 engine.run_graph 的 waits_for 组装)。单跑一个节点时,只有闭包内的
+    节点参与这一轮;闭包外的节点「不在本次运行」——不执行、不计进度、不算失败。闭包的良构性:
+    指向闭包内节点的边/引用,其来源本身就在闭包里(它是那个节点的 waits_for),所以**闭包诱导
+    子图没有悬空边**,拿去预检、单跑都合法。
+    """
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    ids = {str(node.get("id", "")) for node in nodes}
+    references = reference_dependencies(graph)
+    incoming: dict[str, set[str]] = {node_id: set() for node_id in ids}
+    for edge in graph.get("edges") or []:
+        if isinstance(edge, dict) and str(edge.get("source", "")) in ids and str(edge.get("target", "")) in ids:
+            incoming[str(edge.get("target"))].add(str(edge.get("source")))
+    closure: set[str] = set()
+    frontier = [target]
+    while frontier:
+        nid = frontier.pop()
+        if nid in closure:
+            continue
+        closure.add(nid)
+        frontier.extend((incoming.get(nid, set()) | references.get(nid, set())) - closure)
+    return closure
+
+
+def closure_subgraph(graph: dict[str, Any], closure: set[str]) -> dict[str, Any]:
+    """闭包的诱导子图:闭包内节点 + 两端都在闭包内的边。容器节点的 body 原样保留(体的校验
+    随 validate_graph 下探,见 validate_body_graph)。单跑一个节点时,预检跑在这份子图上 —
+    —闭包外节点缺什么不该拦住这一次运行。"""
+    return {
+        "nodes": [
+            node for node in graph.get("nodes") or []
+            if isinstance(node, dict) and str(node.get("id", "")) in closure
+        ],
+        "edges": [
+            edge for edge in graph.get("edges") or []
+            if isinstance(edge, dict)
+            and str(edge.get("source", "")) in closure
+            and str(edge.get("target", "")) in closure
+        ],
+    }
 
 
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:

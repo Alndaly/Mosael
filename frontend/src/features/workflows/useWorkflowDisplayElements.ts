@@ -68,6 +68,7 @@ export function useWorkflowDisplayNodes({
   atRoot,
   refName,
   portNamer,
+  runNode,
 }: {
   nodes: Node[];
   graph: WorkflowGraph;
@@ -88,6 +89,9 @@ export function useWorkflowDisplayNodes({
   refName: (ref: string, path: ScopePath) => string;
   /** 卡片上的接点叫什么(见 portNames)。 */
   portNamer: PortNamer;
+  /** 单跑一个节点(见 useWorkflowRun.runNode)。只有最外层节点给这个入口:循环体/子图里的
+   *  节点第一版不支持,后端会拒;标注模式下也不给 —— 那一刻画布不是拿来跑东西的。 */
+  runNode?: (nodeId: string) => void;
 }) {
   //: 认不出的插件节点为什么用不了(后端说的真实原因),角标的提示里说它。
   const unknownTypes = React.useMemo(
@@ -115,6 +119,7 @@ export function useWorkflowDisplayNodes({
           ? { severity: worstSeverity(nodeIssues), count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry, unusableReasons, refName)).join("\n") }
           : null;
         const step = atRoot ? runByNode[node.id] : undefined;
+        const onRunThisNode = runNode && atRoot && !annotationMode ? () => runNode(node.id) : undefined;
         return {
           ...node,
           className: cn(node.className, searchHighlightClass(searchHit, node.id)) || undefined,
@@ -124,6 +129,7 @@ export function useWorkflowDisplayNodes({
             ...node.data,
             badge,
             run: step ? { status: step.status, ms: step.ms, error: step.error, message: step.message } : null,
+            onRunThisNode,
             runAssets: assetOutputs(outputRows(registry, node.data.nodeType as string, step?.outputs)),
             runSummary: outputSummary(registry, node.data.nodeType as string, step?.outputs),
             // **这两项算在这里,不在 toWorkflowFlowNodes。** 那个函数跑在 useState 的初始化里,
@@ -137,6 +143,6 @@ export function useWorkflowDisplayNodes({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded, runNode],
   );
 }
