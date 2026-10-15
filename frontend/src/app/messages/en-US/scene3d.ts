@@ -362,6 +362,7 @@ export const scene3d = {
   sceneKeyPlay: "Play / pause",
   sceneKeyStep: "Step one frame (hold ⇧ for ten)",
   sceneKeyJump: "Jump to previous / next keyframe",
+  sceneKeyReorder: "Move selection up / down among its siblings",
   sceneKeyDuplicate: "Duplicate",
   sceneKeyDelete: "Delete selection",
   sceneKeyHide: "Hide/show selection · Show all",

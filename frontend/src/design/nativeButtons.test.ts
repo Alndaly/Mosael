@@ -148,7 +148,10 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/scenes/SceneDopeSheet.tsx": 1,
   "features/scenes/SceneList.tsx": 1,
   "features/scenes/ScenePanel.tsx": 1,
-  "features/scenes/SceneStudio.tsx": 9,
+  //: 物体行里那颗「名字」(`.scene-object-name`,整格是拖柄、带 aria-pressed)从 SceneStudio.tsx
+  //: 跟着列表搬到了 SceneObjectTree.tsx:数没变,9 → 8 + 1。
+  "features/scenes/SceneObjectTree.tsx": 1,
+  "features/scenes/SceneStudio.tsx": 8,
   "features/scenes/SceneViewport.tsx": 1,
   "features/scheduler/SchedulerView.tsx": 2,
   "features/settings/AgentSkillsSection.tsx": 1,

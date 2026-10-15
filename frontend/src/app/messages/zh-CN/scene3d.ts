@@ -362,6 +362,7 @@ export const scene3d = {
   sceneKeyPlay: "播放、暂停",
   sceneKeyStep: "逐帧（按住 ⇧ 走十帧）",
   sceneKeyJump: "跳到上 / 下一个关键帧",
+  sceneKeyReorder: "把选中的物体在同级里上移 / 下移",
   sceneKeyDuplicate: "复制一份",
   sceneKeyDelete: "删除选中",
   sceneKeyHide: "隐藏/显示选中 · 全部显示",

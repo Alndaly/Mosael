@@ -646,9 +646,11 @@
    撑到距面板边 8px(不是 0):行自己还有 8px 内距,两段加起来正好等于上面标题的 16px,
    于是文字对齐,而底色比文字宽出 8px 一圈。 */
 .scene-object-list {
-  /* 三格的宽度和每层缩进 —— **只在这里写一次**,行和箭头都从这儿取。 */
-  --row-twist: 18px;
-  --row-indent: 14px;
+  /* 三格的宽度和每层缩进 —— **只在这里写一次**,行和箭头都从这儿取。
+     折叠箭头那一格收到 14px(箭头自己就是 13px):它此前 18px,而叶子行也得留着同样宽的空位
+     才对齐 —— 于是每一行的名字都被推出去一格。缩进 14 → 10 同理,是"看着缩进一大截"的另一半。 */
+  --row-twist: 14px;
+  --row-indent: 10px;
   --row-height: 30px;
   /* 往外让多少跟着面板走(见 .scene-panel-body),不自己定一个数。 */
   --row-bleed: var(--scene-row-bleed);
@@ -1012,13 +1014,15 @@
 
 .scene-object-row {
   display: grid;
-  grid-template-columns: var(--row-twist) minmax(0, 1fr) var(--row-height) var(--row-height);
+  grid-template-columns: minmax(0, 1fr) var(--row-twist) var(--row-height) var(--row-height);
   align-items: center;
   border-radius: 7px;
   /* 缩进加在**行的内距**上:高亮从行首起,缩进落在高亮里面。加在子元素的 margin 上的话,
      缩进会把整行往右推,于是深层的行高亮比浅层的窄一截。 */
   padding-left: calc(var(--row-bleed) + var(--row-indent) * var(--depth, 0));
   padding-right: var(--row-bleed);
+  /* 落点那条线画在行的上/下沿(见下面 data-drop 那段),要有个包含块。 */
+  position: relative;
 }
 .scene-object-name {
   display: flex;
@@ -1026,8 +1030,15 @@
   gap: 8px;
   min-width: 0;
   height: var(--row-height);
-  padding: 0 4px;
+  /* 左边只留 2px:名字前面那一格是折叠箭头。留 4px 的话,叶子行的图标比上面那行标题
+     右出去一截 —— 而它右边此刻什么都没有。 */
+  padding: 0 4px 0 2px;
   text-align: left;
+  /* 这一格就是拖柄(见 SceneObjectTree):手型和抓取中的样子说明它拿得起来。 */
+  cursor: grab;
+}
+.scene-object-name:active {
+  cursor: grabbing;
 }
 .scene-object-name > span {
   overflow: hidden;
@@ -1070,6 +1081,66 @@
 }
 .scene-object-row[data-hidden="self"] .scene-object-name > span {
   font-style: italic;
+}
+
+/* ── 拖着挪位置(见 SceneObjectTree) ──────────────────────────────────────────
+   拖动中的那一行淡下去、跟手的那一片在指针下(DragOverlay);能落的行由 `data-drop` 画出落点:
+   落在某一行**前 / 后** = 一条 2px 的横线(就是它将来会待的那条缝),落在**组里** = 整行描边。
+   **落点只出现在真能落的地方**(非组收不了、环、太深、原地),所以这里没有"禁止"那一档样式 ——
+   不画,就是落不下去。 */
+.scene-object-row[data-dragging] {
+  opacity: 0.4;
+}
+.scene-object-row[data-drop="before"]::before,
+.scene-object-row[data-drop="after"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--primary);
+}
+.scene-object-row[data-drop="before"]::before {
+  top: -1px;
+}
+.scene-object-row[data-drop="after"]::after {
+  bottom: -1px;
+}
+.scene-object-row[data-drop="inside"] {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+/* 列表末尾那条空白:拖到它上面 = 回到最外层(根层的末尾)。平时只是一条 4px 的缝,
+   不占地方 —— 拖动时它亮成一条横线,和上面"落在某一行后面"是同一种长相。 */
+.scene-object-tail {
+  height: 4px;
+  border-radius: 2px;
+}
+.scene-object-tail[data-drop] {
+  background: var(--primary);
+}
+
+/* 跟手的那一片。DragOverlay 是 `position: fixed`(不在网格里),所以取不到列表上的
+   `--row-height` —— 它也就不是"一行",是一块浮起来的名字:高度跟着内距走,和对话列表
+   拖分组时跟手的那一片同一种做法。 */
+.scene-object-ghost {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--popover);
+  color: var(--foreground);
+  font-size: var(--text-ui-xs);
+  box-shadow: var(--shadow-raised);
+}
+.scene-object-ghost span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 @media (max-width: 780px) {
   .scene-side {

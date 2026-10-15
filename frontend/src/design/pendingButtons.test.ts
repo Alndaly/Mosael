@@ -63,9 +63,15 @@ const EXCEPTIONS: Record<string, { disabled: string; count?: number; why: string
     { disabled: "busy", count: 2, why: "「取消选择」和卡片本身:删除、改名在跑时整列锁住,转圈的是确认框、改名框里那颗" },
   ],
   "features/scenes/SceneStudio.tsx": [
-    { disabled: "!!busy", count: 4,
-      why: "「生成素材」入口、播放、物体的显隐和删除:导出、录制、准备生成在跑时编辑器锁住,视口上那块 scene-busy 转圈并写着在做什么" },
+    { disabled: "!!busy", count: 2,
+      why: "「生成素材」入口和播放:导出、录制、准备生成在跑时编辑器锁住,视口上那块 scene-busy 转圈并写着在做什么" },
     { disabled: "draft.content.shots.length<=1||!!busy", why: "删镜头:同上,编辑器锁住时点不了,进度在视口上" },
+  ],
+  //: 物体的显隐和删除这两颗本来在 SceneStudio.tsx(那条 `!!busy` 记 4 颗)。物体列表独立成
+  //: SceneObjectTree.tsx 时跟着搬了过来 —— 数没变,4 → 2 + 2。理由同一条:编辑器锁住时它们
+  //: 点不了,转圈的是视口上那块 scene-busy。
+  "features/scenes/SceneObjectTree.tsx": [
+    { disabled: "!!busy", count: 2, why: "物体行的显隐和删除:导出、录制、准备生成在跑时编辑器锁住,进度在视口上" },
   ],
   "features/settings/ProviderProfilesSection.tsx": [
     { disabled: "bulkBusy", why: "「批量删除」只是打开确认框;批量开关、删除在跑时它点不了,转圈的是点的那一颗或确认框" },

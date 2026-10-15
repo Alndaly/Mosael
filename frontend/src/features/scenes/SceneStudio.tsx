@@ -22,6 +22,8 @@ import { lightingPrompt, presetById } from "./lighting";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import { useSceneFullscreen } from "./useSceneFullscreen";
 import { SceneHistory } from "./SceneHistory";
+import { SceneObjectTree } from "./SceneObjectTree";
+import { moveObject, siblingsOf, type DropZone } from "./sceneDrag";
 import { SceneCameraPanel } from "./SceneCameraPanel";
 import { SceneDopeSheet } from "./SceneDopeSheet";
 import { SceneInspector } from "./SceneInspector";
@@ -35,7 +37,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArchiveRestore,
   Box,
-  Boxes,
   Camera,
   Check,
   CheckSquare,
@@ -46,14 +47,10 @@ import {
   ChevronsUpDown,
   CircleAlert,
   Download,
-  Eye,
-  EyeOff,
   Focus,
-  Folder,
   HelpCircle,
   History,
   Image as ImageIcon,
-  Lightbulb,
   Loader2,
   Magnet,
   Maximize,
@@ -67,8 +64,6 @@ import {
   RotateCw,
   Scaling,
   Sparkles,
-  Trash2,
-  Video,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
@@ -101,7 +96,6 @@ import {
 } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
-import { Truncate } from "@/components/ui/truncate";
 import {
   CanvasAgentChat,
   type CanvasAgentMode,
@@ -124,7 +118,6 @@ import {
   sampleCamera,
   sampleObject,
   duplicateObject,
-  hiddenObjectIds,
   initialScene,
   makeObject,
   makeShot,
@@ -172,15 +165,6 @@ const ADD_OPTIONS: {
 /** 一个模型在「添加」菜单里占的那一项。前缀把它和内置形状分开 —— 模型的 id 是十六进制串,
  *  和 kind 撞不上,但靠"撞不上"来区分是等着出事。 */
 const MODEL_PREFIX = "model:";
-
-/** 列表里那个小图标。**组、相机、灯要分得出来** —— 全是同一个方块的话,树的结构没人看得懂。 */
-function ObjectKindIcon({ kind }: { kind: SceneObject["kind"] }) {
-  if (kind === "group") return <Folder size={14} />;
-  if (kind === "camera") return <Video size={14} />;
-  if (kind === "light") return <Lightbulb size={14} />;
-  if (kind === "model") return <Boxes size={14} />;
-  return <Box size={14} />;
-}
 
 const readId = () =>
   new URLSearchParams(location.hash.split("?")[1] ?? "").get("scene");
@@ -541,6 +525,31 @@ function SceneEditor({
       ),
     });
   }
+  /**
+   * 拖拽的落点。**一步 `update`**:撤销栈、自动保存、本地草稿全走那条老路 —— 不另存一份。
+   * `moveObject` 说"没变化"时返回 null,那时连一条空的撤销记录都不该留下。
+   */
+  function moveInTree(activeId: string, overId: string, zone: DropZone) {
+    const next = moveObject(current.current.content, activeId, overId, zone);
+    if (next) update(next);
+  }
+  /**
+   * 把选中的物体在**同级里**上移 / 下移一格(⌥↑ / ⌥↓)。
+   *
+   * 拖拽那条路是给指针的,而"排在第几"除了拖没有别的入口 —— 这条补上:和拖拽共用
+   * `moveObject`,所以环、深度、"只有组能装"的判定完全一致。到头的(已经在最前/最后)
+   * 什么都不做:和 ← → 跳到最后一个关键帧时一样,那不是错误,是边界。
+   */
+  function moveSelectedSibling(step: -1 | 1) {
+    if (!selected) return;
+    const content = current.current.content;
+    const siblings = siblingsOf(content, selected);
+    const at = siblings.findIndex((one) => one.id === selected);
+    const neighbour = siblings[at + step];
+    if (!neighbour) return;
+    const next = moveObject(content, selected, neighbour.id, step < 0 ? "before" : "after");
+    if (next) update(next);
+  }
   function removeSceneObjects(ids: string[]) {
     const before = current.current.content;
     const content = removeObjects(before, ids);
@@ -623,8 +632,6 @@ function SceneEditor({
     object = draft.content.objects.find((o) => o.id === selected);
   /** 拍当前镜头的那台机位。**运镜长在它身上** —— 见 docs/design/scene-time-and-cameras.md。 */
   const rig = cameraOfShot(draft.content, shot);
-  /** 实际看不见的物体(自己藏了或在藏起来的组里)。列表按它淡显。 */
-  const hiddenIds = hiddenObjectIds(draft.content.objects);
   function rigPatch(patch: Partial<SceneObject>) {
     if (rig) objectPatch(rig.id, patch);
   }
@@ -661,6 +668,7 @@ function SceneEditor({
    *   空格      播放暂停                          ⇧D         复制一份
    *   ← →      逐帧                              X / ⌫      删除
    *   ↑ ↓      跳到上/下一个关键帧                F          聚焦选中
+   *   ⌥↑ ⌥↓    选中的物体在同级里上移 / 下移
    *   H / ⌥H   藏 / 显示选中,全部显示
    *
    * 单键的那些一律要求"没有按任何修饰键" —— 否则 ⌘S(保存)会顺手把工具切成缩放,
@@ -691,6 +699,14 @@ function SceneEditor({
       if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyH") {
         e.preventDefault();
         revealAll();
+        return;
+      }
+      // ⌥↑ / ⌥↓:把选中的物体在同级里挪一格。上下这两个方向键本来管"跳到上/下一个关键帧",
+      // 加了 ⌥ 就归列表。水平的 ⌥← / ⌥→ 不接:那在 macOS 上是按词移动、在浏览器里是前进后退,
+      // 而"放进哪个组"本来就有另一条键盘可达的路(「调整对象 → 所属组」那个下拉)。
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        moveSelectedSibling(e.key === "ArrowUp" ? -1 : 1);
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1357,6 +1373,7 @@ function SceneEditor({
                     <dt><KbdGroup keys={[t("keySpace")]} /></dt><dd>{t("sceneKeyPlay")}</dd>
                     <dt><KbdGroup keys={["←", "→"]} /></dt><dd>{t("sceneKeyStep")}</dd>
                     <dt><KbdGroup keys={["↑", "↓"]} /></dt><dd>{t("sceneKeyJump")}</dd>
+                    <dt><KbdGroup keys={["⌥↑", "⌥↓"]} /></dt><dd>{t("sceneKeyReorder")}</dd>
                     <dt><KbdGroup keys={["⇧D"]} /></dt><dd>{t("sceneKeyDuplicate")}</dd>
                     <dt><KbdGroup keys={["X"]} /></dt><dd>{t("sceneKeyDelete")}</dd>
                     <dt><KbdGroup keys={["H", "⌥H"]} /></dt><dd>{t("sceneKeyHide")}</dd>
@@ -1578,86 +1595,39 @@ function SceneEditor({
                       <p>{t("sceneStartBody")}</p>
                     </div>
                   )}
-                  {/* **按树的顺序画,缩进按层数来。** 此前是数组原样铺开、缩进写成
-                      `o.parent_id ? 24 : 10` —— 只有两级,组里再放组和它的兄弟一样平;
-                      而把一个物体移进组之后那一行也不会挪到组下面,看上去像没生效。 */}
-                  <div className="scene-object-list" role="tree" aria-label={t("sceneObjects")}>
-                    {objectTree(draft.content, collapsed).map(({ object: o, depth, children }) => (
-                      <div
-                        className="scene-object-row"
-                        key={o.id}
-                        // 淡显的是"实际看不见"的行,不只是自己藏了的:藏一个组,组里那些行也要
-                        // 看得出它们此刻不在画面里。`self` 与 `inherited` 分开,前者另加斜体 ——
-                        // 眼睛图标只说自己那一位,斜体说的是"是我自己藏的"。
-                        data-hidden={o.hidden ? "self" : hiddenIds.has(o.id) ? "inherited" : undefined}
-                        role="treeitem"
-                        aria-level={depth + 1}
-                        aria-expanded={children ? !collapsed.has(o.id) : undefined}
-                        // 缩进只经过这一个值:行的左内距按它算(见 scenes.css 里那段)。
-                        style={{ "--depth": depth } as React.CSSProperties}
-                      >
-                        {/* 有孩子才给折叠箭头:79 个物体摊平是一屏翻不完的列表,收起来之后
-                            它就是八行。没孩子的留一块同宽的空位,名字才对得齐。 */}
-                        {children ? (
-                          <IconButton
-                            unstyled
-                            className="scene-object-twist"
-                            label={t(collapsed.has(o.id) ? "sceneExpandNamed" : "sceneCollapseNamed").replace("{name}", o.name)}
-                            onClick={() =>
-                              setCollapsed((was) => {
-                                const next = new Set(was);
-                                if (!next.delete(o.id)) next.add(o.id);
-                                return next;
-                              })
-                            }
-                          >
-                            <ChevronRight
-                              size={13}
-                              style={{
-                                transform: collapsed.has(o.id) ? undefined : "rotate(90deg)",
-                              }}
-                            />
-                          </IconButton>
-                        ) : (
-                          <span className="scene-object-twist" />
-                        )}
-                        <button
-                          className="scene-object-name"
-                          aria-pressed={selected === o.id}
-                          onClick={() => {
-                            setSelected(o.id);
-                            setPreview(false);
-                            requestAnimationFrame(() => view.current?.focus());
-                          }}
-                          onDoubleClick={() => view.current?.focus()}
-                        >
-                          <ObjectKindIcon kind={o.kind} />
-                          <Truncate>{o.name}</Truncate>
-                          {children > 0 && collapsed.has(o.id) && <small>{t("sceneChildCount").replace("{n}", String(children))}</small>}
-                        </button>
-                        {/* 显示/隐藏和删除并排,同尺寸、同一种安静的样子 —— 此前藏一个物体要先选中它,
-                            再到下面的「调整对象」里找那颗眼睛;列表里只有一个「隐藏」字样的标记。 */}
-                        <IconButton
-                          unstyled
-                          className="scene-object-visibility"
-                          label={t(o.hidden ? "sceneShowObjectNamed" : "sceneHideObjectNamed").replace("{name}", o.name)}
-                          disabled={!!busy}
-                          onClick={() => toggleHidden(o.id)}
-                        >
-                          {o.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </IconButton>
-                        <IconButton
-                          unstyled
-                          className="scene-object-delete"
-                          label={t("sceneDeleteObjectNamed").replace("{name}", o.name)}
-                          disabled={!!busy}
-                          onClick={() => removeSceneObjects([o.id])}
-                        >
-                          <Trash2 size={14} />
-                        </IconButton>
-                      </div>
-                    ))}
-                  </div>
+                  {/* 树的顺序、缩进、拖拽、落点全在 SceneObjectTree 里(SceneStudio 到这个文件
+                      已经够长了,而这一段自成一体)。这里只把数据和几个写回口给它 —— 每一个都
+                      落在下面那几条老路上(select / collapsed / objectPatch / update),不另开一份。 */}
+                  <SceneObjectTree
+                    content={draft.content}
+                    selected={selected}
+                    collapsed={collapsed}
+                    busy={!!busy}
+                    onSelect={(id) => {
+                      setSelected(id);
+                      setPreview(false);
+                      requestAnimationFrame(() => view.current?.focus());
+                    }}
+                    onFocusView={() => view.current?.focus()}
+                    onToggleCollapse={(id) =>
+                      setCollapsed((was) => {
+                        const next = new Set(was);
+                        if (!next.delete(id)) next.add(id);
+                        return next;
+                      })
+                    }
+                    onExpandGroup={(id) =>
+                      setCollapsed((was) => {
+                        if (!was.has(id)) return was;
+                        const next = new Set(was);
+                        next.delete(id);
+                        return next;
+                      })
+                    }
+                    onToggleHidden={toggleHidden}
+                    onRemove={(id) => removeSceneObjects([id])}
+                    onMove={moveInTree}
+                  />
                   <input
                     ref={file}
                     type="file"
