@@ -66,6 +66,30 @@ def test_来源是空的而路径要往里走_直说来源空() -> None:
     # wildcard 开头对**空来源**是故意宽容的:「每一个」就是零个,返回 [](真实模板 *.on_model.asset_id 靠这个)。
     assert _extract("", "*.name")["value"] == []
     assert _extract(None, "*")["value"] == []
+
+
+def test_长度保留段_列表字典字符串都给_len() -> None:
+    """`$length` 取这一层的长度:列表给元素个数、字典给键数、字符串给字符数 —— 列表长度这种小操作
+    不用为此开一个 code 节点(Docker 沙箱)。真实 JSON 键几乎不会叫 `$length`,保留段不撞。
+    """
+    chars = [{"name": "林晚"}, {"name": "沈昼"}, {"name": "程雪"}]
+    assert _extract(chars, "$length")["value"] == 3
+    assert _extract({"characters": chars}, "characters.$length")["value"] == 3
+    assert _extract("你好世界", "$length")["value"] == 4
+    assert _extract({"a": 1, "b": 2}, "$length")["value"] == 2
+    assert _extract([], "$length")["value"] == 0
+    # 和星号配合:每一项的 name 是几个字(*.$length 落在每个字典上是键数,要名字长度得 *.name.$length)
+    assert _extract([{"name": "ab"}, {"name": "cde"}], "*.$length")["value"] == [1, 1]
+    assert _extract([{"name": "ab"}, {"name": "cde"}], "*.name.$length")["value"] == [2, 3]
+    # JSONPath 根写法 `$` / `$.` 照常,不会被 `$length` 的根符号干扰
+    assert _extract({"items": chars}, "$.items.$length")["value"] == 3
+    # 取不到长度的(数字/None)走 missing 报错,不瞎猜
+    import pytest
+
+    from app.domain.workflows import WorkflowDomainError
+
+    with pytest.raises(WorkflowDomainError):
+        _extract(42, "$length")
     # 路径留空 = 取整个值:来源空也照实交出空串,不报错
     assert _extract("", "")["value"] == ""
 

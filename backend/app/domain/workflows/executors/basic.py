@@ -261,6 +261,9 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
 #: 路径里的「这一串里的每一个」。
 WILDCARD = "*"
+#: 路径里的保留段「这一层的长度」:列表/字典/字符串给 len,其余走不通(取不到长度)。不是键名 —— 列表长度这种
+#: 小操作不用为此开一个 code 节点(Docker 沙箱);`$length` 开头带 $,真实 JSON 键几乎不会撞。
+LENGTH = "$length"
 _PATH_STEP = re.compile(
     r"""\.?(?:
         \[\s*(?P<index>-?\d+)\s*\]            # [0]、[-1]
@@ -277,10 +280,12 @@ def parse_json_path(path: str) -> list[str | int]:
     """把路径拆成一步一步:键名是 str,方括号里的下标是 int,`*` / `[*]` 是 WILDCARD。
 
     认的写法:`data.items.0.title`、`data.items[0].title`、`[0].name`、`items[-1]`、`results.*.asset_id`、`results[*].id`、
-    `meta["a.b"]`;开头的 `$` / `$.`(JSONPath 的根)可写可不写。空路径 = 整个值。写坏了(方括号没闭合)就报错,不猜。
+    `meta["a.b"]`、`$length`(整个值的长度)/ `items.$length`(某一层的长度);开头的 `$` / `$.`(JSONPath 的根)可写可不写。
+    空路径 = 整个值。写坏了(方括号没闭合)就报错,不猜。
     """
     text = path.strip()
-    if text.startswith("$"):
+    #: JSONPath 的根 `$` 可写可不写 —— 但只认 `$` / `$.` / `$[`,不把 `$length`(长度保留段)的根符号剥掉。
+    if text == "$" or text.startswith("$.") or text.startswith("$["):
         text = text[1:]
     steps: list[str | int] = []
     position = 0
@@ -351,7 +356,12 @@ def _step(value: Any, step: str | int) -> tuple[bool, Any]:
     """走一步:(走到了没有, 走到的值)。没走到时第二格是**这一层**(报错里列它有什么)。
 
     列表认整数下标(`[0]`,也认 `items.0` 这种写成键名的数字);对象认键名(`[0]` 落在对象上就找键「0」)。
+    `$length` 是保留段,不是键名:列表/字典/字符串给 len(其余取值走不通)。
     """
+    if step == LENGTH:
+        if isinstance(value, (list, dict, str)):
+            return True, len(value)
+        return False, value
     if isinstance(value, dict):
         key = str(step)
         return (True, value[key]) if key in value else (False, value)
