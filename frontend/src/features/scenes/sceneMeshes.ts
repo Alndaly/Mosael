@@ -73,7 +73,7 @@ export function geometryObject(o: SceneObject): THREE.Object3D {
    * 用 19 关节 FK 层级拼一个可摆姿态的人形(复用 `mannequinRig`):默认直立站姿和原来那个
    * 「固定站姿」看着一样,但现在每个关节都能转 —— 摆好的姿态存进 `o.pose`(见 sceneGraph /
    * 后端 SceneObject.pose),随 SceneContent 一起持久化。比例按 1.7 米常见人体,头约 1/7.5
-   * 身高、肩宽约 1/4、腿约占下半身。材质跟着场景物体自己的颜色/粗糙度/金属度走。 */
+   * 身高、肩宽(上臂外缘)0.47 米 ≈ 身高的 0.28、腿约占下半身。材质跟着场景物体自己的颜色/粗糙度/金属度走。 */
   if (o.kind === "figure") {
     const rig = createMannequin(o.parameters.height, material);
     if (o.pose) applyPose(rig, poseToMannequin(o.pose));
