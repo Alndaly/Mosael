@@ -3,7 +3,7 @@ import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleDot, Database, Eye, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, Database, Eye, PanelRight, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -28,6 +28,7 @@ import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
 import { transcriptPolling, useTranscriptFollowsSession } from "@/features/agent/transcriptFollowsSession";
 import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
+import { ComposerAttachMenu } from "@/features/agent/ComposerAttachMenu";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -678,6 +679,8 @@ export function ChatWorkspace({
                 >
                   {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
                   {/* 附件就是「这条消息里带了什么」,一排摆在输入卡里(笔记引用是正文里的节点,走 `@`)。 */}
+                  {/* 附上的压缩包 / 文件夹解开后要人看的:发现了技能、有文件没收(ADR 0059)。 */}
+                  {attach.bundleNotes}
                   <ComposerChips chips={attach.chips} uploading={attach.uploading} className="px-0.5" />
                   {attach.previewModal}
                   {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
@@ -693,20 +696,8 @@ export function ChatWorkspace({
                   <div className="flex items-center justify-between gap-1.5 pt-0.5">
                     <div className="flex items-center gap-1.5">
                       {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
-                      <IconButton asChild variant="ghost" size="icon-xs" label={t("attachFile")} disabled={attach.uploading}>
-                        <label>
-                          <input
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={(event) => {
-                              void attach.accept(event.currentTarget.files);
-                              event.currentTarget.value = "";
-                            }}
-                          />
-                          {attach.uploading ? <Loader2 size={14} className="animate-mosael-spin" /> : <Paperclip size={14} />}
-                        </label>
-                      </IconButton>
+                      {/* 📎 选文件或文件夹(压缩包走文件),和画布助手同一个组件。 */}
+                      <ComposerAttachMenu attach={attach} label={t("attachFile")} />
                       {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
                       <DictateButton
                         onText={(text) =>

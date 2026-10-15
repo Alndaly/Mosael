@@ -137,10 +137,10 @@ class AgentBundleOut(ApiModel):
     别的:`assets` 是进了素材库的图片和文本合订本(当附件发出去),`skipped` 是没收的。
     """
 
-    source_name: str = ""
-    skill_import: AgentSkillImportOut | None = None
-    assets: list[AssetOut] = Field(default_factory=list)
-    skipped: list[AgentBundleSkipped] = Field(default_factory=list)
+    source_name: str
+    skill_import: AgentSkillImportOut | None
+    assets: list[AssetOut]
+    skipped: list[AgentBundleSkipped]
 
 
 class AgentSkillDraftOut(ApiModel):

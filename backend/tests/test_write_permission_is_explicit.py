@@ -102,6 +102,9 @@ GATED_IN_THE_DOMAIN = {
     # 或者接入被禁用,都在那里 404/409。判据是**归属**不是角色 —— 这条路由压根没有
     # workspace_id,它作用在「你自己的那个 Blender 连接」上。
     "blender.py:check",
+    # 闸在领域模块 bundles.unpack(ensure_workspace_perm "upload",ADR 0059):技能包走
+    # stage_import 暂存、非技能包图片 / 文本合订本进素材库,两条路都从这一个内核过闸。
+    "agent_skills.py:unpack_agent_bundle",
 }
 
 

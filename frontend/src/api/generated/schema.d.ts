@@ -9464,16 +9464,13 @@ export interface components {
          *     别的:`assets` 是进了素材库的图片和文本合订本(当附件发出去),`skipped` 是没收的。
          */
         AgentBundleOut: {
-            /**
-             * Source Name
-             * @default
-             */
+            /** Source Name */
             source_name: string;
-            skill_import?: components["schemas"]["AgentSkillImportOut"] | null;
+            skill_import: components["schemas"]["AgentSkillImportOut"] | null;
             /** Assets */
-            assets?: components["schemas"]["AssetOut"][];
+            assets: components["schemas"]["AssetOut"][];
             /** Skipped */
-            skipped?: components["schemas"]["AgentBundleSkipped"][];
+            skipped: components["schemas"]["AgentBundleSkipped"][];
         };
         /**
          * AgentBundleSkipped

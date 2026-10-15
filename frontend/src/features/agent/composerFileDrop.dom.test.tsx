@@ -221,12 +221,12 @@ describe.each(Object.keys(HOSTS))("%s:从系统拖文件进来", (host) => {
 
   it("收不了的文件和 📎 选到时一样报出是哪一个,而不是松手后什么都没发生", async () => {
     const { inside } = await HOSTS[host]!();
-    const zip = new File(["x"], "bundle.zip", { type: "application/zip" });
+    const dmg = new File(["x"], "setup.dmg", { type: "application/x-apple-diskimage" });
 
-    drag(inside, "dragenter", { types: ["Files"], files: [zip] });
-    drag(inside, "drop", { types: ["Files"], files: [zip] });
+    drag(inside, "dragenter", { types: ["Files"], files: [dmg] });
+    drag(inside, "drop", { types: ["Files"], files: [dmg] });
 
-    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining("bundle.zip")));
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining("setup.dmg")));
     expect(mocks.importAsset).not.toHaveBeenCalled();
   });
 

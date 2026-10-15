@@ -5,7 +5,6 @@ import {
   Eye,
   Move,
   PanelRight,
-  Paperclip,
   Plus,
   Send,
   Square,
@@ -20,6 +19,7 @@ import {
   textAttachmentBlock,
   useComposerAttachments,
 } from "@/features/agent/composerAttachments";
+import { ComposerAttachMenu } from "@/features/agent/ComposerAttachMenu";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { DictateButton } from "@/features/agent/DictateButton";
 
@@ -178,7 +178,6 @@ export function CanvasAgentChat({
   const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspaceId);
-  const fileRef = React.useRef<HTMLInputElement | null>(null);
   //: 换地方:上一处挂着的附件暂存起来,这一处先前的取回来;打的字换成这一处的。见上面 `draft` 那段。
   //: (笔记引用不在这里 —— 它是正文里的原子节点,跟着草稿走;入口是 `@`,见 ChatComposer。)
   const composerShownFor = React.useRef({ workspaceId, place, key: `${workspaceId}|${here}` });
@@ -687,18 +686,10 @@ export function CanvasAgentChat({
             cancelling={cancelQueued.isPending}
           />
           <div data-toast-avoid="" className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                void attach.accept(event.target.files);
-                event.target.value = "";
-              }}
-            />
             {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
             {/* 附件就是「这条消息里带了什么」,一排摆在输入卡里(笔记引用是正文里的节点,走 `@`)。 */}
+            {/* 附上的压缩包 / 文件夹解开后要人看的:发现了技能、有文件没收(ADR 0059)。 */}
+            {attach.bundleNotes}
             <ComposerChips chips={[...(contextChips ?? []), ...attach.chips]} uploading={attach.uploading} />
             {attach.previewModal}
             {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
@@ -715,14 +706,8 @@ export function CanvasAgentChat({
               <div className="flex min-w-0 items-center gap-1">
                 {/* icon-xs(28px)是工具栏那一档,整行统一走它。默认的 icon 是 36px,
                     在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
-                <IconButton
-                  variant="ghost"
-                  size="icon-xs"
-                  label={t("wfAgentAttach")}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <Paperclip size={14} />
-                </IconButton>
+                {/* 📎 选文件或文件夹(压缩包走文件),和对话页同一个组件。 */}
+                <ComposerAttachMenu attach={attach} label={t("wfAgentAttach")} />
                 {/* 说话输入紧挨着附件:两者都是"往输入框里放东西",而模型选择是"怎么处理它"。 */}
                 <DictateButton
                   onText={(text) =>

@@ -40,10 +40,13 @@ export function SkillImportDialog({
   workspaceId,
   staged,
   onClose,
+  onInstalled,
 }: {
   workspaceId: string;
   staged: AgentSkillImport | null;
   onClose: () => void;
+  /** 装好了(在 onClose 之前)。对话里「发现 N 个技能」的卡靠它收起 —— 只是关掉审阅的话卡要留着。 */
+  onInstalled?: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -65,6 +68,7 @@ export function SkillImportDialog({
     onSuccess: (installed) => {
       void qc.invalidateQueries({ queryKey: skillKeys.all(workspaceId) });
       toast.success(t("agentSkillsImported").replace("{n}", String(installed.length)));
+      onInstalled?.();
       onClose();
     },
     onError: (error) => toast.error(errorText(error)),

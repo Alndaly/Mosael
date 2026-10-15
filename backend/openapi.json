@@ -27878,8 +27878,7 @@
         "properties": {
           "source_name": {
             "type": "string",
-            "title": "Source Name",
-            "default": ""
+            "title": "Source Name"
           },
           "skill_import": {
             "anyOf": [
@@ -27907,6 +27906,12 @@
           }
         },
         "type": "object",
+        "required": [
+          "source_name",
+          "skill_import",
+          "assets",
+          "skipped"
+        ],
         "title": "AgentBundleOut",
         "description": "对话里附上的压缩包 / 文件夹解开之后(ADR 0059)。\n\n技能包:`skill_import` 是暂存好的导入(和设置页导入同一个),什么都还没装,`assets` 为空。\n别的:`assets` 是进了素材库的图片和文本合订本(当附件发出去),`skipped` 是没收的。"
       },

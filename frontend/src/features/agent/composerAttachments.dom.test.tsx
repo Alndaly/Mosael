@@ -75,10 +75,10 @@ describe("附件分流", () => {
   it("读不了的类型明确拒绝,而不是静默丢掉", async () => {
     const get = mount();
     await act(async () => {
-      await get().accept([new File(["x"], "bundle.zip", { type: "application/zip" })]);
+      await get().accept([new File(["x"], "setup.dmg", { type: "application/x-apple-diskimage" })]);
     });
     expect(get().isEmpty).toBe(true);
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("bundle.zip"));
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("setup.dmg"));
   });
 
   it("没有 MIME 的文件按文本试读(从终端拖出来的常常没有)", async () => {

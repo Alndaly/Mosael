@@ -1,5 +1,7 @@
 import React from "react";
 
+import { splitDropped } from "@/lib/folderFiles";
+
 /**
  * 往整块区域上拖文件。
  *
@@ -40,11 +42,14 @@ function fileTypes(event: React.DragEvent): string[] {
  * @param accept 松手时留下哪些文件。
  * @param wants  悬停时这一拖**归不归这块区域**。不归的话不亮提示,事件照常落到下面 —— 笔记页里只拖
  *               图片时,是正文要把它插成图片,不是整页要把它导入成笔记。不传就是凡带文件都归它。
+ * @param onFolders 拖进来的**文件夹**交给谁(见 lib/folderFiles)。不传的话文件夹照旧混在文件里 —— 那是一个读不出内容的空壳,
+ *               由 onFiles 那边报读不了;传了,文件夹的入口单独交过去,文件照旧走 onFiles。
  */
 export function useFileDrop(
   onFiles: (files: File[]) => void,
   accept?: (file: File) => boolean,
   wants?: (types: string[]) => boolean,
+  onFolders?: (folders: FileSystemDirectoryEntry[]) => void,
 ): FileDrop {
   const [active, setActive] = React.useState(false);
 
@@ -74,7 +79,9 @@ export function useFileDrop(
         if (!carriesFiles(event)) return;
         event.preventDefault();
         setActive(false);
-        const files = Array.from(event.dataTransfer.files ?? []);
+        //: 文件夹入口只在这一刻拿得到(事件一过 items 就清空),所以在这里同步分开。
+        const { files, folders } = onFolders ? splitDropped(event.dataTransfer) : { files: Array.from(event.dataTransfer.files ?? []), folders: [] };
+        if (folders.length > 0) onFolders?.(folders);
         const kept = accept ? files.filter(accept) : files;
         if (kept.length > 0) onFiles(kept);
       },

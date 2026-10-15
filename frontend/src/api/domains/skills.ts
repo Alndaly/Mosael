@@ -88,3 +88,37 @@ export const commitSkillImport = (workspaceId: string, importId: string, choices
 /** 「存成技能」:用这次对话的模型起草一份,不保存。 */
 export const draftSkillFromSession = (sessionId: string) =>
   api<AgentSkillDraft>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/skill-draft`, { method: "POST" });
+
+/**
+ * 对话里附上的压缩包 / 文件夹(ADR 0059):后端解开、认一认。里面有 SKILL.md 的回一份暂存的导入(`skill_import`,和上面
+ * 导入第一步回的同一个东西,什么都还没装);别的回进了素材库的附件(`assets`)和没收的文件(`skipped`)。
+ */
+export type AgentBundle = components["schemas"]["AgentBundleOut"];
+export type AgentBundleSkipped = components["schemas"]["AgentBundleSkipped"];
+
+const bundlesPath = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/agent-bundles`;
+
+export function unpackAgentBundleArchive(workspaceId: string, archive: File): Promise<AgentBundle> {
+  const form = new FormData();
+  form.set("archive", archive, archive.name);
+  form.set("source_name", archive.name);
+  return api<AgentBundle>(bundlesPath(workspaceId), { method: "POST", body: form });
+}
+
+/**
+ * 一个文件夹:文件和相对路径**同序**放进两列(同 stageSkillFolder)。`path` 从最顶上那层文件夹名开始(像
+ * webkitRelativePath),`sourceName` 是文件夹名。
+ */
+export function unpackAgentBundleFolder(
+  workspaceId: string,
+  sourceName: string,
+  files: readonly { file: File; path: string }[],
+): Promise<AgentBundle> {
+  const form = new FormData();
+  for (const { file, path } of files) {
+    form.append("files", file, file.name);
+    form.append("paths", path);
+  }
+  form.set("source_name", sourceName);
+  return api<AgentBundle>(bundlesPath(workspaceId), { method: "POST", body: form });
+}
