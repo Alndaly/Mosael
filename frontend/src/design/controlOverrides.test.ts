@@ -139,7 +139,7 @@ const STOCK: Record<string, number> = {
   "features/settings/ModelSettingsDialog.tsx": 1,
   "features/settings/ProviderModelList.tsx": 1,
   "features/voice/VoiceCreationDialogs.tsx": 1,
-  "features/workflows/NodeInspector.tsx": 4,
+  "features/workflows/NodeInspector.tsx": 5,
   "features/workflows/RunOutputs.tsx": 2,
   "features/workflows/WorkflowRunHistory.tsx": 2,
 };

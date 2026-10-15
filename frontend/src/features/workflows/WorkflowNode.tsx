@@ -9,7 +9,6 @@ import {
   Film,
   Image as ImageIcon,
   Loader2,
-  Play,
   SkipForward,
   Type,
   XCircle,
@@ -18,7 +17,6 @@ import {
 import { getAsset } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
-import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
@@ -91,9 +89,6 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   configAssetId?: string;
   /** 一行配置摘要:这个节点被配成做什么。没有它,一屏节点长得只有标题不一样。 */
   configSummary?: string;
-  /** 「▶ 运行此节点」:单跑这一个节点(只跑它和它的上游闭包)。只有最外层的节点才有这个入口
-   *  (循环体/子图里的节点不支持,见 useWorkflowDisplayElements)。 */
-  onRunThisNode?: () => void;
   /** 每个输入接点收什么类型 —— 卡片按它给接点上色。 */
   inputTypes?: Record<string, string>;
   /** 输入接点在人机界面上的名字(portNames:和检查器那一格同一个名字)。 */
@@ -227,22 +222,6 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
         <span className="timecode absolute -bottom-2 right-1.5 rounded-full border border-border bg-panel px-1.5 text-[9.5px] text-muted-foreground">
           {(d.run.ms / 1000).toFixed(2)}s
         </span>
-      )}
-      {/* 「▶ 运行此节点」:悬停浮在卡片上方的小工具条。单跑目标 + 它的上游闭包,到目标即停、
-          下游不跑(省算力);结果照常落在节点自己的输出预览处。nodrag:按下它不该把节点拖走。 */}
-      {d.onRunThisNode && (
-        <div className="nodrag absolute -top-9 left-1/2 -translate-x-1/2 opacity-0 transition-opacity duration-100 group-hover/node:opacity-100">
-          <IconButton
-            variant="secondary"
-            label={t("wfRunThisNode")}
-            onClick={(event) => {
-              event.stopPropagation();
-              d.onRunThisNode!();
-            }}
-          >
-            <Play size={13} />
-          </IconButton>
-        </div>
       )}
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="grid size-8 flex-none place-items-center rounded-lg bg-[color-mix(in_srgb,var(--wf-node-color,var(--primary))_12%,transparent)] text-[color:var(--wf-node-color,var(--primary))]" style={{ "--wf-node-color": visual.color } as React.CSSProperties}>{kindIcon ?? visual.icon ?? <Type size={13} />}</span>

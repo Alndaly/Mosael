@@ -516,7 +516,6 @@ export function WorkflowEditor({
     annotationMode,
     searchHit: layerSearchHit,
     atRoot,
-    runNode,
   });
 
   return (
@@ -868,6 +867,8 @@ export function WorkflowEditor({
               bodyKey(registry, selectedNode.type) ? () => enterScope([...scopePath, selectedNode.id]) : undefined
             }
             onClose={() => selectInspectorNode(null)}
+            atRoot={atRoot}
+            runNode={runNode}
             revealField={revealField}
           />
         )}

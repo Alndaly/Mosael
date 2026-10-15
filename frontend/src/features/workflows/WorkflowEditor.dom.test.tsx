@@ -771,16 +771,15 @@ describe("点运行被服务端拦下", () => {
 });
 
 describe("单跑一个节点(▶ 运行此节点)", () => {
-  it("最外层的节点悬停有「运行此节点」,点了带 target_node_id 起一次运行", async () => {
+  it("最外层的节点选中后,检查器工具条有「运行此节点」,点了带 target_node_id 起一次运行", async () => {
     await renderEditor(CHAIN);
-    await waitFor(() => nodeEl("llm-1"));
-    // 链上三个节点都有这个入口(start / llm-1 / template-1)。jsdom 里 React Flow 量不出节点
-    // 尺寸,节点一直 visibility:hidden、可访问名算不出来 —— 像 nodeEl 一样直接查 DOM。
-    const runButtons = () =>
-      [...document.querySelectorAll<HTMLElement>('.react-flow__node button[aria-label="wfRunThisNode"]')];
-    await waitFor(() => expect(runButtons()).toHaveLength(3));
+    await waitFor(() => nodeEl("template-1"));
+    fireEvent.click(nodeEl("template-1"));
+    // 入口挪进了选中节点的检查器工具条(和「进入子图」「删除」同一排),不再是节点上的 hover 钮。
+    const runButton = await screen.findByRole("button", { name: "wfRunThisNode" });
+    expect(runButton).toBeTruthy();
 
-    fireEvent.click(runButtons().find((b) => b.closest('.react-flow__node')?.getAttribute("data-id") === "template-1")!);
+    fireEvent.click(runButton);
     await waitFor(() => expect(apiMocks.runWorkflow).toHaveBeenCalledWith("wf1", {}, "template-1"));
     // 走运行 mutation 的同一条成功路:这次运行被认下、跟着看。
     await waitFor(() => expect(apiMocks.listWorkflowRuns).toHaveBeenCalled());
@@ -790,6 +789,9 @@ describe("单跑一个节点(▶ 运行此节点)", () => {
     await renderEditor(LOOPED);
     await drillInto("loop-1");
     await waitFor(() => nodeEl("template-1"));
-    expect(document.querySelectorAll('.react-flow__node button[aria-label="wfRunThisNode"]')).toHaveLength(0);
+    fireEvent.click(nodeEl("template-1"));
+    // 检查器面板开着(名字输入框在),但工具条上没有「运行此节点」。
+    await screen.findByLabelText("wfNodeName");
+    expect(screen.queryByRole("button", { name: "wfRunThisNode" })).toBeNull();
   });
 });

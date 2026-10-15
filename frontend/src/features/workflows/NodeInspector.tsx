@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NodeToolbar, Position } from "@xyflow/react";
-import { AlertTriangle, Boxes, Trash2, Type, X } from "lucide-react";
+import { AlertTriangle, Boxes, Play, Trash2, Type, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -104,6 +104,8 @@ export function NodeInspector({
   onDelete,
   onDrillIn,
   onClose,
+  atRoot = false,
+  runNode,
   revealField = null,
 }: {
   /** 画布正在平移:此时面板不吃指针事件(见 WorkflowsView 里 panning 的说明)。 */
@@ -128,6 +130,10 @@ export function NodeInspector({
   /** 只有子图 / 循环节点给 —— 双击进子画布的那件事,在悬浮键上也给一个入口。 */
   onDrillIn?: () => void;
   onClose?: () => void;
+  /** 只有最外层节点能单跑(循环体/子图里的节点不支持,后端会拒)—— 和节点上原来 hover 钮的 atRoot 判据一致。 */
+  atRoot?: boolean;
+  /** 单跑一个节点(见 useWorkflowRun.runNode)。 */
+  runNode?: (nodeId: string) => void;
   /** 要人去看的那一格(点运行被拦下时,失败卡上的「去这个节点」):面板翻到它所在的那一档 —— 插件节点选连接的那一格
    *  标着 advanced,停在「参数」上的人找不到它。之后点别的档照常换。 */
   revealField?: { nodeId: string; field: string } | null;
@@ -432,6 +438,9 @@ export function NodeInspector({
   // 第一块,不需要一个 effect 追着清空(那种 effect 总慢一帧,会先露出一个空面板)。
   const area = [pickedArea, revealedArea].find((one) => one && areas.includes(one)) ?? areas[0];
   const AREA_LABELS: Record<string, MessageKey> = { config: "wfaConfig", advanced: "wfAdvanced", outputs: "wfOutputs", run: "wfRunOutputs" };
+  //: 「▶ 运行此节点」:只有最外层节点能单跑(循环体/子图里的节点第一版不支持,后端会拒)——
+  //: 和原来节点上 hover 钮同一个判据。标注模式整个检查器都不渲染,这里不再判 annotationMode。
+  const onRunThisNode = atRoot && runNode ? () => runNode(node.id) : undefined;
 
 
   /** 字段接上游 = 数据边(ComfyUI 式:暴露输入接点,再从画布拖数据边或下拉选源)。 */
@@ -546,8 +555,20 @@ export function NodeInspector({
           </button>
         ))}
         {/* 竖线只在两边都有东西时才画 —— 否则它分隔的是"一组和空气"。 */}
-        {areas.length > 0 && (onDrillIn || onDelete) && (
+        {areas.length > 0 && (onRunThisNode || onDrillIn || onDelete) && (
           <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+        )}
+        {/* 「▶ 运行此节点」:单跑这一个节点(只跑它和它的上游闭包)。只有最外层的节点才有这个入口,
+            和节点上原来 hover 钮的 atRoot 判据一致。 */}
+        {onRunThisNode && (
+          <IconButton
+            unstyled
+            className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground transition-[background,color] duration-100 hover:bg-secondary hover:text-foreground"
+            label={t("wfRunThisNode")}
+            onClick={onRunThisNode}
+          >
+            <Play size={14} />
+          </IconButton>
         )}
         {onDrillIn && (
           <IconButton
