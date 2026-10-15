@@ -166,7 +166,7 @@ export function AssetGridField({
                     data-upload-tile=""
                     label={t("wfAssetGridUpload")}
                     onClick={() => chooser.current?.click()}
-                    className="grid cursor-pointer place-items-center"
+                    className="grid size-full cursor-pointer place-items-center"
                   >
                     <Upload size={16} strokeWidth={1.8} />
                   </IconButton>
@@ -177,7 +177,7 @@ export function AssetGridField({
                     data-add-tile=""
                     label={t("wfAssetGridAdd")}
                     onClick={() => setPicking(true)}
-                    className="grid cursor-pointer place-items-center"
+                    className="grid size-full cursor-pointer place-items-center"
                   >
                     <Plus size={16} strokeWidth={1.8} />
                   </IconButton>
