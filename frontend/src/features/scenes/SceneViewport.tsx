@@ -29,9 +29,16 @@ import {
   type SceneObject,
   type SceneShot,
   type SceneLighting,
+  type FigurePose,
   type Vec3,
 } from "@/api/domains/scenes";
 import { cameraOfShot, sampleCamera, sampleObject } from "./sceneGraph";
+import {
+  poseFromMannequin,
+  readPose,
+  type MannequinJoint,
+  type MannequinRig,
+} from "./mannequin/mannequinRig";
 import {
   applyOrbit,
   captureOrbit,
@@ -87,6 +94,8 @@ type Props = {
   /** 正在被手改姿态的那个物体 —— 它这一刻不跟着自己的轨走。见 SceneStudio 里 `posing`。 */
   posing?: string | null;
   onTransform: (id: string, patch: Partial<SceneObject>) => void;
+  /** 摆好一个 figure 的关节后写回 pose(角度全量,蛇形 hips_drop)。 */
+  onFigurePose: (id: string, pose: FigurePose) => void;
   onError: (error: string) => void;
 };
 function disposeTree(root: THREE.Object3D) {
@@ -301,12 +310,20 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         editorCamera,
         renderer.domElement,
       );
+      /** figure 关节的手柄:选中一个 figure 再点它的某个关节段,手柄挂到那个 pivot 上,拖圆环转它(FK)。
+       *  和整物体操纵器分开 —— 这是摆姿态,改的是那个关节的局部旋转,不是物体的 transform。 */
+      const jointTransform = new TransformControls(
+        editorCamera,
+        renderer.domElement,
+      );
+      jointTransform.setMode("rotate");
+      jointTransform.setSpace("local");
       const removeNavigation = attachSceneNavigation(
         renderer.domElement,
         () => (latest.current.observing ? observerOrbit : orbit),
         () => ({
           mode: latest.current.navigation,
-          disabled: latest.current.preview || transform.dragging,
+          disabled: latest.current.preview || transform.dragging || jointTransform.dragging,
         }),
       );
       observerOrbit.minDistance = 0.1;
@@ -314,6 +331,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       orbit.minDistance = 0.1;
       orbit.maxDistance = 1000;
       scene.add(transform.getHelper());
+      scene.add(jointTransform.getHelper());
       const selection = new THREE.BoxHelper(new THREE.Object3D(), 0x8da9cf);
       scene.add(selection);
       selection.visible = false;
@@ -321,6 +339,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         /** 选中的那个此刻该不该画选中框、挂操纵器 —— 藏起来的(或在藏起来的组里的)不挂:
          *  框住一片空气、拖一个看不见的东西,都比"选中了但没反应"更让人糊涂。 */
         selectionShown = false,
+        /** 当前选中的 figure 里被点选的那个关节名(null = 整物体模式,关节手柄不挂)。 */
+        selectedJointName: MannequinJoint | null = null,
         alive = true,
         frameId = 0,
         generation = 0,
@@ -362,9 +382,21 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       function select() {
         const p = latest.current,
           o = p.selected ? objects.get(p.selected) : null;
+        const rig = o?.userData.figureRig as MannequinRig | undefined;
+        // 换到别的物体(或选中的不是 figure)就退出关节摆位;关节名对不上当前 rig 也退。
+        if (!rig || !selectedJointName || !rig.joints.has(selectedJointName))
+          selectedJointName = null;
+        const pivot = rig && selectedJointName ? rig.joints.get(selectedJointName)! : null;
         selectionShown = !!o && shownInTree(o, root);
-        if (o && selectionShown && !p.preview && !p.observing) transform.attach(o);
-        else transform.detach();
+        if (pivot) {
+          // 摆关节:整物体操纵器撤下,手柄挂到那个 pivot 上。
+          transform.detach();
+          jointTransform.attach(pivot);
+        } else {
+          jointTransform.detach();
+          if (o && selectionShown && !p.preview && !p.observing) transform.attach(o);
+          else transform.detach();
+        }
         transform.setMode(p.mode);
         transform.setTranslationSnap(p.snap ? 0.25 : null);
         transform.setRotationSnap(p.snap ? Math.PI / 12 : null);
@@ -387,6 +419,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         lastSignature = signature;
         const gen = ++generation;
         transform.detach();
+        jointTransform.detach();
         disposeTree(root);
         root.clear();
         objects.clear();
@@ -463,6 +496,28 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
       transform.addEventListener("objectChange", () => {
         if (transform.object) selection.setFromObject(transform.object);
       });
+      jointTransform.addEventListener("objectChange", () => {
+        const id = latest.current.selected;
+        const object = id ? objects.get(id) : null;
+        if (object) selection.setFromObject(object);
+      });
+      jointTransform.addEventListener("dragging-changed", (event) => {
+        orbit.enabled =
+          !event.value && !latest.current.preview && !latest.current.observing;
+        // 松手才写回:拖动途中每帧读一次会触发一整串 scene 重建,还看不到中间态。
+        if (!event.value && selectedJointName) {
+          const id = latest.current.selected;
+          const object = id ? objects.get(id) : null;
+          const rig = object?.userData.figureRig as MannequinRig | undefined;
+          if (rig && id) {
+            const pose = poseFromMannequin({ angles: readPose(rig) });
+            // 髋下移只在预设里动过,拖关节不碰它 —— 从场景对象的 pose 里原样带过去。
+            const stored = latest.current.content.objects.find((o) => o.id === id)?.pose;
+            if (stored?.hips_drop) pose.hips_drop = stored.hips_drop;
+            latest.current.onFigurePose(id, pose);
+          }
+        }
+      });
       let down = { x: 0, y: 0 };
       const pointerDown = (e: PointerEvent) => {
         down = { x: e.clientX, y: e.clientY };
@@ -472,6 +527,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
           latest.current.preview ||
           latest.current.observing ||
           transform.axis ||
+          jointTransform.axis ||
           Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4 ||
           e.button !== 0
         )
@@ -496,7 +552,18 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         let node = hit?.object;
         while (node && !node.userData.sceneObjectId)
           node = node.parent ?? undefined;
-        latest.current.onSelect(node?.userData.sceneObjectId ?? null);
+        const sceneObjectId = node?.userData.sceneObjectId ?? null;
+        // 点的是当前选中 figure 的某个关节段:进入/切换关节摆位,而不是重新选物体。
+        if (sceneObjectId && sceneObjectId === latest.current.selected) {
+          const rig = objects.get(sceneObjectId)?.userData.figureRig as MannequinRig | undefined;
+          const joint = rig ? rig.jointOf(hit?.object ?? null) : null;
+          if (joint) {
+            selectedJointName = joint;
+            select();
+            return;
+          }
+        }
+        latest.current.onSelect(sceneObjectId);
       };
       renderer.domElement.addEventListener("pointerdown", pointerDown);
       renderer.domElement.addEventListener("pointerup", pointerUp);
@@ -568,7 +635,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         if (!alive) return;
         frameId = requestAnimationFrame(render);
         const p = latest.current;
-        orbit.enabled = !p.preview && !p.observing && !transform.dragging;
+        orbit.enabled = !p.preview && !p.observing && !transform.dragging && !jointTransform.dragging;
         observerOrbit.enabled = !!p.observing;
         if (p.observing && observedShot !== p.shot.id) {
           frameOverview();
@@ -608,7 +675,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         // 重摆一次 —— 但只在真的有东西在动的时候做,静态场景一帧也不该多算。
         //
         // 拖动操纵器时跳过:那时用户正在改的是**静止姿态**,每帧再按轨覆盖一次会把它拽回去。
-        if (!transform.dragging)
+        if (!transform.dragging && !jointTransform.dragging)
           for (const o of p.content.objects) {
             if (!o.track.length) continue;
             // **正在手改的那个不采样。** 否则拖动操作杆是一件看不见的事:松手的下一帧就被
@@ -635,6 +702,8 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         observer.group.visible = !!p.observing;
         transform.enabled = !p.preview && !p.observing;
         transform.getHelper().visible = transform.enabled && !!transform.object;
+        jointTransform.enabled = !p.preview && !p.observing;
+        jointTransform.getHelper().visible = jointTransform.enabled && !!jointTransform.object;
         selection.visible = selectionShown && !p.preview && !p.observing;
         const w = element.clientWidth,
           h = element.clientHeight;
@@ -987,6 +1056,7 @@ export const SceneViewport = React.forwardRef<ViewportHandle, Props>(
         cancelAnimationFrame(frameId);
         resize.disconnect();
         transform.dispose();
+        jointTransform.dispose();
         removeNavigation();
         observerOrbit.dispose();
         observer.dispose();

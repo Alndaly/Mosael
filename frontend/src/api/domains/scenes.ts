@@ -2,6 +2,12 @@ import type { components } from "@/api/generated/schema";
 import { api, API_BASE, apiBlob, getAuthToken } from "@/api/transport";
 export type Vec3 = [number, number, number];
 
+/** figure 的关节姿态:关节名 → 欧拉角(度),外加可选的髋部下移(米)。和后端 FigurePose 一致(蛇形 hips_drop)。 */
+export type FigurePose = {
+  angles?: Record<string, [number, number, number]>;
+  hips_drop?: number;
+};
+
 /** 预览用的物体:后端 `scene_preview` 挑出来的那几个字段,不含造型解释。 */
 export interface PreviewObject {
   kind: string;
@@ -23,11 +29,13 @@ export interface ScenePreviewData {
 export type Keyframe = components["schemas"]["Keyframe"] & { time: number; position: Vec3 };
 export type SceneObject = Omit<
   Required<components["schemas"]["SceneObject"]>,
-  "parameters" | "track"
+  "parameters" | "track" | "pose"
 > & {
   parameters: Required<components["schemas"]["ShapeParameters"]>;
   /** 空的就是静止 —— 绝大多数物体都是空的。 */
   track: Keyframe[];
+  /** figure 的关节姿态(度)。undefined = 直立默认站姿。蛇形 hips_drop,和后端 FigurePose 一致。 */
+  pose?: FigurePose | null;
 };
 /** 镜头 = 用哪台机位、拍多久。运镜是那台相机物体的 track,见 docs/design/scene-time-and-cameras.md。 */
 export type SceneShot = Required<components["schemas"]["SceneShot"]>;

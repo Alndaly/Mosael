@@ -10,6 +10,8 @@ import {
   createMannequin,
   MANNEQUIN_HEIGHT,
   MANNEQUIN_JOINTS,
+  poseFromMannequin,
+  poseToMannequin,
   readPose,
   resetPose,
 } from "./mannequinRig";
@@ -150,5 +152,33 @@ describe("姿势读写", () => {
     for (const name of MANNEQUIN_JOINTS)
       expect(readPose(r)[name]).toEqual([0, 0, 0]);
     expect(r.joints.get("hips")!.position.y).toBeCloseTo(standingHipY);
+  });
+});
+
+describe("pose ↔ 场景对象序列化", () => {
+  it("poseFromMannequin 用蛇形 hips_drop,poseToMannequin 读回来", () => {
+    const scenePose = poseFromMannequin({
+      angles: { upperArmL: [0, 0, 152], thighR: [-30, 0, 0] },
+      hipsDrop: 0.44,
+    });
+    expect(scenePose).toEqual({
+      angles: { upperArmL: [0, 0, 152], thighR: [-30, 0, 0] },
+      hips_drop: 0.44,
+    });
+    expect(poseToMannequin(scenePose)).toEqual({
+      angles: { upperArmL: [0, 0, 152], thighR: [-30, 0, 0] },
+      hipsDrop: 0.44,
+    });
+  });
+
+  it("髋没下沉就不写 hips_drop,读回来是 0", () => {
+    const scenePose = poseFromMannequin({ angles: { head: [-8, 0, 0] } });
+    expect(scenePose.hips_drop).toBeUndefined();
+    expect(poseToMannequin(scenePose).hipsDrop).toBe(0);
+  });
+
+  it("没有 pose(undefined/null)就是直立默认", () => {
+    expect(poseToMannequin(null)).toEqual({ angles: {}, hipsDrop: 0 });
+    expect(poseToMannequin(undefined)).toEqual({ angles: {}, hipsDrop: 0 });
   });
 });

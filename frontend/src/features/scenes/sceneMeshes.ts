@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 import type { SceneObject } from "@/api/domains/scenes";
+import { applyPose, createMannequin, poseToMannequin } from "./mannequin/mannequinRig";
 
 /**
  * 每种场景物体长什么样 —— 工作台里看到的那一份几何。
@@ -69,49 +70,16 @@ export function geometryObject(o: SceneObject): THREE.Object3D {
       );
   /** 人物。**是给构图当尺子的,不是给人看脸的。**
    *
-   * 用几个基本体拼一个概括的人形:关键是高度、肩宽、头的位置和站姿的重心 —— 相机在不在
-   * 视平线上、门够不够高、桌子到不到手,靠这几样就判断得出来。做得再细也不会出现在成片里
-   * (成片是模型生成的),反而会让人误以为它决定长相。
-   *
-   * 比例按 1.7 米的常见人体来分:头约 1/7.5 身高,肩宽约 1/4,腿约占下半身。 */
+   * 用 19 关节 FK 层级拼一个可摆姿态的人形(复用 `mannequinRig`):默认直立站姿和原来那个
+   * 「固定站姿」看着一样,但现在每个关节都能转 —— 摆好的姿态存进 `o.pose`(见 sceneGraph /
+   * 后端 SceneObject.pose),随 SceneContent 一起持久化。比例按 1.7 米常见人体,头约 1/7.5
+   * 身高、肩宽约 1/4、腿约占下半身。材质跟着场景物体自己的颜色/粗糙度/金属度走。 */
   if (o.kind === "figure") {
-    const h = p.height;
-    const shoulders = Math.max(p.width, 0.2);
-    const thickness = Math.max(p.depth, 0.12);
-    const headR = h * 0.066;
-    const legH = h * 0.47;
-    const torsoH = h * 0.33;
-    const capsule = (radius: number, length: number, x: number, y: number, z = 0) => {
-      const m = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 4, 12), material);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      group.add(m);
-    };
-    // 双腿
-    capsule(thickness * 0.42, legH - thickness * 0.84, -shoulders * 0.22, legH / 2);
-    capsule(thickness * 0.42, legH - thickness * 0.84, shoulders * 0.22, legH / 2);
-    // 躯干:用一个压扁的胶囊,肩比腰宽一点
-    const torso = new THREE.Mesh(
-      new THREE.CapsuleGeometry(thickness * 0.62, torsoH - thickness * 1.24, 4, 14),
-      material,
-    );
-    torso.scale.set(shoulders / (thickness * 1.24), 1, 1);
-    torso.position.y = legH + torsoH / 2;
-    torso.castShadow = true;
-    torso.receiveShadow = true;
-    group.add(torso);
-    // 双臂,自然垂在身侧
-    const armH = h * 0.36;
-    capsule(thickness * 0.3, armH - thickness * 0.6, -shoulders * 0.62, legH + torsoH - armH / 2);
-    capsule(thickness * 0.3, armH - thickness * 0.6, shoulders * 0.62, legH + torsoH - armH / 2);
-    // 头(含一小截脖子)
-    capsule(headR * 0.4, headR * 0.6, 0, legH + torsoH + headR * 0.3);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(headR, 24, 16), material);
-    head.position.y = h - headR;
-    head.castShadow = true;
-    head.receiveShadow = true;
-    group.add(head);
+    const rig = createMannequin(o.parameters.height, material);
+    if (o.pose) applyPose(rig, poseToMannequin(o.pose));
+    group.add(rig.root);
+    //: 视口摆关节手柄、快照读关节都从这棵树上拿(rig.joints / rig.meshes / rig.jointOf)。
+    group.userData.figureRig = rig;
   }
   /** 桌子:一块台面 + 四条腿。摆道具、定台面高度用 —— 这一页里它出现的频率仅次于地面。 */
   if (o.kind === "table") {

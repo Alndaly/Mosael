@@ -383,3 +383,25 @@ def test_缩略图不画藏起来的组里的东西():
         {'id': 'keep', 'kind': 'sphere'},
     ]})
     assert [o['kind'] for o in preview['objects']] == ['sphere']
+
+
+def test_figure_pose_round_trips_through_the_schema():
+    """figure 的关节姿态是场景数据:SceneObject → 存库 JSON → 读回,角度和髋下移原样。"""
+    from app.domain.scenes.types import SceneContent
+
+    content = SceneContent.model_validate({
+        "objects": [
+            {"id": "cam", "kind": "camera", "position": [8, 5, 8]},
+            {"id": "f", "kind": "figure", "parameters": {"height": 1.7},
+             "pose": {"angles": {"upperArmL": [0, 0, 152], "thighR": [-30, 0, 0]}, "hips_drop": 0.44}},
+        ],
+        "shots": [{"id": "s", "camera_id": "cam"}],
+    })
+    figure = next(o for o in content.objects if o.id == "f")
+    assert figure.pose.angles["upperArmL"] == (0, 0, 152)
+    assert figure.pose.hips_drop == 0.44
+    # 存库(JSON)再读回:pose 原样 —— 序列化形状是前端照着的那个形状。
+    again = SceneContent.model_validate(content.model_dump(mode="json"))
+    assert next(o for o in again.objects if o.id == "f").pose.model_dump(mode="json") == {
+        "angles": {"upperArmL": [0, 0, 152], "thighR": [-30, 0, 0]}, "hips_drop": 0.44,
+    }

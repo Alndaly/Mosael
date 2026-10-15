@@ -1,4 +1,5 @@
 """Portable, model-independent scene description. Units are metres and degrees."""
+import math
 from typing import Annotated, Literal
 
 from pydantic_core import PydanticCustomError
@@ -22,6 +23,29 @@ class ShapeParameters(SceneValue):
     steps: int = Field(8, ge=1, le=64)
     door_width: float = Field(1.4, ge=.1, le=100)
     door_height: float = Field(2.3, ge=.1, le=100)
+
+
+class FigurePose(SceneValue):
+    """一个 figure 的关节姿态:关节名 → 欧拉角(度),外加可选的髋部下移(米)。
+
+    关节层级与 FK 约定见前端 `features/scenes/mannequin/mannequinRig.ts`(19 个关节:
+    hips → spine → chest → neck → head;chest → shoulder.L/R → upperArm.L/R → forearm.L/R → hand.L/R;
+    hips → thigh.L/R → shin.L/R → foot.L/R)。四肢段沿 -Y 下垂、面朝 +Z,角度按 XYZ 欧拉序。
+
+    存进 SceneObject 的 `pose`,随 SceneContent 一起持久化 —— 摆好的人偶姿态是场景数据,
+    白模参考帧和 GLB 都要按它画(见 render/meshes._figure)。
+    """
+
+    angles: dict[str, tuple[float, float, float]] = Field(default_factory=dict)
+    #: 髋从站姿高度往下沉多少(米)。坐/蹲放低身体用(纯旋转放不下去),0 = 站姿高度。
+    hips_drop: float = Field(0, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def angles_finite(self):
+        for name, angle in self.angles.items():
+            if len(angle) != 3 or not all(math.isfinite(a) and -180 <= a <= 180 for a in angle):
+                raise PydanticCustomError("scene_invalid", f"Figure joint {name!r} angles must be finite and within ±180°")
+        return self
 
 
 class Keyframe(SceneValue):
@@ -71,6 +95,9 @@ class SceneObject(SceneValue):
     #: 人偶演的是资产库里的哪个人物(ADR 0029 §3)。渲这个镜头当生成参考时,镜头里看得见的人偶带上它的参考图、
     #: 提示词里写明「这个颜色的人偶是谁」—— 构图由 3D 定,长相由资产定。只有 figure 用得上。
     entity_id: Identifier | None = None
+    #: figure 才有:19 关节的角度表(度)+ 髋部下移(米)。None = 直立默认站姿。摆好的姿态随场景持久化,
+    #: 白模参考帧、GLB 都按它画(见 render/meshes._figure 对照前端的 mannequinRig)。
+    pose: FigurePose | None = None
     #: 相机看向哪里,以及视角。非相机忽略它们。
     #:
     #: **相机的静止姿态也放在物体上**(position + target + fov),和别的物体一样 ——

@@ -12863,6 +12863,32 @@ export interface components {
              */
             path: string;
         };
+        /**
+         * FigurePose
+         * @description 一个 figure 的关节姿态:关节名 → 欧拉角(度),外加可选的髋部下移(米)。
+         *
+         *     关节层级与 FK 约定见前端 `features/scenes/mannequin/mannequinRig.ts`(19 个关节:
+         *     hips → spine → chest → neck → head;chest → shoulder.L/R → upperArm.L/R → forearm.L/R → hand.L/R;
+         *     hips → thigh.L/R → shin.L/R → foot.L/R)。四肢段沿 -Y 下垂、面朝 +Z,角度按 XYZ 欧拉序。
+         *
+         *     存进 SceneObject 的 `pose`,随 SceneContent 一起持久化 —— 摆好的人偶姿态是场景数据,
+         *     白模参考帧和 GLB 都要按它画(见 render/meshes._figure)。
+         */
+        FigurePose: {
+            /** Angles */
+            angles?: {
+                [key: string]: [
+                    number,
+                    number,
+                    number
+                ];
+            };
+            /**
+             * Hips Drop
+             * @default 0
+             */
+            hips_drop: number;
+        };
         /** FontOut */
         FontOut: {
             /** Id */
@@ -17530,6 +17556,7 @@ export interface components {
             model_id?: string | null;
             /** Entity Id */
             entity_id?: string | null;
+            pose?: components["schemas"]["FigurePose"] | null;
             /**
              * Target
              * @default [

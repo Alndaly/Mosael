@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SceneSubsection } from "./SceneSubsection";
-import { Copy, Eye, EyeOff, Group, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Group, RotateCcw, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -12,11 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { SceneContent, SceneLighting, SceneObject } from "@/api/domains/scenes";
+import type { SceneContent, SceneLighting, SceneObject, FigurePose } from "@/api/domains/scenes";
 import { entityKeys, listEntities } from "@/api/domains/entities";
 import { CUSTOM_PRESET, presetById, presetGroups } from "./lighting";
-import { Num, Vector, Tool } from "./SceneControls";
+import { Num, Vector, Tool, Pick } from "./SceneControls";
 import { duplicateObject, groupPath, groupTargets, makeObject, moveToGroup } from "./sceneGraph";
+import { MANNEQUIN_POSES, MANNEQUIN_POSE_ORDER } from "./mannequin/mannequinPoses";
+import { poseFromMannequin } from "./mannequin/mannequinRig";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { formatCombo } from "@/lib/shortcuts";
@@ -85,6 +87,9 @@ export function SceneInspector({
                 value={object.entity_id ?? null}
                 onChange={(entity_id) => objectPatch(object.id, { entity_id })}
               />
+            )}
+            {object.kind === "figure" && (
+              <FigurePoseSection object={object} objectPatch={objectPatch} />
             )}
             <div className="scene-actions">
               <Tool
@@ -162,15 +167,18 @@ export function SceneInspector({
                   ] as const
                 )
                   .filter((k) =>
-                    k === "radius"
-                      ? ["sphere", "cylinder"].includes(object.kind)
-                      : k === "steps"
-                        ? object.kind === "stairs"
-                        : k.startsWith("door")
-                          ? object.kind === "room"
-                          : k === "height"
-                            ? !["sphere", "plane"].includes(object.kind)
-                            : !["sphere", "cylinder"].includes(object.kind),
+                    // figure 的几何由关节层级(mannequinRig)定,只有「身高」缩放它;肩宽/厚度不再单独调。
+                    object.kind === "figure"
+                      ? k === "height"
+                      : k === "radius"
+                        ? ["sphere", "cylinder"].includes(object.kind)
+                        : k === "steps"
+                          ? object.kind === "stairs"
+                          : k.startsWith("door")
+                            ? object.kind === "room"
+                            : k === "height"
+                              ? !["sphere", "plane"].includes(object.kind)
+                              : !["sphere", "cylinder"].includes(object.kind),
                   )
                   .map((k) => (
                     <Num
@@ -344,6 +352,71 @@ function FigureCast({ workspaceId, value, onChange }: {
         </SelectContent>
       </Select>
     </label>
+  );
+}
+
+/** 姿势预设键 → 文案键。选中 figure 时能一键套站/走/坐/蹲/举手。 */
+const POSE_LABELS: Record<(typeof MANNEQUIN_POSE_ORDER)[number], MessageKey> = {
+  stand: "sceneMannequinPoseStand",
+  walk: "sceneMannequinPoseWalk",
+  sit: "sceneMannequinPoseSit",
+  squat: "sceneMannequinPoseSquat",
+  armsUp: "sceneMannequinPoseArmsUp",
+};
+
+/** 当前 pose 是不是某张预设(应用预设存的就是那张表本身,所以逐项对得上就是)。 */
+function posePreset(pose: FigurePose | null | undefined): string | null {
+  if (!pose) return null;
+  const angles = pose.angles ?? {};
+  for (const key of MANNEQUIN_POSE_ORDER) {
+    const preset = MANNEQUIN_POSES[key];
+    const want = preset.angles;
+    if (Object.keys(want).length !== Object.keys(angles).length) continue;
+    if (!Object.entries(want).every(([name, value]) => {
+      const got = angles[name];
+      return got && value.every((v, i) => Math.abs(v - got[i]) < 0.5);
+    })) continue;
+    if ((pose.hips_drop ?? 0) !== (preset.hipsDrop ?? 0)) continue;
+    return key;
+  }
+  return null;
+}
+
+/** figure 的姿势:一键套预设(复用 mannequinPoses 的 5 张表),写回 `object.pose`;复位 = 清空回直立默认。 */
+function FigurePoseSection({
+  object,
+  objectPatch,
+}: {
+  object: SceneObject;
+  objectPatch: (id: string, patch: Partial<SceneObject>) => void;
+}) {
+  const t = useI18n();
+  const current = posePreset(object.pose);
+  return (
+    <SceneSubsection expanded title={t("sceneMannequinPosePreset")}>
+      <Pick
+        label={t("sceneMannequinPosePreset")}
+        value={current ?? "custom"}
+        options={[
+          ...MANNEQUIN_POSE_ORDER.map((key): [string, string] => [key, t(POSE_LABELS[key])]),
+          ["custom", t("sceneMannequinPoseCustom")],
+        ]}
+        onChange={(key) => {
+          if (key === "custom") return;
+          const preset = MANNEQUIN_POSES[key];
+          if (preset) objectPatch(object.id, { pose: poseFromMannequin(preset) });
+        }}
+        size="sm"
+      />
+      <div className="scene-actions">
+        <Tool
+          label={t("sceneMannequinReset")}
+          onClick={() => objectPatch(object.id, { pose: null })}
+        >
+          <RotateCcw size={15} />
+        </Tool>
+      </div>
+    </SceneSubsection>
   );
 }
 

@@ -72,11 +72,28 @@ class Test机位和前端同一套插值:
 
 
 class Test几何和工作台一样:
-    def test_人物有多高就是多高(self) -> None:
+    def test_人物是十九关节的可摆姿态人形(self) -> None:
+        # 默认直立:脚底贴地(脚盒子略抬 3.7cm)、头顶 ~1.76(mannequinRig 的比例,头略高出 nominal 身高)。
         figure = SceneObject(id="f", kind="figure", parameters={"height": 1.7, "width": 0.42, "depth": 0.22})
-        top = max(mesh.vertices[:, 1].max() for mesh in meshes_for(figure))
-        bottom = min(mesh.vertices[:, 1].min() for mesh in meshes_for(figure))
-        assert top == pytest.approx(1.7, abs=1e-6) and bottom == pytest.approx(0, abs=1e-6)
+        meshes = meshes_for(figure)
+        assert len(meshes) == 19
+        top = max(mesh.vertices[:, 1].max() for mesh in meshes)
+        bottom = min(mesh.vertices[:, 1].min() for mesh in meshes)
+        assert top == pytest.approx(1.7642, abs=1e-4)
+        assert 0 <= bottom <= 0.05
+
+    def test_人物姿态写进场景_FK_转得动(self) -> None:
+        from app.domain.scenes.render.meshes import meshes_for as _m
+        figure = SceneObject(id="f", kind="figure", parameters={"height": 1.7},
+                             pose={"angles": {"upperArmL": [0, 0, 152], "upperArmR": [0, 0, -152]}})
+        arms_up = _m(figure)
+        standing = _m(SceneObject(id="f", kind="figure", parameters={"height": 1.7}))
+        up_top = max(mesh.vertices[:, 1].max() for mesh in arms_up)
+        up_wide = max(mesh.vertices[:, 0].max() for mesh in arms_up)
+        stand_wide = max(mesh.vertices[:, 0].max() for mesh in standing)
+        assert up_top > 1.8  # 手举过了头
+        assert up_wide > stand_wide  # 举手撑宽了包围盒
+
 
     def test_房间是地面加四面墙和两道门楣(self) -> None:
         room = SceneObject(id="r", kind="room")

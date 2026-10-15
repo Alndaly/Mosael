@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.domain.scenes.types import SceneObject
+from app.domain.scenes.types import FigurePose, SceneObject
 
 #: 这几种没有可见几何:相机不拍自己(前端标了 editorOnly),分组只是容器,灯另算光照。
 NO_GEOMETRY = {"camera", "group", "light"}
@@ -124,6 +124,53 @@ def capsule(radius: float, length: float, radial: int = 12, cap: int = 4,
     return _mesh(vertices, faces, offset, scale)
 
 
+def _rotation(degrees: tuple[float, float, float]) -> np.ndarray:
+    """three.js 欧拉角 'XYZ' 顺序:R = Rx · Ry · Rz(和 render.__init__ 的 _rotation 同一份约定)。"""
+    x, y, z = (math.radians(v) for v in degrees)
+    rx = np.array([[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]])
+    ry = np.array([[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]])
+    rz = np.array([[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]])
+    return rx @ ry @ rz
+
+
+def _local_matrix(position, rotation_deg, scale=(1.0, 1.0, 1.0)) -> np.ndarray:
+    """three.js Object3D 的局部变换:T(position) · R(rotation) · S(scale)。"""
+    matrix = np.eye(4)
+    matrix[:3, :3] = _rotation(rotation_deg) * np.asarray(scale, dtype=np.float64)[None, :]
+    matrix[:3, 3] = np.asarray(position, dtype=np.float64)
+    return matrix
+
+
+#: 关节层级(名字 → 父关节),和前端 mannequinRig.createMannequin 的 pivot 层级一致。
+_JOINT_PARENTS = {
+    "hips": None, "spine": "hips", "chest": "spine", "neck": "chest", "head": "neck",
+    "shoulderL": "chest", "upperArmL": "shoulderL", "forearmL": "upperArmL", "handL": "forearmL",
+    "shoulderR": "chest", "upperArmR": "shoulderR", "forearmR": "upperArmR", "handR": "forearmR",
+    "thighL": "hips", "shinL": "thighL", "footL": "shinL",
+    "thighR": "hips", "shinR": "thighR", "footR": "shinR",
+}
+
+#: 关节在父级局部坐标里的位置(未缩放,s=1)。左(L)在 +X 侧、面朝 +Z,和前端 pivot() 一致。
+_JOINT_OFFSETS = {
+    "hips": (0.0, 0.95, 0.0), "spine": (0.0, 0.15, 0.0), "chest": (0.0, 0.2, 0.0),
+    "neck": (0.0, 0.18, 0.0), "head": (0.0, 0.06, 0.0),
+    "shoulderL": (0.1, 0.16, 0.0), "upperArmL": (0.11, 0.0, 0.0),
+    "forearmL": (0.0, -0.23, 0.0), "handL": (0.0, -0.21, 0.0),
+    "shoulderR": (-0.1, 0.16, 0.0), "upperArmR": (-0.11, 0.0, 0.0),
+    "forearmR": (0.0, -0.23, 0.0), "handR": (0.0, -0.21, 0.0),
+    "thighL": (0.105, -0.03, 0.0), "shinL": (0.0, -0.4, 0.0), "footL": (0.0, -0.4, 0.0),
+    "thighR": (-0.105, -0.03, 0.0), "shinR": (0.0, -0.4, 0.0), "footR": (0.0, -0.4, 0.0),
+}
+
+#: 关节的建造顺序(父在子前)。
+_JOINT_ORDER = [
+    "hips", "spine", "chest", "neck", "head",
+    "shoulderL", "upperArmL", "forearmL", "handL",
+    "shoulderR", "upperArmR", "forearmR", "handR",
+    "thighL", "shinL", "footL", "thighR", "shinR", "footR",
+]
+
+
 def meshes_for(obj: SceneObject) -> list[Mesh]:
     """这个物体在它自己的坐标系里的全部几何。"""
     p = obj.parameters
@@ -157,7 +204,7 @@ def meshes_for(obj: SceneObject) -> list[Mesh]:
             for i in range(p.steps)
         ]
     if kind == "figure":
-        return _figure(p.height, max(p.width, 0.2), max(p.depth, 0.12))
+        return _figure(p.height, pose=obj.pose)
     if kind == "table":
         top = min(0.06, p.height * 0.1)
         leg = min(0.08, min(p.width, p.depth) * 0.09)
@@ -170,16 +217,55 @@ def meshes_for(obj: SceneObject) -> list[Mesh]:
     return []
 
 
-def _figure(h: float, shoulders: float, thickness: float) -> list[Mesh]:
-    """人物:给构图当尺子的概括人形。比例和前端一模一样(1.7 米人体的常见分法)。"""
-    head_r, leg_h, torso_h, arm_h = h * 0.066, h * 0.47, h * 0.33, h * 0.36
-    return [
-        capsule(thickness * 0.42, leg_h - thickness * 0.84, offset=(-shoulders * 0.22, leg_h / 2, 0)),
-        capsule(thickness * 0.42, leg_h - thickness * 0.84, offset=(shoulders * 0.22, leg_h / 2, 0)),
-        capsule(thickness * 0.62, torso_h - thickness * 1.24, radial=14,
-                offset=(0, leg_h + torso_h / 2, 0), scale=(shoulders / (thickness * 1.24), 1, 1)),
-        capsule(thickness * 0.3, arm_h - thickness * 0.6, offset=(-shoulders * 0.62, leg_h + torso_h - arm_h / 2, 0)),
-        capsule(thickness * 0.3, arm_h - thickness * 0.6, offset=(shoulders * 0.62, leg_h + torso_h - arm_h / 2, 0)),
-        capsule(head_r * 0.4, head_r * 0.6, offset=(0, leg_h + torso_h + head_r * 0.3, 0)),
-        sphere(head_r, offset=(0, h - head_r, 0)),
+def _figure(h: float, pose: FigurePose | None) -> list[Mesh]:
+    """可摆姿态的人形:**19 关节 FK 层级**,和前端 `mannequinRig.createMannequin` 逐项一致。
+
+    默认(`pose` 为 None)= 直立站姿;给了 pose 就按它的角度表转每个关节(子随父动 = FK),
+    再把髋部往下沉 `hips_drop`。比例全部从 `height` 推(s = height / 1.7),肩宽/厚度不再单独
+    参数化 —— 原来那个「固定站姿 + width/depth」的 figure 换成关节版,默认看着仍是同一个站立人形。
+
+    旋转约定:四肢段沿 -Y 下垂、面朝 +Z,欧拉角按 XYZ 序(和 three.js `Object3D.rotation` 一样)。
+    """
+
+    s = h / 1.7
+    angles = pose.angles if pose else {}
+    hips_drop = pose.hips_drop if pose else 0.0
+
+    worlds: dict[str, np.ndarray] = {}
+    for name in _JOINT_ORDER:
+        ox, oy, oz = _JOINT_OFFSETS[name]
+        if name == "hips":
+            oy -= hips_drop
+        local = _local_matrix((ox * s, oy * s, oz * s), angles.get(name, (0.0, 0.0, 0.0)))
+        parent = _JOINT_PARENTS[name]
+        worlds[name] = worlds[parent] @ local if parent else local
+
+    def placed(joint: str, base: Mesh, position, rotation=(0.0, 0.0, 0.0), scale=(1.0, 1.0, 1.0)) -> Mesh:
+        matrix = worlds[joint] @ _local_matrix(position, rotation, scale)
+        vertices = np.concatenate([base.vertices, np.ones((len(base.vertices), 1))], axis=1) @ matrix.T
+        return Mesh(vertices[:, :3], base.faces, base.color, base.metalness)
+
+    def seg(joint: str, radius: float, length: float, y: float, sx: float = 1.0, sz: float = 1.0) -> Mesh:
+        return placed(joint, capsule(radius * s, length * s, radial=14), (0.0, y * s, 0.0), scale=(sx, 1.0, sz))
+
+    parts: list[Mesh] = [
+        seg("hips", 0.135, 0.1, 0.03, 1.2, 0.85),  # 骨盆
+        seg("spine", 0.125, 0.16, 0.09, 1.1, 0.8),  # 腰段
+        seg("chest", 0.15, 0.18, 0.09, 1.3, 0.78),  # 胸廓
+        seg("neck", 0.05, 0.06, 0.03),  # 脖子
     ]
+    # 头:一个球,略拉长。
+    parts.append(placed("head", sphere(0.115 * s), (0.0, 0.1 * s, 0.0), scale=(0.92, 1.08, 0.98)))
+    for side, sign in (("L", 1.0), ("R", -1.0)):
+        # 锁骨:横躺的小胶囊(绕 Z 转 90°),连到上臂根。
+        parts.append(placed(f"shoulder{side}", capsule(0.045 * s, 0.08 * s, radial=10),
+                            (sign * 0.055 * s, 0.0, 0.0), rotation=(0.0, 0.0, 90.0)))
+        parts.append(seg(f"upperArm{side}", 0.055, 0.17, -0.115))
+        parts.append(seg(f"forearm{side}", 0.047, 0.15, -0.1))
+        parts.append(seg(f"hand{side}", 0.05, 0.09, -0.065))
+    for side, sign in (("L", 1.0), ("R", -1.0)):
+        parts.append(seg(f"thigh{side}", 0.085, 0.27, -0.19))
+        parts.append(seg(f"shin{side}", 0.063, 0.27, -0.18))
+        parts.append(placed(f"foot{side}", box(0.095 * s, 0.07 * s, 0.23 * s, 0, 0, 0),
+                            (0.0, -0.048 * s, 0.055 * s)))
+    return parts

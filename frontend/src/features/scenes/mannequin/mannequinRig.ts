@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+import type { FigurePose } from "@/api/domains/scenes";
+
 /**
  * 程序化内置人偶:three.js 图元拼的、关节分层的摆姿势模型。**零外部资产** —— 素材全在代码里。
  *
@@ -60,6 +62,25 @@ export type MannequinPose = {
   hipsDrop?: number;
 };
 
+/**
+ * 场景对象里的 pose(见 api/domains/scenes.FigurePose)→ 人偶姿势表:`hips_drop` 蛇形换驼峰。
+ * 人偶代码内部用驼峰 `hipsDrop`;场景数据持久化用蛇形(和 entity_id、model_id 一样)。
+ */
+export function poseToMannequin(pose: FigurePose | null | undefined): MannequinPose {
+  return {
+    angles: (pose?.angles ?? {}) as MannequinPose["angles"],
+    hipsDrop: pose?.hips_drop ?? 0,
+  };
+}
+
+/** 人偶姿势表 → 场景对象的 pose(髋没下沉就不写那个键)。 */
+export function poseFromMannequin(pose: MannequinPose): FigurePose {
+  return {
+    angles: pose.angles as Record<string, [number, number, number]>,
+    ...(pose.hipsDrop ? { hips_drop: pose.hipsDrop } : {}),
+  };
+}
+
 export type MannequinRig = {
   /** 人偶根(脚底在 y=0,面朝 +Z)。挂进场景、传给快照渲染都用它。 */
   root: THREE.Group;
@@ -80,9 +101,13 @@ export const MANNEQUIN_HEIGHT = 1.7;
 /** 木头人偶的哑光色:暖木色,粗糙度拉高,没有高光点,关节走向读得清。 */
 export const MANNEQUIN_MATERIAL = { color: 0xc59a68, roughness: 0.82, metalness: 0.02 };
 
-export function createMannequin(height = MANNEQUIN_HEIGHT): MannequinRig {
+export function createMannequin(
+  height = MANNEQUIN_HEIGHT,
+  material?: THREE.MeshStandardMaterial,
+): MannequinRig {
   const s = height / MANNEQUIN_HEIGHT;
-  const material = new THREE.MeshStandardMaterial({
+  const ownsMaterial = material === undefined;
+  const materialFor = material ?? new THREE.MeshStandardMaterial({
     color: MANNEQUIN_MATERIAL.color,
     roughness: MANNEQUIN_MATERIAL.roughness,
     metalness: MANNEQUIN_MATERIAL.metalness,
@@ -121,7 +146,7 @@ export function createMannequin(height = MANNEQUIN_HEIGHT): MannequinRig {
     scaleZ = 1,
   ): THREE.Mesh {
     const geometry = new THREE.CapsuleGeometry(radius * s, length * s, 4, 14);
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(geometry, materialFor);
     mesh.position.y = y * s;
     mesh.scale.set(scaleX, 1, scaleZ);
     mesh.castShadow = true;
@@ -146,7 +171,7 @@ export function createMannequin(height = MANNEQUIN_HEIGHT): MannequinRig {
   const head = pivot("head", neck, 0, 0.06, 0);
   {
     const geometry = new THREE.SphereGeometry(0.115 * s, 24, 18);
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(geometry, materialFor);
     mesh.position.y = 0.1 * s;
     mesh.scale.set(0.92, 1.08, 0.98);
     mesh.castShadow = true;
@@ -164,7 +189,7 @@ export function createMannequin(height = MANNEQUIN_HEIGHT): MannequinRig {
     // 锁骨:横躺的小胶囊,连到上臂根。
     {
       const geometry = new THREE.CapsuleGeometry(0.045 * s, 0.08 * s, 4, 10);
-      const mesh = new THREE.Mesh(geometry, material);
+      const mesh = new THREE.Mesh(geometry, materialFor);
       mesh.rotation.z = Math.PI / 2;
       mesh.position.x = (sign * 0.055 * s);
       mesh.castShadow = true;
@@ -192,7 +217,7 @@ export function createMannequin(height = MANNEQUIN_HEIGHT): MannequinRig {
     const foot = pivot(`foot${side}` as MannequinJoint, shin, 0, -0.4, 0);
     {
       const geometry = new THREE.BoxGeometry(0.095 * s, 0.07 * s, 0.23 * s);
-      const mesh = new THREE.Mesh(geometry, material);
+      const mesh = new THREE.Mesh(geometry, materialFor);
       mesh.position.set(0, -0.048 * s, 0.055 * s);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -215,11 +240,11 @@ export function createMannequin(height = MANNEQUIN_HEIGHT): MannequinRig {
     root,
     joints,
     meshes,
-    material,
+    material: materialFor,
     jointOf,
     dispose: () => {
       geometries.forEach((geometry) => geometry.dispose());
-      material.dispose();
+      if (ownsMaterial) materialFor.dispose();
     },
   };
 }
