@@ -61,4 +61,25 @@ describe("粘贴一组节点", () => {
     const copy = pasteNodes(graph, clip, registry)!.graph.nodes.find((one) => one.id === "code-1")!;
     expect(copy.config).toEqual({ code: "print('{{llm-1.text}}')", input: { t: "{{llm-2.text}}" } });
   });
+
+  it("给了落点(鼠标处):整组左上角对齐到那,节点间相对位置原样保留;没给就按老习惯右下错开", () => {
+    const graph = { nodes: [node("start", "start")], edges: [] } as WorkflowGraph;
+    const clip = {
+      nodes: [
+        { ...node("a", "llm"), position: { x: 300, y: 200 } },
+        { ...node("b", "llm"), position: { x: 420, y: 260 } },
+      ],
+      edges: [],
+    };
+    // 落点 {x:1000,y:500}:组左上角(min 300,200)对齐到 (1000,500),两个节点各平移 (+700,+300)。
+    const pasted = pasteNodes(graph, clip, registry, { x: 1000, y: 500 })!;
+    const byId = new Map(pasted.graph.nodes.map((one) => [one.id, one]));
+    expect(byId.get("llm-1")!.position).toEqual({ x: 1000, y: 500 });
+    expect(byId.get("llm-2")!.position).toEqual({ x: 1120, y: 560 }); // 相对间距 (120,60) 原样保留
+
+    // 没给落点:退回原「右下错开 PASTE_OFFSET」。
+    const fallback = pasteNodes(graph, clip, registry)!;
+    const fb = new Map(fallback.graph.nodes.map((one) => [one.id, one]));
+    expect(fb.get("llm-1")!.position).toEqual({ x: 300 + 48, y: 200 + 48 });
+  });
 });

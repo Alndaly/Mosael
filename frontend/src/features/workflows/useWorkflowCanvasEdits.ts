@@ -42,6 +42,7 @@ export function useWorkflowCanvasEdits({
   canvasSurfaceRef,
   getCanvasInsets,
   workspaceId,
+  getPastePosition,
 }: Pick<
   WorkflowGraphState,
   "graph" | "setGraph" | "applyGraph" | "nodes" | "setNodes" | "setEdges" | "setDirty" | "canAddStart" | "selectedFlowIds"
@@ -54,6 +55,8 @@ export function useWorkflowCanvasEdits({
   canvasSurfaceRef: React.MutableRefObject<HTMLDivElement | null>;
   getCanvasInsets: () => CanvasViewportInsets;
   workspaceId: string;
+  /** 黏贴时的落点(画布坐标):鼠标此刻在画布上的位置;不在画布上(没动过鼠标)给 null,退回原错位。 */
+  getPastePosition?: () => { x: number; y: number } | null;
 }) {
   // ── 标记(位置书签)────────────────────────────────────────────────────────
   //: 一张几十个节点的图铺开之后,回到"上次在改的那块"要靠拖和缩放。标记把它变成按一下键。
@@ -162,7 +165,7 @@ export function useWorkflowCanvasEdits({
     return true;
   }, [nodes, graph]);
   const pasteClipboard = React.useCallback((): boolean => {
-    const pasted = pasteNodes(graph, clipboardRef.current, registry);
+    const pasted = pasteNodes(graph, clipboardRef.current, registry, getPastePosition?.() ?? null);
     if (!pasted) return false;
     // 让下次 Cmd+V 继续向右下错开,避免层层重叠。
     clipboardRef.current = pasted.clip;
@@ -173,7 +176,7 @@ export function useWorkflowCanvasEdits({
     setEdges(toWorkflowFlowEdges(pasted.graph, t, registry));
     setDirty(true);
     return true;
-  }, [graph, registry]);
+  }, [graph, registry, getPastePosition]);
 
   // Cmd/Ctrl+C 复制选中节点,Cmd/Ctrl+V 粘贴,Cmd/Ctrl+G 把选中的折叠成子图;
   // 输入框 / 代码编辑器里不劫持(交给系统复制粘贴)。

@@ -61,6 +61,8 @@ export function pasteNodes(
   graph: WorkflowGraph,
   clip: NodeClip,
   registry: RegistryLike,
+  /** 黏贴落点(画布坐标):给了就把整组节点的**左上角**挪到那,没给就按老习惯从原位置右下错开。 */
+  at?: { x: number; y: number } | null,
 ): { graph: WorkflowGraph; pastedIds: string[]; clip: NodeClip } | null {
   const freshId = idAllocator(graph);
   const idMap = new Map<string, string>();
@@ -69,9 +71,14 @@ export function pasteNodes(
     idMap.set(node.id, freshId(node.type));
   }
   if (idMap.size === 0) return null;
+  // 成组节点的左上角(粘进多个时当一整个搬):给了落点就把这个角对齐到鼠标,相对位置原样保留。
+  const minX = Math.min(...clip.nodes.map((node) => node.position?.x ?? 0));
+  const minY = Math.min(...clip.nodes.map((node) => node.position?.y ?? 0));
+  const dx = at ? at.x - minX : PASTE_OFFSET;
+  const dy = at ? at.y - minY : PASTE_OFFSET;
   const shift = (node: WNode): WNode["position"] => ({
-    x: (node.position?.x ?? 0) + PASTE_OFFSET,
-    y: (node.position?.y ?? 0) + PASTE_OFFSET,
+    x: (node.position?.x ?? 0) + dx,
+    y: (node.position?.y ?? 0) + dy,
   });
   const newNodes = clip.nodes
     .filter((node) => idMap.has(node.id))

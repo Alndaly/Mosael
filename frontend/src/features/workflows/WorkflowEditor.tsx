@@ -213,6 +213,13 @@ export function WorkflowEditor({
   const [dragging, setDragging] = React.useState(false);
   const rfRef = React.useRef<ReactFlowInstance | null>(null);
   const canvasSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  // 黏贴节点落在鼠标处:画布上最近一次 pointer 的屏幕坐标(画布 div 的 onMouseMove 里刷),黏贴时换成画布坐标。
+  const pasteMouseRef = React.useRef<{ x: number; y: number } | null>(null);
+  /** 黏贴落点(画布坐标):鼠标此刻在画布上的位置;没进过画布(鼠标没动过)给 null,退回原「右下错开」。 */
+  const getPastePosition = React.useCallback(
+    () => (pasteMouseRef.current && rfRef.current ? rfRef.current.screenToFlowPosition(pasteMouseRef.current) : null),
+    [],
+  );
   /** 整块编辑器(工具条 + 画布 + 检查器)。删除键只认从这里面发出的按键,见 isCanvasKeyTarget。 */
   const editorRef = React.useRef<HTMLDivElement | null>(null);
   const agentPanelRef = React.useRef<HTMLDivElement | null>(null);
@@ -334,6 +341,7 @@ export function WorkflowEditor({
     canvasSurfaceRef,
     getCanvasInsets,
     workspaceId,
+    getPastePosition,
   });
 
   const { save, pendingSaveRef, adoptServerWorkflow } = useWorkflowSave({
@@ -624,6 +632,9 @@ export function WorkflowEditor({
           //: 而 bg-panel 是「一块面板」。用两种底色的话,在两页之间切换会觉得走进了另一个应用。
           className="relative min-h-0 overflow-hidden bg-background"
           {...canvasDrop.handlers}
+          onMouseMove={(event) => {
+            pasteMouseRef.current = { x: event.clientX, y: event.clientY };
+          }}
           onDrop={(event) => {
             // 落点要在这一刻算 —— 只有事件里才有鼠标位置。存进 ref 给上面那个回调用。
             const instance = rfRef.current;
