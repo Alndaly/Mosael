@@ -2,7 +2,7 @@
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { forgetCanvases, installPixelCanvas, pixelOf } from "@/test/pixelCanvasSetup";
+import { forgetCanvases, installPixelCanvas, pixelOf, type PixelCanvas } from "@/test/pixelCanvasSetup";
 import { loadUnderlay, pixelHarness, type PixelHarness } from "@/test/maskEditorPixels";
 import { createMaskWriter } from "@/lib/maskPixels";
 
@@ -85,17 +85,11 @@ async function press(harness: PixelHarness, name: string) {
  * 把「笔刷硬度」推到 100%。
  *
  * 默认 90% 的笔刷是**一串径向渐变** —— 笔迹边缘是中间灰(实测 30 / 89 / 145 这些值),
- * 于是"蒙版那点是 255"这种断言会随机红。推到 100% 走的是实心那一条(`hardness >= 0.99`),
- * 笔迹就只有 0 和 255。
+ * 于是"蒙版那点是 255"这种断言会随机红。推到 100% 走的是实心那一条(`HARD_EDGE`),
+ * 笔迹就只有 0 和 255(同一个判据也是那个圈变硬的判据)。
  */
 async function hardBrush(harness: PixelHarness) {
-  //: radix 的滑块没有 `aria-label`,名字来自外面那个 `<label>` —— 按 `role="slider"` 的名字查不到,
-  //: 只能按那口 `aria-valuemax` 认(硬度是 0..1 的那一根)。
-  const slider = harness
-    .scope()
-    .getAllByRole("slider")
-    .find((one: HTMLElement) => one.getAttribute("aria-valuemax") === "1") as HTMLElement | undefined;
-  if (!slider) throw new Error("没有找到硬度滑块");
+  const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "1", "硬度");
   slider.focus();
   for (let i = 0; i < 20; i += 1) {
     fireEvent.keyDown(slider, { key: "ArrowRight", bubbles: true, cancelable: true });
@@ -104,19 +98,42 @@ async function hardBrush(harness: PixelHarness) {
   expect(slider.getAttribute("aria-valuenow")).toBe("1");
 }
 
+/**
+ * 按 `aria-valuemin` / `aria-valuemax` 认一根滑块。
+ *
+ * radix 的滑块没有 `aria-label`(名字来自外面那个 `<label>`),按 `role="slider"` 的名字查不到 ——
+ * 只能按这两口数字认:硬度 0..1、羽化 0..64、扩张 −64..64、笔刷大小 2..400。
+ */
+function sliderWith(harness: PixelHarness, match: (one: HTMLElement) => boolean, what: string): HTMLElement {
+  const found = harness.scope().getAllByRole("slider").find((one: HTMLElement) => match(one)) as HTMLElement | undefined;
+  if (!found) throw new Error(`没有找到${what}滑块`);
+  return found;
+}
+
+/** 一根滑块按 `times` 下方向键(每一档一下)。 */
+async function stepSlider(slider: HTMLElement, key: "ArrowRight" | "ArrowLeft", times: number) {
+  slider.focus();
+  for (let i = 0; i < times; i += 1) fireEvent.keyDown(slider, { key, bubbles: true, cancelable: true });
+  await flush();
+}
+
 /** 把「羽化」滑块推到 `steps`(它是 0..64 那一根;「扩张」是 −64..64)。 */
 async function featherBy(harness: PixelHarness, steps: number) {
-  const slider = harness
-    .scope()
-    .getAllByRole("slider")
-    .find((one: HTMLElement) => one.getAttribute("aria-valuemax") === "64" && one.getAttribute("aria-valuemin") === "0") as
-    | HTMLElement
-    | undefined;
-  if (!slider) throw new Error("没有找到羽化滑块");
-  slider.focus();
-  for (let i = 0; i < steps; i += 1) fireEvent.keyDown(slider, { key: "ArrowRight", bubbles: true, cancelable: true });
-  await flush();
+  const slider = sliderWith(
+    harness,
+    (one) => one.getAttribute("aria-valuemax") === "64" && one.getAttribute("aria-valuemin") === "0",
+    "羽化",
+  );
+  await stepSlider(slider, "ArrowRight", steps);
   expect(slider.getAttribute("aria-valuenow")).toBe(String(steps));
+}
+
+/** 把「扩张 / 收缩」滑块推到 `target`(−64..64,按当前值算出要按几下)。 */
+async function setGrow(harness: PixelHarness, target: number) {
+  const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemin") === "-64", "扩张");
+  const from = Number(slider.getAttribute("aria-valuenow"));
+  await stepSlider(slider, target >= from ? "ArrowRight" : "ArrowLeft", Math.abs(target - from));
+  expect(slider.getAttribute("aria-valuenow")).toBe(String(target));
 }
 
 /** 拖一笔:按下 → 移动 → 松手,每一步之间让 React 冲一次。 */
@@ -507,5 +524,271 @@ describe("写入口那道闸:组件之外也绕不过去", () => {
     //: 新文档整张仍然是黑底(旧快照那 64 个像素没有资格改写它)。
     expect([...data.slice(0, 4)]).toEqual([0, 0, 0, 255]);
     expect(data.length).toBe(96 * 120 * 4);
+  });
+});
+
+/** 一张画布上"亮"(要改)的那些像素:个数 + 包围盒。预览变了没有,看的就是它们。 */
+function brightStats(pixels: PixelCanvas): { count: number; bounds: { left: number; top: number; right: number; bottom: number } | null } {
+  const data = pixels.pixels.data;
+  let count = 0;
+  let left = Infinity;
+  let top = Infinity;
+  let right = -1;
+  let bottom = -1;
+  for (let at = 0; at < data.length; at += 4) {
+    if (data[at] === 0) continue;
+    count += 1;
+    const index = at >> 2;
+    const x = index % pixels.width;
+    const y = Math.floor(index / pixels.width);
+    left = Math.min(left, x);
+    top = Math.min(top, y);
+    right = Math.max(right, x);
+    bottom = Math.max(bottom, y);
+  }
+  return { count, bounds: right < 0 ? null : { left, top, right, bottom } };
+}
+
+function brightBounds(pixels: PixelCanvas): { left: number; top: number; right: number; bottom: number } {
+  const { bounds } = brightStats(pixels);
+  if (!bounds) throw new Error("这张画布上一个亮的像素都没有 —— 这一笔没画上去?");
+  return bounds;
+}
+
+/** 某一「行」里最左边那个亮的像素 —— 笔迹是一坨(圆点串),包围盒的左沿未必落在中间那一行。 */
+function leftmostInRow(pixels: PixelCanvas, row: number): number {
+  for (let x = 0; x < pixels.width; x += 1) if (pixels.pixels.data[(row * pixels.width + x) * 4] !== 0) return x;
+  throw new Error(`第 ${row} 行没有亮的像素`);
+}
+
+/** 指针那个圈(纯显示、不接指针 —— 只能按 data 属性找它)。 */
+function brushRing(): HTMLElement {
+  const found = document.querySelector<HTMLElement>("[data-mask-brush-ring]");
+  if (!found) throw new Error("没有找到指针那个圈");
+  return found;
+}
+
+/**
+ * 圈上那几个渐变色标的百分比 —— 软边的**形状**就是它:硬核到哪一格、外沿在哪。
+ *
+ * 去重 + 排序:圈的填充是**深浅两层**同一条曲线(见 brushRingFill),每一层各报一遍那两个色标
+ * (0 / 硬核 / 100);断言要的是"硬核到哪一格",不是"写了几层"。
+ */
+function ringStops(): number[] {
+  return [...new Set([...brushRing().style.background.matchAll(/([\d.]+)%/g)].map((one) => Number(one[1])))].sort(
+    (left, right) => left - right,
+  );
+}
+
+/** 指针挪到文档坐标 (x,y)(这一座里盒子 = 文档,所以它同时是屏幕坐标)。 */
+function hover(harness: PixelHarness, x: number, y: number) {
+  fireEvent.pointerMove(harness.view(), { ...at(harness, x, y), pointerId: 1, buttons: 0 });
+}
+
+/**
+ * ## 笔刷硬度 → 指针那个圈(维护者:「笔刷硬度…在 UI 上没有体现」)
+ *
+ * 圈此前是一道写死的 1px 硬白边:硬度拖到 10% 和 100% 看上去一模一样,而画出来的笔迹一个是软边、
+ * 一个是硬边。现在它的**填充**就是 `paintLine` 会画出来的那条曲线(内圈硬核到 `radius × hardness`,
+ * 外面渐隐到半径)—— 两处共用同一个 `HARD_EDGE` 判据,不会分叉。
+ *
+ * 这几条只断言**圈的样子**:蒙版的像素一个都不该因此改变。
+ */
+describe("笔刷硬度 → 指针那个圈", () => {
+  it("硬度 = 1:圈是硬边 —— 整块实心,没有渐变", async () => {
+    const harness = await open();
+    hover(harness, 30, 40);
+    expect(brushRing().hidden, "指针在画布上、工具是画笔 ⇒ 圈该在").toBe(false);
+    expect(brushRing().style.width, "直径 = 笔刷大小 × 相机缩放(这里都是 1)").toBe("48px");
+
+    await hardBrush(harness);
+    expect(brushRing().hidden).toBe(false);
+    const fill = brushRing().style.background;
+    expect(fill, "硬边的圈必须有填充(空串 = 圈又变回一条什么也说不出的边)").not.toBe("");
+    expect(fill, "硬度 1 = 利落硬边:没有软的那一段").not.toContain("radial-gradient");
+    expect(ringStops(), "没有渐变就没有百分比色标").toEqual([]);
+  });
+
+  it("硬度 < 1:圈带软边 —— 硬核到 hardness 那一档,外圈渐隐(不用等下一次移动)", async () => {
+    const harness = await open();
+    hover(harness, 30, 40);
+    await hardBrush(harness);
+    expect(brushRing().style.background).not.toContain("radial-gradient");
+
+    //: 从 100% 往左退 10 档 = 50%。**这中间指针一次都没动** —— 滑块一拖圈就得跟着变。
+    const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "1", "硬度");
+    await stepSlider(slider, "ArrowLeft", 10);
+    expect(slider.getAttribute("aria-valuenow")).toBe("0.5");
+
+    expect(brushRing().style.background).toContain("radial-gradient");
+    expect(ringStops(), "0% → 硬核 50% → 100% 渐隐到边").toEqual([0, 50, 100]);
+    //: 圈的大小和位置没被这一下动过(改的只是软硬)。
+    expect(brushRing().style.width).toBe("48px");
+  });
+
+  it("笔刷大小与指针位置:圈立刻跟着变", async () => {
+    const harness = await open();
+    hover(harness, 30, 40);
+    expect(brushRing().style.transform).toBe("translate(6px, 16px)");
+
+    hover(harness, 50, 60);
+    expect(brushRing().style.transform, "圈跟着指针走").toBe("translate(26px, 36px)");
+
+    //: 48 → 49(一档),**中间没有移动指针**:拖大小滑块也得当场反映。
+    await stepSlider(sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "400", "笔刷大小"), "ArrowRight", 1);
+    expect(brushRing().style.width).toBe("49px");
+    expect(brushRing().style.transform, "变大是往外长,圆心还在指针那一点").toBe("translate(25.5px, 35.5px)");
+  });
+
+  it("形状工具与平移:圈收起来(它不是形状的预览)", async () => {
+    const harness = await open();
+    await pick(harness, "矩形");
+    hover(harness, 30, 40);
+    expect(brushRing().hidden).toBe(true);
+
+    await pick(harness, "橡皮");
+    hover(harness, 30, 40);
+    expect(brushRing().hidden, "橡皮也有大小,圈该回来").toBe(false);
+  });
+});
+
+/**
+ * ## 扩张 / 羽化 → 画布上的预览副本(维护者:「边缘的扩张和羽化在 UI 上没有体现」)
+ *
+ * 这两根滑块此前只在点「应用到蒙版」那一刻才作用到蒙版:拖动时屏幕上**什么都没有**,用户是"点下去
+ * 才知道这一步长什么样"。现在待应用时显示层用一份**预览副本**(对当前蒙版算 `growMask` + `featherMask`),
+ * 真蒙版一个字节都不动 —— 所以下面每一条都同时钉两件事:可见画布上那个变化**在**,
+ * 而 `maskPixels()` 逐字节**没变**。
+ *
+ * 「显示底图」关掉之后可见画布上就只剩蒙版那一张(层表只剩 `mask`),断言的字节 = 屏幕上看到的那份。
+ */
+describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => {
+  /** 关掉「显示底图」:可见画布上只剩蒙版自己 —— 屏幕上是什么就是那一份的字节。 */
+  async function maskOnly(harness: PixelHarness) {
+    fireEvent.click(harness.scope().getByRole("switch", { name: "显示底图" }));
+    await flush();
+    await harness.settle();
+  }
+
+  /** 画一团白的(硬度 100%:笔迹只有 0 和 255,断言不用挑值)。 */
+  async function blob(harness: PixelHarness) {
+    await pick(harness, "笔刷");
+    await hardBrush(harness);
+    await drag(harness, [30, 40], [50, 60]);
+    await harness.settle();
+  }
+
+  /** 预览是 debounce 过的(拖完约 120ms 才算那一张):等它上屏,而不是"等 0 毫秒"。 */
+  async function previewShows(harness: PixelHarness, spot: [number, number]) {
+    await waitFor(() => expect(harness.sample(harness.view(), ...spot)[0], "预览没上屏").toBeGreaterThan(0));
+  }
+
+  it("扩张 +4:可见画布上那一圈长出来了,真蒙版逐字节没变;滑块归零就回到真蒙版", async () => {
+    const harness = await open();
+    await blob(harness);
+    await maskOnly(harness);
+
+    const blobBounds = brightBounds(harness.viewPixels());
+    const middle = Math.round((blobBounds.top + blobBounds.bottom) / 2);
+    const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
+    const before = brightStats(harness.viewPixels()).count;
+    expect(harness.sample(harness.view(), ...outside), "扩张之前:这一点在笔迹外").toEqual([0, 0, 0, 255]);
+    const maskBefore = [...harness.maskPixels().pixels.data];
+
+    await setGrow(harness, 4);
+    await previewShows(harness, outside);
+
+    // ① 预览在:屏幕上"要改"的那一块变大了。
+    expect(brightStats(harness.viewPixels()).count, "可见画布上的笔迹长出来了(预览)").toBeGreaterThan(before);
+    // ② 真蒙版一个字节都没动(预览只是一份喂给显示层的副本)。
+    expect([...harness.maskPixels().pixels.data], "预览不许碰真蒙版").toEqual(maskBefore);
+    expect(harness.sample(harness.mask(), ...outside)).toEqual([0, 0, 0, 255]);
+    expect(transparentInMask(harness)).toBe(0);
+
+    // ③ 滑块归零 ⇒ 屏幕上回到真蒙版(预览不是"留在那里"的一层)。
+    await setGrow(harness, 0);
+    await waitFor(() => expect(harness.sample(harness.view(), ...outside)).toEqual([0, 0, 0, 255]));
+    expect([...harness.maskPixels().pixels.data]).toEqual(maskBefore);
+  });
+
+  it("羽化 8:边两侧晕成灰的,真蒙版还是原来那条硬边、逐字节没变", async () => {
+    const harness = await open();
+    await blob(harness);
+    await maskOnly(harness);
+
+    const bounds = brightBounds(harness.viewPixels());
+    const middle = Math.round((bounds.top + bounds.bottom) / 2);
+    const edge: [number, number] = [leftmostInRow(harness.viewPixels(), middle), middle];
+    const outside: [number, number] = [edge[0] - 2, middle];
+    expect(harness.sample(harness.mask(), ...edge), "这一笔的边缘是硬边").toEqual([255, 255, 255, 255]);
+    expect(harness.sample(harness.mask(), ...outside)).toEqual([0, 0, 0, 255]);
+    const maskBefore = [...harness.maskPixels().pixels.data];
+
+    await featherBy(harness, 8);
+    await previewShows(harness, outside);
+
+    // ① 晕开的是**灰的**:边上不再是纯白,外面也不再是纯黑 —— 一眼看得出"这一步是羽化"。
+    const softOutside = harness.sample(harness.view(), ...outside)[0];
+    expect(softOutside).toBeLessThan(255);
+    const softEdge = harness.sample(harness.view(), ...edge)[0];
+    expect(softEdge).toBeGreaterThan(0);
+    expect(softEdge).toBeLessThan(255);
+    // ② 真蒙版:还是原来那条硬边,逐字节没变。
+    expect([...harness.maskPixels().pixels.data]).toEqual(maskBefore);
+    expect(harness.sample(harness.mask(), ...edge)).toEqual([255, 255, 255, 255]);
+    expect(harness.sample(harness.mask(), ...outside)).toEqual([0, 0, 0, 255]);
+    expect(transparentInMask(harness)).toBe(0);
+  });
+
+  it("待应用时又画了一笔:屏幕上不会停在一份旧副本上(副本按蒙版的版本过期)", async () => {
+    const harness = await open();
+    await blob(harness);
+    await maskOnly(harness);
+    await setGrow(harness, 4);
+    const bounds = brightBounds(harness.viewPixels());
+    const middle = Math.round((bounds.top + bounds.bottom) / 2);
+    await previewShows(harness, [leftmostInRow(harness.viewPixels(), middle) - 3, middle]);
+
+    //: 离那一坨远远地再来一笔 —— 刚上屏的那份副本里**没有它**(副本是按上一版蒙版算的)。
+    const spot: [number, number] = [10, 100];
+    expect(harness.sample(harness.view(), ...spot)).toEqual([0, 0, 0, 255]);
+    await drag(harness, spot, spot);
+    await waitFor(() =>
+      expect(harness.sample(harness.view(), ...spot)[0], "新的一笔没上屏 —— 屏幕停在一份旧副本上了").toBeGreaterThan(0),
+    );
+    expect(harness.sample(harness.mask(), ...spot)[0], "这一笔真的落在真蒙版上").toBeGreaterThan(0);
+  });
+
+  it("点「应用到蒙版」才写进真蒙版:写进去的正是刚才预览的那一份,而且一步撤销", async () => {
+    const harness = await open();
+    await blob(harness);
+    await maskOnly(harness);
+    const maskBefore = [...harness.maskPixels().pixels.data];
+    const paintedBefore = paintedInMask(harness);
+
+    await setGrow(harness, 4);
+    const bounds = brightBounds(harness.viewPixels());
+    const middle = Math.round((bounds.top + bounds.bottom) / 2);
+    const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
+    await previewShows(harness, outside);
+    const preview = [...harness.viewPixels().pixels.data];
+    expect([...harness.maskPixels().pixels.data], "还没点应用:真蒙版没动").toEqual(maskBefore);
+
+    await press(harness, "应用到蒙版");
+    await harness.settle();
+
+    // ① 真蒙版变了,而且写进去的正是预览里那一点。
+    expect(paintedInMask(harness), "真蒙版长出来了").toBeGreaterThan(paintedBefore);
+    expect(harness.sample(harness.mask(), ...outside)[0]).toBeGreaterThan(0);
+    expect(transparentInMask(harness)).toBe(0);
+    // ② 屏幕上正是刚才预览的那一份:应用之后**不会再预览一遍**(那会再多 4 个像素,一眼看得出)。
+    expect([...harness.viewPixels().pixels.data], "应用的结果 == 刚才的预览,没有二次扩张").toEqual(preview);
+
+    // ③ 一步撤销回到应用之前(那一步是「应用边缘」自己那一步,不是两笔)。
+    await press(harness, "撤销");
+    await harness.settle();
+    expect([...harness.maskPixels().pixels.data], "一步撤销回到应用之前").toEqual(maskBefore);
+    //: 撤销之后滑块还是 4,而这一版蒙版又没被写过 ⇒ 回到"待应用":屏幕上重新是同一份预览。
+    await waitFor(() => expect([...harness.viewPixels().pixels.data]).toEqual(preview));
   });
 });

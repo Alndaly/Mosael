@@ -127,6 +127,24 @@ import {
  * 「橡皮 = 写黑」也是这条不变量的一部分:蒙版没有 alpha 可用,"擦掉"在数据上只能是写黑;屏幕上
  * "擦完露出原图"由**底图那一层**负责。像素运算(反选 / 阈值 / 扩张 / 羽化)全在 `lib/maskPixels`,
  * 和后端由 `contracts/mask-cases.json` 逐字节钉住。
+ *
+ * ## 两个参数的**视觉反馈**(维护者:「笔刷硬度以及边缘的扩张和羽化在 UI 上没有体现」)
+ *
+ * 两处都只在**看**的那一头上加东西,蒙版那套像素契约一个字节都不动:
+ *
+ * | 参数 | 在哪看得出来 | 怎么做到 |
+ * | --- | --- | --- |
+ * | 笔刷硬度 | 跟随指针的那个圈 | 圈的填充就是 `paintLine` 会画出来的那条曲线(`brushRingFill`),拖滑块当场变 |
+ * | 扩张 / 羽化 | 看得见那画布上的**预览** | 显示层改喂一份**副本**(`renderEdgesPreview`),点「应用到蒙版」才写真蒙版 |
+ *
+ * 预览那份副本是**一次性算出来的画布**(`edgePreviewRef`):对当前蒙版 `read()` 一份像素、在拷贝上跑
+ * `growMask` + `featherMask`、`putImageData` 进它自己那张画布 —— 真蒙版那张从头到尾没人写。
+ * 它只喂给 `drawMaskView` 的 `mask` 层,所以「待应用」时用户看到的就是点下那个按钮会得到的样子
+ * (测试里两者逐字节相等)。两个判据管着它什么时候算、什么时候用:
+ *
+ * - **过期**:蒙版内容一变(`MaskWriter.revision`)或者参数一变,那份副本就作废,屏幕上先回到真蒙版;
+ * - **已经写进去了**:点过「应用到蒙版」的那一组参数在这一版蒙版上不再算"待应用"(`appliedEdgesRef`)
+ *   —— 少了这一条,应用之后屏幕会把它**再预览一遍**(又扩张 4 个像素,一眼看得出)。
  */
 
 /**
@@ -164,12 +182,38 @@ const BRUSH_MIN = 2;
 const BRUSH_MAX = 400;
 /** 扩张 / 羽化滑块的范围(文档像素)。 */
 const EDGE_MAX = 64;
+/**
+ * 「待应用」的扩张 / 羽化在屏幕上预览的那份副本,隔多久重算一次(毫秒)。
+ *
+ * 滑块拖一下、笔刷走一帧都会让这份副本过期,而重算是**整张**文档上的形态学 + 三遍盒式模糊
+ * (4096² 就是一千六百万像素)—— 每一帧都算的话,拖动会变成"卡住不动"。隔这么一段重算一次:
+ * 拖动期间屏幕上是真蒙版(新笔画立刻看得见),松手之后马上换成预览。
+ */
+const EDGE_PREVIEW_DELAY = 120;
+/**
+ * 硬度到了这一档以上就是"硬边"。
+ *
+ * **两处共用这一个数**:`paintLine` 画笔迹时走实心那一条,指针那个圈(`brushRingFill`)给整块平铺。
+ * 各写一个 0.99 迟早会分叉,而分叉的表现正是「圈看着是软的、画出来是硬的」—— 那比没有圈更糟。
+ */
+const HARD_EDGE = 0.99;
 const TAU = Math.PI * 2;
 const BLACK = "#000000";
 const WHITE = "#ffffff";
 /** 软边渐变的外圈。画布是不透明的,所以"往回混"就够了,不需要 destination-out。 */
 const FADE_WHITE = "rgba(255, 255, 255, 0)";
 const FADE_BLACK = "rgba(0, 0, 0, 0)";
+/**
+ * 指针那个圈里的**两层墨**:一深一浅,叠在同一块圆盘上。
+ *
+ * 只涂一层的话,蒙版画布上总有一半看不见它:底下是白(没画过的白蒙版、亮底图)时白墨没了,是黑时
+ * 黑墨没了。两层一起淡出去,那条软边在**任何底色**上都读得出来 —— 而"看得见"正是这个圈存在的理由。
+ * 两层都是低透明度:圈的**形状**才是信息,它自己不喧宾夺主。
+ */
+const RING_DARK = "rgba(0, 0, 0, 0.35)";
+const RING_LIGHT = "rgba(255, 255, 255, 0.45)";
+const RING_DARK_FADE = "rgba(0, 0, 0, 0)";
+const RING_LIGHT_FADE = "rgba(255, 255, 255, 0)";
 /** 上传时的文件名(素材名由后端起,见后端 domain/assets/masks.write_mask_asset)。 */
 const MASK_FILE_NAME = "mask.png";
 
@@ -301,7 +345,7 @@ function paintLine(
     const at = { x: from.x + ((to.x - from.x) * step) / steps, y: from.y + ((to.y - from.y) * step) / steps };
     ctx.beginPath();
     ctx.arc(at.x, at.y, radius, 0, TAU);
-    if (hardness >= 0.99 || radius <= 1) {
+    if (hardness >= HARD_EDGE || radius <= 1) {
       ctx.fillStyle = ink;
       ctx.fill();
       continue;
@@ -313,6 +357,29 @@ function paintLine(
     ctx.fillStyle = gradient;
     ctx.fill();
   }
+}
+
+/**
+ * 指针那个圈的**填充**:和 `paintLine` 的软边是**同一条曲线** —— 内圈到 `radius × hardness` 是实心硬核,
+ * 外面渐隐到半径那一圈(对应 `createRadialGradient(radius × hardness → radius)` 那两个色标)。
+ *
+ * 此前那个圈是一道写死的 1px 硬白边:硬度拖到 10% 和 100% 看上去一模一样,而画出来的笔迹一个软一个硬
+ * —— 维护者报的「笔刷硬度在 UI 上没有体现」正是这一条。现在拖硬度滑块,圈当场从"利落的一枚圆盘"
+ * 变成"中间实、边上晕开"。
+ *
+ * 判据和 `paintLine` 共用 `HARD_EDGE`(见那个常量的说明)。`hardness` 不是有限数时按硬边处理。
+ * 深浅两层一起给(理由见上面那两个常量);整串当 `background` 一次写进 DOM —— 只换一层的话,
+ * 底色一变就会剩下一半看不见。
+ */
+export function brushRingFill(hardness: number): string {
+  //: 硬边:两层都铺满,没有渐变可看(`linear-gradient(ink, ink)` 就是一整块纯色,只是能跟另一层并排写)。
+  if (!(hardness < HARD_EDGE)) {
+    return `linear-gradient(${RING_DARK}, ${RING_DARK}), linear-gradient(${RING_LIGHT}, ${RING_LIGHT})`;
+  }
+  const core = Math.round(Math.min(1, Math.max(0, hardness)) * 100);
+  //: `closest-side`:这个盒子是正圆(宽高都由 placeRing 写成同一个直径),所以它就是"到边的距离"。
+  const soft = (ink: string, fade: string) => `radial-gradient(closest-side, ${ink} 0%, ${ink} ${core}%, ${fade} 100%)`;
+  return `${soft(RING_DARK, RING_DARK_FADE)}, ${soft(RING_LIGHT, RING_LIGHT_FADE)}`;
 }
 
 /** 矩形 / 椭圆:一次填一块白的(拖动时每帧重画,所以看到的就是松手后的样子)。 */
@@ -499,6 +566,8 @@ export function MaskEditor({
   const frameRef = React.useRef<HTMLDivElement>(null);
   /** 笔刷的圈:跟着指针、按屏幕上的真实大小画(放大之后笔刷看上去也跟着大)。 */
   const ringRef = React.useRef<HTMLDivElement>(null);
+  /** 指针**上一次**在画布上的哪一点(CSS 像素):拖硬度 / 大小滑块时圈就在原地重画,不用等下次移动。 */
+  const ringPointRef = React.useRef<Point | null>(null);
   /** 正在画一笔:拖动期间不重量盒子(每一次量都要读版面,而拖动每秒几十次)。 */
   const drawingRef = React.useRef(false);
   /**
@@ -514,6 +583,21 @@ export function MaskEditor({
   });
   /** 合成可见那张画布时复用的一张离屏画布(蒙版的反相 / 着色,见 drawMaskView 的 maskLayer)。 */
   const scratchRef = React.useRef<HTMLCanvasElement | null>(null);
+  /**
+   * 「待应用」的扩张 / 羽化在屏幕上用的那份**预览副本**:`key` 说它是按哪一版蒙版、哪一组参数算的
+   * (见 `edgesKey`)。真蒙版那张从头到尾没人写它 —— 它只喂给 `drawMaskView` 的 `mask` 层。
+   */
+  const edgePreviewRef = React.useRef<{ canvas: HTMLCanvasElement; key: string } | null>(null);
+  /** 算那份副本的定时器(拖动 / 涂抹期间不每帧重算整张,见 EDGE_PREVIEW_DELAY)。 */
+  const edgeTimerRef = React.useRef<number | null>(null);
+  /**
+   * 哪一组扩张 / 羽化**已经写进**这一版蒙版了(`applyEdges` 之后记下来)。滑块还是那几个数,但屏幕上
+   * 不该再预览一遍 —— 否则"应用"之后会看到又扩张一次。
+   */
+  const appliedEdgesRef = React.useRef<{ revision: number; grow: number; feather: number } | null>(null);
+  /** `paint()` 是终身不变的那个函数(只读 ref),所以这两件事只能从 ref 里拿到最新那几个闭包。 */
+  const ringSyncRef = React.useRef<() => void>(() => undefined);
+  const previewSyncRef = React.useRef<() => void>(() => undefined);
   /** 底图像素(按亮度 / 按 alpha 初始化读的就是它)和那张图(画在看得见的画布上)。 */
   const underlayRef = React.useRef<Loaded | null>(null);
   /** 底稿:打开时已经有的那张蒙版 —— **灰度**的那种才会走到这里(见 isGrayscaleImage)。 */
@@ -570,6 +654,12 @@ export function MaskEditor({
 
   const showUnderlayRef = React.useRef(showUnderlay);
   const spaceRef = React.useRef(false);
+  /**
+   * 扩张 / 羽化的当前值。`paint()` / `displayedMask()` 是终身不变的那个闭包(见下面),它们只能从
+   * ref 里读到**这一刻**的参数 —— 直接读 state 的话拿到的是第一次渲染那一份。
+   */
+  const growRef = React.useRef(grow);
+  const featherRef = React.useRef(feather);
 
   /** 文档尺寸只有一个来源:写入口自己。两边各记一份迟早分叉,而分叉的后果正是"只写了一半"。 */
   const writer = () => writerRef.current as ReturnType<typeof createMaskWriter>;
@@ -602,9 +692,40 @@ export function MaskEditor({
   }, []);
 
   /**
+   * 这一刻的扩张 / 羽化**还没有写进蒙版**吗(即"待应用")。
+   *
+   * 滑块非 0 只说明"参数不是空的";点过「应用到蒙版」的那一组参数已经在**这一版**蒙版里了
+   * (`appliedEdgesRef`),那时再预览一遍就是多余的 —— 屏幕上该回到真蒙版。
+   * 只读 ref:它是从 `paint()` 那条终身不变的闭包里被调的。
+   */
+  const edgesPending = () => {
+    const grow = growRef.current;
+    const feather = featherRef.current;
+    if (grow === 0 && feather === 0) return false;
+    const applied = appliedEdgesRef.current;
+    return !(applied && applied.revision === writer().revision && applied.grow === grow && applied.feather === feather);
+  };
+
+  /** 那份预览副本是"按哪一版蒙版 + 哪一组参数"算的。三样里任意一样变了,它就该重算。 */
+  const edgesKey = () => `${writer().revision}|${growRef.current}|${featherRef.current}`;
+
+  /**
+   * 显示层该用哪张蒙版:**待应用**时是那份预览副本(算得出来的话),否则是真蒙版。
+   *
+   * 这里**一个字都不写蒙版** —— 副本是另算的一张画布(见 `renderEdgesPreview`),真蒙版要等
+   * 「应用到蒙版」才动。副本过期(`key` 对不上)时宁可显示真蒙版,也不要显示一份旧的。
+   */
+  const displayedMask = (): CanvasImageSource | null => {
+    const preview = edgePreviewRef.current;
+    if (!preview || !edgesPending() || preview.key !== edgesKey()) return writer().canvas();
+    return preview.canvas;
+  };
+
+  /**
    * 把当前状态画到看得见的那张画布上:底图原样在下面,要改的地方压暗 + 着蒙版色叠上去。
    *
    * **只读 ref** —— 所以这个函数在整个生命周期里是同一个,几个 effect 不会因为它的身份变化而重跑。
+   * 两件"要从最新那几个闭包里拿"的事(圈的位置、预览副本该不该重算)走 ref 里的回调,见上面那两个 ref。
    */
   const paint = React.useCallback(() => {
     const view = viewRef.current;
@@ -616,15 +737,82 @@ export function MaskEditor({
     const box = boxRef.current;
     drawMaskView(ctx, {
       plan: maskViewLayers({ hasUnderlay: Boolean(underlay), showUnderlay: showUnderlayRef.current, tint: tintRef.current }),
-      mask: writer().canvas(),
+      mask: displayedMask(),
       underlay,
       scratch,
       width: view.width,
       height: view.height,
       place: camera && box ? placement(camera, writer().size, view.width / box.width) : undefined,
     });
+    //: 相机、笔刷、文档边框的显示都挂在 `paint()` 上:它们只有 ref,不会自己发现变化(圈的大小尤其
+    //: —— 缩放之后它还按上一个比例画)。
     placeFrame();
+    ringSyncRef.current();
+    //: 画完再决定要不要算那份预览:它算好了会自己再 paint 一次(那时显示的才是副本)。
+    previewSyncRef.current();
   }, [placeFrame]);
+
+  /**
+   * 算一份"边缘已经应用过"的副本,喂给显示层(真蒙版**只读**)。
+   *
+   * 读一份当前蒙版的像素 → 在**拷贝**上跑 `growMask` + `featherMask`(纯函数,和「应用到蒙版」用的是
+   * 同两条)→ `putImageData` 进自己那张画布。真蒙版那张从头到尾没人写:出口(`save()`)读的、写入口
+   * (`MaskContext`)发的,始终是它。
+   */
+  const renderEdgesPreview = () => {
+    const ctx = maskContext();
+    if (!ctx || !writer().canvas() || !edgesPending()) return;
+    const { width, height } = ctx.size;
+    //: `read()` 给的是一份**工作副本**(`transform` 那条路也是拿它就地改),改它碰不到蒙版那张画布;
+    //: 它和「应用到蒙版」唯一的分别就是这里**不调 `write()`**。
+    const image = ctx.read();
+    growMask(image.data, width, height, growRef.current);
+    featherMask(image.data, width, height, featherRef.current);
+    const canvas = edgePreviewRef.current?.canvas ?? document.createElement("canvas");
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    const raw = canvas.getContext("2d");
+    if (!raw) return;
+    raw.putImageData(image, 0, 0);
+    edgePreviewRef.current = { canvas, key: edgesKey() };
+    paint();
+  };
+
+  /** 等在路上的那一次重算不做了(参数归零 / 已经写进蒙版 / 关了弹窗)。 */
+  const cancelEdgesPreview = () => {
+    if (edgeTimerRef.current === null) return;
+    window.clearTimeout(edgeTimerRef.current);
+    edgeTimerRef.current = null;
+  };
+
+  /**
+   * 该算就约一个定时器(`paint()` 每帧都会问一次):参数或蒙版变了、副本过期了,才排一个。
+   *
+   * **每一次都重排**(尾随式 debounce):拖动滑块 / 涂抹的每一帧都会走到这里,而重算是整张文档上
+   * 的形态学 + 三遍盒式模糊 —— 不重排的话,拖动期间就变成"算、等 120ms、再算",4096² 上主线程
+   * 一直满着,滑块像卡住。重排之后:手一停(或松手)120ms 就把预览换上;手还在动的时候屏幕上老老实实
+   * 是真蒙版(新那一笔立刻看得见)。
+   */
+  const syncEdgesPreview = () => {
+    if (!edgesPending()) {
+      cancelEdgesPreview();
+      return;
+    }
+    if (edgePreviewRef.current?.key === edgesKey()) return;
+    cancelEdgesPreview();
+    edgeTimerRef.current = window.setTimeout(() => {
+      edgeTimerRef.current = null;
+      renderEdgesPreview();
+    }, EDGE_PREVIEW_DELAY);
+  };
+
+  //: `paint()` 只读 ref(见它的说明),所以这两个回调得挂进 ref 里给它用。
+  React.useEffect(() => {
+    ringSyncRef.current = placeRing;
+    previewSyncRef.current = syncEdgesPreview;
+  });
 
   /** 换相机:记下来、底栏的缩放跟上。`fitted` = 这是不是「适应窗口」那一档。 */
   const setCamera = React.useCallback((next: Camera, fitted: boolean) => {
@@ -694,6 +882,9 @@ export function MaskEditor({
       } else if (carry && previous && (previous.width !== next.width || previous.height !== next.height)) {
         ctx.paste(previous, PASTE_PREVIOUS);
       }
+      //: 文档换了 —— 上一份预览副本是按**上一张**蒙版算的,连同"哪一组参数已经应用过"一起作废。
+      edgePreviewRef.current = null;
+      appliedEdgesRef.current = null;
       const first = snapshot();
       historyRef.current = first ? { steps: [first], at: 0 } : { steps: [], at: -1 };
       lastStepRef.current = null;
@@ -718,6 +909,27 @@ export function MaskEditor({
     showUnderlayRef.current = showUnderlay;
     if (open) paint();
   }, [open, showUnderlay, paint]);
+
+  /**
+   * 扩张 / 羽化滑块动了:把当前值搬进 ref(那两条终身不变的闭包只读得到 ref),然后重画一次
+   * —— 参数一变,原来那份预览副本就过期了,屏幕上这一刻该回到真蒙版,新的那份 120ms 后上屏。
+   *
+   * 蒙版**内容**变了(用户又画了一笔、撤销了)走的是 `paint()` 那条路(`previewSyncRef`),
+   * 不在这里:那件事每一次画布刷新都要问一遍,而不只是滑块动的时候。
+   */
+  React.useEffect(() => {
+    growRef.current = grow;
+    featherRef.current = feather;
+    if (!open) return;
+    syncEdgesPreview();
+    paint();
+  }, [open, grow, feather, paint]);
+
+  //: 关掉 / 卸载:等在路上的那一次重算不必再跑(它读的那张画布已经在拆了)。
+  React.useEffect(() => {
+    if (!open) cancelEdgesPreview();
+    return cancelEdgesPreview;
+  }, [open]);
 
   /** 主题色变了就重画 —— `paint()` 每一帧只读 `tintRef`,不会反过来发现主题变过。 */
   React.useEffect(() => {
@@ -936,12 +1148,19 @@ export function MaskEditor({
   /**
    * 「应用到蒙版」:先扩张 / 收缩、再羽化,作用在整张蒙版上,一步撤销(ADR 0057 决定 3)。
    * 次序和后端配方一样(`contracts/mask-cases.json` 的 pipeline),两侧的结果逐字节相同。
+   *
+   * 写完之后把这一组参数记成"已经在这一版蒙版里了"(`appliedEdgesRef`):否则屏幕会把它**再预览一遍**
+   * —— 应用完看到的比自己点下去时又扩张一次,正是"这一步到底写进去没有"说不清的那种画面。
    */
-  const applyEdges = () =>
+  const applyEdges = () => {
     transform((data, size) => {
       growMask(data, size.width, size.height, grow);
       featherMask(data, size.width, size.height, feather);
     });
+    appliedEdgesRef.current = { revision: writer().revision, grow, feather };
+    cancelEdgesPreview();
+    paint();
+  };
 
   /**
    * 从底图起手:底图像素复制一份 → 阈值二值化 → 变成初笔迹。
@@ -1003,11 +1222,19 @@ export function MaskEditor({
     return { x: (local.x / rect.width) * width, y: (local.y / rect.height) * height };
   };
 
-  /** 笔刷那个圈:屏幕上的真实大小(直径 × 相机缩放),只有画笔和橡皮有。 */
-  const moveRing = (event: React.PointerEvent<HTMLCanvasElement> | null) => {
+  /**
+   * 笔刷那个圈:屏幕上的真实大小(直径 × 相机缩放)+ **硬度那条曲线**,只有画笔和橡皮有。
+   *
+   * 位置取指针**上一次**在画布上的那一点(`ringPointRef`)而不是事件本身 —— 拖笔刷大小 / 硬度滑块时
+   * 指针在右栏上,圈得在画布上原地跟着变(`paint()` 和那个 effect 都会调这里)。
+   *
+   * 它画的曲线和 `paintLine` 是同一条(见 `brushRingFill`):内圈到 `radius × hardness` 是硬核,
+   * 外面渐隐到半径那一圈。所以"拖硬度滑块"和"画出来的笔迹"说的是同一件事。
+   */
+  const placeRing = React.useCallback(() => {
     const ring = ringRef.current;
     if (!ring) return;
-    const local = event ? localPoint(event) : null;
+    const local = ringPointRef.current;
     const camera = cameraRef.current;
     const freehand = tool === "brush" || tool === "eraser";
     if (!local || !camera || !freehand || panMode !== "off") {
@@ -1019,7 +1246,19 @@ export function MaskEditor({
     ring.style.width = `${diameter}px`;
     ring.style.height = `${diameter}px`;
     ring.style.transform = `translate(${local.x - diameter / 2}px, ${local.y - diameter / 2}px)`;
+    ring.style.background = brushRingFill(hardness);
+  }, [brushSize, hardness, tool, panMode]);
+
+  /** 指针动了 / 离开画布(`null`):记住它在哪,圈跟着走(或收起来)。 */
+  const moveRing = (event: React.PointerEvent<HTMLCanvasElement> | null) => {
+    ringPointRef.current = event ? localPoint(event) : null;
+    placeRing();
   };
+
+  //: 拖笔刷大小 / 硬度滑块、换工具、开始平移 —— 指针没动也要当场重画那个圈(它就是这两根滑块的反馈)。
+  React.useEffect(() => {
+    placeRing();
+  }, [placeRing]);
 
   /** 一笔的墨:笔刷写白(要改)、橡皮写黑(不改)。见文件头「橡皮 = 写黑」。 */
   const inkOf = (kind: Tool) => (kind === "brush" ? { ink: WHITE, fade: FADE_WHITE } : { ink: BLACK, fade: FADE_BLACK });
@@ -1323,7 +1562,9 @@ export function MaskEditor({
               }}
               onAuxClick={(event) => event.preventDefault()}
             />
-            {/*: 文档的边框与笔刷圈:纯显示,不接指针(事件全落在画布上)。位置由相机写(placeFrame / moveRing)。 */}
+            {/*: 文档的边框与笔刷圈:纯显示,不接指针(事件全落在画布上)。位置由相机写(placeFrame / moveRing)。
+                那个圈里的**填充**是硬度(内圈硬核、外面渐隐,见 brushRingFill):它此前是一道写死的 1px
+                硬白边,硬度拖到多少都一个样 —— 维护者报的「笔刷硬度在 UI 上没有体现」。 */}
             <div
               ref={frameRef}
               data-mask-doc-frame=""
@@ -1333,6 +1574,7 @@ export function MaskEditor({
             />
             <div
               ref={ringRef}
+              data-mask-brush-ring=""
               hidden
               aria-hidden
               className="pointer-events-none absolute left-0 top-0 rounded-full border border-white shadow-[0_0_0_1px_rgb(0_0_0/0.55)]"

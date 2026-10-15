@@ -254,7 +254,7 @@ export const aiStudio = {
   maskDraw: "Draw one",
   maskDrawHint: "Paint the area to change on a canvas",
   maskEdges: "Edges",
-  maskEdgesHint: "Grows first, then feathers, across the whole mask. A negative grow shrinks it. You can undo it.",
+  maskEdgesHint: "Grows first, then feathers, across the whole mask. A negative grow shrinks it. The canvas previews this step — nothing is written into the mask until you apply it. You can undo it.",
   maskEdit: "Edit mask",
   maskEditHint: "Keep drawing on this mask",
   maskEditorHint: "White marks what should change. Saving adds it to the mask slot as a new asset.",

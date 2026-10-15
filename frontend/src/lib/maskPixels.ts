@@ -434,6 +434,16 @@ export interface MaskContext {
 export interface MaskWriter {
   /** 文档尺寸(和蒙版画布的位图尺寸永远一致 —— 它就是在这里设的)。 */
   readonly size: { width: number; height: number };
+  /**
+   * **蒙版内容**改到第几版了。每一次真正写蒙版(`write` / `clear` / `paste` / `restore` / `stroke` /
+   * `preview`)都 +1,读(`read` / `snapshot`)不算。
+   *
+   * 谁要:显示层那份"边缘待应用"的**预览副本**。它是对蒙版的某个版本算出来的,蒙版一变(用户又画了
+   * 一笔、撤销了、清空了)那份副本就过期了 —— 靠这个数字判断,而不是靠"记得在每一处写完之后喊一声"
+   * (喊漏一处的表现是屏幕上停着一份旧蒙版,极难查)。放在这里是因为**写蒙版只有这一条路**,
+   * 版本号也就只有这里说得准。
+   */
+  readonly revision: number;
   /** 当前那张蒙版画布(导出用;除此之外不要碰它)。 */
   canvas(): HTMLCanvasElement | null;
   context(): MaskContext | null;
@@ -455,7 +465,13 @@ export function createMaskWriter(): MaskWriter {
   let canvas: HTMLCanvasElement | null = null;
   let context: MaskContext | null = null;
   let size = { width: 0, height: 0 };
+  /** 蒙版内容的版本号(见 `MaskWriter.revision`):每一次真正写都 +1。 */
+  let revision = 0;
   const refused: MaskWriteRefused[] = [];
+  /** 蒙版内容动了一下。读那几条(`read` / `snapshot`)不算。 */
+  const wrote = () => {
+    revision += 1;
+  };
 
   const admit = (write: MaskWrite) => {
     if (!partialAllowed(write, size.width, size.height)) {
@@ -524,12 +540,14 @@ export function createMaskWriter(): MaskWriter {
         }
         neutral();
         ctx.putImageData(image, 0, 0);
+        wrote();
       },
       clear(color = MASK_BLACK) {
         admit({ kind: "fill", rect: whole(size.width, size.height), color });
         neutral();
         ctx.fillStyle = color;
         ctx.fillRect(0, 0, size.width, size.height);
+        wrote();
       },
       paste(source, label) {
         //: 归一之后就是整张 —— 唯一的例外是"文档比源图大的那几帧",那时底色(黑)本来就不透明。
@@ -545,6 +563,7 @@ export function createMaskWriter(): MaskWriter {
         normalizeGray(image.data as MaskPixels);
         neutral();
         ctx.putImageData(image, 0, 0);
+        wrote();
         void label;
       },
       snapshot: () => grayscaleOf(ctx.getImageData(0, 0, size.width, size.height).data),
@@ -558,6 +577,7 @@ export function createMaskWriter(): MaskWriter {
       stroke(shade) {
         neutral();
         shade(ctx);
+        wrote();
       },
       beginStroke() {
         base = grayscaleOf(ctx.getImageData(0, 0, size.width, size.height).data);
@@ -571,6 +591,8 @@ export function createMaskWriter(): MaskWriter {
         if (base) this.restore(base);
         neutral();
         shade(ctx);
+        //: 形状拖动的每一帧**确实**改了蒙版内容(下一条 `preview` 会把它抹掉),所以也算一版。
+        wrote();
       },
     };
     context = instance;
@@ -580,6 +602,9 @@ export function createMaskWriter(): MaskWriter {
   return {
     get size() {
       return { ...size };
+    },
+    get revision() {
+      return revision;
     },
     canvas: () => canvas,
     context: () => context,

@@ -254,7 +254,7 @@ export const aiStudio = {
   maskDraw: "画一张",
   maskDrawHint: "在画布上刷出要改的地方",
   maskEdges: "边缘",
-  maskEdgesHint: "先扩张再羽化，作用在整张蒙版上；扩张填负数就是收缩。可以撤销。",
+  maskEdgesHint: "先扩张再羽化，作用在整张蒙版上；扩张填负数就是收缩。画布上先预览这一步的结果，点「应用到蒙版」才写进蒙版。可以撤销。",
   maskEdit: "编辑蒙版",
   maskEditHint: "在这张蒙版上接着画",
   maskEditorHint: "白色是要改的地方。存下来就是一张新素材，自动放进蒙版那一格。",
