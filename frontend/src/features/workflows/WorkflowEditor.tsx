@@ -868,7 +868,9 @@ export function WorkflowEditor({
             onClose={() => setAddNodeAt(null)}
           />
           {scopeNode && graph.nodes.length === 0 && (
-            <div className="pointer-events-none absolute left-1/2 top-14 max-w-[70%] -translate-x-1/2 rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-center text-xs text-muted-foreground">
+            // 空循环体/子图的提示放**左上角**,和右上那排工具条(添加节点/撤销/…)同一高度 —— 正中会盖住
+            // 画布中央、挡着人拖第一个节点;左上角空着,不碍事。
+            <div className="pointer-events-none absolute left-2 top-2 max-w-[60%] rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-left text-xs text-muted-foreground">
               {t(scopeNode.type === "subgraph" ? "wfSubgraphEmptyHint" : "wfLoopEmptyHint")}
             </div>
           )}
