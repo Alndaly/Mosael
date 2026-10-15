@@ -291,6 +291,21 @@ function SceneObjectRow({
       // 缩进只经过这一个值:行的左内距按它算(见 scenes.css 里那段)。
       style={{ "--depth": depth } as React.CSSProperties}
     >
+      {/* 折叠箭头在行首;**没孩子的行不渲染这块** —— 行首直接从图标起,不留无谓的内间距
+          (维护者:叶子行不该缩进一截)。CSS 用 :not(:has(.scene-object-twist)) 认这件事。 */}
+      {childCount ? (
+        <IconButton
+          unstyled
+          className="scene-object-twist"
+          label={t(collapsed ? "sceneExpandNamed" : "sceneCollapseNamed").replace("{name}", o.name)}
+          onClick={() => onToggleCollapse(o.id)}
+        >
+          <ChevronRight
+            size={13}
+            style={{ transform: collapsed ? undefined : "rotate(90deg)" }}
+          />
+        </IconButton>
+      ) : null}
       <button
         className="scene-object-name"
         //: dnd-kit 的那套属性(`role`、`tabIndex`、说明、`aria-pressed: undefined`)在前,
@@ -305,23 +320,6 @@ function SceneObjectRow({
         <Truncate>{o.name}</Truncate>
         {childCount > 0 && collapsed && <small>{t("sceneChildCount").replace("{n}", String(childCount))}</small>}
       </button>
-      {/* 折叠箭头放名字**右侧**(维护者:放左边会留一块看着怪异的内间距,行首直接从图标起)。
-          没孩子的留一块同宽的空位,名字才对得齐。 */}
-      {childCount ? (
-        <IconButton
-          unstyled
-          className="scene-object-twist"
-          label={t(collapsed ? "sceneExpandNamed" : "sceneCollapseNamed").replace("{name}", o.name)}
-          onClick={() => onToggleCollapse(o.id)}
-        >
-          <ChevronRight
-            size={13}
-            style={{ transform: collapsed ? undefined : "rotate(90deg)" }}
-          />
-        </IconButton>
-      ) : (
-        <span className="scene-object-twist" />
-      )}
       {/* 显示/隐藏和删除并排,同尺寸、同一种安静的样子 —— 此前藏一个物体要先选中它,
           再到下面的「调整对象」里找那颗眼睛;列表里只有一个「隐藏」字样的标记。 */}
       <IconButton

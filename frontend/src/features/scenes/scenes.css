@@ -1014,7 +1014,7 @@
 
 .scene-object-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--row-twist) var(--row-height) var(--row-height);
+  grid-template-columns: var(--row-twist) minmax(0, 1fr) var(--row-height) var(--row-height);
   align-items: center;
   border-radius: 7px;
   /* 缩进加在**行的内距**上:高亮从行首起,缩进落在高亮里面。加在子元素的 margin 上的话,
@@ -1023,6 +1023,11 @@
   padding-right: var(--row-bleed);
   /* 落点那条线画在行的上/下沿(见下面 data-drop 那段),要有个包含块。 */
   position: relative;
+}
+/* **没有子项的行不留折叠箭头那一格。** 那块空位只有"整列名字对齐"这一个好处,代价是每个叶子行
+   都白缩进一截 —— 维护者不要这个。认法就用行里有没有那颗箭头(.scene-object-twist),不另加属性。 */
+.scene-object-row:not(:has(.scene-object-twist)) {
+  grid-template-columns: minmax(0, 1fr) var(--row-height) var(--row-height);
 }
 .scene-object-name {
   display: flex;
