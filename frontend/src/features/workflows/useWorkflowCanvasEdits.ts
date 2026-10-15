@@ -161,11 +161,30 @@ export function useWorkflowCanvasEdits({
     const pickedNodes = graph.nodes.filter((node) => selectedIds.has(node.id));
     // 只带上"两端都被选中"的边:整段子图连内部接线一起复制,不牵连外部节点。
     const pickedEdges = graph.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target));
-    clipboardRef.current = structuredClone({ nodes: pickedNodes, edges: pickedEdges });
+    // 选中节点对**外**的连线也记下:Cmd+Shift+V 带连线粘贴时把仍在图里的那端重接上(剪切后尤其有用)。
+    const external = graph.edges.filter((edge) => selectedIds.has(edge.source) !== selectedIds.has(edge.target));
+    clipboardRef.current = structuredClone({ nodes: pickedNodes, edges: pickedEdges, external });
     return true;
   }, [nodes, graph]);
-  const pasteClipboard = React.useCallback((): boolean => {
-    const pasted = pasteNodes(graph, clipboardRef.current, registry, getPastePosition?.() ?? null);
+  // 剪切 = 复制 + 删掉原件。start 是流程入口,不剪(也粘不出第二个 start)。
+  const cutSelection = React.useCallback((): boolean => {
+    const removable = new Set(nodes.filter((node) => node.selected && !isMarkerNode(node) && node.type !== "start").map((node) => node.id));
+    if (removable.size === 0) return false;
+    if (!copySelection()) return false;
+    const next: WorkflowGraph = {
+      ...graph,
+      nodes: graph.nodes.filter((node) => !removable.has(node.id)),
+      edges: graph.edges.filter((edge) => !removable.has(edge.source) && !removable.has(edge.target)),
+    };
+    setGraph(next);
+    setNodes(toWorkflowFlowNodes(next, registry));
+    setEdges(toWorkflowFlowEdges(next, t, registry));
+    selectInspectorNode(null);
+    setDirty(true);
+    return true;
+  }, [nodes, graph, copySelection, setGraph, setNodes, setEdges, registry, t, selectInspectorNode]);
+  const pasteClipboard = React.useCallback((withConnections = false): boolean => {
+    const pasted = pasteNodes(graph, clipboardRef.current, registry, getPastePosition?.() ?? null, withConnections);
     if (!pasted) return false;
     // 让下次 Cmd+V 继续向右下错开,避免层层重叠。
     clipboardRef.current = pasted.clip;
@@ -191,7 +210,12 @@ export function useWorkflowCanvasEdits({
         if (leaveClipboardToSystem(event)) return;
         if (copySelection()) event.preventDefault();
       } else if (key === "v") {
-        if (pasteClipboard()) event.preventDefault();
+        // Cmd+Shift+V = 带连线粘贴(把选中节点对外的入参/出参连线一起重接上);普通 Cmd+V 只粘节点+内部连线。
+        if (pasteClipboard(event.shiftKey)) event.preventDefault();
+      } else if (key === "x") {
+        // 选中了文字就是要剪切文字:和复制同一个判据(见 leaveClipboardToSystem)。
+        if (leaveClipboardToSystem(event)) return;
+        if (cutSelection()) event.preventDefault();
       } else if (key === "g") {
         // G = group,和别处"编组"是同一个键位。**要拦下浏览器的"查找下一个"** ——
         // 不 preventDefault 的话 Safari/Chrome 会在折叠的同时弹出查找栏。
@@ -203,7 +227,7 @@ export function useWorkflowCanvasEdits({
       }
     };
     return listenKeys(window, onKey);
-  }, [copySelection, pasteClipboard, selectedFlowIds, handleCollapse]);
+  }, [copySelection, cutSelection, pasteClipboard, selectedFlowIds, handleCollapse]);
 
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {

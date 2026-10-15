@@ -21,6 +21,8 @@ type WEdge = WorkflowGraph["edges"][number];
 export interface NodeClip {
   nodes: WNode[];
   edges: WEdge[];
+  /** 选中节点对**外**的连线(恰好一端在选区):Cmd+Shift+V 带连线粘贴时,把仍在图里的那端重接上。 */
+  external?: WEdge[];
 }
 
 /** 每次粘贴相对原件往右下错开多少 —— 连按 ⌘V 时一层层错开,不叠成一摞。 */
@@ -63,6 +65,8 @@ export function pasteNodes(
   registry: RegistryLike,
   /** 黏贴落点(画布坐标):给了就把整组节点的**左上角**挪到那,没给就按老习惯从原位置右下错开。 */
   at?: { x: number; y: number } | null,
+  /** 带连线粘贴(Cmd+Shift+V):把选中节点对外的连线也重接上(另一端仍在图里的才接)。 */
+  withConnections?: boolean,
 ): { graph: WorkflowGraph; pastedIds: string[]; clip: NodeClip } | null {
   const freshId = idAllocator(graph);
   const idMap = new Map<string, string>();
@@ -99,9 +103,30 @@ export function pasteNodes(
           : `e-${source}${edge.source_handle ? `-${edge.source_handle}` : ""}-${target}`;
       return { ...structuredClone(edge), id, source, target };
     });
+  // 带连线粘贴:把选中节点对外的连线重接上 —— 粘上的那端换新 id,另一端保持原节点(仍在图里才接)。
+  // 节点的入参声明/清空随 structuredClone 一起带过来了,重接连线即恢复「由边供值」。
+  if (withConnections && clip.external) {
+    for (const edge of clip.external) {
+      const source = idMap.has(edge.source) ? idMap.get(edge.source)! : edge.source;
+      const target = idMap.has(edge.target) ? idMap.get(edge.target)! : edge.target;
+      // 对外的那端若已不在图里(比如连同它一起删了),这条线无处可接,跳过。
+      if (!idMap.has(edge.source) && !graph.nodes.some((node) => node.id === edge.source)) continue;
+      if (!idMap.has(edge.target) && !graph.nodes.some((node) => node.id === edge.target)) continue;
+      const id =
+        edge.kind === "data"
+          ? `d-${source}-${edge.source_output}-${target}-${edge.target_input}`
+          : `e-${source}${edge.source_handle ? `-${edge.source_handle}` : ""}-${target}`;
+      if (graph.edges.some((one) => one.id === id) || newEdges.some((one) => one.id === id)) continue;
+      newEdges.push({ ...structuredClone(edge), id, source, target });
+    }
+  }
   return {
     graph: { ...graph, nodes: [...graph.nodes, ...newNodes], edges: [...graph.edges, ...newEdges] },
     pastedIds: newNodes.map((node) => node.id),
-    clip: structuredClone({ nodes: clip.nodes.map((node) => ({ ...node, position: shift(node) })), edges: clip.edges }),
+    clip: structuredClone({
+      nodes: clip.nodes.map((node) => ({ ...node, position: shift(node) })),
+      edges: clip.edges,
+      external: clip.external,
+    }),
   };
 }

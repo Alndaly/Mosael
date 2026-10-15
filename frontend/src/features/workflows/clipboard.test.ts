@@ -82,4 +82,22 @@ describe("粘贴一组节点", () => {
     const fb = new Map(fallback.graph.nodes.map((one) => [one.id, one]));
     expect(fb.get("llm-1")!.position).toEqual({ x: 300 + 48, y: 200 + 48 });
   });
+
+  it("带连线粘贴:对外连线重接到仍在图里的那端;普通粘贴不接", () => {
+    const dataEdge = { id: "d-llm-1-json-llm-2-prompt", source: "llm-1", target: "llm-2", kind: "data", source_output: "json", target_input: "prompt" } as const;
+    const graph = {
+      nodes: [node("start", "start"), node("llm-1", "llm"), node("llm-2", "llm")],
+      edges: [{ ...dataEdge }],
+    } as unknown as WorkflowGraph;
+    // 只复制 llm-2;它对外的数据边(来自 llm-1)记进 external。
+    const clip = { nodes: [node("llm-2", "llm")], edges: [], external: [{ ...dataEdge }] };
+    // 带连线粘贴(Cmd+Shift+V):新节点(llm-3)接上 llm-1 的 json。
+    const withConn = pasteNodes(graph, clip as never, registry, null, true)!;
+    expect(withConn.graph.edges).toContainEqual(
+      expect.objectContaining({ id: "d-llm-1-json-llm-3-prompt", source: "llm-1", target: "llm-3", kind: "data" }),
+    );
+    // 普通粘贴(Cmd+V):不带外部连线,边数不变。
+    const plain = pasteNodes(graph, clip as never, registry, null, false)!;
+    expect(plain.graph.edges).toHaveLength(graph.edges.length);
+  });
 });
