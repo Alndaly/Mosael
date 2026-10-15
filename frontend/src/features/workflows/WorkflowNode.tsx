@@ -184,13 +184,15 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
           ? "border-[color-mix(in_srgb,var(--destructive)_60%,var(--border))]"
           : "border-[color-mix(in_srgb,var(--warning)_55%,var(--border))]"),
         // 运行态压过就绪角标:正在跑/跑挂了是此刻更要紧的信息。
-        d.run?.status === "running" && "border-primary shadow-[0_0_0_1px_var(--primary)]",
         d.run?.status === "done" && "border-[color-mix(in_srgb,var(--success)_55%,var(--border))]",
         d.run?.status === "failed" && "border-[color-mix(in_srgb,var(--destructive)_70%,var(--border))]",
         d.run?.status === "skipped" && "opacity-55",
         // 被停下的那一步和画板上取消的格子同一种样子(虚线、灰),不是失败的红框。
         d.run?.status === "cancelled" && "border-dashed border-muted-foreground/60",
         selected && "border-primary shadow-[0_0_0_1px_var(--primary)] hover:border-primary",
+        // 运行中:紫色(run 一族,和「跑过的线」同一个 --canvas-edge-run)+ 节点上的转圈 —— 和**选中**(静态
+        // primary 蓝)区分开;正在跑是此刻更要紧的信息,压在选中之上(维护者:运行/选中同色分不清)。
+        d.run?.status === "running" && "border-[var(--canvas-edge-run)] shadow-[0_0_0_1px_var(--canvas-edge-run)]",
       )}
       data-node-type={d.nodeType}
     >
