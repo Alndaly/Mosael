@@ -311,7 +311,10 @@ export function maskViewLayers(view: { hasUnderlay: boolean; showUnderlay: boole
  *   `CanvasRenderingContext2D`,也就没有第二条路能往蒙版上写(想绕开就得先改这个文件);
  * - 每一次写先过 `partialAllowed`:覆盖不满整张的**默认拒绝**,只有声明过的那几种笔迹例外;
  * - 写完的下一微任务**逐像素验一遍不透明**,破了就记进 `refused` —— 于是"哪一步把它写透明的"
- *   永远有答案,不用再从屏幕上的颜色反推。
+ *   永远有答案,不用再从屏幕上的颜色反推;
+ * - `paste` 是这里唯一的 `drawImage`(源图什么色就是什么色),所以它画完读回来**归一成灰度**
+ *   (`normalizeGray`)—— 「蒙版逐像素 `r = g = b`」不只管 alpha:漏了它,彩色会一直躺在蒙版里,
+ *   直到第一次 `snapshot` / `restore` 把它**静默换成红通道那份灰度**(彩色照片忽然变成黑白)。
  *
  * 为什么"整张写"是硬要求:`putImageData` 的 `ImageData` 是**零填充**的,`fillRect` 只碰它那一块矩形
  * —— 两者都不会把"没碰到的那些像素"补成不透明。而蒙版一旦出现透明像素,损坏是**静默**的:屏幕上
@@ -533,6 +536,15 @@ export function createMaskWriter(): MaskWriter {
         admit({ kind: "fill", rect: whole(size.width, size.height), color: MASK_BLACK });
         neutral();
         ctx.drawImage(source, 0, 0, size.width, size.height);
+        //: `drawImage` **照抄**源图:源图不是灰的(底稿 = 用户传进蒙版槽的一张照片)就把颜色
+        //: 留在了蒙版画布上,而契约是逐像素 `r = g = b`。少了这一下,颜色会一直躺在那儿,直到
+        //: 第一次 `snapshot` / `restore`(撤销、形状预览、反选、应用边缘)把它**静默换成红通道那份
+        //: 灰度** —— 屏幕上就是"彩色照片忽然变成黑白"(维护者报的那个,画笔/橡皮不走这条路所以没事)。
+        //: 读回来 → 归一 → 整张写回,和 `write` / `transform` 是同一套动作。
+        const image = ctx.getImageData(0, 0, size.width, size.height);
+        normalizeGray(image.data as MaskPixels);
+        neutral();
+        ctx.putImageData(image, 0, 0);
         void label;
       },
       snapshot: () => grayscaleOf(ctx.getImageData(0, 0, size.width, size.height).data),
@@ -592,12 +604,39 @@ export function createMaskWriter(): MaskWriter {
  *
  * 一步一份四通道的像素在 2048² 上是 16MB,三十步就是五百兆;蒙版本身是灰的,一像素一个字节就够。
  * 还原走 writeGrayscale。
+ *
+ * 按 **Rec.601 亮度**取(不是红通道):蒙版本该逐像素 `r = g = b`(那时两种取法完全一样),但
+ * "本该"不是"一定" —— `normalizeGray` 会把漏进来的彩色归一,而它用的就是这一条。两处同一条,
+ * 一次 `snapshot` → `restore` 对一张已经归一的蒙版才是**逐字节不变**的。
  */
 export function grayscaleOf(data: MaskPixels): Uint8ClampedArray {
   const count = Math.floor(data.length / CHANNELS);
   const channel = new Uint8ClampedArray(count);
-  for (let at = 0, i = 0; i < count; at += CHANNELS, i += 1) channel[i] = data[at];
+  for (let at = 0, i = 0; i < count; at += CHANNELS, i += 1) channel[i] = halfUp(gray(data[at], data[at + 1], data[at + 2]));
   return channel;
+}
+
+/**
+ * 把一份像素**就地归一成灰度**:`r = g = b = Rec.601 亮度`,alpha 填满(见文件头那两条契约)。
+ *
+ * 蒙版的每一条写路径本来只会写出灰的:`clear` 的黑、`stroke` 的白 / 黑、`write` 那边全是纯函数 ——
+ * 只有 `paste` 是 `drawImage`,**源图什么色就是什么色**。而底稿就是用户自己传的那张图(蒙版那一格
+ * 的 `accept` 是 `image/*`):传一张照片进去,颜色就这么进了蒙版画布。
+ *
+ * 代价不是"看着不对"那么轻:下一次 `snapshot` / `restore`(撤销、形状的每一帧预览、反选、应用边缘)
+ * 会把整张换成单通道那一份 —— 彩色照片**忽然变成黑白**,而不碰整张的画笔 / 橡皮看着一切正常。
+ *
+ * 用 Rec.601 亮度而不是红通道:后端把蒙版落成 `L` 模式走的正是这条(PIL 的 `L`),`thresholdMask`
+ * 也是这条(见文件头的 `LUMA_*`)。
+ */
+export function normalizeGray(data: MaskPixels): void {
+  for (let at = 0; at < data.length; at += CHANNELS) {
+    const value = halfUp(gray(data[at], data[at + 1], data[at + 2]));
+    data[at] = value;
+    data[at + 1] = value;
+    data[at + 2] = value;
+    data[at + 3] = 255;
+  }
 }
 
 /** 把单通道灰度写回一份 RGBA 像素(alpha 填满,见文件头)。长度不够的写多少算多少。 */

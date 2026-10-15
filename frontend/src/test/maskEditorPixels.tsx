@@ -44,6 +44,10 @@ export function buildUnderlay(width: number, height: number): PixelImage {
 export interface PixelHarness {
   /** 底图那份像素(断言"逐字节等于原图"的参照)。 */
   underlay: PixelImage;
+  /** 底稿(打开时已经有的那张蒙版)那份像素 —— 没给 `initial` 时是 null。 */
+  draft: PixelImage | null;
+  /** 这一座有没有底图(`?source=null` 那一档:可见画布上只剩蒙版自己)。 */
+  hasSource: boolean;
   /** 底图那个 `Image`(测试拿它去挂像素)。 */
   images: HTMLImageElement[];
   /** 底图那份像素挂着的源对象(`loadImage` 用它读"底图像素")。 */
@@ -71,10 +75,24 @@ export interface PixelHarness {
  * 把 jsdom 的画布换成"真有像素"的那一份,并把组件挂起来。
  *
  * 底图 = `size`;盒子量出 `box`(contain 那一套只影响 CSS 尺寸,像素断言按文档坐标走)。
+ *
+ * `initial` 给一张**底稿**(打开时已经有的那张蒙版):它可能不是灰的 —— 维护者往蒙版槽里传过一张
+ * 照片,那时 `paste` 就是把彩色照抄进蒙版画布(见 `maskPixels` 的 `normalizeGray`)。`hasSource`
+ * 给 false 就是"没有底图":可见那张只剩下蒙版自己(那是维护者截图上"整幅黑白"的那一面)。
  */
-export function pixelHarness(options: { width: number; height: number; box?: { width: number; height: number } }): PixelHarness {
+export function pixelHarness(options: {
+  width: number;
+  height: number;
+  box?: { width: number; height: number };
+  /** 打开时已经有的那张蒙版(彩色也行 —— 这一座存在的理由就是它)。 */
+  initial?: PixelImage | null;
+  /** 有没有底图。false ⇒ 可见画布上只有蒙版那一层(`maskViewLayers` 的第一条分支)。 */
+  hasSource?: boolean;
+}): PixelHarness {
   const width = options.width;
   const height = options.height;
+  const draft = options.initial ?? null;
+  const hasSource = options.hasSource ?? true;
   //: **盒子 = 文档、dpr = 1**:contain 算出来的位图尺寸于是**正好**等于文档尺寸,可见画布上的
   //: 底图与蒙版都是 1:1(没有重采样)。断言要"逐字节等于原图",就必须先没有插值。
   const box = options.box ?? { width, height };
@@ -125,13 +143,17 @@ export function pixelHarness(options: { width: number; height: number; box?: { w
   sourceElement.height = height;
   registerPixelImage(sourceElement, underlay);
 
-  //: 底图走组件真实那条路:fetch → blob → Image。解码由测试决定什么时候"完成"。
+  //: 底图 / 底稿走组件真实那条路:fetch → blob → Image。解码由测试决定什么时候"完成"。
+  //: blob 上带着**它来自哪个素材地址**,于是 `image.src` 就是 `assetPreviewUrl(assetId)` ——
+  //: 两张图(底图 / 底稿)因此分得开,各挂各的像素(这一条是"底稿是彩色的"那一座的前提)。
   const decoded: HTMLImageElement[] = [];
-  globalThis.fetch = vi.fn(async () => ({
+  globalThis.fetch = vi.fn(async (url: string) => ({
     ok: true,
-    blob: async () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])]),
+    blob: async () => ({ __assetUrl: String(url) }),
   })) as never;
-  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:probe");
+  vi.spyOn(URL, "createObjectURL").mockImplementation(
+    (blob) => (blob as unknown as { __assetUrl?: string })?.__assetUrl ?? "blob:probe",
+  );
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
   vi.stubGlobal(
     "Image",
@@ -140,7 +162,13 @@ export function pixelHarness(options: { width: number; height: number; box?: { w
       naturalHeight = height;
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
-      set src(_value: string) {
+      /** `assetPreviewUrl(assetId)` —— 测试按它认人(见 `loadImages`)。 */
+      private assetSrc = "";
+      get src(): string {
+        return this.assetSrc;
+      }
+      set src(value: string) {
+        this.assetSrc = value;
         decoded.push(this as unknown as HTMLImageElement);
       }
     },
@@ -169,6 +197,8 @@ export function pixelHarness(options: { width: number; height: number; box?: { w
 
   return {
     underlay,
+    draft,
+    hasSource,
     images: decoded,
     source: sourceElement,
     view,
@@ -186,7 +216,11 @@ export function pixelHarness(options: { width: number; height: number; box?: { w
     settle: async () => {
       for (let i = 0; i < 4; i += 1) await Promise.resolve();
     },
-    ready: () => !(dialog().getByRole("button", { name: "按亮度初始化" }) as HTMLButtonElement).disabled,
+    ready: () =>
+      hasSource
+        ? !(dialog().getByRole("button", { name: "按亮度初始化" }) as HTMLButtonElement).disabled
+        : //: 没有底图时那两个键一直是禁用的 —— 就绪的判据换成"蒙版按底稿的尺寸铺好了"。
+          canvasesOfSize(width, height).some((one) => isMaskCanvas(one)),
     scope: dialog,
     sample(canvas, x, y) {
       const pixels = pixelOf(canvas);
@@ -200,7 +234,14 @@ export function pixelHarness(options: { width: number; height: number; box?: { w
       render(
         <QueryClientProvider client={client}>
           <PreferencesProvider>
-            <MaskEditor open onOpenChange={onOpenChange} workspaceId="w1" source={{ assetId: "src-1", name: "probe.png" }} onDone={onDone} />
+            <MaskEditor
+              open
+              onOpenChange={onOpenChange}
+              workspaceId="w1"
+              source={hasSource ? { assetId: "src-1", name: "probe.png" } : null}
+              initial={draft ? { assetId: DRAFT_ASSET_ID, name: "draft.png" } : null}
+              onDone={onDone}
+            />
           </PreferencesProvider>
         </QueryClientProvider>,
       );
@@ -209,12 +250,25 @@ export function pixelHarness(options: { width: number; height: number; box?: { w
   };
 }
 
-/** 让底图"解码完",并等文档换成底图那个尺寸(`按亮度初始化` 可用就是信号)。 */
-export async function loadUnderlay(harness: PixelHarness): Promise<void> {
-  await waitFor(() => expect(harness.images.length).toBeGreaterThan(0));
-  for (const image of harness.images) registerPixelImage(image, harness.underlay);
+/** 底稿那个素材 id —— `image.src` 里带的就是它(见 `loadImages` 按地址发像素)。 */
+export const DRAFT_ASSET_ID = "draft-1";
+/** 底图那个素材 id。 */
+export const SOURCE_ASSET_ID = "src-1";
+
+/** 让底图 / 底稿"解码完",并等文档按它们的尺寸铺好。 */
+export async function loadImages(harness: PixelHarness): Promise<void> {
+  const expected = (harness.hasSource ? 1 : 0) + (harness.draft ? 1 : 0);
+  await waitFor(() => expect(harness.images.length).toBe(expected));
+  for (const image of harness.images) {
+    //: 按地址认人:底稿那张挂**它自己**的像素(维护者传进蒙版槽的那张彩色图),其余是底图。
+    registerPixelImage(image, harness.draft && image.src.includes(DRAFT_ASSET_ID) ? harness.draft : harness.underlay);
+  }
   registerPixelImage(harness.source, harness.underlay);
   for (const image of harness.images) image.onload?.(new Event("load"));
-  //: 底图读完 = 那两个初始化键启用(组件就是这样表态的)。
   await waitFor(() => expect(harness.ready()).toBe(true));
+}
+
+/** 让底图"解码完",并等文档换成底图那个尺寸(`按亮度初始化` 可用就是信号)。 */
+export async function loadUnderlay(harness: PixelHarness): Promise<void> {
+  await loadImages(harness);
 }
