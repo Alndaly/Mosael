@@ -39,21 +39,9 @@ export function CanvasPointPicker({
   onPick: (value: string) => void;
   onClose: () => void;
 }) {
-  // 点浮层**外面**(画布空白)也要能关掉 —— Radix Popover 自带的「点外部关闭」被 React Flow 画布吃掉了:
-  // 画布为拖动画布在 pointerdown 上 stopPropagation,Radix 的 dismiss 监听在冒泡阶段、永远收不到。
-  // 这里在 **capture 阶段**自己兜一条(先于画布触发),点在添加单子浮层内容之外就关。
-  React.useEffect(() => {
-    if (!at) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Element | null;
-      // 点在浮层内容(搜索框/列表)里不算外面 —— Radix 把 PopoverContent 包在 [data-radix-popper-content-wrapper] 里。
-      if (target?.closest("[data-radix-popper-content-wrapper]")) return;
-      onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [at, onClose]);
-
+  // 点浮层**外面**(画布空白)关掉:走 ui 层的全局兜底(见 canvasBlankDismiss)——
+  // React Flow 画布会吞掉 Radix「点外部关闭」所依赖的事件,所有 ui 浮层一份兜底修齐,
+  // 这里不再单挂监听。
   return (
     <SearchableSelect
       //: 每个双击点一份单子。单子开着时在别处再双击,锚挪了位置,可弹层不会跟着重算(零尺寸的锚动了,定位库察觉不到)

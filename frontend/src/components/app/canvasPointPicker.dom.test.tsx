@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import * as React from "react";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { CanvasPointPicker } from "./canvasPointPicker";
@@ -40,7 +40,9 @@ describe("双击空白处的添加单子:换一个双击点,单子跟到新点",
 
 /**
  * 点浮层**外面**(画布空白)也要能关掉,不只 Esc —— Radix 自带的「点外部关闭」被 React Flow 画布吃掉
- * (画布拖动画布时在 pointerdown 上 stopPropagation,Radix 的 dismiss 监听收不到),组件自己兜了一条 capture 阶段的。
+ * (画布在 pointerdown 上 stopPropagation、d3 吞 click),修在 ui 浮层层的全局兜底(canvasBlankDismiss):
+ * 点在 `.react-flow__pane` 底板上,所有走 ui 外壳的浮层一次都关。这里用假画布演「capture 掐断」,
+ * 钉的是「点画布空白 → 这份单子也关」这条路径。
  */
 describe("点单子外面(画布空白)关掉", () => {
   beforeAll(() => {
@@ -48,11 +50,19 @@ describe("点单子外面(画布空白)关掉", () => {
     Element.prototype.scrollIntoView ??= () => {};
   });
 
-  it("点在浮层内容里不关、点在浮层外(空白)关", () => {
-    const onClose = vi.fn();
-    render(
-      <CanvasPointPicker at={{ x: 100, y: 100 }} options={options} searchPlaceholder="添加" onPick={vi.fn()} onClose={onClose} />,
+  function renderOpenPicker(onClose: () => void) {
+    return render(
+      <>
+        {/* 演 React Flow: Pane 在 capture 阶段 stopPropagation(选框),Radix 冒泡阶段的 dismiss 收不到。 */}
+        <div data-testid="blank-pane" className="react-flow__pane" onPointerDownCapture={(event) => event.stopPropagation()} />
+        <CanvasPointPicker at={{ x: 100, y: 100 }} options={options} searchPlaceholder="添加" onPick={vi.fn()} onClose={onClose} />
+      </>,
     );
+  }
+
+  it("点在浮层内容里不关、点在浮层外(空白)关", async () => {
+    const onClose = vi.fn();
+    renderOpenPicker(onClose);
     const panel = content();
     expect(panel, "单子没打开").toBeTruthy();
 
@@ -60,17 +70,24 @@ describe("点单子外面(画布空白)关掉", () => {
     fireEvent.pointerDown(panel!);
     expect(onClose).not.toHaveBeenCalled();
 
-    // 点在画布空白(document.body,浮层之外):关
-    fireEvent.pointerDown(document.body);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // 点在画布空白:关(全局兜底)。Radix 的 document pointerdown 监听是 setTimeout(0) 后挂的,
+    // 回调里重发顺带把那个时序等出来(真机上开单子到点画布隔着用户操作,必已就位)。
+    const pane = screen.getByTestId("blank-pane");
+    await waitFor(() => {
+      fireEvent.pointerDown(pane, { button: 0 });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
-  it("收起(at=null)时不挂监听,点什么都不关", () => {
+  it("收起(at=null)时浮层没挂载,点画布空白不关", () => {
     const onClose = vi.fn();
     render(
-      <CanvasPointPicker at={null} options={options} searchPlaceholder="添加" onPick={vi.fn()} onClose={onClose} />,
+      <>
+        <div data-testid="blank-pane" className="react-flow__pane" />
+        <CanvasPointPicker at={null} options={options} searchPlaceholder="添加" onPick={vi.fn()} onClose={onClose} />
+      </>,
     );
-    fireEvent.pointerDown(document.body);
+    fireEvent.pointerDown(screen.getByTestId("blank-pane"));
     expect(onClose).not.toHaveBeenCalled();
   });
 });

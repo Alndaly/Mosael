@@ -7,6 +7,7 @@ import { FLOATING_SURFACE, FLOATING_MOTION, FLOATING_COLLISION_PADDING } from ".
 
 import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
+import { useDismissOnCanvasBlankPress } from "./canvasBlankDismiss"
 import { HintScopeReset, useChromeLayer } from "./tooltip"
 
 /**
@@ -33,6 +34,9 @@ const PopoverContent = React.forwardRef<
 >(({ className, align = "center", sideOffset = 6, onEscapeKeyDown, children, ...props }, ref) => {
   //: 从外壳(工作台那一列、内嵌浏览器的顶栏)里开出来的:抬到外壳之上、也算外壳(见 useChromeLayer)
   const chromeLayer = useChromeLayer()
+  // 点画布空白处关掉本浮层(React Flow 会吞掉 Radix 的「点外部关闭」,见 canvasBlankDismiss)。
+  // 所有走这个外壳的浮层(动作菜单、可搜索下拉、通知面板…)一份兜底,不逐组件打补丁。
+  useDismissOnCanvasBlankPress()
   return (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content

@@ -119,7 +119,7 @@ const STOCK: Record<string, number> = {
   "features/markers/AnnotationModeHint.tsx": 1,
   "features/markers/MarkerPin.tsx": 1,
   "features/media/DocumentReader.tsx": 4,
-  "features/nodeForms/AssetGridField.tsx": 1,
+  "features/nodeForms/AssetGridField.tsx": 3,
   "features/nodeForms/AssetListField.tsx": 1,
   "features/nodeForms/ItemsField.tsx": 1,
   "features/nodeForms/MapField.tsx": 1,
