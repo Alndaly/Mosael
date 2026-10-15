@@ -1291,4 +1291,37 @@ button.scene-object-twist:hover {
 .scene-object-twist svg {
   transition: transform var(--motion-fast) var(--motion-ease-enter);
 }
+
+/* ── 摆姿势的人偶(见 mannequin/) ─────────────────────────────────────────── */
+.mannequin-dialog {
+  max-height: calc(100dvh - 2rem);
+}
+.mannequin-viewport {
+  /* 工作台透应用的底,人偶用影子把自己"踩"在地上;网格会切碎小模型上的读数,这里不放。 */
+  background: color-mix(in srgb, var(--muted-foreground) 7%, transparent);
+}
+.mannequin-viewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.mannequin-readout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-md, 6px);
+  background: color-mix(in srgb, var(--muted-foreground) 9%, transparent);
+  font-size: var(--text-ui-xs);
+  color: var(--muted-foreground);
+}
+.mannequin-readout svg {
+  flex-shrink: 0;
+}
+.mannequin-readout span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 }

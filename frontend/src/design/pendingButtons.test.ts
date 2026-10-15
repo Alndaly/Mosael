@@ -62,6 +62,9 @@ const EXCEPTIONS: Record<string, { disabled: string; count?: number; why: string
       why: "「删除所选」只是打开确认框;删除、改名在跑时、只读成员(D62)都点不了,转圈的是确认框、改名框里那颗" },
     { disabled: "busy", count: 2, why: "「取消选择」和卡片本身:删除、改名在跑时整列锁住,转圈的是确认框、改名框里那颗" },
   ],
+  "features/scenes/mannequin/SceneMannequinDialog.tsx": [
+    { disabled: "!!busy", why: "「复位姿势」:快照渲染/上传在跑时整组锁住,转圈的是按下的「存为素材」「去生图」那一颗" },
+  ],
   "features/scenes/SceneStudio.tsx": [
     { disabled: "!!busy", count: 4,
       why: "「生成素材」入口、播放、物体的显隐和删除:导出、录制、准备生成在跑时编辑器锁住,视口上那块 scene-busy 转圈并写着在做什么" },

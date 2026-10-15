@@ -62,6 +62,7 @@ import {
   Move,
   Pause,
   Play,
+  PersonStanding,
   Plus,
   RotateCcw,
   RotateCw,
@@ -73,7 +74,7 @@ import {
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { boardKeys, sceneKeys } from "@/api/queryKeys";
-import { importAsset } from "@/api/domains/assets";
+import { importAsset, type Asset } from "@/api/domains/assets";
 import { createBoard, updateBoard, withSlotProducer, type BoardItem, type SceneReferenceUse } from "@/api/domains/boards";
 import { errorText } from "@/api/errorMessage";
 import {
@@ -137,6 +138,7 @@ import {
 } from "./sceneGraph";
 import { SHOT_FPS } from "./encodeVideo";
 import { SceneViewport, type ViewportHandle } from "./SceneViewport";
+import { SceneMannequinDialog } from "./mannequin/SceneMannequinDialog";
 import { useSaveShortcut } from "@/lib/saveShortcut";
 import "./scenes.css";
 
@@ -448,6 +450,8 @@ function SceneEditor({
     [agent, setAgent] = React.useState<CanvasAgentMode | null>(null),
     [revisions, setRevisions] = React.useState(false),
     [recovery, setRecovery] = React.useState<typeof draft | null>(null),
+    /** 摆姿势的人偶弹窗。人偶是独立工具 —— 不进场景数据(否则后端白模/GLB  parity 都得跟着改)。 */
+    [mannequin, setMannequin] = React.useState(false),
     /**
      * 正在手改姿态的那个物体 —— **它此刻不跟着轨走**。
      *
@@ -883,6 +887,37 @@ function SceneEditor({
       if (mounted.current) setBridging(null);
     }
   }
+  /**
+   * 人偶快照「去生图」:开一张画板,放一格图片生成格,**这张快照已经挂在「参考图」里**
+   * (source_assets 的 reference_image 角色)。和 bridge() 同一条路 —— 模型和参数由用户在
+   * 画板上挑;支持参考图的图片模型会把它当「照这个人/这个姿势来」的条件。
+   */
+  async function bridgeMannequin(asset: Asset) {
+    await work(t("sceneMannequinBusyBridge"), async () => {
+      const board = await createBoard({
+        workspace_id: initial.workspace_id,
+        name: `${t("sceneMannequinFileName")} · ${draft.name}`,
+      });
+      const generator: BoardItem = {
+        id: uid(),
+        kind: "image",
+        x: 0,
+        y: 0,
+        form: {
+          prompt: t("sceneMannequinBridgePrompt"),
+          source_assets: [{ asset_id: asset.id, role: "reference_image" }],
+        },
+      };
+      await updateBoard(board.id, {
+        workspace_id: initial.workspace_id,
+        base_revision: board.revision,
+        canvas: { items: [withSlotProducer(generator)], edges: [] },
+      });
+      await qc.invalidateQueries({ queryKey: boardKeys.list(initial.workspace_id) });
+      openBoard(board.id);
+      toast.success(t("sceneMannequinBridgeDone"));
+    });
+  }
   function applyCameraPose(patch: Partial<Pick<SceneObject, "position" | "target" | "fov">>) {
     if (!rig) return;
     const pose = posing === rig.id ? rig : sampleCamera(rig, shot, time);
@@ -952,6 +987,12 @@ function SceneEditor({
       data-screen-mode={fullscreen.active ? "editor" : undefined}
     >
       <RenameDialog open={renaming} title={t("sceneRenameTitle")} initialValue={draft.name} onCancel={() => setRenaming(false)} pending={false} onSubmit={(name) => { change({ ...current.current, name }); setRenaming(false); }} />
+      <SceneMannequinDialog
+        workspaceId={initial.workspace_id}
+        open={mannequin}
+        onClose={() => setMannequin(false)}
+        onBridgeToBoard={bridgeMannequin}
+      />
       <header className="scene-header">
         {/* 「回清单 · 这是哪一个」在顶栏的路径里(3D 场景 / 片场,点名字改名,见 components/layout/pageTrail);
             这里只留保存状态。 */}
@@ -999,6 +1040,12 @@ function SceneEditor({
           >
             <Sparkles size={15} />
             {t("sceneAssistant")}
+          </Button>
+          {/* 摆姿势的人偶:程序化图元拼的关节模型,摆好姿势出着色快照进素材库,
+              给生图节点当「要模型看的图片」。和场景数据互相独立。 */}
+          <Button variant="ghost" size="sm" onClick={() => setMannequin(true)}>
+            <PersonStanding size={15} />
+            {t("sceneMannequin")}
           </Button>
           <SceneBlender scene={initial} pending={autosave.pending || !!error} busy={!!busy} work={work}
             //: 和「恢复历史版本」走同一条路(update → change):进撤销栈、由自动保存落库。
