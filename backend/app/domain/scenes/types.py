@@ -96,7 +96,8 @@ class SceneObject(SceneValue):
     #: 提示词里写明「这个颜色的人偶是谁」—— 构图由 3D 定,长相由资产定。只有 figure 用得上。
     entity_id: Identifier | None = None
     #: figure 才有:19 关节的角度表(度)+ 髋部下移(米)。None = 直立默认站姿。摆好的姿态随场景持久化,
-    #: 白模参考帧、GLB 都按它画(见 render/meshes._figure 对照前端的 mannequinRig)。
+    #: 白模参考帧、GLB 都按它画(见 render/meshes._figure 对照前端的 mannequinRig;
+    #: 两侧由 contracts/scene-3d-cases.json 的 figure 用例钉住)。
     pose: FigurePose | None = None
     #: 相机看向哪里,以及视角。非相机忽略它们。
     #:

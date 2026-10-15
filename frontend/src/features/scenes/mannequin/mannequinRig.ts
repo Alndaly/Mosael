@@ -165,9 +165,15 @@ export function createMannequin(
   const spine = pivot("spine", hips, 0, 0.15, 0);
   segment("spine", 0.125, 0.16, 0.09, 1.1, 0.8); // 腰段
   const chest = pivot("chest", spine, 0, 0.2, 0);
-  segment("chest", 0.15, 0.18, 0.09, 1.3, 0.78); // 胸廓(肩比腰宽)
+  // 胸廓:**必须收在肩线(1.46)附近**,否则脖子没地方露。three 的胶囊半高 = length/2 + radius,
+  // 所以 [0.15, 0.02] @ 段心 0 的胸廓是 1.30 ± 0.16 = [1.14, 1.46]:仍够宽(半宽 0.195,和原来
+  // 一样),但顶从 1.63 收到 1.46。原来 length 0.18 那版一路顶到 1.63,把 [1.43,1.59] 的脖子和
+  // 头的下缘(头根 1.516)全包了进去 —— 那才是「没脖子」的真因,不是脖子缺几何。
+  segment("chest", 0.15, 0.02, 0, 1.3, 0.78); // 胸廓(肩比腰宽)
   const neck = pivot("neck", chest, 0, 0.18, 0);
-  segment("neck", 0.05, 0.06, 0.03); // 脖子
+  // 脖子:略加长加粗(0.05/0.06 @ 0.03 → 0.052/0.06 @ 0.02),占 [1.42, 1.58]:
+  // 下段 1.42–1.46 埋在胸里接住躯干,1.46–1.516 露在外面,冠顶 1.58 顶进头根(头根 1.516)。
+  segment("neck", 0.052, 0.06, 0.02);
   const head = pivot("head", neck, 0, 0.06, 0);
   {
     const geometry = new THREE.SphereGeometry(0.115 * s, 24, 18);
@@ -214,11 +220,16 @@ export function createMannequin(
     segment(`thigh${side}` as MannequinJoint, 0.085, 0.27, -0.19);
     const shin = pivot(`shin${side}` as MannequinJoint, thigh, 0, -0.4, 0);
     segment(`shin${side}` as MannequinJoint, 0.063, 0.27, -0.18);
-    const foot = pivot(`foot${side}` as MannequinJoint, shin, 0, -0.4, 0);
+    // 脚踝上提 0.02(-0.4 → -0.38,世界 0.12 → 0.14):原来的 -0.4 把脚面留在 0.107,小腿底
+    // 0.142,中间空 0.035 —— 脚看着就是飘着的小方块。
+    const foot = pivot(`foot${side}` as MannequinJoint, shin, 0, -0.38, 0);
+    // 脚:盒子(脚掌 + 踝)。盒心 -0.07、高 0.14 → 世界 [0.0, 0.14]:**脚底落在 y=0**,顶面
+    // 盖过小腿底 0.142,小腿末端整个坐在脚里,不再有缝;深 0.25、中心 z 0.045 → 脚跟 -0.08 /
+    // 脚尖 0.17(和原来一样),也不再是那个小方块。
     {
-      const geometry = new THREE.BoxGeometry(0.095 * s, 0.07 * s, 0.23 * s);
+      const geometry = new THREE.BoxGeometry(0.09 * s, 0.14 * s, 0.25 * s);
       const mesh = new THREE.Mesh(geometry, materialFor);
-      mesh.position.set(0, -0.048 * s, 0.055 * s);
+      mesh.position.set(0, -0.07 * s, 0.045 * s);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.mannequinJoint = `foot${side}`;

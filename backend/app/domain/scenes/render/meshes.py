@@ -158,8 +158,8 @@ _JOINT_OFFSETS = {
     "forearmL": (0.0, -0.23, 0.0), "handL": (0.0, -0.21, 0.0),
     "shoulderR": (-0.1, 0.16, 0.0), "upperArmR": (-0.11, 0.0, 0.0),
     "forearmR": (0.0, -0.23, 0.0), "handR": (0.0, -0.21, 0.0),
-    "thighL": (0.105, -0.03, 0.0), "shinL": (0.0, -0.4, 0.0), "footL": (0.0, -0.4, 0.0),
-    "thighR": (-0.105, -0.03, 0.0), "shinR": (0.0, -0.4, 0.0), "footR": (0.0, -0.4, 0.0),
+    "thighL": (0.105, -0.03, 0.0), "shinL": (0.0, -0.4, 0.0), "footL": (0.0, -0.38, 0.0),
+    "thighR": (-0.105, -0.03, 0.0), "shinR": (0.0, -0.4, 0.0), "footR": (0.0, -0.38, 0.0),
 }
 
 #: 关节的建造顺序(父在子前)。
@@ -251,8 +251,10 @@ def _figure(h: float, pose: FigurePose | None) -> list[Mesh]:
     parts: list[Mesh] = [
         seg("hips", 0.135, 0.1, 0.03, 1.2, 0.85),  # 骨盆
         seg("spine", 0.125, 0.16, 0.09, 1.1, 0.8),  # 腰段
-        seg("chest", 0.15, 0.18, 0.09, 1.3, 0.78),  # 胸廓
-        seg("neck", 0.05, 0.06, 0.03),  # 脖子
+        # 胸廓:[0.15, 0.02] @ 段心 0 → 1.30 ± (0.02/2 + 0.15) = [1.14, 1.46],收在肩线,
+        # 原来的 1.63 会把脖子包住(那才是「没脖子」的原因)。
+        seg("chest", 0.15, 0.02, 0.0, 1.3, 0.78),  # 胸廓
+        seg("neck", 0.052, 0.06, 0.02),  # 脖子 [1.42, 1.58]:下段埋在胸里,上段露出、冠顶顶进头根
     ]
     # 头:一个球,略拉长。
     parts.append(placed("head", sphere(0.115 * s), (0.0, 0.1 * s, 0.0), scale=(0.92, 1.08, 0.98)))
@@ -263,9 +265,11 @@ def _figure(h: float, pose: FigurePose | None) -> list[Mesh]:
         parts.append(seg(f"upperArm{side}", 0.055, 0.17, -0.115))
         parts.append(seg(f"forearm{side}", 0.047, 0.15, -0.1))
         parts.append(seg(f"hand{side}", 0.05, 0.09, -0.065))
-    for side, sign in (("L", 1.0), ("R", -1.0)):
+    for side in ("L", "R"):
         parts.append(seg(f"thigh{side}", 0.085, 0.27, -0.19))
         parts.append(seg(f"shin{side}", 0.063, 0.27, -0.18))
-        parts.append(placed(f"foot{side}", box(0.095 * s, 0.07 * s, 0.23 * s, 0, 0, 0),
-                            (0.0, -0.048 * s, 0.055 * s)))
+        # 脚:box() 的 y 是**盒心**(给了 y 它自己加 h/2,和前端 BoxGeometry.position 对齐),
+        # 盒心 -0.07、高 0.14、脚踝 0.14 → 世界 [0.0, 0.14]:脚底落在 y=0,小腿底 0.142 坐在脚里。
+        parts.append(placed(f"foot{side}", box(0.09 * s, 0.14 * s, 0.25 * s, 0, -0.07 * s, 0.045 * s),
+                            (0.0, 0.0, 0.0)))
     return parts
