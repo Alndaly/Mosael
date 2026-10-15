@@ -92,70 +92,276 @@ export function alphaMask(data: MaskPixels, value: number): void {
 export const halfUp = (value: number) => Math.floor(value + 0.5);
 
 /**
- * 扩张(`radius` > 0)/ 收缩(`radius` < 0)`|radius|` 个像素,**形态学**:窗口 `(2r+1)×(2r+1)` 的正方形里
- * 取最大值(扩张)/ 最小值(收缩)。灰的(羽化过的软边)照灰的取,不先二值化。
+ * 圆盘结构元拆出来的一趟 1-D 膨胀:`(dx, dy)` 是方向(分量 ∈ {−1, 0, 1},不同时为 0),
+ * `reach` 是这一趟的**半长**(沿线取 `[i-reach, i+reach]`)。
+ */
+export type DiscSegment = readonly [dx: number, dy: number, reach: number];
+
+/** 整数平方根,向下取整。`Math.sqrt` 在完全平方附近可能差一格 → 落地前校正回来。 */
+function isqrt(value: number): number {
+  let root = Math.floor(Math.sqrt(value));
+  if ((root + 1) * (root + 1) <= value) root += 1;
+  while (root > 0 && root * root > value) root -= 1;
+  return root;
+}
+
+/**
+ * 数字圆盘 `dx² + dy² ≤ r²` 里 `|dx| + |dy|` 的最大值 —— 八边形的对角边至少要有这么大,才盖得住圆盘。
  *
- * 和后端 `media/masks.grow_mask` 逐字节相同(contracts/mask-cases.json):两轴分开跑(正方形结构元可分离)、
- * 边界**夹取**(越界的取样点取边上那个像素,贴边那一圈不会自己缩掉)、半径按长边封顶。
+ * 整数循环(每步一次整数开方),**不含浮点**:后端 `media/masks._disc_diagonal_floor` 是同一段,
+ * 两侧算出的是同一个整数。
+ */
+function discDiagonalFloor(reach: number): number {
+  let best = 0;
+  for (let dx = 0; dx <= reach; dx += 1) {
+    const dy = isqrt(reach * reach - dx * dx);
+    if (dx + dy > best) best = dx + dy;
+  }
+  return best;
+}
+
+/**
+ * 半径 `reach`(已取整、已按长边封顶、≥ 1)的**圆盘结构元**,拆成一组 1-D 线段:
+ * **组内按顺序各做一趟**(= 结构元是这些线段的闵可夫斯基和),组与组之间取**并**。
  *
- * 每一行用单调队列求滑动窗口的极值 —— 每个像素进出队列各一次,和半径无关:编辑器里 4096 的文档、
- * 半径 64 拖一下也是一眨眼。`radius` 取整后为 0 就原样不动。
+ * | r | 结构元 | 为什么 |
+ * | --- | --- | --- |
+ * | 1 | 十字(4 邻)`{(0,0),(±1,0),(0,±1)}` | 半径 1 的数字圆盘**就是**十字;四向八边形做不出它(十字不是凸的) |
+ * | 2 | 菱形 `|dx| + |dy| ≤ 2`(3×3 的方 ∪ 两条对角) | 整数上 `dx² + dy² ≤ 4` 与 `|dx| + |dy| ≤ 2` 等价 —— 半径 2 的数字圆盘**就是**这个菱形 |
+ * | ≥ 3 | 八边形 `{\|dx\| ≤ r, \|dx ± dy\| ≤ M}` | 四段线段的闵可夫斯基和;`M` 见下 |
+ *
+ * 1 / 2 两档单独写出来,是因为八边形**表示不了**它们:r = 1 的整数解退化成一个点或 3×3 的方,
+ * r = 2 的整数解要么是 3×3 的方、要么大出一圈。小半径是维护者最容易看见的一档(一个点扩出去
+ * 就是那个小点),这两档必须是**精确**的圆盘。
+ *
+ * r ≥ 3 的八边形 = 四段线段(轴向两条 + 对角两条)的闵可夫斯基和,整数参数
+ * `axis = M - r`(轴向半长)、`diagonal = r - M / 2`(对角半长),其中
+ * `M` 是**能盖住数字圆盘的最小偶数** —— 偶数这条约束来自闵可夫斯基和本身:它给出来的八边形
+ * 恒有 `M = 2 × (两条线段的半长之和)`。取"能盖住"的那一侧 ⇒ **扩张半径 r 从不欠账**
+ * (结果一定含住半径 r 的真圆盘),代价是八个顶点方向上多出去一点(见 `growMask`)。
+ *
+ * 后端 `media/masks._disc_segments` 是同一段整数规则(契约 contracts/mask-cases.json 逐字节钉着)。
+ */
+export function discSegments(reach: number): DiscSegment[][] {
+  if (reach <= 1) return [[[1, 0, 1]], [[0, 1, 1]]];
+  if (reach === 2) return [[[1, 0, 1], [0, 1, 1]], [[1, 1, 1], [1, -1, 1]]];
+  const diagonalFloor = discDiagonalFloor(reach);
+  const even = diagonalFloor + (diagonalFloor % 2);
+  const axis = even - reach;
+  const diagonal = reach - even / 2;
+  return [[[1, 0, axis], [0, 1, axis], [1, 1, diagonal], [1, -1, diagonal]]];
+}
+
+/**
+ * 扩张(`radius` > 0)/ 收缩(`radius` < 0)`|radius|` 个像素,**形态学**:结构元是**圆盘**。
+ * 灰的(羽化过的软边)照灰的取最大 / 最小,不先二值化。
+ *
+ * ## 为什么不是正方形
+ *
+ * 此前这里的窗口是 `(2r+1)×(2r+1)` 的**正方形**,于是一个圆点扩张之后是一个**带直角的方块**。
+ * 现在窗口是圆盘:一个点扩出去还是圆的,只是更大。
+ *
+ * ## 怎么算(圆盘不可分离)
+ *
+ * 正方形可分离(横一趟 + 竖一趟),圆盘不行。所以圆盘走「**若干 1-D 线段的闵可夫斯基和**」:
+ * 沿 0° / 45° / 90° / 135° 各做一趟一维膨胀,**顺序复合**起来是一个数字八边形。
+ * 「凸结构元的膨胀 = 它各条边的 1-D 膨胀按顺序复合」—— 八条边、四个方向 ⇒ 四趟;
+ * 每趟是沿一条线的滑动窗口极值(单调队列,每像素进出队列各一次),**和半径无关**:4096 的文档、
+ * 半径 256 拖一下也就是四趟。
+ *
+ * 注意不是「四趟取**并**」:四趟的并是一个点被扩成米字形的星(每趟只加粗一个方向);
+ * **顺序复合**(闵可夫斯基和)才是那个多边形。
+ *
+ * ## 形状与语义(契约里也写着)
+ *
+ * 结构元是数字圆盘 `dx² + dy² ≤ r²` 的八向近似:r ≤ 2 时**精确**(十字 / 菱形),
+ * r ≥ 3 时是"内切半径 r 的八边形"(见 `discSegments` 的 M 规则)。于是
+ * 「扩张 r」的结果**一定含住**半径 r 的真圆盘(不欠账),八个顶点方向上最多多出 ~8%
+ * (r = 4 / 5 因为 M 只能取偶数,最多 ~17%;大半径稳定在 ~5%–10%)。
+ *
+ * 剩下的语义照旧:**半径半数进位**;半径按图像长边封顶(扩半张图和扩整张图是同一张图);
+ * 边界**夹取**(越界的取样点取边上那个像素,贴边那一圈不会自己缩掉);取整后为 0 原样返回;
+ * 负半径是收缩。
+ *
+ * ## 边界:整组**先补边**,组内每一趟都不夹取
+ *
+ * 「越界的取样点取边上那个像素」说的是**结构元的每一个取样点**:先夹取、再取极值。这跟"每一趟各自
+ * 夹取、再把结果串起来"**不是**同一件事 —— 夹取会打断平移不变性:`clamp(clamp(y+2)+(-3))` 可能
+ * 回到图里,而 `clamp(y+2-3)` 不会。正方形的两轴各管一个坐标、互不干扰,差别看不出来;圆盘的
+ * 对角两趟同时动两个坐标,贴着边就会差出来。
+ *
+ * 所以每一组先按"这一组所有趟的偏移之和"在四周补上**夹取边**(就是把边上那些像素重复出去),
+ * 组内每一趟都在补好的图上跑、不再夹取 —— 补出来的位置正是那些"夹回去"的取样点,取回的中间那块
+ * 就恰好是"每个取样点各自夹取"的结果。契约里那几条贴着边的用例钉着这条。
+ *
+ * 和后端 `media/masks.grow_mask` 逐字节相同(contracts/mask-cases.json 两侧跑同一份语料)。
  */
 export function growMask(data: MaskPixels, width: number, height: number, radius: number): void {
   const signed = halfUp(radius);
   if (signed === 0 || width < 1 || height < 1 || data.length !== width * height * CHANNELS) return;
   const reach = Math.min(Math.abs(signed), Math.max(width, height));
+  if (reach < 1) return;
+  const pick = signed > 0 ? Math.max : Math.min;
   const keepFirst = signed > 0 ? (a: number, b: number) => a >= b : (a: number, b: number) => a <= b;
-  const channel = new Uint8ClampedArray(width * height);
-  for (let at = 0, i = 0; at < data.length; at += CHANNELS, i += 1) channel[i] = data[at];
-  const scratch = new Uint8ClampedArray(width * height);
-  extremumAxis(channel, scratch, width, height, reach, true, keepFirst);
-  extremumAxis(scratch, channel, width, height, reach, false, keepFirst);
+  const count = width * height;
+  //: 这一组的裁剪结果先落这儿;单组时它就是最终结果。
+  const scratch = new Uint8ClampedArray(count);
+  const groups = discSegments(reach);
+  //: 组与组取并 —— 只有 r ≤ 2 会分成两组(十字 / 菱形);r ≥ 3 只有一组(八边形)。
+  const merged = groups.length > 1 ? new Uint8ClampedArray(count) : null;
+  for (let index = 0; index < groups.length; index += 1) {
+    const group = groups[index];
+    //: 这一组最远能取到多远:各趟偏移的和(补这么多圈就够,组内每一趟都不必再夹取)。
+    let padX = 0;
+    let padY = 0;
+    for (const [dx, dy, step] of group) {
+      padX += Math.abs(dx) * step;
+      padY += Math.abs(dy) * step;
+    }
+    const pw = width + padX * 2;
+    const ph = height + padY * 2;
+    //: 从 `data` 直接取灰度铺进补好边的图里(上一组的缓冲已经不能用了,所以每组都重来)。
+    let source = new Uint8ClampedArray(pw * ph);
+    replicateGray(data, source, width, height, padX, padY, pw);
+    let target = new Uint8ClampedArray(pw * ph);
+    const queue = new Int32Array(Math.max(pw, ph));
+    for (const [dx, dy, step] of group) {
+      extremumAlong(source, target, pw, ph, step, dx, dy, keepFirst, queue);
+      //: 这一趟的输出是下一趟的输入;两张缓冲轮着用。
+      const swap = source;
+      source = target;
+      target = swap;
+    }
+    //: 取回中间那块(边上那几圈是补出来的,不写回)。
+    for (let y = 0; y < height; y += 1) {
+      const at = (y + padY) * pw + padX;
+      scratch.set(source.subarray(at, at + width), y * width);
+    }
+    if (!merged) continue;
+    if (index === 0) merged.set(scratch);
+    else for (let i = 0; i < count; i += 1) merged[i] = pick(merged[i], scratch[i]);
+  }
+  const result = merged ?? scratch;
   for (let at = 0, i = 0; at < data.length; at += CHANNELS, i += 1) {
-    data[at] = channel[i];
-    data[at + 1] = channel[i];
-    data[at + 2] = channel[i];
+    const value = result[i];
+    data[at] = value;
+    data[at + 1] = value;
+    data[at + 2] = value;
     data[at + 3] = 255;
   }
 }
 
 /**
- * 沿一个轴取 `[i-reach, i+reach]`(夹在 `[0, n-1]` 里)的极值。夹取等价于把窗口截到边界之内 ——
- * 边上那个像素重复多少次都不改变最大 / 最小值。
+ * 沿一条线求滑动窗口极值:**线**由 `base`(起点下标)、`step`(沿线走一步的下标增量)、
+ * `length`(这条线有几个像素)给出;窗口是线上的 `[i-reach, i+reach]`,夹在这条线内。
  *
- * 队列里存下标,对应的值从队头到队尾按「谁更该留下」单调:新来的比队尾更该留下,队尾就再也当不上极值了。
+ * 队列里存**线上的位置**,对应的值从队头到队尾按「谁更该留下」单调:新来的比队尾更该留下,队尾就
+ * 再也当不上极值了;窗口右端推进时进队、左端越过时出队,每个像素进出各一次 ⇒ 一条线 O(length),
+ * 整趟 O(n),**和半径无关**。
  */
-function extremumAxis(
+function slidingExtremum(
+  from: Uint8ClampedArray,
+  to: Uint8ClampedArray,
+  base: number,
+  step: number,
+  length: number,
+  reach: number,
+  keepFirst: (a: number, b: number) => boolean,
+  queue: Int32Array,
+): void {
+  let head = 0;
+  let tail = 0;
+  let next = 0;
+  for (let i = 0; i < length; i += 1) {
+    //: 窗口右端推进到 i + reach。
+    const right = Math.min(length - 1, i + reach);
+    for (; next <= right; next += 1) {
+      const value = from[base + next * step];
+      while (tail > head && keepFirst(value, from[base + queue[tail - 1] * step])) tail -= 1;
+      queue[tail] = next;
+      tail += 1;
+    }
+    //: 窗口左端之外的出队。
+    while (queue[head] < i - reach) head += 1;
+    to[base + i * step] = from[base + queue[head] * step];
+  }
+}
+
+/**
+ * 从 `data`(RGBA)取红通道(= 灰度,见文件头)铺进一张**四周补了夹取边**的图:
+ * 越界的取样点取边上那个像素,就是把最外那一行 / 一列重复出去。
+ *
+ * `padded` 的宽是 `pw = width + 2·padX`、高是 `height + 2·padY`;中间那几行逐像素取(源是四通道、
+ * 抽不出连续的一段),左右两圈用这一行两端的值铺开,上下两圈整行复制贴边的行。
+ */
+function replicateGray(
+  data: MaskPixels,
+  padded: Uint8ClampedArray,
+  width: number,
+  height: number,
+  padX: number,
+  padY: number,
+  pw: number,
+): void {
+  for (let y = 0; y < height; y += 1) {
+    const at = (y + padY) * pw + padX;
+    for (let x = 0, source = y * width * CHANNELS; x < width; x += 1, source += CHANNELS) {
+      padded[at + x] = data[source];
+    }
+    padded.fill(padded[at], at - padX, at);
+    padded.fill(padded[at + width - 1], at + width, at + width + padX);
+  }
+  const top = padY * pw;
+  const bottom = (height + padY) * pw;
+  for (let y = 0; y < padY; y += 1) {
+    padded.set(padded.subarray(top, top + pw), y * pw);
+    padded.set(padded.subarray(bottom - pw, bottom), bottom + y * pw);
+  }
+}
+
+/**
+ * 沿方向 `(dx, dy)` 取一条线上 `[i-reach, i+reach]` 的极值 —— 一维膨胀 / 腐蚀。
+ *
+ * 传进来的图是**已经补好夹取边**的那一张(见 `growMask` 那段):所有取样点都落在图内,
+ * 所以这里只把窗口夹在这条线内 —— 那是**补边之后**的边界,不是原来那张图的边界,补出来的那些
+ * 位置已经代表了"夹回去的取样点"。(补边为什么是整组一次、而不是每一趟各夹各的,见 `growMask`。)
+ *
+ * 方向只有四种:横、竖、两条对角。窗口对 `i-reach` 与 `i+reach` 是对称的,所以方向的正负号不影响
+ * 结果 —— 四个方向正好四趟(对着 `(1,1)` 再跑一趟 `(-1,-1)` 是同一张图)。
+ */
+function extremumAlong(
   from: Uint8ClampedArray,
   to: Uint8ClampedArray,
   width: number,
   height: number,
   reach: number,
-  horizontal: boolean,
+  dx: number,
+  dy: number,
   keepFirst: (a: number, b: number) => boolean,
+  queue: Int32Array,
 ): void {
-  const outer = horizontal ? height : width;
-  const inner = horizontal ? width : height;
-  const step = horizontal ? 1 : width;
-  const queue = new Int32Array(inner);
-  for (let line = 0; line < outer; line += 1) {
-    const base = horizontal ? line * width : line;
-    let head = 0;
-    let tail = 0;
-    let next = 0;
-    for (let i = 0; i < inner; i += 1) {
-      //: 窗口右端推进到 i + reach。
-      const right = Math.min(inner - 1, i + reach);
-      for (; next <= right; next += 1) {
-        const value = from[base + next * step];
-        while (tail > head && keepFirst(value, from[base + queue[tail - 1] * step])) tail -= 1;
-        queue[tail] = next;
-        tail += 1;
-      }
-      //: 窗口左端之外的出队。
-      while (queue[head] < i - reach) head += 1;
-      to[base + i * step] = from[base + queue[head] * step];
+  if (dy === 0) {
+    for (let y = 0; y < height; y += 1) slidingExtremum(from, to, y * width, 1, width, reach, keepFirst, queue);
+    return;
+  }
+  if (dx === 0) {
+    for (let x = 0; x < width; x += 1) slidingExtremum(from, to, x, width, height, reach, keepFirst, queue);
+    return;
+  }
+  if (dx === dy) {
+    //: 线 x − y = c:起点落在左列或首行,沿线一步是 (1,1)。
+    for (let c = 1 - height; c <= width - 1; c += 1) {
+      const x0 = c > 0 ? c : 0;
+      const y0 = c > 0 ? 0 : -c;
+      slidingExtremum(from, to, x0 + y0 * width, width + 1, Math.min(width - x0, height - y0), reach, keepFirst, queue);
     }
+    return;
+  }
+  //: 线 x + y = s:起点取右上角那一端,沿线一步是 (−1,+1)(下标 +width−1)。
+  for (let s = 0; s <= width + height - 2; s += 1) {
+    const x0 = Math.min(s, width - 1);
+    const y0 = s - x0;
+    slidingExtremum(from, to, x0 + y0 * width, width - 1, Math.min(x0, height - 1 - y0) + 1, reach, keepFirst, queue);
   }
 }
 

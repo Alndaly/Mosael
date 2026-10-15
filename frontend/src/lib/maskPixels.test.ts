@@ -10,6 +10,7 @@ import {
   MASK_TINT_DIM,
   MASK_TINT_TOKEN,
   alphaMask,
+  discSegments,
   featherMask,
   grayscaleOf,
   growMask,
@@ -306,20 +307,34 @@ describe("蒙版写入口:整张写、尺寸不符就拒绝", () => {
 });
 
 describe("扩张 / 收缩(growMask)", () => {
-  /** 照定义一格一格算:窗口 (2r+1)² 夹在图内取极值。慢,但一眼看得出是对的 —— 拿它对单调队列那一版。 */
+  /** 结构元的偏移集:组内闵可夫斯基和、组间取并(照 `discSegments` 的定义)。 */
+  function discOffsets(reach: number): Array<[number, number]> {
+    const points = new Map<string, [number, number]>();
+    for (const group of discSegments(reach)) {
+      let acc: Array<[number, number]> = [[0, 0]];
+      for (const [dx, dy, step] of group) {
+        const next: Array<[number, number]> = [];
+        for (const [x, y] of acc) for (let t = -step; t <= step; t += 1) next.push([x + t * dx, y + t * dy]);
+        acc = next;
+      }
+      for (const point of acc) points.set(point.join(","), point);
+    }
+    return [...points.values()];
+  }
+
+  /** 照定义一格一格算:结构元的**每一个取样点**各自夹回图内,取极大 / 极小。慢,但一眼看得出是对的。 */
   function bruteForce(gray: number[], width: number, height: number, radius: number): number[] {
-    const reach = Math.abs(radius);
+    const reach = Math.min(Math.abs(radius), Math.max(width, height));
     const pick = radius > 0 ? Math.max : Math.min;
+    const offsets = discOffsets(reach);
     return gray.map((_, i) => {
       const x = i % width;
-      const y = Math.floor(i / width);
+      const y = (i - x) / width;
       let best = gray[i];
-      for (let dy = -reach; dy <= reach; dy += 1) {
-        for (let dx = -reach; dx <= reach; dx += 1) {
-          const sx = Math.min(width - 1, Math.max(0, x + dx));
-          const sy = Math.min(height - 1, Math.max(0, y + dy));
-          best = pick(best, gray[sy * width + sx]);
-        }
+      for (const [dx, dy] of offsets) {
+        const sx = Math.min(width - 1, Math.max(0, x + dx));
+        const sy = Math.min(height - 1, Math.max(0, y + dy));
+        best = pick(best, gray[sy * width + sx]);
       }
       return best;
     });
@@ -339,6 +354,73 @@ describe("扩张 / 收缩(growMask)", () => {
       growMask(data, width, height, radius);
       expect([...grayscaleOf(data)], `${width}×${height} r=${radius}`).toEqual(bruteForce(gray, width, height, radius));
       expect(isOpaque(data)).toBe(true);
+    }
+  });
+
+  /**
+   * 结构元是**圆盘**而不是正方形:一个孤立的圆点扩出去还是圆的。
+   *
+   * 三条一起看才钉得住:①水平 / 垂直方向够得着 r(半径是内切半径,不欠账);
+   * ②外接正方形的四个角**不**点亮(正方形核在那里是白的 —— 维护者报的就是这个"带直角的方块");
+   * ③真圆盘 `dx² + dy² ≤ r²` 整个在里面,且结果不超出内切八边形 `{|dx| ≤ r, |dx ± dy| ≤ M}`。
+   */
+  it("一个圆点扩张之后还是圆点(角落不亮、真圆盘在里面)", () => {
+    for (const radius of [1, 2, 3, 4, 5, 8, 20]) {
+      const side = radius * 2 + 5;
+      const center = (side - 1) / 2;
+      const gray = new Array<number>(side * side).fill(0);
+      gray[center * side + center] = 255;
+      const data = new Uint8ClampedArray(side * side * 4);
+      writeGrayscale(new Uint8ClampedArray(gray), data);
+      growMask(data, side, side, radius);
+      const white = new Set<number>();
+      for (let i = 0; i < side * side; i += 1) if (data[i * 4] === 255) white.add(i);
+      const at = (dx: number, dy: number) => (center + dy) * side + center + dx;
+      for (const [dx, dy] of [[radius, 0], [-radius, 0], [0, radius], [0, -radius]] as const) {
+        expect(white.has(at(dx, dy)), `r=${radius}:(${dx},${dy}) 方向没长到 r`).toBe(true);
+      }
+      for (const [dx, dy] of [[radius, radius], [-radius, radius], [radius, -radius], [-radius, -radius]] as const) {
+        expect(white.has(at(dx, dy)), `r=${radius}:外接正方形的角 (${dx},${dy}) 被点亮了(那是正方形核)`).toBe(false);
+      }
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        for (let dy = -radius; dy <= radius; dy += 1) {
+          if (dx * dx + dy * dy <= radius * radius) {
+            expect(white.has(at(dx, dy)), `r=${radius}:真圆盘的 (${dx},${dy}) 没被含住`).toBe(true);
+          }
+        }
+      }
+      //: 内切八边形:r ≥ 3 那一组是 [轴向 p, 轴向 p, 对角 q, 对角 q],M = 2(p + q)。
+      const group = discSegments(radius)[0];
+      //: 轴向是 (1,0)/(0,1)(有一个分量为 0),对角是 (1,1)/(1,−1)(两个分量都不为 0)。
+      const axis = Math.max(...group.filter(([dx, dy]) => dx === 0 || dy === 0).map(([, , step]) => step), 0);
+      const diagonal = Math.max(...group.filter(([dx, dy]) => dx !== 0 && dy !== 0).map(([, , step]) => step), 0);
+      const cap = 2 * (axis + diagonal);
+      for (const index of white) {
+        const x = index % side;
+        const y = (index - x) / side;
+        const dx = x - center;
+        const dy = y - center;
+        expect(Math.abs(dx) <= radius && Math.abs(dx + dy) <= cap && Math.abs(dx - dy) <= cap).toBe(true);
+      }
+    }
+  });
+
+  it("r = 1 是十字(4 邻)、r = 2 是菱形 —— 小半径是精确的数字圆盘", () => {
+    const sorted = (points: Array<[number, number]>) => [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(sorted(discOffsets(1))).toEqual(sorted([[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]));
+    expect(discOffsets(2)).toHaveLength(13);
+    for (const point of discOffsets(2)) expect(Math.abs(point[0]) + Math.abs(point[1])).toBeLessThanOrEqual(2);
+    //: 四个角在 r = 1 / 2 都不该点亮(正方形核会点亮)。
+    for (const radius of [1, 2]) {
+      const side = radius * 2 + 3;
+      const center = (side - 1) / 2;
+      const data = new Uint8ClampedArray(side * side * 4);
+      for (let i = 0; i < side * side; i += 1) data[i * 4 + 3] = 255;
+      data[(center * side + center) * 4] = 255;
+      growMask(data, side, side, radius);
+      for (const pixel of [0, side - 1, (side - 1) * side, side * side - 1]) {
+        expect(data[pixel * 4], `r=${radius}:画布的角 #${pixel} 被点亮了`).toBe(0);
+      }
     }
   });
 

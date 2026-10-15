@@ -17,7 +17,7 @@ ComfyUI 插件那条注入的路读的是**红通道**(`plugins/bundled/comfyui/
 ## 和前端画布那一份的关系
 
 编辑器(`frontend/src/lib/maskPixels.ts`)里的阈值、反选、扩张、羽化和这里是**同一套规则**(阈值按 Rec.601
-加权、`>=` 判白、扩张按正方形窗口取极值、羽化三遍盒式模糊、四边夹取、半径半数进位):同一张底图、同一组参数,
+加权、`>=` 判白、扩张按**圆盘**(数字八边形)取极值、羽化三遍盒式模糊、四边夹取、半径半数进位):同一张底图、同一组参数,
 两边该切出同一串字节。这条"同一串字节"由 `contracts/mask-cases.json` 钉着(两侧读**同一份**语料、逐字节比),
 改这里之前先看那边,反过来也一样。
 
@@ -169,36 +169,138 @@ def invert_mask(mask) -> bytes:
     return (255 - np.frombuffer(_flat(mask), dtype=np.uint8)).astype(np.uint8).tobytes()
 
 
-def _extremum_along(mask: np.ndarray, reach: int, axis: int, *, maximum: bool) -> np.ndarray:
-    """沿一个轴取 `[i-reach, i+reach]` 这一段的极大(扩张)/ 极小(收缩)值 —— 一维形态学。
+def _disc_diagonal_floor(reach: int) -> int:
+    """数字圆盘 `dx² + dy² ≤ r²` 里 `|dx| + |dy|` 的最大值 —— 八边形的对角边至少要有这么大。
 
-    **边界按夹取**:取样点越界就取边上那个像素(`np.pad(..., mode="edge")` 就是这个意思)。
-    补零的话贴着边的那一圈会自己缩掉一块,而蒙版的边常常正是要改的地方 —— 前端羽化那一段
-    写的是同一条理由。
-
-    窗口一格一格并进结果里(`out=`,就地累加),不把 2r+1 个窗口堆成一个大数组再 reduce ——
-    半径 256 时那个堆法要按 513 份图像分配内存,而这里只要两份。
+    `math.isqrt` 是**精确的整数**开方(不是浮点近似),和前端 `lib/maskPixels.discDiagonalFloor`
+    同一段循环:两侧算出的是同一个整数,形状不会在边界像素上差一格。
     """
-    if reach < 1:
+    best = 0
+    for dx in range(reach + 1):
+        dy = math.isqrt(reach * reach - dx * dx)
+        best = max(best, dx + dy)
+    return best
+
+
+def _disc_segments(reach: int) -> list[list[tuple[int, int, int]]]:
+    """半径 `reach`(≥ 1)的**圆盘**结构元,拆成一组 1-D 线段 —— 前端 `maskPixels.discSegments` 同一份规则。
+
+    组内按顺序各做一趟(结构元 = 这些线段的**闵可夫斯基和**),组与组之间取**并**:
+
+    - `r = 1`:十字(两组 = 横、竖)—— 半径 1 的数字圆盘就是十字,而四向八边形做不出它(十字不是凸的);
+    - `r = 2`:菱形 `|dx| + |dy| ≤ 2`(两组 = 3×3 的方、两条对角)—— 整数上它与 `dx² + dy² ≤ 4` 等价;
+    - `r ≥ 3`:一组四段线段(0° / 45° / 90° / 135°)= 数字八边形
+      `{|dx| ≤ r, |dx ± dy| ≤ M}`,`M` 是**能盖住数字圆盘的最小偶数**。
+
+    `M` 取偶数是闵可夫斯基和自带的约束(它给出来的八边形恒有 `M = 2 × 两条线段半长之和`);
+    取"能盖住圆盘"的那一侧 ⇒ 扩张半径 r **从不欠账**。小半径那两档为什么单独写、误差有多大,
+    见 `grow_mask` 的 docstring 与 `contracts/mask-cases.json` 的 `semantics`。
+    """
+    if reach <= 1:
+        return [[(1, 0, 1)], [(0, 1, 1)]]
+    if reach == 2:
+        return [[(1, 0, 1), (0, 1, 1)], [(1, 1, 1), (1, -1, 1)]]
+    floor = _disc_diagonal_floor(reach)
+    even = floor + (floor % 2)
+    axis = even - reach
+    diagonal = reach - even // 2
+    return [[(1, 0, axis), (0, 1, axis), (1, 1, diagonal), (1, -1, diagonal)]]
+
+
+def _shift(mask: np.ndarray, steps: int, dx: int, dy: int) -> np.ndarray:
+    """把 `mask` 沿 `(dx, dy)` 平移 `steps` 格,越界处取边上那个像素(`mode="edge"`)。
+
+    传进来的图是**已经补好夹取边**的那一张(见 `grow_mask`),所以这里夹到的边界是补出来的那一圈,
+    不是原来那张图的边界 —— 组内每一趟都不必再想"取样点夹回原图"这回事。
+
+    `mode="edge"` 的填充逐坐标夹取,夹取又是幂等的 ⇒ 两次夹取复合与一次夹取同值,倍增拼出来的每一块
+    都对得上朴素窗口(`backend/tests/test_masks.py` 里那条对朴素窗口的用例钉着)。
+    """
+    if steps == 0:
         return mask
-    pad = ((0, 0), (reach, reach)) if axis == 1 else ((reach, reach), (0, 0))
-    padded = np.pad(mask, pad, mode="edge")
-    length = mask.shape[axis]
-    result = np.take(padded, range(reach, reach + length), axis=axis).copy()
-    keep = np.maximum if maximum else np.minimum
-    for offset in range(1, reach + 1):
-        for start in (reach - offset, reach + offset):
-            keep(result, np.take(padded, range(start, start + length), axis=axis), out=result)
+    height, width = mask.shape
+    padded = np.pad(mask, ((steps, steps), (steps, steps)), mode="edge")
+    top, left = steps + steps * dy, steps + steps * dx
+    return padded[top:top + height, left:left + width]
+
+
+def _one_sided(mask: np.ndarray, reach: int, dx: int, dy: int, *, keep) -> np.ndarray:
+    """`{0, 1, …, reach}` 每一格上的极值(沿 `(dx, dy)`,越界夹取)。
+
+    **倍增**:`levels[k]` 是一张盖住连续 `2^k` 格的图(`levels[k] = keep(levels[k-1], levels[k-1] 平移 2^(k-1))`),
+    再把 `reach + 1` 按二进制拆成几块、各平移到位后拼起来。整图操作从 `2·reach` 遍降到
+    `~2·log2(reach)` 遍 —— 半径 256 那一档此前是 512 遍整图(约 6 秒),现在十几遍。
+    """
+    total = reach + 1
+    levels = [mask]
+    while (1 << len(levels)) <= total:
+        levels.append(keep(levels[-1], _shift(levels[-1], 1 << (len(levels) - 1), dx, dy)))
+    result = None
+    remaining, offset = total, 0
+    for k in range(len(levels) - 1, -1, -1):
+        block = 1 << k
+        if remaining < block:
+            continue
+        piece = levels[k] if offset == 0 else _shift(levels[k], offset, dx, dy)
+        result = piece if result is None else keep(result, piece)
+        offset += block
+        remaining -= block
     return result
 
 
-def grow_mask(mask, size: tuple[int, int], radius: float) -> bytes:
-    """扩张(`radius` > 0)/ 收缩(`radius` < 0)`|radius|` 个像素,**形态学**。
+def _extremum_segment(mask: np.ndarray, reach: int, dx: int, dy: int, *, maximum: bool) -> np.ndarray:
+    """沿方向 `(dx, dy)` 取 `[i-reach, i+reach]` 的极值 —— 一维形态学(膨胀 / 腐蚀)。
 
-    扩张取窗口最大值,收缩取窗口最小值,窗口是 `(2r+1)×(2r+1)` 的正方形。两轴**分开跑** ——
-    正方形结构元是可分离的(两轴各自夹取,合起来就是二维那个窗口),结果和不分开一样,代价从
-    r² 遍降到 2r 遍。灰的(羽化过的边)照灰的取最大 / 最小,不先二值化:那一圈软边是用户自己
-    调出来的,不该被这一步啃掉。
+    窗口对 `i` 是对称的 ⇒ 正向 `{0..reach}` 与反向 `{-reach..0}` 各自取极值再并;方向的正负号
+    不影响窗口本身,和前端 `extremumAlong` 那条"四趟不是八趟"是同一件事。
+    """
+    if reach < 1:
+        return mask
+    keep = np.maximum if maximum else np.minimum
+    return keep(
+        _one_sided(mask, reach, dx, dy, keep=keep),
+        _one_sided(mask, reach, -dx, -dy, keep=keep),
+    )
+
+
+def grow_mask(mask, size: tuple[int, int], radius: float) -> bytes:
+    """扩张(`radius` > 0)/ 收缩(`radius` < 0)`|radius|` 个像素,**形态学**:结构元是**圆盘**。
+
+    扩张取窗口最大值,收缩取窗口最小值。灰的(羽化过的边)照灰的取最大 / 最小,不先二值化:
+    那一圈软边是用户自己调出来的,不该被这一步啃掉。
+
+    ## 为什么不是正方形
+
+    此前窗口是 `(2r+1)×(2r+1)` 的**正方形**,于是一个圆点扩张之后是一个**带直角的方块**。
+    现在窗口是圆盘:一个点扩出去还是圆的(只是更大)。
+
+    ## 怎么算(圆盘不可分离)
+
+    正方形可分离(横一趟 + 竖一趟),圆盘不行。所以圆盘走「**若干 1-D 线段的闵可夫斯基和**」:
+    沿 0° / 45° / 90° / 135° 各做一趟一维膨胀,**顺序复合**起来是一个数字八边形
+    (凸结构元的膨胀 = 它各条边的 1-D 膨胀按顺序复合 —— 八条边、四个方向 ⇒ 四趟)。
+    每趟是"沿一条线取一段的极值",由 `_extremum_segment` 用倍增在 `~log2(reach)` 遍整图里算完。
+
+    注意不是「四趟取**并**」:四趟的并是一个点被扩成米字形的星;**顺序复合**才是那个多边形
+    (前端 `lib/maskPixels.growMask` 是同一份形状规则的另一份实现:那边沿每条线走单调队列)。
+
+    ## 边界:整组**先补边**,组内每一趟都不夹取
+
+    「越界的取样点取边上那个像素」说的是**结构元的每一个取样点**:先夹取、再取极值。这跟"每一趟各自
+    夹取、再把结果串起来"**不是**同一件事 —— 夹取会打断平移不变性:`clamp(clamp(y+2)-3)` 可能回到
+    图里,而 `clamp(y+2-3)` 不会。正方形的两轴各管一个坐标、互不干扰,差别看不出来;圆盘的对角两趟
+    同时动两个坐标,贴着边就会差出来。
+
+    所以每一组先按"这一组所有趟的偏移之和"在四周补上**夹取边**(`np.pad(..., mode="edge")`),组内
+    每一趟都在补好的图上跑、取回的中间那块就恰好是"每个取样点各自夹取"的结果。契约里那几条贴着边的
+    用例钉着这条。
+
+    ## 形状与语义
+
+    结构元是数字圆盘 `dx² + dy² ≤ r²` 的八向近似:r ≤ 2 时**精确**(十字 / 菱形),r ≥ 3 时是
+    "内切半径 r 的八边形"(`_disc_segments` 的 M 规则)。于是「扩张 r」的结果**一定含住**半径 r 的
+    真圆盘(不欠账),八个顶点方向上最多多出 ~8%(r = 4 / 5 因为 M 只能取偶数,最多 ~17%)。
+    三档怎么分、M 为什么取偶数、两侧怎么保证同一串字节,见 `contracts/mask-cases.json` 的 `semantics`。
 
     半径是「半径类参数」,和 `feather_mask` 走**同一条规则**(写在一处:见 `_half_up`)——
     一律**半数进位**、对齐前端与契约那边的 `Math.round`:`0.5` 扩张 1 格、`2.5` 扩张 3 格、
@@ -209,20 +311,34 @@ def grow_mask(mask, size: tuple[int, int], radius: float) -> bytes:
     与那几条 `grow` 小数用例)。
 
     半径按图像的长边封顶:扩张半个图宽和扩张整个图宽是同一个结果(全白 / 全黑),再往上只是
-    白算一遍。`radius == 0` 原样返回。
+    白算一遍。`radius == 0`(取整后 0 格也一样)原样返回。
     """
     if radius == 0:
         return _flat(mask)
     source = _array(mask, size)
     maximum = radius > 0
     reach = min(abs(_half_up(radius)), max(source.shape))
-    grown = _extremum_along(source, reach, 1, maximum=maximum)
-    grown = _extremum_along(grown, reach, 0, maximum=maximum)
+    if reach < 1:
+        return _flat(mask)
+    #: 组内顺序复合(闵可夫斯基和),组间取并 —— 只有 r ≤ 2 会分成两组(十字 / 菱形)。
+    #: 每一组各补各的边(这一组所有趟的偏移之和),补好之后组内每一趟都不夹取(见 docstring)。
+    grown = None
+    for group in _disc_segments(reach):
+        pad_x = sum(abs(dx) * step for dx, _dy, step in group)
+        pad_y = sum(abs(dy) * step for _dx, dy, step in group)
+        result = np.pad(source, ((pad_y, pad_y), (pad_x, pad_x)), mode="edge")
+        for dx, dy, step in group:
+            result = _extremum_segment(result, step, dx, dy, maximum=maximum)
+        result = result[pad_y:pad_y + source.shape[0], pad_x:pad_x + source.shape[1]]
+        if grown is None:
+            grown = result
+        else:
+            grown = np.maximum(grown, result) if maximum else np.minimum(grown, result)
     return grown.astype(np.uint8).tobytes()
 
 
 def _box_blur_axis(channel: np.ndarray, reach: int, axis: int) -> np.ndarray:
-    """一趟盒式模糊:窗口是 `[i-reach, i+reach]`,边上的取样点夹取(见 `_extremum_along`)。
+    """一趟盒式模糊:窗口是 `[i-reach, i+reach]`,边上的取样点夹取(见 `grow_mask` 那段边界)。
 
     用前缀和跑。前端是一格一格加减的滑动窗口 —— 那些和都是整数、双精度里精确,和这里的差值
     逐位相等,但这里不必在 Python 里逐行循环。**每跑完一趟落回 float32**:前端那一趟写进的是

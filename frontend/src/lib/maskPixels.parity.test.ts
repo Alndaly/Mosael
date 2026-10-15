@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   alphaMask,
+  discSegments,
   featherMask,
   grayscaleOf,
   growMask,
@@ -38,6 +39,7 @@ interface MaskCase {
   grow: number;
   feather: number;
   expected_reach: number;
+  expected_grow_reach?: number;
   expected_hex: string;
 }
 
@@ -51,6 +53,11 @@ const contract = JSON.parse(readFileSync(path, "utf8")) as {
   grow_rounding: Array<{ grow: number; reach: number; note: string }>;
   sources: Record<string, { note: string; rgba_hex: string }>;
   cases: MaskCase[];
+  disc: {
+    note: string;
+    exact: Array<{ r: number; shape: string; offsets: number[][]; note: string }>;
+    octagons: Array<{ r: number; m: number; M: number; axis: number; diagonal: number }>;
+  };
 };
 
 const { width, height } = contract.frame;
@@ -60,15 +67,56 @@ function rgba(one: MaskCase): MaskPixels {
   return new Uint8ClampedArray(Buffer.from(contract.sources[one.source].rgba_hex, "hex"));
 }
 
-/** 语料说的那四步,按定死的先后:阈值 → 反选 → 扩张/收缩 → 羽化。 */
-function pipeline(one: MaskCase): MaskPixels {
+/** 语料说的那四步,按定死的先后:阈值 → 反选 → 扩张/收缩 → 羽化。`grow` 可换成对照实现。 */
+function pipeline(one: MaskCase, grow: typeof growMask = growMask): MaskPixels {
   const data = rgba(one);
   if (one.source_kind === "alpha") alphaMask(data, one.threshold);
   else thresholdMask(data, one.threshold);
   if (one.invert) invertMask(data);
-  growMask(data, width, height, one.grow);
+  grow(data, width, height, one.grow);
   featherMask(data, width, height, one.feather);
   return data;
+}
+
+/**
+ * **改之前**那一版结构元:`(2r+1)²` 的正方形窗口,每个取样点各自夹回图内。
+ *
+ * 只在小语料(7×5)上当对照用 —— "形状退回正方形时语料会不会红"靠它。
+ */
+function squareGrow(data: MaskPixels, w: number, h: number, radius: number): void {
+  const reach = Math.min(Math.abs(Math.floor(radius + 0.5)), Math.max(w, h));
+  const pick = radius > 0 ? Math.max : Math.min;
+  const source = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < w * h; i += 1) source[i] = data[i * 4];
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      let best = source[y * w + x];
+      for (let dy = -reach; dy <= reach; dy += 1) {
+        for (let dx = -reach; dx <= reach; dx += 1) {
+          best = pick(best, source[Math.min(h - 1, Math.max(0, y + dy)) * w + Math.min(w - 1, Math.max(0, x + dx))]);
+        }
+      }
+      data[(y * w + x) * 4] = best;
+      data[(y * w + x) * 4 + 1] = best;
+      data[(y * w + x) * 4 + 2] = best;
+      data[(y * w + x) * 4 + 3] = 255;
+    }
+  }
+}
+
+/** 结构元的偏移集:组内闵可夫斯基和、组间取并 —— 语料 `disc` 那张表说的就是它。 */
+function discOffsets(reach: number): Array<[number, number]> {
+  const points = new Map<string, [number, number]>();
+  for (const group of discSegments(reach)) {
+    let acc: Array<[number, number]> = [[0, 0]];
+    for (const [dx, dy, step] of group) {
+      const next: Array<[number, number]> = [];
+      for (const [x, y] of acc) for (let t = -step; t <= step; t += 1) next.push([x + t * dx, y + t * dy]);
+      acc = next;
+    }
+    for (const point of acc) points.set(point.join(","), point);
+  }
+  return [...points.values()];
 }
 
 /** 一份前端算出来的蒙版 —— 单通道那一串字节(`r = g = b`,取红通道)。 */
@@ -155,5 +203,41 @@ describe("蒙版形状运算 · 前后端共用语料", () => {
     expect(divergent.length).toBeGreaterThan(0);
     const used = new Set(contract.cases.map((one) => one.feather));
     for (const one of divergent) expect(used.has(one.feather)).toBe(true);
+  });
+
+  it("圆盘:半径到八边形参数那张表(disc)和实现一致", () => {
+    //: r ≤ 2 是精确的数字圆盘:偏移集逐格对语料里那张表。
+    expect(contract.disc.exact.length).toBeGreaterThan(0);
+    for (const one of contract.disc.exact) {
+      const got = discOffsets(one.r).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const want = one.offsets.map(([x, y]) => [x, y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      expect(got, `r=${one.r}`).toEqual(want);
+    }
+    //: r ≥ 3 是八边形:先核参数,再把小半径的偏移集和那个八边形的整点比一遍(大半径点太多)。
+    for (const one of contract.disc.octagons) {
+      const groups = discSegments(one.r);
+      expect(groups.length, `r=${one.r} 该是一组(八边形)`).toBe(1);
+      const axis = groups[0].filter(([dx, dy]) => dx === 0 || dy === 0).map(([, , step]) => step);
+      const diagonal = groups[0].filter(([dx, dy]) => dx !== 0 && dy !== 0).map(([, , step]) => step);
+      expect([...new Set(axis)]).toEqual([one.axis]);
+      expect([...new Set(diagonal)]).toEqual([one.diagonal]);
+      if (one.r > 20) continue;
+      const want: Array<[number, number]> = [];
+      for (let x = -one.r; x <= one.r; x += 1) {
+        for (let y = -one.r; y <= one.r; y += 1) {
+          if (Math.abs(x) <= one.r && Math.abs(x + y) <= one.M && Math.abs(x - y) <= one.M) want.push([x, y]);
+        }
+      }
+      const got = discOffsets(one.r).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      expect(got, `r=${one.r}`).toEqual(want.sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+    }
+  });
+
+  it("语料里那几条扩张用例真的能分出圆盘与正方形", () => {
+    //: 结构元退回正方形(改之前那一版)时语料必须红 —— 一条永远绿的语料比没有更糟。
+    const diverged = contract.cases
+      .filter((one) => one.grow && bytesOf(pipeline(one, squareGrow)) !== one.expected_hex)
+      .map((one) => one.name);
+    expect(diverged.length, `能分出圆盘与正方形的用例:${diverged.join("、")}`).toBeGreaterThanOrEqual(3);
   });
 });

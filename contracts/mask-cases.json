@@ -1,8 +1,8 @@
 {
   "contract": "mask-cases",
   "version": 1,
-  "why": "羽化半径的取整两侧不同:后端 int(round(radius)) 是 Python 的半数取偶(round(0.5) = 0、round(2.5) = 2),前端 Math.round 是半数进位(1 / 3)。feather 是浮点、三条入口(dialog 的输入格、HTTP schema、MCP 工具签名)都能到 2.5,于是同一组参数在后端与编辑器里出两张图 —— 而两侧的单元测试各自都是绿的,因为没有一条测试同时看两边。grow 是**同一个形状的第二处**:后端那一句是 int(radius) 向零截断(0.5 → 0、2.5 → 2、-1.7 → 1),截断比半数进位小一格 —— 用户侧三条入口今天都送不进小数(grow 在 HTTP schema 与 MCP 签名上都是 int,素材库对话框那格先 Math.round),所以 grow 这一组主要是**预先钉住**的:哪天有人把 grow 放成 float,规则已经在那儿。但「够不着」只对这三条入口成立:智能体的工具调用把参数原样交给工具体(只按名字收敛,不按类型校验),确认卡的 payload 是普通 dict,`backend/app/domain/agent/confirmable/media.py` 那两处 `int(payload.get(\"grow\") or 0)` 同样向零截断 —— 那一处是同一个形状的第三处,**已单独报出、这次没动**(它是「grow 变 float」那一笔该一起改的:卡的文案与落库的 payload 都读同一份规范化结果,两处要一起走)。两处半径此后只走同一条规则(见 semantics)。",
-  "semantics": "四步顺序定死:阈值 → 反选 → 扩张/收缩 → 羽化。输出是单通道灰度字节(r = g = b、alpha 不透明),即蒙版本身那一串字节。**半径类参数只有一条取整规则**:grow 与 feather 都按**半数进位**取整,reach = floor(x + 0.5) —— 与 JS 的 Math.round 同一条规则(负数也一样:Math.round(-1.5) = -1、Math.round(-1.7) = -2),既不是 Python / numpy 缺省的半数取偶,也不是向零截断;取整后不足一格(0.4 → 0)原样返回。半径按图像长边封顶。羽化是三遍盒式模糊(一横一纵 = 一遍),每趟落回 float32、四边夹取,往回写 floor(x + 0.5)(同一条规则)。",
+  "why": "羽化半径的取整两侧不同:后端 int(round(radius)) 是 Python 的半数取偶(round(0.5) = 0、round(2.5) = 2),前端 Math.round 是半数进位(1 / 3)。feather 是浮点、三条入口(dialog 的输入格、HTTP schema、MCP 工具签名)都能到 2.5,于是同一组参数在后端与编辑器里出两张图 —— 而两侧的单元测试各自都是绿的,因为没有一条测试同时看两边。grow 是**同一个形状的第二处**:后端那一句是 int(radius) 向零截断(0.5 → 0、2.5 → 2、-1.7 → 1),截断比半数进位小一格 —— 用户侧三条入口今天都送不进小数(grow 在 HTTP schema 与 MCP 签名上都是 int,素材库对话框那格先 Math.round),所以 grow 这一组主要是**预先钉住**的:哪天有人把 grow 放成 float,规则已经在那儿。但「够不着」只对这三条入口成立:智能体的工具调用把参数原样交给工具体(只按名字收敛,不按类型校验),确认卡的 payload 是普通 dict,`backend/app/domain/agent/confirmable/media.py` 那两处 `int(payload.get(\"grow\") or 0)` 同样向零截断 —— 那一处是同一个形状的第三处,**已单独报出、这次没动**(它是「grow 变 float」那一笔该一起改的:卡的文案与落库的 payload 都读同一份规范化结果,两处要一起走)。两处半径此后只走同一条规则(见 semantics)。 **形状那一处(圆盘)**:两侧的结构元此前都是 (2r+1)² 的**正方形** —— 一个圆点扩张之后是一个带直角的方块(维护者报的就是这个)。现在两侧同为**圆盘**(见 semantics 的「圆盘」与 disc 那张表)。逐字节同源照旧由语料钉着:扩张 / 收缩那几条里,「白点 · 扩张 2」(菱形)、「十字 · 收缩 -1」(中心留不留)、「斑驳 · 扩张 3」(八边形偏移集)正是圆盘与正方形分岔的地方。 **形状那一处(圆盘)**:两侧的结构元此前都是 (2r+1)² 的**正方形** —— 一个圆点扩张之后是一个带直角的方块(维护者报的就是这个)。现在两侧同为**圆盘**(见 semantics 的「圆盘」与 disc 那张表)。逐字节同源照旧由语料钉着:扩张 / 收缩那几条里,「白点 · 扩张 2」(菱形)、「十字 · 收缩 -1」(中心留不留)、「斑驳 · 扩张 3」(八边形偏移集)正是圆盘与正方形分岔的地方。",
+  "semantics": "四步顺序定死:阈值 → 反选 → 扩张/收缩 → 羽化。输出是单通道灰度字节(r = g = b、alpha 不透明),即蒙版本身那一串字节。**半径类参数只有一条取整规则**:grow 与 feather 都按**半数进位**取整,reach = floor(x + 0.5) —— 与 JS 的 Math.round 同一条规则(负数也一样:Math.round(-1.5) = -1、Math.round(-1.7) = -2),既不是 Python / numpy 缺省的半数取偶,也不是向零截断;取整后不足一格(0.4 → 0)原样返回。半径按图像长边封顶。**扩张 / 收缩的结构元是圆盘**(不是正方形:正方形会把一个圆点扩成带直角的方块,见 disc):数字圆盘 dx² + dy² ≤ r² 的八向近似 —— r ≤ 2 时**精确**(r = 1 是十字(4 邻)、r = 2 是菱形 |dx| + |dy| ≤ 2),r ≥ 3 时是八边形 {|dx| ≤ r, |dx ± dy| ≤ M},M 见 disc 那张表。于是扩张 r 的结果**一定含住**半径 r 的真圆盘(不欠账),八个顶点方向上最多多出 ~8%(r = 4 / 5 因为 M 只能取偶数,最多 ~17%;大半径稳定在 ~5%–10%)。圆盘不可分离,按「四段 1-D 线段(0° / 45° / 90° / 135°)的闵可夫斯基和」算:组内顺序复合、组间取并(r ≤ 2 是两组:十字 / 菱形),每段沿一条线取窗口极值。**边界夹取**是对**每一个取样点**说的(越界就取边上那个像素):整组先在四周补上夹取边、组内每一趟都不再夹取 —— 逐趟各夹各的会打断平移不变性,贴着边会差出来(正方形两轴互不干扰所以看不出来,圆盘的对角两趟同时动两个坐标就会)。羽化是三遍盒式模糊(一横一纵 = 一遍),每趟落回 float32、四边夹取,往回写 floor(x + 0.5)(同一条规则)。",
   "frame": {
     "width": 7,
     "height": 5
@@ -111,6 +111,10 @@
     "mottle": {
       "note": "斑驳灰度(含 0 / 255 两头):羽化后正好落在半整数上的格子 1 个、离半整数最近 0.000e+00",
       "rgba_hex": "000000ffc8c8c8ffc8c8c8ff000000ff000000ff808080ffffffffffc8c8c8ff404040ff808080ffc8c8c8ffffffffffc8c8c8ff808080ff404040ff000000ff404040ffffffffff000000ff404040ffc8c8c8ff000000ffc8c8c8ff404040ffc8c8c8ffffffffffc8c8c8ff808080ff404040ffc8c8c8ff808080ff808080ff404040ff000000ff404040ff"
+    },
+    "cross": {
+      "note": "正中一个十字(5 格:中心 + 上下左右各一格),其余全黑 —— 收缩时正方形核会把中心也啃掉,圆盘不会",
+      "rgba_hex": "000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ffffffffff000000ff000000ff000000ff000000ff000000ffffffffffffffffffffffffff000000ff000000ff000000ff000000ff000000ffffffffff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff000000ff"
     }
   },
   "cases": [
@@ -219,7 +223,7 @@
       "invert": false,
       "grow": 2,
       "feather": 0,
-      "expected_hex": "00ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff00",
+      "expected_hex": "000000ff0000000000ffffff000000ffffffffff000000ffffff0000000000ff000000",
       "expected_reach": 0,
       "expected_grow_reach": 2
     },
@@ -232,7 +236,7 @@
       "invert": false,
       "grow": 1,
       "feather": 2.5,
-      "expected_hex": "2828282828282828282828282828282828282828282828282828282828282828282828",
+      "expected_hex": "1818181818181818181818181818181818181818181818181818181818181818181818",
       "expected_reach": 3,
       "expected_grow_reach": 1
     },
@@ -271,7 +275,7 @@
       "invert": false,
       "grow": 0.5,
       "feather": 0,
-      "expected_hex": "000000000000000000ffffff00000000ffffff00000000ffffff000000000000000000",
+      "expected_hex": "00000000000000000000ff0000000000ffffff0000000000ff00000000000000000000",
       "expected_reach": 0,
       "expected_grow_reach": 1
     },
@@ -284,7 +288,7 @@
       "invert": false,
       "grow": 1.5,
       "feather": 0,
-      "expected_hex": "00ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff0000ffffffffff00",
+      "expected_hex": "000000ff0000000000ffffff000000ffffffffff000000ffffff0000000000ff000000",
       "expected_reach": 0,
       "expected_grow_reach": 2
     },
@@ -297,7 +301,7 @@
       "invert": false,
       "grow": 2.5,
       "feather": 0,
-      "expected_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "expected_hex": "00ffffffffff00ffffffffffffffffffffffffffffffffffffffffff00ffffffffff00",
       "expected_reach": 0,
       "expected_grow_reach": 3
     },
@@ -410,6 +414,356 @@
       "feather": 0.5,
       "expected_hex": "0009265ea1d9f60009265ea1d9f60009265ea1d9f60009265ea1d9f60009265ea1d9f6",
       "expected_reach": 1
+    },
+    {
+      "name": "十字 · 收缩 -1(圆盘只留中心)",
+      "note": "圆盘(半径 1 是十字)做腐蚀:中心那格的四邻都是白 ⇒ 留下来;四个臂各差一格 ⇒ 变黑。正方形核要八个邻居全白,中心也会被啃掉 —— 这条是**圆盘与正方形在收缩这一侧分岔**的地方。",
+      "source": "cross",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": -1,
+      "feather": 0,
+      "expected_reach": 0,
+      "expected_grow_reach": -1,
+      "expected_hex": "0000000000000000000000000000000000ff0000000000000000000000000000000000"
+    },
+    {
+      "name": "十字 · 扩张 1(圆盘长出来的还是圆盘)",
+      "note": "圆盘扩张:十字 ⊕ 十字(5 格 ⊕ 5 格)。正方形核会把它长成一大片(3×3 逐格铺开)。",
+      "source": "cross",
+      "source_kind": "luminance",
+      "threshold": 0.5,
+      "invert": false,
+      "grow": 1,
+      "feather": 0,
+      "expected_reach": 0,
+      "expected_grow_reach": 1,
+      "expected_hex": "000000ff0000000000ffffff000000ffffffffff000000ffffff0000000000ff000000"
     }
-  ]
+  ],
+  "disc": {
+    "note": "扩张 / 收缩的**结构元是圆盘**(不是正方形:正方形会把一个圆点扩成带直角的方块)。数字圆盘 dx² + dy² ≤ r² 的八向近似 —— r ≤ 2 精确(exact 那两条偏移表),r ≥ 3 是八边形 {|dx| ≤ r, |dx ± dy| ≤ M}。M 只能取偶数(闵可夫斯基和自带:八边形恒有 M = 2×(轴向半长 + 对角半长)),取「能盖住数字圆盘的最小偶数」 ⇒ 扩张 r 从不欠账。算式只有整数:m = max(|dx| + |dy|)(dx² + dy² ≤ r²,遍历 dx)、M = m + m % 2、轴向半长 = M − r、对角半长 = r − M/2;两侧各有一段一模一样的实现,这张表把它们钉在一起。",
+    "exact": [
+      {
+        "r": 1,
+        "shape": "cross",
+        "offsets": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            -1,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            -1
+          ]
+        ],
+        "note": "半径 1 的圆盘就是 4 邻(十字):四向八边形做不出它(十字不是凸的)"
+      },
+      {
+        "r": 2,
+        "shape": "diamond",
+        "offsets": [
+          [
+            -2,
+            0
+          ],
+          [
+            -1,
+            -1
+          ],
+          [
+            -1,
+            0
+          ],
+          [
+            -1,
+            1
+          ],
+          [
+            0,
+            -2
+          ],
+          [
+            0,
+            -1
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            1,
+            -1
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            0
+          ]
+        ],
+        "note": "半径 2 的圆盘就是菱形:整数上 dx² + dy² ≤ 4 与 |dx| + |dy| ≤ 2 等价"
+      }
+    ],
+    "octagons": [
+      {
+        "r": 3,
+        "m": 4,
+        "M": 4,
+        "axis": 1,
+        "diagonal": 1
+      },
+      {
+        "r": 4,
+        "m": 5,
+        "M": 6,
+        "axis": 2,
+        "diagonal": 1
+      },
+      {
+        "r": 5,
+        "m": 7,
+        "M": 8,
+        "axis": 3,
+        "diagonal": 1
+      },
+      {
+        "r": 6,
+        "m": 8,
+        "M": 8,
+        "axis": 2,
+        "diagonal": 2
+      },
+      {
+        "r": 7,
+        "m": 9,
+        "M": 10,
+        "axis": 3,
+        "diagonal": 2
+      },
+      {
+        "r": 8,
+        "m": 11,
+        "M": 12,
+        "axis": 4,
+        "diagonal": 2
+      },
+      {
+        "r": 9,
+        "m": 12,
+        "M": 12,
+        "axis": 3,
+        "diagonal": 3
+      },
+      {
+        "r": 10,
+        "m": 14,
+        "M": 14,
+        "axis": 4,
+        "diagonal": 3
+      },
+      {
+        "r": 11,
+        "m": 15,
+        "M": 16,
+        "axis": 5,
+        "diagonal": 3
+      },
+      {
+        "r": 12,
+        "m": 16,
+        "M": 16,
+        "axis": 4,
+        "diagonal": 4
+      },
+      {
+        "r": 13,
+        "m": 18,
+        "M": 18,
+        "axis": 5,
+        "diagonal": 4
+      },
+      {
+        "r": 14,
+        "m": 19,
+        "M": 20,
+        "axis": 6,
+        "diagonal": 4
+      },
+      {
+        "r": 15,
+        "m": 21,
+        "M": 22,
+        "axis": 7,
+        "diagonal": 4
+      },
+      {
+        "r": 16,
+        "m": 22,
+        "M": 22,
+        "axis": 6,
+        "diagonal": 5
+      },
+      {
+        "r": 17,
+        "m": 24,
+        "M": 24,
+        "axis": 7,
+        "diagonal": 5
+      },
+      {
+        "r": 18,
+        "m": 25,
+        "M": 26,
+        "axis": 8,
+        "diagonal": 5
+      },
+      {
+        "r": 19,
+        "m": 26,
+        "M": 26,
+        "axis": 7,
+        "diagonal": 6
+      },
+      {
+        "r": 20,
+        "m": 28,
+        "M": 28,
+        "axis": 8,
+        "diagonal": 6
+      },
+      {
+        "r": 21,
+        "m": 29,
+        "M": 30,
+        "axis": 9,
+        "diagonal": 6
+      },
+      {
+        "r": 22,
+        "m": 31,
+        "M": 32,
+        "axis": 10,
+        "diagonal": 6
+      },
+      {
+        "r": 23,
+        "m": 32,
+        "M": 32,
+        "axis": 9,
+        "diagonal": 7
+      },
+      {
+        "r": 24,
+        "m": 33,
+        "M": 34,
+        "axis": 10,
+        "diagonal": 7
+      },
+      {
+        "r": 31,
+        "m": 43,
+        "M": 44,
+        "axis": 13,
+        "diagonal": 9
+      },
+      {
+        "r": 32,
+        "m": 45,
+        "M": 46,
+        "axis": 14,
+        "diagonal": 9
+      },
+      {
+        "r": 33,
+        "m": 46,
+        "M": 46,
+        "axis": 13,
+        "diagonal": 10
+      },
+      {
+        "r": 48,
+        "m": 67,
+        "M": 68,
+        "axis": 20,
+        "diagonal": 14
+      },
+      {
+        "r": 64,
+        "m": 90,
+        "M": 90,
+        "axis": 26,
+        "diagonal": 19
+      },
+      {
+        "r": 100,
+        "m": 141,
+        "M": 142,
+        "axis": 42,
+        "diagonal": 29
+      },
+      {
+        "r": 128,
+        "m": 181,
+        "M": 182,
+        "axis": 54,
+        "diagonal": 37
+      },
+      {
+        "r": 200,
+        "m": 282,
+        "M": 282,
+        "axis": 82,
+        "diagonal": 59
+      },
+      {
+        "r": 256,
+        "m": 362,
+        "M": 362,
+        "axis": 106,
+        "diagonal": 75
+      },
+      {
+        "r": 512,
+        "m": 724,
+        "M": 724,
+        "axis": 212,
+        "diagonal": 150
+      },
+      {
+        "r": 1024,
+        "m": 1448,
+        "M": 1448,
+        "axis": 424,
+        "diagonal": 300
+      }
+    ]
+  }
 }

@@ -19,6 +19,7 @@ from PIL import Image
 
 from app.media.masks import (
     MaskError,
+    _disc_segments,
     feather_mask,
     grow_mask,
     invert_mask,
@@ -98,18 +99,98 @@ def test_扩张_白的一圈长出去_收缩反过来() -> None:
     assert grow_mask(base, SIZE, 1)[:W] == bytes([0, 0, 0, 255, 255, 255, 255, 255]), "扩张啃掉一格黑"
     assert grow_mask(base, SIZE, -1)[:W] == bytes([0, 0, 0, 0, 0, 255, 255, 255]), "收缩啃掉一格白"
     assert grow_mask(base, SIZE, 0) == base
-    #: 两轴都跑:正中间一个白点,扩张一格得到一个 3×3 的块(只跑横轴的话是一条横线)。
+    #: 结构元是**圆盘**:半径 1 的数字圆盘是十字(4 邻)—— 正中间一个白点扩一格,得到的是十字,不是 3×3。
     dot = bytearray(W * H)
     dot[3 * W + 3] = 255
     grown = grow_mask(bytes(dot), SIZE, 1)
-    assert [grown[y * W + x] for y in (2, 3, 4) for x in (2, 3, 4)] == [255] * 9
-    assert grown[3 * W + 1] == 0 and grown[1 * W + 3] == 0
+    assert [grown[y * W + x] for y in (2, 3, 4) for x in (2, 3, 4)] == [0, 255, 0, 255, 255, 255, 0, 255, 0]
     #: 四边夹取:白顶着右边,扩张之后右边一整列还是白(补零的话它会缩掉一圈)。
     assert grow_mask(base, SIZE, 1)[7] == 255 and grow_mask(base, SIZE, 1)[15] == 255
     #: 灰的照灰的取最大,不先二值化 —— 那一圈软边不该被这一步啃成硬边。
     soft = bytearray(W * H)
     soft[3 * W + 3] = 128
     assert grow_mask(bytes(soft), SIZE, 1)[3 * W + 2] == 128
+
+
+def _disc_offsets(reach: int) -> list[tuple[int, int]]:
+    """结构元的偏移集:组内闵可夫斯基和、组间取并(照 `_disc_segments` 的定义)。"""
+    points: set[tuple[int, int]] = set()
+    for group in _disc_segments(reach):
+        acc = {(0, 0)}
+        for dx, dy, step in group:
+            acc = {(x + t * dx, y + t * dy) for (x, y) in acc for t in range(-step, step + 1)}
+        points |= acc
+    return sorted(points)
+
+
+def _disc_brute_force(gray: list[list[int]], width: int, height: int, radius: float) -> bytes:
+    """照定义一格一格算:结构元的**每一个取样点**各自夹回图内,再取极大 / 极小。慢,但一眼看得出是对的。"""
+    reach = min(abs(radius), max(width, height))
+    pick = max if radius > 0 else min
+    offsets = _disc_offsets(reach)
+    out = bytearray(width * height)
+    for y in range(height):
+        for x in range(width):
+            best = gray[y][x]
+            for dx, dy in offsets:
+                best = pick(best, gray[min(height - 1, max(0, y + dy))][min(width - 1, max(0, x + dx))])
+            out[y * width + x] = best
+    return bytes(out)
+
+
+def test_扩张收缩_和照定义算的逐格相同() -> None:
+    """拿「每个取样点各自夹取」那版朴素实现对后端这条快路径(分组 + 倍增的平移取极值)。
+
+    分组的补边、倍增的二进制拆分、对角那两趟都是容易差一格的地方 —— 大图上看不出来,只有逐格比。
+    """
+    rng = np.random.default_rng(7)
+    for width, height in ((7, 5), (1, 9), (9, 1), (13, 11), (17, 4)):
+        for radius in (1, 2, 3, 5, 8, 16, -1, -2, -5):
+            gray = rng.integers(0, 256, size=(height, width)).tolist()
+            source = bytes(value for row in gray for value in row)
+            assert grow_mask(source, (width, height), radius) == _disc_brute_force(gray, width, height, radius), (
+                f"{width}×{height} r={radius}"
+            )
+
+
+def test_圆盘_一个点扩出去还是圆的() -> None:
+    """结构元是**圆盘**,不是正方形 —— 一个圆点扩张之后还是圆点(只是更大)。
+
+    三条一起看才钉得住形状:①水平 / 垂直方向上够得着 r(半径是**内切半径**,不欠账);
+    ②外接正方形的四个角**不**点亮(正方形核在那里是白的 —— 维护者报的就是它);
+    ③真圆盘 `dx² + dy² ≤ r²` 整个在里面,而结果不超出内切八边形 `{|dx| ≤ r, |dx ± dy| ≤ M}`。
+    """
+    for radius in (1, 2, 3, 4, 5, 8, 20):
+        side = radius * 2 + 5
+        center = side // 2
+        dot = bytearray(side * side)
+        dot[center * side + center] = 255
+        grown = grow_mask(bytes(dot), (side, side), radius)
+        white = {(x, y) for y in range(side) for x in range(side) if grown[y * side + x]}
+        axes = {(center + radius, center), (center - radius, center), (center, center + radius), (center, center - radius)}
+        corners = {
+            (center + radius, center + radius), (center - radius, center + radius),
+            (center + radius, center - radius), (center - radius, center - radius),
+        }
+        assert axes <= white, f"r={radius}:水平 / 垂直方向没长到 r"
+        assert corners.isdisjoint(white), f"r={radius}:外接正方形的角落被点亮了(那是正方形核)"
+        disc = {
+            (center + dx, center + dy)
+            for dx in range(-radius, radius + 1)
+            for dy in range(-radius, radius + 1)
+            if dx * dx + dy * dy <= radius * radius
+        }
+        assert disc <= white, f"r={radius}:真圆盘没被含住"
+        #: 内切八边形:r ≥ 3 那一组是 [轴向 p, 轴向 p, 对角 q, 对角 q],M = 2(p + q)。
+        group = _disc_segments(radius)[0]
+        axis = max((step for dx, dy, step in group if dx == 0 or dy == 0), default=0)
+        diagonal = max((step for dx, dy, step in group if dx != 0 and dy != 0), default=0)
+        cap = 2 * (axis + diagonal)
+        for (x, y) in white:
+            dx, dy = x - center, y - center
+            assert abs(dx) <= radius and abs(dx + dy) <= cap and abs(dx - dy) <= cap, (
+                f"r={radius}:({dx},{dy})跑出了内切八边形"
+            )
 
 
 def test_羽化_把边晕开_四边夹取() -> None:

@@ -27,7 +27,15 @@ from pathlib import Path
 
 import pytest
 
-from app.media.masks import feather_mask, grow_mask, invert_mask, mask_from_alpha, mask_from_luminance
+from app.media.masks import (
+    _disc_diagonal_floor,
+    _disc_segments,
+    feather_mask,
+    grow_mask,
+    invert_mask,
+    mask_from_alpha,
+    mask_from_luminance,
+)
 
 CONTRACT = json.loads((Path(__file__).parents[2] / "contracts" / "mask-cases.json").read_text(encoding="utf-8"))
 
@@ -45,8 +53,12 @@ def _source(case: dict) -> bytes:
     return bytes.fromhex(CONTRACT["sources"][case["source"]]["rgba_hex"])
 
 
-def _pipeline(case: dict) -> bytes:
-    """语料说的那四步,按定死的先后:阈值 → 反选 → 扩张/收缩 → 羽化。"""
+def _pipeline(case: dict, grow=grow_mask) -> bytes:
+    """语料说的那四步,按定死的先后:阈值 → 反选 → 扩张/收缩 → 羽化。
+
+    `grow` 是压进来的扩张实现 —— 默认是 `masks.grow_mask`;下面那条"语料真的能分出圆盘与正方形"
+    会换成**正方形**那一版当对照。
+    """
     pixels = _source(case)
     mask = (
         mask_from_alpha(pixels, SIZE, case["threshold"])
@@ -56,8 +68,39 @@ def _pipeline(case: dict) -> bytes:
     if case["invert"]:
         mask = invert_mask(mask)
     if case["grow"]:
-        mask = grow_mask(mask, SIZE, case["grow"])
+        mask = grow(mask, SIZE, case["grow"])
     return feather_mask(mask, SIZE, case["feather"])
+
+
+def _square_grow(mask, size: tuple[int, int], radius: float) -> bytes:
+    """**改之前**那一版结构元:`(2r+1)²` 的正方形窗口(两轴可分离 ⇒ 取最大 / 最小)。
+
+    只在小语料(7×5)上跑,慢无所谓 —— 它是"形状退回正方形时语料会不会红"的对照。
+    """
+    width, height = size
+    reach = min(abs(math.floor(radius + 0.5)), max(width, height))
+    pick = max if radius > 0 else min
+    values = list(mask)
+    out = bytearray(width * height)
+    for y in range(height):
+        for x in range(width):
+            best = values[y * width + x]
+            for dy in range(-reach, reach + 1):
+                for dx in range(-reach, reach + 1):
+                    best = pick(best, values[min(height - 1, max(0, y + dy)) * width + min(width - 1, max(0, x + dx))])
+            out[y * width + x] = best
+    return bytes(out)
+
+
+def _disc_offsets(reach: int) -> list[tuple[int, int]]:
+    """结构元的偏移集:组内闵可夫斯基和、组间取并 —— 语料 `disc` 那张表说的就是它。"""
+    points: set[tuple[int, int]] = set()
+    for group in _disc_segments(reach):
+        acc = {(0, 0)}
+        for dx, dy, step in group:
+            acc = {(x + t * dx, y + t * dy) for (x, y) in acc for t in range(-step, step + 1)}
+        points |= acc
+    return sorted(points)
 
 
 def _first_difference(case: dict, got: bytes) -> str:
@@ -151,3 +194,46 @@ def test_语料里那几条扩张小数用例真的能分出两种取整() -> No
         if case["grow"] == 0:
             continue
         assert case["expected_grow_reach"] == math.floor(case["grow"] + 0.5), case["name"]
+
+
+def test_圆盘_半径到八边形参数那张表和实现一致() -> None:
+    """语料 `disc` 那张表:两侧各有一段**一样的整数规则**,这张表把它们钉在一起(不靠浮点)。
+
+    - `exact` 那两档(r = 1 十字、r = 2 菱形)逐格对偏移集;
+    - `octagons` 那张表逐行核对 `(m, M, 轴向半长, 对角半长)`,再把小半径的偏移集与
+      `{|dx| ≤ r, |dx ± dy| ≤ M}` 的整点比一遍 —— 大半径上点太多,只核参数。
+    """
+    assert CONTRACT["disc"]["exact"] and CONTRACT["disc"]["octagons"], "语料里没有圆盘那张表"
+    for one in CONTRACT["disc"]["exact"]:
+        assert _disc_offsets(one["r"]) == sorted(tuple(point) for point in one["offsets"]), one["r"]
+    for one in CONTRACT["disc"]["octagons"]:
+        radius = one["r"]
+        floor = _disc_diagonal_floor(radius)
+        even = floor + (floor % 2)
+        assert (floor, even, even - radius, radius - even // 2) == (
+            one["m"], one["M"], one["axis"], one["diagonal"],
+        ), f"r={radius} 的参数和表里那行对不上"
+        assert len(_disc_segments(radius)) == 1, f"r={radius} 该是一组(八边形)"
+        if radius > 20:
+            continue
+        want = {
+            (x, y)
+            for x in range(-radius, radius + 1)
+            for y in range(-radius, radius + 1)
+            if abs(x) <= radius and abs(x + y) <= one["M"] and abs(x - y) <= one["M"]
+        }
+        assert set(_disc_offsets(radius)) == want, f"r={radius} 的偏移集不是那张表说的八边形"
+
+
+def test_语料里那几条扩张用例真的能分出圆盘与正方形() -> None:
+    """结构元退回**正方形**(改之前那一版)时语料必须红 —— 一条永远绿的语料比没有更糟。
+
+    圆点扩张那条(菱形 / 十字 / 八边形)、十字收缩那条(中心留不留)都能分出来;少于三条就说明
+    语料钉不住形状,换回去也不会有人发现。
+    """
+    diverged = [
+        case["name"]
+        for case in CONTRACT["cases"]
+        if case["grow"] and _pipeline(case, _square_grow).hex() != case["expected_hex"]
+    ]
+    assert len(diverged) >= 3, f"只有 {len(diverged)} 条扩张用例能分出圆盘与正方形:{diverged}"
