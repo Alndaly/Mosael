@@ -2,9 +2,10 @@
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { forgetCanvases, installPixelCanvas, pixelOf, type PixelCanvas } from "@/test/pixelCanvasSetup";
-import { loadUnderlay, pixelHarness, type PixelHarness } from "@/test/maskEditorPixels";
+import { isEdgePreviewCanvas, previewScale } from "@/components/generation/MaskEditor";
 import { createMaskWriter } from "@/lib/maskPixels";
+import { loadUnderlay, pixelHarness, type PixelHarness } from "@/test/maskEditorPixels";
+import { canvasesOfSize, forgetCanvases, installPixelCanvas, pixelOf, type PixelCanvas } from "@/test/pixelCanvasSetup";
 
 /**
  * ## 「蒙版编辑只动蒙版」这条不变量:像素级的那几条回归
@@ -46,6 +47,20 @@ async function open(withUnderlay = true): Promise<PixelHarness> {
   harness.mount();
   await waitFor(() => expect(harness.view()).toBeTruthy());
   if (withUnderlay) await loadUnderlay(harness);
+  return harness;
+}
+
+/**
+ * 和 `open()` 一样,但画布**盒子只有文档的一半**(比例一致)。
+ *
+ * 可见那张位图 = 盒子 ⇒ 文档在屏幕上只有 48×60 个像素,而文档自己是 96×120 —— 「预览副本按显示
+ * 分辨率算」那一条要的就是这个差。
+ */
+async function openHalfSize(): Promise<PixelHarness> {
+  const harness = pixelHarness({ width: W, height: H, box: { width: W / 2, height: H / 2 } });
+  harness.mount();
+  await waitFor(() => expect(harness.view()).toBeTruthy());
+  await loadUnderlay(harness);
   return harness;
 }
 
@@ -580,6 +595,18 @@ function ringStops(): number[] {
   );
 }
 
+/**
+ * 圈里那两层墨的不透明度(取最浓的那一层)—— 「硬度越低越透明」看的数。
+ *
+ * 那一串里有四个带 alpha 的颜色:两层墨(0.35 / 0.45 那一对)和两个透明的渐隐端(alpha 0)。
+ * 取最大 = 圈上最浓的那一点有多浓。
+ */
+function ringAlpha(): number {
+  const alphas = [...brushRing().style.background.matchAll(/rgba\([^)]*?,\s*([\d.]+)\)/g)].map((one) => Number(one[1]));
+  if (!alphas.length) throw new Error("圈上没有半透明的墨 —— 填充又变回一条什么也说不出的边了?");
+  return Math.max(...alphas);
+}
+
 /** 指针挪到文档坐标 (x,y)(这一座里盒子 = 文档,所以它同时是屏幕坐标)。 */
 function hover(harness: PixelHarness, x: number, y: number) {
   fireEvent.pointerMove(harness.view(), { ...at(harness, x, y), pointerId: 1, buttons: 0 });
@@ -588,13 +615,44 @@ function hover(harness: PixelHarness, x: number, y: number) {
 /**
  * ## 笔刷硬度 → 指针那个圈(维护者:「笔刷硬度…在 UI 上没有体现」)
  *
- * 圈此前是一道写死的 1px 硬白边:硬度拖到 10% 和 100% 看上去一模一样,而画出来的笔迹一个是软边、
- * 一个是硬边。现在它的**填充**就是 `paintLine` 会画出来的那条曲线(内圈硬核到 `radius × hardness`,
- * 外面渐隐到半径)—— 两处共用同一个 `HARD_EDGE` 判据,不会分叉。
+ * 上一版把曲线写进了圈的 `style.background`,可那个 div 的 className 里还留着一道**写死的**
+ * `border border-white` + 一圈 `shadow`:那道硬白圈盖在渐变上面,于是拖硬度屏幕上一动不动
+ * —— 维护者第二次报的「还是没体现」就是它。现在圈上只有 `brushRingFill` 这一样东西决定观感
+ * (没有常量边框):它的**填充**就是 `paintLine` 会画出来的那条曲线(内圈硬核到 `radius × hardness`,
+ * 外面渐隐到半径),而且那两层墨的浓度也随硬度走(维护者:「应该和透明度有关系」)——
+ * 两处共用同一个 `HARD_EDGE` 判据,不会分叉。
  *
  * 这几条只断言**圈的样子**:蒙版的像素一个都不该因此改变。
  */
 describe("笔刷硬度 → 指针那个圈", () => {
+  it("圈上不再有那道恒定的硬边(border / shadow)—— 观感只由填充给", async () => {
+    const harness = await open();
+    hover(harness, 30, 40);
+    const classes = brushRing().className;
+    expect(classes, "圈上还挂着 Tailwind 的 border 工具类 —— 那就是盖住渐变的硬白圈").not.toMatch(/(^|\s)border(-\S+)?(\s|$)/);
+    expect(classes, "圈上还挂着 shadow 工具类 —— 那是硬圈的另外半道").not.toMatch(/(^|\s)shadow(-\S+)?(\s|$)/);
+    expect(brushRing().style.background, "没有边框之后,圈的样子全在填充里").not.toBe("");
+  });
+
+  it("硬度越低,圈越透明、边越散(维护者:「应该和透明度有关系」)", async () => {
+    const harness = await open();
+    hover(harness, 30, 40);
+    await hardBrush(harness);
+    const hard = { alpha: ringAlpha(), stops: ringStops() };
+    expect(hard.stops, "硬边 = 没有渐隐的那一段").toEqual([]);
+
+    //: 100% → 10%(退 18 档,每档 5%)。指针一次都没动。
+    const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "1", "硬度");
+    await stepSlider(slider, "ArrowLeft", 18);
+    expect(slider.getAttribute("aria-valuenow")).toBe("0.1");
+    const soft = { alpha: ringAlpha(), stops: ringStops() };
+
+    expect(soft.alpha, "软圈的墨该比硬圈淡(硬度 = 透明度那条关系)").toBeLessThan(hard.alpha);
+    expect(soft.stops, "软圈:硬核缩到 10%,外面九成半径都在渐隐").toEqual([0, 10, 100]);
+    //: 圈的大小没被这一下动过(改的只是软硬)。
+    expect(brushRing().style.width).toBe("48px");
+  });
+
   it("硬度 = 1:圈是硬边 —— 整块实心,没有渐变", async () => {
     const harness = await open();
     hover(harness, 30, 40);
@@ -660,6 +718,11 @@ describe("笔刷硬度 → 指针那个圈", () => {
  * 真蒙版一个字节都不动 —— 所以下面每一条都同时钉两件事:可见画布上那个变化**在**,
  * 而 `maskPixels()` 逐字节**没变**。
  *
+ * 上一版那份副本是**尾随 debounce**(120ms)算的,而且在**文档全分辨率**上跑:维护者那张
+ * 4432×1904 一次几百毫秒,拖滑块时屏幕一动不动、松手才猛地换一帧(第二次报的「不实时、卡顿」)。
+ * 现在副本按**显示分辨率**算(长边封在 `MAX_VIEW_EDGE`,见 `previewScale`),参数一变就在**这一次
+ * `paint()`** 里重算 —— 所以下面 `previewShows` 是"当场断言",一个计时器都不等。
+ *
  * 「显示底图」关掉之后可见画布上就只剩蒙版那一张(层表只剩 `mask`),断言的字节 = 屏幕上看到的那份。
  */
 describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => {
@@ -678,10 +741,35 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     await harness.settle();
   }
 
-  /** 预览是 debounce 过的(拖完约 120ms 才算那一张):等它上屏,而不是"等 0 毫秒"。 */
-  async function previewShows(harness: PixelHarness, spot: [number, number]) {
-    await waitFor(() => expect(harness.sample(harness.view(), ...spot)[0], "预览没上屏").toBeGreaterThan(0));
+  /**
+   * 预览**当场**就在屏幕上:参数一变,下一次 `paint()` 画上去的就是新副本。
+   *
+   * 此前这里要 `waitFor` 一圈(尾随 debounce:松手 120ms 之后才算那一张)—— 断言"不用等"就得
+   * 把**等待**去掉,否则 debounce 回来了它照样绿。
+   */
+  function previewShows(harness: PixelHarness, spot: [number, number]) {
+    expect(harness.sample(harness.view(), ...spot)[0], "预览没在同一帧上屏 —— 还在 debounce?").toBeGreaterThan(0);
   }
+
+  it("拖扩张滑块:同一次 paint 就换预览,不等任何计时器(旧的 120ms debounce 没了)", async () => {
+    const harness = await open();
+    await blob(harness);
+    await maskOnly(harness);
+
+    const bounds = brightBounds(harness.viewPixels());
+    const middle = Math.round((bounds.top + bounds.bottom) / 2);
+    const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
+    expect(harness.sample(harness.view(), ...outside), "扩张之前:这一点在笔迹外").toEqual([0, 0, 0, 255]);
+
+    //: 假计时器,而且**一个都不推**:预览必须已经上屏。真排了 debounce 的话这里永远是黑的。
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await setGrow(harness, 4);
+      expect(harness.sample(harness.view(), ...outside)[0], "等计时器才换预览 —— 那就是那个 debounce").toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("扩张 +4:可见画布上那一圈长出来了,真蒙版逐字节没变;滑块归零就回到真蒙版", async () => {
     const harness = await open();
@@ -696,7 +784,7 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     const maskBefore = [...harness.maskPixels().pixels.data];
 
     await setGrow(harness, 4);
-    await previewShows(harness, outside);
+    previewShows(harness, outside);
 
     // ① 预览在:屏幕上"要改"的那一块变大了。
     expect(brightStats(harness.viewPixels()).count, "可见画布上的笔迹长出来了(预览)").toBeGreaterThan(before);
@@ -707,8 +795,44 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
 
     // ③ 滑块归零 ⇒ 屏幕上回到真蒙版(预览不是"留在那里"的一层)。
     await setGrow(harness, 0);
-    await waitFor(() => expect(harness.sample(harness.view(), ...outside)).toEqual([0, 0, 0, 255]));
+    expect(harness.sample(harness.view(), ...outside)).toEqual([0, 0, 0, 255]);
     expect([...harness.maskPixels().pixels.data]).toEqual(maskBefore);
+  });
+
+  it("副本按**显示分辨率**算(盒子是文档的一半 ⇒ 48×60),幅度和真蒙版那一下同一档", async () => {
+    const harness = await openHalfSize();
+    await blob(harness);
+    await maskOnly(harness);
+    expect([harness.view().width, harness.view().height], "可见那张位图 = 盒子").toEqual([W / 2, H / 2]);
+    const docBoundsBefore = paintedBounds(harness);
+    if (!docBoundsBefore) throw new Error("蒙版里一个白像素都没有 —— 这一笔没画上去");
+    const maskBefore = [...harness.maskPixels().pixels.data];
+    const viewLeftBefore = brightBounds(harness.viewPixels()).left;
+    const canvasesBefore = canvasesOfSize(W, H).length;
+
+    await setGrow(harness, 4);
+    //: 等的是"预览有没有上屏"这个条件,不是时间(两种分辨率下它都会上屏)。
+    await waitFor(() => expect(brightBounds(harness.viewPixels()).left, "预览没上屏").toBeLessThan(viewLeftBefore));
+
+    // ① 副本是在**显示分辨率**上算的:文档全分辨率上没有因此多出第二张画布(旧版正是在 96×120 上跑),
+    //:   而副本自己那张正好是显示层那个尺寸(48×60 —— 长边封在 MAX_VIEW_EDGE 里、也不超过可见位图)。
+    expect(canvasesOfSize(W, H).length, "预览又在文档全分辨率上另开了一张画布").toBe(canvasesBefore);
+    const previews = canvasesOfSize(W / 2, H / 2).filter((one) => isEdgePreviewCanvas(one));
+    expect(previews.length, "没有那张按显示分辨率算的预览副本").toBe(1);
+    expect([previews[0].width, previews[0].height]).toEqual([W / 2, H / 2]);
+    // ② 屏幕上长出来的幅度和「应用到蒙版」那一下同一档:4 个文档像素 = 这里 2 个(实测就是 2;
+    //:   留一格余地是因为降采样取最近邻,边缘落在哪半格跟着笔迹的奇偶走)。
+    const grewInView = viewLeftBefore - brightBounds(harness.viewPixels()).left;
+    expect(grewInView, "预览长出来的幅度和真蒙版那一下对不上").toBeGreaterThanOrEqual(1);
+    expect(grewInView).toBeLessThanOrEqual(3);
+    // ③ 真蒙版一个字节都没动(预览始终只是一份喂给显示层的副本)。
+    expect([...harness.maskPixels().pixels.data]).toEqual(maskBefore);
+
+    await press(harness, "应用到蒙版");
+    await harness.settle();
+    const applied = paintedBounds(harness);
+    if (!applied) throw new Error("应用之后蒙版里一个白像素都没有");
+    expect(applied.left, "真蒙版这一步正是扩张 4 个文档像素").toBe(docBoundsBefore.left - 4);
   });
 
   it("羽化 8:边两侧晕成灰的,真蒙版还是原来那条硬边、逐字节没变", async () => {
@@ -744,18 +868,18 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     const harness = await open();
     await blob(harness);
     await maskOnly(harness);
-    await setGrow(harness, 4);
+    //: 参照取**扩张之前**那一坨(现在参数一变预览就在同一帧上屏,晚了就量到已经长出来的那一份)。
     const bounds = brightBounds(harness.viewPixels());
     const middle = Math.round((bounds.top + bounds.bottom) / 2);
-    await previewShows(harness, [leftmostInRow(harness.viewPixels(), middle) - 3, middle]);
+    await setGrow(harness, 4);
+    previewShows(harness, [bounds.left - 3, middle]);
 
     //: 离那一坨远远地再来一笔 —— 刚上屏的那份副本里**没有它**(副本是按上一版蒙版算的)。
     const spot: [number, number] = [10, 100];
     expect(harness.sample(harness.view(), ...spot)).toEqual([0, 0, 0, 255]);
     await drag(harness, spot, spot);
-    await waitFor(() =>
-      expect(harness.sample(harness.view(), ...spot)[0], "新的一笔没上屏 —— 屏幕停在一份旧副本上了").toBeGreaterThan(0),
-    );
+    //: 这一笔的 paint 里副本就按**新版蒙版**重算了(版本号变了),所以新笔画当场在屏幕上。
+    expect(harness.sample(harness.view(), ...spot)[0], "新的一笔没上屏 —— 屏幕停在一份旧副本上了").toBeGreaterThan(0);
     expect(harness.sample(harness.mask(), ...spot)[0], "这一笔真的落在真蒙版上").toBeGreaterThan(0);
   });
 
@@ -765,12 +889,13 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     await maskOnly(harness);
     const maskBefore = [...harness.maskPixels().pixels.data];
     const paintedBefore = paintedInMask(harness);
-
-    await setGrow(harness, 4);
+    //: 参照取**扩张之前**那一坨(预览现在同一帧就上屏,晚一点量到的已经是长出来的那一份了)。
     const bounds = brightBounds(harness.viewPixels());
     const middle = Math.round((bounds.top + bounds.bottom) / 2);
-    const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
-    await previewShows(harness, outside);
+    const outside: [number, number] = [bounds.left - 3, middle];
+
+    await setGrow(harness, 4);
+    previewShows(harness, outside);
     const preview = [...harness.viewPixels().pixels.data];
     expect([...harness.maskPixels().pixels.data], "还没点应用:真蒙版没动").toEqual(maskBefore);
 
@@ -788,7 +913,28 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     await press(harness, "撤销");
     await harness.settle();
     expect([...harness.maskPixels().pixels.data], "一步撤销回到应用之前").toEqual(maskBefore);
-    //: 撤销之后滑块还是 4,而这一版蒙版又没被写过 ⇒ 回到"待应用":屏幕上重新是同一份预览。
-    await waitFor(() => expect([...harness.viewPixels().pixels.data]).toEqual(preview));
+    //: 撤销之后滑块还是 4,而这一版蒙版又没被写过 ⇒ 回到"待应用":屏幕上重新是同一份预览
+    //: (每帧当场重算,所以撤销那一下的 paint 里就已经换回来了,不用等)。
+    expect([...harness.viewPixels().pixels.data]).toEqual(preview);
+  });
+});
+
+/**
+ * ## 预览副本的分辨率(`previewScale`)
+ *
+ * 上面那条测的是"屏幕上那份副本确实小了一号";这一条把**规则**本身钉住 —— 长边封在显示层那个
+ * `MAX_VIEW_EDGE`(2048,显示层位图的上限)里,也不超过可见那张位图,而小文档原样算(1)。
+ */
+describe("预览副本的分辨率(previewScale)", () => {
+  it("长边封在显示层的 2048 里,也不超过可见那张位图;小文档原样", () => {
+    expect(previewScale({ width: 96, height: 120 }, { width: 96, height: 120 }), "文档本来就够小 ⇒ 原样算").toBe(1);
+    //: 维护者那张 4432×1904:显示层位图 2048×880 都够用,副本按 2048/4432 ≈ 0.462 缩。
+    const big = previewScale({ width: 4432, height: 1904 }, { width: 2048, height: 2048 });
+    expect(big).toBeCloseTo(2048 / 4432, 6);
+    expect(big * 4432, "长边正好落在显示层上限上").toBeCloseTo(2048, 6);
+    //: 画布区小的时候按位图算:盒子只有 600 宽 ⇒ 算 2048 是白算的。
+    expect(previewScale({ width: 4432, height: 1904 }, { width: 600, height: 400 })).toBeCloseTo(600 / 4432, 6);
+    //: 还没量到位图(jsdom、对话框刚挂上那一帧)时退回"只看长边上限",不是 0(0 会让副本变成 1×1)。
+    expect(previewScale({ width: 4432, height: 1904 }, { width: 0, height: 0 })).toBeCloseTo(2048 / 4432, 6);
   });
 });

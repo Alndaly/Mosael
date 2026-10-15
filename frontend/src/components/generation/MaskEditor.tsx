@@ -134,15 +134,20 @@ import {
  *
  * | 参数 | 在哪看得出来 | 怎么做到 |
  * | --- | --- | --- |
- * | 笔刷硬度 | 跟随指针的那个圈 | 圈的填充就是 `paintLine` 会画出来的那条曲线(`brushRingFill`),拖滑块当场变 |
+ * | 笔刷硬度 | 跟随指针的那个圈 | 圈的填充就是 `paintLine` 会画出来的那条曲线(`brushRingFill`),连**浓度**也随硬度走(`ringInk`),拖滑块当场变 |
  * | 扩张 / 羽化 | 看得见那画布上的**预览** | 显示层改喂一份**副本**(`renderEdgesPreview`),点「应用到蒙版」才写真蒙版 |
  *
- * 预览那份副本是**一次性算出来的画布**(`edgePreviewRef`):对当前蒙版 `read()` 一份像素、在拷贝上跑
- * `growMask` + `featherMask`、`putImageData` 进它自己那张画布 —— 真蒙版那张从头到尾没人写。
- * 它只喂给 `drawMaskView` 的 `mask` 层,所以「待应用」时用户看到的就是点下那个按钮会得到的样子
- * (测试里两者逐字节相等)。两个判据管着它什么时候算、什么时候用:
+ * 圈上**没有**常量边框:上一版留着 `border border-white` + 一圈 `shadow`,那道硬白圈把渐变整个盖住
+ * —— 拖硬度屏幕上一动不动(维护者第二次报的就是它)。现在圈的观感只由那一串填充给。
  *
- * - **过期**:蒙版内容一变(`MaskWriter.revision`)或者参数一变,那份副本就作废,屏幕上先回到真蒙版;
+ * 预览那份副本是**一张按显示分辨率算的画布**(`edgePreviewRef`):把当前蒙版按 `previewScale` 缩进
+ * 副本自己的画布、在**那份缩过的像素**上跑 `growMask` + `featherMask`(半径同比缩)、`putImageData`
+ * 进它自己那张画布 —— 真蒙版那张从头到尾没人写。它只喂给 `drawMaskView` 的 `mask` 层,所以
+ * 「待应用」时用户看到的就是点下那个按钮会得到的样子(测试里两者逐字节相等)。两条判据管着它:
+ *
+ * - **过期**:蒙版内容一变(`MaskWriter.revision`)或者参数一变,那份副本就作废;`paint()` 每一帧
+ *   开头**当场**把它重算(见 `refreshEdgesPreview`)—— 此前是尾随 debounce 120ms + 文档全分辨率,
+ *   拖动期间屏幕一动不动、松手才换一帧(维护者第二次报的「不实时、卡顿」),两条都改了;
  * - **已经写进去了**:点过「应用到蒙版」的那一组参数在这一版蒙版上不再算"待应用"(`appliedEdgesRef`)
  *   —— 少了这一条,应用之后屏幕会把它**再预览一遍**(又扩张 4 个像素,一眼看得出)。
  */
@@ -156,6 +161,17 @@ const MASK_CANVASES = new WeakSet<HTMLCanvasElement>();
 /** 这张画布是不是「画蒙版」发出去的那张**蒙版**(不是可见那张、也不是派生层的临时画布)。 */
 export function isMaskCanvas(element: HTMLCanvasElement): boolean {
   return MASK_CANVASES.has(element);
+}
+
+/**
+ * 这个模块**发出去的那张预览副本画布**(见 `renderEdgesPreview`)。同样只给测试用:像素级回归要能
+ * 认出"屏幕上那份预览是按多大的分辨率算的"(文档 96×120、盒子 48×60 时它该是 48×60)。
+ */
+const EDGE_PREVIEW_CANVASES = new WeakSet<HTMLCanvasElement>();
+
+/** 这张画布是不是「待应用的扩张 / 羽化」那份预览副本。 */
+export function isEdgePreviewCanvas(element: HTMLCanvasElement): boolean {
+  return EDGE_PREVIEW_CANVASES.has(element);
 }
 
 /** 没有底图、也没有底稿时的画布尺寸。 */
@@ -183,14 +199,6 @@ const BRUSH_MAX = 400;
 /** 扩张 / 羽化滑块的范围(文档像素)。 */
 const EDGE_MAX = 64;
 /**
- * 「待应用」的扩张 / 羽化在屏幕上预览的那份副本,隔多久重算一次(毫秒)。
- *
- * 滑块拖一下、笔刷走一帧都会让这份副本过期,而重算是**整张**文档上的形态学 + 三遍盒式模糊
- * (4096² 就是一千六百万像素)—— 每一帧都算的话,拖动会变成"卡住不动"。隔这么一段重算一次:
- * 拖动期间屏幕上是真蒙版(新笔画立刻看得见),松手之后马上换成预览。
- */
-const EDGE_PREVIEW_DELAY = 120;
-/**
  * 硬度到了这一档以上就是"硬边"。
  *
  * **两处共用这一个数**:`paintLine` 画笔迹时走实心那一条,指针那个圈(`brushRingFill`)给整块平铺。
@@ -210,10 +218,22 @@ const FADE_BLACK = "rgba(0, 0, 0, 0)";
  * 黑墨没了。两层一起淡出去,那条软边在**任何底色**上都读得出来 —— 而"看得见"正是这个圈存在的理由。
  * 两层都是低透明度:圈的**形状**才是信息,它自己不喧宾夺主。
  */
-const RING_DARK = "rgba(0, 0, 0, 0.35)";
-const RING_LIGHT = "rgba(255, 255, 255, 0.45)";
+const RING_DARK_RGB = "0, 0, 0";
+const RING_LIGHT_RGB = "255, 255, 255";
+const RING_DARK_ALPHA = 0.35;
+const RING_LIGHT_ALPHA = 0.45;
 const RING_DARK_FADE = "rgba(0, 0, 0, 0)";
 const RING_LIGHT_FADE = "rgba(255, 255, 255, 0)";
+/**
+ * 软的圈里那两层墨最少留到原来的几成(`hardness` = 0 那一档)。
+ *
+ * 维护者那句「应该和透明度有关系」就落在这一条上:硬度在屏幕上说的本来就是**透明度** —— 软笔是墨
+ * 一点点淡出去,硬笔是一刀切。所以让硬度同时管住两件事:硬核到哪一格(`hardness × 半径`)和墨整体
+ * 多浓。于是 10% 与 100% 的圈不只是"渐隐那一段宽窄不同",**浓度**也一眼看得出不一样。
+ * 0.55 是下限:再淡圈就快看不见了,而圈的存在正是为了让人看见笔刷落在哪。
+ */
+const RING_INK_FLOOR = 0.55;
+
 /** 上传时的文件名(素材名由后端起,见后端 domain/assets/masks.write_mask_asset)。 */
 const MASK_FILE_NAME = "mask.png";
 
@@ -329,6 +349,31 @@ function capsSize(size: Size): Size {
   return { width: Math.max(1, Math.round(size.width * scale)), height: Math.max(1, Math.round(size.height * scale)) };
 }
 
+/**
+ * 「待应用」的扩张 / 羽化在屏幕上预览的那份副本,按多大的分辨率算(1 = 原样,不缩)。
+ *
+ * 显示层那张位图本来就封在 `MAX_VIEW_EDGE` 里(见那个常量),蒙版尺寸再大,屏幕上也只有这么多像素
+ * —— 在文档全分辨率上跑形态学 + 三遍盒式模糊,多出来的细节屏幕上根本看不见,代价却是拖动时每一帧
+ * 几百毫秒(维护者那张 4432×1904 是八百四十万像素:一次 `read()` 加形态学加模糊,几百毫秒 → 拖滑块
+ * 时屏幕一动不动)。这里把副本压到**和显示层同一个分辨率**:
+ *
+ * - 长边不超过 `MAX_VIEW_EDGE` —— 显示层位图的上限,同一个常量,不另造一个分辨率魔法数;
+ * - 也不超过可见那张位图:画布区小的时候没必要按 2048 算(盒子 600 宽时那 2048 是白算的);
+ * - 文档本来就够小 ⇒ 返回 1,原样算(小文档的预览因此逐字节不变,和其它断言一样严)。
+ *
+ * 半径按同一个比例缩(`grow × scale` / `feather × scale`):屏幕上长出来的方向与幅度,和点下
+ * 「应用到蒙版」时写进真蒙版的那一下一致 —— 差的只是降采样带来的亚像素。
+ */
+export function previewScale(doc: Size, view: Size): number {
+  const longest = Math.max(doc.width, doc.height);
+  if (longest < 1) return 1;
+  let scale = Math.min(1, MAX_VIEW_EDGE / longest);
+  if (doc.width > 0 && doc.height > 0 && view.width > 0 && view.height > 0) {
+    scale = Math.min(scale, view.width / doc.width, view.height / doc.height);
+  }
+  return scale;
+}
+
 /** 一笔画上去:沿 from→to 按间距盖圆点。间距取半径的四成 —— 比半径密,笔迹才不显颗粒。 */
 function paintLine(
   ctx: CanvasRenderingContext2D,
@@ -361,25 +406,47 @@ function paintLine(
 
 /**
  * 指针那个圈的**填充**:和 `paintLine` 的软边是**同一条曲线** —— 内圈到 `radius × hardness` 是实心硬核,
- * 外面渐隐到半径那一圈(对应 `createRadialGradient(radius × hardness → radius)` 那两个色标)。
+ * 外面渐隐到半径那一圈(对应 `createRadialGradient(radius × hardness → radius)` 那两个色标);
+ * 那两层墨的**浓度**也随硬度走(见 `ringInk`)。
  *
- * 此前那个圈是一道写死的 1px 硬白边:硬度拖到 10% 和 100% 看上去一模一样,而画出来的笔迹一个软一个硬
- * —— 维护者报的「笔刷硬度在 UI 上没有体现」正是这一条。现在拖硬度滑块,圈当场从"利落的一枚圆盘"
- * 变成"中间实、边上晕开"。
+ * 这个 div 上**没有**常量边框:上一版留了一道写死的 `border border-white` + 一圈 `shadow`,那道硬白圈
+ * 盖在渐变上面,于是拖硬度屏幕上一动不动 —— 维护者第二次报的「还是没体现」正是它。现在圈的观感
+ * 只由这一串填充给。
  *
  * 判据和 `paintLine` 共用 `HARD_EDGE`(见那个常量的说明)。`hardness` 不是有限数时按硬边处理。
  * 深浅两层一起给(理由见上面那两个常量);整串当 `background` 一次写进 DOM —— 只换一层的话,
  * 底色一变就会剩下一半看不见。
  */
 export function brushRingFill(hardness: number): string {
+  const level = hardnessLevel(hardness);
+  //: 三位小数足矣:再多的位数只是让 DOM 里的字符串更长(0.35 × 0.775 = 0.27125 那种)。
+  const ink = (rgb: string, alpha: number) => `rgba(${rgb}, ${Number((alpha * ringInk(level)).toFixed(3))})`;
+  const dark = ink(RING_DARK_RGB, RING_DARK_ALPHA);
+  const light = ink(RING_LIGHT_RGB, RING_LIGHT_ALPHA);
   //: 硬边:两层都铺满,没有渐变可看(`linear-gradient(ink, ink)` 就是一整块纯色,只是能跟另一层并排写)。
-  if (!(hardness < HARD_EDGE)) {
-    return `linear-gradient(${RING_DARK}, ${RING_DARK}), linear-gradient(${RING_LIGHT}, ${RING_LIGHT})`;
+  if (level >= HARD_EDGE) {
+    return `linear-gradient(${dark}, ${dark}), linear-gradient(${light}, ${light})`;
   }
-  const core = Math.round(Math.min(1, Math.max(0, hardness)) * 100);
+  const core = Math.round(level * 100);
   //: `closest-side`:这个盒子是正圆(宽高都由 placeRing 写成同一个直径),所以它就是"到边的距离"。
-  const soft = (ink: string, fade: string) => `radial-gradient(closest-side, ${ink} 0%, ${ink} ${core}%, ${fade} 100%)`;
-  return `${soft(RING_DARK, RING_DARK_FADE)}, ${soft(RING_LIGHT, RING_LIGHT_FADE)}`;
+  const soft = (color: string, fade: string) => `radial-gradient(closest-side, ${color} 0%, ${color} ${core}%, ${fade} 100%)`;
+  return `${soft(dark, RING_DARK_FADE)}, ${soft(light, RING_LIGHT_FADE)}`;
+}
+
+/** 硬度收进 `0..1`;不是有限数时按**硬边**那一档(和 `paintLine` 的 `HARD_EDGE` 分支一致)。 */
+function hardnessLevel(hardness: number): number {
+  if (!Number.isFinite(hardness)) return 1;
+  return Math.min(1, Math.max(0, hardness));
+}
+
+/**
+ * 圈的墨在硬度 `hardness` 上留多少(1 = 原样)。
+ *
+ * 维护者那句「应该和透明度有关系」:硬度越低,圈的墨越淡(下限见 `RING_INK_FLOOR`)—— 和那条
+ * "硬核越窄、渐隐越宽"的曲线说的是同一件事:软笔的边是淡出去的。
+ */
+export function ringInk(hardness: number): number {
+  return RING_INK_FLOOR + (1 - RING_INK_FLOOR) * hardnessLevel(hardness);
 }
 
 /** 矩形 / 椭圆:一次填一块白的(拖动时每帧重画,所以看到的就是松手后的样子)。 */
@@ -588,8 +655,6 @@ export function MaskEditor({
    * (见 `edgesKey`)。真蒙版那张从头到尾没人写它 —— 它只喂给 `drawMaskView` 的 `mask` 层。
    */
   const edgePreviewRef = React.useRef<{ canvas: HTMLCanvasElement; key: string } | null>(null);
-  /** 算那份副本的定时器(拖动 / 涂抹期间不每帧重算整张,见 EDGE_PREVIEW_DELAY)。 */
-  const edgeTimerRef = React.useRef<number | null>(null);
   /**
    * 哪一组扩张 / 羽化**已经写进**这一版蒙版了(`applyEdges` 之后记下来)。滑块还是那几个数,但屏幕上
    * 不该再预览一遍 —— 否则"应用"之后会看到又扩张一次。
@@ -706,19 +771,91 @@ export function MaskEditor({
     return !(applied && applied.revision === writer().revision && applied.grow === grow && applied.feather === feather);
   };
 
-  /** 那份预览副本是"按哪一版蒙版 + 哪一组参数"算的。三样里任意一样变了,它就该重算。 */
-  const edgesKey = () => `${writer().revision}|${growRef.current}|${featherRef.current}`;
+  /**
+   * 那份副本这一刻该按多大的分辨率算(当前文档 + 当前可见位图,见 `previewScale`)。
+   *
+   * 只在 ref 上读:它是从 `paint()` 那条终身不变的闭包里被调的。
+   */
+  const edgesScale = () => {
+    const doc = writer().size;
+    const view = viewRef.current;
+    return previewScale(doc, { width: view?.width ?? 0, height: view?.height ?? 0 });
+  };
+
+  /**
+   * 那份预览副本是"按哪一版蒙版 + 哪一组参数 + 哪一个分辨率"算的。任意一样变了,它就该重算。
+   *
+   * 分辨率也进 key:盒子换了大小(窗口变了)、位图尺寸还没量到时就画了一笔 —— 这两种情形下参数和
+   * 蒙版版本都没变,可副本该按另一个分辨率算,不进 key 就会一直停在旧分辨率上(放大之后看着糊)。
+   */
+  const edgesKey = () => `${writer().revision}|${growRef.current}|${featherRef.current}|${edgesScale()}`;
 
   /**
    * 显示层该用哪张蒙版:**待应用**时是那份预览副本(算得出来的话),否则是真蒙版。
    *
    * 这里**一个字都不写蒙版** —— 副本是另算的一张画布(见 `renderEdgesPreview`),真蒙版要等
-   * 「应用到蒙版」才动。副本过期(`key` 对不上)时宁可显示真蒙版,也不要显示一份旧的。
+   * 「应用到蒙版」才动。`paint()` 画之前已经把它更新到最新(见 `refreshEdgesPreview`),所以
+   * `key` 对不上只剩"这份副本算不出来"这一种情形 —— 那时宁可显示真蒙版,也不显示一份旧的。
    */
   const displayedMask = (): CanvasImageSource | null => {
     const preview = edgePreviewRef.current;
     if (!preview || !edgesPending() || preview.key !== edgesKey()) return writer().canvas();
     return preview.canvas;
+  };
+
+  /**
+   * 算一份"边缘已经应用过"的副本,喂给显示层(真蒙版**只读**)。
+   *
+   * 蒙版那张画布**只读**(和显示层 `displayedMask` 拿它是同一条路):按**显示分辨率**(见 `previewScale`)
+   * 把它缩进副本自己的画布 —— 缩放交给浏览器的原生重采样,比 `read()` 整张读回来(4432×1904 是
+   * 33MB 的一份 `ImageData`)再自己抽稀便宜得多 —— 然后在**这份缩过的像素**上跑 `growMask` +
+   * `featherMask`(纯函数,和「应用到蒙版」用的是同两条,半径按同一个比例缩)→ `putImageData`。
+   *
+   * 真蒙版那张从头到尾没人写:出口(`save()`)读的、写入口(`MaskContext`)发的,始终是它。
+   */
+  const renderEdgesPreview = () => {
+    const ctx = maskContext();
+    const source = writer().canvas();
+    if (!ctx || !source || !edgesPending()) return;
+    const doc = ctx.size;
+    const scale = edgesScale();
+    const width = Math.max(1, Math.round(doc.width * scale));
+    const height = Math.max(1, Math.round(doc.height * scale));
+    const canvas = edgePreviewRef.current?.canvas ?? document.createElement("canvas");
+    if (canvas.width !== width || canvas.height !== height) {
+      //: 改尺寸 = 换一张清空的位图(浏览器语义),下面重铺一遍。
+      canvas.width = width;
+      canvas.height = height;
+    }
+    const raw = canvas.getContext("2d");
+    if (!raw) return;
+    raw.globalAlpha = 1;
+    raw.globalCompositeOperation = "source-over";
+    //: 往小缩要平滑采样(默认就是开的,写明是因为缩得太狠时它决定了预览的软硬);
+    raw.imageSmoothingEnabled = true;
+    raw.clearRect(0, 0, width, height);
+    raw.drawImage(source, 0, 0, doc.width, doc.height, 0, 0, width, height);
+    const image = raw.getImageData(0, 0, width, height);
+    //: 半径跟着降采样一起缩 —— 不缩的话 4 个**文档**像素会变成屏幕上的 4 个**副本**像素(放大后 8 个)。
+    growMask(image.data, width, height, growRef.current * scale);
+    featherMask(image.data, width, height, featherRef.current * scale);
+    raw.putImageData(image, 0, 0);
+    EDGE_PREVIEW_CANVASES.add(canvas);
+    edgePreviewRef.current = { canvas, key: edgesKey() };
+  };
+
+  /**
+   * 该算就**当场**算(`paint()` 每一帧开头问一次):参数或蒙版一变,这一帧画上屏的就是新副本。
+   *
+   * 此前是尾随 debounce(`EDGE_PREVIEW_DELAY` = 120ms):每一次都重排定时器,于是拖滑块 / 涂抹期间
+   * 屏幕上根本没有预览,松手之后才猛地换一帧 —— 维护者报的「不实时、卡顿」。副本现在按**显示分辨率**
+   * 算(见 `previewScale`),维护者那张 4432×1904 上一次重算从 365ms 降到 90ms 上下(真 Chromium 实测,
+   * 含画布读回),于是有了每帧算的底气:手不停,预览也一直在动。
+   */
+  const refreshEdgesPreview = () => {
+    if (!edgesPending()) return;
+    if (edgePreviewRef.current?.key === edgesKey()) return;
+    renderEdgesPreview();
   };
 
   /**
@@ -731,6 +868,8 @@ export function MaskEditor({
     const view = viewRef.current;
     const ctx = view?.getContext("2d") ?? null;
     if (!view || !ctx) return;
+    //: 画之前先把"待应用"的那份副本更新到最新参数:这一次 paint 显示的就是新副本(见 refreshEdgesPreview)。
+    previewSyncRef.current();
     const underlay = underlayRef.current?.image ?? null;
     const scratch = scratchRef.current ?? (scratchRef.current = document.createElement("canvas"));
     const camera = cameraRef.current;
@@ -748,70 +887,12 @@ export function MaskEditor({
     //: —— 缩放之后它还按上一个比例画)。
     placeFrame();
     ringSyncRef.current();
-    //: 画完再决定要不要算那份预览:它算好了会自己再 paint 一次(那时显示的才是副本)。
-    previewSyncRef.current();
   }, [placeFrame]);
-
-  /**
-   * 算一份"边缘已经应用过"的副本,喂给显示层(真蒙版**只读**)。
-   *
-   * 读一份当前蒙版的像素 → 在**拷贝**上跑 `growMask` + `featherMask`(纯函数,和「应用到蒙版」用的是
-   * 同两条)→ `putImageData` 进自己那张画布。真蒙版那张从头到尾没人写:出口(`save()`)读的、写入口
-   * (`MaskContext`)发的,始终是它。
-   */
-  const renderEdgesPreview = () => {
-    const ctx = maskContext();
-    if (!ctx || !writer().canvas() || !edgesPending()) return;
-    const { width, height } = ctx.size;
-    //: `read()` 给的是一份**工作副本**(`transform` 那条路也是拿它就地改),改它碰不到蒙版那张画布;
-    //: 它和「应用到蒙版」唯一的分别就是这里**不调 `write()`**。
-    const image = ctx.read();
-    growMask(image.data, width, height, growRef.current);
-    featherMask(image.data, width, height, featherRef.current);
-    const canvas = edgePreviewRef.current?.canvas ?? document.createElement("canvas");
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-    const raw = canvas.getContext("2d");
-    if (!raw) return;
-    raw.putImageData(image, 0, 0);
-    edgePreviewRef.current = { canvas, key: edgesKey() };
-    paint();
-  };
-
-  /** 等在路上的那一次重算不做了(参数归零 / 已经写进蒙版 / 关了弹窗)。 */
-  const cancelEdgesPreview = () => {
-    if (edgeTimerRef.current === null) return;
-    window.clearTimeout(edgeTimerRef.current);
-    edgeTimerRef.current = null;
-  };
-
-  /**
-   * 该算就约一个定时器(`paint()` 每帧都会问一次):参数或蒙版变了、副本过期了,才排一个。
-   *
-   * **每一次都重排**(尾随式 debounce):拖动滑块 / 涂抹的每一帧都会走到这里,而重算是整张文档上
-   * 的形态学 + 三遍盒式模糊 —— 不重排的话,拖动期间就变成"算、等 120ms、再算",4096² 上主线程
-   * 一直满着,滑块像卡住。重排之后:手一停(或松手)120ms 就把预览换上;手还在动的时候屏幕上老老实实
-   * 是真蒙版(新那一笔立刻看得见)。
-   */
-  const syncEdgesPreview = () => {
-    if (!edgesPending()) {
-      cancelEdgesPreview();
-      return;
-    }
-    if (edgePreviewRef.current?.key === edgesKey()) return;
-    cancelEdgesPreview();
-    edgeTimerRef.current = window.setTimeout(() => {
-      edgeTimerRef.current = null;
-      renderEdgesPreview();
-    }, EDGE_PREVIEW_DELAY);
-  };
 
   //: `paint()` 只读 ref(见它的说明),所以这两个回调得挂进 ref 里给它用。
   React.useEffect(() => {
     ringSyncRef.current = placeRing;
-    previewSyncRef.current = syncEdgesPreview;
+    previewSyncRef.current = refreshEdgesPreview;
   });
 
   /** 换相机:记下来、底栏的缩放跟上。`fitted` = 这是不是「适应窗口」那一档。 */
@@ -912,24 +993,18 @@ export function MaskEditor({
 
   /**
    * 扩张 / 羽化滑块动了:把当前值搬进 ref(那两条终身不变的闭包只读得到 ref),然后重画一次
-   * —— 参数一变,原来那份预览副本就过期了,屏幕上这一刻该回到真蒙版,新的那份 120ms 后上屏。
+   * —— `paint()` 开头会把过期的那份副本**当场**重算,所以这一次画上去的就是新参数的样子
+   * (不必等任何计时器)。
    *
-   * 蒙版**内容**变了(用户又画了一笔、撤销了)走的是 `paint()` 那条路(`previewSyncRef`),
+   * 蒙版**内容**变了(用户又画了一笔、撤销了)走的也是 `paint()` 那条路(`previewSyncRef`),
    * 不在这里:那件事每一次画布刷新都要问一遍,而不只是滑块动的时候。
    */
   React.useEffect(() => {
     growRef.current = grow;
     featherRef.current = feather;
     if (!open) return;
-    syncEdgesPreview();
     paint();
   }, [open, grow, feather, paint]);
-
-  //: 关掉 / 卸载:等在路上的那一次重算不必再跑(它读的那张画布已经在拆了)。
-  React.useEffect(() => {
-    if (!open) cancelEdgesPreview();
-    return cancelEdgesPreview;
-  }, [open]);
 
   /** 主题色变了就重画 —— `paint()` 每一帧只读 `tintRef`,不会反过来发现主题变过。 */
   React.useEffect(() => {
@@ -1158,7 +1233,6 @@ export function MaskEditor({
       featherMask(data, size.width, size.height, feather);
     });
     appliedEdgesRef.current = { revision: writer().revision, grow, feather };
-    cancelEdgesPreview();
     paint();
   };
 
@@ -1563,8 +1637,9 @@ export function MaskEditor({
               onAuxClick={(event) => event.preventDefault()}
             />
             {/*: 文档的边框与笔刷圈:纯显示,不接指针(事件全落在画布上)。位置由相机写(placeFrame / moveRing)。
-                那个圈里的**填充**是硬度(内圈硬核、外面渐隐,见 brushRingFill):它此前是一道写死的 1px
-                硬白边,硬度拖到多少都一个样 —— 维护者报的「笔刷硬度在 UI 上没有体现」。 */}
+                那个圈的**填充**就是硬度(内圈硬核、外面渐隐,连浓度一起,见 brushRingFill / ringInk);
+                className 里**不放** border / shadow —— 写死的边会把那份填充盖住,拖硬度就什么也看不出来
+                (维护者两次报的都是这一条,第一次是"没写填充",第二次是"填充被硬边盖着")。 */}
             <div
               ref={frameRef}
               data-mask-doc-frame=""
@@ -1577,7 +1652,7 @@ export function MaskEditor({
               data-mask-brush-ring=""
               hidden
               aria-hidden
-              className="pointer-events-none absolute left-0 top-0 rounded-full border border-white shadow-[0_0_0_1px_rgb(0_0_0/0.55)]"
+              className="pointer-events-none absolute left-0 top-0 rounded-full"
             />
           </div>
         </div>
