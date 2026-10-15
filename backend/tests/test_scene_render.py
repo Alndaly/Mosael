@@ -73,12 +73,14 @@ class Test机位和前端同一套插值:
 
 class Test几何和工作台一样:
     def test_人物是十九关节的可摆姿态人形(self) -> None:
-        # 默认直立:脚底就是地面 y=0(脚掌盒 [0,0.14],小腿底 0.142 坐在脚里)、头顶 ~1.76
-        # (mannequinRig 的比例,头略高出 nominal 身高)。脚底那一端容 1e-9:盒心 -0.07 与半高
-        # 0.055 的浮点加减到不了精确 0(-1.1e-16),量的仍然是「站在地上」。
+        # 默认直立:脚底就是地面 y=0、头顶 ~1.76(mannequinRig 的比例,头略高出 nominal 身高)。
+        # 21 块几何:19 个关节 + 每只脚多一块(圆角脚掌 + 一段踝)。脚底那一端容 1e-9:脚掌是
+        # 躺下的 16 边形胶囊,最低顶点在 -r 上,浮点加减到不了精确 0(几十 pm),量的仍然是
+        # 「站在地上」—— 这也是这里不能换成 14 边形的原因:14 边形在 ±Z 是面,躺下后脚底会浮在
+        # 0.000752 上,虽然仍在容差里,但「脚底 = 0」就不再是字面意思了。
         figure = SceneObject(id="f", kind="figure", parameters={"height": 1.7, "width": 0.42, "depth": 0.22})
         meshes = meshes_for(figure)
-        assert len(meshes) == 19
+        assert len(meshes) == 21
         top = max(mesh.vertices[:, 1].max() for mesh in meshes)
         bottom = min(mesh.vertices[:, 1].min() for mesh in meshes)
         assert top == pytest.approx(1.7642, abs=1e-4)

@@ -227,23 +227,44 @@ export function createMannequin(
     const thigh = pivot(`thigh${side}` as MannequinJoint, hips, sign * 0.105, -0.03, 0);
     segment(`thigh${side}` as MannequinJoint, 0.085, 0.27, -0.19);
     const shin = pivot(`shin${side}` as MannequinJoint, thigh, 0, -0.4, 0);
-    segment(`shin${side}` as MannequinJoint, 0.063, 0.27, -0.18);
-    // 脚踝上提 0.02(-0.4 → -0.38,世界 0.12 → 0.14):原来的 -0.4 把脚面留在 0.107,小腿底
-    // 0.142,中间空 0.035 —— 脚看着就是飘着的小方块。
-    const foot = pivot(`foot${side}` as MannequinJoint, shin, 0, -0.38, 0);
-    // 脚:盒子(脚掌 + 踝)。盒心 -0.07、高 0.14 → 世界 [0.0, 0.14]:**脚底落在 y=0**,顶面
-    // 盖过小腿底 0.142,小腿末端整个坐在脚里,不再有缝;深 0.25、中心 z 0.045 → 脚跟 -0.08 /
-    // 脚尖 0.17(和原来一样),也不再是那个小方块。
+    // 小腿 0.27 → 0.34、段心 -0.18 → -0.215:**只往下长**。胶囊总高 = length + 2r,段心同时下移
+    // 增量的一半,膝那一端就钉在原来的 0.538 上(thigh 底 0.51,2.8cm 重叠照旧),踝那一端从
+    // 0.142 落到 0.072 —— 比脚踝关节(0.10)低 2.8cm,踝整个埋进脚里,和膝是同一个重叠量级。
+    segment(`shin${side}` as MannequinJoint, 0.063, 0.34, -0.215);
+    // 脚踝 0.14 → 0.10:原来脚 pivot 架在 0.14 上(占身高 8.2%),踝高、腿短、脚只能靠一块
+    // 0.14 高的方块撑到地面 —— 那就是「垫了两块砖」。
+    const foot = pivot(`foot${side}` as MannequinJoint, shin, 0, -0.42, 0);
+    // 脚 = **圆角脚掌 + 一段踝**,两块:
+    //   - 脚掌是躺下的胶囊(轴从 Y 转到 Z,再在 X 上拉宽):两头天然是圆的 —— 脚跟/脚尖不是刀切
+    //     直角;压成 0.06 高、0.13 宽(**≥ 小腿直径 0.126**,正面不再比小腿窄)、0.25 长;脚踝
+    //     0.10 - 0.07(段心) - 0.03(半径) = 底面 0,脚跟 -0.08 / 脚尖 0.17 和原来一致,站姿的
+    //     落地范围没动。**radial 必须是 4 的倍数**(这里 16):14 边形在 ±Z 是「面」不是「顶点」,
+    //     躺下后触地的是那个平面,脚会浮在 0.000752 上(实测),脚下就没有精确的 y=0 了。
+    //   - 踝是竖着的小胶囊(半径 0.05,比小腿的 0.063 细),从脚掌里长出来、上端没入小腿末端
+    //     (顶 0.165 > 小腿底 0.072),于是「小腿 → 踝 → 脚掌」是一个连着收细的体块。
     {
-      const geometry = new THREE.BoxGeometry(0.09 * s, 0.14 * s, 0.25 * s);
-      const mesh = new THREE.Mesh(geometry, materialFor);
-      mesh.position.set(0, -0.07 * s, 0.045 * s);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.userData.mannequinJoint = `foot${side}`;
-      geometries.push(geometry);
-      meshes.push(mesh);
-      foot.add(mesh);
+      const soleRadius = 0.03;
+      const sole = new THREE.CapsuleGeometry(soleRadius * s, 0.19 * s, 4, 16);
+      const soleMesh = new THREE.Mesh(sole, materialFor);
+      soleMesh.rotation.x = Math.PI / 2; // 胶囊轴 Y → Z:脚掌沿脚长躺下
+      soleMesh.position.set(0, -0.07 * s, 0.045 * s);
+      soleMesh.scale.set(0.065 / soleRadius, 1, 1); // 0.06 圆截面 → 0.13 宽
+      soleMesh.castShadow = true;
+      soleMesh.receiveShadow = true;
+      soleMesh.userData.mannequinJoint = `foot${side}`;
+      geometries.push(sole);
+      meshes.push(soleMesh);
+      foot.add(soleMesh);
+
+      const ankle = new THREE.CapsuleGeometry(0.05 * s, 0.04 * s, 4, 16);
+      const ankleMesh = new THREE.Mesh(ankle, materialFor);
+      ankleMesh.position.set(0, -0.005 * s, 0);
+      ankleMesh.castShadow = true;
+      ankleMesh.receiveShadow = true;
+      ankleMesh.userData.mannequinJoint = `foot${side}`;
+      geometries.push(ankle);
+      meshes.push(ankleMesh);
+      foot.add(ankleMesh);
     }
   }
 

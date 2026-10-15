@@ -20,7 +20,8 @@ describe("场景里的 figure 是关节人形", () => {
   it("figure 由 19 关节层级拼成,默认直立", () => {
     const rig = rigOf(makeObject("figure"));
     expect(rig.joints.size).toBe(MANNEQUIN_JOINTS.length);
-    expect(rig.meshes.length).toBe(19);
+    // 21 块 = 19 个关节,脚的关节上多一块:每只脚是「圆角脚掌 + 一段踝」。
+    expect(rig.meshes.length).toBe(21);
     for (const name of MANNEQUIN_JOINTS) expect(readPose(rig)[name]).toEqual([0, 0, 0]);
   });
 
