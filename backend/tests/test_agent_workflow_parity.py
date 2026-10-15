@@ -129,6 +129,11 @@ NOT_A_TOOL: dict[str, str] = {
     "fit_narration": "按时长把口播改短。智能体自己写口播时就能数字数、自己改,同 llm。",
     "plugin_tool": "插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个工具名。",
     "social_link": "从链接、分享口令里认出平台和编号。模型自己会读链接。",
+    #: 拆镜头三节点(ADR 0061 待拍板 1):智能体的工具定义预算几乎用满,而 analyze_asset 已经会读
+    #: 镜头表、按镜头抽帧;要整条流程就跑官方模板 reference_video_shots(run_workflow),不单独开工具。
+    "detect_shots": "拆镜头:analyze_asset 会读镜头表并按镜头抽帧;要整条流程用官方模板 reference_video_shots(run_workflow)。",
+    "describe_shots": "逐镜看画面:拆镜头的后半段,同上 —— analyze_asset 读镜头表,官方模板 reference_video_shots 跑整条。",
+    "shot_report": "镜头表报告:报告是镜头表的投影,analyze_asset 读表;官方模板 reference_video_shots 出报告。",
 }
 
 

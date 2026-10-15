@@ -1073,6 +1073,101 @@
     }
   },
   {
+    "type": "describe_shots",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "profile_id": {
+        "type": "string",
+        "label": {
+          "zh": "供应商配置",
+          "en": "Provider connection"
+        }
+      },
+      "model": {
+        "type": "string",
+        "label": {
+          "zh": "模型",
+          "en": "Model"
+        }
+      }
+    },
+    "outputs": [
+      "judged",
+      "batches",
+      "hints",
+      "shots"
+    ],
+    "output_labels": {
+      "judged": {
+        "zh": "判完的批数",
+        "en": "Batches judged"
+      },
+      "batches": {
+        "zh": "拆出来的批",
+        "en": "Batches"
+      },
+      "hints": {
+        "zh": "对账提示",
+        "en": "Reconciliation hints"
+      },
+      "shots": {
+        "zh": "逐镜明细",
+        "en": "Shot details"
+      }
+    }
+  },
+  {
+    "type": "detect_shots",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "threshold": {
+        "type": "number",
+        "label": {
+          "zh": "阈值",
+          "en": "Threshold"
+        }
+      },
+      "save_sheets": {
+        "type": "string",
+        "label": {
+          "zh": "联系表存成素材",
+          "en": "Save sheets as assets"
+        }
+      }
+    },
+    "outputs": [
+      "shot_count",
+      "sheets",
+      "asset_ids"
+    ],
+    "output_labels": {
+      "shot_count": {
+        "zh": "镜头数",
+        "en": "Shot count"
+      },
+      "sheets": {
+        "zh": "联系表清单",
+        "en": "Contact sheets"
+      },
+      "asset_ids": {
+        "zh": "素材列表",
+        "en": "Media list"
+      }
+    }
+  },
+  {
     "type": "document_to_markdown",
     "config": {
       "asset_id": {
@@ -3363,6 +3458,42 @@
       "engine": {
         "zh": "引擎",
         "en": "Engine"
+      }
+    }
+  },
+  {
+    "type": "shot_report",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      }
+    },
+    "outputs": [
+      "report_markdown",
+      "storyboard_markdown",
+      "stats",
+      "shot_count"
+    ],
+    "output_labels": {
+      "report_markdown": {
+        "zh": "镜头表 Markdown",
+        "en": "Shot-list Markdown"
+      },
+      "storyboard_markdown": {
+        "zh": "分镜提示词",
+        "en": "Storyboard prompts"
+      },
+      "stats": {
+        "zh": "指标",
+        "en": "Metrics"
+      },
+      "shot_count": {
+        "zh": "镜头数",
+        "en": "Shot count"
       }
     }
   },

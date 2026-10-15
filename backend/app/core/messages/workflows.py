@@ -479,6 +479,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "docProgress_renderPages": {"zh": "渲染页面图", "en": "Rendering page images"},
     "jobMsg_videoGifRunning": {"zh": "正在将视频转换为 GIF", "en": "Converting video to GIF"},
     "jobMsg_videoGifDone": {"zh": "GIF 已生成", "en": "GIF created"},
+    # 拆镜头(domain/shots,ADR 0061)
+    "jobMsg_shotsQueued": {"zh": "拆镜头排队中", "en": "Shot breakdown queued"},
+    "jobMsg_shotsMeasuring": {"zh": "正在量刀口和动静、取帧拼联系表", "en": "Measuring cuts and motion, grabbing frames"},
+    "jobMsg_shotsDescribing": {"zh": "正在逐镜看画面(按联系表一批批判)", "en": "Judging each shot's picture batch by batch"},
+    "jobMsg_shotsDone": {"zh": "拆好了:{count} 镜", "en": "Breakdown done: {count} shots"},
+    # 拆镜头节点(domain/shots → executors/shots.py)
+    "wfErr_shotsNotBrokenDown": {"zh": "这份视频还没拆过镜头,先接一个「拆镜头」节点", "en": "This video has no shot breakdown yet. Run the Detect shots node first."},
+    "wfErr_shotsNotVideo": {"zh": "「{name}」不是视频素材,拆镜头只认视频", "en": "\"{name}\" is not a video asset; shot detection only takes videos."},
+    "wfErr_shotsThreshold": {"zh": "刀口阈值要在 0.05–0.9 之间", "en": "The cut threshold must be between 0.05 and 0.9."},
     "jobMsg_proxyRunning": {"zh": "生成预览代理中", "en": "Generating the preview proxy"},
     "jobMsg_proxyDone": {"zh": "预览代理完成", "en": "Preview proxy ready"},
     "jobMsg_proxyFailed": {"zh": "预览代理生成失败", "en": "Preview proxy generation failed"},

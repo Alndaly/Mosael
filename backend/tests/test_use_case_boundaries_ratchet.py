@@ -23,6 +23,9 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 #: app/domain 下每个文件里 `.commit()` 的调用数。
 DOMAIN_COMMITS: dict[str, int] = {
+    #: 素材页「拆镜头」后台任务的长事务:量完、每判完一批要报进度并落一次断点,取消/失败时前几批仍在 ——
+    #: 和 generation/runner 的进度提交同一类,不是领域函数随手 commit。
+    "app/domain/analysis/shots_task.py": 3,
     "app/domain/agent/autopilot.py": 4,
     "app/domain/agent/confirmations.py": 1,
     "app/domain/agent/host.py": 10,

@@ -168,6 +168,10 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   //: 自媒体分析:认链接、整理数据算指标、从链接下载(和「导出」的下载箭头区分开)。
   social_link: Link2,
   social_metrics: ChartColumn,
+  //: 拆镜头(ADR 0061):量刀口取帧拼联系表 → 逐镜看画面 → 镜头表报告。
+  detect_shots: Scissors,
+  describe_shots: Camera,
+  shot_report: Rows3,
   quote_check: Quote,
   import_url: HardDriveDownload,
   asset: ImageIcon,

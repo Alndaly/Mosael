@@ -1,0 +1,342 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Break down a reference video: shot list, contact sheets, report",
+  "description": "Pick a video from the asset library. Code first measures every cut and each shot's motion (free, not guessed by a model) and grabs two frames per shot into contact sheets; optionally transcribe the speech so lines are assigned to each shot by timecode. A vision model then judges framing, camera work, transitions and rhythm shot by shot, and writes a picture description plus a storyboard prompt to recreate it (up to 25 shots per call; code reconciles afterwards: out-of-vocabulary words are dropped, and camera moves the pixels don't show are corrected and recorded). Code produces the shot-list report, a model writes the breakdown (structure, pacing curve, hook, reusable techniques), and it is saved as a note and handed over. Cost: no extra spend per shot, 25 shots per vision call — a one-minute, 30-shot video costs two vision calls plus one chat call for the summary. The starting point is a video already in the asset library; to break down a link, import it into the library first with Import from link.",
+  "graph_hash": "5993f8d7d70d14cb2f7092dbf71d8fc07d8493c78f84aa63120677e5fe902863",
+  "graph": {
+    "meta": {
+      "template_id": "reference_video_shots",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "Set the breakdown focus",
+        "position": {
+          "x": 40,
+          "y": 478
+        },
+        "config": {
+          "params": {
+            "transcribe_speech": "yes",
+            "focus": ""
+          }
+        }
+      },
+      {
+        "id": "source_video",
+        "type": "asset",
+        "name": "Pick the reference video",
+        "position": {
+          "x": 360,
+          "y": 478
+        },
+        "config": {
+          "asset_id": ""
+        }
+      },
+      {
+        "id": "detect",
+        "type": "detect_shots",
+        "name": "Detect shots (cuts, motion, contact sheets)",
+        "position": {
+          "x": 680,
+          "y": 478
+        },
+        "config": {
+          "asset_id": "",
+          "save_sheets": "no"
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "want_speech",
+        "type": "condition",
+        "name": "Transcribe the speech for dialogue?",
+        "position": {
+          "x": 1000,
+          "y": 478
+        },
+        "config": {
+          "left": "{{start.transcribe_speech}}",
+          "op": "not_equals",
+          "right": "no"
+        }
+      },
+      {
+        "id": "transcript",
+        "type": "transcribe_asset",
+        "name": "Transcribe the speech with timecodes",
+        "position": {
+          "x": 1320,
+          "y": 288
+        },
+        "config": {
+          "asset_id": ""
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "transcript_section",
+        "type": "template",
+        "name": "Attach the transcript",
+        "position": {
+          "x": 1640,
+          "y": 288
+        },
+        "config": {
+          "template": "## 口播逐字稿\n\n{{transcript.text}}"
+        }
+      },
+      {
+        "id": "describe",
+        "type": "describe_shots",
+        "name": "Judge each shot (framing, camera, rhythm)",
+        "position": {
+          "x": 1960,
+          "y": 478
+        },
+        "config": {
+          "asset_id": "",
+          "profile_id": "",
+          "model": ""
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "report",
+        "type": "shot_report",
+        "name": "Shot-list report",
+        "position": {
+          "x": 2280,
+          "y": 478
+        },
+        "config": {
+          "asset_id": ""
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "summary",
+        "type": "llm",
+        "name": "Write the breakdown (structure, pacing, hook, moves)",
+        "position": {
+          "x": 2600,
+          "y": 478
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "balanced",
+          "system": "你是一名资深短视频编导,擅长拉片拆解。你会收到一份参考视频的完整镜头表:每一镜的镜号、起止时间、\n时长、实测动静、景别、类别、运镜、转场、节奏、画面描述、这一镜的台词,以及照着重生的分镜提示词;另有判画面时的\n对账提示(哪一镜的判断被代码纠正过、为什么 —— 被纠正过的运镜说法不要照抄)。镜头表里的数字(镜长、每分钟几刀)\n是代码量出来的,是事实,照用,不要自己重算也不要改镜头表。基于它写一份给创作者照着做的拆解:整体结构、节奏曲线\n(哪里快哪里慢、为什么)、前 5 秒的钩子、最值得复用的拍摄手法;开始参数里点了拆解重点的话,单独回应那个方向。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "素材:{{source_video.name}}({{source_video.duration}} 秒)\n拆解重点(可能为空):{{start.focus}}\n\n## 镜头表\n\n{{report.report_markdown}}\n\n## 判画面对账提示(可能为空)\n{{describe.hints}}\n\n## 口播逐字稿(可能为空)\n{{transcript.text}}",
+          "response_format": "json_schema",
+          "json_schema_name": "reference_video_breakdown",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "笔记标题:片子名 + 一句话定性"
+              },
+              "verdict": {
+                "type": "string",
+                "description": "一句话总评:这条片子靠什么成立"
+              },
+              "structure": {
+                "type": "string",
+                "description": "整体结构:几段式、各段在干什么、怎么衔接"
+              },
+              "pacing": {
+                "type": "string",
+                "description": "节奏曲线:哪里快哪里慢、为什么、和情绪的关系"
+              },
+              "hook": {
+                "type": "string",
+                "description": "前 5 秒的钩子:抛了什么、怎么留人"
+              },
+              "techniques": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "最值得复用的拍摄手法,逐条写清怎么照做"
+              },
+              "report_markdown": {
+                "type": "string",
+                "description": "完整拆解(markdown,含上面各部分)"
+              }
+            },
+            "required": [
+              "title",
+              "verdict",
+              "structure",
+              "pacing",
+              "hook",
+              "techniques",
+              "report_markdown"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.3,
+          "max_tokens": 12000
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "Save as a note (summary, shot list, prompts)",
+        "position": {
+          "x": 2920,
+          "y": 478
+        },
+        "config": {
+          "title": "{{summary.json.title}}",
+          "markdown": "> {{summary.json.verdict}}\n\n{{summary.json.report_markdown}}\n\n---\n\n## 镜头表与分镜提示词\n\n{{report.report_markdown}}\n\n{{transcript_section.text}}",
+          "tags": "参考视频拆解"
+        }
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "Breakdown ready",
+        "position": {
+          "x": 3240,
+          "y": 478
+        },
+        "config": {
+          "title": "参考视频拆解已存成笔记",
+          "body": "{{source_video.name}} —— {{summary.json.verdict}}"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the breakdown and the shot list",
+        "position": {
+          "x": 3560,
+          "y": 478
+        },
+        "config": {
+          "values": {
+            "note_id": "{{save_note.note_id}}",
+            "title": "{{summary.json.title}}",
+            "verdict": "{{summary.json.verdict}}",
+            "summary_markdown": "{{summary.json.report_markdown}}",
+            "shot_report_markdown": "{{report.report_markdown}}",
+            "stats": "{{report.stats}}",
+            "shot_count": "{{report.shot_count}}",
+            "judged_batches": "{{describe.judged}}",
+            "hints": "{{describe.hints}}",
+            "video_asset_id": "{{source_video.asset_id}}",
+            "transcript": "{{transcript.text}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start__source_video",
+        "source": "start",
+        "target": "source_video"
+      },
+      {
+        "id": "detect__want_speech",
+        "source": "detect",
+        "target": "want_speech"
+      },
+      {
+        "id": "want_speech__transcript__true",
+        "source": "want_speech",
+        "target": "transcript",
+        "source_handle": "true"
+      },
+      {
+        "id": "transcript__transcript_section",
+        "source": "transcript",
+        "target": "transcript_section"
+      },
+      {
+        "id": "want_speech__describe__false",
+        "source": "want_speech",
+        "target": "describe",
+        "source_handle": "false"
+      },
+      {
+        "id": "transcript_section__describe",
+        "source": "transcript_section",
+        "target": "describe"
+      },
+      {
+        "id": "describe__report",
+        "source": "describe",
+        "target": "report"
+      },
+      {
+        "id": "report__summary",
+        "source": "report",
+        "target": "summary"
+      },
+      {
+        "id": "summary__save_note",
+        "source": "summary",
+        "target": "save_note"
+      },
+      {
+        "id": "save_note__done_notice",
+        "source": "save_note",
+        "target": "done_notice"
+      },
+      {
+        "id": "done_notice__output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "d-source_video-asset_id-detect-asset_id",
+        "source": "source_video",
+        "target": "detect",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-source_video-asset_id-transcript-asset_id",
+        "source": "source_video",
+        "target": "transcript",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-source_video-asset_id-describe-asset_id",
+        "source": "source_video",
+        "target": "describe",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      },
+      {
+        "id": "d-source_video-asset_id-report-asset_id",
+        "source": "source_video",
+        "target": "report",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      }
+    ]
+  }
+}

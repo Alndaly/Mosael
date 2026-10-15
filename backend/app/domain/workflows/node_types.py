@@ -16,6 +16,7 @@ from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_
 from app.domain.media_kinds import declared_media
 from app.domain.scenes.operations import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
+from app.domain.shots.detect import DEFAULT_THRESHOLD as SHOT_DEFAULT_THRESHOLD
 
 
 def _source_assets_help() -> dict[str, str]:
@@ -357,6 +358,8 @@ _FIELD_LABELS = {
     "account": "wfField_account",
     "stats": "wfField_stats",
     "summary": "wfField_summary",
+    "threshold": "wfField_threshold",
+    "save_sheets": "wfField_save_sheets",
     "table": "wfField_table",
 }
 
@@ -1082,6 +1085,58 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["asset_ids", "asset_id", "count", "columns", "source_asset_id"],
         "output_types": {"asset_ids": "asset", "count": "number", "columns": "number"},
         "wiring_outputs": ["count", "columns", "source_asset_id"],
+    },
+    #: 拆镜头三节点(ADR 0061):刀口 / 动静 / 帧由代码量,景别 / 运镜由视觉模型判,一份视频一份镜头表。
+    #: 分析(analyze_asset)和素材详情页读的是同一张表 —— 节点拆完,分析那边立刻按镜头抽帧、带镜头表。
+    "detect_shots": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_detect_shots",
+        "description": "wfNode_detect_shots_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "video",
+                         "description": "wfNode_detect_shots_asset_id"},
+            "threshold": {"advanced": True, "type": "number", "default": SHOT_DEFAULT_THRESHOLD,
+                          "description": "wfNode_detect_shots_threshold"},
+            "save_sheets": {"advanced": True, "type": "string", "default": "no", "options": ["yes", "no"],
+                            "description": "wfNode_detect_shots_save_sheets"},
+        },
+        "outputs": ["shot_count", "sheets", "asset_ids"],
+        "output_types": {"shot_count": "number", "sheets": "json", "asset_ids": "json"},
+        "output_labels": {"sheets": "wfOut_shot_sheets"},
+    },
+    "describe_shots": {
+        "external": False,
+        "spends": True,
+        "category": "wfCat_ai",
+        "label": "wfNode_describe_shots",
+        "description": "wfNode_describe_shots_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "video",
+                         "description": "wfNode_describe_shots_asset_id"},
+            "profile_id": {"type": "string", "description": "wfNode_llm_profile_id", "options_from": "chat_connections"},
+            "model": {"type": "string", "description": "wfNode_llm_model", "depends_on": "profile_id",
+                      "options_from": "chat_models", "allow_custom": True},
+        },
+        "outputs": ["judged", "batches", "hints", "shots"],
+        "output_types": {"judged": "number", "batches": "number", "hints": "json", "shots": "json"},
+        "output_labels": {"judged": "wfOut_described_shots", "hints": "wfOut_shot_hints", "shots": "wfOut_shots_list"},
+    },
+    "shot_report": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_shot_report",
+        "description": "wfNode_shot_report_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "video",
+                         "description": "wfNode_shot_report_asset_id"},
+        },
+        "outputs": ["report_markdown", "storyboard_markdown", "stats", "shot_count"],
+        "output_types": {"report_markdown": "text", "storyboard_markdown": "text", "stats": "json",
+                         "shot_count": "number"},
+        "output_labels": {"report_markdown": "wfOut_shot_report", "storyboard_markdown": "wfOut_storyboard_prompts"},
     },
     "publish": {
         "external": True,

@@ -226,7 +226,8 @@ def test_就绪检查只等用的人填那几格_没有别的阻断和警告(tem
 
 def _raw_template_graphs(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict[str, Any]]:
     """建图函数最后都过一遍 normalize_graph;换成原样交回,拿到的就是作者画的那张(规范化之前)。"""
-    for name in ("templates_full_video", "templates_business", "templates_analysis", "templates_cleanup", "templates_dub"):
+    for name in ("templates_full_video", "templates_business", "templates_analysis", "templates_cleanup", "templates_dub",
+                 "templates_shots"):
         module = importlib.import_module(f"app.domain.workflows.{name}")
         monkeypatch.setattr(module, "normalize_graph", lambda graph, *, node_types: graph)
     return blank_template_graphs("zh")

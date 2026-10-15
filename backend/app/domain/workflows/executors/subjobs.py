@@ -588,32 +588,9 @@ def inspect_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     }
 
 
-def _asset_in(db: Session, scope: RunScope, asset_id: str) -> Asset:
-    """取这份素材,并确认它属于这次运行所在的工作区。和 _sequence_in 成对。
-
-    asset_id 同样常常来自上游节点。少了这一条,A 工作区的工作流能转写 B 工作区的素材
-    ——而转写结果是**要返回到工作流输出里**的,那是把别人的内容读出来。
-    """
-    if not asset_id:
-        raise WorkflowDomainError("wfErr_assetIdMissing")
-    asset = db.get(Asset, asset_id)
-    if asset is None or asset.workspace_id != scope.workspace_id:
-        raise WorkflowDomainError("wfErr_assetNotInWorkspace")
-    return asset
-
-
-def _sequence_in(db: Session, scope: RunScope, sequence_id: str) -> Sequence:
-    """取这条序列,并确认它属于这次运行所在的工作区。
-
-    sequence_id 常常来自上游节点,而上游可能拿到任何地方的 id —— 这一条挡的是
-    「用 A 工作区的工作流去改 B 工作区的时间线」。
-    """
-    if not sequence_id:
-        raise WorkflowDomainError("wfErr_sequenceIdMissing")
-    sequence = db.get(Sequence, sequence_id)
-    if sequence is None or sequence.workspace_id != scope.workspace_id:
-        raise WorkflowDomainError("wfErr_sequenceNotInWorkspace")
-    return sequence
+#: 拿输入 id 并确认属于这次运行所在工作区的一对帮手。本体在 executors.inputs —— 住在 cycle 外,
+#: 这样不卷在 engine ⇄ executors 循环里的新执行器(如 shots)也能用,不用一起进 LAZY_CYCLE_MODULES。
+from app.domain.workflows.executors.inputs import _asset_in, _sequence_in  # noqa: F401  (re-export: 既有引用处照旧)
 
 
 #: 同一条时间线被别的写入方抢先改了一版时,重读重试几次。每一次冲突都意味着别人**已经写成**了一次,

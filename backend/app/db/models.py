@@ -36,6 +36,7 @@ from app.db.model_slices.sharing import ResourceShare  # noqa: E402,F401
 from app.db.model_slices.projects import Project  # noqa: E402,F401
 from app.db.model_slices.media import Asset, AssetNsfwMark, Font, Lut  # noqa: E402,F401
 from app.db.model_slices.documents import AssetExtraction  # noqa: E402,F401
+from app.db.model_slices.shots import ShotBreakdown  # noqa: E402,F401
 from app.db.model_slices.entities import Entity, EntityReference  # noqa: E402,F401
 from app.db.model_slices.transcripts import ClipTranscriptRef, Transcript, TranscriptSegment, TranscriptToken  # noqa: E402,F401
 from app.db.model_slices.sequences import Clip, Sequence, SequenceOperation, SequenceRevision, Track  # noqa: E402,F401

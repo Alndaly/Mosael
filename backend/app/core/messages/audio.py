@@ -286,4 +286,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没有支持原生视频理解的供应商(需 Gemini / 通义千问 Qwen-VL / Kimi),或改用抽帧模式",
         "en": "No provider supports native video understanding (it needs Gemini, Qwen-VL or Kimi). Add one, or switch to frame sampling.",
     },
+    # 拆镜头(domain/shots,ADR 0061)
+    "shotsErr_noDuration": {"zh": "这份视频读不出时长", "en": "This video's duration can't be read."},
+    "shotsErr_noVideoStream": {"zh": "这份文件里没有视频流", "en": "This file has no video stream."},
+    "shotsErr_detectFailed": {"zh": "量刀口和动静失败", "en": "Measuring the cuts and motion failed."},
+    "shotsErr_noFrames": {"zh": "一帧都取不出来", "en": "Not a single frame could be grabbed."},
+    "shotsErr_notVideo": {"zh": "只有视频素材可以拆镜头", "en": "Only video assets can be broken into shots."},
+    "shotsErr_noLocalFile": {"zh": "这份素材没有本地文件", "en": "This asset has no local file."},
+    "shotsErr_fileMissing": {"zh": "这份素材的文件找不到了", "en": "This asset's file can't be found."},
+    "shotsErr_badParams": {
+        "zh": "拆镜头的参数不对(阈值 0.05–0.9,最短镜头 0–5 秒)",
+        "en": "Bad shot-detection parameters (threshold 0.05–0.9, minimum shot length 0–5s).",
+    },
 }

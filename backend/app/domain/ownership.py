@@ -27,6 +27,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Asset": ("app/domain/assets/",),
     #: 文档的解析结果(ADR 0031)只归文档域写。
     "AssetExtraction": ("app/domain/documents/",),
+    #: 镜头表(ADR 0061)是素材的派生物,只归 shots 域写。
+    "ShotBreakdown": ("app/domain/shots/",),
     # 资产库(ADR 0027):人物 / 场景 / 道具与它们的参考图只归 entities 域写。
     "Entity": ("app/domain/entities/",),
     "EntityReference": ("app/domain/entities/",),

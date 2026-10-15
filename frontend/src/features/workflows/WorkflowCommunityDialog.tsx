@@ -8,6 +8,7 @@ import {
   Film,
   Flame,
   FolderInput,
+  Grid2x2,
   Languages,
   ListOrdered,
   Loader2,
@@ -68,6 +69,7 @@ const TEMPLATE_ICONS: Record<string, typeof Film> = {
   account_analysis: ChartColumn,
   viral_video_breakdown: Flame,
   comment_insights: MessageSquareText,
+  reference_video_shots: Grid2x2,
 };
 
 type Filter = "all" | "added" | "ready";

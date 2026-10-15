@@ -960,5 +960,21 @@
     "python",
     "service",
     "updated_at"
+  ],
+  "shot_breakdowns": [
+    "asset_id",
+    "created_at",
+    "created_by",
+    "cuts",
+    "describe",
+    "hints",
+    "id",
+    "lang",
+    "meta",
+    "params",
+    "sheets",
+    "shots",
+    "updated_at",
+    "workspace_id"
   ]
 }

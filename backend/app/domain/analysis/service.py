@@ -144,6 +144,52 @@ def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
         return [frame.read_bytes() for frame in frames]
 
 
+def _breakdown_shots_for(db: Session, asset: Asset, path: Path) -> tuple[list[dict[str, Any]], Any | None]:
+    """这条素材的镜头(ADR 0061 §3):库里有镜头表就用(刀口已经量好);没有就现场只量刀口
+    (不取帧、不判画面,短片一两秒)。量不出来回 ([], None) —— 调用方回落均匀抽帧。"""
+    from app.domain.shots import breakdowns as shots_breakdowns
+    from app.domain.shots import detect as shots_detect
+
+    row = shots_breakdowns.breakdown_for(db, asset.id)
+    if row is not None and row.shots:
+        return list(row.shots), row
+    try:
+        probed = shots_detect.probe(path)
+        measured = shots_detect.measure(path, motion=False)
+        return shots_detect.build_shots(probed.duration, measured.cuts, measured.motion), None
+    except Exception:
+        return [], None
+
+
+def extract_shot_frames(
+    path: Path, shots: list[dict[str, Any]], frame_count: int
+) -> tuple[list[bytes], list[str] | None]:
+    """按镜头取中点帧(每镜至少一帧,镜多均匀挑),每张图带 `S03 · 0:12.4–0:15.0` 标注,
+    返回 `(帧字节, 标注)`;没有镜头 / 一帧都取不到时回落均匀抽帧(标注为 None)。
+    分析不能因为镜头表缺席或取帧失败而失败。"""
+    from app.domain.shots import frames as shots_frames
+
+    if shots:
+        try:
+            labeled = shots_frames.grab_midframes(path, shots, frame_count)
+        except Exception:
+            labeled = []
+        if labeled:
+            return [image for _label, image in labeled], [label for label, _image in labeled]
+    #: 均匀抽帧保持 `extract_video_frames(path)` 的单参形状 —— 既有测试替身按这个签名挂。
+    return extract_video_frames(path), None
+
+
+def shot_table_context(db: Session, asset: Asset) -> str:
+    """已有镜头表的那一段(量好的刀口时长、判过的景别运镜);没有表回空串。两条路都带上(ADR 0061 §3)。"""
+    from app.domain.shots import breakdowns as shots_breakdowns
+
+    row = shots_breakdowns.breakdown_for(db, asset.id)
+    if row is None or not row.shots:
+        return ""
+    return shots_breakdowns.prompt_context(row, asset)
+
+
 def image_part(data: bytes, mime: str = "image/jpeg") -> dict[str, Any]:
     """一张图在对话消息里的样子(data URI)。**导出给别处用** —— 画板上「图片连到便签让
     模型看着写」用的是同一份,自己再拼一遍 base64 的话,格式改了只会改好其中一处。"""
@@ -162,18 +208,32 @@ def build_messages(
     transcript: str | None = None,
     *,
     image_mime: str = "image/jpeg",
+    frame_labels: list[str] | None = None,
+    shot_context: str = "",
 ) -> list[dict[str, Any]]:
     meta = asset.media_info or {}
     context = f"素材名称: {asset.name}；类型: {asset.kind}"
     if meta.get("duration"):
         context += f"；时长: {meta['duration']}秒"
     if asset.kind == "video":
-        context += f"。以下是按时间均匀抽取的 {len(images)} 帧画面（从前到后）。"
+        if frame_labels is not None:
+            context += (f"。以下是按镜头抽取的 {len(images)} 帧画面（每帧前面的标注写着它在哪一镜、"
+                        "这一镜的起止时间，照标注说哪一帧在哪一镜）。镜头边界和时长是代码量出来的，准确。")
+        else:
+            context += f"。以下是按时间均匀抽取的 {len(images)} 帧画面（从前到后）。"
     # 画面只能"看",接上语音转写才能"听懂"台词/旁白——视频理解质量的关键补充。
     if transcript:
         context += f"\n\n【语音转写(自动识别,可能有误差,仅供参考)】\n{transcript}"
+    # 已有镜头表就带上(ADR 0061 §3):量好的刀口时长、判过的景别运镜,模型不必再猜一遍。
+    if shot_context:
+        context += f"\n\n{shot_context}"
     content: list[dict[str, Any]] = [{"type": "text", "text": f"{context}\n\n{question}"}]
-    content.extend(_image_part(image, image_mime) for image in images)
+    if frame_labels is not None:
+        for label, image in zip(frame_labels, images):
+            content.append({"type": "text", "text": f"【{label}】"})
+            content.append(_image_part(image, image_mime))
+    else:
+        content.extend(_image_part(image, image_mime) for image in images)
     return [{"role": "user", "content": content}]
 
 
@@ -364,6 +424,8 @@ def analyze_asset(
         return {"answer": answer, "provider": profile.vendor, "model": actual_model, "mode": "image", "frames": 1}
 
     transcript_text = asset_transcript_text(db, asset.id)  # 转写两条路都喂
+    #: 有镜头表就带上(两条路都带,ADR 0061 §3):量好的刀口时长、判过的景别运镜,模型不必再猜。
+    table_context = shot_table_context(db, asset)
     oauth_gateway = resolved_connection is not None and surface == "automation" and resolved_connection.auth_type == "oauth"
     if mode == "native" and oauth_gateway:
         raise AnalysisError("analysisErr_oauthNoNativeVideo")
@@ -379,6 +441,7 @@ def analyze_asset(
         raise AnalysisError("analysisErr_noNativeVideoProvider")
     if native_profile is not None and mode in ("native", "auto"):
         # 原生视频理解是这套里最贵的调用之一,以前完全不在账上。
+        native_prompt = f"{prompt}\n\n{table_context}" if table_context else prompt
         with billable(
             db, user_id=user_id, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
             idempotency_key=once("analyze_asset"),
@@ -389,7 +452,7 @@ def analyze_asset(
                 native_profile,
                 asset,
                 path,
-                prompt,
+                native_prompt,
                 transcript_text,
                 call,
                 model=model,
@@ -405,14 +468,19 @@ def analyze_asset(
         }
 
     # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
+    # 按镜头抽(ADR 0061 §3):先量刀口,每镜至少一帧取中点,每张图标着 S03 · 0:12.4–0:15.0;
+    # 没镜头表 / 取不到时回落老喂法(均匀抽帧)。
     profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
-    images = extract_video_frames(path)  # 帧数按时长自适应
+    shots, _row = _breakdown_shots_for(db, asset, path)
+    frame_count = adaptive_frame_count(float((asset.media_info or {}).get("duration") or 0))
+    images, frame_labels = extract_shot_frames(path, shots, frame_count)
     with billable(
         db, user_id=user_id, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
         idempotency_key=once("analyze_asset"),
         source_type="asset", source_id=asset.id,
     ) as call:
-        messages = build_messages(asset, prompt, images, transcript=transcript_text)
+        messages = build_messages(asset, prompt, images, transcript=transcript_text,
+                                  frame_labels=frame_labels, shot_context=table_context)
         if resolved_connection is not None:
             answer = call_vision_model(db, profile, messages, call, model=model, surface=surface)
         else:

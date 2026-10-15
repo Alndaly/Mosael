@@ -115,6 +115,11 @@ from app.domain.workflows.templates_full_video import (
     single_set_rules,  # noqa: F401
     full_video_generation_graph,
 )
+from app.domain.workflows.templates_shots import (
+    REFERENCE_VIDEO_SHOTS,
+    SHOTS_TEMPLATE_CATALOG,
+    reference_video_shots_graph,
+)
 
 
 #: 官方模板的**说明**:叫什么、干什么、分几步、跑之前要备好什么。图由上面那几个函数造,
@@ -281,7 +286,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                    "Lay subtitles on the original timecodes", "Dub and time-compress", "Re-sync the lips to the dub", "Export"],
         },
     },
-] + BUSINESS_TEMPLATE_CATALOG + ANALYSIS_TEMPLATE_CATALOG
+] + BUSINESS_TEMPLATE_CATALOG + ANALYSIS_TEMPLATE_CATALOG + SHOTS_TEMPLATE_CATALOG
 
 
 def built_in_template_graph(
@@ -355,6 +360,9 @@ def built_in_template_graph(
         return localised_names(locale, viral_video_breakdown_graph(chat=chat, locale=locale))
     if template_id == COMMENT_INSIGHTS:
         return localised_names(locale, comment_insights_graph(chat=chat, locale=locale))
+    if template_id == REFERENCE_VIDEO_SHOTS:
+        #: 拆镜头那条:对话模型同时喂「逐镜看画面」和「写拆解总结」;转写引擎由节点自己挑,不转写也能跑。
+        return localised_names(locale, reference_video_shots_graph(chat=chat, locale=locale))
     raise WorkflowDomainError("wfErr_unknownTemplate", params={"id": template_id})
 
 
@@ -394,6 +402,8 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         ACCOUNT_ANALYSIS: account_analysis_graph(chat=blank, locale=locale),
         VIRAL_VIDEO_BREAKDOWN: viral_video_breakdown_graph(chat=blank, locale=locale),
         COMMENT_INSIGHTS: comment_insights_graph(chat=blank, locale=locale),
+        #: 拆解参考视频:对话模型那一格留空;联系表默认不存成素材(节点上 advanced 可以开)。
+        REFERENCE_VIDEO_SHOTS: reference_video_shots_graph(chat=blank),
     }
 
 

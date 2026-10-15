@@ -20368,7 +20368,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "full_video_generation" | "transcript_video_cleanup" | "translated_dub" | "translated_dub_lipsync" | "highlight_shorts" | "product_on_model" | "product_pitch_short" | "footage_montage" | "fabric_lookbook" | "talking_script_video" | "product_pitch_presenter" | "account_analysis" | "viral_video_breakdown" | "comment_insights";
+            id: "full_video_generation" | "transcript_video_cleanup" | "translated_dub" | "translated_dub_lipsync" | "highlight_shorts" | "product_on_model" | "product_pitch_short" | "footage_montage" | "fabric_lookbook" | "talking_script_video" | "product_pitch_presenter" | "account_analysis" | "viral_video_breakdown" | "comment_insights" | "reference_video_shots";
             /** Name */
             name: string;
             /** Description */
