@@ -15,11 +15,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Job
 from app.domain import render
+from app.domain.jobs import cancel_job
 from app.media.render_executor import RenderExecutionError
+from app.media.scratch import EXPORT, scratch_root
 from tests.util import fresh_client
 
 
@@ -90,3 +94,24 @@ def test_成功之后也不留_它已经拷进素材库了(monkeypatch) -> None:
         assert job.status == "succeeded"
         # output_key 指向一个已经不存在的文件,而且从来没人读它。
         assert "output_key" not in (job.result or {})
+
+
+@pytest.mark.parametrize("before_it_starts", ["排队时被取消", "任务已被删"])
+def test_没开始就结束的导出_不建中转目录(monkeypatch, before_it_starts: str) -> None:
+    """此前中转目录建在查任务之前:排队时就被取消(或任务已被删)的从那里直接返回,每次在 tmp/export 下留一个空目录,
+    只等下次启动才清 —— 同一进程里后面的导出用例看「中转目录清没清」、启动清暂存的用例数「清掉几项」,就数到它。"""
+    job_id = _job(_workspace())
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        if before_it_starts == "排队时被取消":
+            cancel_job(db, job, by=None)
+        else:
+            db.delete(job)
+        db.commit()
+    exports = scratch_root() / EXPORT
+    before = set(exports.glob("*"))
+    monkeypatch.setattr(render, "execute_render", lambda *a, **kw: pytest.fail("没开始的导出不该编码"))
+
+    render._run_export(job_id, _plan())
+
+    assert set(exports.glob("*")) == before, "没开始的导出在暂存目录里留了东西"

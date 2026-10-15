@@ -490,10 +490,6 @@ def _not_enough_disk(target_dir: Path, needed: int) -> str | None:
 
 
 def _run_export_body(job_id: str, plan: RenderPlan) -> None:
-    #: 成片先写在暂存目录(和素材库同一块盘),编完**搬**进素材库,不再复制一份;进程中途没了,下次启动清掉
-    #: (见 media/scratch)。此前写在 <数据目录>/exports,编完再整份复制进素材库:几个 GB 的成片要占两倍的盘,复制到
-    #: 一半盘满,刚编完的成片在 finally 里被删掉;后端在导出中途被杀,半截文件永远留在那里(MED-6)。
-    workdir = scratch_dir(EXPORT_SCRATCH)
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -505,6 +501,12 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         # 「在导出」先落库:编码要几十秒到几分钟,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
         started = time.monotonic()
+        #: 成片先写在暂存目录(和素材库同一块盘),编完**搬**进素材库,不再复制一份;进程中途没了,下次启动清掉
+        #: (见 media/scratch)。此前写在 <数据目录>/exports,编完再整份复制进素材库:几个 GB 的成片要占两倍的盘,复制到
+        #: 一半盘满,刚编完的成片在 finally 里被删掉;后端在导出中途被杀,半截文件永远留在那里(MED-6)。
+        #: 也在「真开始了」之后才建,紧挨着删它的那个 try:此前建在最前面,排队时就被取消(或任务已被删)的从上面返回,
+        #: 每次在 tmp/export 下留一个空目录,只等下次启动才清。
+        workdir = scratch_dir(EXPORT_SCRATCH)
         #: 扩展名就是用户选的格式 —— 素材库按它认种类(mp3 是音频),下载 / 另存的文件名和类型也跟着它走。
         #: 在「真开始了」之后才读计划:排队时就被取消的任务从这里之前就返回了,不碰计划。
         output_path = workdir / f"{job_id}.{plan.output.container}"

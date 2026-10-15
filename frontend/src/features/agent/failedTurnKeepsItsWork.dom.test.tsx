@@ -13,7 +13,7 @@
 
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const settings = vi.hoisted(() => ({ opened: [] as string[] }));
 vi.mock("@/lib/deepLink", async (importOriginal) => ({
@@ -112,6 +112,11 @@ describe("ask_user 的结果卡", () => {
 
 
 describe("配置类的失败(UC-05)", () => {
+  // 记下的「跳去哪一页」是整份文件共用的:不清的话,乱序跑时排在前面的那条点过的也算进来(Timing chaos 种子 2、3)。
+  beforeEach(() => {
+    settings.opened.length = 0;
+  });
+
   it("没配对话模型:气泡说原因,并给一个去设置里配模型的按钮", () => {
     render(
       <AgentErrorCard
@@ -135,7 +140,7 @@ describe("配置类的失败(UC-05)", () => {
     );
     expect(screen.getByText(/授权已经过期/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /agentReauthorize/ }));
-    expect(settings.opened.at(-1)).toBe("providers:chat");
+    expect(settings.opened).toEqual(["providers:chat"]);
   });
 
   it("别的失败不冒出这颗按钮", () => {

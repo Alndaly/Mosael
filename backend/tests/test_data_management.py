@@ -28,7 +28,7 @@ def _rewrite_manifest(backup: bytes, **updates: object) -> bytes:
     return output.getvalue()
 
 
-def test_backup_is_consistent_complete_and_excludes_rebuildable_data(tmp_path: Path) -> None:
+def test_backup_is_consistent_complete_and_excludes_rebuildable_data(tmp_path: Path, request) -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "Backup workspace"}).json()
     project = client.post(
@@ -52,6 +52,14 @@ def test_backup_is_consistent_complete_and_excludes_rebuildable_data(tmp_path: P
     for path, content in excluded.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def remove_excluded() -> None:
+        for path in excluded:
+            path.unlink(missing_ok=True)
+
+    # 数据目录整个进程共用(tests/conftest.py):这几份不收,同一进程里后面的测试就看得见 —— 存储清理把 exports/ 里
+    # 多出来的这 14 字节算进「老版本的导出中转目录」,那条用例数到 314 而不是 300(乱序跑时排在它后面就红)。
+    request.addfinalizer(remove_excluded)
 
     response = client.post("/api/settings/data/backup")
 
