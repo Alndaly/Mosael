@@ -31,6 +31,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { IconButton } from "@/components/ui/icon-button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import {
   MASK_TINT_TOKEN,
   PASTE_DRAFT,
@@ -1375,14 +1377,20 @@ export function MaskEditor({
             <PanelSection label={t("maskFromSource")}>
               <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("maskFromSourceHint")}</p>
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" disabled={!hasUnderlay} onClick={() => pressFromSource("luminance")}>
-                  <SunMedium />
-                  {t("maskFromLuminance")}
-                </Button>
-                <Button variant="outline" disabled={!hasUnderlay} onClick={() => pressFromSource("alpha")}>
-                  <Droplets />
-                  {t("maskFromAlpha")}
-                </Button>
+                {/* 标签窄了就省略号 + 悬停给全文(Button 基类 whitespace-nowrap 会直接切掉);禁用时 Hint 靠 disabledReason
+                    套一层壳才收得到悬停。 */}
+                <Hint label={t("maskFromLuminance")} disabledReason={hasUnderlay ? undefined : t("maskFromNeedsImage")}>
+                  <Button variant="outline" className="w-full min-w-0" disabled={!hasUnderlay} onClick={() => pressFromSource("luminance")}>
+                    <SunMedium />
+                    <Truncate>{t("maskFromLuminance")}</Truncate>
+                  </Button>
+                </Hint>
+                <Hint label={t("maskFromAlpha")} disabledReason={hasUnderlay ? undefined : t("maskFromNeedsImage")}>
+                  <Button variant="outline" className="w-full min-w-0" disabled={!hasUnderlay} onClick={() => pressFromSource("alpha")}>
+                    <Droplets />
+                    <Truncate>{t("maskFromAlpha")}</Truncate>
+                  </Button>
+                </Hint>
               </div>
               <SliderField label={t("maskThreshold")} value={threshold} min={0} max={1} step={0.01} format={percent} onChange={changeThreshold} />
             </PanelSection>

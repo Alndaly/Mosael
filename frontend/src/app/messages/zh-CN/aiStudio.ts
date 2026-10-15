@@ -267,6 +267,7 @@ export const aiStudio = {
   maskFromLuminance: "按亮度初始化",
   maskFromSource: "从底图起手",
   maskFromSourceHint: "取底图的像素二值化：亮的地方、或者不透明的地方，变成白色笔迹，之后还能接着画。",
+  maskFromNeedsImage: "先有底图（或彩色参考图）才能初始化",
   maskGrow: "扩张",
   maskHistory: "撤销与重做",
   maskInvert: "反选",

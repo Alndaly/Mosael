@@ -267,6 +267,7 @@ export const aiStudio = {
   maskFromLuminance: "From brightness",
   maskFromSource: "Start from the base image",
   maskFromSourceHint: "Binarise the base image's pixels: bright areas, or opaque ones, become white strokes. Keep drawing after that.",
+  maskFromNeedsImage: "Needs a base image (or color reference) first",
   maskGrow: "Grow",
   maskHistory: "Undo and redo",
   maskInvert: "Invert",
