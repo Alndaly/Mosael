@@ -91,6 +91,20 @@ import {
  * 底图永远按原始比例画(相机只有一个缩放)。滚轮的语义跟全局的画布操控方式走(触控板:双指平移、捏合缩放;
  * 鼠标:滚轮缩放),这里只读不改。
  *
+ * ## 蒙版槽里的**彩色图**是参考底图,不是底稿
+ *
+ * 「蒙版」那一格(`lib/sourceFrames.ts` 的 `mask`)是 `image/*`,用户能传一张彩色照片进去。那张图
+ * 打开时读进来(`initial`),按**它是灰还是彩**分两条路(判据 `isGrayscaleImage`,容差 2):
+ *
+ * | 蒙版槽里那张图 | 当什么 | 蒙版画布 | 屏幕上 |
+ * | --- | --- | --- | --- |
+ * | 灰度(每个像素 r ≈ g ≈ b)| **已有的蒙版**(底稿):铺进蒙版,接着在上面画 | 那张图 | 那张图 |
+ * | 彩色(有像素差 > 2)| **参考底图**:和 `source` 同一个槽位,只画在看得见的那张上 | 空白黑底 | **原始彩色** |
+ *
+ * 「传进来的彩色照片就看着是彩色、蒙版从空白开始画」是维护者拍板要的行为。优先级:`source`(参考图 /
+ * 首帧那一格)在的时候**它就是**底图 —— 彩色 initial 不抢底图,只被忽略成底稿。存回去的仍然是灰度蒙版
+ * (见上一节,契约没变)。
+ *
  * ## 可见的那张不能把蒙版整张盖上去
  *
  * 蒙版是**不透明**的,`source-over` 整张画上去就是一块黑板。可见的那张照 `maskViewLayers` 给的层表画
@@ -188,6 +202,31 @@ interface PanDrag {
 interface Loaded extends Size {
   data: MaskPixels;
   image: HTMLImageElement;
+}
+
+/**
+ * 判灰度时**任意两个通道**允许的最大差。本应用导出的蒙版逐字节 `r = g = b`(差 0),而灰度 JPEG
+ * 解码后各通道会差个 1(色度子采样 + 取整)—— 留 2 才不会把一张灰度照片误判成彩色照片。
+ */
+const GRAY_TOLERANCE = 2;
+
+/**
+ * 这一份像素是不是一张**灰度图**:每一个像素都 `r ≈ g ≈ b`(任意两通道相差 ≤ `tolerance`)。
+ *
+ * 蒙版槽那一格的 `accept` 是 `image/*`(`lib/sourceFrames.ts` 的 `mask`),用户能传两种图进去,
+ * 这张判据是它们**唯一**的分别(见文件头「蒙版槽里的彩色图是参考底图,不是底稿」):
+ * 灰度的 = 用户已有的那张蒙版(当底稿,接着在上面画);彩色的 = 一张参考图(当底图,蒙版从空白画起)。
+ *
+ * 扫全部像素、发现第一个明显彩色的就返回 —— 近灰的图要扫到底,但它只有一遍、一次打开一遍。
+ */
+export function isGrayscaleImage(data: MaskPixels, tolerance = GRAY_TOLERANCE): boolean {
+  for (let at = 0; at < data.length; at += 4) {
+    const r = data[at];
+    const g = data[at + 1];
+    const b = data[at + 2];
+    if (Math.abs(r - g) > tolerance || Math.abs(g - b) > tolerance || Math.abs(r - b) > tolerance) return false;
+  }
+  return true;
 }
 
 /** 一份底图 / 底稿:素材 id + 名字。 */
@@ -440,7 +479,11 @@ export function MaskEditor({
   workspaceId: string;
   /** 要改的那张图:画在画布底下当参考,**不进导出的蒙版**。没给就是一块黑画布。 */
   source?: MaskImage | null;
-  /** 打开时已经有一张蒙版:它当底稿(ADR 0056 决定 5:要改就在它上面继续画)。 */
+  /**
+   * 蒙版槽那一格现在有的一张图。**灰度的** = 已有的蒙版:当底稿铺进蒙版,接着在上面画
+   * (ADR 0056 决定 5);**彩色的** = 一张参考图:当底图(蒙版从空白开始),`source` 在的时候不抢它。
+   * 见文件头「蒙版槽里的彩色图是参考底图,不是底稿」。
+   */
   initial?: MaskImage | null;
   /** 存好了:调用方把这份素材放进蒙版槽。 */
   onDone: (asset: Asset) => void;
@@ -471,7 +514,7 @@ export function MaskEditor({
   const scratchRef = React.useRef<HTMLCanvasElement | null>(null);
   /** 底图像素(按亮度 / 按 alpha 初始化读的就是它)和那张图(画在看得见的画布上)。 */
   const underlayRef = React.useRef<Loaded | null>(null);
-  /** 底稿:打开时已经有的那张蒙版。 */
+  /** 底稿:打开时已经有的那张蒙版 —— **灰度**的那种才会走到这里(见 isGrayscaleImage)。 */
   const draftRef = React.useRef<HTMLImageElement | null>(null);
   const dragRef = React.useRef<Drag | null>(null);
   const panRef = React.useRef<PanDrag | null>(null);
@@ -697,11 +740,18 @@ export function MaskEditor({
     setFromSource(null);
     setFailure(null);
     void (async () => {
-      const [underlay, draft] = await Promise.all([
+      const [reference, slot] = await Promise.all([
         source ? loadImage(assetPreviewUrl(source.assetId)) : Promise.resolve(null),
         initial ? loadImage(assetPreviewUrl(initial.assetId)) : Promise.resolve(null),
       ]);
       if (!alive) return;
+      //: 蒙版槽里那张图按**灰还是彩**分两条路(见文件头那一节):灰度的 = 已有的蒙版(底稿),
+      //: 彩色的 = 一张参考图(底图)。判据在 `isGrayscaleImage`。
+      const colorSlot = slot && !isGrayscaleImage(slot.data) ? slot : null;
+      const draft = colorSlot ? null : slot;
+      //: 优先级:参考图那一格(`source`,取参考图 / 首帧)在的时候**它就是**底图 —— 彩色 initial
+      //: 不抢,只被忽略成底稿(不铺进蒙版,也不覆盖 source)。
+      const underlay = reference ?? colorSlot;
       underlayRef.current = underlay;
       draftRef.current = draft?.image ?? null;
       setHasUnderlay(Boolean(underlay));
