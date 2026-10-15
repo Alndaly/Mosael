@@ -84,6 +84,25 @@ async function pick(harness: PixelHarness, name: string) {
   expect(button.getAttribute("aria-pressed")).toBe("true");
 }
 
+/**
+ * 把「笔刷硬度」推到 100%(硬边)。
+ *
+ * 硬度管的是**每一笔的边缘过渡**:默认 90% 的方框边上有一条 `半径 × (1 − 0.9)` 宽的软边,
+ * 反选之后形状之内那一条边不是整块 0,而是一段 `0 → 255` 的斜坡(软边翻过来了)——
+ * "形状内逐字节等于原图"那条断言会在边缘那几格上差一点点。这条用例测的是**反选与合成**
+ * (别把底图糊成灰),不是软边本身,所以它要的是一个**边缘一刀切、内部满浓度**的形状
+ * (浓度来自「不透明度」,默认就是 100%)。
+ */
+async function hardEdge(harness: PixelHarness) {
+  //: 按**那一行的名字**认(hardness / opacity / threshold 都是 0..1,按范围认会认错人)。
+  const row = harness.scope().getByText("笔刷硬度", { selector: "span" }).closest("label") as HTMLElement;
+  const slider = row.querySelector('[role="slider"]') as HTMLElement;
+  slider.focus();
+  for (let i = 0; i < 20; i += 1) fireEvent.keyDown(slider, { key: "ArrowRight", bubbles: true, cancelable: true });
+  await flush();
+  expect(slider.getAttribute("aria-valuenow")).toBe("1");
+}
+
 /** 可见画布上对应某个**文档坐标**的那一格(dpr=1:位图 = CSS 盒子,一格对一个 CSS 像素)。 */
 function viewAtDoc(harness: PixelHarness, x: number, y: number): number[] {
   const { clientX, clientY } = docToScreen(x, y);
@@ -148,6 +167,8 @@ describe("维护者复现:画形状 / 撤销 / 反选不把底图整灰(盒子 �
   it("反选:形状之内回到原图,形状之外是「要改」的样子 —— 但没有一处被糊成统一的灰", async () => {
     const harness = await open();
     await pick(harness, "矩形");
+    //: 硬边 + 满浓度(不透明度默认 100%)的方框:反选之后形状之内才是**纯黑**(= 不改),底图原样透出来。
+    await hardEdge(harness);
     await drag(harness, [20, 20], [60, 70]);
     await press(harness, "反选");
     await harness.settle();

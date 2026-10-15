@@ -128,26 +128,66 @@ import {
  * "擦完露出原图"由**底图那一层**负责。像素运算(反选 / 阈值 / 扩张 / 羽化)全在 `lib/maskPixels`,
  * 和后端由 `contracts/mask-cases.json` 逐字节钉住。
  *
- * ## 两个参数的**视觉反馈**(维护者:「笔刷硬度以及边缘的扩张和羽化在 UI 上没有体现」)
+ * ## 五个参数,各管一件事(维护者最终定义)
  *
- * 两处都只在**看**的那一头上加东西,蒙版那套像素契约一个字节都不动:
- *
- * | 参数 | 在哪看得出来 | 怎么做到 |
+ * | 参数 | 管什么 | 落在哪 |
  * | --- | --- | --- |
- * | 笔刷硬度 | 跟随指针的那个圈 | 圈的填充就是 `paintLine` 会画出来的那条曲线(`brushRingFill`),连**浓度**也随硬度走(`ringInk`),拖滑块当场变 |
- * | 扩张 / 羽化 | 看得见那画布上的**预览** | 显示层改喂一份**副本**(`renderEdgesPreview`),点「应用到蒙版」才写真蒙版 |
+ * | 笔刷大小 | 笔尖直径 | `paintLine` 的半径;形状那条过渡带的尺度也按它算(见 `edgeBand`) |
+ * | **笔刷硬度** | **每一笔的边缘过渡**(100% = 一刀切;越低边缘越软) | 画笔:径向渐变的内半径 `半径 × 硬度` → 外半径 `半径`;矩形 / 椭圆:从外沿往里一条 `半径 × (1 − 硬度)` 宽的斜坡;指针那个圈 |
+ * | **不透明度** | **画进蒙版的灰度值** = 蒙版的透明度 / 改动强度 | `inkGray(不透明度) = round(不透明度 × 255)`(`inkColor`),画笔 / 矩形 / 椭圆共用 |
+ * | 扩张 | 整张蒙版边缘外扩 / 内缩(**圆盘**结构元,见 `lib/maskPixels`) | 显示层那份预览副本,点「应用到蒙版」才写真蒙版 |
+ * | 羽化 | 整张蒙版边缘的过渡宽度 | 同上 |
  *
+ * ### 浓度靠**颜色**承载、软边靠 **alpha**
+ *
+ * 不透明度定的那个灰度就是这一笔的**颜色**:`rgb(v v v)`(v = `round(不透明度 × 255)`),
+ * `globalAlpha` 保持 1。硬度定的那条软边是**同一个颜色**的 alpha 从 1 到 0(画笔的径向渐变;
+ * 形状那条是分层内缩 + 递增 `globalAlpha`)。两件事因此互不重叠:
+ *
+ * - **不叠加**:同色的 dab 重叠是"同一个不透明色再铺一次",颜色不变 ⇒ 整条笔迹的值就是 v
+ *   (0.5 → `128`),来回蹭多少趟都停在 v —— 若改成"白 + alpha = 不透明度",重叠处会
+ *   `1 − (1 − 不透明度)ⁿ` 一路饱和到 255(上一版就是那样,再叠上径向渐变);
+ * - **不外溢**:软边那一段颜色始终是 v、只有 alpha 走 1 → 0 ⇒ 边缘是 `v → 0` 的斜坡,不会在边上
+ *   混出别的浓度。
+ *
+ * 不透明度 1 → `255`、0.5 → `128`、**0 → `0`**(滑块最左直接涂不上:写进蒙版的 0 就是"这块不改")。
+ *
+ * 指针圈**只跟硬度走**(`brushRingFill` / `ringInk`:越低越透,维护者那句「应该和透明度有关系」
+ * 落的就是这里),和不透明度无关 —— 它是"这笔的边有多软"的提示,不是一张浓度色卡。
  * 圈上**没有**常量边框:上一版留着 `border border-white` + 一圈 `shadow`,那道硬白圈把渐变整个盖住
  * —— 拖硬度屏幕上一动不动(维护者第二次报的就是它)。现在圈的观感只由那一串填充给。
+ *
+ * ## 「橡皮」**不**吃不透明度(擦除力度保持满强度)
+ *
+ * 维护者给的是二选一("擦除强度也跟不透明度"或"论证为什么它该保持满强度"),这里选了后者:
+ *
+ * 1. 蒙版是**没有 alpha 的灰度图**,"擦掉"在数据上只能是写黑(`0` = 这块不改,见 `lib/maskPixels`
+ *    文件头那条)。橡皮的落点值只有**一个**目标,**没有"半浓的黑"可言** —— 而不透明度那条说的是
+ *    "往蒙版里**加**多浓",橡皮不加东西;
+ * 2. 想让擦除吃不透明度的唯一表达是拿 `globalAlpha = 不透明度` 去混(`v ← v × (1 − 不透明度)`)。
+ *    可 dab 的间距是半径的 0.4 倍 ⇒ 同一个像素会被同一笔打中五到九次:`(1 − 0.5)⁵ ≈ 0.03` ——
+ *    笔迹**中间照样擦干净、只有边缘留一点**,连"擦除力度"都算不上(0% 还会变成"擦不动",比涂不上
+ *    更难解释);
+ * 3. 于是**唯一**那个浓度定义(`inkGray`)橡皮不消费它 —— 这条决定由
+ *    `MaskEditor.pixels.dom.test.tsx` 里那条"橡皮不吃不透明度"钉着。
+ *
+ * 橡皮**吃硬度**:那是"每一笔的边缘过渡",和擦除力度是两件事(维护者那张表里硬度那一行写着
+ * "画笔/橡皮 + 形状工具都吃它")。所以橡皮的 dab 中心照旧是纯 `0`,边上才淡出去。
  *
  * 预览那份副本是**一张按显示分辨率算的画布**(`edgePreviewRef`):把当前蒙版按 `previewScale` 缩进
  * 副本自己的画布、在**那份缩过的像素**上跑 `growMask` + `featherMask`(半径同比缩)、`putImageData`
  * 进它自己那张画布 —— 真蒙版那张从头到尾没人写。它只喂给 `drawMaskView` 的 `mask` 层,所以
- * 「待应用」时用户看到的就是点下那个按钮会得到的样子(测试里两者逐字节相等)。两条判据管着它:
+ * 「待应用」时用户看到的就是点下那个按钮会得到的样子(测试里两者逐字节相等)。三条判据管着它:
  *
- * - **过期**:蒙版内容一变(`MaskWriter.revision`)或者参数一变,那份副本就作废;`paint()` 每一帧
- *   开头**当场**把它重算(见 `refreshEdgesPreview`)—— 此前是尾随 debounce 120ms + 文档全分辨率,
- *   拖动期间屏幕一动不动、松手才换一帧(维护者第二次报的「不实时、卡顿」),两条都改了;
+ * - **过期**:副本的 `key` 里有 `MaskWriter.revision`(内容)+ 参数 + 分辨率 —— 蒙版内容一变
+ *   (又画了一笔、撤销了、清空了)那份副本就作废,`displayedMask` 当场回到真蒙版,绝不让旧副本
+ *   冒充新的那一版;
+ * - **两条触发分开**(维护者第三次报的「设置扩张以后 绘制、画笔过程都会非常卡顿」):
+ *   **参数变**(grow / feather 滑块)在**那一次 `paint()`** 里当场重算(`refreshEdgesPreview`,
+ *   一个计时器都不等 —— 维护者要的实时手感);**内容变**(正在画)则**不每帧算**:落笔期间显示层
+ *   直接喂真蒙版(当帧可见、不卡),`EDGE_PREVIEW_TRAILING_MS` 之后才把预览追上去
+ *   (`catchUpEdgesPreview`)。病根是上一版把内容版本号也塞进了"要不要重算"的判据里,而画笔
+ *   每一帧都在 +1 ⇒ 每帧一次约 90ms 的重算;
  * - **已经写进去了**:点过「应用到蒙版」的那一组参数在这一版蒙版上不再算"待应用"(`appliedEdgesRef`)
  *   —— 少了这一条,应用之后屏幕会把它**再预览一遍**(又扩张 4 个像素,一眼看得出)。
  */
@@ -199,18 +239,34 @@ const BRUSH_MAX = 400;
 /** 扩张 / 羽化滑块的范围(文档像素)。 */
 const EDGE_MAX = 64;
 /**
- * 硬度到了这一档以上就是"硬边"。
+ * 硬度到了这一档以上就算"硬边"(一刀切、没有渐隐那一段)。
  *
- * **两处共用这一个数**:`paintLine` 画笔迹时走实心那一条,指针那个圈(`brushRingFill`)给整块平铺。
- * 各写一个 0.99 迟早会分叉,而分叉的表现正是「圈看着是软的、画出来是硬的」—— 那比没有圈更糟。
+ * **三处共用这一个数**:画笔(`paintLine` 走实心那一条)、矩形 / 椭圆(`paintShape` 只填一次)、
+ * 指针那个圈(`brushRingFill` 整块平铺)。各写一个 0.99 迟早会分叉,而分叉的表现正是「圈看着是硬的、
+ * 画出来是软的」—— 那比没有圈更糟。
  */
 const HARD_EDGE = 0.99;
+/**
+ * 形状 / 画笔那条软边**往里铺几层**(见 `paintShape`)。
+ *
+ * 层数就是那条斜坡的**分辨率**:每一层往里缩 `过渡带 ÷ 32`。半径 24 的笔刷上那是一格七五 ——
+ * 屏幕上那条斜坡看不出台阶;再密只是白算(形状拖动时每一帧都要重铺一遍)。
+ */
+const SOFT_STEPS = 32;
 const TAU = Math.PI * 2;
 const BLACK = "#000000";
 const WHITE = "#ffffff";
-/** 软边渐变的外圈。画布是不透明的,所以"往回混"就够了,不需要 destination-out。 */
-const FADE_WHITE = "rgba(255, 255, 255, 0)";
-const FADE_BLACK = "rgba(0, 0, 0, 0)";
+/** 橡皮的墨那一端(写黑 = `0` = 这块不改):它**不吃不透明度**,见文件头那一节。 */
+const ERASER_FADE = "rgba(0, 0, 0, 0)";
+/**
+ * 笔画停下来之后多久把扩张 / 羽化的预览追上去(尾随,见 `catchUpEdgesPreview`)。
+ *
+ * 依据:副本按显示分辨率算,维护者那张 4432×1904 上重算一趟约 90ms(真 Chromium 实测,含画布读回,
+ * 见 `previewScale`)—— 那比一帧(60Hz 的 16.7ms)长五倍,落在笔迹中间就是"每帧一次 90ms"的幻灯片
+ * (维护者第三次报的「设置扩张以后 绘制、画笔过程都会非常卡顿」)。120ms 是"手停下一小会儿"的量级:
+ * 比一趟 90ms 宽出三成,落笔期间不会排上第二次;停手之后人几乎察觉不到这一下。
+ */
+export const EDGE_PREVIEW_TRAILING_MS = 120;
 /**
  * 指针那个圈里的**两层墨**:一深一浅,叠在同一块圆盘上。
  *
@@ -374,7 +430,77 @@ export function previewScale(doc: Size, view: Size): number {
   return scale;
 }
 
-/** 一笔画上去:沿 from→to 按间距盖圆点。间距取半径的四成 —— 比半径密,笔迹才不显颗粒。 */
+/**
+ * `HARD_EDGE` 那个判据(见常量):硬度到这一档以上就是一刀切 —— 画笔走实心那一条、形状只填一次、
+ * 圈整块平铺。**三处共用**(不会分叉)。
+ */
+function isHardEdge(hardness: number): boolean {
+  return unit01(hardness) >= HARD_EDGE;
+}
+
+/**
+ * 边缘那条过渡带的宽度 = **笔刷半径 × (1 − 硬度)**(硬度 1 时是 0 = 一刀切)。
+ *
+ * 这是"硬度 = 每一笔的边缘过渡"那一条的**唯一**尺度,**画笔和形状共用**:
+ *
+ * - 画笔:`paintLine` 的径向渐变内半径 = `半径 − edgeBand(半径, 硬度)` —— 剩下那一段正是渐隐带;
+ * - 矩形 / 椭圆:`paintShape` 从外沿往里铺这么宽的一条斜坡。
+ *
+ * 抽成一个函数、而不是两处各写一遍 `× (1 − 硬度)`:那正是"画笔的软边和形状的软边不是一个尺度"的
+ * 来源(测试里"过渡带宽度 = 笔刷半径 × (1 − 硬度)"量的是它)。
+ */
+export function edgeBand(radius: number, hardness: number): number {
+  return Math.max(0, radius * (1 - unit01(hardness)));
+}
+
+/**
+ * ## 不透明度 → 这一笔涂进蒙版的**灰度**(维护者最终定义,一处定义在这里)
+ *
+ * 蒙版是灰度图、白 = 要改(见 `lib/maskPixels` 文件头),所以"画进去多浓"就是那个灰度本身:
+ * `round(不透明度 × 255)`。1 → 255、0.5 → 128、**0 → 0**(= 写黑 = 这块不改,滑块最左直接涂不上)。
+ *
+ * 三处**画**的地方共用它:画笔的每个 dab、矩形、椭圆。橡皮**不**消费它(理由见文件头
+ * 「橡皮不吃不透明度」)。
+ */
+export function inkGray(opacity: number): number {
+  return Math.round(unit01(opacity) * 255);
+}
+
+/**
+ * 那个灰度写成画布认的**实心**颜色(空格分隔:同样合法,但字符串更短、测试里的正则更好读)。
+ *
+ * **浓度靠颜色承载、`globalAlpha` 保持 1**,这是"密集重叠不叠到 255"的关键:同一笔的每个 dab
+ * 铺的是**同一个不透明色**,叠上去是"再铺一次同色"(逐像素结果还是那个色);若改成"白色 + alpha =
+ * 不透明度",重叠处会 `1 − (1 − 不透明度)ⁿ` 一路饱和到 255 —— 上一版就是那样。
+ */
+function inkColor(opacity: number): string {
+  const value = inkGray(opacity);
+  return `rgb(${value} ${value} ${value})`;
+}
+
+/**
+ * 同一个浓度的**透明端** —— 软边渐变的外圈那一端:颜色还是那个浓度色,只有 alpha 到 0。
+ *
+ * 颜色必须跟着 `inkColor` 走(不能写死白):渐变外圈混出来的要是"同一个灰的淡版本",不然软边会
+ * 带出别的浓度(见文件头「浓度靠颜色承载、软边靠 alpha」)。
+ */
+function inkFade(opacity: number): string {
+  const value = inkGray(opacity);
+  return `rgba(${value}, ${value}, ${value}, 0)`;
+}
+
+/**
+ * 一笔画上去:沿 from→to 按间距盖圆点,**每一个 dab 都是同一个浓度色**。间距取半径的四成
+ * —— 比半径密,笔迹才不显颗粒。
+ *
+ * 每一笔的软边:内半径到 `半径 × 硬度` 是实心硬核,外面渐隐到半径那一圈,alpha 从 1 到 0
+ * (颜色自始至终是那一个浓度色)。于是:
+ *
+ * - 重叠的 dab 把同一个不透明色再铺一遍 ⇒ 整条笔迹的值就是那个浓度,来回描也停在它(**不会 255**);
+ * - 笔迹的外缘就是硬度给的软边(硬度 ≥ `HARD_EDGE` 或半径 ≤ 1 时走实心那一条)。
+ *
+ * 真浏览器里 `fill()` 在圆盘边上还会带一圈亚像素抗锯齿 —— 那是栅格化的常态,不是"软化"。
+ */
 function paintLine(
   ctx: CanvasRenderingContext2D,
   from: Point,
@@ -386,17 +512,19 @@ function paintLine(
 ): void {
   const distance = Math.hypot(to.x - from.x, to.y - from.y);
   const steps = Math.max(1, Math.ceil(distance / Math.max(1, radius * 0.4)));
+  const soft = !isHardEdge(hardness) && radius > 1;
+  //: 硬核那一段 = 半径 − 过渡带(和形状同一条尺度,见 edgeBand)。
+  const core = radius - edgeBand(radius, hardness);
   for (let step = 1; step <= steps; step += 1) {
     const at = { x: from.x + ((to.x - from.x) * step) / steps, y: from.y + ((to.y - from.y) * step) / steps };
     ctx.beginPath();
     ctx.arc(at.x, at.y, radius, 0, TAU);
-    if (hardness >= HARD_EDGE || radius <= 1) {
+    if (!soft) {
       ctx.fillStyle = ink;
       ctx.fill();
       continue;
     }
-    //: 硬度 = 实心那一段占半径的比例:1 是硬边,0 是从圆心就开始淡出去。
-    const gradient = ctx.createRadialGradient(at.x, at.y, radius * hardness, at.x, at.y, radius);
+    const gradient = ctx.createRadialGradient(at.x, at.y, core, at.x, at.y, radius);
     gradient.addColorStop(0, ink);
     gradient.addColorStop(1, fade);
     ctx.fillStyle = gradient;
@@ -405,26 +533,25 @@ function paintLine(
 }
 
 /**
- * 指针那个圈的**填充**:和 `paintLine` 的软边是**同一条曲线** —— 内圈到 `radius × hardness` 是实心硬核,
- * 外面渐隐到半径那一圈(对应 `createRadialGradient(radius × hardness → radius)` 那两个色标);
- * 那两层墨的**浓度**也随硬度走(见 `ringInk`)。
+ * 指针那个圈的**填充**:内圈到 `radius × hardness` 是实心硬核,外面渐隐到半径那一圈(和
+ * `paintLine` 那条软边是同一条曲线);那两层墨的**浓度**也随硬度走(见 `ringInk`)。
+ *
+ * 它**只跟硬度走**:硬度 = 这一笔的边缘过渡,圈说的就是这件事 —— **不透明度**(画进蒙版的浓度)
+ * 不进来(维护者最终定义里那是两根不同的滑块,见文件头那张表)。
  *
  * 这个 div 上**没有**常量边框:上一版留了一道写死的 `border border-white` + 一圈 `shadow`,那道硬白圈
  * 盖在渐变上面,于是拖硬度屏幕上一动不动 —— 维护者第二次报的「还是没体现」正是它。现在圈的观感
- * 只由这一串填充给。
- *
- * 判据和 `paintLine` 共用 `HARD_EDGE`(见那个常量的说明)。`hardness` 不是有限数时按硬边处理。
- * 深浅两层一起给(理由见上面那两个常量);整串当 `background` 一次写进 DOM —— 只换一层的话,
- * 底色一变就会剩下一半看不见。
+ * 只由这一串填充给。深浅两层一起给(理由见上面那两个常量);整串当 `background` 一次写进 DOM
+ * —— 只换一层的话,底色一变就会剩下一半看不见。
  */
 export function brushRingFill(hardness: number): string {
-  const level = hardnessLevel(hardness);
+  const level = unit01(hardness);
   //: 三位小数足矣:再多的位数只是让 DOM 里的字符串更长(0.35 × 0.775 = 0.27125 那种)。
   const ink = (rgb: string, alpha: number) => `rgba(${rgb}, ${Number((alpha * ringInk(level)).toFixed(3))})`;
   const dark = ink(RING_DARK_RGB, RING_DARK_ALPHA);
   const light = ink(RING_LIGHT_RGB, RING_LIGHT_ALPHA);
   //: 硬边:两层都铺满,没有渐变可看(`linear-gradient(ink, ink)` 就是一整块纯色,只是能跟另一层并排写)。
-  if (level >= HARD_EDGE) {
+  if (isHardEdge(level)) {
     return `linear-gradient(${dark}, ${dark}), linear-gradient(${light}, ${light})`;
   }
   const core = Math.round(level * 100);
@@ -433,10 +560,12 @@ export function brushRingFill(hardness: number): string {
   return `${soft(dark, RING_DARK_FADE)}, ${soft(light, RING_LIGHT_FADE)}`;
 }
 
-/** 硬度收进 `0..1`;不是有限数时按**硬边**那一档(和 `paintLine` 的 `HARD_EDGE` 分支一致)。 */
-function hardnessLevel(hardness: number): number {
-  if (!Number.isFinite(hardness)) return 1;
-  return Math.min(1, Math.max(0, hardness));
+/**
+ * 参数收进 `0..1`(**硬度和不透明度都是这一档**);不是有限数时按满那一档(硬边 / 满浓度)。
+ */
+function unit01(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(0, value));
 }
 
 /**
@@ -446,23 +575,77 @@ function hardnessLevel(hardness: number): number {
  * "硬核越窄、渐隐越宽"的曲线说的是同一件事:软笔的边是淡出去的。
  */
 export function ringInk(hardness: number): number {
-  return RING_INK_FLOOR + (1 - RING_INK_FLOOR) * hardnessLevel(hardness);
+  return RING_INK_FLOOR + (1 - RING_INK_FLOOR) * unit01(hardness);
 }
 
-/** 矩形 / 椭圆:一次填一块白的(拖动时每帧重画,所以看到的就是松手后的样子)。 */
-function paintShape(ctx: CanvasRenderingContext2D, tool: Tool, from: Point, to: Point): void {
+/** 形状往里缩 `inset` 之后填一次(矩形 / 椭圆各一条路;缩没了就什么都不填)。 */
+function fillInset(
+  ctx: CanvasRenderingContext2D,
+  tool: Tool,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  inset: number,
+): void {
+  const inner = { left: left + inset, top: top + inset, width: width - inset * 2, height: height - inset * 2 };
+  if (inner.width <= 0 || inner.height <= 0) return;
+  if (tool === "rect") {
+    ctx.fillRect(inner.left, inner.top, inner.width, inner.height);
+    return;
+  }
+  ctx.beginPath();
+  ctx.ellipse(inner.left + inner.width / 2, inner.top + inner.height / 2, inner.width / 2, inner.height / 2, 0, 0, TAU);
+  ctx.fill();
+}
+
+/**
+ * 矩形 / 椭圆:一次填一块**浓度色**的图形,边缘按硬度铺一条软边(拖动时每帧重画,所以看到的就是
+ * 松手后的样子)。
+ *
+ * 浓度和画笔**同一条定义**(`inkColor` → `inkGray`):不透明度 1 → 255、0.5 → 128、0 → 0(涂不上)。
+ * 边缘那条斜坡的宽度是 `edgeBand(笔刷半径, 硬度)` —— **和画笔共用同一个尺度**:
+ *
+ * - 从外沿往里一层层缩:第 m 层缩 `过渡带 × m / SOFT_STEPS`、`globalAlpha = 1 / (SOFT_STEPS − m)`;
+ * - 累计起来正好是 `m / SOFT_STEPS`(每一层把剩下的差距补掉一格)⇒ 外缘是 `浓度 → 0` 的一条直线
+ *   斜坡,而**最里面那一层 alpha 1 把内部按在浓度色上**(不会"层数越多越亮",也不会停在某个
+ *   比浓度小的值);
+ * - 颜色自始至终是那一个浓度色 ⇒ 内部停在 v、外缘是 `v → 0`(见文件头)。
+ *
+ * `isHardEdge`(硬度 ≥ `HARD_EDGE`)/ 过渡带为 0 时只填一次:边缘逐格是 `0 / v` 的跳变。
+ *
+ * 外沿就是拖出来的那个框(`from` → `to`):软硬不改形状的大小。真浏览器里 `fillRect` /
+ * `ellipse().fill()` 在分数坐标上会有一像素的抗锯齿 —— 那不是"软边",是像素栅格化的常态。
+ */
+function paintShape(
+  ctx: CanvasRenderingContext2D,
+  tool: Tool,
+  from: Point,
+  to: Point,
+  ink: string,
+  hardness: number,
+  radius: number,
+): void {
   const left = Math.min(from.x, to.x);
   const top = Math.min(from.y, to.y);
   const width = Math.abs(to.x - from.x);
   const height = Math.abs(to.y - from.y);
-  ctx.fillStyle = WHITE;
-  if (tool === "rect") {
-    ctx.fillRect(left, top, width, height);
+  //: 点一下没拖(0×0 的框):什么都不画(松手那边也不记一步,见 onPointerUp)。
+  if (width <= 0 || height <= 0) return;
+  ctx.fillStyle = ink;
+  const band = edgeBand(radius, hardness);
+  if (isHardEdge(hardness) || band <= 0) {
+    fillInset(ctx, tool, left, top, width, height, 0);
     return;
   }
-  ctx.beginPath();
-  ctx.ellipse(left + width / 2, top + height / 2, width / 2, height / 2, 0, 0, TAU);
-  ctx.fill();
+  //: 缩到只剩一格就停:再往里缩形状就没了,而**最后一层 alpha 1** 保证内部仍是浓度色。
+  const deepest = Math.max(0, Math.min(width, height) / 2 - 0.5);
+  for (let layer = 0; layer < SOFT_STEPS; layer += 1) {
+    ctx.globalAlpha = 1 / (SOFT_STEPS - layer);
+    fillInset(ctx, tool, left, top, width, height, Math.min((band * layer) / SOFT_STEPS, deepest));
+  }
+  //: 复位:这个 ctx 是写入口交出来的(它每次进来也 `neutral()`),这里不留脏状态给下一个人。
+  ctx.globalAlpha = 1;
 }
 
 /**
@@ -660,9 +843,10 @@ export function MaskEditor({
    * 不该再预览一遍 —— 否则"应用"之后会看到又扩张一次。
    */
   const appliedEdgesRef = React.useRef<{ revision: number; grow: number; feather: number } | null>(null);
-  /** `paint()` 是终身不变的那个函数(只读 ref),所以这两件事只能从 ref 里拿到最新那几个闭包。 */
+  /** `paint()` 是终身不变的那个函数(只读 ref),所以这三件事只能从 ref 里拿到最新那几个闭包。 */
   const ringSyncRef = React.useRef<() => void>(() => undefined);
-  const previewSyncRef = React.useRef<() => void>(() => undefined);
+  /** 预览副本这一帧该怎么更新(两条触发分开,见 `syncEdgesPreview`)。 */
+  const edgesSyncRef = React.useRef<() => void>(() => undefined);
   /** 底图像素(按亮度 / 按 alpha 初始化读的就是它)和那张图(画在看得见的画布上)。 */
   const underlayRef = React.useRef<Loaded | null>(null);
   /** 底稿:打开时已经有的那张蒙版 —— **灰度**的那种才会走到这里(见 isGrayscaleImage)。 */
@@ -696,6 +880,12 @@ export function MaskEditor({
   /** 笔刷大小(直径,文档像素)。 */
   const [brushSize, setBrushSize] = React.useState(48);
   const [hardness, setHardness] = React.useState(0.9);
+  /**
+   * **画进蒙版的浓度**(蒙版的透明度 / 改动强度),默认满(`round(1 × 255)` = 纯白)。
+   *
+   * 和硬度是两件事:这个数是**颜色**(`inkColor`),硬度是那条软边的**宽度**(见文件头)。
+   */
+  const [opacity, setOpacity] = React.useState(1);
   /** 扩张(正)/ 收缩(负),文档像素。 */
   const [grow, setGrow] = React.useState(0);
   const [feather, setFeather] = React.useState(0);
@@ -791,11 +981,12 @@ export function MaskEditor({
   const edgesKey = () => `${writer().revision}|${growRef.current}|${featherRef.current}|${edgesScale()}`;
 
   /**
-   * 显示层该用哪张蒙版:**待应用**时是那份预览副本(算得出来的话),否则是真蒙版。
+   * 显示层该用哪张蒙版:**待应用**且副本就是**这一版**蒙版算的,才用它;否则用真蒙版。
    *
    * 这里**一个字都不写蒙版** —— 副本是另算的一张画布(见 `renderEdgesPreview`),真蒙版要等
-   * 「应用到蒙版」才动。`paint()` 画之前已经把它更新到最新(见 `refreshEdgesPreview`),所以
-   * `key` 对不上只剩"这份副本算不出来"这一种情形 —— 那时宁可显示真蒙版,也不显示一份旧的。
+   * 「应用到蒙版」才动。`key` 里带着 `MaskWriter.revision`,所以内容一变那份副本**当场作废** ——
+   * 于是落笔期间屏幕上走的就是这一条:显示层直接喂真蒙版(当帧可见、不卡),预览等
+   * `catchUpEdgesPreview` 追上来(见文件头「两条触发分开」)。宁可显示真蒙版,也不显示一份旧的。
    */
   const displayedMask = (): CanvasImageSource | null => {
     const preview = edgePreviewRef.current;
@@ -845,12 +1036,14 @@ export function MaskEditor({
   };
 
   /**
-   * 该算就**当场**算(`paint()` 每一帧开头问一次):参数或蒙版一变,这一帧画上屏的就是新副本。
+   * 该算就**当场**算:参数或蒙版一变,这一帧画上屏的就是新副本。
    *
-   * 此前是尾随 debounce(`EDGE_PREVIEW_DELAY` = 120ms):每一次都重排定时器,于是拖滑块 / 涂抹期间
-   * 屏幕上根本没有预览,松手之后才猛地换一帧 —— 维护者报的「不实时、卡顿」。副本现在按**显示分辨率**
-   * 算(见 `previewScale`),维护者那张 4432×1904 上一次重算从 365ms 降到 90ms 上下(真 Chromium 实测,
-   * 含画布读回),于是有了每帧算的底气:手不停,预览也一直在动。
+   * 谁调它:**参数变**(grow / feather 滑块那个 effect)直接调 —— 维护者要的实时手感,一个计时器
+   * 都不等;内容变(画了一笔、撤销、清空)走 `syncEdgesPreview`,落笔期间不调它(见那个函数)。
+   *
+   * 副本按**显示分辨率**算(见 `previewScale`):维护者那张 4432×1904 上一次重算从 365ms(文档全
+   * 分辨率)降到 90ms 上下(真 Chromium 实测,含画布读回)—— 即便如此也是一帧的五倍多,所以它
+   * **不能**每帧都算。
    */
   const refreshEdgesPreview = () => {
     if (!edgesPending()) return;
@@ -868,8 +1061,8 @@ export function MaskEditor({
     const view = viewRef.current;
     const ctx = view?.getContext("2d") ?? null;
     if (!view || !ctx) return;
-    //: 画之前先把"待应用"的那份副本更新到最新参数:这一次 paint 显示的就是新副本(见 refreshEdgesPreview)。
-    previewSyncRef.current();
+    //: 画之前先把"待应用"的那份副本弄对:参数变当场算、正在画就**不**算(见 syncEdgesPreview)。
+    edgesSyncRef.current();
     const underlay = underlayRef.current?.image ?? null;
     const scratch = scratchRef.current ?? (scratchRef.current = document.createElement("canvas"));
     const camera = cameraRef.current;
@@ -889,11 +1082,79 @@ export function MaskEditor({
     ringSyncRef.current();
   }, [placeFrame]);
 
-  //: `paint()` 只读 ref(见它的说明),所以这两个回调得挂进 ref 里给它用。
+  /** 尾随那个定时器(`catchUpEdgesPreview` 排的)。null = 没有在等。 */
+  const edgesTrailRef = React.useRef<number | null>(null);
+
+  /** 撤掉尾随 —— 参数一变就当场算,不能让一个旧定时器回头再算一遍。 */
+  const cancelEdgesTrail = () => {
+    if (edgesTrailRef.current === null) return;
+    clearTimeout(edgesTrailRef.current);
+    edgesTrailRef.current = null;
+  };
+
+  /**
+   * **笔迹告一段落**之后把预览追上去(尾随 `EDGE_PREVIEW_TRAILING_MS`)。
+   *
+   * 每一次落笔期间的 `paint()` 都重排一次(尾随 debounce):手不停就一次都不算,手停下来
+   * (或松开)之后才追上。追上这一下自己再 `paint()` 一次 —— 松手之后没有别的东西会重画,
+   * 不主动画的话屏幕上就永远停在真蒙版那一份上了。
+   */
+  const catchUpEdgesPreview = () => {
+    cancelEdgesTrail();
+    edgesTrailRef.current = window.setTimeout(() => {
+      edgesTrailRef.current = null;
+      refreshEdgesPreview();
+      paint();
+    }, EDGE_PREVIEW_TRAILING_MS);
+  };
+
+  /**
+   * ### 扩张 / 羽化预览的**两条触发分开**(维护者:「设置扩张以后 绘制、画笔过程都会非常卡顿」)
+   *
+   * 病根:重算的判据里含**内容版本号**(`MaskWriter.revision`),而画笔**每一帧**都在 +1 ⇒ 预览每一帧
+   * 都重算一次(显示分辨率下约 90ms)→ 画笔卡成幻灯片。现在:
+   *
+   * | 什么变了 | 怎么做 |
+   * | --- | --- |
+   * | **参数**(grow / feather 滑块) | **立刻**重算(那个 effect 直接调 `refreshEdgesPreview`),一个计时器都不等 |
+   * | **内容**(正在画 / 撤销 / 清空) | 不每帧算:这一帧显示层用真蒙版(`displayedMask` 的 revision 判据已经保证了"旧副本不冒充"),笔画告一段落再追上(`catchUpEdgesPreview`) |
+   *
+   * "旧副本不再冒充"那条**没有被放松**:副本的 `key` 里仍然有 `revision`,内容一变它当场作废
+   * —— 只是**追**得晚一点(尾随),不是让旧的那份继续顶包。
+   */
+  const syncEdgesPreview = () => {
+    if (!edgesPending()) return;
+    //: 正在画:这一帧不算,排一次尾随(手一停就追上)。
+    if (drawingRef.current) {
+      catchUpEdgesPreview();
+      return;
+    }
+    //: 刚松手、还在尾随窗口里:别抢跑(参数变那条走的是 effect,不经过这里)。
+    if (edgesTrailRef.current !== null) return;
+    refreshEdgesPreview();
+  };
+
+  //: `paint()` 只读 ref(见它的说明),这三个回调得挂进 ref 里给它用。
   React.useEffect(() => {
     ringSyncRef.current = placeRing;
-    previewSyncRef.current = refreshEdgesPreview;
+    edgesSyncRef.current = syncEdgesPreview;
   });
+
+  /**
+   * 卸载时撤掉还在等的那次尾随。
+   *
+   * 不撤的话,那个定时器会在**一个已经不在了的组件**上算一份没人看的预览(约 90ms 白算),
+   * 而且它读的旧蒙版画布会被重新登记进测试的画布表 —— 下一条用例按尺寸找"蒙版那张"时可能
+   * 摸到它(实测踩过:下一条用例摸到一张全黑的旧蒙版,断言全打在它上面)。
+   */
+  React.useEffect(
+    () => () => {
+      if (edgesTrailRef.current === null) return;
+      clearTimeout(edgesTrailRef.current);
+      edgesTrailRef.current = null;
+    },
+    [],
+  );
 
   /** 换相机:记下来、底栏的缩放跟上。`fitted` = 这是不是「适应窗口」那一档。 */
   const setCamera = React.useCallback((next: Camera, fitted: boolean) => {
@@ -963,7 +1224,9 @@ export function MaskEditor({
       } else if (carry && previous && (previous.width !== next.width || previous.height !== next.height)) {
         ctx.paste(previous, PASTE_PREVIOUS);
       }
-      //: 文档换了 —— 上一份预览副本是按**上一张**蒙版算的,连同"哪一组参数已经应用过"一起作废。
+      //: 文档换了 —— 上一份预览副本是按**上一张**蒙版算的,连同"哪一组参数已经应用过"一起作废,
+      //: 还在等的那次尾随也撤掉(它算出来的会是旧文档那份分辨率/参数)。
+      cancelEdgesTrail();
       edgePreviewRef.current = null;
       appliedEdgesRef.current = null;
       const first = snapshot();
@@ -988,21 +1251,31 @@ export function MaskEditor({
   //: 「显示底图」是个纯显示开关:它只重画看得见的那张,不碰撤销栈、不重铺文档。
   React.useEffect(() => {
     showUnderlayRef.current = showUnderlay;
-    if (open) paint();
+    if (!open) {
+      //: 关掉编辑器之后不再为一份没人看的预览算那 90ms(尾随只有这里和下面那条参数 effect 会撤)。
+      cancelEdgesTrail();
+      return;
+    }
+    paint();
   }, [open, showUnderlay, paint]);
 
   /**
-   * 扩张 / 羽化滑块动了:把当前值搬进 ref(那两条终身不变的闭包只读得到 ref),然后重画一次
-   * —— `paint()` 开头会把过期的那份副本**当场**重算,所以这一次画上去的就是新参数的样子
-   * (不必等任何计时器)。
+   * 扩张 / 羽化滑块动了 = **参数变**:把当前值搬进 ref(那几条终身不变的闭包只读得到 ref),
+   * 然后**当场**重算那份副本并重画一次 —— 一个计时器都不等(维护者要的实时手感)。
    *
-   * 蒙版**内容**变了(用户又画了一笔、撤销了)走的也是 `paint()` 那条路(`previewSyncRef`),
+   * 这里必须**直接**调 `refreshEdgesPreview`、不能只靠 `paint()`:拖动这类滑块时指针在右栏上、
+   * 多半没有"正在画"这件事,但**万一**刚松手还在尾随窗口里,`syncEdgesPreview` 会让位给那个定时器
+   * —— 参数变绝不能被内容那条的尾随挡住,所以先把尾随撤掉再当场算。
+   *
+   * 蒙版**内容**变(用户又画了一笔、撤销了)走的是 `paint()` 开头那条路(`syncEdgesPreview`),
    * 不在这里:那件事每一次画布刷新都要问一遍,而不只是滑块动的时候。
    */
   React.useEffect(() => {
     growRef.current = grow;
     featherRef.current = feather;
     if (!open) return;
+    cancelEdgesTrail();
+    refreshEdgesPreview();
     paint();
   }, [open, grow, feather, paint]);
 
@@ -1302,8 +1575,9 @@ export function MaskEditor({
    * 位置取指针**上一次**在画布上的那一点(`ringPointRef`)而不是事件本身 —— 拖笔刷大小 / 硬度滑块时
    * 指针在右栏上,圈得在画布上原地跟着变(`paint()` 和那个 effect 都会调这里)。
    *
-   * 它画的曲线和 `paintLine` 是同一条(见 `brushRingFill`):内圈到 `radius × hardness` 是硬核,
-   * 外面渐隐到半径那一圈。所以"拖硬度滑块"和"画出来的笔迹"说的是同一件事。
+   * 它画的曲线和 `paintLine` 的软边是同一条(见 `brushRingFill`):内圈到 `radius × hardness` 是
+   * 硬核,外面渐隐到半径那一圈。所以"拖硬度滑块"和"这一笔的边有多软"说的是同一件事。
+   * **不透明度不进这里** —— 那是"画进蒙版多浓",和圈的形状/浓淡是两根滑块(见文件头那张表)。
    */
   const placeRing = React.useCallback(() => {
     const ring = ringRef.current;
@@ -1334,8 +1608,19 @@ export function MaskEditor({
     placeRing();
   }, [placeRing]);
 
-  /** 一笔的墨:笔刷写白(要改)、橡皮写黑(不改)。见文件头「橡皮 = 写黑」。 */
-  const inkOf = (kind: Tool) => (kind === "brush" ? { ink: WHITE, fade: FADE_WHITE } : { ink: BLACK, fade: FADE_BLACK });
+  /**
+   * 一笔的墨 —— **整笔一个颜色,浓度就是它**(见 `inkGray` / `inkColor`),软边那端见 `inkFade`。
+   *
+   * - 画笔、矩形、椭圆:**不透明度**那个灰度(1 → `rgb(255 255 255)`、0.5 → `rgb(128 128 128)`、
+   *   0 → 黑 = 涂不上)—— **形状和画笔共用同一条定义**;
+   * - 橡皮:写黑(`0` = 这块不改),**不吃不透明度**(理由见文件头「橡皮不吃不透明度」);
+   *   它照样吃**硬度** —— 那是边缘过渡,不是擦除力度。
+   *
+   * 颜色算在**这一笔**上(而不是每个 dab 各算一次),所以整条笔迹 —— 包括来回描的那几趟 —— 都是
+   * 同一个值,重叠的 dab 只是把同一个不透明色再铺一遍。
+   */
+  const inkOf = (kind: Tool, opacity: number) =>
+    kind === "eraser" ? { ink: BLACK, fade: ERASER_FADE } : { ink: inkColor(opacity), fade: inkFade(opacity) };
 
   const capture = (event: React.PointerEvent<HTMLCanvasElement>) => {
     //: 指针捕获在合成事件 / 某些设备上是会抛的。它只是"指针滑出画布也算数"的便利,抛了不该让这一笔断掉。
@@ -1365,11 +1650,11 @@ export function MaskEditor({
     const freehand = tool === "brush" || tool === "eraser";
     dragRef.current = { tool, from: at, last: at, before: freehand ? null : snapshot(), pressed: { ...doc() } };
     if (freehand) {
-      const { ink, fade } = inkOf(tool);
+      const { ink, fade } = inkOf(tool, opacity);
       ctx.stroke((raw) => paintLine(raw, at, at, brushSize / 2, hardness, ink, fade));
     } else {
       ctx.beginStroke();
-      ctx.preview((raw) => paintShape(raw, tool, at, at));
+      ctx.preview((raw) => paintShape(raw, tool, at, at, inkOf(tool, opacity).ink, hardness, brushSize / 2));
     }
     paint();
   };
@@ -1409,11 +1694,11 @@ export function MaskEditor({
       }
     }
     if (drag.tool === "brush" || drag.tool === "eraser") {
-      const { ink, fade } = inkOf(drag.tool);
+      const { ink, fade } = inkOf(drag.tool, opacity);
       ctx.stroke((raw) => paintLine(raw, drag.last, at, brushSize / 2, hardness, ink, fade));
     } else {
       //: 形状工具每一帧都从按下时那份像素重来:看到的是「松手后会是这样」,不是一层层叠上去的边。
-      ctx.preview((raw) => paintShape(raw, drag.tool, drag.from, at));
+      ctx.preview((raw) => paintShape(raw, drag.tool, drag.from, at, inkOf(drag.tool, opacity).ink, hardness, brushSize / 2));
     }
     drag.last = at;
     paint();
@@ -1637,7 +1922,8 @@ export function MaskEditor({
               onAuxClick={(event) => event.preventDefault()}
             />
             {/*: 文档的边框与笔刷圈:纯显示,不接指针(事件全落在画布上)。位置由相机写(placeFrame / moveRing)。
-                那个圈的**填充**就是硬度(内圈硬核、外面渐隐,连浓度一起,见 brushRingFill / ringInk);
+                那个圈的**填充**就是硬度(内圈硬核、外面渐隐,连墨的浓淡一起,见 brushRingFill / ringInk);
+                **不透明度不进这里** —— 它管的是画进蒙版多浓,不是圈的软硬。
                 className 里**不放** border / shadow —— 写死的边会把那份填充盖住,拖硬度就什么也看不出来
                 (维护者两次报的都是这一条,第一次是"没写填充",第二次是"填充被硬边盖着")。 */}
             <div
@@ -1679,6 +1965,9 @@ export function MaskEditor({
                 onChange={setBrushSize}
               />
               <SliderField label={t("maskBrushHardness")} value={hardness} min={0} max={1} step={0.05} format={percent} onChange={setHardness} />
+              {/*: 浓度那一根**紧跟**在硬度下面(维护者定的面板顺序):硬度管边缘过渡,这根管画进蒙版多浓。 */}
+              <SliderField label={t("maskBrushOpacity")} value={opacity} min={0} max={1} step={0.05} format={percent} onChange={setOpacity} />
+              <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">{t("maskBrushOpacityHint")}</p>
             </PanelSection>
 
             <PanelSection label={t("maskEdges")}>

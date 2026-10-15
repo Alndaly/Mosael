@@ -247,6 +247,8 @@ export const aiStudio = {
   maskBrush: "笔刷",
   maskBrushGroup: "画笔",
   maskBrushHardness: "笔刷硬度",
+  maskBrushOpacity: "不透明度",
+  maskBrushOpacityHint: "不透明度 = 画进蒙版的浓度：越低，画出来的蒙版越透明、改动越弱；100% 是纯白（要改的地方）。",
   maskBrushSize: "笔刷大小",
   maskCanvasLabel: "蒙版画布",
   maskClear: "清空",

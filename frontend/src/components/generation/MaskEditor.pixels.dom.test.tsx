@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
-import { act, fireEvent, waitFor } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isEdgePreviewCanvas, previewScale } from "@/components/generation/MaskEditor";
+import { EDGE_PREVIEW_TRAILING_MS, isEdgePreviewCanvas, previewScale } from "@/components/generation/MaskEditor";
 import { createMaskWriter } from "@/lib/maskPixels";
 import { loadUnderlay, pixelHarness, type PixelHarness } from "@/test/maskEditorPixels";
 import { canvasesOfSize, forgetCanvases, installPixelCanvas, pixelOf, type PixelCanvas } from "@/test/pixelCanvasSetup";
@@ -99,12 +99,12 @@ async function press(harness: PixelHarness, name: string) {
 /**
  * 把「笔刷硬度」推到 100%。
  *
- * 默认 90% 的笔刷是**一串径向渐变** —— 笔迹边缘是中间灰(实测 30 / 89 / 145 这些值),
- * 于是"蒙版那点是 255"这种断言会随机红。推到 100% 走的是实心那一条(`HARD_EDGE`),
- * 笔迹就只有 0 和 255(同一个判据也是那个圈变硬的判据)。
+ * 默认 90% 的笔刷边上有一条 `半径 × (1 − 0.9)` 宽的过渡带 —— 边缘那几格是中间灰,
+ * 于是"蒙版那点是 255 / 那一行只有 0 和 255"这类断言会红。推到 100% 走的是实心那一条
+ * (`HARD_EDGE`),笔迹就只有 0 和 255(同一个判据也是那个圈变硬的判据、形状只填一次的判据)。
  */
 async function hardBrush(harness: PixelHarness) {
-  const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "1", "硬度");
+  const slider = fieldSlider(harness, "笔刷硬度");
   slider.focus();
   for (let i = 0; i < 20; i += 1) {
     fireEvent.keyDown(slider, { key: "ArrowRight", bubbles: true, cancelable: true });
@@ -117,12 +117,27 @@ async function hardBrush(harness: PixelHarness) {
  * 按 `aria-valuemin` / `aria-valuemax` 认一根滑块。
  *
  * radix 的滑块没有 `aria-label`(名字来自外面那个 `<label>`),按 `role="slider"` 的名字查不到 ——
- * 只能按这两口数字认:硬度 0..1、羽化 0..64、扩张 −64..64、笔刷大小 2..400。
+ * 只能按这两口数字认:羽化 0..64、扩张 −64..64、笔刷大小 2..400。
+ *
+ * **0..1 那三根(硬度 / 不透明度 / 阈值)不要用它**:范围一样,找到的只是 DOM 里第一个 ——
+ * 用 `fieldSlider` 按那一行的名字认。
  */
 function sliderWith(harness: PixelHarness, match: (one: HTMLElement) => boolean, what: string): HTMLElement {
   const found = harness.scope().getAllByRole("slider").find((one: HTMLElement) => match(one)) as HTMLElement | undefined;
   if (!found) throw new Error(`没有找到${what}滑块`);
   return found;
+}
+
+/**
+ * 按**那一行的名字**认一根滑块(`SliderField` 渲染成 `<label><span>名字</span><Slider/>…</label>`)。
+ *
+ * 比 `sliderWith` 按范围认更稳:范围是会撞的 —— 硬度 / **不透明度** / 阈值三根都是 0..1,
+ * 按 `aria-valuemax === "1"` 找到的是**第一个**(= 硬度,靠 DOM 顺序才没出错)。
+ */
+function fieldSlider(harness: PixelHarness, label: string): HTMLElement {
+  const row = harness.scope().getByText(label, { selector: "span" }).closest("label");
+  if (!row) throw new Error(`「${label}」那一行不是一个 <label>`);
+  return within(row).getByRole("slider");
 }
 
 /** 一根滑块按 `times` 下方向键(每一档一下)。 */
@@ -642,7 +657,7 @@ describe("笔刷硬度 → 指针那个圈", () => {
     expect(hard.stops, "硬边 = 没有渐隐的那一段").toEqual([]);
 
     //: 100% → 10%(退 18 档,每档 5%)。指针一次都没动。
-    const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "1", "硬度");
+    const slider = fieldSlider(harness, "笔刷硬度");
     await stepSlider(slider, "ArrowLeft", 18);
     expect(slider.getAttribute("aria-valuenow")).toBe("0.1");
     const soft = { alpha: ringAlpha(), stops: ringStops() };
@@ -674,7 +689,7 @@ describe("笔刷硬度 → 指针那个圈", () => {
     expect(brushRing().style.background).not.toContain("radial-gradient");
 
     //: 从 100% 往左退 10 档 = 50%。**这中间指针一次都没动** —— 滑块一拖圈就得跟着变。
-    const slider = sliderWith(harness, (one) => one.getAttribute("aria-valuemax") === "1", "硬度");
+    const slider = fieldSlider(harness, "笔刷硬度");
     await stepSlider(slider, "ArrowLeft", 10);
     expect(slider.getAttribute("aria-valuenow")).toBe("0.5");
 
@@ -708,6 +723,23 @@ describe("笔刷硬度 → 指针那个圈", () => {
     hover(harness, 30, 40);
     expect(brushRing().hidden, "橡皮也有大小,圈该回来").toBe(false);
   });
+
+  /**
+   * 圈说的是**硬度**(边缘过渡),不是**不透明度**(画进蒙版的浓度)——
+   * 两根滑块都动了之后,圈只该跟着硬度变。
+   */
+  it("不透明度不碰那个圈:改浓度,圈的填充一个字节都不变", async () => {
+    const harness = await open();
+    hover(harness, 30, 40);
+    await stepSlider(fieldSlider(harness, "笔刷硬度"), "ArrowLeft", 8); //: 90% → 50%
+    const soft = brushRing().style.background;
+    expect(ringStops(), "圈上那条曲线是硬度给的").toEqual([0, 50, 100]);
+
+    await stepSlider(fieldSlider(harness, "不透明度"), "ArrowLeft", 18); //: 100% → 10%
+    expect(fieldSlider(harness, "不透明度").getAttribute("aria-valuenow")).toBe("0.1");
+    expect(brushRing().style.background, "圈跟着不透明度走了 —— 它只该反映硬度").toBe(soft);
+    expect(ringStops(), "不透明度动过之后,圈上那条曲线还是硬度给的").toEqual([0, 50, 100]);
+  });
 });
 
 /**
@@ -720,8 +752,13 @@ describe("笔刷硬度 → 指针那个圈", () => {
  *
  * 上一版那份副本是**尾随 debounce**(120ms)算的,而且在**文档全分辨率**上跑:维护者那张
  * 4432×1904 一次几百毫秒,拖滑块时屏幕一动不动、松手才猛地换一帧(第二次报的「不实时、卡顿」)。
- * 现在副本按**显示分辨率**算(长边封在 `MAX_VIEW_EDGE`,见 `previewScale`),参数一变就在**这一次
- * `paint()`** 里重算 —— 所以下面 `previewShows` 是"当场断言",一个计时器都不等。
+ * 现在副本按**显示分辨率**算(长边封在 `MAX_VIEW_EDGE`,见 `previewScale`),而且**两条触发分开**
+ * (维护者第三次报的「设置扩张以后 绘制、画笔过程都会非常卡顿」):
+ *
+ * - **参数变**(grow / feather 滑块)→ 那一次 `paint()` 里当场算,一个计时器都不等
+ *   (所以下面 `previewShows` 是"当场断言");
+ * - **内容变**(正在画)→ **不每帧算**:落笔期间显示层直接用真蒙版(当帧可见、不卡),
+ *   `EDGE_PREVIEW_TRAILING_MS` 之后才把预览追上去(见这个 describe 最后那一条)。
  *
  * 「显示底图」关掉之后可见画布上就只剩蒙版那一张(层表只剩 `mask`),断言的字节 = 屏幕上看到的那份。
  */
@@ -871,8 +908,13 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     //: 参照取**扩张之前**那一坨(现在参数一变预览就在同一帧上屏,晚了就量到已经长出来的那一份)。
     const bounds = brightBounds(harness.viewPixels());
     const middle = Math.round((bounds.top + bounds.bottom) / 2);
+    //: 「笔迹外 3 个像素」按**这一行**的左沿算,不拿全图包围盒的左沿:扩张的结构元是**圆盘**
+    //: (见 `lib/maskPixels` 的 `growMask`),全图左沿常常落在**别的行**上(实测全图左沿在 y≈44、
+    //: 这一行的左沿在 x=8),拿它退 3 格会落到圆盘够不到的地方。同一行退 3 格则方圆两种结构元
+    //: 都够得到 —— 而"预览当帧就在"这条断言的分量一点没减。
+    const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
     await setGrow(harness, 4);
-    previewShows(harness, [bounds.left - 3, middle]);
+    previewShows(harness, outside);
 
     //: 离那一坨远远地再来一笔 —— 刚上屏的那份副本里**没有它**(副本是按上一版蒙版算的)。
     const spot: [number, number] = [10, 100];
@@ -892,7 +934,8 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     //: 参照取**扩张之前**那一坨(预览现在同一帧就上屏,晚一点量到的已经是长出来的那一份了)。
     const bounds = brightBounds(harness.viewPixels());
     const middle = Math.round((bounds.top + bounds.bottom) / 2);
-    const outside: [number, number] = [bounds.left - 3, middle];
+    //: 同上:按**这一行**的左沿退 3 格(圆盘结构元在全图左沿那一行之外够不到)。
+    const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
 
     await setGrow(harness, 4);
     previewShows(harness, outside);
@@ -917,6 +960,79 @@ describe("扩张 / 羽化 → 画布上的预览副本(真蒙版不动)", () => 
     //: (每帧当场重算,所以撤销那一下的 paint 里就已经换回来了,不用等)。
     expect([...harness.viewPixels().pixels.data]).toEqual(preview);
   });
+
+  /**
+   * 那份预览副本的画布 + 它的像素。
+   *
+   * 只能按登记表认它(`isEdgePreviewCanvas`):真蒙版、可见那张、派生层那张临时画布**尺寸都一样**
+   * (这一座里盒子 = 文档、`previewScale` = 1),按尺寸找会摸错人。
+   */
+  function previewOf(): { element: HTMLCanvasElement; data: Uint8ClampedArray } {
+    const element = canvasesOfSize(W, H).find((one) => isEdgePreviewCanvas(one));
+    if (!element) throw new Error("没有那份预览副本 —— 待应用时它该有一张");
+    return { element, data: pixelOf(element).pixels.data };
+  }
+
+  /**
+   * ## 两条触发**分开**(维护者:「设置扩张以后 绘制、画笔过程都会非常卡顿」)
+   *
+   * 病根:重算的 key 里含**内容版本号**(`MaskWriter.revision`),于是**画每一笔 revision 都 +1
+   * → 预览每一帧都重算**(显示分辨率下约 90ms)→ 画笔卡成幻灯片。两条触发现在分开:
+   *
+   * - **参数变**(grow / feather 滑块)= 当场算,一个计时器都不等(维护者要的实时手感);
+   * - **内容变**(正在画)= 不每帧算:落笔期间显示层直接喂**真蒙版**(当帧可见、不卡),
+   *   `EDGE_PREVIEW_TRAILING_MS` 之后把预览追上。
+   *
+   * 过期判据没被改坏:副本的 `key` 里**仍然**有 `revision`,所以内容一变那份旧副本当场作废
+   * (`displayedMask` 回到真蒙版)—— 只是**追**得晚一点,不是"旧副本继续冒充"。
+   *
+   * 假计时器(**一个都不推**)是这条用例的度量:`setGrow` 之后预览必须已经上屏(参数那条不排队),
+   * 而落笔之后副本必须**逐字节没变**(内容那条不抢跑),推到 120ms 才换。
+   */
+  it("参数变当帧就换预览;内容变(正在画)一次都不重算 —— 笔画停下来才追上", async () => {
+    const harness = await open();
+    await blob(harness);
+    await maskOnly(harness);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      //: 先从**扩张之前**那一份(屏幕上就是真蒙版)量出"笔迹外 3 个像素"那一点:生长 4 个像素之后
+      //: 它该变亮。`outside` 必须在 `setGrow` **之前**量 —— 之后量到的是已经长出来的沿,再往左
+      //: 3 格就跑到预览之外了(这一条实测踩过)。
+      const bounds = brightBounds(harness.viewPixels());
+      const middle = Math.round((bounds.top + bounds.bottom) / 2);
+      const outside: [number, number] = [leftmostInRow(harness.viewPixels(), middle) - 3, middle];
+      expect(harness.sample(harness.view(), ...outside), "扩张之前:这一点在笔迹外").toEqual([0, 0, 0, 255]);
+
+      // ① 参数变:**一个计时器都没推**,预览已经在屏幕上。
+      await setGrow(harness, 4);
+      expect(harness.sample(harness.view(), ...outside)[0], "参数变还要等计时器 —— 那是上一版的 debounce").toBeGreaterThan(0);
+      const preview = previewOf();
+      const previewBefore = [...preview.data];
+
+      // ② 内容变:离那一坨远远地画一笔 —— 预览**一次都不该重算**。
+      const spot: [number, number] = [12, 100];
+      await drag(harness, spot, spot);
+      expect([...previewOf().data], "画一笔就把预览重算了 —— 那正是每帧 90ms 的根因").toEqual(previewBefore);
+      //: 而真蒙版与屏幕**当帧**更新(落笔期间显示层直接喂真蒙版):
+      expect(harness.sample(harness.mask(), ...spot)[0], "这一笔得真的落在真蒙版上").toBeGreaterThan(0);
+      expect(harness.sample(harness.view(), ...spot)[0], "落笔期间屏幕停在一份旧副本上").toBeGreaterThan(0);
+      //: 同一帧上那份**过期**的扩张预览已经退场(显示层不是"停着旧副本",是真蒙版)。
+      expect(harness.sample(harness.view(), ...outside)[0], "落笔期间屏幕上还挂着过期的那份扩张预览").toBe(0);
+
+      // ③ 笔画告一段落(尾随 120ms)→ 预览追上,而且追的是**这一版**蒙版。
+      const maskAfterStroke = [...harness.maskPixels().pixels.data];
+      await act(async () => {
+        vi.advanceTimersByTime(EDGE_PREVIEW_TRAILING_MS);
+      });
+      expect([...previewOf().data], "停手之后预览没追上").not.toEqual(previewBefore);
+      expect(harness.sample(harness.view(), ...outside)[0], "追上之后扩张那一圈该回来").toBeGreaterThan(0);
+      //: 追上这一下也只是一份喂给显示层的副本 —— 真蒙版逐字节没动。
+      expect([...harness.maskPixels().pixels.data], "预览那次重算碰了真蒙版").toEqual(maskAfterStroke);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 /**
@@ -936,5 +1052,296 @@ describe("预览副本的分辨率(previewScale)", () => {
     expect(previewScale({ width: 4432, height: 1904 }, { width: 600, height: 400 })).toBeCloseTo(600 / 4432, 6);
     //: 还没量到位图(jsdom、对话框刚挂上那一帧)时退回"只看长边上限",不是 0(0 会让副本变成 1×1)。
     expect(previewScale({ width: 4432, height: 1904 }, { width: 0, height: 0 })).toBeCloseTo(2048 / 4432, 6);
+  });
+});
+
+/**
+ * ## 五个参数各管一件事:硬度 = **边缘过渡**、不透明度 = **画进蒙版的浓度**
+ *
+ * 维护者最终定义:
+ *
+ * | 参数 | 管什么 |
+ * | --- | --- |
+ * | 大小 | 笔尖直径 |
+ * | **硬度** | **每一笔的边缘过渡**(1 = 一刀切,越低越软)。画笔 / 橡皮 / 形状都吃它 |
+ * | **不透明度** | **画进蒙版的灰度值** = 蒙版的透明度:`round(不透明度 × 255)` |
+ *
+ * 两条职责在实现上是**分开的两样东西**:
+ *
+ * - **浓度靠颜色**:`rgb(v v v)`(`inkColor`),`globalAlpha` 保持 1 ⇒ 同色 dab 重叠是"同一个不透明色
+ *   再铺一次",整条笔迹停在 v,**不会叠到 255**;
+ * - **软边靠 alpha**:画笔的径向渐变内半径 `半径 × 硬度` → 外半径 `半径`,alpha 从 1 到 0,颜色始终
+ *   是那个浓度色;形状按 `半径 × (1 − 硬度)` 往里铺一条分层斜坡(内缩 + 递增 `globalAlpha`,
+ *   `SOFT_STEPS` 层)⇒ 内部停在 v、外缘是 `v → 0`。
+ *
+ * 这里断言的是**蒙版里的灰度**(不是屏幕上那个圈、也不是预览那张副本):契约是逐像素 `r = g = b`,
+ * 所以取红通道就是那个灰度。
+ */
+describe("不透明度 = 浓度 / 硬度 = 边缘过渡(整笔一个灰度)", () => {
+  /** 把一根 `0..1`、每档 5% 的滑块推到 `target`。 */
+  async function setLevel(slider: HTMLElement, target: number) {
+    const from = Number(slider.getAttribute("aria-valuenow"));
+    await stepSlider(slider, target >= from ? "ArrowRight" : "ArrowLeft", Math.round(Math.abs(target - from) / 0.05));
+    expect(Number(slider.getAttribute("aria-valuenow"))).toBeCloseTo(target, 6);
+  }
+
+  /** 把「笔刷硬度」推到 `target`。 */
+  const setHardness = (harness: PixelHarness, target: number) => setLevel(fieldSlider(harness, "笔刷硬度"), target);
+  /** 把「不透明度」推到 `target`。 */
+  const setOpacity = (harness: PixelHarness, target: number) => setLevel(fieldSlider(harness, "不透明度"), target);
+
+  /** 把「笔刷大小」推到 `target`(2..400,每档 1 像素)。 */
+  async function setBrush(harness: PixelHarness, target: number) {
+    const slider = fieldSlider(harness, "笔刷大小");
+    const from = Number(slider.getAttribute("aria-valuenow"));
+    await stepSlider(slider, target >= from ? "ArrowRight" : "ArrowLeft", Math.abs(target - from));
+    expect(slider.getAttribute("aria-valuenow")).toBe(String(target));
+  }
+
+  /** 蒙版上某一点那一格的灰度。 */
+  const grayAt = (harness: PixelHarness, x: number, y: number) => harness.sample(harness.mask(), x, y)[0];
+
+  /** 蒙版里最亮的那一格 —— 「重叠的 dab 不叠到 255」看的就是它。 */
+  function brightest(harness: PixelHarness): number {
+    const data = harness.maskPixels().pixels.data;
+    let most = 0;
+    for (let at = 0; at < data.length; at += 4) most = Math.max(most, data[at]);
+    return most;
+  }
+
+  /** 蒙版里某一行的灰度(左右都闭)。 */
+  function maskRow(harness: PixelHarness, y: number, left: number, right: number): number[] {
+    const pixels = harness.maskPixels();
+    const row: number[] = [];
+    for (let x = left; x <= right; x += 1) row.push(pixels.pixels.data[(y * pixels.width + x) * 4]);
+    return row;
+  }
+
+  /** 画一笔(**先把上一笔清掉**,再放硬度 / 不透明度、选工具、拖)。 */
+  async function stroke(
+    harness: PixelHarness,
+    tool: string,
+    { hardness = 1, opacity = 1, from, to }: { hardness?: number; opacity?: number; from: [number, number]; to: [number, number] },
+  ) {
+    await press(harness, "清空");
+    await setHardness(harness, hardness);
+    await setOpacity(harness, opacity);
+    await pick(harness, tool);
+    await drag(harness, from, to);
+    await harness.settle();
+  }
+
+  /** 一根形状工具的框(左沿 20 / 右沿 90,第 55、60 行都离上下沿够远)。 */
+  const RECT: { from: [number, number]; to: [number, number] } = { from: [20, 20], to: [90, 110] };
+
+  it("⓪ 面板:「不透明度」紧跟在「笔刷硬度」下面、默认 100%,文案说清它管的是浓度", async () => {
+    const harness = await open();
+
+    const rows = [...harness.scope().getAllByRole("slider")];
+    const hardness = fieldSlider(harness, "笔刷硬度");
+    const opacity = fieldSlider(harness, "不透明度");
+    expect(opacity.getAttribute("aria-valuenow"), "不透明度默认 100%").toBe("1");
+    expect(rows.indexOf(opacity), "不透明度要**紧跟**在硬度下面(维护者:面板里紧跟硬度)").toBe(rows.indexOf(hardness) + 1);
+    //: 文案得让用户明白它管的是"画进蒙版的浓度",不是第三根"硬度"。
+    expect(harness.scope().getByText(/画进蒙版的浓度/), "面板上没有一句话说清不透明度是什么").toBeTruthy();
+  });
+
+  it("① 不透明度:100% → 255、50% → 128、0% → 0(画笔 / 矩形 / 椭圆共用同一条定义)", async () => {
+    const harness = await open();
+    const cases: { tool: string; box: { from: [number, number]; to: [number, number] }; at: [number, number] }[] = [
+      { tool: "笔刷", box: { from: [20, 20], to: [60, 60] }, at: [40, 40] },
+      { tool: "矩形", box: RECT, at: [55, 60] },
+      { tool: "椭圆", box: { from: [10, 10], to: [80, 110] }, at: [45, 60] },
+    ];
+
+    for (const { tool, box, at } of cases) {
+      await stroke(harness, tool, { opacity: 1, ...box });
+      expect(grayAt(harness, ...at), `${tool}:100% 是满浓度`).toBe(255);
+
+      await stroke(harness, tool, { opacity: 0.5, ...box });
+      expect(grayAt(harness, ...at), `${tool}:50% = round(0.5 × 255) = 128`).toBe(128);
+
+      await stroke(harness, tool, { opacity: 0, ...box });
+      expect(brightest(harness), `${tool}:0% 一点都涂不上(写进去的就是 0 = 这块不改)`).toBe(0);
+      expect(paintedInMask(harness), `${tool}:0% 时蒙版里没有"要改"的格子`).toBe(0);
+    }
+  });
+
+  it("② 同一条笔迹来回蹭三趟,最亮仍是 128 —— 颜色承载浓度,不叠到 255", async () => {
+    const harness = await open();
+    await press(harness, "清空");
+    await setHardness(harness, 1);
+    await setOpacity(harness, 0.5);
+    await pick(harness, "笔刷");
+    //: 同一条线来回蹭三趟(每个 dab 之间本来就重叠:间距是半径的 0.4 倍)。
+    for (let pass = 0; pass < 3; pass += 1) {
+      await drag(harness, [20, 30], [70, 80]);
+      await drag(harness, [70, 80], [20, 30]);
+    }
+    await harness.settle();
+
+    expect(brightest(harness), "重叠的 dab 叠成 255 了 —— 浓度靠颜色扛,不靠饱和").toBe(128);
+    for (const [x, y] of [
+      [30, 40],
+      [45, 55],
+      [60, 70],
+      [50, 60],
+    ] as [number, number][]) {
+      expect(grayAt(harness, x, y), `(${x},${y}) 的浓度该和整条笔迹一样(点位均匀)`).toBe(128);
+    }
+    expect(transparentInMask(harness)).toBe(0);
+  });
+
+  it("③ 硬度 0 的矩形边缘是一条单调斜坡;硬度 1 的只有 0 / v 跳变", async () => {
+    const harness = await open();
+
+    //: 半径 24(笔刷 48)+ 硬度 0 ⇒ 过渡带 24 个像素:第 55 行横穿左沿(左沿在 x=20)。
+    await stroke(harness, "矩形", { hardness: 0, opacity: 1, ...RECT });
+    const ramp = maskRow(harness, 55, 15, 95);
+    const inward = ramp.slice(0, 35);
+    for (let i = 1; i < inward.length; i += 1) {
+      expect(inward[i], `从框外往里第 ${i} 格比上一格还暗 —— 边缘不是一条非降的斜坡`).toBeGreaterThanOrEqual(inward[i - 1]);
+    }
+    const middle = inward.filter((one) => one > 0 && one < 255);
+    expect(middle.length, "硬度 0 的边上没有中间灰 —— 那不是软边").toBeGreaterThan(8);
+    expect(new Set(middle).size, "中间那几格全是同一个值 —— 那不是斜坡").toBeGreaterThan(8);
+    expect(inward[5], "左沿那一格(深度 1 像素)该接近 0,而不是一上来就满浓度").toBeLessThan(40);
+    expect(inward[0], "框外仍是黑的").toBe(0);
+    expect(inward[inward.length - 1], "过渡带走完就是满浓度").toBe(255);
+
+    //: 同一把笔刷、同一个框,硬度 1:边缘逐格只有 0 / 255 —— 一刀切,没有过渡带。
+    await stroke(harness, "矩形", { hardness: 1, opacity: 1, ...RECT });
+    const hard = maskRow(harness, 55, 15, 95);
+    expect(new Set(hard), "硬度 100% 的边上出现了中间灰 —— 边缘没有一刀切").toEqual(new Set([0, 255]));
+    expect(hard.slice(0, 5), "框外是黑的").toEqual([0, 0, 0, 0, 0]);
+    expect(hard.slice(5, 75).every((one) => one === 255), "框里一路平到右沿").toBe(true);
+  });
+
+  it("④ 过渡带的宽度 = 笔刷半径 × (1 − 硬度):跟着半径和硬度两个轴走", async () => {
+    const harness = await open();
+    /** 过渡带有几格:第 60 行从框的左沿(第一格非零)数到第一格满浓度为止。 */
+    function bandPixels(): number {
+      const row = maskRow(harness, 60, 0, W - 1);
+      const start = row.findIndex((one) => one !== 0);
+      expect(start, "这一行上没有形状 —— 什么都没画上去?").toBeGreaterThanOrEqual(0);
+      let at = start;
+      while (at < row.length && row[at] !== 255) at += 1;
+      expect(at, "这一行上没有满浓度那一格 —— 形状没铺满?").toBeLessThan(row.length);
+      return at - start;
+    }
+
+    await setBrush(harness, 48); //: 半径 24
+    await stroke(harness, "矩形", { hardness: 0, opacity: 1, ...RECT });
+    const soft = bandPixels(); //: 24 × (1 − 0) = 24
+    await stroke(harness, "矩形", { hardness: 0.5, opacity: 1, ...RECT });
+    const halfway = bandPixels(); //: 24 × (1 − 0.5) = 12
+    await setBrush(harness, 96); //: 半径翻倍
+    await stroke(harness, "矩形", { hardness: 0.5, opacity: 1, ...RECT });
+    const doubled = bandPixels(); //: 48 × (1 − 0.5) = 24 —— 和上面那条一样宽
+
+    expect(soft, "半径 24 / 硬度 0 的过渡带该是 24 格(格数按像素取整,留一点余量)").toBeGreaterThanOrEqual(22);
+    expect(soft).toBeLessThanOrEqual(25);
+    expect(halfway, "硬度 0.5 的过渡带该是它的一半").toBeGreaterThanOrEqual(10);
+    expect(halfway).toBeLessThanOrEqual(13);
+    expect(Math.abs(doubled - soft), "半径翻倍 × 硬度 0.5 ≠ 半径 24 × 硬度 0 —— 尺度不是同一个乘积").toBeLessThanOrEqual(2);
+  });
+
+  it("⑤ 形状仍是一步撤销:半浓度的矩形,按一下撤销就整张回到画之前", async () => {
+    const harness = await open();
+    const before = [...harness.maskPixels().pixels.data];
+    await stroke(harness, "矩形", { hardness: 1, opacity: 0.5, from: [20, 30], to: [70, 80] });
+    expect(grayAt(harness, 45, 55), "先确认真的画进去了(否则这条是空转的绿)").toBe(128);
+
+    await press(harness, "撤销");
+    await harness.settle();
+    expect([...harness.maskPixels().pixels.data], "一步撤销 = 整张回到画之前").toEqual(before);
+    expect(transparentInMask(harness)).toBe(0);
+  });
+
+  /**
+   * 显示层**不需要改**:合成那条路本来就把蒙版的灰度当"多少浓度"用(`maskViewLayers` 的
+   * `maskInverse` multiply + `maskTint` lighter,两者都逐像素乘蒙版),所以 128 的那一点在屏幕上
+   * 读出来正好落在"没画过"与"满浓度"之间 —— 既不是"有/无",也不是全浓度。
+   *
+   * 底图左 2/3 是纯蓝、蒙版色 `--destructive` 的红通道 189 ⇒ 没画 0、半浓度 ≈ 95、满浓度 ≈ 189
+   * (压暗那一层乘的是 `255 − 蒙版`,着色那一层乘的是蒙版)。
+   */
+  it("⑥ 屏幕上的合成按灰度出透明度:半浓度那一点比没画过浓、比满浓度淡", async () => {
+    const harness = await open();
+    await press(harness, "清空");
+    await setHardness(harness, 1);
+    await pick(harness, "笔刷");
+
+    //: 满浓度一笔(y≈20)与半浓度一笔(y≈100):两条离得开,采样点各取在笔迹正中。
+    await setOpacity(harness, 1);
+    await drag(harness, [10, 20], [40, 20]);
+    await harness.settle();
+    await setOpacity(harness, 0.5);
+    await drag(harness, [10, 100], [40, 100]);
+    await harness.settle();
+
+    const red = (x: number, y: number) => harness.sample(harness.view(), x, y)[0];
+    expect(grayAt(harness, 25, 20), "参照:上面那一笔是满浓度").toBe(255);
+    expect(grayAt(harness, 25, 100), "参照:下面那一笔是半浓度").toBe(128);
+    expect(grayAt(harness, 25, 60), "参照:中间这一点没被碰过").toBe(0);
+
+    const full = red(25, 20);
+    const half = red(25, 100);
+    const none = red(25, 60);
+    expect(half, "半浓度在屏幕上读不出浓度差(被压成有/无了)").toBeGreaterThan(none);
+    expect(half, "半浓度那一格比满浓度还浓").toBeLessThan(full);
+  });
+
+  /**
+   * **橡皮不吃不透明度**:擦除力度保持满强度(写黑 = `0` = 这块不改)。
+   *
+   * 理由(同一段话也写在 `MaskEditor` 文件头「橡皮不吃不透明度」):
+   *
+   * 1. 蒙版是**没有 alpha 的灰度图**,"擦掉"在数据上只能是写黑(`0`)。橡皮的落点值只有**一个**
+   *    目标,**没有"半浓的黑"可言** —— 而不透明度那条说的是"往蒙版里**加**多浓",橡皮不加东西;
+   * 2. 想让擦除吃不透明度的唯一表达是拿 `globalAlpha = 不透明度` 去混(`v ← v × (1 − 不透明度)`),
+   *    而 dab 的间距是半径的 0.4 倍 ⇒ 同一个像素会被同一笔打中五到九次:`(1 − 0.5)⁵ ≈ 0.03`。
+   *    结果是**笔迹中间照样擦干净、只有边缘留着一点**,连"擦除力度"都算不上(0% 还会变成
+   *    "擦不动",比涂不上更难解释);
+   * 3. 于是**唯一**那个浓度定义(`inkGray`)橡皮不消费它 —— 这条决定在这里钉住。
+   *
+   * 橡皮**吃硬度**(那是"每一笔的边缘过渡",是另一件事):dab 中心照旧是纯 `0`,只有边缘淡出去。
+   */
+  it("⑦ 橡皮不吃不透明度:50% / 0% 的橡皮擦下去仍是纯黑(中心满强度)", async () => {
+    const harness = await open();
+    const spot: [number, number] = [40, 50];
+    /** 画一团满浓度的白,好让橡皮有东西可擦。 */
+    async function whiteBlob() {
+      await press(harness, "清空");
+      await setOpacity(harness, 1);
+      await setHardness(harness, 1);
+      await pick(harness, "笔刷");
+      await drag(harness, [30, 40], [50, 60]);
+      await harness.settle();
+      expect(harness.sample(harness.mask(), ...spot), "参照:这一点先得是满浓度").toEqual([255, 255, 255, 255]);
+    }
+    async function eraseAt(opacity: number, hardness: number) {
+      await pick(harness, "橡皮");
+      await setHardness(harness, hardness);
+      await setOpacity(harness, opacity);
+      await drag(harness, spot, spot);
+      await harness.settle();
+    }
+
+    await whiteBlob();
+    await eraseAt(0.5, 1);
+    expect(harness.sample(harness.mask(), ...spot), "橡皮的力度跟着不透明度走了 —— 擦完该是纯黑").toEqual([0, 0, 0, 255]);
+
+    await whiteBlob();
+    await eraseAt(0, 1);
+    expect(harness.sample(harness.mask(), ...spot), "不透明度 0 的橡皮也照擦(擦除只有一个目标值)").toEqual([0, 0, 0, 255]);
+
+    await whiteBlob();
+    await eraseAt(0.5, 0.5);
+    expect(harness.sample(harness.mask(), ...spot), "橡皮吃硬度 —— 但那是软边,dab 中心仍是满强度(纯黑)").toEqual([
+      0, 0, 0, 255,
+    ]);
+    //: 「橡皮 = 写黑」那条不变量没被这条决定带坏:蒙版里不许漏出透明像素。
+    expect(transparentInMask(harness)).toBe(0);
   });
 });

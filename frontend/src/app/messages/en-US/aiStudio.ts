@@ -247,6 +247,8 @@ export const aiStudio = {
   maskBrush: "Brush",
   maskBrushGroup: "Brush",
   maskBrushHardness: "Brush hardness",
+  maskBrushOpacity: "Opacity",
+  maskBrushOpacityHint: "Opacity is how strongly the brush marks the mask: the lower it is, the more transparent the painted mask and the weaker the change. 100% paints pure white (change here).",
   maskBrushSize: "Brush size",
   maskCanvasLabel: "Mask canvas",
   maskClear: "Clear",
