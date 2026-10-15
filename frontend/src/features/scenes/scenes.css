@@ -649,8 +649,8 @@
   /* 三格的宽度和每层缩进 —— **只在这里写一次**,行和箭头都从这儿取。
      折叠箭头那一格收到 14px(箭头自己就是 13px):它此前 18px,而叶子行也得留着同样宽的空位
      才对齐 —— 于是每一行的名字都被推出去一格。缩进 14 → 10 同理,是"看着缩进一大截"的另一半。 */
-  --row-twist: 14px;
-  --row-indent: 10px;
+  --row-twist: 20px;
+  --row-indent: 16px;
   --row-height: 30px;
   /* 往外让多少跟着面板走(见 .scene-panel-body),不自己定一个数。 */
   --row-bleed: var(--scene-row-bleed);
@@ -1350,7 +1350,9 @@
   height: var(--row-height);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  /* 箭头在那一格里**靠左**,右边留出间距 —— 居中的话 20px 的格子两边各 3.5px,箭头还是贴着图标
+     (维护者:下拉按钮和右边的图标/名字要有适当的间距)。 */
+  justify-content: flex-start;
   padding: 0;
   border: 0;
   background: transparent;
