@@ -170,6 +170,13 @@ interface Drag {
   from: Point;
   last: Point;
   before: Uint8ClampedArray | null;
+  /**
+   * 按下那一刻的文档尺寸。拖动途中底图 / 底稿读进来(rebuild)会把文档换成另一个尺寸,
+   * 而 `from` / `last` 还是旧坐标系的 —— 那时要按新旧尺寸比把它们搬过来(carry 正是把
+   * 旧画布按同一个比缩进新文档的),否则这一笔会从旧空间的点划到新空间的点,横跨整张图
+   * 落在错位的地方。
+   */
+  pressed: Size;
 }
 /** 一次平移拖动(空格 + 左键,或中键):上一次指针在哪(屏幕坐标)。 */
 interface PanDrag {
@@ -505,9 +512,10 @@ export function MaskEditor({
   const [canUndo, setCanUndo] = React.useState(false);
   const [canRedo, setCanRedo] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  /** 底栏那一行:输出尺寸和当前缩放(只给人看;真值在 ref 里)。 */
-  const [readout, setReadout] = React.useState<{ size: Size; zoom: number | null }>({
-    size: { width: DEFAULT_DOC, height: DEFAULT_DOC },
+  /** 底栏那一行:输出尺寸和当前缩放(只给人看;真值在 ref 里)。尺寸在底图/底稿读出来之前是 null ——
+   *  那一刻输出尺寸还不存在,拿 1024 占位谎称「已确立」正是"打开一瞬间尺寸不对"的来源。 */
+  const [readout, setReadout] = React.useState<{ size: Size | null; zoom: number | null }>({
+    size: null,
     zoom: null,
   });
   /** 空格按着(准备平移)/ 正在平移 —— 只决定指针的样子。 */
@@ -645,13 +653,19 @@ export function MaskEditor({
       historyRef.current = first ? { steps: [first], at: 0 } : { steps: [], at: -1 };
       lastStepRef.current = null;
       syncHistory();
-      //: 底栏说的是**存下来的尺寸**:出口会缩回源图那么大,所以这里给封顶之前的那一对。
-      setReadout((previous) => ({ ...previous, size }));
-      //: 内容换了 —— 不管盒子变没变都要重画一次(底图读进来那一趟尺寸常常和打开时一模一样)。
-      measure(true);
+      if (drawingRef.current) {
+        //: 拖动途中文档换了尺寸:`measure` 被「拖动中」挡掉,但相机**必须当场重适应** ——
+        //: 否则松手之前整张图都按旧文档的尺寸摆(图错位、四周露出画布底色),松手之后也没有
+        //: 任何东西会补这一下。不量盒子(盒子没变),只按新文档重算那一档适应窗口。
+        const box = boxRef.current;
+        if (box) setCamera(fitCamera({ width: next.width, height: next.height }, box), true);
+      } else {
+        //: 内容换了 —— 不管盒子变没变都要重画一次(底图读进来那一趟尺寸常常和打开时一模一样)。
+        measure(true);
+      }
       paint();
     },
-    [measure, paint],
+    [measure, paint, setCamera],
   );
 
   //: 「显示底图」是个纯显示开关:它只重画看得见的那张,不碰撤销栈、不重铺文档。
@@ -668,6 +682,8 @@ export function MaskEditor({
 
   React.useEffect(() => {
     if (!open) return;
+    //: 尺寸要等下面那个 effect 读完底图才确立 —— 先清掉上一轮的,别拿旧图/占位的数字顶包。
+    setReadout((previous) => (previous.size ? { ...previous, size: null } : previous));
     rebuild({ width: DEFAULT_DOC, height: DEFAULT_DOC }, false);
   }, [open, rebuild]);
 
@@ -691,6 +707,12 @@ export function MaskEditor({
       setHasUnderlay(Boolean(underlay));
       const size = underlay ?? draft;
       rebuild(size ? { width: size.width, height: size.height } : { width: DEFAULT_DOC, height: DEFAULT_DOC }, true);
+      //: 底栏的输出尺寸**此刻才确立**(出口会把蒙版缩回源图那么大,所以给封顶之前的原始尺寸);
+      //: 读出来之前那一格是 "—",不是谎称的 1024 占位。
+      setReadout((previous) => ({
+        ...previous,
+        size: size ? { width: size.width, height: size.height } : { width: DEFAULT_DOC, height: DEFAULT_DOC },
+      }));
     })();
     return () => {
       alive = false;
@@ -976,7 +998,7 @@ export function MaskEditor({
     capture(event);
     drawingRef.current = true;
     const freehand = tool === "brush" || tool === "eraser";
-    dragRef.current = { tool, from: at, last: at, before: freehand ? null : snapshot() };
+    dragRef.current = { tool, from: at, last: at, before: freehand ? null : snapshot(), pressed: { ...doc() } };
     if (freehand) {
       const { ink, fade } = inkOf(tool);
       ctx.stroke((raw) => paintLine(raw, at, at, brushSize / 2, hardness, ink, fade));
@@ -1004,17 +1026,28 @@ export function MaskEditor({
     if (!drag || !ctx) return;
     const at = docPoint(event);
     if (!at) return;
+    //: **按下之后底图才读进来**(rebuild 把文档换了尺寸)的话,`from` / `last` 还是旧坐标系的
+    //: —— 按新旧尺寸比搬过来(carry 就是把旧画布按同一个比缩进新文档的,笔迹几何跟着同一个比走),
+    //: 否则这一笔从旧空间的点划到新空间的点,横跨整张图落在错位的地方。形状工具那份「按下之前的
+    //: 像素」快照同时候作废:重取一份当前的,否则 `restore` 会把整张挡掉(它拒绝写尺寸对不上的
+    //: 快照),预览就从「每帧重来」变成「一层层叠」。
+    const sizeNow = doc();
+    if (drag.pressed.width !== sizeNow.width || drag.pressed.height !== sizeNow.height) {
+      const scaleX = sizeNow.width / drag.pressed.width;
+      const scaleY = sizeNow.height / drag.pressed.height;
+      drag.from = { x: drag.from.x * scaleX, y: drag.from.y * scaleY };
+      drag.last = { x: drag.last.x * scaleX, y: drag.last.y * scaleY };
+      drag.pressed = { ...sizeNow };
+      if (drag.before) {
+        drag.before = snapshot();
+        ctx.beginStroke();
+      }
+    }
     if (drag.tool === "brush" || drag.tool === "eraser") {
       const { ink, fade } = inkOf(drag.tool);
       ctx.stroke((raw) => paintLine(raw, drag.last, at, brushSize / 2, hardness, ink, fade));
     } else {
       //: 形状工具每一帧都从按下时那份像素重来:看到的是「松手后会是这样」,不是一层层叠上去的边。
-      //: **按下之后底图才读进来**(文档换了尺寸)的话,那份快照已经作废 —— 重取一份当前的,
-      //: 否则 `restore` 会把整张挡掉(它拒绝写尺寸对不上的快照),预览就从"每帧重来"变成"一层层叠"。
-      if (drag.before && drag.before.length !== doc().width * doc().height) {
-        drag.before = snapshot();
-        ctx.beginStroke();
-      }
       ctx.preview((raw) => paintShape(raw, drag.tool, drag.from, at));
     }
     drag.last = at;
@@ -1319,7 +1352,9 @@ export function MaskEditor({
           */}
         <footer className="col-span-2 flex min-w-0 items-center gap-4 border-t border-divider px-5 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3 text-ui-xs text-muted-foreground">
-            <span className="shrink-0 tabular-nums text-foreground">{`${readout.size.width} × ${readout.size.height} px`}</span>
+            <span className="shrink-0 tabular-nums text-foreground">
+              {readout.size ? `${readout.size.width} × ${readout.size.height} px` : "—"}
+            </span>
             <span className="shrink-0 tabular-nums" aria-label={t("maskZoomLevel")}>
               {zoomText}
             </span>
