@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import * as React from "react";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { CanvasPointPicker } from "./canvasPointPicker";
@@ -35,5 +35,42 @@ describe("双击空白处的添加单子:换一个双击点,单子跟到新点",
     expect(second).not.toBe(first);
     const anchor = document.querySelector<HTMLElement>("[data-canvas-point-picker]")!;
     expect([anchor.style.left, anchor.style.top]).toEqual(["600px", "300px"]);
+  });
+});
+
+/**
+ * 点浮层**外面**(画布空白)也要能关掉,不只 Esc —— Radix 自带的「点外部关闭」被 React Flow 画布吃掉
+ * (画布拖动画布时在 pointerdown 上 stopPropagation,Radix 的 dismiss 监听收不到),组件自己兜了一条 capture 阶段的。
+ */
+describe("点单子外面(画布空白)关掉", () => {
+  beforeAll(() => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    Element.prototype.scrollIntoView ??= () => {};
+  });
+
+  it("点在浮层内容里不关、点在浮层外(空白)关", () => {
+    const onClose = vi.fn();
+    render(
+      <CanvasPointPicker at={{ x: 100, y: 100 }} options={options} searchPlaceholder="添加" onPick={vi.fn()} onClose={onClose} />,
+    );
+    const panel = content();
+    expect(panel, "单子没打开").toBeTruthy();
+
+    // 点在单子浮层内容里:不关
+    fireEvent.pointerDown(panel!);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 点在画布空白(document.body,浮层之外):关
+    fireEvent.pointerDown(document.body);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("收起(at=null)时不挂监听,点什么都不关", () => {
+    const onClose = vi.fn();
+    render(
+      <CanvasPointPicker at={null} options={options} searchPlaceholder="添加" onPick={vi.fn()} onClose={onClose} />,
+    );
+    fireEvent.pointerDown(document.body);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
