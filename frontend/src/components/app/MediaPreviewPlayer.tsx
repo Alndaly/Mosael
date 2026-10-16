@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { mediaClock, usePlayback, useScrub, useWaveformPeaks } from "./media-playback";
 
 /** Full preview transport. The viewing area and controls never overlap. */
-export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true, seekTo = null }: {
+export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true, seekTo = null, onTime }: {
   src: string;
   assetId?: string;
   kind: "audio" | "video";
@@ -21,6 +21,13 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true, seekTo
    * 还没有元数据时直接赋值也是对的:规范说那时先记成「默认起播位置」,元数据一到就从那儿开始。
    */
   seekTo?: { seconds: number; seq: number } | null;
+  /**
+   * 播到第几秒时报一声(素材详情右栏的节奏条据此高亮当前镜,ADR 0061 §5)。
+   *
+   * 报的就是 `usePlayback` 已有的那个 `at`(进度条用的同一份),不另开一路时间状态;回调不进依赖 ——
+   * 调用方每次给一个新函数不该让时间重报一遍。
+   */
+  onTime?: (seconds: number) => void;
 }) {
   const t = useI18n();
   const ref = React.useRef<HTMLMediaElement | null>(null);
@@ -31,6 +38,14 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true, seekTo
   const peaks = useWaveformPeaks(kind === "audio" ? assetId : undefined, 96);
   const duration = Number.isFinite(total) ? total : 0;
   const { shown, scrub, release } = useScrub(ref, at);
+  //: 最新那个回调放 ref 里(和 `VideoPlayer` 的 `onPlaybackChange` 同一个态度:谁关心谁留着)。
+  const report = React.useRef(onTime);
+  React.useEffect(() => {
+    report.current = onTime;
+  });
+  React.useEffect(() => {
+    report.current?.(at);
+  }, [at]);
 
   React.useEffect(() => {
     const media = ref.current;

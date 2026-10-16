@@ -191,6 +191,8 @@ export const transcriptKeys = {
  */
 export const shotKeys = {
   detail: (assetId: string) => ["assets", "shots", assetId] as const,
+  /** 整条动静曲线(节奏条):**同一个前缀下**,拆镜头任务做完时跟着 `assets` 一起作废。 */
+  track: (assetId: string) => ["assets", "shots", assetId, "track"] as const,
   pending: (workspaceId: string) => ["shot-jobs", workspaceId] as const,
 };
 

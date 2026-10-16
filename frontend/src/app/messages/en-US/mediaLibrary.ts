@@ -96,6 +96,15 @@ export const mediaLibrary = {
   shotSaveAsNote: "Save to notes",
   shotNoteReport: "Shot list (stats and notes)",
   shotNoteStoryboard: "Storyboard prompts",
+  // Pace strip: the whole motion curve above the shot list (x = full duration, y = frame delta 0–255).
+  shotPaceTitle: "Pace strip",
+  shotPacePeak: "peak {value}",
+  shotPaceScale: "full scale {value}",
+  shotPaceCuts: "{value} cuts",
+  shotPaceSeek: "Click to jump to this shot",
+  shotPaceShotDetail: "{shot} · {start}–{end} · {seconds}s · measured motion {motion}",
+  shotPaceNoTrack: "This motion curve has not been measured yet (the earlier breakdown did not record it). Breaking the shots down again brings it in.",
+  shotPaceMissing: "The library records this curve ({points} samples, digest {digest}), but the file on disk is gone or was changed — breaking the shots down again re-measures it.",
   // Reconciliation and rhythm notes (`hints[].kind`, the 14 kinds in backend domain/shots/describe.py and analysis/service.py).
   shotHint_sheets_truncated: "Shots after {shot} up to {value} were not sent as pictures (one call carries at most 3 contact sheets) — the analysis never saw them",
   shotHint_sheets_unavailable: "No contact sheets available — only a few frames out of {value} shots were sampled, so not every shot was seen",

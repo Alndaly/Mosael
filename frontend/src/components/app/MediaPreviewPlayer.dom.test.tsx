@@ -69,6 +69,24 @@ describe("media preview transport", () => {
     expect(video.currentTime).toBe(12.4);
   });
 
+  //: 节奏条要知道「播到哪儿了」来高亮当前镜(ADR 0061 §5):报的就是进度条用的那一份时间,
+  //: 不另开一路。回调每次换一个新身份也不该让时间重报(否则调用方一渲染就报一次)。
+  it("播到哪儿就报到哪儿(素材详情右栏的节奏条用它高亮当前镜)", () => {
+    const onTime = vi.fn();
+    const { container, rerender } = render(<MediaPreviewPlayer src="/sample.mp4" kind="video" autoPlay={false} onTime={onTime} />);
+    const video = container.querySelector("video")!;
+    Object.defineProperty(video, "duration", { value: 120 });
+    fireEvent.loadedMetadata(video);
+
+    video.currentTime = 12.4;
+    fireEvent.timeUpdate(video);
+    expect(onTime).toHaveBeenLastCalledWith(12.4);
+
+    const before = onTime.mock.calls.length;
+    rerender(<MediaPreviewPlayer src="/sample.mp4" kind="video" autoPlay={false} onTime={vi.fn()} />);
+    expect(onTime.mock.calls.length).toBe(before); // 只是换了个函数身份,不重报
+  });
+
   it("reports rejected playback and keeps the controls available", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValueOnce(new Error("unsupported"));
     render(<MediaPreviewPlayer src="/broken.wav" kind="audio" autoPlay={false} />);

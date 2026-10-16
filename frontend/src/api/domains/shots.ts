@@ -12,6 +12,17 @@ import { API_BASE, api, getAuthToken } from "@/api/transport";
 /** `GET /assets/{id}/shots` 的回答。没拆过时只有 `asset_id` 和 `status`。 */
 export type ShotBreakdown = components["schemas"]["ShotBreakdownResponse"];
 
+/**
+ * `GET /assets/{id}/shots/track` 的回答:**整条**动静曲线(5Hz 的每个采样)。
+ *
+ * 时间轴**不是** `i / hz`:`values[i]` 在 `first_sample_seconds + i × sample_interval_seconds` 秒,
+ * 第 0 个采样不在 0 秒(ffmpeg 的 `tblend` 第 0 帧没有前一帧)。两个数都从响应里读。
+ *
+ * `status` 三种,**没有一种是 404**:`ready` 有曲线;`none` 没量过(或这一版之前的行没记);
+ * `missing` 库里记着 `points` 与 `digest`、盘上那份丢了或被改过 —— 这时 `values` 是空的。
+ */
+export type ShotMotionTrack = components["schemas"]["ShotMotionTrackResponse"];
+
 /** 拆镜头任务的那一种(后端 `domain/analysis/shots_task.JOB_KIND`)。按它列任务就能查「这条视频还在拆吗」。 */
 export const SHOT_JOB_KIND = "shot_breakdown";
 
@@ -95,6 +106,16 @@ export function describeOf(breakdown: Pick<ShotBreakdown, "describe">): ShotDesc
  */
 export function getShotBreakdown(assetId: string): Promise<ShotBreakdown> {
   return api<ShotBreakdown>(`/api/assets/${encodeURIComponent(assetId)}/shots`);
+}
+
+/**
+ * 这份视频的**整条动静曲线**(节奏条画的就是它)。
+ *
+ * 和镜头表同一族(挂在 `assets` 前缀下),曲线本身不在镜头表里 —— 1 小时 ≈ 18000 个数,读一次镜头表
+ * 不该把它整个搬过来(后端 `ShotMotionTrackResponse` 的说明)。
+ */
+export function getShotMotionTrack(assetId: string): Promise<ShotMotionTrack> {
+  return api<ShotMotionTrack>(`/api/assets/${encodeURIComponent(assetId)}/shots/track`);
 }
 
 /**

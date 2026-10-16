@@ -96,6 +96,15 @@ export const mediaLibrary = {
   shotSaveAsNote: "存成笔记",
   shotNoteReport: "镜头表（含统计和提示）",
   shotNoteStoryboard: "分镜提示词",
+  // 节奏条:把整条动静曲线画在「镜头」列表上面（横轴 = 整段时长，纵轴 = 帧间差 0–255）。
+  shotPaceTitle: "节奏条",
+  shotPacePeak: "峰值 {value}",
+  shotPaceScale: "满格 {value}",
+  shotPaceCuts: "刀口 {value} 处",
+  shotPaceSeek: "点一下跳到这一镜",
+  shotPaceShotDetail: "{shot} · {start}–{end} · {seconds} 秒 · 实测动静 {motion}",
+  shotPaceNoTrack: "这条动静曲线还没量过（早先拆的那一份没记它）。重拆一次镜头就有了。",
+  shotPaceMissing: "库里记着这条曲线（{points} 个采样，摘要 {digest}），盘上那份没了或被改过 —— 重拆一次会重新量。",
   // 对账和节奏的提示(`hints[].kind`,14 种,见后端 domain/shots/describe.py 与 analysis/service.py)。
   shotHint_sheets_truncated: "{shot} 之后到 {value} 的镜头没交画面（联系表一次最多交 3 组），这些镜头分析时没被看到",
   shotHint_sheets_unavailable: "拿不到联系表，{value} 镜里只抽了几帧画面 —— 不是每一镜都被看到",

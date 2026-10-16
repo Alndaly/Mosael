@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   describeOf,
   getShotBreakdown,
+  getShotMotionTrack,
   hintsOf,
   listJobs,
   shotFrameUrl,
@@ -25,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { jobSettled } from "@/components/jobs/runStatus";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { formatTimecode } from "@/lib/time";
+import { ShotPaceStrip } from "@/features/media/ShotPaceStrip";
 import { shotHintText, storyboardText, vocabKey, type ShotField } from "@/features/media/shotVocab";
 
 /**
@@ -41,11 +43,17 @@ import { shotHintText, storyboardText, vocabKey, type ShotField } from "@/featur
  *
  * 对账和节奏的提示(`hints`)在列表底下逐条给人看:它们是「模型这一处判得可疑」的账,
  * 闷着就等于没记。
+ *
+ * 列表**上面**还有一条**节奏条**(`ShotPaceStrip`):整条动静曲线 + 刀口 + 当前镜高亮,点一下就跳到
+ * 那一镜(和点一行走同一个 `onSeek`)。它自己取整条曲线(曲线有一万多个数,不在镜头表那份响应里),
+ * 没拆过时不问;`none` / `missing` 各有一句人话(见那个文件)。
  */
-export function ShotBreakdownPanel({ asset, onSeek }: {
+export function ShotBreakdownPanel({ asset, onSeek, playhead = 0 }: {
   asset: Asset;
   /** 点某一镜:把这一镜的 `start` 报上去,由详情把它交给左栏那个播放器。 */
   onSeek: (seconds: number) => void;
+  /** 播放器现在在第几秒 —— 节奏条据此高亮当前镜(详情从 `MediaPreviewPlayer` 的 timeupdate 报上来)。 */
+  playhead?: number;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -88,6 +96,21 @@ export function ShotBreakdownPanel({ asset, onSeek }: {
   const hasShots = shots.length > 0;
   //: 「判过画面没有」看**键在不在**,不看值:没判时这些键一个都没有,不是空串。
   const judged = shots.some((shot) => shot.size !== undefined || shot.camera !== undefined || shot.frame !== undefined);
+
+  /**
+   * 整条动静曲线(节奏条)。**没拆过时不问** —— 那时连刀口都没有,条画不出来;有镜头表才取。
+   * 它挂在 `assets` 前缀下(`shotKeys.track`),重拆做完时和镜头表一起刷。
+   */
+  const track = useQuery({
+    queryKey: shotKeys.track(asset.id),
+    queryFn: () => getShotMotionTrack(asset.id),
+    enabled: hasShots,
+  });
+  //: 横轴满格(秒):曲线自己的时长最准,退到末镜的结束,再退到素材的时长。
+  const trackDuration = Number(track.data?.duration) || 0;
+  const span = trackDuration > 0
+    ? trackDuration
+    : shots.reduce((high, shot) => Math.max(high, Number(shot.end) || 0), Number(asset.media_info?.duration) || 0);
 
   const copyStoryboard = () => {
     void navigator.clipboard?.writeText(made).then(() => {
@@ -136,6 +159,20 @@ export function ShotBreakdownPanel({ asset, onSeek }: {
       {breakdown.isError && <p className="text-ui-xs text-muted-foreground">{errorText(breakdown.error)}</p>}
 
       {data && !hasShots && <p className="text-ui-xs text-muted-foreground">{t("shotBreakdownNone")}</p>}
+
+      {/* 节奏条:整条动静曲线 + 刀口 + 当前镜高亮,点一下就跳到那一镜(和下面那列走同一个 onSeek)。 */}
+      {hasShots && (
+        <ShotPaceStrip
+          shots={shots}
+          track={track.data}
+          duration={span}
+          playhead={playhead}
+          loading={track.isPending}
+          error={track.isError ? errorText(track.error) : ""}
+          onSeek={onSeek}
+          onRebuild={activeJob ? undefined : () => start.mutate()}
+        />
+      )}
 
       {hasShots && (
         <div className="grid gap-0.5">

@@ -72,6 +72,9 @@ export function AssetPreviewModal({
   //: 点镜头表里某一镜那一行时,左栏播放器要跳到第几秒(ADR 0061 §5)。每次点都给一个新的对象 ——
   //: 同一个秒数连点两下也要跳第二次(见 MediaPreviewPlayer 的 seekTo)。
   const [seekTo, setSeekTo] = React.useState<{ seconds: number; seq: number } | null>(null);
+  //: 左栏播放器现在在第几秒 —— 右栏的节奏条据此高亮当前镜(ADR 0061 §5)。播放器自己的 `at` 报上来,
+  //: 不另开一路时间状态;换一份素材就归零。
+  const [playhead, setPlayhead] = React.useState(0);
   // 顺着「来自」点进去看的出处:栈顶是正在看的那一份,「返回上一份」退一格。换了一份素材就清空。
   // 点的那一刻取一次就够(不进查询缓存):这张弹窗在很多地方是独立挂的,不该为了它要求外面有查询上下文。
   const [trail, setTrail] = React.useState<Asset[]>([]);
@@ -82,6 +85,7 @@ export function AssetPreviewModal({
   React.useEffect(() => {
     setCopied(false);
     setSeekTo(null);
+    setPlayhead(0);
   }, [shownId]);
 
   if (!asset) return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
@@ -160,6 +164,7 @@ export function AssetPreviewModal({
                 src={src}
                 assetId={shown.id}
                 seekTo={shown.kind === "video" ? seekTo : null}
+                onTime={setPlayhead}
               />
             )}
             {shown.kind === "document" && <DocumentReader assetId={shown.id} />}
@@ -256,6 +261,7 @@ export function AssetPreviewModal({
             {shown.kind === "video" && (
               <ShotBreakdownPanel
                 asset={shown}
+                playhead={playhead}
                 onSeek={(seconds) => setSeekTo((now) => ({ seconds, seq: (now?.seq ?? 0) + 1 }))}
               />
             )}

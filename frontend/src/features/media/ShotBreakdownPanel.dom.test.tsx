@@ -13,10 +13,10 @@
  */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import type { ShotBreakdown } from "@/api/domains/shots";
+import type { ShotBreakdown, ShotMotionTrack } from "@/api/domains/shots";
 import type { Asset } from "@/api/domains/assets";
 
 vi.mock("@/app/preferences", async () => {
@@ -26,12 +26,15 @@ vi.mock("@/app/preferences", async () => {
 });
 
 const getShotBreakdown = vi.fn();
+const getShotMotionTrack = vi.fn();
 const startShotBreakdown = vi.fn();
 const listJobs = vi.fn();
 
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   getShotBreakdown: (...args: unknown[]) => getShotBreakdown(...args),
+  //: 节奏条那条曲线(自己的画法在 ShotPaceStrip.dom.test.tsx);这里验的是**这一块怎么接它**。
+  getShotMotionTrack: (...args: unknown[]) => getShotMotionTrack(...args),
   startShotBreakdown: (...args: unknown[]) => startShotBreakdown(...args),
   listJobs: (...args: unknown[]) => listJobs(...args),
 }));
@@ -112,16 +115,41 @@ function ready(over: Partial<ShotBreakdown> = {}): ShotBreakdown {
 
 const none = { asset_id: "clip", status: "none", shots: [], hints: [], describe: {} } as unknown as ShotBreakdown;
 
+/** 整条动静曲线(`GET /assets/{id}/shots/track`)。缺省是量过的:40 秒、5Hz、200 个点。 */
+function track(over: Partial<ShotMotionTrack> = {}): ShotMotionTrack {
+  const values = new Array<number>(200).fill(6);
+  return {
+    asset_id: "clip",
+    status: "ready",
+    hz: 5,
+    points: values.length,
+    duration: 40,
+    first_sample_seconds: 0.2,
+    sample_interval_seconds: 0.2,
+    digest: "sha256:0123456789abcdef0123",
+    values,
+    ...over,
+  } as ShotMotionTrack;
+}
+
+/** 没量过的那一种:后端照旧 200,`values` 空。 */
+const noTrack = track({ status: "none", hz: 0, points: 0, duration: 0, first_sample_seconds: 0, sample_interval_seconds: 0, digest: "", values: [] });
+
 function show(panel = <ShotBreakdownPanel asset={asset} onSeek={vi.fn()} />) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  return render(<QueryClientProvider client={client}>{panel}</QueryClientProvider>);
+  const wrap = (node: React.ReactElement) => <QueryClientProvider client={client}>{node}</QueryClientProvider>;
+  const view = render(wrap(panel));
+  return { ...view, replay: (node: React.ReactElement) => view.rerender(wrap(node)) };
 }
 
 beforeEach(() => {
   getShotBreakdown.mockReset();
+  getShotMotionTrack.mockReset();
   startShotBreakdown.mockReset();
   listJobs.mockReset();
   listJobs.mockResolvedValue([]);
+  //: 这一份用例集测的是「镜头」那四种状态;曲线缺省给「没量过」,要曲线的自己覆盖。
+  getShotMotionTrack.mockResolvedValue(noTrack);
   noteProps.current = null;
   Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } });
 });
@@ -307,4 +335,94 @@ it("没判过画面:分镜提示词那颗按钮点不了", async () => {
   );
   show();
   expect(await screen.findByRole("button", { name: /复制分镜提示词/ })).toBeDisabled();
+});
+
+//: ⑧ 节奏条(ADR 0061 §5):整条动静曲线画在逐镜列表**上面**;点条上某一镜走的是详情那条 `onSeek`
+//: —— 和点一行同一条路,不另造第二个跳转机制。
+it("节奏条:画在逐镜列表上面,点条上某一镜报的是它的 start", async () => {
+  getShotBreakdown.mockResolvedValue(ready());
+  getShotMotionTrack.mockResolvedValue(track());
+  const onSeek = vi.fn();
+  const { container } = show(<ShotBreakdownPanel asset={asset} onSeek={onSeek} />);
+
+  const strip = await waitFor(() => {
+    const found = container.querySelector<HTMLElement>("[data-shot-pace]");
+    expect(found).not.toBeNull();
+    return found!;
+  });
+  //: 曲线 + 两处刀口(和镜头表里那两镜对得上)。
+  expect(strip.querySelector("[data-shot-pace-svg]")).not.toBeNull();
+  expect(strip.querySelectorAll("[data-pace-cut]")).toHaveLength(2);
+  expect(strip.querySelector("[data-pace-cut]")?.getAttribute("data-pace-cut")).toBe("S01");
+  //: 在逐镜列表**上面**。
+  const rows = container.querySelector("[data-shot-row]")!;
+  expect(strip.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  fireEvent.click(strip.querySelector('[data-shot-region="S02"]')!);
+  expect(onSeek).toHaveBeenCalledWith(12.4);
+});
+
+//: 当前镜高亮接的是**播放器报上来的秒数**,不是这一块自己猜的。
+it("节奏条:当前镜跟着播放器报上来的秒数走", async () => {
+  getShotBreakdown.mockResolvedValue(ready());
+  getShotMotionTrack.mockResolvedValue(track());
+  const panel = (playhead: number) => <ShotBreakdownPanel asset={asset} onSeek={vi.fn()} playhead={playhead} />;
+  const { container, replay } = show(panel(13));
+
+  await waitFor(() => expect(container.querySelector("[data-pace-current]")).not.toBeNull());
+  expect(container.querySelector("[data-pace-current]")!.getAttribute("data-pace-current")).toBe("S02");
+
+  replay(panel(0.5));
+  expect(container.querySelector("[data-pace-current]")!.getAttribute("data-pace-current")).toBe("S01");
+});
+
+//: ⑨ 没拆过:连刀口都没有,节奏条**不出现**(不是画一条空的)。
+it("没拆过:不出现节奏条,也不问曲线", async () => {
+  getShotBreakdown.mockResolvedValue(none);
+  const { container } = show();
+  await screen.findByRole("button", { name: /拆镜头/ });
+  expect(container.querySelector("[data-shot-pace]")).toBeNull();
+  expect(getShotMotionTrack).not.toHaveBeenCalled();
+});
+
+//: ⑩ `status: "none"`(没量过 / 老行没记):不画条,一句话说清拆一次就有。
+it("曲线没量过:不画条,说明拆一次就有", async () => {
+  getShotBreakdown.mockResolvedValue(ready());
+  const { container } = show();
+  await waitFor(() => expect(container.querySelector('[data-shot-pace-status="none"]')).not.toBeNull());
+  expect(container.querySelector("[data-shot-pace-svg]")).toBeNull();
+  //: 逐镜那一列照旧在 —— 曲线没了不该带走镜头表。
+  expect(container.querySelectorAll("[data-shot-row]")).toHaveLength(2);
+});
+
+//: ⑪ `status: "missing"`(库里记着、盘上那份没了):说出 points 与 digest,并给重拆的出口 ——
+//: 出口排的是**同一条**拆镜头任务(和上面那颗按钮同一条路)。
+it("曲线盘上丢了:说出 points 与 digest,重拆的出口排的是拆镜头任务", async () => {
+  getShotBreakdown.mockResolvedValue(ready());
+  getShotMotionTrack.mockResolvedValue(
+    track({ status: "missing", values: [], points: 18000, digest: "sha256:deadbeefdeadbeef" }),
+  );
+  startShotBreakdown.mockResolvedValue({ id: "job2", kind: "shot_breakdown", status: "queued", message: "拆镜头排队中", payload: { asset_id: "clip" } });
+  const { container } = show();
+
+  const line = await waitFor(() => {
+    const found = container.querySelector<HTMLElement>('[data-shot-pace-status="missing"]');
+    expect(found).not.toBeNull();
+    return found!;
+  });
+  expect(line.textContent).toContain("18000");
+  expect(line.textContent).toContain("deadbeefdead");
+  expect(container.querySelector("[data-shot-pace-svg]")).toBeNull();
+
+  fireEvent.click(within(line).getByRole("button", { name: /重拆/ }));
+  await waitFor(() => expect(startShotBreakdown).toHaveBeenCalledWith("clip"));
+});
+
+//: 曲线那条请求自己失败时,别把整块拖下水:一句话,逐镜列表照旧。
+it("曲线取不到:说一句,镜头列表照旧", async () => {
+  getShotBreakdown.mockResolvedValue(ready());
+  getShotMotionTrack.mockRejectedValue(new Error("boom"));
+  const { container } = show();
+  await waitFor(() => expect(container.querySelector('[data-shot-pace-status="error"]')).not.toBeNull());
+  expect(container.querySelectorAll("[data-shot-row]")).toHaveLength(2);
 });

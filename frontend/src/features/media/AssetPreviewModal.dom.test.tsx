@@ -14,6 +14,8 @@ vi.mock("@/api/client", () => ({
   fetchWaveform: async () => ({ peaks: [] }),
   //: 视频详情右栏的「镜头」那一块自己取数(ADR 0061 §5);它有自己的测试(ShotBreakdownPanel.dom.test.tsx)。
   getShotBreakdown: async () => ({ asset_id: "clip-asset", status: "none", shots: [], hints: [], describe: {} }),
+  //: 节奏条要的那条动静曲线(同一块自己有测试);没拆过时它根本不问(见 ShotBreakdownPanel 的 enabled)。
+  getShotMotionTrack: async () => ({ asset_id: "clip-asset", status: "none", hz: 0, points: 0, values: [] }),
   startShotBreakdown: async () => ({}),
   listJobs: async () => [],
 }));

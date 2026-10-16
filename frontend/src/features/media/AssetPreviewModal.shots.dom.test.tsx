@@ -53,6 +53,18 @@ const breakdown: ShotBreakdown = {
 vi.mock("@/api/client", async (original) => ({
   ...(await original<typeof import("@/api/client")>()),
   getShotBreakdown: async () => breakdown,
+  //: 节奏条那条曲线:这一份用例测的是「点行 → 播放器跳」,曲线给一条量过的就行。
+  getShotMotionTrack: async () => ({
+    asset_id: "clip",
+    status: "ready",
+    hz: 5,
+    points: 75,
+    duration: 15,
+    first_sample_seconds: 0.2,
+    sample_interval_seconds: 0.2,
+    digest: "sha256:0123456789abcdef0123",
+    values: new Array<number>(75).fill(9),
+  }),
   startShotBreakdown: vi.fn(),
   listJobs: async () => [],
 }));
