@@ -240,7 +240,7 @@ export const otherUi = {
   permModeBypassConfirmCta: "I understand, turn it on",
   autopilotTitle: "Auto-approve rules",
   autopilotDesc:
-    "When a conversation is set to auto-approve, these three kinds of irreversible action are decided here. The default is to always ask you; switch one to \"let the judge decide\" and a separate model call — blind to the conversation — decides whether to allow or ask. If it cannot tell, times out, or errors, it asks you. Notes can only tighten it; they can never allow anything on their own. Admins only.",
+    "When a conversation is set to auto-approve, irreversible actions are decided here: outbound requests, publishing, and running code (running code has three tiers — sandboxed / on this computer / Blender). The default is to always ask you; switch one to \"let the judge decide\" and a separate model call — blind to the conversation — decides whether to allow or ask. If it cannot tell, times out, or errors, it asks you. Notes can only tighten it; they can never allow anything on their own. Admins only.",
   autopilotHttp: "Outbound requests",
   autopilotHttpDesc: "Write requests to someone else's server — once sent, they cannot be taken back.",
   autopilotPublish: "Publishing",

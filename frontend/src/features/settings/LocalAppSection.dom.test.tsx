@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 /**
- * 「后端」这一页上的「打开外部文件」怎么处理。
+ * 「本机应用」这一页上的「打开外部文件」怎么处理。
  *
- * 这一行**原来钉在「外观」页**(老的 AppearanceSection.dom.test.tsx),而主题 / 语言 / 字体是"看着是什么样",
- * 「别的程序交来的文件怎么办」是"这台机器上的桌面壳怎么反应" —— 两件事。现在它和 StartupRow 挨着:
- * 两行配的都是本机桌面行为,判据也一样(`window.mosaelDesktop` 不在就不摆)。测试跟着这一行走。
+ * 这一行**原来钉在「外观」页**(老的 AppearanceSection.dom.test.tsx),后来挪到「后端」页和
+ * StartupRow 挨着 —— 而「后端」的说明只讲连着的后端与工作区标识,这两行配的却是**这台机器上的
+ * 桌面壳**行为,是两件事。现在它们一起有了自己的页(features/settings/LocalAppSection),测试跟着走。
  *
  * 三件事必须成立 —— 它是**桌面壳才摆**的(浏览器里没有别的程序能把文件交给它,摆一行改了没人读的设置
  * 只会让人以为它有用)、**默认是入库**(这个偏好出现之前唯一的行为,老用户升级上来不改设置还是老样子),
@@ -28,10 +28,21 @@ vi.mock("@/app/preferences", async (original) => ({
 }));
 
 import { PreferencesProvider } from "@/app/preferences";
-import { ExternalOpenRow } from "./BackendSection";
+import { ExternalOpenRow, LocalAppSection } from "./LocalAppSection";
+
+//: 版本那一行读的是构建期注入的 __APP_VERSION__。测试跑在 vite 的转换里,真机上有的这里也可能没有 ——
+//: 兜一个,免得为了那串数字把整页挂不上。
+vi.stubGlobal("__APP_VERSION__", "0.0.0-test");
 
 const desktopShell = (present: boolean) => {
-  if (present) (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = { platform: "darwin" };
+  if (present)
+    (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop = {
+      platform: "darwin",
+      //: 登录项那座桥在不在,决定了 StartupRow 摆不摆 —— 要和「桌面壳在不在」一致,否则整页挂上时
+      //: 那一行会静静地不出现,看着像回归。
+      getOpenAtLogin: vi.fn(async () => ({ enabled: true, needsApproval: false })),
+      setOpenAtLogin: vi.fn(async () => ({ enabled: true, needsApproval: false })),
+    };
   else delete (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop;
 };
 
@@ -48,6 +59,16 @@ const mount = () =>
     </QueryClientProvider>,
   );
 
+/** 整页挂上 —— 判据是「桌面壳不在时,桌面才有的那两行不摆」,单看一行证明不了这件事。 */
+const mountSection = () =>
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <PreferencesProvider>
+        <LocalAppSection />
+      </PreferencesProvider>
+    </QueryClientProvider>,
+  );
+
 const group = () => screen.getByRole("radiogroup", { name: "settingsExternalOpen" });
 
 beforeEach(() => {
@@ -59,7 +80,7 @@ afterEach(() => {
   desktopShell(false);
 });
 
-describe("「后端」页上的「打开外部文件」", () => {
+describe("「本机应用」页上的「打开外部文件」", () => {
   it("桌面壳里摆出这一行,两个选项,默认入库", () => {
     mount();
     expect(screen.getByText("settingsExternalOpen")).toBeInTheDocument();
@@ -93,5 +114,21 @@ describe("「后端」页上的「打开外部文件」", () => {
     desktopShell(false);
     const { container } = mount();
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("整页看:桌面壳里三行都在,浏览器里只剩版本那一行", async () => {
+    mountSection();
+    //: 开机自启那一行要等系统回读,是异步出现的。
+    expect(await screen.findByText("settingsStartup")).toBeInTheDocument();
+    expect(screen.getByText("settingsExternalOpen")).toBeInTheDocument();
+    expect(screen.getByText("settingsVersion")).toBeInTheDocument();
+
+    cleanup();
+    desktopShell(false);
+    mountSection();
+    //: 那两行说的是桌面壳行为,浏览器里没有东西会读它们;版本不是 —— 浏览器里也看得到。
+    expect(screen.queryByText("settingsStartup")).toBeNull();
+    expect(screen.queryByText("settingsExternalOpen")).toBeNull();
+    expect(screen.getByText("settingsVersion")).toBeInTheDocument();
   });
 });

@@ -21,7 +21,7 @@ vi.mock("@/app/preferences", () => ({
 const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toasts }));
 
-import { StartupRow } from "@/features/settings/BackendSection";
+import { StartupRow } from "@/features/settings/LocalAppSection";
 
 type State = { enabled: boolean; needsApproval: boolean } | null;
 

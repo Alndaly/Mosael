@@ -5,6 +5,7 @@ import {
   Link2,
   ImageIcon,
   MessageSquare,
+  Monitor,
   Palette,
   Server,
   ShieldCheck,
@@ -26,6 +27,7 @@ import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection
 import { BackendSection } from "@/features/settings/BackendSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
+import { LocalAppSection } from "@/features/settings/LocalAppSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { CapabilityProvidersSection } from "@/features/settings/CapabilityProvidersSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
@@ -150,14 +152,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         capabilities: ["tts", "podcast", "audio"],
         render: ({ t, focusCapability }) => (
           <>
+            {/* 音乐与音效是**生成**(和图像、视频同一条管线,ADR 0022),所以它有自己的默认模型。 */}
+            <ProviderDefaultsSection capabilities={["audio"]} focusCapability={focusCapability} />
             <ProviderProfilesSection capability="tts" title={t("providerTtsTitle")} description={t("providerTtsDesc")} />
             <ProviderProfilesSection
               capability="podcast"
               title={t("providerPodcastTitle")}
               description={t("providerPodcastDesc")}
             />
-            {/* 音乐与音效是**生成**(和图像、视频同一条管线,ADR 0022),所以它有自己的默认模型。 */}
-            <ProviderDefaultsSection capabilities={["audio"]} focusCapability={focusCapability} />
             <ProviderProfilesSection
               capability="audio"
               title={t("providerMusicTitle")}
@@ -222,6 +224,15 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "settingsBackend",
         icon: <Server size={14} />,
         render: ({ workspace }) => <BackendSection workspace={workspace} />,
+      },
+      {
+        // **这台电脑上应用自己的事,不跟「连着哪台后端」混。** 此前开机自启、打开外部文件、版本与
+        // 检查更新三行挂在「后端」页,而那一页的说明只讲后端与工作区标识 —— 六行里三行对不上说明。
+        // 那三行说的是这台机器上的桌面壳行为(前两行还只在桌面壳里摆),所以有自己的页。
+        id: "local-app",
+        label: "settingsLocalAppTitle",
+        icon: <Monitor size={14} />,
+        render: () => <LocalAppSection />,
       },
     ],
   },

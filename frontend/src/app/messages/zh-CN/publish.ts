@@ -123,7 +123,7 @@ export const publish = {
   voiceMode_off: "点一下开始",
   voiceDockHeard: "听到:",
   agentVoiceTitle: "语音对话",
-  agentVoiceDesc: "智能体说话时用哪个声音。和配音的默认音色是分开的两份配置 —— 配音要质量,对话要快。",
+  agentVoiceDesc: "智能体说话时用哪个声音。和配音的默认音色是分开的两份配置 —— 配音要质量,对话要快。下面「免提浮标」只在这台设备上生效,其余几项跟着你的账号走。",
   agentVoiceEnabled: "让它出声",
   agentVoiceEnabledDesc: "关掉就只用文字。说话输入不受这个开关影响。",
   agentVoiceEngine: "引擎",

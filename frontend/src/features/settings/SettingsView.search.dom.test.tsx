@@ -23,6 +23,7 @@ vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => nul
 vi.mock("@/features/settings/BuiltinTtsSection", () => ({ BuiltinTtsSection: () => null }));
 vi.mock("@/features/settings/CapabilityProvidersSection", () => ({ CapabilityProvidersSection: () => null }));
 vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null }));
+vi.mock("@/features/settings/LocalAppSection", () => ({ LocalAppSection: () => null }));
 vi.mock("@/features/settings/ProviderDefaultsSection", () => ({ ProviderDefaultsSection: () => null }));
 vi.mock("@/features/settings/ProviderProfilesSection", () => ({ ProviderProfilesSection: () => null }));
 vi.mock("@/features/settings/TeamSection", () => ({ TeamSection: () => null }));
@@ -49,10 +50,12 @@ it("搜「语言」落到「外观」,并写出是里面的哪一行", () => {
   expect(screen.queryByText(messages["zh-CN"].studioSettingsEmpty)).toBeNull();
 });
 
-it("搜「打开外部文件」落到「后端」—— 这一行从「外观」挪到了那儿,搜索也得跟着走", () => {
+it("搜「打开外部文件」落到「本机应用」—— 这一行从「外观」挪到「后端」、这次又挪到了「本机应用」,搜索得跟着走", () => {
   search("打开外部文件");
   const nav = screen.getByRole("navigation");
-  expect(within(nav).getByRole("button", { name: /后端/ }).textContent).toContain("打开外部文件");
+  expect(within(nav).getByRole("button", { name: /本机应用/ }).textContent).toContain("打开外部文件");
+  //: 旧位置不再认领它 —— 「后端」那一页剩下的是服务器、接口地址、工作区标识。
+  expect(within(nav).queryByRole("button", { name: /后端/ })).toBeNull();
   expect(screen.queryByText(messages["zh-CN"].studioSettingsEmpty)).toBeNull();
 });
 

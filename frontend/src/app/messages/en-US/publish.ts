@@ -122,7 +122,7 @@ export const publish = {
   voiceMode_off: "Tap to start",
   voiceDockHeard: "Heard: ",
   agentVoiceTitle: "Spoken replies",
-  agentVoiceDesc: "The voice the agent speaks in. Kept separate from the dubbing default — dubbing wants quality, conversation wants speed.",
+  agentVoiceDesc: "The voice the agent speaks in. Kept separate from the dubbing default — dubbing wants quality, conversation wants speed. The “Hands-free dock” below is per device; the other items follow your account.",
   agentVoiceEnabled: "Speak replies",
   agentVoiceEnabledDesc: "Off means text only. Speaking into the composer is unaffected.",
   agentVoiceEngine: "Engine",

@@ -315,7 +315,3 @@ function normalizeProfile(profile: { username: string; display_name: string; sig
 function profileKey(profile: { username: string; display_name: string; signature: string }) {
   return `${profile.username}\n${profile.display_name}\n${profile.signature}`;
 }
-
-/** 开机自启(仅桌面端渲染,且开发模式下主进程不暴露——那时 execPath 是裸 Electron)。
- *  和「关窗收进托盘」是一对:后者让应用关窗后还活着,前者让它开机就活着。定时任务依赖
- *  后端进程存活(后端是主进程 spawn 的子进程),两者缺一,到点就不会触发。 */

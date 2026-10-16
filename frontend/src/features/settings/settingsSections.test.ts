@@ -20,6 +20,7 @@ vi.mock("@/features/settings/AutopilotRulesSection", () => ({ AutopilotRulesSect
 vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => null }));
 vi.mock("@/features/settings/BuiltinTtsSection", () => ({ BuiltinTtsSection: () => null }));
 vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null }));
+vi.mock("@/features/settings/LocalAppSection", () => ({ LocalAppSection: () => null }));
 vi.mock("@/features/settings/ProviderDefaultsSection", () => ({ ProviderDefaultsSection: () => null }));
 vi.mock("@/features/settings/ProviderProfilesSection", () => ({ ProviderProfilesSection: () => null }));
 vi.mock("@/features/settings/TeamSection", () => ({ TeamSection: () => null }));
