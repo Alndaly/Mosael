@@ -213,7 +213,13 @@ def test_暂停落在库里_重启收尾之后仍在等() -> None:
     #: 等的是**「门又走了一遍」这件事本身**(门自己 started 第二次、第二条 awaiting 事件),
     #: 不是那句从第一次暂停起就没变过的任务消息 —— 等那句话的话,这一条在"其实根本没接回来"
     #: 时也会绿(而它正是要证"接回来了")。
-    _wait_for(lambda: _started(job_id, "gate") >= 2, what="重启收尾把这次运行接回来")
+    #: 两件事**都要等**:门第二次 started 写在派发那一刻,而第二条 awaiting 事件要等门跑完、
+    #: 重新停回那张单上才落库(engine 线 905 → 922 → _park_at_approval 的 emit_job_event)。
+    #: 只等 started 的话,机器一忙就会在两者之间读到 1,红的是这一条而不是真没接回来。
+    _wait_for(
+        lambda: _started(job_id, "gate") >= 2 and _events(job_id, "workflow.awaiting_approval") >= 2,
+        what="重启收尾把这次运行接回来",
+    )
     assert _events(job_id, "workflow.awaiting_approval") == 2, "接回来之后要重新停在同一张单上"
     assert _projects(ws) == 1, "恢复不该重跑暂停点前面的节点"
     assert _started(job_id, "make") == 1
