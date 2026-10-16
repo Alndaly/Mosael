@@ -459,6 +459,8 @@ export function ChatWorkspace({
           workspaceId={workspace.id}
           sessions={everything.data ?? []}
           loaded={everything.isSuccess}
+          //: 还没读到就铺骨架:此前这一列在智能体读回来之前看着和"一条对话都没有"一模一样(见 SessionList 的 loading)
+          loading={everything.isPending}
           activeSessionId={activeSession?.id ?? null}
           onSelect={current.select}
           onCreate={current.startDraft}

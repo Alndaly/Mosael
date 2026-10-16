@@ -1332,6 +1332,8 @@ export function GenerateWorkspace({
           workspaceId={workspace.id}
           sessions={listedSessions}
           loaded={sessions.isSuccess}
+          //: 还没读到就铺骨架,别让这一列看着像"一条创作都没有"(见 SessionList 的 loading)
+          loading={sessions.isPending}
           activeSessionId={activeSession?.id ?? null}
           onSelect={(id) => {
             setSessionId(id);

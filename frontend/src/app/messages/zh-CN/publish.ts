@@ -319,6 +319,7 @@ export const publish = {
   poolNamePlaceholder: "如:抖音小号 / 采集账号",
   poolProxyHint: "留空=直连。格式 http(s)://[user:pass@]host:port 或 socks5://host:port。",
   chatNoSessions: "还没有对话,在右边说第一句话就开一段。",
+  chatSessionsLoading: "读取对话…",
   chatSearchSessions: "搜索对话…",
   chatSearchNoMatch: "没有匹配的对话",
   chatNewGroup: "新建分组",

@@ -116,6 +116,7 @@ export const aiStudio = {
   agentPlaceHiddenComfy: "一台 ComfyUI",
   generationNewSession: "新生成",
   generationNoSessions: "还没有创作会话",
+  generationSessionsLoading: "读取创作会话…",
   generationSessionReadOnly: "这条会话是同事共享给你看的,只能查看。想接着生成,新建一条自己的会话。",
   chatSessionReadOnly: "这条对话是同事共享给你看的,只能查看。想接着聊,新建一条自己的对话。",
   agentDecisionOwnerOnly: "等对话的主人拍板",

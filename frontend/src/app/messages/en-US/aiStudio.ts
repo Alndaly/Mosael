@@ -116,6 +116,7 @@ export const aiStudio = {
   agentPlaceHiddenComfy: "a ComfyUI connection",
   generationNewSession: "New generation",
   generationNoSessions: "No creations yet",
+  generationSessionsLoading: "Loading creations…",
   generationSessionReadOnly: "A teammate shared this session with you to view. To keep generating, start a session of your own.",
   chatSessionReadOnly: "A teammate shared this conversation with you to view. To keep talking, start a conversation of your own.",
   agentDecisionOwnerOnly: "Waiting for the conversation's owner to decide.",

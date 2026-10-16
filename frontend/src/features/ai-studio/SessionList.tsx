@@ -33,6 +33,7 @@ import {
 import { IconButton } from "@/components/ui/icon-button";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import { MenuItemBody } from "@/components/ui/menu";
+import { Skeleton, SkeletonLine } from "@/components/ui/skeleton";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { SessionShareMenuItem } from "@/features/ai-studio/SessionShareMenuItem";
@@ -84,6 +85,11 @@ interface SessionKindSpec {
   title: MessageKey;
   newSession: MessageKey;
   empty: MessageKey;
+  /**
+   * 列表还在读时给读屏念的那一句(见 SessionListSkeleton)。两种会话说的不是同一样东西 ——
+   * 「读取对话…」/「读取创作会话…」,所以它和 `empty` 一样落在这一张表里。
+   */
+  loading: MessageKey;
   searchPlaceholder: MessageKey;
   searchNoMatch: MessageKey;
   renameTitle: MessageKey;
@@ -106,6 +112,7 @@ const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
     title: "chatSessionsTitle",
     newSession: "chatNewSession",
     empty: "chatNoSessions",
+    loading: "chatSessionsLoading",
     searchPlaceholder: "chatSearchSessions",
     searchNoMatch: "chatSearchNoMatch",
     renameTitle: "renameSession",
@@ -121,6 +128,7 @@ const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
     title: "generationSessionsTitle",
     newSession: "generationNewSession",
     empty: "generationNoSessions",
+    loading: "generationSessionsLoading",
     searchPlaceholder: "generationSearchSessions",
     searchNoMatch: "generationSearchNoMatch",
     renameTitle: "renameGenerationSession",
@@ -145,6 +153,68 @@ function moveSessionToGroup(kind: SessionGroupKind, sessionId: string, groupId: 
 }
 
 /**
+ * 一行的**壳**:那一圈内边距 + 标题/副标题那一列。真行(见 SessionRow 的 rowButton)和加载中的
+ * 骨架行共用这一串 —— 各写一份的话,哪天改了内边距,加载完列表就会整体挪一下(见 SessionListSkeleton)。
+ */
+const SESSION_ROW_BODY =
+  "grid w-full grid-cols-[minmax(0,1fr)] items-center gap-px border-0 bg-transparent px-3 py-3 text-left";
+
+/** 一屏大概放得下的行数。它说的是「正在来」,不是「有 6 条」—— 真有几条此刻还不知道。 */
+const SESSION_SKELETON_ROWS = 6;
+
+/** 标题长短不一。一样宽的一列灰条看着像一张表格,不像一份会话清单。 */
+const SESSION_SKELETON_WIDTHS = ["62%", "44%", "78%", "35%", "55%", "70%"];
+
+/**
+ * 会话列表**还没读回来**时的样子。
+ *
+ * 维护者报的:AI Studio 左边的「对话记录」在智能体读回来之前**看着是空的** —— 上面还先闪出一排
+ * 「素材调研 0 / 素材生成 0」的分组,像是这个工作区一条都没有。其实是还没到。
+ *
+ * 所以这几行照**真行**的版式铺(同一个 SESSION_ROW_BODY、同样那两行字),分组标题那一块也占着
+ * (照 GroupToggle 的排版,但它是块死占位:不是按钮、不转、不悬停变色,免得看着像能点)。
+ * 空态那两句(chatNoSessions / generationNoSessions)只留给**确实没有**,搜索无果那条路也不铺骨架。
+ *
+ * 读屏那边:一个 `role="status"` + `aria-busy` 的状态区,里面只有一句 sr-only 的话;那些假行
+ * 各自 `aria-hidden` —— 一屏灰条不该被念成「这里有六条对话」(既有约定见 AssetGridPicker 的 GridSkeleton)。
+ */
+function SessionListSkeleton({ label, rows = SESSION_SKELETON_ROWS }: { label: string; rows?: number }) {
+  return (
+    <div role="status" aria-busy="true" data-session-skeleton="" className="grid content-start gap-1">
+      <span className="sr-only">{label}</span>
+      <div
+        aria-hidden="true"
+        data-session-skeleton-group=""
+        className="flex w-full items-center gap-1 px-1.5 py-1 text-left text-ui-xs font-medium"
+      >
+        <Skeleton className="size-3 shrink-0 rounded-sm" />
+        <span className="flex-1">
+          <SkeletonLine className="w-[72px]" />
+        </span>
+        <Skeleton className="h-2.5 w-3 shrink-0" />
+      </div>
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} aria-hidden="true" data-session-skeleton-row="" className={SESSION_ROW_BODY}>
+          <span className="grid min-w-0 gap-0.5">
+            {/* 字号落在**外层**这一格上:两行字的高度由它定(`lh` 相对这一层的行高)。 */}
+            <span className="text-ui-sm">
+              <SkeletonLine className={SESSION_SKELETON_WIDTHS[index % SESSION_SKELETON_WIDTHS.length]} />
+            </span>
+            {/* 真列表里不是每行都有副标题(家就在这一处的对话没有「在别处开的」那句):骨架也长短不一,
+                整屏都是两行的话,加载完会看着矮一截。 */}
+            {index % 3 !== 2 && (
+              <span className="text-ui-xs">
+                <SkeletonLine className="w-[38%]" />
+              </span>
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 左侧的对话列表:分组收纳 + 批量删除。
  *
  * 从 ChatWorkspace 抽出来 —— 那个文件已经一千多行,而"列表怎么组织"和"这一轮怎么跑"
@@ -158,6 +228,7 @@ export function SessionList<S extends ListedSession>({
   workspaceId,
   sessions,
   loaded,
+  loading = false,
   activeSessionId,
   onSelect,
   onCreate,
@@ -174,6 +245,14 @@ export function SessionList<S extends ListedSession>({
   workspaceId: string;
   sessions: S[];
   loaded: boolean;
+  /**
+   * 这一列还在从服务端读。调用方给的是那条查询的 `isPending`(`isPending` 只在**一条都还没读到**时为真,
+   * 所以轮询的每一次重取不会把列表换成骨架)。
+   *
+   * 「还没读到」和「确实没有」是两回事:前者铺骨架(见 SessionListSkeleton),后者的空态
+   * (chatNoSessions / generationNoSessions)只留给后者。没给 = 不铺。
+   */
+  loading?: boolean;
   activeSessionId: string | null;
   onSelect: (id: string) => void;
   onCreate: () => void;
@@ -322,6 +401,8 @@ export function SessionList<S extends ListedSession>({
   }, [visible, groupList, aside?.isAside]);
   //: 这里开的一条都没有(「来自别处」那摞不算):空态照说
   const mainCount = aside ? sessions.filter((session) => !aside.isAside(session)).length : sessions.length;
+  //: 铺骨架:**还没读到任何一条**的时候。读到过的照旧摆着 —— 轮询重取(对话那一列每 4 秒一次)不该把列表换成骨架。
+  const showSkeleton = loading && sessions.length === 0;
   const asideShown = asideOpen || Boolean(keyword);
   //: 开着的那条在「来自别处」里(从任务中心、「在哪里用过」、「回到」带过来的):展开,看得见它在哪一行;之后照样能合上
   const activeInAside = Boolean(activeSessionId) && byGroup.aside.some((session) => session.id === activeSessionId);
@@ -486,76 +567,83 @@ export function SessionList<S extends ListedSession>({
       <div
         className={cn(
           "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto overflow-x-hidden p-1.5",
-          loaded && ((mainCount === 0 && groupList.length === 0 && byGroup.aside.length === 0) || (Boolean(keyword) && visible.length === 0)) &&
+          !showSkeleton && loaded && ((mainCount === 0 && groupList.length === 0 && byGroup.aside.length === 0) || (Boolean(keyword) && visible.length === 0)) &&
             "content-center justify-items-center",
         )}
       >
-        {loaded && mainCount === 0 && groupList.length === 0 && !keyword && (
-          <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={emptyTitle ?? t(spec.empty)} />
-        )}
-        {keyword && visible.length === 0 && (
-          <EmptyState size="compact" icon={<SearchX size={15} />} title={t(spec.searchNoMatch)} />
-        )}
-        {groupList.map((group) => {
-          const members = byGroup.map.get(group.id) ?? [];
-          // 搜索时把没命中的分组整段收起 —— 一排「某某 0」既占地方,又让人以为搜错了。
-          // 不搜索时空分组要留着:刚建出来的那个得看得见,否则没地方往里拖。
-          if (keyword && members.length === 0) return null;
-          const isCollapsed = collapsed.has(group.id);
-          return (
-            <GroupSection key={group.id} groupId={group.id}>
-              <ContextMenu>
-                <ContextMenuTrigger asChild>
-                  <GroupToggle
-                    open={!isCollapsed}
-                    label={group.name}
-                    count={members.length}
-                    onClick={() =>
-                      setCollapsed((current) => {
-                        const next = new Set(current);
-                        if (next.has(group.id)) next.delete(group.id);
-                        else next.add(group.id);
-                        return next;
-                      })
-                    }
-                  />
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setRenamingGroup(group)}>
-                    <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    className="text-destructive focus:text-destructive"
-                    disabled={Boolean(writeBlocked)}
-                    onSelect={() => setDeletingGroup(group)}
-                  >
-                    <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-              {!isCollapsed && (
-                <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>
-              )}
-            </GroupSection>
-          );
-        })}
-        {/* 「未分组」这个小标题只在**真有分组**时才出现 —— 一个分组都没建过的人不该被告知
-            他的对话"未分组"。 */}
-        {groupList.length > 0 && byGroup.main.length > 0 && (
-          // separator 变体 = 左右两条细线夹住中间那几个字。它本来就是 Marker 的
-          //「带标签的分隔线」那一档 —— 这一段不是标题,是"下面这些没归到任何分组"的分界。
-          <Marker variant="separator" className="px-1.5 pt-1">
-            <MarkerContent className="text-ui-xs font-medium">
-              {t("chatUngrouped")}
-            </MarkerContent>
-          </Marker>
-        )}
-        {byGroup.main.map(renderSession)}
-        {aside && byGroup.aside.length > 0 && (
-          <div className="grid gap-1 pt-1" data-session-aside="">
-            <GroupToggle open={asideShown} label={aside.title} count={byGroup.aside.length} onClick={() => setAsideOpen(!asideOpen)} />
-            {asideShown && byGroup.aside.map(renderSession)}
-          </div>
+        {/* 还没读到:铺一屏骨架,而不是一个看着像「一条都没有」的空格子(见 SessionListSkeleton)。
+            空态那两句、分组计数都在这一支外面 —— 它们只说「确实没有」。 */}
+        {showSkeleton && <SessionListSkeleton label={t(spec.loading)} />}
+        {!showSkeleton && (
+          <>
+          {loaded && mainCount === 0 && groupList.length === 0 && !keyword && (
+            <EmptyState size="compact" icon={<MessageSquarePlus size={15} />} title={emptyTitle ?? t(spec.empty)} />
+          )}
+          {keyword && visible.length === 0 && (
+            <EmptyState size="compact" icon={<SearchX size={15} />} title={t(spec.searchNoMatch)} />
+          )}
+          {groupList.map((group) => {
+            const members = byGroup.map.get(group.id) ?? [];
+            // 搜索时把没命中的分组整段收起 —— 一排「某某 0」既占地方,又让人以为搜错了。
+            // 不搜索时空分组要留着:刚建出来的那个得看得见,否则没地方往里拖。
+            if (keyword && members.length === 0) return null;
+            const isCollapsed = collapsed.has(group.id);
+            return (
+              <GroupSection key={group.id} groupId={group.id}>
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <GroupToggle
+                      open={!isCollapsed}
+                      label={group.name}
+                      count={members.length}
+                      onClick={() =>
+                        setCollapsed((current) => {
+                          const next = new Set(current);
+                          if (next.has(group.id)) next.delete(group.id);
+                          else next.add(group.id);
+                          return next;
+                        })
+                      }
+                    />
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem disabled={Boolean(writeBlocked)} onSelect={() => setRenamingGroup(group)}>
+                      <MenuItemBody icon={<Pencil />} label={t("rename")} description={writeBlocked?.brief} />
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={Boolean(writeBlocked)}
+                      onSelect={() => setDeletingGroup(group)}
+                    >
+                      <MenuItemBody icon={<Trash2 />} label={t("delete")} description={writeBlocked?.brief} />
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+                {!isCollapsed && (
+                  <div className="grid gap-1 pl-2">{members.map(renderSession)}</div>
+                )}
+              </GroupSection>
+            );
+          })}
+          {/* 「未分组」这个小标题只在**真有分组**时才出现 —— 一个分组都没建过的人不该被告知
+              他的对话"未分组"。 */}
+          {groupList.length > 0 && byGroup.main.length > 0 && (
+            // separator 变体 = 左右两条细线夹住中间那几个字。它本来就是 Marker 的
+            //「带标签的分隔线」那一档 —— 这一段不是标题,是"下面这些没归到任何分组"的分界。
+            <Marker variant="separator" className="px-1.5 pt-1">
+              <MarkerContent className="text-ui-xs font-medium">
+                {t("chatUngrouped")}
+              </MarkerContent>
+            </Marker>
+          )}
+          {byGroup.main.map(renderSession)}
+          {aside && byGroup.aside.length > 0 && (
+            <div className="grid gap-1 pt-1" data-session-aside="">
+              <GroupToggle open={asideShown} label={aside.title} count={byGroup.aside.length} onClick={() => setAsideOpen(!asideOpen)} />
+              {asideShown && byGroup.aside.map(renderSession)}
+            </div>
+          )}
+          </>
         )}
       </div>
       {/* 拖起来时跟手的那一片 —— 没有它,拖动中的行只是原地变淡,看不出自己在拖什么。 */}
@@ -715,7 +803,8 @@ function SessionRow({
       ref={setNodeRef}
       type="button"
       className={cn(
-        "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px border-0 bg-transparent px-3 py-3 text-left",
+        SESSION_ROW_BODY,
+        "cursor-pointer",
         selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
         extra,
       )}
