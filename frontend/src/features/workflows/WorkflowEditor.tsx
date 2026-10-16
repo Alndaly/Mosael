@@ -511,6 +511,7 @@ export function WorkflowEditor({
     nodes,
     graph,
     registry,
+    workspaceId,
     refName,
     portNamer,
     t,

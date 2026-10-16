@@ -14,6 +14,7 @@ import { assetOutputs, outputRows } from "@/features/workflows/runSteps";
 import type { WorkflowRunState } from "@/features/workflows/useWorkflowRun";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 import { configAssetId, workflowIssueText, workflowNodeSubtitle, workflowPortPresentation } from "@/features/workflows/workflowCanvasModel";
+import { feishuTargetParents, useFeishuTargetNames } from "@/features/workflows/feishuTargets";
 import type { ScopePath } from "@/features/workflows/scope";
 import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
 import { nodePorts } from "@/features/workflows/workflowPorts";
@@ -115,6 +116,7 @@ export function useWorkflowDisplayNodes({
   nodes,
   graph,
   registry,
+  workspaceId,
   t,
   layerIssues,
   runByNode,
@@ -133,6 +135,8 @@ export function useWorkflowDisplayNodes({
   nodes: Node[];
   graph: WorkflowGraph;
   registry: Map<string, WorkflowNodeType>;
+  /** 现查收件人目录要它(见 feishuTargets)。 */
+  workspaceId: string;
   t: ReturnType<typeof useI18n>;
   layerIssues: WorkflowRunState["layerIssues"];
   runByNode: WorkflowRunState["runByNode"];
@@ -158,6 +162,10 @@ export function useWorkflowDisplayNodes({
   const unusableReasons = useUnusableNodeReasons(unknownTypes);
   //: 卡片上那一行写选中的模型叫什么(两层名字的主名,见 workflowNodeSubtitle):和检查器、AI Studio 读同一份缓存
   const generationModels = useGenerationOptions(GENERATION_KINDS);
+  //: 飞书那两个节点卡上的收件人写**名字**而不是 `ou_…`:那一格的目录在这里取(只有这一张图真的用得上
+  //: 哪一档才去问,见 feishuTargetParents)。查不到的值照旧写 id,不编名字。
+  const feishuParents = React.useMemo(() => feishuTargetParents(graph), [graph]);
+  const feishuNames = useFeishuTargetNames(workspaceId, feishuParents);
   return React.useMemo(
     () => {
       //: 画布节点(react-flow 的)身上没有 config,配置在图里。按 id 取回来。
@@ -191,13 +199,13 @@ export function useWorkflowDisplayNodes({
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
             configAssetId: configAssetId(graphNode(node.id), registry),
-            configSummary: workflowNodeSubtitle(graphNode(node.id), registry, generationModels.options, t, generationModels.loaded),
+            configSummary: workflowNodeSubtitle(graphNode(node.id), registry, generationModels.options, t, generationModels.loaded, feishuNames),
             ...workflowPortPresentation(graphNode(node.id), node.data as WorkflowNodeData, registry, portNamer),
           },
         };
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded, feishuNames],
   );
 }

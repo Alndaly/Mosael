@@ -11,7 +11,7 @@ import {
   type NodeIssue,
 } from "@/features/workflows/analyze";
 import type { PortNamer } from "@/features/workflows/portNames";
-import { feishuChannelSummary } from "@/features/workflows/feishuChannel";
+import { feishuChannelSummary, type FeishuTargetNamer } from "@/features/workflows/feishuChannel";
 import type { ScopePath } from "@/features/workflows/scope";
 import { plainRefName } from "@/features/workflows/workflowRefCatalog";
 import { nodePorts } from "@/features/workflows/workflowPorts";
@@ -61,6 +61,8 @@ export function workflowConfigSummary(node: WorkflowGraph["nodes"][number]): str
  * - 选了生成模型的节点(`ai_generate` 的连接 + 模型;资产、说话这类按生成选项 id 选的):写那个模型的**主名**,现查生成选项
  *   —— 此前写的是原始模型 id,表单入口就是 `krea2-text-2-image.json#app` 这种字直接露在画布上。查不到(模型现在用不了)写
  *   「之前选的模型 · 用不了」(为什么在检查器里),也不写 id;清单还没到(`loaded` 为假)先不写;
+ * - 飞书那两个会发卡的节点:写「发给谁」——收件人那一格存的是某个应用眼里的 id(open_id / chat_id),
+ *   姓名只有那一格的**选项目录**知道,所以由画布把目录喂进来(`feishuNames`);查不到就照旧写 id。
  * - 插件节点:写它是哪张工作流的哪个入口(「来自 krea2-text-2-image」/「完整工作流」),节点按插件聚合、不分连接,不写连接名;
  * - 别的照旧按配置挑一格(workflowConfigSummary)。
  */
@@ -70,6 +72,8 @@ export function workflowNodeSubtitle(
   options: readonly GenerationOption[],
   t: (key: MessageKey) => string,
   loaded = true,
+  /** 飞书收件人那一格的选项目录(值 → 名字,见 feishuChannel 的 FeishuTargetNamer)。 */
+  feishuNames?: FeishuTargetNamer,
 ): string {
   const config = node.config ?? {};
   const model = String(config.model ?? "").trim();
@@ -81,7 +85,7 @@ export function workflowNodeSubtitle(
   }
   //: 「等人确认」和「发飞书消息」先把**飞书那一面**说在卡上(发不发、发给谁):此前它完全是隐式的,
   //: 不点开检查器看不出这个门会发卡,更看不出发给谁(见 feishuChannel)。
-  const feishu = feishuChannelSummary(node.type, config, t);
+  const feishu = feishuChannelSummary(node.type, config, t, feishuNames);
   if (feishu) return feishu;
   const origin = entryOrigin(registry.get(node.type)?.group, formedGroups(registry.values()), t);
   return origin || workflowConfigSummary(node);

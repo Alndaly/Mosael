@@ -121,6 +121,13 @@ export type FieldOption = {
   profile_name?: string;
   /** 是哪张工作流的哪个入口(不叫 `group`:下拉选项的 `group` 是分组标题)。 */
   entry_group?: components["schemas"]["EntryGroupOut"] | null;
+  /**
+   * 这一项属于**哪台机器人** —— 只有飞书「收件人」那一格带它(`feishu_targets`)。那一格的值是
+   * 某台应用眼里的 open_id / chat_id(open_id 按飞书应用隔离),所以选中它时要把节点上 `bot` 那一格
+   * 一并写上;清单没说就不写(见 NodeConfigForm 的 optionBotWrite)。接口返回的是 `list[dict]`,
+   * 多带几格原样过来,不需要重生 schema。
+   */
+  bot_id?: string;
 };
 
 export function fetchWorkflowFieldOptions(

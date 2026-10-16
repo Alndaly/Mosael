@@ -421,3 +421,74 @@ describe("节点表单", () => {
     expect(screen.queryByRole("option", { name: "outside · text" })).toBeNull();
   });
 });
+
+describe("收件人那一格:哪台机器人跟着一起写", () => {
+  /**
+   * 「收件人」存的是**某个飞书应用眼里**的 open_id / chat_id —— open_id 按应用隔离,同一个人的两串
+   * id 互不通用。而清单本来就是按机器人列出来的(后端 field_options 的 `_feishu_bound_users` /
+   * `_feishu_chats`),所以"这一项属于哪台"只有**清单**知道:选了 B 的人却让运行拿 A 去发,飞书直接拒
+   * (维护者报的那一条)。选项里带着哪台就写哪台;没带就**什么都不写** —— 按 label 里的机器人名反推是猜。
+   */
+  const specs = {
+    channel: { type: "string", default: "user", options: ["user", "chat"], label: "往哪发" },
+    to: { type: "string", required: true, depends_on: "channel", options_from: "feishu_targets", allow_custom: true, label: "收件人" },
+    bot: { type: "string", options_from: "feishu_bots", advanced: true, label: "机器人" },
+  } as unknown as Record<string, ConfigSpec>;
+
+  function renderRecipient(recipients: unknown[]) {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://x");
+      const body = url.searchParams.get("source") === "feishu_targets" ? recipients : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }) as never;
+    const onSetConfig = vi.fn();
+    const onPatchConfig = vi.fn();
+    function Host() {
+      const config = { channel: "user" };
+      const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId: "w1", nodeType: "feishu_message" });
+      return (
+        <NodeConfigForm
+          fields={Object.entries(specs)}
+          config={config}
+          workspaceId="w1"
+          variables={[]}
+          fieldOptions={fieldOptions}
+          onSetConfig={onSetConfig}
+          onTypeConfig={vi.fn()}
+          onPatchConfig={onPatchConfig}
+        />
+      );
+    }
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <TooltipProvider>
+          <Host />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    return { onSetConfig, onPatchConfig };
+  }
+
+  async function pick(label: string) {
+    const user = userEvent.setup();
+    const field = document.querySelector<HTMLElement>('[data-field-key="to"]')!;
+    await user.click(within(field).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: label }));
+  }
+
+  it("选了某一台机器人的收件人,`bot` 那一格跟着写成它", async () => {
+    const { onPatchConfig } = renderRecipient([
+      { value: "ou_b", label: "张三 · 机器人 B", bot_id: "bot-b" },
+      { value: "ou_a", label: "张三 · 机器人 A", bot_id: "bot-a" },
+    ]);
+    await pick("张三 · 机器人 B");
+    expect(onPatchConfig).toHaveBeenLastCalledWith("to", { to: "ou_b", bot: "bot-b" }, false);
+  });
+
+  it("清单没带是哪台的:只写这一格,绝不按名字猜一个机器人", async () => {
+    const { onSetConfig, onPatchConfig } = renderRecipient([{ value: "ou_b", label: "张三 · 机器人 B" }]);
+    await pick("张三 · 机器人 B");
+    expect(onSetConfig).toHaveBeenLastCalledWith("to", "ou_b");
+    expect(onPatchConfig).not.toHaveBeenCalled();
+  });
+});

@@ -225,6 +225,8 @@ export const nodeToolbar = {
   wfRefUseField: "Reference “{ref}”",
   wfRefMissingNode: "There's no node “{node}” — it may have been deleted, renamed or mistyped; pick an upstream output again",
   wfRefMissingOutput: "“{node}” has no output “{output}” — pick an upstream output again",
+  //: The remembered entry (stored as an id) is no longer in the list. The list no longer has it, so the note only says “pick again” — **no name is invented**.
+  wfValueNotInList: "The remembered entry is no longer in the list — pick another one",
   wfAgentEmpty: "Describe the flow you want — I'll build or edit nodes; changes go through confirmation cards.",
   editorAgentEmpty: "Tell me how you want this timeline adjusted — tighten pacing, move or trim clips, add tracks, or change the picture; edits go through confirmation cards.",
   editorAgentPlaceholder: "e.g. shorten each of the first three clips by 0.5 seconds, then close the gaps",
@@ -386,5 +388,9 @@ export const nodeToolbar = {
   feishuBindHint: "The bot acts with the bound member's permissions. Send this code to the bot from Feishu to bind (valid 10 min). Unbound users can't use it.",
   feishuBindMembers: "Bound Feishu users",
   feishuBindNobody: "Nobody bound yet",
+  //: A stale row the workspace can't place: open_ids are per-app, so this one doesn't hold for this bot.
+  //: Two things leave such a row today — a swapped app (`unknown-app`) and a **deleted bot** (`bot-removed`);
+  //: the API only carries `stale: bool`, so the sentence names both instead of picking a cause for the backend.
+  feishuBindStale: "This entry doesn't match this bot — open_ids are per-app: it came from another app, or that bot was deleted. Bind again.",
   feishuRemove: "Remove",
 } as const;

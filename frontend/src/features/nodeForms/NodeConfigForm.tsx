@@ -175,9 +175,12 @@ export type EmptyOptions =
   | { kind: "upstream"; parent: string }
   | { kind: "none" };
 
+/** 一个现查清单里的选项。除 `value` / `label` 外,来源可以**多带几格**(见 optionBotWrite 的 `bot_id`)。 */
+export type DynamicOption = { value: string; label: string; bot_id?: string };
+
 export interface NodeFieldOptions {
   /** 一个字段的下拉选项;返回 null 表示它不是下拉。 */
-  dynamicOptions: (key: string, spec?: ConfigSpec) => Array<{ value: string; label: string }> | null;
+  dynamicOptions: (key: string, spec?: ConfigSpec) => DynamicOption[] | null;
   /** 现查的清单是空的时候,为什么。 */
   whyEmpty: (key: string) => EmptyOptions;
   /** 素材库里的素材(有素材字段、或宿主说它要时才拉,见 hostNeeds)。 */
@@ -190,6 +193,25 @@ export interface NodeFieldOptions {
  * 类型里、可调用工作流要排掉自己),这里不据此分支。
  */
 const NO_HOST_NEEDS: { assets?: boolean } = {};
+
+/**
+ * 选项里**自带的伴随几格**:选了某一项时,除了这一格,节点上还有哪一格要跟着一起写。
+ *
+ * 现在只有一处:飞书「收件人」。它的值是**某个应用眼里**的 open_id / chat_id(open_id 按飞书应用隔离,
+ * 同一个人的两串 id 互不通用),而清单本来就是按机器人列出来的(后端 field_options 的
+ * `_feishu_bound_users` / `_feishu_chats`)—— 所以"这一项属于哪台"只有**清单**知道:选了 B 的人却让
+ * 运行拿 A 去发,飞书直接拒。
+ *
+ * 落到节点上哪一格:`bot_id` → `bot`(后端 node_types 里那两个会发飞书的节点都声明了这一格,而
+ * `feishu_targets` 只有它们用)。表单这一层拿不到整份声明(`fields` 只是当前这一档),所以这条约定写在
+ * 这里一处;来源将来多一个时,该由**后端的字段声明**说"哪一格从哪一格来",这张表就该删掉。
+ *
+ * **清单里没带这一格就什么都不写** —— 按 label 里的机器人名反推是猜,猜错就是发不出去。
+ */
+function optionBotWrite(options: readonly DynamicOption[], value: string): Record<string, string> | null {
+  const bot = String(options.find((option) => option.value === value)?.bot_id ?? "").trim();
+  return bot ? { bot } : null;
+}
 
 /** 没有自动来的引用时那个空清单:引用不变,控件里的 memo 才不会每次渲染都重算一遍。 */
 const NO_REFS: readonly AutoImageRef[] = [];
@@ -271,7 +293,7 @@ export function useNodeFieldOptions({
   const dynamicOptions = (
     key: string,
     spec?: { options_from?: string },
-  ): Array<{ value: string; label: string }> | null => {
+  ): DynamicOption[] | null => {
     if (spec?.options_from) {
       return fetchedOptions.get(key) ?? [];
     }
@@ -602,9 +624,18 @@ export function NodeConfigForm({
                         options={options}
                         variables={references ? insertable : []}
                         literal={allowsCustomValue(spec)}
+                        //: 清单是值的唯一来源时,存下来的值不在清单里要说得出来(见 RefCombobox 的 missingText)
+                        //: —— 但不能在清单还没到的时候说:加载中 / 素材库还在翻页都还不知道有没有它。
+                        missingText={fieldOptions.whyEmpty(key).kind === "pending" ? null : t("wfValueNotInList")}
                         placeholder={placeholder}
                         size={size}
-                        onValueChange={(next) => setConfig(key, next)}
+                        onValueChange={(next) => {
+                          //: 选项里带着"这是哪台机器人"时(Target 那一格),连同节点上 `bot` 一起写 ——
+                          //: 一次交给宿主,撤销一步退回(见 optionBotWrite)。
+                          const companion = optionBotWrite(options, next);
+                          if (companion) onPatchConfig(key, { [key]: next, ...companion }, false);
+                          else setConfig(key, next);
+                        }}
                       />
                     );
                   }

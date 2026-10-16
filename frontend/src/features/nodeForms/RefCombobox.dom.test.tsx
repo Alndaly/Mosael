@@ -142,6 +142,40 @@ describe("挑上游的输出", () => {
   });
 });
 
+describe("记着的那一项不在清单里", () => {
+  const options = [{ value: "asset-1", label: "片头.mp4" }];
+
+  it("值照旧显示 + 警示色 + 底下一句去重挑 —— 名字不编", () => {
+    const { container } = renderField("asset-gone", { literal: false, options, missingText: zh.wfValueNotInList });
+    const trigger = screen.getByRole("combobox");
+    //: 显示的就是记着的那个值,不是空着、也不是别的一项。
+    expect(trigger.textContent).toBe("asset-gone");
+    expect(trigger.querySelector("[data-missing]")).not.toBeNull();
+    expect(screen.getByRole("note").textContent).toBe(zh.wfValueNotInList);
+    //: 清单里已经没有它了 —— 名字无从谈起,不许拿别的项的名字顶上。
+    expect(container.textContent).not.toContain("片头.mp4");
+  });
+
+  it("清单里有的照旧显示名字,不说这句", () => {
+    renderField("asset-1", { literal: false, options, missingText: zh.wfValueNotInList });
+    const trigger = screen.getByRole("combobox");
+    expect(trigger.textContent).toBe("片头.mp4");
+    expect(trigger.querySelector("[data-missing]")).toBeNull();
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("能随手填字面量的那一格(清单不是值的唯一来源)不判它不在清单里", () => {
+    renderField("随手一串", { literal: true, options, missingText: zh.wfValueNotInList });
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.getByRole("combobox").textContent).toBe("随手一串");
+  });
+
+  it("清单还没到先不下结论(空表不等于没有它)", () => {
+    renderField("asset-gone", { literal: false, options: [], missingText: zh.wfValueNotInList });
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
 describe("字和引用混写", () => {
   it("和提示词同一个编辑器:引用是整块的标签,不摆双括号", async () => {
     const { container } = renderField("> {{report.json.verdict}} / {{report.json.report_markdown}}");

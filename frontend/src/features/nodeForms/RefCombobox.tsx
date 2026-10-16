@@ -3,6 +3,7 @@ import React from "react";
 import { useI18n } from "@/app/preferences";
 import { Combobox, type ComboboxOption } from "@/components/app/combobox";
 import type { FieldSize } from "@/components/ui/control-size";
+import { Truncate } from "@/components/ui/truncate";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { RefToken } from "@/features/nodeForms/RefToken";
 import { refLabel, useRefCatalog } from "@/features/nodeForms/refCatalog";
@@ -24,6 +25,11 @@ import { cn } from "@/lib/utils";
  *
  * 挑的时候:每个上游输出一项,输出声明了结构(JSON Schema)或上次运行交回过字段的,字段各一项排在它后面;
  * 没有的,在引用后面接着敲字段路径(`report.json.verdict`),清单最前给一项「引用 …」。
+ *
+ * **记着的那一项不在清单里**(清单是值的唯一来源时,见 `missingText`)—— 触发器照旧显示**存下来的那个值**
+ * (清单里已经没有它,名字无从谈起,不编),换成警示色,底下一句让人重挑。这和 OptionPicker 的
+ * `missingLabel` 是同一条规矩的两个出口:那里能写出它叫什么(生成选项还留着两层名字),这里写不出来,
+ * 就只把事实说出来。
  */
 const NO_OPTIONS: ComboboxOption[] = [];
 
@@ -33,6 +39,7 @@ export function RefCombobox({
   variables,
   options = NO_OPTIONS,
   literal = true,
+  missingText,
   placeholder,
   emptyText,
   size,
@@ -47,6 +54,12 @@ export function RefCombobox({
   /** 清单和引用之外能不能手填一个字面量。挑资源的下拉不能(随手敲的一串字是个不存在的 id,只会运行时报错),
    *  只收引用;值本来就是一段字的(具名输出、入参)能。 */
   literal?: boolean;
+  /**
+   * 记着的那一项不在清单里时底下那句话。**只在这一格的清单是值的唯一来源时才有人给**(`literal` 为假:
+   * 手填只收引用,清单之外的值本来就不合法);能随手填字面量的格子给了也不作数 —— 那种格子里"不在清单里"
+   * 是常态,不是问题。清单还没到(空表)同样不下结论:那只是还不知道,不是"没有它"。
+   */
+  missingText?: string | null;
   placeholder?: string;
   emptyText?: string;
   size?: FieldSize;
@@ -95,6 +108,20 @@ export function RefCombobox({
   const path = wholeRef(value);
   const look = path === null ? null : catalog.look(path);
   const problem = look?.problem ?? null;
+  /**
+   * 清单里没有这个值,而这一格的清单是**值的唯一来源**。
+   *
+   * 三个前提缺一不可:手填只收引用(`literal` 为假)、清单已经到了(空表说明还不知道)、值不是一段引用
+   * (引用指不到东西有它自己那句,见 `problem`)。满足时值**照旧**显示 —— 清单里已经没有它,给不出名字。
+   */
+  const missing =
+    !literal &&
+    !problem &&
+    path === null &&
+    value.trim() !== "" &&
+    options.length > 0 &&
+    !allOptions.some((option) => option.value === value);
+  const missingNote = missing ? (missingText ?? null) : null;
 
   /** 敲的是一段字段路径(`report.json.verdict`),前两段是上游的一个输出:给一项「引用 …」。 */
   const fieldPathOption = (query: string): ComboboxOption[] => {
@@ -116,15 +143,34 @@ export function RefCombobox({
         acceptsCustomValue={literal ? undefined : hasReference}
         customValueLabel={literal ? undefined : (query) => t("wfUseReference").replace("{q}", query)}
         extraOptions={fieldPathOption}
-        renderValue={() => (look && path !== null ? <RefToken path={path} look={look} /> : undefined)}
-        hint={problem ? refProblemText(t, problem) : path ?? undefined}
+        renderValue={() => {
+          if (look && path !== null) return <RefToken path={path} look={look} />;
+          //: 不在清单里:值照旧,只换警示色。给的是 `Truncate` 而不是一段裸字 —— `renderValue` 返回的东西
+          //: 进的是触发器里那个位置(截断靠 `[&>span]:truncate` 的 CSS,而**悬停看不到全文**),放进去的
+          //: 是一串三十几位的 id(见 combobox.tsx 的 `renderValue` 契约)。
+          if (missingNote) {
+            return (
+              <Truncate data-missing="" className="text-warning">
+                {value.trim()}
+              </Truncate>
+            );
+          }
+          //: 别的照旧回 undefined:combobox 自己退回 `selected?.label ?? value`(见它的 renderValue 契约)。
+          return undefined;
+        }}
+        hint={problem ? refProblemText(t, problem) : (missingNote ?? path ?? undefined)}
         size={size}
-        className={cn("w-full min-w-0", problem && "border-destructive", className)}
+        className={cn("w-full min-w-0", problem && "border-destructive", missingNote && "border-warning", className)}
         onValueChange={onValueChange}
       />
       {problem && (
         <small className="text-ui-2xs leading-[1.4] text-destructive" role="alert">
           {refProblemText(t, problem)}
+        </small>
+      )}
+      {missingNote && (
+        <small className="text-ui-2xs leading-[1.4] text-warning" role="note">
+          {missingNote}
         </small>
       )}
     </div>

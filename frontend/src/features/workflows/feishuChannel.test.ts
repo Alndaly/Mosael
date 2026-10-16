@@ -25,9 +25,21 @@ function node(type: string, config: Record<string, unknown> = {}): WorkflowGraph
   return { id: type, type, name: "", config, position: { x: 0, y: 0 } } as WorkflowGraph["nodes"][number];
 }
 
-/** 这一版图在这张卡上写着什么(zh 缺省)。 */
-function line(type: string, config: Record<string, unknown>, locale: Locale = "zh"): string {
-  return workflowNodeSubtitle(node(type, config), CATALOGS[locale], [], uiText(locale));
+/** 这一版图在这张卡上写着什么(zh 缺省)。`names` 是「收件人」那一格的选项目录:值 → 界面上叫什么。 */
+function line(
+  type: string,
+  config: Record<string, unknown>,
+  locale: Locale = "zh",
+  names: Record<string, string> = {},
+): string {
+  return workflowNodeSubtitle(
+    node(type, config),
+    CATALOGS[locale],
+    [],
+    uiText(locale),
+    true,
+    (value) => names[value.trim()] ?? "",
+  );
 }
 
 describe("飞书那一行说了什么", () => {
@@ -43,13 +55,27 @@ describe("飞书那一行说了什么", () => {
 
   it("发到某个群:卡上就能看见是哪个群", () => {
     expect(line("await_approval", { channel: "chat", to: "oc_team_room" })).toBe("飞书 · 群 oc_team_room");
+    //: 收件人目录里有的,**写名字**(那是人挑的时候看见的那一行),不是那串 id。
+    expect(line("await_approval", { channel: "chat", to: "oc_team_room" }, "zh", { oc_team_room: "运营群" })).toBe(
+      "飞书 · 群 运营群",
+    );
+    //: 目录里没有(问不到 / 不是这台机器人所在)照旧显示值 —— **不编名字**。
+    expect(line("await_approval", { channel: "chat", to: "oc_team_room" }, "zh", { oc_other: "别的群" })).toBe(
+      "飞书 · 群 oc_team_room",
+    );
     //: id 很长时只放能分辨身份的那一截(卡是张名片,不是日志窗口)。
     expect(line("feishu_message", { channel: "chat", to: "oc_0123456789abcdef0123456789abcdef" })).toBe(
       "飞书 · 群 oc_01234…cdef",
     );
   });
 
-  it("私聊某个人:认得出是谁就写 id,是一段引用就说「发起人」", () => {
+  it("私聊某个人:目录里有他就写名字,没有就写 id,是一段引用就说「发起人」", () => {
+    //: 维护者看到的正是这一串:`飞书 · 私聊 ou_1f8ca9…6998` —— 界面上那个下拉里写的是人名。
+    expect(
+      line("await_approval", { channel: "user", to: "ou_1f8ca9d0f5b04b1e8a7c6998" }, "zh", {
+        ou_1f8ca9d0f5b04b1e8a7c6998: "张三 · 机器人 A",
+      }),
+    ).toBe("飞书 · 私聊 张三 · 机器人 A");
     expect(line("await_approval", { channel: "user", to: "ou_bound_person" })).toBe("飞书 · 私聊 ou_bound_person");
     expect(line("await_approval", { channel: "user", to: "{{开始.负责人}}" })).toBe("飞书 · 私聊 发起人");
     expect(line("await_approval", { channel: "user", to: "" })).toBe("飞书 · 私聊 发起人");
@@ -81,5 +107,13 @@ describe("这一行真的落到卡片上", () => {
     //: 飞书那一行在后者里,所以这一句断了卡上就什么都不显示。
     const source = readFileSync(join(import.meta.dirname, "useWorkflowDisplayElements.ts"), "utf8");
     expect(source).toContain("configSummary: workflowNodeSubtitle(");
+  });
+
+  it("收件人目录真的接到了画布上(名字查找不是只做了一半)", () => {
+    //: 光有 `feishuChannelSummary` 会查名字没用 —— 目录得从画布那一层取(现查接口,一张图问一次),
+    //: 再传进 workflowNodeSubtitle。这两句断了,卡上就退回原始 id(维护者报的那一行)。
+    const source = readFileSync(join(import.meta.dirname, "useWorkflowDisplayElements.ts"), "utf8");
+    expect(source).toContain("useFeishuTargetNames(");
+    expect(source).toContain("feishuNames");
   });
 });
