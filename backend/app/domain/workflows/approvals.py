@@ -283,9 +283,15 @@ def dispatch_resume(job_id: str) -> bool:
 
     认的是**这张单的检查点**:没有它就恢复不了(那是"这道门装出来之前就停下的一次运行"),
     这时什么都不做 —— 交给重启收尾 / 任务本身去说。
-    """
-    from app.domain.workflows.engine import continue_workflow_job
 
+    **派发那一步由引擎自己登记进来**(见 `use_resume_dispatcher`):这个模块不许 import engine ——
+    那就又给"引擎 ⇄ 执行器"那一族添一个新环(见 tests/test_import_layering 的 LAZY_CYCLE_MODULES)。
+    方向反过来就干净了:引擎认识工作流的领域,领域不认识引擎。
+    """
+    dispatch = _RESUME_DISPATCHER
+    if dispatch is None:  # pragma: no cover —— 引擎一被 import 就登记了
+        logger.warning("no resume dispatcher registered; job %s stays parked", job_id)
+        return False
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None or job.status != "running":
@@ -293,9 +299,19 @@ def dispatch_resume(job_id: str) -> bool:
         approval = _resumable(db, job_id)
         if approval is None:
             return False
-        continue_workflow_job(db, job, approval.checkpoint or {})
+        dispatch(db, job, approval.checkpoint or {})
         logger.info("workflow job %s resumed from approval %s", job_id, approval.id)
         return True
+
+
+#: 「把暂停的运行接着派发出去」的实现 —— 引擎登记(engine.continue_workflow_job)。
+_RESUME_DISPATCHER: Callable[[Session, Job, dict[str, Any]], None] | None = None
+
+
+def use_resume_dispatcher(dispatch: Callable[[Session, Job, dict[str, Any]], None]) -> None:
+    """登记"怎么把一次暂停的运行重新派发出去"。引擎是唯一知道这件事的人(见 dispatch_resume)。"""
+    global _RESUME_DISPATCHER
+    _RESUME_DISPATCHER = dispatch
 
 
 def _resumable(db: Session, job_id: str) -> WorkflowRunApproval | None:

@@ -434,16 +434,16 @@ def decide_run_approval(
     approval = db.get(WorkflowRunApproval, approval_id)
     if approval is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_runApprovalNotFound"))
-    workflow_uc.ensure_can_browse(db, user, approval.workspace_id)
     if approval.status != approvals.PENDING:
         raise HTTPException(status_code=409, detail=tr("routeErr_runApprovalSettled"))
     note = body.note.strip()
     if note and not approval.allow_note:
         #: 节点上关掉了备注那一格:不收,也不悄悄丢掉 —— 说一句,前端把输入框收起来。
         raise HTTPException(status_code=422, detail=tr("routeErr_runApprovalNoNote"))
-    won = approvals.decide_and_wake(
-        db, approval, decision=body.decision, user_id=user.id,
-        user_name=user.display_name or user.username, note=note, via="app",
+    #: **权限和决定都在领域那一处**(workflow_uc.decide_run_approval):按工作区 edit 放行,再落决定、
+    #: 唤醒那次运行。飞书卡片回调调的是同一个用例 —— 一个门不会因为在哪儿点而有两种权限。
+    won = workflow_uc.decide_run_approval(
+        db, user, approval, decision=body.decision, note=note, via="app",
     )
     if not won:
         #: 另一条路(飞书)在这一瞬间先到了 —— 决定已经落了,这不是错误,把最新那份给他看。

@@ -108,14 +108,21 @@ def _settled(job_id: str) -> Job | None:
 
 
 def _paused(job_id: str) -> WorkflowRunApproval:
-    """等到这次运行**停在**「等人确认」上(库里那张单是 pending)。"""
+    """等到这次运行**停在**「等人确认」上(库里那张单是 pending,而且恢复现场已经落库)。
 
-    def look():
-        with SessionLocal() as db:
-            row = db.query(WorkflowRunApproval).filter_by(job_id=job_id).one_or_none()
-            return row if row is not None and row.status == "pending" else None
-
-    return _wait_for(look, what="运行停在等人确认上")
+    **要等现场**:单是节点自己一个事务先提交的(它必须比卡片先落库),检查点由引擎随后写进同一个
+    事务。只等单出现的话,读到的是一份还没有现场的暂停态 —— 重启收尾那时接不回来。
+    """
+    settled = _wait_for(
+        lambda: (lambda j: j if j.message_key == "jobMsg_awaitingApproval" else None)(_job(job_id)),
+        what="这次运行停在等人确认上(任务卡说出来了)",
+    )
+    assert settled.status == "running", settled.error
+    with SessionLocal() as db:
+        row = db.query(WorkflowRunApproval).filter_by(job_id=job_id).one()
+    assert row.status == "pending", row.status
+    assert row.checkpoint.get("done"), "恢复现场还没落库"
+    return row
 
 
 def _approval(approval_id: str) -> WorkflowRunApproval:
@@ -135,8 +142,14 @@ def _projects(ws: str) -> int:
 
 def _started(job_id: str, node_id: str) -> int:
     """这个节点被**开始执行**过几次 —— 「没有重跑前面节点」的直接证据。"""
+    return _events(job_id, "workflow.node.started", node_id)
+
+
+def _events(job_id: str, kind: str, node_id: str = "") -> int:
     with SessionLocal() as db:
-        rows = db.query(TaskEvent).filter_by(job_id=job_id, type="workflow.node.started").all()
+        rows = db.query(TaskEvent).filter_by(job_id=job_id, type=kind).all()
+    if not node_id:
+        return len(rows)
     return sum(1 for row in rows if str((row.payload or {}).get("node_id") or "") == node_id)
 
 
@@ -196,10 +209,12 @@ def test_暂停落在库里_重启收尾之后仍在等() -> None:
     assert reopened.status == "running", reopened.error
 
     #: 接回来之后**重新停在同一个节点上等**,而且前面那一步没有被再跑一遍。
-    _wait_for(
-        lambda: _job(job_id).message_key == "jobMsg_awaitingApproval",
-        what="重启收尾把这次运行接回来",
-    )
+    #:
+    #: 等的是**「门又走了一遍」这件事本身**(门自己 started 第二次、第二条 awaiting 事件),
+    #: 不是那句从第一次暂停起就没变过的任务消息 —— 等那句话的话,这一条在"其实根本没接回来"
+    #: 时也会绿(而它正是要证"接回来了")。
+    _wait_for(lambda: _started(job_id, "gate") >= 2, what="重启收尾把这次运行接回来")
+    assert _events(job_id, "workflow.awaiting_approval") == 2, "接回来之后要重新停在同一张单上"
     assert _projects(ws) == 1, "恢复不该重跑暂停点前面的节点"
     assert _started(job_id, "make") == 1
     same = _paused(job_id)

@@ -158,7 +158,11 @@
   `app/domain/workflows/executors/registry.py:_PREFIX_REGISTRY`、
   `app/domain/workflows/executors/registry.py:_PREFLIGHTS`、
   `app/domain/workflows/executors/registry.py:_PREFIX_PREFLIGHTS`(节点的运行前检查,import 时登记)
-- `app/domain/agent/origins.py:_origins`(外部渠道登记的系统提示补充与 turn 收尾回送;飞书在 import 时登记)
+- `app/domain/workflows/approvals.py:_RUN_CARD_SENDER` — 「工作流停在等人确认上,把那张卡发到飞书」的实现。
+  组装根在导入期登记(集成层填进来),运行时只读 —— 领域层不认识飞书(见 ADR 0064)。
+- `app/domain/workflows/approvals.py:_RESUME_DISPATCHER` — 「把暂停在等人确认上的运行接着派发出去」的实现。
+  引擎在 import 时登记自己,运行时只读 —— 反过来让领域去 import 引擎会给「引擎 ⇄ 执行器」那一族添一个新环。
+- - `app/domain/agent/origins.py:_origins`(外部渠道登记的系统提示补充与 turn 收尾回送;飞书在 import 时登记)
 - `app/domain/plugins/media_bridge.py:_sink`、`app/domain/plugins/media_bridge.py:_source`
 - `app/domain/capabilities/__init__.py:_registry` — 宿主能力的契约表(素材外链、文档解析……,ADR 0031 §5):组装根在导入期
   登记,运行时只读;挑哪一家读的是库里的默认,不在这里。

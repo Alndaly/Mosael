@@ -114,7 +114,6 @@ class RunApprovalOut(OrmModel):
     status: str
     #: 决定那一格:approved / rejected / timeout(空 = 还没决定)。界面拿它写回执那半句。
     decision: str
-    decided_by_name: str
     #: 什么时候算超时(空 = 一直等)。
     expires_at: datetime | None
     created_at: datetime

@@ -89,3 +89,23 @@ def unusable_node_types(db: Session, user: User, types: list[str]) -> list[dict[
             out.append({"type": node_type, "reason": str(found.error), "upgrade": bool(found.upgrade_in),
                         "instance_id": found.upgrade_in})
     return out
+
+
+def decide_run_approval(
+    db: Session, user: User, approval: Any, *, decision: str, note: str = "", via: str = "app"
+) -> bool:
+    """批一次停在「等人确认」上的运行:**先按工作区写权限放行,再落决定、唤醒那次运行**。
+
+    **两条路共用这一处**(应用内路由、飞书卡片回调):闸不按入口各写一份(见本模块开头那条规矩)。
+    批一次运行是改这个工作区里的东西 —— 那次运行会接着往下跑、可能花钱 —— 所以门槛和"运行一次
+    工作流"一样是 `edit`(见 editable)。
+
+    返回是不是**我**落的决定(两条路同时点只有一个赢,见 approvals.decide_and_wake)。
+    """
+    from app.domain.workflows import approvals
+
+    ensure_workspace_perm(db, user, approval.workspace_id, "edit")
+    return approvals.decide_and_wake(
+        db, approval, decision=decision, user_id=user.id,
+        user_name=user.display_name or user.username, note=note, via=via,
+    )

@@ -1027,6 +1027,11 @@ def _park_at_approval(db: Session, job: Job, run: GraphRun) -> None:
     emit_job_event(db, job.id, "workflow.awaiting_approval", {
         "node_id": run.awaiting, "approval_id": approval.id, "title": approval.title,
     })
+    #: **flush,不 commit。** 那两句必须现在就进这次事务:`_run_workflow_thread` 收尾时会
+    #: `db.refresh(job)` 记一句日志,而 refresh **不会**先把待写的东西刷下去 —— 它直接拿库里的行
+    #: 覆盖内存里的对象,于是暂停那一刻写的话(「等待确认:…」)和那条事件会被无声地擦掉,
+    #: 任务卡上显示的还是「工作流运行中」。
+    db.flush()
     #: 站内通知 + 飞书卡片。通知是兜底(没有飞书绑定也照样等),卡片失败一律降级。
     #:
     #: **排在提交之后**(`after_commit`,不在这里 commit —— 领域层不提交,见
@@ -1141,3 +1146,12 @@ def run_workflow(
     )
     db.commit()
     return context
+
+
+#: **「把暂停在等人确认上的运行接着跑」这件事只有引擎会做,所以由引擎自己登记。**
+#: 方向是有讲究的:领域(approvals)不许 import 引擎 —— 那就又给"引擎 ⇄ 执行器"那一族添一个
+#: 新环(见 tests/test_import_layering 的 LAZY_CYCLE_MODULES);反过来,引擎认识工作流的领域。
+#: 放在模块末尾:登记的是一个**已经定义好**的函数。
+from app.domain.workflows import approvals as _approvals  # noqa: E402
+
+_approvals.use_resume_dispatcher(continue_workflow_job)

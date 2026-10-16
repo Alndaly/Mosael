@@ -7,6 +7,7 @@ import { decideRunApproval, listRunApprovals, runApprovalsKey, type RunApproval 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
+import { parseServerTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,7 +85,7 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
         <Button size="sm" loading={decide.isPending} onClick={() => decide.mutate("approved")}>
           {row.approve_label || t("runApprovalApproved")}
         </Button>
-        <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate("rejected")}>
+        <Button size="sm" variant="outline" loading={decide.isPending} onClick={() => decide.mutate("rejected")}>
           {row.reject_label || t("runApprovalRejected")}
         </Button>
         <span className="text-ui-2xs">{decide.isPending ? t("runApprovalSending") : t("runApprovalFeishuHint")}</span>
@@ -96,8 +97,8 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
 /** 什么时候算超时。`expires_at` 是后端给的那一刻(空 = 不设超时,一直等)。 */
 function expiry(row: RunApproval, t: ReturnType<typeof useI18n>): string {
   if (!row.expires_at) return t("runApprovalNoExpiry");
-  const at = new Date(row.expires_at.endsWith("Z") ? row.expires_at : `${row.expires_at}Z`);
-  const minutes = Math.max(0, Math.round((at.getTime() - Date.now()) / 60000));
+  //: 后端给的是不带时区的 UTC —— 自己拼 `Z` 会绕过 lib/time 那一条(见 lib/time.test.ts)。
+  const minutes = Math.max(0, Math.round((parseServerTime(row.expires_at).getTime() - Date.now()) / 60000));
   const left = minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes}m`;
   return t("runApprovalExpires").replace("{time}", left);
 }

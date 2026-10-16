@@ -45491,10 +45491,6 @@
             "type": "string",
             "title": "Decision"
           },
-          "decided_by_name": {
-            "type": "string",
-            "title": "Decided By Name"
-          },
           "expires_at": {
             "anyOf": [
               {
@@ -45527,7 +45523,6 @@
           "allow_note",
           "status",
           "decision",
-          "decided_by_name",
           "expires_at",
           "created_at"
         ],

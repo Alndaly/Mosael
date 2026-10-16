@@ -17630,8 +17630,6 @@ export interface components {
             status: string;
             /** Decision */
             decision: string;
-            /** Decided By Name */
-            decided_by_name: string;
             /** Expires At */
             expires_at: string | null;
             /**

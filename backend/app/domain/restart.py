@@ -42,6 +42,13 @@ NOT_ORPHANED_BY_RESTART: dict[str, str] = {
         "它是**派生**的:运行记录跟着它派出去的那个 job 走。job 在启动时被收尾,"
         "`scheduler/executors.sync_run_states` 随后把终态抄过来。"
     ),
+    "workflow_run_approvals": (
+        "在等**人**的决定,不在等进程 —— 和 agent_questions / tool_confirmations 同一条道理:"
+        "重启不改变「还没人点」这件事,而这次运行正是要**跨重启接着等**。收尾它的是工作流自己在"
+        "任务总线上登记的 resumer(jobs.register_resumer(\"workflow\"),见 domain/workflows/approvals"
+        ".register_seams):重启时带检查点的运行被重新派发、重新停在同一张单上,不是判失败;"
+        "取消它则走 jobs.register_cancel_listener。"
+    ),
 }
 
 

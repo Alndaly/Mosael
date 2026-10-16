@@ -276,7 +276,6 @@ export const nodeToolbar = {
   runApprovalSending: "正在提交…",
   runApprovalDone: "已{decision}:那次运行接着往下跑了",
   runApprovalFailed: "没能批下去",
-  runApprovalGone: "这次等待已经不在了(那次运行被取消或清掉了)。",
   runApprovalFeishuHint: "在飞书里点那张卡也一样。",
   runApprovalApproved: "确认",
   runApprovalRejected: "拒绝",

@@ -225,9 +225,10 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any]) -> Ca
     """工作流确认卡的按钮:授权按**点击者**走(和工具确认卡同一条路),决定落到领域那一处。
 
     授权这一关和工具确认卡刻意一致 —— 群里谁都看得见这张卡,但看得见不等于能批:
-    必须已绑定 Mosael 账号、且此刻仍是该工作区成员。
+    必须已绑定 Mosael 账号、且此刻仍是该工作区成员(工作区**写权限**那一道闸在领域用例里,
+    和应用内那条路是同一个,见 workflow_uc.decide_run_approval)。
     """
-    from app.domain.workflows import approvals as run_approvals
+    from app.domain.permissions import PermissionDenied
     from app.integrations.feishu import cards
 
     approval_id = str(value.get("approval_id") or "")
@@ -249,11 +250,17 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any]) -> Ca
             return _toast("请先在 Mosael 的「飞书机器人」里绑定你的账号")
         note = _note_from(value)
         try:
-            won = run_approvals.decide_and_wake(
-                db, approval, decision=decision, user_id=user.id,
-                user_name=user.display_name or user.username, note=note, via="feishu",
+            #: **和 HTTP 路由同一个用例**(workflow_uc.decide_run_approval):工作区写权限那一道闸、
+            #: CAS 落决定、提交之后唤醒那次运行,全都在那一处。这里只负责把 open_id 认成人、
+            #: 把领域异常翻成 toast。
+            from app.domain.workflows import use_cases as workflow_uc
+
+            won = workflow_uc.decide_run_approval(
+                db, user, approval, decision=decision, note=note, via="feishu",
             )
             db.commit()  # 卡片回调是入口:领域函数不提交
+        except PermissionDenied:
+            return _toast("你在 Mosael 里没有这个工作区的编辑权限")
         except Exception:  # noqa: BLE001 —— 含权限不足与执行失败
             logger.exception("feishu workflow approval failed approval=%s", approval_id)
             return _toast("处理失败,请到 Mosael 里查看")
