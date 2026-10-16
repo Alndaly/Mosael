@@ -36,6 +36,36 @@ describe("设置页结构", () => {
     expect(SETTINGS_SEARCH.map((one) => [one.id, one.label])).toEqual(ALL_SECTIONS.map((one) => [one.id, one.label]));
   });
 
+  it("每个分区搜得到哪些行,也钉在这里:keywords 是手写的,漏一个不会有人发现", () => {
+    //: 只钉 id 与 label 时,`keywords` 是一条**无声的**缺口 —— `4777fa580` 才补上「后端」页漏掉的
+    //: `settingsWorkspace`:行换了页、加了行,搜索索引没跟上,搜「工作区」什么也搜不到,而没有一条
+    //: 测试会红。这里按 id 钉住整份 keywords。**当成集合比**(顺序无关):同一个分区里写在前面的
+    //: 只是"先命中先显示",那层行为由 settingsSearch.test 里几条按真实查询的断言钉。空数组 =
+    //: 这一页的行还没登记进搜索,补的时候这张表也要跟着动 —— 那正是这一步该被人看见的地方。
+    const actual = Object.fromEntries(SETTINGS_SEARCH.map((one) => [one.id, [...one.keywords].sort()]));
+    const expected: Record<string, readonly string[]> = {
+      account: ["settingsUsername", "displayName", "signature", "settingsPassword", "avatarChange", "signOut"],
+      team: ["teamInvite", "teamRole", "teamActivity", "renameWorkspace", "deleteWorkspace", "teamLeave"],
+      appearance: ["settingsTheme", "settingsLanguage", "settingsFont", "appearanceBgTitle", "customCssTitle"],
+      dubbing: ["builtinTtsTitle", "voiceLibrary"],
+      "provider-chat": ["providerDefaultsTitle"],
+      "provider-image": ["providerDefaultsTitle"],
+      "provider-video": ["providerDefaultsTitle"],
+      "provider-audio": ["providerTtsTitle", "providerPodcastTitle", "providerMusicTitle", "providerDefaultsTitle"],
+      "agent-voice": [],
+      "agent-memory": [],
+      "agent-skills": [],
+      "agent-autopilot": [],
+      feishu: [],
+      capabilities: [],
+      backend: ["settingsEndpoint", "serverSwitchLabel", "settingsWorkspace"],
+      "local-app": ["settingsStartup", "settingsExternalOpen", "settingsVersion", "updateCheck"],
+    };
+    expect(actual).toEqual(
+      Object.fromEntries(Object.entries(expected).map(([id, keys]) => [id, [...keys].sort()])),
+    );
+  });
+
   it("每一页只出现一次", () => {
     const ids = ALL_SECTIONS.map((one) => one.id);
     expect(new Set(ids).size).toBe(ids.length);

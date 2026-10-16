@@ -70,12 +70,20 @@ export type SettingsSection = {
 
 export type SettingsGroup = { title: MessageKey; sections: readonly SettingsSection[] };
 
-/** 「某种能力的供应商」一页的固定形状:默认模型在上,连接列表在下。 */
-function providerPage(capability: string, title: MessageKey, description: MessageKey) {
+/**
+ * 「某种能力的供应商」一页的固定形状:默认模型在上,连接列表在下。
+ *
+ * **组名不覆盖成页名,让组件用自己那个默认的**(providerAccountsTitle,「供应商配置」)。
+ * 上一版把组名传成页名(「AI 对话」/「AI 绘图」/「AI 视频」):左边导航的页名与正文里的组名
+ * 一模一样,读起来像同一页有两个同名标题;紧跟其后的那句说明也就被当成了**页说明** ——
+ * 维护者两次没认出这一组到底在讲什么。组名只回答「这一组是连接列表」,是哪种能力由页名与
+ * 那句说明各自区分,两者不再重复。只要说明(description),不要标题。
+ */
+function providerPage(capability: string, description: MessageKey) {
   return ({ focusCapability, t }: SettingsContext) => (
     <>
       <ProviderDefaultsSection capabilities={[capability]} focusCapability={focusCapability} />
-      <ProviderProfilesSection capability={capability} title={t(title)} description={t(description)} />
+      <ProviderProfilesSection capability={capability} description={t(description)} />
     </>
   );
 }
@@ -127,21 +135,21 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "providerChatTitle",
         icon: <MessageSquare size={14} />,
         capabilities: ["chat"],
-        render: providerPage("chat", "providerChatTitle", "providerChatDesc"),
+        render: providerPage("chat", "providerChatDesc"),
       },
       {
         id: "provider-image",
         label: "providerImageTitle",
         icon: <ImageIcon size={14} />,
         capabilities: ["image"],
-        render: providerPage("image", "providerImageTitle", "providerImageDesc"),
+        render: providerPage("image", "providerImageDesc"),
       },
       {
         id: "provider-video",
         label: "providerVideoTitle",
         icon: <Video size={14} />,
         capabilities: ["video"],
-        render: providerPage("video", "providerVideoTitle", "providerVideoDesc"),
+        render: providerPage("video", "providerVideoDesc"),
       },
       {
         // **只放云端的配音与播客连接。** 内置配音引擎与音色库在「个人与工作区 → 配音与音色」,
