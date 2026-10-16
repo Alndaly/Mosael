@@ -174,7 +174,13 @@ def create(db: Session, user: User, workspace_id: str, **fields: Any) -> Workflo
 
 
 def update(db: Session, user: User, trigger_id: str, changes: dict[str, Any]) -> WorkflowTrigger:
-    """改一条触发器。`workflow_id` 可以改绑到同一工作区里的另一张图;主人不变。"""
+    """改一条触发器。`workflow_id` 可以改绑到同一工作区里的另一张图;主人不变。
+
+    **打开(`enabled=True`)之前顺手看一眼那张图还在不在**:删图那一刻我们会停用它
+    (`stop_triggers_bound_to_workflow`),但那是竞态 —— 绕过接口直接删、或者停用之后图又没了,
+    这一格此前会返回 200,让一条注定跑不起来的自动化在面板上显示成"开着",直到下一条消息才
+    refused + 自停。这就是 `create` 已经有的那一道(工作流不在这个工作区 → 422)。
+    """
     trigger = _trigger(db, trigger_id)
     ensure_workspace_perm(db, user, trigger.workspace_id, "edit")
     if "workflow_id" in changes and changes["workflow_id"] is not None:
@@ -201,7 +207,10 @@ def update(db: Session, user: User, trigger_id: str, changes: dict[str, Any]) ->
     if changes.get("max_runs_per_minute") is not None:
         trigger.max_runs_per_minute = _check_limit(changes["max_runs_per_minute"])
     if changes.get("enabled") is not None:
-        trigger.enabled = bool(changes["enabled"])
+        enabled = bool(changes["enabled"])
+        if enabled:
+            _workflow_in(db, trigger.workspace_id, trigger.workflow_id)
+        trigger.enabled = enabled
     db.flush()
     return trigger
 

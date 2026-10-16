@@ -16,8 +16,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import time
+import zipfile
+from datetime import datetime
 
 from sqlalchemy import select
 
@@ -27,7 +30,7 @@ from app.db.models import AgentSession, Job, Workflow, WorkflowTrigger, Workflow
 from app.domain.agent import host
 from app.domain.feishu import bindings
 from app.domain.jobs import wait_for_idle_jobs
-from app.domain.triggers import matching
+from app.domain.triggers import dispatch, matching
 from app.integrations.feishu import client as feishu_client
 from app.integrations.feishu import inbound
 from tests.util import fresh_client
@@ -667,3 +670,322 @@ def test_会话链路自己的表没被动过(monkeypatch) -> None:
 
     with SessionLocal() as db:
         assert db.scalars(select(AgentSession)).all() == [], "触发器的运行不该开一条智能体会话"
+
+
+# ---------------- 入站链路 + 触发器的这一笔:八条,逐条先红后绿 ----------------
+
+
+def _zip_bytes() -> bytes:
+    """一份**真的** zip —— 素材库认不出它,`import_binary_asset` 会当场拒收。"""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("readme.txt", "群里丢上来的压缩包")
+    return buffer.getvalue()
+
+
+def test_收不进素材库的文件也要回一句而不是静默(monkeypatch) -> None:
+    """[high] 群里丢一个 .zip:下载拿得到,而素材库不收这种文件(`AssetFileTypeError`)。
+
+    此前那条异常冒在 try **之外**,一路穿过 `_run_triggers` / `handle_incoming` 到
+    `connections.dispatch` 起的 `feishu-inbound` 线程 —— 那条线程没有 wrapper:没有回执、
+    没有事件行、连兜底那句都没有,而 `seen_recently` 已经把它记成"见过"。
+    """
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t18")
+    workflow = _workflow(client, ws, graph=_graph("asset_id"))
+    trigger = _trigger(
+        client, ws, workflow["id"], message_types=["file"], params={"asset_id": "{{trigger.asset_id}}"}
+    )
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    #: **不 patch import_binary_asset** —— 让素材库自己判"这不是能收的东西"。
+    monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: _zip_bytes())
+
+    _incoming(
+        bot["id"], "oc_g", _unique("zip"), open_id, message_type="file",
+        content_json=json.dumps({"file_key": "fk_zip", "file_name": "素材.zip"}),
+    )
+
+    assert len(sent) == 1, f"收不进来必须说一句,不能静默:{sent}"
+    assert "没能取回来" in sent[0][1]
+    assert _runs(client, workflow["id"]) == [], "素材没入库,这一次不该硬跑"
+    assert _events(client, trigger["id"]) == [], "附件没到,这条消息不算被认领过"
+
+
+def _refusing_engine(monkeypatch) -> None:
+    """让 `start_workflow_job` 在 `check_runnable` 过了之后抛 —— ADR 0047「这一版要你认可」那一路。"""
+    from app.domain.workflows import WorkflowDomainError, engine
+
+    def refuse(*args, **kwargs):
+        raise WorkflowDomainError("wfErr_spendNotVouched", params={"workflow": "被触发的流", "revision": 3})
+
+    monkeypatch.setattr(engine, "start_workflow_job", refuse)
+
+
+def test_起跑失败不在群里喊这次运行失败了(monkeypatch) -> None:
+    """[high] `check_runnable` 过了、`start_workflow_job` 却抛:事件记 `failed`,可任务 payload 里
+    `trigger_id` / `trigger_event_id` 那两格还在,收尾钩子(`jobs.register_settle_listener` →
+    `deliver_trigger_run`)照样把「这次运行失败了」发进群 —— 而那两格本来就是"这次没有运行"的信号。
+    ADR 0065 §5:配置错误不喊给一整群人;有回执 = 跑起来了。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t19")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    sent = _sent_texts(monkeypatch)
+    _refusing_engine(monkeypatch)
+
+    _incoming(bot["id"], "oc_g", _unique("vouch"), open_id, content_json=json.dumps({"text": "群里来一条"}))
+
+    assert [one["status"] for one in _events(client, trigger["id"])] == ["failed"]
+    assert sent == [], f"起跑就失败 = 没有这次运行,群里不该喊(ADR 0065 §5):{sent}"
+    notices = client.get(f"/api/notifications?workspace_id={ws}").json()["items"]
+    assert any("群里的视频" in one["title"] for one in notices), "主人该在站内收到"
+
+
+def test_起跑失败的通知每分钟最多一条(monkeypatch) -> None:
+    """[medium] `_refuse` 是"写坏事件**之前**判 `_notified_recently`"的,失败那条路漏了这一判 ——
+    一个配错的触发器被群里连丢十条,主人收到十条通知(通知本身就是另一种风暴)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t23")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    _sent_texts(monkeypatch)
+    _refusing_engine(monkeypatch)
+
+    for index in range(2):
+        _incoming(
+            bot["id"], "oc_g", _unique(f"vouch{index}"), open_id,
+            content_json=json.dumps({"text": f"第 {index} 条"}),
+        )
+
+    assert [one["status"] for one in _events(client, trigger["id"])] == ["failed", "failed"]
+    notices = client.get(f"/api/notifications?workspace_id={ws}").json()["items"]
+    failures = [one for one in notices if "群里的视频" in one["title"]]
+    assert len(failures) == 1, f"每分钟最多喊一次主人,实际 {len(failures)} 条"
+
+
+def test_重投的消息不再重复入库(monkeypatch) -> None:
+    """[medium] 附件入库发生在去重**之前**:飞书重投时运行被 `(trigger_id, message_id)` 挡住,
+    素材却照样多一份(`import_binary_asset` 自己 commit,回滚也带不走)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t20")
+    workflow = _workflow(client, ws, graph=_graph("asset_id"))
+    trigger = _trigger(
+        client, ws, workflow["id"], message_types=["media"], params={"asset_id": "{{trigger.asset_id}}"}
+    )
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: b"fake-mp4-bytes")
+
+    imported: list[str] = []
+
+    class _Asset:
+        def __init__(self, index: int) -> None:
+            self.id = f"asset-{index}"
+
+    def fake_import(*args, **kwargs):
+        imported.append("imported")
+        return _Asset(len(imported))
+
+    monkeypatch.setattr("app.domain.assets.importer.import_binary_asset", fake_import)
+
+    message_id = _unique("dup-media")
+    payload = json.dumps({"file_key": "fk_v", "file_name": "clip.mp4"})
+    _incoming(bot["id"], "oc_g", message_id, open_id, message_type="media", content_json=payload)
+    #: 模拟一次重启:进程内那份去重清掉,库里那行(真正的判据)还在。
+    with inbound._seen_lock:
+        inbound._seen.clear()
+    _incoming(bot["id"], "oc_g", message_id, open_id, message_type="media", content_json=payload)
+
+    assert len(imported) == 1, f"同一条消息只该入库一次,实际 {len(imported)} 次"
+    assert len(_runs(client, workflow["id"])) == 1
+    assert [one["status"] for one in _events(client, trigger["id"])] == ["started"]
+
+
+def test_被限流的消息回落到智能体会话(monkeypatch) -> None:
+    """[medium] ADR 0065 §3:筛选不命中(**限流了**)时"一切如常,会话链路一个字节都没变"。
+    被限流的那条照旧喂给智能体,面板上那一行 `throttled` 照旧留痕。"""
+    client = fresh_client()
+    from tests.test_feishu import _configured
+
+    _configured(client)
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t21")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={}, max_runs_per_minute=1)
+    sent = _sent_texts(monkeypatch)
+    agent_ran: list[object] = []
+
+    def fake_turn(*args, **kwargs):
+        agent_ran.append(args)
+        return TurnResult(text="智能体接住了")
+
+    monkeypatch.setattr(host, "run_turn", fake_turn)
+
+    _incoming(bot["id"], "oc_g", _unique("ok"), open_id, content_json=json.dumps({"text": "第一条"}))
+    _incoming(bot["id"], "oc_g", _unique("over"), open_id, content_json=json.dumps({"text": "第二条"}))
+    assert host.wait_for_idle_turns(_RUN_BUDGET)
+
+    assert len(_runs(client, workflow["id"])) == 1, "限流的那条不该起运行"
+    assert sorted(one["status"] for one in _events(client, trigger["id"])) == ["started", "throttled"]
+    assert agent_ran, "被限流的消息该回落到智能体会话,而不是两个去处都不去"
+    assert "智能体接住了" in "\n".join(text for _, text in sent)
+
+
+def test_认领的都限流_落选的不算数(monkeypatch) -> None:
+    """[medium] 跟上面那条同一件事的边界:五条触发器都认同一句话时,前三条认领、后两条 `skipped`
+    —— 前三条全被限流,这条消息仍然该回落到智能体会话(**落选的不是"它起过运行"**)。
+    """
+    client = fresh_client()
+    from tests.test_feishu import _configured
+
+    _configured(client)
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t24")
+    workflow = _workflow(client, ws)
+    triggers = [
+        _trigger(client, ws, workflow["id"], name=f"t{index}", params={}, max_runs_per_minute=1)
+        for index in range(5)
+    ]
+    _sent_texts(monkeypatch)
+    agent_ran: list[object] = []
+
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: agent_ran.append(a) or TurnResult(text="接住了"))
+
+    _incoming(bot["id"], "oc_g", _unique("many1"), open_id, content_json=json.dumps({"text": "第一条"}))
+    _incoming(bot["id"], "oc_g", _unique("many2"), open_id, content_json=json.dumps({"text": "第二条"}))
+    assert host.wait_for_idle_turns(_RUN_BUDGET)
+
+    statuses = sorted(one["status"] for trigger in triggers for one in _events(client, trigger["id"]))
+    #: 第一条:三条起跑、两条落选;第二条:三条限流、两条落选。
+    assert statuses == ["skipped", "skipped", "skipped", "skipped", "started", "started", "started", "throttled", "throttled", "throttled"], statuses
+    assert len(_runs(client, workflow["id"])) == 3, "限流的那三条不该起运行"
+    assert agent_ran, "认领的三条全被限流时,这条消息该回落到智能体会话"
+
+
+def _receipts_survive_a_failing_send(monkeypatch, failure: BaseException) -> None:
+    """两条触发器各回一次执,而第一条发送以 `failure` 失败 —— 第二条照样要发出去。"""
+    from app.integrations.feishu import connections
+
+    #: 这条用例只关心回执怎么发,不起真的长连接子进程:它是另一个进程,退出时要写机器人状态,
+    #: 而这条用例里第二遍 fresh_client() 会把库重建掉 —— 于是那条泵线程撞上
+    #: 「no such table: feishu_bots」(正是 connections.stop_connection 注释里记着的那件事)。
+    monkeypatch.setattr(connections, "start_or_report", lambda bot_id: None)
+
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t22")
+    workflow = _workflow(client, ws)
+    for index in range(2):
+        _trigger(client, ws, workflow["id"], name=f"t{index}", params={})
+
+    attempts: list[str] = []
+    delivered: list[str] = []
+    first_receipt = {"raised": False}
+
+    def flaky(bot, chat_id, text):
+        attempts.append(text)
+        if "已按触发器" in text and not first_receipt["raised"]:
+            first_receipt["raised"] = True
+            raise failure
+        delivered.append(text)
+        return "om_x"
+
+    monkeypatch.setattr(feishu_client, "send_text", flaky)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("m2"), open_id, content_json=json.dumps({"text": "起两条"}))
+
+    name = type(failure).__name__
+    receipts = [text for text in attempts if "已按触发器" in text]
+    assert len(receipts) == 2, f"{name}:两条触发器各该回一次执:{attempts}"
+    assert receipts[1] in delivered, f"{name}:第一条抛了,第二条照样要发:{delivered}"
+
+
+def test_一条回执发不出去不影响后面几条(monkeypatch) -> None:
+    """[low] 机器人被移出群 / 网络抖动:第一条回执抛,不该把后面那条(**其实已经起跑了**的运行
+    的回执)一起丢掉,更不该让线程带着未处理异常结束。
+
+    两种抛法都试:飞书自己回的 `FeishuError`,和网络抖动(`RetryingClient` 把连接断开 / 超时 / DNS
+    按 `httpx.RequestError` 抛出来,见 core/http_retry —— 那条路不是 FeishuError)。
+    """
+    import httpx
+
+    _receipts_survive_a_failing_send(
+        monkeypatch, feishu_client.FeishuError("feishuErr_sendText", detail="bot was removed from the chat")
+    )
+    _receipts_survive_a_failing_send(monkeypatch, httpx.ConnectError("connection reset"))
+
+
+def test_图已删的触发器不能再打开(monkeypatch) -> None:
+    """[low] `update` 只在给了 `workflow_id` 时校验图在不在:`{"enabled": true}` 对"图已删"的
+    触发器返回 200,直到下一条消息才 refused + 自停 —— 用户在面板上看着它是开着的。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    assert client.delete(f"/api/workflows/{workflow['id']}").status_code == 204
+
+    res = client.patch(f"/api/workflow-triggers/{trigger['id']}", json={"enabled": True})
+    assert res.status_code == 422, f"图没了就该当场说,而不是等下一条消息:{res.text}"
+    #: 422 只挡"打开一条注定跑不起来的自动化":关掉它、改别的字段照旧。
+    assert client.patch(f"/api/workflow-triggers/{trigger['id']}", json={"enabled": False}).status_code == 200
+    assert client.patch(f"/api/workflow-triggers/{trigger['id']}", json={"name": "改个名"}).status_code == 200
+
+
+def test_同一刻创建的触发器按_id_排队(monkeypatch) -> None:
+    """[low] `created_at` 撞在同一刻时,顺序要有 tiebreaker —— 不然"先配的先跑"由数据库的
+    返回顺序说了算,而"前三条认领、后两条落选"的名额也跟着随机。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    stamp = datetime(2026, 1, 1, 12, 0, 0)
+    #: 插入顺序与 id 顺序**相反**:只看 created_at 时拿到的就是插入顺序。
+    with SessionLocal() as db:
+        for name in ("t-e", "t-d", "t-c", "t-b", "t-a"):
+            db.add(
+                WorkflowTrigger(
+                    id=name, workspace_id=ws, workflow_id=workflow["id"], name=name,
+                    message_types=["text"], created_at=stamp,
+                )
+            )
+        db.commit()
+
+    message = matching.IncomingMessage(
+        workspace_id=ws, bot_id="b", chat_id="c", message_id="m-tie",
+        sender_open_id="ou_1", message_type="text", text="来一条",
+    )
+    with SessionLocal() as db:
+        claimed, skipped = dispatch.claimable(db, message)
+
+    assert claimed == ["t-a", "t-b", "t-c"], f"同一刻创建时按 id 兜底:{claimed}"
+    assert skipped == ["t-d", "t-e"]
+
+
+def test_seen_recently_不看墙上时钟(monkeypatch) -> None:
+    """[low] 过期判据换成单调钟:系统时间往前跳一格(校时、夏令时),不该把"刚见过的消息"
+    整批放走 —— 那正是飞书重投被当成新消息、再付费跑一次的那一刻。"""
+    message_id = _unique("clock")
+    assert inbound.seen_recently(message_id) is False
+
+    real_time = time.time
+    monotonic_clock = time.monotonic
+
+    class _JumpedClock:
+        """只换掉 `inbound` 眼里的那只钟:别处照常用真时间。"""
+
+        @staticmethod
+        def time() -> float:
+            return real_time() + 3600
+
+        @staticmethod
+        def monotonic() -> float:
+            return monotonic_clock()
+
+    monkeypatch.setattr(inbound, "time", _JumpedClock)
+
+    assert inbound.seen_recently(message_id) is True
