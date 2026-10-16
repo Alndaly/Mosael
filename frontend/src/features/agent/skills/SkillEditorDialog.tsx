@@ -209,7 +209,8 @@ export function SkillEditorDialog({
               {t("agentSkillDraftHint")}
             </p>
           ) : null}
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* 每个字段各占一行、满宽(和导入弹窗同一条标准):两列会把输入框和它的说明挤成半行。 */}
+          <div className="grid gap-3">
             <label className={DIALOG_FIELD}>
               <span>{t("agentSkillsFieldTitle")}</span>
               <Input value={fields.title} maxLength={80} onChange={set("title")} placeholder={t("agentSkillsFieldTitlePlaceholder")} />
@@ -247,7 +248,7 @@ export function SkillEditorDialog({
               placeholder={t("agentSkillsFieldBodyPlaceholder")} />
             <small>{t("agentSkillsFieldBodyHint")}</small>
           </label>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3">
             <label className={DIALOG_FIELD}>
               <span>{t("agentSkillsFieldLicense")}</span>
               <Input value={fields.license} maxLength={500} onChange={set("license")} placeholder="MIT" />

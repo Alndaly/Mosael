@@ -192,6 +192,27 @@ describe("开关、导入、复制的卡", () => {
     expect(box).toHaveAttribute("data-state", "unchecked");
   });
 
+  it("显示名和技能名相同时,卡上只写一遍名字", async () => {
+    //: 卡上和设置页的导入审阅画的是同一份:同一个名字写两遍的话,人在哪一屏都得猜为什么。
+    api.getSkillImport.mockResolvedValue({
+      import_id: "i".repeat(32), source_name: "skills.zip",
+      skills: [{
+        name: "pdf", title: "pdf", description: "PDF 的做法", license: "", compatibility: "", allowed_tools: "", unknown_fields: [],
+        folder: "pdf", conflict: "",
+        files: [{ path: "SKILL.md", size: 20, script: false, text: "导入的全文", binary: false }],
+      }],
+    });
+    api.listConfirmations.mockResolvedValue([card("import_skill", {
+      url: "https://github.com/acme/skills/tree/main/skills/pdf", import_id: "i".repeat(32), enable: false,
+      _skills: [{ name: "pdf", title: "pdf", conflict: "", files: 1 }],
+    }, { choices: { enable: false } })]);
+    mountCenter();
+    await waitFor(() => expect(screen.getByText(/导入的全文/)).toBeInTheDocument());
+
+    const section = theCard().querySelector("[data-import-skill='pdf']") as HTMLElement;
+    expect(section.textContent!.split("pdf").length - 1).toBe(1);
+  });
+
   it("复制成我的:新的 SKILL.md 和没改的文件(从原来那份读)都摊开", async () => {
     api.getSkill.mockResolvedValue({
       ref: "creative-board", name: "creative-board", title: "创意画板", description: "d", source: "builtin", source_label: "Mosael 内置",

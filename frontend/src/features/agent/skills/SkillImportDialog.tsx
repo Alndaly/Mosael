@@ -35,6 +35,9 @@ function problemOf(item: AgentSkillImportItem, choice: Choice, t: (key: "agentSk
  *
  * 压缩包 / 文件夹已经在后端读好、放进了暂存,这里把每个技能的每个文件摊开给人看;要装哪几个、换不换名字、撞名时
  * 替不替换、装好开不开,都在这一屏定。「装好就启用」默认不勾 —— 导入的是别人写的做法,开它是一个信任决定。
+ *
+ * 中间那块表单**一行一件事、每行占满内容宽**:改名字段自己一行,两个勾选各自一行、整行可点。此前改名和勾选并排
+ * 成两列,输入框只占半行,勾选那列还得靠 `pt-6` 硬凑到和左列标签齐平。
  */
 export function SkillImportDialog({
   workspaceId,
@@ -101,9 +104,11 @@ export function SkillImportDialog({
         <p className="m-0 text-ui-sm text-muted-foreground">{t("agentSkillsImportHint")}</p>
         {items.map((item, index) => {
           const choice = choices[item.name] ?? initialChoice(item);
+          //: 显示名和装进去的名字是同一个时只写一遍 —— 同一个名字写两遍,人还得猜为什么。
+          const namedDifferently = Boolean(item.title) && item.title !== item.name;
           return (
             <section key={item.name} className="grid gap-3 border-t border-divider pt-4 first:border-t-0 first:pt-0" data-import-skill={item.name}>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                 <label className="flex cursor-pointer items-center gap-2 text-ui-md font-medium">
                   <Checkbox
                     checked={choice.include}
@@ -112,7 +117,13 @@ export function SkillImportDialog({
                   />
                   {item.title || item.name}
                 </label>
-                {item.title ? <span className="font-mono text-ui-xs text-muted-foreground">{item.name}</span> : null}
+                {namedDifferently ? (
+                  //: 两个名字不同就得说清哪个是装进去的,别让人猜(原来文件夹那一层的意思在下面那句里)。
+                  <span className="flex min-w-0 items-center gap-1.5 text-ui-xs text-muted-foreground" data-slot="import-skill-name">
+                    <span>{t("agentSkillsImportInstalledAs")}</span>
+                    <span className="break-all font-mono text-foreground">{item.name}</span>
+                  </span>
+                ) : null}
               </div>
               {item.folder && item.folder !== item.name ? (
                 <p className="m-0 text-ui-xs text-muted-foreground">
@@ -120,7 +131,7 @@ export function SkillImportDialog({
                 </p>
               ) : null}
               {choice.include && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <>
                   <label className={DIALOG_FIELD}>
                     <span>{t("agentSkillsImportRename")}</span>
                     <Input
@@ -132,7 +143,8 @@ export function SkillImportDialog({
                     />
                     {problems[index] ? <small className="!text-destructive">{problems[index]}</small> : null}
                   </label>
-                  <div className="grid content-start gap-2 pt-6 text-ui-sm">
+                  {/* 一行一件事,各自占满内容宽、整行都能点 —— 不再和改名挤成两列、靠 pt-6 硬凑对齐。 */}
+                  <div className="grid gap-2 text-ui-sm">
                     {item.conflict === "workspace" && (
                       <label className="flex cursor-pointer items-center gap-2">
                         <Checkbox checked={choice.replace} onCheckedChange={(value) => update(item.name, { replace: value === true })} />
@@ -144,7 +156,7 @@ export function SkillImportDialog({
                       {t("agentSkillsImportEnable")}
                     </label>
                   </div>
-                </div>
+                </>
               )}
               <SkillContent head={item} files={item.files ?? []} />
             </section>

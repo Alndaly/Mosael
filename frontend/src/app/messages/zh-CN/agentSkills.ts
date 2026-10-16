@@ -64,6 +64,7 @@ export const agentSkills = {
   agentSkillsImportInclude: "导入这个技能",
   agentSkillsImportEnable: "装好就启用",
   agentSkillsImportRename: "换个名字(可选)",
+  agentSkillsImportInstalledAs: "装进去的名字",
   agentSkillsImportConflictBuiltin: "和内置技能同名,得换个名字",
   agentSkillsImportConflictMine: "已经有同名的技能:换个名字,或者勾上替换",
   agentSkillsImportReplace: "替换掉原来那个",

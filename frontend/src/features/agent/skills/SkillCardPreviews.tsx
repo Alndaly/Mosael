@@ -221,7 +221,8 @@ function ImportSkillPreview({ payload, workspaceId }: { payload: Record<string, 
           <section key={item.name} className="grid min-w-0 gap-2 border-t border-divider pt-2.5 first:border-t-0 first:pt-0" data-import-skill={item.name}>
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
               <span className="text-ui-sm font-medium">{item.title || item.name}</span>
-              {item.title ? <span className="font-mono text-ui-xs text-muted-foreground">{item.name}</span> : null}
+              {/* 显示名和技能名是同一个时只写一遍 —— 同一个名字写两遍,人还得猜为什么(和导入审阅同一条)。 */}
+              {item.title && item.title !== item.name ? <span className="font-mono text-ui-xs text-muted-foreground">{item.name}</span> : null}
             </div>
             {item.conflict === "workspace" ? <p className="m-0 text-ui-xs text-warning">{t("agentSkillCardReplaces")}</p> : null}
             <SkillContent head={item} files={item.files ?? []} />

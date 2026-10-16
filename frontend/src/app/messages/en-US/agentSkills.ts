@@ -64,6 +64,7 @@ export const agentSkills = {
   agentSkillsImportInclude: "Import this skill",
   agentSkillsImportEnable: "Enable once installed",
   agentSkillsImportRename: "Rename (optional)",
+  agentSkillsImportInstalledAs: "Installed as",
   agentSkillsImportConflictBuiltin: "This name belongs to a built-in skill; choose another",
   agentSkillsImportConflictMine: "A skill with this name exists: rename it, or tick replace",
   agentSkillsImportReplace: "Replace the existing one",
