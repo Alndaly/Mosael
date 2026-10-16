@@ -3,9 +3,10 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { API_BASE, type Workspace } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Truncate } from "@/components/ui/truncate";
 import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
@@ -43,6 +44,37 @@ export function StartupRow() {
             if (next && value && !value.enabled) toast.error(t("settingsStartupRefused"));
           })
         }
+      />
+    </SettingsRow>
+  );
+}
+
+/**
+ * 外部打开的文件(访达 / 资源管理器的「打开方式」,或拖到程序坞 / 任务栏图标上)怎么办。
+ *
+ * **只在桌面壳里摆**:这条偏好说的是「别的程序把文件交给 Mosael」,而这件事的整条通道
+ * (preload 转发 `mosael:open-files`,见 lib/deepLink)只在装了桌面壳时存在 —— 浏览器里改了它
+ * 也没有任何东西会读。判据和上面那行 StartupRow 一模一样:桥不在就不摆。
+ *
+ * **和 StartupRow 挨着,而不是回「外观」**:这两行配的都是**这台机器上的桌面壳**行为
+ * (开机自启、别的程序交来的文件怎么办),不是主题/语言/字体那种看的东西,也不是这一页别的行
+ * 那种「连的是哪台后端」。谁读得到它们也相同 —— 只有桌面壳里才读得到。整页的分组见
+ * features/settings/settingsSections(「系统」组)。
+ */
+export function ExternalOpenRow() {
+  const t = useI18n();
+  const { externalOpen, setExternalOpen } = usePreferences();
+  if (!window.mosaelDesktop) return null;
+  return (
+    <SettingsRow label={t("settingsExternalOpen")} description={t("settingsExternalOpenDesc")}>
+      <Segmented
+        aria-label={t("settingsExternalOpen")}
+        value={externalOpen}
+        onValueChange={setExternalOpen}
+        options={[
+          { value: "import", label: t("settingsExternalOpenImport") },
+          { value: "preview", label: t("settingsExternalOpenPreview") },
+        ]}
       />
     </SettingsRow>
   );
@@ -111,6 +143,7 @@ export function BackendSection({ workspace }: { workspace: Workspace }) {
           <Truncate as="code" className="timecode max-w-[320px] text-xs text-muted-foreground">{workspace.id}</Truncate>
         </SettingsRow>
         <StartupRow />
+        <ExternalOpenRow />
         <SettingsRow label={t("settingsVersion")} description={t("settingsVersionDesc")}>
           <Truncate as="code" className="timecode max-w-[320px] text-xs text-muted-foreground">v{__APP_VERSION__}</Truncate>
           <UpdateCheckButton />

@@ -49,6 +49,13 @@ it("搜「语言」落到「外观」,并写出是里面的哪一行", () => {
   expect(screen.queryByText(messages["zh-CN"].studioSettingsEmpty)).toBeNull();
 });
 
+it("搜「打开外部文件」落到「后端」—— 这一行从「外观」挪到了那儿,搜索也得跟着走", () => {
+  search("打开外部文件");
+  const nav = screen.getByRole("navigation");
+  expect(within(nav).getByRole("button", { name: /后端/ }).textContent).toContain("打开外部文件");
+  expect(screen.queryByText(messages["zh-CN"].studioSettingsEmpty)).toBeNull();
+});
+
 it("搜「代理」:不是部署管理员的人看到它在管理页、由谁改", () => {
   const { container } = search("代理");
   const hits = container.querySelector("[data-settings-admin-hits]") as HTMLElement;

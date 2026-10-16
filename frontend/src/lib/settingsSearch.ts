@@ -35,7 +35,7 @@ export const SETTINGS_SEARCH: readonly SettingsSearchEntry[] = [
   { id: "agent-autopilot", label: "autopilotTitle", keywords: [] },
   { id: "feishu", label: "feishuTitle", keywords: [] },
   { id: "capabilities", label: "capabilityProvidersTitle", keywords: [], terms: ["settingsSearchTermsCapabilities"] },
-  { id: "backend", label: "settingsBackend", keywords: ["settingsEndpoint", "serverSwitchLabel", "settingsStartup", "settingsVersion", "updateCheck"] },
+  { id: "backend", label: "settingsBackend", keywords: ["settingsEndpoint", "serverSwitchLabel", "settingsStartup", "settingsExternalOpen", "settingsVersion", "updateCheck"] },
 ];
 
 export const ADMIN_SETTINGS: readonly AdminSetting[] = [
