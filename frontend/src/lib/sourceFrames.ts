@@ -124,6 +124,18 @@ export const ROLE_COPY: Record<SourceRole, RoleCopy> = {
   },
 };
 
+/**
+ * 一个角色收**哪一类**素材。`ROLE_COPY` 的 `accept` 就是这件事(文件选择器收什么),这里只是把它说成
+ * 三个词 —— 画板按它给上游素材找槽位,工作流检查器按它判「引用即发送并进来的这一份,是不是这个角色
+ * 要的那类素材」。和后端 `descriptors/shared.SOURCE_ROLE_MEDIA` 是同一份判断。
+ */
+export function roleMedia(role: string): "image" | "video" | "audio" {
+  const accept = (ROLE_COPY as Record<string, RoleCopy | undefined>)[role]?.accept ?? "image/*";
+  if (accept.startsWith("video/")) return "video";
+  if (accept.startsWith("audio/")) return "audio";
+  return "image";
+}
+
 /** 这个槽位是空的吗 —— 素材和外链都没有。 */
 /**
  * 一行素材槽分几列 —— **一份就占满整行**,最多三份。真控件(ai-studio/FrameSlotField)和表单预览

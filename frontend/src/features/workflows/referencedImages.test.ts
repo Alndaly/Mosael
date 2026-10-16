@@ -90,4 +90,16 @@ describe("哪几处引用会成为图片", () => {
     expect(referencedImages(SPECS, { prompt: "随便写点什么" }, REGISTRY, nodes)).toEqual({});
     expect(referencedImages({ image_asset_ids: { type: "template" } }, { prompt: "{{pic.asset_id}}" }, REGISTRY, nodes)).toEqual({});
   });
+
+  it("生成节点的「输入素材」也是同一份声明:提示词里引用到的素材并进 source_assets", () => {
+    //: 那一格并进来时**带角色**(后端 `ref_assets_role`,默认「参考图」)—— 界面这一层只管摆出引用,
+    //: 角色由 source_assets 那一块的控件给(见 NodeInspector.autoSources.dom.test)。
+    const specs: Record<string, ConfigSpec> = {
+      prompt: { type: "template" },
+      source_assets: { type: "template", lines: true, ref_assets_from: ["prompt"], ref_assets_role: "reference_image" },
+    };
+    expect(referencedImages(specs, { prompt: "照 {{pic.asset_id}} 画" }, REGISTRY, nodes)).toEqual({
+      source_assets: [{ path: "pic.asset_id", assetId: "img-a" }],
+    });
+  });
 });

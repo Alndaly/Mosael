@@ -62,6 +62,22 @@
           "en": "Input media"
         }
       },
+      "source_assets_excluded": {
+        "type": "list",
+        "edited_by": "source_assets",
+        "label": {
+          "zh": "不要自动带上的素材",
+          "en": "Referenced media left out"
+        }
+      },
+      "source_assets_roles": {
+        "type": "list",
+        "edited_by": "source_assets",
+        "label": {
+          "zh": "引用来的素材用什么角色",
+          "en": "Roles for referenced media"
+        }
+      },
       "source_group": {
         "type": "string",
         "label": {

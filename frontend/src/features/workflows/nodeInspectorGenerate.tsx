@@ -1,16 +1,21 @@
 import React from "react";
+import { RotateCcw, Wand2, X } from "lucide-react";
 
 import type { GenerationOption, WorkflowGraph } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import type { MessageKey } from "@/app/messages";
 import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { declaredChoices } from "@/components/generation/parameterPanel";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
 import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Truncate } from "@/components/ui/truncate";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FIELD_BOX, type useNodeFieldOptions } from "@/features/nodeForms/NodeConfigForm";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
+import type { AutoImageRef } from "@/features/nodeForms/AssetGridField";
 import { generationModelOf } from "@/features/workflows/readiness";
 import {
   SOURCE_ROLE_LABELS,
@@ -23,6 +28,9 @@ import {
   valueForRole,
   withRole,
 } from "@/features/workflows/sourceAssetLines";
+import { useAssetDetails } from "@/lib/assetQueries";
+import { assetKindKey } from "@/lib/assetKinds";
+import { roleMedia } from "@/lib/sourceFrames";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import {
   GENERATION_KINDS,
@@ -139,11 +147,41 @@ function DeclaredGenControl({
 
 type NodeConfig = Record<string, unknown>;
 
+/** 那一格记账(`type: "list"`:排除清单、角色覆盖)里现在的那几条。 */
+function storedLedger(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+/** 一条记账说的是哪一处引用:一条一个引用路径,带角色时写成 `引用路径:角色`(存的是右边那半是角色)。
+ *  和 `parseSourceAssetText` 同一条读法:**从右边**切,后半段真是一个角色名时才算角色。 */
+function ledgerRef(entry: string): string {
+  const at = entry.lastIndexOf(":");
+  const role = at > 0 ? entry.slice(at + 1).trim() : "";
+  return at > 0 && (SOURCE_ROLE_ORDER as readonly string[]).includes(role) ? entry.slice(0, at).trim() : entry;
+}
+
+/** `<那一格>_roles`:用户把哪一处自动来的引用改成了什么角色(没记的就是声明的默认角色)。 */
+function roleLedger(value: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const entry of storedLedger(value)) {
+    const ref = ledgerRef(entry);
+    if (ref !== entry) out[ref] = entry.slice(ref.length + 1).trim();
+  }
+  return out;
+}
+
+/** 一个角色在界面上叫什么。认不出的角色照原样写出来 —— 不静默换成别的词。 */
+function roleNameOf(t: ReturnType<typeof useI18n>, role: string): string {
+  const key = (SOURCE_ROLE_LABELS as Record<string, MessageKey | undefined>)[role];
+  return key ? t(key) : role;
+}
+
 /** 专区的状态:所选模型、它声明的参数、输入素材。NodeInspector 在原来那个位置调它。 */
 export function useGenerateNodeSection({
   node,
   config,
   generationModels,
+  autoSources,
   onChange,
   setConfig,
   t,
@@ -151,6 +189,8 @@ export function useGenerateNodeSection({
   node: WorkflowGraph["nodes"][number];
   config: NodeConfig;
   generationModels: { options: GenerationOption[]; loaded?: boolean };
+  /** 提示词里引用到的素材(「引用即发送」)—— 检查器按同一份声明算好交下来(见 workflows/referencedImages)。 */
+  autoSources: readonly AutoImageRef[];
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>, options?: SetGraphOptions) => void;
   setConfig: (key: string, value: unknown, options?: SetGraphOptions) => void;
   t: ReturnType<typeof useI18n>;
@@ -303,6 +343,11 @@ export function useGenerateNodeSection({
     () => extraLines(genSourceLines, genSourceRoles as readonly string[]),
     [genSourceLines, genSourceRoles],
   );
+  //: 自动来的那几处引用里,静态就知道指的是哪一份素材的(源节点是「素材」且写死了 id):查一下它的种类 ——
+  //: 不是这个角色要的那一类时运行时会被跳过,界面上明说,而不是让人等一次没有它的生成。
+  const autoSourceDetails = useAssetDetails(
+    autoSources.map((one) => one.assetId).filter((id): id is string => Boolean(id)),
+  );
 
   return {
     genCustom,
@@ -317,6 +362,8 @@ export function useGenerateNodeSection({
     genSourceLines,
     genSourceRoles,
     genExtraSourceLines,
+    autoSources,
+    autoSourceDetails,
   };
 }
 
@@ -332,6 +379,7 @@ export function generateNodeSection({
   generationModels,
   fieldOptions,
   variables,
+  sourceRoleDefault,
   onChange,
   setConfig,
   setTextConfig,
@@ -346,6 +394,8 @@ export function generateNodeSection({
   generationModels: { options: GenerationOption[] };
   fieldOptions: ReturnType<typeof useNodeFieldOptions>;
   variables: string[];
+  /** 「输入素材」那一格声明的默认角色(后端 `ref_assets_role`,维护者拍板是「参考图」)。 */
+  sourceRoleDefault: string;
   onChange: (patch: Partial<WorkflowGraph["nodes"][number]>, options?: SetGraphOptions) => void;
   setConfig: (key: string, value: unknown, options?: SetGraphOptions) => void;
   setTextConfig: (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -364,8 +414,20 @@ export function generateNodeSection({
     genSourceLines,
     genSourceRoles,
     genExtraSourceLines,
+    autoSources,
+    autoSourceDetails,
   } = gen;
   const formed = formedGroups(generationModels.options);
+  //: 那一格的两份记账(`type: "list"`,由「输入素材」那一格的控件一起编辑):点名不要的、改了角色的。
+  //: 运行时的读法是同一条(`binding.with_referenced_assets`);删掉就是删掉,下一轮不会又塞回来。
+  const sourceExcluded = storedLedger(config.source_assets_excluded);
+  const sourceRoles = roleLedger(config.source_assets_roles);
+  /** 记下这一处引用用什么角色发:一条一个 `引用路径:角色`;没记的就是声明里的默认角色。 */
+  const setSourceRole = (path: string, role: string) =>
+    setConfig("source_assets_roles", [
+      ...storedLedger(config.source_assets_roles).filter((one) => ledgerRef(one) !== path),
+      `${path}:${role}`,
+    ]);
   return (
     <div className="grid min-w-0 gap-2">
       <div className={FIELD_BOX}>
@@ -592,6 +654,79 @@ export function generateNodeSection({
           )}
         </div>
       ))}
+      {/* **自动来的那几处引用**(「引用即发送」):提示词里 `{{…}}` 引用到的素材,运行时会以「参考图」
+          并进「输入素材」(后端 binding.with_referenced_assets —— 同一份声明、同一处推导)。
+          和上面按角色一行一格手动填的**分开摆**:看着名字就知道这一份是怎么进来的。
+          角色改得动(记在 `source_assets_roles`)、删得掉、点得回来(记在 `source_assets_excluded`);
+          模型不收这个角色时**明说**它不会被送进去,而不是沉默 —— 沉默地丢掉和硬塞都不许。 */}
+      {autoSources.length > 0 && (
+        <div className={FIELD_BOX} data-auto-sources="">
+          <span>
+            <Wand2 size={11} strokeWidth={1.8} />
+            {t("wfGenAutoSourcesTitle")}
+          </span>
+          {autoSources.map((ref) => {
+            const off = sourceExcluded.includes(ref.path);
+            const role = sourceRoles[ref.path] ?? sourceRoleDefault;
+            //: 这个模型收哪几种角色,是**描述符说了算**(和运行时同一份判据、同一个解析)。模型还没认出来
+            //: (清单里没有它)时不下结论:那时图跑不了,别处已经说了原因。
+            const accepted = (genSourceRoles as readonly string[]).includes(role);
+            const known = genModel !== null;
+            const asset = ref.assetId ? autoSourceDetails.byId.get(ref.assetId) : undefined;
+            //: 静态就知道是哪一份素材时顺手判一眼:不是这个角色要的那一类,运行时会被跳过。
+            const wrongKind = asset !== undefined && asset.kind !== roleMedia(role);
+            return (
+              <div
+                key={ref.path}
+                data-auto-source-ref={ref.path}
+                data-auto-source-on={off ? "false" : "true"}
+                className="flex min-w-0 items-center gap-1.5"
+              >
+                <Truncate className="min-w-0 flex-1 text-ui-2xs">{ref.label}</Truncate>
+                {wrongKind && (
+                  <span data-auto-sources-wrong-kind="" className="shrink-0 text-ui-2xs text-muted-foreground">
+                    {t("wfGenAutoSourcesWrongKind").replace("{kind}", t(assetKindKey(asset.kind)))}
+                  </span>
+                )}
+                {!off && known && !accepted && (
+                  <span data-auto-sources-rejected="" className="shrink-0 text-ui-2xs text-muted-foreground">
+                    {t("wfGenAutoSourcesRejected").replace("{role}", roleNameOf(t, role))}
+                  </span>
+                )}
+                {/* 这个模型收得下的角色都列出来,包括**当前这个它不收**的时候 —— 换一个收得下的角色就能发
+                    (角色不同结果不同:首帧是"从这张图动起来",参考图是"照这个风格来")。 */}
+                {!off && known && genSourceRoles.length > 0 && (
+                  <OptionPicker
+                    size="xs"
+                    value={accepted ? role : ""}
+                    ariaLabel={t("wfGenSourceRole")}
+                    options={genSourceRoles.map((one) => ({ value: one, label: roleNameOf(t, one) }))}
+                    onChange={(next) => setSourceRole(ref.path, next)}
+                  />
+                )}
+                <IconButton
+                  size="icon-xs"
+                  variant="ghost"
+                  data-auto-source-toggle=""
+                  label={(off ? t("wfGenAutoSourcesRestore") : t("wfGenAutoSourcesDrop")).replace("{name}", ref.label)}
+                  onClick={() =>
+                    setConfig(
+                      "source_assets_excluded",
+                      off ? sourceExcluded.filter((one) => one !== ref.path) : [...sourceExcluded, ref.path],
+                    )
+                  }
+                  className="shrink-0 text-muted-foreground"
+                >
+                  {off ? <RotateCcw size={11} /> : <X size={11} />}
+                </IconButton>
+              </div>
+            );
+          })}
+          {/* 引用即发送说的是**引用到的图片**:并进来的是这一格的角色要的那一类素材,不是的跳过;
+              模型收不下的角色一个都不硬塞。这两句是这一块的规矩,不是模型的选择。 */}
+          <small data-auto-sources-hint="">{t("wfGenAutoSourcesHint")}</small>
+        </div>
+      )}
       {genExtraSourceLines.length > 0 && (
         // 换了模型之后不再被支持的角色。**不能悄悄丢掉** —— 用户换个模型看看效果,
         // 回来发现之前挂的东西没了,比多显示一行难受得多。

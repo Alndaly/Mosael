@@ -378,7 +378,14 @@ export function NodeInspector({
   };
 
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
-  const gen = useGenerateNodeSection({ node, config, generationModels, onChange, setConfig, t });
+  //: 「输入素材」那一格声明的默认角色(后端 node_types 的 `ref_assets_role`)——「引用即发送」并进来的
+  //: 那一份以它发(维护者拍板:默认「参考图」)。声明没有(大模型节点那一格)就是空串:不带角色。
+  const sourceRoleDefault = String(allSpecs.source_assets?.ref_assets_role ?? "").trim();
+  const gen = useGenerateNodeSection({
+    node, config, generationModels,
+    autoSources: autoImages.source_assets ?? [],
+    onChange, setConfig, t,
+  });
   const { genPromptMode, genSourceRoles } = gen;
   //: 「输入素材」那几格是这里自己画的专区(不走字段声明),它要的素材清单由这里说 —— 画着几格就要,一格没有就不拉。
   const fieldOptions = useNodeFieldOptions({
@@ -736,6 +743,7 @@ export function NodeInspector({
             generationModels,
             fieldOptions,
             variables,
+            sourceRoleDefault,
             onChange,
             setConfig,
             setTextConfig,

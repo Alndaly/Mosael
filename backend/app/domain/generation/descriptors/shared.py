@@ -48,6 +48,25 @@ SOURCE_ROLE_HELP = {
     "mask": "局部重绘的蒙版:白色是要改的地方,和要改的那张图(参考图)一起给",
 }
 
+#: 每个角色收**哪一种素材**。这份知识此前只活在前端(lib/sourceFrames 的 ROLE_COPY.accept ——
+#: 上传槽那个文件选择器收什么);「引用即发送」把提示词里引用到的素材并进来时要问同一句话:
+#: 并成 `reference_image` 的那一份**必须真是一张图** —— 把一段视频当参考图发出去,换来的是提交期
+#: 的 400 或者一次白花钱的生成,而用户的提示词没有任何问题。
+#:
+#: `first_clip` 在音频续写时是一段音频,这里按**视频**算:和界面上那个文件选择器收什么一致
+#: (前端那张表在 lib/sourceFrames;两处要一起改,背后是同一个判断)。
+SOURCE_ROLE_MEDIA = {
+    "first_frame": "image",
+    "last_frame": "image",
+    "reference_image": "image",
+    "reference_video": "video",
+    "reference_audio": "audio",
+    "source_video": "video",
+    "first_clip": "video",
+    "driving_audio": "audio",
+    "mask": "image",
+}
+
 KEYFRAME_GROUP = ["first_frame", "last_frame"]
 
 REFERENCE_GROUP = ["reference_image", "reference_video", "reference_audio"]

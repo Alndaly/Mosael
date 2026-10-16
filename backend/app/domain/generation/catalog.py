@@ -7,6 +7,7 @@ from typing import Any
 from app.domain.generation.descriptors.shared import (
     SOURCE_ROLE_LABELS,  # noqa: F401
     SOURCE_ROLE_HELP,  # noqa: F401
+    SOURCE_ROLE_MEDIA,  # noqa: F401
     KEYFRAME_GROUP,  # noqa: F401
     REFERENCE_GROUP,  # noqa: F401
     SOURCE_GROUPS,  # noqa: F401

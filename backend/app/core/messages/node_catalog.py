@@ -46,6 +46,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "aiErr_refreshNoResult": {"zh": "刷新凭据没有返回结果", "en": "Refreshing the credentials returned no result"},
     "wfNode_ai_generate_source_assets": {"zh": "每行一条 `素材id` 或 `素材id:角色`。角色:{roles_zh};不写角色时图生视频按首帧、图生图按参考图。", "en": "One `asset_id` or `asset_id:role` per line. Roles: {roles}. With no role, image-to-video treats it as the first frame and image-to-image as a reference image."},
+    #: 「引用即发送」在生成节点上的那两格记账(ADR 0067 同一个语义;大模型节点那份叫 image_asset_ids_excluded)。
+    "wfNode_ai_generate_source_assets_excluded": {"zh": "提示词里引用到、但点名不要的素材:一条一个引用路径或素材 id(由上面那一格的控件编辑)", "en": "Media referenced in the prompt but deliberately left out: one reference path or asset id per entry (edited by the field above)"},
+    "wfNode_ai_generate_source_assets_roles": {"zh": "自动带上的素材用什么角色:一条一个 `引用路径:角色`;没记的就是默认的「参考图」(由上面那一格的控件编辑)", "en": "The role an automatically included reference is sent as: one `path:role` per entry; anything unlisted keeps the default, “reference image” (edited by the field above)"},
     "wfNode_publish": {"zh": "发布", "en": "Publish"},
     "wfNode_publish_desc": {"zh": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。", "en": "Publish to Douyin / Xiaohongshu / Weixin Channels / Bilibili using an already signed-in account (carried out by the desktop app's embedded browser)."},
     "wfNode_publish_account_id": {"zh": "浏览器池可查", "en": "Look it up in the browser pool"},

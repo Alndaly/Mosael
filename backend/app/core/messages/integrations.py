@@ -896,6 +896,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_session_name": {"zh": "会话名称", "en": "Session name"},
     "wfField_source": {"zh": "来源", "en": "Source"},
     "wfField_source_assets": {"zh": "输入素材", "en": "Input media"},
+    #: 生成节点上那两格记账(自动并进来的素材里,用户点名不要的 / 改了角色的)。它们不单独出现在面板上
+    #: (声明 edited_by,由「输入素材」那一格的控件一起编辑),但报错提到字段时得有个人话名字,
+    #: 不能露出 `source_assets_excluded` 这个键名。
+    "wfField_source_assets_excluded": {"zh": "不要自动带上的素材", "en": "Referenced media left out"},
+    "wfField_source_assets_roles": {"zh": "引用来的素材用什么角色", "en": "Roles for referenced media"},
     "wfField_start": {"zh": "起始位置", "en": "Start"},
     "wfField_stop": {"zh": "停止词", "en": "Stop sequences"},
     "wfField_system": {"zh": "系统提示词", "en": "System prompt"},

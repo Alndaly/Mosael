@@ -209,6 +209,17 @@ export const aiStudio = {
   wfGenSourceSlotNames: "In order: {names}",
   wfGenSourceExtra: "Other assets",
   wfGenSourceExtraHint: "Lines that don't belong to a slot above: a whole-group reference (one line brings in a set of assets, each carrying its own role), or roles the current model does not accept — kept in case you switch back.",
+  //: “A reference means it gets sent” on the generation node (backend binding.with_referenced_assets, same declaration).
+  wfGenSourceRole: "Send as",
+  wfGenAutoSourcesTitle: "Referenced in the prompt:",
+  wfGenAutoSourcesHint:
+    "A reference means it gets sent: media referenced in the prompt joins this field automatically, so there is no " +
+    "need to pick it again. It joins as the kind of media its role takes — anything else is skipped, and a role the " +
+    "model does not accept is never sent.",
+  wfGenAutoSourcesDrop: "Leave out “{name}”",
+  wfGenAutoSourcesRestore: "Include “{name}” automatically again",
+  wfGenAutoSourcesRejected: "This model does not take {role}; the referenced image will not be sent",
+  wfGenAutoSourcesWrongKind: "Not {kind}; not sent",
   genSwapKeyframes: "Swap first and last",
   genSwapKeyframesNeedsBoth: "Add both a first and a last frame to swap them",
   genReferenceImage: "Reference image",

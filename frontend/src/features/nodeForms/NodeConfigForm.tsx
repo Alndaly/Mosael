@@ -89,6 +89,10 @@ export interface ConfigSpec {
    *  (后端 NODE_TYPES 的 `ref_assets_from`,推导见 binding.with_referenced_assets)。检查器据此在这一格
    *  下面列出自动来的那几处引用(见 workflows/referencedImages),那一格的控件负责摆出来。 */
   ref_assets_from?: string[];
+  /** 自动并进这一格时**以什么角色**发(后端 NODE_TYPES 的 `ref_assets_role`)。只有一行一项的素材字段
+   *  (`source_assets`,每行 `素材:角色`)声明它;没有它的那一格并进来的就是素材本身(大模型节点那一格)。
+   *  用户改过的角色记在 `<这一格>_roles` 里(见 workflows/nodeInspectorGenerate)。 */
+  ref_assets_role?: string;
   /** 值是**行的列表**(生成节点的输入素材,每行 `素材:角色`)。画布上每一行是一个输入口(见 workflows/portNames)。 */
   lines?: boolean;
   /** 这一格里每一项(对象的键、列表的一行)叫什么从哪里取:`generation_parameters` / `source_roles`(见 workflows/portNames)。 */

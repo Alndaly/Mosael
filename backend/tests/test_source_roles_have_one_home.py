@@ -32,6 +32,22 @@ def test_两张产地表本身对得上() -> None:
     )
 
 
+def test_每个角色还说得出自己收哪类素材() -> None:
+    """`SOURCE_ROLE_MEDIA` 和角色表一一对应,值只能是三种素材。
+
+    「引用即发送」按它判「并成 `reference_image` 的那一份是不是真的一张图」(见
+    workflows/binding.with_referenced_assets):少一条 = 那个角色并进来的素材不做检查,
+    一段视频会被当成参考图发出去 —— 换来一次 400 或者一次白花钱的生成。
+    """
+    from app.domain.generation.catalog import SOURCE_ROLE_MEDIA
+
+    assert set(SOURCE_ROLE_MEDIA) == set(SOURCE_ROLES), (
+        f"收哪类素材的表与角色表对不上:只在角色表={set(SOURCE_ROLES) - set(SOURCE_ROLE_MEDIA)}、"
+        f"只在素材表={set(SOURCE_ROLE_MEDIA) - set(SOURCE_ROLES)}"
+    )
+    assert set(SOURCE_ROLE_MEDIA.values()) <= {"image", "video", "audio"}, SOURCE_ROLE_MEDIA
+
+
 def test_工作流节点的说明覆盖全部角色() -> None:
     """**两种语言都要覆盖。** 这句话是现算的,而它有中英两份模板 —— 只有中文那句跟着角色表
     走的话,加第九种角色时英文界面和读英文的智能体永远不知道有这个东西。

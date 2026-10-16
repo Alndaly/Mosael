@@ -895,6 +895,58 @@ def validate_against_capabilities(
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
 
 
+def capabilities_of_choice(
+    db: Session, *, provider: str, model: str, kind: str, provider_profile_id: str | None
+) -> dict[str, Any] | None:
+    """工作流节点那三格(连接身份 + provider + model)指向的模型,描述符长什么样;**认不出来回 None**。
+
+    和界面拿到的那一份同一处解析:有连接身份时走逐模型解析(用户在自己那行模型上声明的能力档案
+    从这里生效 —— 见 generation/resolution);没有(老的图、模板里手写的 provider/model)退回内置目录。
+    **认不出来就是 None,不给兜底那份** —— 兜底那份是给界面渲染用的,拿它当"这个模型不收"的证据
+    会把本来能用的东西挡在外面(见 catalog.capabilities_for)。
+    """
+    from app.db.models import ProviderModel
+    from app.domain.generation.resolution import resolve_row
+
+    if provider_profile_id:
+        row = db.scalar(
+            select(ProviderModel).where(
+                ProviderModel.provider_profile_id == provider_profile_id,
+                ProviderModel.model_id == model,
+            )
+        )
+        if row is not None and row.profile is not None:
+            try:
+                resolved = resolve_row(db, row, kind)
+            except GenerationResolutionError:
+                return None
+            return resolved.capabilities if resolved.capabilities_known else None
+    return known_capabilities_for(provider, model, kind)
+
+
+def takes_source_role(
+    db: Session, *, provider: str, model: str, kind: str, provider_profile_id: str | None, role: str
+) -> bool:
+    """这个模型在这种生成上**收不收**这个素材角色。
+
+    「引用即发送」拿它当能力闸(见 workflows/binding.with_referenced_assets):提示词里引用到的素材
+    并进「输入素材」之前先问一句模型认不认那个角色 —— 猜错就是一次提交期报错,或者一次白花钱的生成。
+
+    判据和生成漏斗、模型选择器**同一处**:描述符参数面里的角色(`allowed_parameter_keys`,它同时
+    算上 `<角色>_url` 那些别名)。
+
+    **认不出这个模型 = 不收。** 和 validate_against_capabilities 那边「认不出就放行」刚好相反,因为
+    代价不同:那边放行是让服务商自己判;这边是**替用户往请求里加东西** —— 说不清它收,就不加。
+    界面上用的是同一份描述符,所以两边说的是同一句话。
+    """
+    capabilities = capabilities_of_choice(
+        db, provider=provider, model=model, kind=kind, provider_profile_id=provider_profile_id
+    )
+    if capabilities is None:
+        return False
+    return role in allowed_parameter_keys(capabilities, kind)
+
+
 #: 手填的尺寸:`768x1024`、`768 × 1024`、`768*1024` 都认。
 _SIZE_TEXT = re.compile(r"^\s*(\d+)\s*[x×*]\s*(\d+)\s*$", re.IGNORECASE)
 

@@ -197,6 +197,80 @@ def _referenced_ids(value: Any) -> list[str]:
     return []
 
 
+def _source_lines(value: Any) -> list[str]:
+    """一行一项的素材字段(`source_assets`)现在的那几行,**原样** —— 顺序就是发给模型的顺序。"""
+    if isinstance(value, list):
+        return [str(one).strip() for one in value if str(one or "").strip()]
+    if isinstance(value, str):
+        return [part.strip() for part in value.split("\n") if part.strip()]
+    return []
+
+
+def _line_asset_ids(lines: list[str]) -> list[str]:
+    """一行一项的素材字段里现在的那几份素材 id(每行 `素材id` 或 `素材id:角色`)。
+
+    和唯一的那份读法(generation.operations.parse_source_assets)同一条:**从右边**切,后半段真是一个
+    角色名时才算角色 —— 模板串自己带冒号(`{{图.a:b}}`)不能被腰斩。这里只要 id 那一半:判
+    「这一份已经在里面了,不要并第二遍」。
+    """
+    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+
+    out: list[str] = []
+    for line in lines:
+        head, sep, tail = line.rpartition(":")
+        out.append(head.strip() if sep and tail.strip() in SOURCE_ROLE_LABELS else line)
+    return out
+
+
+def _role_overrides(value: Any) -> dict[str, str]:
+    """`<那一格>_roles`:用户把自动来的哪一条引用改成了什么角色(一条一个 `引用路径:角色`)。"""
+    from app.domain.generation.catalog import SOURCE_ROLE_LABELS
+
+    entries = value if isinstance(value, list) else [value]
+    out: dict[str, str] = {}
+    for entry in entries:
+        head, sep, tail = str(entry or "").strip().rpartition(":")
+        if sep and head.strip() and tail.strip() in SOURCE_ROLE_LABELS:
+            out[head.strip()] = tail.strip()
+    return out
+
+
+def _generation_source_role(db: Any, config: dict[str, Any], role: str) -> bool:
+    """生成节点那一格的能力闸:这个模型认不认这个素材角色(见 generation.operations.takes_source_role)。
+
+    问的是节点上写的连接身份 / provider / model / kind 那几格;模型名本身可能来自上游 —— 引擎传进来的
+    config 已经插过值、绑过数据边,所以这里问的就是**这一次真的要用的那个模型**。
+    """
+    from app.domain.generation.operations import takes_source_role
+
+    provider = str(config.get("provider") or "").strip()
+    model = str(config.get("model") or "").strip()
+    if not provider or not model:
+        return False
+    return takes_source_role(
+        db,
+        provider=provider,
+        model=model,
+        kind=str(config.get("kind") or "image").strip() or "image",
+        provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+        role=role,
+    )
+
+
+#: `ref_assets_gate` 点名的能力闸:**注入之前先问一句「这个模型收不收这个角色」**。
+#: 判据是既有的那一套(生成描述符的参数面 + 连接上声明的档案,见 generation.operations),和生成漏斗、
+#: 界面上的角色格子是同一个答案。生成节点那一格必须有闸:那里「以什么角色发」由模型能力决定,塞错了
+#: 就是一次报错或者一次白花钱的生成(大模型节点那一格没有闸 —— 那边只是多带一张图,代价不同)。
+REF_ASSET_GATES = {"generation_source_role": _generation_source_role}
+
+
+def _gate_accepts(gate: Any, db: Any, config: dict[str, Any], role: str, cache: dict[str, bool]) -> bool:
+    """问一次闸,同一个角色只问一次(一次运行里会问到的角色就那么几个)。"""
+    if role not in cache:
+        cache[role] = bool(gate and gate(db, config, role))
+    return cache[role]
+
+
 def with_referenced_assets(
     db: Any,
     workspace_id: str,
@@ -211,20 +285,29 @@ def with_referenced_assets(
     维护者的话:「对这种通过 `@` 引用了图片素材的 LLM 节点,其中的『要模型看的图片』**应该自动同步**」。
     此前那段话只是文字:`{{画图.asset_id}}` 插值成一串素材编号,模型从没见过那张图 —— 用户得记得
     再去「要模型看的图片」里手动挑一遍同一张图,忘了就是个安静的错(模型答得像没看图)。
+    「AI 生成素材」节点上是同一个断层、同一句话:提示词里引用到的图以**参考图**并进「输入素材」。
 
     **推导在运行时做,不在保存时同步。** 值到这一刻才知道(上游可能还没跑),而 config 是用户存的:
     保存时同步意味着**老图**(config 里没有那一串 id)照旧看不到图,于是得再补一条「config 里没有
     就现推」的分支 —— 那正是同一条语义写两遍。这里只写一遍:**引用即发送**。
 
     并进来的怎么排:手动挑的在前(用户排的顺序说了算),引用来的按 prompt → system、按引用出现的
-    先后接在后面,同一个 id 只发一次。
+    先后接在后面,同一份素材只发一次。
     `ref_assets_from` 点名的每一格配一条排除清单(`<那一格>_excluded`,一条一个引用路径或素材 id):
     用户删掉一张自动来的图就写在那里 —— 删掉就是删掉,下一轮不再塞回来。
 
-    不是素材的引用**跳过**,不报错也不硬塞:提示词里引用的多半是文字(`{{llm.text}}`)、也可能是
-    视频素材。视频塞进 image_url 只会当场 400,把整条工作流拦下来,而用户的提示词本身没有任何问题。
+    **一行一项的那一格多两样**(`ref_assets_role`:生成节点的「输入素材」,每行 `素材:角色`):
+
+    - 并进来的每一份都带**角色**,默认是声明里写的那个,用户改过的那几条记在 `<那一格>_roles`
+      (`引用路径:角色`)里 —— 角色不同,结果不同(首帧 / 参考图 / 驱动音频是三条路);
+    - `ref_assets_gate` 点名的**能力闸**先问一句「这个模型收不收这个角色」。**不收就不并**(硬塞换来
+      一次提交期报错,或者一次白花钱的生成),但也不沉默 —— 界面上明说(见 referencedImages 那一行)。
+
+    不是素材的引用**跳过**,不报错也不硬塞:提示词里引用的多半是文字(`{{llm.text}}`)、也可能是一段
+    视频。视频当参考图发出去只会当场 400,把整条工作流拦下来,而用户的提示词本身没有任何问题。
     """
     from app.db.models import Asset
+    from app.domain.generation.catalog import SOURCE_ROLE_MEDIA
     from app.domain.workflows.id_values import id_list
     from app.domain.workflows.node_types import NODE_TYPES, config_media, output_data_type
 
@@ -239,8 +322,15 @@ def with_referenced_assets(
         sources = [name for name in (spec.get("ref_assets_from") or []) if isinstance(name, str)]
         media = config_media(spec)
         excluded = set(id_list(resolved.get(f"{key}_excluded")))
-        picked = id_list(resolved.get(key))
+        #: 一行一项的素材字段(声明了 `ref_assets_role`):并进来时每一份都要带角色。
+        default_role = str(spec.get("ref_assets_role") or "").strip()
+        pinned = _role_overrides(resolved.get(f"{key}_roles")) if default_role else {}
+        picked_lines = _source_lines(resolved.get(key)) if default_role else id_list(resolved.get(key))
+        picked = _line_asset_ids(picked_lines) if default_role else list(picked_lines)
+        gate = REF_ASSET_GATES.get(str(spec.get("ref_assets_gate") or ""))
+        accepted: dict[str, bool] = {}
         added: list[str] = []
+        added_ids: set[str] = set()
         for source in sources:
             for ref in _raw_references(raw.get(source)):
                 if ref in excluded:
@@ -251,18 +341,30 @@ def with_referenced_assets(
                 #: 引用的那个输出不可能装素材(`{{llm.text}}`)就不用往下解析了 —— 它本来就只是文字。
                 if output_data_type(output, NODE_TYPES.get(node_types.get(node_id, "")) or {}) in _NOT_ASSETS:
                     continue
+                role = pinned.get(ref, default_role)
+                #: 能力闸:这个模型不收这个角色就不并 —— 不硬塞,也不在这里沉默(界面会说)。
+                if role and not _gate_accepts(gate, db, resolved, role, accepted):
+                    continue
                 for candidate in _referenced_ids(interpolate("{{" + ref + "}}", context)):
-                    if candidate in excluded or candidate in picked or candidate in added:
+                    if candidate in excluded or candidate in picked or candidate in added_ids:
                         continue
                     asset = db.get(Asset, candidate)
-                    #: 不是这一格的素材(视频 / 音频 / 文字素材)、不在这个工作区、已经删了:跳过。
+                    #: 不在这个工作区、已经删了:跳过。
                     if asset is None or asset.workspace_id != workspace_id:
                         continue
-                    if media and asset.kind not in media:
+                    if role:
+                        #: 角色说了要哪一种素材(`reference_image` 要一张图):不是那一种就跳过。
+                        if SOURCE_ROLE_MEDIA.get(role) != asset.kind:
+                            continue
+                    elif media and asset.kind not in media:
                         continue
-                    added.append(candidate)
+                    added.append(f"{candidate}:{role}" if role else candidate)
+                    added_ids.add(candidate)
         if not added:
             continue
-        merged = [*picked, *added]
-        resolved[key] = merged if isinstance(resolved.get(key), list) else ",".join(merged)
+        merged = [*picked_lines, *added]
+        if isinstance(resolved.get(key), str):
+            resolved[key] = "\n".join(merged) if default_role else ",".join(merged)
+        else:
+            resolved[key] = merged
     return resolved

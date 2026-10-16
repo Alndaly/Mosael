@@ -21,7 +21,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useAssetDetails, useMentionCandidates } from "@/lib/assetQueries";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
-import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
+import { ROLE_COPY, SOURCE_ROLES, roleMedia, type SourceRole } from "@/lib/sourceFrames";
 import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
 import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import { IconButton } from "@/components/ui/icon-button";
@@ -187,19 +187,13 @@ export function durationRangeOptions(range: { min: number; max: number }): { val
 /** ROLE_COPY 里存的是 i18n 的 key,**不是**给人看的字 —— 不过一遍 t() 就会把
  *  「genFirstFrame」原样挂到提示上。 */
 /** 一个角色收哪一类素材。**只此一处** —— 选择器开哪一类、上游哪种产出能自动挂进来,
- *  都问它;分散写两遍的话,加一个角色就会有一边忘记改。 */
+ *  都问它;分散写两遍的话,加一个角色就会有一边忘记改。
+ *
+ *  实现搬进了 `lib/sourceFrames.roleMedia`(那份 `ROLE_COPY` 就在那个文件里,而工作流检查器也要问
+ *  同一句话 —— 两处各写一遍的话,加一个角色又会有一边忘记改)。这个名字留着:画板这一侧用的还是它。
+ */
 export function roleAccepts(role: string): "image" | "video" | "audio" {
-  //: **从 ROLE_COPY 的 accept 推**,不自己再列一张表。那里每个角色都写了文件选择器收什么
-  //: (`image/*` / `video/*` / `audio/*`)—— 那就是「这个角色收哪类素材」本身。
-  //:
-  //: 此前这里是「参考视频→视频、参考音频→音频、**其余一律图片**」。八个角色里那条兜底判错了
-  //: 三个:source_video(源视频)、first_clip(首段)是视频,driving_audio(驱动音频)是音频。
-  //: 判错的后果是正文里 @ 一段视频,它会被当成图片去找槽位 —— 要么落到参考图上(厂商当场拒),
-  //: 要么一个槽都找不到,那份素材**根本没发出去**,而提示词里还写着它的名字。
-  const accept = ROLE_COPY[role as SourceRole]?.accept ?? "image/*";
-  if (accept.startsWith("video/")) return "video";
-  if (accept.startsWith("audio/")) return "audio";
-  return "image";
+  return roleMedia(role);
 }
 
 /**

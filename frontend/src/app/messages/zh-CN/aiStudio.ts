@@ -210,6 +210,16 @@ export const aiStudio = {
   wfGenSourceSlotNames: "依次接到:{names}",
   wfGenSourceExtra: "其他素材",
   wfGenSourceExtraHint: "不属于上面几格的行:整组引用(一行带进一组素材,角色写在每一项里),或当前模型不认的角色 —— 换个模型可能又用得上,所以留着没删。",
+  //: 「引用即发送」在生成节点上的那一行(后端 binding.with_referenced_assets,同一份声明)。
+  wfGenSourceRole: "以什么角色发",
+  wfGenAutoSourcesTitle: "提示词里引用到的:",
+  wfGenAutoSourcesHint:
+    "引用即发送:提示词里引用到的素材自动并进这里,不用再挑一遍。并进来的是这个角色要的那类素材 —— " +
+    "不是的会跳过;模型收不下的角色不会被送进去。",
+  wfGenAutoSourcesDrop: "不要「{name}」这一份",
+  wfGenAutoSourcesRestore: "恢复自动带上「{name}」",
+  wfGenAutoSourcesRejected: "这个模型不接受{role},引用的图不会被送进去",
+  wfGenAutoSourcesWrongKind: "不是{kind},不会发送",
   genSwapKeyframes: "对调首尾帧",
   genSwapKeyframesNeedsBoth: "首帧和尾帧都挂上之后才能对调",
   genReferenceImage: "参考图",

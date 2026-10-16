@@ -1036,12 +1036,44 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             # 用法藏起来,而判据的第二条正是"它是不是这个节点在做的事"。
             #: 值是**行的列表**,每行 `素材:角色`;某一行可以是一整串引用(一组这样的行)。
             #: 每一行叫它的角色(「首帧」「参考图」),和检查器里按角色一行一格同一个名字 —— 不是行号 `0`。
+            #:
+            #: `ref_assets_from` / `ref_assets_role` / `ref_assets_gate`:**提示词里引用到的图以「参考图」
+            #: 并进这一格**(ADR 0067 同一个语义,唯一实现在 binding.with_referenced_assets;
+            #: 守着这句话的是 tests/test_ai_generate_sees_referenced_images.py)。
+            #: 和大模型节点那一笔**形状相同、多一道闸**:那边并进 `image_asset_ids` 只是"多带一张图",
+            #: 这一格是"以什么角色发",而角色由模型能力决定 —— 塞给一个不收参考图的模型,换来的是
+            #: 一次提交期报错或者一次白花钱的生成。所以 `ref_assets_gate` 点名能力闸,不收就不并。
+            #: 默认角色是「参考图」,但**删得掉、也改得动**(见 `source_assets_excluded` / `source_assets_roles`),
+            #: 而且推导只在运行时、不写回库 —— 老图一个字节都不用改。
             "source_assets": {
                 "type": "template",
                 "lines": True,
+                "ref_assets_from": ["prompt"],
+                "ref_assets_role": "reference_image",
+                "ref_assets_gate": "generation_source_role",
                 "description": "wfNode_ai_generate_source_assets",
                 "description_params": _source_assets_help(),
                 "entry_labels": "source_roles",
+            },
+            #: 自动并进来的那几份素材里,用户**点名不要**的:一条一个引用路径(`图.asset_id`)或素材 id。
+            #: 和上面那一格配的排除清单(命名约定照大模型节点那一笔:`<那一格>_excluded`,一条一个引用路径)。
+            #: 由「输入素材」那一格的控件一起编辑(声明 `edited_by`:不单独出一格,也不能接上游 ——
+            #: 它不是给模型看的东西,是一份记账)。
+            "source_assets_excluded": {
+                "type": "list",
+                "edited_by": "source_assets",
+                "label": "wfField_source_assets_excluded",
+                "description": "wfNode_ai_generate_source_assets_excluded",
+            },
+            #: 自动并进来的那几份素材,用户把**角色**改成了什么:一条一个 `引用路径:角色`。
+            #: 没记在这里的就是默认角色(「参考图」)。角色不同结果不同(首帧是"从这张图动起来"、
+            #: 参考图是"照这个风格来"),所以用户改过的那个选择要留下来、下一轮照它发。
+            #: 同样由「输入素材」那一格的控件一起编辑,不是给模型看的东西。
+            "source_assets_roles": {
+                "type": "list",
+                "edited_by": "source_assets",
+                "label": "wfField_source_assets_roles",
+                "description": "wfNode_ai_generate_source_assets_roles",
             },
             #: 首尾帧组和参考素材组互斥时用哪一组(见 generation/catalog.SOURCE_GROUPS)。
             #: 允许手填:整片流程里是逐镜决定的,值来自上游(`{{…}}`)。
