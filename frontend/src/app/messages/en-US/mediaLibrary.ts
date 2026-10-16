@@ -95,7 +95,9 @@ export const mediaLibrary = {
   shotSaveAsNote: "Save to notes",
   shotNoteReport: "Shot list (stats and notes)",
   shotNoteStoryboard: "Storyboard prompts",
-  // Reconciliation and rhythm notes (`hints[].kind`, the 12 kinds in backend domain/shots/describe.py).
+  // Reconciliation and rhythm notes (`hints[].kind`, the 14 kinds in backend domain/shots/describe.py and analysis/service.py).
+  shotHint_sheets_truncated: "Shots after {shot} up to {value} were not sent as pictures (one call carries at most 3 contact sheets) — the analysis never saw them",
+  shotHint_sheets_unavailable: "No contact sheets available — only a few frames out of {value} shots were sampled, so not every shot was seen",
   shotHint_unknown_word: "{shot}: \"{value}\" is not a known {field} — treated as empty",
   shotHint_camera_corrected: "{shot}: the model said \"{value}\", which always moves the whole frame, but almost nothing moved — that move was dropped",
   shotHint_static_but_moving: "{shot}: judged static while the picture is moving (frame delta {value}) — flagged only, not changed",

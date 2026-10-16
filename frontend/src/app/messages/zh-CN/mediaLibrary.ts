@@ -95,7 +95,9 @@ export const mediaLibrary = {
   shotSaveAsNote: "存成笔记",
   shotNoteReport: "镜头表（含统计和提示）",
   shotNoteStoryboard: "分镜提示词",
-  // 对账和节奏的提示(`hints[].kind`,12 种,见后端 domain/shots/describe.py)。
+  // 对账和节奏的提示(`hints[].kind`,14 种,见后端 domain/shots/describe.py 与 analysis/service.py)。
+  shotHint_sheets_truncated: "{shot} 之后到 {value} 的镜头没交画面（联系表一次最多交 3 组），这些镜头分析时没被看到",
+  shotHint_sheets_unavailable: "拿不到联系表，{value} 镜里只抽了几帧画面 —— 不是每一镜都被看到",
   shotHint_unknown_word: "{shot}：{field}「{value}」不在词表里，已按空处理",
   shotHint_camera_corrected: "{shot}：模型判成「{value}」—— 这类运镜整幅画面必然在动，而实测几乎没动，已把这个运镜去掉",
   shotHint_static_but_moving: "{shot}：判成固定机位，实测画面却在动（帧间差 {value}）—— 只提示，没改",

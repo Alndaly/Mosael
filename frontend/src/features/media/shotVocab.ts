@@ -101,7 +101,8 @@ const FIELDS: Readonly<Record<string, MessageKey>> = {
   rhythm: "shotField_rhythm",
 };
 
-/** 12 种提示各一句人话(键)**。** */
+/** 14 种提示各一句人话(键):判画面那 12 种(`domain/shots/describe.py`)+ 分析抽帧那 2 种
+ *  (`analysis/service.py` 的 `sheets_truncated` / `sheets_unavailable`)。** */
 const HINTS: Readonly<Record<string, MessageKey>> = {
   unknown_word: "shotHint_unknown_word",
   camera_corrected: "shotHint_camera_corrected",
@@ -115,6 +116,8 @@ const HINTS: Readonly<Record<string, MessageKey>> = {
   truncated: "shotHint_truncated",
   no_hook: "shotHint_no_hook",
   payoff_without_setup: "shotHint_payoff_without_setup",
+  sheets_truncated: "shotHint_sheets_truncated",
+  sheets_unavailable: "shotHint_sheets_unavailable",
 };
 
 /** 这个词表里的值对应的文案键;表外(不该有,但以后可能加)返回 null,由调用方原样显示。 */
