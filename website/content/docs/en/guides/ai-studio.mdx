@@ -346,9 +346,9 @@ binding a second bot has to bind again.
   message says plainly "this bot isn't bound to your Feishu account yet" and points back to **that** bot's
   panel; it never pretends to have worked and never guesses.
 - **The panel groups by person**: one row per member, and each binding under them says which bot it is for.
-  Rows whose app can no longer be told apart (left over from a bot you recreated) are flagged so you can
-  bind again, and **deleting a bot** leaves its bindings in exactly that state rather than deleting them —
-  "this person used to be bound to that one" is worth keeping.
+  The list holds only **this bot's** bindings — there is no third "can't be told apart" state: the rows left
+  over from an earlier app are **deleted during the upgrade**, and anyone who recreated an app or deleted a
+  bot simply binds again on the bot they still have. **Deleting a bot** deletes the bindings under it too.
 - **An old code stops working after you recreate the app**: the bot says whether it expired, was already
   used, or was generated for a bot in **another app**.
 

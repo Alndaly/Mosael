@@ -10009,7 +10009,7 @@ def migration_plan() -> MigrationPlan:
                 # 同上:这三列是**投递结果**(发到飞书没有、发出去那条消息的 id)。老行留空 = 跳过,
                 # 不猜着回填(见那条迁移的说明)。同样要在 SCHEMA 之前 —— ORM 已经指望这三列在。
                 _migrate_workflow_run_approvals_record_their_delivery,
-                # 同上:ORM 上的 FeishuBinding 指望主键里的 `bot_id` 与 `stale_reason` 在。open_id
+                # 同上:ORM 上的 FeishuBinding 指望主键里的 `bot_id` 在。open_id
                 # 按飞书应用隔离,键上没有机器人这一维就认不出人(见那条迁移的说明);改主键只能重建表。
                 _migrate_feishu_bindings_know_their_app,
                 # 紧跟着上一步,而且**必须**在它之后:上一步把说不清归属的老行写成 `bot_id = ''` 的

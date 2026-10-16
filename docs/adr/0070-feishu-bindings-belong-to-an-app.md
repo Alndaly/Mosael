@@ -1,12 +1,13 @@
-# ADR 0070:飞书绑定是**某个应用**的绑定 —— 键加上机器人这一维、说不清归属就不归属、机器人绝不把绑定码发给外人
+# ADR 0070:飞书绑定是**某个应用**的绑定 —— 键加上机器人这一维、说不清归属就删掉、机器人绝不把绑定码发给外人
 
 ## Status
 
 Accepted — 2026-10-17。修的是 ADR 0066 那族飞书能力底下**认人**那一层:`feishu_bindings` 的键从
-`(workspace_id, open_id)` 改成 `(workspace_id, bot_id, open_id)`(数据库 29 → 30)。ADR 0064 §4 的
+`(workspace_id, open_id)` 改成 `(workspace_id, bot_id, open_id)`(数据库 **29 → 30 → 31**)。ADR 0064 §4 的
 「发起人绑没绑飞书」、ADR 0065 §4 的「只有绑定了 Mosael 账号的人能驱动触发器」、ADR 0069 §2 的
 `not_attempted / not-bound` 都经过这一层,所以这一条**谁都不改语义**,只把"是谁"这个问题答对。
-本文档里两处**取舍**是维护者拍板的结果,记在 §5、§6。
+31 是收尾:30 给"说不清归属"的老行留下的空串哨兵 + `stale_reason` 被整段删掉 —— 那是**一段迁移
+没走完的中间态,不是一等状态**(见 §1、§2)。本文档里两处**取舍**是维护者拍板的结果,记在 §5、§6。
 
 ## Context
 
@@ -35,36 +36,47 @@ feishu_bindings(workspace_id, open_id) → user_id
 
 ## Decision
 
-### 1. 键加一维,并记下"说不清"
+### 1. 键加一维,`bot_id` 是名正言顺的外键
 
 ```sql
 feishu_bindings(workspace_id, bot_id, open_id)   -- 主键
-  + stale_reason VARCHAR(200) NOT NULL DEFAULT ''   -- 空 = 正常
+  bot_id VARCHAR(64) NOT NULL REFERENCES feishu_bots(id) ON DELETE CASCADE   -- 无 default
 ```
 
-`bot_id` **不是外键**:机器人被删之后这一行要留着说明"以前绑过"(见 §4),而迁移里说不清归属的那些
-只能留空串 —— 空串指不到任何一行。
+**不变式交给 schema,不写显式删。** `bot_id` 指着 `feishu_bots` 并 `ON DELETE CASCADE`:
+`(bot, open_id) -> user` 随机器人一起没有意义 —— 那台应用没了之后,它眼里的那串 open_id 不再有
+任何应用解释得了,留着就是一行谁都匹配不上的死行。所以 `bots.delete_bot` 只剩 `db.delete(bot)`,
+级联由外键承担(与 `delete_workspace` / 删发布账号 / 卸载插件同一条既有做法;本仓显式扫列删
+只出现在**故意不设外键**的列上)。
 
-**「说不清归属」是一等状态,不是缺失。** `stale_reason` 非空的行**永远不算有效绑定**:
-`bindings.resolve_sender` 第一句就把它当没绑定。这样"设置页说绑了、机器人说没绑"这只错觉的**源头**
-就从数据里被标了出来,而不是继续表现得像一条正常绑定。
+**为什么当初不是外键、后来为什么是。** 30 那一步要给"说不清归属"的老行留一个位置,而那个位置是
+空串 `bot_id = ''` + `stale_reason = 'unknown-app'` —— 空串指不到任何一行,`bot_id` 那时**不可能**
+是外键。31 把那件事想清了:那些行的 open_id 属于**已经不存在的应用**,永远匹配不上任何东西,
+「说不清归属」只是**一段迁移没走完的中间态**,不是一等状态。于是这一步直接
+`DELETE FROM feishu_bindings WHERE bot_id = ''`,空串哨兵随列定义一起消失,`bot_id` 才成为真外键 ——
+而且 `NOT NULL`、**没有 default**。
 
-### 2. 迁移 29 → 30:归属判据只有一条,绝不默默归属
+### 2. 迁移 29 → 30 → 31:归属判据只有一条,绝不默默归属,判不出来的删掉
 
-`migrate-feishu-bindings-know-their-app`(`db/migrations.py`,BEFORE_SCHEMA 最后一步、幂等 ——
+`migrate-feishu-bindings-know-their-app`(`db/migrations.py`,BEFORE_SCHEMA 里的一步、幂等 ——
 SQLite 改主键只能重建表,所以只在 `bot_id` 还不在的时候整张重建):
 
 > **绑定落库的那一刻,这个工作区里只有一台机器人存在**(按 `feishu_bots.created_at` 判)。
 
 - 那一刻**恰好一台** → 回填它的 id;
 - 那一刻**一台都没有**(那台应用已经删了 / 这张单比机器人还早 —— 换过应用那一族)或**不止一台**
-  (说不清是哪台的) → `bot_id = ''` + `stale_reason = 'unknown-app'`。
+  (说不清是哪台的) → `bot_id = ''` + `stale_reason = 'unknown-app'`(这是**当时**的形状,见 §1)。
+
+**紧接着的 31 把它们删了。** `migrate-feishu-bindings-drop-stale-rows` 一句
+`DELETE FROM feishu_bindings WHERE bot_id = ''`,再把表重建成 §1 现在的形状:没有 `stale_reason`、
+`bot_id` `NOT NULL` 而且**没有默认值**。「说不清归属」只在 30 到 31 之间活了一版。
 
 **旧数据绝不默默归到"现在那台"机器人。** 那正是上面那只错觉的成因,而按它回填等于把错觉写进库、
-以后再也没人分得清哪一行是真的。代价明确:这些行要人去重绑一次(见 Consequences)。
+以后再也没人分得清哪一行是真的。代价明确:这些行的人要在**还在的那台**机器人上重绑一次(见 Consequences)。
 
 只搬父行(工作区 / 用户)还在的行:主键那两列都是外键,搬一条死引用会当场
-`FOREIGN KEY constraint failed` 把启动卡死 —— 这条在种子的老库上真撞到过。
+`FOREIGN KEY constraint failed` 把启动卡死 —— 这条在种子的老库上真撞到过。31 重建时 join 又多一张
+`feishu_bots`:`bot_id` 从那时起是**真外键**,指着一台已经不在了的机器人的行同样没有读者,一样是死行。
 
 ### 3. 每一个认人的入口都带 `bot_id`,一处都不例外
 
@@ -75,19 +87,19 @@ SQLite 改主键只能重建表,所以只在 `bot_id` 还不在的时候整张�
 
 - **`requester_binding` 改成"他绑过的那台"**:点名了机器人就用它的那一行;没点名时挑**他绑过的**
   那台(启用中、创建时间最早的那个,`ORDER BY`),不再"挑机器人 + 随便取一行 open_id"。
-- **两个路由真的按机器人**(`app/api/routes/feishu.py`):列表只列**这台**的(外加工作区级说不清
-  归属的老行,`stale` 标出来);删除只删**这台**的那一行。此前只拿 `bot_id` 推出 `workspace_id` ——
+- **两个路由真的按机器人**(`app/api/routes/feishu.py`):列表只列**这台**的(`bot_id` 精确 `==`,
+  一行不多);删除只删**这台**的那一行。此前只拿 `bot_id` 推出 `workspace_id` ——
   拿 A 的 URL 能把 B 那条绑定删掉,这是一条越权面。
 - **写绑定只有 `bind_member` 一条路**:成员自己兑码和"扫码创建完自动绑发起人"(§4)都走它。
 
-### 4. 删机器人:**标 stale,不级联删**
+### 4. 删机器人:**外键级联删,不标任何状态**
 
-`bindings.stale_bindings_of_bot`:把那台机器人名下的绑定清 `bot_id`、置
-`stale_reason = 'bot-removed'`(同一人 + 同一 open_id 已经有一条"说不清归属"老行时把老行并掉 ——
-主键含 `bot_id`,清空它是一次改主键的 UPDATE)。
+`bots.delete_bot` 只剩 `db.delete(bot)` —— `bot_id` 上的 `ON DELETE CASCADE` 把它名下的绑定一起带走
+(§1 那条既有做法)。不写显式扫列删,也不留行:这台应用没了之后,它眼里的那些 open_id 不再有任何
+应用解释得了,留着就是一行**谁都匹配不上**的死行。
 
-级联删掉的话,「这个人以前绑过这台」就没有了 —— 而那一行正是要**留着让人看得见、重新绑**的:
-这台应用没了之后,它眼里的那些 open_id 也不再有任何应用解释得了。
+**「这个人以前绑过这台」不靠这张活跃表留。** 它是**历史**,归审计表(见 §9)。塞回活跃表换来的
+正是这套刚删掉的状态:一个空串哨兵、一个"请重新绑"的界面分支、一行谁都匹配不上的记录。
 
 ### 5. 取舍之一:**机器人绝不把绑定码发给未绑定的人**
 
@@ -121,21 +133,52 @@ SQLite 改主键只能重建表,所以只在 `bot_id` 还不在的时候整张�
 ### 8. 由此带出的三处前端
 
 - **绑定面板按 Mosael `user_id` 归并**(不是 open_id、不是名字 —— open_id 按应用隔离,照它一行一条
-  就是"重复用户"的来路):一个成员一条,他名下每条绑定各占一行并真读 `binding.bot_id` 说明是哪台;
-  `stale` 那一行给警示色 + 自己的删除键。
+  就是"重复用户"的来路):一个成员一条,他名下每条绑定各占一行并真读 `binding.bot_id` 说明是哪台。
+  列表本身就是**这台机器人**的(`bot_id` 精确 `==`),所以没有"要排在最后的那种行",也没有 `stale` 这一格。
 - **选收件人时把"哪台机器人"一并写进 `bot`**:选项带上 `bot_id`(`field_options._feishu_bound_users`
   / `_feishu_chats`),前端 `NodeConfigForm` 的 `optionBotWrite` 在选中时一次
   `onPatchConfig(key, {to, bot})`;**清单没带就什么都不写**(不按名字猜机器人)。
 - **画布卡片显示名字**(`features/workflows/feishuTargets.ts`):只对图里真用得上的档现查
   `feishu_targets` 目录,查不到照旧显示原值 —— **不编名字**。
 
+### 9. 补记:**「谁曾绑过」落在审计表,不落回活跃表**
+
+机器人删掉之后,"这个人以前绑过这台"这件事该落在哪?现有的落点是**审计表** `activity_events`
+(模型 `backend/app/db/model_slices/collaboration.py`,写入入口 `record_activity()`
+在 `backend/app/domain/collaboration/__init__.py`):`actor_id` 是 `users.id` 上的 `SET NULL`
+(**人走了痕迹还在**)、`subject_type` / `subject_id` 一起说明这条记的是谁、`payload` 是 JSON、
+`created_at` 只增不改。写入大概长这样:
+
+```python
+record_activity(
+    db, workspace_id=ws, actor_id=user_id, action="feishu.binding.removed",
+    subject_type="feishu_binding", subject_id=f"{bot_id}:{open_id}",
+    summary="…", payload={"bot_id": bot_id, "app_id": app_id, "bot_name": name, "open_id": open_id},
+)
+```
+
+三个关键点:
+
+- **它不指向 `feishu_bots`。** `subject_id` 是一段字符串,不是外键,所以机器人删了、`feishu_bots`
+  那一行没了,这条痕迹**照样在** —— 这正是活跃表做不到的事(它必须跟着级联)。
+- **它不参与授权。** 认人(`bindings.resolve_sender`)与面板(`bindings.list_bindings`)都只读
+  **活跃**那张表;审计表只出现在工作区动态流(`GET /api/activity`)那条读路径里,没有任何
+  "从历史推出现在谁能驱动机器人"的判断 —— 历史是历史,现状以活跃表为准。
+- **删机器人时每一条** `feishu.binding.removed` **各记一条**,否则"删了就查无此事"。这属于
+  **要落实现时**的事,不是这一版的改动(本文档只记它该落在哪、以及为什么不是活跃表)。
+
+`subject_id` 那一列模型上写的是 `String(64)`;`bot_id`(32 位 hex)加 `open_id`(真实值约 35 字符)
+拼起来会顶到边界,真要落一行时得自己保证长度(截断,或把 open_id 只放进 `payload`)。
+
 ## Consequences
 
-- **数据库 29 → 30。** 维护者的真库上那唯一一行**正确回填**了那一台机器人;说不清的那些行要人重绑一次。
-  这是本条最直接的代价,而它换掉的是"面板与机器人各说各话"。
+- **数据库 29 → 30 → 31。** 30 把能无歧义归属的行回填到那一台机器人(维护者的真库上那唯一一行正是
+  这么**正确回填**的);说不清归属的那些行在 31 里被**删掉** —— 那部分人要在还在的那台机器人上重绑
+  一次。这是本条最直接的代价,而它换掉的是"面板与机器人各说各话"。
 - **多一台机器人 = 多一套身份。** 同一个人要在每台机器人上各绑一次。这不是实现选择,是飞书的模型
   (open_id 按应用隔离);把它藏起来才是不诚实。
-- **删机器人不再清掉"谁曾绑过它"**:那些行以 `bot-removed` 留着,界面照它说「重新绑定」。
+- **删机器人会连带删掉它名下的绑定,"谁曾绑过它"因此在活跃表里没有痕迹**。那些 open_id 属于一个
+  没有了的应用,留着没有读者;要留痕是**审计表**的事(见 §9),不是把历史塞回活跃表。
 - **`_is_bound` / `handle_card_action` 多一个参数**:飞书回调那边由 `worker.card_action` 把
   `bot_id` 一起带过来(点击的回调本来就来自某一条连接)。
 - **`field_options` 的选项多一格 `bot_id`**:这正是把 ADR 0045 的"两层名字"顺带修好的那一笔
@@ -144,9 +187,13 @@ SQLite 改主键只能重建表,所以只在 `bot_id` 还不在的时候整张�
 ## 验收
 
 - `backend/tests/test_feishu_bindings_know_their_app_migration.py`:喂旧形状(含同人不同应用四行),
-  验新主键序、回填、标 stale、丢死引用、再跑一次不变。
+  验新主键序、回填、标 stale、丢死引用、再跑一次不变 —— 那一步的身体**冻着**,这条验的是 30 当时
+  搬成了什么样(历史快照),不是现在的形状。
+- `backend/tests/test_feishu_bindings_drop_stale_rows_migration.py`:喂**真 v30 形状**并走真升级路径,
+  验 `bot_id=''` 的死行没了、留下的原样(含 `created_at`)、列定义逐字、主键序、
+  `PRAGMA foreign_key_list` 里有 `(feishu_bots, bot_id, id, CASCADE)`、模型上没有默认值,再跑一次全等。
 - `backend/tests/test_feishu_binding.py`:签名(少了 `bot_id` 就报)、"拿 A 的 open_id 配 B"被拒、
-  面板不串台、拿 B 的 URL 删不掉 A 那条、删机器人标 stale 不级联。
+  面板不串台、拿 B 的 URL 删不掉 A 那条、**删机器人时它名下的绑定一起没了**。
 - `backend/tests/test_feishu_onboarding.py`:建完绑发起人;回包缺 open_id / 缺发起人 / 发起人已不在
   三种都不写、不报错。
 - `frontend/src/features/settings/FeishuSection.bindings.dom.test.tsx`(按人归并)、
