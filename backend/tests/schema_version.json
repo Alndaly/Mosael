@@ -1,5 +1,5 @@
 {
-  "version": 27,
+  "version": 28,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -220,6 +220,7 @@
     "migrate-voices-declare-consent",
     "migrate-webhook-secrets-are-hashed",
     "migrate-workflow-revisions",
+    "migrate-workflow-run-approvals-take-the-current-shape",
     "migrate-workflow-source-assets",
     "remove-minimax-music-models",
     "reprice-usage-billed-on-estimated-prompt-tokens"

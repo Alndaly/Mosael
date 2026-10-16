@@ -2567,6 +2567,47 @@ def _migrate_shot_breakdowns_keep_their_motion_track() -> None:
         conn.execute(text("ALTER TABLE shot_breakdowns ADD COLUMN motion_track JSON NOT NULL DEFAULT '{}'"))
 
 
+def _migrate_workflow_run_approvals_take_the_current_shape() -> None:
+    """「等人确认」的待批单收成模型现在的形状(`workflow_run_approvals`):补 `on_reject` / `feishu_receive_id` /
+    `feishu_receive_type`,去掉 `feishu_chat_id`。
+
+    这张表是 1.9 开发期才有的,而**开发机上它是当天更早的一版模型建出来的**:`create_all` 照当时那一版建表 ——
+    只有 `feishu_chat_id`(一个群的 id),没有 `on_reject`(拒绝之后怎么办)。后来模型把那一列拆成「收件 id + 收件
+    类型」(卡片既能发回群,也能私聊发起人),又加了 `on_reject`,而 `create_all` 只建缺失的**表**、从不给已有的表
+    加列 —— 于是这些库永远停在旧形状上,任何 `SELECT ... FROM workflow_run_approvals` 都当场炸在
+    `no such column: on_reject`,工作流一跑到「等人确认」节点就失败。
+
+    `feishu_chat_id` 是**死列**,照仓库规矩删掉而不是留着(同 `_drop_publish_account_profile_name`):这个名字在
+    仓库历史里一次都没出现过(那一版模型只活在开发机上,没发出去过),全仓没有一处读它,维护者库里那张表一行数据
+    都没有 —— 留着只会让下一个人以为它有用。SQLite 3.35+ 支持 `DROP COLUMN`;老 SQLite 删不掉就跳过并记一条日志:
+    一个没人读的列不影响任何行为,而在启动路径上抛异常会让应用起不来(同 `provider_profiles` 那几处的取舍;这里不
+    像 `agent_sessions` 那样后面还排着一步重建等着它先删干净)。
+
+    表不在的跳过 —— 那种库由 `create-current-schema` 直接建成现在的形状。**幂等**:加列、删列各自判「在不在」。
+    **必须在 SCHEMA 之前**:create_all 不给已有的表加列,而这一步之后 ORM 上的 WorkflowRunApproval 已经指望
+    `on_reject` 那三列在了。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(workflow_run_approvals)"))}
+        if not columns:
+            return
+        for name, kind in (
+            # 列定义与模型逐字一致(见 db/model_slices/workflows.WorkflowRunApproval)。
+            ("on_reject", "VARCHAR(16) NOT NULL DEFAULT 'abort'"),
+            ("feishu_receive_id", "VARCHAR(120) NOT NULL DEFAULT ''"),
+            ("feishu_receive_type", "VARCHAR(16) NOT NULL DEFAULT ''"),
+        ):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE workflow_run_approvals ADD COLUMN {name} {kind}"))
+    if "feishu_chat_id" not in columns:
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE workflow_run_approvals DROP COLUMN feishu_chat_id"))
+    except Exception:  # noqa: BLE001 —— 老 SQLite 不支持 DROP COLUMN,留着无害
+        logger.info("workflow_run_approvals.feishu_chat_id 未能删除(SQLite 版本不支持 DROP COLUMN),留着无害")
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -9786,6 +9827,10 @@ def migration_plan() -> MigrationPlan:
                 # 同上:ORM 上的 ShotBreakdown 指望「整条曲线去哪了」那一列在(ADR 0061:曲线本体落在素材目录的
                 # shots/track.json,库里只留采样率、点数和摘要)。
                 _migrate_shot_breakdowns_keep_their_motion_track,
+                # 同上:ORM 上的 WorkflowRunApproval 指望 `on_reject` 与飞书路由那两列在,而旧形状里那个
+                # `feishu_chat_id` 已经没人读了(这一版把路由拆成「收件 id + 收件类型」)。表的出生形状由
+                # `create-current-schema` 建,这一条只管**已经存在的**表。
+                _migrate_workflow_run_approvals_take_the_current_shape,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
