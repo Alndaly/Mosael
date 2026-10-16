@@ -70,6 +70,13 @@ const IPC = Object.freeze({
     pageToolsRead: "pageTools:read",
     pageToolsInset: "pageTools:inset",
     pageToolsSaveDownload: "pageTools:saveDownload",
+    // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的那个位置(见 save-file.cjs)。四步走 ——
+    // 开工(弹框)、写一块、收尾(改名到位)、撤掉。分四步而不是一步:素材原文件可以有 2 GiB
+    // (见 publish/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节。
+    saveFileBegin: "saveFile:begin",
+    saveFileWrite: "saveFile:write",
+    saveFileEnd: "saveFile:end",
+    saveFileAbort: "saveFile:abort",
   }),
   send: Object.freeze({
     titleOverlay: "mosael:title-overlay",
@@ -865,6 +872,56 @@ function parsePickPath(value) {
   };
 }
 
+/** 「保存到本地」一块字节的上限(8 MiB)。一次一块才走得通:素材原文件可以有 2 GiB(见 publish/downloadRules.MAX_DOWNLOAD_BYTES),
+ *  而一条 IPC 消息装不下那么多字节(见 save-file.cjs);渲染层那边也按同一个数攒块(见 lib/download)。 */
+const MAX_SAVE_CHUNK = 8 * 1024 * 1024;
+
+/**
+ * 「保存到本地」的第一步:一个建议文件名。**只有它** —— 目标路径由保存框产生,渲染层送不进任何一个
+ * 路径字符串(见 save-file.cjs)。名字里的路径分隔符和系统不收的字符在这里不收:`..`、`a/b` 这种
+ * 交上去只会让保存框的默认目录跑偏。
+ */
+function parseSaveFileBegin(value) {
+  const channel = IPC.invoke.saveFileBegin;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["name"], channel);
+  const name = requiredString(payload, "name", channel);
+  if (name.length > 300) throw new TypeError(`${channel}: name is too long`);
+  if (/[\\/]/.test(name)) throw new TypeError(`${channel}: name must not be a path`);
+  if (/[\x00-\x1f]/.test(name)) throw new TypeError(`${channel}: name must not contain control characters`);
+  return { name };
+}
+
+/** 一次保存会话的 id(主进程发的手柄,见 save-file.cjs)。 */
+function saveFileId(payload, channel) {
+  const id = requiredString(payload, "id", channel);
+  if (!/^[0-9a-f-]{36}$/.test(id)) throw new TypeError(`${channel}: id is invalid`);
+  return id;
+}
+
+/**
+ * 「保存到本地」的第二步:一块字节。**收 Uint8Array(和 Buffer)、也收 ArrayBuffer** —— 经 contextBridge +
+ * IPC 过来的是结构化克隆的字节,认这两种形状就够;别的形状不收,免得主进程去猜一个对象是什么。
+ */
+function parseSaveFileChunk(value) {
+  const channel = IPC.invoke.saveFileWrite;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["id", "bytes"], channel);
+  const id = saveFileId(payload, channel);
+  const raw = payload.bytes;
+  const bytes = raw instanceof Uint8Array ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : null;
+  if (!bytes) throw new TypeError(`${channel}: bytes must be a Uint8Array or an ArrayBuffer`);
+  if (bytes.byteLength > MAX_SAVE_CHUNK) throw new TypeError(`${channel}: a chunk is at most ${MAX_SAVE_CHUNK} bytes`);
+  return { id, bytes };
+}
+
+/** 「保存到本地」的收尾 / 撤销:只带那个手柄。 */
+function parseSaveFileId(value, channel) {
+  const payload = record(value, channel);
+  onlyKeys(payload, ["id"], channel);
+  return { id: saveFileId(payload, channel) };
+}
+
 /**
  * 渲染层的界面语言(`<html lang>` 上那个值,如 `en-US`)。主进程只认 zh / en,归一在
  * i18n.cjs 里做;这里只保证它是一个像样的语言标签,不是任意长的字符串。
@@ -908,6 +965,9 @@ module.exports = {
   parseReadMode,
   parseRegionSelection,
   parseSaveDownload,
+  parseSaveFileBegin,
+  parseSaveFileChunk,
+  parseSaveFileId,
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,

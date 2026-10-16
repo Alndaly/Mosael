@@ -47,6 +47,10 @@ export const IPC: {
     pageToolsRead: "pageTools:read";
     pageToolsInset: "pageTools:inset";
     pageToolsSaveDownload: "pageTools:saveDownload";
+    saveFileBegin: "saveFile:begin";
+    saveFileWrite: "saveFile:write";
+    saveFileEnd: "saveFile:end";
+    saveFileAbort: "saveFile:abort";
     dataExportDiagnostics: "data:exportDiagnostics";
     dataCreateBackup: "data:createBackup";
     dataApplyRestore: "data:applyRestore";
@@ -138,6 +142,9 @@ export function parseToastsShow(value: unknown): {
   root: { className: string; style: string; attributes: Record<string, string> };
 };
 export function parseFloatHide(value: unknown): { id: string | null };
+export function parseSaveFileBegin(value: unknown): import("./preload-api").SaveFileBeginRequest;
+export function parseSaveFileChunk(value: unknown): { id: string; bytes: Uint8Array };
+export function parseSaveFileId(value: unknown, channel: string): { id: string };
 export function parseSaveDownload(value: unknown): {
   id: string;
   server: string;

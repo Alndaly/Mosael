@@ -196,6 +196,14 @@ const publishBridge = {
   showToasts: (toasts) => ipcRenderer.send(IPC.send.toastsShow, toasts),
   hideToasts: () => ipcRenderer.send(IPC.send.toastsHide),
   onToastsPointer: (callback) => onEvent(IPC.event.toastsPointer, callback),
+  // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的位置(见 save-file.cjs)。分四步走,是因为
+  // 素材原文件可以有 2 GiB —— 一把交过来说不定撞上一条 IPC 消息装不下的上限,渲染层也不该先把整份读进内存。
+  saveFile: {
+    begin: (request) => invoke(IPC.invoke.saveFileBegin, request),
+    write: (request) => invoke(IPC.invoke.saveFileWrite, request),
+    end: (request) => invoke(IPC.invoke.saveFileEnd, request),
+    abort: (request) => invoke(IPC.invoke.saveFileAbort, request),
+  },
 };
 contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 

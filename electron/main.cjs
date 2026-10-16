@@ -34,6 +34,7 @@ const {
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { pickPath } = require("./path-picker.cjs");
+const { createSaveDesk } = require("./save-file.cjs");
 const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrome.cjs");
 const { bindFullscreenState } = require("./window-state.cjs");
 const {
@@ -65,6 +66,9 @@ const {
   parseRegionSelection,
   parseRestoreStage,
   parseSaveDownload,
+  parseSaveFileBegin,
+  parseSaveFileChunk,
+  parseSaveFileId,
   parseSystemStatus,
   parseTaskNotice,
   parseTitleOverlay,
@@ -264,6 +268,9 @@ try {
 // —— 托盘建不出来时应用还能正常用,只是退化成「关窗即退」的老行为。
 let system = null;
 let systemHandle = null;
+
+// 「保存到本地」的台账(见 save-file.cjs):窗口就绪时建,退出时把还没写完的临时文件撤掉。
+let saveFiles = null;
 
 // 开发时主进程过期(见 dev-staleness.cjs):哪几份产物变了;能不能替用户重启(由 dev-loop.cjs 拉起时才能)。
 const { createStalenessWatcher } = require("./dev-staleness.cjs");
@@ -1226,6 +1233,20 @@ app.whenReady().then(async () => {
   handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
   handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
   handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
+  // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的位置(见 save-file.cjs)。路径只由保存框产生 ——
+  // 渲染层送的是建议名和一块块字节。桌面上没有界面语言的那份文案表,标题在这里用 t() 说。
+  saveFiles = createSaveDesk({
+    dialog,
+    downloadsDir: app.getPath("downloads"),
+    title: t("dialog_saveLocal"),
+    log: (line) => appendMainLog("save-file", line),
+  });
+  handle(IPC.invoke.saveFileBegin, (event, payload) =>
+    saveFiles.begin(parseSaveFileBegin(payload), BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()),
+  );
+  handle(IPC.invoke.saveFileWrite, (_event, payload) => saveFiles.write(parseSaveFileChunk(payload)));
+  handle(IPC.invoke.saveFileEnd, (_event, payload) => saveFiles.end(parseSaveFileId(payload, IPC.invoke.saveFileEnd)));
+  handle(IPC.invoke.saveFileAbort, (_event, payload) => saveFiles.abort(parseSaveFileId(payload, IPC.invoke.saveFileAbort)));
   // 路径格旁边的「选择…」:挂在发起的那个窗口上(找不到就用前台窗口),交回选中的路径或 null。
   handle(IPC.invoke.pickPath, (event, payload) =>
     pickPath(dialog, BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow(), parsePickPath(payload)),
@@ -1431,6 +1452,8 @@ app.on("before-quit", (event) => {
 app.on("will-quit", () => {
   markSmokeStage("will-quit");
   staleWatcher?.close();
+  // 写到一半的保存撤掉:临时文件不该留在他选的那一格旁边(撤不掉进程也马上就没了,见 save-file.cjs 的闲置超时)。
+  void saveFiles?.dispose();
   backendSupervisor.killNow();
 });
 process.on("exit", () => backendSupervisor.killNow());

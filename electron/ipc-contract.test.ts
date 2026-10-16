@@ -36,6 +36,9 @@ const contract = require("./ipc-contract.cjs") as {
   parseReadMode: (value: unknown) => { mode: string };
   parseToolsInset: (value: unknown) => { right: number };
   parseSaveDownload: (value: unknown) => Record<string, string | null>;
+  parseSaveFileBegin: (value: unknown) => { name: string };
+  parseSaveFileChunk: (value: unknown) => { id: string; bytes: Uint8Array };
+  parseSaveFileId: (value: unknown, channel: string) => { id: string };
   parsePageId: (value: unknown, channel: string) => { id: string };
   parsePageOrder: (value: unknown) => { ids: string[] };
   parseNewPage: (value: unknown) => { url: string };
@@ -430,6 +433,33 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseSaveDownload({ ...request, token: "" })).toThrow(/token/);
     expect(() => contract.parseSaveDownload({ ...request, token: "x".repeat(20_000) })).toThrow(/token/);
     expect(() => contract.parseSaveDownload({ ...request, path: "/etc/passwd" })).toThrow(/unexpected field path/);
+  });
+
+  /**
+   * 「保存到本地」(见 save-file.cjs):渲染层能说的只有**一个建议文件名**和一块块字节 —— 目标路径由保存框
+   * 产生,一个路径字符串都进不来。名字里的路径分隔符在这里就挡掉(`../evil.txt` 交上去只会让保存框的默认目录跑偏)。
+   */
+  it("decodes 'save to this computer': a suggested name, then bounded byte chunks, and nothing else", () => {
+    expect(contract.parseSaveFileBegin({ name: "配音.wav" })).toEqual({ name: "配音.wav" });
+    expect(contract.parseSaveFileBegin({ name: "  trimmed.txt  " })).toEqual({ name: "trimmed.txt" });
+    expect(() => contract.parseSaveFileBegin({ name: "" })).toThrow(/name/);
+    expect(() => contract.parseSaveFileBegin({ name: "../../etc/passwd" })).toThrow(/path/);
+    expect(() => contract.parseSaveFileBegin({ name: "a\u0000b" })).toThrow(/control/);
+    expect(() => contract.parseSaveFileBegin({ name: "x".repeat(400) })).toThrow(/too long/);
+    expect(() => contract.parseSaveFileBegin({ name: "a.txt", path: "/tmp/a.txt" })).toThrow(/unexpected field path/);
+
+    const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const bytes = new Uint8Array([1, 2, 3]);
+    expect(contract.parseSaveFileChunk({ id, bytes })).toEqual({ id, bytes });
+    expect(contract.parseSaveFileChunk({ id, bytes: bytes.buffer }).bytes).toEqual(bytes);
+    expect(() => contract.parseSaveFileChunk({ id, bytes: "AAAA" })).toThrow(/bytes/);
+    expect(() => contract.parseSaveFileChunk({ id, bytes: new Uint8Array(9 * 1024 * 1024) })).toThrow(/at most/);
+    expect(() => contract.parseSaveFileChunk({ id: "../etc", bytes })).toThrow(/id/);
+    expect(() => contract.parseSaveFileChunk({ id, bytes, path: "/tmp/x" })).toThrow(/unexpected field path/);
+
+    expect(contract.parseSaveFileId({ id }, "saveFile:end")).toEqual({ id });
+    expect(() => contract.parseSaveFileId({ id: "not-a-handle" }, "saveFile:end")).toThrow(/id/);
+    expect(() => contract.parseSaveFileId({ id, path: "/tmp/x" }, "saveFile:end")).toThrow(/unexpected field/);
   });
 
   /**

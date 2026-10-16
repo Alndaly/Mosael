@@ -194,7 +194,7 @@ export async function apiBlob(path: string, init?: RequestInit): Promise<Blob> {
   return (await request(path, init)).blob();
 }
 
-/** 回的是一条持续推送的流(SSE)而不是一次性的响应体。报错、掉线、401 和 `api` 同一套处理。 */
+/** 回的是一条流(SSE,或者一份不落内存的字节:原文件下载,见 domains/assets 的 openAssetFile)而不是一次性的响应体。报错、掉线、401 和 `api` 同一套处理。 */
 export async function apiStream(path: string, init?: RequestInit): Promise<ReadableStream<Uint8Array>> {
   const response = await request(path, init);
   if (!response.body) throw new ApiError("Empty stream", response.status, "");

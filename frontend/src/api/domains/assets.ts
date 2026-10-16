@@ -1,7 +1,7 @@
 import type { components, operations } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
 import type { Transcript } from "@/api/domains/speech";
-import { API_BASE, ApiError, api, apiUpload, getAuthToken } from "@/api/transport";
+import { API_BASE, ApiError, api, apiStream, apiUpload, getAuthToken } from "@/api/transport";
 
 export type Asset = components["schemas"]["AssetOut"];
 
@@ -77,6 +77,15 @@ export function importLocalAsset(workspaceId: string, path: string, projectId?: 
 /** Original asset bytes. Media elements carry auth in the query because they cannot add headers. */
 export function assetFileUrl(assetId: string): string {
   return assetUrl(assetId, "file");
+}
+
+/**
+ * 原文件的字节流(带登录态,走 Authorization 头而不是 `?token=`)。给「保存到本地」用:**不落内存** ——
+ * 调用方边收边往外交(桌面壳交给主进程写到用户选的那个位置,见 lib/download)。原文件可以有 2 GiB,
+ * 所以这里回的是流而不是 Blob。
+ */
+export function openAssetFile(assetId: string): Promise<ReadableStream<Uint8Array>> {
+  return apiStream(`/api/assets/${assetId}/file`);
 }
 
 /** Browser-compatible full-size preview; HEIC originals are derived to JPEG on demand. */

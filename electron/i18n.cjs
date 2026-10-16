@@ -74,6 +74,8 @@ const MESSAGES = {
   dialog_zipArchive: { zh: "ZIP 压缩包", en: "ZIP archive" },
   dialog_createBackup: { zh: "创建 Mosael 数据备份", en: "Create Mosael Backup" },
   dialog_backupFile: { zh: "Mosael 备份", en: "Mosael backup" },
+  // 「保存到本地」的保存框(见 save-file.cjs)。渲染层送的是字节,标题由主进程按界面语言说。
+  dialog_saveLocal: { zh: "保存到本地", en: "Save to this computer" },
   backend_stoppedTitle: { zh: "Mosael 后端已停止", en: "Mosael backend stopped" },
   backend_stoppedBody: {
     zh: "本地后端反复意外退出(最后一次:{code}),自动重启没能恢复。可以再试一次;一直起不来的话,日志在 {logs} 和 {dataLogs}(设置 → 数据里能导出诊断包)。",

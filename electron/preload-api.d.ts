@@ -96,6 +96,42 @@ export interface PageSnapshot {
   bounds: { x: number; y: number; width: number; height: number };
 }
 
+/** 「保存到本地」的第一步:一个建议文件名(保存框里的默认名,默认目录是系统的下载目录)。**没有路径** —— 目标由保存框产生。 */
+export interface SaveFileBeginRequest {
+  name: string;
+}
+
+export type SaveFileBeginResult =
+  | { status: "ready"; id: string }
+  /** 用户在保存框里点了取消:调用方静默收场。 */
+  | { status: "cancelled" }
+  | { status: "failed"; error: string };
+
+export interface SaveFileWriteRequest {
+  /** begin 交回来的手柄。 */
+  id: string;
+  /** 一块字节(最多 8 MiB,见 electron/ipc-contract.cjs 的 MAX_SAVE_CHUNK)。 */
+  bytes: Uint8Array;
+}
+
+export type SaveFileWriteResult = { status: "writing"; received: number } | { status: "failed"; error: string };
+
+export type SaveFileEndResult = { status: "saved"; path: string } | { status: "failed"; error: string };
+
+/**
+ * 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的那个位置(见 electron/save-file.cjs)。
+ *
+ * 分四步而不是一把交过去 —— 素材原文件可以有 2 GiB,一条 IPC 消息装不下,渲染层也不该为了存一个文件先把整份
+ * 读进内存。用法:begin(弹框)→ write 一块块 → end 收尾到位;中途出错就 abort(临时文件撤掉,用户原来那个
+ * 文件一个字节没动)。**取消是 begin 回 `cancelled`,不是异常。**
+ */
+export interface MosaelSaveFileBridge {
+  begin(request: SaveFileBeginRequest): Promise<SaveFileBeginResult>;
+  write(request: SaveFileWriteRequest): Promise<SaveFileWriteResult>;
+  end(request: { id: string }): Promise<SaveFileEndResult>;
+  abort(request: { id: string }): Promise<void>;
+}
+
 export interface MosaelPublishBridge {
   login(accountId: string, platform: string): Promise<void>;
   openPage(accountId: string, platform: string): Promise<void>;
@@ -146,6 +182,11 @@ export interface MosaelPublishBridge {
   hideToasts(): void;
   /** 那一块浮层视图上的指针(主窗口的 CSS 坐标):`up` 是点了一下,渲染层据此点真的那条提示。 */
   onToastsPointer(callback: (pointer: ToastsPointer) => void): () => void;
+  /**
+   * 「保存到本地」:系统保存框 + 主进程写盘(见 electron/save-file.cjs)。**在桌面壳里存文件只走这一条路** ——
+   * 锚点那条在跨域时会被 Electron 当成导航(先冒出一个空白页)。
+   */
+  saveFile: MosaelSaveFileBridge;
 }
 
 export interface ToastsPointer {
