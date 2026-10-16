@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { AlertTriangle, KeyRound, Link2, Loader2, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
+import { KeyRound, Link2, Loader2, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -22,7 +22,7 @@ type Binding = components["schemas"]["FeishuBindingOut"];
 
 const CAPABILITIES = ["readonly", "editor", "full"] as const;
 
-/** 一个成员在这台机器人的面板里那张名单上的样子:他绑过的每一条各一行(有效绑定 + 说不清归属的老行)。 */
+/** 一个成员在这台机器人的面板里那张名单上的样子:他在这台机器人上的每一条绑定各一行。 */
 interface MemberBindings {
   userId: string;
   username: string;
@@ -36,8 +36,7 @@ interface MemberBindings {
  * 两串不同的值(飞书按应用隔离),照 open_id 一行一条、只印名字,同一个人就变成两行一模一样的字
  * —— 维护者报的「重复用户」正是这个。`user_id` 是他在**这个工作区**里的身份,一台多行也归得成一条。
  *
- * 有效绑定排在前面,**说不清归属的老行排在最后**(后端按 `bot_id` 排序,空串在最前):老行是一句
- * 「请重新绑定」,不是这个人现在绑着的东西。
+ * 列表本身就是**这台机器人**的(接口按 `bot_id` 取),所以这里没有"要排在最后的那种行"。
  */
 function groupByMember(rows: Binding[]): MemberBindings[] {
   const groups = new Map<string, MemberBindings>();
@@ -45,9 +44,6 @@ function groupByMember(rows: Binding[]): MemberBindings[] {
     const found = groups.get(binding.user_id);
     if (found) found.rows.push(binding);
     else groups.set(binding.user_id, { userId: binding.user_id, username: binding.username, rows: [binding] });
-  }
-  for (const group of groups.values()) {
-    group.rows.sort((left, right) => Number(left.stale) - Number(right.stale));
   }
   return [...groups.values()];
 }
@@ -159,8 +155,8 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
 
   const hasBots = (bots.data ?? []).length > 0;
   const memberBindings = groupByMember(bindings.data ?? []);
-  /** 这条绑定是**哪台机器人**眼里的 —— 名字从工作区那台机器人的清单里查。查不到(机器人已删)就照旧写 id,
-   *  **不编一个名字**:留下的行正是要说明"它以前是哪台",给个编的名字反而把它抹掉了。 */
+  /** 这条绑定是**哪台机器人**眼里的 —— 名字从工作区那台机器人的清单里查。查不到就照旧写 id,
+   *  **不编一个名字**:给个编的名字反而把「到底是哪一台」这件事抹掉了。 */
   const botLabel = (botId: string): string => {
     const bot = (bots.data ?? []).find((one) => one.id === botId);
     return bot?.name || bot?.app_id || botId;
@@ -345,19 +341,11 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                       key={binding.open_id}
                       data-feishu-binding={binding.open_id}
                     >
-                      {binding.stale ? (
-                        //: `bot_id` 空 = 这一条说不出是哪台应用建的(open_id 按应用隔离,老行归不到任何一台)。
-                        //: 它仍然是能被人收掉的那一条 —— 在后端,拿这台机器人的地址删得掉工作区那一条老行。
-                        <small className="flex min-w-0 items-start gap-1.5 text-ui-xs leading-[1.5] text-warning">
-                          <AlertTriangle size={12} className="mt-px shrink-0" />
-                          <span>{t("feishuBindStale")}</span>
-                        </small>
-                      ) : (
-                        <span className="flex min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
-                          <MessageSquare size={12} className="shrink-0" />
-                          <Truncate>{botLabel(binding.bot_id)}</Truncate>
-                        </span>
-                      )}
+                      {/*: 这一条是**哪台机器人**眼里的 —— 列表就是按 `bot_id` 取的,所以每一行都说得出来。 */}
+                      <span className="flex min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
+                        <MessageSquare size={12} className="shrink-0" />
+                        <Truncate>{botLabel(binding.bot_id)}</Truncate>
+                      </span>
                       <IconButton
                         size="icon-xs"
                         className="shrink-0 text-muted-foreground hover:text-destructive"

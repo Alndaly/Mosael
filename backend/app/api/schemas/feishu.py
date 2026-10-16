@@ -49,9 +49,6 @@ class FeishuBindingOut(ApiModel):
     open_id: str
     user_id: str
     username: str
-    #: 这条绑定是**哪台机器人(哪个飞书应用)**眼里的 open_id。**空 = 说不清归属的老行**:
-    #: open_id 按应用隔离,老行说不出是哪台应用建的 —— 界面照 `stale` 说「请重新绑定」。
+    #: 这条绑定是**哪台机器人(哪个飞书应用)**眼里的 open_id —— 列表本来就是按它取的
+    #: (open_id 按应用隔离,`bot_id` 是那张表的键的一部分)。
     bot_id: str
-    #: 说不清归属的老行:它**不是**任何一台现在机器人的有效绑定(理由存在 `stale_reason` 那一列,
-    #: 目前只有「来自另一个应用」一种,所以出口只给这一个判据;多出一种时再加字段)。
-    stale: bool

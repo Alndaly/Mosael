@@ -6,7 +6,12 @@
 取哪一行由存储顺序定 —— 拿 A 的 open_id 用 B 的 token 发,飞书直接拒。
 
 喂它一份**真实的老形状**(两列主键、没有 bot_id/stale_reason,表里已经有几行):看它搬成什么样、
-哪些行能**无歧义**归属、哪些只能标成 stale、再跑一次什么都不做。
+哪些行能**无歧义**归属、哪些只能写成空串 `bot_id` + `stale_reason`、再跑一次什么都不做。
+
+**那批说不清归属的行不留在这一版**:它们属于已经不存在的应用,永远匹配不上任何东西 ——
+紧跟着的 `migrate-feishu-bindings-drop-stale-rows` 把它们删掉,并把 `stale_reason` 整列去掉
+(见 tests/test_feishu_bindings_drop_stale_rows_migration.py)。这里逐行验的是**上一步自己**搬成了
+什么样:它当时确实那么写,那一步的身体冻着、不能再改。
 """
 
 from __future__ import annotations
@@ -130,11 +135,11 @@ def test_老库的绑定补上应用这一维_能归属的回填_说不清的标
     #: 另一个工作区:机器人是后来才建的,老行不是它建的。
     assert rows["ou_under_rebuilt_app"] == ("", "unknown-app")
 
-    #: 迁移完之后 ORM 读得动这张表(新列、新键都在),而且 stale 的行照旧认得出来。
+    #: 迁移完之后 ORM 读得动这张表(这一步之后 ORM 不再有 `stale_reason` —— 它是下一步要删的东西,
+    #: 所以这里只按 raw SQL 的 `_rows()` 验那几列)。
     with SessionLocal() as db:
         bindings = {row.open_id: row for row in db.scalars(select(FeishuBinding))}
         assert bindings["ou_same_person_under_old"].bot_id == "bot_old"
-        assert bindings["ou_same_person_ambiguous"].stale_reason == "unknown-app"
 
     migrate()  # 再跑一次:判「bot_id 在不在」,不重建、不重复搬
     engine.dispose()

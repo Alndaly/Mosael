@@ -448,7 +448,7 @@ def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
 
     **按机器人分组列**:open_id 按飞书应用隔离,同一个人在两台机器人上是两串不同的 id,
     拿 A 的那串配 B 的 token 发,飞书直接拒。工作区里不止一台时标签带上机器人名,让人一眼
-    看出选的是哪一台的哪一串;说不清归属的老行不列 —— 选它发不出去。
+    看出选的是哪一台的哪一串(`list_bindings` 交回的就是**这台机器人**的那些行)。
 
     每一项还带着 `bot_id`(那台机器人的 id):这一串 id **是哪台应用眼里的**,
     只有这里说得清。前端选中时要把「机器人」那一格一并写上,而它拿不到"选项属于谁"这件事 ——
@@ -460,8 +460,6 @@ def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
     options: list[Option] = []
     for bot in all_bots:
         for one in bindings.list_bindings(db, ctx.workspace_id, bot.id):
-            if one.bot_id != bot.id:
-                continue
             label = one.user.display_name or one.user.username
             options.append({
                 "value": one.open_id,

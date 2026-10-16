@@ -153,7 +153,6 @@ def requester_binding(db: Session, workspace_id: str, user_id: str | None, bot_i
             FeishuBot.enabled.is_(True),
             FeishuBinding.workspace_id == workspace_id,
             FeishuBinding.user_id == user_id,
-            FeishuBinding.stale_reason == "",
         )
         .order_by(FeishuBot.created_at)
     ).first()
@@ -169,7 +168,6 @@ def _bound_open_id(db: Session, workspace_id: str, bot_id: str, user_id: str) ->
             FeishuBinding.workspace_id == workspace_id,
             FeishuBinding.bot_id == bot_id,
             FeishuBinding.user_id == user_id,
-            FeishuBinding.stale_reason == "",
         )
         .order_by(FeishuBinding.created_at.desc())
     ) or ""
@@ -315,7 +313,7 @@ def resolve(
 
 
 def _is_bound(db: Session, workspace_id: str, bot_id: str, open_id: str) -> bool:
-    """这个人**在这台机器人(这个应用)眼里**绑过没有。空 bot_id / 说不清归属的老行都不算绑定。"""
+    """这个人**在这台机器人(这个应用)眼里**绑过没有。答不上「哪台机器人」就不算绑定。"""
     if not bot_id:
         return False
     return (
@@ -324,7 +322,6 @@ def _is_bound(db: Session, workspace_id: str, bot_id: str, open_id: str) -> bool
                 FeishuBinding.workspace_id == workspace_id,
                 FeishuBinding.bot_id == bot_id,
                 FeishuBinding.open_id == open_id,
-                FeishuBinding.stale_reason == "",
             )
         )
         is not None

@@ -116,7 +116,7 @@ def test_扫码建完机器人就把发起人绑在它名下(monkeypatch) -> Non
         bot = db.query(FeishuBot).filter_by(workspace_id=ws).one()
         row = db.get(FeishuBinding, {"workspace_id": ws, "bot_id": bot.id, "open_id": "ou_scanner"})
         assert row is not None, "建完机器人没有给发起人写绑定"
-        assert (row.user_id, row.stale_reason) == (me["id"], ""), (row.user_id, row.stale_reason)
+        assert row.user_id == me["id"], row.user_id
         #: 它是一条**有效**绑定(不是"写是写了、认人时不算数"的那种)。
         assert bindings.resolve_sender(db, ws, bot.id, "ou_scanner").id == me["id"]
 

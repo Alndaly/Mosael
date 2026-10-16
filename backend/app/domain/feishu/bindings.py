@@ -8,8 +8,8 @@ open_id」),所以「发这条消息的人是谁」只有配上机器人(`bot_id
 这个模块里每一个认人的入口都要求 `bot_id`,一处都不例外 —— 少传一次就是拿 A 应用眼里的 id 去
 B 应用里认人,而那正是这条根因:`requester_binding` 取到 A 的 open_id、用 B 的 token 发,飞书直接拒。
 
-说不清归属的老行(`bot_id` 空 + `stale_reason` 非空,见 `migrations._migrate_feishu_bindings_know_their_app`)
-**永远不当成有效绑定**:它是「设置页说已绑定、机器人说没绑定」那只错觉的源头,所以照实标出来让人重绑。
+「说不清归属」这种行**不存在**:它们属于已经不存在的应用,永远匹配不上任何东西,迁移
+(`migrations._migrate_feishu_bindings_drop_stale_rows`)把 `bot_id = ''` 的那些直接删掉了。
 """
 
 from __future__ import annotations
@@ -23,25 +23,14 @@ from sqlalchemy.orm import Session
 
 from app.db.models import FeishuBindCode, FeishuBinding, User, WorkspaceMember, now
 
-#: 说不清归属的老行上 `stale_reason` 的取值(稳定 key,出口翻成人话;见 api/routes/feishu)。
-STALE_UNKNOWN_APP = "unknown-app"
-#: 那台机器人被删了,这一行留着的取值(稳定 key,同上)。删机器人**不级联删绑定**:「谁曾绑过它」
-#: 要留着让人看得见、重新绑 —— 而这台应用没了之后,它眼里的那些 open_id 也不再有任何应用解释得了。
-STALE_BOT_REMOVED = "bot-removed"
-
 
 @dataclass(frozen=True)
 class Binding:
-    """一条绑定在**某台机器人**眼里的样子。`stale_reason` 非空 = 它是说不清归属的老行。"""
+    """一条绑定:某个飞书用户(**在这台机器人眼里的** open_id)绑到一个 Mosael 成员。"""
 
     bot_id: str
     open_id: str
     user: User
-    stale_reason: str
-
-    @property
-    def stale(self) -> bool:
-        return bool(self.stale_reason)
 
 
 def _is_member(db: Session, workspace_id: str, user_id: str) -> bool:
@@ -60,12 +49,12 @@ def looks_like_code(text: str) -> bool:
 def resolve_sender(db: Session, workspace_id: str, bot_id: str, open_id: str) -> User | None:
     """The Mosael account bound to this Feishu sender **as seen by this bot's app** — only if still a member.
 
-    `bot_id` 空、或那一行是说不清归属的老行,一律当没绑定 —— 「换过应用之后旧行不许再算数」就落在这里。
+    `bot_id` 空一律当没绑定:「这条 open_id 是哪台应用眼里的」答不上来就认不了人,而 open_id 按应用隔离。
     """
     if not bot_id or not open_id:
         return None
     binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "bot_id": bot_id, "open_id": open_id})
-    if binding is None or binding.stale_reason or not _is_member(db, workspace_id, binding.user_id):
+    if binding is None or not _is_member(db, workspace_id, binding.user_id):
         return None
     return db.get(User, binding.user_id)
 
@@ -85,7 +74,7 @@ def bind_member(db: Session, workspace_id: str, bot_id: str, open_id: str, user_
     if not _is_member(db, workspace_id, user_id):
         return False
     db.merge(
-        FeishuBinding(workspace_id=workspace_id, bot_id=bot_id, open_id=open_id, user_id=user_id, stale_reason="")
+        FeishuBinding(workspace_id=workspace_id, bot_id=bot_id, open_id=open_id, user_id=user_id)
     )
     db.flush()
     return True
@@ -111,38 +100,6 @@ def redeem_bind_code(db: Session, workspace_id: str, bot_id: str, open_id: str, 
     return db.get(User, row.user_id)
 
 
-def stale_bindings_of_bot(db: Session, workspace_id: str, bot_id: str) -> int:
-    """这台机器人被删了:它名下的绑定**不删**,清掉 `bot_id`、标上 `STALE_BOT_REMOVED`。
-
-    级联删掉的话「这个人以前绑过这台」就没有了,而那一行正是要留着让人看得见、重新绑的 ——
-    这台应用没了之后,它眼里的那些 open_id 也不再有任何应用能解释(open_id 按应用隔离)。
-    返回标了几行。
-
-    主键里有 `bot_id`,所以清空它是一次**改主键**的 UPDATE:同一个人 + 同一串 open_id 要是已经有一条
-    说不清归属的老行(`bot_id` 空),两条会撞在同一格主键上 —— 那种情况把老的那条并掉:它本来就是
-    「请重新绑」的意思,留下的这条说得更具体(哪台机器人被删了)。
-    """
-    if not bot_id:
-        return 0
-    rows = list(
-        db.scalars(
-            select(FeishuBinding).where(
-                FeishuBinding.workspace_id == workspace_id,
-                FeishuBinding.bot_id == bot_id,
-            )
-        )
-    )
-    for row in rows:
-        clash = db.get(FeishuBinding, {"workspace_id": workspace_id, "bot_id": "", "open_id": row.open_id})
-        if clash is not None and clash is not row:
-            db.delete(clash)
-            db.flush()
-        row.bot_id = ""
-        row.stale_reason = STALE_BOT_REMOVED
-    db.flush()
-    return len(rows)
-
-
 def issue_bind_code(db: Session, workspace_id: str, user_id: str) -> tuple[str, datetime]:
     """Member self-issues a one-time code (10-min TTL) to redeem from Feishu."""
     code = secrets.token_hex(3).upper()  # 6 hex chars
@@ -153,35 +110,28 @@ def issue_bind_code(db: Session, workspace_id: str, user_id: str) -> tuple[str, 
 
 
 def list_bindings(db: Session, workspace_id: str, bot_id: str) -> list[Binding]:
-    """这台机器人眼里的绑定,**外加说不清归属的老行**。
+    """**这台机器人**眼里的绑定。
 
-    老行(`bot_id` 空)不属于任何一台机器人,但它必须看得见:它是「设置页说已绑定」那只错觉里
-    唯一能被人收掉的东西 —— 每一台的面板都列它(标成 stale),也都能删它(见 `remove_binding`)。
-    真正的绑定只有 `bot_id` 相等的那一行,所以「面板里显示别的机器人的绑定」这件事不再发生。
+    「哪台机器人」是这张表的键的一部分(open_id 按飞书应用隔离),列表天然只有本机的那些 ——
+    谁的面板显示谁的东西,不靠调用方再筛一遍。
     """
     rows = db.execute(
         select(FeishuBinding, User)
         .join(User, User.id == FeishuBinding.user_id)
         .where(
             FeishuBinding.workspace_id == workspace_id,
-            FeishuBinding.bot_id.in_([bot_id, ""]),
+            FeishuBinding.bot_id == bot_id,
         )
-        .order_by(FeishuBinding.bot_id, FeishuBinding.created_at)
+        .order_by(FeishuBinding.created_at)
     ).all()
     return [
-        Binding(bot_id=row.bot_id, open_id=row.open_id, user=user, stale_reason=row.stale_reason)
+        Binding(bot_id=row.bot_id, open_id=row.open_id, user=user)
         for row, user in rows
     ]
 
 
 def remove_binding(db: Session, workspace_id: str, bot_id: str, open_id: str) -> None:
-    """删掉**这台机器人**的那一行。
-
-    这台机器人名下没有、而工作区里有一条说不清归属的老行时,删掉那条 —— 它没有归属,谁的面板上
-    看得见就从哪儿删得掉;别的机器人的行一动不动(那正是此前那个越权面:按工作区删,删掉的是别人的)。
-    """
+    """删掉**这台机器人**的那一行。别的机器人的行一动不动(那正是此前那个越权面:按工作区删,删掉的是别人的)。"""
     binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "bot_id": bot_id, "open_id": open_id})
-    if binding is None and bot_id:
-        binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "bot_id": "", "open_id": open_id})
     if binding is not None:
         db.delete(binding)

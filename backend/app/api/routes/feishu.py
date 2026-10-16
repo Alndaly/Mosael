@@ -90,8 +90,8 @@ def issue_bind_code(bot_id: str, db: Tx, user: CurrentUser) -> FeishuBindCodeOut
 def list_bindings(bot_id: str, db: DbSession, user: CurrentUser) -> list[FeishuBindingOut]:
     """**这台机器人**的绑定。
 
-    说不清归属的老行(`bot_id` 空)也列,`stale` 标出来 —— 它是「设置页说已绑定、机器人说没绑定」
-    那只错觉里唯一能被人收掉的东西:界面照它说「这一条来自另一个应用,请重新绑定」。
+    「哪台机器人」是那张表的键的一部分(open_id 按飞书应用隔离),所以列出来的天然只有本机的
+    那些 —— 谁的面板显示谁的东西,不靠出口再筛一遍。
     """
     return [
         FeishuBindingOut(
@@ -99,7 +99,6 @@ def list_bindings(bot_id: str, db: DbSession, user: CurrentUser) -> list[FeishuB
             user_id=one.user.id,
             username=one.user.username,
             bot_id=one.bot_id,
-            stale=one.stale,
         )
         for one in feishu.list_bindings(db, user, bot_id)
     ]
@@ -107,6 +106,6 @@ def list_bindings(bot_id: str, db: DbSession, user: CurrentUser) -> list[FeishuB
 
 @router.delete("/feishu/bots/{bot_id}/bindings/{open_id}", status_code=204)
 def remove_binding(bot_id: str, open_id: str, db: Tx, user: CurrentUser) -> Response:
-    """**只删这台机器人的那一行**(说不清归属的老行没有归属,在谁的面板上看见就从哪儿删)。"""
+    """**只删这台机器人的那一行**(别的机器人名下同一个人那一行不动)。"""
     feishu.remove_binding(db, user, bot_id, open_id)
     return Response(status_code=204)

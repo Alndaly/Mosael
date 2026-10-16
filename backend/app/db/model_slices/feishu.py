@@ -35,22 +35,21 @@ class FeishuBinding(Base):
     `(workspace_id, open_id)` 时:同一台机器人换过应用之后,旧行的 open_id 永远匹配不上新事件的
     `sender_open_id`(机器人回「你还没有绑定」,而设置页照样显示已绑定);同一个人在两个应用里是
     两行,`requester_binding` 取哪一行由存储顺序定 —— 拿 A 的 open_id 用 B 的 token 发,飞书直接拒。
+
+    **`bot_id` 指着 `feishu_bots` 并 `ON DELETE CASCADE`**:机器人没了,它名下的绑定一起走 ——
+    那台应用眼里的 open_id 不再有任何应用解释得了,留着就是一行谁都匹配不上的死行。
+    「谁曾绑过」不是这张**活跃**表的事(真要留痕是另一张审计 / 事件表的事)。
     """
 
     __tablename__ = "feishu_bindings"
 
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True)
-    #: 这条绑定是**哪台机器人(哪个飞书应用)**眼里的 open_id。**空串 = 说不清归属的老行**
-    #: (迁移时那个工作区里同时有多台机器人,或那台应用已经不在了):它不属于任何一台现在的机器人,
-    #: 永远不当成有效绑定(见 `stale_reason`)。不是外键:`delete_bot` 之后这一行仍要留着说明
-    #: 「这个人以前绑过」,而且迁移里分不清归属的那些只能留空串。
-    bot_id: Mapped[str] = mapped_column(String(64), primary_key=True, default="", server_default="")
+    #: 这条绑定是**哪台机器人(哪个飞书应用)**眼里的 open_id。键的正式一员(理由见类说明)。
+    bot_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("feishu_bots.id", ondelete="CASCADE"), primary_key=True
+    )
     open_id: Mapped[str] = mapped_column(String(120), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    #: 说不清归属的原因(稳定 key,出口翻成人话;空串 = 正常绑定)。界面照它说
-    #: 「这一条来自另一个应用,请重新绑定」—— 老库里的行说不出是哪台应用建的,而这正是
-    #: 「创建完自动绑定了」那只错觉的来源,所以**不猜**:标出来,让人重新绑。
-    stale_reason: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
 
 

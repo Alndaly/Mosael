@@ -3,7 +3,7 @@
 官方《用户身份概述》的原话是「不要在跨应用的数据通信中使用 open_id」,而键此前只有
 `(workspace_id, open_id)`。这里逐条钉住四个后果的修法:
 
-1. 换 / 重建应用之后,旧行**不再**被当成有效绑定(而设置页说得出它 stale);
+1. 换 / 重建应用之后,旧行**不再**被当成有效绑定;
 2. 同一个人在两个应用里的两行**各归各的机器人**,`requester_binding` 取的 (机器人, open_id)
    来自同一行(不是"A 的 id 配 B 的 token");
 3. 两个路由真的按机器人:列表只列本机、删除只删本机(双向);
@@ -85,28 +85,6 @@ def test_换过应用之后旧行的open_id在新机器人里认不出来() -> N
     assert client.get(f"/api/feishu/bots/{new['id']}/bindings").json() == []
 
 
-def test_说不清归属的老行不算绑定_而列表说得出它来自另一个应用() -> None:
-    """老库里的行说不出是哪台应用建的(迁移里那种):**标 stale,不猜着归到当前那台机器人**。
-
-    「创建完自动绑定了」那只错觉正是猜出来的;标出来 + 界面上有一句话,人才知道要重新绑。
-    """
-    client = fresh_client()
-    ws = _workspace(client)
-    me = client.get("/api/auth/me").json()
-    bot = _bot(client, ws)
-    with SessionLocal() as db:
-        db.add(FeishuBinding(
-            workspace_id=ws, bot_id="", open_id="ou_from_another_app", user_id=me["id"],
-            stale_reason=bindings.STALE_UNKNOWN_APP,
-        ))
-        db.commit()
-        assert bindings.resolve_sender(db, ws, bot["id"], "ou_from_another_app") is None
-        assert routing.requester_binding(db, ws, me["id"], bot["id"]) is None
-
-    listed = client.get(f"/api/feishu/bots/{bot['id']}/bindings").json()
-    assert [(one["open_id"], one["stale"], one["bot_id"]) for one in listed] == [("ou_from_another_app", True, "")]
-
-
 def test_同一个人在两个应用里的两行各归各的机器人() -> None:
     """同一个人两台机器人 = 两行、两串 id;`requester_binding` 交回的 (机器人, open_id) 必须同一行。"""
     client = fresh_client()
@@ -167,12 +145,12 @@ def test_列表只列本机_删除只删本机() -> None:
     assert listed(second["id"]) == ["ou_two"]
 
 
-def test_删机器人时它名下的绑定标成_机器人已删除_而不是被删掉() -> None:
-    """删机器人 ≠ 删「谁曾绑过它」。
+def test_删机器人时它名下的绑定一起没了() -> None:
+    """删机器人 = 它名下的绑定一起走。
 
-    级联删掉的话,那件事就没有痕迹了 —— 而这一行正是要留着**让人看得见、重新绑**的:这台机器人
-    没了,它眼里的那些 open_id 也不再有任何应用解释得了(open_id 按应用隔离)。所以是**标出来**:
-    `bot_id` 清空 + `stale_reason` 说明原因,行留着;别的机器人那几行一动不动。
+    `(bot, open_id) -> user` 这条绑定随机器人一起没有意义:open_id 按应用隔离,那台应用没了之后
+    它眼里的这串 id 不再有任何应用解释得了 —— 留着只会在表里积一行**谁都匹配不上**的死行。
+    「谁曾绑过」不是这张**活跃**表的事:真要留痕,那是另一张审计 / 事件表的事。
     """
     client = fresh_client()
     ws = _workspace(client)
@@ -187,47 +165,16 @@ def test_删机器人时它名下的绑定标成_机器人已删除_而不是被
 
     with SessionLocal() as db:
         assert db.get(FeishuBot, doomed["id"]) is None
-        row = db.get(FeishuBinding, {"workspace_id": ws, "bot_id": "", "open_id": "ou_doomed"})
-        assert row is not None, "这一行被级联删掉了 —— 「谁曾绑过」从此没有痕迹"
-        assert (row.user_id, row.stale_reason) == (me["id"], "bot-removed"), row.stale_reason
+        assert db.query(FeishuBinding).filter_by(workspace_id=ws, open_id="ou_doomed").all() == [], (
+            "机器人都没了,它名下那行绑定还留着 —— 它永远匹配不上任何东西"
+        )
         #: 别的机器人的绑定一动不动(删一台不该动到另一台)。
-        other = db.get(FeishuBinding, {"workspace_id": ws, "bot_id": kept["id"], "open_id": "ou_kept"})
-        assert other is not None and other.stale_reason == ""
-        #: 那一行不再是任何一台机器人的有效绑定 —— 那台应用已经不在了。
+        assert db.get(FeishuBinding, {"workspace_id": ws, "bot_id": kept["id"], "open_id": "ou_kept"}) is not None
         assert bindings.resolve_sender(db, ws, doomed["id"], "ou_doomed") is None
 
-    #: 面板上看得见它、也只看得见它那一条(stale 那半句由前端第二半说)。
+    #: 留着的机器人面板上只有它自己那一条。
     listed = client.get(f"/api/feishu/bots/{kept['id']}/bindings").json()
-    assert [(one["open_id"], one["bot_id"], one["stale"]) for one in listed] == [
-        ("ou_doomed", "", True),
-        ("ou_kept", kept["id"], False),
-    ]
-
-
-def test_删机器人时撞上同一个人那条说不清归属的老行() -> None:
-    """主键是 `(workspace_id, bot_id, open_id)`,所以清空 `bot_id` 是一次**改主键**的 UPDATE:
-    同一个人 + 同一串 open_id 要是已经有一条说不清归属的老行(这台应用重建过、他在它里面又绑了一次),
-    两条会撞在同一格主键上。并成一条 —— 留下的那条说得更具体(哪台机器人被删了),人照样看得见要重绑。
-    """
-    client = fresh_client()
-    ws = _workspace(client)
-    me = client.get("/api/auth/me").json()
-    bot = _bot(client, ws, name="要删的", app_id="cli_same_app")
-    with SessionLocal() as db:
-        db.add(FeishuBinding(
-            workspace_id=ws, bot_id="", open_id="ou_same", user_id=me["id"],
-            stale_reason=bindings.STALE_UNKNOWN_APP,
-        ))
-        db.commit()
-        _bind(db, ws, bot["id"], "ou_same", me["id"])
-
-    assert client.delete(f"/api/feishu/bots/{bot['id']}").status_code == 204
-
-    with SessionLocal() as db:
-        rows = db.query(FeishuBinding).filter_by(workspace_id=ws).all()
-        assert [(one.bot_id, one.open_id, one.stale_reason) for one in rows] == [
-            ("", "ou_same", bindings.STALE_BOT_REMOVED),
-        ]
+    assert [(one["open_id"], one["bot_id"]) for one in listed] == [("ou_kept", kept["id"])]
 
 
 def test_bind_code_route_requires_membership() -> None:

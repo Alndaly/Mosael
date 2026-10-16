@@ -78,7 +78,7 @@ def issue_bind_code(db: Session, user: User, bot_id: str) -> tuple[str, datetime
 
 
 def list_bindings(db: Session, user: User, bot_id: str) -> list[bindings.Binding]:
-    """**这台机器人的**绑定(外加说不清归属的老行,见 bindings.list_bindings)。
+    """**这台机器人的**绑定(见 bindings.list_bindings)。
 
     此前这里只拿 `bot_id` 推 `workspace_id`,列的是整个工作区的绑定 —— 新机器人的面板里显示着
     别台机器人的绑定,看着就像"创建完自动绑定了"(而数据其实一行都没动)。

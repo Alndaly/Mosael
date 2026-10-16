@@ -2719,6 +2719,70 @@ def _migrate_feishu_bindings_know_their_app() -> None:
         conn.execute(text("ALTER TABLE feishu_bindings_new RENAME TO feishu_bindings"))
 
 
+def _migrate_feishu_bindings_drop_stale_rows() -> None:
+    """飞书绑定里那批**说不清归属**的死行删掉,`bot_id` 变成名正言顺的主键成员(`feishu_bindings`)。
+
+    上一步(`_migrate_feishu_bindings_know_their_app`,已合进 main、**身体冻着**)把归属判不出来的老行
+    写成 `bot_id = ''`(空串哨兵)+ `stale_reason = 'unknown-app'`,于是运行时多出一整套状态:出口上的
+    `stale`、界面上那一段话、领域里两个常量。那是**为旧数据留的兼容分支**,而这里不留兼容 ——
+    该删的东西在迁移里删掉,不该变成运行时要解释的状态:
+
+    · 那些行的 open_id 属于**已经不存在的应用**(落库那一刻工作区里一台机器人都没有,或者有不止一台、
+      说不清是哪台)。open_id 按飞书应用隔离,所以它们**永远匹配不上任何东西** —— 架构上就是死行;
+    · 「说不清归属」不是一个能长期存在的状态,是一段迁移没走完的中间态;走完就该没有它。
+
+    所以这一步先 `DELETE FROM feishu_bindings WHERE bot_id = ''`,再把表重建成**没有 `stale_reason`、
+    `bot_id` 不许为空也不给默认值**的样子(空串哨兵随列定义一起消失)。删机器人之后它名下的绑定由
+    `bot_id` 上的外键 `ON DELETE CASCADE` 一并带走(见 `domain/feishu/bots.delete_bot`):那台应用没了,
+    它眼里的 open_id 也不再有任何应用解释得了 —— 「谁曾绑过」不是这张**活跃**表的事。
+
+    **只搬父行还在的行**(join `workspaces` / `users` / `feishu_bots`):前两个外键指着一条已经没有的
+    工作区 / 用户的绑定本来就没人认得出(上一步正是在这一点上踩过 `FOREIGN KEY constraint failed`);
+    第三个是因为 `bot_id` 从这一步起是**真外键** —— 指着一台已经不在了的机器人的行同样没有读者
+    (面板按机器人列、认人按机器人查都取不到它),一样是死行,不搬。
+
+    **必须在 SCHEMA 之前**:create_all 只建缺失的**表**、从不给已有的表改键,而这一步之后 ORM 上的
+    FeishuBinding 已经指望新形状了。表不在的跳过 —— 那种库由 `create-current-schema` 直接建成现在的
+    形状。**幂等**:判「`stale_reason` 不在、且 `bot_id` 没有默认值」,重跑直接返回。
+    """
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
+        if "feishu_bindings" not in tables:
+            return  # 表还没有(空库):create_all 会直接建成现在的形状
+        columns = {row[1]: row for row in conn.execute(text("PRAGMA table_info(feishu_bindings)"))}
+        if "bot_id" not in columns:
+            return  # 还是更早的形状:把 `bot_id` 补进键里是上一步的事,那一步跑完之后才轮到这里
+        #: `PRAGMA table_info` 的第 5 格是这一列的缺省值:None = 没有默认值。
+        if "stale_reason" not in columns and columns["bot_id"][4] is None:
+            return  # 已经是这一步之后的形状(重跑)
+        #: 死行先删掉:重建之后的表里它们没有任何位置(空的 `bot_id` 既不是一台机器人,也不是任何东西)。
+        conn.execute(text("DELETE FROM feishu_bindings WHERE bot_id = ''"))
+        #: 列定义与模型逐字一致(见 db/model_slices/feishu.FeishuBinding):`bot_id` 是 `NOT NULL` 的
+        #: 主键成员、指着 `feishu_bots` 并 `ON DELETE CASCADE`,而且**没有 `DEFAULT ''`**。
+        conn.execute(text(
+            "CREATE TABLE feishu_bindings_new ("
+            "workspace_id VARCHAR(64) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, "
+            "bot_id VARCHAR(64) NOT NULL REFERENCES feishu_bots(id) ON DELETE CASCADE, "
+            "open_id VARCHAR(120) NOT NULL, "
+            "user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "created_at DATETIME NOT NULL, "
+            "PRIMARY KEY (workspace_id, bot_id, open_id))"
+        ))
+        #: `feishu_bots` 不在的老库上,上一步给所有行写的都是空串 `bot_id` —— 上面那句 DELETE 已经把它们
+        #: 全删了,活着的一行都没有,不必(也不能)去 join 一张不存在的表。
+        if "feishu_bots" in tables:
+            conn.execute(text(
+                "INSERT INTO feishu_bindings_new (workspace_id, bot_id, open_id, user_id, created_at) "
+                "SELECT b.workspace_id, b.bot_id, b.open_id, b.user_id, b.created_at "
+                "FROM feishu_bindings b "
+                "JOIN workspaces w ON w.id = b.workspace_id "
+                "JOIN users u ON u.id = b.user_id "
+                "JOIN feishu_bots bot ON bot.id = b.bot_id"
+            ))
+        conn.execute(text("DROP TABLE feishu_bindings"))
+        conn.execute(text("ALTER TABLE feishu_bindings_new RENAME TO feishu_bindings"))
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -9948,6 +10012,10 @@ def migration_plan() -> MigrationPlan:
                 # 同上:ORM 上的 FeishuBinding 指望主键里的 `bot_id` 与 `stale_reason` 在。open_id
                 # 按飞书应用隔离,键上没有机器人这一维就认不出人(见那条迁移的说明);改主键只能重建表。
                 _migrate_feishu_bindings_know_their_app,
+                # 紧跟着上一步,而且**必须**在它之后:上一步把说不清归属的老行写成 `bot_id = ''` 的
+                # 空串哨兵 + `stale_reason`,这一步把它们**删掉**并把 `bot_id` 改成不许为空、没有默认值
+                # 的主键成员(列定义见那条迁移的说明)。同样是 SCHEMA 之前的重建 —— ORM 已经指望新形状。
+                _migrate_feishu_bindings_drop_stale_rows,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

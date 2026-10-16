@@ -388,9 +388,5 @@ export const nodeToolbar = {
   feishuBindHint: "The bot acts with the bound member's permissions. Send this code to the bot from Feishu to bind (valid 10 min). Unbound users can't use it.",
   feishuBindMembers: "Bound Feishu users",
   feishuBindNobody: "Nobody bound yet",
-  //: A stale row the workspace can't place: open_ids are per-app, so this one doesn't hold for this bot.
-  //: Two things leave such a row today — a swapped app (`unknown-app`) and a **deleted bot** (`bot-removed`);
-  //: the API only carries `stale: bool`, so the sentence names both instead of picking a cause for the backend.
-  feishuBindStale: "This entry doesn't match this bot — open_ids are per-app: it came from another app, or that bot was deleted. Bind again.",
   feishuRemove: "Remove",
 } as const;

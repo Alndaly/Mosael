@@ -395,9 +395,5 @@ export const nodeToolbar = {
   feishuBindHint: "机器人会以「绑定成员」的权限执行。把下面的绑定码在飞书里直接发给机器人即可完成绑定(10 分钟内有效)。未绑定的人无法使用。",
   feishuBindMembers: "已绑定的飞书用户",
   feishuBindNobody: "还没有人绑定",
-  //: 说不清归属的老行(`stale`):open_id 按应用隔离,所以这一条在这台机器人眼里不成立。
-  //: 目前有两处会留下这种行 —— 换过应用(`unknown-app`),以及**那台机器人被删了**(`bot-removed`);
-  //: 接口只给 `stale: bool`,说不出是哪一种,所以这句把两种都说了,不替后端咬定一个原因。
-  feishuBindStale: "这一条对不上这台机器人 —— open_id 按应用隔离,它来自另一个应用,或那台机器人已经被删;请重新绑定。",
   feishuRemove: "删除",
 } as const;
