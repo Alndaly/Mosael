@@ -6,6 +6,7 @@
 
 每一步都**只认旧形状**,新形状的图原样过:可以对任何一张图放心地调,调几次都一样。
 
+- 被旧规范化**折掉**的控制边 → 按历史判据补回来(见 `drawn_control_edges_come_back`);
 - 循环 / 子图的体内字段(output、condition)被旧规范化接成了外层数据边 → 改回体内引用
   (见 `inner_scope_fields_come_back`);
 - 代码字段里的 `{{…}}`(老版本按文字插值)→ 挪进入参、代码改成读入参(见 `code_references_read_input`);
@@ -20,7 +21,7 @@ import re
 from typing import Any
 
 from app.domain.workflows.code_references import REFERENCE, declares_input, references_become_input
-from app.domain.workflows.graph_rules import NESTED_BODY_TYPES
+from app.domain.workflows.graph_rules import BRANCHING_NODE_TYPES, NESTED_BODY_TYPES
 from app.domain.workflows.node_types import NODE_TYPES
 from app.domain.workflows.normalization import required_params_as_rows
 
@@ -33,7 +34,9 @@ CODE_FIELDS = {"code": ("code", "python"), "browser_evaluate": ("expression", "j
 
 def upgrade_graph(graph: Any) -> Any:
     """一张图(连同循环体 / 子图体)改成现在的形状。不是图的原样交回;不改传进来的那份。"""
-    return start_required_params_become_a_list(code_references_read_input(inner_scope_fields_come_back(graph)))
+    return start_required_params_become_a_list(
+        code_references_read_input(drawn_control_edges_come_back(inner_scope_fields_come_back(graph)))
+    )
 
 
 def start_required_params_become_a_list(graph: Any) -> Any:
@@ -53,6 +56,129 @@ def start_required_params_become_a_list(graph: Any) -> Any:
             node = {**node, "config": required_params_as_rows({**config, "required_params": names})}
         nodes.append(node)
     return {**graph, "nodes": nodes}
+
+
+def drawn_control_edges_come_back(graph: Any) -> Any:
+    """旧数据里**被规范化折掉**的控制边,按当年那条判据补回来。新形状的图原样交回。
+
+    ## 为什么要有这一步
+
+    2026-10-02 到 2026-10-16 之间,规范化(`normalization.canonicalize_data_bindings`)把作者画的、
+    **同一对节点间已经/即将有一条数据边**的无 handle 控制边当多余的折掉(判据见下)。维护者
+    2026-10-16 拍板不折了(`docs/adr/0063-画出来的控制边一律保留.md`),可**当年存的那些图里那些边
+    已经不在了** —— 规范化只加数据边、从不凭空补控制边,所以老图不会自己长回来。补回来这一步
+    就在这里:迁移(`db/migrations._migrate_restore_drawn_control_edges`)、导入旧文件、恢复旧修订
+    三条路共用(和这个模块里别的「旧 → 新」改写同一条规矩)。
+
+    ## 当年的判据(e35979a10^ 的 normalization.py,只读复刻)
+
+        routes(edge)        来源节点声明了 branches(条件的真 / 假出口)就是「带路由语义」
+        ordering_only(e)    kind 是 control、没写 source_handle、来源不 branches、
+                            且 (来源, 目标) 在 upgraded_pairs 里(这一趟刚从精确引用升级出数据边)
+        routing(e)          kind 是 control 且(写了 source_handle 或来源 branches)
+        foldable_into(T)    T 另有 routing 边 → 折;否则「T 的普通控制边来源集合」== 「T 的数据边来源集合」→ 折
+        redundant(e)        ordering_only(e) and foldable_into(e.target)
+        edges = [e for e in edges if not redundant(e)]      ← 被删掉的就是这些
+
+    **这套判据只用来认旧数据,不要再放回规范化路径**(维护者的决定:画出来的边一律保留)。
+
+    ## 什么样的「缺一条控制边」证得出来
+
+    落库的图是折过之后的:作者画的那条边连 id 都没留下,只能从「同一对节点间有一条数据边」认回去。
+    于是要问的是:见到「目标 T 没有普通控制入边、却有来自 S 的数据入边」,当年那条 S→T 控制边是不是
+    被折了?两种作者意图落库是**同一个样子**:
+
+    · 画了 S→T,规范化折了(折前 T 的普通控制边来源 == T 的数据边来源,foldable 成立);
+    · 根本没画 S→T,只是把 `{{S.输出}}` 写进了 T 的配置(规范化升成数据边,没有控制边可折)。
+      —— 官方模板里这样的对子就有 60 处。
+
+    所以「缺一条边」本身**不是证据**。能证的只有一种形状:**T 一条控制入边都没有**。这时若当年折过
+    (foldable 成立),则「T 的普通控制边来源集合 == T 的数据边来源集合」要求 T 的数据边来源**每一个**
+    都画过一条控制边 —— 于是这条形状下「T 的每一条数据边来源都补一条控制边」是**被逼出来的**,不是猜。
+    而 T 只要还有一条普通控制入边、或有一条路由控制入边,当年折没折就分不出来:那里一条都不补
+    (官方模板上 68 条被折的边,这样补回 58 条,剩下的 10 条全落在「T 另有条件的真 / 假出口」这一形状里;
+    15 张模板补完沿控制边从开始都走得到交付)。
+
+    补回来的边**判据自己就不再成立**(它成了 T 的普通控制入边),所以跑第二遍什么都不做 —— 幂等。
+
+    ## 不动的部分
+
+    节点的 inputs / 配置、别的边、边序、坐标,一律不动。补的边 id 沿用这个模块里 `inner_scope_fields_come_back`
+    的习惯(`c-{来源}-{目标}`,撞了加序号),来源节点声明了 branches 的数据边不补(那种来源的控制边当年
+    本来就不会折)。**插件节点的 branches 元数据看不到**(那要读这台机器上装了什么,迁移不能依赖)——
+    按「不分支」处理,和「插件没装时」的规范化判法一致。
+    """
+    if not isinstance(graph, dict):
+        return graph
+    nodes = [dict(node) if isinstance(node, dict) else node for node in graph.get("nodes") or []]
+    by_id = {str(node.get("id")): node for node in nodes if isinstance(node, dict)}
+    edges: list[Any] = [dict(edge) if isinstance(edge, dict) else edge for edge in graph.get("edges") or []]
+    restored = _control_edges_the_old_normalizer_folded(edges, by_id)
+    used = {str(edge.get("id")) for edge in edges if isinstance(edge, dict)}
+    for source, target_id in restored:
+        edge_id, suffix = f"c-{source}-{target_id}", 2
+        while edge_id in used:
+            edge_id, suffix = f"c-{source}-{target_id}-{suffix}", suffix + 1
+        used.add(edge_id)
+        edges.append({"id": edge_id, "source": source, "target": target_id})
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        config = dict(node.get("config") or {})
+        for key, value in config.items():
+            if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                config[key] = drawn_control_edges_come_back(value)
+        if config != (node.get("config") or {}):
+            node["config"] = config
+    return {**graph, "nodes": nodes, "edges": edges}
+
+
+def _control_edges_the_old_normalizer_folded(edges: list[Any], by_id: dict[str, Any]) -> list[tuple[str, str]]:
+    """(来源, 目标) 列表:这一层里「当年折得掉、而且折了」判据成立时被删掉的那些控制边。判据见上。"""
+
+    def branches(node_id: str) -> bool:
+        return str((by_id.get(node_id) or {}).get("type", "")) in BRANCHING_NODE_TYPES
+
+    data_sources: dict[str, set[str]] = {}
+    candidates: dict[str, set[str]] = {}
+    plain: dict[str, set[str]] = {}
+    routed: set[str] = set()
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        source, target = str(edge.get("source", "")), str(edge.get("target", ""))
+        if not source or not target:
+            continue
+        if str(edge.get("kind")) == "data":
+            data_sources.setdefault(target, set()).add(source)
+            #: 来源会分支的数据边不在这里:那种来源的控制边当年算「带路由语义」,一条都没折过。
+            if not branches(source):
+                candidates.setdefault(target, set()).add(source)
+            continue
+        if str(edge.get("kind", "control")) != "control":
+            continue
+        #: 写了 handle 或来源会分支 = 带路由语义(当年的 routing):它们当年不会折,现在也不补。
+        if edge.get("source_handle") or branches(source):
+            routed.add(target)
+        else:
+            plain.setdefault(target, set()).add(source)
+
+    restored: list[tuple[str, str]] = []
+    for target, sources in sorted(candidates.items()):
+        missing = sources - plain.get(target, set())
+        if not missing:
+            continue
+        if target in routed:
+            #: 目标另有条件的真 / 假出口:当年折没折分不出来(折了也不改谁该跑),不补。
+            continue
+        if plain.get(target, set()) & sources:
+            #: 同格上还留着一条「同一对节点间有数据边」的普通控制边 —— 当年这条都折不掉,说明这一格根本没折。
+            continue
+        if plain.get(target, set()) | sources != data_sources.get(target, set()):
+            #: foldable_into 当年要求的两组来源相等,这里对不上:这一格不是「折过」的样子。
+            continue
+        restored.extend((source, target) for source in sorted(missing))
+    return restored
 
 
 def inner_scope_fields_come_back(graph: Any) -> Any:

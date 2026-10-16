@@ -6360,6 +6360,32 @@ def _migrate_loop_scopes_are_not_outer_data_edges() -> None:
     _rewrite_workflow_graphs(inner_scope_fields_come_back, "循环 / 子图的体内 output、condition 被错接成了外层数据边:改回体内引用")
 
 
+def _migrate_restore_drawn_control_edges() -> None:
+    """**把规范化当年折掉的控制边,从旧数据里补回来。**
+
+    2026-10-02 到 2026-10-16 之间,规范化把作者画的、同一对节点间已经/即将有一条数据边的无 handle
+    控制边当多余的折掉 —— 折掉的那条**连 id 都没留下**(维护者 2026-10-16 拍板不再折,见 ADR 0063)。
+    规范化只加数据边、从不凭空补控制边,所以库里的老图不会自己长回来:老图打开再存一遍还是缺线的
+    那个样子。这一步把它们补回来,像这个文件里别的老数据修缮一样自己跑完,不留兼容分支。
+
+    判据与「哪些证得出来」写在领域层 `graph_upgrade.drawn_control_edges_come_back`(那是
+    e35979a10^ 折边判据的**只读复刻**,只为认旧数据)。这里只搬库里的图:
+
+    · **所有工作流都看**(`_rewrite_workflow_graphs` 遍历整张表),不只是官方模板副本 —— 用户自己画的
+      图当年一样被折:折边不看 `meta.source`;
+    · 变了的经 `_rewrite_workflow_graphs` 落成新的一版修订,作者沿用上一版、认可过上一版的人照样担保
+      (机械改写不换担保人,见那个函数);
+    · **修订快照本身不重写**(不可变的历史):回滚到旧修订时由 `revisions.restore_workflow_revision` 走
+      同一个 `upgrade_graph`,补出来的边和这一步一样 —— 见那个函数的注释;
+    · 幂等:补过之后同一格上已经有一条普通控制入边,判据自然不再成立,第二遍什么都不做(也不落修订)。
+    """
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows.graph_upgrade import drawn_control_edges_come_back
+
+    _rewrite_workflow_graphs(drawn_control_edges_come_back, "规范化当年折掉的控制边:按历史判据补回来(画布与库一致)")
+
+
 def _disable_tasks_bound_to_deleted_workflows() -> None:
     """绑着一张**已经删掉**的工作流、却还是「启用」的定时任务,停用。
 
@@ -9898,6 +9924,9 @@ def migration_plan() -> MigrationPlan:
                 MigrationPhase.AFTER_SCHEMA,
                 # 改走 commit_graph_revision 之后它要现成的修订(老库的第一版由修订迁移补上),从上面挪到这里。
                 _migrate_loop_scopes_are_not_outer_data_edges,
+                # 同一条路子:补回被旧规范化折掉的控制边,也落新修订。排在修订迁移之后,排在那条
+                # 「按当前图补回体内引用」之后 —— 它可能刚把一对节点之间的边清空、补了一条控制边。
+                _migrate_restore_drawn_control_edges,
                 # 1.8.1 里上面这条(和条件边那条)经修订迁移落的那一版没有作者:补上一版的作者和认可。
                 _migrate_migration_revisions_keep_their_vouchers,
                 _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks,

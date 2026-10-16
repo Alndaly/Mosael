@@ -186,6 +186,7 @@
   "migrate-registration-invites-become-invite-links": "5352f5642821fd7f",
   "migrate-removed-track-records-are-complete": "5edb39fa825c9b2a",
   "migrate-resource-ownership": "077bf37000e9e5e7",
+  "migrate-restore-drawn-control-edges": "c1b82296e4f6cae0",
   "migrate-scene-cameras-become-objects": "df310644caa04840",
   "migrate-scene-models-to-disk": "f6948f98c02c039e",
   "migrate-scene-models-to-workspace": "1804893907b3c1c4",
