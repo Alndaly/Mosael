@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import math
 import mimetypes
 import subprocess
@@ -38,16 +39,37 @@ normalized first. Video can use a native API-backed Adapter or evenly sampled fr
 existing transcript; the Gateway has no native video block and therefore uses frames.
 """
 
+logger = logging.getLogger(__name__)
+
 ANALYSIS_VENDOR_ORDER = ("moonshot", "minimax", "openai", "openai-compatible")
-# 抽帧数按时长自适应:约每 SECONDS_PER_FRAME 秒 1 帧,夹在 [MIN, MAX]。帧越多画面覆盖越全,
-# 但图片 token 线性上涨,所以封顶——避免长视频把上下文和费用打爆。
-MIN_VIDEO_FRAMES = 4
-MAX_VIDEO_FRAMES = 16
-SECONDS_PER_FRAME = 6.0
+
+# ---- 回落专用:没有镜头信息时,按**时长**猜密度 ----------------------------------------------
+# 只在 `extract_video_frames` 那条均匀回路上用(整条片子从头到尾匀着抓几帧):约每
+# FALLBACK_SECONDS_PER_FRAME 秒 1 帧,夹在 [FALLBACK_MIN_FRAMES, FALLBACK_MAX_FRAMES]。
+# **这不是镜头路的上限。** 镜头路有多少镜是量出来的,和时长无关;镜多的时候按时长算出来的
+# 4–16 会让大半镜头一帧都看不到,把镜头路的预算换成 MAX_VISUAL_FRAMES / MAX_SHEET_GROUPS。
+FALLBACK_MIN_FRAMES = 4
+FALLBACK_MAX_FRAMES = 16
+FALLBACK_SECONDS_PER_FRAME = 6.0
 FRAME_WIDTH = 512
 REQUEST_TIMEOUT_SECONDS = 120
 # 转写文本喂进分析时的字符上限(控 token)。
 TRANSCRIPT_MAX_CHARS = 6000
+
+# ---- 镜头路(有镜头)的预算:交给模型几张「图」,由视觉模型一次能吃多少决定,和时长无关 -------------
+# 镜数 ≤ 它:每镜一张中点帧(每镜至少被看到一次)。一张 512×288 的中点帧约 255 张量 token
+# (512px 分块计法 85 + 170×块数),24 张 ≈ 6k,和转写上限(6000 字符)同一个量级;再多,模型对单张的
+# 注意力被摊薄、账单线性涨,而画面信息并没有多出来。短视频(15–60 秒,单镜 1–3 秒)十几到几十镜,
+# 24 以内能逐镜看完,不必走联系表。
+MAX_VISUAL_FRAMES = 24
+# 镜数 > MAX_VISUAL_FRAMES:改交现成的联系表(每 25 镜一组 A/B 两张,见 domain/shots/frames)——
+# 全片每一镜都在里面,不再丢镜头。一组是两张 1600×900 的大图 ≈ 2.9k token,3 组(≤75 镜)≈ 8.7k,
+# 和 24 帧那条路同一量级,一次调用仍吃得下;再多就只交前几组,并把没交出去的那段记成一条提示
+# (`sheets_truncated`),不装作全看到了。
+MAX_SHEET_GROUPS = 3
+# 分析这次自己记的提示(和拆镜头那套 hints 同一个字段,见 domain/shots/breakdowns):重跑分析要幂等,
+# 先清掉上一次同类的那条再记。
+ANALYSIS_HINT_KINDS = ("sheets_truncated", "sheets_unavailable")
 
 # 支持"原生视频理解"(直接吃视频、不抽帧)的 vendor:
 #   google  → Gemini 原生 API(视频走 inline_data)
@@ -62,12 +84,13 @@ VIDEO_ANALYSIS_MODES = ("auto", "frames", "native")
 MAX_NATIVE_VIDEO_MB = 48
 
 
-def adaptive_frame_count(duration_seconds: float) -> int:
-    """按时长定帧数:约每 SECONDS_PER_FRAME 秒 1 帧,夹在 [MIN_VIDEO_FRAMES, MAX_VIDEO_FRAMES]。"""
+def fallback_frame_count(duration_seconds: float) -> int:
+    """**没有镜头信息时**按时长定帧数:约每 FALLBACK_SECONDS_PER_FRAME 秒 1 帧,
+    夹在 [FALLBACK_MIN_FRAMES, FALLBACK_MAX_FRAMES]。镜头路不用它(见 MAX_VISUAL_FRAMES)。"""
     if not (duration_seconds > 0):
-        return MIN_VIDEO_FRAMES
-    target = math.ceil(duration_seconds / SECONDS_PER_FRAME)
-    return max(MIN_VIDEO_FRAMES, min(MAX_VIDEO_FRAMES, target))
+        return FALLBACK_MIN_FRAMES
+    target = math.ceil(duration_seconds / FALLBACK_SECONDS_PER_FRAME)
+    return max(FALLBACK_MIN_FRAMES, min(FALLBACK_MAX_FRAMES, target))
 
 
 class AnalysisError(LocalizedError, RuntimeError):
@@ -122,13 +145,14 @@ def select_native_video_connection(
 
 
 def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
-    """Evenly sampled JPEG frames via a single ffmpeg pass. count=None → 按时长自适应帧数。"""
+    """Evenly sampled JPEG frames via a single ffmpeg pass. count=None → 按时长自适应帧数
+    (`fallback_frame_count`,**只在没有镜头信息时**用)。"""
     with tempfile.TemporaryDirectory(prefix="mosael-frames-") as tmp:
         pattern = Path(tmp) / "frame-%02d.jpg"
         try:
             # 时长走共用的探测:头里没写时长的录像,这里曾把 "N/A" 交给 float() 直接抛出去。
             duration = max(float(probe_media(path).get("duration") or 1.0), 0.2)
-            frame_count = count if count is not None else adaptive_frame_count(duration)
+            frame_count = count if count is not None else fallback_frame_count(duration)
             run_logged(
                 [
                     settings.ffmpeg, "-y", "-v", "error", "-i", str(path),
@@ -166,7 +190,10 @@ def extract_shot_frames(
 ) -> tuple[list[bytes], list[str] | None]:
     """按镜头取中点帧(每镜至少一帧,镜多均匀挑),每张图带 `S03 · 0:12.4–0:15.0` 标注,
     返回 `(帧字节, 标注)`;没有镜头 / 一帧都取不到时回落均匀抽帧(标注为 None)。
-    分析不能因为镜头表缺席或取帧失败而失败。"""
+    分析不能因为镜头表缺席或取帧失败而失败。
+
+    `frame_count` 是这次的中点帧预算。**算它的不该是时长** —— 镜数在 `MAX_VISUAL_FRAMES` 以内时
+    就是镜数(每镜一张);超过就整条不走这条路,见 `_shot_road_images`。"""
     from app.domain.shots import frames as shots_frames
 
     if shots:
@@ -178,6 +205,91 @@ def extract_shot_frames(
             return [image for _label, image in labeled], [label for label, _image in labeled]
     #: 均匀抽帧保持 `extract_video_frames(path)` 的单参形状 —— 既有测试替身按这个签名挂。
     return extract_video_frames(path), None
+
+
+def _sheet_bytes(asset: Asset, row: Any | None, groups: int) -> list[tuple[dict[str, Any], bytes, bytes]]:
+    """库里那份镜头表已经拼好的联系表(量刀口时落盘的 `shots/sheets/`,见 domain/shots/frames)。
+    表不在这份库里 / 文件被删了,就只回拿得到的那几组;一组都拿不到回空表(调用方现场拼)。"""
+    from app.domain.shots import breakdowns as shots_breakdowns
+
+    if row is None:
+        return []
+    out: list[tuple[dict[str, Any], bytes, bytes]] = []
+    for sheet in row.sheets or []:
+        data = [
+            shots_breakdowns.sheet_file(asset, str(sheet.get(point) or ""))
+            for point in ("a", "b")
+        ]
+        images = [path.read_bytes() if path is not None else b"" for path in data]
+        if any(images):
+            out.append((dict(sheet), images[0], images[1]))
+        if len(out) >= groups:
+            break
+    return out
+
+
+def _shots_after(shots: list[dict[str, Any]], shot_id: str) -> list[dict[str, Any]]:
+    """`shot_id` 之后的镜头(表里的镜号对不上就当后面没有,不猜)。"""
+    ids = [str(shot.get("id") or "") for shot in shots]
+    return shots[ids.index(shot_id) + 1:] if shot_id in ids else []
+
+
+def _shot_road_images(
+    asset: Asset, path: Path, shots: list[dict[str, Any]], row: Any | None
+) -> tuple[list[bytes], list[str] | None, str, dict[str, str] | None]:
+    """镜数超过 `MAX_VISUAL_FRAMES` 时交什么:**联系表**,而不是按时长算出来的前几帧。
+
+    全片每一镜都在表里(每 25 镜一组 A/B 两张,格角压着镜号和该帧的时间码)。表优先用库里现成的;
+    库里的还没生成就现场拼(帧和表只写临时目录,没有表的素材不该凭空多一个 `shots/`)。
+    只交前 `MAX_SHEET_GROUPS` 组,再往后交不完 —— 交不完/拼不出都记一条提示交给调用方,别装作全看到了。
+
+    返回 `(图, 每张图的标注, 走的是哪种图, 要记的提示)`;标注为 None 表示没有镜头信息、走了均匀回落。
+    """
+    from app.domain.shots import frames as shots_frames
+
+    sheets = _sheet_bytes(asset, row, MAX_SHEET_GROUPS)
+    if not sheets:
+        try:
+            info = probe_media(path)
+            width, height = float(info.get("width") or 0), float(info.get("height") or 0)
+            sheets = shots_frames.sheets_in_memory(
+                path, shots, groups=MAX_SHEET_GROUPS, aspect=(width / height if height else 16 / 9)
+            )
+        except Exception:
+            sheets = []
+    images: list[bytes] = []
+    labels: list[str] = []
+    shown = sheets[:MAX_SHEET_GROUPS]
+    for sheet, sheet_a, sheet_b in shown:
+        for point, data in (("15% 处", sheet_a), ("85% 处", sheet_b)):
+            if data:
+                labels.append(f"联系表 {sheet.get('index')} · {sheet.get('first')}–{sheet.get('last')} · {point}")
+                images.append(data)
+    if not images:
+        # 一张表都交不出来:退一步按预算均匀挑镜头的中点帧。**不是每一镜都看到了**,记一条提示。
+        middle_images, middle_labels = extract_shot_frames(path, shots, MAX_VISUAL_FRAMES)
+        return middle_images, middle_labels, "frames", {
+            "shot": "", "kind": "sheets_unavailable", "field": "", "value": str(len(shots))
+        }
+    rest = _shots_after(shots, str(shown[-1][0].get("last") or ""))
+    if rest:
+        return images, labels, "sheets", {
+            "shot": str(rest[0].get("id") or ""), "kind": "sheets_truncated", "field": "",
+            "value": str(rest[-1].get("id") or ""),
+        }
+    return images, labels, "sheets", None
+
+
+def _coverage_note(hint: dict[str, str] | None) -> str:
+    """这次没把镜头交全时,给**模型**的那一句话(和记在镜头表上的提示同一个事实)。没缺就空串。"""
+    if not hint:
+        return ""
+    if hint.get("kind") == "sheets_truncated":
+        return f"联系表只交到 {hint.get('shot')} 之前，往后到 {hint.get('value')} 的镜头没交出来，没在表里的镜头你没看到。"
+    if hint.get("kind") == "sheets_unavailable":
+        return (f"没拿到联系表，画面只均匀抽了其中几帧（全片 {hint.get('value')} 镜），"
+                "不是每一镜都看到了。")
+    return ""
 
 
 def shot_table_context(db: Session, asset: Asset) -> str:
@@ -210,15 +322,24 @@ def build_messages(
     image_mime: str = "image/jpeg",
     frame_labels: list[str] | None = None,
     shot_context: str = "",
+    visual_kind: str = "frames",
+    coverage_note: str = "",
 ) -> list[dict[str, Any]]:
+    """`visual_kind`:这批图是每镜一张的中点帧(`frames`),还是按镜拼的联系表(`sheets`)——
+    两者的标注怎么读不一样,说错了模型就照着错的读。`coverage_note`:这次没把镜头交全时,
+    对模型直说少了什么(和记在镜头表上的那条提示同一个事实,见 `_shot_road_images`)。"""
     meta = asset.media_info or {}
     context = f"素材名称: {asset.name}；类型: {asset.kind}"
     if meta.get("duration"):
         context += f"；时长: {meta['duration']}秒"
     if asset.kind == "video":
         if frame_labels is not None:
-            context += (f"。以下是按镜头抽取的 {len(images)} 帧画面（每帧前面的标注写着它在哪一镜、"
-                        "这一镜的起止时间，照标注说哪一帧在哪一镜）。镜头边界和时长是代码量出来的，准确。")
+            if visual_kind == "sheets":
+                context += (f"。以下是按镜头拼的 {len(images)} 张联系表（每张表前面写着它覆盖哪几镜；一格一镜，"
+                            "格子左上角压着镜号和这一帧的时间码，照格角的镜号说事）。镜头边界和时长是代码量出来的，准确。")
+            else:
+                context += (f"。以下是按镜头抽取的 {len(images)} 帧画面（每帧前面的标注写着它在哪一镜、"
+                            "这一镜的起止时间，照标注说哪一帧在哪一镜）。镜头边界和时长是代码量出来的，准确。")
         else:
             context += f"。以下是按时间均匀抽取的 {len(images)} 帧画面（从前到后）。"
     # 画面只能"看",接上语音转写才能"听懂"台词/旁白——视频理解质量的关键补充。
@@ -227,6 +348,8 @@ def build_messages(
     # 已有镜头表就带上(ADR 0061 §3):量好的刀口时长、判过的景别运镜,模型不必再猜一遍。
     if shot_context:
         context += f"\n\n{shot_context}"
+    if coverage_note:
+        context += f"\n\n【这次拿到多少画面】{coverage_note}"
     content: list[dict[str, Any]] = [{"type": "text", "text": f"{context}\n\n{question}"}]
     if frame_labels is not None:
         for label, image in zip(frame_labels, images):
@@ -468,19 +591,31 @@ def analyze_asset(
         }
 
     # 抽帧 + 转写(frames,或 auto 无原生档案时的回落)。
-    # 按镜头抽(ADR 0061 §3):先量刀口,每镜至少一帧取中点,每张图标着 S03 · 0:12.4–0:15.0;
-    # 没镜头表 / 取不到时回落老喂法(均匀抽帧)。
+    # 按镜头抽(ADR 0061 §3),数量由**镜头数**决定,不由时长决定:
+    #   镜数 ≤ MAX_VISUAL_FRAMES → 每镜一张中点帧,每张图标着 S03 · 0:12.4–0:15.0;
+    #   镜数 >  MAX_VISUAL_FRAMES → 交联系表(全片每一镜都在里面),交不完的记一条提示;
+    # 没有镜头表 / 连表都拿不到时才回落老喂法(均匀抽帧,按时长猜密度)。
     profile = resolved_connection or select_analysis_connection(db, profile_id, user_id)
-    shots, _row = _breakdown_shots_for(db, asset, path)
-    frame_count = adaptive_frame_count(float((asset.media_info or {}).get("duration") or 0))
-    images, frame_labels = extract_shot_frames(path, shots, frame_count)
+    shots, row = _breakdown_shots_for(db, asset, path)
+    if shots and len(shots) > MAX_VISUAL_FRAMES:
+        images, frame_labels, visual_kind, hint = _shot_road_images(asset, path, shots, row)
+    else:
+        images, frame_labels = extract_shot_frames(path, shots, len(shots))
+        visual_kind, hint = "frames", None
+    if hint is not None:
+        # 交不完 / 拿不到表都不是静默跳过:记在镜头表那条上(和判画面对账的提示同一个位置,界面按 kind 说人话)。
+        if row is not None:
+            row.hints = [*[old for old in row.hints if old.get("kind") not in ANALYSIS_HINT_KINDS], hint]
+        else:
+            logger.warning("analyze_asset %s: %s", asset.id, hint)
     with billable(
         db, user_id=user_id, capability="chat", operation="analyze_asset", workspace_id=asset.workspace_id,
         idempotency_key=once("analyze_asset"),
         source_type="asset", source_id=asset.id,
     ) as call:
         messages = build_messages(asset, prompt, images, transcript=transcript_text,
-                                  frame_labels=frame_labels, shot_context=table_context)
+                                  frame_labels=frame_labels, shot_context=table_context,
+                                  visual_kind=visual_kind, coverage_note=_coverage_note(hint))
         if resolved_connection is not None:
             answer = call_vision_model(db, profile, messages, call, model=model, surface=surface)
         else:

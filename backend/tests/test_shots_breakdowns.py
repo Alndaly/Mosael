@@ -86,6 +86,19 @@ def test_measure_into_builds_breakdown_and_files(video_asset) -> None:
             assert (folder / "sheets" / f"sheet-01{point}.jpg").is_file()
 
 
+def test_sheet_file_only_serves_sheets_inside_the_asset_dir(video_asset) -> None:
+    """联系表的文件名收窄(和帧图同一个理由):`shots/sheets/` 是素材目录里面的目录,
+    名字任由调用方给就等于开了一条走出去的路。"""
+    with SessionLocal() as db:
+        breakdowns.measure_into(db, video_asset, created_by=None, lang="zh")
+        db.commit()
+    assert breakdowns.sheet_file(video_asset, "sheet-01a.jpg") is not None
+    assert breakdowns.sheet_file(video_asset, "sheet-99b.jpg") is None  # 名字对但文件不在
+    assert breakdowns.sheet_file(video_asset, "../../secret.jpg") is None
+    assert breakdowns.sheet_file(video_asset, "sheet-1a.jpg") is None  # 位数不对
+    assert breakdowns.sheet_file(video_asset, "sheet-01c.jpg") is None
+
+
 def test_measure_into_overwrites_existing_row(video_asset) -> None:
     with SessionLocal() as db:
         first = breakdowns.measure_into(db, video_asset, created_by=None, lang="zh")

@@ -137,3 +137,30 @@ def test_grab_frames_all_failing_raises(tmp_path: Path) -> None:
     with pytest.raises(frames.ShotFramesError) as err:
         frames.grab_frames(video, shots, tmp_path / "frames")
     assert err.value.key == "shotsErr_noFrames"
+
+
+# --------------------------------------------------------------------------------------
+# 现场拼表(库里那份还没生成时;分析那条路用,见 domain/analysis/service)
+# --------------------------------------------------------------------------------------
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_sheets_in_memory_returns_a_and_b_bytes(tmp_path: Path) -> None:
+    """只拼前 `groups` 组,每组的 A/B 两张读成字节交出去;不往素材目录写东西(这里是 tmp_path)。"""
+    video = tmp_path / "v.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=25:duration=3",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video)],
+        check=True, timeout=60,
+    )
+    shots = [_shot(i, float(i - 1), float(i)) for i in range(1, 31)]  # 30 镜 → 两组
+    made = frames.sheets_in_memory(video, shots, groups=1, aspect=16 / 9)
+    assert len(made) == 1, "只拼要交的那几组"
+    sheet, sheet_a, sheet_b = made[0]
+    assert sheet["first"] == "S01" and sheet["last"] == "S25"
+    assert sheet_a[:2] == b"\xff\xd8" and sheet_b[:2] == b"\xff\xd8"  # JPEG magic
+    #: 帧和表只落在临时目录:片子旁边不该多出任何东西(「一份素材一份表」)。
+    assert [path.name for path in tmp_path.iterdir()] == ["v.mp4"]
+
+
+def test_sheets_in_memory_without_shots_is_empty(tmp_path: Path) -> None:
+    assert frames.sheets_in_memory(tmp_path / "nope.mp4", [], groups=3, aspect=16 / 9) == []

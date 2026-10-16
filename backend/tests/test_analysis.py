@@ -103,12 +103,24 @@ def test_build_messages_includes_transcript() -> None:
     assert "你好，今天聊剪辑。" in text
 
 
-def test_adaptive_frame_count_scales_with_duration() -> None:
-    # 约每 6 秒 1 帧,夹在 [4, 16]。
-    assert service.adaptive_frame_count(0) == service.MIN_VIDEO_FRAMES
-    assert service.adaptive_frame_count(3) == service.MIN_VIDEO_FRAMES  # 太短也保底 4 帧
-    assert service.adaptive_frame_count(60) == 10
-    assert service.adaptive_frame_count(6000) == service.MAX_VIDEO_FRAMES  # 长视频封顶
+def test_fallback_frame_count_scales_with_duration() -> None:
+    """回落专用:没有镜头信息时,约每 6 秒 1 帧,夹在 [4, 16]。"""
+    assert service.fallback_frame_count(0) == service.FALLBACK_MIN_FRAMES
+    assert service.fallback_frame_count(3) == service.FALLBACK_MIN_FRAMES  # 太短也保底 4 帧
+    assert service.fallback_frame_count(60) == 10
+    assert service.fallback_frame_count(6000) == service.FALLBACK_MAX_FRAMES  # 长视频封顶
+
+
+def test_shot_road_budget_is_not_derived_from_duration() -> None:
+    """镜头路的预算和时长无关:`MAX_VISUAL_FRAMES` 是「一次视觉调用吃几张图」,不是按时长算的。
+
+    值钉在这里:改它要连这条一起想清楚(改前是拿 `adaptive_frame_count(时长)` 当镜头路上限,
+    镜多时大半镜头一帧都看不到;见 test_shots_analysis_feed 的两条路)。"""
+    assert service.MAX_VISUAL_FRAMES == 24
+    assert service.MAX_SHEET_GROUPS == 3
+    assert service.MAX_VISUAL_FRAMES > service.FALLBACK_MAX_FRAMES
+    #: 6 秒的短片:回落口径给 4 张,镜头路按镜头数给(6 镜就是 6 张,见 test_shots_analysis_feed)。
+    assert service.fallback_frame_count(6) == service.FALLBACK_MIN_FRAMES
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")

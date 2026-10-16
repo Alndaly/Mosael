@@ -223,7 +223,7 @@ class AnalyzeAssetResponse(ApiModel):
     model: str
     #: 实际走的方式:image / native / frames。
     mode: str = "frames"
-    #: 抽帧数(原生模式为 0)。
+    #: 这次交出去的图片数:每镜一张的中点帧,或覆盖全片的联系表张数(原生模式为 0)。
     frames: int = 0
     used_transcript: bool = False
 

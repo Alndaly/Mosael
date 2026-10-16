@@ -59,6 +59,8 @@ def require_video(asset: Asset) -> Path:
 #: 帧图的名字(`S03a.jpg` / `S03b.jpg`,见 frames.frame_name)。详情页按它取缩略图,所以在这里收窄一次:
 #: `shots/frames/` 是素材目录里面的目录,名字任由调用方给就等于开了一条走出去的路。
 _FRAME_NAME = re.compile(r"S\d{2,}[ab]\.jpg")
+#: 联系表的名字(`sheet-01a.jpg` / `sheet-01b.jpg`,见 frames.sheet_name)。同理收窄。
+_SHEET_NAME = re.compile(r"sheet-\d{2,}[ab]\.jpg")
 
 
 def frame_file(asset: Asset, name: str) -> Path | None:
@@ -66,6 +68,14 @@ def frame_file(asset: Asset, name: str) -> Path | None:
     if not _FRAME_NAME.fullmatch(name):
         return None
     path = shots_dir(asset) / "frames" / name
+    return path if path.is_file() else None
+
+
+def sheet_file(asset: Asset, name: str) -> Path | None:
+    """那一组联系表的 A / B 半张;名字不是联系表、或者文件不在,都回 None(分析据此只交拿得到的那几张)。"""
+    if not _SHEET_NAME.fullmatch(name):
+        return None
+    path = shots_dir(asset) / "sheets" / name
     return path if path.is_file() else None
 
 
@@ -218,4 +228,4 @@ def prompt_context(row: ShotBreakdown, asset: Asset) -> str:
 
 
 __all__ = ["ShotBreakdownError", "breakdown_for", "frame_file", "judge", "lang_now", "measure_into",
-           "prompt_context", "public_shape", "require_video", "shots_dir", "transcript_segments"]
+           "prompt_context", "public_shape", "require_video", "sheet_file", "shots_dir", "transcript_segments"]

@@ -124,6 +124,33 @@ def _grab_bytes(source: Path, at: float) -> bytes | None:
         return target.read_bytes() if target.is_file() and target.stat().st_size > 0 else None
 
 
+def sheets_in_memory(
+    source: Path, shots: list[dict[str, Any]], *, groups: int, aspect: float
+) -> list[tuple[dict[str, Any], bytes, bytes]]:
+    """**现场**拼联系表(库里那份还没生成时),把每组的 A/B 两张读成字节交出去。
+
+    帧和表都只落在临时目录:一份没有表的素材不该凭空多出一个 `shots/`(「一份素材一份表」,
+    见 breakdowns.measure_into)。只拼前 `groups` 组(每组 SHEET_MAX 镜),再往后的由调用方说清没交。
+
+    一帧都取不到抛 `ShotFramesError`(调用方据此退一步)。"""
+    capped = shots[: max(0, groups) * SHEET_MAX]
+    if not capped:
+        return []
+    with tempfile.TemporaryDirectory(prefix="mosael-shot-sheets-") as tmp:
+        root = Path(tmp)
+        grab_frames(source, capped, root / "frames")
+        made = make_sheets(capped, root / "frames", root / "sheets", aspect)
+        return [
+            (sheet, *(_read_or_empty(root / "sheets" / sheet[point]) for point in FRAME_POINTS))
+            for sheet in made
+        ]
+
+
+def _read_or_empty(path: Path) -> bytes:
+    """这一格读不出来就空着(和 `grab_frames` 一帧取不到不连坐同一个态度)。"""
+    return path.read_bytes() if path.is_file() and path.stat().st_size > 0 else b""
+
+
 def timecode(seconds: float) -> str:
     """0:12.4 / 1:02:03.5 —— 镜头常常不到一秒,十分之一秒要留着。"""
     tenths = int(round(max(0.0, seconds) * 10))
@@ -176,4 +203,4 @@ def make_sheets(shots: list[dict[str, Any]], frames_dir: Path, sheets_dir: Path,
 
 
 __all__ = ["FRAME_POINTS", "SHEET_MAX", "ShotFramesError", "frame_name", "frame_time", "grab_frames",
-           "grab_midframes", "make_sheets", "sheet_name", "shot_label", "timecode"]
+           "grab_midframes", "make_sheets", "sheet_name", "sheets_in_memory", "shot_label", "timecode"]
