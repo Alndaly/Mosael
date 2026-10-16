@@ -130,6 +130,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这一次运行停在「等人确认」上,但恢复它要的那份现场没了(待批单被删或被取消),接不下去。",
         "en": "This run is stopped at “Wait for approval” but the resume point it needs is gone (the approval row was deleted or cancelled), so it cannot continue.",
     },
+    "wfErr_awaitApprovalParallel": {
+        "zh": "一次运行只停得住一个「等人确认」,而这张图里「{node}」和「{other}」互相不在对方的上下游 —— 两个都可能同时跑到,恢复的现场却只记得住一个。把它们串成一条线(中间接上各自的活),或者先只留一个门。",
+        "en": "A run can only stop at one “Wait for approval”, but in this graph “{node}” and “{other}” are not upstream of each other — both can be reached at the same time, while a resume point can only remember one. Put them in a line (with their own work in between), or keep just one gate for now.",
+    },
     "wfErr_awaitApprovalTimedOut": {
         "zh": "「{node}」等到超时({hours} 小时)也没有人确认,这一次运行按节点上的「中止」停下了。",
         "en": "“{node}” timed out after {hours} hour(s) with nobody deciding, so this run stopped as the node's “abort” says.",

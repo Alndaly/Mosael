@@ -235,7 +235,9 @@ def send_approval_card(
     tail = f"\n\n(飞书内直接确认需要:{_CARD_SETUP_HINT})" if missing_capability else ""
     message_id = transport.send_text(
         bot, receive_id, receive_type,
-        f"有一个工作流在等你确认:{approval.title}\n请到 Mosael 里处理,或在飞书里回复。{tail}",
+        #: **不写"在飞书里回复"**:全仓没有任何一条路把飞书里的回复变成决定(只有卡片上的按钮是)。
+        #: 那句话把人支去一个不存在的入口 —— 说清"到 Mosael 里处理"就够了。
+        f"有一个工作流在等你确认:{approval.title}\n请到 Mosael 里处理。{tail}",
     )
     if missing_capability:
         #: 写进机器人状态,设置页那行小字会显示 —— 否则用户只在聊天里看到一次就过去了。
@@ -246,15 +248,21 @@ def send_approval_card(
     return message_id
 
 
-#: 这一次等待结束时补的那句话(取消 / 超时)。认不出的档位退到一句通用的话 —— 不抛。
+#: 这一次等待结束时补的那句话(取消 / 超时 / 到点提醒)。认不出的档位退到一句通用的话 —— 不抛。
+#: `remind` **不是结果态**:这件事还在等,只是已经提醒过一次了 —— 写成"已经结束"会把群里的人
+#: 支去一个还开着的门(见 domain/workflows/approvals.remind_feishu_card)。
 _SETTLED_NOTICE = {
     "cancelled": "这次等待已经结束:已被取消,不用再点了。",
     "timeout": "这次等待已经结束:已超时,不用再点了。",
+    "remind": "这件事还在等你确认,已经提醒过一次了 —— 决定权还在你手上。",
 }
 
 
 def settle_run_approval(db: Session, approval: WorkflowRunApproval, outcome: str) -> None:
-    """这一次等待结束了(取消 / 超时):把飞书里那张卡**收回成结果态**,别留在原地还能点。
+    """这一次等待有了新说法(取消 / 超时 / 到点提醒):把飞书里那张卡**就地换成它**,别留在原地还能点。
+
+    取消 / 超时是**结果态**(这件事结束了);`remind` 是"还在等,已提醒过一次"(见
+    domain/workflows/approvals.remind_feishu_card)—— 同一套原语,只是卡上的话不一样。
 
     只在**确实发出去过**的时候调:领域那一边按 `feishu_message_id` 判过了(见
     domain/workflows/approvals.retire_feishu_card),这里再判一次 —— 这一步是被 after_commit
@@ -265,7 +273,7 @@ def settle_run_approval(db: Session, approval: WorkflowRunApproval, outcome: str
     1. **就地换掉**那条消息(消息 id 不变、按钮没了):群里的人一眼看出这件事结束了;
     2. 换不成(降级发出去的是纯文字消息,卡片换不了)就在**同一个会话**里补一条文字。
 
-    **全程不抛**:调用方(领域)已经提交了取消 / 超时,这一步失败只是"那张卡还留在那儿",
+    **全程不抛**:调用方(领域)已经提交了那个结果,这一步失败只是"那张卡还留在那儿",
     不该把那个已经成立的结果弄回去。失败记日志 —— 想追一件事有没有说出去,看这里。
     """
     message_id = str(approval.feishu_message_id or "").strip()
@@ -282,6 +290,16 @@ def settle_run_approval(db: Session, approval: WorkflowRunApproval, outcome: str
         transport = domain_gateway.transport()
     except Exception:  # noqa: BLE001 —— 这一半没装上(组装根没登记):没有可收回的东西
         logger.info("feishu transport is not wired; nothing to retire for approval %s", approval.id)
+        return
+    if outcome == "remind":
+        #: **提醒不换掉那张卡。** 门还开着 —— 卡上那两个按钮还得点得动,换成没有按钮的卡会让人
+        #: 再也批不了。所以在同一个会话里补一句话就行(和上面"换不成"那条退路同一句话)。
+        try:
+            transport.send_text(
+                bot, approval.feishu_receive_id, approval.feishu_receive_type, _SETTLED_NOTICE["remind"],
+            )
+        except Exception:  # noqa: BLE001 —— 见 docstring:补不上也只是日志,不影响"已提醒"
+            logger.exception("feishu reminder notice failed approval=%s", approval.id)
         return
     try:
         transport.update_card(

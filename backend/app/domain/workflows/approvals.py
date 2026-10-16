@@ -37,7 +37,16 @@
 到点由后台那一拍处理(workers/scheduler.tick → `expire_due`),按节点上写的办:
 `abort` 中止这次运行(去掉决定后接着跑,执行器抛出`wfErr_awaitApprovalTimedOut`)、
 `continue` 当成 `timeout` 继续往下、`remind` 只再提醒一次并把下一次提醒的时刻往后推一格。
-**三种都再通知一次** —— 一个门禁悄悄过期等于没装。
+**三种都再通知一次** —— 一个门禁悄悄过期等于没装。提醒这一档**飞书那边也说一声**
+(同一张卡就地换成"还在等,已提醒过一次",见 `remind_feishu_card`;没发出去过就跳过)。
+
+## 决定 / 超时 / 提醒**只在现场落库之后**才成立
+
+单是执行器自己一个事务先提交的(它必须比卡片先落库),检查点由引擎随后写进 `_park_at_approval`
+那次事务。那一段窗口里这张单是 `pending`、检查点还是空的:**批它只会落一个决定,而没有现场可恢复**,
+那次运行永远醒不过来。两头都堵上 —— 列表不列还没有现场的单(`pending_for_*` 见 `ready_to_decide`),
+后台那一拍也不处理它们;引擎写完现场会**复查**这道门是不是已经被决定了,是就自己再排一次恢复
+(见 engine._park_at_approval)。
 
 ## 拒绝
 
@@ -71,6 +80,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -212,18 +222,43 @@ def for_job(db: Session, job_id: str) -> list[WorkflowRunApproval]:
     )
 
 
+def ready_to_decide(row: WorkflowRunApproval) -> bool:
+    """这张单**此刻批得动**吗:恢复现场(`checkpoint`)已经落库。
+
+    执行器建单时**自己一个事务先提交**(它必须比卡片先落库,见 executors/approval),检查点由引擎在
+    兄弟节点都落定之后写进 `_park_at_approval` 那次事务。这两件事之间有一段窗口:单是 `pending`、
+    检查点还是空的 —— 这时批它只是落一个决定,而**没有现场可恢复**,那次运行醒不过来
+    (决定赢了、运行永远停着;见 engine._park_at_approval 那道复查)。
+
+    列表不列它,是因为在这段窗口里批它对谁都没有意义:`pending_for_*` 用它过滤。
+    """
+    return bool(row.checkpoint)
+
+
 def pending_for_job(db: Session, job_id: str) -> WorkflowRunApproval | None:
-    return db.scalar(
-        select(WorkflowRunApproval)
-        .where(WorkflowRunApproval.job_id == job_id, WorkflowRunApproval.status == PENDING)
-        .order_by(WorkflowRunApproval.created_at)
+    return next(
+        (
+            row
+            for row in db.scalars(
+                select(WorkflowRunApproval)
+                .where(WorkflowRunApproval.job_id == job_id, WorkflowRunApproval.status == PENDING)
+                .order_by(WorkflowRunApproval.created_at)
+            )
+            if ready_to_decide(row)
+        ),
+        None,
     )
 
 
 def pending_for_workspace(db: Session, workspace_id: str) -> list[WorkflowRunApproval]:
-    """这个工作区此刻在等确认的那些单(任务中心 / 运行详情那两处列表读它)。"""
-    return list(
-        db.scalars(
+    """这个工作区此刻在等确认的那些单(任务中心 / 运行详情那两处列表读它)。
+
+    只列**已经可以批**的(见 `ready_to_decide`):单是执行器自己一个事务先提交的,检查点由引擎随后写
+    —— 那一段窗口里这张单任何人都还没法批,列出来只是给人一个点了没反应的按钮。
+    """
+    return [
+        row
+        for row in db.scalars(
             select(WorkflowRunApproval)
             .where(
                 WorkflowRunApproval.workspace_id == workspace_id,
@@ -231,12 +266,14 @@ def pending_for_workspace(db: Session, workspace_id: str) -> list[WorkflowRunApp
             )
             .order_by(WorkflowRunApproval.created_at.desc())
         )
-    )
+        if ready_to_decide(row)
+    ]
 
 
 def pending_for_workflow(db: Session, workflow_id: str) -> list[WorkflowRunApproval]:
-    return list(
-        db.scalars(
+    return [
+        row
+        for row in db.scalars(
             select(WorkflowRunApproval)
             .where(
                 WorkflowRunApproval.workflow_id == workflow_id,
@@ -244,7 +281,8 @@ def pending_for_workflow(db: Session, workflow_id: str) -> list[WorkflowRunAppro
             )
             .order_by(WorkflowRunApproval.created_at.desc())
         )
-    )
+        if ready_to_decide(row)
+    ]
 
 
 # ---------------- 落检查点 / 恢复 ----------------
@@ -312,24 +350,47 @@ def decide_and_wake(
     note: str = "",
     via: str = "app",
 ) -> bool:
-    """落决定并在**提交之后**叫醒那次运行。飞书卡片和应用内那两处唯一该调的入口。"""
+    """落决定并在**提交之后**叫醒那次运行。飞书卡片和应用内那两处唯一该调的入口。
+
+    **赢下 CAS 的那一个还负责把飞书那张卡收回**(提交之后尽力做):在应用里批的那一下,群里那张
+    卡如果还留着两个按钮,别人会以为这件事还欠着 —— 两处点哪个都算数,但卡片得跟着结果走。
+    `via == "feishu"` 时跳过:那条路的**回调响应本身**就是把这张卡换成结果态(见
+    integrations/feishu/approvals._handle_run_approval),再收一次是多余的。
+    """
     if not decide(db, approval, decision=decision, user_id=user_id, user_name=user_name, note=note, via=via):
         return False
+    if via != "feishu":
+        approval_id = approval.id
+        after_commit(db, lambda: retire_feishu_card(approval_id, decision))
     wake(db, approval)
     return True
 
 
 def wake(db: Session, approval: WorkflowRunApproval) -> None:
-    """把停在这张单上的那次运行接着派发出去(提交之后才真的起线程 —— 见 jobs.dispatch_job 的说明)。"""
+    """把停在这张单上的那次运行接着派发出去(提交之后才真的起线程 —— 见 jobs.dispatch_job 的说明)。
+
+    **带上这张单的 id。** 一次运行里可以有好几张单(图里串着两道门):不带 id 的时候"该从哪一张的
+    现场接着跑"只能猜,而猜错就是从**上一道门**的现场重跑中间那些节点(见 `_resumable`)。
+
+    这里顺手把这张单"已经派过一次恢复"的标记放下:决定是新的,这一次唤醒就该派得出去。
+    """
     job_id = approval.job_id
-    after_commit(db, lambda: dispatch_resume(job_id))
+    approval_id = approval.id
+    _forget_resume(job_id, approval_id)
+    after_commit(db, lambda: dispatch_resume(job_id, approval_id=approval_id))
 
 
-def dispatch_resume(job_id: str) -> bool:
+def dispatch_resume(job_id: str, *, approval_id: str | None = None) -> bool:
     """重新进引擎把这次运行接着跑。返回是否真的派发了。
 
     认的是**这张单的检查点**:没有它就恢复不了(那是"这道门装出来之前就停下的一次运行"),
-    这时什么都不做 —— 交给重启收尾 / 任务本身去说。
+    这时什么都不做 —— 交给重启收尾 / 任务本身去说。`approval_id` 给定时认**那一张**
+    (人的决定 / 超时走这条路);不给就是"**最新**那一张"(重启接回一个还在等的运行走这条路)。
+
+    **同一个运行的一次等待只派一次**(`_RESUMED`):两条唤醒路(人的决定、重启 resumer)在毫秒级
+    窗口里撞上时,第二次派发直接退回去。派出去就是同一张图在两条线程里各跑一遍,而检查点只记得住
+    上次落定的那些节点 —— 两道门之间那些节点会**重跑**(实测:下游节点建了两行、按次计费的那一步
+    付了两次)。
 
     **派发那一步由引擎自己登记进来**(见 `use_resume_dispatcher`):这个模块不许 import engine ——
     那就又给"引擎 ⇄ 执行器"那一族添一个新环(见 tests/test_import_layering 的 LAZY_CYCLE_MODULES)。
@@ -339,16 +400,66 @@ def dispatch_resume(job_id: str) -> bool:
     if dispatch is None:  # pragma: no cover —— 引擎一被 import 就登记了
         logger.warning("no resume dispatcher registered; job %s stays parked", job_id)
         return False
-    with unit_of_work() as db:
-        job = db.get(Job, job_id)
-        if job is None or job.status != "running":
+    claimed = ""
+    try:
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is None or job.status != "running":
+                return False
+            approval = _resumable(db, job_id, approval_id=approval_id)
+            if approval is None:
+                return False
+            if not _claim_resume(job_id, approval.id):
+                logger.info(
+                    "workflow job %s was already resumed from approval %s; this wake is ignored",
+                    job_id, approval.id,
+                )
+                return False
+            claimed = approval.id
+            dispatch(db, job, approval.checkpoint or {})
+            logger.info("workflow job %s resumed from approval %s", job_id, approval.id)
+            return True
+    except BaseException:  # 派发没成:标记还回去,否则这个运行再也唤不醒
+        if claimed:
+            _forget_resume(job_id, claimed)
+        raise
+
+
+#: 「这一次等待的恢复**已经派出去了**」的 per (运行, 单) 标记(进程内)。
+#:
+#: 它挡住的是"同一个等待被唤醒两次":人的决定与重启 resumer 撞上、或一次决定被重复投递。
+#: 不用库里的格子记这件事,是因为这里要挡的正是**两次派发之间**那一段毫秒级窗口 —— 那一段里
+#: 库里还没有任何可写的状态(派出去的那条线程还没跑到任何一步)。
+#:
+#: 标记在**恢复的那条运行跑完 / 又停在下一道门上**时放下(`resume_finished`,引擎在收尾时调):
+#: 这样"下一次唤醒"照样派得出去,而"同一次等待"只派一次。
+_RESUMED: set[tuple[str, str]] = set()
+_RESUMED_LOCK = threading.Lock()
+
+
+def _claim_resume(job_id: str, approval_id: str) -> bool:
+    with _RESUMED_LOCK:
+        key = (job_id, approval_id)
+        if key in _RESUMED:
             return False
-        approval = _resumable(db, job_id)
-        if approval is None:
-            return False
-        dispatch(db, job, approval.checkpoint or {})
-        logger.info("workflow job %s resumed from approval %s", job_id, approval.id)
+        _RESUMED.add(key)
         return True
+
+
+def _forget_resume(job_id: str, approval_id: str) -> None:
+    with _RESUMED_LOCK:
+        _RESUMED.discard((job_id, approval_id))
+
+
+def resume_finished(job_id: str) -> None:
+    """这次运行的恢复**不在飞了**(跑完了,或又停在下一道门上):把它的标记放下。
+
+    引擎在接回来的那条线程收尾时调(见 engine.continue_workflow_job)。放下之后,下一道门上的
+    决定(或者重启 resumer)照旧派得出去。
+    """
+    with _RESUMED_LOCK:
+        for key in [one for one in _RESUMED if one[0] == job_id]:
+            _RESUMED.discard(key)
 
 
 #: 「把暂停的运行接着派发出去」的实现 —— 引擎登记(engine.continue_workflow_job)。
@@ -361,12 +472,29 @@ def use_resume_dispatcher(dispatch: Callable[[Session, Job, dict[str, Any]], Non
     _RESUME_DISPATCHER = dispatch
 
 
-def _resumable(db: Session, job_id: str) -> WorkflowRunApproval | None:
+def _resumable(db: Session, job_id: str, *, approval_id: str | None = None) -> WorkflowRunApproval | None:
     """这一次运行该接着跑吗:手里有一张带检查点的单、而且它的决定已经下来了(或者还在等)。
 
     还在等也接着跑:重启把它打断了,重新进去还是停在同一个节点上等 —— 卡片和单都不会重发。
+
+    **`approval_id` 给定时认的就是那一张**(人的决定、“就这一张”的那次唤醒)。不给时认**最新**
+    那一张:重启接回一个还在等的运行,眼前那道门就是它。
+
+    **这里错一次,代价是重跑。** 一次运行里可以有好几张单(A → 门1 → B → 门2 → C):此前这里取的是
+    "最早那张有检查点的",于是批第二道门时从**第一道门**的现场恢复 —— 门1 与门2 之间的 B 又跑了一遍
+    (实测:Project 落 3 行而不是 2 行、B 起两次),而任务照样 succeeded,重跑被掩盖在"成功"里。
+    检查点里本来就写着"已经落定到哪一步",取哪一张不能靠猜。
     """
-    rows = for_job(db, job_id)
+    if approval_id:
+        row = db.get(WorkflowRunApproval, approval_id)
+        if row is None or row.job_id != job_id or row.status == CANCELLED or not row.checkpoint:
+            return None
+        return row
+    rows = db.scalars(
+        select(WorkflowRunApproval)
+        .where(WorkflowRunApproval.job_id == job_id)
+        .order_by(WorkflowRunApproval.created_at.desc())
+    )
     return next((row for row in rows if row.checkpoint and row.status != CANCELLED), None)
 
 
@@ -424,12 +552,33 @@ def expire_due(db: Session, *, moment: datetime | None = None) -> int:
     )
     handled = 0
     for row in due:
+        if not ready_to_decide(row):
+            #: 检查点还没落库:"这张单在等"这件事还没成立(见 ready_to_decide)。到点了也不能由
+            #: 后台那一拍替它落一个决定 —— 没有现场,唤醒不了;等现场落下来的下一拍再处理它。
+            continue
         if row.on_timeout == TIMEOUT_REMIND:
-            row.expires_at = reference + timedelta(seconds=row.timeout_seconds or 0)
-            row.reminded_at = reference
-            row.updated_at = reference
-            _notify_timeout(db, row, "wfNotice_awaitApprovalTimeoutRemind")
+            #: **提醒也要走 CAS。** 直接改 ORM 对象的话,人到点前一刻批了、这一拍在同一瞬间把
+            #: "还在等,已提醒"喊出去 —— 那条通知和外层那个决定自相矛盾,而且提醒的时刻还写回了行上。
+            #: 一条 `WHERE status='pending'` 的 UPDATE:只有还真的在等才提醒。
+            changed = db.execute(
+                update(WorkflowRunApproval)
+                .where(WorkflowRunApproval.id == row.id, WorkflowRunApproval.status == PENDING)
+                .values(
+                    expires_at=reference + timedelta(seconds=row.timeout_seconds or 0),
+                    reminded_at=reference,
+                    updated_at=reference,
+                )
+                .execution_options(synchronize_session=False)
+            ).rowcount
+            if not changed:
+                continue
+            db.refresh(row)
             handled += 1
+            _notify_timeout(db, row, "wfNotice_awaitApprovalTimeoutRemind")
+            #: **站内说了,飞书那边也要说一声。** 一个门禁悄悄地过期等于没装(ADR 0064 的原话:
+            #: 三种都会再通知一次)—— 而只提醒站内的话,群里那张卡看上去还在等人点,那边的人不知
+            #: 道这件事已经欠了一格。发出去过才收(没发出去过就跳过),失败只记日志、不影响"已提醒"。
+            after_commit(db, lambda one=row.id: remind_feishu_card(one))
             continue
         changed = db.execute(
             update(WorkflowRunApproval)
@@ -483,7 +632,19 @@ def announce(db: Session, approval: WorkflowRunApproval) -> None:
 
     **只在检查点落库之后调**(见 engine._park_at_approval):先发卡、后落现场的话,手快的人在
     现场写下去之前点了确认,那次运行会卡在一个永远唤醒不了的等待上。
+
+    **同一个等待只说一遍。** 重启把一次运行接回来时会**重新进到暂停那一步**(同一个节点、同一张单),
+    引擎照样走到这里 —— 再说一遍就是第二条站内通知 + 第二张卡,而群里那张旧卡从此收不回来
+    (`feishu_message_id` 被新的那张覆盖,取消 / 超时只会去收后来那张)。所以已经有投递记录的
+    **只更新现场、不再说第二遍**:现场是引擎写的,这里直接退回去。
+    空着(第一次暂停、或者上次还没说到就跑挂了)才说 —— 没说过的话,该说的还得说。
     """
+    if approval.feishu_delivery or approval.feishu_message_id:
+        logger.info(
+            "approval %s was already announced (%s); not saying it again",
+            approval.id, approval.feishu_delivery or approval.feishu_message_id,
+        )
+        return
     notify(
         db,
         approval.workspace_id,
@@ -507,7 +668,9 @@ def _record_delivery(db: Session, approval: WorkflowRunApproval, delivery: Deliv
     """
     approval.feishu_delivery = delivery.status
     approval.feishu_delivery_reason = delivery.reason[:200]
-    if delivery.status == DELIVERY_SENT:
+    if delivery.status == DELIVERY_SENT and not approval.feishu_message_id:
+        #: **最早那张卡的 id 不覆盖。** 取消 / 超时照它去收群里那张卡;后来真又发出去过一张的话,
+        #: 至少原来那张收得回来 —— 覆盖掉就是"发了两张,一张也收不回来"。
         approval.feishu_message_id = delivery.message_id[:120]
     approval.updated_at = now()
     if delivery.status != DELIVERY_FAILED:
@@ -591,8 +754,9 @@ _RUN_CARD_SETTLER: Callable[[Session, WorkflowRunApproval, str], None] | None = 
 def use_run_card_settler(settle: Callable[[Session, WorkflowRunApproval, str], None]) -> None:
     """登记"把已经发出去的那张卡收回成结果态"的实现。
 
-    `outcome` 是 `cancelled` / `timeout`(决定那一格的取值,集成层照它挑卡片标题)。
-    领域这一侧只决定**什么时候**要收(取消 / 超时、而且发出去过),怎么收是集成层的事。
+    `outcome` 是 `cancelled` / `timeout`(决定那一格的取值,集成层照它挑卡片标题),`remind` 那一档
+    也走这里(见 `remind_feishu_card`:同一张卡换成"还在等,已提醒过一次")。
+    领域这一侧只决定**什么时候**要收(取消 / 超时 / 提醒、而且发出去过),怎么收是集成层的事。
     """
     global _RUN_CARD_SETTLER
     _RUN_CARD_SETTLER = settle
@@ -607,6 +771,26 @@ def retire_feishu_card(approval_id: str, outcome: str) -> None:
 
     没发出去过就跳过(没有消息 id 可改,也不该为此报错):写了「仅站内」的单走的就是这一条。
     """
+    _settle_feishu_card(approval_id, outcome, what="retiring")
+
+
+def remind_feishu_card(approval_id: str) -> None:
+    """`on_timeout=remind` 到点了:**在飞书那边也说一声这件事还在等**。
+
+    和取消 / 超时走同一套原语(同一条消息就地更新),但 outcome 是 `remind` 那一档 —— 集成层照它
+    **只补一句话、不把那张卡换成没有按钮的结果态**:门还开着,卡上那两个按钮还得点得动,
+    换成"已拒绝 / 超时"那样一张卡会让人以为门已经过了,比不提醒更糟(见
+    integrations/feishu/approvals.settle_run_approval)。
+
+    ADR 0064 那句原话是"三种都会再通知一次 —— 一个门禁悄悄过期等于没装":只提醒站内的话,群里那张
+    卡看上去还在等人点,那边的人不知道这件事已经欠了一格。
+
+    没发出去过就跳过;失败只记日志,**不许影响"已提醒"这个已经落库的结果**(和取消 / 超时同一条规矩)。
+    """
+    _settle_feishu_card(approval_id, TIMEOUT_REMIND, what="reminding")
+
+
+def _settle_feishu_card(approval_id: str, outcome: str, *, what: str) -> None:
     settle = _RUN_CARD_SETTLER
     if settle is None:
         return
@@ -616,8 +800,8 @@ def retire_feishu_card(approval_id: str, outcome: str) -> None:
             if row is None or not row.feishu_message_id:
                 return
             settle(db, row, outcome)
-    except Exception:  # noqa: BLE001 —— 见 docstring
-        logger.exception("retiring feishu card of approval %s failed", approval_id)
+    except Exception:  # noqa: BLE001 —— 见 docstring:这一步坏掉不许把已经落库的结果弄回去
+        logger.exception("%s feishu card of approval %s failed", what, approval_id)
 
 
 def announce_parked(approval_id: str) -> None:

@@ -140,6 +140,10 @@
 - `app/domain/model_nsfw_local.py:_scores`、`app/domain/model_nsfw_local.py:_queue`、`app/domain/model_nsfw_local.py:_queued`、`app/domain/model_nsfw_local.py:_unreadable`、`app/domain/model_nsfw_local.py:_digests`、`app/domain/model_nsfw_local.py:_weights`、`app/domain/model_nsfw_local.py:_worker`、`app/domain/model_nsfw_local.py:_dirty` — 本机识别模型预览图(ADR 0038 §9):按缩略图内容的哈希记的结果的内存那一份(真身在磁盘上,`<数据目录>/nsfw-classifier/scores-<版本>.json`,攒几条写一次、队列空了写)、排着队的缩略图和它们的哈希、这次进程里认不出的、每个缩略图文件的哈希(按修改时间和大小复用)、读进内存的权重(二十来 MB)、那一个后台线程和还没写盘的条数。重启丢掉的是排着的队和没写盘的几条:下次列模型库时还没结果的会重新排进去。多进程下各算各的,同一张图可能被算两遍,写盘时后写的那份为准(都是同一个模型算的同一个数)。
 - `app/domain/plugins/catalog_watch.py:_failed` — 插件目录刷不出来时的退避:每个(实例, 能力)记着刷失败时的指纹、连着失败了几次、下次什么时候再试(一分钟起翻倍、最多半小时;那边指纹又变了立刻再试)。重启后是空的:第一次巡检照常整份重拉一遍,之后重新从一分钟退起 —— 多问的只是那一次。多进程下各退各的,刷不出来的那台被多问一倍。
 - `app/domain/providers/auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
+- `app/domain/workflows/approvals.py:_RESUMED` — 「这一次等待(运行 + 那张单)的恢复**已经派出去了**」的标记,挡住"同一个等待被两条唤醒路各派一遍"
+  (人的决定与重启 resumer 在毫秒级窗口里撞上,而那时库里还没有任何可写的状态)。重启后是空的:进程没了,那几条恢复线程也一起没了,
+  下一次唤醒(下一道门上的决定、或者又一次重启)照常派得出去。多进程下各记各的,同一次等待可能被两个进程各派一遍 ——
+  而"谁来跑这个任务"本来就是进程内的事(见第五节的 `_RESUMERS`),真要起第二个后端进程时这一条要跟着一起想。
 - `app/integrations/feishu/client.py:_token_cache`(租户令牌)、
   `app/integrations/feishu/inbound.py:_seen`(消息去重)、
   `app/integrations/feishu/onboarding.py:_onboard_state`(引导流程)、`app/domain/poem.py:_token`。
@@ -209,6 +213,7 @@
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
   `app/domain/media_tools.py:_status_lock`(探 ffmpeg 一次一个:启动时的后台探测和管理页的「重新检测」可能撞上)
   `app/media/filmstrip.py:_making_guard`(守 `_making` 这张表本身)、`app/domain/poem.py:_token_lock`、
+  `app/domain/workflows/approvals.py:_RESUMED_LOCK`(守 `_RESUMED` 那张表本身,见第四节)、
   `app/core/outbound_proxy.py:_lock`(守 `_tickets` 和起守卫代理那一下)
 - `app/integrations/feishu/client.py:_token_lock`、`app/integrations/feishu/connections.py:_process_lock`、
   `app/integrations/feishu/inbound.py:_seen_lock`、`app/integrations/feishu/inbound.py:_awaiting_lock`、`app/integrations/feishu/onboarding.py:_onboard_lock`

@@ -20,10 +20,15 @@ integrations/feishu/approvals 与 routes/workflows),一处写决定、一处唤�
 
 超时 + `abort` 那一档依旧是失败:那时没有任何人做过决定,也就没有决定可以交给下游。
 
-## 只放在主流程里
+## 只放在主流程里,而且一次运行只停得住一个
 
 循环体 / 子图里的暂停要往外套好几层,而落检查点的地方只有主流程(体的执行内核没有 job)。
-运行前检查(`_no_nested`)在开跑之前就拦下它 —— 那些图里前面的节点可能已经花了钱,不该跑到这一步才说。
+运行前检查在开跑之前就拦下它 —— 那些图里前面的节点可能已经花了钱,不该跑到这一步才说。
+
+主流程里**两个互相不可达**的「等人确认」(比如挂在同一个 start 底下的两条分支上)同样跑不动:
+引擎一轮只抓一个暂停点,第二个 `AwaitingApproval` 会被当成兄弟节点的失败,整轮判 failed,而两张单
+都停在"还没现场"上 —— 按钮点了什么都不会发生。这一条也在开跑前拦下(见 `_parallel_gates`)。
+条件节点的真 / 假两条出口上的两个门不在此列:调度那一层按出口跳过没走到的那一支,那种图跑得起来。
 """
 
 from __future__ import annotations
@@ -127,11 +132,135 @@ def _hours(row: Any) -> int:
 
 
 @register_preflight("await_approval")
-def _no_nested(_db: Session, _config: dict[str, Any], _actor: str | None, place: PreflightNode) -> None:
-    """**运行前**就拦下放错地方的「等人确认」:循环体 / 子图里第一版不支持。
+def _main_flow_and_one_at_a_time(
+    _db: Session, _config: dict[str, Any], _actor: str | None, place: PreflightNode
+) -> None:
+    """**运行前**就拦下两种跑不动的摆法:
+
+    1. 放在循环体 / 子图里 —— 第一版不支持,而且只有主流程有地方落检查点(见下面 `_nested`);
+    2. 主流程里**两个互相不在对方上下游**的「等人确认」—— 它们可以同时被调度,而一次运行只记得住
+       一个暂停现场(见 `_parallel_gates`)。
 
     不拦的话症状是:图里前面的付费节点全跑完,轮到它才说一句"接不下去"—— 而这个仓库反复修过的
     正是这一类(见 executors/registry 的 register_preflight 说明)。
     """
     if place.scope:
         raise WorkflowDomainError("wfErr_awaitApprovalNested")
+    _parallel_gates(place)
+
+
+def _parallel_gates(place: PreflightNode) -> None:
+    """两个 `await_approval` 互相不可达(而且没有被条件出口分到两条互斥的岔上)—— 开跑前拦下。
+
+    引擎一轮只停得下**一个**暂停点:`run_graph` 抓到第一个 `AwaitingApproval` 就停了,兄弟节点那边
+    再抛一个同样的事就被当成**失败**(`error` 一落下,整轮 failed) —— 于是这一次运行判失败,而两张
+    单都是 `pending` + 空检查点,永远挂在待批列表上:点了什么都不会发生,错误文本还是内部串
+    `awaiting approval <hex> at node <id>`(实测,见 tests/test_await_approval_resume_gates.py)。
+
+    判据用的是"这两个门会不会被同时调度":**互相不可达**是必要条件,但还不够 —— 条件节点的真 / 假两条
+    出口上的两个门**永远不会同时活**(调度那一层按出口跳过没走到的那一支,见 engine.incoming_active),
+    那种图今天是跑得起来的,不该被这条检查误拦。所以还要排除"被同一个会分支的节点分到两条互斥出口上"。
+    """
+    graph = place.graph if isinstance(place.graph, dict) else {}
+    here = str(place.node.get("id") or "")
+    gates = [
+        str(node.get("id") or "")
+        for node in graph.get("nodes") or []
+        if isinstance(node, dict) and str(node.get("type") or "") == "await_approval"
+    ]
+    if len(gates) < 2:
+        return
+    edges = _edges(graph)
+    for other in gates:
+        if other == here or other == "":
+            continue
+        if _reaches(edges, here, other) or _reaches(edges, other, here):
+            continue
+        if _branch_apart(graph, here, other):
+            continue
+        raise WorkflowDomainError(
+            "wfErr_awaitApprovalParallel",
+            params={"node": _title(place.node), "other": _title(_node(graph, other))},
+        )
+
+
+def _edges(graph: dict[str, Any]) -> list[tuple[str, str]]:
+    return [
+        (str(edge.get("source") or ""), str(edge.get("target") or ""))
+        for edge in graph.get("edges") or []
+        if isinstance(edge, dict)
+    ]
+
+
+def _node(graph: dict[str, Any], node_id: str) -> dict[str, Any]:
+    return next(
+        (
+            node
+            for node in graph.get("nodes") or []
+            if isinstance(node, dict) and str(node.get("id") or "") == node_id
+        ),
+        {},
+    )
+
+
+def _title(node: dict[str, Any]) -> str:
+    """这个节点给人看叫什么:它自己起的名字,没有就是 id(和别处的说法一致)。"""
+    return str(node.get("name") or node.get("id") or "").strip()
+
+
+def _reaches(edges: list[tuple[str, str]], start: str, goal: str) -> bool:
+    """从 `start` 顺着边(控制边和数据边都算)**走得到** `goal` 吗。"""
+    seen = {start}
+    frontier = [start]
+    while frontier:
+        here = frontier.pop()
+        for source, target in edges:
+            if source != here or target in seen:
+                continue
+            if target == goal:
+                return True
+            seen.add(target)
+            frontier.append(target)
+    return False
+
+
+def _branch_apart(graph: dict[str, Any], a: str, b: str) -> bool:
+    """`a`、`b` 是不是被**同一个会分支的节点**分到两条互斥的出口上(条件的真 / 假)。
+
+    严格分得开才算:两个门都在某一条出口下面、或者有一个两边都够得着,都还是可能同时活。
+    出口的口径和调度那一层一样 —— 没写 `source_handle` 的边按「真」算(见 engine.incoming_active)。
+    """
+    outgoing: dict[str, list[tuple[str, str]]] = {}
+    for edge in graph.get("edges") or []:
+        if not isinstance(edge, dict):
+            continue
+        outgoing.setdefault(str(edge.get("source") or ""), []).append(
+            (str(edge.get("target") or ""), str(edge.get("source_handle") or "true"))
+        )
+
+    def below(source: str, handle: str) -> set[str]:
+        """从 `source` 的这一条出口往里走,够得着哪些节点(不穿过 `source` 自己)。"""
+        seen: set[str] = set()
+        frontier = [target for target, one in outgoing.get(source, []) if one == handle]
+        while frontier:
+            here = frontier.pop()
+            if here in seen or here == source:
+                continue
+            seen.add(here)
+            frontier.extend(target for target, _one in outgoing.get(here, []))
+        return seen
+
+    for source, outs in outgoing.items():
+        handles = sorted({one for _target, one in outs})
+        if len(handles) < 2:
+            continue
+        areas = {one: below(source, one) for one in handles}
+        for index, one in enumerate(handles):
+            for other in handles[index + 1:]:
+                if (a in areas[one] and a not in areas[other]
+                        and b in areas[other] and b not in areas[one]):
+                    return True
+                if (b in areas[one] and b not in areas[other]
+                        and a in areas[other] and a not in areas[one]):
+                    return True
+    return False

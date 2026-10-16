@@ -1053,7 +1053,29 @@ def _park_at_approval(db: Session, job: Job, run: GraphRun) -> None:
     #: 先发卡、检查点还在这个事务里的话,手快的人在提交之前点了确认,那次运行会卡在一个
     #: 永远唤醒不了的等待上(见 approvals.announce 的说明)。
     approval_id = approval.id
-    after_commit(db, lambda: approvals.announce_parked(approval_id))
+    #: **写完现场再看一眼:这道门是不是已经被决定了。** 单是执行器自己一个事务先提交的(见
+    #: executors/approval),而现场要等还在飞的兄弟节点都落定才写得进来 —— 这两步之间那段窗口里,
+    #: 决定可能已经落了库(飞书那张旧卡、应用内那一格、后台那一拍超时)。那时这一次唤醒找不到现场
+    #: (`approvals.dispatch_resume` 认的是检查点),运行就永远停在 running 上:决定赢了、醒不过来。
+    #: 复查一次,是的话**在这里再排一次恢复** —— 同一个事务里排的,天然盖住那段窗口。
+    #:
+    #: `refresh` 安全:现场上面那一次 `flush` 已经把它写进这次事务了,读回来就是它。
+    db.refresh(approval)
+    if approval.status != approvals.PENDING:
+        #: 已经决定了就**别再喊人来等**:那张卡会是一张"已经批过"的卡,通知也会让人白跑一趟。
+        logger.info(
+            "approval %s was decided (%s) before its resume point landed; resuming instead of announcing",
+            approval_id, approval.status,
+        )
+        after_commit(db, lambda: approvals.dispatch_resume(job.id, approval_id=approval_id))
+    else:
+        #: 站内通知 + 飞书卡片。通知是兜底(没有飞书绑定也照样等),卡片失败一律降级。
+        #:
+        #: **排在提交之后**(`after_commit`,不在这里 commit —— 领域层不提交,见
+        #: tests/test_use_case_boundaries_ratchet.py)。这一条不是洁癖:说出去的东西**必须已经落库** ——
+        #: 先发卡、检查点还在这个事务里的话,手快的人在提交之前点了确认,那次运行会卡在一个
+        #: 永远唤醒不了的等待上(见 approvals.announce 的说明)。
+        after_commit(db, lambda: approvals.announce_parked(approval_id))
     logger.info("workflow job %s parked at node %s awaiting approval %s", job.id, run.awaiting, approval.id)
 
 
@@ -1076,12 +1098,23 @@ def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> 
     #: **只捏普通值** —— 线程起来时调用方的会话可能正在回滚,在线程里读 `job.id` 会拿那个会话回库加载
     #: (见 jobs.dispatch_job 的说明,tests/test_jobs_are_dispatched_by_the_bus.py 守着这条)。
     job_id = job.id
-    dispatch_job(
-        db, job,
-        lambda: _run_workflow_thread(
-            workflow_id, revision_id, job_id, params, locale=locale, target_node=target_node, resume=resume,
-        ),
-    )
+
+    def run_resumed() -> None:
+        """接回来的那一轮,外头再套一层:跑完(或者又停在下一道门上)就把"恢复中"的标记放下。
+
+        `approvals.resume_finished` 放下标记之后,下一道门上的决定才派得出去 —— 而这次恢复在飞的
+        那一段里,同一个等待不会被第二条唤醒路再派一遍(见 approvals.dispatch_resume)。
+        """
+        from app.domain.workflows import approvals
+
+        try:
+            _run_workflow_thread(
+                workflow_id, revision_id, job_id, params, locale=locale, target_node=target_node, resume=resume,
+            )
+        finally:
+            approvals.resume_finished(job_id)
+
+    dispatch_job(db, job, run_resumed)
 
 
 def run_workflow(
