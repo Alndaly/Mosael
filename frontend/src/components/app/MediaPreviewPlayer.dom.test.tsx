@@ -54,6 +54,21 @@ describe("media preview transport", () => {
     expect(bar.value).toBe("75"); // 之后照常跟着画面走
   });
 
+  //: 素材详情右栏点某一镜那一行时,跳转请求走这里(ADR 0061 §5)。同一个秒数连点两下也要跳第二次 ——
+  //: 所以认的是**每一次请求**(对象换了一个),不是值变没变。
+  it("外部说跳到第几秒,就跳到那一秒", () => {
+    const { container, rerender } = render(<MediaPreviewPlayer src="/sample.mp4" kind="video" autoPlay={false} />);
+    const video = container.querySelector("video")!;
+    Object.defineProperty(video, "duration", { value: 120 });
+    fireEvent.loadedMetadata(video);
+
+    rerender(<MediaPreviewPlayer src="/sample.mp4" kind="video" autoPlay={false} seekTo={{ seconds: 12.4, seq: 1 }} />);
+    expect(video.currentTime).toBe(12.4);
+
+    rerender(<MediaPreviewPlayer src="/sample.mp4" kind="video" autoPlay={false} seekTo={{ seconds: 12.4, seq: 2 }} />);
+    expect(video.currentTime).toBe(12.4);
+  });
+
   it("reports rejected playback and keeps the controls available", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValueOnce(new Error("unsupported"));
     render(<MediaPreviewPlayer src="/broken.wav" kind="audio" autoPlay={false} />);

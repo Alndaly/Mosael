@@ -178,6 +178,23 @@ export const transcriptKeys = {
 };
 
 /**
+ * 镜头表(ADR 0061 §5)。**一份视频一份**,重拆覆盖同一份,所以取数只有一种键。
+ *
+ * `detail` 挂在 `assets` 前缀下:拆镜头任务做完时任务中心按目录里的 `affects: assets` 整片作废
+ * (`components/jobs/TaskCenter`),这一份跟着刷 —— 详情页开着的时候镜头表自己就长出来了。
+ *
+ * `pending` 是**这条工作区里还在跑的拆镜头任务**(界面据此显示「进行中」,弹窗关掉再打开也算数)。
+ * 它第一段**不叫 jobs**:任务那一族在 queryKeys.ts 里还没有工厂(任务中心、工作流、工作台
+ * 各处自己拼那个前缀的键),这里认下那个族名就等于当场把那些内联写法判成违规 —— 那是另一笔
+ * 要一起改的账,不该混在这一笔里。这一份的刷新也不靠那一族:在跑的时候自己按 1.5 秒问,
+ * 刚排上那一下由发起方显式作废。
+ */
+export const shotKeys = {
+  detail: (assetId: string) => ["assets", "shots", assetId] as const,
+  pending: (workspaceId: string) => ["shot-jobs", workspaceId] as const,
+};
+
+/**
  * 笔记。列表、主题、搜索选择器、附件选择器、引用卡都挂在 `lists(ws)` 下 —— 保存、删除、恢复之后
  * 失效它一次就全部覆盖。此前同一份「按关键词列笔记」在 `note-picker` 与 `note-attach` 两个键族里,
  * 只有一处会被失效,另一处在挂着的时候看的是旧的。

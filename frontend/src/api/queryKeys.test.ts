@@ -107,6 +107,9 @@ const SAME_FETCHER_ALLOWED: Record<string, string> = {
   fetchWorkflowFieldOptions: "参数化的通用取数,各族取的不是同一份数据",
   //: 单个任务各自每秒轮询到结束,不靠失效刷新;工作台那份挂在 jobs 下是为了新任务事件时一起重取。
   getJob: "各自轮询到结束,不靠失效",
+  //: 按条件切任务的**通用入口**:任务中心按 top_level、素材详情按 kind=shot_breakdown 取,各族取的本就不是同一份数据
+  //: (和 fetchWorkflowFieldOptions 同一类)。表在素材详情右栏(ADR 0061 §5),在跑时自己轮询。
+  listJobs: "参数化的通用取数,各族取的不是同一份数据",
 };
 
 describe("同一个取数函数只在一个键族下", () => {

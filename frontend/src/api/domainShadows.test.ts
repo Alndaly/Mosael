@@ -41,6 +41,11 @@ const KEPT_BY_HAND: Record<string, string> = {
     "`@资产` 的回执存在 GenerationJobOut.request 里,那是一份裸 dict(请求原样留档,见后端 generation/operations);" +
     "它的形状由 domain/entities/mentions 定,前端手写这一份是为了拿回类型。",
   "scenes.ts:SceneModel": "3D 场景的内容是裸 dict(scene.content),同 boards 的账。",
+  "shots.ts:Shot":
+    "逐镜那份 JSON 是**故意**不在接口里再声明一遍的(`backend/app/api/schemas/shots.py` 明写形状由 domain/shots 定)," +
+    "生成出来是 {[key: string]: unknown}[];手写这一份是为了在界面上拿回类型(景别、运镜、画面、提示词……)。",
+  "shots.ts:ShotHint": "同上:`{shot,kind,field,value}` 是 domain/shots/describe 里的裸 dict。",
+  "shots.ts:ShotDescribe": "同上:谁判的、判了几批、为什么没判,同样是裸 dict。",
   "scenes.ts:ScenePreviewData": "同上:预览结构由场景内容那个裸 dict 决定。",
   "scenes.ts:PreviewObject": "同上:预览里的一个物体,形状由场景内容决定。",
   "speech.ts:F5Model":

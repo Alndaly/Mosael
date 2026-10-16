@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,7 +12,14 @@ vi.mock("@/api/client", () => ({
   assetFileUrl: (id: string) => `/file/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   fetchWaveform: async () => ({ peaks: [] }),
+  //: 视频详情右栏的「镜头」那一块自己取数(ADR 0061 §5);它有自己的测试(ShotBreakdownPanel.dom.test.tsx)。
+  getShotBreakdown: async () => ({ asset_id: "clip-asset", status: "none", shots: [], hints: [], describe: {} }),
+  startShotBreakdown: async () => ({}),
+  listJobs: async () => [],
 }));
+
+//: 「存成笔记」走它自己的中文案表和笔记查询,和这里要测的预览层次无关。
+vi.mock("@/features/notes/SaveToNote", () => ({ SaveToNote: () => null }));
 
 //: 「属于哪些资产」那一行自己取数(资产库,ADR 0027),和这里要测的预览层次无关。
 vi.mock("@/features/entities/AssetEntities", () => ({ AssetEntitiesList: () => null }));
@@ -60,6 +68,12 @@ const videoAsset = {
   media_info: { width: 1920, height: 1080, duration: 3.5, fps: 24 },
 };
 
+/** 右栏的「镜头」那一块(ADR 0061 §5)自己取数,要一个查询上下文。 */
+function show(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
 describe("AssetPreviewModal", () => {
   beforeEach(() => {
     openImagePreview.mockReset();
@@ -68,7 +82,7 @@ describe("AssetPreviewModal", () => {
   });
 
   it("uses the browser-compatible image endpoint in both inline and zoomed previews", () => {
-    render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
 
     const image = screen.getByRole("img", { name: "IMG_0665.HEIC" });
     expect(image.getAttribute("src")).toBe("/preview/heic-asset");
@@ -86,7 +100,7 @@ describe("AssetPreviewModal", () => {
   //: 详情弹窗是这条链上的总入口(工具结果、附件、画板参考槽、笔记引用都开它),
   //: 所以三类的默认动作都摆在它自己的头部,不靠每个调用方记得传。
   it("图片:头部默认就有一颗「保存到本地」,点了保存的是这一份", () => {
-    render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "assetSaveLocal" }));
 
@@ -94,7 +108,7 @@ describe("AssetPreviewModal", () => {
   });
 
   it("视频:头部默认就有一颗「保存到本地」,点了保存的是这一份(取原文件字节,不是预览图)", () => {
-    render(<AssetPreviewModal asset={videoAsset as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={videoAsset as never} onClose={vi.fn()} />);
 
     expect(document.querySelector("[data-media-preview-player]")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "assetSaveLocal" }));
@@ -103,7 +117,7 @@ describe("AssetPreviewModal", () => {
   });
 
   it("音频:头部默认就有一颗「保存到本地」,点了保存的是这一份", () => {
-    render(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "assetSaveLocal" }));
 
@@ -113,7 +127,7 @@ describe("AssetPreviewModal", () => {
   it("文档(ADR 0031)不当图片画,放解析出的阅读器;没有「属于哪些资产」", () => {
     const doc = { ...imageAsset, id: "doc", name: "方案.pptx", original_filename: "方案.pptx", kind: "document",
                   media_info: { format: "pptx", size_bytes: 2048 } };
-    render(<AssetPreviewModal asset={doc as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={doc as never} onClose={vi.fn()} />);
     expect(screen.queryByRole("img")).toBeNull();
     expect(document.querySelector("[data-document-reader]")).not.toBeNull();
     expect(screen.queryByText("assetEntitiesTitle")).toBeNull();
@@ -121,7 +135,7 @@ describe("AssetPreviewModal", () => {
   });
 
   it("renders audio with the shared custom player instead of native controls", () => {
-    render(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
 
     // Dialog content is portaled into document.body, outside Testing Library's render container.
     const audio = document.querySelector("audio");
@@ -136,7 +150,7 @@ describe("AssetPreviewModal", () => {
   it("keeps the asset details open while the fullscreen image preview is open", () => {
     imagePreviewOpen = true;
     const onClose = vi.fn();
-    render(<AssetPreviewModal asset={imageAsset as never} onClose={onClose} />);
+    show(<AssetPreviewModal asset={imageAsset as never} onClose={onClose} />);
 
     fireEvent.keyDown(document, { key: "Escape" });
 
@@ -145,7 +159,7 @@ describe("AssetPreviewModal", () => {
 
   it("still closes the asset details when no fullscreen preview is open", () => {
     const onClose = vi.fn();
-    render(<AssetPreviewModal asset={imageAsset as never} onClose={onClose} />);
+    show(<AssetPreviewModal asset={imageAsset as never} onClose={onClose} />);
 
     fireEvent.keyDown(document, { key: "Escape" });
 
@@ -164,7 +178,7 @@ describe("AssetPreviewModal", () => {
       { label: "assetSetAsReference", icon: null, onSelect: vi.fn() },
       { label: "delete", icon: null, destructive: true, onSelect: remove },
     ]);
-    const view = render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} actions={actions} />);
+    const view = show(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} actions={actions} />);
     expect(actions).toHaveBeenCalledWith(imageAsset);
     const bar = document.querySelector("[data-asset-detail-actions]") as HTMLElement;
     expect([...bar.querySelectorAll(":scope > button")].map((one) => one.textContent)).toEqual(["assetSaveLocal", "rename", "editTags", ""]);
@@ -173,7 +187,7 @@ describe("AssetPreviewModal", () => {
     view.unmount();
 
     //: 没给动作的地方(只读的工具结果、附件预览)也照样有「保存到本地」—— 这条是这次改动的重点。
-    render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
+    show(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
     const builtin = document.querySelector("[data-asset-detail-actions]") as HTMLElement;
     expect([...builtin.querySelectorAll(":scope > button")].map((one) => one.textContent)).toEqual(["assetSaveLocal"]);
   });

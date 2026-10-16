@@ -7,11 +7,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { mediaClock, usePlayback, useScrub, useWaveformPeaks } from "./media-playback";
 
 /** Full preview transport. The viewing area and controls never overlap. */
-export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
+export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true, seekTo = null }: {
   src: string;
   assetId?: string;
   kind: "audio" | "video";
   autoPlay?: boolean;
+  /**
+   * 外面要求跳到第几秒(素材详情右栏点某一镜那一行,ADR 0061 §5)。
+   *
+   * 认的是**这一个对象**:同一个秒数连点两下也要跳第二次,所以调用方每次给一个新的 `{seconds, seq}`。
+   * `seq` 只是让两个请求在值上分得开,组件本身不看它 —— 效果挂在对象上。
+   *
+   * 还没有元数据时直接赋值也是对的:规范说那时先记成「默认起播位置」,元数据一到就从那儿开始。
+   */
+  seekTo?: { seconds: number; seq: number } | null;
 }) {
   const t = useI18n();
   const ref = React.useRef<HTMLMediaElement | null>(null);
@@ -22,6 +31,12 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
   const peaks = useWaveformPeaks(kind === "audio" ? assetId : undefined, 96);
   const duration = Number.isFinite(total) ? total : 0;
   const { shown, scrub, release } = useScrub(ref, at);
+
+  React.useEffect(() => {
+    const media = ref.current;
+    if (!media || !seekTo) return;
+    media.currentTime = seekTo.seconds;
+  }, [seekTo]);
   const props = {
     src, autoPlay, preload: "metadata", ...bind,
     onLoadedMetadata: (event: React.SyntheticEvent<HTMLMediaElement>) => setTotal(event.currentTarget.duration),

@@ -15,6 +15,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { AssetLineageList } from "@/features/media/AssetLineage";
+import { ShotBreakdownPanel } from "@/features/media/ShotBreakdownPanel";
 import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 import { saveAssetToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,9 @@ export function AssetPreviewModal({
   const t = useI18n();
   const { openImagePreview, isImagePreviewOpen } = useImagePreview();
   const [copied, setCopied] = React.useState(false);
+  //: 点镜头表里某一镜那一行时,左栏播放器要跳到第几秒(ADR 0061 §5)。每次点都给一个新的对象 ——
+  //: 同一个秒数连点两下也要跳第二次(见 MediaPreviewPlayer 的 seekTo)。
+  const [seekTo, setSeekTo] = React.useState<{ seconds: number; seq: number } | null>(null);
   // 顺着「来自」点进去看的出处:栈顶是正在看的那一份,「返回上一份」退一格。换了一份素材就清空。
   // 点的那一刻取一次就够(不进查询缓存):这张弹窗在很多地方是独立挂的,不该为了它要求外面有查询上下文。
   const [trail, setTrail] = React.useState<Asset[]>([]);
@@ -77,6 +81,7 @@ export function AssetPreviewModal({
   }, [asset?.id]);
   React.useEffect(() => {
     setCopied(false);
+    setSeekTo(null);
   }, [shownId]);
 
   if (!asset) return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
@@ -149,7 +154,13 @@ export function AssetPreviewModal({
         <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(200px,1fr)_minmax(0,180px)] md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,1fr)]">
           <div className="relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden bg-workspace-subtle">
             {(shown.kind === "video" || shown.kind === "audio") && (
-              <MediaPreviewPlayer key={shown.id} kind={shown.kind} src={src} assetId={shown.id} />
+              <MediaPreviewPlayer
+                key={shown.id}
+                kind={shown.kind}
+                src={src}
+                assetId={shown.id}
+                seekTo={shown.kind === "video" ? seekTo : null}
+              />
             )}
             {shown.kind === "document" && <DocumentReader assetId={shown.id} />}
             {shown.kind === "image" && (
@@ -241,6 +252,13 @@ export function AssetPreviewModal({
                 </Hint>
               </InfoRow>
             </dl>
+            {/* 镜头表(ADR 0061 §5)只对视频有:一列镜头,点一行让上面的播放器跳到那一镜。 */}
+            {shown.kind === "video" && (
+              <ShotBreakdownPanel
+                asset={shown}
+                onSeek={(seconds) => setSeekTo((now) => ({ seconds, seq: (now?.seq ?? 0) + 1 }))}
+              />
+            )}
           </div>
         </div>
       </DialogContent>
