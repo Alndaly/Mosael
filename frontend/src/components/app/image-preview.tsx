@@ -6,7 +6,7 @@ import { useI18n } from "@/app/preferences";
 import { IMAGE_PREVIEW_EVENT, type ImagePreviewRequest } from "@/components/app/image-preview-request";
 import { VideoPlayer } from "@/components/app/media-playback";
 import { APP_CHROME } from "@/components/ui/appChrome";
-import { IconButton } from "@/components/ui/icon-button";
+import { FloatingIconButton } from "@/components/ui/floating-button";
 import { useNativeViewAside } from "@/components/ui/nativeViewAside";
 import { HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -116,6 +116,11 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
     [openImagePreview, visible],
   );
 
+  //: 顶上那颗「保存到本地」存的是**当前这一张**。它在关闭键旁边(见下),拿不到库 render 给的下标,
+  //: 用的是 provider 自己这份 index —— 翻页时 `onIndexChange` 和库在同一个批次里更新,两边看的是同一张。
+  const saveItem = images[index];
+  const saveId = saveItem?.assetId;
+
   return (
     <ImagePreviewContext.Provider value={value}>
       {children}
@@ -124,8 +129,10 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
        * 恢复顶层交互；关闭动画开始时立即禁用，避免透明 Portal 短暂挡住应用。 */}
       {/* 宿主也是「窗口外壳」(APP_CHROME):在大图上点的每一下(翻页、关闭、点遮罩)都发生在底下那个弹窗**外面**,
           没有它,Radix 会把这一下当成「点了弹窗外面」把弹窗一起关掉;焦点落进来(「打开原图」)也不被弹窗拽回去。 */}
-      {/* 关闭键:**每一张都有、一直看得见**,在右上角,能用键盘按。不用库自带的那个 ✕ —— 它在顶上那一条里,点一下画面
-          (视频的播放 / 暂停也算)那一条就淡出去,而视频铺满时又没有背景可点:只剩 Esc 关得掉(维护者报的)。 */}
+      {/* 右上角那两颗:**每一张都有、一直看得见**,能用键盘按。不用库自带的那个 ✕ —— 它在顶上那一条里,点一下画面
+          (视频的播放 / 暂停也算)那一条就淡出去,而视频铺满时又没有背景可点:只剩 Esc 关得掉(维护者报的)。
+          关闭和「保存到本地」是**同一颗基础件**(components/ui/floating-button)画的:圆、深色半透明底、白图标 18、
+          同一顶边、同一层 —— 只有位子不同(关闭在右边缘,保存在它左边一颗的距离),间距由那张 slot 表算。 */}
       <div
         ref={portalHostRef}
         data-image-preview-portal-host
@@ -134,17 +141,34 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
       >
         {visible && (
           <HintRegion.Provider value={LIGHTBOX_REGION}>
-            <IconButton
-              unstyled
+            <FloatingIconButton
               ref={closeButton}
+              slot={0}
               label={t("imagePreviewClose")}
               shortcut="Esc"
               data-image-preview-close=""
               onClick={close}
-              className="fixed right-2 top-1.5 z-[221] grid size-9 cursor-pointer place-items-center rounded-full border-0 bg-[rgb(0_0_0/0.38)] text-[rgb(255_255_255/0.88)] transition-colors hover:bg-[rgb(255_255_255/0.2)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(255_255_255/0.8)] [.is-desktop_&]:[-webkit-app-region:no-drag]"
             >
-              <X size={18} />
-            </IconButton>
+              <X />
+            </FloatingIconButton>
+            {/* 「保存到本地」:此前想存一张图,只能关掉灯箱、跑去素材管理页翻出同一张。
+                存的必须是**原始文件** —— 图那一项的 src 是后端转好的预览(HEIC 转 JPEG),
+                所以按素材 id 走 `/file`(原始字节 + 响应头里的原始文件名,和素材库、AI 工作台那颗同一件事)。
+                不是素材的(笔记正文里的图、浏览器截图)没有 id 可存,这一颗就不摆 —— 和下面「打开原图」一样。 */}
+            {saveId && (
+              <FloatingIconButton
+                slot={1}
+                label={t("assetSaveLocal")}
+                data-image-preview-save={saveId}
+                onClick={() => saveAssetToDisk({
+                  id: saveId,
+                  name: saveItem?.title ?? t("imagePreviewTitle"),
+                  original_filename: "",
+                })}
+              >
+                <Download />
+              </FloatingIconButton>
+            )}
           </HintRegion.Provider>
         )}
       </div>
@@ -211,8 +235,9 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         className={cn(
           !visible && "pointer-events-none",
           visible && "[.is-desktop_&]:[-webkit-app-region:no-drag]",
-          //: 库自带的 ✕ 藏起来(换成上面那颗一直在的关闭键),右边让出它的位置
-          String.raw`[&_.PhotoView-Slider\_\_BannerRight>.PhotoView-Slider\_\_toolbarIcon]:hidden [&_.PhotoView-Slider\_\_BannerRight]:pr-12`,
+          //: 库自带的 ✕ 藏起来(换成上面那颗一直在的关闭键),右边让出顶上那**两颗**浮钮的位子
+          //: (关闭 8..44、保存在它左边 52..88;加上胶囊自己的 `mr-2` 就是 8px 的间距)。
+          String.raw`[&_.PhotoView-Slider\_\_BannerRight>.PhotoView-Slider\_\_toolbarIcon]:hidden [&_.PhotoView-Slider\_\_BannerRight]:pr-[88px]`,
           String.raw`z-[220] [&_.PhotoView-Slider\_\_BannerWrap]:h-12 [&_.PhotoView-Slider\_\_BannerWrap]:bg-[linear-gradient(to_bottom,rgb(0_0_0/0.42),transparent)] [&_.PhotoView-Slider\_\_Counter]:font-mono [&_.PhotoView-Slider\_\_Counter]:text-ui-xs [&_.PhotoView-Slider\_\_Counter]:text-[rgb(255_255_255/0.68)] [&_.PhotoView-Slider\_\_toolbarIcon]:h-9 [&_.PhotoView-Slider\_\_toolbarIcon]:w-9 [&_.PhotoView-Slider\_\_toolbarIcon]:text-[rgb(255_255_255/0.82)] [&_:is(.PhotoView-Slider\_\_ArrowLeft,.PhotoView-Slider\_\_ArrowRight)]:text-[rgb(255_255_255/0.78)]`,
         )}
         maskClassName="will-change-[opacity]"
@@ -220,48 +245,19 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         maskOpacity={0.88}
         toolbarRender={({ images: photoImages, index }) => {
           const photo = photoImages[index];
-          const current = images[index];
-          const saveId = current?.assetId;
-          //: 视频那一项库里没有 `src`(见上面 images.map 里的说明),所以「打开原图」照旧只给图;
-          //: 「保存到本地」两头都给。
-          if (!photo?.src && !current) return null;
+          //: 视频那一项库里没有 `src`(见上面 images.map 里的说明),所以「打开原图」照旧只给图。
+          //: 「保存到本地」不在这儿了 —— 它和关闭键并排(见上面),两颗同一颗基础件、同一层。
+          if (!photo?.src) return null;
           return (
-            <>
-              {/* 顶上这颗「保存到本地」:此前想存一张图,只能关掉灯箱、跑去素材管理页翻出同一张。
-                  存的必须是**原始文件** —— 图那一项的 src 是后端转好的预览(HEIC 转 JPEG),
-                  所以按素材 id 走 `/file`(原始字节 + 响应头里的原始文件名,和素材库、AI 工作台那颗同一件事)。 */}
-              {saveId && (
-                <HintRegion.Provider value={LIGHTBOX_REGION}>
-                  {/* 档位走基础件(`secondary` + `icon-sm`),不在 className 上压高度和圆角(design/controlOverrides)。
-                      旁边「打开原图」是黑的底上那颗白胶囊,这一颗跟着主题走 —— 两者都读得清。 */}
-                  <IconButton
-                    variant="secondary"
-                    size="icon-sm"
-                    label={t("assetSaveLocal")}
-                    data-image-preview-save={saveId}
-                    onClick={() => saveAssetToDisk({
-                      id: saveId,
-                      name: current.title ?? t("imagePreviewTitle"),
-                      original_filename: "",
-                    })}
-                    className="mr-2"
-                  >
-                    <Download />
-                  </IconButton>
-                </HintRegion.Provider>
-              )}
-              {photo?.src && (
-                <a
-                  href={photo.src}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mr-2 inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[rgb(255_255_255/0.18)] bg-[rgb(255_255_255/0.12)] px-[11px] text-xs text-white no-underline hover:bg-[rgb(255_255_255/0.2)]"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <ExternalLink size={14} /> {t("openOriginal")}
-                </a>
-              )}
-            </>
+            <a
+              href={photo.src}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="mr-2 inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[rgb(255_255_255/0.18)] bg-[rgb(255_255_255/0.12)] px-[11px] text-xs text-white no-underline hover:bg-[rgb(255_255_255/0.2)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ExternalLink size={14} /> {t("openOriginal")}
+            </a>
           );
         }}
         overlayRender={({ overlay }) =>

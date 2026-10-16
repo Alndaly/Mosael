@@ -56,7 +56,11 @@ const STOCK: Record<string, number> = {
   "app/App.tsx": 3,
   "components/app/CanvasInputModeMenu.tsx": 1,
   "components/app/FailureDetails.tsx": 1,
-  "components/app/image-preview.tsx": 1,
+  //: 1 → 0:灯箱右上角那两颗(关闭 / 保存到本地)都把外观收进了基础件 `components/ui/floating-button`
+  //: (半透明黑圆钮、36px、图标 18、no-drag 那一套)—— OWNERS 里不计数,调用处只剩下位置。
+  //: 原先记的那一处就是关闭键自己在 className 上写的 `size-9 rounded-full`;旁边那颗「保存到本地」
+  //: 当时为了不涨存量走 `variant="secondary" size="icon-sm"`,两颗并排却两个样子(维护者报的)。
+  //: 这就是注释里那句「真是另一种控件的就给它一个基础件」:浮在画面上的钮是另一种控件,给它一个家,存量减掉。
   "components/app/media-playback.tsx": 4,
   "components/app/MediaPreviewPlayer.tsx": 1,
   "components/app/TagFilter.tsx": 1,

@@ -4,6 +4,7 @@ import { Columns2, Download, FlipHorizontal, Grid2x2, Link2, Link2Off, Maximize2
 import { assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { FloatingIconButton } from "@/components/ui/floating-button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -307,14 +308,15 @@ function SplitPane({
   );
 }
 
-/** 浮在画面上的「保存到本地」—— 滑动分割那一屏用(A 存左、B 存右)。 */
+/** 浮在画面上的「保存到本地」—— 滑动分割那一屏用(A 存左、B 存右)。
+ *
+ *  底是照片,所以走**浮钮基础件**(半透明黑 + 白图标 + 全圆),和分割线正中那颗抓取钮是同一族;
+ *  此前是 `variant="secondary"`(跟着主题走的实心方钮)浮在照片上,而旁边那颗抓取钮是深色半透明的圆钮 ——
+ *  同一块画面上两种钮。位置在这里给(它是跟着画面走的,不在画面右上角那一排),尺寸和外观不在这里写。 */
 function SaveOverlay({ asset, side }: { asset: Asset; side: "left" | "right" }) {
   const t = useI18n();
   return (
-    <IconButton
-      //: 档位走基础件(design/controlOverrides):这里只摆位置。
-      variant="secondary"
-      size="icon-xs"
+    <FloatingIconButton
       label={`${t("assetSaveLocal")}: ${asset.name || asset.original_filename || ""}`}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
@@ -324,7 +326,7 @@ function SaveOverlay({ asset, side }: { asset: Asset; side: "left" | "right" }) 
       className={cn("absolute top-8 z-[2]", side === "left" ? "left-2" : "right-2")}
     >
       <Download />
-    </IconButton>
+    </FloatingIconButton>
   );
 }
 
