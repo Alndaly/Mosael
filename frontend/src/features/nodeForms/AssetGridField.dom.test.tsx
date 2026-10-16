@@ -558,6 +558,63 @@ describe("一行一条 `素材id:角色`(生成节点的「输入素材」)", ()
   });
 });
 
+/**
+ * 「同一行内尽量满宽」:瓦片不到**设计列数**(不带角色四列 / 带角色两列)时按**实际枚数**分列,
+ * 每一枚各占这一行的一等份;到了设计列数以上就是那几列。空格的常态正是两枚(上传格 + 「+」格)——
+ * 此前不带角色的那版写死 `grid-cols-4`,两枚各占 25%、右边空出一截(维护者报的那张图)。
+ * jsdom 量不到宽度,所以这里钉的是决定宽度的那两个类(`grid-flow-col auto-cols-fr` / `grid-cols-*`)。
+ */
+describe("一排占满那一格的宽度", () => {
+  const row = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-asset-grid] > .grid")!;
+
+  it("没挑的空格:上传格 + 「+」格两枚,按枚数分列(不带角色的那版也是)", () => {
+    const { container } = renderField("");
+    const grid = row(container);
+    expect(grid.children).toHaveLength(2);
+    expect(grid.className).toContain("grid-flow-col");
+    expect(grid.className).toContain("auto-cols-fr");
+  });
+
+  it("不到设计列数(四列)都按枚数分列:1 份 3 枚、2 份 4 枚", () => {
+    const { container } = renderField("img-a");
+    const one = row(container);
+    expect(one.children).toHaveLength(3);
+    expect(one.className).toContain("auto-cols-fr");
+    cleanup();
+    const { container: four } = renderField("img-a,img-b");
+    expect(row(four).children).toHaveLength(4);
+    expect(row(four).className).toContain("auto-cols-fr");
+  });
+
+  it("多过设计列数:回到四列(5 枚不会撑成巨块)", () => {
+    const { container } = renderField("img-a,img-b,img-c");
+    const grid = row(container);
+    expect(grid.children).toHaveLength(5);
+    expect(grid.className).toContain("grid-cols-4");
+    expect(grid.className).not.toContain("auto-cols-fr");
+  });
+
+  it("满 8 张(两格虚线格消失):仍旧一排四张", () => {
+    const { container } = renderField(Array.from({ length: 8 }, (_, at) => `full-${at}`).join(","));
+    const grid = row(container);
+    expect(grid.children).toHaveLength(8);
+    expect(grid.className).toContain("grid-cols-4");
+  });
+
+  it("带角色的那一格同一条规矩:两枚按枚数分列,多了就是它的两列", () => {
+    const { container } = renderLines({ value: [] });
+    const empty = row(container);
+    expect(empty.children).toHaveLength(2);
+    expect(empty.className).toContain("auto-cols-fr");
+    cleanup();
+    const { container: many } = renderLines({ value: ["img-a:first_frame", "img-b:reference_image"], max: 4 });
+    const grid = row(many);
+    expect(grid.children).toHaveLength(4);
+    expect(grid.className).toContain("grid-cols-2");
+    expect(grid.className).not.toContain("auto-cols-fr");
+  });
+});
+
 describe("声明 → 控件参数(纯函数)", () => {
   it("`entry_labels` 不是 `source_roles` 就没有角色词表(那三个 asset_ids 不长得角标)", () => {
     expect(assetGridRoles(undefined, undefined, keyText)).toBeNull();

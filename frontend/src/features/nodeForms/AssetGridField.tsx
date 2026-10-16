@@ -76,6 +76,15 @@ import { cn } from "@/lib/utils";
 const TILE_CLASS = "relative h-12 overflow-hidden rounded-lg border";
 /** 带角色的瓦片高一点:角色角标要写下一个角色名(「参考图」/「Reference image」)并看得见。 */
 const ROLE_TILE_CLASS = "relative h-16 overflow-hidden rounded-lg border";
+/**
+ * 一格里的瓦片**设计列数**(一排最多几列):带角色的**两列**(角色角标要写下一个角色名,四列一格
+ * 放不下它),不带角色的**四列**(大模型那格一直就是这个样子)。
+ *
+ * 瓦片**不到**这个数时不是按它硬分列,而是按实际枚数分(见下面 `tileGrid`)—— 「同一行内尽量满宽」。
+ * 多过这个数时就是它:八张图仍旧一排四张,不会撑成巨块。
+ */
+const ROLE_TILE_COLUMNS = 2;
+const PLAIN_TILE_COLUMNS = 4;
 /** 角标压在缩略图右下角:半透明深底 + 浅字,缩略图深浅都能读。 */
 const BADGE_ON_TILE = "absolute bottom-0.5 right-0.5 max-w-[calc(100%-0.25rem)] overflow-hidden text-ellipsis border-transparent bg-[rgba(10,12,15,0.72)] text-[#e8eaed] backdrop-blur-sm hover:bg-[rgba(10,12,15,0.85)] hover:text-[#fff]";
 
@@ -351,6 +360,20 @@ export function AssetGridField({
   const roleName = (role: string) => (roles ?? []).find((one) => one.value === role)?.label ?? role;
 
   const full = picked.length >= max;
+  /** 这一格真画出来的瓦片数:已挑的 + 还没满时那两格虚线格(上传 / 从素材库挑)。 */
+  const tiles = picked.length + (full ? 0 : 2);
+  /** 这一格的设计列数:带角色两列、不带角色四列(见 ROLE_TILE_COLUMNS 上那段)。 */
+  const tileColumns = roleAware ? ROLE_TILE_COLUMNS : PLAIN_TILE_COLUMNS;
+  /**
+   * 一排的排法 —— 「同一行内尽量满宽」这条版式**只有这一处**。
+   *
+   * 瓦片数不到设计列数时按**实际枚数**分列:`grid-flow-col auto-cols-fr` 让每一枚各占这一行的
+   * 一等份。空格的常态正是两枚(上传格 + 「+」格),于是各半行、**整行占满那一格的宽度**;
+   * 此前不带角色的格子写死 `grid-cols-4`,同样的两枚各占 25%、右边空出一截(大模型那格被报的)。
+   * 到了设计列数以上就是那几列 —— 八张图仍旧一排四张,不会变成八个巨块。
+   */
+  const tileGrid =
+    tiles <= tileColumns ? "grid-flow-col auto-cols-fr" : roleAware ? "grid-cols-2" : "grid-cols-4";
   return (
     <div className="relative" data-asset-grid="" data-asset-grid-mode={lines ? "lines" : "ids"} {...drop.handlers}>
       <DndContext
@@ -360,9 +383,10 @@ export function AssetGridField({
         onDragEnd={onDragEnd}
       >
         <SortableContext items={picked.map((one) => one.value)} strategy={rectSortingStrategy}>
-          {/* 带角色的格子**两列**:角色角标要写下一个角色名(「参考图」/「Reference image」),
-              四列一格(~80px)放不下它,而角色必须看得见。 */}
-          <div className={cn("grid gap-1", roleAware ? "grid-cols-2" : "grid-cols-4")}>
+          {/* 一排怎么分列见上面 `tileGrid`:瓦片不到设计列数时按实际枚数各占一等份(整行占满),
+              到了以上就是设计列数。带角色的那一版**两列**的理由:角色角标要写下一个角色名
+              (「参考图」/「Reference image」),四列一格(~80px)放不下它,而角色必须看得见。 */}
+          <div className={cn("grid gap-1", tileGrid)}>
             {picked.map((item, index) => (
               <PickedTile
                 key={item.value}
