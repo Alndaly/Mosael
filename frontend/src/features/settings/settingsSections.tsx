@@ -18,6 +18,7 @@ import {
 
 import type { Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
+import { SettingsGroup } from "@/components/settings/settings-layout";
 import { AccountSection } from "@/features/settings/AccountSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AgentSkillsSection } from "@/features/settings/AgentSkillsSection";
@@ -78,6 +79,9 @@ export type SettingsGroup = { title: MessageKey; sections: readonly SettingsSect
  * 一模一样,读起来像同一页有两个同名标题;紧跟其后的那句说明也就被当成了**页说明** ——
  * 维护者两次没认出这一组到底在讲什么。组名只回答「这一组是连接列表」,是哪种能力由页名与
  * 那句说明各自区分,两者不再重复。只要说明(description),不要标题。
+ *
+ * **页头不在这里。**「这一页叫什么、这一页配的是哪种能力」由 `withPageHeader` 在声明层补一个
+ * 只有标题与说明的空组 —— 四个供应商页各有自己那句说明,子组仍只讲自己那一件事。
  */
 function providerPage(capability: string, description: MessageKey) {
   return ({ focusCapability, t }: SettingsContext) => (
@@ -86,6 +90,32 @@ function providerPage(capability: string, description: MessageKey) {
       <ProviderProfilesSection capability={capability} description={t(description)} />
     </>
   );
+}
+
+/**
+ * 给一页补上**页头**:一个只有标题与说明、没有 children 的空组。
+ *
+ * 设置页没有独立页头 —— `SettingsView` 只渲染 `current.render(ctx)`(SettingsView.tsx:123-125),
+ * 页里第一个组的标题被 settings-layout 的 CSS 抬到 2xl、说明抬到 ui-md
+ * (`[&>[data-slot=settings-group]:first-child_…]`,settings-layout.tsx:445)。所以「这一页叫什么」
+ * 在界面上完全由第一个组回答:页头就是它,没有第二个地方可写。
+ *
+ * **必须写在声明层。** 页头若写在组件里,组件自己的加载中(骨架)与出错(`PageLoadError`)一早返回
+ * 就把它一起吃了 —— 「能力提供方」那一页此前正是这样:加载中与出错时整页没有页头。
+ *
+ * **标题取 `section.label`**,不在页头里另写一份。导航里的页名与正文里的页头各写一遍迟早分叉,
+ * 而分叉出来的正是这次要修的毛病(页头显示成某个子组的名字)。棘轮:SettingsPageHeader.dom.test.tsx。
+ */
+function withPageHeader(section: SettingsSection, description: MessageKey): SettingsSection {
+  return {
+    ...section,
+    render: (ctx) => (
+      <>
+        <SettingsGroup title={ctx.t(section.label)} description={ctx.t(description)} />
+        {section.render(ctx)}
+      </>
+    ),
+  };
 }
 
 export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
@@ -111,71 +141,92 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
           </>
         ),
       },
-      {
-        // 这个工作区的音色库,加上不用连接就能配音的几个内置引擎现在能不能用(只读)。
-        // 本地克隆引擎怎么装、用哪个解释器和下载源是部署级的,在管理页「引擎」。
-        id: "dubbing",
-        label: "settingsDubbingTitle",
-        icon: <AudioLines size={14} />,
-        render: ({ workspace }) => (
-          <>
-            <BuiltinTtsSection />
-            <VoiceLibrarySection workspace={workspace} />
-          </>
-        ),
-      },
+      // 这个工作区的音色库,加上不用连接就能配音的几个内置引擎现在能不能用(只读)。
+      // 本地克隆引擎怎么装、用哪个解释器和下载源是部署级的,在管理页「引擎」。
+      // **页头是声明层那个空组。** 挂在某个子组上的话,那一组在有些状态下根本不渲染(数据没到、
+      // 出错、或者它自己决定不画),页头就跟着没了 —— 页名不该由子组的有无决定。同页的
+      // capabilities 是现成的例子:骨架与 `PageLoadError` 都是组件的早返回。
+      withPageHeader(
+        {
+          id: "dubbing",
+          label: "settingsDubbingTitle",
+          icon: <AudioLines size={14} />,
+          render: ({ workspace }) => (
+            <>
+              <BuiltinTtsSection />
+              <VoiceLibrarySection workspace={workspace} />
+            </>
+          ),
+        },
+        "settingsDubbingPageDesc",
+      ),
     ],
   },
   {
     // 「用哪家的哪个模型」—— 全是云端连接。花多少钱(成本规则)只有部署管理员写得了,在管理页。
     title: "studioSettingsProviders",
     sections: [
-      {
-        id: "provider-chat",
-        label: "providerChatTitle",
-        icon: <MessageSquare size={14} />,
-        capabilities: ["chat"],
-        render: providerPage("chat", "providerChatDesc"),
-      },
-      {
-        id: "provider-image",
-        label: "providerImageTitle",
-        icon: <ImageIcon size={14} />,
-        capabilities: ["image"],
-        render: providerPage("image", "providerImageDesc"),
-      },
-      {
-        id: "provider-video",
-        label: "providerVideoTitle",
-        icon: <Video size={14} />,
-        capabilities: ["video"],
-        render: providerPage("video", "providerVideoDesc"),
-      },
-      {
-        // **只放云端的配音与播客连接。** 内置配音引擎与音色库在「个人与工作区 → 配音与音色」,
-        // 本地克隆引擎的安装在管理页;语音对话是智能体的一种说话方式,归「智能体」。
-        id: "provider-audio",
-        label: "providerAudioTitle",
-        icon: <AudioLines size={14} />,
-        capabilities: ["tts", "podcast", "audio"],
-        render: ({ t, focusCapability }) => (
-          <>
-            {/* 音乐与音效是**生成**(和图像、视频同一条管线,ADR 0022),所以它有自己的默认模型。 */}
-            <ProviderDefaultsSection capabilities={["audio"]} focusCapability={focusCapability} />
-            <ProviderProfilesSection capability="tts" title={t("providerTtsTitle")} description={t("providerTtsDesc")} />
-            <ProviderProfilesSection
-              capability="podcast"
-              title={t("providerPodcastTitle")}
-              description={t("providerPodcastDesc")}
-            />
-            <ProviderProfilesSection
-              capability="audio"
-              title={t("providerMusicTitle")}
-              description={t("providerMusicDesc")}
-            />
-          </>
-        ),
-      },
+      // 四个供应商页同一套:页头(页名 + 这一页管的是哪种能力)在声明层,然后默认模型、连接列表。
+      withPageHeader(
+        {
+          id: "provider-chat",
+          label: "providerChatTitle",
+          icon: <MessageSquare size={14} />,
+          capabilities: ["chat"],
+          render: providerPage("chat", "providerChatDesc"),
+        },
+        "providerChatPageDesc",
+      ),
+      withPageHeader(
+        {
+          id: "provider-image",
+          label: "providerImageTitle",
+          icon: <ImageIcon size={14} />,
+          capabilities: ["image"],
+          render: providerPage("image", "providerImageDesc"),
+        },
+        "providerImagePageDesc",
+      ),
+      withPageHeader(
+        {
+          id: "provider-video",
+          label: "providerVideoTitle",
+          icon: <Video size={14} />,
+          capabilities: ["video"],
+          render: providerPage("video", "providerVideoDesc"),
+        },
+        "providerVideoPageDesc",
+      ),
+      // **只放云端的配音与播客连接。** 内置配音引擎与音色库在「个人与工作区 → 配音与音色」,
+      // 本地克隆引擎的安装在管理页;语音对话是智能体的一种说话方式,归「智能体」。
+      // 这一页有四个组、四个概念(默认模型 / 语音合成 / 播客对话 / 音乐与音效生成),一层都没说
+      // 「这是音频」—— 页头那句说明把它说清,子组名与子组说明各自不动。
+      withPageHeader(
+        {
+          id: "provider-audio",
+          label: "providerAudioTitle",
+          icon: <AudioLines size={14} />,
+          capabilities: ["tts", "podcast", "audio"],
+          render: ({ t, focusCapability }) => (
+            <>
+              {/* 音乐与音效是**生成**(和图像、视频同一条管线,ADR 0022),所以它有自己的默认模型。 */}
+              <ProviderDefaultsSection capabilities={["audio"]} focusCapability={focusCapability} />
+              <ProviderProfilesSection capability="tts" title={t("providerTtsTitle")} description={t("providerTtsDesc")} />
+              <ProviderProfilesSection
+                capability="podcast"
+                title={t("providerPodcastTitle")}
+                description={t("providerPodcastDesc")}
+              />
+              <ProviderProfilesSection
+                capability="audio"
+                title={t("providerMusicTitle")}
+                description={t("providerMusicDesc")}
+              />
+            </>
+          ),
+        },
+        "providerAudioPageDesc",
+      ),
     ],
   },
   {
@@ -219,14 +270,20 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         icon: <MessageSquare size={14} />,
         render: ({ workspace }) => <FeishuSection workspace={workspace} />,
       },
-      {
-        // **自己一页,不挂在某一种模型下面。** 宿主的几项能力(素材外链、文档解析……)各用哪一家,回答的是
-        // 「这件事交给哪一家做」—— 按后端的能力表列,多一项能力这里不用改(ADR 0031 §5)。
-        id: "capabilities",
-        label: "capabilityProvidersTitle",
-        icon: <Link2 size={14} />,
-        render: () => <CapabilityProvidersSection />,
-      },
+      // **自己一页,不挂在某一种模型下面。** 宿主的几项能力(素材外链、文档解析……)各用哪一家,回答的是
+      // 「这件事交给哪一家做」—— 按后端的能力表列,多一项能力这里不用改(ADR 0031 §5)。
+      // **页头只能是声明层这一组。** 下面的每一组名字都是**后端给的能力名**(今天=「降噪」),而
+      // 加载中(骨架)与出错(`PageLoadError`)时组件一早返回,组一个都不渲染 —— 页头写在组件里,
+      // 那两种状态下这一页就没有页头了。
+      withPageHeader(
+        {
+          id: "capabilities",
+          label: "capabilityProvidersTitle",
+          icon: <Link2 size={14} />,
+          render: () => <CapabilityProvidersSection />,
+        },
+        "capabilityProvidersPageDesc",
+      ),
       {
         id: "backend",
         label: "settingsBackend",

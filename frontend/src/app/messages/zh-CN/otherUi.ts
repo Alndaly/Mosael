@@ -260,8 +260,10 @@ export const otherUi = {
   autopilotNotesDesc: "用自己的话补充判断依据,会原样交给判断者。它只能收紧,不能单独放行任何东西。",
   autopilotNotesPlaceholder: "例如:只发到草稿箱;不要请求任何带 delete 的接口。",
   autopilotJudgeTitle: "判断者",
+  //: 曾经写的是「名单没覆盖到的情况……」—— 那两份白名单 2026-08-07(`ab06e5b80`)就删了
+  //: (backend/tests/test_autopilot_has_no_allowlists.py 断言它们不存在),说明不能留一个已经不在的东西。
   autopilotJudgeDesc:
-    "名单没覆盖到的情况,由一次单独的模型调用判断。它只拿到工具名、这次的参数和上面的准则 —— 拿不到对话内容,也拿不到工具返回的网页与文档,那正是外部文字能影响判断的入口。判不出、超时或出错时一律问你。",
+    "交给判断者的那几档,由一次单独的模型调用判断。它只拿到工具名、这次的参数和上面的准则 —— 拿不到对话内容,也拿不到工具返回的网页与文档,那正是外部文字能影响判断的入口。判不出、超时或出错时一律问你。",
   autopilotJudgeBadge: "与对话隔离",
   autopilotSaved: "准则已保存",
   autopilotAdminOnly: "只有管理员能改",

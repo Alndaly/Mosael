@@ -261,8 +261,11 @@ export const otherUi = {
   autopilotNotesDesc: "Your own words, passed to the judge verbatim. It can only narrow — it cannot allow anything on its own.",
   autopilotNotesPlaceholder: "e.g. only post to drafts; never call an endpoint containing \u201Cdelete\u201D.",
   autopilotJudgeTitle: "The judge",
+  //: This used to read "Cases the lists do not cover…" — but the two allowlists were deleted on
+  //: 2026-08-07 (`ab06e5b80`, asserted gone in backend/tests/test_autopilot_has_no_allowlists.py),
+  //: so the copy must not mention something that no longer exists.
   autopilotJudgeDesc:
-    "Cases the lists do not cover go to a separate model call. It receives only the tool name, this call's arguments and the rules above — not the conversation, and not the pages and documents tools returned, which is exactly where outside text could sway a decision. Timeouts, errors and unreadable answers all fall back to asking you.",
+    "The gates you hand to the judge go to a separate model call. It receives only the tool name, this call's arguments and the rules above — not the conversation, and not the pages and documents tools returned, which is exactly where outside text could sway a decision. Timeouts, errors and unreadable answers all fall back to asking you.",
   autopilotJudgeBadge: "isolated from the conversation",
   autopilotSaved: "Rules saved",
   autopilotAdminOnly: "Admins only",

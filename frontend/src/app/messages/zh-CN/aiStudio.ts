@@ -419,6 +419,9 @@ export const aiStudio = {
   /* 「配音与音色」= 内置配音引擎 + 声音克隆 + 音色库。此前前一个在「AI 音频」里、后两个在
      「语音与服务」组里 —— 同一件事拆在两个组,内置引擎卡片上还挂着一个跳去克隆页的链接。 */
   settingsDubbingTitle: "配音与音色",
+  //: 页头(结构声明里那个空组)。下面两组各自讲自己那一件事,页头这句把两件都覆盖到。
+  settingsDubbingPageDesc:
+    "不用连接就能用的配音引擎在这台机器上装了没有(内置配音引擎),以及这个工作区有哪些音色、怎么建(音色库)。",
   installSourceTitle: "下载源",
   installSourcePipIndexHint: "只管装 Python 依赖。国内建议选镜像,直连 PyPI 可能非常慢。模型权重从哪下是另一项:这一节最后的「模型下载源」。",
   installSourceModelHint: "模型权重从哪儿下:声音克隆、本机识别(NSFW)、Mosael 起的本机 ComfyUI 都用这一行。选 ModelScope 时只有支持它的克隆引擎走 ModelScope,别的照旧从 HuggingFace 拉。",
@@ -554,11 +557,16 @@ export const aiStudio = {
   providerAccountsDesc: "按能力管理对应供应商的 Adapter 配置。",
   providerChatTitle: "AI 对话",
   providerChatDesc: "能走对话接口的连接:密钥、授权与模型清单。默认用哪个在上面那组选。",
+  //: 这四句是**页头**(结构声明里那个只有标题+说明的空组):页名说是哪种能力,子组各讲自己那一件事。
+  providerChatPageDesc: "对话用哪个模型(默认模型),以及这些模型来自哪几条连接(供应商配置:密钥、授权与模型清单)。",
   providerImageTitle: "AI 绘图",
   providerImageDesc: "能走图像生成的连接:密钥、授权与模型清单。默认用哪个在上面那组选。",
+  providerImagePageDesc: "图像生成用哪个模型(默认模型),以及这些模型来自哪几条连接(供应商配置:密钥、授权与模型清单)。",
   providerVideoTitle: "AI 视频",
   providerVideoDesc: "能走视频生成的连接:密钥、授权与模型清单。默认用哪个在上面那组选。",
+  providerVideoPageDesc: "视频生成用哪个模型(默认模型),以及这些模型来自哪几条连接(供应商配置:密钥、授权与模型清单)。",
   providerAudioTitle: "AI 音频",
+  providerAudioPageDesc: "音频用哪个模型(默认模型),以及这些模型来自哪几条连接 —— 下面按用途分三组:语音合成、播客对话、音乐与音效生成,每组各自管密钥、授权与模型清单。",
   providerTtsTitle: "语音合成",
   providerTtsDesc: "配置远程 TTS Adapter,用于工作流配音、AI 语音生成等能力。",
   providerPodcastTitle: "播客对话",

@@ -129,7 +129,9 @@ export const shell = {
   updatePassword: "Update password",
   passwordUpdated: "Password updated; you have been signed out everywhere else",
   passwordUpdateFailed: "Password update failed",
-  settingsAppearanceDesc: "Theme, language and font, applied immediately; this device only.",
+  //: This page's header (the first group's description) has to cover all three groups: appearance,
+  //: background, custom CSS.
+  settingsAppearanceDesc: "Theme, language and font, plus background and custom CSS; all applied immediately and saved on this device only.",
   settingsThemeDesc: "System follows your macOS appearance automatically.",
   appearanceBgTitle: "Background & glass",
   appearanceBgDesc: "Give the whole app a background; once set, panels turn into translucent frosted glass. Everything previews live and is saved per device.",

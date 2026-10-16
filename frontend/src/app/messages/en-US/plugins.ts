@@ -207,6 +207,10 @@ export const plugins = {
   pluginMarketHomepage: "Homepage",
   pluginMarketUninstalled: "Uninstalled",
   capabilityProvidersTitle: "Capability providers",
+  //: The page header lives in the structure declaration (an empty group in settingsSections.tsx):
+  //: group names are capability names the backend sends, so they cannot double as the page name.
+  capabilityProvidersPageDesc:
+    "Which provider handles each of the host's capabilities — asset links, document parsing, transcription, dubbing, noise reduction and the like: one group per capability, each saying where it is used.",
   capabilityProvider: "Provider",
   capabilityUsedBy: "Used in",
   capabilityProviders: "Providers",

@@ -416,6 +416,10 @@ export const aiStudio = {
   saved: "Saved",
   aiRuntimeTitle: "AI runtime",
   settingsDubbingTitle: "Dubbing & voices",
+  //: The page header (the empty group in the structure declaration). The two groups below each
+  //: speak for themselves; this one sentence has to cover both.
+  settingsDubbingPageDesc:
+    "Whether the dubbing engines that need no connection are installed on this machine (built-in engines), and which voices this workspace has and how to add them (the voice library).",
   installSourceTitle: "Download sources",
   installSourcePipIndexHint: "Only covers Python dependencies. Pick a mirror if PyPI is slow where you are. Where model weights download from is separate: Model download source at the end of this section.",
   installSourceModelHint: "Where model weights are downloaded from: voice cloning, local NSFW detection and the local ComfyUI that Mosael starts all use this row. With ModelScope, only clone engines that support it use ModelScope; everything else still downloads from HuggingFace.",
@@ -551,11 +555,17 @@ export const aiStudio = {
   providerAccountsDesc: "Manage adapter configuration by capability.",
   providerChatTitle: "AI chat",
   providerChatDesc: "Connections that expose a chat interface: keys, authorization and model lists. The default model is chosen in the group above.",
+  //: These four are the **page headers** (the empty title+description group in the structure
+  //: declaration): the page name says which capability, each group below speaks only for itself.
+  providerChatPageDesc: "Which model chat uses (the default model), and which connections those models come from (provider config: keys, authorization and model lists).",
   providerImageTitle: "AI image",
   providerImageDesc: "Connections that can generate images: keys, authorization and model lists. The default model is chosen in the group above.",
+  providerImagePageDesc: "Which model image generation uses (the default model), and which connections those models come from (provider config: keys, authorization and model lists).",
   providerVideoTitle: "AI video",
   providerVideoDesc: "Connections that can generate video: keys, authorization and model lists. The default model is chosen in the group above.",
+  providerVideoPageDesc: "Which model video generation uses (the default model), and which connections those models come from (provider config: keys, authorization and model lists).",
   providerAudioTitle: "AI audio",
+  providerAudioPageDesc: "Which model audio uses (the default model), and which connections those models come from — below, three groups by purpose: speech synthesis, podcast dialogue, and music & sound generation, each with its own keys, authorization and model lists.",
   providerTtsTitle: "Speech synthesis",
   providerTtsDesc: "Configure remote TTS adapters for workflow voiceover and AI speech generation.",
   providerPodcastTitle: "Podcast dialogue",

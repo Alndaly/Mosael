@@ -209,6 +209,9 @@ export const plugins = {
   pluginMarketHomepage: "主页",
   pluginMarketUninstalled: "已卸载",
   capabilityProvidersTitle: "能力提供方",
+  //: 页头藏在结构声明里(settingsSections.tsx 的空组):组名是后端给的能力名,不能顶页名。
+  capabilityProvidersPageDesc:
+    "宿主的几项能力各交给哪一家做 —— 素材外链、文档解析、转写、配音、降噪这些,一项能力一组,组里写明它用在哪。",
   capabilityProvider: "用哪一家",
   capabilityUsedBy: "用在哪",
   capabilityProviders: "有哪几家",

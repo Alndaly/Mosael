@@ -131,7 +131,8 @@ export const shell = {
   updatePassword: "更新密码",
   passwordUpdated: "密码已更新;别处的登录已退出",
   passwordUpdateFailed: "密码更新失败",
-  settingsAppearanceDesc: "界面主题、语言与字体,立即生效;只在这台设备上。",
+  //: 这一页的页头(第一个组的说明)得覆盖**整页三组**:外观、背景、自定义 CSS。
+  settingsAppearanceDesc: "界面主题、语言与字体,以及背景和自定义 CSS;都只在这台设备上、立即生效。",
   settingsThemeDesc: "跟随系统会随 macOS 外观自动切换。",
   appearanceBgTitle: "背景与磨玻璃",
   appearanceBgDesc: "给整个应用换一张背景;设置背景后,面板会自动变成半透明磨玻璃。所有改动即时预览、逐设备保存。",
