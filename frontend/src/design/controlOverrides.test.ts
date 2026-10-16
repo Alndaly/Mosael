@@ -86,7 +86,9 @@ const STOCK: Record<string, number> = {
   //: 而 EmptyTile 自己的 className 走 cn(SLOT_TILE, …) —— 格子的高、圆角在那一份 SLOT_TILE 里,不再是调用处的覆盖。
   //: 3 → 2:对调箭头那一颗(`mx-auto h-6 w-6`)连同成对壳挪去了两个功能共用的 components/generation/slotTiles
   //: (理由见 features/featureBoundaries.test.ts)—— 它那一处记在新文件名下,存量总数没变,只是换了家。
-  "features/ai-studio/FrameSlotField.tsx": 2,
+  //: 2 → 3:蒙版那颗「编辑」从左上角挪到右下角,并压到和右上角移除钮同尺寸(`h-5 w-5 rounded-full`)——
+  //: 多出一处尺寸覆盖,是维护者要的"两个角上的钮一样大"。
+  "features/ai-studio/FrameSlotField.tsx": 3,
   "features/ai-studio/GenerateWorkspace.tsx": 3,
   "features/ai-studio/voicedCreation.tsx": 3,
   "features/auth/LoginView.tsx": 1,

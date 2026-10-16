@@ -117,22 +117,27 @@ function Tile({
           </IconButton>
         )}
         {name && (
-          <span className="pointer-events-none absolute bottom-1 left-1 flex max-w-[calc(100%-8px)] rounded bg-background/85 px-1 text-ui-2xs font-semibold text-foreground">
+          //: 右下角有「编辑」钮时给名字让出那颗钮的宽度(20px + 边距),否则长名字会压在它下面。
+          <span
+            className={`pointer-events-none absolute bottom-1 left-1 flex rounded bg-background/85 px-1 text-ui-2xs font-semibold text-foreground ${
+              onEdit && !disabled ? "max-w-[calc(100%-32px)]" : "max-w-[calc(100%-8px)]"
+            }`}
+          >
             <Truncate>{name}</Truncate>
           </span>
         )}
         {onEdit && !disabled && (
-          //: 蒙版的「编辑」:不占新的格,压在缩略图左上角 —— 右上角是移除,右下角是名字。
+          //: 蒙版的「编辑」:不占新的格,压在缩略图**右下角**(维护者:入口放右下、别放左上),尺寸与右上角那颗
+          //: 移除钮**一致**(h-5 w-5 + size={11});名字在左下,给它让出这颗钮的宽度。
           <IconButton
             variant="ghost"
-            size="icon-xs"
-            shape="round"
-            className="absolute left-1 top-1 bg-background/85 hover:bg-background"
+            size="icon"
+            className="absolute bottom-1 right-1 h-5 w-5 rounded-full bg-background/85 hover:bg-background"
             onClick={onEdit}
             label={t("maskEdit")}
             hint={t("maskEditHint")}
           >
-            <Pencil size={13} />
+            <Pencil size={11} />
           </IconButton>
         )}
         {onClear && !disabled && (
