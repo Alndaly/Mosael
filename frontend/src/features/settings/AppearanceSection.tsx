@@ -46,6 +46,7 @@ export function AppearanceSection() {
           ]}
         />
       </SettingsRow>
+      <ExternalOpenRow />
       <SettingsBlock>
         <div className="grid gap-1">
           <span className="text-ui-md font-medium">{t("settingsFont")}</span>
@@ -65,6 +66,32 @@ export function AppearanceSection() {
         </div>
       </SettingsBlock>
     </SettingsGroup>
+  );
+}
+
+/**
+ * 外部打开的文件(访达 / 资源管理器的「打开方式」,或拖到程序坞 / 任务栏图标上)怎么办。
+ *
+ * **只在桌面壳里摆**:这条偏好说的是「别的程序把文件交给 Mosael」,而这件事的整条通道
+ * (preload 转发 `mosael:open-files`,见 lib/deepLink)只在装了桌面壳时存在 —— 浏览器里改了它
+ * 也没有任何东西会读。判据和 BackendSection 的 StartupRow 同一个:桥不在就不摆。
+ */
+function ExternalOpenRow() {
+  const t = useI18n();
+  const { externalOpen, setExternalOpen } = usePreferences();
+  if (!window.mosaelDesktop) return null;
+  return (
+    <SettingsRow label={t("settingsExternalOpen")} description={t("settingsExternalOpenDesc")}>
+      <Segmented
+        aria-label={t("settingsExternalOpen")}
+        value={externalOpen}
+        onValueChange={setExternalOpen}
+        options={[
+          { value: "import", label: t("settingsExternalOpenImport") },
+          { value: "preview", label: t("settingsExternalOpenPreview") },
+        ]}
+      />
+    </SettingsRow>
   );
 }
 

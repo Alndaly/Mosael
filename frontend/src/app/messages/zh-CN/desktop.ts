@@ -11,4 +11,11 @@ export const desktop = {
   // 路径格旁边的「选择…」:系统的选文件 / 选文件夹对话框(见 components/settings/PathField)。
   pathFieldChoose: "选择…",
   pathFieldChooseLabel: "选择「{label}」",
+  // 外部打开的文件(「打开方式」/ 拖到图标上)怎么处理,见 app/preferencesContext 的 ExternalOpenBehavior。
+  // 说明里**必须写清「打开预览」也会入库** —— 渲染层没法直接预览不在库里的本地文件,那条路的前半段就是入库。
+  settingsExternalOpen: "打开外部文件",
+  settingsExternalOpenDesc:
+    "从访达 / 资源管理器的「打开方式」、或拖到程序坞 / 任务栏图标上的文件怎么办。入库:导入素材库后就停在那儿(此前的行为)。打开预览:同样导入,再多开一次预览 —— 文件仍然进了素材库;音频没有预览,只导入。改完从下一个打开的文件起生效。",
+  settingsExternalOpenImport: "入库",
+  settingsExternalOpenPreview: "打开预览",
 } as const;

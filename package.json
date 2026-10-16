@@ -118,6 +118,18 @@
           "name": "音频",
           "role": "Viewer",
           "rank": "Alternate"
+        },
+        {
+          "ext": [
+            "png",
+            "jpg",
+            "jpeg",
+            "webp",
+            "gif"
+          ],
+          "name": "图片",
+          "role": "Viewer",
+          "rank": "Alternate"
         }
       ]
     },

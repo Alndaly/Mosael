@@ -11,4 +11,12 @@ export const desktop = {
   // The "Choose…" button next to a path field: the system file / folder dialog (see components/settings/PathField).
   pathFieldChoose: "Choose…",
   pathFieldChooseLabel: "Choose “{label}”",
+  // Files handed to Mosael from outside (Open With, or dropped on the Dock / taskbar icon), see
+  // app/preferencesContext ExternalOpenBehavior. The description **must** say that "Open preview" still
+  // imports: the renderer cannot preview a local file that is not in the library, so import comes first.
+  settingsExternalOpen: "Opening outside files",
+  settingsExternalOpenDesc:
+    "What to do with files handed to Mosael from Finder / Explorer’s “Open With”, or dropped on the Dock / taskbar icon. Add to library: imported into the library and nothing else — the previous behaviour. Open preview: imported just the same, then the preview opens right away — the file still lands in your library; audio has no preview and is only imported. Applies from the next file you open.",
+  settingsExternalOpenImport: "Add to library",
+  settingsExternalOpenPreview: "Open preview",
 } as const;

@@ -61,13 +61,14 @@ import { useDesignSheetRoute } from "@/dev/designSheetRoute";
 import { APP_CHROME, ChromeAboveDialogs, installAppChromeGuards } from "@/components/ui/appChrome";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { ImagePreviewProvider } from "@/components/app/image-preview";
+import { ImagePreviewProvider, useImagePreview } from "@/components/app/image-preview";
 import { NativeViewStandIn } from "@/components/ui/nativeViewAside";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
 import { installEmbeddedFocus, pageAfterPointer } from "@/features/browser-pool/embeddedFocus";
 import { isImeKeystroke } from "@/lib/shortcuts";
+import { openExternalFiles } from "@/lib/openExternalFiles";
 import { canReviveDesktopBackend, reviveDesktopBackend } from "@/lib/desktopBackend";
 import { MainStaleBadge } from "@/features/desktop/MainStaleBadge";
 import { MainStaleNotice } from "@/features/desktop/MainStaleNotice";
@@ -510,7 +511,7 @@ function Studio({
   workspaces: Workspace[];
   onSelectWorkspace: (id: string) => void;
 }) {
-  const { voiceDock, setVoiceDock } = usePreferences();
+  const { voiceDock, setVoiceDock, externalOpen } = usePreferences();
   const t = useI18n();
   const qc = useQueryClient();
   const createProjectBlocked = useWriteBlocked(workspace.role);
@@ -590,24 +591,30 @@ function Studio({
   // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
   const createProject = useCreateProject(workspace.id, openProject);
 
-  // 桌面端外部唤起:mosael:// 深链(只导航)与拖到应用图标上的媒体文件(入库)。
+  // 桌面端外部唤起:mosael:// 深链(只导航)与别的程序交过来的媒体文件(「打开方式」/ 拖到图标上)。
   // 挂在 App 这一层,是因为它要跨页面生效——不能等某个页面挂载了才开始听。
+  //
+  // 文件那一路按偏好分支:**入库**(现状)或「导入 + 立刻打开预览」(见 lib/openExternalFiles 头部:
+  // 渲染层没法预览一份不在库里的本地文件,所以那是唯一一条真能预览的路)。`externalOpen` 进依赖是
+  // 故意的 —— 它读的是**挂这一次时的那个值**,正在跑的那批按开跑时的值走完,改设置从下一个文件起生效。
+  const { openImagePreview } = useImagePreview();
   React.useEffect(() => {
     return listenDesktopDeepLinks((paths) => {
-      void Promise.allSettled(
-        paths.map((p) => importLocalAsset(workspace.id, p)),
-      ).then((settled) => {
-        const ok = settled.filter((r) => r.status === "fulfilled").length;
-        if (ok) {
-          void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) });
-          toast.success(t("importedAssets").replace("{n}", String(ok)));
-        }
-        const failed = settled.length - ok;
-        if (failed)
-          toast.error(t("importFailed").replace("{n}", String(failed)));
+      void openExternalFiles(paths, externalOpen, {
+        importFile: (p) => importLocalAsset(workspace.id, p),
+        preview: (items, start) => openImagePreview({ ...items[start], gallery: items }),
+        //: 入库那句提示与那次刷新两条偏好共用 —— 它们的前半段本来就是同一条路。
+        reportImport: (ok, failed) => {
+          if (ok) {
+            void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) });
+            toast.success(t("importedAssets").replace("{n}", String(ok)));
+          }
+          if (failed)
+            toast.error(t("importFailed").replace("{n}", String(failed)));
+        },
       });
     });
-  }, [workspace.id, qc, t]);
+  }, [workspace.id, qc, t, externalOpen, openImagePreview]);
 
   return (
     <RecordingProvider workspaceId={workspace.id}>

@@ -15,6 +15,62 @@ import { leaveNativeView, nativeViewInFront } from "@/lib/nativeView";
  */
 const mailbox = new Map<string, string>();
 
+/**
+ * 「别的程序把文件交给 Mosael」这一路的**另一个信箱** —— 同一个道理,但空窗更硬:
+ * 主进程是等 `did-finish-load` 就把 `IPC.event.openFiles` 发出来的(见 electron/system/protocol 的
+ * deliver),而听它的 `listenDesktopDeepLinks` 要到**登录完、工作区列表回来**才由 Studio 挂上。
+ * 中间那段里事件照发,没人接 —— 冷启动双击一张图把应用拉起来,窗口是开了,素材库里什么都没有,
+ * 也没有任何提示,而它正是「图片进打开方式」最要紧的那条路。
+ *
+ * 所以和 `lib/inviteLinks` 同一个做法:`main.tsx` 在**渲染之前**先挂一个只负责收下的听筒,谁要处理了
+ * 再来取(见 `installOpenFilesInbox`)。已经有人收的时候不进信箱,直接送到 —— 事件不多走一圈,顺序也不乱。
+ */
+const waitingFiles: string[][] = [];
+const fileConsumers = new Set<(paths: string[]) => void>();
+let filesListened = false;
+
+/**
+ * 只收形状对的那一批。主进程那侧已经按后缀筛过一轮(见 electron/system/protocol 的 MEDIA_EXTENSIONS),
+ * 这里防的是"事件被别的东西照着重放了一遍":非字符串一律剔掉,剔完什么都不剩就当没来过。
+ */
+function acceptableFiles(detail: unknown): string[] {
+  if (!Array.isArray(detail)) return [];
+  return detail.filter((one): one is string => typeof one === "string" && one.length > 0);
+}
+
+function ensureFilesListened(): void {
+  if (filesListened || typeof window === "undefined") return;
+  filesListened = true;
+  window.addEventListener("mosael:open-files", (event) => {
+    const paths = acceptableFiles((event as CustomEvent<unknown>).detail);
+    if (!paths.length) return;
+    if (!fileConsumers.size) {
+      waitingFiles.push(paths);
+      return;
+    }
+    for (const consumer of fileConsumers) consumer(paths);
+  });
+}
+
+/**
+ * 在渲染之前挂上(`main.tsx` 的模块作用域)。**必须早于系统能把文件交过来** —— 那时事件还没发生,
+ * 攒不攒得下就看它挂没挂(这条由 deepLink.openFiles.dom.test.ts 钉着)。
+ */
+export function installOpenFilesInbox(): void {
+  ensureFilesListened();
+}
+
+/** 收这批文件。返回退订。挂上时立刻补齐信箱里攒着的(按先来后到)。 */
+function subscribeOpenFiles(consumer: (paths: string[]) => void): () => void {
+  ensureFilesListened();
+  fileConsumers.add(consumer);
+  //: 一次取空再投:投递过程中新到的走 `fileConsumers` 那条路直接送,不会插进这一轮中间打乱顺序。
+  for (let batch = waitingFiles.shift(); batch; batch = waitingFiles.shift()) consumer(batch);
+  return () => {
+    fileConsumers.delete(consumer);
+  };
+}
+
 export function emitOpenEvent(event: string, id: string): void {
   mailbox.set(event, id);
   window.dispatchEvent(new CustomEvent(event, { detail: id }));
@@ -298,6 +354,9 @@ export const VIEW_RECORD_EVENTS: Record<string, string> = {
  *
  * 内嵌浏览器、工作台在前台时**先把它收起来再跳**(ADR 0051 D35):不然路由在网页底下换了,窗口被唤到前台却看不出任何变化,
  * 按「返回 Mosael」之后才落到那一页。收起和「返回 Mosael」是同一下 —— 视图还活着,工作台里没存的改动还在,不另弹确认。
+ *
+ * **文件那一半要分两次挂**:这个函数由 Studio 调用(登录完、工作区回来),而系统交过来的文件在
+ * 那之前就到了。所以 main.tsx 先挂信箱,这里挂上时补齐(见 lib/openFilesInbox)。
  */
 export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () => void {
   const go = (link: { view: string; id?: string; market?: string; template?: string }) => {
@@ -315,15 +374,13 @@ export function listenDesktopDeepLinks(onFiles: (paths: string[]) => void): () =
     if (nativeViewInFront()) void leaveNativeView().then(() => go({ ...link, view }));
     else go({ ...link, view });
   };
-  const onOpenFiles = (event: Event) => {
-    const paths = (event as CustomEvent<string[]>).detail;
-    if (Array.isArray(paths) && paths.length) onFiles(paths);
-  };
+  const onOpenFiles = (paths: string[]) => onFiles(paths);
   window.addEventListener("mosael:deep-link", onLink);
-  window.addEventListener("mosael:open-files", onOpenFiles);
+  //: 文件走上面的信箱(见 installOpenFilesInbox),不在这里自己 addEventListener。
+  const stopOpenFiles = subscribeOpenFiles(onOpenFiles);
   return () => {
     window.removeEventListener("mosael:deep-link", onLink);
-    window.removeEventListener("mosael:open-files", onOpenFiles);
+    stopOpenFiles();
   };
 }
 

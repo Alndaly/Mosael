@@ -12,6 +12,7 @@ import "./styles.css";
 import { AppBoundary } from "@/app/PageBoundary";
 import { loadStartupMessages } from "@/app/preferences";
 import { runLocalMigrations } from "@/lib/localMigrations";
+import { installOpenFilesInbox } from "@/lib/deepLink";
 import { captureInviteFromLocation, listenInviteDeepLinks } from "@/lib/inviteLinks";
 import { installSaveShortcut } from "@/lib/saveShortcut";
 import { installWindowChrome } from "@/lib/windowChrome";
@@ -24,6 +25,9 @@ installSaveShortcut();
 // 打开的是一张邀请链接(`#/join/<码>`,ADR 0054):先把码收起来、地址换回首页,再让路由读地址。桌面端的深链在登录前也要接得住。
 captureInviteFromLocation();
 listenInviteDeepLinks();
+// 「用 Mosael 打开」交过来的文件同理,而且来得更早:主进程是等 did-finish-load 就发的,那时 React 还什么
+// 都没挂。这里只挂一个负责收下的听筒,真正处理它的是 App 那边(登录完、工作区回来才挂得上)—— 见 lib/deepLink。
+installOpenFilesInbox();
 // 外壳和当前语言的文案表并行取(文案表按语言分块,只取用得到的那一种,见 app/messageTables),都到了才画。
 void Promise.all([import("@/app/App"), loadStartupMessages()]).then(([{ App }]) => {
   createRoot(document.getElementById("root")!).render(

@@ -6,7 +6,7 @@ import { INTERFACE_FONTS, loadInterfaceFont, normalizeInterfaceFont, type Interf
 import { useQueryClient } from "@tanstack/react-query";
 
 import { configureApiLocale, type ApiLocale } from "@/api/client";
-import { PreferencesContext, type Locale, type PreferencesContextValue, type Theme } from "@/app/preferencesContext";
+import { PreferencesContext, type ExternalOpenBehavior, type Locale, type PreferencesContextValue, type Theme } from "@/app/preferencesContext";
 
 const STORAGE_KEY = "mosael.preferences";
 
@@ -30,6 +30,9 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   //: 免提浮标要不要浮着。**本地偏好**:同一个账号在两台机器上,想不想要一颗浮窗完全可以不同,
   //: 而它不影响任何服务端行为(音色、开不开口那些在 settings/agent-voice)。
   const [voiceDock, setVoiceDockState] = React.useState<boolean>(() => readPreferences().voiceDock);
+  //: 外部打开的文件怎么办(「打开方式」/ 拖到图标上)。**默认入库** —— 那是此前的唯一行为,
+  //: 升级上来的人不改设置就还是老样子。见 preferencesContext 里的 ExternalOpenBehavior。
+  const [externalOpen, setExternalOpen] = React.useState<ExternalOpenBehavior>(() => readPreferences().externalOpen);
   /*
    * 语言变了要做两件事。
    *
@@ -69,12 +72,12 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     };
     apply();
     document.documentElement.lang = locale;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, locale, voiceDock, font }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ theme, locale, voiceDock, font, externalOpen }));
     if (theme === "system") {
       media.addEventListener("change", apply);
       return () => media.removeEventListener("change", apply);
     }
-  }, [theme, locale, voiceDock, font]);
+  }, [theme, locale, voiceDock, font, externalOpen]);
 
   //: 切语言:那种语言的表还没取过就先取到再切(文案表按语言分块,见 app/messageTables),取不到就留在原来那种。
   const setLocale = React.useCallback((next: Locale) => {
@@ -90,11 +93,13 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       setTheme: setThemeState,
       voiceDock,
       setVoiceDock: setVoiceDockState,
+      externalOpen,
+      setExternalOpen,
       locale,
       setLocale,
       t: (key) => messagesFor(locale)[key],
     }),
-    [locale, theme, voiceDock, font, setLocale],
+    [locale, theme, voiceDock, font, externalOpen, setLocale],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
@@ -123,14 +128,29 @@ export function loadStartupMessages(): Promise<unknown> {
   return loadMessages(readPreferences().locale);
 }
 
-function readPreferences(): { font: InterfaceFont; theme: Theme; locale: Locale; voiceDock: boolean } {
-  if (typeof window === "undefined") return { font: "default", theme: "light", locale: "zh-CN", voiceDock: false };
+function readPreferences(): {
+  font: InterfaceFont;
+  theme: Theme;
+  locale: Locale;
+  voiceDock: boolean;
+  externalOpen: ExternalOpenBehavior;
+} {
+  const fallback = {
+    font: "default" as InterfaceFont,
+    theme: "light" as Theme,
+    locale: "zh-CN" as Locale,
+    voiceDock: false,
+    //: 认不出来的值(老版本写的、手改坏的)一律当**入库** —— 那是此前的行为,回到它最安全。
+    externalOpen: "import" as ExternalOpenBehavior,
+  };
+  if (typeof window === "undefined") return fallback;
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<{
       font: InterfaceFont;
       theme: Theme;
       locale: Locale;
       voiceDock: boolean;
+      externalOpen: ExternalOpenBehavior;
     }>;
     return {
       font: normalizeInterfaceFont(parsed.font),
@@ -138,8 +158,9 @@ function readPreferences(): { font: InterfaceFont; theme: Theme; locale: Locale;
       locale: parsed.locale === "en-US" ? "en-US" : "zh-CN",
       //: 默认不浮 —— 一颗常驻的浮窗该由人主动要,而不是装完就在那儿。
       voiceDock: parsed.voiceDock === true,
+      externalOpen: parsed.externalOpen === "preview" ? "preview" : "import",
     };
   } catch {
-    return { font: "default", theme: "light", locale: "zh-CN", voiceDock: false };
+    return fallback;
   }
 }

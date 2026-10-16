@@ -32,7 +32,7 @@
 ; Software\Classes\.mp4 的默认值写成自己的类 —— 装完 Mosael,电脑上所有视频、音频的默认程序和图标
 ; 都变成了 Mosael(用户:「理论上应该是设置默认打开方式后才替换才对吧」)。所以 Windows 这边不再交给它
 ; (package.json 里 fileAssociations 只留在 mac 下),在这里自己登记:
-;   · 两个 ProgID(Mosael.Video / Mosael.Audio):用它打开时怎么启动、什么图标;
+;   · 三个 ProgID(Mosael.Video / Mosael.Audio / Mosael.Image):用它打开时怎么启动、什么图标;
 ;   · 每种扩展名的 OpenWithProgids 里挂上 —— 右键「打开方式」里有 Mosael;
 ;   · Capabilities + RegisteredApplications —— 「设置 → 默认应用」里能选 Mosael。
 ; **扩展名的默认值一个都不写**:默认程序归用户自己定。扩展名清单和 package.json 的 mac.fileAssociations 是同一份
@@ -87,6 +87,12 @@
   !insertmacro ${ACTION} "m4a" "Mosael.Audio" "音频"
   !insertmacro ${ACTION} "aac" "Mosael.Audio" "音频"
   !insertmacro ${ACTION} "flac" "Mosael.Audio" "音频"
+  ; MOSAEL-IMAGE-EXTS: png jpg jpeg webp gif
+  !insertmacro ${ACTION} "png" "Mosael.Image" "图片"
+  !insertmacro ${ACTION} "jpg" "Mosael.Image" "图片"
+  !insertmacro ${ACTION} "jpeg" "Mosael.Image" "图片"
+  !insertmacro ${ACTION} "webp" "Mosael.Image" "图片"
+  !insertmacro ${ACTION} "gif" "Mosael.Image" "图片"
 !macroend
 
 ; 卸载时的那一版只要两个参数:第三个(旧类)吞掉。
@@ -97,6 +103,7 @@
 !macro customInstall
   !insertmacro mosaelProgId "Mosael.Video" "Mosael 视频"
   !insertmacro mosaelProgId "Mosael.Audio" "Mosael 音频"
+  !insertmacro mosaelProgId "Mosael.Image" "Mosael 图片"
   WriteRegStr SHCTX "${MOSAEL_CAPABILITIES}" "ApplicationName" "Mosael"
   WriteRegStr SHCTX "${MOSAEL_CAPABILITIES}" "ApplicationDescription" "Mosael 视频创作工作台"
   !insertmacro mosaelFileTypes mosaelAssociate
@@ -114,5 +121,6 @@
   DeleteRegKey /ifempty SHCTX "Software\Mosael"
   DeleteRegKey SHCTX "Software\Classes\Mosael.Video"
   DeleteRegKey SHCTX "Software\Classes\Mosael.Audio"
+  DeleteRegKey SHCTX "Software\Classes\Mosael.Image"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend

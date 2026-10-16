@@ -51,14 +51,42 @@ def test_安装脚本不写扩展名的默认值() -> None:
 
 
 def test_两边的扩展名是同一份() -> None:
+    """mac 那一份声明和 installer.nsh 里登记的是同一份清单。
+
+    一边加了扩展名、另一边忘了加,后果是两个平台的行为悄悄分叉:mac 上「打开方式」里有 Mosael、
+    Windows 上没有(或者反过来,Windows 认得而主进程压根不接这个后缀,双击了什么都不发生)。
+    所以每一组都钉住三处:**mac 声明的、注释里列出的、真正 !insertmacro 登记的**。
+
+    组名(「视频」/「音频」/「图片」)→ NSIS 侧那对(注释标签、ProgID)写在这里。新加一组时,
+    这里不补上就会红 —— 那正是要的:加一组关联是有 Windows 这一半的。
+    """
     script = _script()
     mac = {one["name"]: sorted(one["ext"]) for one in _build()["mac"]["fileAssociations"]}
+    groups = {
+        "视频": ("VIDEO", "Mosael.Video"),
+        "音频": ("AUDIO", "Mosael.Audio"),
+        "图片": ("IMAGE", "Mosael.Image"),
+    }
     listed = {
-        "视频": sorted(re.search(r"MOSAEL-VIDEO-EXTS: (.+)", script).group(1).split()),
-        "音频": sorted(re.search(r"MOSAEL-AUDIO-EXTS: (.+)", script).group(1).split()),
+        name: sorted(re.search(rf"MOSAEL-{tag}-EXTS: (.+)", script).group(1).split())
+        for name, (tag, _) in groups.items()
     }
     registered = {
-        "视频": sorted(re.findall(r'!insertmacro \$\{ACTION\} "(\w+)" "Mosael\.Video"', script)),
-        "音频": sorted(re.findall(r'!insertmacro \$\{ACTION\} "(\w+)" "Mosael\.Audio"', script)),
+        name: sorted(re.findall(rf'!insertmacro \$\{{ACTION\}} "(\w+)" "{progid}"', script))
+        for name, (_, progid) in groups.items()
     }
     assert mac == listed == registered
+
+
+def test_每一个_ProgID_都在安装和卸载两边各出现一次() -> None:
+    """登记了 ProgID 却忘了在 customUnInstall 里删,卸载之后注册表里留着一个指向空目录的类。
+
+    这个类还挂在每个扩展名的 OpenWithProgids 下 —— Windows 的「打开方式」里会留下一个点了没反应的
+    Mosael(卸载器删了 OpenWithProgids 里的值,但类本身和 Capabilities 是另一回事)。
+    """
+    script = _script()
+    progids = ["Mosael.Video", "Mosael.Audio", "Mosael.Image"]
+    install, uninstall = script.split("!macro customInstall", 1)[1].split("!macro customUnInstall", 1)
+    for progid in progids:
+        assert f'!insertmacro mosaelProgId "{progid}"' in install, progid
+        assert f'DeleteRegKey SHCTX "Software\\Classes\\{progid}"' in uninstall, progid

@@ -15,6 +15,18 @@ import type { MessageKey } from "@/app/messages";
 export type Theme = "light" | "dark" | "system";
 export type Locale = "zh-CN" | "en-US";
 
+/**
+ * 从系统那边把文件交给 Mosael 时(访达 / 资源管理器的「打开方式」、拖到程序坞或任务栏的图标上),
+ * 拿这些文件怎么办。
+ *
+ * - `import`:入库。**这是此前的唯一行为**,所以它是默认值 —— 升级上来的人不必先改设置。
+ * - `preview`:先入库,**再立刻打开预览**。
+ *
+ * 「打开预览」为什么也要入库:渲染层**没有**办法预览一份不在素材库里的本地文件(证据见
+ * lib/openExternalFiles.ts 头部)。预览这一层吃的全是素材行的地址,所以两条路的前半段是同一条。
+ */
+export type ExternalOpenBehavior = "import" | "preview";
+
 export type PreferencesContextValue = {
   font: InterfaceFont;
   setFont: (font: InterfaceFont) => void;
@@ -23,6 +35,9 @@ export type PreferencesContextValue = {
   /** 免提浮标浮不浮着。本地偏好 —— 见 provider 里那段说明。 */
   voiceDock: boolean;
   setVoiceDock: (on: boolean) => void;
+  /** 外部打开的文件怎么处理。本地偏好:同一台机器上「双击一张图想干什么」是这台机器的事。 */
+  externalOpen: ExternalOpenBehavior;
+  setExternalOpen: (behavior: ExternalOpenBehavior) => void;
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: (key: MessageKey) => string;
