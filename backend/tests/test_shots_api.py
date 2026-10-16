@@ -24,7 +24,7 @@ import pytest
 import mcp_server
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, ShotBreakdown, User
+from app.db.models import ShotBreakdown, User
 from app.domain.assets import use_cases
 from app.domain.shots import breakdowns
 from tests.util import fresh_client, insert_asset, user_id, wait_settled
