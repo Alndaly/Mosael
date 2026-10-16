@@ -9,12 +9,17 @@
  * 认不出形状的回 null,工具行照通用的画。要做的事(定位、照这个改、去下载)由页签经 WorkbenchAssistantContext 给。
  */
 import React from "react";
-import { CircleAlert, Crosshair, Download, FilePlus2, Info, TriangleAlert, Wrench } from "lucide-react";
+import { CircleAlert, Crosshair, Download, ExternalLink, FilePlus2, Info, TriangleAlert, Wrench } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Button } from "@/components/ui/button";
 import { Truncate } from "@/components/ui/truncate";
-import { WorkbenchAssistantContext, type AssistantFinding } from "@/features/plugins/workbench/assistantActions";
+import {
+  WorkbenchAssistantContext,
+  type AssistantFinding,
+  type AssistantFindingPack,
+} from "@/features/plugins/workbench/assistantActions";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +77,34 @@ function FindingsCard({ findings, counts }: { findings: AssistantFinding[]; coun
   );
 }
 
+/** 缺的那种节点自己写着的出处(①):包名 + 来源 + 要哪一版 + 这台的状态 + 一个能点的页面。 */
+function PackLine({ pack }: { pack: AssistantFindingPack }) {
+  const t = useI18n();
+  const source = pack.source === "git" ? t("workbenchFindingPackGit") : t("workbenchFindingPackRegistry");
+  const version = pack.wanted_version
+    ? t(pack.wanted_is_commit ? "workbenchFindingPackCommit" : "workbenchFindingPackWanted").replace("{version}", pack.wanted_version)
+    : "";
+  const status = pack.installed
+    ? t("workbenchFindingPackInstalled").replace("{version}", pack.installed_version || "")
+    : t("workbenchFindingPackMissing");
+  const href = pack.page || pack.repository || "";
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-ui-2xs text-muted-foreground">
+      <span className="min-w-0 font-mono [overflow-wrap:anywhere]">{pack.id}</span>
+      <span>{source}</span>
+      {version && <span className="tabular-nums">{version}</span>}
+      <span>{status}</span>
+      {href && (
+        <a href={href} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 text-primary hover:underline"
+           aria-label={t("workbenchFindingPackPage").replace("{name}", pack.id)}>
+          <ExternalLink size={10} aria-hidden />
+          {t("workbenchFindingPackPage").replace("{name}", pack.id)}
+        </a>
+      )}
+    </span>
+  );
+}
+
 /** 一条问题:严重程度、哪个节点、原因、改法;「定位」和「照这个改」。指不到节点的(整张图的报错)只有「照这个改」。 */
 export function FindingRow({ finding, canFix = true }: { finding: AssistantFinding; canFix?: boolean }) {
   const t = useI18n();
@@ -82,7 +115,8 @@ export function FindingRow({ finding, canFix = true }: { finding: AssistantFindi
   const where = finding.ref ? `#${finding.ref}` : "";
   const name = finding.title || finding.type || "";
   return (
-    <li className="grid min-w-0 gap-1 rounded-md px-1 py-1 hover:bg-secondary" data-finding={finding.ref}>
+    <li className="grid min-w-0 gap-1 rounded-md px-1 py-1 hover:bg-secondary" data-finding={finding.ref}
+        data-core={finding.core ? "true" : undefined}>
       <span className="flex min-w-0 items-start gap-1.5">
         <Icon size={13} className={cn("mt-[2px] shrink-0", error ? "text-destructive" : "text-warning")}
               aria-label={t(error ? "workbenchSeverityError" : "workbenchSeverityWarning")} />
@@ -92,6 +126,9 @@ export function FindingRow({ finding, canFix = true }: { finding: AssistantFindi
             {name && <span className="mr-1 text-muted-foreground">{name}</span>}
             {finding.cause}
           </span>
+          {/* 核心节点不是缺插件:界面上单独说一句,别让人以为要装什么(见诊断里的 ①) */}
+          {finding.core && <CatalogBadge tone="warning">{t("workbenchFindingCore")}</CatalogBadge>}
+          {finding.pack && <PackLine pack={finding.pack} />}
           {finding.fix && <span className="text-muted-foreground [overflow-wrap:anywhere]">{finding.fix}</span>}
         </span>
       </span>

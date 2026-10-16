@@ -31,14 +31,24 @@ const SOURCE_LABEL: Record<string, MessageKey> = {
 };
 
 type Candidate = NonNullable<ModelSearch["candidates"]>[number];
+/** 三档置信度(见插件的 model_search / ADR 0038 §9):只有「哈希确认」允许「直接下载」,相近的只给页面。 */
+type Confidence = "confirmed" | "exact" | "likely";
+
+/** 一个候选是哪一档:新数据看 `confidence`,老插件只有 `exact`(认不出就当 `exact`/`likely`)。 */
+function confidenceOf(candidate: Candidate): Confidence {
+  const said = candidate.confidence;
+  if (said === "confirmed" || said === "exact" || said === "likely") return said;
+  return candidate.exact ? "exact" : "likely";
+}
 
 /**
  * 工作台里「这个模型文件这台 ComfyUI 上没有」的那一块(模型库面板选中的那一格、缺失项面板缺的每个模型共用):
  *
  * - 工作流里写了下载地址:一个醒目的「下载」;
  * - 没写:「找下载地址」—— 插件按文件名(先完整的名字,再去掉扩展名)去 Civitai、HuggingFace、ModelScope 搜,列出候选:哪家、
- *   哪个仓库 / 模型、确切的文件名、多大、什么底模;文件名一字不差的排在前面、标出来,对不上的从不替人选。点一个候选和贴链接
- *   走同一条路(认一下 → 就地确认 → 下载);没搜到就说没搜到,贴链接那一格一直在这儿,不打发人去别的页签;
+ *   哪个仓库 / 模型、确切的文件名、多大、什么底模。候选分三档,**按档给不同的入口**(ADR 0038 §9):
+ *   `confirmed`(哈希对上)才有「直接下载」;`exact`(文件名一字不差)要用户确认;`likely`(去后缀一致 / 名字里含着)
+ *   **只给页面**,不主动给直链。算不出哈希时插件会给一句话说清「所以只是同名」,原样显示;
  * - 确认里写明下到哪台机器的哪个目录、叫什么名字,走 ComfyUI-Manager 时那几件要先知道的事(令牌、进度、取消)和这台服务器
  *   下载走哪条路(模型库报的);下完由调用方刷新下拉、重新检查。
  */
@@ -47,6 +57,8 @@ export function ModelDownload({
   folder,
   wanted,
   url = "",
+  hash = "",
+  hashType = "",
   doneLabel,
   onDone,
 }: {
@@ -56,6 +68,9 @@ export function ModelDownload({
   wanted: string;
   /** 工作流里写着的下载地址(没有是空串) */
   url?: string;
+  /** 工作流自己声明的哈希(没有是空串):交给插件去认 `confirmed` */
+  hash?: string;
+  hashType?: string;
   /** 下完之后那句话(刷新得了下拉 / 刷新不了) */
   doneLabel: string;
   onDone: () => void;
@@ -75,7 +90,9 @@ export function ModelDownload({
   //: 这台服务器下载走哪条路(ComfyUI-Manager / 本机 / 下不了)和那句说明:模型库报的,和模型库面板同一份缓存
   const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const route = library.data?.download?.route ?? "";
-  const search = useMutation({ mutationFn: () => searchModelSources(target.instanceId, filename, folder) });
+  const search = useMutation({
+    mutationFn: () => searchModelSources(target.instanceId, filename, folder, hash, hashType),
+  });
   const resolve = useMutation({
     mutationFn: (pick: { address: string; name?: string }) => resolveModelLink(target.instanceId, pick.address),
     onSuccess: (found, pick) => {
@@ -136,6 +153,10 @@ export function ModelDownload({
         </div>
       )}
       {search.isError && <PanelNote tone="error">{errorText(search.error)}</PanelNote>}
+      {/* 哈希这一项:确认到哪一个了,或者为什么没得算 —— 插件的原话(它按界面语言写好了),原样说给用户 */}
+      {search.data?.hash?.note && (
+        <PanelNote tone={search.data.hash.state === "matched" ? "info" : "warning"}>{search.data.hash.note}</PanelNote>
+      )}
       {search.data && (
         candidates.length === 0 ? (
           <PanelNote>{t("workbenchSearchNothing").replace("{name}", filename)}</PanelNote>
@@ -184,36 +205,59 @@ export function ModelDownload({
   );
 }
 
-/** 一个候选:哪家、哪个仓库 / 模型、确切的文件名(一字不差的标出来)、多大、什么底模。点它 = 认这个链接。 */
+/**
+ * 一个候选:哪家、哪个仓库 / 模型、确切的文件名、多大、什么底模;按置信度给不同的入口(见模块说明)。
+ *
+ * - `confirmed`(哈希对上):**直接下载** —— 唯一允许这样的一档;
+ * - `exact`(文件名一字不差):**确认后下载**(走同一个「认一下 → 就地确认」),文案里写明还没算过哈希;
+ * - `likely`(去后缀一致 / 名字里含着):**只有页面**,不主动给直链。
+ */
 function CandidateRow({ candidate, pending, onPick }: { candidate: Candidate; pending: boolean; onPick: () => void }) {
   const t = useI18n();
+  const confidence = confidenceOf(candidate);
   const facts = [
     SOURCE_LABEL[candidate.source] ? t(SOURCE_LABEL[candidate.source]) : candidate.source,
     candidate.size ? formatBytes(candidate.size) : "",
     candidate.base_model,
   ].filter(Boolean);
+  const badge = confidence === "confirmed"
+    ? <CatalogBadge tone="success">{t("workbenchSearchConfirmed")}</CatalogBadge>
+    : confidence === "exact"
+      ? <CatalogBadge tone="muted">{t("workbenchSearchExact")}</CatalogBadge>
+      : <CatalogBadge tone="muted">{t("workbenchSearchSimilar")}</CatalogBadge>;
+  const name = <Truncate className="min-w-0 flex-1 font-medium text-foreground">{candidate.filename}</Truncate>;
+  const title = <Truncate className="text-muted-foreground">{candidate.title || candidate.repo}</Truncate>;
+  const meta = <span className="text-ui-2xs text-muted-foreground">{facts.join(" · ")}</span>;
+  const shape = cn(
+    "grid w-full min-w-0 gap-0.5 rounded-md border p-1.5 text-left text-ui-xs",
+    confidence === "confirmed" ? "border-primary/40 bg-accent/40 hover:bg-accent" : "border-border bg-transparent",
+    confidence === "likely" ? "" : "cursor-pointer hover:bg-secondary",
+  );
+  //: 相近的(去后缀一致、名字里含着)只给页面:没有「直接下载」这个入口,连直链都不主动摆出来。
+  if (confidence === "likely") {
+    return (
+      <a href={candidate.page || candidate.url} target="_blank" rel="noreferrer noopener" data-candidate="likely"
+         aria-label={t("workbenchSearchOpenPage").replace("{name}", candidate.filename)}
+         className={cn(shape, "hover:bg-secondary")}>
+        <span className="flex min-w-0 items-center gap-1.5">{name}{badge}</span>
+        {title}
+        {meta}
+      </a>
+    );
+  }
   return (
-    <button
-      type="button"
-      data-candidate={candidate.exact ? "exact" : "similar"}
-      disabled={pending}
-      aria-busy={pending || undefined}
-      aria-label={t("workbenchSearchPick").replace("{name}", candidate.filename).replace("{repo}", candidate.repo || candidate.title)}
-      className={cn(
-        "grid w-full min-w-0 cursor-pointer gap-0.5 rounded-md border p-1.5 text-left text-ui-xs",
-        candidate.exact ? "border-primary/40 bg-accent/40 hover:bg-accent" : "border-border bg-transparent hover:bg-secondary",
-      )}
-      onClick={onPick}
-    >
+    <button type="button" data-candidate={confidence} disabled={pending} aria-busy={pending || undefined}
+            aria-label={(confidence === "confirmed" ? t("workbenchSearchDirectDownload") : t("workbenchSearchConfirmDownload"))
+              .replace("{name}", candidate.filename).replace("{repo}", candidate.repo || candidate.title)}
+            className={shape}
+            onClick={onPick}>
       <span className="flex min-w-0 items-center gap-1.5">
         {pending && <Loader2 size={12} className="shrink-0 animate-mosael-spin" />}
-        <Truncate className="min-w-0 flex-1 font-medium text-foreground">{candidate.filename}</Truncate>
-        {candidate.exact
-          ? <CatalogBadge tone="success">{t("workbenchSearchExact")}</CatalogBadge>
-          : <CatalogBadge tone="muted">{t("workbenchSearchSimilar")}</CatalogBadge>}
+        {name}
+        {badge}
       </span>
-      <Truncate className="text-muted-foreground">{candidate.title || candidate.repo}</Truncate>
-      <span className="text-ui-2xs text-muted-foreground">{facts.join(" · ")}</span>
+      {title}
+      {meta}
     </button>
   );
 }

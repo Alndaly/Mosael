@@ -1,6 +1,7 @@
 """按文件名找一个模型的下载地址:去 HuggingFace、ModelScope、Civitai 上搜(工作台「缺失项」里的「找下载地址」)。
 
-    {"op": "search_sources", "filename": "…", "folder": "…"} → {"filename", "candidates": […], "failed": […]}
+    {"op": "search_sources", "filename": "…", "folder": "…", "hash"?, "hash_type"?}
+        → {"filename", "candidates": […], "failed": […], "hash": {…}}
 
 工作流里只写了文件名、没写下载地址的模型,原来要用户自己去三个站上一个个搜。这里替他搜,每个站依次用三个词:
 
@@ -11,6 +12,17 @@
 
 一个站找到同名文件就不再往下搜那个站。**同名**(`exact`)是文件名一样(不分大小写,只比最后一段);别的都是**近似**:
 stem 一样只是扩展名不同、去掉精度后缀之后一样,或者文件名里含着那个去掉后缀的名字。近似的永远不标 `exact`。
+
+**每个候选三档置信度,界面按它决定给不给直链**(ADR 0038 §9):
+
+- `confirmed`:**哈希对上了**(工作流声明的 `hash`,或者**那台机器算出来的 SHA256** 经 Civitai 的 `by-hash` 指着它那个
+  版本)—— 唯一允许「直接下载」的一档;顺带给出 `sha256`;
+- `exact`:文件名一字不差(不分大小写,只比最后一段)—— **给直链,但要用户确认**;
+- `likely`:去后缀一致 / 名字里含着 —— **只给页面**,不主动给直链。
+
+`hash` 那一项说清这一轮哈希是怎么来的(或为什么没有):`state` 是 `matched` / `none` / `unavailable`,后者带 `reason`
+(`no_tools`:那台机器没装 ComfyUI-Custom-Scripts;`no_file`:这个文件还不在那台机器上;`no_connection`:没连上那台
+ComfyUI)和一句给人看的话 —— **算不出哈希时界面必须说清「所以只是同名」,不许含糊成「确认」**。
 
 **排序**:同名的在前;同名里按 `folder`(要放进的模型目录,给了的话)对得上的在前,再按站(HuggingFace、ModelScope、
 Civitai),同一个站里按站点给的先后(热度 / 相关度)。近似的在后:「stem 一样 / 去掉后缀一样」比「只是含着」靠前,
@@ -32,7 +44,8 @@ Civitai),同一个站里按站点给的先后(热度 / 相关度)。近似的在
 
 **HuggingFace 的搜索只比仓库名,不比文件名**:ComfyUI 官方模板用的文件大都在 Comfy-Org 名下的仓库里(按 ComfyUI 的
 目录名拆好的那些),仓库名里却没有文件名。所以先把 Comfy-Org 的全部仓库连同文件列表拉一次(一个请求)对一遍,
-再按词搜。搜到的仓库只交文件名,大小另问:最多问 4 个仓库(`?blobs=true`),问不到就不写大小。
+再按词搜。搜到的仓库只交文件名,大小和哈希另问:最多问 4 个仓库(`?blobs=true`,里面的 `lfs.oid` 就是这个文件的
+SHA256),问不到就不写。
 
 **ModelScope** 用的是它不要令牌的公开接口 `/openapi/v1/models?search=`(只交仓库,不交文件),每个词最多再看 4 个
 仓库的文件列表(和 sources 读文件列表同一个接口)。只搜 modelscope.cn,不搜国际站 modelscope.ai。
@@ -56,10 +69,19 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib import parse
 
+import civitai
+import lookup
+import previews
 import sources
 from comfy_http import Comfy
 from lines import ComfyError, say
 from model_files import load_json, save_json
+
+#: 三档置信度(见模块说明):只有 `CONFIRMED` 允许直接下载。
+CONFIRMED, EXACT, LIKELY = "confirmed", "exact", "likely"
+#: 哈希这一项的几种状态、以及算不出来的几种原因。
+MATCHED, NO_MATCH, UNAVAILABLE = "matched", "none", "unavailable"
+NO_TOOLS, NO_FILE, NO_CONNECTION = "no_tools", "no_file", "no_connection"
 
 #: 同样贴近时的站点次序。
 SITES = ("huggingface", "modelscope", "civitai")
@@ -159,10 +181,26 @@ class Candidate:
     folders: tuple[str, ...] = ()
     #: 在它那个站里是第几个找到的(站点给的先后)。
     order: int = 0
+    #: 站点自己填着的 SHA256(Civitai 的 `files[].hashes.SHA256`、HuggingFace 的 `lfs.oid`):有才写。
+    sha256: str = ""
+    #: Civitai 的版本号(`by-hash` 认出来的那个版本按它对)。
+    version_id: int = 0
+    #: 这一档是怎么认定的(见模块说明):`confirmed` / `exact` / `likely`。
+    confidence: str = ""
+
+    def confirmed(self, digest: str) -> None:
+        """哈希对上了(见 `_confirm`):这一档才允许直接下载。"""
+        self.confidence = CONFIRMED
+        self.sha256 = digest
 
     def out(self) -> dict[str, Any]:
+        if not self.confidence:
+            self.confidence = EXACT if self.tier == 0 else LIKELY
         return {"source": self.source, "repo": self.repo, "title": self.title, "filename": self.filename, "url": self.url,
-                "page": self.page, "size": self.size, "base_model": self.base_model, "exact": self.tier == 0}
+                "page": self.page, "size": self.size, "base_model": self.base_model, "exact": self.tier == 0,
+                #: 三档置信度;`direct` 只有哈希确认过才是真 —— 界面据此决定给不给「直接下载」(ADR 0038 §9)。
+                "confidence": self.confidence, "direct": self.confidence == CONFIRMED,
+                **({"sha256": self.sha256} if self.sha256 else {})}
 
 
 # --- 记一会儿 -----------------------------------------------------------------
@@ -311,12 +349,18 @@ def _hf_repos(data: Json) -> list[dict[str, Any]] | None:
     return repos
 
 
-def _hf_sizes(data: Json) -> dict[str, int] | None:
-    """`/api/models/{仓库}?blobs=true` 的回答剪成 {路径: 大小}。"""
+def _hf_blobs(data: Json) -> dict[str, dict[str, Any]] | None:
+    """`/api/models/{仓库}?blobs=true` 的回答剪成 {路径: {size, sha256}}(`lfs.oid` 就是那个文件的 SHA256)。"""
     if not isinstance(data, dict):
         return None
-    return {entry["rfilename"]: entry["size"] for entry in data.get("siblings") or []
-            if isinstance(entry, dict) and isinstance(entry.get("rfilename"), str) and isinstance(entry.get("size"), int)}
+    out: dict[str, dict[str, Any]] = {}
+    for entry in data.get("siblings") or []:
+        if not isinstance(entry, dict) or not isinstance(entry.get("rfilename"), str):
+            continue
+        lfs = entry.get("lfs") if isinstance(entry.get("lfs"), dict) else {}
+        out[entry["rfilename"]] = {"size": entry.get("size") if isinstance(entry.get("size"), int) else None,
+                                   "sha256": str(lfs.get("oid") or "").strip().lower()}
+    return out
 
 
 class _HuggingFace(_Site):
@@ -346,14 +390,16 @@ class _HuggingFace(_Site):
                 ))
 
     def finish(self) -> None:
-        """补大小:先补同名的那几个仓库。问不到就不写大小,候选照样能点。"""
+        """补大小和哈希(`lfs.oid`):先补同名的那几个仓库。问不到就不写,候选照样能点。"""
         ranked = sorted(self.found, key=lambda one: (one.tier, one.order))
         for repo in list(dict.fromkeys(one.repo for one in ranked))[:HF_SIZE_LOOKUPS]:
             url = f"https://huggingface.co/api/models/{repo}?" + parse.urlencode({"blobs": "true", "expand[]": "siblings"})
-            sizes = self.extra(f"hf:sizes:{repo}", SEARCH_TTL, lambda url=url: self.parsed(url, _hf_sizes)) or {}
+            blobs = self.extra(f"hf:sizes:{repo}", SEARCH_TTL, lambda url=url: self.parsed(url, _hf_blobs)) or {}
             for one in self.found:
                 if one.repo == repo:
-                    one.size = sizes.get(one.path)
+                    facts = blobs.get(one.path) or {}
+                    one.size = facts.get("size")
+                    one.sha256 = str(facts.get("sha256") or "")
 
 
 # --- ModelScope -------------------------------------------------------------------
@@ -425,7 +471,8 @@ def _civitai_models(data: Json) -> list[dict[str, Any]] | None:
             if not isinstance(version, dict) or not isinstance(version.get("id"), int):
                 continue
             files = [{"name": str(one.get("name") or ""), "type": str(one.get("type") or ""), "primary": bool(one.get("primary")),
-                      "size": int(float(one["sizeKB"]) * 1024) if isinstance(one.get("sizeKB"), (int, float)) else None}
+                      "size": int(float(one["sizeKB"]) * 1024) if isinstance(one.get("sizeKB"), (int, float)) else None,
+                      "sha256": str((one.get("hashes") or {}).get("SHA256") or "").strip().lower()}
                      for one in version.get("files") or [] if isinstance(one, dict) and one.get("downloadUrl")]
             versions.append({"id": version["id"], "name": str(version.get("name") or "").strip(),
                              "base": str(version.get("baseModel") or "").strip(), "files": files})
@@ -468,6 +515,7 @@ class _Civitai(_Site):
                         "civitai", model["name"], title, file["name"], link,
                         f"https://civitai.com/models/{model['id']}?modelVersionId={version['id']}", file["size"],
                         version["base"], tier, file["name"], (folder,) if folder else (),
+                        sha256=file["sha256"], version_id=int(version["id"]),
                     ))
 
 
@@ -477,13 +525,13 @@ SITE_CLASSES: tuple[type[_Site], ...] = (_HuggingFace, _ModelScope, _Civitai)
 # --- op: search_sources --------------------------------------------------------------
 
 def rank(candidates: list[Candidate], folder: str = "") -> list[Candidate]:
-    """同名的在前;同一档里目录对得上的在前,再按站;同名的同一个站里按站点给的先后,近似的按大小(小的在前)。
-    最多 MAX_CANDIDATES 个,一个站最多 PER_SITE 个。"""
+    """哈希确认过的在前;再同名的在前;同一档里目录对得上的在前,再按站;同名的同一个站里按站点给的先后,近似的按大小
+    (小的在前)。最多 MAX_CANDIDATES 个,一个站最多 PER_SITE 个。"""
 
     def key(one: Candidate) -> tuple[Any, ...]:
         elsewhere = 1 if folder and folder not in one.folders else 0
         size = (one.size is None, one.size or 0) if one.tier else (False, 0)
-        return one.tier, elsewhere, SITES.index(one.source), size, one.order
+        return (0 if one.confidence == CONFIRMED else 1, one.tier, elsewhere, SITES.index(one.source), size, one.order)
 
     picked: list[Candidate] = []
     per_site: dict[str, int] = {}
@@ -497,7 +545,87 @@ def rank(candidates: list[Candidate], folder: str = "") -> list[Candidate]:
     return picked
 
 
-def search(payload: dict[str, Any], _comfy: Comfy, locale: str) -> dict[str, Any]:
+# --- 哈希:三档里最高的那一档 ---------------------------------------------------------
+
+def _declared_hash(payload: dict[str, Any]) -> str:
+    """工作流自己声明的 SHA256(`models[].hash` / `models[].hash_type`):认得出才用,别的哈希不当成确认。"""
+    digest = str(payload.get("hash") or "").strip().lower()
+    kind = str(payload.get("hash_type") or "").strip().lower().replace("-", "")
+    if not civitai.SHA256.match(digest) or kind not in ("", "sha256"):
+        return ""
+    return digest
+
+
+def _hash_of(payload: dict[str, Any], comfy: Comfy | None, folder: str, name: str, locale: str) -> tuple[str, str]:
+    """(这一轮信得过的 SHA256, 没有时的原因)。先看工作流自己声明的;没有就**让那台机器算**(`lookup`,要
+    ComfyUI-Custom-Scripts,而且文件得在那台机器上)。"""
+    declared = _declared_hash(payload)
+    if declared:
+        return declared, ""
+    if comfy is None:
+        return "", NO_CONNECTION
+    if not previews.tools(comfy)["hash"]:
+        return "", NO_TOOLS
+    if not folder or not lookup.on_machine(comfy, folder, name):
+        return "", NO_FILE
+    try:
+        return lookup.sha256_of(comfy, folder, name, locale), ""
+    except ComfyError as exc:
+        #: 文件刚被挪走 / 改名(404):按「不在那台机器上」说;别的是算哈希那条路没答上。
+        return "", NO_FILE if getattr(exc, "status", 0) == 404 else NO_TOOLS
+
+
+def _confirm(candidates: list[Candidate], digest: str, locale: str) -> bool:
+    """哈希对上的是哪几个:候选自己填着的 SHA256 对得上;或者 Civitai 的 `by-hash` 指着它那个版本(搜索接口那一份
+    没填哈希时靠这一下)。对上几个回真。"""
+    known = {one.sha256 for one in candidates if one.sha256}
+    if digest in known:
+        for one in candidates:
+            if one.sha256 == digest:
+                one.confirmed(digest)
+        return True
+    try:
+        info = civitai.by_hash(digest, locale)
+    except ComfyError:
+        return False
+    if not info:
+        return False
+    names = {str(one.get("name") or "").lower() for one in info.get("files") or [] if one.get("sha256") == digest}
+    hit = False
+    for one in candidates:
+        if one.source == "civitai" and one.version_id == int(info.get("version_id") or 0) and one.filename.lower() in names:
+            one.confirmed(digest)
+            hit = True
+    return hit
+
+
+def _hash_out(digest: str, matched: bool, reason: str, locale: str) -> dict[str, Any]:
+    """`hash` 那一项:这一轮哈希是怎么来的(或为什么没有)。算不出来时**说清是哪一个原因**,界面照它说明白。"""
+    if matched:
+        return {"state": MATCHED, "sha256": digest,
+                "note": say(locale, "哈希对上了:这一个就是工作流要的那个文件",
+                            "The hash matches: this is the file the workflow asks for")}
+    if digest:
+        return {"state": NO_MATCH, "sha256": digest,
+                "note": say(locale, "算出了这个文件的 SHA256,但下面的候选没有一个对得上:只能是同名,不是确认过的那个文件",
+                            "A SHA256 was available, but none of the candidates below matches it: these are name matches, "
+                            "not the confirmed file")}
+    notes = {
+        NO_TOOLS: ("这台机器没装 ComfyUI-Custom-Scripts,算不出 SHA256:下面的候选只是同名,不是确认过的那个文件",
+                   "This machine has no ComfyUI-Custom-Scripts, so no SHA256 can be computed: the candidates below are name "
+                   "matches, not the confirmed file"),
+        NO_FILE: ("这个文件还不在那台机器上,没有哈希可以算:下面的候选只是同名,不是确认过的那个文件",
+                  "This file isn't on that machine yet, so there is no hash to compute: the candidates below are name matches, "
+                  "not the confirmed file"),
+        NO_CONNECTION: ("没连上那台 ComfyUI,算不出哈希:下面的候选只是同名,不是确认过的那个文件",
+                        "Can't reach that ComfyUI, so no hash can be computed: the candidates below are name matches, not the "
+                        "confirmed file"),
+    }.get(reason, ("算不出哈希:下面的候选只是同名,不是确认过的那个文件",
+                   "No hash is available: the candidates below are name matches, not the confirmed file"))
+    return {"state": UNAVAILABLE, "reason": reason, "note": say(locale, *notes)}
+
+
+def search(payload: dict[str, Any], comfy: Comfy | None, locale: str) -> dict[str, Any]:
     filename = _basename(str(payload.get("filename") or ""))[:300]
     if not filename:
         raise ComfyError(say(locale, "要找的模型文件名是空的", "The model file name to search for is empty"))
@@ -508,9 +636,14 @@ def search(payload: dict[str, Any], _comfy: Comfy, locale: str) -> dict[str, Any
     with ThreadPoolExecutor(max_workers=len(sites)) as pool:
         results = list(pool.map(lambda site: site.run(), sites))
     cache.save()
-    candidates = rank([one for found, _ in results for one in found], folder)
+    #: 三档里最高的那一档:有哈希就试着认到 `confirmed`,没有就如实说为什么没有(见模块说明)。
+    digest, reason = _hash_of(payload, comfy, folder, filename, locale)
+    found = [one for found, _ in results for one in found]
+    matched = _confirm(found, digest, locale) if digest else False
+    candidates = rank(found, folder)
     return {
         "filename": filename,
         "candidates": [one.out() for one in candidates],
         "failed": [{"source": site.name, "message": message} for site, (_, message) in zip(sites, results) if message],
+        "hash": _hash_out(digest, matched, reason, locale),
     }

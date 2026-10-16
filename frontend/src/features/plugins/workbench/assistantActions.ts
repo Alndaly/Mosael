@@ -6,7 +6,13 @@
  */
 import React from "react";
 
-/** 诊断里的一条(插件 check_graph 的问题单,见 diagnose.py):节点按画布摘要的写法(`12`、子图里的 `12:5`)。 */
+/**
+ * 诊断里的一条(插件 check_graph 的问题单,见 diagnose.py):节点按画布摘要的写法(`12`、子图里的 `12:5`)。
+ *
+ * `pack`:缺的那种节点**图里自己写着的出处**(`properties.cnr_id` / `aux_id` / `ver`)—— 插件离线归因出来的:
+ * 包名、来源、要哪一版、包页面。`core`:它是 ComfyUI 的核心节点(`cnr_id` 写着 `comfy-core`),那不是缺插件,是
+ * 这台 ComfyUI 太老。两者的文案插件都写好了(`cause` / `fix`),这里只多给一个能点的页面。
+ */
 export interface AssistantFinding {
   ref: string;
   type?: string;
@@ -16,6 +22,20 @@ export interface AssistantFinding {
   input?: string;
   cause: string;
   fix?: string;
+  core?: boolean;
+  pack?: AssistantFindingPack;
+}
+
+export interface AssistantFindingPack {
+  id: string;
+  /** `registry`(注册表上的节点包)/ `git`(git 仓库) */
+  source: string;
+  page: string;
+  repository?: string;
+  wanted_version?: string;
+  wanted_is_commit?: boolean;
+  installed?: boolean;
+  installed_version?: string;
 }
 
 export interface WorkbenchAssistantActions {

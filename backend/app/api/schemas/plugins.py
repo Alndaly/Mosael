@@ -655,15 +655,23 @@ class ModelResolveOut(ApiModel):
 
 
 class ModelSearchRequest(ApiModel):
-    """按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。"""
+    """按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。
+
+    `hash` / `hash_type`:工作流自己声明的哈希(见 `WorkflowMissingModelOut`),有这个就可能把候选认到
+    `confirmed`;没有的话插件让那台机器算 SHA256(要 ComfyUI-Custom-Scripts)。"""
 
     filename: str = Field(min_length=1, max_length=300)
     folder: str = Field(default="", max_length=200)
+    hash: str = Field(default="", max_length=200)
+    hash_type: str = Field(default="", max_length=40)
 
 
 class ModelSearchCandidateOut(ApiModel):
     """一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),
-    别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。"""
+    别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。
+
+    `confidence` 是三档:`confirmed`(哈希对上)/ `exact`(文件名一字不差)/ `likely`(去后缀一致 / 名字里含着);
+    **`direct` 只有 `confirmed` 才是真** —— 界面据此决定给不给「直接下载」(见 ADR 0038 §9)。"""
 
     source: str = ""
     repo: str = ""
@@ -674,6 +682,21 @@ class ModelSearchCandidateOut(ApiModel):
     size: int | None = None
     base_model: str = ""
     exact: bool = False
+    confidence: str = ""
+    direct: bool = False
+    #: 确认它的那个 SHA256(只有 `confirmed` 才有)。
+    sha256: str = ""
+
+
+class ModelSearchHashOut(ApiModel):
+    """这一轮哈希是怎么来的(或为什么没有)。`state`:`matched`(对上了)/ `none`(算出了但没有候选对得上)/
+    `unavailable`(没得算,见 `reason`:`no_tools` 没装 ComfyUI-Custom-Scripts、`no_file` 文件还不在那台机器上、
+    `no_connection` 没连上那台 ComfyUI)。`note` 是给人看的一句 —— **算不出哈希时必须说清「所以只是同名」**。"""
+
+    state: str = ""
+    reason: str = ""
+    sha256: str = ""
+    note: str = ""
 
 
 class ModelSearchFailureOut(ApiModel):
@@ -685,9 +708,10 @@ class ModelSearchFailureOut(ApiModel):
 
 class ModelSearchOut(ApiModel):
     filename: str
-    #: 同名的在前,最多 20 个。
+    #: 哈希确认过的在前,最多 20 个。
     candidates: list[ModelSearchCandidateOut] = Field(default_factory=list)
     failed: list[ModelSearchFailureOut] = Field(default_factory=list)
+    hash: ModelSearchHashOut = Field(default_factory=ModelSearchHashOut)
 
 
 class ModelDownloadRequest(ApiModel):
@@ -818,11 +842,14 @@ class WorkflowMissingNodeOut(ApiModel):
 
 
 class WorkflowMissingModelOut(ApiModel):
-    """缺的、工作流声明了下载地址的模型。"""
+    """缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):
+    交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。"""
 
     folder: str
     name: str
     url: str = ""
+    hash: str = ""
+    hash_type: str = ""
 
 
 class WorkflowGenerationRefOut(ApiModel):

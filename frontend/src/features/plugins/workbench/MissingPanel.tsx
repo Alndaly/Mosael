@@ -201,7 +201,8 @@ export function MissingPanel({
           <ul className="m-0 grid list-none gap-2 p-0">
             {models.map((model) => (
               <ModelRow key={`${model.folder}/${model.name}`} target={target} folder={model.folder} name={model.name}
-                        url={model.url ?? ""} spots={workflow ? nodesUsingModel(workflow, model.name) : []} canLocate={canLocate}
+                        url={model.url ?? ""} hash={model.hash ?? ""} hashType={model.hash_type ?? ""}
+                        spots={workflow ? nodesUsingModel(workflow, model.name) : []} canLocate={canLocate}
                         canRefresh={capabilities?.refreshCombos !== false} onDone={run} />
             ))}
           </ul>
@@ -342,11 +343,14 @@ function PackRow({
 }
 
 /** 一个缺的模型:名字、目录、定位;下载(工作流写了地址就一键,没写就找、或者贴链接)。下完刷新下拉、重新检查。 */
-function ModelRow({ target, folder, name, url, spots, canLocate, canRefresh, onDone }: {
+function ModelRow({ target, folder, name, url, hash, hashType, spots, canLocate, canRefresh, onDone }: {
   target: WorkbenchTarget;
   folder: string;
   name: string;
   url: string;
+  /** 工作流自己声明的哈希(没有是空串):「找下载地址」拿它把候选认到 `confirmed` */
+  hash: string;
+  hashType: string;
   spots: CanvasSpot[];
   canLocate: boolean;
   canRefresh: boolean;
@@ -367,7 +371,7 @@ function ModelRow({ target, folder, name, url, spots, canLocate, canRefresh, onD
         {can && <LocateButton label={modelBaseName(name)} spots={spots} at={at} onLocate={() => void locate()} />}
       </span>
       {note && <span role="status" className="text-ui-2xs text-muted-foreground">{note}</span>}
-      <ModelDownload target={target} folder={folder} wanted={name} url={url}
+      <ModelDownload target={target} folder={folder} wanted={name} url={url} hash={hash} hashType={hashType}
                      doneLabel={t(canRefresh ? "workbenchDownloadDone" : "workbenchDownloadDoneManual")}
                      onDone={() => {
                        void qc.invalidateQueries({ queryKey: ["model-library", target.instanceId] });

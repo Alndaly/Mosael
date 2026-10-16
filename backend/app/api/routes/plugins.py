@@ -634,11 +634,12 @@ def resolve_model_link(instance_id: str, body: ModelResolveRequest, db: DbSessio
 
 @router.post("/plugins/instances/{instance_id}/model-library/search", response_model=ModelSearchOut)
 def search_model_sources(instance_id: str, body: ModelSearchRequest, db: DbSession, user: CurrentUser) -> dict:
-    """按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。同名的候选在前;
-    一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve` 正好解析到那个文件。"""
+    """按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。哈希确认过的
+    候选在前、只有它允许「直接下载」;一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve`
+    正好解析到那个文件。`body.hash` 是工作流自己声明的哈希(有就拿它认 `confirmed`)。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return model_library.search_sources(db, instance, body.filename, body.folder)
+        return model_library.search_sources(db, instance, body.filename, body.folder, body.hash, body.hash_type)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
 

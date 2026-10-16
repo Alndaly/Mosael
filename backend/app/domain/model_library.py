@@ -513,20 +513,32 @@ _MAX_CANDIDATES = 20
 _MAX_FAILED = 10
 
 
-def search_sources(db: Session, instance: PluginInstance, filename: str, folder: str = "") -> dict[str, Any]:
-    """按文件名去模型站上找下载地址(工作台「缺失项」里工作流没写地址的模型):插件去搜,交回候选(同名的在前)和搜不了的
-    站。每个候选的 `url` 是插件自己的 `resolve` 认得、正好解析到那个文件的链接 —— 界面点了就拿它去解析、再下载。
-    宿主只规整:没有 http(s) 地址或文件名的候选丢掉,长文本截断。"""
+def search_sources(db: Session, instance: PluginInstance, filename: str, folder: str = "",
+                   digest: str = "", hash_type: str = "") -> dict[str, Any]:
+    """按文件名去模型站上找下载地址(工作台「缺失项」里工作流没写地址的模型):插件去搜,交回候选(哈希确认过的
+    在前)和搜不了的站。每个候选的 `url` 是插件自己的 `resolve` 认得、正好解析到那个文件的链接 —— 界面点了就拿它去
+    解析、再下载。
+
+    `digest` / `hash_type` 是工作流自己声明的哈希:有就可能把候选认到 `confirmed`(只有这一档允许「直接下载」,
+    见 ADR 0038 §9);没有的话插件让那台机器算 SHA256。宿主只规整:没有 http(s) 地址或文件名的候选丢掉,长文本截断。"""
     _require(db, instance)
     name = _text(filename, 300)
-    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY,
-                               {"op": "search_sources", "filename": name, "folder": _text(folder, 200)},
+    payload: dict[str, Any] = {"op": "search_sources", "filename": name, "folder": _text(folder, 200)}
+    #: 没声明哈希就不带这两个键(调用记录里不写空字段,老插件也不认识它们)。
+    if _text(digest, 200):
+        payload["hash"] = _text(digest, 200)
+        payload["hash_type"] = _text(hash_type, 40)
+    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, payload,
                                timeout=QUICK_TIMEOUT_SECONDS, record=False)
     candidates = []
     for one in output.get("candidates") or []:
         if not isinstance(one, dict) or not _http(one.get("url")) or not _text(one.get("filename"), 300):
             continue
         size = _number(one.get("size"))
+        #: 三档置信度:认不出的按 `exact` 那一档说(旧版插件没有这两个字段)。
+        confidence = _text(one.get("confidence"), 20)
+        if confidence not in ("confirmed", "exact", "likely"):
+            confidence = "exact" if one.get("exact") else "likely"
         candidates.append({
             "source": _text(one.get("source"), 40),
             "repo": _text(one.get("repo"), 300),
@@ -537,13 +549,22 @@ def search_sources(db: Session, instance: PluginInstance, filename: str, folder:
             "size": int(size) if size is not None else None,
             "base_model": _text(one.get("base_model"), 120),
             "exact": bool(one.get("exact")),
+            "confidence": confidence,
+            #: **只有哈希确认过的候选才允许直接下载** —— 这里不信任插件单方面说的 `direct`:它必须和置信度一致。
+            "direct": confidence == "confirmed",
+            "sha256": _text(one.get("sha256"), 64) if confidence == "confirmed" else "",
         })
     failed = [
         {"source": _text(one.get("source"), 40), "message": _text(one.get("message"), 500)}
         for one in output.get("failed") or [] if isinstance(one, dict) and _text(one.get("message"), 500)
     ]
+    raw_hash = output.get("hash") if isinstance(output.get("hash"), dict) else {}
+    state = _text(raw_hash.get("state"), 20)
     return {"filename": _text(output.get("filename"), 300) or name, "candidates": candidates[:_MAX_CANDIDATES],
-            "failed": failed[:_MAX_FAILED]}
+            "failed": failed[:_MAX_FAILED],
+            "hash": {"state": state if state in ("matched", "none", "unavailable") else "",
+                     "reason": _text(raw_hash.get("reason"), 20), "sha256": _text(raw_hash.get("sha256"), 64),
+                     "note": _text(raw_hash.get("note"), 500)}}
 
 
 #: 工作台一次最多问几格(和插件那一侧同一个数)。

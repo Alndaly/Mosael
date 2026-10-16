@@ -279,17 +279,29 @@ def _fed(api: dict[str, Any] | None, node: dict[str, Any], inner: bool) -> set[s
     return out
 
 
+def _declaration(spec: dict[str, Any]) -> dict[str, str]:
+    """下载声明里要的那几项。`hash` / `hash_type` 是 schema 允许、真实工作流很少写的:有就带上,没有就空着。"""
+    return {
+        "name": _norm(str(spec.get("name") or "")), "folder": str(spec.get("directory") or "").strip(),
+        "url": canonical_url(str(spec.get("url") or "").strip()),
+        "hash": str(spec.get("hash") or "").strip(), "hash_type": str(spec.get("hash_type") or "").strip(),
+    }
+
+
 def scan_workflow(ui_graph: dict[str, Any], api: dict[str, Any] | None = None) -> tuple[list[str], list[dict[str, str]]]:
     """一张图:(节点输入里写着的全部字符串, 真在用的那些下载声明)。
 
-    下载声明是节点的 `properties.models`(官方模板的写法)和顶层的 `models`。只收**节点当前真在用**的:节点改选了别的
-    文件,声明就过期了;顶层的声明要在某个节点的输入里写着。
+    下载声明有**两处**:节点的 `properties.models`(官方模板的写法)和**顶层的 `models`**(schema 允许)。只收
+    **节点当前真在用**的:节点改选了别的文件,声明就过期了;顶层的声明要在某个节点的输入里写着。
+
+    **同名(同一个目录里)冲突时节点级胜出** —— 它更贴近「这个节点要用这个文件」;顶层的那一份只在节点上没写的时候补上。
 
     给了转出来的 API 图(`api`)时,「节点当前用的是哪个文件」以它为准:子图里的加载节点那一格接的是子图的输入口时,
     它自己存着的是模板默认值,真正用的是子图节点上提升出来的那一格 —— 维护者的 video_minimax_h3_t2v 在子图节点上
     换了 UNET,此前照里层存的旧值判「在用」,把一个没在用的十几 GB 的模型列成「缺的模型」、带着下载按钮。"""
     used: set[str] = set()
-    declared: list[dict[str, str]] = []
+    #: (目录, 名字) → 那一条声明。**节点级先收**(下面的循环),顶层的再 `setdefault` 补空。
+    declared: dict[tuple[str, str], dict[str, str]] = {}
     top = [one for one in ui_graph.get("nodes") or [] if isinstance(one, dict)] \
         if isinstance(ui_graph.get("nodes"), list) else []
     top_ids = {id(one) for one in top}
@@ -304,21 +316,21 @@ def scan_workflow(ui_graph: dict[str, Any], api: dict[str, Any] | None = None) -
         current = values if fed is None else fed
         for spec in (node.get("properties") or {}).get("models") or [] if isinstance(node.get("properties"), dict) else []:
             if isinstance(spec, dict) and _norm(str(spec.get("name") or "")) in current:
-                declared.append(spec)
+                one = _declaration(spec)
+                if one["name"]:
+                    declared.setdefault((one["folder"], one["name"]), one)
     for spec in ui_graph.get("models") or [] if isinstance(ui_graph.get("models"), list) else []:
         if isinstance(spec, dict) and _norm(str(spec.get("name") or "")) in used:
-            declared.append(spec)
-    clean = [
-        {"name": _norm(str(spec.get("name") or "")), "folder": str(spec.get("directory") or "").strip(),
-         "url": canonical_url(str(spec.get("url") or "").strip())}
-        for spec in declared
-    ]
-    return sorted(used), [one for one in clean if one["name"] and one["folder"]]
+            one = _declaration(spec)
+            if one["name"]:
+                declared.setdefault((one["folder"], one["name"]), one)
+    return sorted(used), [one for one in declared.values() if one["name"] and one["folder"]]
 
 
 #: 「工作流里在用哪些文件、声明了哪些下载地址」那份记录的格式:判「在用」的规矩变了就换一个,旧的整份作废重扫。
 #: 2:声明按转出来的 API 图判在不在用(子图里提升出来的那一格,见 scan_workflow)。
-WORKFLOW_SCAN_VERSION = 2
+#: 3:顶层 `models` 和节点级 `properties.models` 合并(同名时节点级胜出),并带上 `hash` / `hash_type`。
+WORKFLOW_SCAN_VERSION = 3
 
 
 def converted(ui_graph: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any] | None:
@@ -459,7 +471,11 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
             if (spec["folder"], spec["name"]) in present or not spec["url"].startswith(TRUSTED_SOURCES):
                 continue
             found = missing.setdefault((spec["folder"], spec["name"]),
-                                       {"folder": spec["folder"], "name": spec["name"], "url": spec["url"], "workflows": []})
+                                       {"folder": spec["folder"], "name": spec["name"], "url": spec["url"],
+                                        #: 工作流自己声明的哈希:有就带上(「找下载地址」拿它认到 `confirmed`)。
+                                        **({"hash": spec["hash"], "hash_type": spec.get("hash_type") or ""}
+                                           if spec.get("hash") else {}),
+                                        "workflows": []})
             if all(one["id"] != ident for one in found["workflows"]):
                 found["workflows"].append({"id": ident, "label": label})
 

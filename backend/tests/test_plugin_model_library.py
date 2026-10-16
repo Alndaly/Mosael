@@ -146,6 +146,21 @@ elif op == "resolve":
 elif op == "search_sources":
     if payload["filename"] == "boom.safetensors":
         emit({"ok": False, "error": "三个站都搜不了"})
+    elif payload["filename"] == "confirmed.safetensors":
+        digest = "ab" * 32
+        emit({"ok": True, "output": {"filename": payload["filename"], "candidates": [
+            {"source": "huggingface", "repo": "acme/wan", "title": "acme/wan", "filename": "confirmed.safetensors",
+             "url": "https://huggingface.co/acme/wan/resolve/main/confirmed.safetensors", "exact": True,
+             "confidence": "confirmed", "direct": True, "sha256": digest},
+            #: 插件把 `direct` 和置信度说岔了:宿主按置信度来,不认这个 true
+            {"source": "civitai", "repo": "Wan", "title": "Wan", "filename": "same.safetensors",
+             "url": "https://civitai.com/api/download/models/9", "exact": True,
+             "confidence": "exact", "direct": True, "sha256": digest},
+            {"source": "modelscope", "repo": "wan", "title": "wan", "filename": "near.safetensors",
+             "url": "https://modelscope.cn/models/wan/resolve/master/near.safetensors", "exact": False,
+             "confidence": "likely", "direct": False},
+        ], "hash": {"state": "matched", "sha256": digest, "note": "哈希对上了:这一个就是工作流要的那个文件"},
+           "failed": []}})
     else:
         emit({"ok": True, "output": {"filename": payload["filename"], "candidates": [
             {"source": "huggingface", "repo": "Comfy-Org/flux1-dev", "title": "Comfy-Org/flux1-dev",
@@ -681,6 +696,24 @@ def test_按文件名找下载地址_插件交回候选_宿主规整(library) ->
     assert bad.status_code == 422 and "搜不了" in bad.json()["detail"]
     assert client.post(url, json={"filename": ""}).status_code == 422, "空文件名宿主当场拒绝"
     assert client.post(url, json={"filename": "x" * 301}).status_code == 422
+
+
+def test_找下载地址_只有哈希确认过的才算直接下载_声明了的哈希原样交给插件(library) -> None:
+    """三档置信度(ADR 0038 §9):`confirmed` 才是「直接下载」;插件把 `direct` 和置信度说岔了,宿主按置信度来。
+    工作流自己声明的哈希有才带给插件(没声明就不带这两个键)。"""
+    client, instance_id, _ = library
+    url = f"/api/plugins/instances/{instance_id}/model-library/search"
+    body = client.post(url, json={"filename": "confirmed.safetensors"}).json()
+    assert [(one["confidence"], one["direct"], one["sha256"]) for one in body["candidates"]] == [
+        ("confirmed", True, "ab" * 32), ("exact", False, ""), ("likely", False, "")], "只有 confirmed 允许直接下载"
+    assert body["hash"]["state"] == "matched" and body["hash"]["note"], "算没算得出哈希都如实说"
+    digest = "cd" * 32
+    client.post(url, json={"filename": "flux1-dev-fp8.safetensors", "hash": digest, "hash_type": "sha256"})
+    assert _ops()[-1] == {"op": "search_sources", "filename": "flux1-dev-fp8.safetensors", "folder": "",
+                          "hash": digest, "hash_type": "sha256"}
+    client.post(url, json={"filename": "flux1-dev-fp8.safetensors"})
+    assert _ops()[-1] == {"op": "search_sources", "filename": "flux1-dev-fp8.safetensors", "folder": ""}, \
+        "没声明哈希:不带这两个键"
 
 
 def test_下载是一个后台任务_报进度_下完让连接的目录重新拉一遍(library) -> None:

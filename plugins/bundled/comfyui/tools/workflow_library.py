@@ -49,6 +49,7 @@ import time
 import uuid
 from collections import Counter
 from typing import Any
+from urllib import parse
 
 import app_form
 import convert
@@ -79,6 +80,14 @@ VIRTUAL_NODES = frozenset({
     "Node Collector (rgthree)", "Mute / Bypass Relay (rgthree)", "Mute / Bypass Repeater (rgthree)",
     "Power Primitive (rgthree)",
 })
+#: 节点自己写着的出处(官方模板带这三项):注册表 id、git 的 `user/repo`、图上要的那一版。
+PACK_FIELDS = ("cnr_id", "aux_id", "ver")
+#: 官方核心节点在模板里写的来源:`SaveImage` 这类节点写的就是它 —— **不是要装的插件**,是这台 ComfyUI 太老。
+CORE_CNR = "comfy-core"
+#: 注册表里一个节点包给人看的那一页(和界面上「主页」那个链接同一个形状)。
+REGISTRY_PAGE = "https://registry.comfy.org/nodes"
+#: `ver` 也可能是 git commit(不是 semver):七到四十位十六进制、至少有一个 a-f。**原样显示,不比较**。
+_GIT_COMMIT = re.compile(r"^(?=[0-9a-fA-F]{7,40}$)(?=.*[a-fA-F])[0-9a-fA-F]+$")
 #: 缩略图上最多画几个节点。
 MAX_NODES = 400
 #: Manager 的「节点类型 → 节点包」映射几 MB,一天取一次,记在持久目录里。
@@ -365,6 +374,51 @@ def pack_ids(installed: dict[str, dict[str, Any]]) -> set[str]:
     return have
 
 
+def installed_versions(installed: dict[str, dict[str, Any]] | None) -> dict[str, str]:
+    """装着的包能叫的名字(小写)→ 装的版本(名字和 `pack_ids` 同一套)。"""
+    out: dict[str, str] = {}
+    for key, value in (installed or {}).items():
+        version = str(value.get("ver") or "")
+        for name in pack_ids({key: value}):
+            out[name] = version
+    return out
+
+
+def pack_page(ident: str) -> str:
+    """一个节点包给人看的那一页:注册表上的节点页;本来就是 http(s) 地址的(git 装的)原样去掉 `.git`。"""
+    text = str(ident or "").strip()
+    if text.startswith(("http://", "https://")):
+        return text.rstrip("/").removesuffix(".git")
+    return f"{REGISTRY_PAGE}/{parse.quote(text, safe='')}"
+
+
+def declared_packs(source: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """图上每种节点**自己写着的出处**:节点级 `properties.cnr_id` / `aux_id` / `ver`(官方模板都带)。类型 → 那一条。
+
+    这是「缺插件」归因里最靠前、也最权威的一步(离线、免费):完全没装的包在别处查不到,图上却写着。
+
+    **子图实例先过滤掉**:它的 `type` 是一份子图定义的 GUID,不是节点类型;实例上也没有 `properties`(判空)。同一种
+    类型有好几处、写的出处不一样时取第一处 —— 模板里的同一种节点出处是一致的。"""
+    subgraphs = {str(one.get("id")) for one in (source.get("definitions") or {}).get("subgraphs") or []
+                 if isinstance(one, dict)}
+    found: dict[str, dict[str, str]] = {}
+    for node in _nodes(source):
+        kind = str(node.get("type") or node.get("class_type") or "")
+        if not kind or kind in subgraphs or _UUID.match(kind) or kind.startswith(("workflow>", "workflow/")):
+            continue
+        properties = node.get("properties") if isinstance(node.get("properties"), dict) else {}
+        values = {field: str(properties.get(field) or "").strip() for field in PACK_FIELDS}
+        if any(values.values()):
+            found.setdefault(kind, values)
+    return found
+
+
+def wanted_version(ver: str) -> tuple[str, bool]:
+    """图上写的那一版:(原样, 是不是 git commit)。**不解析、不比较** —— commit 和 semver 不是一回事。"""
+    text = str(ver or "").strip()
+    return text, bool(_GIT_COMMIT.match(text))
+
+
 def mapping_short(pack: str) -> str:
     """映射里一个包的键(注册表 id,或者仓库地址)→ 比较用的那个短名字(小写的仓库名)。"""
     return str(pack).rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].lower()
@@ -437,7 +491,11 @@ def _models(api: dict[str, Any], source: dict[str, Any], options: dict[str, set[
     """(用到的模型文件和在不在, 缺的模型)。转得过来的看节点上选模型文件的那几格;再加上工作流声明的下载地址(只收节点
     当前真在用的,按转出来的图判,见 library.scan_workflow)。"""
     _used, declared = scan_workflow(source, api or None)
-    urls = {(one["folder"], one["name"]): one["url"] for one in declared}
+    by_key = {(one["folder"], one["name"]): one for one in declared}
+    #: 声明里没写 `directory` 的(schema 允许):按文件名对,目录以选文件的那个节点为准(labels 的判定)。
+    by_name: dict[str, dict[str, str]] = {}
+    for one in declared:
+        by_name.setdefault(one["name"], one)
     picked: list[tuple[str, str]] = []
     for node in api.values():
         class_type = str(node.get("class_type") or "")
@@ -452,10 +510,10 @@ def _models(api: dict[str, Any], source: dict[str, Any], options: dict[str, set[
                 folder = next((name for name, files in options.items() if value in files), "")
                 if folder:
                     picked.append((folder, value))
-    picked += list(urls)
+    picked += list(by_key)
     seen: set[tuple[str, str]] = set()
     found: list[dict[str, Any]] = []
-    missing: list[dict[str, str]] = []
+    missing: list[dict[str, Any]] = []
     for folder, name in picked:
         if (folder, name) in seen:
             continue
@@ -463,8 +521,14 @@ def _models(api: dict[str, Any], source: dict[str, Any], options: dict[str, set[
         present = name in options.get(folder, set())
         found.append({"folder": folder, "name": name, "present": present})
         if not present:
-            url = urls.get((folder, name), "")
-            missing.append({"folder": folder, "name": name, "url": url if url.startswith(TRUSTED_SOURCES) else ""})
+            spec = by_key.get((folder, name)) or by_name.get(name) or {}
+            url = str(spec.get("url") or "")
+            entry: dict[str, Any] = {"folder": folder, "name": name, "url": url if url.startswith(TRUSTED_SOURCES) else ""}
+            #: 工作流自己声明的哈希(schema 允许、真实工作流很少写):「找下载地址」拿它把候选认到 `confirmed`。
+            if spec.get("hash"):
+                entry["hash"] = spec["hash"]
+                entry["hash_type"] = spec.get("hash_type") or ""
+            missing.append(entry)
     return found, missing
 
 

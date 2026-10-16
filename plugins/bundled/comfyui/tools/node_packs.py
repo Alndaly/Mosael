@@ -29,7 +29,7 @@ import node_catalog
 import sources
 from comfy_http import Comfy
 from lines import ComfyError, say
-from workflow_library import installed_packs, manager_mappings, mapping_short, pack_ids, provides
+from workflow_library import installed_packs, installed_versions, manager_mappings, mapping_short, pack_ids, provides
 
 #: 注册表的地址(测试换成假的)。
 REGISTRY = "https://api.comfy.org"
@@ -131,13 +131,8 @@ def _rank(entry: dict[str, Any]) -> float:
 # --- 这台 ComfyUI 上 ----------------------------------------------------------------
 
 def _installed_versions(installed: dict[str, dict[str, Any]] | None) -> dict[str, str]:
-    """装着的包能叫的名字(小写)→ 装的版本。"""
-    out: dict[str, str] = {}
-    for key, value in (installed or {}).items():
-        version = str(value.get("ver") or "")
-        for name in pack_ids({key: value}):
-            out[name] = version
-    return out
+    """装着的包能叫的名字(小写)→ 装的版本(那一套名字在 workflow_library.pack_ids)。"""
+    return installed_versions(installed)
 
 
 def _mapping_entry(mappings: dict[str, Any] | None, ident: str) -> tuple[str, Any] | None:

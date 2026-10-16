@@ -122,7 +122,7 @@ describe("搜索", () => {
       ...flow("sketch.json"),
       problem: "这台 ComfyUI 上没有这几种节点:CR Prompt Text",
       missing_nodes: [{ type: "CR Prompt Text", count: 1, packs: [] }],
-      missing_models: [{ folder: "loras", name: "gone.safetensors", url: "" }],
+      missing_models: [{ folder: "loras", name: "gone.safetensors", url: "", hash: "", hash_type: "" }],
       inputs: [{ node: "10", title: "LoadImage", media: "image", role: "reference_image" }],
       outputs: [{ node: "9", title: "保存图像", media: "image" }],
     } as WorkflowFile;

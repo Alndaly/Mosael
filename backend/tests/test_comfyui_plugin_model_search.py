@@ -21,6 +21,7 @@ from urllib import parse
 import pytest
 
 TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui" / "tools"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 RECORDED: dict[str, Any] = json.loads(
     (Path(__file__).resolve().parent / "fixtures" / "comfyui" / "model_search.json").read_text(encoding="utf-8"))["answers"]
 DREAMSHAPER_5 = 43888
@@ -370,6 +371,142 @@ def test_没有持久目录就不记(modules, monkeypatch) -> None:
     asked = len(sites.calls)
     _search(model_search, "sd_xl_base_1.0.safetensors")
     assert len(sites.calls) == 2 * asked
+
+
+# --- ④ 三档置信度:只有哈希确认过的才允许「直接下载」 ------------------------------------------------
+
+def _civitai_answer(*files: dict[str, Any], model_id: int = 71, version_id: int = 4242,
+                    name: str = "Wan i2v") -> dict[str, Any]:
+    """Civitai `/api/v1/models?query=` 的一份回答(自己拼的:录下来的那几份按解析要读的项剪过,没有 `hashes`)。"""
+    return {"items": [{"id": model_id, "name": name, "type": "Checkpoint", "modelVersions": [{
+        "id": version_id, "name": "v1", "baseModel": "Wan 2.2",
+        "files": [{"name": one["name"], "type": one.get("type", "Model"), "primary": one.get("primary", True),
+                   "sizeKB": one.get("sizeKB", 1024), "downloadUrl": f"https://civitai.com/api/download/models/{version_id}",
+                   **({"hashes": {"SHA256": one["sha256"].upper()}} if one.get("sha256") else {})}
+                  for one in files]}]}]}
+
+
+def _crafted(answers: dict[str, Any]) -> tuple[Any, list[str]]:
+    """按地址回给出来的回答(没给的 404);顺带记下每次请求的地址。"""
+    from sources import Answer
+
+    calls: list[str] = []
+
+    def fetch(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, timeout: float = 30):
+        calls.append(url)
+        if url not in answers:
+            return Answer(404, {}, b'{"error": "not recorded"}', url)
+        return Answer(200, {"content-type": "application/json"}, json.dumps(answers[url]).encode(), url)
+
+    return fetch, calls
+
+
+def _civitai_query(stem: str) -> str:
+    """Civitai 按词搜的那个地址(和 `model_search.SEARCH_LIMIT` 同一个数)。"""
+    return "https://civitai.com/api/v1/models?" + parse.urlencode({"query": stem, "limit": 10})
+
+
+def test_工作流写着哈希_对上的那一个才_confirmed_才允许直接下载(modules, monkeypatch) -> None:
+    model_search, sources = modules
+    digest = "ab" * 32
+    answers = {_civitai_query("i2v-high.safetensors"): _civitai_answer(
+        {"name": "i2v-high.safetensors", "sha256": digest},
+        {"name": "i2v-high-fp16.safetensors", "sha256": "cd" * 32, "primary": False, "type": "Pruned Model"})}
+    fetch, _calls = _crafted(answers)
+    monkeypatch.setattr(sources, "fetch", fetch)
+    out = model_search.search({"filename": "i2v-high.safetensors", "folder": "checkpoints",
+                               "hash": digest, "hash_type": "sha256"}, None, "zh")
+    by_name = {one["filename"]: one for one in out["candidates"]}
+    hit = by_name["i2v-high.safetensors"]
+    assert (hit["confidence"], hit["direct"], hit["exact"]) == ("confirmed", True, True)
+    assert hit["sha256"] == digest
+    near = by_name["i2v-high-fp16.safetensors"]
+    assert (near["confidence"], near["direct"]) == ("likely", False), "哈希对不上的近似候选:只给页面"
+    assert out["hash"]["state"] == "matched" and out["hash"]["sha256"] == digest
+
+
+def test_工作流写着哈希_候选里没有一个填了_就说对不上_谁都不许直接下(modules, monkeypatch) -> None:
+    model_search, sources = modules
+    answers = {_civitai_query("i2v-high.safetensors"): _civitai_answer({"name": "i2v-high.safetensors"})}
+    fetch, _calls = _crafted(answers)
+    monkeypatch.setattr(sources, "fetch", fetch)
+    out = model_search.search({"filename": "i2v-high.safetensors", "folder": "checkpoints",
+                               "hash": "ab" * 32, "hash_type": "sha256"}, None, "zh")
+    assert out["hash"]["state"] == "none" and out["hash"]["note"]
+    one = out["candidates"][0]
+    assert (one["exact"], one["confidence"], one["direct"]) == (True, "exact", False), "同名,但对不上哈希"
+
+
+def test_算不了哈希就停在同名_并且说清为什么(modules, monkeypatch) -> None:
+    model_search, sources = modules
+    answers = {_civitai_query("i2v-high.safetensors"): _civitai_answer({"name": "i2v-high.safetensors"})}
+    fetch, _calls = _crafted(answers)
+    monkeypatch.setattr(sources, "fetch", fetch)
+    out = model_search.search({"filename": "i2v-high.safetensors", "folder": "checkpoints"}, None, "zh")
+    assert out["hash"]["reason"] == "no_connection", "没连上那台 ComfyUI:算不出哈希"
+    one = out["candidates"][0]
+    assert (one["exact"], one["confidence"], one["direct"]) == (True, "exact", False)
+    assert "哈希" in out["hash"]["note"] and out["hash"]["note"] in json.dumps(out, ensure_ascii=False)
+    english = model_search.search({"filename": "i2v-high.safetensors"}, None, "en-US")
+    assert english["hash"]["reason"] == "no_connection" and "hash" in english["hash"]["note"]
+
+
+def test_那台机器没装_Custom_Scripts_算不出哈希_说清是哪一个原因(modules, monkeypatch) -> None:
+    model_search, sources = modules
+    from comfy_http import Comfy
+    from tests.fake_comfyui import FakeComfyUI
+
+    answers = {_civitai_query("i2v-high.safetensors"): _civitai_answer({"name": "i2v-high.safetensors"})}
+    fetch, _calls = _crafted(answers)
+    monkeypatch.setattr(sources, "fetch", fetch)
+    with FakeComfyUI() as server:
+        server.state.pysssss_scripts = ()  # 没装 ComfyUI-Custom-Scripts
+        out = model_search.search({"filename": "i2v-high.safetensors", "folder": "checkpoints"},
+                                  Comfy(server.url), "zh")
+    assert out["hash"]["state"] == "unavailable" and out["hash"]["reason"] == "no_tools"
+    assert "ComfyUI-Custom-Scripts" in out["hash"]["note"]
+    assert out["candidates"][0]["direct"] is False
+
+
+def test_那台机器算得出的_SHA256_接进候选_和_Civitai_对上就是_confirmed(modules, monkeypatch) -> None:
+    model_search, sources = modules
+    from comfy_http import Comfy
+    from tests.fake_comfyui import FakeComfyUI
+
+    by_hash = json.loads((FIXTURES / "civitai" / "version_by_hash.json").read_text(encoding="utf-8"))
+    digest = by_hash["files"][0]["hashes"]["SHA256"].lower()
+    filename = by_hash["files"][0]["name"]
+    version_id = by_hash["id"]
+    answers = {
+        # 搜索接口这一份**没填**哈希:认出来全靠那台机器算的 SHA256 + Civitai 的 by-hash
+        _civitai_query(filename): _civitai_answer({"name": filename}, model_id=by_hash["modelId"], version_id=version_id),
+        f"https://civitai.com/api/v1/model-versions/by-hash/{digest.upper()}": by_hash,
+    }
+    fetch, calls = _crafted(answers)
+    monkeypatch.setattr(sources, "fetch", fetch)
+    with FakeComfyUI() as server:
+        server.state.model_folders = {"checkpoints": [filename]}
+        server.state.model_hashes[f"checkpoints/{filename}"] = digest
+        out = model_search.search({"filename": filename, "folder": "checkpoints"}, Comfy(server.url), "zh")
+        assert server.state.hashed == [f"checkpoints/{filename}"], "让那台机器把文件读一遍算 SHA256"
+    one = out["candidates"][0]
+    assert (one["confidence"], one["direct"], one["sha256"]) == ("confirmed", True, digest)
+    assert out["hash"]["state"] == "matched" and out["hash"]["sha256"] == digest
+    assert any("by-hash" in url for url in calls)
+
+
+def test_去后缀一致的候选只给页面_不主动给直链(modules, monkeypatch) -> None:
+    model_search, sources = modules
+    answers = {_civitai_query("dreamshaper_8.safetensors"): _civitai_answer(
+        {"name": "dreamshaper_8.safetensors"}, {"name": "dreamshaper_8_fp16.safetensors", "primary": False, "type": "Pruned Model"})}
+    fetch, _calls = _crafted(answers)
+    monkeypatch.setattr(sources, "fetch", fetch)
+    out = model_search.search({"filename": "dreamshaper_8.safetensors", "folder": "checkpoints"}, None, "zh")
+    by_name = {one["filename"]: one for one in out["candidates"]}
+    assert by_name["dreamshaper_8.safetensors"]["confidence"] == "exact"
+    near = by_name["dreamshaper_8_fp16.safetensors"]
+    assert (near["confidence"], near["direct"]) == ("likely", False)
+    assert near["page"].startswith("https://civitai.com/models/"), "只给页面"
 
 
 @pytest.fixture(autouse=True)

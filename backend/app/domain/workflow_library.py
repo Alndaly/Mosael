@@ -317,7 +317,10 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
         ][:_MAX_LIST],
         "missing_nodes": _missing_nodes(raw.get("missing_nodes")),
         "missing_models": [
-            one for one in _items(raw.get("missing_models"), {"folder": 200, "name": 1000, "url": 4000})
+            #: `hash` / `hash_type`:工作流自己声明的哈希(schema 允许、很少写)。界面拿它交给「找下载地址」,
+            #: 对上的候选才算 `confirmed`(见 model_library.search_sources)。
+            one for one in _items(raw.get("missing_models"),
+                                  {"folder": 200, "name": 1000, "url": 4000, "hash": 200, "hash_type": 40})
             if one["folder"] and one["name"]
         ],
         "app": _app_summary(raw.get("app")),

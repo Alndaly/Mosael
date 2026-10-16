@@ -192,6 +192,151 @@ def test_缺的节点类型_带上哪个节点包能补_装没装(plugin) -> Non
     assert "WanVideoWrapper" in finding["fix"] and "已装" in finding["fix"], "Manager 的映射:哪个包提供它、装着没有"
 
 
+# --- ① 「缺插件」先信工作流自己写的出处(cnr_id / aux_id / ver) -------------------------------------
+
+def _offline(monkeypatch) -> None:
+    """把出网这条路掐断:归因只用工作流里写着的东西,不该联网(ADR 0042 §7 的离线那一半)。"""
+    import sources
+
+    def refused(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("这一步不该出网:工作流自己写着出处")
+
+    monkeypatch.setattr(sources, "follow", refused)
+    monkeypatch.setattr(sources, "fetch", refused)
+
+
+def test_缺的插件先信图里写的_cnr_id_断网断_Manager_也对得上(plugin, comfy, monkeypatch) -> None:
+    _offline(monkeypatch)
+    comfy.state.manager = None  # ComfyUI-Manager 也答不上
+    comfy.state.manager_installed = {}
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "WanVideoSampler", [], properties={
+        "cnr_id": "comfyui-wanvideowrapper", "aux_id": "kijai/ComfyUI-WanVideoWrapper", "ver": "1.4.7"}))
+    out = plugin("check_graph", content=graph)
+    finding = next(one for one in out["findings"] if one["kind"] == "missing_type")
+    assert finding["pack"] == {"id": "comfyui-wanvideowrapper", "source": "registry",
+                               "page": "https://registry.comfy.org/nodes/comfyui-wanvideowrapper",
+                               "repository": "", "wanted_version": "1.4.7", "wanted_is_commit": False,
+                               "installed": False, "installed_version": ""}
+    assert "comfyui-wanvideowrapper" in finding["fix"] and "1.4.7" in finding["fix"]
+    assert "comfy_node_pack_info" in finding["fix"], "装之前先看清楚那一版"
+
+
+def test_缺的插件_只写_aux_id_就归到那个仓库页(plugin, comfy, monkeypatch) -> None:
+    _offline(monkeypatch)
+    comfy.state.manager = None
+    graph = _txt2img()
+    graph["nodes"].append(_node(21, "ImageResizeKJ", [], properties={"aux_id": "kijai/ComfyUI-KJNodes"}))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert finding["pack"]["source"] == "git"
+    assert finding["pack"]["page"] == "https://github.com/kijai/ComfyUI-KJNodes"
+    assert finding["pack"]["id"] == "kijai/ComfyUI-KJNodes"
+
+
+def test_图里没写出处_照旧走_Manager_的映射_或者去注册表搜(plugin, comfy) -> None:
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "WanVideoSampler", []))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert "pack" not in finding, "图里没写:归因交给 Manager 的映射,不是猜一个 id"
+    assert "WanVideoWrapper" in finding["fix"]
+    comfy.state.manager = None
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert "pack" not in finding and "comfy_node_pack_search" in finding["fix"], "彻底没装、也不知道出处:去注册表搜"
+
+
+def test_写着_comfy_core_的是核心节点_不报要装插件_说版本可能太老(plugin, comfy, monkeypatch) -> None:
+    _offline(monkeypatch)
+    comfy.state.manager = None
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "LoadAudioMP3", [], properties={"cnr_id": "comfy-core", "ver": "0.3.60"}))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert finding["core"] is True and "pack" not in finding
+    assert "核心节点" in finding["cause"] and "太老" in finding["fix"]
+    assert "装上提供它的节点包" not in finding["fix"] and "registry.comfy.org" not in finding["fix"]
+    en = next(one for one in plugin("check_graph", locale="en", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert en["core"] is True and "core node" in en["cause"] and "too old" in en["fix"]
+
+
+def test_ver_是四十位_git_commit_就原样显示_不比较(plugin, comfy, monkeypatch) -> None:
+    _offline(monkeypatch)
+    comfy.state.manager = None
+    commit = "3f1a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c"
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "WanVideoSampler", [], properties={"cnr_id": "comfyui-wanvideowrapper", "ver": commit}))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert finding["pack"]["wanted_version"] == commit and finding["pack"]["wanted_is_commit"] is True
+    assert commit in finding["fix"] and "git" in finding["fix"]
+
+
+def test_子图实例的_GUID_不当成缺的节点类型(plugin) -> None:
+    """官方模板里子图实例的 `type` 是一份子图定义的 GUID:归因之前先按子图过滤,否则会误报缺插件。"""
+    guid = "e2a55522-0f5f-4b5f-9d3f-0b3b6f1c2a44"
+    graph = _txt2img()
+    graph["nodes"].append({"id": 30, "type": guid, "widgets_values": [], "inputs": [], "outputs": [], "mode": 0})
+    graph["definitions"] = {"subgraphs": [{"id": guid, "name": "我的子图", "inputs": [], "outputs": [], "links": [],
+                                           "nodes": [{"id": 1, "type": "Note", "widgets_values": ["说明"], "inputs": [],
+                                                      "outputs": [], "mode": 0}]}]}
+    out = plugin("check_graph", content=graph)
+    assert [one for one in out["findings"] if one["kind"] == "missing_type"] == [], "GUID 是子图,不是节点类型"
+    assert guid not in json.dumps(out)
+
+
+def test_图上写着的来源_和装着的那一版对得上就说清(plugin, comfy, monkeypatch) -> None:
+    _offline(monkeypatch)
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "WanVideoSampler", [], properties={
+        "cnr_id": "comfyui-wanvideowrapper", "ver": "1.4.5"}))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert finding["pack"]["installed"] is True and finding["pack"]["installed_version"] == "1.4.7", \
+        "夹具里装着 1.4.7,图上要的是 1.4.5"
+    assert "1.4.7" in finding["fix"], "这台装着哪一版也要说"
+
+
+# --- ③ 顶层 models[] 与节点级 properties.models[] 合并 ---------------------------------------------
+
+def test_只写在顶层的_models_也算声明的下载地址(plugin) -> None:
+    graph = _txt2img(ckpt="juggernaut.safetensors")
+    graph["models"] = [{"name": "juggernaut.safetensors", "directory": "checkpoints",
+                        "url": "https://huggingface.co/x/y/resolve/main/juggernaut.safetensors"}]
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_model")
+    assert "https://huggingface.co/x/y/resolve/main/juggernaut.safetensors" in finding["fix"]
+
+
+def test_顶层和节点级都写了_同名时节点级胜出(plugin) -> None:
+    graph = _txt2img(ckpt="juggernaut.safetensors")
+    graph["nodes"][0]["properties"] = {"models": [{"name": "juggernaut.safetensors", "directory": "checkpoints",
+                                                   "url": "https://huggingface.co/node/level/resolve/main/juggernaut.safetensors"}]}
+    graph["models"] = [{"name": "juggernaut.safetensors", "directory": "checkpoints",
+                        "url": "https://huggingface.co/top/level/resolve/main/juggernaut.safetensors"}]
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_model")
+    assert "node/level" in finding["fix"] and "top/level" not in finding["fix"], "节点级更贴近「这个节点要用它」"
+
+
+def test_两处都没写_还是老样子_放一个文件或者换成已有的(plugin) -> None:
+    finding = next(one for one in plugin("check_graph", content=_txt2img(ckpt="juggernaut.safetensors"))["findings"]
+                   if one["kind"] == "missing_model")
+    assert "https://" not in finding["fix"] and "放一个文件" in finding["fix"]
+
+
+def test_扫描一张工作流_顶层和节点级都读_节点级胜出_带着_hash(plugin) -> None:
+    import library
+
+    graph = {"nodes": [{"id": 1, "type": "CheckpointLoaderSimple", "widgets_values": ["a.safetensors"],
+                        "properties": {"models": [{"name": "a.safetensors", "directory": "checkpoints",
+                                                   "url": "https://huggingface.co/n/a.safetensors",
+                                                   "hash": "aa" * 32, "hash_type": "sha256"}]}},
+                       {"id": 2, "type": "LoraLoader", "widgets_values": ["b.safetensors"]}],
+             "models": [{"name": "a.safetensors", "directory": "checkpoints", "url": "https://huggingface.co/t/a.safetensors"},
+                        {"name": "b.safetensors", "directory": "loras", "url": "https://huggingface.co/t/b.safetensors"},
+                        {"name": "unused.safetensors", "directory": "loras", "url": "https://huggingface.co/t/unused.safetensors"}]}
+    _used, declared = library.scan_workflow(graph)
+    by_name = {one["name"]: one for one in declared}
+    assert by_name["a.safetensors"]["url"] == "https://huggingface.co/n/a.safetensors", "同名时节点级胜出"
+    assert by_name["a.safetensors"]["hash"] == "aa" * 32 and by_name["a.safetensors"]["hash_type"] == "sha256"
+    assert by_name["b.safetensors"]["url"] == "https://huggingface.co/t/b.safetensors", "顶层的也算(节点在用)"
+    assert "unused.safetensors" not in by_name, "没有节点在用的顶层声明不算"
+
+
 def test_缺的模型_同名文件在别的子目录就说改成哪个_没有就带下载地址(plugin) -> None:
     graph = _txt2img(ckpt="waiNSFW_v140.safetensors")
     out = plugin("check_graph", content=graph)

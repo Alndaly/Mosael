@@ -60,6 +60,19 @@ def _hash(comfy: Comfy, folder: str, name: str, locale: str) -> str:
     return digest
 
 
+def on_machine(comfy: Comfy, folder: str, name: str) -> bool:
+    """这个文件在不在这台 ComfyUI 的那个模型目录里(名字统一成正斜杠后比)。算哈希之前先问一句。"""
+    wanted = norm(name)
+    return any(norm(str(item.get("name") or "")) == wanted for item in files_in(comfy, folder))
+
+
+def sha256_of(comfy: Comfy, folder: str, name: str, locale: str) -> str:
+    """让那台机器算这个文件的 SHA256(见 `_hash`)。没装 ComfyUI-Custom-Scripts、文件不在,都抛 `ComfyError`。
+
+    「找下载地址」拿它把候选认到 `confirmed`(见 model_search):这是唯一一条不靠猜的确认路。"""
+    return _hash(comfy, folder, name, locale)
+
+
 def _search_by_filename(name: str, size: int | None, locale: str) -> list[dict[str, Any]]:
     """在 Civitai 上按文件名搜:回 Civitai 记的原始文件名一字不差(不分大小写)、大小差不过 1 KB 的那些版本。"""
     filename = norm(name).rsplit("/", 1)[-1]

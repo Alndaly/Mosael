@@ -1291,9 +1291,9 @@ describe("缺失项:定位到节点;按节点包装;找下载地址", () => {
     api.getJob.mockResolvedValue({ id: "job-3", status: "succeeded" });
     const card = within(column()).getByText("i2v-high.safetensors").closest("li")!;
     fireEvent.click(within(card).getByRole("button", { name: "workbenchSearchSourcesLabel" }));
-    await waitFor(() => expect(api.searchModelSources).toHaveBeenCalledWith("i1", "i2v-high.safetensors", "checkpoints"));
+    await waitFor(() => expect(api.searchModelSources).toHaveBeenCalledWith("i1", "i2v-high.safetensors", "checkpoints", "", ""));
     const candidates = await within(card).findByRole("list", { name: "workbenchSearchResults" });
-    expect([...candidates.querySelectorAll("[data-candidate]")].map((one) => one.getAttribute("data-candidate"))).toEqual(["exact", "similar"]);
+    expect([...candidates.querySelectorAll("[data-candidate]")].map((one) => one.getAttribute("data-candidate"))).toEqual(["exact", "likely"]);
     expect(within(card).getByText("workbenchSearchFailed"), "没搜成的那家说一声").toBeTruthy();
     expect(within(card).getByRole("textbox", { name: "workbenchDownloadLink" }), "贴链接那一格一直在").toBeTruthy();
     fireEvent.click(within(candidates).getAllByRole("button")[0]);
@@ -1306,6 +1306,74 @@ describe("缺失项:定位到节点;按节点包装;找下载地址", () => {
       filename: "i2v-high.safetensors",
     }));
     await waitFor(() => expect(api.inspectWorkflowImport, "下完自己重新检查").toHaveBeenCalledTimes(2));
+  });
+
+  it("候选分三档:哈希确认的才有「直接下载」,同名的要确认,相近的只给页面;哈希那一项的话原样说", async () => {
+    await missingTab();
+    const digest = "ab".repeat(32);
+    api.searchModelSources.mockResolvedValue({
+      filename: "i2v-high.safetensors",
+      candidates: [
+        { source: "huggingface", repo: "acme/wan", title: "acme/wan", filename: "i2v-high.safetensors",
+          url: "https://huggingface.co/acme/wan/resolve/main/i2v-high.safetensors", page: "https://huggingface.co/acme/wan",
+          size: 14_000_000_000, base_model: "Wan 2.2", exact: true, confidence: "confirmed", direct: true, sha256: digest },
+        { source: "civitai", repo: "Wan i2v", title: "Wan i2v · fp16", filename: "i2v-high-fp16.safetensors",
+          url: "https://civitai.com/api/download/models/42", page: "https://civitai.com/models/7", size: null, base_model: "",
+          exact: false, confidence: "likely", direct: false },
+      ],
+      failed: [],
+      hash: { state: "matched", sha256: digest, note: "哈希对上了:这一个就是工作流要的那个文件" },
+    });
+    const card = within(column()).getByText("i2v-high.safetensors").closest("li")!;
+    fireEvent.click(within(card).getByRole("button", { name: "workbenchSearchSourcesLabel" }));
+    const candidates = await within(card).findByRole("list", { name: "workbenchSearchResults" });
+    const rows = [...candidates.querySelectorAll("[data-candidate]")];
+    expect(rows.map((one) => one.getAttribute("data-candidate"))).toEqual(["confirmed", "likely"]);
+    expect(within(card).getByText("哈希对上了:这一个就是工作流要的那个文件"), "算没算得出哈希都要如实说").toBeTruthy();
+    //: `confirmed` 才有「直接下载」这一档
+    expect(rows[0].getAttribute("aria-label")).toContain("workbenchSearchDirectDownload");
+    expect(rows[0].getAttribute("data-candidate")).toBe("confirmed");
+    //: 相近的只给页面:连按钮都不是,指向页面
+    expect(rows[1].tagName).toBe("A");
+    expect(rows[1].getAttribute("href")).toBe("https://civitai.com/models/7");
+    expect(rows[1].getAttribute("target")).toBe("_blank");
+    expect(within(rows[1] as HTMLElement).queryByRole("button")).toBeNull();
+  });
+
+  it("同名但算不出哈希:停在「确认后下载」,不是「直接下载」;插件那句话说清为什么", async () => {
+    await missingTab();
+    api.searchModelSources.mockResolvedValue({
+      filename: "i2v-high.safetensors",
+      candidates: [{ source: "huggingface", repo: "acme/wan", title: "acme/wan", filename: "i2v-high.safetensors",
+                     url: "https://huggingface.co/acme/wan/resolve/main/i2v-high.safetensors", page: "https://huggingface.co/acme/wan",
+                     size: null, base_model: "", exact: true, confidence: "exact", direct: false }],
+      failed: [],
+      hash: { state: "unavailable", reason: "no_tools",
+              note: "这台机器没装 ComfyUI-Custom-Scripts,算不出 SHA256:下面的候选只是同名,不是确认过的那个文件" },
+    });
+    const card = within(column()).getByText("i2v-high.safetensors").closest("li")!;
+    fireEvent.click(within(card).getByRole("button", { name: "workbenchSearchSourcesLabel" }));
+    const candidates = await within(card).findByRole("list", { name: "workbenchSearchResults" });
+    const row = candidates.querySelector("[data-candidate]") as HTMLElement;
+    expect(row.getAttribute("data-candidate")).toBe("exact");
+    expect(row.getAttribute("aria-label"), "同名要用户确认").toContain("workbenchSearchConfirmDownload");
+    expect(row.getAttribute("aria-label"), "没确认过的没有直接下载").not.toContain("workbenchSearchDirectDownload");
+    expect(within(card).getByText(/只是同名,不是确认过的那个文件/)).toBeTruthy();
+  });
+
+  it("工作流自己声明的哈希交给「找下载地址」(对上的候选才算 confirmed)", async () => {
+    const bridge = await mount();
+    bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) =>
+      call.op === "export" ? { ok: true, export: WITH_SUBGRAPH } : { ok: true });
+    const digest = "cd".repeat(32);
+    api.inspectWorkflowImport.mockResolvedValue({ missing_nodes: [], missing_models: [
+      { folder: "loras", name: "x.safetensors", url: "", hash: digest, hash_type: "sha256" }] });
+    api.searchModelSources.mockResolvedValue({ filename: "x.safetensors", candidates: [], failed: [],
+                                               hash: { state: "none", note: "对不上" } });
+    tab("workbenchTabMissing");
+    const card = (await within(column()).findByText("x.safetensors")).closest("li")!;
+    fireEvent.click(within(card).getByRole("button", { name: "workbenchSearchSourcesLabel" }));
+    await waitFor(() => expect(api.searchModelSources).toHaveBeenCalledWith("i1", "x.safetensors", "loras", digest, "sha256"));
   });
 
   it("什么都没搜到:说没找到,贴链接就在这儿;工作流写了下载地址的直接一个「下载」", async () => {
@@ -1452,6 +1520,38 @@ describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、�
     tab("workbenchTabAssistant");
     //: 既没有卡片,也没有那行安静的确认 —— 零发现的工具回包不是内容。
     expect(result().querySelector("[data-comfy-findings]")).toBeNull();
+  });
+
+  it("缺插件那条:图上自己写着的出处(包名、来源、要哪一版、这台装没装、页面)画出来;核心节点说版本太老", async () => {
+    agent.tool = "comfy_check";
+    agent.data = {
+      findings: [
+        { ref: "20", type: "WanVideoSampler", severity: "error", kind: "missing_type",
+          cause: "这台 ComfyUI 没有节点类型「WanVideoSampler」;图上自己写着它来自「comfyui-wanvideowrapper」",
+          fix: "从 comfyui-wanvideowrapper 补(包页面 https://registry.comfy.org/nodes/comfyui-wanvideowrapper)",
+          pack: { id: "comfyui-wanvideowrapper", source: "registry", repository: "",
+                  page: "https://registry.comfy.org/nodes/comfyui-wanvideowrapper", wanted_version: "1.4.5",
+                  wanted_is_commit: false, installed: true, installed_version: "1.4.7" } },
+        { ref: "21", type: "LoadAudioMP3", severity: "error", kind: "missing_type", core: true,
+          cause: "「LoadAudioMP3」是 ComfyUI 的核心节点(图上写着 comfy-core)", fix: "这台 ComfyUI 的版本可能太老:升级 ComfyUI" },
+      ],
+      counts: { error: 2, warning: 0 },
+    };
+    await mount();
+    tab("workbenchTabAssistant");
+    const rows = within(result()).getAllByRole("listitem");
+    expect(rows[0].textContent).toContain("comfyui-wanvideowrapper");
+    expect(within(rows[0]).getByText("workbenchFindingPackRegistry"), "注册表上的节点包").toBeTruthy();
+    expect(within(rows[0]).getByText("workbenchFindingPackWanted"), "图上要的是哪一版").toBeTruthy();
+    expect(within(rows[0]).getByText("workbenchFindingPackInstalled"), "这台装着哪一版").toBeTruthy();
+    const page = within(rows[0]).getByRole("link", { name: /workbenchFindingPackPage/ });
+    expect(page.getAttribute("href")).toBe("https://registry.comfy.org/nodes/comfyui-wanvideowrapper");
+    expect(page.getAttribute("target")).toBe("_blank");
+    expect(page.getAttribute("rel")).toContain("noopener");
+    //: 核心节点不是缺插件:单独一句,而且没有包/页面
+    expect(rows[1].getAttribute("data-core")).toBe("true");
+    expect(within(rows[1]).getByText("workbenchFindingCore")).toBeTruthy();
+    expect(within(rows[1]).queryByRole("link")).toBeNull();
   });
 
   it("「照这个改」替用户发一句(带着这一条),智能体据此提一次 comfy_canvas_edit;面板接走就清掉", async () => {

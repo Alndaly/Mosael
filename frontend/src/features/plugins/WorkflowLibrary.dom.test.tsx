@@ -119,7 +119,8 @@ function library(overrides: Partial<WorkflowLibrary> = {}): WorkflowLibrary {
         outputs: [{ node: "9", title: "保存图像", media: "image" }],
         models: [{ folder: "checkpoints", name: "sdxl.safetensors", present: true },
                  { folder: "loras", name: "gone.safetensors", present: false }],
-        missing_models: [{ folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors" }],
+        missing_models: [{ folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors",
+                          hash: "", hash_type: "" }],
         generation: { provider_profile_id: "p9", kind: "image", model: "portrait.json" },
         last_output: { asset_id: "a1", kind: "image", created_at: "2026-10-05T10:00:00" },
         used_by: [{ kind: "workflow", id: "w1", name: "出图流程" }, { kind: "board", id: "b1", name: "分镜板" }],
@@ -440,7 +441,7 @@ describe("工作流库", () => {
   it("列表:表头不透明、压在行上面;每行一样高,缺东西的只摆一枚;种类一律灰字;全在根目录时不摆「目录」那一列", async () => {
     const data = library();
     data.workflows![0].missing_nodes = [{ type: "A", count: 1, packs: [] }, { type: "B", count: 1, packs: [] }];
-    data.workflows![0].missing_models = [{ folder: "loras", name: "m.safetensors", url: "" }];
+    data.workflows![0].missing_models = [{ folder: "loras", name: "m.safetensors", url: "", hash: "", hash_type: "" }];
     api.getWorkflowLibrary.mockResolvedValue(data);
     await openLibrary();
     fireEvent.click(screen.getByRole("radio", { name: "libraryDensityList" }));
@@ -908,8 +909,9 @@ describe("工作流库", () => {
       { type: "MysteryNode", count: 2, packs: [] },
     ];
     data.workflows![2].missing_models = [
-      { folder: "loras", name: "with-url.safetensors", url: "https://huggingface.co/x/y/resolve/main/with-url.safetensors" },
-      { folder: "checkpoints", name: "no-url.safetensors", url: "" },
+      { folder: "loras", name: "with-url.safetensors", url: "https://huggingface.co/x/y/resolve/main/with-url.safetensors",
+        hash: "", hash_type: "" },
+      { folder: "checkpoints", name: "no-url.safetensors", url: "", hash: "", hash_type: "" },
     ];
     api.getWorkflowLibrary.mockResolvedValue(data);
     wrap(<WorkflowLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1" onShowModel={vi.fn()} />);

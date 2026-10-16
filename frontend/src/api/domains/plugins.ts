@@ -166,11 +166,18 @@ export const resolveModelLink = (instanceId: string, url: string) =>
   });
 
 /** 按文件名去 HuggingFace / ModelScope / Civitai 找下载地址(工作流里只写了文件名的模型)。每个候选的 `url` 交给
- * `resolveModelLink` 正好解析到那个文件;一个站搜不了只进 `failed`。`folder`:要放进的模型目录(排序用)。 */
-export const searchModelSources = (instanceId: string, filename: string, folder = "") =>
+ * `resolveModelLink` 正好解析到那个文件;一个站搜不了只进 `failed`。`folder`:要放进的模型目录(排序用)。
+ * `hash` / `hashType`:工作流自己声明的哈希 —— 有就可能把候选认到 `confirmed`(只有这一档允许「直接下载」)。 */
+export const searchModelSources = (
+  instanceId: string,
+  filename: string,
+  folder = "",
+  hash = "",
+  hashType = "",
+) =>
   api<ModelSearch>(`/api/plugins/instances/${instanceId}/model-library/search`, {
     method: "POST",
-    body: JSON.stringify({ filename, folder }),
+    body: JSON.stringify({ filename, folder, ...(hash ? { hash, hash_type: hashType } : {}) }),
   });
 
 /** 下到这个连接的那台服务器上:一个后台任务(进度、取消都在任务上)。 */

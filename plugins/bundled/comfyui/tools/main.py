@@ -29,7 +29,7 @@
     {"op": "library"}                      → 全部模型文件、各目录数目、工作流缺的模型、下载走哪条路(见 library)
     {"op": "detail", "folder", "name"}     → 一个文件的完整元数据
     {"op": "resolve", "url"}               → 一个链接指的是哪个文件(见 sources)
-    {"op": "search_sources", "filename", "folder"} → 按文件名去 HuggingFace / ModelScope / Civitai 找下载地址,每个候选的链接 resolve 都认(见 model_search)
+    {"op": "search_sources", "filename", "folder", "hash"?, "hash_type"?} → 按文件名去 HuggingFace / ModelScope / Civitai 找下载地址,每个候选的链接 resolve 都认;候选分 confirmed / exact / likely,只有哈希确认过的才允许直接下(见 model_search)
     {"op": "download", "url", "folder", "filename"} → 流式:下到这台 ComfyUI 上(见 install)
     {"op": "node_folders", "nodes"}         → 工作台:选中节点上选模型文件的那几格各是哪个模型目录(见 workbench)
     {"op": "lookup", "folder", "name", "refresh"?} → 在 Civitai 上找这个文件(按哈希,或文件名和大小;见 lookup)

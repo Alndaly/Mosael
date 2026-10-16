@@ -36,7 +36,8 @@ import node_catalog
 from comfy_http import Comfy
 from families import BRANCHES
 from lines import ComfyError, say
-from workflow_library import VIRTUAL_NODES, _choices, _packs, live_graph
+from workflow_library import (CORE_CNR, VIRTUAL_NODES, _choices, _packs, declared_packs, installed_packs,
+                              installed_versions, live_graph, pack_page, wanted_version)
 
 #: 报错原文最多读多少字(ComfyUI 的「Value not in list」带着整张可选值列表)。
 MAX_ERROR = 20000
@@ -132,7 +133,8 @@ class _Findings:
         self.paths = canvas.instance_paths(content)
 
     def add(self, ref: str, kind: str, severity: str, cause: str, fix: str, *, input_name: str = "",
-            class_type: str = "", refs: list[str] | None = None) -> None:
+            class_type: str = "", refs: list[str] | None = None, pack: dict[str, Any] | None = None,
+            core: bool = False) -> None:
         key = (ref, kind, input_name)
         if key in self.seen or len(self.items) >= MAX_FINDINGS:
             return
@@ -148,6 +150,12 @@ class _Findings:
             entry["title"] = title[:200]
         if input_name:
             entry["input"] = input_name
+        #: 工作流自己写着的出处(见 `_missing_types`):界面上按它显示「包名 + 来源 + 要哪一版 + 页面」。
+        if pack:
+            entry["pack"] = pack
+        #: 核心节点(图上写着 comfy-core):不是缺插件,是这台 ComfyUI 太老。
+        if core:
+            entry["core"] = True
         if layer is not None:
             entry["subgraph"] = {"id": str(layer.get("id")), "name": str(layer.get("name") or layer.get("id"))[:200],
                                  "instances": self.paths.get(str(layer.get("id")), [])}
@@ -160,15 +168,62 @@ class _Findings:
 
 
 def _declared_downloads(content: dict[str, Any]) -> dict[str, dict[str, str]]:
-    """图里节点上声明的模型下载地址(`properties.models`,模板都带):文件名 → {url, directory}。"""
+    """图里声明的模型下载地址:文件名 → {url, directory, hash?, hash_type?}。
+
+    **两处都读**:节点的 `properties.models`(官方模板的写法)和**顶层的 `models`**(schema 允许,现在才接上),
+    同名冲突时**节点级胜出** —— 它更贴近「这个节点要用这个文件」。`hash` / `hash_type` 是 schema 允许、真实工作流
+    很少写的:有就带上,交给「找下载地址」把候选认到 `confirmed`(见 model_search)。"""
     found: dict[str, dict[str, str]] = {}
+
+    def take(one: Any) -> None:
+        if not isinstance(one, dict) or not isinstance(one.get("name"), str):
+            return
+        found.setdefault(_norm(one["name"]).split("/")[-1], {
+            "url": str(one.get("url") or ""), "directory": str(one.get("directory") or ""),
+            "hash": str(one.get("hash") or ""), "hash_type": str(one.get("hash_type") or ""),
+        })
+
     for scope in [content, *canvas.definitions(content).values()]:
         for node in canvas.nodes_of(scope):
             for one in ((node.get("properties") or {}).get("models") or []):
-                if isinstance(one, dict) and isinstance(one.get("name"), str) and isinstance(one.get("url"), str):
-                    found.setdefault(_norm(one["name"]).split("/")[-1],
-                                     {"url": one["url"], "directory": str(one.get("directory") or "")})
+                take(one)
+    for one in content.get("models") or []:
+        take(one)
     return found
+
+
+def _attributed(found: _Findings, kind: str, refs: list[str], own: dict[str, str],
+                installed: dict[str, str]) -> None:
+    """图上自己写着出处的缺节点(①):一个节点包 id(`cnr_id`)或者一个 git 仓库(`aux_id`),外加图上要的那一版。
+
+    **离线、免费、权威** —— 完全不装的包在 Manager 的映射和注册表搜索里都可能找不到,图上却写着它出自哪。`ver` 是
+    git commit 时**原样显示、不比较**(它不是 semver);这一版和这台机器上装的那一版对得上就说清是哪一版。"""
+    cnr, aux = own.get("cnr_id", ""), own.get("aux_id", "")
+    ident = cnr or aux
+    repository = "" if cnr else f"https://github.com/{aux}"
+    page = pack_page(cnr) if cnr else repository
+    version, commit = wanted_version(own.get("ver", ""))
+    have = installed.get(ident.lower(), "")
+    if commit:
+        wanted = found.say(f"图上写的是这一版:{version}(git commit,不是版本号,原样核对)",
+                           f"The graph names this version: {version} (a git commit, not a release number — taken as-is)")
+    elif version:
+        wanted = found.say(f"图上要的是这一版:{version}", f"The graph asks for version {version}")
+    else:
+        wanted = found.say("图上没写要哪一版", "The graph names no version")
+    if have:
+        where = found.say(f"这台机器上装着 {have}:确认它开着,重启之后再检查", f"This machine has {have} installed: check that it's enabled, then restart and check again")
+    else:
+        where = found.say("这台机器上没装:用 comfy_node_pack_info 看可用版本、依赖风险,再装上它",
+                          "Not installed on this machine: check comfy_node_pack_info for available versions and risks, then install it")
+    pack = {"id": ident, "source": "registry" if cnr else "git", "page": page, "repository": repository,
+            "wanted_version": version, "wanted_is_commit": commit, "installed": bool(have), "installed_version": have}
+    found.add(refs[0], "missing_type", "error",
+              found.say(f"这台 ComfyUI 没有节点类型「{kind}」({len(refs)} 处);图上自己写着它来自「{ident}」",
+                        f"This ComfyUI has no node type “{kind}” ({len(refs)} place(s)); the graph itself says it comes from “{ident}”"),
+              found.say(f"从 {ident} 补{'(git 仓库)' if not cnr else ''}:{wanted}。{where}。包页面 {page}",
+                        f"Get it from {ident}{' (git repository)' if not cnr else ''}: {wanted}. {where}. Pack page: {page}"),
+              class_type=kind, refs=refs, pack=pack)
 
 
 def _missing_types(found: _Findings, object_info: dict[str, Any], comfy: Comfy) -> None:
@@ -179,11 +234,37 @@ def _missing_types(found: _Findings, object_info: dict[str, Any], comfy: Comfy) 
             by_type.setdefault(kind, []).append(ref)
     if not by_type:
         return
+    #: 归因里最靠前的一步:图上自己写着的出处(`properties.cnr_id` / `aux_id` / `ver`,官方模板都带)。写着的那种
+    #: 类型不再去问 Manager / 注册表 —— 它更准,而且完全离线。
+    declared = declared_packs(found.content)
+    rest = sorted(kind for kind in by_type if kind not in declared)
     try:
-        packs = _packs(comfy, sorted(by_type))
+        packs = _packs(comfy, rest) if rest else {}
     except ComfyError:
         packs = {}
+    #: 只有图上真写了出处的那种缺节点才去问 Manager「这台装着哪一版」(别为一张没写出处的图多跑一趟)。
+    if any((declared.get(kind) or {}).get("cnr_id") or (declared.get(kind) or {}).get("aux_id") for kind in by_type):
+        try:
+            installed = installed_versions(installed_packs(comfy))
+        except ComfyError:
+            installed = {}
+    else:
+        installed = {}
     for kind, refs in sorted(by_type.items()):
+        own = declared.get(kind) or {}
+        if own.get("cnr_id") == CORE_CNR:
+            #: 官方模板里 `SaveImage` 这类核心节点写的就是 `comfy-core`:它不是要装的插件 —— 缺它意味着这台
+            #: ComfyUI 比做这张图的那台老(核心节点跟着 ComfyUI 的版本一起发)。
+            found.add(refs[0], "missing_type", "error",
+                      found.say(f"「{kind}」是 ComfyUI 的核心节点(图上写着 comfy-core),这台 ComfyUI 的节点定义里没有它({len(refs)} 处)",
+                                f"“{kind}” is a ComfyUI core node (the graph says comfy-core) and this ComfyUI has no such type ({len(refs)} place(s))"),
+                      found.say("这台 ComfyUI 的版本可能太老:升级 ComfyUI(核心节点跟着版本一起更新);或者把这一步换成这台机器上有的节点",
+                                "This ComfyUI is probably too old: upgrade it (core nodes ship with it), or replace this step with a node this machine has"),
+                      class_type=kind, refs=refs, core=True)
+            continue
+        if own.get("cnr_id") or own.get("aux_id"):
+            _attributed(found, kind, refs, own, installed)
+            continue
         offered = packs.get(kind) or []
         if offered:
             names = "、".join(one["title"] + ("(已装,可能没启用或要重启)" if one.get("installed") else "") for one in offered[:3])
@@ -303,7 +384,7 @@ def _choice_finding(found: _Findings, ref: str, kind: str, name: str, value: str
         if elsewhere:
             fix = found.say(f"这台机器上有同一个文件,在「{elsewhere}」:把这一格改成它",
                             f"This machine has the same file as “{elsewhere}”: pick that one")
-        elif base in downloads:
+        elif (downloads.get(base) or {}).get("url"):
             fix = found.say(f"下载它到 {folder or '对应的模型目录'}:{downloads[base]['url']}(先说多大,确认后再下)",
                             f"Download it into {folder or 'the matching models folder'}: {downloads[base]['url']} (state the size and confirm first)")
         else:
