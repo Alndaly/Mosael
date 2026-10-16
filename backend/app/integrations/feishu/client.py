@@ -1,20 +1,36 @@
 """飞书开放平台的 REST 调用:租户令牌(按机器人缓存、提前两分钟刷新)、发文字 / 卡片、
 表情反应(飞书的「对方正在输入」)、取回消息里的图片与文件、列出机器人所在的群。只懂飞书,不懂 Mosael 的业务。
+
+## 失败时要说得出飞书自己那句话
+
+飞书的业务错误大多是 **HTTP 200 + code≠0**,但限流 / 网关 / 令牌失效是**真非 2xx** ——
+消息 API 限流是 `code 230020` + HTTP 429(历史版本 400),消息流 `99991400`。所以这里**先把 body 解出来**:
+非 2xx 也当成一次回答来读,`code` / `msg` / HTTP 状态码一起进 `FeishuError`(它是 `LocalizedError`,
+执行器那层翻得动)。此前是先 `raise_for_status()` 再 `json()` —— 非 2xx 一律变成 httpx 的
+`HTTPStatusError`:飞书写的 code/msg 一个都没读,`except LocalizedError` 也接不住,任务失败原因里
+只剩一句英文的 `Client error '429 Too Many Requests' for url …`。
+
+## 重发只对不会留下可见副本的调用开
+
+见 `_resend_budget`:幂等的(GET 列群 / 下载)和"重发只是再拿一个令牌"的交给
+`core.http_retry` 那套判据;**发消息 / 改卡片 / 加表情一律 0 次** —— 重发一遍就是群里多一条,
+而 429 恰好是飞书消息 API 最常见的限流回法,仓库那条判据对它是放行的。
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import quote
 
 import httpx
 
-from app.core.http_retry import RetryingClient
+from app.core.http_retry import RetryingClient, current_max_retries
 from app.core.i18n import LocalizedError
 from app.db.models import FeishuBot
 
@@ -33,6 +49,100 @@ class FeishuError(LocalizedError, RuntimeError):
     """飞书这一侧没做成。带文案 key(`feishuErr_*`);飞书自己回的 msg / code 放进 `detail`。"""
 
 
+#: 飞书说「你手上那个令牌不认」的两个码。`99991663` 是**租户访问令牌无效**(官方 FAQ 专门有一篇:
+#: how-to-fix-99991663-error),`99991664` 是**应用访问令牌无效** —— 官方 SDK 的错误码表里它们是兄弟,
+#: 而第三方客户端(openclaw 那几笔修复)两个都重试:有些接口回的是后一个。我们只持有租户令牌,
+#: 所以 99991664 在这里多半用不上;真遇上了,多花的也只是"再取一次令牌",**不会多发一条消息**。
+_TOKEN_INVALID = frozenset({99991663, 99991664})
+
+#: 非 2xx 时飞书的 `code` 可能与 HTTP 状态码不是一回事(429 + code 230020)。两个都要看得见,
+#: 所以解析时把状态码另记一处(见 `_fail`)。
+_HTTP_STATUS = "http_status"
+
+
+def _json_of(response: httpx.Response) -> Any:
+    """body 是 JSON 就解出来,不是就 None —— **不抛**。
+
+    网关 / 门户页回的是 HTML,`response.json()` 会抛 JSONDecodeError;那不是 `LocalizedError`,
+    执行器那层接不住(和 `HTTPStatusError` 同一个毛病,见模块说明)。
+    """
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
+
+def _body_head(response: httpx.Response) -> str:
+    """响应体开头一小段(空白压平)。说不清是不是飞书答的时候,原文比一句"失败了"有用。"""
+    try:
+        raw = response.text
+    except Exception:  # noqa: BLE001 —— 解不出文本(二进制、编码坏)不影响给出状态码
+        raw = ""
+    return " ".join(raw.split())[:200]
+
+
+def _detail_of(data: dict[str, Any]) -> str:
+    """飞书那条回答里的 code 与 msg —— **两个都留着**。
+
+    只说 msg 的话排查时没有错误码(限流 230020 与令牌失效 99991663 的修法完全不同);
+    只说 code 的话飞书偶尔不回 msg,人看不懂。
+    """
+    code, msg = data.get("code"), str(data.get("msg") or "").strip()
+    has_code = code is not None and str(code) != ""
+    if has_code and msg:
+        return f"code {code}: {msg}"
+    return f"code {code}" if has_code else msg
+
+
+def _payload(response: httpx.Response) -> dict[str, Any]:
+    """把响应的 body 读成飞书那种 `{code, msg, data}` —— **非 2xx 也读**(见模块说明)。
+
+    非 2xx 且 body 里带着飞书自己的 `code` 时原样交回去:让调用方按 code 说清是哪一件事,
+    `msg` 一个字都不丢。说不清是不是飞书答的(网关的 HTML、门户页,或者 2xx 却不是 JSON)时
+    给一份**说真话的替身**:`code` 留空(它不是飞书的业务码,别混进那个语义里),`msg` 是 body 开头一小段。
+    """
+    body = _json_of(response)
+    if isinstance(body, dict) and "code" in body and (response.is_success or body.get("code") not in (None, 0)):
+        data = body
+    else:
+        data = {"code": None, "msg": _body_head(response)}
+    if not response.is_success:
+        data[_HTTP_STATUS] = response.status_code
+    return data
+
+
+def _fail(key: str, data: dict[str, Any]) -> NoReturn:
+    """飞书拒了这一趟:把 code / msg / HTTP 状态一起放进错误里,并换成我们的文案 key。
+
+    这是这一串 bug 的收敛点 —— 此前非 2xx 抛的是 httpx.HTTPStatusError,`code` 与 `msg` 从来没被读过,
+    执行器那层的 `except LocalizedError`(见 domain/workflows/executors/feishu._Translated)也接不住。
+    """
+    detail = _detail_of(data)
+    status = data.get(_HTTP_STATUS)
+    if status is not None and f"HTTP {status}" not in detail:
+        detail = f"{detail} (HTTP {status})" if detail else f"HTTP {status}"
+    said = {"detail": detail, "code": data.get("code"), "msg": data.get("msg"), "status": status}
+    #: 空的那几栏不传:它们要么翻不出东西,要么会在落库时变成字符串 "None"(见 core/i18n.stored_param)。
+    raise FeishuError(key, **{name: value for name, value in said.items() if value not in (None, "")})
+
+
+def _resend_budget(method: str, url: str) -> int:
+    """这次调用允许自动重发几次(不含首次)。
+
+    **会留下可见副本的那几条(发消息 / 改卡片 / 加表情)一律 0。** 重发一遍就是群里多一条消息、
+    多一个表情,而飞书消息 API 最常见的限流回法恰好是 **HTTP 429 + code 230020** —— 仓库那条判据
+    (`core.http_retry.status_resend_is_safe`)对 429 是**放行**的:它判的是"供应商会不会多做一次并
+    多收一次钱",不是"用户会不会看到两条"。全仓此前一次都不自动重发,这条性质得保住。
+
+    **不会留下可见副本的那几条**交给仓库那套:列群 / 下载是 GET(幂等,遇 429 / 5xx 都重发),
+    取令牌是"重发只是再拿一个令牌"的 POST(非幂等,只在对方**明说没处理这一次**,也就是
+    429 / 503 / 529 时重发)。
+    """
+    if method.upper() == "GET" or url.startswith(TOKEN_URL):
+        return current_max_retries()
+    return 0
+
+
 # --- tenant token cache (per bot, refreshed with safety margin) -------------
 
 _token_lock = threading.Lock()
@@ -44,26 +154,31 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
         cached = _token_cache.get(bot.id)
         if cached and not force and cached[1] > time.time() + 120:
             return cached[0]
-    with RetryingClient(timeout=15.0, max_retries=0) as client:
+    #: 取令牌是 POST,但重发只是**再拿一个令牌**(没有可见副本),所以交给仓库那套重试策略:
+    #: 非幂等请求只在对方明说没处理这一次(429 / 503 / 529)时重发(见 _resend_budget)。
+    with RetryingClient(timeout=15.0, max_retries=_resend_budget("POST", TOKEN_URL)) as client:
         response = client.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret})
-    data = response.json()
+        data = _payload(response)
     if data.get("code") != 0:
-        raise FeishuError("feishuErr_token", detail=data.get("msg") or data.get("code"))
-    token = str(data["tenant_access_token"])
+        _fail("feishuErr_token", data)
+    token = str(data.get("tenant_access_token") or "")
+    if not token:
+        #: 说成功却没给令牌(网关改写、上游异常)。这一条**也必须是我们自己的错误**:KeyError 冲出去,
+        #: 和 HTTPStatusError / JSONDecodeError 是同一类 —— 执行器接不住,失败原因里没有原文。
+        raise FeishuError("feishuErr_token", detail=_body_head(response), status=response.status_code)
     with _token_lock:
-        _token_cache[bot.id] = (token, time.time() + float(data.get("expire", 7200)))
+        _token_cache[bot.id] = (token, time.time() + float(data.get("expire") or 7200))
     return token
 
 
 def call_api(bot: FeishuBot, method: str, url: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     def _call(token: str) -> dict[str, Any]:
-        with RetryingClient(timeout=15.0, max_retries=0) as client:
+        with RetryingClient(timeout=15.0, max_retries=_resend_budget(method, url)) as client:
             response = client.request(method, url, headers={"Authorization": f"Bearer {token}"}, json=body)
-            response.raise_for_status()
-            return response.json()
+            return _payload(response)
 
     data = _call(get_tenant_access_token(bot))
-    if data.get("code") == 99991663:  # token expired mid-flight
+    if data.get("code") in _TOKEN_INVALID:  # 令牌半路过期:换一个新的再来一次(见 _TOKEN_INVALID)
         data = _call(get_tenant_access_token(bot, force=True))
     return data
 
@@ -82,7 +197,7 @@ def send_text(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str =
         {"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text})},
     )
     if data.get("code") != 0:
-        raise FeishuError("feishuErr_sendText", detail=data.get("msg") or data.get("code"))
+        _fail("feishuErr_sendText", data)
     return _message_id(data)
 
 
@@ -96,7 +211,7 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_
         {"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
     )
     if data.get("code") != 0:
-        raise FeishuError("feishuErr_sendCard", detail=data.get("msg") or data.get("code"))
+        _fail("feishuErr_sendCard", data)
     return _message_id(data)
 
 
@@ -108,23 +223,25 @@ def update_card(bot: FeishuBot, message_id: str, card: dict[str, Any]) -> None:
     """
     data = call_api(bot, "PATCH", f"{SEND_URL}/{message_id}", {"content": json.dumps(card, ensure_ascii=False)})
     if data.get("code") != 0:
-        raise FeishuError("feishuErr_updateCard", detail=data.get("msg") or data.get("code"))
+        _fail("feishuErr_updateCard", data)
 
 
 def list_chats(bot: FeishuBot, *, limit: int = 200) -> list[dict[str, str]]:
     """这个机器人所在的群:`[{"id": "oc_…", "name": "…"}]`,按飞书给的顺序。
 
     飞书按 `page_token` 分页(`has_more` / `page_token`),这里跟到底 —— 但当心"跟到底"也可能是
-    几千个群:调用方给 `limit` 划上界,到这里就停(不再要下一页)。
+    几千个群:调用方给 `limit` 划上界,到这里就停(不再要下一页)。服务端要是 `has_more=true`
+    却一直回**同一个 token**,再拉就是原地转圈:见过的 token 直接停(见下面那一处)。
     """
     found: list[dict[str, str]] = []
     cap = max(1, int(limit))
     page_token = ""
+    seen_tokens: set[str] = set()
     while True:
         query = f"?page_size={CHATS_PAGE_SIZE}" + (f"&page_token={quote(page_token)}" if page_token else "")
         data = call_api(bot, "GET", f"{CHATS_URL}{query}")
         if data.get("code") != 0:
-            raise FeishuError("feishuErr_listChats", detail=data.get("msg") or data.get("code"))
+            _fail("feishuErr_listChats", data)
         page = data.get("data") or {}
         for item in page.get("items") or []:
             if not isinstance(item, dict):
@@ -135,6 +252,14 @@ def list_chats(bot: FeishuBot, *, limit: int = 200) -> list[dict[str, str]]:
         page_token = str(page.get("page_token") or "").strip()
         if len(found) >= cap or not page.get("has_more") or not page_token:
             return found[:cap]
+        if page_token in seen_tokens:
+            #: 这个 token 我们已经拿它要过一页了 —— 再要就是同一页,而 `has_more` 永远为真,拉不完。
+            #: 把已经拿到的交出去(不给空清单,也不假装拉完了)。
+            logger.warning(
+                "feishu list_chats: page_token %r came back twice, stopping after %d groups", page_token, len(found)
+            )
+            return found[:cap]
+        seen_tokens.add(page_token)
 
 
 # --- 反应(reaction)= 飞书的「对方正在输入」(前身项目同款) ----------------
@@ -166,7 +291,7 @@ def add_reaction_strict(bot: FeishuBot, message_id: str, emoji_type: str) -> str
         bot, "POST", f"{SEND_URL}/{message_id}/reactions", {"reaction_type": {"emoji_type": emoji_type}}
     )
     if data.get("code") != 0:
-        raise FeishuError("feishuErr_reaction", detail=data.get("msg") or data.get("code"))
+        _fail("feishuErr_reaction", data)
     return str((data.get("data") or {}).get("reaction_id") or "")
 
 
@@ -194,8 +319,25 @@ class DownloadedResource:
     content_type: str
 
 
-def _resource_name(disposition: str, file_key: str, kind: str) -> str:
-    """`Content-Disposition` 里的文件名;没有就按 file_key 与类型兜一个认得出的名字。"""
+def _suffix_for(content_type: str) -> str:
+    """`content-type` → 扩展名。用标准库那张表,不自己编;认不出就没有。
+
+    `application/octet-stream` 除外:它的意思是"我不知道这是什么字节",给它按一个 `.bin`
+    等于编一个类型出来。标准库对它有映射,这里挡掉。
+    """
+    mime = (content_type or "").split(";")[0].strip().lower()
+    if not mime or mime == "application/octet-stream":
+        return ""
+    return mimetypes.guess_extension(mime) or ""
+
+
+def _resource_name(disposition: str, file_key: str, kind: str, content_type: str = "") -> str:
+    """`Content-Disposition` 里的文件名;没有就按 file_key 与类型兜一个**认得出**的名字。
+
+    `content-type` 也参与:飞书对 file 类消息**不一定**给 `Content-Disposition`,而素材库按
+    名字 / 类型认种类(见 media/probe.guess_kind)—— 一个没有扩展名的 `feishu-xxxxxxxx` 会先被
+    当成视频去探测,素材库里可能直接进不去。推不出扩展名就保持原样(不编)。
+    """
     for marker in ("filename*=UTF-8''", 'filename="', "filename="):
         at = disposition.find(marker)
         if at < 0:
@@ -204,31 +346,42 @@ def _resource_name(disposition: str, file_key: str, kind: str) -> str:
         name = tail.split(";")[0].strip().strip('"').strip()
         if name:
             return name
-    suffix = ".jpg" if kind == "image" else ""
+    suffix = _suffix_for(content_type) or (".jpg" if kind == "image" else "")
     return f"feishu-{file_key[-8:]}{suffix}"
 
 
 def download_message_resource_named(bot: FeishuBot, message_id: str, file_key: str, kind: str) -> DownloadedResource:
     """把消息里的图片/文件取回来,**连它的名字和类型一起**。走 tenant token,和其它 API 调用同一条路。"""
 
+    url = f"{API_BASE}/im/v1/messages/{message_id}/resources/{file_key}"
+
     def _fetch(token: str) -> httpx.Response:
-        with RetryingClient(timeout=60.0, max_retries=0) as client:
-            return client.get(
-                f"{API_BASE}/im/v1/messages/{message_id}/resources/{file_key}",
-                params={"type": kind},
-                headers={"Authorization": f"Bearer {token}"},
-            )
+        #: 下载是 GET:限流(429)/ 网关(5xx)重发一遍不会多取一份东西(见 _resend_budget)。
+        with RetryingClient(timeout=60.0, max_retries=_resend_budget("GET", url)) as client:
+            return client.get(url, params={"type": kind}, headers={"Authorization": f"Bearer {token}"})
 
     response = _fetch(get_tenant_access_token(bot))
     if response.status_code == 401:  # token 半路过期
         response = _fetch(get_tenant_access_token(bot, force=True))
     if response.status_code != 200:
-        raise FeishuError("feishuErr_download", status=response.status_code)
-    disposition = response.headers.get("content-disposition", "")
+        #: body 里飞书的 code/msg 也要带出来(限流 230020、权限 99991613…)。`feishuErr_download`
+        #: 的文案只有一个 `{status}` 槽,所以把状态码与原文一起拼进那个槽 —— 不新增文案 key,
+        #: 但一个字的原文都不丢。
+        body = _json_of(response)
+        said = _detail_of(body) if isinstance(body, dict) else ""
+        detail = said or _body_head(response)
+        params: dict[str, Any] = {
+            "status": f"HTTP {response.status_code}" + (f" · {detail}" if detail else ""),
+            "detail": detail,
+        }
+        if isinstance(body, dict):
+            params["code"], params["msg"] = body.get("code"), body.get("msg")
+        raise FeishuError("feishuErr_download", **params)
+    content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
     return DownloadedResource(
         data=response.content,
-        filename=_resource_name(disposition, file_key, kind),
-        content_type=(response.headers.get("content-type") or "").split(";")[0].strip(),
+        filename=_resource_name(response.headers.get("content-disposition", ""), file_key, kind, content_type),
+        content_type=content_type,
     )
 
 
