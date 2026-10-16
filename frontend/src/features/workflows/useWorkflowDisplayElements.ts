@@ -3,7 +3,7 @@ import type { Edge, Node } from "@xyflow/react";
 
 import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
 import type { useI18n } from "@/app/preferences";
-import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { shapeEdges, laneEdges, type EdgeHeightRank, type EdgeShape } from "@/components/app/canvasEdgeShape";
 import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 import type { CanvasMarker } from "@/features/markers/markers";
@@ -16,6 +16,7 @@ import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 import { configAssetId, workflowIssueText, workflowNodeSubtitle, workflowPortPresentation } from "@/features/workflows/workflowCanvasModel";
 import type { ScopePath } from "@/features/workflows/scope";
 import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
+import { nodePorts } from "@/features/workflows/workflowPorts";
 import { isMarkerNode } from "@/features/workflows/workflowViewShared";
 import { useGenerationOptions } from "@/lib/generationOptions";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,65 @@ export function useWorkflowDisplayEdges(
       return taken ? { ...edge, className: canvasEdgeClass("taken") } : edge;
     });
   }, [edges, runByNode, edgeShape]);
+}
+
+/**
+ * 一对节点里每条边**天生**排在多高 —— 错开时先按它排,再按 id 断平(见 canvasEdgeShape 的平行边)。
+ *
+ * 卡片上接点的先后是死的:控制口在标题层(进出各一个),数据口在页脚的接点行上,行越靠后越低;
+ * 条件节点那两路(真 18 / 假 38)夹着控制口(28)。同一对节点共用两头,所以**两侧行号相加**和真实
+ * 中段的高度同序 —— 页脚相对卡片顶端那个偏移是个常数,不影响排序(它只决定"控制口该算哪一行",
+ * 而控制口一定在所有数据行之上,这里按 -1 算)。
+ *
+ * 只为了让道次别把线插到一起:**道次是从中间往外分的**,顺序错了,天然在上面那根会分到往下的道次,
+ * 两根就互相穿过去(实测:控制线(中段 29)往下一道、页脚第一行的数据线(78)往上一道 —— 49 的天然
+ * 间隔撞上 48 的跨度,差 0.8px,正好叠上)。
+ */
+export function canvasEdgeHeightRank(
+  graph: WorkflowGraph,
+  registry: Map<string, WorkflowNodeType>,
+): (edge: Edge) => number {
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const ports = new Map<string, { inputs: string[]; outputs: string[] }>();
+  const portsOf = (id: string) => {
+    const found = ports.get(id);
+    if (found) return found;
+    const node = nodes.get(id);
+    const computed = node ? nodePorts(node, registry, graph.edges ?? []) : { inputs: [], outputs: [] };
+    ports.set(id, computed);
+    return computed;
+  };
+  /** 接点在卡片上的行号:控制口(没有 id 的那种)在标题层,记 -1;数据口是页脚第几行(从 2 起,页脚整个在标题层下面)。 */
+  const rowOf = (handle: string | null | undefined, list: string[], branch: boolean) => {
+    if (handle === null || handle === undefined) return -1;
+    //: 条件节点那两路(真 18 / 假 38)夹着控制口(28)—— 它们的值就是 "true" / "false",不带 in:/out: 前缀。
+    if (branch && (handle === "true" || handle === "false")) return handle === "true" ? -1.5 : 0.5;
+    const index = list.indexOf(handle.replace(/^(in|out):/, ""));
+    return 2 + (index >= 0 ? index : 0);
+  };
+  const isCondition = (id: string) => nodes.get(id)?.type === "condition";
+  return (edge) =>
+    rowOf(edge.sourceHandle, portsOf(edge.source).outputs, isCondition(edge.source)) +
+    rowOf(edge.targetHandle, portsOf(edge.target).inputs, false);
+}
+
+/**
+ * 交给 React Flow 的那一整串边:引用提示线排在前面(**先画**,后画的真连线压在它上面),真连线按
+ * 标注模式关掉可选中,整体再按「同一对节点之间的第几条」错开(见 canvasEdgeShape 的平行边)。
+ *
+ * **错开必须在这一层、对两串一起算。** 规范化不再折掉「同一对节点间的控制边」之后,一对节点上会同时
+ * 挂控制线(实线,说先后)和数据线(虚线,说哪个值流过去),外加画在这一对上的引用提示线 —— 分组要
+ * 看的是「这一对节点上一共画了几根」,分开算的话两边都以为自己是独苗,照旧重合。
+ *
+ * **分组只看两头是谁,不看 id 前缀**(`d-` / `e-` / `ref-hint:` 各有各的来历,那不是边的性质):
+ * 谁和谁在同一对节点上,图里就写着(source / target)。`heightOf` 见 canvasEdgeHeightRank。
+ */
+export function canvasEdgesForFlow(
+  hintEdges: Edge[],
+  displayEdges: Edge[],
+  { annotationMode, heightOf }: { annotationMode: boolean; heightOf?: EdgeHeightRank },
+): Edge[] {
+  return laneEdges([...hintEdges, ...displayEdges.map((edge) => ({ ...edge, selectable: !annotationMode }))], heightOf);
 }
 
 /** 节点:角标、运行状态与产出、手动层级、查找高亮;标记另走一套。 */

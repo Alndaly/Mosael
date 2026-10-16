@@ -48,7 +48,7 @@ import { highlightAtLayer, nodeSearchEntryId, nodeSearchTargets } from "@/featur
 import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { useWorkflowCanvasEdits } from "@/features/workflows/useWorkflowCanvasEdits";
-import { useWorkflowDisplayEdges, useWorkflowDisplayNodes } from "@/features/workflows/useWorkflowDisplayElements";
+import { useWorkflowDisplayEdges, useWorkflowDisplayNodes, canvasEdgeHeightRank, canvasEdgesForFlow } from "@/features/workflows/useWorkflowDisplayElements";
 import { useWorkflowPortNamer } from "@/features/workflows/useWorkflowPortNamer";
 import { workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 import { useWorkflowEditorShortcuts, useWorkflowNodeZ } from "@/features/workflows/useWorkflowEditorKeys";
@@ -485,6 +485,15 @@ export function WorkflowEditor({
   const displayEdges = useWorkflowDisplayEdges(edges, runByNode, edgeShape);
   //: `{{…}}` 引用画成淡点线(只管先后,不让被引用的节点跑);被引用的不会跑时是错误色。不在图里,只叠在显示上。
   const referenceHintEdges = useReferenceHintEdges(graph, registry, { entryIsRoot: !atRoot, shape: edgeShape, t });
+  //: 两串一起过一遍「同一对节点之间的第几条」:折边拿掉之后,一对节点上会同时挂着控制线、数据线和
+  //: 画在这一对上的引用提示线 —— 不错开的话它们在中段叠成一根(见 canvasEdgeShape 的平行边那一段)。
+  //: 道次的**先后**按接点在卡片上的高低定(见 canvasEdgeHeightRank):不按高低排的话,天然在上面那根
+  //: 会分到往下的道次,两根互相插过去 —— 那正是"看不出来"的另一种样子。
+  const edgeHeightRank = React.useMemo(() => canvasEdgeHeightRank(graph, registry), [graph, registry]);
+  const flowEdges = React.useMemo(
+    () => canvasEdgesForFlow(referenceHintEdges, displayEdges, { annotationMode, heightOf: edgeHeightRank }),
+    [referenceHintEdges, displayEdges, annotationMode, edgeHeightRank],
+  );
 
   useWorkflowEditorShortcuts({ save, startRun });
 
@@ -677,7 +686,8 @@ export function WorkflowEditor({
             nodesConnectable={!annotationMode}
             elementsSelectable={!workflowComments.active}
             //: 提示线排在前面:后画的真连线压在它上面。它们自己就不可选(见 referenceHints),不跟着标注模式切。
-            edges={[...referenceHintEdges, ...displayEdges.map(edge => ({ ...edge, selectable: !annotationMode }))]}
+            //: 道次(同一对节点之间的第几条)在这一串上一起算 —— 见 flowEdges。
+            edges={flowEdges}
             nodeTypes={WORKFLOW_CANVAS_NODE_TYPES}
             edgeTypes={WORKFLOW_CANVAS_EDGE_TYPES}
             minZoom={0.1}

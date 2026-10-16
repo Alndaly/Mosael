@@ -30,7 +30,7 @@ import { errorText } from "@/api/errorMessage";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { fitCanvasViewport, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
-import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
+import { CANVAS_EDGE_TYPES, laneEdges, shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
 import { CANVAS_EDGE_CLASS, CANVAS_EDGE_OPTIONS } from "@/components/app/canvasEdges";
 import {
   PENDING_GHOST_ID,
@@ -562,12 +562,17 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     return shown;
   });
   //: 箭头、命中宽度、层次都是**画出来的那一份**才有的东西,不进画布数据(toCanvas 只存 id 和两头)。
-  const baseEdges: Edge[] = shapeEdges(edges, edgeShape).map((edge) => ({
+  //: 再按「同一对格子之间的第几条」错开(见 canvasEdgeShape 的平行边)。画板的连线规矩不许同一对之间
+  //: 有两根**同向**的线(boardLinks 的 duplicate),所以这里平时一条道都用不上 —— 道次是给"以后允许
+  //: 了"和工作流那一半留的(两块画布共用同一套)。
+  //: 反向那一对(a→b 和 b→a)现在各算一对、各走各的道(都只有一条 → 不让开),仍旧会重合;要让它们
+  //: 也分开得先给"一对"定个规范方向、再给反向那条翻个号 —— 折边回来的那 85 对全是有向的同一对。
+  const baseEdges: Edge[] = laneEdges(shapeEdges(edges, edgeShape).map((edge) => ({
     ...edge,
     ...CANVAS_EDGE_OPTIONS,
     zIndex: LAYERS.edge,
     selectable: !commentMode && !markerMode,
-  }));
+  })));
 
   /** 画布上的一格(连线的规矩看种类);标记和不在的回 undefined。 */
   const cellOf = (id: string | null | undefined): Pick<BoardItem, "id" | "kind"> | undefined => {
@@ -883,6 +888,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         edges={display.edges}
         connectionLineType={edgeShape as ConnectionLineType}
         nodeTypes={CANVAS_NODE_TYPES}
+        //: 两种走线方式都由共用的那个组件画(见 canvasEdgeShape):它只多做一件事 —— 同一对格子之间
+        //: 的第二条线让开。没有第二条时画出来的和工作流那边、和以前内置的都逐字相同。
+        edgeTypes={CANVAS_EDGE_TYPES}
         minZoom={0.1}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

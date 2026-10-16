@@ -49,6 +49,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
 });
 
 import type { Workspace, WorkflowGraph } from "@/api/client";
+import { CANVAS_EDGE_TYPES } from "@/components/app/canvasEdgeShape";
 import { isReferenceHintId } from "@/features/workflows/referenceHints";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { WorkflowsView } from "@/features/workflows/WorkflowsView";
@@ -149,6 +150,25 @@ it("同一对节点上数据边 + 控制边:自动保存把两条边都发出去
   served = workflowWith(sent, "2026-09-20T00:01:00", "h-2");
   await waitFor(() => expect(canvasEdges().has("e-llm-1-template-1")).toBe(true));
   expect(canvasEdges().has("d-llm-1-text-template-1-template")).toBe(true);
+}, 20000);
+
+it("这两条边在画布上各走各的道:同一对节点之间,一条不许压在另一条上", async () => {
+  await renderEditor(GRAPH);
+  act(() => flow.props?.onConnect?.({ source: "llm-1", target: "template-1", sourceHandle: "out:text", targetHandle: "in:template" }));
+  act(() => flow.props?.onConnect?.({ source: "llm-1", target: "template-1", sourceHandle: null, targetHandle: null }));
+
+  //: 两条边挂在同一对节点上,交给 React Flow 之前各贴一条道(见 components/app/canvasEdgeShape 的
+  //: 平行边那段)。**控制线在上面那道(-12),数据线在下面那道(+12)** —— 道次的先后按接点在卡片上的
+  //: 高低定(控制口在标题层、数据口在页脚),不是按 id:按 id 的话 `d-…` 在前,控制线会被推到下面,
+  //: 正好撞进页脚第一行那条数据线里(实测差 0.8px)。折边回来之后,这就是"两根都看得见"的那一半。
+  const lanes = new Map((flow.props?.edges ?? []).map((edge) => [edge.id, edge.data?.lane]));
+  expect(lanes.get("e-llm-1-template-1")).toBe(-12);
+  expect(lanes.get("d-llm-1-text-template-1-template")).toBe(12);
+
+  //: 而且两根线真的是**共用的那个边组件**画的:道次贴上去,没人照它画就等于没贴(javascript 里
+  //: 接点量不出位置,画出来的 `d` 在 canvasEdgeShape.dom.test 里比)。
+  expect(flow.props?.edgeTypes?.default).toBe(CANVAS_EDGE_TYPES.default);
+  expect(flow.props?.edgeTypes?.smoothstep).toBe(CANVAS_EDGE_TYPES.smoothstep);
 }, 20000);
 
 it("两条边是一次离散操作各记一条:撤一次只退控制边,再撤一次退数据边", async () => {

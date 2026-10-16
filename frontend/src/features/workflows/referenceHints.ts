@@ -130,6 +130,8 @@ export interface ReferenceHintEdgeData extends Record<string, unknown> {
   title: string;
   shape: EdgeShape;
   neverRuns: boolean;
+  /** 同一对节点之间的第几条让开多少(见 canvasEdgeShape 的平行边;由画布那一层统一算)。 */
+  lane?: number;
 }
 
 export type ReferenceHintFlowEdge = Edge<ReferenceHintEdgeData, typeof REFERENCE_HINT_EDGE_TYPE>;
