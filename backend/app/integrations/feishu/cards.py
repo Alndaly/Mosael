@@ -16,6 +16,10 @@
 
 卡片回调允许在响应里直接返回一张新卡片,飞书会就地替换原卡。所以「批准后把卡更新成结果态」
 不需要我们记住 message_id,也就不必给 ToolConfirmation 加列。
+
+**这条只对**工具确认卡**成立**:点击者还在回调那条线上。工作流的「等人确认」还有两条**没有回调可搭车**
+的结束方式(取消 / 超时),那里只能拿着消息 id 去 PATCH —— 所以那张单存了 `feishu_message_id`
+(见 domain/workflows/approvals 与 ADR 0069)。
 """
 
 from __future__ import annotations

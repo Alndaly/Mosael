@@ -114,6 +114,13 @@ class RunApprovalOut(OrmModel):
     status: str
     #: 决定那一格:approved / rejected / timeout(空 = 还没决定)。界面拿它写回执那半句。
     decision: str
+    #: 这一次等待**发到飞书没有**:sent / failed / not_attempted(空 = 那一版之前建的,没有投递记录)。
+    #: 界面照它说「已发到飞书 / 仅站内(原因) / 发飞书失败(原因)」—— 「在飞书里点那张卡也一样」
+    #: 这句话只有在**真发出去过**时才成立。
+    feishu_delivery: str
+    #: 为什么是这个结果:not_attempted 是路由那一档(none / no-bot / no-origin / not-bound / no-target),
+    #: failed 是发出去时撞上的那一句。界面拿它把"发不出去"说得具体一点。
+    feishu_delivery_reason: str
     #: 什么时候算超时(空 = 一直等)。
     expires_at: datetime | None
     created_at: datetime

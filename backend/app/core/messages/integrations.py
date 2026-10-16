@@ -31,6 +31,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "飞书发卡片失败: {detail}",
         "en": "Couldn't send the Feishu card: {detail}",
     },
+    "feishuErr_updateCard": {
+        "zh": "更新飞书卡片失败: {detail}",
+        "en": "Couldn't update the Feishu card: {detail}",
+    },
     "feishuErr_reaction": {
         "zh": "飞书加表情失败: {detail}",
         "en": "Couldn't add the Feishu reaction: {detail}",

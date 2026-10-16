@@ -58,6 +58,10 @@ class FeishuTransport:
     def send_card(self, bot: FeishuBot, receive_id: str, receive_type: str, card: dict[str, Any]) -> str:
         return client.send_card(bot, receive_id, card, receive_id_type=receive_type)
 
+    def update_card(self, bot: FeishuBot, message_id: str, card: dict[str, Any]) -> None:
+        #: **就地换掉**(消息 id 不变):取消 / 超时之后把群里那张卡收回成结果态,别人不必再点。
+        client.update_card(bot, message_id, card)
+
     def card(self, spec: domain.CardSpec) -> dict[str, Any]:
         return message_card(spec)
 

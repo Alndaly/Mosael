@@ -2608,6 +2608,38 @@ def _migrate_workflow_run_approvals_take_the_current_shape() -> None:
         logger.info("workflow_run_approvals.feishu_chat_id 未能删除(SQLite 版本不支持 DROP COLUMN),留着无害")
 
 
+def _migrate_workflow_run_approvals_record_their_delivery() -> None:
+    """「等人确认」的待批单记下**这一次到底发到飞书没有**(`workflow_run_approvals`):
+    补 `feishu_delivery` / `feishu_delivery_reason` / `feishu_message_id`。
+
+    改之前这三件事只活在日志里:卡片和降级那段文字都没发出去(断网、机器人没权限)时,单上看不出
+    "到底发到飞书没有",群里也没有任何东西 —— 用户在群里等一张永远不会来的卡。这三列之后是
+    **投递结果的唯一出处**:界面照它说"已发飞书 / 仅站内(原因) / 发飞书失败(原因)",
+    取消和超时也照 `feishu_message_id` 把群里那张卡收回成结果态(否则它留在原地还能点)。
+
+    老行的三列留空:**空 = 这张单是这一版之前建的,那时没有投递记录这回事**。不猜着回填
+    (`feishu_receive_id` 非空就写 `sent`?)—— 那三列只说明"当时路由解到了哪",发卡成没成当时
+    根本没记,猜出来的结果会在取消时去改一张不存在的消息(或者漏掉一张真卡)。空值在代码里的
+    含义就是"跳过"。
+
+    **必须在 SCHEMA 之前**:create_all 只建缺失的**表**、从不给已有的表加列,而这一步之后 ORM 上的
+    WorkflowRunApproval 已经指望这三列在了(任何 SELECT 都会带上它们)。表不在的跳过 —— 那种库由
+    `create-current-schema` 直接建成现在的形状。**幂等**:逐列判「在不在」。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(workflow_run_approvals)"))}
+        if not columns:
+            return
+        for name, kind in (
+            # 列定义与模型逐字一致(见 db/model_slices/workflows.WorkflowRunApproval)。
+            ("feishu_delivery", "VARCHAR(16) NOT NULL DEFAULT ''"),
+            ("feishu_delivery_reason", "VARCHAR(200) NOT NULL DEFAULT ''"),
+            ("feishu_message_id", "VARCHAR(120) NOT NULL DEFAULT ''"),
+        ):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE workflow_run_approvals ADD COLUMN {name} {kind}"))
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -9831,6 +9863,9 @@ def migration_plan() -> MigrationPlan:
                 # `feishu_chat_id` 已经没人读了(这一版把路由拆成「收件 id + 收件类型」)。表的出生形状由
                 # `create-current-schema` 建,这一条只管**已经存在的**表。
                 _migrate_workflow_run_approvals_take_the_current_shape,
+                # 同上:这三列是**投递结果**(发到飞书没有、发出去那条消息的 id)。老行留空 = 跳过,
+                # 不猜着回填(见那条迁移的说明)。同样要在 SCHEMA 之前 —— ORM 已经指望这三列在。
+                _migrate_workflow_run_approvals_record_their_delivery,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

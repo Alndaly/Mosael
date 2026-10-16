@@ -100,6 +100,17 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_
     return _message_id(data)
 
 
+def update_card(bot: FeishuBot, message_id: str, card: dict[str, Any]) -> None:
+    """**就地换掉**一张已经发出去的交互卡片(`PATCH im/v1/messages/:message_id`)。
+
+    飞书只让改"这张应用自己发的、而且那条消息是交互卡片"的消息 —— 降级发出去的那种纯文字消息
+    改不了,调用方据此再补一条(见 integrations/feishu/approvals.settle_run_approval)。
+    """
+    data = call_api(bot, "PATCH", f"{SEND_URL}/{message_id}", {"content": json.dumps(card, ensure_ascii=False)})
+    if data.get("code") != 0:
+        raise FeishuError("feishuErr_updateCard", detail=data.get("msg") or data.get("code"))
+
+
 def list_chats(bot: FeishuBot, *, limit: int = 200) -> list[dict[str, str]]:
     """这个机器人所在的群:`[{"id": "oc_…", "name": "…"}]`,按飞书给的顺序。
 

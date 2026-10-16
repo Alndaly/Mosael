@@ -25,6 +25,15 @@ vi.mock("@/app/preferences", () => ({
       runApprovalFailed: "没能批下去",
       runApprovalGone: "这次等待已经不在了。",
       runApprovalFeishuHint: "在飞书里点那张卡片也一样。",
+      runApprovalDeliverySent: "已发到飞书",
+      runApprovalDeliveryStationOnly: "仅站内",
+      runApprovalNotDelivered: "这次没能发到飞书,只能在站内批。",
+      runApprovalReasonNone: "节点上写的就是「仅站内」",
+      runApprovalReasonNoBot: "这个工作区还没有可用的飞书机器人",
+      runApprovalReasonNoOrigin: "这次运行不是从飞书来的,发起人也没绑飞书",
+      runApprovalReasonNotBound: "节点上点名的那个人没绑飞书账号",
+      runApprovalReasonNoTarget: "节点上没说清发给谁",
+      runApprovalReasonUnknown: "说不清是为什么",
       runApprovalApproved: "确认",
       runApprovalRejected: "拒绝",
     })[key] ?? key,
@@ -86,6 +95,9 @@ const row = {
   allow_note: true,
   status: "pending",
   decision: "",
+  //: 默认这一条是**真发到过飞书**的(旧用例按"两条路都能点"写)。
+  feishu_delivery: "sent",
+  feishu_delivery_reason: "",
   expires_at: null,
   created_at: "2026-10-16T09:00:00",
 };
@@ -147,5 +159,49 @@ describe("运行停在等人确认上", () => {
     renderNotice([{ ...row, id: "ap-2", expires_at: null }]);
     const notice = await screen.findByText("要发布吗");
     expect(within(notice.closest("[data-wf-run-approval]") as HTMLElement).getByText("不设超时,一直等。")).toBeInTheDocument();
+  });
+
+  // ---- 这一次到底发到飞书没有(见后端 domain/workflows/approvals 的 feishu_delivery)----
+  //
+  // 「在飞书里点那张卡也一样」这句话**只有真发出去过时才成立**。此前卡上根本不提这件事:
+  // 传输失败时用户在飞书群里等一张永远不来的卡,而界面上还在说"去飞书点"。
+
+  it("发到过:说已发,并照旧说「在飞书里点那张卡也一样」", async () => {
+    renderNotice([row]);
+    await screen.findByText("要发布吗");
+    expect(screen.getByText("已发到飞书")).toBeInTheDocument();
+    expect(screen.getByText("在飞书里点那张卡片也一样。")).toBeInTheDocument();
+  });
+
+  it("发失败了:说清只能在站内批、把原因带上,并且不再叫人去飞书点", async () => {
+    renderNotice([{ ...row, feishu_delivery: "failed", feishu_delivery_reason: "飞书发卡片失败: connection reset" }]);
+    await screen.findByText("要发布吗");
+    expect(
+      screen.getByText("这次没能发到飞书,只能在站内批。(飞书发卡片失败: connection reset)"),
+    ).toBeInTheDocument();
+    //: 上面那句已经说清了,别再补一句"去飞书点"。
+    expect(screen.queryByText("在飞书里点那张卡片也一样。")).toBeNull();
+    //: 这一行按警告的样子出(不是灰字)—— 它是"你要知道"的那一类。
+    expect(screen.getByText(/这次没能发到飞书/).className).toContain("text-warning");
+  });
+
+  it("仅站内:说清是节点上写的那一档,不是失败", async () => {
+    renderNotice([{ ...row, feishu_delivery: "not_attempted", feishu_delivery_reason: "none" }]);
+    await screen.findByText("要发布吗");
+    expect(screen.getByText("仅站内 · 节点上写的就是「仅站内」")).toBeInTheDocument();
+    expect(screen.queryByText("在飞书里点那张卡片也一样。")).toBeNull();
+  });
+
+  it("没机器人可发:原因换成人话(「no-bot」不给人看)", async () => {
+    renderNotice([{ ...row, feishu_delivery: "not_attempted", feishu_delivery_reason: "no-bot" }]);
+    await screen.findByText("要发布吗");
+    expect(screen.getByText("仅站内 · 这个工作区还没有可用的飞书机器人")).toBeInTheDocument();
+  });
+
+  it("这一版之前建的没有投递记录:这件事一个字都不说", async () => {
+    renderNotice([{ ...row, feishu_delivery: "", feishu_delivery_reason: "" }]);
+    await screen.findByText("要发布吗");
+    expect(document.querySelector("[data-wf-run-approval-delivery]")).toBeNull();
+    expect(screen.queryByText("在飞书里点那张卡片也一样。")).toBeNull();
   });
 });

@@ -163,6 +163,9 @@
   `app/domain/workflows/executors/registry.py:_PREFIX_PREFLIGHTS`(节点的运行前检查,import 时登记)
 - `app/domain/workflows/approvals.py:_RUN_CARD_SENDER` — 「工作流停在等人确认上,把那张卡发到飞书」的实现。
   组装根在导入期登记(集成层填进来),运行时只读 —— 领域层不认识飞书(见 ADR 0064)。
+- `app/domain/workflows/approvals.py:_RUN_CARD_SETTLER` — 「这一次等待结束(取消 / 超时)之后把那张卡收回成
+  结果态」的实现。同一个方向:领域只决定**什么时候**要收(判 `feishu_message_id`),怎么改那条消息是集成层的事
+  (见 ADR 0069)。它排成 `after_commit`,所以失败也只影响那张卡,不影响已经落库的取消 / 超时。
 - `app/domain/workflows/approvals.py:_RESUME_DISPATCHER` — 「把暂停在等人确认上的运行接着派发出去」的实现。
   引擎在 import 时登记自己,运行时只读 —— 反过来让领域去 import 引擎会给「引擎 ⇄ 执行器」那一族添一个新环。
 - `app/domain/feishu/gateway.py:_TRANSPORT` — 「怎么发飞书」的实现(发文字 / 发卡片 / 取附件 / 加表情 / 列群)。

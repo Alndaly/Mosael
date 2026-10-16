@@ -218,6 +218,7 @@
   "migrate-voices-declare-consent": "4a6c4fa3dcfbf502",
   "migrate-webhook-secrets-are-hashed": "7e2ab27be3d79de5",
   "migrate-workflow-revisions": "04fd419950fe7083",
+  "migrate-workflow-run-approvals-record-their-delivery": "d1e79848e18ca998",
   "migrate-workflow-run-approvals-take-the-current-shape": "ad974cdd67da1a19",
   "migrate-workflow-source-assets": "25f8666dabba6a7a",
   "remove-minimax-music-models": "8338a680f9ccf955",

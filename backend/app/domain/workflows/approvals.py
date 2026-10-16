@@ -45,12 +45,34 @@
 `abort`(默认)把这次运行判失败(执行器抛出`wfErr_awaitApprovalRejected`,和超时 + `abort`
 同一个失败口径),决定不交到下游;`branch` 则把 `rejected` 当成一个决定交给下游
 (condition 接 `decision="rejected"`)。
+
+## 到底发到飞书没有(投递结果)
+
+「先站内通知、再尽力发飞书卡片」这条链上有三件不同的事,此前只有日志分得开:
+(见 ADR 0069)
+
+1. **发到了**(`sent`):卡片成了,或者卡片失败之后退成的那段文字成了 —— 飞书里的人确实收到了东西;
+2. **这次本来就没打算发**(`not_attempted`):路由那一层就解不出收件人(节点上写了「仅站内」、
+   工作区没有机器人、发起人没绑定)。**那要么是用户明说的选择、要么是这次运行没有可发的去处,
+   不是失败** —— 记成失败,下一步就会有人给它加"重试";
+3. **发失败了**(`failed`):卡片和降级的文字都没出去(断网、机器人没权限)。
+
+三件事写在那张单的 `feishu_delivery` / `feishu_delivery_reason` / `feishu_message_id` 上。
+第 3 种除了既有的「在等人确认」,**再写一条站内通知**说清"只能在站内批"并带上那张单的 id ——
+用户正等着群里那张卡,而它不会来了。第 1、2 种不喊。
+
+## 取消 / 超时之后,飞书那边不留一张死卡
+
+发出去过(`feishu_message_id` 非空)就把那条消息**就地收回成结果态**(已取消 / 超时),
+让群里的人知道别再点了;没发出去过就跳过。这件事**在落库之后尽力做**(`after_commit`)——
+取消必须是第一优先:更新卡片失败只记日志,不许把"单被撤销"这个结果弄回去。
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -70,6 +92,12 @@ APPROVED = "approved"
 REJECTED = "rejected"
 TIMED_OUT = "timeout"
 CANCELLED = "cancelled"
+
+#: 这一次等待**发到飞书没有**(那张单上 `feishu_delivery` 那一格,见模块说明)。
+DELIVERY_SENT = "sent"
+DELIVERY_FAILED = "failed"
+DELIVERY_NOT_ATTEMPTED = "not_attempted"
+DELIVERIES = (DELIVERY_SENT, DELIVERY_FAILED, DELIVERY_NOT_ATTEMPTED)
 
 #: 决定那一格交给下游的三个值(节点输出 `decision`)。**三值文字而不是布尔**:条件节点里
 #: `equals approved` 一条就说清,不受大小写 / 语言影响(见 node_types 的说明)。
@@ -349,15 +377,29 @@ def cancel_for_job(db: Session, job: Job) -> None:
     """这次运行被停下了:它名下还在等的单一起撤掉 —— 否则卡片还点得动、列表里还挂着一条永远没人处理的等待。
 
     和取消**同一个事务**(见 jobs.register_cancel_listener):任务落了取消,这张单也就撤了。
+
+    **飞书群里那张卡另说**:撤单是立刻的(同一个事务),把卡收回是**提交之后**尽力做的一步
+    (`retire_feishu_card`)—— 顺序反过来就会让"改卡片"这件事有机会把取消本身弄失败,而取消必须
+    是第一优先。发出去过才收;没发出去过就跳过。
     """
+    retiring = list(
+        db.scalars(
+            select(WorkflowRunApproval.id).where(
+                WorkflowRunApproval.job_id == job.id, WorkflowRunApproval.status == PENDING
+            )
+        )
+    )
     changed = db.execute(
         update(WorkflowRunApproval)
         .where(WorkflowRunApproval.job_id == job.id, WorkflowRunApproval.status == PENDING)
         .values(status=CANCELLED, decided_via="cancel", decided_at=now(), updated_at=now())
         .execution_options(synchronize_session=False)
     ).rowcount
-    if changed:
-        logger.info("cancelled %d pending approval(s) of job %s", changed, job.id)
+    if not changed:
+        return
+    logger.info("cancelled %d pending approval(s) of job %s", changed, job.id)
+    for approval_id in retiring:
+        after_commit(db, lambda one=approval_id: retire_feishu_card(one, CANCELLED))
 
 
 # ---------------- 超时 ----------------
@@ -405,6 +447,8 @@ def expire_due(db: Session, *, moment: datetime | None = None) -> int:
             "wfNotice_awaitApprovalTimeoutContinue" if row.on_timeout == TIMEOUT_CONTINUE
             else "wfNotice_awaitApprovalTimeoutAbort",
         )
+        #: 这一次等待结束了:发出去过的那张卡也该收回(提交之后尽力做,见 retire_feishu_card)。
+        after_commit(db, lambda one=row.id: retire_feishu_card(one, TIMED_OUT))
         wake(db, row)
     return handled
 
@@ -425,13 +469,17 @@ def _notify_timeout(db: Session, row: WorkflowRunApproval, key: str) -> None:
 
 
 def announce(db: Session, approval: WorkflowRunApproval) -> None:
-    """把这次等待说出去:先站内通知(没有飞书也照样等),再尽力发一张飞书卡片。
+    """把这次等待说出去:先站内通知(没有飞书也照样等),再尽力发一张飞书卡片,最后**记下投递结果**。
 
     **站内那一条是兜底,不是补充**:没有飞书绑定、飞书没配好、卡片能力没开,这次运行都照旧在等
     (需求里那句"不许因为没有飞书就报错或直接放行")。所以通知先写、卡片后发,卡片失败一律降级。
 
     **发给整个工作区**(和"工作流失败"那条通知同一个范围):一个门禁最坏的失败是没人看见。
     待批列表本来就是全工作区可见的(谁能批在决定那一步按成员校验),通知也就不挑人。
+
+    **发不出去就再喊一声**:卡片和降级的文字都没出去时,除上面那条「在等人确认」之外**再写一条**
+    (说清"只能在站内批"、带上那张单的 id,见 `_record_delivery`)—— 否则用户在群里等一张永远
+    不会来的卡,而站内那条通知还在说"在飞书里点卡片也一样"。
 
     **只在检查点落库之后调**(见 engine._park_at_approval):先发卡、后落现场的话,手快的人在
     现场写下去之前点了确认,那次运行会卡在一个永远唤醒不了的等待上。
@@ -448,7 +496,38 @@ def announce(db: Session, approval: WorkflowRunApproval) -> None:
         link="#/workflows",
         payload={"approval_id": approval.id, "job_id": approval.job_id, "workflow_id": approval.workflow_id},
     )
-    _announce_feishu(db, approval)
+    _record_delivery(db, approval, _announce_feishu(db, approval))
+
+
+def _record_delivery(db: Session, approval: WorkflowRunApproval, delivery: Delivery) -> None:
+    """把这一次投递的结果写在那张单上;发失败了就再写一条站内通知(见模块说明)。
+
+    写在这张单上是**唯一出处**:界面照它说「已发飞书 / 仅站内(原因) / 发飞书失败(原因)」,
+    取消和超时照 `feishu_message_id` 决定要不要去收回群里那张卡。
+    """
+    approval.feishu_delivery = delivery.status
+    approval.feishu_delivery_reason = delivery.reason[:200]
+    if delivery.status == DELIVERY_SENT:
+        approval.feishu_message_id = delivery.message_id[:120]
+    approval.updated_at = now()
+    if delivery.status != DELIVERY_FAILED:
+        return
+    logger.warning("workflow approval %s never reached feishu: %s", approval.id, delivery.reason)
+    notify(
+        db,
+        approval.workspace_id,
+        type="workflow",
+        title=t("wfNotice_awaitApprovalUndelivered", DEFAULT_LOCALE, title=approval.title),
+        body=t(
+            "wfNotice_awaitApprovalUndeliveredBody", DEFAULT_LOCALE,
+            title=approval.title, approval=approval.id,
+        ),
+        link="#/workflows",
+        payload={
+            "approval_id": approval.id, "job_id": approval.job_id,
+            "workflow_id": approval.workflow_id, "delivery": DELIVERY_FAILED,
+        },
+    )
 
 
 def _workflow_name(db: Session, workflow_id: str) -> str:
@@ -456,8 +535,22 @@ def _workflow_name(db: Session, workflow_id: str) -> str:
     return workflow.name if workflow is not None else workflow_id
 
 
-def _announce_feishu(db: Session, approval: WorkflowRunApproval) -> None:
-    """把确认卡推到飞书。**一律降级、绝不抛**(和工具确认卡同一条规矩):飞书那边出问题不该让这次运行跑不下去。
+@dataclass(frozen=True)
+class Delivery:
+    """这一次投递的结果:发到飞书了吗、为什么、发出去那条消息的 id。
+
+    集成层(飞书那一侧)回答这三个问题 —— 只有它知道卡片和降级那段文字各自成没成、
+    路由那一层解出来的又是什么。
+    """
+
+    status: str
+    reason: str = ""
+    message_id: str = ""
+
+
+def _announce_feishu(db: Session, approval: WorkflowRunApproval) -> Delivery:
+    """把确认卡推到飞书,并交回**结果**。**一律降级、绝不抛**(和工具确认卡同一条规矩):
+    飞书那边出问题不该让这次运行跑不下去 —— 界面上要说清"没发出去",运行照旧在等。
 
     **实现由集成层在组装根登记**(见 `use_run_card_sender` 与 app.main._wire_seams):领域层不认识
     飞书 —— 飞书是**调用领域的一方**,不是领域要用的外部能力(见 tests/test_import_layering)。
@@ -465,21 +558,66 @@ def _announce_feishu(db: Session, approval: WorkflowRunApproval) -> None:
     """
     send = _RUN_CARD_SENDER
     if send is None:
-        return
+        return Delivery(DELIVERY_NOT_ATTEMPTED, reason="not-wired")
     try:
-        send(db, approval)
-    except Exception:  # noqa: BLE001 — 见 docstring
+        return send(db, approval) or Delivery(DELIVERY_FAILED, reason="发送这一步没有交回结果(实现没接上?)")
+    except Exception as exc:  # noqa: BLE001 — 见 docstring
         logger.exception("feishu approval card failed approval=%s", getattr(approval, "id", "?"))
+        return Delivery(DELIVERY_FAILED, reason=_reason_of(exc))
+
+
+def _reason_of(exc: BaseException) -> str:
+    """失败的原因:一句话,认不出别的就退到类名(空字符串在界面上什么也说不出来)。"""
+    said = str(exc).strip()
+    return said or type(exc).__name__
 
 
 #: 「这一次等待说给飞书听」的实现。集成层在组装根登记;领域层只认"有人会替我发"。
-_RUN_CARD_SENDER: Callable[[Session, WorkflowRunApproval], None] | None = None
+#: 它**交回投递结果**(见 Delivery)—— 发没发出去是集成层知道的事,而"要不要在站内再喊一声"是领域的事。
+_RUN_CARD_SENDER: Callable[[Session, WorkflowRunApproval], Delivery | None] | None = None
 
 
-def use_run_card_sender(send: Callable[[Session, WorkflowRunApproval], None]) -> None:
+def use_run_card_sender(send: Callable[[Session, WorkflowRunApproval], Delivery | None]) -> None:
     """登记"把待批单发到飞书"的实现(见 integrations/feishu/approvals.announce_run_approval)。"""
     global _RUN_CARD_SENDER
     _RUN_CARD_SENDER = send
+
+
+#: 「把飞书那条消息收回成结果态」的实现,同样由集成层在组装根登记
+#: (见 integrations/feishu/approvals.settle_run_approval)。领域层只认"有人会替我改"。
+_RUN_CARD_SETTLER: Callable[[Session, WorkflowRunApproval, str], None] | None = None
+
+
+def use_run_card_settler(settle: Callable[[Session, WorkflowRunApproval, str], None]) -> None:
+    """登记"把已经发出去的那张卡收回成结果态"的实现。
+
+    `outcome` 是 `cancelled` / `timeout`(决定那一格的取值,集成层照它挑卡片标题)。
+    领域这一侧只决定**什么时候**要收(取消 / 超时、而且发出去过),怎么收是集成层的事。
+    """
+    global _RUN_CARD_SETTLER
+    _RUN_CARD_SETTLER = settle
+
+
+def retire_feishu_card(approval_id: str, outcome: str) -> None:
+    """这一次等待结束了,把飞书那张卡收回 —— **提交之后**尽力做,失败只记日志。
+
+    自己有会话、自己提交(和 `announce_parked` 同一个理由:排进来的那一刻调用方的事务已经落了库,
+    而这一步要读到那张单最新的样子),而且**整段包住**:更新卡片失败不许影响"单被撤销 / 已超时"
+    这个已经落库的结果 —— 要收回的那张卡已经过期了,不是一个还要拦人的门。
+
+    没发出去过就跳过(没有消息 id 可改,也不该为此报错):写了「仅站内」的单走的就是这一条。
+    """
+    settle = _RUN_CARD_SETTLER
+    if settle is None:
+        return
+    try:
+        with unit_of_work() as db:
+            row = db.get(WorkflowRunApproval, approval_id)
+            if row is None or not row.feishu_message_id:
+                return
+            settle(db, row, outcome)
+    except Exception:  # noqa: BLE001 —— 见 docstring
+        logger.exception("retiring feishu card of approval %s failed", approval_id)
 
 
 def announce_parked(approval_id: str) -> None:

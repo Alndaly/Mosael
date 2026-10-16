@@ -143,6 +143,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{workflow}」的一次运行停在「{node}」这一步,等你确认。在飞书里点卡片,或在应用的运行记录里点都可以。",
         "en": "A run of “{workflow}” is stopped at “{node}”, waiting for you. Decide from the Feishu card or from the run in the app.",
     },
+    #: 卡片和降级那段文字**都没发出去**时那条额外的站内提醒(见 domain/workflows/approvals):
+    #: 用户正等着群里那张卡,而它不会来了 —— 而上面那条「在等人确认」还在说"在飞书里点卡片也一样",
+    #: 那会把人支去一个什么都没有的地方。所以再说一条,并带上那张单的 id。
+    "wfNotice_awaitApprovalUndelivered": {
+        "zh": "这次没能发到飞书:{title}",
+        "en": "This one never reached Feishu: {title}",
+    },
+    "wfNotice_awaitApprovalUndeliveredBody": {
+        "zh": "「{title}」这一次等待没能发到飞书,只能在站内批(待批单 {approval})—— 在应用的运行记录里点一下就行。",
+        "en": "“{title}” could not be delivered to Feishu, so it can only be decided in the app (approval {approval}) — open the run and click there.",
+    },
     "wfNotice_awaitApprovalTimeoutAbort": {
         "zh": "「{title}」等到超时也没人确认,这一次运行已中止。",
         "en": "“{title}” timed out with nobody deciding; this run has stopped.",
@@ -183,6 +194,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「发飞书消息」的通知方式写成了「仅站内」—— 这个节点整个存在的意义就是把消息发出去。要只走站内就用「发送通知」节点,要发飞书就换一档通知方式。",
         "en": "“Send a Feishu message” is set to “in-app only”, but sending is this node's whole point. Use the “Send notification” node to stay in-app, or pick another way to notify.",
     },
+    #: 手改 / 迁移过来的图里可能出现这个节点的声明里没有的写法。三种都**不猜**:认不出的通知方式
+    #: 此前悄悄退回「哪来发回哪」(于是本该不发的图发给了发起人),认不出的收件 id 此前悄悄当成群 id
+    #: (于是要等飞书回一句英文报错)。说清是哪一格、能写什么,比替用户挑一档强。
     "wfErr_feishuEmptyText": {"zh": "发飞书消息:文本不能为空", "en": "Send a Feishu message: the text cannot be empty"},
     "wfErr_feishuEmptyTitle": {"zh": "发飞书消息:卡片标题不能为空", "en": "Send a Feishu message: the card title cannot be empty"},
     "wfErr_feishuEmptyMessageId": {"zh": "飞书消息 id 不能为空", "en": "The Feishu message ID cannot be empty"},

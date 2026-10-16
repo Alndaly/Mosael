@@ -11,6 +11,17 @@ domain/workflows/approvals)。**同一个回调入口、同一条授权、同一
 
 两条路的汇合点在**领域那一处**:`approvals.decide_and_wake`(CAS 写决定 + 提交后唤醒那次运行)。
 飞书这一层只负责:认人、翻卡片、把领域异常说成 toast。
+
+## 发出去之后还要收得回来
+
+「等人确认」的卡发出去之后**还活着**(群里谁都能点)。所以这一层还负责两件后续:
+
+- 发的时候把**投递结果**交回领域(`announce_run_approval` 返回 `Delivery`):卡片成了、退成文字
+  成了、还是两层都没出去 —— 前两种都算发到了,后一种由领域在站内再喊一声;
+- 这次等待结束(取消 / 超时)时把那张卡**收回成结果态**(`settle_run_approval`):就地换掉那条消息,
+  换不掉就在同一个会话里补一条。两步都尽力 —— 取消本身已经落库了,这一步失败不该把它弄回去。
+
+两件事的取舍写在 ADR 0069。
 """
 
 from __future__ import annotations
@@ -24,6 +35,12 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.db.models import FeishuBot, Workflow, WorkflowRunApproval
 from app.domain.feishu import bindings, routing
+from app.domain.workflows.approvals import (
+    DELIVERY_FAILED,
+    DELIVERY_NOT_ATTEMPTED,
+    DELIVERY_SENT,
+    Delivery,
+)
 from app.integrations.feishu import client
 
 logger = logging.getLogger(__name__)
@@ -103,27 +120,37 @@ def _toast(message: str) -> CardDecision:
 # ---------------- 工作流「等人确认」:发卡、路由、收回调 ----------------
 
 
-def announce_run_approval(db: Session, approval: WorkflowRunApproval) -> None:
-    """把待批单发到飞书。**由工作流领域在组装根登记进来**(见 app.main._wire_seams 与
-    domain/workflows/approvals.use_run_card_sender):领域层不认识飞书,飞书是调用领域的一方。
+def announce_run_approval(db: Session, approval: WorkflowRunApproval) -> Delivery:
+    """把待批单发到飞书,**并交回投递结果**。**由工作流领域在组装根登记进来**(见 app.main._wire_seams
+    与 domain/workflows/approvals.use_run_card_sender):领域层不认识飞书,飞书是调用领域的一方。
 
     发到哪**按节点上写的那三格**(`channel` / `bot` / `to`)解 —— 见 `route_for_approval`。
     不提交:调用方(领域那一处 after_commit 钩子开的会话)提交 —— 卡片发出去之后那三列路由信息
     才落库,而**真正要紧的检查点在那之前就已经提交了**(见 domain/workflows/approvals.announce)。
+
+    三种结果分得开(见 domain/workflows/approvals 的模块说明):
+
+    - `sent`:卡片成了,或者卡片失败之后退成的那段文字成了;
+    - `not_attempted`:路由那一层就解不出收件人(写了「仅站内」/ 没有机器人 / 发起人没绑定)——
+      **那是用户明说的选择或这次运行没有可发的去处,不是失败**;
+    - `failed`:两层都没出去。原因交回领域那一边,由它写站内那条额外的提醒。
     """
     route = route_for_approval(db, approval)
     if route is None:
         #: **显式**说一句为什么不发飞书:节点上写了「仅站内」,或这次运行本来就没有可发的去处。
         #: 此前这里只有"返回 None"一种沉默 —— 而"照节点上写的没发"和"发不出去"是两件事。
-        logger.info(
-            "workflow approval %s not sent to feishu: %s", approval.id, route_reason(db, approval)
-        )
-        return
+        reason = route_reason(db, approval)
+        logger.info("workflow approval %s not sent to feishu: %s", approval.id, reason)
+        return Delivery(DELIVERY_NOT_ATTEMPTED, reason=reason)
     bot, receive_id, receive_type = route
     approval.feishu_bot_id = bot.id
     approval.feishu_receive_id = receive_id
     approval.feishu_receive_type = receive_type
-    send_approval_card(db, bot, receive_id, receive_type, approval)
+    try:
+        return Delivery(DELIVERY_SENT, message_id=send_approval_card(db, bot, receive_id, receive_type, approval))
+    except Exception as exc:  # noqa: BLE001 —— 卡片和降级的文字都没出去:交给领域说给用户听
+        logger.warning("workflow approval %s never reached feishu: %s", approval.id, exc)
+        return Delivery(DELIVERY_FAILED, reason=str(exc).strip() or type(exc).__name__)
 
 
 def approval_resolution(db: Session, approval: WorkflowRunApproval) -> routing.Resolution:
@@ -169,8 +196,11 @@ def route_for_approval(db: Session, approval: WorkflowRunApproval) -> tuple[Feis
 
 def send_approval_card(
     db: Session, bot: FeishuBot, receive_id: str, receive_type: str, approval: WorkflowRunApproval
-) -> None:
-    """把确认卡推出去。失败分两层降级,和工具确认卡同一套:先退成一段文字,再不行就只剩站内那条路。
+) -> str:
+    """把确认卡推出去,**返回那条消息的 id**(取消 / 超时要照它把卡收回)。
+
+    失败分两层降级,和工具确认卡同一套:先退成一段文字;**两层都没出去就抛出去** ——
+    调用方(`announce_run_approval`)据此把这一次记成 `failed`,而不是当成发过了。
 
     **"发一张卡 / 发一段文字"走的是和 4 个飞书能力节点同一份原语**(`integrations/feishu/gateway`
     那道缝后面的 transport,见 domain/feishu/gateway):两处各写一套的话,同一个"发飞书"会有两个
@@ -184,7 +214,7 @@ def send_approval_card(
     hours = int(round((approval.timeout_seconds or 0) / 3600)) if approval.timeout_seconds else None
     workflow = db.get(Workflow, approval.workflow_id)
     try:
-        transport.send_card(
+        return transport.send_card(
             bot, receive_id, receive_type,
             cards.approval_card(
                 approval_id=approval.id,
@@ -198,13 +228,12 @@ def send_approval_card(
                 timeout_hours=hours,
             ),
         )
-        return
     except client.FeishuError as exc:
         missing_capability = CARD_CAPABILITY_ERROR in str(exc)
         logger.warning("feishu approval card send failed, falling back to text: %s", exc)
 
     tail = f"\n\n(飞书内直接确认需要:{_CARD_SETUP_HINT})" if missing_capability else ""
-    transport.send_text(
+    message_id = transport.send_text(
         bot, receive_id, receive_type,
         f"有一个工作流在等你确认:{approval.title}\n请到 Mosael 里处理,或在飞书里回复。{tail}",
     )
@@ -214,6 +243,63 @@ def send_approval_card(
         bot_row = db.get(FeishuBot, bot.id)
         if bot_row is not None and CARD_CAPABILITY_ERROR not in (bot_row.status_detail or ""):
             bot_row.status_detail = f"交互卡片未开启({CARD_CAPABILITY_ERROR}):{_CARD_SETUP_HINT}"[:400]
+    return message_id
+
+
+#: 这一次等待结束时补的那句话(取消 / 超时)。认不出的档位退到一句通用的话 —— 不抛。
+_SETTLED_NOTICE = {
+    "cancelled": "这次等待已经结束:已被取消,不用再点了。",
+    "timeout": "这次等待已经结束:已超时,不用再点了。",
+}
+
+
+def settle_run_approval(db: Session, approval: WorkflowRunApproval, outcome: str) -> None:
+    """这一次等待结束了(取消 / 超时):把飞书里那张卡**收回成结果态**,别留在原地还能点。
+
+    只在**确实发出去过**的时候调:领域那一边按 `feishu_message_id` 判过了(见
+    domain/workflows/approvals.retire_feishu_card),这里再判一次 —— 这一步是被 after_commit
+    排进来的,读到的那一行可能已经不是它当时看到的样子。
+
+    两步都尽力,顺序也是有意的:
+
+    1. **就地换掉**那条消息(消息 id 不变、按钮没了):群里的人一眼看出这件事结束了;
+    2. 换不成(降级发出去的是纯文字消息,卡片换不了)就在**同一个会话**里补一条文字。
+
+    **全程不抛**:调用方(领域)已经提交了取消 / 超时,这一步失败只是"那张卡还留在那儿",
+    不该把那个已经成立的结果弄回去。失败记日志 —— 想追一件事有没有说出去,看这里。
+    """
+    message_id = str(approval.feishu_message_id or "").strip()
+    if not message_id:
+        return
+    bot = db.get(FeishuBot, approval.feishu_bot_id) if approval.feishu_bot_id else None
+    if bot is None:
+        logger.info("approval %s was sent by a bot that is gone; nothing to retire", approval.id)
+        return
+    from app.domain.feishu import gateway as domain_gateway
+    from app.integrations.feishu import cards
+
+    try:
+        transport = domain_gateway.transport()
+    except Exception:  # noqa: BLE001 —— 这一半没装上(组装根没登记):没有可收回的东西
+        logger.info("feishu transport is not wired; nothing to retire for approval %s", approval.id)
+        return
+    try:
+        transport.update_card(
+            bot, message_id,
+            cards.settled_approval_card(title=approval.title, decision=outcome, by="", note=""),
+        )
+        return
+    except Exception as exc:  # noqa: BLE001 —— 见 docstring:换不掉就补一条
+        logger.warning(
+            "feishu approval card update failed approval=%s message=%s: %s", approval.id, message_id, exc
+        )
+    try:
+        transport.send_text(
+            bot, approval.feishu_receive_id, approval.feishu_receive_type,
+            _SETTLED_NOTICE.get(outcome, "这次等待已经结束,不用再点了。"),
+        )
+    except Exception:  # noqa: BLE001 —— 见 docstring:补不上也只是日志
+        logger.exception("feishu settled notice failed approval=%s", approval.id)
 
 
 def _note_from(value: dict[str, Any]) -> str:

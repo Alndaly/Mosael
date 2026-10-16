@@ -156,5 +156,15 @@ class WorkflowRunApproval(Base):
     feishu_bot_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="")
     feishu_receive_id: Mapped[str] = mapped_column(String(120), nullable=False, default="", server_default="")
     feishu_receive_type: Mapped[str] = mapped_column(String(16), nullable=False, default="", server_default="")
+    #: 这一次等待**真的发到飞书了吗**:`sent` / `failed` / `not_attempted`(空 = 还没走过这一遍)。
+    #: 此前只有日志分得清这三件事,单上看不出来 —— 而"到底发到飞书没有"决定了人该去哪儿批。
+    #: `not_attempted` 是**路由那一层就没打算发**(写了「仅站内」/ 没有机器人 / 发起人没绑定):
+    #: 那是用户明说的选择或这次运行没有可发的去处,不是失败(见 domain/workflows/approvals)。
+    feishu_delivery: Mapped[str] = mapped_column(String(16), nullable=False, default="", server_default="")
+    #: 为什么是这个结果:`not_attempted` 记路由那一档的原因(`none` / `no-bot` / …),`failed` 记发出去时撞上的那一句。
+    feishu_delivery_reason: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
+    #: 飞书那条消息的 id(`om_…`):发出去了才写。取消 / 超时时照它把群里那张卡就地收回成结果态
+    #: —— 否则一张还能点的卡留在群里,别人不知道这件事已经结束(见 integrations/feishu/approvals)。
+    feishu_message_id: Mapped[str] = mapped_column(String(120), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

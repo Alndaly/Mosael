@@ -60,6 +60,15 @@ class Transport(Protocol):
 
     def send_card(self, bot: FeishuBot, receive_id: str, receive_type: str, card: dict) -> str: ...
 
+    def update_card(self, bot: FeishuBot, message_id: str, card: dict) -> None:
+        """**就地换掉**一条已经发出去的交互卡片:消息 id 不变,内容换成另一张。
+
+        「等人确认」用它把群里那张卡收回成结果态(取消 / 超时之后不留一张还能点的死卡)。
+        飞书只让改"自己发的、而且是交互卡片"的消息 —— 降级发出去的那种纯文字消息改不了,
+        调用方据此再补一条(见 integrations/feishu/approvals.settle_run_approval)。
+        """
+        ...
+
     def card(self, spec: CardSpec) -> dict: ...
 
     def download(self, bot: FeishuBot, message_id: str, file_key: str, kind: str) -> Downloaded: ...

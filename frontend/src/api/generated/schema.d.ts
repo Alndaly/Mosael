@@ -17751,6 +17751,10 @@ export interface components {
             status: string;
             /** Decision */
             decision: string;
+            /** Feishu Delivery */
+            feishu_delivery: string;
+            /** Feishu Delivery Reason */
+            feishu_delivery_reason: string;
             /** Expires At */
             expires_at: string | null;
             /**

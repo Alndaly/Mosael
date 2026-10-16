@@ -45834,6 +45834,14 @@
             "type": "string",
             "title": "Decision"
           },
+          "feishu_delivery": {
+            "type": "string",
+            "title": "Feishu Delivery"
+          },
+          "feishu_delivery_reason": {
+            "type": "string",
+            "title": "Feishu Delivery Reason"
+          },
           "expires_at": {
             "anyOf": [
               {
@@ -45866,6 +45874,8 @@
           "allow_note",
           "status",
           "decision",
+          "feishu_delivery",
+          "feishu_delivery_reason",
           "expires_at",
           "created_at"
         ],

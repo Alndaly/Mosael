@@ -69,12 +69,25 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
   });
   //: 这一次点的是哪个决定 —— 只用来决定**哪一颗按钮转圈**(见下面那颗按钮上的注释)。
   const deciding = decide.isPending ? decide.variables : null;
+  const delivery = deliveryLine(row, t);
   return (
     <div className="grid gap-1.5 rounded-md border border-border bg-background/40 p-2">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
       {row.body && <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>}
       <p className="m-0">{t("runApprovalWaiting").replace("{node}", row.node_name || row.node_id)}</p>
       <p className="m-0 text-ui-2xs">{expiry(row, t)}</p>
+      {/*: **到底发到飞书没有**。后端把投递结果记在那张单上(见 domain/workflows/approvals):
+          发了 / 这次就没打算发(写了「仅站内」、没有机器人、没绑定)/ 发失败了。
+          没发出去的那两种要用一行提醒看得见 —— 用户在飞书群里等一张**不会来的卡**,
+          而下面那句「在飞书里点那张卡也一样」正是在说"去飞书点"。 */}
+      {delivery && (
+        <p
+          className={cn("m-0 text-ui-2xs", delivery.failed ? "font-medium text-warning" : "text-muted-foreground")}
+          data-wf-run-approval-delivery={row.feishu_delivery}
+        >
+          {delivery.text}
+        </p>
+      )}
       {row.allow_note && (
         <input
           className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-ui-xs text-foreground"
@@ -104,10 +117,50 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
         >
           {row.reject_label || t("runApprovalRejected")}
         </Button>
-        <span className="text-ui-2xs">{decide.isPending ? t("runApprovalSending") : t("runApprovalFeishuHint")}</span>
+        <span className="text-ui-2xs">
+          {decide.isPending
+            ? t("runApprovalSending")
+            : /*: 这句只在**真发出去过**时才说 —— 没发出去时上面那行已经说清了去哪儿批。 */
+              row.feishu_delivery === "sent"
+              ? t("runApprovalFeishuHint")
+              : ""}
+        </span>
       </div>
     </div>
   );
+}
+
+/**
+ * 「这一次到底发到飞书没有」那一行。空 = 不说(这张单是投递结果那一版之前建的,没有记录)。
+ *
+ * 三档照后端 `domain/workflows/approvals` 的 `feishu_delivery`:
+ * `sent`(卡片成了,或卡片失败之后退成的那段文字成了)、
+ * `not_attempted`(路由那一层就没打算发:写了「仅站内」/ 没机器人 / 没绑定 —— **用户的选择或这次没有去处,不是失败**)、
+ * `failed`(卡片和文字都没出去:那才要在界面上说得像个问题)。
+ */
+function deliveryLine(
+  row: RunApproval,
+  t: ReturnType<typeof useI18n>,
+): { text: string; failed: boolean } | null {
+  if (row.feishu_delivery === "sent") return { text: t("runApprovalDeliverySent"), failed: false };
+  if (row.feishu_delivery === "not_attempted") {
+    return { text: `${t("runApprovalDeliveryStationOnly")} · ${reasonWord(row.feishu_delivery_reason, t)}`, failed: false };
+  }
+  if (row.feishu_delivery === "failed") {
+    //: 发失败时把后端那句原因原样带上(它是一句拿得出手的说明),再说清"只能在站内批"。
+    return { text: `${t("runApprovalNotDelivered")}(${row.feishu_delivery_reason || reasonWord("", t)})`, failed: true };
+  }
+  return null;
+}
+
+/** 路由那一档的原因(见后端 domain/feishu/routing 的 reason)—— 每一档的修法不同,不该只说"没发出去"。 */
+function reasonWord(reason: string, t: ReturnType<typeof useI18n>): string {
+  if (reason === "none") return t("runApprovalReasonNone");
+  if (reason === "no-bot") return t("runApprovalReasonNoBot");
+  if (reason === "no-origin") return t("runApprovalReasonNoOrigin");
+  if (reason === "not-bound") return t("runApprovalReasonNotBound");
+  if (reason === "no-target") return t("runApprovalReasonNoTarget");
+  return reason || t("runApprovalReasonUnknown");
 }
 
 /** 什么时候算超时。`expires_at` 是后端给的那一刻(空 = 不设超时,一直等)。 */
