@@ -151,6 +151,23 @@ def _route_settled(approval_id: str) -> WorkflowRunApproval:
     )
 
 
+def _notice_for(workspace_id: str, approval_id: str) -> Notification:
+    """等这次待批单的站内通知落库。
+
+    **通知与发卡都在暂停现场之后**(见 domain/workflows/approvals.announce:先把现场落库,再在 after_commit
+    里说出去),所以「待批单那一行已经在」和「站内那条通知已经写了」之间有一小段窗口 —— 直接读会偶发读空,
+    整仓并行跑时就是抽奖(CI 上实测撞到过一次),红的是这一条,不是"没通知"。和 `_route_settled` 同一个教训:
+    断言的是**两件先后发生的事**,就得等第二件。
+    """
+
+    def look() -> Notification | None:
+        with SessionLocal() as db:
+            rows = db.query(Notification).filter_by(workspace_id=workspace_id, type="workflow").all()
+        return next((row for row in rows if (row.payload or {}).get("approval_id") == approval_id), None)
+
+    return _wait_for(look, what="这次待批单的站内通知")
+
+
 def _job(job_id: str) -> Job:
     with SessionLocal() as db:
         return db.get(Job, job_id)
@@ -436,9 +453,7 @@ def test_没有飞书绑定_走站内待批且应用内能批() -> None:
     approval = _paused(job_id)
 
     #: 没有飞书机器人时**不报错、也不放行**:通知照样有,运行照样在等。
-    with SessionLocal() as db:
-        notices = db.query(Notification).filter_by(workspace_id=ws, type="workflow").all()
-    assert any((row.payload or {}).get("approval_id") == approval.id for row in notices)
+    _notice_for(ws, approval.id)
     assert _job(job_id).status == "running"
     assert approval.feishu_bot_id == ""
 
@@ -648,9 +663,7 @@ def test_通知方式写了仅站内_一个字都不发飞书(monkeypatch) -> No
 
     assert seen["cards"] == [] and seen["texts"] == [], "写了「仅站内」还发了飞书"
     #: **站内那条照旧**(仅站内 = 换一条通知的路,不是不通知):通知有、运行在等、应用内批得动。
-    with SessionLocal() as db:
-        notices = db.query(Notification).filter_by(workspace_id=ws, type="workflow").all()
-    assert any((row.payload or {}).get("approval_id") == approval.id for row in notices)
+    _notice_for(ws, approval.id)
     assert _job(job_id).status == "running"
     #: 单上那三格是空的 —— "没发飞书"这件事在记录里也是显式的。
     stored = _approval(approval.id)
