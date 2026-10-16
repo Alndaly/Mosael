@@ -30,7 +30,7 @@ from app.db.models import LocalService, PluginInstance, PluginPackage
 from app.domain import local_services
 from app.domain.local_services import installer, pidfiles, records, supervisor
 from app.domain.plugins.runtime import StreamHooks, _dispatch
-from tests.util import first_free_port_of_this_worker, fresh_client, second_client
+from tests.util import first_free_port_of_this_worker, fresh_client, second_client, until
 
 FAKE = Path(__file__).resolve().parent / "fake_local_service.py"
 PACKAGE_ID = "dev.test.managedsvc"
@@ -270,6 +270,36 @@ def _wait(client, instance_id: str, done, timeout: float = 30.0) -> dict[str, An
         time.sleep(0.05)
 
 
+def _wait_step_bytes(client, instance_id: str, step: str, timeout: float = 30.0) -> dict[str, Any]:
+    """等到宿主报出「正在 <step> 这一步、手上有个文件、下了多少字节」的那一刻,把那一刻的状态交回来。
+
+    **等的是条件,不是时间**(`tests/util.until`):`slow=…` 只负责让那一步持续得够久 —— 插件在那一步报十几次进度、
+    每次之间歇一下,这一步就至少是十几个间隔,条件一成立就返回。
+
+    此前这里等的是「`done_bytes` 出现」,而**查空间那一步也报字节**:等到的快照是 `step == "disk"`,断言报
+    `assert ('disk' == 'fetch')`(6883b6b31 那次 CI 红的就是这条)。条件比断言弱,过不过全看第一次采样落在哪一步 ——
+    机器一忙(burst 被拉长)就轮到 disk。等到「那一步带字节」为止,这个赌就没有了:没走到那一步,这里当场红,
+    并把一路上看到过哪几步写在报错里。
+    """
+    walked: list[str] = []
+    found: list[dict[str, Any]] = []
+
+    def reporting_at_step() -> bool:
+        install = _status(client, instance_id).get("install") or {}
+        current = str(install.get("step") or "")
+        if current and current not in walked:
+            walked.append(current)
+        if current == step and install.get("done_bytes") is not None:
+            found.append(install)
+            return True
+        return False
+
+    assert until(reporting_at_step, timeout), (
+        f"这次安装没有走到「{step}」这一步(一路上只看到 {walked or ['还没开始']})——"
+        "不是「此刻正好不在」,是这一步根本没出现过")
+    return found[-1]
+
+
 def _install_state(state: str):
     return lambda status: (status.get("install") or {}).get("state") == state
 
@@ -373,15 +403,22 @@ def test_装要确认_建成让Mosael装_试起通过才记成装好(plugged) ->
 
 def test_进度_哪一步_字节_正在下哪个(plugged) -> None:
     instance_id = _connection(plugged)
+    #: 下载那一步插件要报 11 次进度、每次之间歇 0.2 秒 —— 这一步至少 2.2 秒,足够等到它出现(轮询 0.02 秒一次)。
+    #: 等的是「正在下载、有字节」这一刻出现,不是「窗口里第一次采样正好落在哪一步」。
     _control(slow={"fetch": 0.2})
     _install(plugged, instance_id)
-    status = _wait(plugged, instance_id, lambda one: (one.get("install") or {}).get("done_bytes"))
-    install = status["install"]
+    install = _wait_step_bytes(plugged, instance_id, "fetch")
     assert install["step"] == "fetch" and install["item"] == "fetch.whl" and install["total_bytes"] == 100000
+    assert install["state"] == "installing", "看到的是正在下的那一刻,不是结束之后留下的快照"
     assert [one["done"] for one in install["steps"]] == [True, False, False, False]
     assert install["steps"][1]["title"] == "下载"
     speedy = _wait(plugged, instance_id, lambda one: (one.get("install") or {}).get("speed"))
     assert speedy["install"]["speed"] and speedy["install"]["speed"] > 0, "速度由宿主按字节和时间算"
+    #: 钉子:这一趟**确实**进过「下载」那一步。插件进这一步时先往安装日志写一行 `== fetch`(宿主照原样摆出来),
+    #: 上面那次观察又是这一步正报着字节的那一刻 —— 两条独立的线(状态、日志)都指着同一次进入。没进过这一步,
+    #: 上面那次等待自己就会红;这条把「必须观察到 fetch 阶段」这件事也写进用例,快机器上不靠运气。
+    lines = plugged.get(_url(instance_id, "/logs"), params={"source": "install"}).json()["lines"]
+    assert "== fetch" in lines, "这次安装没有进过「下载」那一步"
     plugged.post(_url(instance_id, "/install/cancel"))
     _wait(plugged, instance_id, _install_state("cancelled"))
 
