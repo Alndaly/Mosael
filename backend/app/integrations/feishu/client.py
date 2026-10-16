@@ -15,6 +15,7 @@
 见 `_resend_budget`:幂等的(GET 列群 / 下载)和"重发只是再拿一个令牌"的交给
 `core.http_retry` 那套判据;**发消息 / 改卡片 / 加表情一律 0 次** —— 重发一遍就是群里多一条,
 而 429 恰好是飞书消息 API 最常见的限流回法,仓库那条判据对它是放行的。
+**次数不跟设置页那个 `max_retries` 走**:GET 有自己的上限(`FEISHU_MAX_RESENDS`)。
 """
 
 from __future__ import annotations
@@ -58,6 +59,14 @@ _TOKEN_INVALID = frozenset({99991663, 99991664})
 #: 非 2xx 时飞书的 `code` 可能与 HTTP 状态码不是一回事(429 + code 230020)。两个都要看得见,
 #: 所以解析时把状态码另记一处(见 `_fail`)。
 _HTTP_STATUS = "http_status"
+
+#: 飞书这一侧的重发上限(不含首次)。
+#:
+#: **不跟 `core.http_retry` 那个进程级次数走。** 那个数由**设置页的 AI 连接**写
+#: (`AiRuntimeConfig.max_retries`,缺省 3),和飞书没有关系 —— 跟着它在这里是有代价的:列群 / 下载
+#: 都是 GET,5xx 风暴下每多一次重发就多等一轮退避,`list_chats` 最长可以多花几十秒,而那几十秒里
+#: 用户看到的只是"群列表转圈"。2 够用:一次瞬时抖动等得到,持续 5xx 也不会把一次列群拖成半分钟。
+FEISHU_MAX_RESENDS = 2
 
 
 def _json_of(response: httpx.Response) -> Any:
@@ -137,9 +146,14 @@ def _resend_budget(method: str, url: str) -> int:
     **不会留下可见副本的那几条**交给仓库那套:列群 / 下载是 GET(幂等,遇 429 / 5xx 都重发),
     取令牌是"重发只是再拿一个令牌"的 POST(非幂等,只在对方**明说没处理这一次**,也就是
     429 / 503 / 529 时重发)。
+
+    **GET 的次数是飞书自己的上限,不是设置页那个数**(见 `FEISHU_MAX_RESENDS`):设置页那一栏是
+    AI 连接的,而它落在飞书这里表现为"群列表多转几十秒"。
     """
-    if method.upper() == "GET" or url.startswith(TOKEN_URL):
+    if url.startswith(TOKEN_URL):
         return current_max_retries()
+    if method.upper() == "GET":
+        return FEISHU_MAX_RESENDS
     return 0
 
 
@@ -364,16 +378,16 @@ def download_message_resource_named(bot: FeishuBot, message_id: str, file_key: s
     if response.status_code == 401:  # token 半路过期
         response = _fetch(get_tenant_access_token(bot, force=True))
     if response.status_code != 200:
-        #: body 里飞书的 code/msg 也要带出来(限流 230020、权限 99991613…)。`feishuErr_download`
-        #: 的文案只有一个 `{status}` 槽,所以把状态码与原文一起拼进那个槽 —— 不新增文案 key,
-        #: 但一个字的原文都不丢。
+        #: body 里飞书的 code/msg 也要带出来(限流 230020、权限 99991613…)。文案有两个槽:
+        #: `{status}` 只放状态码、`{detail}` 放飞书那句原文 —— 此前只有一个槽,原文被拼进了状态码
+        #: 那一格,于是"状态码"那一格说的不是状态码。
+        #: **两栏都给**:模板里两个槽都在,少给一个会让 `t()` 把整句的占位符一起抹掉。
         body = _json_of(response)
         said = _detail_of(body) if isinstance(body, dict) else ""
-        detail = said or _body_head(response)
-        params: dict[str, Any] = {
-            "status": f"HTTP {response.status_code}" + (f" · {detail}" if detail else ""),
-            "detail": detail,
-        }
+        #: 网关连一个字节都没回时正文是空的(那时括号里会留下一个孤零零的分隔符)——
+        #: 退到 HTTP 自己那句状态文本。
+        detail = said or _body_head(response) or response.reason_phrase
+        params: dict[str, Any] = {"status": f"HTTP {response.status_code}", "detail": detail}
         if isinstance(body, dict):
             params["code"], params["msg"] = body.get("code"), body.get("msg")
         raise FeishuError("feishuErr_download", **params)

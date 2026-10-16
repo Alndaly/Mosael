@@ -20078,12 +20078,34 @@ export interface components {
         /**
          * WorkflowFieldOptionOut
          * @description 节点字段的一个动态选项。
+         *
+         *     各个来源给得不一样多(见 domain/workflows/field_options 的 `Option`),所以**伴随信息那几格都有默认值**:
+         *     这个来源不填就是空,不代表这项不存在。**别把它们收成 required** —— 一个不带这几格的来源会让整个下拉 500。
+         *
+         *     路由的返回注解是 `list[dict]`、领域层的 `Option` 是 `dict[str, Any]`,而 `ApiModel` 是 pydantic 默认的
+         *     `extra="ignore"`:领域层给了、这里没声明的键会在**序列化那一刻被静默丢掉**。下面这几格此前就是这么丢的。
          */
         WorkflowFieldOptionOut: {
             /** Value */
             value: string;
             /** Label */
             label: string;
+            /**
+             * Bot Id
+             * @default
+             */
+            bot_id: string;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Profile Name
+             * @default
+             */
+            profile_name: string;
+            entry_group?: components["schemas"]["EntryGroupOut"] | null;
         };
         /**
          * WorkflowFileOut

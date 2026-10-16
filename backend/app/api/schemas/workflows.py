@@ -134,10 +134,28 @@ class RunApprovalDecisionIn(ApiModel):
 
 
 class WorkflowFieldOptionOut(ApiModel):
-    """节点字段的一个动态选项。"""
+    """节点字段的一个动态选项。
+
+    各个来源给得不一样多(见 domain/workflows/field_options 的 `Option`),所以**伴随信息那几格都有默认值**:
+    这个来源不填就是空,不代表这项不存在。**别把它们收成 required** —— 一个不带这几格的来源会让整个下拉 500。
+
+    路由的返回注解是 `list[dict]`、领域层的 `Option` 是 `dict[str, Any]`,而 `ApiModel` 是 pydantic 默认的
+    `extra="ignore"`:领域层给了、这里没声明的键会在**序列化那一刻被静默丢掉**。下面这几格此前就是这么丢的。
+    """
 
     value: str
     label: str
+    #: 这一项属于**哪台机器人**(飞书「收件人」那一格:`_feishu_bound_users` / `_feishu_chats`)。
+    #: 值是某台应用眼里的 open_id / chat_id,而 open_id 按飞书应用隔离 —— 归属只有清单说得清。
+    #: 前端选中时要据此把节点上的「机器人」那一格一并写上,**不许**从 `label` 里的机器人名反推。
+    bot_id: str = ""
+    #: ADR 0045 的两层名字(见 generation_option_names):选、存、比对用 `model`(模型 id,或 ComfyUI 的
+    #: 工作流路径),给人看的主名在 `label`;`profile_name` 是连接名,`entry_group` 是「哪样东西的哪个入口」。
+    #: **这三格是既存 bug 的修复,不是新加的展示**:`generation_option_names` 一直给、前端 `lib/entryNames`
+    #: 的 `entryNamedOptions` 一直读,而它们从没穿过这一层 —— 第二行永远是空的,且是静默的。
+    model: str = ""
+    profile_name: str = ""
+    entry_group: EntryGroupOut | None = None
 
 
 class WorkflowUnusableNodeOut(ApiModel):

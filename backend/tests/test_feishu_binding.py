@@ -167,6 +167,69 @@ def test_列表只列本机_删除只删本机() -> None:
     assert listed(second["id"]) == ["ou_two"]
 
 
+def test_删机器人时它名下的绑定标成_机器人已删除_而不是被删掉() -> None:
+    """删机器人 ≠ 删「谁曾绑过它」。
+
+    级联删掉的话,那件事就没有痕迹了 —— 而这一行正是要留着**让人看得见、重新绑**的:这台机器人
+    没了,它眼里的那些 open_id 也不再有任何应用解释得了(open_id 按应用隔离)。所以是**标出来**:
+    `bot_id` 清空 + `stale_reason` 说明原因,行留着;别的机器人那几行一动不动。
+    """
+    client = fresh_client()
+    ws = _workspace(client)
+    me = client.get("/api/auth/me").json()
+    doomed = _bot(client, ws, name="要删的", app_id="cli_doomed")
+    kept = _bot(client, ws, name="留着的", app_id="cli_kept")
+    with SessionLocal() as db:
+        _bind(db, ws, doomed["id"], "ou_doomed", me["id"])
+        _bind(db, ws, kept["id"], "ou_kept", me["id"])
+
+    assert client.delete(f"/api/feishu/bots/{doomed['id']}").status_code == 204
+
+    with SessionLocal() as db:
+        assert db.get(FeishuBot, doomed["id"]) is None
+        row = db.get(FeishuBinding, {"workspace_id": ws, "bot_id": "", "open_id": "ou_doomed"})
+        assert row is not None, "这一行被级联删掉了 —— 「谁曾绑过」从此没有痕迹"
+        assert (row.user_id, row.stale_reason) == (me["id"], "bot-removed"), row.stale_reason
+        #: 别的机器人的绑定一动不动(删一台不该动到另一台)。
+        other = db.get(FeishuBinding, {"workspace_id": ws, "bot_id": kept["id"], "open_id": "ou_kept"})
+        assert other is not None and other.stale_reason == ""
+        #: 那一行不再是任何一台机器人的有效绑定 —— 那台应用已经不在了。
+        assert bindings.resolve_sender(db, ws, doomed["id"], "ou_doomed") is None
+
+    #: 面板上看得见它、也只看得见它那一条(stale 那半句由前端第二半说)。
+    listed = client.get(f"/api/feishu/bots/{kept['id']}/bindings").json()
+    assert [(one["open_id"], one["bot_id"], one["stale"]) for one in listed] == [
+        ("ou_doomed", "", True),
+        ("ou_kept", kept["id"], False),
+    ]
+
+
+def test_删机器人时撞上同一个人那条说不清归属的老行() -> None:
+    """主键是 `(workspace_id, bot_id, open_id)`,所以清空 `bot_id` 是一次**改主键**的 UPDATE:
+    同一个人 + 同一串 open_id 要是已经有一条说不清归属的老行(这台应用重建过、他在它里面又绑了一次),
+    两条会撞在同一格主键上。并成一条 —— 留下的那条说得更具体(哪台机器人被删了),人照样看得见要重绑。
+    """
+    client = fresh_client()
+    ws = _workspace(client)
+    me = client.get("/api/auth/me").json()
+    bot = _bot(client, ws, name="要删的", app_id="cli_same_app")
+    with SessionLocal() as db:
+        db.add(FeishuBinding(
+            workspace_id=ws, bot_id="", open_id="ou_same", user_id=me["id"],
+            stale_reason=bindings.STALE_UNKNOWN_APP,
+        ))
+        db.commit()
+        _bind(db, ws, bot["id"], "ou_same", me["id"])
+
+    assert client.delete(f"/api/feishu/bots/{bot['id']}").status_code == 204
+
+    with SessionLocal() as db:
+        rows = db.query(FeishuBinding).filter_by(workspace_id=ws).all()
+        assert [(one.bot_id, one.open_id, one.stale_reason) for one in rows] == [
+            ("", "ou_same", bindings.STALE_BOT_REMOVED),
+        ]
+
+
 def test_bind_code_route_requires_membership() -> None:
     client = fresh_client()
     ws = _workspace(client)

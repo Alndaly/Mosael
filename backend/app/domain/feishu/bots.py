@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import unit_of_work
 from app.db.models import FeishuBot
+from app.domain.feishu import bindings
 
 
 def list_bots(db: Session, workspace_id: str) -> list[FeishuBot]:
@@ -33,6 +34,12 @@ def update_bot(db: Session, bot: FeishuBot, changes: dict[str, Any]) -> None:
 
 
 def delete_bot(db: Session, bot: FeishuBot) -> None:
+    """删机器人:它名下的绑定**留着**,标成「那台机器人被删了」(见 `bindings.stale_bindings_of_bot`)。
+
+    不级联删 —— 「谁曾绑过这台」要看得见,人才能重新绑;而删掉之后那些 open_id 在新机器人眼里
+    本来也认不出来(open_id 按应用隔离),照实标出来比留一行"看着像绑着"的强。
+    """
+    bindings.stale_bindings_of_bot(db, bot.workspace_id, bot.id)
     db.delete(bot)
 
 

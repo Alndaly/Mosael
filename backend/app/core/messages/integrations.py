@@ -15,9 +15,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "飞书发消息失败: {detail}",
         "en": "Couldn't send the Feishu message: {detail}",
     },
+    #: 两个槽:`{status}` 是 `HTTP 401` 这样的状态码,`{detail}` 是**飞书自己那句**
+    #: (`code 99991664: app access token invalid`)。此前只有一个槽,client 只好把原文拼进状态码那一格
+    #: —— 于是"状态码"那一格说的不是状态码。
     "feishuErr_download": {
-        "zh": "下载飞书资源失败({status})",
-        "en": "Couldn't download the Feishu resource ({status}).",
+        "zh": "下载飞书资源失败({status} · {detail})",
+        "en": "Couldn't download the Feishu resource ({status} · {detail}).",
     },
     "feishuErr_qrUnsupported": {
         "zh": "当前环境不支持扫码创建,请手动填写 App ID / App Secret。",

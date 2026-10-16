@@ -560,7 +560,7 @@ def test_收件人那一格_私聊列已绑定的人_发群列机器人所在的
     """**同一个值格装着两种东西**,装哪种由 `channel` 说(它就是 depends_on 的那个父字段)——
     所以这一格的下拉必须跟着父字段换源,不然私聊那一档会列出群、发群那一档会列出人。"""
     ws = _workspace()
-    _bot(ws, name="助手")
+    bot_id = _bot(ws, name="助手")
     _bind(ws)
     monkeypatch.setattr(
         client, "call_api",
@@ -570,7 +570,9 @@ def test_收件人那一格_私聊列已绑定的人_发群列机器人所在的
     )
 
     assert [one["value"] for one in _options("feishu_targets", ws, parent="user")] == [OPEN_ID]
-    assert _options("feishu_targets", ws, parent="chat") == [{"value": "oc_room", "label": "产品群"}]
+    assert _options("feishu_targets", ws, parent="chat") == [
+        {"value": "oc_room", "label": "产品群", "bot_id": bot_id}
+    ]
     #: 另外两档(哪来发回哪 / 手填 id)用不上这一格:给清单反而是误导。
     assert _options("feishu_targets", ws, parent="origin") == []
     assert _options("feishu_targets", ws, parent="") == []
@@ -589,9 +591,55 @@ def test_收件人那一格_两台机器人时那串id标着是谁的() -> None:
     _bind(ws, "ou_in_two", bot_id=second)
 
     assert _options("feishu_targets", ws, parent="user") == [
-        {"value": "ou_in_one", "label": "tester · 一号"},
-        {"value": "ou_in_two", "label": "tester · 二号"},
+        {"value": "ou_in_one", "label": "tester · 一号", "bot_id": first},
+        {"value": "ou_in_two", "label": "tester · 二号", "bot_id": second},
     ]
+
+
+def test_收件人那一格_同一个人在两台应用上各带各的bot_id() -> None:
+    """open_id 按飞书应用隔离:同一个人在一号、二号上各是一串不同的 id、各是一条绑定。
+
+    两项必须各自说清自己属于**哪台机器人** —— 前端选中时要把「机器人」那一格一并写上,
+    而它拿不到"选项属于谁"这件事。机器人的名字写在标签里,**不许**从标签反推(那是禁掉的猜法):
+    依据只能是这个键。
+    """
+    ws = _workspace()
+    first = _bot(ws, name="一号", app_id="cli_one")
+    second = _bot(ws, name="二号", app_id="cli_two")
+    _bind(ws, "ou_in_one", bot_id=first)
+    _bind(ws, "ou_in_two", bot_id=second)
+
+    options = _options("feishu_targets", ws, parent="user")
+
+    assert [one["value"] for one in options] == ["ou_in_one", "ou_in_two"], "值仍然是那串 open_id,语义没动"
+    assert [one["bot_id"] for one in options] == [first, second], "每一项带着自己那台机器人的 id"
+    assert options[0]["bot_id"] != options[1]["bot_id"], "同一个人,两台应用 → 两个不同的 bot_id"
+
+
+def test_收件人那一格_发群时两台机器人各自带各自的bot_id(monkeypatch) -> None:
+    """发群那一支同理:chat_id 也按飞书应用隔离,同一个群在两台应用眼里是两串不同的 id。
+
+    「选中 B 的收件人、却让运行用 A 发」正是这里要挡的事 —— 每一项都得说清这串 id 是哪台
+    机器人眼里的,不然那串 id 配上另一台的 token,飞书直接拒。
+    """
+    ws = _workspace()
+    first = _bot(ws, name="一号", app_id="cli_one")
+    second = _bot(ws, name="二号", app_id="cli_two")
+    #: 同一个群(都叫「产品群」),两台机器人各自看见自己那串 chat_id。
+    seen_by_bot = {first: "oc_seen_by_one", second: "oc_seen_by_two"}
+
+    def call_api(bot, method, url, body=None):
+        return {"code": 0, "data": {"items": [{"chat_id": seen_by_bot[bot.id], "name": "产品群"}], "has_more": False}}
+
+    monkeypatch.setattr(client, "call_api", call_api)
+
+    options = _options("feishu_targets", ws, parent="chat")
+
+    assert [one["value"] for one in options] == ["oc_seen_by_one", "oc_seen_by_two"], "值仍然是那串 chat_id,语义没动"
+    assert [one["bot_id"] for one in options] == [first, second], "每一项带着自己那台机器人的 id"
+    assert options[0]["bot_id"] != options[1]["bot_id"], "同一个群,两台应用 → 两个不同的 bot_id"
+    #: 标签的现有形状没动:不止一台时带机器人名,名字在标签里,但归属的依据是 bot_id 而不是它。
+    assert [one["label"] for one in options] == ["一号 / 产品群", "二号 / 产品群"]
 
 
 def test_收件人那一格_飞书问不到就给空表而不是把这一页打红(monkeypatch) -> None:

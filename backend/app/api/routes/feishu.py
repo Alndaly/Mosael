@@ -62,9 +62,12 @@ def restart_bot(bot_id: str, db: DbSession, user: CurrentUser) -> FeishuBot:
 
 @router.post("/feishu/onboarding/{workspace_id}", response_model=FeishuOnboardingOut)
 def begin_onboarding(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+    #: **发起人是谁要带下去**:建完机器人,第一条绑定绑的就是他/她(见 integrations/feishu/onboarding)。
+    #: 这里写注释而不是 docstring —— docstring 会进 OpenAPI 的接口描述,那就是一次要跟前端一起
+    #: 重新生成的漂移(见 export_openapi.py --check)。
     feishu.ensure_can_edit(db, user, workspace_id)
     try:
-        return onboarding.begin_onboarding(workspace_id)
+        return onboarding.begin_onboarding(workspace_id, user.id)
     except client.FeishuError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

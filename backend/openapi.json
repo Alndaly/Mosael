@@ -50456,6 +50456,31 @@
           "label": {
             "type": "string",
             "title": "Label"
+          },
+          "bot_id": {
+            "type": "string",
+            "title": "Bot Id",
+            "default": ""
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "default": ""
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name",
+            "default": ""
+          },
+          "entry_group": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryGroupOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -50464,7 +50489,7 @@
           "label"
         ],
         "title": "WorkflowFieldOptionOut",
-        "description": "节点字段的一个动态选项。"
+        "description": "节点字段的一个动态选项。\n\n各个来源给得不一样多(见 domain/workflows/field_options 的 `Option`),所以**伴随信息那几格都有默认值**:\n这个来源不填就是空,不代表这项不存在。**别把它们收成 required** —— 一个不带这几格的来源会让整个下拉 500。\n\n路由的返回注解是 `list[dict]`、领域层的 `Option` 是 `dict[str, Any]`,而 `ApiModel` 是 pydantic 默认的\n`extra=\"ignore\"`:领域层给了、这里没声明的键会在**序列化那一刻被静默丢掉**。下面这几格此前就是这么丢的。"
       },
       "WorkflowFileOut": {
         "properties": {

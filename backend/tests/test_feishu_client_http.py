@@ -18,7 +18,7 @@ import pytest
 
 from app.core import http_retry
 from app.core.http_retry import status_resend_is_safe
-from app.core.i18n import LocalizedError
+from app.core.i18n import MESSAGES, LocalizedError, t
 from app.integrations.feishu import client
 
 #: 一条用例里允许的请求上限(取令牌也算)。分页那条要是没停住,这里当场炸,而不是把测试挂死。
@@ -251,8 +251,8 @@ def test_令牌失效的两个码都会换一个令牌再来一次(wire, code) -
 def test_下载二次401后body里的code与msg都带出来(wire) -> None:
     """401 → 换令牌 → 还是 401。此前只留一个状态码,而 body 里飞书写着 code/msg。
 
-    `feishuErr_download` 的文案只有一个 `{status}` 槽,所以这里把状态码与原文一起拼进那个槽
-    (`HTTP 401 · code 99991664: app access token invalid`)—— 不新增文案 key,原文一个字不丢。
+    文案有**两个**槽:`{status}` 是 `HTTP 401`(不再把原文拼进去),`{detail}` 是飞书自己那句
+    `code 99991664: app access token invalid`。原文一个字不丢,而"状态码"那一格说的一直是状态码。
     """
     seen = wire(
         _json(401, {"code": 99991663, "msg": "token expired"}),
@@ -264,10 +264,51 @@ def test_下载二次401后body里的code与msg都带出来(wire) -> None:
 
     exc = raised.value
     assert exc.key == "feishuErr_download"
+    assert exc.params.get("status") == "HTTP 401", exc.params
+    assert exc.params.get("detail") == "code 99991664: app access token invalid", exc.params
+    assert t(exc.key, "zh", **exc.params) == "下载飞书资源失败(HTTP 401 · code 99991664: app access token invalid)"
     assert "99991664" in str(exc), str(exc)
     assert "app access token invalid" in str(exc), str(exc)
-    assert exc.params.get("detail") == "code 99991664: app access token invalid", exc.params
     assert len(_paths(seen, "/resources/")) == 2, "401 之后换一次令牌再取"
+
+
+def test_下载失败的文案真的有一个放原文的槽() -> None:
+    """`feishuErr_download` 此前只有一个 `{status}` 槽:文案里根本没有放飞书原文的地方,于是 client
+    把 code/msg 拼进了状态码那一格(`HTTP 401 · code 99991664: …`)。
+
+    **先红就是这一条**:没有 `{detail}` 槽时 `t()` 对多出来的参数视而不见 —— 这句模板渲染出来
+    只剩状态码,飞书写的原文一个字都不在。
+    """
+    for locale in ("zh", "en"):
+        assert "{detail}" in MESSAGES["feishuErr_download"][locale], MESSAGES["feishuErr_download"]
+
+    assert t(
+        "feishuErr_download", "zh", status="HTTP 401", detail="code 99991664: app access token invalid"
+    ) == "下载飞书资源失败(HTTP 401 · code 99991664: app access token invalid)"
+
+
+def test_飞书5xx最多重发两次(wire) -> None:
+    """飞书这一侧的重发上限是 **2**(不含首次):设置页那个数是**AI 连接**的、缺省 3,跟着它走的话
+    5xx 风暴下 `list_chats` 要多等一轮退避 —— 而用户在那几十秒里只看到"群列表转圈"。
+    """
+    seen = wire(_json(500, {"code": 99991400, "msg": "internal error"}))
+
+    with pytest.raises(client.FeishuError):
+        client.list_chats(_Bot("b-cap-default"), limit=10)
+
+    assert len(_paths(seen, "/chats")) == 3, "首次 + 最多 2 次重发(此前跟着设置页的 3,是 4 次)"
+
+
+def test_飞书5xx的上限不跟设置页那个数走(wire) -> None:
+    """**独立上限**:设置页把 `max_retries` 调到 0,飞书这一层照样有自己的 2 次 —— 那一栏管的是
+    AI 连接,和"列群要不要再问一次"没有关系。"""
+    http_retry.set_max_retries(0)
+    seen = wire(_json(500, {"code": 99991400, "msg": "internal error"}))
+
+    with pytest.raises(client.FeishuError):
+        client.list_chats(_Bot("b-cap-zero"), limit=10)
+
+    assert len(_paths(seen, "/chats")) == 3, "首次 + 最多 2 次重发"
 
 
 # ---------------- ⑤ 文件名:缺 Content-Disposition 时按 content-type 给扩展名 ----------------

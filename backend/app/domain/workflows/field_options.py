@@ -449,6 +449,10 @@ def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
     **按机器人分组列**:open_id 按飞书应用隔离,同一个人在两台机器人上是两串不同的 id,
     拿 A 的那串配 B 的 token 发,飞书直接拒。工作区里不止一台时标签带上机器人名,让人一眼
     看出选的是哪一台的哪一串;说不清归属的老行不列 —— 选它发不出去。
+
+    每一项还带着 `bot_id`(那台机器人的 id):这一串 id **是哪台应用眼里的**,
+    只有这里说得清。前端选中时要把「机器人」那一格一并写上,而它拿不到"选项属于谁"这件事 ——
+    依据只能是这个键,**不许**从标签里的机器人名反推(那是猜法)。
     """
     from app.domain.feishu import bindings, bots
 
@@ -462,6 +466,7 @@ def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
             options.append({
                 "value": one.open_id,
                 "label": f"{label} · {bot.name or bot.app_id}" if len(all_bots) > 1 else label,
+                "bot_id": bot.id,
             })
     return options
 
@@ -487,6 +492,10 @@ def _feishu_chats(db: Session, ctx: OptionContext) -> list[Option]:
 
     **一律 best-effort**:这是一个下拉,对方没开、超时、没接机器人都不该把整页打红 ——
     声明里写了 allow_custom,问不到的时候人还能把 id 填进去。
+
+    和「私聊」那一支同一个道理:chat_id 也按飞书应用隔离,同一个群在两台机器人眼里是两串不同的
+    id。所以每一项带着 `bot_id`(这串 id 是**哪台应用**看见的) —— 前端选中时
+    要把「机器人」那一格一并写上,依据只能是这个键,不从标签里的机器人名反推。
     """
     from app.domain.feishu import gateway, routing
 
@@ -509,7 +518,11 @@ def _feishu_chats(db: Session, ctx: OptionContext) -> list[Option]:
             seen.add(chat_id)
             name = str(chat.get("name") or "") or chat_id
             #: 工作区接了不止一个机器人时,群名前面带上是谁的列表 —— 同一个群名在两边都会出现。
-            options.append({"value": chat_id, "label": f"{bot.name} / {name}" if len(bots) > 1 else name})
+            options.append({
+                "value": chat_id,
+                "label": f"{bot.name} / {name}" if len(bots) > 1 else name,
+                "bot_id": bot.id,
+            })
     return options
 
 
