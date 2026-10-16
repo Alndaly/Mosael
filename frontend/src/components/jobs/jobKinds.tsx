@@ -16,13 +16,13 @@ import {
   Clapperboard,
   CloudUpload,
   Download,
+  Eraser,
   FileText,
   Film,
   GitBranch,
   HardDriveDownload,
   ImageDown,
   Link as LinkIcon,
-  type LucideIcon,
   Mic,
   PackagePlus,
   PenLine,
@@ -33,6 +33,7 @@ import {
   Sparkles,
   Split,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
 
 import { fetchJobKinds, type Job, type JobKind } from "@/api/client";
@@ -67,6 +68,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   node_install: PackagePlus,
   model_previews: ImageDown,
   shot_breakdown: Clapperboard,
+  scrub_metadata: Eraser,
 };
 
 export type JobKindMeta = JobKind & { icon: LucideIcon };

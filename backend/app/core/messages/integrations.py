@@ -471,6 +471,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": ";**背景音乐也会被当成噪声去掉**",
         "en": "; **background music will be removed as noise too**",
     },
+    "confirm_scrubMetadata": {
+        "zh": "清除这段视频的元数据,产出一份新素材(画面和声音逐字节不变;去掉地点、设备、账号、封面、数据轨和 ffprobe 看不见的那几层){provenance}",
+        "en": "Strip this video's metadata into a new asset (picture and sound byte-for-byte identical; drops location, device, account, cover art, data tracks and the layers ffprobe cannot see){provenance}",
+    },
+    "confirm_scrubMetadataProvenance": {
+        "zh": ";**同时抹掉「这段是 AI 生成的」标记(C2PA)**",
+        "en": "; **also erases the \u201cthis was AI-generated\u201d marking (C2PA)**",
+    },
+    "confirm_scrubMetadataKeepProvenance": {
+        "zh": ";AI 生成标记保留",
+        "en": "; the AI-generation marking is preserved",
+    },
     "confirm_videoToGif": {
         "zh": "把视频转成新的 GIF({fps} fps,宽 {width} px{clip}),原视频不变",
         "en": "Convert the video into a new GIF ({fps} fps, {width} px wide{clip}); the video is unchanged",
@@ -1109,7 +1121,25 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "把联系表也存成素材（选「是」）：每张联系表登记成一张图片素材，记「取自这一镜帧」的派生关系，进素材库",
         "en": "Also save the contact sheets as assets (yes): each sheet is registered as an image asset derived from this video's frames, and appears in the library",
     },
+    "wfNode_scrub_metadata": {"zh": "清除元数据", "en": "Strip metadata"},
+    "wfNode_scrub_metadata_desc": {
+        "zh": "产出一份「干净」的副本:画面和声音逐字节不变(流复制,不重编码),去掉容器标签、拍摄地点(GPS)、设备与软件、账号/ID、封面,以及数据轨(GoPro GPMF 遥测、时间码);再清掉 ffprobe 看不见的三层——H.264/H.265 里的 user-data SEI(编码器设置、固件串)、AAC 帧里的 DSE / 填充元素、以及 compressorname。同时交出一份对账文本:清之前发现了什么、清了什么、哪些清不掉以及为什么。原素材一个字节不动。不花钱。",
+        "en": "Produces a clean copy: picture and sound stay byte-for-byte identical (stream copy, no re-encode) while container tags, capture location (GPS), device and software strings, account/ID, cover art and data tracks (GoPro GPMF telemetry, timecode) are dropped; then the three layers ffprobe cannot see are cleared too — user-data SEI in H.264/H.265 (encoder settings, firmware strings), DSE / fill elements inside AAC frames, and compressorname. It also returns a reconciliation text: what was found before, what was cleared, and what could not be cleared and why. The source asset is untouched. Costs nothing.",
+    },
+    "wfNode_scrub_metadata_asset_id": {"zh": "要清除元数据的视频素材", "en": "The video asset to strip metadata from"},
+    "wfNode_scrub_metadata_provenance": {
+        "zh": "也清掉 AI 生成标记(C2PA)?默认「否」。选「是」会把「这段是 AI 生成的」这个声明一并抹掉,输出看起来和从未被 AI 碰过的素材一样——那不是去掉你的隐私,在要求标注 AI 生成的平台或地区可能让发布违规。开着的这一趟只在你自己知道后果时用。",
+        "en": "Also erase the AI-generation marking (C2PA)? Default no. Yes removes the statement that this was AI-generated, so the file looks like footage no AI ever touched — that is not removing your own privacy, and it can break the rules of platforms or regions that require that disclosure. Only turn it on when you accept that.",
+    },
+    "wfOut_scrub_report": {"zh": "对账文本", "en": "Reconciliation report"},
+    "wfOut_scrub_removed_rows": {"zh": "清掉了什么", "en": "What was removed"},
+    "wfOut_scrub_gates": {"zh": "门禁逐条", "en": "Gate results"},
+    "wfOut_scrub_gates_ok": {"zh": "门禁是否全过", "en": "All gates passed"},
+    "wfOut_scrub_warnings": {"zh": "未做到的部分", "en": "What could not be done"},
+    "wfNode_scrub_metadata_provenance_label": {"zh": "也清 AI 生成标记", "en": "Also erase the AI marking"},
+    "wfOut_scrub_removed": {"zh": "清掉了什么", "en": "What was removed"},
     "wfNode_describe_shots": {"zh": "逐镜看画面", "en": "Judge shots"},
+
     "wfNode_describe_shots_desc": {
         "zh": "用视觉模型逐批判这份视频的每一镜：景别、类别、运镜、转场、节奏、画面描述和照着重生的分镜提示词。每批最多 25 镜一次调用（一份联系表一批），代码对账：表外的词当场清掉、声称在动而实测没动的运镜被拦下并记下来。花钱（每批一次视觉调用）。",
         "en": "Has a vision model judge every shot of this video, in batches of up to 25 (one contact sheet per batch): framing, category, camera work, transitions, rhythm, a picture description and a storyboard prompt to recreate it. Code reconciles afterwards: out-of-vocabulary words are dropped, and camera moves that claim motion the pixels don't show are corrected and recorded. Costs money (one vision call per batch).",

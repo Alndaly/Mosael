@@ -388,6 +388,43 @@ def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | N
     )
     return {"job_id": job.id, "source_asset_id": asset.id}
 
+def _validate_scrub_video_metadata(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.db.models import Asset
+    from app.domain.assets.scrub.task import require_video
+    from app.domain.assets.scrub.engine import ScrubError
+
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotInWorkspace")
+    payload["provenance"] = bool(payload.get("provenance"))
+    #: 说不通(不是视频、没有本地文件)在**开卡之前**就拒 —— 一张注定执行不了的卡没有让用户去点的道理。
+    try:
+        require_video(asset)
+    except ScrubError as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+
+
+def _summarize_scrub_video_metadata(db: Session, payload: dict[str, Any]) -> Summary:
+    asks_provenance = bool(payload.get("provenance"))
+    return "confirm_scrubMetadata", {
+        "provenance": fragment(
+            "confirm_scrubMetadataProvenance" if asks_provenance else "confirm_scrubMetadataKeepProvenance"),
+    }
+
+
+def _execute_scrub_video_metadata(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    from app.db.models import Asset
+    from app.domain.assets.scrub.task import start_scrub_job
+
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    #: 只起任务(和 convert_video_to_gif 同款:返回 job_id,智能体按它问进度)。
+    job = start_scrub_job(db, asset=asset, created_by=actor, provenance=bool(payload.get("provenance")))
+    return {"job_id": job.id, "source_asset_id": asset.id}
+
+
 def _validate_split_image_grid(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.db.models import Asset
     from app.domain.assets.image_grid import ImageGridError, parse_grid
@@ -697,6 +734,19 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_convert_video_to_gif,
     execute=_execute_convert_video_to_gif,
     validate=_validate_convert_video_to_gif,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="scrub_video_metadata",
+    #: 不花钱,但会**多出一份**素材(整份写一遍)。撤得回:删掉那份产出就回去了,所以是 edit。
+    permission="edit",
+    cost="none",
+    #: 只起任务,产出的登记由任务那一侧按 `JobKind.affects` 刷新。
+    writes=(),
+    summarize=_summarize_scrub_video_metadata,
+    execute=_execute_scrub_video_metadata,
+    validate=_validate_scrub_video_metadata,
 ))
 
 

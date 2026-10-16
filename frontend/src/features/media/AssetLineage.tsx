@@ -20,6 +20,7 @@ const OP_LABELS: Record<string, MessageKey> = {
   mix: "assetLineageOpMix",
   extract: "assetLineageOpExtract",
   mask: "assetLineageOpMask",
+  scrub: "assetLineageOpScrub",
   plugin: "assetLineageOpPlugin",
 };
 

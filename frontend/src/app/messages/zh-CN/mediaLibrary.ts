@@ -62,6 +62,7 @@ export const mediaLibrary = {
   assetLineageOpMix: "混音",
   assetLineageOpExtract: "从文档取出",
   assetLineageOpMask: "生成蒙版",
+  assetLineageOpScrub: "清除元数据",
   assetLineageOpPlugin: "插件加工",
   // 「生成蒙版」(ADR 0056 决定 6):对素材库里已有的一张图,一步得到一张存下来的蒙版素材。
   // 阈值 / 反选 / 羽化半径复用 aiStudio 那几条 —— 和 MaskEditor 是同一种东西,说法也该是同一种。

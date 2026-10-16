@@ -61,6 +61,7 @@ export const mediaLibrary = {
   assetLineageOpMix: "mixed",
   assetLineageOpExtract: "from document",
   assetLineageOpMask: "mask",
+  assetLineageOpScrub: "metadata stripped",
   assetLineageOpPlugin: "plugin",
   // "Make a mask" (ADR 0056 decision 6): one step from an image already in the library to a stored mask asset.
   // Threshold / invert / feather radius reuse the aiStudio entries — same thing as MaskEditor, same words.

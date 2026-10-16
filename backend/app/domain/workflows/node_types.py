@@ -1106,6 +1106,33 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"shot_count": "number", "sheets": "json", "asset_ids": "json"},
         "output_labels": {"sheets": "wfOut_shot_sheets"},
     },
+    #: 清除元数据(ADR 0062):画面和声音逐字节不动,去掉容器标签 / GPS / 设备 / 账号 / 封面 /
+    #: 数据轨,以及 ffprobe 看不见的三层(SEI、AAC 帧内元素、compressorname)。产出是一份新素材,
+    #: 对账文本随输出交出去(清前发现了什么、清了什么、哪些清不掉)。
+    "scrub_metadata": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_scrub_metadata",
+        "description": "wfNode_scrub_metadata_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "video",
+                         "description": "wfNode_scrub_metadata_asset_id"},
+            "provenance": {"type": "string", "default": "no", "options": ["no", "yes"],
+                           "label": "wfNode_scrub_metadata_provenance_label",
+                           "description": "wfNode_scrub_metadata_provenance"},
+        },
+        "outputs": ["asset_id", "source_asset_id", "report", "removed", "gates", "gates_ok", "warnings"],
+        "output_types": {
+            "asset_id": "asset", "source_asset_id": "asset", "report": "string",
+            "removed": "json", "gates": "json", "gates_ok": "boolean", "warnings": "json",
+        },
+        "output_labels": {
+            "report": "wfOut_scrub_report", "removed": "wfOut_scrub_removed",
+            "gates": "wfOut_scrub_gates", "gates_ok": "wfOut_scrub_gates_ok",
+            "warnings": "wfOut_scrub_warnings",
+        },
+    },
     "describe_shots": {
         "external": False,
         "spends": True,

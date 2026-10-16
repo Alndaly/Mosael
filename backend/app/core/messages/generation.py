@@ -548,4 +548,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     "gifErr_noLocalFile": {"zh": "视频素材没有本地文件", "en": "The video asset has no local file."},
     "gifErr_badParams": {"zh": "GIF 参数超出允许范围", "en": "The GIF settings are out of the allowed range."},
     "gifErr_fileMissing": {"zh": "视频素材文件不存在", "en": "The video file is missing."},
+    #: 清除元数据(ADR 0062)。
+    "scrubErr_notVideo": {"zh": "只有视频素材可以清除元数据", "en": "Only video assets can have their metadata stripped."},
+    "scrubErr_noLocalFile": {"zh": "视频素材没有本地文件", "en": "The video asset has no local file."},
+    "scrubErr_sourceMissing": {"zh": "视频素材文件不存在", "en": "The video file is missing."},
+    "scrubErr_encrypted": {
+        "zh": "这份素材的音视频是加密的,读不出画面,没法保证「画面逐字节相同」",
+        "en": "This asset's streams are encrypted, so its picture cannot be read and \"byte-for-byte identical picture\" cannot be promised.",
+    },
+    "scrubErr_gateFailed": {
+        "zh": "清除后的产出没有通过硬门禁({gates}),已丢弃,没有登记进素材库",
+        "en": "The stripped output failed the hard gates ({gates}); it was discarded and not added to the library.",
+    },
 }

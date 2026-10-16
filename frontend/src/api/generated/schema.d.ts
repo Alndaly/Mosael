@@ -2086,6 +2086,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/scrub": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Scrub
+         * @description 排一条「清除元数据」后台任务,返回这条任务(照 `/convert-gif`、`/shots` 那条既有形状)。
+         *
+         *     产出是一份**新的**派生素材:画面和声音逐字节等于原片,去掉的是容器标签、GPS、设备/软件、
+         *     账号/ID、封面、数据轨(遥测 / 时间码),以及 `ffprobe` 看不见的三层(H.264/H.265 的
+         *     user-data SEI、AAC 帧里的 `DSE` / 填充元素、`compressorname`)。原素材一个字节不动。
+         *
+         *     `provenance=true` 时连 AI 生成标记(C2PA)一起清 —— 那是另一个开关,**默认关**,理由见
+         *     `domain/media/scrub/policy.PROVENANCE`。做完在任务中心看得到,结果里有对账文本和十道门;
+         *     素材详情读 `GET /assets/{id}/scrub-report`。
+         */
+        post: operations["start_scrub_api_assets__asset_id__scrub_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/scrub-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Scrub Report
+         * @description 这份素材上一次清除元数据的对账文本。**没清过是 200 + `status="none"`**,不是 404 ——
+         *     「还没清过」和「看不到这份素材」是两件事(和镜头表同一个态度)。
+         */
+        get: operations["read_scrub_report_api_assets__asset_id__scrub_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voices": {
         parameters: {
             query?: never;
@@ -17927,6 +17976,40 @@ export interface components {
             } | null;
         };
         /**
+         * ScrubAssetRequest
+         * @description 清除元数据(ADR 0062)的选项 —— 前端「导出时勾选」那一条要的形状就是它。
+         *
+         *     `provenance` 是**单独一个开关,默认关**:关着只清你自己的隐私(地点、设备、账号、封面);
+         *     打开会连 AI 生成标记(C2PA 清单)一起抹掉。那不是"去掉你的隐私",是抹掉"这段是 AI 生成的"
+         *     这个声明,在要求标注 AI 生成的地方可能让发布违规 —— 界面上这句必须写在开关旁边。
+         */
+        ScrubAssetRequest: {
+            /**
+             * Provenance
+             * @description 也清掉 AI 生成标记(C2PA)。默认关。
+             * @default false
+             */
+            provenance: boolean;
+        };
+        /**
+         * ScrubReportOut
+         * @description 一份素材上一次清除元数据的对账文本。没清过是 `status="none"`,不是 404。
+         */
+        ScrubReportOut: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "ready";
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+        };
+        /**
          * SeparationEngineOut
          * @description 一个人声/背景音分离引擎装没装。
          *
@@ -24771,6 +24854,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_scrub_api_assets__asset_id__scrub_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScrubAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_scrub_report_api_assets__asset_id__scrub_report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScrubReportOut"];
                 };
             };
             /** @description Validation Error */

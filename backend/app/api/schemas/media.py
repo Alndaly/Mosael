@@ -294,6 +294,25 @@ class VideoToGifRequest(ApiModel):
     duration: float | None = Field(default=None, gt=0)
 
 
+class ScrubAssetRequest(ApiModel):
+    """清除元数据(ADR 0062)的选项 —— 前端「导出时勾选」那一条要的形状就是它。
+
+    `provenance` 是**单独一个开关,默认关**:关着只清你自己的隐私(地点、设备、账号、封面);
+    打开会连 AI 生成标记(C2PA 清单)一起抹掉。那不是"去掉你的隐私",是抹掉"这段是 AI 生成的"
+    这个声明,在要求标注 AI 生成的地方可能让发布违规 —— 界面上这句必须写在开关旁边。
+    """
+
+    provenance: bool = Field(default=False, description="也清掉 AI 生成标记(C2PA)。默认关。")
+
+
+class ScrubReportOut(ApiModel):
+    """一份素材上一次清除元数据的对账文本。没清过是 `status="none"`,不是 404。"""
+
+    asset_id: str
+    status: Literal["none", "ready"]
+    markdown: str = ""
+
+
 class DenoiseAssetRequest(ApiModel):
     """给一份素材降噪。空 engine = 内置引擎;档位的合法值由契约判(领域层报 422)。"""
 

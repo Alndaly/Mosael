@@ -418,6 +418,36 @@ def start_gif(db: Session, user: User, asset_id: str, **options: Any) -> Job:
     return start_video_to_gif(db, asset=require_asset(db, user, asset_id, perm="edit"), created_by=user.id, **options)
 
 
+def start_scrub(db: Session, user: User, asset_id: str, *, provenance: bool = False) -> Job:
+    """排一条「清除元数据」后台任务(ADR 0062)。产出是一份**新的**派生素材,原素材一个字节不动。
+
+    `provenance=True` 是那个单独的开关(默认关):连 AI 生成标记(C2PA)一起清。那不是"去掉你的
+    隐私",是抹掉"这段是 AI 生成的"这个声明 —— 后果写在 `domain/assets/scrub/policy.PROVENANCE`。
+    """
+    from app.domain.assets.scrub.task import start_scrub_job
+
+    asset = require_asset(db, user, asset_id, perm="edit")
+    return start_scrub_job(db, asset=asset, created_by=user.id, provenance=provenance)
+
+
+def scrub_report(db: Session, user: User, asset_id: str) -> dict[str, Any]:
+    """这份素材上一次清除元数据的**对账文本**。
+
+    **没清过是 200 + `status="none"`**,不是 404 —— 和「镜头表」同一个态度:还没做过是一次正常的
+    回答,和「这份素材你看不到」不是一回事。
+    """
+    from app.domain.assets.scrub.task import report_path_for
+    from app.media.paths import resolve_key
+
+    asset = require_asset(db, user, asset_id)
+    if not asset.file_key:
+        return {"asset_id": asset.id, "status": "none"}
+    path = report_path_for(resolve_key(asset.file_key))
+    if not path.is_file():
+        return {"asset_id": asset.id, "status": "none"}
+    return {"asset_id": asset.id, "status": "ready", "markdown": path.read_text(encoding="utf-8")}
+
+
 def start_separation(db: Session, user: User, asset_id: str, *, engine: str = "") -> Job:
     from app.domain.assets.separation import start_separation_job
 

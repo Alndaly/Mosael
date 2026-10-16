@@ -3424,6 +3424,64 @@
     }
   },
   {
+    "type": "scrub_metadata",
+    "config": {
+      "asset_id": {
+        "type": "template",
+        "label": {
+          "zh": "素材",
+          "en": "Media"
+        }
+      },
+      "provenance": {
+        "type": "string",
+        "label": {
+          "zh": "也清 AI 生成标记",
+          "en": "Also erase the AI marking"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "source_asset_id",
+      "report",
+      "removed",
+      "gates",
+      "gates_ok",
+      "warnings"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "source_asset_id": {
+        "zh": "来源素材",
+        "en": "Source media"
+      },
+      "report": {
+        "zh": "对账文本",
+        "en": "Reconciliation report"
+      },
+      "removed": {
+        "zh": "清掉了什么",
+        "en": "What was removed"
+      },
+      "gates": {
+        "zh": "门禁逐条",
+        "en": "Gate results"
+      },
+      "gates_ok": {
+        "zh": "门禁是否全过",
+        "en": "All gates passed"
+      },
+      "warnings": {
+        "zh": "未做到的部分",
+        "en": "What could not be done"
+      }
+    }
+  },
+  {
     "type": "separate_audio",
     "config": {
       "asset_id": {

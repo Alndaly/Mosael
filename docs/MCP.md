@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **126** 个工具,其中 **39** 个走确认卡、**1** 个停下来等用户作答。
+共 **127** 个工具,其中 **40** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -125,6 +125,7 @@
 | `run_host_code` | 确认卡 | Confirmation required: run Python directly on the user's computer, NOT isolated. |
 | `run_plugin_tool` | 确认卡 | Confirmation required: call a plugin tool not in your list this turn (`tool` as in plugin_tools; `arguments`: |
 | `run_workflow` | 确认卡 | Confirmation required: execute an EXISTING visual workflow. |
+| `scrub_video_metadata` | 确认卡 | Confirmation required: strip metadata from an EXISTING video asset into a NEW asset. |
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
 | `set_skill_enabled` | 确认卡 | Confirmation required, every time: turn a skill on or off in this workspace (on shows its full text). |

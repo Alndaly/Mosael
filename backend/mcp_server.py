@@ -529,6 +529,34 @@ def convert_video_to_gif(
 
 
 @tool(effect="confirms")
+def scrub_video_metadata(
+    asset_id: str,
+    provenance: bool = False,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: strip metadata from an EXISTING video asset into a NEW asset.
+
+    Picture and sound stay byte-for-byte identical (stream copy, never re-encoded). Container
+    tags, capture location (GPS), device/software strings, account/ID, cover art and data
+    tracks (GoPro telemetry, timecode) are dropped, along with the three layers ffprobe cannot
+    see: user-data SEI in H.264/H.265, DSE/fill elements inside AAC frames, and compressorname.
+    Returns a reconciliation report: found, cleared, and what could not be cleared and why.
+
+    provenance stays False unless the user asks for it. True ALSO erases the AI-generation
+    marking (C2PA), which can break platforms that require that disclosure. Say so first.
+    """
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "scrub_video_metadata",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "provenance": bool(provenance)},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def import_from_url(
     url: str,
     kind: str = "video",

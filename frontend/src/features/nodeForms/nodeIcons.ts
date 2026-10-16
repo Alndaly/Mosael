@@ -172,6 +172,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   detect_shots: Scissors,
   describe_shots: Camera,
   shot_report: Rows3,
+  //: 清除元数据(ADR 0062):画面声音逐字节不变,去掉容器标签与 ffprobe 看不见的那三层。
+  scrub_metadata: Eraser,
   quote_check: Quote,
   import_url: HardDriveDownload,
   asset: ImageIcon,

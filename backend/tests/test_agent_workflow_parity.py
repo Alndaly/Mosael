@@ -47,6 +47,9 @@ NODE_TO_TOOL: dict[str, str] = {
     "export_sequence": "render_sequence",
     "document_to_markdown": "read_document",
     "video_to_gif": "convert_video_to_gif",
+    # 清除元数据(ADR 0062):节点和工具是同一件事的两个入口 —— 工具开确认卡(会多出一份素材),
+    # 节点在工作流里跑,两边都落在 domain/assets/scrub。
+    "scrub_metadata": "scrub_video_metadata",
     "image_grid_split": "split_image_grid",
     #: 和素材库「从链接导入」同一个任务(assets.from_url)。
     "import_url": "import_from_url",

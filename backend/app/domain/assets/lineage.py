@@ -41,8 +41,9 @@ MIX = "mix"  # 几段混成一段(对口型的配音)
 EXTRACT = "extract"  # 从文档里取出的插图
 PLUGIN = "plugin"  # 插件拿这几份做出来的
 MASK = "mask"  # 在这张图上画的、或按配方从它算的蒙版(只由 domain/assets/masks.write_mask_asset 登记,ADR 0057)
+SCRUB = "scrub"  # 清除元数据:画面声音逐字节不变的一份「干净」副本(见 domain/media/scrub,ADR 0062)
 
-OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN, MASK})
+OPS = frozenset({TRIM, FRAME, GRID_SPLIT, GIF, DENOISE, SEPARATE, EXPORT, CONCAT, PAD, MIX, EXTRACT, PLUGIN, MASK, SCRUB})
 
 #: 来源链往上追几级、最多交回多少个节点(界面上的来源链)。导出成片的出处可以有几十份,再往上一级就是几百。
 LINEAGE_DEPTH = 6
