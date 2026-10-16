@@ -52,7 +52,7 @@ def _workspace() -> str:
     return fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
 
 
-def _graph(*, on_timeout: str = "abort", timeout_hours: float = 24) -> dict:
+def _graph(*, on_timeout: str = "abort", on_reject: str = "abort", timeout_hours: float = 24) -> dict:
     """start → 新建项目(会留下真行,用来数它跑了几次) → 等人确认 → 文本模板。"""
     return {
         "nodes": [
@@ -70,6 +70,7 @@ def _graph(*, on_timeout: str = "abort", timeout_hours: float = 24) -> dict:
                     "allow_note": "yes",
                     "timeout_hours": timeout_hours,
                     "on_timeout": on_timeout,
+                    "on_reject": on_reject,
                 },
             },
             {"id": "after", "type": "template", "config": {"template": "决定:{{gate.decision}} 由 {{gate.decided_by}}"}},
@@ -190,6 +191,7 @@ def test_暂停落在库里_重启收尾之后仍在等() -> None:
     assert approval.title == "要发布「前半程」吗"
     assert approval.node_name == "上线前确认"
     assert approval.on_timeout == "abort"
+    assert approval.on_reject == "abort"
     assert approval.timeout_seconds == 24 * 3600
     assert approval.expires_at is not None
     #: 现场里**已经落定的**是 start 和 make —— 恢复时要跳过它们。
@@ -255,12 +257,14 @@ def test_批准之后从暂停节点接着跑_前面的节点不重跑() -> None
 
 
 def test_拒绝也是一个决定_下游按它分支() -> None:
-    """`rejected` 是**交给下游的那一格**,不是一个错误:想"拒绝了就停下",就在那条分支上接。"""
+    """`on_reject=branch` 时 `rejected` 是**交给下游的那一格**,不是一个错误:想"拒绝了就停下",
+    就在那条分支上接(默认已是 abort,所以这里显式写 branch)。"""
     ws = _workspace()
     graph = {
         "nodes": [
             {"id": "start", "type": "start", "config": {}},
-            {"id": "gate", "type": "await_approval", "config": {"title": "发不发", "timeout_hours": 24}},
+            {"id": "gate", "type": "await_approval",
+             "config": {"title": "发不发", "timeout_hours": 24, "on_reject": "branch"}},
             {"id": "check", "type": "condition",
              "config": {"left": "{{gate.decision}}", "op": "equals", "right": "rejected"}},
             {"id": "no", "type": "template", "config": {"template": "不发了({{gate.note}})"}},
@@ -280,6 +284,37 @@ def test_拒绝也是一个决定_下游按它分支() -> None:
     assert finished.status == "succeeded", finished.error
     assert finished.result["context"]["no"]["text"] == "不发了(再改一版)"
     assert "yes" not in finished.result["context"], "假分支不该跑"
+
+
+def test_拒绝_中止_这一次运行失败() -> None:
+    """`on_reject=abort`(默认)时拒绝是一个**失败**,和超时 + abort 同一个口径:决定不交到下游。"""
+    ws = _workspace()
+    job_id, _ = _start(_graph(on_reject="abort"), ws, actor=user_id())
+    approval = _paused(job_id)
+
+    assert _decide(approval.id, "rejected", note="再改一版") is True
+
+    finished = _wait_for(lambda: _settled(job_id), what="拒绝 + 中止之后这次运行停下")
+    assert finished.status == "failed"
+    assert finished.error_key == "wfErr_awaitApprovalRejected", finished.error
+    #: 决定确实落下了(是「拒绝」),只是不交到下游 —— 下游那个节点根本没被派发。
+    assert _approval(approval.id).decision == "rejected"
+    assert _started(job_id, "after") == 0, "中止时决定不该交到下游"
+    assert _projects(ws) == 1, "停下也不该回头重跑前面那些节点"
+
+
+def test_拒绝_分支_把决定交给下游() -> None:
+    """`on_reject=branch` 时拒绝是一个**决定**:下游拿到 `decision="rejected"`,这次运行照常走完。"""
+    ws = _workspace()
+    job_id, _ = _start(_graph(on_reject="branch"), ws, actor=user_id())
+    approval = _paused(job_id)
+
+    assert _decide(approval.id, "rejected", note="再改一版") is True
+
+    finished = _wait_for(lambda: _settled(job_id), what="拒绝 + 分支之后这次运行走完")
+    assert finished.status == "succeeded", finished.error
+    assert finished.result["context"]["after"]["text"].startswith("决定:rejected")
+    assert _projects(ws) == 1, "分支也不该回头重跑前面那些节点"
 
 
 # ---------------- ③ 超时按配置走,而且再通知一次 ----------------

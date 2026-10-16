@@ -929,6 +929,7 @@
     "node_id",
     "node_name",
     "note",
+    "on_reject",
     "on_timeout",
     "reject_label",
     "reminded_at",

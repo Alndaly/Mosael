@@ -263,6 +263,7 @@ _FIELD_LABELS = {
     "allow_note": "wfField_allow_note",
     "timeout_hours": "wfField_timeout_hours",
     "on_timeout": "wfField_on_timeout",
+    "on_reject": "wfField_on_reject",
     "decision": "wfField_decision",
     "decided_by": "wfField_decided_by",
     "decided_by_id": "wfField_decided_by_id",
@@ -1390,6 +1391,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
     #:
     #: 超时默认 24 小时,默认**中止**(abort):一个门禁的用处就是拦住"没人看着就往下走",超时
     #: 还继续等于这个门没装。要别的语义(继续 / 只提醒)在节点上明说。
+    #: 拒绝默认也**中止**(abort),和超时同一个失败口径;要"拒绝了当作一个决定交下去"就写 on_reject=branch。
     "await_approval": {
         "external": False,
         "spends": False,
@@ -1418,6 +1420,15 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "default": "abort",
                 "options": ["abort", "continue", "remind"],
                 "description": "wfNode_await_approval_on_timeout",
+            },
+            #: 拒绝之后:abort 中止这一次运行 / branch 当成决定交给下游(condition 接 decision="rejected")。
+            #: 默认 abort:拒绝和超时同一个口径 —— 一个门禁的用处就是拦住"没人点通过就往下走"。
+            "on_reject": {
+                "advanced": True,
+                "type": "string",
+                "default": "abort",
+                "options": ["abort", "branch"],
+                "description": "wfNode_await_approval_on_reject",
             },
         },
         #: 「下游用 condition 接这个决定」:`decision` 是三值文字(approved / rejected / timeout),

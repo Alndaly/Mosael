@@ -134,6 +134,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{node}」等到超时({hours} 小时)也没有人确认,这一次运行按节点上的「中止」停下了。",
         "en": "“{node}” timed out after {hours} hour(s) with nobody deciding, so this run stopped as the node's “abort” says.",
     },
+    "wfErr_awaitApprovalRejected": {
+        "zh": "「{node}」被拒绝,这一次运行按节点上的「中止」停下了。",
+        "en": "“{node}” was rejected, so this run stopped as the node's “abort” says.",
+    },
     "wfNotice_awaitApproval": {"zh": "工作流等你确认:{title}", "en": "A workflow is waiting for your approval: {title}"},
     "wfNotice_awaitApprovalBody": {
         "zh": "「{workflow}」的一次运行停在「{node}」这一步,等你确认。在飞书里点卡片,或在应用的运行记录里点都可以。",

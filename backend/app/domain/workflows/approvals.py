@@ -38,6 +38,13 @@
 `abort` 中止这次运行(去掉决定后接着跑,执行器抛出`wfErr_awaitApprovalTimedOut`)、
 `continue` 当成 `timeout` 继续往下、`remind` 只再提醒一次并把下一次提醒的时刻往后推一格。
 **三种都再通知一次** —— 一个门禁悄悄过期等于没装。
+
+## 拒绝
+
+拒绝是**一个人真的做了决定**,不是超时那种"没人做"。按节点上的 `on_reject` 办:
+`abort`(默认)把这次运行判失败(执行器抛出`wfErr_awaitApprovalRejected`,和超时 + `abort`
+同一个失败口径),决定不交到下游;`branch` 则把 `rejected` 当成一个决定交给下游
+(condition 接 `decision="rejected"`)。
 """
 
 from __future__ import annotations
@@ -74,6 +81,11 @@ TIMEOUT_CONTINUE = "continue"
 TIMEOUT_REMIND = "remind"
 TIMEOUT_ACTIONS = (TIMEOUT_ABORT, TIMEOUT_CONTINUE, TIMEOUT_REMIND)
 
+#: 拒绝之后怎么办。
+REJECT_ABORT = "abort"
+REJECT_BRANCH = "branch"
+REJECT_ACTIONS = (REJECT_ABORT, REJECT_BRANCH)
+
 #: 节点上没写超时小时数时用这个(和声明里的 default 同一个数)。
 DEFAULT_TIMEOUT_HOURS = 24.0
 #: 超时最多能填多久 / 最少:按小时填,但一格 100000 小时的等待没有意义,只会拖着一个 running 的任务。
@@ -101,6 +113,12 @@ def timeout_of(config: dict[str, Any]) -> int | None:
 def on_timeout_of(config: dict[str, Any]) -> str:
     value = str(config.get("on_timeout") or TIMEOUT_ABORT).strip()
     return value if value in TIMEOUT_ACTIONS else TIMEOUT_ABORT
+
+
+def on_reject_of(config: dict[str, Any]) -> str:
+    """拒绝之后怎么办。没写 = 中止(和超时同一个失败口径)。"""
+    value = str(config.get("on_reject") or REJECT_ABORT).strip()
+    return value if value in REJECT_ACTIONS else REJECT_ABORT
 
 
 def wants_note(config: dict[str, Any]) -> bool:
@@ -139,6 +157,7 @@ def prepare(
         allow_note=wants_note(config),
         timeout_seconds=seconds,
         on_timeout=on_timeout_of(config),
+        on_reject=on_reject_of(config),
         status=PENDING,
         expires_at=(now() + timedelta(seconds=seconds)) if seconds else None,
     )

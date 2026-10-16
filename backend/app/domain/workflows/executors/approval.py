@@ -10,11 +10,15 @@
 决定的**来源**不在这里:飞书卡片和应用内那两处都走 `approvals.decide_and_wake`(见
 integrations/feishu/approvals 与 routes/workflows),一处写决定、一处唤醒,没有第二套。
 
-## 拒绝是一个决定,不是一个错误
+## 拒绝:默认是一个错误,也可以是一个决定
 
-`rejected` 和 `approved` 一样是**交出去的那一格**,下游用条件节点按它分支 —— 想"拒绝了就停下",
-就在 `rejected` 那条分支上接你要做的事。唯一会让这一次运行**失败**的是超时 + `abort` 那一档:
-那时没有任何人做过决定,也就没有决定可以交给下游。
+`rejected` 按节点上的 `on_reject` 走两种:
+- `abort`(**默认**):这一次运行**失败**(抛 `wfErr_awaitApprovalRejected`),决定不交到下游 —— 和
+  超时 + `abort` 同一个失败口径;
+- `branch`:`rejected` 和 `approved` 一样是**交出去的那一格**,下游用条件节点按它分支 —— 想
+  "拒绝了就停下",就在 `rejected` 那条分支上接你要做的事。
+
+超时 + `abort` 那一档依旧是失败:那时没有任何人做过决定,也就没有决定可以交给下游。
 
 ## 只放在主流程里
 
@@ -65,8 +69,15 @@ def await_approval(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
                     "wfErr_awaitApprovalTimedOut",
                     params={"node": row.node_name or row.node_id, "hours": _hours(row)},
                 )
+            #: **拒绝 + 中止**:那个人做了决定(拒绝),节点上写了"拒绝就中止",于是这次运行失败,
+            #: 决定不交到下游 —— 和超时 + 中止同一个失败口径。要"拒绝了当成一个决定交下去"就写 on_reject=branch。
+            if row.status == approvals.REJECTED and row.on_reject == approvals.REJECT_ABORT:
+                raise WorkflowDomainError(
+                    "wfErr_awaitApprovalRejected",
+                    params={"node": row.node_name or row.node_id},
+                )
             #: 决定交给下游的那几格。**`decision` 是三值文字**(approved / rejected / timeout):
-            #: 下游用条件节点按它分支 —— 拒绝也是一个决定,不是一个错误(见文件头)。
+            #: 下游用条件节点按它分支 —— 拒绝也可以是一个决定(节点上写了 on_reject=branch 时,见文件头)。
             return {
                 "decision": row.decision or row.status,
                 "decided_by": row.decided_by_name or "",

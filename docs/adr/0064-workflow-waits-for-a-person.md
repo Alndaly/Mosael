@@ -133,9 +133,22 @@ import `engine` —— 那会给"引擎 ⇄ 执行器"那一族添一个新环;�
 "没人看着就往下走",超时还继续等于这个门没装。
 「只提醒」刻意**不是**一次性的:提醒之后 `expires_at` 往后推一格,否则每一次轮询都提醒一次。
 
-`rejected` 和 `approved` 一样是**交给下游的那一格**(`decision` 是三值文字,下游用条件节点分支),
-不是错误 —— 想"拒绝了就停下",就在 `rejected` 那条分支上接你要做的事。唯一的例外是超时 + `abort`:
-那时没有任何人做过决定,没有决定可以交。
+### 7. 拒绝的语义(`on_reject`)
+
+拒绝是**一个人真的做了决定**,和超时那种"没人做"不是一回事。按节点上的 `on_reject` 办:
+
+| `on_reject` | 做什么 | 下游拿到什么 |
+| --- | --- | --- |
+| `abort`(默认) | 执行器抛出 `wfErr_awaitApprovalRejected`,**这次运行失败**,决定不交到下游 | 没有 —— 运行停了 |
+| `branch` | `rejected` 当成一个决定交给下游(`decision = "rejected"`) | `decision = "rejected"` |
+
+`abort` 和超时 + `abort` **同一个失败口径** —— 想"拒绝了就停下",用默认的 `abort` 即可;想
+"拒绝了走另一条分支",就在节点上写 `on_reject = "branch"`,下游用条件节点接 `decision = "rejected"`
+(和 `approved` / `timeout` 一样是三值文字,不是错误)。
+
+> **默认由 `branch` 改成 `abort` 是 2026-10-16 拍板、有意的**:`await_approval` 节点刚上、
+> 还没有旧数据,所以直接改默认、不加兼容(没有"老图上没写 on_reject 要按 branch 迁"这一档)。
+> 一个门禁的用处就是拦住"没人点通过就往下走" —— 拒绝还继续往下,等于这个门没装。
 
 取消走既有那条路(`jobs.cancel_job`),并顺带撤掉待批单(`register_cancel_listener("workflow", …)`)——
 否则卡片还点得动、待批列表里还挂着一条永远没人处理的等待。
@@ -156,7 +169,7 @@ import `engine` —— 那会给"引擎 ⇄ 执行器"那一族添一个新环;�
 
 ## 验收(可复查的证据,不只是最终结果)
 
-`backend/tests/test_await_approval_node.py`(27 条):
+`backend/tests/test_await_approval_node.py`(29 条):
 
 - **暂停落库 / 重启仍在等**:暂停后调 `reconcile_orphaned_jobs`,`failed == 0`、任务仍 `running`、
   仍是**同一张单**;恢复之后数 `project_create` 落下的 `projects` 行仍是 1、`workflow.node.started`
@@ -165,6 +178,8 @@ import `engine` —— 那会给"引擎 ⇄ 执行器"那一族添一个新环;�
   而门自己(`gate`)是 2 次(一遍停下、一遍读决定)。
 - **超时三档**:`continue` 走到 `decision:timeout`;`abort` 失败且 `error_key == wfErr_awaitApprovalTimedOut`;
   `remind` 仍是 pending 且 `expires_at` 往后推。三档都断言**多了一条超时通知**。
+- **拒绝两档**:`on_reject=abort`(默认)失败且 `error_key == wfErr_awaitApprovalRejected`、决定不交到下游;
+  `on_reject=branch` 走到 `decision:rejected`、下游按它分支。
 - **没有飞书**:通知在、`job.status == "running"`、`feishu_bot_id` 为空、
   `GET /api/run-approvals` 列得到、`POST …/decide` 批得动。
 - **飞书回调**:直接调 `handle_card_action`(和 `connections.dispatch` 同一个函数),

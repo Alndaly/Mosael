@@ -339,6 +339,13 @@
           "zh": "超时后",
           "en": "On timeout"
         }
+      },
+      "on_reject": {
+        "type": "string",
+        "label": {
+          "zh": "拒绝后",
+          "en": "On reject"
+        }
       }
     },
     "outputs": [

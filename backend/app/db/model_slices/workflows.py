@@ -130,6 +130,8 @@ class WorkflowRunApproval(Base):
     timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: 超时之后怎么办:continue(当 timeout 继续往下)/ abort(中止这一次运行)/ remind(只再提醒一次,继续等)。
     on_timeout: Mapped[str] = mapped_column(String(16), nullable=False, default="continue", server_default="continue")
+    #: 拒绝之后怎么办:branch(当成决定交给下游)/ abort(中止这一次运行)。
+    on_reject: Mapped[str] = mapped_column(String(16), nullable=False, default="abort", server_default="abort")
     #: pending / approved / rejected / timeout / cancelled。**只有 pending 是可以被决定的那一态。**
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", server_default="pending", index=True)
     #: 节点交给下游的那一格:approved / rejected / timeout(空 = 还没决定)。
