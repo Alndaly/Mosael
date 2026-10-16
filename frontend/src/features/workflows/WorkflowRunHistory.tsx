@@ -8,6 +8,7 @@ import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton"
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
+import { RunApprovalNotice } from "@/features/workflows/RunApprovalNotice";
 import { assetOutputs, outputRows, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
 import { formatCosts, type CostAmount } from "@/lib/money";
 import { parseServerTime } from "@/lib/time";
@@ -236,6 +237,9 @@ export function WorkflowRunHistory({
           <X size={13} />
         </IconButton>
       </div>
+      {/* 「等人确认」的入口就在运行历史顶上:那一次运行**没有失败、也没在跑**,它停在一步上等人点。
+          没有这一段的话,面板上只会看到一次永远"运行中"的记录 —— 看不出它在等谁。 */}
+      <RunApprovalNotice workflowId={workflowId} />
       <div className="flex min-h-0 flex-1 flex-col">
         {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
             不会被固定的上下分栏推到面板底部。 */}

@@ -766,6 +766,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_workflowRunning": {"zh": "工作流运行中: {name}", "en": "Workflow running: {name}"},
     "jobMsg_workflowDone": {"zh": "工作流完成: {name}", "en": "Workflow complete: {name}"},
     "jobMsg_workflowFailed": {"zh": "工作流失败: {name}", "en": "Workflow failed: {name}"},
+    #: 「等人确认」节点把这一轮停下时任务卡上那句话。**状态仍是 running**:这回运行是活的,只是在等 ——
+    #: 取消它的路和别的在跑的任务完全一样(见 domain/workflows/approvals)。
+    "jobMsg_awaitingApproval": {"zh": "等待确认: {title}", "en": "Waiting for approval: {title}"},
     "jobMsg_publishWaiting": {"zh": "等待桌面发布器认领: {title}", "en": "Waiting for the desktop publisher: {title}"},
     "jobMsg_publishRunning": {"zh": "桌面发布器执行中: {title}", "en": "Desktop publisher running: {title}"},
     "jobMsg_publishDone": {"zh": "发布完成: {title}", "en": "Published: {title}"},

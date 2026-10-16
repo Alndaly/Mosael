@@ -109,6 +109,9 @@ class PreflightNode:
     #: 节点所在的那一层图(子图、循环体里的节点就是那一层)。
     graph: dict[str, Any]
     node: dict[str, Any]
+    #: 从主流程往里钻过的容器节点 id(主流程是空的)。**「这一步允不允许放在体里」要看它** ——
+    #: 「等人确认」只在主流程里有地方落检查点,体里的那个必须开跑前就拦下(见 executors/approval)。
+    scope: tuple[str, ...] = ()
     #: 写的是引用、但在跑之前就插好了值的那几格(只引用开始参数):它们**不算**运行时才知道。
     known: frozenset[str] = frozenset()
 
@@ -267,7 +270,7 @@ def _preflight_graph(
                 resolved_refs.add(key)
         try:
             check(db, given, actor, PreflightNode(workspace_id=workspace_id, graph=graph, node=node,
-                                                  known=frozenset(resolved_refs)))
+                                                  scope=scope, known=frozenset(resolved_refs)))
         except WorkflowDomainError as exc:
             exc.details.setdefault("scope", list(scope))
             exc.details.setdefault("node_id", str(node.get("id") or ""))

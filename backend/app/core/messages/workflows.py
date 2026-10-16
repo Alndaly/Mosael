@@ -121,6 +121,36 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_waitNeedsCondition": {"zh": "等待节点需要 selector / url_contains / text 之一", "en": "The wait node needs one of selector, url_contains or text"},
     "wfErr_loopItems": {"zh": "循环·遍历的 items 必须是列表(或 JSON 数组文本、多行文本)", "en": "For-each items must be a list (or a JSON array as text, or multi-line text)"},
     "wfErr_notifyTitleEmpty": {"zh": "通知标题不能为空", "en": "The notification title cannot be empty"},
+    #: 「等人确认」。
+    "wfErr_awaitApprovalNested": {
+        "zh": "「等人确认」只能放在主流程里:循环体 / 子图里第一版不支持(那里的暂停要往外套好几层,而恢复的现场只有主流程记)。",
+        "en": "“Wait for approval” can only sit in the main flow: loop bodies and subgraphs are not supported yet (a pause inside them would have to unwind several layers, and only the main flow records the resume point).",
+    },
+    "wfErr_awaitNotResumable": {
+        "zh": "这一次运行停在「等人确认」上,但恢复它要的那份现场没了(待批单被删或被取消),接不下去。",
+        "en": "This run is stopped at “Wait for approval” but the resume point it needs is gone (the approval row was deleted or cancelled), so it cannot continue.",
+    },
+    "wfErr_awaitApprovalTimedOut": {
+        "zh": "「{node}」等到超时({hours} 小时)也没有人确认,这一次运行按节点上的「中止」停下了。",
+        "en": "“{node}” timed out after {hours} hour(s) with nobody deciding, so this run stopped as the node's “abort” says.",
+    },
+    "wfNotice_awaitApproval": {"zh": "工作流等你确认:{title}", "en": "A workflow is waiting for your approval: {title}"},
+    "wfNotice_awaitApprovalBody": {
+        "zh": "「{workflow}」的一次运行停在「{node}」这一步,等你确认。在飞书里点卡片,或在应用的运行记录里点都可以。",
+        "en": "A run of “{workflow}” is stopped at “{node}”, waiting for you. Decide from the Feishu card or from the run in the app.",
+    },
+    "wfNotice_awaitApprovalTimeoutAbort": {
+        "zh": "「{title}」等到超时也没人确认,这一次运行已中止。",
+        "en": "“{title}” timed out with nobody deciding; this run has stopped.",
+    },
+    "wfNotice_awaitApprovalTimeoutContinue": {
+        "zh": "「{title}」等到超时也没人确认,已按「继续」往下走(决定记为 timeout)。",
+        "en": "“{title}” timed out with nobody deciding; it continued as configured (decision “timeout”).",
+    },
+    "wfNotice_awaitApprovalTimeoutRemind": {
+        "zh": "「{title}」还在等确认(已经超时过一次,按「只提醒」继续等)。",
+        "en": "“{title}” is still waiting (it already passed the timeout; configured to keep waiting and remind).",
+    },
     "wfErr_tagNoAssets": {"zh": "素材打标签:没有可处理的素材 id", "en": "Tag assets: no asset ids to work on"},
     "wfErr_tagsEmpty": {"zh": "素材打标签:标签不能为空", "en": "Tag assets: the tags cannot be empty"},
     "wfErr_updateNoAssets": {"zh": "素材整理:没有可处理的素材 id", "en": "Update assets: no asset ids to work on"},

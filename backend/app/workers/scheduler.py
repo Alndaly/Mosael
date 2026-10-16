@@ -120,7 +120,14 @@ def tick(db: Session) -> list[str]:
     """
     expire_worker_leases(db)
     sync_run_states(db)
+    #: 工作流「等人确认」到点的那些(见 domain/workflows/approvals.expire_due):**和别的活儿同一个
+    #: 提交**。它自己会唤醒到点的运行(wake 登记在提交之后),所以这一笔提交必须在它之后。
+    from app.domain.workflows import approvals as run_approvals
+
+    expired = run_approvals.expire_due(db)
     db.commit()
+    if expired:
+        logger.info("Workflow run approvals timed out: %d", expired)
 
     created: list[str] = []
     due = db.scalars(

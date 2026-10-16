@@ -257,6 +257,17 @@ _FIELD_LABELS = {
     "batches": "wfField_batches",
     "total": "wfField_total",
     "title": "wfField_title",
+    #: 「等人确认」的几个格:按钮文案、超时、超时之后怎么办 —— 以及它交出的那个决定。
+    "approve_label": "wfField_approve_label",
+    "reject_label": "wfField_reject_label",
+    "allow_note": "wfField_allow_note",
+    "timeout_hours": "wfField_timeout_hours",
+    "on_timeout": "wfField_on_timeout",
+    "decision": "wfField_decision",
+    "decided_by": "wfField_decided_by",
+    "decided_by_id": "wfField_decided_by_id",
+    "decided_at": "wfField_decided_at",
+    "note": "wfField_note",
     "tool_name": "wfField_tool_name",
     "top_p": "wfField_top_p",
     "track_id": "wfField_track_id",
@@ -1369,6 +1380,53 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_delay_desc",
         "config": {"seconds": {"type": "number", "description": "wfNode_delay_seconds"}},
         "outputs": ["waited"],
+    },
+    #: 「等人确认」:跑到这里**落库停下**,等一个人点确认 / 拒绝;飞书卡片和应用内那两处点都行。
+    #:
+    #: 它和 delay 不是一回事:delay 等的是**一段时间**,它等的是**一个决定**。所以它不占线程、
+    #: 不占连接、也不占派发名额(见 domain/workflows/approvals 与 engine.GraphResume)——暂停是
+    #: **持久化**的,重启之后仍在等;决定下来之后从**暂停的那一个节点**接着跑,前面已经跑完的
+    #: 节点不重跑(它们可能已经烧了钱、落了素材)。
+    #:
+    #: 超时默认 24 小时,默认**中止**(abort):一个门禁的用处就是拦住"没人看着就往下走",超时
+    #: 还继续等于这个门没装。要别的语义(继续 / 只提醒)在节点上明说。
+    "await_approval": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_flow",
+        "label": "wfNode_await_approval",
+        "description": "wfNode_await_approval_desc",
+        "config": {
+            "title": {"type": "template", "required": True, "description": "wfNode_await_approval_title"},
+            "body": {"type": "template", "label": "wfField_notify_body", "description": "wfNode_await_approval_body"},
+            #: 按钮文案:飞书卡片和应用内那两处读的是同一份 —— 两处各写一句的话,同一个门在两处叫两个名字。
+            "approve_label": {"advanced": True, "type": "template", "description": "wfNode_await_approval_approve_label"},
+            "reject_label": {"advanced": True, "type": "template", "description": "wfNode_await_approval_reject_label"},
+            #: 飞书卡片上要不要留一格输入框(批准 / 拒绝时带一句备注)。应用内那边同一格也收。
+            "allow_note": {
+                "advanced": True,
+                "type": "string",
+                "default": "yes",
+                "options": ["yes", "no"],
+                "description": "wfNode_await_approval_allow_note",
+            },
+            "timeout_hours": {"advanced": True, "type": "number", "default": 24, "description": "wfNode_await_approval_timeout"},
+            #: 超时之后:continue 当 timeout 继续往下 / abort 中止这一次运行 / remind 只再提醒一次,继续等。
+            "on_timeout": {
+                "advanced": True,
+                "type": "string",
+                "default": "abort",
+                "options": ["abort", "continue", "remind"],
+                "description": "wfNode_await_approval_on_timeout",
+            },
+        },
+        #: 「下游用 condition 接这个决定」:`decision` 是三值文字(approved / rejected / timeout),
+        #: 不用布尔 —— 布尔插值出来是 "True" / "False",条件节点里手填的那一格跟着它的写法走,
+        #: 而三值文字一条 `equals` 就说清了,也不受大小写影响。
+        "outputs": ["decision", "decided_by", "decided_by_id", "note", "decided_at"],
+        "output_types": {
+            "decision": "text", "decided_by": "text", "decided_by_id": "text", "note": "text", "decided_at": "text",
+        },
     },
     "synthesize_speech": {
         "external": False,

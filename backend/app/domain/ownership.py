@@ -70,6 +70,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Workflow": ("app/domain/workflows/",),
     "WorkflowRevision": ("app/domain/workflows/",),
     "WorkflowRevisionAttestation": ("app/domain/workflows/",),
+    #: 「等人确认」那一次等待(新节点 await_approval)也只归工作流域写。
+    "WorkflowRunApproval": ("app/domain/workflows/",),
     "WorkflowRunOutput": ("app/domain/workflows/",),
     "Scene3D": ("app/domain/scenes/operations.py",),
     "Scene3DRevision": ("app/domain/scenes/operations.py",),

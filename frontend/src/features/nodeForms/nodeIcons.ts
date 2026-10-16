@@ -7,6 +7,7 @@ import {
   ScanBox,
   Rotate3d,
   Smile,
+  UserCheck,
   UserRoundPlus,
   UsersRound,
   AlignLeft,
@@ -95,6 +96,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   list_chunk: ListChecks,
   text_transform: CaseSensitive,
   delay: Timer,
+  //: 「等人确认」:一个人点头才往下走。和「延时」(Timer)刻意不同 —— 等的是**人**,不是时间。
+  await_approval: UserCheck,
   //: 口播按时长收紧:掐着表改稿。
   fit_narration: Timer,
   synthesize_speech: AudioLines,

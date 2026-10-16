@@ -378,6 +378,19 @@ def _wire_seams() -> None:
     from app.domain.workflows import plugin_references
     from app.domain.boards import plugin_references as board_plugin_references
 
+    # 工作流「等人确认」(新节点 await_approval):**任务域不认识工作流**,所以"停在等人确认上的运行,
+    # 重启之后接着等 / 接着跑"和"取消时把待批的那张单一起撤掉"这两条由工作流域在这里登记
+    # (见 domain/workflows/approvals.register_seams)。不登记的话:重启会把还在等的运行判成
+    # "被中断,请重新发起" —— 而它其实只是在等人点一下。
+    from app.domain.workflows import approvals as workflow_run_approvals
+
+    workflow_run_approvals.register_seams()
+    # 「这一次等待说给飞书听」的实现也在这里接上:领域层不认识飞书(见 tests/test_import_layering),
+    # 而"卡片发回哪个飞书会话"是集成层知道的事(见 integrations/feishu/approvals.route_for_approval)。
+    from app.integrations.feishu import approvals as feishu_approvals
+
+    workflow_run_approvals.use_run_card_sender(feishu_approvals.announce_run_approval)
+
     # 宿主能力的契约(ADR 0031 §5):各项能力的宿主侧把自己登记进能力表,设置页照表列出每一项。
     from app.domain import capabilities
     from app.domain import documents

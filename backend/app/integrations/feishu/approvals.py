@@ -2,17 +2,27 @@
 
 从飞书驱动智能体、却要切回桌面端点「同意」,这条链路只走了一半。确认卡直接发回发起的那个
 飞书会话,批准/拒绝就地完成。卡片外观见 cards.py,那里也写了授权与「为什么不用存 message_id」。
+
+## 工作流的「等人确认」也走这一条线
+
+工作流跑到 `await_approval` 节点停下时要发的也是确认卡(标题正文由节点给,见
+domain/workflows/approvals)。**同一个回调入口、同一条授权、同一张提交** —— `handle_card_action`
+按动作名前缀把两种卡分流到各自的决定上,重复的只有"把 open_id 认成人"这一步(那正是它该被复用的)。
+
+两条路的汇合点在**领域那一处**:`approvals.decide_and_wake`(CAS 写决定 + 提交后唤醒那次运行)。
+飞书这一层只负责:认人、翻卡片、把领域异常说成 toast。
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import AgentSession, FeishuBot
+from app.db.models import AgentSession, FeishuBot, Workflow, WorkflowRunApproval
 from app.domain.feishu import bindings
 from app.integrations.feishu import client
 
@@ -99,6 +109,161 @@ def _toast(message: str) -> CardDecision:
     return CardDecision({"toast": {"type": "error", "content": message}})
 
 
+# ---------------- 工作流「等人确认」:发卡、路由、收回调 ----------------
+
+
+def announce_run_approval(db: Session, approval: WorkflowRunApproval) -> None:
+    """把待批单发到飞书。**由工作流领域在组装根登记进来**(见 app.main._wire_seams 与
+    domain/workflows/approvals.use_run_card_sender):领域层不认识飞书,飞书是调用领域的一方。
+
+    不提交:调用方(领域那一处 after_commit 钩子开的会话)提交 —— 卡片发出去之后那三列路由信息
+    才落库,而**真正要紧的检查点在那之前就已经提交了**(见 domain/workflows/approvals.announce)。
+    """
+    route = route_for_approval(db, approval)
+    if route is None:
+        return
+    bot, receive_id, receive_type = route
+    approval.feishu_bot_id = bot.id
+    approval.feishu_receive_id = receive_id
+    approval.feishu_receive_type = receive_type
+    send_approval_card(db, bot, receive_id, receive_type, approval)
+
+
+def route_for_approval(db: Session, approval: WorkflowRunApproval) -> tuple[FeishuBot, str, str] | None:
+    """这张待批单该发到飞书的哪里:(机器人, 收件 id, 收件 id 的类型);发不出去就是 None。
+
+    两条路,先近后远:
+
+    1. **这一次运行来自飞书会话** —— 任务载荷里的回执指着一次 `origin="feishu"` 的智能体会话
+       (`AgentSession.external_key` 是 `feishu:<bot_id>:<chat_id>`,和工具确认卡同一个取法),
+       卡片发回那个群:谁在飞书里让这件事跑起来的,就在那儿批。
+    2. **负责人绑过飞书** —— 运行不是从飞书来的,但发起这次运行的人在这个工作区绑了账号:
+       卡片当私聊发给他(`receive_id_type=open_id`)。这就是需求里"工作区绑了飞书机器人"那一半。
+
+    两条都不成立(这很常见:本地用、没接飞书)就返回 None —— 上层照旧发站内通知、这次运行照旧在等。
+    """
+    from app.db.models import Job
+    from app.domain.workflows import approvals as run_approvals
+
+    job = db.get(Job, approval.job_id)
+    receipt = (job.payload or {}).get("receipt") if job is not None else None
+    if isinstance(receipt, dict):
+        origin = _feishu_origin(db, str(receipt.get("session_id") or ""))
+        if origin is not None:
+            bot, chat_id = origin
+            return bot, chat_id, "chat_id"
+    fallback = run_approvals.bot_for_user(db, approval.workspace_id, job.created_by if job is not None else None)
+    if fallback is None:
+        return None
+    bot, open_id = fallback
+    return bot, open_id, "open_id"
+
+
+def send_approval_card(
+    db: Session, bot: FeishuBot, receive_id: str, receive_type: str, approval: WorkflowRunApproval
+) -> None:
+    """把确认卡推出去。失败分两层降级,和工具确认卡同一套:先退成一段文字,再不行就只剩站内那条路。"""
+    from app.integrations.feishu import cards
+
+    hours = int(round((approval.timeout_seconds or 0) / 3600)) if approval.timeout_seconds else None
+    workflow = db.get(Workflow, approval.workflow_id)
+    try:
+        client.send_card(
+            bot, receive_id,
+            cards.approval_card(
+                approval_id=approval.id,
+                title=approval.title,
+                body=approval.body,
+                workflow=workflow.name if workflow is not None else approval.workflow_id,
+                node=approval.node_name or approval.node_id,
+                approve_label=approval.approve_label,
+                reject_label=approval.reject_label,
+                allow_note=bool(approval.allow_note),
+                timeout_hours=hours,
+            ),
+            receive_id_type=receive_type,
+        )
+        return
+    except client.FeishuError as exc:
+        missing_capability = CARD_CAPABILITY_ERROR in str(exc)
+        logger.warning("feishu approval card send failed, falling back to text: %s", exc)
+
+    tail = f"\n\n(飞书内直接确认需要:{_CARD_SETUP_HINT})" if missing_capability else ""
+    client.send_text(
+        bot, receive_id,
+        f"有一个工作流在等你确认:{approval.title}\n请到 Mosael 里处理,或在飞书里回复。{tail}",
+        receive_id_type=receive_type,
+    )
+    if missing_capability:
+        #: 写进机器人状态,设置页那行小字会显示 —— 否则用户只在聊天里看到一次就过去了。
+        #: 不提交:调用方那个事务提交(见 announce_run_approval)。
+        bot_row = db.get(FeishuBot, bot.id)
+        if bot_row is not None and CARD_CAPABILITY_ERROR not in (bot_row.status_detail or ""):
+            bot_row.status_detail = f"交互卡片未开启({CARD_CAPABILITY_ERROR}):{_CARD_SETUP_HINT}"[:400]
+
+
+def _note_from(value: dict[str, Any]) -> str:
+    """卡片上那格备注。**飞书把表单值放在哪儿有几种写法**,能读到就读,读不到就是空 ——
+    备注丢了是可接受的退化,批不动不是(见 cards.approval_card 的说明)。"""
+    direct = value.get("note")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    raw = value.get("form_value")
+    if isinstance(raw, str) and raw.strip():
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = None
+    if isinstance(raw, dict):
+        note = raw.get("note")
+        if isinstance(note, str):
+            return note.strip()
+    return ""
+
+
+def _handle_run_approval(open_id: str, action: str, value: dict[str, Any]) -> CardDecision:
+    """工作流确认卡的按钮:授权按**点击者**走(和工具确认卡同一条路),决定落到领域那一处。
+
+    授权这一关和工具确认卡刻意一致 —— 群里谁都看得见这张卡,但看得见不等于能批:
+    必须已绑定 Mosael 账号、且此刻仍是该工作区成员。
+    """
+    from app.domain.workflows import approvals as run_approvals
+    from app.integrations.feishu import cards
+
+    approval_id = str(value.get("approval_id") or "")
+    if not approval_id:
+        return _toast("无法识别的操作")
+    decision = "approved" if action == cards.ACTION_RUN_APPROVE else "rejected"
+    with SessionLocal() as db:
+        approval = db.get(WorkflowRunApproval, approval_id)
+        if approval is None:
+            return _toast("这次等待已经不在了")
+        if approval.status != "pending":
+            #: 已经决定过(另一条路先到):卡跟着改成结果态,别让人以为没点上。
+            return CardDecision({"card": {"type": "raw", "data": cards.settled_approval_card(
+                title=approval.title, decision=approval.decision or approval.status,
+                by=approval.decided_by_name, note=approval.note,
+            )}})
+        user = bindings.resolve_sender(db, approval.workspace_id, open_id) if open_id else None
+        if user is None:
+            return _toast("请先在 Mosael 的「飞书机器人」里绑定你的账号")
+        note = _note_from(value)
+        try:
+            won = run_approvals.decide_and_wake(
+                db, approval, decision=decision, user_id=user.id,
+                user_name=user.display_name or user.username, note=note, via="feishu",
+            )
+            db.commit()  # 卡片回调是入口:领域函数不提交
+        except Exception:  # noqa: BLE001 —— 含权限不足与执行失败
+            logger.exception("feishu workflow approval failed approval=%s", approval_id)
+            return _toast("处理失败,请到 Mosael 里查看")
+        if not won:
+            return _toast("这张卡已经处理过了")
+        return CardDecision({"card": {"type": "raw", "data": cards.settled_approval_card(
+            title=approval.title, decision=decision, by=user.display_name or user.username, note=note,
+        )}})
+
+
 def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
     """处理确认卡的按钮点击。
 
@@ -122,6 +287,11 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
 
     action = str(value.get("action") or "")
     confirmation_id = str(value.get("confirmation_id") or "")
+    #: **按动作名分流**:工具确认卡(改什么要人同意)和工作流的「等人确认」共用这一个回调入
+    #: 口(见 connections.dispatch)。两件事的决定落在两张不同的单上,但"把 open_id 认成人、
+    #: 把领域异常翻成 toast"这层是一样的 —— 所以是同一个入口,不是一个复制出来的入口。
+    if action in (cards.ACTION_RUN_APPROVE, cards.ACTION_RUN_REJECT):
+        return _handle_run_approval(open_id, action, value)
     if action not in (cards.ACTION_APPROVE, cards.ACTION_REJECT) or not confirmation_id:
         return _toast("无法识别的操作")
 

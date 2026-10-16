@@ -1,0 +1,127 @@
+"""「等人确认」节点(`await_approval`):跑到这一步**落库停下**,等一个人点确认 / 拒绝再往下走。
+
+这个执行器本身很短 —— 它做的三件事:
+
+1. **建单**(或认出重启前那张):标题、正文、按钮文案、超时怎么算都落进 `WorkflowRunApproval`;
+2. **交出去**:抛 `AwaitingApproval`,引擎据此把这一轮停在暂停点上(见 engine.run_graph 的说明),
+   上层把现场写进那张单。**这里不停、不轮询、不占线程** —— 一个等 24 小时的门不该占着一条线程。
+3. **恢复时交回那一格**:重新进到这一步时单上已经有决定了,就地交回 `decision` 那几样给下游。
+
+决定的**来源**不在这里:飞书卡片和应用内那两处都走 `approvals.decide_and_wake`(见
+integrations/feishu/approvals 与 routes/workflows),一处写决定、一处唤醒,没有第二套。
+
+## 拒绝是一个决定,不是一个错误
+
+`rejected` 和 `approved` 一样是**交出去的那一格**,下游用条件节点按它分支 —— 想"拒绝了就停下",
+就在 `rejected` 那条分支上接你要做的事。唯一会让这一次运行**失败**的是超时 + `abort` 那一档:
+那时没有任何人做过决定,也就没有决定可以交给下游。
+
+## 只放在主流程里
+
+循环体 / 子图里的暂停要往外套好几层,而落检查点的地方只有主流程(体的执行内核没有 job)。
+运行前检查(`_no_nested`)在开跑之前就拦下它 —— 那些图里前面的节点可能已经花了钱,不该跑到这一步才说。
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.core.unit_of_work import unit_of_work
+from app.db.models import Job, WorkflowRevision
+from app.domain.jobs import current_parent_job_id
+from app.domain.workflows import AwaitingApproval, WorkflowDomainError
+from app.domain.workflows.executors.registry import (
+    PreflightNode,
+    RunScope,
+    register,
+    register_preflight,
+)
+from app.domain.workflows.run_scope import current_node
+
+logger = logging.getLogger(__name__)
+
+
+@register("await_approval")
+def await_approval(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """决定已经下来就把它交给下游;还没下来就把这一轮停在暂停点上。"""
+    from app.domain.workflows import approvals
+
+    node_id = current_node()
+    job_id = current_parent_job_id()
+    if not job_id or not node_id:
+        #: 不在任何任务里跑(脚本、单测直接调执行器):没有任务就没有可恢复的现场,也没有可唤醒的运行。
+        raise WorkflowDomainError("wfErr_awaitNotResumable")
+
+    row = approvals.find(db, job_id, node_id)
+    if row is not None:
+        if row.status != approvals.PENDING:
+            #: **超时 + 中止是唯一会让这一次运行停在这里失败的档**:那时没有任何人做过决定,
+            #: 没有决定可以交给下游(原因说清是超时,和别的节点失败同一个出口)。
+            if row.status == approvals.TIMED_OUT and row.on_timeout == approvals.TIMEOUT_ABORT:
+                raise WorkflowDomainError(
+                    "wfErr_awaitApprovalTimedOut",
+                    params={"node": row.node_name or row.node_id, "hours": _hours(row)},
+                )
+            #: 决定交给下游的那几格。**`decision` 是三值文字**(approved / rejected / timeout):
+            #: 下游用条件节点按它分支 —— 拒绝也是一个决定,不是一个错误(见文件头)。
+            return {
+                "decision": row.decision or row.status,
+                "decided_by": row.decided_by_name or "",
+                "decided_by_id": row.decided_by or "",
+                "note": row.note or "",
+                "decided_at": row.decided_at.isoformat() if row.decided_at else "",
+            }
+        #: 单还在等:重启之后又进到这一步(上一轮的线程已经结束)。**不重发卡片、不重发通知** ——
+        #: 那张卡还点得动,再发一张只会让人分不清哪张算数。
+        raise AwaitingApproval(row.id, node_id)
+
+    #: **自己开一个事务建单、先提交。** 引擎只在节点成功时提交(见 run_node 的事务边界),而这一轮
+    #: 接下去要抛 AwaitingApproval —— 跟着它回滚的话,任务就恢复不了了。所以建单自己提交。
+    #: **说出去(站内通知 / 飞书卡片)不在这里**:那要等引擎把恢复现场也写进这张单之后
+    #: (见 engine._park_at_approval)—— 先发卡、现场还没落,手快的人点了确认就唤不醒那次运行。
+    with unit_of_work() as adb:
+        job = adb.get(Job, job_id)
+        if job is None:
+            raise WorkflowDomainError("wfErr_awaitNotResumable")
+        row = approvals.prepare(
+            adb,
+            job=job,
+            workflow_id=str(scope.id),
+            node_id=node_id,
+            node_name=_node_name(adb, job, node_id),
+            config=config,
+        )
+        approval_id = row.id
+
+    raise AwaitingApproval(approval_id, node_id)
+
+
+def _node_name(db: Session, job: Job, node_id: str) -> str:
+    """这个节点在图里叫什么:从**这次运行钉住的那一版修订**里找(不是工作流当前那一版 —— 图可能已经改了)。"""
+    revision_id = str((job.payload or {}).get("workflow_revision_id") or "")
+    revision = db.get(WorkflowRevision, revision_id) if revision_id else None
+    graph = revision.graph if revision is not None else {}
+    node = next(
+        (one for one in graph.get("nodes") or [] if isinstance(one, dict) and str(one.get("id")) == node_id),
+        None,
+    )
+    name = str((node or {}).get("name") or "").strip()
+    return name or node_id
+
+
+def _hours(row: Any) -> int:
+    return int(round((row.timeout_seconds or 0) / 3600))
+
+
+@register_preflight("await_approval")
+def _no_nested(_db: Session, _config: dict[str, Any], _actor: str | None, place: PreflightNode) -> None:
+    """**运行前**就拦下放错地方的「等人确认」:循环体 / 子图里第一版不支持。
+
+    不拦的话症状是:图里前面的付费节点全跑完,轮到它才说一句"接不下去"—— 而这个仓库反复修过的
+    正是这一类(见 executors/registry 的 register_preflight 说明)。
+    """
+    if place.scope:
+        raise WorkflowDomainError("wfErr_awaitApprovalNested")

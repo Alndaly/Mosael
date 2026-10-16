@@ -93,6 +93,40 @@ class WorkflowRunOutputOut(ApiModel):
     value: str
 
 
+class RunApprovalOut(OrmModel):
+    """一次运行停在「等人确认」上的那一步 —— 应用内批它的那一格(见 routes/workflows)。
+
+    **和 `TaskAwaitingApprovalOut` 不是一件事**:那一条是定时任务「这一版要主人认可」(只提醒、
+    不拦、没有单子);这一条是一次真的停下来的运行,批了就接着跑。
+    """
+
+    id: str
+    job_id: str
+    workflow_id: str
+    node_id: str
+    node_name: str
+    title: str
+    body: str
+    #: 按钮文案:节点上写的;空着时界面按语言给缺省的「确认 / 拒绝」。
+    approve_label: str
+    reject_label: str
+    allow_note: bool
+    status: str
+    #: 决定那一格:approved / rejected / timeout(空 = 还没决定)。界面拿它写回执那半句。
+    decision: str
+    decided_by_name: str
+    #: 什么时候算超时(空 = 一直等)。
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class RunApprovalDecisionIn(ApiModel):
+    """应用内点的那一下。**和飞书卡片走同一条决定路径**(见 domain/workflows/approvals.decide_and_wake)。"""
+
+    decision: Literal["approved", "rejected"]
+    note: str = Field(default="", max_length=2000)
+
+
 class WorkflowFieldOptionOut(ApiModel):
     """节点字段的一个动态选项。"""
 

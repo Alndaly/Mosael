@@ -459,6 +459,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这次运行没有存下这个输出的全文",
         "en": "This run has no full text stored for that output.",
     },
+    "routeErr_runApprovalNotFound": {
+        "zh": "这次等待已经不在了(那次运行被取消或清掉了)",
+        "en": "That pending approval is gone (the run was cancelled or cleaned up).",
+    },
+    "routeErr_runApprovalSettled": {
+        "zh": "这一步已经有人批过了",
+        "en": "Someone already decided this one.",
+    },
+    "routeErr_runApprovalNoNote": {
+        "zh": "这一步不收备注(节点上关掉了备注那一格)",
+        "en": "This step does not take a note (the node turned the note field off).",
+    },
     "routeErr_judgeHostCodeNeedsAdmin": {
         "zh": "把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 代码在本机不隔离地跑,承担风险的是这台机器的主人",
         "en": "Letting the judge approve \"run code on this machine\" requires admin rights on this machine — the code runs unsandboxed here, and the risk falls on the machine's owner.",

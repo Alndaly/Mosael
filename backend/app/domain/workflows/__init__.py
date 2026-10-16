@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Workflow
 
 # 包的公开面不变:节点表、图规则、错误类型都还能从 app.domain.workflows 直接拿(几十处调用方这么写)。
-from app.domain.workflows.errors import WorkflowDomainError  # noqa: F401
+from app.domain.workflows.errors import AwaitingApproval, WorkflowDomainError  # noqa: F401
 from app.domain.workflows.graph_rules import (  # noqa: F401
     _MAX_GRAPH_SCAN_DEPTH,
     BRANCHING_NODE_TYPES,

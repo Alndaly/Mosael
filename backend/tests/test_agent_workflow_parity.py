@@ -137,6 +137,10 @@ NOT_A_TOOL: dict[str, str] = {
     "detect_shots": "拆镜头:analyze_asset 会读镜头表并按镜头抽帧;要整条流程用官方模板 reference_video_shots(run_workflow)。",
     "describe_shots": "逐镜看画面:拆镜头的后半段,同上 —— analyze_asset 读镜头表,官方模板 reference_video_shots 跑整条。",
     "shot_report": "镜头表报告:报告是镜头表的投影,analyze_asset 读表;官方模板 reference_video_shots 出报告。",
+    #: 「等人确认」把一次**无人值守**的运行停下等人点:它存在的场景恰恰是"没人在跟这次运行对话"。
+    #: 智能体那一侧本来就在跟人对话 —— 要等人点头,它直接问一句就行,不需要一个把自己的回合
+    #: 停下来的工具(何况它的回合停了也没人替它唤醒)。
+    "await_approval": "无人值守的运行停下来等人点;智能体自己在对话里,要等人点头直接问一句即可。",
 }
 
 

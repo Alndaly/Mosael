@@ -4942,6 +4942,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/{workflow_id}/run-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run Approvals
+         * @description 这张工作流的运行里,**此刻停在「等人确认」上的那几步**(新节点 `await_approval`)。
+         *
+         *     和上面那条 `awaiting-approvals` 不是一件事:那一条是定时任务「这一版要主人认可」(ADR 0047),
+         *     只提醒、不拦、没有单子;这一条是真的停下来的运行 —— 在这里点一下(或去飞书点),
+         *     那次运行就从暂停的那个节点接着跑。
+         *
+         *     读得到这张图的人就看得见(这是"这件事在等人处理",不是"谁的私事");**能不能批**在决定那一步
+         *     按工作区成员校验。
+         */
+        get: operations["run_approvals_api_workflows__workflow_id__run_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/run-approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workspace Run Approvals
+         * @description 这个工作区此刻所有在等确认的运行 —— 任务中心/通知面板那一格读它。
+         */
+        get: operations["workspace_run_approvals_api_run_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/run-approvals/{approval_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Run Approval
+         * @description 应用内批一次「等人确认」。**和飞书卡片走同一条决定路径**:一处写决定、一处唤醒那次运行。
+         *
+         *     `decide_and_wake` 用一条 CAS 保证两条路同时点只有一个算数(赢了的那一个才唤醒),
+         *     所以这里不需要另加锁;唤醒在**提交之后**发生(jobs.dispatch_job 的约定)。
+         */
+        post: operations["decide_run_approval_api_run_approvals__approval_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/revisions/{revision}/attest": {
         parameters: {
             query?: never;
@@ -17511,6 +17581,64 @@ export interface components {
              * @default false
              */
             all_tracks: boolean;
+        };
+        /**
+         * RunApprovalDecisionIn
+         * @description 应用内点的那一下。**和飞书卡片走同一条决定路径**(见 domain/workflows/approvals.decide_and_wake)。
+         */
+        RunApprovalDecisionIn: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "rejected";
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * RunApprovalOut
+         * @description 一次运行停在「等人确认」上的那一步 —— 应用内批它的那一格(见 routes/workflows)。
+         *
+         *     **和 `TaskAwaitingApprovalOut` 不是一件事**:那一条是定时任务「这一版要主人认可」(只提醒、
+         *     不拦、没有单子);这一条是一次真的停下来的运行,批了就接着跑。
+         */
+        RunApprovalOut: {
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Node Id */
+            node_id: string;
+            /** Node Name */
+            node_name: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Approve Label */
+            approve_label: string;
+            /** Reject Label */
+            reject_label: string;
+            /** Allow Note */
+            allow_note: boolean;
+            /** Status */
+            status: string;
+            /** Decision */
+            decision: string;
+            /** Decided By Name */
+            decided_by_name: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** RunScheduledTaskResponse */
         RunScheduledTaskResponse: {
@@ -30740,6 +30868,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskAwaitingApprovalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_approvals_api_workflows__workflow_id__run_approvals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunApprovalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workspace_run_approvals_api_run_approvals_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunApprovalOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_run_approval_api_run_approvals__approval_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunApprovalDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunApprovalOut"];
                 };
             };
             /** @description Validation Error */

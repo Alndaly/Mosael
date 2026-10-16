@@ -162,6 +162,31 @@ export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
 
 export type WorkflowRunOutput = components["schemas"]["WorkflowRunOutputOut"];
 
+/** 一次运行停在「等人确认」节点上的那一步(见后端 domain/workflows/approvals)。
+ *  **和 `TaskAwaitingApproval` 不是一件事**:那一条是定时任务「这一版要主人认可」(只提醒、不拦);
+ *  这一条是真的停下来的运行,批了就接着跑。 */
+export type RunApproval = components["schemas"]["RunApprovalOut"];
+
+/** 这张工作流的运行里此刻在等确认的那几步 —— 运行历史面板顶上那一条读它。 */
+export function listRunApprovals(workflowId: string): Promise<RunApproval[]> {
+  return api<RunApproval[]>(`/api/workflows/${workflowId}/run-approvals`);
+}
+
+/** 上面那份清单的缓存键。决定下来、跑完一次之后都要失效它。 */
+export const runApprovalsKey = (workflowId: string) => ["workflow-run-approvals", workflowId] as const;
+
+/** 应用内批一次「等人确认」。**和飞书卡片走同一条决定路径**(后端一处写决定、一处唤醒那次运行)。 */
+export function decideRunApproval(
+  approvalId: string,
+  decision: "approved" | "rejected",
+  note = "",
+): Promise<RunApproval> {
+  return api<RunApproval>(`/api/run-approvals/${encodeURIComponent(approvalId)}/decide`, {
+    method: "POST",
+    body: JSON.stringify({ decision, note }),
+  });
+}
+
 /** 一次运行里某个节点某个输出的全文。事件快照里长文字只留了开头(事件的 `truncated` 说截了哪几个)。 */
 export function getWorkflowRunOutput(jobId: string, nodeId: string, key: string): Promise<WorkflowRunOutput> {
   const path = [jobId, "outputs", nodeId, key].map(encodeURIComponent).join("/");

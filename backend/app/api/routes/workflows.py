@@ -13,6 +13,8 @@ from typing import Annotated
 
 from app.api.schemas import (
     JobOut,
+    RunApprovalDecisionIn,
+    RunApprovalOut,
     TaskAwaitingApprovalOut,
     WorkflowAiEditRequest,
     WorkflowAiEditResponse,
@@ -33,7 +35,7 @@ from app.api.schemas import (
 )
 from app.domain.scheduler import stop_tasks_bound_to_workflow
 from app.domain.scheduler import use_cases as scheduler_uc
-from app.db.models import Job, Workflow, WorkflowRevision
+from app.db.models import Job, Workflow, WorkflowRevision, WorkflowRunApproval
 from app.domain.workflows import (
     WorkflowDomainError,
     create_workflow,
@@ -390,6 +392,63 @@ def awaiting_approvals(workflow_id: str, db: DbSession, user: CurrentUser) -> li
             awaiting=waiting.attest_details()["attest"],
         ))
     return rows
+
+
+@router.get("/workflows/{workflow_id}/run-approvals", response_model=list[RunApprovalOut])
+def run_approvals(workflow_id: str, db: DbSession, user: CurrentUser) -> list[RunApprovalOut]:
+    """这张工作流的运行里,**此刻停在「等人确认」上的那几步**(新节点 `await_approval`)。
+
+    和上面那条 `awaiting-approvals` 不是一件事:那一条是定时任务「这一版要主人认可」(ADR 0047),
+    只提醒、不拦、没有单子;这一条是真的停下来的运行 —— 在这里点一下(或去飞书点),
+    那次运行就从暂停的那个节点接着跑。
+
+    读得到这张图的人就看得见(这是"这件事在等人处理",不是"谁的私事");**能不能批**在决定那一步
+    按工作区成员校验。
+    """
+    from app.domain.workflows import approvals
+
+    workflow = workflow_uc.readable(db, user, workflow_id)
+    return approvals.pending_for_workflow(db, workflow.id)
+
+
+@router.get("/run-approvals", response_model=list[RunApprovalOut])
+def workspace_run_approvals(workspace_id: str, db: DbSession, user: CurrentUser) -> list[RunApprovalOut]:
+    """这个工作区此刻所有在等确认的运行 —— 任务中心/通知面板那一格读它。"""
+    from app.domain.workflows import approvals
+
+    workflow_uc.ensure_can_browse(db, user, workspace_id)
+    return approvals.pending_for_workspace(db, workspace_id)
+
+
+@router.post("/run-approvals/{approval_id}/decide", response_model=RunApprovalOut)
+def decide_run_approval(
+    approval_id: str, body: RunApprovalDecisionIn, db: Tx, user: CurrentUser
+) -> RunApprovalOut:
+    """应用内批一次「等人确认」。**和飞书卡片走同一条决定路径**:一处写决定、一处唤醒那次运行。
+
+    `decide_and_wake` 用一条 CAS 保证两条路同时点只有一个算数(赢了的那一个才唤醒),
+    所以这里不需要另加锁;唤醒在**提交之后**发生(jobs.dispatch_job 的约定)。
+    """
+    from app.domain.workflows import approvals
+
+    approval = db.get(WorkflowRunApproval, approval_id)
+    if approval is None:
+        raise HTTPException(status_code=404, detail=tr("routeErr_runApprovalNotFound"))
+    workflow_uc.ensure_can_browse(db, user, approval.workspace_id)
+    if approval.status != approvals.PENDING:
+        raise HTTPException(status_code=409, detail=tr("routeErr_runApprovalSettled"))
+    note = body.note.strip()
+    if note and not approval.allow_note:
+        #: 节点上关掉了备注那一格:不收,也不悄悄丢掉 —— 说一句,前端把输入框收起来。
+        raise HTTPException(status_code=422, detail=tr("routeErr_runApprovalNoNote"))
+    won = approvals.decide_and_wake(
+        db, approval, decision=body.decision, user_id=user.id,
+        user_name=user.display_name or user.username, note=note, via="app",
+    )
+    if not won:
+        #: 另一条路(飞书)在这一瞬间先到了 —— 决定已经落了,这不是错误,把最新那份给他看。
+        db.refresh(approval)
+    return approval
 
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/attest", response_model=WorkflowRevisionOut)

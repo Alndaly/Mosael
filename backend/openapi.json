@@ -14872,6 +14872,153 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/run-approvals": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Run Approvals",
+        "description": "这张工作流的运行里,**此刻停在「等人确认」上的那几步**(新节点 `await_approval`)。\n\n和上面那条 `awaiting-approvals` 不是一件事:那一条是定时任务「这一版要主人认可」(ADR 0047),\n只提醒、不拦、没有单子;这一条是真的停下来的运行 —— 在这里点一下(或去飞书点),\n那次运行就从暂停的那个节点接着跑。\n\n读得到这张图的人就看得见(这是\"这件事在等人处理\",不是\"谁的私事\");**能不能批**在决定那一步\n按工作区成员校验。",
+        "operationId": "run_approvals_api_workflows__workflow_id__run_approvals_get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunApprovalOut"
+                  },
+                  "title": "Response Run Approvals Api Workflows  Workflow Id  Run Approvals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/run-approvals": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Workspace Run Approvals",
+        "description": "这个工作区此刻所有在等确认的运行 —— 任务中心/通知面板那一格读它。",
+        "operationId": "workspace_run_approvals_api_run_approvals_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunApprovalOut"
+                  },
+                  "title": "Response Workspace Run Approvals Api Run Approvals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/run-approvals/{approval_id}/decide": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Decide Run Approval",
+        "description": "应用内批一次「等人确认」。**和飞书卡片走同一条决定路径**:一处写决定、一处唤醒那次运行。\n\n`decide_and_wake` 用一条 CAS 保证两条路同时点只有一个算数(赢了的那一个才唤醒),\n所以这里不需要另加锁;唤醒在**提交之后**发生(jobs.dispatch_job 的约定)。",
+        "operationId": "decide_run_approval_api_run_approvals__approval_id__decide_post",
+        "parameters": [
+          {
+            "name": "approval_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Approval Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunApprovalDecisionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunApprovalOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/revisions/{revision}/attest": {
       "post": {
         "tags": [
@@ -45269,6 +45416,123 @@
         ],
         "title": "RippleDeleteClipsRequest",
         "description": "多选后一次波纹删除。"
+      },
+      "RunApprovalDecisionIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "title": "Decision"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "RunApprovalDecisionIn",
+        "description": "应用内点的那一下。**和飞书卡片走同一条决定路径**(见 domain/workflows/approvals.decide_and_wake)。"
+      },
+      "RunApprovalOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "node_id": {
+            "type": "string",
+            "title": "Node Id"
+          },
+          "node_name": {
+            "type": "string",
+            "title": "Node Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "approve_label": {
+            "type": "string",
+            "title": "Approve Label"
+          },
+          "reject_label": {
+            "type": "string",
+            "title": "Reject Label"
+          },
+          "allow_note": {
+            "type": "boolean",
+            "title": "Allow Note"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "decided_by_name": {
+            "type": "string",
+            "title": "Decided By Name"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "workflow_id",
+          "node_id",
+          "node_name",
+          "title",
+          "body",
+          "approve_label",
+          "reject_label",
+          "allow_note",
+          "status",
+          "decision",
+          "decided_by_name",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "RunApprovalOut",
+        "description": "一次运行停在「等人确认」上的那一步 —— 应用内批它的那一格(见 routes/workflows)。\n\n**和 `TaskAwaitingApprovalOut` 不是一件事**:那一条是定时任务「这一版要主人认可」(只提醒、\n不拦、没有单子);这一条是一次真的停下来的运行,批了就接着跑。"
       },
       "RunScheduledTaskResponse": {
         "properties": {

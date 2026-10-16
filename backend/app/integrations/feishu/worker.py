@@ -124,14 +124,23 @@ def message_event(data: Any) -> dict[str, Any] | None:
 
 
 def card_action(data: Any) -> tuple[str, dict[str, Any]]:
-    """SDK 的卡片回调 → (点击者 open_id, 按钮 value)。用 open_id:绑定表按它建。"""
+    """SDK 的卡片回调 → (点击者 open_id, 按钮 value)。用 open_id:绑定表按它建。
+
+    **表单里填的值一并带上**(`form_value`):工作流的确认卡上有一格备注,飞书把它和按钮的
+    `value` 分开放。这里只做"把两个都交给上层",在哪儿读、读不到怎么办是卡片那一层的事
+    (见 approvals._note_from)—— 备注读不到是可接受的退化,批不动不是。
+    """
     event = getattr(data, "event", None)
     operator = getattr(event, "operator", None)
     action = getattr(event, "action", None)
     value = getattr(action, "value", None) or {}
     if isinstance(value, str):
         value = json.loads(value)
-    return getattr(operator, "open_id", "") or "", dict(value)
+    value = dict(value)
+    form = getattr(action, "form_value", None)
+    if form:
+        value.setdefault("form_value", json.loads(form) if isinstance(form, str) else form)
+    return getattr(operator, "open_id", "") or "", value
 
 
 def main(bot_id: str) -> None:

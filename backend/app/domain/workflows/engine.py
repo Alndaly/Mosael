@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
 from app.core.i18n import DEFAULT_LOCALE, get_current_locale, speaking, t, tr
-from app.core.unit_of_work import unit_of_work
+from app.core.unit_of_work import after_commit, unit_of_work
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import (
     blame,
@@ -974,8 +974,9 @@ def run_graph(
                 processed += 1
                 node_finished(pending_nid, outputs)
                 if has_job:
+                    #: 进度照写,**不在这里提交** —— 这一轮马上就收场了,提交由外层那一次事务做
+                    #: (领域层不提交,见 tests/test_use_case_boundaries_ratchet.py)。
                     job.progress = processed / total
-                    db.commit()
             if error is not None:
                 paused = None
         elif error is not None:
@@ -1027,9 +1028,13 @@ def _park_at_approval(db: Session, job: Job, run: GraphRun) -> None:
         "node_id": run.awaiting, "approval_id": approval.id, "title": approval.title,
     })
     #: 站内通知 + 飞书卡片。通知是兜底(没有飞书绑定也照样等),卡片失败一律降级。
-    #: **排在检查点之后**:手快的人在现场落库之前点了确认,那次运行会卡在一个永远唤醒不了的等待上。
-    approvals.announce(db, approval)
-    db.commit()
+    #:
+    #: **排在提交之后**(`after_commit`,不在这里 commit —— 领域层不提交,见
+    #: tests/test_use_case_boundaries_ratchet.py)。这一条不是洁癖:说出去的东西**必须已经落库** ——
+    #: 先发卡、检查点还在这个事务里的话,手快的人在提交之前点了确认,那次运行会卡在一个
+    #: 永远唤醒不了的等待上(见 approvals.announce 的说明)。
+    approval_id = approval.id
+    after_commit(db, lambda: approvals.announce_parked(approval_id))
     logger.info("workflow job %s parked at node %s awaiting approval %s", job.id, run.awaiting, approval.id)
 
 
@@ -1049,10 +1054,13 @@ def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> 
     params = dict(payload.get("params") or {})
     locale = payload.get("locale")
     target_node = str(payload.get("target_node_id") or "") or None
+    #: **只捏普通值** —— 线程起来时调用方的会话可能正在回滚,在线程里读 `job.id` 会拿那个会话回库加载
+    #: (见 jobs.dispatch_job 的说明,tests/test_jobs_are_dispatched_by_the_bus.py 守着这条)。
+    job_id = job.id
     dispatch_job(
         db, job,
         lambda: _run_workflow_thread(
-            workflow_id, revision_id, job.id, params, locale=locale, target_node=target_node, resume=resume,
+            workflow_id, revision_id, job_id, params, locale=locale, target_node=target_node, resume=resume,
         ),
     )
 

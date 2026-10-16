@@ -62,22 +62,24 @@ def call_api(bot: FeishuBot, method: str, url: str, body: dict[str, Any] | None 
     return data
 
 
-def send_text(bot: FeishuBot, chat_id: str, text: str) -> None:
+def send_text(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str = "chat_id") -> None:
     data = call_api(
         bot,
         "POST",
-        f"{SEND_URL}?receive_id_type=chat_id",
+        f"{SEND_URL}?receive_id_type={receive_id_type}",
         {"receive_id": chat_id, "msg_type": "text", "content": json.dumps({"text": text})},
     )
     if data.get("code") != 0:
         raise FeishuError("feishuErr_sendText", detail=data.get("msg") or data.get("code"))
 
 
-def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any]) -> None:
+def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_type: str = "chat_id") -> None:
+    """发一张交互卡片。`receive_id_type` 是 `chat_id`(会话,默认)或 `open_id`(私聊某个人)——
+    工作流的确认卡两条路都要:这一轮**来自飞书会话**就发回那个群,不是的话发给负责人本人。"""
     data = call_api(
         bot,
         "POST",
-        f"{SEND_URL}?receive_id_type=chat_id",
+        f"{SEND_URL}?receive_id_type={receive_id_type}",
         {"receive_id": chat_id, "msg_type": "interactive", "content": json.dumps(card, ensure_ascii=False)},
     )
     if data.get("code") != 0:

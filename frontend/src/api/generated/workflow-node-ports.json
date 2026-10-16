@@ -289,6 +289,89 @@
     }
   },
   {
+    "type": "await_approval",
+    "config": {
+      "title": {
+        "type": "template",
+        "label": {
+          "zh": "标题",
+          "en": "Title"
+        }
+      },
+      "body": {
+        "type": "template",
+        "label": {
+          "zh": "正文",
+          "en": "Body"
+        }
+      },
+      "approve_label": {
+        "type": "template",
+        "label": {
+          "zh": "确认按钮文案",
+          "en": "Approve button"
+        }
+      },
+      "reject_label": {
+        "type": "template",
+        "label": {
+          "zh": "拒绝按钮文案",
+          "en": "Reject button"
+        }
+      },
+      "allow_note": {
+        "type": "string",
+        "label": {
+          "zh": "带备注输入框",
+          "en": "Note field"
+        }
+      },
+      "timeout_hours": {
+        "type": "number",
+        "label": {
+          "zh": "超时(小时)",
+          "en": "Timeout (hours)"
+        }
+      },
+      "on_timeout": {
+        "type": "string",
+        "label": {
+          "zh": "超时后",
+          "en": "On timeout"
+        }
+      }
+    },
+    "outputs": [
+      "decision",
+      "decided_by",
+      "decided_by_id",
+      "note",
+      "decided_at"
+    ],
+    "output_labels": {
+      "decision": {
+        "zh": "决定",
+        "en": "Decision"
+      },
+      "decided_by": {
+        "zh": "谁批的",
+        "en": "Decided by"
+      },
+      "decided_by_id": {
+        "zh": "谁批的(账号 id,给下游判断用)",
+        "en": "Decided by (account id, for downstream checks)"
+      },
+      "note": {
+        "zh": "备注",
+        "en": "Note"
+      },
+      "decided_at": {
+        "zh": "什么时候批的",
+        "en": "Decided at"
+      }
+    }
+  },
+  {
     "type": "browser_click",
     "config": {
       "session": {

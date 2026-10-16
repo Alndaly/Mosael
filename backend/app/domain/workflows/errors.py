@@ -5,6 +5,24 @@ from __future__ import annotations
 from typing import Any
 
 
+class AwaitingApproval(Exception):
+    """**这个节点要等一个人确认** —— 引擎收到它就停在暂停点上,不把它当成失败(见 engine.run_graph)。
+
+    为什么用异常而不是返回值:执行器只能交回一份产物字典,"这一轮请停下来"是控制流,不是数据。
+    引擎捕获它之后做三件事:不立停的信号、等还在飞的兄弟节点各自落定、把**已经落定的现场**
+    (engine.GraphResume)连同这张单一起交回上层。上层(engine.run_workflow)把现场写进待批单,
+    任务留在 running 等决定 —— 线程在这里就结束了,连接和派发名额都还回去。
+
+    不带文案:它不是给人看的错误。真正给人看的是待批单上的标题正文,以及超时 / 被拒时
+    执行器抛出的 WorkflowDomainError。
+    """
+
+    def __init__(self, approval_id: str, node_id: str) -> None:
+        super().__init__(f"awaiting approval {approval_id} at node {node_id}")
+        self.approval_id = approval_id
+        self.node_id = node_id
+
+
 class WorkflowDomainError(RuntimeError):
     """可安全展示给工作流操作者的领域错误。
 
