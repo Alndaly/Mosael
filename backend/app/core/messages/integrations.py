@@ -43,6 +43,32 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "拉取飞书群列表失败: {detail}",
         "en": "Couldn't list the Feishu groups: {detail}",
     },
+    #: 绑定是**按机器人(按飞书应用)**记的:open_id 按应用隔离,所以拒绝一个人时得说清是哪一台
+    #: —— 换过应用之后旧绑定作废,而设置页那份列表此前按工作区列,看起来还「绑着」。
+    "feishuUnboundSender": {
+        "zh": (
+            "这台机器人「{bot}」还没有与你的飞书账号绑定,所以我还不能替你做事。"
+            "请在 Mosael 的『设置 → 飞书机器人』里选中「{bot}」,生成**这台机器人的**绑定码,再直接发给我。"
+            "(换过应用的话,以前那张码在这台机器人上不算数。)"
+        ),
+        "en": (
+            "This bot \"{bot}\" isn't bound to your Feishu account yet, so I can't act for you. "
+            "In Mosael, open Settings → Feishu bots, pick \"{bot}\", generate a bind code **for this bot**, "
+            "and send it to me here. (If the app was recreated, an older code won't work on this bot.)"
+        ),
+    },
+    "feishuUnboundCodeRefused": {
+        "zh": (
+            "你发来的那张绑定码在「{bot}」这里无效:它可能已经过期 / 用过,或者是为**另一个应用的**机器人"
+            "生成的(open_id 与绑定码都按应用隔离)。请在 Mosael『设置 → 飞书机器人 → {bot}』里重新生成一张,"
+            "再发给我。"
+        ),
+        "en": (
+            "That bind code isn't valid for \"{bot}\": it may have expired or been used, or it was generated "
+            "for a bot in **another app** (open_ids and bind codes are per-app). Generate a fresh one for "
+            "\"{bot}\" in Mosael → Settings → Feishu bots, then send it to me."
+        ),
+    },
     "volcErr_needsAkSk": {
         "zh": "需要账号的 AK / SK 才能拉取音色列表",
         "en": "The account's AK / SK are needed to fetch the voice list.",

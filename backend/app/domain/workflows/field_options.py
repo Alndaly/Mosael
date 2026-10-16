@@ -444,13 +444,26 @@ def _feishu_bots(db: Session, ctx: OptionContext) -> list[Option]:
 
 def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
     """这个工作区里绑过飞书账号的人。值是**他们在那台机器人眼里的 open_id** ——
-    飞书按它发私聊,所以这一格存的就得是它(存 Mosael 的账号 id 到运行时还得再查一次)。"""
-    from app.domain.feishu import bindings
+    飞书按它发私聊,所以这一格存的就得是它(存 Mosael 的账号 id 到运行时还得再查一次)。
 
-    return [
-        {"value": open_id, "label": user.display_name or user.username}
-        for open_id, user in bindings.list_bindings(db, ctx.workspace_id)
-    ]
+    **按机器人分组列**:open_id 按飞书应用隔离,同一个人在两台机器人上是两串不同的 id,
+    拿 A 的那串配 B 的 token 发,飞书直接拒。工作区里不止一台时标签带上机器人名,让人一眼
+    看出选的是哪一台的哪一串;说不清归属的老行不列 —— 选它发不出去。
+    """
+    from app.domain.feishu import bindings, bots
+
+    all_bots = bots.list_bots(db, ctx.workspace_id)
+    options: list[Option] = []
+    for bot in all_bots:
+        for one in bindings.list_bindings(db, ctx.workspace_id, bot.id):
+            if one.bot_id != bot.id:
+                continue
+            label = one.user.display_name or one.user.username
+            options.append({
+                "value": one.open_id,
+                "label": f"{label} · {bot.name or bot.app_id}" if len(all_bots) > 1 else label,
+            })
+    return options
 
 
 def _feishu_targets(db: Session, ctx: OptionContext) -> list[Option]:

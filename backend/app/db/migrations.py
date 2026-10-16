@@ -2640,6 +2640,85 @@ def _migrate_workflow_run_approvals_record_their_delivery() -> None:
                 conn.execute(text(f"ALTER TABLE workflow_run_approvals ADD COLUMN {name} {kind}"))
 
 
+def _migrate_feishu_bindings_know_their_app() -> None:
+    """飞书绑定的键补上「哪台机器人(哪个飞书应用)」这一维(`feishu_bindings`):
+    主键 `(workspace_id, open_id)` → `(workspace_id, bot_id, open_id)`,并补一列 `stale_reason`。
+
+    **为什么非加不可。** 飞书的 `open_id` **按应用隔离**(官方《用户身份概述》原话:「不要在跨应用
+    的数据通信中使用 open_id」)。键上只有工作区时:同一台机器人换过应用之后,旧行的 open_id 永远
+    匹配不上新事件的 `sender_open_id`(机器人回「你还没有绑定」,而设置页照样显示已绑定);同一个人
+    在两个应用里是两行,`requester_binding` 取哪一行由存储顺序定 —— 拿 A 的 open_id 用 B 的 token
+    发,飞书直接拒。
+
+    **老行不许默默归到当前那台机器人** —— 那正是「创建完自动绑定了」那只错觉。能**无歧义**归属的
+    判据只有一条:绑定落库的那一刻,这个工作区里**只有一台机器人存在**(open_id 只能是那台应用
+    眼里的)。按 `created_at` 判,不看"现在剩几台":
+
+    - 那一刻恰好一台 → 回填它的 id;
+    - 那一刻一台都没有(那台应用已经删了 / 这张单比机器人还早)或不止一台(说不清是哪台的)
+      → `bot_id` 留空 + `stale_reason = 'unknown-app'`。它**不是**任何一台现在机器人的有效绑定,
+      界面照它说「这一条来自另一个应用,请重新绑定」。
+
+    **改主键只能重建表**(SQLite 不支持 ALTER 主键),所以整张重建 —— 但只在 `bot_id` 还不在的时候。
+
+    **必须在 SCHEMA 之前**:create_all 只建缺失的**表**、从不给已有的表改键,而这一步之后 ORM 上的
+    FeishuBinding 已经指望三列主键和 stale_reason 在了。表不在的跳过 —— 那种库由
+    `create-current-schema` 直接建成现在的形状。**幂等**:判「bot_id 在不在」。
+
+    老行的 `created_at` 原样搬过来(它不是"什么时候迁的",是这次归属判断的依据)。
+
+    **只搬父行还在的那些行**(join `workspaces` / `users`):主键里那两列都是外键,指着一条已经
+    没有的工作区 / 用户的绑定本来就没人认得出、也级联不掉(FK 是这一版才在每个连接上开的),
+    搬过去只会当场撞 `FOREIGN KEY constraint failed` 把启动卡住。
+    """
+    #: `stale_reason` 的取值写字面量,不 import 领域那一份:迁移是**历史快照**,领域那边日后改了
+    #: 写法也不该让这一步的结果跟着变(见 tests/test_migration_bodies_are_frozen)。
+    stale = "unknown-app"
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type = 'table'"))}
+        if "feishu_bindings" not in tables:
+            return
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(feishu_bindings)"))}
+        if "bot_id" in columns:
+            return  # 已经迁过(或本来就是新形状)
+        #: 列定义与模型逐字一致(见 db/model_slices/feishu.FeishuBinding)。`feishu_bots` 不在的
+        #: 老库上归属判不出来 —— 那种库里的老行一律说不清归属。
+        conn.execute(text(
+            "CREATE TABLE feishu_bindings_new ("
+            "workspace_id VARCHAR(64) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, "
+            "bot_id VARCHAR(64) NOT NULL DEFAULT '', "
+            "open_id VARCHAR(120) NOT NULL, "
+            "user_id VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+            "stale_reason VARCHAR(200) NOT NULL DEFAULT '', "
+            "created_at DATETIME NOT NULL, "
+            "PRIMARY KEY (workspace_id, bot_id, open_id))"
+        ))
+        live = "FROM feishu_bindings b JOIN workspaces w ON w.id = b.workspace_id JOIN users u ON u.id = b.user_id"
+        if "feishu_bots" in tables:
+            conn.execute(text(
+                "INSERT INTO feishu_bindings_new (workspace_id, bot_id, open_id, user_id, stale_reason, created_at) "
+                "SELECT b.workspace_id, "
+                "       CASE WHEN (SELECT COUNT(*) FROM feishu_bots bot "
+                "                   WHERE bot.workspace_id = b.workspace_id AND bot.created_at <= b.created_at) = 1 "
+                "            THEN (SELECT bot.id FROM feishu_bots bot "
+                "                   WHERE bot.workspace_id = b.workspace_id AND bot.created_at <= b.created_at "
+                "                   ORDER BY bot.created_at, bot.id LIMIT 1) "
+                "            ELSE '' END, "
+                "       b.open_id, b.user_id, "
+                "       CASE WHEN (SELECT COUNT(*) FROM feishu_bots bot "
+                "                   WHERE bot.workspace_id = b.workspace_id AND bot.created_at <= b.created_at) = 1 "
+                "            THEN '' ELSE :stale END, "
+                "       b.created_at " + live
+            ), {"stale": stale})
+        else:
+            conn.execute(text(
+                "INSERT INTO feishu_bindings_new (workspace_id, bot_id, open_id, user_id, stale_reason, created_at) "
+                "SELECT b.workspace_id, '', b.open_id, b.user_id, :stale, b.created_at " + live
+            ), {"stale": stale})
+        conn.execute(text("DROP TABLE feishu_bindings"))
+        conn.execute(text("ALTER TABLE feishu_bindings_new RENAME TO feishu_bindings"))
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -9866,6 +9945,9 @@ def migration_plan() -> MigrationPlan:
                 # 同上:这三列是**投递结果**(发到飞书没有、发出去那条消息的 id)。老行留空 = 跳过,
                 # 不猜着回填(见那条迁移的说明)。同样要在 SCHEMA 之前 —— ORM 已经指望这三列在。
                 _migrate_workflow_run_approvals_record_their_delivery,
+                # 同上:ORM 上的 FeishuBinding 指望主键里的 `bot_id` 与 `stale_reason` 在。open_id
+                # 按飞书应用隔离,键上没有机器人这一维就认不出人(见那条迁移的说明);改主键只能重建表。
+                _migrate_feishu_bindings_know_their_app,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

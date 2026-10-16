@@ -491,12 +491,15 @@ def test_应用内批一条已经批过的单_409而不是又跑一遍() -> None
 
 
 def _feishu_ready(ws: str) -> str:
-    """这个工作区接一个飞书机器人,并把 tester 绑定成一个 open_id。"""
+    """这个工作区接一个飞书机器人,并把 tester 绑定成**它眼里的**一个 open_id。
+
+    open_id 按飞书应用隔离,所以绑定行上必须记着是哪台机器人(见 model_slices/feishu.FeishuBinding)。
+    """
     with SessionLocal() as db:
         bot = FeishuBot(workspace_id=ws, name="助手", app_id="cli_x", app_secret="s", enabled=True)
         db.add(bot)
         db.flush()
-        db.add(FeishuBinding(workspace_id=ws, open_id=OPEN_ID, user_id=user_id()))
+        db.add(FeishuBinding(workspace_id=ws, bot_id=bot.id, open_id=OPEN_ID, user_id=user_id()))
         db.commit()
         return bot.id
 
@@ -680,7 +683,7 @@ def test_通知方式写了私聊某个人_发到那个人的_open_id(monkeypatc
     #: 另一个人也绑了 —— 节点点名了谁,就该发给谁,不是"发给发起人"。
     someone_else = "ou_someone_else"
     with SessionLocal() as db:
-        db.add(FeishuBinding(workspace_id=ws, open_id=someone_else, user_id=user_id()))
+        db.add(FeishuBinding(workspace_id=ws, bot_id=bot_id, open_id=someone_else, user_id=user_id()))
         db.commit()
     seen = _capture(monkeypatch)
 
@@ -734,18 +737,34 @@ def test_没写那三格时_行为与此前一致(monkeypatch) -> None:
 
 
 def test_节点上写了哪个机器人就用哪个(monkeypatch) -> None:
-    """工作区接了不止一个机器人时,节点上那一格说得上话(改之前一律挑最早启用的那个)。"""
+    """工作区接了不止一个机器人时,节点上那一格说得上话(改之前一律挑最早启用的那个)。
+
+    `to` 是**那台机器人眼里的** open_id(open_id 按应用隔离),所以这里把同一个人也绑到第二台上 ——
+    顺手钉住"在哪台机器人上绑过"这件事:拿第一台的那串 id 配第二台的机器人,这一格根本发不出去。
+    """
     ws = _workspace()
     first = _feishu_ready(ws)
+    second_open_id = "ou_same_person_in_second_app"
     with SessionLocal() as db:
         second = FeishuBot(workspace_id=ws, name="另一个", app_id="cli_y", app_secret="s", enabled=True)
         db.add(second)
+        db.flush()
+        db.add(FeishuBinding(workspace_id=ws, bot_id=second.id, open_id=second_open_id, user_id=user_id()))
         db.commit()
         second_id = second.id
     seen = _capture(monkeypatch)
 
-    job_id, _ = _start(_graph(feishu={"channel": "user", "to": OPEN_ID, "bot": second_id}), ws, actor=user_id())
+    job_id, _ = _start(
+        _graph(feishu={"channel": "user", "to": second_open_id, "bot": second_id}), ws, actor=user_id(),
+    )
     _paused(job_id)
 
     assert [one["bot"] for one in seen["cards"]] == [second_id]
     assert first != second_id
+    #: 拿第一台的那串 id 配第二台点名:认不出来,所以那张卡发不出去(而不是拿 B 的 token 发 A 的 id)。
+    from app.domain.feishu import routing
+
+    with SessionLocal() as db:
+        assert routing.resolve(
+            db, workspace_id=ws, channel="user", bot_id=second_id, to=OPEN_ID,
+        ).reason == "not-bound"

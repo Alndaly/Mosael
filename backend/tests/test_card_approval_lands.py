@@ -24,7 +24,7 @@ import time
 
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
-from app.db.models import Asset, FeishuBinding, ToolConfirmation, User
+from app.db.models import Asset, FeishuBinding, FeishuBot, ToolConfirmation, User
 from app.domain.agent.autopilot import wait_for_idle_autopilot
 from app.integrations.feishu import cards
 from app.integrations.feishu.approvals import handle_card_action
@@ -97,10 +97,18 @@ def test_在飞书卡片上点批准_素材真的删了() -> None:
     chat = Chat()
     card_id = chat.agent_deletes()
     with SessionLocal() as db:
-        db.add(FeishuBinding(workspace_id=chat.workspace_id, open_id=OPEN_ID, user_id=chat.user_id))
+        #: 绑定按 (工作区, 机器人, open_id) 记;回调那一层把**收到这次回调的机器人**交下来
+        #: (见 connections.dispatch → approvals.handle_card_action)。
+        bot = FeishuBot(workspace_id=chat.workspace_id, name="助手", app_id="cli_card", app_secret="s")
+        db.add(bot)
+        db.flush()
+        db.add(FeishuBinding(
+            workspace_id=chat.workspace_id, bot_id=bot.id, open_id=OPEN_ID, user_id=chat.user_id,
+        ))
         db.commit()
+        bot_id = bot.id
 
-    out = handle_card_action(OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": card_id})
+    out = handle_card_action(OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": card_id}, bot_id)
 
     assert "toast" not in out, out
     chat.assert_deleted(card_id)

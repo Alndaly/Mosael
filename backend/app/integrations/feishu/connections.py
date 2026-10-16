@@ -87,7 +87,13 @@ def dispatch(connection: Connection, event: dict[str, Any]) -> None:
         def decide() -> None:
             try:
                 value = event.get("value")
-                result = approvals.handle_card_action(str(event.get("open_id") or ""), value if isinstance(value, dict) else {})
+                #: 点击者的 open_id 是**收到这次回调的那台机器人(那个飞书应用)**眼里的 id ——
+                #: 绑定按 (工作区, 机器人, open_id) 记,所以这一维必须传下去(见 approvals.handle_card_action)。
+                result = approvals.handle_card_action(
+                    str(event.get("open_id") or ""),
+                    value if isinstance(value, dict) else {},
+                    connection.bot_id,
+                )
             except Exception:  # noqa: BLE001 —— 回一句总比让飞书那头超时强
                 logger.exception("feishu card decision crashed bot=%s", connection.bot_id)
                 result = {"toast": {"type": "error", "content": "处理失败,请到 Mosael 里查看"}}

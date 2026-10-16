@@ -207,6 +207,20 @@ def _describe_unsupported(message_type: str) -> str:
     return f"我暂时看不了{what}。可以发文字或图片给我,或者把文件先传进 Mosael 的素材库再让我处理。"
 
 
+def unbound_reply(bot: FeishuBot, text: str) -> str:
+    """没绑定时回哪一句话。**必须说清是哪台机器人。**
+
+    open_id 按飞书应用隔离,所以「你没绑定」这件事只有配上机器人名才说得清:同一个人换过应用
+    之后就是没绑定,而 Mosael 设置页那份列表(改之前按工作区列)看起来还「绑着」—— 说清是哪一台,
+    人才知道去生成哪一台的绑定码。他要是刚发了一张码上来,单独说那一张为什么不作数(过期 / 用过 /
+    属于另一个应用的机器人):「没收到码」和「码不对」是两件事,回复不能一样。
+    """
+    name = bot.name or bot.app_id
+    if bindings.looks_like_code(text):
+        return t("feishuUnboundCodeRefused", DEFAULT_LOCALE, bot=name)
+    return t("feishuUnboundSender", DEFAULT_LOCALE, bot=name)
+
+
 def handle_incoming(
     bot_id: str,
     chat_id: str,
@@ -245,20 +259,18 @@ def handle_incoming(
         if not text and not image_keys and not file_key:
             return
         # Identify the human behind the message. No open_id → can't attribute → refuse.
-        user = bindings.resolve_sender(db, bot.workspace_id, sender_open_id) if sender_open_id else None
+        #: **按机器人认人**:open_id 按飞书应用隔离,这一行只有配上这台机器人(bot.id)才有意义。
+        user = bindings.resolve_sender(db, bot.workspace_id, bot.id, sender_open_id) if sender_open_id else None
         if user is None:
             # An unbound sender may be redeeming a one-time bind code they got in-app.
-            redeemed = bindings.redeem_bind_code(db, bot.workspace_id, sender_open_id, text) if sender_open_id else None
+            redeemed = (
+                bindings.redeem_bind_code(db, bot.workspace_id, bot.id, sender_open_id, text) if sender_open_id else None
+            )
             db.commit()  # 这条消息就是一次用例:兑了码就在回话之前落库
             if redeemed is not None:
                 client.send_text(bot, chat_id, f"绑定成功,你好 {redeemed.username}!之后直接对我说话即可。")
             else:
-                client.send_text(
-                    bot,
-                    chat_id,
-                    "你还没有绑定 Mosael 账号,无法使用本机器人。请在 Mosael『设置 → 飞书机器人』生成绑定码,"
-                    "然后把绑定码直接发给我完成绑定。",
-                )
+                client.send_text(bot, chat_id, unbound_reply(bot, text))
             return
         #: **只有绑定过的人能驱动触发器**(ADR 0065 §4):上面那一道就是它的门槛 —— 未绑定的消息
         #: 在这里已经回头了,连匹配都轮不到。触发器跑起来花的是配置它那个人的钥匙和额度。
@@ -320,7 +332,7 @@ def handle_incoming(
             external_key=f"feishu:{bot.id}:{chat_id}",
             title=f"飞书 · {bot.name}",
         )
-        user = bindings.resolve_sender(db, workspace_id, sender_open_id)
+        user = bindings.resolve_sender(db, workspace_id, bot.id, sender_open_id)
         if user is None:
             if typing_reaction:
                 client.remove_reaction(bot, message_id, typing_reaction)

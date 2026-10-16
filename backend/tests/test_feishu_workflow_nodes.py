@@ -24,6 +24,7 @@ from typing import Any
 
 import pytest
 from PIL import Image
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, FeishuBinding, FeishuBot, Workspace
@@ -58,9 +59,21 @@ def _bot(ws: str, name: str = "助手", app_id: str = "cli_x") -> str:
         return bot.id
 
 
-def _bind(ws: str, open_id: str = OPEN_ID) -> str:
+def _bind(ws: str, open_id: str = OPEN_ID, bot_id: str = "") -> str:
+    """把这个人绑到**这台机器人**上。
+
+    open_id 按飞书应用隔离,所以绑定必须指名机器人;没指名就用这个工作区的第一台(没有就建一台)。
+    """
     with SessionLocal() as db:
-        db.add(FeishuBinding(workspace_id=ws, open_id=open_id, user_id=user_id()))
+        bot = (
+            db.get(FeishuBot, bot_id) if bot_id
+            else db.scalars(select(FeishuBot).where(FeishuBot.workspace_id == ws)).first()
+        )
+        if bot is None:
+            bot = FeishuBot(workspace_id=ws, name="助手", app_id="cli_bind", app_secret="s")
+            db.add(bot)
+            db.flush()
+        db.add(FeishuBinding(workspace_id=ws, bot_id=bot.id, open_id=open_id, user_id=user_id()))
         db.commit()
     return open_id
 
@@ -561,6 +574,24 @@ def test_收件人那一格_私聊列已绑定的人_发群列机器人所在的
     #: 另外两档(哪来发回哪 / 手填 id)用不上这一格:给清单反而是误导。
     assert _options("feishu_targets", ws, parent="origin") == []
     assert _options("feishu_targets", ws, parent="") == []
+
+
+def test_收件人那一格_两台机器人时那串id标着是谁的() -> None:
+    """open_id 按飞书应用隔离:同一个人在两台机器人上是两串不同的 id,而这一格存的就是那一串。
+
+    清单里不分是谁的,选中的那串配别的机器人发出去就是飞书直接拒 —— 所以不止一台时标签带上
+    机器人名(见 field_options._feishu_bound_users)。
+    """
+    ws = _workspace()
+    first = _bot(ws, name="一号")
+    second = _bot(ws, name="二号")
+    _bind(ws, "ou_in_one", bot_id=first)
+    _bind(ws, "ou_in_two", bot_id=second)
+
+    assert _options("feishu_targets", ws, parent="user") == [
+        {"value": "ou_in_one", "label": "tester · 一号"},
+        {"value": "ou_in_two", "label": "tester · 二号"},
+    ]
 
 
 def test_收件人那一格_飞书问不到就给空表而不是把这一页打红(monkeypatch) -> None:

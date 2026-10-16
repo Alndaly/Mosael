@@ -6955,7 +6955,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Bindings */
+        /**
+         * List Bindings
+         * @description **这台机器人**的绑定。
+         *
+         *     说不清归属的老行(`bot_id` 空)也列,`stale` 标出来 —— 它是「设置页说已绑定、机器人说没绑定」
+         *     那只错觉里唯一能被人收掉的东西:界面照它说「这一条来自另一个应用,请重新绑定」。
+         */
         get: operations["list_bindings_api_feishu_bots__bot_id__bindings_get"];
         put?: never;
         post?: never;
@@ -6975,7 +6981,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove Binding */
+        /**
+         * Remove Binding
+         * @description **只删这台机器人的那一行**(说不清归属的老行没有归属,在谁的面板上看见就从哪儿删)。
+         */
         delete: operations["remove_binding_api_feishu_bots__bot_id__bindings__open_id__delete"];
         options?: never;
         head?: never;
@@ -12967,6 +12976,10 @@ export interface components {
             user_id: string;
             /** Username */
             username: string;
+            /** Bot Id */
+            bot_id: string;
+            /** Stale */
+            stale: boolean;
         };
         /** FeishuBotCreate */
         FeishuBotCreate: {

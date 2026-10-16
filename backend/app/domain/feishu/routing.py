@@ -12,7 +12,8 @@
 - `origin`(**缺省**):哪来发回哪 —— 这次运行的任务载荷里那份回执指着一次 `origin="feishu"` 的
   智能体会话,消息就发回那个会话(`AgentSession.external_key` 是 `feishu:<bot_id>:<chat_id>`)。
   这一档就是此前那条"先近"的路:旧的图(节点上没写那三格)行为不变。
-- `user`:私聊一个**已绑定**的人(`to` 是那个人的 open_id)。
+- `user`:私聊一个**已绑定**的人(`to` 是那个人的 open_id)。**「已绑定」是就这次用的那台机器人而言**
+  —— open_id 按飞书应用隔离,别的机器人眼里的那串 id 在这台里认不出来,也不该拿去发。
 - `chat`:`to` 是一个群 id(`oc_…`)。
 - `raw`:手填收件 id 与类型 —— 给"机器人看得见、但不在下拉里"的那种 id 留的口子。
   类型**按 id 前缀判**(`oc_` 是群、`ou_` 是人),那一格写的名字要和它对得上。
@@ -125,22 +126,53 @@ def _raw_type(raw_id: str, declared: str) -> str:
 
 
 def requester_binding(db: Session, workspace_id: str, user_id: str | None, bot_id: str = "") -> tuple[FeishuBot, str] | None:
-    """发起这次运行的人在这个工作区绑过飞书吗:(机器人, 他的 open_id);没有就 None。
+    """发起这次运行的人绑过飞书吗:(机器人, **那台机器人眼里的**他);没有就 None。
 
     这是 `origin` 那一档**第二条**路(不是从飞书会话来的,但发起人绑过账号 —— 私聊他),
     也是此前 `bot_for_user` 干的那件事;`bot` 那一格照样说得上话。
+
+    **两个值必须来自同一行绑定**:`open_id` 按应用隔离,先挑机器人再拿"某个工作区里的
+    open_id"就是拿 A 的 id 用 B 的 token 发 —— 飞书直接拒(这条根因的第三个后果)。
+    点名了机器人就用它的那一行;没点名时挑**他绑过的那台**(启用中、创建时间最早的那个)——
+    此前是没有 app 维度也没有 ORDER BY,取哪条由存储顺序定。
     """
     if not user_id:
         return None
-    bot = pick_bot(db, workspace_id, bot_id)
-    if bot is None:
-        return None
-    open_id = db.scalar(
-        select(FeishuBinding.open_id).where(
-            FeishuBinding.workspace_id == workspace_id, FeishuBinding.user_id == user_id
+    wanted = str(bot_id or "").strip()
+    if wanted:
+        bot = pick_bot(db, workspace_id, wanted)
+        if bot is None:
+            return None
+        open_id = _bound_open_id(db, workspace_id, bot.id, user_id)
+        return (bot, open_id) if open_id else None
+    row = db.execute(
+        select(FeishuBot, FeishuBinding.open_id)
+        .join(FeishuBinding, FeishuBinding.bot_id == FeishuBot.id)
+        .where(
+            FeishuBot.workspace_id == workspace_id,
+            FeishuBot.enabled.is_(True),
+            FeishuBinding.workspace_id == workspace_id,
+            FeishuBinding.user_id == user_id,
+            FeishuBinding.stale_reason == "",
         )
-    )
-    return (bot, open_id) if open_id else None
+        .order_by(FeishuBot.created_at)
+    ).first()
+    return (row[0], row[1]) if row is not None else None
+
+
+def _bound_open_id(db: Session, workspace_id: str, bot_id: str, user_id: str) -> str:
+    """这个成员在这台机器人眼里的 open_id。同一个人在同一台机器人上绑过不止一个飞书身份时,
+    取**最近绑的那个** —— 此前没有 ORDER BY,取哪条由存储顺序定。"""
+    return db.scalar(
+        select(FeishuBinding.open_id)
+        .where(
+            FeishuBinding.workspace_id == workspace_id,
+            FeishuBinding.bot_id == bot_id,
+            FeishuBinding.user_id == user_id,
+            FeishuBinding.stale_reason == "",
+        )
+        .order_by(FeishuBinding.created_at.desc())
+    ) or ""
 
 
 def session_origin(db: Session, session_id: str | None) -> tuple[FeishuBot, str] | None:
@@ -275,18 +307,24 @@ def resolve(
     bot = pick_bot(db, workspace_id, bot_id)
     if bot is None:
         return _failed("no-bot")
-    if channel == USER and not _is_bound(db, workspace_id, target_id):
-        #: `channel=user` 的契约是"一个**已绑定**的人":没绑过的 open_id 不猜着发。
+    if channel == USER and not _is_bound(db, workspace_id, bot.id, target_id):
+        #: `channel=user` 的契约是"一个**在这台机器人眼里已绑定**的人":没绑过的 open_id 不猜着发。
         #: 要发一个任意 id 是 `raw` 那一档的事 —— 那一档明确说了"机器人看得见的都行"。
         return _failed("not-bound")
     return Resolution(target=Target(bot=bot, receive_id=target_id, receive_type=receive_type), reason=channel)
 
 
-def _is_bound(db: Session, workspace_id: str, open_id: str) -> bool:
+def _is_bound(db: Session, workspace_id: str, bot_id: str, open_id: str) -> bool:
+    """这个人**在这台机器人(这个应用)眼里**绑过没有。空 bot_id / 说不清归属的老行都不算绑定。"""
+    if not bot_id:
+        return False
     return (
         db.scalar(
             select(FeishuBinding.open_id).where(
-                FeishuBinding.workspace_id == workspace_id, FeishuBinding.open_id == open_id
+                FeishuBinding.workspace_id == workspace_id,
+                FeishuBinding.bot_id == bot_id,
+                FeishuBinding.open_id == open_id,
+                FeishuBinding.stale_reason == "",
             )
         )
         is not None

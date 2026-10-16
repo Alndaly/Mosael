@@ -77,12 +77,19 @@ def issue_bind_code(db: Session, user: User, bot_id: str) -> tuple[str, datetime
     return bindings.issue_bind_code(db, bot.workspace_id, user.id)
 
 
-def list_bindings(db: Session, user: User, bot_id: str) -> list[tuple[str, User]]:
-    return bindings.list_bindings(db, readable_bot(db, user, bot_id).workspace_id)
+def list_bindings(db: Session, user: User, bot_id: str) -> list[bindings.Binding]:
+    """**这台机器人的**绑定(外加说不清归属的老行,见 bindings.list_bindings)。
+
+    此前这里只拿 `bot_id` 推 `workspace_id`,列的是整个工作区的绑定 —— 新机器人的面板里显示着
+    别台机器人的绑定,看着就像"创建完自动绑定了"(而数据其实一行都没动)。
+    """
+    bot = readable_bot(db, user, bot_id)
+    return bindings.list_bindings(db, bot.workspace_id, bot.id)
 
 
 def remove_binding(db: Session, user: User, bot_id: str, open_id: str) -> None:
-    """管谁能驱动机器人 = 成员管理。"""
+    """管谁能驱动机器人 = 成员管理。**只删这台机器人的那一行** —— 此前按工作区删,拿 A 的 URL
+    能把 B 的绑定删掉。"""
     bot = _bot(db, bot_id)
     ensure_workspace_perm(db, user, bot.workspace_id, "members")
-    bindings.remove_binding(db, bot.workspace_id, open_id)
+    bindings.remove_binding(db, bot.workspace_id, bot.id, open_id)

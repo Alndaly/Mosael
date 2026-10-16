@@ -339,12 +339,27 @@ def _note_from(value: dict[str, Any]) -> str:
     return ""
 
 
-def _handle_run_approval(open_id: str, action: str, value: dict[str, Any]) -> CardDecision:
+def _app_for_card(db: Session, bot_id: str, session_id: str | None) -> str:
+    """点这张卡的人该按**哪个应用**的 open_id 认 —— 就是收到这次回调的那台机器人。
+
+    open_id 按飞书应用隔离,所以绑定的键上有 bot 这一维;回调那一层没带机器人 id 时(测试直接调
+    这一层、或更早的数据)退到这张卡自己挂着的飞书会话所属的那台(见 routing.session_origin)。
+    """
+    if bot_id:
+        return bot_id
+    origin = routing.session_origin(db, session_id)
+    return origin[0].id if origin is not None else ""
+
+
+def _handle_run_approval(open_id: str, action: str, value: dict[str, Any], bot_id: str = "") -> CardDecision:
     """工作流确认卡的按钮:授权按**点击者**走(和工具确认卡同一条路),决定落到领域那一处。
 
     授权这一关和工具确认卡刻意一致 —— 群里谁都看得见这张卡,但看得见不等于能批:
     必须已绑定 Mosael 账号、且此刻仍是该工作区成员(工作区**写权限**那一道闸在领域用例里,
     和应用内那条路是同一个,见 workflow_uc.decide_run_approval)。
+
+    认人按**发出这张卡的那台机器人**(回调带过来的 `bot_id`,没有就用单子上存着的
+    `feishu_bot_id`)—— 那张码 / 那个 open_id 属于哪个应用,认人才算得住。
     """
     from app.domain.permissions import PermissionDenied
     from app.integrations.feishu import cards
@@ -363,7 +378,11 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any]) -> Ca
                 title=approval.title, decision=approval.decision or approval.status,
                 by=approval.decided_by_name, note=approval.note,
             )}})
-        user = bindings.resolve_sender(db, approval.workspace_id, open_id) if open_id else None
+        user = (
+            bindings.resolve_sender(db, approval.workspace_id, bot_id or approval.feishu_bot_id, open_id)
+            if open_id
+            else None
+        )
         if user is None:
             return _toast("请先在 Mosael 的「飞书机器人」里绑定你的账号")
         note = _note_from(value)
@@ -389,13 +408,18 @@ def _handle_run_approval(open_id: str, action: str, value: dict[str, Any]) -> Ca
         )}})
 
 
-def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
+def handle_card_action(open_id: str, value: dict[str, Any], bot_id: str = "") -> CardDecision:
     """处理确认卡的按钮点击。
 
-    授权按**点击者**走,和发消息完全同一条路径(_resolve_sender):必须已绑定 Mosael
+    授权按**点击者**走,和发消息完全同一条路径(bindings.resolve_sender):必须已绑定 Mosael
     账号、且此刻仍是该工作区成员。不是发起者也要过这关 —— 群里任何人都看得见这张卡,但看得见
     不等于能批。用 open_id 而不是 user_id:绑定表就是按 open_id 建的,两者混用会让明明绑过的人
     被拒(这是 Hermes 在飞书审批上踩过的坑)。
+
+    **`bot_id` 是收到这次回调的那台机器人**(connections.dispatch 手里就有)。绑定按
+    (工作区, 机器人, open_id)记 —— open_id 按飞书应用隔离,不带上它是拿别应用的 id 认人。
+    没带时退到这张卡自己挂着的飞书会话所属的那台(见 `_app_for_card`);两者都没有就认不出人,
+    回一句「请先绑定」而不是照旧认人。
 
     批准走的是与 HTTP 路由同一个 authorize_and_approve,且按点击者校验:卡是他批的,这次执行
     就记在他头上。
@@ -416,7 +440,7 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
     #: 口(见 connections.dispatch)。两件事的决定落在两张不同的单上,但"把 open_id 认成人、
     #: 把领域异常翻成 toast"这层是一样的 —— 所以是同一个入口,不是一个复制出来的入口。
     if action in (cards.ACTION_RUN_APPROVE, cards.ACTION_RUN_REJECT):
-        return _handle_run_approval(open_id, action, value)
+        return _handle_run_approval(open_id, action, value, bot_id)
     if action not in (cards.ACTION_APPROVE, cards.ACTION_REJECT) or not confirmation_id:
         return _toast("无法识别的操作")
 
@@ -427,7 +451,13 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
         if confirmation.status != "pending":
             return _toast("这张确认卡已经处理过了")
 
-        user = bindings.resolve_sender(db, confirmation.workspace_id, open_id) if open_id else None
+        user = (
+            bindings.resolve_sender(
+                db, confirmation.workspace_id, _app_for_card(db, bot_id, confirmation.session_id), open_id,
+            )
+            if open_id
+            else None
+        )
         if user is None:
             return _toast("请先在 Mosael 的「飞书机器人」里绑定你的账号")
 

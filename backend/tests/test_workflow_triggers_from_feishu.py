@@ -70,8 +70,9 @@ def _bound_bot(client, workspace_id: str, *, app_id: str = "cli_trigger") -> tup
     me = client.get("/api/auth/me").json()
     open_id = f"ou_{app_id}"
     with SessionLocal() as db:
+        #: 绑到**这台机器人**上:open_id 按飞书应用隔离。
         code, _ = bindings.issue_bind_code(db, workspace_id, me["id"])
-        assert bindings.redeem_bind_code(db, workspace_id, open_id, code) is not None
+        assert bindings.redeem_bind_code(db, workspace_id, bot["id"], open_id, code) is not None
         db.commit()
     return bot, open_id
 

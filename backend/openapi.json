@@ -20948,6 +20948,7 @@
           "feishu"
         ],
         "summary": "List Bindings",
+        "description": "**这台机器人**的绑定。\n\n说不清归属的老行(`bot_id` 空)也列,`stale` 标出来 —— 它是「设置页说已绑定、机器人说没绑定」\n那只错觉里唯一能被人收掉的东西:界面照它说「这一条来自另一个应用,请重新绑定」。",
         "operationId": "list_bindings_api_feishu_bots__bot_id__bindings_get",
         "parameters": [
           {
@@ -20994,6 +20995,7 @@
           "feishu"
         ],
         "summary": "Remove Binding",
+        "description": "**只删这台机器人的那一行**(说不清归属的老行没有归属,在谁的面板上看见就从哪儿删)。",
         "operationId": "remove_binding_api_feishu_bots__bot_id__bindings__open_id__delete",
         "parameters": [
           {
@@ -35816,13 +35818,23 @@
           "username": {
             "type": "string",
             "title": "Username"
+          },
+          "bot_id": {
+            "type": "string",
+            "title": "Bot Id"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
           }
         },
         "type": "object",
         "required": [
           "open_id",
           "user_id",
-          "username"
+          "username",
+          "bot_id",
+          "stale"
         ],
         "title": "FeishuBindingOut"
       },

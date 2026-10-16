@@ -85,8 +85,9 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     # The sender must be bound to a member first — the bot acts with that member's perms.
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:
+        #: **绑到这台机器人上**:open_id 按飞书应用隔离,绑定的键带着 bot_id。
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
-        assert bindings.redeem_bind_code(db, ws["id"], "ou_sender", code) is not None
+        assert bindings.redeem_bind_code(db, ws["id"], bot["id"], "ou_sender", code) is not None
         db.commit()  # 测试就是入口:兑码只改对象
 
     sent: list[tuple[str, str]] = []
@@ -143,7 +144,7 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
-        bindings.redeem_bind_code(db, ws["id"], "ou_sender2", code)
+        bindings.redeem_bind_code(db, ws["id"], bot["id"], "ou_sender2", code)
         db.commit()
 
     monkeypatch.setattr(host, "run_turn", boom)
@@ -162,7 +163,7 @@ def _bound_bot(client, monkeypatch, sent: list):
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
-        assert bindings.redeem_bind_code(db, ws["id"], "ou_img", code) is not None
+        assert bindings.redeem_bind_code(db, ws["id"], bot["id"], "ou_img", code) is not None
         db.commit()
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
     return ws, bot
@@ -425,7 +426,8 @@ def test_卡片点击在主进程里裁决_答复按id回到worker(monkeypatch) 
 
     decided: list = []
     monkeypatch.setattr(
-        approvals, "handle_card_action", lambda open_id, value: (decided.append((open_id, value)), {"toast": {"content": "ok"}})[1]
+        approvals, "handle_card_action",
+        lambda open_id, value, bot_id="": (decided.append((open_id, value, bot_id)), {"toast": {"content": "ok"}})[1],
     )
     replies = worker.CardReplies()
 
@@ -438,7 +440,8 @@ def test_卡片点击在主进程里裁决_答复按id回到worker(monkeypatch) 
     emitted: list = []
     monkeypatch.setattr(worker, "emit", lambda event: (emitted.append(event), connections.dispatch(FakeConnection(), event)))
     assert replies.ask("ou_9", {"action": "approve", "confirmation_id": "c1"}, timeout=5) == {"toast": {"content": "ok"}}
-    assert decided == [("ou_9", {"action": "approve", "confirmation_id": "c1"})]
+    #: **收到这次回调的那台机器人**要一并交下去:open_id 按飞书应用隔离,绑定的键上有 bot 这一维。
+    assert decided == [("ou_9", {"action": "approve", "confirmation_id": "c1"}, "b")]
     assert emitted[0]["event"] == "card"
 
 

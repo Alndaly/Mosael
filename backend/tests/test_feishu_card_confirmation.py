@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import FeishuBinding, FeishuBot, ToolConfirmation, User, WorkspaceMember
@@ -12,15 +13,38 @@ from tests.util import fresh_client
 
 卡片挂在群里,群里谁都看得见;看得见不等于能批。授权走的是和发消息同一条路径
 (open_id → feishu_bindings → 仍是工作区成员),所以这里逐条钉住那条路径的每个出口。
+
+**绑定按 (工作区, 机器人, open_id) 记**:open_id 按飞书应用隔离,所以这一层要带上
+「收到这次回调的那台机器人」—— 真机上 connections.dispatch 传的就是它。
 """
 
 OTHER_OPEN_ID = "ou_someone_else"
 
 
-def _bind(workspace_id: str, open_id: str, user_id: str) -> None:
+def _workspace_bot(db, workspace_id: str) -> FeishuBot:
+    """这个工作区的那台机器人(没有就建一台)。绑定与点卡都按同一条 id 认人。"""
+    bot = db.scalars(select(FeishuBot).where(FeishuBot.workspace_id == workspace_id)).first()
+    if bot is None:
+        bot = FeishuBot(workspace_id=workspace_id, name="助手", app_id="cli_card", app_secret="s")
+        db.add(bot)
+        db.flush()
+    return bot
+
+
+def _bind(workspace_id: str, open_id: str, user_id: str) -> str:
     with SessionLocal() as db:
-        db.add(FeishuBinding(workspace_id=workspace_id, open_id=open_id, user_id=user_id))
+        bot = _workspace_bot(db, workspace_id)
+        db.add(FeishuBinding(workspace_id=workspace_id, bot_id=bot.id, open_id=open_id, user_id=user_id))
         db.commit()
+        return bot.id
+
+
+def _click(workspace_id: str, open_id: str, value: dict) -> dict:
+    """点这张卡 —— 带上**收到这次回调的那台机器人**(真机上由 connections.dispatch 传下来)。"""
+    with SessionLocal() as db:
+        bot = db.scalars(select(FeishuBot).where(FeishuBot.workspace_id == workspace_id)).first()
+        bot_id = bot.id if bot is not None else ""
+    return handle_card_action(open_id, value, bot_id)
 
 
 def _make_confirmation(client, workspace_id: str) -> str:
@@ -83,7 +107,7 @@ def test_unbound_clicker_is_refused_and_card_stays_pending(ctx) -> None:
     """没绑定账号的人点了不算数 —— 这是「授权建立在账号体系上」的底线。"""
     client, ws, _, _ = ctx
     cid = _make_confirmation(client, ws)
-    out = handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
+    out = _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
     assert "toast" in out and "绑定" in out["toast"]["content"]
     assert _status(cid) == "pending", "未绑定者的点击不该改变卡片状态"
 
@@ -91,7 +115,7 @@ def test_unbound_clicker_is_refused_and_card_stays_pending(ctx) -> None:
 def test_no_open_id_is_refused(ctx) -> None:
     client, ws, _, _ = ctx
     cid = _make_confirmation(client, ws)
-    out = handle_card_action("", {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
+    out = _click(ws, "", {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
     assert "toast" in out
     assert _status(cid) == "pending"
 
@@ -100,7 +124,7 @@ def test_bound_member_can_approve(ctx) -> None:
     client, ws, user_id, username = ctx
     _bind(ws, OTHER_OPEN_ID, user_id)
     cid = _make_confirmation(client, ws)
-    out = handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
+    out = _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
     assert "card" in out, out
     # 就地替换成已决卡,且**不再带按钮** —— 否则同一张卡会被反复点。
     rendered = str(out["card"]["data"])
@@ -114,7 +138,7 @@ def test_bound_member_can_reject(ctx) -> None:
     client, ws, user_id, _ = ctx
     _bind(ws, OTHER_OPEN_ID, user_id)
     cid = _make_confirmation(client, ws)
-    out = handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_REJECT, "confirmation_id": cid})
+    out = _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_REJECT, "confirmation_id": cid})
     assert "card" in out and "已拒绝" in str(out["card"]["data"])
     assert _status(cid) == "rejected"
 
@@ -130,7 +154,7 @@ def test_binding_survives_only_while_still_a_member(ctx) -> None:
         ):
             db.delete(row)
         db.commit()
-    out = handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
+    out = _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
     assert "toast" in out
     assert _status(cid) == "pending"
 
@@ -139,8 +163,8 @@ def test_settled_card_cannot_be_clicked_again(ctx) -> None:
     client, ws, user_id, _ = ctx
     _bind(ws, OTHER_OPEN_ID, user_id)
     cid = _make_confirmation(client, ws)
-    handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_REJECT, "confirmation_id": cid})
-    again = handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
+    _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_REJECT, "confirmation_id": cid})
+    again = _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": cid})
     assert "toast" in again and "处理过" in again["toast"]["content"]
     assert _status(cid) == "rejected", "重复点击不该翻转已决状态"
 
@@ -151,7 +175,7 @@ def test_garbage_payloads_do_not_crash(ctx) -> None:
     _bind(ws, OTHER_OPEN_ID, user_id)
     for value in ({}, {"action": "confirm.approve"}, {"action": "rm -rf", "confirmation_id": "x"},
                   {"confirmation_id": "does-not-exist", "action": cards.ACTION_APPROVE}):
-        out = handle_card_action(OTHER_OPEN_ID, value)
+        out = _click(ws, OTHER_OPEN_ID, value)
         assert "toast" in out, value
 
 
@@ -243,6 +267,6 @@ def test_both_entries_share_one_authorization(ctx, monkeypatch) -> None:
     assert client.post(f"/api/confirmations/{via_http}/approve").status_code == 200
 
     via_card = _make_confirmation(client, ws)
-    handle_card_action(OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": via_card})
+    _click(ws, OTHER_OPEN_ID, {"action": cards.ACTION_APPROVE, "confirmation_id": via_card})
 
     assert calls == [via_http, via_card], f"两条入口没有都走共用实现:{calls}"

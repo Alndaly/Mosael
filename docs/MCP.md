@@ -253,8 +253,9 @@ approval happens where the request was made rather than forcing a switch to the 
 Authorisation reuses the existing account model — it is **not** a second scheme. The clicker
 must already be bound to a Mosael account (`feishu_bindings`) **and still be a member of
 the workspace**. Seeing the card in a group chat does not confer the right to approve it.
-Binding is keyed by `open_id`, never `user_id` — mixing the two silently rejects people who did
-bind.
+Binding is keyed by `(workspace, bot, open_id)`, never `user_id` — mixing the two silently rejects
+people who did bind, and Feishu's `open_id` is per-app, so the binding has to name the bot (app)
+whose callback carried the click.
 
 Both entries call `domain/agent/confirmations.authorize_and_approve` / `authorize_and_reject`.
 Identity resolution belongs to the entry; "may this person approve, and what happens when they
