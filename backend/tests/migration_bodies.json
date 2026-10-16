@@ -196,6 +196,7 @@
   "migrate-session-groups-serve-both": "6094543b7499867e",
   "migrate-shared-host-folders": "3627f5e0e220683f",
   "migrate-shared-venvs": "fa40498536bb5ef9",
+  "migrate-shot-breakdowns-keep-their-motion-track": "b18697bffd24876b",
   "migrate-source-assets-get-a-role": "e69852b95fc6dcb6",
   "migrate-speech-and-podcast-join-creation-sessions": "086790677bfae5eb",
   "migrate-speech-engines-are-providers": "8475b311b5735e0e",

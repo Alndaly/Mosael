@@ -135,6 +135,20 @@ def test_shot_motion_uses_median_not_mean() -> None:
     assert detect.shot_motion(track, 0.0, 4.0) == 2.0
 
 
+def test_第_i_个采样落在_i_加_1_除以_hz_秒处() -> None:
+    """时间轴约定只有这一条:`values[i]` 在 `(i + 1) / MOTION_HZ` 秒处(ffmpeg 的 tblend 要前一帧,
+    第 0 帧不出值,所以整条曲线偏一位)。它同时被 detect.shot_motion 和存下来的曲线用着,谁也别另猜一套。"""
+    assert detect.sample_time(0) == pytest.approx(1 / detect.MOTION_HZ)
+    assert detect.sample_time(4) == pytest.approx(1.0)
+    assert detect.sample_time(0, hz=2) == pytest.approx(0.5)
+
+    #: 只在索引 4(= 1.0 秒)有尖峰:掐掉两头之后只剩 [0.9, 1.1] 秒那一段采样,中位数就是它。
+    #: 要是把索引当成 i / hz(0.8 秒),这个窗口里一个采样都取不到,中位数会变成 0。
+    track = _track(0.0, 2.0)
+    track[4] = 42.0
+    assert detect.shot_motion(track, 0.8, 1.2) == 42.0
+
+
 # --------------------------------------------------------------------------------------
 # 真跑一遍 ffmpeg:色块拼接的片子,刀口应该在颜色交界处
 # --------------------------------------------------------------------------------------
@@ -191,6 +205,23 @@ def test_measure_moving_segment_has_real_motion(tmp_path: Path) -> None:
     still = next(shot for shot in shots if shot["start"] < 1.0)
     assert moving["motion"] is not None and moving["motion"] > 10.0
     assert still["motion"] is not None and still["motion"] < 5.0
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_曲线的采样时刻真的按_i_加_1_除以_hz_排(tmp_path: Path) -> None:
+    """整幅在动的那一段是 1–2 秒:量的高值必须落在 1.0–2.0 秒对应的那些下标上。
+
+    这一条钉的是**偏几位**:1–2 秒那段是随机噪点,结束那一帧(索引 9)的差值是三位数;0.8 秒还是纯红、
+    差值恰好 0。把索引当成 `i / hz` 的话,热的那几个会整体挪到 0.8–1.8 秒 —— 这两条断言当场就红。
+    """
+    video = tmp_path / "moving.mp4"
+    _make_color_cut_video(video, moving=True)
+    measured = detect.measure(video)
+    hot = {round(detect.sample_time(index), 2)
+           for index, value in enumerate(measured.motion) if value > 5}
+    assert 1.2 in hot and 1.8 in hot, f"整幅在动的那一段没测出来:{sorted(hot)}"
+    assert 2.0 in hot, "噪点段结束那一帧在索引 9(=(9+1)/5 秒处)"
+    assert 0.8 not in hot, "0.8 秒还是纯红、差值为 0;它算热就是整条曲线偏了"
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")

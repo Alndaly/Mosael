@@ -55,7 +55,8 @@ class Probe:
 @dataclass(frozen=True)
 class Measured:
     cuts: list[dict[str, float]]
-    #: 动静曲线:第 i 个值是 i / MOTION_HZ 秒处和前一帧的差(0–255)。只量刀口时是空的。
+    #: 动静曲线:第 i 个值是**第 i+1 帧**、也就是 `sample_time(i)` 秒处和前一帧的差(0–255)。
+    #: 只量刀口时是空的。整条序列的去处见 domain/shots/track.py;这一条时间轴约定由 `sample_time` 说了算。
     motion: list[float]
 
 
@@ -119,6 +120,17 @@ def measure(path: Path, *, threshold: float = DEFAULT_THRESHOLD, motion: bool = 
     return Measured(cuts=cuts, motion=track)
 
 
+def sample_time(index: int, hz: int = MOTION_HZ) -> float:
+    """动静曲线上第 `index` 个采样落在第几秒:**`(index + 1) / hz`**。
+
+    偏这一位是 `tblend` 的账:它算的是「这一帧和前一帧的差」,第 0 帧没有前一帧、ffmpeg 不出值,
+    所以序列的第 0 个值其实是原视频的第 1 帧(5Hz 下正好是 0.2 秒处),整条曲线因此往后偏一帧。
+    **这条约定只有这一个出处**:`shot_motion` 按它挑采样,存下来的曲线(domain/shots/track.py)和
+    接口(ShotMotionTrackResponse)按它标时间轴 —— 别在别处另写一套。
+    """
+    return (index + 1) / hz
+
+
 def shot_motion(track: list[float], start: float, end: float) -> float | None:
     """这一镜的动静:镜内采样的中位数,两头各掐掉 `min(0.4, max(0.1, 镜长×0.15))` 秒 ——
     刀口两侧的差是「换了一个画面」,不是「画面在动」。镜头太短、掐完没剩采样时回 None(不评判)。"""
@@ -127,8 +139,8 @@ def shot_motion(track: list[float], start: float, end: float) -> float | None:
     span = end - start
     trim = min(0.4, max(0.1, span * 0.15))
     first, last = start + trim, end - trim
-    #: tblend 的第 i 个值是第 i 帧和第 i-1 帧的差,落在 i / hz 秒处;第 0 帧没有前一帧,ffmpeg 不出值,所以偏一位。
-    samples = [value for index, value in enumerate(track) if first <= (index + 1) / MOTION_HZ <= last]
+    #: 采样时刻见 `sample_time`(第 i 个值在第 i+1 帧处)。
+    samples = [value for index, value in enumerate(track) if first <= sample_time(index) <= last]
     if not samples:
         return None
     return round(statistics.median(samples), 2)
@@ -167,5 +179,5 @@ def shot_id(index: int) -> str:
 
 __all__ = [
     "DEFAULT_MIN_SHOT_SECONDS", "DEFAULT_THRESHOLD", "MAX_SHOTS", "MOTION_HZ", "Measured", "Probe", "ShotDetectError",
-    "build_shots", "measure", "probe", "shot_id", "shot_motion",
+    "build_shots", "measure", "probe", "sample_time", "shot_id", "shot_motion",
 ]

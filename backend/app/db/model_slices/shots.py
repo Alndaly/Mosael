@@ -15,7 +15,7 @@ class ShotBreakdown(Base):
     """一份视频的镜头表:刀口、逐镜的时间和动静(代码量的),景别、运镜、画面描述(模型判的)。
 
     **是素材的派生物,一份视频一份**:重拆就覆盖(镜头表说的是「这条视频长什么样」,不是一次次的对话记录)。
-    帧和联系表落在素材目录的 `shots/` 下,素材删了行跟着删(外键级联)、目录随素材目录一起走。
+    帧、联系表和整条动静曲线落在素材目录的 `shots/` 下,素材删了行跟着删(外键级联)、目录随素材目录一起走。
     """
 
     __tablename__ = "shot_breakdowns"
@@ -34,6 +34,9 @@ class ShotBreakdown(Base):
     cuts: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     #: 逐镜。字段见 domain/shots(detect.build_shots 量的、describe.reconcile 判的)。
     shots: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    #: 整条动静曲线的去处:`{hz, points, digest}`;曲线本体是素材目录下的 `shots/track.json`
+    #: (5Hz × 时长 个数 —— 塞进这一行的话,每次读镜头表都得把它整个搬一遍)。这一版之前量的行是 `{}`。
+    motion_track: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     #: 联系表 `[{index, first, last, a, b}]`。
     sheets: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     #: 谁判的画面:`{provider, model, batches, judged_batches, error}`;一镜都没判过是空的。

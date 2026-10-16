@@ -5332,6 +5332,49 @@
         }
       }
     },
+    "/api/assets/{asset_id}/shots/track": {
+      "get": {
+        "tags": [
+          "shots"
+        ],
+        "summary": "Read Shot Motion Track",
+        "description": "这份视频**整条**动静曲线(5Hz 的每个采样),不是逐镜那个中位数 —— 那是 `GET /assets/{id}/shots`\n里 `shots[].motion`。\n\n量到的事实原样交:**全量、不平滑、不补洞、不降采样**(1 小时约 18000 个数、100 KB 上下)。降采样是画法,\n交给画的人 —— 同一个地址下有时代交全量、有时交抽过的,谁也不知道手里的是哪一种,而这条路的用处正是当证据。\n时间轴约定见 `ShotMotionTrackResponse`:`values[i]` 在 `(i + 1) / hz` 秒处。刀口在 `GET /assets/{id}/shots`\n的 `shots[].start` / `end` 里,这里不重复一遍。\n\n**没有曲线也是 200 + `status`**(和读镜头表同一个态度):没量过、这一版之前的行没记、盘上那份丢了或\n被人动过,各是一种 `status`,不是 404。",
+        "operationId": "read_shot_motion_track_api_assets__asset_id__shots_track_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShotMotionTrackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/shots/frames/{name}": {
       "get": {
         "tags": [
@@ -46917,6 +46960,11 @@
             "type": "array",
             "title": "Shots"
           },
+          "motion_track": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Motion Track"
+          },
           "sheets": {
             "items": {
               "additionalProperties": true,
@@ -46973,6 +47021,67 @@
         ],
         "title": "ShotBreakdownResponse",
         "description": "读一份视频的镜头表。**没拆过也是 200**:`status=\"none\"`,其余几栏是空的。\n\n和同一份素材上的 `AnalyzeAssetResponse` 同一类:它是一次回答,不是一行 ORM(`*Out` 那一族)。"
+      },
+      "ShotMotionTrackResponse": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "ready",
+              "missing"
+            ],
+            "title": "Status"
+          },
+          "hz": {
+            "type": "integer",
+            "title": "Hz",
+            "default": 0
+          },
+          "points": {
+            "type": "integer",
+            "title": "Points",
+            "default": 0
+          },
+          "duration": {
+            "type": "number",
+            "title": "Duration",
+            "default": 0.0
+          },
+          "first_sample_seconds": {
+            "type": "number",
+            "title": "First Sample Seconds",
+            "default": 0.0
+          },
+          "sample_interval_seconds": {
+            "type": "number",
+            "title": "Sample Interval Seconds",
+            "default": 0.0
+          },
+          "digest": {
+            "type": "string",
+            "title": "Digest",
+            "default": ""
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "status"
+        ],
+        "title": "ShotMotionTrackResponse",
+        "description": "一条视频的**整条**动静曲线(5Hz 的每个采样),机器证据那一份。\n\n**时间轴约定:`values[i]` 是 `(i + 1) / hz` 秒处的帧间差**(0–255 的 YAVG,见 detect.sample_time)。\n第 0 个采样不在 0 秒:ffmpeg 的 `tblend` 算的是「这一帧和前一帧的差」,第 0 帧没有前一帧、不出值,\n所以序列的第 0 个值其实是原视频的第 1 帧(5Hz 下是 0.2 秒处)。`first_sample_seconds` 和\n`sample_interval_seconds` 把这条约定写成数,前端照着画:第 i 个点在 `first + i × interval` 秒。\n\n**不做平滑、不补洞、不降采样** —— 降采样是画法(节奏条几百像素宽,画的人自己抽),不是事实。\n刀口不在这里重复一遍:它在 `GET /assets/{id}/shots` 的 `shots[].start` / `end`(每镜的起止就是刀口)。\n\n**没有曲线也是 200**:`status` 说清是哪一种(和读镜头表同一个态度,见 `ShotBreakdownResponse`)。"
       },
       "SourceAssetRef": {
         "properties": {

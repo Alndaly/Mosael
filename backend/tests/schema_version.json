@@ -1,5 +1,5 @@
 {
-  "version": 25,
+  "version": 26,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -198,6 +198,7 @@
     "migrate-session-groups-serve-both",
     "migrate-shared-host-folders",
     "migrate-shared-venvs",
+    "migrate-shot-breakdowns-keep-their-motion-track",
     "migrate-source-assets-get-a-role",
     "migrate-speech-and-podcast-join-creation-sessions",
     "migrate-speech-engines-are-providers",

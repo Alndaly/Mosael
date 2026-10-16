@@ -3,7 +3,8 @@
 **两步分开落库。** 量和取帧几秒到几十秒、不花钱;判画面一批一次视觉调用。量完先落一次(界面马上看得到刀口和帧),
 之后每判完一批落一次 —— 一批失败不连坐,判到一半被取消,前面几批也在。
 
-**重拆是整份换掉。** 帧和联系表先写进 `shots.new/`,写完再换掉旧的 `shots/`:拆到一半失败时旧表和旧图都还在。
+**重拆是整份换掉。** 整条动静曲线、帧和联系表先写进 `shots.new/`,写完再换掉旧的 `shots/`:拆到一半失败时
+旧表、旧曲线和旧图都还在。
 
 **素材页那条后台任务不住这里**:挑视觉模型、起视觉调用是分析域的事(这个模块不认识任何连接 / 模型,
 分层见 tests/test_import_layering),见 app/domain/analysis/shots_task.py。
@@ -23,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, get_current_locale
 from app.db.models import Asset, ShotBreakdown
 from app.domain.jobs import ensure_wanted
-from app.domain.shots import describe, detect, frames, report
+from app.domain.shots import describe, detect, frames, report, track
 from app.media.paths import resolve_key
 
 
@@ -37,7 +38,7 @@ def lang_now() -> str:
 
 
 def shots_dir(asset: Asset) -> Path:
-    """帧和联系表的目录:素材目录下的 `shots/`,随素材目录一起删。"""
+    """帧、联系表和整条动静曲线的目录:素材目录下的 `shots/`,随素材目录一起删。"""
     return resolve_key(asset.file_key).parent / "shots"
 
 
@@ -101,6 +102,9 @@ def measure_into(
 ) -> ShotBreakdown:
     """量刀口和动静、取帧、拼联系表,写进这份视频的镜头表(没有就建,有就整份换掉;判过的画面一并清掉)。
 
+    量出来的**整条**动静曲线落在素材目录的 `shots/track.json`(见 track.py),库里只记它的去向;
+    逐镜的 `motion` 照旧是这条曲线里掐两头取的中位数。
+
     `segments` 不给就用这份素材已有的逐字稿分台词。"""
     if not 0.05 <= threshold <= 0.9 or not 0 <= min_shot <= 5:
         raise ShotBreakdownError("shotsErr_badParams")
@@ -114,6 +118,9 @@ def measure_into(
     staging = final.with_name("shots.new")
     shutil.rmtree(staging, ignore_errors=True)
     try:
+        #: 整条曲线和帧、联系表一起进 `shots.new/`,写完再一起换 —— 拆到一半失败时旧曲线也还在。
+        motion_track = track.write_track(staging, hz=detect.MOTION_HZ, duration=probe.duration,
+                                         values=measured.motion)
         frames.grab_frames(source, shots, staging / "frames")
         ensure_wanted()
         aspect = probe.width / probe.height if probe.height else 16 / 9
@@ -137,6 +144,8 @@ def measure_into(
     row.meta = probe.as_dict()
     row.cuts = measured.cuts
     row.shots = shots
+    #: 曲线本体在 `shots/track.json`,库里只有它的去处(采样率、点数、摘要),见 domain/shots/track.py。
+    row.motion_track = motion_track
     row.sheets = sheets
     row.describe = {}
     row.hints = hints
@@ -197,6 +206,12 @@ def _ids_between(shots: list[dict[str, Any]], first: str, last: str) -> list[str
 # --------------------------------------------------------------------------------------
 
 
+def motion_track_summary(row: ShotBreakdown | None) -> dict[str, Any]:
+    """库里记的曲线去处(`{hz, points, digest}`);没有那一行、或者不是那个形状,都当 `{}`(没有曲线)。"""
+    raw = row.motion_track if row is not None else None
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
 def public_shape(row: ShotBreakdown, asset: Asset) -> dict[str, Any]:
     duration = float((row.meta or {}).get("duration") or 0)
     return {
@@ -206,6 +221,9 @@ def public_shape(row: ShotBreakdown, asset: Asset) -> dict[str, Any]:
         "params": row.params,
         "meta": row.meta,
         "shots": row.shots,
+        #: 整条曲线的摘要(`{hz, points, digest}`);曲线本体走 `GET /assets/{id}/shots/track`,
+        #: 读镜头表这一下不该把它整个搬过来(5Hz × 时长 个数)。
+        "motion_track": motion_track_summary(row),
         "sheets": row.sheets,
         "describe": row.describe,
         "hints": row.hints,
@@ -214,6 +232,27 @@ def public_shape(row: ShotBreakdown, asset: Asset) -> dict[str, Any]:
         "storyboard_markdown": report.storyboard_markdown(row.shots, lang=row.lang),
         "updated_at": row.updated_at,
     }
+
+
+def motion_track_shape(db: Session, asset: Asset) -> dict[str, Any]:
+    """这份视频的**整条**动静曲线(全量),给界面画节奏条、给机器当证据读。
+
+    **没有曲线也是一次正常的回答**,不是 404:`status="none"` 是「没量过 / 这一版之前的行没有曲线」,
+    `"missing"` 是「库里记着一条、盘上那份丢了或被人动过」(记下的采样率和点数照旧交回去,人知道该重拆一次)。
+    404 只留给「看不到这份素材」。
+
+    库里没有的东西一概不猜:曲线文件不在或验不过摘要就当它不在(曲线是机器量到的事实,来路不明的那份不算)。
+    """
+    row = breakdown_for(db, asset.id)
+    summary = motion_track_summary(row)
+    if not summary:
+        return {"asset_id": asset.id, "status": "none"}
+    recorded = {"hz": int(summary.get("hz") or 0), "points": int(summary.get("points") or 0),
+                "digest": str(summary.get("digest") or "")}
+    curve = track.read_track(shots_dir(asset), expect_digest=recorded["digest"])
+    if curve is None:
+        return {"asset_id": asset.id, "status": "missing", **recorded}
+    return {"asset_id": asset.id, "status": "ready", **curve}
 
 
 def prompt_context(row: ShotBreakdown, asset: Asset) -> str:
@@ -228,4 +267,5 @@ def prompt_context(row: ShotBreakdown, asset: Asset) -> str:
 
 
 __all__ = ["ShotBreakdownError", "breakdown_for", "frame_file", "judge", "lang_now", "measure_into",
-           "prompt_context", "public_shape", "require_video", "sheet_file", "shots_dir", "transcript_segments"]
+           "motion_track_shape", "motion_track_summary", "prompt_context", "public_shape", "require_video",
+           "sheet_file", "shots_dir", "transcript_segments"]

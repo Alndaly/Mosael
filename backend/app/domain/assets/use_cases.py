@@ -468,3 +468,12 @@ def shot_breakdown(db: Session, user: User, asset_id: str) -> dict[str, Any]:
     if row is None or not row.shots:
         return {"asset_id": asset.id, "status": "none"}
     return {"asset_id": asset.id, "status": "ready", **breakdowns.public_shape(row, asset)}
+
+
+def shot_motion_track(db: Session, user: User, asset_id: str) -> dict[str, Any]:
+    """这份视频**整条**动静曲线(全量,机器证据那一份)。和 `shot_breakdown` 同一个态度:**没有曲线也是
+    一次正常的回答**(`status="none"` / `"missing"`,见 breakdowns.motion_track_shape),不是 404。"""
+    from app.domain.shots import breakdowns
+
+    asset = require_asset(db, user, asset_id)
+    return breakdowns.motion_track_shape(db, asset)

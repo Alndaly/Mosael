@@ -2034,6 +2034,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/shots/track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Shot Motion Track
+         * @description 这份视频**整条**动静曲线(5Hz 的每个采样),不是逐镜那个中位数 —— 那是 `GET /assets/{id}/shots`
+         *     里 `shots[].motion`。
+         *
+         *     量到的事实原样交:**全量、不平滑、不补洞、不降采样**(1 小时约 18000 个数、100 KB 上下)。降采样是画法,
+         *     交给画的人 —— 同一个地址下有时代交全量、有时交抽过的,谁也不知道手里的是哪一种,而这条路的用处正是当证据。
+         *     时间轴约定见 `ShotMotionTrackResponse`:`values[i]` 在 `(i + 1) / hz` 秒处。刀口在 `GET /assets/{id}/shots`
+         *     的 `shots[].start` / `end` 里,这里不重复一遍。
+         *
+         *     **没有曲线也是 200 + `status`**(和读镜头表同一个态度):没量过、这一版之前的行没记、盘上那份丢了或
+         *     被人动过,各是一种 `status`,不是 404。
+         */
+        get: operations["read_shot_motion_track_api_assets__asset_id__shots_track_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/shots/frames/{name}": {
         parameters: {
             query?: never;
@@ -18243,6 +18272,10 @@ export interface components {
             shots?: {
                 [key: string]: unknown;
             }[];
+            /** Motion Track */
+            motion_track?: {
+                [key: string]: unknown;
+            };
             /** Sheets */
             sheets?: {
                 [key: string]: unknown;
@@ -18271,6 +18304,61 @@ export interface components {
             storyboard_markdown: string;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * ShotMotionTrackResponse
+         * @description 一条视频的**整条**动静曲线(5Hz 的每个采样),机器证据那一份。
+         *
+         *     **时间轴约定:`values[i]` 是 `(i + 1) / hz` 秒处的帧间差**(0–255 的 YAVG,见 detect.sample_time)。
+         *     第 0 个采样不在 0 秒:ffmpeg 的 `tblend` 算的是「这一帧和前一帧的差」,第 0 帧没有前一帧、不出值,
+         *     所以序列的第 0 个值其实是原视频的第 1 帧(5Hz 下是 0.2 秒处)。`first_sample_seconds` 和
+         *     `sample_interval_seconds` 把这条约定写成数,前端照着画:第 i 个点在 `first + i × interval` 秒。
+         *
+         *     **不做平滑、不补洞、不降采样** —— 降采样是画法(节奏条几百像素宽,画的人自己抽),不是事实。
+         *     刀口不在这里重复一遍:它在 `GET /assets/{id}/shots` 的 `shots[].start` / `end`(每镜的起止就是刀口)。
+         *
+         *     **没有曲线也是 200**:`status` 说清是哪一种(和读镜头表同一个态度,见 `ShotBreakdownResponse`)。
+         */
+        ShotMotionTrackResponse: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "ready" | "missing";
+            /**
+             * Hz
+             * @default 0
+             */
+            hz: number;
+            /**
+             * Points
+             * @default 0
+             */
+            points: number;
+            /**
+             * Duration
+             * @default 0
+             */
+            duration: number;
+            /**
+             * First Sample Seconds
+             * @default 0
+             */
+            first_sample_seconds: number;
+            /**
+             * Sample Interval Seconds
+             * @default 0
+             */
+            sample_interval_seconds: number;
+            /**
+             * Digest
+             * @default
+             */
+            digest: string;
+            /** Values */
+            values?: number[];
         };
         /**
          * SourceAssetRef
@@ -24620,6 +24708,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_shot_motion_track_api_assets__asset_id__shots_track_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotMotionTrackResponse"];
                 };
             };
             /** @description Validation Error */

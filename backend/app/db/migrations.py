@@ -2551,6 +2551,22 @@ def _migrate_generation_prompts_drop_the_reference_documents() -> None:
                 )
 
 
+def _migrate_shot_breakdowns_keep_their_motion_track() -> None:
+    """镜头表记下「整条动静曲线去哪了」(`shot_breakdowns.motion_track`):采样率、点数、文件摘要。
+
+    曲线本体不进库(5Hz × 时长 个数,见 domain/shots/track.py):它是素材目录里的 `shots/track.json`。
+    **必须在 SCHEMA 之前**:create_all 不会给已有的表补列,而之后 ORM 上的 ShotBreakdown 已经指望这一列在了。
+    老行留 `{}` = 没有曲线 —— 这一版之前量的镜头表,曲线算完就丢了,没有可以补出来的东西。
+    """
+    inspector = inspect(engine)
+    if "shot_breakdowns" not in set(inspector.get_table_names()):
+        return
+    if "motion_track" in {column["name"] for column in inspector.get_columns("shot_breakdowns")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE shot_breakdowns ADD COLUMN motion_track JSON NOT NULL DEFAULT '{}'"))
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -9741,6 +9757,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_usage_remembers_who_spent,
                 # 同上:ORM 上的 DeploymentConfig 指望「任务保留多久」那一列在(ADR 0050)。
                 _migrate_deployments_keep_finished_jobs_for_a_year,
+                # 同上:ORM 上的 ShotBreakdown 指望「整条曲线去哪了」那一列在(ADR 0061:曲线本体落在素材目录的
+                # shots/track.json,库里只留采样率、点数和摘要)。
+                _migrate_shot_breakdowns_keep_their_motion_track,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
