@@ -128,16 +128,17 @@ function Tile({
         )}
         {onEdit && !disabled && (
           //: 蒙版的「编辑」:不占新的格,压在缩略图**右下角**(维护者:入口放右下、别放左上),尺寸与右上角那颗
-          //: 移除钮**一致**(h-5 w-5 + size={11});名字在左下,给它让出这颗钮的宽度。
+          //: 移除钮**一致**(h-5 w-5)。铅笔要显式压到 13px:`Button` 基类的 `[&_svg]:size-4`(CSS)会盖掉
+          //: 图标自己的 `size` 属性,所以不写这条的话铅笔在 20px 的钮里仍是 16px、看着比 `X` 重一截。
           <IconButton
             variant="ghost"
             size="icon"
-            className="absolute bottom-1 right-1 h-5 w-5 rounded-full bg-background/85 hover:bg-background"
+            className="absolute bottom-1 right-1 h-5 w-5 rounded-full bg-background/85 hover:bg-background [&_svg]:size-[13px]"
             onClick={onEdit}
             label={t("maskEdit")}
             hint={t("maskEditHint")}
           >
-            <Pencil size={11} />
+            <Pencil />
           </IconButton>
         )}
         {onClear && !disabled && (
