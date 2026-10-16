@@ -21,6 +21,13 @@ G10 流式       全程最大的单次读取远小于文件本身 —— 没有"
 
 G6/G7/G9 是**硬门**:它们红说明产出不可信,引擎不许交出去。其余是软门:红了照样交,但会
 一字不落地写进对账文本第一屏。
+
+**碎片化 MP4(顶层 `moof`)的输入**:样本表在 `moof` 的 `traf/trun` 里,`moov` 的 `stbl` 是
+空的 —— 拿源直接当基准会读到 0 个样本,于是 G6/G8 必然红("样本数不同:0 vs 180"),硬门一红
+整条任务失败、产出丢弃(ADR 0062 §6 说"碎片化输入由重封装收成正片",当时门禁这一层没算进去)。
+所以逐样本的那几道门(G6/G7/G8)与 G9 比的是**同一套重封装参数收出来的规范输入**:重封装是
+stream copy,VCL 载荷逐字节不变,"画面没被重编"这条证明依然成立。**门的条数与含义一个字没改**,
+改的只是"拿哪一份字节当基准" —— 见 `canonical`。
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.domain.assets.scrub import canonical as canonical_mod
 from app.domain.assets.scrub import findings as findings_mod
 from app.domain.assets.scrub import mp4 as mp4_mod
 from app.domain.assets.scrub import nal as nal_mod
@@ -68,7 +76,11 @@ def check(
     edits: list | tuple = (),
     max_read: int = 0,
 ) -> list[Gate]:
-    """把 `target` 拿 `source` 对一遍。`edits` 是引擎记录的音频改动区间。"""
+    """把 `target` 拿 `source` 对一遍。`edits` 是引擎记录的音频改动区间。
+
+    逐样本比对的那几道门比的**不是** `source` 本身,而是"当输入的那一份":源的样本表读得出来
+    就是源自己,碎片化 MP4 就先按同一套重封装参数收一份规范输入(见 `canonical`)。
+    """
     source, target = Path(source), Path(target)
     before = findings_mod.inspect(source)
     after = findings_mod.inspect(target)
@@ -80,19 +92,29 @@ def check(
         dst_mp4 = mp4_mod.open_mp4(target)
     except (Mp4Error, OSError) as exc:
         return [Gate("G0", "输出的容器读得开", False, f"{exc}")]
-    gates = [
-        _g1_container(before, after, dst_mp4, provenance=provenance),
-        _g2_tracks(before, after, src_mp4, dst_mp4),
-        _g3_sei(before, after, target, provenance=provenance),
-        _g4_compressorname(dst_mp4),
-        _g5_aac(after),
-        _g6_video(src_mp4, dst_mp4, before),
-        _g7_audio(src_mp4, dst_mp4, edits),
-        _g8_sample_tables(src_mp4, dst_mp4),
-        _g9_decodes(source, target),
-        _g10_streaming(source, max_read),
-    ]
-    return gates
+    with canonical_mod.baseline(source, src_mp4) as base:
+        try:
+            base_mp4 = src_mp4 if base == source else mp4_mod.open_mp4(base)
+        except (Mp4Error, OSError) as exc:
+            return [Gate("G0", "归一化之后的输入读得开", False, f"{exc}")]
+        gates = [
+            _g1_container(before, after, dst_mp4, provenance=provenance),
+            _g2_tracks(before, after, src_mp4, dst_mp4),
+            _g3_sei(before, after, target, provenance=provenance),
+            _g4_compressorname(dst_mp4),
+            _g5_aac(after),
+            _g6_video(base_mp4, dst_mp4, before),
+            _g7_audio(base_mp4, dst_mp4, edits),
+            _g8_sample_tables(base_mp4, dst_mp4),
+            _g9_decodes(base, target),
+            _g10_streaming(source, max_read),
+        ]
+        #: 逐样本的那几道门要能自证"比的是哪一份输入" —— 对账文本里"输入 0 个样本"读着像我们的错。
+        kind = "canonical" if base != source else "source"
+        for gate in gates:
+            if gate.id in ("G6", "G7", "G8", "G9"):
+                gate.evidence["baseline"] = kind
+        return gates
 
 
 # ---------------- 各道门 ----------------
@@ -270,7 +292,10 @@ def _g5_aac(after) -> Gate:
 
 
 def _g6_video(src, dst, before) -> Gate:
-    """画面载荷逐字节相同:逐样本比 VCL NAL。**这是"没有重编码"的硬证据。**"""
+    """画面载荷逐字节相同:逐样本比 VCL NAL。**这是"没有重编码"的硬证据。**
+
+    `src` 是基准(`check` 给的:源自己,或者碎片化输入的规范输入),不是"源"这个身份本身。
+    """
     if src is None:
         return Gate("G6", "画面载荷逐字节相同", True, "输入不是 MP4:改为由 G9 逐帧解码比对",
                     {"method": "decode-fallback"})
@@ -344,6 +369,8 @@ def _g7_audio(src, dst, edits) -> Gate:
 
 
 def _g8_sample_tables(src, dst) -> Gate:
+    """每轨样本数、每个样本长度、时间基逐项相同。`src` 是基准(见 G6):碎片化输入的样本表
+    只有从**规范输入**里才读得出来。"""
     if src is None:
         return Gate("G8", "样本表(NAL/噪声之外的容器事实)", True, "输入不是 MP4,无可比对", {})
     problems: list[str] = []
@@ -370,16 +397,21 @@ def _g8_sample_tables(src, dst) -> Gate:
                 {"tracks": len(dst.tracks)})
 
 
-def _g9_decodes(source: Path, target: Path) -> Gate:
+def _g9_decodes(baseline: Path, target: Path) -> Gate:
+    """输出能不能整份解出来;解码之后画面逐帧、音轨 PCM 与**基准**是不是同一份。
+
+    `baseline` 通常就是源;碎片化输入时是规范输入(见 `canonical`)—— 源那种容器写法没有
+    `edts/elst`,重封装出来的正片有,两边解码出来的 PCM 天生差几百个采样,拿源直接比是**没法过**的。
+    """
     problems: list[str] = []
     try:
-        frames_a, frames_b = frame_md5(source), frame_md5(target)
+        frames_a, frames_b = frame_md5(baseline), frame_md5(target)
         if frames_a != frames_b:
             problems.append("逐帧画面 MD5 与输入不同")
     except Exception as exc:
         problems.append(f"画面解不开:{exc}")
     try:
-        if pcm_md5(source) != pcm_md5(target):
+        if pcm_md5(baseline) != pcm_md5(target):
             problems.append("音轨 PCM MD5 与输入不同")
     except Exception as exc:
         problems.append(f"音轨解不开:{exc}")

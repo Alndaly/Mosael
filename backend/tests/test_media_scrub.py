@@ -24,6 +24,7 @@ import pytest
 from app.core.config import settings
 from app.domain.assets import scrub as scrub_pkg
 from app.domain.assets.scrub import aac as aac_mod
+from app.domain.assets.scrub import canonical as canonical_mod
 from app.domain.assets.scrub import gates as gates_mod
 from app.domain.assets.scrub import mp4 as mp4_mod
 from app.domain.assets.scrub import nal as nal_mod
@@ -46,8 +47,12 @@ XMP_UUID = bytes.fromhex("be7acfcb97a942e89c71999491e3afac")
 
 
 def _encode(path: Path, *, seconds: int = 1, codec: str = "libx264", size: str = "320x240",
-            rate: int = 15, tags: bool = True, cover: bool = True) -> None:
-    """现场编一段:画面 + 声音(+ 一张封面图)。标签按需带上。"""
+            rate: int = 15, tags: bool = True, cover: bool = True, fragmented: bool = False) -> None:
+    """现场编一段:画面 + 声音(+ 一张封面图)。标签按需带上。
+
+    `fragmented=True` 编成**碎片化 MP4**:顶层有 `moof`、`moov` 的 `stbl` 是空的(样本表进了
+    `moof` 的 `traf/trun`)。维护者库里的 B 站视频大量是这个形状。
+    """
     args = [
         "ffmpeg", "-y", "-v", "error",
         "-f", "lavfi", "-i", f"testsrc2=size={size}:rate={rate}:duration={seconds}",
@@ -70,7 +75,13 @@ def _encode(path: Path, *, seconds: int = 1, codec: str = "libx264", size: str =
             "-metadata", f"location={SECRET_GPS}", "-metadata", "make=GoPro",
             "-metadata", "model=HERO12 Black",
         ]
-    args += ["-movflags", "+faststart", str(path)]
+    args += [
+        "-movflags",
+        #: `+empty_moov` 是"moov 里不放样本表"的关键,`+default_base_moof` 让样本偏移相对 moof 算 ——
+        #: 真素材(以及 B 站那些)也这么写。
+        "+frag_keyframe+empty_moov+default_base_moof" if fragmented else "+faststart",
+        str(path),
+    ]
     subprocess.run(args, check=True, capture_output=True, timeout=300)
 
 
@@ -496,6 +507,119 @@ def test_a_large_file_is_never_read_whole(tmp_path: Path) -> None:
     outcome = scrub_file(source, target, provenance=False)
     assert outcome.max_read < size // 8, f"单次读了 {outcome.max_read} 字节,文件才 {size} 字节"
     assert not [gate for gate in scrub_pkg.run_all(outcome) if not gate["ok"]]
+
+
+# ---------------- 碎片化 MP4(moof):门禁比的是规范输入 ----------------
+
+#: 碎片化 MP4 是**真素材的形状**(B 站那些都是),而它的样本表在 `moof` 里、`moov` 的 `stbl`
+#: 是空的。修复之前:`open_mp4(源)` 读到 **0 个样本**、输出读得出全部样本,于是 G6(硬门)报
+#: `样本数不同:0 vs N`(前端那笔真素材上是 `0 vs 180`)—— 整条清除任务失败、产出丢弃。
+#: 这一组钉三件事:①碎片化输入现在跑得通、十道门全绿;②门没被放松(故意重编过的输出照样被
+#: G6 抓红);③"规范输入"这条路凭什么是合法的(重封装是 stream copy,VCL 载荷逐字节不变)。
+
+
+def _fragmented_video(path: Path, *, seconds: int = 1, size: str = "320x240") -> Path:
+    _encode(path, seconds=seconds, size=size, tags=True, cover=False, fragmented=True)
+    return path
+
+
+def _annexb_vcl(path: Path) -> list[bytes]:
+    """把视频抽成 Annex-B 基本流再切出 VCL NAL —— **碎片化源也能走这条路**。
+
+    `open_mp4` 读不出碎片化输入的样本表,所以想证明"源本身的画面字节 == 规范输入的"时,
+    得有另一个入口:ffmpeg 解容器(它会读 `moof`)之后把 NAL 原样倒出来。
+    """
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-c", "copy",
+         "-bsf:v", "h264_mp4toannexb", "-f", "h264", "-"],
+        check=True, capture_output=True, timeout=300,
+    )
+    data = proc.stdout
+    starts: list[int] = []
+    at = data.find(b"\x00\x00\x01")
+    while at >= 0:
+        starts.append(at + 3)
+        at = data.find(b"\x00\x00\x01", at + 3)
+    out: list[bytes] = []
+    for index, start in enumerate(starts):
+        end = (starts[index + 1] - 3) if index + 1 < len(starts) else len(data)
+        while end > start and data[end - 1] == 0x00:   # 4 字节起始码多出来的那个 0
+            end -= 1
+        nal = data[start:end]
+        if nal and (nal[0] & 0x1F) in (1, 2, 3, 4, 5):
+            out.append(nal)
+    return out
+
+
+def test_碎片化输入跑得通十道门全绿(tmp_path: Path) -> None:
+    """**先红后绿的那一条**:修复前 G6 报 `样本数不同:0 vs N`(实测),现在全绿。"""
+    source = _fragmented_video(tmp_path / "fragmented.mp4")
+    src = mp4_mod.open_mp4(source)
+    assert [box.typ for box in src.boxes].count("moof") > 0, "样本本身就该是碎片化的"
+    assert src.fragmented is True
+    #: 这条钉子就是那个 bug 的根因:源的样本表读出来是 0(样本在 moof 里,open_mp4 只读 moov)。
+    assert all(track.sample_count == 0 for track in src.tracks), "碎片化源的样本表本来就该是空的"
+
+    target = tmp_path / "clean.mp4"
+    outcome = scrub_file(source, target, provenance=False)
+    assert outcome.canonical_baseline is True, "碎片化输入要按规范输入比"
+    assert any("碎片化" in note for note in outcome.warnings)
+
+    gates = scrub_pkg.run_all(outcome)
+    assert all(gate["ok"] for gate in gates), [gate for gate in gates if not gate["ok"]]
+    assert [gate["id"] for gate in gates] == [f"G{i}" for i in range(1, 11)]
+    #: 逐样本的那几道门要能自证比的是哪一份输入(对账文本里"输入 0 个样本"读着像我们的错)。
+    for gate_id in ("G6", "G7", "G8", "G9"):
+        assert _gate(gates, gate_id)["evidence"]["baseline"] == "canonical", gate_id
+
+    #: 重封装把碎片收成了正片:输出读得出样本,而且容器层的隐私照样清了。
+    dst = mp4_mod.open_mp4(target)
+    assert next(track for track in dst.tracks if track.handler == "vide").sample_count > 0
+    assert SECRET_TAG.encode() not in target.read_bytes()
+    #: 引擎的音轨自证也没被容器的编辑列表差异冤枉(修复前它会整体回滚,G5 因此红)。
+    assert outcome.aac_verified and not outcome.aac_rolled_back
+
+
+def test_源与规范输入的画面载荷逐字节相同(tmp_path: Path) -> None:
+    """规范基准凭什么能替源:**重封装是 stream copy,VCL 载荷逐字节不变。**
+
+    这是"画面没被重编"那条证明的信任锚 —— 门禁拿规范输入当基准,靠的就是它。
+    """
+    source = _fragmented_video(tmp_path / "fragmented.mp4")
+    with canonical_mod.baseline(source, mp4_mod.open_mp4(source)) as base:
+        assert base != source, "碎片化输入应当被归一化"
+        raw_vcl = _annexb_vcl(source)
+        assert raw_vcl, "这个入口得真读到 NAL,不然下面那句比的是两个空表"
+        assert raw_vcl == _video_vcl(base), "重封装改了画面比特 = 这条修法不成立"
+
+
+def test_故意重编过的输出在碎片化输入上照样被G6抓红(tmp_path: Path) -> None:
+    """**门没被放松**:输入是碎片化的,产出被真重编过一遍 → G6 必须红。
+
+    拿规范输入当基准只改"比哪一份字节",不改"比什么" —— 重编过的画面 VCL 与 stream copy
+    出来的那份不可能一样。
+    """
+    source = _fragmented_video(tmp_path / "fragmented.mp4")
+    reencoded = tmp_path / "reencoded.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(source), "-c:v", "libx264", "-preset", "ultrafast",
+         "-crf", "30", "-c:a", "copy", str(reencoded)],
+        check=True, capture_output=True, timeout=300,
+    )
+    gates = gates_mod.check(source, reencoded, provenance=False, edits=[])
+    assert _gate(gates, "G6")["ok"] is False
+    assert _gate(gates, "G6")["evidence"]["baseline"] == "canonical"
+
+
+def test_非碎片化输入仍然拿源自己当基准(tmp_path: Path) -> None:
+    """既有那条路一个字没动:源读得出样本表就用源自己,不做多余的归一化。"""
+    source = _dirty_video(tmp_path / "dirty.mp4")
+    outcome = scrub_file(source, tmp_path / "clean.mp4", provenance=False)
+    assert outcome.canonical_baseline is False
+    assert not any("碎片化" in note for note in outcome.warnings)
+    gates = scrub_pkg.run_all(outcome)
+    for gate_id in ("G6", "G7", "G8", "G9"):
+        assert _gate(gates, gate_id)["evidence"]["baseline"] == "source", gate_id
 
 
 # ---------------- HTTP / 任务那一半 ----------------

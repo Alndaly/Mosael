@@ -71,7 +71,8 @@ export const mediaLibrary = {
     "Drops this video's location, device and software, account / ID, cover art, data tracks (telemetry / timecode) and the layers ffprobe cannot see: SEI, AAC in-frame elements and compressorname.",
   scrubProvenanceLabel: "Also erase the AI-generation marking (C2PA)",
   // Kept as two sentences so the panel can say exactly what the switch means when it is off.
-  scrubProvenanceOff: "The AI-generation marking (C2PA) is preserved as-is.",
+  // Off, it states the **current setting** outright, so it reads alongside the label above.
+  scrubProvenanceOff: "Current setting: the AI-generation marking (C2PA) is preserved as-is.",
   scrubProvenanceConsequence:
     "On, this also erases the AI-generation marking (the C2PA manifest), so the file looks like footage no AI ever touched. That is not removing your own privacy: it is removing the statement that this was AI-generated, which can break the rules of platforms or regions that require that disclosure. Off, the marking is preserved as-is.",
   scrubSourceUntouched: "The source asset is untouched, byte for byte — you get one new, clean asset.",

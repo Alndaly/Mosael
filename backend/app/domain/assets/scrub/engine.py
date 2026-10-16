@@ -16,8 +16,12 @@
 - **`ffmpeg` 会把所有顶层 `uuid` 盒子丢掉**,C2PA 的清单就在那儿。所以打开"清 AI 标记"时
   我们不去管它(它已经没了);关着时(`provenance=False`,默认)**把 C2PA 的盒子原样追加回
   文件尾** —— 默认那一趟只动你的隐私,不动"这段是 AI 生成的"这个声明。
-- **AAC 那半会自证**:改完之后把输入输出的音轨各解一遍,比 PCM 的 MD5。不一样就把音轨的改动
+- **AAC 那半会自证**:改完之后把音轨解一遍,和**基准**比 PCM 的 MD5。不一样就把音轨的改动
   **整体回滚**(原始字节在手里),并在报告里写清"没敢动"。宁可少清,不可错清。
+
+还有一件:**碎片化输入(moof)的源当不了"输入"** —— moov 的 `stbl` 是空的,样本在 `moof` 里,
+读出来 0 个。重封装那一趟(第 1 步)照旧把源收成正片;门禁和音轨自证改用**同一套重封装参数
+收出来的规范输入**当基准,见 `canonical`。十道门的条数与含义一个字没改。
 """
 
 from __future__ import annotations
@@ -31,12 +35,13 @@ from pathlib import Path
 from app.core.i18n import LocalizedError
 from app.media.scratch import scratch_dir
 from app.domain.assets.scrub import aac as aac_mod
+from app.domain.assets.scrub import canonical as canonical_mod
 from app.domain.assets.scrub import findings as findings_mod
 from app.domain.assets.scrub import mp4 as mp4_mod
 from app.domain.assets.scrub import nal as nal_mod
 from app.domain.assets.scrub.findings import MediaFacts
 from app.domain.assets.scrub.mp4 import Mp4Error, Reader
-from app.domain.assets.scrub.verify import frame_md5, pcm_md5, run_ffmpeg
+from app.domain.assets.scrub.verify import frame_md5, pcm_md5
 
 logger = logging.getLogger(__name__)
 
@@ -92,36 +97,10 @@ class ScrubOutcome:
     udta_neutralized: int = 0
     #: 这次清除里最大的单次读取(证"没有整份读进内存")。
     max_read: int = 0
+    #: 输入是碎片化 MP4(moof),源当不了逐样本比对的基准 —— 门禁比的是同一套重封装参数收出来的
+    #: **规范输入**(见 `canonical`)。对账文本要写明这件事,不然"输入 0 个样本"读着像我们的错。
+    canonical_baseline: bool = False
     warnings: list[str] = field(default_factory=list)
-
-
-# ---------------- 重封装 ----------------
-
-
-def _remux(source: Path, target: Path) -> None:
-    """无损重封装到干净的 MP4:只搬画面和声音,不搬任何标签和其余轨。"""
-    codec = ""
-    try:
-        facts = findings_mod.read_container(source)
-        codec = facts.tracks[0].codec if facts.tracks else ""
-    except Exception:  # pragma: no cover - 探不出就让 ffmpeg 自己认
-        codec = ""
-    tag = ["-tag:v", "hvc1"] if codec in ("hvc1", "hev1") else []
-    run_ffmpeg([
-        "-y", "-v", "error",
-        "-i", str(source),
-        #: 大写 `V` **不含** attached_pic(封面图那条视频轨);`a?` 里的 `?` 是"没有也别报错"。
-        "-map", "0:V?", "-map", "0:a?",
-        "-c", "copy",
-        "-map_metadata", "-1", "-map_chapters", "-1",
-        #: 没有这两句,muxer 会自己写 `encoder=Lavf63.1.102`(实测)。
-        "-fflags", "+bitexact", "-flags", "+bitexact",
-        #: `hdlr` 里默认写 "VideoHandler";摄像机会在这儿留机型,空着最省事。
-        "-empty_hdlr_name", "1",
-        "-movflags", "+faststart",
-        *tag,
-        str(target),
-    ], what="清除元数据:重封装")
 
 
 # ---------------- uuid 盒子(AI 生成标记) ----------------
@@ -365,12 +344,24 @@ def scrub_file(
     staged = holder / (target.stem + ".scrub.mp4")
     try:
         source_boxes: list[tuple[bytes, bytes, bool]] = []
+        source_media: mp4_mod.Mp4File | None = None
         if before.container.is_mp4:
             try:
-                source_boxes = _uuid_boxes(mp4_mod.open_mp4(source))
+                source_media = mp4_mod.open_mp4(source)
+                source_boxes = _uuid_boxes(source_media)
             except (Mp4Error, OSError):
                 source_boxes = []
-        _remux(source, staged)
+        #: 碎片化输入(moof)的样本表在 moof 里,moov 的 stbl 是空的 —— 源既当不了逐样本比对的
+        #: 基准,也当不了音轨自证的基准(容器的 edts/elst 两种写法解出来的 PCM 天生差几百个采样)。
+        #: 这里只记一个事实,真正的规范输入由 `gates` 与 `_verify_audio` 各自按需产出(见 `canonical`)。
+        outcome.canonical_baseline = canonical_mod.needs_baseline(source_media)
+        if outcome.canonical_baseline:
+            outcome.warnings.append(
+                "输入是碎片化 MP4(样本表在 moof 里,moov 的 stbl 是空的):"
+                "上面「清除前发现了什么」里码流层那几项读不出来;逐样本比对的 G6/G7/G8 与 G9 "
+                "改用**同一套重封装参数收出来的规范输入**当基准(重封装是 stream copy,VCL 载荷逐字节不变)。"
+            )
+        canonical_mod.remux(source, staged)
         _restore_provenance(staged, source_boxes, outcome)
         media = mp4_mod.open_mp4(staged)
         if media.encrypted:
@@ -378,9 +369,14 @@ def scrub_file(
         with Reader(staged) as reader:
             _patch_video(media, outcome, reader)
             _patch_container(media, outcome)
+            #: 音轨自证的基准:能拿源比就拿源(顺带证明重封装没动声音);碎片化输入拿**改之前那一份
+            #: staged** 的 PCM —— 同一个容器、同一批样本,只差我们下面要改的那几个字节。
+            #: 拿源直接比在碎片化输入上必然不等(见 `canonical`),那会把每一次 AAC 清理都误判成
+            #: "改坏了声音"而整体回滚。
+            pristine_pcm = pcm_md5(staged) if outcome.canonical_baseline else None
             undo = _patch_audio(media, outcome, reader)
         if undo:
-            _verify_audio(source, staged, undo, outcome)
+            _verify_audio(source, staged, undo, outcome, pristine_pcm=pristine_pcm)
 
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
@@ -393,10 +389,20 @@ def scrub_file(
             shutil.rmtree(holder, ignore_errors=True)
 
 
-def _verify_audio(source: Path, staged: Path, undo: list[tuple[int, bytes]], outcome: ScrubOutcome) -> None:
-    """改完音轨解一遍,和输入比 PCM。不一样就整体回滚 —— 宁可少清,不可错清。"""
+def _verify_audio(
+    source: Path,
+    staged: Path,
+    undo: list[tuple[int, bytes]],
+    outcome: ScrubOutcome,
+    *,
+    pristine_pcm: str | None = None,
+) -> None:
+    """改完音轨解一遍,和**基准**比 PCM。不一样就整体回滚 —— 宁可少清,不可错清。
+
+    基准通常是源;碎片化输入时是"改之前那一份 staged"的 PCM(`pristine_pcm`),理由见 `canonical`。
+    """
     try:
-        same = pcm_md5(source) == pcm_md5(staged)
+        same = (pristine_pcm if pristine_pcm is not None else pcm_md5(source)) == pcm_md5(staged)
     except Exception as exc:
         same = False
         outcome.warnings.append(f"核对音轨失败({exc})")

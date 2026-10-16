@@ -72,7 +72,8 @@ export const mediaLibrary = {
     "去掉这份视频里的拍摄地点、设备与软件、账号 / ID、封面、数据轨(遥测 / 时间码),以及 ffprobe 看不见的 SEI、AAC 帧内元素和 compressorname。",
   scrubProvenanceLabel: "也抹掉 AI 生成标记(C2PA)",
   // 「开」和「关」两种说法分开写:开关旁边那一句要如实,不能含糊成一句。
-  scrubProvenanceOff: "AI 生成标记(C2PA)原样保留。",
+  // 关着时这一句是一句明确的陈述(说的是**当前的设置**),和上面那个勾选项并排读得通。
+  scrubProvenanceOff: "当前的设置:AI 生成标记(C2PA)会原样保留。",
   scrubProvenanceConsequence:
     "打开会把 AI 生成标记(C2PA 清单)一并抹掉,输出看起来和一段从未被 AI 碰过的素材一样。那不是「去掉你的隐私」,是抹掉「这段是 AI 生成的」这个声明 —— 在要求标注 AI 生成的平台或地区,这可能让发布违规。关掉时这些标记原样保留。",
   scrubSourceUntouched: "原素材一个字节都不动 —— 清完会多出一份新的干净素材。",

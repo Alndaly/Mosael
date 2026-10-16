@@ -96,6 +96,12 @@ def render(outcome, gates: list[dict[str, object]], *, lang: str = "zh") -> str:
                "3 分钟 1080p 实测清除 3.7 秒、门禁 55 秒。这条证据值这个价 —— 少了它,"
                "「画面没被改坏」就只是推理出来的。")
     out.append("")
+    if outcome.canonical_baseline:
+        out.append("> 输入是**碎片化 MP4**(样本表在 `moof` 里,`moov` 的 `stbl` 是空的):"
+                   "逐样本比对的 G6/G7/G8 与 G9 比的基准是**同一套重封装参数收出来的规范输入**。"
+                   "重封装是 stream copy,VCL 载荷逐字节不变,所以「画面没被重编」这条证明一个字没松;"
+                   "它比的是「我们改的那几个字节有没有动到画面和声音」,而不是「两种容器写法对不对得上」。")
+        out.append("")
     out.append("| 门 | 查什么 | 结果 | 说明 |")
     out.append("| --- | --- | --- | --- |")
     for gate in gates:
@@ -128,9 +134,21 @@ def _list_line(values: list[str]) -> str:
 def _tracks_line(facts) -> str:
     if not facts.container.tracks:
         return "读不出来(容器不是 MP4 / QuickTime 一族)"
-    return ";".join(
+    line = ";".join(
         f"#{track.index} {track.handler}/{track.codec} {track.samples} 个样本" for track in facts.container.tracks
     )
+    if _samples_in_moof(facts):
+        line += "(碎片化 MP4:样本表在 moof 里,上面这个 0 是 moov 里读出来的,不是文件真的没有样本)"
+    return line
+
+
+def _samples_in_moof(facts) -> bool:
+    """输入是碎片化 MP4:样本表在 `moof` 里,`open_mp4` 只读 moov —— 码流层那几项**读不出来**。
+
+    这时候不能报"没有 SEI"、"音轨不是 AAC":那是把"没看见"说成"没有"。逐样本的门禁比的是
+    同一套重封装参数收出来的规范输入(见 `canonical`),对账文本要说的是同一件事。
+    """
+    return facts.container.fragmented and not any(track.samples for track in facts.container.tracks)
 
 
 def _data_line(facts) -> str:
@@ -161,6 +179,8 @@ def _uuid_line(facts) -> str:
 def _sei_line(facts) -> str:
     bits = facts.bitstream
     if not bits.sei_types:
+        if _samples_in_moof(facts):
+            return "读不出来(碎片化 MP4:样本表在 moof 里)"
         return _HE["none"] if bits.codec else "没做(编码不支持按字节重写 NAL)"
     parts = []
     for payload_type, count in sorted(bits.sei_types.items()):
@@ -174,6 +194,8 @@ def _sei_line(facts) -> str:
 def _aac_line(facts) -> str:
     finding = facts.bitstream.aac
     if not finding.frames:
+        if _samples_in_moof(facts):
+            return "读不出来(碎片化 MP4:样本表在 moof 里)"
         return "没做(音轨不是 AAC)"
     parts = [f"{finding.frames} 个访问单元"]
     if finding.dse_count:
