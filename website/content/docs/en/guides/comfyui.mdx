@@ -4,7 +4,7 @@ description: Connect a ComfyUI server on this machine or your LAN; every saved w
 seo_title: ComfyUI client: workflows as models, model library
 keywords: ComfyUI client, ComfyUI desktop, ComfyUI workflows, ComfyUI model manager, LoRA trigger words, ComfyUI app
 order: 18
-updated: 2026-10-06
+updated: 2026-10-17
 version: 1.9.6
 ---
 
@@ -346,6 +346,20 @@ its Files tab.
 
 ![Download from a missing model in a workflow's details: the workflow gives no address for it, so the dialog says which file in text_encoders it needs and waits for a link](/media/screens/en/model-download.png)
 
+**"Find a download" has three confidence tiers, and only the top one may be downloaded directly.** When it searches Civitai,
+HuggingFace and ModelScope by file name, whether a candidate has been *identified* is a separate question from whether its name
+matches — and a matching file name is not proof it is the file:
+
+| Tier | How it was identified | What the UI offers |
+| --- | --- | --- |
+| `confirmed` | **The hash matches** (a hash the workflow itself declares, or the SHA256 this machine computed, resolved back through Civitai's by-hash lookup) | **Download directly** |
+| `exact` | The file name matches exactly (case-insensitive, last segment only) | A direct link, but you **confirm** it |
+| `likely` | Same name once the precision / quantisation suffix is stripped, or the wanted name is contained in it | **A page link only**, never a direct link |
+
+**When no hash can be computed it says why, and says plainly "so these are name matches, not the confirmed file"** — one sentence
+per cause (that machine has no ComfyUI-Custom-Scripts / the file is not on that machine yet / that ComfyUI isn't connected).
+Softening that into "confirmed" is not allowed. Nor does it choose for you: a `likely` candidate opens a page you can look at first.
+
 Good to know:
 
 - **Existing files are never overwritten**: if the folder already has that name you're asked to pick another (with a
@@ -404,8 +418,14 @@ appends them (skipping any already there).
   converted says why.
 - **Models it uses**: whether each is on the server; the ones that are have a button to show them in the model library.
 - **Missing nodes**: which node pack each comes from and whether that pack is installed (installed but not loaded is said separately).
+  **The source is read from the workflow's own declarations first** (`cnr_id` / `aux_id` / `ver`), so it works **offline, with no
+  ComfyUI-Manager** — and it links straight to the pack's node page or repository. The version the graph asks for and the version
+  installed on this machine are both listed (the latter only costs an extra lookup when the graph really declares one); a `ver` that
+  is a 40-character git commit is shown verbatim, never parsed or compared. A source of `comfy-core` is a separate case: that is
+  something ComfyUI ships, so it says "this ComfyUI may be too old" instead of telling you to install a pack.
 - **Missing models**: a **Download** on each row opens the model library's download dialog with the link, folder and file name
-  written in the workflow.
+  written in the workflow. The model's **hash** travels with it, which is what makes the "download directly" tier possible (see
+  **Find a download**'s three tiers above).
 - **Latest output** and **Used in Mosael by**: the workflow nodes and board items in this workspace that pick it, linked.
 
 The header has **Generate with it** (jumps to AI Studio with this workflow selected; disabled with the reason when it isn't a
@@ -609,8 +629,9 @@ beside it:
   same pack are grouped under one **Install** (through ComfyUI-Manager, confirmed in place; ComfyUI has to restart to load it, so save
   the canvas before restarting); without ComfyUI-Manager the panel says it can't tell or install packs. **Download** a model the
   workflow gives a download address for; otherwise **Find a download** searches Civitai, HuggingFace and ModelScope by the file name
-  (the full name first, then without the extension) and lists the site, repository, exact file name, size and base model, exact names
-  first and never picking a similar one for you; click one to confirm in place and download it into that folder, or paste a link right
+  (the full name first, then without the extension) and lists the site, repository, exact file name, size and base model; **only the
+  hash-confirmed tier offers "download directly"** (see the three tiers above) and it never picks a similar one for you; click one to
+  confirm in place and download it into that folder, or paste a link right
   there when nothing turns up. After a download or install finishes it checks again by itself.
 - **Forms**: the editor from the workflow library, bound to the graph on the canvas (several forms, new, copy and delete work the same).
   **Sync to canvas** only puts the forms onto the nodes on the canvas — **nothing is saved yet**; **Save** in the top bar then stores them

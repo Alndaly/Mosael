@@ -2,7 +2,7 @@
 title: Admin console & statistics
 description: Deployment admins use Admin to watch usage, manage members and sign-up, install local engines, set mirrors and the outbound proxy, and back up data; everyone gets their own numbers in Statistics.
 order: 22
-updated: 2026-10-09
+updated: 2026-10-17
 version: 1.9.6
 ---
 
@@ -93,8 +93,10 @@ by a deployment admin" where they would need one (the transcript, the denoise di
   install npm packages (such as Remotion). A plugin connection can pick its own; otherwise it follows these. The last row, **Model
   download source** (HF mirror, HuggingFace, ModelScope), is where model weights come from: voice cloning, local NSFW detection and the
   local ComfyUI that Mosael starts all use it.
-- **Transcription models**: runtimes and models for FunASR and WhisperX. After **Install runtime**, an engine becomes selectable under
-  **Settings → Capability providers → Transcription**.
+- **Transcription models**: runtimes and models for FunASR, sherpa-onnx and WhisperX. After **Install runtime**, an engine becomes
+  selectable under **Settings → Capability providers → Transcription**. **FunASR and sherpa-onnx run the same SenseVoice model**
+  (FunASR on torch, sherpa-onnx on ONNX): the latter installs no torch and carries ~230 MB of weights instead of ~900 MB, so it installs
+  and starts far faster — the price is **no speaker diarisation**, so pick FunASR to tell speakers apart. FunASR is still the default.
 - **Voice cloning**: runtime and weights for local cloning (F5-TTS, Fish Speech); weights come from the **Model download source** above.
 - **Voice and background separation**: Demucs. A long asset takes many minutes on a CPU.
 - **Noise reduction**: the built-in method needs nothing; DeepFilterNet downloads once here (about 30 MB); RNNoise ships with the app.

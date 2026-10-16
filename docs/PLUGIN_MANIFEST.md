@@ -1197,7 +1197,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `document_parse` | 本地解析 | 用本地解析 —— 文档是原件,交给云端必须是用户自己定过的 | 调用类 |
 | `audio_denoise` | ffmpeg 频谱降噪、DeepFilterNet、RNNoise | 第一个不会去掉配乐、跑得起来的本机引擎 | 调用类 |
 | `audio_separation` | Demucs | 本机引擎 | 调用类 |
-| `transcription` | FunASR、WhisperX | 第一个装好了运行环境的本机引擎 —— 声音交给云端必须是用户自己定过的 | 调用类 |
+| `transcription` | FunASR、sherpa-onnx、WhisperX | 第一个装好了运行环境的本机引擎(按这个顺序)—— 声音交给云端必须是用户自己定过的 | 调用类 |
 | `translation` | Google 免费翻译、对话模型 | Google 免费翻译(对话模型要花钱,点名或定成默认才用) | 调用类 |
 | `speech` | 本机克隆、Edge、OpenAI、火山、百炼(qwen-tts / CosyVoice) | **没有默认**:引擎和音色成对选,每个入口都点名 | 调用类 |
 | `generation` | —— | 每个连接都是一家供应商(见下一节) | 目录类 |

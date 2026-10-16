@@ -174,7 +174,7 @@ full list with model names is in [Model connections](https://mosael.com/en/docs/
 | Talking photo & lip-sync | Volcengine Jimeng (OmniHuman), Kling, HeyGen, Hedra, Alibaba Bailian (Wan s2v, videoretalk) |
 | Music & sound | Google (Lyria), Evolink (Suno), Kling audio, Alibaba Model Studio (Fun-Music), Volcengine AI music |
 | Speech & voice | Local voice cloning (F5-TTS, Fish Speech), Alibaba Bailian (CosyVoice), Edge voices, OpenAI, Volcengine TTS and podcast |
-| Transcription | FunASR, WhisperX (local) |
+| Transcription | FunASR, sherpa-onnx, WhisperX (local) |
 | Chat & agent | DeepSeek, Kimi, Alibaba Bailian (Qwen), MiniMax, OpenAI, OpenRouter, Ollama and other OpenAI-compatible endpoints; Google Gemini (AI Studio API key); Claude Pro/Max, ChatGPT Plus/Pro, Kimi Code, GitHub Copilot and xAI sign-in |
 | Your own GPU | Any ComfyUI server on this computer or your LAN |
 

@@ -4,7 +4,7 @@ description: Connect media, models and tools, check inputs and run repeatable cr
 seo_title: AI video workflows and templates
 keywords: AI video workflow, AI video automation, product promo video template, translated dubbing, long video to shorts
 order: 6
-updated: 2026-10-05
+updated: 2026-10-17
 version: 1.9.6
 ---
 
@@ -115,6 +115,28 @@ The start node lists one parameter per row — **Name** and **Default** — with
   per-character price, with no local engine to install (see [Editing → Your own voice through Bailian](/docs/guides/editing)). The
   first use of a voice needs your agreement to upload its reference clip, and nobody is there to agree while a workflow runs — click
   **Clone on Bailian** on the voice under **Settings → Dubbing & voices** first; without it, the run stops at the voicing step and says so.
+
+### Wait for approval
+
+**The Wait for approval node stops the run where it stands until a person approves or rejects.**
+
+- **Where it stops, where it picks up**: the run waits **at this node**, and it is still waiting after a restart; once approved it
+  continues from this step and **none of the earlier nodes re-run**. When one run holds several gates, **which gate** is being decided
+  travels with the decision — approving the second gate resumes from the second gate's own saved point, never re-running the nodes between them.
+- **Who may approve**: the Feishu card and the in-app run record are two entries to one and the same decision. Whoever taps must already
+  have their Feishu account bound to a Mosael account and must still be a member of the workspace.
+- **Two gates on parallel branches don't fit**: a run can only stop at one gate, so two Wait for approval nodes that are not upstream of
+  each other are rejected **before the run starts**, with the fix spelled out. Two gates on a Condition node's true / false outlets are the
+  exception (they can never both be live).
+- **Deciding in one place clears the other**: approving in the app also retires the Feishu card in place, and cancelling or timing out never
+  leaves a card that still looks clickable.
+- **Timeouts** (24 hours by default; 0 waits forever) follow the node: **stop this run** (the default), **continue with decision `timeout`**,
+  or **just remind again and keep waiting**. All three notify again; the reminder also says so in the **same Feishu chat** (without swapping the
+  card — the gate is still open, so its buttons have to stay). Each reminder pushes the next one out by a full interval.
+- **Rejections** follow the node too: **stop this run** (the default) or **hand the decision downstream** (a Condition node reading `decision = "rejected"`).
+- **How it notifies** is written on the node: back to where it came from, direct-message someone, a specific group, or in-app only. Anything that
+  fails on the Feishu side degrades to in-app and the run keeps waiting; when nothing got out at all, an in-app notice says the decision has to be
+  made there, and the line "you can also click the card in Feishu" is only shown when the card really was sent.
 
 ### Top toolbar
 
@@ -294,6 +316,25 @@ Use [Scheduled tasks](/docs/guides/scheduler) to attach a plan and inspect its r
 
 Workflows can be bound to scheduled tasks: manual, cron, or webhook. Batch runs of the same workflow are supported.
 
+**Messages and files in a Feishu group can start a run too**: configure one under **⋯ → Triggers** on a workflow's card (the entry lives in
+the card menu, not the editor toolbar — it changes how the graph gets *called*, not the graph). A trigger says which bot, which chat (both can
+be left blank for any), **which messages it accepts** (text, images, files, video) and optional keywords (fill them in and only messages
+containing one of them count). The same panel holds the trigger's explanation, its switch, **which messages it recently fired on and which run
+each started**, and the mapping from a message field (text, assets, file name, sender …) to a Start node parameter.
+
+- **Claimed means claimed**: once any enabled trigger claims a message it is **not** handed to the agent session as well (never both), so you
+  never get "I can't read video" plus a run. Messages nothing claims (wrong type, wrong keywords, wrong sender, throttled) go to the agent as before.
+- **With "Reply in the group" on**: it acknowledges the start ("Trigger … started a run of …") and posts the result back. Turn it off and the
+  record stays in Mosael only (the trigger panel and that run's task card still show it).
+- **Only people bound to a Mosael account can drive triggers** (the same precondition as chat): the bot acts as that workspace member, on their keys and quota.
+- **Failures are not shouted into the group**: a run that fails to start says nothing there (a configuration error is useless to a whole group) —
+  the trigger's owner gets an in-app notice, **at most one per minute**. Throttled messages notify nobody (the notice would be a second storm)
+  but leave a row in the trigger panel, and a message that started nothing *because* of throttling falls back to the agent session.
+- **The same message never runs twice**: dedupe keys on (trigger × message id) in the database, so redelivery and post-restart replays are both
+  caught; attachments are turned away before downloading, so no asset is imported twice.
+- **An attachment that can't be fetched says so**: a plain sentence asks the group to try another file or later, and this message starts no run
+  (the asset *is* the input).
+
 <Aside type="caution" title="Scheduled tasks need the app running">
 
 The scheduler runs inside the local backend, which is a child process of Mosael — **fully
@@ -301,7 +342,7 @@ quitting the app stops scheduled tasks from firing at all.**
 
 That is why closing the window only tucks the app into the tray rather than quitting; use the tray
 menu or ⌘Q to actually exit. To have it standing by from boot, turn on **Launch at login** under
-Settings → Backend. Tasks missed while the app was closed run once on next start (the next
+Settings → Local app. Tasks missed while the app was closed run once on next start (the next
 occurrence is recomputed from now, so missed runs do not pile up).
 
 </Aside>

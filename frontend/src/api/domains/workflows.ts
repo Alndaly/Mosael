@@ -124,8 +124,12 @@ export type FieldOption = {
   /**
    * 这一项属于**哪台机器人** —— 只有飞书「收件人」那一格带它(`feishu_targets`)。那一格的值是
    * 某台应用眼里的 open_id / chat_id(open_id 按飞书应用隔离),所以选中它时要把节点上 `bot` 那一格
-   * 一并写上;清单没说就不写(见 NodeConfigForm 的 optionBotWrite)。接口返回的是 `list[dict]`,
-   * 多带几格原样过来,不需要重生 schema。
+   * 一并写上;清单没说就不写(见 NodeConfigForm 的 optionBotWrite)。
+   *
+   * 这一格**真的在接口里声明了**(后端 `WorkflowFieldOptionOut`,和上面那三层名字一起)——
+   * 那是修过的一个 bug:它们此前只由领域层给、响应模型没声明,于是被 pydantic 的 `extra="ignore"`
+   * 在序列化那一刻静默吞掉,前端读到的永远是 undefined(见 ADR 0045「修订之三」、ADR 0070)。
+   * 所以这里不是"多带几格原样过来",是新字段就该重生 schema(`pnpm gen:api`)。
    */
   bot_id?: string;
 };

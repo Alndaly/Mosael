@@ -4,7 +4,7 @@ description: 用自己的 API Key 或订阅授权连接模型服务商，选择�
 seo_title: 自带 API Key 接入 Seedance、可灵、Veo、万相等模型
 keywords: 自带 API Key, Seedance API, 可灵 API, Veo, Gemini API, 万相, DeepSeek, OpenRouter, Ollama
 order: 1
-updated: 2026-10-06
+updated: 2026-10-17
 version: 1.9.6
 ---
 
@@ -225,7 +225,7 @@ AI Studio 用订阅模型分析已有图片或视频时，会继续使用**当�
 | 文档解析 | 本地解析 | 本地解析；MinerU 这类云端解析必须你自己选，不会自动选 |
 | 素材外链 | 无，要对象存储插件的连接 | 只配好一家时自动用它；配了几家没选时，生成时先问你 |
 | 配音 | 本地音色克隆、Edge 免费语音、OpenAI、火山、阿里云百炼 | **没有默认**：引擎和音色是成对选的，每个用到的地方自己点名 |
-| 转写 | FunASR、WhisperX（本机） | 装好了运行环境的第一个（FunASR 在前）；没装的会指向「管理 → 引擎」 |
+| 转写 | FunASR、sherpa-onnx、WhisperX（本机） | 装好了运行环境的第一个（按 FunASR、sherpa-onnx、WhisperX 的顺序）；没装的会指向「管理 → 引擎」 |
 | 翻译 | Google 翻译（免费）、对话模型 | Google 翻译；对话模型花钱，要你选了、并用你自己的对话连接 |
 
 **插件不会被悄悄选上**（素材外链只配了一家时除外）：装了转写、翻译或文档解析插件，要在这里设成默认，或在用到的地方点名。

@@ -4,7 +4,7 @@ description: Connect your model services with an API key or a subscription sign-
 seo_title: Bring your own API keys: Seedance, Kling, Veo, Wan
 keywords: bring your own API key, Seedance API, Kling API, Veo, Gemini API, Wan, DeepSeek, OpenRouter, Ollama
 order: 1
-updated: 2026-10-06
+updated: 2026-10-17
 version: 1.9.6
 ---
 
@@ -257,7 +257,7 @@ plugin market filtered to that capability.
 | Document parsing | Local parsing | Local parsing; a cloud parser such as MinerU is only used when you choose it |
 | Asset links | None — needs an object-storage plugin connection | With exactly one set up it's used automatically; with several and none chosen, you're asked at generation time |
 | Speech | Local voice cloning, Edge free voices, OpenAI, Volcano, Alibaba Bailian | **No default**: engine and voice are chosen as a pair wherever they're used |
-| Transcription | FunASR, WhisperX (local) | The first one with its runtime installed (FunASR first); missing runtimes point to Admin → Engines |
+| Transcription | FunASR, sherpa-onnx, WhisperX (local) | The first one with its runtime installed (in that order); missing runtimes point to Admin → Engines |
 | Translation | Google Translate (free), Chat model | Google Translate; the chat model costs money, so it's used only when chosen, with your own chat connection |
 
 **Plugins are never picked silently** (except asset links with a single storage): a transcription, translation or document-parsing plugin

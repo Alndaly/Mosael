@@ -224,3 +224,32 @@ keywords 为空,或文本里出现任意一个(大小写不敏感)
   `app/messages/{zh-CN,en-US}/workflowTriggers.ts`。
 - 验收:`backend/tests/test_workflow_triggers_from_feishu.py`(`先红后绿`那六条)、
   `frontend/src/features/workflows/WorkflowTriggersDialog.dom.test.tsx`。
+
+## 补记(2026-10-17):跑起来之后暴露的八处,一处语义都没改
+
+这一笔上线后真跑,`§3`–`§5` 那几条语义**一条不动**,补的是它们各自的机械面
+(`12885ce3a`,验收在 `backend/tests/test_workflow_triggers_from_feishu.py` 里扩到 324 行):
+
+1. **附件取不回来不再是静默的**:`_ATTACHMENT_MISSING` 一句人话说给群里("附件没能取回来或没能收进
+   素材库……换一个或稍后再试"),而这一次**不起运行** —— 素材就是入参,缺了起一次注定失败的运行没有意义。
+   日志里分得清是"下载取不回来"还是"素材库不收这种文件",对人都是"换一个"。
+2. **起跑失败不在群里喊**(§5 那条照旧):`create_job` 之后再抛的异常记一行 `failed` + 异常原文、
+   `job.payload` 留着 `trigger_id` / `trigger_event_id`(运行历史据此说得出"这次是触发器起的"),
+   站内通知主人。
+3. **失败通知每分钟最多一条**:`_notified_recently` 按 `(trigger_id, 最近 60 秒内有没有坏状态事件)`
+   判,而且**在写下这一次的坏事件之前**判 —— 否则 `_notified_recently` 看到的是它自己。
+4. **去重前置**:`dispatch.unrecorded_claims` 在**附件下载之前**问一次"这条消息已经为这些触发器留过痕没有"。
+   判据还是 `(trigger_id, message_id)` 上的唯一约束,但**附件入库自己 commit** —— 等到 `fire` 里那一道
+   去重才拦,运行是挡住了,素材已经白多一份。
+5. **被限流的消息回落到智能体会话**:这正是 §3「没被认领的消息照旧走智能体……(限流了)」那句话
+   (`inbound._left_for_the_agent`)。判据是"**认领过**的那些结论非空、且全是 `throttled`" ——
+   落选的 `skipped` 不算(它和这条消息有没有起过运行无关),**一条结论都没有**也不算(那是重投或
+   触发器在两步之间被关掉,不能当成"没人要",否则同一条消息会再喂一轮)。
+6. **回执发送包 try**:一条发不出去不能带走后面几条 —— 能走到那里的运行**都已经起了**,抛出去就是
+   `feishu-inbound` 那条线程带着未处理异常结束。捕得比 `deliver_turn` 宽:飞书自己的错是 `FeishuError`,
+   而网络抖动是 `httpx.RequestError`。
+7. **图已删的触发器不能再被打开**:`triggers.use_cases.update` 在 `enabled=True` 之前顺手看一眼那张图
+   还在不在(和 `create` 已有的那一道同一条)。此前那一格会返回 200,让一条注定跑不起来的自动化
+   在面板上显示成"开着",直到下一条消息才 `refused` + 自停。
+8. **三处机械 bug**(`ad6775dcb`,同一族代码):`limit=0` / 非法 `channel` / `raw` 前缀写法
+   (见 [ADR 0066](0066-feishu-is-a-first-class-citizen-of-the-workflow.md) 的补记)。

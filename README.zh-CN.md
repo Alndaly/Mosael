@@ -153,7 +153,7 @@ ComfyUI、对象存储和 MinerU 文档解析随应用内置；Blender、Manim�
 | 照片说话与口型同步 | 即梦(OmniHuman)、可灵、HeyGen、Hedra、阿里云百炼(万相 s2v、videoretalk) |
 | 音乐与音效 | Google(Lyria)、Evolink(Suno)、可灵音效、阿里云百炼(Fun-Music)、火山引擎 AI 音乐 |
 | 语音与配音 | 本机声音克隆(F5-TTS、Fish Speech)、阿里云百炼(CosyVoice)、Edge 音色、OpenAI、火山引擎语音合成与播客 |
-| 转写 | FunASR、WhisperX(本机) |
+| 转写 | FunASR、sherpa-onnx、WhisperX(本机) |
 | 对话与智能体 | DeepSeek、Kimi、阿里云百炼(通义千问)、MiniMax、OpenAI、OpenRouter、Ollama 等 OpenAI 兼容接口；Google Gemini(AI Studio 的 API Key)；Claude Pro/Max、ChatGPT Plus/Pro、Kimi Code、GitHub Copilot、xAI 订阅授权 |
 | 你自己的显卡 | 本机或局域网里的任意一台 ComfyUI |
 

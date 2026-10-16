@@ -4,7 +4,7 @@ description: Talk to an agent that uses your creative tools; under Create, gener
 seo_title: AI Studio: text-to-video, image-to-video and music
 keywords: text-to-video, image-to-video, first and last frame, AI image generation, AI music generation, AI agent
 order: 3
-updated: 2026-10-08
+updated: 2026-10-17
 version: 1.9.6
 ---
 
@@ -329,6 +329,28 @@ without leaving Feishu.**
 Who may approve follows the account binding: whoever taps the button must already have their
 Feishu account bound to a Mosael account, and must still be a member of the workspace.
 Everyone in a group chat can see the card; seeing it is not permission to approve it.
+
+### A binding belongs to **one bot**
+
+Feishu's `open_id` is **per app** (the official *User identity overview* says: "do not use open_id in
+cross-application data communication"), so the same person is two different ids in two different apps.
+A binding therefore records **which bot (which Feishu app) × which open_id**, and the same person
+binding a second bot has to bind again.
+
+- **There is only one direction to pair**: pick **that** bot under Settings → Feishu bots, generate a
+  bind code (good for 10 minutes, single use) and send it to that bot. **The bot will never send you a
+  code** — a code means "become that member's Feishu identity", so handing one to someone who is not
+  bound yet would be publishing a member's credential. To get it to act for you, you generate the code.
+- **A bot created through the QR flow binds its creator** on the spot. If the id Feishu returns for that
+  flow turns out to belong to a different app (the docs never say which side's id it is), the first
+  message says plainly "this bot isn't bound to your Feishu account yet" and points back to **that** bot's
+  panel; it never pretends to have worked and never guesses.
+- **The panel groups by person**: one row per member, and each binding under them says which bot it is for.
+  Rows whose app can no longer be told apart (left over from a bot you recreated) are flagged so you can
+  bind again, and **deleting a bot** leaves its bindings in exactly that state rather than deleting them —
+  "this person used to be bound to that one" is worth keeping.
+- **An old code stops working after you recreate the app**: the bot says whether it expired, was already
+  used, or was generated for a bot in **another app**.
 
 Two developer-console settings are required for this (neither is settable via API, so one-click
 bot creation cannot do it for you): subscribe to `card.action.trigger` under Event Subscriptions,

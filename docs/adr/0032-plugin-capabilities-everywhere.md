@@ -35,7 +35,7 @@
 
 - **名字**:清单 `provides` 里写的那个词;标签、说明;
 - **内置提供方**:零个到多个。本地引擎就是内置提供方(降噪的 ffmpeg / rnnoise / deepfilternet、分离的 demucs、
-  转写的 funasr / whisperx、翻译的 google / 对话模型、配音的五家);每个内置提供方报自己「此刻跑不跑得起来」
+  转写的 funasr / sherpa-onnx / whisperx、翻译的 google / 对话模型、配音的五家);每个内置提供方报自己「此刻跑不跑得起来」
   (没装依赖、缺 Key 的列出来但标缺什么,和插件连接缺配置是同一种「missing」);
 - **插件协议**:宿主怎么调认领这项能力的插件工具(准备什么输入、收什么产出、进度与取消)。协议把插件工具包成
   这一族的适配器 —— 调用方拿到的永远是这一族的适配器,不关心它背后是本地引擎还是哪个插件;
@@ -104,7 +104,7 @@
 进度:第 1 步已落地 ——「`host_capabilities` 并入能力表」:生成、工具清单作为不参与挑选的两项(`pickable=False`)
 登记进能力表,实例变动的对齐钩子与插件页的清单挂在表里(`on_instance_change` / `listing`),`host_capabilities`
 只剩按表查钩子、转发通知(查法由组装根注入,插件域不 import 能力表);(插件页宿主工具的「用在哪」由接口现算、文档解析 / 降噪 /
-分离能在插件页「试一下」,走的是宿主真实的入口);第 2 步已落地;第 3 步的转写已落地(`transcription`:本机 FunASR / WhisperX 是内置提供方,素材转写、听写、
+分离能在插件页「试一下」,走的是宿主真实的入口);第 2 步已落地;第 3 步的转写已落地(`transcription`:本机 FunASR / sherpa-onnx / WhisperX 是内置提供方,素材转写、听写、
 参考音频识别、工作流节点走同一个 transcriber;部署配置 `asr_provider` 不再参与挑选),翻译已落地(`translation`:`builtin:google` / `builtin:chat` 加插件,
 对话模型那一家带连接 / 模型两个参数,节点里 `active_when: {engine: builtin:chat}`;剪辑页字幕翻译的引擎下拉照能力表列);第 4 步已落地(`speech`:内置引擎 id 统一成 `builtin:<适配器名>`,
 存量数据由迁移改写;配音**没有默认**,`Capability.defaultable=False`,设置页只列候选和用在哪;内置实现的就绪判定带着人
