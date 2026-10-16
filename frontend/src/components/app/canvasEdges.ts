@@ -16,9 +16,9 @@ import { MarkerType } from "@xyflow/react";
  * | 引用 / 控制流   | (无)                                  | 画板:上游 → 下游;工作流:执行顺序       | `--canvas-edge` 实线 + 闭合箭头        |
  * | 条件为真        | `canvas-edge-true`                    | 条件节点「真」那一路                     | `--success` 实线 + 箭头 + 「真」标签   |
  * | 条件为假        | `canvas-edge-false`                   | 条件节点「假」那一路                     | `--destructive` 实线 + 箭头 + 「假」标签 |
- * | 数据            | `canvas-edge-data canvas-edge-flow`   | 端口之间传值(不是执行顺序)               | `--primary` 流动虚线,无箭头            |
- * | 类型对不上      | `canvas-edge-mismatch canvas-edge-flow` | 数据线两端类型不兼容(软提示,不拦)      | `--warning` 流动虚线,无箭头            |
- * | 运行走过        | `canvas-edge-taken`(数据线再带 flow) | 上一次运行真的走了这根                   | `--canvas-edge-run`(紫),线宽取选中档  |
+ * | 数据            | `canvas-edge-data canvas-edge-flow`   | 端口之间传值(不是执行顺序)               | `--primary` **静止**虚线,无箭头         |
+ * | 类型对不上      | `canvas-edge-mismatch canvas-edge-flow` | 数据线两端类型不兼容(软提示,不拦)      | `--warning` 静止虚线,无箭头            |
+ * | 运行走过        | `canvas-edge-taken canvas-edge-flow canvas-edge-live` | 上一次/这一次运行真的走了这根 | `--canvas-edge-run`(紫),选中档线宽,虚线**在走** |
  * | 待定            | `canvas-edge-pending`                 | 拉线松手在空白处,等你在单子上选一种      | `--primary` 静止虚线 + 箭头            |
  * | 引用提示        | `canvas-edge-ref canvas-edge-hint`    | 工作流:`{{A.x}}` 引用 —— 值从 A 的口流到这个属性,A 先跑完;不让 A 跑 | `--primary` 往底色退三成的细点线,无箭头 |
  * | 引用了不会跑的  | `canvas-edge-ref-never-runs canvas-edge-hint` | 被引用的节点没接进流程,运行前会被拦 | `--destructive` 的细点线,无箭头       |
@@ -27,11 +27,16 @@ import { MarkerType } from "@xyflow/react";
  * | 选中            | `.selected`                           | 选中了这根                               | `--primary`,线宽 2.75                  |
  *
  * 几条定下来的取舍:
- *  · **数据线不画箭头。** 它的方向由流动的虚线说(从出口流向入口);入口是一列挨着的小接点,
- *    每根都挂一个 13px 宽的箭头会在那一列上叠成一团。
- *  · **颜色互斥,图案另算。** 一根线只挂一个颜色类(true/false/data/mismatch/taken/pending 之一),
- *    「流动虚线」是单独的 `canvas-edge-flow`。于是「数据线跑过了」= taken + flow,颜色由调用方
- *    一次定好,不靠两条同权重规则谁后生成谁赢。
+ *  · **数据线不画箭头。** 它的方向由两端说(出口在右、入口在左),不靠流动 —— 没在跑的时候画布上
+ *    一根线都不许动(见下一条);入口是一列挨着的小接点,每根都挂一个 13px 宽的箭头会在那一列上
+ *    叠成一团。
+ *  · **颜色互斥,形状和动画另算。** 一根线只挂一个颜色类(true/false/data/mismatch/taken/pending
+ *    之一);虚线是**形状**(`canvas-edge-flow`,静止),会走是**动画**(`canvas-edge-live`)。
+ *    于是「数据线跑过了」= taken + flow + live,颜色由调用方一次定好,不靠两条同权重规则谁后生成谁赢。
+ *  · **动画只留给运行时。** `canvas-edge-live` 只有「运行走过」挂 —— 在 `canvasEdgeClass` 里定死,
+ *    别的意思想要也给不了(见下)。此前那支动画长在所有数据线上,画布没在跑时也一片在动,
+ *    天然读成「正在跑 / 有东西流过来」。所以「运行走过」一定是虚线:动画走的是 `stroke-dashoffset`,
+ *    实线上根本看不出来;控制线也因此在这一档换成虚线 —— 会走才看得出「这根跑过」。
  *  · **引用提示线不是连线。** 它把画布上看不见的 `{{…}}` 依赖如实画出来(每一处引用一根,哪怕两头已有控制线):
  *    和数据线同一族颜色(值确实从那个口流过来),但更淡、更细、点线、无箭头,
  *    不能选中、删除、拖去重连,也不参与连线校验(它不在图里,只在显示时叠上去,见
@@ -63,7 +68,12 @@ export type CanvasEdgeTone =
   | "ref-never-runs";
 
 /**
- * 一根线该挂的类名。`flow`:流动虚线(数据线)。`hint`:引用提示的细点线(只能悬停,见上表)。
+ * 一根线该挂的类名。
+ *  · `flow`:数据线的**形状** —— 静止的虚线(不流动)。
+ *  · `hint`:引用提示的细点线(只能悬停,见上表)。
+ *  · 「在走」那支动画(`canvas-edge-live`)**不在这里给选项**:只有「运行走过」带它 —— 运行时状态
+ *    是画布上唯一该动的东西,而且挂它的线一定是虚线(实线上看不出来,见上表)。于是画布没在跑时
+ *    一根线都不动这件事,不靠每个调用方自觉。
  * 没有要挂的就回 undefined —— React Flow 的 className 是可选的,给空串会在 DOM 上留一个 `class="react-flow__edge "`。
  */
 export function canvasEdgeClass(
@@ -72,7 +82,9 @@ export function canvasEdgeClass(
 ): string | undefined {
   const classes = [
     tone === "reference" ? null : `canvas-edge-${tone}`,
-    flow ? "canvas-edge-flow" : null,
+    //: 「运行走过」必是虚线:动画走 dashoffset,实线上看不出来。
+    flow || tone === "taken" ? "canvas-edge-flow" : null,
+    tone === "taken" ? "canvas-edge-live" : null,
     hint ? "canvas-edge-hint" : null,
   ].filter(Boolean);
   return classes.length > 0 ? classes.join(" ") : undefined;
@@ -134,12 +146,16 @@ export const CANVAS_EDGE_CLASS = [
   "[&_.canvas-edge-ref]:[--xy-edge-stroke:color-mix(in_oklab,var(--primary)_70%,var(--background))]",
   "[&_.canvas-edge-ref-never-runs]:[--xy-edge-stroke:color-mix(in_oklab,var(--destructive)_85%,var(--background))]",
   String.raw`[&_.react-flow\_\_edges_.react-flow\_\_edge.canvas-edge-taken]:[--xy-edge-stroke-width:2.75]`,
-  // 图案:数据线流动的虚线(周期 11,和 edge-flow 动画的位移一致;减少动态效果时停住);
-  // 待定的线和拖线途中那根是静止的虚线 —— 圆线帽让每段两头各长出半个线宽,`4 6` 看上去是 6 实 4 空。
+  // 图案:数据线是**静止**的虚线(它是形状,不是动画 —— 动画只给运行走过的线);待定的线和拖线
+  // 途中那根也是静止的虚线,`4 6` 看上去是 6 实 4 空(圆线帽让每段两头各长出半个线宽)。
   String.raw`[&_.canvas-edge-flow_.react-flow\_\_edge-path]:[stroke-dasharray:6_5]`,
-  String.raw`[&_.canvas-edge-flow_.react-flow\_\_edge-path]:motion-safe:animate-edge-flow`,
   String.raw`[&_.canvas-edge-pending_.react-flow\_\_edge-path]:[stroke-dasharray:4_6]`,
   String.raw`[&_.react-flow\_\_connection-path]:[stroke-dasharray:4_6]`,
+  // **运行时才动的那一支。** `canvas-edge-live` 只有「运行走过」挂(见 canvasEdgeClass),它自己
+  // 带虚线形状 —— 会动的线必须是虚线(位移 -11 = 6+5,一个周期,首尾接得上,见 tokens.css);
+  // 减少动态效果时停住(motion-safe)。
+  String.raw`[&_.canvas-edge-live_.react-flow\_\_edge-path]:[stroke-dasharray:6_5]`,
+  String.raw`[&_.canvas-edge-live_.react-flow\_\_edge-path]:motion-safe:animate-edge-flow`,
   // 引用提示的细点线:比连线细一档、静止;不可选的线 xyflow 会关掉指针事件(.inactive),这里还回去 ——
   // 悬停才看得到那句说明(线上的 <title>)。
   "[&_.canvas-edge-hint]:[--xy-edge-stroke-width:1.5]",

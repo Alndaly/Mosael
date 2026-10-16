@@ -41,10 +41,11 @@ export function useWorkflowDisplayEdges(
       const from = runByNode[edge.source];
       const to = runByNode[edge.target];
       const taken = from && to && from.status !== "skipped" && to.status !== "skipped";
-      //: 走过的线换成「运行走过」那一种(见 components/app/canvasEdges 的表)。颜色类是互斥的,
-      //: 所以整串重给,而不是在原来的类后面再追加一个去和它比权重;数据线留着流动的虚线。
+      //: 走过的线换成「运行走过」那一种(见 components/app/canvasEdges 的表):紫色、虚线和**唯一
+      //: 那支动画**。颜色类是互斥的,所以整串重给,而不是在原来的类后面再追加一个去和它比权重。
+      //: 数据线与否都一个样 —— 会走才看得出「这根跑过」,画布上也只有这一刻的线该动。
       //: 不写行内 style —— 此前写死的 success + 2.4px 压过了一切,选中它也不变主色。
-      return taken ? { ...edge, className: canvasEdgeClass("taken", { flow: edge.data?.kind === "data" }) } : edge;
+      return taken ? { ...edge, className: canvasEdgeClass("taken") } : edge;
     });
   }, [edges, runByNode, edgeShape]);
 }

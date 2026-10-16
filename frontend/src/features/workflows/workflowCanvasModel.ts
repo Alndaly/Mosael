@@ -159,9 +159,11 @@ export function toWorkflowFlowEdges(
         target: edge.target,
         sourceHandle: edge.source_output ? `out:${edge.source_output}` : undefined,
         targetHandle: edge.target_input ? `in:${edge.target_input}` : undefined,
-        //: 样子见 components/app/canvasEdges 那张表:流动虚线,颜色在「数据」和「类型不匹配」里二选一。
+        //: 样子见 components/app/canvasEdges 那张表:**静止**的虚线(数据线的形状,不是动画),
+        //: 颜色在「数据」和「类型不匹配」里二选一。
         className: canvasEdgeClass(mismatch ? "mismatch" : "data", { flow: true }),
-        //: 数据线不画箭头(方向由流动的虚线说)。写成 undefined 是为了**盖掉** defaultEdgeOptions 的默认箭头。
+        //: 数据线不画箭头(方向由两端说:出口在右、入口在左)。写成 undefined 是为了**盖掉**
+        //: defaultEdgeOptions 的默认箭头。
         markerEnd: undefined,
         data: { kind: "data" },
       };

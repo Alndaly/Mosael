@@ -32,17 +32,21 @@ function strokeFor(className: string): string | undefined {
 }
 
 describe("工作流的连线 ↔ 共用的连线外观(components/app/canvasEdges)", () => {
-  it("模型挂到边上的每个类,共用那串里都有规则 —— 颜色类有线色,flow 有虚线", () => {
+  it("模型挂到边上的每个类,共用那串里都有规则 —— 颜色类有线色,flow 有静止的虚线、没有动画", () => {
     const classes = edges.flatMap((edge) => (edge.className ?? "").split(/\s+/)).filter(Boolean);
     expect(new Set(classes)).toEqual(new Set(["canvas-edge-true", "canvas-edge-false", "canvas-edge-data", "canvas-edge-flow"]));
     for (const one of classes.filter((name) => name !== "canvas-edge-flow")) expect(strokeFor(one), one).toBeDefined();
     expect(CANVAS_EDGE_CLASS).toContain(String.raw`[&_.canvas-edge-flow_.react-flow\_\_edge-path]:[stroke-dasharray:`);
+    //: **数据线不流动。** 动画那一支叫 canvas-edge-live,只挂在「运行走过」上(见 canvasEdges 的表)。
+    expect(CANVAS_EDGE_CLASS).not.toMatch(/canvas-edge-flow[^ ]*motion-safe:animate/);
   });
 
-  it("条件分支是真/假那一种,数据线是数据那一种、流动虚线,普通控制线不挂类", () => {
+  it("条件分支是真/假那一种,数据线是数据那一种、静止虚线,普通控制线不挂类", () => {
     expect(byId("t").className).toBe(canvasEdgeClass("true"));
     expect(byId("f").className).toBe(canvasEdgeClass("false"));
     expect(byId("d").className).toBe(canvasEdgeClass("data", { flow: true }));
+    //: 没在跑的时候画布上一条都不许动:数据线的类里没有 live。
+    expect(byId("d").className).not.toContain("canvas-edge-live");
     expect(byId("c").className).toBeUndefined();
   });
 
@@ -52,7 +56,8 @@ describe("工作流的连线 ↔ 共用的连线外观(components/app/canvasEdge
     //: `markerEnd: undefined` 才盖得掉默认值(React Flow 是 { ...defaultEdgeOptions, ...edge })。
     expect("markerEnd" in byId("d")).toBe(true);
     expect(byId("d").markerEnd).toBeUndefined();
-    //: 流动虚线由 canvas-edge-flow 负责,不再叠 React Flow 自己那套 animated(两套虚线节奏会打架)。
+    //: 数据线的虚线由 canvas-edge-flow 给(它是形状,不是动画);会走的那一支只在「运行走过」的线上,
+    //: React Flow 自己那套 animated 两处都不用(两套虚线节奏会打架)。
     expect(byId("d").animated).toBeUndefined();
   });
 

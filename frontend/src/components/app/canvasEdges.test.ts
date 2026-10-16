@@ -158,8 +158,9 @@ describe("共用的连线外观", () => {
       "ref-never-runs": "color-mix(in_oklab,var(--destructive)_85%,var(--background))",
     };
     for (const [tone, token] of Object.entries(expected)) {
-      const className = canvasEdgeClass(tone as CanvasEdgeTone)!;
-      expect(declared(`&_.${className}`, "--xy-edge-stroke"), tone).toBe(token);
+      //: 颜色类各自一条规则。不能拿 canvasEdgeClass 的整串当选择器 —— 「运行走过」那串里还有
+      //: 只管形状和动画的 flow / live(它们不碰颜色)。
+      expect(declared(`&_.canvas-edge-${tone}`, "--xy-edge-stroke"), tone).toBe(token);
     }
   });
 
@@ -172,15 +173,35 @@ describe("共用的连线外观", () => {
     expect(strokes[0]).toContain("var(--foreground)");
   });
 
-  it("流动虚线、待定虚线、拖线途中那根各有图案;线帽是圆的", () => {
+  it("图案:数据线是静止的虚线,待定和拖线途中各有自己的虚线;线帽是圆的", () => {
     expect(declared(String.raw`&_.canvas-edge-flow_.react-flow\_\_edge-path`, "stroke-dasharray")).toBeDefined();
-    expect(CANVAS_EDGE_CLASS).toContain(String.raw`[&_.canvas-edge-flow_.react-flow\_\_edge-path]:motion-safe:animate-edge-flow`);
     const pending = declared(String.raw`&_.canvas-edge-pending_.react-flow\_\_edge-path`, "stroke-dasharray");
     expect(pending).toBeDefined();
     //: 拖线途中和松手后待定的是**同一个样子**,线只在连上那一刻换一次(虚 → 实)。
     expect(declared(String.raw`&_.react-flow\_\_connection-path`, "stroke-dasharray")).toBe(pending);
     expect(declared(String.raw`&_.react-flow\_\_edge-path`, "stroke-linecap")).toBe("round");
     expect(declared(String.raw`&_.react-flow\_\_edge-path`, "stroke-linejoin")).toBe("round");
+  });
+
+  it("动画只留给运行时:数据线一动不动,会走的只有「运行走过」那根", () => {
+    //: 全表只有一条动画规则,而且只挂在 canvas-edge-live 上。
+    const animated = CANVAS_EDGE_CLASS.split(/\s+/).filter((one) => one.includes("animate"));
+    expect(animated).toHaveLength(1);
+    expect(animated[0]).toContain(String.raw`.canvas-edge-live_.react-flow\_\_edge-path`);
+    expect(animated[0]).toContain("motion-safe:animate-edge-flow");
+    //: **数据线(和类型不匹配线)没有动画。** 「没在跑的时候画布上一片线在动」就是这儿长出来的。
+    expect(CANVAS_EDGE_CLASS).not.toMatch(/canvas-edge-flow[^ ]*motion-safe:animate/);
+    //: 会走的线一定是虚线 —— 实线上走 stroke-dashoffset 看不见,「在动」会变成一句空话。
+    expect(declared(String.raw`&_.canvas-edge-live_.react-flow\_\_edge-path`, "stroke-dasharray")).toBeDefined();
+    //: live 只管形状和动;颜色/线宽不归它(live 不该掺进任何一种语义色)。
+    expect(declared(String.raw`&_.canvas-edge-live_.react-flow\_\_edge-path`, "--xy-edge-stroke")).toBeUndefined();
+    //: 各种意思里只有 taken 带 live:别处想要也没有。
+    for (const tone of ["true", "false", "data", "mismatch", "pending", "ref", "ref-never-runs"] as const) {
+      expect(canvasEdgeClass(tone, { flow: true, hint: true }) ?? "", tone).not.toContain("canvas-edge-live");
+    }
+    expect(canvasEdgeClass("taken")).toContain("canvas-edge-live");
+    //: 「去动画」不是「改形状」:跑过的线还是那条虚线,只是它现在会走。
+    expect(canvasEdgeClass("taken")).toContain("canvas-edge-flow");
   });
 
   it("统一出口的预览线:没悬在格子上时和拖线途中同一个样子;连得上的换实线、取悬停那一档;连不上的不用主色", () => {
@@ -194,23 +215,26 @@ describe("共用的连线外观", () => {
     expect(CANVAS_DRAFT_LINE_CLASS.refused).not.toContain("stroke-primary");
   });
 
-  it("canvasEdgeClass:引用那种不挂类;颜色和流动虚线分开给", () => {
+  it("canvasEdgeClass:引用那种不挂类;颜色、虚线形状和「在走」分开给,动只跟 taken", () => {
     expect(canvasEdgeClass("reference")).toBeUndefined();
     expect(canvasEdgeClass("true")).toBe("canvas-edge-true");
     expect(canvasEdgeClass("data", { flow: true })).toBe("canvas-edge-data canvas-edge-flow");
-    expect(canvasEdgeClass("taken", { flow: true })).toBe("canvas-edge-taken canvas-edge-flow");
+    //: 「运行走过」= 颜色(taken)+ 虚线形状(flow)+ 在走(live)。数据线与否都一个样:
+    //: 会走的线才看得出「这根跑过」,控制线也一样。
+    expect(canvasEdgeClass("taken")).toBe("canvas-edge-taken canvas-edge-flow canvas-edge-live");
+    expect(canvasEdgeClass("taken", { flow: true })).toBe("canvas-edge-taken canvas-edge-flow canvas-edge-live");
     expect(canvasEdgeClass("ref", { hint: true })).toBe("canvas-edge-ref canvas-edge-hint");
     expect(canvasEdgeClass("ref-never-runs", { hint: true })).toBe("canvas-edge-ref-never-runs canvas-edge-hint");
   });
 
-  it("引用提示线:比连线细一档、静止的点线(和流动虚线、待定虚线都不一样);不可选,却还能悬停看说明", () => {
+  it("引用提示线:比连线细一档、静止的点线(和数据线、待定线都不一样);不可选,却还能悬停看说明", () => {
     const width = Number(declared("&_.canvas-edge-hint", "--xy-edge-stroke-width"));
     expect(width).toBeLessThan(CANVAS_EDGE_WIDTH.rest);
     const dash = declared(String.raw`&_.canvas-edge-hint_.react-flow\_\_edge-path`, "stroke-dasharray");
     expect(dash).toBeDefined();
     expect(dash).not.toBe(declared(String.raw`&_.canvas-edge-flow_.react-flow\_\_edge-path`, "stroke-dasharray"));
     expect(dash).not.toBe(declared(String.raw`&_.canvas-edge-pending_.react-flow\_\_edge-path`, "stroke-dasharray"));
-    //: 静止:不跟数据线一起流动 —— 流动说的是「值从这儿流过去」,引用提示不传值。
+    //: 引用提示没有动画:它不传值,也从不出现在运行状态里(动的只有「运行走过」那根)。
     expect(CANVAS_EDGE_CLASS.split(/\s+/).filter((one) => one.includes("canvas-edge-hint") && one.includes("animate"))).toEqual([]);
     //: xyflow 给「不可选、没有点击回调」的线挂 `.inactive`(pointer-events: none),悬停就没了 —— 这里还回去。
     expect(declared(String.raw`&_.react-flow\_\_edge.canvas-edge-hint`, "pointer-events")).toBe("visibleStroke");

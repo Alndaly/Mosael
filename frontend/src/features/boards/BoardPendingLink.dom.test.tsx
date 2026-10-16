@@ -225,6 +225,10 @@ describe("拉线松手在空白处:占位 + 待定的线 + 单子", () => {
     //: 「待定」那一种:主色静止虚线(样子在 canvasEdges 的类里,不是行内 style)。
     expect(pending.className).toBe(canvasEdgeClass("pending"));
     expect(pending.style).toBeUndefined();
+    //: **画板的线不掺运行态。** 画板没有「跑过的线」这个概念:普通连线上不挂语义类,静静地待着 ——
+    //: 会动的那一支(canvas-edge-live)是工作流运行时才有的,别漏到这儿来。
+    expect(real.className).toBeUndefined();
+    expect(pending.className).not.toContain("canvas-edge-live");
     //: 和占位同一层,压在已有的项之上 —— 否则穿过别的卡片时就看不出它接到哪儿了。
     expect(pending.zIndex).toBe(ghost()!.zIndex);
     expect(pending.zIndex!).toBeGreaterThan(shownNodes().find((node) => node.id === "n2")!.zIndex!);

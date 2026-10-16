@@ -178,7 +178,9 @@
     }
   }
   --animate-confirm-in: confirm-in var(--motion-base) var(--motion-ease-enter);
-  /* 数据线流动的虚线(见 components/app/canvasEdges):位移 -11 正好是虚线一个周期 6+5,首尾接得上。 */
+  /* **只有运行走过的线在走**(见 components/app/canvasEdges 的 `canvas-edge-live`):位移 -11 正好是
+     虚线一个周期 6+5,首尾接得上。数据线是静止的虚线,不吃这支动画 —— 没在跑的时候画布上
+     一根线都不动。 */
   --animate-edge-flow: edge-flow 0.6s linear infinite;
   @keyframes edge-flow {
     to {
@@ -265,8 +267,10 @@
      棘轮见 design/semanticColors.test.ts。 */
   --canvas-dot: #cdd3dc;
   --canvas-edge: #858c99;
-  /* 「上一次运行走了这根」。**不用 --success**:条件节点「真」那一路已经是绿的,两种绿只能靠
-     粗细分(用户指出过)。取一个画布上别处不用的紫:和真/假/数据/警示/选中都拉得开。 */
+  /* 「上一次 / 这一次运行走了这根」(节点 started 那一刻两端就都不是 skipped,正在跑的那一段
+     也算)。**不用 --success**:条件节点「真」那一路已经是绿的,两种绿只能靠粗细分(用户指出过)。
+     取一个画布上别处不用的紫:和真/假/数据/警示/选中都拉得开;运行中的节点、在走的那条线
+     (canvas-edge-live)和它同一个色。 */
   --canvas-edge-run: #7a5bc7;
 
   /* 浮层与 chrome 使用磨玻璃;自定义背景下,内容面板共享外层表面。

@@ -86,6 +86,7 @@ describe("编出来的层叠", () => {
       "react-flow__edges .react-flow__edge.canvas-edge-taken",
       "react-flow__edge:not(.selected):hover .react-flow__edge-path",
       "canvas-edge-flow .react-flow__edge-path",
+      "canvas-edge-live .react-flow__edge-path",
       "canvas-edge-hint .react-flow__edge-path",
       "react-flow__edge.canvas-edge-hint",
       "react-flow__handle-left:hover",
@@ -110,8 +111,11 @@ describe("编出来的层叠", () => {
     expect(utilities).toMatch(/\.canvas-edge-ref[^-][^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--primary\) 70%, ?var\(--background\)\)/);
     expect(utilities).toMatch(/\.canvas-edge-ref-never-runs[^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--destructive\) 85%, ?var\(--background\)\)/);
     expect(utilities).toMatch(/\.react-flow__edge\.canvas-edge-hint[^{]*\{[^}]*pointer-events: visibleStroke/);
-    //: 流动虚线的动画确实生成了(它的 keyframes 在 tokens.css 的 @theme 里),而且只在不要求减少动态时跑。
+    //: 运行时那支动画确实生成了(它的 keyframes 在 tokens.css 的 @theme 里),只在不要求减少动态时跑,
+    //: 而且**只挂在 canvas-edge-live 上** —— 数据线(canvas-edge-flow)一动不动。
     expect(utilities).toMatch(/prefers-reduced-motion: no-preference[\s\S]*animation: edge-flow 0\.6s linear infinite/);
+    expect(utilities).toMatch(/\.canvas-edge-live[^{]*\.react-flow__edge-path[^{]*\{[^}]*animation: edge-flow/);
+    expect(utilities).not.toMatch(/\.canvas-edge-flow[^{]*\{[^}]*animation/);
   }, 20_000);
 
   it("加载占位块的扫光:落在 components 层、走 transform、减少动态时只剩底色", async () => {
