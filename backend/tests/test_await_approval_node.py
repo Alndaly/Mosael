@@ -239,6 +239,20 @@ def _capture(monkeypatch) -> dict[str, list]:
     return seen
 
 
+def _went_out(seen: dict[str, list] | list) -> list[dict]:
+    """这场等待**真的说出去**的那几条(卡片 + 降级的文字)—— 等到它发出去为止。
+
+    卡片和降级的文字排在暂停现场提交**之后**(engine._park_at_approval 用 after_commit 排到
+    approvals.announce_parked),而 `_paused` 只等现场落库 —— 直接断"发了什么"就是赌那一步已经跑完:
+    机器负载一高就变成抽奖,CI 上实测撞上过一次(那张单已经停在等人确认上,而卡片还没轮到发,
+    断言看到的一张都没有)。和 `_notice_for` / `_route_settled` 同一个教训:断的是先后发生的两件事,
+    就得等第二件。
+    """
+    cards, texts = (seen["cards"], seen["texts"]) if isinstance(seen, dict) else (seen, [])
+    _wait_for(lambda: cards or texts or None, what="这场等待说出去")
+    return [*cards, *texts]
+
+
 # ---------------- ① 能暂停,而且落在库里(重启之后仍在等) ----------------
 
 
@@ -513,10 +527,11 @@ def test_飞书卡片那条路_发得出去_点得回来(monkeypatch) -> None:
     approval = _paused(job_id)
 
     #: 卡片发到了这个人的私聊(这次运行不是从飞书会话来的,所以走"负责人绑过飞书"那条)。
-    assert [one["to"] for one in sent] == [OPEN_ID]
-    assert sent[0]["bot"] == bot_id
-    assert sent[0]["type"] == "open_id"
-    assert sent[0]["card"]["header"]["title"]["content"] == "要发布「前半程」吗"
+    out = _went_out(sent)
+    assert [one["to"] for one in out] == [OPEN_ID]
+    assert out[0]["bot"] == bot_id
+    assert out[0]["type"] == "open_id"
+    assert out[0]["card"]["header"]["title"]["content"] == "要发布「前半程」吗"
     stored = _route_settled(approval.id)
     assert (stored.feishu_bot_id, stored.feishu_receive_id, stored.feishu_receive_type) == (bot_id, OPEN_ID, "open_id")
 
@@ -648,8 +663,8 @@ def test_备注那一格的解析(config: dict, expected: bool) -> None:
 
 
 def _sent_to(seen: dict[str, list]) -> list[tuple[str, str, str]]:
-    """发出去的那些是「(机器人, 收件 id, 收件 id 的类型)」—— 卡片和降级用的文字一起看。"""
-    return [(one["bot"], one["to"], one["type"]) for one in [*seen["cards"], *seen["texts"]]]
+    """发出去的那些是「(机器人, 收件 id, 收件 id 的类型)」—— 卡片和降级用的文字一起看,**等到它发出去为止**。"""
+    return [(one["bot"], one["to"], one["type"]) for one in _went_out(seen)]
 
 
 def test_通知方式写了仅站内_一个字都不发飞书(monkeypatch) -> None:
@@ -664,9 +679,11 @@ def test_通知方式写了仅站内_一个字都不发飞书(monkeypatch) -> No
     job_id, _ = _start(_graph(feishu={"channel": "none"}), ws, actor=user_id())
     approval = _paused(job_id)
 
+    #: **先等这条等待说出去**(站内那条通知落库 = 发飞书那一步已经走完,见 `_notice_for`),
+    #: 再断"一个字都没发" —— 反过来写的话,发卡那一步还没轮到也会绿,而那是假绿。
+    _notice_for(ws, approval.id)
     assert seen["cards"] == [] and seen["texts"] == [], "写了「仅站内」还发了飞书"
     #: **站内那条照旧**(仅站内 = 换一条通知的路,不是不通知):通知有、运行在等、应用内批得动。
-    _notice_for(ws, approval.id)
     assert _job(job_id).status == "running"
     #: 单上那三格是空的 —— "没发飞书"这件事在记录里也是显式的。
     stored = _approval(approval.id)
@@ -711,13 +728,19 @@ def test_通知方式写了发到某个群_发到那个群(monkeypatch) -> None:
 
 def test_没绑机器人时_只站内_既不报错也不放行(monkeypatch) -> None:
     """节点点名了私聊某个人,而工作区一个机器人都没接:退回站内那条路(单照建、运行照等),
-    **不是**让这次运行失败 —— 一个门禁的用处是拦住"没人看着就往下走",不是拦住自己。"""
+    **不是**让这次运行失败 —— 一个门禁的用处是拦住"没人看着就往下走",不是拦住自己。
+
+    「一台机器人都没接」就是**一行绑定都不建**(工作区里连 `FeishuBot` 都没有):`bot_id` 现在是
+    NOT NULL 的真外键,没有"空串哨兵"这种行可以拿来冒充没绑定。
+    """
     ws = _workspace()
     seen = _capture(monkeypatch)
 
     job_id, _ = _start(_graph(feishu={"channel": "user", "to": OPEN_ID}), ws, actor=user_id())
     approval = _paused(job_id)
 
+    #: 同 `仅站内` 那条:先等这次等待说出去,再断"一个字都没发"(见 `_went_out`)。
+    _notice_for(ws, approval.id)
     assert seen["cards"] == [] and seen["texts"] == []
     assert _job(job_id).status == "running"
     assert _approval(approval.id).feishu_bot_id == ""
@@ -732,8 +755,9 @@ def test_没写那三格时_行为与此前一致(monkeypatch) -> None:
     job_id, _ = _start(_graph(), ws, actor=user_id())
     _paused(job_id)
 
-    assert [one["to"] for one in seen["cards"]] == [OPEN_ID]
-    assert seen["cards"][0]["type"] == "open_id"
+    out = _went_out(seen)
+    assert [one["to"] for one in out] == [OPEN_ID]
+    assert out[0]["type"] == "open_id"
 
 
 def test_节点上写了哪个机器人就用哪个(monkeypatch) -> None:
@@ -759,7 +783,7 @@ def test_节点上写了哪个机器人就用哪个(monkeypatch) -> None:
     )
     _paused(job_id)
 
-    assert [one["bot"] for one in seen["cards"]] == [second_id]
+    assert [one["bot"] for one in _went_out(seen)] == [second_id]
     assert first != second_id
     #: 拿第一台的那串 id 配第二台点名:认不出来,所以那张卡发不出去(而不是拿 B 的 token 发 A 的 id)。
     from app.domain.feishu import routing
