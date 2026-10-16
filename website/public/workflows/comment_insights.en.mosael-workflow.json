@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Comment insights and audience",
   "description": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu comments need a signed-in browser profile) or TikHub (needs the plugin and an API key; 1 call per run; complete fields, steadier, no sign-in). Plus one or two AI chat calls.",
-  "graph_hash": "4bb1d1633f541be159ae64837690455b74a21b9bdf340c1b98682024277c6c1a",
+  "graph_hash": "6f945bedd19aa8c93b9159cc7ae7a91a05f252292ee25575f8f2a1acd6efc74c",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -742,6 +742,11 @@
         "source_handle": "true"
       },
       {
+        "id": "dy_comments__dy_comments_m",
+        "source": "dy_comments",
+        "target": "dy_comments_m"
+      },
+      {
         "id": "tk_is_dy__tk_is_xhs__false",
         "source": "tk_is_dy",
         "target": "tk_is_xhs",
@@ -752,6 +757,11 @@
         "source": "tk_is_xhs",
         "target": "xhs_comments",
         "source_handle": "true"
+      },
+      {
+        "id": "xhs_comments__xhs_comments_m",
+        "source": "xhs_comments",
+        "target": "xhs_comments_m"
       },
       {
         "id": "tk_is_xhs__tk_is_bili__false",
@@ -766,6 +776,11 @@
         "source_handle": "true"
       },
       {
+        "id": "bili_comments__bili_comments_m",
+        "source": "bili_comments",
+        "target": "bili_comments_m"
+      },
+      {
         "id": "tk_is_bili__tk_unsupported__false",
         "source": "tk_is_bili",
         "target": "tk_unsupported",
@@ -776,6 +791,16 @@
         "source": "use_tikhub",
         "target": "web_open",
         "source_handle": "false"
+      },
+      {
+        "id": "web_open__web_read",
+        "source": "web_open",
+        "target": "web_read"
+      },
+      {
+        "id": "web_read__web_close",
+        "source": "web_read",
+        "target": "web_close"
       },
       {
         "id": "web_read__web_is_api",
@@ -861,6 +886,16 @@
         "source": "has_comments",
         "target": "all_items",
         "source_handle": "true"
+      },
+      {
+        "id": "all_items__chunks",
+        "source": "all_items",
+        "target": "chunks"
+      },
+      {
+        "id": "chunks__batch_analyze",
+        "source": "chunks",
+        "target": "batch_analyze"
       },
       {
         "id": "batch_analyze__insight",

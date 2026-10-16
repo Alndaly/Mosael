@@ -175,9 +175,14 @@ class Test每一镜都有实物参考:
             edges = {(one["source"], one["target"], one.get("source_handle")) for one in body["edges"]}
             assert edges == {("find", "has_art", None), ("has_art", drawer, "false"), (drawer, "save", None),
                              (drawer, "file_art", None)}, "只有库里没有它的图时才画;画完就存,并归进成片项目"
-            #: 存的就是刚画的那张(模板规范化把整串引用改成了一根数据线)。
-            wire = next(one for one in body["edges"] if one["target"] == "save")
+            #: 存的就是刚画的那张(模板规范化把整串引用改成了一根数据线);同格上作者画的那条先后控制边照样在
+            #: (折边已废,见 ADR 0063)—— 两条边同一个 (source, target),上面那个集合分不出来,这里分开看。
+            wire = next(one for one in body["edges"] if one["target"] == "save" and one.get("kind") == "data")
             assert (wire.get("source_output"), wire.get("target_input")) == ("asset_id", "asset_ids")
+            assert any(
+                one["source"] == drawer and one["target"] == "save" and one.get("kind", "control") == "control"
+                for one in body["edges"]
+            ), "作者画的控制边不许被规范化折掉"
             save = nodes["save"]["config"]
             assert (save["kind"], save["name"], save["role"]) == (kind, "{{loop.item.name}}", role)
 
@@ -331,7 +336,13 @@ def test_data_binding_normalization_is_lossless_and_idempotent() -> None:
     assert normalized["nodes"][1]["config"]["asset_id"] == ""
     assert normalized["nodes"][1]["inputs"] == ["asset_id"]
     assert normalized["nodes"][2]["config"]["body"] == "已处理 {{source.name}}"
-    assert not any(edge["id"] == "source_transcript" for edge in normalized["edges"])
+    #: 升级只**加**数据边(引用成了显式依赖),作者画的那条控制边原样在 —— 折边已废(ADR 0063)。
+    assert any(edge["id"] == "source_transcript" for edge in normalized["edges"]), "作者画的控制边不许被规范化折掉"
+    assert {
+        (edge["source"], edge["source_output"], edge["target"], edge["target_input"])
+        for edge in normalized["edges"]
+        if edge.get("kind") == "data"
+    } == {("source", "asset_id", "transcript", "asset_id")}, "精确引用升级出来的数据边"
     assert canonicalize_data_bindings(normalized, node_types=NODE_TYPES) == normalized
 
 

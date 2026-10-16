@@ -57,5 +57,11 @@ def test_only_installed_official_workflows_are_migrated() -> None:
     official_transcript = stored["official"]["nodes"][1]
     assert official_transcript["config"]["asset_id"] == ""
     assert official_transcript["inputs"] == ["asset_id"]
-    assert stored["official"]["edges"][0]["kind"] == "data"
+    #: 迁移只加数据边;作者画的那条控制边原样在(折边已废,见 ADR 0063),不再只看第一条边。
+    assert [edge["id"] for edge in stored["official"]["edges"] if edge.get("kind") == "data"] == [
+        "d-source-asset_id-transcript-asset_id"
+    ]
+    assert [edge["id"] for edge in stored["official"]["edges"] if edge.get("kind", "control") == "control"] == [
+        "source_transcript"
+    ]
     assert stored["custom"] == _legacy_graph("custom")

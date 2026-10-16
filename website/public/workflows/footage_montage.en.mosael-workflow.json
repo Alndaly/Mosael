@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Montage from your own footage",
   "description": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you. Up to 200 videos under the tag are used at a time; split larger batches with finer tags first.",
-  "graph_hash": "d024909b03d8a52c179135e1ff84c15fbde38e8172629b57705c27b263819640",
+  "graph_hash": "b5f65a1cbe7be7f41978282237b8158994835994ea76e0da702dd91d6e3ceb38",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -385,6 +385,11 @@
             ],
             "edges": [
               {
+                "id": "shot_caption",
+                "source": "place_shot",
+                "target": "caption_shot"
+              },
+              {
                 "id": "caption_voice",
                 "source": "caption_shot",
                 "target": "has_voice"
@@ -402,6 +407,11 @@
                 "source_handle": "true"
               },
               {
+                "id": "speak_place",
+                "source": "narrate",
+                "target": "place_voice"
+              },
+              {
                 "id": "narration_place",
                 "source": "has_narration",
                 "target": "place_voice",
@@ -411,6 +421,11 @@
                 "id": "place_duck",
                 "source": "place_voice",
                 "target": "duck_source"
+              },
+              {
+                "id": "place_overflow",
+                "source": "place_voice",
+                "target": "voice_overflow"
               },
               {
                 "id": "overflow_notify",
@@ -526,6 +541,11 @@
         "id": "start_footage",
         "source": "start",
         "target": "footage"
+      },
+      {
+        "id": "footage_check",
+        "source": "footage",
+        "target": "has_footage"
       },
       {
         "id": "no_footage",

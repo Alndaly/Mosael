@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自有素材混剪 · 配音与字幕",
   "description": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。一次最多取这个标签下的 200 条视频,更多的先按更细的标签分批。",
-  "graph_hash": "4412e24753544d78fa4ce81f0b0b2b464306c46e7723c626ae7af089398982dd",
+  "graph_hash": "0cddaebe10796d2acd7695fd5022d5eb22ad17a9b40efb5975e9474140797a4c",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -385,6 +385,11 @@
             ],
             "edges": [
               {
+                "id": "shot_caption",
+                "source": "place_shot",
+                "target": "caption_shot"
+              },
+              {
                 "id": "caption_voice",
                 "source": "caption_shot",
                 "target": "has_voice"
@@ -402,6 +407,11 @@
                 "source_handle": "true"
               },
               {
+                "id": "speak_place",
+                "source": "narrate",
+                "target": "place_voice"
+              },
+              {
                 "id": "narration_place",
                 "source": "has_narration",
                 "target": "place_voice",
@@ -411,6 +421,11 @@
                 "id": "place_duck",
                 "source": "place_voice",
                 "target": "duck_source"
+              },
+              {
+                "id": "place_overflow",
+                "source": "place_voice",
+                "target": "voice_overflow"
               },
               {
                 "id": "overflow_notify",
@@ -526,6 +541,11 @@
         "id": "start_footage",
         "source": "start",
         "target": "footage"
+      },
+      {
+        "id": "footage_check",
+        "source": "footage",
+        "target": "has_footage"
       },
       {
         "id": "no_footage",

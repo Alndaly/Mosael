@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "口播与访谈智能整理",
   "description": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。适合 30 分钟以内的口播、访谈；更长的素材先分段再整理。",
-  "graph_hash": "de55a62370866c9fdd7baa04b60249a54709429e12a962afb35ea0c2a7949e55",
+  "graph_hash": "fc591d5e88464f0d0d4b1f616c86a85777692ba73bd4e777fd2b44ba39c82e13",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
@@ -353,9 +353,29 @@
         "target": "source_video"
       },
       {
+        "id": "source_denoise",
+        "source": "source_video",
+        "target": "clean_audio"
+      },
+      {
+        "id": "denoise_transcript",
+        "source": "clean_audio",
+        "target": "verbatim_transcript"
+      },
+      {
         "id": "transcript_project",
         "source": "verbatim_transcript",
         "target": "cleanup_project"
+      },
+      {
+        "id": "denoise_append",
+        "source": "clean_audio",
+        "target": "source_on_timeline"
+      },
+      {
+        "id": "project_append",
+        "source": "cleanup_project",
+        "target": "source_on_timeline"
       },
       {
         "id": "transcript_plan",

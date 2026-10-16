@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
   "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "9f22f76a87f2e2ea016c135cf3af857c84bc13b041b696288bbc7752cf42131b",
+  "graph_hash": "6ce23dfa01ef29a79e4babd91fc8e90d63a49bc000d5c5cc6b0267a5794d2582",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -742,6 +742,11 @@
         "source_handle": "true"
       },
       {
+        "id": "dy_comments__dy_comments_m",
+        "source": "dy_comments",
+        "target": "dy_comments_m"
+      },
+      {
         "id": "tk_is_dy__tk_is_xhs__false",
         "source": "tk_is_dy",
         "target": "tk_is_xhs",
@@ -752,6 +757,11 @@
         "source": "tk_is_xhs",
         "target": "xhs_comments",
         "source_handle": "true"
+      },
+      {
+        "id": "xhs_comments__xhs_comments_m",
+        "source": "xhs_comments",
+        "target": "xhs_comments_m"
       },
       {
         "id": "tk_is_xhs__tk_is_bili__false",
@@ -766,6 +776,11 @@
         "source_handle": "true"
       },
       {
+        "id": "bili_comments__bili_comments_m",
+        "source": "bili_comments",
+        "target": "bili_comments_m"
+      },
+      {
         "id": "tk_is_bili__tk_unsupported__false",
         "source": "tk_is_bili",
         "target": "tk_unsupported",
@@ -776,6 +791,16 @@
         "source": "use_tikhub",
         "target": "web_open",
         "source_handle": "false"
+      },
+      {
+        "id": "web_open__web_read",
+        "source": "web_open",
+        "target": "web_read"
+      },
+      {
+        "id": "web_read__web_close",
+        "source": "web_read",
+        "target": "web_close"
       },
       {
         "id": "web_read__web_is_api",
@@ -861,6 +886,16 @@
         "source": "has_comments",
         "target": "all_items",
         "source_handle": "true"
+      },
+      {
+        "id": "all_items__chunks",
+        "source": "all_items",
+        "target": "chunks"
+      },
+      {
+        "id": "chunks__batch_analyze",
+        "source": "chunks",
+        "target": "batch_analyze"
       },
       {
         "id": "batch_analyze__insight",

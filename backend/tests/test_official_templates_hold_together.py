@@ -9,6 +9,8 @@ TEMPLATE_CATALOG 里的每一个(整片、业务、译配、整理、分析)都�
   「未连接到流程」的角标,布景师拿到的道具清单永远是空的 —— 从它加进模板那一版起就没跑过。
 - 同一张图里「按画幅取尺寸 → 建项目」「建项目 → 三视图 / 设定图」只写在引用里:引擎照样等,画布上看不见。
 - 规范化把「配字幕」那条带数据的控制边折掉,出镜版带货口播收尾为空时字幕、导出整段被跳过,照样报成功。
+  (折边本身已在 2026-10-16 废掉 —— 控制边一律保留,「谁该跑」由引擎按路由语义判,见 ADR 0063 与
+  tests/test_drawn_control_edges_are_never_folded.py;这一条留在这里是这段历史。)
 
 每一处都是「图本身没问题、单看哪个函数都对」,只有把整张图摆出来逐条核对才看得见。
 
@@ -21,7 +23,7 @@ TEMPLATE_CATALOG 里的每一个(整片、业务、译配、整理、分析)都�
    (「另一支没跑,引用出来是空串」)是作者有意的,画成控制边反倒会改谁该跑。
 3. 就绪:落库前的结构校验干净;运行前的校验除了留给用的人填的那几格(必填、几选一),没有别的阻断;数据边两头的
    类型对得上(编辑器的 type-mismatch 同一个判据)。
-4. 规范化折掉的控制边不改谁该跑(另有路由边说了算的除外 —— 作者画那几条就是为了排先后)。
+4. 规范化只加数据边、不动作者画的控制边,也不改「谁该跑」(带路由语义的控制边说了算,见 ADR 0063)。
 5. 新建、按新版重建、官网副本:节点和连线一模一样。
 """
 
@@ -73,8 +75,13 @@ def _routing(edge: dict[str, Any], types: dict[str, str]) -> bool:
 
 
 def _always_runs(graph: dict[str, Any]) -> set[str]:
-    """一定会跑的节点(不算失败):engine.incoming_active 的判法,只是把条件分支一律当成可能不走 ——
-    有控制边的,任一条不带路由的控制边来自一定会跑的节点;一条控制边都没有的,任一条数据边来自一定会跑的节点。"""
+    """一定会跑的节点(不算失败):engine.incoming_active 的判法,加上「条件分支一律当成可能不走」。
+
+    有控制边时(**和引擎逐字同一条**,折边不再参与,见 ADR 0063):带路由语义的那几条由某一支决定,
+    而那一支可能不走,所以它们**不能**让这一格算「一定跑」;同格上剩下的那些普通控制边里,只有**没有同向
+    数据线**的才无条件激活(有数据线的那条只排先后)—— 它们来自一定会跑的节点,这一格才算一定跑。
+    一条带路由的都没有时,全部控制边照旧算数;一条控制边都没有的,看数据边。
+    """
     types = {node["id"]: node["type"] for node in graph["nodes"]}
     always = {node_id for node_id, node_type in types.items() if node_type == "start"}
     grew = True
@@ -83,7 +90,18 @@ def _always_runs(graph: dict[str, Any]) -> set[str]:
         for node_id in types.keys() - always:
             incoming = [edge for edge in graph["edges"] if edge["target"] == node_id]
             control = [edge for edge in incoming if edge.get("kind", "control") == "control"]
-            deciding = [edge for edge in control if not _routing(edge, types)] if control else incoming
+            if not control:
+                deciding = incoming
+            elif any(_routing(edge, types) for edge in control):
+                paired = {
+                    (edge["source"], edge["target"]) for edge in incoming if edge.get("kind") == "data"
+                }
+                deciding = [
+                    edge for edge in control
+                    if not _routing(edge, types) and (edge["source"], edge["target"]) not in paired
+                ]
+            else:
+                deciding = control
             if any(edge["source"] in always for edge in deciding):
                 always.add(node_id)
                 grew = True
@@ -249,7 +267,9 @@ def _who_decides(graph: dict[str, Any]) -> dict[str, tuple[str, frozenset[tuple[
     return decided
 
 
-def _folds_that_change_who_runs(raw: dict[str, Any], normalized: dict[str, Any], where: str) -> list[str]:
+def _changes_who_decides(raw: dict[str, Any], normalized: dict[str, Any], where: str) -> list[str]:
+    """规范化前后,每一格「该不该跑该看哪几条入边」有没有变。折边已废(ADR 0063):规范化只许**加**数据边,
+    加出来的数据边只在那一格一条控制边都没有时才参与判定 —— 有控制边的格子,判定必须一模一样。"""
     types = {node["id"]: node["type"] for node in raw["nodes"]}
     before, after = _who_decides(raw), _who_decides(normalized)
     changed = [
@@ -262,15 +282,15 @@ def _folds_that_change_who_runs(raw: dict[str, Any], normalized: dict[str, Any],
     for node in raw["nodes"]:
         body = (node.get("config") or {}).get("body")
         if isinstance(body, dict) and isinstance(body.get("nodes"), list):
-            changed += _folds_that_change_who_runs(body, inner[node["id"]]["config"]["body"], f"{where}{node['id']} › ")
+            changed += _changes_who_decides(body, inner[node["id"]]["config"]["body"], f"{where}{node['id']} › ")
     return changed
 
 
-def test_规范化折掉的控制边不改谁该跑(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_规范化不改谁该跑(monkeypatch: pytest.MonkeyPatch) -> None:
     raw = _raw_template_graphs(monkeypatch)
     assert set(raw) == set(TEMPLATE_IDS)
     changed = {
-        template_id: _folds_that_change_who_runs(graph, normalize_graph(graph, node_types=NODE_TYPES), "")
+        template_id: _changes_who_decides(graph, normalize_graph(graph, node_types=NODE_TYPES), "")
         for template_id, graph in raw.items()
     }
     assert {template_id: one for template_id, one in changed.items() if one} == {}

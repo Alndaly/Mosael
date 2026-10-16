@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Break down a reference video: shot list, contact sheets, report",
   "description": "Pick a video from the asset library. Code first measures every cut and each shot's motion (free, not guessed by a model) and grabs two frames per shot into contact sheets; optionally transcribe the speech so lines are assigned to each shot by timecode. A vision model then judges framing, camera work, transitions and rhythm shot by shot, and writes a picture description plus a storyboard prompt to recreate it (up to 25 shots per call; code reconciles afterwards: out-of-vocabulary words are dropped, and camera moves the pixels don't show are corrected and recorded). Code produces the shot-list report, a model writes the breakdown (structure, pacing curve, hook, reusable techniques), and it is saved as a note and handed over. Cost: no extra spend per shot, 25 shots per vision call — a one-minute, 30-shot video costs two vision calls plus one chat call for the summary. The starting point is a video already in the asset library; to break down a link, import it into the library first with Import from link.",
-  "graph_hash": "5993f8d7d70d14cb2f7092dbf71d8fc07d8493c78f84aa63120677e5fe902863",
+  "graph_hash": "f19128d97e058fa7a9b5b46492cbc27511b1d0c67cec52e8379cfdb94dbb7831",
   "graph": {
     "meta": {
       "template_id": "reference_video_shots",
@@ -252,6 +252,11 @@
         "id": "start__source_video",
         "source": "start",
         "target": "source_video"
+      },
+      {
+        "id": "source_video__detect",
+        "source": "source_video",
+        "target": "detect"
       },
       {
         "id": "detect__want_speech",

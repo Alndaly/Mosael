@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Transcript-based video cleanup",
   "description": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original. Suited to talks and interviews up to about 30 minutes; split longer footage first.",
-  "graph_hash": "a5af197b26fca66ecaac5b6d04d6a1c9bf70739f10ec6a3611792fcd679a2d32",
+  "graph_hash": "b6d6e5ab29ac9b4186e2d6f8f0c1972d74e845283b390ee9cbb4c7306fd0e086",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
@@ -353,9 +353,29 @@
         "target": "source_video"
       },
       {
+        "id": "source_denoise",
+        "source": "source_video",
+        "target": "clean_audio"
+      },
+      {
+        "id": "denoise_transcript",
+        "source": "clean_audio",
+        "target": "verbatim_transcript"
+      },
+      {
         "id": "transcript_project",
         "source": "verbatim_transcript",
         "target": "cleanup_project"
+      },
+      {
+        "id": "denoise_append",
+        "source": "clean_audio",
+        "target": "source_on_timeline"
+      },
+      {
+        "id": "project_append",
+        "source": "cleanup_project",
+        "target": "source_on_timeline"
       },
       {
         "id": "transcript_plan",

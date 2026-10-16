@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Why a video went viral",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; switch to a signed-in browser profile where needed) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each; complete fields, steadier, no sign-in). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
-  "graph_hash": "fdc8eb30c9eb104dc3e2f60113ad50713fb1f69a784044f483294bd9bb51703a",
+  "graph_hash": "b124566e4648a7c9e334b8ca43495df39542e9901768e282a04e6c4a829b13c5",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
@@ -896,6 +896,16 @@
         "source_handle": "true"
       },
       {
+        "id": "dy_video__dy_video_m",
+        "source": "dy_video",
+        "target": "dy_video_m"
+      },
+      {
+        "id": "dy_comments__dy_comments_m",
+        "source": "dy_comments",
+        "target": "dy_comments_m"
+      },
+      {
         "id": "tk_is_dy__tk_is_xhs__false",
         "source": "tk_is_dy",
         "target": "tk_is_xhs",
@@ -912,6 +922,16 @@
         "source": "tk_is_xhs",
         "target": "xhs_comments",
         "source_handle": "true"
+      },
+      {
+        "id": "xhs_video__xhs_video_m",
+        "source": "xhs_video",
+        "target": "xhs_video_m"
+      },
+      {
+        "id": "xhs_comments__xhs_comments_m",
+        "source": "xhs_comments",
+        "target": "xhs_comments_m"
       },
       {
         "id": "tk_is_xhs__tk_is_bili__false",
@@ -932,6 +952,16 @@
         "source_handle": "true"
       },
       {
+        "id": "bili_video__bili_video_m",
+        "source": "bili_video",
+        "target": "bili_video_m"
+      },
+      {
+        "id": "bili_comments__bili_comments_m",
+        "source": "bili_comments",
+        "target": "bili_comments_m"
+      },
+      {
         "id": "tk_is_bili__tk_unsupported__false",
         "source": "tk_is_bili",
         "target": "tk_unsupported",
@@ -942,6 +972,16 @@
         "source": "use_tikhub",
         "target": "web_open",
         "source_handle": "false"
+      },
+      {
+        "id": "web_open__web_read",
+        "source": "web_open",
+        "target": "web_read"
+      },
+      {
+        "id": "web_read__web_close",
+        "source": "web_read",
+        "target": "web_close"
       },
       {
         "id": "web_read__web_is_api",
@@ -1059,6 +1099,11 @@
         "source": "want_download",
         "target": "download",
         "source_handle": "true"
+      },
+      {
+        "id": "download__got_video",
+        "source": "download",
+        "target": "got_video"
       },
       {
         "id": "got_video__transcript__true",

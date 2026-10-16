@@ -43,6 +43,7 @@ from app.domain.notifications import notify
 from app.domain.workflows import (
     BRANCHING_NODE_TYPES,
     NESTED_BODY_TYPES,
+    AwaitingApproval,
     WorkflowDomainError,
     available_node_types,
     closure_subgraph,
@@ -59,7 +60,7 @@ from app.domain.workflows.node_types import node_title
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config, one_asset_fields
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
-from app.domain.workflows.graph_run import GraphRun
+from app.domain.workflows.graph_run import GraphResume, GraphRun
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import keep_full_texts, snapshot
 from app.domain.workflows.run_scope import halt_scope, halted, node_scope
@@ -545,7 +546,7 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
 
 def _run_workflow_thread(
     workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any], *, locale: str | None = None,
-    target_node: str | None = None,
+    target_node: str | None = None, resume: GraphResume | None = None,
 ) -> None:
     # 线程就是入口:正常走完提交(失败也记在任务上、正常走完),真抛出去才回滚。
     with speaking(locale), unit_of_work() as db:
@@ -558,8 +559,10 @@ def _run_workflow_thread(
             if revision is None or revision.workflow_id != workflow.id:
                 raise WorkflowDomainError("wfErr_revisionMissing")
             logger.info("workflow job %s: running '%s'", job_id, workflow.name)
-            run_workflow(db, workflow, revision, job, params, target_node=target_node)
+            run_workflow(db, workflow, revision, job, params, target_node=target_node, resume=resume)
             db.refresh(job)
+            #: 停在「等人确认」上也是正常收场(见 _park_at_approval):这一句说"finished"只是日志,
+            #: 任务那时仍是 running。别在这一句上读终态。
             logger.info("workflow job %s: '%s' finished (%s)", job_id, workflow.name, job.status)
         except Exception as exc:  # noqa: BLE001 — 线程内兜底,失败必须落到 job 上
             logger.exception("workflow job %s ('%s') crashed", job_id, workflow.name)
@@ -617,6 +620,7 @@ def run_graph(
     db: Session | None = None,
     entry_is_root: bool = False,
     target_node: str | None = None,
+    resume: GraphResume | None = None,
 ) -> GraphRun:
     """依赖驱动的并行执行内核(顶层工作流与循环体/子图共用):前驱全完成才可运行,彼此独立的
     分支**同时**跑(线程池)。条件分支按 source_handle 匹配才算活跃;未被活跃入边触达的节点整段
@@ -628,6 +632,8 @@ def run_graph(
     - 单跑一个节点(`target_node`):只执行目标及其 waits_for 传递闭包(见 target_dependency_closure)
       ——目标跑完即收(闭包里全是它的上游,它完成时闭包已落定),闭包外节点「不在本次运行」:
       不执行、不计入进度 total、不算失败。闭包内无闭包依赖的节点作入口(等价 entry_is_root)。
+    - **从暂停接着跑(`resume`)**:`done` 里的节点**直接跳过、绝不执行**,上下文从那份现场播种
+      (见 GraphResume)。「等人确认」把一轮图拆成两半,这是后半截的入口。
     """
     order = topo_order(graph)  # 校验 DAG + 稳定顺序
     order_ids = [str(node["id"]) for node in order]
@@ -661,6 +667,12 @@ def run_graph(
     context: dict[str, Any] = dict(initial_context or {})
     executed: set[str] = set()
     done: set[str] = set()  # executed ∪ skipped
+    #: **从暂停接着跑**:把现场播种进来。`done` 里的节点在调度那一步被直接跳过(见 schedule_ready),
+    #: 于是它们**一个都不会被执行第二次** —— 前面烧过钱的节点不会重生一次。
+    if resume is not None:
+        context.update(resume.context)
+        executed |= set(resume.executed)
+        done |= set(resume.done)
     lock = threading.Lock()
 
     def is_cancelled(db: Session | None = None) -> bool:
@@ -728,6 +740,10 @@ def run_graph(
             return True
         return entry_is_root and not incoming.get(nid)
 
+    def routed_control(edge: dict[str, Any]) -> bool:
+        """带路由语义的控制边:条件的真 / 假出口(写了 handle),或来源是会分支的节点(没写 handle 也是「真」)。"""
+        return bool(edge.get("source_handle")) or node_types.get(str(edge.get("source"))) in BRANCHING_NODE_TYPES
+
     def incoming_active(nid: str) -> bool:
         node_edges = incoming.get(nid, [])
         if not node_edges:
@@ -738,7 +754,28 @@ def run_graph(
         # 只有数据边(画布上把控制边折叠成了数据边)时,由数据边决定,和以前一样。
         control = [edge for edge in node_edges if str(edge.get("kind", "")) != "data"]
         if control:
-            node_edges = control
+            if any(routed_control(edge) for edge in control):
+                # **有带路由语义的控制边时,由它定「该不该跑」。** 条件节点的「真 / 假」出口说的是"什么时候跑",
+                # 而同格上那些**已经有一条同向数据线**的普通控制边只说"谁在谁前面"(数据线本身就在排先后,
+                # 那条实线是画出来给人看的),不激活这一格。规范化此前正是替作者把这些边折掉来达到这个判法的 ——
+                # 维护者 2026-10-16 不再折(见 ADR 0063),同一条规矩在这里明说,折与不折「谁该跑」完全一样。
+                #
+                # **没有同向数据线的那几条普通控制边照旧激活。** 它们不是"只排先后":同格上没有别的东西能排它,
+                # 作者画它就是要这一格跑起来。两条官方模板靠这个:`reference_video_shots` 的 `describe`
+                # (want_speech 的两个出口 + transcript_section→describe,整段是"要不要先转写再逐镜描述"),
+                # `highlight_shorts` 的 `cut_clips`(has_clips 的真出口 + clips_project→cut_clips)。
+                # 一并当成"只排先后"的话,这两格该跑的时候不跑了。
+                paired = {
+                    (str(edge.get("source", "")), str(edge.get("target", "")))
+                    for edge in node_edges
+                    if str(edge.get("kind", "")) == "data"
+                }
+                node_edges = [
+                    edge for edge in control
+                    if routed_control(edge) or (str(edge.get("source", "")), str(edge.get("target", ""))) not in paired
+                ]
+            else:
+                node_edges = control
         for edge in node_edges:
             source = str(edge.get("source"))
             with lock:
@@ -817,11 +854,14 @@ def run_graph(
 
         return listen
 
-    processed = 0
-    scheduled: set[str] = set()
+    #: 已经落定的那些计入进度:从暂停接着跑时进度不该从头开始(前面那几步是跑过的)。
+    processed = sum(1 for nid in order_ids if nid in done)
+    scheduled: set[str] = set(done & set(order_ids))
     error: Exception | None = None
     failed_node = ""
     cancelled = False
+    #: 停在哪一步等人确认(见 AwaitingApproval)。它不是失败:收场时走的是 GraphRun.paused 那条。
+    paused: AwaitingApproval | None = None
 
     # 「停」信号先于线程池压上:节点提交时带走的上下文里要有它(见 workflows.run_scope)。
     with halt_scope() as halt, ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_NODES, total)) as pool:
@@ -843,6 +883,10 @@ def run_graph(
                 if len(done) < len(order_ids):
                     cancelled = True
                 return
+            if paused is not None:
+                # 有人在等确认:这一轮到此为止,**后面还没派出去的节点一律先不派** —— 它们属于
+                # 恢复之后的那半截(见 GraphResume)。刻意不立停的信号:那不是失败,兄弟节点做完就做完。
+                return
             for nid in order_ids:
                 if nid in scheduled:
                     continue
@@ -862,7 +906,7 @@ def run_graph(
                 futures[pool.submit(contextvars.copy_context().run, run_node, nid)] = nid
 
         schedule_ready()
-        while futures and error is None and not cancelled:
+        while futures and error is None and not cancelled and paused is None:
             if stopping():
                 cancelled = True
                 break
@@ -871,6 +915,12 @@ def run_graph(
                 nid = futures.pop(future)
                 try:
                     outputs = future.result()
+                except AwaitingApproval as waiting:
+                    # **「等人确认」不是失败。** 这一轮停在暂停点上:不立停的信号(兄弟节点该做完的
+                    # 做完、该提交的提交),不记失败事件,后面没派出去的节点留给恢复之后那一半。
+                    paused = waiting
+                    node_event("workflow.node.awaiting_approval", nid, approval_id=waiting.approval_id)
+                    break
                 except Exception as exc:  # noqa: BLE001 —— 任一节点失败即整流失败
                     if is_cancelled():
                         # 取消在前、失败在后:这一步是**被取消的**。运行名下的东西随取消被收走(浏览器会话关掉、
@@ -895,7 +945,7 @@ def run_graph(
                 if has_job:
                     job.progress = processed / total
                     db.commit()
-            if error is None and not cancelled:
+            if error is None and not cancelled and paused is None:
                 schedule_ready()
         if cancelled:
             halt.set()
@@ -903,6 +953,31 @@ def run_graph(
             for pending_nid in futures.values():
                 node_event("workflow.node.failed", pending_nid,
                            error=t("jobErr_cancelled", DEFAULT_LOCALE), error_key="jobErr_cancelled")
+        elif paused is not None:
+            # **等还在飞的兄弟节点各自落定,一件都不留给恢复之后重跑。** 它们在暂停点上已经开始了,
+            # 半途丢下的话恢复时就只能从头再来一遍(那正是要避免的:这一步可能正在烧钱)。它们做完的
+            # 产物一并进现场。
+            wait(list(futures.keys()))
+            for future, pending_nid in futures.items():
+                failure = future.exception()
+                if failure is not None:
+                    # 兄弟节点失败:这一轮还是**失败**(不是暂停)—— 一次运行里既有失败又有等待时,
+                    # 失败优先,像以前一样。暂停那半截的信息跟着丢掉,反正没人会往下跑。
+                    error, failed_node = failure, pending_nid
+                    node_event("workflow.node.failed", pending_nid, **failure_payload(failure))
+                    continue
+                outputs = future.result()
+                with lock:
+                    context[pending_nid] = outputs
+                    executed.add(pending_nid)
+                    done.add(pending_nid)
+                processed += 1
+                node_finished(pending_nid, outputs)
+                if has_job:
+                    job.progress = processed / total
+                    db.commit()
+            if error is not None:
+                paused = None
         elif error is not None:
             # 失败之后还在飞的兄弟节点:等它们停下,各自落一个终态事件 —— 只有 started 的话,
             # 执行历史会把它们永远画成「运行中」。
@@ -917,7 +992,69 @@ def run_graph(
     cancelled = cancelled or is_cancelled()
     if cancelled:
         return GraphRun(context, True)
+    if paused is not None:
+        #: **子图里不许暂停。** 体的执行内核(has_job=False)没有地方落检查点,层级也套不回去;
+        #: 校验和运行前检查都会先拦下它,这里是不该走到的一道兜底。
+        if not has_job:
+            raise WorkflowDomainError("wfErr_awaitApprovalNested")
+        return GraphRun(
+            context, False,
+            awaiting=paused.node_id, approval=paused.approval_id,
+            executed=frozenset(executed), done=frozenset(done),
+        )
     return GraphRun(context, False, error, failed_node if error is not None else "")
+
+
+def _park_at_approval(db: Session, job: Job, run: GraphRun) -> None:
+    """把暂停那一刻的现场写进那张待批单,并让任务卡说出「在等人确认」。
+
+    **不收尾、不落终态**:这次运行是活的,只是在等。取消它走的是普通任务那条路
+    (jobs.cancel_job → 挂在 kind 上的取消监听把待批单一起撤了),重启接回来走的是 resumer 那条
+    (见 domain/workflows/approvals.register_seams)。进度按已经落定的节点算,不回头。
+    """
+    from app.domain.workflows import approvals
+
+    approval = approvals.find(db, job.id, run.awaiting)
+    if approval is None:
+        #: 单不在了(被取消撤掉、被清理):这一轮恢复不了,老实说一句,别让它停在 running 上没人管。
+        raise WorkflowDomainError("wfErr_awaitNotResumable")
+    approvals.record_checkpoint(
+        db, approval,
+        GraphResume(context=run.context, executed=run.executed, done=run.done).checkpoint(),
+    )
+    say(job, "jobMsg_awaitingApproval", title=approval.title)
+    emit_job_event(db, job.id, "workflow.awaiting_approval", {
+        "node_id": run.awaiting, "approval_id": approval.id, "title": approval.title,
+    })
+    #: 站内通知 + 飞书卡片。通知是兜底(没有飞书绑定也照样等),卡片失败一律降级。
+    #: **排在检查点之后**:手快的人在现场落库之前点了确认,那次运行会卡在一个永远唤醒不了的等待上。
+    approvals.announce(db, approval)
+    db.commit()
+    logger.info("workflow job %s parked at node %s awaiting approval %s", job.id, run.awaiting, approval.id)
+
+
+def continue_workflow_job(db: Session, job: Job, checkpoint: dict[str, Any]) -> None:
+    """**把一个停在「等人确认」上的运行从暂停的那个节点接着跑。** 决定下来时(飞书 / 应用内 / 超时)
+    和重启收尾都走这里。
+
+    不改任务状态(它一直是 running)、不重新校验(那一版开跑前已经查过)、也不新建任务 ——
+    派发走的是和开跑同一处(jobs.dispatch_job),线程拿的是**当时钉住的那一版修订**。
+    """
+    resume = GraphResume.from_checkpoint(checkpoint)
+    if resume is None:
+        raise WorkflowDomainError("wfErr_awaitNotResumable")
+    payload = job.payload or {}
+    workflow_id = str(payload.get("workflow_id") or "")
+    revision_id = str(payload.get("workflow_revision_id") or "")
+    params = dict(payload.get("params") or {})
+    locale = payload.get("locale")
+    target_node = str(payload.get("target_node_id") or "") or None
+    dispatch_job(
+        db, job,
+        lambda: _run_workflow_thread(
+            workflow_id, revision_id, job.id, params, locale=locale, target_node=target_node, resume=resume,
+        ),
+    )
 
 
 def run_workflow(
@@ -928,20 +1065,28 @@ def run_workflow(
     params: dict[str, Any],
     *,
     target_node: str | None = None,
+    resume: GraphResume | None = None,
 ) -> dict[str, Any]:
     """执行固定修订；编辑当前工作流不会改变已排队任务的图。`target_node` 给定时单跑这一个节点
-    (只执行它及其上游闭包,见 run_graph)。"""
+    (只执行它及其上游闭包,见 run_graph)。
+
+    `resume` 给定时是**从「等人确认」的暂停点接着跑**:前面已经落定的节点直接跳过(见 GraphResume)。
+    """
     graph = revision.graph
     node_types = {str(node["id"]): str(node.get("type")) for node in (graph.get("nodes") or [])}
     if not finish_job(db, job, status="running"):
         db.commit()
         return {}
-    say(job, "jobMsg_workflowRunning", name=workflow.name)
-    db.commit()
+    if resume is None:
+        say(job, "jobMsg_workflowRunning", name=workflow.name)
+        db.commit()
 
-    run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db, target_node=target_node)
+    run = run_graph(graph, wf_id=workflow.id, params=params, job=job, db=db, target_node=target_node, resume=resume)
     context = run.context
     if run.cancelled:
+        return context
+    if run.paused:
+        _park_at_approval(db, job, run)
         return context
     if run.error is not None:
         # 失败的任务结果里照样留下**已经跑完的那些节点**的产物(出好的图、建好的项目)—— 失败原因由外层兜底

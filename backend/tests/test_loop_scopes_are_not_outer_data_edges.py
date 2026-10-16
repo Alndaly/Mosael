@@ -57,7 +57,7 @@ def test_规范化不碰体内作用域的字段() -> None:
     assert nodes["again"]["config"]["output"] == "{{llm-1.text}}"
     assert nodes["sub"]["config"]["output"] == "{{llm-1.text}}"
     assert not [edge for edge in normalized["edges"] if edge.get("kind") == "data"], "体内引用被接成了外层数据边"
-    #: 控制边一条不少(没有数据边,也就没有可折的)。
+    #: 控制边一条不少(这里没有数据边可升级,也就没有要动的边;折边已废,见 ADR 0063)。
     assert {edge["id"] for edge in normalized["edges"]} == {"e1", "e2", "e3", "e4"}
 
 

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too. Where a video model is available, the beats in between move, as in the narrated short (the hook and call to action are already presenter video): one more paid video generation per beat, with about (target length minus hook and call to action) ÷ the start node's beat_seconds beats. This copy includes “Put this beat in motion”: the start node's beat_seconds is every beat's length, and the video model you pick has to make that length. Without a video model, open the per-beat loop on the canvas after importing, delete “Put this beat in motion”, “File this beat's clip” and “Mute this beat's clip”, then wire the output of “Paint this beat” into the asset of “Lay it down for this beat's length” — every beat then lays a still for beat_seconds. Or add the template from the in-app gallery: without a video model it is built with stills.",
-  "graph_hash": "984ec1d397330cbb84eda9efd29095ea2af6aea3d0c44566d16a731f9df44174",
+  "graph_hash": "1ea954da5a2d039e3509d31eca42f0104bb2ec1e57f517d9b6ff18ee54d40cf2",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -605,9 +605,34 @@
                 "target": "beat_clip"
               },
               {
+                "id": "clip_file",
+                "source": "beat_clip",
+                "target": "file_clip"
+              },
+              {
+                "id": "clip_place",
+                "source": "beat_clip",
+                "target": "beat_on_timeline"
+              },
+              {
                 "id": "place_mute",
                 "source": "beat_on_timeline",
                 "target": "mute_clip"
+              },
+              {
+                "id": "frame_file",
+                "source": "beat_frame",
+                "target": "file_frame"
+              },
+              {
+                "id": "place_voice",
+                "source": "beat_on_timeline",
+                "target": "beat_voice_place"
+              },
+              {
+                "id": "voice_voice_place",
+                "source": "beat_voice",
+                "target": "beat_voice_place"
               },
               {
                 "id": "narration_voice",
@@ -620,6 +645,11 @@
                 "source": "has_narration",
                 "target": "beat_voice_place",
                 "source_handle": "true"
+              },
+              {
+                "id": "voice_overflow_check",
+                "source": "beat_voice_place",
+                "target": "voice_overflow"
               },
               {
                 "id": "overflow_notify",
@@ -773,6 +803,11 @@
         "target": "presenter"
       },
       {
+        "id": "presenter_voice_check",
+        "source": "presenter",
+        "target": "presenter_has_voice"
+      },
+      {
         "id": "presenter_voice_ok",
         "source": "presenter_has_voice",
         "target": "presenter_has_face",
@@ -802,6 +837,11 @@
         "target": "pitch_project"
       },
       {
+        "id": "presenter_hook",
+        "source": "presenter",
+        "target": "hook_talk"
+      },
+      {
         "id": "script_has_hook",
         "source": "pitch_script",
         "target": "has_hook"
@@ -813,6 +853,11 @@
         "source_handle": "true"
       },
       {
+        "id": "presenter_cta",
+        "source": "presenter",
+        "target": "cta_talk"
+      },
+      {
         "id": "script_has_cta",
         "source": "pitch_script",
         "target": "has_cta"
@@ -822,6 +867,16 @@
         "source": "has_cta",
         "target": "cta_talk",
         "source_handle": "true"
+      },
+      {
+        "id": "hook_place_edge",
+        "source": "hook_talk",
+        "target": "hook_place"
+      },
+      {
+        "id": "project_hook",
+        "source": "pitch_project",
+        "target": "hook_place"
       },
       {
         "id": "hook_place_gate",
@@ -848,6 +903,11 @@
         "id": "beats_then_cta",
         "source": "shoot_beats",
         "target": "cta_spoken"
+      },
+      {
+        "id": "cta_place_edge",
+        "source": "cta_talk",
+        "target": "cta_place"
       },
       {
         "id": "cta_place_gate",

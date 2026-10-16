@@ -7,10 +7,10 @@ source_handle,于是被当成「真」分支 —— 把 `result` 接进一个模
 同一条数据边。
 
 路由语义属于**控制边**。哪些节点会分支、分支叫什么,由节点声明(NODE_TYPES 的 `branches`),
-引擎路由、保存校验、规范化折叠边都读这一格:
+引擎路由和保存校验都读这一格:控制边从会分支的节点出发、没写 handle 就是「真」那一支。
 
-- 规范化会把"同一对节点间已有数据边"的无 handle 控制边折叠掉 —— 但从会分支的节点出发的
-  控制边带着路由语义(没写 handle 就是「真」),折叠掉它等于把"只在真时跑"改成"总是跑"。
+- 从会分支的节点出发的控制边**永远不折** —— 折边本身已在 2026-10-16 废掉(控制边一律保留,见 ADR 0063),
+  而它带着路由语义:折掉它、或者让别的普通控制边把它挤掉,都等于把"只在真时跑"改成"总是跑"。
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def test_接了_result_的节点两个分支都跑(right: str, expected: str) ->
 @pytest.mark.parametrize(("right", "runs"), [("a", True), ("b", False)])
 def test_没写_handle_的分支边保存后仍然只在真时跑(right: str, runs: bool) -> None:
     """控制边没写 handle 就是「真」分支;同一对节点间再有一条数据边(`{{check.result}}` 规范化出来的)
-    时,规范化此前把这条控制边当成多余的折叠掉 —— 路由语义跟着没了。"""
+    时,这条控制边照样在(规范化只加数据边,见 ADR 0063),「只在真时跑」由它带着。"""
     context, saved = _run(
         {
             "nodes": [
@@ -87,7 +87,7 @@ def test_没写_handle_的分支边保存后仍然只在真时跑(right: str, ru
             ],
         }
     )
-    assert any(edge["id"] == "e2" for edge in saved["edges"]), "带路由语义的控制边被规范化折叠掉了"
+    assert any(edge["id"] == "e2" for edge in saved["edges"]), "带路由语义的控制边不该被规范化动:它带着「只在真时跑」"
     assert ("say" in context) is runs
 
 

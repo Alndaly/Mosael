@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Social account health check",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu / Douyin need a signed-in browser profile, other platforms work too, and the numbers are the page's rounded ones) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each — see your TikHub bill; complete fields, steadier, no sign-in). Plus one or two AI chat calls (one more on the browser route to read the page).",
-  "graph_hash": "63fc33516e01bd531d10f54cfcf2b99bbcb79a3e1b79f75bc27e81a618d0691b",
+  "graph_hash": "7310b7fb6c6b4ebb291db3f7dcf1117bdd2603035a04e68791eb42b0bd02a5b8",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
@@ -751,6 +751,16 @@
         "source": "use_tikhub",
         "target": "web_open",
         "source_handle": "false"
+      },
+      {
+        "id": "web_open__web_read",
+        "source": "web_open",
+        "target": "web_read"
+      },
+      {
+        "id": "web_read__web_close",
+        "source": "web_read",
+        "target": "web_close"
       },
       {
         "id": "web_read__web_struct",

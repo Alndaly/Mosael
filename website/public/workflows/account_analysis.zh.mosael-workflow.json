@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自媒体账号运营诊断",
   "description": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书 / 抖音要换成已登录的浏览器档案,其他平台也能用,数字是页面上的约数)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起,以 TikHub 账单为准;字段全、更稳、不用登录)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
-  "graph_hash": "db6734cd042bb5177cb091723ad29eeb714067f43f932fa558e0b7f300df2995",
+  "graph_hash": "be4e953843f761064f989ad1b3197dc2e05ae0b238b992b28dda2a50f342ef08",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
@@ -751,6 +751,16 @@
         "source": "use_tikhub",
         "target": "web_open",
         "source_handle": "false"
+      },
+      {
+        "id": "web_open__web_read",
+        "source": "web_open",
+        "target": "web_read"
+      },
+      {
+        "id": "web_read__web_close",
+        "source": "web_read",
+        "target": "web_close"
       },
       {
         "id": "web_read__web_struct",

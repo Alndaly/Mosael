@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
   "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion). This copy includes “Put this scene in motion”. Without a video model, delete “Put this scene in motion” and “File this scene's clip” on the canvas after importing and it shoots stills only — the loop hands over the on-model images and doesn't depend on those two.",
-  "graph_hash": "25f87f27a2e16e82dfe3cd2be8fce2de25940ac6da50f147272c71b38109a8db",
+  "graph_hash": "2b9bcf94cfa2e30fa4ff7739a0920e377f52da8739d2c1673295ab2b1ec23d7e",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -249,9 +249,19 @@
             ],
             "edges": [
               {
+                "id": "gen_file",
+                "source": "on_model",
+                "target": "file_image"
+              },
+              {
                 "id": "file_clip_gen",
                 "source": "file_image",
                 "target": "on_model_clip"
+              },
+              {
+                "id": "clip_file",
+                "source": "on_model_clip",
+                "target": "file_clip"
               },
               {
                 "id": "d-on_model-asset_id-file_image-asset_ids",
@@ -397,6 +407,16 @@
         "id": "shoot_notice",
         "source": "shoot_scenes",
         "target": "done_notice"
+      },
+      {
+        "id": "shoot_images",
+        "source": "shoot_scenes",
+        "target": "scene_images"
+      },
+      {
+        "id": "shoot_clips",
+        "source": "shoot_scenes",
+        "target": "scene_clips"
       },
       {
         "id": "clips_output",

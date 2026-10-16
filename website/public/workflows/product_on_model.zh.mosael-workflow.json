@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品图 → 模特上身图与短视频",
   "description": "给一张平铺图或面料图,规划几组投放场景(最多 12 组),每组出一张竖幅模特上身图;视频模型可用时再以这张图为首帧把每一组动起来。商品图贯穿每一次生成 —— 版型、颜色、纹理、logo 都以它为准,不是照描述重画。图和视频都归进一个项目,卖点文案一并存成笔记。每一组是一次付费出图(带视频再加一次视频生成)。这一份带着「把这一组动起来」:没有视频模型的话,导入后在画布上删掉「把这一组动起来」和「归档这一组的视频」两个节点就只出图 —— 循环交出的是上身图,不依赖它们。",
-  "graph_hash": "bf76e3cdbb94227ed79b3d11eb50ab395773425b35e7dfb82ebd646c08ac51ae",
+  "graph_hash": "b7e28fe020625d14eb0f24e751b5ed4b4b4c950e963737a0062f8cf56d2e48a1",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -249,9 +249,19 @@
             ],
             "edges": [
               {
+                "id": "gen_file",
+                "source": "on_model",
+                "target": "file_image"
+              },
+              {
                 "id": "file_clip_gen",
                 "source": "file_image",
                 "target": "on_model_clip"
+              },
+              {
+                "id": "clip_file",
+                "source": "on_model_clip",
+                "target": "file_clip"
               },
               {
                 "id": "d-on_model-asset_id-file_image-asset_ids",
@@ -397,6 +407,16 @@
         "id": "shoot_notice",
         "source": "shoot_scenes",
         "target": "done_notice"
+      },
+      {
+        "id": "shoot_images",
+        "source": "shoot_scenes",
+        "target": "scene_images"
+      },
+      {
+        "id": "shoot_clips",
+        "source": "shoot_scenes",
+        "target": "scene_clips"
       },
       {
         "id": "clips_output",

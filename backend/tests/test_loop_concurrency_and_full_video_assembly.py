@@ -409,7 +409,8 @@ class Test数据边不决定该不该跑:
         assert "guarded" not in context
 
     def test_只有数据边时仍由数据边带起(self, fake_node) -> None:
-        """画布会把控制边折叠成数据边;那种节点照旧跟着上游跑。"""
+        """只有数据边(没有控制边)的节点,照旧跟着上游跑 —— 精确引用升级出来的数据边、用户手连的数据线
+        都会造成这种形状(折边已在 2026-10-16 废掉,见 ADR 0063;这条守的是引擎那一半)。"""
         from app.domain.workflows.engine import execute_graph
 
         ws = _workspace()

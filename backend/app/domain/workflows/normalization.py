@@ -229,66 +229,25 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         if isinstance(body, dict) and isinstance(body.get("nodes"), list):
             _canonicalize_graph(body, node_types)
 
-    data_sources: dict[str, set[str]] = {}
-    for edge in edges:
-        if edge.get("kind") == "data":
-            data_sources.setdefault(str(edge.get("target", "")), set()).add(str(edge.get("source", "")))
-    for source_id, _, target_id, _ in new_bindings:
-        data_sources.setdefault(target_id, set()).add(source_id)
-    #: 只折「这一步刚从精确引用升级出来的数据边」造成的冗余。用户画布里**本来就有**的数据边
-    #: (画布上亲手连的)不让控制边被折 —— 折了画布就和库里分岔:本轮画布还在,下一次刷新
-    #: (或换台机器)控制边就没了(维护者 2026-10-15 两张截图对照报上来的 bug)。
-    upgraded_pairs = {(source_id, target_id) for source_id, _, target_id, _ in new_bindings}
-
-    def routes(edge: dict[str, Any]) -> bool:
-        """这条控制边带路由语义吗:从会分支的节点出发的,没写 handle 也是「真」那一支。"""
-        source = by_id.get(str(edge.get("source", "")))
-        source_type = str(source.get("type", "")) if source else ""
-        return bool((node_types.get(source_type) or {}).get("branches"))
-
-    def ordering_only(edge: dict[str, Any]) -> bool:
-        """只排先后的控制边:没写 handle、不从会分支的节点出发、它的冗余是这一步升级数据边造成的
-        (数据边本身就排先后;用户自己连的数据边不折,见 upgraded_pairs)。"""
-        return (
-            edge.get("kind", "control") == "control"
-            and not edge.get("source_handle")
-            and not routes(edge)
-            and (str(edge.get("source", "")), str(edge.get("target", ""))) in upgraded_pairs
-        )
-
-    def routing(edge: dict[str, Any]) -> bool:
-        """带路由语义的控制边:写了 handle(条件的真 / 假出口),或从会分支的节点出发。"""
-        return edge.get("kind", "control") == "control" and (bool(edge.get("source_handle")) or routes(edge))
-
-    control_into: dict[str, list[dict[str, Any]]] = {}
-    for edge in edges:
-        if edge.get("kind", "control") == "control":
-            control_into.setdefault(str(edge.get("target", "")), []).append(edge)
-
-    def foldable_into(target: str) -> bool:
-        """T 的那几条只排先后的控制边能不能折掉 —— 折掉之后「T 该不该跑」得还是作者画的那个意思。
-
-        引擎的判法(engine.incoming_active):有控制边只看控制边,任一条来源跑了就跑;一条控制边都没有时看数据边。
-        - T 另有**带路由语义**的控制边(条件的「真」出口):那几条只排先后的边折掉,T 由那条路由边说了算 —— 作者
-          画它们就是为了排先后(官方模板里「这一拍有画外音才放音轨」就靠这个)。
-        - T 没有路由边:「任一条来源跑了就跑」的那组来源折前折后得是同一组。所以只在数据边的来源恰好就是这几条
-          控制边的来源时折(折掉之后改由数据边判,判的还是这一组)。两种情况因此都不折:
-          · 数据边另有分支外的来源 B:T 的控制边只来自条件分支里的 A,折掉 A→T 就把「A 跑了才跑」改成了「A 或 B
-            跑了就跑」,A 被跳过、T 照样拿着空值跑;
-          · 另有一条**不带数据**的普通控制边:折掉之后 T 只看那一条,它没跑 T 就跟着不跑。此前把「不是只排先后」当成了
-            「带路由」:出镜版带货口播的「配字幕」从「逐拍成片」(另有数据边)和「放收尾」(不带数据)各来一条控制边,
-            前一条被折掉 —— 收尾那句是空的、「放收尾」跳过时,字幕、导出、交付整段跟着跳过,工作流照样报成功。
-        """
-        control = control_into.get(target, [])
-        if any(routing(edge) for edge in control):
-            return True
-        return {str(edge.get("source", "")) for edge in control} == data_sources.get(target, set())
-
-    def redundant(edge: dict[str, Any]) -> bool:
-        return ordering_only(edge) and foldable_into(str(edge.get("target", "")))
-
-    edges[:] = [edge for edge in edges if not redundant(edge)]
-
+    #: **这里曾经折边,现在一条都不折(维护者 2026-10-16 的决定:"我要能看见,用方案一")。**
+    #:
+    #: 折的是「这一步刚从精确引用升级出来的数据边」造成的冗余:同一对节点间有数据边时,那条无 handle 的
+    #: 控制边看起来只排先后(数据边也排先后)。可它折与不折**取决于巧合** —— `foldable_into` 要求「折掉后
+    #: 谁该跑不变」,目标另有入边时就不折。最小复现:`start → A → T` 加一条 `T.body = {{B.text}}` 就有了
+    #: B→T 的数据边,此时 A→T 折掉(T 只剩 B→T,「A 跑了才跑」变成「A 或 B 跑了就跑」);只要 T 再有**任何
+    #: 一条**别的入边,同一条 A→T 就留下。同一张图里时有时无,作者画的那条线在不在全看别处的连线。
+    #:
+    #: 代价在官方模板上看得最清楚:15 张手写的图里 start→output 的控制链本来都完整(15/15),规范化折断了
+    #: 其中 10 张 —— 68 条控制边被折、55 个节点只剩数据入边(画布上那一格没有线)。
+    #:
+    #: 当初敢折,是因为「引擎只看控制边」;可折掉的那几条**确实会改谁该跑** —— 目标上有带路由语义的
+    #: 控制边(条件的真 / 假出口)时,那些**已经有一条同向数据线**的普通控制边本来就该只排先后,而引擎的
+    #: 「任一条来源跑了就跑」不这么判。折边一直在替引擎模拟这条判法;不折之后,它由 engine.incoming_active
+    #: 明说(ADR 0063)。于是「谁该跑」折与不折完全一样,而作者画出来的边一条不少。
+    #: 保留下来的理由是**画布与库一致** —— 用户画出来的连线,就是这张图;少一条边,他看不见的先后就少一段。
+    #: 见 docs/adr/0063-画出来的控制边一律保留.md。
+    #:
+    #: 注意:**精确引用升级成数据边本身**是另一件事,照旧(见本函数开头),别一起删。
     used_ids = {str(edge.get("id", "")) for edge in edges}
     for source_id, source_output, target_id, target_input in new_bindings:
         edge_id = f"d-{source_id}-{source_output}-{target_id}-{target_input}"

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "长视频切多条竖屏",
   "description": "把一条口播、访谈或直播回放转成逐字稿,挑出能独立成立的片段(最多 12 条),每条在同一个项目里各建一条竖屏时间线、截取原片那一段、配上重写过的短句字幕并导出。不生成任何画面,所以除了转写和一次对话之外不花生成费用。",
-  "graph_hash": "bf365dd9338dcef6da522d4972cab6af53133213ee5bd2be8073e7a7c0ad1590",
+  "graph_hash": "e3715f7cc5bef3a6b665dfd5df13db8c2621142f646c28e3aacfc7723d47834e",
   "graph": {
     "meta": {
       "template_id": "highlight_shorts",
@@ -292,6 +292,11 @@
             ],
             "edges": [
               {
+                "id": "seq_place",
+                "source": "clip_sequence",
+                "target": "place_range"
+              },
+              {
                 "id": "place_caption",
                 "source": "place_range",
                 "target": "burn_captions"
@@ -387,6 +392,11 @@
         "id": "start_source",
         "source": "start",
         "target": "source_video"
+      },
+      {
+        "id": "source_transcript",
+        "source": "source_video",
+        "target": "transcript"
       },
       {
         "id": "transcript_highlights",

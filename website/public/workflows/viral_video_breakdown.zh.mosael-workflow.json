@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自媒体视频爆款拆解",
   "description": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,要登录的平台换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起;字段全、更稳、不用登录)。下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
-  "graph_hash": "9d1b3506dddba0d454163bd6d2870a689dc87ae0cda953398a4a008d0bae08c2",
+  "graph_hash": "25268c35c0698d5f6ee542875e4f477651cfbc7981b9a03ef78cee413f489adf",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
@@ -896,6 +896,16 @@
         "source_handle": "true"
       },
       {
+        "id": "dy_video__dy_video_m",
+        "source": "dy_video",
+        "target": "dy_video_m"
+      },
+      {
+        "id": "dy_comments__dy_comments_m",
+        "source": "dy_comments",
+        "target": "dy_comments_m"
+      },
+      {
         "id": "tk_is_dy__tk_is_xhs__false",
         "source": "tk_is_dy",
         "target": "tk_is_xhs",
@@ -912,6 +922,16 @@
         "source": "tk_is_xhs",
         "target": "xhs_comments",
         "source_handle": "true"
+      },
+      {
+        "id": "xhs_video__xhs_video_m",
+        "source": "xhs_video",
+        "target": "xhs_video_m"
+      },
+      {
+        "id": "xhs_comments__xhs_comments_m",
+        "source": "xhs_comments",
+        "target": "xhs_comments_m"
       },
       {
         "id": "tk_is_xhs__tk_is_bili__false",
@@ -932,6 +952,16 @@
         "source_handle": "true"
       },
       {
+        "id": "bili_video__bili_video_m",
+        "source": "bili_video",
+        "target": "bili_video_m"
+      },
+      {
+        "id": "bili_comments__bili_comments_m",
+        "source": "bili_comments",
+        "target": "bili_comments_m"
+      },
+      {
         "id": "tk_is_bili__tk_unsupported__false",
         "source": "tk_is_bili",
         "target": "tk_unsupported",
@@ -942,6 +972,16 @@
         "source": "use_tikhub",
         "target": "web_open",
         "source_handle": "false"
+      },
+      {
+        "id": "web_open__web_read",
+        "source": "web_open",
+        "target": "web_read"
+      },
+      {
+        "id": "web_read__web_close",
+        "source": "web_read",
+        "target": "web_close"
       },
       {
         "id": "web_read__web_is_api",
@@ -1059,6 +1099,11 @@
         "source": "want_download",
         "target": "download",
         "source_handle": "true"
+      },
+      {
+        "id": "download__got_video",
+        "source": "download",
+        "target": "got_video"
       },
       {
         "id": "got_video__transcript__true",
