@@ -165,6 +165,9 @@
   组装根在导入期登记(集成层填进来),运行时只读 —— 领域层不认识飞书(见 ADR 0064)。
 - `app/domain/workflows/approvals.py:_RESUME_DISPATCHER` — 「把暂停在等人确认上的运行接着派发出去」的实现。
   引擎在 import 时登记自己,运行时只读 —— 反过来让领域去 import 引擎会给「引擎 ⇄ 执行器」那一族添一个新环。
+- `app/domain/feishu/gateway.py:_TRANSPORT` — 「怎么发飞书」的实现(发文字 / 发卡片 / 取附件 / 加表情 / 列群)。
+  组装根在导入期登记(集成层填进来),运行时只读 —— 和上面那条同一个道理:领域层不认识集成层,而两族节点
+  (「等人确认」和 4 个飞书能力节点)要的是**同一份**发送原语(见 ADR 0066)。
 - - `app/domain/agent/origins.py:_origins`(外部渠道登记的系统提示补充与 turn 收尾回送;飞书在 import 时登记)
 - `app/domain/plugins/media_bridge.py:_sink`、`app/domain/plugins/media_bridge.py:_source`
 - `app/domain/capabilities/__init__.py:_registry` — 宿主能力的契约表(素材外链、文档解析……,ADR 0031 §5):组装根在导入期

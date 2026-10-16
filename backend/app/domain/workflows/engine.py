@@ -57,7 +57,13 @@ from app.domain.authority import Authority, Voucher
 from app.domain.workflows.authority import revision_voucher, run_authority
 from app.domain.workflows.graph_rules import run_params, spending_nodes_in_graph
 from app.domain.workflows.node_types import node_title
-from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config, one_asset_fields
+from app.domain.workflows.binding import (
+    apply_data_edges,
+    check_number_fields,
+    interpolate_node_config,
+    one_asset_fields,
+    with_referenced_assets,
+)
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows.graph_run import GraphResume, GraphRun
@@ -799,7 +805,10 @@ def run_graph(
         with lock:
             snapshot = dict(context)
         # **先插值字面量,再覆盖数据边的值** —— 顺序就是这条规矩的全部(见 binding.apply_data_edges)。
-        config = interpolate_node_config(ntype, dict(node.get("config") or {}), snapshot)
+        #: config 的**原文**留着:引用在插值之后就成了一串十六进制,和手打进去的 id 分不开,而
+        #: 「引用即发送」认的是引用(见 binding.with_referenced_assets)。
+        written = dict(node.get("config") or {})
+        config = interpolate_node_config(ntype, dict(written), snapshot)
         config = one_asset_fields(ntype, check_number_fields(ntype, apply_data_edges(nid, config, edges, snapshot)))
         if ntype == "start":
             return run_params(config.get("params"), params)
@@ -819,6 +828,11 @@ def run_graph(
                     raise WorkflowDomainError("wfErr_cancelled")
                 # 工作流本身就是节点的运行作用域(RunScope:工作区、id、名字),直接给它。
                 wf = node_db.get(Workflow, wf_id)
+                #: 提示词里引用到的素材并进声明了 `ref_assets_from` 的那一格(「引用即发送」)——
+                #: 在手边有会话、有工作区、也有上游刚落定的值时做,是这一条语义唯一的实现处。
+                config = with_referenced_assets(
+                    node_db, wf.workspace_id, ntype, written, config, snapshot, node_types
+                )
                 if ntype in NESTED_BODY_TYPES:
                     #: **容器节点跑体的时候不占连接,也不占预算。** 它的活儿全在体里,体里的节点从同一份
                     #: 预算里自己拿;容器攥着不放,嵌套几层、并行几项就把预算吃光,体里的叶子永远拿不到

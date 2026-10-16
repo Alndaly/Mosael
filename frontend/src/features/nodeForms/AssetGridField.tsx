@@ -2,7 +2,7 @@ import React from "react";
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Image as ImageIcon, ImageOff, Plus, RotateCcw, Upload, X } from "lucide-react";
+import { Image as ImageIcon, ImageOff, Plus, RotateCcw, Upload, Wand2, X } from "lucide-react";
 
 import { assetThumbnailUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -31,15 +31,32 @@ import { cn } from "@/lib/utils";
  * 和**素材库**(点 ＋ 开 `AssetGridPicker` 多选,角标标先后,footer 确认)。满 8 张两格消失。
  * - 进度不占格子:格子下面一行 `text-ui-2xs` —— 在传第几个/共几个、失败给重试/取消。
  * - 被删的素材(详情查不到、缩略图也 404)画占位图标,悬停说它已不在素材库里。
+ * - **自动来的那几处引用**(`refs`,见 workflows/referencedImages):提示词里引用了图片素材时,后端运行时
+ *   会把那几张图并进这一格(「引用即发送」)。它们和手动挑的**分开摆**在下面一行 —— 名字是引用
+ *   (「画图 · 素材」),来源看得见;× 去掉一处 = 写进 `<字段>_excluded`,运行时的取图认它(去掉就是去掉,
+ *   下一轮不会又塞回来),点回来即可恢复。
  */
 
 /** 一格 / 虚线操作格共用的骨架;高 48px 是内容不是控件(docs/DESIGN_LANGUAGE.md)。 */
 const TILE_CLASS = "relative h-12 overflow-hidden rounded-lg border";
 
+/** 自动来的一处引用:给人看的名字 + 存进排除清单的记号(见 workflows/referencedImages)。 */
+export interface AutoImageRef {
+  /** 引用路径(`图.asset_id`)—— 排除清单里存的就是它。 */
+  path: string;
+  /** 给人看的名字(「画图 · 素材」)。 */
+  label: string;
+  /** 静态就知道是哪张素材时给出来;用来判它到底是不是图片(不是图片的不会被发给模型)。 */
+  assetId: string | null;
+}
+
 export function AssetGridField({
   value,
   workspaceId,
   max = 8,
+  refs = [],
+  excluded = [],
+  onExcludedChange,
   onChange,
 }: {
   /** 逗号分隔的素材 id 串(也收真列表:值可能来自上游插值)。 */
@@ -47,6 +64,12 @@ export function AssetGridField({
   workspaceId: string;
   /** 最多几张(发给模型的上限);满了上传格、素材库格就不出现。 */
   max?: number;
+  /** 提示词里引用到的图(运行时自动带上)。空 = 这一格没有自动来的,整块不出现。 */
+  refs?: readonly AutoImageRef[];
+  /** 已经点名不要的那几处引用(值存在 `<字段>_excluded` 那一格里)。 */
+  excluded?: readonly string[];
+  /** 改排除清单。不给就只能看不能改。 */
+  onExcludedChange?: (next: string[]) => void;
   onChange: (next: string) => void;
 }) {
   const t = useI18n();
@@ -55,6 +78,13 @@ export function AssetGridField({
     [value],
   );
   const details = useAssetDetails(picked);
+  //: 自动来的那几处引用里,静态就知道是哪张素材的(源节点是「素材」且写死了 id):查一下它的种类 ——
+  //: 不是图片的那些运行时会被跳过,界面上明说「不是图片,不会发送」,而不是让人等一个空的结果。
+  const autoAssetIds = React.useMemo(
+    () => refs.map((one) => one.assetId).filter((id): id is string => Boolean(id)),
+    [refs],
+  );
+  const autoDetails = useAssetDetails(autoAssetIds);
 
   /** 排好序的新 id 串写回值;空就是空串(不是 "[]")。 */
   const write = (next: string[]) => onChange(next.join(","));
@@ -238,6 +268,68 @@ export function AssetGridField({
           >
             <X size={11} />
           </IconButton>
+        </div>
+      )}
+
+      {/* **自动来的那几处引用**(「引用即发送」):提示词 / 系统提示词里 `{{…}}` 引用到的图片素材,运行时会
+          自动和提示词一起发给模型(后端 binding.with_referenced_assets —— 同一份规则,这里只是把来源摆出来)。
+          和上面手动挑的缩略图**分开**摆:看着名字就知道模型为什么会看到它,不用去翻提示词。
+          × 去掉一处 = 写进 `<字段>_excluded`,运行时的取图认它;点回来即可恢复(不是删了就回不来)。 */}
+      {refs.length > 0 && (
+        <div className="mt-1.5 grid gap-1" data-auto-images="">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <span className="inline-flex shrink-0 items-center gap-1 text-ui-2xs font-medium text-muted-foreground">
+              <Wand2 size={11} strokeWidth={1.8} />
+              {t("wfAssetGridAutoTitle")}
+            </span>
+            {refs.map((ref) => {
+              const on = !excluded.includes(ref.path);
+              //: 静态就知道是哪张素材时,顺手判一眼它是不是图片 —— 不是的那些运行时会被跳过。
+              const asset = ref.assetId ? autoDetails.byId.get(ref.assetId) : undefined;
+              const notImage = asset !== undefined && asset.kind !== "image";
+              return (
+                <span
+                  key={ref.path}
+                  data-auto-image-ref={ref.path}
+                  data-auto-image-on={on ? "true" : "false"}
+                  className={cn(
+                    "inline-flex min-w-0 items-center gap-1 rounded-full border py-px pl-2 pr-0.5 text-ui-2xs",
+                    on ? "border-border bg-muted/40 text-foreground" : "border-dashed border-border text-muted-foreground",
+                  )}
+                >
+                  <Truncate className="max-w-[9rem]" as="span">
+                    {ref.label}
+                  </Truncate>
+                  {on && notImage && (
+                    <span data-auto-image-skipped="" className="shrink-0 text-muted-foreground">
+                      {t("wfAssetGridAutoNotImage")}
+                    </span>
+                  )}
+                  <IconButton
+                    size="icon-xs"
+                    variant="ghost"
+                    data-auto-image-toggle=""
+                    label={(on ? t("wfAssetGridAutoDrop") : t("wfAssetGridAutoRestore")).replace("{name}", ref.label)}
+                    onClick={() =>
+                      onExcludedChange?.(
+                        on ? [...excluded, ref.path] : excluded.filter((one) => one !== ref.path),
+                      )
+                    }
+                    className="shrink-0 text-muted-foreground"
+                  >
+                    {on ? <X size={11} /> : <RotateCcw size={11} />}
+                  </IconButton>
+                </span>
+              );
+            })}
+          </div>
+          {/* 到顶了说清:自动来的也要占那 8 个位置,不然用户只会看到运行时一句「最多 8 张」。 */}
+          {picked.length + refs.filter((one) => !excluded.includes(one.path)).length > max && (
+            <p role="alert" data-auto-images-over="" className="text-ui-2xs text-destructive">
+              {t("wfAssetGridAutoTooMany").replace("{max}", String(max))}
+            </p>
+          )}
+          <p className="text-ui-2xs leading-[1.5] text-muted-foreground">{t("wfAssetGridAutoHint")}</p>
         </div>
       )}
 

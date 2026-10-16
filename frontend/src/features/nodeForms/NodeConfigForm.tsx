@@ -6,7 +6,7 @@ import { fetchWorkflowFieldOptions, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
-import { AssetGridField } from "@/features/nodeForms/AssetGridField";
+import { AssetGridField, type AutoImageRef } from "@/features/nodeForms/AssetGridField";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -85,6 +85,10 @@ export interface ConfigSpec {
   options_map?: string;
   /** 这一格不单独出现:它由那一格的控件一起编辑(开始节点的 required_params 跟着参数的每一行走)。 */
   edited_by?: string;
+  /** 这几格(`prompt` / `system`)里 `{{…}}` **引用到的**素材自动并进这一格 ——「引用即发送」
+   *  (后端 NODE_TYPES 的 `ref_assets_from`,推导见 binding.with_referenced_assets)。检查器据此在这一格
+   *  下面列出自动来的那几处引用(见 workflows/referencedImages),那一格的控件负责摆出来。 */
+  ref_assets_from?: string[];
   /** 值是**行的列表**(生成节点的输入素材,每行 `素材:角色`)。画布上每一行是一个输入口(见 workflows/portNames)。 */
   lines?: boolean;
   /** 这一格里每一项(对象的键、列表的一行)叫什么从哪里取:`generation_parameters` / `source_roles`(见 workflows/portNames)。 */
@@ -117,6 +121,11 @@ export function emptyOptionsHint(t: (key: MessageKey) => string, why: EmptyOptio
   if (why.kind === "parent") return t("wfPickParentFirst").replace("{field}", why.parent);
   if (why.kind === "upstream") return t("wfParentFromUpstream").replace("{field}", why.parent);
   return t("wfNoOptions");
+}
+
+/** 一串 id 存在配置里的两种形状:真列表(`type: "list"` 的声明,如排除清单),或逗号分隔的一串。 */
+function storedIds(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : parseIds(String(value ?? ""));
 }
 
 /** code 字段保持纯编辑器；上游变量不再作为整片提示标签铺在表单下面。 */
@@ -306,6 +315,7 @@ export function NodeConfigForm({
   onPatchConfig,
   binding,
   renderOwnField,
+  autoImages = {},
   references = false,
   compact = false,
 }: {
@@ -328,6 +338,9 @@ export function NodeConfigForm({
   binding?: FieldBinding;
   /** 宿主自己认得的字段;返回 null 就按声明渲染。 */
   renderOwnField?: (key: string, spec: ConfigSpec) => React.ReactNode | null;
+  /** 「引用即发送」自动来的那几处引用,按字段给(见 workflows/referencedImages)。只有宿主认识这张图,
+   *  所以由它算好交下来;这一层只管把它摆到对应那一格的控件上。 */
+  autoImages?: Record<string, readonly AutoImageRef[]>;
   /** 这个宿主里值能不能是一段 `{{上游.输出}}` 引用。工作流能(引擎对每个值都插值,循环体里的
    *  `{{loop.item.…}}` 也只能这么写);画板、插件的「试一下」不能 —— 那里的值就是字面量。
    *  能的话,挑东西的下拉在清单之外也收引用,并把上游的输出列在清单后面。 */
@@ -445,7 +458,17 @@ export function NodeConfigForm({
                 // 大模型节点「要模型看的图片」:紧凑的图片格子(挑、拖排序、直接传),由**后端的字段声明**点名
                 // (editor: "asset_grid"),不是一个手填引用的文本框。值是逗号分隔的素材 id 串;接上游
                 // (`{{上游}}`)的那一半由外面裹的绑定钮管,这里只管手动。
-                <AssetGridField value={value} workspaceId={workspaceId} max={8} onChange={(next) => setConfig(key, next)} />
+                // 自动来的那几处引用(`refs`)由宿主按**同一份声明**(`ref_assets_from`)算好交下来;
+                // 去掉一处 = 写进这一格配的排除清单(`<key>_excluded`,命名约定见后端 NODE_TYPES)。
+                <AssetGridField
+                  value={value}
+                  workspaceId={workspaceId}
+                  max={8}
+                  refs={autoImages[key] ?? []}
+                  excluded={storedIds(config[`${key}_excluded`])}
+                  onExcludedChange={(next) => onPatchConfig(key, { [`${key}_excluded`]: next }, false)}
+                  onChange={(next) => setConfig(key, next)}
+                />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
                 // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />

@@ -11,6 +11,7 @@ import {
   type NodeIssue,
 } from "@/features/workflows/analyze";
 import type { PortNamer } from "@/features/workflows/portNames";
+import { feishuChannelSummary } from "@/features/workflows/feishuChannel";
 import type { ScopePath } from "@/features/workflows/scope";
 import { plainRefName } from "@/features/workflows/workflowRefCatalog";
 import { nodePorts } from "@/features/workflows/workflowPorts";
@@ -78,6 +79,10 @@ export function workflowNodeSubtitle(
     if (chosen) return generationOptionNames(chosen, formedGroups(options), t).primary;
     if (node.type === "ai_generate" && profile) return loaded ? `${t("genModelMissingName")} · ${t("genModelUnusable")}` : "";
   }
+  //: 「等人确认」和「发飞书消息」先把**飞书那一面**说在卡上(发不发、发给谁):此前它完全是隐式的,
+  //: 不点开检查器看不出这个门会发卡,更看不出发给谁(见 feishuChannel)。
+  const feishu = feishuChannelSummary(node.type, config, t);
+  if (feishu) return feishu;
   const origin = entryOrigin(registry.get(node.type)?.group, formedGroups(registry.values()), t);
   return origin || workflowConfigSummary(node);
 }

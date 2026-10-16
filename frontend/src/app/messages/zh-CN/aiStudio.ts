@@ -144,6 +144,14 @@ export const aiStudio = {
   wfLoopEmptyHint: "循环体还是空的 —— 右上「添加节点」开始搭建;里面的节点在 loop 下取当前元素(item)与序号(index)",
   wfBranchTrue: "真",
   wfBranchFalse: "假",
+  //: 节点卡上那一行「这个门 / 这条消息怎么发飞书」—— 不点开检查器就该看得见。
+  //: 句子在 feishuChannel.ts 里拼(key 里不带占位:前端的 t() 不做插值),但**词**都住在这张表里。
+  wfFeishuStationOnly: "仅站内",
+  wfFeishuOrigin: "飞书 · 哪来发回哪",
+  wfFeishuDirect: "飞书 · 私聊",
+  wfFeishuGroup: "飞书 · 群",
+  wfFeishuRaw: "飞书 · 发给",
+  wfFeishuRequester: "发起人",
   wfRangeMinus2To2: "-2 到 2",
   wfSubgraphBody: "子图",
   wfSubgraphBodyNote: "{n} 个节点 · 双击子图节点进入子画布编辑;子图里的节点在 input 下按名字取输入,节点的 output 选子图里某个节点的输出",

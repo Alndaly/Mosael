@@ -57,6 +57,17 @@ export const nodeToolbar = {
   wfAssetGridPickDesc: "Up to {max} images; the picking order is the order the model sees them — first picked, first seen.",
   wfAssetGridPickedCount: "{n}/{max} picked",
   wfAssetGridConfirm: "Use these {n}",
+  //: The automatically included references (“a reference means it gets sent”): images referenced in the prompt
+  //: are sent at run time, and where they come from must stay visible.
+  wfAssetGridAutoTitle: "Referenced in the prompt:",
+  wfAssetGridAutoHint:
+    "A reference means it gets sent: image assets referenced in the prompt (or system prompt) are sent with it " +
+    "automatically, so there is no need to pick them again here. Images only — referenced video, audio and text " +
+    "are not sent.",
+  wfAssetGridAutoDrop: "Leave out “{name}”",
+  wfAssetGridAutoRestore: "Include “{name}” automatically again",
+  wfAssetGridAutoNotImage: "Not an image; not sent",
+  wfAssetGridAutoTooMany: "Picked plus referenced is more than {max} images — remove one before running",
   wfGenModel: "Generation model",
   wfGenPromptOptional: "This model runs without a prompt; one you write is still sent.",
   wfGenModelHint: "Pick the model to generate with",

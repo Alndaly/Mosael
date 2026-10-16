@@ -58,6 +58,15 @@ export const nodeToolbar = {
   wfAssetGridPickDesc: "最多 {max} 张;挑的顺序就是发给模型的顺序,先挑的在前。",
   wfAssetGridPickedCount: "已挑 {n}/{max} 张",
   wfAssetGridConfirm: "用这 {n} 张",
+  //: 自动来的那几处引用(「引用即发送」):提示词里引用了图片素材,运行时自动带上,来源要看得见。
+  wfAssetGridAutoTitle: "提示词里引用到的:",
+  wfAssetGridAutoHint:
+    "引用即发送:提示词(或系统提示词)里引用到的图片素材会自动和提示词一起发给模型,不用在这里再挑一遍。" +
+    "只发图片,引用到的视频、音频、文字不会发。",
+  wfAssetGridAutoDrop: "不要「{name}」这一张",
+  wfAssetGridAutoRestore: "恢复自动带上「{name}」",
+  wfAssetGridAutoNotImage: "不是图片,不会发送",
+  wfAssetGridAutoTooMany: "手动挑的加引用来的超过 {max} 张了,去掉一张再跑",
   wfGenModel: "生成模型",
   wfGenPromptOptional: "这个模型可以不写提示词;写了会一起发过去。",
   wfGenModelHint: "选择要用的生成模型",

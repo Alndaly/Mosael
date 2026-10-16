@@ -305,6 +305,20 @@
           "en": "Body"
         }
       },
+      "channel": {
+        "type": "string",
+        "label": {
+          "zh": "通知方式",
+          "en": "How to notify"
+        }
+      },
+      "to": {
+        "type": "string",
+        "label": {
+          "zh": "收件人",
+          "en": "Recipient"
+        }
+      },
       "approve_label": {
         "type": "template",
         "label": {
@@ -345,6 +359,13 @@
         "label": {
           "zh": "拒绝后",
           "en": "On reject"
+        }
+      },
+      "bot": {
+        "type": "string",
+        "label": {
+          "zh": "飞书机器人",
+          "en": "Feishu bot"
         }
       }
     },
@@ -1965,6 +1986,227 @@
     }
   },
   {
+    "type": "feishu_chats",
+    "config": {
+      "bot": {
+        "type": "string",
+        "label": {
+          "zh": "飞书机器人",
+          "en": "Feishu bot"
+        }
+      },
+      "limit": {
+        "type": "number",
+        "label": {
+          "zh": "条数上限",
+          "en": "Limit"
+        }
+      }
+    },
+    "outputs": [
+      "chats",
+      "ids",
+      "count"
+    ],
+    "output_labels": {
+      "chats": {
+        "zh": "群列表(id 与名字)",
+        "en": "Groups (ID and name)"
+      },
+      "ids": {
+        "zh": "群 id 列表",
+        "en": "Group IDs"
+      },
+      "count": {
+        "zh": "数量",
+        "en": "Count"
+      }
+    }
+  },
+  {
+    "type": "feishu_message",
+    "config": {
+      "channel": {
+        "type": "string",
+        "label": {
+          "zh": "通知方式",
+          "en": "How to notify"
+        }
+      },
+      "to": {
+        "type": "string",
+        "label": {
+          "zh": "收件人",
+          "en": "Recipient"
+        }
+      },
+      "raw_id": {
+        "type": "template",
+        "label": {
+          "zh": "收件 id",
+          "en": "Recipient ID"
+        }
+      },
+      "raw_type": {
+        "type": "string",
+        "label": {
+          "zh": "收件 id 的类型",
+          "en": "Recipient ID type"
+        }
+      },
+      "format": {
+        "type": "string",
+        "label": {
+          "zh": "消息形态",
+          "en": "Message form"
+        }
+      },
+      "text": {
+        "type": "template",
+        "label": {
+          "zh": "文本",
+          "en": "Text"
+        }
+      },
+      "title": {
+        "type": "template",
+        "label": {
+          "zh": "标题",
+          "en": "Title"
+        }
+      },
+      "body": {
+        "type": "template",
+        "label": {
+          "zh": "正文",
+          "en": "Body"
+        }
+      },
+      "link": {
+        "type": "template",
+        "label": {
+          "zh": "链接",
+          "en": "Link"
+        }
+      },
+      "button_label": {
+        "type": "template",
+        "label": {
+          "zh": "按钮文案",
+          "en": "Button label"
+        }
+      },
+      "bot": {
+        "type": "string",
+        "label": {
+          "zh": "飞书机器人",
+          "en": "Feishu bot"
+        }
+      }
+    },
+    "outputs": [
+      "sent",
+      "message_id"
+    ],
+    "output_labels": {
+      "sent": {
+        "zh": "已发送",
+        "en": "Sent"
+      },
+      "message_id": {
+        "zh": "消息 id",
+        "en": "Message ID"
+      }
+    }
+  },
+  {
+    "type": "feishu_reaction",
+    "config": {
+      "message_id": {
+        "type": "template",
+        "label": {
+          "zh": "消息 id",
+          "en": "Message ID"
+        }
+      },
+      "emoji_type": {
+        "type": "string",
+        "label": {
+          "zh": "表情",
+          "en": "Emoji"
+        }
+      },
+      "bot": {
+        "type": "string",
+        "label": {
+          "zh": "飞书机器人",
+          "en": "Feishu bot"
+        }
+      }
+    },
+    "outputs": [
+      "reaction_id"
+    ],
+    "output_labels": {
+      "reaction_id": {
+        "zh": "表情 id",
+        "en": "Reaction ID"
+      }
+    }
+  },
+  {
+    "type": "feishu_take_resource",
+    "config": {
+      "message_id": {
+        "type": "template",
+        "label": {
+          "zh": "消息 id",
+          "en": "Message ID"
+        }
+      },
+      "file_key": {
+        "type": "template",
+        "label": {
+          "zh": "附件标识",
+          "en": "Attachment key"
+        }
+      },
+      "resource_type": {
+        "type": "string",
+        "label": {
+          "zh": "附件类型",
+          "en": "Attachment type"
+        }
+      },
+      "bot": {
+        "type": "string",
+        "label": {
+          "zh": "飞书机器人",
+          "en": "Feishu bot"
+        }
+      }
+    },
+    "outputs": [
+      "asset_id",
+      "name",
+      "size_bytes"
+    ],
+    "output_labels": {
+      "asset_id": {
+        "zh": "素材",
+        "en": "Media"
+      },
+      "name": {
+        "zh": "名称",
+        "en": "Name"
+      },
+      "size_bytes": {
+        "zh": "大小(字节)",
+        "en": "Size (bytes)"
+      }
+    }
+  },
+  {
     "type": "fit_narration",
     "config": {
       "items": {
@@ -2638,6 +2880,14 @@
         "label": {
           "zh": "要模型看的图片",
           "en": "Images for the model"
+        }
+      },
+      "image_asset_ids_excluded": {
+        "type": "list",
+        "edited_by": "image_asset_ids",
+        "label": {
+          "zh": "不要自动带上的图",
+          "en": "Referenced images left out"
         }
       },
       "response_format": {
@@ -3803,6 +4053,7 @@
       },
       "required_params": {
         "type": "list",
+        "edited_by": "params",
         "label": {
           "zh": "必填参数",
           "en": "Required parameters"
@@ -3811,6 +4062,7 @@
       "param_options": {
         "type": "object",
         "editor": "map",
+        "edited_by": "params",
         "label": {
           "zh": "参数选项",
           "en": "Parameter options"

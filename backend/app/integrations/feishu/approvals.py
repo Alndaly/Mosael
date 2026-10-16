@@ -22,8 +22,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import AgentSession, FeishuBot, Workflow, WorkflowRunApproval
-from app.domain.feishu import bindings
+from app.db.models import FeishuBot, Workflow, WorkflowRunApproval
+from app.domain.feishu import bindings, routing
 from app.integrations.feishu import client
 
 logger = logging.getLogger(__name__)
@@ -32,19 +32,10 @@ logger = logging.getLogger(__name__)
 def _feishu_origin(db: Session, session_id: str | None) -> tuple[FeishuBot, str] | None:
     """确认卡属于某次飞书会话时,返回(机器人, 会话 id)。
 
-    路由信息全在 AgentSession.external_key 里(`feishu:<bot_id>:<chat_id>`,见
-    get_or_create_external_session 的调用处),所以 ToolConfirmation 不需要为此加列。
+    `AgentSession.external_key` 里那串 `feishu:<bot_id>:<chat_id>` 的解析只有一处
+    (`domain/feishu/routing.session_origin`)—— 工具确认卡和工作流的待批单读的是同一份。
     """
-    if not session_id:
-        return None
-    session = db.get(AgentSession, session_id)
-    if session is None or session.origin != "feishu" or not session.external_key:
-        return None
-    parts = session.external_key.split(":", 2)
-    if len(parts) != 3 or parts[0] != "feishu":
-        return None
-    bot = db.get(FeishuBot, parts[1])
-    return (bot, parts[2]) if bot is not None else None
+    return routing.session_origin(db, session_id)
 
 
 #: 开发者后台没开交互卡片 / 没订阅 card.action.trigger 时,发卡片会撞上这个码。
@@ -116,11 +107,17 @@ def announce_run_approval(db: Session, approval: WorkflowRunApproval) -> None:
     """把待批单发到飞书。**由工作流领域在组装根登记进来**(见 app.main._wire_seams 与
     domain/workflows/approvals.use_run_card_sender):领域层不认识飞书,飞书是调用领域的一方。
 
+    发到哪**按节点上写的那三格**(`channel` / `bot` / `to`)解 —— 见 `route_for_approval`。
     不提交:调用方(领域那一处 after_commit 钩子开的会话)提交 —— 卡片发出去之后那三列路由信息
     才落库,而**真正要紧的检查点在那之前就已经提交了**(见 domain/workflows/approvals.announce)。
     """
     route = route_for_approval(db, approval)
     if route is None:
+        #: **显式**说一句为什么不发飞书:节点上写了「仅站内」,或这次运行本来就没有可发的去处。
+        #: 此前这里只有"返回 None"一种沉默 —— 而"照节点上写的没发"和"发不出去"是两件事。
+        logger.info(
+            "workflow approval %s not sent to feishu: %s", approval.id, route_reason(db, approval)
+        )
         return
     bot, receive_id, receive_type = route
     approval.feishu_bot_id = bot.id
@@ -129,47 +126,66 @@ def announce_run_approval(db: Session, approval: WorkflowRunApproval) -> None:
     send_approval_card(db, bot, receive_id, receive_type, approval)
 
 
-def route_for_approval(db: Session, approval: WorkflowRunApproval) -> tuple[FeishuBot, str, str] | None:
-    """这张待批单该发到飞书的哪里:(机器人, 收件 id, 收件 id 的类型);发不出去就是 None。
+def approval_resolution(db: Session, approval: WorkflowRunApproval) -> routing.Resolution:
+    """这张待批单按**节点上写的那三格**该发到飞书的哪里。
 
-    两条路,先近后远:
-
-    1. **这一次运行来自飞书会话** —— 任务载荷里的回执指着一次 `origin="feishu"` 的智能体会话
-       (`AgentSession.external_key` 是 `feishu:<bot_id>:<chat_id>`,和工具确认卡同一个取法),
-       卡片发回那个群:谁在飞书里让这件事跑起来的,就在那儿批。
-    2. **负责人绑过飞书** —— 运行不是从飞书来的,但发起这次运行的人在这个工作区绑了账号:
-       卡片当私聊发给他(`receive_id_type=open_id`)。这就是需求里"工作区绑了飞书机器人"那一半。
-
-    两条都不成立(这很常见:本地用、没接飞书)就返回 None —— 上层照旧发站内通知、这次运行照旧在等。
+    节点配置从**这次运行钉住的那一版修订**里读(不是工作流当前那一版 —— 图可能已经改了),
+    和 `_node_name` 同一个出处。目标解析本身在 `domain/feishu/routing`:「等人确认」和 4 个
+    飞书能力节点共用它,所以同一个写法不会给出发给谁的两个答案。
     """
     from app.db.models import Job
     from app.domain.workflows import approvals as run_approvals
 
+    config = run_approvals.node_config(db, approval)
     job = db.get(Job, approval.job_id)
-    receipt = (job.payload or {}).get("receipt") if job is not None else None
-    if isinstance(receipt, dict):
-        origin = _feishu_origin(db, str(receipt.get("session_id") or ""))
-        if origin is not None:
-            bot, chat_id = origin
-            return bot, chat_id, "chat_id"
-    fallback = run_approvals.bot_for_user(db, approval.workspace_id, job.created_by if job is not None else None)
-    if fallback is None:
+    return routing.resolve(
+        db,
+        workspace_id=approval.workspace_id,
+        channel=routing.channel_of(config, allowed=routing.APPROVAL_CHANNELS, fallback=routing.ORIGIN),
+        bot_id=routing.bot_id_of(config),
+        to=routing.to_of(config),
+        job=job,
+    )
+
+
+def route_reason(db: Session, approval: WorkflowRunApproval) -> str:
+    """为什么不发飞书(或发到哪一档)。给日志用,也让"仅站内"这件事在记录里说得出来。"""
+    return approval_resolution(db, approval).reason
+
+
+def route_for_approval(db: Session, approval: WorkflowRunApproval) -> tuple[FeishuBot, str, str] | None:
+    """这张待批单该发到飞书的哪里:(机器人, 收件 id, 收件 id 的类型);发不出去就是 None。
+
+    解出来的地方见 `approval_resolution`(**节点上写的**那一档,不是自动猜的)。
+    解不出来的几种(`none` 只站内 / 没有机器人 / 这次运行不是从飞书来的 / 收件人没绑)一律
+    退回站内那条路 —— 一个门禁的用处是拦住"没人看着就往下走",不是拦住自己。
+    """
+    resolved = approval_resolution(db, approval)
+    if resolved.target is None:
         return None
-    bot, open_id = fallback
-    return bot, open_id, "open_id"
+    target = resolved.target
+    return target.bot, target.receive_id, target.receive_type
 
 
 def send_approval_card(
     db: Session, bot: FeishuBot, receive_id: str, receive_type: str, approval: WorkflowRunApproval
 ) -> None:
-    """把确认卡推出去。失败分两层降级,和工具确认卡同一套:先退成一段文字,再不行就只剩站内那条路。"""
+    """把确认卡推出去。失败分两层降级,和工具确认卡同一套:先退成一段文字,再不行就只剩站内那条路。
+
+    **"发一张卡 / 发一段文字"走的是和 4 个飞书能力节点同一份原语**(`integrations/feishu/gateway`
+    那道缝后面的 transport,见 domain/feishu/gateway):两处各写一套的话,同一个"发飞书"会有两个
+    实现,而它们迟早会在详情上分家(重试、token 刷新、地址)。卡片**长什么样**仍然是两回事:
+    确认卡带按钮回调(`cards.approval_card`),节点那张卡只带一个链接。
+    """
+    from app.domain.feishu import gateway as domain_gateway
     from app.integrations.feishu import cards
 
+    transport = domain_gateway.transport()
     hours = int(round((approval.timeout_seconds or 0) / 3600)) if approval.timeout_seconds else None
     workflow = db.get(Workflow, approval.workflow_id)
     try:
-        client.send_card(
-            bot, receive_id,
+        transport.send_card(
+            bot, receive_id, receive_type,
             cards.approval_card(
                 approval_id=approval.id,
                 title=approval.title,
@@ -181,7 +197,6 @@ def send_approval_card(
                 allow_note=bool(approval.allow_note),
                 timeout_hours=hours,
             ),
-            receive_id_type=receive_type,
         )
         return
     except client.FeishuError as exc:
@@ -189,10 +204,9 @@ def send_approval_card(
         logger.warning("feishu approval card send failed, falling back to text: %s", exc)
 
     tail = f"\n\n(飞书内直接确认需要:{_CARD_SETUP_HINT})" if missing_capability else ""
-    client.send_text(
-        bot, receive_id,
+    transport.send_text(
+        bot, receive_id, receive_type,
         f"有一个工作流在等你确认:{approval.title}\n请到 Mosael 里处理,或在飞书里回复。{tail}",
-        receive_id_type=receive_type,
     )
     if missing_capability:
         #: 写进机器人状态,设置页那行小字会显示 —— 否则用户只在聊天里看到一次就过去了。

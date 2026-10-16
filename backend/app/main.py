@@ -390,6 +390,13 @@ def _wire_seams() -> None:
     from app.integrations.feishu import approvals as feishu_approvals
 
     workflow_run_approvals.use_run_card_sender(feishu_approvals.announce_run_approval)
+    # 「怎么发飞书」也在这里接上(见 domain/feishu/gateway):两族节点用的是同一份原语 ——
+    # 「等人确认」的卡片,和「发飞书消息 / 取回附件 / 回表情 / 列群」那四个。地址、分页、卡片 JSON
+    # 都在集成层,领域只认"有人会替我发"(见 tests/test_import_layering)。
+    from app.domain.feishu import gateway as feishu_gateway
+    from app.integrations.feishu import gateway as feishu_transport
+
+    feishu_gateway.use_transport(feishu_transport.TRANSPORT)
 
     # 宿主能力的契约(ADR 0031 §5):各项能力的宿主侧把自己登记进能力表,设置页照表列出每一项。
     from app.domain import capabilities

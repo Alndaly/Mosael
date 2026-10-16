@@ -39,6 +39,7 @@ import { chatProfileIds, generationVendors } from "@/features/workflows/bindingR
 import { withDataInputBound } from "@/features/workflows/connections";
 import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSection } from "@/features/workflows/nodeInspectorGenerate";
 import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmMainSection } from "@/features/workflows/nodeInspectorLlm";
+import { referencedImages } from "@/features/workflows/referencedImages";
 import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
 import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
@@ -170,6 +171,20 @@ export function NodeInspector({
     );
     return Object.fromEntries(keys.map((key) => [key, inner]));
   }, [meta, node, registry]);
+
+  //: 「引用即发送」:提示词 / 系统提示词里 `{{…}}` 引用到的图,运行时会自动并进「要模型看的图片」
+  //: (后端 binding.with_referenced_assets —— 同一份规则)。这里按同一份声明算出**哪几处引用**会成为图片,
+  //: 交给那一格的控件摆出来:自动来的和手动挑的分开,来源看得见。名字用引用目录那一套(「画图 · 素材」),
+  //: 和画布上的引用提示线、输出那一块叫的是同一个名字。
+  const autoImages = React.useMemo(() => {
+    const found = referencedImages(allSpecs, config, registry, graph.nodes);
+    return Object.fromEntries(
+      Object.entries(found).map(([key, refs]) => [
+        key,
+        refs.map((one) => ({ ...one, label: refLabel(refCatalog.look(one.path)) })),
+      ]),
+    );
+  }, [allSpecs, config, registry, graph.nodes, refCatalog]);
 
   // 失效引用:本节点配置里引用了图中已不存在的节点(通常是上游被删)。
   //: 代码字段不查:代码不插值,里面的 {{…}} 是字面文字(就绪清单同一条,见 analyze.isCodeConfig)——
@@ -514,6 +529,7 @@ export function NodeInspector({
       onPatchConfig={patchConfig}
       binding={binding}
       renderOwnField={renderOwnField}
+      autoImages={autoImages}
       references
     />
   );

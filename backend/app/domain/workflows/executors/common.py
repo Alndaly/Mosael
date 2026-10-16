@@ -16,6 +16,8 @@ from app.domain.workflows.graph_run import GraphRun
 from app.domain.workflows.run_scope import halted
 #: 整数格的解析在 numbers 里(它不碰引擎,不进 engine⇄executors 那个环);执行器照旧从这里取。
 from app.domain.workflows.executors.numbers import at_least, whole_number  # noqa: F401
+#: 一串 id 的解析同理住在 id_values(绑定那一层也要用同一条规矩,见 binding.with_referenced_assets)。
+from app.domain.workflows.id_values import id_list  # noqa: F401
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -218,19 +220,6 @@ def provided(values: dict[str, Any]) -> dict[str, Any]:
     收在这一处:插件节点和生成节点曾经一个过滤一个不过滤。
     """
     return {key: value for key, value in values.items() if value is not None and value != ""}
-
-
-def id_list(value: Any) -> list[str]:
-    """Accept either a comma-separated string or a real list.
-
-    Both reach here legitimately: a hand-typed config gives a string, while `{{查询.ids}}`
-    resolves to the list asset_query produced. Treating the list case as a string would
-    stringify it and match nothing, with no error to show for it.
-    """
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    text = str(value or "").replace("，", ",")
-    return [part.strip() for part in text.split(",") if part.strip()]
 
 
 def text_lines(value: Any) -> list[str]:

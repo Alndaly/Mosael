@@ -18,7 +18,10 @@ from app.domain.workflows.node_catalog import describe_node_types
 NODE_PORTS = ROOT.parent / "frontend" / "src" / "api" / "generated" / "workflow-node-ports.json"
 
 #: 快照里留的字段声明:决定一处引用落在哪个口、那个口叫什么的那几项(见前端 workflows/portNames)。
-_PORT_SPEC_FIELDS = ("type", "editor", "lines", "entry_labels")
+#: `edited_by` 在其中:那一格由**别的格子的控件**一起编辑(开始节点的必填清单、大模型节点那份
+#: 「自动带上但点名不要」的排除清单),因此它自己**没有口**、也不该有个人话名字 —— 不带上它,
+#: 前端测试会拿它当一个能接上游的输入口(canTakeUpstream 读的正是这一项)。
+_PORT_SPEC_FIELDS = ("type", "editor", "lines", "entry_labels", "edited_by")
 _LOCALES = ("zh", "en")
 
 

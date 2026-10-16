@@ -269,6 +269,21 @@ _FIELD_LABELS = {
     "decided_by_id": "wfField_decided_by_id",
     "decided_at": "wfField_decided_at",
     "note": "wfField_note",
+    #: 飞书那一面(「等人确认」的三格,和 4 个飞书能力节点共用同一份名字)。
+    "channel": "wfField_channel",
+    "bot": "wfField_feishu_bot",
+    "to": "wfField_feishu_to",
+    "raw_id": "wfField_feishu_raw_id",
+    "raw_type": "wfField_feishu_raw_type",
+    "format": "wfField_feishu_format",
+    "button_label": "wfField_feishu_button_label",
+    "emoji_type": "wfField_emoji_type",
+    "message_id": "wfField_feishu_message_id",
+    "file_key": "wfField_file_key",
+    "resource_type": "wfField_resource_type",
+    "reaction_id": "wfField_reaction_id",
+    "size_bytes": "wfField_size_bytes",
+    "chats": "wfField_chats",
     "tool_name": "wfField_tool_name",
     "top_p": "wfField_top_p",
     "track_id": "wfField_track_id",
@@ -675,11 +690,27 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: 在提示词里写 `{{画图.asset_id}}` 送过去的只是一串素材编号,模型从没见过那张图。
             #: `editor: "asset_grid"`:紧凑的图片格子(前端 AssetGridField)——挑、拖排序、直接传,不是手填引用;
             #: 值照旧是逗号分隔的素材 id 串,也能接上游(`{{…}}`)。顺序就是发给模型的顺序。
+            #:
+            #: `ref_assets_from`:这几格里 `{{…}}` **引用到的**图片素材自动并进这一格(见 binding.with_referenced_assets)
+            #: ——「引用即发送」。提示词里点名要模型看的那张图,不因为没在这一格里再挑一遍就不发给它;
+            #: 推导在运行时做,所以配置里从没同步过 id 的老图照旧看得到图。
             "image_asset_ids": {
                 "type": "template",
                 "media": ["image"],
                 "editor": "asset_grid",
+                "ref_assets_from": ["prompt", "system"],
                 "description": "wfNode_llm_image_asset_ids",
+            },
+            #: 自动并进来的那几张图里,用户**点名不要**的:一条一个 —— 引用路径(`图.asset_id`)或素材 id。
+            #: 上面那一格的格子上删掉一张自动来的图就写这里(前端 AssetGridField);运行时的取图认它,
+            #: 所以「删掉」就是删掉,下一轮不会又塞回来。由 `image_asset_ids` 那一格的控件一起编辑
+            #: (声明 `edited_by`:不单独出一格,也不能接上游 —— 它不是给模型看的东西,是一份记账)。
+            #: 命名约定:排除清单永远是 `<那一格>_excluded`,前后端各推一次,不另立一张表。
+            "image_asset_ids_excluded": {
+                "type": "list",
+                "edited_by": "image_asset_ids",
+                "label": "wfField_image_asset_ids_excluded",
+                "description": "wfNode_llm_image_asset_ids_excluded",
             },
             #: **输出格式和 Schema 不标 advanced。** 「要一份 JSON、下游按字段取」是这个节点在做的事,不是微调:
             #: 藏在高级里时维护者翻了一圈以为大模型节点没有 JSON 模式。Schema 的名字和严格与否才是微调。
@@ -1401,6 +1432,26 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "title": {"type": "template", "required": True, "description": "wfNode_await_approval_title"},
             "body": {"type": "template", "label": "wfField_notify_body", "description": "wfNode_await_approval_body"},
+            #: **飞书那一面显式写在节点上。** 此前它是自动猜的:这次运行从飞书会话来就发回那个会话,
+            #: 否则看发起人绑没绑 —— 节点上既看不见会发卡、也看不见发给谁,更没有一个"就是不发飞书"
+            #: 的档。`origin`(缺省)逐字沿用那套自动路由,所以旧的图行为不变。
+            "channel": {
+                "type": "string",
+                "default": "origin",
+                "options": ["origin", "user", "chat", "none"],
+                "description": "wfNode_await_approval_channel",
+            },
+            #: 收件人跟着 `channel` 走:私聊时是一个已绑定的人,发群时是一个群。
+            #: 两个档合用一个值格(而不是两个字段)是因为它俩**互斥** —— 分成两格就会出现"两格都填了"。
+            "to": {
+                "type": "string",
+                "required": True,
+                "active_when": {"channel": ["user", "chat"]},
+                "depends_on": "channel",
+                "options_from": "feishu_targets",
+                "allow_custom": True,
+                "description": "wfNode_await_approval_to",
+            },
             #: 按钮文案:飞书卡片和应用内那两处读的是同一份 —— 两处各写一句的话,同一个门在两处叫两个名字。
             "approve_label": {"advanced": True, "type": "template", "description": "wfNode_await_approval_approve_label"},
             "reject_label": {"advanced": True, "type": "template", "description": "wfNode_await_approval_reject_label"},
@@ -1430,6 +1481,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["abort", "branch"],
                 "description": "wfNode_await_approval_on_reject",
             },
+            "bot": {"advanced": True, "type": "string", "options_from": "feishu_bots", "description": "wfNode_feishu_bot"},
         },
         #: 「下游用 condition 接这个决定」:`decision` 是三值文字(approved / rejected / timeout),
         #: 不用布尔 —— 布尔插值出来是 "True" / "False",条件节点里手填的那一格跟着它的写法走,
@@ -1486,6 +1538,144 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "body": {"type": "template", "label": "wfField_notify_body", "description": "wfNode_notify_body"},
         },
         "outputs": ["sent"],
+    },
+    #: ---- 飞书能力节点 ----
+    #:
+    #: 四个都归在「发布」那一组:它们是同一条"把结果送出去、跟飞书打交道"的动线,拆到三组去反而
+    #: 找不齐(用户找的是"飞书",不是"这个动作算读取还是算写入")。
+    #:
+    #: 「发到哪」四处同源(见 domain/feishu/routing):`channel` 的取值表、「收件人」那一格的选择器、
+    #: 运行时解目标、以及「等人确认」那三格 —— 同一个写法在哪儿都解到同一个地方。
+    "feishu_message": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_publish",
+        "label": "wfNode_feishu_message",
+        "description": "wfNode_feishu_message_desc",
+        "config": {
+            "channel": {
+                "type": "string",
+                "default": "origin",
+                "options": ["origin", "user", "chat", "raw"],
+                "description": "wfNode_feishu_message_channel",
+            },
+            #: 收件人跟着 `channel`:私聊是一个已绑定的人,发群是一个群。`raw` 那两格手填。
+            "to": {
+                "type": "string",
+                "required": True,
+                "active_when": {"channel": ["user", "chat"]},
+                "depends_on": "channel",
+                "options_from": "feishu_targets",
+                "allow_custom": True,
+                "description": "wfNode_await_approval_to",
+            },
+            "raw_id": {
+                "type": "template",
+                "required": True,
+                "active_when": {"channel": "raw"},
+                #: 它是**飞书那个系统里的编号**,不是这个工作区里的一种东西 —— 没有选择器可给
+                #: (清单只在飞书那边)。见 EXTERNAL_ID 与 test_entity_fields_have_a_picker。
+                "data_type": EXTERNAL_ID,
+                "description": "wfNode_feishu_message_raw_id",
+            },
+            "raw_type": {
+                "type": "string",
+                "default": "chat_id",
+                "options": ["chat_id", "open_id"],
+                "active_when": {"channel": "raw"},
+                "description": "wfNode_feishu_message_raw_type",
+            },
+            "format": {
+                "type": "string",
+                "default": "text",
+                "options": ["text", "card"],
+                "description": "wfNode_feishu_message_format",
+            },
+            "text": {
+                "type": "template",
+                "required": True,
+                "active_when": {"format": "text"},
+                "description": "wfNode_feishu_message_text",
+            },
+            "title": {
+                "type": "template",
+                "required": True,
+                "active_when": {"format": "card"},
+                "description": "wfNode_feishu_message_title",
+            },
+            "body": {
+                "type": "template",
+                "label": "wfField_notify_body",
+                "active_when": {"format": "card"},
+                "description": "wfNode_feishu_message_body",
+            },
+            "link": {"advanced": True, "type": "template", "active_when": {"format": "card"},
+                     "description": "wfNode_feishu_message_link"},
+            "button_label": {"advanced": True, "type": "template", "active_when": {"format": "card"},
+                             "description": "wfNode_feishu_message_button_label"},
+            "bot": {"advanced": True, "type": "string", "options_from": "feishu_bots", "description": "wfNode_feishu_bot"},
+        },
+        "outputs": ["sent", "message_id"],
+        "output_types": {"message_id": "text"},
+    },
+    "feishu_take_resource": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_publish",
+        "label": "wfNode_feishu_take_resource",
+        "description": "wfNode_feishu_take_resource_desc",
+        "config": {
+            "message_id": {"type": "template", "required": True, "data_type": EXTERNAL_ID,
+                           "description": "wfNode_feishu_take_resource_message_id"},
+            "file_key": {"type": "template", "required": True, "description": "wfNode_feishu_take_resource_file_key"},
+            #: 飞书按这个决定从哪个桶里拿(image / file),填错了会说找不到 —— 所以它是**选项**不是自由文本。
+            "resource_type": {
+                "type": "string",
+                "default": "image",
+                "options": ["image", "file"],
+                "description": "wfNode_feishu_take_resource_resource_type",
+            },
+            "bot": {"advanced": True, "type": "string", "options_from": "feishu_bots", "description": "wfNode_feishu_bot"},
+        },
+        "outputs": ["asset_id", "name", "size_bytes"],
+        "output_types": {"size_bytes": "number", "name": "text"},
+    },
+    "feishu_reaction": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_publish",
+        "label": "wfNode_feishu_reaction",
+        "description": "wfNode_feishu_reaction_desc",
+        "config": {
+            "message_id": {"type": "template", "required": True, "data_type": EXTERNAL_ID,
+                           "description": "wfNode_feishu_reaction_message_id"},
+            #: 表情名是飞书那一侧的词表,给一份常用的当选项;**下拉之外的名字填得进去**
+            #: (飞书加新表情不需要等这里改),所以是 allow_custom 而不是闭集。
+            "emoji_type": {
+                "type": "string",
+                "default": "THUMBSUP",
+                "options": ["THUMBSUP", "OK", "DONE", "HEART", "SMILE", "LOL", "APPLAUSE", "FIRE", "THINKING", "SOB"],
+                "allow_custom": True,
+                "description": "wfNode_feishu_reaction_emoji_type",
+            },
+            "bot": {"advanced": True, "type": "string", "options_from": "feishu_bots", "description": "wfNode_feishu_bot"},
+        },
+        "outputs": ["reaction_id"],
+        "output_types": {"reaction_id": "text"},
+    },
+    "feishu_chats": {
+        "external": False,
+        "spends": False,
+        "category": "wfCat_publish",
+        "label": "wfNode_feishu_chats",
+        "description": "wfNode_feishu_chats_desc",
+        "config": {
+            "bot": {"type": "string", "options_from": "feishu_bots", "description": "wfNode_feishu_bot"},
+            "limit": {"type": "number", "default": 200, "description": "wfNode_feishu_chats_limit"},
+        },
+        "outputs": ["chats", "ids", "count"],
+        "output_labels": {"chats": "wfOut_feishu_chats", "ids": "wfOut_feishu_chat_ids"},
+        "output_types": {"chats": "json", "ids": "json", "count": "number"},
     },
     "translate": {
         "external": False,

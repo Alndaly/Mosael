@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.workflows import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES, interpolate
-from app.domain.workflows.graph_rules import interpolate_json_text
+from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate_json_text
 
 # 内嵌子图的节点(循环体、subgraph)的 body/output/condition 引用的是**子作用域 / 子图内部节点**
 # ({{loop.*}}、{{input.*}}、{{body_node.x}}),绝不能在外层作用域解析——它们要留到执行器里对
@@ -166,3 +166,103 @@ def interpolate_node_config(
     config.update(raw)
     config.update({key: interpolate_json_text(value, context) for key, value in as_json.items()})
     return config
+
+
+#: 声明成这几类的输出**不可能**是素材(见 node_types.output_data_type):引用它不算「要模型看的图」。
+#: 这是给引用画的一道线,不是给值看的 —— 值那边还有一道(解析出来必须真是一张本工作区的素材)。
+_NOT_ASSETS = frozenset({"text", "number", "json", "sequence", "scene"})
+
+
+def _raw_references(value: Any) -> list[str]:
+    """一段**还没插值**的模板(config 里存的那份原文)里出现的每一处引用,按出现顺序:`["图.asset_id"]`。
+
+    只认原文,不认插值结果:插值之后 `{{图.asset_id}}` 就成了一串十六进制,和用户手打进去的一串
+    id 再也分不开 —— 而「引用即发送」说的是**引用**。
+    """
+    if isinstance(value, dict):
+        return [ref for one in value.values() for ref in _raw_references(one)]
+    if isinstance(value, list):
+        return [ref for one in value for ref in _raw_references(one)]
+    if not isinstance(value, str):
+        return []
+    return [match.group(1).strip() for match in VARIABLE_RE.finditer(value)]
+
+
+def _referenced_ids(value: Any) -> list[str]:
+    """一处引用解析出来的值里,哪些像素材 id:本身是一串,或是列表里的字符串元素。"""
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, list):
+        return [one.strip() for one in value if isinstance(one, str) and one.strip()]
+    return []
+
+
+def with_referenced_assets(
+    db: Any,
+    workspace_id: str,
+    node_type: str,
+    raw: dict[str, Any],
+    config: dict[str, Any],
+    context: dict[str, dict[str, Any]],
+    node_types: dict[str, str],
+) -> dict[str, Any]:
+    """把 `prompt` / `system` 里**引用到的**素材并进声明了 `ref_assets_from` 的那一格。
+
+    维护者的话:「对这种通过 `@` 引用了图片素材的 LLM 节点,其中的『要模型看的图片』**应该自动同步**」。
+    此前那段话只是文字:`{{画图.asset_id}}` 插值成一串素材编号,模型从没见过那张图 —— 用户得记得
+    再去「要模型看的图片」里手动挑一遍同一张图,忘了就是个安静的错(模型答得像没看图)。
+
+    **推导在运行时做,不在保存时同步。** 值到这一刻才知道(上游可能还没跑),而 config 是用户存的:
+    保存时同步意味着**老图**(config 里没有那一串 id)照旧看不到图,于是得再补一条「config 里没有
+    就现推」的分支 —— 那正是同一条语义写两遍。这里只写一遍:**引用即发送**。
+
+    并进来的怎么排:手动挑的在前(用户排的顺序说了算),引用来的按 prompt → system、按引用出现的
+    先后接在后面,同一个 id 只发一次。
+    `ref_assets_from` 点名的每一格配一条排除清单(`<那一格>_excluded`,一条一个引用路径或素材 id):
+    用户删掉一张自动来的图就写在那里 —— 删掉就是删掉,下一轮不再塞回来。
+
+    不是素材的引用**跳过**,不报错也不硬塞:提示词里引用的多半是文字(`{{llm.text}}`)、也可能是
+    视频素材。视频塞进 image_url 只会当场 400,把整条工作流拦下来,而用户的提示词本身没有任何问题。
+    """
+    from app.db.models import Asset
+    from app.domain.workflows.id_values import id_list
+    from app.domain.workflows.node_types import NODE_TYPES, config_media, output_data_type
+
+    specs = (NODE_TYPES.get(node_type) or {}).get("config") or {}
+    declared = [
+        (key, spec) for key, spec in specs.items() if isinstance(spec, dict) and spec.get("ref_assets_from")
+    ]
+    if not declared:
+        return config
+    resolved = dict(config)
+    for key, spec in declared:
+        sources = [name for name in (spec.get("ref_assets_from") or []) if isinstance(name, str)]
+        media = config_media(spec)
+        excluded = set(id_list(resolved.get(f"{key}_excluded")))
+        picked = id_list(resolved.get(key))
+        added: list[str] = []
+        for source in sources:
+            for ref in _raw_references(raw.get(source)):
+                if ref in excluded:
+                    continue
+                node_id, _, output = ref.partition(".")
+                if not output:
+                    continue
+                #: 引用的那个输出不可能装素材(`{{llm.text}}`)就不用往下解析了 —— 它本来就只是文字。
+                if output_data_type(output, NODE_TYPES.get(node_types.get(node_id, "")) or {}) in _NOT_ASSETS:
+                    continue
+                for candidate in _referenced_ids(interpolate("{{" + ref + "}}", context)):
+                    if candidate in excluded or candidate in picked or candidate in added:
+                        continue
+                    asset = db.get(Asset, candidate)
+                    #: 不是这一格的素材(视频 / 音频 / 文字素材)、不在这个工作区、已经删了:跳过。
+                    if asset is None or asset.workspace_id != workspace_id:
+                        continue
+                    if media and asset.kind not in media:
+                        continue
+                    added.append(candidate)
+        if not added:
+            continue
+        merged = [*picked, *added]
+        resolved[key] = merged if isinstance(resolved.get(key), list) else ",".join(merged)
+    return resolved

@@ -144,6 +144,13 @@ export const aiStudio = {
   wfLoopEmptyHint: "The loop body is empty — use “Add node” (top right) to start; nodes inside take the current item and its index under loop",
   wfBranchTrue: "True",
   wfBranchFalse: "False",
+  //: The line on a node card saying how this gate / message reaches Feishu — visible without opening the inspector.
+  wfFeishuStationOnly: "In-app only",
+  wfFeishuOrigin: "Feishu · back to where it came from",
+  wfFeishuDirect: "Feishu · DM",
+  wfFeishuGroup: "Feishu · group",
+  wfFeishuRaw: "Feishu · to",
+  wfFeishuRequester: "the requester",
   wfRangeMinus2To2: "-2 to 2",
   wfSubgraphBody: "Subgraph",
   wfSubgraphBodyNote: "{n} nodes · double-click the subgraph node to edit the sub-canvas; nodes inside find inputs by name under input, and the node's output picks an output of a node inside",

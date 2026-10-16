@@ -91,6 +91,7 @@ const LIBRARY = new Map<string, Record<string, unknown>>([
   ["img-a", { id: "img-a", kind: "image", name: "甲", original_filename: "a.png", source: "imported", derived: false, ai_generated: false, created_at: new Date().toISOString(), media_info: { width: 1024, height: 1024 } }],
   ["img-b", { id: "img-b", kind: "image", name: "乙", original_filename: "b.png", source: "imported", derived: false, ai_generated: false, created_at: new Date().toISOString(), media_info: { width: 800, height: 600 } }],
   ["img-c", { id: "img-c", kind: "image", name: "丙", original_filename: "c.png", source: "generated", derived: false, ai_generated: true, created_at: new Date().toISOString(), media_info: { width: 1920, height: 1080 } }],
+  ["clip-v", { id: "clip-v", kind: "video", name: "一段视频", original_filename: "v.mp4", source: "imported", derived: false, ai_generated: false, created_at: new Date().toISOString(), media_info: { width: 1920, height: 1080 } }],
 ]);
 
 vi.mock("@/lib/assetQueries", () => ({
@@ -98,10 +99,11 @@ vi.mock("@/lib/assetQueries", () => ({
     byId: new Map(ids.flatMap((id) => (LIBRARY.has(id) ? [[id, LIBRARY.get(id)] as const] : []))),
     settled: true,
   }),
-  useAssetSearch: () => ({
+  //: 和真那一份一样按 `kind` 筛:挑图弹窗只列图片(库里那份视频不该出现在候选项里)。
+  useAssetSearch: (query?: { kind?: readonly string[] }) => ({
     text: "",
     search: vi.fn(),
-    items: [...LIBRARY.values()],
+    items: [...LIBRARY.values()].filter((one) => !query?.kind || query.kind.includes(String(one.kind))),
     isLoading: false,
     isError: false,
     error: null,
@@ -151,6 +153,36 @@ function renderField(value: unknown) {
   const view = render(<AssetGridField value={value} workspaceId="w1" max={8} onChange={onChange} />);
   return { onChange, ...view };
 }
+
+/** 带**自动来的引用**那一块渲染(见 workflows/referencedImages:提示词里引用到的图)。 */
+function renderAuto({
+  value = "",
+  refs,
+  excluded = [],
+  max = 8,
+}: {
+  value?: unknown;
+  refs: Array<{ path: string; label: string; assetId: string | null }>;
+  excluded?: string[];
+  max?: number;
+}) {
+  const onChange = vi.fn();
+  const onExcludedChange = vi.fn();
+  const view = render(
+    <AssetGridField
+      value={value}
+      workspaceId="w1"
+      max={max}
+      refs={refs}
+      excluded={excluded}
+      onExcludedChange={onExcludedChange}
+      onChange={onChange}
+    />,
+  );
+  return { onChange, onExcludedChange, ...view };
+}
+
+const REF = { path: "pic.asset_id", label: "画图 · 素材", assetId: "img-a" };
 
 const tileIds = (container: HTMLElement) =>
   [...container.querySelectorAll("[data-asset-tile]")].map((tile) => tile.getAttribute("data-asset-tile"));
@@ -259,6 +291,61 @@ describe("上传与上限", () => {
     expect(uploadMock.retry).toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText("close"));
     expect(uploadMock.dismiss).toHaveBeenCalled();
+  });
+});
+
+describe("自动来的引用(「引用即发送」)", () => {
+  const chip = (container: HTMLElement, path: string) => container.querySelector(`[data-auto-image-ref="${path}"]`);
+
+  it("没有引用时那一块不出现(不占地方)", () => {
+    const { container } = renderField("img-a");
+    expect(container.querySelector("[data-auto-images]")).toBeNull();
+  });
+
+  it("有引用时和手动挑的分开摆:名字是引用(「画图 · 素材」)、来源写在数据属性上,还说得清为什么", () => {
+    const { container } = renderAuto({ refs: [REF] });
+    const block = container.querySelector("[data-auto-images]")!;
+    expect(block).not.toBeNull();
+    //: 自动来的那几处不在手动格子那一片里(缩略图那一侧一个都没多)。
+    expect(tileIds(container)).toEqual([]);
+    const one = chip(container, "pic.asset_id")!;
+    expect(one.textContent).toContain("画图 · 素材");
+    expect(one.getAttribute("data-auto-image-on")).toBe("true");
+    //: 一行说明 + 这一处引用自己:来源看得见。
+    expect(block.textContent).toContain("wfAssetGridAutoTitle");
+    expect(block.textContent).toContain("wfAssetGridAutoHint");
+  });
+
+  it("× 去掉一处:把引用路径写进排除清单(运行时的取图认它)", () => {
+    const { container, onExcludedChange } = renderAuto({ refs: [REF], excluded: ["other.ref"] });
+    fireEvent.click(chip(container, "pic.asset_id")!.querySelector("[data-auto-image-toggle]")!);
+    expect(onExcludedChange).toHaveBeenCalledWith(["other.ref", "pic.asset_id"]);
+  });
+
+  it("已排除的那一处还在(看得见、点得回来):状态是关,再点从清单里去掉", () => {
+    const { container, onExcludedChange } = renderAuto({ refs: [REF], excluded: ["pic.asset_id"] });
+    const one = chip(container, "pic.asset_id")!;
+    expect(one.getAttribute("data-auto-image-on")).toBe("false");
+    fireEvent.click(one.querySelector("[data-auto-image-toggle]")!);
+    expect(onExcludedChange).toHaveBeenCalledWith([]);
+  });
+
+  it("静态就知道不是图片的(引用了视频素材):就地说它不会发送", () => {
+    const { container } = renderAuto({ refs: [{ path: "clip.asset_id", label: "一段片 · 素材", assetId: "clip-v" }] });
+    const one = chip(container, "clip.asset_id")!;
+    expect(one.querySelector("[data-auto-image-skipped]")).not.toBeNull();
+    expect(one.textContent).toContain("wfAssetGridAutoNotImage");
+  });
+
+  it("手动挑的加引用来的超过上限:当场说清,而不是等运行时报「最多 8 张」", () => {
+    const refs = Array.from({ length: 3 }, (_, at) => ({ path: `n${at}.asset_id`, label: `第 ${at} 张`, assetId: null }));
+    const { container } = renderAuto({ value: "img-a,img-b,img-c,img-d,img-e,img-f", refs });
+    expect(container.querySelector("[data-auto-images-over]")).not.toBeNull();
+  });
+
+  it("没超上限就没有那一句", () => {
+    const { container } = renderAuto({ refs: [REF] });
+    expect(container.querySelector("[data-auto-images-over]")).toBeNull();
   });
 });
 

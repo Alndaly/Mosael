@@ -52,8 +52,13 @@ def _workspace() -> str:
     return fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
 
 
-def _graph(*, on_timeout: str = "abort", on_reject: str = "abort", timeout_hours: float = 24) -> dict:
-    """start → 新建项目(会留下真行,用来数它跑了几次) → 等人确认 → 文本模板。"""
+def _graph(
+    *, on_timeout: str = "abort", on_reject: str = "abort", timeout_hours: float = 24, feishu: dict | None = None
+) -> dict:
+    """start → 新建项目(会留下真行,用来数它跑了几次) → 等人确认 → 文本模板。
+
+    `feishu`:`channel` / `bot` / `to` 那三格(节点上怎么写通知方式),不填就是没写 —— 和此前存的图一样。
+    """
     return {
         "nodes": [
             {"id": "start", "type": "start", "config": {}},
@@ -71,6 +76,7 @@ def _graph(*, on_timeout: str = "abort", on_reject: str = "abort", timeout_hours
                     "timeout_hours": timeout_hours,
                     "on_timeout": on_timeout,
                     "on_reject": on_reject,
+                    **(feishu or {}),
                 },
             },
             {"id": "after", "type": "template", "config": {"template": "决定:{{gate.decision}} 由 {{gate.decided_by}}"}},
@@ -131,6 +137,20 @@ def _approval(approval_id: str) -> WorkflowRunApproval:
         return db.get(WorkflowRunApproval, approval_id)
 
 
+def _route_settled(approval_id: str) -> WorkflowRunApproval:
+    """等这张单把「发到哪」那三列记下来。
+
+    **卡是在提交之后才发的**(见 domain/workflows/approvals.announce:先把暂停现场落库,再在
+    after_commit 里说出去),所以「任务卡已经说出在等人确认」和「这三列已经写进库」之间有一小段
+    窗口 —— 直接读会偶发地读到空串,机器负载一高就变成抽奖(整仓并行跑时实测撞上过一次)。
+    和「等满两件事再断言」那几条同一个教训:断言的是**两件先后发生的事**,就得等第二件。
+    """
+    return _wait_for(
+        lambda: (lambda row: row if row.feishu_receive_id else None)(_approval(approval_id)),
+        what="这张单记下要发到哪",
+    )
+
+
 def _job(job_id: str) -> Job:
     with SessionLocal() as db:
         return db.get(Job, job_id)
@@ -173,9 +193,33 @@ def _no_network(monkeypatch) -> list:
 
     def send_card(bot, receive_id, card, *, receive_id_type="chat_id"):
         sent.append({"bot": bot.id, "to": receive_id, "type": receive_id_type, "card": card})
+        return f"om_card_{len(sent)}"
 
     monkeypatch.setattr(client, "send_card", send_card)
     return sent
+
+
+def _capture(monkeypatch) -> dict[str, list]:
+    """卡片和文字都记下来(降级那条路也要看得见),一条都不出网。
+
+    `_no_network` 只挡卡片 —— 它服务的是"卡片发得出去"那几条。要证「一个字都没发」的用例
+    必须把**两条**路都记下来,否则降级发出去的那段文字会真的出网,而断言还绿着。
+    """
+    from app.integrations.feishu import client
+
+    seen: dict[str, list] = {"cards": [], "texts": []}
+
+    def send_card(bot, receive_id, card, *, receive_id_type="chat_id"):
+        seen["cards"].append({"bot": bot.id, "to": receive_id, "type": receive_id_type, "card": card})
+        return f"om_card_{len(seen['cards'])}"
+
+    def send_text(bot, receive_id, text, *, receive_id_type="chat_id"):
+        seen["texts"].append({"bot": bot.id, "to": receive_id, "type": receive_id_type, "text": text})
+        return f"om_text_{len(seen['texts'])}"
+
+    monkeypatch.setattr(client, "send_card", send_card)
+    monkeypatch.setattr(client, "send_text", send_text)
+    return seen
 
 
 # ---------------- ① 能暂停,而且落在库里(重启之后仍在等) ----------------
@@ -455,7 +499,7 @@ def test_飞书卡片那条路_发得出去_点得回来(monkeypatch) -> None:
     assert sent[0]["bot"] == bot_id
     assert sent[0]["type"] == "open_id"
     assert sent[0]["card"]["header"]["title"]["content"] == "要发布「前半程」吗"
-    stored = _approval(approval.id)
+    stored = _route_settled(approval.id)
     assert (stored.feishu_bot_id, stored.feishu_receive_id, stored.feishu_receive_type) == (bot_id, OPEN_ID, "open_id")
 
     #: 点按钮:直接调回调那一层(和 connections.dispatch 调的是同一个函数)。
@@ -577,3 +621,118 @@ def test_超时之后怎么办的解析(config: dict, expected: str) -> None:
 )
 def test_备注那一格的解析(config: dict, expected: bool) -> None:
     assert run_approvals.wants_note(config) == expected
+
+
+# ---------------- ⑨ 飞书那一面**显式写在节点上**(channel / bot / to) ----------------
+#
+# 此前"发到哪"是**自动猜**的:这次运行来自飞书会话就发回那个会话,否则看发起人绑没绑 ——
+# 节点上既看不见、也改不了,更没有"就是不发飞书"这一档。现在这三格写在节点上,运行时照它走。
+
+
+def _sent_to(seen: dict[str, list]) -> list[tuple[str, str, str]]:
+    """发出去的那些是「(机器人, 收件 id, 收件 id 的类型)」—— 卡片和降级用的文字一起看。"""
+    return [(one["bot"], one["to"], one["type"]) for one in [*seen["cards"], *seen["texts"]]]
+
+
+def test_通知方式写了仅站内_一个字都不发飞书(monkeypatch) -> None:
+    """`channel=none` 是**节点上明写的选择**,不是"发不出去就算了"。
+
+    改之前这里会照旧发卡(节点上那一格根本没人读)—— 所以这条用例改之前是红的。
+    """
+    ws = _workspace()
+    bot_id = _feishu_ready(ws)
+    seen = _capture(monkeypatch)
+
+    job_id, _ = _start(_graph(feishu={"channel": "none"}), ws, actor=user_id())
+    approval = _paused(job_id)
+
+    assert seen["cards"] == [] and seen["texts"] == [], "写了「仅站内」还发了飞书"
+    #: **站内那条照旧**(仅站内 = 换一条通知的路,不是不通知):通知有、运行在等、应用内批得动。
+    with SessionLocal() as db:
+        notices = db.query(Notification).filter_by(workspace_id=ws, type="workflow").all()
+    assert any((row.payload or {}).get("approval_id") == approval.id for row in notices)
+    assert _job(job_id).status == "running"
+    #: 单上那三格是空的 —— "没发飞书"这件事在记录里也是显式的。
+    stored = _approval(approval.id)
+    assert (stored.feishu_bot_id, stored.feishu_receive_id, stored.feishu_receive_type) == ("", "", "")
+    assert bot_id, "这个用例里机器人是接着的 —— 不发飞书只能是节点上写了「仅站内」"
+
+    assert _decide(approval.id, "approved") is True
+    assert _wait_for(lambda: _settled(job_id), what="仅站内批完接着跑").status == "succeeded"
+
+
+def test_通知方式写了私聊某个人_发到那个人的_open_id(monkeypatch) -> None:
+    ws = _workspace()
+    bot_id = _feishu_ready(ws)
+    #: 另一个人也绑了 —— 节点点名了谁,就该发给谁,不是"发给发起人"。
+    someone_else = "ou_someone_else"
+    with SessionLocal() as db:
+        db.add(FeishuBinding(workspace_id=ws, open_id=someone_else, user_id=user_id()))
+        db.commit()
+    seen = _capture(monkeypatch)
+
+    job_id, _ = _start(
+        _graph(feishu={"channel": "user", "to": someone_else, "bot": bot_id}), ws, actor=user_id()
+    )
+    approval = _paused(job_id)
+
+    assert _sent_to(seen) == [(bot_id, someone_else, "open_id")]
+    assert _route_settled(approval.id).feishu_receive_id == someone_else
+
+
+def test_通知方式写了发到某个群_发到那个群(monkeypatch) -> None:
+    ws = _workspace()
+    bot_id = _feishu_ready(ws)
+    seen = _capture(monkeypatch)
+
+    job_id, _ = _start(_graph(feishu={"channel": "chat", "to": "oc_team_room"}), ws, actor=user_id())
+    approval = _paused(job_id)
+
+    assert _sent_to(seen) == [(bot_id, "oc_team_room", "chat_id")]
+    stored = _route_settled(approval.id)
+    assert (stored.feishu_receive_id, stored.feishu_receive_type) == ("oc_team_room", "chat_id")
+
+
+def test_没绑机器人时_只站内_既不报错也不放行(monkeypatch) -> None:
+    """节点点名了私聊某个人,而工作区一个机器人都没接:退回站内那条路(单照建、运行照等),
+    **不是**让这次运行失败 —— 一个门禁的用处是拦住"没人看着就往下走",不是拦住自己。"""
+    ws = _workspace()
+    seen = _capture(monkeypatch)
+
+    job_id, _ = _start(_graph(feishu={"channel": "user", "to": OPEN_ID}), ws, actor=user_id())
+    approval = _paused(job_id)
+
+    assert seen["cards"] == [] and seen["texts"] == []
+    assert _job(job_id).status == "running"
+    assert _approval(approval.id).feishu_bot_id == ""
+
+
+def test_没写那三格时_行为与此前一致(monkeypatch) -> None:
+    """`channel` 缺省是 `origin`:旧的图(节点上没有那三格)照旧走"哪来发回哪、否则私聊发起人"。"""
+    ws = _workspace()
+    _feishu_ready(ws)
+    seen = _capture(monkeypatch)
+
+    job_id, _ = _start(_graph(), ws, actor=user_id())
+    _paused(job_id)
+
+    assert [one["to"] for one in seen["cards"]] == [OPEN_ID]
+    assert seen["cards"][0]["type"] == "open_id"
+
+
+def test_节点上写了哪个机器人就用哪个(monkeypatch) -> None:
+    """工作区接了不止一个机器人时,节点上那一格说得上话(改之前一律挑最早启用的那个)。"""
+    ws = _workspace()
+    first = _feishu_ready(ws)
+    with SessionLocal() as db:
+        second = FeishuBot(workspace_id=ws, name="另一个", app_id="cli_y", app_secret="s", enabled=True)
+        db.add(second)
+        db.commit()
+        second_id = second.id
+    seen = _capture(monkeypatch)
+
+    job_id, _ = _start(_graph(feishu={"channel": "user", "to": OPEN_ID, "bot": second_id}), ws, actor=user_id())
+    _paused(job_id)
+
+    assert [one["bot"] for one in seen["cards"]] == [second_id]
+    assert first != second_id

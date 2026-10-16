@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,6 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import MESSAGES, LocalizedError, t
+
+logger = logging.getLogger(__name__)
 
 
 class FieldOptionsError(LocalizedError, ValueError):
@@ -425,6 +428,78 @@ def _automation_chat_models(db: Session, ctx: OptionContext) -> list[Option]:
     ]
 
 
+#: ---- 飞书(「等人确认」的三格与 4 个飞书能力节点共用同一份清单)----
+
+
+def _feishu_bots(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区接了哪些飞书机器人 —— 节点上点名叫哪一个用它发。
+
+    停用的也列:那个开关管的是长连接(收消息),出站的 REST 照发,所以"停用了"照样发得出去
+    (见 routing.pick_bot)。自动挑选(留空)才只认启用中的那一个。
+    """
+    from app.domain.feishu import bots
+
+    return [{"value": row.id, "label": row.name or row.app_id} for row in bots.list_bots(db, ctx.workspace_id)]
+
+
+def _feishu_bound_users(db: Session, ctx: OptionContext) -> list[Option]:
+    """这个工作区里绑过飞书账号的人。值是**他们在那台机器人眼里的 open_id** ——
+    飞书按它发私聊,所以这一格存的就得是它(存 Mosael 的账号 id 到运行时还得再查一次)。"""
+    from app.domain.feishu import bindings
+
+    return [
+        {"value": open_id, "label": user.display_name or user.username}
+        for open_id, user in bindings.list_bindings(db, ctx.workspace_id)
+    ]
+
+
+def _feishu_targets(db: Session, ctx: OptionContext) -> list[Option]:
+    """「收件人」那一格:**同一个值格装着两种东西**,装哪种由 `channel` 说(它就是 depends_on 的那个父字段)。
+
+    私聊 → 已绑定的人;发群 → 机器人所在的群。别的一档(哪来发回哪 / 手填 id)用不上这一格,
+    给了清单反而是误导,所以是空表。
+    """
+    from app.domain.feishu import routing
+
+    channel = ctx.parent.strip()
+    if channel == routing.USER:
+        return _feishu_bound_users(db, ctx)
+    if channel == routing.CHAT:
+        return _feishu_chats(db, ctx)
+    return []
+
+
+def _feishu_chats(db: Session, ctx: OptionContext) -> list[Option]:
+    """机器人所在的群(现问飞书,和「列出机器人所在的群」那个节点同一份调用)。
+
+    **一律 best-effort**:这是一个下拉,对方没开、超时、没接机器人都不该把整页打红 ——
+    声明里写了 allow_custom,问不到的时候人还能把 id 填进去。
+    """
+    from app.domain.feishu import gateway, routing
+
+    if not gateway.wired():
+        return []
+    transport = gateway.transport()
+    bots = routing.enabled_bots(db, ctx.workspace_id)
+    options: list[Option] = []
+    seen: set[str] = set()
+    for bot in bots:
+        try:
+            chats = transport.chats(bot, limit=200)
+        except Exception:  # noqa: BLE001 —— 见 docstring:清单问不到就空着,让人手填
+            logger.warning("feishu chat options failed bot=%s", bot.id, exc_info=True)
+            continue
+        for chat in chats:
+            chat_id = str(chat.get("id") or "")
+            if not chat_id or chat_id in seen:
+                continue
+            seen.add(chat_id)
+            name = str(chat.get("name") or "") or chat_id
+            #: 工作区接了不止一个机器人时,群名前面带上是谁的列表 —— 同一个群名在两边都会出现。
+            options.append({"value": chat_id, "label": f"{bot.name} / {name}" if len(bots) > 1 else name})
+    return options
+
+
 def split_chat_model(value: str) -> tuple[str, str]:
     """`automation_chat_models` 的值 → (连接 id, 模型)。空着就是两样都空(用默认)。"""
     profile, _, model = str(value or "").partition(":")
@@ -458,6 +533,9 @@ SOURCES: dict[str, Source] = {
     "publish_accounts": _publish_accounts,
     "browser_profiles": _browser_profiles,
     "callable_workflows": _callable_workflows,
+    #: 飞书:「机器人」是按工作区列的;「收件人」那一格按 depends_on 的 channel 在"人 / 群"之间换源。
+    "feishu_bots": _feishu_bots,
+    "feishu_targets": _feishu_targets,
 }
 
 

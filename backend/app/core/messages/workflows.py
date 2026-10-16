@@ -155,6 +155,39 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{title}」还在等确认(已经超时过一次,按「只提醒」继续等)。",
         "en": "“{title}” is still waiting (it already passed the timeout; configured to keep waiting and remind).",
     },
+    #: ---- 飞书能力节点(见 executors/feishu 与 domain/feishu)----
+    #:
+    #: 「没接机器人」「没选收件人」这些都是**这一步做不成**,各说各的:一句笼统的"发不出去"会让人
+    #: 挨个字段试,而这几种的修法完全不同(去接机器人 / 去选收件人 / 去改节点上的通知方式)。
+    "wfErr_feishuNotWired": {
+        "zh": "这套运行环境没有装上飞书那一半(组装根没有登记飞书的发送实现),发不出去。",
+        "en": "This runtime does not have the Feishu half wired in (the assembly root registered no sender), so nothing can be sent.",
+    },
+    "wfErr_feishuNoBot": {
+        "zh": "这个工作区还没有启用中的飞书机器人:先去「飞书机器人」接一个,或在这个节点上换一种通知方式。",
+        "en": "This workspace has no enabled Feishu bot: connect one under Feishu bots, or change how this node notifies.",
+    },
+    "wfErr_feishuNoTarget": {
+        "zh": "没说清发给谁:这一档要填收件人(群 id 或某个已绑定的人),或者把手填的收件 id 与类型补齐。",
+        "en": "It doesn't say who should get it: fill in the recipient (a group ID or a bound person), or complete the typed-in recipient ID and its type.",
+    },
+    "wfErr_feishuNoOrigin": {
+        "zh": "通知方式写的是「哪来发回哪」,但这一次运行**不是从飞书来的**,而发起这次运行的人也没绑飞书账号 —— 没有可发的地方。改成指定群 / 指定的人,或改成「仅站内」。",
+        "en": "This node says “back to where it came from”, but this run did not come from Feishu and whoever started it has no Feishu account bound — there is nowhere to send. Pick a group or a person, or choose “in-app only”.",
+    },
+    "wfErr_feishuNotBound": {
+        "zh": "收件人「{to}」不是这个工作区里已绑定的人:让他先在「飞书机器人」里绑定账号,或换一个人。要发一个任意 id 就把通知方式改成「手填收件 id」。",
+        "en": "The recipient “{to}” is not bound to an account in this workspace: have them bind one under Feishu bots, or pick someone else. To send to any ID, switch to “type the recipient ID”.",
+    },
+    "wfErr_feishuStationOnly": {
+        "zh": "「发飞书消息」的通知方式写成了「仅站内」—— 这个节点整个存在的意义就是把消息发出去。要只走站内就用「发送通知」节点,要发飞书就换一档通知方式。",
+        "en": "“Send a Feishu message” is set to “in-app only”, but sending is this node's whole point. Use the “Send notification” node to stay in-app, or pick another way to notify.",
+    },
+    "wfErr_feishuEmptyText": {"zh": "发飞书消息:文本不能为空", "en": "Send a Feishu message: the text cannot be empty"},
+    "wfErr_feishuEmptyTitle": {"zh": "发飞书消息:卡片标题不能为空", "en": "Send a Feishu message: the card title cannot be empty"},
+    "wfErr_feishuEmptyMessageId": {"zh": "飞书消息 id 不能为空", "en": "The Feishu message ID cannot be empty"},
+    "wfErr_feishuEmptyFileKey": {"zh": "飞书附件的标识不能为空", "en": "The Feishu attachment key cannot be empty"},
+    "wfErr_feishuEmptyEmoji": {"zh": "表情不能为空(填飞书的表情名,如 THUMBSUP)", "en": "The emoji cannot be empty (use Feishu's name for it, such as THUMBSUP)"},
     "wfErr_tagNoAssets": {"zh": "素材打标签:没有可处理的素材 id", "en": "Tag assets: no asset ids to work on"},
     "wfErr_tagsEmpty": {"zh": "素材打标签:标签不能为空", "en": "Tag assets: the tags cannot be empty"},
     "wfErr_updateNoAssets": {"zh": "素材整理:没有可处理的素材 id", "en": "Update assets: no asset ids to work on"},

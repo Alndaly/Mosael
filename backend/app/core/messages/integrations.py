@@ -31,6 +31,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "飞书发卡片失败: {detail}",
         "en": "Couldn't send the Feishu card: {detail}",
     },
+    "feishuErr_reaction": {
+        "zh": "飞书加表情失败: {detail}",
+        "en": "Couldn't add the Feishu reaction: {detail}",
+    },
+    "feishuErr_listChats": {
+        "zh": "拉取飞书群列表失败: {detail}",
+        "en": "Couldn't list the Feishu groups: {detail}",
+    },
     "volcErr_needsAkSk": {
         "zh": "需要账号的 AK / SK 才能拉取音色列表",
         "en": "The account's AK / SK are needed to fetch the voice list.",
@@ -798,6 +806,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_if_exists": {"zh": "同名时", "en": "When it exists"},
     #: 一串素材和一份素材**不同名**:生成节点同时交出这两样(封面一份、这次出的全部),都叫「素材」时画布上两个口一模一样。
     "wfField_asset_ids": {"zh": "素材列表", "en": "Media list"},
+    #: 大模型节点那一格排除清单的名字。它不单独出现在面板上(声明 edited_by,由「要模型看的图片」的格子一起编辑),
+    #: 但报错提到字段(`field_name`)时得有个人话名字,不能露出 `image_asset_ids_excluded` 这个键名。
+    "wfField_image_asset_ids_excluded": {"zh": "不要自动带上的图", "en": "Referenced images left out"},
     "wfField_clip_id": {"zh": "片段", "en": "Clip"},
     "wfField_attribute": {"zh": "取哪个属性", "en": "Attribute"},
     "wfField_body": {"zh": "子图", "en": "Subgraph"},
@@ -1037,7 +1048,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_llm_response_format": {"zh": "要 JSON 时选 JSON:回答解析进 json 输出,下游按字段引用;给了 Schema 就照它约束和校验", "en": "Choose JSON to parse the reply into the json output for later steps to reference by field; with a Schema the reply is held to it"},
     "wfNode_llm_json_schema_name": {"zh": "JSON Schema 名称,默认 workflow_output", "en": "JSON Schema name; defaults to workflow_output"},
     "wfNode_llm_json_schema": {"zh": "选「按 JSON Schema」时用:模型交回的 JSON 照它校验,下游引用时按它列出字段", "en": "Used with “JSON Schema”: the model's JSON is checked against it, and references downstream list its fields"},
-    "wfNode_llm_image_asset_ids": {"zh": "要模型看的图片:和提示词一起发过去,最多 8 张;可以接上游画出来的图", "en": "Images for the model to look at, sent with the prompt (up to 8); can come from an upstream step"},
+    "wfNode_llm_image_asset_ids": {"zh": "要模型看的图片:和提示词一起发过去,最多 8 张;提示词里引用到的图会自动带上,也可以接上游画出来的图", "en": "Images for the model to look at, sent with the prompt (up to 8); images referenced in the prompt are added automatically, and upstream output can be wired in"},
+    "wfNode_llm_image_asset_ids_excluded": {"zh": "自动带上、但点名不要的那几张:一条一个引用或素材 id(由上面那一格的控件编辑)", "en": "Referenced images deliberately left out: one reference or asset id per entry (edited by the field above)"},
     "wfNode_llm_json_schema_strict": {"zh": "JSON Schema 严格模式", "en": "JSON Schema strict mode"},
     "wfNode_plugin_tool": {"zh": "插件工具", "en": "Plugin tool"},
     "wfNode_plugin_tool_desc": {"zh": "调用已启用插件的纯函数工具。", "en": "Call a pure-function tool from an enabled plugin."},

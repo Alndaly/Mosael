@@ -59,7 +59,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import DEFAULT_LOCALE, t
 from app.core.unit_of_work import after_commit, unit_of_work
-from app.db.models import FeishuBinding, FeishuBot, Job, User, Workflow, WorkflowRunApproval, now
+from app.db.models import Job, User, Workflow, WorkflowRevision, WorkflowRunApproval, now
 from app.domain.notifications import notify
 from app.domain.workflows import WorkflowDomainError, as_text
 
@@ -532,24 +532,30 @@ def requester_name(db: Session, job: Job | None) -> str:
     return (user.display_name or user.username) if user is not None else ""
 
 
-def bot_for_user(db: Session, workspace_id: str, user_id: str | None) -> tuple[FeishuBot, str] | None:
-    """这个人在这个工作区绑了哪个 open_id、用哪个机器人给他发私聊(没有就 None)。
+def pinned_node(db: Session, job: Job, node_id: str) -> dict[str, Any]:
+    """这个节点在**这次运行钉住的那一版修订**里长什么样(不是工作流当前那一版 —— 图可能已经改了)。
 
-    这是"工作区绑了飞书机器人"那条路:这次运行**不是**从飞书会话来的,但负责人绑过账号 ——
-    卡片当私聊发给他。飞书允许按 open_id 直接发(`receive_id_type=open_id`)。
+    「等人确认」的标题、以及**飞书那一面那三格**(channel / bot / to)都从这儿读:发卡发生在
+    执行器那一轮过去很久之后(after_commit),那时手里只有这张单,而单上没有存配置的地方。
+    读钉住的那一版而不是当前那一版,是因为**发出去的通知要照这次运行实际跑的那张图**。
     """
-    if not user_id:
-        return None
-    bot = db.scalar(
-        select(FeishuBot)
-        .where(FeishuBot.workspace_id == workspace_id, FeishuBot.enabled.is_(True))
-        .order_by(FeishuBot.created_at)
+    revision_id = str((job.payload or {}).get("workflow_revision_id") or "")
+    revision = db.get(WorkflowRevision, revision_id) if revision_id else None
+    graph = revision.graph if revision is not None else {}
+    return next(
+        (
+            one
+            for one in (graph.get("nodes") or [])
+            if isinstance(one, dict) and str(one.get("id")) == node_id
+        ),
+        {},
     )
-    if bot is None:
-        return None
-    open_id = db.scalar(
-        select(FeishuBinding.open_id).where(
-            FeishuBinding.workspace_id == workspace_id, FeishuBinding.user_id == user_id
-        )
-    )
-    return (bot, open_id) if open_id else None
+
+
+def node_config(db: Session, approval: WorkflowRunApproval) -> dict[str, Any]:
+    """这张待批单对应的那个节点当时是怎么配的(见 `pinned_node`)。找不到就是空配置。"""
+    job = db.get(Job, approval.job_id)
+    if job is None:
+        return {}
+    config = pinned_node(db, job, approval.node_id).get("config")
+    return dict(config) if isinstance(config, dict) else {}

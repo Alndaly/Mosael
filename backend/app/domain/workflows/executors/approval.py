@@ -34,7 +34,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import unit_of_work
-from app.db.models import Job, WorkflowRevision
+from app.db.models import Job
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import AwaitingApproval, WorkflowDomainError
 from app.domain.workflows.executors.registry import (
@@ -111,15 +111,14 @@ def await_approval(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
 
 
 def _node_name(db: Session, job: Job, node_id: str) -> str:
-    """这个节点在图里叫什么:从**这次运行钉住的那一版修订**里找(不是工作流当前那一版 —— 图可能已经改了)。"""
-    revision_id = str((job.payload or {}).get("workflow_revision_id") or "")
-    revision = db.get(WorkflowRevision, revision_id) if revision_id else None
-    graph = revision.graph if revision is not None else {}
-    node = next(
-        (one for one in graph.get("nodes") or [] if isinstance(one, dict) and str(one.get("id")) == node_id),
-        None,
-    )
-    name = str((node or {}).get("name") or "").strip()
+    """这个节点在图里叫什么:从**这次运行钉住的那一版修订**里找(不是工作流当前那一版 —— 图可能已经改了)。
+
+    同一份"钉住的那一版"读数(`approvals.pinned_node`)也在发卡那一步用 —— 飞书那三格
+    (`channel` / `bot` / `to`)从同一个地方读,免得两处各解一遍、各有一个答案。
+    """
+    from app.domain.workflows import approvals
+
+    name = str(approvals.pinned_node(db, job, node_id).get("name") or "").strip()
     return name or node_id
 
 

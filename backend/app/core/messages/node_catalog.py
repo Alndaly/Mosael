@@ -121,6 +121,125 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_await_approval_on_reject": {"zh": "被拒绝了怎么办", "en": "What to do when it is rejected"},
     "wfOpt_on_reject_abort": {"zh": "中止这次运行", "en": "Stop this run"},
     "wfOpt_on_reject_branch": {"zh": "当成决定交给下游", "en": "Hand the decision downstream"},
+    #: 飞书那一面:**显式写在节点上**(此前是自动猜的 —— 哪来发回哪、不是就私聊发起人,节点上既看不见也改不了)。
+    "wfNode_await_approval_channel": {
+        "zh": "这个门怎么通知:「哪来发回哪」= 这次运行从哪个飞书会话来就发回那里(不是从飞书来的就私聊发起人);"
+              "「仅站内」= 一个字都不发飞书,而不是发不出去就算了。飞书那一侧出问题一律降级,这次运行照旧在等。",
+        "en": "How this gate notifies: “Back to where it came from” sends to the Feishu chat that started the run "
+              "(and direct-messages the requester when it did not come from Feishu); “In-app only” sends nothing to Feishu "
+              "rather than silently giving up. Feishu problems still degrade — the run keeps waiting either way.",
+    },
+    "wfNode_await_approval_to": {
+        "zh": "飞书里的收件人:通知方式是「私聊某个人」时挑一个已绑定的人,是「发到某个群」时挑一个群。"
+              "清单跟着工作区里的机器人走;也可以直接填那个机器人看得见的 id。",
+        "en": "The Feishu recipient: pick a bound person when notifying by direct message, or a group when sending to a group. "
+              "The list follows the workspace's bots; you can also type an ID that bot can see.",
+    },
+    "wfNode_feishu_bot": {
+        "zh": "工作区里接了不止一个机器人时点名用哪一个;留空用最早启用的那个(和此前自动挑的是同一个)。",
+        "en": "Which bot to use when the workspace has more than one; leave it empty for the earliest enabled one "
+              "(the same pick as before).",
+    },
+    "wfOpt_channel_origin": {"zh": "哪来发回哪", "en": "Back to where it came from"},
+    "wfOpt_channel_user": {"zh": "私聊某个人", "en": "Direct message a person"},
+    "wfOpt_channel_chat": {"zh": "发到某个群", "en": "Send to a group"},
+    "wfOpt_channel_none": {"zh": "仅站内,不发飞书", "en": "In-app only, nothing to Feishu"},
+    "wfOpt_channel_raw": {"zh": "手填收件 id", "en": "Type the recipient ID"},
+    # ---- 飞书能力节点(实现见 integrations/feishu,执行体见 executors/feishu)----
+    "wfNode_feishu_message": {"zh": "发飞书消息", "en": "Send a Feishu message"},
+    "wfNode_feishu_message_desc": {
+        "zh": "主动发一条文字或卡片到飞书(群或私聊),**发完就走**、不等谁回复;要等人点确认就用「等人确认」。",
+        "en": "Send a text or a card to Feishu (a group or a direct message) and move on right away — nobody has to reply. "
+              "To wait for a person, use “Wait for approval”.",
+    },
+    "wfNode_feishu_message_channel": {
+        "zh": "发给谁:「哪来发回哪」= 这次运行从哪个飞书会话来就发回那里;「私聊某个人」「发到某个群」按下面的收件人;"
+              "「手填收件 id」自己填 id 与类型,机器人看得见的都行。",
+        "en": "Who gets it: “Back to where it came from” sends to the Feishu chat that started the run; "
+              "“Direct message a person” and “Send to a group” use the recipient below; "
+              "“Type the recipient ID” takes an ID and its type that the bot can see.",
+    },
+    "wfNode_feishu_message_format": {
+        "zh": "发出去的形态:纯文字只填文本;卡片有标题、正文和一个可选按钮(按钮要配链接)。",
+        "en": "The shape of what is sent: plain text is just the text; a card has a title, a body and an optional button "
+              "(a button needs a link).",
+    },
+    "wfNode_feishu_message_text": {"zh": "发出去的正文,可引用上游的输出", "en": "The body to send; upstream outputs can be referenced"},
+    "wfNode_feishu_message_title": {"zh": "卡片顶部那句话", "en": "The line at the top of the card"},
+    "wfNode_feishu_message_body": {"zh": "卡片正文(Markdown),可引用上游的输出", "en": "The card body (Markdown); upstream outputs can be referenced"},
+    "wfNode_feishu_message_link": {"zh": "按钮点开去哪;不放按钮时这张卡片就没有链接", "en": "Where the button opens; with no button the card carries no link"},
+    "wfNode_feishu_message_button_label": {"zh": "按钮上写什么;留空就不放按钮", "en": "What the button says; leave it empty for no button"},
+    "wfNode_feishu_message_raw_id": {"zh": "收件 id(群是 oc_ 开头,人是 ou_ 开头)", "en": "The recipient ID (groups start with oc_, people with ou_)"},
+    "wfNode_feishu_message_raw_type": {
+        "zh": "手填的这个 id 是哪一种:群 id 还是某个人的 open_id —— 飞书按它去找收件人",
+        "en": "Which kind of ID you typed — a group ID or a person's open_id; Feishu looks up the recipient by it",
+    },
+    "wfNode_feishu_take_resource": {"zh": "取回飞书附件", "en": "Fetch a Feishu attachment"},
+    "wfNode_feishu_take_resource_desc": {
+        "zh": "把飞书消息里的图片或文件取回来,**存成素材**再往下走(交出的素材编号和其它素材节点一样用)。",
+        "en": "Fetch an image or a file out of a Feishu message and register it as an asset before moving on "
+              "(the asset ID works like any other asset node's).",
+    },
+    "wfNode_feishu_take_resource_message_id": {
+        "zh": "哪条消息:群里的消息要先把消息 id 取出来(机器人收到的那个 om_ 开头的编号)",
+        "en": "Which message: for a message in a group, get its ID first (the om_ ID the bot received)",
+    },
+    "wfNode_feishu_take_resource_file_key": {
+        "zh": "附件在飞书里的标识(图片是 image_key,文件是 file_key)",
+        "en": "The attachment's key in Feishu (image_key for images, file_key for files)",
+    },
+    "wfNode_feishu_take_resource_resource_type": {
+        "zh": "取的是图片还是文件:飞书按它决定从哪个桶里拿,填错了会说找不到",
+        "en": "Whether this is an image or a file: Feishu uses it to pick the bucket, and the wrong one comes back as not found",
+    },
+    "wfOpt_resource_type_image": {"zh": "图片", "en": "Image"},
+    "wfOpt_resource_type_file": {"zh": "文件", "en": "File"},
+    "wfNode_feishu_reaction": {"zh": "回个表情", "en": "React with an emoji"},
+    "wfNode_feishu_reaction_desc": {
+        "zh": "给一条飞书消息加一个表情回执 —— 回复之外最轻的一种「收到了」。",
+        "en": "Add an emoji reaction to a Feishu message — the lightest way to say “got it” short of replying.",
+    },
+    "wfNode_feishu_reaction_message_id": {"zh": "给哪条消息加(om_ 开头的那个编号)", "en": "Which message (the om_ ID)"},
+    "wfNode_feishu_reaction_emoji_type": {
+        "zh": "加哪个表情(飞书的表情名,如 THUMBSUP / OK / DONE);下拉之外的名字也能直接填",
+        "en": "Which emoji (Feishu's name for it, such as THUMBSUP / OK / DONE); names outside the list can be typed in",
+    },
+    "wfNode_feishu_chats": {"zh": "列出机器人所在的群", "en": "List the bot's groups"},
+    "wfNode_feishu_chats_desc": {
+        "zh": "把机器人加入的那些群列出来(id 与名字),给「发到某个群」那几格当数据源,下游也能自己接着用。",
+        "en": "List the groups the bot is in (ID and name). It feeds the “send to a group” fields, and downstream steps can use it too.",
+    },
+    "wfNode_feishu_chats_limit": {"zh": "最多列出多少个群,默认 200", "en": "How many groups to list at most; 200 by default"},
+    "wfOpt_emoji_type_THUMBSUP": {"zh": "点赞", "en": "Thumbs up"},
+    "wfOpt_emoji_type_OK": {"zh": "好的", "en": "OK"},
+    "wfOpt_emoji_type_DONE": {"zh": "完成", "en": "Done"},
+    "wfOpt_emoji_type_HEART": {"zh": "爱心", "en": "Heart"},
+    "wfOpt_emoji_type_SMILE": {"zh": "微笑", "en": "Smile"},
+    "wfOpt_emoji_type_LOL": {"zh": "大笑", "en": "Laugh"},
+    "wfOpt_emoji_type_APPLAUSE": {"zh": "鼓掌", "en": "Applause"},
+    "wfOpt_emoji_type_FIRE": {"zh": "火", "en": "Fire"},
+    "wfOpt_emoji_type_THINKING": {"zh": "思考", "en": "Thinking"},
+    "wfOpt_emoji_type_SOB": {"zh": "大哭", "en": "Sobbing"},
+    "wfField_channel": {"zh": "通知方式", "en": "How to notify"},
+    "wfField_feishu_bot": {"zh": "飞书机器人", "en": "Feishu bot"},
+    "wfField_feishu_to": {"zh": "收件人", "en": "Recipient"},
+    "wfField_feishu_format": {"zh": "消息形态", "en": "Message form"},
+    "wfField_feishu_raw_id": {"zh": "收件 id", "en": "Recipient ID"},
+    "wfField_feishu_raw_type": {"zh": "收件 id 的类型", "en": "Recipient ID type"},
+    "wfField_feishu_button_label": {"zh": "按钮文案", "en": "Button label"},
+    "wfOpt_format_text": {"zh": "纯文字", "en": "Plain text"},
+    "wfOpt_format_card": {"zh": "卡片", "en": "Card"},
+    "wfOpt_raw_type_chat_id": {"zh": "群 id(oc_ 开头)", "en": "Group ID (starts with oc_)"},
+    "wfOpt_raw_type_open_id": {"zh": "用户 open_id(ou_ 开头)", "en": "User open_id (starts with ou_)"},
+    "wfField_feishu_message_id": {"zh": "消息 id", "en": "Message ID"},
+    "wfField_file_key": {"zh": "附件标识", "en": "Attachment key"},
+    "wfField_resource_type": {"zh": "附件类型", "en": "Attachment type"},
+    "wfField_emoji_type": {"zh": "表情", "en": "Emoji"},
+    "wfField_reaction_id": {"zh": "表情 id", "en": "Reaction ID"},
+    "wfField_size_bytes": {"zh": "大小(字节)", "en": "Size (bytes)"},
+    "wfField_chats": {"zh": "群", "en": "Groups"},
+    "wfOut_feishu_chats": {"zh": "群列表(id 与名字)", "en": "Groups (ID and name)"},
+    "wfOut_feishu_chat_ids": {"zh": "群 id 列表", "en": "Group IDs"},
     "wfField_approve_label": {"zh": "确认按钮文案", "en": "Approve button"},
     "wfField_reject_label": {"zh": "拒绝按钮文案", "en": "Reject button"},
     "wfField_allow_note": {"zh": "带备注输入框", "en": "Note field"},
