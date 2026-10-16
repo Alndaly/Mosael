@@ -114,18 +114,30 @@ def _required(config: dict[str, Any], key: str, error: str) -> str:
 
 
 def _target_or_fail(db: Session, scope: RunScope, config: dict[str, Any], *, allowed: tuple[str, ...]):
-    channel = routing.channel_of(config, allowed=allowed)
-    #: `raw` 那一档手填的是 `raw_id`,别的档是 `to` —— 写法不同,解的地方是同一处(见 routing.resolve)。
-    target_id = routing.to_of(config) if channel != routing.RAW else as_text(config.get("raw_id")).strip()
-    resolved = routing.resolve(
-        db,
-        workspace_id=scope.workspace_id,
-        channel=channel,
-        bot_id=routing.bot_id_of(config),
-        to=target_id,
-        raw_type=routing.raw_type_of(config),
-        job=_job(db),
-    )
+    """解出"发到哪";解不出来(缺机器人 / 没填收件人 / 没人绑)和**写法认不出**都在这里说清。
+
+    `routing` 是领域里的叶子模块:它不能回头 import 工作流这一层(见 tests/test_import_layering),
+    所以"认不出的写法"它按 key 抛 `LocalizedError`,由这里转成工作流错误 —— key 和参数跟着走,
+    落库的失败原因才不会冻在写下它的那一刻(见 WorkflowDomainError.from_error)。
+    """
+    try:
+        channel = routing.channel_of(config, allowed=allowed, strict=True)
+        #: `raw` 那一档手填的是 `raw_id`,别的档是 `to` —— 写法不同,解的地方是同一处(见 routing.resolve)。
+        if channel == routing.RAW:
+            target_id, raw_type = as_text(config.get("raw_id")).strip(), routing.raw_type_of(config)
+        else:
+            target_id, raw_type = routing.to_of(config), ""
+        resolved = routing.resolve(
+            db,
+            workspace_id=scope.workspace_id,
+            channel=channel,
+            bot_id=routing.bot_id_of(config),
+            to=target_id,
+            raw_type=raw_type,
+            job=_job(db),
+        )
+    except LocalizedError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
     if resolved.target is None:
         raise WorkflowDomainError(_UNRESOLVED.get(resolved.reason, "wfErr_feishuNoTarget"))
     return resolved.target
@@ -196,12 +208,16 @@ def feishu_reaction(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
 @register("feishu_chats")
 def feishu_chats(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """列出这个机器人所在的群(id 与名字)。「发到某个群」那几格的清单问的是同一份(见 field_options)。"""
-    from app.domain.workflows.executors.numbers import whole_number
+    from app.domain.workflows.executors.numbers import at_least, whole_number
 
     transport = _transport()
     bot = _bot_or_fail(db, scope.workspace_id, config)
-    limit = whole_number(config, "limit", node_type="feishu_chats", default=200) or 200
-    chats = transport.chats(bot, limit=max(1, min(limit, 1000)))
+    limit = whole_number(config, "limit", node_type="feishu_chats", default=200)
+    #: **不再 `or 200`。** 那句会把用户写的 `0` 一起吃掉(填了 0 的人以为自己设了,跑的是默认的 200 个群)。
+    #: `0` 在这里只能是"一个群都不列",而这个节点的用处就是交出群清单 —— 所以按「最少 1」当场说清,
+    #: 而不是悄悄换成任何值(见 numbers.at_least 的说明)。
+    limit = at_least(200 if limit is None else limit, 1, key="limit", node_type="feishu_chats")
+    chats = transport.chats(bot, limit=min(limit, 1000))
     return {"chats": chats, "ids": [one["id"] for one in chats], "count": len(chats)}
 
 
@@ -216,9 +232,15 @@ def _needs_a_bot(db: Session, config: dict[str, Any], _actor: str | None, place:
     这个仓库反复修过的正是这一类。
 
     「发飞书消息」写了 `origin` 的那一档不问:它发得出去靠的是"这次运行从飞书会话来",
-    而那本身就意味着有一个机器人;真到运行时没有,执行器会说。
+    而那本身就意味着有一个机器人;真到运行时没有,执行器会说。**认不出的通知方式**也不接着往下问:
+    那件事比"有没有机器人"更该先说出来(和 `_target_or_fail` 同一个说法)。
     """
-    if str(place.node.get("type") or "") == "feishu_message" and routing.channel_of(config) == routing.ORIGIN:
-        return
+    if str(place.node.get("type") or "") == "feishu_message":
+        try:
+            channel = routing.channel_of(config, strict=True)
+        except LocalizedError as exc:
+            raise WorkflowDomainError.from_error(exc) from exc
+        if channel == routing.ORIGIN:
+            return
     if routing.pick_bot(db, place.workspace_id, routing.bot_id_of(config)) is None:
         raise WorkflowDomainError("wfErr_feishuNoBot")

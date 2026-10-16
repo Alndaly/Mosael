@@ -155,18 +155,74 @@ def test_发飞书消息_卡片_标题正文链接按钮(monkeypatch) -> None:
 
 
 def test_发飞书消息_手填收件_id_与类型(monkeypatch) -> None:
-    """`raw` 是给"机器人看得见、但不在下拉里"的那种 id 留的口子(另一个租户、另一个拉群的机器人)。"""
+    """`raw` 是给"机器人看得见、但不在下拉里"的那种 id 留的口子(另一个租户、另一个拉群的机器人)。
+
+    手填的 id 是飞书那边的编号:**类型按前缀判**(`ou_` 是人、`oc_` 是群),那一格写的名字要和它对上。
+    """
     ws = _workspace()
     bot_id = _bot(ws)
     seen = _sent(monkeypatch)
 
     _run(
         "feishu_message",
-        {"channel": "raw", "raw_id": "om_someone", "raw_type": "open_id", "format": "text", "text": "在吗"},
+        {"channel": "raw", "raw_id": "ou_handwritten", "raw_type": "open_id", "format": "text", "text": "在吗"},
         ws,
     )
 
-    assert seen["texts"] == [{"bot": bot_id, "to": "om_someone", "type": "open_id", "text": "在吗"}]
+    assert seen["texts"] == [{"bot": bot_id, "to": "ou_handwritten", "type": "open_id", "text": "在吗"}]
+
+
+def test_手填的收件_id_前缀说了算_类型那一格空着也认(monkeypatch) -> None:
+    """类型那一格空着时,按 id 前缀判 —— 前缀是飞书真正校验的那一半,手改 / 迁移来的图常常只有 id。"""
+    ws = _workspace()
+    bot_id = _bot(ws)
+    seen = _sent(monkeypatch)
+
+    _run(
+        "feishu_message",
+        {"channel": "raw", "raw_id": "oc_handwritten", "raw_type": "", "format": "text", "text": "在吗"},
+        ws,
+    )
+
+    assert seen["texts"] == [{"bot": bot_id, "to": "oc_handwritten", "type": "chat_id", "text": "在吗"}]
+
+
+def test_手填的收件_id_认不出前缀_当场说清而不是猜成群(monkeypatch) -> None:
+    """前缀认不出时此前**猜成 chat_id** 发出去(那一格空着就是"回 chat_id"),等飞书回一句英文报错。
+
+    这里两种写法都要失败:那一格空着、以及那一格写着 open_id —— id 的形状认不出就不发。
+    """
+    ws = _workspace()
+    _bot(ws)
+    seen = _sent(monkeypatch)
+
+    for declared in ("", "open_id"):
+        with pytest.raises(WorkflowDomainError) as raised:
+            _run(
+                "feishu_message",
+                {"channel": "raw", "raw_id": "om_someone", "raw_type": declared, "format": "text", "text": "在吗"},
+                ws,
+            )
+        assert raised.value.key == "wfErr_feishuRawId", raised.value
+        assert "oc_" in str(raised.value) and "ou_" in str(raised.value), f"要写清该长什么样:{raised.value}"
+    assert seen["texts"] == [] and seen["cards"] == [], "认不出的收件 id 一个字都不该发出去"
+
+
+def test_手填的收件_id_与类型对不上_当场说清(monkeypatch) -> None:
+    """两格互相矛盾(前缀说是人、那一格写的是群 id)是手改留下的,不许按任何一边猜着发。"""
+    ws = _workspace()
+    _bot(ws)
+    seen = _sent(monkeypatch)
+
+    with pytest.raises(WorkflowDomainError) as raised:
+        _run(
+            "feishu_message",
+            {"channel": "raw", "raw_id": "ou_person", "raw_type": "chat_id", "format": "text", "text": "在吗"},
+            ws,
+        )
+
+    assert raised.value.key == "wfErr_feishuRawType", raised.value
+    assert seen["texts"] == [] and seen["cards"] == []
 
 
 def test_发飞书消息_没绑机器人_失败并说清是哪件事(monkeypatch) -> None:
@@ -292,6 +348,33 @@ def test_列出机器人所在的群_没绑机器人也是失败() -> None:
     assert raised.value.key == "wfErr_feishuNoBot", raised.value
 
 
+def test_列出机器人所在的群_limit_为0_当场说清而不是悄悄换成200(monkeypatch) -> None:
+    """`whole_number(...) or 200` 把用户写的 0 静默换成了 200。
+
+    0 在这儿的含义只能是"一个群都不列" —— 而这个节点的用处正是交出群清单(执行器自己还
+    `max(1, ...)` 兜了一下),飞书那条接口也不认 0。所以按「最少 1」当场说清,而不是把 0 吃掉:
+    填了 0 的人以为自己设了,跑出来的却是默认的 200 个群。
+    """
+    ws = _workspace()
+    _bot(ws)
+    calls: list = []
+    monkeypatch.setattr(
+        client, "call_api",
+        lambda bot, method, url, body=None: (
+            calls.append(url), {"code": 0, "data": {"items": [], "has_more": False}}
+        )[1],
+    )
+
+    with pytest.raises(WorkflowDomainError) as raised:
+        _run("feishu_chats", {"limit": 0}, ws)
+
+    assert raised.value.key == "wfErr_belowMin", raised.value
+    #: 参数落库时会过一道 JSON 化(见 core/i18n.stored_param),所以这里比的是它的样子。
+    assert str(raised.value.params.get("min")) == "1", raised.value.params
+    assert "不能小于 1" in str(raised.value), f"要说清最少多少:{raised.value}"
+    assert calls == [], "数字就不对,不该先去问飞书"
+
+
 # ---------------- ⑤ 目标解析:一份实现,三处用 ----------------
 
 
@@ -329,7 +412,8 @@ def test_目标解析_origin_回到这次运行来的那个飞书会话() -> Non
     [
         ("chat", "oc_room", "", ("oc_room", "chat_id")),
         ("user", OPEN_ID, "", (OPEN_ID, "open_id")),
-        ("raw", "om_anything", "open_id", ("om_anything", "open_id")),
+        ("raw", "ou_anything", "open_id", ("ou_anything", "open_id")),
+        ("raw", "oc_anything", "", ("oc_anything", "chat_id")),
     ],
 )
 def test_目标解析_四档写法各解到哪(channel, to, raw_type, expected) -> None:
@@ -371,6 +455,42 @@ def test_目标解析_none_就是不发飞书这个明确选择() -> None:
         resolved = routing.resolve(db, workspace_id=ws, channel="none", bot_id="", to="", raw_type="", job=None)
     assert resolved.target is None
     assert resolved.reason == "none", "「仅站内」和「发不出去」不是同一件事,理由要分得开"
+
+
+def test_通知方式认不出_当场说清_而不是悄悄发给发起人(monkeypatch) -> None:
+    """`channel` 认不出的值此前**静默退回 origin** —— 而这个节点的声明里根本没有 `none` 那一档,
+    所以这种写法只会从手改 / 迁移来的图进来。退回 origin 的后果是:本该不发的图,发给了发起人。
+
+    这里钉两件事:它当场失败(说清是哪一格、能写哪些值),而且一个字都没发出去。
+    """
+    from app.db.models import Job
+    from app.domain.jobs import reset_parent_job, set_parent_job
+
+    ws = _workspace()
+    _bot(ws)
+    _bind(ws)  # 发起人绑过飞书 —— 旧实现退回 origin 之后正是私聊他
+    seen = _sent(monkeypatch)
+    with SessionLocal() as db:
+        job = Job(workspace_id=ws, kind="workflow", payload={}, created_by=user_id())
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+    token = set_parent_job(job_id)
+    try:
+        with pytest.raises(WorkflowDomainError) as raised:
+            _run(
+                "feishu_message",
+                {"channel": "chatroom", "to": "oc_room", "format": "text", "text": "hi"},
+                ws,
+            )
+    finally:
+        reset_parent_job(token)
+
+    assert raised.value.key == "wfErr_feishuUnknownChannel", raised.value
+    assert "chatroom" in str(raised.value), f"要说清写的是哪个值:{raised.value}"
+    assert "origin" in str(raised.value) and "raw" in str(raised.value), f"要说清能写哪些值:{raised.value}"
+    assert seen["texts"] == [] and seen["cards"] == [], "认不出的通知方式一个字都不该发出去"
 
 
 def test_等人确认那条路走同一份解析() -> None:

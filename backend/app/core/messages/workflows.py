@@ -197,6 +197,18 @@ MESSAGES: dict[str, dict[str, str]] = {
     #: 手改 / 迁移过来的图里可能出现这个节点的声明里没有的写法。三种都**不猜**:认不出的通知方式
     #: 此前悄悄退回「哪来发回哪」(于是本该不发的图发给了发起人),认不出的收件 id 此前悄悄当成群 id
     #: (于是要等飞书回一句英文报错)。说清是哪一格、能写什么,比替用户挑一档强。
+    "wfErr_feishuUnknownChannel": {
+        "zh": "发飞书消息:「通知方式」写的是「{value}」,不是认得的档位。能写的是 {choices} —— 改回其中一档再跑;认不出的写法不会被猜成某一档发出去。",
+        "en": "Send a Feishu message: “who gets it” is set to “{value}”, which is not a known choice. It can be one of {choices} — set it back to one of those; an unrecognised value is never guessed into a target.",
+    },
+    "wfErr_feishuRawId": {
+        "zh": "发飞书消息:手填的收件 id「{value}」看不出是哪一种 —— 群 id 以 oc_ 开头,某个人的 open_id 以 ou_ 开头。类型按前缀判,认不出就不发。",
+        "en": "Send a Feishu message: the typed-in recipient ID “{value}” does not look like either kind — group IDs start with oc_, a person's open_id with ou_. The type comes from the prefix, so an unrecognised one is not sent.",
+    },
+    "wfErr_feishuRawType": {
+        "zh": "发飞书消息:手填的收件 id「{value}」按前缀看是 {actual},而「收件 id 的类型」写的是「{declared}」—— 两格对不上。类型只能是 {types},并且要和 id 的前缀一致。",
+        "en": "Send a Feishu message: by its prefix the typed-in recipient ID “{value}” is {actual}, but “recipient ID type” says “{declared}” — the two disagree. The type can only be {types}, and it must agree with the ID's prefix.",
+    },
     "wfErr_feishuEmptyText": {"zh": "发飞书消息:文本不能为空", "en": "Send a Feishu message: the text cannot be empty"},
     "wfErr_feishuEmptyTitle": {"zh": "发飞书消息:卡片标题不能为空", "en": "Send a Feishu message: the card title cannot be empty"},
     "wfErr_feishuEmptyMessageId": {"zh": "飞书消息 id 不能为空", "en": "The Feishu message ID cannot be empty"},

@@ -15,10 +15,16 @@
 - `user`:私聊一个**已绑定**的人(`to` 是那个人的 open_id)。
 - `chat`:`to` 是一个群 id(`oc_…`)。
 - `raw`:手填收件 id 与类型 —— 给"机器人看得见、但不在下拉里"的那种 id 留的口子。
+  类型**按 id 前缀判**(`oc_` 是群、`ou_` 是人),那一格写的名字要和它对得上。
 - `none`:**只站内**,一个字都不发飞书。这是"这次不通知飞书"的**明确选择**,不是"发不出去就算了"。
 
 解析不出来时给一个说得清的 `reason`,调用方据此决定是**降级**(「等人确认」退回站内那条路)
 还是**失败**(「发飞书消息」这种节点整个存在的意义就是发出去)。
+
+**认不出的写法不猜。** 不在白名单里的 `channel`、认不出前缀的 `raw_id`、和前缀对不上的
+`raw_type`,都当场带着 key 抛出(`LocalizedError`,由调用方翻成它那一层的错误)——
+此前它们各自悄悄退回 `origin` / `chat_id`,于是"本该不发飞书"的图发给了发起人、手填错的 id
+要等飞书回一句英文报错。
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.db.models import AgentSession, FeishuBinding, FeishuBot
 
 ORIGIN = "origin"
@@ -49,15 +56,34 @@ RAW_TYPES = ("chat_id", "open_id")
 #: 每一档解出来的收件 id 是哪一种。
 _TYPE_BY_CHANNEL = {USER: "open_id", CHAT: "chat_id"}
 
-
-def _pick(config: dict[str, Any], key: str, allowed: tuple[str, ...], fallback: str) -> str:
-    value = str((config or {}).get(key) or "").strip()
-    return value if value in allowed else fallback
+#: 手填的收件 id 长什么样 → 它是哪一种。**前缀是飞书真正校验的那一半**:`oc_` 是群,`ou_` 是人。
+_RAW_TYPE_BY_PREFIX = {"oc_": "chat_id", "ou_": "open_id"}
 
 
-def channel_of(config: dict[str, Any], *, allowed: tuple[str, ...] = MESSAGE_CHANNELS, fallback: str = ORIGIN) -> str:
-    """节点上写的通知方式。没写 = `origin`(和此前的自动路由一致),认不出的也回缺省。"""
-    return _pick(config, "channel", allowed, fallback)
+def channel_of(
+    config: dict[str, Any],
+    *,
+    allowed: tuple[str, ...] = MESSAGE_CHANNELS,
+    fallback: str = ORIGIN,
+    strict: bool = False,
+) -> str:
+    """节点上写的通知方式。**没写** = `fallback`(和此前的自动路由一致),**认不出**就当场说清。
+
+    `strict` 为真是给「发飞书消息」那类**必须发出去**的节点用的:手改 / 迁移来的图里一个写作
+    `chatroom` 的值,此前悄悄退回 `origin` —— 而"回 origin"意味着发给发起人。这是一条会
+    把话交给错的人的兜底,所以宁可失败。
+
+    不严格的那一档留给「等人确认」:它遇到发不出去**可以退回站内**(见
+    integrations/feishu/approvals),那条路的降级语义是它自己的,不因为这次改动换默认行为。
+    """
+    value = str((config or {}).get("channel") or "").strip()
+    if not value:
+        return fallback
+    if value in allowed:
+        return value
+    if strict:
+        raise LocalizedError("wfErr_feishuUnknownChannel", value=value, choices=" / ".join(allowed))
+    return fallback
 
 
 def bot_id_of(config: dict[str, Any]) -> str:
@@ -70,7 +96,32 @@ def to_of(config: dict[str, Any]) -> str:
 
 
 def raw_type_of(config: dict[str, Any]) -> str:
-    return _pick(config, "raw_type", RAW_TYPES, "chat_id")
+    """手填的收件 id 是哪一种 —— **按前缀判**(`oc_` 是群、`ou_` 是人),那一格写的名字要和它对上。
+
+    此前认不出就回 `chat_id`:填错的 id 要等飞书回一句英文报错,而"发给一个群"和"发给一个人"
+    错一次就是把话交给了错的对象。空 id 是另一件事(没填收件人),回空串让 `resolve` 照旧说
+    `no-target`。
+    """
+    raw = config or {}
+    return _raw_type(str(raw.get("raw_id") or "").strip(), str(raw.get("raw_type") or "").strip())
+
+
+def _raw_type(raw_id: str, declared: str) -> str:
+    """手填的收件 id + 那一格写的类型 → 类型。认不出前缀、或两者对不上,都带 key 抛(见模块说明)。
+
+    它同时被 `raw_type_of`(读节点上那两格)和 `resolve`(别的调用方直接给 id)用 ——
+    "哪种 id 算哪种类型"只有这一处答案。
+    """
+    if not raw_id:
+        return ""
+    kind = next((one for prefix, one in _RAW_TYPE_BY_PREFIX.items() if raw_id.startswith(prefix)), "")
+    if not kind:
+        raise LocalizedError("wfErr_feishuRawId", value=raw_id, types=" / ".join(RAW_TYPES))
+    if declared and declared != kind:
+        raise LocalizedError(
+            "wfErr_feishuRawType", value=raw_id, declared=declared, actual=kind, types=" / ".join(RAW_TYPES)
+        )
+    return kind
 
 
 def requester_binding(db: Session, workspace_id: str, user_id: str | None, bot_id: str = "") -> tuple[FeishuBot, str] | None:
@@ -189,9 +240,12 @@ def resolve(
     """按节点上写的解出"发到哪"。解不出来时 `reason` 说清是哪一种(见模块说明)。
 
     `to` 就是那个收件 id:`channel=user` 时是人的 open_id、`chat` 时是群 id、`raw` 时是手填的那个
-    (调用方把节点上 `raw_id` 那一格传进来 —— 写法不同,解的地方是同一处)。
+    (调用方把节点上 `raw_id` 那一格传进来 —— 写法不同,解的地方是同一处)。**认不出的写法不是
+    "解不出来"**:那几种带 key 抛出,因为"没填收件人"和"写了一个不存在的档位"是两件事。
     """
     channel = str(channel or "").strip() or ORIGIN
+    if channel not in (ORIGIN, NONE, USER, CHAT, RAW):
+        raise LocalizedError("wfErr_feishuUnknownChannel", value=channel, choices=" / ".join(MESSAGE_CHANNELS))
     if channel == NONE:
         return _failed(NONE)
     if channel == ORIGIN:
@@ -210,7 +264,8 @@ def resolve(
 
     target_id = str(to or "").strip()
     if channel == RAW:
-        receive_type = str(raw_type or "").strip()
+        #: 类型按 id 前缀判(见 _raw_type):认不出前缀、或和那一格写的名字对不上,都在这里说清。
+        receive_type = _raw_type(target_id, str(raw_type or "").strip())
         if not target_id or receive_type not in RAW_TYPES:
             return _failed("no-target")
     else:

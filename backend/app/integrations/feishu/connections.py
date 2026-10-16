@@ -36,6 +36,9 @@ class Connection:
         self.process = process
         self.pump: threading.Thread | None = None
         self._write_lock = threading.Lock()
+        #: worker 最后报上来的**出错原因**。它自己退出时,泵还要写一句「进程退出」——
+        #: 那句话不该把真正的原因盖掉(此前正是这样:凭据被拒的原因被一句 code 1 顶掉)。
+        self.last_error_detail = ""
 
     def send(self, payload: dict[str, Any]) -> None:
         stdin = self.process.stdin
@@ -56,6 +59,12 @@ _pumps: set[threading.Thread] = set()
 _process_lock = threading.Lock()
 #: 停一条连接时等它的泵读完剩下的输出、写完状态。子进程已被终止,管道很快见底,正常远到不了这么久。
 _PUMP_JOIN_SECONDS = 5
+
+
+def _is_current(connection: Connection) -> bool:
+    """这条连接还是这个机器人**现在**的那条吗(而不是被停掉 / 被换掉的上一辈子那条)。"""
+    with _process_lock:
+        return _processes.get(connection.bot_id) is connection
 
 
 def dispatch(connection: Connection, event: dict[str, Any]) -> None:
@@ -86,15 +95,16 @@ def dispatch(connection: Connection, event: dict[str, Any]) -> None:
 
         threading.Thread(target=decide, daemon=True, name="feishu-card").start()
     elif kind == "status":
-        status = str(event.get("status") or "")
-        if status == "online":
-            with SessionLocal() as db:
-                row = db.get(FeishuBot, connection.bot_id)
-                if row is not None and row.status == "connecting":
-                    row.status = "online"
-                    db.commit()
-        elif status:
-            bots.write_status(connection.bot_id, status, str(event.get("detail") or ""))
+        status = str(event.get("status") or "").strip()
+        detail = str(event.get("detail") or "").strip()
+        #: 只有**现在**那条连接有资格替这个机器人说它是什么状态:被停掉的那条晚一步报上来的
+        #: 「在线」是上一辈子的事。此前挡这件事的是"只有当前是 connecting 才落 online" ——
+        #: 那条规矩反过来会让真的「在线」写不进去(残留的 error 会把它吃掉)。
+        if not status or not _is_current(connection):
+            return
+        if status == "error":
+            connection.last_error_detail = detail
+        bots.write_status(connection.bot_id, status, detail)
 
 
 def _pump(connection: Connection) -> None:
@@ -124,9 +134,12 @@ def _drain(connection: Connection) -> None:
         still_current = _processes.get(connection.bot_id) is connection
         if still_current:
             del _processes[connection.bot_id]
-    # 被 stop_connection 停掉的不算出错;自己退出的要让设置页看得见。
+    # 被 stop_connection 停掉的不算出错;自己退出的要让设置页看得见 —— **连同 worker 最后说的原因**:
+    # 只写一句"进程退出"会把它真正为什么死掉这件事盖掉(凭据被拒 / 连不上)。
     if still_current:
-        bots.write_status(connection.bot_id, "error", f"长连接进程退出(code {code})")
+        reason = connection.last_error_detail
+        detail = f"长连接进程退出(code {code})" + (f":{reason}" if reason else "")
+        bots.write_status(connection.bot_id, "error", detail)
 
 
 def start_connection(bot_id: str) -> None:
@@ -173,18 +186,39 @@ def stop_connection(bot_id: str) -> None:
     bots.write_status(bot_id, "offline")
 
 
+def _start_failure_detail(exc: BaseException) -> str:
+    """起不来时说给用户听的那一句:**带上异常原文**。
+
+    只 `logger.exception` 的话,设置页上永远是「连接中」而没有人知道为什么 —— 凭据错、没有
+    libffi、工作区被删,在那一页上都长得一模一样。
+    """
+    return f"启动长连接失败:{exc}"
+
+
 def autostart_enabled_bots() -> None:
+    """后端起来时:**先把残留的连接状态归零**,再启用在用的那几条。
+
+    上一次进程被杀(或被换掉)会在库里留下 `connecting` / `online` —— 而那一刻并没有连接在跑,
+    这正是"设置页说在线、后端根本没起来"的来源。归零之后每一条都由真实过程重新写:启起来的
+    写 connecting、真连上才写 online(见 worker.watch_connection)、起不来写 error。
+
+    归零覆盖**所有**机器人,不只启用的那些:没有连接在跑这件事与它启不启用无关。
+    """
     with SessionLocal() as db:
-        enabled = db.scalars(select(FeishuBot).where(FeishuBot.enabled.is_(True))).all()
-        for bot in enabled:
+        rows = db.scalars(select(FeishuBot)).all()
+        enabled_ids: list[str] = []
+        for bot in rows:
             bot.status = "offline"
+            bot.status_detail = ""
+            if bot.enabled:
+                enabled_ids.append(bot.id)
         db.commit()
-        bot_ids = [bot.id for bot in enabled]
-    for bot_id in bot_ids:
+    for bot_id in enabled_ids:
         try:
             start_connection(bot_id)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 —— 起不来也要留下原因,不只是日志
             logger.exception("feishu autostart failed bot=%s", bot_id)
+            bots.write_status(bot_id, "error", _start_failure_detail(exc))
 
 
 def stop_all_connections() -> None:
@@ -203,9 +237,9 @@ def start_or_report(bot_id: str) -> None:
     """起连接;起不来就把原因写进机器人状态,而不是让建机器人的那个请求失败 —— 机器人已经存好了。"""
     try:
         start_connection(bot_id)
-    except Exception:  # noqa: BLE001 —— 见上
+    except Exception as exc:  # noqa: BLE001 —— 见上
         logger.exception("feishu connection failed to start bot=%s", bot_id)
-        bots.write_status(bot_id, "error", "启动长连接失败")
+        bots.write_status(bot_id, "error", _start_failure_detail(exc))
 
 
 def restart_connection(bot_id: str) -> None:

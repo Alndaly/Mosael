@@ -23,14 +23,14 @@ import logging
 import os
 import sys
 import threading
-import time
 import uuid
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 PROTOCOL = "@@mosael "
-CONNECTING_GRACE_SECONDS = 8.0
+#: 看「SDK 真的连上了没有」的间隔。它不是"等这么久就算连上" —— 只有真状态变了才报(见 watch_connection)。
+CONNECT_CHECK_SECONDS = 0.2
 #: 飞书要求卡片回调 3 秒内答复;留一点余量给来回的管道。
 CARD_REPLY_SECONDS = 2.5
 
@@ -143,6 +143,32 @@ def card_action(data: Any) -> tuple[str, dict[str, Any]]:
     return getattr(operator, "open_id", "") or "", value
 
 
+def watch_connection(client: Any, stop: threading.Event, live: threading.Event | None = None) -> None:
+    """等 SDK **真的把长连接建起来**,再报「在线」。
+
+    ## 「连上了」挂在哪个信号上
+
+    lark_oapi 的 ws.Client **没有「初次连上」的回调**:它公开的那两个观察钩子
+    (`on_reconnecting` / `on_reconnected`)只在**重连**时触发(见 lark_oapi/ws/client.py 的
+    `_reconnect`)。它真实的状态是 `_conn`:端点那次 HTTP POST(拿 app_id / app_secret 换连接地址
+    —— 凭据不对在这里就被拒)和 websocket 握手**都成功**之后才会被赋值,掉线时被清回 `None`。
+
+    所以这一处盯的是那个状态,而不是"起来 N 秒就报在线" —— 后者在凭据错、SDK 卡在内部重连时
+    照样把设置页点亮成绿色:用户看到的那句"已连接"是定时器写的。私有属性将来若改名,这里会
+    **一直不报在线**(绿不了),而不是报一个假的绿:宁可不说,不说谎。
+
+    `live` 是"真的连上过"这件事本身:`on_reconnecting` 要用它分辨"掉线了,正在重连"和
+    "从头到尾就没连上,SDK 在内部重试"。
+    """
+    while not stop.is_set():
+        if getattr(client, "_conn", None) is not None:
+            if live is not None:
+                live.set()
+            emit({"event": "status", "status": "online"})
+            return
+        stop.wait(CONNECT_CHECK_SECONDS)
+
+
 def main(bot_id: str) -> None:
     import lark_oapi as lark
 
@@ -155,11 +181,29 @@ def main(bot_id: str) -> None:
     replies = CardReplies()
     threading.Thread(target=follow_parent, args=(replies, sys.stdin), daemon=True).start()
 
-    def _mark_online_after_grace() -> None:
-        time.sleep(CONNECTING_GRACE_SECONDS)
+    #: 「真的连上过」这件事。重连成功的钩子会让它置位,连接观察者也一样。
+    live = threading.Event()
+
+    def _say_online() -> None:
+        live.set()
         emit({"event": "status", "status": "online"})
 
-    threading.Thread(target=_mark_online_after_grace, daemon=True).start()
+    def _say_retrying() -> None:
+        """SDK 决定重连时如实说一声。
+
+        这一声很要紧:掉线之后不能让上一次的「在线」留着不说(那是"设置页显示已连接,而消息收不到");
+        而从头就没连上时,SDK 会一直自己在内部重试(凭据不对正是这条路:`start()` 把它吞进
+        `_reconnect` 里,永远不返回也不会抛出来),状态必须停在一个说得清的「连接中 + 原因」上,
+        而不是永远空转。
+        """
+        emit({
+            "event": "status",
+            "status": "connecting",
+            "detail": (
+                "长连接断开,SDK 正在重连" if live.is_set()
+                else "长连接还没建立起来,SDK 正在内部重连(检查 app_id / app_secret 与到飞书的网络)"
+            ),
+        })
 
     def _on_message(data) -> None:
         try:
@@ -185,12 +229,22 @@ def main(bot_id: str) -> None:
         .build()
     )
     client = lark.ws.Client(app_id, app_secret, event_handler=handler, log_level=lark.LogLevel.INFO)
+    #: SDK 自己的生命周期钩子(公开的两个):掉线要说、重连上也要说。
+    client.on_reconnecting = _say_retrying
+    client.on_reconnected = _say_online
+
+    stop_watching = threading.Event()
+    threading.Thread(
+        target=watch_connection, args=(client, stop_watching, live), daemon=True, name="feishu-connect-watch"
+    ).start()
     try:
         client.start()  # blocking for the lifetime of the connection
     except Exception as exc:
         logger.exception("feishu worker exited bot=%s", bot_id)
         emit({"event": "status", "status": "error", "detail": str(exc)})
         raise
+    finally:
+        stop_watching.set()
 
 
 if __name__ == "__main__":
