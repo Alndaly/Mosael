@@ -67,6 +67,8 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
     },
     onError: (error: Error) => toast.error(t("runApprovalFailed"), { description: error.message }),
   });
+  //: 这一次点的是哪个决定 —— 只用来决定**哪一颗按钮转圈**(见下面那颗按钮上的注释)。
+  const deciding = decide.isPending ? decide.variables : null;
   return (
     <div className="grid gap-1.5 rounded-md border border-border bg-background/40 p-2">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
@@ -82,10 +84,24 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
         />
       )}
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button size="sm" loading={decide.isPending} onClick={() => decide.mutate("approved")}>
+        {/*: 转圈只给**被点的那一颗**。此前两颗都吃 `decide.isPending`,点「拒绝」两个一起转 ——
+            看起来像两个决定都在提交。这一次点的是哪个由这次 mutate 的参数说了算
+            (`decide.variables`,自带一份就够,不再另起一个 state);另一颗只禁用,不转圈。 */}
+        <Button
+          size="sm"
+          loading={deciding === "approved"}
+          disabled={decide.isPending && deciding !== "approved"}
+          onClick={() => decide.mutate("approved")}
+        >
           {row.approve_label || t("runApprovalApproved")}
         </Button>
-        <Button size="sm" variant="outline" loading={decide.isPending} onClick={() => decide.mutate("rejected")}>
+        <Button
+          size="sm"
+          variant="outline"
+          loading={deciding === "rejected"}
+          disabled={decide.isPending && deciding !== "rejected"}
+          onClick={() => decide.mutate("rejected")}
+        >
           {row.reject_label || t("runApprovalRejected")}
         </Button>
         <span className="text-ui-2xs">{decide.isPending ? t("runApprovalSending") : t("runApprovalFeishuHint")}</span>

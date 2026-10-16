@@ -42,12 +42,23 @@ afterEach(() => {
 
 const calls: Array<{ path: string; method: string; body: string }> = [];
 
-function renderNotice(rows: unknown[]) {
+/** `holdPost` 那一档把 POST 挂住,这里放着"放行"它的把手。 */
+let releasePost: (() => void) | null = null;
+
+function renderNotice(rows: unknown[], opts: { holdPost?: boolean } = {}) {
   calls.length = 0;
+  releasePost = null;
+  //: `holdPost`:让那一次 POST **挂住不返回** —— 用来观察"提交中"的样子(见下面那条用例)。
+  const held = opts.holdPost
+    ? new Promise<void>((resolve) => {
+        releasePost = resolve;
+      })
+    : null;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://x");
     if (init?.method === "POST") {
       calls.push({ path: url.pathname, method: "POST", body: String(init.body ?? "") });
+      if (held) await held;
       const decided = { ...(rows[0] as object), status: "approved", decision: "approved" };
       return new Response(JSON.stringify(decided), { status: 200, headers: { "content-type": "application/json" } });
     }
@@ -102,6 +113,22 @@ describe("运行停在等人确认上", () => {
     fireEvent.click(await screen.findByRole("button", { name: "先别发" }));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(JSON.parse(calls[0].body)).toEqual({ decision: "rejected", note: "" });
+  });
+
+  it("提交中:转圈的只有**点下去的那一颗**,另一颗只是禁用", async () => {
+    //: 此前两颗按钮都吃同一个 `decide.isPending` -> 点「拒绝」两个一起转,看起来像**两个决定都在提交**。
+    renderNotice([row], { holdPost: true });
+    fireEvent.click(await screen.findByRole("button", { name: "先别发" }));
+
+    const rejected = screen.getByRole("button", { name: "先别发" });
+    const approved = screen.getByRole("button", { name: "确认发布" });
+    await waitFor(() => expect(rejected).toHaveAttribute("aria-busy", "true"));
+    expect(approved).not.toHaveAttribute("aria-busy");
+    expect(approved).toBeDisabled();
+
+    //: 收尾:把那一次 POST 放行,免得留下悬着的 promise。
+    releasePost?.();
+    await waitFor(() => expect(calls).toHaveLength(1));
   });
 
   it("节点关掉了备注那一格:不给输入框", async () => {
