@@ -73,6 +73,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     #: 「等人确认」那一次等待(新节点 await_approval)也只归工作流域写。
     "WorkflowRunApproval": ("app/domain/workflows/",),
     "WorkflowRunOutput": ("app/domain/workflows/",),
+    #: 工作流触发器(ADR 0065):「谁在哪个群丢来什么消息就叫起这条工作流」这一族只归 triggers 域写。
+    "WorkflowTrigger": ("app/domain/triggers/",),
+    "WorkflowTriggerEvent": ("app/domain/triggers/",),
     "Scene3D": ("app/domain/scenes/operations.py",),
     "Scene3DRevision": ("app/domain/scenes/operations.py",),
     "Scene3DModel": ("app/domain/scenes/operations.py",),

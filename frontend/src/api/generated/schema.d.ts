@@ -5149,6 +5149,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflow-triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Triggers */
+        get: operations["list_triggers_api_workflow_triggers_get"];
+        put?: never;
+        /** Create Trigger */
+        post: operations["create_trigger_api_workflow_triggers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflow-triggers/{trigger_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trigger */
+        get: operations["get_trigger_api_workflow_triggers__trigger_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Trigger */
+        delete: operations["delete_trigger_api_workflow_triggers__trigger_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Trigger
+         * @description 改配置、开关也走这里(`{"enabled": false}` 就是关掉它)。
+         */
+        patch: operations["update_trigger_api_workflow_triggers__trigger_id__patch"];
+        trace?: never;
+    };
+    "/api/workflow-triggers/{trigger_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Events
+         * @description 这个触发器最近触发过哪些消息、起了哪几次运行 —— 「它在干活吗」问的就是这一条。
+         */
+        get: operations["list_events_api_workflow_triggers__trigger_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/boards": {
         parameters: {
             query?: never;
@@ -7271,8 +7331,9 @@ export interface paths {
         put?: never;
         /**
          * Search Model Sources
-         * @description 按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。同名的候选在前;
-         *     一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve` 正好解析到那个文件。
+         * @description 按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。哈希确认过的
+         *     候选在前、只有它允许「直接下载」;一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve`
+         *     正好解析到那个文件。`body.hash` 是工作流自己声明的哈希(有就拿它认 `confirmed`)。
          */
         post: operations["search_model_sources_api_plugins_instances__instance_id__model_library_search_post"];
         delete?: never;
@@ -15078,6 +15139,9 @@ export interface components {
          * ModelSearchCandidateOut
          * @description 一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),
          *     别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。
+         *
+         *     `confidence` 是三档:`confirmed`(哈希对上)/ `exact`(文件名一字不差)/ `likely`(去后缀一致 / 名字里含着);
+         *     **`direct` 只有 `confirmed` 才是真** —— 界面据此决定给不给「直接下载」(见 ADR 0038 §9)。
          */
         ModelSearchCandidateOut: {
             /**
@@ -15116,6 +15180,21 @@ export interface components {
              * @default false
              */
             exact: boolean;
+            /**
+             * Confidence
+             * @default
+             */
+            confidence: string;
+            /**
+             * Direct
+             * @default false
+             */
+            direct: boolean;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
         };
         /**
          * ModelSearchFailureOut
@@ -15130,6 +15209,34 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * ModelSearchHashOut
+         * @description 这一轮哈希是怎么来的(或为什么没有)。`state`:`matched`(对上了)/ `none`(算出了但没有候选对得上)/
+         *     `unavailable`(没得算,见 `reason`:`no_tools` 没装 ComfyUI-Custom-Scripts、`no_file` 文件还不在那台机器上、
+         *     `no_connection` 没连上那台 ComfyUI)。`note` 是给人看的一句 —— **算不出哈希时必须说清「所以只是同名」**。
+         */
+        ModelSearchHashOut: {
+            /**
+             * State
+             * @default
+             */
+            state: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
         /** ModelSearchOut */
         ModelSearchOut: {
             /** Filename */
@@ -15138,10 +15245,14 @@ export interface components {
             candidates?: components["schemas"]["ModelSearchCandidateOut"][];
             /** Failed */
             failed?: components["schemas"]["ModelSearchFailureOut"][];
+            hash?: components["schemas"]["ModelSearchHashOut"];
         };
         /**
          * ModelSearchRequest
          * @description 按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。
+         *
+         *     `hash` / `hash_type`:工作流自己声明的哈希(见 `WorkflowMissingModelOut`),有这个就可能把候选认到
+         *     `confirmed`;没有的话插件让那台机器算 SHA256(要 ComfyUI-Custom-Scripts)。
          */
         ModelSearchRequest: {
             /** Filename */
@@ -15151,6 +15262,16 @@ export interface components {
              * @default
              */
             folder: string;
+            /**
+             * Hash
+             * @default
+             */
+            hash: string;
+            /**
+             * Hash Type
+             * @default
+             */
+            hash_type: string;
         };
         /**
          * ModelSourceOut
@@ -20441,7 +20562,8 @@ export interface components {
         };
         /**
          * WorkflowMissingModelOut
-         * @description 缺的、工作流声明了下载地址的模型。
+         * @description 缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):
+         *     交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。
          */
         WorkflowMissingModelOut: {
             /** Folder */
@@ -20453,6 +20575,16 @@ export interface components {
              * @default
              */
             url: string;
+            /**
+             * Hash
+             * @default
+             */
+            hash: string;
+            /**
+             * Hash Type
+             * @default
+             */
+            hash_type: string;
         };
         /** WorkflowMissingNodeOut */
         WorkflowMissingNodeOut: {
@@ -20861,6 +20993,148 @@ export interface components {
             label: string;
             /** Deleted At */
             deleted_at?: number | null;
+        };
+        /**
+         * WorkflowTriggerCreate
+         * @description 配一条触发器。`name` 是回执里要点名的那个名字。
+         */
+        WorkflowTriggerCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Bot Id
+             * @default
+             */
+            bot_id: string;
+            /**
+             * Chat Id
+             * @default
+             */
+            chat_id: string;
+            /** Message Types */
+            message_types?: string[];
+            /** Keywords */
+            keywords?: string[];
+            /** Only From Open Ids */
+            only_from_open_ids?: string[];
+            /** Params */
+            params?: {
+                [key: string]: string;
+            };
+            /**
+             * Reply In Chat
+             * @default true
+             */
+            reply_in_chat: boolean;
+            /**
+             * Max Runs Per Minute
+             * @default 6
+             */
+            max_runs_per_minute: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /**
+         * WorkflowTriggerEventOut
+         * @description 「最近触发」的一行:哪条消息、认了什么、起了哪次运行(或者为什么没起)。
+         */
+        WorkflowTriggerEventOut: {
+            /** Id */
+            id: string;
+            /** Message Id */
+            message_id: string;
+            /** Message Type */
+            message_type: string;
+            /** Text Preview */
+            text_preview: string;
+            /** Asset Ids */
+            asset_ids: string[];
+            /** Job Id */
+            job_id: string | null;
+            /** Status */
+            status: string;
+            /** Error */
+            error: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** WorkflowTriggerOut */
+        WorkflowTriggerOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name: string;
+            /** Bot Id */
+            bot_id: string;
+            /** Chat Id */
+            chat_id: string;
+            /** Message Types */
+            message_types: string[];
+            /** Keywords */
+            keywords: string[];
+            /** Only From Open Ids */
+            only_from_open_ids: string[];
+            /** Params */
+            params: {
+                [key: string]: string;
+            };
+            /** Reply In Chat */
+            reply_in_chat: boolean;
+            /** Max Runs Per Minute */
+            max_runs_per_minute: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Last Fired At */
+            last_fired_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * WorkflowTriggerUpdate
+         * @description 改一条触发器。不传的字段不动(`exclude_unset` 由路由那一层给)。
+         */
+        WorkflowTriggerUpdate: {
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Bot Id */
+            bot_id?: string | null;
+            /** Chat Id */
+            chat_id?: string | null;
+            /** Message Types */
+            message_types?: string[] | null;
+            /** Keywords */
+            keywords?: string[] | null;
+            /** Only From Open Ids */
+            only_from_open_ids?: string[] | null;
+            /** Params */
+            params?: {
+                [key: string]: string;
+            } | null;
+            /** Reply In Chat */
+            reply_in_chat?: boolean | null;
+            /** Max Runs Per Minute */
+            max_runs_per_minute?: number | null;
+            /** Enabled */
+            enabled?: boolean | null;
         };
         /**
          * WorkflowUnusableNodeOut
@@ -31195,6 +31469,199 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowAiEditResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_triggers_api_workflow_triggers_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                workflow_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_trigger_api_workflow_triggers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTriggerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trigger_api_workflow_triggers__trigger_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trigger_api_workflow_triggers__trigger_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_trigger_api_workflow_triggers__trigger_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTriggerUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_events_api_workflow_triggers__trigger_id__events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerEventOut"][];
                 };
             };
             /** @description Validation Error */

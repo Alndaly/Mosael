@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FileOutput, Import, ListChecks, Pencil, Play, Plus, Store, Trash2, Workflow as WorkflowIcon, X } from "lucide-react";
+import { Check, FileOutput, Import, ListChecks, Pencil, Play, Plus, Store, Trash2, Workflow as WorkflowIcon, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -32,6 +32,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { WorkflowCard } from "@/features/workflows/WorkflowCard";
 import { WorkflowEditor } from "@/features/workflows/WorkflowEditor";
+import { WorkflowTriggersDialog } from "@/features/workflows/WorkflowTriggersDialog";
 import { analyzeWorkflowNow } from "@/features/workflows/readiness";
 import { refreshAfterWorkflowDelete } from "@/features/workflows/workflowViewShared";
 import { gotoJob, OPEN_WORKFLOW_RUN, OPEN_WORKFLOW_TEMPLATE, parseWorkflowRunLink, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
@@ -49,6 +50,8 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
+  //: 在配触发器的那条工作流(null = 没开这个弹窗)。
+  const [triggersFor, setTriggersFor] = React.useState<Workflow | null>(null);
   const [communityOpen, setCommunityOpen] = React.useState(false);
   const [communityFocus, setCommunityFocus] = React.useState<string | null>(null);
   //: 官网「在 Mosael 中打开」:打开工作流社区、选中那个模板 —— 添加副本仍由人点。
@@ -184,6 +187,9 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const cardActions = (workflow: Workflow): MenuAction[] => [
     { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, disabledReason: writeBlocked?.brief, onSelect: () => menuRun.mutate(workflow) },
     { label: t("rename"), icon: <Pencil />, disabledReason: writeBlocked?.brief, onSelect: () => setMenuRenaming(workflow) },
+    // 「触发器」放在卡片菜单里(不是编辑器工具栏):它改的是"这张图怎么被叫起来",不是图本身
+    // (见 WorkflowTriggersDialog 顶上那段)。看别人的触发器不需要写权限,所以这里不按 writeBlocked 灰掉。
+    { label: t("workflowTriggersTitle"), icon: <Zap />, onSelect: () => setTriggersFor(workflow) },
     { label: t("wfExport"), icon: <FileOutput />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
     { label: t("delete"), icon: <Trash2 />, destructive: true, disabledReason: writeBlocked?.brief, onSelect: () => setMenuDeleting(workflow) },
   ];
@@ -469,6 +475,15 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
         pending={menuRemove.isPending}
         onConfirm={() => menuDeleting && menuRemove.mutate(menuDeleting.id)}
       />
+      {triggersFor && (
+        <WorkflowTriggersDialog
+          workspaceId={workspace.id}
+          workflow={triggersFor}
+          open
+          canEdit={!writeBlocked}
+          onOpenChange={(next) => !next && setTriggersFor(null)}
+        />
+      )}
     </div>
   );
 }

@@ -624,6 +624,83 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "run_at 必须是 ISO 日期时间",
         "en": "run_at must be an ISO datetime.",
     },
+    # ---- 工作流触发器:飞书消息叫起一次运行(ADR 0065)----
+    # 存进库里的失败原因(运行记录、通知正文)与接口的 422 说同一句话。
+    "triggerErr_noMessageTypes": {
+        "zh": "至少要认一种消息类型",
+        "en": "Pick at least one kind of message to accept.",
+    },
+    "triggerErr_badMessageType": {
+        "zh": "认不了这种消息类型:{kinds}。只能是:{allowed}",
+        "en": "Unsupported message type(s): {kinds}. Allowed: {allowed}",
+    },
+    "triggerErr_badPlaceholder": {
+        "zh": "入参映射里用了认不出的占位符:{names}。能用的是:{allowed}",
+        "en": "The parameter mapping uses unknown placeholder(s): {names}. Available: {allowed}",
+    },
+    "triggerErr_badLimit": {
+        "zh": "每分钟最多跑几次要在 1 到 {max} 之间",
+        "en": "Runs per minute must be between 1 and {max}.",
+    },
+    "triggerErr_badParam": {
+        "zh": "入参映射里的参数名不能为空",
+        "en": "A parameter name in the mapping can't be empty.",
+    },
+    "triggerErr_badName": {
+        "zh": "触发器要有个名字",
+        "en": "A trigger needs a name.",
+    },
+    "triggerErr_botNotInWorkspace": {
+        "zh": "这个机器人不在这个工作区里",
+        "en": "That bot isn't in this workspace.",
+    },
+    "triggerErr_workflowNotFound": {
+        "zh": "工作流不在这个工作区里",
+        "en": "That workflow isn't in this workspace.",
+    },
+    # 起跑成功时回群里的那一句(ADR 0065 §3:用户据此看出「这次是触发器起的」)。
+    "triggerReceipt": {
+        "zh": "已按触发器「{trigger}」开始运行「{workflow}」",
+        "en": "Trigger “{trigger}” started a run of “{workflow}”",
+    },
+    "triggerRefused_workflowGone": {
+        "zh": "工作流已删除,触发器已停用",
+        "en": "The workflow was deleted, so this trigger was turned off.",
+    },
+    "triggerRefused_notRunnable": {
+        "zh": "工作流「{workflow}」跑不起来:{reason}",
+        "en": "The workflow “{workflow}” can't run: {reason}",
+    },
+    "triggerRefused_failed": {
+        "zh": "起运行的时候出错了:{reason}",
+        "en": "Starting the run failed: {reason}",
+    },
+    # 站内通知:拒绝 / 失败时喊主人(群里不喊配置错误,见 ADR 0065 §5)。
+    "triggerNotice_refusedTitle": {
+        "zh": "触发器「{trigger}」没能起运行",
+        "en": "Trigger “{trigger}” couldn't start a run",
+    },
+    "triggerNotice_refusedBody": {
+        "zh": "「{workflow}」:{reason}",
+        "en": "“{workflow}”: {reason}",
+    },
+    # 跑完把结果发回群里的那几句(可关,见 WorkflowTrigger.reply_in_chat)。
+    "triggerResult_done": {
+        "zh": "「{workflow}」跑完了(触发器「{trigger}」)",
+        "en": "“{workflow}” finished (trigger “{trigger}”)",
+    },
+    "triggerResult_noOutput": {
+        "zh": "「{workflow}」跑完了,这次没有文字产出(产出在 Mosael 的运行历史里)",
+        "en": "“{workflow}” finished with no text output (see the run history in Mosael)",
+    },
+    "triggerResult_failed": {
+        "zh": "「{workflow}」这次运行失败了:{reason}",
+        "en": "The run of “{workflow}” failed: {reason}",
+    },
+    "triggerResult_cancelled": {
+        "zh": "「{workflow}」这次运行被停下了",
+        "en": "The run of “{workflow}” was stopped.",
+    },
     # 这台电脑上的文件是部署主人的私有资源(见 domain/host_files)。说的是怎么办。
     "hostErr_notAbsolute": {
         "zh": "本机文件路径必须是绝对路径",

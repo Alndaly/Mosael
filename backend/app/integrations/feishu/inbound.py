@@ -11,19 +11,25 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
 import re
 import threading
 import time
 from collections import OrderedDict
+from dataclasses import replace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.db.models import AgentMessage, AgentSession, FeishuBot
+from app.core.i18n import DEFAULT_LOCALE, t
+from app.db.models import AgentMessage, AgentSession, FeishuBot, Job, Workflow, WorkflowTrigger, WorkflowTriggerEvent
 from app.domain.agent import origins
 from app.domain.agent.host import get_or_create_external_session, post_user_message
 from app.domain.feishu import bindings
+from app.domain.jobs import register_settle_listener
+from app.domain.triggers import IncomingMessage
+from app.domain.triggers import dispatch as trigger_dispatch
 from app.integrations.feishu import client
 
 logger = logging.getLogger(__name__)
@@ -78,6 +84,10 @@ CAPABILITY_NOTES = {
 #: 能读进来的消息类型。其余类型不是丢掉,而是回一句说明 —— 见 _describe_unsupported。
 SUPPORTED_MESSAGE_TYPES = frozenset({"text", "post", "image"})
 
+#: 智能体看不懂、但**工作流触发器**可能接的消息类型:文件与视频(ADR 0065)。
+#: 没有触发器认它们时,照旧回一句「看不了」(见 _describe_unsupported)。
+TRIGGERABLE_MESSAGE_TYPES = frozenset({"file", "media"})
+
 
 def _image_keys(message_type: str, content_json: str) -> list[str]:
     """消息里的图片 file_key。image 消息一张;post(富文本)可以内嵌多张。"""
@@ -99,21 +109,56 @@ def _image_keys(message_type: str, content_json: str) -> list[str]:
     return keys
 
 
-def _ingest_images(bot: FeishuBot, workspace_id: str, message_id: str, keys: list[str]) -> list[str]:
-    """把图片下载进素材库,返回素材 id。
+def _file_attachment(message_type: str, content_json: str) -> tuple[str, str]:
+    """文件 / 视频消息里的 `(file_key, file_name)`。别的类型没有,给两个空串。"""
+    if message_type not in TRIGGERABLE_MESSAGE_TYPES:
+        return "", ""
+    try:
+        parsed = json.loads(content_json or "{}")
+    except ValueError:
+        logger.warning("飞书消息的 content 解不开,这条按没有附件处理: %.200r", content_json)
+        return "", ""
+    if not isinstance(parsed, dict):
+        return "", ""
+    return str(parsed.get("file_key") or ""), str(parsed.get("file_name") or "")
+
+
+def _content_type_of(name: str) -> str:
+    """按文件名猜一个 MIME。只是给探测器的提示:真正是什么由回形针那条路自己探。"""
+    return mimetypes.guess_type(name or "")[0] or "application/octet-stream"
+
+
+def _ingest_attachments(
+    bot: FeishuBot, workspace_id: str, message_id: str, message_type: str, content_json: str
+) -> tuple[list[str], str]:
+    """把这条消息里的图片 / 文件 / 视频下载进素材库,返回 `(素材 id, 文件名)`。
 
     **走素材库而不是直接塞给模型**:桌面端的回形针也是这么做的(上传成素材 → 在提示里引用),
-    智能体分析图片靠的是 analyze_asset 这个工具。两条入口落到同一个地方,飞书发来的图片
-    此后在素材库里也找得到、能复用,而不是只在那一轮对话里存在过。
+    智能体分析图片靠的是 analyze_asset 这个工具。图片那条路从第一天起就是这样;文件与视频
+    (触发器用得到,见 ADR 0065)走的是同一个 `import_binary_asset` —— 于是飞书发来的东西此后
+    在素材库里也找得到、能复用,而不是只在那一轮对话里存在过。
     """
     from app.domain.assets.importer import import_binary_asset
 
+    wanted: list[tuple[str, str, str, str]] = [
+        (key, "image", "image/jpeg", f"feishu-{message_id[-8:]}-{index + 1}.jpg")
+        for index, key in enumerate(_image_keys(message_type, content_json)[:MAX_INBOUND_IMAGES])
+    ]
+    file_key, file_name = _file_attachment(message_type, content_json)
+    if file_key:
+        wanted.append((
+            file_key,
+            "file",
+            _content_type_of(file_name),
+            file_name or f"feishu-{message_id[-8:]}",
+        ))
+
     asset_ids: list[str] = []
-    for index, key in enumerate(keys[:MAX_INBOUND_IMAGES]):
+    for key, kind, content_type, name in wanted:
         try:
-            data = client.download_message_resource(bot, message_id, key, "image")
-        except Exception:  # noqa: BLE001 —— 一张下不来不该让整条消息失败
-            logger.warning("feishu image download failed key=%s", key, exc_info=True)
+            data = client.download_message_resource(bot, message_id, key, kind)
+        except Exception:  # noqa: BLE001 —— 一份下不来不该让整条消息失败
+            logger.warning("feishu %s download failed key=%s", kind, key, exc_info=True)
             continue
         with SessionLocal() as db:
             asset = import_binary_asset(
@@ -121,12 +166,12 @@ def _ingest_images(bot: FeishuBot, workspace_id: str, message_id: str, keys: lis
                 workspace_id=workspace_id,
                 project_id=None,
                 data=data,
-                original=f"feishu-{message_id[-8:]}-{index + 1}.jpg",
-                content_type="image/jpeg",
+                original=name,
+                content_type=content_type,
                 source="feishu",
             )
             asset_ids.append(asset.id)
-    return asset_ids
+    return asset_ids, file_name
 
 
 #: 一条消息最多收几张图。飞书一次能发一组,而每张都要下载 + 探测 + 生成缩略图。
@@ -164,20 +209,24 @@ def handle_incoming(
 
     - 会话正忙时这条**排队**,轮到它时照样回复(以前是回一句「上一条还在处理中」就丢掉)。
     - 回复由 origins 的 turn_finished 钩子送回(见文件末尾的登记),和这一轮在哪条线程跑完无关。
+
+    **这一轮之前还有一道**:先问工作流触发器认不认这条消息(ADR 0065)。认了这条消息就归它
+    ——不喂给智能体;没人认领才照旧走上面那条管线。用户发过来的东西两种收场都要有回应。
     """
     if seen_recently(message_id):
         return
     text = extract_text(content_json)
     image_keys = _image_keys(message_type, content_json)
+    file_key, file_name = _file_attachment(message_type, content_json)
     with SessionLocal() as db:
         bot = db.get(FeishuBot, bot_id)
         if bot is None or not bot.enabled:
             return
-        if message_type not in SUPPORTED_MESSAGE_TYPES:
+        if message_type not in SUPPORTED_MESSAGE_TYPES and message_type not in TRIGGERABLE_MESSAGE_TYPES:
             # 说一句,而不是沉默。用户发过来什么都得到回应,哪怕是"我看不了这个"。
             client.send_text(bot, chat_id, _describe_unsupported(message_type))
             return
-        if not text and not image_keys:
+        if not text and not image_keys and not file_key:
             return
         # Identify the human behind the message. No open_id → can't attribute → refuse.
         user = bindings.resolve_sender(db, bot.workspace_id, sender_open_id) if sender_open_id else None
@@ -195,13 +244,37 @@ def handle_incoming(
                     "然后把绑定码直接发给我完成绑定。",
                 )
             return
+        #: **只有绑定过的人能驱动触发器**(ADR 0065 §4):上面那一道就是它的门槛 —— 未绑定的消息
+        #: 在这里已经回头了,连匹配都轮不到。触发器跑起来花的是配置它那个人的钥匙和额度。
+        message = IncomingMessage(
+            workspace_id=bot.workspace_id,
+            bot_id=bot.id,
+            chat_id=chat_id,
+            message_id=message_id,
+            sender_open_id=sender_open_id,
+            message_type=message_type,
+            text=text,
+            file_name=file_name,
+        )
+        #: **先问谁认这条消息,再决定去不去下载附件。** 下载要调飞书、落盘、探测、生成缩略图
+        #: (文件与视频还要跑 ffprobe)—— 没人认领时一个字节都不该去下。
+        claimed, skipped = trigger_dispatch.claimable(db, message)
         # 图片下载要几秒(下载 + 探测 + 缩略图),不该占着数据库会话;而 bot 是纯配置,
         # 出了 session 只用它的 id/app_id/app_secret 调 REST,detached 也够用。
         db.expunge(bot)
         workspace_id = bot.workspace_id
 
+    if claimed:
+        _run_triggers(bot, message, claimed, skipped, message_type, content_json)
+        return
+
+    if message_type not in SUPPORTED_MESSAGE_TYPES:
+        #: 走到这里 = 文件 / 视频,**而没有任何触发器接它**:回到最开始那句话,行为和以前一模一样。
+        client.send_text(bot, chat_id, _describe_unsupported(message_type))
+        return
+
     if image_keys:
-        asset_ids = _ingest_images(bot, workspace_id, message_id, image_keys)
+        asset_ids, _ = _ingest_attachments(bot, workspace_id, message_id, message_type, content_json)
         if not asset_ids:
             client.send_text(bot, chat_id, "图片没能取回来(飞书资源下载失败),换一张或稍后再试。")
             return
@@ -239,6 +312,37 @@ def handle_incoming(
                 client.remove_reaction(bot, message_id, typing_reaction)
             client.add_reaction(bot, message_id, client.REACTION_FAILURE)
             client.send_text(bot, chat_id, "消息没能交给智能体,请查看后端日志。")
+
+
+# ---------------- 触发器认领了这条消息(ADR 0065)----------------
+
+
+def _run_triggers(
+    bot: FeishuBot,
+    message,
+    claimed: list[str],
+    skipped: list[str],
+    message_type: str,
+    content_json: str,
+) -> None:
+    """触发器认领了这条消息:收附件 → 起运行 → 把回执发回群。
+
+    附件下载排在这里而不是匹配之前 —— 只有**确定有人认**才值得去调飞书下载、落盘、探测、生成缩略图。
+    附件取不回来时这一次不跑:素材就是入参,缺了起一次注定失败的运行没有意义。
+    """
+    asset_ids, _ = _ingest_attachments(bot, message.workspace_id, message.message_id, message_type, content_json)
+    if not asset_ids and (_image_keys(message_type, content_json) or _file_attachment(message_type, content_json)[0]):
+        client.send_text(bot, message.chat_id, "附件没能取回来(飞书资源下载失败),换一个或稍后再试。")
+        return
+    message = replace(message, asset_ids=tuple(asset_ids))
+    with SessionLocal() as db:
+        #: 去重、限流、起运行、落事件都在这一个事务里(领域不提交,入口提交 —— 见用例边界棘轮)。
+        outcomes = trigger_dispatch.fire(db, message, list(claimed), skipped=list(skipped))
+        db.commit()
+    for outcome in outcomes:
+        if outcome.receipt:
+            #: 起跑成功的那一句回执:用户据此看出「这次是触发器起的」(ADR 0065 §3)。
+            client.send_text(bot, outcome.chat_id or message.chat_id, outcome.receipt)
 
 
 # ---------------- 一轮跑完:把结果送回飞书 ----------------
@@ -328,6 +432,92 @@ origins.register(
     "feishu",
     origins.ExternalOrigin(system_note=system_note, turn_finished=deliver_turn, confirmation_opened=_announce),
 )
+
+
+# ---------------- 触发器起的那次运行跑完:把结果发回群(ADR 0065 §3)----------------
+
+
+def deliver_trigger_run(db: Session, job: Job) -> None:
+    """一次**触发器起的**运行落终态之后,把结果发回它来的那个群。
+
+    登记在任务总线那条缝上(`jobs.register_settle_listener`),所以成功、失败、**取消**都走得到
+    —— 取消不经过执行体的收尾代码,能在那一刻接住它的只有这里。
+
+    哪个群靠事件行认:触发器上的 `bot_id` / `chat_id` 可能是空串(任意机器人 / 任意群),
+    而这一次到底从哪来,只有写事件那一刻知道。
+    """
+    payload = job.payload or {}
+    trigger_id = str(payload.get("trigger_id") or "")
+    if not trigger_id:
+        return  # 不是触发器起的 —— 绝大多数任务在这里路过
+    trigger = db.get(WorkflowTrigger, trigger_id)
+    if trigger is None or not trigger.reply_in_chat:
+        return
+    event = db.get(WorkflowTriggerEvent, str(payload.get("trigger_event_id") or ""))
+    bot_id = (event.bot_id if event is not None else "") or trigger.bot_id
+    chat_id = (event.chat_id if event is not None else "") or trigger.chat_id
+    if not bot_id or not chat_id:
+        return
+    bot = db.get(FeishuBot, bot_id)
+    if bot is None or not bot.enabled:
+        return
+    text = _run_result_text(db, job, trigger)
+    if not text:
+        return
+    try:
+        client.send_text(bot, chat_id, text)
+    except client.FeishuError:
+        logger.exception("feishu trigger result failed trigger=%s chat=%s", trigger.id, chat_id)
+
+
+def _run_result_text(db: Session, job: Job, trigger: WorkflowTrigger) -> str:
+    """这次运行交回群里的一句话。还没落终态(排队中 / 还在跑)时什么都不说。"""
+    workflow = db.get(Workflow, trigger.workflow_id)
+    name = workflow.name if workflow is not None else (trigger.name or trigger.id)
+    if job.status == "failed":
+        return t("triggerResult_failed", DEFAULT_LOCALE, workflow=name, reason=(job.error or "")[:500])
+    if job.status == "cancelled":
+        return t("triggerResult_cancelled", DEFAULT_LOCALE, workflow=name)
+    if job.status != "succeeded":
+        return ""
+    body = _produced_text(job.result or {})
+    if not body:
+        return t("triggerResult_noOutput", DEFAULT_LOCALE, workflow=name)
+    head = t("triggerResult_done", DEFAULT_LOCALE, workflow=name, trigger=trigger.name or trigger.id)
+    return f"{head}\n\n{body}"
+
+
+#: 回群里的正文最多多少字。群里要的是一句话,全文在 Mosael 的运行历史里(那边按需取全文)。
+RESULT_TEXT_LIMIT = 1500
+
+
+def _produced_text(result: dict) -> str:
+    """这次运行交出来的文字:**输出节点声明的具名输出**优先(那是这张图的契约),
+    没有就用上下文里各节点的 `text`(最后一个通常是最终答复)。
+
+    注意这是**有界快照**(长文字在事件与结果里都截过,见 domain/workflows/run_outputs),
+    所以这里不去承诺"发回群里的是全文"。
+    """
+    pieces: list[str] = []
+    output = result.get("output")
+    if isinstance(output, dict):
+        pieces = [value for value in output.values() if isinstance(value, str) and value.strip()]
+    if not pieces:
+        context = result.get("context")
+        if isinstance(context, dict):
+            #: 取**最后**一个交回文字的节点:上下文按节点落定的先后排,最后那个通常就是终点的产出。
+            #: (全部拼起来会把"开始节点交出的入参"和"终点的答复"一起发回群里,读起来像回声。)
+            for node_out in context.values():
+                text = node_out.get("text") if isinstance(node_out, dict) else None
+                if isinstance(text, str) and text.strip():
+                    pieces = [text]
+    body = "\n\n".join(pieces).strip()
+    if len(body) <= RESULT_TEXT_LIMIT:
+        return body
+    return body[:RESULT_TEXT_LIMIT] + "…"
+
+
+register_settle_listener("feishu_workflow_triggers", deliver_trigger_run)
 
 
 def notify_interrupted_chats(db: Session) -> int:

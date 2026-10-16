@@ -34,6 +34,7 @@ from app.api.schemas import (
     WorkflowUpdate,
 )
 from app.domain.scheduler import stop_tasks_bound_to_workflow
+from app.domain.triggers import stop_triggers_bound_to_workflow
 from app.domain.scheduler import use_cases as scheduler_uc
 from app.db.models import Job, Workflow, WorkflowRevision, WorkflowRunApproval
 from app.domain.workflows import (
@@ -493,6 +494,10 @@ def delete(workflow_id: str, db: Tx, user: CurrentUser) -> Response:
     # 触发、照样失败,手动的也照样能点「立即运行」。这一步排在路由这层(和 sharing.forget 一样),
     # 因为定时任务依赖工作流、工作流不能反过来认识定时任务(见 tests/test_import_layering.py)。
     stop_tasks_bound_to_workflow(db, workflow)
+    # 绑着它的**触发器**同一个事务里停用(ADR 0065 §5),理由和上面那一条一样:图没了,
+    # 触发器留着也没用 —— 它只会在每来一条飞书消息时白试一次、再喊一次主人。
+    # 同样排在这一层:触发器依赖工作流,工作流不能反过来认识触发器。
+    stop_triggers_bound_to_workflow(db, workflow)
     db.delete(workflow)
     return Response(status_code=204)
 

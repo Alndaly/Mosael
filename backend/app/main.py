@@ -61,6 +61,7 @@ from app.api.routes.publish_worker import router as publish_worker_router
 from app.api.routes.boards import router as boards_router
 from app.api.routes.notes import router as notes_router
 from app.api.routes.workflows import router as workflows_router
+from app.api.routes.triggers import router as triggers_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.core.config import allowed_hosts, settings
 from app.api.middleware import NEW_JOBS_HEADER, AnnounceNewJobs, AnswerCrashes, CarryLocale
@@ -616,6 +617,7 @@ def create_app() -> FastAPI:
     app.include_router(entities_router, prefix="/api", dependencies=protected)
     app.include_router(scheduler_router, prefix="/api", dependencies=protected)
     app.include_router(workflows_router, prefix="/api", dependencies=protected)
+    app.include_router(triggers_router, prefix="/api", dependencies=protected)
     app.include_router(boards_router, prefix="/api", dependencies=protected)
     app.include_router(notes_router, prefix="/api", dependencies=protected)
     app.include_router(publish_router, prefix="/api", dependencies=protected)

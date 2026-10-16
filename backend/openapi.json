@@ -15395,6 +15395,292 @@
         }
       }
     },
+    "/api/workflow-triggers": {
+      "post": {
+        "tags": [
+          "triggers"
+        ],
+        "summary": "Create Trigger",
+        "operationId": "create_trigger_api_workflow_triggers_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTriggerCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTriggerOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "triggers"
+        ],
+        "summary": "List Triggers",
+        "operationId": "list_triggers_api_workflow_triggers_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "workflow_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTriggerOut"
+                  },
+                  "title": "Response List Triggers Api Workflow Triggers Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflow-triggers/{trigger_id}": {
+      "get": {
+        "tags": [
+          "triggers"
+        ],
+        "summary": "Get Trigger",
+        "operationId": "get_trigger_api_workflow_triggers__trigger_id__get",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trigger Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTriggerOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "triggers"
+        ],
+        "summary": "Update Trigger",
+        "description": "改配置、开关也走这里(`{\"enabled\": false}` 就是关掉它)。",
+        "operationId": "update_trigger_api_workflow_triggers__trigger_id__patch",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trigger Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTriggerUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTriggerOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "triggers"
+        ],
+        "summary": "Delete Trigger",
+        "operationId": "delete_trigger_api_workflow_triggers__trigger_id__delete",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trigger Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflow-triggers/{trigger_id}/events": {
+      "get": {
+        "tags": [
+          "triggers"
+        ],
+        "summary": "List Events",
+        "description": "这个触发器最近触发过哪些消息、起了哪几次运行 —— 「它在干活吗」问的就是这一条。",
+        "operationId": "list_events_api_workflow_triggers__trigger_id__events_get",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trigger Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTriggerEventOut"
+                  },
+                  "title": "Response List Events Api Workflow Triggers  Trigger Id  Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/boards": {
       "get": {
         "tags": [
@@ -21571,7 +21857,7 @@
           "plugins"
         ],
         "summary": "Search Model Sources",
-        "description": "按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。同名的候选在前;\n一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve` 正好解析到那个文件。",
+        "description": "按文件名去模型站(HuggingFace、ModelScope、Civitai)上找下载地址:工作流里只写了文件名的模型。哈希确认过的\n候选在前、只有它允许「直接下载」;一个站搜不了只进 `failed`,别的站照常交回。每个候选的 `url` 交给 `/resolve`\n正好解析到那个文件。`body.hash` 是工作流自己声明的哈希(有就拿它认 `confirmed`)。",
         "operationId": "search_model_sources_api_plugins_instances__instance_id__model_library_search_post",
         "parameters": [
           {
@@ -40122,6 +40408,21 @@
             "type": "boolean",
             "title": "Exact",
             "default": false
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence",
+            "default": ""
+          },
+          "direct": {
+            "type": "boolean",
+            "title": "Direct",
+            "default": false
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256",
+            "default": ""
           }
         },
         "type": "object",
@@ -40130,7 +40431,7 @@
           "url"
         ],
         "title": "ModelSearchCandidateOut",
-        "description": "一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),\n别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。"
+        "description": "一个候选文件。`url` 交给 `/model-library/resolve` 正好解析到它;`exact`:文件名和要找的一样(不分大小写),\n别的是近似的(同名不同扩展名、别的精度、名字里含着)。`repo`:HuggingFace / ModelScope 的仓库,Civitai 的模型名。\n\n`confidence` 是三档:`confirmed`(哈希对上)/ `exact`(文件名一字不差)/ `likely`(去后缀一致 / 名字里含着);\n**`direct` 只有 `confirmed` 才是真** —— 界面据此决定给不给「直接下载」(见 ADR 0038 §9)。"
       },
       "ModelSearchFailureOut": {
         "properties": {
@@ -40151,6 +40452,33 @@
         "title": "ModelSearchFailureOut",
         "description": "一个搜不了的站(超时、限流、拒绝):别的站照常交回。"
       },
+      "ModelSearchHashOut": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State",
+            "default": ""
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256",
+            "default": ""
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ModelSearchHashOut",
+        "description": "这一轮哈希是怎么来的(或为什么没有)。`state`:`matched`(对上了)/ `none`(算出了但没有候选对得上)/\n`unavailable`(没得算,见 `reason`:`no_tools` 没装 ComfyUI-Custom-Scripts、`no_file` 文件还不在那台机器上、\n`no_connection` 没连上那台 ComfyUI)。`note` 是给人看的一句 —— **算不出哈希时必须说清「所以只是同名」**。"
+      },
       "ModelSearchOut": {
         "properties": {
           "filename": {
@@ -40170,6 +40498,9 @@
             },
             "type": "array",
             "title": "Failed"
+          },
+          "hash": {
+            "$ref": "#/components/schemas/ModelSearchHashOut"
           }
         },
         "type": "object",
@@ -40191,6 +40522,18 @@
             "maxLength": 200,
             "title": "Folder",
             "default": ""
+          },
+          "hash": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Hash",
+            "default": ""
+          },
+          "hash_type": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Hash Type",
+            "default": ""
           }
         },
         "type": "object",
@@ -40198,7 +40541,7 @@
           "filename"
         ],
         "title": "ModelSearchRequest",
-        "description": "按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。"
+        "description": "按文件名找下载地址。`folder`:要放进的模型目录(给了的话,放在这个目录下的候选排在前面)。\n\n`hash` / `hash_type`:工作流自己声明的哈希(见 `WorkflowMissingModelOut`),有这个就可能把候选认到\n`confirmed`;没有的话插件让那台机器算 SHA256(要 ComfyUI-Custom-Scripts)。"
       },
       "ModelSourceOut": {
         "properties": {
@@ -51021,6 +51364,16 @@
             "type": "string",
             "title": "Url",
             "default": ""
+          },
+          "hash": {
+            "type": "string",
+            "title": "Hash",
+            "default": ""
+          },
+          "hash_type": {
+            "type": "string",
+            "title": "Hash Type",
+            "default": ""
           }
         },
         "type": "object",
@@ -51029,7 +51382,7 @@
           "name"
         ],
         "title": "WorkflowMissingModelOut",
-        "description": "缺的、工作流声明了下载地址的模型。"
+        "description": "缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):\n交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。"
       },
       "WorkflowMissingNodeOut": {
         "properties": {
@@ -51816,6 +52169,399 @@
         ],
         "title": "WorkflowTrashedOut",
         "description": "回收目录里的一张(ADR 0035 §3)。"
+      },
+      "WorkflowTriggerCreate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "bot_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Bot Id",
+            "default": ""
+          },
+          "chat_id": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Chat Id",
+            "default": ""
+          },
+          "message_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Message Types"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "only_from_open_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Only From Open Ids"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Params"
+          },
+          "reply_in_chat": {
+            "type": "boolean",
+            "title": "Reply In Chat",
+            "default": true
+          },
+          "max_runs_per_minute": {
+            "type": "integer",
+            "title": "Max Runs Per Minute",
+            "default": 6
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "workflow_id",
+          "name"
+        ],
+        "title": "WorkflowTriggerCreate",
+        "description": "配一条触发器。`name` 是回执里要点名的那个名字。"
+      },
+      "WorkflowTriggerEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id"
+          },
+          "message_type": {
+            "type": "string",
+            "title": "Message Type"
+          },
+          "text_preview": {
+            "type": "string",
+            "title": "Text Preview"
+          },
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asset Ids"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "message_id",
+          "message_type",
+          "text_preview",
+          "asset_ids",
+          "job_id",
+          "status",
+          "error",
+          "created_at"
+        ],
+        "title": "WorkflowTriggerEventOut",
+        "description": "「最近触发」的一行:哪条消息、认了什么、起了哪次运行(或者为什么没起)。"
+      },
+      "WorkflowTriggerOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "bot_id": {
+            "type": "string",
+            "title": "Bot Id"
+          },
+          "chat_id": {
+            "type": "string",
+            "title": "Chat Id"
+          },
+          "message_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Message Types"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "only_from_open_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Only From Open Ids"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Params"
+          },
+          "reply_in_chat": {
+            "type": "boolean",
+            "title": "Reply In Chat"
+          },
+          "max_runs_per_minute": {
+            "type": "integer",
+            "title": "Max Runs Per Minute"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "last_fired_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fired At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "workflow_id",
+          "name",
+          "bot_id",
+          "chat_id",
+          "message_types",
+          "keywords",
+          "only_from_open_ids",
+          "params",
+          "reply_in_chat",
+          "max_runs_per_minute",
+          "enabled",
+          "last_fired_at",
+          "created_at"
+        ],
+        "title": "WorkflowTriggerOut"
+      },
+      "WorkflowTriggerUpdate": {
+        "properties": {
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "bot_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Id"
+          },
+          "chat_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Id"
+          },
+          "message_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Types"
+          },
+          "keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keywords"
+          },
+          "only_from_open_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Only From Open Ids"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "reply_in_chat": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply In Chat"
+          },
+          "max_runs_per_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Runs Per Minute"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowTriggerUpdate",
+        "description": "改一条触发器。不传的字段不动(`exclude_unset` 由路由那一层给)。"
       },
       "WorkflowUnusableNodeOut": {
         "properties": {

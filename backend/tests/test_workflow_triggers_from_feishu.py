@@ -1,0 +1,669 @@
+"""飞书消息触发工作流:一条匹配的消息起一次运行,其余的照旧(ADR 0065)。
+
+验收那六条各自在这里:
+
+1. 一条匹配的消息 → **起了一次运行**、入参对(`test_一条匹配的消息起一次运行`);
+2. 不匹配的消息 → 不起(`test_认不上的消息不起运行_照旧走智能体会话`);
+3. 同一条消息重复投递 → **只起一次**(`test_同一条消息重复投递只起一次`);
+4. 风暴 → 按限流规则生效(`test_风暴按限流丢掉_而且留痕`);
+5. 工作流被删 / 跑不起来 → 按 ADR 定的语义(`test_删工作流时触发器当场停用`、
+   `test_跑不起来时留痕并通知主人_群里不喊`);
+6. 智能体会话那条链路不受影响(`test_认不上的消息不起运行_照旧走智能体会话`,以及既有的
+   `tests/test_feishu.py` 整份)。
+
+还有两条是这一族自己的门面:纯匹配(不碰数据库)与接口的增删改查 / 最近触发。
+"""
+
+from __future__ import annotations
+
+import json
+import time
+
+from sqlalchemy import select
+
+from app.ai.sidecar.pi_client import TurnResult
+from app.core.db import SessionLocal
+from app.db.models import AgentSession, Job, Workflow, WorkflowTrigger, WorkflowTriggerEvent
+from app.domain.agent import host
+from app.domain.feishu import bindings
+from app.domain.jobs import wait_for_idle_jobs
+from app.domain.triggers import matching
+from app.integrations.feishu import client as feishu_client
+from app.integrations.feishu import inbound
+from tests.util import fresh_client
+
+#: 等一次工作流跑完的预算(秒)。
+_RUN_BUDGET = 60
+
+
+def _unique(prefix: str) -> str:
+    return f"{prefix}-{time.time()}-{len(prefix)}"
+
+
+def _graph(*params: str, required: list[str] | None = None) -> dict:
+    """一张最小可跑的图:开始节点(带几个参数)→ 模板节点(把第一个参数原样交出来)。
+
+    没有会花钱的节点 —— 触发器的运行不需要任何供应商连接就能跑完(测试也不该依赖网络)。
+    """
+    names = list(params) or ["text"]
+    return {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {name: "" for name in names}, "required_params": required or []}},
+            {"id": "t", "type": "template", "config": {"template": "{{start.%s}}" % names[0]}},
+        ],
+        "edges": [{"id": "e", "source": "start", "target": "t"}],
+    }
+
+
+def _workspace(client) -> str:
+    return client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+
+def _bound_bot(client, workspace_id: str, *, app_id: str = "cli_trigger") -> tuple[dict, str]:
+    """建一个机器人 + 把一个飞书发送者绑到当前账号(触发器只认绑定过的人)。"""
+    bot = client.post(
+        "/api/feishu/bots", json={"workspace_id": workspace_id, "app_id": app_id, "app_secret": "s3cret"}
+    ).json()
+    me = client.get("/api/auth/me").json()
+    open_id = f"ou_{app_id}"
+    with SessionLocal() as db:
+        code, _ = bindings.issue_bind_code(db, workspace_id, me["id"])
+        assert bindings.redeem_bind_code(db, workspace_id, open_id, code) is not None
+        db.commit()
+    return bot, open_id
+
+
+def _workflow(client, workspace_id: str, *, name: str = "被触发的流", graph: dict | None = None) -> dict:
+    return client.post(
+        "/api/workflows",
+        json={"workspace_id": workspace_id, "name": name, "graph": graph or _graph("text")},
+    ).json()
+
+
+def _trigger(client, workspace_id: str, workflow_id: str, **fields) -> dict:
+    body = {
+        "workspace_id": workspace_id,
+        "workflow_id": workflow_id,
+        "name": "群里的视频",
+        "message_types": ["text"],
+        **fields,
+    }
+    res = client.post("/api/workflow-triggers", json=body)
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def _incoming(bot_id: str, chat_id: str, message_id: str, sender: str, **kwargs) -> None:
+    inbound.handle_incoming(bot_id, chat_id, message_id, sender, **kwargs)
+
+
+def _runs(client, workflow_id: str) -> list[dict]:
+    return client.get(f"/api/workflows/{workflow_id}/runs").json()
+
+
+def _events(client, trigger_id: str) -> list[dict]:
+    return client.get(f"/api/workflow-triggers/{trigger_id}/events").json()
+
+
+def _job(job_id: str) -> Job:
+    with SessionLocal() as db:
+        return db.get(Job, job_id)  # type: ignore[return-value]
+
+
+def _sent_texts(monkeypatch) -> list[tuple[str, str]]:
+    sent: list[tuple[str, str]] = []
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+    return sent
+
+
+# ---------------- 1. 匹配 → 起一次运行、入参对 ----------------
+
+
+def test_一条匹配的消息起一次运行(monkeypatch) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t1")
+    workflow = _workflow(client, ws, name="视频转码", graph=_graph("text"))
+    trigger = _trigger(client, ws, workflow["id"], params={"text": "处理:{{trigger.text}}"})
+    sent = _sent_texts(monkeypatch)
+    agent_ran: list[object] = []
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: agent_ran.append(a))
+
+    _incoming(
+        bot["id"], "oc_g", _unique("m"), open_id,
+        content_json=json.dumps({"text": "这条视频帮我转一下"}),
+    )
+
+    runs = _runs(client, workflow["id"])
+    assert len(runs) == 1, "匹配的消息应该起一次运行"
+    job = _job(runs[0]["id"])
+    #: 入参按映射算:模板里的 {{trigger.text}} 换成了消息文本。
+    assert job.payload["params"] == {"text": "处理:这条视频帮我转一下"}
+    #: 命中的消息**不再喂给智能体**(ADR 0065 §3)。
+    assert agent_ran == []
+    #: 回执点了触发器的名字 —— 用户据此看出这次是触发器起的。
+    assert sent and "群里的视频" in sent[0][1] and "视频转码" in sent[0][1]
+
+    events = _events(client, trigger["id"])
+    assert [one["status"] for one in events] == ["started"]
+    assert events[0]["job_id"] == runs[0]["id"]
+
+
+def test_同名直填_不必配映射(monkeypatch) -> None:
+    """开始节点里有个参数正好叫 `text` 时,入参映射可以留空(ADR 0065 §2 那条便利)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t2")
+    workflow = _workflow(client, ws, graph=_graph("text"))
+    _trigger(client, ws, workflow["id"], params={})
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "原文"}))
+
+    runs = _runs(client, workflow["id"])
+    assert len(runs) == 1
+    assert _job(runs[0]["id"]).payload["params"] == {"text": "原文"}
+
+
+# ---------------- 2. 不匹配 → 不起 ----------------
+
+
+def test_认不上的消息不起运行_照旧走智能体会话(monkeypatch) -> None:
+    """筛选不命中时一切如常:智能体那一轮照跑、照回(**这一条守的是"没改坏")**。"""
+    client = fresh_client()
+    from tests.test_feishu import _configured
+
+    _configured(client)
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t3")
+    workflow = _workflow(client, ws)
+    #: 关键词与消息不符。
+    trigger = _trigger(client, ws, workflow["id"], keywords=["发布"], params={})
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="我是智能体"))
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "随便聊聊"}))
+
+    assert host.wait_for_idle_turns(_RUN_BUDGET)
+    assert _runs(client, workflow["id"]) == [], "不匹配就不该起运行"
+    assert _events(client, trigger["id"]) == [], "不匹配连事件都不留"
+    assert sent == [("oc_g", "我是智能体")], "没被认领的消息照旧交给智能体"
+
+
+def test_类型不对的消息也不起(monkeypatch) -> None:
+    client = fresh_client()
+    from tests.test_feishu import _configured
+
+    _configured(client)
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t4")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], message_types=["media"], params={})
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="智能体回的"))
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "只是文字"}))
+
+    assert host.wait_for_idle_turns(_RUN_BUDGET)
+    assert _runs(client, workflow["id"]) == [], "只认视频的触发器不该被一条文字叫起来"
+    assert _events(client, trigger["id"]) == []
+    #: 这条消息照旧被智能体接待(守的是"没改坏")。
+    assert sent == [("oc_g", "智能体回的")]
+
+
+# ---------------- 3. 重复投递 → 只起一次 ----------------
+
+
+def test_同一条消息重复投递只起一次(monkeypatch) -> None:
+    """飞书会重放同一条消息,而**重启之后**进程内那份去重(seen_recently)就没了 ——
+    判据因此落在库里((trigger_id, message_id) 唯一约束,ADR 0065 §4)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t5")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    message_id = _unique("dup")
+    for _ in range(2):
+        _incoming(bot["id"], "oc_g", message_id, open_id, content_json=json.dumps({"text": "同一条"}))
+    #: 模拟一次重启:进程内那份去重清掉,库里那行还在。
+    with inbound._seen_lock:
+        inbound._seen.clear()
+    _incoming(bot["id"], "oc_g", message_id, open_id, content_json=json.dumps({"text": "同一条"}))
+
+    assert len(_runs(client, workflow["id"])) == 1, "同一条消息只能起一次"
+    assert [one["status"] for one in _events(client, trigger["id"])] == ["started"]
+    receipts = [text for _, text in sent if "已按触发器" in text]
+    assert len(receipts) == 1, f"只回一次回执:{sent}"
+
+
+# ---------------- 4. 风暴 → 限流 ----------------
+
+
+def test_风暴按限流丢掉_而且留痕(monkeypatch) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t6")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={}, max_runs_per_minute=2)
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    for index in range(5):
+        _incoming(
+            bot["id"], "oc_g", _unique(f"storm{index}"), open_id,
+            content_json=json.dumps({"text": f"第 {index} 条"}),
+        )
+
+    statuses = [one["status"] for one in _events(client, trigger["id"])]
+    assert statuses.count("started") == 2, f"限流只放两次,实际 {statuses}"
+    assert statuses.count("throttled") == 3, f"超出的那些要留痕,实际 {statuses}"
+    assert len(_runs(client, workflow["id"])) == 2
+
+
+def test_一条消息最多认领三条触发器(monkeypatch) -> None:
+    """一个工作区里十条触发器都认同一句话时,一句话不该起十次运行(ADR 0065 §4 的兜底)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t7")
+    workflow = _workflow(client, ws)
+    triggers = [_trigger(client, ws, workflow["id"], name=f"t{index}", params={}) for index in range(5)]
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("many"), open_id, content_json=json.dumps({"text": "一条消息"}))
+
+    started = sum(1 for one in triggers for event in _events(client, one["id"]) if event["status"] == "started")
+    skipped = sum(1 for one in triggers for event in _events(client, one["id"]) if event["status"] == "skipped")
+    assert started == 3
+    assert skipped == 2
+
+
+# ---------------- 5. 工作流被删 / 跑不起来 ----------------
+
+
+def test_删工作流时触发器当场停用(monkeypatch) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t8")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    assert client.delete(f"/api/workflows/{workflow['id']}").status_code == 204
+
+    listed = client.get(f"/api/workflow-triggers?workspace_id={ws}").json()
+    assert [one["enabled"] for one in listed] == [False], "图没了,触发器不能再自己跑"
+    #: 触发器留着(连它的名字和最近触发记录),删不删由人决定。
+    assert listed[0]["name"] == trigger["name"]
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "还有人在发"}))
+    assert _events(client, trigger["id"]) == [], "停用之后连事件都不该有"
+
+
+def test_跑不起来时留痕并通知主人_群里不喊(monkeypatch) -> None:
+    """配错的自动化**不能**沉默(群里的人以为它跑了),也不能在群里喊(他们改不了它)——
+    留痕 + 站内通知主人(ADR 0065 §5)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t9")
+    #: 必填的 text,而映射交的是空串 → 开跑前那一道拦下。
+    workflow = _workflow(client, ws, graph=_graph("text", required=["text"]))
+    trigger = _trigger(client, ws, workflow["id"], params={"text": ""})
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": ""}))
+    #: 空文本的消息本来就被丢掉,换个有文本但映射成空的场景:消息文本有,映射不看它。
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "有内容"}))
+
+    events = _events(client, trigger["id"])
+    assert [one["status"] for one in events] == ["refused"], f"该留痕,实际 {events}"
+    assert "缺少必填" in events[0]["error"]
+    assert _runs(client, workflow["id"]) == []
+    assert sent == [], "配置错误不在群里喊"
+
+    notices = client.get(f"/api/notifications?workspace_id={ws}").json()["items"]
+    titles = [one["title"] for one in notices]
+    assert any("群里的视频" in title for title in titles), f"主人该收到通知,实际 {titles}"
+
+
+def test_没绑机器人时什么都不发生(monkeypatch) -> None:
+    """机器人停用了,消息本来就到不了这一层 —— 静默是对的(没有 bot 就没有入站)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t10")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    sent = _sent_texts(monkeypatch)
+    client.patch(f"/api/feishu/bots/{bot['id']}", json={"enabled": False})
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "你好"}))
+
+    assert _events(client, trigger["id"]) == []
+    assert sent == []
+
+
+# ---------------- 附件:图片 / 文件 / 视频 ----------------
+
+
+def test_视频消息进素材库_并当入参(monkeypatch) -> None:
+    """群里丢一条视频 → 它先进素材库,素材 id 按映射交给开始节点(ADR 0065 §2)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t11")
+    workflow = _workflow(client, ws, graph=_graph("asset_id"))
+    _trigger(
+        client, ws, workflow["id"], message_types=["media"],
+        params={"asset_id": "{{trigger.asset_id}}"},
+    )
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+    monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: b"fake-mp4-bytes")
+
+    class _Asset:
+        id = "asset-from-feishu"
+
+    monkeypatch.setattr("app.domain.assets.importer.import_binary_asset", lambda *a, **k: _Asset())
+
+    _incoming(
+        bot["id"], "oc_g", _unique("m"), open_id, message_type="media",
+        content_json=json.dumps({"file_key": "fk_1", "file_name": "clip.mp4", "duration": 3000}),
+    )
+
+    runs = _runs(client, workflow["id"])
+    assert len(runs) == 1
+    assert _job(runs[0]["id"]).payload["params"] == {"asset_id": "asset-from-feishu"}
+    assert sent and "视频转码" not in sent[0][1]
+
+
+def test_文件取不回来就不跑_而且说一句(monkeypatch) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t12")
+    workflow = _workflow(client, ws, graph=_graph("asset_id"))
+    trigger = _trigger(client, ws, workflow["id"], message_types=["file"], params={})
+    sent = _sent_texts(monkeypatch)
+
+    def boom(*a, **k):
+        raise feishu_client.FeishuError("下载飞书资源失败(404)")
+
+    monkeypatch.setattr(feishu_client, "download_message_resource", boom)
+
+    _incoming(
+        bot["id"], "oc_g", _unique("m"), open_id, message_type="file",
+        content_json=json.dumps({"file_key": "fk_2", "file_name": "素材.zip"}),
+    )
+
+    assert _runs(client, workflow["id"]) == [], "素材就是入参,取不回来不该硬跑"
+    assert sent and "没能取回来" in sent[0][1]
+    assert _events(client, trigger["id"]) == [], "附件没到,这条消息没被认领过"
+
+
+def test_没有触发器接的文件消息还是那句看不了(monkeypatch) -> None:
+    """`file` / `media` 从「智能体看不了」变成「触发器可能接」之后,没人接时要回到原样。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t13")
+    sent = _sent_texts(monkeypatch)
+
+    _incoming(
+        bot["id"], "oc_g", _unique("m"), open_id, message_type="media",
+        content_json=json.dumps({"file_key": "fk_3", "file_name": "clip.mp4"}),
+    )
+
+    assert sent and "看不了视频" in sent[0][1]
+
+
+# ---------------- 结果发回群 ----------------
+
+
+def test_跑完之后把结果发回群(monkeypatch) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t14")
+    workflow = _workflow(client, ws, graph=_graph("text"))
+    _trigger(client, ws, workflow["id"], params={"text": "{{trigger.text}}"})
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "写一句话"}))
+
+    assert wait_for_idle_jobs(_RUN_BUDGET), "工作流没在预算内跑完"
+    runs = _runs(client, workflow["id"])
+    assert runs[0]["status"] == "succeeded", runs
+    body = "\n".join(text for _, text in sent)
+    assert "写一句话" in body, f"结果没发回群:{sent}"
+
+
+def test_关掉回群之后只留痕(monkeypatch) -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t15")
+    workflow = _workflow(client, ws, graph=_graph("text"))
+    trigger = _trigger(client, ws, workflow["id"], params={"text": "{{trigger.text}}"}, reply_in_chat=False)
+    sent = _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "安静地跑"}))
+    assert wait_for_idle_jobs(_RUN_BUDGET)
+
+    assert sent == []
+    assert [one["status"] for one in _events(client, trigger["id"])] == ["started"]
+
+
+# ---------------- 纯匹配:不碰数据库 ----------------
+
+
+def _fake_trigger(**fields):
+    class _Trigger:
+        message_types = ["text"]
+        bot_id = ""
+        chat_id = ""
+        only_from_open_ids: list[str] = []
+        keywords: list[str] = []
+
+    trigger = _Trigger()
+    for key, value in fields.items():
+        setattr(trigger, key, value)
+    return trigger
+
+
+def _message(**fields) -> matching.IncomingMessage:
+    base = {
+        "workspace_id": "w",
+        "bot_id": "b",
+        "chat_id": "c",
+        "message_id": "m",
+        "sender_open_id": "ou_1",
+        "message_type": "text",
+    }
+    return matching.IncomingMessage(**{**base, **fields})
+
+
+def test_匹配的四个筛子() -> None:
+    message = _message(text="帮我发一条产品视频")
+    assert matching.decide(_fake_trigger(), message) == ""
+    #: 富文本对用户来说就是文字。
+    assert matching.decide(_fake_trigger(), _message(message_type="post", text="x")) == ""
+    assert matching.decide(_fake_trigger(message_types=["image"]), message) == "message_type"
+    assert matching.decide(_fake_trigger(bot_id="other"), message) == "bot"
+    assert matching.decide(_fake_trigger(chat_id="other"), message) == "chat"
+    assert matching.decide(_fake_trigger(only_from_open_ids=["ou_2"]), message) == "sender"
+    assert matching.decide(_fake_trigger(keywords=["产品"]), message) == ""
+    assert matching.decide(_fake_trigger(keywords=["产品", "无关的"]), message) == ""
+    assert matching.decide(_fake_trigger(keywords=["发布"]), message) == "keyword"
+    #: 大小写不敏感。
+    assert matching.decide(_fake_trigger(keywords=["VIDEO"]), _message(text="make a Video now")) == ""
+    #: 认不了的消息类型(语音、表情……)一概不认。
+    assert matching.decide(_fake_trigger(), _message(message_type="audio")) == "message_type"
+
+
+def test_占位符白名单与渲染() -> None:
+    assert matching.unknown_placeholders("{{trigger.text}} 和 {{trigger.nope}}") == ["nope"]
+    assert matching.bad_placeholders({"a": "{{trigger.text}}", "b": "{{trigger.zzz}}"}) == ["zzz"]
+    values = matching.values_of(_message(asset_ids=("a1", "a2")))
+    assert matching.render("看:{{trigger.text}}", values) == "看:"
+    assert matching.render("{{trigger.asset_id}}/{{trigger.asset_ids}}", values) == "a1/a1,a2"
+    #: 认不出的原样留着(保存那一道已经拦过)。
+    assert matching.render("{{trigger.nope}}", values) == "{{trigger.nope}}"
+
+
+def test_入参映射_显式优先_同名直填在后() -> None:
+    values = matching.values_of(_message(text="原文", file_name="a.mp4", asset_ids=("a1",)))
+    params = matching.render_params({"prompt": "前缀 {{trigger.text}}"}, ["prompt", "text", "file_name"], values)
+    assert params == {"prompt": "前缀 原文", "text": "原文", "file_name": "a.mp4"}
+
+
+def test_开始节点的参数名按图取() -> None:
+    assert matching.start_param_names(_graph("topic", "brief")) == ["topic", "brief"]
+    assert matching.start_param_names({"nodes": []}) == []
+
+
+# ---------------- 接口:增删改查 + 最近触发 ----------------
+
+
+def test_接口的增删改查与最近触发() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    created = _trigger(
+        client, ws, workflow["id"], name="入库", message_types=["image", "media"],
+        keywords=["素材"], params={"text": "{{trigger.text}}"},
+    )
+    assert created["message_types"] == ["image", "media"]
+    assert created["params"] == {"text": "{{trigger.text}}"}
+    assert created["enabled"] is True
+
+    listed = client.get(f"/api/workflow-triggers?workspace_id={ws}&workflow_id={workflow['id']}").json()
+    assert [one["id"] for one in listed] == [created["id"]]
+
+    patched = client.patch(f"/api/workflow-triggers/{created['id']}", json={"enabled": False, "keywords": []}).json()
+    assert patched["enabled"] is False and patched["keywords"] == []
+
+    assert client.get(f"/api/workflow-triggers/{created['id']}/events").json() == []
+    assert client.delete(f"/api/workflow-triggers/{created['id']}").status_code == 204
+    assert client.get(f"/api/workflow-triggers?workspace_id={ws}").json() == []
+
+
+def test_配置错误在保存时就拦() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    base = {"workspace_id": ws, "workflow_id": workflow["id"], "name": "x", "message_types": ["text"]}
+
+    bad_placeholder = client.post(
+        "/api/workflow-triggers", json={**base, "params": {"text": "{{trigger.nope}}"}}
+    )
+    assert bad_placeholder.status_code == 422
+    assert "nope" in bad_placeholder.json()["detail"]
+
+    empty_types = client.post("/api/workflow-triggers", json={**base, "message_types": []})
+    assert empty_types.status_code == 422
+
+    bad_kind = client.post("/api/workflow-triggers", json={**base, "message_types": ["sticker"]})
+    assert bad_kind.status_code == 422
+
+    bad_limit = client.post("/api/workflow-triggers", json={**base, "max_runs_per_minute": 0})
+    assert bad_limit.status_code == 422
+
+    missing_workflow = client.post(
+        "/api/workflow-triggers", json={**base, "workflow_id": "nope"}
+    )
+    assert missing_workflow.status_code == 422
+
+
+def test_触发器按工作区过闸(monkeypatch) -> None:
+    """看得见要先是这个工作区的人,改得了要 `edit`(ADR 0065:配触发器 = 让图在群里自己跑)。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+
+    from tests.util import second_client
+
+    other = second_client("outsider")
+    assert other.get(f"/api/workflow-triggers?workspace_id={ws}").status_code in (403, 404)
+    assert other.patch(f"/api/workflow-triggers/{trigger['id']}", json={"enabled": False}).status_code in (403, 404)
+
+
+def test_事件行的唯一约束是真的(monkeypatch) -> None:
+    """去重靠库,不靠进程内存 —— 直接对库插两行同样的 (trigger, message) 也要被挡住。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+
+    from sqlalchemy.exc import IntegrityError
+
+    import pytest
+
+    with SessionLocal() as db:
+        for _ in range(2):
+            db.add(
+                WorkflowTriggerEvent(
+                    trigger_id=trigger["id"], workspace_id=ws, message_id="same-message",
+                    bot_id="b", chat_id="c", status="started",
+                )
+            )
+        with pytest.raises(IntegrityError):
+            db.commit()
+
+
+def test_触发器绑定的是这个工作区里的机器人() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    workflow = _workflow(client, ws)
+    res = client.post(
+        "/api/workflow-triggers",
+        json={
+            "workspace_id": ws, "workflow_id": workflow["id"], "name": "x",
+            "message_types": ["text"], "bot_id": "not-a-bot",
+        },
+    )
+    assert res.status_code == 422
+
+
+def test_绕过接口删掉工作流时_下一次触发留痕并停用自己(monkeypatch) -> None:
+    """工作流被**直接删掉**(没走接口那条停用逻辑)时的兜底:这一次记一条 refused、
+    顺手停用它自己,下一次不再白试(ADR 0065 §5)。行不随图消失 —— 别处删了图,痕迹要还在。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t17")
+    workflow = _workflow(client, ws)
+    trigger = _trigger(client, ws, workflow["id"], params={})
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    with SessionLocal() as db:
+        db.delete(db.get(Workflow, workflow["id"]))
+        db.commit()
+        #: 图没了,触发器还在(不设外键的取舍,见 model_slices/triggers)。
+        assert db.get(WorkflowTrigger, trigger["id"]) is not None
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "还有人在发"}))
+
+    events = _events(client, trigger["id"])
+    assert [one["status"] for one in events] == ["refused"]
+    assert "已删除" in events[0]["error"]
+    assert client.get(f"/api/workflow-triggers?workspace_id={ws}").json()[0]["enabled"] is False
+
+
+def test_会话链路自己的表没被动过(monkeypatch) -> None:
+    """触发器起运行和智能体会话是两条不相干的路:认领之后**不建** AgentSession。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    bot, open_id = _bound_bot(client, ws, app_id="cli_t16")
+    workflow = _workflow(client, ws)
+    _trigger(client, ws, workflow["id"], params={})
+    _sent_texts(monkeypatch)
+    monkeypatch.setattr(host, "run_turn", lambda *a, **k: None)
+
+    _incoming(bot["id"], "oc_g", _unique("m"), open_id, content_json=json.dumps({"text": "起一条"}))
+
+    with SessionLocal() as db:
+        assert db.scalars(select(AgentSession)).all() == [], "触发器的运行不该开一条智能体会话"

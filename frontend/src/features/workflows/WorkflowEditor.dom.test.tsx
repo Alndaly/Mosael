@@ -660,7 +660,8 @@ describe("工作流列表", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "另一个" }));
     fireEvent.contextMenu(screen.getByText("另一个"), { clientX: 10, clientY: 10 });
-    expect(menuItems()).toEqual(["wfRun", "rename", "wfExport", "delete"]);
+    // 「触发器」排在重命名之后(ADR 0065):它改的是"这张图怎么被叫起来",和导出、删除同属卡片动作。
+    expect(menuItems()).toEqual(["wfRun", "rename", "workflowTriggersTitle", "wfExport", "delete"]);
   });
 });
 

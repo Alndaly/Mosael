@@ -31,4 +31,5 @@ export * from "@/api/domains/shots";
 export * from "@/api/domains/skills";
 export * from "@/api/domains/speech";
 export * from "@/api/domains/workflows";
+export * from "@/api/domains/workflowTriggers";
 export * from "@/api/domains/workspaces";
