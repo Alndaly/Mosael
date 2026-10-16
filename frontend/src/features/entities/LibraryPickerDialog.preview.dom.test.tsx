@@ -31,12 +31,24 @@ const card = (id: string, kind: string): AssetCard => ({
 beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
 });
-// react-photo-view 关场/收尾用的是 0–4ms 的 setTimeout,卸载没清干净:测试一结束文件就拆,它们还没轮到跑、
-// window 已经没了 → vitest 抓一句「window is not defined」的未处理错误、把整个 frontend job 判红(用例本身全过)。
-// cleanup 后等一拍,让挂起的这几个计时器在 jsdom 还活着时落地。
+// react-photo-view 的**入场动画收尾**是一个 400ms 的 `setTimeout(fn.OK, speed)`(speed 默认 400,见
+// node_modules/react-photo-view 的 src/hooks/useAnimationOrigin.tsx:55),它卸载时**不清**:用例跑完、
+// 文件一拆(jsdom 的 window 从全局拿掉)之后才落地 → 回调里 dispatchSetState → resolveUpdatePriority 读
+// window → 「ReferenceError: window is not defined」。vitest 把它算成未处理异常、把整个 frontend job 判红,
+// 而用例本身全过 —— CI 上那一条报的就是它(Object.OK 那一帧)。
+//
+// 为什么是「视频那一项」排的:库里 `loaded = !src`(PhotoBox.tsx),而我们的视频项故意不给 src(给了就会被
+// 当图片加载成一片空白,见 components/app/image-preview.tsx),于是它一挂上就是 loaded=true,开大图时排
+// 这个计时器;图片项在 jsdom 里等不到 onLoad,反倒不排。
+//
+// 等它落地 —— 等条件,不等时间(库的 speed 变了这里也自动跟上):落地就是这个盒子的入场动画收尾,
+// 它身上 transition 里的 height 从动画中的 `200ms`(speed/2)变成 `0ms`。
 afterEach(async () => {
+  const videoBox = document.querySelector<HTMLElement>("[data-video-backdrop]");
+  if (videoBox) {
+    await vi.waitFor(() => expect(videoBox.style.transition).toContain("height 0ms"), { timeout: 4_000 });
+  }
   cleanup();
-  await new Promise((resolve) => setTimeout(resolve, 50));
 });
 
 function mount() {

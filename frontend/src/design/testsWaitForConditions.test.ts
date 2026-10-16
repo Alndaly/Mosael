@@ -50,9 +50,6 @@ const TIMER_WAITS: Record<string, number> = {
   "frontend/src/features/browser-pool/embeddedFocus.dom.test.tsx": 1,
   "frontend/src/features/editor/EditorView.editing.dom.test.tsx": 3,
   "frontend/src/features/editor/playback/audioProxySource.test.ts": 1,
-  //: react-photo-view 关场/收尾用的是 0–4ms 的 setTimeout 且卸载没清干净:cleanup 后必须等一拍真的时间,
-  //: 让这几个计时器在 jsdom 还活着时落地,否则未处理的「window is not defined」把整个 job 判红(原因写在该测试文件里)。
-  "frontend/src/features/entities/LibraryPickerDialog.preview.dom.test.tsx": 1,
   "frontend/src/features/entities/entities.dom.test.tsx": 1,
   "frontend/src/features/media/cameraCapture.dom.test.ts": 1,
   "frontend/src/features/media/inputPreview.test.ts": 1,
