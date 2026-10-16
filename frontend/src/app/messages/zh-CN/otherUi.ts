@@ -574,6 +574,7 @@ export const otherUi = {
   voiceSpeed: "语速",
   builtinTtsTitle: "内置配音引擎",
   builtinTtsDesc: "无需供应商连接,在剪辑页「配音」面板里就能用;要更多音色或更高质量,在「AI 供应商 → AI 音频」里添加连接。",
+  builtinTtsNoEngines: "本机没有可用的内置引擎 —— 去「AI 供应商 → AI 音频」加一个连接后回来。",
   builtinTtsReady: "即开即用",
   engineInstalledByAdmin: "由部署管理员在「管理 → 引擎」里安装",
   engineGoInstall: "去安装",

@@ -78,6 +78,21 @@ it("加载失败说出来、能重试,不是一片白", async () => {
   expect(await screen.findByRole("button", { name: /retry|重试/i })).toBeTruthy();
 });
 
+it("后端一项能力都没登记:给一句空态,不是一片空白", async () => {
+  //: `GET /api/settings/capabilities` 空 = 后端**一项走挑法的能力都没登记**(domain/capabilities.registered()),
+  //: 不是"某项能力还没有连接" —— 后者在组里已经有一句 capabilityNone。空表是这一版没登记,先说清再给下一步。
+  listCapabilityChoices.mockResolvedValue([]);
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("capabilityEmpty")).toBeInTheDocument();
+  expect(screen.getByText("capabilityEmptyNote")).toBeInTheDocument();
+  expect(container.querySelector('[data-slot="settings-empty"]')).not.toBeNull();
+  expect(container.querySelector("[data-capability-loading]")).toBeNull();
+});
+
 it("一项能力一组;文档解析不定就是本地解析,外链一家都没有时说去建一个", async () => {
   render(
     <QueryClientProvider client={new QueryClient()}>

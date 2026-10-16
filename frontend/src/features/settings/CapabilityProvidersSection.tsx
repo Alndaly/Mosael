@@ -20,6 +20,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { CapabilityUseList } from "@/components/settings/CapabilityUseList";
 import {
   SETTINGS_FIELD_WIDTH,
+  SettingsEmpty,
   SettingsGroup,
   SettingsItemNote,
   SettingsItemRow,
@@ -49,14 +50,31 @@ export function CapabilityProvidersSection() {
   if (state.isError) {
     return <PageLoadError size="section" icon={<Plug size={20} />} error={state.error} onRetry={() => void state.refetch()} />;
   }
+  //: 空表 = 后端一项走挑法的能力都没登记(domain/capabilities.registered())。这和**某一项能力还没有
+  //: 一家连接**是两回事 —— 后者在那个组里已经有一句 capabilityNone。此前这里只剩页头、底下一片空白,
+  //: 看着像这一页坏了;说清是这一版还没登记,并给出下一步。
+  const groups = state.data ?? [];
+  if (groups.length === 0) return <CapabilityProvidersEmpty />;
   return (
     <>
-      {(state.data ?? []).map((choices) =>
+      {groups.map((choices) =>
         choices.defaultable === false
           ? <ProvidersOnlyGroup key={choices.capability} choices={choices} />
           : <CapabilityGroup key={choices.capability} choices={choices} />,
       )}
     </>
+  );
+}
+
+/** 后端还没登记任何能力:这一页没有可配的,直接说明白,不是一个空白页。 */
+function CapabilityProvidersEmpty() {
+  const t = useI18n();
+  return (
+    <SettingsEmpty
+      icon={<Store size={20} />}
+      title={t("capabilityEmpty")}
+      body={t("capabilityEmptyNote")}
+    />
   );
 }
 

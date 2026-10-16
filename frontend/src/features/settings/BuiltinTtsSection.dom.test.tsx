@@ -30,10 +30,10 @@ const ENGINES = [
   { id: "openai", label: "OpenAI", needs_key: true, needs_voice_id: false, voices: [], note: "", ready: true },
 ];
 
-function renderSection({ admin }: { admin: boolean }) {
+function renderSection({ admin, engines = ENGINES }: { admin: boolean; engines?: typeof ENGINES }) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    const body = url.includes("/api/auth/me") ? { is_deployment_admin: admin } : url.includes("/tts/engines") ? ENGINES : [];
+    const body = url.includes("/api/auth/me") ? { is_deployment_admin: admin } : url.includes("/tts/engines") ? engines : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -67,5 +67,28 @@ describe("内置配音引擎", () => {
     await user.click(await screen.findByRole("button", { name: "engineGoInstall" }));
     await waitFor(() => expect(opened).toContain("engines"));
     window.removeEventListener("mosael:open-admin", listener);
+  });
+
+  it("一台内置引擎都没有:这一组照旧在(标题、说明),里面写一行「本机没有可用的」和下一步", async () => {
+    //: 组不能凭空消失 —— 配音页的说明会提到这一组,组没了那句话就没有落点;而底下什么都不画,
+    //: 读起来像"没有内置引擎这回事",不是"这台机器上现在没有"。
+    renderSection({ admin: false, engines: [{ id: "openai", label: "OpenAI", needs_key: true, needs_voice_id: false, voices: [], note: "", ready: true }] });
+    expect(await screen.findByText("builtinTtsNoEngines")).toBeInTheDocument();
+    expect(screen.getByText("builtinTtsTitle")).toBeInTheDocument();
+    expect(screen.getByText("builtinTtsDesc")).toBeInTheDocument();
+    expect(screen.queryByText("OpenAI")).toBeNull();
+    expect(screen.queryByText("builtinTtsReady")).toBeNull();
+  });
+
+  it("接口一条引擎都没回:同样有那一行,不是一个没底的组", async () => {
+    renderSection({ admin: false, engines: [] });
+    expect(await screen.findByText("builtinTtsNoEngines")).toBeInTheDocument();
+    expect(screen.getByText("builtinTtsTitle")).toBeInTheDocument();
+  });
+
+  it("有内置引擎时不冒那一行空态", async () => {
+    renderSection({ admin: false });
+    expect(await screen.findByText("Edge TTS")).toBeInTheDocument();
+    expect(screen.queryByText("builtinTtsNoEngines")).toBeNull();
   });
 });
