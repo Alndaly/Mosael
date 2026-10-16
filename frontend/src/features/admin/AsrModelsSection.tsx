@@ -9,7 +9,7 @@ import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 import { ModelDownloadRow } from "./ModelDownloadRow";
 
 /**
- * 管理 → 引擎 → 转写:预下载 funasr / whisperx 权重、装运行环境,展示进度、百分比、速度与剩余时间。
+ * 管理 → 引擎 → 转写:预下载 funasr / sherpa-onnx / whisperx 权重、装运行环境,展示进度、百分比、速度与剩余时间。
  * 转写首次会自动下载权重,这里给一个手动、可见的下载渠道。
  *
  * 在管理页:往这台机器上下模型、装依赖只给部署管理员(routes/asr.download_asr_model)。
@@ -35,7 +35,7 @@ export function AsrModelsSection() {
           <ModelDownloadRow
             key={model.id}
             model={model}
-            // 引擎族是一个 id(funasr / whisperx),照原样作小字 —— 不再是描边的大写小标。
+            // 引擎族是一个 id(funasr / sherpa-onnx / whisperx),照原样作小字 —— 不再是描边的大写小标。
             meta={model.engine}
             noRuntimeText={t("asrModelNoRuntime")}
             // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。

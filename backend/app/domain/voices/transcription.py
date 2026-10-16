@@ -3,8 +3,9 @@
 本 Module 负责抽取音轨、挑出这一次用哪一家转写、调用它,并把词级结果装配成 Transcript。
 模型加载与依赖探测属于 ``ai.runtime``;这里不重复实现运行时判断。
 
-转写是一项**宿主能力**(ADR 0032 第三步):本机的 FunASR / WhisperX 是内置提供方(`builtin:funasr` /
-`builtin:whisperx`),认领 `transcription` 的插件连接和它们并列。挑哪一家走能力表那一份挑法(`capabilities.pick`):
+转写是一项**宿主能力**(ADR 0032 第三步):本机的 FunASR / sherpa-onnx / WhisperX 是内置提供方
+(`builtin:funasr` / `builtin:sherpa-onnx` / `builtin:whisperx`),认领 `transcription` 的插件连接和它们并列。
+挑哪一家走能力表那一份挑法(`capabilities.pick`):
 素材库、剪辑页、工作流节点、听写点名的是提供方 id;不点名按这个人的默认,没定默认用第一个装好了运行环境的本机引擎。
 此前引擎只能在部署配置 `asr_provider` 和节点里写死的 `auto / funasr / whisperx` 之间挑,插件插不进来。
 
@@ -54,7 +55,18 @@ class ASRError(LocalizedError, RuntimeError):
 
 BUILTIN_PREFIX = "builtin:"
 #: 本机引擎,按不定默认时的先后排:FunASR(SenseVoice,多语种)在前。
-LOCAL_ENGINES = {"funasr": "asrEngine_funasr", "whisperx": "asrEngine_whisperx"}
+#:
+#: `sherpa-onnx` 排在 funasr 后面、whisperx 前面:它和 funasr 是**同一个模型**
+#: (iic/SenseVoiceSmall 那份权重),只是换了个运行时 —— 两条路摆在一起,差别一眼能看见。
+#: whisperx 是另一族的模型(另一个模型、另一套权衡),排在它们之后。
+#: **没有把它提到 funasr 前面**是有意的:那会改掉"没定过默认的人"下次转写用的是谁,而那是一次
+#: 用户没做过的选择(现有安装里 sherpa-onnx 一律还没装,所以升级本身不会改变任何人的行为)。
+#: 要不要把它做成默认见本次改动的报告 —— 那是产品决定,不是顺手能替用户拍的。
+LOCAL_ENGINES = {
+    "funasr": "asrEngine_funasr",
+    "sherpa-onnx": "asrEngine_sherpaOnnx",
+    "whisperx": "asrEngine_whisperx",
+}
 
 
 class TranscriptionProviderUnavailable(CapabilityUnavailable, ASRError):
@@ -230,6 +242,14 @@ def transcribe_with_engine(
     }
     if engine_id == "funasr":
         request["funasr_model"] = FUNASR_MODEL
+    elif engine_id == "sherpa-onnx":
+        # 权重缺了**在宿主这儿补下**(出站检查在这一层,worker 够不到),再让 worker 去识别。
+        # 和 funasr / whisperx "首次转写时库自己去下"对应的是同一件事,只是下什么由 pin 说了算;
+        # 进度照同一套盘上字节数报(见 _mirror_model_download_progress 与 asr_models.ensure_pinned_files)。
+        entry = asr_models.entry_for_transcribe(engine_id)
+        if entry is not None:
+            asr_models.ensure_pinned_files(entry)
+        request.update(asr_models.sherpa_request("transcribe"))
     return _invoke_asr_worker(audio_path, python_executable, request)
 
 

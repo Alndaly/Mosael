@@ -120,6 +120,9 @@
   多进程下各算各的:A 进程在装,B 进程看到的是 missing。它不构成部署约束,但两个进程同时装
   同一个 venv 会互相踩 —— 当前部署是单后端进程(见第一节),真要起第二个时这一条要一起想。
 - `app/ai/runtime/workers/tts.py:_LOADED` — 已加载的模型。
+- `app/ai/runtime/workers/asr.py:_SHERPA_RECOGNIZER` — sherpa-onnx 建好的识别器(**按语种留最近
+  一个**:SenseVoice 的语种是构造参数,换语种要另建一个)。一个约 240MB,所以只留一个 —— 重启后
+  第一次转写重建一次(实测约 0.35s),多进程下各建各的、不共享。
 - `app/media/render_executor.py:_FILTER_SCRIPT_FLAGS`(本机 ffmpeg 从文件读滤镜图用哪种写法)、
   `app/media/render_executor.py:_HW_SELF_TESTED`(硬件编码小样自检通过过的分辨率与参数)——
   都是"问过 ffmpeg 了"。只记成功的探测,重启后第一次导出再问一遍,多花零点几秒。

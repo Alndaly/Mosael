@@ -204,14 +204,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has {engine} installed yet. A deployment admin clicks Install runtime under Admin → Engines → Transcription models — it only needs doing once.",
     },
     "asrEngine_funasr": {"zh": "FunASR(本机)", "en": "FunASR (on device)"},
+    "asrEngine_sherpaOnnx": {"zh": "sherpa-onnx(本机,轻量)", "en": "sherpa-onnx (on device, lightweight)"},
     "asrEngine_whisperx": {"zh": "WhisperX(本机)", "en": "WhisperX (on device)"},
     "asrErr_engineRuntimeMissing": {
         "zh": "所选 ASR 引擎 {engine} 的运行环境不可用,请部署管理员先在「管理 → 引擎 → 转写模型」里安装。",
         "en": "The runtime for the selected ASR engine {engine} isn't available. A deployment admin installs it first under Admin → Engines → Transcription models.",
     },
     "asrErr_noRuntime": {
-        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有任何 Python 解释器装了 funasr 或 whisperx。部署管理员在「管理 → 引擎 → 转写模型」里点「安装运行环境」,装一次就好。",
-        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has funasr or whisperx installed. A deployment admin clicks Install runtime under Admin → Engines → Transcription models — it only needs doing once.",
+        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有任何 Python 解释器装了 funasr、sherpa-onnx 或 whisperx。部署管理员在「管理 → 引擎 → 转写模型」里点「安装运行环境」,装一次就好。",
+        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has funasr, sherpa-onnx or whisperx installed. A deployment admin clicks Install runtime under Admin → Engines → Transcription models — it only needs doing once.",
     },
     "asrErr_audioExtractFailed": {"zh": "音频提取失败:{detail}", "en": "Couldn't extract the audio: {detail}"},
     "asrErr_dictationTooLong": {
@@ -219,6 +220,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This recording is {seconds} s, over the {limit} s dictation limit. For longer content, import it as an asset and transcribe that.",
     },
     "asrErr_engineFailed": {"zh": "转写失败({engine}):{detail}", "en": "Transcription failed ({engine}): {detail}"},
+    "asrErr_weightChecksum": {
+        "zh": "「{name}」下载后校验不符(期望 {expected}…,实际 {actual}…):文件在传输中坏了,或这一份已经被上游换掉。重下一次;还是这样的话请看网络中间有没有改动响应的东西。",
+        "en": "“{name}” failed its checksum after downloading (expected {expected}…, got {actual}…): the file was corrupted in transit, or upstream replaced it. Download it again; if it keeps happening, check whether anything on the network is rewriting responses.",
+    },
     "asrErr_assetNotFound": {"zh": "素材不存在", "en": "This asset doesn't exist."},
     "asrErr_notMedia": {"zh": "只有视频或音频素材可以转写", "en": "Only video or audio assets can be transcribed."},
     "asrErr_assetNoFile": {"zh": "素材没有本地文件", "en": "This asset has no local file."},

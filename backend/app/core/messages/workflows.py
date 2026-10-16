@@ -568,6 +568,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "支持 50+ 种语言,自动判语种;官方称识别效果优于 Whisper。含 VAD 断句、标点与说话人分离。",
         "en": "50+ languages with automatic detection; its authors report better accuracy than Whisper. Includes VAD segmentation, punctuation and speaker diarisation.",
     },
+    "asrLabel_sherpaOnnx": {"zh": "sherpa-onnx(SenseVoice,轻量)", "en": "sherpa-onnx (SenseVoice, lightweight)"},
+    "asrDetail_sherpaOnnx": {
+        "zh": "与 FunASR 同一个 SenseVoice 模型,换成 ONNX 运行时:不装 torch,权重约 230 MB(对 900 MB),装一次几秒、启动快得多。含 VAD 断句与标点,支持 50+ 种语言;不含说话人分离(要按人分开请选 FunASR)。",
+        "en": "The same SenseVoice model as FunASR on an ONNX runtime: no torch, ~230 MB of weights instead of ~900 MB, a few seconds to install and a much faster start. Includes VAD segmentation and punctuation across 50+ languages; it does not do speaker diarisation (choose FunASR if you need to tell speakers apart).",
+    },
     "asrDetail_whisperSmall": {"zh": "多语种,自动检测语言;速度与精度均衡", "en": "Multilingual with automatic language detection; balanced speed and accuracy"},
     "asrDetail_whisperMedium": {"zh": "多语种,精度更高、更慢", "en": "Multilingual; more accurate, slower"},
     "asrDetail_whisperLarge": {"zh": "多语种最高精度,占用最大", "en": "Multilingual; highest accuracy, largest footprint"},
