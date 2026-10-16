@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, Mouse, Touchpad } from "lucide-react";
+import { Mouse, Touchpad } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -18,8 +18,10 @@ const MODES: { value: CanvasInputMode; icon: typeof Touchpad; label: MessageKey;
 ];
 
 /**
- * 画布怎么操控(触控板 / 鼠标)的**那一个**样子:一颗小图标按钮,图标是现在这一种,旁边一个小下拉箭头;点开是两项的菜单,
+ * 画布怎么操控(触控板 / 鼠标)的**那一个**样子:一颗按钮,图标是现在这一种;点开是两项的菜单,
  * 每项有图标、名字和一句说明,现在那一项打勾。按钮上的说明写「画布操控方式:现在是 X」。
+ * **不带下拉箭头**(维护者:这种切换按钮右侧那个下拉 icon 不需要 —— 它是个选择器,不是下拉框;
+ * 图标/文字自己已经说明了点开有东西)。
  *
  * 此前同一件事有两种做法:ComfyUI 工作台顶栏是一段「触控板 | 鼠标」分段控件,在「保存」「运行」旁边占了一大块;画板、
  * 工作流、3D 场景是一颗点一下就切换的图标按钮,看不出现在是哪种、点了会变成哪种。存储照旧各走各的(工作台的只对那个连接,
@@ -84,7 +86,6 @@ export function CanvasInputModeMenu({
             >
               <Icon aria-hidden />
               {t(current.label)}
-              <ChevronDown aria-hidden className="size-3! opacity-70" />
             </Button>
           </PopoverTrigger>
         </Hint>
@@ -101,13 +102,12 @@ export function CanvasInputModeMenu({
             data-canvas-input-trigger=""
             data-canvas-input-mode={mode}
             className={cn(
-              //: 和工具条上别的图标同一个颜色(此前那颗是次要色,比旁边的图标淡一截,像是点不了);下拉箭头淡一档,主次在图标上
-              "nodrag nopan nowheel [-webkit-app-region:no-drag] shrink-0 gap-0.5 px-1.5",
+              //: 和工具条上别的图标同一个颜色(此前那颗是次要色,比旁边的图标淡一截,像是点不了)。不带下拉箭头,见文件头。
+              "nodrag nopan nowheel [-webkit-app-region:no-drag] shrink-0 px-1.5",
               className,
             )}
           >
             <Icon aria-hidden />
-            <ChevronDown aria-hidden className="size-3! opacity-70" />
           </IconButton>
         </PopoverTrigger>
       )}
