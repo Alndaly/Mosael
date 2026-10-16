@@ -419,6 +419,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobKind_model_download": {"zh": "下载模型", "en": "Model download"},
     "jobKind_node_install": {"zh": "装节点包", "en": "Node pack install"},
     "jobKind_model_previews": {"zh": "在 Civitai 上找模型", "en": "Find models on Civitai"},
+    "jobKind_shot_breakdown": {"zh": "拆镜头", "en": "Shot breakdown"},
     "jobKind_other": {"zh": "任务", "en": "Task"},
     "jobMsg_boardWriteQueued": {"zh": "写字排队中", "en": "Writing queued"},
     "jobMsg_boardWriteRunning": {"zh": "正在写", "en": "Writing"},

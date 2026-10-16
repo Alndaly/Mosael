@@ -5248,6 +5248,140 @@
         }
       }
     },
+    "/api/assets/{asset_id}/shots": {
+      "post": {
+        "tags": [
+          "shots"
+        ],
+        "summary": "Start Shot Breakdown",
+        "description": "排一条「拆镜头」后台任务,返回这条任务(照 `/transcribe`、`/convert-gif` 那条既有形状)。\n\n量刀口取帧不花钱;有视觉模型就接着逐镜判画面(一批一次调用)。做完在任务中心看得到,素材详情页那一块\n读 `GET /assets/{id}/shots`。**重拆覆盖**同一张表(ADR 0061 待拍板 2),没有历史版本。",
+        "operationId": "start_shot_breakdown_api_assets__asset_id__shots_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "shots"
+        ],
+        "summary": "Read Shot Breakdown",
+        "description": "这份视频的镜头表。**没拆过是 200 + `status=\"none\"`**,不是 404 —— 「还没拆」和「看不到这份素材」\n是两件事,界面据此决定显示「拆镜头」按钮还是那一列镜头。",
+        "operationId": "read_shot_breakdown_api_assets__asset_id__shots_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShotBreakdownResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/shots/frames/{name}": {
+      "get": {
+        "tags": [
+          "shots"
+        ],
+        "summary": "Read Shot Frame",
+        "description": "这一镜的帧图(详情页列表里的缩略图),名字是 `S03a.jpg`(15%)/ `S03b.jpg`(85%)。\n\n帧是镜头表的插图,不进素材库;素材删了目录一起走。名字不在这个形状里 —— 或者那一镜没取到帧 ——\n都是 404。",
+        "operationId": "read_shot_frame_api_assets__asset_id__shots_frames__name__get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/voices": {
       "get": {
         "tags": [
@@ -46740,6 +46874,105 @@
           "folders"
         ],
         "title": "SharedHostFolders"
+      },
+      "ShotBreakdownResponse": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "ready"
+            ],
+            "title": "Status"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "default": ""
+          },
+          "lang": {
+            "type": "string",
+            "title": "Lang",
+            "default": ""
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta"
+          },
+          "shots": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Shots"
+          },
+          "sheets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Sheets"
+          },
+          "describe": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Describe"
+          },
+          "hints": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Hints"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Stats"
+          },
+          "report_markdown": {
+            "type": "string",
+            "title": "Report Markdown",
+            "default": ""
+          },
+          "storyboard_markdown": {
+            "type": "string",
+            "title": "Storyboard Markdown",
+            "default": ""
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "status"
+        ],
+        "title": "ShotBreakdownResponse",
+        "description": "读一份视频的镜头表。**没拆过也是 200**:`status=\"none\"`,其余几栏是空的。\n\n和同一份素材上的 `AnalyzeAssetResponse` 同一类:它是一次回答,不是一行 ORM(`*Out` 那一族)。"
       },
       "SourceAssetRef": {
         "properties": {

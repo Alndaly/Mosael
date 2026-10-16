@@ -1100,13 +1100,20 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
       - "native": force native video understanding (errors for OAuth Gateway or when no
         capable API-backed Adapter exists).
       - "frames": force sampled frames + transcript.
+      - "shots": don't answer — queue a shot breakdown for a video and return that job (poll
+        with get_job); one table per video, re-running overwrites it. Use for 拆镜头/拉片.
+        The session's analysis mode does not apply here.
     Pass "native" only when the user explicitly asks for native/whole-video analysis.
     """
+    from app.api.schemas import JobOut
     from app.domain.assets import use_cases
+
+    if mode == "shots":
+        return _use_case(_queue_shot_breakdown, asset_id, out=JobOut)
 
     def analyze(db, user, asset_id: str) -> dict[str, Any]:
         # 这次对话定下的连接、模型和视频分析方式由会话说了算(见 agent/analysis_target):工具参数里的
-        # mode 覆盖不了用户在会话里的选择。
+        # mode 覆盖不了用户在会话里的选择(「shots」除外 —— 它不是喂视频的方式,见 _queue_shot_breakdown)。
         from app.domain.agent.analysis_target import agent_session_target
 
         session_id = _SESSION_ID.get()
@@ -1117,6 +1124,23 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
         return use_cases.analyze(db, user, asset_id, question, session_target=target, mode=mode)
 
     return _use_case(analyze, asset_id)
+
+
+def _queue_shot_breakdown(db, user, asset_id: str):
+    """工具那一路的「拆镜头」:按**这次对话**的连接和模型排任务,和素材详情页那个按钮同一条路
+    (`use_cases.start_shots` → `analysis.shots_task`,任务种类 `shot_breakdown`)。
+
+    `mode="shots"` 不是喂视频的方式,所以不受会话里选定的分析方式覆盖 —— 那个选择管的是「整段直读还是抽帧」。
+    """
+    from app.domain.agent.analysis_target import agent_session_target
+    from app.domain.assets import use_cases
+
+    target = None
+    session_id = _SESSION_ID.get()
+    if session_id:
+        workspace_id = use_cases.readable(db, user, asset_id).workspace_id
+        target = agent_session_target(db, session_id, workspace_id=workspace_id, user_id=user.id)
+    return use_cases.start_shots(db, user, asset_id, session_target=target)
 
 
 @tool(effect="reads")

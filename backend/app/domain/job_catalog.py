@@ -82,6 +82,9 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("model_previews", "always", ("models",)),
         # 导入、导出之后顺手排的;成功了没人在等,失败了才值得一说(素材预览会不流畅)。
         JobKind("proxy", "failures", ("assets",), view="media"),
+        # 素材详情页那个「拆镜头」(ADR 0061 §5):量刀口取帧几秒到几十秒,有视觉模型时还要逐批判画面 ——
+        # 它是人点的那一下,做完告诉他;表在素材详情里看。改的是这份素材的镜头表(派生物),跟着素材一起刷。
+        JobKind("shot_breakdown", "always", ("assets",), view="media"),
     )
 }
 

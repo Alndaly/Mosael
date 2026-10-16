@@ -435,3 +435,36 @@ def regenerate_proxy(db: Session, user: User, asset_id: str) -> Job | None:
     from app.domain.assets.proxies import start_proxy_job
 
     return start_proxy_job(db, require_asset(db, user, asset_id, perm="edit"), created_by=user.id, force=True)
+
+
+# ---------------- 镜头表(ADR 0061,是这份素材的派生物) ----------------
+
+
+def start_shots(db: Session, user: User, asset_id: str, *, session_target: Any = None) -> Job:
+    """排一条「拆镜头」后台任务:量刀口取帧,有视觉模型就逐镜判画面(见 domain/analysis/shots_task)。
+
+    `session_target`:智能体发起时按**这次对话**的连接和模型判画面(和 `analyze` 同一个来源,ADR 0061 待拍板 3
+    的默认挑法因此不参与);人点的(素材详情页那个按钮)不给,走「分析」那条默认挑法 —— Kimi → MiniMax → OpenAI → 兼容,
+    一个都没有时机器那一半照样交。
+
+    拆镜头会往这份素材的目录里写帧和联系表、并覆盖它的镜头表,所以是 `ai` 那一档写闸。
+    """
+    from app.domain.analysis.shots_task import start_breakdown
+
+    asset = require_asset(db, user, asset_id, perm="ai")
+    profile_id, model, surface = None, "", "direct"
+    if session_target is not None:
+        profile_id, model, surface = session_target.connection.id, session_target.model, "automation"
+    return start_breakdown(db, asset, created_by=user.id, profile_id=profile_id, model=model, surface=surface)
+
+
+def shot_breakdown(db: Session, user: User, asset_id: str) -> dict[str, Any]:
+    """这份视频的镜头表。**没拆过也照答**:`status="none"`,不是 404 —— 「还没拆」是一次正常的回答,
+    和「这份素材你看不到」不是一回事(界面据此决定显示「拆镜头」按钮还是那一列镜头)。"""
+    from app.domain.shots import breakdowns
+
+    asset = require_asset(db, user, asset_id)
+    row = breakdowns.breakdown_for(db, asset.id)
+    if row is None or not row.shots:
+        return {"asset_id": asset.id, "status": "none"}
+    return {"asset_id": asset.id, "status": "ready", **breakdowns.public_shape(row, asset)}

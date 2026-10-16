@@ -20,16 +20,45 @@ APP = Path(__file__).resolve().parents[1] / "app"
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src"
 
 
+def _module_strings(tree: ast.Module) -> dict[str, str]:
+    """模块级 `NAME = "字面量"`。种类的写法有两种:当场写死,或者提成常量再引用。
+
+    第二种此前在扫描里**等于不存在** —— `kind=JOB_KIND` 是个 Name,`isinstance(..., ast.Constant)`
+    放它过去,于是那个种类既不用进目录、也不会被「目录里没有用不到的种类」抓到。拆镜头那个
+    `shot_breakdown` 就是这么漏的:它在代码里建任务,目录里却没有对应的一行。
+    """
+    found: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    found[target.id] = node.value.value
+    return found
+
+
+def _kind_of(node: ast.Call, strings: dict[str, str]) -> str:
+    for keyword in node.keywords:
+        if keyword.arg != "kind":
+            continue
+        value = keyword.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
+        if isinstance(value, ast.Name):
+            return strings.get(value.id, "")
+    return ""
+
+
 def _created_kinds() -> dict[str, str]:
     found: dict[str, str] = {}
     for path in APP.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        strings = _module_strings(tree)
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", "")) == "create_job"):
                 continue
-            for keyword in node.keywords:
-                if keyword.arg == "kind" and isinstance(keyword.value, ast.Constant):
-                    found[keyword.value.value] = f"{path.relative_to(APP)}:{node.lineno}"
+            kind = _kind_of(node, strings)
+            if kind:
+                found[kind] = f"{path.relative_to(APP)}:{node.lineno}"
     return found
 
 

@@ -419,6 +419,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "素材不存在",
         "en": "Asset not found.",
     },
+    "routeErr_shotFrameNotFound": {
+        "zh": "这一镜没有这张帧图",
+        "en": "This shot has no such frame image.",
+    },
     "routeErr_previewCloneUsesSample": {
         "zh": "本地克隆的音色,试听它的参考录音就是它",
         "en": "For a cloned voice, its reference recording is the preview.",

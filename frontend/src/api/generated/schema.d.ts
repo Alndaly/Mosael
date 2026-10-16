@@ -2006,6 +2006,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/shots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Shot Breakdown
+         * @description 这份视频的镜头表。**没拆过是 200 + `status="none"`**,不是 404 —— 「还没拆」和「看不到这份素材」
+         *     是两件事,界面据此决定显示「拆镜头」按钮还是那一列镜头。
+         */
+        get: operations["read_shot_breakdown_api_assets__asset_id__shots_get"];
+        put?: never;
+        /**
+         * Start Shot Breakdown
+         * @description 排一条「拆镜头」后台任务,返回这条任务(照 `/transcribe`、`/convert-gif` 那条既有形状)。
+         *
+         *     量刀口取帧不花钱;有视觉模型就接着逐镜判画面(一批一次调用)。做完在任务中心看得到,素材详情页那一块
+         *     读 `GET /assets/{id}/shots`。**重拆覆盖**同一张表(ADR 0061 待拍板 2),没有历史版本。
+         */
+        post: operations["start_shot_breakdown_api_assets__asset_id__shots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/shots/frames/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Shot Frame
+         * @description 这一镜的帧图(详情页列表里的缩略图),名字是 `S03a.jpg`(15%)/ `S03b.jpg`(85%)。
+         *
+         *     帧是镜头表的插图,不进素材库;素材删了目录一起走。名字不在这个形状里 —— 或者那一镜没取到帧 ——
+         *     都是 404。
+         */
+        get: operations["read_shot_frame_api_assets__asset_id__shots_frames__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voices": {
         parameters: {
             query?: never;
@@ -18157,6 +18208,71 @@ export interface components {
             folders: string[];
         };
         /**
+         * ShotBreakdownResponse
+         * @description 读一份视频的镜头表。**没拆过也是 200**:`status="none"`,其余几栏是空的。
+         *
+         *     和同一份素材上的 `AnalyzeAssetResponse` 同一类:它是一次回答,不是一行 ORM(`*Out` 那一族)。
+         */
+        ShotBreakdownResponse: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "none" | "ready";
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Lang
+             * @default
+             */
+            lang: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            };
+            /** Shots */
+            shots?: {
+                [key: string]: unknown;
+            }[];
+            /** Sheets */
+            sheets?: {
+                [key: string]: unknown;
+            }[];
+            /** Describe */
+            describe?: {
+                [key: string]: unknown;
+            };
+            /** Hints */
+            hints?: {
+                [key: string]: unknown;
+            }[];
+            /** Stats */
+            stats?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Report Markdown
+             * @default
+             */
+            report_markdown: string;
+            /**
+             * Storyboard Markdown
+             * @default
+             */
+            storyboard_markdown: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
          * SourceAssetRef
          * @description 一份输入素材及其在生成请求中的用途。
          */
@@ -24430,6 +24546,100 @@ export interface operations {
                 asset_id: string;
                 extraction_id: string;
                 path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_shot_breakdown_api_assets__asset_id__shots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotBreakdownResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_shot_breakdown_api_assets__asset_id__shots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_shot_frame_api_assets__asset_id__shots_frames__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+                name: string;
             };
             cookie?: never;
         };

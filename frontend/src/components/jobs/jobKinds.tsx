@@ -66,6 +66,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   model_download: HardDriveDownload,
   node_install: PackagePlus,
   model_previews: ImageDown,
+  shot_breakdown: Clapperboard,
 };
 
 export type JobKindMeta = JobKind & { icon: LucideIcon };

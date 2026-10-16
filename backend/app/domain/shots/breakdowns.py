@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -53,6 +54,19 @@ def require_video(asset: Asset) -> Path:
     if not source.is_file():
         raise ShotBreakdownError("shotsErr_fileMissing")
     return source
+
+
+#: 帧图的名字(`S03a.jpg` / `S03b.jpg`,见 frames.frame_name)。详情页按它取缩略图,所以在这里收窄一次:
+#: `shots/frames/` 是素材目录里面的目录,名字任由调用方给就等于开了一条走出去的路。
+_FRAME_NAME = re.compile(r"S\d{2,}[ab]\.jpg")
+
+
+def frame_file(asset: Asset, name: str) -> Path | None:
+    """这一镜的那张帧图;名字不是帧图、或者文件不在,都回 None(调用方 404)。"""
+    if not _FRAME_NAME.fullmatch(name):
+        return None
+    path = shots_dir(asset) / "frames" / name
+    return path if path.is_file() else None
 
 
 def transcript_segments(db: Session, asset_id: str) -> list[dict[str, Any]]:
@@ -203,5 +217,5 @@ def prompt_context(row: ShotBreakdown, asset: Asset) -> str:
     ])
 
 
-__all__ = ["ShotBreakdownError", "breakdown_for", "judge", "lang_now", "measure_into", "prompt_context",
-           "public_shape", "require_video", "shots_dir", "transcript_segments"]
+__all__ = ["ShotBreakdownError", "breakdown_for", "frame_file", "judge", "lang_now", "measure_into",
+           "prompt_context", "public_shape", "require_video", "shots_dir", "transcript_segments"]
