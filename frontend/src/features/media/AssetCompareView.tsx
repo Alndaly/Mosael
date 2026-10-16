@@ -1,5 +1,5 @@
 import React from "react";
-import { Columns2, FlipHorizontal, Grid2x2, Link2, Link2Off, Maximize2, X } from "lucide-react";
+import { Columns2, Download, FlipHorizontal, Grid2x2, Link2, Link2Off, Maximize2, X } from "lucide-react";
 
 import { assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { saveAssetToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -179,15 +180,22 @@ function Pane({
           </span>
         )}
       </div>
-      {/* 元信息贴在窗格里而不是侧栏:挑图时视线在图上,把名字和尺寸放远了等于没有。 */}
-      <div className="grid gap-px border-t border-border bg-panel px-2.5 py-1.5">
-        <Truncate className="text-ui-sm font-semibold text-foreground">
-          {asset.name || asset.original_filename}
-        </Truncate>
-        <span className="timecode text-ui-2xs text-muted-foreground">
-          {dim ? `${dim.w}×${dim.h}` : t("mediaCompareNoSize")}
-          {asset.tags?.length ? ` · ${asset.tags.slice(0, 3).join(" ")}` : ""}
-        </span>
+      {/* 元信息贴在窗格里而不是侧栏:挑图时视线在图上,把名字和尺寸放远了等于没有。
+          「保存到本地」也摆在这儿(比较视图自己就是一个预览窗,不走灯箱和详情弹窗那两条路):
+          压在画面上会跟着缩放平移跑,贴在窗格里才点得准。 */}
+      <div className="flex items-center gap-2 border-t border-border bg-panel px-2.5 py-1.5">
+        <div className="grid min-w-0 flex-1 gap-px">
+          <Truncate className="text-ui-sm font-semibold text-foreground">
+            {asset.name || asset.original_filename}
+          </Truncate>
+          <span className="timecode text-ui-2xs text-muted-foreground">
+            {dim ? `${dim.w}×${dim.h}` : t("mediaCompareNoSize")}
+            {asset.tags?.length ? ` · ${asset.tags.slice(0, 3).join(" ")}` : ""}
+          </span>
+        </div>
+        <IconButton variant="ghost" size="icon-xs" label={`${t("assetSaveLocal")}: ${asset.name || asset.original_filename}`} onClick={() => saveAssetToDisk(asset)}>
+          <Download />
+        </IconButton>
       </div>
     </div>
   );
@@ -291,7 +299,32 @@ function SplitPane({
       </div>
       <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-ui-2xs font-semibold text-white">A</span>
       <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-[rgb(0_0_0/0.55)] px-2 py-0.5 text-ui-2xs font-semibold text-white">B</span>
+      {/* 这一屏没有窗格脚注可挂(两层是叠在一起的),所以「保存到本地」浮在角上、各存各的那一份。
+          按下不往上传:传上去就成了拖动画面(这块容器自己听着 pointerdown 做平移)。 */}
+      <SaveOverlay asset={a} side="left" />
+      <SaveOverlay asset={b} side="right" />
     </div>
+  );
+}
+
+/** 浮在画面上的「保存到本地」—— 滑动分割那一屏用(A 存左、B 存右)。 */
+function SaveOverlay({ asset, side }: { asset: Asset; side: "left" | "right" }) {
+  const t = useI18n();
+  return (
+    <IconButton
+      //: 档位走基础件(design/controlOverrides):这里只摆位置。
+      variant="secondary"
+      size="icon-xs"
+      label={`${t("assetSaveLocal")}: ${asset.name || asset.original_filename || ""}`}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        saveAssetToDisk(asset);
+      }}
+      className={cn("absolute top-8 z-[2]", side === "left" ? "left-2" : "right-2")}
+    >
+      <Download />
+    </IconButton>
   );
 }
 

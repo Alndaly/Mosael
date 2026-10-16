@@ -46,7 +46,7 @@ function MediaPreview({ assetId, gallery, reveal }: { assetId: string; gallery?:
           className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           //: 点开不是孤零零一张 —— 同一批里的全部图/视频装进画廊,
           //: 灯箱里可以左右翻(单张结果时 gallery 为空,行为和原来一样)。
-          onClick={() => openImagePreview({ src, title: asset.data.name, gallery })}
+          onClick={() => openImagePreview({ src, title: asset.data.name, assetId: asset.data.id, gallery })}
         >
           <img className="max-h-[200px] w-full rounded-lg border border-border bg-black object-contain" src={src} alt={asset.data.name} loading="lazy" />
         </IconButton>
@@ -57,7 +57,7 @@ function MediaPreview({ assetId, gallery, reveal }: { assetId: string; gallery?:
         <VideoPlayer
           assetSrc={src}
           className="h-[135px] w-[240px] rounded-lg border border-border"
-          onExpand={() => openImagePreview({ src, title: asset.data.name, video: true, gallery })}
+          onExpand={() => openImagePreview({ src, title: asset.data.name, video: true, assetId: asset.data.id, gallery })}
         />
       ) : asset.data.kind === "audio" ? (
         //: 不用原生 controls(各家各样、不吃主题)—— 全站共享的音频条,画板节点也是它。
@@ -122,6 +122,8 @@ export function MediaPreviewGrid({
       src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
       title: asset.name,
       video: asset.kind === "video",
+      //: 灯箱里的「保存到本地」要知道翻到的这一张是哪份素材。
+      assetId: asset.id,
     }));
   /**
    * **取不到的不占一张卡。**

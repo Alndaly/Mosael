@@ -26,7 +26,10 @@ vi.mock("@/components/app/image-preview", () => ({
   useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: imagePreviewOpen }),
 }));
 
+vi.mock("@/lib/download", () => ({ saveAssetToDisk: vi.fn() }));
+
 import { AssetPreviewModal } from "./AssetPreviewModal";
+import { saveAssetToDisk } from "@/lib/download";
 
 const imageAsset = {
   id: "heic-asset",
@@ -48,9 +51,19 @@ const audioAsset = {
   media_info: { duration: 2.9 },
 };
 
+const videoAsset = {
+  ...imageAsset,
+  id: "clip-asset",
+  name: "片头.mp4",
+  original_filename: "opening.mp4",
+  kind: "video",
+  media_info: { width: 1920, height: 1080, duration: 3.5, fps: 24 },
+};
+
 describe("AssetPreviewModal", () => {
   beforeEach(() => {
     openImagePreview.mockReset();
+    vi.mocked(saveAssetToDisk).mockReset();
     imagePreviewOpen = false;
   });
 
@@ -64,7 +77,37 @@ describe("AssetPreviewModal", () => {
     expect(openImagePreview).toHaveBeenCalledWith({
       src: "/preview/heic-asset",
       title: "IMG_0665.HEIC",
+      //: 灯箱里那颗「保存到本地」要知道存的是哪一份(详见 image-preview.tsx)。
+      assetId: "heic-asset",
     });
+  });
+
+  //: 维护者:所有图片/视频/音频预览的窗口都要有「保存到本地」—— 此前只有素材管理页那一颗。
+  //: 详情弹窗是这条链上的总入口(工具结果、附件、画板参考槽、笔记引用都开它),
+  //: 所以三类的默认动作都摆在它自己的头部,不靠每个调用方记得传。
+  it("图片:头部默认就有一颗「保存到本地」,点了保存的是这一份", () => {
+    render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "assetSaveLocal" }));
+
+    expect(saveAssetToDisk).toHaveBeenCalledWith(imageAsset);
+  });
+
+  it("视频:头部默认就有一颗「保存到本地」,点了保存的是这一份(取原文件字节,不是预览图)", () => {
+    render(<AssetPreviewModal asset={videoAsset as never} onClose={vi.fn()} />);
+
+    expect(document.querySelector("[data-media-preview-player]")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "assetSaveLocal" }));
+
+    expect(saveAssetToDisk).toHaveBeenCalledWith(videoAsset);
+  });
+
+  it("音频:头部默认就有一颗「保存到本地」,点了保存的是这一份", () => {
+    render(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "assetSaveLocal" }));
+
+    expect(saveAssetToDisk).toHaveBeenCalledWith(audioAsset);
   });
 
   it("文档(ADR 0031)不当图片画,放解析出的阅读器;没有「属于哪些资产」", () => {
@@ -110,7 +153,8 @@ describe("AssetPreviewModal", () => {
   });
 
   //: 体检 UM-13:详情里此前一个操作都没有,从 ⌘K、深链、通知跳过来看完想改名、删掉,只能关掉再回网格里找。
-  it("给了动作就在头部摆出来:前三个是按钮,其余(含删除)收进 ⋯;不给就不画", () => {
+  //: 调用方自己那一组里已经有「保存到本地」时不摆第二颗 —— 同一条动作两遍会挤掉「改名」「打标签」。
+  it("给了动作就在头部摆出来:前三个是按钮,其余(含删除)收进 ⋯;自带的那颗不重复摆", () => {
     const rename = vi.fn();
     const remove = vi.fn();
     const actions = vi.fn(() => [
@@ -128,7 +172,9 @@ describe("AssetPreviewModal", () => {
     expect(rename).toHaveBeenCalled();
     view.unmount();
 
+    //: 没给动作的地方(只读的工具结果、附件预览)也照样有「保存到本地」—— 这条是这次改动的重点。
     render(<AssetPreviewModal asset={imageAsset as never} onClose={vi.fn()} />);
-    expect(document.querySelector("[data-asset-detail-actions]")).toBeNull();
+    const builtin = document.querySelector("[data-asset-detail-actions]") as HTMLElement;
+    expect([...builtin.querySelectorAll(":scope > button")].map((one) => one.textContent)).toEqual(["assetSaveLocal"]);
   });
 });

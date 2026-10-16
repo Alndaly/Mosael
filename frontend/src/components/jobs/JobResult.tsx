@@ -58,9 +58,10 @@ export function JobResult({ job }: { job: Job }) {
   const visual = assetIds.filter((id) => byId.get(id)?.kind !== "audio");
   const gallery: ImagePreviewItem[] = visual.map((id) => {
     const asset = byId.get(id);
+    //: assetId:灯箱顶上的「保存到本地」按它取原始文件(见 imagePreviewContext)。
     return asset?.kind === "video"
-      ? { src: assetFileUrl(id), title: asset.name, video: true }
-      : { src: assetPreviewUrl(id), title: asset?.name };
+      ? { src: assetFileUrl(id), title: asset.name, video: true, assetId: id }
+      : { src: assetPreviewUrl(id), title: asset?.name, assetId: id };
   });
 
   return (

@@ -41,18 +41,18 @@ function renderResult() {
 }
 
 const batch = [
-  { src: assetPreviewUrl("img-1"), title: "素材 img-1", video: false },
-  { src: assetFileUrl("vid-1"), title: "素材 vid-1", video: true },
+  { src: assetPreviewUrl("img-1"), title: "素材 img-1", video: false, assetId: "img-1" },
+  { src: assetFileUrl("vid-1"), title: "素材 vid-1", video: true, assetId: "vid-1" },
 ];
 
 it("视频的「全屏」开同一个灯箱,和同一批的图一起翻", async () => {
   renderResult();
   fireEvent.click(await screen.findByRole("button", { name: "boardFullscreen" }));
-  expect(openImagePreview).toHaveBeenCalledWith({ src: assetFileUrl("vid-1"), title: "素材 vid-1", video: true, gallery: batch });
+  expect(openImagePreview).toHaveBeenCalledWith({ src: assetFileUrl("vid-1"), title: "素材 vid-1", video: true, assetId: "vid-1", gallery: batch });
 });
 
 it("图点一下就开,画廊是同一批", async () => {
   renderResult();
   fireEvent.click(await screen.findByRole("button", { name: "素材 img-1" }));
-  expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img-1"), title: "素材 img-1", gallery: batch });
+  expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img-1"), title: "素材 img-1", assetId: "img-1", gallery: batch });
 });

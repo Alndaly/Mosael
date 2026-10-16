@@ -42,6 +42,8 @@ describe("素材行内预览", () => {
     expect(openImagePreview).toHaveBeenCalledWith({
       src: "/preview/a",
       title: "第一张",
+      //: 灯箱顶上那颗「保存到本地」按它取原始文件。
+      assetId: "a",
       gallery,
     });
   });

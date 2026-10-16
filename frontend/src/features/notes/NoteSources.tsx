@@ -1,8 +1,10 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, FileText, Play } from "lucide-react";
+import { Download, ExternalLink, FileText, Play } from "lucide-react";
 import { assetFileUrl, assetPreviewUrl, getAsset } from "@/api/client";
 import { assetKeys, noteKeys } from "@/api/queryKeys";
+import { useI18n } from "@/app/preferences";
+import { saveAssetToDisk } from "@/lib/download";
 import { gotoRecord } from "@/lib/deepLink";
 import { getNoteSourceMessage, type NoteSource } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
@@ -15,6 +17,7 @@ import { useNoteStrings } from "./strings";
 
 export function SourceLink({ source, workspaceId }: { source: NoteSource; workspaceId: string }) {
   const s = useNoteStrings();
+  const t = useI18n();
   const { openImagePreview } = useImagePreview();
   const [open, setOpen] = React.useState(false);
   const asset = useQuery({ queryKey: assetKeys.detail(source.id), queryFn: () => getAsset(source.id), enabled: open && source.kind === "asset" });
@@ -24,8 +27,13 @@ export function SourceLink({ source, workspaceId }: { source: NoteSource; worksp
   if (source.kind === "note") return <a href={noteHref(source.id, source.revision)} className="inline-flex items-center gap-1 text-primary"><FileText size={12} />{source.label || s.untitled}</a>;
   if (source.kind === "board") return <button type="button" onClick={() => gotoRecord("/boards", "mosael:open-board", source.id)} className="text-primary">{source.label || s.source}</button>;
   return <><button type="button" className="inline-flex max-w-full items-center gap-1 text-primary" onClick={() => setOpen(true)}><Play size={12} />{source.label || s.source}{source.start != null && <span className="whitespace-nowrap"> · {Math.floor(source.start / 60)}:{String(Math.floor(source.start % 60)).padStart(2, "0")}</span>}</button>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-3xl"><DialogTitle className="pr-8 break-words">{source.label || s.source}</DialogTitle>
-      {(asset.isError || detail.isError) ? <p>{s.unavailable}</p> : source.kind === "message" ? <div className="max-h-[65vh] overflow-auto"><AgentMarkdown>{detail.data?.content || s.loading}</AgentMarkdown></div> : asset.data ? asset.data.kind === "image" ? <IconButton unstyled label={s.node.preview} className="block w-fit max-w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={() => openImagePreview({ src: assetPreviewUrl(source.id), title: source.label || asset.data?.name })}><img src={assetPreviewUrl(source.id)} alt={source.label} className="max-h-[65vh] object-contain" /></IconButton> : asset.data.kind === "audio" ? <AudioPlayerBar src={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} className="my-6 h-10 rounded-lg border border-border bg-panel" /> : <div className="aspect-video max-h-[65vh] w-full overflow-hidden rounded-lg"><VideoPlayer assetSrc={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} /></div> : <p>{s.loading}</p>}
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-3xl">
+      {/* 这一段引用的素材(图 / 视频 / 音频)本身就是一个预览窗:存下来不用再跑去素材库翻出同一份。 */}
+      <div className="flex min-w-0 items-start gap-2">
+        <DialogTitle className="min-w-0 flex-1 pr-8 break-words">{source.label || s.source}</DialogTitle>
+        {asset.data && <IconButton variant="outline" size="icon-xs" label={t("assetSaveLocal")} onClick={() => saveAssetToDisk(asset.data)}><Download /></IconButton>}
+      </div>
+      {(asset.isError || detail.isError) ? <p>{s.unavailable}</p> : source.kind === "message" ? <div className="max-h-[65vh] overflow-auto"><AgentMarkdown>{detail.data?.content || s.loading}</AgentMarkdown></div> : asset.data ? asset.data.kind === "image" ? <IconButton unstyled label={s.node.preview} className="block w-fit max-w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={() => openImagePreview({ src: assetPreviewUrl(source.id), title: source.label || asset.data?.name, assetId: source.id })}><img src={assetPreviewUrl(source.id)} alt={source.label} className="max-h-[65vh] object-contain" /></IconButton> : asset.data.kind === "audio" ? <AudioPlayerBar src={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} className="my-6 h-10 rounded-lg border border-border bg-panel" /> : <div className="aspect-video max-h-[65vh] w-full overflow-hidden rounded-lg"><VideoPlayer assetSrc={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} /></div> : <p>{s.loading}</p>}
       {source.quote && <blockquote className="text-sm text-muted-foreground">{source.quote}</blockquote>}
     </DialogContent></Dialog></>;
 }

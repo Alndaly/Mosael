@@ -108,7 +108,7 @@ function Tile({
             unstyled
             className={`${SLOT_TILE} relative cursor-zoom-in p-0`}
             label={named}
-            onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: named })}
+            onClick={() => openImagePreview({ src: assetPreviewUrl(slot.assetId), title: named, assetId: slot.assetId })}
           >
             {/* 绝对定位填满:此前是 h-full —— 而这颗按钮是 grid + place-items-center 的行,
                 行高由内容定、内容的 100% 又指着行高,百分比没着落,缩略图按原图比例渲染

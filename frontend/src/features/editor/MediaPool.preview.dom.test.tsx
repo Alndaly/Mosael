@@ -48,8 +48,8 @@ async function renderPool(onAddToTimeline = vi.fn()) {
 }
 
 const pool = [
-  { src: assetFileUrl("beach"), title: "beach", video: true },
-  { src: assetPreviewUrl("pier"), title: "pier" },
+  { src: assetFileUrl("beach"), title: "beach", video: true, assetId: "beach" },
+  { src: assetPreviewUrl("pier"), title: "pier", assetId: "pier" },
 ];
 
 it("图和视频的缩略图是「看大图」按钮;音频的不是", async () => {
@@ -62,7 +62,7 @@ it("图和视频的缩略图是「看大图」按钮;音频的不是", async () 
 it("点开视频:同一个灯箱换成播放器,左右翻的是清单里的图和视频", async () => {
   await renderPool();
   fireEvent.click(screen.getByRole("button", { name: "看大图:beach" }));
-  expect(openImagePreview).toHaveBeenCalledWith({ src: assetFileUrl("beach"), title: "beach", video: true, gallery: pool });
+  expect(openImagePreview).toHaveBeenCalledWith({ src: assetFileUrl("beach"), title: "beach", video: true, assetId: "beach", gallery: pool });
 });
 
 it("键盘也开得了:走到缩略图上按回车", async () => {
@@ -71,7 +71,7 @@ it("键盘也开得了:走到缩略图上按回车", async () => {
   thumb.focus();
   expect(document.activeElement).toBe(thumb);
   await userEvent.setup().keyboard("{Enter}");
-  expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("pier"), title: "pier", gallery: pool });
+  expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("pier"), title: "pier", assetId: "pier", gallery: pool });
 });
 
 it("双击这一行仍然是加进时间线", async () => {

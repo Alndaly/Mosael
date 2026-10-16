@@ -68,9 +68,10 @@ it("「看大图」开灯箱、翻这份清单里的图和视频;这一行不算
     src: "/file/vid",
     title: "开场",
     video: true,
+    assetId: "vid",
     gallery: [
-      { src: "/preview/img", title: "海报" },
-      { src: "/file/vid", title: "开场", video: true },
+      { src: "/preview/img", title: "海报", assetId: "img" },
+      { src: "/file/vid", title: "开场", video: true, assetId: "vid" },
     ],
   });
   expect(onPick).not.toHaveBeenCalled();

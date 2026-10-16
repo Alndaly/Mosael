@@ -83,9 +83,10 @@ it("点开一张图:翻的是这一格引到的图和视频(音频不在里面)"
     src: "/file/vid1",
     title: "样片",
     video: true,
+    assetId: "vid1",
     gallery: [
-      { src: "/preview/img1", title: "分镜" },
-      { src: "/file/vid1", title: "样片", video: true },
+      { src: "/preview/img1", title: "分镜", assetId: "img1" },
+      { src: "/file/vid1", title: "样片", video: true, assetId: "vid1" },
     ],
   });
 });

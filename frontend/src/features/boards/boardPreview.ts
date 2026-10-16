@@ -29,7 +29,10 @@ export function boardPreviewGallery(items: readonly BoardItem[]): ImagePreviewIt
     [...row].sort((a, b) => a.x - b.x).map((item) => {
       const id = item.asset_id as string;
       const title = item.title || item.text || "";
-      return item.kind === "video" ? { src: assetFileUrl(id), title, video: true } : { src: assetPreviewUrl(id), title };
+      return item.kind === "video"
+        //: assetId:灯箱顶上的「保存到本地」按它取原始文件(见 imagePreviewContext)。
+        ? { src: assetFileUrl(id), title, video: true, assetId: id }
+        : { src: assetPreviewUrl(id), title, assetId: id };
     }),
   );
 }

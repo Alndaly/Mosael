@@ -768,14 +768,17 @@ export function GenerateWorkspace({
           const title = String(generation.request.prompt ?? generation.model);
           if (generation.kind === "video") {
             //: 和下面那张播放器一样只放封面那一份(result_asset_id)。
-            return generation.result_asset_id ? [{ src: assetFileUrl(generation.result_asset_id), title, video: true }] : [];
+            //: `assetId`:灯箱顶上的「保存到本地」按它取原始文件(见 imagePreviewContext)。
+            return generation.result_asset_id
+              ? [{ src: assetFileUrl(generation.result_asset_id), title, video: true, assetId: generation.result_asset_id }]
+              : [];
           }
           const ids = generation.result_asset_ids?.length
             ? generation.result_asset_ids
             : generation.result_asset_id
               ? [generation.result_asset_id]
               : [];
-          return ids.map((assetId) => ({ src: assetPreviewUrl(assetId), title }));
+          return ids.map((assetId) => ({ src: assetPreviewUrl(assetId), title, assetId }));
         }),
     [ordered],
   );
@@ -2196,7 +2199,7 @@ function GenerationTurn({
           //: 全站共用的播放器(不是原生 controls):右下角那颗「全屏」开的是同一个灯箱,和本会话的其他产出一起左右翻。
           <GeneratedVideo
             assetId={generation.result_asset_id}
-            onExpand={(src) => openImagePreview({ src, title: String(generation.request.prompt ?? generation.model), video: true, gallery })}
+            onExpand={(src) => openImagePreview({ src, title: String(generation.request.prompt ?? generation.model), video: true, assetId: generation.result_asset_id ?? undefined, gallery })}
           />
         ) : outputs.length > 0 ? (
           //: **照 result_asset_ids 出图,不是只出封面。** 图像接口的 n 选了几就出几张,
@@ -2220,6 +2223,7 @@ function GenerationTurn({
                   openImagePreview({
                     src: assetPreviewUrl(assetId),
                     title: String(generation.request.prompt ?? generation.model),
+                    assetId,
                     gallery,
                   })
                 }

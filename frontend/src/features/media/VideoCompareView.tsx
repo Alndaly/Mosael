@@ -1,11 +1,12 @@
 import React from "react";
-import { Pause, Play, Repeat, SkipBack, StepBack, StepForward, Volume2, VolumeX, X } from "lucide-react";
+import { Download, Pause, Play, Repeat, SkipBack, StepBack, StepForward, Volume2, VolumeX, X } from "lucide-react";
 
 import { assetFileUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
+import { saveAssetToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
@@ -231,6 +232,15 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
                   <Truncate className="text-ui-sm font-semibold">{asset.name}</Truncate>
                   <Truncate className="timecode text-ui-2xs text-muted-foreground">{metaOf(asset)}</Truncate>
                 </div>
+                {/* 「保存到本地」在这一格里(这个视图不走灯箱和详情弹窗):一次比几条,存哪一条就在哪一条上点。 */}
+                <IconButton
+                  variant="ghost"
+                  size="icon-xs"
+                  label={`${t("assetSaveLocal")}: ${asset.name}`}
+                  onClick={() => saveAssetToDisk(asset)}
+                >
+                  <Download />
+                </IconButton>
                 <IconButton
                   variant="ghost"
                   size="icon-xs"

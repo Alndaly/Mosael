@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ExternalLink, X } from "lucide-react";
+import { Download, ExternalLink, X } from "lucide-react";
 import { PhotoSlider } from "react-photo-view";
 
 import { useI18n } from "@/app/preferences";
@@ -10,6 +10,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { useNativeViewAside } from "@/components/ui/nativeViewAside";
 import { HintRegion } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { saveAssetToDisk } from "@/lib/download";
 import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { ImagePreviewContext, type ImagePreviewContextValue, type ImagePreviewItem, type ImagePreviewState } from "@/components/app/imagePreviewContext";
@@ -217,19 +218,50 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
         maskClassName="will-change-[opacity]"
         photoClassName="rounded-lg will-change-[transform,opacity] [outline:1px_solid_rgb(255_255_255/0.12)]"
         maskOpacity={0.88}
-        toolbarRender={({ images, index }) => {
-          const src = images[index]?.src;
-          if (!src) return null;
+        toolbarRender={({ images: photoImages, index }) => {
+          const photo = photoImages[index];
+          const current = images[index];
+          const saveId = current?.assetId;
+          //: 视频那一项库里没有 `src`(见上面 images.map 里的说明),所以「打开原图」照旧只给图;
+          //: 「保存到本地」两头都给。
+          if (!photo?.src && !current) return null;
           return (
-            <a
-              href={src}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="mr-2 inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[rgb(255_255_255/0.18)] bg-[rgb(255_255_255/0.12)] px-[11px] text-xs text-white no-underline hover:bg-[rgb(255_255_255/0.2)]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <ExternalLink size={14} /> {t("openOriginal")}
-            </a>
+            <>
+              {/* 顶上这颗「保存到本地」:此前想存一张图,只能关掉灯箱、跑去素材管理页翻出同一张。
+                  存的必须是**原始文件** —— 图那一项的 src 是后端转好的预览(HEIC 转 JPEG),
+                  所以按素材 id 走 `/file`(原始字节 + 响应头里的原始文件名,和素材库、AI 工作台那颗同一件事)。 */}
+              {saveId && (
+                <HintRegion.Provider value={LIGHTBOX_REGION}>
+                  {/* 档位走基础件(`secondary` + `icon-sm`),不在 className 上压高度和圆角(design/controlOverrides)。
+                      旁边「打开原图」是黑的底上那颗白胶囊,这一颗跟着主题走 —— 两者都读得清。 */}
+                  <IconButton
+                    variant="secondary"
+                    size="icon-sm"
+                    label={t("assetSaveLocal")}
+                    data-image-preview-save={saveId}
+                    onClick={() => saveAssetToDisk({
+                      id: saveId,
+                      name: current.title ?? t("imagePreviewTitle"),
+                      original_filename: "",
+                    })}
+                    className="mr-2"
+                  >
+                    <Download />
+                  </IconButton>
+                </HintRegion.Provider>
+              )}
+              {photo?.src && (
+                <a
+                  href={photo.src}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mr-2 inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[rgb(255_255_255/0.18)] bg-[rgb(255_255_255/0.12)] px-[11px] text-xs text-white no-underline hover:bg-[rgb(255_255_255/0.2)]"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink size={14} /> {t("openOriginal")}
+                </a>
+              )}
+            </>
           );
         }}
         overlayRender={({ overlay }) =>

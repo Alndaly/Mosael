@@ -81,6 +81,8 @@ export function referenceGallery(refs: readonly Pick<EntityReference, "asset_id"
     src: ref.asset_kind === "image" ? assetPreviewUrl(ref.asset_id) : assetFileUrl(ref.asset_id),
     title: ref.asset_name,
     video: ref.asset_kind !== "image",
+    //: 灯箱里的「保存到本地」按它取原始文件(参考图**就是**素材库里的素材)。
+    assetId: ref.asset_id,
   }));
 }
 

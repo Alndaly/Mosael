@@ -177,7 +177,7 @@ export function EntityDetail({
   const openCover = (id: string) => {
     const wall = referenceGallery(data.references);
     const at = data.references.findIndex((ref) => ref.asset_id === id);
-    openImagePreview(at >= 0 ? { ...wall[at], gallery: wall } : { src: assetPreviewUrl(id), title: data.name });
+    openImagePreview(at >= 0 ? { ...wall[at], gallery: wall } : { src: assetPreviewUrl(id), title: data.name, assetId: id });
   };
 
   return (

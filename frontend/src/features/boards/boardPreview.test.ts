@@ -21,8 +21,9 @@ describe("画板选中的那几格怎么排进灯箱", () => {
       cell("pending", "image", 1200, 0, { asset_id: undefined }),
     ]);
     expect(gallery).toEqual([
-      { src: assetPreviewUrl("a-photo"), title: "photo" },
-      { src: assetFileUrl("a-clip"), title: "clip", video: true },
+      //: assetId:灯箱顶上那颗「保存到本地」按它取原文件。
+      { src: assetPreviewUrl("a-photo"), title: "photo", assetId: "a-photo" },
+      { src: assetFileUrl("a-clip"), title: "clip", video: true, assetId: "a-clip" },
     ]);
   });
 

@@ -440,9 +440,10 @@ describe("参考图墙", () => {
       src: "/preview/a-side",
       title: "侧面.png",
       video: false,
+      assetId: "a-side",
       gallery: [
-        { src: "/preview/a-front", title: "正面.png", video: false },
-        { src: "/preview/a-side", title: "侧面.png", video: false },
+        { src: "/preview/a-front", title: "正面.png", video: false, assetId: "a-front" },
+        { src: "/preview/a-side", title: "侧面.png", video: false, assetId: "a-side" },
       ],
     });
   });
@@ -452,7 +453,7 @@ describe("参考图墙", () => {
     await openDetail({ display_cover_asset_id: "parent-cover" });
     const hero = document.querySelector("[data-entity-hero]") as HTMLElement;
     fireEvent.click(within(hero).getByRole("button", { name: "imagePreviewTitle" }));
-    expect(lightbox.openImagePreview).toHaveBeenCalledWith({ src: "/preview/parent-cover", title: "张三" });
+    expect(lightbox.openImagePreview).toHaveBeenCalledWith({ src: "/preview/parent-cover", title: "张三", assetId: "parent-cover" });
   });
 
   it("设封面、往后挪、移出 —— 各发各的请求", async () => {

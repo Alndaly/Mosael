@@ -47,6 +47,7 @@ export function SourceAssetSlotPreview({
         openImagePreview({
           src: kind === "video" ? assetFileUrl(assetId) : assetPreviewUrl(assetId),
           title: label,
+          assetId,
           ...(kind === "video" ? { video: true } : {}),
         })
       }

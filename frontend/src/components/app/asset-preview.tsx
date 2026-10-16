@@ -19,8 +19,10 @@ import { ViewFullSizeButton } from "@/components/app/view-full-size";
  */
 export function assetPreviewItem(asset: { id: string; kind: string; name?: string | null; original_filename?: string | null }): ImagePreviewItem | null {
   const title = asset.name || asset.original_filename || undefined;
-  if (asset.kind === "image") return { src: assetPreviewUrl(asset.id), title };
-  if (asset.kind === "video") return { src: assetFileUrl(asset.id), title, video: true };
+  //: `assetId` 一起带上:灯箱顶上那颗「保存到本地」按它取**原始文件**(src 对图来说是预览地址)。
+  //: 从这里出去的每一项都是素材库里的,所以凡是走 assetPreviewItem / assetGallery 的地方自动就有。
+  if (asset.kind === "image") return { src: assetPreviewUrl(asset.id), title, assetId: asset.id };
+  if (asset.kind === "video") return { src: assetFileUrl(asset.id), title, video: true, assetId: asset.id };
   return null;
 }
 
@@ -134,6 +136,8 @@ export function AssetInlinePreview({
     openImagePreview({
       src,
       title: name,
+      //: 这一份是哪份素材 —— 灯箱顶上的「保存到本地」按它取原始文件(见 imagePreviewContext)。
+      assetId,
       ...(kind === "video" ? { video: true } : {}),
       ...(gallery?.length ? { gallery } : {}),
     });

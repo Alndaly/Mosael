@@ -260,15 +260,17 @@ function RunCard({
     return { button: "workbenchRunOnlyThisImage", label: "workbenchRunOnlyThisImageLabel", hint: "workbenchRunOnlyThisImageHint", undo: "workbenchRunUndoImageLabel" };
   };
   //: 生成记录的 kind 只说明这次运行的主能力；一轮里可以混出图片和视频。预览逐份以素材自己的 kind 为准。
+  //: `asset` 是这一行的本地索引(点哪张开哪张),`assetId` 才是灯箱认的那份素材(顶上「保存到本地」按它取原文件)。
   const gallery = runGallery(groups, nodeName, t("workbenchRunUnknownNode")).map((one) => ({
     src: kindByAsset.get(one.asset) === "video" ? assetFileUrl(one.asset) : assetPreviewUrl(one.asset),
     title: one.title,
     video: kindByAsset.get(one.asset) === "video",
+    assetId: one.asset,
     asset: one.asset,
   }));
   const open = (asset: string) => {
     const at = gallery.find((one) => one.asset === asset);
-    if (at) openImagePreview({ src: at.src, title: at.title, video: at.video, gallery: gallery.map(({ asset: _asset, ...item }) => item) });
+    if (at) openImagePreview({ src: at.src, title: at.title, video: at.video, assetId: at.assetId, gallery: gallery.map(({ asset: _asset, ...item }) => item) });
   };
   return (
     <li className="grid gap-2 rounded-lg border border-border p-2.5" data-run={run.jobId}>

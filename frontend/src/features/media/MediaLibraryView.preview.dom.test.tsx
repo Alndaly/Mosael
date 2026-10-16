@@ -62,9 +62,9 @@ afterEach(() => {
 });
 
 const grid = [
-  { src: assetPreviewUrl("poster"), title: "poster 名字" },
-  { src: assetFileUrl("clip"), title: "clip 名字", video: true },
-  { src: assetPreviewUrl("still"), title: "still 名字" },
+  { src: assetPreviewUrl("poster"), title: "poster 名字", assetId: "poster" },
+  { src: assetFileUrl("clip"), title: "clip 名字", video: true, assetId: "clip" },
+  { src: assetPreviewUrl("still"), title: "still 名字", assetId: "still" },
 ];
 
 it("图和视频的卡片上各有一颗「看大图」,音频没有", async () => {
@@ -78,7 +78,7 @@ it("图和视频的卡片上各有一颗「看大图」,音频没有", async () 
 it("「看大图」开灯箱,从这一张开始翻眼下这格网格;不开详情", async () => {
   mount();
   fireEvent.click(await screen.findByRole("button", { name: "看大图:clip 名字" }));
-  expect(openImagePreview).toHaveBeenCalledWith({ src: assetFileUrl("clip"), title: "clip 名字", video: true, gallery: grid });
+  expect(openImagePreview).toHaveBeenCalledWith({ src: assetFileUrl("clip"), title: "clip 名字", video: true, assetId: "clip", gallery: grid });
   expect(detail).not.toHaveBeenCalledWith("clip");
 });
 

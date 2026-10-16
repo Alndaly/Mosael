@@ -32,7 +32,7 @@ export function MediaPreviewPlayer({ src, kind, assetId, autoPlay = true }: {
   };
 
   return (
-    <div ref={frame} className="media-preview-player grid h-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] bg-workspace-subtle">
+    <div ref={frame} data-media-preview-player="" className="media-preview-player grid h-full min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] bg-workspace-subtle">
       <div className="relative grid min-h-0 min-w-0 place-items-center overflow-hidden">
         {kind === "video" ? (
           <video {...props} ref={(element) => { ref.current = element; }} playsInline onClick={toggle} className="h-full min-h-0 w-full object-contain" />

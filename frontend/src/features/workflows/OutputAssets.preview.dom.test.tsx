@@ -42,8 +42,8 @@ afterEach(() => {
 });
 
 const stepGallery = [
-  { src: assetPreviewUrl("img1"), title: "素材 img1" },
-  { src: assetPreviewUrl("img2"), title: "素材 img2" },
+  { src: assetPreviewUrl("img1"), title: "素材 img1", assetId: "img1" },
+  { src: assetPreviewUrl("img2"), title: "素材 img2", assetId: "img2" },
 ];
 
 describe("画布节点上的产出", () => {
@@ -55,7 +55,7 @@ describe("画布节点上的产出", () => {
     expect(openImagePreview).not.toHaveBeenCalled();
 
     fireEvent.click(zoom);
-    expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img2"), title: "素材 img2", gallery: stepGallery });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img2"), title: "素材 img2", assetId: "img2", gallery: stepGallery });
   });
 
   it("「看大图」按下去不冒泡 —— 节点的点击(选中)不跟着发生", async () => {
@@ -75,14 +75,14 @@ describe("检查器、执行历史里的产出", () => {
   it("点图就开,画廊是这一步的几份", async () => {
     mount(<OutputAssets items={[FIRST, SECOND]} density="panel" />);
     fireEvent.click(await screen.findByRole("button", { name: "素材 img1" }));
-    expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img1"), title: "素材 img1", gallery: stepGallery });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img1"), title: "素材 img1", assetId: "img1", gallery: stepGallery });
   });
 
   it("执行历史给了整次运行的画廊:翻的是那一组,不是这一步自己的", async () => {
-    const run = [...stepGallery, { src: assetFileUrl("vid1"), title: "素材 vid1", video: true }];
+    const run = [...stepGallery, { src: assetFileUrl("vid1"), title: "素材 vid1", video: true, assetId: "vid1" }];
     mount(<OutputAssets items={[SECOND]} density="panel" gallery={run} />);
     fireEvent.click(await screen.findByRole("button", { name: "素材 img2" }));
-    expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img2"), title: "素材 img2", gallery: run });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: assetPreviewUrl("img2"), title: "素材 img2", assetId: "img2", gallery: run });
   });
 
   it("视频由播放器的「全屏」开同一个灯箱,标着 video", async () => {
@@ -92,7 +92,8 @@ describe("检查器、执行历史里的产出", () => {
       src: assetFileUrl("vid1"),
       title: "素材 vid1",
       video: true,
-      gallery: [{ src: assetFileUrl("vid1"), title: "素材 vid1", video: true }],
+      assetId: "vid1",
+      gallery: [{ src: assetFileUrl("vid1"), title: "素材 vid1", video: true, assetId: "vid1" }],
     });
   });
 });

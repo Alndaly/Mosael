@@ -69,7 +69,7 @@ describe("附件分流", () => {
     expect(screen.getByRole("button", { name: "shot.png" }).querySelector("img")).toHaveAttribute("src", "/thumb/a1");
     //: 灯箱里给的是预览地址(HEIC 原图浏览器解不了),画廊是这条消息挂着的图和视频。
     fireEvent.click(screen.getByRole("button", { name: "shot.png" }));
-    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a1", title: "shot.png", gallery: [{ src: "/preview/a1", title: "shot.png" }] });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a1", title: "shot.png", assetId: "a1", gallery: [{ src: "/preview/a1", title: "shot.png", assetId: "a1" }] });
   });
 
   it("读不了的类型明确拒绝,而不是静默丢掉", async () => {

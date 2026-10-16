@@ -118,7 +118,7 @@ describe("一格一份", () => {
     expect(describedText(tiles()[0]).startsWith("1024×1536")).toBe(true);
     expect(screen.queryByRole("button", { name: "看大图:s" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "看大图:a" }));
-    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a", title: "a", gallery: [{ src: "/preview/a", title: "a" }] });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a", title: "a", assetId: "a", gallery: [{ src: "/preview/a", title: "a", assetId: "a" }] });
     expect(onActivate).not.toHaveBeenCalled();
     fireEvent.click(tiles()[1]);
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ id: "s" }));

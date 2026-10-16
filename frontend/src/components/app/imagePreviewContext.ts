@@ -15,6 +15,15 @@ export type ImagePreviewItem = {
    *  Esc、层级这几件事就要各写一遍,而它们已经在这儿处理过了(包括那条「关掉之后
    *  还接管一会儿点击」的坑)。 */
   video?: boolean;
+  /**
+   * 这一项是**素材库里的哪一份**(有没有)。给了,灯箱顶上就多一颗「保存到本地」,点了按这个 id
+   * 走 `/assets/{id}/file` 拿**原始文件**;不给(笔记正文里的图、内嵌浏览器的截图、任务失败的整页
+   * 截图 —— 那些压根没有素材)就不摆,免得点一下只存下一个转好的预览。
+   *
+   * 图那一项的 `src` 是后端转好的**预览**地址(HEIC 这类原图浏览器解不了),所以保存不能拿 `src`
+   * 去下载 —— 必须知道是哪一份素材(见 components/app/image-preview.tsx)。
+   */
+  assetId?: string;
 };
 
 export type ImagePreviewState = ImagePreviewItem & {

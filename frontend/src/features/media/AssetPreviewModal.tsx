@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowLeft, Check, Copy, Maximize2 } from "lucide-react";
+import { ArrowLeft, Check, Copy, Download, Maximize2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { assetFileUrl, assetPreviewUrl, getAsset, type Asset } from "@/api/client";
@@ -16,6 +16,7 @@ import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { AssetLineageList } from "@/features/media/AssetLineage";
 import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
+import { saveAssetToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import { assetKindKey } from "@/lib/assetKinds";
 import { DocumentReader } from "@/features/media/DocumentReader";
@@ -58,9 +59,9 @@ export function AssetPreviewModal({
   asset: Asset | null;
   onClose: () => void;
   /**
-   * 这一份能做的事(下载、改名、打标签、设为参考图、删除……),和卡片的 ⋯ / 右键同一组。头部前三个摆成按钮,其余收进 ⋯。
+   * 这一份能做的事(改名、打标签、设为参考图、转 GIF、分离音轨、删除……),和卡片的 ⋯ / 右键同一组。头部前三个摆成按钮,其余收进 ⋯。
    * 此前详情里一个操作都没有:从 ⌘K、深链、通知跳过来看完想改名、删掉,只能关掉再去几百张的网格里找(体检 UM-13)。
-   * 不给就不画(这张弹窗在很多只读的地方也挂着)。只对打开的那一份给,顺着「来自」点进去看的出处不给。
+   * 不给就只剩弹窗自带的那颗「保存到本地」(见下面 headerActions)。只对打开的那一份给,顺着「来自」点进去看的出处不给。
    */
   actions?: (asset: Asset) => MenuAction[];
 }) {
@@ -111,6 +112,19 @@ export function AssetPreviewModal({
     if (!open && !isImagePreviewOpen) onClose();
   };
 
+  //: **每一份素材的详情里都有「保存到本地」。** 此前这一颗只有素材管理页那颗(以及 AI 工作台的音频结果):
+  //: 从 ⌘K、通知、对话附件、工具结果、画板参考槽点开看完想存下来,得先自己知道去素材库翻出同一张。
+  //:
+  //: 摆在**弹窗自己**身上,不要求每个调用方记得传 —— 以后新开一个入口自动就有。调用方那一组里
+  //: 已经有一条同名的(素材管理页给的就是它)就只留一条:头一排只有三个位子,重复的那条会把
+  //: 它后面的「改名」「打标签」挤进 ⋯。
+  //:
+  //: 存的是**正在看的这一份**(顺着「来自」点进去看的出处也一样),走 `/file` 取原始字节。
+  const headerActions: MenuAction[] = [
+    { label: t("assetSaveLocal"), icon: <Download />, onSelect: () => saveAssetToDisk(shown) },
+    ...(actions && shown.id === asset.id ? actions(asset) : []).filter((action) => action.label !== t("assetSaveLocal")),
+  ];
+
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className={cn("w-[min(1040px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0", shown.kind === "audio" ? "h-[min(480px,86dvh)] md:w-[min(880px,calc(100vw-32px))]" : shown.kind === "document" ? "h-[min(900px,90dvh)] md:w-[min(1480px,calc(100vw-32px))]" : "h-[min(720px,86dvh)]")}>
@@ -129,7 +143,7 @@ export function AssetPreviewModal({
             <Badge variant="secondary">{kindLabel}</Badge>
             <Badge variant="outline">{t(assetOriginKey(shown))}</Badge>
             {showsContainsAi(shown) && <Badge variant="outline">{t("mediaSourceContainsAi")}</Badge>}
-            {actions && shown.id === asset.id && <DetailActions actions={actions(asset)} label={t("studioActions")} />}
+            <DetailActions actions={headerActions} label={t("studioActions")} />
           </div>
         </header>
         <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(200px,1fr)_minmax(0,180px)] md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,1fr)]">
@@ -143,7 +157,7 @@ export function AssetPreviewModal({
               <button
                 type="button"
                 className="group/zoom relative grid h-full min-h-0 w-full min-w-0 cursor-zoom-in place-items-center border-0 bg-transparent p-4"
-                onClick={() => openImagePreview({ src, title: shown.name })}
+                onClick={() => openImagePreview({ src, title: shown.name, assetId: shown.id })}
               >
                 <img className="h-full min-h-0 w-full min-w-0 object-contain" src={src} alt={shown.name} />
                 <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-ui-xs text-white opacity-0 transition-opacity duration-160 group-hover/zoom:opacity-100 group-focus-visible/zoom:opacity-100">

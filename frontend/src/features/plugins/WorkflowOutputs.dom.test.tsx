@@ -96,7 +96,8 @@ describe("最近的产出", () => {
       fireEvent.click(within(tile("a1")).getByRole("button", { name: "viewFullSizeOf" }));
       expect(openImagePreview).toHaveBeenLastCalledWith({
         src: "preview://a1", title: "产出 a1",
-        gallery: [{ src: "preview://a1", title: "产出 a1" }, { src: "preview://a3", title: "产出 a3" }],
+        assetId: "a1",
+        gallery: [{ src: "preview://a1", title: "产出 a1", assetId: "a1" }, { src: "preview://a3", title: "产出 a3", assetId: "a3" }],
       });
     });
     fireEvent.click(within(tile("a2")).getByRole("button", { name: /modelShowHiddenPreview/ }));

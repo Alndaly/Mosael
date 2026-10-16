@@ -87,13 +87,13 @@ describe("点开引用", () => {
   it("图片走灯箱,给的是预览地址", async () => {
     apiCall.mockResolvedValue({ id: "a1", name: "图", kind: "image" });
     await click({ kind: "asset", id: "a1", name: "图" });
-    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a1", title: "图" });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: "/preview/a1", title: "图", assetId: "a1" });
   });
 
   it("视频走原文件,标着 video", async () => {
     apiCall.mockResolvedValue({ id: "v1", name: "片", kind: "video" });
     await click({ kind: "asset", id: "v1", name: "片" });
-    expect(openImagePreview).toHaveBeenCalledWith({ src: "/file/v1", title: "片", video: true });
+    expect(openImagePreview).toHaveBeenCalledWith({ src: "/file/v1", title: "片", video: true, assetId: "v1" });
   });
 
   it("没有画面的素材(音频、文档)就地打开素材详情 —— 不把人从对话里带走", async () => {

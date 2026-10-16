@@ -498,10 +498,11 @@ describe("工作流库", () => {
       fireEvent.click(within(tiles[1]).getByRole("button", { name: "viewFullSizeOf" }));
       expect(openImagePreview).toHaveBeenCalledWith({
         src: "preview://a1", title: "产出 a1",
+        assetId: "a1",
         gallery: [
-          { src: "file://v1", title: "产出 v1", video: true },
-          { src: "preview://a1", title: "产出 a1" },
-          { src: "preview://a2", title: "产出 a2" },
+          { src: "file://v1", title: "产出 v1", video: true, assetId: "v1" },
+          { src: "preview://a1", title: "产出 a1", assetId: "a1" },
+          { src: "preview://a2", title: "产出 a2", assetId: "a2" },
         ],
       });
     });

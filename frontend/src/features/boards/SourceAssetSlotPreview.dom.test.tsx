@@ -59,6 +59,7 @@ describe("生成节点的参考素材预览", () => {
       src: "/files/video-1",
       title: "参考视频",
       video: true,
+      assetId: "video-1",
     });
   });
 });
