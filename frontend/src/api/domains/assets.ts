@@ -264,6 +264,96 @@ export function denoiseAsset(assetId: string, body: { engine?: string; strength?
   return api<Job>(`/api/assets/${assetId}/denoise`, { method: "POST", body: JSON.stringify(body) });
 }
 
+/** 清除元数据任务的那一种(后端 `domain/assets/scrub/task.JOB_KIND`)。按它列任务就能查「这份素材还在清吗」。 */
+export const SCRUB_JOB_KIND = "scrub_metadata";
+
+/**
+ * 清除元数据(ADR 0062)。默认那一趟只动**你自己的隐私**(地点、设备、账号、封面、数据轨,以及
+ * `ffprobe` 看不见的 SEI / AAC 帧内 / `compressorname` 那三层);`provenance` 是**单独一个开关、默认关**。
+ *
+ * 产出是一份**新的**派生素材:画面和声音逐字节等于原片,原素材一个字节不动。排成任务(`JobOut`,
+ * 进度 / 取消在任务中心),任务结果里有新素材 id、整套对账文本、十道门、清掉的计数。
+ */
+export function startScrub(assetId: string, provenance = false): Promise<Job> {
+  return api<Job>(`/api/assets/${encodeURIComponent(assetId)}/scrub`, {
+    method: "POST",
+    body: JSON.stringify({ provenance }),
+  });
+}
+
+/**
+ * 这份素材上一次清除元数据的对账文本。**没清过是 200 + `status: "none"`**,不是 404 ——
+ * 「还没清过」是一次正常的回答(和镜头表同一个态度)。
+ *
+ * `asset_id` 是**这份素材**:新产出那份干净素材自己那份对账就落在它的文件名上(后端把报告写在源文件
+ * 旁边);从源素材(原片)上读也一样读得到最近一次留下的那份。交付方按「干净素材 → 源素材」的顺序问
+ * 一次就够(见 `features/media/ScrubMetadata` 的 `useScrubReport`)。
+ */
+export function getScrubReport(assetId: string): Promise<ScrubReport> {
+  return api<ScrubReport>(`/api/assets/${encodeURIComponent(assetId)}/scrub-report`);
+}
+
+/** 「清除元数据」的选项 —— 目前只有那一个开关(后端 `ScrubAssetRequest`)。 */
+export type ScrubAssetRequest = components["schemas"]["ScrubAssetRequest"];
+
+/** `GET /assets/{id}/scrub-report` 的回答。没清过时 `status` 是 `"none"`、`markdown` 是空串。 */
+export type ScrubReport = components["schemas"]["ScrubReportOut"];
+
+/**
+ * 一次清除的**结果**(任务 `result` 里那一份):新素材 id、源素材 id、整套对账 Markdown、十道门逐条、
+ * 门禁是否全过、清掉了什么(计数)、这一次有没有开 provenance,以及没做到的那几条。
+ *
+ * 后端发的是裸 dict(`domain/assets/scrub/task.removed_counts`),这里是**唯一**把它读成类型的地方。
+ */
+export interface ScrubOutcome {
+  /** 新的干净素材。 */
+  asset_id: string;
+  /** 被清的那一份(一个字节没动)。 */
+  source_asset_id: string;
+  /** 整套对账 Markdown([`getScrubReport`] 读的就是同一份)。 */
+  report: string;
+  gates: ScrubGate[];
+  gates_ok: boolean;
+  removed: ScrubRemoved;
+  provenance: boolean;
+  warnings?: string[];
+}
+
+/** 十道门里的一道(后端 `domain/assets/scrub/gates.Gate`)。`name` 是后端给的一句中文说明。 */
+export interface ScrubGate {
+  id: string;
+  name: string;
+  ok: boolean;
+  detail?: string;
+  evidence?: Record<string, unknown>;
+}
+
+/** 清掉了什么的计数(后端 `removed_counts`);认不得的键不动,`0` 是「没有」不是「没查」。 */
+export type ScrubRemoved = Record<string, number | undefined>;
+
+/** 任务结果里那一份「清除元数据」的结果;不是这个形状(别的任务、老数据)时回 null。 */
+export function scrubOutcomeOf(result: unknown): ScrubOutcome | null {
+  const value = result as Record<string, unknown> | null | undefined;
+  if (!value || typeof value !== "object") return null;
+  if (typeof value.asset_id !== "string" || !value.asset_id) return null;
+  if (!Array.isArray(value.gates)) return null;
+  return {
+    asset_id: value.asset_id,
+    source_asset_id: typeof value.source_asset_id === "string" ? value.source_asset_id : "",
+    report: typeof value.report === "string" ? value.report : "",
+    gates: value.gates.filter((one): one is ScrubGate => {
+      const gate = one as Record<string, unknown> | null;
+      return gate !== null && typeof gate === "object" && typeof gate.id === "string";
+    }),
+    gates_ok: value.gates_ok !== false,
+    removed: (value.removed && typeof value.removed === "object" ? value.removed : {}) as ScrubRemoved,
+    provenance: value.provenance === true,
+    ...(Array.isArray(value.warnings)
+      ? { warnings: value.warnings.filter((one): one is string => typeof one === "string") }
+      : {}),
+  };
+}
+
 /** Create a new GIF asset without mutating the source video. */
 export function convertVideoToGif(
   assetId: string,

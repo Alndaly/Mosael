@@ -15,6 +15,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { AssetLineageList } from "@/features/media/AssetLineage";
+import { ScrubActionButton, ScrubMetadataPanel, useScrubRun } from "@/features/media/ScrubMetadata";
 import { ShotBreakdownPanel } from "@/features/media/ShotBreakdownPanel";
 import { assetOriginKey, showsContainsAi } from "@/lib/assetOrigin";
 import { saveAssetToDisk } from "@/lib/download";
@@ -75,6 +76,11 @@ export function AssetPreviewModal({
   //: 左栏播放器现在在第几秒 —— 右栏的节奏条据此高亮当前镜(ADR 0061 §5)。播放器自己的 `at` 报上来,
   //: 不另开一路时间状态;换一份素材就归零。
   const [playhead, setPlayhead] = React.useState(0);
+  //: 「清除元数据」(ADR 0062)那一份状态:**整份详情只拿一次**,头部那颗按钮和右栏那一块读的是同一条
+  //: 任务(两处各拉一次列表,两边会在轮询之间看到不同的进度)。不是视频时它自己什么都不做。
+  const scrub = useScrubRun(asset);
+  //: 那个确认面板开着没有 —— 由头部那颗按钮开、面板自己关。
+  const [scrubOpen, setScrubOpen] = React.useState(false);
   // 顺着「来自」点进去看的出处:栈顶是正在看的那一份,「返回上一份」退一格。换了一份素材就清空。
   // 点的那一刻取一次就够(不进查询缓存):这张弹窗在很多地方是独立挂的,不该为了它要求外面有查询上下文。
   const [trail, setTrail] = React.useState<Asset[]>([]);
@@ -86,6 +92,7 @@ export function AssetPreviewModal({
     setCopied(false);
     setSeekTo(null);
     setPlayhead(0);
+    setScrubOpen(false);
   }, [shownId]);
 
   if (!asset) return <Dialog open={false} onOpenChange={(open) => !open && onClose()} />;
@@ -152,7 +159,15 @@ export function AssetPreviewModal({
             <Badge variant="secondary">{kindLabel}</Badge>
             <Badge variant="outline">{t(assetOriginKey(shown))}</Badge>
             {showsContainsAi(shown) && <Badge variant="outline">{t("mediaSourceContainsAi")}</Badge>}
-            <DetailActions actions={headerActions} label={t("studioActions")} />
+            <DetailActions
+              actions={headerActions}
+              label={t("studioActions")}
+              pinned={
+                shown.kind === "video"
+                  ? <ScrubActionButton asset={shown} run={scrub} open={scrubOpen} onOpenChange={setScrubOpen} />
+                  : null
+              }
+            />
           </div>
         </header>
         <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(200px,1fr)_minmax(0,180px)] md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,1fr)]">
@@ -265,6 +280,8 @@ export function AssetPreviewModal({
                 onSeek={(seconds) => setSeekTo((now) => ({ seconds, seq: (now?.seq ?? 0) + 1 }))}
               />
             )}
+            {/* 清除元数据(ADR 0062)跑完之后的那几样出口:打开新素材 / 看对账 / 十道门 / 清掉了什么。 */}
+            <ScrubMetadataPanel asset={shown} run={scrub} onOpenAsset={openSource} />
           </div>
         </div>
       </DialogContent>
@@ -272,12 +289,22 @@ export function AssetPreviewModal({
   );
 }
 
-/** 头部那一排:前三个(下载、改名、打标签)摆成按钮,其余收进 ⋯ —— 和卡片的菜单同一组,不另起一套。 */
-function DetailActions({ actions, label }: { actions: MenuAction[]; label: string }) {
-  const shown = actions.filter((action) => !action.destructive).slice(0, 3);
+/**
+ * 头部那一排:前三个(下载、改名、打标签)摆成按钮,其余收进 ⋯ —— 和卡片的菜单同一组,不另起一套。
+ *
+ * `pinned` 是**详情自己带的那一颗**(视频的「清除元数据…」):它排在「保存到本地」前面 ——
+ * 这份素材上"把它交出去"的两个动作挨着。**它也占那一排的三个位子之一**(见下面那两句注释):
+ * 视频上是「清除元数据 / 保存到本地 / <调用方的第一个动作>」,图片上是原来那三个。
+ */
+function DetailActions({ actions, label, pinned }: { actions: MenuAction[]; label: string; pinned?: React.ReactNode }) {
+  //: `pinned` 是一颗**真的**会渲染出来的按钮时它占一个位子(视频);渲染成 `null` 时(图片、音频、
+  //: 文档)不占 —— 否则那三个位子里会空掉一个,「打标签」被白白挤进 ⋯。
+  const slots = pinned ? 2 : 3;
+  const shown = actions.filter((action) => !action.destructive).slice(0, slots);
   const rest = actions.filter((action) => !shown.includes(action));
   return (
     <div data-asset-detail-actions="" className="ml-auto flex flex-wrap items-center gap-1">
+      {pinned}
       {shown.map((action) => (
         //: 摆成按钮的那几个照样说得出为什么点不了(只读成员,见 MenuAction.disabledReason):菜单里写在条目下面,这里悬停说。
         <Hint key={action.label} disabledReason={action.disabledReason}>

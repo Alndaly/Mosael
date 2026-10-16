@@ -197,6 +197,21 @@ export const shotKeys = {
 };
 
 /**
+ * 清除元数据(ADR 0062)。**一份素材一份对账**:取数只有一种键。
+ *
+ * `report` 挂在 `assets` 前缀下 —— 清除任务做完时任务中心按目录里的 `affects: assets` 整片作废,
+ * 这一份跟着刷,详情页开着的时候「查看对账」自己就有内容了。
+ *
+ * `pending` 是**这条工作区里还在跑的清除任务**(素材详情据此显示「进行中」,弹窗关掉再打开也算数),
+ * 和镜头表那份(`shotKeys.pending`)同一个态度:它第一段不叫 `jobs`,而是自己按 1.5 秒问一遍,
+ * 刚排上那一下由发起方显式作废。
+ */
+export const scrubKeys = {
+  report: (assetId: string) => ["assets", "scrub-report", assetId] as const,
+  pending: (workspaceId: string) => ["scrub-jobs", workspaceId] as const,
+};
+
+/**
  * 笔记。列表、主题、搜索选择器、附件选择器、引用卡都挂在 `lists(ws)` 下 —— 保存、删除、恢复之后
  * 失效它一次就全部覆盖。此前同一份「按关键词列笔记」在 `note-picker` 与 `note-attach` 两个键族里,
  * 只有一处会被失效,另一处在挂着的时候看的是旧的。

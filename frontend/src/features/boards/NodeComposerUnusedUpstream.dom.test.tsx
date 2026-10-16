@@ -12,7 +12,12 @@ import type { BoardItem, GenerationOption } from "@/api/client";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
-vi.mock("@tanstack/react-query", () => ({
+const actualQuery = vi.hoisted(() => vi.importActual<typeof import("@tanstack/react-query")>("@tanstack/react-query"));
+vi.mock("@tanstack/react-query", async () => ({
+  //: 这一段是整个模块的替身,列出来的才是真的。`QueryClientContext`(真的那一份)也列一份 ——
+  //: 素材详情里那几块(镜头、「清除元数据」)靠它判断"有没有查询上下文",少了它连渲染都不行。
+  QueryClientContext: (await actualQuery).QueryClientContext,
+
   useQuery: () => ({ data: [] }),
   useQueries: ({ combine }: { combine: (results: unknown[]) => unknown }) => combine([]),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),

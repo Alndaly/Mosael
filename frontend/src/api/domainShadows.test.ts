@@ -53,6 +53,12 @@ const KEPT_BY_HAND: Record<string, string> = {
     "这十五个字段此刻和 f5_models.status() 一致,而这份一致**由两边的人手工维持** —— " +
     "补上 response_model 之后这一条就能撤掉。",
   "workflows.ts:WorkflowGraph": "工作流图也是裸 dict(graph),同 boards 的账。",
+  "assets.ts:ScrubOutcome":
+    "清除元数据那条任务的 `result` 在后端是裸 dict(`domain/assets/scrub/task._body` 里现拼的那个)," +
+    "十道门 / 计数 / warnings 的形状由 domain/assets/scrub 定,接口不为它再开一个 response_model;" +
+    "生成出来是 {[key: string]: unknown},手写这一份是为了在界面上拿回类型(见 ScrubMetadata)。",
+  "assets.ts:ScrubGate":
+    "同上:十道门里的一道来自 `gates.Gate.as_dict()`,是那个裸 dict 里的一项。",
 };
 
 function domainFiles(): string[] {

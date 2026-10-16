@@ -18,6 +18,12 @@ vi.mock("@/api/client", () => ({
   getShotMotionTrack: async () => ({ asset_id: "clip-asset", status: "none", hz: 0, points: 0, values: [] }),
   startShotBreakdown: async () => ({}),
   listJobs: async () => [],
+  //: 「清除元数据」(ADR 0062)那一块自己取数;它有自己的测试(ScrubMetadata.dom.test.tsx)。
+  //: 这里只要求它别干扰"详情页有哪几块"这件事:没有清除任务,就没有那一块。
+  SCRUB_JOB_KIND: "scrub_metadata",
+  getScrubReport: async () => ({ asset_id: "clip-asset", status: "none", markdown: "" }),
+  scrubOutcomeOf: () => null,
+  startScrub: async () => ({}),
 }));
 
 //: 「存成笔记」走它自己的中文案表和笔记查询,和这里要测的预览层次无关。

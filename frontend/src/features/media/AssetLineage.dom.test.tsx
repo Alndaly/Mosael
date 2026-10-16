@@ -11,12 +11,18 @@ import { describe, expect, it, vi } from "vitest";
 const getAsset = vi.fn();
 const getAssetLineage = vi.fn();
 
-vi.mock("@/api/client", () => ({
+vi.mock("@/api/client", async (original) => ({
+  ...(await original<typeof import("@/api/client")>()),
   assetFileUrl: (id: string) => `/file/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   fetchWaveform: async () => ({ peaks: [] }),
   getAsset: (id: string) => getAsset(id),
   getAssetLineage: (id: string) => getAssetLineage(id),
+  //: 「清除元数据」那一块(ADR 0062)也挂在详情里;它有自己的测试(ScrubMetadata.dom.test.tsx),
+  //: 这里只要它别插话:没有清除任务,就没有那一块。
+  listJobs: async () => [],
+  getScrubReport: async () => ({ asset_id: "x", status: "none", markdown: "" }),
+  startScrub: async () => ({}),
 }));
 vi.mock("@/features/entities/AssetEntities", () => ({ AssetEntitiesList: () => null }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
