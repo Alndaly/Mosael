@@ -5,7 +5,7 @@ import { fieldDataType, normalizeDataType, type DataType } from "@/features/node
 import type { PromptMode } from "@/lib/generationCapabilities";
 import { inputPortPath, outputPortName } from "@/features/workflows/portNames";
 import { bodyKey, declaredFieldNames, type ScopePath } from "@/features/workflows/scope";
-import { readSourceAssets } from "@/features/workflows/sourceAssetLines";
+import { readSourceAssets } from "@/lib/sourceAssetLines";
 
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、

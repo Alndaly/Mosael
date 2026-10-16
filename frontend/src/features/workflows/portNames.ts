@@ -2,7 +2,7 @@ import type { GenerationOption, WorkflowGraph } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { canTakeUpstream } from "@/features/nodeForms/fieldTypes";
 import type { ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
-import { sourceLineName } from "@/features/workflows/sourceAssetLines";
+import { sourceLineName } from "@/lib/sourceAssetLines";
 import { generationParameterLabel } from "@/lib/generationParameterLabels";
 
 /**

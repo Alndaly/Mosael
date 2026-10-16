@@ -1,15 +1,17 @@
 /** @vitest-environment jsdom */
 /**
- * 大模型节点「要模型看的图片」的紧凑格子(AssetGridField)。
+ * 「一次挑一组素材」的那一个共用格子(AssetGridField)。
  *
- * 值是一串逗号分隔的素材 id,**顺序就是发给模型的顺序**。这里钉住:
- * - 格子按值的顺序渲染;× 移除写回新串;拖完(dnd-kit 的 dragEnd)新顺序写回。
- * - 点上传格开文件选择、拖文件到字段上走同一个上传入口(只收图片,一次一个)。
- * - 满 8 张:上传格、素材库格都不出现。
- * - 素材库格打开 AssetGridPicker:多选、角标标先后,确认把选择(按挑的顺序)写回。
- * - 进度不占格子:格子下面一行小字(在传第 i/n 个、失败给重试/取消)。
+ * **两种值编码由声明决定**,这里两种都钉住:
+ * - 逗号分隔的素材 id 串(大模型节点那一格,**顺序就是发给模型的顺序**);
+ * - 一行一条 `素材id:角色`(声明了 `lines` + `entry_labels: "source_roles"`:生成节点的「输入素材」)
+ *   —— 写回去的必须是**行的列表**,角色挂在每一份上。
  *
- * 绑定那半(接上游 / `{{上游}}`)由外层 NodeConfigForm 裹,这里不测。
+ * 还钉住:格子按值的顺序渲染;× 移除;拖完(dnd-kit 的 dragEnd)新顺序写回;上传(收哪几类由 `media`
+ * 说);满上限两格虚线格消失;素材库格开 AssetGridPicker(按 `media` 筛)多选、角标标先后、确认写回;
+ * 角色角标点开换角色;自动来的那几处引用单独一行(× 进排除清单、模型不收就说、不是那类素材就标)。
+ *
+ * 绑定那半(接上游 / `{{上游}}`、`{{…}}` 那一行)由外层 NodeConfigForm 裹,这里不测。
  */
 import React from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -65,7 +67,12 @@ vi.mock("@dnd-kit/sortable", async (importOriginal) => {
 });
 
 vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
+  //: 插值那两句按**真模板**给:只回 key 的话 `.replace("{kind}", …)` 什么也换不着,
+  //: 而这两条要看的正是「说的是哪一类素材 / 哪个角色」。
+  useI18n: () => (key: string) =>
+    key === "wfGenAutoSourcesWrongKind" ? "不是{kind},不会发送"
+    : key === "wfGenAutoSourcesRejected" ? "这个模型不接受{role},不会被送进去"
+    : key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
@@ -114,7 +121,11 @@ vi.mock("@/lib/assetQueries", () => ({
   }),
 }));
 
-import { AssetGridField } from "@/features/nodeForms/AssetGridField";
+import { AssetGridField, assetGridMax, assetGridRoles } from "@/features/nodeForms/AssetGridField";
+import { SOURCE_ROLES } from "@/lib/sourceFrames";
+
+//: 这些纯函数只做「声明 → 控件参数」的翻译,文案原样还回来就够断言了。
+const keyText = (key: string) => key as never;
 
 //: jsdom 里没有排版:网格量到的宽度给一个能放下几格的数,滚动区给一个高度(和 AssetGridPicker 自己的测试同一套)。
 const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
@@ -148,10 +159,62 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function renderField(value: unknown) {
+/** 大模型节点那一格的声明:只收图片、值是一串逗号分隔的素材 id、上限 8。 */
+function renderField(value: unknown, media: readonly string[] | null = ["image"]) {
   const onChange = vi.fn();
-  const view = render(<AssetGridField value={value} workspaceId="w1" max={8} onChange={onChange} />);
+  const view = render(
+    <AssetGridField value={value} workspaceId="w1" media={media} max={8} onChange={onChange} />,
+  );
   return { onChange, ...view };
+}
+
+/** 生成节点「输入素材」那一格的声明:一行一条 `素材id:角色`,角色来自模型描述符。 */
+const ROLES = [
+  { value: "first_frame", label: "首帧", accepted: true, limit: 1 },
+  { value: "reference_image", label: "参考图", accepted: true, limit: 2 },
+  { value: "reference_video", label: "参考视频", accepted: false, limit: 1 },
+];
+
+function renderLines({
+  value,
+  roles = ROLES,
+  defaultRole = "reference_image",
+  refs = [],
+  excluded = [],
+  roleOverrides = {},
+  variables = [],
+  max = 3,
+}: {
+  value: unknown;
+  roles?: Array<{ value: string; label: string; accepted?: boolean; limit?: number; slots?: readonly string[] }> | null;
+  defaultRole?: string;
+  refs?: Array<{ path: string; label: string; assetId: string | null }>;
+  excluded?: string[];
+  roleOverrides?: Record<string, string>;
+  variables?: string[];
+  max?: number;
+}) {
+  const onChange = vi.fn();
+  const onExcludedChange = vi.fn();
+  const onRoleOverrideChange = vi.fn();
+  const view = render(
+    <AssetGridField
+      value={value}
+      workspaceId="w1"
+      lines
+      roles={roles}
+      defaultRole={defaultRole}
+      max={max}
+      refs={refs}
+      excluded={excluded}
+      roleOverrides={roleOverrides}
+      onRoleOverrideChange={onRoleOverrideChange}
+      onExcludedChange={onExcludedChange}
+      variables={variables}
+      onChange={onChange}
+    />,
+  );
+  return { onChange, onExcludedChange, onRoleOverrideChange, ...view };
 }
 
 /** 带**自动来的引用**那一块渲染(见 workflows/referencedImages:提示词里引用到的图)。 */
@@ -172,6 +235,7 @@ function renderAuto({
     <AssetGridField
       value={value}
       workspaceId="w1"
+      media={["image"]}
       max={max}
       refs={refs}
       excluded={excluded}
@@ -252,7 +316,7 @@ describe("上传与上限", () => {
     expect(onChange).toHaveBeenCalledWith("img-a,fresh-1");
   });
 
-  it("把文件拖到字段上 = 上传;不是图片不收、就地说原因", () => {
+  it("把文件拖到字段上 = 上传;media 不声明的那几类不收、就地说原因", () => {
     const { container } = renderField("");
     const field = container.querySelector("[data-asset-grid]")!;
     const image = new File(["x"], "drop.png", { type: "image/png" });
@@ -262,6 +326,20 @@ describe("上传与上限", () => {
     fireEvent.drop(field, { dataTransfer: { files: [video], types: ["Files"] } });
     expect(uploadMock.reject).toHaveBeenCalled();
     expect(uploadMock.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("media 声明了 image + video:视频也收(实体保存那一格挂参考图就是两种都要)", () => {
+    const { container } = renderField("", ["image", "video"]);
+    expect(container.querySelector<HTMLInputElement>("[data-asset-grid-chooser]")!.accept).toBe("image/*,video/*");
+    const video = new File(["x"], "clip.mp4", { type: "video/mp4" });
+    fireEvent.drop(container.querySelector("[data-asset-grid]")!, { dataTransfer: { files: [video], types: ["Files"] } });
+    expect(uploadMock.start).toHaveBeenCalledWith(video, expect.any(Function));
+    expect(uploadMock.reject).not.toHaveBeenCalled();
+  });
+
+  it("没声明 media 的格子:图片 / 视频 / 音频都收", () => {
+    const { container } = renderField("", null);
+    expect(container.querySelector<HTMLInputElement>("[data-asset-grid-chooser]")!.accept).toBe("image/*,video/*,audio/*");
   });
 
   it("满 8 张:上传格、素材库格都不出现", () => {
@@ -333,8 +411,9 @@ describe("自动来的引用(「引用即发送」)", () => {
   it("静态就知道不是图片的(引用了视频素材):就地说它不会发送", () => {
     const { container } = renderAuto({ refs: [{ path: "clip.asset_id", label: "一段片 · 素材", assetId: "clip-v" }] });
     const one = chip(container, "clip.asset_id")!;
-    expect(one.querySelector("[data-auto-image-skipped]")).not.toBeNull();
-    expect(one.textContent).toContain("wfAssetGridAutoNotImage");
+    const skipped = one.querySelector("[data-auto-image-skipped]")!;
+    expect(skipped).not.toBeNull();
+    expect(skipped.textContent).toContain("kindVideo");
   });
 
   it("手动挑的加引用来的超过上限:当场说清,而不是等运行时报「最多 8 张」", () => {
@@ -375,5 +454,135 @@ describe("素材库挑图", () => {
     fireEvent.click(screen.getAllByRole("option")[0]);
     fireEvent.click(document.querySelector("[data-asset-grid-confirm]")!);
     expect(onChange).toHaveBeenCalledWith("img-b");
+  });
+});
+
+describe("一行一条 `素材id:角色`(生成节点的「输入素材」)", () => {
+  const tileRoles = (container: HTMLElement) =>
+    [...container.querySelectorAll("[data-asset-tile]")].map((tile) => tile.getAttribute("data-asset-tile-role"));
+
+  it("值是行的列表,每一份挂着自己的角色;写回的也是**行的列表**(不是逗号串)", () => {
+    const { container, onChange } = renderLines({ value: ["img-a:first_frame", "img-b:reference_image"] });
+    expect(container.querySelector("[data-asset-grid]")!.getAttribute("data-asset-grid-mode")).toBe("lines");
+    expect(tileIds(container)).toEqual(["img-a", "img-b"]);
+    expect(tileRoles(container)).toEqual(["first_frame", "reference_image"]);
+    fireEvent.click(container.querySelector("[data-asset-tile='img-a'] button[aria-label]")!);
+    //: × 移除第一份:写回的是列表,角色原样跟在值后面。
+    expect(onChange).toHaveBeenCalledWith(["img-b:reference_image"]);
+  });
+
+  it("没写角色的那一行**原样留着**(后端按种类给默认,这里不替它猜)", () => {
+    const { container, onChange } = renderLines({ value: ["img-a", "img-b:first_frame"] });
+    expect(tileRoles(container)).toEqual([null, "first_frame"]);
+    //: 换第一份的角色:值变成 `id:角色`,第二行一个字节都不动。
+    fireEvent.click(container.querySelector("[data-role-badge='']")!);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "首帧" }));
+    expect(onChange).toHaveBeenCalledWith(["img-a:first_frame", "img-b:first_frame"]);
+  });
+
+  it("角色角标:点开是声明里那几种角色,选一个就把这一份的角色换掉", () => {
+    const { container, onChange } = renderLines({ value: ["img-a:reference_image"] });
+    expect(container.querySelector("[data-role-badge='reference_image']")!.textContent).toContain("参考图");
+    fireEvent.click(container.querySelector("[data-role-badge='reference_image']")!);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "首帧" }));
+    expect(onChange).toHaveBeenCalledWith(["img-a:first_frame"]);
+  });
+
+  it("模型收不下的角色在菜单里标出来,但**照样列着**(换一个收得下的就能发)", () => {
+    const { container } = renderLines({ value: ["img-a:reference_image"] });
+    fireEvent.click(container.querySelector("[data-role-badge='reference_image']")!);
+    const items = screen.getAllByRole("menuitemradio");
+    expect(items.map((one) => one.textContent)).toEqual(["首帧", "参考图", "参考视频wfAssetGridRoleUnsupported"]);
+  });
+
+  it("**没有**角色声明的格子不长角标(三个 asset_ids 那一类)", () => {
+    const { container } = renderLines({ value: ["img-a"], roles: null });
+    expect(container.querySelector("[data-role-badge]")).toBeNull();
+  });
+
+  it("自动来的那一份也有角色角标:默认是声明里的那个,改一下记在 `<字段>_roles`", () => {
+    const { container, onRoleOverrideChange } = renderLines({
+      value: [],
+      refs: [REF],
+    });
+    const chip = container.querySelector("[data-auto-image-ref='pic.asset_id']")!;
+    expect(chip.getAttribute("data-auto-image-role")).toBe("reference_image");
+    fireEvent.click(chip.querySelector("[data-role-badge='reference_image']")!);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "首帧" }));
+    expect(onRoleOverrideChange).toHaveBeenCalledWith("pic.asset_id", "first_frame");
+  });
+
+  it("自动来的那一份按改过的角色发(`roleOverrides`)", () => {
+    const { container } = renderLines({ value: [], refs: [REF], roleOverrides: { "pic.asset_id": "first_frame" } });
+    expect(
+      container.querySelector("[data-auto-image-ref='pic.asset_id']")!.getAttribute("data-auto-image-role"),
+    ).toBe("first_frame");
+  });
+
+  it("模型不收这个角色:明说不会被送进去", () => {
+    const { container } = renderLines({
+      value: [],
+      refs: [REF],
+      roles: [{ value: "first_frame", label: "首帧", accepted: true, limit: 1 }, { value: "reference_image", label: "参考图", accepted: false, limit: 1 }],
+    });
+    const rejected = container.querySelector("[data-auto-image-rejected]")!;
+    expect(rejected).not.toBeNull();
+    expect(rejected.textContent).toBe("这个模型不接受参考图,不会被送进去");
+  });
+
+  it("每个角色能挂几份 / 槽位叫什么:写在格子下面(描述符的 source_limits / source_labels)", () => {
+    const { container } = renderLines({
+      value: [],
+      roles: [{ value: "reference_image", label: "参考图", accepted: true, limit: 9, slots: ["人物", "背景"] }],
+    });
+    const notes = container.querySelector("[data-asset-grid-role-notes]")!;
+    expect(notes).not.toBeNull();
+    expect(notes.textContent).toContain("wfGenSourceMultiHint");
+    expect(notes.textContent).toContain("wfGenSourceSlotNames");
+  });
+
+  it("能接上游输出:一行「再加一份」的输入,挑完接在末尾并带上默认角色", async () => {
+    const { container, onChange } = renderLines({
+      value: ["img-a:first_frame"],
+      variables: ["{{up.asset_id}}"],
+    });
+    const row = container.querySelector("[data-asset-grid-ref]")!;
+    expect(row).not.toBeNull();
+    const trigger = row.querySelector('[role="combobox"]')!;
+    //: 这是一个组合框(挑上游输出用的是它):点开而不是像下拉那样按回车。
+    fireEvent.click(trigger);
+    const options = await screen.findAllByRole("option");
+    expect(options.map((one) => one.textContent).join(" ")).toContain("asset_id");
+    fireEvent.click(options[0]);
+    expect(onChange).toHaveBeenCalledWith(["img-a:first_frame", "{{up.asset_id}}:reference_image"]);
+  });
+});
+
+describe("声明 → 控件参数(纯函数)", () => {
+  it("`entry_labels` 不是 `source_roles` 就没有角色词表(那三个 asset_ids 不长得角标)", () => {
+    expect(assetGridRoles(undefined, undefined, keyText)).toBeNull();
+    expect(assetGridRoles("generation_parameters", undefined, keyText)).toBeNull();
+  });
+
+  it("词表就是 lib/sourceFrames 那一份;收不收由**模型事实**说,认不出模型就不下结论", () => {
+    const roles = assetGridRoles(
+      "source_roles",
+      { accepted: ["reference_image"], limits: { reference_image: 9 }, slots: { reference_image: ["人物"] } },
+      keyText,
+    )!;
+    expect(roles.map((one) => one.value)).toEqual([...SOURCE_ROLES]);
+    expect(roles.find((one) => one.value === "reference_image")).toMatchObject({
+      label: "genReferenceImage", accepted: true, limit: 9, slots: ["人物"],
+    });
+    expect(roles.find((one) => one.value === "first_frame")!.accepted).toBe(false);
+    //: 还没认出模型(`accepted: null`):一个都不标。
+    const unknown = assetGridRoles("source_roles", { accepted: null }, keyText)!;
+    expect(unknown.every((one) => one.accepted === undefined)).toBe(true);
+  });
+
+  it("上限:带角色的格子按每个角色能挂几份**加起来**,没角色的格子还是 8", () => {
+    expect(assetGridMax(null)).toBe(8);
+    expect(assetGridMax(assetGridRoles("source_roles", { accepted: ["reference_image"], limits: { reference_image: 9 } }, keyText))).toBe(9);
+    expect(assetGridMax(assetGridRoles("source_roles", { accepted: ["first_frame", "last_frame"] }, keyText))).toBe(2);
   });
 });

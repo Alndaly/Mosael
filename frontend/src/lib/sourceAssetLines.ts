@@ -9,38 +9,30 @@
  * 但**让用户直接写这段文本不行**。角色名要背(first_frame 还是 firstFrame?),冒号要记,
  * 写错了不报错 —— 后端拿不到角色就按默认走,于是"我明明挂了尾帧"的片子里没有尾帧。
  *
- * 所以界面按角色一行一格,这里只管两边的翻译。往返要**稳**:解析再序列化必须回到原样,
- * 否则每打开一次检查器,配置就被悄悄改一次,而 diff 里全是噪音。
+ * 所以界面按角色一格一格挂(工作流里是共用的素材格子控件,见 nodeForms/AssetGridField),
+ * 这里只管两边的翻译。往返要**稳**:解析再序列化必须回到原样,否则每打开一次检查器,配置就被
+ * 悄悄改一次,而 diff 里全是噪音。
+ *
+ * ## 为什么住在 `lib/`
+ *
+ * 值编码这件事有两个消费方:工作流这一侧(画布上的输入口、就绪检查)和那一格**控件**
+ * (nodeForms/AssetGridField —— 大模型节点那格也用它)。功能模块之间不许互相引用
+ * (棘轮 featureBoundaries),所以编码住在这里两边都够得着。角色词表只有 lib/sourceFrames 那一份
+ * (`SOURCE_ROLES` + `ROLE_COPY`)—— 控件里不抄第二张。
  */
 import type { MessageKey } from "@/app/messages";
+import { ROLE_COPY, SOURCE_ROLES } from "@/lib/sourceFrames";
 
-/** 素材角色在检查器里的排列顺序。和后端 ai/providers/base.SOURCE_ROLES 同一套。 */
-export const SOURCE_ROLE_ORDER = [
-  "first_frame",
-  "last_frame",
-  "reference_image",
-  "reference_video",
-  "reference_audio",
-  "source_video",
-  "first_clip",
-  "driving_audio",
-  "mask",
-] as const;
+/** 角色 → 它在界面上叫什么(文案 key)。由 lib/sourceFrames 那一张表推出来,不另抄一份。 */
+export const SOURCE_ROLE_LABELS: Record<string, MessageKey> = Object.fromEntries(
+  (SOURCE_ROLES as readonly string[]).map((role) => [role, ROLE_COPY[role as keyof typeof ROLE_COPY].label]),
+);
 
-export type SourceRole = (typeof SOURCE_ROLE_ORDER)[number];
-
-/** 素材角色叫什么。**只此一处**:检查器里按角色一行一格的标题,和画布上那一行的输入口(workflows/portNames)读的是它。 */
-export const SOURCE_ROLE_LABELS: Record<SourceRole, MessageKey> = {
-  first_frame: "genFirstFrame",
-  last_frame: "genLastFrame",
-  reference_image: "genReferenceImage",
-  reference_video: "genReferenceVideo",
-  reference_audio: "genReferenceAudio",
-  source_video: "genSourceVideo",
-  first_clip: "genFirstClip",
-  driving_audio: "genDrivingAudio",
-  mask: "genMask",
-};
+/** 一个角色在界面上叫什么;认不出的角色**照原样写出来** —— 不静默换成别的词。 */
+export function roleLabel(t: (key: MessageKey) => string, role: string): string {
+  const key = SOURCE_ROLE_LABELS[role];
+  return key ? t(key) : role;
+}
 
 /**
  * 配置里第 `index` 行在界面上叫什么:它的角色名;同一个角色挂了几行时带上是第几个(「参考图 2」)—— 同一个节点上
@@ -50,7 +42,7 @@ export function sourceLineName(t: (key: MessageKey) => string, value: unknown, i
   if (!Array.isArray(value)) return "";
   const roles = value.map((line) => parseSourceAssetText(String(line))[0]?.role ?? "");
   const role = roles[index] ?? "";
-  const key = (SOURCE_ROLE_LABELS as Record<string, MessageKey | undefined>)[role];
+  const key = SOURCE_ROLE_LABELS[role];
   if (!key) return "";
   const same = roles.filter((one) => one === role).length;
   if (same < 2) return t(key);

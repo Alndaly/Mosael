@@ -1,12 +1,14 @@
 /** @vitest-environment jsdom */
 /**
- * **「引用即发送」在生成节点检查器里看得见**:提示词里 `{{…}}` 引用到的素材,运行时会以「参考图」
- * 并进「输入素材」(后端 binding.with_referenced_assets —— 同一份声明 `ref_assets_from` /
- * `ref_assets_role`)。钉住:
+ * **生成节点的「输入素材」走的是共用的格子控件**(`editor: "asset_grid"`),不是一个自绘的控件。
  *
- * - 引用到的素材单独一行摆出来,写着引用的**来源**(「节点 · 输出」),和按角色手填的那几格分开;
- * - **默认角色是「参考图」**,而且改得动:改完记在 `source_assets_roles`(`引用路径:角色`);
- * - × 去掉一处 → 写进 `source_assets_excluded`(运行时的取图认它);已经排除过的还看得见,点回来即可;
+ * 这一格的值是一行一条 `素材id:角色`(声明 `lines` + `entry_labels: "source_roles"`),所以这里钉住:
+ *
+ * - 画出来的是那个格子(`[data-asset-grid]`,mode = lines),不是按角色两条下拉成行的自绘控件;
+ * - 每份素材带**角色角标**,挑一份写回的是**行的列表** `id:角色`;
+ * - **「引用即发送」**在格子里看得见:提示词里 `{{…}}` 引用到的素材单独一行,写着引用的来源;
+ * - 默认角色是声明里的「参考图」,改得动(记在 `source_assets_roles`,一条一个 `引用路径:角色`);
+ * - × 去掉一处 → 写进 `source_assets_excluded`(运行时的取图认它);已排除过的还看得见,点回来即可恢复;
  * - **模型不收这个角色时明说**「不会被送进去」—— 沉默地丢掉和硬塞都不许;
  * - 静态就知道是哪一份素材、而它不是这个角色要的那一类(引用到一段视频):当场标出来。
  */
@@ -44,7 +46,6 @@ vi.mock("@/lib/assetQueries", async (importOriginal) => ({
     text: "", search: vi.fn(), items: [], isLoading: false, isError: false, error: null,
     hasNextPage: false, isFetchingNextPage: false, fetchNextPage: vi.fn(), refetch: vi.fn(),
   }),
-  //: 按角色一行一格那几格要一份素材清单(useNodeFieldOptions 读它的 `.items`)。
   useAllAssetCards: () => ({ items: [], isSuccess: true, hasNextPage: false, isFetchingNextPage: false, isError: false, fetchNextPage: vi.fn() }),
 }));
 
@@ -76,10 +77,10 @@ const GEN: WorkflowNodeType = {
     kind: { type: "string", required: true, options: ["image", "video", "audio"] },
     prompt: { type: "template" },
     parameters: { type: "object" },
-    //: 声明和 NODE_TYPES 里那一份一致(type / lines / entry_labels / ref_assets_from / ref_assets_role / edited_by)。
+    //: 声明和 NODE_TYPES 里那一份一致(type / lines / entry_labels / editor / ref_assets_* / edited_by)。
     source_assets: {
-      type: "template", lines: true, entry_labels: "source_roles",
-      ref_assets_from: ["prompt"], ref_assets_role: "reference_image",
+      type: "template", lines: true, entry_labels: "source_roles", editor: "asset_grid",
+      ref_assets_from: ["prompt"], ref_assets_role: "reference_image", ref_assets_gate: "generation_source_role",
     },
     source_assets_excluded: { type: "list", edited_by: "source_assets" },
     source_assets_roles: { type: "list", edited_by: "source_assets" },
@@ -164,31 +165,40 @@ function renderGen({
   return { onChange };
 }
 
-const autoBlock = () => document.querySelector("[data-auto-sources]");
-const autoRow = (path = "pic.asset_id") => document.querySelector(`[data-auto-source-ref='${path}']`);
+const grid = () => document.querySelector("[data-asset-grid]");
+const autoBlock = () => document.querySelector("[data-auto-images]");
+const autoChip = (path = "pic.asset_id") => document.querySelector(`[data-auto-image-ref='${path}']`);
+const roleOf = (path = "pic.asset_id") => autoChip(path)?.getAttribute("data-auto-image-role");
 
-/** 等模型清单到齐:**只在认出模型之后才下结论**(收不收这个角色、能换成哪几种)。
- *  角色格子出现了就说明模型认出来了(它按模型的能力铺)。 */
-const modelReady = () => screen.findAllByText("wfGenSourcePlaceholder");
+/** 换一处自动引用的角色(点开角标、选一项)—— 和用户在界面上点两下是同一条路。 */
+async function pickRole(path: string, label: string) {
+  fireEvent.click(autoChip(path)!.querySelector("[data-role-badge]")!);
+  await userEvent.click(await screen.findByRole("menuitemradio", { name: label }));
+}
 
-describe("生成节点检查器里自动同步的那一处引用", () => {
-  it("提示词里引用到的素材单独一行摆出来,名字是引用的来源,默认角色是「参考图」", async () => {
+describe("生成节点的「输入素材」:共用的格子控件", () => {
+  it("画出来的是那个格子(一行一条 `素材id:角色`),不是按角色两条下拉的自绘控件", () => {
     renderGen({ parameterKeys: ["reference_image"] });
-    await modelReady();
-    expect(autoRow()).not.toBeNull();
-    expect(autoRow()!.textContent).toContain("素材");
-    expect(autoRow()!.getAttribute("data-auto-source-on")).toBe("true");
-    //: 角色可改,当前是声明里的默认那个(「参考图」)。
-    expect(autoRow()!.textContent).toContain("genReferenceImage");
+    const field = grid()!;
+    expect(field).not.toBeNull();
+    expect(field.getAttribute("data-asset-grid-mode")).toBe("lines");
+    //: 这一格的声明认角色,所以有角色角标;手改的是同一份值(不是另一套控件写出来的)。
+    expect(field.querySelector("[data-auto-image-ref='pic.asset_id']")).not.toBeNull();
+  });
+
+  it("提示词里引用到的素材单独一行摆出来,名字是引用的来源,默认角色是「参考图」", () => {
+    renderGen({ parameterKeys: ["reference_image"] });
+    expect(autoChip()).not.toBeNull();
+    expect(autoChip()!.textContent).toContain("素材");
+    expect(autoChip()!.getAttribute("data-auto-image-on")).toBe("true");
+    //: 默认角色是声明里的那个(「参考图」),展示在角标上。
+    expect(roleOf()).toBe("reference_image");
+    expect(autoChip()!.querySelector("[data-role-badge]")!.textContent).toBe("genReferenceImage");
   });
 
   it("改角色:记在 source_assets_roles 里(一条一个 `引用路径:角色`)", async () => {
     const { onChange } = renderGen({ parameterKeys: ["reference_image", "first_frame"] });
-    await modelReady();
-    fireEvent.keyDown(autoRow()!.querySelector('[role="combobox"]')!, { key: "Enter" });
-    const options = await screen.findAllByRole("option");
-    const target = options.find((one) => one.textContent?.includes("genFirstFrame"))!;
-    await userEvent.click(target);
+    await pickRole("pic.asset_id", "genFirstFrame");
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
         config: expect.objectContaining({ source_assets_roles: ["pic.asset_id:first_frame"] }),
@@ -197,10 +207,21 @@ describe("生成节点检查器里自动同步的那一处引用", () => {
     );
   });
 
-  it("× 去掉一处:把引用路径写进那一格的排除清单", async () => {
+  it("改回声明里的默认角色:那一格记账里就不留它了(没记的就是默认)", async () => {
+    const { onChange } = renderGen({
+      parameterKeys: ["reference_image", "first_frame"],
+      config: { source_assets_roles: ["pic.asset_id:first_frame"] },
+    });
+    await pickRole("pic.asset_id", "genReferenceImage");
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ config: expect.objectContaining({ source_assets_roles: [] }) }),
+      undefined,
+    );
+  });
+
+  it("× 去掉一处:把引用路径写进那一格的排除清单", () => {
     const { onChange } = renderGen({ parameterKeys: ["reference_image"] });
-    await modelReady();
-    fireEvent.click(autoRow()!.querySelector("[data-auto-source-toggle]")!);
+    fireEvent.click(autoChip()!.querySelector("[data-auto-image-toggle]")!);
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
         config: expect.objectContaining({ source_assets_excluded: ["pic.asset_id"] }),
@@ -209,44 +230,49 @@ describe("生成节点检查器里自动同步的那一处引用", () => {
     );
   });
 
-  it("已经排除过的那一处还看得见,点回来即可恢复", async () => {
+  it("已经排除过的那一处还看得见,点回来即可恢复", () => {
     renderGen({ parameterKeys: ["reference_image"], config: { source_assets_excluded: ["pic.asset_id"] } });
-    await modelReady();
-    expect(autoRow()!.getAttribute("data-auto-source-on")).toBe("false");
+    expect(autoChip()!.getAttribute("data-auto-image-on")).toBe("false");
   });
 
   it("模型不收参考图:明说不会被送进去,不是沉默", async () => {
     renderGen({ parameterKeys: ["first_frame"] });
-    await modelReady();
-    const rejected = autoRow()!.querySelector("[data-auto-sources-rejected]");
-    expect(rejected).not.toBeNull();
-    expect(rejected!.textContent).toContain("genReferenceImage");
-    expect(rejected!.textContent).toContain("不会被送进去");
+    const rejected = await waitFor(() => {
+      const found = autoChip()!.querySelector("[data-auto-image-rejected]");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(rejected.textContent).toContain("genReferenceImage");
+    expect(rejected.textContent).toContain("不会被送进去");
   });
 
   it("模型什么角色都不收(认不出的模型):也说清", async () => {
     renderGen({ parameterKeys: [] });
-    //: 一个角色都不收:没有角色格子可等,直接等那一句。
-    await waitFor(() => expect(autoRow()!.querySelector("[data-auto-sources-rejected]")).not.toBeNull());
-    expect(autoRow()!.querySelector('[role="combobox"]')).toBeNull();
+    const rejected = await waitFor(() => {
+      const found = autoChip()!.querySelector("[data-auto-image-rejected]");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    //: 一个角色都不收:角标照在(声明里有角色),但点开的菜单里每一项都标着「这个模型不收」。
+    expect(rejected.textContent).toContain("不会被送进去");
   });
 
-  it("引用到的是一段视频:当场标出它不是这个角色要的那类素材", async () => {
+  it("引用到的是一段视频:当场标出它不是这个角色要的那类素材", () => {
     renderGen({
       parameterKeys: ["reference_image"],
       assets: { clip: "clip-v" },
       config: { prompt: "看看这段 {{clip.asset_id}}" },
     });
-    await modelReady();
-    const wrong = autoRow("clip.asset_id")!.querySelector("[data-auto-sources-wrong-kind]");
+    const wrong = autoChip("clip.asset_id")!.querySelector("[data-auto-image-skipped]")!;
     expect(wrong).not.toBeNull();
-    expect(wrong!.textContent).toContain("kindVideo");
-    expect(wrong!.textContent).toContain("不会发送");
+    expect(wrong.textContent).toContain("kindVideo");
+    expect(wrong.textContent).toContain("不会发送");
   });
 
   it("提示词里没有引用:那一块不出现", async () => {
     renderGen({ parameterKeys: ["reference_image"], config: { prompt: "随便画一张" } });
-    await screen.findByText("wfGenSourcePlaceholder");
+    await screen.findByText("wfGenModel");
+    expect(grid()).not.toBeNull();
     expect(autoBlock()).toBeNull();
   });
 });

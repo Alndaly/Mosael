@@ -6,7 +6,7 @@ import { fetchWorkflowFieldOptions, type AssetCard } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
-import { AssetGridField, type AutoImageRef } from "@/features/nodeForms/AssetGridField";
+import { AssetGridField, assetGridMax, assetGridRoles, type AssetGridModel, type AutoImageRef } from "@/features/nodeForms/AssetGridField";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -27,6 +27,8 @@ import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField"
 import { StartParamsField } from "@/features/nodeForms/StartParamsField";
 import { useAllAssetCards } from "@/lib/assetQueries";
 import { entryNamedOptions } from "@/lib/entryNames";
+import { readSourceAssets, writeSourceAssets } from "@/lib/sourceAssetLines";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,6 +95,9 @@ export interface ConfigSpec {
    *  (`source_assets`,每行 `素材:角色`)声明它;没有它的那一格并进来的就是素材本身(大模型节点那一格)。
    *  用户改过的角色记在 `<这一格>_roles` 里(见 workflows/nodeInspectorGenerate)。 */
   ref_assets_role?: string;
+  /** 自动并进这一格之前要过的**能力闸**(后端 NODE_TYPES 的 `ref_assets_gate`):模型不收这个角色就不并。
+   *  闸的判据由宿主按所选模型算(见 `assetGridModels`),这一格只说明「有这么一道闸」。 */
+  ref_assets_gate?: string;
   /** 值是**行的列表**(生成节点的输入素材,每行 `素材:角色`)。画布上每一行是一个输入口(见 workflows/portNames)。 */
   lines?: boolean;
   /** 这一格里每一项(对象的键、列表的一行)叫什么从哪里取:`generation_parameters` / `source_roles`(见 workflows/portNames)。 */
@@ -185,6 +190,9 @@ export interface NodeFieldOptions {
  * 类型里、可调用工作流要排掉自己),这里不据此分支。
  */
 const NO_HOST_NEEDS: { assets?: boolean } = {};
+
+/** 没有自动来的引用时那个空清单:引用不变,控件里的 memo 才不会每次渲染都重算一遍。 */
+const NO_REFS: readonly AutoImageRef[] = [];
 
 export function useNodeFieldOptions({
   specs,
@@ -320,6 +328,7 @@ export function NodeConfigForm({
   binding,
   renderOwnField,
   autoImages = {},
+  assetGridModels = {},
   references = false,
   compact = false,
 }: {
@@ -345,6 +354,10 @@ export function NodeConfigForm({
   /** 「引用即发送」自动来的那几处引用,按字段给(见 workflows/referencedImages)。只有宿主认识这张图,
    *  所以由它算好交下来;这一层只管把它摆到对应那一格的控件上。 */
   autoImages?: Record<string, readonly AutoImageRef[]>;
+  /** 「一次挑一组素材」那一格(声明 `editor: "asset_grid"`)按**所选模型**算出来的角色事实:
+   *  哪几种角色收得下(声明里的 `ref_assets_gate`)、每个角色最多几份、槽位叫什么。控件不认识模型,
+   *  所以由宿主算好交下来 —— 和 `autoImages` 同一种交法。没给 = 认不出模型(角色一律不下结论)。 */
+  assetGridModels?: Record<string, AssetGridModel>;
   /** 这个宿主里值能不能是一段 `{{上游.输出}}` 引用。工作流能(引擎对每个值都插值,循环体里的
    *  `{{loop.item.…}}` 也只能这么写);画板、插件的「试一下」不能 —— 那里的值就是字面量。
    *  能的话,挑东西的下拉在清单之外也收引用,并把上游的输出列在清单后面。 */
@@ -372,6 +385,67 @@ export function NodeConfigForm({
   //: 同组(one_of)的兜底那一格要认出来:按这一档要渲染的字段找同组。前面那格只是引用 / 接了上游时它才露出来,
   //: 而露出来的同组格和它在同一份声明里。
   const fieldSpecs = Object.fromEntries(fields);
+
+  /**
+   * **一次挑一组素材的那一格** —— 全仓只有这一个控件(后端的字段声明点名 `editor: "asset_grid"`,
+   * 见 nodeForms/AssetGridField 与后端 tests/test_asset_group_fields_use_the_shared_grid.py)。
+   *
+   * 这一层只做「声明 → 控件参数」的翻译,不认任何节点:
+   * - **值编码**:`lines` 声明了就是一行一条 `素材id:角色`(写回**行的列表**),否则是逗号分隔的素材 id 串;
+   * - **角色**:`entry_labels: "source_roles"` 的格子才有,词表从那一份声明取(lib/sourceFrames);模型收
+   *   哪几种由宿主按声明里的 `ref_assets_gate` 算好交下来(`assetGridModels`);
+   * - **媒介**:`media` 声明哪几类就只收哪几类(没声明 = 都收,带角色的格子按那个角色要的那一类);
+   * - **两份记账**:`<字段>_excluded`(点名不要的自动引用)和 `<字段>_roles`(改过角色的自动引用)
+   *   —— 和值那一格同一份行编码,一起交给宿主(一次改两格,撤销一步退回)。
+   */
+  const assetGridField = (key: string, spec: ConfigSpec, value: unknown, insertable: string[]) => {
+    //: 宿主交下来的模型事实**只在声明了能力闸的格子上作数**(`ref_assets_gate`):没声明闸的格子不按模型
+    //: 收窄 —— 它并进来的东西本来就不经闸(大模型节点那一格只是多带一张图)。
+    const model = spec.ref_assets_gate ? assetGridModels[key] : undefined;
+    const roles = assetGridRoles(spec.entry_labels, model, t);
+    const defaultRole = String(spec.ref_assets_role ?? "").trim();
+    //: 用户把哪一处自动来的引用改成了什么角色(一条一个 `引用路径:角色`)。
+    const overrides = Object.fromEntries(
+      readSourceAssets(config[`${key}_roles`])
+        .filter((one) => one.role)
+        .map((one) => [one.value, one.role]),
+    );
+    const writeOverrides = (next: Record<string, string>) =>
+      onPatchConfig(
+        key,
+        { [`${key}_roles`]: writeSourceAssets(Object.entries(next).map(([value, role]) => ({ value, role }))) },
+        false,
+      );
+    return (
+      <AssetGridField
+        value={value}
+        workspaceId={workspaceId}
+        lines={Boolean(spec.lines)}
+        roles={roles}
+        media={spec.media === undefined ? null : Array.isArray(spec.media) ? spec.media : [spec.media]}
+        defaultRole={defaultRole}
+        max={assetGridMax(roles)}
+        refs={autoImages[key] ?? NO_REFS}
+        excluded={storedIds(config[`${key}_excluded`])}
+        onExcludedChange={(next) => onPatchConfig(key, { [`${key}_excluded`]: next }, false)}
+        roleOverrides={overrides}
+        onRoleOverrideChange={
+          defaultRole
+            ? (path, role) => {
+                const next = { ...overrides };
+                //: 改回声明里的默认角色 = 不留这一条 —— 「没记在这里的就是默认」这句话要一直是真的。
+                if (role === defaultRole) delete next[path];
+                else next[path] = role;
+                writeOverrides(next);
+              }
+            : undefined
+        }
+        //: 一行一项的格子还能**手填一处上游输出**:工作流里这一格常常接的是上游那一刻给的素材。
+        variables={spec.lines && references ? insertable : []}
+        onChange={(next) => setConfig(key, next)}
+      />
+    );
+  };
 
   /** 一个配置字段的渲染。 */
   const renderField = ([key, spec]: [string, ConfigSpec]) => {
@@ -459,20 +533,11 @@ export function NodeConfigForm({
                   }
                 />
               ) : spec?.editor === "asset_grid" ? (
-                // 大模型节点「要模型看的图片」:紧凑的图片格子(挑、拖排序、直接传),由**后端的字段声明**点名
-                // (editor: "asset_grid"),不是一个手填引用的文本框。值是逗号分隔的素材 id 串;接上游
-                // (`{{上游}}`)的那一半由外面裹的绑定钮管,这里只管手动。
-                // 自动来的那几处引用(`refs`)由宿主按**同一份声明**(`ref_assets_from`)算好交下来;
-                // 去掉一处 = 写进这一格配的排除清单(`<key>_excluded`,命名约定见后端 NODE_TYPES)。
-                <AssetGridField
-                  value={value}
-                  workspaceId={workspaceId}
-                  max={8}
-                  refs={autoImages[key] ?? []}
-                  excluded={storedIds(config[`${key}_excluded`])}
-                  onExcludedChange={(next) => onPatchConfig(key, { [`${key}_excluded`]: next }, false)}
-                  onChange={(next) => setConfig(key, next)}
-                />
+                // 一次挑一组素材:紧凑的格子(挑、拖排序、直接传、自动引用单独一行),由**后端的字段声明**
+                // 点名(editor: "asset_grid"),不是一个手填引用的文本框。值是逗号分隔的素材 id 串、还是
+                // 一行一条 `素材id:角色`,由声明决定(见上面那个 assetGridField);接上游(`{{上游}}`)的那
+                // 一半由外面裹的绑定钮管,一行一项的格子还多一条「再加一份」的手填入口。
+                assetGridField(key, spec, value, insertable)
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
                 // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />

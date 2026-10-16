@@ -21,7 +21,11 @@ NODE_PORTS = ROOT.parent / "frontend" / "src" / "api" / "generated" / "workflow-
 #: `edited_by` 在其中:那一格由**别的格子的控件**一起编辑(开始节点的必填清单、大模型节点那份
 #: 「自动带上但点名不要」的排除清单),因此它自己**没有口**、也不该有个人话名字 —— 不带上它,
 #: 前端测试会拿它当一个能接上游的输入口(canTakeUpstream 读的正是这一项)。
-_PORT_SPEC_FIELDS = ("type", "editor", "lines", "entry_labels", "edited_by")
+#: `media` 也在其中:它决定那一个格子**收哪几类素材**(`editor: "asset_grid"` 那一格挑什么、
+#: 上传收什么),前端测试拿真声明断言「image+video 那格收视频」,不另抄一份。
+#: `ref_assets_role` / `ref_assets_gate` 同理:它们决定「自动并进来的那一份以什么角色发、这个模型收不收
+#: 这个角色」(那一格的控件按它们摆角色角标与那句「不会被送进去」)。
+_PORT_SPEC_FIELDS = ("type", "editor", "lines", "entry_labels", "media", "ref_assets_role", "ref_assets_gate", "edited_by")
 _LOCALES = ("zh", "en")
 
 

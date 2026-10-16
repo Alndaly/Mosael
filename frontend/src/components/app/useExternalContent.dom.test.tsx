@@ -16,7 +16,7 @@ import { NO_REFERENCES } from "@/features/agent/references";
 import { PromptEditor } from "@/features/boards/PromptEditor";
 import { NoteEditor } from "@/features/notes/NoteEditor";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
-import { parseSourceAssetText, sourceAssetText } from "@/features/workflows/sourceAssetLines";
+import { parseSourceAssetText, sourceAssetText } from "@/lib/sourceAssetLines";
 import { COMPOSE_SETTLE_MS } from "./useExternalContent";
 
 beforeAll(() => {

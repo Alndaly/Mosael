@@ -12,7 +12,7 @@ import {
   withRole,
   readSourceAssets,
   writeSourceAssets,
-} from "@/features/workflows/sourceAssetLines";
+} from "@/lib/sourceAssetLines";
 
 describe("解析", () => {
   it("认得出角色", () => {

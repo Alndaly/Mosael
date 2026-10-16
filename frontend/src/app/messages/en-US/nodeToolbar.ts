@@ -45,29 +45,36 @@ export const nodeToolbar = {
   wfAdvanced: "Advanced",
   wfAssetListAdd: "Add an asset",
   wfAssetListRemove: "Remove “{name}”",
-  //: Compact image grid for the LLM node's “images for the model” (editor: "asset_grid", see nodeForms/AssetGridField).
-  wfAssetGridUpload: "Upload an image",
+  //: The compact grid for “pick a group of media at once” (editor: "asset_grid", see nodeForms/AssetGridField) —
+  //: the LLM node's “images for the model”, the generate node's “input media” and the three `asset_ids` fields
+  //: share one control, so the wording here is **media**, not images: which kinds come in is the declaration's call.
+  wfAssetGridUpload: "Upload",
   wfAssetGridAdd: "Pick from library",
-  wfAssetGridRemove: "Remove image {n}",
-  wfAssetGridImage: "Image {n}",
-  wfAssetGridMissing: "This image is no longer in the library (it may have been deleted)",
-  wfAssetGridMax: "Up to {max} images — remove one before adding more",
+  wfAssetGridRemove: "Remove {n}",
+  wfAssetGridImage: "Item {n}",
+  wfAssetGridMissing: "This media is no longer in the library (it may have been deleted)",
+  wfAssetGridMax: "Up to {max} — remove one before adding more",
   wfAssetGridUploading: "Uploading “{name}” ({i}/{n})",
-  wfAssetGridPickTitle: "Pick images for the model",
-  wfAssetGridPickDesc: "Up to {max} images; the picking order is the order the model sees them — first picked, first seen.",
+  wfAssetGridPickTitle: "Pick the media to use",
+  wfAssetGridPickDesc: "Up to {max}; the picking order is the order they are used — first picked, first.",
   wfAssetGridPickedCount: "{n}/{max} picked",
   wfAssetGridConfirm: "Use these {n}",
-  //: The automatically included references (“a reference means it gets sent”): images referenced in the prompt
+  //: Empty state of the library dialog: nothing at all (any kind).
+  wfAssetGridNoMedia: "No media in the library yet",
+  //: The **role badge** (only on fields declaring `entry_labels: "source_roles"`: the generate node's input media).
+  wfAssetGridRole: "Role",
+  wfAssetGridRoleNone: "No role",
+  wfAssetGridRoleUnsupported: "This model does not take it",
+  wfAssetGridWrongKind: "Not the kind of media this role wants; it will not be sent",
+  //: The automatically included references (“a reference means it gets sent”): media referenced in the prompt
   //: are sent at run time, and where they come from must stay visible.
   wfAssetGridAutoTitle: "Referenced in the prompt:",
   wfAssetGridAutoHint:
-    "A reference means it gets sent: image assets referenced in the prompt (or system prompt) are sent with it " +
-    "automatically, so there is no need to pick them again here. Images only — referenced video, audio and text " +
-    "are not sent.",
+    "A reference means it gets sent: media referenced in the prompt (or system prompt) are sent with it " +
+    "automatically, so there is no need to pick them again here. Media of a kind this field does not take is not sent.",
   wfAssetGridAutoDrop: "Leave out “{name}”",
   wfAssetGridAutoRestore: "Include “{name}” automatically again",
-  wfAssetGridAutoNotImage: "Not an image; not sent",
-  wfAssetGridAutoTooMany: "Picked plus referenced is more than {max} images — remove one before running",
+  wfAssetGridAutoTooMany: "Picked plus referenced is more than {max} — remove one before running",
   wfGenModel: "Generation model",
   wfGenPromptOptional: "This model runs without a prompt; one you write is still sent.",
   wfGenModelHint: "Pick the model to generate with",
@@ -280,9 +287,15 @@ export const nodeToolbar = {
   runApprovalDone: "Decided ({decision}): the run carried on",
   runApprovalFailed: "Could not send the decision",
   runApprovalFeishuHint: "Clicking the card in Feishu does the same thing.",
+  //: Whether this run's card actually reached Feishu (see backend domain/workflows/approvals).
+  //: The hint above is only true when it did — otherwise say what happened instead of sending
+  //: people to a place where nothing arrived. The sentence is assembled in RunApprovalNotice.tsx
+  //: (the frontend t() does not interpolate); only the words live here.
   runApprovalDeliverySent: "Sent to Feishu",
   runApprovalDeliveryStationOnly: "In-app only",
   runApprovalNotDelivered: "This one never reached Feishu — decide it here in the app.",
+  //: The reason comes from backend domain/feishu/routing: each one has a different fix
+  //: (connect a bot / bind an account / change the node), so a vague "not sent" is useless.
   runApprovalReasonNone: "the node says in-app only",
   runApprovalReasonNoBot: "this workspace has no usable Feishu bot",
   runApprovalReasonNoOrigin: "this run did not come from Feishu and its requester has no Feishu binding",

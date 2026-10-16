@@ -26,7 +26,7 @@ import { canTakeUpstream } from "@/features/nodeForms/fieldTypes";
 import type { ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 import { ENTRY_NAMES, workflowPortNamer } from "@/features/workflows/portNames";
 import { declaredFieldNames } from "@/features/workflows/scope";
-import { SOURCE_ROLE_ORDER } from "@/features/workflows/sourceAssetLines";
+import { SOURCE_ROLES } from "@/lib/sourceFrames";
 import { nodePorts } from "@/features/workflows/workflowPorts";
 import { SNAPSHOT, builtinNodeCatalog, uiText, type CatalogLocale } from "@/test/nodeCatalog";
 
@@ -106,7 +106,7 @@ describe("每种内置节点", () => {
         const spec = raw as ConfigSpec;
         if (meta.type !== "start" && canTakeUpstream(spec)) inputs.push(field);
         if (spec.entry_labels === "source_roles") {
-          config[field] = [...SOURCE_ROLE_ORDER.map((role) => `{{up.asset_id}}:${role}`), "{{up.asset_ids}}:reference_image", "{{up.asset_ids}}"];
+          config[field] = [...SOURCE_ROLES.map((role) => `{{up.asset_id}}:${role}`), "{{up.asset_ids}}:reference_image", "{{up.asset_ids}}"];
           inputs.push(...(config[field] as string[]).map((_, index) => `${field}.${index}`));
         }
       }

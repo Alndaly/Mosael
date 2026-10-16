@@ -37,6 +37,7 @@ import {
 import { bodyScope, drivesDigitalHuman, extractRefs, isCodeConfig, isNestedScopeConfig } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { withDataInputBound } from "@/features/workflows/connections";
+import type { AssetGridModel } from "@/features/nodeForms/AssetGridField";
 import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSection } from "@/features/workflows/nodeInspectorGenerate";
 import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmMainSection } from "@/features/workflows/nodeInspectorLlm";
 import { referencedImages } from "@/features/workflows/referencedImages";
@@ -378,19 +379,21 @@ export function NodeInspector({
   };
 
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
-  //: 「输入素材」那一格声明的默认角色(后端 node_types 的 `ref_assets_role`)——「引用即发送」并进来的
-  //: 那一份以它发(维护者拍板:默认「参考图」)。声明没有(大模型节点那一格)就是空串:不带角色。
-  const sourceRoleDefault = String(allSpecs.source_assets?.ref_assets_role ?? "").trim();
   const gen = useGenerateNodeSection({
     node, config, generationModels,
-    autoSources: autoImages.source_assets ?? [],
     onChange, setConfig, t,
   });
-  const { genPromptMode, genSourceRoles } = gen;
-  //: 「输入素材」那几格是这里自己画的专区(不走字段声明),它要的素材清单由这里说 —— 画着几格就要,一格没有就不拉。
+  const { genPromptMode } = gen;
+  //: 「输入素材」那一格(声明 `editor: "asset_grid"`)是**通用字段渲染**铺的,但它要的东西只有这里认识:
+  //: 所选模型收得下哪几种角色(声明里 `ref_assets_gate` 那道闸)、每个角色几份、槽位名。算好交下去
+  //: —— 和「引用即发送」的 `autoImages` 同一种交法(控件不认识模型,只认识声明)。
+  const assetGridModels = React.useMemo<Record<string, AssetGridModel>>(() => {
+    const out: Record<string, AssetGridModel> = {};
+    if (node.type === "ai_generate") out.source_assets = gen.genGridRoles;
+    return out;
+  }, [node.type, gen.genGridRoles]);
   const fieldOptions = useNodeFieldOptions({
     specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId, boundValues,
-    hostNeeds: { assets: genSourceRoles.length > 0 },
   });
 
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
@@ -537,6 +540,7 @@ export function NodeInspector({
       binding={binding}
       renderOwnField={renderOwnField}
       autoImages={autoImages}
+      assetGridModels={assetGridModels}
       references
     />
   );
@@ -741,13 +745,9 @@ export function NodeInspector({
             workspaceId,
             config,
             generationModels,
-            fieldOptions,
-            variables,
-            sourceRoleDefault,
             onChange,
             setConfig,
             setTextConfig,
-            typeConfig,
             typingRun,
           })}
         {area === "config" && node.type === "llm" &&

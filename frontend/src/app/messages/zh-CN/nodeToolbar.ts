@@ -46,27 +46,35 @@ export const nodeToolbar = {
   wfAdvanced: "高级选项",
   wfAssetListAdd: "再加一份素材",
   wfAssetListRemove: "移除「{name}」",
-  //: LLM 节点「要模型看的图片」的紧凑格子(editor: "asset_grid",见 nodeForms/AssetGridField)。
-  wfAssetGridUpload: "上传图片",
+  //: 「一次挑一组素材」那一格的紧凑格子(editor: "asset_grid",见 nodeForms/AssetGridField)——
+  //: 大模型节点的「要模型看的图片」、生成节点的「输入素材」、实体保存 / 打标签 / 素材更新那三个
+  //: `asset_ids` **共用一个控件**,所以这里的文案是**素材**(不是图片):收哪几类由声明说了算。
+  wfAssetGridUpload: "上传",
   wfAssetGridAdd: "从素材库挑",
-  wfAssetGridRemove: "移除第 {n} 张",
-  wfAssetGridImage: "第 {n} 张",
-  wfAssetGridMissing: "这张图片已不在素材库里(可能已删除)",
-  wfAssetGridMax: "最多 {max} 张,先移除一张再传",
+  wfAssetGridRemove: "移除第 {n} 份",
+  wfAssetGridImage: "第 {n} 份",
+  wfAssetGridMissing: "这份素材已不在素材库里(可能已删除)",
+  wfAssetGridMax: "最多 {max} 份,先移除一份再传",
   wfAssetGridUploading: "正在上传「{name}」({i}/{n})",
-  wfAssetGridPickTitle: "挑要发给模型的图片",
-  wfAssetGridPickDesc: "最多 {max} 张;挑的顺序就是发给模型的顺序,先挑的在前。",
-  wfAssetGridPickedCount: "已挑 {n}/{max} 张",
-  wfAssetGridConfirm: "用这 {n} 张",
-  //: 自动来的那几处引用(「引用即发送」):提示词里引用了图片素材,运行时自动带上,来源要看得见。
+  wfAssetGridPickTitle: "挑要用的素材",
+  wfAssetGridPickDesc: "最多 {max} 份;挑的顺序就是它们的顺序,先挑的在前。",
+  wfAssetGridPickedCount: "已挑 {n}/{max} 份",
+  wfAssetGridConfirm: "用这 {n} 份",
+  //: 素材库挑素材弹窗的空态:一份都没有(不分种类)。
+  wfAssetGridNoMedia: "素材库里还没有素材",
+  //: **角色角标**(只在声明了 `entry_labels: "source_roles"` 的格子上出现:生成节点的「输入素材」)。
+  wfAssetGridRole: "角色",
+  wfAssetGridRoleNone: "未指定角色",
+  wfAssetGridRoleUnsupported: "这个模型不收",
+  wfAssetGridWrongKind: "不是这个角色要的那类素材,不会被送进去",
+  //: 自动来的那几处引用(「引用即发送」):提示词里引用了素材,运行时自动带上,来源要看得见。
   wfAssetGridAutoTitle: "提示词里引用到的:",
   wfAssetGridAutoHint:
-    "引用即发送:提示词(或系统提示词)里引用到的图片素材会自动和提示词一起发给模型,不用在这里再挑一遍。" +
-    "只发图片,引用到的视频、音频、文字不会发。",
-  wfAssetGridAutoDrop: "不要「{name}」这一张",
+    "引用即发送:提示词(或系统提示词)里引用到的素材会自动和提示词一起发给模型,不用在这里再挑一遍。" +
+    "不是这一格要的那类素材不会发。",
+  wfAssetGridAutoDrop: "不要「{name}」这一份",
   wfAssetGridAutoRestore: "恢复自动带上「{name}」",
-  wfAssetGridAutoNotImage: "不是图片,不会发送",
-  wfAssetGridAutoTooMany: "手动挑的加引用来的超过 {max} 张了,去掉一张再跑",
+  wfAssetGridAutoTooMany: "手动挑的加引用来的超过 {max} 份了,去掉一份再跑",
   wfGenModel: "生成模型",
   wfGenPromptOptional: "这个模型可以不写提示词;写了会一起发过去。",
   wfGenModelHint: "选择要用的生成模型",
@@ -286,9 +294,14 @@ export const nodeToolbar = {
   runApprovalDone: "已{decision}:那次运行接着往下跑了",
   runApprovalFailed: "没能批下去",
   runApprovalFeishuHint: "在飞书里点那张卡也一样。",
+  //: 「这一次到底发到飞书没有」—— 上面那句「在飞书里点那张卡也一样」**只有真发出去过时才成立**,
+  //: 所以没发出去就换成这几句,别把人支去一个什么都没有的地方(见后端 domain/workflows/approvals)。
+  //: 句子的拼法在 RunApprovalNotice.tsx 里(前端的 t() 不做插值),这里只有**词**。
   runApprovalDeliverySent: "已发到飞书",
   runApprovalDeliveryStationOnly: "仅站内",
   runApprovalNotDelivered: "这次没能发到飞书,只能在站内批。",
+  //: `not_attempted` 的原因照后端 domain/feishu/routing 的 reason 分档:每一档的**修法不同**
+  //: (去接机器人 / 去绑账号 / 去改节点上那一格),一句笼统的"没发出去"会让人挨个字段试。
   runApprovalReasonNone: "节点上写的就是「仅站内」",
   runApprovalReasonNoBot: "这个工作区还没有可用的飞书机器人",
   runApprovalReasonNoOrigin: "这次运行不是从飞书来的,发起人也没绑飞书",

@@ -44,9 +44,15 @@ export function acceptFor(kind: UploadKind | "media"): string {
   return kind === "media" ? "image/*,video/*,audio/*" : `${kind}/*`;
 }
 
-/** 「这里只收图片」那句:`kind` 是这一格要的那一种(三种都收的是 `media`)。 */
-export function wrongKindText(t: (key: MessageKey) => string, file: File, kind: UploadKind | "media"): string {
-  const noun = t(`assetUploadKind_${kind}` as MessageKey);
+/** 「这里只收图片」那句:`kind` 是这一格要的那一种(三种都收的是 `media`);要的是一种以上时给一列。 */
+export function wrongKindText(
+  t: (key: MessageKey) => string,
+  file: File,
+  kind: UploadKind | "media" | readonly UploadKind[],
+): string {
+  const noun = typeof kind === "string"
+    ? t(`assetUploadKind_${kind}` as MessageKey)
+    : kind.map((one) => t(`assetUploadKind_${one}` as MessageKey)).join(t("listSeparator"));
   return t("assetUploadWrongKind").replace("{name}", file.name || "?").replaceAll("{kind}", noun);
 }
 

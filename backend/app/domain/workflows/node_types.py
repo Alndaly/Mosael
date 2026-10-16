@@ -1054,6 +1054,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_ai_generate_source_assets",
                 "description_params": _source_assets_help(),
                 "entry_labels": "source_roles",
+                #: `editor: "asset_grid"`:和大模型节点的「要模型看的图片」是**同一个控件**
+                #: (frontend/src/features/nodeForms/AssetGridField.tsx)—— 上传格 + 素材库格 + 一格一份缩略图,
+                #: 引用来的那些单独一行。此前这一格是检查器自绘的「按角色一行两条下拉」:同一件事两套长相。
+                #: **值编码由声明决定**:这里有 `lines` + `entry_labels: "source_roles"`,所以写回去的仍是一行
+                #: 一条 `素材id:角色`;大模型那一格没有这两样,存的是逗号分隔的素材 id 串(见 AssetGridField)。
+                "editor": "asset_grid",
             },
             #: 自动并进来的那几份素材里,用户**点名不要**的:一条一个引用路径(`图.asset_id`)或素材 id。
             #: 和上面那一格配的排除清单(命名约定照大模型节点那一笔:`<那一格>_excluded`,一条一个引用路径)。
@@ -2162,7 +2168,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "name": {"type": "template", "required": True, "description": "wfNode_entity_save_name"},
             "prompt": {"type": "template", "description": "wfNode_entity_save_prompt"},
             "description": {"type": "template", "description": "wfNode_entity_save_description"},
-            "asset_ids": {"type": "template", "description": "wfNode_entity_save_asset_ids", "media": ["image", "video"]},
+            #: `editor: "asset_grid"`:一起挑好几份素材,和「要模型看的图片」同一个控件(见 AssetGridField)。
+            #: 只写 `editor`,`lines` / `entry_labels` 都不声明 —— 所以值照旧是逗号分隔的素材 id 串,也没有角色角标。
+            #: `media`:这一格挂的是参考图,**图片和视频都收**(视频当参考在这一格是合法的),所以两种都列。
+            "asset_ids": {
+                "type": "template", "description": "wfNode_entity_save_asset_ids",
+                "media": ["image", "video"], "editor": "asset_grid",
+            },
             "role": {"type": "string", "options_from": "entity_roles", "depends_on": "kind", "description": "wfNode_entity_save_role"},
             "tags": {"advanced": True, "type": "template", "description": "wfNode_entity_save_tags"},
             "if_exists": {"advanced": True, "type": "string", "default": "merge", "options": ["merge", "new"], "description": "wfNode_entity_save_if_exists"},
@@ -2337,10 +2349,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_asset_tag",
         "description": "wfNode_asset_tag_desc",
         "config": {
+            #: 挑一组要打标签的素材:`editor` 点名共用格子控件(见 AssetGridField)。
+            #: **没声明 `media`** = 什么素材都收 —— 打标签本来就不限种类(图片、视频、音频、文档都能打),
+            #: 所以这里的格子比「要模型看的图片」宽:列出来的、能传的都不止图片。
             "asset_ids": {
                 "type": "template",
                 "required": True,
                 "description": "wfNode_asset_tag_asset_ids",
+                "editor": "asset_grid",
             },
             "tags": {"type": "template", "required": True, "description": "wfNode_asset_tag_tags"},
             "mode": {
@@ -2358,7 +2374,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_asset_update",
         "description": "wfNode_asset_update_desc",
         "config": {
-            "asset_ids": {"type": "template", "required": True, "description": "wfNode_asset_update_asset_ids"},
+            #: 同上:一次改好几份素材,走共用格子控件;没声明 `media` = 什么素材都能进来改。
+            "asset_ids": {
+                "type": "template", "required": True, "description": "wfNode_asset_update_asset_ids",
+                "editor": "asset_grid",
+            },
             "name": {"type": "template", "description": "wfNode_asset_update_name"},
             "project_id": {"type": "template", "options_from": "projects", "description": "wfNode_asset_update_project_id"},
         },

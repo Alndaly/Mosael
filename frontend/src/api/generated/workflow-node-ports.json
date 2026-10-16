@@ -55,8 +55,11 @@
       },
       "source_assets": {
         "type": "template",
+        "editor": "asset_grid",
         "lines": true,
         "entry_labels": "source_roles",
+        "ref_assets_role": "reference_image",
+        "ref_assets_gate": "generation_source_role",
         "label": {
           "zh": "输入素材",
           "en": "Input media"
@@ -229,6 +232,7 @@
     "config": {
       "asset_ids": {
         "type": "template",
+        "editor": "asset_grid",
         "label": {
           "zh": "素材列表",
           "en": "Media list"
@@ -269,6 +273,7 @@
     "config": {
       "asset_ids": {
         "type": "template",
+        "editor": "asset_grid",
         "label": {
           "zh": "素材列表",
           "en": "Media list"
@@ -1164,6 +1169,10 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": [
+          "audio",
+          "video"
+        ],
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -1204,6 +1213,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -1254,6 +1264,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -1299,6 +1310,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "document",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -1850,6 +1862,11 @@
       },
       "asset_ids": {
         "type": "template",
+        "editor": "asset_grid",
+        "media": [
+          "image",
+          "video"
+        ],
         "label": {
           "zh": "素材列表",
           "en": "Media list"
@@ -2497,6 +2514,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "image",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -2552,6 +2570,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "image",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -2559,6 +2578,7 @@
       },
       "audio_asset_id": {
         "type": "template",
+        "media": "audio",
         "label": {
           "zh": "音频",
           "en": "Audio"
@@ -2893,6 +2913,9 @@
       "image_asset_ids": {
         "type": "template",
         "editor": "asset_grid",
+        "media": [
+          "image"
+        ],
         "label": {
           "zh": "要模型看的图片",
           "en": "Images for the model"
@@ -3784,6 +3807,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -3842,6 +3866,10 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": [
+          "audio",
+          "video"
+        ],
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -3880,6 +3908,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -4570,6 +4599,10 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": [
+          "audio",
+          "video"
+        ],
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -4745,6 +4778,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"
@@ -4752,6 +4786,7 @@
       },
       "audio_asset_id": {
         "type": "template",
+        "media": "audio",
         "label": {
           "zh": "音频",
           "en": "Audio"
@@ -4818,6 +4853,7 @@
     "config": {
       "asset_id": {
         "type": "template",
+        "media": "video",
         "label": {
           "zh": "素材",
           "en": "Media"

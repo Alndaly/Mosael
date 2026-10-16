@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
  * 工作流「AI 生成素材」节点里,「提示词」一格照**选中的模型**摆(描述符的 `prompt`):
@@ -20,6 +20,11 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
+//: 「从素材库挑」那个弹窗里有「看大图」,真跑要 ImagePreviewProvider(应用外壳给);这里钉住它的协议。
+vi.mock("@/components/app/image-preview", () => ({
+  useImagePreview: () => ({ openImagePreview: vi.fn(), isImagePreviewOpen: false }),
+}));
+
 import { ReactFlowProvider } from "@xyflow/react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,6 +32,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { NodeInspector } from "@/features/workflows/WorkflowsView";
 import type { WorkflowNodeType } from "@/api/client";
 
+//: jsdom 里没有排版:挑素材那个弹窗按量到的宽度算一行几格(见 useVirtualRows),
+//: 量到 0 就一格都不画 —— 给一个能放下几格的数(和 AssetGridField.dom.test.tsx 同一套)。
+const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+const clientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
 beforeAll(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Object.assign(Element.prototype, {
@@ -35,6 +44,22 @@ beforeAll(() => {
     releasePointerCapture: () => {},
     scrollIntoView: () => {},
   });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.getAttribute("role") === "listbox" ? 720 : 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.hasAttribute("data-asset-grid-scroll") ? 600 : 0;
+    },
+  });
+});
+afterAll(() => {
+  if (clientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidth);
+  if (clientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", clientHeight);
 });
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -55,7 +80,11 @@ const META = {
     kind: { type: "string", required: true, options: ["image", "video", "audio"] },
     prompt: { type: "template", label: "提示词" },
     parameters: { type: "object" },
-    source_assets: { type: "template", lines: true },
+    //: 和 NODE_TYPES 里那一份一致:一次挑一组素材的格子(声明点名),值是一行一条 `素材id:角色`。
+    source_assets: {
+      type: "template", lines: true, entry_labels: "source_roles", editor: "asset_grid",
+      ref_assets_role: "reference_image", ref_assets_gate: "generation_source_role",
+    },
     consent: { advanced: true, type: "string", options: ["yes"], label: "授权确认" },
   },
   outputs: ["asset_id"],
@@ -88,7 +117,7 @@ function renderInspector(
                group: { id: "sdxl.json", label: "sdxl", entry: "form", order: 1 }, reason: "工作流「sdxl」上已经没有这张表单了(删掉了)",
                upgrade: false, plugin_instance_id: "inst" };
     }
-    if (url.pathname.endsWith("/api/assets")) body = { items: [{ id: "a1", kind: "image", name: "产品图", original_filename: "p.png" }], next_cursor: null, total: 1 };
+    if (url.pathname.endsWith("/api/assets")) body = { items: [{ id: "a1", kind: "image", name: "产品图", original_filename: "p.png", source: "imported", derived: false, ai_generated: false, created_at: "2026-01-01T00:00:00Z", media_info: {} }], next_cursor: null, total: 1 };
     if (modelsListed && url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
       body = [{
         id: "p1:image:upscale.json", provider_profile_id: "p1", profile_name: "ComfyUI", label: "ComfyUI · 放大",
@@ -189,21 +218,24 @@ describe("AI 生成节点选的模型现在用不了(ADR 0045 修订之一)", ()
   });
 });
 
-//: 「输入素材」那几格是检查器自己画的专区,读的是字段选项里的素材清单。此前清单只在节点**声明了**
-//: asset 型字段时才拉,而生成节点一个也没有 —— 下拉永远是空的。现在由画着这几格的检查器说它要。
+//: 「输入素材」现在是**共用的格子控件**(声明点名 `editor: "asset_grid"`),素材清单由控件自己在
+//: 打开「从素材库挑」时取(useAssetSearch)—— 不再由检查器替它拉一份(此前清单只在节点**声明了**
+//: asset 型字段时才拉,而生成节点一个也没有,于是下拉永远是空的)。
 describe("AI 生成节点的输入素材", () => {
-  it("模型收参考图:那一格的下拉里有工作区素材", async () => {
+  it("模型收参考图:格子的「从素材库挑」里列着工作区素材", async () => {
     renderInspector({ parameter_keys: ["reference_image"] });
-    await waitFor(() => expect(askedPaths).toContain("/api/assets"));
-    const trigger = (await screen.findByText("wfGenSourcePlaceholder")).closest<HTMLElement>('[role="combobox"]')!;
-    fireEvent.click(trigger);
+    await waitFor(() => expect(document.querySelector("[data-asset-grid]")).not.toBeNull());
+    //: 还没打开挑素材的弹窗:不替这一格白拉一份素材清单。
+    expect(askedPaths).not.toContain("/api/assets");
+    fireEvent.click(document.querySelector("[data-add-tile]")!);
     expect(await screen.findByText("产品图")).toBeInTheDocument();
   });
 
-  it("模型不收任何素材:不去拉素材清单", async () => {
+  it("模型不收任何素材:没有「从素材库挑」可点,也就不去拉素材清单", async () => {
     renderInspector({ parameter_keys: ["seed"] });
     await waitFor(() => expect(askedPaths.some((path) => path.endsWith("/generation/options"))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(document.querySelector("[data-add-tile]")).not.toBeNull();
     expect(askedPaths).not.toContain("/api/assets");
   });
 });
