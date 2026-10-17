@@ -542,8 +542,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "capUse_modelLibrary": {"zh": "插件页上那个连接的「模型库」:看有哪些模型、下载缺的模型", "en": "The connection's Model library on the Plugins page: browse its models and download missing ones"},
     "capability_transcription": {"zh": "转写", "en": "Transcription"},
     "capability_transcription_desc": {
-        "zh": "把一段语音转成带时间的逐字稿,听写也走它。本机引擎之外,装了转写插件的也能在这里选;没定默认时用装好了运行环境的本机引擎。",
-        "en": "Turn speech into a timed transcript; dictation uses it too. Besides on-device engines, installed transcription plugins can be chosen here; with no default, an on-device engine whose runtime is installed is used.",
+        "zh": "把一段语音转成带时间的逐字稿。输入框里的语音输入默认也走它,并在「语音对话」里可以单独选。本机引擎之外,装了转写插件的也能在这里选;没定默认时用装好了运行环境的本机引擎。",
+        "en": "Turn speech into a timed transcript. Voice input follows it by default and can be set separately under Spoken replies. Besides on-device engines, installed transcription plugins can be chosen here; with no default, an on-device engine whose runtime is installed is used.",
     },
     "capUse_studioSpeech": {"zh": "AI 工作室的「音频」:念一段文字", "en": "Audio in the AI studio: read text aloud"},
     "capUse_subtitleDub": {"zh": "剪辑页字幕:「配音」", "en": "Subtitles in the editor: Dub"},

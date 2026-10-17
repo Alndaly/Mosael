@@ -8,8 +8,9 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AsrModelOut
+from app.core.db import SessionLocal
 from app.domain.permissions import ensure_deployment_admin
-from app.domain.voices import transcription
+from app.domain.voices import agent_voice, transcription
 from app.ai.runtime import asr_models
 from app.core.i18n import get_current_locale, tr, translate_fields
 
@@ -42,6 +43,21 @@ def download_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
 DICTATION_MAX_BYTES = 12 * 1024 * 1024
 
 
+def resolve_dictation_engine(owner_user_id: str | None, explicit: str = "") -> str:
+    """这一次听写用哪一家:**显式传的 > 「语音对话」里「说话输入用哪一家」 > 空(= 跟随转写默认)**。
+
+    `dictate` 是 async 端点(要 `await clip.read()`),而读库是阻塞的 —— 所以这个同步函数由它交给
+    线程池跑,不在事件循环上开会话(见 tests/test_async_routes_do_not_touch_the_database)。
+
+    这一格指向的引擎没就绪时**不在这里退回空串**:退回去等于把用户做的选择吞掉,而屏幕上还写着它。
+    把 id 原样交下去,由 capabilities.pick 带着「缺什么」拒绝 —— 和素材转写点名的规矩是同一套。
+    """
+    if explicit.strip():
+        return explicit.strip()
+    with SessionLocal() as db:
+        return agent_voice.dictation_engine(db, owner_user_id)
+
+
 @router.post("/asr/dictate")
 async def dictate(
     user: CurrentUser,
@@ -55,7 +71,12 @@ async def dictate(
     而不是在素材库里留下几十个几秒钟的 wav。识别本身仍是同一份实现(常驻 worker)。
 
     没有 workspace 参数:这段音频不属于任何工作区,它连库都不进。鉴权到"是个登录用户"为止。
+
+    `engine` 不是必填:不传就用「设置 → 智能体 → 语音对话」里「说话输入用哪一家」那一格;
+    那一格空着就跟随「转写」的默认 —— 与这一格出现之前完全一致。
     """
+    #: 读库交给线程池:这是 async 端点,不能在事件循环上查库。
+    chosen_engine = await run_in_threadpool(resolve_dictation_engine, user.id, engine)
     with tempfile.TemporaryDirectory(prefix="mosael-dictate-in-") as tmp:
         raw = Path(tmp) / (Path(clip.filename or "clip").name or "clip")
         size = 0
@@ -72,7 +93,8 @@ async def dictate(
             # 识别是阻塞的(等常驻 worker,几秒到几十秒),而这是个 async 端点:直接调会把整个事件循环
             # 卡住 —— 期间所有请求(包括别人的 SSE)都停着。交给线程池。
             text = await run_in_threadpool(
-                transcription.transcribe_clip, raw, owner_user_id=user.id, language=language, engine=engine
+                transcription.transcribe_clip, raw, owner_user_id=user.id, language=language,
+                engine=chosen_engine,
             )
             return {"text": text}
         except transcription.DictationTooLong as exc:

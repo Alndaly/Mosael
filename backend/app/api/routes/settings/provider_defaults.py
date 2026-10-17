@@ -121,7 +121,7 @@ def set_provider_default(
 
 @router.get("/settings/agent-voice", response_model=AgentVoiceOut)
 def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
-    """**我**在语音对话里用哪个音色。没设过就回一份空的(enabled=False)。
+    """**我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。
 
     和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
     十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
@@ -140,12 +140,13 @@ def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
         voice_id=row.voice_id,
         speed=row.speed,
         enabled=row.enabled,
+        asr_engine=row.asr_engine,
     )
 
 
 @router.put("/settings/agent-voice", response_model=AgentVoiceOut)
 def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentVoiceOut:
-    """设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。
+    """设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。
 
     远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。"""
     from app.domain.voices import use_cases as voice_uc
@@ -163,6 +164,7 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
             voice_id=body.voice_id,
             speed=body.speed,
             enabled=body.enabled,
+            asr_engine=body.asr_engine,
         )
     except VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -175,4 +177,5 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
         voice_id=row.voice_id,
         speed=row.speed,
         enabled=row.enabled,
+        asr_engine=row.asr_engine,
     )

@@ -1,7 +1,10 @@
-"""语音对话用哪个音色 —— **每人一份**。
+"""语音对话用哪个音色、说话输入用哪一家 —— **每人一份**。
 
 和配音的 TTS 默认分开,理由在 db.models.AgentVoicePref 上写着:配音要质量,对话要延迟,
 同一个默认同时服务两件事必然在某一边是错的。
+
+说话输入(ASR)那一格是另一件事:它听的是**用户**说的话,念的是智能体的声音,两者可以不是一套引擎。
+空 = 跟随「转写」的默认(与这一格出现之前完全一致)。
 
 立场照搬 provider_defaults:**没有部署兜底,没设就说没设**。语音回复按字符计费,替他挑一个
 他没选过的音色去念,和替他挑一个模型去回答是同一类错误。
@@ -28,6 +31,17 @@ def get_row(db: Session, user_id: str) -> AgentVoicePref | None:
     return db.get(AgentVoicePref, user_id)
 
 
+def dictation_engine(db: Session, user_id: str | None) -> str:
+    """这个人指定的说话输入引擎(能力表提供方 id);空 = 跟随「转写」的默认。
+
+    没有 user(比如内部调用不带主人)就是空 —— 不替他挑一个。
+    """
+    if not user_id:
+        return ""
+    row = get_row(db, user_id)
+    return row.asr_engine.strip() if row is not None else ""
+
+
 def upsert(
     db: Session,
     user_id: str,
@@ -40,6 +54,7 @@ def upsert(
     voice_id: str | None = None,
     speed: float = 1.0,
     enabled: bool = True,
+    asr_engine: str = "",
 ) -> AgentVoicePref:
     """建行/改行。**行创建只发生在这里**(数据归属,见 domain/ownership)。"""
     row = db.get(AgentVoicePref, user_id)
@@ -52,6 +67,8 @@ def upsert(
     row.engine_model = engine_model.strip()
     row.provider_profile_id = provider_profile_id or None
     row.voice_id = voice_id or None
+    #: 空串是**一个值**(跟随转写),不是"没改过" —— 选回跟随就要能清掉。
+    row.asr_engine = asr_engine.strip()
     # 语速给个可用区间:各家引擎对超出范围的值反应不一,有的直接拒、有的悄悄夹取。
     row.speed = min(max(float(speed), 0.5), 2.0)
     row.enabled = bool(enabled)

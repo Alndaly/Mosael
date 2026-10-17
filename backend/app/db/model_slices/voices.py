@@ -81,7 +81,7 @@ class VoiceEnrollment(Base):
 
 
 class AgentVoicePref(Base):
-    """这个人在**语音对话**里用哪个音色。
+    """这个人在**语音对话**里用哪个音色,以及说话输入用哪一家。
 
     **和配音的 TTS 默认是两件事,所以是两行配置。** 配音要的是质量:本地零样本引擎、克隆
     出来的音色,首次加载十几分钟也认了,因为那段音频要进成片。对话要的是延迟:说完一句
@@ -111,4 +111,8 @@ class AgentVoicePref(Base):
     speed: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     #: 关掉就不念 —— 有人只要说话输入,不要它出声。
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 说话输入(ASR)用哪一家:能力表的提供方 id(`builtin:funasr`、转写插件连接 id)。空 = 跟随「转写」的默认。
+    #: 它和上面的 `engine`(TTS)是两件事,所以各占一列:换念字的声音不该悄悄改掉听写用谁。
+    #: `server_default` 和迁移里那条 ALTER 保持一致:不写它,按旧列名直插一行的脚本/测试会撞 NOT NULL。
+    asr_engine: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

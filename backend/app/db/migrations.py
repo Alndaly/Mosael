@@ -1184,6 +1184,24 @@ def _migrate_tts_pip_index() -> None:
         conn.execute(text("ALTER TABLE tts_config ADD COLUMN pip_index VARCHAR(200) NOT NULL DEFAULT ''"))
 
 
+def _migrate_agent_voice_dictation_engine() -> None:
+    """agent_voice_prefs 新增 asr_engine 列:语音对话里「说话输入用哪一家」。
+
+    create_all 只建新表,不给**已有**表补列 —— 不补的话,升级上来的库第一次读这份配置就
+    `no such column: asr_engine`。空串 = 跟随「转写」的默认,那正是升级前所有行的行为,
+    所以**不回填任何引擎名**:替人存一个他没选过的引擎,和替他挑一个没选过的音色同类。
+    """
+    inspector = inspect(engine)
+    if "agent_voice_prefs" not in set(inspector.get_table_names()):
+        return
+    if "asr_engine" in {c["name"] for c in inspector.get_columns("agent_voice_prefs")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE agent_voice_prefs ADD COLUMN asr_engine VARCHAR(100) NOT NULL DEFAULT ''"
+        ))
+
+
 def _migrate_provider_capabilities() -> None:
     """加列迁移:provider_profiles 增加 capability_ids(档案级能力覆盖,None=沿用 vendor 默认)。"""
     inspector = inspect(engine)
@@ -9906,6 +9924,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_permission_modes,
                 _drop_member_perm_overrides,
                 _migrate_tts_pip_index,
+                # 说话输入(ASR)的引擎可以单独选。**必须在 SCHEMA 之前** —— create_all 不会给已有的表
+                # 补列,而 SCHEMA 之后 ORM 上的 AgentVoicePref 已经指望 asr_engine 存在了。
+                _migrate_agent_voice_dictation_engine,
                 _migrate_agent_thinking_level,
                 _migrate_agent_session_plan,
                 _migrate_agent_session_groups,

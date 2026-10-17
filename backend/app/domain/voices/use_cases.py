@@ -64,11 +64,15 @@ def choose_agent_voice(
     voice_id: str | None,
     speed: float,
     enabled: bool,
+    asr_engine: str = "",
 ):
-    """设**我自己**的对话音色(只有这一档,没有部署默认)。
+    """设**我自己**的对话音色,以及说话输入用哪一家(只有这一档,没有部署默认)。
 
     点了配音库里的一把嗓子(只有能复刻的远端引擎这样点,ADR 0037)时,存之前问清楚:我能用这把嗓子、它声明过是谁的、
     我这个账号同意过上传 —— 没同意就 409,设置页弹确认框;不然要等到对话里第一次开口才失败。
+
+    说话输入那一格不在这里验就绪:验它要起子进程探测本机引擎,而这是每次保存都会走的路。界面上只列已经就绪的;
+    哪天真用不了,听写那一刻由 capabilities.pick 带着原因拒绝(见 routes/asr 与 domain/voices/transcription)。
     """
     from app.domain.voices import agent_voice, remote
 
@@ -92,6 +96,7 @@ def choose_agent_voice(
         voice_id=voice_id,
         speed=speed,
         enabled=enabled,
+        asr_engine=asr_engine,
     )
 
 

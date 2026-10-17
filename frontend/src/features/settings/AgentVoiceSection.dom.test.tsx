@@ -21,16 +21,35 @@ const saved = {
   voice_id: null,
   speed: 1,
   enabled: false,
+  //: 说话输入的引擎。空 = 跟随转写默认(此前听写没有自己的开关)。
+  asr_engine: "",
 };
 let pref = saved;
 const setAgentVoice = vi.fn();
 const fetchAgentVoicePreview = vi.fn();
 const playBlob = vi.fn();
 
+/** 转写的候选(能力表):只有 missing 为空的那几家能选。 */
+const transcriptionChoices = [{
+  capability: "transcription",
+  label: "转写",
+  description: "",
+  current: null,
+  automatic: "builtin:funasr",
+  defaultable: true,
+  options: [
+    { id: "builtin:funasr", name: "FunASR(本机)", builtin: true, missing: [] },
+    { id: "builtin:whisperx", name: "WhisperX(本机)", builtin: true, missing: [] },
+    { id: "builtin:sherpa-onnx", name: "sherpa-onnx(本机,轻量)", builtin: true, missing: ["缺运行环境"] },
+  ],
+  used_by: [],
+}];
+
 vi.mock("@/api/client", () => ({
   getAgentVoice: () => Promise.resolve(pref),
   listTtsEngines: () => Promise.resolve([{ id: "edge", label: "Edge", ready: true }]),
   listTtsVoices: () => Promise.resolve([{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }]),
+  listCapabilityChoices: () => Promise.resolve(transcriptionChoices),
   setAgentVoice: (body: unknown) => setAgentVoice(body),
   fetchAgentVoicePreview: (body: unknown) => fetchAgentVoicePreview(body),
 }));
@@ -69,6 +88,57 @@ describe("语音对话的自动保存", () => {
 
     await waitFor(() => expect(setAgentVoice).toHaveBeenCalledTimes(1));
     expect(setAgentVoice.mock.calls[0][0]).toMatchObject({ speed: 1.5, enabled: false });
+  });
+});
+
+describe("说话输入用哪一家", () => {
+  beforeEach(() => {
+    pref = saved;
+    setAgentVoice.mockReset();
+    //: 回包就是存下的那份(和后端一样):状态跟着服务端走,不会因为测试桩回旧值而反复保存。
+    setAgentVoice.mockImplementation(async (body: Record<string, unknown>) => ({ ...saved, ...body }));
+    Element.prototype.scrollIntoView = vi.fn();
+    Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {} });
+  });
+
+  it("默认跟随转写,只列就绪的转写候选", async () => {
+    renderSection();
+    const trigger = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    expect(trigger.textContent).toContain("agentVoiceDictationFollow");
+
+    const user = userEvent.setup();
+    await user.click(trigger);
+    expect(await screen.findByRole("option", { name: "WhisperX(本机)" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "FunASR(本机)" })).toBeTruthy();
+    //: 缺运行环境的候选不出现 —— 列出来只会让人选中之后才失败。
+    expect(screen.queryByRole("option", { name: "sherpa-onnx(本机,轻量)" })).toBeNull();
+  });
+
+  it("选中即存;重进这一页还在", async () => {
+    const view = renderSection();
+    const user = userEvent.setup();
+    const trigger = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name: "WhisperX(本机)" }));
+
+    await waitFor(() => expect(setAgentVoice).toHaveBeenCalled());
+    expect(setAgentVoice.mock.calls.at(-1)?.[0]).toMatchObject({ asr_engine: "builtin:whisperx", enabled: false });
+
+    //: 重进页面 = 用服务端此刻存着的那份重新挂载。
+    view.unmount();
+    pref = { ...saved, asr_engine: "builtin:whisperx" };
+    renderSection();
+    const reopened = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    await waitFor(() => expect(reopened.textContent).toContain("WhisperX(本机)"));
+  });
+  it("重进页面时不会把存着的那一格又写回去", async () => {
+    pref = { ...saved, asr_engine: "builtin:whisperx" };
+    renderSection();
+    const trigger = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    await waitFor(() => expect(trigger.textContent).toContain("WhisperX(本机)"));
+    //: 水合那一帧 asrEngine 还是初始的空串;把它当成「用户选回了跟随转写」就会在每次打开页面时
+    //: 悄悄清掉服务端存着的选择。
+    expect(setAgentVoice).not.toHaveBeenCalled();
   });
 });
 

@@ -24,9 +24,11 @@ before switching to speech. It is not push-to-talk: the composer is where you th
 a button forces you to have the whole sentence ready. One take runs up to 120 seconds; at the limit it
 wraps up and hands in what you have said so far.
 
-Recognition uses whichever engine is set under "Settings → Capability providers → Transcription" (local
-FunASR, sherpa-onnx or WhisperX, or a transcription plugin). A missing transcription runtime, a denied
-microphone or silence each get a plain explanation.
+Recognition follows whichever engine is set under "Settings → Capability providers → Transcription" (local
+FunASR, sherpa-onnx or WhisperX, or a transcription plugin) by default; you can also pick a separate one
+under "Settings → Agent → Spoken replies" · "Speech input engine" (the default is "Follow transcription",
+and only ready engines are listed). A missing transcription runtime, a denied microphone or silence each
+get a plain explanation.
 
 It only fills the box; it does not send. Fixing a misheard word right there is the point:
 recognition will get things wrong sometimes, and sending straight through means the model has to

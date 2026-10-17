@@ -262,7 +262,8 @@ plugin market filtered to that capability.
 
 **Plugins are never picked silently** (except asset links with a single storage): a transcription, translation or document-parsing plugin
 must be made the default here or named where it's used. Transcription and subtitle translation in the editor, the engine dropdowns on
-workflow nodes, voice input in the composer and a document's **Parse again** all follow this page. How plugin authors register for these
+workflow nodes, voice input in the composer (follows transcription by default; it can be set separately under
+Settings → Agent → Spoken replies) and a document's **Parse again** all follow this page. How plugin authors register for these
 capabilities is in [Writing a plugin](/docs/guides/writing-plugins).
 
 ## Outbound proxy

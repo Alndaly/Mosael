@@ -1768,6 +1768,9 @@ export interface paths {
          *     而不是在素材库里留下几十个几秒钟的 wav。识别本身仍是同一份实现(常驻 worker)。
          *
          *     没有 workspace 参数:这段音频不属于任何工作区,它连库都不进。鉴权到"是个登录用户"为止。
+         *
+         *     `engine` 不是必填:不传就用「设置 → 智能体 → 语音对话」里「说话输入用哪一家」那一格;
+         *     那一格空着就跟随「转写」的默认 —— 与这一格出现之前完全一致。
          */
         post: operations["dictate_api_asr_dictate_post"];
         delete?: never;
@@ -6089,7 +6092,7 @@ export interface paths {
         };
         /**
          * Get Agent Voice
-         * @description **我**在语音对话里用哪个音色。没设过就回一份空的(enabled=False)。
+         * @description **我**在语音对话里用哪个音色、说话输入用哪一家。没设过就回一份空的(enabled=False)。
          *
          *     和 /settings/provider-defaults 的 tts 那一格是两回事:配音要质量(本地克隆、首次加载
          *     十几分钟也认),对话要延迟。同一个默认服务两件事,必然在某一边是错的。
@@ -6097,7 +6100,7 @@ export interface paths {
         get: operations["get_agent_voice_api_settings_agent_voice_get"];
         /**
          * Set Agent Voice
-         * @description 设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。
+         * @description 设**我自己**的对话音色,以及说话输入用哪一家。只有这一档 —— 没有部署默认(同 provider-defaults)。
          *
          *     远端引擎念配音库里的嗓子(`voice_id`,ADR 0037)时,这个账号还没同意上传就回 409(`remote_voice_consent_required`)。
          */
@@ -10496,7 +10499,7 @@ export interface components {
         };
         /**
          * AgentVoiceOut
-         * @description 语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。
+         * @description 语音对话的音色,以及说话输入(ASR)用哪一家。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。
          */
         AgentVoiceOut: {
             /**
@@ -10533,6 +10536,11 @@ export interface components {
              * @default false
              */
             enabled: boolean;
+            /**
+             * Asr Engine
+             * @default
+             */
+            asr_engine: string;
         };
         /** AgentVoiceUpdate */
         AgentVoiceUpdate: {
@@ -10570,6 +10578,11 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Asr Engine
+             * @default
+             */
+            asr_engine: string;
         };
         /** AiRuntimeConfigOut */
         AiRuntimeConfigOut: {

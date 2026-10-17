@@ -9,7 +9,7 @@ from app.api.schemas.base import ApiModel
 from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 
 class AgentVoiceOut(ApiModel):
-    """语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
+    """语音对话的音色,以及说话输入(ASR)用哪一家。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
 
     engine: str = ""
     engine_voice: str = ""
@@ -20,6 +20,8 @@ class AgentVoiceOut(ApiModel):
     speed: float = 1.0
     #: 没设过时是 False,而且 engine 为空 —— 界面据此提示去选一个,而不是显示一个假的默认。
     enabled: bool = False
+    #: 说话输入用哪一家(能力表的提供方 id)。空 = 跟随「转写」的默认。
+    asr_engine: str = ""
 
 
 class AgentVoiceUpdate(ApiModel):
@@ -33,6 +35,8 @@ class AgentVoiceUpdate(ApiModel):
     voice_id: str | None = None
     speed: float = 1.0
     enabled: bool = True
+    #: 说话输入用哪一家;空 = 跟随「转写」的默认。**和 `engine`(TTS)分开**,换念字的声音不改听写用谁。
+    asr_engine: str = Field(default="", max_length=100)
 
 
 class AgentSpeechRequest(ApiModel):

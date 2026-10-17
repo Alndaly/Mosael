@@ -40,6 +40,7 @@
   "migrate-agent-sessions-remember-where-they-were-opened": "be7c4fa488185275",
   "migrate-agent-skills-remember-the-drafting-session": "4ae3978a1a0e63a2",
   "migrate-agent-thinking-level": "81ef41be1cab4b4b",
+  "migrate-agent-voice-dictation-engine": "34f1cb76b4ca1167",
   "migrate-applied-moves-remember-old-names": "cc362d4cfb123567",
   "migrate-asset-extractions-remember-page-images": "c8d542df6af5706f",
   "migrate-assets-get-a-name-sort-key": "6a4099ee85e91c6e",
