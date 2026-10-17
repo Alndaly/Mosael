@@ -1,6 +1,6 @@
 /** Navigation follows a creative workflow while published document URLs stay stable. */
 export const DOC_GROUPS = [
-  { id: "start", pages: ["start/intro", "start/download", "start/quickstart", "guides/providers", "guides/appearance"] },
+  { id: "start", pages: ["start/intro", "start/download", "start/quickstart", "guides/providers", "guides/appearance", "guides/local-app"] },
   { id: "create", pages: ["guides/media", "guides/documents", "guides/assets", "guides/notes", "guides/boards", "guides/scenes"] },
   { id: "produce", pages: ["guides/editing", "guides/ai-studio", "guides/agent-skills", "guides/digital-humans", "guides/voice"] },
   { id: "automate", pages: ["guides/workflows", "guides/scheduler", "guides/browser-pool", "guides/publishing"] },

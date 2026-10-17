@@ -1,0 +1,32 @@
+---
+title: This app on this computer
+description: Set this computer's own Mosael behaviour: launch at login, how files from other apps open, and the version with update checks.
+order: 24
+updated: 2026-10-17
+version: 1.9.6
+---
+
+Open **Settings → This app on this computer** in the sidebar. Everything here is about **Mosael itself on this computer** — all three rows belong to this installation: whether it launches at login, what happens when another app hands it a file, and which version is running. They apply on this device only and do not follow you to another computer; account- and workspace-level settings are not here. The first two rows exist in the desktop app only.
+
+## Launch at login
+
+**Launch at login** decides whether **this installation** starts with the system: with it on, Mosael starts in the background (tray) when you sign in, and closing the window only tucks it into the tray rather than quitting. Scheduled tasks only fire while the app is running (see [Scheduled tasks](/docs/guides/scheduler)), so turn this on if you rely on them.
+
+When the system registers it as pending approval, you still have to allow Mosael in your startup settings (macOS: System Settings → General → Login Items; Windows: Task Manager → Startup apps); a managed device may refuse it outright.
+
+## Opening outside files
+
+**Opening outside files** is the default action when **another app hands Mosael a file** — from Finder / Explorer's “Open With”, or by dropping a file on Mosael's Dock / taskbar icon:
+
+- **Add to library**: imported into the library and nothing else (the default).
+- **Open preview**: imported just the same, then the preview opens right away — the file still lands in your library; audio has no preview and is only imported.
+
+It applies from the next file you open.
+
+## Version and update checks
+
+The **Version** row shows which version this installation is running. In the desktop app **Check for updates** sits next to it: it compares against the latest stable release on GitHub Releases and offers **View** to open the download page; being up to date, or failing to check, is said plainly too.
+
+## How this differs from “Backend”
+
+This page is about **this app's own behaviour**. **Which backend and which workspace** you are connected to is in **Settings → Backend**: the **Server** row (local by default; enter a team server URL to switch — it tests the server, then switches and signs you in again), **API endpoint** and **Workspace**, and its description says it is for troubleshooting. Switching servers happens there too; see [Remote deployment](/docs/guides/remote) for pointing the desktop app at a remote backend.
