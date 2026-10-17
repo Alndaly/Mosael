@@ -23,6 +23,8 @@ const saved = {
   enabled: false,
   //: 说话输入的引擎。空 = 跟随转写默认(此前听写没有自己的开关)。
   asr_engine: "",
+  //: 念回复时先出声(默认)。
+  speak_early: true,
 };
 let pref = saved;
 const setAgentVoice = vi.fn();
@@ -138,6 +140,36 @@ describe("说话输入用哪一家", () => {
     await waitFor(() => expect(trigger.textContent).toContain("WhisperX(本机)"));
     //: 水合那一帧 asrEngine 还是初始的空串;把它当成「用户选回了跟随转写」就会在每次打开页面时
     //: 悄悄清掉服务端存着的选择。
+    expect(setAgentVoice).not.toHaveBeenCalled();
+  });
+});
+
+describe("念回复时先出声", () => {
+  beforeEach(() => {
+    pref = saved;
+    setAgentVoice.mockReset();
+    setAgentVoice.mockImplementation(async (body: Record<string, unknown>) => ({ ...saved, ...body }));
+    Element.prototype.scrollIntoView = vi.fn();
+    Object.assign(Element.prototype, { hasPointerCapture: () => false, setPointerCapture: () => {}, releasePointerCapture: () => {} });
+  });
+
+  it("默认先出声;选等整段会把 speak_early:false 存下去", async () => {
+    renderSection();
+    const early = await screen.findByRole("radio", { name: "agentVoiceSpeakEarlyEarly" });
+    expect(early).toHaveAttribute("aria-checked", "true");
+
+    await userEvent.setup().click(screen.getByRole("radio", { name: "agentVoiceSpeakEarlyWhole" }));
+
+    await waitFor(() => expect(setAgentVoice).toHaveBeenCalled());
+    expect(setAgentVoice.mock.calls.at(-1)?.[0]).toMatchObject({ speak_early: false, enabled: false });
+  });
+
+  it("重进页面时按服务端存着的那一档显示", async () => {
+    pref = { ...saved, speak_early: false };
+    renderSection();
+    const whole = await screen.findByRole("radio", { name: "agentVoiceSpeakEarlyWhole" });
+    await waitFor(() => expect(whole).toHaveAttribute("aria-checked", "true"));
+    expect(screen.getByRole("radio", { name: "agentVoiceSpeakEarlyEarly" })).toHaveAttribute("aria-checked", "false");
     expect(setAgentVoice).not.toHaveBeenCalled();
   });
 });

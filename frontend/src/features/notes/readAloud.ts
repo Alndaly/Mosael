@@ -6,6 +6,7 @@ import {
   type AgentVoice,
 } from "@/api/domains/speech";
 import { errorText } from "@/api/errorMessage";
+import { splitSpeech } from "@/lib/speechText";
 
 /**
  * 选区工具条上的「朗读」:在本地播放,不建素材 —— 念完就没了;要留下来另点「存为音频素材」(那一步才建任务、
@@ -17,6 +18,10 @@ import { errorText } from "@/api/errorMessage";
  * 这一份。选的是收费的引擎时照常按字符记账(和对话里念一句同一条路、同一道 ai 权限),提示条上写明用的是谁的声音。
  *
  * 按句切成小段一段段念:念这一段时先去取下一段,段与段之间不留空当;第一段出声也快。
+ *
+ * **它不读「念回复时先出声」那一个开关。** 那说的是智能体回复的念法;这里走的是试听/朗读接口,
+ * 单次字数有上限(200),本来就必须分段 —— 没有"整段一次"这个选项。文件类的「存为音频素材」
+ * 仍然是另走一条:整段合成、建成素材(见 saveAsAudio)。
  */
 
 /** 一段最多多少字(试听接口的上限是 200,留点余量)。 */
@@ -29,10 +34,15 @@ export function edgeVoiceFor(text: string): string {
   return /[\u3400-\u9fff]/.test(text) ? "zh-CN-XiaoxiaoNeural" : "en-US-AriaNeural";
 }
 
-/** 按句切成不超过 READ_ALOUD_CHUNK 字的小段;一句本身就超长的硬切。拼回去和原文一字不差。 */
+/**
+ * 按句切成不超过 READ_ALOUD_CHUNK 字的小段;一句本身就超长的硬切(试听接口的上限是 200)。
+ *
+ * 句子边界走全应用那一份(`lib/speechText`):引号、省略号、代码块、URL、小数里不切 —— 这里此前
+ * 自己写了一份正则,URL 和代码里的标点会被当成句末,念出来是断的。**长度上限仍是这里的事**:
+ * 那是 `/api/tts/preview` 的单次限制,不是"按句"的规矩。
+ */
 export function splitForSpeech(text: string): string[] {
-  if (!text.trim()) return [];
-  const sentences = text.match(/[^。！？!?；;.\n]*[。！？!?；;.\n]+|[^。！？!?；;.\n]+$/g) ?? [text];
+  const sentences = splitSpeech(text).map((sentence) => sentence.text);
   const chunks: string[] = [];
   let current = "";
   for (const sentence of sentences) {

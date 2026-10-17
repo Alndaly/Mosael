@@ -115,4 +115,8 @@ class AgentVoicePref(Base):
     #: 它和上面的 `engine`(TTS)是两件事,所以各占一列:换念字的声音不该悄悄改掉听写用谁。
     #: `server_default` 和迁移里那条 ALTER 保持一致:不写它,按旧列名直插一行的脚本/测试会撞 NOT NULL。
     asr_engine: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
+    #: 念回复时**先出声**(默认):第一句合成完就播,后面的句子边播边取。关掉 = 整段合成完再播(音质更好)。
+    #: **只有对话类读它** —— 文件类(工作流「语音合成」节点、画板音配音、笔记「存成素材」)永远整段一次,
+    #: 连这一列都不读:那些产物是素材,半段音频没有意义。
+    speak_early: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

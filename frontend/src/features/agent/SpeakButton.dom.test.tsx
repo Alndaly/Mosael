@@ -23,6 +23,14 @@ vi.mock("sonner", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
+const speech = vi.hoisted(() => ({ mode: "early" as "early" | "whole" }));
+vi.mock("@/features/agent/speechSettings", () => ({
+  loadSpeechMode: async () => speech.mode,
+  prefetchSpeechMode: () => {},
+  rememberSpeechMode: () => {},
+  speechModeOf: () => speech.mode,
+}));
+
 import { configureApiLocale } from "@/api/client";
 import { SpeakButton } from "@/features/agent/SpeakButton";
 
@@ -47,6 +55,7 @@ function failing(status: number, detail: string) {
 }
 
 beforeEach(() => {
+  speech.mode = "early";
   toastError.mockClear();
   toastMessage.mockClear();
   played.length = 0;
@@ -110,6 +119,36 @@ describe("念给我听", () => {
     expect(url).toMatch(/\/api\/agent\/speech$/);
     expect((init.headers as Record<string, string>)["Accept-Language"]).toBe("en-US");
     expect(JSON.parse(String(init.body))).toEqual({ text: "read this", workspace_id: "w1" });
+  });
+
+  it("播到一半再点一下就停:后面的句子不再合成、不再播,按钮回到可点", async () => {
+    vi.stubGlobal("fetch", okAudio());
+    render(<SpeakButton text="第一句长一点。第二句也长一点。第三句同样不短。" workspaceId="w1" />);
+    const button = screen.getByRole("button");
+    fireEvent.click(button);
+    //: 第一句的音频已经交给播放器了(第二句的合成可能已经在途中)。
+    await waitFor(() => expect(played).toHaveLength(1));
+    await waitFor(() => expect(button).toHaveAttribute("aria-label", "speakStop"));
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("aria-label", "speak"));
+    //: 在途 / 后面的句子都不再播 —— 否则打断之后下一句还会自己响起来。
+    expect(played).toHaveLength(1);
+    expect(played[0].pause).toHaveBeenCalled();
+  });
+
+  it("等整段:整段一次合成,行为和加流水线之前一样", async () => {
+    speech.mode = "whole";
+    const fetchSpy = okAudio();
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<SpeakButton text="第一句长一点。第二句也长一点。第三句同样不短。" workspaceId="w1" />);
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => expect(played).toHaveLength(1));
+    const speechCalls = (fetchSpy as unknown as { mock: { calls: [string][] } }).mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.endsWith("/api/agent/speech"));
+    expect(speechCalls).toHaveLength(1);
+    expect(JSON.parse(String((fetchSpy as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls.find(([url]) => url.endsWith("/api/agent/speech"))![1].body)).text)
+      .toBe("第一句长一点。第二句也长一点。第三句同样不短。");
   });
 
   it("没有内容就不给点 —— 空消息念不出东西", () => {

@@ -29,7 +29,7 @@ export const SETTINGS_SEARCH: readonly SettingsSearchEntry[] = [
   { id: "provider-image", label: "providerImageTitle", keywords: ["providerDefaultsTitle"], terms: ["settingsSearchTermsProviders"] },
   { id: "provider-video", label: "providerVideoTitle", keywords: ["providerDefaultsTitle"], terms: ["settingsSearchTermsProviders"] },
   { id: "provider-audio", label: "providerAudioTitle", keywords: ["providerTtsTitle", "providerPodcastTitle", "providerMusicTitle", "providerDefaultsTitle"], terms: ["settingsSearchTermsProviders"] },
-  { id: "agent-voice", label: "agentVoiceTitle", keywords: [] },
+  { id: "agent-voice", label: "agentVoiceTitle", keywords: ["agentVoiceSpeakEarly", "agentVoiceEngine", "agentVoiceVoice", "agentVoiceDictationEngine"] },
   { id: "agent-memory", label: "agentMemoryTitle", keywords: [] },
   { id: "agent-skills", label: "agentSkillsTitle", keywords: [] },
   { id: "agent-autopilot", label: "autopilotTitle", keywords: [] },

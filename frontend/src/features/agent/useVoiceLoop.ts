@@ -19,6 +19,8 @@ import { toast } from "sonner";
 
 import { ApiError, dictate } from "@/api/client";
 import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
+import { speakText } from "@/features/agent/speechPipeline";
+import { loadSpeechMode, prefetchSpeechMode } from "@/features/agent/speechSettings";
 import { useI18n } from "@/app/preferences";
 import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 import { matchSpokenChoice } from "@/features/agent/spokenChoice";
@@ -72,6 +74,9 @@ export function useVoiceLoop({
   //: 这一段等待的"代"。stop / 卸载把它加一 —— 迟到的识别结果据此知道自己已经过期:
   //: 不该再把"转写中"点亮,也不该替你把一句你其实已经取消的话发出去(取消就是取消)。
   const epochRef = React.useRef(0);
+  //: 开念的"代"。打断、关掉免提、另一段声音接管都让它加一 —— 按句流水线据此把在途的合成作废,
+  //: 也据此不再播下一句。**和识别的 epoch 分开**:说话打断的是声音,不是那句还没发出去的话。
+  const speechRunRef = React.useRef(0);
 
   const streamRef = React.useRef<MediaStream | null>(null);
   const contextRef = React.useRef<AudioContext | null>(null);
@@ -86,15 +91,29 @@ export function useVoiceLoop({
   const onAnswerRef = React.useRef(onAnswer);
   onAnswerRef.current = onAnswer;
 
-  /** 念一句话。**只有这一条路** —— 回复、确认卡、提问、失败,用户听到的都是同一个声音。 */
+  /**
+   * 念一段话。**只有这一条路** —— 回复、确认卡、提问、失败,用户听到的都是同一个声音。
+   *
+   * 设置「念回复时先出声」(默认)时按句流水线:第一句合成完就播,后面的句子边播边取;
+   * 选了「等整段」就一次取完。**设置只影响这条对话路**,文件类那几个入口不读它。
+   */
   const say = React.useCallback(
     async (text: string) => {
       if (!text.trim()) return;
-      try {
-        await playBlob(await synthesizeSpeech(text, workspaceId));
-      } catch (error) {
-        reportSpeechFailure(error, t("agentVoiceSpeakFailed"));
-      }
+      const mine = (speechRunRef.current += 1);
+      const cancelled = () => speechRunRef.current !== mine;
+      const whole = (await loadSpeechMode()) === "whole";
+      if (cancelled()) return;
+      await speakText({
+        text,
+        synthesize: (one) => synthesizeSpeech(one, workspaceId),
+        play: playBlob,
+        whole,
+        cancelled,
+        onFailure: (error) => {
+          if (!cancelled()) reportSpeechFailure(error, t("agentVoiceSpeakFailed"));
+        },
+      });
     },
     [workspaceId, t],
   );
@@ -104,6 +123,8 @@ export function useVoiceLoop({
   const teardown = React.useCallback(() => {
     //: 先作废在途的识别:关掉免提、或者在"转写中"点那颗浮标,都不该在半分钟后冒出一条消息。
     epochRef.current += 1;
+    //: 正在念的那一段也作废:在途的合成不该在关掉之后突然出声。
+    speechRunRef.current += 1;
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
     timerRef.current = null;
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
@@ -118,6 +139,10 @@ export function useVoiceLoop({
   }, []);
 
   React.useEffect(() => teardown, [teardown]);
+  //: 免提浮标一挂上就把「先出声 / 等整段」取回来,别让第一句等你一次往返。
+  React.useEffect(() => {
+    prefetchSpeechMode();
+  }, []);
 
   /** 把这一段交上去识别,再发出去。`epoch` 是录音停下那一刻的代号:等待期间被取消/卸载就作废。 */
   const submit = React.useCallback(
@@ -219,7 +244,11 @@ export function useVoiceLoop({
 
       if (event === "speaking" && !recorderRef.current) {
         // **打断在这里发生。** 它正在念,而你开口了 —— 掐掉播放,开始录。
-        if (stateRef.current === "speaking") stopPlayback();
+        //: 也要作废整条按句队列:只 stopPlayback 的话,播到一半的那句会结束、后面那句还会接着响。
+        if (stateRef.current === "speaking") {
+          speechRunRef.current += 1;
+          stopPlayback();
+        }
         setState("hearing");
         beginClip();
         return;

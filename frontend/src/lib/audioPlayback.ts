@@ -9,7 +9,13 @@
  * 播放方有两种形状,共用同一个登记处:
  * - 手里只有一段音频数据的(朗读)用 `playBlob`;
  * - 自己持有 `<audio>` 的(试听要能暂停、显示在放哪一个)用 `takePlayback` 登记停法。
+ *
+ * `playBlob` 交回**怎么结束的**:正常播完、被掐掉、播放器出错。按句流水线(`speechPipeline`)
+ * 靠它区分"这段播完了"和"这段被别人接管了" —— 后者必须让整条队列停下,否则被打断之后
+ * 下一句还会自己响起来。
  */
+
+export type PlaybackResult = "played" | "interrupted" | "failed";
 
 let current: (() => void) | null = null;
 
@@ -33,25 +39,28 @@ export function takePlayback(stop: () => void): () => void {
 }
 
 /**
- * 播一段音频,**接管前一段**。Promise 在播完或被打断时落定。
+ * 播一段音频,**接管前一段**。Promise 在播完、被打断或播放器出错时落定。
  *
- * 被打断和播完在调用方看来是同一件事:都该回到"听"。区分它们只会让每个调用方各写一遍
- * 同样的收尾。
+ * 被打断和播完在只关心"回到了没有"的调用方看来是同一件事;而按句流水线要据此停下整条队列,
+ * 所以这里把三种收尾分开交回去。
  */
-export function playBlob(blob: Blob): Promise<void> {
+export function playBlob(blob: Blob): Promise<PlaybackResult> {
   const url = URL.createObjectURL(blob);
   const audio = new Audio(url);
-  return new Promise<void>((resolve) => {
+  return new Promise<PlaybackResult>((resolve) => {
     let release = () => {};
-    const finish = () => {
+    let settled = false;
+    const finish = (result: PlaybackResult) => {
+      if (settled) return;
+      settled = true;
       audio.pause();
       URL.revokeObjectURL(url);
       release();
-      resolve();
+      resolve(result);
     };
-    release = takePlayback(finish);
-    audio.onended = finish;
-    audio.onerror = finish;
-    void audio.play().catch(finish);
+    release = takePlayback(() => finish("interrupted"));
+    audio.onended = () => finish("played");
+    audio.onerror = () => finish("failed");
+    void audio.play().catch(() => finish("failed"));
   });
 }

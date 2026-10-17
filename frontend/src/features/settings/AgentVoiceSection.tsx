@@ -8,6 +8,9 @@
  * 引擎与音色的清单**问的是同一组接口**(listTtsEngines / listTtsVoices),和配音面板同源 ——
  * 这里只是另一处选择,不是另一份目录。说话输入底下没有自己的目录:候选就是「转写」那项能力的
  * 候选(能力表),只列已经就绪的;空着 = 跟随转写默认,和这一格出现之前的行为完全一致。
+ *
+ * 「念回复时先出声」也在这里:先出声 = 第一句合成完就播、后面的边播边取;等整段 = 整段合成完再播。
+ * **它是对话类的开关** —— 工作流「语音合成」节点、画板音配音、笔记「存成素材」都不读它。
  */
 
 import React from "react";
@@ -26,10 +29,12 @@ import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
 import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
+import { rememberSpeechMode, speechModeOf, type SpeechMode } from "@/features/agent/speechSettings";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 /** Radix 的下拉项不许用空串当 value;空串在库里表示「跟随转写」,这里换一个哨兵。 */
@@ -48,9 +53,11 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const [voice, setVoice] = React.useState("");
   const [speed, setSpeed] = React.useState(1);
   const [asrEngine, setAsrEngine] = React.useState("");
+  const [speakEarly, setSpeakEarly] = React.useState(true);
   // 服务端那份到了之后水合一次。**之后不再回灌** —— 否则用户改了一半会被一次后台刷新盖掉。
   const hydrated = React.useRef(false);
   const savedAsrRef = React.useRef("");
+  const savedSpeakEarlyRef = React.useRef(true);
   React.useEffect(() => {
     if (hydrated.current || !pref.data) return;
     hydrated.current = true;
@@ -60,6 +67,10 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     setSpeed(pref.data.speed || 1);
     setAsrEngine(pref.data.asr_engine ?? "");
     savedAsrRef.current = pref.data.asr_engine ?? "";
+    setSpeakEarly(pref.data.speak_early !== false);
+    savedSpeakEarlyRef.current = pref.data.speak_early !== false;
+    //: 设置页拿到的就是对话类要用的那份;写进缓存,别让下一次开口再等一次往返。
+    rememberSpeechMode(speechModeOf(pref.data));
   }, [pref.data]);
 
   //: 带上工作区:CosyVoice 还列这个工作区配音库里的嗓子(`cloned`)。
@@ -92,10 +103,14 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
           speed,
           enabled,
           asr_engine: asrEngine,
+          speak_early: speakEarly,
         }),
       ),
     // 回包就是存下的那份:直接放进缓存,试听键不必等一次重新拉取才知道「屏幕上的已经存好了」。
-    onSuccess: (saved) => qc.setQueryData(["agent-voice"], saved),
+    onSuccess: (saved) => {
+      qc.setQueryData(["agent-voice"], saved);
+      rememberSpeechMode(speechModeOf(saved));
+    },
     onError: (error: Error) => {
       //: 不同意上传:这把嗓子没存上,屏幕上也别留着它(像是选好了),清掉让人重挑。
       if (isConsentDeclined(error)) setVoice("");
@@ -117,8 +132,12 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
         speed: pref.data?.speed ?? 1,
         enabled: pref.data?.enabled ?? false,
         asr_engine: next,
+        speak_early: pref.data?.speak_early ?? true,
       }),
-    onSuccess: (saved) => qc.setQueryData(["agent-voice"], saved),
+    onSuccess: (saved) => {
+      qc.setQueryData(["agent-voice"], saved);
+      rememberSpeechMode(speechModeOf(saved));
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -135,6 +154,42 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     savedAsrRef.current = asrEngine;
     saveAsr.mutate(asrEngine);
   }, [asrEngine, saveAsr]);
+
+  //: 念法的开关改完即存。它不要求音色已经选好 —— 「先出声」是这一页的偏好,不是一份合成配置;
+  //: 只带服务端已经存着的那份 TTS 配置,别把一份没选全的组合顺手存下去。
+  const saveSpeakEarly = useMutation({
+    mutationFn: (next: boolean) =>
+      withRemoteVoiceConsent(() =>
+        setAgentVoice({
+          engine: pref.data?.engine ?? "",
+          engine_voice: pref.data?.engine_voice ?? "",
+          engine_voice_resource: pref.data?.engine_voice_resource ?? "",
+          engine_model: pref.data?.engine_model ?? "",
+          provider_profile_id: pref.data?.provider_profile_id ?? null,
+          voice_id: pref.data?.voice_id ?? null,
+          speed: pref.data?.speed ?? 1,
+          enabled: pref.data?.enabled ?? false,
+          asr_engine: pref.data?.asr_engine ?? "",
+          speak_early: next,
+        }),
+      ),
+    onSuccess: (saved) => {
+      qc.setQueryData(["agent-voice"], saved);
+      rememberSpeechMode(speechModeOf(saved));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const speakEarlyHydrated = React.useRef(false);
+  React.useEffect(() => {
+    if (!hydrated.current) return;
+    if (!speakEarlyHydrated.current) {
+      speakEarlyHydrated.current = true;
+      return;
+    }
+    if (speakEarly === savedSpeakEarlyRef.current) return;
+    savedSpeakEarlyRef.current = speakEarly;
+    saveSpeakEarly.mutate(speakEarly);
+  }, [speakEarly, saveSpeakEarly]);
 
   const enabled = pref.data?.enabled ?? false;
   const ready = Boolean(engine && voice);
@@ -168,6 +223,17 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
           disabled={!ready && !enabled}
           onCheckedChange={(next) => save.mutate(next)}
           aria-label={t("agentVoiceEnabled")}
+        />
+      </SettingsRow>
+      <SettingsRow label={t("agentVoiceSpeakEarly")} description={t("agentVoiceSpeakEarlyDesc")}>
+        <Segmented<SpeechMode>
+          value={speakEarly ? "early" : "whole"}
+          onValueChange={(next) => setSpeakEarly(next === "early")}
+          aria-label={t("agentVoiceSpeakEarly")}
+          options={[
+            { value: "early", label: t("agentVoiceSpeakEarlyEarly") },
+            { value: "whole", label: t("agentVoiceSpeakEarlyWhole") },
+          ]}
         />
       </SettingsRow>
       <SettingsRow label={t("voiceDockTitle")} description={t("voiceDockDesc")}>

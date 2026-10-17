@@ -10541,6 +10541,11 @@ export interface components {
              * @default
              */
             asr_engine: string;
+            /**
+             * Speak Early
+             * @default true
+             */
+            speak_early: boolean;
         };
         /** AgentVoiceUpdate */
         AgentVoiceUpdate: {
@@ -10583,6 +10588,11 @@ export interface components {
              * @default
              */
             asr_engine: string;
+            /**
+             * Speak Early
+             * @default true
+             */
+            speak_early: boolean;
         };
         /** AiRuntimeConfigOut */
         AiRuntimeConfigOut: {

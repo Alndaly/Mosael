@@ -141,6 +141,7 @@ def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
         speed=row.speed,
         enabled=row.enabled,
         asr_engine=row.asr_engine,
+        speak_early=row.speak_early,
     )
 
 
@@ -165,6 +166,7 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
             speed=body.speed,
             enabled=body.enabled,
             asr_engine=body.asr_engine,
+            speak_early=body.speak_early,
         )
     except VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -178,4 +180,5 @@ def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentV
         speed=row.speed,
         enabled=row.enabled,
         asr_engine=row.asr_engine,
+        speak_early=row.speak_early,
     )

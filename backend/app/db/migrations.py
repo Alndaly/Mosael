@@ -1202,6 +1202,24 @@ def _migrate_agent_voice_dictation_engine() -> None:
         ))
 
 
+def _migrate_agent_voice_speak_early() -> None:
+    """agent_voice_prefs 新增 speak_early 列:念回复时先出声(默认),还是等整段。
+
+    create_all 只建新表,不给**已有**的表补列 —— 不补的话,升级上来的库第一次读这份配置就
+    `no such column: speak_early`。默认 1(先出声)是新默认:升级前所有行实际是"整段合成完再播",
+    但这一列出现之前那不是一个可选值,升级后跟着新默认走。它只被对话类读;文件类不读它。
+    """
+    inspector = inspect(engine)
+    if "agent_voice_prefs" not in set(inspector.get_table_names()):
+        return
+    if "speak_early" in {c["name"] for c in inspector.get_columns("agent_voice_prefs")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE agent_voice_prefs ADD COLUMN speak_early BOOLEAN NOT NULL DEFAULT 1"
+        ))
+
+
 def _migrate_provider_capabilities() -> None:
     """加列迁移:provider_profiles 增加 capability_ids(档案级能力覆盖,None=沿用 vendor 默认)。"""
     inspector = inspect(engine)
@@ -9927,6 +9945,8 @@ def migration_plan() -> MigrationPlan:
                 # 说话输入(ASR)的引擎可以单独选。**必须在 SCHEMA 之前** —— create_all 不会给已有的表
                 # 补列,而 SCHEMA 之后 ORM 上的 AgentVoicePref 已经指望 asr_engine 存在了。
                 _migrate_agent_voice_dictation_engine,
+                # 念回复时先出声(默认)还是等整段。同样必须在 SCHEMA 之前。
+                _migrate_agent_voice_speak_early,
                 _migrate_agent_thinking_level,
                 _migrate_agent_session_plan,
                 _migrate_agent_session_groups,

@@ -52,7 +52,7 @@ describe("设置页结构", () => {
       "provider-image": ["providerDefaultsTitle"],
       "provider-video": ["providerDefaultsTitle"],
       "provider-audio": ["providerTtsTitle", "providerPodcastTitle", "providerMusicTitle", "providerDefaultsTitle"],
-      "agent-voice": [],
+      "agent-voice": ["agentVoiceEngine", "agentVoiceVoice", "agentVoiceDictationEngine", "agentVoiceSpeakEarly"],
       "agent-memory": [],
       "agent-skills": [],
       "agent-autopilot": [],

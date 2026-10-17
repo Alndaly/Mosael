@@ -65,6 +65,7 @@ def choose_agent_voice(
     speed: float,
     enabled: bool,
     asr_engine: str = "",
+    speak_early: bool = True,
 ):
     """设**我自己**的对话音色,以及说话输入用哪一家(只有这一档,没有部署默认)。
 
@@ -97,6 +98,7 @@ def choose_agent_voice(
         speed=speed,
         enabled=enabled,
         asr_engine=asr_engine,
+        speak_early=speak_early,
     )
 
 

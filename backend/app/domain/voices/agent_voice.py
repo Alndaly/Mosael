@@ -55,6 +55,7 @@ def upsert(
     speed: float = 1.0,
     enabled: bool = True,
     asr_engine: str = "",
+    speak_early: bool = True,
 ) -> AgentVoicePref:
     """建行/改行。**行创建只发生在这里**(数据归属,见 domain/ownership)。"""
     row = db.get(AgentVoicePref, user_id)
@@ -72,6 +73,8 @@ def upsert(
     # 语速给个可用区间:各家引擎对超出范围的值反应不一,有的直接拒、有的悄悄夹取。
     row.speed = min(max(float(speed), 0.5), 2.0)
     row.enabled = bool(enabled)
+    #: 念回复时先出声。一个开关,不是"没改过" —— 选回整段就要能存回去。
+    row.speak_early = bool(speak_early)
     db.flush()
     db.refresh(row)
     return row

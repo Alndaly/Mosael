@@ -22,6 +22,8 @@ class AgentVoiceOut(ApiModel):
     enabled: bool = False
     #: 说话输入用哪一家(能力表的提供方 id)。空 = 跟随「转写」的默认。
     asr_engine: str = ""
+    #: 念回复时先出声(默认);False = 等整段合成完再播。**只有对话类读它。**
+    speak_early: bool = True
 
 
 class AgentVoiceUpdate(ApiModel):
@@ -37,6 +39,8 @@ class AgentVoiceUpdate(ApiModel):
     enabled: bool = True
     #: 说话输入用哪一家;空 = 跟随「转写」的默认。**和 `engine`(TTS)分开**,换念字的声音不改听写用谁。
     asr_engine: str = Field(default="", max_length=100)
+    #: 念回复时先出声(默认);False = 等整段合成完再播。
+    speak_early: bool = True
 
 
 class AgentSpeechRequest(ApiModel):

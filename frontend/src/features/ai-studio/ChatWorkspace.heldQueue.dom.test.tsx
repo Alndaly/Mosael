@@ -33,6 +33,8 @@ vi.mock("@/api/client", () => ({
   ]),
   listAgentQueue: vi.fn(async () => (backend.held ? [HELD] : [])),
   listAgentUsageEvents: vi.fn(async () => []),
+  //: 消息页脚的喇叭挂上会预取「念回复时先出声」;这份 mock 只列它用到的导出。
+  getAgentVoice: vi.fn(async () => ({ speak_early: true })),
   resumeQueuedMessage: vi.fn(async () => {
     backend.held = false;
     return { resumed: true };

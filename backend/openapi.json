@@ -30333,6 +30333,11 @@
             "type": "string",
             "title": "Asr Engine",
             "default": ""
+          },
+          "speak_early": {
+            "type": "boolean",
+            "title": "Speak Early",
+            "default": true
           }
         },
         "type": "object",
@@ -30402,6 +30407,11 @@
             "maxLength": 100,
             "title": "Asr Engine",
             "default": ""
+          },
+          "speak_early": {
+            "type": "boolean",
+            "title": "Speak Early",
+            "default": true
           }
         },
         "type": "object",
