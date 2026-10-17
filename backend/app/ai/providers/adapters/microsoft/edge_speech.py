@@ -13,11 +13,26 @@ from app.core.http_retry import backoff_seconds, current_max_retries
 logger = logging.getLogger(__name__)
 
 
+def _token_rejected(exc: BaseException) -> bool:
+    """微软的 read-aloud 端点在**握手**时就拒了这次连接的令牌(401/403)。
+
+    它不是网络抖:``Sec-MS-GEC`` 是按时段算的,同一套算法重连多少次拿到的都是同一类令牌 —— 重试只会让
+    用户多等几轮再看到同一句话。403 ``Invalid response status`` 正是它换规则之后的回法
+    (2026-10 那次:令牌从 v1 换成 v2,见 pyproject 里 edge-tts 的版本说明)。
+    """
+    import aiohttp
+
+    return isinstance(exc, aiohttp.WSServerHandshakeError) and exc.status in {401, 403}
+
+
 def _transient(exc: BaseException) -> bool:
-    """连不上 / 超时 / 连接中途断掉 —— 再连一次多半就好。服务回了「没有音频」(音色名不对之类)不算:重来也一样。"""
+    """连不上 / 超时 / 连接中途断掉 —— 再连一次多半就好。服务回了「没有音频」(音色名不对之类)不算:重来也一样;
+    令牌被拒也不算(见 ``_token_rejected``):那样的失败重来还是同一个结果。"""
     import aiohttp
     from edge_tts.exceptions import WebSocketError
 
+    if _token_rejected(exc):
+        return False
     return isinstance(exc, (aiohttp.ClientError, TimeoutError, WebSocketError))
 
 
@@ -67,6 +82,11 @@ class EdgeSpeechAdapter:
                     logger.info("Edge 语音合成第 %d 次没连上,重试:%s", attempt + 1, exc)
                     time.sleep(backoff_seconds(attempt))
                     continue
+                if _token_rejected(exc):
+                    #: 上游的原话带着整条 wss url 和令牌,进日志(排查要它);弹窗里换成一句说得清、给得出路的话
+                    #: —— 用户从 `403, message='Invalid response status', url='wss://…'` 里读不出该做什么。
+                    logger.warning("Edge 语音合成被微软的令牌校验拒绝(HTTP %s):%s", exc.status, exc)
+                    raise SpeechSynthesisError("providerErr_edgeTtsRejected", engine="Edge") from exc
                 raise SpeechSynthesisError("providerErr_ttsFailed", engine="Edge", detail=str(exc)) from exc
         if not out_path.is_file() or out_path.stat().st_size == 0:
             raise SpeechSynthesisError("providerErr_ttsEmptyAudio", engine="Edge")

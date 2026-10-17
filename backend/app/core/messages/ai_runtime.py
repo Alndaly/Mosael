@@ -199,6 +199,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{engine} speech synthesis needs an API key. Add it in Settings.",
     },
     "providerErr_ttsFailed": {"zh": "{engine} 语音合成失败:{detail}", "en": "{engine} speech synthesis failed: {detail}"},
+    #: 微软 read-aloud 端点在握手时拒了令牌(401/403)。上游原话(整条 wss url + 令牌)只进日志 ——
+    #: 用户从那串东西里读不出该做什么,所以这里说清「哪家、为什么、下一步去哪」。
+    "providerErr_edgeTtsRejected": {
+        "zh": "{engine} 免费语音这次没连上:微软那边的令牌校验拒绝了它(403,通常是微软改了规则)。"
+              "把 Mosael 更新到最新版再试;不想更新就换一个语音引擎 —— 智能体说话在「设置 → 智能体 → 语音对话」里换,"
+              "配音在配音面板里换。",
+        "en": "{engine} free speech didn't connect: Microsoft's token check rejected it (403 — usually it changed "
+              "the rules). Update Mosael to the latest version and try again, or pick another speech engine — the "
+              "agent's voice in Settings → Agent → Spoken replies, dubbing in the dubbing panel.",
+    },
     "providerErr_ttsEmptyAudio": {"zh": "{engine} 语音合成返回空音频", "en": "{engine} speech synthesis returned empty audio"},
     "providerErr_edgeTtsMissing": {
         "zh": "edge-tts 依赖未安装,请更新后端环境",

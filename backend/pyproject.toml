@@ -20,7 +20,9 @@ dependencies = [
   # 火山播客 TTS 走 WebSocket。uvicorn[standard] 也会装它,但依赖别人的传递依赖
   # 意味着对方换实现时这里会静默失效,所以显式声明。
   "websockets>=13.0",
-  "edge-tts>=7.2.8",
+  # 7.3.0 起才是 Sec-MS-GEC v2 令牌(微软 2026-10 换了那套校验)。7.2.x 的 v1 令牌现在一律被
+  # 握手拒绝:403 Invalid response status —— 用户看到的「Edge 语音合成失败」就是这个。
+  "edge-tts>=7.3.1",
   "playwright>=1.61.0",
   # 落盘加密(见 core/secrets_at_rest)。lark-oapi 也会装它,但依赖别人的传递依赖意味着
   # 对方换实现时这里会静默失效 —— 密钥读不出来的失效方式尤其难查,所以显式声明。
