@@ -1,5 +1,20 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.7": {
+    zh: [
+      "**飞书这一版修到能用了。** 绑定按应用分家(飞书的 open_id 按应用隔离,同一台工作区接两个机器人时,每个人在每台上各绑一次;扫码建机器人后自动绑定创建者;换过应用、删过机器人留下的旧绑定在升级时删掉,重绑一次即可)。「在线」由真的连上了驱动,起不来显示出错和原因;审批等待被取消或超时,群里那张卡就地收回,on_timeout=remind 也会在飞书提醒一句;并行分支上的两个「等人确认」会在开跑前拦下,串联的多道门不再重跑中间的节点。",
+      "**飞书里的消息和文件能触发工作流了。** 群里丢一条视频,自动跑一条工作流,结果发回群;触发器是一等数据,命中即认领(不再同时喂给会话,不再双倍花费),去重靠数据库的唯一约束,重启后飞书重放不会把同一条消息再付费跑一遍。",
+      "**新的「本机应用」设置页,素材表单也只有一个格子了。** 开机自启、打开外部文件、版本和检查更新搬到「本机应用」,「后端」只剩服务器切换、API 地址、工作区 id 三行;大模型节点要模型看的图片、AI 生成素材的输入素材、资产库的保存/打标签/更新,现在都是同一个声明驱动的格子,瓦片行在同一行内尽量满宽。",
+      "**转写多了个轻引擎,ComfyUI 少了猜。** sherpa-onnx 用同一个 SenseVoice 模型但不装 torch,冷启动约快 9 倍、常驻热跑约快 32 倍(默认仍是 FunASR,它没有说话人分离);ComfyUI 缺插件先读工作流自己写的出处,断网、Manager 不在也说得清,下载地址分三档置信度,只有哈希对上的才给「直接下载」。",
+    ],
+    en: [
+      "**Feishu is finally dependable in this release.** Bindings are per application (Feishu open_ids are scoped to the app, so with two bots in one workspace each person binds once per bot; creating a bot by QR code now binds its creator; bindings left behind by a replaced app or a deleted bot are removed on upgrade, and those people bind once more). Online is driven by the connection actually being up, with an error and reason when it cannot start; a cancelled or timed-out approval takes its card back in the group, on_timeout=remind now also nudges in Feishu, two simultaneous approval gates are refused before the run starts instead of failing halfway, and chained gates no longer re-run the nodes between them.",
+      "**Messages and files in Feishu can start workflows.** Drop a video into a group and a workflow runs and posts its result back; triggers are first-class data and a matching message is claimed outright (it is no longer also sent to the conversation, so no double spend), with deduplication on a database unique constraint so a Feishu replay after a restart never pays for the same message twice.",
+      "**A new Local app settings page, and one grid for every asset field.** Startup at login, opening external files, the version and update check move to Local app, leaving Backend with the server switch, API address and workspace id; the images a model should look at, AI Studio's source assets and the asset library's save/tag/update fields are now the same declaration-driven grid, whose tile row fills the row as far as it can.",
+      "**Transcription gains a light engine and ComfyUI stops guessing.** sherpa-onnx runs the same SenseVoice model without torch — about 9x faster cold and 32x warm (FunASR is still the default; sherpa-onnx has no speaker diarization) — and ComfyUI reads a workflow's own declared source before asking anyone, so it works offline and with no Manager, ranks download candidates in three confidence tiers, and only offers Direct download when the hash matches.",
+    ],
+  },
+
   "v1.9.6": {
     zh: [
       "**插件页不再反复崩溃。** 打开插件页(尤其 ComfyUI 连接)过一会儿整个界面崩掉、反复崩,删掉连接重建就好一阵——原因是宿主每刷一次 ComfyUI 的工具清单/模型清单都留一条带整份清单(约 1MB)的调用记录,一个连接攒下上千条、七百多 MB,插件页拉调用记录时不分页、一次全拿,界面解不动就崩。现在问目录不再留调用记录,调用记录一次最多拿最近十条;升级时自动清掉已经攒下的目录记录,别的记录不动。",
