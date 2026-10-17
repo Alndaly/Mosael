@@ -168,7 +168,9 @@ def approval_resolution(db: Session, approval: WorkflowRunApproval) -> routing.R
     return routing.resolve(
         db,
         workspace_id=approval.workspace_id,
-        channel=routing.channel_of(config, allowed=routing.APPROVAL_CHANNELS, fallback=routing.ORIGIN),
+        #: `strict=False` **明说**:「等人确认」遇到发不出去可以退回站内(见 routing.channel_of)。
+        #: 这一格没有缺省 —— 那条降级语义是这条路自己的,不该由别的调用方的默认值替它表态。
+        channel=routing.channel_of(config, allowed=routing.APPROVAL_CHANNELS, fallback=routing.ORIGIN, strict=False),
         bot_id=routing.bot_id_of(config),
         to=routing.to_of(config),
         job=job,

@@ -21,7 +21,13 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import FeishuBindCode, FeishuBinding, User, WorkspaceMember, now
+from app.db.models import FeishuBindCode, FeishuBinding, FeishuBot, User, WorkspaceMember, now
+from app.domain.collaboration import record_activity
+
+#: 「这条绑定曾经存在过」在审计表里叫什么。**历史**,不是活跃状态(见 `record_removed` / ADR 0070 §9)。
+BINDING_REMOVED_ACTION = "feishu.binding.removed"
+#: 这条历史记的是「哪条绑定」(哪台机器人眼里的哪串 open_id),不是任何一张活跃表的行。
+BINDING_SUBJECT_TYPE = "feishu_binding"
 
 
 @dataclass(frozen=True)
@@ -131,7 +137,67 @@ def list_bindings(db: Session, workspace_id: str, bot_id: str) -> list[Binding]:
 
 
 def remove_binding(db: Session, workspace_id: str, bot_id: str, open_id: str) -> None:
-    """删掉**这台机器人**的那一行。别的机器人的行一动不动(那正是此前那个越权面:按工作区删,删掉的是别人的)。"""
+    """删掉**这台机器人**的那一行。别的机器人的行一动不动(那正是此前那个越权面:按工作区删,删掉的是别人的)。
+
+    删之前先记一条历史(`feishu.binding.removed`):解绑之后,「这个人以前绑过这台」在活跃表里
+    就没有痕迹了(那张表只管现状)。记法与理由见 `record_removed` 与 ADR 0070 §9。
+    """
     binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "bot_id": bot_id, "open_id": open_id})
-    if binding is not None:
-        db.delete(binding)
+    if binding is None:
+        return
+    bot = db.get(FeishuBot, bot_id)
+    record_removed(
+        db,
+        workspace_id=workspace_id,
+        bot_id=bot_id,
+        open_id=binding.open_id,
+        user_id=binding.user_id,
+        app_id=bot.app_id if bot is not None else "",
+        bot_name=bot.name if bot is not None else "",
+    )
+    db.delete(binding)
+
+
+def record_removed(
+    db: Session,
+    *,
+    workspace_id: str,
+    bot_id: str,
+    open_id: str,
+    user_id: str,
+    app_id: str = "",
+    bot_name: str = "",
+    whole_bot: bool = False,
+) -> None:
+    """把「这条绑定曾经存在过」记进审计表(`activity_events`,见 `domain/collaboration.record_activity`)。
+
+    **它是历史,不是活跃状态。** `feishu_bindings` 是**活跃**表,`bot_id` 上挂着 `ON DELETE CASCADE`
+    —— 机器人一删,它名下的行必须跟着走(那台应用眼里的 open_id 之后没有任何东西解释得了)。
+    而"谁曾绑过"要留得下来,就只能落在另一张表上:这条记录不指向 `feishu_bots`(`subject_id` 只是
+    一段字符串),所以机器人那一行没了,痕迹照样在。
+
+    **它不参与授权。** 认人(`resolve_sender`)和面板(`list_bindings`)只读**活跃**表;这条记录只
+    出现在工作区动态流(`collaboration.list_activity`)那条读路径里 —— 没有任何"从历史推出现在谁能
+    驱动机器人"的判断。
+
+    **形状**(照 ADR 0070 §9):
+    - `action=BINDING_REMOVED_ACTION`、`subject_type=BINDING_SUBJECT_TYPE`;
+    - `subject_id` 只放 `bot_id` —— 模型上它是 `String(64)`,而 `bot_id`(32 位 hex)拼上
+      `open_id`(真实值约 35 字符)会顶到 80 左右,超了那一列的边界;所以 `open_id` 进 `payload`;
+    - `payload` 四格:`bot_id` / `app_id` / `bot_name` / `open_id` —— 机器人删了之后,
+      光有 id 认不出那台应用是谁,`app_id` 与 `bot_name` 是留给读的人的那一半;
+    - `actor_id` 是**曾经被绑的那个成员**(`FeishuBinding.user_id`):这条历史的主题是"他绑过这台",
+      而 `actor_id` 是 `users.id` 上的 `SET NULL` —— 人走了,痕迹还在。
+
+    不提交:随调用方那个事务落库(解绑的路由 / 删机器人都是各自一个事务)。
+    """
+    record_activity(
+        db,
+        workspace_id=workspace_id,
+        actor_id=user_id,
+        action=BINDING_REMOVED_ACTION,
+        subject_type=BINDING_SUBJECT_TYPE,
+        subject_id=bot_id,
+        summary="删除了飞书机器人,它名下的绑定随之解除" if whole_bot else "解除了飞书绑定",
+        payload={"bot_id": bot_id, "app_id": app_id, "bot_name": bot_name, "open_id": open_id},
+    )

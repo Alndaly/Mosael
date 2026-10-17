@@ -10,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.unit_of_work import unit_of_work
-from app.db.models import FeishuBot
+from app.db.models import FeishuBinding, FeishuBot
+from app.domain.feishu import bindings
 
 
 def list_bots(db: Session, workspace_id: str) -> list[FeishuBot]:
@@ -38,8 +39,26 @@ def delete_bot(db: Session, bot: FeishuBot) -> None:
 
     不标 stale、不留行:`(bot, open_id) -> user` 这条绑定随机器人一起没有意义 —— open_id 按飞书应用
     隔离,那台应用没了之后它眼里的那串 id 不再有任何应用解释得了,留着就是一行**谁都匹配不上**的死行。
-    「谁曾绑过」不是这张**活跃**表的事:真要留痕,那是另一张审计 / 事件表的事。
+
+    **「谁曾绑过」走审计表,不走这张活跃表**(见 `bindings.record_removed` / ADR 0070 §9):
+    删之前把它名下**每一条**绑定各记一条历史 —— 否则级联删完就"查无此事"了。记的是历史事件,
+    不是把行标成已删:绑定表里照旧一条不留(已删的状态写回去,换来的正是这套刚删掉的东西)。
     """
+    for binding in db.scalars(
+        select(FeishuBinding).where(
+            FeishuBinding.workspace_id == bot.workspace_id, FeishuBinding.bot_id == bot.id
+        )
+    ):
+        bindings.record_removed(
+            db,
+            workspace_id=bot.workspace_id,
+            bot_id=bot.id,
+            open_id=binding.open_id,
+            user_id=binding.user_id,
+            app_id=bot.app_id,
+            bot_name=bot.name,
+            whole_bot=True,
+        )
     db.delete(bot)
 
 

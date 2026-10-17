@@ -152,8 +152,8 @@ SQLite 改主键只能重建表,所以只在 `bot_id` 还不在的时候整张�
 ```python
 record_activity(
     db, workspace_id=ws, actor_id=user_id, action="feishu.binding.removed",
-    subject_type="feishu_binding", subject_id=f"{bot_id}:{open_id}",
-    summary="…", payload={"bot_id": bot_id, "app_id": app_id, "bot_name": name, "open_id": open_id},
+    subject_type="feishu_binding", subject_id=bot_id,
+    summary="解除了飞书绑定", payload={"bot_id": bot_id, "app_id": app_id, "bot_name": name, "open_id": open_id},
 )
 ```
 
@@ -164,11 +164,14 @@ record_activity(
 - **它不参与授权。** 认人(`bindings.resolve_sender`)与面板(`bindings.list_bindings`)都只读
   **活跃**那张表;审计表只出现在工作区动态流(`GET /api/activity`)那条读路径里,没有任何
   "从历史推出现在谁能驱动机器人"的判断 —— 历史是历史,现状以活跃表为准。
-- **删机器人时每一条** `feishu.binding.removed` **各记一条**,否则"删了就查无此事"。这属于
-  **要落实现时**的事,不是这一版的改动(本文档只记它该落在哪、以及为什么不是活跃表)。
+- **删机器人时每一条** `feishu.binding.removed` **各记一条**,否则"删了就查无此事"。
 
-`subject_id` 那一列模型上写的是 `String(64)`;`bot_id`(32 位 hex)加 `open_id`(真实值约 35 字符)
-拼起来会顶到边界,真要落一行时得自己保证长度(截断,或把 open_id 只放进 `payload`)。
+**已落实现**(写入在 `app/domain/feishu/bindings.py` 的 `record_removed`):显式解绑
+(`remove_binding`,解绑路由走它)与删机器人(`bots.delete_bot`)**两条路**各记这一条;删机器人在
+`db.delete(bot)` **之前**把它名下每条绑定读出来、记一条,级联删完痕迹仍在。`subject_id` 那一列
+模型上写的是 `String(64)`,而 `bot_id`(32 位 hex)加 `open_id`(真实值约 35 字符)拼起来约 68 字符
+会顶到边界 —— 所以落实现时 `subject_id` **只放 `bot_id`**,`open_id` 进 `payload`(JSON,没有这个
+上界)。
 
 ## Consequences
 

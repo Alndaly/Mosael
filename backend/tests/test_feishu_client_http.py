@@ -217,16 +217,40 @@ def test_取令牌遇到网关的HTML不再是JSONDecodeError(wire) -> None:
 
 def test_取令牌遇到限流会重发_取令牌没有可见副本(wire) -> None:
     """取令牌是 POST,但重发只是再拿一个令牌 —— 没有"群里多一条"这回事,所以按仓库那套:
-    非幂等请求只在对方明说没处理这一次(429 / 503 / 529)时重发。"""
-    #: 令牌那条路一直回 429:重发次数压到 1,免得这条用例在退避里等上四五秒。
-    http_retry.set_max_retries(1)
+    非幂等请求只在对方明说没处理这一次(429 / 503 / 529)时重发。
+
+    **次数是飞书自己的**(`FEISHU_MAX_RESENDS`),不是设置页那个数:这里把设置页写成 0,
+    取令牌照样重发到飞书自己的上限(见下一条)。
+    """
+    http_retry.set_max_retries(0)  # 设置页那一栏 —— 和"要不要再取一次令牌"没有关系
     seen = wire(token=_json(429, {"code": 99991400, "msg": "too many request"}))
 
     with pytest.raises(client.FeishuError) as raised:
         client.send_text(_Bot("b-token429"), "oc_1", "你好")
 
     assert raised.value.key == "feishuErr_token"
-    assert len(_paths(seen, "tenant_access_token")) == 2, "429 明说没处理,取令牌可以再来一次"
+    assert len(_paths(seen, "tenant_access_token")) == 1 + client.FEISHU_MAX_RESENDS, (
+        "429 明说没处理,取令牌可以再来一次 —— 而次数是飞书自己的上限"
+    )
+
+
+@pytest.mark.parametrize("setting", [0, 9])
+def test_取令牌的次数不跟设置页那个数走(setting) -> None:
+    """**取令牌那条 POST 此前直接读 `current_max_retries()`** —— 那是 `AiRuntimeConfig.max_retries`,
+    也就是设置页「AI 连接」那一栏:调成 0 就一次都不再取令牌,调成 9 就在取令牌上退避九轮。
+
+    飞书这一侧现在整个独立:会留下可见副本的那些是 0,GET 与取令牌都读 `FEISHU_MAX_RESENDS`,
+    设置页写 0 还是 9 都一个样。
+    """
+    http_retry.set_max_retries(setting)
+
+    assert client._resend_budget("POST", client.TOKEN_URL) == client.FEISHU_MAX_RESENDS, (
+        f"设置页写成 {setting},取令牌的重发次数就跟着变了 —— 那一栏管的是 AI 连接"
+    )
+    assert client._resend_budget("GET", f"{client.CHATS_URL}?page_size=100") == client.FEISHU_MAX_RESENDS, (
+        "GET 那一条本来就是飞书自己的上限,改这一处时别把它带回去"
+    )
+    assert client._resend_budget("POST", client.SEND_URL) == 0, "会留下可见副本的那些照旧一次都不重发"
 
 
 @pytest.mark.parametrize("code", [99991663, 99991664])

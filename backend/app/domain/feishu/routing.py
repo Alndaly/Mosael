@@ -66,16 +66,21 @@ def channel_of(
     *,
     allowed: tuple[str, ...] = MESSAGE_CHANNELS,
     fallback: str = ORIGIN,
-    strict: bool = False,
+    strict: bool,
 ) -> str:
     """节点上写的通知方式。**没写** = `fallback`(和此前的自动路由一致),**认不出**就当场说清。
 
-    `strict` 为真是给「发飞书消息」那类**必须发出去**的节点用的:手改 / 迁移来的图里一个写作
-    `chatroom` 的值,此前悄悄退回 `origin` —— 而"回 origin"意味着发给发起人。这是一条会
-    把话交给错的人的兜底,所以宁可失败。
+    `strict` **没有缺省**:认不出的写法是"当场失败"还是"退回 `fallback`",是**每条路自己的**
+    取舍,而这一格就是那个取舍 —— 所以两个调用方各自显式表态,不许谁替谁默认:
 
-    不严格的那一档留给「等人确认」:它遇到发不出去**可以退回站内**(见
-    integrations/feishu/approvals),那条路的降级语义是它自己的,不因为这次改动换默认行为。
+    - 「发飞书消息」那类**必须发出去**的节点传 `True`(见 domain/workflows/executors/feishu):
+      手改 / 迁移来的图里一个写作 `chatroom` 的值,此前悄悄退回 `origin` —— 而"回 origin"意味着
+      发给发起人。这是一条会把话交给错的人的兜底,所以宁可失败。
+    - 「等人确认」传 `False`(见 integrations/feishu/approvals):它遇到发不出去**可以退回站内**,
+      那条路的降级语义是它自己的,不因为这一处改动换默认行为。
+
+    此前这一格缺省为假,而那个缺省值的存在只是因为「等人确认」要保持旧的降级语义 ——
+    于是"发飞书消息"那条路是不是严格,取决于它记不记得多传一个字。现在少传就是 `TypeError`。
     """
     value = str((config or {}).get("channel") or "").strip()
     if not value:

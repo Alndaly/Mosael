@@ -15,7 +15,8 @@
 见 `_resend_budget`:幂等的(GET 列群 / 下载)和"重发只是再拿一个令牌"的交给
 `core.http_retry` 那套判据;**发消息 / 改卡片 / 加表情一律 0 次** —— 重发一遍就是群里多一条,
 而 429 恰好是飞书消息 API 最常见的限流回法,仓库那条判据对它是放行的。
-**次数不跟设置页那个 `max_retries` 走**:GET 有自己的上限(`FEISHU_MAX_RESENDS`)。
+**次数不跟设置页那个 `max_retries` 走**:会留下可见副本的那些是 0,GET 与取令牌都用飞书自己的上限
+(`FEISHU_MAX_RESENDS`)—— 设置页那一栏是 **AI 连接**的,和飞书没有关系。
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.core.http_retry import RetryingClient, current_max_retries
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 from app.db.models import FeishuBot
 
@@ -60,12 +61,17 @@ _TOKEN_INVALID = frozenset({99991663, 99991664})
 #: 所以解析时把状态码另记一处(见 `_fail`)。
 _HTTP_STATUS = "http_status"
 
-#: 飞书这一侧的重发上限(不含首次)。
+#: 飞书这一侧的重发上限(不含首次)。**GET 与取令牌都用它。**
 #:
 #: **不跟 `core.http_retry` 那个进程级次数走。** 那个数由**设置页的 AI 连接**写
 #: (`AiRuntimeConfig.max_retries`,缺省 3),和飞书没有关系 —— 跟着它在这里是有代价的:列群 / 下载
 #: 都是 GET,5xx 风暴下每多一次重发就多等一轮退避,`list_chats` 最长可以多花几十秒,而那几十秒里
 #: 用户看到的只是"群列表转圈"。2 够用:一次瞬时抖动等得到,持续 5xx 也不会把一次列群拖成半分钟。
+#:
+#: **取令牌那条 POST 也读这一个。** 它此前读 `current_max_retries()` —— 那同样是设置页那一栏
+#: (AI 连接的重试次数),于是"飞书要不要再取一次令牌"取决于用户把 AI 连接调成了几次:
+#: 调成 0 就一次都不再取,调成 9 就在取令牌上退避九轮。取令牌没有可见副本、也不产生费用,
+#: 所以它归飞书自己管:给同一个上限,飞书这一侧就没有一处再读设置页那个数了。
 FEISHU_MAX_RESENDS = 2
 
 
@@ -147,11 +153,12 @@ def _resend_budget(method: str, url: str) -> int:
     取令牌是"重发只是再拿一个令牌"的 POST(非幂等,只在对方**明说没处理这一次**,也就是
     429 / 503 / 529 时重发)。
 
-    **GET 的次数是飞书自己的上限,不是设置页那个数**(见 `FEISHU_MAX_RESENDS`):设置页那一栏是
-    AI 连接的,而它落在飞书这里表现为"群列表多转几十秒"。
+    **两种的次数都是飞书自己的上限,不是设置页那个数**(见 `FEISHU_MAX_RESENDS`):设置页那一栏是
+    AI 连接的,而它落在飞书这里表现为"群列表多转几十秒",或者"取令牌要不要再试一次由 AI 配置决定"。
     """
     if url.startswith(TOKEN_URL):
-        return current_max_retries()
+        #: 取令牌没有可见副本、也不产生费用:它归飞书自己管,不读设置页那个数(见 FEISHU_MAX_RESENDS)。
+        return FEISHU_MAX_RESENDS
     if method.upper() == "GET":
         return FEISHU_MAX_RESENDS
     return 0
@@ -169,7 +176,8 @@ def get_tenant_access_token(bot: FeishuBot, force: bool = False) -> str:
         if cached and not force and cached[1] > time.time() + 120:
             return cached[0]
     #: 取令牌是 POST,但重发只是**再拿一个令牌**(没有可见副本),所以交给仓库那套重试策略:
-    #: 非幂等请求只在对方明说没处理这一次(429 / 503 / 529)时重发(见 _resend_budget)。
+    #: 非幂等请求只在对方明说没处理这一次(429 / 503 / 529)时重发。**次数是飞书自己的**
+    #: (`FEISHU_MAX_RESENDS`),不是设置页那个 AI 连接的重试次数(见 _resend_budget)。
     with RetryingClient(timeout=15.0, max_retries=_resend_budget("POST", TOKEN_URL)) as client:
         response = client.post(TOKEN_URL, json={"app_id": bot.app_id, "app_secret": bot.app_secret})
         data = _payload(response)
