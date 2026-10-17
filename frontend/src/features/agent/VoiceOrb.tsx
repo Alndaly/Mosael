@@ -39,7 +39,7 @@ export function VoiceOrb({
   stateRef.current = state;
 
   React.useEffect(() => {
-    if (state === "off" || state === "thinking") return;
+    if (state === "off" || state === "transcribing" || state === "thinking") return;
     let frame = 0;
     //: 平滑值。直接画原始 RMS 会抖得像噪点 —— 上升跟得快(开口要立刻有反应),
     //: 下降慢一点(每个字之间的换气不该让它归零闪一下)。
@@ -67,7 +67,11 @@ export function VoiceOrb({
     return () => cancelAnimationFrame(frame);
   }, [state, levelRef]);
 
-  if (state === "thinking") return <Loader2 size={20} className="animate-mosael-spin text-primary" />;
+  //: 转写和"在想"都是**不确定的等待**:不知道还要多久,所以只有转圈,没有百分比 ——
+  //: 那个数这里根本不存在,编一个出来只会让人盯着一个说谎的进度条。旁边那行说明负责说清
+  //: 这一圈是在等识别,还是在等回复。
+  if (state === "transcribing" || state === "thinking")
+    return <Loader2 size={20} className="animate-mosael-spin text-primary" />;
 
   return (
     <span className="pointer-events-none relative grid size-full place-items-center">

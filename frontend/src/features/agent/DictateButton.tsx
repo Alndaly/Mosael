@@ -102,6 +102,9 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
 
   const busy = state === "transcribing";
   const recording = state === "recording";
+  //: 转写时那颗按钮只剩一圈转(Button 的 loading),名字还写着「说话输入」的话,悬停得到的
+  //: 是一句已经做完的事。用编辑器转写那条既有文案 —— 它此刻确实在转写。
+  const label = recording ? t("dictateStop") : busy ? t("transcribing") : t("dictate");
   return (
     <IconButton
       variant="ghost"
@@ -110,7 +113,7 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
       //: 所以换的是 xs↔icon-xs 这一对(同一档的胶囊和圆),不是 sm↔icon(32↔36)。
       size={recording ? "xs" : "icon-xs"}
       className={cn(recording && "gap-1.5 text-destructive")}
-      label={recording ? t("dictateStop") : t("dictate")}
+      label={label}
       disabled={disabled}
       loading={busy}
       onClick={() => (recording ? stop() : void start())}

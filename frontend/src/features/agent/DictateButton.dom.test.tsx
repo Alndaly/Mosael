@@ -102,4 +102,18 @@ describe("说话输入", () => {
     fireEvent.click(screen.getByRole("button"));
     await waitFor(() => expect(toastError).toHaveBeenCalled());
   });
+
+  it("停下来等识别的时候,按钮说自己在转写 —— 而不是还写着「说话输入」", async () => {
+    //: 录音停下到识别回来是一段没有声音的等待;那颗按钮只剩一圈转,名字还说着已经做完的事
+    //: 的话,悬停得到的就是一句错的解释。
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise<Response>(() => {})) as unknown as typeof fetch);
+    grantMic();
+    render(<DictateButton onText={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "dictate" }));
+    await waitFor(() => expect(FakeRecorder.last).not.toBeNull());
+
+    FakeRecorder.last!.stop();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "transcribing" })).toBeTruthy());
+  });
 });

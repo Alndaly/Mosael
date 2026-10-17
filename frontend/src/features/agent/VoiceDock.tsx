@@ -106,7 +106,14 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     dragAnywhere: true,
   });
 
-  const label = loop.on ? t(`voiceMode_${loop.state}` as "voiceMode_listening") : t("voiceModeStart");
+  //: "transcribing" 说的是**一次正在进行的识别**,不是"轮到谁" —— 所以它走转写那一条既有文案
+  //: (编辑器的转写也用同一句),不塞进 voiceMode_* 那一组,也不新造一个同义的 key。
+  const transcribing = loop.state === "transcribing";
+  const label = !loop.on
+    ? t("voiceModeStart")
+    : transcribing
+      ? t("transcribing")
+      : t(`voiceMode_${loop.state}` as "voiceMode_listening");
 
   //: 状态说明什么时候露出来。**换状态时自动露 2.4 秒**,而不是只在悬停时 —— 免提的前提
   //: 就是手和眼睛都在别处,一个要先把鼠标挪过去才肯解释自己的提示,恰好在唯一需要它的
@@ -116,15 +123,24 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
   React.useEffect(() => {
     if (!loop.on) return;
     setShowCaption(true);
+    //: **转写期间不收起。** 识别可能要先载模型,十几秒是常态;按 2.4 秒收起来的话,
+    //: 等待的绝大部分时间界面又回到"什么都没发生" —— 那正是这次要补的洞。
+    if (transcribing) return;
     const timer = window.setTimeout(() => setShowCaption(false), 2400);
     return () => window.clearTimeout(timer);
     // heard 也进依赖:听到新的一句要重新露一次,那是最该被看见的一条。
-  }, [loop.state, loop.heard, loop.on]);
+  }, [loop.state, loop.heard, loop.on, transcribing]);
 
   //: 说明文字贴左边还是右边。浮标常被拖到右下角,那时贴右会被屏幕边切掉一半 ——
   //: 而"被切掉的解释"比没有解释更让人烦躁。
   const captionOnLeft = (style?.left ?? 0) > window.innerWidth / 2;
-  const caption = loop.state === "hearing" || !loop.heard ? label : `${t("voiceDockHeard")}${loop.heard}`;
+  //: 转写时压过"听到:上一句" —— 这一秒该说的是"我还在认",不是"我上一句听到了什么"。
+  //: 换文案时宽度不抖:这个气泡是绝对定位 + nowrap,不参与布局,按钮那颗一直是 52px。
+  const caption = transcribing
+    ? t("transcribing")
+    : loop.state === "hearing" || !loop.heard
+      ? label
+      : `${t("voiceDockHeard")}${loop.heard}`;
   const toggle = () => {
     if (loop.on) loop.stop();
     else void loop.start();

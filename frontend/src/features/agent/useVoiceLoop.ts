@@ -24,7 +24,10 @@ import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 import { matchSpokenChoice } from "@/features/agent/spokenChoice";
 import { UtteranceDetector } from "@/features/agent/utteranceDetector";
 
-export type VoiceLoopState = "off" | "listening" | "hearing" | "thinking" | "speaking";
+/** "transcribing" 是**录音已经停下、话还没换成文字**这一段。"thinking" 是话已经发出去、在等回复。
+ *  分两种情况说,因为等待的长短和失败的原因都不一样 —— 识别首次还要载模型,那和模型跑得快不快无关;
+ *  而用户在这两段里能做的事也不同(前者可以取消,后者不会)。 */
+export type VoiceLoopState = "off" | "listening" | "hearing" | "transcribing" | "thinking" | "speaking";
 
 /** 每隔多久取一次音量。20 次/秒:够分辨句中停顿,又不至于让主线程忙起来。 */
 const SAMPLE_MS = 50;
@@ -66,6 +69,9 @@ export function useVoiceLoop({
   const [heard, setHeard] = React.useState("");
   const stateRef = React.useRef<VoiceLoopState>("off");
   stateRef.current = state;
+  //: 这一段等待的"代"。stop / 卸载把它加一 —— 迟到的识别结果据此知道自己已经过期:
+  //: 不该再把"转写中"点亮,也不该替你把一句你其实已经取消的话发出去(取消就是取消)。
+  const epochRef = React.useRef(0);
 
   const streamRef = React.useRef<MediaStream | null>(null);
   const contextRef = React.useRef<AudioContext | null>(null);
@@ -96,6 +102,8 @@ export function useVoiceLoop({
   sayRef.current = say;
 
   const teardown = React.useCallback(() => {
+    //: 先作废在途的识别:关掉免提、或者在"转写中"点那颗浮标,都不该在半分钟后冒出一条消息。
+    epochRef.current += 1;
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
     timerRef.current = null;
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
@@ -111,26 +119,38 @@ export function useVoiceLoop({
 
   React.useEffect(() => teardown, [teardown]);
 
-  /** 把这一段交上去识别,再发出去。 */
+  /** 把这一段交上去识别,再发出去。`epoch` 是录音停下那一刻的代号:等待期间被取消/卸载就作废。 */
   const submit = React.useCallback(
-    async (clip: Blob) => {
-      setState("thinking");
+    async (clip: Blob, epoch: number) => {
+      if (epochRef.current !== epoch) return;
+      //: **从录音停下到识别回来是一段没有声音的等待。** 用户看不见麦克风还在不在录,只看得见
+      //: 浮标;不说"正在转写"的话,这段就是"它没听见"。首次识别还要载模型,这段可能有十几秒 ——
+      //: 所以这里给的是"转写中",不是"在想"(那是话已经发出去、在等回复)。
+      setState("transcribing");
       try {
         let text: string;
         try {
           text = ((await dictate(clip)).text ?? "").trim();
         } catch (error) {
+          if (epochRef.current !== epoch) return;
           // **失败要出声(至少要看得见)。** 语音模式下用户多半没盯着屏幕,一次静默的失败
           // 会被理解成"它没听见",于是他再说一遍 —— 然后再失败一次。后端说了原因就照说。
-          toast.error(error instanceof ApiError ? error.message : t("agentVoiceSendFailed"));
+          //: 失败发生在**识别**,不在发送:用说话输入既有那条 dictateFailed,
+          //: "这句没能送出去"会把人指向错误的下一步。
+          toast.error(error instanceof ApiError ? error.message : t("dictateFailed"));
           setState("listening");
           return;
         }
+        if (epochRef.current !== epoch) return;
         setHeard(text);
         if (!text) {
+          //: 和输入框那颗麦克风同一条:没听到内容要说出来 —— 否则这次等待结束得无声无息。
+          toast.error(t("dictateHeardNothing"));
           setState("listening");
           return;
         }
+        //: 话已经识别出来了,接下来才是"它在想"。
+        setState("thinking");
         // 有待答的选择题时,这一句是**答它**,不是一条新的指令 —— 否则模型会收到
         // 一句"告白场景",而它正等着你在卡片上点。
         const asked = questionRef.current;
@@ -151,9 +171,13 @@ export function useVoiceLoop({
         }
         await onUtteranceRef.current(text);
       } catch {
-        toast.error(t("agentVoiceSendFailed"));
+        if (epochRef.current === epoch) toast.error(t("agentVoiceSendFailed"));
       } finally {
-        setState((current) => (current === "thinking" ? "listening" : current));
+        //: 这一代还在(没被取消/卸载)才收状态。**不能留下一个永远转圈的浮标**,也不能在
+        //: 已经关掉之后又被一次迟到的 setState 点亮。
+        if (epochRef.current === epoch) {
+          setState((current) => (current === "thinking" || current === "transcribing" ? "listening" : current));
+        }
       }
     },
     [t],
@@ -204,11 +228,16 @@ export function useVoiceLoop({
         const recorder = recorderRef.current;
         recorderRef.current = null;
         const keep = event === "ended";
+        //: 这句话说完这一刻的代号。之后 stop / 卸载会让它过期 —— 那时这段录音不该再变成一句话。
+        const epoch = epochRef.current;
+        //: **停止录音这一秒就开始说"转写中"。** MediaRecorder 的 onstop 还要把最后一块数据
+        //: 交上来,那之前界面不能还写着"听你说"(那是"你的话还在被录"的意思)。
+        if (keep) setState("transcribing");
         recorder.onstop = () => {
           const clip = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
           chunksRef.current = [];
           // 咳嗽和键盘声录下来了,但不发 —— 发上去只会换回一句空识别。
-          if (keep && clip.size > 0) void submit(clip);
+          if (keep && clip.size > 0) void submit(clip, epoch);
           else setState("listening");
         };
         recorder.stop();
