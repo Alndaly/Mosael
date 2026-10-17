@@ -1,5 +1,20 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.8": {
+    zh: [
+      "**Edge 免费语音修好了。** 微软 2026-10-13 换了令牌校验,旧版一律 403;这一版跟上新规则,免提浮标和配音里的 Edge 都能正常念。失败时也不再甩一整串 wss 地址和令牌,而是说清是谁拒了、怎么办;这类拒绝不再白重试十几秒。",
+      "**说话输入可以单独选引擎。** 设置 → 智能体 → 语音对话新增「说话输入用哪一家」,默认跟随转写,只列已经就绪的;选中的引擎用不了会直接说明缺什么,不会悄悄退回转写默认。",
+      "**免提浮标看得出在干活。** 从停止录音到识别回来显示「转写中…」并转圈,首次载模型也等得到;等待中关掉浮标就是取消,不再把已录的那句发出去;识别失败或什么都没听到也会说一句。",
+      "**念回复首句更快出声。** 对话类语音改成按句流水线:第一句合成完就播,本机真 Edge 实测首句 3.285s → 1.567s(约 2.1×);想要更好的音质可以在设置里改回「等整段」,工作流、画板、笔记存成音频仍然是整段一次。",
+    ],
+    en: [
+      "**The free Edge voice works again.** Microsoft changed its token check on 2026-10-13 and older builds got a 403 on every request; this release follows the new rules, so Edge speaks again in the hands-free dock and in dubbing. Failures no longer dump a whole wss URL and token — they say who rejected it and what to do — and a rejected token is no longer retried for a dozen seconds.",
+      "**Speech input can choose its engine.** Settings → Agent → Spoken replies gains Speech input engine, defaulting to Follow transcription and listing only ready engines; if the chosen engine becomes unavailable you are told exactly what is missing instead of it silently falling back to the transcription default.",
+      "**The hands-free dock shows it is working.** From stopping the recording to the transcript arriving it shows Transcribing… with a spinner, so a first model load stays visible; closing the dock while waiting really cancels (the recorded sentence is not sent), and a failed or empty transcription says so.",
+      "**Spoken replies start sooner.** Conversation speech is now a per-sentence pipeline: the first sentence plays as soon as it is synthesized — measured on real Edge here, first-sentence latency dropped from 3.285s to 1.567s (about 2.1x). Switch back to Wait for the whole reply in settings for best quality; workflows, boards and saving a note as audio still render whole.",
+    ],
+  },
+
   "v1.9.7": {
     zh: [
       "**飞书这一版修到能用了。** 绑定按应用分家(飞书的 open_id 按应用隔离,同一台工作区接两个机器人时,每个人在每台上各绑一次;扫码建机器人后自动绑定创建者;换过应用、删过机器人留下的旧绑定在升级时删掉,重绑一次即可)。「在线」由真的连上了驱动,起不来显示出错和原因;审批等待被取消或超时,群里那张卡就地收回,on_timeout=remind 也会在飞书提醒一句;并行分支上的两个「等人确认」会在开跑前拦下,串联的多道门不再重跑中间的节点。",
