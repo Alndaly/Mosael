@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
-from pydantic import Field, StrictBool, field_validator, model_validator
+from pydantic import Field, StrictBool, field_serializer, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
 from app.domain.resources import Resource
 from app.api.schemas.failures import FailureReadout
@@ -293,6 +293,28 @@ class AgentMessageOut(OrmModel):
     payload: dict
     error: str | None
     created_at: datetime
+
+    @field_serializer("payload")
+    def _receipt_failure_readable(self, payload: dict) -> dict:
+        """任务回执的失败原因**在出口翻**,不在落库时冻住语言(和 TaskEventOut 同一个做法)。
+
+        回执 payload 里存的是 `error_key` / `error_params`(以及没有 key 时的第三方原话 `error`);
+        这里按请求方的语言补上 `error_summary` / `error_detail` / `error_hint` —— 界面直接读这三样,
+        切语言后重新取一次消息就是新语言。`content` 是给模型读的那一句,原样留着。
+        """
+        if self.role != "job_receipt" or not isinstance(payload, dict):
+            return payload
+        key = str(payload.get("error_key") or "")
+        error = str(payload.get("error") or "")
+        if not key and not error:
+            return payload
+        from app.core.i18n import get_current_locale
+        from app.domain.failure_summary import detail_of, hint_of, summarize
+
+        locale = get_current_locale()
+        params = payload.get("error_params") if isinstance(payload.get("error_params"), dict) else {}
+        return {**payload, "error_summary": summarize(error, key, params, locale) or None,
+                "error_detail": detail_of(error, key, params, locale), "error_hint": hint_of(params, locale)}
 
 
 class ConfirmationCreate(ApiModel):

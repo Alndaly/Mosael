@@ -21,7 +21,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentMessage, AgentSession, Job, User
+from app.core.i18n import DEFAULT_LOCALE, render_message
+from app.db.models import AgentMessage, AgentSession, GenerationJob, Job, User
 from app.domain.agent import host
 from app.domain.jobs import CANCELLED, TERMINAL_STATUSES, register_receipt_deliverer
 
@@ -50,10 +51,57 @@ def produced_asset_ids(job: Job) -> list[str]:
     return ids
 
 
+#: 回执要带上「能定位到生成记录」的那几类任务。它们各有一条生成记录,记录里记着这次生成的会话 ——
+#: 界面靠它打开那条创作记录、并在可免费取回时摆「重新取回」。
+RECORD_JOB_KINDS = ("ai_generation", "tts", "podcast")
+
+#: 给模型读的那一句里,任务名最多这么长。截断要**带省略号** —— 硬切会让「这是两个任务吗」变成一个
+#: 看不出来的问题;完整的那一份在 payload.subject 里,界面用 Truncate 显示。
+SUBJECT_PREVIEW_CHARS = 80
+
+
+def _subject(job: Job) -> str:
+    """这个任务的完整名字。
+
+    生成任务的 `payload.subject` 在建任务时被硬切到 80 字(`generation.operations`),而完整提示词就在
+    同一个 payload 的 `request.prompt` 里 —— 回执读那一份,不把已经切短的再切一次。其余任务种类
+    (渲染、配音、发布……)本来就没有更长的原文,passthrough。
+    """
+    payload = job.payload or {}
+    request = payload.get("request")
+    if isinstance(request, dict):
+        prompt = request.get("prompt")
+        if isinstance(prompt, str) and prompt.strip():
+            return prompt.strip()
+    return str(payload.get("subject") or "").strip()
+
+
+def _preview(subject: str) -> str:
+    if len(subject) <= SUBJECT_PREVIEW_CHARS:
+        return subject
+    return f"{subject[: SUBJECT_PREVIEW_CHARS - 1].rstrip()}…"
+
+
+def _reason(job: Job) -> str:
+    """失败原因。**带 key 的按缺省语言渲染给模型读**,不把渲染结果写进回执 payload ——
+    界面在出口用 error_key/error_params 按请求方的语言重翻(见 api/schemas/agent.AgentMessageOut)。
+    """
+    said = str(job.error or "").strip()
+    if said:
+        return said
+    key = str(job.error_key or "")
+    if key:
+        return render_message(key, DEFAULT_LOCALE, dict(job.error_params or {}))
+    return str(job.message or "").strip()
+
+
 def _summarize(job: Job) -> str:
-    """回执的正文 —— 用户在对话里看到的也是这一句,所以它要像人话。"""
-    subject = str((job.payload or {}).get("subject") or "").strip()
-    what = f"「{subject}」" if subject else "刚才那个任务"
+    """回执的正文 —— **给模型读的那一句**。界面的任务卡读 payload(按当前语言重排),不读这一句。
+
+    名字超过一句的长度时带省略号截到一句:模型要认出是哪个任务,不是把整段提示词再读一遍。
+    """
+    subject = _subject(job)
+    what = f"「{_preview(subject)}」" if subject else "刚才那个任务"
     if job.status == "succeeded":
         ids = produced_asset_ids(job)
         # 素材 id 是模型下一步真正要用的东西(插进时间线、当下一次生成的首帧)。
@@ -63,8 +111,43 @@ def _summarize(job: Job) -> str:
     if job.status == CANCELLED:
         # 被停下的不是失败(ADR 0049):说成「失败了」,智能体会当成一次该重试的失败。它会不会有结果了 —— 不会,所以照样说一声。
         return f"{what}已取消。"
-    reason = str(job.error or job.message or "").strip()
+    reason = _reason(job)
     return f"{what}失败了{f':{reason}' if reason else ''}。"
+
+
+def receipt_payload(db: Session, job: Job, *, subject: str, asset_ids: list[str]) -> dict[str, Any]:
+    """回执落库时带出去的**结构化事实**。界面据此画任务卡,模型读的是 `_summarize` 那一句。
+
+    `error_key` / `error_params` 是失败原因的唯一来源(带 key 的失败不把渲染好的句子存进来:那句话
+    落库就把语言冻死了,而这张卡要在切语言之后仍是当前语言)。`subject` 是完整的 —— 界面用 Truncate,
+    不在数据层切。
+    """
+    source = job.payload or {}
+    payload: dict[str, Any] = {
+        "job_id": job.id,
+        "asset_ids": asset_ids,
+        "kind": job.kind,
+        "status": job.status,
+        "subject": subject,
+        "error_key": str(job.error_key or ""),
+        "error_params": dict(job.error_params or {}),
+        #: 没有 key 的失败是第三方的原话(我们翻不了),原样带着。
+        "error": "" if job.error_key else str(job.error or ""),
+        "workspace_id": job.workspace_id,
+        "undelivered": False,
+    }
+    if job.kind in RECORD_JOB_KINDS:
+        generation = db.scalar(select(GenerationJob).where(GenerationJob.job_id == job.id))
+        if generation is not None:
+            payload["generation_id"] = generation.id
+        generation_session = generation.session_id if generation is not None else None
+        session_id = generation_session or source.get("session_id")
+        if isinstance(session_id, str) and session_id:
+            payload["generation_session_id"] = session_id
+    project_id = source.get("project_id")
+    if isinstance(project_id, str) and project_id:
+        payload["project_id"] = project_id
+    return payload
 
 
 def deliver(db: Session, job: Job, receipt: dict[str, Any]) -> None:
@@ -80,7 +163,16 @@ def deliver(db: Session, job: Job, receipt: dict[str, Any]) -> None:
     if owner is None:
         logger.warning("job %s 的回执没送:任务没有归属人", job.id)
         return
-    host.post_job_receipt(db, session, _summarize(job), owner, job_id=job.id, asset_ids=produced_asset_ids(job))
+    subject = _subject(job)
+    asset_ids = produced_asset_ids(job)
+    host.post_job_receipt(
+        db,
+        session,
+        _summarize(job),
+        owner,
+        job_id=job.id,
+        payload=receipt_payload(db, job, subject=subject, asset_ids=asset_ids),
+    )
 
 
 def acknowledge_seen(db: Session, _user: User, job_id: str, session_id: str) -> None:

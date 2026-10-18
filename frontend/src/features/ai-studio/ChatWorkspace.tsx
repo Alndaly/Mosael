@@ -63,6 +63,7 @@ import { useOpenRequest } from "@/lib/deepLink";
 import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
+import { SessionJobsCard } from "@/components/jobs/SessionJobsCard";
 import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
@@ -885,6 +886,10 @@ function ChatInspector({
       {/* 子代理排在计划之后、工具之前:它是"派出去的活",粒度介于计划和单次调用之间。
           没派过就不渲染 —— 和计划同一条规矩。 */}
       <InspectorSubagentList timeline={subagentTimeline} onOpen={onOpenSubagent} />
+
+      {/* 本对话发起的后台任务:跨轮次、跨重启,有进度和取消。和下面的「最近工具」是两件事
+          (那边是每一次工具调用),所以各占一块;没有任务时整块不渲染(和计划/子代理同一条规矩)。 */}
+      <SessionJobsCard workspaceId={workspace.id} sessionId={session?.id ?? null} />
 
       {/* 「最近工具」与「能力」原本是两块 —— 一块只有名字和状态(看不出做了什么),另一块把
           36 个工具铺成四行胶囊(占掉半个侧栏,而那 8 个只是注册表顺序的前 8 个)。

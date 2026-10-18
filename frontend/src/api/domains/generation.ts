@@ -70,6 +70,21 @@ export function createPodcast(body: PodcastCreate): Promise<GenerationCreateResp
   return api<GenerationCreateResponse>("/api/generation/podcast", { method: "POST", body: JSON.stringify(body) });
 }
 
+/**
+ * 生成记录,按时间正序。`sessionId`:只要那条创作会话里的(创作页一页页取;对话里的回执按它找回自己那条记录,
+ * 看后端说没说 `retrievable`)。
+ */
+export function listGenerationJobs(
+  workspaceId: string,
+  { kind, sessionId, limit }: { kind?: string; sessionId?: string; limit?: number } = {},
+): Promise<GenerationJob[]> {
+  const query = new URLSearchParams({ workspace_id: workspaceId });
+  if (kind) query.set("kind", kind);
+  if (sessionId) query.set("session_id", sessionId);
+  if (limit) query.set("limit", String(limit));
+  return api<GenerationJob[]>(`/api/generation/jobs?${query.toString()}`);
+}
+
 /** 这种生成能用哪些(连接 × 模型)。设置页里加了什么,这里就有什么。 */
 export function listGenerationOptions(kind: string): Promise<GenerationOption[]> {
   return api<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`);

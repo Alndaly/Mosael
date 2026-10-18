@@ -189,7 +189,11 @@ class TestReconcile:
             db.commit()  # 测试是入口:重启收尾不提交(见 domain/restart.settle_previous_run)
             assert db.get(Job, external_id).status == "queued"
             orphan = db.get(Job, orphan_id)
-            assert orphan.status == "failed" and "重启" in orphan.error
+            assert orphan.status == "failed"
+            #: 失败原因**存 key**,出口按读的人的语言翻(见 api/schemas/jobs);error 列是原文,
+            #: 没有原文(重启不是异常)就空着 —— 把缺省语言渲染好的句子写进去,会把语言冻死。
+            assert orphan.error_key == "jobErr_backendRestart"
+            assert "重启" not in (orphan.error or "")
 
 
 class TestHttpChannel:

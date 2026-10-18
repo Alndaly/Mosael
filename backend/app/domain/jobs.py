@@ -962,7 +962,10 @@ def reconcile_orphaned_jobs(db: Session) -> int:
         #: 此前这一句是写死的中文,于是英文用户的任务列表里它永远是中文 —— 而
         #: `error_key` / `error_params` 这套东西早就齐了,只是总线自己没用。
         job.error_key = RESTART_ERROR_KEY
-        job.error = t(RESTART_ERROR_KEY, DEFAULT_LOCALE)
+        #: **不把翻好的那句写进 error。** 这一列是「原文」,出口按 error_key 翻;写进来的是缺省语言
+        #: 的渲染结果,任何直接读这一列的地方(回执、日志、别的运行时)就永远看见中文 —— 回执正是
+        #: 这么把中文冻结进对话的。没有原文(重启不是异常)就空着,三格以 key 为准。
+        job.error = ""
         db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"reason": "backend_restart"}))
     #: **不在这里提交。** 重启收尾是一次用例(domain/restart.settle_previous_run):几张表一起收完、一起提交,提交钩子
     #: (落终态之后的收拾、送回执 —— 回执会在对话里起一轮)在**全部**收完之后才跑。此前这里自己提交,钩子当场就跑:

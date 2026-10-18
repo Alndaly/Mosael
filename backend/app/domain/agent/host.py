@@ -5,6 +5,7 @@ import logging
 import math
 import threading
 import time
+from typing import Any
 
 from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.orm import Session
@@ -41,10 +42,10 @@ from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context
 from app.domain.providers.model_limits import fallback_context_window
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.unit_of_work import unit_of_work
+from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import LocalizedError, get_current_locale, set_current_locale, tr
 from app.core.security import mint_service_session, revoke_session
-from app.db.models import AgentMessage, AgentSession, ToolConfirmation, User, now
+from app.db.models import AgentMessage, AgentSession, Job, ToolConfirmation, User, now
 from app.core.token_estimate import estimate_text_tokens
 from app.domain.billing.usage import billable
 
@@ -434,9 +435,18 @@ def _with_receipts(prompt: str, receipts: str) -> str:
 
 
 def post_job_receipt(
-    db: Session, session: AgentSession, content: str, owner: User, *, job_id: str, asset_ids: list[str],
+    db: Session,
+    session: AgentSession,
+    content: str,
+    owner: User,
+    *,
+    job_id: str,
+    payload: dict[str, Any] | None = None,
 ) -> AgentMessage:
     """一个后台任务跑完了,把回执交给这次对话的智能体。
+
+    `payload` 是回执的**结构化事实**(见 receipts.receipt_payload):job_id、种类、状态、失败 key 与参数、
+    完整 subject、生成记录 id…… 界面据此画任务卡;`content` 只是给模型读的一句短话。
 
     **会话空闲**:回执落库(已送),直接起一轮,那一轮的提示词就是这条回执(连同此前没送出去的,如果有)。
     **会话正忙**:回执落库成「待送」,**不进队列** —— 这一轮结束时 drain 把攒下的回执合成一次交出去:
@@ -446,6 +456,7 @@ def post_job_receipt(
     落进缝里的消息就丢了(agent-sidecar/src/subagent.ts 为同一个缝选了收尾清算);而回执丢了,智能体就永远不知道
     那个任务跑完了。收尾时从库里取没有这道缝,代价是晚到这一轮结束 —— 而这一轮本来也在忙别的。
     """
+    facts = {"job_id": job_id, "undelivered": False, **(payload or {})}
     if _claim_idle_session(db, session.id):
         # 失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过 —— 和用户消息同一处补法。
         unseen = unseen_since_last_success(db, session)
@@ -453,7 +464,7 @@ def post_job_receipt(
         earlier = _hand_over_receipts(db, session, before_user=False)
         prompt = _with_receipts(job_receipts_prompt([(job_id, content)], before_user=False), earlier)
         message = AgentMessage(
-            session_id=session.id, role=JOB_RECEIPT_ROLE, content=content, payload={"job_id": job_id, "asset_ids": asset_ids},
+            session_id=session.id, role=JOB_RECEIPT_ROLE, content=content, payload=facts,
         )
         return _start_turn_with(db, session, message, _prompt_with_context(prompt, unseen), owner)
     return _wait_for_the_running_turn(
@@ -463,7 +474,7 @@ def post_job_receipt(
             session_id=session.id,
             role=JOB_RECEIPT_ROLE,
             content=content,
-            payload={"job_id": job_id, "asset_ids": asset_ids, "undelivered": True, "deliver_as": owner.id},
+            payload={**facts, "undelivered": True, "deliver_as": owner.id},
         ),
     )
 
@@ -1024,8 +1035,14 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
     对话去接收。所以这不是"点了没反应"那种小事,是一个已经没有上下文的动作仍然可以被执行。
     """
     stale = db.scalars(select(AgentSession).where(AgentSession.status == "running")).all()
+    redeliver: list[str] = []
     for session in stale:
         session.status = "idle"
+        #: **回执不是「落库就算送到」。** 空闲时到的回执一落库就起一轮,而这一轮可能还没被模型读到就被
+        #: 重启掐断了 —— 收尾只拨回会话的话,那条回执永远停在「已送」,智能体永远不知道任务结果。
+        #: 最后一条是「已送的终态回执」时把它重新标成待送,提交之后 drain 一次,让下一轮真的读到它。
+        if _redeliver_receipt_if_unread(db, session):
+            redeliver.append(session.id)
         db.add(
             AgentMessage(
                 session_id=session.id,
@@ -1045,8 +1062,38 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
             )
             .values(status=card_expiry.EXPIRED, error=card_expiry.EXPIRY_BACKEND_RESTARTED, resolved_at=now())
         )
+    if redeliver:
+        #: 提交之后才 drain:它开自己的会话、起一轮,得读到刚提交的「待送」。
+        after_commit(db, lambda: [_drain_queue(session_id) for session_id in redeliver])
     # 不提交:重启收尾是一次用例,几张表收完一起提交(见 domain/restart.settle_previous_run)。
     return len(stale)
+
+
+def _redeliver_receipt_if_unread(db: Session, session: AgentSession) -> bool:
+    """这一轮被重启掐断时,**最后一条是已送的任务回执** → 重新标成待送,返回是否改了。
+
+    判据就是「最后一条」:其后没有助手回答,说明模型没来得及读过它。已经标着待送的(会话忙时到的回执)
+    不用动 —— 它本来就会被下一轮取走。任务被清掉了、或没有归属人(起不了一轮)时不动:送也送不到。
+    """
+    last = db.scalars(
+        select(AgentMessage)
+        .where(AgentMessage.session_id == session.id)
+        .order_by(AgentMessage.created_at.desc())
+        .limit(1)
+    ).first()
+    if last is None or last.role != JOB_RECEIPT_ROLE:
+        return False
+    payload = dict(last.payload or {})
+    if payload.get("undelivered"):
+        return False
+    job = db.get(Job, str(payload.get("job_id") or ""))
+    owner_id = job.created_by if job is not None else None
+    if not owner_id:
+        return False
+    payload["undelivered"] = True
+    payload["deliver_as"] = owner_id
+    last.payload = payload
+    return True
 
 
 #: 中断说明的原文。外部渠道(飞书等)要把同一句话发回聊天里 —— 只写进库的话,

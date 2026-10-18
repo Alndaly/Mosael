@@ -25,6 +25,14 @@ const message = (id: string, role: string, content: string, payload: Record<stri
 
 const queued = message("q1", "user", "顺便把音量调大一点", { queued: true, queued_by: "me" });
 
+const CATALOG = {
+  kinds: [
+    { kind: "ai_generation", label: "生成", announce: "always", affects: ["assets"], view: "ai", record_field: "session_id" },
+    { kind: "tts", label: "配音", announce: "always", affects: ["assets"], view: "ai", record_field: "session_id" },
+  ],
+  fallback: { kind: "", label: "任务", announce: "always", affects: [], view: null, record_field: null },
+};
+
 vi.mock("@/api/client", () => ({
   isNotFound: () => false,
   API_BASE: "http://backend.test",
@@ -33,6 +41,12 @@ vi.mock("@/api/client", () => ({
   assetPreviewUrl: (id: string) => `/previews/${id}`,
   assetThumbnailUrl: (id: string) => `/thumbs/${id}`,
   getAsset: vi.fn(async () => null),
+  fetchJobKinds: vi.fn(async () => CATALOG),
+  getJob: vi.fn(async () => null),
+  cancelJob: vi.fn(),
+  listJobEvents: vi.fn(async () => []),
+  listJobChildren: vi.fn(async () => []),
+  regenerateAssetProxy: vi.fn(),
   listAgentSessions: vi.fn(async () => [{ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", is_mine: true }]),
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
@@ -41,9 +55,14 @@ vi.mock("@/api/client", () => ({
   listAgentMessages: vi.fn(async () => [
     message("u1", "user", "把五段旁白都配上音"),
     message("m1", "assistant", "先配第一段", { timeline: [{ type: "text", text: "先配第一段" }] }),
-    message("r1", "job_receipt", "「配音 1」已完成,素材 id:a1。", { job_id: "j1" }),
+    message("r1", "job_receipt", "「配音 1」失败了。", {
+      job_id: "j1", status: "failed", kind: "ai_generation", subject: "配音 1",
+      error: "下载成片时断了", error_summary: "下载成片时断了",
+    }),
     queued,
-    message("r2", "job_receipt", "「配音 2」已完成,素材 id:a2。", { job_id: "j2", undelivered: true, deliver_as: "me" }),
+    message("r2", "job_receipt", "「配音 2」已取消。", {
+      job_id: "j2", status: "cancelled", kind: "tts", subject: "配音 2", undelivered: true, deliver_as: "me",
+    }),
   ]),
   listAgentQueue: vi.fn(async () => [queued]),
   listAgentUsageEvents: vi.fn(async () => []),
@@ -129,17 +148,16 @@ it("回执画成任务通知,不进待发消息那一条条;用户自己排的�
   await waitFor(() => expect(screen.getAllByText("chatSteerAction")).toHaveLength(1));
 
   const notices = [...container.querySelectorAll("[data-job-receipt]")];
-  expect(notices.map((one) => one.textContent)).toEqual([
-    expect.stringContaining("「配音 1」已完成,素材 id:a1。"),
-    expect.stringContaining("「配音 2」已完成,素材 id:a2。"),
-  ]);
-  for (const notice of notices) expect(notice.querySelectorAll("button")).toHaveLength(0);
+  expect(notices).toHaveLength(2);
+  //: 失败是一条卡(原因 + 能点的动作),被停下的是灰的「已停止」;都不是一行正文。
+  expect(notices[0].textContent).toContain("下载成片时断了");
+  expect(notices[1].textContent).toContain("genStopped");
 
   //: 待发那一条条里只有用户自己排的话。
   const steer = screen.getByText("chatSteerAction").closest("div")!;
   expect(steer.textContent).toContain("顺便把音量调大一点");
-  expect(container.textContent?.match(/「配音 \d」已完成/g)).toHaveLength(2);
-  expect(steer.textContent).not.toContain("已完成");
+  expect(container.querySelectorAll("[data-job-receipt]")).toHaveLength(2);
+  expect(steer.textContent).not.toContain("genStopped");
 });
 
 it("还没交给智能体的回执画在正在跑的那一轮下面;交过的按时间排在前面", async () => {

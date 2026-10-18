@@ -24,7 +24,6 @@ vi.mock("@/features/agent/messageUsage", () => ({
 }));
 
 import { ChatBubble } from "./ChatBubble";
-import { hoverHint } from "@/test/hint";
 
 it("用户气泡不被悬停脚注撑宽:那一列靠右对齐,不拉伸", () => {
   const message = {
@@ -44,14 +43,15 @@ it("用户气泡不被悬停脚注撑宽:那一列靠右对齐,不拉伸", () =>
   expect(column.className).not.toContain("items-stretch");
 });
 
-it("后台任务的回执画成一行任务通知:不是用户气泡,没有发出时间那行脚注", async () => {
-  //: 用户截图:「签章文件.pdf」已完成……靠右摆着,像是他自己发的(「这不是我发送的」)。回执现在是自己的角色
-  //: (job_receipt),不再借用户消息的壳。
+it("成功的后台任务回执不常驻在对话里:交给右侧「后台任务」列表,更不是用户气泡", () => {
+  //: 用户截图:「签章文件.pdf」已完成……靠右摆着,像是他自己发的(「这不是我发送的」)。回执是自己的角色
+  //: (job_receipt),不是用户消息;而**成功**的那一条不进对话 —— 同一件事右侧任务列表已经在列,
+  //: 对话里再留一行「已完成」是把一件结果说两遍(失败/被停下的仍然是一张卡)。
   const message = {
     id: "m2",
     role: "job_receipt",
     content: "「签章文件.pdf」已完成,素材 id:ce5e。",
-    payload: { job_id: "job-1" },
+    payload: { job_id: "job-1", status: "succeeded", kind: "publish", subject: "签章文件.pdf" },
     created_at: "2026-09-30T08:00:00Z",
   } as unknown as Parameters<typeof ChatBubble>[0]["message"];
   const { container } = render(
@@ -59,10 +59,7 @@ it("后台任务的回执画成一行任务通知:不是用户气泡,没有发�
       <ChatBubble message={message} usageEvents={[]} workspaceId="w1" />
     </QueryClientProvider>,
   );
-  const receipt = container.querySelector<HTMLElement>("[data-job-receipt]");
-  expect(receipt?.textContent).toContain("「签章文件.pdf」已完成,素材 id:ce5e。");
-  // 任务 id 只在悬停说明里(给查问题的人看)。
-  expect(await hoverHint(receipt!)).toContain("job-1");
+  expect(container.querySelector("[data-job-receipt]")).toBeNull();
   expect(container.querySelector(".bg-secondary")).toBeNull();
   expect(screen.queryByTestId("footer")).toBeNull();
   expect(container.querySelectorAll("button")).toHaveLength(0);
