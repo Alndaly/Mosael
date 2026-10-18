@@ -47,6 +47,13 @@ export type LibraryNavItem = {
   depth?: number;
   /** 不缩进地看也认得出是哪一个的全名(`video/草稿`):读屏念它,窄窗口的下拉里显示它。不给就用 `label`。 */
   fullLabel?: string;
+  /**
+   * 选中的那一项收在这个分组里(分组被收拢了,子项不渲染):这一项要标出来,让用户知道自己在哪一组里。
+   * 同时它会接替选中项成为这一列页签的键盘落脚点(见 NavColumn)。
+   */
+  containsSelection?: boolean;
+  /** `containsSelection` 时并进读屏名字的那一句(「选中的文件夹在里面」)。调用方给译文。 */
+  selectedInsideLabel?: string;
 };
 
 export type LibraryNav = {
@@ -60,6 +67,11 @@ export type LibraryNav = {
   /** 这一列顶上的一颗操作(工作流库的「新建文件夹」)。窄窗口下排在目录下拉的后面。 */
   action?: React.ReactNode;
   /**
+   * 左列宽度(CSS 长度,如 `"240px"`)。不给就用骨架的 216px(模型库);工作流库按自己的名字常量给。
+   * 只影响并排显示这一列时那一格;窄窗口下整列收成下拉,用不上。
+   */
+  width?: string;
+  /**
    * 给每一项再包一层(工作流库:文件夹的右键菜单、⋯、把卡片拖上来)。`tab` 是那颗页签按钮本身,原样放进去 ——
    * 包的那一层是 `role="none"` 的容器,别换掉按钮;按钮上的方向键照旧在页签之间走。
    */
@@ -72,6 +84,13 @@ export type LibraryNav = {
 export type LibraryReturn = { key: string; scrollTop: number };
 
 const navName = (item: LibraryNavItem) => `${item.fullLabel ?? item.label}${item.count !== undefined ? ` ${item.count}` : ""}`;
+
+/**
+ * 页签那一组的键盘落脚点。选中的那一项在(没被收拢的分组藏起来)时就是它;被藏起来了,由标着
+ * `containsSelection` 的那一项接替 —— 否则整组页签一个 `tabIndex=0` 都没有,Tab 就进不来。
+ */
+const focusValueOf = (items: readonly LibraryNavItem[], value: string) =>
+  items.some((item) => item.value === value) ? value : (items.find((item) => item.containsSelection)?.value ?? value);
 
 /**
  * 工具条按钮上的字在多窄时收起(见 LibraryToolbarLabel)。看的是**工具条自己**有多宽(容器查询),不是窗口:左边那一列
@@ -178,6 +197,7 @@ export function LibraryDialog({
 
   const allItems = nav ? [...nav.items, ...(nav.pinned ?? [])] : [];
   const tabId = (value: string) => `${tabPrefix}-${allItems.findIndex((one) => one.value === value)}`;
+  const labelledBy = nav ? tabId(focusValueOf(allItems, nav.value)) : undefined;
   const showColumn = Boolean(nav) && !narrow;
   const navPicker =
     nav && narrow ? (
@@ -207,12 +227,16 @@ export function LibraryDialog({
       {detailKey ? (
         detail
       ) : (
-        <div className={cn("grid min-h-0 flex-1", showColumn ? "grid-cols-[216px_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]")}>
+        <div
+          data-library-columns=""
+          style={showColumn && nav?.width ? { gridTemplateColumns: `${nav.width} minmax(0, 1fr)` } : undefined}
+          className={cn("grid min-h-0 flex-1", showColumn ? "grid-cols-[216px_minmax(0,1fr)]" : "grid-cols-[minmax(0,1fr)]")}
+        >
           {showColumn && nav && <NavColumn nav={nav} tabId={tabId} panelId={panelId} />}
           <div
             id={panelId}
             role={showColumn ? "tabpanel" : undefined}
-            aria-labelledby={showColumn && nav ? tabId(nav.value) : undefined}
+            aria-labelledby={showColumn ? labelledBy : undefined}
             className="flex min-h-0 min-w-0 flex-col"
           >
             {/* 工具条是一个容器:按钮上的字收不收看它自己有多宽(见 LibraryToolbarLabel)。 */}
@@ -240,10 +264,12 @@ export function LibraryDialog({
 function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: string) => string; panelId: string }) {
   const listRef = React.useRef<HTMLDivElement>(null);
   const all = [...nav.items, ...(nav.pinned ?? [])];
+  const focusValue = focusValueOf(all, nav.value);
   const move = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // 只认页签上按的:包在页签外面的那一层(右键菜单、⋯ 菜单)里的方向键冒泡上来不算
     if (event.defaultPrevented || (event.target as HTMLElement).getAttribute("role") !== "tab") return;
-    const at = all.findIndex((one) => one.value === nav.value);
+    //: 从**实际进得了 Tab 的那一项**数(收起来的组里选中的子项不在,由父项接替,见 focusValueOf)
+    const at = all.findIndex((one) => one.value === focusValue);
     const next =
       event.key === "ArrowDown" ? Math.min(all.length - 1, at + 1)
       : event.key === "ArrowUp" ? Math.max(0, at - 1)
@@ -259,6 +285,7 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
   };
   const tab = (item: LibraryNavItem) => {
     const selected = item.value === nav.value;
+    const inside = Boolean(item.containsSelection);
     const button = (
       <button
         key={item.value}
@@ -267,8 +294,9 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
         role="tab"
         aria-selected={selected}
         aria-controls={panelId}
-        aria-label={navName(item)}
-        tabIndex={selected ? 0 : -1}
+        aria-label={inside && item.selectedInsideLabel ? `${navName(item)} ${item.selectedInsideLabel}` : navName(item)}
+        data-selected-inside={inside || undefined}
+        tabIndex={item.value === focusValue ? 0 : -1}
         onClick={() => nav.onChange(item.value)}
         style={item.depth ? { paddingInlineStart: `${10 + item.depth * 14}px` } : undefined}
         className={cn(
@@ -276,10 +304,13 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
           "hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           "[&_svg]:size-3.5 [&_svg]:shrink-0",
           selected && "bg-accent font-medium text-primary hover:bg-accent hover:text-primary",
+          //: 选中的那一项被收在这一组里:整项透着强调色 + 末尾一个点,和「就是这一项」区分开
+          inside && !selected && "bg-accent/50 text-primary hover:bg-accent hover:text-primary",
         )}
       >
         {item.icon}
         <Truncate className="flex-1">{item.label}</Truncate>
+        {inside && !selected && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />}
         {item.count !== undefined && (
           <span className={cn("shrink-0 text-ui-xs tabular-nums", item.tone === "warning" ? "font-semibold text-warning" : "text-muted-foreground")}>
             {item.count}
@@ -298,7 +329,13 @@ function NavColumn({ nav, tabId, panelId }: { nav: LibraryNav; tabId: (value: st
       onKeyDown={move}
       className={cn("flex min-h-0 flex-col", nav.action ? "flex-1" : "border-r border-divider")}
     >
-      <div role="none" className="grid min-h-0 flex-1 content-start gap-0.5 overflow-y-auto overscroll-contain px-3 pb-3 pt-1">
+      {/* `overflow-x-hidden` 是**有意的**:只写 `overflow-y-auto` 时另一半按 CSS 规则会变成 `auto`,长名字一旦
+          比这一列宽,整列就能左右滚(维护者报的)。截断由名字那一格的 `Truncate` 做,这一层不横滚。 */}
+      <div
+        role="none"
+        data-library-nav-scroll=""
+        className="grid min-h-0 min-w-0 flex-1 content-start gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pb-3 pt-1"
+      >
         {nav.items.map(tab)}
       </div>
       {(nav.pinned ?? []).length > 0 && (

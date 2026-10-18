@@ -25,6 +25,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const openImagePreview = vi.hoisted(() => vi.fn());
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview, isImagePreviewOpen: false }) }));
@@ -88,7 +89,7 @@ vi.mock("@/lib/generationHandoff", () => ({ handOffToGeneration: handoff }));
 import type { PluginInstance, WorkflowApp, WorkflowFile, WorkflowLibrary } from "@/api/client";
 import { invalidateResources } from "@/api/resourceKeys";
 import { ConnectionLibraries } from "./ConnectionLibraries";
-import { WorkflowLibraryDialog } from "./WorkflowLibrary";
+import { WORKFLOW_LIBRARY_NAV_WIDTH, WorkflowLibraryDialog } from "./WorkflowLibrary";
 import { resetWorkbench } from "./workbench/workbenchSession";
 
 const instance = { id: "i1", name: "ComfyUI · 192.168.3.15", blocked_reason: "" } as PluginInstance;
@@ -1146,6 +1147,180 @@ describe("工作流库 · 文件夹", () => {
     fireEvent.dragOver(folderTab("video 1"), { dataTransfer: files });
     expect(folderTab("video 1").closest("[data-drop-target]")).toBeNull();
     expect(screen.queryByRole("dialog", { name: "workflowMoveTitle" })).toBeNull();
+  });
+});
+
+/** 窗口只有 `width` 宽:`(max-width: Npx)` 里 N 不小于它的都算匹配(和 ModelLibrary.dom.test.tsx 同一个办法)。 */
+function narrowWindow(width = 700) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: Number(/max-width: (\d+)px/.exec(query)?.[1] ?? 0) >= width, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+/**
+ * 维护者(截图):左边那列文件夹
+ * 1. 能左右滚了(不该滚)、2. 宽度稍大一些、3. 分组要能展开/收拢、4. 名字长了要省略号 + 悬停看全文。
+ *
+ * jsdom 没有排版,量不了 clientWidth / scrollWidth,所以按**结构和 class** 判(和仓里别的布局用例一样):
+ * 长名字那一格能不能收缩(`min-w-0`)、左列滚动层是不是只纵滚、名字是不是 `Truncate` 画的。
+ * 截断出说明那一段沿用 `components/ui/truncate` 的用例办法:手动给 scrollWidth / clientWidth 造出宽度差。
+ */
+describe("工作流库 · 左栏目录:宽度、截断、展开收拢", () => {
+  const LONG = "这是一个特别长的文件夹名字长到必须截断才放得进左边那一列";
+  const LONG_LIBRARY = () => library({
+    folders: [LONG, `${LONG}/子文件夹`],
+    workflows: [...library().workflows!, flow({ path: `${LONG}/子文件夹/long.json`, label: "long", folder: `${LONG}/子文件夹` })],
+  });
+  const originalMatchMedia = window.matchMedia;
+
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+  });
+
+  it("① 长名字那一格能收缩:名字交给 Truncate,不在格子外面撑开", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(LONG_LIBRARY());
+    await openLibrary();
+    const tab = within(column()).getByRole("tab", { name: `${LONG} 1` });
+    const label = tab.querySelector<HTMLElement>("[class~='truncate']");
+    expect(label, "名字走 Truncate(悬停看全文)").toBeTruthy();
+    expect(label!.textContent).toBe(LONG);
+    expect(label!.hasAttribute("title"), "不是原生 title").toBe(false);
+    expect(tab.parentElement!.className, "那一行是能收缩的格子,长名字撑不开它").toContain("min-w-0");
+  });
+
+  it("① 左列只纵向滚:长名字不让它产生横向滚动", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(LONG_LIBRARY());
+    await openLibrary();
+    const scroller = document.querySelector<HTMLElement>("[data-library-nav-scroll]");
+    expect(scroller, "左列自己滚的那一层").toBeTruthy();
+    expect(scroller!.className, "纵向滚").toContain("overflow-y-auto");
+    expect(scroller!.className, "横向裁掉 —— 滚动条只该有纵向的").toContain("overflow-x-hidden");
+    expect(scroller!.className).not.toContain("overflow-x-auto");
+    expect(scroller!.className, "不靠 nowrap 撑开容器(截断在名字那一格里)").not.toContain("whitespace-nowrap");
+  });
+
+  it("② 左列宽度是那个命名常量(比骨架默认的 216px 宽一档);窄弹窗下收成下拉,不留横向滚动", async () => {
+    await openLibrary();
+    const grid = document.querySelector<HTMLElement>("[data-library-columns]");
+    expect(grid, "左列 + 内容区那一格").toBeTruthy();
+    expect(grid!.style.gridTemplateColumns).toBe(`${WORKFLOW_LIBRARY_NAV_WIDTH} minmax(0, 1fr)`);
+    expect(Number.parseFloat(WORKFLOW_LIBRARY_NAV_WIDTH), "比原来的 216px 稍大一些").toBeGreaterThan(216);
+
+    cleanup();
+    narrowWindow(700);
+    api.getWorkflowLibrary.mockResolvedValue(library());
+    await openLibrary();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("combobox", { name: "workflowLibraryFolders" }), "窄窗口:目录收成下拉").toBeTruthy();
+    expect(dialog.querySelector("[data-library-nav-scroll]"), "没有左列,也就没有它的滚动条").toBeNull();
+    const horizontal = [...dialog.querySelectorAll<HTMLElement>("*")]
+      .filter((element) => /(?:^|\s)overflow-x-(?:auto|scroll)(?:\s|$)/.test(element.className));
+    expect(horizontal.map((element) => element.className), "窄弹窗里没有横向滚动的层").toEqual([]);
+  });
+
+  it("③ 分组默认展开;三角只开合不筛选;父项本身仍然筛选;选中项收在组里时父项标出来", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(WITH_FOLDERS());
+    await openLibrary();
+    expect(folderTab("video/草稿 0"), "默认展开:子文件夹在").toBeTruthy();
+    const toggle = screen.getByRole("button", { name: "workflowFolderCollapse" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(toggle);
+    expect(screen.queryByRole("tab", { name: "video/草稿 0" }), "收拢后子项不渲染").toBeNull();
+    expect(folderTab("video 1"), "父项留着").toBeTruthy();
+    expect(folderTab("workflowLibraryAll 3").getAttribute("aria-selected"), "点三角没有筛选").toBe("true");
+
+    fireEvent.click(folderTab("video 1"));
+    expect(folderTab("video 1").getAttribute("aria-selected"), "点父项本身仍然筛选").toBe("true");
+    expect(names()).toEqual(["wan"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "workflowFolderExpand" }));
+    fireEvent.click(folderTab("video/草稿 0"));
+    fireEvent.click(screen.getByRole("button", { name: "workflowFolderCollapse" }));
+    expect(screen.queryByRole("tab", { name: "video/草稿 0" }), "选中的子项被收起来了").toBeNull();
+    const parent = within(column()).getByRole("tab", { name: /video 1/ });
+    expect(parent.getAttribute("data-selected-inside"), "看得出选中的在该组里").toBe("true");
+    expect(parent.tabIndex, "收拢的组仍然是键盘的落脚点").toBe(0);
+    //: 方向键从**看得见的这一项**数,不能因为选中的子项藏起来了就退回到第一项(「全部」)
+    fireEvent.keyDown(parent, { key: "ArrowDown" });
+    expect(folderTab("空的 0").getAttribute("aria-selected"), "方向键接着往下走").toBe("true");
+  });
+
+  it("收拢状态只在这次打开里:关掉再开,默认又是全展开(不写本机)", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(WITH_FOLDERS());
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: "workflowFolderCollapse" }));
+    expect(screen.queryByRole("tab", { name: "video/草稿 0" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "workflowLibraryOpen" }));
+    await screen.findByRole("tablist", { name: "workflowLibraryFolders" });
+    expect(folderTab("video/草稿 0"), "再打开:默认展开").toBeTruthy();
+  });
+
+  it("④ 名字被截断时悬停看全文(仓里的 Truncate / Tooltip),没截断不出;不是 title、不是手写浮层", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(LONG_LIBRARY());
+    await openLibrary();
+    const tab = within(column()).getByRole("tab", { name: `${LONG} 1` });
+    const label = tab.querySelector<HTMLElement>("[class~='truncate']")!;
+    expect(tab.parentElement!.className, "真浏览器里能截断:那一格先得能收缩").toContain("min-w-0");
+    Object.defineProperty(label, "scrollWidth", { value: 600, configurable: true });
+    Object.defineProperty(label, "clientWidth", { value: 180, configurable: true });
+    fireEvent.pointerEnter(label);
+    fireEvent.pointerMove(label);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toBe(LONG);
+    expect(tooltip.hasAttribute("data-tooltip"), "走仓里的 Truncate / Tooltip,不是手写浮层").toBe(true);
+    expect(tooltip.className, "不是自己摆 absolute 的浮层").not.toContain("absolute");
+
+    cleanup();
+    api.getWorkflowLibrary.mockResolvedValue(library({ folders: ["video"] }));
+    await openLibrary();
+    const short = within(column()).getByRole("tab", { name: /video/ });
+    const shortLabel = short.querySelector<HTMLElement>("[class~='truncate']")!;
+    Object.defineProperty(shortLabel, "scrollWidth", { value: 50, configurable: true });
+    Object.defineProperty(shortLabel, "clientWidth", { value: 180, configurable: true });
+    //: 说明的延迟是 radix 的计时器:用假计时器把「等一秒多」推过去,再看看它出没出(不拿真计时器等)。
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerEnter(shortLabel);
+      fireEvent.pointerMove(shortLabel);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(screen.queryByRole("tooltip"), "没截断就不弹").toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("⑤ 键盘:Tab 能到三角,Enter / Space 都能开合", async () => {
+    const user = userEvent.setup();
+    api.getWorkflowLibrary.mockResolvedValue(WITH_FOLDERS());
+    await openLibrary();
+    folderTab("workflowLibraryAll 3").focus();
+    await user.tab();
+    const toggle = screen.getByRole("button", { name: "workflowFolderCollapse" });
+    expect(document.activeElement, "Tab 直接到三角").toBe(toggle);
+
+    await user.keyboard("{Enter}");
+    expect(toggle.getAttribute("aria-expanded"), "Enter 收拢").toBe("false");
+    expect(screen.queryByRole("tab", { name: "video/草稿 0" })).toBeNull();
+
+    await user.keyboard(" ");
+    expect(screen.getByRole("button", { name: "workflowFolderCollapse" }).getAttribute("aria-expanded"), "Space 展开").toBe("true");
+    expect(folderTab("video/草稿 0")).toBeTruthy();
+  });
+
+  it("左列底部「缺节点或模型」钉在滚动区下面,不被长名字挤掉", async () => {
+    api.getWorkflowLibrary.mockResolvedValue(LONG_LIBRARY());
+    await openLibrary();
+    const pinned = folderTab("workflowLibraryProblems 2");
+    expect(pinned.closest("[data-library-nav-scroll]"), "不在滚的那一层里").toBeNull();
+    expect(pinned.parentElement!.className).toContain("shrink-0");
   });
 });
 

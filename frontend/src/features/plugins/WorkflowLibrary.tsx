@@ -2,6 +2,8 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
+  ChevronDown,
+  ChevronRight,
   CircleAlert,
   ClipboardCopy,
   Copy,
@@ -66,6 +68,7 @@ import {
   LIBRARY_DENSITIES,
   LIBRARY_DENSITY_ICONS,
   LIBRARY_DENSITY_LABELS,
+  LIBRARY_NARROW_QUERY,
   LIBRARY_TABLE_HEAD,
   LibraryDensitySwitch,
   LibraryDetail,
@@ -153,7 +156,9 @@ import { kindIsVisual } from "@/lib/assetKinds";
 import { gotoRecord, openBoard } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
+import { isImeKeystroke } from "@/lib/shortcuts";
 import { useFileDrop } from "@/lib/useFileDrop";
+import { useMediaMatch } from "@/lib/useMediaMatch";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -171,15 +176,42 @@ import { cn } from "@/lib/utils";
  * 自己的,回来时刷新,新存的那张就出现在列表里);「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
  *
  * **文件夹**(见 WorkflowFolders):左栏顶上「新建文件夹」;文件夹上右键(或 ⋯、Shift+F10)新建子文件夹、改名、删除(只删空的);
- * 卡片拖到左边的文件夹上就是「移动到…」那个文件夹(先确认)。**右键菜单**:卡片和列表的一行上右键、悬停 / 聚焦时出现的 ⋯、
- * Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台里打开(网页版是在 ComfyUI 里打开)、编辑应用表单、复制 / 改名 /
- * 移动 / 导出、复制路径、
+ * 卡片拖到左边的文件夹上就是「移动到…」那个文件夹(先确认)。有子文件夹的分组前面一颗三角能展开 / 收拢(默认展开,
+ * 状态只活在这次打开里);名字长了在那一格里截断、悬停看全文,不把左列撑出横向滚动。**右键菜单**:卡片和列表的一行上右键、
+ * 悬停 / 聚焦时出现的 ⋯、Shift+F10 / 菜单键都打开同一份菜单 —— 打开详情、在工作台里打开(网页版是在 ComfyUI 里打开)、
+ * 编辑应用表单、复制 / 改名 / 移动 / 导出、复制路径、
  * 去补缺的模型 / 节点、删除;点不了的写着为什么。
  *
  * 列表每次打开现问插件(不存库)。
  */
 
 const keyOf = (flow: WorkflowFile) => flow.path;
+
+/**
+ * 左列「工作流目录」的宽度。骨架(LibraryBrowser)默认 216px;工作流库的文件夹名带层级、又和 ComfyUI 自己的
+ * 侧栏对照着看,维护者要「左侧可以宽度稍大一些」—— 这里宽一档(240px),由 LibraryDialog 按这个常量排那一格。
+ * 窄窗口(见 LIBRARY_NARROW_QUERY)整列会收成工具条里的下拉,不会挤着内容区,也不产生横向滚动。
+ */
+export const WORKFLOW_LIBRARY_NAV_WIDTH = "240px";
+
+/** 窄窗口下「没有收起来的组」:树全展开,下拉里才走得到每一个文件夹。 */
+const NO_COLLAPSED: ReadonlySet<string> = new Set();
+
+/**
+ * 左列里的一项。文件夹带 `depth` 之外还带**这一组能不能开合、现在开着没有**:有子文件夹的给一颗三角
+ * (见 renderNavItem),点它只开合,点页签本身照旧筛选。收拢状态只活在这次打开里(见 WorkflowLibraryDialog 的
+ * `collapsed`),不写本机。
+ */
+type WorkflowNavItem = LibraryNavItem & {
+  /** 有子文件夹:前面给一颗展开/收拢的三角。 */
+  hasChildren?: boolean;
+  /** 这一组开着(默认开)。 */
+  expanded?: boolean;
+  /** 开合:只动 `collapsed`,不碰筛选。 */
+  onToggle?: () => void;
+  /** 三角的名字(展开 / 收拢「video/草稿」)。 */
+  toggleLabel?: string;
+};
 
 /**
  * 工具条那一行:一排、**不换行**,搜索框吃掉剩下的宽度,别的按内容宽(维护者:加了「用到模型」之后
@@ -240,6 +272,11 @@ export function WorkflowLibraryDialog({
     staleTime: 30_000,
   });
   const [view, setView] = React.useState(ALL_WORKFLOWS);
+  //: 收拢着的分组(值是文件夹路径)。**只活在这次打开里**:关掉再开、或者换一个连接,全部恢复展开。
+  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set());
+  React.useEffect(() => {
+    if (open) setCollapsed(new Set());
+  }, [open, instance.id]);
   const [query, setQuery] = React.useState("");
   const [kind, setKind] = React.useState<WorkflowKindFilter>("all");
   //: 顶栏「用到模型」:选一个模型名,只留用到它的工作流(`ALL_MODELS` = 没挑)。用到的模型名不在搜索里(见
@@ -325,22 +362,78 @@ export function WorkflowLibraryDialog({
     [workflows, library.data],
   );
   const problems = workflows.filter(lacksSomething).length;
-  const navItems: LibraryNavItem[] = [
-    { value: ALL_WORKFLOWS, label: t("workflowLibraryAll"), count: workflows.length, icon: <LayoutGrid /> },
-    ...folders.map((one) => ({
-      value: folderView(one.path), label: one.name, fullLabel: one.path, depth: one.depth, count: one.count,
-      icon: view === folderView(one.path) ? <FolderOpen /> : <Folder />,
-    })),
-  ];
+  //: 这一列在窄窗口里收成工具条里的下拉(见 LibraryBrowser):下拉里没有三角,树就**一直全展开** ——
+  //: 不然收起来的分组在那儿再也打不开。
+  const narrow = useMediaMatch(LIBRARY_NARROW_QUERY);
+  const collapsedFolders = narrow ? NO_COLLAPSED : collapsed;
+  //: 有子文件夹的那几个(路径):只有它们前面给三角,也只有它们能收拢。
+  const foldersWithChildren = React.useMemo(
+    () => new Set(folders.map((one) => parentOf(one.path)).filter((path): path is string => Boolean(path))),
+    [folders],
+  );
+  const hiddenByCollapse = (path: string) => {
+    const parts = path.split("/");
+    //: 自己不算:父项本身在收拢的分组里时,父项仍然要画出来
+    for (let depth = 1; depth < parts.length; depth += 1) {
+      if (collapsedFolders.has(parts.slice(0, depth).join("/"))) return true;
+    }
+    return false;
+  };
+  //: 选中的文件夹被收在哪一组里(最外面那个收拢着的上级 —— 更深的收拢组自己也看不见):父项要标出来,
+  //: 不然用户不知道自己在哪
+  const collapsedAncestorOf = (path: string): string | null => {
+    const parts = path.split("/");
+    for (let depth = 1; depth < parts.length; depth += 1) {
+      const parent = parts.slice(0, depth).join("/");
+      if (collapsedFolders.has(parent) && foldersWithChildren.has(parent)) return parent;
+    }
+    return null;
+  };
+  const toggleFolder = (path: string) => {
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+  //: 「全部」和各个文件夹(排好、缩进);收起来的分组的子项不渲染,父项留着
+  const allItem: WorkflowNavItem = { value: ALL_WORKFLOWS, label: t("workflowLibraryAll"), count: workflows.length, icon: <LayoutGrid /> };
+  const folderItems: WorkflowNavItem[] = folders.map((one) => ({
+    value: folderView(one.path), label: one.name, fullLabel: one.path, depth: one.depth, count: one.count,
+    icon: view === folderView(one.path) ? <FolderOpen /> : <Folder />,
+  }));
   const pinned: LibraryNavItem[] = [
     ...(problems > 0
       ? [{ value: PROBLEMS_VIEW, label: t("workflowLibraryProblems"), count: problems, icon: <TriangleAlert />, tone: "warning" as const }]
       : []),
     ...(trash.length > 0 ? [{ value: TRASH_VIEW, label: t("workflowLibraryTrash"), count: trash.length, icon: <Trash2 /> }] : []),
   ];
-  const current = [...navItems, ...pinned].some((one) => one.value === view) ? view : ALL_WORKFLOWS;
+  //: 选中的是哪个文件夹:用**整棵树**判(不是画出来的那几项)—— 选中的子项可能正被收在分组里,那时不能退回「全部」。
+  const current = [allItem, ...folderItems, ...pinned].some((one) => one.value === view) ? view : ALL_WORKFLOWS;
   //: 选中的文件夹(`""` = 没选文件夹:全部、缺东西的、回收站)
   const selectedFolder = folderOfView(current) ?? "";
+  const collapsedSelectedAncestor = selectedFolder ? collapsedAncestorOf(selectedFolder) : null;
+  const navItems: WorkflowNavItem[] = [
+    allItem,
+    ...folderItems
+      .filter((one) => !hiddenByCollapse(folderOfView(one.value) ?? ""))
+      .map((one) => {
+        const path = folderOfView(one.value) ?? "";
+        const inside = path === collapsedSelectedAncestor;
+        return {
+          ...one,
+          hasChildren: foldersWithChildren.has(path),
+          expanded: !collapsedFolders.has(path),
+          onToggle: () => toggleFolder(path),
+          toggleLabel: collapsedFolders.has(path)
+            ? t("workflowFolderExpand").replace("{name}", path)
+            : t("workflowFolderCollapse").replace("{name}", path),
+          containsSelection: inside,
+          selectedInsideLabel: inside ? t("workflowFolderSelectionInside") : undefined,
+        };
+      }),
+  ];
   const scope = inView(workflows, current);
   //: 「用到模型」的选项是**整座库**的并集,不是当前这一页的:挑了模型再换文件夹(或走「缺节点或模型」那一页),
   //: 挑中的那项还在清单里,下拉不会变成一个空壳。
@@ -458,14 +551,52 @@ export function WorkflowLibraryDialog({
     },
   });
   const renderNavItem = (item: LibraryNavItem, tab: React.ReactElement) => {
+    const treeItem = item as WorkflowNavItem;
     const folder = folderOfView(item.value);
     if (item.value !== ALL_WORKFLOWS && folder === null) return tab;
     const over = dropTarget === item.value;
     const drop = dropOn(item.value, folder ?? "");
+    //: 缩进是骨架写在**页签自己**的 style 上的(见 LibraryBrowser 的 NavColumn)。有三角的那几项把页签的内容
+    //: 再往右让 20px 给三角;三角的位置按同一份缩进取,不用在外层重复 10 + depth * 14 那套数。
+    const tabStyle = (tab.props as { style?: React.CSSProperties }).style;
+    const basePadding = Number.parseFloat(String(tabStyle?.paddingInlineStart ?? "10")) || 10;
+    const row = treeItem.hasChildren
+      ? React.cloneElement(tab as React.ReactElement<{ style?: React.CSSProperties }>, {
+          style: { ...tabStyle, paddingInlineStart: `${basePadding + 20}px` },
+        })
+      : tab;
+    //: 有子文件夹的:一颗三角,只开合这一组。和页签是两个独立的点击区(它是页签的兄弟、绝对定位在页签左边
+    //: 让出来的那块里),不会顺带把筛选也触发。键盘:Enter / Space 照旧能按。
+    const expander = treeItem.hasChildren && treeItem.onToggle ? (
+      <span
+        data-nav-expander=""
+        className="absolute top-1/2 z-10 -translate-y-1/2"
+        style={{ left: `${Math.max(0, basePadding - 10) + 2}px` }}
+      >
+        <IconButton
+          size="icon-xs"
+          className="text-muted-foreground"
+          label={treeItem.toggleLabel ?? ""}
+          aria-expanded={treeItem.expanded}
+          onClick={treeItem.onToggle}
+          onKeyDown={(event) => {
+            //: 原生按钮在真浏览器里 Enter / Space 会合成 click;显式做一遍,不合成 click 的环境里也按得动。
+            //: preventDefault 是为了别再补一次 click(否则一次按键开合两回)。组词期间的空格/回车归输入法。
+            if (event.key !== "Enter" && event.key !== " ") return;
+            if (isImeKeystroke(event)) return;
+            event.preventDefault();
+            treeItem.onToggle?.();
+          }}
+        >
+          {treeItem.expanded ? <ChevronDown /> : <ChevronRight />}
+        </IconButton>
+      </span>
+    ) : null;
     if (folder === null) {
       return (
-        <div role="none" data-drop-target={over || undefined} className={cn("rounded-md", over && "ring-2 ring-primary")} {...drop}>
-          {tab}
+        <div role="none" data-drop-target={over || undefined} className={cn("min-w-0 rounded-md", over && "ring-2 ring-primary")} {...drop}>
+          {expander}
+          {row}
         </div>
       );
     }
@@ -476,10 +607,11 @@ export function WorkflowLibraryDialog({
         <div
           role="none"
           data-drop-target={over || undefined}
-          className={cn("group/folder relative rounded-md", over && "ring-2 ring-primary")}
+          className={cn("group/folder relative min-w-0 rounded-md", over && "ring-2 ring-primary")}
           {...drop}
         >
-          <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>{tab}</ContextMenuTrigger>
+          {expander}
+          <ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>{row}</ContextMenuTrigger>
           {/* 悬停 / 聚焦时出现的 ⋯(盖住数量):只有选中的那一项进 Tab 顺序,别的用右键或 Shift+F10 */}
           <span className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded-md bg-secondary opacity-0 transition-opacity focus-within:opacity-100 group-hover/folder:opacity-100 has-[[data-state=open]]:opacity-100">
             <ActionMenu
@@ -736,7 +868,7 @@ export function WorkflowLibraryDialog({
       nav={
         library.data
           ? { label: t("workflowLibraryFolders"), value: current, onChange: setView, items: navItems, pinned, action: newFolder,
-              renderItem: renderNavItem }
+              width: WORKFLOW_LIBRARY_NAV_WIDTH, renderItem: renderNavItem }
           : undefined
       }
       toolbar={toolbar}
