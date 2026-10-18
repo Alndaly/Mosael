@@ -1171,8 +1171,11 @@ function SharedModelFolders({ instanceId, service }: { instanceId: string; servi
         </ul>
       )}
       <div className="flex min-w-0 flex-wrap items-center gap-2">
+        {/* 这一行只有两格:路径那格**吃掉剩下的宽度**,「添加」按自己的内容宽。PathField 缺省是设置页右栏
+            那个固定 280px(它还要放「选择…」),摆在这种整行的一格里右边会空出一大片 —— 所以给它 w-full
+            把固定宽换掉,再用 flex-1 去抢宽度。不动 Input 自己的 className:宽度是这一格的事。 */}
         <PathField kind="directory" label={t("localServiceSharedPath")} value={draft} onChange={setDraft}
-                   placeholder={t("localServiceSharedPlaceholder")} />
+                   placeholder={t("localServiceSharedPlaceholder")} className="min-w-0 w-full flex-1" />
         <Button variant="outline" disabled={!draft.trim() || save.isPending} loading={adding !== undefined && adding === draft.trim()}
                 onClick={() => add(draft)}>
           {t("localServiceSharedAdd")}
