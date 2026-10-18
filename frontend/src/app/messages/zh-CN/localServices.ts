@@ -161,13 +161,20 @@ export const localServices = {
   localServiceVersionReasonUnknown: "网络问题、离线,或者没有查到",
   localServiceVersionNotChecked: "还没检查",
   localServiceVersionReleaseNotes: "上游发布说明:{notes}",
-  // 这一份不是 Mosael 装的时候(用我自己装的 / 连一台服务器):版本从在跑的那台或安装目录里读
+  // 用我自己装的那一份(不是 Mosael 装的):版本从在跑的那台或安装目录里读;连一台服务器见下面的 Remote 几条
   localServiceVersionOtherRunning: "这一份不是 Mosael 装的;它现在报的版本是 {version}",
   localServiceVersionOtherFile: "这一份不是 Mosael 装的;安装目录里写的版本是 {version}",
   localServiceVersionOtherFileStopped: "这一份不是 Mosael 装的;它现在没在运行,安装目录里写的版本是 {version}",
   localServiceVersionNotRunning: "现在没在运行,读不到版本",
   localServiceVersionNoVersion: "它在跑,但没报版本;安装目录里也没有 comfyui_version.py",
   localServiceVersionUnreachable: "连不上它（没应答）,读不到版本",
+  // 连一台服务器:远端那台由它自己的机器维护,Mosael 只连过去,不装也不起停它
+  localServiceVersionRemoteChecking: "正在问那台服务器报的版本…",
+  localServiceVersionRemoteRunning: "远端那台自己报的版本是 {version};它由那台机器自己维护,Mosael 只连过去,不装也不起停它",
+  localServiceVersionRemoteNotRunning: "那台服务器现在没在运行,读不到版本",
+  localServiceVersionRemoteNoVersion: "它在跑,但没报版本(/system_stats 里没有 comfyui_version);不猜一个版本",
+  localServiceVersionRemoteUnreachable: "连不上它(没应答),读不到版本",
+  localServiceVersionRemoteNoSource: "读不到版本(连接里没有可问的地址)",
   localServiceVersionNoSource: "读不到版本（没有可读的来源）",
   // Mosael 装的那一份、安装记录里却没记下版本:说清是哪一份,不要含糊成「不是 Mosael 装的」
   localServiceVersionManagedMissing: "（Mosael 装的那一份,但插件没记下版本）",

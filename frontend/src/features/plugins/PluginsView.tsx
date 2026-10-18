@@ -345,6 +345,8 @@ export function PackageDetail({
         instanceId: serviceInstances[managedAt].id,
         title: serviceRows[managedAt].data?.title || serviceTitle,
         managed: true,
+        //: 托管的一份由 Mosael 装、由 Mosael 起停;页头照安装记录说
+        remote: false,
       };
     }
     //: 是 Mosael 装的那一份、这会儿却读不了(还没装好 / 要重建 / 不是部署管理员):那一块在连接里说,
@@ -356,7 +358,14 @@ export function PackageDetail({
     );
     if (unreadable) return null;
     const first = serviceRows.find((row) => row.data)?.data;
-    return { instanceId: serviceInstances[0].id, title: first?.title || serviceTitle, managed: false };
+    //: 第一份连接没有本机服务那一行(连一台服务器):远端永远不是 Mosael 装的那一份,版本文案照这个说
+    return {
+      instanceId: serviceInstances[0].id,
+      title: first?.title || serviceTitle,
+      managed: false,
+      //: 本机服务那一行读回来是 null 才算「连一台服务器」;读失败(undefined)别把本机的一份说成远端
+      remote: serviceRows[0]?.data === null,
+    };
   })();
   //: 页头那一行点「有新版本」:展开这个连接、滚到「版本」那一行(更新 / 回到上一版只有那里有)。
   const [versionJump, setVersionJump] = React.useState<{ instanceId: string; seq: number } | null>(null);
@@ -408,6 +417,7 @@ export function PackageDetail({
               instanceId={versionTarget.instanceId}
               title={versionTarget.title}
               managed={versionTarget.managed}
+              remote={versionTarget.remote}
               onOpen={() => openVersion(versionTarget.instanceId)}
             />
           ) : null,

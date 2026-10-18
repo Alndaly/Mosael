@@ -162,13 +162,20 @@ export const localServices = {
   localServiceVersionReasonUnknown: "a network problem, offline, or it wasn't checked",
   localServiceVersionNotChecked: "Not checked yet",
   localServiceVersionReleaseNotes: "Upstream release notes: {notes}",
-  // Not the copy Mosael installed (your own folder / a server): read from the running one or the folder
+  // Your own copy (not the one Mosael installed): read from the running one or the folder; server connections use the Remote keys below
   localServiceVersionOtherRunning: "This isn't the copy Mosael installed; it now reports version {version}",
   localServiceVersionOtherFile: "This isn't the copy Mosael installed; its install folder says version {version}",
   localServiceVersionOtherFileStopped: "This isn't the copy Mosael installed; it isn't running now, and its install folder says version {version}",
   localServiceVersionNotRunning: "It isn't running, so its version can't be read",
   localServiceVersionNoVersion: "It's running but doesn't report a version, and its install folder has no comfyui_version.py",
   localServiceVersionUnreachable: "It can't be reached (no answer), so its version can't be read",
+  // A server connection: that machine maintains it, and Mosael only connects to it
+  localServiceVersionRemoteChecking: "Asking the remote server for its version…",
+  localServiceVersionRemoteRunning: "The remote server reports version {version}; that machine maintains it, and Mosael only connects to it — it doesn't install, start or stop it",
+  localServiceVersionRemoteNotRunning: "That server isn't running, so its version can't be read",
+  localServiceVersionRemoteNoVersion: "It's running but doesn't report a version (its /system_stats has no comfyui_version); Mosael won't guess one",
+  localServiceVersionRemoteUnreachable: "It can't be reached (no answer), so its version can't be read",
+  localServiceVersionRemoteNoSource: "Couldn't read the version (the connection has no address to ask)",
   localServiceVersionNoSource: "Couldn't read the version (there's no source to read it from)",
   // The copy Mosael installed, but the install record has no version: say which copy it is
   localServiceVersionManagedMissing: "(The copy Mosael installed, but the plugin didn't record its version)",

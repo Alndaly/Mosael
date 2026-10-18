@@ -223,14 +223,15 @@ describe("插件页上的 ComfyUI 版本", () => {
     expect(h.version).toHaveBeenCalledTimes(1);
   });
 
-  it("连一台服务器(没有本机服务那一行)也能在页头看到它报的版本", async () => {
+  it("连一台服务器(没有本机服务那一行)也能在页头看到它报的版本,且说清远端不是 Mosael 装的那一份", async () => {
     h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
     h.services.c1 = null;
     h.version.mockResolvedValue({ current: "0.41.0", source: "running", running: true, reason: "" });
     show();
 
-    const expected = messages["zh-CN"].localServiceVersionOtherRunning.replace("{version}", "0.41.0");
+    const expected = messages["zh-CN"].localServiceVersionRemoteRunning.replace("{version}", "0.41.0");
     await waitFor(() => expect(versionFact()?.textContent).toBe(expected));
+    expect(versionFact()?.textContent).not.toContain("Mosael 装的");
     expect(h.version).toHaveBeenCalledWith("c1");
   });
 

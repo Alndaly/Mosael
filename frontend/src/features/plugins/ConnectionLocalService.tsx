@@ -173,6 +173,8 @@ export function ConnectionLocalService({
   });
   if (!declared || query.isPending) return null;
   const title = service?.title ?? declared.title;
+  //: 「连一台服务器」那一格的地址(清单的 SERVICE_ADDRESS_FIELD):有地址才问它要版本;没填就问不到,不摆这一行
+  const serverAddressValue = String(((instance.config ?? {}) as Record<string, unknown>)[SERVICE_ADDRESS_FIELD] ?? "").trim();
   const current: Where = service ? (service.mode === "managed" ? "managed" : "directory") : "server";
   const mode: Where = choosing ?? current;
   const canManage = service?.can_manage ?? true;
@@ -213,7 +215,15 @@ export function ConnectionLocalService({
         onCancel={() => setConfirmServer(false)}
         onConfirm={() => remove.mutate()}
       />
-      {mode === "server" ? serverAddress : <ServiceAddress service={service} portBelow={showRows} />}
+      {mode === "server" ? (
+        <>
+          {serverAddress}
+          {/* 连一台服务器:版本从远端那台的 /system_stats 读,和「地址」紧挨着摆一行;只在展开时问一次,读不到照原因说 */}
+          {serverAddressValue && <UnmanagedVersionRow instanceId={instance.id} title={title} remote />}
+        </>
+      ) : (
+        <ServiceAddress service={service} portBelow={showRows} />
+      )}
       {showDirectory && (
         <DirectorySetup
           instanceId={instance.id}

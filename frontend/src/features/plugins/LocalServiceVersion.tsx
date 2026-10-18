@@ -66,14 +66,21 @@ export function useLocalServiceVersion(instanceId: string, enabled = true) {
   });
 }
 
-/** 那一句版本说明(页头和连接页那一行共用):读到什么就说从哪儿读的,没读到就照原因说。 */
+/**
+ * 那一句版本说明(页头和连接页那一行共用):读到什么就说从哪儿读的,没读到就照原因说。
+ *
+ * `remote` 是「连一台服务器」那一种:**远端永远不是 Mosael 装的那一份**,也不归 Mosael 起停 ——
+ * 文案照这个说,别把本机安装记录 / 安装目录那套话搬过去(见 `useLocalServiceVersion` 的说明)。
+ */
 export function versionText(
   t: (key: MessageKey) => string,
   found: LocalServiceVersion | undefined,
   title: string,
+  remote = false,
 ): string {
-  if (!found) return t("localServiceVersionNoSource");
+  if (!found) return t(remote ? "localServiceVersionRemoteNoSource" : "localServiceVersionNoSource");
   if (found.current) {
+    if (remote) return t("localServiceVersionRemoteRunning").replace("{version}", found.current);
     if (found.source === "install") {
       return t("pluginServiceVersionCurrent").replace("{title}", title).replace("{version}", found.current);
     }
@@ -83,10 +90,16 @@ export function versionText(
     }
     return t("localServiceVersionOtherRunning").replace("{version}", found.current);
   }
-  if (found.reason === "not_running") return t("localServiceVersionNotRunning");
-  if (found.reason === "no_version") return t("localServiceVersionNoVersion");
-  if (found.reason === "unreachable") return t("localServiceVersionUnreachable");
-  return t("localServiceVersionNoSource");
+  if (found.reason === "not_running") {
+    return t(remote ? "localServiceVersionRemoteNotRunning" : "localServiceVersionNotRunning");
+  }
+  if (found.reason === "no_version") {
+    return t(remote ? "localServiceVersionRemoteNoVersion" : "localServiceVersionNoVersion");
+  }
+  if (found.reason === "unreachable") {
+    return t(remote ? "localServiceVersionRemoteUnreachable" : "localServiceVersionUnreachable");
+  }
+  return t(remote ? "localServiceVersionRemoteNoSource" : "localServiceVersionNoSource");
 }
 
 /** 版本号按数字段比(`0.41.0` > `0.39.0`);认不出的按 0 算,只用来决定这句话怎么说。 */
@@ -271,12 +284,15 @@ export function PluginServiceVersionFact({
   instanceId,
   title,
   managed,
+  remote = false,
   onOpen,
 }: {
   instanceId: string;
   title: string;
   /** 是不是「让 Mosael 装」的那一份(安装记录 + 上游;不是就读在跑的那台 / 目录里的文件)。 */
   managed: boolean;
+  /** 「连一台服务器」的那一份:远端永远不是 Mosael 装的,文案照这个说(见 {@link versionText})。 */
+  remote?: boolean;
   /** 点「有新版本」:去连接里那一行(展开、滚到「版本」)。 */
   onOpen: () => void;
 }) {
@@ -324,7 +340,7 @@ export function PluginServiceVersionFact({
       </span>
     );
   }
-  const text = versionText(t, running.data, title);
+  const text = versionText(t, running.data, title, remote);
   return (
     <span data-service-version="" className={running.data?.current ? "tabular-nums" : "text-warning"}>
       {text}
@@ -333,20 +349,32 @@ export function PluginServiceVersionFact({
 }
 
 /**
- * 连接页上非托管那份(「用我自己装的」)的「版本」那一行:读在跑的那台报的版本 / 安装目录里的文件;读不到照原因说。
+ * 连接页上非托管那份的「版本」那一行:读在跑的那台报的版本 / 安装目录里的文件;读不到照原因说。
+ *
+ * `remote` 是「连一台服务器」:地址从连接配置来,问的是远端那台自己的 `/system_stats`;**远端不是 Mosael 装的那一份**,
+ * 文案不拿本机安装记录那套话说它(见 {@link versionText})。
  *
  * 只在连接**展开**时才有这一行:不给列表里每个连接各探一次(插件详情页页头读的是同一份 query,展开不会多探)。
  * 托管的那一份仍走 {@link ManagedVersion}(安装记录 + 上游 + 更新 / 回滚),行为不变。
  */
-export function UnmanagedVersionRow({ instanceId, title }: { instanceId: string; title: string }) {
+export function UnmanagedVersionRow({
+  instanceId,
+  title,
+  remote = false,
+}: {
+  instanceId: string;
+  title: string;
+  /** 「连一台服务器」那一份:远端自己报版本,不是 Mosael 装的。 */
+  remote?: boolean;
+}) {
   const t = useI18n();
   const version = useLocalServiceVersion(instanceId);
   const found = version.data;
   const description = version.isPending
-    ? t("localServiceVersionChecking")
+    ? t(remote ? "localServiceVersionRemoteChecking" : "localServiceVersionChecking")
     : version.error
       ? t("pluginServiceVersionUnreadable").replace("{reason}", version.error.message)
-      : versionText(t, found, title);
+      : versionText(t, found, title, remote);
   return (
     <SettingsRow
       id={`local-service-version-${instanceId}`}
