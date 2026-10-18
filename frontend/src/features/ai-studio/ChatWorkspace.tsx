@@ -452,17 +452,32 @@ export function ChatWorkspace({
   const single = useMediaMatch("(max-width: 820px)");
   const [environmentOpen, setEnvironmentOpen] = React.useState(false);
   const environmentId = React.useId();
-  const toolbarRef = React.useRef<HTMLDivElement>(null);
+  //: 工具栏的高度:右侧「智能体环境」的头部拿它对齐成同一条分隔线(见 ChatInspector 的 headerHeight)。
+  //
+  //  **量的是"这一根工具栏",所以它换了就得重量。** 会话从草稿变成一条时,`SessionDecisions` 从裸
+  //  fragment 换成 Provider,这一整列被重建 —— 旧的工具栏离开文档。而 ResizeObserver 对离开文档的
+  //  元素还会报一次 0 尺寸:此前观察器是在挂载那一刻 observe 的(一次性 useLayoutEffect),这一报就
+  //  把 `toolbarHeight` 写成 0,新节点从此没人观察。头部于是塌成 0(只剩 border-b 的 1px),下面那层
+  //  滚动内容从同一个 y 开始画,把「智能体环境」盖住(维护者截图)。
+  //
+  //  用 **ref 回调**而不是 effect:节点一换(旧回调收到 null)就断开,拿到新节点重新量、重新观察。
+  //  0 一律不写 —— 量不到(还没排版、被藏起来)就留着上一次的值,头部不会塌。
   const [toolbarHeight, setToolbarHeight] = React.useState(56);
-  React.useLayoutEffect(() => {
-    const toolbar = toolbarRef.current;
+  const toolbarObserver = React.useRef<ResizeObserver | null>(null);
+  const measureToolbar = React.useCallback((toolbar: HTMLDivElement | null) => {
+    toolbarObserver.current?.disconnect();
+    toolbarObserver.current = null;
     if (!toolbar) return;
     // 窄窗口工具栏可能换行；抽屉始终从它的下缘开始，保留原开关的点击区域。
-    const measure = () => setToolbarHeight(toolbar.getBoundingClientRect().height);
+    const measure = () => {
+      const height = toolbar.getBoundingClientRect().height;
+      if (height > 0) setToolbarHeight(height);
+    };
     measure();
+    if (typeof ResizeObserver === "undefined") return; // 测试环境(jsdom)没有它
     const observer = new ResizeObserver(measure);
     observer.observe(toolbar);
-    return () => observer.disconnect();
+    toolbarObserver.current = observer;
   }, []);
   const showRight = environmentOpen && !narrow;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判:
@@ -550,7 +565,7 @@ export function ChatWorkspace({
         {acceptsFiles && attach.drop.overlay}
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
-        <div ref={toolbarRef} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
+        <div ref={measureToolbar} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
           {switcher}
           {viewingSubagent ? (
             <SubagentBreadcrumb
