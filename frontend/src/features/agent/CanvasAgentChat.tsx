@@ -56,6 +56,7 @@ import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem }
 import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
+import { caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { useStickToBottom } from "@/features/agent/stickToBottom";
@@ -297,6 +298,11 @@ export function CanvasAgentChat({
   //: 交出去之后它在对话里也排在这一轮的回答之后 —— 现在就按那个位置画,结束时不跳位。
   const transcript = visibleMessages.filter((message) => !isWaitingReceipt(message));
   const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
+  //: 被智能体**接住**的回执归给接住它的那一轮回答(见 ChatBubble.caughtReceiptsByMessage)。
+  //: 和工作台同一个函数、同一条规矩:归属只能由拿到全部消息的列表容器算。
+  const folded = React.useMemo(() => caughtReceiptsByMessage(transcript), [transcript]);
+  //: 被收起来的那几条消息 id:map 时跳过,否则它会单独占一条(接住了,却同时出现在两处)。
+  const foldedIds = React.useMemo(() => new Set([...folded.values()].flat().map((receipt) => receipt.id)), [folded]);
   //: 回执带来的素材画进接着它的那一轮回答(见 turnOutputs);后面还没有回答的归正在跑的这一轮。
   const received = receivedAssetIdsByMessage(transcript);
   //: 对话里画出来的工具调用:对得上其中一行的确认卡就摆在那一行里,对不上的才退回列表末尾。
@@ -587,7 +593,9 @@ export function CanvasAgentChat({
             return payload?.compaction ? <CompactionNotice key={message.id} info={payload.compaction} /> : null;
           }
           // 后台任务的回执:一行任务通知,不是用户气泡(见 JobReceiptNotice)。
+          // **被智能体接住的**不在这里单独占一条:它已经收进接住它的那一轮(见 folded),跳过这条消息。
           if (message.role === JOB_RECEIPT_ROLE) {
+            if (foldedIds.has(message.id)) return null;
             return <JobReceiptNotice key={message.id} content={message.content} payload={message.payload} />;
           }
           return (
@@ -612,6 +620,7 @@ export function CanvasAgentChat({
                     failed={Boolean(message.error)}
                     durationSeconds={duration}
                     receivedAssetIds={received.byMessage.get(message.id)}
+                    foldedReceipts={folded.get(message.id)}
                   />
                   {message.error && (
                     <div className={payload?.timeline?.length ? "mt-2" : undefined}>

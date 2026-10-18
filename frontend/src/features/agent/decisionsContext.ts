@@ -8,7 +8,8 @@ import type { Confirmation } from "@/api/client";
  * 取卡、拍板的 provider 在 InlineConfirmations。
  */
 export type Decisions = {
-  sessionId: string;
+  /** 会话 id;**草稿态是 null**(provider 常挂,但草稿态没有卡可取)。 */
+  sessionId: string | null;
   readOnly: boolean;
   /** 每次工具调用对应的那张卡(按卡上的 tool_call_id)。 */
   byToolCall: ReadonlyMap<string, Confirmation>;
@@ -32,8 +33,8 @@ export function usePendingConfirmations(): readonly Confirmation[] {
   return React.useContext(DecisionsContext)?.pending ?? NO_CARDS;
 }
 
-/** 外层那个 provider 管的是哪次对话、是不是只读。没有 provider 就是 null。 */
-export function useDecisionsScope(): { sessionId: string; readOnly: boolean } | null {
+/** 外层那个 provider 管的是哪次对话(草稿态是 null)、是不是只读。没有 provider 就是 null。 */
+export function useDecisionsScope(): { sessionId: string | null; readOnly: boolean } | null {
   const context = React.useContext(DecisionsContext);
   return context ? { sessionId: context.sessionId, readOnly: context.readOnly } : null;
 }

@@ -86,9 +86,17 @@ function progress(status: string): number {
 const NO_CARDS: readonly Confirmation[] = [];
 
 /**
+ * 草稿态(还没有会话)的缓存键占位。provider **始终**在树上,草稿态把查询关掉(`enabled`),
+ * 这个键永远不会真的取数 —— 它只是让两个 `useQuery` 的键有个稳定值。真实会话 id 不会是空串。
+ */
+const NO_SESSION = "";
+
+/**
  * 一次对话的确认卡:取卡、拍板、把结果交给对话里的各行。
  *
  * `sessionId` 就是**会话 id**:既是白名单挂靠的会话,也是确认卡的归属筛选键。
+ * **草稿态是 null**:provider 照样挂在树上(否则草稿变成一条会话时,外层元素类型一换,整列被重建),
+ * 但两条查询都关着、也不登记内联面 —— 没有会话就没有卡可看。
  * `readOnly`:同事共享来的对话 —— 卡照样摆出来,三档动作换成一句「等主人拍板」。这种卡只在这里出现:
  * 全局确认中心只列我能拍板的(见 ConfirmationCenter),面板关着时它也不会跑到那边去。
  * `live`:这次对话正有一轮在跑 —— 卡的状态会在这期间往前走(批准 → 执行完),要跟着刷。
@@ -101,7 +109,7 @@ export function ConfirmationsProvider({
   children,
 }: {
   workspaceId: string;
-  sessionId: string;
+  sessionId: string | null;
   readOnly?: boolean;
   live?: boolean;
   children: React.ReactNode;
@@ -110,21 +118,26 @@ export function ConfirmationsProvider({
   const qc = useQueryClient();
 
   // 挂载登记:全局中心据此知道**这个会话**的卡已经有人管了,不再重复显示(其余照常兜底)。
-  React.useEffect(() => registerInlineConfirmSurface(sessionId), [sessionId]);
+  React.useEffect(() => {
+    if (!sessionId) return undefined;
+    return registerInlineConfirmSurface(sessionId);
+  }, [sessionId]);
 
   // **只取本会话的卡**。此前拉的是整个工作区的 pending —— 于是同工作区其它对话、工作流节点、
   // MCP/飞书外部智能体的确认卡都会挤进当前对话,用户以为授的是「这次对话」,实际授的是别人的。
   const pending = useQuery({
-    queryKey: confirmationKeys.pending(workspaceId, sessionId),
-    queryFn: () => listConfirmations({ workspaceId, status: "pending", sessionId }),
+    queryKey: confirmationKeys.pending(workspaceId, sessionId ?? NO_SESSION),
+    queryFn: () => listConfirmations({ workspaceId, status: "pending", sessionId: sessionId ?? undefined }),
+    enabled: sessionId !== null,
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
   // 有了结论的卡:给对应那一行配一句状态。别处批的(自动放行、飞书、全局中心)也要看得到,所以从服务端读,
   // 不只记自己点过的那几张。
   const recent = useQuery({
-    queryKey: confirmationKeys.session(workspaceId, sessionId),
-    queryFn: () => listConfirmations({ workspaceId, sessionId, limit: SESSION_CARD_WINDOW }),
+    queryKey: confirmationKeys.session(workspaceId, sessionId ?? NO_SESSION),
+    queryFn: () => listConfirmations({ workspaceId, sessionId: sessionId ?? undefined, limit: SESSION_CARD_WINDOW }),
+    enabled: sessionId !== null,
     refetchInterval: live ? 2000 : false,
     refetchOnWindowFocus: true,
   });
@@ -132,7 +145,7 @@ export function ConfirmationsProvider({
   //: 有结论的那份还停在收尾之前(不跑的时候不轮询)—— 那一行既不是卡也没有结论,退回成工具的「失败」。
   const wasLive = React.useRef(live);
   React.useEffect(() => {
-    if (wasLive.current && !live) void qc.invalidateQueries({ queryKey: confirmationKeys.session(workspaceId, sessionId) });
+    if (sessionId && wasLive.current && !live) void qc.invalidateQueries({ queryKey: confirmationKeys.session(workspaceId, sessionId) });
     wasLive.current = live;
   }, [live, qc, workspaceId, sessionId]);
 
@@ -142,7 +155,7 @@ export function ConfirmationsProvider({
    *
    * `scope` 换了(切到另一个会话)就当作清空,不用 effect 去追。
    */
-  const [decided, setDecided] = React.useState<{ scope: string; cards: Confirmation[] }>({ scope: sessionId, cards: [] });
+  const [decided, setDecided] = React.useState<{ scope: string | null; cards: Confirmation[] }>({ scope: sessionId, cards: [] });
   const mine = decided.scope === sessionId ? decided.cards : NO_CARDS;
 
   /**
@@ -170,6 +183,8 @@ export function ConfirmationsProvider({
       /** 卡上拨的开关(「建好就启用」),批准时带上。 */
       choices: Record<string, boolean>;
     }) => {
+      //: 草稿态没有卡可点(两条查询都关着,待决定列表是空的);类型上把「没有会话」挡在接口之前。
+      if (!sessionId) throw new Error("confirmations need an agent session");
       if (choice === "session") {
         // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
         // 记的是**(工具, 这张卡的档位)**:以后同一工具不高于这一档的卡才放行(同一工具取最高的那条由后端归并)。

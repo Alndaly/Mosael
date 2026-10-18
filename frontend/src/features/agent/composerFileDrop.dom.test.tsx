@@ -53,7 +53,7 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("sonner", () => ({ toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() } }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
 vi.mock("@/features/ai-studio/SessionList", () => ({ SessionList: () => null }));
-vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null }));
+vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null, caughtReceiptsByMessage: () => new Map() }));
 vi.mock("@/features/agent/DictateButton", () => ({ DictateButton: () => null }));
 vi.mock("@/features/agent/ModelPicker", () => ({ ModelPicker: () => null }));
 vi.mock("@/features/agent/SessionSettingsMenu", () => ({ SessionSettingsMenu: () => null }));

@@ -62,7 +62,7 @@ vi.mock("@/features/agent/ChatComposer", () => ({
   emptyDocument: { type: "doc", content: [] },
 }));
 vi.mock("@/features/ai-studio/SessionList", () => ({ SessionList: () => null }));
-vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null }));
+vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null, caughtReceiptsByMessage: () => new Map() }));
 vi.mock("@/features/agent/DictateButton", () => ({ DictateButton: () => null }));
 vi.mock("@/features/agent/ModelPicker", () => ({ ModelPicker: () => null }));
 vi.mock("@/features/agent/SessionSettingsMenu", () => ({ SessionSettingsMenu: () => null }));

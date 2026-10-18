@@ -43,7 +43,7 @@ import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
-import { ChatBubble } from "@/features/agent/ChatBubble";
+import { ChatBubble, caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
 import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
 import { ChatTranscriptSkeleton } from "@/features/agent/chatSkeleton";
 import { isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
@@ -363,6 +363,12 @@ export function ChatWorkspace({
     [visibleMessages],
   );
   const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
+  //: 被智能体**接住**的回执归给接住它的那一轮回答(见 ChatBubble.caughtReceiptsByMessage)。
+  //: 归属只能在这里算 —— 只有消息列表容器手里有全部消息,单条气泡看不到后面还有没有回答。
+  //: 没接住的不在这张表里:它们要在对话里显式出现(带动作的那张卡)。
+  const folded = React.useMemo(() => caughtReceiptsByMessage(transcriptMessages), [transcriptMessages]);
+  //: 被收起来的那几条消息 id:map 时跳过,否则它会单独占一条(接住了,却同时出现在两处)。
+  const foldedIds = React.useMemo(() => new Set([...folded.values()].flat().map((receipt) => receipt.id)), [folded]);
   //: 回执带来的素材画进接着它的那一轮回答(见 turnOutputs);后面还没有回答的归正在跑的这一轮。
   //: memo 住:每条气泡拿到的是这张表里的同一个数组,对话没变就不换引用。
   const received = React.useMemo(() => receivedAssetIdsByMessage(transcriptMessages), [transcriptMessages]);
@@ -454,11 +460,12 @@ export function ChatWorkspace({
   const environmentId = React.useId();
   //: 工具栏的高度:右侧「智能体环境」的头部拿它对齐成同一条分隔线(见 ChatInspector 的 headerHeight)。
   //
-  //  **量的是"这一根工具栏",所以它换了就得重量。** 会话从草稿变成一条时,`SessionDecisions` 从裸
-  //  fragment 换成 Provider,这一整列被重建 —— 旧的工具栏离开文档。而 ResizeObserver 对离开文档的
-  //  元素还会报一次 0 尺寸:此前观察器是在挂载那一刻 observe 的(一次性 useLayoutEffect),这一报就
-  //  把 `toolbarHeight` 写成 0,新节点从此没人观察。头部于是塌成 0(只剩 border-b 的 1px),下面那层
-  //  滚动内容从同一个 y 开始画,把「智能体环境」盖住(维护者截图)。
+  //  **量的是"这一根工具栏",所以它换了就得重量。** 触发重建的那种情形(会话从草稿变成一条时,
+  //  `SessionDecisions` 从裸 fragment 换成 Provider)已经由「Provider 始终挂在树上」根除(见 PendingDecisions);
+  //  但工具栏仍可能因为别的原因换节点。而 ResizeObserver 对离开文档的元素会报一次 0 尺寸:此前观察器是
+  //  在挂载那一刻 observe 的(一次性 useLayoutEffect),这一报就把 `toolbarHeight` 写成 0,新节点从此没人观察。
+  //  头部于是塌成 0(只剩 border-b 的 1px),下面那层滚动内容从同一个 y 开始画,把「智能体环境」盖住
+  //  (维护者截图)。
   //
   //  用 **ref 回调**而不是 effect:节点一换(旧回调收到 null)就断开,拿到新节点重新量、重新观察。
   //  0 一律不写 —— 量不到(还没排版、被藏起来)就留着上一次的值,头部不会塌。
@@ -649,16 +656,19 @@ export function ChatWorkspace({
                  撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */
             <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
             <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
-              {transcriptMessages.map((message) => (
-                <ChatBubble
-                  key={message.id}
-                  message={message}
-                  workspaceId={workspace.id}
-                  usageEvents={usageByMessage.get(message.id) ?? NO_USAGE}
-                  mediaGallery={mediaGallery}
-                  receivedAssetIds={received.byMessage.get(message.id)}
-                />
-              ))}
+              {transcriptMessages.map((message) =>
+                foldedIds.has(message.id) ? null : (
+                  <ChatBubble
+                    key={message.id}
+                    message={message}
+                    workspaceId={workspace.id}
+                    usageEvents={usageByMessage.get(message.id) ?? NO_USAGE}
+                    mediaGallery={mediaGallery}
+                    receivedAssetIds={received.byMessage.get(message.id)}
+                    foldedReceipts={folded.get(message.id)}
+                  />
+                ),
+              )}
               {running && streamText && (
                 <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]">
                   <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />

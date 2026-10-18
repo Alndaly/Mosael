@@ -28,14 +28,16 @@ export function SessionDecisions({
   children,
 }: {
   workspaceId: string;
-  /** 没有会话(还没开口)就什么都不取,原样渲染里面的东西。 */
+  /** 会话 id;**草稿态是 null**。Provider 照样挂在树上(草稿 → 一条会话时外层不换元素类型、整列不重建),
+   *  只是草稿态不取卡。 */
   sessionId: string | null;
   readOnly?: boolean;
   /** 这次对话正有一轮在跑:卡的状态会在这期间往前走,要跟着刷。 */
   live?: boolean;
   children: React.ReactNode;
 }) {
-  if (!sessionId) return <>{children}</>;
+  // **始终**挂 Provider:此前草稿态直接返回 children(fragment),会话一变成一条,外层元素类型就换了 ——
+  // 整列被重建,工具栏跟着换成新节点,「智能体环境」的头部就是因为这个塌过的(见 ChatWorkspace.inspectorHeader 测试)。
   return (
     <ConfirmationsProvider workspaceId={workspaceId} sessionId={sessionId} readOnly={readOnly} live={live}>
       {children}
@@ -53,7 +55,8 @@ export function PendingDecisions({ placed }: { placed: ReadonlySet<string> }) {
   return (
     <>
       <UnplacedConfirmations placed={placed} />
-      <InlineQuestions sessionId={scope.sessionId} readOnly={scope.readOnly} />
+      {/* 草稿态没有会话:没有选择卡可取(有的话也是空列表,但不该拿空 id 去问)。 */}
+      {scope.sessionId !== null && <InlineQuestions sessionId={scope.sessionId} readOnly={scope.readOnly} />}
     </>
   );
 }

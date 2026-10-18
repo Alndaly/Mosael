@@ -1,22 +1,22 @@
 /** @vitest-environment jsdom */
 
 /**
- * 「智能体环境」的头部不许被下面的内容压住。
+ * 「智能体环境」的头部不许被下面的内容压住,也不许因为换会话把整列重建。
  *
  * 现场(维护者截图):面板最上面那行「智能体环境」被一层内容盖住,看起来像头部没了。它不是被别的
  * 东西盖上来,而是**自己塌成了 0** —— 头部那一行的 `height` 来自工具栏量出来的 `toolbarHeight`,
  * 高度一旦是 0,就只剩 `border-b` 那 1px,标题字正常溢出画在那一行里,而紧跟着的滚动内容区从
  * 同一个 y 开始画,后画的那一层就把字盖住了(`elementFromPoint` 落在标题上返回的是内容区)。
  *
- * 根因在**量工具栏的那只观察器守的是旧节点**:面板头部的高度是量工具栏来的(`headerHeight`),
- * 观察器在挂载时 `observe` 了那一刻的那根工具栏。会话从草稿变成一条时,`SessionDecisions` 从裸
- * fragment 换成 Provider,这一整列被重建 —— 旧工具栏离开文档,ResizeObserver 还会对离开文档的元素
- * 报一次 0 尺寸;观察器把这次 0 写进 `toolbarHeight`,而**新的**那根工具栏从此没人观察。于是头部
- * 永久是 0,直到整页重载。
+ * 触发条件是**整列被重建**:会话从草稿变成一条时,`SessionDecisions` 此前从裸 fragment 换成
+ * Provider —— 旧工具栏离开文档,ResizeObserver 还会对离开文档的元素报一次 0 尺寸;观察器把这次 0
+ * 写进 `toolbarHeight`,而新的那根工具栏从此没人观察。测量那一侧已经改成 ref 回调(节点一换就重新
+ * 观察、0 一律不写),但**根因是重建本身** —— 这一列不该重建。
  *
- * 这条测试钉的就是这个不变量:**工具栏换了 DOM 节点之后,面板头部的高度仍然跟着(新的)工具栏走**,
- * 旧节点那次 0 不许变成头部高度。DOM 测不了像素,但"头部高度塌成 0"正是覆盖现象在 DOM 里的那一半:
- * 头部一旦是 0,内容必然画在标题上。
+ * 这条测试同时钉两件事:
+ *   1. 草稿 → 选中一段会话,**工具栏还是同一个 DOM 节点**(整列没有重建);
+ *   2. 同一根工具栏量出来的高度照旧是面板头部的高度,工具栏变高时头部跟着变。
+ * DOM 测不了像素,但"头部高度塌成 0"正是覆盖现象在 DOM 里的那一半:头部一旦是 0,内容必然画在标题上。
  */
 
 import React from "react";
@@ -155,7 +155,7 @@ async function mount() {
   await screen.findByText("studioChatStart");
 }
 
-it("会话从草稿变成一条、工具栏换了节点之后,面板头部仍然跟着工具栏,内容不会压上来", async () => {
+it("会话从草稿变成一条时整列不重建,面板头部照旧跟着工具栏,内容不会压上来", async () => {
   startAgentDraft("w1", STUDIO_PLACE);
   await mount();
 
@@ -174,22 +174,23 @@ it("会话从草稿变成一条、工具栏换了节点之后,面板头部仍然
   const toolbarBefore = document.querySelector('section div[class*="min-h-14"]');
   expect(toolbarBefore, "没找到工具栏").not.toBeNull();
 
-  //: 草稿 → 选中一段对话:`SessionDecisions` 从裸 fragment 换成 Provider,整列重建,工具栏是新节点。
+  //: 草稿 → 选中一段对话。`SessionDecisions` 必须**始终**有一个 Provider 在树上;此前草稿态是
+  //: 裸 fragment,一换会话整列被重建 —— 这就是"头部塌成 1px"的触发条件。
   act(() => { adoptAgentSession("w1", STUDIO_PLACE, "s1"); });
   await screen.findByText("第一句");
   const toolbarAfter = document.querySelector('section div[class*="min-h-14"]');
-  expect(toolbarAfter, "工具栏没被换掉,这条测试要考的场景没发生").not.toBe(toolbarBefore);
-  expect(toolbarBefore!.isConnected, "旧工具栏还留在文档里").toBe(false);
+  expect(toolbarAfter, "工具栏换了 DOM 节点:整列被重建了").toBe(toolbarBefore);
+  expect(toolbarAfter!.isConnected, "整列重建把工具栏从文档里摘掉了").toBe(true);
 
-  //: 浏览器对离开文档的旧工具栏报的那次 0 —— 不许变成面板头部的高度。
+  //: 浏览器报尺寸变化(比如真实环境里离开文档的旧节点那次 0)—— 不许变成面板头部的高度。
   act(() => { FakeResizeObserver.fireAll(); });
   expect(
     header.style.height,
-    "旧工具栏的 0 高度被当成了面板头部的高度:头部会塌成 1px,下面的卡片就压在「智能体环境」上",
+    "0 高度被当成了面板头部的高度:头部会塌成 1px,下面的卡片就压在「智能体环境」上",
   ).toBe("56px");
 
-  //: 而且观察器得挂在**新**那根上:工具栏变高(窄窗口换行),头部跟着变。
+  //: 观察器得挂在工具栏上:工具栏变高(窄窗口换行),头部跟着变。
   metrics.toolbar = 84;
   act(() => { FakeResizeObserver.fireAll(); });
-  expect(header.style.height, "换节点之后,工具栏的尺寸变化没人跟了").toBe("84px");
+  expect(header.style.height, "工具栏的尺寸变化没人跟了").toBe("84px");
 });
