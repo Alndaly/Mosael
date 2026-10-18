@@ -34,9 +34,12 @@ export function startVideoDownload(params: {
   });
 }
 
-/** 这个候选能不能下:受保护的(DRM / 加密流)不能,界面如实说。 */
+/**
+ * 这个候选能不能下:**真 DRM 不能**;AES-128 加密的 HLS 能 —— 交给 yt-dlp 时它会取钥匙、会解。
+ * 页面扫描把这两种分在 `protection` 的 `drm` / `encrypted` 上(见 electron/publish/videoProbe)。
+ */
 export function downloadable(candidate: VideoCandidate): boolean {
-  return candidate.protection === null;
+  return candidate.protection !== "drm";
 }
 
 /** 下载任务的第一份产出(从链接导入的任务把入库的素材记在 result.asset_ids 里)。 */

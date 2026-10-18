@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Film, Loader2, Lock, RefreshCw, ShieldAlert, X } from "lucide-react";
+import { Download, Film, KeyRound, Loader2, Lock, RefreshCw, ShieldAlert, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -46,8 +46,10 @@ function fileOf(url: string): string {
 }
 
 /**
- * 侧栏「页面里的视频」:平台页面一张卡(按整页走从链接导入),下面是页面里找到的候选(直链 / HLS / DASH),
- * 受保护的如实标出来、不给下载;最后是这一会儿发起的下载,带进度和取消。
+ * 侧栏「页面里的视频」:平台页面一张卡(按整页走从链接导入),下面是页面里找到的候选(直链 / HLS / DASH)。
+ * **加密 ≠ 下不了**:标准 AES-128 的 HLS 标「可导入(加密),导入时解密」并照常给下载按钮;
+ * 只有真 DRM(Widevine / FairPlay / PlayReady、非 AES-128 的方法)才标受保护、不给下载。
+ * 最后是这一会儿发起的下载,带进度和取消。
  */
 export function VideoPanel({
   probe,
@@ -117,6 +119,11 @@ export function VideoPanel({
                   </Hint>
                 </span>
                 <span className="text-ui-xs text-muted-foreground">{facts.join(" · ")}</span>
+                {candidate.protection === "encrypted" && (
+                  <span className="flex items-center gap-1.5 text-ui-xs text-muted-foreground" data-video-encrypted="">
+                    <KeyRound size={12} /> {t("browserToolsVideoEncrypted")}
+                  </span>
+                )}
                 {open ? (
                   <Button size="xs" variant="outline" className="justify-self-start" loading={starting === candidate.url} onClick={() => onDownload(candidate)}>
                     <Download /> {t("browserToolsVideoDownload")}

@@ -1252,6 +1252,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/import-image-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Image From Url
+         * @description 贴一条图片直链,收进素材库。
+         *
+         *     复用截图那条路的三道闸:出站检查(每一跳)、40 MiB 上限、文件头认格式。落盘/探测/缩略图
+         *     走 `importer.import_binary_asset`;出处记成 `source_url`。同步完成 —— 一张图不值得为它排
+         *     一个后台任务,用户点完就该在素材库里看到。
+         */
+        post: operations["import_image_from_url_api_assets_import_image_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/import-local": {
         parameters: {
             query?: never;
@@ -13639,6 +13663,20 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
         };
+        /**
+         * ImageUrlImportRequest
+         * @description 贴一条图片直链,收进素材库(和内嵌浏览器采集那条路同一套闸)。
+         */
+        ImageUrlImportRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Project Id */
+            project_id?: string | null;
+            /** Url */
+            url: string;
+            /** Name */
+            name?: string | null;
+        };
         /** InsertClipRequest */
         InsertClipRequest: {
             /** Track Id */
@@ -24122,6 +24160,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_image_from_url_api_assets_import_image_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageUrlImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"];
                 };
             };
             /** @description Validation Error */

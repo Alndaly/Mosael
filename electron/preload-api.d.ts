@@ -272,7 +272,7 @@ export interface PageVideoCandidate {
   width: number;
   height: number;
   duration: number | null;
-  /** 受保护(DRM / 加密流):不给下载。 */
+  /** `drm` 是真 DRM(不给下载);`encrypted` 是标准 AES-128(可导入,导入时解密)。 */
   protection: "drm" | "encrypted" | null;
 }
 

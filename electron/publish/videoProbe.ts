@@ -2,8 +2,9 @@
  * 「下载页面里的视频」里不碰 Electron 的那一半:一条地址算不算视频、算哪一种(直链 / HLS / DASH)、
  * 清单有没有加密,以及把播放器上看见的和网络上看见的合成一份候选。
  *
- * **加密的不碰**:HLS 带 `#EXT-X-KEY`、DASH 带 `<ContentProtection>`、播放器挂着 EME 的 MediaKeys ——
- * 一律标成受保护,界面如实说「这段视频受保护,无法下载」,不尝试取钥匙、不尝试绕过。
+ * **加密不等于受保护**:标准 `METHOD=AES-128` 的 HLS,后端交给 yt-dlp 时它会取钥匙、会解 ——
+ * 页面面板要说「可导入(加密)」。真 DRM(Widevine / FairPlay / PlayReady、非 AES-128 的方法、
+ * DASH 的 `<ContentProtection>`)一律标成受保护,界面如实说「无法下载」,不尝试取钥匙、不尝试绕过。
  */
 import type { PageInfo } from "./pageToolsCore";
 
@@ -65,20 +66,55 @@ export function mediaIdentity(url: string): string {
   }
 }
 
+/** HLS 清单里的密钥是哪一种:`none` 没加密;`aes128` 标准 AES-128(yt-dlp 能解);`drm` 其余(解不了)。 */
+export type HlsKeyKind = "none" | "aes128" | "drm";
+
 /**
- * HLS 清单有没有加密。
- *
- * `#EXT-X-KEY` / `#EXT-X-SESSION-KEY` 的 METHOD 不是 NONE 就是加密流 —— 不分 AES-128 还是
- * SAMPLE-AES / FairPlay / Widevine:**内容方给它上了锁,我们就不去开锁**,如实说「受保护」。
+ * `KEYFORMAT` 不给就是标准 `identity` 密钥;写着别的(FairPlay 的 `com.apple.streamingkeydelivery`、
+ * Widevine 的 `urn:uuid:edef8ba9…`)说明钥匙由 DRM 系统掌管 —— 那是受保护,不是普通 AES-128。
  */
-export function hlsIsEncrypted(manifest: string): boolean {
+function keyFormatIsIdentity(raw: string | undefined): boolean {
+  if (raw === undefined) return true;
+  const value = raw.trim().toLowerCase();
+  return value === "" || value === "identity" || value === "urn:uuid:identity";
+}
+
+function keyFormatOf(params: string): string | undefined {
+  const match = /KEYFORMAT=(?:"([^"]*)"|([^,\s]+))/i.exec(params);
+  return match ? match[1] ?? match[2] : undefined;
+}
+
+/**
+ * HLS 清单用的是哪一种密钥。
+ *
+ * `#EXT-X-KEY` / `#EXT-X-SESSION-KEY` 的 `METHOD=NONE` 是没加密;`AES-128` + 标准 `identity` 密钥
+ * 是**普通加密**,后端能解。其余一律 `drm`:SAMPLE-AES / SAMPLE-AES-CTR、非 identity 的 KEYFORMAT,
+ * 以及认不出的写法(没有 METHOD、AES-256、以后的新方法)—— 认不出就不猜,按受保护算。
+ */
+export function hlsKeyKind(manifest: string): HlsKeyKind {
+  let kind: HlsKeyKind = "none";
   for (const line of manifest.split(/\r?\n/)) {
     const match = /^#EXT-X-(?:SESSION-)?KEY:(.*)$/i.exec(line.trim());
     if (!match) continue;
-    const method = /METHOD=([^,\s]+)/i.exec(match[1]);
-    if (!method || method[1].toUpperCase() !== "NONE") return true;
+    const params = match[1];
+    const method = /METHOD=([^,\s]+)/i.exec(params)?.[1]?.toUpperCase();
+    if (method === "NONE") continue;
+    if (method !== "AES-128") return "drm";
+    if (!keyFormatIsIdentity(keyFormatOf(params))) return "drm";
+    kind = "aes128";
   }
-  return false;
+  return kind;
+}
+
+/**
+ * 这份 HLS 清单要不要拦:`null` 能下;`encrypted` 是 AES-128(可导入,导入时解密);
+ * `drm` 是真 DRM(不给下)。**只有标准 AES-128 会落到 `encrypted`** —— 其余加密方法不变,仍然拦。
+ */
+export function hlsProtection(manifest: string): VideoProtection | null {
+  const kind = hlsKeyKind(manifest);
+  if (kind === "drm") return "drm";
+  if (kind === "aes128") return "encrypted";
+  return null;
 }
 
 /** 主清单(多码率)里的第一条媒体清单地址:加密信息常常只写在媒体清单里。不是主清单返回 null。 */
@@ -125,6 +161,11 @@ export interface MediaResponse {
   bytes: number | null;
 }
 
+/**
+ * `drm`:真 DRM(Widevine / FairPlay / PlayReady、非 AES-128 的 HLS 方法、DASH 的 `<ContentProtection>`)
+ * —— 不给下载;
+ * `encrypted`:标准 AES-128 的 HLS —— **能导入**,下载时由 yt-dlp 解密。界面要把这两种说成不同的话。
+ */
 export type VideoProtection = "drm" | "encrypted";
 
 export interface VideoCandidate {
@@ -137,7 +178,7 @@ export interface VideoCandidate {
   width: number;
   height: number;
   duration: number | null;
-  /** 受保护(DRM / 加密流)就不给下载,界面如实说。 */
+  /** `drm` 不给下载;`encrypted`(AES-128)可导入。见 VideoProtection。 */
   protection: VideoProtection | null;
 }
 

@@ -46,7 +46,9 @@ export const browserTools = {
   browserToolsVideoPlatformAction: "下载这一页的视频",
   browserToolsVideoEmpty: "这一页里没有找到能下载的视频。",
   browserToolsVideoStreamOnly: "播放器用的是分段流,还没看到能下载的地址。让视频开始播放、或刷新页面后再看一次。",
-  browserToolsVideoProtected: "这段视频受保护,无法下载",
+  // 加密 ≠ 下不了:标准 AES-128 由 yt-dlp 在导入时解密;这句只说真 DRM。
+  browserToolsVideoProtected: "受 DRM 保护,无法下载",
+  browserToolsVideoEncrypted: "可导入:加密(AES-128),导入时自动解密",
   browserToolsVideoDrmBanner: "页面上的视频受 DRM 保护,无法下载。",
   browserToolsVideoDownload: "下载",
   browserToolsVideoKindDirect: "视频文件",

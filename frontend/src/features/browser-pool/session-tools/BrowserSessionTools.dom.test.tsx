@@ -227,12 +227,12 @@ describe("下载页面里的视频", () => {
     expect(links.gotoRecord).toHaveBeenCalledWith("/media", "mosael:open-asset", "asset-9");
   });
 
-  it("受保护(加密流 / DRM):如实说「受保护,无法下载」,不给下载按钮", async () => {
+  it("真 DRM(Widevine / FairPlay / PlayReady):说「受 DRM 保护,无法下载」,不给下载按钮(守卫)", async () => {
     tools.probeVideos.mockResolvedValue({
       page: PAGE,
       drm: true,
       streamOnly: false,
-      candidates: [{ url: "https://cdn.example.com/locked/index.m3u8", kind: "hls", from: "element", mime: "", bytes: null, width: 0, height: 0, duration: null, protection: "encrypted" }],
+      candidates: [{ url: "https://cdn.example.com/locked/index.m3u8", kind: "hls", from: "element", mime: "", bytes: null, width: 0, height: 0, duration: null, protection: "drm" }],
     });
     show();
     fireEvent.click(toolButton("video"));
@@ -244,6 +244,32 @@ describe("下载页面里的视频", () => {
     expect(within(row).getByText("browserToolsVideoProtected")).toBeInTheDocument();
     expect(within(row).queryByRole("button")).toBeNull();
     expect(document.querySelector("[data-video-drm]")).toHaveTextContent("browserToolsVideoDrmBanner");
+  });
+
+  it("AES-128 加密的 HLS:标「可导入(加密)」,按钮照样走「从链接导入」", async () => {
+    tools.probeVideos.mockResolvedValue({
+      page: PAGE,
+      drm: false,
+      streamOnly: false,
+      candidates: [{ url: "https://cdn.example.com/locked/index.m3u8", kind: "hls", from: "element", mime: "", bytes: null, width: 0, height: 0, duration: null, protection: "encrypted" }],
+    });
+    api.importFromUrl.mockResolvedValue({ id: "job-4", progress: 0 });
+    api.getJob.mockResolvedValue({ id: "job-4", status: "running", progress: 0, result: null, error: null });
+    show();
+    fireEvent.click(toolButton("video"));
+    const row = await waitFor(() => {
+      const found = document.querySelector('[data-video-candidate="hls"]') as HTMLElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    // 页面面板不再说「下不了」,而是说清是哪一种:加密,导入时会解密。
+    expect(within(row).getByText("browserToolsVideoEncrypted")).toBeInTheDocument();
+    expect(within(row).queryByText("browserToolsVideoProtected")).toBeNull();
+    fireEvent.click(within(row).getByRole("button"));
+    await waitFor(() => expect(api.importFromUrl).toHaveBeenCalled());
+    expect(api.importFromUrl.mock.calls[0][0].items).toEqual([
+      { url: "https://cdn.example.com/locked/index.m3u8", title: PAGE.title, page_url: PAGE.url, page_title: PAGE.title },
+    ]);
   });
 
   it("没有视频:说没找到", async () => {

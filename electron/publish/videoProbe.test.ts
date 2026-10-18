@@ -5,9 +5,12 @@
  * | --- | --- |
  * | direct.html | 一条直链 mp4,可下载 |
  * | hls.html | 一条 HLS 清单,未加密,可下载 |
- * | hls-locked.html | HLS 清单带 `#EXT-X-KEY`(AES-128):受保护 |
+ * | hls-locked.html | HLS 清单带 `#EXT-X-KEY`(AES-128):加密**但可导入**(导入时 yt-dlp 解) |
  * | none.html | 没有视频 |
  * | drm.html | 播放器挂了 ClearKey 的 MediaKeys(EME):受 DRM 保护 |
+ *
+ * 加密和受保护**不是一回事**:`METHOD=AES-128`(标准密钥)yt-dlp 能解,页面面板要说「可导入」;
+ * 其余方法(SAMPLE-AES / SAMPLE-AES-CTR / FairPlay 的 KEYFORMAT…)是真 DRM,仍然受保护。
  *
  * 真 Electron 里由页面自己的 ClearKey 脚本挂上 MediaKeys(见回报里的实跑步骤);jsdom 不实现 EME,由用例补上。
  */
@@ -22,7 +25,8 @@ import {
   classifyMedia,
   dashIsProtected,
   hlsFirstVariant,
-  hlsIsEncrypted,
+  hlsKeyKind,
+  hlsProtection,
   mediaIdentity,
   mergeVideoCandidates,
   type PageVideoScan,
@@ -75,12 +79,38 @@ describe("视频分类", () => {
 });
 
 describe("加密流识别", () => {
-  it("HLS:#EXT-X-KEY 的 METHOD 不是 NONE 就是加密流,不分 AES-128 还是 SAMPLE-AES", () => {
-    expect(hlsIsEncrypted('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n#EXTINF:2,\na.ts')).toBe(true);
-    expect(hlsIsEncrypted('#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://x",KEYFORMAT="com.apple.streamingkeydelivery"')).toBe(true);
-    expect(hlsIsEncrypted('#EXTM3U\n#EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,URI="data:x"')).toBe(true);
-    expect(hlsIsEncrypted("#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:2,\na.ts")).toBe(false);
-    expect(hlsIsEncrypted("#EXTM3U\n#EXTINF:2,\na.ts\n#EXT-X-ENDLIST")).toBe(false);
+  const AES_128 = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n#EXTINF:2,\na.ts';
+  const FAIRPLAY = '#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://x",KEYFORMAT="com.apple.streamingkeydelivery"';
+  const WIDEVINE = '#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES-CTR,URI="data:x",KEYFORMAT="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"';
+
+  it("AES-128:加密但可导入,不是「受保护」", () => {
+    // 后端交给 yt-dlp,AES-128 它自己解 —— 页面扫描不该判成下不了。KEYFORMAT=identity 是标准密钥。
+    expect(hlsKeyKind(AES_128)).toBe("aes128");
+    expect(hlsProtection(AES_128)).toBe("encrypted");
+    expect(hlsProtection('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k",KEYFORMAT="identity"')).toBe("encrypted");
+  });
+
+  it("不是 AES-128 的一律受保护(这条守卫不许放宽)", () => {
+    // FairPlay / Widevine / SAMPLE-AES:标准 AES-128 之外的钥匙,yt-dlp 解不了,也不能假装能。
+    expect(hlsKeyKind(FAIRPLAY)).toBe("drm");
+    expect(hlsProtection(FAIRPLAY)).toBe("drm");
+    expect(hlsProtection(WIDEVINE)).toBe("drm");
+    expect(hlsProtection('#EXTM3U\n#EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,URI="data:x"')).toBe("drm");
+    // 名义上写 AES-128、钥匙却是 FairPlay 的 —— 不是普通 AES-128。
+    expect(hlsProtection('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="skd://x",KEYFORMAT="com.apple.streamingkeydelivery"')).toBe("drm");
+    // 认不出的写法(没有 METHOD、AES-256):不猜,按受保护算。
+    expect(hlsProtection("#EXTM3U\n#EXT-X-KEY:BOGUS")).toBe("drm");
+    expect(hlsProtection('#EXTM3U\n#EXT-X-KEY:METHOD=AES-256,URI="k"')).toBe("drm");
+  });
+
+  it("METHOD=NONE / 没有 KEY:普通,可下载(回归)", () => {
+    expect(hlsKeyKind("#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:2,\na.ts")).toBe("none");
+    expect(hlsProtection("#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:2,\na.ts")).toBeNull();
+    expect(hlsProtection("#EXTM3U\n#EXTINF:2,\na.ts\n#EXT-X-ENDLIST")).toBeNull();
+  });
+
+  it("同一份清单里既有 AES-128 又有 DRM 钥匙:按受保护算", () => {
+    expect(hlsProtection('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://x"')).toBe("drm");
   });
 
   it("HLS 主清单:找出第一条媒体清单(加密信息常常只写在那里)", () => {
@@ -171,13 +201,15 @@ describe("视频探测(静态测试页)", () => {
   it("HLS:<source> 里的清单认成 HLS;清单本身未加密", () => {
     const result = probe("hls.html");
     expect(result.candidates).toEqual([expect.objectContaining({ url: `${ORIGIN}/stream/index.m3u8`, kind: "hls" })]);
-    expect(hlsIsEncrypted(readFileSync(join(FIXTURES, "stream", "index.m3u8"), "utf8"))).toBe(false);
+    expect(hlsProtection(readFileSync(join(FIXTURES, "stream", "index.m3u8"), "utf8"))).toBeNull();
   });
 
-  it("加密 HLS:清单带 #EXT-X-KEY,认成加密流", () => {
+  it("加密 HLS:AES-128 的清单标成「可导入(加密)」", () => {
     const result = probe("hls-locked.html");
     expect(result.candidates.map((one) => one.kind)).toEqual(["hls"]);
-    expect(hlsIsEncrypted(readFileSync(join(FIXTURES, "locked", "index.m3u8"), "utf8"))).toBe(true);
+    const manifest = readFileSync(join(FIXTURES, "locked", "index.m3u8"), "utf8");
+    expect(hlsKeyKind(manifest)).toBe("aes128");
+    expect(hlsProtection(manifest)).toBe("encrypted");
   });
 
   it("无视频:候选为空", () => {

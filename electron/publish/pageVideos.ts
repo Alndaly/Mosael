@@ -11,7 +11,7 @@ import {
   VIDEO_SCAN_SCRIPT,
   dashIsProtected,
   hlsFirstVariant,
-  hlsIsEncrypted,
+  hlsProtection,
   mergeVideoCandidates,
   type PageVideoScan,
   type VideoProbe,
@@ -33,7 +33,7 @@ function frames(wc: WebContents) {
 
 /**
  * 这个页面里有哪些视频:每个 frame 的播放器 + 网络上看见过的媒体响应,合成一份候选;
- * HLS / DASH 再把清单取来看一眼有没有加密 —— 有就标成受保护,界面不给下载。
+ * HLS / DASH 再把清单取来看一眼:标准 AES-128 标成「加密但可导入」,真 DRM 才标成受保护。
  */
 export async function probeVideos(): Promise<VideoProbe> {
   const { webContents: wc } = foreground();
@@ -66,11 +66,17 @@ async function manifestProtection(
   const text = await fetchText(wc, url, referer);
   if (text === null) return null; // 取不到就不下结论:下载那一步自己会如实失败
   if (kind === "dash") return dashIsProtected(text) ? "drm" : null;
-  if (hlsIsEncrypted(text)) return "encrypted";
+  let protection = hlsProtection(text);
+  if (protection === "drm") return "drm";
+  // 加密信息常常只写在媒体清单里:主清单是普通的时候就再看一眼第一条变体。
   const variant = hlsFirstVariant(text, url);
-  if (!variant) return null;
+  if (!variant) return protection;
   const media = await fetchText(wc, variant, referer);
-  return media !== null && hlsIsEncrypted(media) ? "encrypted" : null;
+  if (media === null) return protection;
+  const inner = hlsProtection(media);
+  if (inner === "drm") return "drm";
+  if (inner === "encrypted") protection = "encrypted";
+  return protection;
 }
 
 async function fetchText(wc: WebContents, url: string, referer: string): Promise<string | null> {

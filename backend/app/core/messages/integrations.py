@@ -389,6 +389,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个链接里没有找到视频或音频。",
         "en": "No video or audio was found at this link.",
     },
+    "urlImportErr_tooLarge": {
+        "zh": "这个文件太大了(超过 {max_gb} GB),已经停下,没有存进素材库。",
+        "en": "This file is too large (over {max_gb} GB), so the download was stopped and nothing was saved.",
+    },
+    "urlImportErr_timeout": {
+        "zh": "下载超过 {minutes} 分钟还没完成(总时限),已经取消这一条。换一条更短的,或稍后再试。",
+        "en": "This download didn't finish within {minutes} minutes (total deadline), so it was cancelled. Try a shorter item or come back later.",
+    },
+    "urlImportErr_notMedia": {
+        "zh": "下载回来的文件不是视频或音频(按文件头判定,不信后缀),没有收下。",
+        "en": "What came back isn't video or audio (judged by the file header, not the extension), so it wasn't imported.",
+    },
     "urlImportErr_loginRequired": {
         "zh": "这条内容要登录才能取。在「登录身份」里选一个已登录该站点的浏览器档案再试。",
         "en": "This content requires signing in. Choose a browser profile that is signed in to this site under “Signed-in identity” and try again.",
@@ -397,9 +409,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这条内容不可用:可能是私密的、已被删除或已下架。",
         "en": "This content isn't available: it may be private, deleted or taken down.",
     },
+    #: 「从链接导入」走的是 media/ytdlp 那条出站代理(部署设置 → 出站代理),不是浏览器档案的代理 ——
+    #: 档案代理只作用于内嵌浏览器(见 electron/publish/accountViews.setProxy)。此前那句叫人「为浏览器
+    #: 档案配置代理」,照着做对这条路无效。
     "urlImportErr_geoBlocked": {
-        "zh": "这条内容在当前网络所在的地区看不到,或出口 IP 被站点限制。请为浏览器档案配置可用代理后重试。",
-        "en": "This content isn't available from your current network's region, or the site blocks its IP. Set a working proxy for the browser profile and try again.",
+        "zh": "这条内容在当前网络所在的地区看不到,或站点限制了这台机器的对外 IP。影响「从链接导入」的是这台机器的出站代理(部署设置 → 出站代理);档案自己的代理只管内嵌浏览器,不管这条路。",
+        "en": "This content isn't available from your current region, or the site blocks this machine's outbound IP. For Import from link, what matters is this machine's outbound proxy (set it under Deployment settings → Outbound proxy); a profile's own proxy only applies to the embedded browser, not this route.",
     },
     "urlImportErr_notFound": {
         "zh": "这个地址取不到内容(404)。链接可能打错了,或者这条内容已经被删除。",

@@ -45,7 +45,9 @@ export const browserTools = {
   browserToolsVideoPlatformAction: "Download this page's video",
   browserToolsVideoEmpty: "No downloadable video was found on this page.",
   browserToolsVideoStreamOnly: "The player streams in segments and no downloadable address has shown up yet. Start the video or reload the page, then look again.",
-  browserToolsVideoProtected: "This video is protected and can't be downloaded",
+  // Encryption isn't the same as "can't download": yt-dlp decrypts standard AES-128 during import.
+  browserToolsVideoProtected: "DRM-protected and can't be downloaded",
+  browserToolsVideoEncrypted: "Can be imported: encrypted (AES-128), decrypted automatically on import",
   browserToolsVideoDrmBanner: "The video on this page is DRM-protected and can't be downloaded.",
   browserToolsVideoDownload: "Download",
   browserToolsVideoKindDirect: "Video file",
