@@ -752,9 +752,9 @@ function NewConnectionWhere({ title, where, onChoose }: { title: string; where: 
   const t = useI18n();
   const admin = useIsDeploymentAdmin();
   return (
-    <div className="grid min-w-0 gap-1.5" data-new-connection-where>
+    <div className="@container/where grid min-w-0 gap-1.5" data-new-connection-where>
       <span className="text-ui-sm font-medium text-foreground">{t("localServiceWhere")}</span>
-      <WhereChoice mode={where} localDisabledReason={admin ? undefined : t("localServiceAdminOnly")} onChoose={onChoose} />
+      <WhereChoice fill mode={where} localDisabledReason={admin ? undefined : t("localServiceAdminOnly")} onChoose={onChoose} />
       <small className="text-ui-xs leading-[1.5] text-muted-foreground">
         {admin ? t("localServiceWhereDesc").replace("{title}", title) : t("localServiceNewAdminOnly").replace("{where}", t(machineKey()))}
       </small>

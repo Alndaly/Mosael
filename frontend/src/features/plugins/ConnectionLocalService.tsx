@@ -275,6 +275,7 @@ export function WhereChoice({
   mode,
   disabledReason,
   localDisabledReason,
+  fill = false,
   onChoose,
 }: {
   mode: Where;
@@ -282,6 +283,8 @@ export function WhereChoice({
   disabledReason?: string;
   /** 只是本机的两种用不了(新建弹窗里:不是部署管理员)时说为什么;给了就那两颗变灰,「连一台服务器」照常能选。 */
   localDisabledReason?: string;
+  /** 铺满这一行、三格等宽(新建连接的弹窗里是);连接页的本机服务卡里按内容宽。 */
+  fill?: boolean;
   onChoose: (mode: Where) => void;
 }) {
   const t = useI18n();
@@ -292,7 +295,18 @@ export function WhereChoice({
   ];
   return (
     <Hint disabledReason={disabledReason}>
-      <div role="radiogroup" aria-label={t("localServiceWhere")} className={cn(segmentedListClass(), "flex-wrap")}>
+      <div
+        role="radiogroup"
+        aria-label={t("localServiceWhere")}
+        className={cn(
+          segmentedListClass("md", { fill }),
+          fill
+            ? //: 一格就是一颗 radio。窄到一行放不下时(容器 < 26rem)在格子里折行、外壳跟着长 —— 不省略,也不挤进旁边那格。
+              //: 点不了的几颗外面套着 Hint 的壳,让壳里的按钮居中,和能点的两颗对齐。
+              "[&_button]:h-auto [&_button]:min-h-8 [&_button]:shrink [&_button]:text-center [&_button]:leading-tight @max-[26rem]/where:[&_button]:whitespace-normal [&>span[data-hint-disabled]]:justify-center"
+            : "flex-wrap",
+        )}
+      >
         {options.map((one) => {
           const locked = one.value === "server" ? undefined : localDisabledReason;
           const button = (

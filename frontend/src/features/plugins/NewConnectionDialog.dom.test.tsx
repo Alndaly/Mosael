@@ -165,6 +165,39 @@ describe("在哪跑", () => {
   });
 });
 
+describe("在哪跑:三格等宽", () => {
+  //: jsdom 量不到几何,钉住把三格等分的那层结构:容器是铺满一行的 grid,自动列各 1fr。
+  it("容器铺满一行、三格各占 1/3;选中的那颗自己就是那一格", () => {
+    dialog();
+    const group = screen.getByRole("radiogroup", { name: "localServiceWhere" });
+    const cells = within(group).getAllByRole("radio");
+    expect(cells).toHaveLength(3);
+    expect(group.className.split(/\s+/)).toEqual(expect.arrayContaining(["grid", "w-full", "auto-cols-fr", "grid-flow-col"]));
+    //: 每一颗就是容器的一个格子 —— 不是里面再包一层按文字宽的壳。
+    expect(cells.map((cell) => cell.parentElement)).toEqual([group, group, group]);
+    //: 选中的那一格自己带强调底色:药丸就是格子本身,填满它,不是只包住文字。
+    const selected = group.querySelector('[aria-checked="true"]');
+    expect(selected).toBe(cells[0]);
+    expect(cells[0].className.split(/\s+/)).toContain("bg-accent");
+  });
+
+  //: 窄弹窗(网页版把窗口拖窄时)一格不到 90px:「连一台服务器」「Let Mosael install it」都装不下一行。
+  //: 允许在格子里折行、外壳跟着长 —— 不省略、不挤出相邻那格。
+  it("窄弹窗里名字在格子里折行,不挤出去", () => {
+    dialog();
+    const group = screen.getByRole("radiogroup", { name: "localServiceWhere" });
+    const tokens = group.className.split(/\s+/);
+    //: 折行只在「在哪跑」这块容器窄到 26rem 以下才放开;宽的时候还是原来的一行(高度仍是 32)。
+    const where = document.querySelector<HTMLElement>("[data-new-connection-where]")!;
+    expect(where.className.split(/\s+/)).toContain("@container/where");
+    expect(tokens).toEqual(expect.arrayContaining([
+      "@max-[26rem]/where:[&_button]:whitespace-normal",
+      "[&_button]:h-auto",
+      "[&_button]:min-h-8",
+    ]));
+  });
+});
+
 describe("按回车", () => {
   //: 此前是一组散的输入框 + 右下角一颗点击的按钮,在「服务器地址」里按回车什么也不做。
   it("在配置项里敲回车就是「新建」;点「在哪跑」这种表单里的普通按钮不新建", async () => {
