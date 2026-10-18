@@ -88,7 +88,7 @@ export function WorkflowFacts({
                     {one.present ? t("workflowModelPresent") : t("workflowModelMissing")}
                   </CatalogBadge>
                 }
-                //: 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库。缺的那行照样留着那一格,「在 / 缺」对成一列
+                //: 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库。缺的没有动作,行尾那一格空着(那是动作的列,不是状态的位置)
                 action={
                   onShowModel ? (
                     one.present ? (
@@ -184,7 +184,7 @@ const FACT_SLOT = "flex w-[4.5rem] shrink-0 items-center justify-end";
 type FactLineProps = {
   /** 主行:名字(放不下截断,悬停看全文) */
   primary: string;
-  /** 和名字同一条基线、靠右的一点说明:目录、个数 */
+  /** 紧跟在名字后面、同一条基线上的一点说明:目录、个数 */
   meta?: string;
   /** 主行下面一行灰字:从哪下、装没装 */
   secondary?: string;
@@ -194,6 +194,10 @@ type FactLineProps = {
   muted?: boolean;
   /** 灰字那一行要提醒(装了却没加载) */
   warn?: boolean;
+  /**
+   * 状态(「在 / 缺」徽标):跟在目录名后面,一个正常的小间距 —— 它是这一行的状态,不是动作,
+   * **不**推到行尾、也不占最右那一格(那一格只放动作,见 `action`)。
+   */
   status?: React.ReactNode;
   /**
    * 最右那一格:给了东西就放它;`null` 是这一行没有动作,但同一节的别的行有 —— 照样留出那一格,对成一列;
@@ -203,7 +207,10 @@ type FactLineProps = {
 };
 
 /**
- * 一行的样子 —— 三节一个样:主行(名字 + 同一条基线上的目录 / 个数)、需要时一行灰字、状态、最右一格同样宽的动作。
+ * 一行的样子 —— 三节一个样:主行(名字 + 紧跟其后的目录 / 个数 / 状态)、需要时一行灰字、最右一格同样宽的动作。
+ * 名字那一格放不下时截断(悬停看全文),目录和状态 `shrink-0`:长名字压的是名字自己,不会把状态挤走,也不会
+ * 把行撑出横向滚动。**只有动作**在最右那一格;状态跟在目录后面,不推到行尾 —— 否则会出现一条看起来像列、
+ * 却和下面「下载」的右缘对不上的空当。
  * 至少 40px 高(28px 的按钮上下各留 6px),一行字和两行字的行都在这个高度里垂直居中:有按钮的行不再比没按钮的高一截。
  */
 function FactLine({ primary, meta, secondary, hint, muted, warn, status, action }: FactLineProps) {
@@ -211,17 +218,18 @@ function FactLine({ primary, meta, secondary, hint, muted, warn, status, action 
   return (
     <div className="flex min-h-10 min-w-0 items-center gap-2 py-1">
       <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="flex min-w-0 items-baseline gap-2">
-          <Truncate hint={hint} className={cn("min-w-0 flex-1 text-ui-sm", muted ? "text-muted-foreground" : "text-foreground")}>
+        {/*: 名字、目录、状态挨着排:名字不 flex-1 去撑满,目录和徽标才不会被顶到行尾(见本函数开头)。 */}
+        <span data-fact-line="" className="flex min-w-0 items-baseline gap-2">
+          <Truncate hint={hint} className={cn("text-ui-sm", muted ? "text-muted-foreground" : "text-foreground")}>
             {primary}
           </Truncate>
           {meta && <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">{meta}</span>}
+          {status}
         </span>
         {secondary && (
           <Truncate className={cn("text-ui-xs", warn ? "text-warning" : "text-muted-foreground")}>{secondary}</Truncate>
         )}
       </span>
-      {status}
       {reserved && <span data-fact-slot="" className={FACT_SLOT}>{action}</span>}
     </div>
   );
