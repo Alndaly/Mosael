@@ -40,6 +40,7 @@
   "migrate-agent-sessions-remember-where-they-were-opened": "be7c4fa488185275",
   "migrate-agent-skills-remember-the-drafting-session": "4ae3978a1a0e63a2",
   "migrate-agent-thinking-level": "81ef41be1cab4b4b",
+  "migrate-agent-turn-events-table": "de83579032b14aad",
   "migrate-agent-voice-dictation-engine": "34f1cb76b4ca1167",
   "migrate-agent-voice-speak-early": "574b734744e5f591",
   "migrate-applied-moves-remember-old-names": "cc362d4cfb123567",

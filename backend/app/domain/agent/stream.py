@@ -10,11 +10,15 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 
-from app.db.models import now
+from app.db.agent_turn_events import record_turn_event
+from app.db.models import new_id, now
 from app.domain.agent.textclean import decode_byte_fallback
+
+logger = logging.getLogger(__name__)
 
 _streams_lock = threading.Lock()
 
@@ -32,6 +36,15 @@ def get_stream_state(session_id: str) -> dict:
         return snapshot
 
 
+def _stream_turn_id(session_id: str) -> str | None:
+    """这一轮落在库里的 id(见 `app.db.agent_turn_events`)。收尾后由调用方删掉它的行。"""
+    with _streams_lock:
+        state = _streams.get(session_id)
+        if not state:
+            return None
+        return str(state.get("turn_id") or "") or None
+
+
 def _stream_reset(session_id: str) -> None:
     with _streams_lock:
         # first_token_at:这一轮**第一个** token(正文或思考,谁先算谁)到达的 monotonic 时刻。
@@ -45,6 +58,9 @@ def _stream_reset(session_id: str) -> None:
             "timeline": [],
             "tool_starts": {},
             "first_token_at": None,
+            #: 这一轮在库里叫什么(见 `app.db.agent_turn_events`)。事件按 (turn_id, seq) 落库,
+            #: 重启收尾时靠它把「做到哪一步」找回来。
+            "turn_id": new_id(),
         }
 
 
@@ -75,88 +91,124 @@ def _stream_tool_event(session_id: str, event: dict) -> None:
 
     subtool 是子智能体内部的一步,同样建卡/收卡,条目带 parent_id(发起它的
     run_subagent 调用)。父流只是实时运输载体:界面会把它归入对应子会话,父对话不渲染。
+
+    **每改一次时间线,同步往库里写一份这张卡的完整快照**(见 `app.db.agent_turn_events`):
+    后端重启时内存没了,库里那一份就是「做到哪一步」的全部来源。数据库写放在锁**外面** ——
+    拿锁的时候只改内存,SSE 的读不该排在 SQLite 的提交后面。
     """
     with _streams_lock:
         state = _streams.get(session_id)
         if state is None:
             return
-        timeline: list[dict] = state.setdefault("timeline", [])
-        if event.get("type") == "subagent_result":
-            # 后台派发的子智能体跑完了:把存档填回发起它的那张 run_subagent 卡。
-            # 卡的 content(模型看的那份「已派发」回执)不动 —— 历史不能改;details 是 UI 的。
-            parent_id = str(event.get("parentCallId") or "")
-            for item in timeline:
-                tool = item.get("tool")
-                if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == parent_id:
-                    result = tool.get("result")
-                    if not isinstance(result, dict):
-                        result = {"content": result} if result is not None else {}
-                    details = result.get("details")
-                    if not isinstance(details, dict):
-                        details = {}
-                    details["subagent"] = event.get("archive")
-                    result["details"] = details
-                    tool["result"] = result
-                    break
-            state["seq"] += 1
-            return
-        if event.get("type") == "subtool":
-            call_id = str(event.get("toolCallId") or "")
-            starts = state.setdefault("tool_starts", {})
-            if event.get("phase") == "start":
-                starts[f"sub:{call_id}"] = time.monotonic()
-                timeline.append({
-                    "type": "subtool",
-                    "parent_id": str(event.get("parentCallId") or ""),
-                    "tool": {
-                        "id": call_id,
-                        "name": event.get("toolName"),
-                        "args": event.get("args"),
-                        "status": "running",
-                        "usage": {"started_at": now().isoformat()},
-                    },
-                })
-            else:
-                started = starts.pop(f"sub:{call_id}", None)
-                usage = {"finished_at": now().isoformat()}
-                if isinstance(started, (int, float)):
-                    usage["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
-                for item in timeline:
-                    tool = item.get("tool")
-                    if item.get("type") == "subtool" and isinstance(tool, dict) and tool.get("id") == call_id:
-                        tool["status"] = "error" if event.get("isError") else "done"
-                        tool["result"] = event.get("result")
-                        tool["usage"] = {**(tool.get("usage") if isinstance(tool.get("usage"), dict) else {}), **usage}
-                        break
-            state["seq"] += 1
-            return
-        if event.get("type") == "tool_start":
-            _close_open_thinking(state)
-            tool_call_id = str(event.get("toolCallId") or "")
-            started_at = now().isoformat()
-            state.setdefault("tool_starts", {})[tool_call_id] = time.monotonic()
-            card = {
-                "id": tool_call_id,
-                "name": event.get("name"),
-                "args": event.get("args"),
-                "status": "running",
-                "usage": {"started_at": started_at},
-            }
-            timeline.append({"type": "tool", "tool": card})
-        elif event.get("type") == "tool_end":
-            tool_call_id = str(event.get("toolCallId") or "")
-            started = state.setdefault("tool_starts", {}).pop(tool_call_id, None)
-            usage = {"finished_at": now().isoformat()}
-            if isinstance(started, (int, float)):
-                usage["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
-            for item in timeline:
-                tool = item.get("tool")
-                if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == tool_call_id:
-                    tool["status"] = "error" if event.get("isError") else "done"
-                    tool["result"] = event.get("result")
-                    tool["usage"] = {**(tool.get("usage") if isinstance(tool.get("usage"), dict) else {}), **usage}
-                    break
+        snapshot = _apply_tool_event(state, event)
         state["seq"] += 1
+        if snapshot is None:
+            return
+        turn_id = str(state.get("turn_id") or "")
+        seq = int(state["seq"])
+    _record_turn_event(
+        session_id=session_id,
+        turn_id=turn_id,
+        seq=seq,
+        kind=str(event.get("type") or snapshot["type"]),
+        payload=snapshot,
+    )
+
+
+def _apply_tool_event(state: dict, event: dict) -> dict | None:
+    """把事件应用进内存时间线,返回**改完之后那张卡的快照**(没有卡可改时返回 None)。
+
+    快照而不是「改动」:重启收尾时按 seq 顺序折叠,同一张卡后一份覆盖前一份 —— 工具结束时整张卡
+    都变了(状态、结果、用时),只存差分的话收尾那边得把整套状态机再实现一遍。
+    """
+    timeline: list[dict] = state.setdefault("timeline", [])
+    if event.get("type") == "subagent_result":
+        # 后台派发的子智能体跑完了:把存档填回发起它的那张 run_subagent 卡。
+        # 卡的 content(模型看的那份「已派发」回执)不动 —— 历史不能改;details 是 UI 的。
+        parent_id = str(event.get("parentCallId") or "")
+        for item in timeline:
+            tool = item.get("tool")
+            if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == parent_id:
+                result = tool.get("result")
+                if not isinstance(result, dict):
+                    result = {"content": result} if result is not None else {}
+                details = result.get("details")
+                if not isinstance(details, dict):
+                    details = {}
+                details["subagent"] = event.get("archive")
+                result["details"] = details
+                tool["result"] = result
+                return {"type": "tool", "tool": dict(tool)}
+        return None
+    if event.get("type") == "subtool":
+        call_id = str(event.get("toolCallId") or "")
+        starts = state.setdefault("tool_starts", {})
+        if event.get("phase") == "start":
+            starts[f"sub:{call_id}"] = time.monotonic()
+            card = {
+                "type": "subtool",
+                "parent_id": str(event.get("parentCallId") or ""),
+                "tool": {
+                    "id": call_id,
+                    "name": event.get("toolName"),
+                    "args": event.get("args"),
+                    "status": "running",
+                    "usage": {"started_at": now().isoformat()},
+                },
+            }
+            timeline.append(card)
+            return {"type": "subtool", "parent_id": card["parent_id"], "tool": dict(card["tool"])}
+        started = starts.pop(f"sub:{call_id}", None)
+        usage = {"finished_at": now().isoformat()}
+        if isinstance(started, (int, float)):
+            usage["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
+        for item in timeline:
+            tool = item.get("tool")
+            if item.get("type") == "subtool" and isinstance(tool, dict) and tool.get("id") == call_id:
+                tool["status"] = "error" if event.get("isError") else "done"
+                tool["result"] = event.get("result")
+                tool["usage"] = {**(tool.get("usage") if isinstance(tool.get("usage"), dict) else {}), **usage}
+                return {"type": "subtool", "parent_id": item.get("parent_id"), "tool": dict(tool)}
+        return None
+    if event.get("type") == "tool_start":
+        _close_open_thinking(state)
+        tool_call_id = str(event.get("toolCallId") or "")
+        started_at = now().isoformat()
+        state.setdefault("tool_starts", {})[tool_call_id] = time.monotonic()
+        card = {
+            "id": tool_call_id,
+            "name": event.get("name"),
+            "args": event.get("args"),
+            "status": "running",
+            "usage": {"started_at": started_at},
+        }
+        timeline.append({"type": "tool", "tool": card})
+        return {"type": "tool", "tool": dict(card)}
+    if event.get("type") == "tool_end":
+        tool_call_id = str(event.get("toolCallId") or "")
+        started = state.setdefault("tool_starts", {}).pop(tool_call_id, None)
+        usage = {"finished_at": now().isoformat()}
+        if isinstance(started, (int, float)):
+            usage["duration_seconds"] = round(max(0.0, time.monotonic() - started), 1)
+        for item in timeline:
+            tool = item.get("tool")
+            if item.get("type") == "tool" and isinstance(tool, dict) and tool.get("id") == tool_call_id:
+                tool["status"] = "error" if event.get("isError") else "done"
+                tool["result"] = event.get("result")
+                tool["usage"] = {**(tool.get("usage") if isinstance(tool.get("usage"), dict) else {}), **usage}
+                return {"type": "tool", "tool": dict(tool)}
+    return None
+
+
+def _record_turn_event(*, session_id: str, turn_id: str, seq: int, kind: str, payload: dict) -> None:
+    """落一个事件。**写失败不能连累这一轮** —— 过程记录是给人回看的,模型那一轮该跑完还得跑完。"""
+    if not turn_id:
+        return
+    try:
+        record_turn_event(session_id=session_id, turn_id=turn_id, seq=seq, kind=kind, payload=payload)
+    except Exception:  # noqa: BLE001 —— 过程日志写不进去不是这一轮失败的理由
+        logger.warning("could not persist a turn event for session %s (seq %s)", session_id, seq, exc_info=True)
+
 
 
 def _stream_thinking(session_id: str, event: dict) -> None:
@@ -216,7 +268,10 @@ def _stream_append(session_id: str, delta: str) -> None:
 
 def _stream_finish(session_id: str, final_text: str) -> None:
     with _streams_lock:
-        state = _streams.setdefault(session_id, {"text": "", "done": False, "seq": 0, "timeline": []})
+        state = _streams.setdefault(
+            session_id,
+            {"text": "", "done": False, "seq": 0, "timeline": [], "turn_id": new_id()},
+        )
         state["text"] = final_text
         timeline: list[dict] = state.setdefault("timeline", [])
         # 一轮结束时无论如何都不该再有"思考中"——哪怕这轮只思考没说话。

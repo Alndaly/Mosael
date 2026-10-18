@@ -1,5 +1,5 @@
 {
-  "version": 33,
+  "version": 34,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -42,6 +42,7 @@
     "migrate-agent-sessions-remember-where-they-were-opened",
     "migrate-agent-skills-remember-the-drafting-session",
     "migrate-agent-thinking-level",
+    "migrate-agent-turn-events-table",
     "migrate-agent-voice-dictation-engine",
     "migrate-agent-voice-speak-early",
     "migrate-applied-moves-remember-old-names",

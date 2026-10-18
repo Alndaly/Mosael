@@ -30,7 +30,10 @@ export const mediaLibrary = {
   agentStatusRunning: "运行中",
   agentStatusIdle: "空闲",
   agentMetricQueue: "排队",
-  agentFailedTurns: "{n} 轮失败",
+  // 口径是**连续失败**,不是本会话累计(见 ChatWorkspace.tallyTurnFailures)。
+  agentFailedTurns: "连续失败 {n} 轮",
+  // 后端重启中断的轮次单独数:中断不是失败,不能顶到上面那个数里。
+  agentInterruptedTurns: "后端重启中断 {n} 次",
   agentNoRecentTools: "还没有工具调用。",
   agentVersion: "版本",
   agentToolsAll: "全部 {n} 个",

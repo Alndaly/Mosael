@@ -29,6 +29,7 @@ from app.domain.agent.stream import (
     _stream_reset,
     _stream_thinking,
     _stream_tool_event,
+    _stream_turn_id,
     _timeline_for_payload,
 )
 from app.domain.agent import card_expiry
@@ -46,6 +47,13 @@ from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import LocalizedError, get_current_locale, set_current_locale, tr
 from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, Job, ToolConfirmation, User, now
+from app.db.agent_turn_events import (
+    delete_turn_events,
+    discard_turn_events,
+    latest_turn_id,
+    prune_turn_events,
+    timeline_for_session,
+)
 from app.core.token_estimate import estimate_text_tokens
 from app.domain.billing.usage import billable
 
@@ -670,6 +678,24 @@ def _failed_turn_timeline(session_id: str) -> dict:
     return {"timeline": timeline} if timeline else {}
 
 
+def _discard_turn_events(session_id: str) -> None:
+    """这一轮收尾了:把进行中落库的步骤(见 `app.db.agent_turn_events`)删掉。
+
+    **成功、失败、用户停止都走这里** —— 消息 payload 里已经有折叠好的 `timeline`,中间事件没有
+    第二份用处,留着只会让这张表跟着对话历史一起长。被重启打断的那一轮走不到这里(线程死了),
+    由 `reconcile_orphaned_agent_sessions` 在把过程附到中断消息上之后删。
+
+    删失败不连累收尾:那一轮已经落库、会话要拨回 idle,下一轮照常能起;残留的行由
+    `prune_turn_events` 按天收走。
+    """
+    try:
+        turn_id = _stream_turn_id(session_id)
+        if turn_id:
+            discard_turn_events(turn_id)
+    except Exception:  # noqa: BLE001 —— 收尾路径:过程日志清不掉不是这一轮失败的理由
+        logger.warning("could not discard the persisted events of session %s", session_id, exc_info=True)
+
+
 def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
     final_text = ""
@@ -753,6 +779,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             revoke_session(db, token)
             db.commit()
             _stream_finish(session_id, final_text)
+            _discard_turn_events(session_id)
             return
         try:
             if failure is not None:
@@ -939,6 +966,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 logger.warning("Could not finalise session %s; it may have been deleted", session_id)
                 db.rollback()
             _stream_finish(session_id, final_text)
+            # 消息 payload 里已经有折叠好的 timeline;这一轮落库的中间事件到此为止(见 app.db.agent_turn_events)。
+            _discard_turn_events(session_id)
     # 外部渠道(飞书……)把这一轮的结果送回原会话。在 drain 之前:排队的下一轮不该抢在这一轮的回复前面。
     origins.turn_finished(origin, session_id)
     if name_it:
@@ -1021,6 +1050,28 @@ def _drain_queue_locked(session_id: str) -> None:
     _start_turn(session_id, content, token, actor_id=owner.id)
 
 
+def _interrupted_turn_payload(db: Session, session_id: str) -> dict:
+    """被重启打断的那一轮已经落库的过程 → 中断消息 payload 里 `timeline` 的形状。
+
+    **这条路径此前没有过程。** 正常失败那一轮会把内存里的时间线收进 payload(见
+    `_failed_turn_timeline`),而重启死的是线程,内存先没了 —— 用户只看到一句「已中断」,
+    子代理、工具卡、做到哪一步全消失。事件在跑的当时就落了库(`app.db.agent_turn_events`),
+    这里把它们折叠回消息里,形状和正常轮一样,UI 不用改。
+
+    **读完就删**,这就是「这一轮已收尾」的标记:再拨一次不会重复附加,也不会留下第二份记录。
+    取不到不能让重启收尾崩掉 —— 它在启动路径上,崩了后端就起不来。
+    """
+    try:
+        timeline = timeline_for_session(db, session_id)
+        turn_id = latest_turn_id(db, session_id)
+    except Exception:  # noqa: BLE001 —— 启动路径:有过程更好,没有也不能连累后端起来
+        logger.exception("failed to capture the persisted steps of interrupted session %s", session_id)
+        return {"error_kind": RESTART_ERROR_KIND}
+    if turn_id:
+        delete_turn_events(db, turn_id)
+    return {**({"timeline": timeline} if timeline else {}), "error_kind": RESTART_ERROR_KIND}
+
+
 def reconcile_orphaned_agent_sessions(db: Session) -> int:
     """把重启前卡在 running 的会话拨回 idle(与 reconcile_orphaned_jobs 同理)。
 
@@ -1049,6 +1100,9 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
                 role="assistant",
                 content=INTERRUPTED_NOTICE,
                 error="backend restarted mid-turn",
+                #: **这一轮的步骤还回得去**(见 `_interrupted_turn_payload`)。带上稳定标记:前端据此
+                #: 把「重启中断」与「真实失败」分开统计 —— 中断不是失败,不该把连续失败数顶上去。
+                payload=_interrupted_turn_payload(db, session.id),
             )
         )
     if stale:
@@ -1065,6 +1119,14 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
     if redeliver:
         #: 提交之后才 drain:它开自己的会话、起一轮,得读到刚提交的「待送」。
         after_commit(db, lambda: [_drain_queue(session_id) for session_id in redeliver])
+    #: 兜底清理:正常收尾与上面的「读完就删」都收不掉的行(收尾代码没跑到、会话也没在跑),
+    #: 按天收走 —— 不让这张过程表跟着对话历史无限增长。一次启动扫一遍,不是每轮。
+    try:
+        pruned = prune_turn_events(db)
+        if pruned:
+            logger.info("pruned %d stale agent turn event(s)", pruned)
+    except Exception:  # noqa: BLE001 —— 启动路径:清理扫不动也不能连累后端起来
+        logger.warning("could not prune stale agent turn events", exc_info=True)
     # 不提交:重启收尾是一次用例,几张表收完一起提交(见 domain/restart.settle_previous_run)。
     return len(stale)
 
@@ -1099,6 +1161,11 @@ def _redeliver_receipt_if_unread(db: Session, session: AgentSession) -> bool:
 #: 中断说明的原文。外部渠道(飞书等)要把同一句话发回聊天里 —— 只写进库的话,
 #: 桌面端看得到,而在飞书里发消息的那个人只看到一片沉默,和"还在处理"分辨不出来。
 INTERRUPTED_NOTICE = "上一轮对话因后端重启而中断,请重新发送。"
+
+#: 「这一轮是被后端重启掐断的」的机器标记,落在消息 payload 的 `error_kind` 里。
+#: **不能用文案判断**(文案会翻译、会改)。前端据此把中断与真实失败分开统计:中断不是失败。
+#: 旧消息没有这个标记 → 按真实失败算(见前端 tallyTurnFailures),不为旧数据写分支。
+RESTART_ERROR_KIND = "restart"
 
 
 def interrupted_external_sessions(db: Session, origin: str) -> list[tuple[str, str, str]]:

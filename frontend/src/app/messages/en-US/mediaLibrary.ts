@@ -29,7 +29,10 @@ export const mediaLibrary = {
   agentStatusRunning: "Running",
   agentStatusIdle: "Idle",
   agentMetricQueue: "Queued",
-  agentFailedTurns: "{n} failed turns",
+  // Consecutive, not cumulative — see ChatWorkspace.tallyTurnFailures.
+  agentFailedTurns: "{n} failed turns in a row",
+  // Restart-interrupted turns are counted separately: an interruption is not a failure.
+  agentInterruptedTurns: "{n} turns interrupted by a backend restart",
   agentNoRecentTools: "No tool calls yet.",
   agentVersion: "Version",
   agentToolsAll: "All {n}",

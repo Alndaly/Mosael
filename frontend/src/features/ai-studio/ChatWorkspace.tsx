@@ -85,6 +85,56 @@ type AgentMessage = components["schemas"]["AgentMessageOut"];
 type AgentManifest = components["schemas"]["AgentManifestOut"];
 type AgentTool = components["schemas"]["ToolSpec"];
 
+/** 后端给「这一轮被重启掐断」的稳定标记(`host.RESTART_ERROR_KIND`,落在 payload.error_kind)。
+ *  **不拿文案判断** —— 文案会翻译、会改。旧消息没有这个标记,按真实失败算(见下)。 */
+const RESTART_ERROR_KIND = "restart";
+
+export type TurnFailureTally = {
+  /** 从最后一条助手轮往前数,连续的真实失败轮数;遇到成功轮就停。 */
+  consecutiveFailures: number;
+  /** 本会话因后端重启中断的轮数。单独统计:中断不是失败,不该顶在连续失败上。 */
+  restartInterruptions: number;
+};
+
+type FailureLikeMessage = { role: string; error?: string | null; payload?: unknown };
+
+function interruptedByRestart(message: FailureLikeMessage): boolean {
+  const payload = message.payload;
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    (payload as { error_kind?: unknown }).error_kind === RESTART_ERROR_KIND
+  );
+}
+
+/**
+ * 「N 轮失败」的口径:连续失败 + 重启中断分开。
+ *
+ * 此前是**本会话累计** `messages.filter(m => m.error)`,不连续、不清零,后端重启留下的中断说明
+ * 也算一条失败 —— 用户看到「3 轮失败」,而那三轮里可能有两轮只是应用更新。后端重启不是失败,
+ * 是一轮没跑完;它现在带 `error_kind: "restart"`,跳过(既不算失败,也不打断连续计数),
+ * 单独统计。没有标记的旧消息一律按真实失败算 —— 不为旧数据写特殊分支。
+ *
+ * 只数助手轮:用户消息、排队的消息、任务回执都不是「一轮」。
+ */
+export function tallyTurnFailures(messages: readonly FailureLikeMessage[]): TurnFailureTally {
+  let restartInterruptions = 0;
+  for (const message of messages) {
+    if (message.role === "assistant" && message.error && interruptedByRestart(message)) {
+      restartInterruptions += 1;
+    }
+  }
+  let consecutiveFailures = 0;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.role !== "assistant") continue;
+    if (!message.error) break; // 成功的回答:连续失败到此为止
+    if (interruptedByRestart(message)) continue; // 重启中断不是失败,也不打断连续失败
+    consecutiveFailures += 1;
+  }
+  return { consecutiveFailures, restartInterruptions };
+}
+
 //: 分栏宽度的边界。上限挡的是"把中间对话挤没了",下限挡的是"栏窄到内容全在换行"。
 export const AI_PANEL_BOUNDS = {
   left: { min: 180, max: 340, fallback: 240 },
@@ -836,7 +886,11 @@ function ChatInspector({
   // 「最近工具」和「任务计划」一样可以收成一行 —— 侧栏里三块常驻,
   // 不看的时候能折起来才谈得上"看得下去"。
   const [toolsOpen, setToolsOpen] = React.useState(true);
-  const failedCount = messages.filter((message) => message.error).length;
+  // 「连续失败」和「重启中断」分开:中断不是失败,别让应用更新看起来像对话坏了(见 tallyTurnFailures)。
+  const { consecutiveFailures, restartInterruptions } = React.useMemo(
+    () => tallyTurnFailures(messages),
+    [messages],
+  );
   const status = session?.status ?? (running ? "running" : "idle");
   const statusLabel = running
     ? `${t("agentStatusRunning")} · ${formatElapsedSeconds(elapsedSeconds)}`
@@ -872,9 +926,14 @@ function ChatInspector({
         <InspectorRow label={t("agentModel")} value={effectiveModel || "—"} />
         {/* 排队只在真有东西排队时出现 —— 一个常驻的 0 不构成信息。 */}
         {queue.length > 0 && <InspectorRow label={t("agentMetricQueue")} value={queue.length} />}
-        {failedCount > 0 && (
+        {consecutiveFailures > 0 && (
           <p className="m-0 text-ui-xs leading-normal text-destructive">
-            {t("agentFailedTurns").replace("{n}", String(failedCount))}
+            {t("agentFailedTurns").replace("{n}", String(consecutiveFailures))}
+          </p>
+        )}
+        {restartInterruptions > 0 && (
+          <p className="m-0 text-ui-xs leading-normal text-muted-foreground">
+            {t("agentInterruptedTurns").replace("{n}", String(restartInterruptions))}
           </p>
         )}
       </InspectorCard>

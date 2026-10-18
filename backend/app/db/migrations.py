@@ -968,6 +968,19 @@ def _migrate_generation_capability_profiles() -> None:
     GenerationCapabilityDeclaration.__table__.create(bind=engine, checkfirst=True)
 
 
+def _migrate_agent_turn_events_table() -> None:
+    """建「一轮进行中的步骤」表(见 `app/db/agent_turn_events`)。
+
+    **为什么不靠 `_create_current_schema`**:那张表不在 `Base.metadata` 里(它是过程日志,不是领域
+    模型),`create_all` 看不见它;而 `tests/schema_baseline.json` 记的是「老库出生时的表」,新表
+    往那里补一笔需要解释。定义只写在 `app/db/agent_turn_events.TURN_EVENTS` 一处,这里从它建,
+    `checkfirst=True` 让重跑与全新库都安全。
+    """
+    from app.db.agent_turn_events import TURN_EVENTS
+
+    TURN_EVENTS.create(bind=engine, checkfirst=True)
+
+
 def _migrate_prompt_requirement_becomes_one_field() -> None:
     """用户写下的参数组里,「提示词要不要写」从两个布尔收成一格 `prompt`(见 catalog.PROMPT_MODES)。
 
@@ -10057,6 +10070,9 @@ def migration_plan() -> MigrationPlan:
                 # 空串哨兵 + `stale_reason`,这一步把它们**删掉**并把 `bot_id` 改成不许为空、没有默认值
                 # 的主键成员(列定义见那条迁移的说明)。同样是 SCHEMA 之前的重建 —— ORM 已经指望新形状。
                 _migrate_feishu_bindings_drop_stale_rows,
+                #: 一轮进行中的步骤落库(维护者 2026-10-18 #5)。**新表不在 Base.metadata 里**(它是过程日志),
+                #: create_all 看不见它,所以必须由这一步建;定义只有一处,建表语句从那里取。
+                _migrate_agent_turn_events_table,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
