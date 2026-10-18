@@ -1078,12 +1078,26 @@ describe("缺的模型:没写目录的声明也不丢", () => {
       folder: "", name: "mystery.safetensors", url: "https://huggingface.co/x/y/resolve/main/mystery.safetensors",
       hash: "", hash_type: "", workflows: [{ id: "declaring.json", label: "declaring" }],
     }] }));
+    //: 下载框开着就会去解析这个链接,真接口总会交回一整份 `ModelResolveOut`(形状见
+    //: api/domains/plugins.ts:162 与 generated/schema.d.ts 的 ModelResolveOut);这个文件名看不出该放哪,`folder` 就是空串。
+    //: 漏了这条 mock,onSuccess 里读 `found.folder` 会炸成一个 Unhandled Error —— 测试却照样报「通过」。
+    api.resolveModelLink.mockResolvedValue({
+      source: "huggingface", url: "https://huggingface.co/x/y/resolve/main/mystery.safetensors", page: "",
+      filename: "mystery.safetensors", size: null, folder: "", family: "", triggers: [], title: "", exists: false,
+      note: "", uses_token: false,
+    });
     await openLibrary();
     fireEvent.click(folderTab("modelMissingTitle 1"));
     const missing = screen.getByRole("region", { name: "modelMissingTitle" });
     expect(missing.textContent).toContain("mystery.safetensors");
     expect(missing.textContent, "目录空着:明说不知道放哪个目录,不静默丢掉").toContain("workflowMissingModelUnknownFolder");
     fireEvent.click(within(missing).getByRole("button", { name: /modelMissingDownload/ }));
-    expect(await screen.findByRole("dialog", { name: "modelDownloadTitle" })).toBeTruthy();
+    const dialog = await screen.findByRole("dialog", { name: "modelDownloadTitle" });
+    await waitFor(() => expect(api.resolveModelLink)
+      .toHaveBeenCalledWith("i1", "https://huggingface.co/x/y/resolve/main/mystery.safetensors"));
+    //: 解析也认不出目录:不替人瞎填一个 —— 那一格空着等人挑,挑之前下载点不了
+    expect((await within(dialog).findByRole("combobox", { name: "modelDownloadFolder" })).textContent)
+      .toContain("modelDownloadFolderPick");
+    expect((within(dialog).getByRole("button", { name: /modelDownloadConfirm/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
