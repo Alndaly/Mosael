@@ -5,12 +5,13 @@ import React from "react";
 import { toast } from "sonner";
 import { FieldBox } from "@/components/ui/field-box";
 import { Textarea } from "@/components/ui/textarea";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleArrowUp, Copy, KeyRound, Loader2, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
   createPluginInstance,
+  getLocalService,
   invokePluginTool,
   listPluginCredentials,
   listPluginInvocations,
@@ -77,7 +78,8 @@ import {
   useRefreshWhenRunning,
   type Where,
 } from "@/features/plugins/ConnectionLocalService";
-import { machineKey, serviceIssue, useLocalService } from "@/features/plugins/localServiceStatus";
+import { localServiceKey, machineKey, serviceIssue, useLocalService } from "@/features/plugins/localServiceStatus";
+import { PluginServiceVersionFact } from "@/features/plugins/LocalServiceVersion";
 import { describePermission } from "@/features/plugins/pluginPermissions";
 import { PathField } from "@/components/settings/PathField";
 import { useIsDeploymentAdmin } from "@/app/auth";
@@ -314,6 +316,64 @@ export function PackageDetail({
 
   const canAdd = pkg.multiple || instances.length === 0;
 
+  //: **插件页页头那一行 ComfyUI 版本**(维护者:「ComfyUI 插件内可以看 ComfyUI 的版本」)。
+  //: 每个连接先读**本机服务那一行**(本地库、不联网),挑出「让 Mosael 装的、装好了、当前账号能读」
+  //: 的那一份,才去读版本(那一趟会问上游)。几个连接只挑第一份能读的:插件页面上多一行版本,
+  //: 不该让每张卡、每个连接各问一次上游(ADR 0073 记着的那次网络调用)。
+  const serviceTitle = (pkg.services ?? [])[0]?.title ?? pkg.name;
+  const serviceInstances = React.useMemo(
+    () => ((pkg.services ?? []).length > 0 ? instances : []),
+    [instances, pkg.services],
+  );
+  const serviceRows = useQueries({
+    queries: serviceInstances.map((one) => ({
+      queryKey: localServiceKey(one.id),
+      queryFn: () => getLocalService(one.id),
+      retry: false,
+    })),
+  });
+  const versionTarget = (() => {
+    if (serviceInstances.length === 0) return null;
+    //: 本机服务还没读回来:先不摆 —— 不能先说「不是 Mosael 装的」再改口。
+    if (serviceRows.some((row) => row.isPending)) return null;
+    const managedAt = serviceRows.findIndex(
+      (row) => row.data?.mode === "managed" && row.data.installed && !row.data.needs_rebuild && row.data.can_manage,
+    );
+    if (managedAt >= 0) {
+      return {
+        instanceId: serviceInstances[managedAt].id,
+        title: serviceRows[managedAt].data?.title || serviceTitle,
+        readable: true,
+      };
+    }
+    //: 是 Mosael 装的那一份、这会儿却读不了(还没装好 / 要重建 / 不是部署管理员):那一块在连接里说,
+    //: 这里不拿「不是 Mosael 装的」糊它。
+    const unreadable = serviceRows.some(
+      (row) =>
+        row.data?.mode === "managed" &&
+        (!row.data.installed || row.data.needs_rebuild || !row.data.can_manage),
+    );
+    if (unreadable) return null;
+    const first = serviceRows.find((row) => row.data)?.data;
+    return { instanceId: serviceInstances[0].id, title: first?.title || serviceTitle, readable: false };
+  })();
+  //: 页头那一行点「有新版本」:展开这个连接、滚到「版本」那一行(更新 / 回到上一版只有那里有)。
+  const [versionJump, setVersionJump] = React.useState<{ instanceId: string; seq: number } | null>(null);
+  React.useEffect(() => {
+    if (!versionJump) return;
+    const frame = window.requestAnimationFrame(() => {
+      const row = document.getElementById(`local-service-version-${versionJump.instanceId}`);
+      row?.scrollIntoView({ block: "center" });
+      row?.querySelector<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])")?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [versionJump]);
+  const openVersion = (instanceId: string) => {
+    setTab("connections");
+    opened.setOpen(instanceId, true);
+    setVersionJump((previous) => ({ instanceId, seq: (previous?.seq ?? 0) + 1 }));
+  };
+
   return (
     <div className="grid w-full min-w-0 content-start gap-5">
       {/* 卸载会删掉磁盘上的插件目录 —— 不可撤销,所以走确认;连接还留着本机服务的安装目录时一起问(ADR 0041 §4)。 */}
@@ -340,6 +400,15 @@ export function PackageDetail({
           ) : null,
           status === "bundled" ? (
             <HintedFact key="bundled" hint={t("pluginBundledHint")}>{t("pluginBundledFact")}</HintedFact>
+          ) : null,
+          versionTarget ? (
+            <PluginServiceVersionFact
+              key="service-version"
+              instanceId={versionTarget.instanceId}
+              title={versionTarget.title}
+              readable={versionTarget.readable}
+              onOpen={() => openVersion(versionTarget.instanceId)}
+            />
           ) : null,
         ]}
         actions={

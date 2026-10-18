@@ -162,6 +162,13 @@ export const localServices = {
   localServiceVersionReasonUnknown: "a network problem, offline, or it wasn't checked",
   localServiceVersionNotChecked: "Not checked yet",
   localServiceVersionReleaseNotes: "Upstream release notes: {notes}",
+  // The compact version line in the plugin page's hero (a summary of the connection page's Version row)
+  pluginServiceVersionCurrent: "{title} {version}",
+  pluginServiceVersionUpdate: "New version {version}",
+  pluginServiceVersionUnknown: "Couldn't check ({reason})",
+  pluginServiceVersionNotManaged: "This isn't the copy Mosael installed, so its version can't be read",
+  pluginServiceVersionUnreadable: "Couldn't read the version ({reason})",
+  pluginServiceVersionJump: "Open the Version row under the connection to update",
   localServiceUpdateTo: "Update to {version}",
   localServiceGoBack: "Go back to {version}",
   localServiceGoBackUnfinished: "Go back to {version}",

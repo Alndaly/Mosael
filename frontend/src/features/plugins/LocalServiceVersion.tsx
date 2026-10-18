@@ -20,10 +20,24 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { LocalServiceLogDialog, localServiceKey, machineKey } from "@/features/plugins/localServiceStatus";
 
 export const versionsKey = (instanceId: string) => ["local-service-versions", instanceId] as const;
+
+/**
+ * 这一份本机服务装着的版本(以及上游最新、能不能升)。连接页那一整行和插件页页头那一行
+ * **读的是同一份缓存**(同一个 key、同一趟请求):插件页上多看一眼版本不该再多问一次上游。
+ */
+export function useLocalServiceVersions(instanceId: string, enabled = true) {
+  return useQuery({
+    queryKey: versionsKey(instanceId),
+    queryFn: () => getLocalServiceVersions(instanceId),
+    enabled,
+    retry: false,
+  });
+}
 
 /** 版本号按数字段比(`0.41.0` > `0.39.0`);认不出的按 0 算,只用来决定这句话怎么说。 */
 function newer(first: string, second: string): boolean {
@@ -44,12 +58,7 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
   const { locale } = usePreferences();
   const qc = useQueryClient();
   const run = service.install ?? null;
-  const versions = useQuery({
-    queryKey: versionsKey(instanceId),
-    queryFn: () => getLocalServiceVersions(instanceId),
-    enabled: service.can_manage,
-    retry: false,
-  });
+  const versions = useLocalServiceVersions(instanceId, service.can_manage);
   //: 一次装 / 换版本落定了:重读版本(换好了、换回去了、半截停下了)
   const settledAt = run && run.state !== "installing" ? run.finished_at : null;
   React.useEffect(() => {
@@ -136,7 +145,11 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
   const lastChange = run && run.kind !== "install" && run.state !== "installing" ? run : null;
   return (
     <>
-      <SettingsRow label={t("localServiceVersion")} description={<>{description}{facts}{notes}</>}>
+      <SettingsRow
+        id={`local-service-version-${instanceId}`}
+        label={t("localServiceVersion")}
+        description={<>{description}{facts}{notes}</>}
+      >
         {found?.update && (
           <Button size="sm" loading={change.isPending && change.variables === "update"} onClick={() => setConfirming("update")}>
             <CircleArrowUp /> {t("localServiceUpdateTo").replace("{version}", found.update)}
@@ -189,6 +202,68 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
         <LocalServiceLogDialog instanceId={instanceId} title={service.title} source="install" onClose={() => setLogsOpen(false)} />
       )}
     </>
+  );
+}
+
+/**
+ * 插件页页头那一行轻量版本(「更新、回滚」的摘要,ADR 0041 §4)。
+ *
+ * 整块 {@link ManagedVersion}(更新 / 回到上一版 / 先确认 / 发布说明 / 日志)在连接里展开才有地方摆;
+ * 插件页上看一眼版本不该先展开连接。这一行读的是**同一个查询**(见 {@link useLocalServiceVersions}):
+ * 当前版本 + 能升到哪一版;点「有新版本」去连接里那一行 —— 真正的动作(和它需要的确认)只有那一个控件。
+ *
+ * `readable` 由调用方按本机服务那一行定(让 Mosael 装的、装好了、当前账号能读,才有版本可读)。
+ * 读不到时说「不是 Mosael 装的这一份」,**不留空白、不写 0**;上游查不到时说查不到和原因,
+ * **绝不说「已经是最新的」**(ADR 0073)。
+ */
+export function PluginServiceVersionFact({
+  instanceId,
+  title,
+  readable,
+  onOpen,
+}: {
+  instanceId: string;
+  title: string;
+  /** 这一份是不是读得出「装着哪个版本」。 */
+  readable: boolean;
+  /** 点「有新版本」:去连接里那一行(展开、滚到「版本」)。 */
+  onOpen: () => void;
+}) {
+  const t = useI18n();
+  const versions = useLocalServiceVersions(instanceId, readable);
+  if (!readable) {
+    return <span data-service-version="">{t("pluginServiceVersionNotManaged")}</span>;
+  }
+  if (versions.isPending) return null;
+  if (versions.error) {
+    return (
+      <span data-service-version="" className="text-warning">
+        {t("pluginServiceVersionUnreadable").replace("{reason}", versions.error.message)}
+      </span>
+    );
+  }
+  const found = versions.data;
+  if (!found?.current) {
+    return <span data-service-version="">{t("pluginServiceVersionNotManaged")}</span>;
+  }
+  const upstream = found.upstream;
+  return (
+    <span data-service-version="" className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="tabular-nums">
+        {t("pluginServiceVersionCurrent").replace("{title}", title).replace("{version}", found.current)}
+      </span>
+      {upstream && upstream.status !== "ok" ? (
+        <span className="text-warning">
+          {t("pluginServiceVersionUnknown").replace("{reason}", upstream.message || t("localServiceVersionReasonUnknown"))}
+        </span>
+      ) : found.update ? (
+        <Hint label={t("pluginServiceVersionJump")}>
+          <Button variant="inline" className="text-warning" onClick={onOpen}>
+            {t("pluginServiceVersionUpdate").replace("{version}", found.update)}
+          </Button>
+        </Hint>
+      ) : null}
+    </span>
   );
 }
 

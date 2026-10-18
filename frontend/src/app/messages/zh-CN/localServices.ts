@@ -161,6 +161,13 @@ export const localServices = {
   localServiceVersionReasonUnknown: "网络问题、离线,或者没有查到",
   localServiceVersionNotChecked: "还没检查",
   localServiceVersionReleaseNotes: "上游发布说明:{notes}",
+  // 插件页页头那一行轻量版本(连接页「版本」那一行的摘要,不另做一套控件)
+  pluginServiceVersionCurrent: "{title} {version}",
+  pluginServiceVersionUpdate: "有新版本 {version}",
+  pluginServiceVersionUnknown: "查不到（{reason}）",
+  pluginServiceVersionNotManaged: "不是 Mosael 装的这一份,版本信息读不到",
+  pluginServiceVersionUnreadable: "版本信息读不到（{reason}）",
+  pluginServiceVersionJump: "去连接里的「版本」那一行看更新",
   localServiceUpdateTo: "更新到 {version}",
   localServiceGoBack: "回到上一版 {version}",
   localServiceGoBackUnfinished: "换回 {version}",
