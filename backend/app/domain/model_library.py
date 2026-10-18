@@ -124,6 +124,10 @@ def _number(value: Any) -> float | None:
     return float(value)
 
 
+#: 能拿来自我核对下载内容的哈希:64 位十六进制的 SHA256(插件下完再算一遍,对不上就删)。
+_SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
 def _http(url: Any) -> str:
     """只认 http(s) 的地址;别的(`file://`、相对路径)当没给。"""
     text = _text(url, 4000)
@@ -605,12 +609,19 @@ def _plain_name(value: str, *, key: str) -> str:
 
 
 def start_download(
-    db: Session, user: User, instance: PluginInstance, *, workspace_id: str, url: str, folder: str, filename: str
+    db: Session, user: User, instance: PluginInstance, *, workspace_id: str, url: str, folder: str, filename: str,
+    sha256: str = "",
 ) -> Job:
-    """把一个模型下到这个连接的那台服务器上:一个后台任务。名字、目录、链接在这里先过一遍,不交给插件猜。"""
+    """把一个模型下到这个连接的那台服务器上:一个后台任务。名字、目录、链接在这里先过一遍,不交给插件猜。
+
+    `sha256`:从「确认是同一个文件」的来源下载时带上(工作流声明、平台元数据里也对上的那个哈希)。插件下完再算
+    一遍,对不上就删掉;没有就不核对。"""
     _require(db, instance)
     if not _http(url):
         raise ModelLibraryError("modelLibErr_badUrl")
+    digest = (sha256 or "").strip().lower()
+    if digest and not _SHA256.fullmatch(digest):
+        raise ModelLibraryError("modelLibErr_badHash", hash=(sha256 or "").strip()[:64])
     folder = _plain_name(folder, key="modelLibErr_badFolder")
     filename = _plain_name(filename, key="modelLibErr_badFilename")
     ensure_workspace_perm(db, user, workspace_id, "edit")
@@ -623,7 +634,7 @@ def start_download(
         kind="model_download",  # 和 KIND 同一个;任务目录的测试按字面量扫
         created_by=user.id,
         payload={"instance_id": instance.id, "url": url.strip(), "folder": folder, "filename": filename,
-                 "subject": filename},
+                 **({"sha256": digest} if digest else {}), "subject": filename},
         message="jobMsg_modelDownloadQueued",
         message_params={"name": filename},
     )
@@ -670,7 +681,8 @@ def _download(job_id: str) -> None:
                 say(job, message[:200])
 
     hooks = StreamHooks(on_progress=on_progress, on_task=lambda _receipt: None, is_cancelled=lambda: _cancelled(job_id))
-    request = {"op": "download", "url": payload["url"], "folder": payload["folder"], "filename": payload["filename"]}
+    request = {"op": "download", "url": payload["url"], "folder": payload["folder"], "filename": payload["filename"],
+               **({"sha256": payload["sha256"]} if payload.get("sha256") else {})}
     try:
         with unit_of_work() as db:
             output = tools.invoke_host(db, instance_id, MODEL_LIBRARY, request, hooks=hooks,

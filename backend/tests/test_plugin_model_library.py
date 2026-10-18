@@ -716,6 +716,24 @@ def test_找下载地址_只有哈希确认过的才算直接下载_声明了的
         "没声明哈希:不带这两个键"
 
 
+def test_确认过的来源_拿搜索交回的哈希去下_哈希一路到插件(library) -> None:
+    """多平台:搜索里 `confirmed` 的那个候选带着平台元数据里对上的 SHA256;点它下载时,那个哈希要交给插件下完再核对。"""
+    client, instance_id, _ = library
+    workspace = _workspace(client)
+    found = client.post(f"/api/plugins/instances/{instance_id}/model-library/search", json={
+        "filename": "confirmed.safetensors"}).json()
+    hit = next(one for one in found["candidates"] if one["confidence"] == "confirmed")
+    assert hit["sha256"] == "ab" * 32
+    response = client.post(f"/api/plugins/instances/{instance_id}/model-library/downloads", json={
+        "workspace_id": workspace, "url": hit["url"], "folder": "checkpoints",
+        "filename": "confirmed.safetensors", "sha256": hit["sha256"],
+    })
+    assert response.status_code == 200, response.text
+    assert wait_status(client, response.json()["id"]) == "succeeded"
+    sent = next(one for one in _ops() if one["op"] == "download")
+    assert (sent["url"], sent["sha256"]) == (hit["url"], "ab" * 32)
+
+
 def test_下载是一个后台任务_报进度_下完让连接的目录重新拉一遍(library) -> None:
     client, instance_id, _ = library
     workspace = _workspace(client)
@@ -738,6 +756,27 @@ def test_下载是一个后台任务_报进度_下完让连接的目录重新拉
     listed = client.get(f"/api/plugins/instances/{instance_id}/model-library").json()
     assert [(one["id"], one["status"], one["payload"]["filename"]) for one in listed["downloads"]] == [
         (job["id"], "succeeded", "mosael-test-tiny.safetensors")]
+
+
+def test_带SHA256的下载_哈希交给插件_格式不对当场拒绝(library) -> None:
+    """多平台确认过的来源下载时要带上 SHA256(插件下完核对);不是 64 位十六进制的当场拒绝,不交给插件。"""
+    client, instance_id, _ = library
+    workspace = _workspace(client)
+    digest = "ef" * 32
+    response = client.post(f"/api/plugins/instances/{instance_id}/model-library/downloads", json={
+        "workspace_id": workspace, "url": "https://huggingface.co/a/b/resolve/main/verified.safetensors",
+        "folder": "vae_approx", "filename": "verified.safetensors", "sha256": digest.upper(),
+    })
+    assert response.status_code == 200, response.text
+    assert wait_status(client, response.json()["id"]) == "succeeded"
+    sent = next(one for one in _ops() if one["op"] == "download")
+    assert sent["sha256"] == digest, "交给插件的是规整过的小写"
+
+    bad = client.post(f"/api/plugins/instances/{instance_id}/model-library/downloads", json={
+        "workspace_id": workspace, "url": "https://huggingface.co/a/b/resolve/main/verified.safetensors",
+        "folder": "vae_approx", "filename": "bad.safetensors", "sha256": "not-a-sha256",
+    })
+    assert bad.status_code == 422 and "SHA256" in bad.text, "格式不对当场说,不交给插件"
 
 
 def test_下载_取消经取消文件传到插件(library) -> None:

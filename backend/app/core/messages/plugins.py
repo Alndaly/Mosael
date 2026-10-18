@@ -198,6 +198,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这不是一个能下载的链接:要以 http:// 或 https:// 开头",
         "en": "This is not a downloadable link: it must start with http:// or https://",
     },
+    "modelLibErr_badHash": {
+        "zh": "「{hash}」不是 SHA256:只有 64 位十六进制的 SHA256 能拿来核对下载到的是不是同一个文件",
+        "en": "“{hash}” is not a SHA256: only a 64-character hex SHA256 can verify that the downloaded file is the same one",
+    },
     "modelLibErr_badFilename": {
         "zh": "文件名「{name}」不行:只能是一个文件名,不能带斜杠、反斜杠、冒号这类路径符号,也不能是 . 或 ..",
         "en": "The file name “{name}” won't do: it must be a single name without slashes, backslashes or colons, and not . or ..",

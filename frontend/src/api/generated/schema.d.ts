@@ -7366,6 +7366,9 @@ export interface paths {
         /**
          * Start Model Download
          * @description 把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。
+         *
+         *     `sha256`(可选):从「确认是同一个文件」的来源下载时带上,插件下完再算一遍,对不上就删掉;经 ComfyUI-Manager
+         *     的那条路核对不了,带了就不走它(宁可不下,也不装一个没核对过的)。
          */
         post: operations["start_model_download_api_plugins_instances__instance_id__model_library_downloads_post"];
         delete?: never;
@@ -14835,6 +14838,11 @@ export interface components {
             folder: string;
             /** Filename */
             filename: string;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
         };
         /**
          * ModelDownloadRouteOut

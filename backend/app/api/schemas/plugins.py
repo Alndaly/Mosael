@@ -719,6 +719,8 @@ class ModelDownloadRequest(ApiModel):
     url: str = Field(min_length=1, max_length=4000)
     folder: str = Field(min_length=1, max_length=200)
     filename: str = Field(max_length=300)
+    #: 要核对的 SHA256(只有「确认是同一个文件」的来源才带):下完插件再算一遍,对不上就删掉。
+    sha256: str = Field(default="", max_length=64)
 
 
 class ModelNodeFolderIn(ApiModel):

@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -414,6 +415,38 @@ def test_本机那条路_直接写进模型目录_不留半截文件(comfy, data
     assert not list((root / "vae").glob("*.mosael-part"))
     assert progress.events and progress.events[-1][0] == pytest.approx(1.0)
     assert "KB" in progress.events[-1][1] or "MB" in progress.events[-1][1]
+
+
+def test_本机那条路_带SHA256_对得上才留下(comfy, data_dir, tmp_path, files) -> None:
+    """多平台里「确认是同一个文件」的那些来源:下完按平台元数据里的 SHA256 再核对一遍(少一个跑完才发现是另一个文件的窗口)。"""
+    root = _same_machine(comfy, tmp_path / "models")
+    body = b"\x02" * 200_000
+    digest = hashlib.sha256(body).hexdigest()
+    site = files({"/verified.safetensors": body})
+    out, _progress = _download(comfy, {"url": f"{site.url}/verified.safetensors", "folder": "vae",
+                                       "filename": "verified.safetensors", "sha256": digest.upper()}, data_dir, tmp_path)
+    assert out["route"] == "local"
+    assert (root / "vae" / "verified.safetensors").read_bytes() == body
+
+
+def test_本机那条路_带SHA256_对不上就删掉并说清(comfy, data_dir, tmp_path, files) -> None:
+    root = _same_machine(comfy, tmp_path / "models")
+    body = b"\x03" * 200_000
+    site = files({"/lookalike.safetensors": body})
+    with pytest.raises(PluginRuntimeError, match="SHA256"):
+        _download(comfy, {"url": f"{site.url}/lookalike.safetensors", "folder": "vae",
+                          "filename": "lookalike.safetensors", "sha256": "cd" * 32}, data_dir, tmp_path)
+    assert not (root / "vae" / "lookalike.safetensors").exists(), "核对不上不留下"
+    assert not list((root / "vae").glob("*.mosael-part")), "半截文件也删掉"
+
+
+def test_Manager那条路_要核对SHA256就不下_说清为什么(comfy, data_dir, tmp_path) -> None:
+    """经 ComfyUI-Manager 是那台机器自己下,Mosael 拿到文件之前没法按哈希核对;宁可不下,也不装一个没核对过的。"""
+    comfy.state.manager = "V4.2.1"
+    with pytest.raises(PluginRuntimeError, match="核对"):
+        _download(comfy, {"url": "https://huggingface.co/a/b/resolve/main/tiny.safetensors", "folder": "vae",
+                          "filename": "tiny.safetensors", "sha256": "cd" * 32}, data_dir, tmp_path)
+    assert not comfy.posted("/v2/manager/queue/install_model"), "没提交给 Manager"
 
 
 def test_本机那条路_同名文件不覆盖(comfy, data_dir, tmp_path, files) -> None:

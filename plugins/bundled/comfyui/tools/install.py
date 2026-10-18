@@ -12,13 +12,18 @@
    才放行 —— 被拒时历史里只记一个 failed,原因在日志里(`/internal/logs/raw`),这里把它找出来说人话,并记下来;
 4. 都走不通:如实说明,并给出能做的那一步。
 
-    {"op": "download", "url", "folder", "filename"} → 流式:进度行;结果 {folder, name, size, route, page}
+    {"op": "download", "url", "folder", "filename", "sha256"?} → 流式:进度行;结果 {folder, name, size, route, page}
+
+`sha256`(可选)是从「确认是同一个文件」的来源下载时那个文件的 SHA256:本机那条路边下边算,对上了才挂正式的名字,
+对不上就把半截文件删掉、说清;经 ComfyUI-Manager 那条路是那台机器自己下,Mosael 核对不了 —— 带了 `sha256` 就不走那条,
+宁可不下也不装一个没核对过的。
 
 下成了就记下这个文件的来源(见 provenance):模型库的「原链接」、Civitai 的 NSFW 标记和示例图都从这里来。
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -330,7 +335,7 @@ def _open_download(url: str, locale: str):
     raise ComfyError(say(locale, "下载地址跳转太多次", "The download link redirected too many times"))
 
 
-def via_local(directory: Path, url: str, folder: str, filename: str, locale: str, emit: Emit) -> dict[str, Any]:
+def via_local(directory: Path, url: str, folder: str, filename: str, locale: str, emit: Emit, *, sha256: str = "") -> dict[str, Any]:
     directory.mkdir(exist_ok=True)
     final = directory / filename
     part = directory / f"{filename}.mosael-part"
@@ -353,6 +358,7 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
                                      f"Not enough space: the disk holding {directory} has {_human(free)} left and this file "
                                      f"needs {_human(total)}"))
         started = last = time.monotonic()
+        digest = hashlib.sha256()
         with part.open("wb") as handle:
             while True:
                 if _cancelled():
@@ -362,6 +368,7 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
                 if not chunk:
                     break
                 handle.write(chunk)
+                digest.update(chunk)
                 written += len(chunk)
                 now = time.monotonic()
                 if now - last >= PROGRESS_SECONDS:
@@ -375,6 +382,13 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
         if total and written != total:
             raise ComfyError(say(locale, f"下到一半断了({_human(written)} / {_human(total)}),再试一次",
                                  f"The download broke off ({_human(written)} of {_human(total)}); try again"))
+        got = digest.hexdigest()
+        if sha256 and got != sha256:
+            #: 这份不是确认过的那个文件:半截文件由下面的 except 删掉,正式的名字一次都不挂。
+            raise ComfyError(say(locale, f"下到的文件和确认过的那个不是同一个(SHA256 {got[:12]}…,应为 {sha256[:12]}…):"
+                                           f"已经删掉,没放进 {folder}",
+                                 f"The downloaded file isn't the confirmed one (SHA256 {got[:12]}…, expected "
+                                 f"{sha256[:12]}…): it was deleted and not put into {folder}"))
         _publish(part, final, locale, folder, filename)
     except BaseException:
         part.unlink(missing_ok=True)
@@ -417,6 +431,10 @@ def download(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
                              "This is not a downloadable link: it must start with http:// or https://"))
     if not plain(folder) or not plain(filename):
         raise ComfyError(say(locale, "目录和文件名都只能是一段名字,不能带路径", "The folder and file name must be plain names, not paths"))
+    sha256 = str(payload.get("sha256") or "").strip().lower()
+    if sha256 and not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise ComfyError(say(locale, "要核对的那个 SHA256 不是一个 64 位的十六进制数",
+                             "The SHA256 to verify against isn't a 64-character hex string"))
     info = folder_info(comfy)
     if info is None:
         raise ComfyError(say(locale, "这台 ComfyUI 太旧,没有模型目录的接口(/experiment/models),Mosael 替它下不了:升级 ComfyUI",
@@ -428,16 +446,25 @@ def download(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
     direct = sources.direct_url(url, locale, set(info))
     # 来源页在开始下之前就问好(Civitai 的要问一次版本信息):下完才问的话,那几秒里用户以为卡住了
     origin = provenance.provenance_of(url, locale)
-    done = _download_by_route(comfy, info, direct, folder, filename, locale, emit)
+    done = _download_by_route(comfy, info, direct, folder, filename, locale, emit, sha256=sha256)
     provenance.record(comfy, folder, str(done.get("name") or filename), done.get("size"), {"how": "download", **origin})
     return {**done, "page": origin.get("page", "")}
 
 
 def _download_by_route(comfy: Comfy, info: dict[str, list[str]], direct: str, folder: str, filename: str, locale: str,
-                       emit: Emit) -> dict[str, Any]:
+                       emit: Emit, *, sha256: str = "") -> dict[str, Any]:
     local = _local_dir(info, folder) if same_machine(comfy, info) else None
     if local is not None:
-        return via_local(local, direct, folder, filename, locale, emit)
+        return via_local(local, direct, folder, filename, locale, emit, sha256=sha256)
+    if sha256 and manager_version(comfy):
+        #: 那条路是那台机器自己下,Mosael 拿不到字节、算不了哈希:宁可不下,也不装一个没核对过的。
+        raise ComfyError(say(locale, "这个来源要下完核对 SHA256,得 Mosael 自己把文件写进模型目录;这台服务器只能经 "
+                                       "ComfyUI-Manager 下,Mosael 核对不了,所以没下。用工作流里写的那个地址,或者把 "
+                                       "Mosael 和 ComfyUI 装在同一台机器上。",
+                             "This source is downloaded with a SHA256 check, which needs Mosael to write the file into the "
+                             "model folder itself. This server can only download through ComfyUI-Manager, where Mosael "
+                             "can't verify it, so nothing was downloaded. Use the address the workflow declares, or run "
+                             "Mosael and ComfyUI on the same machine."))
     if manager_version(comfy):
         return via_manager(comfy, info, direct, folder, filename, locale, emit)
     raise ComfyError(_none_steps(locale, direct, folder, filename))

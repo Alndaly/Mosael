@@ -646,11 +646,15 @@ def search_model_sources(instance_id: str, body: ModelSearchRequest, db: DbSessi
 
 @router.post("/plugins/instances/{instance_id}/model-library/downloads", response_model=JobOut)
 def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, user: CurrentUser) -> Job:
-    """把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。"""
+    """把一个模型下到这个连接的那台服务器上:返回后台任务(进度、取消都在任务上)。不覆盖已有文件 —— 那由插件在写入时再查一遍。
+
+    `sha256`(可选):从「确认是同一个文件」的来源下载时带上,插件下完再算一遍,对不上就删掉;经 ComfyUI-Manager
+    的那条路核对不了,带了就不走它(宁可不下,也不装一个没核对过的)。"""
     instance = my_instance(db, instance_id, user)
     try:
         return model_library.start_download(
-            db, user, instance, workspace_id=body.workspace_id, url=body.url, folder=body.folder, filename=body.filename
+            db, user, instance, workspace_id=body.workspace_id, url=body.url, folder=body.folder, filename=body.filename,
+            sha256=body.sha256,
         )
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
