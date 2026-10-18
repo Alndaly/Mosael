@@ -63,9 +63,9 @@ SUBJECT_PREVIEW_CHARS = 80
 def _subject(job: Job) -> str:
     """这个任务的完整名字。
 
-    生成任务的 `payload.subject` 在建任务时被硬切到 80 字(`generation.operations`),而完整提示词就在
-    同一个 payload 的 `request.prompt` 里 —— 回执读那一份,不把已经切短的再切一次。其余任务种类
-    (渲染、配音、发布……)本来就没有更长的原文,passthrough。
+    生成任务的完整提示词在同一个 payload 的 `request.prompt` 里,优先读那一份:建任务处
+    (`generation.operations`)现在存的是完整原文,但此前落库的旧任务 `subject` 只有前 80 字,
+    而 `request.prompt` 一直是原文。其余任务种类(渲染、配音、发布……)passthrough。
     """
     payload = job.payload or {}
     request = payload.get("request")

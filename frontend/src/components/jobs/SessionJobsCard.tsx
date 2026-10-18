@@ -25,9 +25,9 @@ function receiptSessionId(job: JobSummary): string | null {
 }
 
 /**
- * 任务的名字。**生成任务读完整提示词**:建任务时 `payload.subject` 被硬切到 80 字
- * (`generation.operations`),而同一份 payload 的 `request.prompt` 是原文 —— 列表行要的是
- * 「是哪个任务」,不是一句在 80 字处断掉的谜语;放不下由 `Truncate` 收,不在这里切。
+ * 任务的名字。**生成任务优先读完整提示词**:`payload.subject` 现在存完整原文(旧任务可能只有前 80 字),
+ * 而同一份 payload 的 `request.prompt` 一直是原文 —— 列表行要的是「是哪个任务」,不是一句断在 80 字
+ * 处的谜语;放不下由 `Truncate` 收,不在这里切。
  */
 function subjectOf(job: JobSummary, fallback: string): string {
   const payload = (job.payload ?? {}) as Record<string, unknown>;

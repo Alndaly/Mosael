@@ -528,7 +528,8 @@ def start_synthesis(
         kind="tts",
         created_by=created_by,
         payload={
-            "subject": text[:80],
+            #: 完整文本:回执卡/任务卡用 `Truncate` 收窄,源头不再静默切 80 字(切了就拿不回原文)。
+            "subject": text,
             "voice_id": voice_id,
             "project_id": project_id,
             "text": text[:200],
@@ -1153,7 +1154,8 @@ def start_podcast(
         kind="podcast",
         created_by=created_by,
         payload={
-            "subject": " ".join(subject.split())[:80],
+            #: 完整材料:显示层用 `Truncate`(此前源头切 80 字,切掉的正文永远拿不回来)。
+            "subject": subject,
             "project_id": project_id,
             "mode": mode,
             "speakers": chosen,

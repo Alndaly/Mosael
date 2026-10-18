@@ -98,7 +98,7 @@ it("只列本对话发起的任务:状态、进度、失败原因各说各的", 
   h.jobs = [
     job({
       id: "run-1", kind: "ai_generation", status: "running", progress: 0.4,
-      //: 建任务时 subject 被硬切到 80 字;完整的提示词在 request.prompt 里 —— 行上要看全的那一份。
+      //: 旧任务的 subject 只有前 80 字;完整提示词一直在 request.prompt 里 —— 行上要看全的那一份。
       payload: { subject: "雨里的柴犬".repeat(30).slice(0, 80), request: { prompt: "雨里的柴犬".repeat(30) }, receipt: { session_id: "s1" } },
     }),
     job({

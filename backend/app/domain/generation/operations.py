@@ -406,7 +406,9 @@ def _create_generation_job(
         created_by=created_by,
         payload={
             #: 没写提示词时写模型叫什么(主名:表单入口是表单标题,ADR 0045),不写模型 id —— 表单入口的 id 是 `路径#app`
-            "subject": (prompt or prompt_for_provider(request_text))[:80] or (resolved.row.display_name or model)[:80],
+            #: **存完整原文,不在这里切**(此前是 [:80],界面再 Truncate 也回不到全文)。回执卡/任务卡/任务中心
+            #: 都用既有 `Truncate` 收窄,悬停看全文;只有真要长度上限的出口(如系统通知)才截,且带省略号。
+            "subject": (prompt or prompt_for_provider(request_text)) or (resolved.row.display_name or model),
             #: 任务中心「前往」打开的是这条创作会话(job_catalog 的 record_field,ADR 0055 §9)。
             "session_id": session.id,
             "provider_profile_id": provider_profile.id if provider_profile else None,

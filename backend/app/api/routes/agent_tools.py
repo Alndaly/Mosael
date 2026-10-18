@@ -214,14 +214,29 @@ def invoke_agent_tool(
     with registry.calling_as(
         user_id=user.id, requested_by=body.requested_by, session_id=agent_session_id or "", tool_call_id=body.tool_call_id
     ):
+        # **直接工具也会建后台任务**(transcribe_asset、import_media_from_url……),它们不经过确认卡。
+        # 卡那条路已经在执行体外面压了回执(confirmations._execute);这条路此前只设了 calling_as,
+        # 于是任务干完了智能体不知道,也不能按对话归属(「本对话的后台任务」里看不到)。
+        # 与 calling_as 同一处、同一段上下文:create_job 建几个,几个都带同一份回执;
+        # 读类工具一个任务都不建,也就不会凭空多出回执。
+        receipt = None
+        if agent_session_id:
+            from app.domain.agent.receipts import receipt_to_session
+            from app.domain.jobs import reset_receipt, set_receipt
+
+            receipt = set_receipt(receipt_to_session(agent_session_id))
         try:
-            result = fn(**arguments)
-        except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
-            accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
-            raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
-        except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
-            logger.warning("tool %s failed: %s", name, exc)
-            return {"error": str(exc)[:500]}
+            try:
+                result = fn(**arguments)
+            except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
+                accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
+                raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
+            except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
+                logger.warning("tool %s failed: %s", name, exc)
+                return {"error": str(exc)[:500]}
+        finally:
+            if receipt is not None:
+                reset_receipt(receipt)
     return _as_payload(result)
 
 

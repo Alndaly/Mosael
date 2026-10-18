@@ -3376,6 +3376,9 @@ def list_jobs(workspace_id: str = "", kind: str = "", limit: int = 20) -> list[d
 
 #: 列任务时每一条说明 / 错误最多留多少字。
 _JOB_TEXT_CHARS = 300
+#: 列任务时给模型看的 subject 摘要最多留多少字。**这是模型上下文的长度上限,不是数据层的截断**:
+#: 完整原文在 `get_job` 的 payload 里;真要截时带省略号,不然「就这些」和「还有很长」在模型眼里一样。
+_JOB_SUBJECT_CHARS = 120
 #: 载荷里认得出「这是哪个任务」的那几格(给人看的标题、提示词开头)。
 _JOB_SUBJECT_KEYS = ("subject", "title", "name", "prompt", "text")
 
@@ -3399,7 +3402,12 @@ def _job_brief(job: dict[str, Any]) -> dict[str, Any]:
             brief[key] = text.strip()[:_JOB_TEXT_CHARS]
     subject = next((payload[key] for key in _JOB_SUBJECT_KEYS if isinstance(payload.get(key), str) and payload[key].strip()), "")
     if subject:
-        brief["subject"] = subject.strip()[:120]
+        subject = subject.strip()
+        #: 只截**给模型看的摘要**,带省略号;完整原文用 get_job 拿。
+        brief["subject"] = (
+            subject if len(subject) <= _JOB_SUBJECT_CHARS
+            else f"{subject[: _JOB_SUBJECT_CHARS - 1].rstrip()}…"
+        )
     #: 产出:结果里叫 *_id / *_ids 的那几格(素材、字幕轨、转写……)—— 智能体接着要用的就是它们。
     produced = {
         key: value for key, value in result.items()

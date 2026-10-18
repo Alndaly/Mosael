@@ -68,7 +68,7 @@ def test_回执_payload_带够信息_subject_不静默截断(monkeypatch) -> Non
             kind="ai_generation",
             created_by=owner,
             payload={
-                "subject": prompt[:80],  # 和 generation.operations 落库时同一形状
+                "subject": prompt,  # 建任务处（generation.operations）现在也存完整原文
                 "request": {"prompt": prompt},
                 "session_id": "gen-session-1",
                 "receipt": receipts.receipt_to_session(sid),

@@ -478,7 +478,8 @@ def write_on_board(
             workspace_id=workspace_id,
             kind="board_write",
             created_by=actor_id,
-            payload={"board_id": board_id, "item_id": item_id, "subject": prompt[:80]},
+            #: 完整要求:任务卡/任务中心用 `Truncate` 收窄,源头不再静默切 80 字。
+            payload={"board_id": board_id, "item_id": item_id, "subject": prompt},
             message="jobMsg_boardWriteQueued",
         )
     finally:

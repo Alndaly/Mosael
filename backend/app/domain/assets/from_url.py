@@ -95,7 +95,8 @@ def start_url_import(
         created_by=created_by,
         payload={
             "project_id": project_id,
-            "subject": str(chosen[0].get("title") or chosen[0].get("url") or "")[:80]
+            #: 完整标题:任务卡/任务中心用 `Truncate` 收窄,源头不再切 80 字。
+            "subject": str(chosen[0].get("title") or chosen[0].get("url") or "")
             + (f" 等 {len(chosen)} 条" if len(chosen) > 1 else ""),
             "items": chosen,
             "kind": kind,
