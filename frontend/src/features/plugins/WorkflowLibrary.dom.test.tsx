@@ -74,6 +74,9 @@ vi.mock("@/api/client", () => api);
 //: 「表单:…」那一行要拼进表单标题才看得出标出来的是哪几个字;「4 项」那一行要看到数字。别的照旧回键名
 const FORM_TEXT = vi.hoisted((): Record<string, string> => ({
   workflowFormTitleLine: "表单:{title}", listSeparator: "、", workflowFormFields: "{n} 项",
+  //: 节点包那一行要拼进版本号才看得出说的是哪两版
+  workflowPackVersionUpgrade: "图上要 {wanted},装着 {installed}:需要升级",
+  workflowPackVersionCommit: "图上写的是 {version}(git commit)",
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => FORM_TEXT[key] ?? key,
@@ -120,7 +123,7 @@ function library(overrides: Partial<WorkflowLibrary> = {}): WorkflowLibrary {
         models: [{ folder: "checkpoints", name: "sdxl.safetensors", present: true },
                  { folder: "loras", name: "gone.safetensors", present: false }],
         missing_models: [{ folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors",
-                          hash: "", hash_type: "" }],
+                          hash: "ab".repeat(32), hash_type: "sha256" }],
         generation: { provider_profile_id: "p9", kind: "image", model: "portrait.json" },
         last_output: { asset_id: "a1", kind: "image", created_at: "2026-10-05T10:00:00" },
         used_by: [{ kind: "workflow", id: "w1", name: "出图流程" }, { kind: "board", id: "b1", name: "分镜板" }],
@@ -132,8 +135,8 @@ function library(overrides: Partial<WorkflowLibrary> = {}): WorkflowLibrary {
       flow({ path: "sub/sketch.json", label: "sketch", folder: "sub", kind: "", node_count: 12, modified: 1776098500,
              problem: "这台 ComfyUI 上没有这几种节点:CR Prompt Text",
              missing_nodes: [
-               { type: "CR Prompt Text", count: 2, packs: [{ id: "ComfyUI_Comfyroll_CustomNodes", title: "Comfyroll Studio", installed: false }] },
-               { type: "Display Any (rgthree)", count: 1, packs: [{ id: "rgthree-comfy", title: "rgthree", installed: true }] },
+               { type: "CR Prompt Text", count: 2, core: false, packs: [{ id: "ComfyUI_Comfyroll_CustomNodes", title: "Comfyroll Studio", installed: false, enabled: false, source: "registry", page: "https://registry.comfy.org/nodes/ComfyUI_Comfyroll_CustomNodes", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "", state: "not_installed" }] },
+               { type: "Display Any (rgthree)", count: 1, core: false, packs: [{ id: "rgthree-comfy", title: "rgthree", installed: true, enabled: true, source: "registry", page: "https://registry.comfy.org/nodes/rgthree-comfy", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "", state: "installed" }] },
              ] }),
     ],
     others: [{ path: "pack.zip", reason: "这是一个压缩包" }],
@@ -440,7 +443,7 @@ describe("工作流库", () => {
 
   it("列表:表头不透明、压在行上面;每行一样高,缺东西的只摆一枚;种类一律灰字;全在根目录时不摆「目录」那一列", async () => {
     const data = library();
-    data.workflows![0].missing_nodes = [{ type: "A", count: 1, packs: [] }, { type: "B", count: 1, packs: [] }];
+    data.workflows![0].missing_nodes = [{ type: "A", count: 1, core: false, packs: [] }, { type: "B", count: 1, core: false, packs: [] }];
     data.workflows![0].missing_models = [{ folder: "loras", name: "m.safetensors", url: "", hash: "", hash_type: "" }];
     api.getWorkflowLibrary.mockResolvedValue(data);
     await openLibrary();
@@ -833,8 +836,10 @@ describe("工作流库", () => {
     const missing = screen.getByRole("region", { name: "workflowMissingModels" });
     fireEvent.click(within(missing).getByRole("button", { name: "workflowDownloadInModelLibrary" }));
     expect(showModel).toHaveBeenLastCalledWith({
-      download: { folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors" },
+      download: { folder: "loras", name: "gone.safetensors", url: "https://huggingface.co/x/y/resolve/main/gone.safetensors",
+                  hash: "ab".repeat(32), hashType: "sha256" },
     });
+    //: 工作流自己声明的哈希一起交给模型库:下载时才能核对下下来的是不是同一个文件
   });
 
   it("不能跳去模型库(连接没认领模型库)就只列名字", async () => {
@@ -901,12 +906,12 @@ describe("工作流库", () => {
   it("三节的行一个样:缺的节点下面的节点包缩进一级;「装上」「下载」同一个尺寸,都在行尾同样宽的那一格里;每行同一个最小高度", async () => {
     const data = library();
     data.workflows![2].missing_nodes = [
-      { type: "ConditioningKrea2Rebalance", count: 1, packs: [
-        { id: "krea2-conditioning", title: "Krea 2 Conditioning Control", installed: false },
-        { id: "krea2-tools", title: "Krea 2 Tools", installed: false },
-        { id: "rgthree-comfy", title: "rgthree", installed: true },
+      { type: "ConditioningKrea2Rebalance", count: 1, core: false, packs: [
+        { id: "krea2-conditioning", title: "Krea 2 Conditioning Control", installed: false, enabled: false, source: "registry", page: "https://registry.comfy.org/nodes/krea2-conditioning", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "", state: "not_installed" },
+        { id: "krea2-tools", title: "Krea 2 Tools", installed: false, enabled: false, source: "registry", page: "https://registry.comfy.org/nodes/krea2-tools", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "", state: "not_installed" },
+        { id: "rgthree-comfy", title: "rgthree", installed: true, enabled: true, source: "registry", page: "https://registry.comfy.org/nodes/rgthree-comfy", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "", state: "installed" },
       ] },
-      { type: "MysteryNode", count: 2, packs: [] },
+      { type: "MysteryNode", count: 2, core: false, packs: [] },
     ];
     data.workflows![2].missing_models = [
       { folder: "loras", name: "with-url.safetensors", url: "https://huggingface.co/x/y/resolve/main/with-url.safetensors",
@@ -1475,5 +1480,36 @@ describe("工作流库 · 大卡片上「最近的那一份产出」那一枚小
     expect(placeholder(photo)?.dataset.fieldKind).toBe("image");
     //: 另一张卡上的产出不受影响(挂的是哪一份记在哪一份上,不是一个全局的布尔)
     expect(cardOf("movie.json").querySelector("img")?.getAttribute("src")).toBe("thumb://vi1");
+  });
+});
+
+describe("缺的节点:图上写的出处 / 装没装 / 启没启用 / 版本 / 核心节点", () => {
+  it("包那一行的灰字按状态说:禁用 / 版本升级 / 图上写的 commit;核心节点不给「装上」", async () => {
+    const data = library();
+    data.workflows![2].missing_nodes = [
+      { type: "DisabledNode", count: 1, core: false, packs: [{
+        id: "disabled-pack", title: "Disabled Pack", installed: true, enabled: false, source: "registry",
+        page: "", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "1.0.0", state: "installed" }] },
+      { type: "VersionedNode", count: 1, core: false, packs: [{
+        id: "versioned-pack", title: "Versioned Pack", installed: true, enabled: true, source: "registry",
+        page: "", repository: "", wanted_version: "2.0.0", wanted_is_commit: false, installed_version: "1.0.0",
+        state: "installed" }] },
+      { type: "CommitNode", count: 1, core: false, packs: [{
+        id: "commit-pack", title: "Commit Pack", installed: true, enabled: true, source: "git",
+        page: "", repository: "", wanted_version: "3f1a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c",
+        wanted_is_commit: true, installed_version: "1.0.0", state: "installed" }] },
+      { type: "LoadAudioMP3", count: 1, core: true, packs: [] },
+    ];
+    api.getWorkflowLibrary.mockResolvedValue(data);
+    const list = await openLibrary();
+    const card = [...list.querySelectorAll("li")].find((one) => one.textContent?.includes("sketch"))!;
+    fireEvent.click(within(card as HTMLElement).getByRole("button", { name: "sketch" }));
+    const missing = await screen.findByRole("region", { name: "workflowMissingNodes" });
+    expect(within(missing).getByText("workflowPackDisabled"), "装了但被禁用:去 Manager 启用").toBeTruthy();
+    expect(within(missing).getByText(/图上要 2\.0\.0,装着 1\.0\.0:需要升级/)).toBeTruthy();
+    expect(within(missing).getByText(/图上写的是 3f1a2b4c.*git commit/)).toBeTruthy();
+    expect(within(missing).getByText("workflowMissingCore"), "核心节点:这台 ComfyUI 太老").toBeTruthy();
+    expect(within(missing).queryByRole("button", { name: "workflowInstallPackLabel" }), "核心节点没有节点包,不给「装上」").toBeNull();
+    expect(missing.querySelectorAll("[data-missing-core]").length, "核心节点带自己的标记").toBe(1);
   });
 });

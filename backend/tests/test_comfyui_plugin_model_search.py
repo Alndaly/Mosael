@@ -514,3 +514,43 @@ def _no_proxy(monkeypatch):
     for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
         monkeypatch.delenv(key, raising=False)
         monkeypatch.delenv(key.lower(), raising=False)
+
+
+# --- 离线 + 工作流声明了 SHA256:不许把「没搜成」说成「候选对不上」 ----------------------------
+
+def test_站全没连上_声明了哈希也不说候选对不上(modules, monkeypatch) -> None:
+    """离线时三家都连不上,候选是空的。此前 `_hash_out` 只看「有 digest、没对上」,回一句
+    「下面的候选没有一个对得上」—— 可是根本没有候选,也没搜成。这是把「没查到」说成了「查过、不是」。
+    声明了 SHA256 也一样:站没连上就核对不了,只许说「没法核对」。"""
+    model_search, sources = modules
+    monkeypatch.setattr(sources, "fetch", _Sites({host: "unreachable" for host in (
+        "huggingface.co", "modelscope.cn", "civitai.com")}))
+    digest = "ab" * 32
+    out = model_search.search({"filename": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+                               "hash": digest, "hash_type": "sha256"}, None, "zh")
+    assert out["candidates"] == []
+    assert [one["source"] for one in out["failed"]] == ["huggingface", "modelscope", "civitai"]
+    assert out["hash"]["state"] == model_search.UNAVAILABLE
+    assert out["hash"]["reason"] == model_search.SITES_FAILED
+    assert "没连上" in out["hash"]["note"] and "没法核对" in out["hash"]["note"]
+    assert "对不上" not in out["hash"]["note"], "没有候选时不许说「候选对不上」"
+    assert "sha256" not in out["hash"], "没核对过就不交 digest 冒充核对过"
+
+
+def test_有哈希但一个候选都没搜到_也不说它们对不上(modules) -> None:
+    model_search, _ = modules
+    digest = "cd" * 32
+    said = model_search._hash_out(digest, False, "", "zh", candidates=0, failed=[])
+    assert said["state"] == model_search.UNAVAILABLE
+    assert "没搜到候选" in said["note"] and "对不上" not in said["note"]
+
+
+def test_哈希对上了_说清是工作流声明的还是那台机器算出来的(modules) -> None:
+    model_search, _ = modules
+    digest = "ef" * 32
+    declared = model_search._hash_out(digest, True, "", "zh", candidates=2, failed=[], origin="declared")
+    computed = model_search._hash_out(digest, True, "", "zh", candidates=2, failed=[], origin="computed")
+    assert "工作流声明" in declared["note"] and "工作流声明" not in computed["note"]
+    assert "算出的" in computed["note"]
+    missed = model_search._hash_out(digest, False, "", "zh", candidates=2, failed=[], origin="declared")
+    assert "工作流声明" in missed["note"] and "没有一个对得上" in missed["note"]

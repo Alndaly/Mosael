@@ -476,7 +476,7 @@ def test_连不上说出地址(tmp_path: Path) -> None:
 def test_校验不过说出是哪个节点(comfy, tmp_path: Path) -> None:
     comfy.state.reject = {"error": {"message": "Prompt outputs failed validation"},
                           "node_errors": {"4": {"errors": [{"message": "Value not in list"}]}}}
-    with pytest.raises(runtime.PluginRuntimeError, match="#4 Value not in list"):
+    with pytest.raises(runtime.PluginRuntimeError, match="#4.*不在这台机器的可选项里"):
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
 
 
@@ -490,9 +490,11 @@ def test_校验错误很长时照样逐条说出是哪个节点(comfy, tmp_path:
             "type": "value_not_in_list", "message": "Value not in list",
             "details": f"ckpt_name: 'gone.safetensors' not in {options}"}]}},
     }
-    with pytest.raises(runtime.PluginRuntimeError, match="#4 Value not in list: ckpt_name: 'gone.safetensors'") as caught:
+    with pytest.raises(runtime.PluginRuntimeError, match="#4.*ckpt_name.*gone.safetensors") as caught:
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
     assert len(str(caught.value)) < 1200, "给人看的那句不带几 KB 的可选值列表"
+    assert "#4 Value not in list: ckpt_name: 'gone.safetensors'" in caught.value.failure["detail"], "原话进详情"
+    assert len(caught.value.failure["detail"]) < 1200, "详情里的可选值列表也截短"
 
 
 def test_一部分输出校验不过_ComfyUI照样排上_说出原因并把它撤掉(comfy, tmp_path: Path) -> None:
@@ -502,7 +504,7 @@ def test_一部分输出校验不过_ComfyUI照样排上_说出原因并把它�
     comfy.state.node_errors = {"4": {"class_type": "CheckpointLoaderSimple", "dependent_outputs": ["9"], "errors": [{
         "type": "value_not_in_list", "message": "Value not in list",
         "details": "ckpt_name: 'gone.safetensors' not in ['sd_xl_base.safetensors']"}]}}
-    with pytest.raises(runtime.PluginRuntimeError, match="#4 Value not in list: ckpt_name: 'gone.safetensors'"):
+    with pytest.raises(runtime.PluginRuntimeError, match="#4.*不在这台机器的可选项里"):
         _generate(comfy.url, tmp_path, {"model": "portrait.json"})
     assert comfy.posted("/queue") == [{"delete": ["p1"]}], "排上的那个任务撤掉,不让它在 ComfyUI 上跑一个没人要的结果"
 
@@ -681,3 +683,31 @@ def test_必填的前端专用输入_跟着提交的图一起交出去(comfy, tm
     _generate(comfy.url, tmp_path, {"model": "compare.json", "parameters": {}})
     [submitted] = comfy.posted("/prompt")
     assert submitted["prompt"]["90"]["inputs"]["compare_view"] == "", "必填那一格跟着图一起交出去"
+
+
+def test_校验不过_主句说人话_原话进详情_常见三类翻掉(comfy, tmp_path: Path) -> None:
+    """`/prompt` 400 的原始英文此前塞进主句。现在:主句是中文(有节点号、有是哪一类问题),ComfyUI 的原话进失败卡的
+    「详情」,认得出的三类(值不在列表 / 节点不存在 / 必填输入没填)顺带给原因和修法(和 known_failures 同一套)。"""
+    comfy.state.reject = {"error": {"message": "Prompt outputs failed validation"}, "node_errors": {
+        "4": {"errors": [{"message": "Value not in list", "details": "ckpt_name: 'gone.safetensors' not in [...]"}]},
+        "8": {"errors": [{"message": "Required input is missing", "details": "vae"}]},
+    }}
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    said = str(caught.value)
+    assert "不在这台机器" in said and "必填输入" in said and "#4" in said and "#8" in said, said
+    assert "Value not in list" not in said and "Required input is missing" not in said, "原始英文不进主句"
+    failure = caught.value.failure
+    assert "#4 Value not in list" in failure["detail"] and "#8 Required input is missing" in failure["detail"]
+    assert failure["hint"] and failure["hint"]["cause"], "认得出的三类带上原因 / 修法"
+
+
+def test_排上了但一部分节点校验不过_同样人话主句_原话详情(comfy, tmp_path: Path) -> None:
+    comfy.state.node_errors = {"4": {"class_type": "CheckpointLoaderSimple", "dependent_outputs": ["9"], "errors": [{
+        "type": "value_not_in_list", "message": "Value not in list",
+        "details": "ckpt_name: 'gone.safetensors' not in ['sd_xl_base.safetensors']"}]}}
+    with pytest.raises(runtime.PluginRuntimeError) as caught:
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    assert "不在这台机器" in str(caught.value) and "Value not in list" not in str(caught.value)
+    assert "#4 Value not in list" in caught.value.failure["detail"]
+    assert comfy.posted("/queue") == [{"delete": ["p1"]}], "排上的那个任务撤掉"

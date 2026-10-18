@@ -75,10 +75,17 @@ elif op == "workflows":
                          {"node": "12", "title": "高清", "media": "image"}],
              "models": [{"folder": "checkpoints", "name": "sdxl.safetensors", "present": True},
                         {"folder": "vae", "name": "ae.safetensors", "present": False}, {"folder": ""}],
-             "missing_nodes": [{"type": "CR Prompt Text", "count": 2,
-                                "packs": [{"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": False}]}],
+             "missing_nodes": [{"type": "CR Prompt Text", "count": 2, "core": False,
+                                "packs": [{"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": True,
+                                           "enabled": False, "installed_version": "1.2.0", "wanted_version": "1.3.0",
+                                           "wanted_is_commit": False, "source": "registry",
+                                           "page": "https://registry.comfy.org/nodes/ComfyUI_Comfyroll_CustomNodes",
+                                           "repository": "", "state": "installed"}]},
+                               {"type": "LoadAudioMP3", "count": 1, "core": True, "packs": []}],
              "missing_models": [{"folder": "vae", "name": "ae.safetensors",
-                                 "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors"}],
+                                 "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors"},
+                                {"folder": "", "name": "mystery.safetensors",
+                                 "url": "https://huggingface.co/a/b/resolve/main/mystery.safetensors"}],
              "app": {"status": "ok", "upgradable": False, "invalid": 1, "stray": 2, "forms": [
                          {"id": "app", "title": " 人像应用 ", "description": "", "fields": 1, "invalid": 1,
                           "model": "portrait.json#app", "tool": "wf_0123456789ab_app",
@@ -300,9 +307,19 @@ def test_列出插件报的工作流_宿主规整字段_补上它在Mosael里是
         "交出什么:节点给人看的名字按语言挑好,不是类名;插件没给就用标题"
     assert portrait["models"] == [{"folder": "checkpoints", "name": "sdxl.safetensors", "present": True},
                                   {"folder": "vae", "name": "ae.safetensors", "present": False}]
-    assert portrait["missing_nodes"] == [{"type": "CR Prompt Text", "count": 2, "packs": [
-        {"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": False}]}]
-    assert portrait["missing_models"][0]["url"].startswith("https://huggingface.co/")
+    assert portrait["missing_nodes"] == [
+        {"type": "CR Prompt Text", "count": 2, "core": False, "packs": [{
+            "id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": True, "enabled": False,
+            "installed_version": "1.2.0", "wanted_version": "1.3.0", "wanted_is_commit": False, "source": "registry",
+            "page": "https://registry.comfy.org/nodes/ComfyUI_Comfyroll_CustomNodes", "repository": "",
+            "state": "installed"}]},
+        {"type": "LoadAudioMP3", "count": 1, "core": True, "packs": []}], \
+        "图上写的出处 / 版本 / 装没装 / 启没启用 / 核心节点:宿主这一跳一项都不许丢"
+    assert [one["url"] for one in portrait["missing_models"]] == [
+        "https://huggingface.co/x/y/resolve/main/ae.safetensors",
+        "https://huggingface.co/a/b/resolve/main/mystery.safetensors"]
+    assert portrait["missing_models"][1]["folder"] == "", \
+        "没写目录的声明也留着(folder 空着):界面据此说「不知道放哪个目录」"
     assert portrait["generation"]["model"] == "portrait.json" and portrait["generation"]["kind"] == "image"
     assert sketch["generation"] is None, "不是这个连接下的生成模型(转不过来)就不能「用它生成」"
     assert body["others"] == [{"path": "pack.zip", "reason": "这是一个压缩包"}]
@@ -1139,3 +1156,17 @@ def test_工作台运行前主动对账连接目录_不把已保存工作流误�
     )
     assert response.status_code == 200, response.text
     assert len([one for one in _ops() if one["op"] == "models"]) > before, "运行命令自己对账这一台连接的目录"
+
+
+def test_装节点包_图上写的版本交给插件_不属于这一批的键丢掉(library) -> None:
+    """图上写着 `ver` 时,宿主把「包 → 版本」一起交给插件(插件再交给 Manager);不属于这一批包的键不收。"""
+    client, instance_id = library
+    workspace = _workspace(client)
+    response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/install-nodes", json={
+        "workspace_id": workspace, "packs": ["ComfyUI_Comfyroll_CustomNodes"],
+        "versions": {"ComfyUI_Comfyroll_CustomNodes": "1.2.3", "someone-else": "9.9.9"}})
+    assert response.status_code == 200, response.text
+    assert wait_status(client, response.json()["id"]) == "succeeded"
+    sent = [one for one in _ops() if one["op"] == "install_nodes"][-1]
+    assert sent == {"op": "install_nodes", "packs": ["ComfyUI_Comfyroll_CustomNodes"],
+                    "versions": {"ComfyUI_Comfyroll_CustomNodes": "1.2.3"}}, "不认识的键不交给那台机器"

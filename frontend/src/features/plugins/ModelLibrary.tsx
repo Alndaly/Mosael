@@ -158,7 +158,15 @@ const plainName = (name: string) => {
 
 const ACTIVE = new Set(["queued", "running"]);
 
-type DownloadSeed = { url?: string; folder?: string; name?: string };
+/** 工作流自己声明的哈希里能拿来核对下载内容的那一种:SHA256,且 `hash_type` 没写或者是 sha256。 */
+const SHA256 = /^[0-9a-f]{64}$/i;
+function verifiedDigest(hash: string | undefined, hashType: string | undefined): string {
+  const digest = (hash ?? "").trim();
+  const kind = (hashType ?? "").trim().toLowerCase().replace("-", "");
+  return SHA256.test(digest) && (kind === "" || kind === "sha256") ? digest.toLowerCase() : "";
+}
+
+type DownloadSeed = { url?: string; folder?: string; name?: string; hash?: string; hashType?: string };
 
 export function ModelLibraryDialog({
   open,
@@ -392,7 +400,11 @@ export function ModelLibraryDialog({
       );
     }
     if (current === MISSING_VIEW) {
-      return <MissingList missing={missing} onDownload={(one) => setSeed({ url: one.url, folder: one.folder, name: one.name })} />;
+      return <MissingList missing={missing} onDownload={(one) => setSeed({
+        url: one.url, folder: one.folder, name: one.name,
+        //: 工作流自己声明的哈希:下载时交给插件,下完核对(本机那条路;见下载框)。
+        ...(one.hash ? { hash: one.hash, hashType: one.hash_type ?? "" } : {}),
+      })} />;
     }
     if (current === DOWNLOADS_VIEW) return <DownloadList jobs={downloads} />;
     if (shown.length === 0) {
@@ -742,7 +754,9 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
             <span className="grid min-w-0 flex-1 gap-0.5">
               <span className="flex min-w-0 items-baseline gap-2">
                 <Truncate className="text-ui-sm text-foreground" hint={one.url}>{one.name}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
+                <span className="shrink-0 text-ui-xs text-muted-foreground">
+                  {one.folder || t("workflowMissingModelUnknownFolder")}
+                </span>
               </span>
               <Truncate className="text-ui-xs text-muted-foreground">
                 {t("modelMissingFor").replace("{workflows}", (one.workflows ?? []).map((flow) => flow.label).join(t("listSeparator")))}
@@ -757,7 +771,8 @@ function MissingList({ missing, onDownload }: { missing: MissingModel[]; onDownl
             {/* 缺的那个文件:下载框带着地址、目录、文件名;也能只复制名字和地址,自己去那台机器上放 */}
             <ContextMenuContent aria-label={t("modelMenuLabel").replace("{name}", one.name)}>
               <ContextMenuItem onSelect={() => onDownload(one)}>
-                <MenuItemBody icon={<Download />} label={t("modelMissingMenuDownload")} description={one.folder} />
+                <MenuItemBody icon={<Download />} label={t("modelMissingMenuDownload")}
+                              description={one.folder || t("workflowMissingModelUnknownFolder")} />
               </ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem onSelect={() => void navigator.clipboard?.writeText(one.name)}>
@@ -1282,19 +1297,6 @@ function ModelDownloadDialog({
       setFolder((current) => current || seed.folder || found.folder);
     },
   });
-  const start = useMutation({
-    mutationFn: () =>
-      startModelDownload(instance.id, {
-        workspace_id: workspaceId,
-        url: resolve.data?.url ?? url.trim(),
-        folder,
-        filename: filename.trim(),
-      }),
-    onSuccess: (job) => {
-      onStarted(job);
-      onClose();
-    },
-  });
   const resolveRef = React.useRef(resolve.mutate);
   resolveRef.current = resolve.mutate;
   React.useEffect(() => {
@@ -1307,6 +1309,24 @@ function ModelDownloadDialog({
   );
   const exists = Boolean(folder && filename.trim() && taken.has(norm(filename)));
   const route = library.download?.route ?? "none";
+
+  //: 工作流声明的 SHA256:只有本机那条下载路下完能再算一遍、核对得了;经 Manager 的时代替它下,Mosael 核对不了,
+  //: 不交哈希、也不许说「已确认是同一个文件」。
+  const digest = route === "local" ? verifiedDigest(seed.hash, seed.hashType) : "";
+  const start = useMutation({
+    mutationFn: () =>
+      startModelDownload(instance.id, {
+        workspace_id: workspaceId,
+        url: resolve.data?.url ?? url.trim(),
+        folder,
+        filename: filename.trim(),
+        ...(digest ? { sha256: digest } : {}),
+      }),
+    onSuccess: (job) => {
+      onStarted(job);
+      onClose();
+    },
+  });
   const resolved = resolve.data;
   const nameOk = plainName(filename);
   const canStart = Boolean(resolved && folder && nameOk && !exists && route !== "none");
@@ -1425,6 +1445,17 @@ function ModelDownloadDialog({
               {route === "local" && ` ${t("modelDownloadDiskLocal")}`}
               {route === "manager" && ` ${t("modelDownloadDiskRemote")}`}
             </p>
+            {digest && (
+              <p data-verify-hash="" className="m-0 break-words text-ui-xs leading-relaxed text-muted-foreground">
+                {t("modelDownloadVerifyHash")}
+              </p>
+            )}
+            {seed.hash && route !== "local" && (
+              /* 经 Manager 下载时核对不了哈希:说清楚,别让人以为「已经在别处确认过是同一个文件」。 */
+              <p data-hash-remote="" className="m-0 break-words text-ui-xs leading-relaxed text-muted-foreground">
+                {t("modelDownloadHashRemote")}
+              </p>
+            )}
             {start.isError && <p className="m-0 break-words text-ui-sm text-destructive">{errorText(start.error)}</p>}
           </>
         )}

@@ -14804,6 +14804,9 @@ export interface components {
         /**
          * MissingModelOut
          * @description 工作流声明了下载地址、这台服务器上又没有的模型。
+         *
+         *     `folder` 可能是空串:声明里没写目录、也没能从用它的节点补出来 —— 界面据此说「不知道放哪个目录」,
+         *     不能把这条声明丢掉。`hash` / `hash_type` 是工作流自己声明的哈希(有才带):一键下载时交给插件,下完核对。
          */
         MissingModelOut: {
             /** Folder */
@@ -14812,6 +14815,16 @@ export interface components {
             name: string;
             /** Url */
             url: string;
+            /**
+             * Hash
+             * @default
+             */
+            hash: string;
+            /**
+             * Hash Type
+             * @default
+             */
+            hash_type: string;
             /** Workflows */
             workflows?: components["schemas"]["ModelLibraryRefOut"][];
         };
@@ -20628,6 +20641,10 @@ export interface components {
             workspace_id: string;
             /** Packs */
             packs: string[];
+            /** Versions */
+            versions?: {
+                [key: string]: string;
+            };
         };
         /**
          * WorkflowLibraryImportOut
@@ -20745,7 +20762,8 @@ export interface components {
         /**
          * WorkflowMissingModelOut
          * @description 缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):
-         *     交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。
+         *     交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。`folder` 可能是空串:声明里没写目录、
+         *     也没能从用它的节点补出来 —— 界面据此说「不知道放哪个目录」,不能把这条声明丢掉。
          */
         WorkflowMissingModelOut: {
             /** Folder */
@@ -20777,6 +20795,11 @@ export interface components {
              * @default 1
              */
             count: number;
+            /**
+             * Core
+             * @default false
+             */
+            core: boolean;
             /** Packs */
             packs?: components["schemas"]["WorkflowNodePackOut"][];
         };
@@ -20797,7 +20820,8 @@ export interface components {
         };
         /**
          * WorkflowNodePackOut
-         * @description 一个节点类型可能出自的节点包(ComfyUI-Manager 的映射)。
+         * @description 一个节点类型可能出自的节点包:图上自己写着的那条出处(`cnr_id` / `aux_id` / `ver`)优先,Manager 的映射
+         *     只补图上没写的那种。`state` 是 `installed` / `not_installed` / `unknown`(没有 Manager,不知道装没装)。
          */
         WorkflowNodePackOut: {
             /** Id */
@@ -20812,6 +20836,46 @@ export interface components {
              * @default false
              */
             installed: boolean;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /**
+             * Page
+             * @default
+             */
+            page: string;
+            /**
+             * Repository
+             * @default
+             */
+            repository: string;
+            /**
+             * Wanted Version
+             * @default
+             */
+            wanted_version: string;
+            /**
+             * Wanted Is Commit
+             * @default false
+             */
+            wanted_is_commit: boolean;
+            /**
+             * Installed Version
+             * @default
+             */
+            installed_version: string;
+            /**
+             * State
+             * @default
+             */
+            state: string;
         };
         /** WorkflowNodeTypeOut */
         WorkflowNodeTypeOut: {

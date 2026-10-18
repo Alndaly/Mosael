@@ -321,6 +321,8 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
     ]
     missing = [
         {"folder": _text(one.get("folder"), 200), "name": _text(one.get("name"), 1000), "url": _http(one.get("url")),
+         #: 工作流自己声明的哈希(有才带):一键下载时交给插件,下完核对(见 ModelLibrary 的下载框)。
+         "hash": _text(one.get("hash"), 200), "hash_type": _text(one.get("hash_type"), 40),
          "workflows": _refs(one.get("workflows"))}
         for one in output.get("missing") or [] if isinstance(one, dict)
     ]
@@ -328,7 +330,8 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
     return {
         "folders": folders,
         "models": models,
-        "missing": [one for one in missing if one["folder"] and one["name"] and one["url"]][:_MAX_LIST * 4],
+        #: 没写目录的声明也留着(folder 空着,界面说「不知道放哪个目录」):不能因为不知道目录就把一条声明丢了。
+        "missing": [one for one in missing if one["name"] and one["url"]][:_MAX_LIST * 4],
         "download": {"route": _text(route.get("route"), 40) or "none", "note": _text(route.get("note"), 2000)},
         "downloads": downloads(db, instance),
         "preview_tools": snapshot.tools,

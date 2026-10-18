@@ -278,11 +278,27 @@ def _missing_nodes(value: Any) -> list[dict[str, Any]]:
         if not isinstance(one, dict) or not _text(one.get("type"), 200):
             continue
         packs = [
-            {"id": _text(pack.get("id"), 300), "title": _text(pack.get("title"), 200) or _text(pack.get("id"), 300),
-             "installed": pack.get("installed") is True}
+            {
+                "id": _text(pack.get("id"), 300),
+                "title": _text(pack.get("title"), 200) or _text(pack.get("id"), 300),
+                "installed": pack.get("installed") is True,
+                #: 装了但被禁用:界面据此说「去 Manager 启用」,不让人再装一遍。
+                "enabled": pack.get("enabled") is True,
+                #: 图上写着的出处 / 要哪一版 / 装的是哪一版(离线归因靠这几项,宿主这一跳丢了界面就说不出来)。
+                "source": _text(pack.get("source"), 20),
+                "page": _text(pack.get("page"), 4000),
+                "repository": _text(pack.get("repository"), 4000),
+                "wanted_version": _text(pack.get("wanted_version"), 100),
+                "wanted_is_commit": pack.get("wanted_is_commit") is True,
+                "installed_version": _text(pack.get("installed_version"), 100),
+                #: installed / not_installed / unknown(没有 Manager 时不知道装没装)
+                "state": _text(pack.get("state"), 20),
+            }
             for pack in one.get("packs") or [] if isinstance(pack, dict) and _text(pack.get("id"), 300)
         ][:10]
-        out.append({"type": _text(one.get("type"), 200), "count": int(_number(one.get("count")) or 1), "packs": packs})
+        out.append({"type": _text(one.get("type"), 200), "count": int(_number(one.get("count")) or 1),
+                    #: 缺的是核心节点(图上写着 comfy-core):这台 ComfyUI 太老,不是装节点包。
+                    "core": one.get("core") is True, "packs": packs})
     return out[:_MAX_LIST]
 
 
@@ -321,7 +337,8 @@ def _workflow(raw: Any) -> dict[str, Any] | None:
             #: 对上的候选才算 `confirmed`(见 model_library.search_sources)。
             one for one in _items(raw.get("missing_models"),
                                   {"folder": 200, "name": 1000, "url": 4000, "hash": 200, "hash_type": 40})
-            if one["folder"] and one["name"]
+            #: 没写目录的声明也留着(folder 空串,界面据此说「不知道放哪个目录」):不能因为不知道目录就把一条声明丢了。
+            if one["name"]
         ],
         "app": _app_summary(raw.get("app")),
     }
@@ -1354,11 +1371,26 @@ def _packs(value: list[str]) -> list[str]:
     return list(dict.fromkeys(packs))
 
 
+def _wanted_versions(versions: dict[str, str] | None, packs: list[str]) -> dict[str, str]:
+    """图上写着要哪一版:包 id → 版本。只收这一批里的包;版本是一行短文字(长度、控制字符先过一遍)。"""
+    out: dict[str, str] = {}
+    for key, value in (versions or {}).items():
+        if not isinstance(key, str) or key not in packs or not isinstance(value, str):
+            continue
+        text = value.strip()
+        if text and len(text) <= 100 and not any(ord(char) < 32 for char in text):
+            out[key] = text
+    return out
+
+
 def start_node_install(db: Session, user: User, instance: PluginInstance, *, workspace_id: str,
-                       packs: list[str]) -> Job:
-    """经这个连接(ComfyUI-Manager)装几个节点包:一个后台任务。装完要重启 ComfyUI 才加载 —— 任务的结果里写着。"""
+                       packs: list[str], versions: dict[str, str] | None = None) -> Job:
+    """经这个连接(ComfyUI-Manager)装几个节点包:一个后台任务。装完要重启 ComfyUI 才加载 —— 任务的结果里写着。
+
+    `versions` 是图上写的 `ver`(semver):交给 Manager 装那一版,不再一律装 `latest`。没有的不传(Manager 装 `latest`)。"""
     _require(db, instance)
     packs = _packs(packs)
+    wanted = _wanted_versions(versions, packs)
     ensure_workspace_perm(db, user, workspace_id, "edit")
     blocked = inst.blocked_reason(db, instance)
     if blocked:
@@ -1369,7 +1401,8 @@ def start_node_install(db: Session, user: User, instance: PluginInstance, *, wor
         workspace_id=workspace_id,
         kind="node_install",  # 和 NODE_INSTALL_KIND 同一个;任务目录的测试按字面量扫
         created_by=user.id,
-        payload={"instance_id": instance.id, "packs": packs, "subject": subject},
+        payload={"instance_id": instance.id, "packs": packs, **({"versions": wanted} if wanted else {}),
+                 "subject": subject},
         message="jobMsg_nodeInstallQueued",
         message_params={"name": subject},
     )
@@ -1415,8 +1448,9 @@ def _install(job_id: str) -> None:
     try:
         with unit_of_work() as db:
             output = tools.invoke_host(db, str(payload["instance_id"]), WORKFLOW_LIBRARY,
-                                       {"op": "install_nodes", "packs": payload["packs"]}, hooks=hooks,
-                                       timeout=MAX_GENERATION_TIMEOUT_SECONDS, record=True)
+                                       {"op": "install_nodes", "packs": payload["packs"],
+                                        **({"versions": payload["versions"]} if payload.get("versions") else {})},
+                                       hooks=hooks, timeout=MAX_GENERATION_TIMEOUT_SECONDS, record=True)
     except (PluginDomainError, PluginRuntimeError) as exc:
         from app.domain.jobs import blame
 

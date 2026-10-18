@@ -908,3 +908,57 @@ def test_改完诊断一遍_对着改之前的那一份说修好了几个_多出
     assert [(one["ref"], one["kind"]) for one in out["fixed"]] == [("30", "combo_not_in_list")] and out["introduced"] == []
     with pytest.raises(Exception, match="形状不对"):
         plugin("check_graph", content=_txt2img(), baseline=[["combo_not_in_list", "KSampler", "sampler_name"]])
+
+
+# --- 缺的插件:只写 aux_id 也认装没装;版本要比;同名文件不盖章 --------------------------------
+
+def test_只写_aux_id_的包_装着也报装了_不再说没装(plugin, comfy, monkeypatch) -> None:
+    """图上写 `kijai/ComfyUI-KJNodes`,Manager 的已装列表按目录名记 `comfyui-kjnodes`(它的 `aux_id` 还是 null)。
+    此前只用完整的 `kijai/ComfyUI-KJNodes` 去查,查不到 → 说「这台机器上没装」,叫用户再装一遍已经装着的包。"""
+    _offline(monkeypatch)
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "ImageResizeKJ", [], properties={"aux_id": "kijai/ComfyUI-KJNodes"}))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert finding["pack"]["installed"] is True
+    assert finding["pack"]["installed_version"] == "1.5.0"
+    assert "没装" not in finding["fix"], "装着的不许说没装"
+    assert "确认它开着" in finding["fix"]
+
+
+def test_版本不符_要哪一版装着哪一版_说清升级还是降级(plugin, comfy, monkeypatch) -> None:
+    _offline(monkeypatch)
+    graph = _txt2img()
+    graph["nodes"].append(_node(20, "WanVideoSampler", [], properties={
+        "cnr_id": "comfyui-wanvideowrapper", "ver": "1.4.5"}))
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert "1.4.5" in finding["fix"] and "1.4.7" in finding["fix"] and "降级" in finding["fix"], \
+        "装着 1.4.7、图上要 1.4.5:说明要降级"
+
+    graph["nodes"][-1]["properties"]["ver"] = "1.4.9"
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_type")
+    assert "升级" in finding["fix"] and "1.4.9" in finding["fix"]
+
+
+def test_同名文件在别的目录_只说有一个同名文件_能算哈希才说同一个(plugin, comfy) -> None:
+    """`checkpoints` 里没有 `waiNSFW_v140.safetensors`,但 `checkpoints/illustrious/` 下有一个同名的。
+    此前直接说「这台机器上有同一个文件」—— 同名不等于同一个。现在只说「有一个同名文件」并给路径 / 大小;
+    工作流声明了 SHA256、而那台机器算得出来、对得上,才说「就是同一个」。"""
+    graph = _txt2img(ckpt="waiNSFW_v140.safetensors")
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_model")
+    assert "同名" in finding["fix"] and "illustrious/waiNSFW_v140.safetensors" in finding["fix"]
+    assert "1000" in finding["fix"], "给路径也给大小"
+    assert "同一个文件" not in finding["fix"], "没核对过内容:不许说同一个"
+
+    digest = "aa" * 32
+    graph["nodes"][0]["properties"] = {"models": [{
+        "name": "waiNSFW_v140.safetensors", "directory": "checkpoints",
+        "url": "https://huggingface.co/x/y/resolve/main/waiNSFW_v140.safetensors",
+        "hash": digest, "hash_type": "sha256"}]}
+    comfy.state.model_hashes["checkpoints/illustrious/waiNSFW_v140.safetensors"] = digest
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_model")
+    assert "就是同一个文件" in finding["fix"], "声明了 SHA256 且算出来对上:这才叫同一个"
+
+    comfy.state.model_hashes["checkpoints/illustrious/waiNSFW_v140.safetensors"] = "bb" * 32
+    finding = next(one for one in plugin("check_graph", content=graph)["findings"] if one["kind"] == "missing_model")
+    assert "就是同一个文件" not in finding["fix"], "哈希对不上:只是同名"
+    assert "同名" in finding["fix"]

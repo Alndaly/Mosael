@@ -32,12 +32,16 @@ import convert
 import graph
 import labels
 import library
+import lookup
 import node_catalog
+import previews
 from comfy_http import Comfy
 from families import BRANCHES
 from lines import ComfyError, say
+from model_files import files_in
 from workflow_library import (CORE_CNR, VIRTUAL_NODES, _choices, _packs, declared_packs, installed_packs,
-                              installed_versions, live_graph, pack_page, wanted_version)
+                              installed_versions, live_graph, mapping_short, pack_page, version_relation,
+                              wanted_version)
 
 #: 报错原文最多读多少字(ComfyUI 的「Value not in list」带着整张可选值列表)。
 MAX_ERROR = 20000
@@ -203,7 +207,8 @@ def _attributed(found: _Findings, kind: str, refs: list[str], own: dict[str, str
     repository = "" if cnr else f"https://github.com/{aux}"
     page = pack_page(cnr) if cnr else repository
     version, commit = wanted_version(own.get("ver", ""))
-    have = installed.get(ident.lower(), "")
+    #: Manager 按目录名记、图上写的是完整的 `user/repo` 或注册表 id:两种键都查(`pack_ids` 三种写法都收)。
+    have = installed.get(ident.lower(), "") or installed.get(mapping_short(ident), "")
     if commit:
         wanted = found.say(f"图上写的是这一版:{version}(git commit,不是版本号,原样核对)",
                            f"The graph names this version: {version} (a git commit, not a release number — taken as-is)")
@@ -212,7 +217,22 @@ def _attributed(found: _Findings, kind: str, refs: list[str], own: dict[str, str
     else:
         wanted = found.say("图上没写要哪一版", "The graph names no version")
     if have:
-        where = found.say(f"这台机器上装着 {have}:确认它开着,重启之后再检查", f"This machine has {have} installed: check that it's enabled, then restart and check again")
+        relation = "" if commit else version_relation(version, have)
+        if relation == "upgrade":
+            where = found.say(f"这台机器上装着 {have},图上要 {version}:需要升级到那一版(或者把图里那一步换成 {have} 有的节点)",
+                              f"This machine has {have}, the graph wants {version}: upgrade to that version (or replace that step "
+                              f"with a node {have} provides)")
+        elif relation == "downgrade":
+            where = found.say(f"这台机器上装着 {have},图上要 {version}:需要降级到那一版(或者把图里那一步换成 {have} 有的节点)",
+                              f"This machine has {have}, the graph wants {version}: downgrade to that version (or replace that "
+                              f"step with a node {have} provides)")
+        elif relation == "same":
+            where = found.say(f"这台机器上装着 {have},和图上要的那一版一致:确认它开着,重启之后再检查",
+                              f"This machine has {have}, the version the graph asks for: check that it's enabled, then restart "
+                              "and check again")
+        else:
+            where = found.say(f"这台机器上装着 {have}:确认它开着,重启之后再检查",
+                              f"This machine has {have} installed: check that it's enabled, then restart and check again")
     else:
         where = found.say("这台机器上没装:用 comfy_node_pack_info 看可用版本、依赖风险,再装上它",
                           "Not installed on this machine: check comfy_node_pack_info for available versions and risks, then install it")
@@ -281,7 +301,7 @@ def _missing_types(found: _Findings, object_info: dict[str, Any], comfy: Comfy) 
 
 
 def _value_findings(found: _Findings, ref: str, node: dict[str, Any], spec: dict[str, Any],
-                    downloads: dict[str, dict[str, str]]) -> None:
+                    downloads: dict[str, dict[str, str]], comfy: Comfy) -> None:
     kind = str(node.get("class_type") or "")
     required, optional = _definitions(spec)
     inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
@@ -327,7 +347,7 @@ def _value_findings(found: _Findings, ref: str, node: dict[str, Any], spec: dict
         if wanted == V3_COMBO:
             keys = [str(one.get("key")) for one in options.get("options") or [] if isinstance(one, dict) and one.get("key") is not None]
             if isinstance(value, str) and keys and value not in keys:
-                _choice_finding(found, ref, kind, name, value, keys, downloads)
+                _choice_finding(found, ref, kind, name, value, keys, downloads, comfy)
             continue
         choices = _choices(definition)
         if choices is not None:
@@ -341,7 +361,7 @@ def _value_findings(found: _Findings, ref: str, node: dict[str, Any], spec: dict
                                         "Upload a file on this node (template sample images must be put into input yourself), or pick an existing one"),
                               input_name=name)
                 else:
-                    _choice_finding(found, ref, kind, name, value, names, downloads)
+                    _choice_finding(found, ref, kind, name, value, names, downloads, comfy)
             continue
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             low, high = options.get("min"), options.get("max")
@@ -375,15 +395,58 @@ def _cut_upstream(found: _Findings, ref: str, name: str) -> str:
     return f"{prefix}{link[0]}"
 
 
+_SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def _same_content(comfy: Comfy, folder: str, name: str, spec: dict[str, str], locale: str) -> str:
+    """另一个目录里那个同名文件**内容**是不是工作流要的那一个:``same`` / ``different`` / ````（没法核对）。
+
+    只有工作流自己声明了 SHA256、那台机器又算得出来时才说得清。同名不是同一个 —— 没核对过就不许盖章。"""
+    digest = str(spec.get("hash") or "").strip().lower()
+    kind = str(spec.get("hash_type") or "").strip().lower().replace("-", "")
+    if not _SHA256.match(digest) or kind not in ("", "sha256"):
+        return ""
+    try:
+        if not previews.tools(comfy)["hash"]:
+            return ""
+        have = lookup.sha256_of(comfy, folder, name, locale)
+    except ComfyError:
+        return ""
+    return "same" if have == digest else "different"
+
+
+def _size_text(size: int | None) -> str:
+    return f"{size} 字节" if size is not None else "大小不知道"
+
+
 def _choice_finding(found: _Findings, ref: str, kind: str, name: str, value: str, names: list[str],
-                    downloads: dict[str, dict[str, str]]) -> None:
+                    downloads: dict[str, dict[str, str]], comfy: Comfy) -> None:
     base = _norm(value).split("/")[-1]
     if labels.model_folder(kind, name) or _looks_like_model(name, value):
         folder = labels.model_folder(kind, name) or (downloads.get(base) or {}).get("directory", "")
         elsewhere = next((one for one in names if one.split("/")[-1] == base), "")
         if elsewhere:
-            fix = found.say(f"这台机器上有同一个文件,在「{elsewhere}」:把这一格改成它",
-                            f"This machine has the same file as “{elsewhere}”: pick that one")
+            size = next((item.get("size") for item in files_in(comfy, folder)
+                         if _norm(str(item.get("name") or "")) == _norm(elsewhere)
+                         and isinstance(item.get("size"), (int, float))), None)
+            size_bytes = int(size) if size is not None else None
+            same = _same_content(comfy, folder, elsewhere, downloads.get(base) or {}, found.locale)
+            if same == "same":
+                fix = found.say(f"这台机器上有一个同名文件,在「{elsewhere}」({_size_text(size_bytes)});"
+                                "算出来的 SHA256 和工作流声明的一致:就是同一个文件,把这一格改成它",
+                                f"This machine has a same-named file at “{elsewhere}” ({_size_text(size_bytes)}); its SHA256 "
+                                "matches the one the workflow declares, so it is the same file: pick that one")
+            elif same == "different":
+                fix = found.say(f"这台机器上有一个同名文件,在「{elsewhere}」({_size_text(size_bytes)});"
+                                "但算出来的 SHA256 和工作流声明的不一样:不是同一个文件,确实要用它才把这一格改成它",
+                                f"This machine has a same-named file at “{elsewhere}” ({_size_text(size_bytes)}); its SHA256 "
+                                "does not match the one the workflow declares, so it is not the same file — only pick it if "
+                                "that is what you want")
+            else:
+                fix = found.say(f"这台机器上有一个同名文件,在「{elsewhere}」({_size_text(size_bytes)}):"
+                                "同名不等于同一个(没有核对过内容);如果确定是它,把这一格改成它",
+                                f"This machine has a same-named file at “{elsewhere}” ({_size_text(size_bytes)}). A shared name "
+                                "is not proof it is the same file (the contents were not checked); pick it only if you're sure")
         elif (downloads.get(base) or {}).get("url"):
             fix = found.say(f"下载它到 {folder or '对应的模型目录'}:{downloads[base]['url']}(先说多大,确认后再下)",
                             f"Download it into {folder or 'the matching models folder'}: {downloads[base]['url']} (state the size and confirm first)")
@@ -459,11 +522,15 @@ def _error_fix(found: _Findings, text: str) -> str:
     if "out of memory" in lowered or "oom" in lowered.split():
         return found.say("显存不够:调小宽高或批次、换小一点的模型(fp8 / GGUF),或者先释放显存再跑",
                          "Out of memory: lower the size or batch, use a smaller model (fp8 / GGUF), or free VRAM first")
-    if "value not in list" in lowered:
+    #: 两类原话都认:ComfyUI 的英文原话,和 run.submit 翻好的那句(`validation_errors`)—— 任务的 `error` 存的是后者。
+    if "value not in list" in lowered or "不在这台机器的可选项里" in text or "not among this machine" in lowered:
         return found.say("这一格的值这台机器上没有:在下拉里换成已有的,缺的模型先下载",
                          "That value isn't available on this machine: pick an existing one, or download the missing model")
-    if "required input is missing" in lowered:
+    if "required input is missing" in lowered or "必填输入" in text or "required input" in lowered:
         return found.say("必填的输入没连:给它接上", "A required input is not connected: connect it")
+    if "node not found" in lowered or "节点类型这台 comfyui 上没有" in lowered:
+        return found.say("这个节点类型这台 ComfyUI 上没有:装上提供它的节点包、重启 ComfyUI",
+                         "This ComfyUI lacks this node type: install the node pack that provides it and restart ComfyUI")
     return found.say("按报错原文改这个节点;改完再跑一次", "Fix this node according to the error, then run again")
 
 
@@ -518,7 +585,7 @@ def check(content: dict[str, Any], object_info: dict[str, Any], comfy: Comfy, lo
     for ref, node in api.items():
         spec = object_info.get(str(node.get("class_type") or ""))
         if isinstance(spec, dict):
-            _value_findings(found, ref, node, spec, downloads)
+            _value_findings(found, ref, node, spec, downloads, comfy)
     _family_findings(found, comfy)
     _error_findings(found, error, downloads)
     findings = sorted(found.items, key=lambda one: (SEVERITY_ORDER.get(one["severity"], 9), one["ref"] == "", one["ref"]))

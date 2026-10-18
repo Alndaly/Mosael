@@ -91,6 +91,7 @@ function library(overrides: Partial<ModelLibrary> = {}): ModelLibrary {
         family_source: "filename", triggers: [], triggers_source: "", title: "", has_preview: false, preview_origin: "", preview_kind: "image", used_by: [] },
     ],
     missing: [{ folder: "vae", name: "ae.safetensors", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors",
+                hash: "ab".repeat(32), hash_type: "sha256",
                 workflows: [{ id: "declaring.json", label: "declaring" }] }],
     download: { route: "local", note: "ComfyUI 就在这台电脑上" },
     downloads: [],
@@ -877,7 +878,9 @@ describe("模型库", () => {
     fireEvent.click(confirm);
     await waitFor(() => expect(api.startModelDownload).toHaveBeenCalledWith("i1", {
       workspace_id: "w1", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", folder: "vae", filename: "ae.safetensors",
+      sha256: "ab".repeat(32),
     }));
+    //: 工作流声明的哈希一路带到下载(本机那条路下完核对)
     // 发起之后左栏多出「下载记录」,并且切过去看进度
     const downloads = await screen.findByRole("region", { name: "modelDownloadsTitle" });
     expect(folderTab("modelLibraryDownloadsNav 1").getAttribute("aria-selected")).toBe("true");
@@ -1023,3 +1026,64 @@ describe("模型库", () => {
   });
 });
 
+
+describe("工作流声明的哈希:一路带到下载", () => {
+  const DIGEST = "cd".repeat(32);
+
+  it("本机那条路:下完核对 SHA256;发起的下载任务带着它", async () => {
+    api.resolveModelLink.mockResolvedValue({
+      source: "huggingface", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", page: "",
+      filename: "ae.safetensors", size: 335304388, folder: "vae", family: "", triggers: [], title: "", exists: false, note: "",
+    });
+    api.startModelDownload.mockResolvedValue(job({ status: "queued", progress: 0 }));
+    wrap(<ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                             focus={{ download: { url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", folder: "vae",
+                                                  name: "ae.safetensors", hash: DIGEST, hashType: "sha256" }, at: 1 }} />);
+    await waitFor(() => expect(api.resolveModelLink).toHaveBeenCalled());
+    expect(await screen.findByText("modelDownloadVerifyHash"), "说清下完会核对").toBeTruthy();
+    const confirm = await screen.findByRole("button", { name: /modelDownloadConfirm/ });
+    await waitFor(() => expect(confirm.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(confirm);
+    await waitFor(() => expect(api.startModelDownload).toHaveBeenCalledWith("i1", {
+      workspace_id: "w1", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", folder: "vae",
+      filename: "ae.safetensors", sha256: DIGEST,
+    }));
+  });
+
+  it("经 ComfyUI-Manager:核对不了就明说,任务不带哈希、不许称已确认", async () => {
+    api.getModelLibrary.mockResolvedValue(library({ download: { route: "manager", note: "由那台机器自己去下" } }));
+    api.resolveModelLink.mockResolvedValue({
+      source: "huggingface", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", page: "",
+      filename: "ae.safetensors", size: 335304388, folder: "vae", family: "", triggers: [], title: "", exists: false, note: "",
+    });
+    api.startModelDownload.mockResolvedValue(job({ status: "queued", progress: 0 }));
+    wrap(<ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                             focus={{ download: { url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", folder: "vae",
+                                                  name: "ae.safetensors", hash: DIGEST, hashType: "sha256" }, at: 1 }} />);
+    expect(await screen.findByText("modelDownloadHashRemote")).toBeTruthy();
+    expect(screen.queryByText("modelDownloadVerifyHash"), "核对不了就不许说会核对").toBeNull();
+    const confirm = await screen.findByRole("button", { name: /modelDownloadConfirm/ });
+    await waitFor(() => expect(confirm.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(confirm);
+    await waitFor(() => expect(api.startModelDownload).toHaveBeenCalledWith("i1", {
+      workspace_id: "w1", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors", folder: "vae",
+      filename: "ae.safetensors",
+    }));
+  });
+});
+
+describe("缺的模型:没写目录的声明也不丢", () => {
+  it("工作流声明里没写目录:列出来并说「不知道放哪个目录」,下载框让人自己挑一个", async () => {
+    api.getModelLibrary.mockResolvedValue(library({ missing: [{
+      folder: "", name: "mystery.safetensors", url: "https://huggingface.co/x/y/resolve/main/mystery.safetensors",
+      hash: "", hash_type: "", workflows: [{ id: "declaring.json", label: "declaring" }],
+    }] }));
+    await openLibrary();
+    fireEvent.click(folderTab("modelMissingTitle 1"));
+    const missing = screen.getByRole("region", { name: "modelMissingTitle" });
+    expect(missing.textContent).toContain("mystery.safetensors");
+    expect(missing.textContent, "目录空着:明说不知道放哪个目录,不静默丢掉").toContain("workflowMissingModelUnknownFolder");
+    fireEvent.click(within(missing).getByRole("button", { name: /modelMissingDownload/ }));
+    expect(await screen.findByRole("dialog", { name: "modelDownloadTitle" })).toBeTruthy();
+  });
+});

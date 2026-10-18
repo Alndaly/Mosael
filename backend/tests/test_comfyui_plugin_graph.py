@@ -1410,8 +1410,9 @@ def test_视频只在预览里_也不拿存下来的第一帧顶替(graph) -> No
 def test_校验错误和执行错误说得出是哪个节点(graph) -> None:
     detail = {"error": {"message": "Prompt outputs failed validation"},
               "node_errors": {"4": {"errors": [{"message": "Value not in list", "details": "ckpt_name: 'x' not in [...]"}]}}}
-    said = graph.validation_errors(detail)
-    assert "Prompt outputs failed validation" in said and "#4 Value not in list: ckpt_name" in said
+    said = graph.validation_errors(detail, "zh")
+    assert "#4" in said and "不在这台机器的可选项里" in said
+    assert "#4 Value not in list: ckpt_name: 'x' not in [...]" in graph.validation_detail(detail), "原话另放一份"
     status = {"messages": [["execution_error", {"node_type": "KSampler", "exception_message": "CUDA out of memory"}]]}
     assert graph.execution_error(status) == "KSampler: CUDA out of memory"
 
@@ -2007,3 +2008,21 @@ def test_模板格不按required硬判_autogrow的min是0就一格都不必填(g
         ["#7 Encoder · images"]
     assert graph.missing_required({"7": {"class_type": "Encoder", "inputs": {"images.image_1": ["9", 0]}}},
                                   required_info) == [], "具体化出来的那一格在,就算有了"
+
+
+def test_校验错误_主句是中文_原话另放_三类认得(graph) -> None:
+    detail = {"error": {"message": "Prompt outputs failed validation"},
+              "node_errors": {
+                  "4": {"errors": [{"message": "Value not in list", "details": "ckpt_name: 'x' not in [...]"}]},
+                  "8": {"errors": [{"message": "Required input is missing", "details": "vae"}]},
+                  "12": {"errors": [{"message": "Node not found"}]},
+              }}
+    said = graph.validation_errors(detail, "zh")
+    assert "#4" in said and "不在这台机器" in said
+    assert "#8" in said and "必填输入" in said
+    assert "#12" in said and "节点" in said
+    assert "Value not in list" not in said and "Required input is missing" not in said and "Node not found" not in said
+    raw = graph.validation_detail(detail)
+    assert "#4 Value not in list: ckpt_name: 'x' not in [...]" in raw
+    assert "#8 Required input is missing: vae" in raw and "#12 Node not found" in raw, "原话一字不动地留着"
+    assert "not among" in graph.validation_errors(detail, "en")

@@ -810,14 +810,23 @@ export function WorkflowLibraryDialog({
             <ConfirmDialog
               open
               title={t("workflowInstallTitle").replace("{server}", instance.name).replace("{name}", installAsk.title)}
-              body={t("workflowInstallBody")}
+              body={`${t("workflowInstallBody")} ${
+                installAsk.wanted_version
+                  ? (installAsk.wanted_is_commit
+                    ? t("workflowInstallGitCommit").replace("{version}", installAsk.wanted_version)
+                    : t("workflowInstallVersion").replace("{version}", installAsk.wanted_version))
+                  : t("workflowInstallLatest")}`}
               confirmLabel={t("workflowInstallConfirm")}
               pending={installPending}
               onCancel={() => setInstallAsk(null)}
               onConfirm={async () => {
                 setInstallPending(true);
                 try {
-                  const job = await startNodeInstall(instance.id, { workspace_id: workspaceId, packs: [installAsk.id] });
+                  const job = await startNodeInstall(instance.id, {
+                    workspace_id: workspaceId, packs: [installAsk.id],
+                    ...(installAsk.wanted_version && !installAsk.wanted_is_commit
+                      ? { versions: { [installAsk.id]: installAsk.wanted_version } } : {}),
+                  });
                   setInstallStarted((list) => [job, ...list]);
                   setInstallAsk(null);
                 } finally {

@@ -264,10 +264,13 @@ def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str,
     except ComfyError as exc:
         if exc.status == 400:
             try:
-                detail = graph.validation_errors(json.loads(exc.body or "{}"))
+                detail = json.loads(exc.body or "{}")
             except ValueError:
-                detail = exc.body
-            raise ComfyError(say(locale, f"ComfyUI 拒绝了这张工作流:{detail}", f"ComfyUI rejected the workflow: {detail}")) from exc
+                detail = None
+            if not isinstance(detail, dict):
+                raise ComfyError(say(locale, f"ComfyUI 拒绝了这张工作流:{exc.body}",
+                                     f"ComfyUI rejected the workflow: {exc.body}")) from exc
+            raise _rejected(detail, locale) from exc
         raise
     prompt_id = str((answer or {}).get("prompt_id") or "")
     if not prompt_id:
@@ -276,9 +279,18 @@ def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str,
         # 一部分输出节点校验不过时 ComfyUI 照样排上,只跑过了的那几个:缺了 checkpoint 的出图那一路不跑,一个只预览
         # 参考图的节点照跑 —— 交回来的就成了那张预览。这张图没有按它本来的样子跑:说出原因,把排上的撤掉。
         stop(comfy, prompt_id)
-        detail = graph.validation_errors({"node_errors": answer["node_errors"]})
-        raise ComfyError(say(locale, f"ComfyUI 拒绝了这张工作流:{detail}", f"ComfyUI rejected the workflow: {detail}"))
+        raise _rejected({"node_errors": answer["node_errors"]}, locale)
     return prompt_id
+
+
+def _rejected(detail: dict[str, Any], locale: str) -> ComfyError:
+    """ComfyUI 的校验错误 → 一个 `ComfyError`:主句是给人看的中文 / 英文(带节点号),原话进失败卡的「详情」,
+    认得出的三类带上「原因 + 怎么修」(见 graph.validation_hint / known_failures)。"""
+    summary = say(locale, graph.validation_errors(detail, "zh"), graph.validation_errors(detail, "en"))
+    hint = graph.validation_hint(detail)
+    return ComfyError(summary, failure={"remote": "failed", "summary": summary.texts,
+                                        "detail": graph.validation_detail(detail),
+                                        **({"hint": hint} if hint else {})})
 
 
 def stop(comfy: Comfy, prompt_id: str) -> None:

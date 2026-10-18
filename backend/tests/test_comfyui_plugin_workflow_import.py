@@ -171,9 +171,16 @@ def test_界面格式的JSON_认出来_预览带缺的节点和节点包_缺的�
     assert out["workflow"]["id"] != UI_FLOW["id"], "存进去是一张新的图:换一个图 id,不和原来那张的工具名撞"
     assert out["suggested_path"] == "人像 精修.json"
     assert [node["role"] for node in out["graph"]["nodes"]] == ["model", "missing", "model"]
-    assert out["missing_nodes"] == [{"type": "CR Prompt Text", "count": 1, "packs": [
-        {"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll Studio", "installed": False},
-        {"id": "https://github.com/someone/ComfyUI-Only-On-Git", "title": "Only on git", "installed": False}]}]
+    assert out["missing_nodes"] == [{"type": "CR Prompt Text", "count": 1, "core": False, "packs": [
+        {"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll Studio", "source": "registry",
+         "page": "https://registry.comfy.org/nodes/ComfyUI_Comfyroll_CustomNodes", "repository": "",
+         "wanted_version": "", "wanted_is_commit": False, "installed": False, "enabled": False,
+         "installed_version": "", "state": "not_installed"},
+        {"id": "https://github.com/someone/ComfyUI-Only-On-Git", "title": "Only on git", "source": "git",
+         "page": "https://github.com/someone/ComfyUI-Only-On-Git",
+         "repository": "https://github.com/someone/ComfyUI-Only-On-Git",
+         "wanted_version": "", "wanted_is_commit": False, "installed": False, "enabled": False,
+         "installed_version": "", "state": "not_installed"}]}]
     assert out["missing_models"] == [{"folder": "loras", "name": "detail_v2.safetensors",
                                       "url": "https://huggingface.co/x/y/resolve/main/detail_v2.safetensors"}]
     assert out["notes"] == []
@@ -457,3 +464,28 @@ def test_Manager不让重启_说为什么(plugin, comfy) -> None:
 
     with pytest.raises(ComfyError, match="security_level"):
         module.reboot({"op": "reboot"}, Comfy(comfy.url), "zh")
+
+
+def test_图上写了要哪一版_装的时候交给_Manager_git_commit_或没写就说会装最新(plugin, comfy) -> None:
+    """`ver` 是 semver 时安装把版本交给 Manager;是 git commit 时没有版本可选(`unknown`,按 git 最新装);
+    没写就 `latest`。此前一律 `latest` —— 图上要 1.4.7 也装最新,装完还是对不上。"""
+    module, Comfy, _convert = plugin
+    events: list[dict[str, Any]] = []
+    out = module.install_nodes({"packs": ["comfyui-wanvideowrapper"], "versions": {"comfyui-wanvideowrapper": "1.4.7"}},
+                               Comfy(comfy.url), "zh", events.append)
+    tasks = [one[2] for one in comfy.state.calls if one[1] == "/v2/manager/queue/task"]
+    assert tasks[-1]["params"] == {"id": "comfyui-wanvideowrapper", "version": "1.4.7", "selected_version": "1.4.7",
+                                   "mode": "cache", "channel": "default"}
+    assert out["installed"] == ["comfyui-wanvideowrapper"]
+
+    commit = "3f1a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c"
+    module.install_nodes({"packs": ["comfyui-wanvideowrapper"], "versions": {"comfyui-wanvideowrapper": commit}},
+                         Comfy(comfy.url), "zh", events.append)
+    tasks = [one[2] for one in comfy.state.calls if one[1] == "/v2/manager/queue/task"]
+    assert tasks[-1]["params"]["selected_version"] == "unknown", "git commit 不是版本号:按 git 装"
+    assert any("git" in (one.get("message") or "") for one in events), "说清这一版钉不住"
+
+    module.install_nodes({"packs": ["ComfyUI_Comfyroll_CustomNodes"]}, Comfy(comfy.url), "zh", events.append)
+    tasks = [one[2] for one in comfy.state.calls if one[1] == "/v2/manager/queue/task"]
+    assert tasks[-1]["params"]["version"] == "latest", "图上没写要哪一版:装 latest"
+    assert any("latest" in (one.get("message") or "") for one in events), "不能选版本时明说会装 latest"

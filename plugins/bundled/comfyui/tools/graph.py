@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import convert
+import known_failures
 import labels
+from lines import say
 
 
 def _input_defs(object_info: dict[str, Any], class_type: str) -> dict[str, Any]:
@@ -2048,8 +2050,10 @@ def checkpoint_files(api: dict[str, Any]) -> list[str]:
 _MAX_DETAIL = 160
 
 
-def validation_errors(detail: dict[str, Any]) -> str:
-    """`/prompt` 回 400 时的校验错误:顶层那句 + 每个节点的每一条(details 截短)。"""
+def validation_detail(detail: dict[str, Any]) -> str:
+    """`/prompt` 回 400 时的校验错误**原话**:顶层那句 + 每个节点的每一条(details 截短)。
+
+    这一份是放进失败卡「详情」的;给人看的主句由 `validation_errors` 写(见下)。"""
     lines: list[str] = []
     top = detail.get("error")
     if isinstance(top, dict) and top.get("message"):
@@ -2064,3 +2068,62 @@ def validation_errors(detail: dict[str, Any]) -> str:
                 extra = extra[:_MAX_DETAIL] + "…"
             lines.append(f"#{node_id} {said}{(': ' + extra) if extra else ''}")
     return "; ".join(lines)
+
+
+#: 常见三类校验错误的 details 长这样:`ckpt_name: 'x' not in [...]` / `compare_view`。
+_DETAIL_NAME = re.compile(r"^([A-Za-z0-9_.]+)\s*:\s*(.*)$")
+
+
+def _validation_line(node_id: str, problem: Any, locale: str) -> str:
+    """一条校验错误 → 给人看的一句(带节点号)。认得出的三类翻成人话并说怎么办的**方向**;认不出的照原话
+    (原话照样有一份在 `validation_detail` 里)。"""
+    said = str(problem.get("message") if isinstance(problem, dict) else problem or "")
+    extra = str(problem.get("details") or "")[:200] if isinstance(problem, dict) else ""
+    lowered = said.lower()
+    if "value not in list" in lowered:
+        found = _DETAIL_NAME.match(extra)
+        name, value = (found.group(1), found.group(2).split(" not in ", 1)[0].strip()) if found else ("", "")
+        if name:
+            return say(locale, f"#{node_id} 这一格「{name}」的值{('「' + value + '」') if value else ''}不在这台机器的可选项里"
+                               "(多半是缺模型文件,或者节点包升级后选项变了)",
+                       f"#{node_id} the value{(' “' + value + '”') if value else ''} for “{name}” is not among this "
+                       "machine's options (usually a missing model file, or the options changed after a node-pack update)")
+        return say(locale, f"#{node_id} 这一格的值不在这台机器的可选项里(多半是缺模型文件,或者节点包升级后选项变了)",
+                   f"#{node_id} that value is not among this machine's options (usually a missing model file, or the "
+                   "options changed after a node-pack update)")
+    if "node not found" in lowered:
+        return say(locale, f"#{node_id} 这个节点类型这台 ComfyUI 上没有(节点包没装,或者装了没启用)",
+                   f"#{node_id} this ComfyUI has no such node type (the node pack is not installed, or installed but disabled)")
+    if "required input is missing" in lowered:
+        name = extra.strip() or "?"
+        return say(locale, f"#{node_id} 必填输入「{name}」既没有值、也没有连线",
+                   f"#{node_id} required input “{name}” has neither a value nor a link")
+    return f"#{node_id} {said}{(': ' + extra) if extra else ''}"
+
+
+def validation_errors(detail: dict[str, Any], locale: str = "zh") -> str:
+    """校验错误**给人看的主句**:每个节点一条,三类常见的翻成中文 / 英文;ComfyUI 的原话见 `validation_detail`。"""
+    raw = validation_detail(detail)
+    if not raw:
+        return ""
+    lines = [(node_id, problem)
+             for node_id, node in (detail.get("node_errors") or {}).items()
+             for problem in (node if isinstance(node, dict) else {}).get("errors") or []]
+    if not lines:
+        return say(locale, "这张工作流没通过 ComfyUI 的校验", "ComfyUI didn't accept this workflow's validation")
+    return "; ".join(_validation_line(str(node_id), problem, locale) for node_id, problem in lines)
+
+
+def validation_hint(detail: dict[str, Any]) -> dict[str, Any] | None:
+    """认得出的三类 → 「原因 + 怎么修」(和 `known_failures` 同一套);认不出是 None。"""
+    for node in (detail.get("node_errors") or {}).values():
+        for problem in (node if isinstance(node, dict) else {}).get("errors") or []:
+            said = problem.get("message") if isinstance(problem, dict) else problem
+            extra = str(problem.get("details") or "") if isinstance(problem, dict) else ""
+            hint = known_failures.hint_for(f"{said or ''} {extra}")
+            if hint:
+                return hint
+    top = detail.get("error")
+    if isinstance(top, dict):
+        return known_failures.hint_for(str(top.get("message") or ""))
+    return None

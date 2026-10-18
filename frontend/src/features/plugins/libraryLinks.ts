@@ -3,10 +3,13 @@
  * 一次也要重新停过去(用户可能已经在那个库里走开了)。
  */
 
-/** 跳到模型库:停到这个文件的详情,或者为一个缺的文件打开下载框(带着工作流里写的地址)。 */
+/** 跳到模型库:停到这个文件的详情,或者为一个缺的文件打开下载框(带着工作流里写的地址和哈希)。
+
+ * `hash` / `hashType` 是工作流自己声明的 SHA256(有才带):下载时交给插件,下完再算一遍对一对 ——
+ * 只有「确认是同一个文件」的来源才该带它。 */
 export type ModelFocus =
   | { model: { folder: string; name: string }; download?: never }
-  | { download: { folder: string; name: string; url?: string }; model?: never };
+  | { download: { folder: string; name: string; url?: string; hash?: string; hashType?: string }; model?: never };
 
 /** 跳到工作流库:停到这一张(相对 workflows/ 的路径)。 */
 export type WorkflowFocus = { path: string };

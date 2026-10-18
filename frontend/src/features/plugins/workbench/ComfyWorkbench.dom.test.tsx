@@ -451,11 +451,11 @@ describe("ComfyUI 工作台", () => {
   });
 
   it("缺失项:导出画布(含没存的)让插件认一遍;缺的节点包「装上」先就地确认", async () => {
-    const bridge = await mount();
     api.inspectWorkflowImport.mockResolvedValue({
       missing_nodes: [{ type: "CR Prompt Text", count: 2, packs: [{ id: "comfyroll", title: "Comfyroll", installed: false }] }],
       missing_models: [{ folder: "loras", name: "x.safetensors", url: "" }],
     });
+    const bridge = await mount();
     tab("workbenchTabMissing");
     await waitFor(() => expect(api.inspectWorkflowImport).toHaveBeenCalledWith("i1", { text: JSON.stringify(EXPORTED.workflow) }));
     expect(calls(bridge)).toContainEqual({ op: "export" });
@@ -1242,6 +1242,10 @@ describe("缺失项:定位到节点;按节点包装;找下载地址", () => {
     });
     api.inspectWorkflowImport.mockResolvedValue(missing);
     tab("workbenchTabMissing");
+    //: 打开工作台时已经按默认回答查过一遍(缺失项页签现在就挂着);换了回答之后让它再查一遍。
+    const recheck = await within(column()).findByRole("button", { name: /workbenchMissingCheck/ });
+    await waitFor(() => expect(recheck.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(recheck);
     await within(column()).findByText("CR Prompt Text");
     return bridge;
   }
@@ -1362,14 +1366,14 @@ describe("缺失项:定位到节点;按节点包装;找下载地址", () => {
   });
 
   it("工作流自己声明的哈希交给「找下载地址」(对上的候选才算 confirmed)", async () => {
-    const bridge = await mount();
-    bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) =>
-      call.op === "export" ? { ok: true, export: WITH_SUBGRAPH } : { ok: true });
     const digest = "cd".repeat(32);
     api.inspectWorkflowImport.mockResolvedValue({ missing_nodes: [], missing_models: [
       { folder: "loras", name: "x.safetensors", url: "", hash: digest, hash_type: "sha256" }] });
     api.searchModelSources.mockResolvedValue({ filename: "x.safetensors", candidates: [], failed: [],
                                                hash: { state: "none", note: "对不上" } });
+    const bridge = await mount();
+    bridge.comfyWorkbench.mockImplementation(async ({ call }: { call: ComfyWorkbenchCall }) =>
+      call.op === "export" ? { ok: true, export: WITH_SUBGRAPH } : { ok: true });
     tab("workbenchTabMissing");
     const card = (await within(column()).findByText("x.safetensors")).closest("li")!;
     fireEvent.click(within(card).getByRole("button", { name: "workbenchSearchSourcesLabel" }));
@@ -1607,5 +1611,22 @@ describe("助手(ADR 0042 第二步):诊断的「定位」「照这个改」、�
     await mount();
     tab("workbenchTabAssistant");
     expect(result().textContent).toBe("");
+  });
+});
+
+describe("缺失项:打开一张缺东西的工作流时不再静默", () => {
+  it("还没切到「缺失项」:页签上先挂缺几件;切过去就看得见同一份", async () => {
+    api.inspectWorkflowImport.mockResolvedValue({
+      missing_nodes: [{ type: "CR Prompt Text", count: 2, packs: [{ id: "comfyroll", title: "Comfyroll", installed: false }] }],
+      missing_models: [{ folder: "loras", name: "x.safetensors", url: "" }],
+    });
+    await mount();
+    const missing = screen.getByRole("tab", { name: "workbenchTabMissing" });
+    await waitFor(() => expect(missing.querySelector("[data-tab-count]")?.textContent).toBe("2"), {
+      timeout: 2000,
+    });
+    expect(api.inspectWorkflowImport, "没点页签也检查过").toHaveBeenCalled();
+    fireEvent.click(missing);
+    expect(await within(column()).findByText("CR Prompt Text")).toBeTruthy();
   });
 });

@@ -39618,6 +39618,16 @@
             "type": "string",
             "title": "Url"
           },
+          "hash": {
+            "type": "string",
+            "title": "Hash",
+            "default": ""
+          },
+          "hash_type": {
+            "type": "string",
+            "title": "Hash Type",
+            "default": ""
+          },
           "workflows": {
             "items": {
               "$ref": "#/components/schemas/ModelLibraryRefOut"
@@ -39633,7 +39643,7 @@
           "url"
         ],
         "title": "MissingModelOut",
-        "description": "工作流声明了下载地址、这台服务器上又没有的模型。"
+        "description": "工作流声明了下载地址、这台服务器上又没有的模型。\n\n`folder` 可能是空串:声明里没写目录、也没能从用它的节点补出来 —— 界面据此说「不知道放哪个目录」,\n不能把这条声明丢掉。`hash` / `hash_type` 是工作流自己声明的哈希(有才带):一键下载时交给插件,下完核对。"
       },
       "ModelDetailOut": {
         "properties": {
@@ -51342,6 +51352,13 @@
             },
             "type": "array",
             "title": "Packs"
+          },
+          "versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Versions"
           }
         },
         "type": "object",
@@ -51602,7 +51619,7 @@
           "name"
         ],
         "title": "WorkflowMissingModelOut",
-        "description": "缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):\n交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。"
+        "description": "缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):\n交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。`folder` 可能是空串:声明里没写目录、\n也没能从用它的节点补出来 —— 界面据此说「不知道放哪个目录」,不能把这条声明丢掉。"
       },
       "WorkflowMissingNodeOut": {
         "properties": {
@@ -51614,6 +51631,11 @@
             "type": "integer",
             "title": "Count",
             "default": 1
+          },
+          "core": {
+            "type": "boolean",
+            "title": "Core",
+            "default": false
           },
           "packs": {
             "items": {
@@ -51668,6 +51690,46 @@
             "type": "boolean",
             "title": "Installed",
             "default": false
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "page": {
+            "type": "string",
+            "title": "Page",
+            "default": ""
+          },
+          "repository": {
+            "type": "string",
+            "title": "Repository",
+            "default": ""
+          },
+          "wanted_version": {
+            "type": "string",
+            "title": "Wanted Version",
+            "default": ""
+          },
+          "wanted_is_commit": {
+            "type": "boolean",
+            "title": "Wanted Is Commit",
+            "default": false
+          },
+          "installed_version": {
+            "type": "string",
+            "title": "Installed Version",
+            "default": ""
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "default": ""
           }
         },
         "type": "object",
@@ -51675,7 +51737,7 @@
           "id"
         ],
         "title": "WorkflowNodePackOut",
-        "description": "一个节点类型可能出自的节点包(ComfyUI-Manager 的映射)。"
+        "description": "一个节点类型可能出自的节点包:图上自己写着的那条出处(`cnr_id` / `aux_id` / `ver`)优先,Manager 的映射\n只补图上没写的那种。`state` 是 `installed` / `not_installed` / `unknown`(没有 Manager,不知道装没装)。"
       },
       "WorkflowNodeTypeOut": {
         "properties": {

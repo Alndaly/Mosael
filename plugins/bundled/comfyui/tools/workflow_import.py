@@ -48,7 +48,8 @@ from install import MANAGER_CLIENT, MANAGER_LOST_SECONDS, MANAGER_POLL_SECONDS, 
 from lines import ComfyError, say
 from run import Emit
 from service import local_service
-from workflow_library import _BAD_SEGMENT, _free_name, _layout, _taken, check_path, describe, model_options
+from workflow_library import (_BAD_SEGMENT, _free_name, _layout, _taken, check_path, describe, model_options,
+                              wanted_version)
 
 #: 要导入的东西最大多大(图片里嵌着工作流的 PNG 也就几 MB;压缩包放宽一点)。
 MAX_BYTES = 30 * 1024 * 1024
@@ -540,13 +541,27 @@ def save_workflow(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[st
     return {"path": path}
 
 
-def _install_params(pack: str) -> dict[str, Any]:
-    """一个节点包交给 Manager 的安装参数。Manager 的映射里,registry 上有的是包名(按 `latest` 装),只在 git 上的是仓库
-    地址(Manager 按仓库名认它、版本 `unknown` = 按 git 装)。"""
+def _install_params(pack: str, version: str = "") -> tuple[dict[str, Any], str]:
+    """一个节点包交给 Manager 的安装参数,和一句「实际会装哪一版」。
+
+    registry 上有的是包名;只在 git 上的是仓库地址(Manager 按仓库名认它、版本 `unknown` = 按 git 装)。图上写了
+    `ver`(**semver** 时)就把它交给 Manager —— 不再一律 `latest`。`ver` 是 git commit、或者这个包只能按 git 装时,
+    钉不住那一版:明说会按 git 最新装。图上没写版本时明说会装 `latest`。"""
     if pack.startswith(("http://", "https://")):
         name = pack.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
-        return {"id": name, "version": "unknown", "selected_version": "unknown", "mode": "cache", "channel": "default"}
-    return {"id": pack, "version": "latest", "selected_version": "latest", "mode": "cache", "channel": "default"}
+        _text, commit = wanted_version(version)
+        note = "按 git 最新装" + ("(图里写的是 git commit,钉不住那一版)" if commit or version else "(图里没写要哪一版)")
+        return ({"id": name, "version": "unknown", "selected_version": "unknown", "mode": "cache", "channel": "default"},
+                note)
+    _text, commit = wanted_version(version)
+    if version and not commit:
+        return ({"id": pack, "version": version, "selected_version": version, "mode": "cache", "channel": "default"},
+                f"装 {version}")
+    if commit:
+        return ({"id": pack, "version": "unknown", "selected_version": "unknown", "mode": "cache", "channel": "default"},
+                "图上写的是 git commit,钉不住那一版:按 git 最新装")
+    return ({"id": pack, "version": "latest", "selected_version": "latest", "mode": "cache", "channel": "default"},
+            "图上没写要哪一版:装 latest")
 
 
 def _node_policy_steps(locale: str) -> str:
@@ -577,16 +592,19 @@ def install_nodes(payload: dict[str, Any], comfy: Comfy, locale: str, emit: Emit
             f"This ComfyUI has no ComfyUI-Manager that Mosael can use, so Mosael can't install node packs on it. "
             f"{manager_needed(locale)}; or put {', '.join(packs)} into ComfyUI/custom_nodes yourself and restart",
         ))
+    #: 图的 `ver`(semver / git commit):主机按包名带进来,交给 Manager,而不是一律装 latest。
+    wanted = payload.get("versions") if isinstance(payload.get("versions"), dict) else {}
     installed: list[str] = []
     for number, pack in enumerate(packs, start=1):
         ui_id = f"mosael-{uuid.uuid4().hex[:8]}"
         cursor = _log_cursor(comfy)
+        params, note = _install_params(pack, str(wanted.get(pack) or "").strip())
         comfy.post("/v2/manager/queue/task", {"ui_id": ui_id, "client_id": MANAGER_CLIENT, "kind": "install",
-                                              "params": _install_params(pack)})
+                                              "params": params})
         comfy.post("/v2/manager/queue/start", {})
         emit({"event": "progress", "progress": round(0.05 + 0.85 * (number - 1) / len(packs), 4),
-              "message": say(locale, f"ComfyUI-Manager 正在装 {pack}({number}/{len(packs)})",
-                             f"ComfyUI-Manager is installing {pack} ({number}/{len(packs)})")})
+              "message": say(locale, f"ComfyUI-Manager 正在装 {pack}({note})({number}/{len(packs)})",
+                             f"ComfyUI-Manager is installing {pack} ({note}) ({number}/{len(packs)})")})
         entry = _wait_for(comfy, ui_id, locale)
         ok = entry.get("result") == "success" or (entry.get("status") or {}).get("status_str") == "success"
         if not ok:

@@ -594,11 +594,16 @@ class ModelFileOut(ApiModel):
 
 
 class MissingModelOut(ApiModel):
-    """工作流声明了下载地址、这台服务器上又没有的模型。"""
+    """工作流声明了下载地址、这台服务器上又没有的模型。
+
+    `folder` 可能是空串:声明里没写目录、也没能从用它的节点补出来 —— 界面据此说「不知道放哪个目录」,
+    不能把这条声明丢掉。`hash` / `hash_type` 是工作流自己声明的哈希(有才带):一键下载时交给插件,下完核对。"""
 
     folder: str
     name: str
     url: str
+    hash: str = ""
+    hash_type: str = ""
     workflows: list[ModelLibraryRefOut] = Field(default_factory=list)
 
 
@@ -829,23 +834,38 @@ class WorkflowModelRefOut(ApiModel):
 
 
 class WorkflowNodePackOut(ApiModel):
-    """一个节点类型可能出自的节点包(ComfyUI-Manager 的映射)。"""
+    """一个节点类型可能出自的节点包:图上自己写着的那条出处(`cnr_id` / `aux_id` / `ver`)优先,Manager 的映射
+    只补图上没写的那种。`state` 是 `installed` / `not_installed` / `unknown`(没有 Manager,不知道装没装)。"""
 
     id: str
     title: str = ""
     installed: bool = False
+    #: 装了但被禁用(Manager 的 `enabled`):界面说「去 Manager 启用」,不叫人再装。
+    enabled: bool = False
+    #: 图上写着 `cnr_id` 还是 `aux_id` 得出的:`registry` / `git`。
+    source: str = ""
+    page: str = ""
+    repository: str = ""
+    #: 图上要的那一版(原样);`wanted_is_commit` 为真时它是 git commit,不是版本号(不比较)。
+    wanted_version: str = ""
+    wanted_is_commit: bool = False
+    installed_version: str = ""
+    state: str = ""
 
 
 class WorkflowMissingNodeOut(ApiModel):
     type: str
     #: 图里有几个这种节点
     count: int = 1
+    #: 图上写着 `comfy-core`:这是 ComfyUI 的核心节点,缺它 = 这台 ComfyUI 太老,不是要装的节点包。
+    core: bool = False
     packs: list[WorkflowNodePackOut] = Field(default_factory=list)
 
 
 class WorkflowMissingModelOut(ApiModel):
     """缺的、工作流声明了下载地址的模型。`hash` / `hash_type` 是工作流自己声明的哈希(schema 允许、很少写):
-    交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。"""
+    交给「找下载地址」的那一次请求,对上的候选才算 `confirmed`。`folder` 可能是空串:声明里没写目录、
+    也没能从用它的节点补出来 —— 界面据此说「不知道放哪个目录」,不能把这条声明丢掉。"""
 
     folder: str
     name: str
@@ -1262,6 +1282,8 @@ class WorkflowInstallNodesRequest(ApiModel):
     workspace_id: str
     #: 节点包:Manager 映射里的那个 id(registry 的包名,或只在 git 上的仓库地址)
     packs: list[str]
+    #: 图上写着要哪一版(semver):包 id → 版本,装的时候交给 Manager,不再一律 `latest`。没有的不传。
+    versions: dict[str, str] = Field(default_factory=dict)
 
 
 class WorkflowRebootOut(ApiModel):

@@ -53,11 +53,14 @@ export function MissingPanel({
   capabilities,
   active,
   revision,
+  onMissing,
 }: {
   target: WorkbenchTarget;
   capabilities: ComfyWorkbenchState["capabilities"] | null;
   active: boolean;
   revision: number;
+  /** 这一张缺几件(节点类型 + 模型文件):父组件拿它给「缺失项」页签挂数字徽标。 */
+  onMissing?: (count: number) => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -96,6 +99,9 @@ export function MissingPanel({
     queryFn: () => getWorkflowLibrary(target.instanceId, target.workspaceId),
     staleTime: 60_000,
     retry: false,
+    //: 这一页没打开时不挂着这个 observer:它是工作流库那份缓存,别在别的页签上替它拉 / 让它一作废就重取。
+    //: 「没有 Manager」那一条只在面板里说(见下面的 noManager)。
+    enabled: active,
   });
   const noManager = library.data ? !library.data.manager?.version : false;
   const [installed, setInstalled] = React.useState(false);
@@ -113,6 +119,12 @@ export function MissingPanel({
       run();
     },
   });
+
+  //: 缺几件(节点类型 + 模型文件):给父组件挂页签徽标。**早于**下面的提前返回 —— 钩子的个数不能两次渲染不一样。
+  const missingCount = (check.data?.missing_nodes?.length ?? 0) + (check.data?.missing_models?.length ?? 0);
+  React.useEffect(() => {
+    onMissing?.(missingCount);
+  }, [missingCount, onMissing]);
 
   if (!canExport) return <PanelNote tone="warning">{t("workbenchUnsupported").replace("{what}", t("workbenchCapExport"))}</PanelNote>;
   const missing = check.data;
@@ -293,8 +305,17 @@ function PackRow({
   useOnJobDone(job.data, (done) => {
     if (done.status === "succeeded") onInstalled();
   });
+  //: 图上要的那一版(semver)交给 Manager;git commit 钉不住、没写版本就装 latest —— 确认卡上明说会装哪一版。
+  const wanted = pack.wanted_version ?? "";
+  const versionNote = wanted
+    ? (pack.wanted_is_commit ? t("workflowInstallGitCommit").replace("{version}", wanted)
+      : t("workflowInstallVersion").replace("{version}", wanted))
+    : t("workflowInstallLatest");
   const start = useMutation({
-    mutationFn: () => startNodeInstall(target.instanceId, { workspace_id: target.workspaceId, packs: [pack.id] }),
+    mutationFn: () => startNodeInstall(target.instanceId, {
+      workspace_id: target.workspaceId, packs: [pack.id],
+      ...(wanted && !pack.wanted_is_commit ? { versions: { [pack.id]: wanted } } : {}),
+    }),
     onSuccess: (created) => {
       setAsking(false);
       setJobId(created.id);
@@ -311,8 +332,11 @@ function PackRow({
            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
           <ExternalLink size={12} aria-hidden />
         </a>
-        {pack.installed ? (
-          <CatalogBadge tone="muted">{t("workbenchMissingInstalledNotLoaded")}</CatalogBadge>
+        {pack.state === "unknown" ? (
+          <CatalogBadge tone="muted">{t("workbenchMissingUnknownInstall")}</CatalogBadge>
+        ) : pack.installed ? (
+          pack.enabled ? <CatalogBadge tone="muted">{t("workbenchMissingInstalledNotLoaded")}</CatalogBadge>
+            : <CatalogBadge tone="warning">{t("workbenchMissingDisabled")}</CatalogBadge>
         ) : !jobId && !asking ? (
           <Button size="xs" className="shrink-0" onClick={() => setAsking(true)}
                   aria-label={t("workbenchMissingInstallLabel").replace("{name}", pack.title)}>
@@ -320,10 +344,13 @@ function PackRow({
           </Button>
         ) : null}
       </span>
+      {wanted && (
+        <span data-pack-version="" className="text-ui-2xs leading-relaxed text-muted-foreground">{versionNote}</span>
+      )}
       {asking && (
         <InlineConfirm
           title={t("workbenchInstallTitle").replace("{server}", target.instanceName).replace("{name}", pack.title)}
-          body={t("workbenchInstallBody")}
+          body={`${t("workbenchInstallBody")} ${versionNote}`}
           confirmLabel={t("workbenchMissingInstall")}
           pending={start.isPending}
           onCancel={() => setAsking(false)}

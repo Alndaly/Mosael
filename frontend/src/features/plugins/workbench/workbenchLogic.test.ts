@@ -200,7 +200,7 @@ describe("工作台面板背后的纯函数", () => {
   });
 
   it("缺的节点按节点包分组:同一个包的几种一起装,认不出包的各自一组、排在后面;包的主页", () => {
-    const pack = (id: string) => ({ id, title: id, installed: false });
+    const pack = (id: string) => ({ id, title: id, installed: false, enabled: false, source: "registry", page: "", repository: "", wanted_version: "", wanted_is_commit: false, installed_version: "", state: "not_installed" });
     const groups = missingByPack([
       { type: "Unknown", packs: [] },
       { type: "CR A", packs: [pack("comfyroll")] },

@@ -4,7 +4,13 @@ import { TAB_TRIGGER } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type WorkbenchTab<T extends string> = { value: T; label: string; icon: React.ReactNode };
+export type WorkbenchTab<T extends string> = {
+  value: T;
+  label: string;
+  icon: React.ReactNode;
+  /** 这个页签里有多少件要看的事(缺的节点 + 缺的模型):>0 时挂一个数字徽标。 */
+  count?: number;
+};
 
 /**
  * 工作台右栏那一排页签:和别处的页签同一个样子(TAB_TRIGGER:14px、不折行、选中强调色字 + 2px 底线;整条 44px、下面一条分隔线)。
@@ -44,6 +50,7 @@ export function WorkbenchTabs<T extends string>({
           <span key={tab.value} className={cn(TAB_TRIGGER, "px-1.5 [&_svg]:size-4")}>
             {tab.icon}
             {tab.label}
+            {badge(tab.count)}
           </span>
         ))}
       </div>
@@ -58,13 +65,14 @@ export function WorkbenchTabs<T extends string>({
             id={`${idPrefix}-tab-${tab.value}`}
             aria-selected={selected}
             aria-controls={`${idPrefix}-panel-${tab.value}`}
-            aria-label={iconOnly ? tab.label : undefined}
+            aria-label={iconOnly ? (tab.count ? `${tab.label} (${tab.count})` : tab.label) : undefined}
             data-workbench-tab={tab.value}
             className={cn(TAB_TRIGGER, "px-1.5 [&_svg]:size-4")}
             onClick={() => onSelect(tab.value)}
           >
             {tab.icon}
             {!iconOnly && tab.label}
+            {badge(tab.count)}
           </button>
         );
         return iconOnly ? (
@@ -76,6 +84,17 @@ export function WorkbenchTabs<T extends string>({
         );
       })}
     </div>
+  );
+}
+
+/** 页签上的数字徽标:缺东西时不再静默(没选中的页签只剩图标,徽标照样看得见)。 */
+function badge(count: number | undefined): React.ReactNode {
+  if (!count) return null;
+  return (
+    <span data-tab-count="" aria-hidden
+          className="ml-1 inline-flex min-w-4 shrink-0 items-center justify-center rounded-full bg-warning/15 px-1 text-ui-2xs font-semibold tabular-nums text-warning">
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 

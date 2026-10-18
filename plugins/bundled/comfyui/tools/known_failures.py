@@ -28,6 +28,37 @@ class Known(NamedTuple):
 
 
 KNOWN: tuple[Known, ...] = (
+    #: ComfyUI 的校验错误(`/prompt` 回 400 / 回包里的 `node_errors`)里常见的三类:原话认得出,就说清为什么、怎么修。
+    Known(
+        re.compile(r"value not in list", re.IGNORECASE),
+        {"zh": "工作流里有一格的值(多半是选模型文件的那一格)不在这台 ComfyUI 的可选项里 —— 文件没下、被挪走了,"
+               "或者节点包升级后选项变了。",
+         "en": "A stored value in the workflow (usually a model-file field) isn't among this ComfyUI's options: the file "
+               "isn't there, was moved, or the options changed after a node-pack update."},
+        (
+            Step({"zh": "缺的模型先下载、放进对应的模型目录;别的那几格在下拉里换成这台机器上有的值。",
+                  "en": "Download the missing model into its models folder; for other fields, pick a value this machine has."}),
+            Step({"zh": "打开这张工作流、把那几格重选一次再保存。", "en": "Open the workflow, re-pick those fields, and save it."}),
+        ),
+    ),
+    Known(
+        re.compile(r"node ['\"].*?['\"] not found|node not found", re.IGNORECASE),
+        {"zh": "图里用的某个节点类型这台 ComfyUI 上没有:提供它的节点包没装,或者装了没启用。",
+         "en": "This ComfyUI has no such node type: the node pack that provides it isn't installed, or is installed but disabled."},
+        (
+            Step({"zh": "装上提供它的节点包,重启 ComfyUI 之后再跑。",
+                  "en": "Install the node pack that provides it, restart ComfyUI, and run again."}),
+        ),
+    ),
+    Known(
+        re.compile(r"required input is missing", re.IGNORECASE),
+        {"zh": "工作流里有一格必填输入既没有值、也没有连线 —— ComfyUI 不会替它补。",
+         "en": "A required input in the workflow has neither a value nor a link, and ComfyUI won't fill it in."},
+        (
+            Step({"zh": "在 ComfyUI 里给那一格填上值(或者接上线),保存后再跑。",
+                  "en": "Fill in that field (or wire it up) in ComfyUI, save, and run again."}),
+        ),
+    ),
     #: comfy-kitchen 的 hostbuf 读文件那一步,老版本在新的 ComfyUI 上读模型就报这一句(和工作流无关,换哪张图都一样)。
     Known(
         re.compile(r"hostbuf_file_reader_read failed", re.IGNORECASE),

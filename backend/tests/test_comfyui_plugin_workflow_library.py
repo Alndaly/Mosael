@@ -139,8 +139,11 @@ def test_用到的模型在不在_缺的节点排除虚拟节点和子图_带节
     assert laid["missing_models"] == [{"folder": "loras", "name": "gone.safetensors",
                                        "url": "https://huggingface.co/x/y/resolve/main/gone.safetensors"}], \
         "在的不算缺;缺的带着工作流里声明的下载地址"
-    assert laid["missing_nodes"] == [{"type": "CR Prompt Text", "count": 2, "packs": [
-        {"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll Studio", "installed": False}]}], \
+    assert laid["missing_nodes"] == [{"type": "CR Prompt Text", "count": 2, "core": False, "packs": [{
+        "id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll Studio", "source": "registry",
+        "page": "https://registry.comfy.org/nodes/ComfyUI_Comfyroll_CustomNodes", "repository": "",
+        "wanted_version": "", "wanted_is_commit": False, "installed": False, "enabled": False,
+        "installed_version": "", "state": "not_installed"}]}], \
         "Note、SetNode、rgthree 的 Fast Groups Bypasser 只在前端;子图实例不是节点类型"
     assert "CR Prompt Text" in laid["problem"], "缺节点转不过来:原因照说"
 
@@ -159,10 +162,13 @@ def test_节点包按_Manager_的_nodename_pattern_认_不锚在开头(library, 
         "links": [],
     }
     switch = {one["path"]: one for one in _listed(library, comfy)["workflows"]}["switch.json"]
-    rgthree = {"id": "rgthree-comfy", "title": "rgthree's ComfyUI Nodes", "installed": False}
+    rgthree = {"id": "rgthree-comfy", "title": "rgthree's ComfyUI Nodes", "source": "registry",
+               "page": "https://registry.comfy.org/nodes/rgthree-comfy", "repository": "",
+               "wanted_version": "", "wanted_is_commit": False, "installed": False, "enabled": False,
+               "installed_version": "", "state": "not_installed"}
     assert switch["missing_nodes"] == [
-        {"type": "Any Switch (rgthree)", "count": 1, "packs": [rgthree]},
-        {"type": "Power Lora Loader (rgthree)", "count": 1, "packs": [rgthree]},
+        {"type": "Any Switch (rgthree)", "count": 1, "core": False, "packs": [rgthree]},
+        {"type": "Power Lora Loader (rgthree)", "count": 1, "core": False, "packs": [rgthree]},
     ]
 
 
@@ -526,3 +532,147 @@ def test_应用表单_一项的形状不再手抄键表_新加一格照样到得
             "title": {"zh": "蒙版", "en": "Mask"}, "mask_property": 1,
             "以后 graph.items 新加的一格": {"zh": "新", "en": "new"}, "_内部": "不是给宿主的形状"}
     assert module._item_out(item) == {key: value for key, value in item.items() if key != "_内部"}
+
+
+# --- 缺的节点:图上自己写着的出处、核心节点、装没装 / 启没启用 ---------------------------------
+#
+# 维护者的分析(2026-10):工作流库列缺的节点只问 ComfyUI-Manager 的映射 —— 没装 Manager 就「不知道是哪个节点包」,
+# `cnr_id` / `aux_id` / `ver` 只在 diagnose 用。官网承诺离线也能归因。下面这几条钉住:图上写着的出处先信,Manager
+# 只补没有声明的那种;核心节点不是「要装的包」,是这台 ComfyUI 太老;装没装、启没启用、要哪一版都说清,顶部那句话
+# 跟着候选包的状态走,不许再一律叫人「装上对应的节点包」。
+
+
+def _one_node_workflow(kind: str, properties: dict[str, str] | None = None,
+                       widgets: list[Any] | None = None) -> dict[str, Any]:
+    node: dict[str, Any] = {"id": 1, "type": kind, "pos": [0, 0], "size": [200, 80]}
+    if properties is not None:
+        node["properties"] = properties
+    if widgets is not None:
+        node["widgets_values"] = widgets
+    return {"nodes": [node], "links": []}
+
+
+def _only_row(library, comfy, path: str) -> dict[str, Any]:
+    return {one["path"]: one for one in _listed(library, comfy)["workflows"]}[path]
+
+
+def test_缺的节点先信图上写的出处_没_Manager_也归得到那个包(library, comfy) -> None:
+    comfy.state.manager = None
+    comfy.state.manager_mappings = {}
+    comfy.state.manager_installed = {}
+    comfy.state.workflows["declared.json"] = _one_node_workflow(
+        "WanVideoSampler", {"cnr_id": "comfyui-wanvideowrapper", "aux_id": "kijai/ComfyUI-WanVideoWrapper", "ver": "1.4.7"})
+    row = _only_row(library, comfy, "declared.json")
+    assert row["missing_nodes"] == [{"type": "WanVideoSampler", "count": 1, "core": False, "packs": [{
+        "id": "comfyui-wanvideowrapper", "title": "comfyui-wanvideowrapper",
+        "source": "registry", "page": "https://registry.comfy.org/nodes/comfyui-wanvideowrapper",
+        "repository": "", "wanted_version": "1.4.7", "wanted_is_commit": False,
+        "installed": False, "enabled": False, "installed_version": "", "state": "unknown"}]}], \
+        "图上写着出处:没有 Manager 也归得到那个包;Manager 不在,装没装只能说不知道"
+
+
+def test_只写_aux_id_的包_装着也认得出来(library, comfy) -> None:
+    """Manager 的已装列表按目录名记(`comfyui-kjnodes`),图上写的是 `kijai/ComfyUI-KJNodes`:两种键都要查。"""
+    comfy.state.manager_installed = {"comfyui-kjnodes": {"ver": "1.5.0", "cnr_id": "comfyui-kjnodes", "enabled": True}}
+    comfy.state.workflows["kj.json"] = _one_node_workflow("ImageResizeKJ", {"aux_id": "kijai/ComfyUI-KJNodes"})
+    pack = _only_row(library, comfy, "kj.json")["missing_nodes"][0]["packs"][0]
+    assert (pack["id"], pack["source"], pack["page"]) == (
+        "kijai/ComfyUI-KJNodes", "git", "https://github.com/kijai/ComfyUI-KJNodes")
+    assert pack["installed"] is True and pack["installed_version"] == "1.5.0" and pack["state"] == "installed"
+
+
+def test_写着_comfy_core_的缺节点_是这台_ComfyUI_太老_不是装节点包(library, comfy) -> None:
+    comfy.state.manager = None
+    comfy.state.workflows["core.json"] = _one_node_workflow("LoadAudioMP3", {"cnr_id": "comfy-core", "ver": "0.3.60"})
+    row = _only_row(library, comfy, "core.json")
+    assert row["missing_nodes"] == [{"type": "LoadAudioMP3", "count": 1, "core": True, "packs": []}]
+    assert "太老" in row["problem"] and "升级 ComfyUI" in row["problem"], "缺的是核心节点:升级 ComfyUI"
+    assert "装上" not in row["problem"] and "节点包" not in row["problem"], "核心节点不是要装的插件"
+
+
+def test_包已经装了节点却没加载_顶部问题不再叫人装包(library, comfy) -> None:
+    comfy.state.manager_installed = {"ComfyUI_Comfyroll_CustomNodes": {
+        "ver": "1.0.0", "cnr_id": "comfyui-comfyroll", "enabled": True}}
+    comfy.state.workflows["roll.json"] = _one_node_workflow("CR Prompt Text")
+    row = _only_row(library, comfy, "roll.json")
+    pack = row["missing_nodes"][0]["packs"][0]
+    assert pack["installed"] is True and pack["state"] == "installed"
+    assert "已经装了" in row["problem"] and "重启" in row["problem"], "装了却没加载:说的是重启,不是再装一遍"
+    assert "装上" not in row["problem"], "包已经装了,不许再叫人装"
+
+
+def test_被禁用的包_和装了没加载分得开(library, comfy) -> None:
+    comfy.state.manager_installed = {"ComfyUI_Comfyroll_CustomNodes": {
+        "ver": "1.0.0", "cnr_id": "comfyui-comfyroll", "enabled": False}}
+    comfy.state.workflows["roll.json"] = _one_node_workflow("CR Prompt Text")
+    row = _only_row(library, comfy, "roll.json")
+    assert row["missing_nodes"][0]["packs"][0]["enabled"] is False
+    assert "被禁用" in row["problem"] and "Manager" in row["problem"], "禁用要去 Manager 里启用"
+
+
+def test_完全认不出出自哪个包_就说认不出_不叫人装一个不知道的包(library, comfy) -> None:
+    comfy.state.manager = None
+    comfy.state.workflows["mystery.json"] = _one_node_workflow("MysteryNode")
+    row = _only_row(library, comfy, "mystery.json")
+    assert row["missing_nodes"] == [{"type": "MysteryNode", "count": 1, "core": False, "packs": []}]
+    assert "认不出" in row["problem"]
+    assert "装上" not in row["problem"] and "节点包" not in row["problem"]
+
+
+def test_图上写了出处但没_Manager_说不知道装没装_不冒充没装(library, comfy) -> None:
+    comfy.state.manager = None
+    comfy.state.workflows["kj.json"] = _one_node_workflow("ImageResizeKJ", {"aux_id": "kijai/ComfyUI-KJNodes"})
+    row = _only_row(library, comfy, "kj.json")
+    pack = row["missing_nodes"][0]["packs"][0]
+    assert pack["state"] == "unknown" and pack["installed"] is False
+    assert "不知道装没装" in row["problem"] and "没有 ComfyUI-Manager" in row["problem"]
+
+
+def test_版本不符说清要哪一版装着哪一版_升级还是降级_git_commit_不比较(library, comfy) -> None:
+    comfy.state.manager_installed = {"ComfyUI-WanVideoWrapper": {
+        "ver": "1.4.5", "cnr_id": "comfyui-wanvideowrapper", "enabled": True}}
+    comfy.state.workflows["wan.json"] = _one_node_workflow(
+        "WanVideoSampler", {"cnr_id": "comfyui-wanvideowrapper", "ver": "1.4.7"})
+    row = _only_row(library, comfy, "wan.json")
+    pack = row["missing_nodes"][0]["packs"][0]
+    assert (pack["wanted_version"], pack["installed_version"]) == ("1.4.7", "1.4.5")
+    assert "1.4.7" in row["problem"] and "1.4.5" in row["problem"] and "升级" in row["problem"], \
+        "图上要 1.4.7、装着 1.4.5:说明要升级"
+
+    comfy.state.manager_installed["ComfyUI-WanVideoWrapper"]["ver"] = "1.5.0"
+    row = _only_row(library, comfy, "wan.json")
+    assert "降级" in row["problem"], "装着 1.5.0、图上要 1.4.7:说明要降级"
+
+    commit = "3f1a2b4c5d6e7f8091a2b3c4d5e6f708192a3b4c"
+    comfy.state.workflows["commit.json"] = _one_node_workflow(
+        "WanVideoSampler", {"cnr_id": "comfyui-wanvideowrapper", "ver": commit})
+    row = _only_row(library, comfy, "commit.json")
+    pack = row["missing_nodes"][0]["packs"][0]
+    assert pack["wanted_is_commit"] is True and pack["wanted_version"] == commit
+    assert "升级" not in row["problem"] and "降级" not in row["problem"], "git commit 不是版本号:不比较"
+
+
+def test_声明里没写目录的模型_按节点输入名补目录(library, comfy) -> None:
+    comfy.state.workflows["no-folder.json"] = {
+        "nodes": [{"id": 1, "type": "CheckpointLoaderSimple", "widgets_values": ["gone.safetensors"],
+                   "inputs": [{"name": "ckpt_name", "widget": {"name": "ckpt_name"}}]}],
+        "models": [{"name": "gone.safetensors", "url": "https://huggingface.co/x/y/resolve/main/gone.safetensors"}],
+        "links": [],
+    }
+    row = _only_row(library, comfy, "no-folder.json")
+    assert row["missing_models"] == [{"folder": "checkpoints", "name": "gone.safetensors",
+                                      "url": "https://huggingface.co/x/y/resolve/main/gone.safetensors"}], \
+        "没写 directory 的声明不丢:按用它的节点输入补出 checkpoints"
+
+
+def test_声明里没写目录又补不出目录_留住它并说不知道放哪(library, comfy) -> None:
+    comfy.state.workflows["mystery-model.json"] = {
+        "nodes": [{"id": 1, "type": "MysteryLoader", "widgets_values": ["mystery.safetensors"]}],
+        "models": [{"name": "mystery.safetensors", "url": "https://huggingface.co/x/y/resolve/main/mystery.safetensors"}],
+        "links": [],
+    }
+    row = _only_row(library, comfy, "mystery-model.json")
+    assert row["missing_models"] == [{"folder": "", "name": "mystery.safetensors",
+                                      "url": "https://huggingface.co/x/y/resolve/main/mystery.safetensors"}], \
+        "补不出目录也不丢:folder 空着,界面据此说「不知道放哪个目录」"
+    assert {"folder": "", "name": "mystery.safetensors", "present": False} in row["models"]

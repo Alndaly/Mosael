@@ -355,7 +355,10 @@ export const runCanvas = (instanceId: string, body: WorkflowCanvasRun) =>
   );
 
 /** 经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。 */
-export const startNodeInstall = (instanceId: string, body: { workspace_id: string; packs: string[] }) =>
+export const startNodeInstall = (
+  instanceId: string,
+  body: { workspace_id: string; packs: string[]; versions?: Record<string, string> },
+) =>
   api<Job>(`/api/plugins/instances/${instanceId}/workflow-library/install-nodes`, { method: "POST", body: JSON.stringify(body) });
 /** 经这个连接(ComfyUI-Manager)重启那台 ComfyUI,等它回来。 */
 export const rebootWorkflowServer = (instanceId: string) =>

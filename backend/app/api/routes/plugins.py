@@ -911,7 +911,8 @@ def install_workflow_nodes(instance_id: str, body: WorkflowInstallNodesRequest, 
     """经这个连接(ComfyUI-Manager)装缺的节点包:一个后台任务,装完要重启 ComfyUI 才加载。"""
     instance = my_instance(db, instance_id, user)
     try:
-        return workflow_library.start_node_install(db, user, instance, workspace_id=body.workspace_id, packs=body.packs)
+        return workflow_library.start_node_install(db, user, instance, workspace_id=body.workspace_id,
+                                                  packs=body.packs, versions=body.versions)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

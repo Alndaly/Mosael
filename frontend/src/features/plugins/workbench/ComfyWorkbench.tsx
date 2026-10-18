@@ -116,6 +116,8 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   const [open, setOpen] = usePersistentTab<"open" | "closed">("comfy-workbench.column", "open", ["open", "closed"]);
   //: 去过的面板留着(切回来不重读、跑的进度不断)
   const [visited, setVisited] = React.useState<Set<Tab>>(() => new Set([tab]));
+  //: 缺失项页签上的数字:检查过有缺的就挂徽标 —— 打开一张缺东西的工作流时不再静默(默认停在「模型」页签)。
+  const [missingCount, setMissingCount] = React.useState(0);
   const [saveNote, setSaveNote] = React.useState("");
   const run = useCanvasRun(target);
   const columnOpen = open === "open";
@@ -143,8 +145,11 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
   React.useEffect(() => {
     setVisited((current) => (current.has(tab) ? current : new Set([...current, tab])));
   }, [tab]);
-  //: 换了一张:上一张没存成的那句话不是这一张的
-  React.useEffect(() => setSaveNote(""), [workflowKey]);
+  //: 换了一张:上一张没存成的那句话不是这一张的;缺失项的徽标先清掉,等这一张重新检查
+  React.useEffect(() => {
+    setSaveNote("");
+    setMissingCount(0);
+  }, [workflowKey]);
   //: 「保存」是前端自己的保存命令(和 ComfyUI 菜单「工作流 → 保存」同一条):顶栏那一颗和 ⌘S / Ctrl+S 都走这里
   const canSave = state?.capabilities?.save !== false;
   const saveNow = Boolean(state) && canSave;
@@ -297,7 +302,10 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
           idPrefix="comfy-workbench"
           active={tab}
           onSelect={setTab}
-          tabs={TABS.map((one) => ({ value: one, label: tabLabel[one], icon: <TabIcon tab={one} /> }))}
+          tabs={TABS.map((one) => ({
+            value: one, label: tabLabel[one], icon: <TabIcon tab={one} />,
+            count: one === "missing" ? missingCount : undefined,
+          }))}
         />
         {saveNote && <p role="alert" className="m-0 flex-none px-3 pt-3 text-ui-xs text-destructive">{saveNote}</p>}
         {!state && (
@@ -305,7 +313,7 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
             {stuck ? <PanelNote tone="warning">{t("workbenchBridgeMissing")}</PanelNote> : <PanelLoading label={t("workbenchConnecting")} />}
           </div>
         )}
-        {state && TABS.filter((one) => visited.has(one)).map((one) => (
+        {state && TABS.filter((one) => visited.has(one) || one === "missing").map((one) => (
           <div key={one} role="tabpanel" id={`comfy-workbench-panel-${one}`} aria-labelledby={`comfy-workbench-tab-${one}`}
                hidden={tab !== one} {...(one === "assistant" ? { className: ASSISTANT_PANEL }
                  : { tabIndex: 0, "data-workbench-scroll": "", className: TAB_PANEL })}>
@@ -314,8 +322,9 @@ export function ComfyWorkbench({ barHeight }: { barHeight: number }) {
               <ModelsPanel key={workflowKey} target={target} node={state.selection.node} capabilities={capabilities} />
             )}
             {one === "missing" && (
+              //: 不管有没有切到这一页都挂着:打开一张工作流就先查一遍,缺东西时页签上挂数字(见 MissingPanel 的 onMissing)。
               <MissingPanel key={workflowKey} target={target} capabilities={capabilities} active={tab === "missing"}
-                            revision={workflow?.revision ?? 0} />
+                            revision={workflow?.revision ?? 0} onMissing={setMissingCount} />
             )}
             {one === "app" && (
               <AppPanel key={formsKey} target={target} workflowKey={workflowKey} path={path} canvasModified={Boolean(workflow?.modified)}

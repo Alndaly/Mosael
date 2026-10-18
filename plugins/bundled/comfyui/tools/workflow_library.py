@@ -365,23 +365,36 @@ def installed_packs(comfy: Comfy) -> dict[str, dict[str, Any]] | None:
 
 
 def pack_ids(installed: dict[str, dict[str, Any]]) -> set[str]:
-    """装着的包能叫的名字(小写):目录名、注册表 id、git 的仓库名。"""
+    """装着的包能叫的名字(小写):目录名、注册表 id、git 的 `user/repo`、仓库短名。
+
+    **两种键都要有**:Manager 的已装列表按目录名记(`comfyui-kjnodes`),图上写的是 `kijai/ComfyUI-KJNodes`
+    (`aux_id`)、注册表 id 又是第三种写法 —— 少一种,一个装着的包就会被说成「没装」。
+    """
     have = {key.lower() for key in installed}
     for value in installed.values():
-        have |= {str(value.get(key)).lower() for key in ("cnr_id",) if value.get(key)}
-        if value.get("aux_id"):
-            have.add(str(value["aux_id"]).rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].lower())
+        for name in (value.get("cnr_id"), value.get("aux_id")):
+            text = str(name or "").strip().rstrip("/").removesuffix(".git")
+            if text:
+                have.add(text.lower())
+                have.add(text.rsplit("/", 1)[-1].lower())
     return have
+
+
+def installed_states(installed: dict[str, dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+    """装着的包能叫的名字(小写)→ `{installed_version, enabled}`(名字和 `pack_ids` 同一套)。"""
+    out: dict[str, dict[str, Any]] = {}
+    for key, value in (installed or {}).items():
+        state = {"installed_version": str(value.get("ver") or ""),
+                 #: Manager 没写这一项(老版本)时不当成「被禁用」:只有明确 false 才算。
+                 "enabled": value.get("enabled") is not False}
+        for name in pack_ids({key: value}):
+            out[name] = state
+    return out
 
 
 def installed_versions(installed: dict[str, dict[str, Any]] | None) -> dict[str, str]:
     """装着的包能叫的名字(小写)→ 装的版本(名字和 `pack_ids` 同一套)。"""
-    out: dict[str, str] = {}
-    for key, value in (installed or {}).items():
-        version = str(value.get("ver") or "")
-        for name in pack_ids({key: value}):
-            out[name] = version
-    return out
+    return {name: str(state.get("installed_version") or "") for name, state in installed_states(installed).items()}
 
 
 def pack_page(ident: str) -> str:
@@ -441,24 +454,90 @@ def provides(entry: Any, class_type: str) -> bool:
         return False
 
 
-def _packs(comfy: Comfy, types: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """节点类型 → 可能出自的节点包(ComfyUI-Manager 的映射),装没装。没有 Manager → 空。"""
+#: 版本号的样子(带不带 v 都认);git commit 不是版本号,不进这里(见 `wanted_version`)。
+_SEMVER = re.compile(r"^[vV]?(\d+)\.(\d+)\.(\d+)")
+#: 节点包状态的三种说法:装了 / 没装 / 不知道(没有 Manager 或它答不上)。
+PACK_INSTALLED, PACK_MISSING, PACK_UNKNOWN = "installed", "not_installed", "unknown"
+
+
+def version_relation(wanted: str, installed: str) -> str:
+    """图上要的那一版和装着的那一版:``upgrade``(装的旧)/ ``downgrade``(装的新)/ ``same`` / 空串(比不了)。"""
+    left, right = _SEMVER.match(str(wanted or "").strip()), _SEMVER.match(str(installed or "").strip())
+    if left is None or right is None:
+        return ""
+    want, have = tuple(int(one) for one in left.groups()), tuple(int(one) for one in right.groups())
+    return "upgrade" if have < want else "downgrade" if have > want else "same"
+
+
+def _declared_pack(own: dict[str, str], states: dict[str, dict[str, Any]], manager_known: bool) -> dict[str, Any]:
+    """图上写着的那一条出处 → 节点包那一行(和 Manager 映射给出的同一形状)。"""
+    cnr, aux = str(own.get("cnr_id") or "").strip(), str(own.get("aux_id") or "").strip()
+    ident = cnr or aux
+    repository = "" if cnr else f"https://github.com/{aux.rstrip('/').removesuffix('.git')}"
+    state = states.get(ident.lower()) or states.get(mapping_short(ident)) or {}
+    version, commit = wanted_version(own.get("ver", ""))
+    return {
+        "id": ident,
+        "title": cnr or aux.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1],
+        "source": "registry" if cnr else "git",
+        "page": pack_page(cnr) if cnr else pack_page(f"https://github.com/{aux}"),
+        "repository": repository,
+        "wanted_version": version, "wanted_is_commit": commit,
+        "installed": bool(state),
+        "enabled": bool(state.get("enabled", False)),
+        "installed_version": str(state.get("installed_version") or ""),
+        "state": PACK_INSTALLED if state else (PACK_MISSING if manager_known else PACK_UNKNOWN),
+    }
+
+
+def _manager_pack(pack: Any, entry: Any, states: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Manager 映射里的一条 → 节点包那一行(图上没写出处时用它补)。"""
+    meta = entry[1] if isinstance(entry, list) and len(entry) > 1 and isinstance(entry[1], dict) else {}
+    ident = str(pack)
+    state = states.get(ident.lower()) or states.get(mapping_short(ident)) or {}
+    git = ident.startswith(("http://", "https://"))
+    return {
+        "id": ident, "title": str(meta.get("title_aux") or ident),
+        "source": "git" if git else "registry", "page": pack_page(ident),
+        "repository": ident.rstrip("/").removesuffix(".git") if git else "",
+        "wanted_version": "", "wanted_is_commit": False,
+        "installed": bool(state), "enabled": bool(state.get("enabled", False)),
+        "installed_version": str(state.get("installed_version") or ""),
+        "state": PACK_INSTALLED if state else PACK_MISSING,
+    }
+
+
+def _packs_from(mappings: dict[str, Any] | None, states: dict[str, dict[str, Any]], manager_known: bool,
+                types: list[str], declared: dict[str, dict[str, str]] | None = None) -> dict[str, list[dict[str, Any]]]:
+    """节点类型 → 可能出自的节点包(装没装、启没启用、要哪一版)。
+
+    **图上写着的出处先信,Manager 的映射只补没有声明的那种** —— 官方模板都带 `cnr_id` / `aux_id` / `ver`,
+    完全没装的包在 Manager 的映射里也可能找不到;离线、没有 Manager 时它照样说得出来自哪儿。
+    """
     if not types:
         return {}
-    mappings = manager_mappings(comfy)
-    if mappings is None:
-        return {}
-    have = pack_ids(installed_packs(comfy) or {})
+    declared = declared or {}
     out: dict[str, list[dict[str, Any]]] = {}
     for class_type in types:
-        found = []
-        for pack, entry in mappings.items():
-            if provides(entry, class_type):
-                meta = entry[1] if isinstance(entry, list) and len(entry) > 1 and isinstance(entry[1], dict) else {}
-                found.append({"id": str(pack), "title": str(meta.get("title_aux") or pack),
-                              "installed": str(pack).lower() in have or mapping_short(pack) in have})
+        own = declared.get(class_type) or {}
+        found: list[dict[str, Any]] = []
+        if own.get("cnr_id") or own.get("aux_id"):
+            found.append(_declared_pack(own, states, manager_known))
+        elif mappings is not None:
+            for pack, entry in mappings.items():
+                if provides(entry, class_type):
+                    found.append(_manager_pack(pack, entry, states))
         out[class_type] = found[:10]
     return out
+
+
+def _packs(comfy: Comfy, types: list[str],
+           declared: dict[str, dict[str, str]] | None = None) -> dict[str, list[dict[str, Any]]]:
+    """`_packs_from` 自己取 Manager 的映射和已装列表(诊断那边直接用它;工作流库那一批一次取好再分发)。"""
+    if not types:
+        return {}
+    installed = installed_packs(comfy)
+    return _packs_from(manager_mappings(comfy), installed_states(installed), installed is not None, types, declared)
 
 
 def _choices(spec: Any) -> list[Any] | None:
@@ -491,11 +570,13 @@ def _models(api: dict[str, Any], source: dict[str, Any], options: dict[str, set[
     """(用到的模型文件和在不在, 缺的模型)。转得过来的看节点上选模型文件的那几格;再加上工作流声明的下载地址(只收节点
     当前真在用的,按转出来的图判,见 library.scan_workflow)。"""
     _used, declared = scan_workflow(source, api or None)
-    by_key = {(one["folder"], one["name"]): one for one in declared}
-    #: 声明里没写 `directory` 的(schema 允许):按文件名对,目录以选文件的那个节点为准(labels 的判定)。
+    by_key = {(one["folder"], one["name"]): one for one in declared if one["folder"]}
+    #: 声明里没写 `directory` 的(schema 允许):按文件名对,目录以选文件的那个节点为准(labels 的判定);
+    #: 一个节点都没对上的,再看这个文件在哪个目录里;都对不上就**留着**,目录空着交给界面说「不知道放哪个目录」。
     by_name: dict[str, dict[str, str]] = {}
     for one in declared:
-        by_name.setdefault(one["name"], one)
+        if not one["folder"]:
+            by_name.setdefault(one["name"], one)
     picked: list[tuple[str, str]] = []
     for node in api.values():
         class_type = str(node.get("class_type") or "")
@@ -511,6 +592,14 @@ def _models(api: dict[str, Any], source: dict[str, Any], options: dict[str, set[
                 if folder:
                     picked.append((folder, value))
     picked += list(by_key)
+    #: 没写目录的声明:补得出目录就按那个目录算(和用它的节点同一格);补不出也留一条,目录空着。
+    for name, spec in by_name.items():
+        folder = next((one for one, picked_name in picked if picked_name == name), "")
+        if not folder:
+            folder = next((one for one, files in options.items() if name in files), "")
+        if folder and (folder, name) not in by_key:
+            by_key[(folder, name)] = {**spec, "folder": folder}
+        picked.append((folder, name))
     seen: set[tuple[str, str]] = set()
     found: list[dict[str, Any]] = []
     missing: list[dict[str, Any]] = []
@@ -546,17 +635,111 @@ def _trash(comfy: Comfy) -> list[dict[str, Any]]:
     return sorted(out, key=lambda one: -one["deleted_at"])
 
 
+def _pack_note(pack: dict[str, Any], locale: str) -> str:
+    """一个装着的节点包为什么补不上缺的节点:被禁用 / 版本不对(要哪一版、装着哪一版)/ 就是没加载。"""
+    title = str(pack.get("title") or pack.get("id") or "")
+    bits: list[str] = []
+    if pack.get("installed") and not pack.get("enabled"):
+        bits.append(say(locale, "装了但被禁用,去 ComfyUI-Manager 里启用", "installed but disabled: enable it in ComfyUI-Manager"))
+    wanted, have = str(pack.get("wanted_version") or ""), str(pack.get("installed_version") or "")
+    relation = "" if pack.get("wanted_is_commit") else version_relation(wanted, have)
+    if relation == "upgrade":
+        bits.append(say(locale, f"图上要 {wanted},装着 {have},需要升级", f"the graph wants {wanted}, {have} is installed: upgrade it"))
+    elif relation == "downgrade":
+        bits.append(say(locale, f"图上要 {wanted},装着 {have},需要降级", f"the graph wants {wanted}, {have} is installed: downgrade it"))
+    elif pack.get("wanted_is_commit"):
+        bits.append(say(locale, f"图上写的是这一版:{wanted}(git commit,原样核对)",
+                        f"the graph names {wanted} (a git commit — taken as-is)"))
+    elif relation == "same":
+        bits.append(say(locale, f"版本对得上({have})", f"version matches ({have})"))
+    if not bits:
+        bits.append(say(locale, "已经装了", "already installed"))
+    return f"{title}({'、'.join(bits)})"
+
+
+def _missing_problem(missing: Counter[str], packs: dict[str, list[dict[str, Any]]], core: set[str],
+                     locale: str) -> str:
+    """顶部那句「为什么跑不了」:按候选包的状态分支 —— 有没装的才叫人装;全装了就说没加载 / 版本不对;
+    一个都认不出就说认不出。核心节点缺了是这台 ComfyUI 太老,不是装节点包。"""
+    parts: list[str] = []
+    if core:
+        listed = "、".join(sorted(core))
+        parts.append(say(
+            locale,
+            f"这台 ComfyUI 太老:核心节点「{listed}」没有(核心节点跟着 ComfyUI 的版本一起发)。"
+            "升级 ComfyUI,或者把这几步换成这台机器上有的节点",
+            f"This ComfyUI is too old: it has no core node “{listed}” (core nodes ship with ComfyUI itself). "
+            "Upgrade ComfyUI, or replace these steps with nodes this machine has"))
+    install: list[str] = []
+    install_packs: list[str] = []
+    loaded: list[tuple[str, list[dict[str, Any]]]] = []
+    unknown: list[str] = []
+    undeclared: list[tuple[str, list[dict[str, Any]]]] = []
+    for kind in sorted(missing):
+        if kind in core:
+            continue
+        offered = packs.get(kind) or []
+        if not offered:
+            unknown.append(kind)
+            continue
+        states = {one.get("state") for one in offered}
+        if PACK_MISSING in states:
+            install.append(kind)
+            install_packs += [str(one.get("title") or one.get("id")) for one in offered if one.get("state") == PACK_MISSING]
+        elif states == {PACK_INSTALLED}:
+            loaded.append((kind, offered))
+        elif PACK_UNKNOWN in states:
+            undeclared.append((kind, offered))
+        else:
+            unknown.append(kind)
+    if install:
+        parts.append(say(
+            locale,
+            f"缺的节点类型:{'、'.join(install)}。装上提供它们的节点包:{'、'.join(dict.fromkeys(install_packs))}"
+            "(装完要重启 ComfyUI 才会加载)",
+            f"Missing node types: {', '.join(install)}. Install the node packs that provide them: "
+            f"{', '.join(dict.fromkeys(install_packs))} (restart ComfyUI after installing so they load)"))
+    if loaded:
+        notes = "、".join(_pack_note(one, locale) for _kind, offered in loaded for one in offered)
+        parts.append(say(
+            locale,
+            f"有些节点包已经装了,但节点没加载:{notes}。确认它们在 ComfyUI-Manager 里是启用的,再重启 ComfyUI;"
+            "版本不对的要换成图上要的那一版",
+            f"Some node packs are already installed, but their nodes aren't loaded: {notes}. Check that they are enabled in "
+            "ComfyUI-Manager and restart ComfyUI; if the version is wrong, install the version the graph asks for"))
+    if undeclared:
+        notes = "、".join(str(one.get("title") or one.get("id")) for _kind, offered in undeclared for one in offered)
+        parts.append(say(
+            locale,
+            f"图上写着这些节点出自:{notes}。这台 ComfyUI 没有 ComfyUI-Manager,不知道装没装:"
+            "在那台机器上确认后装上,再重启 ComfyUI",
+            f"The graph says these nodes come from: {notes}. This ComfyUI has no ComfyUI-Manager, so whether they are "
+            "installed is unknown: check on that machine, install if needed, and restart ComfyUI"))
+    if unknown:
+        parts.append(say(
+            locale,
+            f"认不出这些节点出自哪个包:{'、'.join(unknown)}。用 comfy_node_pack_search 按名字找,或者在那台机器上打开这张图看缺哪些节点",
+            f"Can't tell which pack provides these nodes: {', '.join(unknown)}. Search by name with "
+            "comfy_node_pack_search, or open the workflow on that machine to see what's missing"))
+    return "。".join(parts)
+
+
 def describe(row: dict[str, Any], source: dict[str, Any], object_info: dict[str, Any], options: dict[str, set[str]],
              comfy: Comfy, locale: str, *, missing: Counter[str] | None = None,
              packs: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, Any]:
     """一张工作流的样子,补进 `row`:节点数、图摘要、缺的节点(和节点包)、识别出的输入 / 参数 / 输出、用到的模型和缺的模型、
     跑不了的原因。列工作流库和导入前的预览是同一份(列的时候缺什么、节点包一次问完,传进来)。"""
     missing = missing if missing is not None else missing_types(source, object_info)
-    packs = packs if packs is not None else _packs(comfy, sorted(missing))
+    declared = declared_packs(source)
+    if packs is None:
+        packs = _packs(comfy, sorted(missing), declared)
+    #: 图上写着 `comfy-core` 的:核心节点,缺它 = 这台 ComfyUI 太老,不是要装的节点包。
+    core = {kind for kind in missing if (declared.get(kind) or {}).get("cnr_id") == CORE_CNR}
     row["node_count"] = len(source["nodes"]) if isinstance(source.get("nodes"), list) else \
         len([one for one in source.values() if isinstance(one, dict) and "class_type" in one])
     row["graph"] = graph_summary(source, object_info, set(missing))
-    row["missing_nodes"] = [{"type": name, "count": count, "packs": packs.get(name, [])}
+    row["missing_nodes"] = [{"type": name, "count": count, "core": name in core,
+                             "packs": [] if name in core else packs.get(name, [])}
                             for name, count in sorted(missing.items())]
     api: dict[str, Any] = {}
     try:
@@ -573,11 +756,9 @@ def describe(row: dict[str, Any], source: dict[str, Any], object_info: dict[str,
                     "outputs": info["outputs"], "app": app_form.summary(marks, resolved, locale)})
     elif not row.get("problem"):
         row["problem"] = say(locale, "工作流是空的", "The workflow is empty")
-    if missing and not row.get("problem"):
-        names = "、".join(sorted(missing))
-        row["problem"] = say(locale, f"这台 ComfyUI 上没有这几种节点:{names}。装上对应的节点包才跑得了",
-                             f"This ComfyUI lacks these node types: {', '.join(sorted(missing))}. "
-                             "Install the node packs that provide them to run it")
+    if missing:
+        #: 不管转不转得过来,顶部那句都说清**为什么**:装包 / 已装没加载(禁用、版本不对)/ 核心节点太老 / 认不出。
+        row["problem"] = _missing_problem(missing, packs, core, locale)
     row["models"], row["missing_models"] = _models(api, source, options)
     return row
 
@@ -588,7 +769,6 @@ def workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, A
     listing = {str(item.get("path") or ""): item for item in comfy.workflow_listing()}
     saved, others = comfy.saved_files()
     rows: list[tuple[dict[str, Any], dict[str, Any], Counter[str]]] = []
-    lacking: set[str] = set()
     for path in saved:
         item = listing.get(path) or {}
         row: dict[str, Any] = {"path": path, "size": item.get("size"), "modified": _seconds(item.get("modified")),
@@ -598,12 +778,16 @@ def workflows(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, A
         except ComfyError as exc:
             rows.append(({**row, "problem": str(exc)}, {}, Counter()))
             continue
-        missing = missing_types(source, object_info)
-        lacking |= set(missing)
-        rows.append((row, source, missing))
-    packs = _packs(comfy, sorted(lacking))
-    out = [describe(row, source, object_info, options, comfy, locale, missing=missing, packs=packs) if source else row
-           for row, source, missing in rows]
+        rows.append((row, source, missing_types(source, object_info)))
+    installed = installed_packs(comfy)
+    mappings, states, manager_known = manager_mappings(comfy), installed_states(installed), installed is not None
+    out = []
+    for row, source, missing in rows:
+        if not source:
+            out.append(row)
+            continue
+        packs = _packs_from(mappings, states, manager_known, sorted(missing), declared_packs(source))
+        out.append(describe(row, source, object_info, options, comfy, locale, missing=missing, packs=packs))
     return {
         "workflows": out,
         #: 左边那一列的文件夹树(ComfyUI 自己的侧栏也按子目录分),空的也列 —— 刚新建、还没挪进去东西的那种

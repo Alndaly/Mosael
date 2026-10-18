@@ -77,7 +77,7 @@ function library(models: ModelFile[] = [
     folders: [{ name: "loras", count: models.length }],
     models,
     missing: [{ folder: "vae", name: "ae.safetensors", url: "https://huggingface.co/x/y/resolve/main/ae.safetensors",
-                workflows: [{ id: "declaring.json", label: "declaring" }] }],
+                hash: "", hash_type: "", workflows: [{ id: "declaring.json", label: "declaring" }] }],
     download: { route: "local", note: "" },
     downloads: [],
     preview_tools: { lookup: "sha256", save: true, save_note: "" },

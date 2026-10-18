@@ -324,13 +324,16 @@ def scan_workflow(ui_graph: dict[str, Any], api: dict[str, Any] | None = None) -
             one = _declaration(spec)
             if one["name"]:
                 declared.setdefault((one["folder"], one["name"]), one)
-    return sorted(used), [one for one in declared.values() if one["name"] and one["folder"]]
+    #: 声明里没写 `directory` 的也交回(schema 允许):丢在这里的话,`workflow_library._models` 那个按名字补目录的
+    #: `by_name` 永远是空的 —— 一条真实存在的声明在界面上静默消失。目录留空串,谁说得出用它的节点在哪一格,谁补。
+    return sorted(used), [one for one in declared.values() if one["name"]]
 
 
 #: 「工作流里在用哪些文件、声明了哪些下载地址」那份记录的格式:判「在用」的规矩变了就换一个,旧的整份作废重扫。
 #: 2:声明按转出来的 API 图判在不在用(子图里提升出来的那一格,见 scan_workflow)。
 #: 3:顶层 `models` 和节点级 `properties.models` 合并(同名时节点级胜出),并带上 `hash` / `hash_type`。
-WORKFLOW_SCAN_VERSION = 3
+#: 4:没写 `directory` 的声明不再丢掉(目录由用它的节点补,补不出就空着)。
+WORKFLOW_SCAN_VERSION = 4
 
 
 def converted(ui_graph: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any] | None:
@@ -468,7 +471,13 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
     missing: dict[tuple[str, str], dict[str, Any]] = {}
     for ident, label, _used, declared in workflows:
         for spec in declared:
-            if (spec["folder"], spec["name"]) in present or not spec["url"].startswith(TRUSTED_SOURCES):
+            if not spec["url"].startswith(TRUSTED_SOURCES):
+                continue
+            if spec["folder"]:
+                if (spec["folder"], spec["name"]) in present:
+                    continue
+            elif any(name == spec["name"] for _folder, name in present):
+                #: 没写目录的声明:同名文件在**任何一个**目录里都算在(不知道它该在哪个目录,不能挑一个目录说缺)
                 continue
             found = missing.setdefault((spec["folder"], spec["name"]),
                                        {"folder": spec["folder"], "name": spec["name"], "url": spec["url"],

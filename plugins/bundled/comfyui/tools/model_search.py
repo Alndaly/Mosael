@@ -22,7 +22,9 @@ stem 一样只是扩展名不同、去掉精度后缀之后一样,或者文件�
 
 `hash` 那一项说清这一轮哈希是怎么来的(或为什么没有):`state` 是 `matched` / `none` / `unavailable`,后者带 `reason`
 (`no_tools`:那台机器没装 ComfyUI-Custom-Scripts;`no_file`:这个文件还不在那台机器上;`no_connection`:没连上那台
-ComfyUI)和一句给人看的话 —— **算不出哈希时界面必须说清「所以只是同名」,不许含糊成「确认」**。
+ComfyUI;`sites_failed`:三个站都没答上来;`no_candidates`:搜索答了、但一个候选都没有)和一句给人看的话 ——
+**算不出哈希时界面必须说清「所以只是同名」,不许含糊成「确认」;候选是空的、站又没答上来时只许说「没得核对」,
+不许说成「候选对不上」**。
 
 **排序**:同名的在前;同名里按 `folder`(要放进的模型目录,给了的话)对得上的在前,再按站(HuggingFace、ModelScope、
 Civitai),同一个站里按站点给的先后(热度 / 相关度)。近似的在后:「stem 一样 / 去掉后缀一样」比「只是含着」靠前,
@@ -79,9 +81,13 @@ from model_files import load_json, save_json
 
 #: 三档置信度(见模块说明):只有 `CONFIRMED` 允许直接下载。
 CONFIRMED, EXACT, LIKELY = "confirmed", "exact", "likely"
-#: 哈希这一项的几种状态、以及算不出来的几种原因。
+#: 哈希这一项的几种状态、以及算不出来 / 核对不了的几种原因。
 MATCHED, NO_MATCH, UNAVAILABLE = "matched", "none", "unavailable"
 NO_TOOLS, NO_FILE, NO_CONNECTION = "no_tools", "no_file", "no_connection"
+#: 三个站一个都没答上来(离线 / 全挂了):候选是空的,**不能**把「没搜成」说成「候选对不上」。
+SITES_FAILED = "sites_failed"
+#: 搜索都答了、但一个候选都没有:同样没法核对(不是「对不上」)。
+NO_CANDIDATES = "no_candidates"
 
 #: 同样贴近时的站点次序。
 SITES = ("huggingface", "modelscope", "civitai")
@@ -556,23 +562,26 @@ def _declared_hash(payload: dict[str, Any]) -> str:
     return digest
 
 
-def _hash_of(payload: dict[str, Any], comfy: Comfy | None, folder: str, name: str, locale: str) -> tuple[str, str]:
-    """(这一轮信得过的 SHA256, 没有时的原因)。先看工作流自己声明的;没有就**让那台机器算**(`lookup`,要
-    ComfyUI-Custom-Scripts,而且文件得在那台机器上)。"""
+def _hash_of(payload: dict[str, Any], comfy: Comfy | None, folder: str, name: str,
+             locale: str) -> tuple[str, str, str]:
+    """(这一轮信得过的 SHA256, 没有时的原因, 它是「工作流声明的」还是「那台机器算出的」)。
+
+    先看工作流自己声明的;没有就**让那台机器算**(`lookup`,要 ComfyUI-Custom-Scripts,而且文件得在那台机器上)。
+    两个来源要分得开:一句「对上了」得说清对的是工作流写的哈希,还是这台机器刚算出来的哈希。"""
     declared = _declared_hash(payload)
     if declared:
-        return declared, ""
+        return declared, "", "declared"
     if comfy is None:
-        return "", NO_CONNECTION
+        return "", NO_CONNECTION, ""
     if not previews.tools(comfy)["hash"]:
-        return "", NO_TOOLS
+        return "", NO_TOOLS, ""
     if not folder or not lookup.on_machine(comfy, folder, name):
-        return "", NO_FILE
+        return "", NO_FILE, ""
     try:
-        return lookup.sha256_of(comfy, folder, name, locale), ""
+        return lookup.sha256_of(comfy, folder, name, locale), "", "computed"
     except ComfyError as exc:
         #: 文件刚被挪走 / 改名(404):按「不在那台机器上」说;别的是算哈希那条路没答上。
-        return "", NO_FILE if getattr(exc, "status", 0) == 404 else NO_TOOLS
+        return "", NO_FILE if getattr(exc, "status", 0) == 404 else NO_TOOLS, ""
 
 
 def _confirm(candidates: list[Candidate], digest: str, locale: str) -> bool:
@@ -599,17 +608,44 @@ def _confirm(candidates: list[Candidate], digest: str, locale: str) -> bool:
     return hit
 
 
-def _hash_out(digest: str, matched: bool, reason: str, locale: str) -> dict[str, Any]:
-    """`hash` 那一项:这一轮哈希是怎么来的(或为什么没有)。算不出来时**说清是哪一个原因**,界面照它说明白。"""
+def _hash_out(digest: str, matched: bool, reason: str, locale: str, *, candidates: int = 1,
+              failed: list[dict[str, Any]] | tuple[Any, ...] = (), origin: str = "") -> dict[str, Any]:
+    """`hash` 那一项:这一轮哈希是怎么来的(或为什么没有)。算不出来 / 没法核对时**说清是哪一个原因**。
+
+    `candidates` / `failed` 说的是这一轮搜索本身:候选是空的、站又没答上来,就**没有东西可以核对** ——
+    不许说成「候选对不上」(那是「查过、不是」;这里只知道「没查到」)。`origin` 是 `declared`(工作流声明的)
+    还是 `computed`(那台机器算出的),「对上了」得说清对的是哪一个。"""
     if matched:
-        return {"state": MATCHED, "sha256": digest,
-                "note": say(locale, "哈希对上了:这一个就是工作流要的那个文件",
-                            "The hash matches: this is the file the workflow asks for")}
+        note = (say(locale, "工作流声明的 SHA256 对上了:这一个就是工作流要的那个文件",
+                    "The SHA256 the workflow declares matches: this is the file the workflow asks for")
+                if origin == "declared" else
+                say(locale, "那台机器算出的 SHA256 对上了:这一个就是工作流要的那个文件",
+                    "The SHA256 computed on that machine matches: this is the file the workflow asks for")
+                if origin == "computed" else
+                say(locale, "哈希对上了:这一个就是工作流要的那个文件",
+                    "The hash matches: this is the file the workflow asks for"))
+        return {"state": MATCHED, "sha256": digest, "note": note}
+    if candidates <= 0:
+        #: 没有候选:不是「对不上」,是「没得对」。站没答上来 / 搜完一个都没有,分开说。
+        if failed:
+            notes = (say(locale, "搜索的站都没答上来(没连上 / 超时 / 被拒),没搜到候选:不知道有没有这个文件,也没法核对哈希",
+                         "None of the search sites answered (unreachable / timed out / refused), so there are no candidates: "
+                         "whether this file exists is unknown, and no hash can be checked"),
+                     SITES_FAILED)
+        else:
+            notes = (say(locale, "这次搜索没搜到候选:不知道有没有这个文件,也没法核对哈希",
+                         "This search found no candidates: whether this file exists is unknown, and no hash can be checked"),
+                     NO_CANDIDATES)
+        return {"state": UNAVAILABLE, "reason": notes[1], "note": notes[0]}
     if digest:
-        return {"state": NO_MATCH, "sha256": digest,
-                "note": say(locale, "算出了这个文件的 SHA256,但下面的候选没有一个对得上:只能是同名,不是确认过的那个文件",
-                            "A SHA256 was available, but none of the candidates below matches it: these are name matches, "
-                            "not the confirmed file")}
+        said = (say(locale, "工作流声明的 SHA256 和下面的候选没有一个对得上:这些只是同名,不是确认过的那个文件",
+                    "The SHA256 the workflow declares matches none of the candidates: these are name matches, not the "
+                    "confirmed file")
+                if origin == "declared" else
+                say(locale, "算出了这个文件的 SHA256,但下面的候选没有一个对得上:这些只是同名,不是确认过的那个文件",
+                    "A SHA256 was computed, but none of the candidates matches it: these are name matches, not the "
+                    "confirmed file"))
+        return {"state": NO_MATCH, "sha256": digest, "note": said}
     notes = {
         NO_TOOLS: ("这台机器没装 ComfyUI-Custom-Scripts,算不出 SHA256:下面的候选只是同名,不是确认过的那个文件",
                    "This machine has no ComfyUI-Custom-Scripts, so no SHA256 can be computed: the candidates below are name "
@@ -637,13 +673,14 @@ def search(payload: dict[str, Any], comfy: Comfy | None, locale: str) -> dict[st
         results = list(pool.map(lambda site: site.run(), sites))
     cache.save()
     #: 三档里最高的那一档:有哈希就试着认到 `confirmed`,没有就如实说为什么没有(见模块说明)。
-    digest, reason = _hash_of(payload, comfy, folder, filename, locale)
+    digest, reason, origin = _hash_of(payload, comfy, folder, filename, locale)
     found = [one for found, _ in results for one in found]
     matched = _confirm(found, digest, locale) if digest else False
     candidates = rank(found, folder)
+    failed = [{"source": site.name, "message": message} for site, (_, message) in zip(sites, results) if message]
     return {
         "filename": filename,
         "candidates": [one.out() for one in candidates],
-        "failed": [{"source": site.name, "message": message} for site, (_, message) in zip(sites, results) if message],
-        "hash": _hash_out(digest, matched, reason, locale),
+        "failed": failed,
+        "hash": _hash_out(digest, matched, reason, locale, candidates=len(candidates), failed=failed, origin=origin),
     }

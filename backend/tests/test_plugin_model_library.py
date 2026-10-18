@@ -98,6 +98,10 @@ elif op == "library":
         ],
         "missing": [{"folder": "vae", "name": "ae.safetensors",
                      "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors",
+                     "hash": "ab" * 32, "hash_type": "sha256",
+                     "workflows": [{"id": "wf.json", "label": "人像"}]},
+                    {"folder": "", "name": "mystery.safetensors",
+                     "url": "https://huggingface.co/x/y/resolve/main/mystery.safetensors",
                      "workflows": [{"id": "wf.json", "label": "人像"}]},
                     {"folder": "vae", "name": "bad", "url": "file:///etc/passwd"}],
         "download": {"route": "manager", "note": "经 ComfyUI-Manager 下载"},
@@ -412,9 +416,17 @@ def test_列出插件报的模型_宿主规整字段_预览图换成宿主的地
     assert f"127.0.0.1:{previews.port}" not in text, "插件那一头的地址不交给界面:界面拿宿主的预览地址"
     assert "secret-for-previews" not in text, "取预览图用的凭据不能出现在给界面的回答里"
     assert body["download"] == {"route": "manager", "note": "经 ComfyUI-Manager 下载"}
-    assert body["missing"] == [{"folder": "vae", "name": "ae.safetensors",
-                                "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors",
-                                "workflows": [{"id": "wf.json", "label": "人像"}]}], "不是 http(s) 的声明地址不列"
+    assert body["missing"] == [
+        {"folder": "vae", "name": "ae.safetensors",
+         "url": "https://huggingface.co/x/y/resolve/main/ae.safetensors",
+         "hash": "ab" * 32, "hash_type": "sha256",
+         "workflows": [{"id": "wf.json", "label": "人像"}]},
+        {"folder": "", "name": "mystery.safetensors",
+         "url": "https://huggingface.co/x/y/resolve/main/mystery.safetensors",
+         "hash": "", "hash_type": "",
+         "workflows": [{"id": "wf.json", "label": "人像"}]},
+    ], "不是 http(s) 的声明地址不列;工作流声明的哈希带着;没写目录的声明也不丢(folder 空着)"
+
     assert body["downloads"] == []
 
 

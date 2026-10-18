@@ -13,6 +13,37 @@ import { cn } from "@/lib/utils";
 
 type Translate = ReturnType<typeof useI18n>;
 
+/** 图上要的那一版和装着的那一版:装的旧是「升级」、装的新是「降级」;比不了(git commit / 缺一个)是空串。 */
+const SEMVER = /^[vV]?(\d+)\.(\d+)\.(\d+)/;
+function versionRelation(wanted: string, installed: string): "upgrade" | "downgrade" | "same" | "" {
+  const left = SEMVER.exec(wanted.trim());
+  const right = SEMVER.exec(installed.trim());
+  if (!left || !right) return "";
+  const want = [Number(left[1]), Number(left[2]), Number(left[3])];
+  const have = [Number(right[1]), Number(right[2]), Number(right[3])];
+  const order = want.findIndex((value, index) => value !== have[index]);
+  if (order < 0) return "same";
+  return want[order] > have[order] ? "upgrade" : "downgrade";
+}
+
+/** 一个节点包那一行的灰字:不知道 / 没装 / 装了但被禁用 / 要哪一版装的是哪一版 / 装了没加载。 */
+function packNote(t: Translate, pack: WorkflowNodePack): string {
+  if (pack.state === "unknown") return t("workflowPackUnknownInstall");
+  if (!pack.installed) return t("workflowPackNotInstalled");
+  if (!pack.enabled) return t("workflowPackDisabled");
+  const relation = pack.wanted_is_commit ? "" : versionRelation(pack.wanted_version ?? "", pack.installed_version ?? "");
+  if (relation === "upgrade") {
+    return t("workflowPackVersionUpgrade").replace("{wanted}", pack.wanted_version).replace("{installed}", pack.installed_version);
+  }
+  if (relation === "downgrade") {
+    return t("workflowPackVersionDowngrade").replace("{wanted}", pack.wanted_version).replace("{installed}", pack.installed_version);
+  }
+  if (pack.wanted_is_commit && pack.wanted_version) {
+    return t("workflowPackVersionCommit").replace("{version}", pack.wanted_version);
+  }
+  return t("workflowPackInstalledNotLoaded");
+}
+
 /** 一张工作流「是什么样」的那几样:工作流库的详情、导入前的预览是同一份。 */
 export type WorkflowFactsSource = Pick<WorkflowFile, "models" | "missing_nodes" | "missing_models">;
 
@@ -83,26 +114,29 @@ export function WorkflowFacts({
         <LibrarySection title={t("workflowMissingNodes")} count={facts.missing_nodes?.length}>
           <ul className={FACT_LIST}>
             {(facts.missing_nodes ?? []).map((one) => (
-              <li key={one.type} data-missing-node="" className="grid min-w-0 pb-1">
-                <FactLine primary={one.type} meta={`×${one.count}`} />
-                {/* 节点 → 出自哪几个节点包:缩进一级、左边一道细线,一眼看出这几行属于上面那个节点 */}
-                <ul data-node-packs="" className="m-0 ml-1.5 grid list-none border-l border-divider p-0 pl-3">
-                  {(one.packs?.length ?? 0) > 0 ? (
-                    (one.packs ?? []).map((pack) => (
-                      <FactRow
-                        key={pack.id}
-                        data-node-pack=""
-                        primary={pack.title}
-                        hint={pack.id !== pack.title ? pack.id : undefined}
-                        secondary={pack.installed ? t("workflowPackInstalledNotLoaded") : t("workflowPackNotInstalled")}
-                        warn={pack.installed}
-                        action={packAction ? packAction(pack) : undefined}
-                      />
-                    ))
-                  ) : (
-                    <FactRow data-node-pack="" primary={t("workflowPackUnknown")} muted action={packAction ? null : undefined} />
-                  )}
-                </ul>
+              <li key={one.type} data-missing-node="" data-missing-core={one.core ? "" : undefined} className="grid min-w-0 pb-1">
+                <FactLine primary={one.type} meta={`×${one.count}`}
+                          secondary={one.core ? t("workflowMissingCore") : undefined} warn={one.core} />
+                {/* 核心节点(图上写着 comfy-core):不是缺插件,是这台 ComfyUI 太老 —— 不列节点包,也不给「装上」。 */}
+                {!one.core && (
+                  <ul data-node-packs="" className="m-0 ml-1.5 grid list-none border-l border-divider p-0 pl-3">
+                    {(one.packs?.length ?? 0) > 0 ? (
+                      (one.packs ?? []).map((pack) => (
+                        <FactRow
+                          key={pack.id}
+                          data-node-pack=""
+                          primary={pack.title}
+                          hint={pack.id !== pack.title ? pack.id : undefined}
+                          secondary={packNote(t, pack)}
+                          warn={pack.installed}
+                          action={packAction ? packAction(pack) : undefined}
+                        />
+                      ))
+                    ) : (
+                      <FactRow data-node-pack="" primary={t("workflowPackUnknown")} muted action={packAction ? null : undefined} />
+                    )}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
@@ -117,12 +151,17 @@ export function WorkflowFacts({
                 key={`${one.folder}/${one.name}`}
                 data-missing-model=""
                 primary={one.name}
-                meta={one.folder}
+                meta={one.folder || t("workflowMissingModelUnknownFolder")}
                 secondary={one.url ? new URL(one.url).host : t("workflowMissingModelNoUrl")}
                 action={
                   onShowModel ? (
                     <Button variant="outline" size="xs" aria-label={t("workflowDownloadInModelLibrary").replace("{name}", one.name)}
-                            onClick={() => onShowModel({ download: { folder: one.folder, name: one.name, ...(one.url ? { url: one.url } : {}) } })}>
+                            onClick={() => onShowModel({ download: {
+                              folder: one.folder, name: one.name,
+                              ...(one.url ? { url: one.url } : {}),
+                              //: 工作流自己声明的 SHA256:下载时一路带到插件,下完再算一遍对一对(见 ModelLibrary)。
+                              ...(one.hash ? { hash: one.hash, hashType: one.hash_type ?? "" } : {}),
+                            } })}>
                       <Download size={12} />
                       {t("modelMissingDownload")}
                     </Button>
