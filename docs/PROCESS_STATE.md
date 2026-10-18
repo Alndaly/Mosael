@@ -102,10 +102,6 @@
 重启即重建,多进程下各算各的 —— 代价只是多算一遍。**这一类不构成部署约束**,列在这里是为了
 让上面三类的边界清楚:不是所有模块级字典都是问题。
 
-- `app/media/resolvers/__init__.py:_resolvers`、`app/media/resolvers/__init__.py:_lock` —
-  「页面 → 媒体地址」的站点 resolver 注册表(现在为空),以及登记它时用的那把锁。注册发生在
-  import 时(以后每个站点一个模块),重启就按同一份代码重建;多进程下各有一份同样的表。它不存
-  用户数据,也不改变「能不能起第二个进程」的答案。
 - `app/ai/model_catalog.py:_cache`、`app/ai/model_catalog.py:_refreshing` — 供应商模型清单,带 TTL。
 - `app/ai/runtime/remote_size.py:_cache`、`app/ai/runtime/remote_size.py:_refreshing` — 远端权重体积。
 - 引擎就绪探测:`app/ai/runtime/tts_models.py:_probes`、`app/ai/runtime/asr_models.py:_probes`、

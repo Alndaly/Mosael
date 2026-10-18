@@ -3133,48 +3133,6 @@
         }
       }
     },
-    "/api/assets/import-image-url": {
-      "post": {
-        "tags": [
-          "assets"
-        ],
-        "summary": "Import Image From Url",
-        "description": "贴一条图片直链,收进素材库。\n\n复用截图那条路的三道闸:出站检查(每一跳)、40 MiB 上限、文件头认格式。落盘/探测/缩略图\n走 `importer.import_binary_asset`;出处记成 `source_url`。同步完成 —— 一张图不值得为它排\n一个后台任务,用户点完就该在素材库里看到。",
-        "operationId": "import_image_from_url_api_assets_import_image_url_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImageUrlImportRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AssetOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/assets/import-local": {
       "post": {
         "tags": [
@@ -37306,50 +37264,6 @@
         ],
         "title": "HookRunOut",
         "description": "外部系统看到的一次运行。进度与说明取自背后那个任务(按请求的 Accept-Language 说)。"
-      },
-      "ImageUrlImportRequest": {
-        "properties": {
-          "workspace_id": {
-            "type": "string",
-            "title": "Workspace Id"
-          },
-          "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Project Id"
-          },
-          "url": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 4,
-            "title": "Url"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "workspace_id",
-          "url"
-        ],
-        "title": "ImageUrlImportRequest",
-        "description": "贴一条图片直链,收进素材库(和内嵌浏览器采集那条路同一套闸)。"
       },
       "InsertClipRequest": {
         "properties": {
