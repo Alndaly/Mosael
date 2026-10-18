@@ -36,7 +36,7 @@ from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import clean_group
 #: 工具名的规矩和清单里声明的工具是同一条(见 manifest.TOOL_NAME_RE)。
 from app.domain.plugins.manifest import TOOL_NAME_RE, TOOLS
-from app.domain.plugins.runtime import PluginRuntimeError
+from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,11 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
     if inst.blocked_reason(db, instance) or not (refresh or not previous.get("refreshed_at")):
         return
     try:
-        output = tools.invoke_host(db, instance.id, TOOLS, {"op": "tools"}, timeout=CATALOG_TIMEOUT_SECONDS, record=False)
+        output = tools.invoke_host(
+            db, instance.id, TOOLS, {"op": "tools"}, timeout=CATALOG_TIMEOUT_SECONDS, record=False,
+            #: 一整份工具清单不是一次普通调用:模型很多的那台 ComfyUI 上它有 1MB 以上(见 runtime.CATALOG_OUTPUT_BYTES)。
+            output_budget=CATALOG_OUTPUT_BYTES,
+        )
         raw = output.get("tools")
         if not isinstance(raw, list):
             raise PluginDomainError("pluginErr_toolsBadShape", name=instance.name, shape='{"tools": [...]}')

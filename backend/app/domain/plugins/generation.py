@@ -30,7 +30,7 @@ from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.groups import clean_group
 from app.domain.plugins.manifest import GENERATION
 from app.domain.plugins.moves import Moves, clean_moves
-from app.domain.plugins.runtime import StreamHooks
+from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, StreamHooks
 
 #: 问一次模型清单最多等多久。一台 ComfyUI 上百张工作流,每张拉一次图 —— 本机/局域网上几秒的事。
 CATALOG_TIMEOUT_SECONDS = 60.0
@@ -105,7 +105,11 @@ _MAX_FINGERPRINT = 200
 
 def catalog(db: Session, instance: PluginInstance) -> Catalog:
     """问这个实例现在有哪些模型。认不出的条目**丢掉**,不让一条坏条目拖垮整份清单。"""
-    output = tools.invoke_host(db, instance.id, GENERATION, {"op": "models"}, timeout=CATALOG_TIMEOUT_SECONDS, record=False)
+    output = tools.invoke_host(
+        db, instance.id, GENERATION, {"op": "models"}, timeout=CATALOG_TIMEOUT_SECONDS, record=False,
+        #: 一整份模型清单(每张工作流的参数 schema 都在里面)和工具清单是同一类回答,同一份预算。
+        output_budget=CATALOG_OUTPUT_BYTES,
+    )
     raw = output.get("models")
     if not isinstance(raw, list):
         raise PluginDomainError("pluginErr_generationBadModels", name=instance.name, shape='{"models": [...]}')

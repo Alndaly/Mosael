@@ -580,8 +580,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The plugin process exited with code {code} without giving a reason.",
     },
     "pluginErr_outputTooLarge": {
-        "zh": "插件输出超过大小限制 (1MB)",
-        "en": "The plugin output exceeds the size limit (1 MB).",
+        #: 不再是「超过大小限制 (1MB)」那一句:那句话说不清是哪个工具、多大、下一步做什么,用户看了只能猜。
+        #: 参数是工具名(含 op,如 `comfyui_generation · tools`)、允许的上限、这次实际读到的量(见 runtime._size_text)。
+        "zh": "插件「{tool}」这一次的输出超过了 {limit} 的上限(实际已读到 {size}),这一份没有收下。"
+              "下一步:到插件页点「刷新」再试一次;还不行就减少这台服务器上的模型 / 工作流数量,或者升级 Mosael。",
+        "en": "The plugin call “{tool}” produced more than the {limit} limit ({size} read), so this response was not "
+              "accepted. Next: click Refresh on the Plugins page and try again; if it still fails, reduce the number "
+              "of models / workflows on this server, or upgrade Mosael.",
     },
     "pluginErr_outputNotJson": {
         "zh": "插件输出不是合法 JSON: {tail}",

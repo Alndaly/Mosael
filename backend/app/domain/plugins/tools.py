@@ -475,12 +475,16 @@ def _run_process(
     timeout: float | None,
     take_slot: bool,
     notify: bool,
+    output_budget: int | None = None,
 ) -> dict[str, Any]:
     """进程插件跑一次:素材换成暂存目录里的副本、注入这个连接的配置与凭据、跑子进程(给了 `hooks` 就走流式)、落 state。
 
     **两条入口共用这一段**(ADR 0033 §3):智能体、工作流、插件页走 `invoke`,宿主自己的入口走 `invoke_host`。
     素材也只有一道暂存(`inputs.materialize`):调用方给的素材 id,和宿主入口手上的文件(`files`)。此前宿主那条
     自己拷文件、自己把路径塞进 payload,插件工具因此分成了两种。
+
+    `output_budget` 只给**目录类回答**(见 runtime.CATALOG_OUTPUT_BYTES),一问一答那条路才有意义:
+    流式回答是一行一行读的,每行另有上限(见 runtime.stream_tool)。不给就是普通工具的 1MB。
     """
     # 连接背后是宿主起停的本机服务(ADR 0041):停着就先替它起进程(任务里报一句进度),等它就绪在交还连接之后
     # (_plugin_slot)。拿回来的变量告诉插件「这台服务器归宿主管」(装完节点要重启时请宿主重启,不自己去重启它)。
@@ -502,7 +506,11 @@ def _run_process(
                     Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, hooks=hooks, **run_kwargs,
                 )
             else:
-                result = execute_tool(Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, **run_kwargs)
+                #: 目录类预算只走一问一答;流式那条每行另有上限(见 runtime.stream_tool)。
+                result = execute_tool(
+                    Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env,
+                    **run_kwargs, **({"output_budget": output_budget} if output_budget is not None else {}),
+                )
     except (PluginRuntimeError, PluginDomainError) as exc:
         # 背后是本机服务、而它此刻用不了(停了、在起、起不来、进程在却不应答):原因按它的状态说 —— 插件那句「连不上,
         # 确认它在运行、地址填对」只适合「连一台服务器」。它好好的就照插件说的(工作流本身的错)
@@ -546,6 +554,7 @@ def invoke_host(
     collect: Callable[[dict[str, Any], Path], dict[str, Any]] | None = None,
     hooks: StreamHooks | None = None,
     timeout: float | None = None,
+    output_budget: int | None = None,
     record: bool,
 ) -> dict[str, Any]:
     """**宿主自己的入口**调一次认领了 `capability` 的那个工具。和 `invoke` 跑的是同一段(`_run_process`):
@@ -561,6 +570,10 @@ def invoke_host(
     - `prepare(暂存目录)` **只给目录类能力**(生成):它的输入是一串带角色的文件,不是工具入参里的素材格子。
 
     `timeout` 不给就用工具自己声明的预算。
+
+    `output_budget` 只给**目录类回答**(工具清单、模型清单:这台服务器此刻有什么的一整份目录,见
+    runtime.CATALOG_OUTPUT_BYTES)。普通工具调用不给 —— 1MB 那条线照旧,别的工具的输出一个字都不受影响。
+    超过预算仍然整份不收,不截断;错误里说得出是哪个工具、实际读到多大、下一步怎么办。
 
     `record` **每个调用处都要明说**(没有缺省):`True` 留一条调用记录,`False` 不留。问目录、问描述的那些(工具清单、
     模型清单、指纹、explain、模型库 / 工作流库的读)不是一次「调用」,而它们的输出常常是整份清单 —— 一份 ComfyUI 工具清单
@@ -596,6 +609,7 @@ def invoke_host(
         output = _run_process(
             db, instance, manifest, tool, sent, scratch, injected, egress=plugin_egress.resolve(db, instance, manifest),
             workspace_id=None, files=files, hooks=hooks, timeout=budget, take_slot=hooks is None, notify=False,
+            output_budget=output_budget,
         )
         recorded = collect(output, scratch) if collect is not None else output
         invocation.status, invocation.output = "succeeded", recorded

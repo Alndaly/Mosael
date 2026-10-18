@@ -78,7 +78,47 @@ def data_dir_for(package_id: str) -> Path:
 
     safe = "".join(ch if ch.isalnum() or ch in "-_." else "-" for ch in package_id).strip(".") or "plugin"
     return settings.data_dir / "plugin-data" / safe
+
+
+#: 一次**普通**插件工具调用的输出上限(按字符计,见 core.child_process 的 `max_stdout`)。插件协议是一问一答:
+#: stdout 是一个 JSON。一个坏插件往 stdout 打起来,不设上限就会在超时之前把后端内存撑爆 —— 所以读到上限就停下,
+#: 报 pluginErr_outputTooLarge,而不是截断收一半。
 MAX_OUTPUT_BYTES = 1_000_000
+
+#: **目录类回答**(工具清单、模型清单)的预算。它们不是「一次工具调用」,而是「这台服务器此刻有什么」的一整份目录。
+#:
+#: 撞过的那一次(维护者截图):远端 ComfyUI 连接显示「出错了 · 已开启 0/7 个工具」,原因只有一句
+#: 「插件输出超过大小限制 (1MB)」。撞线的是 `{"tool":"comfyui_generation","input":{"op":"tools"}}`(以及同一批
+#: schema 的 `{"op":"models"}`),不是某次生成。重复的大表已经由 shared_tables 只搬一次(673bd0b7d);剩下的字节是
+#: **真正不同的内容** —— 一台模型很多的 ComfyUI 上,每张工作流的 schema 都带着几万项的下拉(LoRA / 大模型 / VAE…)。
+#: 对着假 ComfyUI 量:30,000 个模型文件、7 个工具,`/object_info` 1.28MB,tools 回答共享之后仍 1.35MB。
+#:
+#: ADR 0044 修订否掉了「在插件那一侧把长下拉删掉」:工作流节点、画板、插件页「试一下」的表单读的就是这份 schema,
+#: 下拉必须整张。所以在目录**形状**不变的前提下,只能让这一类回答有自己的、仍然有限的预算。
+#:
+#: 为什么是 8MB:42 个工具(维护者那台)共享后约 560KB,8MB 是这个规模的十几倍,给模型多一个数量级也装得下;
+#: 同时它仍有界 —— 宿主读到预算 + 下面那条余量就停,解析一次峰值在百 MB 量级,不会把一个坏插件写成几 GB。
+#: **不是无限**:超过 8MB 的目录仍然整份不收(绝不截断),报错说清是哪个工具、实际读到多大、下一步怎么办。
+CATALOG_OUTPUT_BYTES = 8_000_000
+
+#: 目录类回答读的时候比预算多留的一截。只为把「实际多大」写进错误,而不是只说「超了」;它同时是**硬止损**:
+#: 连这一截都读满了就停下,不再往内存里收。普通工具调用没有这一截 —— 读到 1MB 就停,和以前一样。
+CATALOG_OVERFLOW_READ_BYTES = 8_000_000
+
+
+def _size_text(characters: int) -> str:
+    """给错误文案看的量:1,350,000 → "1.4 MB"(和 MAX_OUTPUT_BYTES 同一种十进制口径)。"""
+    if characters >= 1_000_000:
+        return f"{characters / 1_000_000:.1f} MB"
+    if characters >= 1_000:
+        return f"{characters / 1_000:.0f} KB"
+    return f"{characters}"
+
+
+def _call_text(tool_name: str, input_payload: dict[str, Any]) -> str:
+    """这次调的是谁:`comfyui_generation · tools`。只说工具名的话,一个插件几十个 op 时看不出是哪一问撞的。"""
+    op = input_payload.get("op") if isinstance(input_payload, dict) else None
+    return f"{tool_name} · {op}" if isinstance(op, str) and op.strip() else tool_name
 
 
 class PluginRuntimeError(LocalizedError, RuntimeError):
@@ -196,6 +236,7 @@ def execute_tool(
     timeout: float = PLUGIN_TIMEOUT_SECONDS,
     data_dir: Path | None = None,
     egress: Egress = UNDECIDED,
+    output_budget: int | None = None,
 ) -> ToolResult:
     """Run the plugin entry once. Returns the tool output dict; raises
     PluginRuntimeError with an actionable message on any failure.
@@ -206,8 +247,14 @@ def execute_tool(
 
     `scratch_dir` 是这次调用的产出目录:插件要交出一个文件时写在那儿,路径经
     MOSAEL_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
-    所以搬字节这件事得另开一条路。"""
+    所以搬字节这件事得另开一条路。
+
+    `output_budget`:这一次的输出上限,**只给目录类回答**(工具清单 / 模型清单,见 CATALOG_OUTPUT_BYTES)。
+    不给就还是 MAX_OUTPUT_BYTES —— 普通工具调用一个字节都不放宽。"""
     entry_path = resolve_entry(plugin_dir, entry)
+    budget = MAX_OUTPUT_BYTES if output_budget is None else max(1, int(output_budget))
+    #: 目录类回答多留一截,只为超预算时说得清「实际多大」;普通调用读到预算就停(和以前一样)。
+    read_limit = budget + (CATALOG_OVERFLOW_READ_BYTES if output_budget is not None else 0)
     #: **这次调用要说哪种语言。** 清单里的文案我们替它挑(见 manifest.text_of),但工具**跑出来**
     #: 的那些字(摘要、失败原因、枚举出来的项目名)只有插件自己写得出 —— 不告诉它读的人用什么
     #: 语言,它就只能压一种。请求体和环境变量都给一份:进程插件读哪个都行,而 MCP 那条只有环境变量。
@@ -232,12 +279,15 @@ def execute_tool(
             # 自成一组:超时、取消停的是整棵进程树(见 _CancelSwitch)。
             group=True,
             # 读到上限就停下它:整个读进内存再比,一个死循环打字的插件能在超时前撑爆后端。
-            max_stdout=MAX_OUTPUT_BYTES,
+            max_stdout=read_limit,
             on_child=_attach_to(job_id, attached) if job_id else None)
     except subprocess.TimeoutExpired as exc:
         raise PluginTimeout("pluginErr_timeout", seconds=f"{timeout:g}") from exc
     except ProcessOutputLimitExceeded as exc:
-        raise PluginRuntimeError("pluginErr_outputTooLarge") from exc
+        raise PluginRuntimeError(
+            "pluginErr_outputTooLarge", tool=_call_text(tool_name, input_payload),
+            limit=_size_text(budget), size=_size_text(read_limit),
+        ) from exc
     finally:
         for switch in attached:
             detach_job_child(switch.job_id, switch)
@@ -253,8 +303,12 @@ def execute_tool(
             raise PluginRuntimeError("pluginErr_processExitNoReason", code=result.returncode)
         raise PluginRuntimeError("pluginErr_processExit", code=result.returncode, detail=why)
     stdout = result.stdout.strip()
-    if len(stdout) > MAX_OUTPUT_BYTES:
-        raise PluginRuntimeError("pluginErr_outputTooLarge")
+    if len(stdout) > budget:
+        # 目录类回答预算比读的上限小:读全了才知道「实际多大」,这一句才说得出数(普通调用到不了这里)。
+        raise PluginRuntimeError(
+            "pluginErr_outputTooLarge", tool=_call_text(tool_name, input_payload),
+            limit=_size_text(budget), size=_size_text(len(stdout)),
+        )
     try:
         response = json.loads(stdout)
     except json.JSONDecodeError as exc:
