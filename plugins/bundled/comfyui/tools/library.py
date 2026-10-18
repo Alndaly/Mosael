@@ -54,8 +54,12 @@ from model_files import norm as _norm
 METADATA_WORKERS = 4
 #: 列表里一个文件最多带几个触发词(全部的在详情里)。
 LIST_TRIGGERS = 5
-#: 一次回答的上限是 1 MB(宿主的规矩);留点余量。几千个文件时先削触发词和「在用的工作流」。
-OUTPUT_BUDGET = 900_000
+#: 一次回答的上限 = 宿主的**目录类预算**(`runtime.CATALOG_OUTPUT_BYTES`,8MB)。两边是同一条线:这里曾经自己
+#: 削到 900KB(旧 1MB 的九成),宿主后来把目录类回答(工具清单 / 模型清单 / 模型库 / 工作流库 / 节点包 / 音色清单)
+#: 放宽到 8MB —— 不跟着抬的话,模型一多就先被这里削掉,宿主放宽了也拿不到整份。
+#: **仍然有界**:超过这条线时先削可选的装饰(触发词、「在用的工作流」、标题、预览文件);模型条目本身一条都不删 ——
+#: 真的超过 8MB 就整份交给宿主,由它整份不收并说清(见 _within_budget 与 runtime.CATALOG_OUTPUT_BYTES)。
+OUTPUT_BUDGET = 8_000_000
 #: 详情里训练标签最多列几个。
 DETAIL_TAGS = 100
 
@@ -512,11 +516,17 @@ def library(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any
         out["preview_base"] = f"{comfy.base}/experiment/models/preview/"
         if comfy.headers:
             out["preview_headers"] = dict(comfy.headers)
-    return _within_budget(out, locale)
+    return _within_budget(out)
 
 
-def _within_budget(out: dict[str, Any], locale: str) -> dict[str, Any]:
-    """一次回答最多 1 MB。几千个文件时先削触发词、「在用的工作流」、标题,还不够就只列前面的,并说一句。"""
+def _within_budget(out: dict[str, Any]) -> dict[str, Any]:
+    """一次回答最多 8MB(和宿主的目录类预算同一条线)。几千个文件时先削可选的装饰(触发词、「在用的工作流」、
+    标题、预览文件)。
+
+    **模型条目一条都不删。** 以前这里还会把 `models` 砍掉一截并说一句「只列出了前 N 个」:那就是插件自己先削,
+    用户看到的是一份缺了的清单,宿主那道 8MB 的闸永远看不到真实大小。现在超过 8MB 就整份交回去,由宿主整份不收,
+    文案说清是哪一问、上限多大、实际读到多大、下一步怎么办(见 runtime.CATALOG_OUTPUT_BYTES)。
+    """
     def size() -> int:
         return len(json.dumps(out, ensure_ascii=False).encode("utf-8"))
 
@@ -527,10 +537,6 @@ def _within_budget(out: dict[str, Any], locale: str) -> dict[str, Any]:
             entry.pop(trim, None)
             if trim == "triggers":
                 entry.pop("triggers_source", None)
-    while size() > OUTPUT_BUDGET and out["models"]:
-        out["models"] = out["models"][: int(len(out["models"]) * 0.8)]
-    note = say(locale, f"文件太多,只列出了前 {len(out['models'])} 个", f"Too many files; only the first {len(out['models'])} are listed")
-    out["download"] = {**out["download"], "note": f"{out['download'].get('note', '')} {note}".strip()}
     return out
 
 

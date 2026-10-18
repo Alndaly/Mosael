@@ -85,9 +85,11 @@ def data_dir_for(package_id: str) -> Path:
 #: 报 pluginErr_outputTooLarge,而不是截断收一半。
 MAX_OUTPUT_BYTES = 1_000_000
 
-#: **目录类回答**(工具清单、模型清单、模型库、工作流库)的预算。它们不是「一次工具调用」,而是「这台服务器此刻有什么」的
-#: 一整份目录。四处调用点:`dynamic_tools.refresh`(`op tools`)、`generation.catalog`(`op models`)、
-#: `model_library.library`(`op library`)、`workflow_library.library`(`op workflows`)。
+#: **目录类回答**(工具清单、模型清单、模型库、工作流库、节点包、音色清单)的预算。它们不是「一次工具调用」,而是
+#: 「这台服务器此刻有什么」的一整份目录。六处调用点:`dynamic_tools.refresh`(`op tools`)、`generation.catalog`
+#: (`op models`)、`model_library.library`(`op library`)、`workflow_library.library`(`op workflows`)、
+#: `workbench_agent.node_packs`(`op node_packs`:装了哪些节点包,每个最多 60 个类型)、
+#: `voices.engine_catalog._plugin_voices`(`op voices`:这个引擎 / 账号里能念的音色)。
 #:
 #: 撞过的那一次(维护者截图):远端 ComfyUI 连接显示「出错了 · 已开启 0/7 个工具」,原因只有一句
 #: 「插件输出超过大小限制 (1MB)」。撞线的是 `{"tool":"comfyui_generation","input":{"op":"tools"}}`(以及同一批
@@ -108,6 +110,9 @@ MAX_OUTPUT_BYTES = 1_000_000
 #: (字符)—— `tools` 已经在这台机器上跑得通,同机的 `workflows` 比它还小,所以 8MB 对 116 工具那台够用
 #: (见 tests/test_comfyui_remote_libraries_fit_the_output_limit.py;335 张重的才 7,467,329 字符 / 7,997,299 字节,
 #: 500 张才 11,145,179 / 11,936,179 —— 预算按字符算,见 execute_tool)。
+#: 后补的两处也对假的远端量过:1,600 个节点包 × 每个 60 个类型、名字够长,`op node_packs` 2,853,882 字节
+#: (旧 1MB 收不下);20,000 个音色的 `op voices` 1,320,037 字节。两处都在 8MB 以内
+#: (见 tests/test_catalog_budget_covers_node_packs_and_voices.py)。
 #: 同时它仍有界 —— 宿主读到预算 + 下面那条余量就停,解析一次峰值在百 MB 量级,不会把一个坏插件写成几 GB。
 #: **不是无限**:超过 8MB 的目录仍然整份不收(绝不截断),报错说清是哪个工具、实际读到多大、下一步怎么办。
 CATALOG_OUTPUT_BYTES = 8_000_000
@@ -260,7 +265,8 @@ def execute_tool(
     MOSAEL_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
     所以搬字节这件事得另开一条路。
 
-    `output_budget`:这一次的输出上限,**只给目录类回答**(工具清单 / 模型清单 / 模型库 / 工作流库,见 CATALOG_OUTPUT_BYTES)。
+    `output_budget`:这一次的输出上限,**只给目录类回答**(工具清单 / 模型清单 / 模型库 / 工作流库 / 节点包 / 音色清单,
+    见 CATALOG_OUTPUT_BYTES)。
     不给就还是 MAX_OUTPUT_BYTES —— 普通工具调用一个字节都不放宽。"""
     entry_path = resolve_entry(plugin_dir, entry)
     budget = MAX_OUTPUT_BYTES if output_budget is None else max(1, int(output_budget))

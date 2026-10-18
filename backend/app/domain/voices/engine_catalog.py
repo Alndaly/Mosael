@@ -213,11 +213,14 @@ def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, o
 def _plugin_voices(db: Session, provider) -> list[dict[str, str]]:
     """插件连接能念的音色(`op: voices`)。问不到就是空清单,原因记进日志 —— 一个坏插件不该让引擎下拉整个拉不出来。"""
     from app.domain.plugins.errors import PluginDomainError
-    from app.domain.plugins.runtime import PluginRuntimeError
+    from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError
     from app.domain.plugins.tools import invoke_host
 
     try:
-        output = invoke_host(db, provider.id, SPEECH, {"op": "voices"}, record=False)
+        #: 音色清单是**目录类回答**(这个引擎 / 账号里能念的音色,随音色数线性变大):和工具清单 / 模型清单 /
+        #: 模型库 / 工作流库 / 节点包同一份预算(见 runtime.CATALOG_OUTPUT_BYTES)。别的插件调用一个字节都没放宽。
+        output = invoke_host(db, provider.id, SPEECH, {"op": "voices"}, record=False,
+                             output_budget=CATALOG_OUTPUT_BYTES)
     except (PluginDomainError, PluginRuntimeError) as exc:
         logger.info("speech plugin %s voices unavailable: %s", provider.id, exc)
         return []

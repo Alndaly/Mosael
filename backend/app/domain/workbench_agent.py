@@ -29,7 +29,7 @@ from app.db.models import PluginInstance, User
 from app.domain import browser
 from app.domain.permissions import ensure_workspace_access
 from app.domain.plugins import instances as inst
-from app.domain.plugins import tools
+from app.domain.plugins import runtime, tools
 from app.domain.plugins.manifest import WORKFLOW_LIBRARY
 
 #: 问插件的上限:取模板要把几张模板的整图取一遍、问下载地址多大;注册表在公网上。
@@ -68,8 +68,12 @@ def connection(db: Session, user: User, instance_id: str = "") -> PluginInstance
     raise WorkbenchAgentError("workbenchErr_whichConnection", names=names)
 
 
-def _ask(db: Session, instance: PluginInstance, payload: dict[str, Any]) -> dict[str, Any]:
-    return tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, payload, timeout=PLUGIN_TIMEOUT_SECONDS, record=False)
+def _ask(db: Session, instance: PluginInstance, payload: dict[str, Any], *,
+         output_budget: int | None = None) -> dict[str, Any]:
+    """问插件一句。`output_budget` 只给**目录类回答**(见 `runtime.CATALOG_OUTPUT_BYTES`):这一问返回的是
+    「这台机器上现在有什么」的一整份清单时,才用它;别的问法一个字节都不放宽。"""
+    return tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, payload, timeout=PLUGIN_TIMEOUT_SECONDS,
+                             record=False, output_budget=output_budget)
 
 
 # --- 画布(经主进程的那条路) ----------------------------------------------------------------
@@ -357,7 +361,11 @@ def _canvas_if_open(db: Session, user: User, workspace_id: str, instance: Plugin
 def node_packs(db: Session, user: User, workspace_id: str, instance_id: str = "") -> dict[str, Any]:
     instance = connection(db, user, instance_id)
     graph = _canvas_if_open(db, user, workspace_id, instance)
-    return _ask(db, instance, {"op": "node_packs", **({"content": graph} if graph is not None else {})})
+    #: 一整份节点包清单是**目录类回答**(这台机器装了哪些包,每个最多 60 个节点类型,随装包数线性变大):
+    #: 和工具清单 / 模型清单 / 模型库 / 工作流库同一份预算(见 runtime.CATALOG_OUTPUT_BYTES)。
+    #: 别的问法(templates / node_types / node_pack_search …)照旧 1MB,一个字节都不放宽。
+    return _ask(db, instance, {"op": "node_packs", **({"content": graph} if graph is not None else {})},
+                output_budget=runtime.CATALOG_OUTPUT_BYTES)
 
 
 def node_pack_search(db: Session, user: User, query: str = "", node_types: list[str] | None = None,
