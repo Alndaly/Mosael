@@ -1,8 +1,12 @@
 import React from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Brain, Check, ChevronRight, CircleAlert, Loader2, Settings2, Sparkles, X } from "lucide-react";
 
-import type { Confirmation } from "@/api/client";
+import { getJob, type Confirmation, type JobSummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
+import { JobKindIcon, useJobKinds } from "@/components/jobs/jobKinds";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { Button } from "@/components/ui/button";
@@ -449,10 +453,18 @@ export function agentTurnParts(
 }
 
 
+/**
+ * 后台任务回执的**结构化事实**(后端 receipts.receipt_payload)。收进步骤里只需要这几格;
+ * 界面按当前语言重排,不读给模型读的那句 `content`。
+ */
+export type FoldedReceipt = { id: string; payload?: unknown };
+
 type TurnBlock =
   | { type: "tools"; tools: ToolCall[] }
   | { type: "thinking"; text: string; done?: boolean; duration_seconds?: number }
-  | { type: "text"; text: string };
+  | { type: "text"; text: string }
+  /** 被智能体接住的后台任务回执:它不在对话里单独占一条,而是这一轮的第一步(见 receiptWasCaught)。 */
+  | { type: "receipts"; receipts: readonly FoldedReceipt[] };
 
 /**
  * 把一轮的时间线切成**渲染块**,并且把**连着的工具调用并成一块**。
@@ -554,9 +566,95 @@ export function splitTurn(blocks: TurnBlock[]): { process: TurnBlock[]; result: 
   return { process: blocks.slice(0, cut), result: blocks.slice(cut) };
 }
 
-/** 过程有几步:每次工具调用、每段思考各算一步。中途的旁白不算 —— 它不是一步动作。 */
+/** 过程有几步:每次工具调用、每段思考、每条被接住的回执各算一步。中途的旁白不算 —— 它不是一步动作。 */
 function processSteps(process: TurnBlock[]): number {
-  return process.reduce((sum, block) => sum + (block.type === "tools" ? block.tools.length : block.type === "thinking" ? 1 : 0), 0);
+  return process.reduce(
+    (sum, block) =>
+      sum +
+      (block.type === "tools"
+        ? block.tools.length
+        : block.type === "thinking"
+          ? 1
+          : block.type === "receipts"
+            ? block.receipts.length
+            : 0),
+    0,
+  );
+}
+
+/**
+ * 被智能体接住的后台任务回执 —— 折叠在「已处理 · N 步」里的一行,点开是任务详情。
+ *
+ * 为什么在这里:回执是那一轮的**由头**(后端把回执交给智能体,它随后说的那句话就是结论),
+ * 所以它属于那一轮的步骤,而不是对话里另一条消息。**失败卡不在这一档**:带「查看任务 / 前往结果 /
+ * 重新取回」的那张卡只留给**没被接住**的回执(见 ChatBubble.receiptWasCaught)。
+ *
+ * 行上不读 `content`(那是给模型读的、落库时冻结语言的一句),而是拿 payload 里的事实按当前语言重排。
+ */
+function ReceiptSteps({ receipts }: { receipts: readonly FoldedReceipt[] }) {
+  return (
+    <div className="grid gap-1" data-turn-receipts="">
+      {receipts.map((receipt) => (
+        <ReceiptStep key={receipt.id} receipt={receipt} />
+      ))}
+    </div>
+  );
+}
+
+function ReceiptStep({ receipt }: { receipt: FoldedReceipt }) {
+  const t = useI18n();
+  const { kindOf } = useJobKinds();
+  const payload = (receipt.payload ?? {}) as {
+    job_id?: unknown;
+    kind?: unknown;
+    status?: unknown;
+    subject?: unknown;
+  };
+  const kind = kindOf(typeof payload.kind === "string" ? payload.kind : "");
+  const status = typeof payload.status === "string" ? payload.status : "";
+  const subject = typeof payload.subject === "string" ? payload.subject.trim() : "";
+  const jobId = typeof payload.job_id === "string" ? payload.job_id : "";
+  const [detailJob, setDetailJob] = React.useState<JobSummary | null>(null);
+  //: 详情现取(回执只带 job id);取不到由全局 mutation 兜底说一声,不是点了一下什么都没发生。
+  const openTask = useMutation({
+    mutationFn: () => getJob(jobId),
+    onSuccess: (job) => setDetailJob(job),
+  });
+
+  return (
+    <div className="w-full min-w-0">
+      {/* 一行安静的步骤(ghost 档),点开是任务详情。不用原生 <button>:那是按钮,就该是 Button
+          (档位、转圈、焦点圈、悬停说明都由它给 —— 见 design/nativeButtons.test.ts)。 */}
+      <Button
+        variant="ghost"
+        size="xs"
+        className="w-full min-w-0 justify-start gap-1.5 font-normal"
+        loading={openTask.isPending}
+        disabled={!jobId}
+        onClick={() => jobId && openTask.mutate()}
+        data-receipt-step={jobId}
+      >
+        <JobKindIcon meta={kind} size={12} />
+        <span className="flex-none">{t("chatJobsTitle")}</span>
+        {kind.label ? (
+          <>
+            <span className="flex-none text-muted-foreground" aria-hidden>·</span>
+            <span className="flex-none">{kind.label}</span>
+          </>
+        ) : null}
+        {subject ? (
+          <>
+            <span className="flex-none text-muted-foreground" aria-hidden>·</span>
+            <Truncate className="flex-1 text-muted-foreground">{subject}</Truncate>
+          </>
+        ) : null}
+        {status ? (
+          <span className="flex-none pl-1.5 text-ui-xs text-muted-foreground">{runStatusText(t, status)}</span>
+        ) : null}
+      </Button>
+      <JobDetailDialog job={detailJob} onClose={() => setDetailJob(null)} />
+    </div>
+  );
 }
 
 function TurnBlockView({ block, index }: { block: TurnBlock; index: number }) {
@@ -564,6 +662,9 @@ function TurnBlockView({ block, index }: { block: TurnBlock; index: number }) {
     // 连成一串的工具步骤共用**一个** ToolCalls,于是它们之间是块内的 gap-1,
     // 而不是外层这个"块与块之间"的 gap —— 见 turnBlocks 的说明。
     return <ToolCalls key={`tools-${block.tools[0].id}-${index}`} tools={block.tools} />;
+  }
+  if (block.type === "receipts") {
+    return <ReceiptSteps key={`receipts-${index}`} receipts={block.receipts} />;
   }
   if (block.type === "thinking") {
     return <ThinkingBlock text={block.text} done={block.done} durationSeconds={block.duration_seconds} />;
@@ -577,6 +678,7 @@ function TurnBlockView({ block, index }: { block: TurnBlock; index: number }) {
 }
 
 const NO_IDS: readonly string[] = [];
+const NO_RECEIPTS: readonly FoldedReceipt[] = [];
 
 /**
  * 一轮回答:**过程在上、可以收起;结果在下、一直摊着**(和 ChatGPT / Codex 同一个形态)。
@@ -600,6 +702,7 @@ export function AgentTurnContent({
   failed = false,
   durationSeconds,
   receivedAssetIds = NO_IDS,
+  foldedReceipts = NO_RECEIPTS,
 }: {
   timeline?: AgentTimelineItem[];
   /** 这一轮还在跑(流式那一份)。 */
@@ -610,10 +713,21 @@ export function AgentTurnContent({
   durationSeconds?: number;
   /** 回执带来的素材(见 turnOutputs.receivedAssetIdsByMessage)。调用方要给稳定的数组:气泡是 memo 的。 */
   receivedAssetIds?: readonly string[];
+  /** 被智能体接住的后台任务回执(见 ChatBubble.receiptWasCaught)。它们收进过程摘要里,不单独占一条消息。
+   *  调用方要给稳定的数组:气泡是 memo 的。 */
+  foldedReceipts?: readonly FoldedReceipt[];
 }) {
   const t = useI18n();
   const citations = React.useMemo(() => collectCitations(timeline), [timeline]);
-  const { process, result } = React.useMemo(() => splitTurn(turnBlocks(timeline)), [timeline]);
+  const { process, result } = React.useMemo(
+    () =>
+      splitTurn(
+        foldedReceipts.length > 0
+          ? [{ type: "receipts" as const, receipts: foldedReceipts }, ...turnBlocks(timeline)]
+          : turnBlocks(timeline),
+      ),
+    [timeline, foldedReceipts],
+  );
   const outputs = React.useMemo(() => turnOutputAssetIds(timeline, receivedAssetIds), [timeline, receivedAssetIds]);
   const widgets = React.useMemo(() => turnWidgets(timeline), [timeline]);
   const decisions = React.useContext(DecisionsContext);

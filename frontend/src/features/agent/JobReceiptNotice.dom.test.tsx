@@ -177,3 +177,27 @@ it("被停下的回执是灰的「已停止」,照样点得开任务详情", asy
   fireEvent.click(screen.getByText("chatJobsOpenTask"));
   await waitFor(() => expect(screen.getByTestId("job-detail").textContent).toBe("job-3"));
 });
+
+it("成功、但没人接住(还没交给智能体):兜底地显式出现,带「查看任务 / 前往生成记录」", async () => {
+  //: 成功平时不常驻(右侧「后台任务」在列)。但**没人接住**的那一条是兜底:会话空闲、下一轮被重启掐断、
+  //: 智能体始终没读到 —— 对话里再不说,用户就不知道这个任务到底成了没有、结果去哪了。
+  h.getJob.mockResolvedValue({
+    id: "job-4", workspace_id: "w1", kind: "tts", status: "succeeded", progress: 1,
+    message: "完成", payload: {}, error: null, error_summary: null,
+    created_at: "2026-10-18T08:00:00", updated_at: "2026-10-18T08:00:00",
+  });
+  const { container } = mount({
+    job_id: "job-4", status: "succeeded", kind: "tts", subject: "配音 4",
+    generation_id: "gen-4", generation_session_id: "gen-session-4", workspace_id: "w1",
+    undelivered: true,
+  });
+  const notice = container.querySelector<HTMLElement>("[data-job-receipt]");
+  expect(notice, "没人接住的成功回执在对话里什么都没有").toBeTruthy();
+  expect(notice?.textContent).toContain("chatReceiptWaiting");
+  expect(notice?.textContent).toContain("配音 4");
+
+  fireEvent.click(screen.getByText("chatJobsOpenTask"));
+  await waitFor(() => expect(screen.getByTestId("job-detail").textContent).toBe("job-4"));
+  fireEvent.click(screen.getByText("chatJobsGotoGeneration"));
+  expect(h.gotoRecord).toHaveBeenCalledWith("/ai?tab=create", "mosael:ai-record", "gen-session-4");
+});

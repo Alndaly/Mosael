@@ -7,14 +7,14 @@ import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 
 import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextMeter";
-import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type FoldedReceipt } from "@/features/agent/ToolCalls";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { CHAT_ASSISTANT_ROW_CLASS, CHAT_USER_PILL_CLASS, CHAT_USER_ROW_CLASS } from "@/features/agent/agentRow";
 import type { JSONContent } from "@tiptap/react";
 
 import { UserMessageContent } from "@/features/agent/userMessage";
-import { JOB_RECEIPT_ROLE, JobReceiptNotice } from "@/features/agent/JobReceiptNotice";
+import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 import type { AgentMessageQuote } from "@/api/domains/sessions";
 import { Hint } from "@/components/ui/tooltip";
@@ -22,6 +22,74 @@ import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 export type AgentMessage = components["schemas"]["AgentMessageOut"];
+
+/** 判定只认这几格:完整消息、流里刚拼出来的都够用。 */
+export type TranscriptMessage = { id: string; role: string; payload?: unknown; error?: string | null };
+
+/** 后端给「这一轮被重启掐断」的稳定标记(`host.RESTART_ERROR_KIND`,落在 `payload.error_kind`)。
+ *  **不拿文案判断** —— 文案会翻译、会改。和 ChatWorkspace.tallyTurnFailures 同一份事实;
+ *  那个函数住在页面组件里,这里不能反向依赖它(会成环)。 */
+const RESTART_ERROR_KIND = "restart";
+
+function payloadOf(message: TranscriptMessage): Record<string, unknown> | null {
+  const payload = message.payload;
+  return typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>) : null;
+}
+
+/** 这一轮是被后端重启掐断的:它不是结论,不能算「接住了回执」。 */
+function interruptedByRestart(message: TranscriptMessage): boolean {
+  return payloadOf(message)?.error_kind === RESTART_ERROR_KIND;
+}
+
+/** 回执之后**第一条**正常助手消息的 id(跳过被重启掐断的轮次);还没有就是 null。 */
+function nextAnswerId(messages: readonly TranscriptMessage[], index: number): string | null {
+  for (let i = index + 1; i < messages.length; i += 1) {
+    const next = messages[i];
+    if (next.role !== "assistant") continue;
+    if (interruptedByRestart(next)) continue;
+    return next.id;
+  }
+  return null;
+}
+
+/**
+ * 智能体**接住了**这条回执吗 —— 信息架构:回执不该在对话里当一条独立消息常驻,对话里留的是结论
+ * (智能体那句话);只有**没接住**的回执才显式出现。
+ *
+ * 两样已有事实:
+ * 1. 回执自己还没交给智能体(`payload.undelivered`,后端 `_hand_over_receipts` 交出去时会把这个键删掉);
+ * 2. 它之后有一条助手消息,且那一轮不是被重启掐断的中断说明。
+ *
+ * 没有 `undelivered` 的老回执照同一条规则走:后面有正常回答就算接住,没有就算没接住 ——
+ * 不为旧数据写特例分支。
+ */
+export function receiptWasCaught(messages: readonly TranscriptMessage[], index: number): boolean {
+  const message = messages[index];
+  if (!message || message.role !== JOB_RECEIPT_ROLE) return false;
+  if (isWaitingReceipt(message)) return false;
+  return nextAnswerId(messages, index) !== null;
+}
+
+/**
+ * 把**被接住**的回执归给接住它的那一轮回答 —— 回执就是那一轮的由头(后端 drain 把它交给智能体,
+ * 智能体随后说的那句话就是结论),也是 `turnOutputs.receivedAssetIdsByMessage` 已经把回执带来的
+ * 素材归给的那条消息,两处位置一致。
+ *
+ * 没接住的回执**不在表里**:它们要在对话里显式出现(带「查看任务 / 前往结果」),不能被收起来。
+ */
+export function caughtReceiptsByMessage(
+  messages: readonly TranscriptMessage[],
+): Map<string, TranscriptMessage[]> {
+  const byMessage = new Map<string, TranscriptMessage[]>();
+  for (let i = 0; i < messages.length; i += 1) {
+    const message = messages[i];
+    if (message.role !== JOB_RECEIPT_ROLE || !receiptWasCaught(messages, i)) continue;
+    const answerId = nextAnswerId(messages, i);
+    if (answerId === null) continue;
+    byMessage.set(answerId, [...(byMessage.get(answerId) ?? []), message]);
+  }
+  return byMessage;
+}
 
 /**
  * 对话里的一条消息 —— 主智能体和子智能体共用的渲染语言。
@@ -73,6 +141,7 @@ export const ChatBubble = React.memo(function ChatBubble({
   mediaGallery,
   workspaceId,
   receivedAssetIds,
+  foldedReceipts,
 }: {
   message: AgentMessage;
   usageEvents: AgentUsageEvent[];
@@ -81,6 +150,10 @@ export const ChatBubble = React.memo(function ChatBubble({
   workspaceId: string;
   /** 助手消息:回执带来、该画进这一轮结果里的素材(见 turnOutputs.receivedAssetIdsByMessage)。 */
   receivedAssetIds?: readonly string[];
+  /** 助手消息:被这一轮**接住**的回执(见 receiptWasCaught),收进「已处理 · N 步」里。
+   *  没被接住的不传进来 —— 它们作为独立的一条显式出现(见 JobReceiptNotice)。
+   *  调用方要给稳定的数组:气泡是 memo 的。 */
+  foldedReceipts?: readonly FoldedReceipt[];
 }) {
   const payload = message.payload as
     | {
@@ -106,6 +179,8 @@ export const ChatBubble = React.memo(function ChatBubble({
     ) : null;
   }
   // 后台任务的回执:一行任务通知,不是谁说的话(用户截图:摆成用户气泡,「这不是我发送的」)。
+  // **被智能体接住的不该走到这里** —— 容器按 `receiptWasCaught` 跳过那条消息、把它交给接住它的
+  // 那一轮的 `foldedReceipts`。走到这里的是没接住的:那一条要显式出现。
   if (message.role === JOB_RECEIPT_ROLE) {
     return (
       <div className="mx-auto w-full max-w-[780px] shrink-0">
@@ -148,6 +223,7 @@ export const ChatBubble = React.memo(function ChatBubble({
             failed={Boolean(message.error)}
             durationSeconds={payload?.usage?.duration_seconds}
             receivedAssetIds={receivedAssetIds}
+            foldedReceipts={foldedReceipts}
           />
           {message.error && (
             <div className={payload?.timeline?.length ? "mt-2" : undefined}>

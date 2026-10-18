@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, ListChecks, RotateCcw } from "lucide-react";
+import { CheckCircle2, ExternalLink, ListChecks, RotateCcw } from "lucide-react";
 
 import { getJob, type JobSummary } from "@/api/client";
 import { listGenerationJobs, retrieveGeneration } from "@/api/domains/generation";
@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { FailureCard, failureFields, type FailureFix } from "@/components/failure/FailureCard";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { JobKindIcon, gotoJobPage, jobPage, useJobKinds } from "@/components/jobs/jobKinds";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { jobSubjectText } from "@/components/jobs/SessionJobsCard";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
@@ -57,8 +58,12 @@ export function isWaitingReceipt(message: { role: string; payload?: unknown }): 
  * 后台任务跑完送回来的回执。
  *
  * **成功的不在对话里常驻** —— 右侧「后台任务」那块列着它(状态、进度、取消、结果都在那儿),对话里再留
- * 一行「已完成」是把同一件事说两遍。失败和被停下的仍然是一张卡:用户要在这里看见「哪个任务、为什么、
- * 下一步点哪儿」。
+ * 一行「已完成」是把同一件事说两遍。**除非没人接住**(`undelivered`):会话空闲 / 下一轮被重启掐断时,
+ * 智能体始终没读到它,那一条得显式出现(兜底,见 {@link WaitingSuccessNotice})。
+ * 失败和被停下的仍然是一张卡:用户要在这里看见「哪个任务、为什么、下一步点哪儿」。
+ *
+ * **被智能体接住的回执不该走到这里**:对话容器按 `ChatBubble.receiptWasCaught` 把它们收进那一轮的步骤里、
+ * 不单独渲染。这里画的是**没接住**的那一条。
  *
  * 卡是全应用那一份失败展示(`FailureCard`)—— 此前这里是一行 muted 的中文正文,失败原因由后端
  * **落库时**渲染,英文界面里永远是中文;而且除了任务 id 之外没有任何可点的东西。现在 payload 带着种类、
@@ -74,9 +79,102 @@ export function JobReceiptNotice({
   className?: string;
 }) {
   const receipt = payload as ReceiptPayload;
-  // 成功(以及老形状里没有 status 的)不渲染:交给右侧的任务列表。被停下的和失败的要一张卡。
-  if (!receipt || (receipt.status !== "failed" && receipt.status !== "cancelled")) return null;
+  if (!receipt) return null;
+  // 成功:交给右侧的任务列表 —— **除非没人接住**(还没交给智能体)。那一条是兜底,对话里得看得见
+  // (会话空闲、下一轮被重启掐断时,智能体始终没读到它)。
+  if (receipt.status === "succeeded") {
+    return receipt.undelivered ? <WaitingSuccessNotice receipt={receipt} className={className} /> : null;
+  }
+  // 老形状里没有 status 的不渲染:交给右侧列表。被停下的和失败的要一张卡。
+  if (receipt.status !== "failed" && receipt.status !== "cancelled") return null;
   return <ReceiptCard receipt={receipt} className={className} />;
+}
+
+/**
+ * 成功、但**没人接住**的那一条回执 —— 兜底,不是常态。
+ *
+ * 成功平时不常驻(见上)。但「没接住」是例外:会话空闲着、下一轮被重启掐断、智能体始终没读到 ——
+ * 这时对话里再不说,用户就不知道这个任务成了没有、结果在哪。它不冒充失败卡:一行「后台任务 · 种类 ·
+ * subject · 成功」+ 一句「这一轮结束后交给智能体」+ 「查看任务 / 前往结果」。
+ */
+function WaitingSuccessNotice({
+  receipt,
+  className,
+}: {
+  receipt: NonNullable<ReceiptPayload>;
+  className?: string;
+}) {
+  const t = useI18n();
+  const { kindOf } = useJobKinds();
+  const kind = kindOf(receipt.kind ?? "");
+  //: 用户写的那句;没写就按种类 + 素材份数拼一句(和失败卡、右侧列表同一条规则)。
+  const subject = jobSubjectText(receipt.subject, kind.label, t, receipt.source_asset_count ?? 0);
+  const [detailJob, setDetailJob] = React.useState<JobSummary | null>(null);
+  //: 详情现取(回执只带 job id);取不到由全局的 mutation 兜底说一声。
+  const openTask = useMutation({
+    mutationFn: () => getJob(receipt.job_id!),
+    onSuccess: (job) => setDetailJob(job),
+  });
+  const target = {
+    payload: {
+      ...(receipt.project_id ? { project_id: receipt.project_id } : {}),
+      ...(receipt.generation_session_id ? { session_id: receipt.generation_session_id } : {}),
+    },
+  };
+  const page = jobPage(target, kind);
+  const gotoLabel = receipt.generation_id ? t("chatJobsGotoGeneration") : t("chatJobsGoto");
+  const gotoResult = () => {
+    void leaveNativeView();
+    gotoJobPage(target, kind);
+  };
+
+  return (
+    <div className={cn("min-w-0", className)} data-job-receipt="" data-receipt-succeeded={receipt.job_id}>
+      <div className="grid gap-1.5 rounded-lg border border-border bg-panel-subtle px-3 py-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-ui-sm">
+          <CheckCircle2 size={13} className="shrink-0 text-success" aria-hidden />
+          <span className="font-medium">{t("chatJobsTitle")}</span>
+          <span className="text-muted-foreground" aria-hidden>·</span>
+          <span className="flex shrink-0 items-center gap-1 text-ui-xs text-muted-foreground">
+            <JobKindIcon meta={kind} size={12} />
+            {kind.label}
+          </span>
+          {subject ? (
+            <>
+              <span className="shrink-0 text-muted-foreground" aria-hidden>·</span>
+              <Truncate className="min-w-0 flex-1 text-muted-foreground">{subject}</Truncate>
+            </>
+          ) : null}
+          <span className="shrink-0 text-ui-xs text-muted-foreground">{runStatusText(t, "succeeded")}</span>
+        </div>
+        <p className="m-0 text-ui-2xs text-muted-foreground">{t("chatReceiptWaiting")}</p>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            variant="outline"
+            size="xs"
+            loading={openTask.isPending}
+            onClick={() => openTask.mutate()}
+            data-receipt-open-task=""
+          >
+            <ListChecks size={13} />
+            {t("chatJobsOpenTask")}
+          </Button>
+          {page ? (
+            <Button variant="outline" size="xs" onClick={gotoResult} data-receipt-goto="">
+              <ExternalLink size={13} />
+              {gotoLabel}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <JobDetailDialog
+        job={detailJob}
+        onClose={() => setDetailJob(null)}
+        onGoto={page ? () => { gotoResult(); setDetailJob(null); } : undefined}
+        gotoLabel={gotoLabel}
+      />
+    </div>
+  );
 }
 
 function ReceiptCard({
