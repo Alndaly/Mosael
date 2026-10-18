@@ -41,7 +41,7 @@ from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import MODEL_LIBRARY
-from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
+from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
@@ -266,8 +266,13 @@ def library(db: Session, instance: PluginInstance, pick: str = "safest") -> dict
     (界面按「NSFW 预览」那组设置要,见 model_previews.pick),预览图从哪来和 NSFW 的判断都照它。"""
     _require(db, instance)
     # 不留调用记录:打开模型库、下完一个文件都会列一遍,每次一行会把插件页真正的调用淹掉(和目录指纹同一个理由)。
-    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, {"op": "library"},
-                               timeout=LIBRARY_TIMEOUT_SECONDS, record=False)
+    output = tools.invoke_host(
+        db, instance.id, MODEL_LIBRARY, {"op": "library"},
+        timeout=LIBRARY_TIMEOUT_SECONDS, record=False,
+        #: 一整份模型清单和工具清单 / 工作流清单是**同一类回答**(这台机器此刻有什么,随文件数线性变大):
+        #: 和它们同一份预算(见 runtime.CATALOG_OUTPUT_BYTES)。普通工具调用一个字节都没放宽。
+        output_budget=CATALOG_OUTPUT_BYTES,
+    )
     models: list[dict[str, Any]] = []
     snapshot = _Snapshot(headers={str(k): str(v) for k, v in (output.get("preview_headers") or {}).items()},
                          tools=_preview_tools(output.get("preview_tools")))

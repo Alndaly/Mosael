@@ -85,7 +85,9 @@ def data_dir_for(package_id: str) -> Path:
 #: 报 pluginErr_outputTooLarge,而不是截断收一半。
 MAX_OUTPUT_BYTES = 1_000_000
 
-#: **目录类回答**(工具清单、模型清单)的预算。它们不是「一次工具调用」,而是「这台服务器此刻有什么」的一整份目录。
+#: **目录类回答**(工具清单、模型清单、模型库、工作流库)的预算。它们不是「一次工具调用」,而是「这台服务器此刻有什么」的
+#: 一整份目录。四处调用点:`dynamic_tools.refresh`(`op tools`)、`generation.catalog`(`op models`)、
+#: `model_library.library`(`op library`)、`workflow_library.library`(`op workflows`)。
 #:
 #: 撞过的那一次(维护者截图):远端 ComfyUI 连接显示「出错了 · 已开启 0/7 个工具」,原因只有一句
 #: 「插件输出超过大小限制 (1MB)」。撞线的是 `{"tool":"comfyui_generation","input":{"op":"tools"}}`(以及同一批
@@ -96,7 +98,16 @@ MAX_OUTPUT_BYTES = 1_000_000
 #: ADR 0044 修订否掉了「在插件那一侧把长下拉删掉」:工作流节点、画板、插件页「试一下」的表单读的就是这份 schema,
 #: 下拉必须整张。所以在目录**形状**不变的前提下,只能让这一类回答有自己的、仍然有限的预算。
 #:
-#: 为什么是 8MB:42 个工具(维护者那台)共享后约 560KB,8MB 是这个规模的十几倍,给模型多一个数量级也装得下;
+#: **模型库 / 工作流库是同一类**:返回的是那台机器上的模型文件清单 / 工作流清单(连同图摘要、识别出的输入 / 参数 / 输出、
+#: 缺什么),文件或工作流越多回答就越长 —— 和 `tools` / `models` 同一条风险,所以同一份预算,而不是另造一个。
+#:
+#: 为什么是 8MB:42 个工具(维护者那台)共享后约 560KB,8MB 是这个规模的十几倍,给模型多一个数量级也装得下。
+#: 116 个工具那台(维护者现在这台)对着假 ComfyUI 量:30,000 LoRA + 6,000 大模型、116 个工具,
+#: `op tools` 2,235,482 B、`op models` 1,746,837 B、`op workflows` 705,317 B;工作流更重的机器(120 张各 30 个节点 /
+#: 117 个可调项、每张一个工具的量级)同一台量三份:`tools` 4,445,713、`models` 3,096,013、`workflows` 2,674,979
+#: (字符)—— `tools` 已经在这台机器上跑得通,同机的 `workflows` 比它还小,所以 8MB 对 116 工具那台够用
+#: (见 tests/test_comfyui_remote_libraries_fit_the_output_limit.py;335 张重的才 7,467,329 字符 / 7,997,299 字节,
+#: 500 张才 11,145,179 / 11,936,179 —— 预算按字符算,见 execute_tool)。
 #: 同时它仍有界 —— 宿主读到预算 + 下面那条余量就停,解析一次峰值在百 MB 量级,不会把一个坏插件写成几 GB。
 #: **不是无限**:超过 8MB 的目录仍然整份不收(绝不截断),报错说清是哪个工具、实际读到多大、下一步怎么办。
 CATALOG_OUTPUT_BYTES = 8_000_000
@@ -249,7 +260,7 @@ def execute_tool(
     MOSAEL_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
     所以搬字节这件事得另开一条路。
 
-    `output_budget`:这一次的输出上限,**只给目录类回答**(工具清单 / 模型清单,见 CATALOG_OUTPUT_BYTES)。
+    `output_budget`:这一次的输出上限,**只给目录类回答**(工具清单 / 模型清单 / 模型库 / 工作流库,见 CATALOG_OUTPUT_BYTES)。
     不给就还是 MAX_OUTPUT_BYTES —— 普通工具调用一个字节都不放宽。"""
     entry_path = resolve_entry(plugin_dir, entry)
     budget = MAX_OUTPUT_BYTES if output_budget is None else max(1, int(output_budget))

@@ -81,7 +81,7 @@ from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import GENERATION, TOOLS, WORKFLOW_LIBRARY
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
-from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
+from app.domain.plugins.runtime import CATALOG_OUTPUT_BYTES, PluginRuntimeError, StreamHooks
 from app.domain.plugins.tools import MAX_GENERATION_TIMEOUT_SECONDS
 from app.domain.providers import models as provider_models
 from app.domain.providers import moved_models
@@ -522,8 +522,13 @@ def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: 
     if workspace_id:
         ensure_workspace_access(db, user, workspace_id)
     _require(db, instance)
-    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, {"op": "workflows"},
-                               timeout=LIBRARY_TIMEOUT_SECONDS, record=False)
+    output = tools.invoke_host(
+        db, instance.id, WORKFLOW_LIBRARY, {"op": "workflows"},
+        timeout=LIBRARY_TIMEOUT_SECONDS, record=False,
+        #: 一整份工作流清单和工具清单 / 模型清单是**同一类回答**(这台机器此刻有什么,随工作流数线性变大):
+        #: 和它们同一份预算(见 runtime.CATALOG_OUTPUT_BYTES)。普通工具调用一个字节都没放宽。
+        output_budget=CATALOG_OUTPUT_BYTES,
+    )
     workflows = [one for one in (_workflow(raw) for raw in (output.get("workflows") or [])[:_MAX_WORKFLOWS]) if one]
     _in_mosael(db, instance, workspace_id, workflows)
     manager = output.get("manager") if isinstance(output.get("manager"), dict) else {}
