@@ -180,10 +180,13 @@ export const searchModelSources = (
     body: JSON.stringify({ filename, folder, ...(hash ? { hash, hash_type: hashType } : {}) }),
   });
 
-/** 下到这个连接的那台服务器上:一个后台任务(进度、取消都在任务上)。 */
+/** 下到这个连接的那台服务器上:一个后台任务(进度、取消都在任务上)。
+ *
+ * `sha256`:从「确认是同一个文件」的来源下载时带上(工作流声明、平台元数据里也对上了的那个哈希)。插件下完再算一遍,
+ * 对不上就删掉、说清;只有本机那条下载路带得了,经 ComfyUI-Manager 的时代替它下,核对不了(宿主会拒绝)。 */
 export const startModelDownload = (
   instanceId: string,
-  body: { workspace_id: string; url: string; folder: string; filename: string },
+  body: { workspace_id: string; url: string; folder: string; filename: string; sha256?: string },
 ) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/downloads`, { method: "POST", body: JSON.stringify(body) });
 
 /**

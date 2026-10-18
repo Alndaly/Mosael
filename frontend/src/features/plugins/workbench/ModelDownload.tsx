@@ -1,7 +1,7 @@
 import React from "react";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
-import { useMutation } from "@tanstack/react-query";
-import { Download, Link2, Loader2, Search } from "lucide-react";
+import { onlineManager, useMutation, useQuery } from "@tanstack/react-query";
+import { Download, ExternalLink, Link2, Loader2, Search } from "lucide-react";
 
 import {
   resolveModelLink,
@@ -34,6 +34,16 @@ type Candidate = NonNullable<ModelSearch["candidates"]>[number];
 /** 三档置信度(见插件的 model_search / ADR 0038 §9):只有「哈希确认」允许「直接下载」,相近的只给页面。 */
 type Confidence = "confirmed" | "exact" | "likely";
 
+/** 工作流声明的哈希里,能拿来**确认是同一个文件**的那一种:SHA256,且 `hash_type` 没写或者是 sha256。
+ * md5 / 别的哈希对不上各平台的元数据,不算凭据 —— 没有凭据就不查、不列(见模块说明的「多平台」)。 */
+const SHA256 = /^[0-9a-f]{64}$/i;
+function verifiedDigest(hash: string, hashType: string): string {
+  const digest = hash.trim();
+  if (!SHA256.test(digest)) return "";
+  const kind = hashType.trim().toLowerCase().replace("-", "");
+  return kind === "" || kind === "sha256" ? digest.toLowerCase() : "";
+}
+
 /** 一个候选是哪一档:新数据看 `confidence`,老插件只有 `exact`(认不出就当 `exact`/`likely`)。 */
 function confidenceOf(candidate: Candidate): Confidence {
   const said = candidate.confidence;
@@ -51,6 +61,11 @@ function confidenceOf(candidate: Candidate): Confidence {
  *   **只给页面**,不主动给直链。算不出哈希时插件会给一句话说清「所以只是同名」,原样显示;
  * - 确认里写明下到哪台机器的哪个目录、叫什么名字,走 ComfyUI-Manager 时那几件要先知道的事(令牌、进度、取消)和这台服务器
  *   下载走哪条路(模型库报的);下完由调用方刷新下拉、重新检查。
+ * - **工作流写了地址时**:把那个地址本身完整地摆在「下载」那一行的下面(放不下就折行;不用悬停浮层)。另外只在**能确认是同一个文件**时列别的
+ *   平台:工作流声明了 SHA256,拿去问插件(搜索的 `confirmed` 只在这一条上给),平台元数据里也是这个 SHA256 的才算;
+ *   没有 SHA256(也没有该平台的明确 id)就不查、不列 —— 不靠文件名相近冒充。查询失败 / 超时 / 离线只是那一块不出现,
+ *   原来那个地址照样能下。只有本机那条下载路能下完核对哈希;只能经 ComfyUI-Manager 的时代替它下,核对不了,所以不列。
+ *   下载时把这个 SHA256 也交给插件:下完再算一遍,对不上就删掉、说清。
  */
 export function ModelDownload({
   target,
@@ -82,6 +97,8 @@ export function ModelDownload({
   //: 下下来叫什么。点的是搜到的候选:用候选的文件名 —— Civitai 一个版本有几个文件时,认出来的名字是「名字_文件号」,
   //: 下下来却不是工作流要的那个名字,工作流照样找不到它
   const [saveAs, setSaveAs] = React.useState("");
+  //: 这一次下载要核对的 SHA256(只有「确认是同一个文件」的那几档才带):下完插件再算一遍,对不上就删掉。
+  const [digest, setDigest] = React.useState("");
   const [jobId, setJobId] = React.useState<string | null>(null);
   const job = useJobWatch(jobId);
   useOnJobDone(job.data, (done) => {
@@ -90,14 +107,44 @@ export function ModelDownload({
   //: 这台服务器下载走哪条路(ComfyUI-Manager / 本机 / 下不了)和那句说明:模型库报的,和模型库面板同一份缓存
   const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const route = library.data?.download?.route ?? "";
+  //: 离线时**整个多平台都不出现**(不是灰着、也不是拿缓存里的旧候选骗人):本来也连不上平台。
+  const [online, setOnline] = React.useState(() => onlineManager.isOnline());
+  React.useEffect(() => onlineManager.subscribe((next) => setOnline(next)), []);
+  //: 工作流自己声明的 SHA256:唯一一种**不靠猜**的跨平台确认凭据。
+  const declared = verifiedDigest(hash, hashType);
+  //: 只有本机那条路能下完再算一遍哈希;经 ComfyUI-Manager 的下载在那台机器上,Mosael 核对不了,就不列别的来源。
+  const verifiedRoute = Boolean(url) && Boolean(declared) && route === "local" && online;
+  //: 另找的平台:问的是插件那套搜索(`confirmed` 只给哈希对上的),查询失败 / 超时 / 离线只是不出现,不影响原地址。
+  const elsewhere = useQuery({
+    queryKey: ["model-sources", target.instanceId, folder, filename, declared],
+    queryFn: () => searchModelSources(target.instanceId, filename, folder, declared, "sha256"),
+    enabled: verifiedRoute,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const alternates = React.useMemo(() => {
+    //: 只留**三样都对上**的:置信度是 confirmed、插件给的 SHA256 就是工作流声明的那个、不是原来那个地址。
+    //: 后端还会按同一份凭据再规整一遍(见 model_library.search_sources);这里是界面这一侧的守卫。
+    const seen = new Set<string>();
+    return (elsewhere.data?.candidates ?? []).filter((one) => {
+      if (confidenceOf(one) !== "confirmed" || !one.direct) return false;
+      if ((one.sha256 ?? "").toLowerCase() !== declared) return false;
+      const address = one.url.toLowerCase();
+      if (address === url.toLowerCase() || seen.has(address)) return false;
+      seen.add(address);
+      return true;
+    });
+  }, [elsewhere.data, declared, url]);
   const search = useMutation({
     mutationFn: () => searchModelSources(target.instanceId, filename, folder, hash, hashType),
   });
   const resolve = useMutation({
-    mutationFn: (pick: { address: string; name?: string }) => resolveModelLink(target.instanceId, pick.address),
+    mutationFn: (pick: { address: string; name?: string; sha256?: string }) =>
+      resolveModelLink(target.instanceId, pick.address),
     onSuccess: (found, pick) => {
       setResolved(found);
       setSaveAs(pick.name || found.filename || filename);
+      setDigest(pick.sha256 || "");
     },
   });
   const start = useMutation({
@@ -107,9 +154,11 @@ export function ModelDownload({
         url: resolved!.url,
         folder,
         filename: saveAs,
+        ...(digest ? { sha256: digest } : {}),
       }),
     onSuccess: (created) => {
       setResolved(null);
+      setDigest("");
       setJobId(created.id);
     },
   });
@@ -132,14 +181,24 @@ export function ModelDownload({
   return (
     <div data-model-download="" className="grid gap-2 rounded-lg border border-dashed border-border p-2.5">
       {url ? (
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="m-0 min-w-0 flex-1 text-ui-xs leading-relaxed text-muted-foreground">{t("workbenchDownloadHasUrl")}</p>
-          <Button size="xs" className="shrink-0" loading={resolve.isPending} onClick={() => resolve.mutate({ address: url })}
-                  aria-label={t("workbenchMissingDownloadLabel").replace("{name}", filename)}>
-            <Download size={12} />
-            {t("workbenchMissingDownload")}
-          </Button>
-        </div>
+        <>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="m-0 min-w-0 flex-1 text-ui-xs leading-relaxed text-muted-foreground">{t("workbenchDownloadHasUrl")}</p>
+            <Button size="xs" className="shrink-0" loading={resolve.isPending} onClick={() => resolve.mutate({ address: url })}
+                    aria-label={t("workbenchMissingDownloadLabel").replace("{name}", filename)}>
+              <Download size={12} />
+              {t("workbenchMissingDownload")}
+            </Button>
+          </div>
+          {/* 那个地址本身:完整地摆在「下载」那一行的下面,放不下就在任意处折行 —— **不套悬停浮层**:
+              工作台那一列的说明默认朝左(见 ComfyWorkbench 的 COLUMN_REGION),长地址会撑满一条飘到画布上。
+              点它在新窗口打开;文字本身可选中、可复制。没写地址时整行都不出现。 */}
+          <a href={url} target="_blank" rel="noreferrer noopener" data-declared-url=""
+             className="flex min-w-0 items-start gap-1.5 text-ui-2xs leading-relaxed text-muted-foreground hover:text-foreground hover:underline">
+            <span className="min-w-0 flex-1 break-all">{url}</span>
+            <ExternalLink size={11} aria-hidden className="mt-0.5 shrink-0" />
+          </a>
+        </>
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           <p className="m-0 min-w-0 flex-1 text-ui-xs leading-relaxed text-muted-foreground">
@@ -151,6 +210,41 @@ export function ModelDownload({
             {t("workbenchSearchSources")}
           </Button>
         </div>
+      )}
+      {online && alternates.length > 0 && (
+        <section aria-label={t("workbenchDownloadOtherSources")} data-other-sources="" className="grid gap-1">
+          <p className="m-0 text-ui-2xs leading-relaxed text-muted-foreground">{t("workbenchDownloadOtherSources")}</p>
+          <ul className="m-0 grid list-none gap-1 p-0">
+            {alternates.map((one) => (
+              <li key={`${one.source}:${one.url}`} data-alternate-source={one.source}
+                  className="grid gap-0.5 rounded-md border border-border p-1.5">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Truncate className="min-w-0 flex-1 font-medium text-foreground">{one.filename}</Truncate>
+                  <CatalogBadge tone="success">{t("workbenchSearchConfirmed")}</CatalogBadge>
+                  <Button size="xs" className="shrink-0" loading={resolve.isPending && resolve.variables?.address === one.url}
+                          onClick={() => resolve.mutate({ address: one.url, name: filename, sha256: one.sha256 ?? "" })}
+                          aria-label={t("workbenchDownloadFromSource").replace("{source}", sourceName(one.source))
+                            .replace("{name}", one.filename)}>
+                    <Download size={12} />
+                    {t("workbenchMissingDownload")}
+                  </Button>
+                </span>
+                <span className="flex min-w-0 items-center gap-1.5 text-ui-2xs text-muted-foreground">
+                  <span className="shrink-0">{sourceName(one.source)}</span>
+                  <Truncate className="min-w-0 flex-1">{one.title || one.repo}</Truncate>
+                  {one.page && (
+                    <a href={one.page} target="_blank" rel="noreferrer noopener" data-alternate-page=""
+                       aria-label={t("workbenchDownloadSourcePage").replace("{source}", sourceName(one.source))
+                         .replace("{name}", one.filename)}
+                       className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground">
+                      <ExternalLink size={11} aria-hidden />
+                    </a>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {search.isError && <PanelNote tone="error">{errorText(search.error)}</PanelNote>}
       {/* 哈希这一项:确认到哪一个了,或者为什么没得算 —— 插件的原话(它按界面语言写好了),原样说给用户 */}
@@ -165,7 +259,11 @@ export function ModelDownload({
             {candidates.map((one) => (
               <li key={`${one.source}:${one.url}`}>
                 <CandidateRow candidate={one} pending={resolve.isPending && resolve.variables?.address === one.url}
-                              onPick={() => resolve.mutate({ address: one.url, name: one.filename })} />
+                              onPick={() => resolve.mutate({
+                                address: one.url, name: one.filename,
+                                //: 这套搜索里 `confirmed` 才是哈希对上的;本机那条路下完能再核对一遍,别的不带哈希。
+                                sha256: route === "local" && confidenceOf(one) === "confirmed" ? one.sha256 ?? "" : "",
+                              })} />
               </li>
             ))}
           </ul>
@@ -194,10 +292,13 @@ export function ModelDownload({
           title={t("workbenchDownloadConfirm").replace("{server}", target.instanceName).replace("{folder}", folder)
             .replace("{name}", saveAs)}
           body={<DownloadNotes resolved={resolved} saveAs={saveAs} route={route} note={library.data?.download?.note ?? ""}
-                               wanted={filename} />}
+                               wanted={filename} sha256={digest} />}
           confirmLabel={t("workbenchDownloadStart")}
           pending={start.isPending}
-          onCancel={() => setResolved(null)}
+          onCancel={() => {
+            setResolved(null);
+            setDigest("");
+          }}
           onConfirm={() => start.mutate()}
         />
       )}
@@ -263,17 +364,20 @@ function CandidateRow({ candidate, pending, onPick }: { candidate: Candidate; pe
 }
 
 /** 确认里要先知道的事:同名已在、走 ComfyUI-Manager 时令牌 / 进度 / 取消、这台服务器下载走哪条路。 */
-function DownloadNotes({ resolved, saveAs, route, note, wanted }: {
+function DownloadNotes({ resolved, saveAs, route, note, wanted, sha256 }: {
   resolved: ModelResolved;
   saveAs: string;
   route: string;
   note: string;
   wanted: string;
+  /** 这一次下载要核对的 SHA256(没有是空串):确认里先说清下完还会核对 */
+  sha256: string;
 }) {
   const t = useI18n();
   const renamed = saveAs !== wanted;
   return (
     <>
+      {sha256 && <span data-download-verified="">{t("workbenchDownloadVerifiedHint")}</span>}
       {renamed && <span>{t("workbenchDownloadOtherName").replace("{name}", saveAs).replace("{wanted}", wanted)}</span>}
       {resolved.exists && <span className="text-warning">{t("workbenchDownloadExists")}</span>}
       {route === "manager" && (
