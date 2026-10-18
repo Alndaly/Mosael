@@ -22,6 +22,22 @@ export function topLevelJobsQuery(workspaceId: string) {
 }
 
 /**
+ * 工作区里所有**下模型**的任务(工作台「缺失项」、模型库那一列读的这一份)。
+ *
+ * 下载本身跑在后端任务上,界面只在任务里认「这一行要的那个文件」:认的是任务 `payload` 里的
+ * `instance_id + folder + filename`(后端建任务时写进去的,见 domain/model_library.start_download)。
+ * 所以刷新、切走再切回都不会把「正在下载」弄丢 —— 状态从这份任务列表派生,不再存在组件 state 里。
+ *
+ * **键和取法写在一起,同一个键只有一种取法**(理由见 topLevelJobsQuery)。
+ */
+export function modelDownloadsQuery(workspaceId: string) {
+  return {
+    queryKey: ["jobs", workspaceId, "model-downloads"] as const,
+    queryFn: () => listJobs(workspaceId, { kind: "model_download" }),
+  };
+}
+
+/**
  * 工作区的任务:最近的两百条,**加上全部还在跑的**(后端定的,见 job_center.list_jobs),新的在前。每一行不带 `result`。
  * 此前整表全拉、每行带着结果:578 个顶层任务 2.4 MB,有任务在跑时每 1.5 秒一遍。
  */

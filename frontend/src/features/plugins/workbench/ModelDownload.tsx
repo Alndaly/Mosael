@@ -8,15 +8,18 @@ import {
   discardModelPartial,
   getJob,
   getModelPartial,
+  modelDownloadsQuery,
   resolveModelLink,
   searchModelSources,
   startModelDownload,
+  type Job,
+  type JobSummary,
   type ModelResolved,
   type ModelSearch,
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { modelBaseName } from "@/components/generation/ModelThumb";
 import { useModelLibrary } from "@/components/generation/useModelLibrary";
@@ -24,14 +27,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Truncate } from "@/components/ui/truncate";
-import { InlineConfirm, jobDone, PanelNote, useJobWatch, useOnJobDone } from "@/features/plugins/workbench/workbenchParts";
+import { InlineConfirm, jobDone, PanelNote } from "@/features/plugins/workbench/workbenchParts";
 import type { WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
+import { parseServerTime, relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /** `job.result` 里的字节数(后端从插件的结构化 step 事件记下的):认不出就是 null,不当 0。 */
 function byteField(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** 任务 `payload` 里的一格(后端建下载任务时写的):不是字符串就是空串。 */
+function payloadText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** 任务详情里的 `result`(列表那一份没有它);认不出就当空。 */
+function jobResult(job: Job | JobSummary | null): Record<string, unknown> {
+  const value = job && "result" in job ? job.result : null;
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
 const SOURCE_LABEL: Record<string, MessageKey> = {
@@ -103,6 +118,7 @@ export function ModelDownload({
   onDone: () => void;
 }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const filename = modelBaseName(wanted);
   const [link, setLink] = React.useState("");
   const [resolved, setResolved] = React.useState<ModelResolved | null>(null);
@@ -111,15 +127,82 @@ export function ModelDownload({
   const [saveAs, setSaveAs] = React.useState("");
   //: 这一次下载要核对的 SHA256(只有「确认是同一个文件」的那几档才带):下完插件再算一遍,对不上就删掉。
   const [digest, setDigest] = React.useState("");
-  const [jobId, setJobId] = React.useState<string | null>(null);
-  //: 这一次(或刚刚结束的那一次)下载的源:续传要拿**同一个** URL / 文件名 / 声明哈希再下一次。
-  const [attempt, setAttempt] = React.useState<{ url: string; filename: string; sha256: string } | null>(null);
   //: 删掉没下完的部分之后的那一句(任务那一行已经不在了,得在下载框里说)。
   const [notice, setNotice] = React.useState<"" | "discarded">("");
-  const job = useJobWatch(jobId);
-  useOnJobDone(job.data, (done) => {
-    if (done.status === "succeeded") onDone();
+  const qc = useQueryClient();
+  //: 这一块要的那个文件,认的是任务 `payload` 里的 `instance_id + folder + filename`(后端建任务时写的,
+  //: 见 domain/model_library.start_download)。**状态的家是这份任务列表,不是组件 state**:刷新、切走再切回,
+  //: 「正在下载 / 已取消 / 从 N 继续」都还在。
+  const downloadsQuery = React.useMemo(() => modelDownloadsQuery(target.workspaceId), [target.workspaceId]);
+  const downloads = useQuery({
+    ...downloadsQuery,
+    //: 有没下完的就勤看一点(和任务中心同一条规矩);都结束了就慢下来。
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((job) => !jobDone(job)) ? 1500 : 8000,
   });
+  const mine = React.useMemo(
+    () => (downloads.data ?? []).filter((job) => {
+      const payload = job.payload ?? {};
+      const name = payloadText(payload.filename);
+      //: 任务可能下成别的名字(Civitai 一个版本有几个文件),工作流要的那个名字也认。
+      return payload.instance_id === target.instanceId && payload.folder === folder
+        && (name === filename || name === wanted);
+    }),
+    [downloads.data, target.instanceId, folder, filename, wanted],
+  );
+  //: 最新**未终态**的优先(它还在写);都结束了才取最新的一条。按 `created_at` 排,不赖接口给的顺序。
+  const latest = React.useMemo(() => {
+    const newestFirst = [...mine].sort((a, b) =>
+      parseServerTime(b.created_at).getTime() - parseServerTime(a.created_at).getTime());
+    return newestFirst.find((job) => !jobDone(job)) ?? newestFirst[0] ?? null;
+  }, [mine]);
+  //: 列表里不带 `result`(字节 / 速度只在详情里):盯着的那条还在跑时再问一次详情。
+  const detail = useQuery({
+    queryKey: ["jobs", "workbench", latest?.id],
+    queryFn: () => getJob(latest!.id),
+    enabled: Boolean(latest && !jobDone(latest)),
+    refetchInterval: 1500,
+    retry: false,
+  });
+  //: 这一行的状态就是任务里的那个;详情那份到了就用它(它比列表勤,取消 / 失败的最后一份字节也在里面)。
+  const current: Job | JobSummary | null =
+    latest && detail.data && detail.data.id === latest.id ? detail.data : latest;
+  //: 「做完了」只在这个面板**看着它做**的那一次通知调用方:首次挂载时已经是终态的是历史,不触发。
+  const seenActive = React.useRef<string | null>(null);
+  const announcedDone = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!current) return;
+    if (!jobDone(current)) {
+      seenActive.current = current.id;
+      return;
+    }
+    if (current.status !== "succeeded" || seenActive.current !== current.id || announcedDone.current === current.id) return;
+    announcedDone.current = current.id;
+    onDone();
+  }, [current, onDone]);
+  //: 取消 / 开始之后把任务写回这一份列表缓存(**不存 id**):界面仍只看任务列表。
+  const writeJob = React.useCallback((job: Job) => {
+    qc.setQueryData<JobSummary[]>(downloadsQuery.queryKey, (rows) => {
+      if (!rows) return [job];
+      return rows.some((one) => one.id === job.id)
+        ? rows.map((one) => (one.id === job.id
+          //: 接口有时只回「变了的那几格」:匹配用的 payload 别被空的那份盖掉。
+          ? { ...one, ...job, payload: job.payload && Object.keys(job.payload).length ? job.payload : one.payload }
+          : one))
+        : [job, ...rows];
+    });
+  }, [qc, downloadsQuery.queryKey]);
+  //: 续传要的那几样也从任务的 payload 里来(刷新之后照样能「从 N 继续」):URL / 文件名 / 声明哈希
+  //: 都是建任务时写下的那一份。
+  const source = React.useMemo(() => {
+    //: 认出来的是列表里那一行(它带着匹配用的 payload);详情只补状态和字节。
+    const payload: Record<string, unknown> = latest?.payload ?? current?.payload ?? {};
+    return {
+      url: payloadText(payload.url),
+      filename: payloadText(payload.filename) || filename,
+      sha256: payloadText(payload.sha256),
+    };
+  }, [latest, current, filename]);
   //: 这台服务器下载走哪条路(ComfyUI-Manager / 本机 / 下不了)和那句说明:模型库报的,和模型库面板同一份缓存
   const library = useModelLibrary(target.instanceId, { staleTime: 30_000 });
   const route = library.data?.download?.route ?? "";
@@ -165,38 +248,51 @@ export function ModelDownload({
     },
   });
   const start = useMutation({
-    mutationFn: (source: { url: string; filename: string; sha256: string }) =>
+    mutationFn: (download: { url: string; filename: string; sha256: string }) =>
       startModelDownload(target.instanceId, {
         workspace_id: target.workspaceId,
-        url: source.url,
+        url: download.url,
         folder,
-        filename: source.filename,
-        ...(source.sha256 ? { sha256: source.sha256 } : {}),
+        filename: download.filename,
+        ...(download.sha256 ? { sha256: download.sha256 } : {}),
       }),
-    onSuccess: (created, source) => {
+    onSuccess: (created, download) => {
       setResolved(null);
       setDigest("");
-      setAttempt(source);
       setNotice("");
-      setJobId(created.id);
+      //: 匹配键要 payload 里的那几样(后端建的这份一定有):只回了半条时,拿刚才发出去的那一份补齐,
+      //: 免得这一行当场从列表里认不出来。
+      const job: Job = created.payload && Object.keys(created.payload).length ? created : {
+        ...created,
+        payload: {
+          instance_id: target.instanceId, url: download.url, folder, filename: download.filename,
+          ...(download.sha256 ? { sha256: download.sha256 } : {}),
+        },
+      };
+      //: 刚由我们发起的这一条:哪怕它已经结束了,也是「刚做完」,该通知调用方刷新;先记成「看见过它」。
+      seenActive.current = job.id;
+      //: **把 POST 回来的任务写进列表缓存,不存 id** —— 后面的状态、取消、续传都从这份缓存派生。
+      writeJob(job);
+      qc.setQueryData(["jobs", "workbench", job.id], job);
     },
   });
-  const qc = useQueryClient();
   //: 取消没成功时那一句该说什么。**任务在请求到达前刚好结束不是取消失败** —— 那一下本来也没有可取消的东西,
   //: 用一句错误去吓人只会让人以为出了别的事(任务的终态由那一行自己说)。
   const [cancelNote, setCancelNote] = React.useState<"" | "failed" | "ended">("");
   const cancel = useMutation({
-    mutationFn: () => cancelJob(jobId!),
+    mutationFn: (jobId: string) => cancelJob(jobId),
     onSuccess: (stopped) => {
       setCancelNote("");
-      //: 取消接口回的就是取消后的那一条:直接写进这一行盯着的那份缓存,不必等下一轮轮询。
-      qc.setQueryData(["jobs", "workbench", jobId], stopped);
+      //: 取消接口回的就是取消后的那一条:直接写进这份缓存(列表 + 详情),不必等下一轮轮询。
+      writeJob(stopped);
+      qc.setQueryData(["jobs", "workbench", stopped.id], stopped);
       //: 取消**不删**半截(断点续传):这一行下面马上要问它还剩多少,好让人「继续下载」。
       void qc.invalidateQueries({ queryKey: ["model-partial", target.instanceId] });
     },
-    onError: async () => {
+    onError: async (_error, jobId) => {
       try {
-        const fresh = await getJob(jobId!);
+        const fresh = await getJob(jobId);
+        writeJob(fresh);
         qc.setQueryData(["jobs", "workbench", jobId], fresh);
         setCancelNote(jobDone(fresh) ? "ended" : "failed");
       } catch {
@@ -208,133 +304,146 @@ export function ModelDownload({
 
   //: 任务停在**取消 / 失败**之后才问半截:本机那条路才有,而且这时它不再被写,「从多少继续」才作数。
   //: Manager 那条路是那台机器自己在下,Mosael 这边没有半截 —— 不问、也不给删除(那不是 Mosael 能删的东西)。
-  const stoppedOrFailed = Boolean(jobId && job.data && (job.data.status === "cancelled" || job.data.status === "failed"));
+  const stoppedOrFailed = Boolean(current && (current.status === "cancelled" || current.status === "failed"));
+  const partialKey = ["model-partial", target.instanceId, folder, source.filename, source.url, source.sha256] as const;
   const partial = useQuery({
-    queryKey: ["model-partial", target.instanceId, folder, attempt?.filename ?? filename,
-               attempt?.url ?? "", attempt?.sha256 ?? ""],
+    queryKey: partialKey,
     queryFn: () => getModelPartial(target.instanceId, {
       workspace_id: target.workspaceId,
       folder,
-      name: attempt?.filename ?? filename,
-      ...(attempt?.url ? { url: attempt.url } : {}),
-      ...(attempt?.sha256 ? { sha256: attempt.sha256 } : {}),
+      name: source.filename,
+      ...(source.url ? { url: source.url } : {}),
+      ...(source.sha256 ? { sha256: source.sha256 } : {}),
     }),
-    enabled: stoppedOrFailed && Boolean(attempt) && route === "local",
+    enabled: stoppedOrFailed && Boolean(source.url) && route === "local",
     retry: false,
   });
   const discard = useMutation({
     mutationFn: () => discardModelPartial(target.instanceId, {
-      workspace_id: target.workspaceId, folder, name: attempt?.filename ?? filename,
+      workspace_id: target.workspaceId, folder, name: source.filename,
     }),
-    onSuccess: () => {
-      void qc.removeQueries({ queryKey: ["model-partial", target.instanceId] });
+    onSuccess: (left) => {
+      //: 删除接口回的就是删完之后的那一份:直接写进这份缓存,那一行当场知道「没有半截了」,不必再问一遍。
+      qc.setQueryData(partialKey, left);
       setNotice("discarded");
       setCancelNote("");
-      setJobId(null);
     },
   });
 
-  if (jobId) {
-    const status = job.data?.status ?? "queued";
-    const stopped = status === "cancelled";
-    const failed = status === "failed" && Boolean(job.data);
-    const running = status === "queued" || status === "running";
-    const halted = stopped || failed;
-    const kept = halted && Boolean(partial.data?.partial);
-    const partialBytes = kept ? partial.data?.downloaded_bytes ?? null : null;
-    const resumable = kept && Boolean(partial.data?.resumable) && (partialBytes ?? 0) > 0;
-    //: 字节/速度只从**结构化字段**来(`job.result` 是插件 step 事件记下的);人话只用来兜底说明。
-    const gotBytes = byteField(job.data?.result?.downloaded_bytes);
-    const gotTotal = byteField(job.data?.result?.total_bytes);
-    const speed = byteField(job.data?.result?.speed_bps);
-    //: 能拿到字节就按字节算;拿不到才退回任务的总进度(它也是插件按字节算出来的分数)
-    const percent = Math.min(100, Math.max(0, gotBytes !== null && gotTotal
-      ? Math.round((gotBytes / gotTotal) * 100)
-      : Math.round((job.data?.progress ?? 0) * 100)));
-    const body = failed
-      ? <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(job.data!, t("workbenchDownloadFailed"))} />
-      : (
-        <PanelNote
-          action={running ? (
-            <Button variant="ghost" size="xs" className="shrink-0" loading={cancel.isPending}
-                    aria-label={t("workbenchDownloadCancelLabel").replace("{name}", saveAs || filename)}
-                    onClick={() => cancel.mutate()}>
-              <X size={12} />
-              {t("cancel")}
-            </Button>
-          ) : undefined}
-        >
-          {/* 取消在两条路上不是同一件事:本机那条路半截**留着**供续传(这一段下面就有「继续下载」);
-              Manager 那条路是那台机器自己在下,Mosael 只是不再等(插件已经说清了),不能说「留着」或「删了」。 */}
-          {stopped ? t(route === "manager" ? "workbenchDownloadCancelledManager" : "workbenchDownloadCancelled")
-            : status === "succeeded" ? doneLabel
-            : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
+  const status = current?.status ?? "";
+  const stopped = status === "cancelled";
+  const failed = status === "failed" && Boolean(current);
+  const running = status === "queued" || status === "running";
+  const halted = stopped || failed;
+  const kept = halted && Boolean(partial.data?.partial);
+  const partialBytes = kept ? partial.data?.downloaded_bytes ?? null : null;
+  const resumable = kept && Boolean(partial.data?.resumable) && (partialBytes ?? 0) > 0;
+  //: 字节 / 速度只从**结构化字段**来(`result` 是插件 step 事件记下的);列表里不带 `result`,详情里才有。
+  const result = jobResult(current);
+  const gotBytes = byteField(result.downloaded_bytes);
+  const gotTotal = byteField(result.total_bytes);
+  const speed = byteField(result.speed_bps);
+  //: 能拿到字节就按字节算;拿不到才退回任务的总进度(它也是插件按字节算出来的分数)
+  const percent = Math.min(100, Math.max(0, gotBytes !== null && gotTotal
+    ? Math.round((gotBytes / gotTotal) * 100)
+    : Math.round((current?.progress ?? 0) * 100)));
+  //: 终态那一行说「最后一次 …」:时间取这次下载最后动过的那一刻。
+  const lastAt = current?.updated_at || current?.created_at || "";
+  //: 上一次已经结束了(取消 / 失败)时下载框还留着 —— 半截在就接着下,不在就能从头再下;
+  //: 成功的不必再摆一个「下载」。
+  const showEntry = !current || (jobDone(current) && current.status !== "succeeded");
+  const jobBlock = current ? (
+    <div className="grid gap-2" data-model-download-job={current.id} data-model-download-status={current.status}>
+      {failed
+        ? <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(current!, t("workbenchDownloadFailed"))} />
+        : (
+          <PanelNote
+            action={running ? (
+              <Button variant="ghost" size="xs" className="shrink-0" loading={cancel.isPending}
+                      aria-label={t("workbenchDownloadCancelLabel").replace("{name}", source.filename || filename)}
+                      onClick={() => cancel.mutate(current.id)}>
+                <X size={12} />
+                {t("cancel")}
+              </Button>
+            ) : undefined}
+          >
+            {/* 取消在两条路上不是同一件事:本机那条路半截**留着**供续传(这一段下面就有「继续下载」);
+                Manager 那条路是那台机器自己在下,Mosael 只是不再等(插件已经说清了),不能说「留着」或「删了」。
+                删掉半截之后,那一行也不能还说「留着」。 */}
+            {stopped ? (notice === "discarded" ? t("workbenchDownloadDiscardDone")
+              : t(route === "manager" ? "workbenchDownloadCancelledManager" : "workbenchDownloadCancelled"))
+              : status === "succeeded" ? doneLabel
+              : `${t("workbenchDownloading")} ${current.message ?? ""}`}
+          </PanelNote>
+        )}
+      {running && (
+        <div className="grid gap-1">
+          <Progress value={percent} aria-label={t("workbenchDownloading")} />
+          <p className="m-0 break-words text-ui-2xs leading-relaxed text-muted-foreground">
+            {gotBytes !== null && (gotTotal !== null
+              ? t("workbenchDownloadProgress").replace("{downloaded}", formatBytes(gotBytes))
+                  .replace("{total}", formatBytes(gotTotal))
+              : t("workbenchDownloadProgressUnknown").replace("{downloaded}", formatBytes(gotBytes)))}
+            {gotBytes !== null && ` · ${percent}%`}
+            {speed !== null && speed > 0 && ` · ${formatSpeed(speed)}`}
+          </p>
+        </div>
+      )}
+      {jobDone(current) && lastAt && (
+        <p className="m-0 text-ui-2xs leading-relaxed text-muted-foreground">
+          {t("workbenchDownloadLastAt").replace("{time}", relativeTime(lastAt, locale))}
+        </p>
+      )}
+      {kept && (
+        <PanelNote>
+          {t("workbenchDownloadPartialKept").replace("{size}", formatBytes(partialBytes ?? 0))}
         </PanelNote>
-      );
-    return (
-      <div className="grid gap-2">
-        {body}
-        {running && (
-          <div className="grid gap-1">
-            <Progress value={percent} aria-label={t("workbenchDownloading")} />
-            <p className="m-0 break-words text-ui-2xs leading-relaxed text-muted-foreground">
-              {gotBytes !== null && (gotTotal !== null
-                ? t("workbenchDownloadProgress").replace("{downloaded}", formatBytes(gotBytes))
-                    .replace("{total}", formatBytes(gotTotal))
-                : t("workbenchDownloadProgressUnknown").replace("{downloaded}", formatBytes(gotBytes)))}
-              {gotBytes !== null && ` · ${percent}%`}
-              {speed !== null && speed > 0 && ` · ${formatSpeed(speed)}`}
-            </p>
-          </div>
-        )}
-        {kept && (
-          <PanelNote>
-            {t("workbenchDownloadPartialKept").replace("{size}", formatBytes(partialBytes ?? 0))}
-          </PanelNote>
-        )}
-        {kept && !resumable && (
-          <PanelNote tone="warning">{t("workbenchDownloadNotResumable")}</PanelNote>
-        )}
-        {halted && (
-          <div className="flex flex-wrap gap-1.5">
-            {resumable && (
-              <Button size="xs" loading={start.isPending}
-                      onClick={() => attempt && start.mutate(attempt)}>
-                {partialBytes !== null
-                  ? t("workbenchDownloadResumeFrom").replace("{size}", formatBytes(partialBytes))
-                  : t("workbenchDownloadResume")}
-              </Button>
-            )}
-            {kept && (
-              <Button variant="outline" size="xs" loading={discard.isPending} onClick={() => discard.mutate()}>
-                {t("workbenchDownloadDiscardPart")}
-              </Button>
-            )}
-          </div>
-        )}
-        {start.isError && <PanelNote tone="error">{errorText(start.error)}</PanelNote>}
-        {partial.isError && <PanelNote tone="error">{errorText(partial.error)}</PanelNote>}
-        {discard.isError && (
-          <PanelNote tone="error">
-            {t("workbenchDownloadDiscardFailed").replace("{message}", errorText(discard.error))}
-          </PanelNote>
-        )}
-        {cancelNote === "ended" && <PanelNote>{t("workbenchDownloadCancelEnded")}</PanelNote>}
-        {cancelNote === "failed" && (
-          <PanelNote tone="error">
-            {t("workbenchDownloadCancelFailed").replace("{message}", errorText(cancel.error))}
-          </PanelNote>
-        )}
-      </div>
-    );
-  }
+      )}
+      {kept && !resumable && (
+        <PanelNote tone="warning">{t("workbenchDownloadNotResumable")}</PanelNote>
+      )}
+      {halted && (
+        <div className="flex flex-wrap gap-1.5">
+          {resumable && (
+            <Button size="xs" loading={start.isPending} onClick={() => start.mutate(source)}>
+              {partialBytes !== null
+                ? t("workbenchDownloadResumeFrom").replace("{size}", formatBytes(partialBytes))
+                : t("workbenchDownloadResume")}
+            </Button>
+          )}
+          {kept && (
+            <Button variant="outline" size="xs" loading={discard.isPending} onClick={() => discard.mutate()}>
+              {t("workbenchDownloadDiscardPart")}
+            </Button>
+          )}
+        </div>
+      )}
+      {start.isError && <PanelNote tone="error">{errorText(start.error)}</PanelNote>}
+      {partial.isError && <PanelNote tone="error">{errorText(partial.error)}</PanelNote>}
+      {discard.isError && (
+        <PanelNote tone="error">
+          {t("workbenchDownloadDiscardFailed").replace("{message}", errorText(discard.error))}
+        </PanelNote>
+      )}
+      {cancelNote === "ended" && <PanelNote>{t("workbenchDownloadCancelEnded")}</PanelNote>}
+      {cancelNote === "failed" && (
+        <PanelNote tone="error">
+          {t("workbenchDownloadCancelFailed").replace("{message}", errorText(cancel.error))}
+        </PanelNote>
+      )}
+    </div>
+  ) : null;
 
   const candidates = search.data?.candidates ?? [];
   const failedSources = search.data?.failed ?? [];
   const sourceName = (source: string) => (SOURCE_LABEL[source] ? t(SOURCE_LABEL[source]) : source);
+  if (!showEntry) {
+    return <div data-model-download="" className="grid gap-2">{jobBlock}</div>;
+  }
   return (
     <div data-model-download="" className="grid gap-2 rounded-lg border border-dashed border-border p-2.5">
-      {notice === "discarded" && <PanelNote>{t("workbenchDownloadDiscardDone")}</PanelNote>}
+      {jobBlock}
+      {!current && notice === "discarded" && <PanelNote>{t("workbenchDownloadDiscardDone")}</PanelNote>}
       {url ? (
         <>
           <div className="flex min-w-0 items-center gap-2">

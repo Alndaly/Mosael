@@ -15,16 +15,25 @@ import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({
-  getModelLibrary: vi.fn(),
-  resolveModelLink: vi.fn(),
-  searchModelSources: vi.fn(),
-  startModelDownload: vi.fn(),
-  getJob: vi.fn(),
-  cancelJob: vi.fn(),
-  getModelPartial: vi.fn(),
-  discardModelPartial: vi.fn(),
-}));
+const api = vi.hoisted(() => {
+  //: `model_download` 任务列表:刷新后下载状态就从这一份里恢复(见 ModelDownload)。测试直接往这个数组里放任务。
+  const downloads: Record<string, unknown>[] = [];
+  return {
+    downloads,
+    getModelLibrary: vi.fn(),
+    modelDownloadsQuery: (workspaceId: string) => ({
+      queryKey: ["jobs", workspaceId, "model-downloads"],
+      queryFn: async () => downloads,
+    }),
+    resolveModelLink: vi.fn(),
+    searchModelSources: vi.fn(),
+    startModelDownload: vi.fn(),
+    getJob: vi.fn(),
+    cancelJob: vi.fn(),
+    getModelPartial: vi.fn(),
+    discardModelPartial: vi.fn(),
+  };
+});
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", async () => {
   const { messages } = await import("@/app/messages");
@@ -81,8 +90,39 @@ async function startDownload(route = "local") {
   await waitFor(() => expect(api.startModelDownload).toHaveBeenCalled());
 }
 
+const NOW = Date.now();
+/** 后端时间戳是 UTC 的 ISO 串;这里的 `minutesAgo` 用来排「谁更新」。 */
+function stamp(minutesAgo: number): string {
+  return new Date(NOW - minutesAgo * 60_000).toISOString();
+}
+
+/** `/api/jobs?kind=model_download` 里的一行(JobSummaryOut):列表不带给 `result`,字节只在详情里。 */
+function downloadJob(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "job-1",
+    workspace_id: "w1",
+    kind: "model_download",
+    parent_job_id: null,
+    status: "running",
+    progress: 0.2,
+    message: "",
+    payload: { instance_id: "i1", url: "https://civitai.com/api/download/models/7", folder: FOLDER, filename: NAME },
+    error: null,
+    created_at: stamp(5),
+    updated_at: stamp(1),
+    ...overrides,
+  };
+}
+
+function seedDownloads(...jobs: Record<string, unknown>[]) {
+  api.downloads.splice(0, api.downloads.length, ...jobs);
+}
+
 beforeEach(() => {
-  for (const fn of Object.values(api)) fn.mockReset();
+  for (const fn of Object.values(api)) {
+    if (typeof fn === "function" && "mockReset" in fn) fn.mockReset();
+  }
+  api.downloads.length = 0;
   api.getModelLibrary.mockResolvedValue(library());
   api.searchModelSources.mockResolvedValue({ filename: NAME, candidates: [], failed: [] });
   api.startModelDownload.mockResolvedValue({ id: "job-1", status: "queued" });
@@ -425,5 +465,131 @@ describe("下载中取消", () => {
     expect(api.getModelPartial, "Manager 那条路 Mosael 这边没有半截,不问").not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "删除没下完的部分" })).toBeNull();
     expect(screen.queryByRole("button", { name: /继续/ })).toBeNull();
+  });
+});
+
+// --- 四、刷新之后:下载状态从任务里恢复(不再存在组件 state 里) -------------------------
+
+describe("刷新之后的下载状态", () => {
+  it("① 接口里有一个正在跑的下载:那一行直接是「下载中」,带进度和「取消」", async () => {
+    seedDownloads(downloadJob({ id: "job-live", progress: 0.4 }));
+    api.getJob.mockResolvedValue({
+      ...downloadJob({ id: "job-live", progress: 0.4 }),
+      result: { downloaded_bytes: 4_000_000_000, total_bytes: 10_000_000_000, speed_bps: 5_000_000 },
+    });
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    //: 刷新前它是在组件 state 里的;现在打开面板就该看到,而不是又回到「待下载」
+    expect(await screen.findByText(/正在下载/)).toBeTruthy();
+    expect(await screen.findByRole("progressbar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: `取消下载 ${NAME}` })).toBeTruthy();
+  });
+
+  it("② 切走再切回(卸载再挂载):状态还在", async () => {
+    seedDownloads(downloadJob({ id: "job-live" }));
+    api.getJob.mockResolvedValue({ ...downloadJob({ id: "job-live" }), result: null });
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+    expect(await screen.findByText(/正在下载/)).toBeTruthy();
+
+    cleanup();
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+    expect(await screen.findByText(/正在下载/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: `取消下载 ${NAME}` })).toBeTruthy();
+  });
+
+  it("③ 刷新后:已取消但留着半截,照样能「从 3.2 GB 继续」—— 下载源从任务 payload 里来", async () => {
+    seedDownloads(downloadJob({
+      id: "job-stopped", status: "cancelled", progress: 0.25,
+      payload: { instance_id: "i1", url: "https://civitai.com/api/download/models/7", folder: FOLDER,
+                 filename: NAME, sha256: DIGEST },
+    }));
+    api.getJob.mockResolvedValue(downloadJob({ id: "job-stopped", status: "cancelled", progress: 0.25 }));
+    api.getModelPartial.mockResolvedValue({
+      folder: FOLDER, name: NAME, partial: true, resumable: true,
+      downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, updated_at: 1, removed: false,
+    });
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "从 3.2 GB 继续" }));
+    await waitFor(() => expect(api.startModelDownload).toHaveBeenCalledWith("i1", {
+      workspace_id: "w1", url: "https://civitai.com/api/download/models/7", folder: FOLDER, filename: NAME,
+      sha256: DIGEST,
+    }));
+  });
+
+  it("④ 取消走的是从查询里派生出的 job.id;取消后那一行变「已取消」", async () => {
+    seedDownloads(downloadJob({ id: "job-derived" }));
+    api.getJob.mockResolvedValue(downloadJob({ id: "job-derived" }));
+    api.cancelJob.mockResolvedValue(downloadJob({ id: "job-derived", status: "cancelled" }));
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-derived"));
+    expect((await screen.findByText(/已取消/)).textContent).toContain("留着");
+  });
+
+  it("⑤ 已经下完的:说「下好了」、不再转圈,并带「最后一次 …」", async () => {
+    seedDownloads(downloadJob({ id: "job-done", status: "succeeded", progress: 1, updated_at: stamp(3) }));
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    expect(await screen.findByText("下好了")).toBeTruthy();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.getByText(/最后一次/)).toBeTruthy();
+  });
+
+  it("⑤ 失败的:摆出原因,也带「最后一次 …」", async () => {
+    seedDownloads(downloadJob({
+      id: "job-fail", status: "failed", error: "连接断了", error_summary: "连接断了",
+      error_detail: null, error_hint: null, updated_at: stamp(4),
+    }));
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    expect(await screen.findByText("连接断了")).toBeTruthy();
+    expect(screen.getByText(/最后一次/)).toBeTruthy();
+  });
+
+  it("⑥ 同一个文件有多个任务:先取最新的**未终态**,没有才取最新的一条(按 created_at,不赖顺序)", async () => {
+    seedDownloads(
+      //: 更新的那条已经结束,但还有一条在跑 —— 在跑的那条优先
+      downloadJob({ id: "job-done", status: "succeeded", progress: 1, created_at: stamp(1), updated_at: stamp(1) }),
+      downloadJob({ id: "job-running", status: "running", created_at: stamp(10), updated_at: stamp(9) }),
+      //: 别的文件、别的连接:更新也不关这一块的事
+      downloadJob({ id: "job-other", status: "running", created_at: stamp(0) }),
+    );
+    api.downloads[2].payload = { instance_id: "i1", url: "https://example.test/other", folder: FOLDER, filename: "other.safetensors" };
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    expect(await screen.findByText(/正在下载/)).toBeTruthy();
+    expect(screen.queryByText("下好了")).toBeNull();
+    expect(screen.getByRole("button", { name: `取消下载 ${NAME}` })).toBeTruthy();
+  });
+
+  it("onDone:刷新时任务已经是终态的不触发;看着它从跑到结束才触发一次", async () => {
+    const onDone = vi.fn();
+    seedDownloads(downloadJob({ id: "job-done", status: "succeeded", progress: 1, updated_at: stamp(3) }));
+    renderBlock({ url: "https://civitai.com/api/download/models/7", onDone });
+    expect(await screen.findByText("下好了")).toBeTruthy();
+    expect(onDone, "刷新后看到的是历史,不是刚做完").not.toHaveBeenCalled();
+
+    cleanup();
+    seedDownloads(downloadJob({ id: "job-run" }));
+    api.getJob.mockResolvedValue({ ...downloadJob({ id: "job-run" }), result: null });
+    renderBlock({ url: "https://civitai.com/api/download/models/7", onDone });
+    expect(await screen.findByText(/正在下载/)).toBeTruthy();
+    //: 在面板开着的时候它下完了:这时才该叫调用方刷新
+    api.getJob.mockResolvedValue({ ...downloadJob({ id: "job-run", status: "succeeded", progress: 1 }), result: null });
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1), { timeout: 4000 });
+  });
+
+  it("⑥ 都是终态时:取 created_at 最新的那一条(不赖接口给的顺序)", async () => {
+    seedDownloads(
+      downloadJob({ id: "job-new", status: "succeeded", progress: 1, created_at: stamp(1), updated_at: stamp(1) }),
+      downloadJob({ id: "job-old", status: "failed", error: "连接断了", error_summary: "连接断了",
+                    created_at: stamp(30), updated_at: stamp(30) }),
+    );
+    renderBlock({ url: "https://civitai.com/api/download/models/7" });
+
+    expect(await screen.findByText("下好了")).toBeTruthy();
+    expect(screen.queryByText("连接断了")).toBeNull();
   });
 });

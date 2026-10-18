@@ -43,6 +43,7 @@ const api = vi.hoisted(() => ({
   getJob: vi.fn(),
   getAsset: vi.fn(),
   cancelJob: vi.fn(),
+  modelDownloadsQuery: (workspaceId: string) => ({ queryKey: ["jobs", workspaceId, "model-downloads"], queryFn: async () => [] }),
   assetThumbnailUrl: (id: string) => `thumb://${id}`,
   assetPreviewUrl: (id: string) => `preview://${id}`,
   assetFileUrl: (id: string) => `file://${id}`,

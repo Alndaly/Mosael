@@ -645,6 +645,7 @@ export const plugins = {
   workbenchDownloadFailed: "The download didn't finish",
   workbenchDownloadCancelLabel: "Cancel downloading {name}",
   workbenchDownloadCancelled: "Cancelled; the unfinished part is kept so you can resume",
+  workbenchDownloadLastAt: "Last attempt {time}",
   workbenchDownloadCancelledManager: "Cancelled; Mosael stopped waiting, but the download keeps going on that machine — refresh the model library once it's done",
   workbenchDownloadCancelFailed: "Couldn't cancel: {message}",
   workbenchDownloadCancelEnded: "This download has already finished, so there's nothing to cancel",

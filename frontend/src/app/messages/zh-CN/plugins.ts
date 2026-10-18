@@ -653,6 +653,7 @@ export const plugins = {
   workbenchDownloadFailed: "没下成",
   workbenchDownloadCancelLabel: "取消下载 {name}",
   workbenchDownloadCancelled: "已取消;没下完的部分留着,可以继续下载",
+  workbenchDownloadLastAt: "最后一次 {time}",
   workbenchDownloadCancelledManager: "已取消;Mosael 不再等这次下载,那台机器上的下载还会继续,下完刷新模型库就能看到",
   workbenchDownloadCancelFailed: "取消失败:{message}",
   workbenchDownloadCancelEnded: "这个下载已经结束了,不用取消",
