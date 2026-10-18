@@ -1,7 +1,7 @@
 """模型库(ADR 0034):认领 `model_library` 的连接上有哪些模型文件 —— 宿主这一侧。
 
-插件回答四件事(`op`):列出全部模型文件、一个文件的完整元数据、一个链接指的是什么、把它下到那台服务器上。宿主做的是
-插件做不了、也不该做的那几样:
+插件回答五件事(`op`):列出全部模型文件、一个文件的完整元数据、一个链接指的是什么、把它下到那台服务器上、以及
+「没下完的那一半还有多少 / 删掉它」(断点续传与显式放弃)。宿主做的是插件做不了、也不该做的那几样:
 
 - **规整**:插件报的每一条都过一遍(没有目录或名字的丢掉、长文本截断、只认 http(s) 的声明地址),界面拿到的形状只有一种;
 - **预览图**:插件给的是那台服务器上的地址(连同取它要带的头),在 Civitai 上对上了版本的还有几张示例图的地址。宿主按
@@ -9,7 +9,8 @@
   地址和凭据不进给界面的回答;
 - **NSFW**:插件交的依据、库里记着的手动标记合成一个判断(ADR 0038 §9);
 - **下载**:一个后台任务(`model_download`),进度、取消走流式协议;下完让这个连接的目录重新拉一遍,生成表单里选模型的
-  下拉马上有它。
+  下拉马上有它。取消 / 失败**不删**半截(断点续传):插件把结构化字节记进任务详情,界面据此说「从多少继续」;
+  只有用户点「删除没下完的部分」才删。
 
 **这里不认识 ComfyUI**:任何认领 `model_library` 的连接,插件页上都有一行「模型库」。列表不存库(每次现问插件,插件自己
 记着逐个读的元数据);宿主只在内存里记着「哪个文件的预览图在哪」,重启后界面直接要预览图时先替它列一遍。
@@ -683,7 +684,29 @@ def _download(job_id: str) -> None:
             if message:
                 say(job, message[:200])
 
-    hooks = StreamHooks(on_progress=on_progress, on_task=lambda _receipt: None, is_cancelled=lambda: _cancelled(job_id))
+    def on_step(event: dict[str, Any]) -> None:
+        """插件报的**结构化字节**(`{"event": "step", "step": "download", downloaded_bytes, total_bytes,
+        speed_bps}`):记进任务详情(`result`)里,界面据此显示百分比、速度和「从 3.2 GB 继续」。不解析人话 ——
+        进度文案只是给人看的,数字从字节来。取消 / 失败时 `result` 留着最后一份,正好告诉界面没下完的有多少;
+        成功时会被最终结果覆盖。"""
+        if event.get("step") != "download":
+            return
+        downloaded = _number(event.get("downloaded_bytes"))
+        total = _number(event.get("total_bytes"))
+        speed = _number(event.get("speed_bps"))
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is None or not finish_job(db, job, status="running"):
+                return
+            job.result = {
+                **(job.result or {}),
+                "downloaded_bytes": int(downloaded) if downloaded is not None else None,
+                "total_bytes": int(total) if total is not None else None,
+                "speed_bps": round(speed) if speed is not None else None,
+            }
+
+    hooks = StreamHooks(on_progress=on_progress, on_task=lambda _receipt: None, is_cancelled=lambda: _cancelled(job_id),
+                        on_step=on_step)
     request = {"op": "download", "url": payload["url"], "folder": payload["folder"], "filename": payload["filename"],
                **({"sha256": payload["sha256"]} if payload.get("sha256") else {})}
     try:
@@ -727,6 +750,47 @@ def _download(job_id: str) -> None:
         if job is not None and finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, "jobMsg_modelDownloadDone", name=result["name"], folder=result["folder"])
             emit_job_event(db, job.id, "job.succeeded", dict(result))
+
+
+# --- 半截:续传从多少开始、或者显式删掉 ----------------------------------------------
+#
+# 取消 / 失败 / 后端重启都**留着** `.part` 和 sidecar(见插件 install.via_local),所以界面要知道「还剩多少」;
+# 只有用户明确点「删除没下完的部分」才删。这两件事都问插件(只有它知道那台服务器的磁盘上有什么)。
+
+def partial(db: Session, user: User, instance: PluginInstance, *, workspace_id: str, folder: str, name: str,
+            url: str = "", sha256: str = "", delete: bool = False) -> dict[str, Any]:
+    """一个模型文件没下完的那一半:**还有多少**(续传从多少开始)、或者**删掉它**。
+
+    只在本机那条下载路上有:那台服务器在另一台机器上时(经 ComfyUI-Manager 下),Mosael 这边没有半截,
+    插件回 `partial: false`。`resumable` 由插件按「续传时同一套核对」给出(URL / 声明的 SHA256 / 总大小 /
+    校验器)—— 界面只在它为真时给「继续下载」。"""
+    _require(db, instance)
+    folder = _plain_name(folder, key="modelLibErr_badFolder")
+    name = _plain_name(name, key="modelLibErr_badFilename")
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    blocked = inst.blocked_reason(db, instance)
+    if blocked:
+        raise PluginDomainError("pluginErr_unavailable", name=instance.name, reason=blocked)
+    digest = (sha256 or "").strip().lower()
+    clean_url = _http(url)
+    request = {"op": "partial", "folder": folder, "filename": name, "delete": bool(delete),
+               **({"url": clean_url} if clean_url else {}),
+               **({"sha256": digest} if _SHA256.fullmatch(digest) else {})}
+    output = tools.invoke_host(db, instance.id, MODEL_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    if not isinstance(output, dict):
+        raise ModelLibraryError("modelLibErr_badAnswer", name=instance.name)
+    size, total = _number(output.get("downloaded_bytes")), _number(output.get("total_bytes"))
+    return {
+        "folder": _text(output.get("folder"), 200) or folder,
+        "name": _text(output.get("name"), 1000) or name,
+        "partial": bool(output.get("partial")),
+        "resumable": bool(output.get("resumable")),
+        #: 未知就是 None,不是 0:0 字节和「问不到」在界面上不是一回事。
+        "downloaded_bytes": int(size) if size is not None else None,
+        "total_bytes": int(total) if total is not None else None,
+        "updated_at": _number(output.get("updated_at")),
+        "removed": bool(output.get("removed")),
+    }
 
 
 # --- 模型信息:在 Civitai 上找、存回预览图(ADR 0038 §9) ---------------------------

@@ -26,6 +26,8 @@ from app.api.schemas import (
     ModelLookupJobOut,
     ModelLookupRequest,
     ModelNsfwMarkRequest,
+    ModelPartialOut,
+    ModelPartialRequest,
     ModelSavePreviewOut,
     ModelSavePreviewRequest,
     ModelNsfwOut,
@@ -656,6 +658,19 @@ def start_model_download(instance_id: str, body: ModelDownloadRequest, db: Tx, u
             db, user, instance, workspace_id=body.workspace_id, url=body.url, folder=body.folder, filename=body.filename,
             sha256=body.sha256,
         )
+    except _MODEL_LIBRARY_ERRORS as exc:
+        raise _model_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/model-library/partial", response_model=ModelPartialOut)
+def model_partial(instance_id: str, body: ModelPartialRequest, db: DbSession, user: CurrentUser) -> dict:
+    """这个模型文件没下完的那一半:**还有多少**(界面「继续下载」要显示从多少开始),或者删掉它
+    (「删除没下完的部分」)。只在本机那条下载路上有;经 ComfyUI-Manager 下的那台机器在别处,Mosael 这边没有半截。
+    `resumable` 由插件按续传时同一套核对给出 —— 地址 / 哈希 / 大小 / 校验器变了就不该续。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return model_library.partial(db, user, instance, workspace_id=body.workspace_id, folder=body.folder,
+                                     name=body.name, url=body.url, sha256=body.sha256, delete=body.delete)
     except _MODEL_LIBRARY_ERRORS as exc:
         raise _model_library_failed(exc) from exc
 

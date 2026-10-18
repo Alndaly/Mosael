@@ -5,7 +5,9 @@ import { Download, ExternalLink, Link2, Loader2, Search, X } from "lucide-react"
 
 import {
   cancelJob,
+  discardModelPartial,
   getJob,
+  getModelPartial,
   resolveModelLink,
   searchModelSources,
   startModelDownload,
@@ -20,11 +22,17 @@ import { modelBaseName } from "@/components/generation/ModelThumb";
 import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Truncate } from "@/components/ui/truncate";
 import { InlineConfirm, jobDone, PanelNote, useJobWatch, useOnJobDone } from "@/features/plugins/workbench/workbenchParts";
 import type { WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
-import { formatBytes } from "@/lib/bytes";
+import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
+
+/** `job.result` 里的字节数(后端从插件的结构化 step 事件记下的):认不出就是 null,不当 0。 */
+function byteField(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 const SOURCE_LABEL: Record<string, MessageKey> = {
   huggingface: "modelDownloadSourceHuggingface",
@@ -104,6 +112,10 @@ export function ModelDownload({
   //: 这一次下载要核对的 SHA256(只有「确认是同一个文件」的那几档才带):下完插件再算一遍,对不上就删掉。
   const [digest, setDigest] = React.useState("");
   const [jobId, setJobId] = React.useState<string | null>(null);
+  //: 这一次(或刚刚结束的那一次)下载的源:续传要拿**同一个** URL / 文件名 / 声明哈希再下一次。
+  const [attempt, setAttempt] = React.useState<{ url: string; filename: string; sha256: string } | null>(null);
+  //: 删掉没下完的部分之后的那一句(任务那一行已经不在了,得在下载框里说)。
+  const [notice, setNotice] = React.useState<"" | "discarded">("");
   const job = useJobWatch(jobId);
   useOnJobDone(job.data, (done) => {
     if (done.status === "succeeded") onDone();
@@ -146,23 +158,26 @@ export function ModelDownload({
     mutationFn: (pick: { address: string; name?: string; sha256?: string }) =>
       resolveModelLink(target.instanceId, pick.address),
     onSuccess: (found, pick) => {
+      setNotice("");
       setResolved(found);
       setSaveAs(pick.name || found.filename || filename);
       setDigest(pick.sha256 || "");
     },
   });
   const start = useMutation({
-    mutationFn: () =>
+    mutationFn: (source: { url: string; filename: string; sha256: string }) =>
       startModelDownload(target.instanceId, {
         workspace_id: target.workspaceId,
-        url: resolved!.url,
+        url: source.url,
         folder,
-        filename: saveAs,
-        ...(digest ? { sha256: digest } : {}),
+        filename: source.filename,
+        ...(source.sha256 ? { sha256: source.sha256 } : {}),
       }),
-    onSuccess: (created) => {
+    onSuccess: (created, source) => {
       setResolved(null);
       setDigest("");
+      setAttempt(source);
+      setNotice("");
       setJobId(created.id);
     },
   });
@@ -176,6 +191,8 @@ export function ModelDownload({
       setCancelNote("");
       //: 取消接口回的就是取消后的那一条:直接写进这一行盯着的那份缓存,不必等下一轮轮询。
       qc.setQueryData(["jobs", "workbench", jobId], stopped);
+      //: 取消**不删**半截(断点续传):这一行下面马上要问它还剩多少,好让人「继续下载」。
+      void qc.invalidateQueries({ queryKey: ["model-partial", target.instanceId] });
     },
     onError: async () => {
       try {
@@ -189,24 +206,66 @@ export function ModelDownload({
     },
   });
 
+  //: 任务停在**取消 / 失败**之后才问半截:本机那条路才有,而且这时它不再被写,「从多少继续」才作数。
+  //: Manager 那条路是那台机器自己在下,Mosael 这边没有半截 —— 不问、也不给删除(那不是 Mosael 能删的东西)。
+  const stoppedOrFailed = Boolean(jobId && job.data && (job.data.status === "cancelled" || job.data.status === "failed"));
+  const partial = useQuery({
+    queryKey: ["model-partial", target.instanceId, folder, attempt?.filename ?? filename,
+               attempt?.url ?? "", attempt?.sha256 ?? ""],
+    queryFn: () => getModelPartial(target.instanceId, {
+      workspace_id: target.workspaceId,
+      folder,
+      name: attempt?.filename ?? filename,
+      ...(attempt?.url ? { url: attempt.url } : {}),
+      ...(attempt?.sha256 ? { sha256: attempt.sha256 } : {}),
+    }),
+    enabled: stoppedOrFailed && Boolean(attempt) && route === "local",
+    retry: false,
+  });
+  const discard = useMutation({
+    mutationFn: () => discardModelPartial(target.instanceId, {
+      workspace_id: target.workspaceId, folder, name: attempt?.filename ?? filename,
+    }),
+    onSuccess: () => {
+      void qc.removeQueries({ queryKey: ["model-partial", target.instanceId] });
+      setNotice("discarded");
+      setCancelNote("");
+      setJobId(null);
+    },
+  });
+
   if (jobId) {
     const status = job.data?.status ?? "queued";
     const stopped = status === "cancelled";
-    const body = status === "failed" && job.data
-      ? <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(job.data, t("workbenchDownloadFailed"))} />
+    const failed = status === "failed" && Boolean(job.data);
+    const running = status === "queued" || status === "running";
+    const halted = stopped || failed;
+    const kept = halted && Boolean(partial.data?.partial);
+    const partialBytes = kept ? partial.data?.downloaded_bytes ?? null : null;
+    const resumable = kept && Boolean(partial.data?.resumable) && (partialBytes ?? 0) > 0;
+    //: 字节/速度只从**结构化字段**来(`job.result` 是插件 step 事件记下的);人话只用来兜底说明。
+    const gotBytes = byteField(job.data?.result?.downloaded_bytes);
+    const gotTotal = byteField(job.data?.result?.total_bytes);
+    const speed = byteField(job.data?.result?.speed_bps);
+    //: 能拿到字节就按字节算;拿不到才退回任务的总进度(它也是插件按字节算出来的分数)
+    const percent = Math.min(100, Math.max(0, gotBytes !== null && gotTotal
+      ? Math.round((gotBytes / gotTotal) * 100)
+      : Math.round((job.data?.progress ?? 0) * 100)));
+    const body = failed
+      ? <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(job.data!, t("workbenchDownloadFailed"))} />
       : (
         <PanelNote
-          action={stopped || status === "succeeded" ? undefined : (
+          action={running ? (
             <Button variant="ghost" size="xs" className="shrink-0" loading={cancel.isPending}
                     aria-label={t("workbenchDownloadCancelLabel").replace("{name}", saveAs || filename)}
                     onClick={() => cancel.mutate()}>
               <X size={12} />
               {t("cancel")}
             </Button>
-          )}
+          ) : undefined}
         >
-          {/* 取消在两条路上不是同一件事:本机那条路半截文件当场删掉;Manager 那条路是那台机器自己在下,
-              Mosael 只是不再等(插件已经说清了),不能跟着说「已删掉」。 */}
+          {/* 取消在两条路上不是同一件事:本机那条路半截**留着**供续传(这一段下面就有「继续下载」);
+              Manager 那条路是那台机器自己在下,Mosael 只是不再等(插件已经说清了),不能说「留着」或「删了」。 */}
           {stopped ? t(route === "manager" ? "workbenchDownloadCancelledManager" : "workbenchDownloadCancelled")
             : status === "succeeded" ? doneLabel
             : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
@@ -215,6 +274,51 @@ export function ModelDownload({
     return (
       <div className="grid gap-2">
         {body}
+        {running && (
+          <div className="grid gap-1">
+            <Progress value={percent} aria-label={t("workbenchDownloading")} />
+            <p className="m-0 break-words text-ui-2xs leading-relaxed text-muted-foreground">
+              {gotBytes !== null && (gotTotal !== null
+                ? t("workbenchDownloadProgress").replace("{downloaded}", formatBytes(gotBytes))
+                    .replace("{total}", formatBytes(gotTotal))
+                : t("workbenchDownloadProgressUnknown").replace("{downloaded}", formatBytes(gotBytes)))}
+              {gotBytes !== null && ` · ${percent}%`}
+              {speed !== null && speed > 0 && ` · ${formatSpeed(speed)}`}
+            </p>
+          </div>
+        )}
+        {kept && (
+          <PanelNote>
+            {t("workbenchDownloadPartialKept").replace("{size}", formatBytes(partialBytes ?? 0))}
+          </PanelNote>
+        )}
+        {kept && !resumable && (
+          <PanelNote tone="warning">{t("workbenchDownloadNotResumable")}</PanelNote>
+        )}
+        {halted && (
+          <div className="flex flex-wrap gap-1.5">
+            {resumable && (
+              <Button size="xs" loading={start.isPending}
+                      onClick={() => attempt && start.mutate(attempt)}>
+                {partialBytes !== null
+                  ? t("workbenchDownloadResumeFrom").replace("{size}", formatBytes(partialBytes))
+                  : t("workbenchDownloadResume")}
+              </Button>
+            )}
+            {kept && (
+              <Button variant="outline" size="xs" loading={discard.isPending} onClick={() => discard.mutate()}>
+                {t("workbenchDownloadDiscardPart")}
+              </Button>
+            )}
+          </div>
+        )}
+        {start.isError && <PanelNote tone="error">{errorText(start.error)}</PanelNote>}
+        {partial.isError && <PanelNote tone="error">{errorText(partial.error)}</PanelNote>}
+        {discard.isError && (
+          <PanelNote tone="error">
+            {t("workbenchDownloadDiscardFailed").replace("{message}", errorText(discard.error))}
+          </PanelNote>
+        )}
         {cancelNote === "ended" && <PanelNote>{t("workbenchDownloadCancelEnded")}</PanelNote>}
         {cancelNote === "failed" && (
           <PanelNote tone="error">
@@ -230,6 +334,7 @@ export function ModelDownload({
   const sourceName = (source: string) => (SOURCE_LABEL[source] ? t(SOURCE_LABEL[source]) : source);
   return (
     <div data-model-download="" className="grid gap-2 rounded-lg border border-dashed border-border p-2.5">
+      {notice === "discarded" && <PanelNote>{t("workbenchDownloadDiscardDone")}</PanelNote>}
       {url ? (
         <>
           <div className="flex min-w-0 items-center gap-2">
@@ -349,7 +454,7 @@ export function ModelDownload({
             setResolved(null);
             setDigest("");
           }}
-          onConfirm={() => start.mutate()}
+          onConfirm={() => start.mutate({ url: resolved!.url, filename: saveAs, sha256: digest })}
         />
       )}
     </div>

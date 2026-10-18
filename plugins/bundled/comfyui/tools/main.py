@@ -149,6 +149,9 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return model_search.search(payload, comfy, locale)
     if op == "download":
         return install.download(payload, comfy, locale, emit)
+    if op == "partial":
+        #: 一个模型文件的半截:还有多少(「继续下载」从多少开始)、或者删掉它(「删除没下完的部分」)。
+        return install.partial(payload, comfy, locale)
     if op == "node_folders":
         return workbench.node_folders(payload, comfy, locale)
     if op == "lookup":

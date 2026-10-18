@@ -7377,6 +7377,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/model-library/partial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Model Partial
+         * @description 这个模型文件没下完的那一半:**还有多少**(界面「继续下载」要显示从多少开始),或者删掉它
+         *     (「删除没下完的部分」)。只在本机那条下载路上有;经 ComfyUI-Manager 下的那台机器在别处,Mosael 这边没有半截。
+         *     `resumable` 由插件按续传时同一套核对给出 —— 地址 / 哈希 / 大小 / 校验器变了就不该续。
+         */
+        post: operations["model_partial_api_plugins_instances__instance_id__model_library_partial_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/model-library/lookups": {
         parameters: {
             query?: never;
@@ -15190,6 +15212,68 @@ export interface components {
             level?: number | null;
             /** Score */
             score?: number | null;
+        };
+        /**
+         * ModelPartialOut
+         * @description 没下完的那一半。`downloaded_bytes` / `total_bytes` 未知是 null,不是 0。`resumable` 为真时界面才给
+         *     「继续下载」;`removed` 是这次删除动作是否真的删掉了什么。
+         */
+        ModelPartialOut: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /**
+             * Resumable
+             * @default false
+             */
+            resumable: boolean;
+            /** Downloaded Bytes */
+            downloaded_bytes?: number | null;
+            /** Total Bytes */
+            total_bytes?: number | null;
+            /** Updated At */
+            updated_at?: number | null;
+            /**
+             * Removed
+             * @default false
+             */
+            removed: boolean;
+        };
+        /**
+         * ModelPartialRequest
+         * @description 一个模型文件没下完的那一半:问还有多少(续传从多少开始),或者删掉它。
+         *
+         *     `url` / `sha256` 是**这一次**要下的那份文件和核对值:插件拿它们和 sidecar 里记的核对,给出 `resumable` ——
+         *     地址或文件变了就不该续。`delete: true` 才真的删(界面上「删除没下完的部分」)。
+         */
+        ModelPartialRequest: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Folder */
+            folder: string;
+            /** Name */
+            name: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
+            /**
+             * Delete
+             * @default false
+             */
+            delete: boolean;
         };
         /**
          * ModelPreviewToolsOut
@@ -36318,6 +36402,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    model_partial_api_plugins_instances__instance_id__model_library_partial_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelPartialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPartialOut"];
                 };
             };
             /** @description Validation Error */

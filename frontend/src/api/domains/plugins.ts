@@ -189,6 +189,22 @@ export const startModelDownload = (
   body: { workspace_id: string; url: string; folder: string; filename: string; sha256?: string },
 ) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/downloads`, { method: "POST", body: JSON.stringify(body) });
 
+/** 一个模型文件没下完的那一半(本机那条下载路才有):还有多少 —— 「继续下载」从多少开始。`resumable` 由插件按
+ * 续传时同一套核对给出(源 URL / 声明的 SHA256 / 总大小 / 校验器),为假时不给「继续下载」。 */
+export type ModelPartial = components["schemas"]["ModelPartialOut"];
+export const getModelPartial = (
+  instanceId: string,
+  body: { workspace_id: string; folder: string; name: string; url?: string; sha256?: string },
+) => api<ModelPartial>(`/api/plugins/instances/${instanceId}/model-library/partial`,
+  { method: "POST", body: JSON.stringify(body) });
+
+/** **明确放弃**没下完的那一部分(界面上「删除没下完的部分」):删 `.part` 和 sidecar,成品不碰。 */
+export const discardModelPartial = (
+  instanceId: string,
+  body: { workspace_id: string; folder: string; name: string },
+) => api<ModelPartial>(`/api/plugins/instances/${instanceId}/model-library/partial`,
+  { method: "POST", body: JSON.stringify({ ...body, delete: true }) });
+
 /**
  * 在 Civitai 上找这几个文件(不给 `files` 是这台服务器上没有预览图的全部),`save` 时找到的顺手存成预览图:一个后台任务
  * (按哈希找要那台机器把整个文件读一遍)。

@@ -21959,6 +21959,59 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/model-library/partial": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Model Partial",
+        "description": "这个模型文件没下完的那一半:**还有多少**(界面「继续下载」要显示从多少开始),或者删掉它\n(「删除没下完的部分」)。只在本机那条下载路上有;经 ComfyUI-Manager 下的那台机器在别处,Mosael 这边没有半截。\n`resumable` 由插件按续传时同一套核对给出 —— 地址 / 哈希 / 大小 / 校验器变了就不该续。",
+        "operationId": "model_partial_api_plugins_instances__instance_id__model_library_partial_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelPartialRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPartialOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/model-library/lookups": {
       "post": {
         "tags": [
@@ -40382,6 +40435,118 @@
         ],
         "title": "ModelNsfwReasonOut",
         "description": "一条自动的 NSFW 依据(ADR 0038 §9)。`source`:`civitai`(Civitai 上这个模型 / 这张示例图的标记)、`local`(本机识别\n预览图)、`metadata`(训练标签、文件名和标题)。`nsfw` 是这一条说的是不是;元数据只在说「是」时才有。"
+      },
+      "ModelPartialOut": {
+        "properties": {
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "resumable": {
+            "type": "boolean",
+            "title": "Resumable",
+            "default": false
+          },
+          "downloaded_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloaded Bytes"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bytes"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "folder",
+          "name"
+        ],
+        "title": "ModelPartialOut",
+        "description": "没下完的那一半。`downloaded_bytes` / `total_bytes` 未知是 null,不是 0。`resumable` 为真时界面才给\n「继续下载」;`removed` 是这次删除动作是否真的删掉了什么。"
+      },
+      "ModelPartialRequest": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "folder": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Folder"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Url",
+            "default": ""
+          },
+          "sha256": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Sha256",
+            "default": ""
+          },
+          "delete": {
+            "type": "boolean",
+            "title": "Delete",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "folder",
+          "name"
+        ],
+        "title": "ModelPartialRequest",
+        "description": "一个模型文件没下完的那一半:问还有多少(续传从多少开始),或者删掉它。\n\n`url` / `sha256` 是**这一次**要下的那份文件和核对值:插件拿它们和 sidecar 里记的核对,给出 `resumable` ——\n地址或文件变了就不该续。`delete: true` 才真的删(界面上「删除没下完的部分」)。"
       },
       "ModelPreviewToolsOut": {
         "properties": {

@@ -7,8 +7,9 @@
 - 工作流缺的模型:声明了下载地址、节点真在用、这台服务器上又没有的才列,只认 HuggingFace / Civitai / ModelScope;
 - 逐个读的元数据记在持久目录里,第二次只读目录;
 - 链接解析:HuggingFace 文件、Civitai 页面、ModelScope 的文件与模型页、别的直链;
-- 下载按优先级走:Manager → 同一台机器直接写 → 说清楚能做的那一步。不覆盖已有文件,取消时只删自己的半截文件,
-  空间不够就不下;Manager 被安全策略拒绝时说人话、记下来,能走本机就走本机;令牌只发给它自己那个站。
+- 下载按优先级走:Manager → 同一台机器直接写 → 说清楚能做的那一步。不覆盖已有文件,取消时**留着**自己的半截
+  (断点续传,见 tests/test_model_download_resume.py),空间不够就不下;Manager 被安全策略拒绝时说人话、记下来,
+  能走本机就走本机;令牌只发给它自己那个站。
 """
 
 from __future__ import annotations
@@ -460,14 +461,17 @@ def test_本机那条路_同名文件不覆盖(comfy, data_dir, tmp_path, files)
     assert not site.requests, "同名的连下都不下"
 
 
-def test_本机那条路_取消时删掉自己的半截文件(comfy, data_dir, tmp_path, files) -> None:
+def test_本机那条路_取消时留下自己的半截文件供续传(comfy, data_dir, tmp_path, files) -> None:
+    """维护者 2026-10-19 把口径改成断点续传:取消**不删** `.part`(和 sidecar),只有界面上的
+    「删除没下完的部分」才删(见 tests/test_model_download_resume.py、test_model_download_leaves_no_half_file.py)。"""
     root = _same_machine(comfy, tmp_path / "models")
     site = files({"/big.safetensors": b"\x01" * 2_000_000}, slow=True)
     with pytest.raises(PluginRuntimeError):
         _download(comfy, {"url": f"{site.url}/big.safetensors", "folder": "loras", "filename": "big.safetensors"},
                   data_dir, tmp_path, progress=_Progress(cancel_after=0.01))
-    assert not (root / "loras" / "big.safetensors").exists()
-    assert not list((root / "loras").glob("*.mosael-part")), "半截文件是自己的,取消时删掉"
+    assert not (root / "loras" / "big.safetensors").exists(), "没下完不挂正式的名字"
+    assert list((root / "loras").glob("*.mosael-part")), "取消要留半截,下一次接着下"
+    assert list((root / "loras").glob("*.mosael-part.json")), "还要留 sidecar,续传前核对"
     assert (root / "loras" / "detail.safetensors").exists(), "别的文件一个不动"
 
 

@@ -728,6 +728,34 @@ class ModelDownloadRequest(ApiModel):
     sha256: str = Field(default="", max_length=64)
 
 
+class ModelPartialRequest(ApiModel):
+    """一个模型文件没下完的那一半:问还有多少(续传从多少开始),或者删掉它。
+
+    `url` / `sha256` 是**这一次**要下的那份文件和核对值:插件拿它们和 sidecar 里记的核对,给出 `resumable` ——
+    地址或文件变了就不该续。`delete: true` 才真的删(界面上「删除没下完的部分」)。"""
+
+    workspace_id: str
+    folder: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=1000)
+    url: str = Field(default="", max_length=4000)
+    sha256: str = Field(default="", max_length=64)
+    delete: bool = False
+
+
+class ModelPartialOut(ApiModel):
+    """没下完的那一半。`downloaded_bytes` / `total_bytes` 未知是 null,不是 0。`resumable` 为真时界面才给
+    「继续下载」;`removed` 是这次删除动作是否真的删掉了什么。"""
+
+    folder: str
+    name: str
+    partial: bool = False
+    resumable: bool = False
+    downloaded_bytes: int | None = None
+    total_bytes: int | None = None
+    updated_at: float | None = None
+    removed: bool = False
+
+
 class ModelNodeFolderIn(ApiModel):
     """画布上选中的节点的一格:节点类型 + 输入名。**不带节点上现在选的值** —— 答案只看这两样,在节点上填一个模型、换一个
     type 都不用再问(界面按这两样缓存)。"""

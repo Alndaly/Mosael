@@ -22,6 +22,8 @@ const api = vi.hoisted(() => ({
   startModelDownload: vi.fn(),
   getJob: vi.fn(),
   cancelJob: vi.fn(),
+  getModelPartial: vi.fn(),
+  discardModelPartial: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", async () => {
@@ -85,6 +87,14 @@ beforeEach(() => {
   api.searchModelSources.mockResolvedValue({ filename: NAME, candidates: [], failed: [] });
   api.startModelDownload.mockResolvedValue({ id: "job-1", status: "queued" });
   api.getJob.mockResolvedValue({ id: "job-1", status: "running", message: "" });
+  api.getModelPartial.mockResolvedValue({
+    folder: FOLDER, name: NAME, partial: false, resumable: false,
+    downloaded_bytes: null, total_bytes: null, updated_at: null, removed: false,
+  });
+  api.discardModelPartial.mockResolvedValue({
+    folder: FOLDER, name: NAME, partial: false, resumable: false,
+    downloaded_bytes: null, total_bytes: null, updated_at: null, removed: true,
+  });
 });
 
 afterEach(() => {
@@ -264,10 +274,10 @@ describe("多平台下载", () => {
   });
 });
 
-// --- 三、下载中可以取消 -------------------------------------------------------------
+// --- 三、下载中取消、取消后继续 / 删除没下完的部分 -----------------------------------
 
 describe("下载中取消", () => {
-  it("正在下载的那一行有「取消」;点它 -> 取消这个任务,那一行说清「已取消 + 没下完的部分已删掉」", async () => {
+  it("正在下载的那一行有「取消」;点它 -> 取消这个任务,那一行说清「已取消 + 半截留着」", async () => {
     api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
     await startDownload();
     const cancel = await screen.findByRole("button", { name: `取消下载 ${NAME}` });
@@ -277,8 +287,108 @@ describe("下载中取消", () => {
     fireEvent.click(cancel);
     await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-1"));
     const said = await screen.findByText(/已取消/);
-    expect(said.textContent).toContain("没下完的部分已删掉");
+    expect(said.textContent, "断点续传:取消不删半截").toContain("留着");
+    expect(said.textContent).not.toContain("已删掉");
     expect(screen.queryByRole("button", { name: `取消下载 ${NAME}` }), "取消了就不该还能再点一次").toBeNull();
+  });
+
+  it("取消后:说清还剩多少,给「从 3.2 GB 继续」和「删除没下完的部分」", async () => {
+    api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
+    api.getModelPartial.mockResolvedValue({
+      folder: FOLDER, name: NAME, partial: true, resumable: true,
+      downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, updated_at: 1, removed: false,
+    });
+    await startDownload();
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-1"));
+
+    expect((await screen.findByText(/没下完的部分还在/)).textContent).toContain("3.2 GB");
+    expect(screen.getByRole("button", { name: "从 3.2 GB 继续" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "删除没下完的部分" })).toBeTruthy();
+    expect(api.getModelPartial, "取消之后问的是这次要下的那份").toHaveBeenCalledWith("i1", {
+      workspace_id: "w1", folder: FOLDER, name: NAME,
+      url: "https://civitai.com/api/download/models/7",
+    });
+  });
+
+  it("点「继续下载」:用同一个地址 / 文件名再下一次(插件按 Range 接着下)", async () => {
+    api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
+    api.getModelPartial.mockResolvedValue({
+      folder: FOLDER, name: NAME, partial: true, resumable: true,
+      downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, updated_at: 1, removed: false,
+    });
+    await startDownload();
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    fireEvent.click(await screen.findByRole("button", { name: "从 3.2 GB 继续" }));
+    await waitFor(() => expect(api.startModelDownload).toHaveBeenCalledTimes(2));
+    expect(api.startModelDownload.mock.calls[1][1]).toEqual({
+      workspace_id: "w1", url: "https://civitai.com/api/download/models/7", folder: FOLDER, filename: NAME,
+    });
+  });
+
+  it("点「删除没下完的部分」:走明确的删除接口;那一行收起来,说清已删掉", async () => {
+    api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
+    api.getModelPartial.mockResolvedValue({
+      folder: FOLDER, name: NAME, partial: true, resumable: true,
+      downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, updated_at: 1, removed: false,
+    });
+    await startDownload();
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    fireEvent.click(await screen.findByRole("button", { name: "删除没下完的部分" }));
+    await waitFor(() => expect(api.discardModelPartial).toHaveBeenCalledWith("i1", {
+      workspace_id: "w1", folder: FOLDER, name: NAME,
+    }));
+    expect(await screen.findByText(/没下完的部分已删掉/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "删除没下完的部分" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "从 3.2 GB 继续" })).toBeNull();
+  });
+
+  it("失败(不是取消)也一样:失败卡旁边给「继续下载」「删除没下完的部分」", async () => {
+    api.getJob.mockResolvedValue({
+      id: "job-1", status: "failed", progress: 0.3, message: "没下成", error: "连接断了",
+      error_summary: "没下成", error_detail: "连接断了", error_hint: null,
+      result: { downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000 },
+    });
+    api.getModelPartial.mockResolvedValue({
+      folder: FOLDER, name: NAME, partial: true, resumable: true,
+      downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, updated_at: 1, removed: false,
+    });
+    await startDownload();
+    expect(await screen.findByRole("button", { name: "从 3.2 GB 继续" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "删除没下完的部分" })).toBeTruthy();
+  });
+
+  it("半截和这次要下的对不上(sidecar 里的地址 / 哈希变了):不给「继续下载」,说清只能删掉重下", async () => {
+    api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
+    api.getModelPartial.mockResolvedValue({
+      folder: FOLDER, name: NAME, partial: true, resumable: false,
+      downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, updated_at: 1, removed: false,
+    });
+    await startDownload();
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    expect(await screen.findByText(/对不上/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /继续/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "删除没下完的部分" })).toBeTruthy();
+  });
+
+  it("正在下载:进度条 / 百分比 / 字节 / 速度都来自结构化字段(不从人话里解析)", async () => {
+    api.getJob.mockResolvedValue({
+      id: "job-1", status: "running", progress: 0.25,
+      //: 人话里故意不写数字:界面上的数字只能来自 result 的字节字段
+      message: "正在下载…", result: {
+        downloaded_bytes: 3_200_000_000, total_bytes: 12_800_000_000, speed_bps: 12_500_000,
+      },
+    });
+    await startDownload();
+    const progress = await screen.findByRole("progressbar");
+    //: 仓里的 Progress 把 value 交给指示条(根上没有 aria-valuenow),看它走到 25%
+    const fill = progress.querySelector<HTMLElement>("[style]");
+    expect(fill?.style.transform).toContain("translateX(-75%)");
+    const line = await screen.findByText(/3\.2 GB \/ 12\.8 GB/);
+    expect(line.textContent).toContain("25%");
+    expect(line.textContent).toContain("12.5 MB/s");
+    expect(screen.queryByRole("button", { name: "继续下载" }), "还在下,不给「继续」").toBeNull();
+    expect(screen.queryByRole("button", { name: "删除没下完的部分" }), "还在下,别让人删正在写的半截").toBeNull();
   });
 
   it("任务其实已经结束了:说「已经结束了,不用取消」,不冒充成取消失败吓人", async () => {
@@ -304,7 +414,7 @@ describe("下载中取消", () => {
     expect(screen.queryByText(/已经结束了/), "任务还在跑,别把它说成结束了").toBeNull();
   });
 
-  it("经 ComfyUI-Manager 下载的:取消只是不再等,那台机器上的下载还会继续 —— 不说「已删掉」", async () => {
+  it("经 ComfyUI-Manager 下载的:取消只是不再等,那台机器上的下载还会继续 —— 不说「已删掉」,也没有删除半截", async () => {
     api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
     await startDownload("manager");
     fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
@@ -312,5 +422,8 @@ describe("下载中取消", () => {
     const said = await screen.findByText(/已取消/);
     expect(said.textContent, "那台机器自己在下,Mosael 删不了它的半截").toContain("还会继续");
     expect(said.textContent).not.toContain("已删掉");
+    expect(api.getModelPartial, "Manager 那条路 Mosael 这边没有半截,不问").not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "删除没下完的部分" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /继续/ })).toBeNull();
   });
 });

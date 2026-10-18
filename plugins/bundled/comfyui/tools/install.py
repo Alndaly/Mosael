@@ -3,18 +3,29 @@
 1. ComfyUI 自己的下载接口 —— 0.38.0 没有(`/api/assets` 默认关着,里面也没有下载;官方前端缺模型时只是在浏览器里
    打开链接),今天不去探测不存在的接口;
 2. **ComfyUI 和 Mosael 在同一台机器上**:它报的模型目录在本机存在、且本机的文件和它报的一致 → 直接写进去。先写
-   `<名字>.mosael-part`,下完用硬链接挂上正式的名字(目标已存在就失败,不覆盖);按字节报进度;取消时删掉**自己的**
-   半截文件;开始前查剩余空间。装了 Manager 也走这条:它看得到进度、停得下、令牌走请求头(不拼进地址、不留在
-   Manager 的任务记录里),Manager 那条路一样都做不到(沙盒实测:本机 ComfyUI 装着 Manager,下载走了 Manager,
-   没有进度 —— 和指南、下载框说的「这台电脑上的看得到进度」对不上)。
-   残留的半截:取消 / 失败走 `except` 删;**进程被强杀、后端重启留下的那一份删不了**,所以同一个名字下一次
-   开始下载时**先删掉它**(在连之前,不靠「打开时截断」)—— 这样那一次就算拿不到响应也不会留下没人认领的文件。
+   `<名字>.mosael-part`,**旁边放 `<名字>.mosael-part.json`(sidecar:源 URL、总大小、ETag / Last-Modified、声明的
+   SHA256)**;下完用硬链接挂上正式的名字(目标已存在就失败,不覆盖);按字节报进度;开始前查剩余空间。装了 Manager
+   也走这条:它看得到进度、停得下、令牌走请求头(不拼进地址、不留在 Manager 的任务记录里),Manager 那条路一样都
+   做不到(沙盒实测:本机 ComfyUI 装着 Manager,下载走了 Manager,没有进度 —— 和指南、下载框说的「这台电脑上的
+   看得到进度」对不上)。
+   **断点续传**(维护者 2026-10-19 定,取代此前「取消/失败就删半截」):取消 / 失败 / 后端重启都**留着** `.part` 和
+   sidecar,下次带着 `Range: bytes=<已下>-` 接着下;服务端回 206 就接着写,回 200(不支持 Range,或 `If-Range`
+   对不上)就**截断重下**,416(Range 越界)能按声明的 SHA256 校验就留下、不能就删了重下。续传前核对
+   URL + 校验器 + 总大小,不一致就重下 —— 绝不把两个不同的文件接在一起。取消 / 失败不再删;只有用户明确点
+   「删除没下完的部分」(`discard_partial`)才删。超过 `PART_MAX_AGE_DAYS` 天的孤儿 `.part` 在开始下一次本机
+   下载时顺手扫掉(正在续的那一份除外)。
 3. **ComfyUI-Manager** 的装模型接口(`/v2/manager/version` 回 V4 时,ComfyUI 在另一台机器上):那台机器自己去下。不报
    字节进度,也没有停下单个任务的接口;它的安全策略只在 ComfyUI 监听回环地址、或 `network_mode = personal_cloud` 时
    才放行 —— 被拒时历史里只记一个 failed,原因在日志里(`/internal/logs/raw`),这里把它找出来说人话,并记下来;
 4. 都走不通:如实说明,并给出能做的那一步。
 
     {"op": "download", "url", "folder", "filename", "sha256"?} → 流式:进度行;结果 {folder, name, size, route, page}
+    {"op": "partial", "folder", "filename", "url"?, "sha256"?, "delete"?} → {partial, resumable, downloaded_bytes,
+    total_bytes, updated_at, removed}:没下完的那一半还有多少 / 删掉它(「继续下载」「删除没下完的部分」)。
+
+    进度有两行:`{"event": "progress", progress, message, ...}` 是给人看的总进度;`{"event": "step", "step":
+    "download", downloaded_bytes, total_bytes, speed_bps}` 是**结构化字节**(未知总数是 null 不是 0)。宿主把后者
+    记进任务详情,界面据此显示百分比 / 速度 /「从 3.2 GB 继续」,不解析人话。
 
 `sha256`(可选)是从「确认是同一个文件」的来源下载时那个文件的 SHA256:本机那条路边下边算,对上了才挂正式的名字,
 对不上就把半截文件删掉、说清;经 ComfyUI-Manager 那条路是那台机器自己下,Mosael 核对不了 —— 带了 `sha256` 就不走那条,
@@ -26,6 +37,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import os
 import re
 import shutil
@@ -58,6 +70,13 @@ DISK_MARGIN = 256 * 1024 * 1024
 #: 进度多久报一次。
 PROGRESS_SECONDS = 0.5
 CHUNK = 1024 * 1024
+#: 没下完的半截:`<名字>.mosael-part`;旁边 `<名字>.mosael-part.json` 记着续传要核对的东西。
+PART_SUFFIX = ".mosael-part"
+#: 半截旁边的 sidecar 后缀(拼在 PART_SUFFIX 后面)。
+PART_SIDECAR_SUFFIX = ".mosael-part.json"
+#: 超过这么多天的孤儿 `.part` 才在下次本机下载开始时扫掉。定 7 天:几十 GB 的模型在慢线路上跨几个晚上下完是常事,
+#: 一两天就清会把「明天接着下」的人也清掉;而一周没动过的半截基本不会再被认领,几个文件就能白占几十 GB。
+PART_MAX_AGE_DAYS = 7
 #: 同一台机器的判定:最多比对几个文件、翻几个目录。
 SAME_MACHINE_FILES = 6
 SAME_MACHINE_FOLDERS = 8
@@ -313,17 +332,21 @@ def _scrub(text: str, *secrets: str) -> str:
 
 # --- 同一台机器:直接写 ---------------------------------------------------------
 
-def _open_download(url: str, locale: str):
-    """开始下:跟着跳转,每一跳只带那一跳的站自己的令牌。返回 (响应, 最终地址)。"""
+def _open_download(url: str, locale: str, headers: dict[str, str] | None = None):
+    """开始下:带着这次请求自己的头(续传的 `Range` / `If-Range`),跟着跳转,每一跳只带那一跳的站自己的令牌。
+    返回 (响应, 最终地址)。**416 原样交回** —— 对续传来说它不是「出错」,是「这个范围没有东西」,由调用方判定。"""
     current = url
+    extra = dict(headers or {})
     for _ in range(sources.MAX_HOPS):
-        response = sources.open_url(current, headers=sources.auth_for(current), timeout=60)
+        response = sources.open_url(current, headers={**sources.auth_for(current), **extra}, timeout=60)
         status = getattr(response, "status", None) or getattr(response, "code", 0)
         location = response.headers.get("Location")
         if status in (301, 302, 303, 307, 308) and location:
             response.close()
             current = parse.urljoin(current, location)
             continue
+        if status == 416 and extra.get("Range"):
+            return response, current
         if status >= 400:
             response.close()
             if status in (401, 403):
@@ -337,74 +360,371 @@ def _open_download(url: str, locale: str):
     raise ComfyError(say(locale, "下载地址跳转太多次", "The download link redirected too many times"))
 
 
+def _status(response: Any) -> int:
+    return int(getattr(response, "status", None) or getattr(response, "code", 0) or 0)
+
+
+def _content_length(response: Any) -> int | None:
+    raw = response.headers.get("Content-Length", "")
+    return int(raw) if str(raw).isdigit() else None
+
+
+_CONTENT_RANGE = re.compile(r"bytes\s+(\d+)-(\d+)/(\d+|\*)")
+
+
+def _content_range(response: Any) -> tuple[int, int, int | None] | None:
+    """`Content-Range: bytes <起>-<止>/<总>` → (起, 止, 总);总写成 `*` 时是 None。"""
+    found = _CONTENT_RANGE.fullmatch(str(response.headers.get("Content-Range") or "").strip())
+    if found is None:
+        return None
+    return int(found.group(1)), int(found.group(2)), (None if found.group(3) == "*" else int(found.group(3)))
+
+
+def _file_digest(part: Path) -> "hashlib._Hash":
+    """把一个已有的半截读完再接着算 SHA256(续传时最终哈希要覆盖**整个文件**,不只是新下的那段)。"""
+    digest = hashlib.sha256()
+    with part.open("rb") as handle:
+        for block in iter(lambda: handle.read(CHUNK), b""):
+            digest.update(block)
+    return digest
+
+
+def _sidecar_data(sidecar: Path) -> dict[str, Any]:
+    data = load_json(sidecar)
+    return data if data.get("version") == 1 else {}
+
+
+def _write_sidecar(sidecar: Path, *, url: str, final_url: str, filename: str, total: int | None,
+                   etag: str, last_modified: str, sha256: str) -> None:
+    save_json(sidecar, {
+        "version": 1,
+        "url": url,
+        "final_url": final_url,
+        "filename": filename,
+        "total_bytes": total if isinstance(total, int) and total > 0 else None,
+        "etag": etag or "",
+        "last_modified": last_modified or "",
+        "sha256": (sha256 or "").lower(),
+        "updated_at": time.time(),
+    })
+
+
+def _part_paths(directory: Path, filename: str) -> tuple[Path, Path]:
+    return directory / f"{filename}{PART_SUFFIX}", directory / f"{filename}{PART_SIDECAR_SUFFIX}"
+
+
+def _remove_partial(part: Path, sidecar: Path) -> None:
+    part.unlink(missing_ok=True)
+    sidecar.unlink(missing_ok=True)
+
+
+def _clean_orphan_parts(directory: Path, *, keep: str = "", now: float | None = None) -> list[str]:
+    """把超过 `PART_MAX_AGE_DAYS` 天没动过的孤儿 `.part`(连同 sidecar)扫掉。返回扫掉的模型名。
+
+    **只有开始下一次本机下载时才扫**(不另起定时任务):`.part` 就在模型目录里,那时正好知道这个目录在哪、能不能写。
+    `keep` 是这一次要续的那一份 —— 用户刚点了「继续下载」,哪怕它放了很久也不再算孤儿。"""
+    cutoff = (time.time() if now is None else now) - PART_MAX_AGE_DAYS * 86400
+    removed: list[str] = []
+    for path in list(directory.iterdir()):
+        name = path.name
+        if name.endswith(PART_SUFFIX):
+            filename = name[: -len(PART_SUFFIX)]
+            if filename == keep:
+                continue
+            try:
+                changed = path.stat().st_mtime
+            except OSError:
+                continue
+            if changed >= cutoff:
+                continue
+            path.unlink(missing_ok=True)
+            (directory / f"{name}.json").unlink(missing_ok=True)
+            removed.append(filename)
+        elif name.endswith(PART_SIDECAR_SUFFIX):
+            #: 半截已经没了、sidecar 还在:同样按时间扫,别让它跟着孤儿一起留下。
+            if (directory / name[: -len(".json")]).exists():
+                continue
+            try:
+                changed = path.stat().st_mtime
+            except OSError:
+                continue
+            if changed < cutoff:
+                path.unlink(missing_ok=True)
+    return removed
+
+
+def _resume_offset(part: Path, sidecar: Path, url: str, sha256: str) -> int:
+    """这份半截能不能接着下;能就返回已下字节数,不能返回 0。
+
+    核对的是**同一个文件**的三样:源 URL、声明的 SHA256、sidecar 里记的总大小 / 校验器。任何一样对不上都从头下 ——
+    宁可多下一次,也不把两个不同的文件接在一起。"""
+    if not part.is_file():
+        if sidecar.exists():
+            sidecar.unlink(missing_ok=True)
+        return 0
+    try:
+        offset = part.stat().st_size
+    except OSError:
+        return 0
+    data = _sidecar_data(sidecar)
+    if offset <= 0 or not data:
+        return 0
+    if data.get("url") != url:
+        return 0
+    if (data.get("sha256") or "").lower() != (sha256 or "").lower():
+        return 0
+    total = data.get("total_bytes")
+    if isinstance(total, int) and not isinstance(total, bool):
+        if total <= 0 or offset > total:
+            return 0
+    elif not (data.get("etag") or data.get("last_modified")):
+        #: 既没有总大小、也没有校验器:续下去没法核对是不是同一个文件,不硬续。
+        return 0
+    return offset
+
+
+def _validators_changed(stored: dict[str, Any], response: Any) -> bool:
+    """206 也不能全信:文件在两次下载之间被重新发布时,有的服务端照样按 Range 回 206。ETag / Last-Modified 变了就重下。"""
+    etag = response.headers.get("ETag")
+    if stored.get("etag") and etag and etag != stored["etag"]:
+        return True
+    if not stored.get("etag") and stored.get("last_modified"):
+        modified = response.headers.get("Last-Modified")
+        if modified and modified != stored["last_modified"]:
+            return True
+    return False
+
+
+def _bytes_progress(emit: Emit, locale: str, downloaded: int, total: int | None, speed: float,
+                    *, message: str = "") -> None:
+    """报一次进度。**字节是结构化的**(`downloaded_bytes` / `total_bytes`,未知是 null 不是 0),速度也是从字节和
+    时间算出来的 —— 界面不解析人话。`progress` 行给任务的总进度,`step` 行把字节交给宿主记进任务(见
+    domain/model_library._download 的 on_step)。"""
+    known_total = total if isinstance(total, int) and total > 0 else None
+    fraction = min(0.99, downloaded / known_total) if known_total else 0.0
+    said = message or say(
+        locale,
+        f"已下载 {_human(downloaded)}" + (f" / {_human(known_total)}" if known_total else "")
+        + (f" · {_human(speed)}/s" if speed > 0 else ""),
+        f"{_human(downloaded)}" + (f" of {_human(known_total)}" if known_total else "")
+        + (f" downloaded · {_human(speed)}/s" if speed > 0 else ""),
+    )
+    payload = {"downloaded_bytes": int(downloaded), "total_bytes": known_total,
+               "speed_bps": round(float(speed)) if speed > 0 else None}
+    emit({"event": "progress", "progress": fraction, "message": said, **payload})
+    emit({"event": "step", "step": "download", **payload})
+
+
+def _download_finished(emit: Emit, locale: str, written: int, total: int | None, speed: float) -> None:
+    known_total = total if isinstance(total, int) and total > 0 else None
+    payload = {"downloaded_bytes": int(written), "total_bytes": known_total,
+               "speed_bps": round(float(speed)) if speed > 0 else None}
+    emit({"event": "progress", "progress": 1.0,
+          "message": say(locale, f"已下载 {_human(written)}", f"{_human(written)} downloaded"), **payload})
+    emit({"event": "step", "step": "download", **payload})
+
+
 def via_local(directory: Path, url: str, folder: str, filename: str, locale: str, emit: Emit, *, sha256: str = "") -> dict[str, Any]:
     directory.mkdir(exist_ok=True)
     final = directory / filename
-    part = directory / f"{filename}.mosael-part"
+    part, sidecar = _part_paths(directory, filename)
     if final.exists():
         raise ComfyError(_same_name(locale, folder, filename))
-    #: **上一次没下完留下的半截,在开始之前先删掉。** 取消和失败由下面的 except 自己删;进程被强杀、
-    #: 后端重启这两种走不到那里,`.mosael-part` 就留在了模型目录里。以前只能靠 `part.open("wb")` 截断,
-    #: 可那要等真的拿到响应 —— 这一次 404、要登录、或者又取消,旧的半截就继续没人认领。先删掉,这一次
-    #: 就算在拿到响应之前就失败,目录里也是干净的;正式的名字照旧只在核对通过之后才挂上。
-    part.unlink(missing_ok=True)
-    response, _final_url = _open_download(url, locale)
-    written = 0
+    #: 先扫这个目录里**别人**留下的、超过 N 天的孤儿半截;要续的这一份(同名)不算孤儿。
+    _clean_orphan_parts(directory, keep=filename)
+    offset = _resume_offset(part, sidecar, url, sha256)
+    if offset <= 0:
+        #: 半截在、但核对不过(sidecar 没了、URL / 哈希 / 大小变了):不硬续,删掉从头下。
+        _remove_partial(part, sidecar)
+        offset = 0
+    stored = _sidecar_data(sidecar)
+    digest = _file_digest(part) if (offset and sha256) else hashlib.sha256()
+    restarted = False
+    while True:
+        headers: dict[str, str] = {}
+        if offset:
+            #: 续传必须让服务端别压缩(否则 Range 的字节数和文件对不上),也让跳转后的每一跳都带着它。
+            headers["Accept-Encoding"] = "identity"
+            headers["Range"] = f"bytes={offset}-"
+            validator = stored.get("etag") or stored.get("last_modified")
+            if validator:
+                headers["If-Range"] = str(validator)
+        response, landed = _open_download(url, locale, headers=headers) if headers else _open_download(url, locale)
+        try:
+            status = _status(response)
+            if status == 416:
+                #: Range 越界:本地这份可能已经下完了。**能按声明的 SHA256 校验就留下**,校验不了(没有哈希、
+                #: 或对不上)就删掉重下 —— 不把一个没核对过的文件挂上正式的名字。
+                response.close()
+                if sha256 and offset > 0 and _file_digest(part).hexdigest() == sha256:
+                    _publish(part, final, locale, folder, filename)
+                    sidecar.unlink(missing_ok=True)
+                    total_known = stored.get("total_bytes") if isinstance(stored.get("total_bytes"), int) else offset
+                    _download_finished(emit, locale, offset, total_known, 0.0)
+                    return {"folder": folder, "name": filename, "size": offset, "route": "local"}
+                _remove_partial(part, sidecar)
+                if restarted:
+                    raise ComfyError(say(locale, "服务端说这个范围没有东西,本地这一份也核对不过:删掉重下一次",
+                                         "The server says that range has nothing, and the local copy doesn't verify: "
+                                         "it was deleted; download again"))
+                offset, digest, stored, restarted = 0, hashlib.sha256(), {}, True
+                continue
+            kind = response.headers.get("Content-Type", "").lower()
+            if kind.startswith("text/html"):
+                raise ComfyError(say(locale, "下载地址回的是一个网页,不是模型文件(多半要登录:在这个连接的凭据里填那个站的令牌)",
+                                     "The download link returned a web page, not a model file (it probably needs a login: enter "
+                                     "that site's token in this connection's credentials)"))
+            if status == 206 and offset:
+                found = _content_range(response)
+                known = stored.get("total_bytes")
+                if (found is None or found[0] != offset
+                        or (found[2] is not None and isinstance(known, int) and found[2] != known)
+                        or _validators_changed(stored, response)):
+                    #: 服务端回的 206 接不上(起点不对),或者文件已经换了一份:不能把两段接在一起。
+                    response.close()
+                    _remove_partial(part, sidecar)
+                    if restarted:
+                        raise ComfyError(say(locale, "服务端给的续传范围接不上,重下一次也不行;再试一次",
+                                             "The server's resume range doesn't line up; it failed twice. Try again"))
+                    offset, digest, stored, restarted = 0, hashlib.sha256(), {}, True
+                    continue
+                total = found[2] if found[2] is not None else (
+                    known if isinstance(known, int) else None)
+                mode = "ab"
+            elif status == 200:
+                #: 不支持 Range(或 If-Range 对不上):整包从 0 开始,`wb` 截断旧半截 —— 绝不接在后面。
+                if offset:
+                    offset = 0
+                    digest = hashlib.sha256()
+                total = _content_length(response)
+                mode = "wb"
+            else:
+                raise ComfyError(say(locale, f"下载地址回了 HTTP {status}", f"The download link answered HTTP {status}"))
+            if total:
+                free = shutil.disk_usage(directory).free
+                need = max(0, total - offset)
+                if free < need + DISK_MARGIN:
+                    raise ComfyError(say(locale, f"空间不够:{directory} 所在的磁盘只剩 {_human(free)},这个文件还要 {_human(need)}",
+                                         f"Not enough space: the disk holding {directory} has {_human(free)} left and this "
+                                         f"file still needs {_human(need)}"))
+            _write_sidecar(sidecar, url=url, final_url=landed or _final_url(response, url), filename=filename, total=total,
+                           etag=response.headers.get("ETag") or (stored.get("etag", "") if mode == "ab" else ""),
+                           last_modified=response.headers.get("Last-Modified")
+                           or (stored.get("last_modified", "") if mode == "ab" else ""), sha256=sha256)
+            started = last = time.monotonic()
+            new_written = 0
+            if mode == "ab" and offset:
+                _bytes_progress(emit, locale, offset, total, 0.0,
+                                message=say(locale, f"从已下载的 {_human(offset)} 继续"
+                                                    + (f"(共 {_human(total)})" if total else ""),
+                                            f"Resuming from {_human(offset)}" + (f" of {_human(total)}" if total else "")))
+            with part.open(mode) as handle:
+                while True:
+                    if _cancelled():
+                        #: 取消**不删**半截:下一次「继续下载」从这儿接着下。
+                        raise ComfyError(say(locale, "已取消", "Cancelled"))
+                    # read1:有多少拿多少,不等凑满一块 —— 慢的时候取消也能马上生效
+                    try:
+                        chunk = response.read1(CHUNK) if hasattr(response, "read1") else response.read(CHUNK)
+                    except (OSError, http.client.HTTPException) as exc:
+                        raise ComfyError(say(locale, f"下载连接断了(已下 {_human(offset + new_written)}):再试一次会接着下",
+                                             f"The download connection broke off ({_human(offset + new_written)} so far); "
+                                             f"try again and it will resume")) from exc
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    if sha256:
+                        digest.update(chunk)
+                    new_written += len(chunk)
+                    now = time.monotonic()
+                    if now - last >= PROGRESS_SECONDS:
+                        last = now
+                        speed = new_written / max(now - started, 0.001)
+                        _bytes_progress(emit, locale, offset + new_written, total, speed)
+            written = offset + new_written
+            if total and written != total:
+                #: 断了:半截和 sidecar 留着,下一次接着下。
+                raise ComfyError(say(locale, f"下到一半断了({_human(written)} / {_human(total)}),再试一次",
+                                     f"The download broke off ({_human(written)} of {_human(total)}); try again"))
+            if sha256:
+                got = digest.hexdigest()
+                if got != sha256:
+                    #: 这份不是确认过的那个文件:半截没有续传价值,删掉;正式的名字一次都不挂。
+                    _remove_partial(part, sidecar)
+                    raise ComfyError(say(locale, f"下到的文件和确认过的那个不是同一个(SHA256 {got[:12]}…,应为 "
+                                                   f"{sha256[:12]}…):已经删掉,没放进 {folder}",
+                                         f"The downloaded file isn't the confirmed one (SHA256 {got[:12]}…, expected "
+                                         f"{sha256[:12]}…): it was deleted and not put into {folder}"))
+            _publish(part, final, locale, folder, filename)
+            sidecar.unlink(missing_ok=True)
+            speed = new_written / max(time.monotonic() - started, 0.001)
+            _download_finished(emit, locale, written, total, speed)
+            return {"folder": folder, "name": filename, "size": written, "route": "local"}
+        finally:
+            response.close()
+
+
+def _final_url(response: Any, fallback: str) -> str:
+    """这一跳最后落在哪个地址(没有 `geturl` 就用一开始那个)。只记在 sidecar 里给人排查,不参与续传核对。"""
+    getter = getattr(response, "geturl", None)
     try:
-        kind = response.headers.get("Content-Type", "").lower()
-        if kind.startswith("text/html"):
-            raise ComfyError(say(locale, "下载地址回的是一个网页,不是模型文件(多半要登录:在这个连接的凭据里填那个站的令牌)",
-                                 "The download link returned a web page, not a model file (it probably needs a login: enter "
-                                 "that site's token in this connection's credentials)"))
-        raw = response.headers.get("Content-Length", "")
-        total = int(raw) if raw.isdigit() else 0
-        if total:
-            free = shutil.disk_usage(directory).free
-            if free < total + DISK_MARGIN:
-                raise ComfyError(say(locale, f"空间不够:{directory} 所在的磁盘只剩 {_human(free)},这个文件要 {_human(total)}",
-                                     f"Not enough space: the disk holding {directory} has {_human(free)} left and this file "
-                                     f"needs {_human(total)}"))
-        started = last = time.monotonic()
-        digest = hashlib.sha256()
-        with part.open("wb") as handle:
-            while True:
-                if _cancelled():
-                    raise ComfyError(say(locale, "已取消", "Cancelled"))
-                # read1:有多少拿多少,不等凑满一块 —— 慢的时候取消也能马上生效
-                chunk = response.read1(CHUNK) if hasattr(response, "read1") else response.read(CHUNK)
-                if not chunk:
-                    break
-                handle.write(chunk)
-                digest.update(chunk)
-                written += len(chunk)
-                now = time.monotonic()
-                if now - last >= PROGRESS_SECONDS:
-                    last = now
-                    speed = written / max(now - started, 0.001)
-                    emit({"event": "progress", "progress": min(0.99, written / total) if total else 0.0,
-                          "message": say(locale, f"已下载 {_human(written)}" + (f" / {_human(total)}" if total else "")
-                                         + f" · {_human(speed)}/s",
-                                         f"{_human(written)}" + (f" of {_human(total)}" if total else "")
-                                         + f" downloaded · {_human(speed)}/s")})
-        if total and written != total:
-            raise ComfyError(say(locale, f"下到一半断了({_human(written)} / {_human(total)}),再试一次",
-                                 f"The download broke off ({_human(written)} of {_human(total)}); try again"))
-        got = digest.hexdigest()
-        if sha256 and got != sha256:
-            #: 这份不是确认过的那个文件:半截文件由下面的 except 删掉,正式的名字一次都不挂。
-            raise ComfyError(say(locale, f"下到的文件和确认过的那个不是同一个(SHA256 {got[:12]}…,应为 {sha256[:12]}…):"
-                                           f"已经删掉,没放进 {folder}",
-                                 f"The downloaded file isn't the confirmed one (SHA256 {got[:12]}…, expected "
-                                 f"{sha256[:12]}…): it was deleted and not put into {folder}"))
-        _publish(part, final, locale, folder, filename)
-    except BaseException:
-        part.unlink(missing_ok=True)
-        raise
-    finally:
-        response.close()
-    emit({"event": "progress", "progress": 1.0,
-          "message": say(locale, f"已下载 {_human(written)}", f"{_human(written)} downloaded")})
-    return {"folder": folder, "name": filename, "size": written, "route": "local"}
+        return str(getter()) if callable(getter) else fallback
+    except Exception:  # noqa: BLE001 — 记不下来不是下载的事
+        return fallback
+
+
+def discard_partial(directory: Path, filename: str) -> bool:
+    """**用户明确点了「删除没下完的部分」**才走这里:删掉 `.part` 和 sidecar,成品一个都不碰。"""
+    part, sidecar = _part_paths(directory, filename)
+    existed = part.is_file() or sidecar.is_file()
+    _remove_partial(part, sidecar)
+    return existed
+
+
+def partial(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str, Any]:
+    """问/删一个模型文件的半截(界面上的「继续下载」要知道从多少开始,「删除没下完的部分」要真的删掉)。
+
+    `{"op": "partial", "folder", "filename", "url"?, "sha256"?, "delete"?}`。只在本机那条下载路上有意义:
+    那台服务器在另一台机器上时(经 ComfyUI-Manager 下)Mosael 这边没有半截,`partial` 是 false。"""
+    folder = str(payload.get("folder") or "").strip()
+    filename = str(payload.get("filename") or "").strip()
+    url = str(payload.get("url") or "").strip()
+    sha256 = str(payload.get("sha256") or "").strip().lower()
+    delete = payload.get("delete") is True
+    if not plain(folder) or not plain(filename):
+        raise ComfyError(say(locale, "目录和文件名都只能是一段名字,不能带路径",
+                             "The folder and file name must be plain names, not paths"))
+    info = folder_info(comfy)
+    if info is None or folder not in info:
+        raise ComfyError(say(locale, f"这台 ComfyUI 没有「{folder}」这个模型目录",
+                             f"This ComfyUI has no model folder “{folder}”"))
+    local = _local_dir(info, folder)
+    empty = {"folder": folder, "name": filename, "partial": False, "resumable": False,
+             "downloaded_bytes": None, "total_bytes": None, "updated_at": None, "removed": False}
+    if local is None:
+        return empty
+    #: 问/删半截的时候也顺手扫一下这个目录的孤儿(同一套 N 天规则);要查的这份不算孤儿。
+    _clean_orphan_parts(local, keep=filename)
+    part, sidecar = _part_paths(local, filename)
+    if delete:
+        removed = discard_partial(local, filename)
+        return {**empty, "removed": removed}
+    if not part.is_file():
+        if sidecar.exists():
+            sidecar.unlink(missing_ok=True)
+        return empty
+    try:
+        size = part.stat().st_size
+        modified = part.stat().st_mtime
+    except OSError:
+        return empty
+    stored = _sidecar_data(sidecar)
+    known = stored.get("total_bytes")
+    total = known if isinstance(known, int) and not isinstance(known, bool) and known > 0 else None
+    return {"folder": folder, "name": filename, "partial": True,
+            #: 能续的判据和真正续传时**同一条**(见 _resume_offset):URL / 声明的 SHA256 / 总大小 / 校验器。
+            "resumable": bool(url) and _resume_offset(part, sidecar, url, sha256) > 0,
+            "downloaded_bytes": size, "total_bytes": total, "updated_at": modified, "removed": False}
 
 
 def _publish(part: Path, final: Path, locale: str, folder: str, filename: str) -> None:

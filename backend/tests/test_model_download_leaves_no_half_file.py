@@ -1,18 +1,22 @@
-"""取消 / 中断模型下载,模型目录里不留半成品。
+"""取消 / 中断模型下载:半截**留着**供续传,只有用户明确点「删除没下完的部分」才删。
 
-下载先写 `<名字>.mosael-part`,核对通过才挂正式的名字(见 plugins/bundled/comfyui/tools/install.py)。
-两条路会留下它:
+口径在 2026-10-19 由维护者改成断点续传(取代此前「取消/失败就删 `.part`」):下载先写
+`<名字>.mosael-part` + `<名字>.mosael-part.json`(sidecar:源 URL、总大小、ETag / Last-Modified、声明的
+SHA256),核对通过才挂正式的名字(见 plugins/bundled/comfyui/tools/install.py)。
 
-- 取消、失败:`via_local` 的 `except BaseException` 删掉自己那半截 —— 这一条一直有;
-- **进程被强杀 / 后端重启**:走不到那个 except。此时半截会留在模型目录里,直到下一次
-  **同一个文件**开始下载。以前靠「打开时 `wb` 截断」,可那要等真的拿到响应才发生:这一次
-  404、要登录、或者又取消了,半截就一直没人认领。所以开始下载前要先删掉旧的那一份。
+这里的证据都是**目录清单**:
 
-这里的证据都是**目录清单**:取消之后既没有 `.mosael-part`,也没有成品。
+- 取消:`.part` 和 sidecar 都还在,没有成品 —— 下次能从这儿接着下;
+- `discard_partial`(界面上「删除没下完的部分」)之后:目录里既没有 `.part`,也没有成品、没有 sidecar;
+- 上一次崩溃留下、但 sidecar 已经丢了(核对不了是不是同一个文件)的半截:下一次开始下载时清掉,从头下,
+  下成了目录里只留成品。
+
+续传本身(206 / 200 / 416、Request 上的 Range)钉在 tests/test_model_download_resume.py,那里用本机真 HTTP 服务。
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -49,6 +53,7 @@ class _Body:
         self._on_read = on_read or {}
         self._reads = 0
         self.closed = False
+        self.status = 200
         self.headers = {"Content-Type": "application/octet-stream",
                         "Content-Length": str(sum(len(chunk) for chunk in chunks))}
 
@@ -68,11 +73,11 @@ def _serve(install, response: _Body, url: str = "https://example.invalid/file.sa
 
 
 def _names(directory: Path) -> list[str]:
-    """目录清单。是证据本身:取消之后这里应当只剩原来就有的文件。"""
+    """目录清单。是证据本身。"""
     return sorted(one.name for one in directory.iterdir())
 
 
-def test_下到一半取消_目录里既没有半截也没有成品(install, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_下到一半取消_半截和sidecar都留着_可以接着下(install, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     directory = tmp_path / "ComfyUI" / "models" / "loras"
     directory.mkdir(parents=True)
     (directory / "keep.safetensors").write_bytes(b"already here")
@@ -86,19 +91,39 @@ def test_下到一半取消_目录里既没有半截也没有成品(install, tmp
         install.via_local(directory, "https://example.invalid/big.safetensors", "loras", "big.safetensors", "zh",
                           lambda _event: None)
 
-    assert _names(directory) == ["keep.safetensors"], f"取消后不能留下半截或成品:{_names(directory)}"
+    assert (directory / "big.safetensors.mosael-part").is_file(), f"取消要留半截:{_names(directory)}"
+    assert (directory / "big.safetensors.mosael-part.json").is_file(), f"取消要留 sidecar:{_names(directory)}"
+    assert not (directory / "big.safetensors").exists(), "没下完不挂正式的名字"
+    assert (directory / "keep.safetensors").exists(), "别的文件一个不动"
     assert body.closed, "连接也要关掉"
 
 
-def test_上一次崩溃留下的半截_下一次同一个文件开始下载时先删(install, tmp_path: Path) -> None:
-    """进程被强杀 / 后端重启留下的 `.mosael-part`:下一次同一个文件开始时先删,不靠「拿到响应再截断」。
+def test_删除没下完的部分_才删半截_成品也不碰(install, tmp_path: Path) -> None:
+    directory = tmp_path / "ComfyUI" / "models" / "loras"
+    directory.mkdir(parents=True)
+    (directory / "big.safetensors.mosael-part").write_bytes(b"half")
+    (directory / "big.safetensors.mosael-part.json").write_text('{"version": 1}', encoding="utf-8")
+    (directory / "keep.safetensors").write_bytes(b"already here")
+
+    assert install.discard_partial(directory, "big.safetensors") is True
+    assert _names(directory) == ["keep.safetensors"], f"只删没下完的那一份:{_names(directory)}"
+    assert install.discard_partial(directory, "big.safetensors") is False, "没有半截时是 false"
+
+
+def test_上一次崩溃留下的半截_核对不了_下一次开始时清掉(install, tmp_path: Path) -> None:
+    """进程被强杀 / 后端重启留下的 `.mosael-part`:sidecar 里的 URL 对不上,没法核对是不是同一个文件,不硬续。
 
     这一条此前是红的:重启后用户又点了一次同一个文件,而这次地址回 404(或干脆是取消),旧的半截
-    就一直在目录里 —— 它既不会被下完、也没人认领。"""
+    就一直在目录里 —— 它既不会被下完、也没人认领。现在开始下载前先清掉核对不过的那一份,不再靠
+    「拿到响应再截断」。"""
     directory = tmp_path / "ComfyUI" / "models" / "loras"
     directory.mkdir(parents=True)
     stale = directory / "big.safetensors.mosael-part"
     stale.write_bytes(b"half from the run that was killed")
+    (directory / "big.safetensors.mosael-part.json").write_text(json.dumps({
+        "version": 1, "url": "https://example.invalid/other.safetensors", "filename": "big.safetensors",
+        "total_bytes": 1000, "etag": '"v1"', "sha256": "", "updated_at": 0,
+    }), encoding="utf-8")
 
     def refuse(_url: str, _locale: str):
         raise install.ComfyError("下载地址回了 HTTP 404")
@@ -109,7 +134,7 @@ def test_上一次崩溃留下的半截_下一次同一个文件开始下载时�
         install.via_local(directory, "https://example.invalid/big.safetensors", "loras", "big.safetensors", "zh",
                           lambda _event: None)
 
-    assert _names(directory) == [], f"开始下一次之前先把旧的半截删掉:{_names(directory)}"
+    assert _names(directory) == [], f"核对不过的半截和 sidecar 都清掉:{_names(directory)}"
 
 
 def test_老半截还在时下成了_目录里只留成品(install, tmp_path: Path) -> None:

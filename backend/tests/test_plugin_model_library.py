@@ -178,9 +178,20 @@ elif op == "search_sources":
             {"source": "civitai", "filename": "", "url": "https://civitai.com/api/download/models/1"},
             "not a dict",
         ], "failed": [{"source": "modelscope", "message": "ModelScope 连不上或超时了"}, {"source": "civitai"}]}})
+elif op == "partial":
+    if payload.get("delete"):
+        emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["filename"], "partial": False,
+                                     "resumable": False, "removed": True}})
+    else:
+        emit({"ok": True, "output": {"folder": payload["folder"], "name": payload["filename"], "partial": True,
+                                     "resumable": True, "downloaded_bytes": 3200000000,
+                                     "total_bytes": 12800000000, "updated_at": 1700000000.5}})
 elif op == "download":
     cancel = Path(os.environ["MOSAEL_PLUGIN_CANCEL_FILE"])
     emit({"event": "progress", "progress": 0.25, "message": "已下载 1.2 MB / 4.9 MB"})
+    #: 结构化字节(界面不解析上一句人话):取消之后任务详情里要留着它,才说得出「从 1.2 MB 继续」。
+    emit({"event": "step", "step": "download", "downloaded_bytes": 1200000, "total_bytes": 4900000,
+          "speed_bps": 250000})
     if payload["filename"] == "slow.safetensors":
         while not cancel.exists():
             time.sleep(0.05)
@@ -804,12 +815,44 @@ def test_下载_取消经取消文件传到插件(library) -> None:
         if current["progress"] and current["progress"] >= 0.25:
             break
         time.sleep(0.05)
+    #: 进度和 step 是两行;等那次 step 也记进任务详情(最多再等 5 秒)。
+    settle = time.monotonic() + 5
+    while time.monotonic() < settle and current["result"].get("downloaded_bytes") != 1200000:
+        time.sleep(0.02)
+        current = client.get(f"/api/jobs/{job['id']}").json()
     assert "1.2 MB" in current["message"], "插件报的进度那句话进任务"
+    assert current["result"]["downloaded_bytes"] == 1200000, "结构化字节记进任务详情(不从人话里解析)"
+    assert current["result"]["total_bytes"] == 4900000
     assert client.post(f"/api/jobs/{job['id']}/cancel").status_code == 200
+    cancelled = client.get(f"/api/jobs/{job['id']}").json()
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["result"]["downloaded_bytes"] == 1200000, "取消后最后那份字节留着,界面说得出从多少继续"
     marker = runtime.data_dir_for(PACKAGE_ID) / "cancelled"
     while not marker.exists() and time.monotonic() < deadline:
         time.sleep(0.05)
     assert marker.exists(), "插件没收到取消 —— 那边的下载就停不下来"
+
+
+def test_半截_问还剩多少和显式删除都问插件(library) -> None:
+    """取消后界面要知道「从多少继续」,并且只有明确点「删除没下完的部分」才删 —— 这两件事都问插件。"""
+    client, instance_id, _ = library
+    workspace = _workspace(client)
+    digest = "ab" * 32
+    body = {"workspace_id": workspace, "folder": "loras", "name": "big.safetensors",
+            "url": "https://huggingface.co/a/b/resolve/main/big.safetensors", "sha256": digest}
+    state = client.post(f"/api/plugins/instances/{instance_id}/model-library/partial", json=body)
+    assert state.status_code == 200, state.text
+    assert state.json() == {"folder": "loras", "name": "big.safetensors", "partial": True, "resumable": True,
+                            "downloaded_bytes": 3200000000, "total_bytes": 12800000000,
+                            "updated_at": 1700000000.5, "removed": False}
+    assert _ops()[-1] == {"op": "partial", "folder": "loras", "filename": "big.safetensors",
+                          "delete": False, "url": body["url"], "sha256": digest}
+
+    deleted = client.post(f"/api/plugins/instances/{instance_id}/model-library/partial", json={**body, "delete": True})
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["removed"] is True and deleted.json()["partial"] is False
+    assert _ops()[-1] == {"op": "partial", "folder": "loras", "filename": "big.safetensors", "delete": True,
+                          "url": body["url"], "sha256": digest}
 
 
 @pytest.mark.parametrize("filename", ["../evil.safetensors", "sub/evil.safetensors", "sub\\evil.safetensors", "", ".."])
