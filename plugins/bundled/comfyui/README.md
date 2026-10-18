@@ -792,7 +792,8 @@ ADR 0041, step 3:
   along), installs the new dependencies and starts it once; **if any step fails, or it doesn't start healthily, it goes back to the
   earlier version** (source moved back, changed packages reinstalled from that record). After a successful update the earlier version is
   kept, so “Go back to y” doesn't download anything; the next update replaces it. A change cut short (Mosael closed forcibly) refuses to
-  start and says so; “Go back to y” tidies it up. Pinned versions: 0.38.0 and 0.39.0 (new installs get 0.39.0).
+  start and says so; “Go back to y” tidies it up. New installs get the newest pinned version (0.39.0 right now); updates go to the
+  newest upstream release and fall back to the pinned table only when upstream can't be checked.
 - **Uninstalling**: deleting a connection or uninstalling the plugin asks whether to delete the copy Mosael installed too, optionally
   keeping the models (moved to `local-services/kept-models/<connection name>` in the data folder, ready to add back as a shared models
   folder). Only that install folder in Mosael's data folder is deleted, without following links out of it; a folder you picked yourself

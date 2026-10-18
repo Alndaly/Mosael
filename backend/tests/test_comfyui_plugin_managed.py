@@ -1036,3 +1036,214 @@ def test_卸载之前_选目录那一种的安装目录里只有宿主写的配�
     (tmp_path / "extra_model_paths.yaml").write_text("{}", encoding="utf-8")
     assert managed.uninstall({"directory": str(tmp_path)}, "zh") == {"installed": False, "models": "", "models_bytes": 0,
                                                                     "models_files": 0}
+
+
+# ---- 查上游最新 release、升到上游最新(供给链:ADR 0073)----------------------------------------
+
+
+#: 假的 GitHub releases 回答(注入给 versions / upstream,测试里一次都不连网)。
+def _release_fetch(version: str = "0.40.0", *, status: int = 200, body: bytes | None = None,
+                   error: BaseException | None = None, headers: dict[str, str] | None = None):
+    calls: list[dict[str, Any]] = []
+    payload = body if body is not None else json.dumps({
+        "tag_name": f"v{version}", "name": f"v{version}",
+        "body": "## What's Changed\r\n* Add ImageSDRToHDR node. by @someone\r\n* Fix a bug. by @other\r\n",
+        "published_at": "2026-10-15T22:57:45Z",
+        "html_url": f"https://github.com/Comfy-Org/ComfyUI/releases/tag/v{version}",
+    }).encode()
+
+    def fetch(url: str, request_headers: dict[str, str], timeout: float):
+        calls.append({"url": url, "headers": request_headers, "timeout": timeout})
+        if error is not None:
+            raise error
+        return status, headers or {}, payload
+
+    return fetch, calls
+
+
+def _asked(versioned: Versions, fetch) -> dict[str, Any]:
+    return versioned.module.versions({"directory": str(versioned.setup.root), "check_upstream": True}, "zh", fetch=fetch)
+
+
+@posix_only
+def test_查上游_注入的_releases_回答_解析出_tag_版本和发布说明要点(versioned: Versions) -> None:
+    fetch, calls = _release_fetch("0.40.0")
+    told = _asked(versioned, fetch)
+    up = told["upstream"]
+    assert up["status"] == "ok" and up["version"] == "0.40.0" and up["tag"] == "v0.40.0"
+    assert "ImageSDRToHDR" in up["notes"] and up["url"].endswith("/tag/v0.40.0")
+    assert up["checked_at"], "上次查的时间要交回去"
+    assert told["current"] == "0.38.0" and told["update"] == "0.40.0" and told["source"] == "upstream"
+    assert calls[0]["url"] == "https://api.github.com/repos/comfyanonymous/ComfyUI/releases/latest", "官方 releases API"
+    assert "application/vnd.github+json" in calls[0]["headers"].get("Accept", "")
+    assert calls[0]["headers"].get("User-Agent"), "GitHub API 要 User-Agent"
+    assert 0 < calls[0]["timeout"] <= 20, "超时短一点,别让版本那一行一直转"
+
+
+@posix_only
+@pytest.mark.parametrize(("status", "expected"), [(404, "not_found"), (403, "rate_limited"), (429, "rate_limited")])
+def test_查不到上游_404_限流_说查不到_绝不是已最新(versioned: Versions, status: int, expected: str) -> None:
+    fetch, _calls = _release_fetch(status=status, body=b'{"message":"nope"}')
+    told = _asked(versioned, fetch)
+    up = told["upstream"]
+    assert up["status"] == expected and up["version"] == "" and up["message"], up
+    assert told["update"] == "0.39.0" and told["source"] == "pinned", "离线/查不到时退回钉死表"
+    assert "已经是最新" not in json.dumps(told, ensure_ascii=False)
+
+
+@posix_only
+def test_查不到上游_断网_超时_回答看不懂_都是查不到(versioned: Versions) -> None:
+    offline, _ = _release_fetch(error=TimeoutError("timed out"))
+    told = _asked(versioned, offline)
+    assert told["upstream"]["status"] == "offline" and told["upstream"]["message"]
+    assert told["source"] == "pinned" and told["update"] == "0.39.0"
+
+    broken, _ = _release_fetch(body=b"<html>not json</html>")
+    told = _asked(versioned, broken)
+    assert told["upstream"]["status"] == "error" and told["upstream"]["version"] == ""
+    assert told["source"] == "pinned"
+
+    odd, _ = _release_fetch()
+    odd_body = json.dumps({"tag_name": "release-2026-10", "name": "x"}).encode()
+    odd, _ = _release_fetch(body=odd_body)
+    told = _asked(versioned, odd)
+    assert told["upstream"]["status"] == "error", "认不出的 tag 不当成版本号"
+
+
+@posix_only
+def test_没让查上游就不联网_旧调用照旧(versioned: Versions) -> None:
+    fetch, calls = _release_fetch("0.40.0")
+    told = versioned.module.versions({"directory": str(versioned.setup.root)}, "zh", fetch=fetch)
+    assert not calls and "upstream" not in told
+    assert told == {"current": "0.38.0", "latest": "0.39.0", "update": "0.39.0", "previous": "", "unfinished": ""}
+
+
+def test_上游源码包_只从官方_codeload_拿_sha256_事先不知道(managed) -> None:
+    import pinned
+
+    archive = managed.upstream_archive("0.40.0", "v0.40.0")
+    assert archive.url == "https://codeload.github.com/comfyanonymous/ComfyUI/tar.gz/refs/tags/v0.40.0"
+    assert archive.sha256 == "", "上游标签事先不知道,下完算"
+    assert archive.official_only is True and pinned.is_official(archive.url)
+    assert not pinned.is_official("https://gh.example/https://codeload.github.com/x"), "任意镜像/主机不收"
+    assert not pinned.is_official("https://codeload.github.com.evil.example/x")
+
+
+def test_非官方跳转不收(managed) -> None:
+    import pinned
+
+    handler = pinned._official_redirect("zh")
+    with pytest.raises(_error_type(), match="不是官方"):
+        handler.redirect_request(None, None, 302, "Found", {}, "https://evil.example/ComfyUI.tar.gz")  # type: ignore[arg-type]
+
+
+def _upstream_tarball(tmp_path: Path, version: str = "0.40.0") -> tuple[Path, bytes]:
+    data = _tarball({**COMFY_FILES, "comfyui_version.py": f'__version__ = "{version}"\n'.encode()},
+                    top=f"ComfyUI-{version}")
+    path = tmp_path / f"upstream-{version}.tar.gz"
+    path.write_bytes(data)
+    return path, data
+
+
+def _serve_upstream(versioned: Versions, monkeypatch: pytest.MonkeyPatch, path: Path) -> list[tuple[str, str]]:
+    real = versioned.setup.managed.upstream_archive
+    seen: list[tuple[str, str]] = []
+
+    def factory(version: str, tag: str = ""):
+        seen.append((version, tag))
+        return dataclasses.replace(real(version, tag), url=path.as_uri(), official_only=False)
+
+    monkeypatch.setattr(versioned.setup.managed, "upstream_archive", factory)
+    return seen
+
+
+def _five(root: Path) -> dict[str, bytes]:
+    """五样里每一个文件的相对路径 → 字节(逐字节比)。"""
+    found: dict[str, bytes] = {}
+    for name in ("models", "custom_nodes", "user", "input", "output"):
+        for one in (root / "ComfyUI" / name).rglob("*"):
+            if one.is_file():
+                found[str(one.relative_to(root / "ComfyUI"))] = one.read_bytes()
+    return found
+
+
+@posix_only
+def test_升到上游最新_tag_新目录_校验_切换_试起后版本变成上游_用户数据逐字节不变_sha256_记下(
+    versioned: Versions, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path, data = _upstream_tarball(tmp_path)
+    seen = _serve_upstream(versioned, monkeypatch, path)
+    fetch, _ = _release_fetch("0.40.0")
+    told = _asked(versioned, fetch)
+    assert told["update"] == "0.40.0" and told["upstream"]["tag"] == "v0.40.0"
+    before = _five(versioned.setup.root)
+
+    done = versioned.update(version=told["update"], tag=told["upstream"]["tag"])
+
+    assert done == {"directory": str(versioned.setup.root), "python": str(versioned.setup.root / ".venv" / "bin" / "python"),
+                    "comfyui": "0.40.0", "previous": "0.38.0"}
+    assert seen == [("0.40.0", "v0.40.0")], "换的就是上游那个 tag"
+    assert '"0.40.0"' in versioned.version_on_disk()
+    assert _five(versioned.setup.root) == before, "模型、自定义节点、工作流和设置、输入、输出:一个字节都没变"
+    assert (versioned.setup.root / "ComfyUI.previous").is_dir(), "上一版留着,能回滚"
+    assert not (versioned.setup.root / "ComfyUI.next").exists()
+
+    record = versioned.setup.record()
+    source = record["source"]
+    assert source["version"] == "0.40.0" and source["tag"] == "v0.40.0"
+    assert source["sha256"] == hashlib.sha256(data).hexdigest(), "下载后算出来的 sha256 要记下来"
+    assert source["recorded_at"] and source["url"]
+    assert source["sha256"] in versioned.setup.log.read_text(encoding="utf-8"), "日志里也看得见"
+
+    after = _asked(versioned, _release_fetch("0.40.0")[0])
+    assert after["current"] == "0.40.0" and after["update"] == "" and after["upstream"]["status"] == "ok"
+    assert after["source"] == ""
+
+    versioned.rollback()
+    assert '"0.38.0"' in versioned.version_on_disk() and _five(versioned.setup.root) == before, "上游升上来的也能一步回滚"
+    assert "source" not in versioned.setup.record()
+
+
+@posix_only
+def test_升上游最新_装上就失败_自己换回原来的_用户数据不动_还能起(
+    versioned: Versions, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path, _data = _upstream_tarball(tmp_path)
+    _serve_upstream(versioned, monkeypatch, path)
+    before = _five(versioned.setup.root)
+    monkeypatch.setenv("FAKE_PIP_FAIL", "requirements")
+    with pytest.raises(_error_type()) as caught:
+        versioned.update(version="0.40.0", tag="v0.40.0")
+    assert "已经换回 0.38.0" in str(caught.value), str(caught.value)
+    assert '"0.38.0"' in versioned.version_on_disk()
+    assert _five(versioned.setup.root) == before
+    assert versioned.launch()["argv"][1] == str(versioned.setup.root / "ComfyUI" / "main.py"), "换回来了,照常能起"
+    record = versioned.setup.record()
+    assert record["comfyui"] == "0.38.0" and "source" not in record, "被换下来的那一份的来源记录也收拾掉"
+
+
+@posix_only
+def test_上游以外的版本_没有上游_tag_不放行(versioned: Versions) -> None:
+    with pytest.raises(_error_type(), match="没有钉死"):
+        versioned.update(version="9.9.9")
+    with pytest.raises(_error_type(), match="不是上游发布"):
+        versioned.update(version="9.9.9", tag="../../../etc/passwd")
+
+
+def test_真去问_GitHub_时_404_和_限流_不会被当成断网(managed, monkeypatch: pytest.MonkeyPatch) -> None:
+    """urllib 对 4xx 是抛 HTTPError,不是交回响应 —— 那一层不接住的话 404 / 限流都会变成「离线」。"""
+    import io
+    from urllib import error as urlerror
+
+    import upstream
+
+    class Opener:
+        def __init__(self, code: int) -> None:
+            self.code = code
+
+        def open(self, _req, timeout: float):
+            raise urlerror.HTTPError("https://api.github.com/x", self.code, "nope", {}, io.BytesIO(b'{"message":"nope"}'))
+
+    for code, status in ((404, "not_found"), (403, "rate_limited"), (429, "rate_limited")):
+        monkeypatch.setattr(upstream.request, "build_opener", lambda _handler, code=code: Opener(code))
+        assert upstream.release("zh", fetch=upstream._http_get("zh"))["status"] == status, code

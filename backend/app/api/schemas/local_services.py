@@ -253,15 +253,41 @@ class LocalServicePlanOut(ApiModel):
     directory: str = ""
 
 
+class LocalServiceUpstreamOut(ApiModel):
+    """上游最新 release(GitHub API)查到了什么;查不到时 `status` 说为什么、`version` / `tag` 空着。
+
+    **`status` 不是 `ok` 就不等于「已最新」** —— 界面照这一格说「查不到(离线 / 网络 / 限流)」,不能说已经是最新的。"""
+
+    #: `ok` 查到了;`offline` 离线 / 超时 / 网络;`rate_limited` GitHub 限流;`not_found` 上游没有 release;
+    #: `error` 回答看不懂;`not_checked` 这次没查。
+    status: Literal["ok", "offline", "rate_limited", "not_found", "error", "not_checked"] = "not_checked"
+    version: str = ""
+    #: release 的 tag(`v0.41.0`);换版本时原样交给插件。
+    tag: str = ""
+    #: 发布说明要点(上游原文,不翻译;前几条 bullet)。
+    notes: str = ""
+    url: str = ""
+    #: 上一次查的时间(ISO 8601,UTC);没查是空串。
+    checked_at: str = ""
+    #: 查不到时按读的人的语言说的原因。
+    message: str = ""
+
+
 class LocalServiceVersionsOut(ApiModel):
-    """让 Mosael 装的那一份:装着哪个版本、插件钉死的最新是哪个、能更新到哪个(没有是空串)、能回到哪个(没有是空串)、
-    有没有被打断没做完的(`update` 更新换到一半、`rollback` 回退时依赖还没装回去 —— 这时要先「换回」`previous`)。"""
+    """让 Mosael 装的那一份:装着哪个版本、内置表最新是哪个、上游最新是哪个、能更新到哪个(没有是空串)、能回到哪个
+    (没有是空串)、有没有被打断没做完的(`update` 更新换到一半、`rollback` 回退时依赖还没装回去 —— 这时要先「换回」
+    `previous`)。"""
 
     current: str = ""
+    #: 插件内置表里最新的版本(离线 / 降级路径;**不是**上游最新)。
     latest: str = ""
     update: str = ""
+    #: `update` 是哪来的:`upstream`(已经查到的上游最新 tag)还是 `pinned`(内置表里的下一个;上游查不到时)。
+    source: Literal["", "upstream", "pinned"] = ""
     previous: str = ""
     unfinished: Literal["", "update", "rollback"] = ""
+    #: 上游最新查到了什么、为什么查不到。
+    upstream: LocalServiceUpstreamOut = Field(default_factory=LocalServiceUpstreamOut)
 
 
 class LocalServiceFootprintOut(ApiModel):
@@ -280,10 +306,13 @@ class LocalServiceFootprintOut(ApiModel):
 
 
 class LocalServiceNewVersionRequest(ApiModel):
-    """更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 插件钉死的最新那个。"""
+    """更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 用插件刚查到的那个
+    (上游最新优先,查不到时用内置表里的下一个)。
+    `tag` 是刚查到的上游 release tag(`v0.41.0`):换上游那一版时原样交给插件,它只从官方 codeload 下这一 tag。"""
 
     confirm_run_code: bool = False
     version: str = Field(default="", max_length=40)
+    tag: str = Field(default="", max_length=40)
 
 
 class LocalServiceInstallRequest(ApiModel):
@@ -299,5 +328,5 @@ __all__ = [
     "LocalServiceDiscoveryOut", "LocalServiceDownloadOut", "LocalServiceFactOut", "LocalServiceFoundOut",
     "LocalServiceInstallOut", "LocalServiceInstallRequest", "LocalServiceInstallStepOut", "LocalServiceLogsOut",
     "LocalServiceFootprintOut", "LocalServiceNewVersionRequest", "LocalServiceOfferOut", "LocalServiceOut", "LocalServicePlanOut", "LocalServiceProblemOut",
-    "LocalServiceUpdate", "LocalServiceVersionsOut",
+    "LocalServiceUpdate", "LocalServiceUpstreamOut", "LocalServiceVersionsOut",
 ]

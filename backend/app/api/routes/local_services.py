@@ -232,14 +232,14 @@ def get_local_service_versions(instance_id: str, db: DbSession, user: CurrentUse
 
 @router.post("/plugins/instances/{instance_id}/local-service/update", response_model=LocalServiceOut)
 def update_local_service(instance_id: str, body: LocalServiceNewVersionRequest, db: DbSession, user: CurrentUser) -> dict:
-    """更新到更新的钉死版本:先停下它,后台换源码、装依赖、试起一次(没通过就换回去),马上回来,界面接着轮询。要确认过
-    (会下载新版本的代码并运行)。进度、取消、日志和安装是同一套。"""
+    """更新到更新的版本(上游最新 release 的 tag,或者内置表里的下一个):先停下它,后台换源码、装依赖、试起一次
+    (没通过就换回去),马上回来,界面接着轮询。要确认过(会下载新版本的代码并运行)。进度、取消、日志和安装是同一套。"""
     ensure_deployment_admin(db, user)
     instance = my_instance(db, instance_id, user)
     if not body.confirm_run_code:
         raise HTTPException(status_code=422, detail=tr("localServiceErr_confirmRequired"))
     try:
-        local_services.begin_update(db, instance, version=body.version)
+        local_services.begin_update(db, instance, version=body.version, tag=body.tag)
     except _ERRORS as exc:
         raise _failed(exc) from exc
     return _required(db, instance, user)

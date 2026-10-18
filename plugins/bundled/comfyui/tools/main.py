@@ -18,8 +18,9 @@
                                            → 怎么认一个装好的目录、怎么起、补装 pysssss、本机发现、改端口时搬数据
     {"op": "service_plan", …}              → 让 Mosael 装:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(见 managed)
     {"op": "service_install", …}           → 流式:一步一行进度,取消了停在那一步,再来从没做完的那一步接着装
-    {"op": "service_versions", …}          → 让 Mosael 装的那一份:装着哪个、能更新到哪个、能回到哪个、有没有没做完的(见 versions)
-    {"op": "service_update" | "service_rollback", …} → 流式:换到更新的钉死版本(没成自己换回去)/ 回到上一版
+    {"op": "service_versions", …}          → 让 Mosael 装的那一份:装着哪个、上游最新 release 是哪个(联网查,查不到就说查不到)、
+                                              能更新到哪个(上游 tag 或内置表)、能回到哪个、有没有没做完的(见 versions、upstream)
+    {"op": "service_update" | "service_rollback", …} → 流式:换到上游最新的 tag(没成自己换回去)/ 回到上一版
     {"op": "service_uninstall", …}         → 卸载之前:是不是一份让 Mosael 装的、模型文件夹在哪、多大(见 managed)
     {"op": "service_model_folders", …}     → 共用的模型文件夹:每一处认成什么、在跑的话加载了没有、几个模型(见 shared_models)
     {"op": "service_busy"}                 → 闲置自动停之前:任务队列里有没有在跑、在排的

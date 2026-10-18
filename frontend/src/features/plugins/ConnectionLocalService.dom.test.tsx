@@ -41,7 +41,10 @@ vi.mock("@/features/plugins/ModelLibrary", () => ({
   ModelLibraryDialog: ({ instance }: { instance: { id: string } }) => <div role="dialog" aria-label={`model-library:${instance.id}`} />,
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+vi.mock("@/app/preferences", () => ({
+  useI18n: () => (key: string) => key,
+  usePreferences: () => ({ locale: "zh-CN" }),
+}));
 
 import type { LocalService, PluginInstance, PluginPackage } from "@/api/client";
 import { ConnectionLocalService, LocalServiceDiscovery, joinArgs } from "./ConnectionLocalService";
@@ -71,7 +74,12 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getLocalService.mockResolvedValue(null);
   api.getLocalServiceModelFolders.mockResolvedValue({ folders: [], running: false, suggestions: [] });
-  api.getLocalServiceVersions.mockResolvedValue({ current: "0.39.0", latest: "0.39.0", update: "", previous: "", unfinished: "" });
+  api.getLocalServiceVersions.mockResolvedValue({
+    current: "0.39.0", latest: "0.39.0", update: "", previous: "", unfinished: "", source: "",
+    upstream: {
+      status: "ok", version: "0.39.0", tag: "v0.39.0", notes: "", url: "", checked_at: "2026-10-15T22:57:45Z", message: "",
+    },
+  });
   api.getLocalServiceLogs.mockResolvedValue({ lines: ["Starting server", "To see the GUI go to: http://127.0.0.1:8189"], path: "/data/logs/service-i1.log" });
 });
 afterEach(() => {
@@ -240,6 +248,22 @@ describe("共用的模型文件夹", () => {
     expect((await row(OTHER)).textContent).toContain("localServiceSharedModels");
     expect((await row(WEBUI)).textContent, "刚加的:还没加载").toContain("localServiceSharedRestart");
     expect((await row("/gone")).textContent).toContain("这台机器上没有这个文件夹");
+  });
+
+  it("加的那一行:格子吃掉剩下的宽度,按钮只占自己的宽度", async () => {
+    api.getLocalService.mockResolvedValue(service());
+    mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    const input = await screen.findByLabelText("localServiceSharedPath");
+    //: jsdom 没有排版,量不到宽度 —— 钉的是**决定宽度的那两层**:这一行怎么分、格子有没有固定宽度。
+    const field = input.parentElement as HTMLElement; // PathField 的外壳(输入框 + 「选择…」)
+    const row = field.parentElement as HTMLElement;
+    const add = screen.getByRole("button", { name: "localServiceSharedAdd" });
+    expect(row.className, "这一行是抢宽度的 flex 行").toMatch(/(^|\s)flex(\s|$)/);
+    expect(field.className, "格子吃掉剩下的宽度").toMatch(/(^|\s)flex-1(\s|$)/);
+    expect(field.className, "窄的时候能收,不把按钮挤出去").toMatch(/(^|\s)min-w-0(\s|$)/);
+    expect(field.className, "不是设置页右栏那个固定 280px").not.toContain("w-[280px]");
+    expect(add.parentElement, "和输入框同一行").toBe(row);
+    expect(add.className, "按钮按内容宽度,不跟着抢").not.toMatch(/(^|\s)flex-1(\s|$)/);
   });
 
   it("加:插件认得出才存(整份交上去);移除;卸载时保留下来的可以一键加回来", async () => {
@@ -597,14 +621,21 @@ describe("让 Mosael 装", () => {
 describe("换版本(让 Mosael 装的那一份)", () => {
   const installed = (overrides: Partial<LocalService> = {}) =>
     managedService({ installed: true, python_minor: "3.13", base_python_minor: "3.13", state: "running", ...overrides });
-  const versions = (overrides = {}) => ({ current: "0.38.0", latest: "0.39.0", update: "0.39.0", previous: "", unfinished: "", ...overrides });
+  const versions = (overrides = {}) => ({
+    current: "0.38.0", latest: "0.39.0", update: "0.41.0", previous: "", unfinished: "", source: "upstream",
+    upstream: {
+      status: "ok", version: "0.41.0", tag: "v0.41.0", notes: "Add a node.", url: "",
+      checked_at: "2026-10-15T22:57:45Z", message: "",
+    },
+    ...overrides,
+  });
 
   it("有更新的钉死版本:写明装着哪个;「更新到 x」先确认(会停下它、在哪台机器上运行),确认了才更新", async () => {
     api.getLocalService.mockResolvedValue(installed());
     api.getLocalServiceVersions.mockResolvedValue(versions());
     api.updateLocalService.mockResolvedValue(installed({ state: "stopped", install: run({ kind: "update", target: "0.39.0" }) }));
     mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
-    expect(await screen.findByText("localServiceVersionDesc")).toBeTruthy();
+    expect(await screen.findByText("localServiceVersionAvailable")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /localServiceGoBack/ }), "没更新过:没有上一版").toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: /localServiceUpdateTo/ }));
     expect(api.updateLocalService, "没确认之前不动").not.toHaveBeenCalled();
@@ -612,13 +643,16 @@ describe("换版本(让 Mosael 装的那一份)", () => {
     expect(within(dialog).getByText("localServiceUpdateConfirmTitle")).toBeTruthy();
     expect(within(dialog).getByText("localServiceUpdateConfirmBody")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: /localServiceUpdateTo/ }));
-    await waitFor(() => expect(api.updateLocalService).toHaveBeenCalledWith("i1", "0.39.0"));
+    await waitFor(() => expect(api.updateLocalService).toHaveBeenCalledWith("i1", "0.41.0", "v0.41.0"));
     expect(await screen.findByText("localServiceUpdating"), "进度和安装是同一块").toBeTruthy();
   });
 
   it("更新过:最新的不再给更新;「回到上一版 y」先确认", async () => {
     api.getLocalService.mockResolvedValue(installed());
-    api.getLocalServiceVersions.mockResolvedValue(versions({ current: "0.39.0", update: "", previous: "0.38.0" }));
+    api.getLocalServiceVersions.mockResolvedValue(versions({
+      current: "0.41.0", update: "", previous: "0.38.0",
+      upstream: { ...versions().upstream, version: "0.41.0" },
+    }));
     api.rollbackLocalService.mockResolvedValue(installed({ install: run({ kind: "rollback", target: "0.38.0" }) }));
     mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
     expect(await screen.findByText("localServiceVersionLatest")).toBeTruthy();

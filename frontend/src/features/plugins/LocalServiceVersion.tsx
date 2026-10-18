@@ -1,7 +1,9 @@
 /**
  * 让 Mosael 装的那一份换版本(ADR 0041 §4「更新、回滚」):连接页「本机服务」里的「版本」一行。
  *
- * - 装着哪个版本;插件钉死了更新的就有「更新到 x」,更新过的有「回到上一版 y」(上一版留一步,下一次更新时换掉);
+ * - 当前版本、**上游最新**(联网查,查不到就说查不到)、上次检查、能不能升;能升就有「更新到 x」,
+ *   更新过的有「回到上一版 y」(上一版留一步,下一次更新时换掉);
+ * - **「已经是最新的」只在当前 == 上游最新时说**;查不到(离线 / 限流 / 404)时说明原因,内置表里还有更新就照给按钮;
  * - 上一次换版本被强行打断(半新半旧,起不来):说清楚,「换回 y」把它收拾好;
  * - 两样都先确认(会停下它、正在跑的任务会中断;更新还会下载新代码并运行),之后的进度和安装是同一块(第几步、字节、取消、日志);
  * - 做完了在这一行下面说结果:换好了、没成(原因 —— 试起没通过时已经换回去了 —— 和日志)、取消了。
@@ -14,18 +16,32 @@ import { CircleArrowUp, CircleCheck, FileText, TriangleAlert, Undo2 } from "luci
 import { toast } from "sonner";
 
 import { getLocalServiceVersions, rollbackLocalService, updateLocalService, type LocalService } from "@/api/client";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
+import { Truncate } from "@/components/ui/truncate";
 import { LocalServiceLogDialog, localServiceKey, machineKey } from "@/features/plugins/localServiceStatus";
 
 export const versionsKey = (instanceId: string) => ["local-service-versions", instanceId] as const;
+
+/** 版本号按数字段比(`0.41.0` > `0.39.0`);认不出的按 0 算,只用来决定这句话怎么说。 */
+function newer(first: string, second: string): boolean {
+  const left = first.split(/[^0-9]+/).filter(Boolean).map(Number);
+  const right = second.split(/[^0-9]+/).filter(Boolean).map(Number);
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const one = left[index] ?? 0;
+    const other = right[index] ?? 0;
+    if (one !== other) return one > other;
+  }
+  return false;
+}
 
 type Change = "update" | "rollback";
 
 export function ManagedVersion({ instanceId, service }: { instanceId: string; service: LocalService }) {
   const t = useI18n();
+  const { locale } = usePreferences();
   const qc = useQueryClient();
   const run = service.install ?? null;
   const versions = useQuery({
@@ -43,7 +59,9 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
   const [logsOpen, setLogsOpen] = React.useState(false);
   const found = versions.data;
   const change = useMutation({
-    mutationFn: (kind: Change) => (kind === "update" ? updateLocalService(instanceId, found?.update ?? "") : rollbackLocalService(instanceId)),
+    mutationFn: (kind: Change) => (kind === "update"
+      ? updateLocalService(instanceId, found?.update ?? "", found?.source === "upstream" ? found.upstream?.tag ?? "" : "")
+      : rollbackLocalService(instanceId)),
     onSuccess: (next) => {
       setConfirming(null);
       qc.setQueryData(localServiceKey(instanceId), next);
@@ -56,17 +74,69 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
   if (!service.can_manage) return null;
 
   const where = t(machineKey());
-  const description = versions.isPending
-    ? t("localServiceVersionChecking")
-    : versions.error
-      ? (versions.error as Error).message
-      : found?.current
-        ? t(found.update ? "localServiceVersionDesc" : "localServiceVersionLatest").replace("{current}", found.current)
-        : "";
+  const up = found?.upstream;
+  const unknown = !!up && up.status !== "ok";
+  const upToDate = !!found?.current && up?.status === "ok" && up.version === found.current;
+  const ahead = !!found?.current && up?.status === "ok" && !upToDate && !found.update && !!up.version && newer(found.current, up.version);
+  const behind = !!found?.current && up?.status === "ok" && !upToDate && !found.update && !!up.version && newer(up.version, found.current);
+  const reason = up?.message || t("localServiceVersionReasonUnknown");
+  const describe = (): string => {
+    if (versions.isPending) return t("localServiceVersionChecking");
+    if (versions.error) return (versions.error as Error).message;
+    if (!found?.current) return "";
+    if (found.update && found.source === "upstream") {
+      return t("localServiceVersionAvailable").replace("{current}", found.current).replace("{latest}", found.update);
+    }
+    if (found.update && up?.status === "ok") {
+      return t("localServiceVersionOtherUpdate").replace("{current}", found.current).replace("{latest}", up.version)
+        .replace("{version}", found.update);
+    }
+    if (found.update) {
+      return t("localServiceVersionPinned").replace("{current}", found.current).replace("{version}", found.update);
+    }
+    if (unknown) return t("localServiceVersionUnknown").replace("{current}", found.current);
+    if (upToDate) return t("localServiceVersionLatest").replace("{current}", found.current);
+    if (ahead) {
+      return t("localServiceVersionAhead").replace("{current}", found.current).replace("{latest}", up?.version ?? "");
+    }
+    if (behind) {
+      return t("localServiceVersionUpstreamNewer").replace("{current}", found.current).replace("{latest}", up?.version ?? "");
+    }
+    return t("localServiceVersionUnknown").replace("{current}", found.current);
+  };
+  const description = describe();
+  const facts = found?.current ? (
+    <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1" data-testid="localServiceVersionFacts">
+      <span>{t("localServiceVersionFactCurrent").replace("{version}", found.current)}</span>
+      <span>
+        {up?.status === "ok" && up.version
+          ? t("localServiceVersionFactUpstream").replace("{version}", up.version)
+          : t("localServiceVersionFactUpstreamUnknown")}
+      </span>
+      <span>
+        {up?.checked_at
+          ? t("localServiceVersionFactChecked").replace("{time}", new Date(up.checked_at).toLocaleString(locale))
+          : t("localServiceVersionNotChecked")}
+      </span>
+      <span>
+        {found.update
+          ? t("localServiceVersionFactUpdate").replace("{version}", found.update)
+          : t("localServiceVersionFactNoUpdate")}
+      </span>
+    </span>
+  ) : null;
+  const notesText = up?.status === "ok" && up.notes
+    ? t("localServiceVersionReleaseNotes").replace("{notes}", up.notes)
+    : "";
+  const notes = notesText ? (
+    <Truncate text={notesText} lines={2} className="mt-1" data-testid="localServiceVersionNotes">
+      {notesText}
+    </Truncate>
+  ) : null;
   const lastChange = run && run.kind !== "install" && run.state !== "installing" ? run : null;
   return (
     <>
-      <SettingsRow label={t("localServiceVersion")} description={description}>
+      <SettingsRow label={t("localServiceVersion")} description={<>{description}{facts}{notes}</>}>
         {found?.update && (
           <Button size="sm" loading={change.isPending && change.variables === "update"} onClick={() => setConfirming("update")}>
             <CircleArrowUp /> {t("localServiceUpdateTo").replace("{version}", found.update)}
@@ -83,6 +153,12 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
           </Button>
         )}
       </SettingsRow>
+      {unknown && (
+        <p role="status" className="m-0 flex items-start gap-2 pb-4 text-ui-sm text-warning">
+          <TriangleAlert size={14} aria-hidden className="mt-0.5 shrink-0" />
+          <span className="min-w-0">{t("localServiceVersionCheckFailed").replace("{reason}", reason)}</span>
+        </p>
+      )}
       {found?.unfinished && (
         <p role="alert" className="m-0 flex items-start gap-2 pb-4 text-ui-sm text-warning">
           <TriangleAlert size={14} aria-hidden className="mt-0.5 shrink-0" />

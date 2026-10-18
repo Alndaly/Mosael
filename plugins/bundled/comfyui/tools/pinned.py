@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from urllib import request
+from urllib.parse import urlparse
 
 from lines import ComfyError, say
 
@@ -29,6 +30,9 @@ CHUNK = 256 * 1024
 DOWNLOAD_TIMEOUT_SECONDS = 120
 #: 这几个站的地址才接镜像前缀:钉死的压缩包都在 GitHub 上(codeload 是它下压缩包的那个站)。
 GITHUB_HOSTS = ("https://codeload.github.com/", "https://github.com/")
+#: 官方 GitHub 的主机:上游最新版本那一份**只收这几个**(不接镜像,跳转也只许在这几个之间)。
+#: api.github.com 是 releases API;objects.githubusercontent.com 是 GitHub 放附件的那一台。
+OFFICIAL_HOSTS = frozenset({"api.github.com", "codeload.github.com", "github.com", "objects.githubusercontent.com"})
 
 
 class Cancelled(Exception):
@@ -37,7 +41,10 @@ class Cancelled(Exception):
 
 @dataclass(frozen=True)
 class Archive:
-    """一个钉死的压缩包。`size` 是它大约多大 —— codeload 现打包、不给 Content-Length,进度按它估;下载的上限也按它定。"""
+    """一个要下的源码包。`size` 是它大约多大 —— codeload 现打包、不给 Content-Length,进度按它估;下载的上限也按它定。
+
+    `sha256` 空着 = **事先不知道**(上游最新那个 tag):下载完算出来交给调用方记下,不做对不上的比较。
+    `official_only` = 只许从官方 GitHub 下:不接「下载源」里的镜像前缀,跳转也只在 `OFFICIAL_HOSTS` 里。"""
 
     name: str
     url: str
@@ -45,6 +52,7 @@ class Archive:
     size: int
     max_members: int
     max_unpacked: int
+    official_only: bool = False
 
     @property
     def max_bytes(self) -> int:
@@ -62,6 +70,25 @@ def never() -> bool:
     return False
 
 
+def is_official(url: str) -> bool:
+    """这个地址的主机是不是官方的 GitHub(上游最新那一份只认它)。"""
+    return (urlparse(url).hostname or "").lower() in OFFICIAL_HOSTS
+
+
+def _official_redirect(locale: str) -> request.HTTPRedirectHandler:
+    """只许在官方主机之间跳:上游源码包不能经一个别人给的跳转落到别处(镜像、代理、随便哪台机器)。"""
+
+    class OfficialOnly(request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+            if not is_official(newurl):
+                raise ComfyError(say(locale, f"下载地址被转到了不是官方 GitHub 的主机({newurl}),没有用它",
+                                     f"The download redirected to a host that isn't official GitHub ({newurl}); "
+                                     f"it wasn't used"))
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    return OfficialOnly()
+
+
 def source_url(url: str, mirror: str) -> str:
     """真正去下的地址:GitHub 上的地址前面接上镜像前缀(`https://镜像/` + 原地址,常见的 GitHub 加速都这么用);别的不动。"""
     prefix = (mirror or "").strip()
@@ -71,16 +98,26 @@ def source_url(url: str, mirror: str) -> str:
 
 
 def download(archive: Archive, target: Path, locale: str, *, mirror: str = "",
-             is_cancelled: Callable[[], bool] = never, on_bytes: Callable[[int, int], None] | None = None) -> Path:
+             is_cancelled: Callable[[], bool] = never, on_bytes: Callable[[int, int], None] | None = None,
+             on_sha256: Callable[[str], None] | None = None) -> Path:
     """下到 `target`:先写 `<target>.part`,边下边算 sha256,对上了才改名成 `target`。对不上、断了、取消了,`.part` 都删掉。
-    `on_bytes(已下, 总共)`:总共是响应头给的长度,没给就按钉死的大小估。"""
-    url = source_url(archive.url, mirror)
+    `on_bytes(已下, 总共)`:总共是响应头给的长度,没给就按钉死的大小估。
+
+    `archive.sha256` 空着(上游最新):下完把算出来的 sha256 交给 `on_sha256` 记下,不做比较 —— 事先不知道就没有「对上」可言。
+    `archive.official_only`:起始地址和跳转都只许是官方 GitHub,镜像前缀不接。"""
+    if archive.official_only and not is_official(archive.url):
+        raise ComfyError(say(locale, f"这个下载地址不是官方 GitHub:{archive.url}",
+                             f"This download address isn't official GitHub: {archive.url}"))
+    url = archive.url if archive.official_only else source_url(archive.url, mirror)
     part = target.with_name(target.name + ".part")
     target.parent.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
     written = 0
     try:
-        with request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response, open(part, "wb") as out:  # noqa: S310 — 钉死的地址(可接镜像前缀)
+        opener = request.build_opener(_official_redirect(locale)) if archive.official_only else None
+        opening = opener.open(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) if opener is not None else \
+            request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS)  # noqa: S310 — 钉死的地址(可接镜像前缀)
+        with opening as response, open(part, "wb") as out:
             length = response.headers.get("Content-Length") if hasattr(response, "headers") else None
             total = int(length) if length and length.isdigit() else archive.size
             if on_bytes is not None:
@@ -119,7 +156,7 @@ def download(archive: Archive, target: Path, locale: str, *, mirror: str = "",
         part.unlink(missing_ok=True)
         raise
     got = digest.hexdigest()
-    if got != archive.sha256:
+    if archive.sha256 and got != archive.sha256:
         part.unlink(missing_ok=True)
         raise ComfyError(say(
             locale,
@@ -129,6 +166,8 @@ def download(archive: Archive, target: Path, locale: str, *, mirror: str = "",
             f"{archive.sha256[:12]}…), so it wasn't used. If it came through a mirror or proxy, that served different content\n{url}",
         ))
     part.replace(target)
+    if on_sha256 is not None:
+        on_sha256(got)
     return target
 
 
@@ -178,4 +217,5 @@ def unpack(path: Path, target: Path, archive: Archive, locale: str, *,
         raise
 
 
-__all__ = ["Archive", "Cancelled", "GITHUB_HOSTS", "cancelled", "download", "never", "source_url", "unpack"]
+__all__ = ["Archive", "Cancelled", "GITHUB_HOSTS", "OFFICIAL_HOSTS", "cancelled", "download", "is_official", "never",
+           "source_url", "unpack"]

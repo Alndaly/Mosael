@@ -1,9 +1,10 @@
 """让 Mosael 装的那一份换版本(ADR 0041 §4「更新、回滚」)。宿主经 `comfyui_generation` 按 op 问:
 
-    {"op": "service_versions", "directory"}
-        → 装着哪个、能更新到哪个、能回到哪个、有没有被打断没做完的
-    {"op": "service_update", "directory", "version", "sources", "log", "pip_cache"}
-        → 流式(和 service_install 同一种一步一行):换到一个更新的钉死版本;没成就自己换回去
+    {"op": "service_versions", "directory", "check_upstream"}
+        → 装着哪个、能更新到哪个、能回到哪个、有没有被打断没做完的;`check_upstream` 为真时**联网**问上游最新 release
+          (`upstream`:tag / 版本 / 发布说明要点 / 上次检查时间 / 查不到的原因)
+    {"op": "service_update", "directory", "version", "tag", "sources", "log", "pip_cache"}
+        → 流式(和 service_install 同一种一步一行):换到一个更新的版本 —— 钉死表里的,或者上游 release 的 tag;没成就自己换回去
     {"op": "service_rollback", "directory", "sources", "log", "pip_cache"}
         → 流式:回到上一版(也收拾被打断的更新 / 回退)
 
@@ -14,6 +15,11 @@
 
 **上一版留一步**:更新成了以后 `ComfyUI.previous` 和那份 freeze 留着,「回到上一版」用它们(不重下);下一次更新时换掉。回到上一版
 之后新的那份删掉(要再更新就重下,12 MB)。PyTorch 三件不在 freeze 的对比里:换版本不动它们(装依赖不加 --upgrade,装完核对过)。
+
+**版本从哪来**(ADR 0073):钉死的表(`managed.COMFYUI_PINNED`)是**离线 / 降级**路径;能联网时问上游最新 release(upstream),
+换过去的是它的 tag,源码只从官方 codeload 下。上游标签事先不知道 sha256:下载时边下边算,对得上的比较只对钉死的表做;
+上游那一份下完把 sha256、tag、地址、时间记进安装记录(`source`)—— 事后查得到装的是谁。下载仍然只收官方主机、不接镜像,
+安全解包、试起、换回、取消一条都没少。
 
 **被强行打断**(后端被杀、断电):记录里留着标记 —— `updating` 换到一半、`restoring` 源码换回来了、依赖还没装回去。
 `service_versions` 说出来,`service_launch` 不起它(半新半旧的环境起来也是错的),安装也不在它上面接着装;连接页上「换回 x」
@@ -34,6 +40,7 @@ from typing import Any
 import managed
 import pinned
 import service
+import upstream
 from lines import ComfyError, say
 
 Emit = Callable[[dict[str, Any]], None]
@@ -106,20 +113,42 @@ def _back_to(root: Path, record: dict[str, Any]) -> str:
 # --- service_versions -----------------------------------------------------------
 
 
-def versions(payload: dict[str, Any], locale: str) -> dict[str, Any]:
-    """装着哪个、钉死的最新是哪个、能更新到哪个(没有更新的是空串)、能回到哪个、有没有被打断没做完的(`update` / `rollback`)。只看、不写。"""
+def versions(payload: dict[str, Any], locale: str, *, fetch: upstream.Fetcher | None = None) -> dict[str, Any]:
+    """装着哪个、钉死的最新是哪个、能更新到哪个(没有更新的是空串)、能回到哪个、有没有被打断没做完的(`update` / `rollback`)。
+
+    `check_upstream` 为真时问一次上游最新 release(测试从 `fetch` 注入替身,不连网):能升到上游最新时 `update` 是它的版本、
+    `source` 是 `upstream`;查不到(离线 / 限流 / 404 / 看不懂)时 `source` 退回 `pinned`(内置表里的下一个),
+    `upstream.status` 说为什么查不到 —— **查不到绝不等于「已经是最新的」**。只看、不写。"""
     root = managed._root(payload, locale)
     record = managed.read_record(root)
     current = str(record.get("comfyui") or "")
     unfinished = "update" if record.get("updating") else "rollback" if record.get("restoring") else ""
     newer_ones = [one for one in managed.COMFYUI_PINNED if current and newer(one, current)]
-    return {
+    told: dict[str, Any] = {
         "current": current,
         "latest": managed.COMFYUI_VERSION,
         "update": newer_ones[-1] if newer_ones and not unfinished else "",
         "previous": _back_to(root, record),
         "unfinished": unfinished,
     }
+    if not payload.get("check_upstream"):
+        return told
+    found = upstream.release(locale, fetch=fetch)
+    told["upstream"] = found
+    told["source"] = ""
+    if unfinished:
+        told["update"] = ""
+        return told
+    wanted = found["version"] if found["status"] == "ok" and current and found["version"] and \
+        newer(found["version"], current) else ""
+    pinned = newer_ones[-1] if newer_ones else ""
+    if wanted and (not pinned or not newer(pinned, wanted)):
+        told["update"], told["source"] = wanted, "upstream"
+    elif pinned:
+        told["update"], told["source"] = pinned, "pinned"
+    else:
+        told["update"] = ""
+    return told
 
 
 def launch(payload: dict[str, Any], locale: str) -> dict[str, Any]:
@@ -136,7 +165,7 @@ def launch(payload: dict[str, Any], locale: str) -> dict[str, Any]:
 
 def _job(payload: dict[str, Any], locale: str, emit: Emit, record: dict[str, Any], *, titles: dict[str, dict[str, str]],
          steps: tuple[str, ...], version: str, is_cancelled: Callable[[], bool], log: managed._Log,
-         retry: tuple[str, str]) -> managed._Job:
+         retry: tuple[str, str], archive: pinned.Archive | None = None, tag: str = "") -> managed._Job:
     """换版本用的那一份活:venv 是装好的那个(不重建、不问显卡),PyTorch 的种类、Python 小版本按安装记录。`retry` 是失败了
     点哪个按钮再来(pip 失败的那一句里说)。"""
     root = managed._root(payload, locale)
@@ -145,7 +174,7 @@ def _job(payload: dict[str, Any], locale: str, emit: Emit, record: dict[str, Any
                         flavour=str(record.get("flavour") or ""), sources=managed._sources(payload),
                         pip_cache=str(payload.get("pip_cache") or ""), locale=locale, log=log,
                         report=managed._Reporter(emit, titles, steps), is_cancelled=is_cancelled, record=record,
-                        version=version, titles=titles, retry=retry)
+                        version=version, titles=titles, retry=retry, archive=archive, tag=tag)
 
 
 def _freeze(job: managed._Job) -> str:
@@ -251,6 +280,8 @@ def _go_back(job: managed._Job, titles: dict[str, dict[str, str]], announce: Cal
         record["restoring"] = previous
         record.pop("previous", None)
         record.pop("updating", None)
+        #: 换上去的那一份的来源记录跟着它一起作废(别让记录说装着的是 upstream 的那一版)
+        record.pop("source", None)
         managed._write_record(root, record)
     restoring = record.get("restoring") or {}
     if restoring.get("freeze"):
@@ -271,10 +302,16 @@ def _go_back(job: managed._Job, titles: dict[str, dict[str, str]], announce: Cal
     return str(record.get("comfyui") or "")
 
 
-def _update_titles(current: str, target: str) -> dict[str, dict[str, str]]:
+def _update_titles(current: str, target: str, *, upstream_source: bool = False) -> dict[str, dict[str, str]]:
     return {
         "disk": {"zh": "查剩余空间", "en": "Check free disk space"},
-        "download": {"zh": f"下载 ComfyUI {target} 源码(按 sha256 校验)", "en": f"Download the ComfyUI {target} source (checked by sha256)"},
+        "download": (
+            {"zh": f"下载 ComfyUI {target} 源码(官方 GitHub;下完记下 sha256)",
+             "en": f"Download the ComfyUI {target} source (official GitHub; its sha256 is recorded after download)"}
+            if upstream_source else
+            {"zh": f"下载 ComfyUI {target} 源码(按 sha256 校验)",
+             "en": f"Download the ComfyUI {target} source (checked by sha256)"}
+        ),
         "extract": {"zh": f"解到 {current} 旁边", "en": f"Unpack it next to {current}"},
         "freeze": {"zh": f"记下现在装着的包(pip freeze,换回 {current} 时用)",
                    "en": f"Record the installed packages (pip freeze, used to go back to {current})"},
@@ -296,8 +333,25 @@ def _rollback_titles(back_to: str) -> dict[str, dict[str, str]]:
 # --- service_update -------------------------------------------------------------
 
 
+def _archive_for(target: str, tag: str, locale: str) -> pinned.Archive:
+    """要换到的那个版本的源码包:钉死表里的(sha256 已知)或者上游 release 的 tag(sha256 下完再算)。
+
+    上游那条只收 `v<数字>.<数字>…` 形状的 tag,而且版本号要和 tag 对得上 —— 宿主把刚查到的 tag 原样交回来;
+    没有 tag 的陌生版本不放行(免得谁都能让插件去下一个没发布过的地址)。"""
+    if target in managed.COMFYUI_PINNED:
+        return managed.COMFYUI_PINNED[target]
+    found = upstream.TAG.match(tag)
+    if not tag:
+        raise ComfyError(say(locale, f"没有钉死 ComfyUI {target} 这个版本", f"ComfyUI {target} isn't a pinned version"))
+    if not found or found.group(1) != target:
+        raise ComfyError(say(locale, f"ComfyUI {target} 不是上游发布出来的 tag({tag})",
+                             f"ComfyUI {target} isn't an upstream release tag ({tag})"))
+    return managed.upstream_archive(target, tag)
+
+
 def update(payload: dict[str, Any], locale: str, emit: Emit, *, is_cancelled: Callable[[], bool] = pinned.cancelled) -> dict[str, Any]:
-    """换到一个更新的钉死版本(没说就是最新的)。换上新源码之前出错:新的那份删掉,原来的没动;换上之后出错或取消:自己换回去
+    """换到一个更新的版本:上游 release 的 tag(宿主刚从 `versions` 查到、原样交回来)或者钉死表里的(没说就是最新的钉死版本)。
+    换上新源码之前出错:新的那份删掉,原来的没动;换上之后出错或取消:自己换回去
     (这时不看取消 —— 半截的环境不能留),再说没成。交回换好的版本和上一版(宿主接着试起一次)。"""
     root = managed._root(payload, locale)
     if not root.is_dir():
@@ -311,13 +365,13 @@ def update(payload: dict[str, Any], locale: str, emit: Emit, *, is_cancelled: Ca
                 raise ComfyError(unfinished)
             current = _installed(root, record, locale)
             target = str(payload.get("version") or managed.COMFYUI_VERSION)
-            if target not in managed.COMFYUI_PINNED:
-                raise ComfyError(say(locale, f"没有钉死 ComfyUI {target} 这个版本", f"ComfyUI {target} isn't a pinned version"))
+            tag = str(payload.get("tag") or "").strip()
+            archive = _archive_for(target, tag, locale)
             if not newer(target, current):
                 raise ComfyError(say(locale, f"装着的已经是 {current},不比 {target} 旧", f"{current} is installed, which isn't older than {target}"))
-            titles = _update_titles(current, target)
+            titles = _update_titles(current, target, upstream_source=archive.sha256 == "")
             job = _job(payload, locale, emit, record, titles=titles, steps=UPDATE_STEPS, version=target,
-                       is_cancelled=is_cancelled, log=log, retry=("更新", "Update"))
+                       is_cancelled=is_cancelled, log=log, retry=("更新", "Update"), archive=archive, tag=tag)
             log.line(f"== {datetime.now(UTC).isoformat()} 把 ComfyUI 从 {current} 换到 {target}({root})")
             job.report.outline(set())
             freeze_name = f"pip-freeze-{current}.txt"
@@ -336,6 +390,8 @@ def update(payload: dict[str, Any], locale: str, emit: Emit, *, is_cancelled: Ca
                     # 还没开始换(「换到一半」的标记还没写):原来那份没动,删掉解在旁边的新源码和记下的包清单就行
                     _remove_tree(root / NEXT)
                     (root / freeze_name).unlink(missing_ok=True)
+                    if record.pop("source", None) is not None:
+                        managed._write_record(root, record)
                     if isinstance(exc, ComfyError):
                         raise ComfyError(say(locale, f"{exc}\n还是 {current},没动它", f"{exc}\nStill {current}; nothing changed")) from exc
                     raise
@@ -383,13 +439,35 @@ def _update_disk(job: managed._Job, **_: Any) -> None:
 
 
 def _update_download(job: managed._Job, **_: Any) -> None:
-    managed._step_download(job)
+    """下新源码。钉死的那一份按 sha256 校验;上游那一份事先不知道,下完算出来记进安装记录(`source`)。"""
+    archive = job.archive or managed.COMFYUI_PINNED[job.version]
+    target = job.root / managed.DOWNLOADS / managed._tarball_name(job.version)
+    if target.is_file():
+        target.unlink()  # 上一次没解成的那一份:按记录它没下完(或者不对),重下
+    url = archive.url if archive.official_only else pinned.source_url(archive.url, job.sources["github_mirror"])
+    job.log.line(f"下载 {url}")
+    job.report.progress(done_bytes=0, total_bytes=archive.size, item=f"{archive.name}.tar.gz", force=True)
+    seen: list[str] = []
+    pinned.download(archive, target, job.locale,
+                    mirror="" if archive.official_only else job.sources["github_mirror"], is_cancelled=job.is_cancelled,
+                    on_bytes=lambda done, total: job.report.progress(done_bytes=done, total_bytes=total,
+                                                                     item=f"{archive.name}.tar.gz"),
+                    on_sha256=seen.append)
+    if archive.sha256:
+        job.log.line(f"sha256 对上了:{archive.sha256}")
+        return
+    digest = seen[0] if seen else ""
+    job.record["source"] = {"kind": "upstream", "version": job.version, "tag": job.tag or f"v{job.version}",
+                            "url": archive.url, "sha256": digest, "recorded_at": datetime.now(UTC).isoformat(timespec="seconds")}
+    managed._write_record(job.root, job.record)
+    job.log.line(f"sha256 记下来:{digest}(上游标签事先不知道,下完算的;记在 {managed.RECORD})")
 
 
 def _update_extract(job: managed._Job, **_: Any) -> None:
     tarball = job.root / managed.DOWNLOADS / managed._tarball_name(job.version)
     _remove_tree(job.root / NEXT)
-    pinned.unpack(tarball, job.root / NEXT, managed.COMFYUI_PINNED[job.version], job.locale, is_cancelled=job.is_cancelled)
+    pinned.unpack(tarball, job.root / NEXT, job.archive or managed.COMFYUI_PINNED[job.version], job.locale,
+                  is_cancelled=job.is_cancelled)
     tarball.unlink(missing_ok=True)
 
 

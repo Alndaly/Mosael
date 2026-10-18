@@ -57,11 +57,16 @@ export const installLocalService = (instanceId: string, flavour: string) =>
 export const cancelLocalServiceInstall = (instanceId: string) =>
   api<LocalService>(`${base(instanceId)}/install/cancel`, { method: "POST" });
 export type LocalServiceVersions = components["schemas"]["LocalServiceVersionsOut"];
-/** 让 Mosael 装的那一份:装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的。只给部署管理员。 */
+/** 让 Mosael 装的那一份:装着哪个版本、上游最新(插件联网查)、能更新到哪个(以及来源)、能回到哪个、有没有被打断没做完的。
+ * 只给部署管理员。 */
 export const getLocalServiceVersions = (instanceId: string) => api<LocalServiceVersions>(`${base(instanceId)}/versions`);
-/** 更新到 `version`(问过人了;空 = 钉死的最新那个):先停下它,后台换版本、试起一次,没通过就换回去。马上回来,界面接着轮询。 */
-export const updateLocalService = (instanceId: string, version = "") =>
-  api<LocalService>(`${base(instanceId)}/update`, { method: "POST", body: JSON.stringify({ confirm_run_code: true, version }) });
+/** 更新到 `version`(问过人了;空 = 内置表的最新那个):`tag` 是刚查到的上游 release tag(`v0.41.0`),换上游那一版时原样交给插件。
+ * 先停下它,后台换版本、试起一次,没通过就换回去。马上回来,界面接着轮询。 */
+export const updateLocalService = (instanceId: string, version = "", tag = "") =>
+  api<LocalService>(`${base(instanceId)}/update`, {
+    method: "POST",
+    body: JSON.stringify({ confirm_run_code: true, version, tag }),
+  });
 /** 回到上一版(也是收拾被打断的更新 / 回退的那一下)。 */
 export const rollbackLocalService = (instanceId: string) => api<LocalService>(`${base(instanceId)}/rollback`, { method: "POST" });
 export type LocalServiceModelFolders = components["schemas"]["LocalServiceModelFoldersOut"];

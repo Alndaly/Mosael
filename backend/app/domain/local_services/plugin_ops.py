@@ -59,6 +59,10 @@ UNINSTALL_TIMEOUT_SECONDS = 120
 MAX_VERSION = 40
 #: 「没做完」的那两种:更新换到一半、回退时依赖还没装回去。
 UNFINISHED = ("update", "rollback")
+#: 上游最新 release 的状态:查到 / 离线 / 限流 / 没有 release / 回答看不懂 / 这次没查。
+UPSTREAM_STATUSES = ("ok", "offline", "rate_limited", "not_found", "error", "not_checked")
+#: 发布说明要点最多摆多少字。
+MAX_NOTES = 600
 #: 共用的模型文件夹:认目录只看几层子目录;在跑的话再按每个模型目录问一次 ComfyUI 列文件(一个 100 多 GB 的模型文件夹几秒)。
 MODEL_FOLDERS_TIMEOUT_SECONDS = 120
 #: 最多共用几处(和插件那边同一个数)。
@@ -293,23 +297,44 @@ def uninstall(db: Session, instance: PluginInstance, service: str, root: Path) -
     return {"installed": output.get("installed") is True, "models": models, "models_bytes": count("models_bytes")}
 
 
-def versions(db: Session, instance: PluginInstance, row: LocalService) -> dict[str, str]:
-    """让 Mosael 装的那一份:装着哪个版本(`current`)、能更新到哪个(`update`,没有是空串)、能回到哪个(`previous`)、
-    有没有被打断没做完的(`unfinished`:`update` / `rollback` / 空串)。形状不对的那一格当作没有。"""
-    output = tools.invoke_service(db, instance.package_id, row.service, {"op": "service_versions", "directory": row.directory},
-                                  instance=instance, timeout=VERSIONS_TIMEOUT_SECONDS)
+def versions(db: Session, instance: PluginInstance, row: LocalService) -> dict[str, Any]:
+    """让 Mosael 装的那一份:装着哪个版本(`current`)、内置表最新(`latest`)、上游最新(`upstream`,插件联网查)、
+    能更新到哪个(`update` 和它的来源 `source`:上游 / 内置表 = 离线降级)、能回到哪个(`previous`)、有没有被打断没做完的
+    (`unfinished`:`update` / `rollback` / 空串)。形状不对的那一格当作没有。
 
-    def version(key: str) -> str:
-        value = output.get(key)
-        return value.strip()[:MAX_VERSION] if isinstance(value, str) else ""
+    `upstream.status` 不是 `ok` **不代表已最新**:版本一样、只是查不到(离线、限流、404)。调用方照它说查不到。"""
+    output = tools.invoke_service(
+        db, instance.package_id, row.service,
+        {"op": "service_versions", "directory": row.directory, "check_upstream": True},
+        instance=instance, timeout=VERSIONS_TIMEOUT_SECONDS,
+    )
 
+    def text(value: Any, limit: int = MAX_VERSION) -> str:
+        return value.strip()[:limit] if isinstance(value, str) else ""
+
+    raw = output.get("upstream")
+    raw = raw if isinstance(raw, dict) else {}
+    status = raw.get("status")
+    upstream = {
+        "status": status if status in UPSTREAM_STATUSES else "not_checked",
+        "version": text(raw.get("version")),
+        "tag": text(raw.get("tag")),
+        "notes": text(raw.get("notes"), MAX_NOTES),
+        "url": text(raw.get("url"), MAX_TEXT),
+        "checked_at": text(raw.get("checked_at"), MAX_TEXT),
+        "message": text(raw.get("message"), MAX_TEXT),
+    }
     unfinished = output.get("unfinished")
-    return {"current": version("current"), "latest": version("latest"), "update": version("update"),
-            "previous": version("previous"), "unfinished": unfinished if unfinished in UNFINISHED else ""}
+    source = output.get("source")
+    return {"current": text(output.get("current")), "latest": text(output.get("latest")),
+            "update": text(output.get("update")), "previous": text(output.get("previous")),
+            "unfinished": unfinished if unfinished in UNFINISHED else "",
+            "source": source if source in ("upstream", "pinned") else "", "upstream": upstream}
 
 
 def update(db: Session, instance: PluginInstance, service: str, payload: dict[str, Any], hooks: StreamHooks) -> dict[str, Any]:
-    """换到一个更新的钉死版本:流式,和 install 一样一步一行。没成插件自己换回去再报错;成了交回新版本和上一版(宿主接着试起一次)。"""
+    """换到一个更新的版本(上游最新 tag,或者内置表里的):流式,和 install 一样一步一行。没成插件自己换回去再报错;
+    成了交回新版本和上一版(宿主接着试起一次)。`payload` 里的 `tag` 是刚查到的上游 release tag。"""
     return tools.invoke_service(db, instance.package_id, service, {"op": "service_update", **payload}, instance=instance,
                                 timeout=INSTALL_TIMEOUT_SECONDS, hooks=hooks)
 

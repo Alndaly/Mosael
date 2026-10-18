@@ -123,7 +123,12 @@ beforeEach(() => {
   api.getLocalService.mockResolvedValue(null);
   api.getLocalServicePlan.mockResolvedValue(PLAN);
   api.getLocalServiceModelFolders.mockResolvedValue({ folders: [], running: false, suggestions: [] });
-  api.getLocalServiceVersions.mockResolvedValue({ current: "0.39.0", latest: "0.39.0", update: "", previous: "", unfinished: "" });
+  api.getLocalServiceVersions.mockResolvedValue({
+    current: "0.39.0", latest: "0.39.0", update: "", previous: "", unfinished: "", source: "",
+    upstream: {
+      status: "ok", version: "0.39.0", tag: "v0.39.0", notes: "", url: "", checked_at: "2026-10-15T22:57:45Z", message: "",
+    },
+  });
   api.discoverLocalServices.mockResolvedValue({ servers: [] });
   api.listPluginMarket.mockResolvedValue({ plugins: [], index_error: "" });
   api.listPluginPermissions.mockResolvedValue([]);

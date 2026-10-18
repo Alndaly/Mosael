@@ -788,8 +788,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The last version change didn't finish. Choose “Go back to {version}” first to tidy it up.",
     },
     "localServiceErr_noUpdate": {
-        "zh": "已经是最新的版本({version})了",
-        "en": "It's already the latest version ({version}).",
+        "zh": "已经是最新的版本({version})了(和上游最新一致)",
+        "en": "It's already the latest version ({version}) (the same as upstream latest).",
+    },
+    "localServiceErr_noUpdateUnknown": {
+        "zh": "查不到上游最新({reason});内置表里也没有比 {version} 更新的版本,没有升",
+        "en": "Couldn't check the latest upstream release ({reason}), and the built-in list has nothing newer than {version}; "
+              "nothing was updated",
+    },
+    "localServiceUpstream_unknown": {
+        "zh": "网络问题、离线,或者插件没有回答",
+        "en": "a network problem, offline, or the plugin didn't answer",
     },
     "localServiceErr_badModelsPath": {
         "zh": "「{name}」说的模型文件夹不在安装目录里,没有挪它:{path}",

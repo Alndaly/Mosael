@@ -37,6 +37,9 @@ Python),venv 和装进去的包作废、重装,源码、pysssss 和模型不动;
 依赖都**钉死版本**:ComfyUI 的源码包(sha256)、PyTorch 三件(版本号,CUDA 的连同 `+cu130` 这类后缀)、pysssss(sha256)。
 要升级就一起换:`COMFYUI_PINNED`、`TORCH`、`CUDA_CHANNELS`(和测试里的那一份)。
 
+**新装**装钉死表里最新的那一版;**换版本**可以换到上游 release 的最新 tag(见 versions、ADR 0073):那一份的源码包从
+`UPSTREAM_CODELOAD` 按 tag 现下,事先不知道 sha256,下完算出来记进安装记录;钉死表留着当离线 / 降级路径。
+
 pip 那几步和宿主装引擎依赖(core/pip_install)是同一套规矩:`--prefer-binary`、`--timeout 60`、`--retries 10`,完整输出落盘
 (宿主给的日志文件),失败时挑结论行、不取尾巴,常见病因说人话 —— 插件进程只有标准库,碰不到宿主的代码,所以照抄了一份,
 双语,并按这一步说下一步该换哪个源。
@@ -74,13 +77,27 @@ def _comfyui(version: str, sha256: str, size: int) -> pinned.Archive:
                           sha256=sha256, size=size, max_members=10_000, max_unpacked=400 * 1024 * 1024)
 
 
-#: **钉死的 ComfyUI 版本**,从旧到新;sha256 都在测试场下过两次一致。最后那个是新装时装的、「更新 ComfyUI」更新到的;前一个留着:
+#: **钉死的 ComfyUI 版本**,从旧到新;sha256 都在测试场下过两次一致。最后那个是新装时装的;「更新 ComfyUI」优先换到运行时查到的
+#: 上游最新 release,查不到时退回这表里的下一个(`versions`,ADR 0073);前一个留着:
 #: 装着它的能更新上来(「回到上一版」用的是更新前留在旁边的那一份源码和依赖清单,不重下)。要升级就往后加一个、去掉最旧的。
 COMFYUI_PINNED = {
     "0.38.0": _comfyui("0.38.0", "185a3e55b9d7e06a89064a3b0cc9644295ee033e81fbcec8d0d475ae5590a136", 12_576_846),
     "0.39.0": _comfyui("0.39.0", "095d95805bdf36e73bbd15d6d2ee15fa627708679a2e67b5f467db4c57e7ff0a", 12_627_617),
 }
 COMFYUI_VERSION = list(COMFYUI_PINNED)[-1]
+#: 上游源码包:codeload 的官方地址(旧仓库名会 301 到 Comfy-Org,同属 GitHub 官方主机);标签是 release 的 tag。
+UPSTREAM_REPO = "comfyanonymous/ComfyUI"
+UPSTREAM_CODELOAD = f"https://codeload.github.com/{UPSTREAM_REPO}/tar.gz/refs/tags/"
+#: 上游源码包的压缩包大小(0.41.0 实测 12,733,863 字节;codeload 不给 Content-Length,进度和下载上限按它估)。
+UPSTREAM_SIZE = 12_800_000
+
+
+def upstream_archive(version: str, tag: str = "") -> pinned.Archive:
+    """上游某个 tag 的源码包:**不钉 sha256**(事先不知道),只从官方 codeload 下,跳转也只许官方主机。"""
+    tag = tag or f"v{version}"
+    return pinned.Archive(name=f"ComfyUI {version}", url=f"{UPSTREAM_CODELOAD}{tag}", sha256="", size=UPSTREAM_SIZE,
+                          max_members=10_000, max_unpacked=400 * 1024 * 1024, official_only=True)
+
 #: PyTorch 三件的版本(ComfyUI 0.39.0 的测试场装出来的就是这一组;torchaudio 从 2.11 起不再跟着 torch 发版)。
 TORCH = (("torch", "2.14.1"), ("torchvision", "0.29.1"), ("torchaudio", "2.11.0"))
 
@@ -804,8 +821,12 @@ class _Job:
     report: _Reporter
     is_cancelled: Callable[[], bool]
     record: dict[str, Any] = field(default_factory=dict)
-    #: 装(或换到)哪个钉死的版本。
+    #: 装(或换到)哪个版本(钉死表里的,或者上游 release 的 tag)。
     version: str = COMFYUI_VERSION
+    #: 这一次要下的源码包;空 = 钉死表里那一个。上游最新那一份带着 `official_only`,sha256 空着。
+    archive: pinned.Archive | None = None
+    #: 上游 release 的 tag(换上游版本时记下来;钉死的那一条空着)。
+    tag: str = ""
     #: 这一次每一步的标题(pip 失败时说是哪一步没成);空就按安装的那几步。
     titles: dict[str, dict[str, str]] = field(default_factory=dict)
     #: 失败了点哪个按钮再来(中文、英文):装是「接着装」,换版本是「更新」。
@@ -1052,7 +1073,7 @@ def _step_disk(job: _Job, left: list[str]) -> None:
 
 
 def _step_download(job: _Job) -> None:
-    archive = COMFYUI_PINNED[job.version]
+    archive = job.archive or COMFYUI_PINNED[job.version]
     target = job.root / DOWNLOADS / _tarball_name(job.version)
     if target.is_file():
         target.unlink()  # 上一次没解成的那一份:按记录它没下完(或者不对),重下
@@ -1076,7 +1097,8 @@ def _step_extract(job: _Job) -> None:
             aside = job.root / f"{SOURCE}.incomplete-{int(time.time())}"
             source.replace(aside)
             job.log.line(f"{source} 不完整,挪到 {aside}")
-        pinned.unpack(tarball, source, COMFYUI_PINNED[job.version], job.locale, is_cancelled=job.is_cancelled)
+        pinned.unpack(tarball, source, job.archive or COMFYUI_PINNED[job.version], job.locale,
+                      is_cancelled=job.is_cancelled)
     tarball.unlink(missing_ok=True)
     job.record["comfyui"] = service.comfyui_version(source) or job.version
 
@@ -1215,6 +1237,7 @@ def install(payload: dict[str, Any], locale: str, emit: Emit, *, machine: Machin
 
 
 __all__ = ["COMFYUI_PINNED", "COMFYUI_VERSION", "CUDA_CHANNELS", "CudaChannel", "DISK_NEED", "Gpu", "Machine", "STEPS", "TORCH",
+           "UPSTREAM_CODELOAD", "UPSTREAM_REPO", "UPSTREAM_SIZE", "upstream_archive",
            "Verdict", "done_steps", "explain_pip", "install", "installing_version", "judge", "parse_compute", "parse_driver", "parse_gpus",
            "parse_memory", "plan", "probe_machine", "read_nvidia", "read_record", "torch_index", "torch_requirements",
            "uninstall", "unfinished_change", "venv_python"]

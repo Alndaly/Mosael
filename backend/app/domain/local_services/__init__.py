@@ -14,7 +14,8 @@
 
 这里把它们接起来,对外的几件事:配置、起 / 停 / 重启、**用到时起**(`ensure_running`,经插件域的 `service_gate` 接进
 每一次插件调用)、启动时接回上一个后端没来得及停的、「保持运行」的跟着起、退出时全部停掉;**让 Mosael 装**:安装计划、
-装(或接着装、重建运行环境)、取消,装好的那一份试起一次、健康检查通过才算装好;**换版本**:更新到更新的钉死版本(试起没通过
+装(或接着装、重建运行环境)、取消,装好的那一份试起一次、健康检查通过才算装好;**换版本**:更新到上游最新 release
+(查不到时退回内置表里的下一个;试起没通过
 就换回去)、回到上一版;**卸载**:删连接、卸载插件时问要不要一起删安装目录,可以保留模型。
 
 **让 Mosael 装的那一份**(`mode = managed`)装在宿主分的 `<数据目录>/local-services/<连接>/`,目录就记这个(插件在里面认
@@ -879,8 +880,9 @@ def _trial(instance_id: str, run: installer.InstallRun) -> None:
 # ---------------------------------------------------------------------------
 
 
-def versions(db: Session, instance: PluginInstance) -> dict[str, str]:
-    """装着哪个版本、能更新到哪个、能回到哪个、有没有被打断没做完的(插件读安装目录里的记录;只看)。"""
+def versions(db: Session, instance: PluginInstance) -> dict[str, Any]:
+    """装着哪个版本、内置表最新、上游最新(插件联网查)、能更新到哪个(以及来源)、能回到哪个、有没有被打断没做完的。
+    插件查不到上游时 `upstream.status` 说为什么 —— 那时**不是**「已最新」,界面照它说。只看。"""
     row = _require_row(db, instance)
     if row.mode != records.MANAGED:
         raise LocalServiceError("localServiceErr_notManaged", status=422)
@@ -896,19 +898,29 @@ def _changeable(db: Session, instance: PluginInstance) -> tuple[LocalService, di
     return row, plugin_ops.versions(db, instance, row)
 
 
-def begin_update(db: Session, instance: PluginInstance, *, version: str = "") -> str:
-    """开始更新到 `version`(没说就是插件钉死的最新那个):先停下它(源码要换),后台让插件换源码、装依赖,再试起一次 ——
-    没通过就换回去。上一次换版本没做完的先「换回」。交回要换到的版本。"""
+def begin_update(db: Session, instance: PluginInstance, *, version: str = "", tag: str = "") -> str:
+    """开始更新到 `version`(没说就是 `versions` 说的那个:能升到上游最新就是上游的,否则是内置表里的下一个):先停下它
+    (源码要换),后台让插件换源码、装依赖,再试起一次 —— 没通过就换回去。上一次换版本没做完的先「换回」。交回要换到的版本。
+
+    `tag` 是刚查到的上游 release tag;没说时照 `versions` 刚交回来的那个(来源是上游那一版)。**没有可升的版本**时按
+    `upstream` 的状态说:查到了、就是最新才说「已经是最新的」;查不到(离线 / 限流 / 404)说查不到,绝不说已最新。"""
     row, told = _changeable(db, instance)
     if told["unfinished"]:
         raise LocalServiceError("localServiceErr_changeUnfinished", version=told["previous"])
     target = version.strip() or told["update"]
     if not target:
-        raise LocalServiceError("localServiceErr_noUpdate", version=told["current"])
+        up = told.get("upstream") or {}
+        if up.get("status") == "ok":
+            raise LocalServiceError("localServiceErr_noUpdate", version=told["current"])
+        raise LocalServiceError("localServiceErr_noUpdateUnknown", version=told["current"],
+                                reason=up.get("message") or t("localServiceUpstream_unknown"))
+    release = told.get("upstream") or {}
+    if not tag.strip() and told.get("source") == "upstream" and release.get("version") == target:
+        tag = str(release.get("tag") or "")
     stop(instance.id)
     manifest = inst.manifest_for(db, instance)
     installer.begin(instance.id, install_log_path(instance.id), author_locale=manifest.default_locale,
-                    work=partial(_update, instance.id, row.service, target), kind=installer.UPDATE, target=target)
+                    work=partial(_update, instance.id, row.service, target, tag), kind=installer.UPDATE, target=target)
     return target
 
 
@@ -929,13 +941,14 @@ def _reason(error: LocalizedError) -> Any:
     return fragment(error.key, **error.params) if is_message_key(error.key) else str(error)
 
 
-def _update(instance_id: str, service: str, version: str, run: installer.InstallRun) -> None:
+def _update(instance_id: str, service: str, version: str, tag: str, run: installer.InstallRun) -> None:
     """更新线程:插件换源码、装依赖(没成它自己换回去,原因照说);宿主试起一次。**试起没通过(或者这时取消)就换回去**:
     让插件回到上一版(不看取消),再说「没成,已经换回 x」;换回去也出错就两件都说,请人点「换回」。成了就让它开着。"""
     with SessionLocal() as db:
         instance = inst.get(db, instance_id)
         row = _require_row(db, instance)
-        told = plugin_ops.update(db, instance, service, {**_plugin_payload(instance_id, row), "version": version}, _hooks(run))
+        told = plugin_ops.update(db, instance, service,
+                                 {**_plugin_payload(instance_id, row), "version": version, "tag": tag}, _hooks(run))
     previous = str(told.get("previous") or "")
     try:
         _trial(instance_id, run)

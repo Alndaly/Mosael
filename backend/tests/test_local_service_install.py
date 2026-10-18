@@ -124,8 +124,15 @@ def versions(payload):
     options = control(payload["directory"])
     current = state.get("version", "1.0")
     unfinished = options.get("unfinished", "")
-    return {"current": current, "latest": "2.0", "update": "" if current == "2.0" or unfinished else "2.0",
-            "previous": state.get("previous", "") or options.get("unfinished_back", ""), "unfinished": unfinished}
+    upstream = options.get("upstream") or {"status": "ok", "version": "2.0", "tag": "v2.0.0", "notes": "Add a node.",
+                                           "url": "https://github.com/Comfy-Org/ComfyUI/releases/tag/v2.0.0",
+                                           "checked_at": "2026-10-15T22:57:45Z", "message": ""}
+    update = options.get("update", "" if current == "2.0" or unfinished else "2.0")
+    source = "" if not update else ("upstream" if upstream.get("status") == "ok" and upstream.get("version") == update
+                                    else "pinned")
+    return {"current": current, "latest": "2.0", "update": update, "source": source,
+            "previous": state.get("previous", "") or options.get("unfinished_back", ""), "unfinished": unfinished,
+            "upstream": upstream}
 
 def change(payload, kind):
     root = Path(payload["directory"])
@@ -674,6 +681,19 @@ def _update(client, instance_id: str, **extra: Any):
     return client.post(_url(instance_id, "/update"), json={"confirm_run_code": True, **extra})
 
 
+def _upstream(**overrides: Any) -> dict[str, Any]:
+    return {"status": "ok", "version": "2.0", "tag": "v2.0.0", "notes": "Add a node.",
+            "url": "https://github.com/Comfy-Org/ComfyUI/releases/tag/v2.0.0",
+            "checked_at": "2026-10-15T22:57:45Z", "message": "", **overrides}
+
+
+def _told(**overrides: Any) -> dict[str, Any]:
+    told = {"current": "1.0", "latest": "2.0", "update": "2.0", "previous": "", "unfinished": "", "source": "upstream",
+            "upstream": _upstream()}
+    told.update(overrides)
+    return told
+
+
 def _versions(client, instance_id: str) -> dict[str, Any]:
     response = client.get(_url(instance_id, "/versions"))
     assert response.status_code == 200, response.text
@@ -686,8 +706,7 @@ def _record(instance_id: str) -> dict[str, Any]:
 
 def test_更新_要确认_先停下它_插件换完宿主试起一次_成了让它开着(plugged) -> None:
     instance_id = _installed(plugged)
-    assert _versions(plugged, instance_id) == {"current": "1.0", "latest": "2.0", "update": "2.0", "previous": "",
-                                               "unfinished": ""}
+    assert _versions(plugged, instance_id) == _told()
     refused = plugged.post(_url(instance_id, "/update"), json={})
     assert refused.status_code == 422 and "确认" in refused.json()["detail"]
     started = _update(plugged, instance_id)
@@ -702,15 +721,33 @@ def test_更新_要确认_先停下它_插件换完宿主试起一次_成了让�
     assert [one["key"] for one in status["install"]["steps"]] == ["fetch", "switch", "trial"]
     assert status["install"]["steps"][-1]["title"] == "试起新版本一次,没通过就换回原来的"
     payload = json.loads((settings.data_dir / "local-services" / instance_id / "update-payload.json").read_text(encoding="utf-8"))
-    assert payload["version"] == "2.0" and payload["directory"] == status["directory"]
+    assert payload["version"] == "2.0" and payload["tag"] == "v2.0.0" and payload["directory"] == status["directory"]
     assert payload["pip_cache"].endswith("pip-cache") and set(payload["sources"]) == {"pip_index_url", "pytorch_index_url", "github_mirror"}
-    assert _versions(plugged, instance_id) == {"current": "2.0", "latest": "2.0", "update": "", "previous": "1.0", "unfinished": ""}
+    assert _versions(plugged, instance_id) == _told(current="2.0", update="", previous="1.0", source="")
     assert "== update fetch" in plugged.get(_url(instance_id, "/logs"), params={"source": "install"}).json()["lines"], \
         "日志和安装是同一个"
     nothing = _update(plugged, instance_id)
     assert nothing.status_code == 409 and "已经是最新的版本(2.0)" in nothing.json()["detail"]
     member = second_client("member")
     assert member.get(_url(_connection(member), "/versions")).status_code == 403
+
+
+def test_查不到上游最新_又没有内置更新_说查不到_不说已经是最新(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(update="", upstream=_upstream(status="offline", version="", tag="", notes="", url="", checked_at="",
+                                           message="连不上 GitHub(离线、代理或网络问题)"))
+    refused = _update(plugged, instance_id)
+    assert refused.status_code == 409, refused.text
+    detail = refused.json()["detail"]
+    assert "查不到上游最新" in detail and "连不上 GitHub" in detail, detail
+    assert "已经是最新" not in detail, "查不到的时候绝不说已经是最新"
+
+
+def test_上游最新就是装着的_才说已经是最新(plugged) -> None:
+    instance_id = _installed(plugged)
+    _control(update="", upstream=_upstream(version="1.0", tag="v1.0.0"))
+    refused = _update(plugged, instance_id)
+    assert refused.status_code == 409 and "已经是最新的版本(1.0)" in refused.json()["detail"], refused.text
 
 
 def test_更新后试起没通过_让插件换回去_说没成_已经换回(plugged) -> None:
@@ -725,6 +762,10 @@ def test_更新后试起没通过_让插件换回去_说没成_已经换回(plug
     english = plugged.get(_url(instance_id), headers={"Accept-Language": "en"}).json()["install"]["error"]
     assert "Went back to 1.0" in english and "exit code 3" in english, "原因按读的人的语言说"
     assert _versions(plugged, instance_id)["update"] == "2.0", "还能再更新"
+    started = plugged.post(_url(instance_id, "/start"))
+    assert started.status_code == 200, started.text
+    assert _wait(plugged, instance_id, lambda one: one.get("state") == "running")["state"] == "running", \
+        "换回原来的版本之后照常能起"
 
 
 def test_更新后试起没通过_换回去也没成_两件都说(plugged) -> None:
@@ -766,7 +807,7 @@ def test_回到上一版_试起一次_再回就没有了(plugged) -> None:
     status = _wait(plugged, instance_id, _install_state("succeeded"))
     assert status["state"] == "running" and [one["key"] for one in status["install"]["steps"]] == ["switch", "trial"]
     assert status["install"]["steps"][-1]["title"] == "试起一次"
-    assert _versions(plugged, instance_id) == {"current": "1.0", "latest": "2.0", "update": "2.0", "previous": "", "unfinished": ""}
+    assert _versions(plugged, instance_id) == _told()
     again = plugged.post(_url(instance_id, "/rollback"))
     assert again.status_code == 409 and "没有可以回去的上一版" in again.json()["detail"]
 

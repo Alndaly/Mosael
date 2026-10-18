@@ -9439,8 +9439,8 @@ export interface paths {
         put?: never;
         /**
          * Update Local Service
-         * @description 更新到更新的钉死版本:先停下它,后台换源码、装依赖、试起一次(没通过就换回去),马上回来,界面接着轮询。要确认过
-         *     (会下载新版本的代码并运行)。进度、取消、日志和安装是同一套。
+         * @description 更新到更新的版本(上游最新 release 的 tag,或者内置表里的下一个):先停下它,后台换源码、装依赖、试起一次
+         *     (没通过就换回去),马上回来,界面接着轮询。要确认过(会下载新版本的代码并运行)。进度、取消、日志和安装是同一套。
          */
         post: operations["update_local_service_api_plugins_instances__instance_id__local_service_update_post"];
         delete?: never;
@@ -14314,7 +14314,9 @@ export interface components {
         };
         /**
          * LocalServiceNewVersionRequest
-         * @description 更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 插件钉死的最新那个。
+         * @description 更新:界面问过人了(会下载新版本的源码、依赖并运行),带 `confirm_run_code: true`;`version` 空 = 用插件刚查到的那个
+         *     (上游最新优先,查不到时用内置表里的下一个)。
+         *     `tag` 是刚查到的上游 release tag(`v0.41.0`):换上游那一版时原样交给插件,它只从官方 codeload 下这一 tag。
          */
         LocalServiceNewVersionRequest: {
             /**
@@ -14327,6 +14329,11 @@ export interface components {
              * @default
              */
             version: string;
+            /**
+             * Tag
+             * @default
+             */
+            tag: string;
         };
         /**
          * LocalServiceOfferOut
@@ -14588,9 +14595,54 @@ export interface components {
             confirm_run_code: boolean;
         };
         /**
+         * LocalServiceUpstreamOut
+         * @description 上游最新 release(GitHub API)查到了什么;查不到时 `status` 说为什么、`version` / `tag` 空着。
+         *
+         *     **`status` 不是 `ok` 就不等于「已最新」** —— 界面照这一格说「查不到(离线 / 网络 / 限流)」,不能说已经是最新的。
+         */
+        LocalServiceUpstreamOut: {
+            /**
+             * Status
+             * @default not_checked
+             * @enum {string}
+             */
+            status: "ok" | "offline" | "rate_limited" | "not_found" | "error" | "not_checked";
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Tag
+             * @default
+             */
+            tag: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /**
+             * Checked At
+             * @default
+             */
+            checked_at: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /**
          * LocalServiceVersionsOut
-         * @description 让 Mosael 装的那一份:装着哪个版本、插件钉死的最新是哪个、能更新到哪个(没有是空串)、能回到哪个(没有是空串)、
-         *     有没有被打断没做完的(`update` 更新换到一半、`rollback` 回退时依赖还没装回去 —— 这时要先「换回」`previous`)。
+         * @description 让 Mosael 装的那一份:装着哪个版本、内置表最新是哪个、上游最新是哪个、能更新到哪个(没有是空串)、能回到哪个
+         *     (没有是空串)、有没有被打断没做完的(`update` 更新换到一半、`rollback` 回退时依赖还没装回去 —— 这时要先「换回」
+         *     `previous`)。
          */
         LocalServiceVersionsOut: {
             /**
@@ -14609,6 +14661,12 @@ export interface components {
              */
             update: string;
             /**
+             * Source
+             * @default
+             * @enum {string}
+             */
+            source: "" | "upstream" | "pinned";
+            /**
              * Previous
              * @default
              */
@@ -14619,6 +14677,7 @@ export interface components {
              * @enum {string}
              */
             unfinished: "" | "update" | "rollback";
+            upstream?: components["schemas"]["LocalServiceUpstreamOut"];
         };
         /** LutOut */
         LutOut: {
