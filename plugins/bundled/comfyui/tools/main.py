@@ -18,6 +18,8 @@
                                            → 怎么认一个装好的目录、怎么起、补装 pysssss、本机发现、改端口时搬数据
     {"op": "service_plan", …}              → 让 Mosael 装:这台机器能不能装、装哪种 PyTorch、要多少空间、分几步(见 managed)
     {"op": "service_install", …}           → 流式:一步一行进度,取消了停在那一步,再来从没做完的那一步接着装
+    {"op": "service_version", …}           → 这一份 ComfyUI 现在是什么版本(托管先看安装记录;否则问在跑的那台的 /system_stats,
+                                              再退回安装目录里的 comfyui_version.py;见 versions)
     {"op": "service_versions", …}          → 让 Mosael 装的那一份:装着哪个、上游最新 release 是哪个(联网查,查不到就说查不到)、
                                               能更新到哪个(上游 tag 或内置表)、能回到哪个、有没有没做完的(见 versions、upstream)
     {"op": "service_update" | "service_rollback", …} → 流式:换到上游最新的 tag(没成自己换回去)/ 回到上一版
@@ -198,7 +200,8 @@ _AGENT: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
 #: 本机服务的一问一答(ADR 0041):选目录那一种的五个在 service,「让 Mosael 装」的安装计划、卸载前问的在 managed,换版本在 versions。
 #: 起之前先经 versions 看一眼:让 Mosael 装的那一份换版本换到一半(被强行打断)就不起它。
 _SERVICE: dict[str, Callable[[dict[str, Any], str], dict[str, Any]]] = {
-    **service.OPS, "service_launch": versions.launch, "service_plan": managed.plan, "service_versions": versions.versions,
+    **service.OPS, "service_launch": versions.launch, "service_plan": managed.plan, "service_version": versions.version,
+    "service_versions": versions.versions,
     "service_uninstall": managed.uninstall,
 }
 #: 流式的本机服务操作:一步一行进度(`{"event": "step", …}`),宿主建取消文件就停。

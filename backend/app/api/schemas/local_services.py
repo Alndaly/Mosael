@@ -290,6 +290,24 @@ class LocalServiceVersionsOut(ApiModel):
     upstream: LocalServiceUpstreamOut = Field(default_factory=LocalServiceUpstreamOut)
 
 
+class LocalServiceVersionOut(ApiModel):
+    """这一份 ComfyUI 现在是什么版本,从哪儿读到的;读不到时为什么。
+
+    托管的一份先看安装记录(`install`);非托管的(用我自己装的 / 连一台服务器)优先问**正在跑的那台**
+    (`/system_stats` 的 `system.comfyui_version`,`running`),老版本不报时退回安装目录里的 `comfyui_version.py`
+    (`file`)。`reason` 只在 `current` 为空时有意义:`not_running` 宿主说它没在跑、`no_version` 在跑但没报版本
+    而且目录里也没有、`unreachable` 问了没应答(超时 / 报错)。"""
+
+    #: 读到的版本号;读不到是空串(界面**不写 0、不留空白**,照 `reason` 说为什么)。
+    current: str = ""
+    #: 从哪儿读到的:安装记录 / 在跑的那台报的 / 安装目录里的文件;空 = 没读到。
+    source: Literal["", "install", "running", "file"] = ""
+    #: 这次读的时候它在不在跑(连一台服务器时是这次探测有没有得到回答)。
+    running: bool = False
+    #: 读不到时为什么。
+    reason: Literal["", "not_running", "no_version", "unreachable"] = ""
+
+
 class LocalServiceFootprintOut(ApiModel):
     """一个连接在 `<数据目录>/local-services/<连接>/` 下留着什么(删连接、卸载插件的确认框照它问)。`installed`:是一份让 Mosael
     装的(否则只有宿主写的共用模型配置,删了也不丢东西);`bytes` 整个目录多大;`has_models` / `models_bytes` 有没有模型文件夹、多大;
@@ -328,5 +346,5 @@ __all__ = [
     "LocalServiceDiscoveryOut", "LocalServiceDownloadOut", "LocalServiceFactOut", "LocalServiceFoundOut",
     "LocalServiceInstallOut", "LocalServiceInstallRequest", "LocalServiceInstallStepOut", "LocalServiceLogsOut",
     "LocalServiceFootprintOut", "LocalServiceNewVersionRequest", "LocalServiceOfferOut", "LocalServiceOut", "LocalServicePlanOut", "LocalServiceProblemOut",
-    "LocalServiceUpdate", "LocalServiceUpstreamOut", "LocalServiceVersionsOut",
+    "LocalServiceUpdate", "LocalServiceUpstreamOut", "LocalServiceVersionOut", "LocalServiceVersionsOut",
 ]

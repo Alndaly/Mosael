@@ -27884,6 +27884,49 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/local-service/version": {
+      "get": {
+        "tags": [
+          "local-services"
+        ],
+        "summary": "Get Local Service Version",
+        "description": "这一份 ComfyUI 现在是什么版本。托管的一份先看安装记录;非托管的(用我自己装的 / 连一台服务器)问正在跑的那台\n`/system_stats`,老版本不报时退回安装目录里的 `comfyui_version.py`。只在插件详情页那一份上问一次(界面按 query 缓存);\n探测有超时,读不到就照原因说,不卡界面、不报错。",
+        "operationId": "get_local_service_version_api_plugins_instances__instance_id__local_service_version_get",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalServiceVersionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/local-service/versions": {
       "get": {
         "tags": [
@@ -39337,6 +39380,45 @@
         "type": "object",
         "title": "LocalServiceUpstreamOut",
         "description": "上游最新 release(GitHub API)查到了什么;查不到时 `status` 说为什么、`version` / `tag` 空着。\n\n**`status` 不是 `ok` 就不等于「已最新」** —— 界面照这一格说「查不到(离线 / 网络 / 限流)」,不能说已经是最新的。"
+      },
+      "LocalServiceVersionOut": {
+        "properties": {
+          "current": {
+            "type": "string",
+            "title": "Current",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "",
+              "install",
+              "running",
+              "file"
+            ],
+            "title": "Source",
+            "default": ""
+          },
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "default": false
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "",
+              "not_running",
+              "no_version",
+              "unreachable"
+            ],
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "LocalServiceVersionOut",
+        "description": "这一份 ComfyUI 现在是什么版本,从哪儿读到的;读不到时为什么。\n\n托管的一份先看安装记录(`install`);非托管的(用我自己装的 / 连一台服务器)优先问**正在跑的那台**\n(`/system_stats` 的 `system.comfyui_version`,`running`),老版本不报时退回安装目录里的 `comfyui_version.py`\n(`file`)。`reason` 只在 `current` 为空时有意义:`not_running` 宿主说它没在跑、`no_version` 在跑但没报版本\n而且目录里也没有、`unreachable` 问了没应答(超时 / 报错)。"
       },
       "LocalServiceVersionsOut": {
         "properties": {

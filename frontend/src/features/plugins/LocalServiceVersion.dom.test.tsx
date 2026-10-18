@@ -103,6 +103,16 @@ describe("版本那一行", () => {
     expect(screen.queryByRole("button", { name: new RegExp(table.localServiceUpdateTo.replace("{version}", ".*")) })).toBeNull();
   });
 
+  it.each(["zh-CN", "en-US"] as const)("Mosael 装的那一份、安装记录里没版本(%s):说清是记录里没记下,不留空白", async (one) => {
+    locale = one;
+    api.getLocalServiceVersions.mockResolvedValue(versions({
+      current: "", latest: "", update: "", source: "",
+      upstream: { status: "not_checked", version: "", tag: "", notes: "", url: "", checked_at: "", message: "" },
+    }));
+    mount();
+    expect(await screen.findByText(messages[one].localServiceVersionManagedMissing)).toBeTruthy();
+  });
+
   it.each(["zh-CN", "en-US"] as const)("查不到上游(%s):说查不到和原因,绝不说已经是最新的;内置表有更新照样给按钮", async (one) => {
     locale = one;
     const reason = one === "zh-CN" ? "连不上 GitHub(离线、代理或网络问题)" : "Couldn't reach GitHub (offline, proxy, or network problem)";

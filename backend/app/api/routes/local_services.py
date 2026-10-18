@@ -27,6 +27,7 @@ from app.api.schemas import (
     LocalServiceOut,
     LocalServicePlanOut,
     LocalServiceUpdate,
+    LocalServiceVersionOut,
     LocalServiceVersionsOut,
 )
 from app.core.i18n import tr
@@ -217,6 +218,18 @@ def install_local_service(instance_id: str, body: LocalServiceInstallRequest, db
         db.rollback()
         raise _failed(exc) from exc
     return _required(db, instance, user)
+
+
+@router.get("/plugins/instances/{instance_id}/local-service/version", response_model=LocalServiceVersionOut)
+def get_local_service_version(instance_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """这一份 ComfyUI 现在是什么版本。托管的一份先看安装记录;非托管的(用我自己装的 / 连一台服务器)问正在跑的那台
+    `/system_stats`,老版本不报时退回安装目录里的 `comfyui_version.py`。只在插件详情页那一份上问一次(界面按 query 缓存);
+    探测有超时,读不到就照原因说,不卡界面、不报错。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return local_services.running_version(db, instance)
+    except _ERRORS as exc:
+        raise _failed(exc) from exc
 
 
 @router.get("/plugins/instances/{instance_id}/local-service/versions", response_model=LocalServiceVersionsOut)

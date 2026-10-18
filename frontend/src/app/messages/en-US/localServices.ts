@@ -162,11 +162,20 @@ export const localServices = {
   localServiceVersionReasonUnknown: "a network problem, offline, or it wasn't checked",
   localServiceVersionNotChecked: "Not checked yet",
   localServiceVersionReleaseNotes: "Upstream release notes: {notes}",
+  // Not the copy Mosael installed (your own folder / a server): read from the running one or the folder
+  localServiceVersionOtherRunning: "This isn't the copy Mosael installed; it now reports version {version}",
+  localServiceVersionOtherFile: "This isn't the copy Mosael installed; its install folder says version {version}",
+  localServiceVersionOtherFileStopped: "This isn't the copy Mosael installed; it isn't running now, and its install folder says version {version}",
+  localServiceVersionNotRunning: "It isn't running, so its version can't be read",
+  localServiceVersionNoVersion: "It's running but doesn't report a version, and its install folder has no comfyui_version.py",
+  localServiceVersionUnreachable: "It can't be reached (no answer), so its version can't be read",
+  localServiceVersionNoSource: "Couldn't read the version (there's no source to read it from)",
+  // The copy Mosael installed, but the install record has no version: say which copy it is
+  localServiceVersionManagedMissing: "(The copy Mosael installed, but the plugin didn't record its version)",
   // The compact version line in the plugin page's hero (a summary of the connection page's Version row)
   pluginServiceVersionCurrent: "{title} {version}",
   pluginServiceVersionUpdate: "New version {version}",
   pluginServiceVersionUnknown: "Couldn't check ({reason})",
-  pluginServiceVersionNotManaged: "This isn't the copy Mosael installed, so its version can't be read",
   pluginServiceVersionUnreadable: "Couldn't read the version ({reason})",
   pluginServiceVersionJump: "Open the Version row under the connection to update",
   localServiceUpdateTo: "Update to {version}",

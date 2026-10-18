@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   packages: [] as Array<Record<string, unknown>>,
   services: {} as Record<string, Record<string, unknown> | null>,
   versions: vi.fn(),
+  version: vi.fn(),
   local: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -39,6 +40,7 @@ vi.mock("@/api/client", () => {
     rescanPlugins: async () => [],
     getLocalService: (id: string) => h.local(id),
     getLocalServiceVersions: (id: string) => h.versions(id),
+    getLocalServiceVersion: (id: string) => h.version(id),
     discoverLocalServices: async () => ({ servers: [] }),
     getLocalServiceModelFolders: async () => ({ folders: [], running: false, suggestions: [] }),
   };
@@ -175,6 +177,7 @@ beforeEach(() => {
   h.toast.success.mockReset();
   h.toast.error.mockReset();
   h.versions.mockReset();
+  h.version.mockReset();
   h.local.mockReset();
   h.local.mockImplementation(async (id: string) => h.services[id] ?? null);
 });
@@ -191,6 +194,7 @@ describe("插件页上的 ComfyUI 版本", () => {
 
     await waitFor(() => expect(facts().textContent).toContain("0.39.0"));
     expect(versionFact()?.textContent).toContain("有新版本 0.41.0");
+    expect(h.version, "托管的一份:先读安装记录,不去探在跑的那台").not.toHaveBeenCalled();
     expect(within(facts()).getByRole("button", { name: "有新版本 0.41.0" })).toBeTruthy();
 
     //: 点它:展开第一个连接,滚到「版本」那一行(更新、回到上一版都在那里)
@@ -205,25 +209,102 @@ describe("插件页上的 ComfyUI 版本", () => {
     );
   });
 
-  it("不是 Mosael 装的那一份(用我自己装的):说版本读不到,不去问版本", async () => {
+  it("不是 Mosael 装的、正在跑:显示它现在报的版本,不说「读不到」", async () => {
     h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
     h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockResolvedValue({ current: "0.41.0", source: "running", running: true, reason: "" });
     show();
 
-    await waitFor(() => expect(versionFact()).toBeTruthy());
-    expect(versionFact()?.textContent).toBe(messages["zh-CN"].pluginServiceVersionNotManaged);
-    expect(h.versions, "不是让 Mosael 装的那一份,没有版本接口可问").not.toHaveBeenCalled();
+    const table = messages["zh-CN"];
+    const expected = table.localServiceVersionOtherRunning.replace("{version}", "0.41.0");
+    await waitFor(() => expect(versionFact()?.textContent).toBe(expected));
+    expect(versionFact()?.textContent).not.toContain("读不到");
+    expect(h.versions, "不是让 Mosael 装的那一份:不去读安装记录").not.toHaveBeenCalled();
+    expect(h.version).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["zh-CN", "en-US"] as const)("装着的这一份读不到当前版本(current 为空,%s):说明不是 Mosael 装的这一份", async (one) => {
-    locale = one;
+  it("连一台服务器(没有本机服务那一行)也能在页头看到它报的版本", async () => {
     h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
-    h.services.c1 = service("c1");
-    h.versions.mockResolvedValue(versions({ current: "", latest: "", update: "", source: "", upstream: { status: "not_checked", version: "", tag: "", notes: "", url: "", checked_at: "", message: "" } }));
+    h.services.c1 = null;
+    h.version.mockResolvedValue({ current: "0.41.0", source: "running", running: true, reason: "" });
     show();
 
-    await waitFor(() => expect(versionFact()).toBeTruthy());
-    expect(versionFact()?.textContent).toBe(messages[one].pluginServiceVersionNotManaged);
+    const expected = messages["zh-CN"].localServiceVersionOtherRunning.replace("{version}", "0.41.0");
+    await waitFor(() => expect(versionFact()?.textContent).toBe(expected));
+    expect(h.version).toHaveBeenCalledWith("c1");
+  });
+
+  it.each(["zh-CN", "en-US"] as const)("不是 Mosael 装的、没在跑(%s):说没在运行,不说「不是 Mosael 装的」", async (one) => {
+    locale = one;
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockResolvedValue({ current: "", source: "", running: false, reason: "not_running" });
+    show();
+
+    const table = messages[one];
+    await waitFor(() => expect(versionFact()?.textContent).toBe(table.localServiceVersionNotRunning));
+    expect(versionFact()?.textContent).not.toContain(table.localServiceVersionOtherRunning.split("{version}")[0].trim());
+  });
+
+  it("在跑但老版本不报:退回安装目录里的 comfyui_version.py,说读的是目录里的", async () => {
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockResolvedValue({ current: "0.39.0", source: "file", running: true, reason: "" });
+    show();
+
+    const expected = messages["zh-CN"].localServiceVersionOtherFile.replace("{version}", "0.39.0");
+    await waitFor(() => expect(versionFact()?.textContent).toBe(expected));
+  });
+
+  it("没在跑、目录里有版本文件:显示目录里的版本,并说它现在没在运行", async () => {
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockResolvedValue({ current: "0.39.0", source: "file", running: false, reason: "" });
+    show();
+
+    const expected = messages["zh-CN"].localServiceVersionOtherFileStopped.replace("{version}", "0.39.0");
+    await waitFor(() => expect(versionFact()?.textContent).toBe(expected));
+  });
+
+  it("在跑、老版本不报、目录里也没有:说清为什么读不到", async () => {
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockResolvedValue({ current: "", source: "", running: true, reason: "no_version" });
+    show();
+
+    await waitFor(() => expect(versionFact()?.textContent).toBe(messages["zh-CN"].localServiceVersionNoVersion));
+  });
+
+  it("探了没应答(超时 / 报错):降级成连不上,不卡界面", async () => {
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockResolvedValue({ current: "", source: "", running: false, reason: "unreachable" });
+    show();
+
+    await waitFor(() => expect(versionFact()?.textContent).toBe(messages["zh-CN"].localServiceVersionUnreachable));
+  });
+
+  it("版本接口自己失败(超时 / 报错):说读不到和原因", async () => {
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1", { mode: "directory" });
+    h.version.mockRejectedValue(new Error("探测超时"));
+    show();
+
+    const expected = messages["zh-CN"].pluginServiceVersionUnreadable.replace("{reason}", "探测超时");
+    await waitFor(() => expect(versionFact()?.textContent).toBe(expected));
+  });
+
+  it("托管但安装记录里没版本:说清是 Mosael 装的那一份、插件没记下版本", async () => {
+    h.packages = [PKG("dev.mosael.comfyui", ["c1"])];
+    h.services.c1 = service("c1");
+    h.versions.mockResolvedValue(versions({
+      current: "", latest: "", update: "", source: "",
+      upstream: { status: "not_checked", version: "", tag: "", notes: "", url: "", checked_at: "", message: "" },
+    }));
+    show();
+
+    await waitFor(() => expect(versionFact()?.textContent).toBe(messages["zh-CN"].localServiceVersionManagedMissing));
+    expect(h.version, "托管的一份不靠探测:记录里没有就说没记下").not.toHaveBeenCalled();
   });
 
   it("上游查不到(离线):说查不到和原因,不说「已经是最新的」", async () => {
@@ -260,5 +341,20 @@ describe("插件页上的 ComfyUI 版本", () => {
     //: 列表、详情都落定(版本那一行画出来了)之后仍然是那一次:没有别的卡在后面补问
     await waitFor(() => expect(facts().textContent).toContain("0.39.0"));
     expect(h.versions).toHaveBeenCalledTimes(1);
+  });
+
+  it("不是 Mosael 装的那一份时,版本也只探详情里那一份,不按每个连接各探一次", async () => {
+    h.packages = [
+      PKG("dev.a", ["a1", "a2", "a3"]),
+      PKG("dev.b", ["b1"]),
+      PKG("dev.c", ["c1"]),
+    ];
+    for (const id of ["a1", "a2", "a3", "b1", "c1"]) h.services[id] = service(id, { mode: "directory" });
+    h.version.mockResolvedValue({ current: "0.41.0", source: "running", running: true, reason: "" });
+    show();
+
+    await waitFor(() => expect(versionFact()?.textContent).toContain("0.41.0"));
+    expect(h.version.mock.calls.length, "只探详情那一份,不给每张卡、每个连接各探一次").toBe(1);
+    expect(h.versions).not.toHaveBeenCalled();
   });
 });

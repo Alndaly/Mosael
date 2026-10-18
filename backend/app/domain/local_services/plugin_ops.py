@@ -51,8 +51,10 @@ PLAN_TIMEOUT_SECONDS = 60
 INSTALL_TIMEOUT_SECONDS = 6 * 3600
 #: 安装计划最多摆几步。
 MAX_STEPS = 20
-#: 问版本:只读安装目录里的那份记录。
+#: 问版本:只读安装目录里的那份记录(带上一次联网查上游,所以给它 30 秒)。
 VERSIONS_TIMEOUT_SECONDS = 30
+#: 读这一份现在是什么版本:托管读记录、或者问在跑的那台 `system_stats`(插件那边 3 秒超时)。进程起来加读文件远用不了 15 秒。
+VERSION_TIMEOUT_SECONDS = 15
 #: 卸载之前问一声:量一下模型文件夹(几十万个文件也就几秒)。
 UNINSTALL_TIMEOUT_SECONDS = 120
 #: 版本号最长多少个字。
@@ -297,6 +299,34 @@ def uninstall(db: Session, instance: PluginInstance, service: str, root: Path) -
     return {"installed": output.get("installed") is True, "models": models, "models_bytes": count("models_bytes")}
 
 
+#: 版本是从哪儿读到的(和插件交回来的同一套词)。
+VERSION_SOURCES = ("install", "running", "file")
+#: 读不到的原因:没在跑 / 在跑但没报版本、目录里也没有 / 问了没应答(超时、报错)。
+VERSION_REASONS = ("not_running", "no_version", "unreachable")
+
+
+def version(db: Session, instance: PluginInstance, service: str, *, directory: str, url: str,
+            running: bool | None) -> dict[str, Any]:
+    """这一份 ComfyUI 现在是什么版本(托管先看安装记录;否则问在跑的那台 `/system_stats`,再退回安装目录里的
+    `comfyui_version.py`)。`running`:宿主知道它在不在跑;连一台服务器时是 None(宿主不替它看进程)。
+
+    插件交回来的东西是别人写的数据:认不出的 `source` / `reason` 当没有,不是那一套就不猜着说。只看、不写。"""
+    output = tools.invoke_service(
+        db, instance.package_id, service,
+        {"op": "service_version", "directory": directory, "url": url, "running": running},
+        instance=instance, timeout=VERSION_TIMEOUT_SECONDS,
+    )
+
+    def text(value: Any) -> str:
+        return value.strip()[:MAX_VERSION] if isinstance(value, str) else ""
+
+    current = text(output.get("version"))
+    source = output.get("source") if output.get("source") in VERSION_SOURCES else ""
+    reason = output.get("reason") if output.get("reason") in VERSION_REASONS else ""
+    return {"current": current, "source": source if current else "",
+            "running": output.get("running") is True, "reason": reason if not current else ""}
+
+
 def versions(db: Session, instance: PluginInstance, row: LocalService) -> dict[str, Any]:
     """让 Mosael 装的那一份:装着哪个版本(`current`)、内置表最新(`latest`)、上游最新(`upstream`,插件联网查)、
     能更新到哪个(`update` 和它的来源 `source`:上游 / 内置表 = 离线降级)、能回到哪个(`previous`)、有没有被打断没做完的
@@ -346,4 +376,4 @@ def rollback(db: Session, instance: PluginInstance, service: str, payload: dict[
 
 
 __all__ = ["add_nodes", "busy", "detect", "discover", "install", "launch", "model_folders", "plan", "readdress", "rollback",
-           "uninstall", "update", "versions"]
+           "uninstall", "update", "version", "versions"]

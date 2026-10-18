@@ -1,5 +1,7 @@
 """让 Mosael 装的那一份换版本(ADR 0041 §4「更新、回滚」)。宿主经 `comfyui_generation` 按 op 问:
 
+    {"op": "service_version", "directory", "url", "running"}
+        → 这一份 ComfyUI 现在是什么版本(托管先看安装记录;否则问在跑的那台的 /system_stats,再退回 comfyui_version.py)
     {"op": "service_versions", "directory", "check_upstream"}
         → 装着哪个、能更新到哪个、能回到哪个、有没有被打断没做完的;`check_upstream` 为真时**联网**问上游最新 release
           (`upstream`:tag / 版本 / 发布说明要点 / 上次检查时间 / 查不到的原因)
@@ -37,10 +39,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import layouts
 import managed
 import pinned
 import service
 import upstream
+from comfy_http import Comfy, env_access_token, env_base_url
 from lines import ComfyError, say
 
 Emit = Callable[[dict[str, Any]], None]
@@ -56,6 +60,10 @@ UPDATE_STEPS = ("disk", "download", "extract", "freeze", "switch", "requirements
 ROLLBACK_STEPS = ("switch", "restore", "cleanup")
 #: 更新要的空间:新源码近 50 MB,换下来的包(前端包一个就几十 MB)和 pip 的临时文件,宽松地按 1 GB。
 UPDATE_NEED = 1 * managed.GB
+#: 问「它在跑吗、报的哪个版本」最多等多久。它在本机 / 局域网,不该慢;超时就退回目录里的文件,别让界面等。
+VERSION_PROBE_TIMEOUT_SECONDS = 3.0
+#: 版本号最长留多少(和宿主那一层同一个上限)。
+MAX_VERSION = 40
 #: 不进 freeze 对比的:PyTorch 三件(换版本不动它们;CUDA 版带 +cu130 这类后缀,装回去要走 PyTorch 源)。
 TORCH_NAMES = frozenset(name for name, _version in managed.TORCH)
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*==\s*(\S+)$")
@@ -108,6 +116,65 @@ def _back_to(root: Path, record: dict[str, Any]) -> str:
     if previous.get("version") and (record.get("updating") or (root / PREVIOUS / "main.py").is_file()):
         return str(previous["version"])
     return ""
+
+
+# --- service_version ------------------------------------------------------------
+
+
+def _source_root(root: Path) -> Path:
+    """`comfyui_version.py` 在哪儿:认出来的 ComfyUI 根目录;认不出就试安装目录本身和里面的 `ComfyUI/`。"""
+    layout = layouts.find_layout(root)
+    if layout is not None:
+        return layout.root
+    nested = root / managed.SOURCE
+    return nested if (nested / "comfyui_version.py").is_file() else root
+
+
+def version(payload: dict[str, Any], locale: str, *, timeout: float = VERSION_PROBE_TIMEOUT_SECONDS) -> dict[str, Any]:
+    """这一份 ComfyUI 现在是什么版本 —— **先看 Mosael 的安装记录**(托管的那一份),再看**正在跑的那台**报的
+    (`GET /system_stats` 的 `system.comfyui_version`),最后退回安装目录里的 `comfyui_version.py`。
+
+    `running` 是宿主知道的状态:本地服务停着时是 False,连一台服务器时是 None(宿主不替它看进程)。宿主要没在跑、
+    又拿不到文件里的版本,说 `not_running`;**宿主说在跑、文件里也没有,才说 `no_version`(老版本不报)**;
+    问了没应答 / 超时是 `unreachable`。探测走 `comfy_http.Comfy`(不绕代理、和本机发现同一条 `/system_stats`),
+    超时 `timeout`;探测失败**不抛** —— 版本读不到不该让整页报错。"""
+    directory = str(payload.get("directory") or "").strip()
+    root = Path(directory).expanduser() if directory else None
+    host_running = payload.get("running")
+    host_running = host_running if isinstance(host_running, bool) else None
+
+    def told(version: str, source: str, running: bool, reason: str) -> dict[str, Any]:
+        return {"version": version[:MAX_VERSION], "source": source, "running": running, "reason": reason}
+
+    recorded = str((managed.read_record(root) if root is not None else {}).get("comfyui") or "").strip()
+    if recorded:
+        return told(recorded, "install", host_running is True, "")
+
+    file_version = service.comfyui_version(_source_root(root)) if root is not None else ""
+    probe_answered = False
+    if host_running is not False:
+        url = str(payload.get("url") or "").strip() or env_base_url()
+        if url:
+            try:
+                with Comfy(url, locale, env_access_token()) as comfy:
+                    stats = comfy.get(service.HEALTH_PATH, timeout=timeout)
+            except ComfyError:
+                probe_answered = False
+            else:
+                probe_answered = True
+                system = stats.get("system") if isinstance(stats, dict) else None
+                found = str(system.get("comfyui_version") or "").strip() if isinstance(system, dict) else ""
+                if found:
+                    return told(found, "running", True, "")
+    running = host_running if host_running is not None else probe_answered
+    if file_version:
+        return told(file_version, "file", bool(running), "")
+    if host_running is False:
+        return told("", "", False, "not_running")
+    if probe_answered:
+        return told("", "", bool(running), "no_version")
+    #: 宿主说在跑、却连不上(超时 / 报错),或者连一台服务器时问不到:都是没应答
+    return told("", "", False, "unreachable")
 
 
 # --- service_versions -----------------------------------------------------------

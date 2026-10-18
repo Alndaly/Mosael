@@ -15,7 +15,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleArrowUp, CircleCheck, FileText, TriangleAlert, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { getLocalServiceVersions, rollbackLocalService, updateLocalService, type LocalService } from "@/api/client";
+import {
+  getLocalServiceVersion,
+  getLocalServiceVersions,
+  rollbackLocalService,
+  updateLocalService,
+  type LocalService,
+  type LocalServiceVersion,
+} from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsRow } from "@/components/settings/settings-layout";
@@ -25,6 +33,8 @@ import { Truncate } from "@/components/ui/truncate";
 import { LocalServiceLogDialog, localServiceKey, machineKey } from "@/features/plugins/localServiceStatus";
 
 export const versionsKey = (instanceId: string) => ["local-service-versions", instanceId] as const;
+/** 这一份 ComfyUI 现在是什么版本(非托管:在跑的那台 / 安装目录里的文件)。 */
+export const versionKey = (instanceId: string) => ["local-service-version", instanceId] as const;
 
 /**
  * 这一份本机服务装着的版本(以及上游最新、能不能升)。连接页那一整行和插件页页头那一行
@@ -37,6 +47,46 @@ export function useLocalServiceVersions(instanceId: string, enabled = true) {
     enabled,
     retry: false,
   });
+}
+
+/**
+ * 非托管的一份(「用我自己装的」/「连一台服务器」):它的版本从在跑的那台 / 安装目录里读,读不到时说清为什么。
+ * 探一次有超时(插件那边 3 秒),失败降级;界面按 query 缓存,不每次渲染都探。
+ *
+ * 只在**需要**的时候问:插件详情页页头那一份、连接展开时那一行 —— 不给列表里每个连接各探一次。
+ */
+export function useLocalServiceVersion(instanceId: string, enabled = true) {
+  return useQuery({
+    queryKey: versionKey(instanceId),
+    queryFn: () => getLocalServiceVersion(instanceId),
+    enabled,
+    retry: false,
+    //: 版本不会因为看一眼就变;一分钟内再进这一页不重新探测(它是一次网络来回)。
+    staleTime: 60_000,
+  });
+}
+
+/** 那一句版本说明(页头和连接页那一行共用):读到什么就说从哪儿读的,没读到就照原因说。 */
+export function versionText(
+  t: (key: MessageKey) => string,
+  found: LocalServiceVersion | undefined,
+  title: string,
+): string {
+  if (!found) return t("localServiceVersionNoSource");
+  if (found.current) {
+    if (found.source === "install") {
+      return t("pluginServiceVersionCurrent").replace("{title}", title).replace("{version}", found.current);
+    }
+    if (found.source === "file") {
+      return t(found.running ? "localServiceVersionOtherFile" : "localServiceVersionOtherFileStopped")
+        .replace("{version}", found.current);
+    }
+    return t("localServiceVersionOtherRunning").replace("{version}", found.current);
+  }
+  if (found.reason === "not_running") return t("localServiceVersionNotRunning");
+  if (found.reason === "no_version") return t("localServiceVersionNoVersion");
+  if (found.reason === "unreachable") return t("localServiceVersionUnreachable");
+  return t("localServiceVersionNoSource");
 }
 
 /** 版本号按数字段比(`0.41.0` > `0.39.0`);认不出的按 0 算,只用来决定这句话怎么说。 */
@@ -92,7 +142,7 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
   const describe = (): string => {
     if (versions.isPending) return t("localServiceVersionChecking");
     if (versions.error) return (versions.error as Error).message;
-    if (!found?.current) return "";
+    if (!found?.current) return t("localServiceVersionManagedMissing");
     if (found.update && found.source === "upstream") {
       return t("localServiceVersionAvailable").replace("{current}", found.current).replace("{latest}", found.update);
     }
@@ -212,58 +262,97 @@ export function ManagedVersion({ instanceId, service }: { instanceId: string; se
  * 插件页上看一眼版本不该先展开连接。这一行读的是**同一个查询**(见 {@link useLocalServiceVersions}):
  * 当前版本 + 能升到哪一版;点「有新版本」去连接里那一行 —— 真正的动作(和它需要的确认)只有那一个控件。
  *
- * `readable` 由调用方按本机服务那一行定(让 Mosael 装的、装好了、当前账号能读,才有版本可读)。
- * 读不到时说「不是 Mosael 装的这一份」,**不留空白、不写 0**;上游查不到时说查不到和原因,
- * **绝不说「已经是最新的」**(ADR 0073)。
+ * `managed` 由调用方按本机服务那一行定(让 Mosael 装的、装好了、当前账号能读)。托管的一份照旧读安装记录和上游;
+ * 非托管的一份(用我自己装的 / 连一台服务器)读**在跑的那台**报的版本,老版本不报时退回 `comfyui_version.py`;
+ * 读不到就照原因说(没在跑 / 没报版本 / 连不上),**不留空白、不写 0**,也不把「不是 Mosael 装的」当成「读不到」。
+ * 上游查不到时说查不到和原因,**绝不说「已经是最新的」**(ADR 0073)。
  */
 export function PluginServiceVersionFact({
   instanceId,
   title,
-  readable,
+  managed,
   onOpen,
 }: {
   instanceId: string;
   title: string;
-  /** 这一份是不是读得出「装着哪个版本」。 */
-  readable: boolean;
+  /** 是不是「让 Mosael 装」的那一份(安装记录 + 上游;不是就读在跑的那台 / 目录里的文件)。 */
+  managed: boolean;
   /** 点「有新版本」:去连接里那一行(展开、滚到「版本」)。 */
   onOpen: () => void;
 }) {
   const t = useI18n();
-  const versions = useLocalServiceVersions(instanceId, readable);
-  if (!readable) {
-    return <span data-service-version="">{t("pluginServiceVersionNotManaged")}</span>;
-  }
-  if (versions.isPending) return null;
-  if (versions.error) {
+  const versions = useLocalServiceVersions(instanceId, managed);
+  const running = useLocalServiceVersion(instanceId, !managed);
+  if (managed) {
+    if (versions.isPending) return null;
+    if (versions.error) {
+      return (
+        <span data-service-version="" className="text-warning">
+          {t("pluginServiceVersionUnreadable").replace("{reason}", versions.error.message)}
+        </span>
+      );
+    }
+    const found = versions.data;
+    if (!found?.current) {
+      return <span data-service-version="">{t("localServiceVersionManagedMissing")}</span>;
+    }
+    const upstream = found.upstream;
     return (
-      <span data-service-version="" className="text-warning">
-        {t("pluginServiceVersionUnreadable").replace("{reason}", versions.error.message)}
+      <span data-service-version="" className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="tabular-nums">
+          {t("pluginServiceVersionCurrent").replace("{title}", title).replace("{version}", found.current)}
+        </span>
+        {upstream && upstream.status !== "ok" ? (
+          <span className="text-warning">
+            {t("pluginServiceVersionUnknown").replace("{reason}", upstream.message || t("localServiceVersionReasonUnknown"))}
+          </span>
+        ) : found.update ? (
+          <Hint label={t("pluginServiceVersionJump")}>
+            <Button variant="inline" className="text-warning" onClick={onOpen}>
+              {t("pluginServiceVersionUpdate").replace("{version}", found.update)}
+            </Button>
+          </Hint>
+        ) : null}
       </span>
     );
   }
-  const found = versions.data;
-  if (!found?.current) {
-    return <span data-service-version="">{t("pluginServiceVersionNotManaged")}</span>;
-  }
-  const upstream = found.upstream;
-  return (
-    <span data-service-version="" className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="tabular-nums">
-        {t("pluginServiceVersionCurrent").replace("{title}", title).replace("{version}", found.current)}
+  if (running.isPending) return null;
+  if (running.error) {
+    return (
+      <span data-service-version="" className="text-warning">
+        {t("pluginServiceVersionUnreadable").replace("{reason}", running.error.message)}
       </span>
-      {upstream && upstream.status !== "ok" ? (
-        <span className="text-warning">
-          {t("pluginServiceVersionUnknown").replace("{reason}", upstream.message || t("localServiceVersionReasonUnknown"))}
-        </span>
-      ) : found.update ? (
-        <Hint label={t("pluginServiceVersionJump")}>
-          <Button variant="inline" className="text-warning" onClick={onOpen}>
-            {t("pluginServiceVersionUpdate").replace("{version}", found.update)}
-          </Button>
-        </Hint>
-      ) : null}
+    );
+  }
+  const text = versionText(t, running.data, title);
+  return (
+    <span data-service-version="" className={running.data?.current ? "tabular-nums" : "text-warning"}>
+      {text}
     </span>
+  );
+}
+
+/**
+ * 连接页上非托管那份(「用我自己装的」)的「版本」那一行:读在跑的那台报的版本 / 安装目录里的文件;读不到照原因说。
+ *
+ * 只在连接**展开**时才有这一行:不给列表里每个连接各探一次(插件详情页页头读的是同一份 query,展开不会多探)。
+ * 托管的那一份仍走 {@link ManagedVersion}(安装记录 + 上游 + 更新 / 回滚),行为不变。
+ */
+export function UnmanagedVersionRow({ instanceId, title }: { instanceId: string; title: string }) {
+  const t = useI18n();
+  const version = useLocalServiceVersion(instanceId);
+  const found = version.data;
+  const description = version.isPending
+    ? t("localServiceVersionChecking")
+    : version.error
+      ? t("pluginServiceVersionUnreadable").replace("{reason}", version.error.message)
+      : versionText(t, found, title);
+  return (
+    <SettingsRow
+      id={`local-service-version-${instanceId}`}
+      label={t("localServiceVersion")}
+      description={<span className={version.data?.current ? undefined : "text-warning"}>{description}</span>}
+    />
   );
 }
 

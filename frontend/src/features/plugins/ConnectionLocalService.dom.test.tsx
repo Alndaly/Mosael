@@ -32,6 +32,7 @@ const api = vi.hoisted(() => ({
   cancelLocalServiceInstall: vi.fn(),
   getLocalServiceModelFolders: vi.fn(),
   getLocalServiceVersions: vi.fn(),
+  getLocalServiceVersion: vi.fn(),
   updateLocalService: vi.fn(),
   rollbackLocalService: vi.fn(),
   isCustomServer: vi.fn(),
@@ -74,6 +75,7 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getLocalService.mockResolvedValue(null);
   api.getLocalServiceModelFolders.mockResolvedValue({ folders: [], running: false, suggestions: [] });
+  api.getLocalServiceVersion.mockResolvedValue({ current: "0.41.0", source: "running", running: true, reason: "" });
   api.getLocalServiceVersions.mockResolvedValue({
     current: "0.39.0", latest: "0.39.0", update: "", previous: "", unfinished: "", source: "",
     upstream: {
@@ -710,8 +712,8 @@ describe("换版本(让 Mosael 装的那一份)", () => {
     expect(screen.queryByRole("button", { name: /localServiceUpdateTo/ })).toBeNull();
   });
 
-  it("不是部署管理员、要重建、选目录的那种:没有「版本」这一行", async () => {
-    for (const one of [installed({ can_manage: false }), installed({ needs_rebuild: true, base_python_minor: "3.14" }), service({ state: "running" })]) {
+  it("不是部署管理员、要重建的托管那一种:没有「版本」这一行", async () => {
+    for (const one of [installed({ can_manage: false }), installed({ needs_rebuild: true, base_python_minor: "3.14" })]) {
       api.getLocalService.mockResolvedValue(one);
       const view = mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
       expect(await view.findByText("localServiceStateRunning")).toBeTruthy();
@@ -719,5 +721,15 @@ describe("换版本(让 Mosael 装的那一份)", () => {
       view.unmount();
     }
     expect(api.getLocalServiceVersions).not.toHaveBeenCalled();
+  });
+
+  it("选目录的那种:版本那一行走运行中版本(在跑的那台报的),不读托管记录", async () => {
+    api.getLocalService.mockResolvedValue(service({ state: "running" }));
+    const view = mount(<ConnectionLocalService pkg={PKG} instance={INSTANCE} workspaceId="w1" />);
+    expect(await view.findByText("localServiceStateRunning")).toBeTruthy();
+    expect(await view.findByText("localServiceVersion")).toBeTruthy();
+    await waitFor(() => expect(api.getLocalServiceVersion).toHaveBeenCalledWith("i1"));
+    expect(api.getLocalServiceVersions).not.toHaveBeenCalled();
+    view.unmount();
   });
 });

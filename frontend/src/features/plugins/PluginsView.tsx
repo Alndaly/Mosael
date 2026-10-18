@@ -318,8 +318,9 @@ export function PackageDetail({
 
   //: **插件页页头那一行 ComfyUI 版本**(维护者:「ComfyUI 插件内可以看 ComfyUI 的版本」)。
   //: 每个连接先读**本机服务那一行**(本地库、不联网),挑出「让 Mosael 装的、装好了、当前账号能读」
-  //: 的那一份,才去读版本(那一趟会问上游)。几个连接只挑第一份能读的:插件页面上多一行版本,
-  //: 不该让每张卡、每个连接各问一次上游(ADR 0073 记着的那次网络调用)。
+  //: 的那一份,才去读安装记录和上游;非托管的(用我自己装的 / 连一台服务器)读在跑的那台报的版本
+  //: (老版本不报时退回目录里的文件)。几个连接只挑第一份能读的:插件页面上多一行版本,
+  //: 不该让每张卡、每个连接各问一次上游 / 各探一次(ADR 0073 记着的那次网络调用)。
   const serviceTitle = (pkg.services ?? [])[0]?.title ?? pkg.name;
   const serviceInstances = React.useMemo(
     () => ((pkg.services ?? []).length > 0 ? instances : []),
@@ -343,7 +344,7 @@ export function PackageDetail({
       return {
         instanceId: serviceInstances[managedAt].id,
         title: serviceRows[managedAt].data?.title || serviceTitle,
-        readable: true,
+        managed: true,
       };
     }
     //: 是 Mosael 装的那一份、这会儿却读不了(还没装好 / 要重建 / 不是部署管理员):那一块在连接里说,
@@ -355,7 +356,7 @@ export function PackageDetail({
     );
     if (unreadable) return null;
     const first = serviceRows.find((row) => row.data)?.data;
-    return { instanceId: serviceInstances[0].id, title: first?.title || serviceTitle, readable: false };
+    return { instanceId: serviceInstances[0].id, title: first?.title || serviceTitle, managed: false };
   })();
   //: 页头那一行点「有新版本」:展开这个连接、滚到「版本」那一行(更新 / 回到上一版只有那里有)。
   const [versionJump, setVersionJump] = React.useState<{ instanceId: string; seq: number } | null>(null);
@@ -406,7 +407,7 @@ export function PackageDetail({
               key="service-version"
               instanceId={versionTarget.instanceId}
               title={versionTarget.title}
-              readable={versionTarget.readable}
+              managed={versionTarget.managed}
               onOpen={() => openVersion(versionTarget.instanceId)}
             />
           ) : null,

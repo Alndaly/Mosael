@@ -9408,6 +9408,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/local-service/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Local Service Version
+         * @description 这一份 ComfyUI 现在是什么版本。托管的一份先看安装记录;非托管的(用我自己装的 / 连一台服务器)问正在跑的那台
+         *     `/system_stats`,老版本不报时退回安装目录里的 `comfyui_version.py`。只在插件详情页那一份上问一次(界面按 query 缓存);
+         *     探测有超时,读不到就照原因说,不卡界面、不报错。
+         */
+        get: operations["get_local_service_version_api_plugins_instances__instance_id__local_service_version_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/local-service/versions": {
         parameters: {
             query?: never;
@@ -14637,6 +14659,39 @@ export interface components {
              * @default
              */
             message: string;
+        };
+        /**
+         * LocalServiceVersionOut
+         * @description 这一份 ComfyUI 现在是什么版本,从哪儿读到的;读不到时为什么。
+         *
+         *     托管的一份先看安装记录(`install`);非托管的(用我自己装的 / 连一台服务器)优先问**正在跑的那台**
+         *     (`/system_stats` 的 `system.comfyui_version`,`running`),老版本不报时退回安装目录里的 `comfyui_version.py`
+         *     (`file`)。`reason` 只在 `current` 为空时有意义:`not_running` 宿主说它没在跑、`no_version` 在跑但没报版本
+         *     而且目录里也没有、`unreachable` 问了没应答(超时 / 报错)。
+         */
+        LocalServiceVersionOut: {
+            /**
+             * Current
+             * @default
+             */
+            current: string;
+            /**
+             * Source
+             * @default
+             * @enum {string}
+             */
+            source: "" | "install" | "running" | "file";
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /**
+             * Reason
+             * @default
+             * @enum {string}
+             */
+            reason: "" | "not_running" | "no_version" | "unreachable";
         };
         /**
          * LocalServiceVersionsOut
@@ -40185,6 +40240,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LocalServiceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_local_service_version_api_plugins_instances__instance_id__local_service_version_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalServiceVersionOut"];
                 };
             };
             /** @description Validation Error */

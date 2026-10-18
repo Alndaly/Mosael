@@ -69,8 +69,9 @@ from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import service_gate
+from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import SERVICE_ADDRESS_FIELD, manifest_of
-from app.domain.plugins.runtime import StreamHooks
+from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
 from mosael_formats.plugin_env import EGRESS_KEYS, HOST_PREFIX
 
 logger = logging.getLogger(__name__)
@@ -880,6 +881,27 @@ def _trial(instance_id: str, run: installer.InstallRun) -> None:
 # ---------------------------------------------------------------------------
 
 
+def running_version(db: Session, instance: PluginInstance) -> dict[str, Any]:
+    """这一份 ComfyUI 现在是什么版本(插件详情页页头、连接页那一行)。**托管的一份先看安装记录**;非托管的
+    (「用我自己装的」/「连一台服务器」)问正在跑的那台 `/system_stats`,老版本不报时退回安装目录里的
+    `comfyui_version.py`。
+
+    `running`:本地服务按宿主的进程状态(停着就是 False,别去问);没有本机服务那一行(连一台服务器)是 None,
+    交给插件问那台服务器。**探测失败不抛** —— 版本读不到不该让整页报错,降级成 `unreachable`,界面照原因说。"""
+    row = records.row_of(db, instance.id)
+    process = supervisor.get(instance.id)
+    running = None if row is None else process is not None and process.state == RUNNING
+    directory = row.directory if row is not None else ""
+    url = (records.address(row.port) if row is not None
+           else str((instance.config or {}).get(SERVICE_ADDRESS_FIELD) or ""))
+    service = records.service_of(db, instance, row)
+    try:
+        return plugin_ops.version(db, instance, service.key, directory=directory, url=url, running=running)
+    except (LocalServiceError, PluginDomainError, PluginRuntimeError):
+        logger.warning("读本机服务 %s 的版本时插件没答上来,按读不到处理", instance.id, exc_info=True)
+        return {"current": "", "source": "", "running": False, "reason": "unreachable"}
+
+
 def versions(db: Session, instance: PluginInstance) -> dict[str, Any]:
     """装着哪个版本、内置表最新、上游最新(插件联网查)、能更新到哪个(以及来源)、能回到哪个、有没有被打断没做完的。
     插件查不到上游时 `upstream.status` 说为什么 —— 那时**不是**「已最新」,界面照它说。只看。"""
@@ -1117,5 +1139,5 @@ __all__ = [
     "forget_package",
     "install_log_path", "issue_of", "log_path", "model_folders", "needs_rebuild", "package_installs", "package_roots", "plan", "prepare_install",
     "recent_install_logs", "recent_logs", "remove", "remove_install", "restart", "start", "start_idle_watch", "start_kept_running", "status",
-    "stop", "stop_all", "touch", "versions",
+    "stop", "stop_all", "touch", "running_version", "versions",
 ]

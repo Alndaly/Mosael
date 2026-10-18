@@ -161,11 +161,20 @@ export const localServices = {
   localServiceVersionReasonUnknown: "网络问题、离线,或者没有查到",
   localServiceVersionNotChecked: "还没检查",
   localServiceVersionReleaseNotes: "上游发布说明:{notes}",
+  // 这一份不是 Mosael 装的时候(用我自己装的 / 连一台服务器):版本从在跑的那台或安装目录里读
+  localServiceVersionOtherRunning: "这一份不是 Mosael 装的;它现在报的版本是 {version}",
+  localServiceVersionOtherFile: "这一份不是 Mosael 装的;安装目录里写的版本是 {version}",
+  localServiceVersionOtherFileStopped: "这一份不是 Mosael 装的;它现在没在运行,安装目录里写的版本是 {version}",
+  localServiceVersionNotRunning: "现在没在运行,读不到版本",
+  localServiceVersionNoVersion: "它在跑,但没报版本;安装目录里也没有 comfyui_version.py",
+  localServiceVersionUnreachable: "连不上它（没应答）,读不到版本",
+  localServiceVersionNoSource: "读不到版本（没有可读的来源）",
+  // Mosael 装的那一份、安装记录里却没记下版本:说清是哪一份,不要含糊成「不是 Mosael 装的」
+  localServiceVersionManagedMissing: "（Mosael 装的那一份,但插件没记下版本）",
   // 插件页页头那一行轻量版本(连接页「版本」那一行的摘要,不另做一套控件)
   pluginServiceVersionCurrent: "{title} {version}",
   pluginServiceVersionUpdate: "有新版本 {version}",
   pluginServiceVersionUnknown: "查不到（{reason}）",
-  pluginServiceVersionNotManaged: "不是 Mosael 装的这一份,版本信息读不到",
   pluginServiceVersionUnreadable: "版本信息读不到（{reason}）",
   pluginServiceVersionJump: "去连接里的「版本」那一行看更新",
   localServiceUpdateTo: "更新到 {version}",

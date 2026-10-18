@@ -50,7 +50,7 @@ import {
   machineKey,
   useLocalService,
 } from "@/features/plugins/localServiceStatus";
-import { ManagedVersion } from "@/features/plugins/LocalServiceVersion";
+import { ManagedVersion, UnmanagedVersionRow } from "@/features/plugins/LocalServiceVersion";
 import { ModelLibraryDialog } from "@/features/plugins/ModelLibrary";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { formatBytes, formatSpeed } from "@/lib/bytes";
@@ -1011,6 +1011,8 @@ function ServiceRows({
                      onInstalled={recheck} />
       )}
       {managed && service.installed && !service.needs_rebuild && <ManagedVersion instanceId={instanceId} service={service} />}
+      {/* 用我自己装的那一份:版本从在跑的那台 / 安装目录里读(托管的那一份上面已经有一整行,行为不变) */}
+      {service.mode === "directory" && <UnmanagedVersionRow instanceId={instanceId} title={service.title} />}
       {manage && <SharedModelFolders instanceId={instanceId} service={service} />}
 
       <SettingsRow label={t("localServiceKeepRunning")} description={t("localServiceKeepRunningDesc")}>

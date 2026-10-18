@@ -30,6 +30,7 @@ from app.db.models import LocalService, PluginInstance, PluginPackage
 from app.domain import local_services
 from app.domain.local_services import pidfiles, records, supervisor
 from app.domain.plugins import tools
+from app.domain.plugins.runtime import data_dir_for
 from app.domain.plugins.errors import PluginDomainError
 from tests.util import first_free_port_of_this_worker, fresh_client, second_client, free_port
 
@@ -64,6 +65,17 @@ def svc(payload):
         if said.get("fail"):
             raise RuntimeError("问不到它的队列")
         return {"busy": said.get("busy", False)}
+    if op == "service_version":
+        # 版本探测在插件里做(见 comfyui 插件的 versions);这里只把宿主交来的那几格原样记下,再照测试写好的回答
+        data = Path(os.environ["MOSAEL_PLUGIN_DATA_DIR"])
+        (data / "version-request.json").write_text(json.dumps(payload), encoding="utf-8")
+        control = data / "version.json"
+        if control.is_file():
+            said = json.loads(control.read_text(encoding="utf-8"))
+            if said.get("fail"):
+                raise RuntimeError("问不到它的版本")
+            return said
+        return {"version": "", "source": "", "running": False, "reason": "not_running"}
     if op == "service_model_folders":
         found = []
         for path in payload.get("shared_models") or []:
@@ -440,6 +452,77 @@ def test_本机发现只认本机地址_只给管理员(plugged) -> None:
     assert found.status_code == 200, found.text
     assert found.json() == {"servers": [{"url": "http://127.0.0.1:8188", "label": "本机的那台"}]}
     assert second_client("member").get(f"/api/plugins/{PACKAGE_ID}/local-services/discover").status_code == 403
+
+
+# ---- 版本从哪儿读(插件详情页页头、连接页那一行) --------------------------------------
+
+
+def _version_said(**said: Any) -> None:
+    """测试插件回答 service_version 的那一份(替身在插件里,不碰真 ComfyUI)。"""
+    data = data_dir_for(PACKAGE_ID)
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "version.json").write_text(json.dumps(said), encoding="utf-8")
+    (data / "version-request.json").unlink(missing_ok=True)
+
+
+def _version_request() -> dict[str, Any]:
+    return json.loads((data_dir_for(PACKAGE_ID) / "version-request.json").read_text(encoding="utf-8"))
+
+
+def test_版本_非托管在跑_把目录_地址和运行状态交给插件_再原样说回来(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    directory = _folder(tmp_path)
+    assert _configure(plugged, instance_id, directory).status_code == 200
+    _version_said(version="0.41.0", source="running", running=True, reason="")
+    plugged.post(f"/api/plugins/instances/{instance_id}/local-service/start")
+    assert _wait_state(plugged, instance_id, "running")["state"] == "running"
+
+    told = plugged.get(f"/api/plugins/instances/{instance_id}/local-service/version")
+    assert told.status_code == 200, told.text
+    assert told.json() == {"current": "0.41.0", "source": "running", "running": True, "reason": ""}
+    asked = _version_request()
+    assert asked["op"] == "service_version"
+    assert asked["directory"] == directory
+    assert asked["url"] == _status(plugged, instance_id)["url"]
+    assert asked["running"] is True, "宿主知道它在跑:插件去问 /system_stats"
+
+
+def test_版本_非托管没在跑_宿主说没在跑_插件仍可读目录里的文件(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    directory = _folder(tmp_path)
+    assert _configure(plugged, instance_id, directory).status_code == 200
+    _version_said(version="0.39.0", source="file", running=False, reason="")
+
+    told = plugged.get(f"/api/plugins/instances/{instance_id}/local-service/version")
+    assert told.status_code == 200, told.text
+    assert told.json() == {"current": "0.39.0", "source": "file", "running": False, "reason": ""}
+    asked = _version_request()
+    assert asked["running"] is False and asked["directory"] == directory, "没在跑:不去问 /system_stats,读文件"
+
+
+def test_版本_插件探测失败_不报错_降级成读不到(plugged, tmp_path: Path) -> None:
+    instance_id = _connection(plugged)
+    assert _configure(plugged, instance_id, _folder(tmp_path)).status_code == 200
+    _version_said(fail=True)
+    told = plugged.get(f"/api/plugins/instances/{instance_id}/local-service/version")
+    assert told.status_code == 200, "版本读不到不该让整页报错"
+    assert told.json() == {"current": "", "source": "", "running": False, "reason": "unreachable"}
+
+
+def test_版本_连一台服务器_没有本机服务那一行也能读_地址从连接配置来(plugged) -> None:
+    created = plugged.post(f"/api/plugins/{PACKAGE_ID}/instances",
+                           json={"name": "连一台", "config": {"server_url": "http://127.0.0.1:8188"}})
+    assert created.status_code == 200, created.text
+    instance_id = created.json()["id"]
+    assert plugged.patch(f"/api/plugins/instances/{instance_id}", json={"enabled": True}).status_code == 200
+    _version_said(version="0.41.0", source="running", running=True, reason="")
+
+    told = plugged.get(f"/api/plugins/instances/{instance_id}/local-service/version")
+    assert told.status_code == 200, told.text
+    assert told.json() == {"current": "0.41.0", "source": "running", "running": True, "reason": ""}
+    asked = _version_request()
+    assert asked["directory"] == "" and asked["url"] == "http://127.0.0.1:8188"
+    assert asked["running"] is None, "连一台服务器:宿主不替它看进程,交给插件问那台服务器"
 
 
 # ---- 起、停、日志 ----------------------------------------------------------------

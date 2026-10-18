@@ -56,6 +56,10 @@ export const installLocalService = (instanceId: string, flavour: string) =>
 /** 取消正在装的:停在手上那一步,下次「接着装」从它开始。正在换版本的也是它(换回原来那一版)。 */
 export const cancelLocalServiceInstall = (instanceId: string) =>
   api<LocalService>(`${base(instanceId)}/install/cancel`, { method: "POST" });
+export type LocalServiceVersion = components["schemas"]["LocalServiceVersionOut"];
+/** 这一份 ComfyUI 现在是什么版本:托管先看安装记录;非托管的问在跑的那台 `/system_stats`,再退回安装目录里的
+ * `comfyui_version.py`(读不到照原因说)。只读、有超时。 */
+export const getLocalServiceVersion = (instanceId: string) => api<LocalServiceVersion>(`${base(instanceId)}/version`);
 export type LocalServiceVersions = components["schemas"]["LocalServiceVersionsOut"];
 /** 让 Mosael 装的那一份:装着哪个版本、上游最新(插件联网查)、能更新到哪个(以及来源)、能回到哪个、有没有被打断没做完的。
  * 只给部署管理员。 */
