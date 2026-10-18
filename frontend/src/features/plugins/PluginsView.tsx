@@ -1087,7 +1087,8 @@ export function ConnectionCard({
             </IconButton>
           )}
           {generates && (
-            <OpenConnectionWorkbench instance={instance} workspaceId={workspaceId} />
+            /* 「打开工作台 / 在 ComfyUI 里打开」:打开的是**这个连接**的界面,地址也从它自己来(见组件头部) */
+            <OpenConnectionWorkbench pkg={pkg} instance={instance} workspaceId={workspaceId} />
           )}
           <ConnectionLibraries
             instance={instance}
