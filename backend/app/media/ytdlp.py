@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -41,7 +41,17 @@ RESOLVE_WORKERS = 6
 RESOLVE_RETRY_PAUSE_SECONDS = 1.0
 
 #: 下载单条的超时。长视频 + 慢网络是常态,给得宽;超时不是"下得慢",是"这条再也不会回来"。
+#:
+#: 这是**整次下载的总时限**(从开始到落地,含重试和合流),不是每块 socket 超时 ——
+#: 后者只管「一块数据多久没来」,一个一直有数据、却永远下不完的流能走一整天。
+#: 到点就中止这一条并用 `urlImportErr_timeout` 说清;用户取消不算超时(见 `YtdlpCancelled`)。
 DOWNLOAD_TIMEOUT_SECONDS = 60 * 60
+
+#: 单条下载落地的大小上限(2 GiB)。和内嵌浏览器那条下载共用同一个数 ——
+#: `contracts/shared-constants.json` 的 `web_download_max_bytes`,由
+#: `tests/test_shared_constants_parity.py` 钉着三处相等。几个小时的 1080p 录像在这个量级;
+#: 再大的不该由「粘一个链接」默默写满素材盘。
+MAX_DOWNLOAD_BYTES = 2_147_483_648
 
 #: YouTube 拿哪个客户端的身份去取流 —— **带不带登录态,答案不一样**。
 #:
@@ -102,6 +112,66 @@ class YtdlpError(RuntimeError):
 
 class YtdlpCancelled(RuntimeError):
     """下载被叫停了(任务被人取消)。**不是失败**:不进 classify,不会被说成一句「下载失败」。"""
+
+
+#: 认得的媒体容器文件头。**只看字节,不看后缀** —— 一个名叫 `.mp4` 的网页就是在这里被挡下的。
+#: 白名单而不是黑名单:认不出来的就不收,而不是「只要看着不像 HTML 就收」。
+_VIDEO_MAGIC = (
+    b"\x1aE\xdf\xa3",  # Matroska / WebM
+    b"FLV\x01",  # FLV
+    b"\x00\x00\x01\xba",  # MPEG-PS
+    b"\x30\x26\xb2\x75\x8e\x66\xcf\x11",  # ASF / WMV
+)
+
+
+def _sniff_media(data: bytes) -> str | None:
+    """按文件头认「这是不是媒体、是视频还是音频」;认不出来返回 None。
+
+    写法照 `web_capture.sniff_image`:各家容器在固定的偏移上留一个签名,读前几十个字节就够。
+    认不得的不猜 —— 猜错的代价是收下一个伪装成视频的东西。
+    """
+    if not data:
+        return None
+    if data.startswith(_VIDEO_MAGIC):
+        return "video"
+    # ISO BMFF:mp4 / mov / m4a / 3gp。brand 在 8..12;M4A 那一族是纯音频。
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return "audio" if data[8:12] in (b"M4A ", b"M4B ", b"F4A ", b"mp4a") else "video"
+    if data.startswith(b"RIFF") and len(data) >= 12:
+        form = data[8:12]
+        if form == b"AVI ":
+            return "video"
+        if form == b"WAVE":
+            return "audio"
+    # MPEG-TS:0x47 起头,之后每 188 字节一个同步字节。
+    if data[:1] == b"\x47" and (len(data) < 189 or data[188:189] == b"\x47"):
+        return "video"
+    if data.startswith(b"OggS") or data.startswith(b"fLaC"):
+        return "audio"
+    if data.startswith(b"FORM") and len(data) >= 12 and data[8:12] in (b"AIFF", b"AIFC"):
+        return "audio"
+    # MP3(ID3 标签或裸帧同步)、AAC 的 ADTS 头。
+    if data.startswith(b"ID3") or (len(data) >= 2 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0):
+        return "audio"
+    return None
+
+
+def _checked_media(path: Path, kind: str) -> Path:
+    """落地之后的最后一道:大小和文件头。**对不上就删掉并拒**,不让它进素材库。
+
+    大小这条在进度回调里已经拦过一次(`max_filesize` + 首次回调);这里量的是真正落地的字节 ——
+    分片 / 合流出来的文件可能和报出来的总数不一样。
+    """
+    size = path.stat().st_size
+    if size > MAX_DOWNLOAD_BYTES:
+        path.unlink(missing_ok=True)
+        raise YtdlpError("urlImportErr_tooLarge", max_gb=round(MAX_DOWNLOAD_BYTES / 1024**3, 1))
+    with path.open("rb") as handle:
+        found = _sniff_media(handle.read(64))
+    if found is None or (kind == "video" and found != "video"):
+        path.unlink(missing_ok=True)
+        raise YtdlpError("urlImportErr_notMedia")
+    return path
 
 
 @contextmanager
@@ -311,6 +381,29 @@ def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> Remot
     )
 
 
+class _CapturedLog:
+    """收下 yt-dlp 的屏幕消息。
+
+    有些中止**不是异常**:HTTP 下载器发现 Content-Length 超过 `max_filesize` 时只是
+    `to_screen(... Aborting.)` 然后返回 False,调用方拿到的 info 一切正常、只是文件不在。
+    传 `logger` 之后 `to_screen` 会把这些话送到这里(见 YoutubeDL.to_screen),落地时据此
+    把它们说成「太大」而不是「下载报成功但没找到文件」。
+    """
+
+    def __init__(self) -> None:
+        self.lines: list[str] = []
+
+    def _take(self, message: object) -> None:
+        text = str(message)
+        if text.strip():
+            self.lines.append(text)
+
+    debug = _take
+    info = _take
+    warning = _take
+    error = _take
+
+
 def download(
     url: str,
     *,
@@ -320,6 +413,7 @@ def download(
     cookie_file: Path | None = None,
     max_height: int = 0,
     referer: str = "",
+    headers: Mapping[str, str] | None = None,
     should_stop: Callable[[], bool] | None = None,
 ) -> Path:
     """把一条下到 `target_dir`,返回落地的文件路径。
@@ -335,22 +429,41 @@ def download(
     `referer`:这条地址是从哪个页面里找到的(内嵌浏览器「下载页面里的视频」)。很多站点的视频直链防盗链,
     不带它只回 403。平台页面交给站点解析器时不传 —— 解析器自己知道该带什么。
 
+    `headers`:resolver 从页面里带出来的其它必需请求头(User-Agent 之类)。`referer` 单独一项,
+    因为它是「从哪一页来」这件事的通用写法;两者都有时以 `headers` 里明写的 Referer 为准。
+
     `should_stop`:每次进度回调问一次「还要不要接着下」(任务被取消时答「不要」),答不要就中止并抛
     `YtdlpCancelled`。yt-dlp 认的中止方式正是在进度回调里抛 DownloadCancelled。
     """
     import yt_dlp
 
     target_dir.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + DOWNLOAD_TIMEOUT_SECONDS
+    seen_output = _CapturedLog()
+    #: 为什么主动中止(超时 / 超大小)。抛 `DownloadCancelled` 之后 yt-dlp 会把它包成 DownloadError,
+    #: 光看异常类型分不出来,所以在这儿留一句。
+    aborted: list[str] = []
+
+    def abort(reason: str) -> None:
+        from yt_dlp.utils import DownloadCancelled
+
+        aborted.append(reason)
+        raise DownloadCancelled()
 
     def hook(status: dict[str, Any]) -> None:
+        # 用户取消优先:取消不是失败,也不该被说成超时。
         if should_stop is not None and should_stop():
             from yt_dlp.utils import DownloadCancelled
 
             raise DownloadCancelled()
+        if time.monotonic() >= deadline:
+            abort("timeout")
+        total = status.get("total_bytes") or status.get("total_bytes_estimate") or 0
+        if total and total > MAX_DOWNLOAD_BYTES:
+            abort("tooLarge")
         if on_progress is None:
             return
         if status.get("status") == "downloading":
-            total = status.get("total_bytes") or status.get("total_bytes_estimate") or 0
             done = status.get("downloaded_bytes") or 0
             fraction = (done / total) if total else 0.0
             on_progress(min(0.95, fraction), str(status.get("_percent_str") or "").strip())
@@ -364,6 +477,11 @@ def download(
         "noplaylist": True,  # 用户勾的是具体条目;这里再展开一次列表就是重复下载
         "outtmpl": str(target_dir / "%(title).120B [%(id)s].%(ext)s"),
         "progress_hooks": [hook],
+        #: yt-dlp 的屏幕消息(包括它自己在头部阶段因过大而放弃那一句)收进这里,见 _CapturedLog。
+        "logger": seen_output,
+        #: yt-dlp 自己的上限(按它报出来的文件大小先跳过)。我们另有一条:进度回调里第一次看到
+        #: 超限就停,落地之后再量一次 —— 分片流和报不准的站点靠后两条兜住。
+        "max_filesize": MAX_DOWNLOAD_BYTES,
         "socket_timeout": 30,
         "retries": 3,
         "extractor_args": _youtube_extractor_args(cookie_file),
@@ -371,8 +489,11 @@ def download(
     }
     if cookie_file is not None:
         options["cookiefile"] = str(cookie_file)
+    request_headers = {str(key): str(value) for key, value in (headers or {}).items()}
     if referer:
-        options["http_headers"] = {"Referer": referer}
+        request_headers.setdefault("Referer", referer)
+    if request_headers:
+        options["http_headers"] = request_headers
     if kind == "audio":
         options["format"] = "bestaudio/best"
     else:
@@ -392,11 +513,44 @@ def download(
             # 叫停引起的中止 yt-dlp 可能包了几层才抛出来;问一句「是不是我们叫停的」比认异常类型稳。
             if should_stop is not None and should_stop():
                 raise YtdlpCancelled() from exc
+            if aborted:
+                raise _abort_error(aborted[-1]) from exc
+            if time.monotonic() >= deadline:
+                raise _abort_error("timeout") from exc
+            if _said_too_large(seen_output):
+                raise _abort_error("tooLarge") from exc
             raise _failure(exc, issued) from exc
 
+    try:
+        landed = _landed_file(path, target_dir)
+    except YtdlpError:
+        #: 不是异常的中止:yt-dlp 发现文件超过 max_filesize,只打印一句就返回了。
+        if _said_too_large(seen_output):
+            raise _abort_error("tooLarge") from None
+        raise
+    if time.monotonic() >= deadline:
+        # 下载 / 合流刚好在 deadline 之后才回来:这一条不再收下。
+        landed.unlink(missing_ok=True)
+        raise _abort_error("timeout")
+    return _checked_media(landed, kind)
+
+
+def _said_too_large(output: _CapturedLog) -> bool:
+    """yt-dlp 说过「文件比 max-filesize 大」吗(它有时不抛异常)。"""
+    return any("larger than max-filesize" in line.lower() for line in output.lines)
+
+
+def _abort_error(reason: str) -> YtdlpError:
+    """主动中止的那一句:超大小 / 超时各自说清,不混成「取不到」。"""
+    if reason == "tooLarge":
+        return YtdlpError("urlImportErr_tooLarge", max_gb=round(MAX_DOWNLOAD_BYTES / 1024**3, 1))
+    return YtdlpError("urlImportErr_timeout", minutes=max(1, DOWNLOAD_TIMEOUT_SECONDS // 60))
+
+
+def _landed_file(path: Path, target_dir: Path) -> Path:
+    """真正落地的那个文件:后处理换过扩展名(合流、抽音轨)时 prepare_filename 给的是原名。"""
     if path.is_file():
         return path
-    # 后处理换过扩展名(合流、抽音轨)时 prepare_filename 给的是原名。按 id 找回真正落地的那个。
     stem = path.stem
     for candidate in sorted(target_dir.glob(f"{glob_escape(stem)}.*")):
         if candidate.is_file():
@@ -432,6 +586,7 @@ _REASONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("urlImportErr_formatMismatch", ("requested format is not available",)),
     ("urlImportErr_drm", ("drm protected",)),
     ("urlImportErr_noMedia", ("no video formats", "no formats found", "no video", "no media", "only images are available")),
+    ("urlImportErr_tooLarge", ("file is larger than max-filesize", "max-filesize")),
     ("urlImportErr_mergeFailed", ("ffmpeg exited", "postprocessing: conversion failed")),
     (
         "urlImportErr_network",

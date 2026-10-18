@@ -10,7 +10,7 @@ from app.api.responses import file_response
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, ImageUrlImportRequest, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
@@ -154,6 +154,7 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     """
     use_cases.ensure_can_import(db, user, body.workspace_id)
     from app.core.i18n import get_current_locale, t
+    from app.domain.assets.from_url import UrlImportError
     from app.domain.assets.from_url import probe_url as probe
     from app.media.ytdlp import YtdlpError
 
@@ -170,6 +171,9 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     except YtdlpError as exc:
         # 出口才翻:领域抛的是原因 key,这里按请求方的 Accept-Language 渲染。
         raise HTTPException(status_code=422, detail=t(exc.key, get_current_locale(), **exc.params)) from exc
+    except UrlImportError as exc:
+        # 守卫拦下的地址、resolver 自己抓页面时被拦的那一跳 —— 已经是给人看的话。
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "title": listing.title,
         "is_playlist": listing.is_playlist,
@@ -211,6 +215,28 @@ def import_from_url(body: UrlImportRequest, db: Tx, user: CurrentUser) -> Job:
     except sharing.NotUsableError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (UrlImportError, BrowserDomainError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/assets/import-image-url", response_model=AssetOut)
+def import_image_from_url(body: ImageUrlImportRequest, db: Tx, user: CurrentUser) -> Asset:
+    """贴一条图片直链,收进素材库。
+
+    复用截图那条路的三道闸:出站检查(每一跳)、40 MiB 上限、文件头认格式。落盘/探测/缩略图
+    走 `importer.import_binary_asset`;出处记成 `source_url`。同步完成 —— 一张图不值得为它排
+    一个后台任务,用户点完就该在素材库里看到。
+    """
+    from app.domain.assets.from_url import UrlImportError, import_image_url
+    from app.domain.assets.web_capture import WebCaptureError
+
+    use_cases.ensure_can_import(db, user, body.workspace_id)
+    try:
+        return import_image_url(
+            db, workspace_id=body.workspace_id, project_id=body.project_id, url=body.url, name=body.name,
+        )
+    except WebCaptureError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    except UrlImportError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

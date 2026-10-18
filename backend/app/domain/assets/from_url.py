@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import shutil
 import threading
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -28,12 +28,14 @@ from urllib.parse import urlsplit
 import httpx
 from sqlalchemy.orm import Session
 
-from app.media.scratch import URL_IMPORT, scratch_dir
+from app.media.scratch import URL_IMPORT, WEB_DOWNLOAD, scratch_dir
 from app.core import outbound_guard
+from app.core.http_retry import RetryingClient
+from app.core.outbound_guard import Origin
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
-from app.domain.assets import register_file_asset
+from app.domain.assets import register_file_asset, web_capture, web_download
 from app.domain.assets.source_url import remember_asset_source
 from app.domain.assets.web_capture import PAGE_VIDEO, WebSource, remember_web_source
 from app.domain.jobs import (
@@ -46,7 +48,7 @@ from app.domain.jobs import (
     say,
     start_job,
 )
-from app.media import ytdlp
+from app.media import resolvers, ytdlp
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +130,17 @@ def _item(item: dict[str, Any]) -> dict[str, str]:
     return chosen
 
 
+def _resolve(url: str) -> resolvers.ResolvedMedia | None:
+    """问一次 resolver。被出站检查拦下时,把这句「为什么、怎么放行」转成导入这一侧的话。
+
+    resolver 认不出来是正常回答(`None`),不在这里兜异常 —— 那会把守卫拦下的地址也吞成「不认识」。
+    """
+    try:
+        return resolvers.resolve(url)
+    except outbound_guard.OutboundBlocked as exc:
+        raise UrlImportError.relay(exc) from exc
+
+
 class _StopFlag:
     """登记成任务的「子进程」:取消任务时总线调它的 kill()(见 jobs.kill_job_child),下载在下一次进度回调停下。"""
 
@@ -175,6 +188,14 @@ def _run(job_id: str) -> None:
             title = str(item.get("title") or item.get("url") or "")
             page_url = str(item.get("page_url") or "")
             try:
+                #: 探测时问过一次,下载这一条再问一次:链接可能是直接粘进来、没走过探测的,
+                #: 而且探测到下载之间页面可以变。认不出来就退回 yt-dlp 的地址。
+                resolved = _resolve(str(item["url"]))
+                download_url = resolved.url if resolved is not None else str(item["url"])
+                ensure_public_link(download_url)
+                extra_headers: dict[str, str] = dict(resolved.headers) if resolved is not None else {}
+                resolved_referer = str(extra_headers.pop("Referer", extra_headers.pop("referer", "")) or "")
+
                 def report(fraction: float, _text: str, index: int = index, title: str = title) -> None:
                     # 整批的进度 = 已完成的条数 + 当前这条的进度。只报当前条的话,进度条会在
                     # 每条开头掉回 0;只报条数的话,一条 20 分钟的下载看起来像卡住了。
@@ -186,19 +207,20 @@ def _run(job_id: str) -> None:
                         say(live, "jobMsg_urlImportItem", n=index + 1, total=total, title=title[:40])
 
                 path = ytdlp.download(
-                    item["url"],
+                    download_url,
                     kind=kind,
                     target_dir=workdir,
                     on_progress=report,
                     cookie_file=cookie_file,
                     max_height=max_height,
                     # 平台页面(地址就是页面本身)交给站点解析器,不替它加请求头。
-                    referer=page_url if page_url and page_url != item["url"] else "",
+                    referer=resolved_referer or (page_url if page_url and page_url != download_url else ""),
+                    headers=extra_headers or None,
                     should_stop=stop.event.is_set,
                 )
             except ytdlp.YtdlpCancelled:
                 break
-            except ytdlp.YtdlpError as exc:
+            except (ytdlp.YtdlpError, UrlImportError) as exc:
                 failed += 1
                 # 原因**本来就是现成的**:ytdlp.classify 已经把「HTTP Error 403」这类翻成了
                 # 「站点拒绝了匿名取流,请选择已登录的浏览器档案」。它此前只进日志,而用户看到的
@@ -319,6 +341,114 @@ def ensure_public_link(url: str) -> None:
         return
 
 
+#: 认得的图片格式 → 落盘扩展名(与 web_capture 那份同一组,那边是私有的 _EXTENSIONS)。
+_IMAGE_EXTENSIONS = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/avif": ".avif",
+}
+
+
+class _ChunkReader:
+    """把 httpx 的字节迭代器包成 `save_capped` 认的「有 read() 的流」——不先把整份读进内存。"""
+
+    def __init__(self, chunks) -> None:
+        self._chunks = iter(chunks)
+        self._buffer = b""
+
+    def read(self, size: int) -> bytes:
+        while len(self._buffer) < size:
+            try:
+                self._buffer += next(self._chunks)
+            except StopIteration:
+                break
+        chunk, self._buffer = self._buffer[:size], self._buffer[size:]
+        return chunk
+
+
+def import_image_url(
+    db: Session,
+    *,
+    workspace_id: str,
+    project_id: str | None,
+    url: str,
+    name: str | None = None,
+):
+    """贴一条图片直链,把那张图收进素材库(内嵌浏览器采集之外的第二个入口)。
+
+    闸和截图那条路**一模一样**,只是字节的来源从「客户端交上来」换成「我们自己按这个地址取」:
+    出站检查(每一跳)、40 MiB 上限(`web_capture.MAX_CAPTURE_BYTES`)、文件头认格式(不信后缀,
+    也不全信 Content-Type)。落盘、探测、缩略图交给所有素材共用的 `importer.import_binary_asset`;
+    出处记成 `source_url` —— 它确实是「从某个地址下载来的那份文件」。
+
+    取的过程是**边收边数**:超过上限当场停并删掉半截文件,不会把一个几百 MB 的地址整个读进内存。
+    """
+    from app.domain.assets.importer import AssetFileTypeError, import_binary_asset
+
+    ensure_public_link(url)
+    workdir = scratch_dir(WEB_DOWNLOAD)
+    target = workdir / "image"
+    try:
+        with RetryingClient(origin=Origin.GIVEN, follow_redirects=True, max_retries=2, timeout=30.0) as client:
+            with client.stream("GET", url, headers={"Accept": "image/*,*/*;q=0.8"}) as response:
+                response.raise_for_status()
+                content_type = str(response.headers.get("content-type") or "").split(";")[0].strip().lower()
+                #: 明摆着是网页 / JSON 的,不用把正文下完再拒;其余交给文件头 —— 有些图床给的是
+                #: `application/octet-stream`,信 Content-Type 会把它们误伤。
+                if content_type in ("text/html", "application/xhtml+xml", "application/json", "text/xml", "application/xml"):
+                    raise web_capture.WebCaptureError("webCaptureErr_notImage", status=415)
+                try:
+                    web_download.save_capped(
+                        _ChunkReader(response.iter_bytes()), target, limit=web_capture.MAX_CAPTURE_BYTES,
+                    )
+                except web_capture.WebCaptureError as exc:
+                    if exc.key == "webDownloadErr_tooLarge":
+                        #: 同一个上限,说成截图那条路那句「最多 40 MB」—— 不是下载那条的 GB。
+                        raise web_capture.WebCaptureError(
+                            "webCaptureErr_tooLarge", status=413,
+                            max_mb=max(1, web_capture.MAX_CAPTURE_BYTES // (1024 * 1024)),
+                        ) from exc
+                    raise
+        data = target.read_bytes()
+        if not data:
+            raise web_capture.WebCaptureError("webDownloadErr_empty", name="image")
+        mime = web_capture.sniff_image(data)
+        if mime is None:
+            raise web_capture.WebCaptureError("webCaptureErr_notImage", status=415)
+        filename = f"image-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}{_IMAGE_EXTENSIONS[mime]}"
+        try:
+            asset = import_binary_asset(
+                db,
+                workspace_id=workspace_id,
+                project_id=project_id,
+                data=data,
+                original=filename,
+                content_type=mime,
+                source="downloaded",
+                name=(name or "").strip()[:200] or None,
+            )
+        except AssetFileTypeError as exc:
+            raise web_capture.WebCaptureError("webCaptureErr_notImage", status=415) from exc
+        remember_asset_source(asset, url)
+        return asset
+    except outbound_guard.OutboundBlocked as exc:
+        #: 重定向跳到私网也是这一句(GuardedTransport 每一跳都判)。
+        raise UrlImportError.relay(exc) from exc
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status in (404, 410):
+            raise UrlImportError("urlImportErr_notFound") from exc
+        if status in (401, 403, 412):
+            raise UrlImportError("urlImportErr_forbidden") from exc
+        raise UrlImportError("urlImportErr_other", detail=f"HTTP {status}") from exc
+    except httpx.HTTPError as exc:
+        raise UrlImportError("urlImportErr_network") from exc
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int = 0, actor: str | None):
     """这个链接后面有什么(只读元数据)。带了浏览器档案就借它的登录态去探。
 
@@ -330,6 +460,19 @@ def probe_url(url: str, *, workspace_id: str, profile_id: str = "", start: int =
     from app.media import ytdlp
 
     ensure_public_link(url)
+    resolved = _resolve(url.strip())
+    if resolved is not None:
+        #: 页面 → 媒体地址:命中就不问 yt-dlp 要清单了。**它只给这一条**,不是播放列表。
+        ensure_public_link(resolved.url)
+        return ytdlp.RemoteListing(
+            title=resolved.title,
+            is_playlist=False,
+            entries=[ytdlp.RemoteEntry(
+                id="", url=resolved.url, title=resolved.title, duration=None, uploader="", thumbnail="",
+            )],
+            truncated=False,
+            start=1,
+        )
     workdir = scratch_dir(URL_IMPORT) if profile_id else None
     try:
         cookie_file = _cookie_file(workspace_id, profile_id, workdir, actor=actor) if workdir is not None else None

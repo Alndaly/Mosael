@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link2, Loader2 } from "lucide-react";
+import { ImagePlus, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { importFromUrl, listBrowserProfiles, probeUrl, type UrlProbe, type Workspace } from "@/api/client";
@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { Truncate } from "@/components/ui/truncate";
+import { FailureCard, rawFailureFields } from "@/components/failure/FailureCard";
+import { importImageUrl } from "@/features/media/importImageUrl";
 import { knownBestHeight, qualityHint, qualityOptions } from "@/features/media/urlImportQuality";
 import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -43,6 +45,10 @@ export function UrlImportDialog({
   const t = useI18n();
   const [url, setUrl] = React.useState("");
   const [listing, setListing] = React.useState<UrlProbe | null>(null);
+  //: 探测失败时的原话。失败卡里还要指一条出路(图片直链走下面那个入口),所以不能只 toast 一下。
+  const [probeError, setProbeError] = React.useState("");
+  //: 贴图片直链的入口。和视频链接分开两格:一个是「页面 → 清单」,一个是「就是这张图」。
+  const [imageUrl, setImageUrl] = React.useState("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [kind, setKind] = React.useState<"video" | "audio">("video");
   //: 画质上限。0 = 不限 —— 4K 素材动辄几个 GB,而多数剪辑只需要 1080p。
@@ -66,6 +72,8 @@ export function UrlImportDialog({
       setUrl("");
       setListing(null);
       setSelected(new Set());
+      setProbeError("");
+      setImageUrl("");
     }
   }, [open]);
 
@@ -74,12 +82,16 @@ export function UrlImportDialog({
     // 表现为"点了下一批还停在原地"。
     mutationFn: (from: number = 1) => probeUrl(workspace.id, url.trim(), optionalValue(profileId), from),
     onSuccess: (result) => {
+      setProbeError("");
       setListing(result);
       // 单条视频就是用户想要的那一条,直接勾上 —— 让他为一条结果再点一次是纯仪式。
       // 播放列表则一个都不勾:几百条默认全选,一次误点就是几十 GB。
       setSelected(new Set(result.is_playlist ? [] : result.entries.map((entry) => entry.url)));
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      setProbeError(error.message);
+      toast.error(error.message);
+    },
   });
 
   const start = useMutation({
@@ -97,6 +109,21 @@ export function UrlImportDialog({
     onSuccess: () => {
       onOpenChange(false);
       toast.success(t("urlImportQueued").replace("{n}", String(selected.size)));
+      onQueued?.();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const importImage = useMutation({
+    mutationFn: () =>
+      importImageUrl({
+        workspace_id: workspace.id,
+        project_id: projectId ?? null,
+        url: imageUrl.trim(),
+      }),
+    onSuccess: () => {
+      onOpenChange(false);
+      toast.success(t("urlImportImageDone"));
       onQueued?.();
     },
     onError: (error: Error) => toast.error(error.message),
@@ -153,6 +180,45 @@ export function UrlImportDialog({
           >
             {t("urlImportProbe")}
           </Button>
+        </form>
+
+        {probeError && (
+          <FailureCard
+            status="failed"
+            title={t("urlImportProbeFailed")}
+            {...rawFailureFields(probeError, t("urlImportProbeFailed"))}
+            //: 失败处指一条出路:很多「不支持/取不到」其实就是把图片直链粘到了视频那一格。
+            fix={{ steps: [{ text: t("urlImportTryDirect") }] }}
+          />
+        )}
+
+        <form
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2.5 gap-y-2 border-t border-divider pt-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (imageUrl.trim()) importImage.mutate();
+          }}
+        >
+          <label className="col-span-full text-ui-sm font-medium" htmlFor="url-import-image">
+            {t("urlImportImageLabel")}
+          </label>
+          <Input
+            id="url-import-image"
+            className="min-w-0 flex-1"
+            value={imageUrl}
+            placeholder={t("urlImportImagePlaceholder")}
+            onChange={(event) => setImageUrl(event.target.value)}
+          />
+          <Button
+            type="submit"
+            variant="outline"
+            className="shrink-0"
+            loading={importImage.isPending}
+            disabled={!imageUrl.trim()}
+          >
+            <ImagePlus size={13} /> {t("urlImportImageStart")}
+          </Button>
+          <p className="col-span-full m-0 text-ui-2xs text-muted-foreground">{t("urlImportImageHint")}</p>
         </form>
 
         {(profiles.data ?? []).length > 0 && (

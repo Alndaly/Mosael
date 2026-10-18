@@ -228,6 +228,15 @@ class AnalyzeAssetResponse(ApiModel):
     used_transcript: bool = False
 
 
+class ImageUrlImportRequest(ApiModel):
+    """贴一条图片直链,收进素材库(和内嵌浏览器采集那条路同一套闸)。"""
+
+    workspace_id: str
+    project_id: str | None = None
+    url: str = Field(min_length=4, max_length=2000)
+    name: str | None = Field(default=None, max_length=200)
+
+
 class UrlProbeRequest(ApiModel):
     workspace_id: str
     url: str = Field(min_length=4, max_length=2000)

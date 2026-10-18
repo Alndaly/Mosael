@@ -174,6 +174,27 @@ class Test取不到时说清是哪一种原因:
         assert "不支持" in chinese.json()["detail"]
 
 
+def test_geo_blocked_points_at_the_outbound_proxy_not_a_profile_proxy() -> None:
+    """地区受限时该改的是**这台机器的出站代理**。
+
+    浏览器档案的代理只作用于内嵌浏览器(见 electron/publish/accountViews.setProxy);「从链接导入」
+    的 yt-dlp 走的是 core/outbound_proxy 那条路(见 media/ytdlp._guarded)。此前那句让人「为浏览器
+    档案配置代理」——照做也不会影响这条路,是一句照做无效的误导。
+    """
+    from app.core.i18n import MESSAGES
+
+    zh = MESSAGES["urlImportErr_geoBlocked"]["zh"]
+    en = MESSAGES["urlImportErr_geoBlocked"]["en"]
+    # 准确说法:出站代理(部署设置里那个),不是档案代理。
+    assert "出站代理" in zh
+    assert "outbound proxy" in en.lower()
+    # 说清浏览器那条路走哪个 —— 但不再叫人去配「浏览器档案代理」。
+    assert "内嵌浏览器" in zh
+    assert "embedded browser" in en.lower()
+    assert "为浏览器档案配置" not in zh
+    assert "for the browser profile" not in en.lower()
+
+
 def test_titles_with_glob_characters_can_still_be_found() -> None:
     """视频标题里 `[]` 很常见(`[Official MV]`)。不转义的话,找回落地文件那一步会匹配不到自己。"""
     assert ytdlp.glob_escape("Song [Official MV]") == "Song [[]Official MV[]]"
@@ -209,7 +230,8 @@ def test_quality_is_a_ceiling_not_an_exact_match(monkeypatch: pytest.MonkeyPatch
     import tempfile
 
     tmp = Path(tempfile.mkdtemp())
-    (tmp / "t.mp4").write_bytes(b"x")
+    #: 落地文件要过文件头嗅探(见 test_url_import_guards):这里给一个真的 mp4 头。
+    (tmp / "t.mp4").write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2mp41")
     fake = types.ModuleType("yt_dlp")
     fake.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "yt_dlp", fake)
@@ -249,7 +271,7 @@ def test_audio_ignores_the_quality_ceiling(monkeypatch: pytest.MonkeyPatch) -> N
     import tempfile
 
     tmp = Path(tempfile.mkdtemp())
-    (tmp / "t.m4a").write_bytes(b"x")
+    (tmp / "t.m4a").write_bytes(b"\x00\x00\x00\x18ftypM4A \x00\x00\x02\x00M4A mp42isom")
     fake = types.ModuleType("yt_dlp")
     fake.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "yt_dlp", fake)
