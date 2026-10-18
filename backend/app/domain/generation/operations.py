@@ -405,10 +405,15 @@ def _create_generation_job(
         kind="ai_generation",
         created_by=created_by,
         payload={
-            #: 没写提示词时写模型叫什么(主名:表单入口是表单标题,ADR 0045),不写模型 id —— 表单入口的 id 是 `路径#app`
-            #: **存完整原文,不在这里切**(此前是 [:80],界面再 Truncate 也回不到全文)。回执卡/任务卡/任务中心
-            #: 都用既有 `Truncate` 收窄,悬停看全文;只有真要长度上限的出口(如系统通知)才截,且带省略号。
-            "subject": (prompt or prompt_for_provider(request_text)) or (resolved.row.display_name or model),
+            #: **只放用户自己写的那一句**(提示词原文);没写就是空串。
+            #: 此前没写提示词时落的是 `prompt_for_provider(request_text)` —— 那是**喂给模型的那整段**
+            #: (连进来的文档正文、3D 参考说明、素材描述全接在后面),不是「用户要什么」;再没有补充时
+            #: 还退化成模型名。那两样都不该占着 `subject`。
+            #: 空的时候由出口自己说清:回执卡 / 「本对话的后台任务」 / 任务中心按**当前语言** +
+            #: 任务种类 + 素材份数拼一句;给模型读的那句(`receipts`)同理。落库的字符串不带语言。
+            #: **存完整原文,不在这里切**(此前是 [:80],界面再 Truncate 也回不到全文)。要收窄的是
+            #: 「存哪种内容」,不是长度;真要长度上限的出口(系统通知 / 模型上下文)才截,且带省略号。
+            "subject": prompt if prompt.strip() else "",
             #: 任务中心「前往」打开的是这条创作会话(job_catalog 的 record_field,ADR 0055 §9)。
             "session_id": session.id,
             "provider_profile_id": provider_profile.id if provider_profile else None,

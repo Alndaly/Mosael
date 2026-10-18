@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CheckCircle2, ListChecks, Loader2, X } from "lucide-react";
 
 import { cancelJob, topLevelJobsQuery, type JobSummary } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { InspectorCard } from "@/components/layout/InspectorCard";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
@@ -25,17 +26,57 @@ function receiptSessionId(job: JobSummary): string | null {
 }
 
 /**
- * 任务的名字。**生成任务优先读完整提示词**:`payload.subject` 现在存完整原文(旧任务可能只有前 80 字),
- * 而同一份 payload 的 `request.prompt` 一直是原文 —— 列表行要的是「是哪个任务」,不是一句断在 80 字
- * 处的谜语;放不下由 `Truncate` 收,不在这里切。
+ * 任务名字的公共规则 —— 「本对话的后台任务」「任务中心」「回执卡」三处**同一份**,不各写一版。
+ *
+ * 后端把 `payload.subject` 收窄成「只放用户自己写的那句」,没写就是**空串**(不再塞喂给模型的整段
+ * 正文,也不塞模型名)。空的时候由展示层自己说清「这是哪来的」:按**当前语言** + **任务种类**
+ * (useJobKinds 的种类名)+ **素材份数**拼一句;没有份数就只说种类(种类名本来就在行上,不重复)。
+ *
+ * 有内容时**原样**给出:旧任务的 `subject` 可能是整篇,`request.prompt` 一直是完整提示词 ——
+ * 放不下由调用方的 `Truncate` 收,不在这里切。
  */
-function subjectOf(job: JobSummary, fallback: string): string {
+export type JobSubjectTranslator = (key: MessageKey) => string;
+
+/** 这次请求挂了几份素材(生成把它们记在 `request.source_assets` 上)。 */
+export function sourceAssetCount(payload: unknown): number {
+  const request = (payload as { request?: { source_assets?: unknown } } | null | undefined)?.request;
+  const assets = request?.source_assets;
+  return Array.isArray(assets) ? assets.length : 0;
+}
+
+/**
+ * 一个任务的标题。`written` 是用户自己写的那句;空的时候用种类 + 素材份数拼一句。
+ *
+ * @param count 这次挂了几份素材(回执卡从 `source_asset_count` 拿,列表从 `request.source_assets` 数)。
+ */
+export function jobSubjectText(
+  written: unknown,
+  kindLabel: string,
+  t: JobSubjectTranslator,
+  count: number,
+): string | null {
+  const text = typeof written === "string" ? written.trim() : "";
+  if (text) return text;
+  //: 目录还没到时种类名是空的:宁可晚一拍(目录到了会重渲),也不先说半句「从 2 个素材 」。
+  if (count > 0 && kindLabel) {
+    return t("jobSubjectFromAssets").replace("{count}", String(count)).replace("{kind}", kindLabel);
+  }
+  //: 没有份数:种类名已经单独显示在行上 —— 返回 null,别把「AI 生成」再说一遍。
+  return null;
+}
+
+/** `jobSubjectText` 的任务载荷版:先读用户那句(`request.prompt` 是旧任务也能拿到的原文),再读 subject。 */
+export function jobSubjectOf(
+  job: Pick<JobSummary, "payload">,
+  kindLabel: string,
+  t: JobSubjectTranslator,
+): string | null {
   const payload = (job.payload ?? {}) as Record<string, unknown>;
   const request = payload.request as { prompt?: unknown } | undefined;
   const prompt = typeof request?.prompt === "string" ? request.prompt.trim() : "";
-  if (prompt) return prompt;
   const subject = payload.subject;
-  return typeof subject === "string" && subject.trim() ? subject.trim() : fallback;
+  const written = prompt || (typeof subject === "string" ? subject.trim() : "");
+  return jobSubjectText(written, kindLabel, t, sourceAssetCount(payload));
 }
 
 /**
@@ -84,7 +125,7 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
         <ul className="m-0 grid list-none gap-1 p-0">
         {mine.map((job) => {
           const kind = kindOf(job.kind);
-          const subject = subjectOf(job, kind.label);
+          const subject = jobSubjectOf(job, kind.label, t);
           const active = ACTIVE.has(job.status);
           const failed = job.status === "failed";
           const page = jobPage(job, kind);
@@ -102,7 +143,7 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
                   <JobStatusIcon status={job.status} />
                   <JobKindIcon meta={kind} size={12} />
                   <span className="shrink-0 text-ui-2xs text-muted-foreground">{kind.label}</span>
-                  <Truncate className="flex-1">{subject}</Truncate>
+                  {subject ? <Truncate className="flex-1">{subject}</Truncate> : null}
                   <span className="shrink-0 tabular-nums text-ui-2xs text-muted-foreground">
                     {active
                       ? progress > 0

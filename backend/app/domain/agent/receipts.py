@@ -21,9 +21,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import DEFAULT_LOCALE, render_message
+from app.core.i18n import DEFAULT_LOCALE, render_message, tr
 from app.db.models import AgentMessage, AgentSession, GenerationJob, Job, User
 from app.domain.agent import host
+from app.domain.job_catalog import FALLBACK_LABEL_KEY, job_kind
 from app.domain.jobs import CANCELLED, TERMINAL_STATUSES, register_receipt_deliverer
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,28 @@ def _preview(subject: str) -> str:
     return f"{subject[: SUBJECT_PREVIEW_CHARS - 1].rstrip()}…"
 
 
+def _source_asset_count(job: Job) -> int:
+    """这次生成挂了几份素材(`request.source_assets`)。回执只说**份数**,不带正文 —— 那段正文是喂给
+    模型的拼装文本(见 generation.operations._create_generation_job),不是「用户要什么」。"""
+    request = (job.payload or {}).get("request")
+    assets = request.get("source_assets") if isinstance(request, dict) else None
+    return len(assets) if isinstance(assets, list) else 0
+
+
+def _kind_label(kind: str) -> str:
+    """任务种类的名字,**按当前语言**。落库那边只存 kind(见 receipt_payload),这里才翻。"""
+    meta = job_kind(kind)
+    return tr(meta.label_key if meta.kind else FALLBACK_LABEL_KEY)
+
+
+def _fallback_subject(job: Job) -> str:
+    """`subject` 为空(用户没写提示词)时,给模型读的那句自己说清「这是哪来的」:种类 + 素材份数,
+    没有份数就只说种类。按当前语言拼 —— 不往数据里写一句带语言的话。"""
+    label = _kind_label(job.kind)
+    count = _source_asset_count(job)
+    return tr("jobSubject_fromAssets", count=count, kind=label) if count else label
+
+
 def _reason(job: Job) -> str:
     """失败原因。**带 key 的按缺省语言渲染给模型读**,不把渲染结果写进回执 payload ——
     界面在出口用 error_key/error_params 按请求方的语言重翻(见 api/schemas/agent.AgentMessageOut)。
@@ -99,9 +122,11 @@ def _summarize(job: Job) -> str:
     """回执的正文 —— **给模型读的那一句**。界面的任务卡读 payload(按当前语言重排),不读这一句。
 
     名字超过一句的长度时带省略号截到一句:模型要认出是哪个任务,不是把整段提示词再读一遍。
+    用户没写提示词时(`subject` 空)不拿喂给模型的整段正文顶上去:按当前语言 + 任务种类 + 素材份数
+    说清这是哪来的(见 `_fallback_subject`)。
     """
     subject = _subject(job)
-    what = f"「{_preview(subject)}」" if subject else "刚才那个任务"
+    what = f"「{_preview(subject)}」" if subject else f"「{_fallback_subject(job)}」"
     if job.status == "succeeded":
         ids = produced_asset_ids(job)
         # 素材 id 是模型下一步真正要用的东西(插进时间线、当下一次生成的首帧)。
@@ -121,6 +146,9 @@ def receipt_payload(db: Session, job: Job, *, subject: str, asset_ids: list[str]
     `error_key` / `error_params` 是失败原因的唯一来源(带 key 的失败不把渲染好的句子存进来:那句话
     落库就把语言冻死了,而这张卡要在切语言之后仍是当前语言)。`subject` 是完整的 —— 界面用 Truncate,
     不在数据层切。
+
+    `source_asset_count` 是一个**结构**(这次挂了几份素材):`subject` 为空时,界面 / 给模型读的那句
+    拿它和种类名按当前语言自己拼一句。这里不存拼好的句子,也就不把语言冻进库里。
     """
     source = job.payload or {}
     payload: dict[str, Any] = {
@@ -129,6 +157,7 @@ def receipt_payload(db: Session, job: Job, *, subject: str, asset_ids: list[str]
         "kind": job.kind,
         "status": job.status,
         "subject": subject,
+        "source_asset_count": _source_asset_count(job),
         "error_key": str(job.error_key or ""),
         "error_params": dict(job.error_params or {}),
         #: 没有 key 的失败是第三方的原话(我们翻不了),原样带着。

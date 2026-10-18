@@ -3383,6 +3383,27 @@ _JOB_SUBJECT_CHARS = 120
 _JOB_SUBJECT_KEYS = ("subject", "title", "name", "prompt", "text")
 
 
+def _job_kind_label(kind: str) -> str:
+    """任务种类的名字,按**当前语言**(和 `/api/jobs/kinds` 出口那一份同一张表)。"""
+    from app.core.i18n import tr
+    from app.domain.job_catalog import FALLBACK_LABEL_KEY, job_kind
+
+    meta = job_kind(kind)
+    return tr(meta.label_key if meta.kind else FALLBACK_LABEL_KEY)
+
+
+def _job_fallback_subject(kind: str, payload: dict[str, Any]) -> str:
+    """没有用户提示词时(生成任务的 `subject` 是空串)给模型的那一句:种类 + 素材份数;
+    没有份数就只说种类。**模型要认出这是哪个任务,空字符串和整段喂给模型的正文都不行。**"""
+    from app.core.i18n import tr
+
+    label = _job_kind_label(kind)
+    request = payload.get("request")
+    assets = request.get("source_assets") if isinstance(request, dict) else None
+    count = len(assets) if isinstance(assets, list) else 0
+    return tr("jobSubject_fromAssets", count=count, kind=label) if count else label
+
+
 def _job_brief(job: dict[str, Any]) -> dict[str, Any]:
     """列任务时给智能体的那一条:是什么、到哪一步、产出了哪些东西的 id。整份载荷 / 结果用 get_job 看。
 
@@ -3408,6 +3429,9 @@ def _job_brief(job: dict[str, Any]) -> dict[str, Any]:
             subject if len(subject) <= _JOB_SUBJECT_CHARS
             else f"{subject[: _JOB_SUBJECT_CHARS - 1].rstrip()}…"
         )
+    else:
+        #: 「用户没写提示词」不等于「没有任务」:说清是哪一类、从几份素材来的(按当前语言)。
+        brief["subject"] = _job_fallback_subject(str(job.get("kind") or ""), payload)
     #: 产出:结果里叫 *_id / *_ids 的那几格(素材、字幕轨、转写……)—— 智能体接着要用的就是它们。
     produced = {
         key: value for key, value in result.items()

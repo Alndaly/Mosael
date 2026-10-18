@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { FailureCard, failureFields, type FailureFix } from "@/components/failure/FailureCard";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
 import { JobKindIcon, gotoJobPage, jobPage, useJobKinds } from "@/components/jobs/jobKinds";
+import { jobSubjectText } from "@/components/jobs/SessionJobsCard";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -28,6 +29,8 @@ type ReceiptPayload =
       kind?: string;
       status?: string;
       subject?: string;
+      /** 这次挂了几份素材(结构):subject 为空时,卡上用种类 + 份数说清「这是哪来的」。 */
+      source_asset_count?: number;
       undelivered?: boolean;
       error_key?: string;
       error_params?: Record<string, unknown>;
@@ -87,6 +90,8 @@ function ReceiptCard({
   const qc = useQueryClient();
   const { kindOf } = useJobKinds();
   const kind = kindOf(receipt.kind ?? "");
+  //: 用户写的那句;没写就按种类 + 素材份数拼一句(份数由后端结构化带出,见 receipts.receipt_payload)。
+  const subject = jobSubjectText(receipt.subject, kind.label, t, receipt.source_asset_count ?? 0);
   const failed = receipt.status === "failed";
   const [detailJob, setDetailJob] = React.useState<JobSummary | null>(null);
 
@@ -177,10 +182,10 @@ function ReceiptCard({
     <span className="flex min-w-0 max-w-[320px] items-center gap-1.5 text-ui-xs text-muted-foreground">
       <JobKindIcon meta={kind} size={12} />
       <span className="shrink-0">{kind.label}</span>
-      {receipt.subject ? (
+      {subject ? (
         <>
           <span className="shrink-0" aria-hidden>·</span>
-          <Truncate className="flex-1">{receipt.subject}</Truncate>
+          <Truncate className="flex-1">{subject}</Truncate>
         </>
       ) : null}
     </span>

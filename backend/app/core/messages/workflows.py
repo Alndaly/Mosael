@@ -519,6 +519,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobKind_shot_breakdown": {"zh": "拆镜头", "en": "Shot breakdown"},
     "jobKind_scrub_metadata": {"zh": "清除元数据", "en": "Strip metadata"},
     "jobKind_other": {"zh": "任务", "en": "Task"},
+    #: 任务没写提示词时,给模型读的那句 / 界面里用种类名 + 素材份数说清「这是哪来的」。
+    #: **只在出口拼**(回执 / 简报),落库的 subject 不带这句话,也就不带语言。
+    "jobSubject_fromAssets": {"zh": "从 {count} 个素材 {kind}", "en": "{kind} from {count} assets"},
     "jobMsg_boardWriteQueued": {"zh": "写字排队中", "en": "Writing queued"},
     "jobMsg_boardWriteRunning": {"zh": "正在写", "en": "Writing"},
     "jobMsg_boardWriteDone": {"zh": "写好了", "en": "Written"},

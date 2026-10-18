@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
+import { jobSubjectOf } from "@/components/jobs/SessionJobsCard";
 import { gotoJobPage, JobKindIcon, jobPage, queryKeysAffectedBy, shouldAnnounce, useJobKinds } from "@/components/jobs/jobKinds";
 import { relativeTime } from "@/lib/time";
 import { IconButton } from "@/components/ui/icon-button";
@@ -86,14 +87,16 @@ export function TaskCenter({ workspaceId }: { workspaceId: string }) {
   const finished = React.useMemo(() => {
     const groups = new Map<string, { job: JobSummary; count: number }>();
     for (const job of all.filter((item) => !ACTIVE.has(item.status))) {
-      const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
+      //: 名字走和行上同一条规则(用户写的那句;没写就按种类 + 素材份数拼)—— 空串不再当成一件事
+      //: 去合并:两条「只挂了素材」的生成是不同的任务,份数不同也该分开。
+      const subject = jobSubjectOf(job, kindOf(job.kind).label, t) ?? "";
       const key = `${job.kind}|${job.status}|${subject}|${job.error ?? job.message}`;
       const seen = groups.get(key);
       if (seen) seen.count += 1;
       else groups.set(key, { job, count: 1 });
     }
     return [...groups.values()].slice(0, 12);
-  }, [all]);
+  }, [all, kindOf, t]);
 
   // 点任务行 → 打开该 job 的执行详情弹层(状态 + 事件时间线)。
   const openJob = (job: JobSummary) => {
@@ -280,7 +283,8 @@ function JobRow({ job, count = 1, onOpen, onCancel }: { job: JobSummary; count?:
   const running = ACTIVE.has(job.status);
   const status = job.status;
   const failed = !running && status === "failed";
-  const subject = String((job.payload as Record<string, unknown> | null)?.subject ?? "");
+  //: 用户自己写的那句;没写就按种类 + 素材份数拼一句(见 SessionJobsCard.jobSubjectOf)。
+  const subject = jobSubjectOf(job, meta.label, t);
   return (
     <div
       className="grid cursor-pointer grid-cols-[36px_minmax(0,1fr)] items-start gap-3 rounded-lg px-2 py-4 hover:bg-secondary"

@@ -451,6 +451,8 @@ export const otherUi = {
   chatJobsOpenTask: "View task",
   chatJobsGoto: "Open result",
   chatJobsGotoGeneration: "Open generation record",
+  //: 生成任务没写提示词时,任务名自己说清「这是哪来的」:种类名 + 素材份数(见 components/jobs/SessionJobsCard)。
+  jobSubjectFromAssets: "{kind} from {count} assets",
   chatReceiptRetrieve: "Retrieve again (no extra charge)",
   chatReceiptWaiting: "goes to the agent when this turn ends",
   chatSubagentSteps: "{n} steps",
