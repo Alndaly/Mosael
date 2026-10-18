@@ -1,9 +1,11 @@
 import React from "react";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
-import { onlineManager, useMutation, useQuery } from "@tanstack/react-query";
-import { Download, ExternalLink, Link2, Loader2, Search } from "lucide-react";
+import { onlineManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download, ExternalLink, Link2, Loader2, Search, X } from "lucide-react";
 
 import {
+  cancelJob,
+  getJob,
   resolveModelLink,
   searchModelSources,
   startModelDownload,
@@ -19,7 +21,7 @@ import { useModelLibrary } from "@/components/generation/useModelLibrary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Truncate } from "@/components/ui/truncate";
-import { InlineConfirm, PanelNote, useJobWatch, useOnJobDone } from "@/features/plugins/workbench/workbenchParts";
+import { InlineConfirm, jobDone, PanelNote, useJobWatch, useOnJobDone } from "@/features/plugins/workbench/workbenchParts";
 import type { WorkbenchTarget } from "@/features/plugins/workbench/workbenchSession";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
@@ -61,6 +63,8 @@ function confidenceOf(candidate: Candidate): Confidence {
  *   **只给页面**,不主动给直链。算不出哈希时插件会给一句话说清「所以只是同名」,原样显示;
  * - 确认里写明下到哪台机器的哪个目录、叫什么名字,走 ComfyUI-Manager 时那几件要先知道的事(令牌、进度、取消)和这台服务器
  *   下载走哪条路(模型库报的);下完由调用方刷新下拉、重新检查。
+ * - **正在下载时那一行上有「取消」**(走任务中心同一条 `cancelJob`):取消了就说清「已取消,没下完的部分已删掉」;
+ *   任务在点下去的那一刻刚好结束的,说「已经结束了,不用取消」,不当成取消失败吓人。
  * - **工作流写了地址时**:把那个地址本身完整地摆在「下载」那一行的下面(放不下就折行;不用悬停浮层)。另外只在**能确认是同一个文件**时列别的
  *   平台:工作流声明了 SHA256,拿去问插件(搜索的 `confirmed` 只在这一条上给),平台元数据里也是这个 SHA256 的才算;
  *   没有 SHA256(也没有该平台的明确 id)就不查、不列 —— 不靠文件名相近冒充。查询失败 / 超时 / 离线只是那一块不出现,
@@ -162,16 +166,62 @@ export function ModelDownload({
       setJobId(created.id);
     },
   });
+  const qc = useQueryClient();
+  //: 取消没成功时那一句该说什么。**任务在请求到达前刚好结束不是取消失败** —— 那一下本来也没有可取消的东西,
+  //: 用一句错误去吓人只会让人以为出了别的事(任务的终态由那一行自己说)。
+  const [cancelNote, setCancelNote] = React.useState<"" | "failed" | "ended">("");
+  const cancel = useMutation({
+    mutationFn: () => cancelJob(jobId!),
+    onSuccess: (stopped) => {
+      setCancelNote("");
+      //: 取消接口回的就是取消后的那一条:直接写进这一行盯着的那份缓存,不必等下一轮轮询。
+      qc.setQueryData(["jobs", "workbench", jobId], stopped);
+    },
+    onError: async () => {
+      try {
+        const fresh = await getJob(jobId!);
+        qc.setQueryData(["jobs", "workbench", jobId], fresh);
+        setCancelNote(jobDone(fresh) ? "ended" : "failed");
+      } catch {
+        //: 连它现在是什么都读不回来:只能照实说这次取消没成。
+        setCancelNote("failed");
+      }
+    },
+  });
 
   if (jobId) {
     const status = job.data?.status ?? "queued";
-    if (status === "failed" && job.data) {
-      return <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(job.data, t("workbenchDownloadFailed"))} />;
-    }
+    const stopped = status === "cancelled";
+    const body = status === "failed" && job.data
+      ? <FailureCard size="inline" lines={2} title={t("workbenchDownloadFailed")} {...failureFields(job.data, t("workbenchDownloadFailed"))} />
+      : (
+        <PanelNote
+          action={stopped || status === "succeeded" ? undefined : (
+            <Button variant="ghost" size="xs" className="shrink-0" loading={cancel.isPending}
+                    aria-label={t("workbenchDownloadCancelLabel").replace("{name}", saveAs || filename)}
+                    onClick={() => cancel.mutate()}>
+              <X size={12} />
+              {t("cancel")}
+            </Button>
+          )}
+        >
+          {/* 取消在两条路上不是同一件事:本机那条路半截文件当场删掉;Manager 那条路是那台机器自己在下,
+              Mosael 只是不再等(插件已经说清了),不能跟着说「已删掉」。 */}
+          {stopped ? t(route === "manager" ? "workbenchDownloadCancelledManager" : "workbenchDownloadCancelled")
+            : status === "succeeded" ? doneLabel
+            : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
+        </PanelNote>
+      );
     return (
-      <PanelNote>
-        {status === "succeeded" ? doneLabel : `${t("workbenchDownloading")} ${job.data?.message ?? ""}`}
-      </PanelNote>
+      <div className="grid gap-2">
+        {body}
+        {cancelNote === "ended" && <PanelNote>{t("workbenchDownloadCancelEnded")}</PanelNote>}
+        {cancelNote === "failed" && (
+          <PanelNote tone="error">
+            {t("workbenchDownloadCancelFailed").replace("{message}", errorText(cancel.error))}
+          </PanelNote>
+        )}
+      </div>
     );
   }
 

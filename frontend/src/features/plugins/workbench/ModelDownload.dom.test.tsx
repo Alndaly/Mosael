@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
   searchModelSources: vi.fn(),
   startModelDownload: vi.fn(),
   getJob: vi.fn(),
+  cancelJob: vi.fn(),
 }));
 vi.mock("@/api/client", () => api);
 vi.mock("@/app/preferences", async () => {
@@ -64,6 +65,18 @@ function renderBlock(props: Partial<React.ComponentProps<typeof ModelDownload>> 
 
 function declared(): HTMLElement | null {
   return document.querySelector<HTMLElement>("[data-declared-url]");
+}
+
+/** 走完「下载 → 确认 → 开始下载」,让这一块进入「正在下载」那一行(取消就在那一行上)。 */
+async function startDownload(route = "local") {
+  api.getModelLibrary.mockResolvedValue(library(route));
+  api.resolveModelLink.mockResolvedValue({ source: "civitai", url: "https://civitai.com/api/download/models/7",
+                                           filename: NAME, exists: false, uses_token: false, note: "" });
+  renderBlock({ url: "https://civitai.com/api/download/models/7" });
+  fireEvent.click(await screen.findByRole("button", { name: `下载 ${NAME}` }));
+  const confirm = await screen.findByRole("group");
+  fireEvent.click(within(confirm).getByRole("button", { name: "开始下载" }));
+  await waitFor(() => expect(api.startModelDownload).toHaveBeenCalled());
 }
 
 beforeEach(() => {
@@ -248,5 +261,56 @@ describe("多平台下载", () => {
         workspace_id: "w1", url: "https://civitai.com/api/download/models/7", folder: FOLDER, filename: NAME,
       });
     });
+  });
+});
+
+// --- 三、下载中可以取消 -------------------------------------------------------------
+
+describe("下载中取消", () => {
+  it("正在下载的那一行有「取消」;点它 -> 取消这个任务,那一行说清「已取消 + 没下完的部分已删掉」", async () => {
+    api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
+    await startDownload();
+    const cancel = await screen.findByRole("button", { name: `取消下载 ${NAME}` });
+    //: 复用仓里的 Button(基础件),不是原生 <button>:原生按钮进不了 design/nativeButtons 那一套
+    expect(cancel.tagName).toBe("BUTTON");
+    expect(cancel.className, "仓里 Button 的样子").toContain("inline-flex");
+    fireEvent.click(cancel);
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-1"));
+    const said = await screen.findByText(/已取消/);
+    expect(said.textContent).toContain("没下完的部分已删掉");
+    expect(screen.queryByRole("button", { name: `取消下载 ${NAME}` }), "取消了就不该还能再点一次").toBeNull();
+  });
+
+  it("任务其实已经结束了:说「已经结束了,不用取消」,不冒充成取消失败吓人", async () => {
+    let status = "running";
+    api.getJob.mockImplementation(async () => ({ id: "job-1", status, message: "" }));
+    api.cancelJob.mockRejectedValue(new Error("任务已结束,无法取消"));
+    await startDownload();
+    //: 点下去的那一刻它刚好做完(取消的请求晚到):再读一次任务,看到终态
+    status = "succeeded";
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-1"));
+    expect(await screen.findByText(/已经结束了.*不用取消/), "这句话要在").toBeTruthy();
+    expect(screen.queryByText(/取消失败/), "已经不是能不能取消的问题了").toBeNull();
+  });
+
+  it("取消真的没成功:说「取消失败」并带上原因,不说成任务已结束", async () => {
+    api.cancelJob.mockRejectedValue(new Error("连不上后端"));
+    await startDownload();
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-1"));
+    const said = await screen.findByText(/取消失败/);
+    expect(said.textContent).toContain("连不上后端");
+    expect(screen.queryByText(/已经结束了/), "任务还在跑,别把它说成结束了").toBeNull();
+  });
+
+  it("经 ComfyUI-Manager 下载的:取消只是不再等,那台机器上的下载还会继续 —— 不说「已删掉」", async () => {
+    api.cancelJob.mockResolvedValue({ id: "job-1", status: "cancelled", message: "" });
+    await startDownload("manager");
+    fireEvent.click(await screen.findByRole("button", { name: `取消下载 ${NAME}` }));
+    await waitFor(() => expect(api.cancelJob).toHaveBeenCalledWith("job-1"));
+    const said = await screen.findByText(/已取消/);
+    expect(said.textContent, "那台机器自己在下,Mosael 删不了它的半截").toContain("还会继续");
+    expect(said.textContent).not.toContain("已删掉");
   });
 });

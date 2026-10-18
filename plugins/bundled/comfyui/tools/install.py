@@ -6,7 +6,9 @@
    `<名字>.mosael-part`,下完用硬链接挂上正式的名字(目标已存在就失败,不覆盖);按字节报进度;取消时删掉**自己的**
    半截文件;开始前查剩余空间。装了 Manager 也走这条:它看得到进度、停得下、令牌走请求头(不拼进地址、不留在
    Manager 的任务记录里),Manager 那条路一样都做不到(沙盒实测:本机 ComfyUI 装着 Manager,下载走了 Manager,
-   没有进度 —— 和指南、下载框说的「这台电脑上的看得到进度」对不上);
+   没有进度 —— 和指南、下载框说的「这台电脑上的看得到进度」对不上)。
+   残留的半截:取消 / 失败走 `except` 删;**进程被强杀、后端重启留下的那一份删不了**,所以同一个名字下一次
+   开始下载时**先删掉它**(在连之前,不靠「打开时截断」)—— 这样那一次就算拿不到响应也不会留下没人认领的文件。
 3. **ComfyUI-Manager** 的装模型接口(`/v2/manager/version` 回 V4 时,ComfyUI 在另一台机器上):那台机器自己去下。不报
    字节进度,也没有停下单个任务的接口;它的安全策略只在 ComfyUI 监听回环地址、或 `network_mode = personal_cloud` 时
    才放行 —— 被拒时历史里只记一个 failed,原因在日志里(`/internal/logs/raw`),这里把它找出来说人话,并记下来;
@@ -341,6 +343,11 @@ def via_local(directory: Path, url: str, folder: str, filename: str, locale: str
     part = directory / f"{filename}.mosael-part"
     if final.exists():
         raise ComfyError(_same_name(locale, folder, filename))
+    #: **上一次没下完留下的半截,在开始之前先删掉。** 取消和失败由下面的 except 自己删;进程被强杀、
+    #: 后端重启这两种走不到那里,`.mosael-part` 就留在了模型目录里。以前只能靠 `part.open("wb")` 截断,
+    #: 可那要等真的拿到响应 —— 这一次 404、要登录、或者又取消,旧的半截就继续没人认领。先删掉,这一次
+    #: 就算在拿到响应之前就失败,目录里也是干净的;正式的名字照旧只在核对通过之后才挂上。
+    part.unlink(missing_ok=True)
     response, _final_url = _open_download(url, locale)
     written = 0
     try:
