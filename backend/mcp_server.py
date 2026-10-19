@@ -2794,11 +2794,13 @@ def sleep(seconds: float) -> dict[str, Any]:
 
 
 @tool(effect="reads")
-def translate_text(text: str, target: str, engine: str = "google", workspace_id: str = "") -> dict[str, Any]:
+def translate_text(text: str, target: str, engine: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Runs directly: translate text into a target language.
 
     target is a language code ("zh", "en", "ja"); the source language is auto-detected.
-    engine is "google" (free, no key needed) or "ai" (uses a configured AI provider).
+    engine is a capability-table id ("builtin:google", "builtin:chat", or a plugin id); leave it
+    empty for the user's default. Old ids ("google", "ai") still work; an unknown one reports
+    what is available rather than silently becoming Google.
     Do NOT use for transcribing audio — that is transcribe_asset.
     """
     from app.api.routes.translate import translate_texts
@@ -2806,9 +2808,10 @@ def translate_text(text: str, target: str, engine: str = "google", workspace_id:
 
     body = _route(
         translate_texts,
+        # engine 原样交出去:旧 id 由能力表一处归一(capabilities.canonical_id),认不出的由它报错。
         body=TranslateRequest(
             workspace_id=workspace_id or _default_workspace_id(), texts=[text], target_lang=target,
-            engine=engine if engine in ("google", "ai") else "google",
+            engine=engine,
         ),
         out=TranslateResponse,
     )

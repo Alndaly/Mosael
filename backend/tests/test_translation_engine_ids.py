@@ -57,7 +57,7 @@ def _stub_google(monkeypatch) -> list[tuple[str, str]]:
 
 
 def test_智能体的翻译工具按默认翻_不再502(monkeypatch) -> None:
-    """这是真机上那条路:工具默认发 `engine="google"`。以前它必然 502,一次都翻不成。"""
+    """这是真机上那条路。此前工具默认发老 id `engine="google"`,必然 502,一次都翻不成。"""
     import mcp_server
 
     client = fresh_client()
@@ -82,6 +82,84 @@ def test_智能体传老id_google_也不再502(monkeypatch) -> None:
 
     assert mcp_server.translate_text("hi", "zh", engine="google") == {"text": "[zh]hi"}
     assert calls == [("hi", "zh")]
+
+
+# ── ①' 参数**原样**交出去:归一只有能力表那一处(canonical_id)──────────────────────
+
+
+def _spy_engine(monkeypatch) -> list[str]:
+    """截住工具发给路由的那份请求体,只看 `engine` —— 不落库、不出网。"""
+    import mcp_server
+
+    sent: list[str] = []
+
+    def fake_route(_fn, *, out=None, **params):
+        sent.append(params["body"].engine)
+        return {"translations": [f"[{params['body'].target_lang}]"]}
+
+    monkeypatch.setattr(mcp_server, "_route", fake_route)
+    return sent
+
+
+def test_智能体不传engine_传下去的是空串而不是硬编码google(monkeypatch) -> None:
+    """空串 = 「按默认」(和字幕面板 / 工作流节点同一个语义)。以前这里默认是 `"google"`,
+    于是「不点名」被悄悄说成了「点名 Google」。"""
+    import inspect
+
+    import mcp_server
+
+    client = fresh_client()
+    _workspace(client)
+    sent = _spy_engine(monkeypatch)
+
+    assert inspect.signature(mcp_server.translate_text).parameters["engine"].default == ""
+    assert mcp_server.translate_text("你好", "en", workspace_id="w") == {"text": "[en]"}
+    assert sent == [""], sent
+
+
+def test_智能体点名builtin_chat_不被改写成google(monkeypatch) -> None:
+    """用户点名「AI 翻译」时,能力表得听到 `builtin:chat` 才能选到它;静默改成 `google` 就是换掉他的选择。"""
+    import mcp_server
+
+    client = fresh_client()
+    _workspace(client)
+    sent = _spy_engine(monkeypatch)
+
+    mcp_server.translate_text("你好", "en", engine="builtin:chat", workspace_id="w")
+
+    assert sent == ["builtin:chat"], sent
+
+
+def test_智能体点名翻译插件id_不被改写成google(monkeypatch) -> None:
+    """插件连接 id(认领 `translation` 的那家)大小写敏感、也不在内置名单里 —— 一样要原样交出去。"""
+    import mcp_server
+
+    client = fresh_client()
+    _workspace(client)
+    sent = _spy_engine(monkeypatch)
+
+    mcp_server.translate_text("你好", "en", engine="Plugin-AbC123", workspace_id="w")
+
+    assert sent == ["Plugin-AbC123"], sent
+
+
+def test_智能体点名不存在的引擎_报错而不是悄悄换成google(monkeypatch) -> None:
+    """以前改成 `google`:他用一个打错的 id 请求「用某某翻译」,拿回来的是 Google 的译文,没有任何迹象。
+    现在原样交出去,由能力表说清「没有叫「nope」的翻译引擎」并列出能用的。"""
+    import mcp_server
+
+    client = fresh_client()
+    ws = _workspace(client)
+    _as_this_client(monkeypatch, client)
+    _stub_google(monkeypatch)
+
+    with pytest.raises(ValueError) as caught:
+        mcp_server.translate_text("hi", "en", engine="nope", workspace_id=ws)
+
+    message = str(caught.value)
+    assert "502" in message and "nope" in message, message
+    #: 不是「换成 Google 翻出来了」。
+    assert "Google" in message
 
 
 def test_工作流翻译节点_空引擎与老id_都落到内置Google(monkeypatch) -> None:
