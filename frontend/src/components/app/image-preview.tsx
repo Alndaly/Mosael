@@ -85,6 +85,17 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
     if (visible) closeButton.current?.focus({ preventScroll: true });
   }, [visible]);
 
+  //: **灯箱是此刻唯一的活动源。** 它盖住整页,底下那些就地播放的媒体(素材引用里的一条音频、
+  //: 画板/工具结果里的视频)如果还在响,就变成两路声音一起放 —— 打开灯箱时先停掉灯箱外的所有
+  //: `<video>`/`<audio>`。只暂停、不恢复:关掉灯箱不该让刚才那段声音又自己响起来。
+  React.useEffect(() => {
+    if (!visible) return;
+    for (const media of document.querySelectorAll<HTMLMediaElement>("video, audio")) {
+      if (media.closest(".PhotoView-Portal")) continue;
+      if (!media.paused) media.pause();
+    }
+  }, [visible]);
+
   //: 手写 DOM 的界面(笔记编辑器里的图片、Markdown 正文里的图)从这里进来,见 image-preview-request。
   React.useEffect(() => {
     const onRequest = (event: Event) => openImagePreview((event as CustomEvent<ImagePreviewRequest>).detail);
@@ -120,6 +131,12 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
   //: 用的是 provider 自己这份 index —— 翻页时 `onIndexChange` 和库在同一个批次里更新,两边看的是同一张。
   const saveItem = images[index];
   const saveId = saveItem?.assetId;
+  //: 灯箱里**同一时刻只有一个活动源**。react-photo-view 的 PhotoSlider 会把当前项左右相邻的那几项
+  //: 一起挂出来(prev/current/next,见它源码里的 `slice(index-1, index+2)`),给每一项视频都渲染一个
+  //: `autoPlay` 的播放器就变成:点开第一个视频,第二个视频的声音也跟着响(维护者报的)。
+  //: 所以只有**当前这一项 + 灯箱开着**才挂播放器,其余视频项留一个空画框;翻页/关掉时旧播放器随
+  //: React 卸载被 pause 并摘掉 src(见 media-playback 里 VideoPlayer 的清理),不会留在后台响。
+  const currentSrc = images[index]?.src;
 
   return (
     <ImagePreviewContext.Provider value={value}>
@@ -205,16 +222,18 @@ export function ImagePreviewProvider({ children }: { children: React.ReactNode }
                   {/* 直接用共用播放器,不借画板那个包装:画板那层管的是「离屏就卸掉」,
                       而这里是屏幕正中唯一的那个播放器,没有"离屏"可言。 */}
                   <div data-video-frame="" style={fitVideo(videoSizes[item.src], viewport)}>
-                    <VideoPlayer
-                      assetSrc={item.src}
-                      autoPlay
-                      className="rounded-lg"
-                      onNaturalSize={(width, height) =>
-                        setVideoSizes((current) =>
-                          current[item.src]?.width === width && current[item.src]?.height === height
-                            ? current
-                            : { ...current, [item.src]: { width, height } })}
-                    />
+                    {visible && item.src === currentSrc ? (
+                      <VideoPlayer
+                        assetSrc={item.src}
+                        autoPlay
+                        className="rounded-lg"
+                        onNaturalSize={(width, height) =>
+                          setVideoSizes((current) =>
+                            current[item.src]?.width === width && current[item.src]?.height === height
+                              ? current
+                              : { ...current, [item.src]: { width, height } })}
+                      />
+                    ) : null}
                   </div>
                 </div>
               )

@@ -348,6 +348,21 @@ export function VideoPlayer({
   const t = useI18n();
   const ref = React.useRef<HTMLVideoElement | null>(null);
   const { playing, muted, at, total, setTotal, toggle, toggleMute, bind } = usePlayback(ref, { muted: startMuted, endAt });
+  const src = assetSrc ?? assetFileUrl(assetId ?? "");
+
+  //: **卸掉就该闭嘴。** 把 <video> 从 DOM 里摘掉,浏览器不保证立刻停 —— 元素还可能被留着继续解码。
+  //: 灯箱翻页 / 关掉时旧播放器就是这么被换下去的;不在这里 pause + 摘源,后台会留一路声音。
+  //: 元素由挂载后的 effect 闭包抓着(那时 ref 一定已经接上),不依赖卸载时的 ref.current(可能已是 null)。
+  React.useEffect(() => {
+    const media = ref.current;
+    if (!media) return;
+    //: StrictMode 的「挂 → 卸 → 挂」会把 effect 重跑一遍:卸的那一次摘了 src,挂回来要补上。
+    if (media.getAttribute("src") !== src) media.setAttribute("src", src);
+    return () => {
+      media.pause();
+      media.removeAttribute("src");
+    };
+  }, [ref, src]);
 
   //: 报给调用方,不自己存 —— 谁关心谁留着。effect 而不是在回调里直接叫,是因为 at/playing
   //: 是 usePlayback 的状态:在它更新之前叫,报出去的是上一拍的数。
@@ -359,7 +374,7 @@ export function VideoPlayer({
     <div className={cn("group/player relative h-full w-full overflow-hidden bg-black", className)}>
       <video
         ref={ref}
-        src={assetSrc ?? assetFileUrl(assetId ?? "")}
+        src={src}
         preload="metadata"
         autoPlay={autoPlay}
         poster={poster}
