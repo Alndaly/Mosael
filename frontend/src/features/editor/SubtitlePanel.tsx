@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AudioLines, BookPlus, Bold, Clock, Languages, Loader2, Palette, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { AudioLines, BookPlus, Bold, Clock, Languages, Loader2, Palette, Sparkles, TextCursorInput, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -378,13 +378,16 @@ export function SubtitlePanel({
                     <Sparkles />
                   </IconButton>
                 )}
+                {/* 「在播放头加字幕」:读作**把文字插到播放头这个点**。此前是 `Plus` ——
+                    一个泛化的「加」,和左边「从逐字稿生成」的 `Sparkles` 像同一类动作,
+                    看不出插在哪儿。`TextCursorInput` 是文字 + 输入光标,正好是「插入点」。 */}
                 <IconButton
                   className={ACTION_ICON}
                   label={t("addSubtitleAtPlayhead")}
                   hint={t("addSubtitleAtPlayheadHint")}
                   onClick={onAddSubtitle}
                 >
-                  <Plus />
+                  <TextCursorInput />
                 </IconButton>
               </div>
             </div>

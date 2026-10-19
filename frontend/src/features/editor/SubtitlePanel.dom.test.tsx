@@ -114,13 +114,14 @@ describe("去配音页的入口", () => {
 function renderAll() {
   const onSetStyle = vi.fn();
   const onPreviewStyle = vi.fn();
+  const onAddSubtitle = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
       <SubtitlePanel
         sequence={sequenceWith(["第一条"])}
         onSetText={vi.fn()}
-        onAddSubtitle={vi.fn()}
+        onAddSubtitle={onAddSubtitle}
         onGenerate={vi.fn()}
         onDeleteClip={vi.fn()}
         onDub={vi.fn()}
@@ -132,7 +133,7 @@ function renderAll() {
       />
     </QueryClientProvider>,
   );
-  return { ...view, onSetStyle, onPreviewStyle };
+  return { ...view, onSetStyle, onPreviewStyle, onAddSubtitle };
 }
 
 /** 面板上的 7 个动作,按它们自己的名字找。 */
@@ -352,6 +353,65 @@ describe("顶部动作区是图标按钮", () => {
       expect(hint, name).toContain(name);
       expect(hint, name).toContain(explanation);
     }
+  });
+});
+
+/**
+ * 维护者:「播放头加花字那个 icon 换个」。
+ *
+ * 「在播放头加字幕」原先用 `Plus`:一个泛化的「加」,和同排「从逐字稿生成」的 `Sparkles`
+ * 读起来像同一类(都是「往这条轨上加内容」),它要表达的是**在播放头这个位置插入一条字幕**。
+ * 换成 `TextCursorInput`(文字 + 输入光标):读作「在这一处输入文字」,也就是插入点。
+ * 同排的图标不许重复 —— 两处同一颗图标,一排动作就分不出谁是谁。
+ */
+describe("「在播放头加字幕」的图标", () => {
+  /** 按钮里那颗 SVG 的 lucide 名字(`lucide lucide-text-cursor-input …`)。 */
+  function iconName(button: HTMLElement): string | undefined {
+    const svg = button.querySelector("svg");
+    return [...(svg?.classList ?? [])].find((name) => name.startsWith("lucide-") && name !== "lucide");
+  }
+
+  it("不再是泛化的 `Plus`,而是读得出「在这里插入文字」的那一颗", () => {
+    renderAll();
+    const button = screen.getByRole("button", { name: "addSubtitleAtPlayhead" });
+    expect(button.querySelector("svg.lucide-plus"), "`Plus` 是泛化的「加」,读不出插在播放头").toBeNull();
+    expect(iconName(button)).toBe("lucide-text-cursor-input");
+  });
+
+  it("和同排其它动作的图标都不重复", () => {
+    renderAll();
+    const row = [
+      ...actionButtons(),
+      screen.getByRole("button", { name: "subtitleStyle" }),
+    ];
+    const names = row.map((button) => {
+      const name = iconName(button);
+      expect(name, button.getAttribute("aria-label") ?? "").toBeTruthy();
+      return name;
+    });
+    // 8 颗动作、8 个不同的图标:集合大小 = 按钮数,没有任何两颗重样。
+    expect(names).toHaveLength(8);
+    expect(new Set(names).size).toBe(row.length);
+    // 也钉住是**哪 8 颗**:换图标时只换那一颗,同排其余七颗原样不动。
+    expect(new Set(names)).toEqual(new Set([
+      "lucide-sparkles",
+      "lucide-text-cursor-input",
+      "lucide-languages",
+      "lucide-audio-lines",
+      "lucide-file-input",
+      "lucide-file-output",
+      "lucide-book-plus",
+      "lucide-palette",
+    ]));
+  });
+
+  it("行为没变:点它仍然插入一条,读屏名字仍是「在播放头加字幕」", async () => {
+    const { onAddSubtitle } = renderAll();
+    const button = screen.getByRole("button", { name: "addSubtitleAtPlayhead" });
+    expect(button).toHaveAttribute("aria-label", "addSubtitleAtPlayhead");
+    expect(button.textContent).toBe("");
+    await userEvent.click(button);
+    expect(onAddSubtitle).toHaveBeenCalledOnce();
   });
 });
 
