@@ -54,6 +54,29 @@ _HUB_UNREACHABLE = (
 )
 
 
+def _failure_from(exc: BaseException) -> tuple[str, dict[str, str], str]:
+    """一次下载失败 → (卡片上那句话的 key/原话, 模板参数, 「详情」里的原文)。
+
+    **原文不进主句。** 第三方库的英文异常(截图里是 `LocalEntryNotFoundError: An error occurred…`)
+    此前被拼进卡片那一句,而卡片只显示两行 —— 一截就只剩「An error…」,人话和能行动的那半句
+    都被挤没了。现在它留在 `error` 里:界面的「详情」读的就是这一栏。
+
+    三类原因:我们自己抛的带 key(翻得出人话);连不上下载源的那几种(说清去哪儿换源);
+    其余第三方库的原文(翻不了,只当详情,不摆进主句)。
+    """
+    from app.core.i18n import is_message_key
+
+    message, params = failure_message(exc)
+    raw = str(exc).strip()
+    if is_message_key(message):
+        return message, params, raw
+    if any(marker in message for marker in _HUB_UNREACHABLE):
+        from app.ai.runtime import config as tts_config
+
+        return "runtimeErr_hubUnreachable", {"endpoint": str(tts_config.get().hf_endpoint)}, raw
+    return "runtimeErr_f5DownloadFailed", {}, raw
+
+
 @dataclass(frozen=True)
 class F5Model:
     id: str
@@ -520,21 +543,8 @@ def _run_download(model_id: str) -> None:
         # 清空 —— 而界面只看 status,于是"下载中"一消失就变回「下载这个文件」按钮,失败原因
         # 一个字都没露出来。用户看到的正是:加载一会儿没了,像根本没开始。
         #
-        # 原因分三种:我们自己抛的带 key(翻得出人话);第三方库的原文(翻不了,原样摆出来);
-        # 连不上下载源的那几种(能说清下一次动哪儿 —— 换源再试)。
-        from app.core.i18n import is_message_key
-
-        message, params = failure_message(exc)
-        if not is_message_key(message):
-            detail = message.strip()
-            if any(marker in detail for marker in _HUB_UNREACHABLE):
-                from app.ai.runtime import config as tts_config
-
-                message, params = (
-                    "runtimeErr_hubUnreachable",
-                    {"endpoint": str(tts_config.get().hf_endpoint), "detail": detail[:220]},
-                )
-            else:
-                message, params = "runtimeErr_f5DownloadFailed", {"detail": detail}
+        # 原因分三种:我们自己抛的带 key(翻得出人话);连不上下载源的那几种(能说清去哪儿
+        # 换源);其余第三方库的原文(翻不了 —— 它进 `error`,不进主句)。
+        message, params, raw = _failure_from(exc)
         _failed_at[model_id] = _now_iso()
-        set_live(model_id, status="failed", message=message, params=params, error=str(exc)[:400])
+        set_live(model_id, status="failed", message=message, params=params, error=raw[:400])

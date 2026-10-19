@@ -22,21 +22,25 @@
 from __future__ import annotations
 
 from app.ai.runtime import tts_models
+from app.core.i18n import render_message
 from app.core.text import strip_ansi
 
 
 def test_ansi_colour_codes_never_reach_the_message() -> None:
+    """颜色码不进主句;原文(带不带颜色码)只留在参数 `detail` 里 —— 它是详情/日志的料。"""
     coloured = (
         "Traceback (most recent call last):\n"
         "\x1b[1;35mhuggingface_hub.errors.LocalEntryNotFoundError\x1b[0m: "
         "\x1b[35mAn error happened while trying to locate the file on the Hub\x1b[0m"
     )
 
-    message = tts_models._explain_failure(coloured)
+    message, params = tts_models._failure_reason(coloured)
+    shown = render_message(message, "zh", params)
 
-    assert "\x1b" not in message, f"转义序列进了界面:{message!r}"
-    assert "[1;35m" not in message and "[0m" not in message, f"颜色码被当成文字画出来了:{message}"
-    assert "LocalEntryNotFoundError" in message
+    assert "\x1b" not in shown, f"转义序列进了界面:{shown!r}"
+    assert "[1;35m" not in shown and "[0m" not in shown, f"颜色码被当成文字画出来了:{shown}"
+    assert "LocalEntryNotFoundError" in params["detail"], "原文要留着 —— 详情/日志只有它说得出是哪一层出的错"
+    assert "LocalEntryNotFoundError" not in shown, f"原文又进了主句:{shown}"
 
 
 def test_strip_ansi_leaves_ordinary_text_alone() -> None:

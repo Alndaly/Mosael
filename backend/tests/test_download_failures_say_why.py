@@ -21,11 +21,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
 from app.ai.runtime.workers import tts as tts_worker
+from app.ai.runtime import config as tts_config
 from app.ai.runtime import tts_models
+from app.core.i18n import render_message
 WORKER = tts_models.WORKER_PATH
 
 
@@ -50,9 +53,7 @@ def test_the_worker_exits_non_zero_so_the_host_can_tell(tmp_path) -> None:
 
 
 def test_the_failure_message_carries_the_real_error(monkeypatch) -> None:
-    """卡片上那句话,要来自子进程说的那句,而不是一句猜测。"""
-    captured: dict[str, str] = {}
-
+    """卡片上那句话,要说出子进程报的那个源和原因,而不是一句猜测。"""
     class _Child:
         def __init__(self, *a, **k) -> None:
             self.stdin = _Stdin()
@@ -89,9 +90,14 @@ def test_the_failure_message_carries_the_real_error(monkeypatch) -> None:
 
     live = tts_models._store.get("f5-tts")
     # 卡片上存的是文案 key + 参数(出口按读的人的语言翻),所以按渲染出来的那句断言。
-    from app.core.i18n import render_message
-
+    assert live is not None and live.status == "failed"
     shown = render_message(live.message, "zh", live.params)
-    captured["message"] = shown
-    assert live.status == "failed"
-    assert "hf-mirror" in shown, f"把子进程说的话丢了,只剩猜测:{shown}"
+    #: 主句点名的是**这次配置的源**;子进程的原话进「详情」(params 的 detail)和完整日志。
+    #: 这条用例不走设置接口,别继承同一进程里别的用例改过的下载源(实测那条会把源改成
+    #: ModelScope,而这里的假 stderr 说的是 hf-mirror)。
+    assert str(tts_config.get().hf_endpoint) in shown, f"没说清是哪个源:{shown}"
+    assert "LocalEntryNotFoundError" in live.params["detail"], f"子进程说的那句丢了:{live.params}"
+    assert "LocalEntryNotFoundError" not in shown, f"原文又进了主句:{shown}"
+    log_path = Path(live.params["log"])
+    assert log_path.is_file(), f"完整日志没落盘:{log_path}"
+    assert "LocalEntryNotFoundError" in log_path.read_text(encoding="utf-8"), "日志里没有子进程的原话"

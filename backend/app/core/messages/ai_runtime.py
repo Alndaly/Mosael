@@ -379,8 +379,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The download reported success, but the checkpoint is not on disk",
     },
     "runtimeErr_f5DownloadFailed": {
-        "zh": "语言包下载失败:{detail}",
-        "en": "The language pack download failed: {detail}",
+        "zh": "语言包下载失败,没有装完整。请重试一次;若仍然失败,请反馈。",
+        "en": "The language pack download failed and nothing was installed. Try again; if it still fails, please report it.",
     },
     "runtimeErr_f5DownloadInterrupted": {
         "zh": "上一次下载没有完成(下载进程已经不在了,通常是应用退出或后端重启)。盘上还留着没下完的部分,再点一次会从头下载。",
@@ -410,13 +410,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "下载没有完成,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。\n完整日志:{log}",
         "en": "The download did not finish and the process left no reason. Try once more; if it keeps happening, please report it.\nFull log: {log}",
     },
+    #: **主句只说人话,第三方库的英文原文不进这里**(它的去处是状态记录的 `error`,见
+    #: ai/runtime/f5_models._failure_from)。卡片只有两行:原文一截就只剩「An error…」,把
+    #: 能行动的那半句挤没了。指路也不许写「上面的」—— 配音 tab 里根本没有下载源设置,
+    #: 模型下载源只在「管理 → 引擎 → 下载源」那一行(部署管理员)。
     "runtimeErr_hubUnreachable": {
-        "zh": "连不上模型下载源({endpoint}):{detail} —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。",
-        "en": "Could not reach the model download source ({endpoint}): {detail}. Switch “Model download source” above and try again (when a mirror stalls, the official source often works).",
+        "zh": "连不上模型下载源({endpoint})。在「管理 → 引擎 → 下载源」把「模型下载源」换一个,再点「重试」。",
+        "en": "Could not reach the model download source ({endpoint}). Switch “Model download source” under Admin → Engines → Download sources, then click Retry.",
     },
     "runtimeErr_hubUnreachableLog": {
-        "zh": "连不上模型下载源({endpoint}):{detail} —— 在上面的「模型下载源」换一个(镜像下不动时,官方直连往往反而是通的)再重试。\n完整日志:{log}",
-        "en": "Could not reach the model download source ({endpoint}): {detail}. Switch “Model download source” above and try again (when a mirror stalls, the official source often works).\nFull log: {log}",
+        "zh": "连不上模型下载源({endpoint})。在「管理 → 引擎 → 下载源」把「模型下载源」换一个,再点「重试」。\n完整日志:{log}",
+        "en": "Could not reach the model download source ({endpoint}). Switch “Model download source” under Admin → Engines → Download sources, then click Retry.\nFull log: {log}",
     },
     "runtimeErr_failedWithLog": {"zh": "{detail}\n完整日志:{log}", "en": "{detail}\nFull log: {log}"},
     "runtimeErr_ttsWorkerBusy": {

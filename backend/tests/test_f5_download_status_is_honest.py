@@ -136,9 +136,10 @@ def test_retry_does_not_show_the_previous_attempt(monkeypatch: pytest.MonkeyPatc
 
 
 def test_a_connection_failure_says_which_source_and_what_to_do(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    """连不上源的时候,能行动的那半句是「换一个源再试」——不能只剩一条库的英文原文。"""
+    """连不上源的时候,主句说清是哪个源、并指到真能换源的那一页;库的英文原文进 `error`(详情)。"""
     from app.ai.runtime import config as tts_config
     from app.ai.runtime import tts_daemon, tts_models
+    from app.core.i18n import render_message
 
     monkeypatch.setattr(f5_models, "root", lambda: tmp_path)
     monkeypatch.setattr(f5_models, "measured_total", lambda model, blocking=False: (1_000, False))
@@ -164,7 +165,12 @@ def test_a_connection_failure_says_which_source_and_what_to_do(monkeypatch: pyte
     assert live.status == "failed"
     assert live.message == "runtimeErr_hubUnreachable", live.message
     assert live.params["endpoint"] == "https://hf-mirror.com"
-    assert "LocalEntryNotFoundError" in live.params["detail"]
+    #: 原文不再进模板参数/主句:它是「详情」,主句一截就只剩「An error…」。
+    assert "detail" not in live.params, live.params
+    assert "LocalEntryNotFoundError" in live.error, "原文丢了,详情里什么都没得看"
+    shown = render_message(live.message, "zh", live.params)
+    assert "LocalEntryNotFoundError" not in shown, shown
+    assert "hf-mirror.com" in shown and "管理 → 引擎 → 下载源" in shown, shown
     assert f5_models.status(_JA).get("failed_at"), "终态没有时间 —— 界面说不出「最后一次 …」"
 
 
