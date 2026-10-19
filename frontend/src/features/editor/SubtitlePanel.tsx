@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AudioLines, Bold, Clock, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { AudioLines, BookPlus, Bold, Clock, Languages, Loader2, Palette, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ import { capabilityKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { formatTimecode } from "@/lib/time";
-import { PILL } from "@/features/editor/pill";
+import { ACTION_ICON } from "@/features/editor/pill";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
@@ -45,20 +45,6 @@ import { cn } from "@/lib/utils";
 
 //: 下拉里「按默认」那一项的值(OptionPicker 不收空串当值)。发给接口时是空串。
 const DEFAULT_ENGINE = "__default__";
-
-//: 顶部工具条上的胶囊按钮:整颗折到下一行,而不是把自己压窄、把字挤断(面板本来就窄)。
-const ACTION = "shrink-0 whitespace-nowrap";
-
-/**
- * 「字幕样式」的触发键:**和同一排的其它动作同一款**。
- *
- * 它得是一颗 Button —— `DialogTrigger asChild` 借它的样子,按钮的外观归基础件(棘轮
- * design/nativeButtons.test.ts),别为了这一处再手写一颗原生 `<button>`。但 Button 自带
- * `font-medium` 和 16px 图标,而这一排动作是 400 字重、12px 图标:在这里把这两样收回去,
- * 其余(高度、字号、内距、图标与文字的间距、无描边)全由 PILL 与 ACTION 决定 ——
- * 此前它用的是 `size="sm" variant="outline"`,于是这一排里只有它是描边药丸。
- */
-const STYLE_ACTION = cn(PILL, ACTION, "font-normal [&_svg]:size-3");
 
 
 /**
@@ -198,22 +184,36 @@ export function SubtitlePanel({
       >
         <div data-actions-group="generate" className="flex min-w-0 flex-wrap items-center gap-1">
           {onGenerate && (
-            <Hint label={t("subtitleGenerateHint")}>
-              <button type="button" className={cn(PILL, ACTION)} onClick={onGenerate} disabled={generating}>
-                {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
-              </button>
-            </Hint>
+            <IconButton
+              className={ACTION_ICON}
+              label={t("subtitleGenerate")}
+              hint={t("subtitleGenerateHint")}
+              loading={generating}
+              onClick={onGenerate}
+            >
+              <Sparkles />
+            </IconButton>
           )}
-          <button type="button" className={cn(PILL, ACTION)} onClick={onAddSubtitle}>
-            <Plus size={12} /> {t("addSubtitleAtPlayhead")}
-          </button>
+          <IconButton
+            className={ACTION_ICON}
+            label={t("addSubtitleAtPlayhead")}
+            hint={t("addSubtitleAtPlayheadHint")}
+            onClick={onAddSubtitle}
+          >
+            <Plus />
+          </IconButton>
           {subtitles.length > 0 && onApplyTexts && (
             <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
           )}
           {subtitles.length > 0 && onDub && (
-            <button type="button" className={cn(PILL, ACTION)} onClick={() => onDub()}>
-              <AudioLines size={12} /> {t("subtitleDub")}
-            </button>
+            <IconButton
+              className={ACTION_ICON}
+              label={t("subtitleDub")}
+              hint={t("subtitleDubHint")}
+              onClick={() => onDub()}
+            >
+              <AudioLines />
+            </IconButton>
           )}
         </div>
         {(onImportFile || subtitles.length > 0) && (
@@ -223,8 +223,20 @@ export function SubtitlePanel({
           <div data-actions-group="files" className="flex min-w-0 flex-wrap items-center gap-1">
             {onImportFile && <SubtitleFiles sequence={sequence} onImport={onImportFile} importing={importingFile} />}
             {subtitles.length > 0 && (
-              <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants} className={cn(PILL, ACTION)}
-                label={noteStrings.saveAll} />
+              <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants}
+                label={noteStrings.saveAll}
+                trigger={({ open, disabled, label }) => (
+                  <IconButton
+                    className={ACTION_ICON}
+                    label={label}
+                    hint={noteStrings.saveAllSubtitles}
+                    disabled={disabled}
+                    disabledReason={disabled ? noteStrings.nothingToSave : undefined}
+                    onClick={open}
+                  >
+                    <BookPlus />
+                  </IconButton>
+                )} />
             )}
           </div>
         )}
@@ -232,10 +244,11 @@ export function SubtitlePanel({
           <Dialog open={styleOpen} onOpenChange={setStyleOpen}>
             <DialogTrigger asChild>
               {/* 位置:紧跟「全部存为笔记」,不再用 ml-auto 推到最右 —— 一颗同款按钮被甩到
-                  另一头,读起来就像另一类动作。同一排的下一颗,交给工具栏自己的 gap 排。 */}
-              <Button variant="ghost" size="sm" className={STYLE_ACTION}>
-                <Type size={12} /> {t("subtitleStyle")}
-              </Button>
+                  另一头,读起来就像另一类动作。同一排的下一颗,交给工具栏自己的 gap 排。
+                  它和其它动作一样做成图标钮:同一排动作,一款按钮。 */}
+              <IconButton className={ACTION_ICON} label={t("subtitleStyle")} hint={t("subtitleStyleHint")}>
+                <Palette />
+              </IconButton>
             </DialogTrigger>
             <DialogContent aria-describedby={undefined} className="w-[min(26rem,calc(100vw-2rem))]">
               <DialogHeader>
@@ -618,9 +631,9 @@ function SubtitleTranslate({
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className={cn(PILL, ACTION)}>
-          <Languages size={12} /> {t("subtitleTranslate")}
-        </button>
+        <IconButton className={ACTION_ICON} label={t("subtitleTranslate")} hint={t("subtitleTranslateHint")}>
+          <Languages />
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
         <strong>{t("subtitleTranslate")}</strong>

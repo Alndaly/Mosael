@@ -1,8 +1,11 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { readHint } from "@/test/hint";
 
 /**
  * 逐字稿列表读起来要像一段**文稿**,而不是一列带前缀的行。
@@ -298,5 +301,160 @@ describe("在此切一刀之后的行序", () => {
     const rows = [...container.querySelectorAll(".group\\/sentence > p")].map((row) => row.textContent);
     expect(rows.slice(0, 2)).toEqual(["如果", "太年轻的爱注定要分开。"]);
     expect(rows.indexOf("Iflovethat")).toBeGreaterThan(1);
+  });
+});
+
+/** 转写出一段带两处口癖(呃 / 嗯)的逐字稿:口癖按钮的计数角标要靠它才有数。 */
+function serveFillerTranscript() {
+  const transcript = {
+    id: "tr1",
+    language: "zh",
+    segments: [
+      {
+        id: "seg0",
+        start_time: 0,
+        end_time: 2,
+        text: "呃嗯",
+        speaker: null,
+        tokens: [
+          { start_time: 0, end_time: 1, text: "呃" },
+          { start_time: 1, end_time: 2, text: "嗯" },
+        ],
+      },
+    ],
+  };
+  globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const body = String(input).includes("/transcript") ? transcript : [];
+    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  }) as never;
+}
+
+/**
+ * 把顶部工具条装齐:逐字稿、存笔记、静音、口癖、按句切分、在此切一刀、生成字幕 —— 7 个动作。
+ * 给上 `onSplitPoints` / `onGenerateSubtitles`,后两颗才会渲染。
+ */
+function renderToolbar({
+  onSplitPoints = vi.fn(),
+  onGenerateSubtitles = vi.fn(),
+}: {
+  onSplitPoints?: (cuts: Array<{ clipId: string; srcTimes: number[] }>) => void;
+  onGenerateSubtitles?: () => void;
+} = {}) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <TranscriptPanel
+        sequence={sequenceWith("c1")}
+        onCutSegment={vi.fn()}
+        onCutRanges={vi.fn()}
+        onSplitPoints={onSplitPoints}
+        onGenerateSubtitles={onGenerateSubtitles}
+      />
+    </QueryClientProvider>,
+  );
+  return { onSplitPoints, onGenerateSubtitles };
+}
+
+/** 工具条上的 7 个动作,按读屏 / 悬停里那个名字找。存笔记那颗的名字来自笔记文案(中文)。 */
+function toolbarButtons() {
+  return [
+    screen.getByRole("button", { name: "aiTranscribe" }),
+    screen.getByRole("button", { name: "全部存为笔记" }),
+    screen.getByRole("button", { name: "silences" }),
+    screen.getByRole("button", { name: "fillers" }),
+    screen.getByRole("button", { name: "splitBySentence" }),
+    screen.getByRole("button", { name: "splitAtWord" }),
+    screen.getByRole("button", { name: "transcriptGenerateSubtitles" }),
+  ];
+}
+
+/** 悬停说明挂在哪:能点的按钮挂在自己身上,点不了的按钮挂在 Hint 套的那层壳上(见 tooltip.tsx)。 */
+function hintHost(button: HTMLElement): HTMLElement {
+  return (button.closest("[data-hint-disabled]") as HTMLElement | null) ?? button;
+}
+
+describe("顶部动作区:图标按钮 + Hint", () => {
+  it("7 个动作都是只有图标的按钮:没有可见文字,读屏名字是 aria-label,标准 32px 方钮", async () => {
+    serveFillerTranscript();
+    renderToolbar();
+    await screen.findByText("呃");
+
+    for (const button of toolbarButtons()) {
+      expect(button.getAttribute("aria-label"), "icon-only 的按钮必须给读屏一个名字").toBeTruthy();
+      // 可见的只有图标;口癖那颗多一个纯数字角标(计数不是动作名)。
+      expect(button.textContent ?? "").toMatch(/^\d*$/);
+      // 标准档位:32px 的方钮,不许被 flex 压扁。
+      expect(button.className).toContain("size-8");
+      expect(button.className).toContain("shrink-0");
+      // 悬停说明走 Hint,不是原生 title。
+      expect(button.hasAttribute("title")).toBe(false);
+      expect(hintHost(button).hasAttribute("data-hint-trigger")).toBe(true);
+    }
+  });
+
+  it("每个图标按钮的 Hint 都有动作名和一句说明", async () => {
+    serveFillerTranscript();
+    renderToolbar();
+    await screen.findByText("呃");
+
+    const expected: Array<[string, string]> = [
+      // 这份逐字稿已经转好了:按钮点不了,说明里给的是「都转过了」。
+      ["aiTranscribe", "transcribeAllDone"],
+      ["全部存为笔记", "把整份逐字稿存成一篇笔记"],
+      ["silences", "silencesHint"],
+      ["fillers", "fillersHint"],
+      ["splitBySentence", "splitBySentenceHint"],
+      ["splitAtWord", "splitAtWordHint"],
+      ["transcriptGenerateSubtitles", "transcriptGenerateSubtitlesHint"],
+    ];
+    for (const [name, explanation] of expected) {
+      const hint = await readHint(screen.getByRole("button", { name }));
+      expect(hint, name).toContain(name);
+      expect(hint, name).toContain(explanation);
+    }
+  });
+
+  it("口癖的计数还在:右上角数字角标,说明里也说清口癖是什么", async () => {
+    serveFillerTranscript();
+    renderToolbar();
+    await screen.findByText("呃");
+
+    const fillers = screen.getByRole("button", { name: "fillers" });
+    const badge = fillers.querySelector("[data-count-badge]");
+    expect(badge?.textContent).toBe("2");
+    expect(fillers.textContent).toBe("2");
+    expect(await readHint(fillers)).toContain("fillersHint");
+  });
+
+  it("「N 句 · M 字」是一段统计文字,不是按钮", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    renderToolbar();
+    await screen.findByText("第0句");
+
+    const stats = screen.getByText("transcriptStats");
+    expect(stats.tagName).toBe("SPAN");
+    expect(stats.closest("button")).toBeNull();
+  });
+
+  it("点「按句切分」和「生成字幕」还是做原来那件事(回归)", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    const onSplitPoints = vi.fn();
+    const onGenerateSubtitles = vi.fn();
+    renderToolbar({ onSplitPoints, onGenerateSubtitles });
+    await screen.findByText("第0句");
+
+    await userEvent.click(screen.getByRole("button", { name: "splitBySentence" }));
+    expect(onSplitPoints).toHaveBeenCalledWith([{ clipId: "c1", srcTimes: [0] }]);
+    await userEvent.click(screen.getByRole("button", { name: "transcriptGenerateSubtitles" }));
+    expect(onGenerateSubtitles).toHaveBeenCalledOnce();
+  });
+
+  it("点「全部存为笔记」仍然打开保存到笔记的弹窗(回归)", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    renderToolbar();
+    await screen.findByText("第0句");
+
+    await userEvent.click(screen.getByRole("button", { name: "全部存为笔记" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 });

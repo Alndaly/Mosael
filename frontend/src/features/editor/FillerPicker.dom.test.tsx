@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { readHint } from "@/test/hint";
+
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
@@ -57,5 +59,18 @@ describe("口癖选择", () => {
     expect(preview.querySelectorAll("mark")).toHaveLength(3);
     await user.click(screen.getByRole("button", { name: /fillerSelect/ }));
     expect(onSelect).toHaveBeenCalledWith(["c:s:0", "c:s:1", "c:s:3"]);
+  });
+
+  it("入口是图标按钮:计数在角标里、名字和说明在 Hint 里,不是 title=", async () => {
+    render(<Harness onSelect={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "fillers" });
+    expect(trigger.getAttribute("aria-label")).toBe("fillers");
+    // 可见的只有图标 + 数字角标;动作名不在按钮里。
+    expect(trigger.textContent).toBe("2");
+    expect(trigger.querySelector("[data-count-badge]")?.textContent).toBe("2");
+    expect(trigger.hasAttribute("title")).toBe(false);
+    const hint = await readHint(trigger);
+    expect(hint).toContain("fillers");
+    expect(hint).toContain("fillersHint");
   });
 });

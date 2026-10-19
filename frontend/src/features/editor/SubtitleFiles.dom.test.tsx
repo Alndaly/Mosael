@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { readHint } from "@/test/hint";
+
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
@@ -81,5 +83,19 @@ describe("字幕文件", () => {
     expect(isSubtitleFile(new File([""], "台词.SRT"))).toBe(true);
     expect(isSubtitleFile(new File([""], "a.vtt"))).toBe(true);
     expect(isSubtitleFile(new File([""], "clip.mp4"))).toBe(false);
+  });
+
+  it("导入 / 导出都是图标按钮,Hint 里给动作名和一句说明", async () => {
+    renderFiles();
+    const importTrigger = screen.getByRole("button", { name: "subtitleFileImport" });
+    const exportTrigger = screen.getByRole("button", { name: "subtitleFileExport" });
+    for (const [trigger, explanation] of [
+      [importTrigger, "subtitleFileImportHint"],
+      [exportTrigger, "subtitleFileExportHint"],
+    ] as const) {
+      expect(trigger.textContent).toBe("");
+      expect(trigger.hasAttribute("title")).toBe(false);
+      expect(await readHint(trigger)).toContain(explanation);
+    }
   });
 });

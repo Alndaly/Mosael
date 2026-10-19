@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { readHint } from "@/test/hint";
+
 /**
  * 字幕面板:列表本身,以及去「配音」页的入口。
  *
@@ -196,41 +198,85 @@ describe("顶部动作区", () => {
 });
 
 /**
- * 维护者截图:「字幕样式」是这一排里唯一一颗**描边药丸**(Button size="sm" variant="outline"),
- * 其它动作都是 PILL 的朴素图标 + 文字。同一排动作,一款按钮。
+ * 维护者:「逐字稿和字幕的这些交互入口按钮可以改为 icon 模式的 button 然后注意 Hint」。
+ *
+ * 顶上 7 个动作 + 「字幕样式」都只画图标:读屏名字在 aria-label,悬停说明在 Hint(不是 title),
+ * 计数之类的补充说明跟着进 Hint。动作本身一个都没少、行为不变 —— 行为由其它用例钉。
  */
+describe("顶部动作区是图标按钮", () => {
+  /** 7 个动作 + 「字幕样式」,按自己的名字找(字幕样式也统一成图标款)。 */
+  function iconActions() {
+    return [
+      screen.getByRole("button", { name: "subtitleGenerate" }),
+      screen.getByRole("button", { name: "addSubtitleAtPlayhead" }),
+      screen.getByRole("button", { name: "subtitleTranslate" }),
+      screen.getByRole("button", { name: "subtitleDub" }),
+      screen.getByRole("button", { name: "subtitleFileImport" }),
+      screen.getByRole("button", { name: "subtitleFileExport" }),
+      screen.getByRole("button", { name: "全部存为笔记" }),
+      screen.getByRole("button", { name: "subtitleStyle" }),
+    ];
+  }
+
+  it("只有图标:没有可见文字、名字在 aria-label、标准 32px 方钮、不压扁", () => {
+    renderAll();
+    for (const button of iconActions()) {
+      expect(button.getAttribute("aria-label"), "icon-only 的按钮必须给读屏一个名字").toBeTruthy();
+      expect(button.textContent).toBe("");
+      expect(button.className).toContain("size-8");
+      expect(button.className).toContain("shrink-0");
+      expect(button.hasAttribute("title")).toBe(false);
+      expect(button.hasAttribute("data-hint-trigger")).toBe(true);
+    }
+  });
+
+  it("每个图标按钮都有 Hint:动作名 + 一句说明", async () => {
+    renderAll();
+    const expected: Array<[string, string]> = [
+      ["subtitleGenerate", "subtitleGenerateHint"],
+      ["addSubtitleAtPlayhead", "addSubtitleAtPlayheadHint"],
+      ["subtitleTranslate", "subtitleTranslateHint"],
+      ["subtitleDub", "subtitleDubHint"],
+      ["subtitleFileImport", "subtitleFileImportHint"],
+      ["subtitleFileExport", "subtitleFileExportHint"],
+      ["全部存为笔记", "把整条字幕轨存成一篇笔记"],
+      ["subtitleStyle", "subtitleStyleHint"],
+    ];
+    for (const [name, explanation] of expected) {
+      const hint = await readHint(screen.getByRole("button", { name }));
+      expect(hint, name).toContain(name);
+      expect(hint, name).toContain(explanation);
+    }
+  });
+});
+
 describe("「字幕样式」和同排动作是同一款", () => {
   const classesOf = (element: Element) => new Set(element.className.split(/\s+/).filter(Boolean));
 
-  it("用同一串 PILL,不再单独做成描边那一款", () => {
+  it("用同一款图标钮,不再单独做成文字药丸", () => {
     renderAll();
     const style = screen.getByRole("button", { name: "subtitleStyle" });
-    // 同排动作的每一个外观 token,「字幕样式」都得有 —— 这是「同一款」最直接的写法。
-    for (const sibling of [
-      screen.getByRole("button", { name: "addSubtitleAtPlayhead" }),
-      screen.getByRole("button", { name: /全部存为笔记/ }),
-    ]) {
-      const own = classesOf(style);
-      for (const token of classesOf(sibling)) expect(own.has(token), token).toBe(true);
+    // 同排每个动作的每一个外观 token,「字幕样式」都得有 —— 这是「同一款」最直接的写法。
+    for (const name of ["subtitleGenerate", "addSubtitleAtPlayhead", "subtitleDub", "全部存为笔记"]) {
+      const sibling = screen.getByRole("button", { name });
+      for (const token of classesOf(sibling)) expect(classesOf(style).has(token), `${name}: ${token}`).toBe(true);
     }
-    // outline 那一款的标记:字段色的描边、正文那一档的字号。
+    // 同排是图标动作:它也得只有图标,不再是 PILL 那一款文字按钮。
+    expect(style.textContent).toBe("");
+    expect(style.className).not.toContain("text-ui-xs");
+    expect(style.className).not.toContain("px-[9px]");
     expect(style.className).not.toContain("border-field-border");
-    expect(style.className).not.toContain("text-ui-sm");
   });
 
-  it("高度 / 字号 / 内距和同排动作一致 —— 差一档就又是另一款", () => {
+  it("高度 / 图标尺寸和同排动作一致 —— 差一档就又是另一款", () => {
     renderAll();
     const style = screen.getByRole("button", { name: "subtitleStyle" });
     const action = screen.getByRole("button", { name: "addSubtitleAtPlayhead" });
-    // jsdom 没有排版:钉住决定高度、字号、内距的类。同排动作是 32px、12px 字、9px 横向内距。
-    for (const token of ["h-8", "text-ui-xs", "px-[9px]", "gap-1.5"]) {
+    // jsdom 没有排版:钉住决定高度、图标尺寸的类。同一排都是 32px 方钮、16px 图标。
+    for (const token of ["size-8", "rounded-md", "[&_svg]:size-4", "shrink-0"]) {
       expect(style.className, token).toContain(token);
       expect(action.className, token).toContain(token);
     }
-    // 它是 Button:基础件自带的 font-medium / 16px 图标在这里收回成同排动作的 400 / 12px。
-    expect(style.className).toContain("font-normal");
-    expect(style.className).toContain("[&_svg]:size-3");
-    expect(style.className).not.toContain("[&_svg]:size-4");
   });
 
   it("紧跟在「全部存为笔记」后面,不再用 ml-auto 单独甩到最右", () => {

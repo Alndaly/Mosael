@@ -89,15 +89,16 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/editor/ClipAppearancePanel.tsx": 2,
   "features/editor/CurveEditor.tsx": 2,
   "features/editor/EditorView.tsx": 1,
-  "features/editor/FillerPicker.tsx": 1,
   "features/editor/Inspector.tsx": 11,
   "features/editor/MediaPool.tsx": 1,
   "features/editor/Monitor.tsx": 1,
   "features/editor/SequenceSettings.tsx": 2,
-  "features/editor/SubtitleFiles.tsx": 2,
-  //: 7 → 6:顶上那个「字幕样式」折叠区改成了弹窗,折叠按钮(原生 <button>)换成 Button + DialogTrigger。
-  "features/editor/SubtitlePanel.tsx": 6,
-  "features/editor/TranscriptPanel.tsx": 12,
+  //: 6 → 2:顶上那排动作(生成 / 加字幕 / 翻译 / 配音 / 导入 / 导出 / 存笔记 / 字幕样式)全换成了 IconButton;
+  //: 只剩行内的时间码定位与样式弹窗里的「加粗」这两颗。
+  "features/editor/SubtitlePanel.tsx": 2,
+  //: 12 → 6:顶部 7 个动作里的 6 颗(转写 / 存笔记 / 静音 / 句切 / 切一刀 / 生成字幕)换成了 IconButton,
+  //: 列表里的时间码、词、整句、静音间隙与底部选择条仍是原生按钮(样式各归各的上下文)。
+  "features/editor/TranscriptPanel.tsx": 6,
   "features/entities/AssetEntities.tsx": 1,
   "features/entities/DrawDialog.tsx": 1,
   "features/entities/EntityCard.tsx": 1,

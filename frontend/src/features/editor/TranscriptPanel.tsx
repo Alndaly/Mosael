@@ -3,7 +3,7 @@ import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
+import { AudioLines, BookPlus, Captions, ListChecks, Loader2, MessageSquareText, Mic, Scissors, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
 import { getAssetTranscript, getJob, listAsrModels, listJobs, transcribeAsset, type Clip, type Sequence } from "@/api/client";
 import { jobSettled } from "@/components/jobs/runStatus";
@@ -36,7 +36,8 @@ import {
 } from "@/domain/timeline/transcriptProjection";
 import { FillerPicker } from "@/features/editor/FillerPicker";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
-import { PILL } from "@/features/editor/pill";
+import { ACTION_ICON, PILL } from "@/features/editor/pill";
+import { CountBadge } from "@/features/editor/CountBadge";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/lib/useVirtualRows";
 import { cn } from "@/lib/utils";
@@ -578,33 +579,34 @@ export function TranscriptPanel({
   // 进度按**素材**数报,不按任务数 —— 用户看的是"这条时间线转到哪了"。
   const asrProgress = queueTotal > 1 ? `${Math.min(queueTotal - queue.length + 1, queueTotal)}/${queueTotal}` : "";
   const transcribeButton = assetIds.length > 0 && (
-    // 已经有逐字稿之后,这颗按钮转的是**后来加上来的**那几段 —— 数字让人知道点下去会转什么。
-    <Hint
-      label={allTranscribed ? undefined : t("transcribePendingHint").replace("{n}", String(pendingIds.length))}
-      disabledReason={allTranscribed ? t("transcribeAllDone") : undefined}
+    // 只有图标:名字与「点下去会转哪些」那一句都在 Hint 里。
+    // 已有逐字稿之后,这颗按钮转的是**后来加上来的**那几段 —— 数量说在说明里,让人知道点下去会转什么。
+    // 转写在跑时换个转圈(IconButton 的 loading),进度也跟在同一句说明里。
+    <IconButton
+      className={ACTION_ICON}
+      label={t("aiTranscribe")}
+      hint={
+        asrRunning
+          ? undefined
+          : pendingIds.length > 0
+            ? t("transcribePendingHint").replace("{n}", String(pendingIds.length))
+            : undefined
+      }
+      loading={asrRunning}
+      disabled={asrRunning || noAsrEngine || transcriptsLoading || allTranscribed}
+      disabledReason={
+        asrRunning
+          ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}`
+          : allTranscribed
+            ? t("transcribeAllDone")
+            : noAsrEngine
+              ? t("transcribeNoEngine")
+              : undefined
+      }
+      onClick={startAll}
     >
-      <button
-        type="button"
-        className={PILL}
-        disabled={asrRunning || noAsrEngine || transcriptsLoading || allTranscribed}
-        onClick={startAll}
-      >
-        {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
-            可以很长,塞进这个为四个字做的胶囊里会折成两行、把图标挤到一边 —— 它属于下面那行状态,
-            不属于控件本身。 */}
-        {asrRunning ? <Loader2 size={12} className="shrink-0 animate-mosael-spin" /> : <Mic size={12} className="shrink-0" />}
-        {/* 已有逐字稿、又有没转过的素材时,**把数字写进动作里**:「转写其余 12 段」。
-            此前是「AI 转写」后面挂一个光秃秃的 12 —— 同一排「静音」「口癖」后面的数字是"点下去会选中几处",
-            它却是"还有几个素材没转写",没有悬停就读不出来,用户只能问这个数字是什么意思。 */}
-        <span className="whitespace-nowrap">
-          {asrRunning
-            ? `${t("transcribing")}${asrProgress ? ` ${asrProgress}` : ""}`
-            : projected.length > 0 && pendingIds.length > 0
-              ? t("transcribePending").replace("{n}", String(pendingIds.length))
-              : t("aiTranscribe")}
-        </span>
-      </button>
-    </Hint>
+      <Mic />
+    </IconButton>
   );
   // 引擎没装:说清楚,并给出路 —— 管理员直达管理页「引擎」,成员被告知由部署管理员安装(EngineNotice)。
   // 按钮同时禁用 —— 点下去只会排一个注定失败的任务。
@@ -858,56 +860,79 @@ export function TranscriptPanel({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap gap-2 border-b border-border px-3 py-3">
         {transcribeButton}
-        <SaveToNote workspaceId={sequence.workspace_id} variants={exportVariants} className={PILL}
-          label={selected.size ? s.excerpt : s.saveAll} />
-        <Hint label={t("silencesHint")}>
-          <button
-            type="button"
-            className={cn(PILL, showSilences && "border-[color-mix(in_oklab,var(--primary)_40%,var(--border))] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))] text-primary enabled:hover:text-primary")}
-            aria-pressed={showSilences}
-            onClick={() => setShowSilences((value) => !value)}
-          >
-            <AudioLines size={12} /> {t("silences")}
-            {showSilences && silences.length > 0 && <em>{silences.length}</em>}
-          </button>
-        </Hint>
+        {/* 顶上这一排全是只有图标的动作:名字与那句说明交给 IconButton 的 label / hint。
+            「全部存为笔记」的入口长什么样由宿主给(trigger),这样它和同排其它动作同一款。 */}
+        <SaveToNote workspaceId={sequence.workspace_id} variants={exportVariants}
+          label={selected.size ? s.excerpt : s.saveAll}
+          trigger={({ open, disabled, label }) => (
+            <IconButton
+              className={ACTION_ICON}
+              label={label}
+              hint={s.saveAllTranscript}
+              disabled={disabled}
+              disabledReason={disabled ? s.nothingToSave : undefined}
+              onClick={open}
+            >
+              <BookPlus />
+            </IconButton>
+          )} />
+        <IconButton
+          className={ACTION_ICON}
+          label={t("silences")}
+          hint={t("silencesHint")}
+          aria-pressed={showSilences}
+          onClick={() => setShowSilences((value) => !value)}
+        >
+          <AudioLines />
+          {/* 静音也带计数:打开之后才知道会选中几处,和口癖那颗同一套角标。 */}
+          {showSilences && <CountBadge count={silences.length} />}
+        </IconButton>
         <FillerPicker matches={fillers} enabled={fillerKinds} onEnabledChange={setFillerKinds} onSelect={selectFillers} />
         {onSplitPoints && (
           <>
-            <Hint label={t("splitBySentenceHint")}>
-              <button type="button" className={PILL} onClick={splitBySentence}>
-                <Split size={12} /> {t("splitBySentence")}
-              </button>
-            </Hint>
-            <Hint label={t("splitAtWordHint")} disabledReason={!overClip ? t("splitAtWordNoClip") : undefined}>
-              <button
-                type="button"
-                className={PILL}
-                onClick={splitAtPlayhead}
-                disabled={!overClip}
-              >
-                <Scissors size={12} /> {t("splitAtWord")}
-              </button>
-            </Hint>
+            <IconButton
+              className={ACTION_ICON}
+              label={t("splitBySentence")}
+              hint={t("splitBySentenceHint")}
+              onClick={splitBySentence}
+            >
+              <Split />
+            </IconButton>
+            <IconButton
+              className={ACTION_ICON}
+              label={t("splitAtWord")}
+              hint={t("splitAtWordHint")}
+              onClick={splitAtPlayhead}
+              disabled={!overClip}
+              disabledReason={t("splitAtWordNoClip")}
+            >
+              <Scissors />
+            </IconButton>
           </>
         )}
         {/* 逐字稿这边只做一件事:**把它变成字幕**。
             翻译是字幕的事(译的是已经成型的字幕),放在字幕那一页 —— 逐字稿是"这段音频说了什么"
             的记录,给它挂一个语言选择器,等于让人在记录里做译制。 */}
         {onGenerateSubtitles && (
-          <Hint label={t("transcriptGenerateSubtitlesHint")}>
-            <button type="button" className={PILL} disabled={generatingSubtitles} onClick={onGenerateSubtitles}>
-              {generatingSubtitles ? <Loader2 size={12} className="animate-mosael-spin" /> : <Captions size={12} />}
-              {t("transcriptGenerateSubtitles")}
-            </button>
-          </Hint>
+          <IconButton
+            className={ACTION_ICON}
+            label={t("transcriptGenerateSubtitles")}
+            hint={t("transcriptGenerateSubtitlesHint")}
+            loading={generatingSubtitles}
+            onClick={onGenerateSubtitles}
+          >
+            <Captions />
+          </IconButton>
         )}
         {showSilences && silences.length > 0 && (
-          <Hint label={t("removeAllSilences")}>
-            <button type="button" className={PILL} onClick={selectAllSilences}>
-              {t("selectAllSilences")}
-            </button>
-          </Hint>
+          <IconButton
+            className={ACTION_ICON}
+            label={t("selectAllSilences")}
+            hint={t("selectAllSilencesHint")}
+            onClick={selectAllSilences}
+          >
+            <ListChecks />
+          </IconButton>
         )}
         <span className="ml-auto self-center whitespace-nowrap text-ui-xs text-muted-foreground">
           {t("transcriptStats")

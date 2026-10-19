@@ -6,11 +6,11 @@ import { toast } from "sonner";
 import { exportSubtitleFile, type Sequence, type SubtitleFileFormat } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Hint } from "@/components/ui/tooltip";
-import { PILL } from "@/features/editor/pill";
+import { ACTION_ICON } from "@/features/editor/pill";
 import { saveBlobToDisk } from "@/lib/download";
 
 //: 「导入到一条新字幕轨」在下拉里的值(Select 不收空串)。
@@ -60,13 +60,15 @@ export function SubtitleFiles({
   return (
     <>
       <Popover open={importOpen} onOpenChange={setImportOpen}>
-        <Hint label={t("subtitleFileImportHint")}>
-          <PopoverTrigger asChild>
-            <button type="button" className={`${PILL} shrink-0 whitespace-nowrap`}>
-              <FileInput size={12} /> {t("subtitleFileImport")}
-            </button>
-          </PopoverTrigger>
-        </Hint>
+        <PopoverTrigger asChild>
+          <IconButton
+            className={ACTION_ICON}
+            label={t("subtitleFileImport")}
+            hint={t("subtitleFileImportHint")}
+          >
+            <FileInput />
+          </IconButton>
+        </PopoverTrigger>
         <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
           <strong>{t("subtitleFileImport")}</strong>
           <label className="grid gap-1 text-xs text-muted-foreground">
@@ -111,9 +113,13 @@ export function SubtitleFiles({
       {chosenExport && (
         <Popover open={exportOpen} onOpenChange={setExportOpen}>
           <PopoverTrigger asChild>
-            <button type="button" className={`${PILL} shrink-0 whitespace-nowrap`}>
-              <FileOutput size={12} /> {t("subtitleFileExport")}
-            </button>
+            <IconButton
+              className={ACTION_ICON}
+              label={t("subtitleFileExport")}
+              hint={t("subtitleFileExportHint")}
+            >
+              <FileOutput />
+            </IconButton>
           </PopoverTrigger>
           <PopoverContent className="flex w-[220px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="end">
             <strong>{t("subtitleFileExport")}</strong>

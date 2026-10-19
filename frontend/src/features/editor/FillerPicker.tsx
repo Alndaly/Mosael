@@ -3,16 +3,17 @@ import { Sparkles } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import {
   FILLER_CATEGORIES,
   type FillerCategoryId,
   type FillerMatch,
 } from "@/domain/timeline/transcriptProjection";
-import { PILL } from "@/features/editor/pill";
+import { ACTION_ICON } from "@/features/editor/pill";
+import { CountBadge } from "@/features/editor/CountBadge";
 
 //: 预览里最多列几处。再多也读不完,够用来判断「这一类是不是真的口癖」就行。
 const PREVIEW_LIMIT = 30;
@@ -39,14 +40,19 @@ export function FillerPicker({
   for (const match of matches) counts.set(match.category, (counts.get(match.category) ?? 0) + 1);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label={t("fillersHint")} disabledReason={matches.length === 0 ? t("fillersNone") : undefined}>
-        <PopoverTrigger asChild>
-          <button type="button" className={PILL} disabled={matches.length === 0}>
-            <Sparkles size={12} /> {t("fillers")}
-            {chosen.length > 0 && <em>{chosen.length}</em>}
-          </button>
-        </PopoverTrigger>
-      </Hint>
+      {/* 只有图标 + 数字角标:名字与「口癖是什么」在 Hint 里(IconButton 一次给两样),计数留在角标上。 */}
+      <PopoverTrigger asChild>
+        <IconButton
+          className={ACTION_ICON}
+          label={t("fillers")}
+          hint={t("fillersHint")}
+          disabled={matches.length === 0}
+          disabledReason={matches.length === 0 ? t("fillersNone") : undefined}
+        >
+          <Sparkles />
+          <CountBadge count={chosen.length} />
+        </IconButton>
+      </PopoverTrigger>
       <PopoverContent className="flex w-[300px] flex-col gap-2 p-2.5 [&>strong]:text-ui-sm" align="start">
         <strong>{t("fillers")}</strong>
         {FILLER_CATEGORIES.filter((category) => (counts.get(category.id) ?? 0) > 0).map((category) => (
