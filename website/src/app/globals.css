@@ -91,6 +91,19 @@
     }
   }
 
+  /* 账号页的入场:表单和暗房各自上来一次,不循环。使用方一律挂在 `motion-safe:` 下,
+     开了「减少动态效果」就只剩终态。 */
+  @keyframes auth-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   /* 文档页侧栏粘住的位置 = 悬浮站头占位约 4.25rem + 正文区 3rem 的上留白。 */
   --spacing-sticky: 7.25rem;
 

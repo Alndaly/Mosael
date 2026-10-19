@@ -31,7 +31,7 @@ export default async function AccountPage({
   const { user_code } = await searchParams;
   const t = getMessages(locale).account;
   return (
-    <AccountShell title={t.accountTitle} lede={t.accountLede}>
+    <AccountShell locale={locale} copy={t} title={t.accountTitle} lede={t.accountLede} wide>
       <AccountView locale={locale} copy={t} initialCode={user_code ?? ""} />
     </AccountShell>
   );

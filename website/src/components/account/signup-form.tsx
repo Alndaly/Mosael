@@ -1,41 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { AccountField, FormAlert, PasswordField, SubmitButton } from "@/components/account/form-controls";
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
 
-const FIELD =
-  "h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+type Phase = "form" | "success";
 
-/** 注册。成功后去登录页 —— 注册本身不建立会话(云端 signup 不自动登录)。 */
+/** 注册。成功后**留在这页**给出成功态 —— 静默跳转会让用户不确定账号到底建没建成。 */
 export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["account"] }) {
-  const router = useRouter();
+  const [phase, setPhase] = useState<Phase>("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState<"" | "password" | "confirm">("");
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    setFieldError("");
     if (password.length < 8) {
-      setError(copy.passwordTooShort);
+      setFieldError("password");
       return;
     }
     if (password !== confirm) {
-      setError(copy.passwordMismatch);
+      setFieldError("confirm");
       return;
     }
     setBusy(true);
     try {
       await cloudAccount.signup(email, password);
-      router.push(`/${locale}/login?registered=1`);
+      setPhase("success");
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
     } finally {
@@ -43,53 +45,93 @@ export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["a
     }
   };
 
-  return (
-    <form className="grid gap-4" onSubmit={submit} noValidate>
-      <label className="grid gap-1.5 text-sm">
-        {copy.email}
-        <input
-          className={FIELD}
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-      </label>
-      <label className="grid gap-1.5 text-sm">
-        {copy.password}
-        <input
-          className={FIELD}
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </label>
-      <label className="grid gap-1.5 text-sm">
-        {copy.confirmPassword}
-        <input
-          className={FIELD}
-          type="password"
-          autoComplete="new-password"
-          required
-          value={confirm}
-          onChange={(event) => setConfirm(event.target.value)}
-        />
-      </label>
-      {error && (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
+  if (phase === "success") {
+    return (
+      <div className="grid gap-5 motion-safe:animate-[auth-rise_450ms_ease-out_both]">
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="rounded-3xl border border-primary/20 bg-brand-soft p-6 text-accent sm:p-7"
+        >
+          <CheckCircle2 className="size-6" aria-hidden />
+          <h2 className="mt-4 font-display text-2xl font-semibold tracking-[-0.035em]">
+            {copy.signupSuccessTitle}
+          </h2>
+          <p className="mt-2 text-sm leading-7 text-foreground/75">{copy.signupSuccessBody}</p>
+          <p className="mt-3 break-all text-sm font-medium text-foreground">{email}</p>
+        </div>
+        <Button
+          asChild
+          className="h-13 w-full rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground hover:bg-accent focus-visible:ring-4 focus-visible:ring-primary/25"
+        >
+          <Link href={`/${locale}/login?registered=1`}>{copy.signupSuccessCta}</Link>
+        </Button>
+        <p className="m-0 text-center text-sm leading-6 text-muted-foreground">
+          {copy.haveAccount}{" "}
+          <Link
+            className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            href={`/${locale}/login`}
+          >
+            {copy.signIn}
+          </Link>
         </p>
+      </div>
+    );
+  }
+
+  return (
+    <form className="grid gap-5" onSubmit={submit} noValidate>
+      {error && (
+        <FormAlert id="signup-error" title={copy.formErrorTitle}>
+          {error}
+        </FormAlert>
       )}
-      <Button type="submit" className="w-full" disabled={busy}>
-        {busy ? copy.creating : copy.signUp}
-      </Button>
-      <p className="text-sm text-muted-foreground">
+      <AccountField
+        id="signup-email"
+        label={copy.email}
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        required
+        value={email}
+        describedBy={error ? "signup-error" : undefined}
+        onChange={(event) => setEmail(event.target.value)}
+      />
+      <PasswordField
+        id="signup-password"
+        label={copy.password}
+        hint={copy.passwordHint}
+        autoComplete="new-password"
+        required
+        minLength={8}
+        value={password}
+        error={fieldError === "password" ? copy.passwordTooShort : undefined}
+        describedBy={error ? "signup-error" : undefined}
+        showPassword={copy.showPassword}
+        hidePassword={copy.hidePassword}
+        onChange={(event) => setPassword(event.target.value)}
+      />
+      <PasswordField
+        id="signup-confirm"
+        label={copy.confirmPassword}
+        autoComplete="new-password"
+        required
+        value={confirm}
+        error={fieldError === "confirm" ? copy.passwordMismatch : undefined}
+        describedBy={error ? "signup-error" : undefined}
+        showPassword={copy.showPassword}
+        hidePassword={copy.hidePassword}
+        onChange={(event) => setConfirm(event.target.value)}
+      />
+      <div className="pt-1">
+        <SubmitButton label={copy.signUp} busyLabel={copy.creating} busy={busy} />
+      </div>
+      <p className="m-0 text-center text-sm leading-6 text-muted-foreground">
         {copy.haveAccount}{" "}
-        <Link className="font-semibold text-primary underline-offset-4 hover:underline" href={`/${locale}/login`}>
+        <Link
+          className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          href={`/${locale}/login`}
+        >
           {copy.signIn}
         </Link>
       </p>

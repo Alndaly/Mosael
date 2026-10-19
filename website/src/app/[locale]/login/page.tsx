@@ -31,7 +31,7 @@ export default async function LoginPage({
   const { registered } = await searchParams;
   const t = getMessages(locale).account;
   return (
-    <AccountShell title={t.loginTitle} lede={t.loginLede}>
+    <AccountShell locale={locale} copy={t} title={t.loginTitle} lede={t.loginLede}>
       <LoginForm locale={locale} copy={t} registered={registered === "1"} />
     </AccountShell>
   );

@@ -29,7 +29,7 @@ export default async function SignupPage({ params }: { params: Params }) {
   if (!isLocale(locale)) notFound();
   const t = getMessages(locale).account;
   return (
-    <AccountShell title={t.signupTitle} lede={t.signupLede}>
+    <AccountShell locale={locale} copy={t} title={t.signupTitle} lede={t.signupLede}>
       <SignupForm locale={locale} copy={t} />
     </AccountShell>
   );
