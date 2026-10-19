@@ -458,3 +458,76 @@ describe("顶部动作区:图标按钮 + Hint", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 });
+
+/**
+ * 维护者:「注意这两个 tab 的图标的分组」。换成 icon-only 之后,一排同款方钮分不出谁和谁是一类;
+ * 分组不能只写在 Hint 里 —— 那要 hover 才知道 —— 要看得见:组间一条发丝线 + 更宽的间距。
+ */
+describe("顶部动作区的分组", () => {
+  function inputNames(group: HTMLElement) {
+    return [...group.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
+  }
+
+  it("三组按语义分开:识别与清理 | 切分与产出 | 文件,每组之间一条发丝线", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    renderToolbar();
+    await screen.findByText("第0句");
+
+    const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
+    expect(bar).not.toBeNull();
+    const groups = [...bar.querySelectorAll<HTMLElement>("[data-actions-group]")];
+    expect(groups.map((group) => group.dataset.actionsGroup)).toEqual(["cleanup", "produce", "files"]);
+    expect(groups.map(inputNames)).toEqual([
+      ["aiTranscribe", "silences", "fillers"],
+      ["splitBySentence", "splitAtWord", "transcriptGenerateSubtitles"],
+      ["全部存为笔记"],
+    ]);
+    // 两条发丝线,不是 7 颗同款按钮一路排下去。
+    const dividers = [...bar.querySelectorAll("[data-actions-divider]")];
+    expect(dividers).toHaveLength(2);
+    for (const divider of dividers) expect(divider).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("窄宽度下折行,不横向滚动", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    renderToolbar();
+    await screen.findByText("第0句");
+
+    const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
+    expect(bar.className).toContain("flex-wrap");
+    expect(bar.className).not.toMatch(/overflow-x-(auto|scroll)/);
+    for (const button of bar.querySelectorAll("button")) {
+      // 动作图标钮整颗换行,不被压窄。
+      if (button.getAttribute("aria-label")) expect(button.className).toContain("shrink-0");
+    }
+  });
+
+  it("折行时分隔线跟着自己的组走,不会孤零零落在行尾", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    renderToolbar();
+    await screen.findByText("第0句");
+
+    const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
+    const units = [...bar.querySelectorAll<HTMLElement>("[data-actions-unit]")];
+    expect(units).toHaveLength(3);
+    // 一个单元 = 一条线 + 它后面那一组。单元自己不折行,线永远挨着组;折行只发生在单元之间。
+    expect(units.map((unit) => unit.querySelectorAll("[data-actions-divider]").length)).toEqual([0, 1, 1]);
+    for (const unit of units) {
+      expect(unit.className).toContain("inline-flex");
+      expect(unit.className).toContain("shrink-0");
+      expect(unit.className).not.toContain("flex-wrap");
+      expect(unit.querySelectorAll("[data-actions-group]")).toHaveLength(1);
+    }
+    // 线在单元里,不是栏的直接子元素 —— 直接挂在 flex-wrap 的栏上才会被单独甩到下一行。
+    for (const divider of bar.querySelectorAll("[data-actions-divider]")) {
+      expect(divider.parentElement).not.toBe(bar);
+      expect(divider.parentElement?.hasAttribute("data-actions-unit")).toBe(true);
+    }
+    // 组内 4px,组间更宽。
+    for (const group of bar.querySelectorAll<HTMLElement>("[data-actions-group]")) {
+      expect(group.className).toContain("gap-1");
+    }
+    expect(bar.className).toContain("gap-x-1.5");
+    for (const unit of units) expect(unit.className).toContain("gap-1.5");
+  });
+});

@@ -85,6 +85,21 @@ describe("字幕文件", () => {
     expect(isSubtitleFile(new File([""], "clip.mp4"))).toBe(false);
   });
 
+  it("导入 / 导出弹层里那颗动作本来就铺满这一列(和上面的下拉同宽)", async () => {
+    const user = userEvent.setup();
+    renderFiles();
+    await user.click(screen.getByRole("button", { name: "subtitleFileImport" }));
+    const importButton = await screen.findByRole("button", { name: "subtitleFileChoose" });
+    expect(importButton.parentElement).toHaveClass("flex", "flex-col");
+    expect(importButton).not.toHaveClass("w-full");
+
+    await user.click(screen.getByRole("button", { name: "subtitleFileExport" }));
+    const exportButtons = await screen.findAllByRole("button", { name: /subtitleFileExport/ });
+    const exportButton = exportButtons[exportButtons.length - 1];
+    expect(exportButton.parentElement).toHaveClass("flex", "flex-col");
+    expect(exportButton).not.toHaveClass("w-full");
+  });
+
   it("导入 / 导出都是图标按钮,Hint 里给动作名和一句说明", async () => {
     renderFiles();
     const importTrigger = screen.getByRole("button", { name: "subtitleFileImport" });

@@ -184,6 +184,37 @@ describe("字幕翻译 · 取消", () => {
   });
 });
 
+describe("字幕翻译 · 版面", () => {
+  it("「翻译全部」铺满弹层这一列 —— 和上面两个下拉同宽", async () => {
+    const user = userEvent.setup();
+    renderPanel(["a", "b", "c"]);
+    await user.click(await screen.findByRole("button", { name: "翻译" }));
+
+    const apply = await screen.findByRole("button", { name: "翻译全部 3 条" });
+    //: 弹层内容是一条 `flex-col` 的列,上面两个 Select 靠列的 stretch 铺满。这一颗动作也得是
+    //: 列里的**直接一项** —— 此前它套在一行 `flex items-center` 里:行被拉满了,按钮还按内容宽,
+    //: 于是它比上面那两个下拉短一截(维护者截图)。
+    expect(apply.parentElement).toHaveClass("flex", "flex-col", "items-stretch");
+    //: 宽度走容器、不写控件身上(见 design/controlOverrides.test.ts 的注:宽度是排版)。
+    expect(apply).not.toHaveClass("w-full");
+  });
+
+  it("翻译中多出「取消」:并列两颗各自按内容宽,不铺满", async () => {
+    const user = userEvent.setup();
+    renderPanel(Array.from({ length: 375 }, (_, i) => `cue-${i}`));
+    await user.click(await screen.findByRole("button", { name: "翻译" }));
+    await user.click(await screen.findByRole("button", { name: "翻译全部 375 条" }));
+
+    const cancel = await screen.findByRole("button", { name: "取消" });
+    const row = cancel.parentElement;
+    //: 一排并列的小按钮(「取消」+ 翻译中的主动作)各自按内容宽:铺满会把弹层读成两个主按钮。
+    expect(row).toHaveClass("flex", "items-center");
+    expect(row).not.toHaveClass("flex-col");
+    expect(cancel).not.toHaveClass("w-full");
+    expect(screen.getByRole("button", { name: /翻译中/ })).not.toHaveClass("w-full");
+  });
+});
+
 describe("字幕翻译 · 连不上", () => {
   it("请求当场失败:说「连不上翻译服务」,不是继续「翻译中」", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {

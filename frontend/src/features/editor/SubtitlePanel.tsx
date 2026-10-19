@@ -31,7 +31,7 @@ import { capabilityKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { formatTimecode } from "@/lib/time";
-import { ACTION_ICON } from "@/features/editor/pill";
+import { ACTION_BAR, ACTION_DIVIDER, ACTION_GROUP, ACTION_ICON, ACTION_UNIT } from "@/features/editor/pill";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
@@ -176,99 +176,115 @@ export function SubtitlePanel({
   return (
     <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
       {/* 动作在**列表上方**:此前它们在列表底部,一屏字幕看完才找得到「生成」。
-          原先的两排合成一条工具行,但两件事仍分得开 —— 左边是「往这条轨上加内容 / 翻译 / 配音」,
-          右边是「进出的文件 / 存成笔记」,中间一条发丝线隔开;窄了按组折行,不横向滚。 */}
+          原先的两排合成一条工具行。换成 icon-only 之后一排方钮看着都一样,分组只能靠布局说:
+          生成(往这条轨上加内容)| 加工(翻译 / 配音)| 文件(进出与存笔记)| 设置(字幕样式)——
+          组内 4px,组间一条发丝线 + 两侧各 6px;窄了按**单元**折行,不横向滚。
+          分隔线和它后面那组包在同一个单元里(ACTION_UNIT),折行时线跟着组走,不会孤零零掉到下一行。 */}
       <div
         data-subtitle-actions=""
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-3 py-2"
+        className={cn(ACTION_BAR, "border-b border-border px-3 py-2")}
       >
-        <div data-actions-group="generate" className="flex min-w-0 flex-wrap items-center gap-1">
-          {onGenerate && (
+        <div data-actions-unit="" className={ACTION_UNIT}>
+          <div data-actions-group="generate" className={ACTION_GROUP}>
+            {onGenerate && (
+              <IconButton
+                className={ACTION_ICON}
+                label={t("subtitleGenerate")}
+                hint={t("subtitleGenerateHint")}
+                loading={generating}
+                onClick={onGenerate}
+              >
+                <Sparkles />
+              </IconButton>
+            )}
             <IconButton
               className={ACTION_ICON}
-              label={t("subtitleGenerate")}
-              hint={t("subtitleGenerateHint")}
-              loading={generating}
-              onClick={onGenerate}
+              label={t("addSubtitleAtPlayhead")}
+              hint={t("addSubtitleAtPlayheadHint")}
+              onClick={onAddSubtitle}
             >
-              <Sparkles />
+              <Plus />
             </IconButton>
-          )}
-          <IconButton
-            className={ACTION_ICON}
-            label={t("addSubtitleAtPlayhead")}
-            hint={t("addSubtitleAtPlayheadHint")}
-            onClick={onAddSubtitle}
-          >
-            <Plus />
-          </IconButton>
-          {subtitles.length > 0 && onApplyTexts && (
-            <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
-          )}
-          {subtitles.length > 0 && onDub && (
-            <IconButton
-              className={ACTION_ICON}
-              label={t("subtitleDub")}
-              hint={t("subtitleDubHint")}
-              onClick={() => onDub()}
-            >
-              <AudioLines />
-            </IconButton>
-          )}
+          </div>
         </div>
-        {(onImportFile || subtitles.length > 0) && (
-          <span data-actions-divider="" aria-hidden className="h-4 w-px shrink-0 self-center bg-border" />
+        {subtitles.length > 0 && (onApplyTexts || onDub) && (
+          <div data-actions-unit="" className={ACTION_UNIT}>
+            <span data-actions-divider="" aria-hidden className={ACTION_DIVIDER} />
+            <div data-actions-group="process" className={ACTION_GROUP}>
+              {onApplyTexts && (
+                <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
+              )}
+              {onDub && (
+                <IconButton
+                  className={ACTION_ICON}
+                  label={t("subtitleDub")}
+                  hint={t("subtitleDubHint")}
+                  onClick={() => onDub()}
+                >
+                  <AudioLines />
+                </IconButton>
+              )}
+            </div>
+          </div>
         )}
         {(onImportFile || subtitles.length > 0) && (
-          <div data-actions-group="files" className="flex min-w-0 flex-wrap items-center gap-1">
-            {onImportFile && <SubtitleFiles sequence={sequence} onImport={onImportFile} importing={importingFile} />}
-            {subtitles.length > 0 && (
-              <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants}
-                label={noteStrings.saveAll}
-                trigger={({ open, disabled, label }) => (
-                  <IconButton
-                    className={ACTION_ICON}
-                    label={label}
-                    hint={noteStrings.saveAllSubtitles}
-                    disabled={disabled}
-                    disabledReason={disabled ? noteStrings.nothingToSave : undefined}
-                    onClick={open}
-                  >
-                    <BookPlus />
-                  </IconButton>
-                )} />
-            )}
+          <div data-actions-unit="" className={ACTION_UNIT}>
+            <span data-actions-divider="" aria-hidden className={ACTION_DIVIDER} />
+            <div data-actions-group="files" className={ACTION_GROUP}>
+              {onImportFile && <SubtitleFiles sequence={sequence} onImport={onImportFile} importing={importingFile} />}
+              {subtitles.length > 0 && (
+                <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants}
+                  label={noteStrings.saveAll}
+                  trigger={({ open, disabled, label }) => (
+                    <IconButton
+                      className={ACTION_ICON}
+                      label={label}
+                      hint={noteStrings.saveAllSubtitles}
+                      disabled={disabled}
+                      disabledReason={disabled ? noteStrings.nothingToSave : undefined}
+                      onClick={open}
+                    >
+                      <BookPlus />
+                    </IconButton>
+                  )} />
+              )}
+            </div>
           </div>
         )}
         {onSetStyle && (
-          <Dialog open={styleOpen} onOpenChange={setStyleOpen}>
-            <DialogTrigger asChild>
-              {/* 位置:紧跟「全部存为笔记」,不再用 ml-auto 推到最右 —— 一颗同款按钮被甩到
-                  另一头,读起来就像另一类动作。同一排的下一颗,交给工具栏自己的 gap 排。
-                  它和其它动作一样做成图标钮:同一排动作,一款按钮。 */}
-              <IconButton className={ACTION_ICON} label={t("subtitleStyle")} hint={t("subtitleStyleHint")}>
-                <Palette />
-              </IconButton>
-            </DialogTrigger>
-            <DialogContent aria-describedby={undefined} className="w-[min(26rem,calc(100vw-2rem))]">
-              <DialogHeader>
-                <DialogTitle>{t("subtitleStyle")}</DialogTitle>
-              </DialogHeader>
-              {/* 设置项原样搬进来:改一项立刻写回(和原来一样),不是等「完成」才应用。 */}
-              <SubtitleStyleSettings
-                style={style}
-                fonts={fonts ?? []}
-                onUploadFont={onUploadFont}
-                onDeleteFont={onDeleteFont}
-                uploadingFont={uploadingFont}
-                onPreviewStyle={onPreviewStyle}
-                onSetStyle={onSetStyle}
-              />
-              <DialogFooter>
-                <Button size="sm" onClick={() => setStyleOpen(false)}>{t("close")}</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div data-actions-unit="" className={ACTION_UNIT}>
+            <span data-actions-divider="" aria-hidden className={ACTION_DIVIDER} />
+            <div data-actions-group="style" className={ACTION_GROUP}>
+              <Dialog open={styleOpen} onOpenChange={setStyleOpen}>
+                <DialogTrigger asChild>
+                  {/* 位置:紧跟「全部存为笔记」,不再用 ml-auto 推到最右 —— 一颗同款按钮被甩到
+                      另一头,读起来就像另一类动作。同一排的下一颗,交给工具栏自己的 gap 排。
+                      它和其它动作一样做成图标钮:同一排动作,一款按钮。 */}
+                  <IconButton className={ACTION_ICON} label={t("subtitleStyle")} hint={t("subtitleStyleHint")}>
+                    <Palette />
+                  </IconButton>
+                </DialogTrigger>
+                <DialogContent aria-describedby={undefined} className="w-[min(26rem,calc(100vw-2rem))]">
+                  <DialogHeader>
+                    <DialogTitle>{t("subtitleStyle")}</DialogTitle>
+                  </DialogHeader>
+                  {/* 设置项原样搬进来:改一项立刻写回(和原来一样),不是等「完成」才应用。 */}
+                  <SubtitleStyleSettings
+                    style={style}
+                    fonts={fonts ?? []}
+                    onUploadFont={onUploadFont}
+                    onDeleteFont={onDeleteFont}
+                    uploadingFont={uploadingFont}
+                    onPreviewStyle={onPreviewStyle}
+                    onSetStyle={onSetStyle}
+                  />
+                  <DialogFooter>
+                    <Button size="sm" onClick={() => setStyleOpen(false)}>{t("close")}</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
         )}
       </div>
       <div
@@ -676,7 +692,12 @@ function SubtitleTranslate({
           <span>{t("subtitleTranslateBilingual")}</span>
           <Switch checked={bilingual} onCheckedChange={setBilingual} />
         </label>
-        <div className="flex items-center gap-1.5">
+        {/* 弹层里这一颗是**唯一的动作**:它得铺满这一列、和上面两个 Select 左右对齐。宽度走
+            **容器** —— 这个弹层本来就是一列 `flex-col`,让按钮当列里的直接一项,列的 stretch 就把它
+            拉满;不往控件自己身上写 `w-full`(宽度是排版,见 design/controlOverrides 的注)。
+            翻译中会多出一颗「取消」:那时改回一行、两颗各自按内容宽 —— 一排并列的小按钮铺满,
+            会被读成两个主按钮。 */}
+        <div className={cn("flex gap-1.5", run.isPending ? "items-center" : "flex-col items-stretch")}>
           <Button size="sm" loading={run.isPending} onClick={() => run.mutate()}>
             <Languages size={13} />
             {progress

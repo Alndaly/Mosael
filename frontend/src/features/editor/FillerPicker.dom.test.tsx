@@ -61,6 +61,16 @@ describe("口癖选择", () => {
     expect(onSelect).toHaveBeenCalledWith(["c:s:0", "c:s:1", "c:s:3"]);
   });
 
+  it("弹层里那颗「选中」铺满这一列 —— 和上面的类别开关同宽", async () => {
+    const user = userEvent.setup();
+    render(<Harness onSelect={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: /fillers/ }));
+    const select = screen.getByRole("button", { name: /fillerSelect/ });
+    //: 弹层内容 `flex flex-col`,按钮是直接一项 → 列的 stretch 把它拉满;不往控件自己身上写宽度。
+    expect(select.parentElement).toHaveClass("flex", "flex-col");
+    expect(select).not.toHaveClass("w-full");
+  });
+
   it("入口是图标按钮:计数在角标里、名字和说明在 Hint 里,不是 title=", async () => {
     render(<Harness onSelect={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: "fillers" });

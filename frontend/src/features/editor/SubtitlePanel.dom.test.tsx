@@ -163,21 +163,29 @@ describe("顶部动作区", () => {
     expect(root.lastElementChild).toBe(list);
   });
 
-  it("分两组看得出:4 颗「生成 / 翻译 / 配音」、3 颗「导入 / 导出 / 存笔记」,中间有分隔", () => {
+  it("四组按语义分开:生成 | 加工 | 文件 | 设置,每组之间一条发丝线", () => {
     const { container } = renderAll();
     const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
     expect(bar).not.toBeNull();
     const groups = [...bar.querySelectorAll<HTMLElement>("[data-actions-group]")];
-    expect(groups.map((group) => group.dataset.actionsGroup)).toEqual(["generate", "files"]);
-    expect(groups[0]!.querySelectorAll("button")).toHaveLength(4);
-    expect(groups[1]!.querySelectorAll("button")).toHaveLength(3);
-    // 两组之间是一条发丝分隔线,不是 7 颗同款按钮一路排下去。
-    const divider = bar.querySelector("[data-actions-divider]");
-    expect(divider).not.toBeNull();
-    expect(divider).toHaveAttribute("aria-hidden", "true");
+    expect(groups.map((group) => group.dataset.actionsGroup)).toEqual(["generate", "process", "files", "style"]);
+    const names = (group: HTMLElement) =>
+      [...group.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
+    expect(groups.map(names)).toEqual([
+      ["subtitleGenerate", "addSubtitleAtPlayhead"],
+      ["subtitleTranslate", "subtitleDub"],
+      ["subtitleFileImport", "subtitleFileExport", "全部存为笔记"],
+      ["subtitleStyle"],
+    ]);
+    // 三条发丝线,不是 8 颗同款按钮一路排下去。
+    const dividers = [...bar.querySelectorAll("[data-actions-divider]")];
+    expect(dividers).toHaveLength(3);
+    for (const divider of dividers) {
+      expect(divider).toHaveAttribute("aria-hidden", "true");
+    }
   });
 
-  it("窄宽度下折行,不横向滚动,按钮文字不折", () => {
+  it("窄宽度下折行,不横向滚动,按钮自己不被压窄", () => {
     const { container } = renderAll();
     const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
     // jsdom 没有布局:钉住决定这件事的类,回归时它会先没。
@@ -185,15 +193,39 @@ describe("顶部动作区", () => {
     expect(bar.className).not.toMatch(/overflow-x-(auto|scroll)/);
     const root = container.firstElementChild as HTMLElement;
     expect(root.className).not.toMatch(/overflow-x-(auto|scroll)/);
-    for (const group of bar.querySelectorAll<HTMLElement>("[data-actions-group]")) {
-      expect(group.className).toContain("flex-wrap");
-    }
     for (const button of actionButtons()) {
       // 按钮整颗换行,而不是把自己压窄、把字挤断。
       expect(button.className).toContain("shrink-0");
       expect(button.className).toContain("whitespace-nowrap");
     }
     expect(bar.contains(screen.getByRole("button", { name: "subtitleStyle" }))).toBe(true);
+  });
+
+  it("折行时分隔线跟着自己的组走,不会孤零零落在行尾", () => {
+    const { container } = renderAll();
+    const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
+    const units = [...bar.querySelectorAll<HTMLElement>("[data-actions-unit]")];
+    expect(units).toHaveLength(4);
+    // 一个单元 = 一条线 + 它后面那一组。单元自己不折行,所以线永远挨着组;
+    // 折行只发生在单元与单元之间(flex-wrap 在栏上)。
+    expect(units.map((unit) => unit.querySelectorAll("[data-actions-divider]").length)).toEqual([0, 1, 1, 1]);
+    for (const unit of units) {
+      expect(unit.className).toContain("inline-flex");
+      expect(unit.className).toContain("shrink-0");
+      expect(unit.className).not.toContain("flex-wrap");
+      expect(unit.querySelectorAll("[data-actions-group]")).toHaveLength(1);
+    }
+    // 线在单元里,不是栏的直接子元素 —— 直接挂在 flex-wrap 的栏上才会被单独甩到下一行。
+    for (const divider of bar.querySelectorAll("[data-actions-divider]")) {
+      expect(divider.parentElement).not.toBe(bar);
+      expect(divider.parentElement?.hasAttribute("data-actions-unit")).toBe(true);
+    }
+    // 组内 4px;组间是两侧各 6px 加一条 1px 线(13px),近的是同类、远的是异类。
+    for (const group of bar.querySelectorAll<HTMLElement>("[data-actions-group]")) {
+      expect(group.className).toContain("gap-1");
+    }
+    expect(bar.className).toContain("gap-x-1.5");
+    for (const unit of units) expect(unit.className).toContain("gap-1.5");
   });
 });
 

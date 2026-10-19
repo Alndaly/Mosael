@@ -36,7 +36,7 @@ import {
 } from "@/domain/timeline/transcriptProjection";
 import { FillerPicker } from "@/features/editor/FillerPicker";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
-import { ACTION_ICON, PILL } from "@/features/editor/pill";
+import { ACTION_BAR, ACTION_DIVIDER, ACTION_GROUP, ACTION_ICON, ACTION_UNIT, PILL } from "@/features/editor/pill";
 import { CountBadge } from "@/features/editor/CountBadge";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/lib/useVirtualRows";
@@ -858,82 +858,104 @@ export function TranscriptPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap gap-2 border-b border-border px-3 py-3">
-        {transcribeButton}
+      {/* 一排同款图标钮靠布局分组:识别与清理(转写 / 静音 / 口癖)| 切分与产出(按句切、切一刀、生成字幕)|
+          文件(全部存为笔记)。组内 4px,组间一条发丝线 + 两侧各 6px;窄了按**单元**折行,不横向滚。
+          分隔线和它后面那组包在同一个单元里(ACTION_UNIT),折行时线跟着组走,不会孤零零掉到下一行。 */}
+      <div
+        data-transcript-actions=""
+        className={cn(ACTION_BAR, "border-b border-border px-3 py-3")}
+      >
+        <div data-actions-unit="" className={ACTION_UNIT}>
+          <div data-actions-group="cleanup" className={ACTION_GROUP}>
+            {transcribeButton}
+            <IconButton
+              className={ACTION_ICON}
+              label={t("silences")}
+              hint={t("silencesHint")}
+              aria-pressed={showSilences}
+              onClick={() => setShowSilences((value) => !value)}
+            >
+              <AudioLines />
+              {/* 静音也带计数:打开之后才知道会选中几处,和口癖那颗同一套角标。 */}
+              {showSilences && <CountBadge count={silences.length} />}
+            </IconButton>
+            <FillerPicker matches={fillers} enabled={fillerKinds} onEnabledChange={setFillerKinds} onSelect={selectFillers} />
+            {showSilences && silences.length > 0 && (
+              <IconButton
+                className={ACTION_ICON}
+                label={t("selectAllSilences")}
+                hint={t("selectAllSilencesHint")}
+                onClick={selectAllSilences}
+              >
+                <ListChecks />
+              </IconButton>
+            )}
+          </div>
+        </div>
+        {(onSplitPoints || onGenerateSubtitles) && (
+          <div data-actions-unit="" className={ACTION_UNIT}>
+            <span data-actions-divider="" aria-hidden className={ACTION_DIVIDER} />
+            <div data-actions-group="produce" className={ACTION_GROUP}>
+              {onSplitPoints && (
+                <>
+                  <IconButton
+                    className={ACTION_ICON}
+                    label={t("splitBySentence")}
+                    hint={t("splitBySentenceHint")}
+                    onClick={splitBySentence}
+                  >
+                    <Split />
+                  </IconButton>
+                  <IconButton
+                    className={ACTION_ICON}
+                    label={t("splitAtWord")}
+                    hint={t("splitAtWordHint")}
+                    onClick={splitAtPlayhead}
+                    disabled={!overClip}
+                    disabledReason={t("splitAtWordNoClip")}
+                  >
+                    <Scissors />
+                  </IconButton>
+                </>
+              )}
+              {/* 逐字稿这边只做一件事:**把它变成字幕**。
+                  翻译是字幕的事(译的是已经成型的字幕),放在字幕那一页 —— 逐字稿是"这段音频说了什么"
+                  的记录,给它挂一个语言选择器,等于让人在记录里做译制。 */}
+              {onGenerateSubtitles && (
+                <IconButton
+                  className={ACTION_ICON}
+                  label={t("transcriptGenerateSubtitles")}
+                  hint={t("transcriptGenerateSubtitlesHint")}
+                  loading={generatingSubtitles}
+                  onClick={onGenerateSubtitles}
+                >
+                  <Captions />
+                </IconButton>
+              )}
+            </div>
+          </div>
+        )}
         {/* 顶上这一排全是只有图标的动作:名字与那句说明交给 IconButton 的 label / hint。
             「全部存为笔记」的入口长什么样由宿主给(trigger),这样它和同排其它动作同一款。 */}
-        <SaveToNote workspaceId={sequence.workspace_id} variants={exportVariants}
-          label={selected.size ? s.excerpt : s.saveAll}
-          trigger={({ open, disabled, label }) => (
-            <IconButton
-              className={ACTION_ICON}
-              label={label}
-              hint={s.saveAllTranscript}
-              disabled={disabled}
-              disabledReason={disabled ? s.nothingToSave : undefined}
-              onClick={open}
-            >
-              <BookPlus />
-            </IconButton>
-          )} />
-        <IconButton
-          className={ACTION_ICON}
-          label={t("silences")}
-          hint={t("silencesHint")}
-          aria-pressed={showSilences}
-          onClick={() => setShowSilences((value) => !value)}
-        >
-          <AudioLines />
-          {/* 静音也带计数:打开之后才知道会选中几处,和口癖那颗同一套角标。 */}
-          {showSilences && <CountBadge count={silences.length} />}
-        </IconButton>
-        <FillerPicker matches={fillers} enabled={fillerKinds} onEnabledChange={setFillerKinds} onSelect={selectFillers} />
-        {onSplitPoints && (
-          <>
-            <IconButton
-              className={ACTION_ICON}
-              label={t("splitBySentence")}
-              hint={t("splitBySentenceHint")}
-              onClick={splitBySentence}
-            >
-              <Split />
-            </IconButton>
-            <IconButton
-              className={ACTION_ICON}
-              label={t("splitAtWord")}
-              hint={t("splitAtWordHint")}
-              onClick={splitAtPlayhead}
-              disabled={!overClip}
-              disabledReason={t("splitAtWordNoClip")}
-            >
-              <Scissors />
-            </IconButton>
-          </>
-        )}
-        {/* 逐字稿这边只做一件事:**把它变成字幕**。
-            翻译是字幕的事(译的是已经成型的字幕),放在字幕那一页 —— 逐字稿是"这段音频说了什么"
-            的记录,给它挂一个语言选择器,等于让人在记录里做译制。 */}
-        {onGenerateSubtitles && (
-          <IconButton
-            className={ACTION_ICON}
-            label={t("transcriptGenerateSubtitles")}
-            hint={t("transcriptGenerateSubtitlesHint")}
-            loading={generatingSubtitles}
-            onClick={onGenerateSubtitles}
-          >
-            <Captions />
-          </IconButton>
-        )}
-        {showSilences && silences.length > 0 && (
-          <IconButton
-            className={ACTION_ICON}
-            label={t("selectAllSilences")}
-            hint={t("selectAllSilencesHint")}
-            onClick={selectAllSilences}
-          >
-            <ListChecks />
-          </IconButton>
-        )}
+        <div data-actions-unit="" className={ACTION_UNIT}>
+          <span data-actions-divider="" aria-hidden className={ACTION_DIVIDER} />
+          <div data-actions-group="files" className={ACTION_GROUP}>
+            <SaveToNote workspaceId={sequence.workspace_id} variants={exportVariants}
+              label={selected.size ? s.excerpt : s.saveAll}
+              trigger={({ open, disabled, label }) => (
+                <IconButton
+                  className={ACTION_ICON}
+                  label={label}
+                  hint={s.saveAllTranscript}
+                  disabled={disabled}
+                  disabledReason={disabled ? s.nothingToSave : undefined}
+                  onClick={open}
+                >
+                  <BookPlus />
+                </IconButton>
+              )} />
+          </div>
+        </div>
         <span className="ml-auto self-center whitespace-nowrap text-ui-xs text-muted-foreground">
           {t("transcriptStats")
             .replace("{n}", String(projected.length))
