@@ -1,5 +1,24 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.10": {
+    zh: [
+      "**智能体不再被「600 秒」掐断。** 超时从「总时长」改成「连续没进展」—— 正文、思考、工具的开始与结束、子智能体的每一步都算进展,一直在干活就一直跑;另加 2 小时硬上限,失败卡写清卡在哪一步(调了哪个工具、返回了什么)。",
+      "**检查器里「任务计划」和「后台任务」用同一套行语法。** 状态只在左边那一圈(两边的 done / in_progress / succeeded / queued 归成同一个状态),右侧只放动作,进度 / 用时 / 失败原因留在下方的说明行;类型图标和右侧重复的那句「成功」都撤下了。",
+      "**你选的那一项记在你自己的消息里。** 选择卡答完之后记录回到用户那条消息,助手侧只剩一行「已选 先暂停」/「已跳过」—— 不再把用户的选择塞进助手的话、由助手用第一人称转述。",
+      "**翻译引擎名对不上不再报 502。** 早期 id(`google` / `ai`)在能力表一处归一;智能体点名 AI 或翻译插件原样生效、不再被悄悄落回 Google,真不认识的会列出这台机器上现在能用的引擎。",
+      "**笔记顶栏更安静。** 「AI 助手」只剩图标(和剪辑页同一个入口);「已保存」变成一颗四状态图标 —— saved / saving / draft / error 四颗不同图形、各带中英说明、读屏念得到,状态位从 88px 收到 30px。",
+      "**完整版 FFmpeg 的构建清单刷新。** Windows 的上游换到 autobuild-2026-10-19-13-06,macOS / Linux 的 9.0.2 未变;这一条上次没进 1.9.9,从这一版起生效。",
+    ],
+    en: [
+      "**The agent is no longer cut off at 600 seconds.** The timeout measures how long nothing has progressed instead of total runtime — text, thinking, tool start and finish, and every sub-agent step count as progress, so an agent that keeps working keeps going; a 2-hour hard cap remains, and the failure card says which step it stopped at (which tool, and what came back).",
+      "**The inspector's task plan and background tasks share one row syntax.** Status lives only in the circle on the left (done / in_progress / succeeded / queued all collapse into one state), actions sit on the right, and progress, elapsed time and failure reasons stay on the note line below; the type icon and the repeated “succeeded” label are gone.",
+      "**What you picked is recorded in your own message.** Once a choice card is answered the record belongs to the user message, leaving one noun-like line on the assistant side (“Picked …” / “Skipped”) instead of the assistant restating your choice in its own words.",
+      "**A stale translation engine id no longer 502s.** The early ids (`google` / `ai`) are mapped to their canonical ids in one place; naming the AI engine or a translation plugin now really takes effect instead of being silently rewritten to Google, and an unknown id lists what this machine can actually use.",
+      "**The notes top bar is quieter.** The AI assistant is an icon now (the same entry as the editor's top bar), and “Saved” became one four-state icon — saved, saving, draft and error each with their own glyph and hint, readable by a screen reader — in a 30px slot instead of an 88px label.",
+      "**The full FFmpeg build list is refreshed.** Windows moves to upstream autobuild-2026-10-19-13-06 while macOS / Linux stay on 9.0.2; this missed 1.9.9 and takes effect from this release.",
+    ],
+  },
+
   "v1.9.9": {
     zh: [
       "**ComfyUI 的大机器不再「输出超限」。** 目录类操作(工具、模型、工作流库、节点包、音色)的输出预算从 1 MB 放宽到 8 MB;插件侧也不再静默截掉模型清单 —— 以前只列出前 N 个,现在整份放不下就不收,并说清是哪一步超了。插件版本 1.23.5。",
