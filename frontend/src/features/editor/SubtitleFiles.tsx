@@ -62,7 +62,7 @@ export function SubtitleFiles({
       <Popover open={importOpen} onOpenChange={setImportOpen}>
         <Hint label={t("subtitleFileImportHint")}>
           <PopoverTrigger asChild>
-            <button type="button" className={PILL}>
+            <button type="button" className={`${PILL} shrink-0 whitespace-nowrap`}>
               <FileInput size={12} /> {t("subtitleFileImport")}
             </button>
           </PopoverTrigger>
@@ -111,7 +111,7 @@ export function SubtitleFiles({
       {chosenExport && (
         <Popover open={exportOpen} onOpenChange={setExportOpen}>
           <PopoverTrigger asChild>
-            <button type="button" className={PILL}>
+            <button type="button" className={`${PILL} shrink-0 whitespace-nowrap`}>
               <FileOutput size={12} /> {t("subtitleFileExport")}
             </button>
           </PopoverTrigger>

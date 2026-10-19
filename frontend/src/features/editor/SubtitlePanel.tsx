@@ -1,9 +1,10 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AudioLines, Bold, ChevronDown, ChevronRight, Clock, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { AudioLines, Bold, Clock, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,6 +45,9 @@ import { cn } from "@/lib/utils";
 
 //: 下拉里「按默认」那一项的值(OptionPicker 不收空串当值)。发给接口时是空串。
 const DEFAULT_ENGINE = "__default__";
+
+//: 顶部工具条上的胶囊按钮:整颗折到下一行,而不是把自己压窄、把字挤断(面板本来就窄)。
+const ACTION = "shrink-0 whitespace-nowrap";
 
 
 /**
@@ -98,6 +102,8 @@ export function SubtitlePanel({
   const noteStrings = useNoteStrings();
   const playing = useEditorStore((state) => state.playing);
   const selectClip = useEditorStore((state) => state.selectClip);
+  //: 「字幕样式」弹窗开着没有。样式是设一次的东西,不该常驻在面板顶上。
+  const [styleOpen, setStyleOpen] = React.useState(false);
 
   const subtitles = React.useMemo(
     () =>
@@ -168,21 +174,77 @@ export function SubtitlePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, playing]);
 
-  // 列轴要和行轴一起锁:不声明 grid-cols 的话隐式列按 max-content 定尺,样式条里任何一段
-  // nowrap 文案(字体名、时间码)都会把整栏撑过左侧面板的固定宽度。
+  // 列轴要和行轴一起锁:不声明 grid-cols 的话隐式列按 max-content 定尺,动作条 / 列表里任何一段
+  // nowrap 文案(按钮字、时间码)都会把整栏撑过左侧面板的固定宽度。
   return (
-    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
-      {onSetStyle && (
-        <SubtitleStyleControls
-          style={style}
-          fonts={fonts ?? []}
-          onUploadFont={onUploadFont}
-          onDeleteFont={onDeleteFont}
-          uploadingFont={uploadingFont}
-          onPreviewStyle={onPreviewStyle}
-          onSetStyle={onSetStyle}
-        />
-      )}
+    <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+      {/* 动作在**列表上方**:此前它们在列表底部,一屏字幕看完才找得到「生成」。
+          原先的两排合成一条工具行,但两件事仍分得开 —— 左边是「往这条轨上加内容 / 翻译 / 配音」,
+          右边是「进出的文件 / 存成笔记」,中间一条发丝线隔开;窄了按组折行,不横向滚。 */}
+      <div
+        data-subtitle-actions=""
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-3 py-2"
+      >
+        <div data-actions-group="generate" className="flex min-w-0 flex-wrap items-center gap-1">
+          {onGenerate && (
+            <Hint label={t("subtitleGenerateHint")}>
+              <button type="button" className={cn(PILL, ACTION)} onClick={onGenerate} disabled={generating}>
+                {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
+              </button>
+            </Hint>
+          )}
+          <button type="button" className={cn(PILL, ACTION)} onClick={onAddSubtitle}>
+            <Plus size={12} /> {t("addSubtitleAtPlayhead")}
+          </button>
+          {subtitles.length > 0 && onApplyTexts && (
+            <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
+          )}
+          {subtitles.length > 0 && onDub && (
+            <button type="button" className={cn(PILL, ACTION)} onClick={() => onDub()}>
+              <AudioLines size={12} /> {t("subtitleDub")}
+            </button>
+          )}
+        </div>
+        {(onImportFile || subtitles.length > 0) && (
+          <span data-actions-divider="" aria-hidden className="h-4 w-px shrink-0 self-center bg-border" />
+        )}
+        {(onImportFile || subtitles.length > 0) && (
+          <div data-actions-group="files" className="flex min-w-0 flex-wrap items-center gap-1">
+            {onImportFile && <SubtitleFiles sequence={sequence} onImport={onImportFile} importing={importingFile} />}
+            {subtitles.length > 0 && (
+              <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants} className={cn(PILL, ACTION)}
+                label={noteStrings.saveAll} />
+            )}
+          </div>
+        )}
+        {onSetStyle && (
+          <Dialog open={styleOpen} onOpenChange={setStyleOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="ml-auto shrink-0">
+                <Type size={13} /> {t("subtitleStyle")}
+              </Button>
+            </DialogTrigger>
+            <DialogContent aria-describedby={undefined} className="w-[min(26rem,calc(100vw-2rem))]">
+              <DialogHeader>
+                <DialogTitle>{t("subtitleStyle")}</DialogTitle>
+              </DialogHeader>
+              {/* 设置项原样搬进来:改一项立刻写回(和原来一样),不是等「完成」才应用。 */}
+              <SubtitleStyleSettings
+                style={style}
+                fonts={fonts ?? []}
+                onUploadFont={onUploadFont}
+                onDeleteFont={onDeleteFont}
+                uploadingFont={uploadingFont}
+                onPreviewStyle={onPreviewStyle}
+                onSetStyle={onSetStyle}
+              />
+              <DialogFooter>
+                <Button size="sm" onClick={() => setStyleOpen(false)}>{t("close")}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
       <div
         ref={scrollRef}
         className={cn(
@@ -222,31 +284,6 @@ export function SubtitlePanel({
               />
             ))}
           </div>
-        )}
-      </div>
-      <div className="flex flex-wrap justify-start gap-2 border-t border-border px-3 py-3">
-        {onGenerate && (
-          <Hint label={t("subtitleGenerateHint")}>
-            <button type="button" className={PILL} onClick={onGenerate} disabled={generating}>
-              {generating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Sparkles size={12} />} {t("subtitleGenerate")}
-            </button>
-          </Hint>
-        )}
-        <button type="button" className={PILL} onClick={onAddSubtitle}>
-          <Plus size={12} /> {t("addSubtitleAtPlayhead")}
-        </button>
-        {subtitles.length > 0 && onApplyTexts && (
-          <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
-        )}
-        {subtitles.length > 0 && onDub && (
-          <button type="button" className={PILL} onClick={() => onDub()}>
-            <AudioLines size={12} /> {t("subtitleDub")}
-          </button>
-        )}
-        {onImportFile && <SubtitleFiles sequence={sequence} onImport={onImportFile} importing={importingFile} />}
-        {subtitles.length > 0 && (
-          <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants} className={PILL}
-            label={noteStrings.saveAll} />
         )}
       </div>
     </div>
@@ -568,7 +605,7 @@ function SubtitleTranslate({
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className={PILL}>
+        <button type="button" className={cn(PILL, ACTION)}>
           <Languages size={12} /> {t("subtitleTranslate")}
         </button>
       </PopoverTrigger>
@@ -643,7 +680,8 @@ function SubtitleTranslate({
 /** Distinguishes an uploaded font from a built-in stack in the one Select. */
 const UPLOAD_PREFIX = "upload:";
 
-function SubtitleStyleControls({
+/** 「字幕样式」弹窗里的设置:**字段、默认值、写回时机都原样搬自**面板顶上那个折叠区。 */
+function SubtitleStyleSettings({
   style,
   fonts,
   onUploadFont,
@@ -661,7 +699,6 @@ function SubtitleStyleControls({
   onSetStyle: (style: Record<string, unknown>) => void;
 }) {
   const t = useI18n();
-  const [open, setOpen] = React.useState(false);
   const s = readSubtitleStyle(style);
   const patch = (next: Partial<SubtitleStyle>) => onSetStyle({ ...s, ...next });
   // Sliders are controlled off `s` (which is the draft while one is in flight) so the value
@@ -670,178 +707,170 @@ function SubtitleStyleControls({
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   return (
-    <div className="border-b border-border">
-      <button type="button" aria-expanded={open} className="flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-2.5 py-[7px] text-xs font-semibold text-muted-foreground" onClick={() => setOpen((v) => !v)}>
-        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {t("subtitleStyle")}
-      </button>
-      {open && (
-        // 样式是**设一次**的东西,列表才是天天碰的 —— 它不该占掉大半个面板。
-        // 每一行都是同一副骨架(见 StyleRow):标签列、控件列、读数列三列定宽,
-        // 于是所有控件的左缘、右缘都落在同一条竖线上 —— 此前下拉、滑杆、色块各自决定
-        // 自己在哪儿结束,一栏里有三条参差的右边线。
-        <div className="grid gap-3 px-2.5 pb-3 pt-0.5">
-          <StyleGroup label={t("subGroupText")}>
-            <StyleRow label={t("subFont")}>
-              <span className="col-span-2 flex min-w-0 items-center gap-1">
-                {/* 每一项按自己的字体渲染 —— 字体是用**样子**挑的,名字帮不上忙。装了几十个字体
-                    之后名字就帮得上了,所以超过阈值 OptionPicker 会换成可搜索的那一版。 */}
-                <OptionPicker
-                  ariaLabel={t("subFont")}
-                  value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
-                  onChange={(v) => {
-                    if (!v.startsWith(UPLOAD_PREFIX)) {
-                      patch({ font_family: v, font_id: "" });
-                      return;
-                    }
-                    const id = v.slice(UPLOAD_PREFIX.length);
-                    const picked = fonts.find((font) => font.id === id);
-                    if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
-                  }}
-                  options={[
-                    ...SUBTITLE_FONTS.map((font) => ({
-                      value: font.value,
-                      label: t(font.labelKey as Parameters<typeof t>[0]),
-                      style: { fontFamily: font.value },
-                    })),
-                    ...fonts.map((font) => ({
-                      value: `${UPLOAD_PREFIX}${font.id}`,
-                      label: font.family,
-                      style: { fontFamily: uploadedFontStack(font.family) },
-                    })),
-                  ]}
-                  className={STYLE_FIELD}
-                />
-                {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
-                {onUploadFont && (
-                  <IconButton
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                    disabled={uploadingFont}
-                    label={t("subFontUpload")}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />}
-                  </IconButton>
-                )}
-                {s.font_id && onDeleteFont && (
-                  <IconButton
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                    label={t("subFontRemove")}
-                    onClick={() => {
-                      // Point the style back at a built-in BEFORE the font goes away, so the
-                      // sequence never references a font id that no longer resolves.
-                      const removing = s.font_id;
-                      patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
-                      onDeleteFont(removing);
-                    }}
-                  >
-                    <Trash2 size={12} />
-                  </IconButton>
-                )}
-                {onUploadFont && (
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".ttf,.otf,.ttc,.otc"
-                    hidden
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) onUploadFont(file);
-                      event.target.value = ""; // re-selecting the same file must fire change again
-                    }}
-                  />
-                )}
-              </span>
-            </StyleRow>
-            <StyleSlider
-              label={t("subFontSize")}
-              min={10}
-              max={120}
-              step={1}
-              value={s.font_size}
-              format={(v) => String(Math.round(v))}
-              onPreview={(v) => preview({ font_size: v })}
-              onCommit={(v) => patch({ font_size: v })}
+    // 每一行都是同一副骨架(见 StyleRow):标签列、控件列、读数列三列定宽,
+    // 于是所有控件的左缘、右缘都落在同一条竖线上 —— 此前下拉、滑杆、色块各自决定
+    // 自己在哪儿结束,一栏里有三条参差的右边线。
+    <div className="grid gap-3">
+      <StyleGroup label={t("subGroupText")}>
+        <StyleRow label={t("subFont")}>
+          <span className="col-span-2 flex min-w-0 items-center gap-1">
+            {/* 每一项按自己的字体渲染 —— 字体是用**样子**挑的,名字帮不上忙。装了几十个字体
+                之后名字就帮得上了,所以超过阈值 OptionPicker 会换成可搜索的那一版。 */}
+            <OptionPicker
+              ariaLabel={t("subFont")}
+              value={s.font_id ? `${UPLOAD_PREFIX}${s.font_id}` : s.font_family}
+              onChange={(v) => {
+                if (!v.startsWith(UPLOAD_PREFIX)) {
+                  patch({ font_family: v, font_id: "" });
+                  return;
+                }
+                const id = v.slice(UPLOAD_PREFIX.length);
+                const picked = fonts.find((font) => font.id === id);
+                if (picked) patch({ font_id: id, font_family: uploadedFontStack(picked.family) });
+              }}
+              options={[
+                ...SUBTITLE_FONTS.map((font) => ({
+                  value: font.value,
+                  label: t(font.labelKey as Parameters<typeof t>[0]),
+                  style: { fontFamily: font.value },
+                })),
+                ...fonts.map((font) => ({
+                  value: `${UPLOAD_PREFIX}${font.id}`,
+                  label: font.family,
+                  style: { fontFamily: uploadedFontStack(font.family) },
+                })),
+              ]}
+              className={STYLE_FIELD}
             />
-            <StyleRow label={t("subColor")}>
-              <StyleColor label={t("subColor")} value={s.color} onPreview={(v) => preview({ color: v })} onCommit={(v) => patch({ color: v })} />
-            </StyleRow>
-            {/* 加粗自成一行,用和花字面板同一种「按下 / 抬起」的切换键 —— 此前它是一个开关,
-                挤在颜色那一行的右端,读起来像是这块颜色的附属选项。 */}
-            <StyleRow label={t("subFontWeight")}>
-              <span className="col-span-2 flex items-center">
-                <button
-                  type="button"
-                  aria-pressed={s.bold}
-                  className={cn(
-                    "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-control px-2.5 text-ui-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground",
-                    s.bold && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground",
-                  )}
-                  onClick={() => patch({ bold: !s.bold })}
-                >
-                  <Bold size={13} /> {t("subBold")}
-                </button>
-              </span>
-            </StyleRow>
-          </StyleGroup>
-
-          {/* 衬底自成一组:底色和它的不透明度是同一件东西的两个量,放在一起读。 */}
-          <StyleGroup label={t("subGroupBackplate")}>
-            <StyleRow label={t("subBg")}>
-              <StyleColor
-                label={t("subBg")}
-                value={s.bg_color}
-                onPreview={(v) => preview({ bg_color: v })}
-                onCommit={(v) => patch({ bg_color: v })}
-                // 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。
-                note={s.bg_opacity <= 0.001 ? t("subBgNone") : undefined}
+            {/* 上传/移除跟在字体选择器旁边,而不是独占一行 —— 它们就是对这个选择器的操作。 */}
+            {onUploadFont && (
+              <IconButton
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                disabled={uploadingFont}
+                label={t("subFontUpload")}
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploadingFont ? <Loader2 size={12} className="animate-mosael-spin" /> : <Upload size={12} />}
+              </IconButton>
+            )}
+            {s.font_id && onDeleteFont && (
+              <IconButton
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                label={t("subFontRemove")}
+                onClick={() => {
+                  // Point the style back at a built-in BEFORE the font goes away, so the
+                  // sequence never references a font id that no longer resolves.
+                  const removing = s.font_id;
+                  patch({ font_id: "", font_family: SUBTITLE_FONTS[0].value });
+                  onDeleteFont(removing);
+                }}
+              >
+                <Trash2 size={12} />
+              </IconButton>
+            )}
+            {onUploadFont && (
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".ttf,.otf,.ttc,.otc"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) onUploadFont(file);
+                  event.target.value = ""; // re-selecting the same file must fire change again
+                }}
               />
-            </StyleRow>
-            <StyleSlider
-              label={t("subBgOpacity")}
-              min={0}
-              max={1}
-              step={0.05}
-              value={s.bg_opacity}
-              format={(v) => `${Math.round(v * 100)}%`}
-              onPreview={(v) => preview({ bg_opacity: v })}
-              onCommit={(v) => patch({ bg_opacity: v })}
-            />
-          </StyleGroup>
+            )}
+          </span>
+        </StyleRow>
+        <StyleSlider
+          label={t("subFontSize")}
+          min={10}
+          max={120}
+          step={1}
+          value={s.font_size}
+          format={(v) => String(Math.round(v))}
+          onPreview={(v) => preview({ font_size: v })}
+          onCommit={(v) => patch({ font_size: v })}
+        />
+        <StyleRow label={t("subColor")}>
+          <StyleColor label={t("subColor")} value={s.color} onPreview={(v) => preview({ color: v })} onCommit={(v) => patch({ color: v })} />
+        </StyleRow>
+        {/* 加粗自成一行,用和花字面板同一种「按下 / 抬起」的切换键 —— 此前它是一个开关,
+            挤在颜色那一行的右端,读起来像是这块颜色的附属选项。 */}
+        <StyleRow label={t("subFontWeight")}>
+          <span className="col-span-2 flex items-center">
+            <button
+              type="button"
+              aria-pressed={s.bold}
+              className={cn(
+                "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-control px-2.5 text-ui-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground",
+                s.bold && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground",
+              )}
+              onClick={() => patch({ bold: !s.bold })}
+            >
+              <Bold size={13} /> {t("subBold")}
+            </button>
+          </span>
+        </StyleRow>
+      </StyleGroup>
 
-          {/* 位置和边距是**同一件事的两半**(摆在哪儿、离边多远)。组名叫「布局」,不再叫「位置」——
-              此前组名和它底下的第一行同名,读出来是「位置 / 位置」。 */}
-          <StyleGroup label={t("subGroupPlacement")}>
-            <StyleRow label={t("subPosition")}>
-              <span className="col-span-2 flex min-w-0">
-                <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
-                  <SelectTrigger aria-label={t("subPosition")} className={STYLE_FIELD}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bottom">{t("subPosBottom")}</SelectItem>
-                    <SelectItem value="center">{t("subPosCenter")}</SelectItem>
-                    <SelectItem value="top">{t("subPosTop")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </span>
-            </StyleRow>
-            <StyleSlider
-              label={t("subOffset")}
-              min={0}
-              max={45}
-              step={1}
-              value={s.offset}
-              format={(v) => `${Math.round(v)}%`}
-              onPreview={(v) => preview({ offset: v })}
-              onCommit={(v) => patch({ offset: v })}
-            />
-          </StyleGroup>
-        </div>
-      )}
+      {/* 衬底自成一组:底色和它的不透明度是同一件东西的两个量,放在一起读。 */}
+      <StyleGroup label={t("subGroupBackplate")}>
+        <StyleRow label={t("subBg")}>
+          <StyleColor
+            label={t("subBg")}
+            value={s.bg_color}
+            onPreview={(v) => preview({ bg_color: v })}
+            onCommit={(v) => patch({ bg_color: v })}
+            // 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。
+            note={s.bg_opacity <= 0.001 ? t("subBgNone") : undefined}
+          />
+        </StyleRow>
+        <StyleSlider
+          label={t("subBgOpacity")}
+          min={0}
+          max={1}
+          step={0.05}
+          value={s.bg_opacity}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onPreview={(v) => preview({ bg_opacity: v })}
+          onCommit={(v) => patch({ bg_opacity: v })}
+        />
+      </StyleGroup>
+
+      {/* 位置和边距是**同一件事的两半**(摆在哪儿、离边多远)。组名叫「布局」,不再叫「位置」——
+          此前组名和它底下的第一行同名,读出来是「位置 / 位置」。 */}
+      <StyleGroup label={t("subGroupPlacement")}>
+        <StyleRow label={t("subPosition")}>
+          <span className="col-span-2 flex min-w-0">
+            <Select value={s.position} onValueChange={(v) => patch({ position: v as SubtitleStyle["position"] })}>
+              <SelectTrigger aria-label={t("subPosition")} className={STYLE_FIELD}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bottom">{t("subPosBottom")}</SelectItem>
+                <SelectItem value="center">{t("subPosCenter")}</SelectItem>
+                <SelectItem value="top">{t("subPosTop")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </span>
+        </StyleRow>
+        <StyleSlider
+          label={t("subOffset")}
+          min={0}
+          max={45}
+          step={1}
+          value={s.offset}
+          format={(v) => `${Math.round(v)}%`}
+          onPreview={(v) => preview({ offset: v })}
+          onCommit={(v) => patch({ offset: v })}
+        />
+      </StyleGroup>
     </div>
   );
 }

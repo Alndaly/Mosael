@@ -95,7 +95,8 @@ const NATIVE_STOCK: Record<string, number> = {
   "features/editor/Monitor.tsx": 1,
   "features/editor/SequenceSettings.tsx": 2,
   "features/editor/SubtitleFiles.tsx": 2,
-  "features/editor/SubtitlePanel.tsx": 7,
+  //: 7 → 6:顶上那个「字幕样式」折叠区改成了弹窗,折叠按钮(原生 <button>)换成 Button + DialogTrigger。
+  "features/editor/SubtitlePanel.tsx": 6,
   "features/editor/TranscriptPanel.tsx": 12,
   "features/entities/AssetEntities.tsx": 1,
   "features/entities/DrawDialog.tsx": 1,

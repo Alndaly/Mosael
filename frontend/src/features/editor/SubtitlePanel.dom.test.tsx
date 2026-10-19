@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -99,7 +99,7 @@ describe("去配音页的入口", () => {
     expect(useEditorStore.getState().selectedClipIds).toEqual(["c0"]);
   });
 
-  it("底部的「配音」也切过去,不再在这里弹一张表单", async () => {
+  it("顶部动作区的「配音」也切过去,不再在这里弹一张表单", async () => {
     const onDub = vi.fn();
     renderPanel(["一条"], onDub);
     await userEvent.click(screen.getByRole("button", { name: "subtitleDub" }));
@@ -108,7 +108,139 @@ describe("去配音页的入口", () => {
   });
 });
 
-describe("字幕样式表单", () => {
+/** 动作区要齐 7 个动作,还要有「字幕样式」:别的用例只管列表,这一份把面板装满。 */
+function renderAll() {
+  const onSetStyle = vi.fn();
+  const onPreviewStyle = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <SubtitlePanel
+        sequence={sequenceWith(["第一条"])}
+        onSetText={vi.fn()}
+        onAddSubtitle={vi.fn()}
+        onGenerate={vi.fn()}
+        onDeleteClip={vi.fn()}
+        onDub={vi.fn()}
+        onApplyTexts={vi.fn(async () => ({}))}
+        onImportFile={vi.fn()}
+        style={{}}
+        onSetStyle={onSetStyle}
+        onPreviewStyle={onPreviewStyle}
+      />
+    </QueryClientProvider>,
+  );
+  return { ...view, onSetStyle, onPreviewStyle };
+}
+
+/** 面板上的 7 个动作,按它们自己的名字找。 */
+function actionButtons() {
+  return [
+    screen.getByRole("button", { name: "subtitleGenerate" }),
+    screen.getByRole("button", { name: "addSubtitleAtPlayhead" }),
+    screen.getByRole("button", { name: "subtitleTranslate" }),
+    screen.getByRole("button", { name: "subtitleDub" }),
+    screen.getByRole("button", { name: "subtitleFileImport" }),
+    screen.getByRole("button", { name: "subtitleFileExport" }),
+    screen.getByRole("button", { name: /全部存为笔记/ }),
+  ];
+}
+
+describe("顶部动作区", () => {
+  it("7 个动作都在列表之前,底部不再有一排", () => {
+    const { container } = renderAll();
+    const root = container.firstElementChild as HTMLElement;
+    const list = root.querySelector(".overflow-y-auto") as HTMLElement;
+    expect(list).not.toBeNull();
+    for (const button of actionButtons()) {
+      expect(list.contains(button)).toBe(false);
+      // list 在按钮之后 ⇒ 按钮在列表之前。
+      expect(button.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    // 列表就是面板的最后一个子元素:原来那排钉子已经删掉,不是两处都有。
+    expect(root.lastElementChild).toBe(list);
+  });
+
+  it("分两组看得出:4 颗「生成 / 翻译 / 配音」、3 颗「导入 / 导出 / 存笔记」,中间有分隔", () => {
+    const { container } = renderAll();
+    const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
+    expect(bar).not.toBeNull();
+    const groups = [...bar.querySelectorAll<HTMLElement>("[data-actions-group]")];
+    expect(groups.map((group) => group.dataset.actionsGroup)).toEqual(["generate", "files"]);
+    expect(groups[0]!.querySelectorAll("button")).toHaveLength(4);
+    expect(groups[1]!.querySelectorAll("button")).toHaveLength(3);
+    // 两组之间是一条发丝分隔线,不是 7 颗同款按钮一路排下去。
+    const divider = bar.querySelector("[data-actions-divider]");
+    expect(divider).not.toBeNull();
+    expect(divider).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("窄宽度下折行,不横向滚动,按钮文字不折", () => {
+    const { container } = renderAll();
+    const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
+    // jsdom 没有布局:钉住决定这件事的类,回归时它会先没。
+    expect(bar.className).toContain("flex-wrap");
+    expect(bar.className).not.toMatch(/overflow-x-(auto|scroll)/);
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).not.toMatch(/overflow-x-(auto|scroll)/);
+    for (const group of bar.querySelectorAll<HTMLElement>("[data-actions-group]")) {
+      expect(group.className).toContain("flex-wrap");
+    }
+    for (const button of actionButtons()) {
+      // 按钮整颗换行,而不是把自己压窄、把字挤断。
+      expect(button.className).toContain("shrink-0");
+      expect(button.className).toContain("whitespace-nowrap");
+    }
+    expect(bar.contains(screen.getByRole("button", { name: "subtitleStyle" }))).toBe(true);
+  });
+});
+
+describe("字幕样式弹窗", () => {
+  it("默认看不到样式设置,也没有折叠区那套展开状态", () => {
+    renderAll();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByLabelText("subColor")).toBeNull();
+    // 它现在是**弹窗**的触发器,不再是那一排折叠区(折叠区只有一个 aria-expanded)。
+    const trigger = screen.getByRole("button", { name: "subtitleStyle" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+  });
+
+  it("点「字幕样式」→ 弹窗出现,原来那些设置项都在里面", async () => {
+    const user = userEvent.setup();
+    renderAll();
+    await user.click(screen.getByRole("button", { name: "subtitleStyle" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("subtitleStyle")).toBeTruthy();
+    // 原样搬过来的七样设置 + 加粗那一切换键。
+    for (const label of ["subFont", "subFontSize", "subColor", "subBg", "subBgOpacity", "subPosition", "subOffset"]) {
+      expect(within(dialog).getByLabelText(label), label).toBeTruthy();
+    }
+    expect(within(dialog).getByRole("button", { name: "subBold" })).toBeTruthy();
+    expect(within(dialog).getAllByRole("group")).toHaveLength(3);
+  });
+
+  it("关掉就没了", async () => {
+    const user = userEvent.setup();
+    renderAll();
+    await user.click(screen.getByRole("button", { name: "subtitleStyle" }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByLabelText("subColor")).toBeNull();
+  });
+
+  it("在弹窗里改一项立刻生效(不是等「完成」才写)", async () => {
+    const user = userEvent.setup();
+    const { onSetStyle } = renderAll();
+    await user.click(screen.getByRole("button", { name: "subtitleStyle" }));
+    const dialog = screen.getByRole("dialog");
+    // 默认加粗是开着的(见 subtitleStyle 的 SUBTITLE_DEFAULTS),点一下就地关掉 —— 写回马上发生。
+    await user.click(within(dialog).getByRole("button", { name: "subBold" }));
+    expect(onSetStyle).toHaveBeenLastCalledWith(expect.objectContaining({ bold: false }));
+  });
+});
+
+describe("字幕样式设置(弹窗里)", () => {
   function renderStyle(style: Record<string, unknown> = {}) {
     const onSetStyle = vi.fn();
     const onPreviewStyle = vi.fn();
@@ -131,13 +263,14 @@ describe("字幕样式表单", () => {
   }
 
   it("三组各有名字,组名不和组里任何一行重名(此前是「位置 / 位置」)", async () => {
-    const { container } = renderStyle();
+    renderStyle();
     await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
+    // 设置搬进了弹窗(portal 到 body),所以按 document 找,不按 render 的容器找。
     const groups = screen.getAllByRole("group");
-    expect(groups.map((group) => group.getAttribute("aria-labelledby") && container.querySelector(`[id="${group.getAttribute("aria-labelledby")}"]`)?.textContent))
+    expect(groups.map((group) => group.getAttribute("aria-labelledby") && document.getElementById(group.getAttribute("aria-labelledby")!)?.textContent))
       .toEqual(["subGroupText", "subGroupBackplate", "subGroupPlacement"]);
     for (const group of groups) {
-      const name = container.querySelector(`[id="${group.getAttribute("aria-labelledby")}"]`)?.textContent;
+      const name = document.getElementById(group.getAttribute("aria-labelledby")!)?.textContent;
       const rowLabels = [...group.querySelectorAll("[data-style-row] > span:first-child")].map((span) => span.textContent);
       expect(rowLabels).not.toContain(name);
     }
@@ -150,13 +283,13 @@ describe("字幕样式表单", () => {
   });
 
   it("每一行是同一副三列骨架:标签列、控件列、读数列定宽,控件的左右缘对齐", async () => {
-    const { container } = renderStyle();
+    renderStyle();
     await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
-    const rows = [...container.querySelectorAll("[data-style-row]")];
+    const rows = [...document.querySelectorAll("[data-style-row]")];
     expect(rows).toHaveLength(8);
     for (const row of rows) expect(row.className).toContain("grid-cols-[56px_minmax(0,1fr)_36px]");
     // 滑杆的读数落在第三列,等宽数字。
-    const readouts = [...container.querySelectorAll("[data-style-row] output")];
+    const readouts = [...document.querySelectorAll("[data-style-row] output")];
     expect(readouts.map((one) => one.textContent)).toEqual(["32", "50%", "8%"]);
     for (const one of readouts) expect(one.className).toContain("timecode");
   });
