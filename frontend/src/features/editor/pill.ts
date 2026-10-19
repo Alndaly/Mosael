@@ -34,10 +34,22 @@ export const ACTION_BAR = "flex min-w-0 items-center gap-2.5";
  * flex 的自动最小宽度会按内容把它撑住,右栏就被挤出面板。`overflow-x-auto` 只在真放不下时
  * 出现滚动;`overflow-y-hidden` 保证永远只有横向那一条。
  *
- * 滚动条的样子走全局策略(见 design/tokens.css:平时宽 0,悬停 / 聚焦才显形),所以这里
- * **不设 `scrollbar-gutter`** —— 那会常驻一条高度,把图标行撑高;也不用 `calc()`。
+ * **裁剪框自己也要留纵向余量** ✓。`overflow-x: auto` 会让 `overflow-y: visible` 计算成 `auto`
+ * (溢出即裁),`overflow-y-hidden` 更是直接裁 —— 裁剪发生在 **padding box 边缘**,所以要让
+ * 凸出来的东西落在**内边距**里,而不是去改 `overflow-y`(和 `overflow-x-auto` 同时写 `visible`
+ * 不算数,只会变成 `auto` 照样裁、还多一条纵向滚动条)。
+ *
+ * 具体量:图标钮 `icon-sm` 32px;`CountBadge` 按设计钉在图标右上 `-top-1`(向上凸 4px);
+ * 按钮的 `ring-2` 焦点环往上下各出 2px。够用的裁切框 = 32 + 4(上)+ 2(下)= 38px;
+ * 取 `py-1`(上下各 4px)= 40px,正好压在控件刻度的 md 档,底边还多 2px 给焦点环 ——
+ * `min-h-10` 把这条下限钉住,以后谁改小内边距,测试先红。
+ *
+ * 只补这几像素:行高从 32 变 40(+8px),不再往别处找地方。
+ *
+ * 滚动条的样子走全局策略(见 design/tokens.css:平时宽 0,悬停 / 聚焦才显形,桌面壳里是
+ * overlay 不占布局),所以这里**不设 `scrollbar-gutter`** —— 那会常驻一条高度;也不用 `calc()`。
  */
-export const ACTION_SCROLL = "flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden";
+export const ACTION_SCROLL = "flex min-h-10 min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden py-1";
 
 /**
  * 左栏里的动作轨道:一排、不折行、宽度按内容(`w-max`)。
@@ -51,8 +63,11 @@ export const ACTION_TRACK = "flex w-max items-center gap-x-1.5";
  * 右栏:统计文字 / 「字幕样式」。钉在右缘 —— 不参与收缩(`shrink-0`)、不滚、不折行
  * (`whitespace-nowrap`)。`self-stretch` 让那条 `border-l` 跟左边的图标同高(整条栏的
  * 内容高度),而不是只绕着一行 16px 的统计文字。这条线和组间的 `ACTION_DIVIDER` 同一种细线。
+ *
+ * `min-h-10` 和左栏同一档:左边为了角标 / 焦点环钉在 40px,右栏也跟着这一档 —— 里面的
+ * 32px 图标钮上下各 4px,「字幕样式」的焦点环不贴边;两条栏的 `border-l` 也不会一高一低。
  */
-export const ACTION_INFO = "flex shrink-0 self-stretch items-center gap-2 whitespace-nowrap border-l border-border pl-2.5";
+export const ACTION_INFO = "flex min-h-10 shrink-0 self-stretch items-center gap-2 whitespace-nowrap border-l border-border pl-2.5";
 
 /**
  * 一组同类动作:组内 4px。组本身不折行 —— 单元结构决定的,见 `ACTION_UNIT`。

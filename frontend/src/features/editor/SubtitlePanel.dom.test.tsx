@@ -252,6 +252,56 @@ describe("顶部动作区", () => {
   });
 });
 
+/** 会纵向裁剪的祖先:只要带 `overflow-*` 的 auto / hidden / scroll / clip 就算(见 `pill.ts` 的说明)。 */
+function verticalClippers(from: HTMLElement, stop: HTMLElement): HTMLElement[] {
+  const clippers: HTMLElement[] = [];
+  for (let node = from.parentElement; node && node !== stop; node = node.parentElement) {
+    if (/overflow-(?:x-|y-)?(?:auto|hidden|scroll|clip)/.test(node.getAttribute("class") ?? "")) clippers.push(node);
+  }
+  return clippers;
+}
+
+/**
+ * 同一个根因在字幕 tab 上:左栏一样是 `overflow-x-auto overflow-y-hidden`,图标钮的焦点环
+ * (上下各 2px)会被那 32px 的裁剪框切掉;右栏的「字幕样式」不在滚动层里,但它要和左边同高,
+ * 里面的 32px 图标钮也要有上下各 4px 的余量。jsdom 没有排版,钉结构 + 类。
+ */
+describe("动作栏的纵向余量", () => {
+  it("左栏也留出上下余量,行高钉在 40px", () => {
+    const { container } = renderAll();
+    const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
+    const scroller = bar.querySelector("[data-actions-scroll]") as HTMLElement;
+
+    // 32px 图标钮 + 焦点环 2px ⇒ 至少 34px;py-1 上下各 4px、min-h-10 钉在 40px,留够且不把行撑高太多。
+    expect(scroller.className).toContain("py-1");
+    expect(scroller.className).toContain("min-h-10");
+    // 横向滚动机制原样保留,`overflow-y` 仍然是 hidden(不改成 visible:那会和 overflow-x-auto 冲突)。
+    expect(scroller.className).toContain("overflow-x-auto");
+    expect(scroller.className).toContain("overflow-y-hidden");
+    expect(scroller.className).not.toContain("overflow-y-visible");
+    expect(scroller.className).not.toContain("calc(");
+  });
+
+  it("右栏的「字幕样式」根本不在裁剪层里,而且栏高和左栏同一档", () => {
+    const { container } = renderAll();
+    const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
+    const info = bar.querySelector("[data-actions-info]") as HTMLElement;
+    const style = screen.getByRole("button", { name: "subtitleStyle" });
+
+    expect(info.contains(style)).toBe(true);
+    // 右栏不滚、不裁:从「字幕样式」到动作栏之间一个裁剪者都没有,32px 按钮上下各有 4px 余量(40px 栏高)。
+    expect(verticalClippers(style, bar)).toEqual([]);
+    expect(info.className).toContain("min-h-10");
+    expect(info.className).toContain("items-center");
+    expect(style.className).toContain("size-8");
+    expect(style.className).toContain("focus-visible:ring-2");
+    // 右栏按内容定宽、不折行 —— 位置和滚动行为没变。
+    expect(info.className).toContain("shrink-0");
+    expect(info.className).toContain("whitespace-nowrap");
+    expect(info.className).toContain("border-l");
+  });
+});
+
 /**
  * 维护者:「逐字稿和字幕的这些交互入口按钮可以改为 icon 模式的 button 然后注意 Hint」。
  *

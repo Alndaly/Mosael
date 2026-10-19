@@ -557,3 +557,71 @@ describe("顶部动作区的分组", () => {
     for (const unit of units) expect(unit.className).toContain("gap-1.5");
   });
 });
+
+/**
+ * 维护者:「为何左侧都被切割了导致 icon 的角标不完整」。
+ *
+ * `overflow-x-auto` 的容器会把 `overflow-y` 算成 `auto`(再显式写 `overflow-y-hidden` 更是直接裁),
+ * 裁剪发生在 **padding box 边缘**。图标钮 32px、角标按设计凸在右上 `-top-1`(4px)、焦点环 `ring-2`
+ * 往外 2px —— 滚动层的总高若只有内容那 32px,这三样里凸出来的部分全被切掉。
+ *
+ * jsdom 没有排版,所以这里钉的是**结构和类**:裁剪框自己有没有留出余量、角标到栏之间的祖先链里
+ * 还有没有第二个裁剪者。数值由类名对应的刻度说明,和本目录其它布局用例同一种做法。
+ */
+
+/** 会纵向裁剪的祖先:只要带 `overflow-*` 的 auto / hidden / scroll / clip 就算(见 `pill.ts` 的说明)。 */
+function verticalClippers(from: HTMLElement, stop: HTMLElement): HTMLElement[] {
+  const clippers: HTMLElement[] = [];
+  for (let node = from.parentElement; node && node !== stop; node = node.parentElement) {
+    if (/overflow-(?:x-|y-)?(?:auto|hidden|scroll|clip)/.test(node.getAttribute("class") ?? "")) clippers.push(node);
+  }
+  return clippers;
+}
+
+describe("动作栏的纵向余量", () => {
+  it("左栏给自己留出上下余量,行高钉在 40px —— 不再只给内容 32px", async () => {
+    serveTranscript(["SPEAKER_00"]);
+    renderToolbar();
+    await screen.findByText("第0句");
+
+    const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
+    const scroller = bar.querySelector("[data-actions-scroll]") as HTMLElement;
+
+    // 图标钮 32px + 角标向上凸 4px + 焦点环向下 2px ⇒ 至少 38px。py-1 是上下各 4px(共 40px),
+    // min-h-10 把这一行钉在同一档(40px = 控件刻度 md):角标正好落在裁剪框里,焦点环还多 2px。
+    expect(scroller.className).toContain("py-1");
+    expect(scroller.className).toContain("min-h-10");
+    // 补的只是纵向空间:横向滚动机制一个字没动,`overflow-y` 也没有被改成 visible。
+    expect(scroller.className).toContain("overflow-x-auto");
+    expect(scroller.className).toContain("overflow-y-hidden");
+    expect(scroller.className).not.toContain("overflow-y-visible");
+    expect(scroller.className).not.toContain("calc(");
+    // 右栏跟着同一档高度,「N 句 · M 字」不会比左边的图标行矮一截。
+    const stats = bar.querySelector("[data-actions-info]") as HTMLElement;
+    expect(stats.className).toContain("min-h-10");
+  });
+
+  it("口癖的「132」角标不被切:从角标到动作栏,唯一的裁剪者就是留了余量的左栏", async () => {
+    serveFillerTranscript();
+    renderToolbar();
+    await screen.findByText("呃");
+
+    const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
+    const scroller = bar.querySelector("[data-actions-scroll]") as HTMLElement;
+    const badge = document.querySelector("[data-count-badge]") as HTMLElement;
+    const button = badge.closest("button") as HTMLElement;
+
+    // 角标仍然凸在按钮右上(`-top-1` = 4px)—— 这是对的样子,不把它藏进图标里。
+    expect(badge.className).toContain("absolute");
+    expect(badge.className).toContain("-top-1");
+    // 它自己的定位容器是那颗 32px 的图标钮(不裁剪);再往上唯一的裁剪者是左栏。
+    expect(button.className).toContain("relative");
+    expect(button.className).toContain("size-8");
+    expect(verticalClippers(badge, bar)).toEqual([scroller]);
+    // 那个裁剪者上下各留了 4px(>= 角标凸出的 4px),所以「132」整个画得出来。
+    expect(scroller.className).toContain("py-1");
+    // 焦点环也往上下各出 2px,同样落在余量里;按钮本身没被压窄或压矮。
+    expect(button.className).toContain("focus-visible:ring-2");
+    expect(button.className).toContain("shrink-0");
+  });
+});
