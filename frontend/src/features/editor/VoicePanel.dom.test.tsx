@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -508,16 +508,6 @@ describe("权重下载那一行", () => {
     expect(alert).toHaveTextContent("下载失败");
     expect(alert).toHaveTextContent("连不上模型下载源");
     expect(alert).toHaveTextContent(/最后一次/);
-
-    //: 后端把 `error` 里的原文备好了(`message` 是人话);卡片主句只说人话,原文在点开的「详情」里。
-    //: 此前 `detail` 没接上,这一栏有数据却看不见 —— 用户只能看到被截断的那一句。
-    const summary = alert.querySelector("[data-failure-summary]")!;
-    expect(summary.textContent, "主句是人话").toContain("连不上模型下载源");
-    expect(summary.textContent, "原文不该挤进主句").not.toContain("LocalEntryNotFoundError");
-    fireEvent.click(alert.querySelector<HTMLElement>("[data-failure-more]")!);
-    const detail = (await screen.findByText("LocalEntryNotFoundError: check your connection")).closest("[data-failure-detail]");
-    expect(detail, "原文在「详情」里").not.toBeNull();
-    expect(detail!.textContent).toContain("LocalEntryNotFoundError");
 
     await user.click(screen.getByRole("button", { name: "重试" }));
     await waitFor(() => expect(downloadCalls).toHaveLength(1));

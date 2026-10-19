@@ -1,24 +1,5 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
-  "v1.9.9": {
-    zh: [
-      "**ComfyUI 的大机器不再「输出超限」。** 目录类操作(工具、模型、工作流库、节点包、音色)的输出预算从 1 MB 放宽到 8 MB;插件侧也不再静默截掉模型清单 —— 以前只列出前 N 个,现在整份放不下就不收,并说清是哪一步超了。插件版本 1.23.5。",
-      "**模型下载能接着下。** 下载支持断点续传(Range / 206 / 200 / 416,并用 sidecar 对账);取消或失败会保留半截文件,下次从 N 继续,也可以显式「删除没下完的部分」;7 天没再动的孤儿自动清理。进度、百分比和速度改成结构化的字节数,总量未知就留空,不再去解析人话;刷新页面后状态不丢,还能继续。",
-      "**远端连接显示版本,也能直接打开工作台。** 「打开工作台」入口不再依赖整份工作流库,网页版也有它;没有地址时入口照样摆着,但会说清为什么点不了。连接卡显示远端那台自己报的版本号,四种情况各说一句,不猜。",
-      "**缺失项先说真话。** 12 条修复:离线也能按图上写的 cnr_id / aux_id / ver 归因;产物「对不上」不再冒充「没搜成」;没有目录的声明不会丢;版本不符会说清该升级还是降级;同名的文件不再冒充同一个文件;校验错误的主句改成白话。缺的模型显示真实下载地址,多平台来源只在哈希对得上时才给,并按工作流声明的 SHA256 下载核对,对不上就删掉并说清。",
-      "**URL 导入补上三道闸。** 2 GiB 上限、整个请求的 wall-clock 总超时、落地文件头嗅探(HTML 改名成 .mp4 会被拒);新增 resolve() 站点适配器接缝和图片直链导入入口;MissAV 站点适配(解析并登记,只对实测可用的 missav123.com 与 missav.live;.ai / .ws 被 Cloudflare 拦,不用)。AES-128 的 HLS 不再一律标「受保护」,地区受限的文案指向真正管用的出站代理。",
-      "**剪辑页:不再多一路声音,也不再卡住。** 灯箱修掉库渲染相邻项带来的第二路声音;字幕翻译有超时、能取消,不再永远停在 0/1039;字幕与逐字稿的动作改成图标 + Hint(带读屏名,口癖计数留角标)并按语义分组;翻译弹层主按钮铺满,右侧统计与设置跟着钉住;配音模型下载失败或被杀都说明原因并能重试;画布 0×0 时的 NaN SVG 修掉。",
-    ],
-    en: [
-      "**A big ComfyUI no longer hits “output too large”.** Directory operations (tools, models, workflows, node packs, voices) got an 8 MB output budget instead of 1 MB, and the plugin side no longer silently trims a model list — it used to list only the first N; now an oversized reply is refused whole, with a clear message. Plugin version 1.23.5.",
-      "**Model downloads resume.** Downloads support ranged resumes (Range / 206 / 200 / 416, reconciled with a sidecar file); cancelling or failing keeps the partial file, the next attempt continues from N, and you can explicitly delete the unfinished part; orphans untouched for 7 days are cleaned up. Progress, percentage and speed are structured byte counts now (null when the total is unknown) instead of parsing prose, and reloading the page no longer loses state or the ability to continue.",
-      "**Remote connections show their version and open the workbench directly.** The Open workbench entry no longer depends on the whole workflow library — it exists on the web build too — and it stays visible without an address while saying why it cannot be used. The connection card shows the version the remote machine reports, with one sentence for each of four cases and no guessing.",
-      "**Missing items tell the truth first.** Twelve fixes: attribution from the graph's own cnr_id / aux_id / ver works offline; an output that “doesn't match” no longer poses as “nothing found”; declarations without a catalogue are not dropped; a version mismatch says whether to upgrade or downgrade; same-named files no longer pose as the same file; validation errors lead with plain language. Missing models show their real download URL, multi-platform sources appear only when the hash matches, and downloads verify the workflow's declared SHA256 — a mismatch is deleted and explained.",
-      "**URL import gains three gates.** A 2 GiB limit, a wall-clock timeout for the whole request, and sniffing the landed file header (an HTML page renamed to .mp4 is refused); plus a resolve() site-adapter seam and an image direct-link import entry; MissAV is adapted (parsed and registered) only for the two domains verified working, missav123.com and missav.live (.ai / .ws are behind Cloudflare). AES-128 HLS is no longer always labelled protected, and the region-restricted copy points at the outbound proxy that actually works.",
-      "**Editor: no second audio track, no stuck progress.** The lightbox no longer plays a second audio track from the library's neighbouring item; subtitle translation has a timeout and can be cancelled instead of sitting at 0/1039 forever; subtitle and transcript actions became icons with hints (screen-reader names, quirk counts as badges) grouped by meaning; the translation dialog's primary button is full width and the right-hand stats and settings stay pinned; dubbing model downloads say why they failed or were killed and can be retried; the NaN SVG at a 0×0 canvas is fixed.",
-    ],
-  },
-
   "v1.9.8": {
     zh: [
       "**Edge 免费语音修好了。** 微软 2026-10-13 换了令牌校验,旧版一律 403;这一版跟上新规则,免提浮标和配音里的 Edge 都能正常念。失败时也不再甩一整串 wss 地址和令牌,而是说清是谁拒了、怎么办;这类拒绝不再白重试十几秒。",

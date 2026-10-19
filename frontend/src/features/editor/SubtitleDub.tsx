@@ -414,7 +414,6 @@ function WeightDownloadRow({
           lines={2}
           title={t("subtitleDubModelFailed")}
           summary={reason || t("subtitleDubModelFailedNoReason")}
-          detail={model.error || null}
         />
         {model.failed_at && (
           <span className="text-ui-2xs text-muted-foreground">
