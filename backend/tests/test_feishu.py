@@ -92,7 +92,10 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
 
     sent: list[tuple[str, str]] = []
     monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
-    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+    #: 回复现在是**卡片**(见 client.send_markdown);短通知仍是 send_text。两条都接进 sent,
+    #: 断言照旧看"发出去的是什么"。
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
+    monkeypatch.setattr(feishu_client, "send_markdown", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
 
     _incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
 
@@ -148,7 +151,8 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
         db.commit()
 
     monkeypatch.setattr(host, "run_turn", boom)
-    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append(text))
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text, **k: sent.append(text))
+    monkeypatch.setattr(feishu_client, "send_markdown", lambda bot, chat_id, text, **k: sent.append(text))
 
     _incoming(bot["id"], "oc_chat_2", "msg-2", "ou_sender2", content_json=json.dumps({"text": "hi"}))
     assert sent and "失败" in sent[0]
@@ -165,7 +169,9 @@ def _bound_bot(client, monkeypatch, sent: list):
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
         assert bindings.redeem_bind_code(db, ws["id"], bot["id"], "ou_img", code) is not None
         db.commit()
-    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
+    #: 回复 / 运行结果是卡片(`send_markdown`),回执与提示仍是 `send_text`;两边都接进 sent。
+    monkeypatch.setattr(feishu_client, "send_markdown", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
     return ws, bot
 
 

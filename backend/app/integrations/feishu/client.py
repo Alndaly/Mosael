@@ -237,6 +237,143 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_
     return _message_id(data)
 
 
+#: 飞书「发送消息」的上限:卡片 / 富文本**请求体最大 30 KB**,文本 150 KB
+#: (官方文档「发送消息 → 请求体 → content」,错误码 230025)。
+#: 这里量的是**真正要发出去的请求体**(照 httpx 的序列化方式),不是正文字节 —— 引号 / 换行
+#: 在 JSON 里要转义,一段代码块能让同样的正文大出两成,只量正文就会在那一刻撞上限。
+#: 29_000 留 1 KB 余量给真实收件 id(`_RECEIVE_ID_PLACEHOLDER` 已按更长的算)。
+CARD_PAYLOAD_MAX_BYTES = 29_000
+
+#: 量请求体时用的收件 id 占位。真实 chat_id / open_id 一般 30~60 字符,这里给 67 —— 偏大即安全。
+_RECEIVE_ID_PLACEHOLDER = "oc_" + "0" * 64
+
+
+def markdown_card(content: str, *, index: int = 1, total: int = 1) -> dict[str, Any]:
+    """一张只放正文的交互卡片:一个 `div`、一个 `lark_md`,正文原样。
+
+    `lark_md` 是飞书卡片(JSON 1.0)普通文本组件支持的 Markdown 文本类型 —— 加粗、斜体、
+    删除线、链接、列表、代码块这些会按排版渲染,而不是显示成源码(标题 / 表格 / 引用是
+    JSON 2.0 的 `markdown` 组件才有的语法,这里不换卡片结构)。
+
+    `total > 1` 时加一格标题栏写 `（i/n）`:超长正文拆成几张卡时,先看哪张、后看哪张
+    才说得清。**正文一个字都不动** —— 编号在标题栏,不在正文里。
+    """
+    card: dict[str, Any] = {
+        "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": content}}],
+    }
+    if total > 1:
+        card["header"] = {
+            "template": "grey",
+            "title": {"tag": "plain_text", "content": f"（{index}/{total}）"},
+        }
+    return card
+
+
+def _card_text_bytes(content: str) -> int:
+    """这张卡发出去时**请求体**有多少字节。按最宽的编号头算,给实际编号留余量。
+
+    照 `httpx` 的 JSON 序列化方式量(`ensure_ascii=False`、紧凑分隔符):这样正文里的
+    引号 / 换行 / 反斜杠在 JSON 里的那层转义也真的算进去。
+    """
+    card = markdown_card(content, index=999, total=999)
+    body = {
+        "receive_id": _RECEIVE_ID_PLACEHOLDER,
+        "msg_type": "interactive",
+        "content": json.dumps(card, ensure_ascii=False),
+    }
+    return len(json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8"))
+
+
+def _fits_one_card(content: str) -> bool:
+    return _card_text_bytes(content) <= CARD_PAYLOAD_MAX_BYTES
+
+
+def _hard_split_one_line(text: str) -> list[str]:
+    """一整行就超过上限(压缩过的 JSON、没有句读的长段):按字符二分,切到装得下为止。"""
+    pieces: list[str] = []
+    rest = text
+    while rest:
+        if _fits_one_card(rest):
+            pieces.append(rest)
+            break
+        low, high = 1, len(rest)
+        while low < high:
+            middle = (low + high + 1) // 2
+            if _fits_one_card(rest[:middle]):
+                low = middle
+            else:
+                high = middle - 1
+        pieces.append(rest[:low])
+        rest = rest[low:]
+    return pieces
+
+
+def markdown_chunks(text: str) -> list[str]:
+    """把正文切成**每张卡都装得下**的几段。拼起来与原文逐字相等 —— 不截断、不重排。
+
+    优先在行边界切(代码块 / 列表不会被从中间断开);某一整行本身就超限时才按字符切开。
+    空正文给一段空串,让调用方照旧发一张(能不能渲染由飞书说,失败还有下面那道降级)。
+    """
+    if not text:
+        return [""]
+    if _fits_one_card(text):
+        return [text]
+    chunks: list[str] = []
+    current = ""
+    for line in text.splitlines(keepends=True):
+        candidate = current + line
+        if current and not _fits_one_card(candidate):
+            chunks.append(current)
+            current = line
+        else:
+            current = candidate
+        #: 一整行自己就超限时在这里切开 —— 不能等下一行才发现。
+        if not _fits_one_card(current):
+            pieces = _hard_split_one_line(current)
+            chunks.extend(pieces[:-1])
+            current = pieces[-1]
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def send_markdown(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str = "chat_id") -> list[str]:
+    """**长正文**发成交互卡片,返回每条消息的 message_id(单张卡就是一个元素)。
+
+    这是"长正文"唯一的一处实现 —— 智能体的回复与工作流运行结果都走它;短通知继续用
+    `send_text`(任务回执、绑定提示、"看不了这种消息"),少一次卡片失败面。
+
+    两道保险:
+
+    - **卡片发不出去**(飞书拒了、网络抖动、卡片构造失败)→ 同一段内容改用 `send_text`
+      重发,并把原因写进日志。消息不许凭空消失;逐段降级,已发出去的卡不会重发一遍。
+    - **超长** → 按飞书 30 KB 的卡片请求体上限分多张卡(`markdown_chunks`),每张带
+      `（i/n）` 编号,按原顺序发出,拼起来等于原文。**不静默截断。**
+
+    这一轮不做流式 / 分段更新:调用方原来一次发多少还是多少,只是每一段的消息类型变了。
+    """
+    try:
+        chunks = markdown_chunks(text)
+    except Exception as exc:  # noqa: BLE001 —— 构造失败也只降级,不许把消息弄丢
+        logger.warning("feishu markdown card build failed (%s: %s); sending as text", type(exc).__name__, exc)
+        return [send_text(bot, chat_id, text, receive_id_type=receive_id_type)]
+
+    total = len(chunks)
+    sent: list[str] = []
+    for index, chunk in enumerate(chunks, 1):
+        try:
+            card = markdown_card(chunk, index=index, total=total)
+            sent.append(send_card(bot, chat_id, card, receive_id_type=receive_id_type))
+        except Exception as exc:  # noqa: BLE001 —— 见 docstring:降级成文字,而不是丢掉
+            logger.warning(
+                "feishu markdown card %d/%d failed (%s: %s); resending that part as text",
+                index, total, type(exc).__name__, exc,
+            )
+            label = f"（{index}/{total}）\n" if total > 1 else ""
+            sent.append(send_text(bot, chat_id, label + chunk, receive_id_type=receive_id_type))
+    return sent
+
+
 def update_card(bot: FeishuBot, message_id: str, card: dict[str, Any]) -> None:
     """**就地换掉**一张已经发出去的交互卡片(`PATCH im/v1/messages/:message_id`)。
 

@@ -485,7 +485,9 @@ def deliver_turn(session_id: str) -> None:
         if not bot.enabled:
             return
         try:
-            client.send_text(bot, chat_id, text)
+            #: **长正文发卡片**:智能体的回复是 markdown,`text` 类型会在飞书里显示成源码。
+            #: 卡片失败时 `send_markdown` 自己降级成 text 重发并记日志 —— 回复不会凭空消失。
+            client.send_markdown(bot, chat_id, text)
         except client.FeishuError:
             logger.exception("feishu reply failed bot=%s chat=%s", bot.id, chat_id)
 
@@ -549,7 +551,8 @@ def deliver_trigger_run(db: Session, job: Job) -> None:
     if not text:
         return
     try:
-        client.send_text(bot, chat_id, text)
+        #: 运行结果也是**长正文**(头部一句 + 产出全文),和智能体回复一样发卡片。
+        client.send_markdown(bot, chat_id, text)
     except client.FeishuError:
         logger.exception("feishu trigger result failed trigger=%s chat=%s", trigger.id, chat_id)
 

@@ -115,8 +115,10 @@ def _job(job_id: str) -> Job:
 
 
 def _sent_texts(monkeypatch) -> list[tuple[str, str]]:
+    """回执走 `send_text`,运行结果走 `send_markdown`(卡片)—— 两边都接进同一份清单。"""
     sent: list[tuple[str, str]] = []
-    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
+    monkeypatch.setattr(feishu_client, "send_markdown", lambda bot, chat_id, text, **k: sent.append((chat_id, text)))
     return sent
 
 
