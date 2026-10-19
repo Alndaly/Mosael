@@ -34,6 +34,35 @@ export function canvasCameraDuration(ms: number): number {
 }
 
 /**
+ * 视口跳转的时长 —— **量不出尺寸时一律不等**(0)。
+ *
+ * d3-zoom 的过渡按 extent 的跨度当插值尺度(见 d3-zoom `schedule` 里的 `w / l[2]`)。容器是
+ * 0×0 时跨度是 0,`0 / 0 = NaN`:过渡的每一帧都把 transform 写成 `NaN`,React Flow 的
+ * `<Background>` 再把它写进 `<pattern x/y>` 和圆点的 `cx/cy/r`(CI 日志里那串「Received NaN for
+ * the `cx` attribute」)。直接落地没有过渡,也就没有那次除法。
+ *
+ * 0×0 不是只在测试里出现:容器还没挂上、右栏把画布压没、窗口窄到 0 时量出来都是 0。
+ */
+function cameraDuration(surface: HTMLElement, ms: number): number {
+  if (!(surface.clientWidth > 0) || !(surface.clientHeight > 0)) return 0;
+  return canvasCameraDuration(ms);
+}
+
+/**
+ * 视口三个分量必须是有限数。NaN / Infinity 一旦进了 React Flow 的 `transform`,就会变成 SVG 属性
+ * 里的 `NaN`(见 `cameraDuration` 的说明);算不出来时退回默认视口,而不是让坐标一路烂下去。
+ * zoom 还必须是正数 —— 0 或负数会让画布彻底用不了。
+ */
+function finiteViewport(viewport: { x: number; y: number; zoom: number }): { x: number; y: number; zoom: number } {
+  const zoom = Number.isFinite(viewport.zoom) && viewport.zoom > 0 ? viewport.zoom : 1;
+  return {
+    x: Number.isFinite(viewport.x) ? viewport.x : 0,
+    y: Number.isFinite(viewport.y) ? viewport.y : 0,
+    zoom,
+  };
+}
+
+/**
  * Fit every node into the part of a React Flow surface that is actually visible.
  *
  * Docked panels are layered over the canvas, so React Flow's built-in fitView
@@ -60,8 +89,8 @@ export function fitCanvasViewport<NodeType extends Node = Node, EdgeType extends
     options.padding ?? 0.3,
   );
   return instance.setViewport(
-    { ...viewport, x: viewport.x + visible.left, y: viewport.y + visible.top },
-    { duration: canvasCameraDuration(options.duration ?? 240) },
+    finiteViewport({ ...viewport, x: viewport.x + visible.left, y: viewport.y + visible.top }),
+    { duration: cameraDuration(surface, options.duration ?? 240) },
   );
 }
 
@@ -75,11 +104,14 @@ export function centerCanvasViewport<NodeType extends Node = Node, EdgeType exte
 ) {
   const visible = visibleCanvasSize(surface.clientWidth, surface.clientHeight, insets);
   const zoom = options.zoom ?? instance.getZoom();
-  return instance.setViewport({
-    x: visible.left + visible.width / 2 - point.x * zoom,
-    y: visible.top + visible.height / 2 - point.y * zoom,
-    zoom,
-  }, { duration: canvasCameraDuration(options.duration ?? 350) });
+  return instance.setViewport(
+    finiteViewport({
+      x: visible.left + visible.width / 2 - point.x * zoom,
+      y: visible.top + visible.height / 2 - point.y * zoom,
+      zoom,
+    }),
+    { duration: cameraDuration(surface, options.duration ?? 350) },
+  );
 }
 
 /**

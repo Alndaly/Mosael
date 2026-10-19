@@ -186,6 +186,22 @@ def _notices(ws: str) -> int:
         return db.query(Notification).filter_by(workspace_id=ws).count()
 
 
+def _announced(approval_id: str) -> WorkflowRunApproval:
+    """等这张单把「说出去」整笔落库(站内通知 + 飞书投递结果在**同一次提交**里写下去)。
+
+    **不在 `_paused` 回来之后直接数通知。** `_paused` 等的是任务卡上的 `messageKey`;而「还在等你
+    确认」那条站内通知与投递结果排在暂停现场提交之后(`engine._park_at_approval` 的
+    `after_commit` → `announce_parked`)。这两件事之间有窗口:基线赶在它前面时,后来那条**本来就该说**
+    的通知会被当成「多喊了一条」—— CI 上三次红的这一条实测就是 `1 != 0`,而 `reminded_at` 是 `None`、
+    那条通知的正文正是暂停时那句「等你确认」(不是提醒那一拍写的)。等 `feishu_delivery` 非空:它和
+    站内通知在同一个事务里,非空就是整笔说完了。
+    """
+    return _wait_for(
+        lambda: next((row for row in [_approval(approval_id)] if row.feishu_delivery), None),
+        what="这张单的暂停通知和投递结果都落库",
+    )
+
+
 def _awaiting(job_id: str) -> int:
     return _events(job_id, "workflow.awaiting_approval")
 
@@ -460,13 +476,19 @@ def test_提醒那一拍与人的决定撞上_不写回提醒也不多喊一条(
     这一条把那个毫秒级窗口**做成确定的**:后台那一拍**读完到点的行之后**才让另一个会话把决定提交
     下去(pysqlite 的读是自动提交的快照,所以提交得进去),这一拍接着写时看到的就是新状态。
     提醒走 `UPDATE … WHERE status='pending'`:这时它什么都写不进去。
+
+    **基线要等暂停那条通知说完**(见 `_announced`):这一条断言的是"这一拍**不要再多说一句**",
+    前提是"该说的那一句已经说完了"。不等的话,那条「还在等你确认」会随机落在基线之后,把这条
+    测试变成抽奖(CI 上三次红,红的是这里的 `1 != 0`,不是产品多写了提醒)。
     """
     from sqlalchemy.orm import Session as OrmSession
 
     ws = _workspace()
     job_id, _ = _start(_graph(on_timeout="remind"), ws, actor=user_id())
     approval = _paused(job_id)
+    _announced(approval.id)
     before = _notices(ws)
+    assert _notice_count(ws, approval.id) == before, "工作区里只有这一张单,基线里不该有别的"
 
     real = OrmSession.scalars
     landed: list[str] = []
