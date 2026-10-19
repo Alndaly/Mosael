@@ -89,6 +89,27 @@ describe("按句切分", () => {
   it("空白不念", () => {
     expect(splitSpeech("  \n ")).toEqual([]);
   });
+
+  it("只剩符号的段落不念(送去合成只会换回一次「文本为空」)", () => {
+    expect(texts("| --- | --- |\n\n……\n\n真正的句子。")).toEqual(["真正的句子。"]);
+    expect(splitSpeech("|---|---|\n\n……")).toEqual([]);
+  });
+});
+
+describe("只剩符号的段落", () => {
+  it("不送去合成,真正的句子照念", async () => {
+    const synthesized: string[] = [];
+    const outcome = await speakText({
+      text: "|---|---|\n\n……\n\n真正的句子。还有一句。",
+      synthesize: async (one) => {
+        synthesized.push(one);
+        return new Blob(["a"]);
+      },
+      play: async () => "played",
+    });
+    expect(outcome).toBe("done");
+    expect(synthesized).toEqual(["真正的句子。", "还有一句。"]);
+  });
 });
 
 describe("按句流水线", () => {

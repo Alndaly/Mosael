@@ -29,7 +29,8 @@ import { useVoiceLoop } from "@/features/agent/useVoiceLoop";
 import { useActivePlace } from "@/features/agent/activePlace";
 import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { placePayload } from "@/features/agent/places";
-import { VoiceOrb } from "@/features/agent/VoiceOrb";
+import { VoiceAssistantStatus } from "@/features/agent/VoiceAssistantStatus";
+import { voiceAssistantView } from "@/features/agent/voiceAssistant";
 import { useFloatingPanel } from "@/components/app/useFloatingPanel";
 import { InChromeStatusSlot, useChromeStatusSlot } from "@/components/app/chromeStatusSlot";
 import { useNativeViewInFront } from "@/lib/nativeView";
@@ -109,11 +110,20 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
   //: "transcribing" 说的是**一次正在进行的识别**,不是"轮到谁" —— 所以它走转写那一条既有文案
   //: (编辑器的转写也用同一句),不塞进 voiceMode_* 那一组,也不新造一个同义的 key。
   const transcribing = loop.state === "transcribing";
-  const label = !loop.on
-    ? t("voiceModeStart")
-    : transcribing
-      ? t("transcribing")
-      : t(`voiceMode_${loop.state}` as "voiceMode_listening");
+  //: **状态说法只有一份**(见 voiceAssistant):浮着的这一颗和收进顶栏的那一颗读的是同一个 view。
+  //: 此前两处各自拼 `voiceMode_` + state —— 新加一个状态时,漏掉的那一处就会显示成键名,
+  //: 或者干脆什么都不显示(维护者看到的「只有一个点点点」)。
+  const view = voiceAssistantView({
+    on: loop.on,
+    state: loop.state,
+    heard: loop.heard,
+    failure: loop.speechFailure,
+    t,
+  });
+  //: 生成语音、转写、失败这三种**不能 2.4 秒后自己收起来**:那正是"该看见的时候没有它"。
+  const pinned = transcribing || loop.state === "synthesizing" || Boolean(loop.speechFailure);
+  //: 悬停说明只在它比名字多说一点时才给 —— 否则同一个名字在两行里各说一遍。
+  const hint = view.caption === view.label ? undefined : view.caption;
 
   //: 状态说明什么时候露出来。**换状态时自动露 2.4 秒**,而不是只在悬停时 —— 免提的前提
   //: 就是手和眼睛都在别处,一个要先把鼠标挪过去才肯解释自己的提示,恰好在唯一需要它的
@@ -123,27 +133,32 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
   React.useEffect(() => {
     if (!loop.on) return;
     setShowCaption(true);
-    //: **转写期间不收起。** 识别可能要先载模型,十几秒是常态;按 2.4 秒收起来的话,
-    //: 等待的绝大部分时间界面又回到"什么都没发生" —— 那正是这次要补的洞。
-    if (transcribing) return;
+    //: **转写 / 生成语音 / 失败期间不收起。** 识别可能要先载模型,十几秒是常态;合成是一次真实的
+    //: 等待(远端引擎还要多一次往返);失败那一句更是必须看见 —— 按 2.4 秒收起来的话,等待的绝大
+    //: 部分时间界面又回到"什么都没发生",那正是这次要补的洞。
+    if (pinned) return;
     const timer = window.setTimeout(() => setShowCaption(false), 2400);
     return () => window.clearTimeout(timer);
     // heard 也进依赖:听到新的一句要重新露一次,那是最该被看见的一条。
-  }, [loop.state, loop.heard, loop.on, transcribing]);
+  }, [loop.state, loop.heard, loop.on, pinned]);
 
   //: 说明文字贴左边还是右边。浮标常被拖到右下角,那时贴右会被屏幕边切掉一半 ——
   //: 而"被切掉的解释"比没有解释更让人烦躁。
   const captionOnLeft = (style?.left ?? 0) > window.innerWidth / 2;
-  //: 转写时压过"听到:上一句" —— 这一秒该说的是"我还在认",不是"我上一句听到了什么"。
-  //: 换文案时宽度不抖:这个气泡是绝对定位 + nowrap,不参与布局,按钮那颗一直是 52px。
-  const caption = transcribing
-    ? t("transcribing")
-    : loop.state === "hearing" || !loop.heard
-      ? label
-      : `${t("voiceDockHeard")}${loop.heard}`;
+  //: 点这一下是什么:开关免提,或者在合成失败时**再念一遍**。换文案时宽度不抖:这个气泡是绝对定位 +
+  //: nowrap,不参与布局,按钮那颗一直是 52px。
   const toggle = () => {
-    if (loop.on) loop.stop();
-    else void loop.start();
+    if (!loop.on) {
+      void loop.start();
+      return;
+    }
+    //: **失败之后这一下是「再念一遍」**,不是「关掉免提」—— 那是此刻唯一想要的动作,也是"可重试"
+    //: 落到实处的地方:那一句话不必再说一遍。
+    if (view.retry) {
+      loop.retrySpeech();
+      return;
+    }
+    loop.stop();
   };
 
   //: 内嵌浏览器、工作台的画布在前台时(ADR 0051 D37):浮标拖到哪儿都可能落在网页底下,收成外壳顶栏上的一个图标 —— 同一个
@@ -159,10 +174,10 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
           data-voice-dock-in-chrome=""
           className={cn(loop.on && "border-primary/60", loop.state === "hearing" && "ring-2 ring-primary/30")}
           onClick={toggle}
-          label={label}
-          hint={loop.heard ? `${t("voiceDockHeard")}${loop.heard}` : undefined}
+          label={view.label}
+          hint={hint}
         >
-          <VoiceOrb state={loop.state} levelRef={loop.levelRef} />
+          <VoiceAssistantStatus state={loop.state} levelRef={loop.levelRef} />
         </IconButton>
       </InChromeStatusSlot>
     );
@@ -192,11 +207,11 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
         onClick={() => {
           if (!wasDragged()) toggle();
         }}
-        label={label}
-        hint={loop.heard ? `${t("voiceDockHeard")}${loop.heard}` : undefined}
+        label={view.label}
+        hint={hint}
         tooltipSide={captionOnLeft ? "left" : "right"}
       >
-        <VoiceOrb state={loop.state} levelRef={loop.levelRef} />
+        <VoiceAssistantStatus state={loop.state} levelRef={loop.levelRef} />
       </IconButton>
 
       {/* 说明:当前在干什么,或者上一句听到了什么。 */}
@@ -211,8 +226,9 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
           showCaption ? "opacity-100" : "opacity-0",
         )}
         aria-live="polite"
+        data-voice-caption=""
       >
-        {caption}
+        {view.caption}
       </div>
 
       {/* 关掉浮标本身:不必为了收起它去翻设置页。悬停才出现,常态下它只是一颗。

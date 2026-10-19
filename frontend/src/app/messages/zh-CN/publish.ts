@@ -120,6 +120,10 @@ export const publish = {
   voiceMode_hearing: "听你说",
   voiceMode_thinking: "在想",
   voiceMode_speaking: "在说",
+  //: 从「它答完了」到「声音出来」之间的那一段。此前它和「在说」共用状态,界面上什么都没发生。
+  voiceMode_synthesizing: "正在生成语音…",
+  voiceMode_synthesisFailed: "语音生成失败",
+  voiceDockRetry: "点一下重试",
   voiceMode_off: "点一下开始",
   voiceDockHeard: "听到:",
   agentVoiceTitle: "语音对话",

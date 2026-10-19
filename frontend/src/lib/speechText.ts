@@ -57,6 +57,22 @@ function dotEndsSentence(text: string, at: number): boolean {
   return !isAbbreviation(text, at);
 }
 
+/** 这一段还有**字**可念吗:字母 / 数字 / 汉字才算字。`|---|---|`、`……`、纯 emoji 没有。 */
+const HAS_WORDS = /[\p{L}\p{N}]/u;
+
+/**
+ * 只剩下符号的段落**不必送去合成**。
+ *
+ * 合成那头的出口会先把 markdown 洗一遍(`domain/voices/speakable`),洗完只剩符号就说「没有可念的
+ * 文本」。对话这条路上,表格分隔行 `|---|---|`、单独一行省略号都是**切句切出来的段落** —— 把它们
+ * 送去只会换回一次 422,用户听到/看到的却是「念失败」。真正该发生的是:这一段跳过,接着念下一句。
+ *
+ * 它只回答「有没有字」,不负责洗文本 —— 洗只有后端那**一处**(否则又是两份规则)。
+ */
+export function hasSpeakableContent(text: string): boolean {
+  return HAS_WORDS.test(text);
+}
+
 export function splitSpeech(text: string): SpokenChunk[] {
   const chunks: SpokenChunk[] = [];
   let start = 0;
@@ -67,7 +83,8 @@ export function splitSpeech(text: string): SpokenChunk[] {
 
   const push = (end: number, gapAfterMs: number) => {
     const piece = text.slice(start, end).trim();
-    if (piece) chunks.push({ text: piece, gapAfterMs });
+    //: 只剩符号的段落不念(见 hasSpeakableContent):它是切句切出来的,送去只会换回一次失败。
+    if (piece && hasSpeakableContent(piece)) chunks.push({ text: piece, gapAfterMs });
   };
 
   while (i < text.length) {

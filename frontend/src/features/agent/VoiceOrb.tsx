@@ -14,7 +14,7 @@
  */
 
 import React from "react";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 import type { VoiceLoopState } from "@/features/agent/useVoiceLoop";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,15 @@ export function VoiceOrb({
   stateRef.current = state;
 
   React.useEffect(() => {
-    if (state === "off" || state === "transcribing" || state === "thinking") return;
+    //: 这几种状态里画的是别的东西(转圈 / 进度环 / 警示),没有条要跟着音量走 —— 别空跑 rAF。
+    if (
+      state === "off" ||
+      state === "transcribing" ||
+      state === "thinking" ||
+      state === "synthesizing" ||
+      state === "synthesisFailed"
+    )
+      return;
     let frame = 0;
     //: 平滑值。直接画原始 RMS 会抖得像噪点 —— 上升跟得快(开口要立刻有反应),
     //: 下降慢一点(每个字之间的换气不该让它归零闪一下)。
@@ -67,11 +75,31 @@ export function VoiceOrb({
     return () => cancelAnimationFrame(frame);
   }, [state, levelRef]);
 
-  //: 转写和"在想"都是**不确定的等待**:不知道还要多久,所以只有转圈,没有百分比 ——
+  //: 转写、"在想"、"生成语音"都是**不确定的等待**:不知道还要多久,所以只有转圈,没有百分比 ——
   //: 那个数这里根本不存在,编一个出来只会让人盯着一个说谎的进度条。旁边那行说明负责说清
-  //: 这一圈是在等识别,还是在等回复。
+  //: 这一圈是在等识别、等回复,还是在等合成。
   if (state === "transcribing" || state === "thinking")
     return <Loader2 size={20} className="animate-mosael-spin text-primary" />;
+
+  //: **生成语音中**:一圈在转的环(不是点点点,也不是"已经在说"的涟漪)。语音里最让人不安的一段是
+  //: 「它答完了」到「声音出来」之间 —— 那一段此前没有任何东西在动。环是进度感,不冒充百分比。
+  if (state === "synthesizing")
+    return (
+      <span className="pointer-events-none grid size-full place-items-center">
+        <span
+          data-voice-generating=""
+          className="size-[22px] animate-mosael-spin rounded-full border-2 border-primary/25 border-t-primary"
+        />
+      </span>
+    );
+
+  //: **合成失败**:换成一个明确的警示符号 —— 静默失败会被理解成「它没听见」,然后再失败一次。
+  if (state === "synthesisFailed")
+    return (
+      <span className="pointer-events-none grid size-full place-items-center">
+        <AlertTriangle data-voice-failed="" size={20} className="text-destructive" />
+      </span>
+    );
 
   return (
     <span className="pointer-events-none relative grid size-full place-items-center">

@@ -18,7 +18,12 @@ import React from "react";
 import { toast } from "sonner";
 
 import { ApiError, dictate } from "@/api/client";
-import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
+import {
+  reportSpeechFailure,
+  speechFailure as classifySpeechFailure,
+  synthesizeSpeech,
+  type SpeechFailure,
+} from "@/features/agent/agentSpeech";
 import { speakText } from "@/features/agent/speechPipeline";
 import { loadSpeechMode, prefetchSpeechMode } from "@/features/agent/speechSettings";
 import { useI18n } from "@/app/preferences";
@@ -28,8 +33,22 @@ import { UtteranceDetector } from "@/features/agent/utteranceDetector";
 
 /** "transcribing" 是**录音已经停下、话还没换成文字**这一段。"thinking" 是话已经发出去、在等回复。
  *  分两种情况说,因为等待的长短和失败的原因都不一样 —— 识别首次还要载模型,那和模型跑得快不快无关;
- *  而用户在这两段里能做的事也不同(前者可以取消,后者不会)。 */
-export type VoiceLoopState = "off" | "listening" | "hearing" | "transcribing" | "thinking" | "speaking";
+ *  而用户在这两段里能做的事也不同(前者可以取消,后者不会)。
+ *
+ *  "synthesizing" 是**话已经有了、声音还没合成出来**这一段 —— 维护者报的正是它:「智能体助手在音频
+ *  生成过程中没有 loading 以及对应 UI,生成语音时没有任何状态变化」。它此前和 "speaking" 共用一个
+ *  状态,于是用户看到的是「它答完了」紧接「它已经在说」,而中间其实在等一次合成(远端引擎还要多一次
+ *  往返)。"synthesisFailed" 是那一次合成没成:要说清原因、并且**点一下能重试** —— 语音模式下静默失败
+ *  会被理解成「它没听见」,于是人再说一遍,然后再失败一次。 */
+export type VoiceLoopState =
+  | "off"
+  | "listening"
+  | "hearing"
+  | "transcribing"
+  | "thinking"
+  | "synthesizing"
+  | "synthesisFailed"
+  | "speaking";
 
 /** 每隔多久取一次音量。20 次/秒:够分辨句中停顿,又不至于让主线程忙起来。 */
 const SAMPLE_MS = 50;
@@ -69,6 +88,11 @@ export function useVoiceLoop({
   //: 最近听清的一句。浮标把它显示出来 —— 语音里最让人不安的是"我说了,它有没有听见",
   //: 而把听到的原话摆出来一次性回答了这个问题(包括听错时,你当场就知道错在哪儿)。
   const [heard, setHeard] = React.useState("");
+  //: 上一次开念失败的原因(和**能不能重试**)。浮标据此说清并给重试;清空的时机只有两个:
+  //: 下一次真的开始合成、或者用户重新开口/关掉免提 —— 不能留一条永远挂在那儿的旧错。
+  const [speechFailure, setSpeechFailure] = React.useState<SpeechFailure | null>(null);
+  //: 最近一次交给合成的那段话。重试就是**再念一遍它** —— 失败之后用户不必再说一遍同样的话。
+  const lastSpokenRef = React.useRef("");
   const stateRef = React.useRef<VoiceLoopState>("off");
   stateRef.current = state;
   //: 这一段等待的"代"。stop / 卸载把它加一 —— 迟到的识别结果据此知道自己已经过期:
@@ -104,16 +128,33 @@ export function useVoiceLoop({
       const cancelled = () => speechRunRef.current !== mine;
       const whole = (await loadSpeechMode()) === "whole";
       if (cancelled()) return;
+      lastSpokenRef.current = text;
+      setSpeechFailure(null);
+      //: **合成不是"已经在说"。** 这一段此前和 speaking 共用状态,屏幕上看起来什么都没发生。
+      setState((current) => (current === "off" ? current : "synthesizing"));
+      let failed = false;
       await speakText({
         text,
         synthesize: (one) => synthesizeSpeech(one, workspaceId),
         play: playBlob,
         whole,
         cancelled,
+        //: 第一段音频真的要出声了,才切到"在说" —— 不是请求发出去的那一刻。
+        onFirstAudio: () => {
+          if (!cancelled()) setState((current) => (current === "off" ? current : "speaking"));
+        },
         onFailure: (error) => {
-          if (!cancelled()) reportSpeechFailure(error, t("agentVoiceSpeakFailed"));
+          if (cancelled()) return;
+          failed = true;
+          setSpeechFailure(classifySpeechFailure(error, t("agentVoiceSpeakFailed")));
+          setState((current) => (current === "off" ? current : "synthesisFailed"));
+          //: toast 这一句照旧:人可能正看着别处,浮标也未必看得见。
+          reportSpeechFailure(error, t("agentVoiceSpeakFailed"));
         },
       });
+      if (cancelled() || failed) return;
+      //: 念完(或被打断)都回到听 —— 语音模式下"没有下一步"等于死在那儿。
+      setState((current) => (current === "speaking" || current === "synthesizing" ? "listening" : current));
     },
     [workspaceId, t],
   );
@@ -244,6 +285,8 @@ export function useVoiceLoop({
 
       if (event === "speaking" && !recorderRef.current) {
         // **打断在这里发生。** 它正在念,而你开口了 —— 掐掉播放,开始录。
+        //: 上一次合成的失败也到此为止:人已经在说下一句了,那条旧错不该还挂在浮标上。
+        setSpeechFailure(null);
         //: 也要作废整条按句队列:只 stopPlayback 的话,播到一半的那句会结束、后面那句还会接着响。
         if (stateRef.current === "speaking") {
           speechRunRef.current += 1;
@@ -277,20 +320,24 @@ export function useVoiceLoop({
   const stop = React.useCallback(() => {
     teardown();
     stopPlayback();
+    setSpeechFailure(null);
     setState("off");
   }, [teardown]);
 
-  // 外面那一轮跑完、有话可念 —— 念出来,念完回到听。
+  /** 再念一遍刚才没合成成功的那句话。**只重试合成,不让用户把话再说一遍** —— 他要的是听见它。 */
+  const retrySpeech = React.useCallback(() => {
+    const text = lastSpokenRef.current;
+    if (!text) return;
+    void sayRef.current(text);
+  }, []);
+
+  // 外面那一轮跑完、有话可念 —— 念出来。**状态由 say 自己走**(合成中 → 在说 → 回到听),
+  // 这里只管"该念哪一句"。
   const spokenRef = React.useRef("");
   React.useEffect(() => {
     if (state === "off" || busy || !reply.trim() || reply === spokenRef.current) return;
     spokenRef.current = reply;
-    setState("speaking");
-    void (async () => {
-      await sayRef.current(reply);
-      // 念完(或被打断)都回到听 —— 语音模式下"没有下一步"等于死在那儿。
-      setState((current) => (current === "speaking" ? "listening" : current));
-    })();
+    void sayRef.current(reply);
   }, [busy, reply, state]);
 
   // 有待批准的变更 —— **只念,不接受语音批准**。
@@ -327,5 +374,5 @@ export function useVoiceLoop({
     void sayRef.current(t("agentVoiceStepFailed").replace("{failure}", failure));
   }, [failure, state, t]);
 
-  return { state, start, stop, on: state !== "off", levelRef, heard };
+  return { state, start, stop, on: state !== "off", levelRef, heard, speechFailure, retrySpeech };
 }

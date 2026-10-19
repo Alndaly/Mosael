@@ -119,6 +119,10 @@ export const publish = {
   voiceMode_hearing: "Hearing you",
   voiceMode_thinking: "Thinking",
   voiceMode_speaking: "Speaking",
+  //: The stretch between "it answered" and "sound comes out" — it used to share the Speaking state.
+  voiceMode_synthesizing: "Generating voice…",
+  voiceMode_synthesisFailed: "Voice generation failed",
+  voiceDockRetry: "Tap to retry",
   voiceMode_off: "Tap to start",
   voiceDockHeard: "Heard: ",
   agentVoiceTitle: "Spoken replies",

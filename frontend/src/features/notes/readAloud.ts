@@ -6,7 +6,7 @@ import {
   type AgentVoice,
 } from "@/api/domains/speech";
 import { errorText } from "@/api/errorMessage";
-import { splitSpeech } from "@/lib/speechText";
+import { hasSpeakableContent, splitSpeech } from "@/lib/speechText";
 
 /**
  * 选区工具条上的「朗读」:在本地播放,不建素材 —— 念完就没了;要留下来另点「存为音频素材」(那一步才建任务、
@@ -42,7 +42,8 @@ export function edgeVoiceFor(text: string): string {
  * 那是 `/api/tts/preview` 的单次限制,不是"按句"的规矩。
  */
 export function splitForSpeech(text: string): string[] {
-  const sentences = splitSpeech(text).map((sentence) => sentence.text);
+  //: 只剩符号的句子(表格分隔行、单独一行省略号)不念 —— 送去只会换回一次「文本为空」。
+  const sentences = splitSpeech(text).map((sentence) => sentence.text).filter(hasSpeakableContent);
   const chunks: string[] = [];
   let current = "";
   for (const sentence of sentences) {
