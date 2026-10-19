@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # 让渲染由团队服务器旁的独立 worker 机器承担)。默认全部 in_process。
     external_job_kinds: str = ""
 
+    #: MosaelCloud 的 API 根地址(例如 https://mosael.com/api/cloud/v1)。空 = 这个部署不提供
+    #: 「绑定 MosaelCloud」—— 没有它也能照常用本地账号。它和本地账号是两套,见 docs/CLOUD_ACCOUNTS.md。
+    cloud_url: str = ""
+
     #: 额外允许的浏览器来源(逗号分隔),给**部署到服务器**用。
     #:
     #: 默认那份白名单是照桌面端写死的:Electron 的 `file://`(Origin: null)和两个 dev 端口。

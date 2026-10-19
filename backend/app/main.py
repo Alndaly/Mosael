@@ -55,6 +55,7 @@ from app.api.routes.shares import router as shares_router
 from app.api.routes.publish import router as publish_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.collaboration import router as collaboration_router
+from app.api.routes.cloud import router as cloud_router
 from app.api.routes.job_worker import router as job_worker_router
 from app.api.routes.browser_worker import router as browser_worker_router
 from app.api.routes.publish_worker import router as publish_worker_router
@@ -639,6 +640,8 @@ def create_app() -> FastAPI:
     app.include_router(agent_browser_router, prefix="/api", dependencies=protected)
     app.include_router(browser_profiles_router, prefix="/api", dependencies=protected)
     app.include_router(local_services_router, prefix="/api", dependencies=protected)
+    # 本地保存的 MosaelCloud 绑定(不是本地账号;见 domain/cloud_binding)。
+    app.include_router(cloud_router, prefix="/api", dependencies=protected)
     return app
 
 

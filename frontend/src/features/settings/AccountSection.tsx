@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { accountOrigin } from "@/components/layout/accountOrigin";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
+import { CloudBindingSection } from "@/features/settings/CloudBindingSection";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {
@@ -282,6 +283,7 @@ export function AccountSection() {
           </form>
         </div>
       </SettingsBlock>
+      <CloudBindingSection />
       <ConfirmDialog
         open={confirmingUsername}
         title={t("usernameChange")}

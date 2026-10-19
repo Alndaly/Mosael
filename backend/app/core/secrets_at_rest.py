@@ -56,6 +56,8 @@ ENCRYPTED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("plugin_credentials", "value"),
         ("feishu_bots", "app_secret"),
         ("publish_accounts", "config"),
+        # 桌面端绑定的 MosaelCloud 设备凭据:长期有效,泄露就是别人能替这台机器调云端。
+        ("cloud_bindings", "token"),
     }
 )
 

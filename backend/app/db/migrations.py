@@ -3524,6 +3524,18 @@ def _migrate_scene_models_to_workspace() -> None:
         logger.info("把 %d 份 3D 模型从「归场景」改成了「归工作区」", len(rows))
 
 
+def _migrate_cloud_bindings_table() -> None:
+    """本地保存的 MosaelCloud 绑定表。
+
+    新表本身由 SCHEMA 阶段的 create-all 建;这一步把它**当作一次显式迁移记账**,并给那些在
+    新表加入之前就已经建好的库补一道 checkfirst。它只碰这张新表,不动 `users` 或任何旧表 ——
+    云绑定是"本地用户的一个可选外挂",不是第二套本地身份。
+    """
+    from app.db.models import CloudBinding
+
+    Base.metadata.create_all(bind=engine, tables=[CloudBinding.__table__], checkfirst=True)
+
+
 def init_db() -> None:
     """Prepare storage, then execute the validated startup migration plan."""
 
@@ -10078,6 +10090,9 @@ def migration_plan() -> MigrationPlan:
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
+                # 云绑定是张**新表**,列都在出生形状里;这一步把它记进迁移账本(并给已有库补 checkfirst),
+                # 不动任何旧表。排在 SCHEMA 之后:表那时已经由 create-all 建好。
+                _migrate_cloud_bindings_table,
                 # 加列:provider_profiles.deleted_at(删连接立碑)。**排在所有 AFTER_SCHEMA 的最前面** ——
                 # 模型上已经有这一列了,而这一相里有用 ORM 读 ProviderProfile 的迁移(下面补参考价那几步),
                 # 排到它们后面,老库会在 `no such column: provider_profiles.deleted_at` 上当场炸。

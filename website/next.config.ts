@@ -38,6 +38,21 @@ const nextConfig: NextConfig = {
       })),
     ];
   },
+
+  /**
+   * MosaelCloud 与官网同源。浏览器只请求 `/api/cloud/v1/*`,这里把它转给 Cloud 服务:
+   * 本地开发默认 `http://127.0.0.1:8901`,部署时用 `CLOUD_API_URL` 指到内部地址。
+   *
+   * **不要改成跨域直连** —— 那需要 CORS + `SameSite=None`,而云端会话 cookie 只有在同源时
+   * 才是第一方的;同源也让 Cloud 的 Origin 校验只需要认识官网这一个地址。
+   * 生产上若 Caddy 已经把这个前缀直接转给了 Cloud,这条 rewrite 不会被用到,留着不影响。
+   */
+  async rewrites() {
+    const cloud = (process.env.CLOUD_API_URL || "http://127.0.0.1:8901").replace(/\/+$/, "");
+    return [
+      { source: "/api/cloud/v1/:path*", destination: `${cloud}/api/cloud/v1/:path*` },
+    ];
+  },
 };
 
 export default nextConfig;

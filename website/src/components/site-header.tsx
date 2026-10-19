@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DownloadLink } from "@/components/download-link";
+import { AccountNav } from "@/components/account/account-nav";
 
 import { BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
@@ -44,6 +45,7 @@ export function SiteHeader({ locale }: { locale: Locale }) {
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <AccountNav locale={locale} loginLabel={t.account.login} accountLabel={t.account.account} />
           <SearchDialog
             locale={locale}
             labels={{

@@ -1,0 +1,7 @@
+# 本地开发的 Cloud 数据(SQLite、会话、设备码)。
+cloud-data/
+.env
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/

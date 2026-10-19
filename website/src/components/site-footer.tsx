@@ -47,6 +47,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
         // 下载分国内 / 海外两条路,href 只是占位 —— 渲染时交给 DownloadLink 按访客挑。
         { label: t.footer.download, href: SITE.releases, external: true, download: true },
         { label: t.nav.changelog, href: localePath(locale, "/changelog") },
+        { label: t.account.account, href: localePath(locale, "/account") },
         { label: t.footer.issues, href: `${SITE.repo}/issues`, external: true },
       ],
     },

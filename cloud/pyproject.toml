@@ -1,0 +1,58 @@
+[project]
+name = "mosael-cloud"
+version = "0.1.0"
+description = "MosaelCloud: the independent Mosael account service (accounts + desktop binding)."
+requires-python = ">=3.14"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.5",
+  "sqlalchemy>=2.1",
+  # 密码哈希只用成熟库的 argon2id,不自己写 KDF。
+  "argon2-cffi>=23.1",
+  # Pydantic 的 EmailStr 需要它;校验邮箱格式这件事不自己写正则。
+  "email-validator>=2.0",
+  # 生产用 PostgreSQL;本地、测试用 SQLite。
+  "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  # TestClient 的传输(Starlette 1.x 起认 httpx2)。
+  "httpx2>=2.13",
+  "ruff>=0.14",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "cloud"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+  "error::pytest.PytestUnhandledThreadExceptionWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+# 和 backend/ 同一组:能抓缺陷的,不是风格(理由见 backend/pyproject.toml)。
+select = ["F", "E9", "B"]
+ignore = ["B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+  "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Body",
+  "fastapi.Query", "fastapi.Header", "fastapi.Path", "fastapi.Cookie",
+]
