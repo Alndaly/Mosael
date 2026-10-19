@@ -6,7 +6,9 @@
 ② 下载 —— 复用引擎权重那套(清单、实测体积、进度、失败原因),不另起一个下载器;
 ③ 合成 —— 文本进、音频出;失败要带着能读懂的原因,不许写一段正弦音冒充结果;
 ④ 版本钉住 —— 配置里有确切的 release / commit / sha256,不写会漂的 “latest”;
-⑤ 不依赖真机 —— 推理、下载都打桩。
+⑤ 不依赖真机 —— 推理、下载都打桩;
+⑥ MPS —— CUDA 优先不变,MPS 次之且必须 float32;MPS 真报错时回落 CPU 并说清代价
+   (2026-10-20 真机验证见 docs/validation/2026-10-20-qwen-tts-mps.md)。
 
 版本依据(报告里也写了):Qwen3-TTS 于 2026-01-22 开源,权重 Apache-2.0,
 `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` 的 HF commit `0c0e3051…`,
@@ -17,6 +19,7 @@ from __future__ import annotations
 import re
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -476,3 +479,145 @@ def test_arabic_is_refused_before_a_job_is_created() -> None:
 def test_japanese_is_allowed_for_qwen() -> None:
     """日文是它支持的语言之一 —— 不要照抄克隆引擎那条「日文要下权重」的判据。"""
     voices._refuse_if_unspeakable("こんにちは、今日はいい天気ですね", QWEN_ENGINE, "vivian", "")  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# ⑥ Apple MPS:M4 Max / macOS 27 / torch 2.14.1 / qwen-tts 0.1.1 上真机验过
+#    (docs/validation/2026-10-20-qwen-tts-mps.md)。这里只打桩设备探测,不 import 真 torch。
+# ---------------------------------------------------------------------------
+
+
+def _fake_torch(monkeypatch: pytest.MonkeyPatch, *, cuda: bool, mps: bool) -> types.SimpleNamespace:
+    """把整个 torch 换成一个只回答设备探测的假货(后端测试环境里本来就没有 torch)。"""
+    torch = types.SimpleNamespace(
+        float32="torch.float32",
+        bfloat16="torch.bfloat16",
+        cuda=types.SimpleNamespace(is_available=lambda: cuda),
+        backends=types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: mps)),
+    )
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    return torch
+
+
+@pytest.fixture
+def qwen_state():
+    """权重缓存是进程级的:每条用例前后清干净,别让上一条加载的模型留给下一条。"""
+    tts_worker._LOADED.clear()
+    yield
+    tts_worker._LOADED.clear()
+
+
+def _fake_qwen(monkeypatch: pytest.MonkeyPatch, *, load_fails_on: frozenset[str] = frozenset(),
+               generate_fails_on: frozenset[str] = frozenset()) -> dict:
+    """假的 qwen_tts:记录每次加载用的设备、每次生成跑在哪个设备上,并按需在指定设备上抛错。"""
+    seen: dict = {"loads": [], "generations": []}
+    module = types.ModuleType("qwen_tts")
+
+    class _Model:
+        def __init__(self, device_map: str) -> None:
+            self.device_map = device_map
+
+        @classmethod
+        def from_pretrained(cls, path: str, **kwargs: object) -> "_Model":
+            seen["loads"].append(kwargs)
+            if kwargs["device_map"] in load_fails_on:
+                raise RuntimeError(f"{kwargs['device_map']} backend: op not implemented")
+            return cls(str(kwargs["device_map"]))
+
+        def generate_custom_voice(self, **_kwargs: object) -> tuple[list, int]:
+            seen["generations"].append(self.device_map)
+            if self.device_map in generate_fails_on:
+                raise RuntimeError(f"{self.device_map} backend: op not implemented")
+            return [np.zeros(2400, dtype=np.float32)], 24000
+
+    module.Qwen3TTSModel = _Model
+    monkeypatch.setitem(sys.modules, "qwen_tts", module)
+    return seen
+
+
+def _installed_qwen_dir(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Path:
+    """摆一份「已安装」的权重目录(只建两个必需文件,不真的放内容)。"""
+    model_dir = tmp_path / "qwen"
+    (model_dir / "speech_tokenizer").mkdir(parents=True)
+    (model_dir / "model.safetensors").write_bytes(b"weights")
+    (model_dir / "speech_tokenizer" / "model.safetensors").write_bytes(b"tokenizer")
+    monkeypatch.setenv("MOSAEL_QWEN_MODEL_DIR", str(model_dir))
+    return model_dir
+
+
+def test_apple_silicon_uses_mps_in_float32(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MPS 可用就走 MPS;dtype **必须 float32**(bf16 在 MPS 上又慢又不一致)。"""
+    torch = _fake_torch(monkeypatch, cuda=False, mps=True)
+    assert tts_worker._qwen_device() == ("mps", torch.float32)
+
+
+def test_cuda_still_wins_over_mps(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CUDA 优先不变:两种都可用时仍然先 CUDA —— 接 MPS 不许动这一支。"""
+    torch = _fake_torch(monkeypatch, cuda=True, mps=True)
+    assert tts_worker._qwen_device() == ("cuda:0", torch.bfloat16)
+
+
+def test_without_mps_qwen_stays_on_cpu_in_float32(monkeypatch: pytest.MonkeyPatch) -> None:
+    """纯 CPU 的 Mac(没有 MPS):行为不变,仍然是 CPU + float32。"""
+    torch = _fake_torch(monkeypatch, cuda=False, mps=False)
+    assert tts_worker._qwen_device() == ("cpu", torch.float32)
+
+
+def test_the_engine_venv_pins_the_torch_that_was_verified() -> None:
+    """torch 也钉住:验过的是 2.14.1,以后升级 MPS 行为可能变(验证文档 §8.2)。"""
+    assert "torch==2.14.1" in qwen_models.PIP_REQUIREMENTS
+    assert "qwen-tts==0.1.1" in qwen_models.PIP_REQUIREMENTS
+
+
+def test_a_broken_mps_load_falls_back_to_cpu_and_says_why(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys: pytest.CaptureFixture[str], qwen_state
+) -> None:
+    """MPS 上真报错(未来 torch / 未实现的算子)时:回落 CPU,并把原因和重载代价写清楚。"""
+    _installed_qwen_dir(monkeypatch, tmp_path)
+    _fake_torch(monkeypatch, cuda=False, mps=True)
+    seen = _fake_qwen(monkeypatch, load_fails_on=frozenset({"mps"}))
+    out = tmp_path / "speech.wav"
+
+    assert tts_worker.run_qwen({"text": "你好", "speaker": "vivian"}, str(out)) == "qwen-tts"
+
+    assert [load["device_map"] for load in seen["loads"]] == ["mps", "cpu"]
+    assert seen["generations"] == ["cpu"]
+    assert out.read_bytes().startswith(b"RIFF")
+    err = capsys.readouterr().err
+    assert "MPS" in err and "CPU" in err, "回落要在日志里说清,不能静默换设备"
+    assert "4.5 GB" in err, "重载一遍权重的代价也要说清"
+
+
+def test_a_broken_mps_generation_reloads_on_cpu_and_says_the_cost(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, capsys: pytest.CaptureFixture[str], qwen_state
+) -> None:
+    """加载成功、生成才炸(未实现的算子):丢掉 MPS 实例,换 CPU 重载并重新生成一遍。"""
+    _installed_qwen_dir(monkeypatch, tmp_path)
+    _fake_torch(monkeypatch, cuda=False, mps=True)
+    seen = _fake_qwen(monkeypatch, generate_fails_on=frozenset({"mps"}))
+    out = tmp_path / "speech.wav"
+
+    assert tts_worker.run_qwen({"text": "你好", "speaker": "vivian"}, str(out)) == "qwen-tts"
+
+    assert [load["device_map"] for load in seen["loads"]] == ["mps", "cpu"]
+    assert seen["generations"] == ["mps", "cpu"]
+    assert out.read_bytes().startswith(b"RIFF")
+    err = capsys.readouterr().err
+    assert "MPS" in err and "CPU" in err, "回落要在日志里说清,不能静默换设备"
+    assert "4.5 GB" in err, "重载一遍权重的代价也要说清"
+
+
+def test_after_a_fallback_the_next_synthesis_does_not_try_mps_again(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, qwen_state
+) -> None:
+    """回落一次就够:缓存里放的是 CPU 那份,后面的请求不能再碰 MPS(碰一次就要重读 4.5 GB)。"""
+    _installed_qwen_dir(monkeypatch, tmp_path)
+    _fake_torch(monkeypatch, cuda=False, mps=True)
+    seen = _fake_qwen(monkeypatch, load_fails_on=frozenset({"mps"}))
+    out = tmp_path / "speech.wav"
+
+    assert tts_worker.run_qwen({"text": "你好", "speaker": "vivian"}, str(out)) == "qwen-tts"
+    assert tts_worker.run_qwen({"text": "再念一次", "speaker": "vivian"}, str(out)) == "qwen-tts"
+
+    assert [load["device_map"] for load in seen["loads"]] == ["mps", "cpu"]
+    assert seen["generations"] == ["cpu", "cpu"]

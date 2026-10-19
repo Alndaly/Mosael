@@ -236,8 +236,15 @@ def _qwen_model_dir() -> Path:
 
 
 def _qwen_device() -> tuple[str, Any]:
-    """这台机器上拿什么跑。**只在 CUDA 上加速**;Apple 的 MPS 对这套解码没有验证过,
-    拿它跑得到的是"很慢、偶尔算错",不如老老实实说在 CPU 上(见报告里「只有真机能验」)。
+    """这台机器上拿什么跑。CUDA 优先(和接 MPS 之前一样),其次 Apple 的 MPS,最后 CPU。
+
+    MPS 于 2026-10-20 在 M4 Max / macOS 27 / torch 2.14.1 / qwen-tts 0.1.1 上**真机验过**
+    (docs/validation/2026-10-20-qwen-tts-mps.md):完全贪心解码时与 CPU 逐样本一致
+    (最大差 1 个 16-bit LSB),速度约 1.7×(RTF 1.70 → 0.98),首句还要多约 4 s 的
+    MPS kernel 冷启动;内存按 12 GB 规划,16 GB 的 Mac 偏紧(16 GB 机器上没验过)。
+
+    dtype **必须 float32**:同一份权重下 MPS 的 bf16 又慢又不一致(同文档 §6.2),
+    不要照 CUDA 那支用 bfloat16。
 
     返回 `(device_map, dtype)`。torch 不在(例如结构化测试里)时返回 CPU + None,让上游用它自己的默认。
     """
@@ -248,6 +255,10 @@ def _qwen_device() -> tuple[str, Any]:
         return "cpu", None
     if torch.cuda.is_available():
         return "cuda:0", torch.bfloat16
+    # MPS 只在 CUDA 之后:两种都可用时仍然先 CUDA(那一支的行为没有被这次改动动过)。
+    # 回落过一次之后也不会再回到这里 —— 缓存里放的就是 CPU 那份(见 `run_qwen`)。
+    if torch.backends.mps.is_available():
+        return "mps", torch.float32
     # CPU 用 float32:官方 CPU 指南实测 float16/bfloat16 在 CPU 上要么慢要么精度出问题。
     return "cpu", torch.float32
 
@@ -269,6 +280,55 @@ def _write_wave(path: str, samples: Any, sample_rate: int) -> None:
         handle.writeframes(pcm.tobytes())
 
 
+def _qwen_mps_failure(what: str, exc: BaseException, cost: str) -> None:
+    """MPS 真报错:原始原因和栈原样留下,并说清回落 CPU 要付什么代价。**不许静默换设备**。"""
+    traceback.print_exc(file=sys.stderr)
+    print(
+        f"Qwen3-TTS 在 MPS 上{what}失败,回落到 CPU({cost};之后这个引擎进程都用 CPU,"
+        f"生成比 MPS 慢约 1.7×)。MPS 不可用的原因:{type(exc).__name__}: {exc}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
+def _load_qwen(model_class: Any, path: Path, *, force_cpu: bool = False) -> tuple[Any, str]:
+    """按 `_qwen_device()` 挑的设备加载权重;MPS 真报错时回落到 CPU 再加载一次。
+
+    `force_cpu` 是给「MPS 生成时才炸」那条路用的:换 CPU 重载一遍,也不再把同一个坏后端试第二次。
+    返回 `(model, device)`:device 让调用方知道这份实例是不是刚在 MPS 上建起来的 ——
+    只有那种情况下的第一次生成失败才值得再回落一次(见 `run_qwen`)。
+    """
+    if force_cpu:
+        import torch  # 刚才就在 MPS 上跑过,这个 import 不会失败
+
+        device, dtype = "cpu", torch.float32
+    else:
+        device, dtype = _qwen_device()
+    _progress("load", 0.1, f"首次加载 Qwen3-TTS 权重({device})")
+    kwargs: dict[str, Any] = {"device_map": device}
+    if dtype is not None:
+        kwargs["dtype"] = dtype
+    try:
+        return model_class.from_pretrained(str(path), **kwargs), device
+    except Exception as exc:  # noqa: BLE001 — MPS 是新的失败面,回落是这里行为的一部分
+        if device != "mps":
+            raise
+        _qwen_mps_failure("加载", exc, "这一次要把 4.5 GB 权重重新读一遍,冷盘耗时未实测")
+        kwargs["device_map"] = "cpu"
+        _progress("load", 0.1, "MPS 不可用,改用 CPU 重新加载")
+        return model_class.from_pretrained(str(path), **kwargs), "cpu"
+
+
+def _qwen_generate(model: Any, request: dict[str, Any]) -> tuple[Any, int]:
+    """一次生成。抽出来是为了「MPS 失败后换 CPU 把同一段再跑一遍」不必把参数抄第二份。"""
+    return model.generate_custom_voice(
+        text=request["text"],
+        # 上游认 "Auto" 或具体语言名;能确证的语言由宿主算好,拿不准就交 Auto。
+        language=request.get("language") or "Auto",
+        speaker=request.get("speaker") or "vivian",
+    )
+
+
 def run_qwen(request: dict[str, Any], output_path: str) -> str:
     """Qwen3-TTS CustomVoice:预置音色 + 文本 → 音频。不克隆、不要参考音频。
 
@@ -277,24 +337,31 @@ def run_qwen(request: dict[str, Any], output_path: str) -> str:
     """
     path = _qwen_model_dir()
     cache_key = f"qwen-tts:{path}"
-    model = _LOADED.get(cache_key)
-    if model is None:
-        from qwen_tts import Qwen3TTSModel  # heavy, only in the TTS interpreter
+    from qwen_tts import Qwen3TTSModel  # heavy, only in the TTS interpreter
 
-        device, dtype = _qwen_device()
-        _progress("load", 0.1, f"首次加载 Qwen3-TTS 权重({device})")
-        kwargs: dict[str, Any] = {"device_map": device}
-        if dtype is not None:
-            kwargs["dtype"] = dtype
-        model = Qwen3TTSModel.from_pretrained(str(path), **kwargs)
+    model = _LOADED.get(cache_key)
+    # 只有「刚在 MPS 上加载好、还没成功生成过」的这一次才值得回落:同一份 MPS 实例之后再报错,
+    # 就不再是"MPS 跑不起来",重载一遍只会给错误外面再加一层代价(见 `_qwen_mps_failure`)。
+    loaded_on: str | None = None
+    if model is None:
+        model, loaded_on = _load_qwen(Qwen3TTSModel, path)
         _LOADED[cache_key] = model
     _progress("generate", 0.35, "生成中")
-    wavs, sample_rate = model.generate_custom_voice(
-        text=request["text"],
-        # 上游认 "Auto" 或具体语言名;能确证的语言由宿主算好,拿不准就交 Auto。
-        language=request.get("language") or "Auto",
-        speaker=request.get("speaker") or "vivian",
-    )
+    try:
+        wavs, sample_rate = _qwen_generate(model, request)
+    except Exception as exc:  # noqa: BLE001 — MPS 的失败面要回落,别的照旧往上抛
+        if loaded_on != "mps":
+            raise
+        del model  # 先放开 MPS 实例,别让 CPU 那份和它同时占着内存
+        _LOADED.pop(cache_key, None)  # 回落成功后缓存里就是 CPU 那份,后面的请求不会再碰 MPS
+        _qwen_mps_failure(
+            "生成", exc,
+            "这一次要重新加载一遍 4.5 GB 权重再生成一遍,页缓存热时约 1.4 s、冷盘未实测",
+        )
+        model, _ = _load_qwen(Qwen3TTSModel, path, force_cpu=True)
+        _LOADED[cache_key] = model
+        _progress("generate", 0.35, "MPS 不可用,改用 CPU 重新生成")
+        wavs, sample_rate = _qwen_generate(model, request)
     if not wavs:
         raise KeyedWorkerError("runtimeErr_qwenNoAudio", "Qwen3-TTS returned no audio")
     _progress("encode", 0.9, "写出音频")

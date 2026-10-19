@@ -36,7 +36,14 @@ MANAGED_QWEN_MODEL = settings.data_dir / "tts" / "qwen3-tts-12hz-1.7b-customvoic
 #: 装进**这个引擎自己的**托管 venv 的依赖。qwen-tts 0.1.1 是 2026-02-06 的版本;它自己钉了
 #: transformers==4.57.3 / accelerate==1.12.0。**不进后端 pyproject**:它带 torch/torchaudio 与
 #: gradio,几 GB —— 和 F5/Fish 一样按需装进用户数据目录,而不是把安装包撑大。
-PIP_REQUIREMENTS = ("qwen-tts==0.1.1", "modelscope")
+#:
+#: torch 也钉 2.14.1:**MPS 那条路就是在这个版本上验的**(docs/validation/2026-10-20-qwen-tts-mps.md),
+#: 而 qwen-tts 自己不钉 torch(只要求 torchaudio,accelerate==1.12.0 只要求 torch>=2.0.0)——
+#: 不钉的话升级会悄悄换掉 MPS 后端的行为。兼容性(2026-10-20 实测):该 venv 里是
+#: torch 2.14.1 + torchaudio 2.11.0 + transformers 4.57.3 + accelerate 1.12.0,`pip check` 干净;
+#: 按 `qwen-tts==0.1.1 torch==2.14.1 modelscope` 做 pip 解析,选中的仍是 torch-2.14.1 /
+#: torchaudio-2.11.0,modelscope 不依赖 torch,没有版本冲突。
+PIP_REQUIREMENTS = ("qwen-tts==0.1.1", "torch==2.14.1", "modelscope")
 
 
 @dataclass(frozen=True)
