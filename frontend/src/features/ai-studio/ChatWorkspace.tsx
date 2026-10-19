@@ -67,7 +67,6 @@ import { SessionJobsCard } from "@/components/jobs/SessionJobsCard";
 import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
-import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentTurnContent, toolCallIds, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { AgentStatusIcon, toAgentStatus } from "@/components/layout/InspectorStatusRow";
@@ -347,15 +346,14 @@ export function ChatWorkspace({
     });
   };
 
-  // 回执消息里,答案已经被 `ask_user` 的工具结果记下的那些不再画 —— 同一次选择此前会紧挨着
-  // 出现两遍(上面一张独立的卡,下面 ask_user 那一行展开还是它)。判据见 answerRecords:
-  // 靠 question_id 对上才算,猜的话错的方向是把唯一那份痕迹也藏掉。
+  // 一次选择的记录长在**用户那条消息**里(后端的回执,`payload.answers` 带着问的和选的,
+  // 见 AnsweredChoice):选择是用户做的事。助手那一侧只有 `ask_user` 那一步的状态(一行
+  // 「已选」),不重复记一遍 —— 反过来把回执藏掉、让工具结果画整张记录,就是把用户的选择
+  // 画进了助手的消息里(维护者截图)。
   //: 这一串都要 memo:气泡是 memo 的(ChatBubble),这里每次渲染派生一个新数组,画廊跟着变,三百个气泡就全部重画。
-  const allMessages = messages.data ?? NO_MESSAGES;
-  const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
   const visibleMessages = React.useMemo(
-    () => allMessages.filter((message) => !queuedIds.has(message.id) && !isRedundantAnswerRecord(message, recordedQuestions)),
-    [allMessages, queuedIds, recordedQuestions],
+    () => (messages.data ?? NO_MESSAGES).filter((message) => !queuedIds.has(message.id)),
+    [messages.data, queuedIds],
   );
   const mediaGallery = React.useMemo(() => chatMediaGallery(visibleMessages), [visibleMessages]);
   //: 还没交给智能体的回执不算进对话记录(轨迹、统计):它们这一轮结束才交出去,在那之前画在正在跑的那一轮下面。

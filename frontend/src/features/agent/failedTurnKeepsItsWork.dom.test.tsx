@@ -26,8 +26,8 @@ vi.mock("@/app/preferences", () => ({
     ({
       agentFailedTitle: "智能体执行失败",
       chatErrorDetail: "错误详情",
-      agentChoiceAnswered: "你在选择卡上选了",
-      agentChoiceDismissed: "你跳过了这几个问题,让它自己判断",
+      agentChoiceAnswered: "已选",
+      agentChoiceDismissed: "已跳过",
     })[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
@@ -56,7 +56,7 @@ describe("失败的一轮", () => {
 });
 
 describe("答完的选择卡", () => {
-  it("画的是「问了什么、选了哪一项」，不是一段自述", () => {
+  it("画的是「问了什么、选了哪一项」,不是一段自述", () => {
     render(
       <AnsweredChoiceCard
         answers={{
@@ -67,7 +67,9 @@ describe("答完的选择卡", () => {
         }}
       />,
     );
-    expect(screen.getByText("你在选择卡上选了")).toBeTruthy();
+    // 名目性的标签 —— 不写「你选了…」:记录属于用户那条消息,位置已经说清楚了谁做的。
+    expect(screen.getByText("已选")).toBeTruthy();
+    expect(screen.queryByText(/你选/)).toBeNull();
     expect(screen.getByText("接下来想先做哪件事？")).toBeTruthy();
     expect(screen.getByText("修一下道具/人物细节")).toBeTruthy();
     expect(screen.getByText("统一成正面朝窗")).toBeTruthy();
@@ -77,18 +79,19 @@ describe("答完的选择卡", () => {
 
   it("跳过了也说清楚 —— 模型收到的是「他不答」", () => {
     render(<AnsweredChoiceCard answers={{ dismissed: true }} />);
-    expect(screen.getByText("你跳过了这几个问题,让它自己判断")).toBeTruthy();
+    expect(screen.getByText("已跳过")).toBeTruthy();
+    expect(screen.queryByText(/你跳过/)).toBeNull();
   });
 });
 
 /**
- * `ask_user` 这一步的结果卡要写着**用户选了什么**。
+ * `ask_user` 这一步的结果**是它自己那一步的状态**,不是那次选择的记录。
  *
- * 此前它掉进通用的键值摘要:卡片上是「状态 answered / answers 2 个字段」—— 而这次调用的
- * 全部意义就是那个选择。要看它得展开原始 JSON,翻过一整段选项定义才找得到。
+ * 此前它复用了用户侧那张记录卡:问题 + 选项 + 「你在选择卡上选了」—— 于是用户的选择被画进
+ * 助手那条消息,还由助手用第一人称转述。记录在用户那条消息里(见 AnsweredChoice 的说明)。
  */
-describe("ask_user 的结果卡", () => {
-  it("画出问题和选中的那一项,而不是「answers 2 个字段」", () => {
+describe("ask_user 的结果状态", () => {
+  it("只写「已选」和选中的值,不再画一遍问题和选项", () => {
     render(
       <ToolResultCard
         value={{
@@ -97,16 +100,20 @@ describe("ask_user 的结果卡", () => {
         }}
       />,
     );
-    expect(screen.getByText("这次要做成什么规格？")).toBeTruthy();
+    expect(screen.getByText("已选")).toBeTruthy();
     expect(screen.getByText("16:9 横屏")).toBeTruthy();
     // 单选也画得出来(后端存的是列表,但别处可能给单值)。
     expect(screen.getByText("先搭主体")).toBeTruthy();
+    // 第一人称转述不再出现;问题归记录那条消息,这里不重复。
+    expect(screen.queryByText(/你选/)).toBeNull();
+    expect(screen.queryByText("这次要做成什么规格？")).toBeNull();
     expect(screen.queryByText(/个字段/)).toBeNull();
   });
 
-  it("跳过了也说清楚", () => {
+  it("跳过了也只是一个状态", () => {
     render(<ToolResultCard value={{ status: "dismissed", skipped: true }} />);
-    expect(screen.getByText("你跳过了这几个问题,让它自己判断")).toBeTruthy();
+    expect(screen.getByText("已跳过")).toBeTruthy();
+    expect(screen.queryByText(/你跳过/)).toBeNull();
   });
 });
 

@@ -35,8 +35,11 @@ export const plugins = {
   wfPropsNone: "这个工作区还没有 3D 模型。在工作台里导入,或在 Blender 里建好后收进来。",
   wfPropsAll: "一个都不勾 = 这个工作区里的全部模型",
   wfPropsPicked: "只准用勾中的这 {n} 份",
-  agentChoiceAnswered: "你在选择卡上选了",
-  agentChoiceDismissed: "你跳过了这几个问题,让它自己判断",
+  //: 这两条是**名目性的状态标签**,不是句子:选择是用户做的事,记录长在用户那条消息里,
+  //: 助手那一侧只写「这一步拿到了什么」。别写回「你选了…」那种第一人称转述(维护者原话:
+  //: 「用户的选择被塞进助手的消息里、由助手转述」)。
+  agentChoiceAnswered: "已选",
+  agentChoiceDismissed: "已跳过",
   jobCancel: "取消任务",
   //: 取消是**节点粒度**的:正在跑的那一步会跑完。说清楚,否则点了之后进度条还在动,
   //: 看起来像没生效。

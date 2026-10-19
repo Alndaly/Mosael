@@ -329,6 +329,75 @@ it("对不上任何一行的待决卡照样摆出来 —— 那一行还没到�
   expect(container.querySelector("article")!.closest("[data-tool-call]")).toBeNull();
 });
 
+/**
+ * 答完的选择:记录在**用户那条消息**里,不在助手那一条里。
+ *
+ * 维护者截图:助手那条消息里的选择卡上写着「你在选择卡上选了 …」。选择是用户做的事,记录
+ * 该跟着用户那条消息(`payload.answers`);助手那一步只剩一行状态。此前界面反过来做了:
+ * `ask_user` 的结果卡画整张记录,而用户那条回执被当成"多余"藏掉(见已删掉的 answerRecords)。
+ */
+describe("答完的选择", () => {
+  const question = "接下来怎么走？";
+  const askUserAnswered = {
+    type: "tool",
+    tool: {
+      id: "ask",
+      name: "ask_user",
+      status: "done",
+      result: {
+        content: [{ type: "text", text: "" }],
+        details: { data: { status: "answered", answers: { [question]: ["先暂停"] }, question_id: "q1" } },
+      },
+    },
+  };
+  const receipt = {
+    id: "u2",
+    session_id: "s1",
+    role: "user",
+    content: `我选好了:\n· ${question}:先暂停`,
+    error: null,
+    created_at: "2026-10-02T10:00:30",
+    payload: { answers: { question_id: "q1", picked: [{ question, choices: ["先暂停"] }] } },
+  };
+
+  beforeEach(() => {
+    mocks.running = false;
+    mocks.streamTimeline = [];
+    mocks.messages = [
+      ...mocks.messages,
+      { id: "m1", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:00:00",
+        payload: { timeline: [askUserAnswered] } },
+      receipt,
+    ];
+  });
+
+  it("记录跟着用户那条消息 —— 不是被工具结果「顶掉」、也不是画进助手那一条", async () => {
+    const { container } = await mount();
+
+    const record = await waitFor(() => {
+      const found = container.querySelector("[data-answer-record]");
+      expect(found, "一次选择的记录不能因为工具结果也记了同一件事就不画").toBeTruthy();
+      return found!;
+    });
+    expect(record.textContent).toContain(question);
+    expect(record.textContent).toContain("先暂停");
+    // 最要紧的一条:它不在助手那一条消息的工具行里。
+    expect(record.closest("[data-tool-call]")).toBeNull();
+    // 给模型读的那句正文不上界面。
+    expect(container.textContent).not.toContain("我选好了");
+  });
+
+  it("助手那一步展开后只有一行状态,不是又一张记录卡", async () => {
+    const { container } = await mount();
+    const line = row(container, "ask") as HTMLElement;
+    fireEvent.click(within(line).getByRole("button"));
+
+    await waitFor(() => expect(line.querySelector("[data-answer-status]")).toBeTruthy());
+    expect(line.querySelector("[data-answer-record]")).toBeNull();
+    expect(line.textContent).toContain("先暂停");
+  });
+});
+
 it("等卡时按了停止:这一轮收尾,那一行收成「这一轮已停止,卡已作废」,不退回成工具的「失败」", async () => {
   //: 跑着的时候卡在等;用户按停止,宿主收尾时把它作废(ADR 0007 修订 2026-10-08)。不跑的时候「有结论的卡」不轮询 ——
   //: 收尾那一刻不再取一次的话,待决列表里它没了、有结论的那份还停在收尾之前,这一行就既不是卡也没有结论。

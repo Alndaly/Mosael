@@ -35,8 +35,9 @@ export const plugins = {
   wfPropsNone: "No 3D models in this workspace yet. Import one in the workbench, or model it in Blender and bring it back.",
   wfPropsAll: "Nothing ticked means every model in this workspace",
   wfPropsPicked: "Only these {n} may be placed",
-  agentChoiceAnswered: "You picked",
-  agentChoiceDismissed: "You skipped these questions and let it decide",
+  //: Status labels, not sentences — see the zh-CN note.
+  agentChoiceAnswered: "Picked",
+  agentChoiceDismissed: "Skipped",
   jobCancel: "Cancel task",
   jobCancelHint: "Stops after the current step finishes; what it already produced is kept",
   wfStop: "Stop run",

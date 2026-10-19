@@ -10,7 +10,7 @@ import { gotoJob, gotoRecord } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import { AnsweredChoiceCard } from "@/features/agent/AnsweredChoice";
+import { AnsweredChoiceStatus } from "@/features/agent/AnsweredChoice";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 
@@ -590,20 +590,21 @@ export type ResultShape =
  * shapes are arrays of objects, and the first match wins, so the specific tests come first.
  */
 /**
- * `ask_user` 的结果:**用户选了什么**。
+ * `ask_user` 的结果:这一步拿回了答案。
  *
  * 此前它掉进通用的键值摘要,卡片上是「状态 answered / answers 2 个字段」—— 而这次调用的全部
  * 意义就是那个选择。要看它得去展开原始 JSON,翻过一整段选项定义才找得到答案。
  *
- * 画法直接复用对话里那张「你选了哪一项」卡(features/agent/AnsweredChoice):同一件事在两个
- * 地方出现,长成两个样子的话,读的人得认两遍。
+ * 但它**不是那次选择的记录**。记录在用户那条消息里(`payload.answers`,见交付说明
+ * `questions.deliver_to_session`),这里是助手那一步的回包:只说明这次调用拿到了答案,顺带把
+ * 选中的值摆成状态。此前这里画的是用户侧那张记录卡,于是用户的选择被画进助手那条消息、还带着
+ * 「你在选择卡上选了…」的第一人称口吻 —— 位置和口吻都错了(维护者截图)。
  */
 function AskUserAnswer({ value }: { value: Record<string, unknown> }) {
   const answers = isRecord(value.answers) ? value.answers : null;
-  if (!answers || Object.keys(answers).length === 0)
-    return <AnsweredChoiceCard answers={{ dismissed: true }} />;
+  if (!answers || Object.keys(answers).length === 0) return <AnsweredChoiceStatus answers={{ dismissed: true }} />;
   return (
-    <AnsweredChoiceCard
+    <AnsweredChoiceStatus
       answers={{
         picked: Object.entries(answers).map(([question, picked]) => ({
           question,

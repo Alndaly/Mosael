@@ -88,6 +88,7 @@ vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, Trac
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));
 
 import { ChatWorkspace } from "./ChatWorkspace";
+import { listAgentMessages } from "@/api/client";
 
 class NoopResizeObserver {
   observe() {}
@@ -123,4 +124,36 @@ it("执行完的收成行里的状态,还在等的那张摆在它那次调用里
   expect(screen.queryByRole("button", { name: "confirmDismiss" })).toBeNull();
   const later = screen.getByText("后来的一句");
   expect(container.querySelector("article")!.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+/**
+ * 答完的选择:记录画在**用户那条消息**里,不在助手那一条里。
+ *
+ * 两个入口的这一点是同一条规矩(这边走 ChatBubble) —— 在上面那条测试的同一套挂载里再钉一次,
+ * 免得下次只改了画布助手。(`ask_user` 的结果自己也画一份记录的那次回归,两边各中了一次。)
+ */
+it("选择的记录跟着用户那条消息,助手那一步只有一行状态", async () => {
+  vi.mocked(listAgentMessages).mockResolvedValue([
+    { id: "u1", session_id: "s1", role: "user", content: "开工", payload: {}, error: null, created_at: "2026-10-02T10:00:00" },
+    { id: "m1", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:00:30",
+      payload: { timeline: [{ type: "tool", tool: { id: "ask", name: "ask_user", status: "done",
+        result: { content: [{ type: "text", text: "" }], details: { data: { status: "answered", answers: { "接下来怎么走？": ["先暂停"] }, question_id: "q1" } } } } }] } },
+    { id: "u2", session_id: "s1", role: "user", content: "我选好了:\n· 接下来怎么走？:先暂停", error: null, created_at: "2026-10-02T10:01:00",
+      payload: { answers: { question_id: "q1", picked: [{ question: "接下来怎么走？", choices: ["先暂停"] }] } } },
+  ] as never);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { container } = render(
+    <QueryClientProvider client={client}>
+      <ChatWorkspace workspace={{ id: "w1", name: "工作区" } as never} />
+    </QueryClientProvider>,
+  );
+
+  const record = await waitFor(() => {
+    const found = container.querySelector("[data-answer-record]");
+    expect(found, "一次选择的记录该画在用户那条消息里").toBeTruthy();
+    return found!;
+  });
+  expect(record.textContent).toContain("先暂停");
+  expect(record.closest("[data-tool-call]")).toBeNull();
+  expect(container.textContent).not.toContain("我选好了");
 });

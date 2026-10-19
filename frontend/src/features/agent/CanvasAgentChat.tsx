@@ -57,7 +57,6 @@ import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
-import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
@@ -288,12 +287,11 @@ export function CanvasAgentChat({
   }, [usageEvents.data]);
   const queuedIds = new Set((queue.data ?? []).map((message) => message.id));
 
-  // 和 ChatWorkspace 同一条规矩,同一个函数:答案已经被 `ask_user` 的工具结果记下的回执
-  // 不再画一遍(见 features/agent/answerRecords)。两个面板各写一遍的话,这条迟早在其中
-  // 一个上失效 —— 那正是「同一条流式协议两个面板各实现一遍」那个毛病的来路。
-  const allMessages = messages.data ?? [];
-  const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
-  const visibleMessages = allMessages.filter((message) => !isRedundantAnswerRecord(message, recordedQuestions));
+  // 一次选择的记录长在**用户那条消息**里(后端的回执,`payload.answers` 带着问的和选的,
+  // 见 AnsweredChoice):它是用户做过的事。助手那一侧只有它自己那一步的状态(`ask_user`
+  // 的结果卡,一行「已选」),不重复记一遍。此前反过来做了 —— 工具结果画整张记录、回执被
+  // 当成"多余"不画,于是用户的选择被画进了助手的消息(维护者截图里那一行)。
+  const visibleMessages = messages.data ?? [];
   //: 还没交给智能体的回执画在正在跑的那一轮**下面**:这一轮结束它才交出去(时间戳改成那一刻),
   //: 交出去之后它在对话里也排在这一轮的回答之后 —— 现在就按那个位置画,结束时不跳位。
   const transcript = visibleMessages.filter((message) => !isWaitingReceipt(message));
