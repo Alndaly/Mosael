@@ -50,12 +50,18 @@ def test_the_reference_text_rule_comes_from_the_table() -> None:
 
 
 def test_no_engine_id_is_hardcoded_outside_the_catalog() -> None:
-    """引擎 id 的字面量只该出现在两个地方:声明它的表,和按引擎分派的 worker。
+    """引擎 id 的字面量只该出现在声明它的表,和按引擎分派的 worker。
 
     别处出现一个 `== "fish-speech"`,就是又长出了一处"关于这个引擎的知识"。
+    Qwen3-TTS 的 id 声明在自己的目录模块里(版本/文件清单也在那儿),和 `tts_models.CATALOG`
+    是同一张表的两半 —— 所以它也算"声明处"。
     """
-    allowed = {"app/ai/runtime/tts_models.py", "app/ai/runtime/workers/tts.py"}
-    engine_ids = {"fish-speech", "f5-tts"}
+    allowed = {
+        "app/ai/runtime/tts_models.py",
+        "app/ai/runtime/qwen_models.py",
+        "app/ai/runtime/workers/tts.py",
+    }
+    engine_ids = {"fish-speech", "f5-tts", "qwen-tts"}
     offenders: list[str] = []
     for path in sorted(pathlib.Path("app").rglob("*.py")):
         if path.as_posix() in allowed:

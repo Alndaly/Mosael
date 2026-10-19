@@ -20,7 +20,9 @@ from app.domain.voices.speech import (
     BUILTIN_PREFIX,
     CAPABILITY,
     CLONE_ENGINE,
+    LOCAL_SPEECH_ENGINES,
     PODCAST_ENGINE,
+    QWEN_ENGINE,
     SPEECH,
     SpeechProviderUnavailable,
     adapter_id,
@@ -82,12 +84,15 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
     给不出会话(没有 db)时,要钥匙的引擎按"不知道"算 = 不就绪:宁可少列一个,也不要让人选中之后
     才失败。
     """
+    from app.ai.runtime import qwen_models
     from app.ai.runtime import tts_models
     from app.ai.runtime import config as tts_config
 
     # **不等探测**:这个接口只是"引擎选择器要什么",而探测要起子进程 import torch。
     # 没测过时按"还没就绪"渲染,后台探完下一次拉列表就对了(见 tts_models.runtime_status)。
     clone_ready, _checked = tts_models.runtime_status(tts_config.get().engine)
+    # 响应模型里 `ready` 是 bool:没测过时按 False 渲染(理由见 describe_engines 的说明)。
+    qwen_ready = bool(local_engine_ready(LOCAL_SPEECH_ENGINES[QWEN_ENGINE]))
     engines: list[dict[str, object]] = [
         {
             "id": CLONE_ENGINE,
@@ -100,6 +105,19 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "voices": [],
             "ready": clone_ready,
             "note": "ttsProviderNote_cloneReady" if clone_ready else "ttsProviderNote_cloneMissing",
+        },
+        {
+            # 本机念字引擎:**不是克隆**。9 个预置音色、文本进音频出;语言支持由模型决定
+            # (中文/英文/日文/韩文/德文/法文/俄文/葡文/西文/意文),界面照这份表列,不假装更多。
+            "id": QWEN_ENGINE,
+            "label": "ttsProvider_qwen",
+            "needs_key": False,
+            # generate_custom_voice 没有语速参数(它靠 instruct 控节奏,而界面没有这一格)。
+            "supports_speed": False,
+            "needs_voice_id": False,
+            "voices": [item.id for item in qwen_models.SPEAKERS],
+            "ready": qwen_ready,
+            "note": "ttsProviderNote_qwenReady" if qwen_ready else "ttsProviderNote_qwenMissing",
         },
         {
             "id": f"{BUILTIN_PREFIX}{EdgeSpeechAdapter.engine_id}",
@@ -331,19 +349,27 @@ def _engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dic
     return [{"value": voice, "label": label} for voice, label in VOLCANO_BUILTIN_VOICES]
 
 
-def clone_engine_ready() -> bool | None:
-    """本机克隆引擎(配音库的音色走它)跑不跑得起来:True 跑得起来,False 已知跑不起来(没有运行环境、或权重没下),
-    None 还没测过。只读已经测过的结果，不在请求里起探测(起子进程 import torch 要十几秒)。"""
-    from app.ai.runtime import config as tts_config
+def local_engine_ready(engine_id: str) -> bool | None:
+    """本机引擎跑不跑得起来:**解释器 import 得动 + 权重在盘上**,两样都要。
+
+    True 跑得起来,False 已知跑不起来(没有运行环境、或权重没下),None 还没测过。
+    只读已经测过的结果,不在请求里起探测(起子进程 import torch 要十几秒)。
+    """
     from app.ai.runtime import tts_models
 
-    engine = tts_config.get().engine
-    ready, known = tts_models.runtime_status(engine)
+    ready, known = tts_models.runtime_status(engine_id)
     if known and not ready:
         return False
-    if ready and not tts_models.is_installed(engine):
+    if ready and not tts_models.is_installed(engine_id):
         return False
     return True if ready else None
+
+
+def clone_engine_ready() -> bool | None:
+    """本机克隆引擎(配音库的音色走它)跑不跑得起来。判据同上,只是引擎取配置里那个默认。"""
+    from app.ai.runtime import config as tts_config
+
+    return local_engine_ready(tts_config.get().engine)
 
 
 def cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:

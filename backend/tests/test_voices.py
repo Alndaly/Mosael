@@ -92,7 +92,7 @@ def test_tts_models_listed() -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
     rows = client.get("/api/tts/models").json()
-    assert {r["id"] for r in rows} == {"f5-tts", "fish-speech"}
+    assert {r["id"] for r in rows} == {"f5-tts", "fish-speech", "qwen-tts"}
 
 
 def test_tts_config_get_and_update() -> None:

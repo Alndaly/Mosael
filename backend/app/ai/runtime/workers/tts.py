@@ -1,8 +1,8 @@
 """Standalone TTS / voice-clone worker (ported from the predecessor project's tts engines).
 
-Runs inside the *TTS interpreter* — a Python that has f5-tts and/or fish-speech
-installed (configured via MOSAEL_TTS_PYTHON, autodetected from a sibling
-a sibling venv in dev). Must import nothing from this app at module level
+Runs inside the *TTS interpreter* — a Python that has one of the local engines
+installed (f5-tts / fish-speech / qwen-tts; configured via MOSAEL_TTS_PYTHON,
+autodetected from a per-engine venv in dev). Must import nothing from this app at module level
 besides the standard library, so the host backend can ship it to a foreign
 interpreter.
 
@@ -217,6 +217,91 @@ def run_fish(request: dict[str, Any], output_path: str) -> str:
     return "fish-speech"
 
 
+#: Qwen3-TTS 的权重目录与版本由宿主经 env 交给这里 —— worker 跑在引擎自己的解释器里,
+#: import 不到本仓库,**不许在那边再抄一份版本号**(那就会漂成 "latest")。
+_QWEN_HINT = (
+    "Qwen3-TTS is unavailable: download its pinned weights (Admin → Engines → Voice cloning, "
+    "Qwen3-TTS) or set MOSAEL_QWEN_MODEL_DIR to a directory holding model.safetensors + "
+    "speech_tokenizer/model.safetensors"
+)
+
+
+def _qwen_model_dir() -> Path:
+    configured = os.environ.get("MOSAEL_QWEN_MODEL_DIR", "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        if (path / "model.safetensors").is_file() and (path / "speech_tokenizer" / "model.safetensors").is_file():
+            return path
+    raise KeyedWorkerError("runtimeErr_qwenModelMissing", _QWEN_HINT + " (weights not found)")
+
+
+def _qwen_device() -> tuple[str, Any]:
+    """这台机器上拿什么跑。**只在 CUDA 上加速**;Apple 的 MPS 对这套解码没有验证过,
+    拿它跑得到的是"很慢、偶尔算错",不如老老实实说在 CPU 上(见报告里「只有真机能验」)。
+
+    返回 `(device_map, dtype)`。torch 不在(例如结构化测试里)时返回 CPU + None,让上游用它自己的默认。
+    """
+    try:
+        import torch  # heavy, only in the TTS interpreter
+    except Exception as exc:  # noqa: BLE001 — 没 torch 时下面的 import 也会失败,这里只是先挑设备
+        print(f"没有 torch,按 CPU 跑(会慢很多):{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return "cpu", None
+    if torch.cuda.is_available():
+        return "cuda:0", torch.bfloat16
+    # CPU 用 float32:官方 CPU 指南实测 float16/bfloat16 在 CPU 上要么慢要么精度出问题。
+    return "cpu", torch.float32
+
+
+def _write_wave(path: str, samples: Any, sample_rate: int) -> None:
+    """把模型给的 float 波形写成 16-bit PCM wav。
+
+    不用 soundfile:它虽然随 qwen-tts 一起装上了,但这一条路只依赖 stdlib + numpy(qwen-tts 本来就要
+    numpy),少一个"能 import 但版本不对"的失败面。
+    """
+    import numpy as np
+
+    values = np.asarray(samples, dtype=np.float32).reshape(-1)
+    pcm = (np.clip(values, -1.0, 1.0) * 32767.0).astype("<i2")
+    with wave.open(path, "w") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(int(sample_rate))
+        handle.writeframes(pcm.tobytes())
+
+
+def run_qwen(request: dict[str, Any], output_path: str) -> str:
+    """Qwen3-TTS CustomVoice:预置音色 + 文本 → 音频。不克隆、不要参考音频。
+
+    权重加载一次(和 F5/Fish 一样按路径缓存):1.7B 模型读进内存要几十秒,每次合成重建一遍
+    等于把用户的时间花在读同一份文件上。
+    """
+    path = _qwen_model_dir()
+    cache_key = f"qwen-tts:{path}"
+    model = _LOADED.get(cache_key)
+    if model is None:
+        from qwen_tts import Qwen3TTSModel  # heavy, only in the TTS interpreter
+
+        device, dtype = _qwen_device()
+        _progress("load", 0.1, f"首次加载 Qwen3-TTS 权重({device})")
+        kwargs: dict[str, Any] = {"device_map": device}
+        if dtype is not None:
+            kwargs["dtype"] = dtype
+        model = Qwen3TTSModel.from_pretrained(str(path), **kwargs)
+        _LOADED[cache_key] = model
+    _progress("generate", 0.35, "生成中")
+    wavs, sample_rate = model.generate_custom_voice(
+        text=request["text"],
+        # 上游认 "Auto" 或具体语言名;能确证的语言由宿主算好,拿不准就交 Auto。
+        language=request.get("language") or "Auto",
+        speaker=request.get("speaker") or "vivian",
+    )
+    if not wavs:
+        raise KeyedWorkerError("runtimeErr_qwenNoAudio", "Qwen3-TTS returned no audio")
+    _progress("encode", 0.9, "写出音频")
+    _write_wave(output_path, wavs[0], int(sample_rate))
+    return "qwen-tts"
+
+
 def synthesize(request: dict[str, Any], output_path: str) -> str:
     """引擎跑不起来就**报错**,不写一段正弦音冒充结果。
 
@@ -227,6 +312,8 @@ def synthesize(request: dict[str, Any], output_path: str) -> str:
     engine = (request.get("engine") or "f5-tts").strip().lower()
     if engine == "fish-speech":
         return run_fish(request, output_path)
+    if engine == "qwen-tts":
+        return run_qwen(request, output_path)
     return run_f5(request, output_path)
 
 
@@ -347,9 +434,12 @@ def fetch_named_model(request: dict[str, Any]) -> str:
     return "f5-tts"
 
 
-def _modelscope_snapshot(model_id: str, local_dir: str) -> str:
+def _modelscope_snapshot(model_id: str, local_dir: str, revision: str = "") -> str:
     from modelscope import snapshot_download  # type: ignore
 
+    # 空 revision 时保持老行为(ModelScope 自己的默认分支),有就钉死。
+    if revision:
+        return snapshot_download(model_id, local_dir=local_dir, revision=revision)
     return snapshot_download(model_id, local_dir=local_dir)
 
 
@@ -380,12 +470,44 @@ def fetch_fish_weights() -> None:
         _hf_snapshot(repo_id=FISH_HF_REPO)  # → HF cache;进度由宿主轮询目录
 
 
+def _required_env(name: str, key: str) -> str:
+    """宿主没给这一项就**别下** —— 少了 revision 的下载等于去拿 latest,而那会漂。"""
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise KeyedWorkerError(key, f"{name} is not set by the host")
+    return value
+
+
+def fetch_qwen_weights() -> None:
+    """把 Qwen3-TTS 的**钉住的那一版**权重拉到托管目录。
+
+    两个源各钉各的 revision(HF 是 git commit,ModelScope 是它自己的 revision)—— 宿主经 env
+    把两个都交进来,所以这里没有一处会漂成 "latest"。
+    """
+    target = _required_env("MOSAEL_QWEN_MODEL_DIR", "runtimeErr_qwenNoTarget")
+    source = os.environ.get("MOSAEL_MODEL_SOURCE", "").strip()
+    if source == "modelscope":
+        repo = _required_env("MOSAEL_QWEN_MODELSCOPE_REPO", "runtimeErr_qwenNoRevision")
+        revision = _required_env("MOSAEL_QWEN_MODELSCOPE_REVISION", "runtimeErr_qwenNoRevision")
+        _progress("download", 0.1, f"下载 {repo}@{revision[:8]}")
+        _modelscope_snapshot(repo, local_dir=target, revision=revision)
+    else:
+        repo = _required_env("MOSAEL_QWEN_REPO", "runtimeErr_qwenNoRevision")
+        revision = _required_env("MOSAEL_QWEN_REVISION", "runtimeErr_qwenNoRevision")
+        _progress("download", 0.1, f"下载 {repo}@{revision[:8]}")
+        _hf_snapshot(repo_id=repo, revision=revision, local_dir=target)
+    _progress("download", 1.0, "下载完成")
+
+
 def warmup(request: dict[str, Any], output_path: str) -> str:
     """Construct the engine so its weights download; write a tiny marker wav."""
     engine = (request.get("engine") or "f5-tts").strip().lower()
     try:
         if engine == "fish-speech":
             fetch_fish_weights()
+        elif engine == "qwen-tts":
+            # 权重是整仓快照;不必为了"预热"把 4.5 GB 读进内存 —— 能不能加载由就绪探测回答。
+            fetch_qwen_weights()
         else:
             fetch_f5_weights()  # ModelScope 那条路先把大文件拿下来
             from f5_tts.api import F5TTS

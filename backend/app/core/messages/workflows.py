@@ -651,8 +651,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "零样本克隆,支持情感标签;一键下载源码 + 权重,占用更大",
         "en": "Zero-shot cloning with emotion tags; downloads source and weights in one go, larger footprint.",
     },
+    "ttsDetail_qwen": {
+        "zh": "Qwen3-TTS(阿里千问,Apache-2.0):本机念字,9 个预置音色,支持中文、英文、日语、韩语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语。不克隆、不要参考音频;权重 4.5 GB,首次使用才下载。",
+        "en": "Qwen3-TTS (Alibaba Qwen, Apache-2.0): local text-to-speech with 9 preset voices; Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian. No cloning and no reference audio; the 4.5 GB of weights download on first use.",
+    },
     # ---- 语音引擎(供应商)----
     "ttsProvider_clone": {"zh": "本地音色克隆", "en": "Local voice clone"},
+    "ttsProvider_qwen": {"zh": "Qwen3-TTS(本机)", "en": "Qwen3-TTS (local)"},
+    "ttsProviderNote_qwenReady": {
+        "zh": "本机运行,不联网、不花钱;9 个预置音色,不需要参考音频。",
+        "en": "Runs locally — no network, no cost; 9 preset voices, no reference audio needed.",
+    },
+    "ttsProviderNote_qwenMissing": {
+        "zh": "Qwen3-TTS 的权重还没下:部署管理员在「管理 → 引擎 → 声音克隆」里点 Qwen3-TTS 那一行的「下载」(约 4.5 GB,另装数 GB 运行环境)。只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
+        "en": "The Qwen3-TTS weights aren't downloaded yet — a deployment admin downloads it from the Qwen3-TTS row under Admin → Engines → Voice cloning (about 4.5 GB, plus a few GB of runtime). If you just want sound now, Edge below needs no setup.",
+    },
     "ttsProviderNote_cloneReady": {"zh": "用音色库里的克隆音色,完全本地。", "en": "Uses cloned voices from your library — fully local."},
     "ttsProviderNote_cloneMissing": {
         "zh": "本地引擎还没装:部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」装一次;只想马上出声的话,下面的「Edge 免费在线合成」不用装。",

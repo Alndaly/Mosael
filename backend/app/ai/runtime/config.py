@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 
+from app.ai.runtime import qwen_models
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,11 @@ MANAGED_FISH_MODEL = settings.data_dir / "tts" / "fish-speech-s2-pro"
 #: F5 走 ModelScope 时权重落在这里(HF 那条路由 f5_tts 自己落进 HF 缓存)。
 #: 分开放是因为两条路的目录布局本来就不一样,硬凑成一个会让"装没装"更难判。
 MANAGED_F5_MODEL = settings.data_dir / "tts" / "f5-tts-weights"
+
+#: Qwen3-TTS 的权重目录。两个源都落到这里(和 F5 的 HF 缓存那条不同):模型按仓库布局
+#: 直接铺在这个目录下(`model.safetensors`、`speech_tokenizer/…`),`qwen_tts` 拿目录路径就能加载。
+#: 定义在 qwen_models(那里也拿着版本/文件清单),这里只做转出 —— 免得路径和 pinned 版本分家。
+MANAGED_QWEN_MODEL = qwen_models.MANAGED_QWEN_MODEL
 
 
 def managed_venv_dir(engine_id: str) -> Path:

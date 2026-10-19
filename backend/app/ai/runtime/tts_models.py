@@ -3,8 +3,8 @@
 Mirrors app/audio/asr_models.py: a catalog of downloadable TTS engine weights,
 install detection by probing the HuggingFace cache, deliberate download via the
 worker's warmup action (runs in the external TTS interpreter), byte-poll
-progress with speed + ETA. The heavy engines (f5-tts / fish-speech) live in a
-separate Python resolved from MOSAEL_TTS_PYTHON.
+progress with speed + ETA. The heavy engines (f5-tts / fish-speech / qwen-tts) live in a
+separate Python resolved from MOSAEL_TTS_PYTHON (one managed venv per engine).
 """
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ from app.core.rate import DownloadRate
 from app.core.config import settings
 from app.core.text import blame_line, strip_ansi
 from app.ai.runtime import remote_size
+from app.ai.runtime import qwen_models
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore, ProbeCache
 from app.ai.runtime.errors import RuntimeSetupError, failure_message, venv_failure, with_log
@@ -44,7 +45,7 @@ _INSTALLED_FRACTION = 0.6
 
 @dataclass(frozen=True)
 class TtsEngine:
-    id: str  # engine id used by the worker: "f5-tts" | "fish-speech"
+    id: str  # engine id used by the worker: "f5-tts" | "fish-speech" | "qwen-tts"
     label: str
     detail: str
     cache_dirs: tuple[str, ...]  # HF cache dir names to sum for install/progress
@@ -120,6 +121,29 @@ CATALOG: tuple[TtsEngine, ...] = (
         modelscope_repo="fishaudio/s2-pro",
         imports=("fish_speech.utils.schema", "tools.server.inference", "tools.server.model_manager"),
         needs_reference_text=True,
+        supports_speed=False,
+    ),
+    TtsEngine(
+        # 本机念字引擎(不是克隆):文本 + 9 个预置音色之一 → 音频。版本/文件/sha256 钉在
+        # ai/runtime/qwen_models;这里只说"怎么装、怎么跑"。
+        id=qwen_models.ENGINE_ID,
+        label="Qwen3-TTS",
+        detail="ttsDetail_qwen",
+        cache_dirs=("models--Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice",),
+        # 4.52 GB:主模型 3.83 GB + 声码器 0.68 GB + 几个小文件。不是拍的 —— 逐个照钉住的
+        # 文件清单加出来(qwen_models.MODEL.total_bytes),问得到源时仍以源上的实测为准。
+        expected_bytes=qwen_models.MODEL.total_bytes,
+        module="qwen_tts",
+        # qwen-tts 0.1.1 自己钉了 transformers==4.57.3 / accelerate==1.12.0。**每个引擎一个
+        # venv**(见 config.managed_venv_dir),所以它和 F5 的 torch 版本互不干涉。
+        # modelscope:走 ModelScope 拉那 4.5 GB 要用它。
+        pip_requirements=qwen_models.PIP_REQUIREMENTS,
+        modelscope_repo=qwen_models.MODEL.modelscope_repo,
+        # 合成真正 import 的是这个子模块;探顶层包名等于没探(见 _probe_code 的说明)。
+        imports=("qwen_tts.inference.qwen3_tts_model",),
+        # CustomVoice 拿的是预置音色,不需要参考音频。
+        needs_reference_text=False,
+        # generate_custom_voice 没有语速参数(它靠 instruct 控语气/节奏,而界面没有这一格)。
         supports_speed=False,
     ),
 )
@@ -220,6 +244,11 @@ def _measure(engine: TtsEngine) -> int:
         managed = _f5_model_dir()
         if managed is not None and _dir_size(managed) > 0:
             return _dir_size(managed)
+    if engine.id == qwen_models.ENGINE_ID:
+        # 两个下载源都铺进同一个托管目录(见 config.MANAGED_QWEN_MODEL),量它就是量下载进度。
+        managed = qwen_models.root()
+        if managed.is_dir():
+            return _dir_size(managed)
     total = 0
     for name in engine.cache_dirs:
         for root in _hf_roots():
@@ -307,6 +336,14 @@ def _install_verdict(engine: TtsEngine) -> str:
             lines.append(f"  权重目录 {managed}")
             lines.append(f"  检查点 {ckpt or '(没有)'}")
             lines.append(f"  vocab {vocab or '(没有)'}")
+        if engine.id == qwen_models.ENGINE_ID:
+            managed = qwen_models.root()
+            present = [name for name in qwen_models.MODEL.required_files if (managed / name).is_file()]
+            missing = [name for name in qwen_models.MODEL.required_files if name not in present]
+            lines.append(f"  权重目录 {managed}")
+            lines.append(f"  必需文件 {present or '(没有)'}")
+            lines.append(f"  缺 {missing or '(无)'}")
+            lines.append(f"  版本 {qwen_models.MODEL.release}")
         for partial in _partial_downloads(engine):
             try:
                 stat = partial.stat()
@@ -354,6 +391,9 @@ def _is_installed(engine: TtsEngine) -> bool:
             return True
         if has_ckpt or has_vocab:
             return False
+    elif engine.id == qwen_models.ENGINE_ID:
+        # 按文件判,不按体积:主模型在、声码器没下完时加载同样会炸,而那时体积可能已经过线。
+        return qwen_models.installed()
     if _has_partial_downloads(engine):
         return False
     # 判据也用实测总量:上游把文件改大之后,拿旧估算当分母会把"才下了一半"判成"已安装",
@@ -458,6 +498,13 @@ def _worker_env(engine_python: str = "") -> dict[str, str]:
         env["MOSAEL_FISH_MODEL_DIR"] = cfg.resolved_fish_model
     # F5 走 ModelScope 时权重落在这里,worker 据此显式指给 F5TTS。
     env["MOSAEL_F5_MODEL_DIR"] = str(tts_config.MANAGED_F5_MODEL)
+    # Qwen3-TTS:权重目录 + **钉住的版本**。仓库 id 和 revision 也一起给 —— worker 是交给
+    # 另一个解释器跑的脚本,它 import 不到本仓库,不能让它在那边再抄一份版本号(那就会漂)。
+    env["MOSAEL_QWEN_MODEL_DIR"] = str(tts_config.MANAGED_QWEN_MODEL)
+    env["MOSAEL_QWEN_REPO"] = qwen_models.MODEL.repo
+    env["MOSAEL_QWEN_REVISION"] = qwen_models.MODEL.hf_revision
+    env["MOSAEL_QWEN_MODELSCOPE_REPO"] = qwen_models.MODEL.modelscope_repo
+    env["MOSAEL_QWEN_MODELSCOPE_REVISION"] = qwen_models.MODEL.modelscope_revision
     # 让 torchcodec 找得到一份它认得的 FFmpeg。排在最前:dlopen 按这个顺序找,而系统里那份
     # 太新的正是加载不上的那个。找不到就什么都不做 —— 那种机器上错误信息会说清楚要装什么。
     ffmpeg_lib = _ffmpeg_runtime_dir(engine_python) if engine_python else ""
@@ -654,6 +701,11 @@ def download_parts(engine_id: str, source: str) -> tuple[tuple[str, str, tuple[s
         return ((source, "SWivid/F5-TTS", ("F5TTS_v1_Base/*",)), vocoder)
     if engine_id == "fish-speech":
         return ((source if source == "modelscope" else source, "fishaudio/s2-pro", ()),)
+    if engine_id == qwen_models.ENGINE_ID:
+        # 整个仓库一次取(主模型 + 内嵌的声码器 + tokenizer 配置都在里面),不挑文件:
+        # 模型卡给的就是"下这个仓库,然后把目录喂给 qwen_tts"。
+        repo = qwen_models.MODEL.modelscope_repo if source == "modelscope" else qwen_models.MODEL.repo
+        return ((source, repo, ()),)
     return ()
 
 
@@ -686,6 +738,23 @@ def measured_total(engine: TtsEngine, source: str, *, blocking: bool = False) ->
     return total, False
 
 
+def _download_was_interrupted(engine: TtsEngine) -> bool:
+    """盘上有痕迹、内存里没有记录 = 上一次下载被杀了(应用退出 / 后端重启)。
+
+    只有 Qwen3-TTS 这样判:F5/Fish 的权重可能来自别的工具、或落在 HF 缓存里,"盘上不是空的"
+    不能证明是我们下的。Qwen 的目录是我们自己的、只由这条下载路写,所以有痕迹就是没下完。
+    """
+    if engine.id != qwen_models.ENGINE_ID:
+        return False
+    managed = qwen_models.root()
+    try:
+        return managed.is_dir() and any(managed.iterdir()) and not qwen_models.installed()
+    except OSError as exc:
+        # 读不动就当"没有痕迹":这只是状态卡片的一句补充说明,不该让整个列表拉不出来。
+        logger.debug("看 %s 有没有下了一半的 Qwen 权重时读不动:%s", managed, exc)
+        return False
+
+
 def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     from app.ai.runtime import config as tts_config
 
@@ -711,6 +780,13 @@ def _status_dict(engine: TtsEngine) -> dict[str, Any]:
     if live is not None and live.status == "failed":
         return {**base, "status": "failed", "downloaded_bytes": _measure(engine),
                 "total_bytes": total, "message": live.message, "message_params": live.params}
+    if _download_was_interrupted(engine):
+        # 被杀的下载也要说话:停在「下载中」然后凭空变回「下载这个模型」,用户看到的是
+        # "像从来没点过"。说清盘上还剩着半截、再点一次会接着下。
+        ready, checked = runtime_status(engine.id)
+        return {**base, "status": "failed", "runtime_ready": ready, "runtime_checked": checked,
+                "downloaded_bytes": _measure(engine), "total_bytes": total,
+                "message": "runtimeErr_qwenDownloadInterrupted", "message_params": {}}
     if _is_installed(engine):
         # 权重齐了不等于跑得起来:pip 包可能压根没装(权重是别的工具下的,或者托管 venv 被删了)。
         # 此前这里一律说「已安装,声音克隆可用」,而合成那边探测解释器失败 —— 页面说可用,
@@ -971,6 +1047,13 @@ def _download_body(engine_id: str) -> None:
         progress_dir.mkdir(parents=True, exist_ok=True)
         env["MOSAEL_FISH_MODEL_DIR"] = str(progress_dir)
         python = _download_python(engine_id)
+    elif engine_id == qwen_models.ENGINE_ID:
+        # 权重同时是进度条要量的那个目录。和 fish 一样在下载开始前就建好 —— 量的对象不存在
+        # 时进度永远是 0,而用户看到的是"点了下载,没反应"。
+        progress_dir = qwen_models.root()
+        progress_dir.mkdir(parents=True, exist_ok=True)
+        env["MOSAEL_QWEN_MODEL_DIR"] = str(progress_dir)
+        python = resolve_engine_python(engine.id) or _download_python(engine.id)
     else:
         # 预热是**去下权重**:优先能跑引擎的那个解释器,没有就退到第一个存在的候选
         # (装了 f5-tts 但还没下权重时,它就是那一个)。跑不起来由预热自己的状态去报。

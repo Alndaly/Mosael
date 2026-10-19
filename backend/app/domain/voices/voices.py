@@ -32,7 +32,17 @@ from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line, strip_ansi
 from app.core.config import settings
 from app.domain.voices.errors import VoiceError
-from app.domain.voices.speech import CLONE_ENGINE, EDGE_ENGINE, SPEECH, adapter_id, is_plugin, require_engine
+from app.domain.voices.speakable import speakable_text
+from app.domain.voices.speech import (
+    CLONE_ENGINE,
+    EDGE_ENGINE,
+    LOCAL_SPEECH_ENGINES,
+    QWEN_ENGINE,
+    SPEECH,
+    adapter_id,
+    is_plugin,
+    require_engine,
+)
 from app.domain.voices.target import speech_target
 
 if TYPE_CHECKING:
@@ -181,6 +191,15 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     """
     script = detect_script(text)
     if not script:
+        return
+    if engine == QWEN_ENGINE:
+        # Qwen3-TTS 支持 10 种语言(含日韩俄),但**没有**阿拉伯文/天城文。念不了就现在说,
+        # 别让它按自己的发音规则硬念一遍交出一段废音。日/韩/俄放行 —— 不要照抄克隆那条
+        # 「日文要下权重」的判据(那是模型权重的限制,这里不是)。
+        from app.ai.runtime import qwen_models
+
+        if script not in qwen_models.MODEL.languages:
+            raise VoiceError("voiceErr_qwenUnsupportedLanguage")
         return
     #: 「这段文本是日文」的语言名每种界面语言各说各的,所以按文种各一条文案,而不是把一个
     #: 中文语言名当参数塞进英文句子里。detect_script 只认得出这两种。
@@ -477,6 +496,10 @@ def start_synthesis(
     `usage_source`:这次合成的用量记在谁名下,默认是这个任务(`("job", 任务 id)`);创作页的记录传它自己(ADR 0055 §5)。
     `on_asset`:产出登记之后、任务落「成功」之前在同一个事务里调(见 `OnAsset`)。
     """
+    #: **到引擎的第一扇门。** 屏幕上的 markdown 不是念出来的话:`**粗体**` 会被念成「星号 粗体 星号」,
+    #: 表格竖线、标题井号、URL 逐字符 —— 用户报的「所有地方都念符号」就是这一段。洗一遍再往下走,
+    #: 任务回执上的 `subject`、素材名、`_refuse_if_unspeakable` 的语言判断也都对着同一份干净文字。
+    text = speakable_text(text)
     if not text.strip():
         raise VoiceError("voiceErr_textEmpty")
     # 语言对不上就现在拦 —— 建了任务再失败,用户已经等了几十秒;而它根本不会"失败",
@@ -511,7 +534,17 @@ def start_synthesis(
         if not workspace_id:
             raise VoiceError("voiceErr_workspaceRequired")
         label = _voice_label(engine_voice, voice_label) or engine
-        if voice_id:
+        if engine in LOCAL_SPEECH_ENGINES:
+            # 本机念字引擎:音色是模型自带的预置发音人,名字由目录认(不在目录里就是调用方的错)。
+            from app.ai.runtime import qwen_models
+
+            if engine_voice and qwen_models.speaker(engine_voice) is None:
+                raise VoiceError("voiceErr_qwenUnknownVoice", voice=engine_voice)
+            engine_voice = qwen_models.speaker_id(engine_voice) or qwen_models.DEFAULT_SPEAKER
+            label = _voice_label(engine_voice) or engine
+            # 和克隆那条同一个判据:解释器 + 权重都在才建任务,而不是排上队再失败/顺手下一份权重。
+            _require_local_engine(LOCAL_SPEECH_ENGINES[engine])
+        elif voice_id:
             # 配音库里的一把嗓子,用远端引擎念(ADR 0037):嗓子在这个工作区、声明过是谁的、这个账号同意过上传 ——
             # 建任务之前问,没同意就回 409 让界面弹确认框,而不是排上队再失败。
             from app.domain.voices import remote
@@ -594,9 +627,8 @@ def _run_synthesis(
 ) -> None:
     """Take an admission slot before touching the database — see run_job_guarded(派发处已经替它套上了兜底).
 
-    Only the local clone engine takes the slot. A remote engine is an HTTP request that holds no
-    model in memory, so queueing it behind the single local slot would serialise work that has
-    no reason to be serial.
+    **本机引擎都取这个名额**(克隆、Qwen3-TTS):它们把几 GB 权重读进内存、在 CPU 上解码,
+    两个一起跑只会互相抢内存和核。远端引擎是一次 HTTP 请求,不占内存,不该排在它后面。
     """
     args = (
         job_id,
@@ -614,7 +646,7 @@ def _run_synthesis(
         clone_model,
     )
     extra = {"asset_name": asset_name, "voice_label": voice_label, "usage_source": usage_source, "on_asset": on_asset}
-    if engine == CLONE_ENGINE:
+    if engine == CLONE_ENGINE or engine in LOCAL_SPEECH_ENGINES:
         with TTS_SLOTS:
             _run_synthesis_body(*args, **extra)
     else:
@@ -795,6 +827,55 @@ __all__ = [
 ]
 
 
+def _speak_locally(
+    engine: str,
+    *,
+    text: str,
+    engine_voice: str,
+    out_dir: Path,
+    job_id: str | None,
+    on_progress: Callable[[dict], None] | None,
+) -> Path:
+    """本机念字引擎合成一段话:交给常驻 worker,写进 `out_dir/speech.wav`。
+
+    走的是和克隆那条同一个 worker(同一个 TTS 解释器、同一条行协议、同一个常驻进程池)——
+    **不另起 sidecar**。差别只在请求:这条带预置发音人,不带参考音频。
+
+    本机引擎不花第三方的钱,所以没有计费那一笔(和克隆相同);它也不产出"是谁的克隆"这种
+    授权信息 —— 音色是模型自带的,不是谁的嗓子。
+    """
+    from app.ai.runtime import qwen_models
+
+    runtime = LOCAL_SPEECH_ENGINES[engine]
+    _require_local_engine(runtime)
+    python = tts_models.resolve_engine_python(runtime)
+    if python is None:  # 建任务时还在、跑起来时被卸了
+        raise VoiceError("voiceErr_noRuntime", label=runtime)
+    out = out_dir / "speech.wav"
+    request: dict[str, object] = {
+        "action": "synthesize",
+        "engine": runtime,
+        "text": text,
+        "output_path": str(out),
+    }
+    if runtime == qwen_models.ENGINE_ID:
+        # 音色是模型自带的 9 个之一;认不出就退回第一个(界面/智能体给了别的 id 时至少能出声)。
+        request["speaker"] = qwen_models.speaker_id(engine_voice) or qwen_models.DEFAULT_SPEAKER
+        # 有硬证据的语言说清楚,拿不准交 Auto —— 语言支持由模型决定,不在界面上假装更多。
+        request["language"] = qwen_models.language_for(detect_script(text))
+    tts_daemon.pool().request(
+        runtime,
+        python,
+        request,
+        on_progress=on_progress,
+        timeout=TTS_TIMEOUT_SECONDS,
+        env=tts_models._worker_env(python),
+    )
+    if not out.is_file() or out.stat().st_size == 0:
+        raise VoiceError("voiceErr_synthNoAudio")
+    return out
+
+
 def speak_to_file(
     db,
     *,
@@ -812,8 +893,13 @@ def speak_to_file(
     source_id: str,
     job_id: str | None = None,
     voice_id: str | None = None,
+    on_progress: Callable[[dict], None] | None = None,
 ) -> Path:
-    """用远端引擎合成一段语音,落到 `out_dir` 里,**不管产物归谁**。
+    """用一个引擎合成一段语音,落到 `out_dir` 里,**不管产物归谁**。
+
+    本机念字引擎(Qwen3-TTS)和远端引擎在这一个入口后面分叉:前者交给常驻 worker(权重已经在
+    它自己的解释器里),后者是一次 HTTP 请求。**入口以上的调用方不区分这两条** —— 试听、对话
+    朗读、配音任务都走这里,新增一家只需要在这里多一条路,而不是每个入口各加一遍。
 
     产出型(配音:登记成素材、挂在任务上)和临时型(对话里念一句、说完就扔)只在最后那一步
     不同 —— 解析连接、按引擎那一族筛模型、建适配器、记账,两条路必须逐字一样。抄第二份的话,
@@ -827,8 +913,19 @@ def speak_to_file(
     """
     from app.ai.providers import SpeechSynthesisRequest, build_speech_adapter, connection_vendor_for_speech_engine
 
+    #: **到引擎的第二扇门。** 对话朗读、免提、试听、笔记朗读都直接走这里;任务那条路(配音、画板音、
+    #: 工作流、字幕逐句配音)在建任务时已经洗过一遍,这里再走一次是**幂等**的无操作 —— 两扇门都洗,
+    #: 是为了「谁也别想绕过它」,而不是两套规则(规则只有 `speakable_text` 这一个函数)。
+    text = speakable_text(text)
+    if not text.strip():
+        raise VoiceError("voiceErr_textEmpty")
     if is_plugin(engine):
         return _speak_with_plugin(db, engine, text=text, voice=engine_voice, speed=speed, out_dir=out_dir)
+    if engine in LOCAL_SPEECH_ENGINES:
+        return _speak_locally(
+            engine, text=text, engine_voice=engine_voice, out_dir=out_dir,
+            job_id=job_id, on_progress=on_progress,
+        )
     #: 能力表里是 `builtin:edge`,`ai` 层的适配器认裸名 `edge`。
     engine = adapter_id(engine)
     profile, model = speech_target(
@@ -1053,6 +1150,8 @@ def _synthesize_remote(
             source_id=source_id,
             job_id=job.id,
             voice_id=voice.id if voice is not None else None,
+            # 本机引擎(加载权重、解码)会报阶段;远端引擎不发,回调只是不被调用。
+            on_progress=lambda event: _update_progress(job.id, event),
         )
         job.progress = 0.85
         # 付过费的那次合成已经回来了:进度(和这次的用量)先落库,再登记素材。

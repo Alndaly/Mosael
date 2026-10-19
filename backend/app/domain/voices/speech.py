@@ -32,6 +32,7 @@ from app.ai.providers import (
     VolcanoSpeechAdapter,
     connection_vendor_for_speech_engine,
 )
+from app.ai.runtime import qwen_models
 from app.core.i18n import tr
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable
 from app.domain.plugins.manifest import SPEECH
@@ -42,6 +43,11 @@ CLONE_ENGINE = f"{BUILTIN_PREFIX}clone"
 EDGE_ENGINE = f"{BUILTIN_PREFIX}{EdgeSpeechAdapter.engine_id}"
 #: 播客引擎:一次产出一整段双人对话,不是"念一句话"那种 —— 念字的地方都不该列它,也不进配音能力。
 PODCAST_ENGINE = f"{BUILTIN_PREFIX}volcano-podcast"
+#: 本机 Qwen3-TTS(预置音色,文本进、音频出)。
+QWEN_ENGINE = f"{BUILTIN_PREFIX}qwentts"
+#: **本机念字引擎**:能力表里的 id → ai/runtime 那边的引擎名。本机克隆(`builtin:clone`)不在这里 ——
+#: 它念的是配音库里的一把嗓子(要一行 Voice),和"选一个预置音色"不是同一种东西。
+LOCAL_SPEECH_ENGINES: dict[str, str] = {QWEN_ENGINE: qwen_models.ENGINE_ID}
 
 
 class SpeechProviderUnavailable(CapabilityUnavailable):
@@ -54,6 +60,25 @@ def _clone_ready(_db: Session, _owner: str | None) -> tuple[str, ...]:
 
     ready, _checked = tts_models.runtime_status(tts_config.get().engine)
     return () if ready else (tr("ttsProviderNote_cloneMissing"),)
+
+
+def _local_ready(engine: str):
+    """本机念字引擎的判据:**解释器跑得起来 + 权重在盘上**,两样都要。
+
+    这和克隆那条是同一条判据(见 engine_catalog.local_engine_ready),只是这边只回答"缺什么"。
+    没测过时说得保守一点(当作没装),因为缺的那句提示正好就是"去哪点下载"。
+    """
+
+    def missing(_db: Session, _owner: str | None) -> tuple[str, ...]:
+        from app.ai.runtime import tts_models
+
+        runtime = LOCAL_SPEECH_ENGINES[engine]
+        ready, _checked = tts_models.runtime_status(runtime)
+        if ready and tts_models.is_installed(runtime):
+            return ()
+        return (tr("ttsProviderNote_qwenMissing"),)
+
+    return missing
 
 
 def _connection_ready(engine: str):
@@ -74,6 +99,8 @@ CAPABILITY = Capability(
     incomplete_key="speechErr_engineNotReady",
     builtins=(
         Builtin(id=CLONE_ENGINE, name_key="ttsProvider_clone", ready=_clone_ready),
+        # 本机念字引擎:不要钥匙、不联网、不克隆 —— 只要一份权重和一个解释器。
+        Builtin(id=QWEN_ENGINE, name_key="ttsProvider_qwen", ready=_local_ready(QWEN_ENGINE)),
         Builtin(id=EDGE_ENGINE, name_key=EdgeSpeechAdapter.label_key),
         *(Builtin(id=f"{BUILTIN_PREFIX}{cls.engine_id}", name_key=cls.label_key, ready=_connection_ready(cls.engine_id))
           for cls in (OpenAISpeechAdapter, VolcanoSpeechAdapter, BailianSpeechAdapter, CosyVoiceSpeechAdapter)),
@@ -107,8 +134,8 @@ def require_engine(db: Session, engine: str, *, user_id: str | None) -> None:
     raise SpeechProviderUnavailable("speechErr_unknownEngineChoose", name=engine, **engine_choices(db, user_id))
 
 
-#: 不用钥匙、不花钱的内置引擎:Edge 和本机克隆(和引擎目录里 needs_key=False 的那两条是同一组)。
-_NO_SETUP = (EDGE_ENGINE, CLONE_ENGINE)
+#: 不用钥匙、不花钱的内置引擎:Edge、本机克隆、本机 Qwen3-TTS(和引擎目录里 needs_key=False 的那几条同一组)。
+_NO_SETUP = (EDGE_ENGINE, CLONE_ENGINE, QWEN_ENGINE)
 
 
 def engine_choices(db: Session, user_id: str | None) -> dict[str, str]:
@@ -173,7 +200,9 @@ __all__ = [
     "CAPABILITY",
     "CLONE_ENGINE",
     "EDGE_ENGINE",
+    "LOCAL_SPEECH_ENGINES",
     "PODCAST_ENGINE",
+    "QWEN_ENGINE",
     "SPEECH",
     "SpeechProviderUnavailable",
     "adapter_id",

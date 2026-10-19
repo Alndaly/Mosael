@@ -387,6 +387,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The previous download did not finish (its process is gone — usually the app quit or the backend restarted). Partial files are still on disk; downloading again starts over.",
     },
     "runtimeErr_f5NoTarget": {"zh": "没有指定权重目录", "en": "No weights directory was given"},
+    "runtimeErr_qwenModelMissing": {
+        "zh": "Qwen3-TTS 不可用:权重还没下。部署管理员在「管理 → 引擎 → 声音克隆」里点 Qwen3-TTS 那一行的「下载」,或把 MOSAEL_QWEN_MODEL_DIR 指到一个含有 model.safetensors 与 speech_tokenizer/model.safetensors 的目录。",
+        "en": "Qwen3-TTS is unavailable: its weights aren't downloaded. A deployment admin downloads it under Admin → Engines → Voice cloning, or points MOSAEL_QWEN_MODEL_DIR at a directory holding model.safetensors and speech_tokenizer/model.safetensors.",
+    },
+    "runtimeErr_qwenNoTarget": {"zh": "没有指定 Qwen3-TTS 的权重目录", "en": "No weights directory was given for Qwen3-TTS"},
+    "runtimeErr_qwenNoRevision": {
+        "zh": "没有拿到 Qwen3-TTS 要下载的固定版本,已停止(不允许去拿 latest)。请重装或反馈。",
+        "en": "The pinned Qwen3-TTS revision was not provided, so the download stopped (fetching “latest” is not allowed). Reinstall or report this.",
+    },
+    "runtimeErr_qwenNoAudio": {
+        "zh": "Qwen3-TTS 这次没有产出音频(模型返回空结果),请重试或换一段文字。",
+        "en": "Qwen3-TTS produced no audio this time (the model returned an empty result). Try again or use different text.",
+    },
+    "runtimeErr_qwenDownloadInterrupted": {
+        "zh": "上一次 Qwen3-TTS 权重下载没有完成(下载进程已经不在了,通常是应用退出或后端重启)。盘上还留着没下完的部分,再点一次会接着下。",
+        "en": "The previous Qwen3-TTS weights download did not finish (its process is gone — usually the app quit or the backend restarted). Partial files are still on disk; downloading again resumes.",
+    },
     "runtimeErr_gitMissing": {"zh": "未找到 git,无法拉取 Fish Speech 源码", "en": "git was not found, so the Fish Speech source cannot be fetched"},
     "runtimeErr_fishCloneFailed": {"zh": "拉取 Fish Speech 源码失败:{detail}", "en": "Could not fetch the Fish Speech source: {detail}"},
     "runtimeErr_fishCloneFailedSilent": {

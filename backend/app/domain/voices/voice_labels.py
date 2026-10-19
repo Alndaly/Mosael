@@ -6,9 +6,12 @@
 from __future__ import annotations
 
 from app.ai.providers import EDGE_BUILTIN_VOICES, PODCAST_SPEAKERS, VOLCANO_BUILTIN_VOICES
+from app.ai.runtime import qwen_models
 
 _BUILTIN_VOICE_LABELS: dict[str, str] = {
     **dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES),
+    # 本机 Qwen3-TTS 的 9 个预置音色:id 是上游的小写名(vivian / uncle_fu …),下拉要给人看的名字。
+    **qwen_models.voice_labels(),
 }
 
 

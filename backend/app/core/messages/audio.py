@@ -26,6 +26,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{label}'s model weights aren't downloaded yet, so it can't synthesise anything. A deployment admin clicks Download under Admin → Engines → Voice cloning — it won't start on its own here, since it's several GB and the admin decides when.",
     },
     "voiceErr_unknownEngine": {"zh": "不认识的本地引擎:{engine}", "en": "Unknown local engine: {engine}"},
+    "voiceErr_qwenUnknownVoice": {
+        "zh": "Qwen3-TTS 没有这个音色:{voice}(它有 9 个预置音色,从下拉里挑一个)",
+        "en": "Qwen3-TTS has no voice called {voice} — it has 9 preset voices; pick one from the list.",
+    },
+    "voiceErr_qwenUnsupportedLanguage": {
+        "zh": "Qwen3-TTS 念不了这段文字的语言。它支持中文、英文、日语、韩语、德语、法语、俄语、葡萄牙语、西班牙语、意大利语;请换一个引擎。",
+        "en": "Qwen3-TTS cannot speak this text's language. It supports Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian — pick another engine.",
+    },
     "voiceErr_synthNoReason": {
         "zh": "语音合成失败,而子进程没有留下原因 —— 请重试一次;若仍然如此请反馈。",
         "en": "Speech synthesis failed and the worker process left no reason. Try once more; if it keeps happening, please report it.",
