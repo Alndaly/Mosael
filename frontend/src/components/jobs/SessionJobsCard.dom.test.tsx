@@ -11,7 +11,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   jobs: [] as any[],
@@ -56,6 +56,7 @@ vi.mock("@/components/jobs/JobDetailDialog", () => ({
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PlanCard } from "@/features/agent/PlanCard";
 import { SessionJobsCard } from "./SessionJobsCard";
 
 const stamp = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString();
@@ -80,6 +81,25 @@ function mount() {
   return render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
+        <SessionJobsCard workspaceId="w1" sessionId="s1" />
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+}
+
+/** 「任务计划」和「后台任务」并排(面板里上下紧挨着),一行一行的语法要一样。 */
+const PLAN = [
+  { step: "已完成的一步", status: "done" },
+  { step: "正在做的一步", status: "in_progress" },
+  { step: "还没开始的一步", status: "pending" },
+];
+
+function mountBoth() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <PlanCard plan={PLAN} />
         <SessionJobsCard workspaceId="w1" sessionId="s1" />
       </TooltipProvider>
     </QueryClientProvider>,
@@ -146,7 +166,91 @@ it("还没报进度的在跑任务说「已跑 N 秒」,不是停在 0%", async 
   h.jobs = [
     job({ id: "run-2", status: "running", progress: 0, created_at: stamp(7), payload: { subject: "慢活", receipt: { session_id: "s1" } } }),
   ];
-  mount();
+  const { container } = mount();
   await screen.findByText("慢活");
   expect(screen.getByText("chatJobsElapsed")).toBeTruthy();
+  //: 用时是次要信息:在主行下方那一行,不挤在主行右侧(和「任务计划」同一个位置约定)。
+  expect(container.querySelector("[data-session-job] [data-inspector-note]")?.textContent).toContain("chatJobsElapsed");
+});
+
+/**
+ * 维护者截图:同一个「智能体环境」面板里,上面「任务计划」每行是 状态圈 + 文字(右侧什么都没有);
+ * 下面「后台任务」却多一个类型图标、右侧再写一遍「成功」。两块每一行说的都是同一件事,
+ * 语法必须一样 —— 这组测试并排渲染两块,逐条钉住。
+ */
+describe("和「任务计划」同一套行语法", () => {
+  it("① 同一套状态圈:成功/进行中/未开始都用同一个组件、同一组 class", async () => {
+    h.jobs = [
+      job({ id: "ok", status: "succeeded", progress: 1, payload: { subject: "做完的", receipt: { session_id: "s1" } } }),
+      job({ id: "run", status: "running", progress: 0.4, payload: { subject: "在跑的", receipt: { session_id: "s1" } } }),
+      job({ id: "wait", status: "queued", progress: 0, payload: { subject: "排队的", receipt: { session_id: "s1" } } }),
+    ];
+    const { container } = mountBoth();
+    await screen.findByText("做完的");
+
+    const planIcon = (status: string) =>
+      container.querySelector(`[data-plan-step] [data-agent-status="${status}"]`);
+    const jobIcon = (status: string) =>
+      container.querySelector(`[data-session-job] [data-agent-status="${status}"]`);
+    for (const status of ["done", "running", "pending"]) {
+      expect(jobIcon(status), `任务侧的 ${status}`).toBeTruthy();
+      expect(jobIcon(status)!.className, `两块的 ${status} 圈`).toBe(planIcon(status)!.className);
+    }
+    //: 而且两边都是同一种"行"(同一个 InspectorStatusRow 画出来的)。
+    expect(container.querySelectorAll("[data-session-job] [data-inspector-row]")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-plan-step] [data-inspector-row]")).toHaveLength(3);
+  });
+
+  it("② 右侧不再重复一遍状态词;失败原因走说明行", async () => {
+    h.jobs = [
+      job({ id: "ok", status: "succeeded", progress: 1, payload: { subject: "做完的", receipt: { session_id: "s1" } } }),
+      job({
+        id: "fail", status: "failed", progress: 1,
+        error: "provider said no", error_summary: "连接超时",
+        payload: { subject: "失败的", receipt: { session_id: "s1" } },
+      }),
+      job({ id: "stop", status: "cancelled", progress: 1, payload: { subject: "被停下的", receipt: { session_id: "s1" } } }),
+    ];
+    const { container } = mountBoth();
+    await screen.findByText("做完的");
+
+    const rows = [...container.querySelectorAll("[data-session-job]")];
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      //: 状态只由左边的圈表达:成功/失败/已取消都不再在行里写字。
+      expect(row.textContent).not.toMatch(/runStatus_(succeeded|failed|cancelled)/);
+      expect(row.textContent).not.toContain("成功");
+    }
+    //: 失败要文字时,那块字在两块共用的位置 —— 主行下方那一行,不是右侧。
+    const failed = container.querySelector('[data-session-job="fail"]')!;
+    expect(failed.querySelector("[data-inspector-row]")!.textContent).not.toContain("连接超时");
+    expect(failed.querySelector("[data-inspector-note]")!.textContent).toContain("连接超时");
+  });
+
+  it("③ 类型图标要么两块都有、要么都没有 —— 现在是都没有,一行只剩一颗圈", async () => {
+    h.jobs = [
+      job({ id: "ok", status: "succeeded", progress: 1, payload: { subject: "做完的", receipt: { session_id: "s1" } } }),
+    ];
+    const { container } = mountBoth();
+    await screen.findByText("做完的");
+
+    //: 完工行没有取消钮,所以主行里唯一一个 svg 就是状态圈;计划那侧同样。
+    expect(container.querySelector("[data-session-job] [data-inspector-row]")!.querySelectorAll("svg")).toHaveLength(1);
+    expect(container.querySelector("[data-plan-step] [data-inspector-row]")!.querySelectorAll("svg")).toHaveLength(1);
+  });
+
+  it("④ 进度/用时在主行下方的说明行里,和文字同一左缘", async () => {
+    h.jobs = [
+      job({ id: "run", status: "running", progress: 0.4, payload: { subject: "在跑的", receipt: { session_id: "s1" } } }),
+    ];
+    const { container } = mountBoth();
+    await screen.findByText("在跑的");
+
+    const main = container.querySelector("[data-session-job] [data-inspector-row]")!;
+    const note = container.querySelector("[data-session-job] [data-inspector-note]")!;
+    expect(note.textContent).toContain("40%");
+    expect(main.textContent).not.toContain("40%");
+    //: 说明行在主行之后,不是主行里的第三格。
+    expect(main.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

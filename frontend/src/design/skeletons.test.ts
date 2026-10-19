@@ -24,7 +24,9 @@ const SRC = path.resolve(import.meta.dirname, "..");
 /** 可以脉冲的地方 —— 每一处都是状态指示,不是加载占位。 */
 const PULSE_ALLOWED: Record<string, string> = {
   "features/agent/SubagentPanel.tsx": "子代理运行中的状态圆点",
-  "features/agent/StatusIcon.tsx": "运行中的状态图标",
+  //: 状态圈从 features/agent/StatusIcon.tsx 搬下来,和「一行」的几何一起归检查器共用
+  //: (任务计划、后台任务、最近工具都从 components/layout/InspectorStatusRow 取同一颗圈)。
+  "components/layout/InspectorStatusRow.tsx": "运行中的状态圈",
 };
 
 function sources(): Array<[string, string]> {

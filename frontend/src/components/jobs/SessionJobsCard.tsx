@@ -1,20 +1,19 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CheckCircle2, ListChecks, Loader2, X } from "lucide-react";
+import { ListChecks, X } from "lucide-react";
 
 import { cancelJob, topLevelJobsQuery, type JobSummary } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { InspectorCard } from "@/components/layout/InspectorCard";
+import { InspectorStatusRow, toAgentStatus } from "@/components/layout/InspectorStatusRow";
 import { JobDetailDialog } from "@/components/jobs/JobDetailDialog";
-import { JobKindIcon, gotoJobPage, jobPage, useJobKinds } from "@/components/jobs/jobKinds";
-import { runStatusText } from "@/components/jobs/runStatus";
+import { gotoJobPage, jobPage, useJobKinds } from "@/components/jobs/jobKinds";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { leaveNativeView } from "@/lib/nativeView";
 import { formatElapsedSeconds } from "@/lib/time";
-import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -132,56 +131,52 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
           const progress = typeof job.progress === "number" ? job.progress : 0;
           const elapsed = Math.max(0, (Date.now() - Date.parse(job.created_at)) / 1000);
           return (
-            <li key={job.id} className="grid min-w-0 gap-0.5" data-session-job={job.id}>
-              <div className="flex min-w-0 items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="min-w-0 flex-1 justify-start gap-1.5"
-                  onClick={() => setDetailJob(job)}
-                >
-                  <JobStatusIcon status={job.status} />
-                  <JobKindIcon meta={kind} size={12} />
-                  <span className="shrink-0 text-ui-2xs text-muted-foreground">{kind.label}</span>
-                  {subject ? <Truncate className="flex-1">{subject}</Truncate> : null}
-                  <span className="shrink-0 tabular-nums text-ui-2xs text-muted-foreground">
-                    {active
-                      ? progress > 0
+            <li key={job.id} data-session-job={job.id}>
+              {/* 和「任务计划」同一个 InspectorStatusRow:左边一个圈、右边文字,右侧不再写一遍状态。
+                  类型图标两边都不画;进度/用时/失败原因走说明行(在主行下方,和文字同一左缘)。 */}
+              <InspectorStatusRow
+                status={toAgentStatus(job.status)}
+                onActivate={() => setDetailJob(job)}
+                trailing={
+                  active ? (
+                    <IconButton
+                      size="icon-xs"
+                      label={t("jobCancel")}
+                      loading={cancel.isPending && cancel.variables === job.id}
+                      onClick={() => cancel.mutate(job.id)}
+                    >
+                      <X size={12} />
+                    </IconButton>
+                  ) : failed && page ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        void leaveNativeView();
+                        gotoJobPage(job, kind);
+                      }}
+                    >
+                      {t("chatJobsGoto")}
+                    </Button>
+                  ) : null
+                }
+                note={
+                  active ? (
+                    <span className="tabular-nums">
+                      {progress > 0
                         ? `${Math.round(progress * 100)}%`
-                        : t("chatJobsElapsed").replace("{t}", formatElapsedSeconds(elapsed))
-                      : failed
-                        ? null
-                        : runStatusText(t, job.status)}
-                  </span>
-                </Button>
-                {active ? (
-                  <IconButton
-                    size="icon-xs"
-                    label={t("jobCancel")}
-                    loading={cancel.isPending && cancel.variables === job.id}
-                    onClick={() => cancel.mutate(job.id)}
-                  >
-                    <X size={12} />
-                  </IconButton>
-                ) : null}
-                {failed && page ? (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => {
-                      void leaveNativeView();
-                      gotoJobPage(job, kind);
-                    }}
-                  >
-                    {t("chatJobsGoto")}
-                  </Button>
-                ) : null}
-              </div>
-              {failed && (job.error_summary || job.error) ? (
-                <p className="m-0 min-w-0 pl-[18px] text-ui-2xs leading-normal text-muted-foreground">
-                  <Truncate>{job.error_summary || job.error}</Truncate>
-                </p>
-              ) : null}
+                        : t("chatJobsElapsed").replace("{t}", formatElapsedSeconds(elapsed))}
+                    </span>
+                  ) : failed && (job.error_summary || job.error) ? (
+                    <Truncate>{job.error_summary || job.error}</Truncate>
+                  ) : null
+                }
+              >
+                <span className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="shrink-0 text-ui-2xs text-muted-foreground">{kind.label}</span>
+                  {subject ? <Truncate className="flex-1 text-ui-xs text-foreground">{subject}</Truncate> : null}
+                </span>
+              </InspectorStatusRow>
             </li>
           );
         })}
@@ -202,20 +197,5 @@ export function SessionJobsCard({ workspaceId, sessionId }: { workspaceId: strin
         gotoLabel={detailJob?.status === "failed" && detailJob.kind === "ai_generation" ? t("chatJobsGotoGeneration") : undefined}
       />
     </InspectorCard>
-  );
-}
-
-function JobStatusIcon({ status }: { status: string }) {
-  if (status === "running" || status === "queued") {
-    return <Loader2 size={12} className="shrink-0 animate-mosael-spin text-primary" aria-hidden />;
-  }
-  if (status === "succeeded") {
-    return <CheckCircle2 size={12} className="shrink-0 text-success" aria-hidden />;
-  }
-  if (status === "cancelled") {
-    return <Ban size={12} className="shrink-0 text-muted-foreground" aria-hidden />;
-  }
-  return (
-    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full bg-destructive")} aria-hidden />
   );
 }

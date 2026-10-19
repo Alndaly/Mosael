@@ -70,7 +70,8 @@ import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/fe
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentTurnContent, toolCallIds, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
-import { AgentStatusIcon, ToolName, toAgentStatus } from "@/features/agent/StatusIcon";
+import { AgentStatusIcon, toAgentStatus } from "@/components/layout/InspectorStatusRow";
+import { ToolName } from "@/features/agent/ToolName";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
 import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";

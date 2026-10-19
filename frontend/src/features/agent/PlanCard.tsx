@@ -1,7 +1,7 @@
 import React from "react";
 import { ListChecks } from "lucide-react";
 import { useI18n } from "@/app/preferences";
-import { AgentStatusIcon, toAgentStatus } from "@/features/agent/StatusIcon";
+import { InspectorStatusRow, toAgentStatus } from "@/components/layout/InspectorStatusRow";
 import { InspectorCard } from "@/components/layout/InspectorCard";
 import type { AgentTimelineItem } from "@/features/agent/ToolCalls";
 import { cn } from "@/lib/utils";
@@ -127,21 +127,21 @@ function PlanSteps({ steps }: { steps: PlanStep[] }) {
       {(
         <ol className="m-0 grid list-none gap-1 p-0">
           {steps.map((step, index) => (
-            <li
-              className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5 text-ui-xs leading-[1.5]"
-              key={`${index}-${step.step}`}
-            >
-              <AgentStatusIcon status={toAgentStatus(step.status)} className="mt-[3px]" />
-              <span
-                className={cn(
-                  "min-w-0 break-words",
-                  step.status === "done" && "text-muted-foreground line-through decoration-muted-foreground/50",
-                  step.status === "in_progress" && "font-medium text-foreground",
-                  step.status !== "done" && step.status !== "in_progress" && "text-muted-foreground",
-                )}
-              >
-                {step.step}
-              </span>
+            //: 一行 = 状态圈 + 文字,右侧什么都没有;和「后台任务」共用 InspectorStatusRow
+            //: (同一份几何、同一个圈)。次要信息这块没有,所以也没有说明行。
+            <li key={`${index}-${step.step}`} data-plan-step="">
+              <InspectorStatusRow status={toAgentStatus(step.status)}>
+                <span
+                  className={cn(
+                    "min-w-0 break-words",
+                    step.status === "done" && "text-muted-foreground line-through decoration-muted-foreground/50",
+                    step.status === "in_progress" && "font-medium text-foreground",
+                    step.status !== "done" && step.status !== "in_progress" && "text-muted-foreground",
+                  )}
+                >
+                  {step.step}
+                </span>
+              </InspectorStatusRow>
             </li>
           ))}
         </ol>
