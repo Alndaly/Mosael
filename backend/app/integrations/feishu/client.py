@@ -225,7 +225,12 @@ def send_text(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str =
 
 def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_type: str = "chat_id") -> str:
     """发一张交互卡片,返回它的 message_id。`receive_id_type` 是 `chat_id`(会话,默认)或 `open_id`(私聊某个人)——
-    工作流的确认卡两条路都要:这一轮**来自飞书会话**就发回那个群,不是的话发给负责人本人。"""
+    工作流的确认卡两条路都要:这一轮**来自飞书会话**就发回那个群,不是的话发给负责人本人。
+
+    `card` 可以是 1.0 结构(`{"elements": …}`),也可以是 2.0(`{"schema": "2.0", "body": …}`)——
+    飞书按 `schema` 自己认。`content` 放**整张卡**序列化后的字符串(官方「发送消息内容结构 →
+    卡片 → 方式三:使用卡片 JSON 发送」),2.0 不再额外包一层,所以这里两种结构都是同一条路。
+    """
     data = call_api(
         bot,
         "POST",
@@ -238,9 +243,11 @@ def send_card(bot: FeishuBot, chat_id: str, card: dict[str, Any], *, receive_id_
 
 
 #: 飞书「发送消息」的上限:卡片 / 富文本**请求体最大 30 KB**,文本 150 KB
-#: (官方文档「发送消息 → 请求体 → content」,错误码 230025)。
+#: (官方文档「发送消息 → 请求体 → content」,错误码 230025)。**卡片 JSON 2.0 没有另立上限**,
+#: 文档在这一条上不分 1.0 / 2.0 —— 所以分卡阈值仍是 30 KB 那条线。
 #: 这里量的是**真正要发出去的请求体**(照 httpx 的序列化方式),不是正文字节 —— 引号 / 换行
 #: 在 JSON 里要转义,一段代码块能让同样的正文大出两成,只量正文就会在那一刻撞上限。
+#: 2.0 的外壳(`schema` / `body`)、编号头也一起算在里面。
 #: 29_000 留 1 KB 余量给真实收件 id(`_RECEIVE_ID_PLACEHOLDER` 已按更长的算)。
 CARD_PAYLOAD_MAX_BYTES = 29_000
 
@@ -249,17 +256,28 @@ _RECEIVE_ID_PLACEHOLDER = "oc_" + "0" * 64
 
 
 def markdown_card(content: str, *, index: int = 1, total: int = 1) -> dict[str, Any]:
-    """一张只放正文的交互卡片:一个 `div`、一个 `lark_md`,正文原样。
+    """一张只放正文的交互卡片,**卡片 JSON 2.0**:`body` 里一个 `markdown` 组件,正文原样。
 
-    `lark_md` 是飞书卡片(JSON 1.0)普通文本组件支持的 Markdown 文本类型 —— 加粗、斜体、
-    删除线、链接、列表、代码块这些会按排版渲染,而不是显示成源码(标题 / 表格 / 引用是
-    JSON 2.0 的 `markdown` 组件才有的语法,这里不换卡片结构)。
+    形状照官方文档(不是凭记忆写的):
+
+    - 「卡片 JSON 2.0 结构」:版本要**显式**声明 `"schema": "2.0"`,组件放在 `body.elements`;
+    - 「富文本组件」:2.0 的组件 `tag` 固定取 `markdown`,正文在 `content`(必填);
+    - 「发送消息内容结构 → 卡片 → 方式三:使用卡片 JSON 发送」:用 `msg_type: "interactive"`
+      发送时,`content` 就是**这整个 2.0 对象**序列化后的字符串 —— **不再包一层**。
+
+    **为什么从 1.0 的 `lark_md` 换成它:** 标题(`##`)、表格、引用只有 2.0 的 `markdown`
+    组件认(富文本组件文档:表格语法「仅支持 JSON 2.0 结构」);`lark_md` 只排加粗 / 列表 /
+    代码块这类,那几样发出去是源码或兜底样式。**正文一个字都不改** —— 认不认、怎么排是飞书的事。
+
+    代价写在文档的「注意事项」里:2.0 要飞书客户端 7.20+,更低的版本只显示兜底的升级提示文案。
+    发送端看不出这个区别(它照样回成功),真被拒时由 `send_markdown` 降级成文字。
 
     `total > 1` 时加一格标题栏写 `（i/n）`:超长正文拆成几张卡时,先看哪张、后看哪张
-    才说得清。**正文一个字都不动** —— 编号在标题栏,不在正文里。
+    才说得清。**正文一个字都不动** —— 编号在标题栏,不在正文里(v2 的 `header` 结构与 1.0 同形)。
     """
     card: dict[str, Any] = {
-        "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": content}}],
+        "schema": "2.0",
+        "body": {"elements": [{"tag": "markdown", "content": content}]},
     }
     if total > 1:
         card["header"] = {
@@ -272,7 +290,8 @@ def markdown_card(content: str, *, index: int = 1, total: int = 1) -> dict[str, 
 def _card_text_bytes(content: str) -> int:
     """这张卡发出去时**请求体**有多少字节。按最宽的编号头算,给实际编号留余量。
 
-    照 `httpx` 的 JSON 序列化方式量(`ensure_ascii=False`、紧凑分隔符):这样正文里的
+    2.0 的外壳(`schema` / `body` / `markdown` 这一层)和编号头都算在里面 —— 它们跟正文一起
+    占那 30 KB。照 `httpx` 的 JSON 序列化方式量(`ensure_ascii=False`、紧凑分隔符):这样正文里的
     引号 / 换行 / 反斜杠在 JSON 里的那层转义也真的算进去。
     """
     card = markdown_card(content, index=999, total=999)
@@ -338,17 +357,19 @@ def markdown_chunks(text: str) -> list[str]:
 
 
 def send_markdown(bot: FeishuBot, chat_id: str, text: str, *, receive_id_type: str = "chat_id") -> list[str]:
-    """**长正文**发成交互卡片,返回每条消息的 message_id(单张卡就是一个元素)。
+    """**长正文**发成交互卡片(卡片 JSON 2.0 的 `markdown` 组件),返回每条消息的 message_id。
 
     这是"长正文"唯一的一处实现 —— 智能体的回复与工作流运行结果都走它;短通知继续用
     `send_text`(任务回执、绑定提示、"看不了这种消息"),少一次卡片失败面。
 
-    两道保险:
+    **降级只有两层:2.0 卡片 → 文字。** 卡片发不出去(飞书拒了、卡片 JSON 不被支持、网络抖动)
+    或卡片构造失败 → 同一段内容改用 `send_text` 重发,并把原因写进日志。消息不许凭空消失;
+    逐段降级,已发出去的卡不会重发一遍。**不退回 1.0 的 `lark_md`:** 那要多押一次注(1.0 失败时
+    仍然得落到 `text`,只是把"多久送到"拖长),换来的只是部分排版 —— 对一条必须送到的回复,
+    简单、可预测更值钱。
 
-    - **卡片发不出去**(飞书拒了、网络抖动、卡片构造失败)→ 同一段内容改用 `send_text`
-      重发,并把原因写进日志。消息不许凭空消失;逐段降级,已发出去的卡不会重发一遍。
-    - **超长** → 按飞书 30 KB 的卡片请求体上限分多张卡(`markdown_chunks`),每张带
-      `（i/n）` 编号,按原顺序发出,拼起来等于原文。**不静默截断。**
+    **超长** → 按飞书 30 KB 的卡片请求体上限分多张卡(`markdown_chunks`),每张带 `（i/n）` 编号,
+    按顺序发出,拼起来等于原文。**不静默截断。**
 
     这一轮不做流式 / 分段更新:调用方原来一次发多少还是多少,只是每一段的消息类型变了。
     """
