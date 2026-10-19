@@ -39,7 +39,7 @@ def _fake_ydl(monkeypatch: pytest.MonkeyPatch, behaviour: Any) -> dict[str, Any]
     seen: dict[str, Any] = {}
 
     class FakeYDL:
-        def __init__(self, options: dict[str, Any]) -> None:
+        def __init__(self, options: dict[str, Any], auto_init: bool = True) -> None:
             seen.clear()
             seen.update(options)
 
@@ -48,6 +48,12 @@ def _fake_ydl(monkeypatch: pytest.MonkeyPatch, behaviour: Any) -> dict[str, Any]
 
         def __exit__(self, *args: object) -> bool:
             return False
+
+        def add_info_extractor(self, extractor):
+            pass
+
+        def add_default_info_extractors(self):
+            pass
 
         def extract_info(self, url: str, download: bool = True) -> dict[str, Any]:
             info = behaviour(seen, url)

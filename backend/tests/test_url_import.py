@@ -209,7 +209,7 @@ def test_quality_is_a_ceiling_not_an_exact_match(monkeypatch: pytest.MonkeyPatch
     captured: dict = {}
 
     class FakeYDL:
-        def __init__(self, options):
+        def __init__(self, options, auto_init=True):
             captured.update(options)
 
         def __enter__(self):
@@ -217,6 +217,12 @@ def test_quality_is_a_ceiling_not_an_exact_match(monkeypatch: pytest.MonkeyPatch
 
         def __exit__(self, *args):
             return False
+
+        def add_info_extractor(self, extractor):
+            pass
+
+        def add_default_info_extractors(self):
+            pass
 
         def extract_info(self, url, download=False):
             return {"id": "x", "title": "t", "ext": "mp4"}
@@ -250,7 +256,7 @@ def test_audio_ignores_the_quality_ceiling(monkeypatch: pytest.MonkeyPatch) -> N
     captured: dict = {}
 
     class FakeYDL:
-        def __init__(self, options):
+        def __init__(self, options, auto_init=True):
             captured.update(options)
 
         def __enter__(self):
@@ -258,6 +264,12 @@ def test_audio_ignores_the_quality_ceiling(monkeypatch: pytest.MonkeyPatch) -> N
 
         def __exit__(self, *args):
             return False
+
+        def add_info_extractor(self, extractor):
+            pass
+
+        def add_default_info_extractors(self):
+            pass
 
         def extract_info(self, url, download=False):
             return {"id": "x", "title": "t", "ext": "m4a"}
@@ -306,7 +318,7 @@ def test_probe_start_shifts_the_window() -> None:
     captured: dict = {}
 
     class FakeYDL:
-        def __init__(self, options):
+        def __init__(self, options, auto_init=True):
             captured.update(options)
 
         def __enter__(self):
@@ -314,6 +326,12 @@ def test_probe_start_shifts_the_window() -> None:
 
         def __exit__(self, *args):
             return False
+
+        def add_info_extractor(self, extractor):
+            pass
+
+        def add_default_info_extractors(self):
+            pass
 
         def extract_info(self, url, download=False):
             return {"id": "x", "title": "t"}
@@ -476,7 +494,7 @@ class Test浅层条目没标题时逐条补:
         monkeypatch.setattr(ytdlp, "RESOLVE_RETRY_PAUSE_SECONDS", 0)
 
         class FakeYDL:
-            def __init__(self, options):
+            def __init__(self, options, auto_init=True):
                 self.options = options
 
             def __enter__(self):
@@ -484,6 +502,12 @@ class Test浅层条目没标题时逐条补:
 
             def __exit__(self, *args):
                 return False
+
+            def add_info_extractor(self, extractor):
+                pass
+
+            def add_default_info_extractors(self):
+                pass
 
             def extract_info(self, url, download=False, process=True):
                 calls.append((url, download, process))

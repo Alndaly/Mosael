@@ -165,7 +165,7 @@ def test_下载器收到停止信号就中止并说是被取消的(monkeypatch: 
     captured: dict = {}
 
     class FakeYDL:
-        def __init__(self, options):
+        def __init__(self, options, auto_init=True):
             captured.update(options)
             self.hooks = options["progress_hooks"]
 
@@ -174,6 +174,12 @@ def test_下载器收到停止信号就中止并说是被取消的(monkeypatch: 
 
         def __exit__(self, *args):
             return False
+
+        def add_info_extractor(self, extractor):
+            pass
+
+        def add_default_info_extractors(self):
+            pass
 
         def extract_info(self, url, download=False):
             for hook in self.hooks:

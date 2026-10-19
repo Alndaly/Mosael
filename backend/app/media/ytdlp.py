@@ -207,16 +207,55 @@ def extractor_classes() -> tuple[type[Any], ...]:
     return tuple(extractor for extractor in gen_extractor_classes() if extractor.IE_NAME != "generic")
 
 
+def _custom_extractor_classes() -> tuple[type[Any], ...]:
+    """我们的站点适配器,**顺序就是被问的顺序**。
+
+    每次现读模块属性,不缓存、不在 import 时定格:测试会临时换掉这份集合来验证顺序,
+    而要换的正是 `extractors.CUSTOM_EXTRACTORS` 本身。
+    """
+    from app.media import extractors
+
+    return extractors.CUSTOM_EXTRACTORS
+
+
+def _youtube_dl(options: dict[str, Any]) -> Any:
+    """构造 `YoutubeDL` 的**唯一入口**:自定义 extractor 先于 yt-dlp 默认。
+
+    守着「只能从这里构造」的是 `tests/test_media_extractors.py::test_youtube_dl_is_constructed_only_here`
+    —— 它扫 `app/` 下真的构造调用;别处再 new 一个就红。
+
+    `auto_init=False` 是这条顺序的前提 —— 默认构造会把 yt-dlp 自己的 1700 多个解析器先装进去,
+    之后再加自定义就永远排在它们后面。所以先手工装自定义、再 `add_default_info_extractors()`。
+
+    装的是**实例**而不是类:`add_info_extractor` 对类只把类名记进 `_ies`,真正取用时
+    `YoutubeDL.get_info_extractor` 会去 yt-dlp 的全局注册表里找那个类 —— 我们的适配器不在那里,
+    会 KeyError。实例走的是 `_ies_instances`,不经过全局注册表。
+
+    三个构造点(`probe` / `download` / `_fill_untitled`)都走这里:顺序只写一遍,不会分叉。
+    """
+    import yt_dlp
+
+    ydl = yt_dlp.YoutubeDL(options, auto_init=False)
+    for extractor in _custom_extractor_classes():
+        ydl.add_info_extractor(extractor())
+    ydl.add_default_info_extractors()
+    return ydl
+
+
 def matching_extractor(url: str) -> str | None:
     """Identify a URL without making a network request.
 
-    yt-dlp owns the URL patterns. Keeping a second domain catalogue in Mosael would always
-    lag behind upgrades and was the reason the browser extension only covered three sites.
+    The custom adapters are asked first, then yt-dlp's registry — the same order the factory
+    installs them in. Otherwise ``url-support`` could name one extractor while the download
+    path handed the URL to another.
+
+    yt-dlp owns the default URL patterns. Keeping a second domain catalogue in Mosael would
+    always lag behind upgrades and was the reason the browser extension only covered three sites.
     """
     candidate = url.strip()
     if not candidate.lower().startswith(("http://", "https://")):
         return None
-    for extractor in extractor_classes():
+    for extractor in (*_custom_extractor_classes(), *extractor_classes()):
         try:
             if extractor.suitable(candidate):
                 return str(extractor.IE_NAME)
@@ -290,7 +329,7 @@ def _entry(raw: dict[str, Any], fallback_url: str, *, within: str = "") -> Remot
     )
 
 
-def _fill_untitled(yt_dlp: Any, options: dict[str, Any], entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _fill_untitled(options: dict[str, Any], entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """浅层条目没带标题的,逐条补一次元数据。
 
     有些站点的播放列表只给每条一个地址:B 站多 P 视频的浅层条目就只有
@@ -308,7 +347,7 @@ def _fill_untitled(yt_dlp: Any, options: dict[str, Any], entries: list[dict[str,
 
     def resolve(raw: dict[str, Any], *, last_try: bool) -> dict[str, Any]:
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
+            with _youtube_dl(options) as ydl:
                 info = ydl.extract_info(str(raw["url"]), download=False, process=False)
         except Exception as exc:  # noqa: BLE001 — 补不上的那一条保持原样,不拖垮整份清单
             if last_try:
@@ -338,8 +377,6 @@ def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> Remot
     与其把上限提高到让人等三分钟,不如让他往后翻:**第 201 条之后的内容并非取不到,只是要
     再问一次**。
     """
-    import yt_dlp
-
     options = {
         "quiet": True,
         "no_warnings": True,
@@ -355,7 +392,7 @@ def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> Remot
         options["cookiefile"] = str(cookie_file)
     with _guarded(options) as issued:
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
+            with _youtube_dl(options) as ydl:
                 info = ydl.extract_info(url, download=False)
         except Exception as exc:  # noqa: BLE001 — yt-dlp 的异常层次很深,对调用方只有"取不到"
             raise _failure(exc, issued) from exc
@@ -363,7 +400,7 @@ def probe(url: str, *, cookie_file: Path | None = None, start: int = 1) -> Remot
             raise YtdlpError("urlImportErr_noMedia")
         entries = [entry for entry in (info.get("entries") or []) if isinstance(entry, dict)]
         if entries:
-            filled = _fill_untitled(yt_dlp, options, entries)
+            filled = _fill_untitled(options, entries)
     if entries:
         title = str(info.get("title") or "")
         return RemoteListing(
@@ -435,8 +472,6 @@ def download(
     `should_stop`:每次进度回调问一次「还要不要接着下」(任务被取消时答「不要」),答不要就中止并抛
     `YtdlpCancelled`。yt-dlp 认的中止方式正是在进度回调里抛 DownloadCancelled。
     """
-    import yt_dlp
-
     target_dir.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + DOWNLOAD_TIMEOUT_SECONDS
     seen_output = _CapturedLog()
@@ -506,7 +541,7 @@ def download(
 
     with _guarded(options) as issued:
         try:
-            with yt_dlp.YoutubeDL(options) as ydl:
+            with _youtube_dl(options) as ydl:
                 info = ydl.extract_info(url, download=True)
                 path = Path(ydl.prepare_filename(info))
         except Exception as exc:  # noqa: BLE001
@@ -631,7 +666,16 @@ def classify(exc: BaseException) -> YtdlpError:
     from yt_dlp.networking.exceptions import HTTPError, TransportError
     from yt_dlp.utils import GeoRestrictedError, UnsupportedError
 
+    from app.media.extractors import SiteAdapterPending
+
     chain = _causes(exc)
+    #: 这两类已经带着「是哪一种」:yt-dlp 里的代码抛的 `YtdlpError` 带 key,站点适配器抛的
+    #: `SiteAdapterPending` 带站点名。不要再按措辞归一次类 —— 那会把它们降级成一句泛泛的「取不到」。
+    for cause in chain:
+        if isinstance(cause, YtdlpError):
+            return cause
+        if isinstance(cause, SiteAdapterPending):
+            return YtdlpError("urlImportErr_sitePending", site=cause.site)
     if any(isinstance(cause, UnsupportedError) for cause in chain):
         return YtdlpError("urlImportErr_unsupported")
     if any(isinstance(cause, GeoRestrictedError) for cause in chain):

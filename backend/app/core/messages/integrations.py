@@ -385,6 +385,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "不支持这个网站或这种链接。换成某一条视频自己的页面地址再试。",
         "en": "This site or kind of link isn't supported. Try the page address of one specific video instead.",
     },
+    #: 站点**认出来了**、但页面解析还没接入(适配器骨架阶段)。和 `unsupported` 分开:
+    #: 前者是"我们不认识这个站",这一句是"认识,但还没学会怎么从它的页面里取出媒体地址"。
+    "urlImportErr_sitePending": {
+        "zh": "已经认出这是 {site} 的视频页,但这个站点的页面解析还没接入,暂时取不到。",
+        "en": "This is a {site} video page, but parsing for this site isn't implemented yet, so it can't be fetched.",
+    },
     "urlImportErr_noMedia": {
         "zh": "这个链接里没有找到视频或音频。",
         "en": "No video or audio was found at this link.",
