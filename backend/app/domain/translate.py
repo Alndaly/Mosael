@@ -95,6 +95,8 @@ CAPABILITY = Capability(
     description_key="capability_translation_desc",
     error=TranslateProviderUnavailable,
     unknown_key="translateErr_unknownProvider",
+    #: 一家能用的都没有时换一句:下一步是「去接一个」,不是「换成其中一家」。
+    unknown_none_key="translateErr_unknownProviderNone",
     incomplete_key="translateErr_providerNotReady",
     builtins=(
         Builtin(id=GOOGLE, name_key="translateEngine_google"),
@@ -103,6 +105,10 @@ CAPABILITY = Capability(
     ),
     #: 文字交给插件(多半是云端、多半计费)必须是他自己定过的。
     auto_single=False,
+    #: ADR 0032 之前写出去的老 id(老工作流、老画板、智能体工具参数、第三方客户端):`google` / `ai`。
+    #: 改名之后它们仍在路上 —— 在一个地方按别名认回来(见 capabilities.canonical_id),不在每个调用点
+    #: 各认一遍,更不把旧 id 注册成第二家引擎(下拉里会出现两个同一家的选项)。
+    aliases=(("google", GOOGLE), ("ai", CHAT)),
 )
 
 

@@ -625,7 +625,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "translateEngine_google": {"zh": "Google 翻译(免费)", "en": "Google Translate (free)"},
     "translateEngine_chat": {"zh": "对话模型", "en": "Chat model"},
     "translateHint_noChatConnection": {"zh": "还没有可用的对话连接 —— 去「设置 → AI 对话」加一条", "en": "No chat connection yet — add one under Settings → AI chat"},
-    "translateErr_unknownProvider": {"zh": "没有这一家翻译:{name}", "en": "No such translation provider: {name}"},
+    "translateErr_unknownProvider": {
+        "zh": "没有叫「{name}」的翻译引擎。这台机器上现在能用的:{available}。可以在「设置 → 能力提供方 → 翻译」里换一个。",
+        "en": "There is no translation engine called “{name}”. Usable on this machine right now: {available}. Pick one under Settings → Capability providers → Translation.",
+    },
+    "translateErr_unknownProviderNone": {
+        "zh": "没有叫「{name}」的翻译引擎,而这台机器上还没有能用的翻译引擎 —— 去「设置 → 能力提供方 → 翻译」接一个(不花钱的 Google 翻译也在那里)。",
+        "en": "There is no translation engine called “{name}”, and none is usable on this machine yet — set one up under Settings → Capability providers → Translation (free Google Translate is listed there too).",
+    },
     "translateErr_providerNotReady": {"zh": "「{plugin}」还用不了:{missing}", "en": "“{plugin}” can't be used yet: {missing}"},
     "translateErr_pluginFailed": {"zh": "「{plugin}」没翻成:{detail}", "en": "“{plugin}” couldn't translate it: {detail}"},
     "translateErr_pluginBadOutput": {

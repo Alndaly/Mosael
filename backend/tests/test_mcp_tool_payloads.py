@@ -95,7 +95,6 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_publish_accounts": {},
     "list_publish_tasks": {},
     "browser_pool_list": {},
-    "translate_text": {"text": "hello", "target": "zh"},
     "create_project": {"name": "冒烟项目"},
     "notify_workspace": {"title": "冒烟通知", "body": "正文"},
     "list_agent_sessions": {},
@@ -134,6 +133,9 @@ ARGS: dict[str, dict[str, Any]] = {
 SKIP: dict[str, str] = {
     "web_search": "会打真实外网。",
     "fetch_url": "会打真实外网。",
+    # 翻译现在真能选中引擎(旧 id `google` 在能力表里按别名认回来),于是冒烟这一次会**真的**去问 Google
+    # 免费端点 —— 载荷形状改由 tests/test_translation_engine_ids.py 盯着(google_translate 在那里打桩)。
+    "translate_text": "会打真实外网的 Google 免费端点;载荷与引擎 id 由 tests/test_translation_engine_ids.py 盯着。",
     # 探测链接这一步就要打外网(yt-dlp 去问站点),而且没探到条目会先抛,根本走不到发载荷那步。
     # 它发的两个载荷由 tests/test_url_import.py 直接盯着后端那一侧。
     "import_media_from_url": "探测链接要打真实外网。",

@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NoReturn
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -73,13 +73,20 @@ class Capability:
     #: 挑不出来时的四句话(i18n key)。参数:`plugin` 那一家的名字、`missing` 缺的项、`names` 几家的名字,
     #: 再加上调用方给的(`subject`,比如素材名)。
     none_key: str = "capErr_none"
-    #: 点名了一家,却不在候选里(参数 `name`:点的那个 id)。
+    #: 点名了一家,却不在候选里(参数 `name`:点的那个 id;`available`:这台机器上现在能用的几家)。
     unknown_key: str = "capErr_unknown"
+    #: 和上一句同一种错,但**一家能用的都没有**(参数 `name`)。**空 = 不区分**,照旧用 `unknown_key` ——
+    #: 只有少数能力(翻译)那句话的下一步不一样,不替所有能力改口。
+    unknown_none_key: str = ""
     incomplete_key: str = "capErr_incomplete"
     ambiguous_key: str = "capErr_ambiguous"
     outdated_key: str = "capErr_outdated"
     #: 宿主自带的实现,按挑选的先后排(没人定默认时用第一个 `automatic` 且跑得起来的)。
     builtins: tuple[Builtin, ...] = ()
+    #: 旧 id → 规范 id(小写比较)。**只在 `canonical_id` 里解析一次**:改名之后,老工作流、老画板、
+    #: 智能体工具、第三方客户端手里仍是旧 id —— 让每个调用点各认一遍,迟早会漏掉一处,而且每处认法
+    #: 还会慢慢不一样。不把旧 id 注册成第二个实现:那会让下拉里出现两个同一家的选项。
+    aliases: tuple[tuple[str, str], ...] = ()
     #: 没定默认、也没有内置实现时,只有一家配好就不问直接用。**数据会离开本机的能力**(文档交给云端解析)
     #: 不该这样:用哪家必须他自己定过。
     auto_single: bool = True
@@ -342,21 +349,48 @@ def choose(db: Session, owner_user_id: str | None, capability: Capability, **sub
     return _usable(capability, chosen, subject)
 
 
+def canonical_id(capability: Capability, provider_id: str | None) -> str:
+    """把一个 id 归一到能力表的规范 id:契约里登记了别名的按别名解析,**只在这里解析一次**。
+
+    没登记过的**原样返回**(插件连接 id 大小写敏感,不能顺手归一)。空串仍是空串 —— 调用方拿它表示
+    「按默认」。
+    """
+    wanted = (provider_id or "").strip()
+    if not wanted:
+        return ""
+    folded = wanted.lower()
+    return next((new for old, new in capability.aliases if folded == old.lower()), wanted)
+
+
+def _unknown_named(capability: Capability, given: str, candidates: list[Provider], subject: dict[str, Any]) -> NoReturn:
+    """点名的那一家不在候选里:说清**哪一家**、这台机器上**现在能用哪几家**、**下一步**去哪换。
+
+    一家能用的都没有时换一句:那句的下一步是「去接一个」,不是「换成其中一家」。
+    """
+    usable = [one.name for one in candidates if not one.missing]
+    #: 没登记 `unknown_none_key` 的能力保持原来的那句话和 key(`asrErr_unsupportedEngine` 之类已经
+    #: 被别的测试钉着);`available` 照给:不用它的模板会忽略多余的参数。
+    key = capability.unknown_none_key if not usable and capability.unknown_none_key else capability.unknown_key
+    raise capability.error(key, name=given, available=tr("punct_listSep").join(usable), **subject)
+
+
 def pick(db: Session, owner_user_id: str | None, capability: Capability, provider_id: str | None, **subject: Any) -> Provider:
     """点名用哪一家(界面上「用 ×× 重新解析」、节点里选的引擎);没点名就按默认挑(choose)。
-    点名的得是内置的,或他自己的、配好了的插件连接。"""
-    if not provider_id:
+    点名的得是内置的,或他自己的、配好了的插件连接。旧 id 按契约的 `aliases` 归一(见 `canonical_id`)。"""
+    wanted = canonical_id(capability, provider_id)
+    if not wanted:
         return choose(db, owner_user_id, capability, **subject)
-    found = next((one for one in providers(db, owner_user_id, capability) if one.id == provider_id), None)
+    candidates = providers(db, owner_user_id, capability)
+    found = next((one for one in candidates if one.id == wanted), None)
     if found is None:
-        raise capability.error(capability.unknown_key, name=provider_id, **subject)
+        _unknown_named(capability, wanted, candidates, subject)
     return _usable(capability, found, subject)
 
 
 def resolve_named(db: Session, owner_user_id: str | None, capability: Capability, name_or_id: str) -> Provider | None:
     """智能体说的是提供方的名字(「MinerU 文档解析」「RNNoise」)或 id:认出来就是它(不管配没配好,由 pick 说),
-    认不出回 None。空串 = 按默认。"""
-    wanted = name_or_id.strip().lower()
+    认不出回 None。空串 = 按默认。旧 id 同样先归一(见 `canonical_id`)。"""
+    wanted = canonical_id(capability, name_or_id).lower()
     if not wanted:
         return None
     candidates = providers(db, owner_user_id, capability)
@@ -371,6 +405,8 @@ def set_default(db: Session, owner_user_id: str, capability: Capability, provide
 
     if not capability.defaultable:
         raise capability.error("capErr_notDefaultable", name=tr(capability.label_key))
+    #: 旧 id 也在这里认回来(和 pick 同一份解析,见 canonical_id);空 = 清掉。
+    provider_id = canonical_id(capability, provider_id) or None
     #: 选的是「不定时本来就会用的那一家」= 清掉:以后内置实现换了先后,跟着走。
     automatic = _automatic(capability, _builtins(db, owner_user_id, capability))
     if provider_id is None or (automatic is not None and provider_id == automatic.id):
@@ -385,6 +421,7 @@ __all__ = [
     "Capability",
     "CapabilityUnavailable",
     "Provider",
+    "canonical_id",
     "choices",
     "instance_hooks",
     "resolve_named",
