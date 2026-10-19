@@ -266,7 +266,10 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
         }}
         title={t("feishuScanCreate")}
       >
-        <div className="flex items-center gap-3.5 [&_img]:rounded [&_img]:bg-white [&_img]:p-1 [&_p]:mb-1 [&_p]:mt-0 [&_p]:text-xs">
+        {/* 二维码在上、说明在下,整列水平居中 —— 扫码是**一件事**,不是「左一块右一块」。
+            此前是横排(左 188px 的码、右两行说明),默认 512px 宽的弹窗把说明挤在右边一窄条里,
+            两块各贴一边。三种状态(生成中占位 / 出码 / 出码失败)共用这一个竖直容器,只换第一块。 */}
+        <div className="flex min-w-0 flex-col items-center gap-3.5 text-center [&_img]:rounded [&_img]:bg-white [&_img]:p-1 [&_p]:mb-1 [&_p]:mt-0 [&_p]:text-xs [&_p]:break-words">
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="Feishu QR" />
           ) : (
@@ -274,7 +277,8 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
               <Loader2 size={20} className="animate-mosael-spin" />
             </div>
           )}
-          <div>
+          {/* 说明给一个宽度上限,窄了自然折行(不设死宽,也不缩小二维码换空间)。 */}
+          <div className="w-full min-w-0 max-w-[280px]">
             <p>{t("feishuScanHint")}</p>
             <p className="text-muted-foreground">
               {beginScan.isError
