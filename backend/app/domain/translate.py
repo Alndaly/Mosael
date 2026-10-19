@@ -31,6 +31,10 @@ ChatSurface = Literal["direct", "automation"]
 
 _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
+#: 连接超时单独收紧。Google 免费端点在部分网络里是个黑洞:域名解析得出、TCP 却不回,要等满
+#: 整档超时才报错 —— 一条字幕轨的第一句就能让界面静默一分钟,用户只看到「翻译中 0/N」。
+#: 连不上和答得慢是两件事:连上之后仍在传的那一段照旧按 _TIMEOUT / _TIMEOUT * 2 等。
+_CONNECT_TIMEOUT = 10
 # AI 供应商的字幕请求有限并发；Google 免费端点走下面的单通道节流。
 _MAX_PARALLEL = 8
 #: 并发翻译时,多久问一次调用方「还要不要」。
@@ -216,6 +220,11 @@ def translate(
     )[0]
 
 
+def _timeout(read: float) -> httpx.Timeout:
+    """读/写/池按调用点给,连接单独收紧(见 _CONNECT_TIMEOUT)。"""
+    return httpx.Timeout(read, connect=_CONNECT_TIMEOUT)
+
+
 def google_translate(text: str, target: str, source: str = "auto", client: httpx.Client | None = None) -> str:
     """Free Google translate. Returns the translation, or "" for empty input.
 
@@ -228,7 +237,7 @@ def google_translate(text: str, target: str, source: str = "auto", client: httpx
     if not text.strip():
         return ""
     own = client is None
-    http = client or http_retry.RetryingClient(timeout=_TIMEOUT)
+    http = client or http_retry.RetryingClient(timeout=_timeout(_TIMEOUT))
     try:
         response = http.get(
             _GOOGLE_URL,
@@ -236,7 +245,6 @@ def google_translate(text: str, target: str, source: str = "auto", client: httpx
             # Sorry/429，而同一请求用 Chrome 字典客户端仍正常返回；不要再把这种响应误判成
             # 某一个代理 IP 被封。
             params={"client": "dict-chrome-ex", "sl": source, "tl": target, "dt": "t", "q": text},
-            timeout=_TIMEOUT,
         )
         response.raise_for_status()
         data = response.json()
@@ -332,7 +340,7 @@ def translate_many(
     if chat_target is None:  # google:免费端点,不产生供应商用量,不开记账
         # 429 后立刻停：通用 RetryingClient 的指数重试适合有正式配额的供应商 API，但 Google
         # 免费端点会把同一出口的并发重试视为更多异常流量。共享连接仍保留，省掉逐句 TLS 握手。
-        with http_retry.RetryingClient(timeout=_TIMEOUT * 2, max_retries=0) as client:
+        with http_retry.RetryingClient(timeout=_timeout(_TIMEOUT * 2), max_retries=0) as client:
             last_started = 0.0
             for index, text in indexed:
                 pause = _GOOGLE_MIN_INTERVAL_SECONDS - (time.monotonic() - last_started)
@@ -344,7 +352,7 @@ def translate_many(
 
     # AI 供应商是有正式配额的 API，保留并发与通用重试策略。
     # 共享连接只对直连有意义:订阅授权走网关(sidecar),没有调用方 HTTP 连接可复用。
-    with http_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
+    with http_retry.RetryingClient(timeout=_timeout(_TIMEOUT * 2)) as client:
         shared = None if chat_target.execution_surface == "gateway" else client
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。

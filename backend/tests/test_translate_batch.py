@@ -235,3 +235,28 @@ def test_逐句翻译节点_这一轮在停就停下_说的是在停(monkeypatch
                                          "engine": "builtin:chat"})
     assert stopped.value.key == "wfErr_cancelled"
     _stopped_late(called)
+
+
+def test_google批量的连接超时比读超时短(monkeypatch) -> None:
+    """整批共用一条连接:连不上要按 connect 超时收手,读超时仍留给真正在传输的那一段。"""
+    captured: dict = {}
+
+    class Client:
+        def __init__(self, *args, max_retries=None, **kwargs) -> None:
+            captured.update(kwargs)
+            captured["max_retries"] = max_retries
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> bool:
+            return False
+
+    monkeypatch.setattr(tr.http_retry, "RetryingClient", Client)
+    monkeypatch.setattr(tr, "google_translate", lambda text, target, source="auto", client=None: text)
+    monkeypatch.setattr(tr, "_GOOGLE_MIN_INTERVAL_SECONDS", 0)
+
+    assert tr.translate_many(None, ["a", "b"], "en", user_id=None) == ["a", "b"]
+    timeout = captured["timeout"]
+    assert timeout.connect is not None and timeout.connect <= 15
+    assert timeout.read == tr._TIMEOUT * 2, "读超时不该被连接超时一起缩短:慢回答仍要等得完"

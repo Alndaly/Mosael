@@ -312,3 +312,40 @@ def test_模型一路传到调用目标(monkeypatch) -> None:
     own = SimpleNamespace(get=lambda _model, _id: SimpleNamespace(owner_user_id="u1", deleted_at=None))
     assert tr.resolve_ai_chat_target(own, "p1", "u1", "kimi-k3") == "target"
     assert seen["model"] == "kimi-k3"
+
+
+def test_连不上_google_时按连接超时收手_并说清是连不上(monkeypatch) -> None:
+    """黑洞出口(SYN 不发回)以前要耗满整档超时才报错 —— 一批字幕的第一句就静默一分钟。
+
+    连接超时和读超时不是一回事:连不上就该在十几秒内说「连不上」,而不是让用户看着
+    「翻译中 0/1039」等读超时。
+    """
+    captured: dict = {}
+
+    class Client:
+        def __init__(self, *args, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> bool:
+            return False
+
+        def get(self, *_args, **_kwargs):
+            raise httpx.ConnectTimeout("blackhole")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(http_retry, "RetryingClient", Client)
+
+    with pytest.raises(tr.TranslateError) as caught:
+        tr.google_translate("你好", "en")
+
+    assert caught.value.key == "translateErr_googleUnreachable", "DNS 不通/连接被拒要落到「连不上」这句"
+    assert "ConnectTimeout" in str(caught.value)
+    timeout = captured["timeout"]
+    assert timeout.connect is not None and timeout.connect <= 15, (
+        f"连接超时还是 {getattr(timeout, 'connect', timeout)} 秒:连不上时仍会静默很久"
+    )

@@ -16,7 +16,15 @@ import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle 
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
-import { translateTexts, type Clip, type Sequence } from "@/api/client";
+import {
+  ApiOfflineError,
+  TranslationCancelled,
+  TranslationDeadlineExceeded,
+  TranslationTimeout,
+  translateTexts,
+  type Clip,
+  type Sequence,
+} from "@/api/client";
 import { listCapabilityChoices } from "@/api/domains/capabilities";
 import { capabilityKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
@@ -455,11 +463,16 @@ function SubtitleTranslate({
   //: 已经写进轨道的条数。中途失败时靠它把话说全:「前 N 条已写入」—— 只报"失败"的话,
   //: 用户不知道轨道此刻是半翻译状态,更不知道该从哪续。
   const appliedRef = React.useRef(0);
+  //: 这一趟的取消开关。翻译中那颗「取消」按的就是它 —— abort 之后在途的一批当场断,
+  //: 后面的批次不再发(见 translateTexts 的 options.signal)。
+  const abortRef = React.useRef<AbortController | null>(null);
 
   const run = useMutation({
     mutationFn: async () => {
       const items = targets.filter((clip) => (clip.text_override ?? "").trim());
       appliedRef.current = 0;
+      const controller = new AbortController();
+      abortRef.current = controller;
       setProgress({ done: 0, total: items.length });
       try {
         // **边翻边落地**:每一批译完立即写进轨道,而不是攒到全部翻完。上千条字幕走 LLM
@@ -489,9 +502,13 @@ function SubtitleTranslate({
             }
             setProgress({ done: Math.min(offset + batch.length, items.length), total: items.length });
           },
+          //: 一批有超时、整趟有总预算,而且随时能取消 —— 此前 fetch 没有 signal,后端
+          //: 一句句串行翻的时候界面只能一直「翻译中 0/1039」。
+          { signal: controller.signal },
         );
         return appliedRef.current;
       } finally {
+        if (abortRef.current === controller) abortRef.current = null;
         setProgress(null);
       }
     },
@@ -499,18 +516,57 @@ function SubtitleTranslate({
       setOpen(false);
       toast.success(t("subtitleTranslateDone").replace("{n}", String(applied)));
     },
-    onError: (error: Error) =>
+    onError: (error: Error) => {
+      //: 已写入的批次留在轨道上(这是"边翻边落地"的另一面),必须说出来 —— 否则用户以为
+      //: 一条都没动,而轨道已经是两种语言各一半。
+      const partial = appliedRef.current > 0
+        ? t("subtitleTranslatePartial").replace("{n}", String(appliedRef.current))
+        : "";
+      if (error instanceof TranslationCancelled) {
+        toast.message(t("subtitleTranslateCancelled"), {
+          description: partial || t("subtitleTranslateCancelledNone"),
+        });
+        return;
+      }
+      if (error instanceof TranslationTimeout) {
+        toast.error(t("subtitleTranslateTimedOut"), {
+          description: [
+            t("subtitleTranslateTimeout").replace("{seconds}", String(Math.round(error.timeoutMs / 1000))),
+            partial,
+          ].filter(Boolean).join(" "),
+        });
+        return;
+      }
+      if (error instanceof TranslationDeadlineExceeded) {
+        toast.error(t("subtitleTranslateTimedOut"), {
+          description: [
+            t("subtitleTranslateDeadline").replace("{minutes}", String(Math.round(error.deadlineMs / 60_000))),
+            partial,
+          ].filter(Boolean).join(" "),
+        });
+        return;
+      }
+      if (error instanceof ApiOfflineError) {
+        toast.error(t("subtitleTranslateUnreachable"), {
+          description: [error.message, partial].filter(Boolean).join(" "),
+        });
+        return;
+      }
       toast.error(t("subtitleTranslateFailed"), {
-        // 半路失败时已写入的留在轨道上(这是"边翻边落地"的另一面),必须说出来 ——
-        // 否则用户以为一条都没动,而轨道已经是两种语言各一半。
-        description: appliedRef.current > 0
-          ? `${t("subtitleTranslatePartial").replace("{n}", String(appliedRef.current))} ${error.message}`
-          : error.message,
-      }),
+        description: [partial, error.message].filter(Boolean).join(" "),
+      });
+    },
   });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        //: 翻译中不收起弹层:收起了「取消」也跟着没了,后台却还在翻 —— 那正是"无法取消"。
+        if (!next && run.isPending) return;
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <button type="button" className={PILL}>
           <Languages size={12} /> {t("subtitleTranslate")}
@@ -557,17 +613,25 @@ function SubtitleTranslate({
           <span>{t("subtitleTranslateBilingual")}</span>
           <Switch checked={bilingual} onCheckedChange={setBilingual} />
         </label>
-        <Button size="sm" loading={run.isPending} onClick={() => run.mutate()}>
-          <Languages size={13} />
-          {progress
-            ? t("subtitleTranslateProgress")
-                .replace("{done}", String(progress.done))
-                .replace("{total}", String(progress.total))
-            : (scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
-                "{n}",
-                String(targets.length),
-              )}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" loading={run.isPending} onClick={() => run.mutate()}>
+            <Languages size={13} />
+            {progress
+              ? t("subtitleTranslateProgress")
+                  .replace("{done}", String(progress.done))
+                  .replace("{total}", String(progress.total))
+              : (scoped ? t("subtitleTranslateApplySelected") : t("subtitleTranslateApply")).replace(
+                  "{n}",
+                  String(targets.length),
+                )}
+          </Button>
+          {run.isPending && (
+            //: 翻译中一直有这一颗:此前按钮被 loading 焊死,一千条字幕翻到一半想停都停不下来。
+            <Button size="sm" variant="secondary" onClick={() => abortRef.current?.abort()}>
+              {t("cancel")}
+            </Button>
+          )}
+        </div>
         <small className="text-ui-xs leading-[1.4] text-muted-foreground">
           {bilingual ? t("subtitleTranslateNoteBilingual") : t("subtitleTranslateNote")}
         </small>

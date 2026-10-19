@@ -387,8 +387,96 @@ export function setSubtitleStyle(sequence: SequenceRef, style: Record<string, un
   return edit(sequence, "/subtitle-style", { method: "PUT", body: JSON.stringify({ style }) });
 }
 
-/** Backend safety limit for one translation request; the client exposes an unbounded operation. */
-const TRANSLATE_BATCH = 400;
+/**
+ * 一次翻译请求最多带多少条字幕。
+ *
+ * 此前是 400(贴着后端单次 500 条的安全阀)。可这条链的进度是**按批**报的,而 Google 免费端点
+ * 在后端是一句一句串行翻的(`_GOOGLE_MIN_INTERVAL_SECONDS = 0.35`,见
+ * backend/app/domain/translate.py):400 条一批光句间节流就要 140 秒 —— 一千条字幕点下去,
+ * 「翻译中 0/1039」能停两分多钟,看起来就是死了。
+ *
+ * 现在取 125:Google 约 44 秒一批(1039 条是 9 批),进度跟着动、取消最多等一批;对 AI 引擎
+ * 仍是后端 8 路并发的 16 轮。**再小就不取了** —— `backend/tests/test_translate_batches_do_not_drift.py`
+ * 钉着「批不能小于后端上限的四分之一」(500 / 4 = 125):切得太碎会把一次往返变成几十次,
+ * 而每一批后端内部本来就会并发。
+ */
+export const TRANSLATE_BATCH = 125;
+
+/**
+ * 一批请求最多等这么久。
+ *
+ * 取 2 分钟:Google 免费端点 50 条(句间节流 0.35 秒)约 18 秒;对话模型一批 50 条按后端 8 路
+ * 并发是 7 轮,慢模型单句几十秒也还能跑完。不能取 15 秒 —— 那会把**正常**的 Google 批(18 秒+)
+ * 和正常的对话模型批一起砍掉。真正连不上时不靠它:后端对 Google 的连接超时是 10 秒,会先报
+ * 「连不上」;这一道闸是防「服务端接住了、却一直不答」。
+ */
+export const TRANSLATE_BATCH_TIMEOUT_MS = 120_000;
+
+/**
+ * 整次翻译的总预算。
+ *
+ * 取 15 分钟而不是 2 分钟:Google 免费端点被这个仓库**主动**限速成每句至少 0.35 秒,1039 条
+ * 光节流就要 6 分钟 —— 2 分钟的硬上限会让真机截图里那 1039 条**永远翻不完**。15 分钟既盖得住
+ * 这个下限,也盖得住慢对话模型的 8 路并发,同时给「一批一批慢慢爬」画了终点。
+ */
+export const TRANSLATE_DEADLINE_MS = 15 * 60_000;
+
+/** 调用方取消了这次翻译(不是失败:界面上说「已取消」,已经写入的批次保留)。 */
+export class TranslationCancelled extends Error {
+  constructor() {
+    super("translation cancelled");
+    this.name = "TranslationCancelled";
+  }
+}
+
+/** 某一批在预算内没有回来。 */
+export class TranslationTimeout extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`translation batch timed out after ${Math.round(timeoutMs / 1000)}s`);
+    this.name = "TranslationTimeout";
+  }
+}
+
+/** 整次翻译用完总预算。 */
+export class TranslationDeadlineExceeded extends Error {
+  constructor(readonly deadlineMs: number) {
+    super(`translation deadline exceeded after ${Math.round(deadlineMs / 60_000)}min`);
+    this.name = "TranslationDeadlineExceeded";
+  }
+}
+
+export type TranslateOptions = {
+  /** 调用方要停(取消按钮、组件卸载)。abort 之后不再发新批,在途的那一批当场断。 */
+  signal?: AbortSignal;
+  /** 一批的预算(测试会调小)。 */
+  batchTimeoutMs?: number;
+  /** 整次翻译的预算(测试会调小)。 */
+  deadlineMs?: number;
+};
+
+type BatchGate = { signal: AbortSignal; readonly timedOut: boolean; dispose: () => void };
+
+/** 把「一批的超时」和「调用方的取消」合成一个 signal,并记下这次掐断是不是超时。 */
+function batchGate(timeoutMs: number, parent?: AbortSignal): BatchGate {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const forward = () => controller.abort();
+  parent?.addEventListener("abort", forward, { once: true });
+  return {
+    signal: controller.signal,
+    get timedOut() {
+      return timedOut;
+    },
+    dispose() {
+      clearTimeout(timer);
+      parent?.removeEventListener("abort", forward);
+    },
+  };
+}
 
 export async function translateTexts(
   workspaceId: string,
@@ -398,16 +486,38 @@ export async function translateTexts(
   engine = "",
   /** Awaited after every batch so callers can persist incremental progress atomically. */
   onBatch?: (translations: string[], offset: number) => void | Promise<void>,
+  options: TranslateOptions = {},
 ): Promise<{ translations: string[] }> {
   const translations: string[] = [];
+  const deadlineMs = options.deadlineMs ?? TRANSLATE_DEADLINE_MS;
+  const deadlineAt = Date.now() + deadlineMs;
   for (let start = 0; start < texts.length; start += TRANSLATE_BATCH) {
+    if (options.signal?.aborted) throw new TranslationCancelled();
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) throw new TranslationDeadlineExceeded(deadlineMs);
     const batch = texts.slice(start, start + TRANSLATE_BATCH);
-    // Sequential batches avoid multiplying pressure on an upstream provider; the backend
-    // already parallelizes work inside each batch.
-    const result = await api<{ translations: string[] }>("/api/translate", {
-      method: "POST",
-      body: JSON.stringify({ workspace_id: workspaceId, texts: batch, target_lang: targetLang, engine }),
-    });
+    const budget = Math.min(options.batchTimeoutMs ?? TRANSLATE_BATCH_TIMEOUT_MS, remaining);
+    const gate = batchGate(budget, options.signal);
+    let result: { translations: string[] };
+    try {
+      // Sequential batches avoid multiplying pressure on an upstream provider; the backend
+      // already parallelizes work inside each batch.
+      result = await api<{ translations: string[] }>("/api/translate", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: workspaceId, texts: batch, target_lang: targetLang, engine }),
+        signal: gate.signal,
+      });
+    } catch (error) {
+      //: 先看是不是调用方喊停 —— 那一条要落到「已取消」,不是「失败」。
+      if (options.signal?.aborted) throw new TranslationCancelled();
+      if (gate.timedOut) {
+        if (Date.now() >= deadlineAt) throw new TranslationDeadlineExceeded(deadlineMs);
+        throw new TranslationTimeout(budget);
+      }
+      throw error;
+    } finally {
+      gate.dispose();
+    }
     translations.push(...result.translations);
     await onBatch?.(result.translations, start);
   }
