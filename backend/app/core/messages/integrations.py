@@ -391,6 +391,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "已经认出这是 {site} 的视频页,但这个站点的页面解析还没接入,暂时取不到。",
         "en": "This is a {site} video page, but parsing for this site isn't implemented yet, so it can't be fetched.",
     },
+    #: 站点解析失败的具体几种(见 media/extractors/missav.py)。都要比一句「取不到」说得更准:
+    #: 页面结构变了、脚本解不开、拿到的根本不是详情页 —— 用户能据此判断该重试还是换链接。
+    "urlImportErr_siteParseFailed": {
+        "zh": "认出了这是 {site} 的视频页,但页面里没找到可用的媒体地址 —— 页面结构可能变了。这不是链接写错。",
+        "en": "This is a {site} video page, but no usable media address was found in it — the page layout may have changed. The link itself is fine.",
+    },
+    "urlImportErr_siteScriptUndecodable": {
+        "zh": "认出了这是 {site} 的视频页,但页面里的脚本解不开,取不到媒体地址。页面结构可能变了。",
+        "en": "This is a {site} video page, but the scripts on it could not be decoded, so the media address is out of reach. The page layout may have changed.",
+    },
+    "urlImportErr_sitePageTooLarge": {
+        "zh": "拿到的 {site} 页面异常大(超过 {max_mb} MB),看起来不是详情页,已经停下、没有继续解析。稍后再试。",
+        "en": "The {site} page that came back is abnormally large (over {max_mb} MB), so it doesn't look like a detail page. Parsing stopped. Try again later.",
+    },
     "urlImportErr_noMedia": {
         "zh": "这个链接里没有找到视频或音频。",
         "en": "No video or audio was found at this link.",

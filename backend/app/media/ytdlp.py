@@ -666,14 +666,17 @@ def classify(exc: BaseException) -> YtdlpError:
     from yt_dlp.networking.exceptions import HTTPError, TransportError
     from yt_dlp.utils import GeoRestrictedError, UnsupportedError
 
-    from app.media.extractors import SiteAdapterPending
+    from app.media.extractors import SiteAdapterError, SiteAdapterPending
 
     chain = _causes(exc)
-    #: 这两类已经带着「是哪一种」:yt-dlp 里的代码抛的 `YtdlpError` 带 key,站点适配器抛的
-    #: `SiteAdapterPending` 带站点名。不要再按措辞归一次类 —— 那会把它们降级成一句泛泛的「取不到」。
+    #: 这几类已经带着「是哪一种」:yt-dlp 里的代码抛的 `YtdlpError` 带 key,站点适配器抛的
+    #: `SiteAdapterError` 带 key、`SiteAdapterPending` 带站点名。不要再按措辞归一次类 ——
+    #: 那会把它们降级成一句泛泛的「取不到」。
     for cause in chain:
         if isinstance(cause, YtdlpError):
             return cause
+        if isinstance(cause, SiteAdapterError):
+            return YtdlpError(cause.key, **cause.params)
         if isinstance(cause, SiteAdapterPending):
             return YtdlpError("urlImportErr_sitePending", site=cause.site)
     if any(isinstance(cause, UnsupportedError) for cause in chain):
