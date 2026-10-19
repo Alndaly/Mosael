@@ -119,10 +119,16 @@ it("左边全是编辑格式(含高亮,和选区工具条一致),右边依次是
   expect(editor.getMarkdown()).not.toContain("==");
 });
 
-it("保存状态是一块固定的位置:文字在悬停说明里也有一份(窄了只剩图标),切换状态时不推着别的按钮动", async () => {
+it("保存状态只占一个图标位:没有可见文字,名字在悬停说明里;读屏走 role=status 活区", async () => {
   mount();
   const status = header().querySelector("[data-slot='save-status']") as HTMLElement;
   expect(status.className).toContain("note-status");
+  //: 有改动时不再是一段字把位置撑开 —— 只剩一颗图标。
+  expect(status.querySelector(".note-status-label")).toBeNull();
+  expect(status.querySelector("svg")).not.toBeNull();
+  //: 状态变化要被念到(图形 aria-hidden,字在活区里)。
+  expect(status).toHaveAttribute("role", "status");
+  expect(status).toHaveAttribute("aria-live", "polite");
   expect(await hoverHint(status)).toBe("已保存");
 });
 

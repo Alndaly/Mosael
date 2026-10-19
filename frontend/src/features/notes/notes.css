@@ -134,22 +134,21 @@
 .note-format .note-block-style { width:96px; justify-content:space-between; }
 .note-format .note-block-style > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .note-header-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; white-space:nowrap; }
-/* 保存状态定宽、靠右、比按钮弱一档:「保存中…」「已保存」换来换去不推着右边的按钮动。 */
-.note-document-header .note-status { display:flex; flex-shrink:0; align-items:center; justify-content:flex-end; width:88px; height:30px; gap:5px; margin-right:2px; overflow:hidden; white-space:nowrap; font-size:var(--text-ui-2xs); color:color-mix(in srgb,var(--muted-foreground) 78%,transparent); }
+/* 保存状态:一个 30px 的图标位(和旁边那排图标按钮一样宽),图形随状态换、颜色比按钮弱一档。
+   位置定宽,四种状态换来换去不推着右边的按钮动。 */
+.note-document-header .note-status { display:flex; flex-shrink:0; align-items:center; justify-content:center; width:30px; height:30px; margin-right:2px; overflow:hidden; color:color-mix(in srgb,var(--muted-foreground) 78%,transparent); }
 .note-document-header .note-status svg { flex-shrink:0; }
-.note-status-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 /* Markdown 源码:一颗切换,按下时和格式按钮的按下态同一个样子。 */
 .note-source-toggle[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
-/* 助手开关:和剪辑页那一颗同样是「图标 + AI 助手」、开着时 accent 底,高度跟这一行走(30px)。 */
-.note-agent-toggle { display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 9px; border-radius:6px; }
+/* 助手开关:和剪辑页那一颗同样是一颗 Bot、30px 的图标位(名字在 aria-label 与悬停说明里)。 */
+.note-agent-toggle { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; padding:0; border-radius:6px; }
 .note-agent-toggle:hover { background:color-mix(in srgb,var(--foreground) 5%,transparent); color:var(--foreground); }
 .note-agent-toggle[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
-@media(max-width:950px) { .note-agent-toggle span { display:none; } .note-agent-toggle { width:30px; padding:0; justify-content:center; } }
 /* 高亮(存成 ==文字==,见 NoteHighlight):提醒色压一层浅底,字色不变 —— 明暗两档都跟着 --warning 走。 */
 .note-prose mark.note-highlight { background:color-mix(in srgb,var(--warning) 30%,transparent); color:inherit; border-radius:2px; padding:0 1px; }
 /* 编辑器失焦时仍画出选区:助手会带上的就是这一段(见 inactiveSelection)。 */
 .note-prose .note-inactive-selection { background:color-mix(in srgb,var(--primary) 16%,transparent); border-radius:2px; }
-@media(max-width:1250px) { .note-document-header .note-status { width:auto; gap:0; } .note-status-label { display:none; } .note-document-header { padding-inline:12px; } }
+@media(max-width:1250px) { .note-document-header { padding-inline:12px; } }
 .note-heading-option { display:inline-flex; align-items:center; gap:10px; }
 .note-heading-option > span { font:500 var(--text-ui-xs) var(--font-mono); color:var(--muted-foreground); }
 .note-format button[aria-pressed=true],.notes-filter button[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }

@@ -11,6 +11,7 @@ import type { Editor } from "@tiptap/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { emptyNote, type Note } from "@/api/domains/notes";
 import { messages, type MessageKey } from "@/app/messages";
+import { readHint } from "@/test/hint";
 import type { NotesAgentPanelProps } from "./NotesView";
 
 vi.mock("@/app/preferences", () => ({
@@ -109,6 +110,18 @@ it("顶栏有 AI 助手开关:打开是停靠的同一个面板,开合记在本�
   fireEvent.click(screen.getByRole("button", { name: "close-agent" }));
   expect(screen.queryByTestId("notes-agent-slot")).toBeNull();
   expect(localStorage.getItem("mosael:tab:notes-agent")).toBe("off");
+});
+
+it("顶栏那颗 AI 助手是纯图标:没有可见文字,和剪辑页同一颗 Bot,名字在 aria-label 与 Hint 里", async () => {
+  window.location.hash = "#/notes?note=a";
+  mount();
+
+  const toggle = await screen.findByRole("button", { name: "AI 助手" });
+  //: 名字只写一次:aria-label 就是悬停说明的第一行,按钮里不再摆一行字。
+  expect(toggle.textContent).toBe("");
+  expect(toggle.querySelector("svg")?.getAttribute("class")).toContain("lucide-bot");
+  expect(toggle).toHaveAttribute("aria-label", "AI 助手");
+  expect(await readHint(toggle)).toContain("AI 助手");
 });
 
 it("每条消息带上当前这篇:标题、id、正文;选中一段后带上它的正文原文", async () => {

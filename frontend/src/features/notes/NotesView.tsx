@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, Check, FileCode, Loader2, PenLine, X, Plus, Star, FileOutput, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CheckSquare, SearchX, MoreHorizontal, FileCode, X, Plus, Star, FileOutput, Import, PanelLeftClose, PanelLeftOpen, History, Info, TextQuote, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import type { Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
@@ -43,6 +43,7 @@ import type { NoteAiAction } from "./NoteSelectionToolbar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { NoteEditor } from "./NoteEditor";
+import { NoteSaveStatus, type NoteStatus } from "./NoteSaveStatus";
 import { SourceLink } from "./NoteSources";
 import { useNoteStrings } from "./strings";
 import { NoteList, type NoteListAction } from "./NoteList";
@@ -292,19 +293,6 @@ export function NotesView({ workspace, AgentPanel, onNoteChange }: {
   </div>;
 }
 
-/** 保存状态的四个取值。图标和文案都按它查表 —— 它们是同一件事的两面,不该各写一遍四分支。 */
-type NoteStatus = "saved" | "saving" | "draft" | "error";
-const STATUS_ICON = { saved: Check, saving: Loader2, draft: PenLine, error: AlertCircle } as const;
-
-/** 保存状态:一块定宽的位置(「保存中」「已保存」换来换去时不推着右边的按钮动),颜色比按钮弱一档;
- *  窄了只剩图标,悬停说明里还有一份文字。 */
-function NoteStatusBadge({ status, label }: { status: NoteStatus; label: string }) {
-  const Icon = STATUS_ICON[status];
-  return <Hint label={label}><span className="note-status" role="status" data-slot="save-status" data-state={status}>
-    <Icon size={12} className={status === "saving" ? "animate-mosael-spin" : undefined} aria-hidden="true" /><span className="note-status-label">{label}</span>
-  </span></Hint>;
-}
-
 export function NoteDocument({ note, readOnly = null, controller, focus, onFocus, agentOpen = false, onToggleAgent, onSelectionChange, onAskAi, onAiAction, onQuote }: {
   note: Note;
   /** 只读成员:正文、标题、主题和标签都不能改,收藏、移到回收站、恢复版本收成灰的(说明为什么)—— 否则打的字存不上、只换来一条报错。 */
@@ -428,11 +416,11 @@ export function NoteDocument({ note, readOnly = null, controller, focus, onFocus
       <div className="note-header-format" ref={setToolbarTarget} />
       {/* 右边一组是文档级的:保存状态 → Markdown → AI 助手 → 收藏 → 更多。保存状态说的是「这篇文档」,和格式工具不是一类,
           夹在收起按钮和格式工具之间时像是格式工具的一部分。图标和左边格式按钮同一个规格(16、描边 1.7)。 */}
-      <div className="note-header-actions"><NoteStatusBadge status={status} label={s[status]} />
+      <div className="note-header-actions"><NoteSaveStatus status={status} />
       {/* Markdown 只剩一个选项:一颗能按下的切换(按下看源码,再点回到编辑)。 */}
       <IconButton unstyled className="note-icon note-source-toggle" label={s.raw} hint={s.rawHint} shortcut={formatCombo(NOTE_SOURCE_COMBO)} aria-pressed={mode === "raw"} onClick={toggleMode}><FileCode size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>
-      {/* 窄了只剩图标(文字收起),名字靠 IconButton 的 aria-label 和悬停说明。 */}
-      {onToggleAgent && <IconButton unstyled className="note-agent-toggle" label={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={16} strokeWidth={1.7} aria-hidden="true" /><span>{t("wfAgentTitle")}</span></IconButton>}
+      {/* 纯图标:和剪辑页顶栏那颗同一个 Bot、同一个入口;名字只写一次(IconButton 的 aria-label 与悬停说明)。 */}
+      {onToggleAgent && <IconButton unstyled className="note-agent-toggle" label={t("wfAgentTitle")} aria-pressed={agentOpen} onClick={onToggleAgent}><Bot size={16} strokeWidth={1.7} aria-hidden="true" /></IconButton>}
       <IconButton unstyled className="note-icon" label={s.favorite} aria-pressed={draft.favorite} disabled={Boolean(readOnly)} disabledReason={readOnly?.reason} onClick={() => change({favorite: !draft.favorite})}><Star size={16} strokeWidth={1.7} fill={draft.favorite ? "currentColor" : "none"} /></IconButton>
       <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><IconButton unstyled className="note-icon" label={s.actions} aria-haspopup="menu"><MoreHorizontal size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>{/* 和笔记列表的右键菜单同一套条目(MenuItem / MenuItemBody)。 */}
       <MenuContent label={s.actions} align="end">
