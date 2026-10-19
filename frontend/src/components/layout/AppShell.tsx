@@ -333,25 +333,34 @@ function ProjectSwitcher({
           <ChevronsUpDown size={12} className="shrink-0" />
         </button>
       </PopoverTrigger>
-      <MenuContent label={t("timelineSwitch")} className="max-h-[min(60vh,360px)] overflow-y-auto" align="start" sideOffset={8}>
+      {/* 浮层自己不滚(盖掉 PopoverContent 默认的 overflow-y-auto):只有项目列表滚,
+          「新建项目」待在外面那条底栏里,列表再长也不会把它带出去。
+          列表上限 = 可用高度 − 标题/底栏;16rem 贴着原来整张单子 360px 的观感。 */}
+      <MenuContent label={t("timelineSwitch")} className="overflow-hidden" align="start" sideOffset={8}>
         <MenuLabel>{t("timelineSwitch")}</MenuLabel>
-        {projects.map((p) => (
-          <MenuItem
-            key={p.id}
-            role="menuitemradio"
-            checked={p.id === currentProjectId}
-            inset={Boolean(onCreateProject)}
-            label={p.name}
-            truncate
-            className={cn(p.id === currentProjectId && "font-semibold text-primary")}
-            onClick={() => {
-              setOpen(false);
-              if (p.id !== currentProjectId) onSwitchProject(p.id);
-            }}
-          />
-        ))}
+        <div
+          data-menu-scroll=""
+          className="grid content-start gap-0.5 overflow-y-auto overflow-x-hidden overscroll-contain max-h-[min(55vh,16rem,calc(var(--radix-popover-content-available-height,100vh)-7rem))]"
+        >
+          {projects.map((p) => (
+            <MenuItem
+              key={p.id}
+              role="menuitemradio"
+              checked={p.id === currentProjectId}
+              // 项目行没有图标,就不占图标槽:此前 `inset` 给每一行垫了 size-4 + gap-2.5,
+              // 于是文字比下面有文件夹图标的「新建项目」多缩进一截。勾在行尾,左边不需要留位。
+              label={p.name}
+              truncate
+              className={cn(p.id === currentProjectId && "font-semibold text-primary")}
+              onClick={() => {
+                setOpen(false);
+                if (p.id !== currentProjectId) onSwitchProject(p.id);
+              }}
+            />
+          ))}
+        </div>
         {onCreateProject && (
-          <>
+          <div data-menu-footer="" className="shrink-0">
             <MenuSeparator />
             <MenuItem
               icon={<FolderPlus />}
@@ -363,7 +372,7 @@ function ProjectSwitcher({
                 onCreateProject();
               }}
             />
-          </>
+          </div>
         )}
       </MenuContent>
     </Popover>

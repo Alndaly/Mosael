@@ -255,3 +255,103 @@ it("工作区头像那一格:首字在正中", async () => {
   expect(avatar).not.toHaveClass("leading-5");
 });
 
+/**
+ * 剪辑页顶栏的项目切换器(维护者两张截图):
+ *
+ * 1. 每个普通项目项前面空出一段内间距 —— 那是 `MenuItem` 的 `inset` 提前占下的图标槽,而这些行没有图标;
+ *    对照底部有文件夹图标的「新建项目」,它顶格,于是两类行的左边缘差着「图标 + 间距」。
+ * 2. 列表一长就把「新建项目」一起滚走,挤到弹窗下缘。底栏要独立在滚动区之外,列表自己滚。
+ *
+ * jsdom 没有排版:量不出像素,按 class 和 DOM 结构守着(同文件其它条目的做法)。
+ */
+async function openProjectMenu(overrides: Partial<React.ComponentProps<typeof AppShell>> = {}) {
+  cleanup();
+  const switchTo = vi.fn();
+  const create = vi.fn();
+  mount({
+    view: "editor",
+    projectName: "片子 A",
+    projects: [{ id: "a", name: "片子 A" }, { id: "b", name: "片子 B" }],
+    currentProjectId: "a",
+    onSwitchProject: switchTo,
+    onCreateProject: create,
+    ...overrides,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "timelineSwitch" }));
+  return { menu: await screen.findByRole("menu", { name: "timelineSwitch" }), switchTo, create };
+}
+
+/** 一行自己的左右内边距类(控件外壳上的那一层)。 */
+const horizontalPadding = (element: Element) =>
+  new Set(element.className.split(/\s+/).filter((one) => /^-?p[xytrblse]?-/.test(one)));
+
+it("项目切换器:普通项不占空图标槽,和有图标的「新建项目」走同一条左内边距", async () => {
+  const { menu } = await openProjectMenu();
+  const row = within(menu).getByRole("menuitemradio", { name: "片子 A" });
+  const create = within(menu).getByRole("menuitem", { name: "createProject" });
+
+  // 没有图标就不生成图标槽 —— 此前 `inset={Boolean(onCreateProject)}` 给每一行都垫了 size-4 + gap-2.5。
+  expect(row.querySelector("[data-menu-icon]")).toBeNull();
+  // 有图标的那行:图标槽在行首第一格(「新建项目」顶格)。
+  const icon = create.querySelector("[data-menu-icon]");
+  expect(icon).toBeTruthy();
+  expect(create.firstElementChild).toBe(icon);
+  // 两行的左内边距来自同一个 MENU_ITEM,一模一样;普通项的名字直接贴在这条内边距上。
+  expect(horizontalPadding(row)).toEqual(horizontalPadding(create));
+  expect(row).toHaveClass("px-2.5");
+  expect(row.firstElementChild).not.toBe(icon);
+});
+
+it("「新建项目」在独立的底栏里,不跟列表一起滚;列表自己有上限、自己滚", async () => {
+  const { menu } = await openProjectMenu();
+  const create = within(menu).getByRole("menuitem", { name: "createProject" });
+  const scroller = menu.querySelector<HTMLElement>("[data-menu-scroll]");
+  expect(scroller).toBeTruthy();
+  // 项目行在滚动区里,「新建项目」不在。
+  expect(scroller!.contains(within(menu).getByRole("menuitemradio", { name: "片子 A" }))).toBe(true);
+  expect(scroller!.contains(create)).toBe(false);
+  expect(scroller!.className).toContain("max-h-");
+  expect(scroller!.className).toContain("overflow-y-auto");
+  // 底栏(含上方那条分隔线)在滚动区外面。
+  const footer = create.closest("[data-menu-footer]");
+  expect(footer).toBeTruthy();
+  expect(scroller!.contains(footer)).toBe(false);
+  expect(menu.contains(footer)).toBe(true);
+  expect(scroller!.querySelector('[role="separator"]')).toBeNull();
+  expect(footer!.querySelector('[role="separator"]')).toBeTruthy();
+  // 弹窗外壳自己不滚(否则整张单子还是会带走底栏),滚的只有列表。
+  expect(menu.className).not.toContain("overflow-y-auto");
+  expect(menu.className).toContain("overflow-hidden");
+});
+
+it("项目很多时:列表自己滚,弹窗不超过视口,底栏仍然露在外面", async () => {
+  const many = Array.from({ length: 40 }, (_, index) => ({ id: `p${index}`, name: `时间线 ${index}` }));
+  const { menu } = await openProjectMenu({ projects: many, projectName: many[0]!.name, currentProjectId: "p0" });
+  expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(40);
+
+  const scroller = menu.querySelector<HTMLElement>("[data-menu-scroll]")!;
+  expect(scroller.className).toContain("overflow-y-auto");
+  // 上限按 Radix 算出来的可用高度再扣掉标题和底栏 —— 列表再长也长不出视口。
+  expect(scroller.className).toMatch(/max-h-\[.*radix-popover-content-available-height/);
+  // 弹窗自己只被可用高度夹住,并且不再靠整块滚动兜底。
+  expect(menu.className).toContain("max-h-[var(--radix-popover-content-available-height)]");
+  expect(menu.className).not.toContain("overflow-y-auto");
+  // 「新建项目」照旧在滚动区之外:列表再长它也贴在弹窗底边。
+  expect(scroller.contains(within(menu).getByRole("menuitem", { name: "createProject" }))).toBe(false);
+});
+
+it("选中项的勾还在行尾(没挪到左边),切换照常", async () => {
+  const { menu, switchTo } = await openProjectMenu();
+  const selected = within(menu).getByRole("menuitemradio", { name: "片子 A" });
+  const other = within(menu).getByRole("menuitemradio", { name: "片子 B" });
+  expect(selected).toHaveAttribute("aria-checked", "true");
+  expect(other).toHaveAttribute("aria-checked", "false");
+  const tick = selected.querySelector("svg");
+  expect(tick).toBeTruthy();
+  // 勾是这一行的最后一格;行首没有图标槽。
+  expect(selected.lastElementChild).toBe(tick);
+  expect(selected.querySelector("[data-menu-icon]")).toBeNull();
+  fireEvent.click(other);
+  expect(switchTo).toHaveBeenCalledWith("b");
+});
+
