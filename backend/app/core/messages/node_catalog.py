@@ -27,14 +27,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "模型没有返回任何内容。请检查 AI 供应商配置:base_url 是否为完整的 OpenAI 兼容端点(含端口与 /v1,如 http://localhost:11434/v1)、模型名是否存在、服务是否可达。",
         "en": "The model returned nothing. Check the AI provider settings: the base_url must be a complete OpenAI-compatible endpoint (with port and /v1, e.g. http://localhost:11434/v1), the model name must exist, and the service must be reachable.",
     },
-    "aiErr_turnTimeout": {
-        "zh": "智能体运行超过 {seconds} 秒未返回,已终止。",
-        "en": "The agent ran for more than {seconds} seconds without returning and was stopped.",
+    "aiErr_turnIdleTimeout": {
+        "zh": "连续 {seconds} 秒没有任何进展,已终止。\n{last_step}",
+        "en": "No progress for {seconds} seconds, so the run was stopped.\n{last_step}",
     },
-    "aiErr_turnTimeoutDetail": {
-        "zh": "智能体运行超过 {seconds} 秒未返回,已终止。\n{detail}",
-        "en": "The agent ran for more than {seconds} seconds without returning and was stopped.\n{detail}",
+    "aiErr_turnIdleTimeoutDetail": {
+        "zh": "连续 {seconds} 秒没有任何进展,已终止。\n{last_step}\n{detail}",
+        "en": "No progress for {seconds} seconds, so the run was stopped.\n{last_step}\n{detail}",
     },
+    "aiErr_turnHardCap": {
+        "zh": "运行超过 {hours} 小时,已终止。\n{last_step}",
+        "en": "The agent ran for more than {hours} hours and was stopped.\n{last_step}",
+    },
+    "aiErr_turnHardCapDetail": {
+        "zh": "运行超过 {hours} 小时,已终止。\n{last_step}\n{detail}",
+        "en": "The agent ran for more than {hours} hours and was stopped.\n{last_step}\n{detail}",
+    },
+    #: 超时卡片上的「最后一步」。失败卡此前只说超时,用户看到的却是「明明在正常跑」——
+    #: 说不清停在哪,就没法判断是模型卡死、工具卡住,还是自己该换个说法。
+    "agentTurn_lastStepTool": {"zh": "最后一步:调用工具 {name}", "en": "Last step: called tool {name}"},
+    "agentTurn_lastStepToolDone": {"zh": "最后一步:工具 {name} 已返回", "en": "Last step: tool {name} returned"},
+    "agentTurn_lastStepToolFailed": {"zh": "最后一步:工具 {name} 返回了错误", "en": "Last step: tool {name} returned an error"},
+    "agentTurn_lastStepText": {"zh": "最后一步:正在输出回答「{text}」", "en": "Last step: writing a reply “{text}”"},
+    "agentTurn_lastStepThinking": {"zh": "最后一步:正在思考", "en": "Last step: thinking"},
+    "agentTurn_lastStepNone": {"zh": "最后一步:还没有产生任何输出", "en": "Last step: no output had been produced yet"},
     "aiErr_sidecarExited": {"zh": "pi sidecar 异常退出(退出码 {exit_code})", "en": "The pi sidecar exited with code {exit_code}"},
     "aiErr_compactFailed": {"zh": "压缩失败", "en": "Compaction failed"},
     "aiErr_compactNoResult": {"zh": "压缩没有返回结果", "en": "Compaction returned no result"},

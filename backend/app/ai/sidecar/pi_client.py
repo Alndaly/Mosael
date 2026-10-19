@@ -7,6 +7,7 @@ import threading
 import os
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,12 +23,21 @@ flow through the confirmation cards.
 
 from app.core import abort, outbound_guard
 from app.core.child_process import ChildProcess, popen_text
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import LocalizedError, fragment, tr
 
 logger = logging.getLogger(__name__)
 
+#: 一轮里连续这么久**没有任何进展**才终止。名字还是旧的(测试、注释都按它找),语义已经换了:
+#: 以前它量的是总时长(一直在调工具的轮次照样在 600 秒到点被杀),现在正文 / 思考的每个分片、
+#: 每次工具调用(开始与结束)、子智能体的每一步都会把它往后推。600 这个数字没变。
+#: 手动压缩那条旁路仍拿它当总时长 —— 那是一次有界操作,不是智能体运行循环。
 TURN_TIMEOUT_SECONDS = 600
-#: 一轮里等人(批确认卡、答选择卡)的时候停掉整轮时限的表 —— 这一段停多久的上限。人慢慢看卡不该把一轮判成超时
+#: 防跑飞的硬上限:有进展也算,只有它才该说"运行超过 N 小时"。单次工具调用最长 180 秒
+#: (agent-sidecar/src/tools.ts 的 TOOL_CALL_TIMEOUT_MS),等人批卡另有停表,所以正常的轮次
+#: 不该接近这个数;两小时留给"真的在连续干活"的长任务,再长就是在跑飞。
+TURN_HARD_CAP_HOURS = 2
+TURN_HARD_CAP_SECONDS = TURN_HARD_CAP_HOURS * 60 * 60
+#: 一轮里等人(批确认卡、答选择卡)的时候停掉**两把**表 —— 这一段停多久的上限。人慢慢看卡不该把一轮判成超时
 #: (此前 600 秒里包括等人的时间:先干两分钟活再开卡,人八分钟后回来,整轮已经被杀、卡还亮着)。上限要比 sidecar
 #: 等一张卡的上限(CARD_WAIT_CEILING_MS)长,由 contracts/shared-constants.json 的 budgets 钉着;它只防 sidecar 卡死在
 #: 「等人中」永远不说等完了。
@@ -406,6 +416,203 @@ def spawn_pi(*, stderr: int = subprocess.PIPE) -> subprocess.Popen:
     return popen_text([node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, text=True, env=env)
 
 
+@dataclass
+class _LastStep:
+    """这一轮最后一件**真的发生过**的事,用于超时卡片上的「最后一步」。
+
+    只记协议里可靠的进展信号:正文 / 思考分片、工具调用的开始与结束、子智能体的每一步。
+    `queued` / `aborted_ack` 是用户那边打字的回执,不是智能体做了什么,不覆盖它。
+    """
+
+    kind: str = "none"
+    name: str = ""
+    text: str = ""
+
+
+def _is_progress(event: dict) -> bool:
+    """这条 sidecar 事件算不算「智能体还在干活」。
+
+    正文 / 思考的空分片不算;工具调用(含子智能体内部的 subtool)的开始与结束都算 —— 一次
+    工具调用最长 180 秒(TOOL_CALL_TIMEOUT_MS),所以有工具在跑时,真实事件间隔远小于 600 秒。
+    """
+    kind = event.get("type")
+    if kind in ("text_delta", "thinking_delta"):
+        return bool(str(event.get("delta") or "").strip())
+    return kind in ("thinking_end", "tool_start", "tool_end", "subtool", "subagent_result")
+
+
+#: 失败卡上「最后一步」里回答片段的长度 / 累积缓冲。**这不是子进程的报错原因**,是模型自己
+#: 最后说到的那句话 —— 取尾部正是要它停在哪一句上,所以不走 `blame_line`。
+_REPLY_BUFFER_CHARS = 160
+_REPLY_SNIPPET_CHARS = 60
+
+
+def _reply_tail(text: str, limit: int = _REPLY_SNIPPET_CHARS) -> str:
+    clean = " ".join(text.split())
+    return clean if len(clean) <= limit else clean[-limit:]
+
+
+def _note_last_step(event: dict, last: _LastStep, tool_names: dict[str, str]) -> None:
+    kind = event.get("type")
+    if kind == "text_delta":
+        delta = str(event.get("delta") or "")
+        if delta.strip():
+            last.kind = "text"
+            last.text = _reply_tail(last.text + delta, _REPLY_BUFFER_CHARS)
+    elif kind in ("thinking_delta", "thinking_end"):
+        last.kind = "thinking"
+    elif kind == "tool_start":
+        name = str(event.get("name") or "")
+        tool_names[str(event.get("toolCallId") or "")] = name
+        last.kind = "tool"
+        last.name = name
+    elif kind == "tool_end":
+        last.kind = "tool_failed" if event.get("isError") else "tool_done"
+        last.name = tool_names.get(str(event.get("toolCallId") or ""), last.name)
+    elif kind == "subtool":
+        last.kind = "tool" if event.get("phase") != "end" else ("tool_failed" if event.get("isError") else "tool_done")
+        last.name = str(event.get("toolName") or last.name)
+    elif kind == "subagent_result":
+        last.kind = "tool_done"
+        last.name = tool_names.get(str(event.get("parentCallId") or ""), last.name)
+
+
+def _last_step_fragment(last: _LastStep) -> dict:
+    """落进文案参数的「最后一步」半句(见 core/i18n.fragment:语言到渲染时才定)。"""
+    if last.kind in ("tool", "tool_done", "tool_failed"):
+        name = last.name or "?"
+        key = {
+            "tool": "agentTurn_lastStepTool",
+            "tool_done": "agentTurn_lastStepToolDone",
+            "tool_failed": "agentTurn_lastStepToolFailed",
+        }[last.kind]
+        return fragment(key, name=name)
+    if last.kind == "text":
+        text = _reply_tail(last.text)
+        if text:
+            return fragment("agentTurn_lastStepText", text=text)
+    if last.kind == "thinking":
+        return fragment("agentTurn_lastStepThinking")
+    return fragment("agentTurn_lastStepNone")
+
+
+class _TurnWatchdog:
+    """一轮的两把表:连续多久没有进展(空闲),以及总共跑了多久(硬上限)。
+
+    **为什么不能再用 `ChildProcess(timeout=600)`**:它量的是总时长,而智能体一直在调工具、
+    一直在出字也算「超过 600 秒没返回」——真机上就是这么把一轮正常干活的对话掐掉的。这里
+    把「在用」定义成「有进展」:每次进展把空闲表推回满格,只有真的 600 秒没动静才终止。
+
+    硬上限是另一把独立的表(默认 2 小时):真的有进展也拦,拦的是跑飞,文案也另说一句。
+
+    等人批卡 / 作答时两把表一起停(sidecar 的 `awaiting_user`),和此前 `pause_deadline` 的
+    语义一致;停表本身有上限,对面卡死在「等人中」也不会让看门狗永远失效。
+
+    实现是一个线程 + 单调时钟,而不是每个 token 重开一个 `threading.Timer`:流式输出一秒几十个
+    分片,按事件重开定时器等于一秒几十个线程。
+    """
+
+    #: 看门狗自己的轮询间隔上限。600 秒的两把表不需要毫秒精度;测试会把时限拨到零点几秒,
+    #: 这个粒度仍然够快(空闲 0.4 秒的用例最迟 ~0.65 秒发现)。
+    _TICK_SECONDS = 0.25
+
+    def __init__(self, idle_seconds: float, hard_seconds: float, on_expire: Callable[[str], None]) -> None:
+        self._idle_seconds = float(idle_seconds)
+        self._on_expire = on_expire
+        self._lock = threading.Lock()
+        self._wake = threading.Event()
+        now = time.monotonic()
+        self._last = now
+        self._idle_left = float(idle_seconds)
+        self._hard_left = float(hard_seconds)
+        self._pauses = 0
+        self._paused_until = 0.0
+        self._stopped = False
+        self._expired: str | None = None
+        self._thread = threading.Thread(target=self._watch, name="agent-turn-watchdog", daemon=True)
+        self._thread.start()
+
+    @property
+    def expired(self) -> str | None:
+        """`"idle"` / `"hard"`;还没到点或已经正常收尾就是 None。"""
+        with self._lock:
+            return self._expired
+
+    def touch(self) -> None:
+        """有进展:把空闲表推回满格。硬上限不动 —— 它量的就是总时长。"""
+        with self._lock:
+            if self._stopped:
+                return
+            self._advance_locked()
+            self._idle_left = self._idle_seconds
+        self._wake.set()
+
+    def pause(self, cap: float) -> None:
+        """停表(等人)。可以叠;最后一次 resume 才接着走。`cap` 是停表自身的上限。"""
+        with self._lock:
+            if self._stopped:
+                return
+            self._advance_locked()
+            self._pauses += 1
+            if self._pauses == 1:
+                self._paused_until = time.monotonic() + float(cap)
+        self._wake.set()
+
+    def resume(self) -> None:
+        with self._lock:
+            if self._stopped or self._pauses == 0:
+                return
+            self._advance_locked()
+            self._pauses -= 1
+            if self._pauses == 0:
+                self._paused_until = 0.0
+        self._wake.set()
+
+    def stop(self) -> None:
+        with self._lock:
+            self._stopped = True
+        self._wake.set()
+
+    def _advance_locked(self) -> None:
+        now = time.monotonic()
+        if self._pauses:
+            if self._paused_until and now >= self._paused_until:
+                logger.warning("一轮在「等人」里停了超过上限,空闲 / 硬上限恢复计时")
+                self._pauses = 0
+                self._paused_until = 0.0
+            else:
+                #: 停表期间不扣时间,但把基准拨到当下 —— 恢复时不能把等人那段补扣回来。
+                self._last = now
+                return
+        elapsed = now - self._last
+        self._last = now
+        self._idle_left -= elapsed
+        self._hard_left -= elapsed
+
+    def _watch(self) -> None:
+        while True:
+            with self._lock:
+                if self._stopped:
+                    return
+                self._advance_locked()
+                if self._idle_left <= 0:
+                    self._expired = "idle"
+                    self._stopped = True
+                    break
+                if self._hard_left <= 0:
+                    self._expired = "hard"
+                    self._stopped = True
+                    break
+                if self._pauses and self._paused_until:
+                    wait = min(self._TICK_SECONDS, max(0.01, self._paused_until - time.monotonic()))
+                else:
+                    wait = min(self._TICK_SECONDS, max(0.01, self._idle_left), max(0.01, self._hard_left))
+            self._wake.wait(wait)
+            self._wake.clear()
+        #: 不在锁里执行回调:它会杀子进程,不该让别的线程等在锁上。
+        self._on_expire(self._expired or "idle")
+
+
 def _run_pi(
     prompt: str,
     system_prompt: str,
@@ -462,7 +669,15 @@ def _run_pi(
         with _LIVE_LOCK:
             _LIVE[session_id] = live
 
-    child = ChildProcess(process, TURN_TIMEOUT_SECONDS)
+    #: 两把表都在 `_TurnWatchdog` 里,`ChildProcess` 自己的总时长表关掉:那个数就是这次要改的东西
+    #: (它把「一直在干活」也当成「超时」)。收尾仍然走 `finish()` 的独立 REAP_TIMEOUT。
+    child = ChildProcess(process)
+
+    def _timed_out(_kind: str) -> None:
+        # 哪把表到点由 `watchdog.expired` 决定;这里只负责真的停下子进程。
+        child.kill()
+
+    watchdog = _TurnWatchdog(TURN_TIMEOUT_SECONDS, TURN_HARD_CAP_SECONDS, _timed_out)
     result_text: str | None = None
     result_state: object | None = None
     result_usage: dict | None = None
@@ -471,6 +686,8 @@ def _run_pi(
     saw_tool = False
     aborted = False
     stderr_tail = ""
+    last_step = _LastStep()
+    tool_names: dict[str, str] = {}
     try:
         for line in child.lines():
             try:
@@ -480,6 +697,9 @@ def _run_pi(
                 #: 事件(含 credential_refreshed / gateway_done)就这么丢了,只能靠超时兜底。
                 logger.debug("sidecar 交来一行解不出 JSON 的输出,跳过: %.200r", line)
                 continue
+            if _is_progress(event):
+                _note_last_step(event, last_step, tool_names)
+                watchdog.touch()
             kind = event.get("type")
             if kind == "text_delta" and on_delta is not None:
                 on_delta(str(event.get("delta", "")))
@@ -498,11 +718,11 @@ def _run_pi(
             elif kind == "aborted_ack":
                 live.ack("aborted_ack", bool(event.get("accepted")))
             elif kind == "awaiting_user":
-                # 等人批卡 / 作答的这段不算进整轮时限(见 AWAITING_USER_PAUSE_CAP_SECONDS)。成对来,按计数停表。
+                # 等人批卡 / 作答的这段不算进任何一把表(见 AWAITING_USER_PAUSE_CAP_SECONDS)。成对来,按计数停表。
                 if event.get("waiting"):
-                    child.pause_deadline(AWAITING_USER_PAUSE_CAP_SECONDS)
+                    watchdog.pause(AWAITING_USER_PAUSE_CAP_SECONDS)
                 else:
-                    child.resume_deadline()
+                    watchdog.resume()
             elif kind == "turn_done":
                 result_text = str(event.get("text", ""))
                 result_state = event.get("sessionState")
@@ -516,6 +736,7 @@ def _run_pi(
                 # open for the whole turn so steering has somewhere to go, which means the sidecar's
                 # readline loop no longer ends on its own — waiting for EOF left every turn
                 # "running" until the timeout, long after the answer had finished streaming.
+                watchdog.stop()
                 break
             elif kind == "error":
                 detail = _tail(str(event.get("message", "pi sidecar error")))
@@ -548,20 +769,34 @@ def _run_pi(
                 aborted = True
     finally:
         # Every terminal path owns the same cleanup: success, protocol error, callback error,
-        # timeout, and user abort. Close and unregister the steering channel before reaping the
-        # child so concurrent requests immediately see that this turn can no longer be steered.
+        # timeout, and user abort. Stop the clocks first — a timer that fires while we are
+        # reaping the child would turn a finished turn into a timeout. Close and unregister the
+        # steering channel before reaping the child so concurrent requests immediately see that
+        # this turn can no longer be steered.
+        watchdog.stop()
         live.close()
         if session_id:
             with _LIVE_LOCK:
                 if _LIVE.get(session_id) is live:
                     del _LIVE[session_id]
         stderr_tail = _tail(child.finish())
-    if child.timed_out:
+    #: 两把表说的是两件事,文案也必须分开:一个是「连续 N 秒没有进展」,一个是「总时长超过 N 小时」。
+    #: 只在**没有 turn_done** 时才算超时:定时器可能正好和收尾擦肩而过,已经拿到结果的一轮不算被杀。
+    expired = watchdog.expired
+    if expired is not None and result_text is None:
+        step = _last_step_fragment(last_step)
+        if expired == "hard":
+            key = "aiErr_turnHardCap"
+            params: dict[str, object] = {"hours": f"{TURN_HARD_CAP_SECONDS / 3600:g}", "last_step": step}
+        else:
+            key = "aiErr_turnIdleTimeout"
+            params = {"seconds": f"{TURN_TIMEOUT_SECONDS:g}", "last_step": step}
         # `human` 是落进对话气泡的那一句(见 domain/agent/host),按**此刻**的语言渲染。
-        human = tr("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS)
+        # 它必须带「最后一步」:用户看到「明明在正常跑」,是因为失败卡此前只说了超时,没说停在哪。
+        human = tr(key, **params)
         if stderr_tail:
-            raise SidecarError("aiErr_turnTimeoutDetail", seconds=TURN_TIMEOUT_SECONDS, detail=stderr_tail, human=human)
-        raise SidecarError("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS, human=human)
+            raise SidecarError(f"{key}Detail", detail=stderr_tail, human=human, **params)
+        raise SidecarError(key, human=human, **params)
     if result_text is None:
         if stderr_tail:
             raise SidecarError(stderr_tail)
