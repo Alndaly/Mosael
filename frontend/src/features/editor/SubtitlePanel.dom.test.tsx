@@ -177,45 +177,67 @@ describe("顶部动作区", () => {
       ["subtitleFileImport", "subtitleFileExport", "全部存为笔记"],
       ["subtitleStyle"],
     ]);
-    // 三条发丝线,不是 8 颗同款按钮一路排下去。
+    // 左栏两条发丝线;「字幕样式」在右栏,由左右之间那条 border-l 隔开。
     const dividers = [...bar.querySelectorAll("[data-actions-divider]")];
-    expect(dividers).toHaveLength(3);
+    expect(dividers).toHaveLength(2);
     for (const divider of dividers) {
       expect(divider).toHaveAttribute("aria-hidden", "true");
     }
   });
 
-  it("窄宽度下折行,不横向滚动,按钮自己不被压窄", () => {
+  it("左右两栏:动作在可横滚的左栏,「字幕样式」钉在右缘、永不滚走", () => {
     const { container } = renderAll();
     const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
-    // jsdom 没有布局:钉住决定这件事的类,回归时它会先没。
-    expect(bar.className).toContain("flex-wrap");
-    expect(bar.className).not.toMatch(/overflow-x-(auto|scroll)/);
-    const root = container.firstElementChild as HTMLElement;
-    expect(root.className).not.toMatch(/overflow-x-(auto|scroll)/);
+    const scroller = bar.querySelector("[data-actions-scroll]") as HTMLElement;
+    const info = bar.querySelector("[data-actions-info]") as HTMLElement;
+    const style = screen.getByRole("button", { name: "subtitleStyle" });
+
+    // 左栏:可收缩(flex-1 min-w-0),放不下才横向滚。
+    expect(scroller).not.toBeNull();
+    expect(scroller.className).toContain("overflow-x-auto");
+    expect(scroller.className).toContain("flex-1");
+    expect(scroller.className).toContain("min-w-0");
+    // 只有横向那一条;不预留滚动条位置(会把图标行撑高),也不写 calc()。
+    expect(scroller.className).toContain("overflow-y-hidden");
+    expect(scroller.className).not.toContain("scrollbar-gutter");
+    expect(scroller.className).not.toContain("calc(");
+    // 右栏:同级兄弟、不在滚动容器里;按内容定宽、一行、贴右缘。
+    expect(info).not.toBeNull();
+    expect(info.parentElement).toBe(bar);
+    expect(scroller.contains(info)).toBe(false);
+    expect(info.className).toContain("shrink-0");
+    expect(info.className).toContain("whitespace-nowrap");
+    expect(info.className).toContain("border-l");
+    expect(info.contains(style)).toBe(true);
+    expect(scroller.contains(style)).toBe(false);
+    // 其余 7 颗动作都在滚动容器里;它们自己不被压窄。
     for (const button of actionButtons()) {
-      // 按钮整颗换行,而不是把自己压窄、把字挤断。
+      expect(scroller.contains(button)).toBe(true);
       expect(button.className).toContain("shrink-0");
       expect(button.className).toContain("whitespace-nowrap");
     }
-    expect(bar.contains(screen.getByRole("button", { name: "subtitleStyle" }))).toBe(true);
+    // 轨道不折行:折行就不会有横向溢出,「超出滚动」也就无从发生。
+    const track = scroller.querySelector("[data-actions-track]") as HTMLElement;
+    expect(track.className).toContain("w-max");
+    expect(track.className).not.toContain("flex-wrap");
+    // 整条动作区只有左栏这一个横向滚动容器。
+    expect(bar.querySelectorAll(".overflow-x-auto")).toHaveLength(1);
   });
 
-  it("折行时分隔线跟着自己的组走,不会孤零零落在行尾", () => {
+  it("分组仍然成立:线跟着自己的组,单元不折行、不缩窄", () => {
     const { container } = renderAll();
     const bar = container.querySelector("[data-subtitle-actions]") as HTMLElement;
     const units = [...bar.querySelectorAll<HTMLElement>("[data-actions-unit]")];
-    expect(units).toHaveLength(4);
-    // 一个单元 = 一条线 + 它后面那一组。单元自己不折行,所以线永远挨着组;
-    // 折行只发生在单元与单元之间(flex-wrap 在栏上)。
-    expect(units.map((unit) => unit.querySelectorAll("[data-actions-divider]").length)).toEqual([0, 1, 1, 1]);
+    expect(units).toHaveLength(3);
+    // 一个单元 = 一条线 + 它后面那一组。滚动的是外面那层,单元本身结构不动。
+    expect(units.map((unit) => unit.querySelectorAll("[data-actions-divider]").length)).toEqual([0, 1, 1]);
     for (const unit of units) {
       expect(unit.className).toContain("inline-flex");
       expect(unit.className).toContain("shrink-0");
       expect(unit.className).not.toContain("flex-wrap");
       expect(unit.querySelectorAll("[data-actions-group]")).toHaveLength(1);
     }
-    // 线在单元里,不是栏的直接子元素 —— 直接挂在 flex-wrap 的栏上才会被单独甩到下一行。
+    // 线在单元里,不是栏的直接子元素 —— 滚到哪,线都跟着自己的组。
     for (const divider of bar.querySelectorAll("[data-actions-divider]")) {
       expect(divider.parentElement).not.toBe(bar);
       expect(divider.parentElement?.hasAttribute("data-actions-unit")).toBe(true);
@@ -224,7 +246,8 @@ describe("顶部动作区", () => {
     for (const group of bar.querySelectorAll<HTMLElement>("[data-actions-group]")) {
       expect(group.className).toContain("gap-1");
     }
-    expect(bar.className).toContain("gap-x-1.5");
+    const track = bar.querySelector("[data-actions-track]") as HTMLElement;
+    expect(track.className).toContain("gap-x-1.5");
     for (const unit of units) expect(unit.className).toContain("gap-1.5");
   });
 });

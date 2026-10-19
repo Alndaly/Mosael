@@ -488,21 +488,46 @@ describe("顶部动作区的分组", () => {
     for (const divider of dividers) expect(divider).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("窄宽度下折行,不横向滚动", async () => {
+  it("左右两栏:动作在可横滚的左栏,统计钉在右缘、永不滚走", async () => {
     serveTranscript(["SPEAKER_00"]);
     renderToolbar();
     await screen.findByText("第0句");
 
     const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
-    expect(bar.className).toContain("flex-wrap");
-    expect(bar.className).not.toMatch(/overflow-x-(auto|scroll)/);
-    for (const button of bar.querySelectorAll("button")) {
-      // 动作图标钮整颗换行,不被压窄。
-      if (button.getAttribute("aria-label")) expect(button.className).toContain("shrink-0");
+    const scroller = bar.querySelector("[data-actions-scroll]") as HTMLElement;
+    const stats = screen.getByText("transcriptStats");
+
+    // 左栏就是那一条**允许**横滚的容器:先能收缩(flex-1 min-w-0),放不下才滚。
+    expect(scroller).not.toBeNull();
+    expect(scroller.className).toContain("overflow-x-auto");
+    expect(scroller.className).toContain("flex-1");
+    expect(scroller.className).toContain("min-w-0");
+    // 只有横向那一条;不预留滚动条位置(会把图标行撑高),也不写 calc()。
+    expect(scroller.className).toContain("overflow-y-hidden");
+    expect(scroller.className).not.toContain("scrollbar-gutter");
+    expect(scroller.className).not.toContain("calc(");
+    // 右栏是同级兄弟,不在滚动容器里 —— 滚的只有左边。宽度按内容(shrink-0)、一行(nowrap)。
+    expect(stats.parentElement).toBe(bar);
+    expect(scroller.contains(stats)).toBe(false);
+    expect(stats.hasAttribute("data-actions-info")).toBe(true);
+    expect(stats.className).toContain("shrink-0");
+    expect(stats.className).toContain("whitespace-nowrap");
+    // 动作全在左栏;左右之间一条发丝线(border-l),和组间那条 ACTION_DIVIDER 同一种细线。
+    for (const unit of bar.querySelectorAll("[data-actions-unit]")) {
+      expect(scroller.contains(unit)).toBe(true);
     }
+    expect(stats.className).toContain("border-l");
+
+    // 左栏的轨道**不折行**:折行就永远滚不起来,「超出滚动」也就无从发生。
+    const track = scroller.querySelector("[data-actions-track]") as HTMLElement;
+    expect(track).not.toBeNull();
+    expect(track.className).toContain("w-max");
+    expect(track.className).not.toContain("flex-wrap");
+    // 整条动作区只有左栏这一个横向滚动容器。
+    expect(bar.querySelectorAll(".overflow-x-auto")).toHaveLength(1);
   });
 
-  it("折行时分隔线跟着自己的组走,不会孤零零落在行尾", async () => {
+  it("分组仍然成立:线跟着自己的组,单元不折行、不缩窄", async () => {
     serveTranscript(["SPEAKER_00"]);
     renderToolbar();
     await screen.findByText("第0句");
@@ -510,7 +535,7 @@ describe("顶部动作区的分组", () => {
     const bar = document.querySelector("[data-transcript-actions]") as HTMLElement;
     const units = [...bar.querySelectorAll<HTMLElement>("[data-actions-unit]")];
     expect(units).toHaveLength(3);
-    // 一个单元 = 一条线 + 它后面那一组。单元自己不折行,线永远挨着组;折行只发生在单元之间。
+    // 一个单元 = 一条线 + 它后面那一组。滚动的是外面那层,单元本身结构不动。
     expect(units.map((unit) => unit.querySelectorAll("[data-actions-divider]").length)).toEqual([0, 1, 1]);
     for (const unit of units) {
       expect(unit.className).toContain("inline-flex");
@@ -518,7 +543,7 @@ describe("顶部动作区的分组", () => {
       expect(unit.className).not.toContain("flex-wrap");
       expect(unit.querySelectorAll("[data-actions-group]")).toHaveLength(1);
     }
-    // 线在单元里,不是栏的直接子元素 —— 直接挂在 flex-wrap 的栏上才会被单独甩到下一行。
+    // 线在单元里,不是栏的直接子元素 —— 滚到哪,线都跟着自己的组。
     for (const divider of bar.querySelectorAll("[data-actions-divider]")) {
       expect(divider.parentElement).not.toBe(bar);
       expect(divider.parentElement?.hasAttribute("data-actions-unit")).toBe(true);
@@ -527,7 +552,8 @@ describe("顶部动作区的分组", () => {
     for (const group of bar.querySelectorAll<HTMLElement>("[data-actions-group]")) {
       expect(group.className).toContain("gap-1");
     }
-    expect(bar.className).toContain("gap-x-1.5");
+    const track = bar.querySelector("[data-actions-track]") as HTMLElement;
+    expect(track.className).toContain("gap-x-1.5");
     for (const unit of units) expect(unit.className).toContain("gap-1.5");
   });
 });

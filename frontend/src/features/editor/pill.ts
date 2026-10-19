@@ -12,31 +12,59 @@ export const PILL =
  * 名字由 `IconButton` 的 `label` 交给读屏和 Hint。
  *
  * - `relative`:计数角标(见 CountBadge)钉在右上角;
- * - `shrink-0`:窄面板里整颗折行,而不是被 flex 压成点不到的窄条(工具栏本身 `flex-wrap`)。
+ * - `shrink-0`:左栏横向滚动时整颗按自己的宽度走,不被压成点不到的窄条。
  */
 export const ACTION_ICON = "relative shrink-0 text-muted-foreground";
 
 /**
- * 顶部动作条本身:窄了就**按单元折行**,不横向滚。
+ * 顶部动作条:**左右两栏**。
  *
- * 动作从「图标 + 文字」收成只有图标之后,一排同款方钮彼此看起来一样 —— 谁和谁是一类
- * 只剩布局能说。所以分组做成看得见的三件事:组内 4px(`ACTION_GROUP`)、组间一条发丝线、
- * 线两侧各 6px(`ACTION_UNIT`,加上线本身两家之间 13px)。这里 `gap-x-1.5` 管的是单元之间。
+ * 左栏是动作,右栏是一段不会走开的信息(逐字稿的「N 句 · M 字」/ 字幕的「字幕样式」)。
+ * 维护者要的是「右侧信息 sticky 在右侧,左侧超出滚动即可」:右边按内容定宽、永远贴在右缘;
+ * 左边是那条可收缩的栏,放不下时自己横滚 —— 右边那份信息不参与滚动。
+ *
+ * **这里的横滚是用户明确要的**,和别处「宁可折行也不横滚」不冲突:别的工具行里全是要读、
+ * 要打的控件,滚起来就藏掉一半,而它们没有主次(见 MediaLibraryView 的筛选行);这一排则是
+ * 同一类的图标动作,右侧那条信息才是要一直看得见的那一个 —— 让它留在原地,动作从左往右翻。
  */
-export const ACTION_BAR = "flex flex-wrap items-center gap-x-1.5 gap-y-1.5";
+export const ACTION_BAR = "flex min-w-0 items-center gap-2.5";
 
 /**
- * 一组同类动作:组内 4px。组本身不折行 —— 折行单位是外面的 `ACTION_UNIT`,
- * 这样"近的是同类、远的是异类"在窄宽度下也成立。
+ * 左栏:可收缩的动作区。`flex-1 min-w-0` 先让它成为能被压缩的那一栏 —— 不写 `min-w-0`,
+ * flex 的自动最小宽度会按内容把它撑住,右栏就被挤出面板。`overflow-x-auto` 只在真放不下时
+ * 出现滚动;`overflow-y-hidden` 保证永远只有横向那一条。
+ *
+ * 滚动条的样子走全局策略(见 design/tokens.css:平时宽 0,悬停 / 聚焦才显形),所以这里
+ * **不设 `scrollbar-gutter`** —— 那会常驻一条高度,把图标行撑高;也不用 `calc()`。
+ */
+export const ACTION_SCROLL = "flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden";
+
+/**
+ * 左栏里的动作轨道:一排、不折行、宽度按内容(`w-max`)。
+ *
+ * **不折行是横滚的前提** —— 折行的 flex 容器不会产生横向溢出,`overflow-x-auto` 就永远不滚,
+ * 被压窄的只会是会收缩的右栏。滚动量发生在 `ACTION_SCROLL` 那一层,轨道自己的结构不动。
+ */
+export const ACTION_TRACK = "flex w-max items-center gap-x-1.5";
+
+/**
+ * 右栏:统计文字 / 「字幕样式」。钉在右缘 —— 不参与收缩(`shrink-0`)、不滚、不折行
+ * (`whitespace-nowrap`)。`self-stretch` 让那条 `border-l` 跟左边的图标同高(整条栏的
+ * 内容高度),而不是只绕着一行 16px 的统计文字。这条线和组间的 `ACTION_DIVIDER` 同一种细线。
+ */
+export const ACTION_INFO = "flex shrink-0 self-stretch items-center gap-2 whitespace-nowrap border-l border-border pl-2.5";
+
+/**
+ * 一组同类动作:组内 4px。组本身不折行 —— 单元结构决定的,见 `ACTION_UNIT`。
  */
 export const ACTION_GROUP = "flex items-center gap-1";
 
 /**
  * 一组动作 + 它前面那条发丝线,包成**一个不折行的单元**。
  *
- * 分隔线不能直接挂在 `flex-wrap` 的栏上:栏在组与组之间折行时,一条孤零零的线会掉到下一行行首,
- * 读起来像"这一行第一颗按钮属于谁"的杂音。把它和后面那一组放进同一个 `inline-flex` 单元,
- * 线就永远跟着自己的组走;栏只在单元之间折行。
+ * 分组是看得见的:线就长在这一组前面,而不是栏上的一颗独立元素。动作轨道横向滚动时,
+ * 滚到哪线都跟着自己的组;哪天轨道改回折行,线也不会孤零零掉到下一行行首、读起来像
+ * 「这一行第一颗按钮属于谁」的杂音。
  */
 export const ACTION_UNIT = "inline-flex shrink-0 items-center gap-1.5";
 
