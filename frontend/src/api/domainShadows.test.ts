@@ -50,7 +50,7 @@ const KEPT_BY_HAND: Record<string, string> = {
   "scenes.ts:PreviewObject": "同上:预览里的一个物体,形状由场景内容决定。",
   "speech.ts:F5Model":
     "对着的 `list_f5_models` 没有 response_model,生成出来是 {[key: string]: unknown}[]。" +
-    "这十五个字段此刻和 f5_models.status() 一致,而这份一致**由两边的人手工维持** —— " +
+    "这十六个字段此刻和 f5_models.status() 一致,而这份一致**由两边的人手工维持** —— " +
     "补上 response_model 之后这一条就能撤掉。",
   "workflows.ts:WorkflowGraph": "工作流图也是裸 dict(graph),同 boards 的账。",
   "assets.ts:ScrubOutcome":

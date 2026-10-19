@@ -378,6 +378,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "下载报成功,但检查点不在盘上",
         "en": "The download reported success, but the checkpoint is not on disk",
     },
+    "runtimeErr_f5DownloadFailed": {
+        "zh": "语言包下载失败:{detail}",
+        "en": "The language pack download failed: {detail}",
+    },
+    "runtimeErr_f5DownloadInterrupted": {
+        "zh": "上一次下载没有完成(下载进程已经不在了,通常是应用退出或后端重启)。盘上还留着没下完的部分,再点一次会从头下载。",
+        "en": "The previous download did not finish (its process is gone — usually the app quit or the backend restarted). Partial files are still on disk; downloading again starts over.",
+    },
     "runtimeErr_f5NoTarget": {"zh": "没有指定权重目录", "en": "No weights directory was given"},
     "runtimeErr_gitMissing": {"zh": "未找到 git,无法拉取 Fish Speech 源码", "en": "git was not found, so the Fish Speech source cannot be fetched"},
     "runtimeErr_fishCloneFailed": {"zh": "拉取 Fish Speech 源码失败:{detail}", "en": "Could not fetch the Fish Speech source: {detail}"},

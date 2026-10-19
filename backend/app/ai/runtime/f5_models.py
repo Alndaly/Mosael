@@ -24,6 +24,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,13 +34,24 @@ from app.ai.runtime import remote_size
 from app.core.rate import DownloadRate
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore
-from app.ai.runtime.errors import RuntimeSetupError
+from app.ai.runtime.errors import RuntimeSetupError, failure_message
 
 logger = logging.getLogger(__name__)
 
 #: 量一次盘的间隔。和引擎权重、转写模型那两条路取同一个值 —— 三处报的是同一种东西,
 #: 刷新快慢不该各不相同。
 _POLL_SECONDS = 1.5
+
+#: 第三方库报"连不上下载源"的几种说法。和 tts_models 的 `_HUB_UNREACHABLE` 是同一条判据:
+#: 那边解析子进程的 stderr,这边拿到的是一个异常 —— 判据一样,来源不同。
+_HUB_UNREACHABLE = (
+    "LocalEntryNotFoundError",
+    "ConnectionError",
+    "ReadTimeout",
+    "ProxyError",
+    "check your connection",
+    "Max retries exceeded",
+)
 
 
 @dataclass(frozen=True)
@@ -255,6 +267,45 @@ def missing_for_language(script: str) -> F5Model | None:
 #: 和转写模型、克隆引擎同一份实现(见 runtime/download_state)。
 _store = DownloadStore()
 
+#: 上一次失败发生的时刻(UTC ISO)。只服务界面那句「最后一次 …」——
+#: DownloadProgress 是引擎权重、转写模型、语言包三条下载路共用的记录,不为这一条链的显示
+#: 去改它的形状。清掉 / 重试 / 成功时一并丢掉,免得下一次失败还挂着上一次的时间。
+_failed_at: dict[str, str] = {}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _unfinished_attempt(model: F5Model) -> str:
+    """盘上有没有**上一次没下完**的痕迹:那一刻的 UTC ISO;没有就是空串。
+
+    下载跑在另一个进程里(常驻的 f5-tts worker),而状态记录在**这个**进程的内存里 ——
+    后端重启 / dev 的 `--reload` 会把记录清空、线程一起杀掉,盘上那半截却还在。只看内存的话,
+    界面这时会回到「下载这个模型」,像从来没点过;而用户看到的是"加载一会儿就没了"。
+    盘上的痕迹(半截文件、hf 的锁、哪怕只有一个 `.cache/huggingface` 目录)就是"试过、没下完"。
+
+    只认这个模型自己的目录:基础模型落在根下,量它自己的仓库前缀那一层,不能把别的语言包
+    算成它的痕迹。
+    """
+    base = root()
+    target = (base / model.local_dir) if model.local_dir else (base / model.checkpoint.split("/", 1)[0])
+    try:
+        if not target.is_dir():
+            return ""
+        latest = 0.0
+        found = False
+        for entry in target.rglob("*"):
+            if not entry.is_file():
+                continue
+            found = True
+            latest = max(latest, entry.stat().st_mtime)
+        if not found:
+            return ""
+        return datetime.fromtimestamp(latest, timezone.utc).isoformat(timespec="seconds")
+    except OSError:
+        return ""
+
 
 def measured_total(model: F5Model, *, blocking: bool = False) -> tuple[int, bool]:
     """(这份权重的总字节, 这个数是不是估算)。
@@ -279,6 +330,11 @@ def measured_total(model: F5Model, *, blocking: bool = False) -> tuple[int, bool
 def status(model: F5Model) -> dict[str, Any]:
     live = _store.get(model.id) or DownloadProgress(status="", progress=-1.0)
     total, estimated = measured_total(model)
+    downloading_now = live.status == "downloading"
+    on_disk = installed(model)
+    # 内存里没有记录、盘上却有上一次的痕迹 = 上一次被杀了(应用退出 / 后端重启 / dev 热重载)。
+    # 这时候不能报 missing —— 那会让界面回到「下载这个模型」,像从来没点过。
+    interrupted_at = "" if live.status or on_disk else _unfinished_attempt(model)
     return {
         "id": model.id,
         "label": model.label,
@@ -286,17 +342,26 @@ def status(model: F5Model) -> dict[str, Any]:
         "note": model.note,
         "expected_bytes": total,
         "total_is_estimate": estimated,
-        "installed": installed(model),
-        "status": live.status or ("installed" if installed(model) else "missing"),
-        "progress": live.progress if live.progress >= 0 else (1.0 if installed(model) else 0.0),
+        "installed": on_disk,
+        "status": live.status or ("failed" if interrupted_at else ("installed" if on_disk else "missing")),
+        "progress": live.progress if live.progress >= 0 else (1.0 if on_disk else 0.0),
         # 和引擎权重、转写模型那两条路报同样的东西 —— 三处报的是同一种事,形状不同只会让
         # 界面各写一套(而"三处两种做法"正是这条路进度不动的由来)。
         "downloaded_bytes": live.downloaded,
-        "total_bytes": live.total,
+        # **未知总量给 None,不给 0。** 0 会被界面当成分母,画出「0% · 0 MB / 5.4 GB」这种
+        # "从来没动过"的样子;而它和"卡住了"在用户眼里是同一件事。下载中有多少报多少,
+        # 量不到(还没开始量 / 源上问不到)就明说不知道。
+        "total_bytes": (live.total or None) if downloading_now else (live.total or total),
         "speed_bps": live.speed,
         "eta_seconds": live.eta,
-        "message": live.message,
+        # 失败时 message 是 i18n key 或第三方库的原话,message_params 是它的槽;
+        # 出口(routes/voices.list_f5_models)连同 label / note 一起翻。
+        "message": "runtimeErr_f5DownloadInterrupted" if interrupted_at else live.message,
+        "message_params": live.params,
         "error": live.error,
+        # 终态那一行说「最后一次 …」用:失败发生的时刻(下载中 / 没下过就是空)。
+        # 被杀的这一次没有内存记录,用盘上最后一次写入的时刻。
+        "failed_at": _failed_at.get(model.id, "") or interrupted_at,
     }
 
 
@@ -331,7 +396,11 @@ def start_download(model_id: str) -> dict[str, Any]:
     busy = downloading()
     if busy:
         raise RuntimeSetupError("runtimeErr_f5LanguageBusy", busy=busy)
-    set_live(model.id, status="downloading", progress=0.0, message="dlMsg_preparing", error="")
+    # **整条记录换新,不是只改几个字段。** 上一次失败留下的字节数 / 总量 / 原因要是还挂在
+    # 记录上,重试的第一眼就会显示上一次的进度和上一次的失败原因 —— 用户看到的是"重试了,
+    # 可它还是上次那个数"。
+    _failed_at.pop(model.id, None)
+    _store.set(model.id, DownloadProgress(status="downloading", progress=0.0, message="dlMsg_preparing"))
     threading.Thread(target=_run_download, args=(model.id,), daemon=True).start()
     return status(model)
 
@@ -355,7 +424,10 @@ class _ByteWatcher:
         self._thread.start()
 
     def stop(self) -> None:
+        """叫停,并**等这一拍走完**(有上限)。只放下事件不等的话,一次刚好在量的读写会在
+        「失败」写进去之后才落盘 —— 把原因覆盖回「准备下载…」,状态还是 failed,而原因没了。"""
         self._stop.set()
+        self._thread.join(timeout=1.0)
 
     def _measure(self) -> int:
         # 只量这个模型自己的目录。基础模型 shared_root=True 落在根下,那就量检查点本身 ——
@@ -376,10 +448,16 @@ class _ByteWatcher:
         started = time.monotonic()
         rate.update(self._measure(), at=started)
         while not self._stop.wait(_POLL_SECONDS):
+            # stop() 之后这一拍如果还在路上,就别再写了 —— 终态的原因不该被一句「准备下载…」
+            # 盖掉。没有记录(直接构造这个观察者的测试)时照旧报:这个类本身不依赖调用方先建记录。
+            if self._stop.is_set():
+                return
             now = time.monotonic()
             current = self._measure()
             speed = rate.update(current, at=now)
             eta = rate.eta(remaining=max(0, total - current))
+            if self._stop.is_set():
+                return
             set_live(
                 self._model_id,
                 progress=min(current / total, 0.99) if total else 0.0,
@@ -435,6 +513,28 @@ def _run_download(model_id: str) -> None:
             watcher.stop()
         if not installed(model):
             raise RuntimeSetupError("runtimeErr_f5CheckpointMissing")
+        _failed_at.pop(model_id, None)
         clear_live(model_id)
     except Exception as exc:  # noqa: BLE001 — 失败要落在状态上,否则界面永远停在"下载中"
-        set_live(model_id, status="failed", error=str(exc)[:400], message="")
+        # **失败要带着能读懂的原因落地。** 此前这里只写 `str(exc)` 到 error 字段、把 message
+        # 清空 —— 而界面只看 status,于是"下载中"一消失就变回「下载这个文件」按钮,失败原因
+        # 一个字都没露出来。用户看到的正是:加载一会儿没了,像根本没开始。
+        #
+        # 原因分三种:我们自己抛的带 key(翻得出人话);第三方库的原文(翻不了,原样摆出来);
+        # 连不上下载源的那几种(能说清下一次动哪儿 —— 换源再试)。
+        from app.core.i18n import is_message_key
+
+        message, params = failure_message(exc)
+        if not is_message_key(message):
+            detail = message.strip()
+            if any(marker in detail for marker in _HUB_UNREACHABLE):
+                from app.ai.runtime import config as tts_config
+
+                message, params = (
+                    "runtimeErr_hubUnreachable",
+                    {"endpoint": str(tts_config.get().hf_endpoint), "detail": detail[:220]},
+                )
+            else:
+                message, params = "runtimeErr_f5DownloadFailed", {"detail": detail}
+        _failed_at[model_id] = _now_iso()
+        set_live(model_id, status="failed", message=message, params=params, error=str(exc)[:400])

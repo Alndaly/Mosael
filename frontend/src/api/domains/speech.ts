@@ -189,11 +189,14 @@ export interface F5Model {
   status: string;
   progress: number;
   downloaded_bytes: number;
-  total_bytes: number;
+  /** 下载中量到的总量;**`null` = 还不知道**(后端以前在这里报 0,界面于是画出「0 MB / 0%」)。 */
+  total_bytes: number | null;
   speed_bps: number;
   eta_seconds: number | null;
   message: string;
   error: string;
+  /** 这一次失败发生的时刻(UTC ISO);没失败过是空串。失败那一行用它说「最后一次 …」。 */
+  failed_at: string;
 }
 
 export function listF5Models(): Promise<F5Model[]> {

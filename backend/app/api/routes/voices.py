@@ -218,7 +218,9 @@ def list_f5_models(user: CurrentUser) -> list[dict]:
     from app.ai.runtime import f5_models
 
     locale = get_current_locale()
-    return [translate_fields(row, ("label", "note"), locale) for row in f5_models.list_status()]
+    # message 也要翻:失败时它是 key(我们自己的原因)或第三方库的原话(翻不了,原样给)。
+    # 不翻的话,英文界面上会直接冒出一串 runtimeErr_*。
+    return [translate_fields(row, ("label", "note", "message"), locale) for row in f5_models.list_status()]
 
 
 @router.post("/tts/f5-models/{model_id}/download")
@@ -228,11 +230,14 @@ def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
     from app.ai.runtime import f5_models
 
     try:
-        return f5_models.start_download(model_id)
+        row = f5_models.start_download(model_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=tr("routeErr_noSuchModel")) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    # 和 GET 同一个出口:POST 回的这份也是给人看的(message 可能是 dlMsg_preparing 这种 key),
+    # 不翻的话前端拿到的形状和列表里那份不一样。
+    return translate_fields(row, ("label", "note", "message"), get_current_locale())
 
 
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])

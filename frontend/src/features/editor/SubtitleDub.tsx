@@ -5,22 +5,26 @@ import { toast } from "sonner";
 
 import { downloadF5Model, dubSubtitles, listF5Models, ORIGINAL_AUDIO_MODES, type OriginalAudio, type Sequence } from "@/api/client";
 import { useIsDeploymentAdmin } from "@/app/auth";
-import { useI18n } from "@/app/preferences";
+import { useI18n, usePreferences } from "@/app/preferences";
+import { FailureCard } from "@/components/failure/FailureCard";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NONE, optionalValue } from "@/components/ui/selectSentinel";
 import { Switch } from "@/components/ui/switch";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { detectScript, dubTextOf, hasVoiceFor, pickVoiceFor, unspeakable } from "@/features/editor/dubLanguage";
+import { f5DownloadPercent, f5DownloadPhase, f5ModelsPollMs } from "@/features/editor/f5ModelDownload";
 import { VoiceField } from "@/features/voice/SpeechVoiceFields";
 import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 import { isConsentDeclined, withRemoteVoiceConsent } from "@/features/voice/remoteVoiceConsent";
-import { formatBytes } from "@/lib/bytes";
+import { formatBytes, formatSpeed } from "@/lib/bytes";
 import { useEditorStore } from "@/features/editor/editorStore";
-import { CLONE_ENGINE, DEFAULT_MATCH_DURATION } from "@/api/domains/speech";
-import { formatTimecode } from "@/lib/time";
+import { CLONE_ENGINE, DEFAULT_MATCH_DURATION, type F5Model } from "@/api/domains/speech";
+import { formatTimecode, relativeTime } from "@/lib/time";
 
 type Line = "all" | "first" | "last";
 
@@ -91,8 +95,10 @@ export function SubtitleDub({
     queryKey: ["f5-models"],
     queryFn: listF5Models,
     enabled: usesF5,
-    // 下载中就跟着刷:点完下载不该盯着一个不动的界面猜它有没有在跑。
-    refetchInterval: (query) => (query.state.data?.some((item) => item.status === "downloading") ? 1500 : false),
+    // **状态的家是后端那份清单,不是这个组件。** 还在下就 1.5 秒问一次(任务中心同一条规矩),
+    // 都结束了就慢下来到 8 秒 —— 别的窗口 / 部署管理员那边重新点了一次,这边照样看得到。
+    // 失败也要接着问:停下来就等于"它永远不会变了"。
+    refetchInterval: (query) => f5ModelsPollMs(query.state.data),
   });
   const installedWeights = usesF5 ? (f5Models.data ?? []).filter((model) => model.installed) : [];
 
@@ -109,6 +115,17 @@ export function SubtitleDub({
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["f5-models"] }),
     onError: (error: Error) => toast.error(error.message),
   });
+  //: 轮询本身失败时那颗「重试」自己的忙碌状态。不用 `f5Models.isFetching`:轮询每 8 秒也会把它
+  //: 点亮一次,于是按钮会自己转圈,看着像有人在按。
+  const [checkingStatus, setCheckingStatus] = React.useState(false);
+  const retryStatus = async () => {
+    setCheckingStatus(true);
+    try {
+      await f5Models.refetch();
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
 
   // **默认就选对**:用户还没亲手挑过发音人时,按字幕的文字挑一个念得了的。挑过就不再覆盖。
   // 只在引擎自己的音色里挑:配音库里的嗓子要把参考音频传上去,得是人亲手点的。
@@ -265,6 +282,28 @@ export function SubtitleDub({
           <Switch checked={matchDuration} onCheckedChange={setMatchDuration} />
         </label>
       </div>
+      {/* **轮询本身失败也要说话。** 此前 `isSuccess` 一假,`mismatch` 随之变空,整块下载行
+          (连同进度和按钮)一起消失 —— 用户看到的就是「loading 没了,什么都没发生」。
+          "查不到状态"和"没在下"是两件事:前者说清楚,并给一次再问的机会。 */}
+      {usesF5 && f5Models.isError && (
+        <div role="alert" className="grid gap-1.5">
+          <FailureCard
+            size="inline"
+            lines={2}
+            title={t("subtitleDubModelStatusUnknown")}
+            summary={t("subtitleDubModelStatusUnknownHint")}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            loading={checkingStatus}
+            onClick={() => void retryStatus()}
+          >
+            {t("retry")}
+          </Button>
+        </div>
+      )}
       {mismatch && (
         <div className="rounded-md border border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_8%,transparent)] px-2 py-1.5 text-ui-2xs leading-[1.5] text-foreground">
           {/* 说清楚**下一步动哪儿**:这个引擎里有能念的发音人就让他换发音人 —— 已经选对引擎
@@ -281,24 +320,11 @@ export function SubtitleDub({
             <span className="mt-1 block text-muted-foreground">{t("engineInstalledByAdmin")}</span>
           )}
           {missingModel && isAdmin && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-1.5 w-full"
-              loading={downloadModel.isPending || missingModel.status === "downloading"}
-              onClick={() => downloadModel.mutate(missingModel.id)}
-            >
-              {/* 权重 1.3–5.4 GB,慢网络下一个百分点要好几分钟 —— 有实测总量就一并报出来,
-                  否则"看不出还要多久"和"卡住了"在用户眼里是同一件事。 */}
-              {missingModel.status === "downloading"
-                ? missingModel.total_bytes > 0
-                  ? t("subtitleDubModelDownloadingSize")
-                      .replace("{n}", String(Math.round(missingModel.progress * 100)))
-                      .replace("{done}", formatBytes(missingModel.downloaded_bytes))
-                      .replace("{total}", formatBytes(missingModel.total_bytes))
-                  : t("subtitleDubModelDownloading").replace("{n}", String(Math.round(missingModel.progress * 100)))
-                : t("subtitleDubModelDownload")}
-            </Button>
+            <WeightDownloadRow
+              model={missingModel}
+              pending={downloadModel.isPending}
+              onDownload={() => downloadModel.mutate(missingModel.id)}
+            />
           )}
         </div>
       )}
@@ -312,5 +338,98 @@ export function SubtitleDub({
       </Button>
       <p className="m-0 text-ui-2xs leading-[1.5] text-muted-foreground">{t("subtitleDubTrackNote")}</p>
     </div>
+  );
+}
+
+/**
+ * 缺的那份权重下面那一行:**下没下、下到哪了、为什么没下成**,全部从后端那份清单派生。
+ *
+ * 三种样子,每一种都落在一个说得清的状态上:
+ *
+ * - 正在下:进度条 + 字节 + 速度。百分比**按字节算**(见 f5DownloadPercent);总量还不知道
+ *   就说「大小未知」,不拿 0 当分母画一条永远不动的 0%;
+ * - 失败:原因 + 最后一次时间 + 重试。此前这里直接变回「下载这个模型」——加载一会儿什么都没了,
+ *   用户只能怀疑自己点没点上;
+ * - 还没下 / 后端没话说:那个下载按钮。
+ */
+function WeightDownloadRow({
+  model,
+  pending,
+  onDownload,
+}: {
+  model: F5Model;
+  /** 这次点下载的请求还在路上。 */
+  pending: boolean;
+  onDownload: () => void;
+}) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+
+  const phase = f5DownloadPhase(model, false);
+
+  if (phase === "downloading") {
+    const percent = f5DownloadPercent(model);
+    const downloaded = Math.max(0, model.downloaded_bytes ?? 0);
+    const total = model.total_bytes ?? 0;
+    return (
+      <div className="mt-1.5 grid gap-1.5">
+        {percent === null ? (
+          //: 总量未知:一条扫光的占位条(全项目唯一的加载占位实现),不画一个假的百分比。
+          <div
+            role="progressbar"
+            aria-label={t("subtitleDubModelDownloadingLabel")}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={t("subtitleDubModelSizeUnknown")}
+            className="h-1 w-full overflow-hidden rounded-full bg-primary/20"
+          >
+            <Skeleton aria-hidden className="h-1 w-1/3 rounded-full" />
+          </div>
+        ) : (
+          // 共用 Progress 把 value 只用在指示条的位移上(**没有传给 Root**),所以 aria-valuenow
+          // 得自己给 —— 不然读屏软件只知道"有个进度条",不知道走到哪了。
+          <Progress value={percent} aria-valuenow={percent} className="h-1" aria-label={t("subtitleDubModelDownloadingLabel")} />
+        )}
+        <div className="flex items-center justify-between gap-2 text-ui-2xs tabular-nums text-muted-foreground">
+          <span>
+            {percent === null
+              ? t("subtitleDubModelDownloadingUnknown").replace("{done}", formatBytes(downloaded))
+              : t("subtitleDubModelDownloadingSize")
+                  .replace("{n}", String(percent))
+                  .replace("{done}", formatBytes(downloaded))
+                  .replace("{total}", formatBytes(total))}
+          </span>
+          {model.speed_bps > 0 && <span className="shrink-0">{formatSpeed(model.speed_bps)}</span>}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "failed") {
+    const reason = (model.message || model.error || "").trim();
+    return (
+      <div role="alert" className="mt-1.5 grid gap-1.5">
+        <FailureCard
+          size="inline"
+          lines={2}
+          title={t("subtitleDubModelFailed")}
+          summary={reason || t("subtitleDubModelFailedNoReason")}
+        />
+        {model.failed_at && (
+          <span className="text-ui-2xs text-muted-foreground">
+            {t("subtitleDubModelLastAt").replace("{time}", relativeTime(model.failed_at, locale))}
+          </span>
+        )}
+        <Button size="sm" variant="outline" className="w-full" loading={pending} onClick={onDownload}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button size="sm" variant="outline" className="mt-1.5 w-full" loading={pending} onClick={onDownload}>
+      {t("subtitleDubModelDownload")}
+    </Button>
   );
 }

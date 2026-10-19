@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,10 +15,25 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
  * 这类"改了但没生效"靠类型检查抓不到,只有**按一下看看**能抓到。
  */
 
-vi.mock("@/app/preferences", () => ({
-  useI18n: () => (key: string) => key,
-  usePreferences: () => ({ locale: "zh-CN" }),
-}));
+vi.mock("@/app/preferences", () => {
+  //: 带占位符的那几条用真模板:其余键仍返回键名(老测试就是按键名断言的),但下载行里的
+  //: 百分比 / 字节 / 速度必须能读出来,否则「进度真的在动」这件事没法验。
+  const templates: Record<string, string> = {
+    subtitleDubModelDownloadingSize: "下载中 {n}% · {done} / {total}",
+    subtitleDubModelDownloadingUnknown: "下载中 · 已下载 {done} · 大小未知",
+    subtitleDubModelFailed: "下载失败",
+    subtitleDubModelFailedNoReason: "下载没有完成,也没有留下原因 —— 请重试。",
+    subtitleDubModelStatusUnknown: "查不到模型下载状态",
+    subtitleDubModelStatusUnknownHint: "网络或后端暂时连不上。再试一次;正在下载的任务不会因此停下。",
+    subtitleDubModelLastAt: "最后一次 {time}",
+    subtitleDubModelSizeUnknown: "大小未知",
+    retry: "重试",
+  };
+  return {
+    useI18n: () => (key: string) => templates[key] ?? key,
+    usePreferences: () => ({ locale: "zh-CN" }),
+  };
+});
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { toast } from "sonner";
@@ -75,17 +90,33 @@ function sequenceWith(texts: string[]) {
 type Served = {
   voices?: unknown[]; texts?: string[]; weights?: unknown[]; onOpenSubtitles?: () => void; admin?: boolean;
   sequence?: unknown; focusClipId?: string;
+  /** 让 `/tts/f5-models` 返回错误:下载状态本身查不到时界面该说什么。 */
+  f5Failure?: { code: number };
 };
 
 function renderPanel({
   voices: voiceData = voices, texts = ["一条字幕"], weights = BASE_WEIGHTS, onOpenSubtitles, admin = true, sequence, focusClipId,
+  f5Failure,
 }: Served = {}) {
   const dubRequests: Array<Record<string, unknown>> = [];
+  const downloadCalls: string[] = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/dub-subtitles")) {
       dubRequests.push(JSON.parse(String(init?.body)));
       return new Response(JSON.stringify({ id: "job-1", status: "queued" }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    //: 下载状态查不到(后端暂时连不上 / 500):比"假装它没在下载"更该说清楚的那一种。
+    if (url.includes("/tts/f5-models") && f5Failure && f5Failure.code >= 400) {
+      return new Response(JSON.stringify({ detail: "f5 status unavailable" }), {
+        status: f5Failure.code, headers: { "content-type": "application/json" },
+      });
+    }
+    if (url.includes("/tts/f5-models/") && url.endsWith("/download")) {
+      downloadCalls.push(url);
+      return new Response(JSON.stringify((weights as Record<string, unknown>[])[1]), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
     }
     const body = url.includes("/api/auth/me")
       ? { is_deployment_admin: admin }
@@ -124,7 +155,7 @@ function renderPanel({
       />
     </QueryClientProvider>,
   );
-  return { ...view, dubRequests };
+  return { ...view, dubRequests, downloadCalls, client };
 }
 
 describe("音色库", () => {
@@ -403,5 +434,150 @@ describe("给字幕配音", () => {
     await user.click(await screen.findByRole("button", { name: /subtitleDubOpenSubtitles/ }));
     expect(onOpenSubtitles).toHaveBeenCalledOnce();
     expect(screen.queryByRole("button", { name: /subtitleDubApply/ })).toBeNull();
+  });
+});
+
+/**
+ * 权重下载那一行:**状态从后端派生**,不是组件里的一次性动画。
+ *
+ * 维护者截图:点「下载这个模型」→「下载中 0% · 0 MB / 5.4 GB」一直不动 → 过一会儿 loading
+ * 消失、又变回「下载这个模型」。两件事都在这里钉住:
+ *
+ * 1. 百分比从**字节**算,不从后端那个可能还停在 0 的 `progress` 算(截图里的 0% 就是这么来的);
+ * 2. 任何终止都落到一个说得清的状态上:失败说原因 + 重试,查不到状态说查不到 —— 绝不悄无声息
+ *    地回到初始按钮。
+ */
+describe("权重下载那一行", () => {
+  const JA_MISSING = {
+    id: "ja",
+    label: "日语模型",
+    languages: ["ja"],
+    installed: false,
+    status: "missing",
+    expected_bytes: 5_400_000_000,
+    total_is_estimate: false,
+    progress: 0,
+    downloaded_bytes: 0,
+    total_bytes: null,
+    speed_bps: 0,
+    eta_seconds: null,
+    message: "",
+    error: "",
+    failed_at: "",
+  };
+
+  /** 只装中英基础模型 + 一份日语权重;要测的那一档由 overrides 给。 */
+  function weightsWithJa(overrides: Record<string, unknown>) {
+    return [{ ...BASE_WEIGHTS[0] }, { ...JA_MISSING, ...overrides }];
+  }
+
+  it("刷新 / 重开面板后状态还在:后端说正在下,就直接显示「下载中 + 进度」", async () => {
+    renderPanel({
+      texts: ["お漏らし。"],
+      // 后端的 progress 还停在 0(截图里的那一眼),但字节已经动了 —— 百分比该按字节走。
+      weights: weightsWithJa({
+        status: "downloading",
+        downloaded_bytes: 1_200_000_000,
+        total_bytes: 5_400_000_000,
+        progress: 0,
+        speed_bps: 1_500_000,
+      }),
+    });
+
+    const bar = await screen.findByRole("progressbar", { name: "subtitleDubModelDownloadingLabel" });
+    expect(bar).toHaveAttribute("aria-valuenow", "22");
+    expect(await screen.findByText("下载中 22% · 1.2 GB / 5.4 GB")).toBeInTheDocument();
+    expect(screen.getByText("1.5 MB/s")).toBeInTheDocument();
+    // 正在下就不该还有一个「下载这个模型」在下面等着被再点一次。
+    expect(screen.queryByRole("button", { name: "subtitleDubModelDownload" })).toBeNull();
+  });
+
+  it("下载失败:说原因 + 重试;不把 loading 悄悄换成按钮", async () => {
+    const user = userEvent.setup();
+    const { downloadCalls } = renderPanel({
+      texts: ["お漏らし。"],
+      weights: weightsWithJa({
+        status: "failed",
+        message: "连不上模型下载源(https://hf-mirror.com):check your connection",
+        error: "LocalEntryNotFoundError: check your connection",
+        failed_at: "2026-10-19T12:33:00Z",
+      }),
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("下载失败");
+    expect(alert).toHaveTextContent("连不上模型下载源");
+    expect(alert).toHaveTextContent(/最后一次/);
+
+    await user.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(downloadCalls).toHaveLength(1));
+    expect(downloadCalls[0]).toContain("/tts/f5-models/ja/download");
+    expect(screen.queryByRole("button", { name: "subtitleDubModelDownload" })).toBeNull();
+  });
+
+  it("进度会动:两次轮询的字节不同,百分比和字节跟着变", async () => {
+    const weights = weightsWithJa({
+      status: "downloading",
+      downloaded_bytes: 1_000_000_000,
+      total_bytes: 5_400_000_000,
+      progress: 0,
+    });
+    const { client } = renderPanel({ texts: ["お漏らし。"], weights });
+
+    expect(await screen.findByRole("progressbar", { name: "subtitleDubModelDownloadingLabel" }))
+      .toHaveAttribute("aria-valuenow", "19");
+
+    // 第二轮:后端多报了 1 GB。**刷新来的状态必须当回事** —— 这一行不是一次性的。
+    const second = weights[1] as Record<string, unknown>;
+    second.downloaded_bytes = 2_000_000_000;
+    await act(async () => { await client.refetchQueries({ queryKey: ["f5-models"] }); });
+
+    expect(await screen.findByRole("progressbar", { name: "subtitleDubModelDownloadingLabel" }))
+      .toHaveAttribute("aria-valuenow", "37");
+    expect(screen.getByText("下载中 37% · 2.0 GB / 5.4 GB")).toBeInTheDocument();
+  });
+
+  it("总量未知:不编百分比,说「大小未知」", async () => {
+    renderPanel({
+      texts: ["お漏らし。"],
+      weights: weightsWithJa({
+        status: "downloading",
+        downloaded_bytes: 500_000_000,
+        total_bytes: null,
+        progress: 0,
+      }),
+    });
+
+    const bar = await screen.findByRole("progressbar", { name: "subtitleDubModelDownloadingLabel" });
+    expect(bar).not.toHaveAttribute("aria-valuenow");
+    expect(bar).toHaveAttribute("aria-valuetext", "大小未知");
+    expect(await screen.findByText("下载中 · 已下载 500 MB · 大小未知")).toBeInTheDocument();
+    expect(screen.queryByText(/下载中 \d+%/)).toBeNull();
+  });
+
+  it("轮询本身失败:说「查不到下载状态」并给重试,不回到初始按钮", async () => {
+    //: 先让第一次查询成功(正在下),再让后端 500 —— 这正是"轮询本身失败"的那一刻。
+    const f5Failure = { code: 0 };
+    const { client } = renderPanel({
+      texts: ["お漏らし。"],
+      f5Failure,
+      weights: weightsWithJa({
+        status: "downloading",
+        downloaded_bytes: 1_000_000_000,
+        total_bytes: 5_400_000_000,
+      }),
+    });
+    await screen.findByRole("progressbar", { name: "subtitleDubModelDownloadingLabel" });
+
+    // 之后后端连不上了(轮询失败)。这一行不能因此消失,更不能变成"什么都没发生"。
+    f5Failure.code = 500;
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["f5-models"] }).catch(() => {});
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("查不到模型下载状态");
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "subtitleDubModelDownload" })).toBeNull();
   });
 });

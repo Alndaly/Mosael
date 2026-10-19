@@ -116,6 +116,9 @@
   而每次分离都炸(见 `separation_models` 模块说明)。
 - 下载进度:`app/ai/runtime/tts_models.py:_store`、`app/ai/runtime/asr_models.py:_store`、
   `app/ai/runtime/f5_models.py:_store` —— 都是 `download_state.DownloadStore`。
+- `app/ai/runtime/f5_models.py:_failed_at` — 语言包上一次**失败**发生的时刻(UTC ISO),只给
+  界面上那句「最后一次 …」用;状态和原因本身在那条 `_store` 记录里。重启后是空的:下载线程本来
+  就随进程一起没了,失败记录也一起没了(和上面 `_store` 同一类);多进程下各记各的。
 - `app/ai/runtime/separation_models.py:_store`、`app/ai/runtime/denoise_models.py:_store`、`app/ai/runtime/nsfw_models.py:_store` —
   分离引擎、降噪引擎(DeepFilterNet)、本机识别 NSFW 预览图的权重的**安装进度**,都是 `install_state.InstallStore`。和上面两个 `_store`
   同一类:静息时的事实源在盘上(那个托管 venv 的解释器在不在),内存这份只在"正在装"和
