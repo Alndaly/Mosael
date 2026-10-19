@@ -46,6 +46,119 @@ import { cn } from "@/lib/utils";
 //: 下拉里「按默认」那一项的值(OptionPicker 不收空串当值)。发给接口时是空串。
 const DEFAULT_ENGINE = "__default__";
 
+/**
+ * 翻译设置 = 弹层里那三样(目标语言 / 引擎 / 保留原文)。**只有一份**,放在面板上:
+ * 弹层和行内的「翻译这一段」读写的都是它,行内不另建一套默认 —— 在弹层里调好的语言和双语,
+ * 点行内那颗按钮时就得照它办。
+ */
+type TranslateSettings = { lang: string; engine: string; bilingual: boolean };
+const DEFAULT_TRANSLATE_SETTINGS: TranslateSettings = { lang: "en", engine: "", bilingual: false };
+
+/** 翻译的输入:只要这两样(字幕 clip 和弹层的 `subtitles` 都满足)。 */
+type TranslateTarget = { id: string; text_override?: string | null };
+
+/** 一条执行链对外报的进度:分母是要翻的条数,`applied` 是已经写进轨道的条数。 */
+type TranslateProgress = { done: number; total: number; applied: number };
+
+/** 弹层与行内共用的文案查表函数(只用到「键 → 一句」这一件事)。 */
+type Translate = ReturnType<typeof useI18n>;
+
+/**
+ * 一次翻译的**执行体**。弹层的「翻全部 / 只翻选中」和行内的「只翻这一条」都走这里 ——
+ * 它们共用同一条 `translateTexts` 链:每一批有超时、整趟有总预算、`signal` 随时能取消、
+ * 每批译完立刻落回轨道并报进度。两者只差 `items` 有几条、进度画在哪儿。
+ *
+ * 返回已写入的条数(失败时由调用方用 `onProgress` 里最后一次 `applied` 说清「前 N 条已写入」)。
+ */
+async function translateClips({
+  workspaceId,
+  items,
+  settings,
+  signal,
+  onApplyTexts,
+  onProgress,
+}: {
+  workspaceId: string;
+  items: readonly TranslateTarget[];
+  settings: TranslateSettings;
+  signal: AbortSignal;
+  onApplyTexts: (texts: { clip_id: string; text: string }[]) => Promise<unknown>;
+  onProgress?: (progress: TranslateProgress) => void;
+}): Promise<number> {
+  let applied = 0;
+  onProgress?.({ done: 0, total: items.length, applied: 0 });
+  await translateTexts(
+    workspaceId,
+    // 只送原文那一行(双语字幕的第一行),见 subtitleTranslate —— 送整条的话旧译文也被再翻一遍。
+    items.map((clip) => translationSource(clip.text_override ?? "")),
+    settings.lang,
+    settings.engine,
+    async (batch, offset) => {
+      const texts = batch.flatMap((translated, j) => {
+        const clip = items[offset + j];
+        if (!clip || !translated) return [];
+        // Bilingual keeps the source line above the translation (replacing any older second line).
+        // The subtitle renders with white-space: pre-wrap, so the newline is a real second line
+        // in the preview and, via the ASS \N we emit at export, in the burned-in output too.
+        const text = translatedCue(clip.text_override ?? "", translated, settings.bilingual);
+        if (text === (clip.text_override ?? "")) return [];
+        return [{ clip_id: clip.id, text }];
+      });
+      if (texts.length > 0) {
+        await onApplyTexts(texts);
+        applied += texts.length;
+      }
+      onProgress?.({ done: Math.min(offset + batch.length, items.length), total: items.length, applied });
+    },
+    //: 一批有超时、整趟有总预算,而且随时能取消 —— 此前 fetch 没有 signal,后端
+    //: 一句句串行翻的时候界面只能一直「翻译中 0/1039」。
+    { signal },
+  );
+  return applied;
+}
+
+/** 翻译失败/取消时说清楚。弹层和行内共用这一份,免得同一种失败在两个地方两种说法。 */
+function reportTranslationFailure(t: Translate, error: Error, applied: number) {
+  //: 已写入的批次留在轨道上(这是"边翻边落地"的另一面),必须说出来 —— 否则用户以为
+  //: 一条都没动,而轨道已经是两种语言各一半。
+  const partial = applied > 0
+    ? t("subtitleTranslatePartial").replace("{n}", String(applied))
+    : "";
+  if (error instanceof TranslationCancelled) {
+    toast.message(t("subtitleTranslateCancelled"), {
+      description: partial || t("subtitleTranslateCancelledNone"),
+    });
+    return;
+  }
+  if (error instanceof TranslationTimeout) {
+    toast.error(t("subtitleTranslateTimedOut"), {
+      description: [
+        t("subtitleTranslateTimeout").replace("{seconds}", String(Math.round(error.timeoutMs / 1000))),
+        partial,
+      ].filter(Boolean).join(" "),
+    });
+    return;
+  }
+  if (error instanceof TranslationDeadlineExceeded) {
+    toast.error(t("subtitleTranslateTimedOut"), {
+      description: [
+        t("subtitleTranslateDeadline").replace("{minutes}", String(Math.round(error.deadlineMs / 60_000))),
+        partial,
+      ].filter(Boolean).join(" "),
+    });
+    return;
+  }
+  if (error instanceof ApiOfflineError) {
+    toast.error(t("subtitleTranslateUnreachable"), {
+      description: [error.message, partial].filter(Boolean).join(" "),
+    });
+    return;
+  }
+  toast.error(t("subtitleTranslateFailed"), {
+    description: [partial, error.message].filter(Boolean).join(" "),
+  });
+}
+
 
 /**
  * Subtitle list editor (沿用前身项目的字幕可见入口): every text clip on
@@ -115,11 +228,74 @@ export function SubtitlePanel({
   const activeKey = useEditorStore((state) => activeSubtitleKey(subtitles, state.playhead));
   const activeIds = React.useMemo(() => new Set(activeKey ? activeKey.split("\n") : []), [activeKey]);
 
-  // 行的回调身份要稳定,memo 过的行才跳得过去;调用时读最新的 props。
-  const latest = React.useRef({ onSetText, onDeleteClip, onDub, onSetTiming });
+  //: 翻译设置只有这一份:弹层里改的就是它,行内「翻译这一段」读的也是它(见 TranslateSettings)。
+  const [translateSettings, setTranslateSettings] = React.useState<TranslateSettings>(DEFAULT_TRANSLATE_SETTINGS);
+  const updateTranslateSettings = React.useCallback((patch: Partial<TranslateSettings>) => {
+    setTranslateSettings((prev) => ({ ...prev, ...patch }));
+  }, []);
+  const translateSettingsRef = React.useRef(translateSettings);
   React.useLayoutEffect(() => {
-    latest.current = { onSetText, onDeleteClip, onDub, onSetTiming };
+    translateSettingsRef.current = translateSettings;
   });
+
+  //: 哪几条正在翻(行内那颗按钮据此转圈)。按 clip.id 记,几个并行也不互相盖掉。
+  const [translatingIds, setTranslatingIds] = React.useState<ReadonlySet<string>>(() => new Set<string>());
+  //: 每一条的取消开关。行内那颗按钮在跑的时候**还是可点的**,点它就是停这一条(见 translateCue)。
+  const translateRuns = React.useRef(new Map<string, AbortController>());
+
+  // 行的回调身份要稳定,memo 过的行才跳得过去;调用时读最新的 props。
+  const latest = React.useRef({
+    onSetText, onDeleteClip, onDub, onSetTiming, onApplyTexts,
+    workspaceId: sequence.workspace_id, t,
+  });
+  React.useLayoutEffect(() => {
+    latest.current = {
+      onSetText, onDeleteClip, onDub, onSetTiming, onApplyTexts,
+      workspaceId: sequence.workspace_id, t,
+    };
+  });
+
+  /**
+   * 行内「翻译这一段」。**只送这一条**,设置读的是弹层那一份;执行链是 `translateClips`
+   * (也就是顶部的 `translateTexts`),不另写一套。跑着的时候再点一下 = 取消这一条 ——
+   * 此前弹层那颗按钮被 loading 焊死过,这里不能再犯。
+   */
+  const translateCue = React.useCallback((clip: SubtitleClip) => {
+    const running = translateRuns.current.get(clip.id);
+    if (running) {
+      running.abort();
+      return;
+    }
+    const apply = latest.current.onApplyTexts;
+    const source = translationSource(clip.text_override ?? "");
+    if (!apply || !source) return;
+    const controller = new AbortController();
+    translateRuns.current.set(clip.id, controller);
+    setTranslatingIds((prev) => new Set(prev).add(clip.id));
+    void translateClips({
+      workspaceId: latest.current.workspaceId,
+      items: [clip],
+      settings: translateSettingsRef.current,
+      signal: controller.signal,
+      onApplyTexts: apply,
+    })
+      .then((applied) => {
+        //: 最后一批落回之后才按的取消:不算「已取消」,但也别报成功 —— 用户已经喊停了。
+        if (controller.signal.aborted) return;
+        toast.success(latest.current.t("subtitleTranslateDone").replace("{n}", String(applied)));
+      })
+      .catch((error: Error) => reportTranslationFailure(latest.current.t, error, 0))
+      .finally(() => {
+        translateRuns.current.delete(clip.id);
+        setTranslatingIds((prev) => {
+          if (!prev.has(clip.id)) return prev;
+          const next = new Set(prev);
+          next.delete(clip.id);
+          return next;
+        });
+      });
+  }, []);
+
   const rowActions = React.useMemo<SubtitleRowActions>(
     () => ({
       seek: (clip) => {
@@ -132,8 +308,9 @@ export function SubtitlePanel({
       remove: (clipId) => latest.current.onDeleteClip(clipId),
       setText: (clipId, text) => latest.current.onSetText(clipId, text),
       setTiming: (clipId, timing) => latest.current.onSetTiming?.(clipId, timing),
+      translate: (clip) => translateCue(clip),
     }),
-    [selectClip],
+    [selectClip, translateCue],
   );
 
   // 长列表只渲染视口里的几十行(一小时的字幕是上千个 textarea)。
@@ -216,7 +393,13 @@ export function SubtitlePanel({
                 <span data-actions-divider="" aria-hidden className={ACTION_DIVIDER} />
                 <div data-actions-group="process" className={ACTION_GROUP}>
                   {onApplyTexts && (
-                    <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
+                    <SubtitleTranslate
+                      workspaceId={sequence.workspace_id}
+                      subtitles={subtitles}
+                      onApplyTexts={onApplyTexts}
+                      settings={translateSettings}
+                      onSettingsChange={updateTranslateSettings}
+                    />
                   )}
                   {onDub && (
                     <IconButton
@@ -326,6 +509,8 @@ export function SubtitlePanel({
                 active={activeIds.has(clip.id)}
                 canDub={Boolean(onDub)}
                 canEditTiming={Boolean(onSetTiming)}
+                canTranslate={Boolean(onApplyTexts)}
+                translating={translatingIds.has(clip.id)}
                 actions={rowActions}
               />
             ))}
@@ -344,7 +529,16 @@ interface SubtitleRowActions {
   remove: (clipId: string) => void;
   setText: (clipId: string, text: string) => void;
   setTiming: (clipId: string, timing: { timeline_start: number; src_in: number; src_out: number }) => void;
+  /** 只翻这一条;它正在翻的时候再调一次 = 取消那一次。 */
+  translate: (clip: SubtitleClip) => void;
 }
+
+/**
+ * 行内小图标(时间码右边那几颗)的共同外观:12px 图标、无边框、悬停垫一层浅底。
+ * 写成常量是因为行里现在有四颗同一款 —— `controlOverrides` 棘轮数的是控件 className 里的
+ * 字面量,再抄一遍存量就涨一处(见 design/controlOverrides.test.ts)。
+ */
+const ROW_ACTION_ICON = "cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground";
 
 /** 播放头下的字幕 id(多条以换行连接,没有则空串)。字符串可以直接拿 === 比,选择器据此判断要不要重渲。 */
 export function activeSubtitleKey(subtitles: readonly SubtitleClip[], playhead: number): string {
@@ -363,6 +557,8 @@ const SubtitleRow = React.memo(function SubtitleRow({
   active,
   canDub,
   canEditTiming,
+  canTranslate,
+  translating,
   actions,
 }: {
   rowRef: (element: HTMLElement | null) => void;
@@ -370,11 +566,17 @@ const SubtitleRow = React.memo(function SubtitleRow({
   active: boolean;
   canDub: boolean;
   canEditTiming: boolean;
+  /** 有翻译入口时才有这一颗(见 SubtitleTranslate)。 */
+  canTranslate: boolean;
+  /** 这一条正在翻:图标换成转圈,再点一下就是取消。 */
+  translating: boolean;
   actions: SubtitleRowActions;
 }) {
   const t = useI18n();
   //: 这一行正在改起止时间。
   const [editingTiming, setEditingTiming] = React.useState(false);
+  //: 没有文字的条目没什么可翻的 —— 与其点了没反应,不如说清为什么点不了。
+  const hasText = Boolean(translationSource(clip.text_override ?? ""));
   return (
     <div ref={rowRef} className={cn(
       // **不在行上留 border-l**:父容器的 divide-border 选择器特异性更高,会把子项的
@@ -415,6 +617,24 @@ const SubtitleRow = React.memo(function SubtitleRow({
               onClick={() => actions.dub(clip.id)}
             >
               <AudioLines size={12} />
+            </IconButton>
+          )}
+          {/* 「翻译这一段」:只翻这一条,设置沿用顶部「翻译」弹层那一份(lang / engine / 双语)。
+              排在删除之前、配音之后 —— 它和配音一样是「加工这一条」,删除是破坏性的,始终在最右。
+              进行中还是这一颗按钮:图标转圈,**点它就是取消这一条**(不设 disabled —— `loading`
+              会顺手把按钮禁掉,那就成了此前「翻译中按不动」的那个坑)。 */}
+          {canTranslate && (
+            <IconButton
+              unstyled
+              className={ROW_ACTION_ICON}
+              label={translating ? t("subtitleTranslateThisCancel") : t("subtitleTranslateThis")}
+              hint={translating ? t("subtitleTranslateThisCancelHint") : t("subtitleTranslateThisHint")}
+              aria-busy={translating}
+              disabled={!hasText}
+              disabledReason={!hasText ? t("subtitleTranslateThisEmpty") : undefined}
+              onClick={() => actions.translate(clip)}
+            >
+              {translating ? <Loader2 size={12} className="animate-mosael-spin" /> : <Languages size={12} />}
             </IconButton>
           )}
           <IconButton
@@ -514,18 +734,21 @@ function SubtitleTranslate({
   workspaceId,
   subtitles,
   onApplyTexts,
+  settings,
+  onSettingsChange,
 }: {
   workspaceId: string;
   subtitles: { id: string; text_override?: string | null }[];
   onApplyTexts: (texts: { clip_id: string; text: string }[]) => Promise<unknown>;
+  /** 面板上那一份翻译设置(行内「翻译这一段」读的也是它)。 */
+  settings: TranslateSettings;
+  onSettingsChange: (patch: Partial<TranslateSettings>) => void;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
-  const [lang, setLang] = React.useState<string>("en");
-  const [bilingual, setBilingual] = React.useState(false);
+  const { lang, engine, bilingual } = settings;
   // 用哪一家翻:照能力表列(ADR 0032)—— Google 免费、对话模型、装了的翻译插件并列,空 = 按「设置 → 能力提供方」
   // 里的默认(没定就是 Google:它不花钱也不要配置)。此前这里写死 google / ai 两项,插件插不进来。
-  const [engine, setEngine] = React.useState("");
   const providers = useQuery({ queryKey: capabilityKeys.choices(), queryFn: listCapabilityChoices, enabled: open });
   const translation = (providers.data ?? []).find((one) => one.capability === "translation");
   const readyProviders = (translation?.options ?? []).filter((option) => (option.missing ?? []).length === 0);
@@ -556,40 +779,23 @@ function SubtitleTranslate({
       appliedRef.current = 0;
       const controller = new AbortController();
       abortRef.current = controller;
-      setProgress({ done: 0, total: items.length });
       try {
         // **边翻边落地**:每一批译完立即写进轨道,而不是攒到全部翻完。上千条字幕走 LLM
         // 引擎是分钟级的 —— 攒到最后意味着这几分钟里界面毫无动静,而中途一个失败会把
         // 已经译好的几百条一起扔掉。代价是撤销从"一步"变成"一批一步",以及中途失败时
         // 轨道处于部分翻译状态 —— 所以失败提示必须说清写到了第几条。
-        await translateTexts(
+        // 执行体和行内「翻译这一段」是同一个(translateClips),只是条数不同。
+        return await translateClips({
           workspaceId,
-          // 只送原文那一行(双语字幕的第一行),见 subtitleTranslate —— 送整条的话旧译文也被再翻一遍。
-          items.map((clip) => translationSource(clip.text_override ?? "")),
-          lang,
-          engine,
-          async (batch, offset) => {
-            const texts = batch.flatMap((translated, j) => {
-              const clip = items[offset + j];
-              if (!clip || !translated) return [];
-              // Bilingual keeps the source line above the translation (replacing any older second line).
-              // The subtitle renders with white-space: pre-wrap, so the newline is a real second line
-              // in the preview and, via the ASS \N we emit at export, in the burned-in output too.
-              const text = translatedCue(clip.text_override ?? "", translated, bilingual);
-              if (text === (clip.text_override ?? "")) return [];
-              return [{ clip_id: clip.id, text }];
-            });
-            if (texts.length > 0) {
-              await onApplyTexts(texts);
-              appliedRef.current += texts.length;
-            }
-            setProgress({ done: Math.min(offset + batch.length, items.length), total: items.length });
+          items,
+          settings,
+          signal: controller.signal,
+          onApplyTexts,
+          onProgress: (next) => {
+            appliedRef.current = next.applied;
+            setProgress({ done: next.done, total: next.total });
           },
-          //: 一批有超时、整趟有总预算,而且随时能取消 —— 此前 fetch 没有 signal,后端
-          //: 一句句串行翻的时候界面只能一直「翻译中 0/1039」。
-          { signal: controller.signal },
-        );
-        return appliedRef.current;
+        });
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         setProgress(null);
@@ -600,44 +806,8 @@ function SubtitleTranslate({
       toast.success(t("subtitleTranslateDone").replace("{n}", String(applied)));
     },
     onError: (error: Error) => {
-      //: 已写入的批次留在轨道上(这是"边翻边落地"的另一面),必须说出来 —— 否则用户以为
-      //: 一条都没动,而轨道已经是两种语言各一半。
-      const partial = appliedRef.current > 0
-        ? t("subtitleTranslatePartial").replace("{n}", String(appliedRef.current))
-        : "";
-      if (error instanceof TranslationCancelled) {
-        toast.message(t("subtitleTranslateCancelled"), {
-          description: partial || t("subtitleTranslateCancelledNone"),
-        });
-        return;
-      }
-      if (error instanceof TranslationTimeout) {
-        toast.error(t("subtitleTranslateTimedOut"), {
-          description: [
-            t("subtitleTranslateTimeout").replace("{seconds}", String(Math.round(error.timeoutMs / 1000))),
-            partial,
-          ].filter(Boolean).join(" "),
-        });
-        return;
-      }
-      if (error instanceof TranslationDeadlineExceeded) {
-        toast.error(t("subtitleTranslateTimedOut"), {
-          description: [
-            t("subtitleTranslateDeadline").replace("{minutes}", String(Math.round(error.deadlineMs / 60_000))),
-            partial,
-          ].filter(Boolean).join(" "),
-        });
-        return;
-      }
-      if (error instanceof ApiOfflineError) {
-        toast.error(t("subtitleTranslateUnreachable"), {
-          description: [error.message, partial].filter(Boolean).join(" "),
-        });
-        return;
-      }
-      toast.error(t("subtitleTranslateFailed"), {
-        description: [partial, error.message].filter(Boolean).join(" "),
-      });
+      //: 失败/取消的说法和行内那颗按钮共用一份(见 reportTranslationFailure)。
+      reportTranslationFailure(t, error, appliedRef.current);
     },
   });
 
@@ -659,7 +829,7 @@ function SubtitleTranslate({
         <strong>{t("subtitleTranslate")}</strong>
         <label className="grid gap-1 text-xs text-muted-foreground">
           <span>{t("subtitleTranslateTo")}</span>
-          <Select value={lang} onValueChange={setLang}>
+          <Select value={lang} onValueChange={(next) => onSettingsChange({ lang: next })}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -676,7 +846,7 @@ function SubtitleTranslate({
           <span>{t("subtitleTranslateEngine")}</span>
           <OptionPicker
             value={engine || DEFAULT_ENGINE}
-            onChange={(next) => setEngine(next === DEFAULT_ENGINE ? "" : next)}
+            onChange={(next) => onSettingsChange({ engine: next === DEFAULT_ENGINE ? "" : next })}
             options={[
               {
                 value: DEFAULT_ENGINE,
@@ -694,7 +864,7 @@ function SubtitleTranslate({
         )}
         <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{t("subtitleTranslateBilingual")}</span>
-          <Switch checked={bilingual} onCheckedChange={setBilingual} />
+          <Switch checked={bilingual} onCheckedChange={(next) => onSettingsChange({ bilingual: next })} />
         </label>
         {/* 弹层里这一颗是**唯一的动作**:它得铺满这一列、和上面两个 Select 左右对齐。宽度走
             **容器** —— 这个弹层本来就是一列 `flex-col`,让按钮当列里的直接一项,列的 stretch 就把它
