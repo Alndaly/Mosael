@@ -49,6 +49,17 @@ const DEFAULT_ENGINE = "__default__";
 //: 顶部工具条上的胶囊按钮:整颗折到下一行,而不是把自己压窄、把字挤断(面板本来就窄)。
 const ACTION = "shrink-0 whitespace-nowrap";
 
+/**
+ * 「字幕样式」的触发键:**和同一排的其它动作同一款**。
+ *
+ * 它得是一颗 Button —— `DialogTrigger asChild` 借它的样子,按钮的外观归基础件(棘轮
+ * design/nativeButtons.test.ts),别为了这一处再手写一颗原生 `<button>`。但 Button 自带
+ * `font-medium` 和 16px 图标,而这一排动作是 400 字重、12px 图标:在这里把这两样收回去,
+ * 其余(高度、字号、内距、图标与文字的间距、无描边)全由 PILL 与 ACTION 决定 ——
+ * 此前它用的是 `size="sm" variant="outline"`,于是这一排里只有它是描边药丸。
+ */
+const STYLE_ACTION = cn(PILL, ACTION, "font-normal [&_svg]:size-3");
+
 
 /**
  * Subtitle list editor (沿用前身项目的字幕可见入口): every text clip on
@@ -220,8 +231,10 @@ export function SubtitlePanel({
         {onSetStyle && (
           <Dialog open={styleOpen} onOpenChange={setStyleOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" variant="outline" className="ml-auto shrink-0">
-                <Type size={13} /> {t("subtitleStyle")}
+              {/* 位置:紧跟「全部存为笔记」,不再用 ml-auto 推到最右 —— 一颗同款按钮被甩到
+                  另一头,读起来就像另一类动作。同一排的下一颗,交给工具栏自己的 gap 排。 */}
+              <Button variant="ghost" size="sm" className={STYLE_ACTION}>
+                <Type size={12} /> {t("subtitleStyle")}
               </Button>
             </DialogTrigger>
             <DialogContent aria-describedby={undefined} className="w-[min(26rem,calc(100vw-2rem))]">

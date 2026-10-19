@@ -195,6 +195,69 @@ describe("顶部动作区", () => {
   });
 });
 
+/**
+ * 维护者截图:「字幕样式」是这一排里唯一一颗**描边药丸**(Button size="sm" variant="outline"),
+ * 其它动作都是 PILL 的朴素图标 + 文字。同一排动作,一款按钮。
+ */
+describe("「字幕样式」和同排动作是同一款", () => {
+  const classesOf = (element: Element) => new Set(element.className.split(/\s+/).filter(Boolean));
+
+  it("用同一串 PILL,不再单独做成描边那一款", () => {
+    renderAll();
+    const style = screen.getByRole("button", { name: "subtitleStyle" });
+    // 同排动作的每一个外观 token,「字幕样式」都得有 —— 这是「同一款」最直接的写法。
+    for (const sibling of [
+      screen.getByRole("button", { name: "addSubtitleAtPlayhead" }),
+      screen.getByRole("button", { name: /全部存为笔记/ }),
+    ]) {
+      const own = classesOf(style);
+      for (const token of classesOf(sibling)) expect(own.has(token), token).toBe(true);
+    }
+    // outline 那一款的标记:字段色的描边、正文那一档的字号。
+    expect(style.className).not.toContain("border-field-border");
+    expect(style.className).not.toContain("text-ui-sm");
+  });
+
+  it("高度 / 字号 / 内距和同排动作一致 —— 差一档就又是另一款", () => {
+    renderAll();
+    const style = screen.getByRole("button", { name: "subtitleStyle" });
+    const action = screen.getByRole("button", { name: "addSubtitleAtPlayhead" });
+    // jsdom 没有排版:钉住决定高度、字号、内距的类。同排动作是 32px、12px 字、9px 横向内距。
+    for (const token of ["h-8", "text-ui-xs", "px-[9px]", "gap-1.5"]) {
+      expect(style.className, token).toContain(token);
+      expect(action.className, token).toContain(token);
+    }
+    // 它是 Button:基础件自带的 font-medium / 16px 图标在这里收回成同排动作的 400 / 12px。
+    expect(style.className).toContain("font-normal");
+    expect(style.className).toContain("[&_svg]:size-3");
+    expect(style.className).not.toContain("[&_svg]:size-4");
+  });
+
+  it("紧跟在「全部存为笔记」后面,不再用 ml-auto 单独甩到最右", () => {
+    renderAll();
+    const style = screen.getByRole("button", { name: "subtitleStyle" });
+    const saveAll = screen.getByRole("button", { name: /全部存为笔记/ });
+    expect(
+      saveAll.compareDocumentPosition(style) & Node.DOCUMENT_POSITION_FOLLOWING,
+      "它该排在其它动作之后",
+    ).toBeTruthy();
+    // 同一排的下一颗动作靠工具栏自己的 gap 排过去,而不是把自己推到另一头当成另一类。
+    expect(style.className).not.toContain("ml-auto");
+  });
+
+  it("点它仍然打开同一个字幕样式弹窗(回归)", async () => {
+    const user = userEvent.setup();
+    renderAll();
+    const style = screen.getByRole("button", { name: "subtitleStyle" });
+    expect(style).toHaveAttribute("aria-haspopup", "dialog");
+    await user.click(style);
+    const dialogs = screen.getAllByRole("dialog");
+    expect(dialogs).toHaveLength(1);
+    expect(within(dialogs[0]!).getByText("subtitleStyle")).toBeTruthy();
+    expect(within(dialogs[0]!).getByLabelText("subColor")).toBeTruthy();
+  });
+});
+
 describe("字幕样式弹窗", () => {
   it("默认看不到样式设置,也没有折叠区那套展开状态", () => {
     renderAll();
