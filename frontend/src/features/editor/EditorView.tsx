@@ -1021,7 +1021,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       <div role="toolbar" aria-label={t("editTools")} className="editor-commandbar flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider p-2">
         <LeftTabs tab={panels.tab} onChange={panels.setTab} />
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" aria-label={t("wfAgentTitle")} aria-pressed={agentOpen === "on"} onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")} ><Bot />{t("wfAgentTitle")}</Button>
+          {/*: 纯图标:文案只进 aria-label / Hint —— 同排已经有颗 ✨(在播放头加花字),这里用 Bot 才不会混。 */}
+          <IconButton
+            variant="ghost"
+            size="icon-sm"
+            label={t("wfAgentTitle")}
+            aria-pressed={agentOpen === "on"}
+            onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
+          >
+            <Bot size={14} />
+          </IconButton>
 
           <IconButton
             variant="ghost"

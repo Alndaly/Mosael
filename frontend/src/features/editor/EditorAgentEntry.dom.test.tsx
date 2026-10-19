@@ -21,6 +21,7 @@ vi.mock("@/app/preferences", () => ({
     if (key === "editorAgentContext") {
       return "project={project};project_id={projectId};sequence={sequence};sequence_id={sequenceId}";
     }
+    if (key === "wfAgentTitle") return "AI 助手";
     return key;
   },
   usePreferences: () => ({ locale: "zh-CN" }),
@@ -65,6 +66,7 @@ import type { Project, Sequence, Workspace } from "@/api/client";
 import { EditorView } from "@/features/editor/EditorView";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { RecordingProvider } from "@/features/media/RecordingProvider";
+import { readHint } from "@/test/hint";
 
 const workspace = { id: "workspace-1", name: "工作区" } as Workspace;
 const project = { id: "project-1", name: "宣传片" } as Project;
@@ -113,7 +115,7 @@ describe("剪辑页智能体入口", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    const trigger = await screen.findByRole("button", { name: "wfAgentTitle" });
+    const trigger = await screen.findByRole("button", { name: "AI 助手" });
     expect(screen.queryByTestId("editor-agent-panel")).toBeNull();
 
     await user.click(trigger);
@@ -131,10 +133,41 @@ describe("剪辑页智能体入口", () => {
     expect(localStorage.getItem("mosael:tab:editor-agent")).toBe("on");
   });
 
+  it("只有图标:按钮里没有「AI 助手」这几个字", async () => {
+    renderEditor();
+
+    const trigger = await screen.findByRole("button", { name: "AI 助手" });
+
+    expect(trigger.querySelector("svg")).not.toBeNull();
+    expect(trigger.textContent).toBe("");
+    expect(screen.queryByText("AI 助手")).toBeNull();
+  });
+
+  it("图标没有文字,读屏和悬停仍有名字:aria-label 与 Hint 都是「AI 助手」", async () => {
+    renderEditor();
+
+    const trigger = await screen.findByRole("button", { name: "AI 助手" });
+
+    expect(trigger).toHaveAttribute("aria-label", "AI 助手");
+    expect(await readHint(trigger)).toContain("AI 助手");
+  });
+
+  it("和右边那颗 ✨(在播放头加花字)不是同一个图标", async () => {
+    renderEditor();
+
+    const agent = await screen.findByRole("button", { name: "AI 助手" });
+    const sparkles = screen.getByRole("button", { name: "addTextAtPlayhead" });
+    const iconClass = (element: HTMLElement) => element.querySelector("svg")?.getAttribute("class") ?? "";
+
+    expect(iconClass(agent)).toContain("lucide-bot");
+    expect(iconClass(sparkles)).toContain("lucide-sparkles");
+    expect(iconClass(agent)).not.toBe(iconClass(sparkles));
+  });
+
   it("窄工作台把助手改为覆盖层,恢复宽度后继续停靠", async () => {
     const user = userEvent.setup();
     renderEditor();
-    await user.click(await screen.findByRole("button", { name: "wfAgentTitle" }));
+    await user.click(await screen.findByRole("button", { name: "AI 助手" }));
     act(() => apiMocks.resize?.([{ contentRect: { width: 700 } } as ResizeObserverEntry], {} as ResizeObserver));
     expect(screen.getByTestId("editor-layout")).toHaveStyle({ gridTemplateColumns: "252px minmax(0, 1fr)" });
     expect(screen.getByTestId("editor-agent-slot")).toHaveClass("absolute");
