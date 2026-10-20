@@ -550,7 +550,23 @@ it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」
   expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(0);
 });
 
-it("改了音色之后保存:写的是「引擎 + 音色」这一对,并让候选列表失效", async () => {
+it("配音的默认行没有「保存默认」按钮 —— 和 ASR / 降噪一样选完即存", async () => {
+  //: 维护者原话:「不需要这个保存默认的按钮的」。这一行的规矩和这一页别处一样:选中即存。
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(within(group).queryByRole("button", { name: "capabilityVoiceDefaultSave" })).toBeNull();
+  //: 控件行里只剩两个下拉(平铺成按钮的那个 mock):没有第三颗「保存」。
+  const control = group.querySelector<HTMLElement>('[data-slot="settings-item-control"]')!;
+  expect(control.querySelectorAll("ul[data-picker]")).toHaveLength(2);
+  expect([...control.children].filter((child) => !child.hasAttribute("data-picker"))).toHaveLength(0);
+});
+
+it("引擎和音色都选了就立刻写这一对:一次 PUT,不弹按钮", async () => {
   const { container } = render(
     <QueryClientProvider client={new QueryClient()}>
       <CapabilityProvidersSection />
@@ -561,11 +577,89 @@ it("改了音色之后保存:写的是「引擎 + 音色」这一对,并让候�
   const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
   await waitFor(() => expect(pickers[1].textContent).toContain("云希"));
   fireEvent.click(within(pickers[1]).getByRole("button", { name: "云希" }));
-  fireEvent.click(within(group).getByRole("button", { name: "capabilityVoiceDefaultSave" }));
   await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith("builtin:edge", "zh-CN-YunxiNeural"));
+  //: 一次写:不是「先写引擎、再写音色」两笔。
+  expect(speechApi.setVoiceDefault).toHaveBeenCalledTimes(1);
   //: 写后重取:引擎列表和这一家的音色列表都在失效之列(默认的唯一来源是它们的 is_default)。
   await waitFor(() => expect(speechApi.listTtsEngines).toHaveBeenCalledTimes(2));
   expect(container.querySelectorAll("[data-picker]")).toHaveLength(4);
+});
+
+it("只选了一个(引擎)不写:默认必须是一对,而且没有可以手动补写的那颗按钮", async () => {
+  //: 这一台还有第二个能用的引擎(它自己的音色列表里没有 is_default,所以音色那一格是空的)。
+  speechApi.listTtsEngines.mockResolvedValue([
+    ...engines,
+    { id: "builtin:volcano", label: "火山", needs_key: false, needs_voice_id: false, voices: [], supports_speed: true,
+      note: "", ready: true, clones_voices: false, is_default: false },
+  ]);
+  speechApi.listTtsVoices.mockImplementation(async (engineId: string) =>
+    engineId === "builtin:volcano"
+      ? [{ value: "volcano-voice", label: "火山音色", resource_id: "", cloned: false, is_default: false }]
+      : edgeVoices);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  const pickers = () => group.querySelectorAll<HTMLElement>("[data-picker]");
+  await waitFor(() => expect(pickers()[0].textContent).toContain("火山"));
+  fireEvent.click(within(pickers()[0]).getByRole("button", { name: "火山" }));
+  //: 新的音色列表到了(只有一把、不是默认),但音色还没选 —— 这一对还不齐。
+  await waitFor(() => expect(pickers()[1].textContent).toContain("火山音色"));
+  expect(speechApi.setVoiceDefault).not.toHaveBeenCalled();
+  //: 旧版这里有一颗「保存默认」;它现在不该存在,否则「只选了一个」就有了一条手动写半对的入口。
+  expect(within(group).queryByRole("button", { name: "capabilityVoiceDefaultSave" })).toBeNull();
+});
+
+it("改成「未指定」就清掉默认:立刻 PUT 空对,和 ASR 选回自动一样", async () => {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
+  await waitFor(() => expect(pickers[0].textContent).toContain("Edge"));
+  fireEvent.click(within(pickers[0]).getByRole("button", { name: "capabilityUnset" }));
+  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith("", ""));
+  expect(speechApi.setVoiceDefault).toHaveBeenCalledTimes(1);
+});
+
+it("写的时候两个下拉都禁用,避免连点", async () => {
+  let release!: (value: unknown) => void;
+  speechApi.setVoiceDefault.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  const pickers = () => group.querySelectorAll<HTMLElement>("[data-picker]");
+  await waitFor(() => expect(pickers()[1].textContent).toContain("云希"));
+  fireEvent.click(within(pickers()[1]).getByRole("button", { name: "云希" }));
+  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalled());
+  for (const picker of pickers()) expect(picker.hasAttribute("data-disabled")).toBe(true);
+  release({ engine: "builtin:edge", voice: "zh-CN-YunxiNeural" });
+  await waitFor(() => expect(pickers()[0].hasAttribute("data-disabled")).toBe(false));
+});
+
+it("写失败:错误写在控件那一行下面(数据没写进去,选择也留在屏幕上)", async () => {
+  speechApi.setVoiceDefault.mockRejectedValue(new Error("speechErr_pairRejected"));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
+  await waitFor(() => expect(pickers[1].textContent).toContain("云希"));
+  fireEvent.click(within(pickers[1]).getByRole("button", { name: "云希" }));
+  await waitFor(() => expect(group.textContent).toContain("speechErr_pairRejected"));
 });
 
 it("不是部署管理员:两个控件都禁用,并说明只有管理员能改这台机器的默认", async () => {
@@ -580,7 +674,6 @@ it("不是部署管理员:两个控件都禁用,并说明只有管理员能改�
   const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
   expect(pickers).toHaveLength(2);
   for (const picker of pickers) expect(picker.hasAttribute("data-disabled")).toBe(true);
-  expect((within(group).getByRole("button", { name: "capabilityVoiceDefaultSave" }) as HTMLButtonElement).disabled).toBe(true);
   expect(group.textContent).toContain("capabilityVoiceDefaultAdminOnly");
   expect(container.querySelectorAll("[data-picker]")).toHaveLength(4);
 });
@@ -621,4 +714,62 @@ it("有几家、却一家都没配好时按能力说:转写不提「桶和密钥
   expect(within(transcribe).getAllByText("capabilityBuiltinUnready")).toHaveLength(2);
   const link = screen.getByText("素材外链").closest('[data-slot="settings-group"]') as HTMLElement;
   expect(link.textContent).toContain("assetLinkNoneReady");
+});
+
+/**
+ * 「自动」这一项说的是「不选也会用它」。**只有一家能选时它是废话** —— 下拉里就是那一家。
+ * 维护者原话:「素材外链这边不需要这个自动的这一项」;规则不是只给素材外链打的补丁,而是同一条
+ * 下拉(CapabilityGroup)上的判断:转写/降噪/文档解析/翻译……一起生效。
+ */
+const pickerValues = (group: HTMLElement) =>
+  [...group.querySelectorAll<HTMLLIElement>("[data-picker] li")].map((one) => one.dataset.value);
+
+it("能选的只有一家:不摆「自动」,下拉里就是那一家(不止素材外链)", async () => {
+  listCapabilityChoices.mockImplementation(async () => [
+    { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: "oss",
+      options: [{ id: "oss", name: "阿里云 OSS · mosael", builtin: false, missing: [] }] },
+    { capability: "document_parse", label: "文档解析", description: "转成 Markdown", current: null, automatic: null,
+      options: [{ id: "m1", name: "MinerU 云端", builtin: false, missing: [] }] },
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("素材外链")).toBeTruthy());
+  const link = screen.getByText("素材外链").closest('[data-slot="settings-group"]') as HTMLElement;
+  //: 旧版这里是「自动:只配好了「阿里云 OSS · mosael」,就用它」+ 那一家,两项同义。
+  expect(link.textContent).not.toContain("assetLinkAuto");
+  expect(pickerValues(link)).toEqual(["oss"]);
+  //: 同一条规则落在别的能力上 —— 不是给素材外链单独写的一个分支。
+  const parse = screen.getByText("文档解析").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(pickerValues(parse)).toEqual(["m1"]);
+});
+
+it("能选的有两家以上:「自动 / 不指定」保留 —— 不选也能跑", async () => {
+  listCapabilityChoices.mockImplementation(async () => [
+    { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: "oss",
+      options: [
+        { id: "oss", name: "阿里云 OSS", builtin: false, missing: [] },
+        { id: "cos", name: "腾讯云 COS", builtin: false, missing: [] },
+      ] },
+    { capability: "document_parse", label: "文档解析", description: "转成 Markdown", current: null, automatic: "builtin:local",
+      options: [
+        { id: "builtin:local", name: "本地解析", builtin: true, missing: [] },
+        { id: "m1", name: "MinerU 云端", builtin: false, missing: [] },
+      ] },
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("素材外链")).toBeTruthy());
+  const link = screen.getByText("素材外链").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(pickerValues(link)).toEqual(["__unset__", "oss", "cos"]);
+  expect(link.textContent).toContain("assetLinkAuto");
+  const parse = screen.getByText("文档解析").closest('[data-slot="settings-group"]') as HTMLElement;
+  //: 内置的「自动」和一家插件:两项,「不指定」那一项留着(标签就是那个内置实现)。
+  expect(pickerValues(parse)).toEqual(["__unset__", "m1"]);
+  expect(parse.textContent).toContain("本地解析");
 });

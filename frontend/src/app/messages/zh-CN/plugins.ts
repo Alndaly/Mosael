@@ -226,7 +226,7 @@ export const plugins = {
   capabilityUnset: "未指定",
   //: 配音的默认是**一对**(引擎 + 音色),所以那一行是两个控件 —— 不是一个下拉。
   capabilityVoiceDefault: "默认(引擎 + 音色)",
-  capabilityVoiceDefaultSave: "保存默认",
+  //: 这一行没有「保存」按钮:一对齐了就写,和这一页 ASR / 降噪的默认行同一条规矩。
   capabilityVoiceDefaultNeedEngine: "先选一个引擎。",
   capabilityVoiceDefaultNeedVoice: "再选一个音色 —— 默认要是一对,只有引擎还念不出来。",
   capabilityVoiceDefaultAdminOnly: "只有部署管理员能改这台机器的默认。",

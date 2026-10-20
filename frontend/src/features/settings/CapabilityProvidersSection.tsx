@@ -278,19 +278,18 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
   const voice = pickedVoice ?? serverVoice;
   const readyVoices = voices.filter((item) => !item.cloned);
   const chosenVoice = readyVoices.find((item) => item.value === voice);
+  //: **选中即存,没有保存按钮** —— 和这一页 ASR / 降噪的默认行同一条规矩(维护者原话:「不需要这个保存默认的
+  //: 按钮的」)。存的永远是完整的一对:引擎 + 音色都齐了才写;只换了引擎、音色还没挑,什么都不发 ——
+  //: 半对存下去是念不出来的默认。选回「未指定」= 清掉默认(空对),和别处「选回自动」是同一件事。
   const save = useMutation({
-    mutationFn: () => setVoiceDefault(engine, engine === "" ? "" : voice),
-    onSuccess: () => {
+    mutationFn: (pair: { engine: string; voice: string }) => setVoiceDefault(pair.engine, pair.voice),
+    onSuccess: (_saved, pair) => {
       //: 写后 invalidate:引擎/音色候选上的 `is_default` 是当前默认的唯一来源,不自己改缓存。
       void qc.invalidateQueries({ queryKey: ["tts-engines"] });
-      void qc.invalidateQueries({ queryKey: voiceKeys.engineVoices(engine) });
+      void qc.invalidateQueries({ queryKey: voiceKeys.engineVoices(pair.engine) });
       void qc.invalidateQueries({ queryKey: KEY });
-      //: 回到「跟着服务端」:下一次渲染读的就是刚写进去的那一对。
-      setPickedEngine(null);
-      setPickedVoice(null);
     },
   });
-  const canSave = isAdmin && (engine === "" || Boolean(chosenVoice)) && !save.isPending;
   const uses = choices.used_by ?? [];
   //: 标题行照别组一样写「现在用谁」:默认那一对(引擎 · 音色);没设过就是「未指定」。
   const engineLabel = engines.find((item) => item.id === serverEngine)?.label ?? "";
@@ -346,8 +345,12 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
           value={engine || UNSET}
           disabled={!isAdmin || save.isPending}
           onChange={(value) => {
-            setPickedEngine(value === UNSET ? "" : value);
+            const next = value === UNSET ? "" : value;
+            setPickedEngine(next);
+            //: 换引擎就换了一整套音色 id(旧音色在新引擎下不存在),音色那一格清空等重挑。
             setPickedVoice(null);
+            //: 只换了引擎 = 一对还不齐,不写;选回「未指定」= 清掉默认(空对)。
+            if (next === "") save.mutate({ engine: "", voice: "" });
           }}
           options={[
             { value: UNSET, label: t("capabilityUnset") },
@@ -360,13 +363,14 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
           value={voice}
           disabled={!isAdmin || !engine || save.isPending}
           placeholder={t("capabilityVoiceDefaultNeedVoice")}
-          onChange={(value) => setPickedVoice(value)}
+          onChange={(value) => {
+            setPickedVoice(value);
+            //: 引擎 + 音色都齐了:立刻写这一对,一次请求。
+            if (engine) save.mutate({ engine, voice: value });
+          }}
           options={readyVoices.map((item) => ({ value: item.value, label: item.label }))}
           className={SETTINGS_FIELD_WIDTH}
         />
-        <Button size="sm" variant="outline" loading={save.isPending} disabled={!canSave} onClick={() => save.mutate()}>
-          {t("capabilityVoiceDefaultSave")}
-        </Button>
       </SettingsItemRow>
       {uses.length > 0 && <CapabilityUseSummary uses={uses} />}
     </SettingsGroup>
@@ -388,6 +392,13 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
   const automaticBuiltin = automatic?.builtin ? automatic : undefined;
   const ready = options.filter((option) => (option.missing ?? []).length === 0 && option.id !== automaticBuiltin?.id);
   const unready = options.filter((option) => (option.missing ?? []).length > 0);
+  //: 能选项:跑得起来的那几家(含「自动」用的那个内置实现)。**「自动 / 不指定」这一项只在能选的不止一家时
+  //: 才摆出来** —— 只有一家时它只是「就用这一家」的第二种说法,下拉里再列一个「自动:只配好了它,就用它」
+  //: 反倒像是还有别的选择。一条判断、全页生效:转写 / 降噪 / 素材外链 / 文档解析 / 翻译都走这同一个下拉,
+  //: 不是给某一项打的补丁。
+  //: (一家都不可选、而旧默认还记着时,那一项留着:那是唯一能「清回不指定」的动作。)
+  const usable = options.filter((option) => (option.missing ?? []).length === 0);
+  const showAutomatic = usable.length >= 2 || ready.length === 0;
 
   const unsetLabel = automaticBuiltin
     ? automaticBuiltin.name
@@ -406,6 +417,8 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
   const currentName = choices.current
     ? options.find((option) => option.id === choices.current)?.name ?? choices.current
     : automaticBuiltin?.name ?? t("capabilityUnset");
+  //: 下拉里选中的那一项:有「自动 / 不指定」就是它;只有一家可挑时,下拉里就是那一家(没有「自动」这一格)。
+  const pickerValue = choices.current ?? (showAutomatic ? UNSET : ready[0]?.id ?? UNSET);
 
   return (
     <SettingsGroup
@@ -439,14 +452,15 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
           </Button>
         ) : nothingElse ? null : (
           <OptionPicker
-            key={choices.current ?? UNSET}
-            value={choices.current ?? UNSET}
+            key={pickerValue}
+            value={pickerValue}
             disabled={save.isPending}
             onChange={(value) => save.mutate(value === UNSET ? null : value)}
-            options={[
-              { value: UNSET, label: unsetLabel },
-              ...ready.map((option) => ({ value: option.id, label: option.name })),
-            ]}
+            options={
+              showAutomatic
+                ? [{ value: UNSET, label: unsetLabel }, ...ready.map((option) => ({ value: option.id, label: option.name }))]
+                : ready.map((option) => ({ value: option.id, label: option.name }))
+            }
             className={SETTINGS_FIELD_WIDTH}
           />
         )}

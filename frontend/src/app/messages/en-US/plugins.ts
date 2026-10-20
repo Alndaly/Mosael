@@ -221,7 +221,7 @@ export const plugins = {
   capabilityUnset: "Not set",
   //: Dubbing's default is a **pair** (engine + voice), so that row has two controls — not one dropdown.
   capabilityVoiceDefault: "Default (engine + voice)",
-  capabilityVoiceDefaultSave: "Save default",
+  //: There is no Save button on this row: a complete pair saves itself, like the ASR / denoise default rows.
   capabilityVoiceDefaultNeedEngine: "Pick an engine first.",
   capabilityVoiceDefaultNeedVoice: "Now pick a voice — the default has to be a pair; an engine alone can't speak.",
   capabilityVoiceDefaultAdminOnly: "Only a deployment admin can change this machine's default.",
