@@ -37,6 +37,11 @@ const zh = {
     skipToContent: "跳到正文",
     menu: "目录",
   },
+  // 成功通知走 toast:viewport 的 region 名与关闭按钮的读屏名;正文由各调用方给。
+  toast: {
+    label: "通知",
+    close: "关闭通知",
+  },
   account: {
     login: "登录",
     signup: "注册",
@@ -604,6 +609,10 @@ const en: Messages = {
     language: "Change language",
     skipToContent: "Skip to content",
     menu: "Contents",
+  },
+  toast: {
+    label: "Notifications",
+    close: "Dismiss notification",
   },
   account: {
     login: "Sign in",

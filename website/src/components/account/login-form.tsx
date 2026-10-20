@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   AccountField,
   CodeField,
   FormAlert,
-  FormNotice,
   PasswordField,
   SegmentedControl,
   SendCodeButton,
@@ -16,6 +15,7 @@ import {
 } from "@/components/account/form-controls";
 import { OAuthButtons } from "@/components/account/oauth-buttons";
 import { useResendCountdown } from "@/components/account/use-email-code";
+import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
@@ -48,7 +48,6 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
-  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -58,14 +57,21 @@ export function LoginForm({
   const switchMode = (next: Mode) => {
     setMode(next);
     setError("");
-    setNotice("");
     setCodeError("");
     setEmailError("");
   };
 
+  // 刚注册完带着 `?registered=1` 回来时,「账号已创建」同样是一过性通知 —— 弹一次 toast,
+  // 不占表单版面。ref 挡住 StrictMode 的重放,免得同一句话弹两遍。
+  const registeredToasted = useRef(false);
+  useEffect(() => {
+    if (!registered || registeredToasted.current) return;
+    registeredToasted.current = true;
+    toast({ title: copy.registered });
+  }, [registered, copy.registered]);
+
   const sendCode = async () => {
     setError("");
-    setNotice("");
     setCodeError("");
     setEmailError("");
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
@@ -76,7 +82,7 @@ export function LoginForm({
     try {
       await cloudAccount.sendLoginCode(email.trim());
       // 后端对"注册过 / 没注册"回同一句,界面也只说这一句。
-      setNotice(copy.loginCodeSent);
+      toast({ title: copy.loginCodeSent });
       countdown.start();
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
@@ -118,9 +124,8 @@ export function LoginForm({
     }
   };
 
-  // 发送结果 / 表单错误都通过 id 关联到验证码字段。
-  const codeDescription =
-    [notice ? "login-code-status" : "", error ? "login-error" : ""].filter(Boolean).join(" ") || undefined;
+  // 表单错误通过 id 关联到验证码字段。
+  const codeDescription = error ? "login-error" : undefined;
 
   return (
     <div className="grid gap-5">
@@ -129,7 +134,6 @@ export function LoginForm({
           {oauthMessage}
         </FormAlert>
       )}
-      {registered && mode === "password" && <FormNotice>{copy.registered}</FormNotice>}
       <SegmentedControl
         id="login-mode"
         label={copy.loginModeLabel}
@@ -183,7 +187,6 @@ export function LoginForm({
               {error}
             </FormAlert>
           )}
-          {notice && <FormNotice id="login-code-status">{notice}</FormNotice>}
           <AccountField
             id="login-code-email"
             label={copy.email}

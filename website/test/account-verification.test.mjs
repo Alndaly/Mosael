@@ -84,7 +84,9 @@ test("错误和提示通过 aria-describedby 关联", () => {
   assert.match(signup, /describedBy=\{codeDescription\}/, "注册表单的验证码字段没有关联提示 / 错误");
   assert.match(login, /const codeDescription =/, "登录表单没有把验证码提示 / 错误 id 组装起来");
   assert.match(login, /describedBy=\{codeDescription\}/, "登录表单的验证码字段没有关联提示 / 错误");
-  assert.match(signup, /<FormNotice id=/, "注册成功提示没有 id,无法关联到字段");
+  // 「验证码已发送」是成功通知,走 toast(不占版面,也就不再有一条内联元素可关联);
+  // 需要关联到字段的只剩错误。
+  assert.match(signup, /toast\(\{ title: copy\.codeSent \}\)/, "注册发码成功没有弹 toast");
 });
 
 test("浏览器客户端只新增同源的验证码端点,签名带上 code", () => {

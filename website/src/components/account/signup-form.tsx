@@ -2,35 +2,32 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import {
   AccountField,
   CodeField,
   FormAlert,
-  FormNotice,
   PasswordField,
   SendCodeButton,
   SubmitButton,
 } from "@/components/account/form-controls";
 import { OAuthButtons } from "@/components/account/oauth-buttons";
 import { useResendCountdown } from "@/components/account/use-email-code";
-import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
 import { oauthErrorCopyKey } from "@/lib/oauth";
 
-
 /**
  * 注册:**邮箱 → 发送验证码 → 6 位码 → 密码**。
  *
  * 验证码是注册的一部分,不是可选项:后端不验码就会拒。发送按钮有 60 秒本地倒计时
- * (服务端同样有冷却),发送中 / 已发送 / 失败都在按钮和提示区里说清楚。
+ * (服务端同样有冷却),发送中 / 失败在按钮和提示区里说清楚;**「验证码已发送」是成功通知,
+ * 走 toast 弹一下就走**,不占表单版面(错误仍内联,见 `FormAlert`)。
  *
- * 成功后**先留在本页**把「账号已创建」摆出来,约 1.5 秒后**自动去社区页**:立刻跳等于
- * 这句提示没出现过,而把提示带到社区页要改社区页(另一笔)。目标见
+ * 注册成功云端直接建会话,所以这里直接 `router.replace` 进控制台(不留注册页在历史里)。
  */
 export function SignupForm({
   locale,
@@ -46,7 +43,6 @@ export function SignupForm({
   const [emailError, setEmailError] = useState("");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
-  const [notice, setNotice] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -59,7 +55,6 @@ export function SignupForm({
 
   const sendCode = async () => {
     setError("");
-    setNotice("");
     setCodeError("");
     setEmailError("");
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
@@ -69,7 +64,8 @@ export function SignupForm({
     setSendingCode(true);
     try {
       await cloudAccount.sendSignupCode(email.trim());
-      setNotice(copy.codeSent);
+      // 「发送成功」是一过性通知:弹一条 toast,表单里不留下占位的一条提示。
+      toast({ title: copy.codeSent });
       countdown.start();
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
@@ -110,9 +106,8 @@ export function SignupForm({
   };
 
 
-  // 发送结果 / 表单错误都通过 id 关联到验证码字段,读屏在聚焦时能听到"为什么"。
-  const codeDescription =
-    [notice ? "signup-code-status" : "", error ? "signup-error" : ""].filter(Boolean).join(" ") || undefined;
+  // 表单错误通过 id 关联到验证码字段,读屏在聚焦时能听到"为什么"。
+  const codeDescription = error ? "signup-error" : undefined;
 
   return (
     <div className="grid gap-5">
@@ -127,7 +122,6 @@ export function SignupForm({
             {error}
           </FormAlert>
         )}
-        {notice && <FormNotice id="signup-code-status">{notice}</FormNotice>}
         <AccountField
           id="signup-email"
           label={copy.email}

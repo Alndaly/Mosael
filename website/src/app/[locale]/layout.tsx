@@ -10,6 +10,7 @@ import { notFound } from "next/navigation";
 import "@fontsource-variable/noto-sans-sc";
 import "../globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
 import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { SITE_NAME, siteVerification } from "@/lib/seo";
@@ -137,6 +138,12 @@ export default async function LocaleLayout({
             {t.nav.skipToContent}
           </a>
           {children}
+          {/*
+            成功通知的 toast 出口。**只挂这一处**:它在这一层, `(site)` 与 `(auth)` 两组页面都继承,
+            注册 / 登录 / 账号页和站内的「已保存」共用同一个 viewport —— 挂到 `(site)` 里就漏了
+            住在 `(auth)` 的三页,挂到每组里又会变成两份。
+          */}
+          <Toaster label={t.toast.label} closeLabel={t.toast.close} />
         </ThemeProvider>
       </body>
       {googleAnalyticsId ? <GoogleAnalytics gaId={googleAnalyticsId} /> : null}

@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { LogOut, PenLine } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { AccountField, FormAlert, FormNotice, SubmitButton } from "@/components/account/form-controls";
+import { AccountField, FormAlert, SubmitButton } from "@/components/account/form-controls";
 import { InitialTile } from "@/components/community/tile";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount, cloudProfile, type CloudIdentity } from "@/lib/cloud";
@@ -43,7 +44,6 @@ export function DashboardProfile({
   const [displayError, setDisplayError] = useState("");
   const [handleError, setHandleError] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
   const [email, setEmail] = useState<string | null>(null);
   const [emailFailed, setEmailFailed] = useState(false);
@@ -72,7 +72,6 @@ export function DashboardProfile({
     setDisplayError("");
     setHandleError("");
     setError("");
-    setNotice("");
     const name = displayName.trim();
     if (!name) {
       setDisplayError(copy.displayNameRequired);
@@ -86,7 +85,8 @@ export function DashboardProfile({
       const { user } = await cloudProfile.update(patch);
       setDisplayName(user.display_name ?? name);
       setHandle(user.handle ?? handle.trim());
-      setNotice(copy.saved);
+      // 保存成功是一过性通知:弹一下就走,不在表单上方留一条常驻提示。
+      toast({ title: copy.saved });
       // 顶栏 / 概览都按新的身份重算(有了 handle,概览才有东西可统计)。
       router.refresh();
     } catch (failure) {
@@ -140,7 +140,6 @@ export function DashboardProfile({
           {error}
         </FormAlert>
       )}
-      {notice && <FormNotice>{notice}</FormNotice>}
 
       <section aria-labelledby="dashboard-profile" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
         <div className="flex flex-wrap items-start gap-4">

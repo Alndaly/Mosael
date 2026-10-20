@@ -5,7 +5,7 @@
  * 不该散落在各个组件里 —— 后端量的是「紧凑 JSON 的 UTF-8 字节数」,前端拦 2MB 时量的
  * 必须是同一把尺子,不然会出现「前端说没超、后端回 413」。
  */
-import type { CloudIdentity, CloudSharePage } from "@/lib/cloud";
+import type { CloudIdentity } from "@/lib/cloud";
 
 /** 后端 `MAX_PAYLOAD_BYTES` 的同一数值(2 MB)。 */
 export const MAX_SHARE_BYTES = 2 * 1024 * 1024;

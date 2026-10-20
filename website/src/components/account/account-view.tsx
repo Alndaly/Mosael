@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, LockKeyhole, LogOut, ShieldAlert, Trash2 } from "lucide-react";
 
-import { FormAlert, FormNotice } from "@/components/account/form-controls";
+import { FormAlert } from "@/components/account/form-controls";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount, type CloudUser } from "@/lib/cloud";
@@ -63,6 +64,15 @@ export function AccountView({
       alive = false;
     };
   }, [locale, copy.loadFailed, reloadKey]);
+
+  // 从 GitHub / Google 回来时,「已创建 / 已绑定」是一过性成功通知 —— 等身份真的读出来
+  // (signed)再弹一次 toast;ref 保证 StrictMode 的重放不会弹第二遍。
+  const oauthToasted = useRef(false);
+  useEffect(() => {
+    if (phase !== "signed" || !oauthOutcome || oauthToasted.current) return;
+    oauthToasted.current = true;
+    toast({ title: oauthOutcome === "created" ? copy.oauthCreated : copy.oauthExisting });
+  }, [phase, oauthOutcome, copy.oauthCreated, copy.oauthExisting]);
 
   const signOut = async () => {
     setBusy("logout");
@@ -151,11 +161,6 @@ export function AccountView({
 
   return (
     <div className="grid gap-4 motion-safe:animate-[auth-rise_450ms_ease-out_both]">
-      {oauthOutcome && (
-        <FormNotice id="oauth-result">
-          {oauthOutcome === "created" ? copy.oauthCreated : copy.oauthExisting}
-        </FormNotice>
-      )}
       {error && (
         <FormAlert id="account-error" title={copy.formErrorTitle}>
           {error}

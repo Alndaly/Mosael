@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Eye,
   EyeOff,
   LoaderCircle,
@@ -258,19 +257,6 @@ export function FormAlert({
         <p className="m-0">{children}</p>
       </div>
     </div>
-  );
-}
-
-export function FormNotice({ id, children }: { id?: string; children: ReactNode }) {
-  return (
-    <output
-      id={id}
-      aria-live="polite"
-      className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-brand-soft px-4 py-3.5 text-accent"
-    >
-      <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-      <span className="m-0 min-w-0 text-[13px] leading-6">{children}</span>
-    </output>
   );
 }
 
