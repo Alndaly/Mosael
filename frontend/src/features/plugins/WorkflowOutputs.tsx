@@ -122,7 +122,7 @@ export function WorkflowOutputs({ instanceId, workspaceId, path, label }: {
             </Button>
           )}
           {/* 和模型库那颗是同一份设置:这里改了,模型库、工作台跟着变 */}
-          <ModelPreviewSettingsButton compact />
+          <ModelPreviewSettingsButton tier="sm" />
         </span>
       }
     >

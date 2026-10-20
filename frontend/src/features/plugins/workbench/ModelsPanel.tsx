@@ -311,7 +311,7 @@ function SlotPicker({
       <div className="flex items-center gap-1.5">
         <SearchInput className="min-w-0 flex-1" size="xs" value={query} placeholder={t("workbenchModelsSearch").replace("{folder}", slot.folder)}
                  aria-label={t("workbenchModelsSearch").replace("{folder}", slot.folder)} onChange={(event) => setQuery(event.target.value)} />
-        <ModelPreviewSettingsButton compact />
+        <ModelPreviewSettingsButton tier="xs" />
       </div>
       {families.length > 1 && (
         <div role="group" aria-label={t("workbenchModelsFamily")} className="flex flex-wrap gap-1">

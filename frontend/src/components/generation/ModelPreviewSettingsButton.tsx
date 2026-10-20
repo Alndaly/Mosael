@@ -32,10 +32,13 @@ const NSFW_LABELS = {
  * 进度(识别完了让模型库重新列一遍,见 useLocalNsfw)。
  */
 export function ModelPreviewSettingsButton({
-  compact = false,
+  tier = "md",
 }: {
-  /** 小一号(工作台面板的标题行上)。 */
-  compact?: boolean;
+  /**
+   * 并排控件的**档**（CONTROL_HEIGHT / CONTROL_SQUARE 那套）。同档才同高 ——
+   * 工作台面板的搜索框是 `xs`（28），模型库工具条是 `md`（40），两边都拿 `sm`（32）就会一边差 4px。
+   */
+  tier?: "xs" | "sm" | "md";
 }) {
   const t = useI18n();
   const [settings, setSettings] = useModelPreviewSettings();
@@ -46,9 +49,9 @@ export function ModelPreviewSettingsButton({
       <PopoverTrigger asChild>
         <IconButton
           variant="outline"
-          size={compact ? "icon-sm" : "default"}
+          size={tier === "md" ? "default" : `icon-${tier}`}
           aria-haspopup="dialog"
-          className={cn("text-muted-foreground", !compact && "px-3",
+          className={cn("text-muted-foreground", tier === "md" && "px-3",
                         covered && "border-primary/40 bg-accent text-primary hover:bg-accent hover:text-primary")}
           label={t("modelPreviewSettings")}
           hint={t("modelPreviewSettingsHint")}

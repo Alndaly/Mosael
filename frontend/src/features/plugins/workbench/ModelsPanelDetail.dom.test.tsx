@@ -351,6 +351,19 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
     expect(list.className, "卡片之间留出呼吸的间距").toMatch(/\bgap-3\b/);
   });
 
+  it("⑪ 搜索框和右边那颗小眼睛同高 —— 两边都按 xs 档(28)", async () => {
+    // 维护者:「这个 input 框的高度和右侧的那个眼睛按钮的高度不一致」✗。
+    // 同高不能靠两处碰巧写了同一个数(见 components/ui/control-size.ts 开头那段),所以两处都从刻度取:
+    // 搜索框走 SEARCH_FIELD/Field 的 xs(h-7),小眼睛走 CONTROL_SQUARE.xs(size-7),都是 28。
+    await mount();
+    const field = document.querySelector("[data-search-input]");
+    expect(field, "面板上有搜索框").not.toBeNull();
+    const parts = [field as Element, ...Array.from(field!.querySelectorAll("*"))];
+    expect(parts.some((el) => /\bh-7\b/.test((el as HTMLElement).className || "")), "搜索框按 xs 档 28").toBe(true);
+    const eye = screen.getByRole("button", { name: "modelPreviewSettings" });
+    expect(eye.className, "小眼睛也按 xs 档 28,不与搜索框差一截").toMatch(/\bsize-7\b/);
+  });
+
   it("⑦ 缩略图固定 4:3、填满卡片宽度,图片 object-cover:图片不撑高卡片,卡是竖排(图在上、字在下)", async () => {
     await mount();
     const card = row("SDXL Base");
