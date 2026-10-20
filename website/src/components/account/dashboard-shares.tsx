@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { CloudApiError, cloudShares, type CloudShare } from "@/lib/cloud";
+import { shareKindLabel } from "@/lib/shareKind";
 import { invalidateAfterShareChange } from "@/lib/query-invalidation";
 
 import { formatShareDate } from "@/components/community/share-utils";
@@ -110,7 +111,7 @@ export function DashboardShares({
                 <div className="min-w-0 flex-1">
                   <h2 className="m-0 text-base font-semibold tracking-tight [overflow-wrap:anywhere]">{share.title}</h2>
                   <p className="mt-1 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                    <span>{share.kind === "board" ? t.kindBoard : t.kindWorkflow}</span>
+                    <span>{shareKindLabel(share.kind, t)}</span>
                     <span aria-hidden>·</span>
                     <time dateTime={share.created_at}>{formatShareDate(share.created_at, locale)}</time>
                   </p>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import type { CloudShare, CloudShareStats } from "@/lib/cloud";
+import { shareKindLabel } from "@/lib/shareKind";
 
 import { formatShareDate } from "@/components/community/share-utils";
 
@@ -131,7 +132,7 @@ export function DashboardOverview({
                 >
                   <span className="min-w-0 flex-1 text-sm font-semibold [overflow-wrap:anywhere]">{share.title}</span>
                   <span className="text-xs text-muted-foreground">
-                    {share.kind === "board" ? t.kindBoard : t.kindWorkflow}
+                    {shareKindLabel(share.kind, t)}
                     <span aria-hidden> · </span>
                     {formatShareDate(share.created_at, locale)}
                   </span>

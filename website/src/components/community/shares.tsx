@@ -15,6 +15,7 @@ import { InitialTile } from "@/components/community/tile";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { toPlainText } from "@/lib/inline-markdown";
+import { shareKindLabel } from "@/lib/shareKind";
 import type { CloudShare, CloudShareKind } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 
@@ -42,11 +43,7 @@ export function ShareCard({ locale, share }: { locale: Locale; share: CloudShare
   const name = share.author.display_name?.trim() || share.author.handle || "—";
   const summary = share.summary?.trim() ? toPlainText(share.summary) : "";
   // 官方插件分享也要说清是「插件」,不能因为原先把 board 以外的都当工作流而标错。
-  const kindLabel: Record<CloudShareKind, string> = {
-    workflow: t.kindWorkflow,
-    board: t.kindBoard,
-    plugin: t.kindPlugin,
-  };
+
   return (
     <Link href={localePath(locale, `/community/${share.id}`)} className={CARD}>
       <div className="flex min-w-0 items-center gap-3.5">
@@ -62,7 +59,7 @@ export function ShareCard({ locale, share }: { locale: Locale; share: CloudShare
               </span>
             )}
             <span aria-hidden> · </span>
-            <span className="shrink-0">{kindLabel[share.kind]}</span>
+            <span className="shrink-0">{shareKindLabel(share.kind, t)}</span>
           </span>
         </div>
       </div>

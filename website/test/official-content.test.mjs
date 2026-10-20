@@ -328,9 +328,13 @@ test("③ /plugins、/workflows 接上混排:静态卡片不动,分享卡片进�
   assert.match(helper, /catch\s*\{\s*return \[\]/, "取数失败没有退化成空数组");
   assert.doesNotMatch(helper, /setError|throw new CloudApiError|loadFailed/, "云端失败被做成了页面错误");
 
-  // 分享卡片的类型标签:plugin 不能显示成工作流。
+  // 分享卡片的类型标签:plugin 不能显示成工作流 —— 而且**只在一处判 kind**(lib/shareKind.ts),
+  // 之前四处各写 `board ? 画布 : 工作流`,插件就被写成了工作流。
   const shares = read("components/community/shares.tsx");
-  assert.match(shares, /t\.kindPlugin/, "分享卡片没有 plugin 类型标签");
+  assert.match(shares, /shareKindLabel\(share\.kind, t\)/, "分享卡片没有走统一的类型名");
+  const kindHelper = read("lib/shareKind.ts");
+  assert.match(kindHelper, /kind === "plugin"/, "统一助手没有处理 plugin");
+  assert.match(kindHelper, /kind === "board"/, "统一助手没有处理 board");
   assert.match(shares, /share\.author\.official/, "分享卡片没有显示官方标记");
 
   const messages = read("i18n/messages.ts");
