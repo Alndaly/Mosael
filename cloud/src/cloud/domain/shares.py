@@ -16,6 +16,7 @@ from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from cloud.domain import notifications
 from cloud.domain.identity import ensure_identity, public_user
 from cloud.errors import CloudError
 from cloud.models import (
@@ -356,17 +357,30 @@ def _serialize_many(db: Session, shares: list[CloudShare], viewer: CloudUser | N
 
 
 def like_share(db: Session, user: CloudUser, share_id: str, *, liked: bool) -> None:
-    """点赞。**靠主键唯一约束去重**:重复 POST 撞 IntegrityError 就当成功(204),不是 409。"""
-    require_listed_share(db, share_id)
-    _toggle(db, CloudShareLike, share_id, user.id, wanted=liked)
+    """点赞。**靠主键唯一约束去重**:重复 POST 撞 IntegrityError 就当成功(204),不是 409。
+
+    通知跟着"这次真的改变了状态"走:重复 POST 一个已经存在的赞不再发通知;取消时把
+    这条互动对应的未读通知收回去。自己给自己的分享两条都走不到。
+    """
+    share = require_listed_share(db, share_id)
+    changed = _toggle(db, CloudShareLike, share_id, user.id, wanted=liked)
+    if not liked:
+        notifications.withdraw_interaction(db, share=share, actor=user, kind="like")
+    elif changed:
+        notifications.notify_interaction(db, share=share, actor=user, kind="like")
 
 
 def favorite_share(db: Session, user: CloudUser, share_id: str, *, favorited: bool) -> None:
-    require_listed_share(db, share_id)
-    _toggle(db, CloudShareFavorite, share_id, user.id, wanted=favorited)
+    share = require_listed_share(db, share_id)
+    changed = _toggle(db, CloudShareFavorite, share_id, user.id, wanted=favorited)
+    if not favorited:
+        notifications.withdraw_interaction(db, share=share, actor=user, kind="favorite")
+    elif changed:
+        notifications.notify_interaction(db, share=share, actor=user, kind="favorite")
 
 
-def _toggle(db: Session, model, share_id: str, user_id: str, *, wanted: bool) -> None:
+def _toggle(db: Session, model, share_id: str, user_id: str, *, wanted: bool) -> bool:
+    """写入 / 撤销一行互动,返回**这次是否真的改变了状态**(重复 POST 返回 False)。"""
     if wanted:
         try:
             db.execute(insert(model).values(share_id=share_id, user_id=user_id, created_at=now()))
@@ -374,9 +388,11 @@ def _toggle(db: Session, model, share_id: str, user_id: str, *, wanted: bool) ->
         except IntegrityError:
             # 已经点过了 —— 唯一约束给出的正是幂等:第二次不改变任何东西。
             db.rollback()
-        return
-    db.execute(delete(model).where(model.share_id == share_id, model.user_id == user_id))
+            return False
+        return True
+    result = db.execute(delete(model).where(model.share_id == share_id, model.user_id == user_id))
     db.commit()
+    return bool(result.rowcount)
 
 
 # ---------------------------------------------------------------- 评论
@@ -385,14 +401,19 @@ def _toggle(db: Session, model, share_id: str, user_id: str, *, wanted: bool) ->
 def add_comment(db: Session, user: CloudUser, share_id: str, body: str) -> dict[str, object]:
     """评论。需要 session + display_name;空评论 422;**存原文**,不做 HTML / markdown 处理。"""
     ensure_identity(user)
-    require_listed_share(db, share_id)
+    share = require_listed_share(db, share_id)
     if not body.strip():
         raise CloudError(422, "comment_empty")
     if len(body) > MAX_COMMENT:
         raise CloudError(422, "comment_too_long", max=MAX_COMMENT)
     comment = CloudShareComment(share_id=share_id, user_id=user.id, body=body)
     db.add(comment)
+    # 评论先落地:通知的去重冲突(并发下同槽位已有一条未读)会 rollback 那一小段,
+    # 不能把评论本身一起回滚掉。评论是事实,通知只是它的影子。
     db.commit()
+    notifications.notify_interaction(
+        db, share=share, actor=user, kind="comment", comment_id=comment.id
+    )
     return _comment_out(comment, user)
 
 
@@ -427,10 +448,14 @@ def list_comments(
 
 
 def delete_comment(db: Session, user: CloudUser, share_id: str, comment_id: str) -> None:
-    """只有评论本人能删;别人的评论一律 404(不给出"存在但不是你的"这个区别)。"""
+    """只有评论本人能删;别人的评论一律 404(不给出"存在但不是你的"这个区别)。
+
+    通知和评论在同一个事务里删:不留下一条指向已经消失的评论的通知。
+    """
     comment = db.get(CloudShareComment, comment_id)
     if comment is None or comment.share_id != share_id or comment.user_id != user.id:
         raise CloudError(404, "comment_not_found")
+    notifications.forget_comment(db, comment_id)
     db.delete(comment)
     db.commit()
 

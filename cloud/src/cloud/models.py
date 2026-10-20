@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -286,4 +287,65 @@ class CloudShareComment(Base):
         ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
     )
     body: Mapped[str] = mapped_column(String(2000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudShareNotification(Base):
+    """"谁对谁的分享做了什么" —— 一条互动一行,收件人永远是分享作者。
+
+    **自己对自己的分享不产生通知**,这条规则在 domain 层写一次,不在读取时再过滤。
+
+    `(recipient_id, actor_id, share_id, kind)` 在未读状态下只允许一行:靠一条部分唯一索引
+    (`WHERE read_at IS NULL`)兜底。于是同一个人对同一条分享连续点赞 / 取消 / 再点赞,或者
+    连续评论,最多只堆出一条未读;已读之后的新互动才会新开一行(历史保留)。
+
+    取消点赞 / 收藏删掉的是**未读**那一行;已读的那行是历史,不再断言"他还赞着"。
+    删评论按 `comment_id` 把对应通知一起删。分享软删只影响读取(join 掉),不删这里的行。
+    """
+
+    __tablename__ = "cloud_share_notifications"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('like', 'favorite', 'comment')", name="ck_cloud_share_notifications_kind"
+        ),
+        # 列表:按收件人取新序。SQLite 的反射不保留排序方向,所以这里按同名列声明,
+        # 实际建库语句是 `(recipient_id, created_at DESC)`(见 0003 迁移),alembic check 不误报。
+        Index("idx_cloud_share_notifications_recipient_created", "recipient_id", "created_at"),
+        # 未读数:`recipient_id + read_at IS NULL`。
+        Index("idx_cloud_share_notifications_recipient_read", "recipient_id", "read_at"),
+        # 删评论时按 comment_id 找通知。
+        Index("idx_cloud_share_notifications_comment", "comment_id"),
+        # 一个槽位最多一条未读 —— 重复点赞 / 连续评论不会刷出多条。
+        Index(
+            "uq_cloud_share_notifications_unread",
+            "recipient_id",
+            "actor_id",
+            "share_id",
+            "kind",
+            unique=True,
+            sqlite_where=text("read_at IS NULL"),
+            postgresql_where=text("read_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: 收到通知的人 = 分享作者。删号时一起消失。
+    recipient_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
+    )
+    #: 点了 / 评论了的人。响应里只给公开三列,email 不在这里。
+    actor_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
+    )
+    share_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_shares.id", ondelete="CASCADE"), nullable=False
+    )
+    #: `like` / `favorite` / `comment`。
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: 评论通知指向的那条评论;点赞 / 收藏为空。评论被删时这一行也一起删。
+    comment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_share_comments.id", ondelete="CASCADE"), nullable=True, default=None
+    )
+    #: 读掉就填。NULL = 未读。
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)

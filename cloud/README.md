@@ -2,7 +2,8 @@
 
 独立于本地 Mosael 的账号服务:邮箱 + 验证码 + 密码注册、密码 / 验证码两种登录、
 **GitHub / Google 第三方登录(授权码 + PKCE)**、HttpOnly cookie 会话、设备码绑定,
-以及社区分享第①笔:**身份(昵称 / 短名 / 头像种子)+ 分享 + 点赞 / 收藏 / 评论**,注册即登录。
+以及社区分享第①笔:**身份(昵称 / 短名 / 头像种子)+ 分享 + 点赞 / 收藏 / 评论**、
+第②笔:**评论 / 点赞 / 收藏的通知**,注册即登录。
 设计、部署与取舍见 [`docs/CLOUD_ACCOUNTS.md`](../docs/CLOUD_ACCOUNTS.md)。
 
 ## 本地跑起来
@@ -59,6 +60,9 @@ GET    /shares/{id}/comments      ?limit=&cursor= → {items,next_cursor}
 POST   /shares/{id}/comments      body {body} → {comment} (201)
 DELETE /shares/{id}/comments/{cid} → 204(仅评论本人)
 GET    /users/{handle}/shares     → {items,next_cursor}
+GET    /notifications             ?limit=&cursor= → {items,next_cursor,unread}(需登录)
+GET    /notifications/unread-count → {count}(需登录)
+POST   /notifications/read        body {ids?} → {marked,unread};不传 ids = 全部标已读
 ```
 
 `/me` 是**本人**形状:除身份三列外还带 `id` / `email` / `email_verified_at` / `created_at`
@@ -68,6 +72,22 @@ GET    /users/{handle}/shares     → {items,next_cursor}
 `{id,kind,title,summary,bytes,license,created_at,author,stats,liked_by_me,favorited_by_me}`;
 `stats = {downloads,likes,favorites,comments}`;游客的 `liked_by_me` / `favorited_by_me` 是 false。
 `payload` 只在 `/payload` 与 `/download` 单独取。
+
+### 通知
+
+互动(点赞 / 收藏 / 评论)会给**分享作者**留一条通知;自己对自己的分享不产生。
+`GET /notifications` 只返回本人的,新序在前;`item =
+{id,kind,read_at,created_at,actor:{display_name,handle,avatar_seed},share:{id,title,kind},comment_preview?}`。
+`comment_preview` 是评论原文按字符截断到 120(不渲染 markdown、不做实体转义),只在评论通知里有。
+`unread` / `unread-count` 都是**未读总数**,不是本页条数。
+
+同一 `(收件人, 互动者, 分享, 类型)` 的**未读只留一条**:数据库里有一条
+`(recipient_id, actor_id, share_id, kind) WHERE read_at IS NULL` 的部分唯一索引兜底,
+所以同一个人反复点赞 / 取消 / 再点赞最多一条未读;已读之后的新互动才新开一行。
+取消点赞 / 收藏删掉对应的**未读**通知(已读的留作历史);删评论按 `comment_id` 把通知一起删;
+分享软删不删通知数据,读取时过滤掉。
+
+`actor` 只有公开三列,**email 不出现在任何通知响应里**。
 
 ## 测试
 
@@ -97,6 +117,10 @@ CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
 - 社区分享第①笔的迁移是 `migrations/versions/0002_identity_and_community.py`:
   只给 `cloud_users` 加 `display_name` / `handle` / `avatar_seed` 三列,再建分享与互动四表。
   已有账号保持"没有身份"的状态(三列为空),写接口会让用户自己起名 —— **不替旧数据猜昵称**。
+- 社区分享第②笔(通知)的迁移是 `migrations/versions/0003_notifications.py`:
+  新建 `cloud_share_notifications`(**不写旧数据回填**,新表从零张行开始)。
+  升级就跑 `cd cloud && uv run python -m cloud.cli migrate`(或直接重启服务,启动时自动升到 head);
+  它只建表,没有需要人工确认的兼容分支。
 - 登录仍是原来的规则:`cloud_users.password_hash` 可空(第三方登录建的账号没有密码)。
 
 ## 配置
