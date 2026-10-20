@@ -139,9 +139,10 @@ export function AccountSection() {
         </Button>
       }
     >
-      {/* 顺序:本地账号(身份、资料)→ 登录密码紧跟本地账号 → MosaelCloud 账号。
-          密码属于本地账号,所以它紧跟着本地账号(云账号不能夹在中间,否则密码看起来像云账号的);
-          云账号放在最后,是另一套可以单独登录的身份。 */}
+      {/* 顺序:MosaelCloud 账号 → 本地账号(身份、资料)→ 登录密码紧跟本地账号。
+          云账号置顶:它是"这台机器上还有另一套身份"这件事的第一句(维护者:别放底部);
+          密码仍然紧贴本地账号 —— 云账号不能夹在密码和本地账号之间,否则密码看起来像云账号的。 */}
+      <CloudAccountSection />
       <SettingsBlock>
         <div className="grid gap-3">
           {/* 本地账号这一块的标题就是「这是哪儿的账号、怎么登进来的」那句 —— 和页头、账号菜单同一个来源。
@@ -295,7 +296,6 @@ export function AccountSection() {
           </form>
         </div>
       </SettingsBlock>
-      <CloudAccountSection />
       <ConfirmDialog
         open={confirmingUsername}
         title={t("usernameChange")}

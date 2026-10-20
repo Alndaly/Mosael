@@ -48,7 +48,7 @@ function before(a: Element, b: Element): boolean {
 }
 
 describe("账户页的块顺序", () => {
-  it("本地账号在最上 → 登录密码紧跟本地账号 → MosaelCloud 账号", async () => {
+  it("MosaelCloud 账号在最上 → 本地账号 → 登录密码紧跟本地账号", async () => {
     render(<AccountSection />);
 
     const local = screen.getByText("本地账号", { selector: "strong" });
@@ -56,16 +56,16 @@ describe("账户页的块顺序", () => {
     const password = screen.getByText("登录密码", { selector: "strong" });
     const cloud = screen.getByText("MosaelCloud 账号", { selector: "strong" });
 
-    //: 本地账号是第一块。
+    //: **云账号是第一块**(维护者:别放在底部)。
     const firstBlock = document.querySelector('[data-slot="settings-group-content"] > [data-slot="settings-block"]');
-    expect(firstBlock?.contains(local), "本地账号应是第一块").toBe(true);
+    expect(firstBlock?.contains(cloud), "MosaelCloud 账号应是第一块").toBe(true);
 
     expect(before(local, username), "本地账号的资料应在本地账号标题之后").toBe(true);
     expect(before(username, password), "登录密码应在本地账号资料之后").toBe(true);
     //: 密码紧跟本地账号:中间不再夹着别的账号块。
     expect(before(local, password), "登录密码应在本地账号之后").toBe(true);
-    //: 云账号在最后:它是另一套身份,不是本地账号的密码。
-    expect(before(password, cloud), "MosaelCloud 账号应在登录密码之后").toBe(true);
+    //: 本地账号在云账号之后:先看见"这台机器上还有另一套身份",再看见本地这一套。
+    expect(before(cloud, local), "MosaelCloud 账号应在本地账号之前").toBe(true);
     //: 渲染出来的整页文字里也不许再有方位指代。
     expect(document.body.textContent ?? "").not.toMatch(/上面|下面|如上|上述/);
   });
