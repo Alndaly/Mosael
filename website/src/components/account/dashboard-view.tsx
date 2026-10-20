@@ -93,7 +93,7 @@ export function DashboardView({
             <DashboardProfile locale={locale} copy={copy} viewer={viewer} onSelect={select} />
           )}
           {tab === "devices" && <DashboardDevices locale={locale} copy={accountCopy} initialCode={initialCode} />}
-          {tab === "notifications" && <DashboardNotifications copy={copy} />}
+          {tab === "notifications" && <DashboardNotifications locale={locale} copy={copy} />}
         </div>
       </section>
     </>

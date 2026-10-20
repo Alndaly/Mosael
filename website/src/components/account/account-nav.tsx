@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
-import { cloudAccount, type CloudUser } from "@/lib/cloud";
+import { cloudAccount, cloudNotifications, formatUnreadBadge, type CloudUser } from "@/lib/cloud";
 
 /**
  * 站头的账号入口。未登录时是「登录」次级按钮,登录后是**一颗圆形头像** —— 账号名的
@@ -21,7 +21,12 @@ import { cloudAccount, type CloudUser } from "@/lib/cloud";
  * `--tile-*` 那六个色相,由名字算一个 hash 取一个 —— 同一个人在列表、详情、站头永远是
  * 同一块颜色。
  *
- * 它只问云端一句 `/me` —— 不碰本地后端,也不把邮箱塞进站头那一行(窄屏放不下)。
+ * 头像右下角是**未读通知角标**:进页面问一次 `unread-count`,0 条不显示,超过 99 收成
+ * `99+`(格式化在 `lib/cloud.ts` 的 `formatUnreadBadge` 里,和测试同一份)。**P1 不轮询**
+ * —— 这里是站头,不是收件箱。
+ *
+ * 它只问云端 `/me` 与 `/notifications/unread-count` —— 不碰本地后端,也不把邮箱塞进站头
+ * 那一行(窄屏放不下)。
  */
 
 /** 顶栏只关心这三列:显示名 → 短名 → 邮箱前缀。 */
@@ -72,6 +77,8 @@ export function AccountNav({
 }) {
   // undefined = 还在问 /me;null = 问过了,没登录。
   const [user, setUser] = useState<CloudUser | null | undefined>(undefined);
+  // 未读通知数。没登录 / 401 时保持 0(角标就不出现)。
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -88,20 +95,45 @@ export function AccountNav({
     };
   }, []);
 
+  // 进页面拉一次,不轮询(P1 不做实时)。
+  useEffect(() => {
+    let alive = true;
+    void cloudNotifications
+      .unreadCount()
+      .then(({ count }) => {
+        if (alive) setUnread(Number.isFinite(count) ? count : 0);
+      })
+      .catch(() => {
+        if (alive) setUnread(0);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   if (user === undefined) return null;
   if (user) {
     // 名字决定首字,也决定底色 —— 邮箱只取 @ 前面的部分,不会被渲染出来。
     const name = accountName(user);
-    const label = avatarLabel(accountLabel, name);
+    const badge = formatUnreadBadge(unread);
+    const label = badge ? `${avatarLabel(accountLabel, name)} · ${badge}` : avatarLabel(accountLabel, name);
     return (
       <Link
         href={`/${locale}/dashboard`}
         aria-label={label}
         title={label}
-        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+        className="relative inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
         style={avatarStyle(name || user.id)}
       >
         {initialOf(name)}
+        {badge && (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-background tabular-nums ring-2 ring-background"
+          >
+            {badge}
+          </span>
+        )}
       </Link>
     );
   }

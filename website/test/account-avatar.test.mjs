@@ -107,7 +107,9 @@ test("④ aria-label 含「账号」和名字", () => {
   const label = avatarLabel("账号", "张三");
   assert.match(label, /账号/, "aria-label 没说清这是账号");
   assert.match(label, /张三/, "aria-label 里没有名字");
-  assert.match(accountNav, /const label = avatarLabel\(accountLabel, name\)/, "标签不是「账号 + 名字」拼出来的");
+  assert.match(accountNav, /avatarLabel\(accountLabel, name\)/, "标签不是「账号 + 名字」拼出来的");
+  // 有未读角标时,数字也要进 aria-label(角标本身 aria-hidden,读屏不能只念名字)。
+  assert.match(accountNav, /badge \? .*avatarLabel\(accountLabel, name\).* : avatarLabel\(accountLabel, name\)/, "未读数字没有进 aria-label");
   assert.match(accountNav, /aria-label=\{label\}/, "头像没有 aria-label,读屏只会念一个字母");
 });
 

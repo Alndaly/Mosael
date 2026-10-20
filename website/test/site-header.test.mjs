@@ -62,8 +62,10 @@ test("登录是次级按钮(复用 Button + outline),不是纯文字链接", () 
   assert.match(accountNav, /<Link[\s\S]*?loginLabel/, "登录按钮里没有指向登录页的链接");
 
   // 它仍然是链接(键盘可达),没有被换成 div / span 伪装。
+  // 只看这颗登录按钮本身:站头头像右下角的未读角标是另一个 <span>,不影响登录语义。
+  const loginButton = accountNav.slice(accountNav.indexOf("<Button"), accountNav.lastIndexOf("</Button>") + "</Button>".length);
   assert.match(accountNav, /<Link[\s\S]*?href=\{`\/\$\{locale\}\/(account|login)/, "登录的链接目标语义丢了");
-  assert.doesNotMatch(accountNav, /<div\b|<span\b/, "登录被改成了没有链接语义的元素");
+  assert.doesNotMatch(loginButton, /<div\b|<span\b/, "登录被改成了没有链接语义的元素");
 
   // 显示文字已经说清是「登录」,不再叠一个重复的 aria-label。
   assert.doesNotMatch(accountNav, /aria-label=\{?(loginLabel|accountLabel)/, "aria-label 与可见文字重复");

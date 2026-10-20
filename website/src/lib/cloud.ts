@@ -98,6 +98,48 @@ export type CloudComment = {
 
 export type CloudCommentPage = { items: CloudComment[]; next_cursor: string | null };
 
+/** 通知的三种来由。 */
+export type CloudNotificationKind = "like" | "favorite" | "comment";
+
+/** 被通知的那条分享 —— 只够画一行,详情要点进去。 */
+export type CloudNotificationShare = { id: string; title: string; kind: CloudShareKind };
+
+/**
+ * 一条通知。`actor` 就是公开身份三列(`CloudIdentity`),**没有 email**。
+ *
+ * `comment_preview` 只在 `kind === "comment"` 时出现,是后端按字符截断的**纯文本**,
+ * 不是 markdown —— 前端原样当文字渲染。
+ */
+export type CloudNotification = {
+  id: string;
+  kind: CloudNotificationKind;
+  read_at: string | null;
+  created_at: string;
+  actor: CloudIdentity;
+  share: CloudNotificationShare;
+  comment_preview?: string;
+};
+
+export type CloudNotificationPage = {
+  items: CloudNotification[];
+  next_cursor: string | null;
+  /** **未读总数**,不是本页未读数。 */
+  unread: number;
+};
+
+/**
+ * 顶栏角标上的数字:0 条未读不显示(`null`),超过 99 收成 `99+`。
+ *
+ * 纯函数放这里,顶栏和 node 测试跑的是同一份;不在组件里另写一遍取整 / 截断。
+ */
+export function formatUnreadBadge(count: number): string | null {
+  const value = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+  if (value === 0) return null;
+  return value > 99 ? "99+" : String(value);
+}
+
+export type CloudNotificationQuery = { limit?: number; cursor?: string };
+
 export type CloudShareInput = {
   kind: CloudShareKind;
   title: string;
@@ -313,6 +355,33 @@ function createClient(context: RequestContext = {}) {
         return request(`/users/${encodeURIComponent(handle)}/shares${suffix ? `?${suffix}` : ""}`, {}, context);
       },
     },
+    notifications: {
+      /** 本人的通知,新序在前;`unread` 是未读**总数**,不是本页条数。 */
+      list(query: CloudNotificationQuery = {}): Promise<CloudNotificationPage> {
+        const search = new URLSearchParams();
+        if (query.limit) search.set("limit", String(query.limit));
+        if (query.cursor) search.set("cursor", query.cursor);
+        const suffix = search.toString();
+        return request(`/notifications${suffix ? `?${suffix}` : ""}`, {}, context);
+      },
+      /** 顶栏角标只需要这个数字。 */
+      unreadCount(): Promise<{ count: number }> {
+        return request("/notifications/unread-count", {}, context);
+      },
+      /**
+       * 标记已读。**不传 `ids` = 全部标已读**;`ids: []` = 一条都不标。
+       *
+       * 所以「全部」这条路径必须真的不带 body —— 传 `{}` 也好(后端把 `ids` 当 None),
+       * 但传 `[]` 是另一件事。
+       */
+      markRead(ids?: string[]): Promise<{ marked: number; unread: number }> {
+        return request(
+          "/notifications/read",
+          ids === undefined ? { method: "POST" } : { method: "POST", body: JSON.stringify({ ids }) },
+          context,
+        );
+      },
+    },
   };
 }
 
@@ -321,6 +390,7 @@ const browser = createClient();
 export const cloudAccount = browser.account;
 export const cloudProfile = browser.profile;
 export const cloudShares = browser.shares;
+export const cloudNotifications = browser.notifications;
 
 /**
  * 服务端渲染用的客户端。

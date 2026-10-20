@@ -247,7 +247,7 @@ test("⑤ 设备两块原样搬进控制台,/account 只剩身份与危险操作
   assert.match(page, /tab=devices/, "转发目标不是设备分区");
 });
 
-test("⑥ 通知只有空态(不造假),没有 handle 时个人信息高亮", () => {
+test("⑥ 通知接上云端列表(空态仍是零条分支、不造假),没有 handle 时个人信息高亮", () => {
   const zh = getMessages("zh").dashboard;
   const en = getMessages("en").dashboard;
   assert.equal(
@@ -260,7 +260,11 @@ test("⑥ 通知只有空态(不造假),没有 handle 时个人信息高亮", ()
   const panel = read(DASHBOARD_NOTIFICATIONS);
   assert.match(panel, /notificationsEmpty/, "通知分区没有用空态文案");
   assert.doesNotMatch(panel, /即将上线|敬请期待|coming soon|coming_soon|还在做|TODO/i, "通知写了「即将上线」之类的话");
-  assert.doesNotMatch(panel, /\.map\(|useState|cloudShares|cloudAccount/, "通知分区在造假数据 / 拉还不存在的接口");
+  // 列表的数据只能来自云端:走的是和 cloudShares 并列的 cloudNotifications,不造假条目、不拉别的接口。
+  assert.match(panel, /cloudNotifications\.list\(/, "通知分区没有接 /notifications");
+  assert.match(panel, /\.map\(/, "通知分区没有渲染条目");
+  assert.doesNotMatch(panel, /cloudShares|cloudAccount/, "通知分区在拉不属于它的接口");
+  assert.doesNotMatch(panel, /display_name:\s*"/, "通知分区写死了假数据");
 
   const lib = dashboardUtils();
   assert.equal(lib.defaultDashboardTab(false), "profile", "没有 handle 时没有默认停在个人信息");
