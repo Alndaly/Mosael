@@ -43,7 +43,7 @@ def test_migrations_build_the_full_schema(tmp_path):
         assert {"display_name", "handle", "avatar_seed"} <= columns
 
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version == ("0007",)
+        assert version == ("0008",)
 
         unique_handle = [
             row[1]
@@ -77,7 +77,7 @@ def test_upgrading_a_0001_database_keeps_rows_and_leaves_identity_empty(tmp_path
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"cloud_shares", "cloud_share_likes", "cloud_share_favorites", "cloud_share_comments"} <= tables
         assert {"cloud_share_notifications"} <= tables
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0008",)
 
 
 def test_0004_drops_the_device_binding_tables(tmp_path):
@@ -108,7 +108,7 @@ def test_0004_drops_the_device_binding_tables(tmp_path):
         assert not ({"cloud_device_codes", "cloud_devices"} & tables)
         # 账号本身不受影响。
         assert connection.execute("SELECT email FROM cloud_users WHERE id = 'u1'").fetchone() == ("old@example.com",)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0008",)
 
 
 def test_notification_table_shape_and_indexes(tmp_path):
@@ -158,8 +158,12 @@ def test_notification_table_shape_and_indexes(tmp_path):
             "SELECT sql FROM sqlite_master WHERE type = 'index' "
             "AND name = 'idx_cloud_share_notifications_recipient_created'"
         ).fetchone()[0]
-        # 新序在前:复合索引的第二列显式降序。
-        assert "created_at DESC" in ordering_sql
+        # **普通复合索引,不带 DESC**(0008 归一)。B-tree 能反向扫,排序方向不改变"按
+        # recipient_id 取、按 created_at 排"这件事;而 DESC 是表达式,会让真 Postgres 上
+        # 模型声明与库结构永久对不上(alembic check 先 remove 再 add)。SQLite 的反射不保留
+        # 方向,所以这个漂移只在 PG 上暴露 —— 归一之后两个库都对得上。
+        assert "created_at DESC" not in ordering_sql
+        assert "recipient_id, created_at" in ordering_sql
 
         unread_sql = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'index' "
@@ -200,7 +204,7 @@ def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0008",)
 
         # ① plugin 现在能建;非法值仍然被数据库兜住。
         connection.execute(_share_insert("plugin"), ("s1", "plugin"))
@@ -311,7 +315,7 @@ def test_0007_backfills_existing_rows_with_zh_cn_and_checks_two_locales(tmp_path
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0008",)
         columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_shares)")}
         assert columns["locale"][3] == 1  # NOT NULL
         # 既有行没有语言信息可推断 —— 迁移只能把它们都当中文,并在迁移里写明。
@@ -389,7 +393,7 @@ def test_0007_downgrade_round_trip_restores_the_0006_shape(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0008",)
         assert connection.execute("SELECT id, locale FROM cloud_shares").fetchall() == [("s1", "zh-CN")]
 
 
