@@ -38,6 +38,7 @@ export function ModelDownloadRow({
   busy,
   busyReason,
   actionHint,
+  extra,
   onDownload,
 }: {
   model: DownloadableModel;
@@ -50,6 +51,8 @@ export function ModelDownloadRow({
   busyReason?: string;
   /** 能点时按钮上的补充说明(点了会先做什么)。 */
   actionHint?: string;
+  /** 这一行自己的额外控件,摆在下载/已安装那一格**前面**(转写模型的「设为默认」)。 */
+  extra?: React.ReactNode;
   onDownload: () => void;
 }) {
   const t = useI18n();
@@ -120,6 +123,9 @@ export function ModelDownloadRow({
         ) : undefined
       }
     >
+      {/* 调用方自己的控件(转写模型的「设为默认」/「默认模型」)。放在下载那一格前面:
+          先回答"这一份是这台机器的默认吗",再说"它下没下" —— 两件事互不依赖。 */}
+      {extra}
       {/* **两件事分开说**:文件在不在盘上(status),和跑不跑得起来(runtime_ready)。
           它们完全可以一真一假 —— 模型缓存是别的工具下的,而这台机器上没有任何解释器装了
           对应的包。只看前者的话,页面写着「已安装」、一用就报找不到环境,而用户最容易做的事

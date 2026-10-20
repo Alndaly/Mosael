@@ -31,12 +31,13 @@ const setAgentVoice = vi.fn();
 const fetchAgentVoicePreview = vi.fn();
 const playBlob = vi.fn();
 
-/** 转写的候选(能力表):只有 missing 为空的那几家能选。 */
-const transcriptionChoices = [{
+/** 转写的候选(能力表):只有 missing 为空的那几家能选。`current` 是这个人在「能力提供方」定过的。 */
+let personalTranscription: string | null = null;
+const transcriptionChoices = () => [{
   capability: "transcription",
   label: "转写",
   description: "",
-  current: null,
+  current: personalTranscription,
   automatic: "builtin:funasr",
   defaultable: true,
   options: [
@@ -47,11 +48,18 @@ const transcriptionChoices = [{
   used_by: [],
 }];
 
+/** 转写模型目录:只为了把「跟随转写」写得具体(管理里设的默认是哪一个)。 */
+let defaultAsrModel: string | null = "WhisperX Large v3";
+
 vi.mock("@/api/client", () => ({
   getAgentVoice: () => Promise.resolve(pref),
   listTtsEngines: () => Promise.resolve([{ id: "edge", label: "Edge", ready: true }]),
   listTtsVoices: () => Promise.resolve([{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }]),
-  listCapabilityChoices: () => Promise.resolve(transcriptionChoices),
+  listCapabilityChoices: () => Promise.resolve(transcriptionChoices()),
+  listAsrModels: () =>
+    Promise.resolve([
+      { id: "whisperx-large-v3", engine: "whisperx", label: defaultAsrModel ?? "", is_default: Boolean(defaultAsrModel) },
+    ]),
   setAgentVoice: (body: unknown) => setAgentVoice(body),
   fetchAgentVoicePreview: (body: unknown) => fetchAgentVoicePreview(body),
 }));
@@ -96,6 +104,7 @@ describe("语音对话的自动保存", () => {
 describe("说话输入用哪一家", () => {
   beforeEach(() => {
     pref = saved;
+    defaultAsrModel = "WhisperX Large v3";
     setAgentVoice.mockReset();
     //: 回包就是存下的那份(和后端一样):状态跟着服务端走,不会因为测试桩回旧值而反复保存。
     setAgentVoice.mockImplementation(async (body: Record<string, unknown>) => ({ ...saved, ...body }));
@@ -114,6 +123,28 @@ describe("说话输入用哪一家", () => {
     expect(screen.getByRole("option", { name: "FunASR(本机)" })).toBeTruthy();
     //: 缺运行环境的候选不出现 —— 列出来只会让人选中之后才失败。
     expect(screen.queryByRole("option", { name: "sherpa-onnx(本机,轻量)" })).toBeNull();
+  });
+
+  it("「跟随转写」写着默认是哪一份 —— 不是一张空白卡片", async () => {
+    defaultAsrModel = "WhisperX Large v3";
+    renderSection();
+    const trigger = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    await waitFor(() => expect(trigger.textContent).toContain("WhisperX Large v3"));
+  });
+
+  it("没设过默认时只说跟随转写,不编一个名字", async () => {
+    defaultAsrModel = null;
+    renderSection();
+    const trigger = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    await waitFor(() => expect(trigger.textContent).toBe("agentVoiceDictationFollow"));
+  });
+
+  it("个人在能力提供方定过转写默认时,「跟随」显示的是那一项(它比部署默认更具体)", async () => {
+    personalTranscription = "builtin:whisperx";
+    renderSection();
+    const trigger = await screen.findByRole("combobox", { name: "agentVoiceDictationEngine" });
+    await waitFor(() => expect(trigger.textContent).toContain("WhisperX(本机)"));
+    personalTranscription = null;
   });
 
   it("选中即存;重进这一页还在", async () => {

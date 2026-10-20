@@ -143,7 +143,8 @@ export const publish = {
   agentVoiceSpeed: "语速",
   agentVoiceSpeedDesc: "对话通常比配音快一点。",
   agentVoiceDictationEngine: "说话输入用哪一家",
-  agentVoiceDictationEngineDesc: "把你说的话转成文字用哪一家。默认「跟随转写」,和「能力提供方 → 转写」用同一家;只列已经就绪的 —— 缺密钥或没装运行环境的选了也用不成。",
+  agentVoiceDictationEngineDesc:
+    "把你说的话转成文字用哪一家。它是「按用途的覆盖」,不是另一份默认:留空 = 用管理里设的默认转写模型(管理 → 引擎 → 转写模型);在这里选了谁,听写就只走那一家。如果你在「能力提供方 → 转写」单独定过,那一项比部署默认更具体。只列已经就绪的 —— 缺密钥或没装运行环境的选了也用不成。",
   agentVoiceDictationFollow: "跟随转写",
   agentVoiceSample: "好的,我用这个声音跟你说话。",
   agentVoicePreviewNeedsVoice: "先选好引擎和音色再试听",

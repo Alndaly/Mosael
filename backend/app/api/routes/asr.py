@@ -4,11 +4,13 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AsrModelOut
 from app.core.db import SessionLocal
+from app.domain import asr as asr_defaults
 from app.domain.permissions import ensure_deployment_admin
 from app.domain.voices import agent_voice, transcription
 from app.ai.runtime import asr_models
@@ -17,12 +19,42 @@ from app.core.i18n import get_current_locale, tr, translate_fields
 router = APIRouter(tags=["asr"])
 
 
+def _status_rows(db: Session) -> list[dict]:
+    """目录的每一行 + 「是不是默认」。默认只有一个,判据在 domain/asr(有效值的唯一解析点)。"""
+    default_id = asr_defaults.default_model_id(db)
+    rows = asr_models.list_status()
+    for row in rows:
+        row["is_default"] = bool(default_id) and row["id"] == default_id
+    return rows
+
+
 @router.get("/asr/models", response_model=list[AsrModelOut])
-def list_asr_models(user: CurrentUser) -> list[dict]:
+def list_asr_models(db: DbSession, user: CurrentUser) -> list[dict]:
     """Downloadable transcription models with install/download status."""
     # 目录里存的是 key,**在出口翻译**(见 core/i18n):领域数据不必知道语言。
     locale = get_current_locale()
-    return [translate_fields(row, ("label", "detail", "message"), locale) for row in asr_models.list_status()]
+    return [translate_fields(row, ("label", "detail", "message"), locale) for row in _status_rows(db)]
+
+
+@router.put("/asr/models/{model_id}/default", response_model=AsrModelOut)
+def set_default_asr_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """把这台机器的默认转写模型设成这一个。
+
+    **只许设已经安装的**(`domain/asr.set_default_model`):没装的设成默认,"默认"就是一句空话。
+    和下载同一类权限 —— 模型是这台机器上的资产,「默认用哪一份」对它也是同一件事。
+    回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。
+    """
+    ensure_deployment_admin(db, user)
+    try:
+        asr_defaults.set_default_model(db, model_id)
+    except asr_defaults.UnknownAsrModel as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except asr_defaults.AsrModelNotInstalled as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    locale = get_current_locale()
+    row = next(one for one in _status_rows(db) if one["id"] == model_id)
+    return translate_fields(row, ("label", "detail", "message"), locale)
 
 
 @router.post("/asr/models/{model_id}/download", response_model=AsrModelOut)

@@ -142,7 +142,8 @@ export const publish = {
   agentVoiceSpeed: "Speed",
   agentVoiceSpeedDesc: "Conversation usually runs a little faster than dubbing.",
   agentVoiceDictationEngine: "Speech input engine",
-  agentVoiceDictationEngineDesc: "Which engine turns what you say into text. “Follow transcription” uses the same engine as Capability providers → Transcription; only ready engines are listed — one missing a key or a runtime cannot be used.",
+  agentVoiceDictationEngineDesc:
+    "Which engine turns what you say into text. This is a per-purpose override, not another default: blank = the default transcription model set under Admin → Engines → Transcription models; pick one here and dictation uses only that engine. If you set one under Capability providers → Transcription, that is more specific than the deployment default. Only ready engines are listed — one missing a key or a runtime cannot be used.",
   agentVoiceDictationFollow: "Follow transcription",
   agentVoiceSample: "Right — this is how I will sound.",
   agentVoicePreviewNeedsVoice: "Pick an engine and a voice to preview",

@@ -32,7 +32,7 @@ def _heard(monkeypatch: pytest.MonkeyPatch, language: str, provider: str = "") -
     """挑出来的那一家转写这段音频时,交给 worker 的(引擎, 语言)。"""
     seen: dict[str, str] = {}
 
-    def fake(_wav, _python, engine_id, lang=""):
+    def fake(_wav, _python, engine_id, lang="", **_kwargs):
         seen.update(engine=engine_id, language=lang)
         return {"language": lang, "segments": []}
 

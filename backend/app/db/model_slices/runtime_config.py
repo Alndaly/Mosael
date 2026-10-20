@@ -1,4 +1,4 @@
-"""这台机器上的配置:本机 AI 运行时、部署、网络出口、TTS、用哪个 ffmpeg。
+"""这台机器上的配置:本机 AI 运行时、转写默认模型、部署、网络出口、TTS、用哪个 ffmpeg。
 
 都是**单例行**(每张表只有一行),所以它们不带 workspace_id —— 它们描述的是部署,不是工作区。
 """
@@ -19,6 +19,28 @@ class AiRuntimeConfig(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class AsrConfig(Base):
+    """Singleton (id='default') 这台机器默认用哪个转写模型(管理 → 引擎 → 转写模型)。
+
+    转写模型是**这台机器上的权重**,和「默认克隆引擎」(TtsConfig.engine)同一类:装了什么、默认
+    用哪个,对所有用户是同一件事 —— 所以是部署级设置,写它只给部署管理员。
+
+    **它不是唯一的一层。** 「设置 → 智能体 → 语音对话 → 说话输入用哪一家」是**按用途的覆盖**,
+    优先于它;每人自己在「能力提供方 → 转写」定过的默认也优先于它(那是他做的选择)。
+    有效值只有一处算,见 `domain/asr.resolve_asr_model`。
+
+    空串 = 没设过默认,行为和这一格出现之前完全一样(自动挑第一个跑得起来的本机引擎)。
+    """
+
+    __tablename__ = "asr_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    #: 转写模型目录(`ai/runtime/asr_models.CATALOG`)里的 id,不是引擎名 —— whisperx 有三档权重,
+    #: 「默认」要说得出是哪一档。空串 = 没设过。
+    default_model: Mapped[str] = mapped_column(String(80), nullable=False, default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

@@ -115,6 +115,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "未知模型",
         "en": "Unknown model.",
     },
+    "routeErr_unknownAsrModel": {
+        "zh": "没有这个转写模型:{model}(目录里只有 FunASR、sherpa-onnx 和 WhisperX 的几档)",
+        "en": "No such transcription model: {model}. The catalog only has FunASR, sherpa-onnx and a few WhisperX sizes.",
+    },
+    "routeErr_asrModelNotInstalled": {
+        "zh": "「{model}」还没安装,不能设成默认 —— 它现在只是一行目录。先在右边点「下载」,装好之后再设。",
+        "en": "“{model}” isn't installed yet, so it can't be the default — right now it's only a catalog entry. Hit Download first, then set it.",
+    },
     "routeErr_dictationTooLarge": {
         "zh": "录音太大了,听写请说短一点。",
         "en": "The recording is too large. Keep dictation shorter.",

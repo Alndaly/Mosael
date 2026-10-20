@@ -40,6 +40,7 @@ from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcr
 from app.media.paths import resolve_key
 from app.media.probe import probe_has_audio, probe_media
 from app.core.child_process import run_logged
+from app.domain import asr as asr_defaults
 from app.domain import capabilities
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
 from app.domain.plugins.manifest import TRANSCRIPTION
@@ -53,7 +54,9 @@ class ASRError(LocalizedError, RuntimeError):
     """转写的领域错误。带文案 key(`asrErr_*`),按读的人的语言翻(见 core/i18n)。"""
 
 
-BUILTIN_PREFIX = "builtin:"
+#: 内置实现的 id 前缀。**同一份字面量在 `capabilities.BUILTIN_PREFIX`**,这里只是取来用 ——
+#: 本模块的 `BUILTIN_PREFIX` 是外部(路由、`__all__`)一直在读的名字,保留它。
+BUILTIN_PREFIX = capabilities.BUILTIN_PREFIX
 #: 本机引擎,按不定默认时的先后排:FunASR(SenseVoice,多语种)在前。
 #:
 #: `sherpa-onnx` 排在 funasr 后面、whisperx 前面:它和 funasr 是**同一个模型**
@@ -111,15 +114,18 @@ class LocalTranscriber:
 
     builtin = True
 
-    def __init__(self, engine: str) -> None:
+    def __init__(self, engine: str, model_id: str = "") -> None:
         self.engine_id = engine
+        #: 这次用目录里的哪一份权重(空 = 这家引擎自己的型号:whisperx 读配置,另两家只有一份)。
+        #: **有效值由 `domain/asr.resolve_asr_model` 算** —— 这里只负责带着它往下走。
+        self.model_id = model_id
         self.name = tr(LOCAL_ENGINES[engine])
 
     def transcribe(self, wav: Path, language: str = "") -> dict:
         python_executable = asr_models.resolve_engine_python(self.engine_id)
         if not python_executable:
             raise ASRError("asrErr_engineRuntimeMissing", engine=self.engine_id)
-        return transcribe_with_engine(wav, python_executable, self.engine_id, language)
+        return transcribe_with_engine(wav, python_executable, self.engine_id, language, model_id=self.model_id)
 
 
 class PluginTranscriber:
@@ -160,10 +166,18 @@ class PluginTranscriber:
 
 
 def transcriber(db: Session, owner_user_id: str | None, provider_id: str | None) -> LocalTranscriber | PluginTranscriber:
-    """这一次用哪一家转写:点名的,或按这个人的默认挑。挑不出来抛一句说清下一步的话。"""
-    provider = capabilities.pick(db, owner_user_id, CAPABILITY, provider_id or None)
+    """这一次用哪一家转写、哪一份权重。挑不出来抛一句说清下一步的话。
+
+    **有效值只有一处算**(`domain/asr.resolve_asr_model`):调用方点名的 → 这个人在「能力提供方」
+    定过的默认 → 这台机器的默认(管理 → 引擎 → 转写模型)→ 第一个跑得起来的。听写在它上面还有
+    一层「说话输入用哪一家」,那一层由路由作为 `provider_id` 传进来(覆盖优先)。
+    """
+    resolved = asr_defaults.resolve_asr_model(
+        db, owner_user_id, explicit=provider_id or "", capability=CAPABILITY
+    )
+    provider = capabilities.pick(db, owner_user_id, CAPABILITY, resolved.provider_id or None)
     if provider.builtin:
-        return LocalTranscriber(provider.id.removeprefix(BUILTIN_PREFIX))
+        return LocalTranscriber(provider.id.removeprefix(BUILTIN_PREFIX), resolved.model_id)
     return PluginTranscriber(provider)
 
 
@@ -229,13 +243,17 @@ def transcribe_with_engine(
     python_executable: str,
     engine_id: str,
     language: str = "",
+    *,
+    model_id: str = "",
 ) -> dict:
     request: dict[str, Any] = {
         "audio_path": str(audio_path),
         # Worker protocol keeps the historical key for compatibility; inside this Module the
         # value is an ASR engine id, not a commercial provider connection.
         "provider": engine_id,
-        "whisper_model": settings.asr_whisper_model,
+        #: 这次点名/默认的那一份权重(目录 id);空 = 配置里的型号。
+        #: whisperx 才是"有哪一档"的那一家;funasr / sherpa-onnx 各只有一份,传不传都一样。
+        "whisper_model": asr_defaults.whisper_model_size(model_id) or settings.asr_whisper_model,
         # 空 = 让引擎自己检测(两个引擎都会:WhisperX 自带检测,SenseVoice 收 language="auto")。
         # 现在 FunASR 只有多语种这一个模型,所以"没说"就是"自动",不再有第二种含义。
         "language": language or "",
@@ -311,12 +329,16 @@ def parse_transcript_segments(segments: list[dict]) -> list[SegmentIn]:
     return parsed
 
 
-def _mirror_model_download_progress(job_id: str, engine_id: str) -> threading.Event:
+def _mirror_model_download_progress(job_id: str, engine_id: str, model_id: str = "") -> threading.Event:
     """While a transcribe is running, if its model isn't installed yet, poll the
-    download and map it onto job progress 0.25→0.9. Returns a stop Event."""
+    download and map it onto job progress 0.25→0.9. Returns a stop Event.
+
+    `model_id` 是这一次实际用的那一份权重(见 domain/asr):whisperx 的进度分母要跟着它走 ——
+    否则默认设成 Large v3、进度条却按配置里的 small(500MB)量,刻度会早早走满。
+    """
 
     stop = threading.Event()
-    entry = asr_models.entry_for_transcribe(engine_id)
+    entry = asr_defaults.model_entry(model_id) or asr_models.entry_for_transcribe(engine_id)
     if entry is None or asr_models.is_installed(entry):
         return stop  # nothing to download → leave the job at 0.25 during inference
 
@@ -404,7 +426,8 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             emit_job_event(db, job.id, "job.running", {"provider": engine_id})
             # 「在转」先落库:转写要一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
             db.commit()
-            logger.info("transcription job %s: engine=%s asset=%s", job_id, engine_id, asset_id)
+            chosen_model = getattr(chosen, "model_id", "")
+            logger.info("transcription job %s: engine=%s model=%s asset=%s", job_id, engine_id, chosen_model or "-", asset_id)
 
             asset = db.get(Asset, asset_id)
             source = resolve_key(asset.file_key)
@@ -416,7 +439,11 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 db.commit()
                 # First transcribe on a machine downloads ~2GB of models inside the
                 # library — surface that as job progress instead of a frozen 25%.
-                stop = _mirror_model_download_progress(job_id, engine_id) if chosen.builtin else threading.Event()
+                stop = (
+                    _mirror_model_download_progress(job_id, engine_id, chosen_model)
+                    if chosen.builtin
+                    else threading.Event()
+                )
                 try:
                     output = chosen.transcribe(wav, language)
                 finally:

@@ -43,6 +43,14 @@ export function downloadAsrModel(id: string): Promise<AsrModel> {
   return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
 
+/**
+ * 把这一个设成**这台机器**的默认转写模型(管理 → 引擎 → 转写模型;只有部署管理员能调)。
+ * 回包是改完之后的那一行 —— 界面照它再向后端问一次整张列表,不自己把别的行改掉。
+ */
+export function setDefaultAsrModel(id: string): Promise<AsrModel> {
+  return api<AsrModel>(`/api/asr/models/${encodeURIComponent(id)}/default`, { method: "PUT" });
+}
+
 /** 人声/背景音分离引擎(ADR-0016)。装在**后端主机**上,所以和转写模型同一条路。 */
 export function listSeparationEngines(): Promise<SeparationEngine[]> {
   return api<SeparationEngine[]>("/api/separation/engines");

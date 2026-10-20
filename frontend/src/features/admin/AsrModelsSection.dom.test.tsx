@@ -18,11 +18,21 @@ vi.mock("@/app/preferences", () => ({
 const base = {
   detail: "中文识别", status: "missing", runtime_ready: false, runtime_checked: true, downloaded_bytes: 0,
   total_bytes: 0, expected_bytes: 973_000_000, total_is_estimate: false, speed_bps: 0, eta_seconds: null, message: "",
+  is_default: false,
 };
 let models: Array<Record<string, unknown>> = [];
 const downloads: string[] = [];
+//: 「设为默认」点过哪几个。
+const defaultCalls: string[] = [];
+//: 接口拒了一次时的原话(toast 会把它显示出来)。
+const errors: string[] = [];
+let rejectDefault: string | null = null;
 //: 这份列表被问了几次。「装完之后界面跟着变」= 它再问了一次,而这一次后端答的是新状态。
 const reads: string[] = [];
+
+vi.mock("sonner", () => ({
+  toast: { error: (message: string) => errors.push(message) },
+}));
 
 vi.mock("@/api/client", () => ({
   listAsrModels: () => {
@@ -32,6 +42,13 @@ vi.mock("@/api/client", () => ({
   downloadAsrModel: (id: string) => {
     downloads.push(id);
     return Promise.resolve(models[0]);
+  },
+  setDefaultAsrModel: (id: string) => {
+    defaultCalls.push(id);
+    if (rejectDefault) return Promise.reject(new Error(rejectDefault));
+    // 后端是真的存下来了:再问一次列表时,它也会照新答案回。
+    models = models.map((one) => ({ ...one, is_default: one.id === id }));
+    return Promise.resolve(models.find((one) => one.id === id));
   },
 }));
 
@@ -54,6 +71,9 @@ const rowOf = async (label: string) =>
 
 beforeEach(() => {
   downloads.length = 0;
+  defaultCalls.length = 0;
+  errors.length = 0;
+  rejectDefault = null;
   reads.length = 0;
 });
 
@@ -82,19 +102,23 @@ describe("转写模型", () => {
     await waitFor(() => expect(downloads).toEqual(["funasr"]));
   });
 
-  it("装好且跑得起来:右边是已安装,没有按钮", async () => {
+  it("装好且跑得起来:右边是已安装和「设为默认」,没有下载按钮", async () => {
     renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true }]);
     const row = await rowOf("FunASR");
     const state = within(row).getByText("asrModelInstalled").closest("[data-admin-row-state]");
     expect(state).toHaveAttribute("data-tone", "success");
-    expect(within(row).queryByRole("button")).toBeNull();
+    //: 已安装 = 能设默认(盘上有这份权重)。下载那一套按钮不该再出现。
+    expect(within(row).getByRole("button", { name: /asrModelSetDefault/ })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /asrModelDownload|asrModelRetry|asrModelInstallRuntime/ })).toBeNull();
   });
 
-  it("运行环境还没测完时说「正在检查」,不下结论也不摆按钮", async () => {
+  it("运行环境还没测完时说「正在检查」,不下结论也不摆下载按钮(默认仍可设:权重在盘上)", async () => {
     renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_checked: false }]);
     const row = await rowOf("FunASR");
     expect(within(row).getByText("runtimeChecking")).toHaveAttribute("data-admin-row-note");
-    expect(within(row).queryByRole("button")).toBeNull();
+    expect(within(row).queryByRole("button", { name: /asrModelDownload|asrModelRetry|asrModelInstallRuntime/ })).toBeNull();
+    //: 权重在盘上,只是还没探完环境 —— 设默认仍然成立(设默认看的是权重在不在)。
+    expect(within(row).getByRole("button", { name: /asrModelSetDefault/ })).toBeInTheDocument();
     expect(row).not.toHaveTextContent("asrModelInstalled");
   });
 
@@ -173,5 +197,64 @@ describe("转写模型", () => {
     await waitFor(() => expect(reads.length).toBeGreaterThan(1));
     await waitFor(() => expect(within(row).getByText("asrModelInstalled")).toBeInTheDocument());
     expect(within(row).queryByText("asrModelNoRuntime")).toBeNull();
+  });
+});
+
+/**
+ * 用户报的那件事:五张卡(已安装)只有「已安装 / 下载」,没有**设为默认**。
+ * 默认是这台机器的设定,所以只有部署管理员、且只有**已经装在盘上**的模型能设 ——
+ * 设一份没装的,下一次转写照样得先下几个 GB,「默认」只是一句空话。
+ */
+describe("设为默认", () => {
+  it("已安装的卡上能设默认;已默认的显示「默认模型」且不能再点", async () => {
+    const user = userEvent.setup();
+    renderSection([
+      { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true },
+      { ...base, id: "whisperx-large-v3", engine: "whisperx", label: "WhisperX Large v3", status: "installed", runtime_ready: true, is_default: true },
+    ]);
+    const funasr = await rowOf("FunASR");
+    //: 已默认的那一个只说「默认模型」,不再是一颗能点的按钮。
+    const large = await rowOf("WhisperX Large v3");
+    expect(within(large).getByText("asrModelIsDefault")).toHaveAttribute("data-admin-row-state");
+    expect(within(large).queryByRole("button", { name: /asrModelSetDefault/ })).toBeNull();
+
+    await user.click(within(funasr).getByRole("button", { name: /asrModelSetDefault/ }));
+    await waitFor(() => expect(defaultCalls).toEqual(["funasr"]));
+  });
+
+  it("没安装的卡上没有「设为默认」", async () => {
+    renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR" }]);
+    const row = await rowOf("FunASR");
+    expect(within(row).queryByRole("button", { name: /asrModelSetDefault/ })).toBeNull();
+  });
+
+  it("设完立刻反映:从后端重新读整张列表,而不是只改本地那一个开关", async () => {
+    const user = userEvent.setup();
+    renderSection([
+      { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true },
+      { ...base, id: "whisperx-large-v3", engine: "whisperx", label: "WhisperX Large v3", status: "installed", runtime_ready: true, is_default: true },
+    ]);
+    expect(reads).toHaveLength(1);
+
+    await user.click(within(await rowOf("FunASR")).getByRole("button", { name: /asrModelSetDefault/ }));
+
+    //: **再问一次后端**:默认只有一个,别的行(原来是默认的那一行)也得跟着改口。
+    await waitFor(() => expect(reads.length).toBeGreaterThan(1));
+    await waitFor(async () => {
+      expect(within(await rowOf("FunASR")).getByText("asrModelIsDefault")).toBeInTheDocument();
+      expect(within(await rowOf("WhisperX Large v3")).queryByText("asrModelIsDefault")).toBeNull();
+    });
+  });
+
+  it("接口拒了要说清原因 —— 不是按钮点一下什么都不发生", async () => {
+    rejectDefault = "「WhisperX Small」还没安装,不能设成默认 —— 先在右边点「下载」,装好之后再设。";
+    const user = userEvent.setup();
+    renderSection([
+      { ...base, id: "whisperx-small", engine: "whisperx", label: "WhisperX Small", status: "installed" },
+    ]);
+
+    await user.click(within(await rowOf("WhisperX Small")).getByRole("button", { name: /asrModelSetDefault/ }));
+
+    await waitFor(() => expect(errors).toEqual([rejectDefault]));
   });
 });

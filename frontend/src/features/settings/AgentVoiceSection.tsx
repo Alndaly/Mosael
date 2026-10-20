@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import {
   fetchAgentVoicePreview,
   getAgentVoice,
+  listAsrModels,
   listCapabilityChoices,
   listTtsEngines,
   listTtsVoices,
@@ -48,6 +49,9 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   //: 说话输入的候选就是「转写」那项能力的候选 —— 和「设置 → 能力提供方」同源,不是另一份目录。
   const capabilities = useQuery({ queryKey: capabilityKeys.choices(), queryFn: listCapabilityChoices, staleTime: 30_000 });
+  //: 「留空 = 跟随转写默认」到底是谁:管理里设的那一份(只读,拿来把这一格说清楚)。
+  //: 这个人自己又在「能力提供方 → 转写」定过的话,那比部署默认更具体 —— 显示那个。
+  const asrModels = useQuery({ queryKey: ["asr-models"], queryFn: listAsrModels, staleTime: 60_000 });
 
   const [engine, setEngine] = React.useState("");
   const [voice, setVoice] = React.useState("");
@@ -88,6 +92,14 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
   const dictationChoices = ((capabilities.data ?? [])
     .find((one) => one.capability === "transcription")?.options ?? [])
     .filter((one) => (one.missing ?? []).length === 0);
+  //: 「跟随默认」不是一张空白卡片:把此刻它实际会用的那一份写出来。
+  //: 这个人在「能力提供方 → 转写」定过的话用那个(那是一次更具体的选择);否则就是管理里设的默认模型。
+  const transcriptionChoice = capabilities.data?.find((one) => one.capability === "transcription");
+  const personalTranscription = transcriptionChoice?.current
+    ? (transcriptionChoice.options ?? []).find((one) => one.id === transcriptionChoice.current)?.name ?? ""
+    : "";
+  const defaultTranscriptionModel = (asrModels.data ?? []).find((one) => one.is_default);
+  const followTranscription = personalTranscription || defaultTranscriptionModel?.label || "";
 
   const save = useMutation({
     //: 点了配音库里的嗓子:这个账号第一次用它,先问一次要不要传上去(ADR 0037),同意了再存。
@@ -315,6 +327,7 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
           <SelectContent>
             <SelectItem value={FOLLOW_TRANSCRIPTION} truncate>
               {t("agentVoiceDictationFollow")}
+              {followTranscription ? ` · ${followTranscription}` : ""}
             </SelectItem>
             {dictationChoices.map((one) => (
               <SelectItem key={one.id} value={one.id} truncate>

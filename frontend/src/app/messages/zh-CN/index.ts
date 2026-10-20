@@ -16,6 +16,7 @@ import { plugins } from "./plugins";
 import { publish } from "./publish";
 import { scene3d } from "./scene3d";
 import { shell } from "./shell";
+import { transcription } from "./transcription";
 import { workflowTriggers } from "./workflowTriggers";
 
 export const zhCN = {
@@ -37,4 +38,5 @@ export const zhCN = {
   ...assetLibrary,
   ...browserTools,
   ...workflowTriggers,
+  ...transcription,
 } as const;

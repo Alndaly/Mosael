@@ -118,6 +118,11 @@ class Provider:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+#: 宿主内置实现的 id 前缀(`builtin:funasr`、`builtin:rnnoise`)。内置实现和插件连接在候选表里
+#: 是同一类,只由这个前缀分得开 —— 各家能力此前各写一遍字面量,谁要按前缀拆引擎名都得先 import
+#: 那一家。放在契约这一层,是因为它描述的是**提供方 id 的形状**,不是某一项能力的细节。
+BUILTIN_PREFIX = "builtin:"
+
 _registry: dict[str, Capability] = {}
 #: 调用类能力的收尾(ADR 0033 §3):智能体、工作流、插件页调了认领它的工具之后,插件交回的产出怎么交给调用方
 #: (文档解析 → 存成那份文档的一次解析)。没登记 = 按通用规矩收(文件进素材库、别的原样交回)。宿主自己的入口
@@ -417,6 +422,7 @@ def set_default(db: Session, owner_user_id: str, capability: Capability, provide
 
 
 __all__ = [
+    "BUILTIN_PREFIX",
     "Builtin",
     "Capability",
     "CapabilityUnavailable",

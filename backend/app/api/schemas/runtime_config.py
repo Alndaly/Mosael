@@ -252,3 +252,6 @@ class AsrModelOut(ApiModel):
     speed_bps: float = 0.0
     eta_seconds: float | None = None
     message: str = ""
+    #: 是不是**这台机器**的默认转写模型(管理 → 引擎 → 转写模型里设的那一个)。
+    #: 只有一个默认:列表里至多一行是 true。
+    is_default: bool = False

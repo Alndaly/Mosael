@@ -43,7 +43,7 @@ def test_it_fills_in_what_the_reference_says(monkeypatch) -> None:
     monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "/usr/bin/python3")
     monkeypatch.setattr(
         transcription, "transcribe_with_engine",
-        lambda *_args: {"segments": [{"start": 0, "end": 3, "text": "今天是个"},
+        lambda *_args, **_kwargs: {"segments": [{"start": 0, "end": 3, "text": "今天是个"},
                                                     {"start": 3, "end": 7, "text": "好天气"}]},
     )
     client = fresh_client()
@@ -71,7 +71,7 @@ def test_it_says_so_when_transcription_is_not_installed(monkeypatch) -> None:
 def test_an_empty_result_is_not_written(monkeypatch) -> None:
     """识别出一片空白时别把空文本写回去 —— 那和没识别一样,却看起来像成功了。"""
     monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "/usr/bin/python3")
-    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda *_args: {"segments": []})
+    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda *_args, **_kwargs: {"segments": []})
     client = fresh_client()
     voice_id = _a_voice(client)
 
@@ -102,7 +102,7 @@ def test_the_recognised_text_actually_unblocks_fish(monkeypatch) -> None:
     from app.core.db import SessionLocal
 
     monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "/usr/bin/python3")
-    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda *_args: {"segments": [{"text": "今天是个好天气"}]})
+    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda *_args, **_kwargs: {"segments": [{"text": "今天是个好天气"}]})
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")
     monkeypatch.setattr(tts_models, "is_installed", lambda engine_id: True)
 

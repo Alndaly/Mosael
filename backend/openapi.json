@@ -4581,6 +4581,49 @@
         }
       }
     },
+    "/api/asr/models/{model_id}/default": {
+      "put": {
+        "tags": [
+          "asr"
+        ],
+        "summary": "Set Default Asr Model",
+        "description": "把这台机器的默认转写模型设成这一个。\n\n**只许设已经安装的**(`domain/asr.set_default_model`):没装的设成默认,\"默认\"就是一句空话。\n和下载同一类权限 —— 模型是这台机器上的资产,「默认用哪一份」对它也是同一件事。\n回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。",
+        "operationId": "set_default_asr_model_api_asr_models__model_id__default_put",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsrModelOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/asr/models/{model_id}/download": {
       "post": {
         "tags": [
@@ -30875,6 +30918,11 @@
             "type": "string",
             "title": "Message",
             "default": ""
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
           }
         },
         "type": "object",

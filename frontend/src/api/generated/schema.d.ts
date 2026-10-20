@@ -1755,6 +1755,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asr/models/{model_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Default Asr Model
+         * @description 把这台机器的默认转写模型设成这一个。
+         *
+         *     **只许设已经安装的**(`domain/asr.set_default_model`):没装的设成默认,"默认"就是一句空话。
+         *     和下载同一类权限 —— 模型是这台机器上的资产,「默认用哪一份」对它也是同一件事。
+         *     回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。
+         */
+        put: operations["set_default_asr_model_api_asr_models__model_id__default_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/asr/models/{model_id}/download": {
         parameters: {
             query?: never;
@@ -10831,6 +10855,11 @@ export interface components {
              * @default
              */
             message: string;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
         };
         /**
          * AssetCardMediaOut
@@ -25188,6 +25217,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AsrModelOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_default_asr_model_api_asr_models__model_id__default_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsrModelOut"];
                 };
             };
             /** @description Validation Error */
