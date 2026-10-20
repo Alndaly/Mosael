@@ -19,7 +19,7 @@ export function SiteHeader({ locale }: { locale: Locale }) {
   const t = getMessages(locale);
   const links = [
     { href: localePath(locale), match: localePath(locale), exact: true, label: t.nav.product },
-    // 社区现在有自己的入口(分享列表);插件和工作流是它的两个分区,在这一格里一起高亮。
+    // 社区现在有自己的入口(分享列表);插件、工作流和创意画板是它的几个分区,在这一格里一起高亮。
     // 它们仍从页脚与社区页头的标签页到达,插件市场没有被藏起来。
     {
       href: localePath(locale, "/community"),
@@ -27,6 +27,7 @@ export function SiteHeader({ locale }: { locale: Locale }) {
         localePath(locale, "/community"),
         localePath(locale, "/plugins"),
         localePath(locale, "/workflows"),
+        localePath(locale, "/boards"),
       ],
       label: t.nav.community,
     },

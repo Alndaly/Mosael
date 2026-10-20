@@ -37,6 +37,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
       links: [
         { label: t.nav.plugins, href: localePath(locale, "/plugins") },
         { label: t.nav.workflows, href: localePath(locale, "/workflows") },
+        { label: t.boards.title, href: localePath(locale, "/boards") },
       ],
     },
     {

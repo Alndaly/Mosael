@@ -11,7 +11,8 @@ import { getMessages } from "@/i18n/messages";
  * 那一项整个从页头消失,用户看到的就是「列表没了」—— 数据一直在,消失的只是入口。把当前页面挡在函数签名
  * 之外,这类「按页面裁剪导航」的写法就从结构上不可能再出现;高亮由页头自己拿 `active` 比对(见 community-header.tsx)。
  *
- * `/community` 是社区首页(插件 / 工作流两组落地页),它不占 tab —— 两组各自的「查看全部」指向市场页。
+ * `/community` 是社区首页(插件 / 工作流 / 创意画板三段落地页),它不占 tab —— 各段的「查看全部」指向市场页。
+ * 创意画板也不占 tab:它只有用户画布分享、没有官方静态内容,入口在首页第三段与页脚。
  */
 export const COMMUNITY_SECTIONS = ["plugins", "workflows"] as const;
 

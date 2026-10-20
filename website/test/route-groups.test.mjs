@@ -34,6 +34,7 @@ const { getMessages } = await import("../src/i18n/messages.ts");
 /** 站内页面的 route(相对 `[locale]`),`page.tsx` 之前那段就是 URL。 */
 const SITE_ROUTES = [
   "page.tsx",
+  "boards/page.tsx",
   "changelog/page.tsx",
   "community/page.tsx",
   "community/[id]/page.tsx",
@@ -85,6 +86,7 @@ test("分组名不进 URL:每个页面还是原来的地址", () => {
     [
       "",
       "/account",
+      "/boards",
       "/changelog",
       "/community",
       "/community/[id]",

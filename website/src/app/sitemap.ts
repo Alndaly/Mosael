@@ -25,6 +25,7 @@ function entries(): Entry[] {
     { path: "/community", priority: 0.7 },
     { path: "/workflows", priority: 0.8 },
     { path: "/plugins", priority: 0.8 },
+    { path: "/boards", priority: 0.7 },
     { path: "/changelog", priority: 0.6 },
   ];
   // 两种语言的文档目录是同构的(同一批 section/name),按默认语言枚举一遍即可;

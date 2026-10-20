@@ -1,14 +1,17 @@
 "use client";
 
 /**
- * 社区首页(落地页):两段,插件 / 工作流。
+ * 社区首页(落地页):三段,插件 / 工作流 / 创意画板。
  *
- * 每段都是「官方静态卡片在前,当前语言的用户分享在后」,和 `/plugins`、`/workflows` 用
+ * 前两段都是「官方静态卡片在前,当前语言的用户分享在后」,和 `/plugins`、`/workflows` 用
  * **同一份规则**:
  *
  * - 取数:`fetchListedShares`(经 `useListedShares`)按 `kind` 各取一次,请求里带当前语言;
  * - 合并:`listedShares` 跳过命中静态 slug 的官方分享(否则同一件东西画两张),再按新→旧排;
  * - 排序:`mergeListing` 把官方卡片全部放在分享卡片之前。
+ *
+ * 第三段「创意画板」只有用户分享:官方内容里没有 board,所以没有静态卡片、没有合并,
+ * 一条画布分享都没有时整段不渲染(不画空块)。
  *
  * 这里**没有搜索 / 排序 / 分页**,也没有空态和错误块:搜索、筛选在各自的市场页
  * (「查看全部」过去);某组没有分享就只显示官方卡片,云端不可达时分享为空 —— 官方内容
@@ -120,6 +123,36 @@ function WorkflowGroup({ locale, workflows }: { locale: Locale; workflows: Workf
   );
 }
 
+/**
+ * 第三组:创意画板。**只**来自用户分享 —— 官方内容里没有 board,所以这里没有官方静态
+ * 卡片,也不走 `mergeListing`。一条分享都没有时整组不出现,和另外两组的规则一致。
+ */
+function BoardGroup({ locale }: { locale: Locale }) {
+  const t = getMessages(locale);
+  const fetched = useListedShares("board", locale);
+  // 和另外两组同一份排序规则(新→旧);画布没有官方 slug 要去重,所以官方集合是空的。
+  const shares = listedShares(fetched, []);
+  // 画布没有官方兜底内容:空组没有任何东西可画,整段不渲染。
+  if (shares.length === 0) return null;
+  return (
+    <section className="grid gap-4" aria-labelledby="community-boards">
+      <GroupHeader
+        id="community-boards"
+        title={t.boards.title}
+        label={t.community.viewAll}
+        href={localePath(locale, "/boards")}
+      />
+      <ul className={GRID}>
+        {shares.map((share) => (
+          <li key={`share-${share.id}`} className="grid">
+            <ShareCard locale={locale} share={share} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function CommunityLanding({
   locale,
   plugins,
@@ -133,6 +166,7 @@ export function CommunityLanding({
     <div className="grid gap-12">
       <PluginGroup locale={locale} plugins={plugins} />
       <WorkflowGroup locale={locale} workflows={workflows} />
+      <BoardGroup locale={locale} />
     </div>
   );
 }

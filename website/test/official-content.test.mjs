@@ -306,7 +306,7 @@ test("③ /plugins、/workflows 接上混排:静态卡片不动,分享卡片进�
   assert.match(workflowsPage, /listWorkflows\(locale\)/, "/workflows 不再用静态官方工作流列表");
   assert.match(workflowsPage, /<WorkflowBrowser locale=\{locale\} workflows=\{workflows\}/, "/workflows 没有把静态工作流交给列表");
 
-  // 保持静态页面(135 页):取数在浏览器里发生,不在构建期把云端结果烤进 HTML。
+  // 保持静态页面(137 页):取数在浏览器里发生,不在构建期把云端结果烤进 HTML。
   assert.doesNotMatch(pluginsPage, /force-dynamic|loadListedShares|loadShare/, "/plugins 被改成了动态取数,构建页数会变");
   assert.doesNotMatch(workflowsPage, /force-dynamic|loadListedShares|loadShare/, "/workflows 被改成了动态取数,构建页数会变");
 
@@ -316,7 +316,8 @@ test("③ /plugins、/workflows 接上混排:静态卡片不动,分享卡片进�
   assert.match(browse, /useListedShares\("plugin", locale\)/, "PluginBrowser 没有取 plugin 分享");
   assert.match(browse, /useListedShares\("workflow", locale\)/, "WorkflowBrowser 没有取 workflow 分享");
   assert.match(browse, /listedShares\(shares, officialSlugs\)/, "没有按官方 slug 跳过已静态展示的官方分享");
-  assert.equal((browse.match(/<ShareCard/g) ?? []).length, 2, "分享卡片没有同时出现在插件和工作流列表里");
+  // 分享卡片:插件 / 工作流 / 画板三个列表各一处(画板列表全是用户分享)。
+  assert.equal((browse.match(/<ShareCard/g) ?? []).length, 3, "分享卡片没有同时出现在插件、工作流和画板列表里");
   assert.match(browse, /mergeListing\(/, "官方卡片和分享卡片没有走同一条合并逻辑");
   assert.match(browse, /entry\.kind === "official"[\s\S]{0,400}<PluginCard/, "PluginBrowser 的官方条目没有用静态卡片");
   assert.match(browse, /entry\.kind === "official"[\s\S]{0,400}<WorkflowCard/, "WorkflowBrowser 的官方条目没有用静态卡片");

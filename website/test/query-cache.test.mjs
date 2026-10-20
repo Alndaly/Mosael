@@ -247,9 +247,17 @@ test("⑤ 退出登录 → invalidate viewer(不刷的话站头还挂着上一�
 
 test("⑥ 列表:失败不重试、成功不重复拉(staleTime),并且用 useQuery 包起来", async () => {
   const browse = read(BROWSE);
-  assert.match(browse, /function useListedShares/, "两组共用的分享取数规则被搬走了");
+  assert.match(browse, /function useListedShares/, "三组共用的分享取数规则被搬走了");
   assert.match(browse, /useQuery\(/, "分享列表没有用 useQuery(仍是 useEffect 取数)");
-  assert.match(browse, /queryKey: queryKeys\.shareList\(kind, locale\)/, "分享列表没有用集中定义的键(按 kind + locale 分开缓存)");
+  // 插件 / 工作流仍走 queryKeys.shareList(kind, locale);board 没有独立的 ShareListKind,
+  // 键挂在同一个分组前缀下,上传 / 删除画布时也会按整组失效。
+  assert.match(browse, /queryKey: listKey\(kind, locale\)/, "分享列表没有用集中定义的键(按 kind + locale 分开缓存)");
+  assert.match(browse, /queryKeys\.shareList\(kind, locale\)/, "插件 / 工作流的列表键没有走 queryKeys.shareList");
+  assert.match(
+    browse,
+    /\[\.\.\.queryKeys\.shareList\(\), "board", locale\]/,
+    "画布列表的键没有挂在 queryKeys.shareList() 的分组前缀下",
+  );
   assert.match(browse, /retry:\s*false/, "列表失败会重试到天荒地老");
   assert.match(browse, /staleTime:/, "列表没有 staleTime,每次切页都会重拉");
   assert.match(browse, /fetchListedShares/, "列表没有复用 fetchListedShares 的「失败退化成空数组」规则");
@@ -257,6 +265,7 @@ test("⑥ 列表:失败不重试、成功不重复拉(staleTime),并且用 useQu
   const keys = await importSource("lib/queryKeys.ts");
   assert.deepEqual(keys.queryKeys.shareList("plugin", "zh"), ["shares", "list", "plugin", "zh"]);
   assert.deepEqual(keys.queryKeys.shareList("workflow", "en"), ["shares", "list", "workflow", "en"]);
+  assert.deepEqual([...keys.queryKeys.shareList(), "board", "zh"], ["shares", "list", "board", "zh"], "画布键的语言段丢了");
 });
 
 test("⑦ 更新用户信息后该刷新的清单:每条都有对应的 invalidateQueries", async () => {

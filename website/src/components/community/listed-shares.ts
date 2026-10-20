@@ -30,6 +30,15 @@ export const LISTED_SHARE_LIMIT = 50;
 /** 列表页要混进来的两种官方内容。 */
 export type ListedShareKind = "plugin" | "workflow";
 
+/**
+ * 列表取数接受的 kind:上面两种官方内容,外加 **board**。
+ *
+ * 画布没有官方静态条目(`lib/registry` 里只有插件 / 工作流),所以它不出现在合并规则里;
+ * 但 `/boards` 和社区首页的第三组仍要按同一个接口取数 —— 签名放宽到这里,取数 / 语言兜底
+ * 与官方组逐字一致。
+ */
+export type ListedShareListKind = ListedShareKind | "board";
+
 /** 合并后的一项:要么是静态官方条目,要么是一张分享卡片。 */
 export type ListingItem<T> =
   | { kind: "official"; official: T }
@@ -38,7 +47,7 @@ export type ListingItem<T> =
 /** 从云端拿一份当前语言的分享列表。失败 → 空数组(页面只留静态列表)。 */
 export async function fetchListedShares(
   load: (query: CloudShareQuery) => Promise<CloudSharePage>,
-  kind: ListedShareKind,
+  kind: ListedShareListKind,
   locale: Locale,
 ): Promise<CloudShare[]> {
   const wanted = cloudLocale(locale);

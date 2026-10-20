@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 /**
- * 保持按请求渲染:构建页数不变(135),分享在浏览器里按当前语言各取一次。
+ * 保持按请求渲染:构建页数不变(137),分享在浏览器里按当前语言各取一次。
  * 这页本身没有服务端取数 —— 官方内容来自构建期读好的 registry,用户分享由落地页组件取。
  */
 export const dynamic = "force-dynamic";
@@ -32,12 +32,13 @@ export const dynamic = "force-dynamic";
 /**
  * 社区首页(落地页)。
  *
- * **两组,不是一张混排列表**:
+ * **三组,不是一张混排列表**:
  *
  * - 插件:官方静态卡片(权限 / 工具 / 安装,来自 `lib/registry`)+ 当前语言的插件分享;
- * - 工作流:官方静态卡片(节点数 / 阶段)+ 当前语言的工作流分享。
+ * - 工作流:官方静态卡片(节点数 / 阶段)+ 当前语言的工作流分享;
+ * - 创意画板:只有当前语言的用户画布分享(官方内容里没有 board),一条都没有时整组不出现。
  *
- * 每组都是「官方在前、分享在后」,合并 / 去重 / 取数规则和 `/plugins`、`/workflows`
+ * 前两组都是「官方在前、分享在后」,合并 / 去重 / 取数规则和 `/plugins`、`/workflows`
  * 共用同一份 `listed-shares.ts`。**搜索、排序、翻页不在这页** —— 它们留在各自的市场页,
  * 这里的「查看全部」直接过去。
  *
@@ -59,7 +60,7 @@ export default async function CommunityPage({ params }: { params: Params }) {
         counts={{ plugins: plugins.length, workflows: workflows.length }}
         title={t.homeTitle}
         lede={t.homeLede}
-        // 整页只有这一个上传入口(两组之间、空态都不再放第二个)。
+        // 整页只有这一个上传入口(各组之间、空态都不再放第二个)。
         contribute={{ label: t.uploadCta, href: localePath(locale, "/community/upload") }}
       />
       <section className="bg-paper">

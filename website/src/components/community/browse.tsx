@@ -8,10 +8,15 @@
  */
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X } from "lucide-react";
+import { BadgeCheck, LayoutGrid, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X, ArrowUpRight } from "lucide-react";
 import * as React from "react";
 
-import { fetchListedShares, listedShares, mergeListing } from "@/components/community/listed-shares";
+import {
+  fetchListedShares,
+  listedShares,
+  mergeListing,
+  type ListedShareListKind,
+} from "@/components/community/listed-shares";
 import { ShareCard } from "@/components/community/shares";
 import { PluginTile, WorkflowTile } from "@/components/community/tile";
 import { type Locale, localePath } from "@/i18n/config";
@@ -194,20 +199,33 @@ export function WorkflowCard({ locale, workflow }: { locale: Locale; workflow: W
 }
 
 /**
- * 当前语言的用户分享。**在浏览器里取**,不在构建期取:官网的 `/plugins`、`/workflows`
- * 仍然是静态页(构建页数不变),云端挂了也只影响这一小段追加内容。
+ * 列表缓存的键。
  *
- * 导出给社区首页(`landing.tsx`)复用 —— 两组的取数必须和这里逐字一致,否则
+ * 插件 / 工作流各按 kind + 语言分开(`lib/queryKeys.ts` 只登记了这两种会被混进官方列表的
+ * ShareListKind)。`board` 没有官方条目,键挂在 `shareList()` 的分组前缀下:上传 / 删除
+ * 画布时按整组失效,语言仍分得开 —— `/boards` 和首页第三组共用这一份缓存。
+ */
+function listKey(kind: ListedShareListKind, locale: Locale) {
+  return kind === "board"
+    ? ([...queryKeys.shareList(), "board", locale] as const)
+    : queryKeys.shareList(kind, locale);
+}
+
+/**
+ * 当前语言的用户分享。**在浏览器里取**,不在构建期取:官网的 `/plugins`、`/workflows`、
+ * `/boards` 仍然是静态页(构建页数不变),云端挂了也只影响这一小段追加内容。
+ *
+ * 导出给社区首页(`landing.tsx`)复用 —— 三组的取数必须和这里逐字一致,否则
  * 落地页和各自的市场页会在语言 / 排序上漂开。
  *
  * 取数规则没变(仍是 `fetchListedShares`,失败退化成空数组),只是换成 `useQuery`:
  * - `retry: false` —— 云端挂了时,列表不是关键路径,不要每 3 秒重试到天荒地老;
- * - `staleTime: 5 分钟` —— 在 `/plugins` `/workflows` `/community` 之间切页不重拉;
+ * - `staleTime: 5 分钟` —— 在 `/plugins` `/workflows` `/boards` `/community` 之间切页不重拉;
  * - 键按 kind + locale 分开(见 `lib/queryKeys.ts`),删 / 传分享后能按 kind 点名失效。
  */
-export function useListedShares(kind: "plugin" | "workflow", locale: Locale): CloudShare[] {
+export function useListedShares(kind: ListedShareListKind, locale: Locale): CloudShare[] {
   const query = useQuery({
-    queryKey: queryKeys.shareList(kind, locale),
+    queryKey: listKey(kind, locale),
     // 失败已经被 fetchListedShares 吞成空数组:内容优先,页面上不出现错误块。
     queryFn: () => fetchListedShares((request) => cloudShares.list(request), kind, locale),
     retry: false,
@@ -320,6 +338,80 @@ export function WorkflowBrowser({ locale, workflows }: { locale: Locale; workflo
       ) : (
         <Empty locale={locale} onClear={() => setQuery("")} />
       )}
+    </div>
+  );
+}
+
+/**
+ * 画板列表:只列当前语言的用户画布分享(`kind=board`)。
+ *
+ * 画布**没有官方静态内容**(`lib/registry` 里只有插件 / 工作流),所以这里没有「官方在前」
+ * 的合并,也没有 slug 去重;取数、语言兜底、新→旧排序仍走 `useListedShares` /
+ * `listedShares` 那一份,和 `/plugins`、`/workflows` 相同,只是没有官方条目可并。
+ * 搜索只在这个已经取回来的列表里过滤,不为一次输入再跑一趟云端。
+ */
+export function BoardBrowser({ locale }: { locale: Locale }) {
+  const t = getMessages(locale);
+  const [query, setQuery] = React.useState("");
+  const shares = listedShares(useListedShares("board", locale), []);
+  const shown = shares.filter((share) => matches(query, shareFields(share)));
+  return (
+    <div className="grid gap-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchBox value={query} onChange={setQuery} placeholder={t.boards.search} />
+        {/* 「去上传」只在一屏出现一次:有画布时在这条工具条上,空的时候交给空态(页头不再给) */}
+        {shares.length > 0 && (
+          <Link
+            href={localePath(locale, "/community/upload")}
+            className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {t.community.uploadCta}
+            <ArrowUpRight className="size-4" aria-hidden />
+          </Link>
+        )}
+        {query && (
+          <button type="button" onClick={() => setQuery("")} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <X className="size-4" aria-hidden />
+            {t.community.clear}
+          </button>
+        )}
+      </div>
+      {shown.length > 0 ? (
+        <ul className={GRID}>
+          {shown.map((share) => (
+            <li key={`share-${share.id}`} className="grid">
+              <ShareCard locale={locale} share={share} />
+            </li>
+          ))}
+        </ul>
+      ) : shares.length === 0 ? (
+        <BoardsEmpty locale={locale} />
+      ) : (
+        <Empty locale={locale} onClear={() => setQuery("")} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * 一整页一条画布都没有时的空态:一句人话 + 唯一的下一步(去上传)。
+ *
+ * 和「搜索筛空」不是一回事:那种该给的是「清除筛选」,这里给的是上传入口。样式沿用
+ * `Empty` 的虚线框,不另起一套。
+ */
+function BoardsEmpty({ locale }: { locale: Locale }) {
+  const t = getMessages(locale);
+  return (
+    <div className="grid place-items-center gap-3 rounded-2xl border border-dashed border-border px-6 py-20 text-center">
+      <LayoutGrid className="size-6 text-muted-foreground" aria-hidden />
+      <p className="m-0 font-semibold">{t.boards.empty}</p>
+      <p className="m-0 text-sm text-muted-foreground">{t.boards.emptyHint}</p>
+      <Link
+        href={localePath(locale, "/community/upload")}
+        className="mt-1 text-sm font-semibold text-primary hover:underline"
+      >
+        {t.community.uploadCta}
+      </Link>
     </div>
   );
 }

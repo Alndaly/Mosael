@@ -177,12 +177,13 @@ test("④ 官方在前、用户分享在后;命中静态 slug 的官方分享不
   assert.match(landing, /mergeListing\(official|mergeListing\(plugins|mergeListing\(workflows/, "落地页没有用同一个合并顺序");
 });
 
-test("⑤ 每组都有「查看全部」,分别指向 /plugins、/workflows", () => {
+test("⑤ 每组都有「查看全部」,分别指向 /plugins、/workflows、/boards", () => {
   const landing = read(LANDING_UI);
   assert.match(landing, /localePath\(locale, "\/plugins"\)/, "插件组没有「查看全部 → /plugins」");
   assert.match(landing, /localePath\(locale, "\/workflows"\)/, "工作流组没有「查看全部 → /workflows」");
+  assert.match(landing, /localePath\(locale, "\/boards"\)/, "画板组没有「查看全部 → /boards」");
   const labels = landing.match(/\{t\.community\.viewAll\}/g) ?? [];
-  assert.equal(labels.length, 2, `两组应该各有一个「查看全部」,现在有 ${labels.length} 个`);
+  assert.equal(labels.length, 3, `三组应该各有一个「查看全部」,现在有 ${labels.length} 个`);
   // 地址按当前语言段生成(中文站 /zh/plugins),不是写死的中文路径。
   assert.match(landing, /localePath\(locale,/, "「查看全部」没有走 localePath");
 });

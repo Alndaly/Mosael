@@ -437,6 +437,18 @@ const zh = {
     more: "更多工作流",
     guideLink: "工作流指南",
   },
+  // 创意画板:社区里只有用户分享(官方 bundle 没有 board),所以没有「官方」文案。
+  boards: {
+    title: "创意画板",
+    heading: "创意画板",
+    seoTitle: "创意画板：社区分享的 Mosael 画布",
+    seoDescription: "浏览 Mosael 社区里公开分享的画布。下载 .json 工程文件，或者在 Mosael 里打开，接着往下做。",
+    keywords: ["Mosael 画板", "创意画板", "画布分享", "AI 创作画板"],
+    lede: "大家分享的画布：素材、位置和连线都在里面，打开就能接着往下做。",
+    search: "搜索画板",
+    empty: "还没有人分享画布",
+    emptyHint: "上传一份画布 .json，它就会出现在这里。",
+  },
   community: {
     name: "社区",
     official: "官方",
@@ -455,12 +467,12 @@ const zh = {
     noApp: "还没装 Mosael？",
     getApp: "下载",
     install: "安装",
-    // ---- 社区首页(落地页):两组官方内容 + 当前语言的用户分享 ----
+    // ---- 社区首页(落地页):三段 —— 两组官方内容 + 用户分享,外加只有用户画布的创意画板 ----
     homeTitle: "社区",
-    homeLede: "官方插件和工作流，加上大家分享的同类作品。只显示当前语言；要搜索和筛选，去各自的市场页。",
-    homeSeoTitle: "社区：插件与工作流",
-    homeSeoDescription: "Mosael 社区的官方插件、官方工作流，以及同语言的用户分享。搜索和筛选在插件市场、工作流模板页。",
-    homeKeywords: ["Mosael 社区", "官方插件", "官方工作流", "插件分享", "工作流分享"],
+    homeLede: "官方插件和工作流，加上大家分享的插件、工作流和画布。只显示当前语言；要搜索和筛选，去各自的市场页。",
+    homeSeoTitle: "社区：插件、工作流与创意画板",
+    homeSeoDescription: "Mosael 社区的官方插件、官方工作流，以及同语言的用户插件、工作流与画布分享。搜索和筛选在插件市场、工作流模板页和创意画板页。",
+    homeKeywords: ["Mosael 社区", "官方插件", "官方工作流", "插件分享", "工作流分享", "画布分享"],
     viewAll: "查看全部",
     // ---- 分享详情 / 上传 ----
     shares: "分享",
@@ -1013,6 +1025,19 @@ const en: Messages = {
     more: "More workflows",
     guideLink: "Workflow guide",
   },
+  // Creative boards: user shares only — the official bundle has no boards.
+  boards: {
+    title: "Idea boards",
+    heading: "Idea boards",
+    seoTitle: "Idea boards shared by the Mosael community",
+    seoDescription:
+      "Browse boards shared in the Mosael community. Download the .json project file, or open it in Mosael and keep building.",
+    keywords: ["Mosael boards", "idea board", "infinite canvas", "board sharing"],
+    lede: "Boards people shared: media, positions and connections are all inside, so you can open one and keep building.",
+    search: "Search boards",
+    empty: "Nobody has shared a board yet",
+    emptyHint: "Upload a board .json and it will show up here.",
+  },
   community: {
     name: "Community",
     official: "Official",
@@ -1031,14 +1056,14 @@ const en: Messages = {
     noApp: "Don't have Mosael yet?",
     getApp: "Download",
     install: "Install",
-    // ---- Community home: two groups, official cards + shares in the current language ----
+    // ---- Community home: three groups — official cards + shares in the current language, plus user-only boards ----
     homeTitle: "Community",
     homeLede:
-      "Official plugins and workflows, plus what people share — in the language you're reading. Search and filter on the market pages.",
-    homeSeoTitle: "Community: plugins and workflows",
+      "Official plugins and workflows, plus plugins, workflows and boards people share — in the language you're reading. Search and filter on the market pages.",
+    homeSeoTitle: "Community: plugins, workflows and boards",
     homeSeoDescription:
-      "Official Mosael plugins and workflows, plus community shares in your language. Search and filter on the plugin market or workflow templates page.",
-    homeKeywords: ["Mosael community", "official plugins", "official workflows", "plugin sharing", "workflow sharing"],
+      "Official Mosael plugins and workflows, plus community shares in your language. Search and filter on the plugin market, workflow templates or idea boards page.",
+    homeKeywords: ["Mosael community", "official plugins", "official workflows", "plugin sharing", "workflow sharing", "board sharing"],
     viewAll: "View all",
     // ---- Share detail / upload ----
     shares: "Shares",
