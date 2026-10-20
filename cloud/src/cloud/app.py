@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
@@ -16,10 +17,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from cloud.api.auth import router as accounts_router
 from cloud.api.device import router as devices_router
+from cloud.api.oauth import router as oauth_router
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
 from cloud.mailer import CodeSender, SmtpCodeSender
+from cloud.oauth import OAuthProvider, default_providers
 
 #: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸;设备码入口是给本机进程的。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -58,11 +61,17 @@ def _cross_site(request: Request, config: CloudConfig) -> bool:
     return _origin_of(candidate) not in config.allowed_origins
 
 
-def create_app(config: CloudConfig | None = None, *, code_sender: CodeSender | None = None) -> FastAPI:
+def create_app(
+    config: CloudConfig | None = None,
+    *,
+    code_sender: CodeSender | None = None,
+    oauth_providers: Mapping[str, OAuthProvider] | None = None,
+) -> FastAPI:
     """装配 HTTP 应用。
 
-    `code_sender` 是测试 / 嵌入用的注入点:不传就用真实的 SMTP sender。**没有"开发环境自动
-    跳过验证"的开关** —— 没配 SMTP 时发码接口会明确报错,测试靠注入假 sender 而不是靠环境判断。
+    `code_sender` / `oauth_providers` 是测试 / 嵌入用的注入点:不传就用真实实现。**没有
+    "开发环境自动跳过验证 / 自动连第三方"的开关** —— 没配 SMTP 时发码接口会明确报错,
+    没配 OAuth 凭据时入口明确报"没启用";测试注入假实现,不连外网。
     """
     resolved = config or CloudConfig.from_env()
     resolved.data_dir.mkdir(parents=True, exist_ok=True)
@@ -79,6 +88,9 @@ def create_app(config: CloudConfig | None = None, *, code_sender: CodeSender | N
     app.state.config = resolved
     app.state.db = database
     app.state.code_sender = code_sender or SmtpCodeSender(resolved)
+    app.state.oauth_providers = (
+        dict(oauth_providers) if oauth_providers is not None else default_providers()
+    )
 
     @app.middleware("http")
     async def same_origin_and_headers(request: Request, call_next):
@@ -119,4 +131,5 @@ def create_app(config: CloudConfig | None = None, *, code_sender: CodeSender | N
 
     app.include_router(accounts_router, prefix=API_PREFIX)
     app.include_router(devices_router, prefix=API_PREFIX)
+    app.include_router(oauth_router, prefix=API_PREFIX)
     return app

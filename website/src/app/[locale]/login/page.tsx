@@ -24,15 +24,15 @@ export default async function LoginPage({
   searchParams,
 }: {
   params: Params;
-  searchParams: Promise<{ registered?: string }>;
+  searchParams: Promise<{ registered?: string; oauth_error?: string }>;
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const { registered } = await searchParams;
+  const { registered, oauth_error: oauthError } = await searchParams;
   const t = getMessages(locale).account;
   return (
     <AccountShell locale={locale} copy={t} title={t.loginTitle} lede={t.loginLede}>
-      <LoginForm locale={locale} copy={t} registered={registered === "1"} />
+      <LoginForm locale={locale} copy={t} registered={registered === "1"} oauthError={oauthError ?? ""} />
     </AccountShell>
   );
 }

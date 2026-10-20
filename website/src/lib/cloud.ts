@@ -34,13 +34,18 @@ const FALLBACK_MESSAGE: CloudMessage = {
 
 /** 云端的一次拒绝。`message` 是中英两份,页面按当前语言挑。 */
 export class CloudApiError extends Error {
-  constructor(
-    readonly code: string,
-    readonly messages: CloudMessage,
-    readonly status: number,
-  ) {
+  // 用显式字段而不是构造器参数属性:Node 的 type-stripping 测试要直接 import 这个模块,
+  // 参数属性属于"需要编译"的 TS 语法,strip-only 模式会拒绝。
+  readonly code: string;
+  readonly messages: CloudMessage;
+  readonly status: number;
+
+  constructor(code: string, messages: CloudMessage, status: number) {
     super(messages.en);
     this.name = "CloudApiError";
+    this.code = code;
+    this.messages = messages;
+    this.status = status;
   }
 
   text(locale: "en" | "zh"): string {
@@ -86,6 +91,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const cloudAccount = {
+  /** 哪些第三方登录已配置。官网只渲染 true 的那几颗按钮。 */
+  oauthProviders(): Promise<{ providers: { github: boolean; google: boolean } }> {
+    return request("/oauth/providers");
+  },
   sendSignupCode(email: string): Promise<{ sent: boolean }> {
     return request("/signup/code", { method: "POST", body: JSON.stringify({ email }) });
   },

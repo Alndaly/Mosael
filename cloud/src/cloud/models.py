@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from cloud.db import Base
@@ -26,7 +26,7 @@ def now() -> datetime:
 
 
 class CloudUser(Base):
-    """一个 MosaelCloud 账号。只有邮箱和密码;**没有**本地账号的用户名、工作区、部署管理员。"""
+    """一个 MosaelCloud 账号。邮箱必填,密码可选(第三方登录建出来的账号没有);**没有**本地账号的用户名、工作区、部署管理员。"""
 
     __tablename__ = "cloud_users"
 
@@ -34,7 +34,8 @@ class CloudUser(Base):
     #: 统一存小写。唯一索引保证"一个邮箱一个账号",并发注册靠数据库兜底。
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     #: argon2id 哈希(见 security.hash_password)。绝不存明文。
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: **可空**:第三方登录新建的账号没有密码,只靠第三方身份或邮箱验证码登录。
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     #: 注册时要先验邮箱验证码,验过即写这个时间;更早的账号可能是空,不做回填。
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
@@ -106,6 +107,60 @@ class CloudDeviceCode(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class CloudIdentity(Base):
+    """一个第三方身份(GitHub / Google)与某个 MosaelCloud 账号的绑定。
+
+    `(provider, provider_user_id)` 唯一:同一个第三方账号只能指向一个 Cloud 账号。
+    反方向不唯一:一个 Cloud 账号可以绑多个第三方(`user_id` 上的索引只为查"这个账号绑了谁")。
+    """
+
+    __tablename__ = "cloud_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_cloud_identities_provider_user"),
+        Index("idx_cloud_identities_user", "cloud_user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    #: `github` / `google`。就这两个,校验在路由层做。
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: 第三方那边的稳定 id:GitHub 的数字 id、Google 的 `sub`。一律按字符串存。
+    provider_user_id: Mapped[str] = mapped_column(String(191), nullable=False)
+    cloud_user_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudOAuthState(Base):
+    """一次第三方登录的中间状态 —— **只存哈希**,原始值只出现在跳转 URL / 那枚短命 cookie 里。
+
+    - `state`:防 CSRF 的一次性串。库里存 sha256,回调时按哈希查、原子地标 `used_at`。
+    - `nonce`:同时写进发起请求的浏览器的一枚 HttpOnly cookie;回调必须带回来。
+      这一期不验 id_token,所以它不是 OIDC 的 nonce,而是"这次 state 属于这个浏览器"的绑定。
+    - `code_verifier`:PKCE 的 verifier。换 token 要用明文,所以不能只存哈希;它和 state 一起
+      10 分钟过期、用完即随行作废(整张表都是短期数据)。
+    """
+
+    __tablename__ = "cloud_oauth_states"
+    __table_args__ = (Index("idx_cloud_oauth_states_expires", "expires_at"),)
+
+    state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    code_verifier: Mapped[str] = mapped_column(String(128), nullable=False)
+    nonce_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: 发起登录时如果浏览器已经登录,就记下是谁 —— 回调时把第三方身份绑到这个账号,
+    #: 而不是另建一个。为空 = 这次是登录 / 注册。
+    link_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=True
+    )
+    #: 回调失败时把用户送回他点按钮的那一页,以及用哪种语言显示原因。
+    locale: Mapped[str] = mapped_column(String(8), nullable=False, default="en")
+    return_page: Mapped[str] = mapped_column(String(16), nullable=False, default="login")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class CloudDevice(Base):

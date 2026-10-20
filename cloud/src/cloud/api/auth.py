@@ -144,7 +144,8 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
     email = str(body.email).strip().lower()
     user = db.scalar(select(CloudUser).where(CloudUser.email == email))
     # 不区分"邮箱没注册"和"密码错" —— 否则这个接口就成了账号探测器。
-    if user is None or not verify_password(body.password, user.password_hash):
+    # 第三方登录建出来的账号 `password_hash` 为空:它没有密码可验,只能走验证码那条路。
+    if user is None or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise CloudError(401, "invalid_credentials")
 
     open_session(db, config, user, response)

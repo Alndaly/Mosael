@@ -1,8 +1,8 @@
 # MosaelCloud 账号服务
 
-独立于本地 Mosael 的账号服务:邮箱 + 验证码 + 密码注册、密码 / 验证码两种登录、HttpOnly
-cookie 会话、设备码绑定。设计、部署与取舍见
-[`docs/CLOUD_ACCOUNTS.md`](../docs/CLOUD_ACCOUNTS.md)。
+独立于本地 Mosael 的账号服务:邮箱 + 验证码 + 密码注册、密码 / 验证码两种登录、
+**GitHub / Google 第三方登录(授权码 + PKCE)**、HttpOnly cookie 会话、设备码绑定。设计、
+部署与取舍见 [`docs/CLOUD_ACCOUNTS.md`](../docs/CLOUD_ACCOUNTS.md)。
 
 ## 本地跑起来
 
@@ -21,6 +21,17 @@ CLOUD_SMTP_HOST=localhost:1025 \
 **没配 `CLOUD_SMTP_HOST` 时发码接口会明确回 `503 mail_not_configured`**,不会假装发出;
 测试注入假 sender,不连外网。
 
+第三方登录同理:**没配 `CLOUD_GITHUB_CLIENT_ID/SECRET` 或 `CLOUD_GOOGLE_CLIENT_ID/SECRET`
+就当作没启用**,`/oauth/{provider}/start` 会 302 回官网并带 `oauth_error=oauth_not_configured`,
+官网也不渲染那颗按钮。本地想试真的第三方授权时,把两个 OAuth 应用的回调地址填成:
+
+```
+http://localhost:3000/api/cloud/v1/oauth/github/callback
+http://localhost:3000/api/cloud/v1/oauth/google/callback
+```
+
+回调地址**只由 `CLOUD_PUBLIC_URL` 推出**,所以它必须和用户在浏览器里访问的 Origin 一致。
+
 数据目录默认 `./cloud-data`(库文件 `cloud.db`)。接口前缀 `/api/cloud/v1`,
 健康检查 `GET /api/cloud/v1/health`。官网开发时 `next.config.ts` 会把 `/api/cloud/v1/*`
 同源反代到这里(见 `website/.env.example` 的 `CLOUD_API_URL`)。
@@ -33,16 +44,24 @@ uv run pytest -q     # 每个用例一个临时 SQLite 库,不连外网
 uv run ruff check
 ```
 
-CI 不启动这个服务;它只跑上面的 pytest。
+CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
+`tests/conftest.py` 里的 `FakeOAuthProvider`(会像真 provider 一样校验 PKCE 与 redirect_uri),
+**不连 GitHub / Google**。
 
 ## 生产
 
 - `CLOUD_DATABASE_URL=postgresql+psycopg://…`
 - `CLOUD_PUBLIC_URL=https://mosael.com`
 - `CLOUD_COOKIE_SECURE=true`
+- `CLOUD_GITHUB_CLIENT_ID` / `CLOUD_GITHUB_CLIENT_SECRET`(可选)
+- `CLOUD_GOOGLE_CLIENT_ID` / `CLOUD_GOOGLE_CLIENT_SECRET`(可选)
 - 反向代理与官网同源(见 docs 里的 Caddy 片段),不要开 CORS。
 - 表结构由 `Base.metadata.create_all` 在启动时创建;这是新服务,还没有需要演进的历史数据。
   一旦线上有真实数据,表结构变化就改用迁移。
+- **已有库升级注意**:第三方登录把 `cloud_users.password_hash` 改成了可空(第三方新建的账号
+  没有密码)。`create_all` 不会改已有的列。Postgres 需要:
+  `ALTER TABLE cloud_users ALTER COLUMN password_hash DROP NOT NULL;`
+  SQLite 开发库直接删掉重来即可;线上若已有真实数据,请写一条显式迁移。
 
 ## 配置
 
@@ -62,3 +81,15 @@ CI 不启动这个服务;它只跑上面的 pytest。
 | `CLOUD_SMTP_USERNAME` | 空 | 有用户名才登录 |
 | `CLOUD_SMTP_PASSWORD` | 空 | 只交给 SMTP,不进日志 |
 | `CLOUD_SMTP_FROM` | `no-reply@mosael.com` | 发件人 |
+| `CLOUD_GITHUB_CLIENT_ID` / `_SECRET` | 空(未启用) | GitHub OAuth App 凭据;空则入口报"没启用" |
+| `CLOUD_GOOGLE_CLIENT_ID` / `_SECRET` | 空(未启用) | Google OAuth 客户端凭据;空则入口报"没启用" |
+| `CLOUD_OAUTH_STATE_TTL_SECONDS` | `600` | 一次 OAuth 登录的 state / nonce 有效期 |
+
+### 第三方 OAuth 应用的填法
+
+| provider | 回调地址(生产) | 申请的 scope |
+| --- | --- | --- |
+| GitHub | `https://mosael.com/api/cloud/v1/oauth/github/callback` | `read:user user:email`(要读 `/user/emails` 的 `verified`) |
+| Google | `https://mosael.com/api/cloud/v1/oauth/google/callback` | `openid email profile`(读 userinfo 的 `email_verified`) |
+
+本地开发把域名换成 `http://localhost:3000` 即可(官网同源反代到 Cloud,与生产 Caddy 等价)。

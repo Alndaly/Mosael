@@ -24,13 +24,20 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
-export default async function SignupPage({ params }: { params: Params }) {
+export default async function SignupPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Promise<{ oauth_error?: string }>;
+}) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  const { oauth_error: oauthError } = await searchParams;
   const t = getMessages(locale).account;
   return (
     <AccountShell locale={locale} copy={t} title={t.signupTitle} lede={t.signupLede}>
-      <SignupForm locale={locale} copy={t} />
+      <SignupForm locale={locale} copy={t} oauthError={oauthError ?? ""} />
     </AccountShell>
   );
 }

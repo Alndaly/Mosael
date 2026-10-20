@@ -24,15 +24,20 @@ export default async function AccountPage({
   searchParams,
 }: {
   params: Params;
-  searchParams: Promise<{ user_code?: string }>;
+  searchParams: Promise<{ user_code?: string; oauth?: string }>;
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const { user_code } = await searchParams;
+  const { user_code, oauth } = await searchParams;
   const t = getMessages(locale).account;
   return (
     <AccountShell locale={locale} copy={t} title={t.accountTitle} lede={t.accountLede} wide>
-      <AccountView locale={locale} copy={t} initialCode={user_code ?? ""} />
+      <AccountView
+        locale={locale}
+        copy={t}
+        initialCode={user_code ?? ""}
+        oauthOutcome={oauth === "created" || oauth === "existing" ? oauth : ""}
+      />
     </AccountShell>
   );
 }

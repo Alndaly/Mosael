@@ -14,10 +14,12 @@ import {
   SendCodeButton,
   SubmitButton,
 } from "@/components/account/form-controls";
+import { OAuthButtons } from "@/components/account/oauth-buttons";
 import { useResendCountdown } from "@/components/account/use-email-code";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
+import { oauthErrorCopyKey } from "@/lib/oauth";
 
 type Mode = "password" | "code";
 
@@ -31,10 +33,13 @@ export function LoginForm({
   locale,
   copy,
   registered = false,
+  oauthError = "",
 }: {
   locale: Locale;
   copy: Messages["account"];
   registered?: boolean;
+  /** Cloud 回调失败时带回的稳定错误码(见 lib/oauth.ts);空 = 不是第三方登录回来的。 */
+  oauthError?: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("password");
@@ -48,6 +53,7 @@ export function LoginForm({
   const [sendingCode, setSendingCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const countdown = useResendCountdown();
+  const oauthMessage = oauthError ? copy[oauthErrorCopyKey(oauthError)] : "";
 
   const switchMode = (next: Mode) => {
     setMode(next);
@@ -118,6 +124,11 @@ export function LoginForm({
 
   return (
     <div className="grid gap-5">
+      {oauthMessage && (
+        <FormAlert id="oauth-error" title={copy.formErrorTitle}>
+          {oauthMessage}
+        </FormAlert>
+      )}
       {registered && mode === "password" && <FormNotice>{copy.registered}</FormNotice>}
       <SegmentedControl
         id="login-mode"
@@ -210,6 +221,8 @@ export function LoginForm({
           </div>
         </form>
       )}
+
+      <OAuthButtons locale={locale} copy={copy} from="login" />
 
       <p className="m-0 text-center text-sm leading-6 text-muted-foreground">
         {copy.noAccount}{" "}

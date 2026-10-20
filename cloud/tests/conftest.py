@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from urllib.parse import urlencode
 
 import pytest
 from fastapi.testclient import TestClient
 
 from cloud.app import create_app
 from cloud.config import CloudConfig
+from cloud.oauth import OAuthProviderError, ProviderIdentity, code_challenge
 
 API = "/api/cloud/v1"
 PASSWORD = "Correct-Horse-9"
@@ -139,3 +141,116 @@ def device_code(client: TestClient, name: str = "MacBook Pro") -> dict:
     response = client.post(api("/device/code"), json={"device_name": name})
     assert response.status_code == 200, response.text
     return response.json()
+
+
+# ---------------------------------------------------------------------------
+# 第三方登录(OAuth)的假 provider
+#
+# 测试**绝不真连 GitHub / Google**:和发信一样,这里注入假实现。它仍然会像真 provider 那样
+# 校验 PKCE(S256(verifier) == authorize 时收到的 challenge)与 redirect_uri,这样"回调必须
+# 用同一个回调地址"也能被测试钉住,而不是只测一个不校验的桩。
+# ---------------------------------------------------------------------------
+
+class FakeOAuthProvider:
+    """记录 authorize / exchange / userinfo 三次交互,并像真 provider 一样验 PKCE。"""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.provider_user_id = f"{name}-user-1"
+        self.email = "alice@example.com"
+        self.email_verified = True
+        self.fail_exchange = ""
+        self.fail_userinfo = ""
+        self.challenges: dict[str, str] = {}
+        self.redirect_uris: dict[str, str] = {}
+        self.codes: dict[str, tuple[str, str]] = {}
+        self.authorize_calls: list[dict[str, str]] = []
+        self.exchange_calls: list[dict[str, str]] = []
+        self.userinfo_calls = 0
+
+    def authorize_url(self, *, config, redirect_uri, state, code_challenge) -> str:
+        self.challenges[state] = code_challenge
+        self.redirect_uris[state] = redirect_uri
+        self.authorize_calls.append(
+            {"redirect_uri": redirect_uri, "state": state, "code_challenge": code_challenge}
+        )
+        query = {
+            "client_id": f"fake-{self.name}-client",
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        return f"https://{self.name}.test/authorize?{urlencode(query)}"
+
+    def issue_code(self, state: str, code: str = "fake-code") -> str:
+        self.codes[code] = (self.challenges[state], self.redirect_uris[state])
+        return code
+
+    def exchange_code(self, *, config, code, redirect_uri, code_verifier) -> str:
+        self.exchange_calls.append({"code": code, "redirect_uri": redirect_uri})
+        if self.fail_exchange:
+            raise OAuthProviderError(self.fail_exchange, "raw provider detail")
+        stored = self.codes.pop(code, None)
+        if stored is None:
+            raise OAuthProviderError("invalid_grant", "unknown code")
+        challenge, authorized_redirect = stored
+        if code_challenge(code_verifier) != challenge:
+            raise OAuthProviderError("invalid_grant", "pkce mismatch")
+        if redirect_uri != authorized_redirect:
+            raise OAuthProviderError("invalid_grant", "redirect_uri mismatch")
+        return f"access-token-for-{self.provider_user_id}"
+
+    def fetch_identity(self, *, config, access_token) -> ProviderIdentity:
+        self.userinfo_calls += 1
+        if self.fail_userinfo:
+            raise OAuthProviderError(self.fail_userinfo, "raw userinfo detail")
+        return ProviderIdentity(
+            provider_user_id=self.provider_user_id,
+            email=self.email,
+            email_verified=self.email_verified,
+            display_name="Test Person",
+        )
+
+
+@pytest.fixture
+def oauth_providers() -> dict[str, FakeOAuthProvider]:
+    return {"github": FakeOAuthProvider("github"), "google": FakeOAuthProvider("google")}
+
+
+@pytest.fixture
+def oauth_config(tmp_path: Path) -> CloudConfig:
+    """**假凭据**。它们只用来把 provider 标成"已配置",不会离开进程。"""
+    return CloudConfig(
+        data_dir=tmp_path,
+        public_url="https://mosael.test",
+        cookie_secure=False,
+        github_client_id="fake-github-client",
+        github_client_secret="fake-github-secret",
+        google_client_id="fake-google-client",
+        google_client_secret="fake-google-secret",
+    )
+
+
+@pytest.fixture
+def oauth_app(oauth_config: CloudConfig, sender: RecordingSender, oauth_providers):
+    return create_app(oauth_config, code_sender=sender, oauth_providers=oauth_providers)
+
+
+@pytest.fixture
+def oauth_client(oauth_app):
+    made = TestClient(oauth_app)
+    yield made
+    made.close()
+
+
+@pytest.fixture
+def oauth_db_path(oauth_config: CloudConfig) -> Path:
+    return oauth_config.data_dir / "cloud.db"
+
+
+def execute(db_path: Path, sql: str, params: tuple = ()) -> None:
+    """直接改库,用来模拟"库里的 verifier 与 provider 记的 challenge 不一致"。"""
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(sql, params)
+        connection.commit()

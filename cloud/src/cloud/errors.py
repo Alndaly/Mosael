@@ -56,6 +56,38 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The code could not be emailed. Try again in a moment.",
         "zh": "验证码邮件没有发出去，请稍后重试。",
     },
+    "oauth_not_configured": {
+        "en": "This sign-in method is not enabled on this MosaelCloud deployment yet. Contact the administrator.",
+        "zh": "这个登录方式还没启用，请联系管理员。",
+    },
+    "oauth_state_invalid": {
+        "en": "This sign-in attempt is invalid or has already been used. Start again from the sign-in page.",
+        "zh": "这次登录的校验信息无效或已经用过，请回到登录页重新发起。",
+    },
+    "oauth_callback_invalid": {
+        "en": "The provider sent us back without an authorization code. Start the sign-in again.",
+        "zh": "第三方回调里没有授权码，请重新发起登录。",
+    },
+    "oauth_denied": {
+        "en": "You cancelled the authorization at {provider}. Nothing on your MosaelCloud account changed.",
+        "zh": "你在 {provider} 那边取消了授权，MosaelCloud 账号没有变化。",
+    },
+    "oauth_code_rejected": {
+        "en": "The provider rejected the authorization code or the PKCE check. Start the sign-in again.",
+        "zh": "第三方拒绝了这次授权码或 PKCE 校验，请重新发起登录。",
+    },
+    "oauth_email_unverified": {
+        "en": "The provider did not return a verified email address, so it cannot sign you in to MosaelCloud. Verify the email with {provider} and try again.",
+        "zh": "第三方没有返回已验证的邮箱，所以不能用来登录 MosaelCloud。请先在 {provider} 验证邮箱后再试。",
+    },
+    "oauth_identity_conflict": {
+        "en": "This {provider} account is already bound to a different MosaelCloud account. Sign in to that account instead.",
+        "zh": "这个 {provider} 账号已经绑到另一个 MosaelCloud 账号，请改为登录那个账号。",
+    },
+    "oauth_provider_error": {
+        "en": "The provider did not answer correctly. Try again in a moment.",
+        "zh": "第三方服务暂时没有正常响应，请稍后重试。",
+    },
     "password_too_short": {
         "en": "The password must be at least {min} characters.",
         "zh": "密码至少要 {min} 个字符。",

@@ -35,10 +35,13 @@ export function AccountView({
   locale,
   copy,
   initialCode = "",
+  oauthOutcome = "",
 }: {
   locale: Locale;
   copy: Messages["account"];
   initialCode?: string;
+  /** 刚通过 GitHub / Google 回到这一页时,Cloud 用 `?oauth=created|existing` 说清结果。 */
+  oauthOutcome?: "" | "created" | "existing";
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
@@ -199,6 +202,11 @@ export function AccountView({
 
   return (
     <div className="grid gap-4 motion-safe:animate-[auth-rise_450ms_ease-out_both]">
+      {oauthOutcome && (
+        <FormNotice id="oauth-result">
+          {oauthOutcome === "created" ? copy.oauthCreated : copy.oauthExisting}
+        </FormNotice>
+      )}
       {error && (
         <FormAlert id="account-error" title={copy.formErrorTitle}>
           {error}
