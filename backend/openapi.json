@@ -28525,14 +28525,236 @@
         }
       }
     },
+    "/api/cloud/v1/login": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Login",
+        "description": "邮箱 + 密码登录。**密码只活在这一跳里**:不落库、不进日志、不进响应。",
+        "operationId": "login_api_cloud_v1_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudLoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/login/code": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Send Login Code",
+        "description": "验证码登录第一步:让 Cloud 把 6 位码发到这个邮箱。",
+        "operationId": "send_login_code_api_cloud_v1_login_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudEmailIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/login/code/verify": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Verify Login Code",
+        "description": "验证码登录第二步:码换会话。和密码登录落库的形状完全一样。",
+        "operationId": "verify_login_code_api_cloud_v1_login_code_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloudCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/logout": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Logout",
+        "description": "退出桌面端的云端登录:调 Cloud 撤掉那一份会话,再删本地那一行。\n\n**本地一定要退得掉**:Cloud 不可达时照样删本地那一行(会话到期会自己消失),不让\"断网\"\n变成\"退不出去\"。没登录过就是一次幂等的 204。",
+        "operationId": "logout_api_cloud_v1_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/me": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Me",
+        "description": "「现在登的是谁」。没登录 → 401(界面据此显示登录表单);会话过期 → 清行 + 401。",
+        "operationId": "me_api_cloud_v1_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSessionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cloud/v1/shares/{share_id}": {
       "get": {
         "tags": [
           "cloud"
         ],
         "summary": "Get Community Share",
-        "description": "分享详情。**公开读**:不转发本地会话,云端那侧按游客认。",
+        "description": "分享详情。登录之后自动带上身份(游客也照常读)。",
         "operationId": "get_community_share_api_cloud_v1_shares__share_id__get",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Delete Community Share",
+        "operationId": "delete_community_share_api_cloud_v1_shares__share_id__delete",
         "parameters": [
           {
             "name": "share_id",
@@ -28613,6 +28835,76 @@
         }
       }
     },
+    "/api/cloud/v1/shares": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Browse Community Shares",
+        "description": "社区分享列表(搜索 / 排序 / 游标都由 Cloud 解释)。",
+        "operationId": "browse_community_shares_api_cloud_v1_shares_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Publish Community Share",
+        "description": "发布一份分享。请求体原样转给 Cloud,由它校验。",
+        "operationId": "publish_community_share_api_cloud_v1_shares_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cloud/v1/shares/{share_id}/download": {
       "post": {
         "tags": [
@@ -28635,6 +28927,441 @@
             "description": "MosaelCloud 社区分享 id"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/shares/{share_id}/like": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Like Community Share",
+        "operationId": "like_community_share_api_cloud_v1_shares__share_id__like_post",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Unlike Community Share",
+        "operationId": "unlike_community_share_api_cloud_v1_shares__share_id__like_delete",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/shares/{share_id}/favorite": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Favorite Community Share",
+        "operationId": "favorite_community_share_api_cloud_v1_shares__share_id__favorite_post",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Unfavorite Community Share",
+        "operationId": "unfavorite_community_share_api_cloud_v1_shares__share_id__favorite_delete",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/shares/{share_id}/comments": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "List Community Comments",
+        "operationId": "list_community_comments_api_cloud_v1_shares__share_id__comments_get",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Add Community Comment",
+        "operationId": "add_community_comment_api_cloud_v1_shares__share_id__comments_post",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/shares/{share_id}/comments/{comment_id}": {
+      "delete": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Delete Community Comment",
+        "operationId": "delete_community_comment_api_cloud_v1_shares__share_id__comments__comment_id__delete",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区评论 id",
+              "title": "Comment Id"
+            },
+            "description": "MosaelCloud 社区评论 id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/users/{handle}/shares": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Community User Shares",
+        "operationId": "community_user_shares_api_cloud_v1_users__handle__shares_get",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 用户短名",
+              "title": "Handle"
+            },
+            "description": "MosaelCloud 用户短名"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/notifications": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "List Cloud Notifications",
+        "operationId": "list_cloud_notifications_api_cloud_v1_notifications_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Count Unread Cloud Notifications",
+        "operationId": "count_unread_cloud_notifications_api_cloud_v1_notifications_unread_count_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/notifications/read": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Mark Cloud Notifications Read",
+        "operationId": "mark_cloud_notifications_read_api_cloud_v1_notifications_read_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -34063,6 +34790,81 @@
           "session_id"
         ],
         "title": "CloseRequest"
+      },
+      "CloudCodeIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Email"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 12,
+            "title": "Code",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "CloudCodeIn",
+        "description": "验证码登录的第二步:邮箱 + 6 位码。"
+      },
+      "CloudEmailIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "CloudEmailIn",
+        "description": "验证码登录的第一步:只要邮箱。"
+      },
+      "CloudLoginIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "CloudLoginIn",
+        "description": "邮箱 + 密码。**这一份只存在这一次请求里**,不落库、不进日志。"
+      },
+      "CloudSessionOut": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "CloudSessionOut",
+        "description": "「现在登的是谁」 —— 只有邮箱。cookie 值**不在**这里。"
       },
       "CommentAnchorUpdate": {
         "properties": {

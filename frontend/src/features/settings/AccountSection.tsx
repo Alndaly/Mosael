@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { accountOrigin } from "@/components/layout/accountOrigin";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
+import { CloudAccountSection } from "@/features/settings/AccountSection.cloud";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {
@@ -129,15 +130,18 @@ export function AccountSection() {
   return (
     <SettingsGroup
       title={t("settingsAccount")}
-      // 页头只描述这一页有的东西:本地账号(这台机器上的身份)。「是哪儿的账号」来自 origin。
-      description={origin}
+      // 页头要同时讲两套账号:本地账号(这台机器上的身份)和 MosaelCloud 账号(云端的)。
+      // 「是哪儿的账号」那一半来自 origin;页面自己补上另外半句(云账号、两者独立登录)。
+      description={`${origin}${t("settingsAccountScope")}`}
       actions={
         <Button variant="outline" size="sm" onClick={() => void logout()}>
           <LogOut size={13} /> {t("signOut")}
         </Button>
       }
     >
-      {/* 顺序:本地账号(身份、资料)→ 登录密码紧跟本地账号。密码属于本地账号,放在它后面归属才一眼就清。 */}
+      {/* 顺序:本地账号(身份、资料)→ 登录密码紧跟本地账号 → MosaelCloud 账号。
+          密码属于本地账号,所以它紧跟着本地账号(云账号不能夹在中间,否则密码看起来像云账号的);
+          云账号放在最后,是另一套可以单独登录的身份。 */}
       <SettingsBlock>
         <div className="grid gap-3">
           {/* 本地账号这一块的标题就是「这是哪儿的账号、怎么登进来的」那句 —— 和页头、账号菜单同一个来源。
@@ -291,6 +295,7 @@ export function AccountSection() {
           </form>
         </div>
       </SettingsBlock>
+      <CloudAccountSection />
       <ConfirmDialog
         open={confirmingUsername}
         title={t("usernameChange")}

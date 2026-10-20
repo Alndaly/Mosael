@@ -3524,6 +3524,20 @@ def _migrate_scene_models_to_workspace() -> None:
         logger.info("把 %d 份 3D 模型从「归场景」改成了「归工作区」", len(rows))
 
 
+def _migrate_cloud_login_table() -> None:
+    """桌面端登录 MosaelCloud 之后存会话 cookie 的那张表。
+
+    新表本身由 SCHEMA 阶段的 create-all 建;这一步把它**当作一次显式迁移记账**,并给那些在
+    新表加入之前就已经建好的库补一道 checkfirst —— 旧库升级时不会因为「这张表是后来才有的」
+    而缺一块。它只碰这张新表,不动 `users` 或任何旧表。
+
+    **没有旧数据要搬**:设备绑定已经整张删掉,而桌面端此前没有云登录会话。这条迁移只建表。
+    """
+    from app.db.models import CloudLogin
+
+    Base.metadata.create_all(bind=engine, tables=[CloudLogin.__table__], checkfirst=True)
+
+
 def _migrate_drop_cloud_bindings_table() -> None:
     """删掉 `cloud_bindings` —— 云端设备绑定机制已经移除。
 
@@ -10095,6 +10109,9 @@ def migration_plan() -> MigrationPlan:
                 # 云端设备绑定已经移除:给老库把 `cloud_bindings` 整张删掉。排在 SCHEMA 之后,
                 # 模型里已经没有这张表,create-all 不会把它建回来。
                 _migrate_drop_cloud_bindings_table,
+                # 桌面端自己登录 MosaelCloud:给老库把存会话 cookie 的 `cloud_login` 建出来。
+                # 排在 SCHEMA 之后,和上面那条 DROP 同一个道理(新表不在老库里)。
+                _migrate_cloud_login_table,
                 # 加列:provider_profiles.deleted_at(删连接立碑)。**排在所有 AFTER_SCHEMA 的最前面** ——
                 # 模型上已经有这一列了,而这一相里有用 ORM 读 ProviderProfile 的迁移(下面补参考价那几步),
                 # 排到它们后面,老库会在 `no such column: provider_profiles.deleted_at` 上当场炸。

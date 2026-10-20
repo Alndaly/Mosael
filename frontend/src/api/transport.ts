@@ -157,7 +157,7 @@ function failure(path: string, method: string, status: number, statusText: strin
 }
 
 /** Unified HTTP seam for every domain client: headers, offline, 401 and error bodies are handled once. */
-async function request(path: string, init?: RequestInit): Promise<Response> {
+async function request(path: string, init?: RequestInit, { localSession = true }: { localSession?: boolean } = {}): Promise<Response> {
   const auth = baseHeaders();
   const headers =
     init?.body instanceof FormData
@@ -171,7 +171,9 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
     if (init?.signal?.aborted) throw cause;
     throw new ApiOfflineError(apiLocale.unreachable(API_BASE), { cause });
   }
-  if (response.status === 401 && !path.startsWith("/api/auth/")) {
+  //: `localSession: false` 的接口,它的 401 说的不是「本机登录过期」:比如 MosaelCloud 的会话没了。
+  //: 那种 401 必须原样带着后端文案抛给调用方,更不能顺手把本地登录一起退出。
+  if (localSession && response.status === 401 && !path.startsWith("/api/auth/")) {
     throw failure(path, init?.method ?? "GET", response.status, response.statusText, "");
   }
   if (!response.ok) {
@@ -185,6 +187,18 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await request(path, init);
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
+/**
+ * 和 `api` 同一套请求/错误处理,唯一的区别是 **401 不当作「本机登录过期」**。
+ *
+ * 给那些"另一个身份"的接口用:桌面端里 MosaelCloud 的会话没了,不等于你在这台机器上的账号
+ * 退出了 —— 把两者混在一起,一次云端 401 就把人从本地踢出去。
+ */
+export async function apiAllowingUnauthorized<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await request(path, init, { localSession: false });
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }

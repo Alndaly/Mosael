@@ -1059,6 +1059,14 @@
     "updated_at",
     "workspace_id"
   ],
+  "cloud_login": [
+    "user_id",
+    "email",
+    "cookie_name",
+    "cookie_value",
+    "expires_at",
+    "created_at"
+  ],
   "cloud_bindings": [
     "user_id",
     "cloud_user_id",

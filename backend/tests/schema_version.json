@@ -1,5 +1,5 @@
 {
-  "version": 35,
+  "version": 36,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -91,6 +91,7 @@
     "migrate-clips-get-a-link-group",
     "migrate-clips-on-a-track-do-not-overlap",
     "migrate-cloned-speech-remembers-its-voice",
+    "migrate-cloud-login-table",
     "migrate-code-fields-read-references-from-input",
     "migrate-code-string-reads-keep-their-text",
     "migrate-comfyui-connections-become-plugin-instances",

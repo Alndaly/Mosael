@@ -15,6 +15,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "账号不存在",
         "en": "Account not found.",
     },
+    "routeErr_cloudSignInRequired": {
+        "zh": "需要先登录 MosaelCloud 才能继续。",
+        "en": "Sign in to MosaelCloud to continue.",
+    },
+    "routeErr_cloudRejected": {
+        "zh": "MosaelCloud 拒绝了这次请求。",
+        "en": "MosaelCloud refused this request.",
+    },
     "routeErr_currentPasswordWrong": {
         "zh": "当前密码不对",
         "en": "The current password is incorrect.",

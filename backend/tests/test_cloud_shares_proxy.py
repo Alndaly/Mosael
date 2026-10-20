@@ -45,29 +45,22 @@ class FakeCloud:
 
     def __init__(self, responses):
         self.responses = list(responses)
-        self.calls: list[tuple[str, str, dict]] = []
+        self.calls: list[tuple[str, str, dict | None]] = []
 
-    def get(self, path: str):
-        self.calls.append(("GET", path, {}))
-        return self._next()
-
-    def post(self, path: str, payload: dict):
-        self.calls.append(("POST", path, payload))
-        return self._next()
-
-    def _next(self):
+    def request(self, method: str, path: str, payload=None, *, session=None):
+        self.calls.append((method, path, payload))
         found = self.responses.pop(0)
         if isinstance(found, BaseException):
             raise found
-        return found
+        status, body = found
+        return cloud_binding.CloudReply(status=status, body=body)
 
 
 def stub_cloud(monkeypatch, responses) -> FakeCloud:
-    """把 Cloud 那一跳换掉,但保留「路由 → get_json / post_json」这一段真代码。"""
+    """把 Cloud 那一跳换掉,但保留「路由 → request_json」这一段真代码。"""
     monkeypatch.setattr(settings, "cloud_url", CLOUD_URL)
     fake = FakeCloud(responses)
-    monkeypatch.setattr(cloud_binding, "get_json", fake.get)
-    monkeypatch.setattr(cloud_binding, "post_json", fake.post)
+    monkeypatch.setattr(cloud_binding, "request_json", fake.request)
     return fake
 
 
@@ -75,6 +68,7 @@ class FakeResponse:
     def __init__(self, status_code: int, body) -> None:
         self.status_code = status_code
         self._body = body
+        self.headers = httpx.Headers()
 
     def json(self):
         return self._body
@@ -94,12 +88,8 @@ def stub_client(monkeypatch, response: FakeResponse) -> list[tuple[str, str, dic
         def __exit__(self, *exc_info) -> bool:
             return False
 
-        def get(self, url, **kwargs):
-            calls.append(("GET", url, kwargs))
-            return response
-
-        def post(self, url, **kwargs):
-            calls.append(("POST", url, kwargs))
+        def request(self, method, url, **kwargs):
+            calls.append((method, url, kwargs))
             return response
 
     monkeypatch.setattr(settings, "cloud_url", CLOUD_URL)
@@ -118,7 +108,7 @@ def test_share_detail_is_relayed_field_for_field(monkeypatch):
 
     assert response.status_code == 200, response.text
     assert response.json() == DETAIL
-    assert fake.calls == [("GET", f"/shares/{SHARE_ID}", {})]
+    assert fake.calls == [("GET", f"/shares/{SHARE_ID}", None)]
 
 
 def test_share_payload_is_relayed_without_reshaping(monkeypatch):
@@ -129,7 +119,7 @@ def test_share_payload_is_relayed_without_reshaping(monkeypatch):
 
     assert response.status_code == 200, response.text
     assert response.json() == {"payload": PAYLOAD}
-    assert fake.calls == [("GET", f"/shares/{SHARE_ID}/payload", {})]
+    assert fake.calls == [("GET", f"/shares/{SHARE_ID}/payload", None)]
 
 
 def test_get_json_uses_the_configured_cloud_url(monkeypatch):
@@ -140,7 +130,12 @@ def test_get_json_uses_the_configured_cloud_url(monkeypatch):
     status, body = cloud_binding.get_json(f"/shares/{SHARE_ID}")
 
     assert (status, body) == (200, DETAIL)
-    assert calls == [("GET", f"{CLOUD_URL}/shares/{SHARE_ID}", {})]
+    assert len(calls) == 1
+    method, url, kwargs = calls[0]
+    assert (method, url) == ("GET", f"{CLOUD_URL}/shares/{SHARE_ID}")
+    #: 同源头跟着每一次转发出去(Cloud 的写请求同源闸靠它们);读也带,保持一致。
+    assert kwargs["headers"]["Origin"] == "https://cloud.example"
+    assert kwargs["headers"]["Referer"] == "https://cloud.example/"
 
 
 def test_get_json_keeps_a_list_body(monkeypatch):
@@ -192,9 +187,9 @@ def test_a_slow_cloud_is_504_not_a_hung_request(monkeypatch):
         def __exit__(self, *exc_info) -> bool:
             return False
 
-        def get(self, url, **kwargs):
+        def request(self, method, url, **kwargs):
             calls.append(url)
-            raise httpx.ReadTimeout("too slow", request=httpx.Request("GET", url))
+            raise httpx.ReadTimeout("too slow", request=httpx.Request(method, url))
 
     client = fresh_client()
     monkeypatch.setattr(settings, "cloud_url", CLOUD_URL)
@@ -261,7 +256,7 @@ def test_the_longest_allowed_id_is_still_forwarded(monkeypatch):
     response = client.get(f"/api/cloud/v1/shares/{longest}")
 
     assert response.status_code == 200, response.text
-    assert fake.calls == [("GET", f"/shares/{longest}", {})]
+    assert fake.calls == [("GET", f"/shares/{longest}", None)]
 
 
 # ---------------------------------------------------------------- ⑤ download 是 POST
@@ -306,25 +301,7 @@ def test_the_local_session_is_not_forwarded_to_cloud(monkeypatch):
 
     assert response.status_code == 200, response.text
     _method, _url, kwargs = calls[0]
-    assert kwargs == {}
-
-
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("get", "/api/cloud/v1/shares"),
-        ("post", f"/api/cloud/v1/shares/{SHARE_ID}/like"),
-        ("post", f"/api/cloud/v1/shares/{SHARE_ID}/favorite"),
-        ("post", f"/api/cloud/v1/shares/{SHARE_ID}/comments"),
-        ("delete", f"/api/cloud/v1/shares/{SHARE_ID}"),
-    ],
-)
-def test_write_and_list_paths_are_not_proxied(monkeypatch, method, path):
-    """只开三个读接口:转写接口过去只会 401(它们要第一方会话),那是下一笔的事。"""
-    client = fresh_client()
-    fake = stub_cloud(monkeypatch, [])
-
-    response = getattr(client, method)(path)
-
-    assert response.status_code in {404, 405}, (method, path, response.text)
-    assert fake.calls == []
+    sent = {name.lower() for name in kwargs["headers"]}
+    #: 本地会话、设备凭据都不出这台机器;只有「这次要去哪、以什么身份」那几样头。
+    assert "authorization" not in sent
+    assert "cookie" not in sent

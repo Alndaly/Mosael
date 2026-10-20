@@ -89,6 +89,7 @@
   "migrate-clips-get-a-link-group": "5f3aaf6a1dca3855",
   "migrate-clips-on-a-track-do-not-overlap": "5006b9ed89524e34",
   "migrate-cloned-speech-remembers-its-voice": "44f2833dedfabdef",
+  "migrate-cloud-login-table": "c14a2b8d465a5648",
   "migrate-code-fields-read-references-from-input": "41caa4ec72ee7da9",
   "migrate-code-string-reads-keep-their-text": "d0ff91701210dd10",
   "migrate-comfyui-connections-become-plugin-instances": "98c5e0ed298559d5",

@@ -9718,6 +9718,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description 邮箱 + 密码登录。**密码只活在这一跳里**:不落库、不进日志、不进响应。
+         */
+        post: operations["login_api_cloud_v1_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/login/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Login Code
+         * @description 验证码登录第一步:让 Cloud 把 6 位码发到这个邮箱。
+         */
+        post: operations["send_login_code_api_cloud_v1_login_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/login/code/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Login Code
+         * @description 验证码登录第二步:码换会话。和密码登录落库的形状完全一样。
+         */
+        post: operations["verify_login_code_api_cloud_v1_login_code_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description 退出桌面端的云端登录:调 Cloud 撤掉那一份会话,再删本地那一行。
+         *
+         *     **本地一定要退得掉**:Cloud 不可达时照样删本地那一行(会话到期会自己消失),不让"断网"
+         *     变成"退不出去"。没登录过就是一次幂等的 204。
+         */
+        post: operations["logout_api_cloud_v1_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description 「现在登的是谁」。没登录 → 401(界面据此显示登录表单);会话过期 → 清行 + 401。
+         */
+        get: operations["me_api_cloud_v1_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cloud/v1/shares/{share_id}": {
         parameters: {
             query?: never;
@@ -9727,12 +9830,13 @@ export interface paths {
         };
         /**
          * Get Community Share
-         * @description 分享详情。**公开读**:不转发本地会话,云端那侧按游客认。
+         * @description 分享详情。登录之后自动带上身份(游客也照常读)。
          */
         get: operations["get_community_share_api_cloud_v1_shares__share_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Community Share */
+        delete: operations["delete_community_share_api_cloud_v1_shares__share_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -9758,6 +9862,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Community Shares
+         * @description 社区分享列表(搜索 / 排序 / 游标都由 Cloud 解释)。
+         */
+        get: operations["browse_community_shares_api_cloud_v1_shares_get"];
+        put?: never;
+        /**
+         * Publish Community Share
+         * @description 发布一份分享。请求体原样转给 Cloud,由它校验。
+         */
+        post: operations["publish_community_share_api_cloud_v1_shares_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cloud/v1/shares/{share_id}/download": {
         parameters: {
             query?: never;
@@ -9772,6 +9900,145 @@ export interface paths {
          * @description 下载一次。Cloud 那侧会**把 downloads +1**,所以方法必须是 POST —— 别顺手改成 GET。
          */
         post: operations["download_community_share_api_cloud_v1_shares__share_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/shares/{share_id}/like": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Like Community Share */
+        post: operations["like_community_share_api_cloud_v1_shares__share_id__like_post"];
+        /** Unlike Community Share */
+        delete: operations["unlike_community_share_api_cloud_v1_shares__share_id__like_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/shares/{share_id}/favorite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Favorite Community Share */
+        post: operations["favorite_community_share_api_cloud_v1_shares__share_id__favorite_post"];
+        /** Unfavorite Community Share */
+        delete: operations["unfavorite_community_share_api_cloud_v1_shares__share_id__favorite_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/shares/{share_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Community Comments */
+        get: operations["list_community_comments_api_cloud_v1_shares__share_id__comments_get"];
+        put?: never;
+        /** Add Community Comment */
+        post: operations["add_community_comment_api_cloud_v1_shares__share_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/shares/{share_id}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Community Comment */
+        delete: operations["delete_community_comment_api_cloud_v1_shares__share_id__comments__comment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/users/{handle}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Community User Shares */
+        get: operations["community_user_shares_api_cloud_v1_users__handle__shares_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Notifications */
+        get: operations["list_cloud_notifications_api_cloud_v1_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count Unread Cloud Notifications */
+        get: operations["count_unread_cloud_notifications_api_cloud_v1_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Cloud Notifications Read */
+        post: operations["mark_cloud_notifications_read_api_cloud_v1_notifications_read_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12243,6 +12510,45 @@ export interface components {
             workspace_id: string;
             /** Session Id */
             session_id: string;
+        };
+        /**
+         * CloudCodeIn
+         * @description 验证码登录的第二步:邮箱 + 6 位码。
+         */
+        CloudCodeIn: {
+            /** Email */
+            email: string;
+            /**
+             * Code
+             * @default
+             */
+            code: string;
+        };
+        /**
+         * CloudEmailIn
+         * @description 验证码登录的第一步:只要邮箱。
+         */
+        CloudEmailIn: {
+            /** Email */
+            email: string;
+        };
+        /**
+         * CloudLoginIn
+         * @description 邮箱 + 密码。**这一份只存在这一次请求里**,不落库、不进日志。
+         */
+        CloudLoginIn: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /**
+         * CloudSessionOut
+         * @description 「现在登的是谁」 —— 只有邮箱。cookie 值**不在**这里。
+         */
+        CloudSessionOut: {
+            /** Email */
+            email: string;
         };
         /** CommentAnchorUpdate */
         CommentAnchorUpdate: {
@@ -41100,7 +41406,194 @@ export interface operations {
             };
         };
     };
+    login_api_cloud_v1_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudLoginIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_login_code_api_cloud_v1_login_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudEmailIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_login_code_api_cloud_v1_login_code_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_api_cloud_v1_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    me_api_cloud_v1_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_community_share_api_cloud_v1_shares__share_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_community_share_api_cloud_v1_shares__share_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -41164,6 +41657,70 @@ export interface operations {
             };
         };
     };
+    browse_community_shares_api_cloud_v1_shares_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_community_share_api_cloud_v1_shares_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_community_share_api_cloud_v1_shares__share_id__download_post: {
         parameters: {
             query?: never;
@@ -41175,6 +41732,353 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    like_community_share_api_cloud_v1_shares__share_id__like_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlike_community_share_api_cloud_v1_shares__share_id__like_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    favorite_community_share_api_cloud_v1_shares__share_id__favorite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfavorite_community_share_api_cloud_v1_shares__share_id__favorite_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_community_comments_api_cloud_v1_shares__share_id__comments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_community_comment_api_cloud_v1_shares__share_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_community_comment_api_cloud_v1_shares__share_id__comments__comment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+                /** @description MosaelCloud 社区评论 id */
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    community_user_shares_api_cloud_v1_users__handle__shares_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 用户短名 */
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cloud_notifications_api_cloud_v1_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    count_unread_cloud_notifications_api_cloud_v1_notifications_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_cloud_notifications_read_api_cloud_v1_notifications_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -5,8 +5,10 @@
  * 维护者看完成品说:「密码不应该放在下面吧,容易引起误解」。误会的来由是顺序:
  * 此前密码被别的块隔开,看着像那块的密码;而密码属于本地账号,放在它后面归属才一眼就清。
  *
- * 现在的顺序:**本地账号**(头像、用户名、昵称、签名)→ **登录密码**(紧跟本地账号)。
- * 页头只描述这一页有的东西 —— 本地账号(这台机器上的身份)。
+ * 现在的顺序:**本地账号**(头像、用户名、昵称、签名)→ **登录密码**(紧跟本地账号) →
+ * **MosaelCloud 账号**(另一套可以单独登录的身份)。云账号放在密码之后:密码属于本地账号,
+ * 夹在中间会让它看起来像云账号的密码 —— 这正是当初那条误会。
+ * 页头要同时讲这两套账号:它们独立登录。
  *
  * 这一页不再用「上面 / 下面 / 如上」指位置 —— 谁在上面是会随排版和窗口变化的,而名字不会。
  */
@@ -46,12 +48,13 @@ function before(a: Element, b: Element): boolean {
 }
 
 describe("账户页的块顺序", () => {
-  it("本地账号在最上 → 登录密码紧跟本地账号", async () => {
+  it("本地账号在最上 → 登录密码紧跟本地账号 → MosaelCloud 账号", async () => {
     render(<AccountSection />);
 
     const local = screen.getByText("本地账号", { selector: "strong" });
     const username = screen.getByText("用户名");
     const password = screen.getByText("登录密码", { selector: "strong" });
+    const cloud = screen.getByText("MosaelCloud 账号", { selector: "strong" });
 
     //: 本地账号是第一块。
     const firstBlock = document.querySelector('[data-slot="settings-group-content"] > [data-slot="settings-block"]');
@@ -61,19 +64,21 @@ describe("账户页的块顺序", () => {
     expect(before(username, password), "登录密码应在本地账号资料之后").toBe(true);
     //: 密码紧跟本地账号:中间不再夹着别的账号块。
     expect(before(local, password), "登录密码应在本地账号之后").toBe(true);
+    //: 云账号在最后:它是另一套身份,不是本地账号的密码。
+    expect(before(password, cloud), "MosaelCloud 账号应在登录密码之后").toBe(true);
     //: 渲染出来的整页文字里也不许再有方位指代。
     expect(document.body.textContent ?? "").not.toMatch(/上面|下面|如上|上述/);
   });
 });
 
 describe("账户页的页头", () => {
-  it("只描述这一页真正有的东西:本地账号", async () => {
+  it("同时描述这一页的两套账号:本地账号与 MosaelCloud 账号", async () => {
     render(<AccountSection />);
 
     const description = document.querySelector('[data-slot="settings-group-description"]');
     const text = description?.textContent ?? "";
     expect(text, "页头要说是哪个账号").toContain("本地账号");
-    expect(text, "这一页已经没有 MosaelCloud 账号块了,页头不该再提它").not.toContain("MosaelCloud");
+    expect(text, "这一页有 MosaelCloud 账号块,页头不能只讲本地账号").toContain("MosaelCloud");
   });
 });
 
@@ -102,6 +107,23 @@ const ACCOUNT_KEYS = [
   "signatureDesc",
   "signaturePlaceholder",
   "settingsPassword",
+  "settingsAccountScope",
+  "settingsCloudAccount",
+  "settingsCloudAccountDesc",
+  "settingsCloudEmail",
+  "settingsCloudPassword",
+  "settingsCloudSignIn",
+  "settingsCloudUseCode",
+  "settingsCloudUsePassword",
+  "settingsCloudSendCode",
+  "settingsCloudCode",
+  "settingsCloudCodeSent",
+  "settingsCloudVerify",
+  "settingsCloudSignOut",
+  "settingsCloudSignedIn",
+  "settingsCloudChecking",
+  "settingsCloudNotConfigured",
+  "settingsCloudNotConfiguredHow",
   "settingsPasswordDesc",
   "currentPassword",
   "newPassword",
