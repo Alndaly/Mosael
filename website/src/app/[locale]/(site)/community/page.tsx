@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 
 import { CommunityHeader } from "@/components/community/community-header";
-import { ShareListSkeleton } from "@/components/community/share-skeleton";
-import { ShareBrowser } from "@/components/community/shares";
-import { cookieHeader, loadShareList } from "@/components/community/share-server";
-import { parseShareQuery, uploadCtaSurface } from "@/components/community/share-utils";
+import { CommunityLanding } from "@/components/community/landing";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { listPlugins, listWorkflows } from "@/lib/registry";
 import { pageMetadata } from "@/lib/seo";
-import { CloudApiError, type CloudSharePage } from "@/lib/cloud";
 
 type Params = Promise<{ locale: string }>;
-type SearchParams = Promise<{ q?: string | string[]; kind?: string | string[]; sort?: string | string[] }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { locale } = await params;
@@ -23,64 +17,54 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return pageMetadata({
     locale,
     path: "/community",
-    title: t.sharesSeoTitle,
-    description: t.sharesSeoDescription,
-    keywords: t.sharesKeywords,
+    title: t.homeSeoTitle,
+    description: t.homeSeoDescription,
+    keywords: t.homeKeywords,
   });
 }
 
+/**
+ * 保持按请求渲染:构建页数不变(135),分享在浏览器里按当前语言各取一次。
+ * 这页本身没有服务端取数 —— 官方内容来自构建期读好的 registry,用户分享由落地页组件取。
+ */
 export const dynamic = "force-dynamic";
 
 /**
- * 社区列表页。
+ * 社区首页(落地页)。
  *
- * 首屏这一份取数同时回答三件事:列表内容、页头 tab 上的分享数(拿得到时)、以及
- * 「去上传」该归页头还是归空态。所以在这里 await 一次,再把同一份结果交给列表组件 ——
- * 云端只问一遍。
+ * **两组,不是一张混排列表**:
  *
- * 取舍:页头因此要等这一次取数才出(以前是先出壳、内容随后流)。换来的是一条明确的规则:
- * 列表为空时页头不给 CTA,空态给;列表非空时页头给,空态根本不存在。列表区仍包在
- * Suspense 里 —— 换筛选 / 翻页时的骨架由列表组件自己出,边界在这里不会被挂起。
+ * - 插件:官方静态卡片(权限 / 工具 / 安装,来自 `lib/registry`)+ 当前语言的插件分享;
+ * - 工作流:官方静态卡片(节点数 / 阶段)+ 当前语言的工作流分享。
+ *
+ * 每组都是「官方在前、分享在后」,合并 / 去重 / 取数规则和 `/plugins`、`/workflows`
+ * 共用同一份 `listed-shares.ts`。**搜索、排序、翻页不在这页** —— 它们留在各自的市场页,
+ * 这里的「查看全部」直接过去。
+ *
+ * 「去上传」只出现一次,在页头。这里没有空态:某组没有分享时照常只有官方卡片,
+ * 云端不可达时也只少掉分享那几张(取数失败被吞成空数组,页面上没有错误块)。
  */
-export default async function CommunityPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
+export default async function CommunityPage({ params }: { params: Params }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const t = getMessages(locale).community;
-  // 首屏和地址栏共用同一套解析(share-utils),刷新 / 分享出去的链接结果一致。
-  const query = parseShareQuery(await searchParams);
-  const cookie = await cookieHeader();
+  // 列表来自仓库里真的能装的 manifest / 模板,不是另抄的一份(见 lib/registry)。
+  const plugins = listPlugins(locale);
+  const workflows = listWorkflows(locale);
 
-  let page: CloudSharePage | null = null;
-  let message = "";
-  try {
-    page = await loadShareList(query, cookie);
-  } catch (error) {
-    message = error instanceof CloudApiError ? error.text(locale) : t.loadFailed;
-  }
-
-  const hasShares = (page?.items.length ?? 0) > 0;
   return (
     <>
       <CommunityHeader
         locale={locale}
-        counts={{
-          plugins: listPlugins(locale).length,
-          workflows: listWorkflows(locale).length,
-        }}
-        title={t.sharesTitle}
-        lede={t.sharesLede}
-        // 「去上传」只出现一次:列表非空归页头,空了交给空态(见 uploadCtaSurface)。
-        contribute={
-          uploadCtaSurface(hasShares) === "header"
-            ? { label: t.uploadCta, href: localePath(locale, "/community/upload") }
-            : null
-        }
+        counts={{ plugins: plugins.length, workflows: workflows.length }}
+        title={t.homeTitle}
+        lede={t.homeLede}
+        // 整页只有这一个上传入口(两组之间、空态都不再放第二个)。
+        contribute={{ label: t.uploadCta, href: localePath(locale, "/community/upload") }}
       />
       <section className="bg-paper">
         <div className="mx-auto max-w-[76rem] px-5 py-10 sm:px-8 sm:pb-24">
-          <Suspense fallback={<ShareListSkeleton locale={locale} />}>
-            <ShareBrowser locale={locale} initial={page} initialError={message} initialQuery={query} />
-          </Suspense>
+          <CommunityLanding locale={locale} plugins={plugins} workflows={workflows} />
         </div>
       </section>
     </>

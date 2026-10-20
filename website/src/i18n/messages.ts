@@ -455,13 +455,17 @@ const zh = {
     noApp: "还没装 Mosael？",
     getApp: "下载",
     install: "安装",
-    // ---- 社区分享(第 ② 笔):列表 / 详情 / 上传 ----
+    // ---- 社区首页(落地页):两组官方内容 + 当前语言的用户分享 ----
+    homeTitle: "社区",
+    homeLede: "官方插件和工作流，加上大家分享的同类作品。只显示当前语言；要搜索和筛选，去各自的市场页。",
+    homeSeoTitle: "社区：插件与工作流",
+    homeSeoDescription: "Mosael 社区的官方插件、官方工作流，以及同语言的用户分享。搜索和筛选在插件市场、工作流模板页。",
+    homeKeywords: ["Mosael 社区", "官方插件", "官方工作流", "插件分享", "工作流分享"],
+    viewAll: "查看全部",
+    // ---- 分享详情 / 上传 ----
     shares: "分享",
     sharesTitle: "社区分享",
-    sharesLede: "别人分享的工作流和画布。下载 .json，在 Mosael 里打开，换成你自己的模型和素材就能用。",
-    sharesSeoTitle: "社区分享：工作流与画布",
     sharesSeoDescription: "浏览 Mosael 社区里公开分享的工作流与画布，下载 .json 工程文件，或在 Mosael 里一键打开。",
-    sharesKeywords: ["Mosael 社区", "工作流分享", "画布分享", "AI 工作流下载"],
     searchShares: "搜索分享",
     filterKind: "类型",
     filterSort: "排序",
@@ -1027,13 +1031,20 @@ const en: Messages = {
     noApp: "Don't have Mosael yet?",
     getApp: "Download",
     install: "Install",
-    // ---- Community shares: browse / detail / upload ----
+    // ---- Community home: two groups, official cards + shares in the current language ----
+    homeTitle: "Community",
+    homeLede:
+      "Official plugins and workflows, plus what people share — in the language you're reading. Search and filter on the market pages.",
+    homeSeoTitle: "Community: plugins and workflows",
+    homeSeoDescription:
+      "Official Mosael plugins and workflows, plus community shares in your language. Search and filter on the plugin market or workflow templates page.",
+    homeKeywords: ["Mosael community", "official plugins", "official workflows", "plugin sharing", "workflow sharing"],
+    viewAll: "View all",
+    // ---- Share detail / upload ----
     shares: "Shares",
     sharesTitle: "Community shares",
-    sharesLede: "Workflows and boards other people published. Download the .json, open it in Mosael, and swap in your own models and media.",
-    sharesSeoTitle: "Community shares: workflows and boards",
-    sharesSeoDescription: "Browse workflows and boards shared in the Mosael community. Download the .json project file, or open it in Mosael in one click.",
-    sharesKeywords: ["Mosael community", "workflow sharing", "board sharing", "AI workflow download"],
+    sharesSeoDescription:
+      "Browse workflows and boards shared in the Mosael community. Download the .json project file, or open it in Mosael in one click.",
     searchShares: "Search shares",
     filterKind: "Type",
     filterSort: "Sort",

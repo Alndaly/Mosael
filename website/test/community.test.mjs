@@ -27,6 +27,7 @@ const LIST_PAGE = "src/app/[locale]/(site)/community/page.tsx";
 const DETAIL_PAGE = "src/app/[locale]/(site)/community/[id]/page.tsx";
 const UPLOAD_PAGE = "src/app/[locale]/(site)/community/upload/page.tsx";
 const LIST_UI = "src/components/community/shares.tsx";
+const LANDING_UI = "src/components/community/landing.tsx";
 const DETAIL_UI = "src/components/community/share-detail.tsx";
 const UPLOAD_UI = "src/components/community/upload-form.tsx";
 const IDENTITY_UI = "src/components/community/identity-form.tsx";
@@ -35,30 +36,39 @@ const SERVER_DATA = "src/components/community/share-server.ts";
 const { getMessages } = await import("../src/i18n/messages.ts");
 const { LOCALES } = await import("../src/i18n/config.ts");
 
-test("① 社区列表:真实数据、搜索 / 类型 / 排序 / 游标分页,空态有「去上传」", async () => {
+test("① 社区首页:插件 / 工作流两组,官方静态卡片在前、当前语言的用户分享在后", async () => {
   assert.ok(maybeRead(LIST_PAGE), "缺少社区列表页 /[locale]/community");
   assert.ok(maybeRead(SERVER_DATA), "缺少服务端取数封装(仍要经 lib/cloud.ts)");
 
   const page = maybeRead(LIST_PAGE);
-  // 服务端渲染 + Suspense:内容进 HTML(可被搜到),但首屏先出壳,不等云端。
-  assert.match(page, /Suspense/, "列表页没有 Suspense,首屏会等云端返回");
-  assert.match(page, /loadShareList|shares\.list|cloudShares\.list/, "列表页没有取分享列表");
-  assert.match(page, /generateMetadata/, "列表页没有自己的 <head>");
-  assert.match(page, /pageMetadata\(/, "列表页没有走 pageMetadata");
+  assert.match(page, /generateMetadata/, "社区首页没有自己的 <head>");
+  assert.match(page, /pageMetadata\(/, "社区首页没有走 pageMetadata");
+  // 两组官方内容都来自构建期读好的 registry —— 卡片就是 /plugins、/workflows 的静态卡片。
+  assert.match(page, /listPlugins\(locale\)/, "社区首页没有读官方插件");
+  assert.match(page, /listWorkflows\(locale\)/, "社区首页没有读官方工作流");
+  assert.match(
+    page,
+    /<CommunityLanding locale=\{locale\} plugins=\{plugins\} workflows=\{workflows\}/,
+    "社区首页没有把两组官方内容交给落地页组件",
+  );
+
+  const landing = maybeRead(LANDING_UI);
+  assert.ok(landing, "缺少社区首页的两组列表组件");
+  // 两组各用和 /plugins、/workflows 同一份官方卡片(权限 / 工具 / 安装、节点数 / 阶段)。
+  assert.match(landing, /<PluginCard locale=\{locale\} plugin=\{entry\.official\}/, "插件组没有用官方静态卡片");
+  assert.match(landing, /<WorkflowCard locale=\{locale\} workflow=\{entry\.official\}/, "工作流组没有用官方静态卡片");
+  // 分享按 kind 各取一次,各带当前语言(取数规则复用 listed-shares)。
+  assert.match(landing, /useListedShares\("plugin", locale\)/, "插件组没有取当前语言的插件分享");
+  assert.match(landing, /useListedShares\("workflow", locale\)/, "工作流组没有取当前语言的工作流分享");
+  // 合并规则复用 /plugins 那一套:命中静态 slug 的官方分享跳过,官方卡片全部在前。
+  assert.match(landing, /listedShares\(/, "没有复用 listedShares 的 slug 去重 / 新→旧排序");
+  assert.match(landing, /mergeListing\(/, "没有复用 mergeListing 的「官方在前、分享在后」");
+  assert.match(landing, /mergeListing\([^)]*officialSlugs|listedShares\(shares, officialSlugs\)/, "组件没有先按官方 slug 去重");
+  assert.ok(landing.includes("<ShareCard"), "两组都该把用户分享画成分享卡片");
 
   const ui = maybeRead(LIST_UI);
-  assert.ok(ui, "缺少分享列表组件");
-  assert.match(ui, /cloudShares\.list/, "列表组件没有调用云端列表接口");
-  assert.match(ui, /q:/, "列表没有搜索参数");
-  assert.match(ui, /kind/, "列表没有类型筛选");
-  assert.match(ui, /"new"|'new'|sort/, "列表没有排序");
-  assert.match(ui, /cursor/, "列表没有游标分页");
-  assert.match(ui, /next_cursor|nextCursor/, "列表没有读 next_cursor");
-  assert.match(ui, /loadMore/, "列表没有「加载更多」,退化成了页码或一次性全量");
-  assert.match(ui, /emptyNoShares/, "空列表没有说清「还没有人分享」");
-  assert.match(ui, /uploadCta/, "空列表没有「去上传」的出口");
-  assert.match(ui, /\/community\/upload/, "空态的「去上传」没有指向上传页");
-  // 卡片字段:标题 / 摘要 / 作者昵称 / 类型 / 四项统计。
+  assert.ok(ui, "缺少分享卡片组件");
+  // 卡片字段:标题 / 摘要 / 作者昵称 / 类型 / 四项统计(详情页和落地页共用这张卡)。
   for (const field of ["share.title", "share.summary", "display_name", "stats.downloads", "stats.likes", "stats.favorites", "stats.comments"]) {
     assert.ok(ui.includes(field), `卡片没有渲染 ${field}`);
   }
@@ -151,6 +161,7 @@ test("⑥ email 绝不出现:社区组件与页面只碰公开身份三列", asy
     DETAIL_PAGE,
     UPLOAD_PAGE,
     LIST_UI,
+    LANDING_UI,
     DETAIL_UI,
     UPLOAD_UI,
     IDENTITY_UI,
@@ -212,8 +223,9 @@ test("文案:中英 community 同键,空态与错误有可读句子", () => {
   const en = getMessages("en").community;
   assert.deepEqual(Object.keys(zh).sort(), Object.keys(en).sort(), "中英 community 文案键不一致");
   for (const key of [
-    "emptyNoShares",
-    "emptyNoSharesHint",
+    "homeTitle",
+    "homeLede",
+    "viewAll",
     "uploadCta",
     "loadMore",
     "loadFailed",

@@ -16,11 +16,10 @@ import {
   type CloudCommentPage,
   type CloudIdentity,
   type CloudShare,
-  type CloudSharePage,
   type CloudShareStats,
 } from "@/lib/cloud";
 
-import { publicIdentity, SHARE_PAGE_SIZE, type ShareListQuery } from "./share-utils";
+import { publicIdentity } from "./share-utils";
 
 /** 服务端直连 Cloud 的内网地址。和 `next.config.ts` 的 rewrite 目标同一个环境变量。 */
 function serverCloudBase(): string {
@@ -46,16 +45,6 @@ export function serverCloud(cookie = "") {
  */
 export const loadShare = cache(async (id: string, cookie: string): Promise<CloudShare> => {
   return serverCloud(cookie).shares.get(id);
-});
-
-/** 列表第一页。 */
-export const loadShareList = cache(async (query: ShareListQuery, cookie: string): Promise<CloudSharePage> => {
-  return serverCloud(cookie).shares.list({
-    q: query.q,
-    kind: query.kind || undefined,
-    sort: query.sort,
-    limit: SHARE_PAGE_SIZE,
-  });
 });
 
 /** 评论第一页。读评论是公开接口,不需要会话。 */

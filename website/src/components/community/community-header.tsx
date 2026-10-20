@@ -9,13 +9,13 @@ import { cn } from "@/lib/utils";
 import { communityTabs, type CommunityCounts, type CommunitySection } from "./community-tabs";
 
 /**
- * 社区三个分区(分享 / 插件 / 工作流)共用的页头。
+ * 社区各页(首页 / 插件 / 工作流)共用的页头。
  *
  * 不再是官网内页那种占半屏的大标题:社区页是**拿来逛和找**的,进来第一眼该看到的是
  * 有哪些东西,而不是一句口号。所以页头压到一行标题 + 一句话,分区之间用 tab 切换 ——
- * 它们是同一个社区的三块,不是三篇文章。
+ * 它们是同一个社区的两件事 + 它们的首页,不是三篇文章。
  *
- * **tab 只有一套,三个页面都渲染同一套。** 旧实现按 `active` 决定要不要放「分享」:
+ * **tab 只有一套,每个页面都渲染同一套。** 旧实现按 `active` 决定要不要放「分享」:
  * 切到 `/plugins` 或 `/workflows` 时这一项直接消失,用户看到的就是「分享列表没了」。
  * 现在 tab 全部来自 `communityTabs(locale, counts)`(它不收 active),`active` 只负责
  * 当前项的高亮 —— 当前页不可能改变「有哪些入口」。
@@ -31,7 +31,7 @@ export function CommunityHeader({
   locale: Locale;
   /**
    * 当前分区,**只用于高亮**,不参与生成 tab。不传 = 这一页不在 tab 里
-   * (例如 `/community` 的用户分享流 —— 它仍可访问,但不占导航)。
+   * (例如 `/community` 社区首页 —— 它仍可访问,但不占导航)。
    */
   active?: CommunitySection;
   counts: CommunityCounts;

@@ -194,8 +194,11 @@ export function WorkflowCard({ locale, workflow }: { locale: Locale; workflow: W
 /**
  * 当前语言的用户分享。**在浏览器里取**,不在构建期取:官网的 `/plugins`、`/workflows`
  * 仍然是静态页(构建页数不变),云端挂了也只影响这一小段追加内容。
+ *
+ * 导出给社区首页(`landing.tsx`)复用 —— 两组的取数必须和这里逐字一致,否则
+ * 落地页和各自的市场页会在语言 / 排序上漂开。
  */
-function useListedShares(kind: "plugin" | "workflow", locale: Locale): CloudShare[] {
+export function useListedShares(kind: "plugin" | "workflow", locale: Locale): CloudShare[] {
   const [shares, setShares] = React.useState<CloudShare[]>([]);
   React.useEffect(() => {
     let active = true;
