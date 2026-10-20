@@ -85,3 +85,20 @@ def test_short_official_password_exits_the_server_entrypoint(tmp_path):
     )
     assert result.returncode != 0
     assert "CLOUD_OFFICIAL_PASSWORD" in result.stderr
+
+
+def test_allowed_origins_can_list_several(monkeypatch):
+    """本地开发时官网(3100)和桌面后端(8000)都要调接口 —— 它们是两个 Origin。
+
+    没配就是 `public_url` 那一个(生产如此:官网和云同一个域名),**不是"什么来源都收"**。
+    """
+    from cloud.config import CloudConfig
+
+    monkeypatch.setenv("CLOUD_PUBLIC_URL", "http://127.0.0.1:3100")
+    monkeypatch.delenv("CLOUD_ALLOWED_ORIGINS", raising=False)
+    one = CloudConfig.from_env()
+    assert one.allowed_origins == frozenset({"http://127.0.0.1:3100"})
+
+    monkeypatch.setenv("CLOUD_ALLOWED_ORIGINS", "http://127.0.0.1:3100, http://127.0.0.1:8000 ,")
+    several = CloudConfig.from_env()
+    assert several.allowed_origins == frozenset({"http://127.0.0.1:3100", "http://127.0.0.1:8000"})

@@ -90,6 +90,9 @@ class CloudConfig:
     #: 非空时短于 `password_min_length` 直接让配置构造失败 —— 不静默接受一个弱密码。
     official_password: str = ""
     #: 从 `public_url` 推出来的同源校验名单(允许的 Origin)。
+    #: 允许的 Origin。**默认就是 `public_url` 的那一个**;本地开发时官网(3100)和桌面后端(8000)
+    #: 都要来调接口,而它们不是同一个 Origin —— 用 `CLOUD_ALLOWED_ORIGINS` 显式列出来。
+    #: 生产不必设(官网和云同一个域名)。
     allowed_origins: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
@@ -162,6 +165,11 @@ class CloudConfig:
         return cls(
             data_dir=data_dir,
             public_url=os.environ.get("CLOUD_PUBLIC_URL", "http://localhost:3000").strip(),
+            allowed_origins=frozenset(
+                part.strip()
+                for part in os.environ.get("CLOUD_ALLOWED_ORIGINS", "").split(",")
+                if part.strip()
+            ),
             database_url=os.environ.get("CLOUD_DATABASE_URL", "").strip(),
             cookie_secure=_flag("CLOUD_COOKIE_SECURE", True),
             cookie_name=os.environ.get("CLOUD_COOKIE_NAME", "mosael_cloud_session").strip() or "mosael_cloud_session",
