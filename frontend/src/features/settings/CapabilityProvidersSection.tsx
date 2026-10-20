@@ -29,6 +29,7 @@ import {
 } from "@/components/settings/settings-layout";
 import { PageLoadError } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { findPluginsFor } from "@/lib/deepLink";
@@ -78,24 +79,124 @@ function CapabilityProvidersEmpty() {
   );
 }
 
-/** 加载中:照一组能力的样子(标题、说明、一行选择)占位,几组排下来 —— 数据到了原地换上,页面不跳。 */
-function CapabilityGroupsSkeleton() {
+/** 骨架里一组的长相:标题条多长、说明几行、有没有下拉、用在哪几颗标签。不写名字和文案 —— 那些只有后端一份。 */
+type CapabilitySkeletonShape = {
+  /** 组标题那一小条 —— 真页的标题是两三个字,一条窄的。 */
+  title: string;
+  /** 组说明占几行、每行多宽。真页有的只有一行,有的两行。 */
+  description: readonly string[];
+  /** 这一组有没有「用哪一家」的下拉。没有的那两组(分离人声、配音)真页只写一行字 / 只列候选。 */
+  picker: boolean;
+  /** 「用在哪」那排标签有几颗、各多宽(真页 2–3 颗,宽度跟着文案长短)。 */
+  tags: readonly string[];
+};
+
+/**
+ * 骨架**照真实页的分组**铺:后端能力表今天登记的 7 项(`domain/capabilities.registered()`,按名字排)——
+ * 降噪、分离人声、文档解析、素材外链、配音、转写、翻译。这里只记每组的形状(标题多长、说明几行、
+ * 有没有下拉、几颗标签),不写能力的名字和文案:那些只有后端那一份(见 `api/domains/capabilities`)。
+ *
+ * **组数必须和能力表一致**:骨架多一组少一组,数据到了页面就会跳一下。后端新登记一项能力时来这里补一行 ——
+ * `CapabilityProvidersSection.dom.test.tsx` 拿它和真实数据的 7 组对齐。
+ */
+export const CAPABILITY_SKELETON_GROUPS: readonly CapabilitySkeletonShape[] = [
+  //: 降噪:说明两行,有下拉,底下还跟着两条「没配好的」和一排标签。
+  { title: "w-16", description: ["w-3/5", "w-2/5"], picker: true, tags: ["w-14", "w-24", "w-20"] },
+  //: 分离人声:只有一行字,没有下拉(「目前只有这一家」)。
+  { title: "w-20", description: ["w-2/5"], picker: false, tags: ["w-16", "w-20"] },
+  //: 文档解析:一行,有下拉。
+  { title: "w-20", description: ["w-1/2"], picker: true, tags: ["w-16", "w-20"] },
+  //: 素材外链:一行,有下拉(一家都没有时那个位置是「去插件」按钮,同样是右边一格)。
+  { title: "w-16", description: ["w-2/5"], picker: true, tags: ["w-14", "w-20"] },
+  //: 配音:没有默认,只列候选和用在哪 —— 没有下拉。
+  { title: "w-12", description: ["w-3/5"], picker: false, tags: ["w-20", "w-16"] },
+  //: 转写:说明两行,有下拉,底下是一排标签。
+  { title: "w-16", description: ["w-4/5", "w-1/3"], picker: true, tags: ["w-14", "w-24", "w-16"] },
+  //: 翻译:一行,有下拉。
+  { title: "w-16", description: ["w-1/2"], picker: true, tags: ["w-16", "w-20"] },
+];
+
+/**
+ * 加载中的一组:壳用真页 `SettingsGroup` 的同一套(同一个 `data-slot="settings-group"`、抬头/标题/正文那一圈类名),
+ * 组里那一行也用真的 `SettingsItemRow` —— 组间分隔线、页头之后的间距都由 `SettingsSectionStack` 那套 CSS 给,
+ * 不另写一套间距。灰条只是把真页的字换成了 <Skeleton>。
+ *
+ * 读屏那边:第一组里放一句 `role="status"` + `aria-busy` + `aria-live` 的 sr-only 说明,灰条整块 `aria-hidden` ——
+ * 一屏占位不该被念成「这里有七组能力」。
+ */
+function CapabilitySkeletonGroup({ shape, label }: { shape: CapabilitySkeletonShape; label?: string }) {
   return (
-    <div data-capability-loading="" aria-busy="true" className="grid gap-10">
-      {[0, 1, 2, 3].map((index) => (
-        <div key={index} className="grid gap-3 px-0.5">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-3.5" style={{ width: `${[58, 46, 64, 52][index]}%` }} />
-          <div className="flex items-center justify-between gap-6 border-t border-divider pt-5">
-            <div className="grid flex-1 gap-2">
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="h-3 w-2/5" />
+    <section
+      data-slot="settings-group"
+      data-capability-skeleton-group=""
+      aria-hidden={label ? undefined : "true"}
+      className="@container/settings grid gap-1"
+    >
+      {label && (
+        <span role="status" aria-live="polite" aria-busy="true" data-capability-loading="" className="sr-only">
+          {label}
+        </span>
+      )}
+      <div data-capability-skeleton-content="" aria-hidden="true" className="contents">
+        <header
+          data-slot="settings-group-header"
+          className="flex flex-wrap items-start justify-between gap-4 px-0.5 pb-2"
+        >
+          <div className="min-w-0">
+            <h2 data-slot="settings-group-title" className="m-0 text-xl font-semibold leading-snug tracking-tight">
+              <Skeleton data-capability-skeleton-title="" className={cn("h-5", shape.title)} />
+            </h2>
+            {/*: 说明那一格和真页的说明同一档字号/颜色/边距,只多一层 `grid gap-1.5` 把几条灰条竖着排。 */}
+            <div
+              data-slot="settings-group-description"
+              className="mb-0 mt-1.5 grid max-w-2xl gap-1.5 text-ui-md leading-[1.55] text-muted-foreground"
+            >
+              {shape.description.map((width, index) => (
+                <Skeleton key={index} data-capability-skeleton-description="" className={cn("h-3.5", width)} />
+              ))}
             </div>
-            <Skeleton className={cn("h-9 rounded-md", SETTINGS_FIELD_WIDTH)} />
           </div>
+          {/*: 组抬头右边是「去插件市场找」—— 真页每一组都有,骨架也占住这一格。 */}
+          <div className="flex shrink-0 items-center gap-2">
+            <Skeleton className="h-8 w-24 rounded-full" />
+          </div>
+        </header>
+        <div data-slot="settings-group-content" className="grid [&>*+*]:border-t [&>*+*]:border-divider">
+          <SettingsItemRow
+            label={<Skeleton data-capability-skeleton-label="" className="h-3.5 w-20" />}
+            description={shape.picker ? <Skeleton className="h-3 w-2/5" /> : undefined}
+            footer={
+              <div data-capability-skeleton-tags="" className="flex min-w-0 flex-wrap items-center gap-2.5">
+                <Skeleton className="h-3 w-12" />
+                {shape.tags.map((width, index) => (
+                  <Skeleton key={index} data-capability-skeleton-tag="" className={cn("h-5 rounded-md", width)} />
+                ))}
+              </div>
+            }
+          >
+            {shape.picker && (
+              //: 和真页的下拉同一格:设置字段那一档高(CONTROL_HEIGHT.md)、同一个宽度。
+              <Skeleton
+                data-capability-skeleton-control=""
+                className={cn(CONTROL_HEIGHT.md, "rounded-md", SETTINGS_FIELD_WIDTH)}
+              />
+            )}
+          </SettingsItemRow>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** 加载中:照**真实页的分组**一组一组铺(不是一排一样长的条),组数见 `CAPABILITY_SKELETON_GROUPS`。 */
+function CapabilityGroupsSkeleton() {
+  const t = useI18n();
+  return (
+    <>
+      {CAPABILITY_SKELETON_GROUPS.map((shape, index) => (
+        <CapabilitySkeletonGroup key={index} shape={shape} label={index === 0 ? t("pageLoading") : undefined} />
       ))}
-    </div>
+    </>
   );
 }
 

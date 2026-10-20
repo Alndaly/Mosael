@@ -1,8 +1,13 @@
 /** @vitest-environment jsdom */
 import React from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
+
+import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsItemRow } from "@/components/settings/settings-layout";
 
 /**
  * 「能力提供方」照后端的能力表列(ADR 0031 §5):一项能力一组。有内置实现的(文档解析)不定就是内置的;
@@ -34,6 +39,21 @@ const listed = [
     used_by: [{ kind: "app", label: "剪辑页字幕:「配音」" }] },
   { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null, options: [] },
 ];
+
+/**
+ * 后端能力表**今天**登记的 7 项(`domain/capabilities.registered()`,按名字排):
+ * 降噪、分离人声、文档解析、素材外链、配音、转写、翻译。骨架在数据到之前只能照**同一条常量**的组数铺 ——
+ * 这里把它抄成真实数据的样子,两边组数对不上就是骨架没跟上能力表(测试会红)。
+ */
+const registered = [
+  { capability: "audio_denoise", label: "降噪", description: "去底噪", current: null, automatic: null, options: [] },
+  { capability: "audio_separation", label: "分离人声", description: "拆人声", current: null, automatic: null, options: [] },
+  { capability: "document_parse", label: "文档解析", description: "转成 Markdown", current: null, automatic: null, options: [] },
+  { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null, options: [] },
+  { capability: "speech", label: "配音", description: "念字", current: null, automatic: null, defaultable: false, options: [] },
+  { capability: "transcription", label: "转写", description: "听写成字", current: null, automatic: null, options: [] },
+  { capability: "translation", label: "翻译", description: "译成中文", current: null, automatic: null, options: [] },
+];
 const { listCapabilityChoices } = vi.hoisted(() => ({ listCapabilityChoices: vi.fn() }));
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices, setCapabilityDefault: vi.fn() }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
@@ -46,7 +66,7 @@ vi.mock("@/components/ui/option-picker", () => ({
   ),
 }));
 
-import { CapabilityProvidersSection } from "./CapabilityProvidersSection";
+import { CAPABILITY_SKELETON_GROUPS, CapabilityProvidersSection } from "./CapabilityProvidersSection";
 
 beforeEach(() => {
   listCapabilityChoices.mockReset();
@@ -66,6 +86,168 @@ it("后端还在答的那几秒是骨架屏,不是一片白;答了原地换上",
   answer(listed);
   await waitFor(() => expect(screen.getByText("文档解析")).toBeTruthy());
   expect(container.querySelector("[data-capability-loading]")).toBeNull();
+});
+
+/** 挂一个一直不答的查询:停在骨架屏上,直到测试自己调用 answer。 */
+function renderPendingSkeleton() {
+  let answer!: (value: typeof registered) => void;
+  listCapabilityChoices.mockImplementation(() => new Promise<typeof registered>((resolve) => { answer = resolve; }));
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  return { ...view, answer };
+}
+
+const skeletonGroups = (container: HTMLElement) =>
+  [...container.querySelectorAll<HTMLElement>("[data-capability-skeleton-group]")];
+
+/**
+ * 维护者截图:「能力提供方这边的 Skeleton 是否有点问题」。骨架屏画成**一排一样长的条**、
+ * 第一块还是一大块矩形,而真实页是「一项能力一组」:组标题 + 一两行说明 +「用哪一家」一行 + 用在哪的标签排。
+ * 下面几条把这件事钉在结构上。
+ */
+it("骨架的组数和真实能力表的组数一致 —— 加载完原地换上,不多不少", async () => {
+  //: 7 = 后端能力表今天登记的项数(`domain/capabilities.registered()`)。骨架照同一条常量铺;
+  //: 常量与真实数据组数对不上时这条会红,提醒去补 `CAPABILITY_SKELETON_GROUPS` 那一行。
+  const { container, answer } = renderPendingSkeleton();
+  expect(skeletonGroups(container)).toHaveLength(registered.length);
+  expect(registered).toHaveLength(CAPABILITY_SKELETON_GROUPS.length);
+  answer(registered);
+  await waitFor(() => expect(screen.getByText("降噪")).toBeTruthy());
+  expect(container.querySelectorAll('[data-slot="settings-group"]')).toHaveLength(registered.length);
+});
+
+it("每组骨架的内部照真实结构:标题条 + 说明 + 一行(左标签/右控件) + 用在哪的标签排", async () => {
+  const { container } = renderPendingSkeleton();
+  const groups = skeletonGroups(container);
+  expect(groups.length).toBeGreaterThan(0);
+  for (const group of groups) {
+    //: 骨架组就是真页的 `SettingsGroup`(同一个 data-slot),组间那条分隔线才落得上。
+    expect(group.getAttribute("data-slot")).toBe("settings-group");
+    const title = group.querySelector('[data-slot="settings-group-title"] [data-capability-skeleton-title]');
+    expect(title).not.toBeNull();
+    expect(title!.className).toContain("h-5");
+    expect(title!.className).not.toContain("w-full");
+    const lines = group.querySelectorAll('[data-slot="settings-group-description"] [data-capability-skeleton-description]');
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    expect(lines.length).toBeLessThanOrEqual(2);
+    const row = group.querySelector('[data-slot="settings-item-row"]');
+    expect(row).not.toBeNull();
+    expect(row!.querySelector('[data-slot="settings-item-label"] [data-capability-skeleton-label]')).not.toBeNull();
+    const tags = group.querySelectorAll("[data-capability-skeleton-tag]");
+    expect(tags.length).toBeGreaterThanOrEqual(2);
+    expect(tags.length).toBeLessThanOrEqual(3);
+  }
+});
+
+it("每组高度不同:有下拉的组多一块和下拉同宽同高的控件,没下拉的组没有;说明有的两行", () => {
+  const { container } = renderPendingSkeleton();
+  const groups = skeletonGroups(container);
+  const withPicker = groups.filter((group) => group.querySelector("[data-capability-skeleton-control]"));
+  const withoutPicker = groups.filter((group) => !group.querySelector("[data-capability-skeleton-control]"));
+  //: 别 7 组一模一样:分离人声、配音那两组真页没有下拉。
+  expect(withPicker.length).toBeGreaterThan(0);
+  expect(withoutPicker.length).toBeGreaterThan(0);
+  for (const group of withPicker) {
+    const control = group.querySelector<HTMLElement>("[data-capability-skeleton-control]")!;
+    expect(control.className).toContain(CONTROL_HEIGHT.md);
+    expect(control.className).toContain(SETTINGS_FIELD_WIDTH);
+    //: 有下拉的组还带一行说明(「没配好的」/「点了会怎样」),和真页那一行一样。
+    expect(group.querySelectorAll("[data-capability-skeleton-description]").length).toBeGreaterThanOrEqual(1);
+  }
+  //: 没有下拉的组,那一行只有左边一行字 —— 少了右侧那一块,整组就比有下拉的矮。
+  for (const group of withoutPicker) {
+    expect(group.querySelector('[data-slot="settings-item-control"]')).toBeNull();
+    expect(group.querySelectorAll('[data-slot="settings-item-label"] [data-capability-skeleton-label]')).toHaveLength(1);
+  }
+  const lineCounts = groups.map((group) => group.querySelectorAll("[data-capability-skeleton-description]").length);
+  expect(new Set(lineCounts).size).toBeGreaterThan(1);
+  expect(lineCounts).toContain(1);
+  expect(lineCounts).toContain(2);
+});
+
+it("第一块不是一大块矩形:从组标题 + 一句说明开始,和真页开头一样", () => {
+  const { container } = renderPendingSkeleton();
+  const first = skeletonGroups(container)[0];
+  expect(first.querySelector('[data-slot="settings-group-title"] [data-capability-skeleton-title]')).not.toBeNull();
+  expect(first.querySelectorAll('[data-slot="settings-group-description"] [data-capability-skeleton-description]').length)
+    .toBeGreaterThanOrEqual(1);
+  //: 骨架里没有比一行标题还高的大灰块(那一版是第一块一大片矩形)。
+  for (const bar of first.querySelectorAll<HTMLElement>('[data-slot="skeleton"]')) {
+    expect(bar.className).not.toMatch(/\b(?:min-)?h-(?:1[2-9]|[2-9]\d)\b/);
+  }
+});
+
+it("加载中有语义:role=status + aria-busy + aria-live;灰条盖住不念,加载完整块切走", async () => {
+  const { container, answer } = renderPendingSkeleton();
+  const loading = container.querySelector("[data-capability-loading]");
+  expect(loading).not.toBeNull();
+  expect(loading!.getAttribute("role")).toBe("status");
+  expect(loading!.getAttribute("aria-busy")).toBe("true");
+  expect(loading!.getAttribute("aria-live")).toBe("polite");
+  expect(loading!.textContent).toBe("pageLoading");
+  //: 一屏灰条不该被读屏一条条念成内容。
+  expect(container.querySelector("[data-capability-skeleton-content]")?.getAttribute("aria-hidden")).toBe("true");
+  answer(registered);
+  await waitFor(() => expect(screen.getByText("降噪")).toBeTruthy());
+  expect(container.querySelector("[data-capability-loading]")).toBeNull();
+});
+
+it("prefers-reduced-motion:扫光整条撤掉;这页不另改动画", () => {
+  //: `.skeleton` 的样子在 design/tokens.css,减少动态时 `::after` 的扫光不跑 —— 骨架只用 <Skeleton>、
+  //: 不自己挂 `animate-*`。设计棘轮 design/compiledCascade.test.ts / design/skeletons.test.ts 同一条。
+  const tokens = readFileSync(join(import.meta.dirname, "../../design/tokens.css"), "utf8");
+  expect(tokens).toMatch(
+    /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.skeleton::after\s*\{[^}]*display: none;[^}]*animation: none;/,
+  );
+  const source = readFileSync(join(import.meta.dirname, "CapabilityProvidersSection.tsx"), "utf8");
+  expect(source).not.toMatch(/\banimate-(?:pulse|none|spin)\b/);
+});
+
+it("骨架组的壳就是真页 SettingsGroup 那一套:区块/抬头/标题/内容不是另写的一套间距", () => {
+  const { container } = renderPendingSkeleton();
+  const skeleton = skeletonGroups(container)[0];
+  const real = render(
+    <SettingsGroup title="真页的一组" description="这一组是干什么的">
+      <SettingsItemRow label="用哪一家" />
+    </SettingsGroup>,
+  ).container;
+  const realGroup = real.querySelector<HTMLElement>('[data-slot="settings-group"]')!;
+  expect(skeleton.className).toBe(realGroup.className);
+  expect(skeleton.querySelector('[data-slot="settings-group-header"]')!.className)
+    .toBe(real.querySelector('[data-slot="settings-group-header"]')!.className);
+  expect(skeleton.querySelector('[data-slot="settings-group-title"]')!.className)
+    .toBe(real.querySelector('[data-slot="settings-group-title"]')!.className);
+  expect(skeleton.querySelector('[data-slot="settings-group-content"]')!.className)
+    .toBe(real.querySelector('[data-slot="settings-group-content"]')!.className);
+  //: 说明那一格只多一层 `grid gap-1.5`(几条灰条要竖着排),真页的类名一个不少。
+  const realDescription = real.querySelector<HTMLElement>('[data-slot="settings-group-description"]')!;
+  const skeletonDescription = skeleton.querySelector<HTMLElement>('[data-slot="settings-group-description"]')!;
+  for (const token of realDescription.className.split(/\s+/)) {
+    expect(skeletonDescription.className.split(/\s+/)).toContain(token);
+  }
+});
+
+it("真实页一点没变:数据到了还是「一项能力一组」,标题/说明/那一行/用在哪都在,骨架整块退场", async () => {
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("降噪")).toBeTruthy());
+  const groups = [...container.querySelectorAll<HTMLElement>('[data-slot="settings-group"]')];
+  expect(groups).toHaveLength(listed.length);
+  for (const group of groups) {
+    expect(group.querySelector('[data-slot="settings-group-title"]')).not.toBeNull();
+    expect(group.querySelector('[data-slot="settings-group-description"]')).not.toBeNull();
+    expect(group.querySelector('[data-slot="settings-item-row"]')).not.toBeNull();
+  }
+  //: 接口给了 `used_by` 的只有降噪和配音两处 —— 真实页的「用在哪」一行照旧,骨架没有多画。
+  expect(container.querySelectorAll("[data-capability-uses]")).toHaveLength(2);
+  expect(container.querySelector("[data-capability-loading]")).toBeNull();
+  expect(container.querySelector("[data-capability-skeleton-group]")).toBeNull();
 });
 
 it("加载失败说出来、能重试,不是一片白", async () => {
