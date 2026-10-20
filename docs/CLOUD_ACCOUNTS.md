@@ -56,13 +56,18 @@ http://127.0.0.1:8901/api/cloud/v1` 才能发起绑定。
 ### 生产
 
 Cloud 是一个独立进程:PostgreSQL(`CLOUD_DATABASE_URL=postgresql+psycopg://…`)、
-`CLOUD_PUBLIC_URL=https://mosael.com`、`CLOUD_COOKIE_SECURE=true`。Caddy 把
-`/api/cloud/*` 同源转给 Cloud,其余转给官网:
+`CLOUD_PUBLIC_URL=https://mosael.com`、`CLOUD_COOKIE_SECURE=true`。目标机器上已有 nginx,
+由它把 `/api/cloud/*` 同源转给回环端口上的 Cloud,其余转给官网:
 
 ```
-handle /api/cloud/* { reverse_proxy cloud:8000 }
-handle              { reverse_proxy website:3000 }
+location /api/cloud/ { proxy_pass http://127.0.0.1:8901; }
+location /           { proxy_pass http://127.0.0.1:3000; }
 ```
+
+完整 server 块在 `deploy/nginx/mosael.conf`。nginx 不读 `.env`,装的时候要把 `${DOMAIN}`
+换成真实域名;反代必须带 `proxy_set_header Host $host;` 和
+`proxy_set_header X-Forwarded-Proto $scheme;` —— 少了后者 Cloud 会以为请求走的是 http,
+不下发 Secure cookie。
 
 **为什么同域反代而不是跨域 + CORS**:会话在 HttpOnly cookie 里,同源时它是第一方 cookie;
 跨域就得 `SameSite=None`,把 CSRF 面放大,还要维护一份 CORS 白名单。同源之后 Cloud 只需要
@@ -71,6 +76,36 @@ handle              { reverse_proxy website:3000 }
 **`CLOUD_PUBLIC_URL` 必须就是用户实际访问的那个 Origin**(例如用户从 `www.mosael.com` 进站,
 这里也写 `https://www.mosael.com`)。它同时决定 cookie 的站点与写请求的同源校验;写错的表现
 是"登录成功但一保存就说来自别的网站"。
+
+### 一键部署(Compose + 已有 nginx)
+
+`deploy/` 有官网 + Cloud + Postgres + cleanup 的 Compose:Postgres 用命名卷,Cloud 等
+Postgres healthy 才启动,另有 cleanup 容器定时删过期的验证码 / 会话 / OAuth 中间态。
+**机器上已有 nginx,所以不装 Caddy**:compose 只把官网和 Cloud 绑在
+`127.0.0.1:3000` / `127.0.0.1:8901`,80/443 由宿主 nginx 的
+`deploy/nginx/mosael.conf` 接;同源仍是一个 `DOMAIN`,没有第二套域名。
+
+```bash
+cd deploy
+cp .env.example .env      # 填 DOMAIN、POSTGRES_PASSWORD;要发信 / OAuth 再填对应项
+docker compose up -d --build
+
+# 接入已有 nginx(域名要和 .env 的 DOMAIN 一致)
+cd ..
+sudo cp deploy/nginx/mosael.conf /etc/nginx/conf.d/mosael.conf
+sudo sed -i 's/${DOMAIN}/mosael.example.com/g' /etc/nginx/conf.d/mosael.conf
+sudo nginx -t && sudo systemctl reload nginx
+
+# 443 / 证书:certbot 会改 nginx,先备份
+sudo cp -a /etc/nginx /root/nginx.bak
+sudo certbot --nginx -d mosael.example.com
+```
+
+`CLOUD_PUBLIC_URL` 由 compose 按 `https://${DOMAIN}` 注入,`CLOUD_COOKIE_SECURE=true` 固定;
+SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮),不要在 compose 里塞假值。
+`DOMAIN` 必须与用户实际访问的 Origin 一致(含 `www` 的选择),也要与 nginx 里替换后的域名
+一致。完整的首次部署清单、旧库 `password_hash` 迁移 SQL、过期清理、x86_64 / arm64 构建时的
+`--platform` 说明与故障对照见 [`deploy/README.md`](../deploy/README.md)。
 
 ## 接口(`/api/cloud/v1`)
 

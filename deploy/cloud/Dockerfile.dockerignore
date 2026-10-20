@@ -1,0 +1,10 @@
+# deploy/cloud/Dockerfile 的构建上下文是仓库根:只放它要的两样。
+*
+!cloud
+!deploy/cloud
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+cloud/cloud-data
+cloud/.env

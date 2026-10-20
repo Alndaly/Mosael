@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 import { DEFAULT_LOCALE } from "./src/i18n/config";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // TypeScript 7 不再暴露 Next 默认走的那套编译器 API,构建会直接失败并让你退回 TS 6。
   // 这个开关让 Next 改用 `tsc` CLI 去做类型检查 —— 保住"依赖取最新版"的前提,而不是为了
   // 迁就构建流程把语言版本降回去。

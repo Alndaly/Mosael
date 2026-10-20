@@ -1,0 +1,143 @@
+# Mosael 官网 + MosaelCloud 账号服务的单机部署(接入机器上已有的 nginx)。
+#
+#   cd deploy
+#   cp .env.example .env      # 填域名、数据库密码(其余可留空)
+#   docker compose up -d --build   # 第一次会构建两个镜像
+#   # 然后按 README 安装 deploy/nginx/mosael.conf 并 reload 宿主 nginx
+#
+# 本文件不发布 80/443,也不跑 Caddy:官网和 Cloud 只绑在 127.0.0.1 的回环端口上,
+# 由机器上已有的 nginx 反代,浏览器看到的只有一个 Origin。
+# 同源是硬要求 —— 云账号的会话 cookie 只有在同源时才是第一方的,不要拆成两个域名。
+# 完整步骤、首次部署清单和故障对照见 README.md。
+
+name: mosael-cloud
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mosael
+      POSTGRES_DB: mosael
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?在 .env 里设置 POSTGRES_PASSWORD}
+    # 不发布端口:只有 compose 内部网络能访问 postgres:5432。
+    volumes:
+      # 命名卷:数据库文件不在容器层,`docker compose down` 不会丢,`down -v` 才会。
+      - postgres_data:/var/lib/postgresql/data
+      # 只在数据卷为空时执行一次:校验 UTF8、把库的默认时区钉成 UTC。
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mosael -d mosael"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  cloud:
+    build:
+      context: ..
+      dockerfile: deploy/cloud/Dockerfile
+    restart: unless-stopped
+    environment:
+      # 同源:用户实际访问的 Origin。OAuth 回调地址也只由它推出。
+      CLOUD_PUBLIC_URL: https://${DOMAIN:?在 .env 里设置 DOMAIN}
+      # 生产必须 true;不要为了本地 http 方便在 compose 里关掉它。
+      CLOUD_COOKIE_SECURE: "true"
+      CLOUD_DATABASE_URL: postgresql+psycopg://mosael:${POSTGRES_PASSWORD:?在 .env 里设置 POSTGRES_PASSWORD}@postgres:5432/mosael
+      CLOUD_DATA_DIR: /data
+      CLOUD_SESSION_TTL_DAYS: ${CLOUD_SESSION_TTL_DAYS:-30}
+      CLOUD_DEVICE_CODE_TTL_SECONDS: ${CLOUD_DEVICE_CODE_TTL_SECONDS:-600}
+      CLOUD_DEVICE_POLL_INTERVAL_SECONDS: ${CLOUD_DEVICE_POLL_INTERVAL_SECONDS:-5}
+      CLOUD_PASSWORD_MIN_LENGTH: ${CLOUD_PASSWORD_MIN_LENGTH:-8}
+      CLOUD_OAUTH_STATE_TTL_SECONDS: ${CLOUD_OAUTH_STATE_TTL_SECONDS:-600}
+      # 发信 / 第三方登录:留空 = 没启用。代码会明确报错(mail_not_configured /
+      # oauth_not_configured),官网也不显示对应入口 —— 这里不塞假值。
+      CLOUD_SMTP_HOST: ${CLOUD_SMTP_HOST:-}
+      CLOUD_SMTP_PORT: ${CLOUD_SMTP_PORT:-587}
+      CLOUD_SMTP_TLS: ${CLOUD_SMTP_TLS:-}
+      CLOUD_SMTP_USERNAME: ${CLOUD_SMTP_USERNAME:-}
+      CLOUD_SMTP_PASSWORD: ${CLOUD_SMTP_PASSWORD:-}
+      CLOUD_SMTP_FROM: ${CLOUD_SMTP_FROM:-}
+      CLOUD_GITHUB_CLIENT_ID: ${CLOUD_GITHUB_CLIENT_ID:-}
+      CLOUD_GITHUB_CLIENT_SECRET: ${CLOUD_GITHUB_CLIENT_SECRET:-}
+      CLOUD_GOOGLE_CLIENT_ID: ${CLOUD_GOOGLE_CLIENT_ID:-}
+      CLOUD_GOOGLE_CLIENT_SECRET: ${CLOUD_GOOGLE_CLIENT_SECRET:-}
+    # 只绑回环:宿主机 nginx 的 /api/cloud/ 指向 127.0.0.1:${CLOUD_PORT}。
+    ports:
+      - "127.0.0.1:${CLOUD_PORT:-8901}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/cloud/v1/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  website:
+    build:
+      context: ..
+      dockerfile: deploy/website/Dockerfile
+      args:
+        # NEXT_PUBLIC_* 与站长验证码是**构建期**写进产物的;改完要重新 build。
+        NEXT_PUBLIC_GOOGLE_ANALYTICS_ID: ${NEXT_PUBLIC_GOOGLE_ANALYTICS_ID:-}
+        SITE_VERIFICATION_GOOGLE: ${SITE_VERIFICATION_GOOGLE:-}
+        SITE_VERIFICATION_BAIDU: ${SITE_VERIFICATION_BAIDU:-}
+        SITE_VERIFICATION_BING: ${SITE_VERIFICATION_BING:-}
+        SITE_VERIFICATION_360: ${SITE_VERIFICATION_360:-}
+        SITE_VERIFICATION_SOGOU: ${SITE_VERIFICATION_SOGOU:-}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      # next.config.ts 的 rewrite 用它;生产上宿主 nginx 已经先接了 /api/cloud/*,
+      # 这里仍指到内网服务,免得绕过 nginx 直连官网时把请求送到不存在的本地端口。
+      CLOUD_API_URL: http://cloud:8000
+    # 只绑回环:宿主机 nginx 的 / 指向 127.0.0.1:${WEBSITE_PORT}。
+    ports:
+      - "127.0.0.1:${WEBSITE_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/en').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # 过期数据清理:每小时删一次过期的验证码、会话和 OAuth 中间态。
+  # 只删 expires_at 已经过去的行 —— 不碰用户、设备、绑定这些长期数据。
+  cleanup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/cleanup.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: mosael
+      PGDATABASE: mosael
+      PGPASSWORD: ${POSTGRES_PASSWORD:?在 .env 里设置 POSTGRES_PASSWORD}
+      CLEANUP_INTERVAL_SECONDS: ${CLEANUP_INTERVAL_SECONDS:-3600}
+    volumes:
+      - ./cron/cleanup.sh:/cleanup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Cloud 启动时会 create_all;等它 healthy 再跑,免得第一轮在"表还不存在"上刷错误。
+      cloud:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

@@ -1,0 +1,18 @@
+# deploy/website/Dockerfile 的构建上下文是仓库根:只放官网构建要的东西。
+*
+!website
+!plugins/examples
+!plugins/bundled
+!deploy/website
+
+# 本机构建产物与依赖,绝不进上下文(也不让它们覆盖容器里的安装结果)。
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/.pytest_cache
+
+# 本机配置 / 插件凭据不进镜像(插件运行时自己读 config.json,构建只需要 manifest 和 README)。
+website/.env*
+website/tsconfig.tsbuildinfo
+plugins/**/config.json

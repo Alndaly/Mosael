@@ -75,6 +75,8 @@ output/playwright/
 *.db-shm
 *.db-wal
 .env
+# 一键部署的本地配置(域名、数据库密码、SMTP/OAuth 凭据):只有 deploy/.env.example 入库。
+deploy/.env
 
 # ---------------------------------------------------------------- 操作系统垃圾
 .DS_Store
