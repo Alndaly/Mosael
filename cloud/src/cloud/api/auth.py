@@ -79,7 +79,13 @@ def clear_session_cookie(response: Response, config: CloudConfig) -> None:
 
 
 def open_session(db, config: CloudConfig, user: CloudUser, response: Response) -> None:
-    """给一次成功的认证发会话。注册、密码登录、验证码登录、第三方登录**共用这一条路径**,行为才不会分叉。"""
+    """给一次成功的认证发会话。注册、密码登录、验证码登录、第三方登录**共用这一条路径**,行为才不会分叉。
+
+    **官方账号在这里被挡死。** 它是发布内容的账号,不是某个人的登录账号:种子不给它密码、
+    邮箱落在保留域,但真正的兜底是这一句 —— 任何认证路径最后都要经过这里才能拿到会话。
+    """
+    if user.official:
+        raise CloudError(403, "official_account_cannot_sign_in")
     raw = new_token()
     expires_at = now() + timedelta(days=config.session_ttl_days)
     db.add(CloudSession(token_hash=token_digest(raw), user_id=user.id, expires_at=expires_at))
@@ -143,7 +149,13 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
     user = db.scalar(select(CloudUser).where(CloudUser.email == email))
     # 不区分"邮箱没注册"和"密码错" —— 否则这个接口就成了账号探测器。
     # 第三方登录建出来的账号 `password_hash` 为空:它没有密码可验,只能走验证码那条路。
-    if user is None or not user.password_hash or not verify_password(body.password, user.password_hash):
+    # 官方账号同样没有密码,这里连哈希都不会去看。
+    if (
+        user is None
+        or user.official
+        or not user.password_hash
+        or not verify_password(body.password, user.password_hash)
+    ):
         raise CloudError(401, "invalid_credentials")
 
     open_session(db, config, user, response)

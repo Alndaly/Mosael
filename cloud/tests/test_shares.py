@@ -51,6 +51,7 @@ def test_publish_returns_public_shape_without_payload_or_email(client):
         "display_name": "Alice",
         "handle": "alice",
         "avatar_seed": share["author"]["avatar_seed"],
+        "official": False,
     }
     assert share["stats"] == {"downloads": 0, "likes": 0, "favorites": 0, "comments": 0}
     assert share["liked_by_me"] is False
@@ -78,10 +79,40 @@ def test_payload_over_two_megabytes_is_413_and_nothing_is_stored(client, db_path
 def test_invalid_kind_is_422_and_nothing_is_stored(client, db_path):
     signup(client)
     make_identity(client)
-    response = client.post(api("/shares"), json=share_body(kind="plugin"))
+    response = client.post(api("/shares"), json=share_body(kind="theme"))
     assert response.status_code == 422, response.text
     assert response.json()["error"] == "invalid_kind"
     assert scalar(db_path, "SELECT COUNT(*) FROM cloud_shares") == 0
+
+
+def test_plugin_kind_is_published_listed_and_readable(client):
+    """① `plugin` 和 workflow / board 一样能发、能按 kind 过滤、详情与 payload 都认它。"""
+    signup(client)
+    make_identity(client)
+    plugin_payload = {"manifest": {"id": "mosael.example", "version": "1.0.0"}, "files": []}
+    plugin = publish_ok(client, kind="plugin", title="Example Plugin", payload=plugin_payload)
+    workflow = publish_ok(client, kind="workflow", title="A Workflow")
+
+    assert plugin["kind"] == "plugin"
+    assert client.get(api(f"/shares/{plugin['id']}")).json()["kind"] == "plugin"
+
+    plugins = client.get(api("/shares?kind=plugin")).json()["items"]
+    assert [item["id"] for item in plugins] == [plugin["id"]]
+    workflows = client.get(api("/shares?kind=workflow")).json()["items"]
+    assert [item["id"] for item in workflows] == [workflow["id"]]
+
+    # payload 走的是和用户分享完全相同的那条路:没有第二套结构。
+    assert client.get(api(f"/shares/{plugin['id']}/payload")).json()["payload"] == plugin_payload
+
+
+def test_unknown_kind_is_still_rejected_everywhere(client):
+    """① 加 `plugin` 不等于放开校验:非法 kind 在写、列表、过滤三处都还是 422。"""
+    signup(client)
+    make_identity(client)
+    response = client.post(api("/shares"), json=share_body(kind="plugin "))
+    assert response.status_code == 422, response.text
+    assert response.json()["error"] == "invalid_kind"
+    assert client.get(api("/shares?kind=theme")).status_code == 422
 
 
 def test_title_is_required_and_bounded(client):
@@ -245,7 +276,9 @@ def test_search_and_kind_filter(client):
     boards = client.get(api("/shares?kind=board")).json()["items"]
     assert [item["title"] for item in boards] == ["Story Board"]
 
-    assert client.get(api("/shares?kind=plugin")).status_code == 422
+    # `plugin` 是合法 kind,只是这一页里还没有;真正非法的值仍然 422。
+    assert client.get(api("/shares?kind=plugin")).json()["items"] == []
+    assert client.get(api("/shares?kind=theme")).status_code == 422
     assert client.get(api("/shares?sort=random")).status_code == 422
     assert client.get(api("/shares?cursor=not-a-cursor")).status_code == 422
 

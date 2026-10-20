@@ -65,6 +65,7 @@ def test_cloud_has_its_own_tables_and_no_local_identity_columns(tmp_path):
             "display_name",
             "handle",
             "avatar_seed",
+            "official",
         }
         assert not ({"username", "workspace_id", "local_user_id"} & columns)
 

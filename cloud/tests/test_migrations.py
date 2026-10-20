@@ -8,6 +8,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 
 def _url(path: Path) -> str:
     return f"sqlite:///{path}"
@@ -41,7 +43,7 @@ def test_migrations_build_the_full_schema(tmp_path):
         assert {"display_name", "handle", "avatar_seed"} <= columns
 
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version == ("0004",)
+        assert version == ("0006",)
 
         unique_handle = [
             row[1]
@@ -75,7 +77,7 @@ def test_upgrading_a_0001_database_keeps_rows_and_leaves_identity_empty(tmp_path
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"cloud_shares", "cloud_share_likes", "cloud_share_favorites", "cloud_share_comments"} <= tables
         assert {"cloud_share_notifications"} <= tables
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
 
 
 def test_0004_drops_the_device_binding_tables(tmp_path):
@@ -106,7 +108,7 @@ def test_0004_drops_the_device_binding_tables(tmp_path):
         assert not ({"cloud_device_codes", "cloud_devices"} & tables)
         # 账号本身不受影响。
         assert connection.execute("SELECT email FROM cloud_users WHERE id = 'u1'").fetchone() == ("old@example.com",)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
 
 
 def test_notification_table_shape_and_indexes(tmp_path):
@@ -164,3 +166,102 @@ def test_notification_table_shape_and_indexes(tmp_path):
             "AND name = 'uq_cloud_share_notifications_unread'"
         ).fetchone()[0]
         assert "WHERE read_at IS NULL" in unread_sql
+
+
+def _share_insert(kind: str):
+    return (
+        "INSERT INTO cloud_shares (id, owner_user_id, kind, title, payload, bytes, license, status, "
+        "downloads, created_at, updated_at) VALUES (?, 'u1', ?, 'Title', '{}', 2, NULL, 'listed', 0, "
+        "'2026-01-01 00:00:00.000000', '2026-01-01 00:00:00.000000')"
+    )
+
+
+def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
+    """① 0005 把 CHECK 换成含 plugin 的;②③ 0006 加 `official` 与种子去重用的 `slug`。
+
+    先钉住 0004 的旧语义(plugin 被 CHECK 拒绝),再升到 head 看它被放开、非法值仍被拒。
+    """
+    from cloud.schema import upgrade_database
+
+    path = tmp_path / "plugin.db"
+    url = _url(path)
+    upgrade_database(url, "0004")
+
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO cloud_users (id, email, created_at) "
+            "VALUES ('u1', 'old@example.com', '2026-01-01 00:00:00.000000')"
+        )
+        # 0004:CHECK 只认 workflow / board。
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(_share_insert("plugin"), ("s1", "plugin"))
+        connection.commit()
+
+    upgrade_database(url, "head")
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
+
+        # ① plugin 现在能建;非法值仍然被数据库兜住。
+        connection.execute(_share_insert("plugin"), ("s1", "plugin"))
+        connection.execute(_share_insert("workflow"), ("s2", "workflow"))
+        connection.commit()
+        assert connection.execute("SELECT kind FROM cloud_shares WHERE id = 's1'").fetchone() == ("plugin",)
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(_share_insert("theme"), ("s3", "theme"))
+        connection.rollback()
+
+        # ② official 非空、默认 false;已有账号升级后就是 false。
+        columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_users)")}
+        assert columns["official"][3] == 1
+        assert columns["official"][4] in (0, "0", "false")
+        connection.execute(
+            "INSERT INTO cloud_users (id, email, created_at) "
+            "VALUES ('u2', 'new@example.com', '2026-01-01 00:00:00.000000')"
+        )
+        connection.commit()
+        assert connection.execute("SELECT official FROM cloud_users WHERE id = 'u2'").fetchone() == (0,)
+        assert connection.execute("SELECT official FROM cloud_users WHERE id = 'u1'").fetchone() == (0,)
+
+        # ③ slug 可空(用户分享没有它),但同一作者 + 同一 kind + 同一 slug 只能有一行。
+        share_columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_shares)")}
+        assert share_columns["slug"][3] == 0
+        # 多条 NULL 不冲突(用户分享都没有 slug)。
+        connection.execute(_share_insert("plugin"), ("s4", "plugin"))
+        connection.commit()
+        connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's1'")
+        connection.commit()
+        # kind 进唯一键:另一个 kind 用同一 slug 是允许的。
+        connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's2'")
+        connection.commit()
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's4'")
+        connection.rollback()
+
+
+def test_downgrade_from_head_restores_the_0004_shape(tmp_path):
+    """⑤ down 能回:head → 0004 之后 plugin 重新被 CHECK 拒绝,official / slug 两列消失。"""
+    from cloud.schema import downgrade_database, upgrade_database
+
+    path = tmp_path / "downgrade.db"
+    url = _url(path)
+    upgrade_database(url)
+    downgrade_database(url, "0004")
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004",)
+        user_columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_users)")}
+        assert "official" not in user_columns
+        share_columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_shares)")}
+        assert "slug" not in share_columns
+
+        connection.execute(
+            "INSERT INTO cloud_users (id, email, created_at) "
+            "VALUES ('u1', 'old@example.com', '2026-01-01 00:00:00.000000')"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(_share_insert("plugin"), ("s1", "plugin"))
+        connection.commit()
+        connection.execute(_share_insert("workflow"), ("s2", "workflow"))
+        connection.commit()
+        assert connection.execute("SELECT COUNT(*) FROM cloud_shares").fetchone() == (1,)

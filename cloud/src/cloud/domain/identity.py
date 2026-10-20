@@ -3,7 +3,7 @@
 规则:
 
 - **注册时不要求身份。** 账号可以先只有邮箱;第一次发布 / 评论时才要 `display_name`。
-- 公开形状只有 `display_name` / `handle` / `avatar_seed`。**email 不在这个函数里出现。**
+- 公开形状是 `display_name` / `handle` / `avatar_seed` + `official`。**email 不在这个函数里出现。**
 - `handle` 只能 `[a-z0-9_-]`,唯一,保留字不可占用;`display_name` 非空、有长度上限。
 - 头像不存图片:只存一个短种子,P1 由前端算"昵称首字母 + 颜色"。
 """
@@ -61,11 +61,16 @@ RESERVED_HANDLES = frozenset(
 
 
 def public_user(user: CloudUser) -> dict[str, object]:
-    """公开响应里的"这是谁"。**只有这三列,email 永远不出现在这里。**"""
+    """公开响应里的"这是谁"。**只有这四列,email 永远不出现在这里。**
+
+    `official` 是公开信息("这条内容是官方账号发的"),不是账号凭据;它只能由部署脚本写入,
+    注册和 `PUT /me` 都改不了(见 `cloud.api.auth` / `cloud.api.profile`)。
+    """
     return {
         "display_name": user.display_name,
         "handle": user.handle,
         "avatar_seed": user.avatar_seed,
+        "official": bool(user.official),
     }
 
 

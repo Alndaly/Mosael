@@ -30,7 +30,7 @@ router = APIRouter(tags=["shares"])
 
 
 class ShareIn(BaseModel):
-    #: `workflow` / `board`。别的值由 domain 回 422(带"只能是哪几个"的人话)。
+    #: `workflow` / `board` / `plugin`。别的值由 domain 回 422(带"只能是哪几个"的人话)。
     kind: str
     title: str
     summary: str | None = None

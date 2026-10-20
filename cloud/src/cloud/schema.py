@@ -33,3 +33,14 @@ def stamp_database(database_url: str, revision: str) -> None:
     from alembic import command
 
     command.stamp(_config(database_url), revision)
+
+
+def downgrade_database(database_url: str, revision: str) -> None:
+    """回退到某个版本(运维 / 测试用)。
+
+    **不删用户数据来迁就旧形状**:0005 把 CHECK 换回两个值时,如果库里已经有 `plugin` 行,
+    回退会在约束校验处明确失败,由人来决定那些分享怎么处理。
+    """
+    from alembic import command
+
+    command.downgrade(_config(database_url), revision)

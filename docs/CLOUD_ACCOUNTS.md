@@ -364,29 +364,57 @@ provider 报错不外泄原始信息、唯一约束在库上。官网侧另有
 
 P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的「社区分享接口」一节):
 
-- **身份**加在 `cloud_users` 上:`display_name` / `handle` / `avatar_seed`,三列都可空 ——
+- **身份**加在 `cloud_users` 上:`display_name` / `handle` / `avatar_seed`,三列都可空;
+  0006 另加 `official`(NOT NULL,默认 false,只由种子命令写,见下面「官方内容」) ——
   注册不填,第一次发布 / 评论才要求(缺 `display_name` → `409 identity_required`,文案是
   "先起个名字")。`handle` 唯一、只允许 `[a-z0-9_-]`、保留字(`admin` / `api` / `u` …)回 409;
   没显式给时自动生成 `member-xxxxxxxx`,之后可用 `PUT /me` 改。头像不存图片:只存短种子,
   P1 由前端算"昵称首字母 + 由种子决定的颜色"。
-- **分享**表 `cloud_shares`:`owner_user_id` NOT NULL(没有匿名发布);`kind` 只有
-  `workflow` / `board`;`payload` 是 JSON(Postgres 上 JSONB),服务端只确认它是合法 JSON 并量
-  **2 MB** 上限(超过 → 413,不截断、不解析节点 / 画板结构);`status` 只有 `listed` / `removed`。
+- **分享**表 `cloud_shares`:`owner_user_id` NOT NULL(没有匿名发布);`kind` 是
+  `workflow` / `board` / `plugin`(0005 起);`payload` 是 JSON(Postgres 上 JSONB),服务端只
+  确认它是合法 JSON 并量 **2 MB** 上限(超过 → 413,不截断、不解析节点 / 画板结构);`status`
+  只有 `listed` / `removed`。
 - **互动**三表 `cloud_share_likes` / `cloud_share_favorites` / `cloud_share_comments`,每张都带
   `user_id`。点赞 / 收藏靠 `(share_id, user_id)` 主键去重:重复 POST 返回 204 且什么都不变,
   不是 409;DELETE 不存在的行也是 204。评论非空、有长度上限,空评论 422。
-- **公开响应里只有** `display_name` / `handle` / `avatar_seed` 三列身份;email 不出现在任何公开
-  列表 / 详情 / 评论 / 个人页。`payload` 只在 `/shares/{id}/payload` 与 `/shares/{id}/download`
-  返回,列表和详情不返回(省流量)。评论存原文、响应是 JSON 纯文本,不做 markdown / HTML 渲染。
+- **公开响应里只有** `display_name` / `handle` / `avatar_seed` + `official` 这份公开身份;
+  email 不出现在任何公开列表 / 详情 / 评论 / 个人页。`payload` 只在
+  `/shares/{id}/payload` 与 `/shares/{id}/download` 返回,列表和详情不返回(省流量)。评论存原文、
+  响应是 JSON 纯文本,不做 markdown / HTML 渲染。
 - **删除权限**:`DELETE /shares/{id}` 对非作者回 **404**(不是 403)—— 不区分"这个 id 不存在"
   与"这个 id 不是你的",已删除的分享也就不留下探测口;作者删除是软删(`status='removed'`),
   重复删除仍 204。删除评论同理,只有本人,别人 404。
 - **注册即登录**:signup 与登录 / 验证码 / 第三方回调共用同一个 `open_session`,响应直接带
   会话 cookie,紧接着 `GET /me` 就是 200。
 - **迁移**:`cloud/migrations/versions/0001_initial.py`(create_all 时代的基线)+
-  `0002_identity_and_community.py`(身份三列 + 分享四表)、`0003_notifications.py`(通知表),
-  以及 `0004_drop_device_binding.py`(拆掉设备绑定,删两张表)。`cloud.app.create_app()` 启动时
-  执行 `alembic upgrade head`;表结构不再由 `create_all` 猜,已有库先用 `cloud.cli stamp 0001`。
+  `0002_identity_and_community.py`(身份三列 + 分享四表)、`0003_notifications.py`(通知表)、
+  `0004_drop_device_binding.py`(拆掉设备绑定,删两张表)、`0005_shares_plugin_kind.py`
+  (`kind` 的 CHECK 加上 `plugin`)、`0006_official_accounts_and_seed_slug.py`
+  (`cloud_users.official` + `cloud_shares.slug` 去重键)。`cloud.app.create_app()` 启动时执行
+  `alembic upgrade head`;表结构不再由 `create_all` 猜,已有库先用 `cloud.cli stamp 0001`。
+
+## 官方内容 = 官方账号发布的分享
+
+维护者裁决:插件和工作流本身就是分享,官方插件 / 官方工作流就是**官方账号发布的分享**。
+因此官方内容不是第二套模型,只是同一张表里 `owner_user_id` 指向官方账号的行。
+
+- **`plugin` 是 `kind` 的第三个取值**(0005 迁移改 CHECK)。发布、列表过滤、详情、payload、
+  下载全部复用用户分享那套接口与 payload 形状;没有"官方 payload"分支,排序 / 游标 / 统计不分叉。
+- **`cloud_users.official`(0006)** 是公开标记:`public_user()` 带出 `official`,出现在列表 /
+  详情 / 评论 / 通知的 `author` 里。`email` 仍然只出现在本人形状 `/me`。
+- **只有部署脚本能造官方号**:注册模型没有 `official` 字段(pydantic 忽略多余键),`PUT /me`
+  也不读它;唯一写入点是 `python -m cloud.cli seed-official`。测试直接钉住"注册请求里塞
+  `official: true` 之后库里的值仍是 0"。
+- **官方账号不能登录**:种子不设密码;邮箱是 `official@mosael.example`(RFC 2606 保留域,
+  DNS 不可达);登录发码对官方账号不投递(响应与未注册邮箱一致);所有认证路径唯一的发会话入口
+  `open_session` 对 `official` 账号回 `403 official_account_cannot_sign_in`。三条互不依赖,
+  所以"拿到密码 / 拿到码 / 以后多一条登录方式"都换不到会话。
+- **种子幂等键是 `(官方账号, kind, slug)`**,slug 来自外部 bundle,存在 `cloud_shares.slug`,
+  唯一索引兜底。不用标题:标题会被运营改,按标题去重会在下次部署多出一条。**只补缺**:
+  已存在的行整行跳过,不覆盖标题 / 简介 / payload;用户分享的 slug 为 NULL,永远不会被碰到。
+  bundle 格式与样例见 `cloud/README.md` 的「官方内容」一节。
+- **回退**:`0005` 的 downgrade 把 CHECK 换回两个值。如果库里已经有 plugin 行,回退会
+  **明确失败**而不是悄悄删数据;要回退先人工决定那些行怎么处理。
 
 ## 不在这一期
 

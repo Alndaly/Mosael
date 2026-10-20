@@ -3,7 +3,8 @@
 独立于本地 Mosael 的账号服务:邮箱 + 验证码 + 密码注册、密码 / 验证码两种登录、
 **GitHub / Google 第三方登录(授权码 + PKCE)**、HttpOnly cookie 会话,
 以及社区分享第①笔:**身份(昵称 / 短名 / 头像种子)+ 分享 + 点赞 / 收藏 / 评论**、
-第②笔:**评论 / 点赞 / 收藏的通知**,注册即登录。
+第②笔:**评论 / 点赞 / 收藏的通知**,第③笔:**官方内容 = 官方账号发布的分享**
+(插件 / 工作流,`official` 公开标记 + `seed-official` 幂等种子命令),注册即登录。
 设计、部署与取舍见 [`docs/CLOUD_ACCOUNTS.md`](../docs/CLOUD_ACCOUNTS.md)。
 
 ## 本地跑起来
@@ -42,13 +43,13 @@ http://localhost:3000/api/cloud/v1/oauth/google/callback
 
 **前缀 `/api/cloud/v1`。读接口公开;写接口要 session,发布 / 评论还要求已设置 `display_name`
 (没有 → `409 identity_required`,提示用户先起名字)。公开响应里只有
-`{display_name, handle, avatar_seed}` 三列身份,email 永不出现在公开响应里。**
+`{display_name, handle, avatar_seed, official}` 这份公开身份,email 永不出现在公开响应里。**
 
 ```
 GET    /me                        → {user} | 401
 PUT    /me                        body {display_name?, handle?} → {user};冲突 409 / 校验 422
 POST   /shares                    body {kind,title,summary?,payload,license?} → {share} (201)
-                                  kind 只能是 workflow|board(否则 422);payload > 2 MB → 413
+                                  kind 只能是 workflow|board|plugin(否则 422);payload > 2 MB → 413
 GET    /shares                    ?q=&kind=&sort=new|hot&limit=&cursor= → {items,next_cursor}
 GET    /shares/{id}               → {share}(不含 payload)
 GET    /shares/{id}/payload       → {payload}
@@ -65,8 +66,8 @@ GET    /notifications/unread-count → {count}(需登录)
 POST   /notifications/read        body {ids?} → {marked,unread};不传 ids = 全部标已读
 ```
 
-`/me` 是**本人**形状:除身份三列外还带 `id` / `email` / `email_verified_at` / `created_at`
-(只有本人看得到);公开列表 / 详情 / 评论里的 `author` 只有三列。
+`/me` 是**本人**形状:除公开身份外还带 `id` / `email` / `email_verified_at` / `created_at`
+(只有本人看得到);公开列表 / 详情 / 评论里的 `author` 只有公开身份四列(含 `official`)。
 
 `share` 的公开形状固定为
 `{id,kind,title,summary,bytes,license,created_at,author,stats,liked_by_me,favorited_by_me}`;
@@ -87,7 +88,72 @@ POST   /notifications/read        body {ids?} → {marked,unread};不传 ids = �
 取消点赞 / 收藏删掉对应的**未读**通知(已读的留作历史);删评论按 `comment_id` 把通知一起删;
 分享软删不删通知数据,读取时过滤掉。
 
-`actor` 只有公开三列,**email 不出现在任何通知响应里**。
+`actor` 只有公开身份(含 `official`),**email 不出现在任何通知响应里**。
+
+## 官方内容(官方账号发布的分享)
+
+维护者裁决:**官方内容就是官方账号发布的分享**。插件和工作流本身就是分享,所以它们和用户分享
+共用 `cloud_shares`、共用 `/shares` 读接口、共用同一套 payload 形状;没有第二张表、没有第二套
+结构,列表的排序 / 游标 / 统计也不为官方内容分叉。
+
+- `cloud_users.official`(NOT NULL,默认 false)是**公开信息**:公开响应里的 `author.official`。
+  **只有部署脚本会写 true**;注册与 `PUT /me` 都不认这个字段(测试钉住"注册请求里塞
+  `official: true` 没有用")。
+- 官方账号固定为 `handle=mosael`、`display_name=Mosael 官方`、
+  `email=official@mosael.example`(RFC 2606 保留域,公网 DNS 不可达)。
+- **它不能登录**:种子不设密码;发码接口对它不投递(响应与未注册邮箱一致);最后一道闸是
+  `open_session` —— 所有认证路径(密码 / 验证码 / 第三方)都从这里发会话,它对 `official`
+  账号直接回 `403 official_account_cannot_sign_in`。
+- `kind=plugin` 与 `workflow` / `board` 并列;`POST /shares`、`GET /shares?kind=`、
+  详情 / payload / 下载都认它,非法 kind 仍然 422。
+
+### 种子命令
+
+```bash
+cd cloud
+uv run python -m cloud.cli seed-official --bundle ./official-bundle.json
+```
+
+它先把库升到 head(和 uvicorn 启动同一条迁移路径),再按 bundle 补官方账号与分享。
+**幂等**:去重键是 `(官方账号, kind, bundle 里的 slug)`,对应 `cloud_shares.slug` 上的
+唯一索引 `(owner_user_id, kind, slug)`。
+
+为什么用 slug 而不是标题:标题是给人改的 —— 运营改一次标题,按标题去重就会在下一次部署
+产出第二条;slug 是发布方在 Git 里维护的稳定标识。**只补缺**:按这个键已经存在的行整行跳过
+(标题 / 简介 / payload / 许可都不动);用户自己的分享没有 slug,种子永远碰不到它们。
+bundle 里改标题也不会回写已有行 —— 要更新内容请在库里改,或者换一个新 slug 重新发布;
+已经被软删(`status='removed'`)的官方分享不会被下一次种子"复活",它按去重键仍算存在。
+
+bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
+
+```json
+{
+  "plugins": [
+    {
+      "slug": "mosael.official.example",
+      "locale": "zh-CN",
+      "title": "官方示例插件",
+      "summary": "官方账号发布的示例插件。",
+      "license": "MIT",
+      "payload": {"version": 1, "manifest": {"id": "mosael.official.example"}, "files": []}
+    }
+  ],
+  "workflows": [
+    {
+      "slug": "mosael.official.welcome",
+      "title": "官方入门工作流",
+      "payload": {"version": 1, "nodes": [], "edges": []}
+    }
+  ]
+}
+```
+
+- 顶层只有 `plugins` / `workflows` 两个数组;出现别的键整份拒绝。
+- 每条必填 `slug`(小写字母 / 数字 / `.` `_` `-`,最长 80)与 `title`、`payload`;
+  `summary` / `license` / `locale` 可选。`locale` 只是操作者标注,**不落库、不参与去重**
+  (分享表没有 locale 列,payload 也必须和用户分享同构);多语言版本请用不同 slug。
+- 结构不对 → 退出码 2、stderr 说明原因、**一行都不写**(先整份校验,再建账号)。
+- 同一个 `slug` 在同一个数组里只能出现一次;`plugins` 与 `workflows` 之间允许同名。
 
 ## 测试
 
@@ -121,6 +187,9 @@ CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
   新建 `cloud_share_notifications`(**不写旧数据回填**,新表从零张行开始)。
   升级就跑 `cd cloud && uv run python -m cloud.cli migrate`(或直接重启服务,启动时自动升到 head);
   它只建表,没有需要人工确认的兼容分支。
+- 社区分享第③笔(官方内容)的迁移是 `0005_shares_plugin_kind.py`(`kind` 的 CHECK 加上
+  `plugin`)+ `0006_official_accounts_and_seed_slug.py`(`cloud_users.official` 与
+  `cloud_shares.slug` 去重键)。种子命令见下一节。
 - 登录仍是原来的规则:`cloud_users.password_hash` 可空(第三方登录建的账号没有密码)。
 
 ## 配置

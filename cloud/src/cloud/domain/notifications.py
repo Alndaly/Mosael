@@ -11,7 +11,7 @@
   不是"他现在还赞着"的陈述;未读的"他点赞了"在他取消之后才是一句假话。
 - **删评论:** 按 `comment_id` 把通知一起删(读没读过都删)。
 - **分享软删:** 不删通知数据;读取时 join 掉 `status='listed'`,未读数也不把它算进去。
-- 公开形状里 `actor` 只用 `public_user()` 的三列,**email 永远不出现**;`comment_preview`
+- 公开形状里 `actor` 只用 `public_user()` 的公开身份(含 `official`),**email 永远不出现**;`comment_preview`
   是原文按字符截断(不渲染 markdown、不做实体转义),和评论列表的口径一致。
 """
 

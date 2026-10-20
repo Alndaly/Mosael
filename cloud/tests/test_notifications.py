@@ -60,7 +60,7 @@ def test_like_favorite_and_comment_notify_the_author(client, app, db_path):
         assert item["kind"] == "like"
         assert item["read_at"] is None
         assert item["created_at"]
-        assert set(item["actor"]) == {"display_name", "handle", "avatar_seed"}
+        assert set(item["actor"]) == {"display_name", "handle", "avatar_seed", "official"}
         assert item["actor"]["display_name"] == "Bob"
         assert item["actor"]["handle"] == "bob"
         assert item["share"] == {"id": share["id"], "title": share["title"], "kind": share["kind"]}
@@ -254,7 +254,7 @@ def test_notification_responses_never_leak_email(client, app, db_path):
             assert leaf not in {"alice@example.com", "bob@example.com"}, path
         assert "alice@example.com" not in response.text
         assert "bob@example.com" not in response.text
-        assert set(payload["items"][0]["actor"]) == {"display_name", "handle", "avatar_seed"}
+        assert set(payload["items"][0]["actor"]) == {"display_name", "handle", "avatar_seed", "official"}
         # 纯文本预览:原样截断,不渲染 markdown / HTML。
         assert payload["items"][0]["comment_preview"] == "**plain** <b>text</b>"
 

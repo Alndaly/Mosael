@@ -3,7 +3,7 @@
 服务端对 `payload` 只做两件事:**确认它是一份 JSON**(请求体解析已经保证了这一点)和
 **量它的紧凑 UTF-8 字节数**(上限 2 MB)。节点、画板、版本号这些内容一概不解析。
 
-公开读接口返回的每一项都只带作者的三列公开身份(`display_name` / `handle` / `avatar_seed`),
+公开读接口返回的每一项都只带作者的公开身份(`display_name` / `handle` / `avatar_seed` / `official`),
 **不认识 email**。
 """
 
@@ -29,7 +29,7 @@ from cloud.models import (
 )
 from cloud.pagination import after_clause, clamp_limit, decode_cursor, encode_cursor
 
-SHARE_KINDS = ("workflow", "board")
+SHARE_KINDS = ("workflow", "board", "plugin")
 SHARE_STATUS_LISTED = "listed"
 SHARE_STATUS_REMOVED = "removed"
 SHARE_SORTS = ("new", "hot")
@@ -104,8 +104,13 @@ def create_share(
     summary: str | None,
     payload: Any,
     license: str | None,
+    slug: str | None = None,
 ) -> dict[str, object]:
-    """发布。**需要 session + 已设置的 display_name**;没有名字是 409。"""
+    """发布。**需要 session + 已设置的 display_name**;没有名字是 409。
+
+    `slug` 只有种子命令用(`cloud.official`):它让"官方 bundle 里的这一条"有一个稳定去重键。
+    HTTP 入口不传它,所以用户分享的这一列永远是 NULL。
+    """
     ensure_identity(user)
     if kind not in SHARE_KINDS:
         raise CloudError(422, "invalid_kind", allowed=" / ".join(SHARE_KINDS))
@@ -124,6 +129,7 @@ def create_share(
         payload=payload,
         bytes=size,
         license=_clean_license(license),
+        slug=slug,
         status=SHARE_STATUS_LISTED,
         downloads=0,
     )
@@ -424,7 +430,7 @@ def list_comments(
     limit: int | None = None,
     cursor: str = "",
 ) -> tuple[list[dict[str, object]], str | None]:
-    """评论列表,新的在前。作者只给公开三列。"""
+    """评论列表,新的在前。作者只给公开身份。"""
     require_listed_share(db, share_id)
     size = clamp_limit(limit)
     stmt = select(CloudShareComment).where(CloudShareComment.share_id == share_id)

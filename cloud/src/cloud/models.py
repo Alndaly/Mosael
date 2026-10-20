@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -59,6 +61,11 @@ class CloudUser(Base):
     handle: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True, default=None)
     #: 头像种子:一个短字符串。P1 的头像 = 昵称首字母 + 由这个种子决定的颜色,**不存图片**。
     avatar_seed: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
+    #: 官方账号标记。**只有部署脚本(`cloud.cli seed-official`)会把它写成 true**;
+    #: 注册与 `PUT /me` 都不读这个字段。它是公开信息(`public_user()` 带出去),email 仍然不是。
+    official: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
 
 class CloudSession(Base):
@@ -157,7 +164,7 @@ class CloudOAuthState(Base):
 
 
 class CloudShare(Base):
-    """一次社区分享:工作流工程文件,或画板。
+    """一次社区分享:工作流工程文件、画板,或插件。
 
     **内容必须挂在身份上。** `owner_user_id` 非空,没有匿名发布。`payload` 服务端只校验
     "是一份 JSON 且不超过 2 MB",不解析里面的节点 / 画板结构 —— 那是客户端的事。
@@ -165,18 +172,21 @@ class CloudShare(Base):
 
     __tablename__ = "cloud_shares"
     __table_args__ = (
-        CheckConstraint("kind IN ('workflow', 'board')", name="ck_cloud_shares_kind"),
+        CheckConstraint("kind IN ('workflow', 'board', 'plugin')", name="ck_cloud_shares_kind"),
         CheckConstraint("status IN ('listed', 'removed')", name="ck_cloud_shares_status"),
         Index("idx_cloud_shares_owner", "owner_user_id"),
         Index("idx_cloud_shares_created", "created_at"),
         Index("idx_cloud_shares_kind_created", "kind", "created_at"),
+        # 种子命令的稳定键:同一官方账号 + 同一 kind + 同一 slug 只能有一行(kind 也进键,
+        # 因为唯一性只该在"同一类内容"里成立)。用户分享的 slug 是 NULL,多条 NULL 不冲突。
+        Index("uq_cloud_shares_owner_kind_slug", "owner_user_id", "kind", "slug", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     owner_user_id: Mapped[str] = mapped_column(
         ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
     )
-    #: `workflow` / `board`。别的值在 domain 层就 422,数据库再兜一道 CHECK。
+    #: `workflow` / `board` / `plugin`。别的值在 domain 层就 422,数据库再兜一道 CHECK。
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     summary: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
@@ -185,6 +195,9 @@ class CloudShare(Base):
     #: 紧凑 UTF-8 JSON 的实际字节数。列表页只读这个数,不必碰 payload。
     bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     license: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    #: 种子命令的稳定标识(bundle 里的 slug)。**用户分享一律 NULL**;不对外暴露,
+    #: 只用于"重复跑种子不产生重复行"。
+    slug: Mapped[str | None] = mapped_column(String(80), nullable=True, default=None)
     #: P1 只有 `listed` / `removed`。作者删除 = 软删(改状态),不再出现在任何公开读接口里。
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="listed")
     #: 下载计次。`POST /download` 每次 +1。
@@ -286,7 +299,7 @@ class CloudShareNotification(Base):
     recipient_id: Mapped[str] = mapped_column(
         ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
     )
-    #: 点了 / 评论了的人。响应里只给公开三列,email 不在这里。
+    #: 点了 / 评论了的人。响应里只给公开身份(含 official),email 不在这里。
     actor_id: Mapped[str] = mapped_column(
         ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
     )

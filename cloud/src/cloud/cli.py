@@ -3,6 +3,7 @@
     uv run python -m cloud.cli migrate            把数据库升到最新
     uv run python -m cloud.cli migrate --revision 0001
     uv run python -m cloud.cli stamp 0001         把 create_all 时代的库标到基线(一次性)
+    uv run python -m cloud.cli seed-official --bundle official-bundle.json   补官方账号的分享(幂等)
 
 配置从 `CLOUD_*` 环境变量读,和 uvicorn 启动时同一份(见 `cloud/config.py`)。
 """
@@ -10,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from cloud.config import CloudConfig
 from cloud.schema import stamp_database, upgrade_database
@@ -33,14 +35,31 @@ def main(argv: list[str] | None = None) -> int:
     stamp = commands.add_parser("stamp", help="把已有库标到某个版本,不执行迁移")
     stamp.add_argument("revision", help="这个库当前的基线版本")
 
+    seed = commands.add_parser(
+        "seed-official", help="把 bundle 里的官方插件 / 工作流补进分享(幂等,只补缺)"
+    )
+    seed.add_argument("--bundle", required=True, help="bundle JSON 的路径")
+
     args = parser.parse_args(argv)
     url = database_url()
     if args.command == "migrate":
         upgrade_database(url, args.revision)
         print(f"数据库已升级到 {args.revision}")
-    else:
+    elif args.command == "stamp":
         stamp_database(url, args.revision)
         print(f"数据库已标记为 {args.revision}")
+    else:
+        # 新库也要能直接跑:和 uvicorn 启动一样先升到 head(迁移本身幂等)。
+        from cloud.official import SeedError, load_bundle, seed_official
+
+        try:
+            bundle = load_bundle(args.bundle)
+            upgrade_database(url)
+            report = seed_official(url, bundle)
+        except SeedError as exc:
+            print(f"种子命令失败: {exc}", file=sys.stderr)
+            return 2
+        print(report.summary())
     return 0
 
 

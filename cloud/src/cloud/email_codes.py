@@ -83,9 +83,13 @@ def issue_code(
     db.add(row)
     db.commit()
 
-    if purpose == "login" and user is None:
-        # 枚举防护:不投递,但响应/配额与已注册邮箱完全一致。
-        logger.info("login code requested for an unknown address (%s); response kept identical", mask_email(email))
+    if purpose == "login" and (user is None or user.official):
+        # 未知邮箱与官方账号都不投递,但响应 / 配额与普通邮箱完全一致。
+        # 官方账号的邮箱本来就在不可投递的保留域里,这里再明确一次:不发。
+        logger.info(
+            "login code requested for a non-signable address (%s); response kept identical",
+            mask_email(email),
+        )
         return
 
     try:
