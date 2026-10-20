@@ -224,11 +224,16 @@ export const plugins = {
   capabilityUseKindAgent: "智能体",
   //: 标题行里「现在用谁」那一格:没点名/没有默认时各说一句短的。
   capabilityUnset: "未指定",
+  //: 配音那一组的说明只留两行以内:这一节是什么 + 默认是一对。后端那份是三句长文,这里是卡片要的那一句。
+  capabilityVoiceGroupDescription: "用本机或云端的音色把文字念出来。默认一对(引擎 + 音色),没设时各入口自己点名。",
   //: 配音的默认是**一对**(引擎 + 音色),所以那一行是两个控件 —— 不是一个下拉。
   capabilityVoiceDefault: "默认(引擎 + 音色)",
-  //: 这一行没有「保存」按钮:一对齐了就写,和这一页 ASR / 降噪的默认行同一条规矩。
-  capabilityVoiceDefaultNeedEngine: "先选一个引擎。",
+  //: 音色那一格还没挑时的占位文字。行下不再重复「先选一个引擎」:那是控件的注释,下拉自己会说。
   capabilityVoiceDefaultNeedVoice: "再选一个音色 —— 默认要是一对,只有引擎还念不出来。",
+  //: 不能设为默认的那几家:数量由界面按数据数出来({n}),不写死。
+  capabilityVoiceRestricted: "{n} 家不能设为默认",
+  //: 收起那一行的尾巴:点开看那两段原文。
+  capabilityVoiceRestrictedWhy: "看原因",
   capabilityVoiceDefaultAdminOnly: "只有部署管理员能改这台机器的默认。",
   capabilityVoiceDefaultUnready: "「{name}」还用不了:{reason}",
   capabilityVoiceDefaultPersonalOnly:

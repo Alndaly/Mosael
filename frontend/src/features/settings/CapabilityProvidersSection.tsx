@@ -15,7 +15,7 @@
  * backend/app/domain/capabilities。
  */
 import React from "react";
-import { CircleDashed, Plug, Store } from "lucide-react";
+import { CircleDashed, Plug, Store, TriangleAlert } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
@@ -38,6 +38,7 @@ import {
 import { PageLoadError } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
+import { Disclosure } from "@/components/ui/disclosure";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { findPluginsFor } from "@/lib/deepLink";
@@ -277,7 +278,6 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
   const serverVoice = voices.find((voice) => voice.is_default)?.value ?? "";
   const voice = pickedVoice ?? serverVoice;
   const readyVoices = voices.filter((item) => !item.cloned);
-  const chosenVoice = readyVoices.find((item) => item.value === voice);
   //: **选中即存,没有保存按钮** —— 和这一页 ASR / 降噪的默认行同一条规矩(维护者原话:「不需要这个保存默认的
   //: 按钮的」)。存的永远是完整的一对:引擎 + 音色都齐了才写;只换了引擎、音色还没挑,什么都不发 ——
   //: 半对存下去是念不出来的默认。选回「未指定」= 清掉默认(空对),和别处「选回自动」是同一件事。
@@ -291,6 +291,11 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
     },
   });
   const uses = choices.used_by ?? [];
+  //: 「不能设为默认」的几家:只属于某个人 / 某个工作区的(插件连接、克隆音色),以及还没装好的。
+  //: **数量在这里数出来**,文案只写「{n} 家不能设为默认」—— 数写死在文案里,换一台机器就对不上;
+  //: 一家都没有时整行不画,不写「0 家」。
+  const restrictedCount = personalOnly.length + unready.length;
+  const [restrictedOpen, setRestrictedOpen] = React.useState(false);
   //: 标题行照别组一样写「现在用谁」:默认那一对(引擎 · 音色);没设过就是「未指定」。
   const engineLabel = engines.find((item) => item.id === serverEngine)?.label ?? "";
   const voiceLabel = voices.find((item) => item.value === serverVoice)?.label ?? "";
@@ -303,32 +308,20 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
       card
       title={choices.label}
       titleAdornment={<CurrentSelection>{current}</CurrentSelection>}
-      description={toPlainText(choices.description)}
+      //: 组说明只留两行以内:这一节是什么 + 默认是一对。后端那句是三句长文(「本机克隆、Edge、
+      //: 各家云端之外……也在这里」),在卡片里比控件还显眼 —— 主次反了。这一句住文案表,
+      //: 和后端那份说明互不相干。
+      description={t("capabilityVoiceGroupDescription")}
       actions={<FindPlugins capability={choices.capability} />}
     >
       <SettingsItemRow
         label={<ControlLabel>{t("capabilityVoiceDefault")}</ControlLabel>}
-        description={!isAdmin
-          ? t("capabilityVoiceDefaultAdminOnly")
-          : !engine
-            ? t("capabilityVoiceDefaultNeedEngine")
-            : !chosenVoice
-              ? t("capabilityVoiceDefaultNeedVoice")
-              : undefined}
+        //: 「先选一个引擎。」删掉了:那是**控件的注释**,不是内容 —— 第一个下拉里就写着「未指定」。
+        //: 「再选一个音色」也不在行下重复,它是音色下拉自己的占位文字。行下只留真正的状态:
+        //: 不是管理员(改不了),以及写失败 / 已保存。
+        description={!isAdmin ? t("capabilityVoiceDefaultAdminOnly") : undefined}
         notes={
           <>
-            {personalOnly.map((item) => (
-              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
-                {t("capabilityVoiceDefaultPersonalOnly").replace("{name}", item.label)}
-              </SettingsItemNote>
-            ))}
-            {unready.map((item) => (
-              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
-                {t("capabilityVoiceDefaultUnready")
-                  .replace("{name}", item.label)
-                  .replace("{reason}", item.note || "—")}
-              </SettingsItemNote>
-            ))}
             {save.isError && (
               <SettingsItemNote tone="destructive" icon={<CircleDashed size={13} aria-hidden />}>
                 {save.error instanceof Error ? save.error.message : String(save.error)}
@@ -372,6 +365,38 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
           className={SETTINGS_FIELD_WIDTH}
         />
       </SettingsItemRow>
+      {restrictedCount > 0 && (
+        //: 那两段「不能设为默认」的解释默认收成一行 —— 和底下「用在哪」同一种收法。
+        //: 收起时只留一句「{n} 家不能设为默认 · 看原因」,点开才是原文,内容一条不丢。
+        <div data-capability-voice-restricted="" className="min-w-0 py-3">
+          <Disclosure
+            wide
+            label={
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <TriangleAlert size={13} aria-hidden className="shrink-0" />
+                {t("capabilityVoiceRestricted").replace("{n}", String(restrictedCount))}
+              </span>
+            }
+            hint={t("capabilityVoiceRestrictedWhy")}
+            open={restrictedOpen}
+            onOpenChange={setRestrictedOpen}
+            contentClassName="grid gap-1.5 pt-2"
+          >
+            {personalOnly.map((item) => (
+              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t("capabilityVoiceDefaultPersonalOnly").replace("{name}", item.label)}
+              </SettingsItemNote>
+            ))}
+            {unready.map((item) => (
+              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t("capabilityVoiceDefaultUnready")
+                  .replace("{name}", item.label)
+                  .replace("{reason}", item.note || "—")}
+              </SettingsItemNote>
+            ))}
+          </Disclosure>
+        </div>
+      )}
       {uses.length > 0 && <CapabilityUseSummary uses={uses} />}
     </SettingsGroup>
   );

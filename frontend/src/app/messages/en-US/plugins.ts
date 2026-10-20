@@ -219,11 +219,17 @@ export const plugins = {
   capabilityUseKindWorkflow: "Workflows",
   capabilityUseKindAgent: "Agents",
   capabilityUnset: "Not set",
+  //: The dubbing group's description stays within two lines: what this section is + the default is a pair.
+  capabilityVoiceGroupDescription:
+    "Speak text with a voice from this machine or the cloud. The default is a pair (engine + voice); when it is unset, each entry point picks its own.",
   //: Dubbing's default is a **pair** (engine + voice), so that row has two controls — not one dropdown.
   capabilityVoiceDefault: "Default (engine + voice)",
-  //: There is no Save button on this row: a complete pair saves itself, like the ASR / denoise default rows.
-  capabilityVoiceDefaultNeedEngine: "Pick an engine first.",
+  //: Placeholder for the voice picker until a voice is chosen. The row no longer repeats "pick an engine first" — the dropdown says it.
   capabilityVoiceDefaultNeedVoice: "Now pick a voice — the default has to be a pair; an engine alone can't speak.",
+  //: Providers that can't be this machine's default: the count is computed in the UI ({n}), never hard-coded.
+  capabilityVoiceRestricted: "{n} can't be the default",
+  //: Tail of the collapsed line: expand to read both explanations.
+  capabilityVoiceRestrictedWhy: "See why",
   capabilityVoiceDefaultAdminOnly: "Only a deployment admin can change this machine's default.",
   capabilityVoiceDefaultUnready: "“{name}” can't be used yet: {reason}",
   capabilityVoiceDefaultPersonalOnly:

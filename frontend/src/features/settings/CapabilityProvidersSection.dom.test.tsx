@@ -8,6 +8,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
 import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsItemRow } from "@/components/settings/settings-layout";
+import { zhCN } from "@/app/messages/zh-CN";
+import { enUS } from "@/app/messages/en-US";
 
 /**
  * 「能力提供方」照后端的能力表列(ADR 0031 §5):一项能力一组。有内置实现的(文档解析)不定就是内置的;
@@ -66,7 +68,10 @@ const speechApi = vi.hoisted(() => ({
 vi.mock("@/api/domains/speech", () => speechApi);
 const admin = vi.hoisted(() => ({ value: true }));
 vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => admin.value }));
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+vi.mock("@/app/preferences", () => ({
+  //: 别的键原样回键名(测试只钉结构);数量那一条要看到真数字,所以留着 `{n}` 让组件自己替换。
+  useI18n: () => (key: string) => (key === "capabilityVoiceRestricted" ? "{n} 家不能设为默认" : key),
+}));
 const { findPluginsFor } = vi.hoisted(() => ({ findPluginsFor: vi.fn() }));
 vi.mock("@/lib/deepLink", () => ({ findPluginsFor }));
 //: 下拉在 jsdom 里点不开;这里只关心**给了哪几项、选了哪一项**,所以把选项平铺成按钮。
@@ -523,7 +528,7 @@ it("「用在哪」默认收成一行摘要,点开才列出接口给的那几处
   expect(container.querySelectorAll("[data-capability-uses-summary]")).toHaveLength(2);
 });
 
-it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」那句话没了;未安装的引擎不进下拉、理由写在行下", async () => {
+it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」那句话没了;未安装的引擎不进下拉、理由收在收起的那一行里", async () => {
   const { container } = render(
     <QueryClientProvider client={new QueryClient()}>
       <CapabilityProvidersSection />
@@ -538,9 +543,13 @@ it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」
   //: 第一格是引擎(当前默认 Edge),第二格是它的音色(当前默认晓晓)。候选项是另一份查询,等它到。
   await waitFor(() => expect(pickers[1].textContent).toContain("晓晓"));
   expect(pickers[0].textContent).toContain("Edge");
-  //: 没装好的引擎不在下拉里,但用户看得到它、以及为什么选不了。
+  //: 没装好的引擎不在下拉里,但用户看得到它、以及为什么选不了 —— 收在那一行解释里,点开才列。
   expect(pickers[0].textContent).not.toContain("OpenAI");
-  expect(group.textContent).toContain("capabilityVoiceDefaultUnready");
+  const restricted = group.querySelector<HTMLElement>("[data-capability-voice-restricted]")!;
+  expect(restricted.textContent).toContain("capabilityVoiceRestricted");
+  expect(group.textContent).not.toContain("capabilityVoiceDefaultUnready");
+  fireEvent.click(within(restricted).getByRole("button"));
+  await waitFor(() => expect(group.textContent).toContain("capabilityVoiceDefaultUnready"));
   //: 未安装的引擎的**名字**在那一行说明里(t 在测试里只回 key,所以这里只钉"有那一行")。
   //: 配音那一处用法也收在摘要里,点开才列。
   const summary = group.querySelector<HTMLElement>("[data-capability-uses-summary]")!;
@@ -548,6 +557,138 @@ it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」
   fireEvent.click(within(summary).getByRole("button"));
   await waitFor(() => expect(group.querySelectorAll("[data-capability-use]")).toHaveLength(1));
   expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(0);
+});
+
+/**
+ * 维护者截图 + 原话:「图中这边的信息还是过多,重构一下 UI」。截图里配音那一组 **13 行字、只有 1 行动作**:
+ * 组说明三句(「本机克隆、Edge、各家云端之外……」)、控件上面还压着一句「先选一个引擎。」、
+ * 两家不能当默认的解释各一段摊在行下 —— 而真正要点的两个下拉排在最后。
+ * 下面几条把新排版钉在结构上:说明两行以内、控件不被注释隔开、限制项收进一个可展开项、
+ * 数量从数据算、一家都没有时整行不出现。
+ */
+const countLine = (group: HTMLElement) => group.querySelector<HTMLElement>("[data-capability-voice-restricted]");
+
+it("配音那一组的说明收成两行以内:只说这一节是什么 + 默认是一对", async () => {
+  //: 中英两份都要能收在两行内:先按「句」数(≤2),中文再按字数(卡片一行 ≈ 40 字,留到 60)。
+  const sentences = (text: string) => text.split(/(?<=[。.!?])\s*/).filter(Boolean);
+  for (const text of [zhCN.capabilityVoiceGroupDescription, enUS.capabilityVoiceGroupDescription]) {
+    expect(typeof text, "说明要走文案表").toBe("string");
+    expect(sentences(text).length).toBeLessThanOrEqual(2);
+  }
+  const zh = zhCN.capabilityVoiceGroupDescription;
+  expect([...zh].length).toBeLessThanOrEqual(60);
+  expect(zh).toContain("默认一对");
+  //: 「本机克隆、Edge、各家云端之外,装了配音插件的也在这里」并掉了 —— 不再一句句铺开。
+  expect(zh).not.toContain("本机克隆、Edge");
+  expect(zh).not.toContain("配音插件");
+  //: 真页读的是这一句,不再是后端那条三句长文(测试里 t() 回键名)。
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(group.querySelector('[data-slot="settings-group-description"]')!.textContent).toBe("capabilityVoiceGroupDescription");
+});
+
+it("「先选一个引擎。」不在了:那是控件的注释,两个下拉自己会说话", async () => {
+  //: 截图里默认是「未指定」—— 没有哪一家是这台机器的默认,才露得出那句注释(先红的状态)。
+  speechApi.listTtsEngines.mockResolvedValue(engines.map((one) => ({ ...one, is_default: false })));
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  //: 等引擎那一份查询到了再断言(下拉里出现 Edge = 数据到了)。
+  await waitFor(() => expect(group.querySelectorAll("[data-picker]")[0].textContent).toContain("Edge"));
+  expect(group.textContent).not.toContain("capabilityVoiceDefaultNeedEngine");
+  //: 控件行下面不再挂一句解释:两个下拉就是这一行的全部内容。
+  expect(group.querySelector('[data-slot="settings-item-description"]')).toBeNull();
+  const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
+  expect(pickers).toHaveLength(2);
+  //: 第一格自己写着「未指定」—— 不需要一行字提醒先选引擎。
+  expect(pickers[0].textContent).toContain("capabilityUnset");
+});
+
+it("「不能设为默认」的两段解释收进一个可展开项:收起一行,点开原文都在", async () => {
+  //: 一家只属于某个人(克隆音色)、一家还用不了(OpenAI):正好是截图里那两段。
+  speechApi.listTtsEngines.mockResolvedValue([
+    ...engines,
+    { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: true, voices: [],
+      supports_speed: true, note: "ttsNote_clone", ready: true, clones_voices: true, is_default: false },
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  //: 那一行要等引擎目录到齐(克隆音色 + OpenAI)才画得出来。
+  await waitFor(() => expect(countLine(group)).not.toBeNull());
+  const restricted = countLine(group)!;
+  //: 收起时只有一行,两段原文都没挂载。
+  expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(0);
+  const trigger = within(restricted).getByRole("button");
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(restricted.textContent).toContain("capabilityVoiceRestricted");
+  //: 点开:两段原文一条不少(个人专属 + 还用不了)。
+  fireEvent.click(trigger);
+  await waitFor(() => expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(2));
+  expect(restricted.textContent).toContain("capabilityVoiceDefaultPersonalOnly");
+  expect(restricted.textContent).toContain("capabilityVoiceDefaultUnready");
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  //: 再收起:又只剩一行。
+  fireEvent.click(trigger);
+  await waitFor(() => expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(0));
+});
+
+it("「几家不能设为默认」是数出来的:1 家、2 家跟着数据走,不写死", async () => {
+  const first = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  //: 默认那组数据:Edge 装好了、OpenAI 还用不了 → 1 家。
+  const firstGroup = () => screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  await waitFor(() => expect(countLine(firstGroup())).not.toBeNull());
+  expect(countLine(firstGroup())!.textContent).toContain("1 家不能设为默认");
+  first.unmount();
+
+  //: 再加一家只属于某个人的(克隆音色)→ 2 家。数量从数据算,不是文案里写死的。
+  speechApi.listTtsEngines.mockResolvedValue([
+    ...engines,
+    { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: true, voices: [],
+      supports_speed: true, note: "ttsNote_clone", ready: true, clones_voices: true, is_default: false },
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  await waitFor(() => expect(countLine(firstGroup())?.textContent).toContain("2 家不能设为默认"));
+});
+
+it("一家都不受限时,「不能设为默认」这一整行不出现 —— 不写「0 家」", async () => {
+  //: 只有 Edge,装好了、也不是个人专属的 —— 没有任何一家不能当默认。
+  speechApi.listTtsEngines.mockResolvedValue([engines[0]]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  //: 等引擎目录到了(下拉里出现 Edge)再断言「没有这一行」—— 否则只是数据还没到。
+  await waitFor(() => expect(group.querySelectorAll("[data-picker]")[0].textContent).toContain("Edge"));
+  expect(countLine(group)).toBeNull();
+  expect(group.textContent).not.toContain("capabilityVoiceRestricted");
+  expect(group.textContent).not.toContain("0 家");
 });
 
 it("配音的默认行没有「保存默认」按钮 —— 和 ASR / 降噪一样选完即存", async () => {
