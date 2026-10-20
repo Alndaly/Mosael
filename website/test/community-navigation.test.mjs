@@ -47,7 +47,7 @@ const listedSharesModule = async () => {
 
 const { getMessages } = await import("../src/i18n/messages.ts");
 
-test("① 社区两个分区在页头都在:插件 / 工作流 —— 不为「分享」单开 tab", async () => {
+test("① 社区三个分区在页头都在:插件 / 工作流 / 创意画板 —— 不为「分享」单开 tab", async () => {
   // 先钉住根因:tab 只能来自同一个纯函数,页头不许再按 active 条件拼接。
   const header = read(HEADER);
   assert.doesNotMatch(header, /active ===/, "页头又按 active 条件拼 tab 了(这正是之前「切一下 tab 列表就没了」的 bug)");
@@ -58,10 +58,14 @@ test("① 社区两个分区在页头都在:插件 / 工作流 —— 不为「�
 
   for (const locale of ["zh", "en"]) {
     const tabs = mod.communityTabs(locale, { plugins: 9, workflows: 15 });
-    assert.deepEqual(tabs.map((tab) => tab.id), ["plugins", "workflows"], `${locale}: 社区 tab 不是「插件 / 工作流」两项`);
+    assert.deepEqual(
+      tabs.map((tab) => tab.id),
+      ["plugins", "workflows", "boards"],
+      `${locale}: 社区 tab 不是「插件 / 工作流 / 创意画板」三项`,
+    );
     assert.deepEqual(
       tabs.map((tab) => tab.href),
-      [`/${locale}/plugins`, `/${locale}/workflows`],
+      [`/${locale}/plugins`, `/${locale}/workflows`, `/${locale}/boards`],
       `${locale}: tab 指向的地址不对`,
     );
     assert.ok(
@@ -71,7 +75,7 @@ test("① 社区两个分区在页头都在:插件 / 工作流 —— 不为「�
   }
 
   // 计数:两项各自带数字。
-  assert.deepEqual(mod.communityTabs("zh", { plugins: 9, workflows: 15 }).map((tab) => tab.count), [9, 15], "计数不对");
+  assert.deepEqual(mod.communityTabs("zh", { plugins: 9, workflows: 15 }).map((tab) => tab.count), [9, 15, undefined], "计数不对(画布的数拿不到就不显示)");
   assert.equal(mod.communityTabs("en", { plugins: 1, workflows: 2 })[0].label, getMessages("en").plugins.title, "「插件」tab 文案不对");
   assert.equal(mod.communityTabs("en", { plugins: 1, workflows: 2 })[1].label, getMessages("en").workflows.title, "「工作流」tab 文案不对");
 
@@ -101,6 +105,7 @@ test("② 当前页高亮:aria-current 只给当前分区", () => {
   // 两个 tab 页各自传自己的分区。
   assert.match(read(PLUGINS_PAGE), /active="plugins"/);
   assert.match(read(WORKFLOWS_PAGE), /active="workflows"/);
+  assert.match(read("src/app/[locale]/(site)/boards/page.tsx"), /active="boards"/, "/boards 没有把自己标成当前分区");
   // 社区首页不把自己当 tab。
   assert.doesNotMatch(read(LIST_PAGE), /active="shares"/, "社区首页又把自己当成一个 tab 了");
 });
@@ -258,9 +263,9 @@ test("⑨ 回归:切到别的分区再回来,页头两项仍在(不随当前页�
 
   // 旧实现按 active 拼 tab,切走时那一项整项消失(原始 bug)。现在生成函数根本不收 active,
   // 结构上不可能因为切换而少一项。
-  for (const active of ["plugins", "workflows", undefined]) {
+  for (const active of ["plugins", "workflows", "boards", undefined]) {
     const tabs = mod.communityTabs("zh", { plugins: 9, workflows: 15 });
-    assert.deepEqual(tabs.map((tab) => tab.id), ["plugins", "workflows"], `停在 ${active ?? "/community"} 时页头少了 tab`);
+    assert.deepEqual(tabs.map((tab) => tab.id), ["plugins", "workflows", "boards"], `停在 ${active ?? "/community"} 时页头少了 tab`);
   }
   assert.equal(mod.communityTabs.length, 2, "communityTabs 只该收 locale 和 counts —— 收 active 就又会按页面裁剪");
 

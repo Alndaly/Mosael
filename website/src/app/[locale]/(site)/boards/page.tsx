@@ -35,6 +35,7 @@ export default async function BoardsPage({ params }: { params: Params }) {
     <>
       <CommunityHeader
         locale={locale}
+        active="boards"
         counts={{ plugins: listPlugins(locale).length, workflows: listWorkflows(locale).length }}
         title={t.boards.heading}
         lede={t.boards.lede}
