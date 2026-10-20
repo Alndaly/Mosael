@@ -48,7 +48,7 @@ test("三页共用一套分屏骨架:桌面左表单、右产品叙事,移动端
 
 test("表单控件有真实 label、聚焦环、密码可见性和错误关联", () => {
   assert.match(controls, /htmlFor=\{id\}/, "label 没有通过 htmlFor 绑定输入框");
-  assert.match(controls, /<input[\s\S]*id=\{id\}/, "输入框没有稳定 id");
+  assert.match(controls, /<Input[\s\S]*id=\{id\}/, "输入框没有稳定 id");
   assert.match(controls, /aria-describedby=\{describedBy\}/, "输入框没有把 hint / 错误关联给读屏");
   assert.match(controls, /aria-invalid=\{Boolean\(error\)\}/, "错误态没有 aria-invalid");
   assert.match(controls, /showPassword/, "没有显示密码的文案");

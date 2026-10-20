@@ -7,7 +7,9 @@ import { Suspense } from "react";
 import { DetailBody, InfoList, Section, SideCard, Steps, actionClass } from "@/components/community/detail";
 import { DetailSkeleton } from "@/components/community/detail-skeleton";
 import { CommentSection, ShareCommentCountProvider, ShareEngagement } from "@/components/community/share-detail";
+import { ShareCanvasDialog } from "@/components/community/share-canvas";
 import { SharePreview } from "@/components/community/share-preview";
+import { toFlowGraph } from "@/components/community/share-preview-model";
 import { cookieHeader, loadComments, loadShare, loadSharePayload, loadViewer } from "@/components/community/share-server";
 import { formatBytes, formatShareDate } from "@/components/community/share-utils";
 import { InitialTile } from "@/components/community/tile";
@@ -129,6 +131,10 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
   const viewer: CloudIdentity | null = viewerResult.status === "fulfilled" ? viewerResult.value : null;
   // 取失败 / 200 但不是预期形状都只是「没有预览」,页面其余部分照常,不另出错误块。
   const previewPayload = previewResult.status === "fulfilled" ? previewResult.value : null;
+  // 无限画布只要最小 nodes / edges:几何在服务端算(和静态 SVG 预览同一个解析 + 同一个
+  // 200 上限),**不**把那份可能 2MB 的原始工程 JSON 传给 client。插件 / 取失败 → null,
+  // 详情页也就不会给「在画布里看」入口。
+  const flowGraph = toFlowGraph(share.kind, previewPayload);
 
   const author = share.author.display_name?.trim() || share.author.handle || "—";
   // 三种类型各说各的。之前只判了 board,插件会落进最后一个分支被写成「工作流」
@@ -192,7 +198,11 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
         main={
           <>
             {/* 先让人看见它长什么样,再解释它是什么。取不到 / 形状不对 / 插件都不留空框。 */}
-            <SharePreview locale={locale} kind={share.kind} payload={previewPayload} />
+            <div className="grid gap-3">
+              {/* 首屏 / SEO 用静态 SVG;要凑近看时再开弹窗里的无限画布(它才引 xyflow)。 */}
+              <SharePreview locale={locale} kind={share.kind} payload={previewPayload} />
+              {flowGraph && <ShareCanvasDialog locale={locale} graph={flowGraph} />}
+            </div>
             <Section id="about" title={t.whatIsTitle}>
               <p className="m-0 text-sm leading-7 text-muted-foreground">
                 {share.kind === "board" ? t.whatIsBoard : share.kind === "plugin" ? t.whatIsPlugin : t.whatIsWorkflow}

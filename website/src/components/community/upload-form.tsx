@@ -7,18 +7,22 @@ import * as React from "react";
 
 import { actionClass } from "@/components/community/detail";
 import { IdentityForm } from "@/components/community/identity-form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { CloudApiError, cloudLocale, cloudShares, type CloudIdentity, type CloudShareKind } from "@/lib/cloud";
 import { invalidateAfterShareChange } from "@/lib/query-invalidation";
-import { cn } from "@/lib/utils";
 
 import { MAX_SHARE_BYTES, measurePayload, publicIdentity } from "./share-utils";
-
-const FIELD =
-  "h-11 w-full rounded-xl border border-input/80 bg-card px-4 text-[16px] text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/20 aria-invalid:border-destructive";
-
-const LABEL = "text-[13px] font-medium leading-5 text-foreground";
 
 /**
  * 上传表单。
@@ -46,6 +50,7 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
   const [error, setError] = React.useState("");
   const [identityNotice, setIdentityNotice] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const fileInput = React.useRef<HTMLInputElement>(null);
 
   const onFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -149,25 +154,21 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
   return (
     <form onSubmit={submit} className="grid gap-5">
       <div className="grid gap-1.5">
-        <label htmlFor="share-kind" className={LABEL}>
-          {t.fieldKind}
-        </label>
-        <select
-          id="share-kind"
-          value={kind}
-          onChange={(event) => setKind(event.target.value as CloudShareKind)}
-          className={cn(FIELD, "appearance-none")}
-        >
-          <option value="workflow">{t.kindWorkflow}</option>
-          <option value="board">{t.kindBoard}</option>
-        </select>
+        <Label htmlFor="share-kind">{t.fieldKind}</Label>
+        <Select value={kind} onValueChange={(value) => setKind(value as CloudShareKind)}>
+          <SelectTrigger id="share-kind" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="workflow">{t.kindWorkflow}</SelectItem>
+            <SelectItem value="board">{t.kindBoard}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid gap-1.5">
-        <label htmlFor="share-title" className={LABEL}>
-          {t.fieldTitle}
-        </label>
-        <input
+        <Label htmlFor="share-title">{t.fieldTitle}</Label>
+        <Input
           id="share-title"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
@@ -176,7 +177,6 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
           required
           aria-invalid={Boolean(titleError)}
           aria-describedby={titleError ? "share-title-error" : undefined}
-          className={cn(FIELD, titleError && "border-destructive")}
         />
         {titleError && (
           <p id="share-title-error" role="alert" className="m-0 flex items-start gap-1.5 text-[13px] text-destructive">
@@ -187,46 +187,59 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
       </div>
 
       <div className="grid gap-1.5">
-        <label htmlFor="share-summary" className={LABEL}>
-          {t.fieldSummary}
-        </label>
-        <textarea
+        <Label htmlFor="share-summary">{t.fieldSummary}</Label>
+        <Textarea
           id="share-summary"
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
           placeholder={t.fieldSummaryPlaceholder}
           rows={4}
           maxLength={500}
-          className="w-full resize-y rounded-xl border border-input/80 bg-card px-4 py-3 text-[16px] leading-6 text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/20"
         />
       </div>
 
       <div className="grid gap-1.5">
-        <label htmlFor="share-license" className={LABEL}>
-          {t.fieldLicense}
-        </label>
-        <select
-          id="share-license"
-          value={license}
-          onChange={(event) => setLicense(event.target.value)}
-          className={cn(FIELD, "appearance-none")}
+        <Label htmlFor="share-license">{t.fieldLicense}</Label>
+        <Select
+          value={license || "none"}
+          onValueChange={(value) => setLicense(value === "none" ? "" : value)}
         >
-          <option value="">{t.noLicense}</option>
-          {t.licenseOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="share-license" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">{t.noLicense}</SelectItem>
+            {t.licenseOptions.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid gap-1.5">
-        <span className={LABEL}>{t.fieldFile}</span>
-        <label
-          className={cn(
-            "flex cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-border bg-card px-4 py-4 text-sm transition-colors hover:border-primary/50",
-            fileError && "border-destructive/60",
-          )}
+        <span className="text-sm font-medium">{t.fieldFile}</span>
+        {/*
+          文件选择是**唯一**保留原生 `<input type="file">` 的地方:HTML 只能用原生文件框
+          打开系统选择器,自己拼一个 div 反而会丢掉键盘、读屏和系统对话框。这里把 input
+          留成透明可聚焦的原生控件,再让下面这颗按钮去 `click()` 它 —— 外观归按钮,能力归原生。
+        */}
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".json,application/json"
+          onChange={(event) => void onFile(event)}
+          className="sr-only"
+          aria-label={t.chooseFile}
+          aria-invalid={Boolean(fileError)}
+          aria-describedby={fileError ? "share-file-error" : undefined}
+        />
+        <button
+          type="button"
+          onClick={() => fileInput.current?.click()}
+          aria-describedby={fileError ? "share-file-error" : undefined}
+          className="flex cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-border bg-card px-4 py-4 text-left text-sm transition-colors hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <FileJson className="size-5 shrink-0 text-primary" aria-hidden />
           <span className="min-w-0 flex-1">
@@ -236,17 +249,9 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
               {t.fileHint}
             </span>
           </span>
-          <input
-            type="file"
-            accept=".json,application/json"
-            onChange={(event) => void onFile(event)}
-            className="sr-only"
-            aria-label={t.chooseFile}
-            aria-invalid={Boolean(fileError)}
-          />
-        </label>
+        </button>
         {fileError && (
-          <p role="alert" className="m-0 flex items-start gap-1.5 text-[13px] text-destructive">
+          <p id="share-file-error" role="alert" className="m-0 flex items-start gap-1.5 text-[13px] text-destructive">
             <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
             {fileError}
           </p>

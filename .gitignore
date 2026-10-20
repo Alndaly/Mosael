@@ -91,3 +91,6 @@ deploy/official-bundle.json
 # 本地服务重建时的暂存构建目录(见 scripts/dev-services.sh)
 website/.next-build
 website/.next-old
+
+# 并发任务跑 next dev 时留下的构建目录(不该进仓库)
+website/.next-canvas-dev

@@ -15,6 +15,8 @@ import * as React from "react";
 
 import { actionClass } from "@/components/community/detail";
 import { IdentityForm } from "@/components/community/identity-form";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { InitialTile } from "@/components/community/tile";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -429,17 +431,16 @@ export function CommentSection({
           </div>
         ) : (
           <form onSubmit={submitComment} className="grid gap-2.5">
-            <label htmlFor="community-comment" className="sr-only">
+            <Label htmlFor="community-comment" className="sr-only">
               {t.commentPlaceholder}
-            </label>
-            <textarea
+            </Label>
+            <Textarea
               id="community-comment"
               value={body}
               onChange={(event) => setBody(event.target.value)}
               placeholder={t.commentPlaceholder}
               rows={4}
               maxLength={2000}
-              className="w-full resize-y rounded-2xl border border-input/80 bg-card px-4 py-3 text-[16px] leading-6 text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/20"
             />
             <div className="flex items-center justify-between gap-3">
               <span className="font-mono text-xs text-muted-foreground tabular-nums">{body.length} / 2000</span>

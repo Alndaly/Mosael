@@ -10,18 +10,18 @@ import {
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 /**
  * 账号表单的零件。
  *
- * 三页共用同一套 label / 错误 / 主按钮,层级才不会被页面各写一遍写歪。输入框固定
- * 48px 高、16px 字号(iOS 不会在聚焦时缩放),聚焦环和错误环都留给键盘与读屏:
+ * 三页共用同一套 label / 错误 / 主按钮,层级才不会被页面各写一遍写歪。输入框的形态
+ * (高度、圆角、字号、聚焦环、禁用态、错误环)统一交给 shadcn 的 `Input`,这里只负责
+ * 关联 label、把 hint / error 拼进 `aria-describedby`,以及密码可见性这类额外交互。
  * 错误同时走 `aria-invalid` 和 `aria-describedby`,不是只飘一行红字。
  */
-const FIELD =
-  "h-12 w-full rounded-xl border border-input/80 bg-card px-4 text-[16px] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15 aria-invalid:border-destructive aria-invalid:ring-4 aria-invalid:ring-destructive/15 dark:shadow-none";
-
 type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> & {
   id: string;
   label: string;
@@ -48,15 +48,13 @@ export function AccountField({
 
   return (
     <div className="grid min-w-0 gap-2">
-      <label htmlFor={id} className="text-[13px] font-medium leading-5 text-foreground">
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
       <div className="relative">
-        <input
+        <Input
           id={id}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
-          className={cn(FIELD, trailing && "pr-12", className)}
+          className={cn(trailing && "pr-12", className)}
           {...props}
         />
         {trailing}

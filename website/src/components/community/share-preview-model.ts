@@ -6,6 +6,10 @@
  * 真实 fixture 钉住。组件只负责把这份模型画成 `<svg>`,规则都在这里 —— 服务端和
  * `node --test` 跑的是同一份。
  *
+ * 同一个文件也给**无限画布**提供 `toFlowGraph()`:它和 `buildSharePreview()` 都走
+ * `drawContent()`(同一份解析、同一个 {@link PREVIEW_LIMIT}),只是前者要 xyflow 的
+ * nodes / edges,后者要 SVG 的矩形 / 线段。静态预览和可浏览画布不会各画一套。
+ *
  * **输入的两种形状**(和云端存的一致,见 cloud 的 seed / 前端 `api/domains/shares.ts`):
  *
  * - 工作流:`{ format, version, name, description, graph: { meta, nodes: [{ id, type, name,
@@ -132,9 +136,18 @@ export type SharePreviewModel = {
 type Dict = Record<string, unknown>;
 
 /** 一个带 id / 位置 / 尺寸 / 种类的矩形,还没决定淡色和截断后的标签。 */
-type RawRect = Omit<PreviewRect, "tint" | "label"> & { id: string; label: string | null };
+type RawRect = Omit<PreviewRect, "tint" | "label"> & {
+  id: string;
+  /**
+   * SVG 预览画在框里的短标签。**只有工作流有**(画布格子照旧不画 —— 老行为),
+   * 无限画布用的是下面的 `name`。
+   */
+  label: string | null;
+  /** 完整显示名(工作流的 `name` / 画布格子的 `title`);无限画布用它,不截断。 */
+  name: string | null;
+};
 
-type ParsedEdge = { source: string; target: string };
+type ParsedEdge = { id: string; source: string; target: string };
 
 type ParsedContent = { rects: RawRect[]; edges: ParsedEdge[] };
 
@@ -162,17 +175,27 @@ function tintFor(kind: string): number {
   return hash % TINT_COUNT;
 }
 
-/** 边的两端只留下能找回矩形的那些;字段就是 `source` / `target`(BoardEdge 和 workflow edge 同形)。 */
+/**
+ * 边的两端只留下能找回矩形的那些;字段就是 `source` / `target`(BoardEdge 和 workflow edge 同形)。
+ *
+ * 顺手带上 id(缺了就用 `source->target` 合成):SVG 预览不用它,但 xyflow 用 id 做 React key
+ * 和边的查表键。重名的边补后缀,别让两条边在画布上互相覆盖。
+ */
 function readEdges(value: unknown): ParsedEdge[] {
   if (!Array.isArray(value)) return [];
   const edges: ParsedEdge[] = [];
+  const used = new Set<string>();
   for (const raw of value) {
     const edge = dict(raw);
     if (!edge) continue;
     const source = text(edge.source);
     const target = text(edge.target);
     if (!source || !target) continue;
-    edges.push({ source, target });
+    const base = text(edge.id) ?? `${source}->${target}`;
+    let id = base;
+    for (let suffix = 2; used.has(id); suffix += 1) id = `${base}#${suffix}`;
+    used.add(id);
+    edges.push({ id, source, target });
   }
   return edges;
 }
@@ -201,6 +224,7 @@ function readWorkflow(payload: unknown): ParsedContent | null {
       radius: WORKFLOW_NODE_RADIUS,
       kind: text(node.type) ?? "node",
       label: text(node.name),
+      name: text(node.name),
     });
   }
 
@@ -241,12 +265,52 @@ function readBoard(payload: unknown): ParsedContent | null {
       height: height !== null && height > 0 ? round(height) : preset.height,
       radius: BOARD_ITEM_RADIUS,
       kind,
+      // SVG 预览一直没给画布格子画字;这里保持 null,名字给无限画布用(见 `name`)。
       label: null,
+      name: text(item.title),
     });
   }
 
   if (rects.length === 0) return null;
   return { rects, edges: readEdges(canvas.edges) };
+}
+
+/**
+ * 一份「准备画」的内容:已经套过 {@link PREVIEW_LIMIT}、边已经丢掉指向没画节点的。
+ *
+ * 静态 SVG 预览和无限画布都从这份内容出发 —— 一份 29 个节点的工作流不会在画布里变成
+ * 另一组坐标,也不会一个画 29 个、一个画 28 个。
+ */
+type DrawnContent = {
+  kind: "workflow" | "board";
+  /** 前 {@link PREVIEW_LIMIT} 个节点 / 格子。 */
+  nodes: RawRect[];
+  /** 两端都画了的边(顺序与 payload 一致)。 */
+  edges: ParsedEdge[];
+  /** 有效内容总数(含超过上限没画的)。 */
+  total: number;
+  /** 因为超过上限没画的节点 / 格子数;0 表示全画了。 */
+  hidden: number;
+};
+
+/** 解析 + 套上限 + 丢掉悬空边;没有可画的东西时返回 null。 */
+function drawContent(kind: string, payload: unknown): DrawnContent | null {
+  if (kind !== "workflow" && kind !== "board") return null;
+  const parsed = kind === "workflow" ? readWorkflow(payload) : readBoard(payload);
+  if (!parsed) return null;
+
+  const total = parsed.rects.length;
+  if (total === 0) return null;
+
+  const nodes = parsed.rects.slice(0, PREVIEW_LIMIT);
+  const drawn = new Set(nodes.map((node) => node.id));
+  return {
+    kind,
+    nodes,
+    edges: parsed.edges.filter((edge) => drawn.has(edge.source) && drawn.has(edge.target)),
+    total,
+    hidden: total - nodes.length,
+  };
 }
 
 /**
@@ -257,33 +321,23 @@ function readBoard(payload: unknown): ParsedContent | null {
  * @returns 没有可画的东西(空内容 / 形状不对 / plugin / 未知 kind)时返回 `null`
  */
 export function buildSharePreview(kind: string, payload: unknown): SharePreviewModel | null {
-  if (kind === "workflow") {
-    const parsed = readWorkflow(payload);
-    return parsed ? buildModel("workflow", parsed) : null;
-  }
-  if (kind === "board") {
-    const parsed = readBoard(payload);
-    return parsed ? buildModel("board", parsed) : null;
-  }
-  return null;
+  const content = drawContent(kind, payload);
+  return content ? buildModel(content) : null;
 }
 
 /**
  * 套上限、丢掉指向没画节点的边、算 viewBox、截标签。
  */
-function buildModel(kind: "workflow" | "board", content: ParsedContent): SharePreviewModel | null {
-  const total = content.rects.length;
-  if (total === 0) return null;
+function buildModel(content: DrawnContent): SharePreviewModel {
+  const { kind, nodes: drawn, edges, total, hidden } = content;
 
-  const drawn = content.rects.slice(0, PREVIEW_LIMIT);
-  const hidden = total - drawn.length;
-
-  // 超过上限的节点不画,也就不该留下指向它们的悬空线。
+  // 超过上限的节点不画,也就不该留下指向它们的悬空线(drawContent 已经筛过一遍;
+  // 这里按 id 查表,是为了取线段两端的矩形中心)。
   const indexById = new Map<string, number>();
   for (let index = 0; index < drawn.length; index += 1) indexById.set(drawn[index].id, index);
 
   const lines: PreviewLine[] = [];
-  for (const edge of content.edges) {
+  for (const edge of edges) {
     const sourceIndex = indexById.get(edge.source);
     const targetIndex = indexById.get(edge.target);
     if (sourceIndex === undefined || targetIndex === undefined) continue;
@@ -336,6 +390,75 @@ function buildModel(kind: "workflow" | "board", content: ParsedContent): SharePr
     total,
     hidden,
     labelSize,
+  };
+}
+
+/**
+ * 无限画布要的一份图:xyflow 的节点 / 边。
+ *
+ * 和 {@link buildSharePreview} **同源**:都走 `drawContent`(同一份解析、同一个
+ * {@link PREVIEW_LIMIT}),这里只是把矩形 / 线段换成 xyflow 能吃的 nodes / edges。
+ * 组件(`share-canvas.tsx`)只负责画,不重新解释 payload。
+ */
+export type ShareFlowNodeData = {
+  /** 圆角框里的名字(工作流的 `name` / 画布格子的 `title`;都没有就退回 kind)。 */
+  label: string;
+  /** 节点 / 格子种类。同类同色,和 SVG 预览同一套 {@link tintFor}。 */
+  kind: string;
+  /** 淡色序号(0..{@link TINT_COUNT}-1)。 */
+  tint: number;
+};
+
+export type ShareFlowNode = {
+  id: string;
+  /** 自定义节点类型;组件里按它注册圆角框,不用默认方块。 */
+  type: "share";
+  position: { x: number; y: number };
+  width: number;
+  height: number;
+  data: ShareFlowNodeData;
+};
+
+export type ShareFlowEdge = { id: string; source: string; target: string };
+
+export type ShareFlowGraph = {
+  kind: "workflow" | "board";
+  nodes: ShareFlowNode[];
+  edges: ShareFlowEdge[];
+  /** 有效内容总数(含超过上限没画的)。 */
+  total: number;
+  /** 因为超过 {@link PREVIEW_LIMIT} 没画的节点 / 格子数;0 表示全画了。 */
+  hidden: number;
+};
+
+/**
+ * payload → 只读无限画布的 nodes / edges。
+ *
+ * @param kind 分享类型(云端的 `workflow` / `board` / `plugin`)
+ * @param payload `GET /shares/{id}/payload` 返回的 `payload` 原文
+ * @returns 没有几何可画(空内容 / 形状不对 / plugin / 未知 kind)时返回 `null`
+ */
+export function toFlowGraph(kind: string, payload: unknown): ShareFlowGraph | null {
+  const content = drawContent(kind, payload);
+  if (!content) return null;
+
+  return {
+    kind: content.kind,
+    nodes: content.nodes.map((node) => ({
+      id: node.id,
+      type: "share",
+      position: { x: node.x, y: node.y },
+      width: node.width,
+      height: node.height,
+      data: {
+        label: node.name ?? node.label ?? node.kind,
+        kind: node.kind,
+        tint: tintFor(node.kind),
+      },
+    })),
+    edges: content.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
+    total: content.total,
+    hidden: content.hidden,
   };
 }
 

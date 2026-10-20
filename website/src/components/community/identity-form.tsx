@@ -5,6 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { CloudApiError, cloudProfile, type CloudIdentity } from "@/lib/cloud";
@@ -12,9 +14,6 @@ import { invalidateAfterProfileSave } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
 
 import { publicIdentity } from "./share-utils";
-
-const FIELD =
-  "h-11 w-full rounded-xl border border-input/80 bg-card px-4 text-[16px] text-foreground outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/20 aria-invalid:border-destructive";
 
 /**
  * 第一次发布 / 评论前的「起个名字」。
@@ -79,10 +78,8 @@ export function IdentityForm({
       </div>
 
       <div className="grid gap-1.5">
-        <label htmlFor="community-display-name" className="text-[13px] font-medium">
-          {t.displayName}
-        </label>
-        <input
+        <Label htmlFor="community-display-name">{t.displayName}</Label>
+        <Input
           id="community-display-name"
           name="display_name"
           value={displayName}
@@ -93,7 +90,6 @@ export function IdentityForm({
           required
           aria-invalid={Boolean(displayError)}
           aria-describedby={displayError ? "community-display-name-error" : undefined}
-          className={cn(FIELD, displayError && "border-destructive")}
         />
         {displayError && (
           <p id="community-display-name-error" role="alert" className="m-0 flex items-start gap-1.5 text-[13px] text-destructive">
@@ -104,10 +100,8 @@ export function IdentityForm({
       </div>
 
       <div className="grid gap-1.5">
-        <label htmlFor="community-handle" className="text-[13px] font-medium">
-          {t.handle}
-        </label>
-        <input
+        <Label htmlFor="community-handle">{t.handle}</Label>
+        <Input
           id="community-handle"
           name="handle"
           value={handle}
@@ -118,7 +112,7 @@ export function IdentityForm({
           maxLength={24}
           aria-invalid={Boolean(handleError)}
           aria-describedby={handleError ? "community-handle-error" : "community-handle-hint"}
-          className={cn(FIELD, "font-mono text-sm", handleError && "border-destructive")}
+          className="font-mono"
         />
         {handleError ? (
           <p id="community-handle-error" role="alert" className="m-0 flex items-start gap-1.5 text-[13px] text-destructive">

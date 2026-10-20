@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
+import { Input } from "@/components/ui/input";
 import type { Locale } from "@/i18n/config";
 import type { SearchEntry } from "@/lib/search";
 import { cn } from "@/lib/utils";
@@ -196,9 +197,9 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
           }}
           className="mx-auto mt-[12vh] w-[calc(100%-2rem)] max-w-2xl overflow-hidden rounded-2xl border border-border bg-paper p-0 text-foreground backdrop:bg-ink/45"
         >
-          <div className="flex items-center gap-3 border-b border-border px-4">
-            <Search className="size-5 shrink-0" />
-            <input
+          <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+            <Search className="size-5 shrink-0 text-muted-foreground" />
+            <Input
               autoFocus
               value={query}
               onChange={(event) => {
@@ -218,7 +219,8 @@ export function SearchDialog({ locale, labels }: { locale: Locale; labels: Label
                 }
               }}
               placeholder={labels.placeholder}
-              className="h-14 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              aria-label={labels.search}
+              className="flex-1"
             />
             <button
               type="button"

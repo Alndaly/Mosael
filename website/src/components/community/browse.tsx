@@ -19,6 +19,7 @@ import {
 } from "@/components/community/listed-shares";
 import { ShareCard } from "@/components/community/shares";
 import { PluginTile, WorkflowTile } from "@/components/community/tile";
+import { Input } from "@/components/ui/input";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { cloudShares, type CloudShare } from "@/lib/cloud";
@@ -36,17 +37,17 @@ function matches(query: string, fields: readonly string[]): boolean {
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (next: string) => void; placeholder: string }) {
   return (
     // 窄屏独占一行:和筛选按钮挤在一行时会被压成一个图标宽。
-    <label className="relative block min-w-0 basis-full sm:max-w-md sm:flex-1 sm:basis-0">
+    <div className="relative block min-w-0 basis-full sm:max-w-md sm:flex-1 sm:basis-0">
       <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-      <input
+      <Input
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="h-11 w-full rounded-xl border border-input bg-card pr-4 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary/20"
+        className="pl-10"
       />
-    </label>
+    </div>
   );
 }
 

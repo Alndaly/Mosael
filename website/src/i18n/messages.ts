@@ -500,6 +500,14 @@ const zh = {
     previewNodesUnit: "个节点",
     previewItemsUnit: "格",
     previewHidden: "还有 {n} 个没画",
+    // 无限画布浏览:静态 SVG 预览旁边的入口(A:大弹窗,不是把预览就地换成画布)
+    canvasOpen: "在画布里看",
+    canvasTitle: "无限画布",
+    canvasHint: "拖动或滚轮平移，双指或 Ctrl / ⌘ + 滚轮缩放",
+    canvasClose: "关闭",
+    canvasZoomIn: "放大",
+    canvasZoomOut: "缩小",
+    canvasFitView: "适应画布",
     importSteps: [
       "点「在 Mosael 里打开」，或在 Mosael 里选择导入工程文件。",
       "选中下载下来的这份 .json。",
@@ -1083,6 +1091,14 @@ const en: Messages = {
     previewNodesUnit: "nodes",
     previewItemsUnit: "tiles",
     previewHidden: "{n} more not drawn",
+    // Infinite-canvas browsing: the entry point next to the static SVG preview.
+    canvasOpen: "View in canvas",
+    canvasTitle: "Infinite canvas",
+    canvasHint: "Drag or scroll to pan; pinch or Ctrl / ⌘ + scroll to zoom",
+    canvasClose: "Close",
+    canvasZoomIn: "Zoom in",
+    canvasZoomOut: "Zoom out",
+    canvasFitView: "Fit view",
     importSteps: [
       "Choose Open in Mosael, or pick Import project inside Mosael.",
       "Select the .json you downloaded.",
