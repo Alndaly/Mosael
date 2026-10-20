@@ -188,9 +188,9 @@ def test_f5_runtime_missing_points_at_the_tts_engines_section() -> None:
     shown = render_message("runtimeErr_f5RuntimeMissing", "zh")
     zh_ai = _zh_messages("aiStudio.ts")
 
-    assert 'voiceCloneTitle: "语音合成引擎"' in zh_ai
+    assert 'voiceCloneTitle: "本地语音合成引擎"' in zh_ai
     assert "上面的" not in shown, f"改文案又漂成相对位置了:{shown}"
-    assert "管理 → 引擎 → 语音合成引擎" in shown
+    assert "管理 → 引擎 → 本地语音合成引擎" in shown
 
 
 def test_the_other_f5_statuses_do_not_point_at_a_ghost_setting() -> None:
