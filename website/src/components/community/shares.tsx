@@ -16,7 +16,7 @@ import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { toPlainText } from "@/lib/inline-markdown";
 import { shareKindLabel } from "@/lib/shareKind";
-import type { CloudShare, CloudShareKind } from "@/lib/cloud";
+import type { CloudShare } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 
 const CARD =
