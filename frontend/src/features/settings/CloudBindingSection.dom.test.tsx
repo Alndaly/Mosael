@@ -4,7 +4,7 @@
  *
  * 维护者原话:「软件内没有登录云账号的地方」。这个区块要回答四件事:
  *
- * - 没绑的时候,说清云账号是什么、和本地账号是两套、不绑也能用;主操作是**登录**(设备码),
+ * - 没绑的时候,说清云账号是什么、和本地账号是什么关系、不绑也能用;主操作是**登录**(设备码),
  *   确认码要大、可复制,浏览器能打开;
  * - 已绑的时候,看得到绑的是哪个邮箱、什么时候绑的、绑在哪台设备;
  * - 解绑只解这一台,解完**从后端重读**,不在组件里自己改状态;
@@ -79,14 +79,19 @@ async function signIn(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("MosaelCloud 账号", () => {
-  it("未绑定时:说清云账号能做什么、和本地是两套、不登录也能用;主操作是登录", async () => {
+  it("未绑定时:说清云账号能做什么、和本地账号什么关系、不绑也能用;主操作是登录", async () => {
     h.status.mockResolvedValue(unbound);
     render(<CloudBindingSection />);
 
     expect(await screen.findByRole("button", { name: "登录 MosaelCloud" })).toBeTruthy();
-    expect(screen.getByText(/用来登录官网、管理云端账号与绑定设备/)).toBeTruthy();
-    expect(screen.getByText(/和上面的本地账号是两套/)).toBeTruthy();
-    expect(screen.getByText(/不登录 MosaelCloud 也能正常使用本地功能/)).toBeTruthy();
+    expect(screen.getByText(/用来登录官网、管理云端设备/)).toBeTruthy();
+    //: 这一块已经排在本地账号之后,而且从此只说名字、不说方位。
+    expect(screen.queryByText(/上面的本地账号/)).toBeNull();
+    expect(screen.queryByText(/上面|下面|如上/)).toBeNull();
+    //: 说清两者的关系:本地账号管本机,云账号独立,不绑也能用全部本地功能。
+    expect(screen.getByText(/本地账号管这台机器/)).toBeTruthy();
+    expect(screen.getByText(/两个是独立的/)).toBeTruthy();
+    expect(screen.getByText(/不绑云账号也能用全部本地功能/)).toBeTruthy();
     //: 浏览器里可以用第三方登录,但软件内不内嵌它们 —— 这一句也要在。
     expect(screen.getByText(/GitHub \/ Google/)).toBeTruthy();
     expect(screen.queryByText(/alice@example\.com/)).toBeNull();
@@ -116,7 +121,7 @@ describe("MosaelCloud 账号", () => {
     expect(await screen.findByRole("button", { name: "已复制" })).toBeTruthy();
   });
 
-  it("已绑定时:显示云端邮箱、绑定时间和设备,并给「解除本机绑定」", async () => {
+  it("已绑定时:显示云端邮箱、登录时间和设备,并给「解除本机绑定」", async () => {
     h.status.mockResolvedValue(bound);
     render(<CloudBindingSection />);
 
@@ -124,7 +129,7 @@ describe("MosaelCloud 账号", () => {
     const when = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(
       parseServerTime(bound.created_at),
     );
-    expect(screen.getByText(`绑定时间:${when}`)).toBeTruthy();
+    expect(screen.getByText(`登录时间:${when}`)).toBeTruthy();
     expect(screen.getByText("设备:这台电脑")).toBeTruthy();
     expect(screen.getByText(/只是这台电脑/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "解除本机绑定" })).toBeTruthy();

@@ -229,10 +229,14 @@ export function AccountSection() {
           </SettingsField>
         </SettingsForm>
       </SettingsBlock>
+      {/* 顺序:身份(本地账号)→ 云账号 → 改密码。云账号此前在页面最底部、登录密码之下,维护者说「很难看到」;
+          放到这里让一进来就看见,但不放到最顶 —— 本地账号仍是这台机器的身份。
+          只挪位置:未绑 / 已绑 / 读失败三种状态、设备码、解绑都由 CloudBindingSection 自己管,一行没改。 */}
+      <CloudBindingSection />
       <SettingsBlock>
         <div className="grid gap-3">
-          {/* 一小节的标题比下面那几格的名字(16px)重一档,说明和字段说明同一档(14px)—— 此前是 14px 标题配 12px 说明,
-              比下面「当前密码」「新密码」还小,读起来层级倒过来了。 */}
+          {/* 一小节的标题比同一块里「当前密码」「新密码」的字段名(16px)重一档,说明和字段说明同一档(14px)——
+              此前是 14px 标题配 12px 说明,比「当前密码」「新密码」还小,读起来层级倒过来了。 */}
           <div className="grid gap-1">
             <strong className="text-ui-lg font-semibold leading-snug">{t("settingsPassword")}</strong>
             <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("settingsPasswordDesc")}</small>
@@ -274,7 +278,7 @@ export function AccountSection() {
                 </SettingsField>
               </div>
               <div className="flex items-end justify-end">
-                {/* 和上面的密码框同一档(md):设置页填值那一行的字段和按钮同高。 */}
+                {/* 和同一张表单里的密码框同一档(md):设置页填值那一行的字段和按钮同高。 */}
                 <Button type="submit" disabled={!canUpdatePassword} loading={passwordPending}>
                   {t("updatePassword")}
                 </Button>
@@ -283,7 +287,6 @@ export function AccountSection() {
           </form>
         </div>
       </SettingsBlock>
-      <CloudBindingSection />
       <ConfirmDialog
         open={confirmingUsername}
         title={t("usernameChange")}
