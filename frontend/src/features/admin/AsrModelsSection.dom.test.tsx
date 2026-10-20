@@ -66,8 +66,14 @@ function renderSection(rows: Array<Record<string, unknown>>) {
   return client;
 }
 
-const rowOf = async (label: string) =>
-  (await screen.findByText(label)).closest("[data-admin-row]") as HTMLElement;
+//: 节顶那条「默认模型」里也会写着默认的那一个名字 —— 找**行**不能只认第一个同名字符串。
+const rowOf = async (label: string) => {
+  const row = (await screen.findAllByText(label))
+    .map((one) => one.closest("[data-admin-row]"))
+    .find((one): one is HTMLElement => one instanceof HTMLElement);
+  if (!row) throw new Error(`没有「${label}」那一行`);
+  return row;
+};
 
 beforeEach(() => {
   downloads.length = 0;
@@ -103,7 +109,11 @@ describe("转写模型", () => {
   });
 
   it("装好且跑得起来:右边是已安装和「设为默认」,没有下载按钮", async () => {
-    renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true }]);
+    //: ≥2 个候选才存在「默认」(见 defaultRow.dom.test.tsx),所以这里给两个。
+    renderSection([
+      { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true },
+      { ...base, id: "whisperx", engine: "whisperx", label: "WhisperX" },
+    ]);
     const row = await rowOf("FunASR");
     const state = within(row).getByText("asrModelInstalled").closest("[data-admin-row-state]");
     expect(state).toHaveAttribute("data-tone", "success");
@@ -113,7 +123,10 @@ describe("转写模型", () => {
   });
 
   it("运行环境还没测完时说「正在检查」,不下结论也不摆下载按钮(默认仍可设:权重在盘上)", async () => {
-    renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_checked: false }]);
+    renderSection([
+      { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_checked: false },
+      { ...base, id: "whisperx", engine: "whisperx", label: "WhisperX" },
+    ]);
     const row = await rowOf("FunASR");
     expect(within(row).getByText("runtimeChecking")).toHaveAttribute("data-admin-row-note");
     expect(within(row).queryByRole("button", { name: /asrModelDownload|asrModelRetry|asrModelInstallRuntime/ })).toBeNull();
@@ -223,7 +236,10 @@ describe("设为默认", () => {
   });
 
   it("没安装的卡上没有「设为默认」", async () => {
-    renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR" }]);
+    renderSection([
+      { ...base, id: "funasr", engine: "funasr", label: "FunASR" },
+      { ...base, id: "whisperx", engine: "whisperx", label: "WhisperX", status: "installed", runtime_ready: true },
+    ]);
     const row = await rowOf("FunASR");
     expect(within(row).queryByRole("button", { name: /asrModelSetDefault/ })).toBeNull();
   });
@@ -251,6 +267,7 @@ describe("设为默认", () => {
     const user = userEvent.setup();
     renderSection([
       { ...base, id: "whisperx-small", engine: "whisperx", label: "WhisperX Small", status: "installed" },
+      { ...base, id: "whisperx-large-v3", engine: "whisperx", label: "WhisperX Large v3", status: "installed", runtime_ready: true },
     ]);
 
     await user.click(within(await rowOf("WhisperX Small")).getByRole("button", { name: /asrModelSetDefault/ }));

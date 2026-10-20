@@ -5,4 +5,6 @@ export const transcription = {
     "已经装在盘上的模型可以设为这台机器的默认 —— 转写默认就用它。语音对话里的「说话输入用哪一家」是按用途的覆盖,留空就回到这里。",
   asrModelSetDefault: "设为默认",
   asrModelIsDefault: "默认模型",
+  //: 还没设过默认时,节顶那一行说的是接下来会怎样:按自动挑(见 domain/asr.resolve_asr_model)。
+  asrDefaultAuto: "自动(还没设默认)",
 } as const;

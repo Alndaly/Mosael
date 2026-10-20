@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CheckCircle2, CircleAlert } from "lucide-react";
+import { CheckCircle2, CircleAlert, Star } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -17,11 +17,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import type { TtsEngine } from "@/api/domains/speech";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
+import { ADMIN_CARD, AdminRow, AdminRowState, AdminSection } from "./adminLayout";
+import { AdminDefaultLine, AdminOnlyOneNote, hasDefaultChoice } from "./defaultRow";
 import { ModelDownloadRow } from "./ModelDownloadRow";
 
 
@@ -42,17 +42,22 @@ function clonesFromReference(engineId: string): boolean {
   return CLONE_ENGINE_IDS.has(engineId);
 }
 
-/** 权重表的一个能力分区:组头(小标题 + 一句说明)+ 那一组的行。
- *  分组**只**是渲染时的分区 —— 下载、状态、进度、失败、重试仍是同一份 ModelDownloadRow 和同一个 mutation。 */
+/** 权重表的一个能力分区:组头(小标题 + 一句说明)+ 组里的「默认」那一行 + 那一组的行。
+ *  分组**只**是渲染时的分区 —— 下载、状态、进度、失败、重试仍是同一份 ModelDownloadRow 和同一个 mutation。
+ *  「默认」永远在组说明之后、列表之前(和转写那一节同一个位置),而且只属于这一组 —— 克隆引擎的默认
+ *  不该挂在含预置音色引擎的整节顶上。 */
 function EngineGroup({
   kind,
   title,
   description,
+  before,
   children,
 }: {
   kind: "clone" | "preset";
   title: string;
   description: string;
+  /** 组说明之后、列表之前的那一行(默认行 / 只有一种实现时的那句话)。 */
+  before?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -61,6 +66,7 @@ function EngineGroup({
         <h3 className="m-0 text-ui-sm font-semibold leading-snug">{title}</h3>
         <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{description}</p>
       </div>
+      {before}
       <div className={ADMIN_CARD}>{children}</div>
     </section>
   );
@@ -121,6 +127,15 @@ export function VoiceCloneSection() {
   });
   const submit = form.handleSubmit((values) => save.mutate(values));
 
+  // **默认克隆引擎就是 TtsConfig.engine 这一个字段**,写它的路只有这一条 —— 那个下拉已经拿掉,
+  // 否则同一个默认会有两处可写。表单里有还没保存的解释器路径时**连同它一起存**(和下载那条路一样
+  // 先存再做):只把 engine 写回去、把用户刚打的路径丢掉,比多存一次糟得多。
+  const makeDefault = useMutation({
+    mutationFn: (engineId: string) => updateTtsConfig({ ...form.getValues(), engine: engineId }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["tts-config"] }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   const download = useMutation({
     // **有未保存的改动就先存再下。** 下载读的是后端存着的配置,所以此前这里的做法是把按钮
     // 禁用掉、让用户先去页顶点「保存」。但用户改下载源**正是为了**重下 —— 意图很清楚,
@@ -171,6 +186,8 @@ export function VoiceCloneSection() {
   const renderModelRow = (model: TtsEngine) => {
     const busy = startingId === model.id || model.status === "downloading";
     const preset = !clonesFromReference(model.id);
+    // 默认只属于克隆引擎,而且只在这一组有 ≥2 个候选时才存在(见 defaultRow);配置还没到就不猜。
+    const canSetDefault = !preset && Boolean(config.data) && hasDefaultChoice(cloneModels.length);
     return (
       <div key={model.id}>
         <ModelDownloadRow
@@ -181,10 +198,31 @@ export function VoiceCloneSection() {
           // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
           busyReason={t("ttsThisDownloading")}
           actionHint={unsaved ? t("ttsSaveAndDownload") : undefined}
+          // 默认就在这一行上设(和转写模型同一套):默认那一行是**状态**,不能再点;装好的另一行
+          // 才有「设为默认」。候选全在眼前,不必展开一个下拉才知道有谁。
+          extra={
+            canSetDefault ? (
+              config.data?.engine === model.id ? (
+                <AdminRowState tone="success" icon={<Star size={13} aria-hidden />}>
+                  {t("voiceCloneEngine")}
+                </AdminRowState>
+              ) : model.status === "installed" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={makeDefault.isPending && makeDefault.variables === model.id}
+                  disabled={makeDefault.isPending && makeDefault.variables === model.id}
+                  onClick={() => makeDefault.mutate(model.id)}
+                >
+                  {t("voiceCloneSetDefault")}
+                </Button>
+              ) : null
+            ) : null
+          }
           onDownload={() => download.mutate(model.id)}
         />
         {/* 预置音色引擎**不在这里切换**。不写这句的话,用户装好 Qwen3-TTS、在这张表里看到
-            「已安装」,却只在上面的「默认克隆引擎」里找它 —— 那个下拉按后端只收 f5-tts/fish-speech,
+            「已安装」,却只在「默认克隆引擎」里找它 —— 那个名字按后端只收 f5-tts/fish-speech,
             它本来就不属于那里。指路要指向真实存在的入口:剪辑台的「配音」、创作页的「语音」。 */}
         {preset && (
           <p className="m-0 px-4 pb-3 text-ui-xs leading-normal text-muted-foreground">
@@ -231,23 +269,8 @@ export function VoiceCloneSection() {
 
       <Form {...form}>
         <form className={ADMIN_CARD} onSubmit={submit} noValidate>
-          <FormField
-            control={form.control}
-            name="engine"
-            render={({ field }) => (
-              <AdminRow label={t("voiceCloneEngine")}>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className={SETTINGS_FIELD_WIDTH} aria-label={t("voiceCloneEngine")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="f5-tts">F5-TTS</SelectItem>
-                    <SelectItem value="fish-speech">Fish Speech</SelectItem>
-                  </SelectContent>
-                </Select>
-              </AdminRow>
-            )}
-          />
+          {/* 没有「引擎」下拉:**默认只在这一组里设,而且只有行内「设为默认」这一处可写**
+              (见 defaultRow)。下拉和行内按钮并存 = 同一个默认有两个写入口,一个存了另一个还不知道。 */}
           <FormField
             control={form.control}
             name="python_path"
@@ -274,6 +297,13 @@ export function VoiceCloneSection() {
               kind="clone"
               title={t("voiceCloneGroupClones")}
               description={t("voiceCloneGroupClonesDesc")}
+              before={
+                <AdminDefaultLine
+                  label={t("voiceCloneEngine")}
+                  optionCount={config.data ? cloneModels.length : undefined}
+                  current={cloneModels.find((model) => model.id === config.data?.engine)?.label ?? config.data?.engine}
+                />
+              }
             >
               {cloneModels.map(renderModelRow)}
             </EngineGroup>
@@ -283,6 +313,8 @@ export function VoiceCloneSection() {
               kind="preset"
               title={t("voiceCloneGroupPreset")}
               description={t("voiceCloneGroupPresetDesc")}
+              // 预置音色只有一种实现(Qwen3-TTS),也就不存在"默认可设";克隆引擎那边才是默认所在。
+              before={<AdminOnlyOneNote optionCount={models.data ? presetModels.length : undefined} />}
             >
               {presetModels.map(renderModelRow)}
             </EngineGroup>

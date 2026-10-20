@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * 管理 → 引擎 →「语音合成引擎」:那张**可下载权重**的表按能力分两区。
@@ -13,7 +13,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
  * 这一节,下拉里只有 F5/Fish,就以为"装了却选不到它"。
  *
  * 分组只改**渲染**:下载、状态、进度、失败、重试仍然是同一份 ModelDownloadRow 和同一个
- * download mutation。这里钉住两组组头、行归属、Qwen 那行的指路,以及下拉仍是两项。
+ * download mutation。这里钉住两组组头、行归属、Qwen 那行的指路,以及默认在克隆组里用行内
+ * 「设为默认」、不再是一个只列两家的下拉。
  */
 
 vi.mock("@/app/preferences", async () => {
@@ -35,6 +36,11 @@ const models = [
   { ...base, id: "fish-speech", label: "Fish Speech S2 Pro" },
   { ...base, id: "qwen-tts", label: "Qwen3-TTS" },
 ];
+//: 每条用例从同一份「什么都没装」起步 —— 有的用例要把两行改成已安装,不能漏给下一条。
+const INITIAL_MODELS = models.map((one) => ({ ...one }));
+beforeEach(() => {
+  models.splice(0, models.length, ...INITIAL_MODELS.map((one) => ({ ...one })));
+});
 const config = {
   engine: "f5-tts",
   python_path: "",
@@ -107,8 +113,9 @@ describe("语音合成引擎这一节", () => {
     renderSection();
     await waitForGroups();
 
-    expect(within(group("clone")).getByText("F5-TTS")).toBeInTheDocument();
-    expect(within(group("clone")).getByText("Fish Speech S2 Pro")).toBeInTheDocument();
+    //: 克隆组顶上的「默认克隆引擎」也会写着默认的那个名字,所以这里按出现次数断言归属。
+    expect(within(group("clone")).getAllByText("F5-TTS").length).toBeGreaterThan(0);
+    expect(within(group("clone")).getAllByText("Fish Speech S2 Pro").length).toBeGreaterThan(0);
     expect(within(group("clone")).queryByText("Qwen3-TTS")).toBeNull();
 
     expect(within(group("preset")).getByText("Qwen3-TTS")).toBeInTheDocument();
@@ -139,17 +146,23 @@ describe("语音合成引擎这一节", () => {
     await waitFor(() => expect(downloadTtsModel).toHaveBeenCalledWith("f5-tts"));
   });
 
-  it("下拉仍是两项、没有 Qwen,而且名字是「默认克隆引擎」", async () => {
-    const user = userEvent.setup();
+  it("默认不再是一个下拉:已默认的那一行标着「默认克隆引擎」,另一行是「设为默认」", async () => {
+    //: 未安装的不能设默认,所以两行都得是已安装。
+    models[0] = { ...models[0], status: "installed", runtime_ready: true };
+    models[1] = { ...models[1], status: "installed", runtime_ready: true };
     renderSection();
+    await waitForGroups();
 
-    const picker = await screen.findByRole("combobox", { name: "默认克隆引擎" });
-    await user.click(picker);
+    //: 下拉已经不在了 —— 留着它就是第二个能写默认的地方。
+    expect(screen.queryByRole("combobox", { name: "默认克隆引擎" })).toBeNull();
 
-    expect(await screen.findByRole("option", { name: "F5-TTS" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Fish Speech" })).toBeInTheDocument();
-    expect(screen.getAllByRole("option")).toHaveLength(2);
-    // Qwen3-TTS 是预置音色引擎,不属于"默认克隆引擎";后端 PUT 也只收 f5-tts|fish-speech。
-    expect(screen.queryByRole("option", { name: /Qwen/ })).toBeNull();
+    const rows = [...group("clone").querySelectorAll<HTMLElement>("[data-admin-row]")];
+    const f5 = rows.find((row) => row.textContent?.includes("F5-TTS"))!;
+    const fish = rows.find((row) => row.textContent?.includes("Fish Speech S2 Pro"))!;
+    expect(within(f5).getByText("默认克隆引擎")).toHaveAttribute("data-admin-row-state");
+    expect(within(f5).queryByRole("button", { name: "设为默认" })).toBeNull();
+    expect(within(fish).getByRole("button", { name: "设为默认" })).toBeInTheDocument();
+    //: Qwen3-TTS 是预置音色引擎,不属于"默认克隆引擎";后端 PUT 也只收 f5-tts|fish-speech。
+    expect(within(group("preset")).queryByText("默认克隆引擎")).toBeNull();
   });
 });

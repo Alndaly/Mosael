@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminRowNote, AdminRowState, AdminSection } from "./adminLayout";
+import { AdminOnlyOneNote } from "./defaultRow";
 
 /**
  * 管理 → 引擎 → 人声/背景音分离(ADR-0016)。
@@ -36,6 +37,9 @@ export function SeparationEnginesSection() {
 
   return (
     <AdminSection id="engine-separation" title={t("separationTitle")} description={t("separationDesc")}>
+      {/* 这一节只有一种引擎(数据说的:分离目录里就 demucs 一份),所以没有默认可设 —— 说清,
+          而不是等用户找那个不存在的选择。位置和别处的默认一样:说明之后、列表之前。 */}
+      <AdminOnlyOneNote optionCount={engines.data?.length} />
       <div className={ADMIN_CARD}>
         {engines.data?.map((engine) => (
           <EngineRow

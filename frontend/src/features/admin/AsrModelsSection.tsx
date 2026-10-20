@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminRowState, AdminSection } from "./adminLayout";
+import { AdminDefaultLine, hasDefaultChoice } from "./defaultRow";
 import { ModelDownloadRow } from "./ModelDownloadRow";
 
 /**
@@ -53,6 +54,13 @@ export function AsrModelsSection() {
         </>
       }
     >
+      {/* 默认只在这一节有**多个**可选模型时才存在;只有一种时说清为什么没有默认可设(见 defaultRow)。
+          位置和别处一样:节说明之后、模型列表之前。 */}
+      <AdminDefaultLine
+        label={t("asrModelIsDefault")}
+        optionCount={models.data?.length}
+        current={models.data?.find((model) => model.is_default)?.label ?? t("asrDefaultAuto")}
+      />
       <div className={ADMIN_CARD}>
         {models.data?.map((model) => (
           <ModelDownloadRow
@@ -66,21 +74,24 @@ export function AsrModelsSection() {
             busyReason={t("ttsThisDownloading")}
             // 已默认 = 一枚**状态**,不是一颗按钮:它不能再点(再点一次也还是它)。
             // 没安装的卡上没有这一格 —— 设一份没装的,"默认"只是一句空话(后端也会拒,见 set_default_model)。
+            // 整个"默认"只在这一节有 ≥2 个候选时才摆(见 defaultRow);只有一种实现时它没有意义。
             extra={
-              model.is_default ? (
-                <AdminRowState tone="success" icon={<Star size={13} />}>
-                  {t("asrModelIsDefault")}
-                </AdminRowState>
-              ) : model.status === "installed" ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  loading={setDefault.isPending && setDefault.variables === model.id}
-                  disabled={setDefault.isPending && setDefault.variables === model.id}
-                  onClick={() => setDefault.mutate(model.id)}
-                >
-                  {t("asrModelSetDefault")}
-                </Button>
+              hasDefaultChoice(models.data?.length) ? (
+                model.is_default ? (
+                  <AdminRowState tone="success" icon={<Star size={13} />}>
+                    {t("asrModelIsDefault")}
+                  </AdminRowState>
+                ) : model.status === "installed" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={setDefault.isPending && setDefault.variables === model.id}
+                    disabled={setDefault.isPending && setDefault.variables === model.id}
+                    onClick={() => setDefault.mutate(model.id)}
+                  >
+                    {t("asrModelSetDefault")}
+                  </Button>
+                ) : null
               ) : null
             }
             onDownload={() => download.mutate(model.id)}

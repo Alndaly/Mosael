@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -55,7 +55,11 @@ beforeEach(() => {
 
 vi.mock("@/api/client", () => ({
   getTtsConfig: () => Promise.resolve(config),
-  updateTtsConfig: () => Promise.resolve(config),
+  //: 「设为默认」写的就是 TtsConfig.engine —— 和保存是同一条 PUT,存下来之后回读也是它。
+  updateTtsConfig: (body: Record<string, unknown>) => {
+    Object.assign(config, body);
+    return Promise.resolve(config);
+  },
   listTtsModels: () => Promise.resolve(models),
   downloadTtsModel: () => Promise.resolve(models[0]),
 }));
@@ -127,14 +131,15 @@ describe("横幅说的是被选中那个引擎的真实状态", () => {
     models[1] = { ...base, id: "fish-speech", label: "Fish Speech", expected_bytes: 11_000_000_000, sources: ["hf", "hf-mirror", "modelscope"], status: "installed", runtime_ready: true, runtime_checked: true };
   });
 
-  it("选了另一个装好的引擎(还没保存)时,不说它「尚未就绪」", async () => {
+  it("把另一个装好的引擎设为默认后,横幅跟着换成它,不说它「尚未就绪」", async () => {
+    //: 默认不再是下拉(那会是第二个能写默认的地方),而是行内的「设为默认」—— 点下去就存。
     const user = userEvent.setup();
     renderSection();
-    const picker = await screen.findByRole("combobox", { name: "voiceCloneEngine" });
+    const fishRow = (await screen.findByText("Fish Speech")).closest("[data-admin-row]") as HTMLElement;
 
-    await user.click(picker);
-    await user.click(await screen.findByRole("option", { name: "Fish Speech" }));
+    await user.click(within(fishRow).getByRole("button", { name: "voiceCloneSetDefault" }));
 
+    await waitFor(() => expect(config.engine).toBe("fish-speech"));
     await waitFor(() => expect(screen.queryByText(/voiceCloneNotReady/)).toBeNull());
   });
 
