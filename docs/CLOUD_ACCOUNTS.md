@@ -423,7 +423,7 @@ P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的�
 - **种子幂等键是 `(官方账号, kind, slug, locale)`**,slug 来自外部 bundle,存在
   `cloud_shares.slug`,四列唯一索引兜底。不用标题:标题会被运营改,按标题去重会在下次部署
   多出一条。**只补缺**:已存在的行整行跳过,不覆盖标题 / 简介 / payload;用户分享的 slug 为
-  NULL,永远不会被碰到。**唯一例外是密码**,理由见 `cloud/official.py` 的注释。
+  NULL,永远不会被碰到。**唯一例外是密码**,理由见 `cloud/src/cloud/official.py` 的注释。
   bundle 格式(每条 `slug` + `locales: {zh-CN: {title, summary?}, en-US: {...}}`)与样例见
   `cloud/README.md` 的「官方内容」一节;bundle 缺一种语言就只发一条,不编造另一种语言的标题。
 - **回退**:`0005` 的 downgrade 把 CHECK 换回两个值;`0007` 的 downgrade 删 `locale` 并把
