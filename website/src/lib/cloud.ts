@@ -15,11 +15,17 @@
 
 export const CLOUD_API = "/api/cloud/v1";
 
-/** 公开身份三列。**没有 email** —— 公开响应里本来就不带它。 */
+/**
+ * 公开身份三列,**没有 email** —— 公开响应里本来就不带它。
+ *
+ * `official` 是官方账号的公开徽章(只有部署脚本会写 true),分享卡片用它标「官方」;
+ * 它不参与身份校验,也不改变任何读接口的可见范围。
+ */
 export type CloudIdentity = {
   display_name: string | null;
   handle: string | null;
   avatar_seed: string | null;
+  official?: boolean;
 };
 
 export type CloudUser = {
@@ -34,8 +40,21 @@ export type CloudUser = {
 
 export type CloudMessage = { en: string; zh: string };
 
-/** 分享类型。 */
-export type CloudShareKind = "workflow" | "board";
+/** 分享类型。`plugin` 和插件市场里的静态条目是同一件东西。 */
+export type CloudShareKind = "workflow" | "board" | "plugin";
+
+/** 分享标题 / 简介的语言。云端只认这两种;`POST /shares` 必填。 */
+export type CloudShareLocale = "zh-CN" | "en-US";
+
+/**
+ * 站点语言 → 云端分享语言。
+ *
+ * 路由段是短码(`/en` `/zh`),云端存的是 BCP 47(`en-US` / `zh-CN`);列表取数必须显式带
+ * 后者 —— 不传的话云端两种都返回,英文站就会看到中文分享。
+ */
+export function cloudLocale(locale: "en" | "zh"): CloudShareLocale {
+  return locale === "zh" ? "zh-CN" : "en-US";
+}
 
 export type CloudShareStats = {
   downloads: number;
@@ -46,7 +65,16 @@ export type CloudShareStats = {
 
 export type CloudShare = {
   id: string;
+  /**
+   * 官方内容的稳定标识(来自 seed bundle 的 slug);**用户分享是 null**。
+   *
+   * 官网用它把云端分享对回静态详情页:`/plugins/<slug>` / `/workflows/<slug>` 已经有了,
+   * 列表里就不再重复渲染一张分享卡片。
+   */
+  slug: string | null;
   kind: CloudShareKind;
+  /** 这一行标题 / 简介的语言,不是 payload 的语言。 */
+  locale: CloudShareLocale;
   title: string;
   summary: string | null;
   bytes: number;
@@ -140,6 +168,8 @@ export type CloudNotificationQuery = { limit?: number; cursor?: string };
 
 export type CloudShareInput = {
   kind: CloudShareKind;
+  /** 发布时"自己的语言"由当前语言段明确声明;云端缺这个字段会回 422。 */
+  locale: CloudShareLocale;
   title: string;
   summary?: string;
   payload: unknown;
@@ -149,6 +179,8 @@ export type CloudShareInput = {
 export type CloudShareQuery = {
   q?: string;
   kind?: string;
+  /** 省略 = 云端两种语言都返回。按语言取数时**必须**带上。 */
+  locale?: CloudShareLocale;
   sort?: string;
   limit?: number;
   cursor?: string;
@@ -240,6 +272,7 @@ function queryString(query: CloudShareQuery): string {
   const search = new URLSearchParams();
   if (query.q) search.set("q", query.q);
   if (query.kind) search.set("kind", query.kind);
+  if (query.locale) search.set("locale", query.locale);
   if (query.sort) search.set("sort", query.sort);
   if (query.limit) search.set("limit", String(query.limit));
   if (query.cursor) search.set("cursor", query.cursor);

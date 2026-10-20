@@ -84,3 +84,6 @@ Thumbs.db
 
 # 插件自己的凭据(如 TikHub 的 API Key)。插件运行时不透传应用凭据,插件的 Key 只能放自己目录里。
 plugins/**/config.json
+
+# 官方内容 bundle:由 scripts/export_official_bundle.py 从仓库确定性导出,部署时重跑,不进仓库
+deploy/official-bundle.json

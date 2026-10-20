@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   AlertCircle,
+  BadgeCheck,
   Bookmark,
   Download,
   Heart,
@@ -20,7 +21,7 @@ import { InitialTile } from "@/components/community/tile";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { toPlainText } from "@/lib/inline-markdown";
-import { CloudApiError, cloudShares, type CloudShare, type CloudSharePage } from "@/lib/cloud";
+import { CloudApiError, cloudShares, type CloudShare, type CloudShareKind, type CloudSharePage } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 
 import { SHARE_PAGE_SIZE, shareSearch, type ShareListQuery } from "./share-utils";
@@ -59,16 +60,28 @@ export function ShareCard({ locale, share }: { locale: Locale; share: CloudShare
   const t = getMessages(locale).community;
   const name = share.author.display_name?.trim() || share.author.handle || "—";
   const summary = share.summary?.trim() ? toPlainText(share.summary) : "";
+  // 官方插件分享也要说清是「插件」,不能因为原先把 board 以外的都当工作流而标错。
+  const kindLabel: Record<CloudShareKind, string> = {
+    workflow: t.kindWorkflow,
+    board: t.kindBoard,
+    plugin: t.kindPlugin,
+  };
   return (
     <Link href={localePath(locale, `/community/${share.id}`)} className={CARD}>
       <div className="flex min-w-0 items-center gap-3.5">
         <InitialTile seed={share.author.avatar_seed || share.author.handle || share.id} name={name} size="md" />
         <div className="grid min-w-0 gap-0.5">
           <h3 className="m-0 line-clamp-2 text-base font-semibold tracking-tight group-hover:text-primary">{share.title}</h3>
-          <span className="truncate text-xs text-muted-foreground">
-            {name}
+          <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <span className="truncate">{name}</span>
+            {share.author.official && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 font-medium text-primary">
+                <BadgeCheck className="size-3.5" aria-hidden />
+                {t.official}
+              </span>
+            )}
             <span aria-hidden> · </span>
-            {share.kind === "board" ? t.kindBoard : t.kindWorkflow}
+            <span className="shrink-0">{kindLabel[share.kind]}</span>
           </span>
         </div>
       </div>

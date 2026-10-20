@@ -197,6 +197,22 @@ SQL
 - 社区分享第①笔会由启动迁移自动加 `display_name` / `handle` / `avatar_seed` 三列和分享四表;
   已有账号保持"没有身份"(三列为空),写接口会要求用户自己起名 —— 不替旧数据猜昵称。
 
+## 官方内容 bundle(导出 + 种子)
+
+官方插件 / 工作流就是官方账号发布的分享。部署时从仓库导出 bundle,再喂给 `seed-official`(幂等):
+
+```bash
+# 仓库根:读 plugins/{bundled,examples}/*/mosael.plugin.json + website/public/workflows/
+python3 scripts/export_official_bundle.py          # → deploy/official-bundle.json
+
+cd cloud
+uv run python -m cloud.cli seed-official --bundle ../deploy/official-bundle.json
+```
+
+`deploy/official-bundle.json` 是**生成产物,不要入库**:它由仓库里的 manifest / catalog 导出,
+同一份仓库重跑逐字节一致;官方内容变了就重跑导出再 seed。工作流的每条只有一份 payload,
+`--payload-locale`(缺省 `en`,和官网默认语言一致)选择用哪份 `.mosael-workflow.json`。
+
 ## 过期行清理
 
 `cleanup` 服务用 `postgres:17-alpine` 里的 `psql`,启动后立刻跑一次,之后每

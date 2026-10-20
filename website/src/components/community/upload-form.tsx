@@ -8,7 +8,7 @@ import { actionClass } from "@/components/community/detail";
 import { IdentityForm } from "@/components/community/identity-form";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
-import { CloudApiError, cloudShares, type CloudIdentity, type CloudShareKind } from "@/lib/cloud";
+import { CloudApiError, cloudLocale, cloudShares, type CloudIdentity, type CloudShareKind } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 
 import { MAX_SHARE_BYTES, measurePayload, publicIdentity } from "./share-utils";
@@ -92,6 +92,8 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
     try {
       const { share } = await cloudShares.create({
         kind,
+        // 发布时声明这一行标题 / 简介的语言:云端必填,缺了会 422。
+        locale: cloudLocale(locale),
         title: title.trim(),
         summary: summary.trim() || undefined,
         license: license || undefined,

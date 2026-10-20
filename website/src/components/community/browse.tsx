@@ -10,9 +10,12 @@ import Link from "next/link";
 import { BadgeCheck, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X } from "lucide-react";
 import * as React from "react";
 
+import { fetchListedShares, listedShares, mergeListing } from "@/components/community/listed-shares";
+import { ShareCard } from "@/components/community/shares";
 import { PluginTile, WorkflowTile } from "@/components/community/tile";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
+import { cloudShares, type CloudShare } from "@/lib/cloud";
 import { toPlainText } from "@/lib/inline-markdown";
 import type { PluginEntry, WorkflowEntry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
@@ -188,19 +191,51 @@ export function WorkflowCard({ locale, workflow }: { locale: Locale; workflow: W
   );
 }
 
+/**
+ * 当前语言的用户分享。**在浏览器里取**,不在构建期取:官网的 `/plugins`、`/workflows`
+ * 仍然是静态页(构建页数不变),云端挂了也只影响这一小段追加内容。
+ */
+function useListedShares(kind: "plugin" | "workflow", locale: Locale): CloudShare[] {
+  const [shares, setShares] = React.useState<CloudShare[]>([]);
+  React.useEffect(() => {
+    let active = true;
+    // 失败已经被 fetchListedShares 吞成空数组:内容优先,页面上不出现错误块。
+    void fetchListedShares((query) => cloudShares.list(query), kind, locale).then((items) => {
+      if (active) setShares(items);
+    });
+    return () => {
+      active = false;
+    };
+  }, [kind, locale]);
+  return shares;
+}
+
+/** 分享卡片上能搜到的字:标题 / 摘要 / 作者。 */
+function shareFields(share: CloudShare): string[] {
+  return [share.title, share.summary ?? "", share.author.display_name ?? "", share.author.handle ?? ""];
+}
+
 const GRID = "m-0 grid list-none grid-cols-[minmax(0,1fr)] gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3";
 
 export function PluginBrowser({ locale, plugins }: { locale: Locale; plugins: PluginEntry[] }) {
   const t = getMessages(locale);
   const [query, setQuery] = React.useState("");
   const [kind, setKind] = React.useState<"all" | "script" | "mcp">("all");
-  const shown = plugins.filter(
+  const shares = useListedShares("plugin", locale);
+  // 先按**全部**官方 slug 去重,再做 kind / 搜索过滤 —— 否则筛到「本地脚本」时,
+  // 一条命中了被隐藏的官方条目的官方分享会以分享卡片的样子重新冒出来。
+  const officialSlugs = plugins.map((plugin) => plugin.slug);
+  const extra = listedShares(shares, officialSlugs);
+  const officialShown = plugins.filter(
     (plugin) =>
       (kind === "all" || plugin.kind === kind) &&
       matches(query, [plugin.name, plugin.id, plugin.summary, ...plugin.permissions, ...plugin.tools.map((tool) => tool.name)]),
   );
+  // 分享是用户传来的工程文件,没有「本地脚本 / MCP」这层信息;只在「全部」里展示。
+  const shareShown = kind === "all" ? extra.filter((share) => matches(query, shareFields(share))) : [];
+  const shown = mergeListing(officialShown, shareShown);
   const kinds = [
-    { id: "all" as const, label: t.community.all, count: plugins.length },
+    { id: "all" as const, label: t.community.all, count: plugins.length + extra.length },
     { id: "script" as const, label: t.plugins.kindScript, count: plugins.filter((p) => p.kind === "script").length },
     { id: "mcp" as const, label: t.plugins.kindMcp, count: plugins.filter((p) => p.kind === "mcp").length },
   ];
@@ -219,9 +254,16 @@ export function PluginBrowser({ locale, plugins }: { locale: Locale; plugins: Pl
       </div>
       {shown.length > 0 ? (
         <ul className={GRID}>
-          {shown.map((plugin) => (
-            <li key={plugin.id} className="grid">
-              <PluginCard locale={locale} plugin={plugin} />
+          {shown.map((entry) => (
+            <li
+              key={entry.kind === "official" ? `plugin-${entry.official.slug}` : `share-${entry.share.id}`}
+              className="grid"
+            >
+              {entry.kind === "official" ? (
+                <PluginCard locale={locale} plugin={entry.official} />
+              ) : (
+                <ShareCard locale={locale} share={entry.share} />
+              )}
             </li>
           ))}
         </ul>
@@ -235,9 +277,14 @@ export function PluginBrowser({ locale, plugins }: { locale: Locale; plugins: Pl
 export function WorkflowBrowser({ locale, workflows }: { locale: Locale; workflows: WorkflowEntry[] }) {
   const t = getMessages(locale);
   const [query, setQuery] = React.useState("");
-  const shown = workflows.filter((workflow) =>
+  const shares = useListedShares("workflow", locale);
+  // 和插件列表同一条规则:先按全部官方 slug 去重,再过滤搜索词。
+  const extra = listedShares(shares, workflows.map((workflow) => workflow.slug));
+  const officialShown = workflows.filter((workflow) =>
     matches(query, [workflow.name, workflow.summary, ...workflow.stages, ...workflow.requires]),
   );
+  const shareShown = extra.filter((share) => matches(query, shareFields(share)));
+  const shown = mergeListing(officialShown, shareShown);
   return (
     <div className="grid gap-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -251,9 +298,16 @@ export function WorkflowBrowser({ locale, workflows }: { locale: Locale; workflo
       </div>
       {shown.length > 0 ? (
         <ul className={GRID}>
-          {shown.map((workflow) => (
-            <li key={workflow.id} className="grid">
-              <WorkflowCard locale={locale} workflow={workflow} />
+          {shown.map((entry) => (
+            <li
+              key={entry.kind === "official" ? `workflow-${entry.official.slug}` : `share-${entry.share.id}`}
+              className="grid"
+            >
+              {entry.kind === "official" ? (
+                <WorkflowCard locale={locale} workflow={entry.official} />
+              ) : (
+                <ShareCard locale={locale} share={entry.share} />
+              )}
             </li>
           ))}
         </ul>
