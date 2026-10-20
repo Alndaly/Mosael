@@ -12,8 +12,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
 
-# 和 community/Dockerfile 同一个做法:uv 来自官方镜像,不在应用镜像里现装。
-COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
+# uv 从 PyPI 装,不依赖 ghcr.io。
+#
+# 原来用 `COPY --from=ghcr.io/astral-sh/uv:0.12`:那个镜像里有一层约 20MB,在国内服务器上
+# 反复卡在同一个字节不动(换 registry 也没用),而 docker.io 走镜像源是 20 秒级的。
+# 改成 pip 装 —— 只依赖 docker.io + PyPI。
+#
+# PIP_INDEX_URL 可在构建时覆盖(国内可用镜像加速):
+#   docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install --no-cache-dir --index-url "$PIP_INDEX_URL" "uv~=0.12"
 
 WORKDIR /app/cloud
 
