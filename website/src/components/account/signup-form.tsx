@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
-import { scheduleCommunityRedirect } from "@/components/account/signup-redirect";
 import {
   AccountField,
   CodeField,
@@ -23,7 +22,6 @@ import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
 import { oauthErrorCopyKey } from "@/lib/oauth";
 
-type Phase = "form" | "success";
 
 /**
  * 注册:**邮箱 → 发送验证码 → 6 位码 → 密码**。
@@ -33,7 +31,6 @@ type Phase = "form" | "success";
  *
  * 成功后**先留在本页**把「账号已创建」摆出来,约 1.5 秒后**自动去社区页**:立刻跳等于
  * 这句提示没出现过,而把提示带到社区页要改社区页(另一笔)。目标见
- * `components/account/signup-redirect.ts`(带当前语言段,不硬编码、不跳不存在的路由)。
  */
 export function SignupForm({
   locale,
@@ -45,7 +42,6 @@ export function SignupForm({
   /** Cloud 回调失败时带回的稳定错误码(见 lib/oauth.ts)。 */
   oauthError?: string;
 }) {
-  const [phase, setPhase] = useState<Phase>("form");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [code, setCode] = useState("");
@@ -60,13 +56,6 @@ export function SignupForm({
   const countdown = useResendCountdown();
   const oauthMessage = oauthError ? copy[oauthErrorCopyKey(oauthError)] : "";
   const router = useRouter();
-
-  // 成功卡片先留一会儿再走:定时器由 phase 决定,与屏幕大小无关 —— 移动端同样跳。
-  // cleanup 会把定时器撤掉:这 1.5 秒里用户自己点了别处,就别再把他拽去社区页。
-  useEffect(() => {
-    if (phase !== "success") return;
-    return scheduleCommunityRedirect(router, locale);
-  }, [phase, router, locale]);
 
   const sendCode = async () => {
     setError("");
@@ -109,7 +98,10 @@ export function SignupForm({
     setBusy(true);
     try {
       await cloudAccount.signup(email.trim(), code.trim(), password);
-      setPhase("success");
+      // 云端注册**直接建会话**(注册即登录,见 cloud/api/auth.py 的 signup),所以这里不需要
+      // 「再登录一次」那一步 —— 直接进自己的控制台。replace 不留注册页在历史里:后退回到一个
+      // 已经完成的表单只会让人误点第二次。
+      router.replace(`/${locale}/dashboard`);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
     } finally {
@@ -117,39 +109,6 @@ export function SignupForm({
     }
   };
 
-  if (phase === "success") {
-    return (
-      <div className="grid gap-5 motion-safe:animate-[auth-rise_450ms_ease-out_both]">
-        <div
-          aria-live="polite"
-          aria-atomic="true"
-          className="rounded-3xl border border-primary/20 bg-brand-soft p-6 text-accent sm:p-7"
-        >
-          <CheckCircle2 className="size-6" aria-hidden />
-          <h2 className="mt-4 font-display text-2xl font-semibold tracking-[-0.035em]">
-            {copy.signupSuccessTitle}
-          </h2>
-          <p className="mt-2 text-sm leading-7 text-foreground/75">{copy.signupSuccessBody}</p>
-          <p className="mt-3 break-all text-sm font-medium text-foreground">{email}</p>
-        </div>
-        <Button
-          asChild
-          className="h-13 w-full rounded-full bg-primary px-6 text-[15px] font-semibold text-primary-foreground hover:bg-accent focus-visible:ring-4 focus-visible:ring-primary/25"
-        >
-          <Link href={`/${locale}/login?registered=1`}>{copy.signupSuccessCta}</Link>
-        </Button>
-        <p className="m-0 text-center text-sm leading-6 text-muted-foreground">
-          {copy.haveAccount}{" "}
-          <Link
-            className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            href={`/${locale}/login`}
-          >
-            {copy.signIn}
-          </Link>
-        </p>
-      </div>
-    );
-  }
 
   // 发送结果 / 表单错误都通过 id 关联到验证码字段,读屏在聚焦时能听到"为什么"。
   const codeDescription =

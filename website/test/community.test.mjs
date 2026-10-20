@@ -187,11 +187,7 @@ test("⑦ 导航与 COMMUNITY_PATH:站头「社区」指向 /community,插件 / 
   assert.match(header, /\/plugins/, "站头的匹配范围丢了插件分区(在插件页时「社区」不再高亮)");
   assert.match(header, /\/workflows/, "站头的匹配范围丢了工作流分区");
 
-  const redirect = read("src/components/account/signup-redirect.ts");
-  assert.match(redirect, /COMMUNITY_PATH\s*=\s*"\/community"/, "COMMUNITY_PATH 没有改成 /community");
-  const mod = await import("../src/components/account/signup-redirect.ts");
-  assert.equal(mod.communityHref("zh"), "/zh/community");
-  assert.equal(mod.communityHref("en"), "/en/community");
+  // 注册成功后不再绕去社区页:云端注册直接建会话,注册完直接进控制台(见 signup-form)。
 
   // 插件市场没有被藏起来:页脚仍然列着两个分区,新社区页的页头也能切过去。
   const footer = read("src/components/site-footer.tsx");

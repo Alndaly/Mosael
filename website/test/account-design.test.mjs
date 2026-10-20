@@ -74,9 +74,11 @@ test("登录 / 注册都有四态,且登录和注册的提交按钮可区分", (
     assert.match(form, /autoComplete=/, `${name}表单没有声明自动填充语义`);
   }
   assert.match(login, /registered/, "登录页没有账号创建后的成功态");
-  assert.match(signup, /signupSuccessTitle|phase === "success"|setPhase\("success"\)/, "注册表单没有成功态");
-  assert.match(signup, /signupSuccessCta/, "注册成功态没有下一步操作");
-  assert.doesNotMatch(signup, /router\.push\(`\/\$\{locale\}\/login\?registered=1`\)/, "注册成功仍是静默跳转,看不出成功状态");
+  // 注册成功**不再有中间态**:云端注册直接建会话(见 cloud/api/auth.py 的 signup),所以没有
+  // 「去登录」这一步 —— 注册完就直接进自己的控制台(维护者:「注册完成就应该直接跳转」)。
+  assert.match(signup, /router\.replace\(`\/\$\{locale\}\/dashboard`\)/, "注册成功后没有直接跳转控制台");
+  assert.doesNotMatch(signup, /phase === "success"|setPhase\("success"\)/, "注册表单又有中间成功态了");
+  assert.doesNotMatch(signup, /signupSuccessCta|\/login\?registered=1/, "注册成功后还在让用户再去登录一次");
 });
 
 test("账号页把加载 / 未登录 / 失败 / 已登录四种状态都画出来", () => {
@@ -150,9 +152,6 @@ test("新增文案中英同键,且没有把按钮词当标签用", () => {
     "hidePassword",
     "passwordHint",
     "formErrorTitle",
-    "signupSuccessTitle",
-    "signupSuccessBody",
-    "signupSuccessCta",
     "retry",
     "signedInLabel",
     "accountIdentity",
