@@ -47,12 +47,16 @@ type DetailState = { key: string; section: "used" | null; open: boolean };
 
 /**
  * 工作台的「模型库」面板(ADR 0038 §6):在画布上选中一个加载节点 → 问插件它那几格选的是哪个模型目录的文件 → 用模型库的数据
- * 只列那个目录的(缩略图、底模家族、触发词),能搜、能按家族筛 → 点一行,经桥填进那一格(桥先查它在下拉里);点缩略图看大图。
+ * 只列那个目录的(缩略图、底模家族、触发词),能搜、能按家族筛 → 点一张卡,经桥填进那一格(桥先查它在下拉里);点缩略图看大图。
  * 现在那一格选的文件这台 ComfyUI 上没有,就地找下载地址或贴链接下到那个目录;下完经桥刷新下拉,新文件出现在下拉里。
  *
- * **看详情**(和模型库点开一张卡是同一页,见 ModelDetail):每一行悬停 / 聚焦时露出「查看详情」,右键是模型库那一份菜单
+ * **卡片网格**:面板这一列会被拖宽拖窄,列表是多列卡(`auto-fill` + `minmax`,列数跟着容器宽度自己变,不写断点)。每张卡
+ * 上面是填满卡宽的 4:3 缩略图(图片 object-cover,不按原图比例撑高),下面是名字与 meta 行;ⓘ 压在缩略图右上角、✓/转圈压在
+ * 右下角,两者对角、不重叠。
+ *
+ * **看详情**(和模型库点开一张卡是同一页,见 ModelDetail):每一张卡悬停 / 聚焦时露出「查看详情」,右键是模型库那一份菜单
  * (第一项「查看详情」);详情开成一个大弹窗(这一列太窄),压在外壳之上、请画布让开(见 overChromeModal)。菜单和详情里的
- * 本事(在 Civitai 上找、存为预览图、标 NSFW、看大图……)和模型库同一份(useModelActionsHost)。关上之后焦点回到那一行。
+ * 本事(在 Civitai 上找、存为预览图、标 NSFW、看大图……)和模型库同一份(useModelActionsHost)。关上之后焦点回到那张卡。
  */
 export function ModelsPanel({
   target,
@@ -334,7 +338,12 @@ function SlotPicker({
       ) : listed.length === 0 ? (
         <p className="m-0 text-ui-xs text-muted-foreground">{t("workbenchModelsEmpty")}</p>
       ) : (
-        <ul aria-label={t("workbenchModelsList").replace("{folder}", slot.folder)} className="m-0 grid list-none gap-1 p-0">
+        <ul
+          aria-label={t("workbenchModelsList").replace("{folder}", slot.folder)}
+          className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3 p-0"
+        >
+          {/* 卡片网格:列数由容器宽度自己决定(auto-fill + minmax),不写死断点 —— 这一列会被拖宽拖窄。
+              下限 10rem(160px):内容宽 328px 起两列、496px 起三列;间距 12px 给卡片留呼吸。 */}
           {listed.slice(0, LISTED).map((model) => {
             const chosen = model.name.replace(/\\/g, "/") === slot.value.replace(/\\/g, "/");
             const filling = pick.isPending && pick.variables?.name === model.name;
@@ -352,74 +361,76 @@ function SlotPicker({
                   <li
                     data-model-row=""
                     className={cn(
-                      "group/thumb relative flex min-w-0 items-center gap-2.5 rounded-lg border p-1.5",
+                      "group/thumb relative min-w-0 rounded-lg border",
                       chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
                     )}
                   >
-                    {previewable(model) ? (
-                      <IconButton
-                        unstyled
-                        data-model-preview=""
-                        label={t("workbenchModelsPreview").replace("{name}", name)}
-                        className="size-11 shrink-0 cursor-zoom-in overflow-hidden rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&>*]:size-full"
-                        onClick={() => preview(model)}
-                      >
-                        {thumb}
-                      </IconButton>
-                    ) : (
-                      <span className="size-11 shrink-0 overflow-hidden rounded-md [&>*]:size-full">{thumb}</span>
-                    )}
+                    {/* 整张卡是一颗按钮:点哪儿(缩略图那层除外)都是填进这一格。缩略图在里面,所以填的过程中那颗转圈
+                        也在按钮里 —— 不只是变灰(见 design/pendingButtons)。竖排 grid:图一格、名字与 meta 一格 */}
                     <button
                       type="button"
                       aria-pressed={chosen}
                       aria-busy={filling || undefined}
                       disabled={pick.isPending}
-                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 self-stretch border-0 bg-transparent p-0 text-left disabled:cursor-default"
+                      className="grid w-full cursor-pointer gap-2 rounded-lg border-0 bg-transparent p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default"
                       onClick={() => pick.mutate(model)}
                     >
-                      <span className="grid min-w-0 flex-1 gap-0.5">
+                      {/* 固定 4:3 且填满卡宽:图片 object-cover,卡片高矮不跟着原图比例变 */}
+                      <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-md bg-secondary">
+                        <span className="absolute inset-0 block [&>*]:size-full">{thumb}</span>
+                        {/* 填的过程中是转圈,填好了是对勾(尺寸不变)。压在缩略图的右下角;和右上角的 ⓘ 分处两头,
+                            永不重叠。只是画给人看的状态,读屏听按钮的 aria-pressed / aria-busy,自己不接点击 */}
+                        {(filling || chosen) && (
+                          <span
+                            data-model-state=""
+                            aria-hidden
+                            className="pointer-events-none absolute bottom-1 right-1 z-10 grid size-4 place-items-center"
+                          >
+                            {filling ? <Loader2 size={14} className="animate-mosael-spin text-muted-foreground" />
+                              : <Check size={14} className="text-primary" />}
+                          </span>
+                        )}
+                      </span>
+                      <span className="grid min-w-0 gap-0.5">
                         {/* 名字的说明显式朝下:这一列是「左」的 Hint 区域(见 ComfyWorkbench 的 COLUMN_REGION),跟着区域走会横到
-                            左边的画布上(维护者)。行下方有地方,往下弹不盖住这一行 */}
+                            左边的画布上(维护者)。卡片下方有地方,往下弹不盖住这张卡 */}
                         <Truncate side="bottom" className="text-ui-xs font-medium text-foreground">{name}</Truncate>
-                        {/* 第二行(meta):底模徽标、文本编码器、触发词,最后是 NSFW 与预览来源这一对;没有 hint 只有角标的
-                            行也要画。所有徽标同一档高度(和 CatalogBadge 一样);角标排在最后(维护者:NSFW 标应该在最后),
-                            Hint 跟着徽标,名字与它们上下,不在行尾另起一列 */}
+                        {/* meta 行:底模徽标、文本编码器、副题,最后是 NSFW 与预览来源这一对;没有 hint 只有角标的卡也要画。
+                            所有徽标同一档高度(和 CatalogBadge 一样);角标排在最后(维护者:NSFW 标应该在最后),
+                            Hint 跟着徽标,名字与它们上下,不在卡尾另起一列 */}
                         {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server") || model.encoder?.label || model.family || subtitle) && (
-                          <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
+                          <span className="flex min-w-0 flex-wrap items-center gap-1 text-ui-2xs text-muted-foreground">
                             {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
                             <EncoderRecipeMark model={model} recipe={slot.recipe} />
-                            {subtitle && <Truncate>{subtitle}</Truncate>}
+                            {subtitle && <Truncate side="bottom">{subtitle}</Truncate>}
                             <NsfwMark nsfw={model.nsfw} className="h-6" />
                             <PreviewOriginMark origin={model.preview_origin} className="h-6 shadow-none" />
                           </span>
                         )}
                       </span>
-                      {/* 同一格:填的过程中是转圈,填好了是对勾(尺寸不变)。脱离文档流覆盖在行的右下角(维护者:选中态也应该是
-                          悬浮着的,不是固定在行内的一个元素),不再占行内一格、挤窄名字与徽标;和右上角的 ⓘ 一上一下错开,
-                          各自只盖一小块,互不重叠。只是画给人看的状态,读屏听按钮的 aria-pressed / aria-busy */}
-                      {(filling || chosen) && (
-                        <span
-                          data-model-state=""
-                          aria-hidden
-                          className="pointer-events-none absolute bottom-1 right-1 z-10 grid size-4 place-items-center"
-                        >
-                          {filling ? <Loader2 size={14} className="animate-mosael-spin text-muted-foreground" />
-                            : <Check size={14} className="text-primary" />}
-                        </span>
-                      )}
                     </button>
-                    {/* 查看详情:悬停、聚焦这一行时露出来(键盘 Tab 得到);点一行本身照旧是填进画布。脱离
-                        文档流覆盖在行的右上角(维护者:不占行内一格、不撑高/撑宽),只挡右上角一小块,
-                        出现时自己接收点击,不误触下面的填画布按钮 */}
+                    {/* 看大图:缩略图上那一层。透明的一颗按钮,盖住缩略图;位置和里面那张图同一块
+                        (卡内边距 p-2,所以 left/right/top 也是 2、比例同样是 4:3) */}
+                    {previewable(model) && (
+                      <IconButton
+                        unstyled
+                        data-model-preview=""
+                        label={t("workbenchModelsPreview").replace("{name}", name)}
+                        className="absolute left-2 right-2 top-2 aspect-[4/3] cursor-zoom-in rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() => preview(model)}
+                      />
+                    )}
+                    {/* 查看详情:常在卡片里(不靠悬停才出现),压在缩略图右上角;点卡本身照旧是填进画布。
+                        和右下角的 ✓ 分处两头,永不重叠 */}
                     <IconButton
                       unstyled
                       data-model-detail={keyOf(model)}
                       label={t("workbenchModelDetailOpen").replace("{name}", name)}
                       className={cn(
-                        "absolute right-1 top-1 z-10 grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0",
+                        "absolute right-2 top-2 z-10 grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0",
                         "text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        "opacity-0 transition-opacity duration-100",
-                        "group-hover/thumb:opacity-100 group-focus-within/thumb:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",
+                        // 常显(维护者:卡片形态下不需要悬停显示,安排在卡里就行)。压在图上,给一层底才看得清
+                        "bg-background/60 backdrop-blur-xs",
                       )}
                       onClick={() => openDetail(model)}
                     >
@@ -431,7 +442,7 @@ function SlotPicker({
             );
           })}
           {listed.length > LISTED && (
-            <li className="px-1.5 text-ui-xs text-muted-foreground">
+            <li className="col-span-full px-2 text-ui-xs text-muted-foreground">
               {t("workbenchModelsMore").replace("{n}", String(listed.length - LISTED))}
             </li>
           )}

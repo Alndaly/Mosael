@@ -48,8 +48,8 @@ const GRANDFATHERED = new Map<string, string>([
   ["components/ui/slider.tsx: 6/16", "滑杆的轨道与滑块"],
   ["components/ui/command.tsx: 16/40", "放大镜图标在输入框内部"],
   // 画布上的小圆工具条:配色圆点比图标按钮小是有意的。
-  // 模型行右上角的「查看详情」:脱离文档流覆盖在行的右上角(不占行内一格),比 44 的缩略图小是有意的。
-  ["features/plugins/workbench/ModelsPanel.tsx: 28/44", "ⓘ 详情键绝对定位覆盖在行右上角,不撑行"],
+  // 工作台的模型库从「行」改成多列卡片网格之后,缩略图不再是和 ⓘ 并排的 44px 一格(它填满卡宽、按 4:3 定高),
+  // 这一行不再有同高可比的控制件 —— 原先那条 28/44 的存量按机制删掉。
 ]);
 
 /** `box-sizing: border-box` 是全局的(design/tokens.css),所以写了 height 就是最终高度。 */

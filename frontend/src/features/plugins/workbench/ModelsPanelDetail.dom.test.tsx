@@ -163,9 +163,9 @@ describe("工作台模型库里的模型详情", () => {
   it("每一行的「查看详情」打开那个模型的详情;画布先铺冻结的画面再让开,关上先放回再拿掉画面,焦点回到那一行", async () => {
     const bridge = await mount();
     const info = within(row("Pony")).getByRole("button", { name: "workbenchModelDetailOpen" });
-    expect(info.className, "平时藏着,悬停、聚焦这一行时露出来").toMatch(/\bopacity-0\b/);
-    expect(info.className).toMatch(/group-hover\/thumb:opacity-100/);
-    expect(info.className).toMatch(/focus-visible:opacity-100/);
+    expect(info.className, "卡片形态下常显,不再靠悬停才出现").not.toMatch(/\bopacity-0\b/);
+    expect(info.className).not.toMatch(/group-hover\/thumb:opacity-100/);
+    expect(info.className, "压在图上,给了一层底才看得清").toMatch(/bg-background\/60/);
     info.focus();
     fireEvent.click(info);
 
@@ -340,50 +340,100 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
     expect(source, "右侧独立徽标列已删").not.toContain("flex-col items-end");
   });
 
-  it("⑥ ⓘ 详情按钮脱离文档流:覆盖在行的右上角,<li> 有 relative,不再撑高/撑宽行", async () => {
+  it("⑥ 模型列表是响应式多列网格:auto-fill + minmax 按容器宽度自己变列数,不是一行一条", async () => {
     await mount();
-    const rowEl = row("Pony");
-    const info = within(rowEl).getByRole("button", { name: "workbenchModelDetailOpen" });
-    expect(info.className, "绝对定位,不再是行内撑满行高的那一列").toMatch(/\babsolute\b/);
-    expect(info.className, "覆盖在行右上角").toMatch(/\bright-1\b/);
-    expect(info.className).toMatch(/\btop-1\b/);
-    expect(info.className, "不再撑高/撑宽行").not.toMatch(/\bself-stretch\b/);
-    expect(info.className, "层叠在最上,挡住角上的点击不误触下面的填画布按钮").toMatch(/\bz-10\b/);
-    expect(rowEl.className, "<li> 是定位上下文").toMatch(/\brelative\b/);
-    expect(info.className, "悬停显现逻辑保留").toMatch(/group-hover\/thumb:opacity-100/);
-    expect(info.className).toMatch(/group-focus-within\/thumb:opacity-100/);
-    expect(info.className).toMatch(/\bopacity-0\b/);
+    const list = screen.getByRole("list", { name: "workbenchModelsList" });
+    expect(list.className, "列数靠容器宽度自己变(auto-fill),不写死断点").toMatch(
+      /grid-cols-\[repeat\(auto-fill,minmax\(10rem,1fr\)\)\]/,
+    );
+    expect(list.className, "是 grid,不是 flex 行").toMatch(/\bgrid\b/);
+    expect(list.className).not.toMatch(/\bflex\b/);
+    expect(list.className, "卡片之间留出呼吸的间距").toMatch(/\bgap-3\b/);
   });
 
-  it("⑦ 转圈/✓ 是右下角的绝对定位覆盖层:不占行内一格,和右上角 ⓘ 上下错开", async () => {
+  it("⑦ 缩略图固定 4:3、填满卡片宽度,图片 object-cover:图片不撑高卡片,卡是竖排(图在上、字在下)", async () => {
     await mount();
-    const rowEl = row("SDXL Base");
-    const state = rowEl.querySelector("[data-model-state]");
-    expect(state, "已选中:行里有 ✓ 这一层").not.toBeNull();
-    expect(state!.className, "脱离文档流覆盖在行上").toMatch(/\babsolute\b/);
-    expect(state!.className, "右下角").toMatch(/\bright-1\b/);
-    expect(state!.className, "右下角").toMatch(/\bbottom-1\b/);
-    expect(state!.className, "和 ⓘ 的 top-1 分处上下,不用 top-1").not.toMatch(/\btop-1\b/);
-    expect(state!.className, "两个覆盖层都在内容之上").toMatch(/\bz-10\b/);
-    expect(state!.className, "不再占行内一格(不挤窄行内容)").not.toMatch(/\bshrink-0\b/);
-    expect(state!.getAttribute("aria-hidden"), "只是画给人看的状态,读屏听按钮的 aria-pressed/aria-busy").not.toBeNull();
+    const card = row("SDXL Base");
+    const img = card.querySelector<HTMLImageElement>("img");
+    expect(img, "有预览图的卡里有图").not.toBeNull();
+    expect(img!.className, "裁切填满,不按原图比例撑开").toMatch(/\bobject-cover\b/);
+    const box = img!.parentElement!.closest<HTMLElement>("[class*='aspect-']");
+    expect(box, "比例写在缩略图那一层").not.toBeNull();
+    expect(box!.className, "固定 4:3").toMatch(/aspect-\[4\/3\]/);
+    expect(box!.className, "填满卡片宽度").toMatch(/\bw-full\b/);
+    expect(box!.closest("[data-model-row]"), "缩略图在卡里").toBe(card);
+    const pick = within(card).getByRole("button", { pressed: true });
+    expect(pick.className, "卡是竖排 grid:缩略图一格、名字与 meta 一格").toMatch(/\bgrid\b/);
+    expect(pick.children[0], "缩略图是第一格").toBe(box);
+  });
 
-    const info = within(rowEl).getByRole("button", { name: "workbenchModelDetailOpen" });
-    expect(info.className, "ⓘ 详情键保持右上角").toMatch(/\bright-1\b/);
-    expect(info.className).toMatch(/\btop-1\b/);
-    expect(info.className, "ⓘ 不在右下角").not.toMatch(/\bbottom-1\b/);
-    expect(rowEl.querySelector("[data-model-detail]"), "两个覆盖层用不同的选择器").toBe(info);
-    expect(rowEl.querySelector("[data-model-state]")).not.toBe(info);
-    expect(within(rowEl).getByRole("button", { pressed: true }).querySelector("[data-model-state]"),
-      "状态层跟着填画布按钮(pending 时转圈的那一处),但绝对定位、不占行内一格").toBe(state);
+  it("⑧ 卡内角标:ⓘ 压在缩略图右上、✓/转圈压在右下;一上一下对角、永不重叠,✓ 不挡点击", async () => {
+    await mount();
+    const card = row("SDXL Base");
+    const info = within(card).getByRole("button", { name: "workbenchModelDetailOpen" });
+    const state = card.querySelector<HTMLElement>("[data-model-state]");
+    const box = card.querySelector<HTMLElement>("[class*='aspect-']")!;
+    const pick = within(card).getByRole("button", { pressed: true });
+
+    //: ⓘ 压在缩略图右上角:卡是定位上下文,卡片自身的内边距 8px,角标 top-2/right-2(8px)正好贴着缩略图边
+    expect(card.className, "<li> 是定位上下文").toMatch(/\brelative\b/);
+    expect(pick.className, "缩略图离卡边 8px").toMatch(/\bp-2\b/);
+    expect(info.className, "绝对定位,不再占一格").toMatch(/\babsolute\b/);
+    expect(info.className, "缩略图右上角").toMatch(/\bright-2\b/);
+    expect(info.className).toMatch(/\btop-2\b/);
+    expect(info.className, "ⓘ 不在下沿").not.toMatch(/\bbottom-/);
+    expect(info.className, "层叠在缩略图之上").toMatch(/\bz-10\b/);
+    expect(info.className, "常显:不再有藏/现两态").not.toMatch(/\bopacity-0\b/);
+    expect(info.className).not.toMatch(/group-hover\/thumb:opacity-100/);
+    expect(info.className).not.toMatch(/group-focus-within\/thumb:opacity-100/);
+    expect(info.className, "压在图上要有底").toMatch(/bg-background\/60/);
+
+    //: ✓ / 转圈在缩略图右下角,和右上角的 ⓘ 分处两头(不共用任何一条横边)
+    expect(state, "已选中:卡里有 ✓ 这一层").not.toBeNull();
+    expect(box.contains(state!), "✓ 画在缩略图那一层").toBe(true);
+    expect(state!.className, "脱离文档流").toMatch(/\babsolute\b/);
+    expect(state!.className, "缩略图右下角").toMatch(/\bright-1\b/);
+    expect(state!.className).toMatch(/\bbottom-1\b/);
+    expect(state!.className, "和 ⓘ 的 top 分处上下").not.toMatch(/\btop-/);
+    expect(state!.className, "两个角标都在内容之上").toMatch(/\bz-10\b/);
+    expect(state!.className, "不许挡缩略图的点击").toMatch(/\bpointer-events-none\b/);
+    expect(state!.getAttribute("aria-hidden"), "只是画给人看的状态,读屏听 aria-pressed/aria-busy").not.toBeNull();
+    expect(pick.querySelector("[data-model-state]"), "状态跟着填画布那张卡按钮(pending 时转圈的那一处)").toBe(state);
     expect(row("Flux Dev").querySelector("[data-model-state]"), "未选中不显示").toBeNull();
   });
 
-  it("⑧ 模型名的 Truncate 显式 side=\"bottom\":不跟着工作台那一列默认的「朝左」横到画布上", async () => {
+  it("⑨ 键盘可达:每张卡是一颗可聚焦的按钮,ⓘ、缩略图预览层是另两颗;四个 data-model-* 都在", async () => {
+    const bridge = await mount();
+    const card = row("Pony");
+    const pick = within(card).getByRole("button", { pressed: false });
+    expect(pick.tagName).toBe("BUTTON");
+    pick.focus();
+    expect(document.activeElement, "卡片本身能聚焦").toBe(pick);
+
+    const info = within(card).getByRole("button", { name: "workbenchModelDetailOpen" });
+    info.focus();
+    expect(document.activeElement, "ⓘ 是独立可聚焦的按钮").toBe(info);
+
+    const preview = within(card).getByRole("button", { name: "workbenchModelsPreview" });
+    preview.focus();
+    expect(document.activeElement, "看大图那层也是按钮").toBe(preview);
+    fireEvent.click(preview);
+    expect(bridge.comfyWorkbench, "点缩略图是看大图,不是填画布").not.toHaveBeenCalled();
+
+    expect(card.hasAttribute("data-model-row")).toBe(true);
+    expect(card.querySelector("[data-model-detail]")).toBe(info);
+    expect(card.querySelector("[data-model-preview]")).toBe(preview);
+    expect(row("SDXL Base").querySelector("[data-model-state]"), "选中的那张卡有 ✓").not.toBeNull();
+  });
+
+  it("⑩ 名字与副题的 Truncate 都显式 side=\"bottom\":不跟着工作台那一列默认的「朝左」横到画布上", async () => {
     const fs = await import("node:fs");
     const source = fs.readFileSync("./src/features/plugins/workbench/ModelsPanel.tsx", "utf8");
-    expect(source, "名字的 Truncate 显式朝下(工作台那一列是 side: left,不显式给就横在行的左边)").toMatch(
+    expect(source, "名字的 Truncate 显式朝下(工作台那一列是 side: left,不显式给就横在卡的左边)").toMatch(
       /<Truncate\b[^>]*\bside="bottom"[^>]*>\{name\}<\/Truncate>/,
+    );
+    expect(source, "副题也一样:卡片更窄,说明更该往下弹").toMatch(
+      /<Truncate\b[^>]*\bside="bottom"[^>]*>\{subtitle\}<\/Truncate>/,
     );
   });
 });
