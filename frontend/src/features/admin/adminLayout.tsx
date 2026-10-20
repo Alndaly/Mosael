@@ -54,7 +54,7 @@ export function AdminSection({
             )}
           </div>
           {/* 说明跟着这一列铺开,不设宽度上限:管理面板是整页宽、下面紧跟满宽卡片,
-              说明却写死 max-w-2xl 时右边会空出一大块(维护者指出)。这是全页共用的节头,一处改、各处一致。 */}
+              说明却被 42rem 的上限截住时,右边会空出一大块(维护者指出)。这是全页共用的节头,一处改、各处一致。 */}
           {description && <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
