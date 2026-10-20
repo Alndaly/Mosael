@@ -91,6 +91,10 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
       const target = (await current.ensure()).id;
       await sendAgentMessage(target, { content: text, place: placePayload(place) });
       void qc.invalidateQueries({ queryKey: ["agent-messages", target] });
+      //: 会话的 `status`(浮标的 `busy`)也是这一句之后才变成 running 的。不立刻重取的话,
+      //: 「消息已发出」到下一次 1.5 秒轮询之间,浮标只能靠状态机里的看门狗推断这一轮在跑。
+      //: 重取一次不改变语义,只是让"在想"更早接上真事。
+      void qc.invalidateQueries({ queryKey: ["agent-session"] });
     },
   });
 
@@ -121,7 +125,12 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     t,
   });
   //: 生成语音、转写、失败这三种**不能 2.4 秒后自己收起来**:那正是"该看见的时候没有它"。
-  const pinned = transcribing || loop.state === "synthesizing" || Boolean(loop.speechFailure);
+  //: 「在想」也一样 —— 那一段可能好几十秒,收起之后浮标就只剩一颗转圈,又回到"不知道它在干什么"。
+  const pinned =
+    transcribing ||
+    loop.state === "thinking" ||
+    loop.state === "synthesizing" ||
+    Boolean(loop.speechFailure);
   //: 悬停说明只在它比名字多说一点时才给 —— 否则同一个名字在两行里各说一遍。
   const hint = view.caption === view.label ? undefined : view.caption;
 
@@ -133,9 +142,10 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
   React.useEffect(() => {
     if (!loop.on) return;
     setShowCaption(true);
-    //: **转写 / 生成语音 / 失败期间不收起。** 识别可能要先载模型,十几秒是常态;合成是一次真实的
-    //: 等待(远端引擎还要多一次往返);失败那一句更是必须看见 —— 按 2.4 秒收起来的话,等待的绝大
-    //: 部分时间界面又回到"什么都没发生",那正是这次要补的洞。
+    //: **转写 / 在想 / 生成语音 / 失败期间不收起。** 识别可能要先载模型,十几秒是常态;等回复的
+    //: 几十秒里模型一直在出字,收起说明之后浮标就只剩一颗转圈;合成是一次真实的等待(远端引擎还要
+    //: 多一次往返);失败那一句更是必须看见 —— 按 2.4 秒收起来的话,等待的绝大部分时间界面又回到
+    //: "什么都没发生",那正是这次要补的洞。
     if (pinned) return;
     const timer = window.setTimeout(() => setShowCaption(false), 2400);
     return () => window.clearTimeout(timer);

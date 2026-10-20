@@ -55,6 +55,18 @@ export function voiceAssistantView({
     };
   }
 
+  //: **等回复那一段。** 它是在想(模型在出字 / 工具在跑),不是在等你说话 —— 只写「听到:…」
+  //: 会被读成「转写刚完成,然后呢?」。短名说清此刻在干什么,后面照旧带上听到的原话:
+  //: 一句回答"它在忙什么",一句回答"它刚才听成什么了"。这一句不自动收起(见 VoiceDock)。
+  if (state === "thinking") {
+    const thinking = t("voiceMode_thinking");
+    return {
+      label: thinking,
+      caption: heard ? `${thinking} · ${t("voiceDockHeard")}${heard}` : thinking,
+      retry: false,
+    };
+  }
+
   //: 转写用的是**转写那条既有文案**(编辑器的转写也用同一句),不塞进 voiceMode_* 那一组。
   const label = state === "transcribing" ? t("transcribing") : t(`voiceMode_${state}` as MessageKey);
   //: 听到的原话比状态更有信息量:听错的时候当场就看得见错在哪个字。

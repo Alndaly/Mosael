@@ -20,6 +20,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
   state: "synthesizing" as string,
+  heard: "" as string,
   speechFailure: null as null | { message: string; retryable: boolean },
   retrySpeech: vi.fn(),
   stop: vi.fn(),
@@ -46,7 +47,7 @@ vi.mock("@/features/agent/useVoiceLoop", () => ({
   useVoiceLoop: () => ({
     on: true,
     state: h.state,
-    heard: "",
+    heard: h.heard,
     levelRef: { current: 0 },
     start: h.start,
     stop: h.stop,
@@ -90,6 +91,7 @@ function caption(): HTMLElement {
 
 beforeEach(() => {
   h.state = "synthesizing";
+  h.heard = "";
   h.speechFailure = null;
   h.retrySpeech.mockReset();
   h.stop.mockReset();
@@ -106,6 +108,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   resetNativeViewForTests();
 });
@@ -120,6 +123,36 @@ it("正在生成语音:环上有转圈,旁边一句看得见的状态文字", ()
   expect(caption(), "生成语音时没有状态说明").toBeTruthy();
   expect(caption().textContent).toBe(T.voiceMode_synthesizing);
   expect(caption().className).toMatch(/\bopacity-100\b/);
+});
+
+it("回复还在写的那一段:写着「在想」和听到的原话 —— 不是一个像转写刚完成的停格", () => {
+  h.state = "thinking";
+  h.heard = "把这段改短";
+  mountFloating();
+
+  const orb = document.querySelector('[data-voice-state="thinking"]');
+  expect(orb, "浮标没有「在想」这个状态").toBeTruthy();
+  expect(orb?.querySelector(".animate-mosael-spin"), "「在想」没有转圈").toBeTruthy();
+
+  expect(caption().textContent, "又在「听到:…」上停着了 —— 没说它现在在干什么").toBe(
+    `${T.voiceMode_thinking} · ${T.voiceDockHeard}把这段改短`,
+  );
+  expect(caption().className).toMatch(/\bopacity-100\b/);
+});
+
+it("「在想」这一段可能好几十秒:那句说明不 2.4 秒后自己收起来", () => {
+  vi.useFakeTimers();
+  h.state = "thinking";
+  h.heard = "把这段改短";
+  mountFloating();
+  expect(caption().className).toMatch(/\bopacity-100\b/);
+
+  act(() => {
+    vi.advanceTimersByTime(10_000);
+  });
+  expect(caption().className, "「在想」2.4 秒后自己收起来了 —— 那一段又变成什么都没说").toMatch(
+    /\bopacity-100\b/,
+  );
 });
 
 it("合成失败:说清原因,并且点一下浮标就重试 —— 不是静默,也不是只能关掉", () => {
