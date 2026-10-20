@@ -1,5 +1,22 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.9.11": {
+    zh: [
+      "**配音也有默认了。** 它一直缺这一项:转写、降噪、语音合成都有「默认用哪个」,只有配音没有,每个用到它的地方都得自己点名。现在补上 —— 默认不是单个下拉,是**一对**:选「哪一家」不够,还得知道「哪个音色」,所以默认行是引擎 + 音色两个下拉;选齐就存,和别处同一条规矩。",
+      "**能力提供方变得能扫了。** 一项能力一张卡片,标题行直接写「现在用谁」(「降噪 · 内置降噪」「配音 · 未指定」),不用往下找下拉;「用在哪」收成一行摘要、点开才展开;「去插件市场找」统一钉在右上;下拉里的「自动」项只在能选 ≥2 家时出现。",
+      "**没接 MosaelCloud 时不再给一颗点了才报错的按钮。** 首屏就知道这个部署接没接,没接时按钮置灰、说清要设 `MOSAEL_CLOUD_URL`,并且不再把 `cloud_not_configured` 这种机器词摆给用户看。",
+      "**几处「说了不算」和「指错地方」的修。** 节说明不再被 42rem 截住、右边空一大块;FFmpeg 被环境变量钉住时,框里的 placeholder 不再自相矛盾;「重新检测」挪进它检测的那一行;节名改成「本地语音合成引擎」,并且 12 处指向它的指路文案跟着改。",
+      "**官网:登录重新设计,注册完自动进社区。** 「登录」从一行纯文字变成安静的描边按钮、挪到「下载」左边;MosaelCloud 注册成功后不再停在成功卡片上,自动跳到社区。",
+    ],
+    en: [
+      "**Dubbing has a default now.** It was the one capability missing it — transcription, denoise and speech synthesis all had a \"use this one by default\" row, while dubbing made every caller name its own engine and voice. The default is not a single dropdown but a **pair**: knowing which provider is not enough, you also need which voice, so the row is engine plus voice. Pick both and it saves, the same rule as everywhere else.",
+      "**Capability providers are scannable now.** One card per capability, with the title row stating the current choice (\"Denoise · Built-in\", \"Dubbing · Not set\") so you no longer hunt for the dropdown; \"used in\" collapses to a single summary line that expands on demand; \"find more in the plugin market\" is pinned to the same corner on every card; and the \"automatic\" option only appears when there are two or more providers to choose from.",
+      "**No more button that only explains itself after you press it.** The app now knows on first paint whether this deployment is connected to MosaelCloud; when it is not, the button is disabled, the text says to set `MOSAEL_CLOUD_URL`, and the `cloud_not_configured` machine word is no longer shown to users.",
+      "**Fixes where the UI said one thing and did another.** Section descriptions are no longer capped at 42rem with a big empty gap on the right; when FFmpeg is pinned by the environment the field's placeholder no longer contradicts the line above it; \"recheck\" moved into the row it rechecks; and the section is now called \"Local speech synthesis engines\", with the twelve pieces of guidance that pointed at the old name updated too.",
+      "**Website: the sign-in entry is redesigned, and signup lands in the community.** \"Sign in\" is a quiet outlined button next to \"Download\" instead of a bare text link, and a successful MosaelCloud signup now goes straight to the community instead of stopping on the success card.",
+    ],
+  },
+
   "v1.9.10": {
     zh: [
       "**智能体不再被「600 秒」掐断。** 超时从「总时长」改成「连续没进展」—— 正文、思考、工具的开始与结束、子智能体的每一步都算进展,一直在干活就一直跑;另加 2 小时硬上限,失败卡写清卡在哪一步(调了哪个工具、返回了什么)。",
