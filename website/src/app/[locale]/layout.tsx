@@ -9,9 +9,6 @@ import { notFound } from "next/navigation";
 // fontsource 这份把字体按 unicode-range 切成了上百片,浏览器只取真正用到的那几片。
 import "@fontsource-variable/noto-sans-sc";
 import "../globals.css";
-import { SiteFooter } from "@/components/site-footer";
-import { NavProgress } from "@/components/nav-progress";
-import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -47,6 +44,10 @@ const googleAnalyticsId = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID?.trim();
  * 这一层就是**根布局** —— `app/` 下没有第二个 layout。`<html lang>` 必须跟着语言变,
  * 而真正的根布局拿不到 `[locale]` 参数;于是全站路由都住在 `[locale]` 段下,
  * `/` 由 next.config 的 redirects 收口。
+ *
+ * 这一层只放**与页面分组无关**的东西:字体、`<html lang>`、主题、默认 metadata、静态语言参数。
+ * 站头和站尾在 `(site)/layout.tsx`,账号页的裸壳在 `(auth)/layout.tsx` —— 两者都从这里继承
+ * `<html>` / `<body>`,但不再被迫共用同一套顶部导航。
  */
 export function generateStaticParams() {
   return LOCALES.map((locale) => ({ locale }));
@@ -127,18 +128,15 @@ export default async function LocaleLayout({
       </head>
       <body className={`${syne.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
-          {/* 键盘用户第一个 Tab 落在这里,不必一路 Tab 穿过整条导航。 */}
+          {/* 键盘用户第一个 Tab 落在这里,不必一路 Tab 穿过整条导航。
+              两组 layout 都提供了 `#main`,具体画不画站头由分组决定。 */}
           <a
             href="#main"
             className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:border-2 focus:border-ink focus:bg-flame focus:px-4 focus:py-2 focus:font-medium focus:text-primary-foreground"
           >
             {t.nav.skipToContent}
           </a>
-          <NavProgress />
-          <SiteHeader locale={current} />
-          {/* 站头固定悬浮。内页保留呼吸位；首页自己以负 margin 把品牌渐变延伸到站头背后。 */}
-          <main id="main" className="pt-20">{children}</main>
-          <SiteFooter locale={current} />
+          {children}
         </ThemeProvider>
       </body>
       {googleAnalyticsId ? <GoogleAnalytics gaId={googleAnalyticsId} /> : null}

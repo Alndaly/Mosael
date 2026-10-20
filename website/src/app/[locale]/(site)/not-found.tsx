@@ -4,7 +4,10 @@ import { DEFAULT_LOCALE, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 
 /**
- * 语言段内的 404。
+ * 站内页面的 404。
+ *
+ * 它住在 `(site)` 组里:未知文档、未知插件这类 `notFound()` 仍然带着站头和站尾 ——
+ * 账号页没有这类入口,也就不需要一份账号壳里的 404。
  *
  * 这里拿不到 `[locale]` 参数 —— not-found 边界不接 params —— 所以文案退到默认语言。
  * 英文访客看到一句中文的"这一页不在了"不理想,但比一个空白页好;等社区页开始出现单语内容、

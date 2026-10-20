@@ -25,9 +25,9 @@ const { getMessages } = await import("../src/i18n/messages.ts");
 
 const read = (relative) => fs.readFileSync(path.resolve(import.meta.dirname, "..", relative), "utf8");
 
-test("三页都在,而且每一页都经 pageMetadata 出 head(未登录页不进搜索索引由页面自己声明)", () => {
+test("三页都在 (auth) 分组里,而且每一页都经 pageMetadata 出 head(未登录页不进搜索索引由页面自己声明)", () => {
   for (const page of ["signup", "login", "account"]) {
-    const file = path.join(SRC, "app", "[locale]", page, "page.tsx");
+    const file = path.join(SRC, "app", "[locale]", "(auth)", page, "page.tsx");
     assert.ok(fs.existsSync(file), `缺少 ${page} 页`);
     const source = fs.readFileSync(file, "utf8");
     assert.match(source, /export async function generateMetadata/, `${page} 没有 generateMetadata`);

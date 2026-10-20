@@ -143,8 +143,8 @@ test("登录后的结果在账号页说清:新建 / 绑定到已有账号", () =
   assert.match(account, /oauthOutcome/, "账号页没有接收第三方登录结果");
   assert.match(account, /copy\.oauthCreated/, "没有「已创建账号」的提示");
   assert.match(account, /copy\.oauthExisting/, "没有「已绑定到已有账号」的提示");
-  const loginPage = read("src/app/[locale]/login/page.tsx");
-  const signupPage = read("src/app/[locale]/signup/page.tsx");
+  const loginPage = read("src/app/[locale]/(auth)/login/page.tsx");
+  const signupPage = read("src/app/[locale]/(auth)/signup/page.tsx");
   assert.match(loginPage, /oauth_error/, "登录页没有读回失败错误码");
   assert.match(signupPage, /oauth_error/, "注册页没有读回失败错误码");
 });

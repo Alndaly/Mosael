@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Check, LockKeyhole } from "lucide-react";
+import { ArrowLeft, Check, LockKeyhole } from "lucide-react";
 
 import { BrandWordmark } from "@/components/brand-logo";
 import type { Locale } from "@/i18n/config";
@@ -34,7 +34,8 @@ export function AccountShell({
 
   return (
     <section className="relative bg-paper">
-      <div className="mx-auto grid min-w-0 max-w-[96rem] lg:min-h-[calc(100svh-5rem)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+      {/* 账号页没有站头,所以这一屏铺满视口;有站头的站内页才需要减掉那 5rem。 */}
+      <div className="mx-auto grid min-w-0 max-w-[96rem] lg:min-h-svh lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <div className="relative flex min-w-0 flex-col px-5 pt-10 pb-14 sm:px-8 sm:pt-14 lg:px-12 lg:py-14 xl:px-20">
           <div
             className={cn(
@@ -43,17 +44,31 @@ export function AccountShell({
               "lg:mx-0",
             )}
           >
-            <Link
-              href={`/${locale}`}
-              aria-label="Mosael"
-              className="inline-flex w-fit items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-            >
-              <BrandWordmark className="w-24 sm:w-28" priority />
-              <span className="h-4 w-px bg-border" aria-hidden />
-              <span className="rounded-full border border-border bg-card/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                Cloud
-              </span>
-            </Link>
+            <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
+              <Link
+                href={`/${locale}`}
+                aria-label="Mosael"
+                className="inline-flex w-fit items-center gap-3 rounded-full focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+              >
+                <BrandWordmark className="w-24 sm:w-28" priority />
+                <span className="h-4 w-px bg-border" aria-hidden />
+                <span className="rounded-full border border-border bg-card/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                  Cloud
+                </span>
+              </Link>
+
+              {/*
+                账号页没有站头,这条小字就是回到站内的唯一出口:语言跟着 URL 走,回的是
+                同一语言的首页。刻意不做成按钮 —— 它是退路,不是这一页要人做的动作。
+              */}
+              <Link
+                href={`/${locale}`}
+                className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+              >
+                <ArrowLeft className="size-3.5" aria-hidden />
+                {copy.backToSite}
+              </Link>
+            </div>
 
             <div className="flex flex-1 flex-col justify-center py-10 motion-safe:animate-[auth-rise_650ms_ease-out_both] lg:py-16">
               <h1 className="m-0 font-display text-[clamp(2.15rem,4.2vw,3.55rem)] leading-[1.02] font-semibold tracking-[-0.045em] text-balance">
@@ -83,7 +98,7 @@ export function AccountShell({
             <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(180deg,transparent,rgba(8,6,12,0.72))]" />
           </div>
 
-          <div className="relative flex flex-col justify-between gap-10 px-5 py-10 sm:px-8 sm:py-12 lg:sticky lg:top-20 lg:h-[calc(100svh-5rem)] lg:px-10 lg:py-14 xl:px-16">
+          <div className="relative flex flex-col justify-between gap-10 px-5 py-10 sm:px-8 sm:py-12 lg:sticky lg:top-0 lg:h-svh lg:px-10 lg:py-14 xl:px-16">
             <p className="m-0 inline-flex items-center gap-2 text-[13px] font-medium text-[#c7c1d2] motion-safe:animate-[auth-rise_650ms_ease-out_both]">
               <span className="size-1.5 rounded-full bg-[#b9a9ff] shadow-[0_0_18px_rgba(185,169,255,0.9)]" aria-hidden />
               {copy.studioEyebrow}
