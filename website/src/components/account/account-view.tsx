@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, LockKeyhole, LogOut, ShieldAlert, Trash2 } from "lucide-react";
 
@@ -10,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
-import { CloudApiError, cloudAccount, type CloudUser } from "@/lib/cloud";
+import { CloudApiError, cloudAccount } from "@/lib/cloud";
+import { invalidateAfterSignOut } from "@/lib/query-invalidation";
+import { useViewer } from "@/lib/queries";
 
 type Phase = "loading" | "anonymous" | "signed" | "error";
 
@@ -35,35 +38,27 @@ export function AccountView({
   oauthOutcome?: "" | "created" | "existing";
 }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("loading");
-  const [user, setUser] = useState<CloudUser | null>(null);
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    let alive = true;
-    cloudAccount
-      .me()
-      .then((me) => {
-        if (!alive) return;
-        setUser(me.user);
-        setPhase("signed");
-      })
-      .catch((failure: unknown) => {
-        if (!alive) return;
-        if (failure instanceof CloudApiError && failure.status === 401) {
-          setPhase("anonymous");
-          return;
-        }
-        setError(failure instanceof CloudApiError ? failure.text(locale) : copy.loadFailed);
-        setPhase("error");
-      });
-    return () => {
-      alive = false;
-    };
-  }, [locale, copy.loadFailed, reloadKey]);
+  // 身份只有一份来源:和站头同一个 viewer 查询缓存(键见 lib/queryKeys.ts)。
+  // 401 在 fetchViewer 里已经是 null(未登录),不会把这一页推进错误态。
+  const viewerQuery = useViewer();
+  const user = viewerQuery.data ?? null;
+  const phase: Phase = user
+    ? "signed"
+    : viewerQuery.isPending || (viewerQuery.isFetching && !viewerQuery.isError)
+      ? "loading"
+      : viewerQuery.isError
+        ? "error"
+        : "anonymous";
+  const loadError = viewerQuery.isError
+    ? viewerQuery.error instanceof CloudApiError
+      ? viewerQuery.error.text(locale)
+      : copy.loadFailed
+    : "";
 
   // 从 GitHub / Google 回来时,「已创建 / 已绑定」是一过性成功通知 —— 等身份真的读出来
   // (signed)再弹一次 toast;ref 保证 StrictMode 的重放不会弹第二遍。
@@ -81,6 +76,8 @@ export function AccountView({
     } catch {
       // 本地无状态可清:cookie 由服务端撤销;即使请求失败,离开这一页也不显示旧账号。
     }
+    // 退出后站头 / 角标 / 通知都必须换掉,否则还挂着上一个账号。
+    await invalidateAfterSignOut(queryClient);
     router.push(`/${locale}/login`);
   };
 
@@ -89,6 +86,7 @@ export function AccountView({
     setError("");
     try {
       await cloudAccount.deleteAccount();
+      await invalidateAfterSignOut(queryClient);
       router.push(`/${locale}`);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
@@ -141,14 +139,14 @@ export function AccountView({
           <AlertTriangle className="size-5" aria-hidden />
         </span>
         <h2 className="mt-5 font-display text-2xl font-semibold tracking-[-0.035em]">{copy.formErrorTitle}</h2>
-        <p className="mt-3 text-sm leading-7 text-muted-foreground">{error || copy.loadFailed}</p>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">{loadError || copy.loadFailed}</p>
         <Button
           variant="outline"
           className="mt-6 min-h-11 rounded-full px-5 text-sm font-semibold"
           onClick={() => {
             setError("");
-            setPhase("loading");
-            setReloadKey((key) => key + 1);
+            // 重试就是让同一个 viewer 查询再跑一次;骨架由 isFetching 决定。
+            void viewerQuery.refetch();
           }}
         >
           {copy.retry}

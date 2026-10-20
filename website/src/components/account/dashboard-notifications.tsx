@@ -3,7 +3,8 @@
 import { AlertCircle, Bell, LoaderCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { formatShareDate } from "@/components/community/share-utils";
 import { InitialTile } from "@/components/community/tile";
@@ -11,14 +12,16 @@ import { Button } from "@/components/ui/button";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { CloudApiError, cloudNotifications, type CloudIdentity, type CloudNotification } from "@/lib/cloud";
+import { invalidateAfterMarkRead } from "@/lib/query-invalidation";
+import { useNotifications } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 /**
  * 通知:**点赞 / 收藏 / 评论**三条来由,一条一行。
  *
- * 数据只来自 `GET /notifications`(进分区拉一次,不轮询、不造假):公开身份只有
- * `display_name` / `handle` / `avatar_seed` 三列,**没有 email**;`comment_preview` 是后端
- * 截好的**纯文本**,这里当文字渲染、不解析 markdown。
+ * 数据只来自 `GET /notifications`(经 `useNotifications` 走查询缓存:进分区不重拉、
+ * 不轮询、不造假):公开身份只有 `display_name` / `handle` / `avatar_seed` 三列,
+ * **没有 email**;`comment_preview` 是后端截好的**纯文本**,这里当文字渲染、不解析 markdown。
  *
  * 未读不只靠颜色:左边一个色点(**形状**)+ 整行加粗(**字重**)+ 读屏可读的「未读通知」。
  * 点一条会先标记这一条已读(`POST /notifications/read {ids:[id]}`),再去那条分享的详情。
@@ -75,79 +78,52 @@ export function openNotification(
 
 export function DashboardNotifications({ locale, copy }: { locale: Locale; copy: Messages["dashboard"] }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const t = getMessages(locale).community;
   const loadFailed = copy.notificationsLoadFailed;
-  const [items, setItems] = useState<CloudNotification[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [unread, setUnread] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+
+  // 列表走查询缓存(游标翻页用 infinite query):进分区不重拉、不轮询;标已读后由
+  // `invalidateAfterMarkRead` 同时刷新站头角标与这里(**unread + 通知列表**)。
+  const notifications = useNotifications(NOTIFICATION_PAGE_SIZE);
+  const items = notifications.data?.pages.flatMap((page) => page.items) ?? [];
+  // `unread` 是后端给的未读总数,取最后一页(每页都带同一个总数)。
+  const unread = notifications.data?.pages.at(-1)?.unread ?? 0;
+  // 首次进入没有缓存 → 骨架;失败后点重试也回到骨架(而不是让错误块留在屏幕上报旧错)。
+  const loading = notifications.isPending || (notifications.isFetching && notifications.data === undefined);
+  const loadingMore = notifications.isFetchingNextPage;
   const [marking, setMarking] = useState(false);
-  const [error, setError] = useState("");
-  // 重试用:同一个 effect 换一个 attempt 再跑一次,不另写一套取数。
-  const [attempt, setAttempt] = useState(0);
+  // 写操作(标已读)的失败单独记;读列表的错误由 query 自己带。
+  const [actionError, setActionError] = useState("");
+  const queryError = notifications.isError
+    ? notifications.error instanceof CloudApiError
+      ? notifications.error.text(locale)
+      : loadFailed
+    : "";
+  const error = actionError || queryError;
 
-  // 进分区拉一次。没有 setInterval / 事件流:P1 不做实时。
-  useEffect(() => {
-    let alive = true;
-    void cloudNotifications
-      .list({ limit: NOTIFICATION_PAGE_SIZE })
-      .then((page) => {
-        if (!alive) return;
-        setItems(page.items);
-        setNextCursor(page.next_cursor);
-        setUnread(page.unread);
-      })
-      .catch((failure: unknown) => {
-        if (!alive) return;
-        setItems([]);
-        setNextCursor(null);
-        setUnread(0);
-        setError(failure instanceof CloudApiError ? failure.text(locale) : loadFailed);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [attempt, loadFailed, locale]);
-
-  /** 重试:状态先在事件里复位,再让 effect 因为 attempt 变了重跑一次。 */
+  /** 重试:让同一个查询再跑一次,不另写一套取数。 */
   const retry = () => {
-    setLoading(true);
-    setError("");
-    setAttempt((value) => value + 1);
+    setActionError("");
+    void notifications.refetch();
   };
 
-  const loadMore = async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    setError("");
-    try {
-      const page = await cloudNotifications.list({ limit: NOTIFICATION_PAGE_SIZE, cursor: nextCursor });
-      setItems((current) => [...current, ...page.items]);
-      setNextCursor(page.next_cursor);
-      setUnread(page.unread);
-    } catch (failure) {
-      setError(failure instanceof CloudApiError ? failure.text(locale) : loadFailed);
-    } finally {
-      setLoadingMore(false);
-    }
+  const loadMore = () => {
+    if (!notifications.hasNextPage || notifications.isFetchingNextPage) return;
+    setActionError("");
+    void notifications.fetchNextPage();
   };
 
   const markAll = async () => {
     if (marking || unread === 0) return;
     setMarking(true);
-    setError("");
+    setActionError("");
     try {
       // 不传 ids = 全部标已读;传 [] 是「一条都不标」,别在这里传错。
-      const result = await cloudNotifications.markRead();
-      const readAt = new Date().toISOString();
-      setItems((current) => current.map((item) => (item.read_at ? item : { ...item, read_at: readAt })));
-      setUnread(result.unread);
+      await cloudNotifications.markRead();
+      // 清单:unread(站头角标)+ 通知列表 —— 一起失效,数字与行上的已读态才不会互相打架。
+      await invalidateAfterMarkRead(queryClient);
     } catch (failure) {
-      setError(failure instanceof CloudApiError ? failure.text(locale) : loadFailed);
+      setActionError(failure instanceof CloudApiError ? failure.text(locale) : loadFailed);
     } finally {
       setMarking(false);
     }
@@ -155,7 +131,11 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
 
   const open = (notification: CloudNotification) => {
     openNotification(notification, {
-      markRead: cloudNotifications.markRead,
+      // 单条标已读也一样:刷 unread 与通知列表(跳转后站头角标也要跟着减)。
+      markRead: async (ids) => {
+        await cloudNotifications.markRead(ids);
+        await invalidateAfterMarkRead(queryClient);
+      },
       navigate: (href) => router.push(href),
       href: localePath(locale, `/community/${notification.share.id}`),
     });
@@ -276,7 +256,7 @@ export function DashboardNotifications({ locale, copy }: { locale: Locale; copy:
             })}
           </ul>
 
-          {nextCursor && (
+          {notifications.hasNextPage && (
             <div className="flex justify-center">
               <button
                 type="button"

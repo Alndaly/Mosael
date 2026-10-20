@@ -2,6 +2,7 @@
 
 import { AlertCircle, FileJson, LoaderCircle, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import { actionClass } from "@/components/community/detail";
@@ -9,6 +10,7 @@ import { IdentityForm } from "@/components/community/identity-form";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { CloudApiError, cloudLocale, cloudShares, type CloudIdentity, type CloudShareKind } from "@/lib/cloud";
+import { invalidateAfterShareChange } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
 
 import { MAX_SHARE_BYTES, measurePayload, publicIdentity } from "./share-utils";
@@ -28,6 +30,7 @@ const LABEL = "text-[13px] font-medium leading-5 text-foreground";
 export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudIdentity }) {
   const t = getMessages(locale).community;
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [identity, setIdentity] = React.useState<CloudIdentity | null>(viewer);
   const [needsIdentity, setNeedsIdentity] = React.useState(!viewer.display_name);
   const [kind, setKind] = React.useState<CloudShareKind>("workflow");
@@ -99,6 +102,9 @@ export function UploadForm({ locale, viewer }: { locale: Locale; viewer: CloudId
         license: license || undefined,
         payload,
       });
+      // 上传成功:我的分享 + 概览统计 + 该 kind 的列表都多了一条(见 lib/query-invalidation.ts)。
+      // 目标详情页不读这些缓存,但回到控制台 / 列表时不该还是旧的;失效即可,不必等重取。
+      void invalidateAfterShareChange(queryClient, share.kind);
       // 成功就跳到详情页 —— 只弹一个 toast 的话,用户不知道自己的分享长什么样。
       router.push(localePath(locale, `/community/${share.id}`));
     } catch (failure) {

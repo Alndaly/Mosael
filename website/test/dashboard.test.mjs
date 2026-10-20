@@ -238,7 +238,9 @@ test("⑥ 通知接上云端列表(空态仍是零条分支、不造假),没有 
   assert.match(panel, /notificationsEmpty/, "通知分区没有用空态文案");
   assert.doesNotMatch(panel, /即将上线|敬请期待|coming soon|coming_soon|还在做|TODO/i, "通知写了「即将上线」之类的话");
   // 列表的数据只能来自云端:走的是和 cloudShares 并列的 cloudNotifications,不造假条目、不拉别的接口。
-  assert.match(panel, /cloudNotifications\.list\(/, "通知分区没有接 /notifications");
+  // 取数在 lib/queries.ts 的 useNotifications 里,分区只消费 hook。
+  assert.match(read("src/lib/queries.ts"), /cloudNotifications\.list\(/, "通知取数没有接 /notifications");
+  assert.match(panel, /useNotifications\(/, "通知分区没有用 useNotifications");
   assert.match(panel, /\.map\(/, "通知分区没有渲染条目");
   assert.doesNotMatch(panel, /cloudShares|cloudAccount/, "通知分区在拉不属于它的接口");
   assert.doesNotMatch(panel, /display_name:\s*"/, "通知分区写死了假数据");

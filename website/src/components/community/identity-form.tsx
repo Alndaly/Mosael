@@ -1,12 +1,14 @@
 "use client";
 
 import { AlertCircle, LoaderCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { CloudApiError, cloudProfile, type CloudIdentity } from "@/lib/cloud";
+import { invalidateAfterProfileSave } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
 
 import { publicIdentity } from "./share-utils";
@@ -33,6 +35,7 @@ export function IdentityForm({
   className?: string;
 }) {
   const t = getMessages(locale).community;
+  const queryClient = useQueryClient();
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [handle, setHandle] = React.useState("");
   const [displayError, setDisplayError] = React.useState("");
@@ -52,6 +55,8 @@ export function IdentityForm({
       // 空 handle = 不要短名,交给服务端自动生成;发一个空串过去会被 422 判成非法。
       if (handle.trim()) patch.handle = handle.trim();
       const { user } = await cloudProfile.update(patch);
+      // 第一次起名字也是改资料:站头 / 我的分享 / 公开列表的作者名一起换新。
+      await invalidateAfterProfileSave(queryClient);
       onDone(publicIdentity(user));
     } catch (failure) {
       if (failure instanceof CloudApiError) {

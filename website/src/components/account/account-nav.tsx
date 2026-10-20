@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
-import { cloudAccount, cloudNotifications, formatUnreadBadge, type CloudUser } from "@/lib/cloud";
+import { formatUnreadBadge, type CloudUser } from "@/lib/cloud";
+import { useUnreadCount, useViewer } from "@/lib/queries";
 
 /**
  * 站头的账号入口。未登录时是「登录」次级按钮,登录后是**一颗圆形头像** —— 账号名的
@@ -21,12 +21,15 @@ import { cloudAccount, cloudNotifications, formatUnreadBadge, type CloudUser } f
  * `--tile-*` 那六个色相,由名字算一个 hash 取一个 —— 同一个人在列表、详情、站头永远是
  * 同一块颜色。
  *
- * 头像右下角是**未读通知角标**:进页面问一次 `unread-count`,0 条不显示,超过 99 收成
- * `99+`(格式化在 `lib/cloud.ts` 的 `formatUnreadBadge` 里,和测试同一份)。**P1 不轮询**
- * —— 这里是站头,不是收件箱。
+ * 头像右下角是**未读通知角标**:`useUnreadCount()` 读 `unread-count`,0 条不显示,超过 99
+ * 收成 `99+`(格式化在 `lib/cloud.ts` 的 `formatUnreadBadge` 里,和测试同一份)。
+ * **P1 不轮询** —— 这里是站头,不是收件箱;从后台切回来时由查询默认的
+ * `refetchOnWindowFocus` 刷一下。
  *
- * 它只问云端 `/me` 与 `/notifications/unread-count` —— 不碰本地后端,也不把邮箱塞进站头
- * 那一行(窄屏放不下)。
+ * 身份与未读数都住在 TanStack Query 的缓存里(键见 `lib/queryKeys.ts`):登录 / 退出 /
+ * 改昵称头像之后由 `lib/query-invalidation.ts` 点名失效,站头才会跟着换字、换色、换
+ * `aria-label`。它只问云端 `/me` 与 `/notifications/unread-count` —— 不碰本地后端,
+ * 也不把邮箱塞进站头那一行(窄屏放不下)。
  */
 
 /** 顶栏只关心这三列:显示名 → 短名 → 邮箱前缀。 */
@@ -75,41 +78,15 @@ export function AccountNav({
   loginLabel: string;
   accountLabel: string;
 }) {
-  // undefined = 还在问 /me;null = 问过了,没登录。
-  const [user, setUser] = useState<CloudUser | null | undefined>(undefined);
-  // 未读通知数。没登录 / 401 时保持 0(角标就不出现)。
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    void cloudAccount
-      .me()
-      .then(({ user: me }) => {
-        if (alive) setUser(me);
-      })
-      .catch(() => {
-        if (alive) setUser(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // 进页面拉一次,不轮询(P1 不做实时)。
-  useEffect(() => {
-    let alive = true;
-    void cloudNotifications
-      .unreadCount()
-      .then(({ count }) => {
-        if (alive) setUnread(Number.isFinite(count) ? count : 0);
-      })
-      .catch(() => {
-        if (alive) setUnread(0);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // undefined = 还在问 /me;null = 问过了,没登录。两份数据都走查询缓存:
+  // 登录 / 退出 / 改资料之后由 invalidateQueries 通知,而不是只有挂载时问一次。
+  const viewer = useViewer();
+  const unreadQuery = useUnreadCount();
+  // 注意不能用 `viewer.data ?? ...` —— 401 时 data 是 **null**(「问过了,没登录」),
+  // 空值合并会把它当成「还没问过」,登录按钮就永远不出现。undefined 才是加载中。
+  const user = viewer.data !== undefined ? viewer.data : viewer.isError ? null : undefined;
+  // 没登录 / 401 时保持 0(角标就不出现)。
+  const unread = unreadQuery.data ?? 0;
 
   if (user === undefined) return null;
   if (user) {

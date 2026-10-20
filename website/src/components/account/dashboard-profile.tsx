@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, PenLine } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { AccountField, FormAlert, SubmitButton } from "@/components/account/form-controls";
 import { InitialTile } from "@/components/community/tile";
@@ -11,18 +12,27 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
-import { CloudApiError, cloudAccount, cloudProfile, type CloudIdentity } from "@/lib/cloud";
+import { CloudApiError, cloudAccount, cloudProfile } from "@/lib/cloud";
+import { invalidateAfterProfileSave, invalidateAfterSignOut } from "@/lib/query-invalidation";
+import { useViewer } from "@/lib/queries";
 
 import type { DashboardTab } from "./dashboard-utils";
+
+/** 个人信息只读这两列;服务端给的公开身份与 `/me` 的完整用户都满足这个形状。 */
+type ProfileViewer = { display_name?: string | null; handle?: string | null };
 
 /**
  * 个人信息:公开身份的两列 + 头像预览 + 保存 / 退出。
  *
- * **邮箱只在这里出现,而且只有本人看得到** —— 它是从 `/me` 单独取的(不随页面首屏的 RSC
- * 数据走),概览和分享列表都拿不到它。
+ * **邮箱只在这里出现,而且只有本人看得到** —— 它来自 `useViewer()` 那一份 `/me`
+ * (站头也读同一份,只是站头只取公开三列),概览和分享列表都拿不到它。
  *
  * 头像预览和顶栏、社区卡片共用同一套 `--tile-*` 色相(见 `components/community/tile.tsx`):
  * 同一个名字在顶栏和这里永远同一块颜色。
+ *
+ * **保存成功要刷新的缓存**见 `lib/query-invalidation.ts` 的清单:viewer(站头首字母 /
+ * 色块 / aria-label)+ 我的分享里的作者名 + 概览 + 个人页。只 `router.refresh()` 的话,
+ * 站头那份客户端缓存不会变,所以才有了「改了昵称站头不刷新」。
  *
  * `handle_taken` / `handle_reserved` 是 409,但含义完全不同(被别人占了 / 是保留字)。
  * 前端不替后端改写成自己的句子 —— 后端给的那句就是用户该看到的那句。
@@ -35,36 +45,26 @@ export function DashboardProfile({
 }: {
   locale: Locale;
   copy: Messages["dashboard"];
-  viewer: CloudIdentity;
+  viewer: ProfileViewer;
   onSelect: (tab: DashboardTab) => void;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [displayName, setDisplayName] = useState(viewer.display_name ?? "");
   const [handle, setHandle] = useState(viewer.handle ?? "");
   const [displayError, setDisplayError] = useState("");
   const [handleError, setHandleError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [email, setEmail] = useState<string | null>(null);
-  const [emailFailed, setEmailFailed] = useState(false);
 
-  const hasHandle = Boolean(viewer.handle?.trim());
+  // 邮箱与「有没有 handle」都读同一份 viewer 缓存:保存之后 invalidate 会把它换新,
+  // 不用再挂一个 useEffect 单独问一次 /me。
+  const viewerQuery = useViewer();
+  const currentViewer = viewerQuery.data ?? viewer;
+  const email = viewerQuery.data?.email ?? null;
+  const emailFailed = viewerQuery.isError || viewerQuery.data === null;
 
-  // 邮箱是「本人那一处」:只在打开个人信息时问一次 /me。
-  useEffect(() => {
-    let alive = true;
-    cloudAccount
-      .me()
-      .then(({ user }) => {
-        if (alive) setEmail(user.email);
-      })
-      .catch(() => {
-        if (alive) setEmailFailed(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const hasHandle = Boolean(currentViewer.handle?.trim());
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -85,10 +85,12 @@ export function DashboardProfile({
       const { user } = await cloudProfile.update(patch);
       setDisplayName(user.display_name ?? name);
       setHandle(user.handle ?? handle.trim());
+      // 缓存清单(见 lib/query-invalidation.ts):viewer 让站头换成新首字母 / 色块 /
+      // aria-label,sharesByMe 让「我的分享」和概览换成新作者名,shareList 让公开列表的
+      // 作者名一起变;个人页与 viewer 共用同一份缓存,一并刷新。
+      await invalidateAfterProfileSave(queryClient);
       // 保存成功是一过性通知:弹一下就走,不在表单上方留一条常驻提示。
       toast({ title: copy.saved });
-      // 顶栏 / 概览都按新的身份重算(有了 handle,概览才有东西可统计)。
-      router.refresh();
     } catch (failure) {
       if (failure instanceof CloudApiError) {
         if (failure.code === "handle_taken" || failure.code === "handle_reserved") {
@@ -115,10 +117,12 @@ export function DashboardProfile({
     } catch {
       // 本地无状态可清:cookie 由服务端撤销;即使请求失败,离开这一页也不显示旧账号。
     }
+    // 退出最不能省的就是这一条:不刷 viewer,站头还挂着上一个账号的头像与未读数。
+    await invalidateAfterSignOut(queryClient);
     router.push(`/${locale}/login`);
   };
 
-  const previewSeed = displayName.trim() || handle.trim() || viewer.handle?.trim() || "mosael";
+  const previewSeed = displayName.trim() || handle.trim() || currentViewer.handle?.trim() || "mosael";
   const previewName = displayName.trim() || handle.trim() || "?";
 
   return (

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -19,6 +20,7 @@ import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
 import { oauthErrorCopyKey } from "@/lib/oauth";
+import { invalidateAfterAuth } from "@/lib/query-invalidation";
 
 /**
  * 注册:**邮箱 → 发送验证码 → 6 位码 → 密码**。
@@ -52,6 +54,7 @@ export function SignupForm({
   const countdown = useResendCountdown();
   const oauthMessage = oauthError ? copy[oauthErrorCopyKey(oauthError)] : "";
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const sendCode = async () => {
     setError("");
@@ -94,6 +97,8 @@ export function SignupForm({
     setBusy(true);
     try {
       await cloudAccount.signup(email.trim(), code.trim(), password);
+      // 注册即建会话:站头的 viewer 缓存要马上换掉,否则进控制台后站头还是「登录」。
+      await invalidateAfterAuth(queryClient);
       // 云端注册**直接建会话**(注册即登录,见 cloud/api/auth.py 的 signup),所以这里不需要
       // 「再登录一次」那一步 —— 直接进自己的控制台。replace 不留注册页在历史里:后退回到一个
       // 已经完成的表单只会让人误点第二次。

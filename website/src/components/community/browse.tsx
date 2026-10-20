@@ -7,6 +7,7 @@
  * 不用为了一次过滤跑一趟服务器。卡片整张可点,进详情页。
  */
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X } from "lucide-react";
 import * as React from "react";
 
@@ -17,6 +18,7 @@ import { type Locale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { cloudShares, type CloudShare } from "@/lib/cloud";
 import { toPlainText } from "@/lib/inline-markdown";
+import { queryKeys } from "@/lib/queryKeys";
 import type { PluginEntry, WorkflowEntry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 
@@ -197,20 +199,21 @@ export function WorkflowCard({ locale, workflow }: { locale: Locale; workflow: W
  *
  * 导出给社区首页(`landing.tsx`)复用 —— 两组的取数必须和这里逐字一致,否则
  * 落地页和各自的市场页会在语言 / 排序上漂开。
+ *
+ * 取数规则没变(仍是 `fetchListedShares`,失败退化成空数组),只是换成 `useQuery`:
+ * - `retry: false` —— 云端挂了时,列表不是关键路径,不要每 3 秒重试到天荒地老;
+ * - `staleTime: 5 分钟` —— 在 `/plugins` `/workflows` `/community` 之间切页不重拉;
+ * - 键按 kind + locale 分开(见 `lib/queryKeys.ts`),删 / 传分享后能按 kind 点名失效。
  */
 export function useListedShares(kind: "plugin" | "workflow", locale: Locale): CloudShare[] {
-  const [shares, setShares] = React.useState<CloudShare[]>([]);
-  React.useEffect(() => {
-    let active = true;
+  const query = useQuery({
+    queryKey: queryKeys.shareList(kind, locale),
     // 失败已经被 fetchListedShares 吞成空数组:内容优先,页面上不出现错误块。
-    void fetchListedShares((query) => cloudShares.list(query), kind, locale).then((items) => {
-      if (active) setShares(items);
-    });
-    return () => {
-      active = false;
-    };
-  }, [kind, locale]);
-  return shares;
+    queryFn: () => fetchListedShares((request) => cloudShares.list(request), kind, locale),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  return query.data ?? [];
 }
 
 /** 分享卡片上能搜到的字:标题 / 摘要 / 作者。 */

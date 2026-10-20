@@ -12,6 +12,7 @@ import "../globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { HTML_LANG, LOCALES, isLocale, type Locale } from "@/i18n/config";
+import { QueryProvider } from "./query-provider";
 import { getMessages } from "@/i18n/messages";
 import { SITE_NAME, siteVerification } from "@/lib/seo";
 import { SITE } from "@/lib/site";
@@ -129,21 +130,29 @@ export default async function LocaleLayout({
       </head>
       <body className={`${syne.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
-          {/* 键盘用户第一个 Tab 落在这里,不必一路 Tab 穿过整条导航。
-              两组 layout 都提供了 `#main`,具体画不画站头由分组决定。 */}
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:border-2 focus:border-ink focus:bg-flame focus:px-4 focus:py-2 focus:font-medium focus:text-primary-foreground"
-          >
-            {t.nav.skipToContent}
-          </a>
-          {children}
           {/*
-            成功通知的 toast 出口。**只挂这一处**:它在这一层, `(site)` 与 `(auth)` 两组页面都继承,
-            注册 / 登录 / 账号页和站内的「已保存」共用同一个 viewport —— 挂到 `(site)` 里就漏了
-            住在 `(auth)` 的三页,挂到每组里又会变成两份。
+            TanStack Query 的 Provider。**只挂这一处**:`(site)` 与 `(auth)` 两组页面共用
+            同一份缓存 —— 登录 / 退出发生在 `(auth)`,站头在 `(site)`,改资料后靠
+            `invalidateQueries` 通知的就是这一份。Provider 本身是 client wrapper
+            (`./query-provider.tsx`),这一层仍是 server component。
           */}
-          <Toaster label={t.toast.label} closeLabel={t.toast.close} />
+          <QueryProvider>
+            {/* 键盘用户第一个 Tab 落在这里,不必一路 Tab 穿过整条导航。
+                两组 layout 都提供了 `#main`,具体画不画站头由分组决定。 */}
+            <a
+              href="#main"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:border-2 focus:border-ink focus:bg-flame focus:px-4 focus:py-2 focus:font-medium focus:text-primary-foreground"
+            >
+              {t.nav.skipToContent}
+            </a>
+            {children}
+            {/*
+              成功通知的 toast 出口。**只挂这一处**:它在这一层, `(site)` 与 `(auth)` 两组页面都继承,
+              注册 / 登录 / 账号页和站内的「已保存」共用同一个 viewport —— 挂到 `(site)` 里就漏了
+              住在 `(auth)` 的三页,挂到每组里又会变成两份。
+            */}
+            <Toaster label={t.toast.label} closeLabel={t.toast.close} />
+          </QueryProvider>
         </ThemeProvider>
       </body>
       {googleAnalyticsId ? <GoogleAnalytics gaId={googleAnalyticsId} /> : null}

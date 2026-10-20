@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -20,6 +21,7 @@ import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { CloudApiError, cloudAccount } from "@/lib/cloud";
 import { oauthErrorCopyKey } from "@/lib/oauth";
+import { invalidateAfterAuth } from "@/lib/query-invalidation";
 
 type Mode = "password" | "code";
 
@@ -42,6 +44,7 @@ export function LoginForm({
   oauthError?: string;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -97,6 +100,8 @@ export function LoginForm({
     setBusy(true);
     try {
       await cloudAccount.login(email.trim(), password);
+      // 登录态变了:站头那份 viewer 缓存必须失效,否则回到站内还显示「登录」。
+      await invalidateAfterAuth(queryClient);
       router.push(`/${locale}/account`);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
@@ -116,6 +121,7 @@ export function LoginForm({
     setBusy(true);
     try {
       await cloudAccount.loginWithCode(email.trim(), code.trim());
+      await invalidateAfterAuth(queryClient);
       router.push(`/${locale}/account`);
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);

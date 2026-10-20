@@ -1,19 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 
 import { GithubMark, GoogleMark } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
-import { cloudAccount } from "@/lib/cloud";
-import {
-  enabledOAuthProviders,
-  oauthStartUrl,
-  type OAuthProviderName,
-  type OAuthReturnPage,
-} from "@/lib/oauth";
+import { oauthStartUrl, type OAuthProviderName, type OAuthReturnPage } from "@/lib/oauth";
+import { useOAuthProviders } from "@/lib/queries";
 
 /**
  * 登录 / 注册页的第三方入口:一颗 GitHub、一颗 Google。
@@ -34,24 +29,10 @@ export function OAuthButtons({
   copy: Messages["account"];
   from: OAuthReturnPage;
 }) {
-  const [providers, setProviders] = useState<OAuthProviderName[] | null>(null);
+  // 可用性走查询缓存(10 分钟内不重拉):登录 / 注册页之间来回切不会每次都问一遍。
+  const providersQuery = useOAuthProviders();
+  const providers = providersQuery.data ?? null;
   const [pending, setPending] = useState<OAuthProviderName | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    cloudAccount
-      .oauthProviders()
-      .then((body) => {
-        if (alive) setProviders(enabledOAuthProviders(body));
-      })
-      .catch(() => {
-        // 问不到就当作没启用:不画一个点下去只会报错的按钮。
-        if (alive) setProviders([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   // 未配置 / 还在确认 / 请求失败:三种情况都不渲染,连分隔线也不占位。
   if (!providers || providers.length === 0) return null;

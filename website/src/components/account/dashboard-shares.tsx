@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Bookmark, Download, ExternalLink, Heart, MessageSquare, PackageOpen, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { type Locale, localePath } from "@/i18n/config";
 import { getMessages, type Messages } from "@/i18n/messages";
 import { CloudApiError, cloudShares, type CloudShare } from "@/lib/cloud";
+import { invalidateAfterShareChange } from "@/lib/query-invalidation";
 
 import { formatShareDate } from "@/components/community/share-utils";
 
@@ -47,6 +49,7 @@ export function DashboardShares({
   onRemoved: (id: string) => void;
   onGoToProfile: () => void;
 }) {
+  const queryClient = useQueryClient();
   const t = getMessages(locale).community;
   // 删除失败时的兜底：后端总有一句话；只有网络/未知错误才用它。
   const genericFailure = getMessages(locale).account.actionFailed;
@@ -63,7 +66,10 @@ export function DashboardShares({
     setBusy(share.id);
     try {
       await cloudShares.remove(share.id);
+      // 就地移除 + 让缓存失效:我的分享、概览统计(两者同一份 sharesByMe)、
+      // 以及该 kind 的公开列表里那张卡片。只改本地 state 的话,切个分区回来它又出现了。
       onRemoved(share.id);
+      void invalidateAfterShareChange(queryClient, share.kind);
       setConfirming("");
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : genericFailure);

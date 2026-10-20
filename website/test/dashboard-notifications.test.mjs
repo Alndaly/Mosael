@@ -152,8 +152,11 @@ test("① 列表:进分区拉一次 /notifications,三种 kind 各一条", async
   }
 
   // 结构:列表真的在渲染,评论有预览,标题链到详情。
+  // 取数搬到了 lib/queries.ts 的 useNotifications(和站头共用同一套查询缓存);
+  // 组件这里只该剩下 hook、分页与渲染。
   const panel = read(PANEL);
-  assert.match(panel, /cloudNotifications\.list\(/, "通知分区没有走 lib/cloud.ts 的同一套取数");
+  assert.match(read("src/lib/queries.ts"), /cloudNotifications\.list\(/, "通知取数没有走 lib/cloud.ts 的同一套取数");
+  assert.match(panel, /useNotifications\(/, "通知分区没有用 useNotifications");
   assert.match(panel, /items\.map\(/, "通知分区没有渲染列表");
   assert.match(panel, /<InitialTile/, "头像没有复用社区 / 个人信息那一块首字母色块");
   assert.match(panel, /item\.kind === "comment"/, "评论没有单独的渲染分支");
@@ -271,7 +274,9 @@ test("⑤ 顶栏角标:0 不显示、>99 收成 99+,只拉一次不轮询", asyn
   assert.equal(stub.calls[0].url, "/api/cloud/v1/notifications/unread-count");
 
   const nav = read(NAV);
-  assert.match(nav, /cloudNotifications\s*\n?\s*\.unreadCount\(\)/, "顶栏没有问 unread-count");
+  const queries = read("src/lib/queries.ts");
+  assert.match(queries, /cloudNotifications\s*\n?\s*\.unreadCount\(\)/, "顶栏没有问 unread-count");
+  assert.match(nav, /useUnreadCount\(/, "顶栏没有用 useUnreadCount");
   assert.match(nav, /formatUnreadBadge\(/, "顶栏角标没有走共用的格式化函数");
   assert.match(nav, /bg-destructive/, "角标不是一个小红点 / 红色数字");
   assert.match(nav, /tabular-nums/, "角标数字没有等宽,位数一变就跳");
@@ -356,7 +361,11 @@ test("⑦ 分页:「加载更多」带 cursor,追加而不是替换", async () =
   );
 
   const panel = read(PANEL);
-  assert.match(panel, /setItems\(\(current\) => \[\.\.\.current, \.\.\.page\.items\]\)/, "「加载更多」不是追加");
-  assert.match(panel, /nextCursor/, "没有记住下一页的 cursor");
-  assert.match(panel, /loadMore/, "没有「加载更多」");
+  const queries = read("src/lib/queries.ts");
+  // 「追加而不是替换」现在由 infinite query 的 pages 拼接保证(同一份缓存,不另写 state)。
+  assert.match(panel, /useNotifications\(/, "通知分区没有用 useNotifications");
+  assert.match(panel, /pages\.flatMap\(/, "多页没有拼成一条列表(加载更多会替换掉第一页)");
+  assert.match(panel, /fetchNextPage\(/, "没有「加载更多」");
+  assert.match(queries, /initialPageParam/, "分页没有首页参数");
+  assert.match(queries, /getNextPageParam: \(last\) => last\.next_cursor/, "下一页 cursor 没有从上一页来");
 });
