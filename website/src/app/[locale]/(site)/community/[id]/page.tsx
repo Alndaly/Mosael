@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return pageMetadata({
     locale,
     path: `/community/${id}`,
-    title: share?.title ?? t.sharesTitle,
+    title: share?.title ?? t.name,
     description: summaryText || t.sharesSeoDescription,
     type: "article",
   });
@@ -74,7 +74,8 @@ function ShareLoadError({ locale, message }: { locale: Locale; message: string }
   const t = getMessages(locale).community;
   return (
     <div className="mx-auto grid max-w-[76rem] items-start gap-4 px-5 py-24 sm:px-8">
-      <h1 className="m-0 font-display text-3xl font-bold tracking-tight">{t.sharesTitle}</h1>
+      {/* 这一页是「社区」下的一条内容,不是另一个叫「社区分享」的分区 */}
+      <h1 className="m-0 font-display text-3xl font-bold tracking-tight">{t.name}</h1>
       <div
         role="alert"
         className="flex max-w-2xl flex-wrap items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
@@ -134,8 +135,7 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
             <Link href={localePath(locale, "/community")} className="hover:text-foreground">
               {t.name}
             </Link>
-            <ChevronRight className="size-3.5" aria-hidden />
-            <span>{t.shares}</span>
+            {/* 没有中间的「分享」一级:社区就是插件和工作流,那一条内容不是另一种"分享" */}
             <ChevronRight className="size-3.5" aria-hidden />
             <span aria-current="page" className="truncate text-foreground">
               {share.title}
