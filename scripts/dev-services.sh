@@ -26,9 +26,15 @@ wait_port() { # $1=端口 $2=秒
 if [ "$target" = "all" ] || [ "$target" = "web" ]; then
   echo "== 官网:构建 + 重启 3100 =="
   cd "$ROOT/website"
+  # **先建到另一个目录**:构建期间 3100 继续用旧的 .next 服务(这段时间页面是好的)。
+  # 建成功才换目录 + 重启,停机只有启动那一两秒。
+  rm -rf .next-build
+  NEXT_DIST_DIR=.next-build npx next build >/tmp/mosael-web-build.log 2>&1 || {
+    echo "构建失败,看 /tmp/mosael-web-build.log(3100 还在用旧构建,没动)" >&2; exit 1; }
+  rm -rf .next-old && mv .next .next-old 2>/dev/null || true
+  mv .next-build .next
   lsof -nP -iTCP:3100 -sTCP:LISTEN -t 2>/dev/null | xargs -r kill || true
   sleep 1
-  npx next build >/tmp/mosael-web-build.log 2>&1 || { echo "构建失败,看 /tmp/mosael-web-build.log" >&2; exit 1; }
   nohup npx next start -p 3100 >/tmp/mosael-web.log 2>&1 &
   wait_port 3100 40
   echo " 3100 ✓"

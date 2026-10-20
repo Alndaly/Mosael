@@ -4,6 +4,9 @@ import { DEFAULT_LOCALE } from "./src/i18n/config";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // 构建产物目录可以被环境变量改掉:`scripts/dev-services.sh` 先建到 `.next-build`,建好了再换上去。
+  // 这样**构建期间正在服务的 3100 不受影响**(踩过:构建到一半用户刷新,整页 404/裸样式)。
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // TypeScript 7 不再暴露 Next 默认走的那套编译器 API,构建会直接失败并让你退回 TS 6。
   // 这个开关让 Next 改用 `tsc` CLI 去做类型检查 —— 保住"依赖取最新版"的前提,而不是为了
   // 迁就构建流程把语言版本降回去。

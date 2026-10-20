@@ -87,3 +87,7 @@ plugins/**/config.json
 
 # 官方内容 bundle:由 scripts/export_official_bundle.py 从仓库确定性导出,部署时重跑,不进仓库
 deploy/official-bundle.json
+
+# 本地服务重建时的暂存构建目录(见 scripts/dev-services.sh)
+website/.next-build
+website/.next-old
