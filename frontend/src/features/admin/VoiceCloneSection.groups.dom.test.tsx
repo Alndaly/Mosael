@@ -93,9 +93,9 @@ beforeAll(() => {
 });
 
 describe("语音合成引擎这一节", () => {
-  it("标题从「声音克隆」改成「语音合成引擎」", async () => {
+  it("标题从「声音克隆」改成「本地语音合成引擎」", async () => {
     renderSection();
-    expect(await screen.findByRole("heading", { level: 2, name: "语音合成引擎" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "本地语音合成引擎" })).toBeInTheDocument();
   });
 
   it("按能力分两组:克隆引擎一组、预置音色引擎一组", async () => {

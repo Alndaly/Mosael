@@ -508,7 +508,7 @@ describe("语音合成引擎:默认是克隆组说明之后、列表之前的一
   it("权重表还没到(undefined)时也不画控件 / 不画那句话", async () => {
     holdTtsModels = true;
     renderWithClient(<VoiceCloneSection />);
-    await screen.findByRole("heading", { name: "语音合成引擎" });
+    await screen.findByRole("heading", { name: "本地语音合成引擎" });
 
     const box = section("engine-clone");
     expect(box.querySelector("[data-admin-default-line]")).toBeNull();

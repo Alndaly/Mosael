@@ -210,6 +210,8 @@ export function AdminRowState({
 const TAG_TONE = {
   neutral: "bg-secondary text-muted-foreground",
   warning: "bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-warning",
+  /** 正向 / 已选中:和 warning 同形状、同浓度,只是换成 `--success` —— 「选中了」不是「有代价」。 */
+  positive: "bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-success",
 } as const;
 
 /** 名字旁的安静标签:语义色淡底的小圆角,不描边、不大写。 */

@@ -2,9 +2,8 @@ import React from "react";
 
 import { useI18n } from "@/app/preferences";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ADMIN_CARD, AdminRow } from "./adminLayout";
+import { ADMIN_CARD, AdminRow, AdminTag } from "./adminLayout";
 
 /**
  * 「默认」的摆放规则(维护者定的):**只出现在同一能力有多个可选实现的地方**,并且永远放在
@@ -125,15 +124,22 @@ export function AdminDefaultSelect({
  * 回答的是"这几项里选中的是它" —— 两件事并排放在同一格,读起来像同一类状态。维护者原话:
  * 「这种当前默认的提示请你放在左侧 title 的右边,可以做成一个 badge 的样式」。
  *
- * **为什么是 badge、为什么只有字**:用的是基础件 `Badge` 的 secondary 一档(小圆角 + 浅底 +
- * 小字,颜色全走现有 token)。字就是「当前默认」本身 —— 一颗星得靠猜,而读屏也只念得出字。
+ * **为什么是 `AdminTag` 药丸、为什么只有字**:形状和降噪那节的「会去掉音乐」是同一枚 —— 全圆、
+ * 11px、淡底、不描边。字就是「当前默认」本身 —— 一颗星得靠猜,而读屏也只念得出字。
+ *
+ * **为什么同形状、不同色**:维护者要的是「不同类型的提示用不同的 badge 配色」。「会去掉音乐」是
+ * **代价提醒**,用 `warning`(暖色);「当前默认」是**正向选中**,用新档 `positive` —— 走现成的
+ * `--success` token,同样 14% 淡底,不新造颜色。两种淡底都落在 `ADMIN_CARD`(`bg-panel`)上,
+ * 按 tokens.css 的数值算过:亮 4.75:1、暗 6.49:1(半透明卡片模式下 4.70 / 6.77),都过 4.5:1。
+ * 颜色只回答语义;它仍然不可点(不包按钮),测试按 `data-admin-default-marker` 找它。
  */
 export function AdminDefaultMarker() {
   const t = useI18n();
+  //: 锚点挂在外层:AdminTag 保持通用药丸(只认 tone),不为了这枚标记给它另开口子。
   return (
-    <Badge variant="secondary" data-admin-default-marker className="shrink-0 whitespace-nowrap">
-      {t("defaultCurrent")}
-    </Badge>
+    <span data-admin-default-marker className="inline-flex shrink-0">
+      <AdminTag tone="positive">{t("defaultCurrent")}</AdminTag>
+    </span>
   );
 }
 
