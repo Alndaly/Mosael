@@ -7,9 +7,8 @@ import sqlite3
 
 from fastapi.testclient import TestClient
 
-from cloud.app import create_app
 from cloud.config import CloudConfig
-from conftest import PASSWORD, api, scalar, signup, signed_in
+from conftest import PASSWORD, api, build_app, scalar, signup, signed_in
 
 
 def cookie_header(response) -> str:
@@ -39,7 +38,7 @@ def test_secure_is_on_when_configured(tmp_path):
         public_url="https://mosael.test",
         cookie_secure=True,
     )
-    app = create_app(config)
+    app = build_app(config)
     client = TestClient(app)
     try:
         signup(client)

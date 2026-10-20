@@ -1,7 +1,8 @@
-# MosaelCloud 账号与桌面端绑定(第一期)
+# MosaelCloud 账号与桌面端绑定
 
-这一期只做两件事:**MosaelCloud 有自己的一套账号**、**桌面端能把它绑到某个本地用户身上**。
-分享、社区、同步、钱包、模型网关都不在这一期,也不预先加字段。
+最初一期只做两件事:**MosaelCloud 有自己的一套账号**、**桌面端能把它绑到某个本地用户身上**。
+这一版又补上了**邮箱验证码注册**与**验证码登录**(见「邮箱验证码与验证码登录」一节)。
+分享、社区、同步、钱包、模型网关都不在这里,也不预先加字段。
 
 设计方向来自 [ADR 0039](adr/0039-mosael-cloud.md)(Cloud 是独立产品边界),但它当时设想的是
 "重新接社区服务的设备授权";这一期按维护者的新方向改成**一套独立的 Cloud 账号**,不复用
@@ -74,8 +75,11 @@ handle              { reverse_proxy website:3000 }
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/signup` | 邮箱 + 密码注册;**不自动登录** |
-| POST | `/login` | 登录,Set-Cookie 会话 |
+| POST | `/signup/code` | 往邮箱发 6 位注册验证码;已注册的邮箱 409 |
+| POST | `/signup` | 邮箱 + **验证码** + 密码注册,成功即 `email_verified_at`;**不自动登录** |
+| POST | `/login` | 密码登录,Set-Cookie 会话 |
+| POST | `/login/code` | 往邮箱发登录验证码;未注册邮箱也回同一句 `{"sent": true}` |
+| POST | `/login/code/verify` | 邮箱 + 验证码换会话,cookie 与密码登录同一条路径 |
 | POST | `/logout` | 撤销当前会话 |
 | GET | `/me` | 当前云端账号 |
 | DELETE | `/me` | 删号(会话 / 设备 / 设备码级联删除) |
@@ -87,6 +91,74 @@ handle              { reverse_proxy website:3000 }
 | GET | `/device/me` | Bearer 设备凭据认自己(给后续同步 / 分享留的接口) |
 
 失败一律 `{error, message: {en, zh}}`;错误码稳定,文案中英各一份。
+
+## 邮箱验证码与验证码登录
+
+注册从"邮箱 + 密码"改成"邮箱 + 验证码 + 密码":先 `POST /signup/code` 拿码,再带着码
+`POST /signup`。登录则在同一条 `/login` 之外多两条:`/login/code` 发码、`/login/code/verify`
+用码换会话。两种登录方式**共用 `cloud_sessions` 与那枚 HttpOnly cookie**,没有第二条鉴权路径。
+
+### 表 `cloud_email_codes`
+
+```
+cloud_email_codes(
+  id, email, purpose(signup|login), code_hash,   -- 只存 sha256,明文只进邮件
+  attempts,                                      -- 验错次数
+  request_ip,                                    -- 只为每 IP 限流;和码一起过期,不是身份
+  created_at, expires_at, used_at
+)
+```
+
+哈希把 `purpose:email:code` 一起拌进去,同一串数字在不同邮箱 / 用途下不是同一个摘要。
+**6 位数字只有 100 万种,单靠哈希挡不住离线穷举** —— 真正的防线是 TTL、一次性、尝试上限和
+重发限流,见下表的常量与理由。`request_ip` 目前没有清理任务,和码一样属于短期运维数据;
+要长期保留时应单独做清理策略。
+
+### 阈值(常量在 `cloud/src/cloud/email_codes.py`,理由随行注释)
+
+| 常量 | 值 | 为什么 |
+| --- | --- | --- |
+| `CODE_TTL_SECONDS` | 600(10 分钟) | 够用户切到邮箱、等信到达;再长就是给暴力猜更多时间 |
+| `CODE_MAX_ATTEMPTS` | 5 | 6 位码的在线命中概率从 1/1000000 压到 1/200000,到上限即作废 |
+| `RESEND_COOLDOWN_SECONDS` | 60 | 同一邮箱 + 用途 60 秒内只能发一次,挡住连点与"轰炸收件箱" |
+| `EMAIL_HOURLY_LIMIT` | 5 | 每邮箱每用途每小时 5 封;正常注册 / 登录用不到,超过就是想刷 |
+| `IP_HOURLY_LIMIT` | 20 | 比单邮箱宽,因为同一个 NAT 后可能坐着多个人;真正挡单邮箱轰炸的是上一行 |
+
+失败分类是明确的:`email_code_required` / `email_code_invalid` / `email_code_expired` /
+`email_code_used` / `email_code_attempts_exhausted` / `email_code_cooldown` / `too_many_requests`,
+每一种都有中英两份文案。
+
+### 枚举防护
+
+- `/login/code` 对**注册过和没注册过的邮箱回完全相同的响应**(`200 {"sent": true}`)。
+  未注册邮箱也会落一行码占掉配额,所以冷却与限流行为也一致;只是不投递、永远用不了。
+- `/login/code/verify` 对未知邮箱统一回 `email_code_invalid`,与"码错"不可区分。
+- 注册用途对已注册邮箱回 `409 email_taken` —— 注册页本来就会在创建账号时告诉用户这件事,
+  这不是新泄露面。
+
+### 发信配置(`CLOUD_SMTP_*`)
+
+| 环境变量 | 缺省 | 说明 |
+| --- | --- | --- |
+| `CLOUD_SMTP_HOST` | 空 | 空 = **没配置发信**,发码接口回 `503 mail_not_configured`,不假装成功 |
+| `CLOUD_SMTP_PORT` | 587 | 也可以直接写在 host 里:`localhost:1025` |
+| `CLOUD_SMTP_TLS` | 有用户名时 `starttls`,否则 `none` | `starttls`(587)/ `ssl`(465)/ `none`(本地 Mailpit) |
+| `CLOUD_SMTP_USERNAME` / `CLOUD_SMTP_PASSWORD` | 空 | 有用户名才登录;密码不写日志 |
+| `CLOUD_SMTP_FROM` | `no-reply@mosael.com` | 信封 / 头里的发件人 |
+
+本地开发用 Mailpit,只填一个变量即可(无认证时 TLS 缺省就是 `none`):
+
+```bash
+CLOUD_SMTP_HOST=localhost:1025 \
+CLOUD_COOKIE_SECURE=false \
+CLOUD_PUBLIC_URL=http://localhost:3000 \
+  uv run uvicorn cloud.main:app --host 127.0.0.1 --port 8901 --reload
+```
+
+没配置发信时,**注册过与没注册过的邮箱都回同一个 `503`** —— 否则「服务没配好」会变成账号探测器。
+发信失败回 `502 email_send_failed`,并删掉那枚没送出去的码(否则它白占冷却和配额)。
+**日志里不出现完整验证码**,邮箱也只写脱敏形式(`a***@example.com`);测试注入假 sender
+断言"发给了谁、什么码",从不真发,也不连外网。测试里没有"开发环境跳过验证"的开关。
 
 ## 密码、会话、CSRF
 
@@ -145,17 +217,21 @@ cloud_bindings(
 
 ## 不在这一期
 
-分享、社区、feed、同步、钱包、模型网关、邮箱验证(字段 `email_verified_at` 已留,恒为 `null`)、
+分享、社区、feed、同步、钱包、模型网关、找回密码、密码登录的失败限速 / 人机验证、
 云端设备凭据的刷新轮换、桌面端用云端凭据调用任何业务接口。
 
 ## 只有真机能验 / 拿不准
 
 - **真机**:系统浏览器打开 `verification_uri_complete`、桌面端在 Electron 里打开外部链接、
-  真实 Postgres 上的 `create_all` 与并发设备码消费。CI 用 SQLite + TestClient。
+  真实 Postgres 上的 `create_all` 与并发设备码消费、真实 SMTP 提供商的投递(SPF / DKIM /
+  退信)、反代后面 `request.client.host` 是否拿到真实客户端 IP(uvicorn 需要开 proxy headers,
+  否则每 IP 限流会退化成"每个代理一个桶")。CI 用 SQLite + TestClient,发信走注入的假 sender。
 - **拿不准**:长期设备 token 在"后续分享 / 同步"里是否够用;如果那时需要更细的权限,应该加
-  作用域或改成 access + refresh,而不是把这一枚 token 直接当万能钥匙。邮箱验证要做时,注册
-  流程与现有可能要补一步"未验证不能绑定"。
-- **这一期没做**:登录 / 设备码的限速与人机验证、邮箱验证、找回密码。上线公网前至少要补
-  "按 IP + 按账号的失败限速";`email_verified_at` 已经留好,但恒为 `null`。
+  作用域或改成 access + refresh,而不是把这一枚 token 直接当万能钥匙。邮箱验证码目前每次
+  重新签发,旧码在同一 purpose 下会被"最新一枚"覆盖逻辑间接作废,但没有显式批量失效;
+  如果以后要支持「作废旧码」,再加一列或一条 UPDATE。SMTP 运行中故障时,注册过的邮箱会拿到
+  `502`、未注册的仍是 `200` —— 这是「把失败说清楚」与「枚举防护」之间的取舍;正常运行时两者一致。
+- **这一期没做**:密码登录的失败限速与人机验证、找回密码、验证码行的过期清理。上线公网前
+  至少要补"按 IP + 按账号的失败限速"和一张清理任务;邮箱验证码本身的限流已经就位。
 - **语言**:`verification_uri` 固定指到 `/en/account`,中文用户需要自己在站内切到中文。
   设备码本身把 `user_code` 带在查询串里,登录后仍会预填。

@@ -4,7 +4,16 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { AccountField, FormAlert, PasswordField, SubmitButton } from "@/components/account/form-controls";
+import {
+  AccountField,
+  CodeField,
+  FormAlert,
+  FormNotice,
+  PasswordField,
+  SendCodeButton,
+  SubmitButton,
+} from "@/components/account/form-controls";
+import { useResendCountdown } from "@/components/account/use-email-code";
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
@@ -12,20 +21,58 @@ import { CloudApiError, cloudAccount } from "@/lib/cloud";
 
 type Phase = "form" | "success";
 
-/** 注册。成功后**留在这页**给出成功态 —— 静默跳转会让用户不确定账号到底建没建成。 */
+/**
+ * 注册:**邮箱 → 发送验证码 → 6 位码 → 密码**。
+ *
+ * 验证码是注册的一部分,不是可选项:后端不验码就会拒。发送按钮有 60 秒本地倒计时
+ * (服务端同样有冷却),发送中 / 已发送 / 失败都在按钮和提示区里说清楚。
+ * 成功后**留在这页**给出成功态 —— 静默跳转会让用户不确定账号到底建没建成。
+ */
 export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["account"] }) {
   const [phase, setPhase] = useState<Phase>("form");
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [sendingCode, setSendingCode] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [fieldError, setFieldError] = useState<"" | "password" | "confirm">("");
   const [busy, setBusy] = useState(false);
+  const countdown = useResendCountdown();
+
+  const sendCode = async () => {
+    setError("");
+    setNotice("");
+    setCodeError("");
+    setEmailError("");
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      setEmailError(copy.emailRequired);
+      return;
+    }
+    setSendingCode(true);
+    try {
+      await cloudAccount.sendSignupCode(email.trim());
+      setNotice(copy.codeSent);
+      countdown.start();
+    } catch (failure) {
+      setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
     setFieldError("");
+    setCodeError("");
+    if (!/^\d{6}$/.test(code.trim())) {
+      setCodeError(copy.codeRequired);
+      return;
+    }
     if (password.length < 8) {
       setFieldError("password");
       return;
@@ -36,7 +83,7 @@ export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["a
     }
     setBusy(true);
     try {
-      await cloudAccount.signup(email, password);
+      await cloudAccount.signup(email.trim(), code.trim(), password);
       setPhase("success");
     } catch (failure) {
       setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
@@ -79,6 +126,10 @@ export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["a
     );
   }
 
+  // 发送结果 / 表单错误都通过 id 关联到验证码字段,读屏在聚焦时能听到"为什么"。
+  const codeDescription =
+    [notice ? "signup-code-status" : "", error ? "signup-error" : ""].filter(Boolean).join(" ") || undefined;
+
   return (
     <form className="grid gap-5" onSubmit={submit} noValidate>
       {error && (
@@ -86,6 +137,7 @@ export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["a
           {error}
         </FormAlert>
       )}
+      {notice && <FormNotice id="signup-code-status">{notice}</FormNotice>}
       <AccountField
         id="signup-email"
         label={copy.email}
@@ -94,8 +146,29 @@ export function SignupForm({ locale, copy }: { locale: Locale; copy: Messages["a
         autoComplete="email"
         required
         value={email}
+        error={emailError}
         describedBy={error ? "signup-error" : undefined}
         onChange={(event) => setEmail(event.target.value)}
+      />
+      <CodeField
+        id="signup-code"
+        label={copy.codeLabel}
+        hint={copy.codeHint}
+        value={code}
+        error={codeError}
+        describedBy={codeDescription}
+        onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+        trailing={
+          <SendCodeButton
+            label={copy.sendCode}
+            sendingLabel={copy.sendingCode}
+            resendLabel={copy.resendCode}
+            sending={sendingCode}
+            cooldown={countdown.remaining}
+            disabled={busy}
+            onClick={() => void sendCode()}
+          />
+        }
       />
       <PasswordField
         id="signup-password"

@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from cloud.app import create_app
 from cloud.config import CloudConfig
-from conftest import PASSWORD, api, scalar, signup
+from conftest import PASSWORD, api, build_app, scalar, signup
 
 
 def make_local_database(path: Path) -> None:
@@ -67,7 +67,7 @@ def test_cloud_signup_and_login_never_touch_the_local_database(tmp_path):
 
     config = CloudConfig(data_dir=tmp_path / "cloud", public_url="https://mosael.test", cookie_secure=False)
     config.data_dir.mkdir()
-    app = create_app(config)
+    app = build_app(config)
     client = TestClient(app)
     try:
         user = signup(client, email="alice@example.com")
@@ -98,7 +98,7 @@ def test_a_local_account_can_exist_before_cloud_registration_and_stays_put(tmp_p
     before = local_snapshot(local)
 
     config = CloudConfig(data_dir=tmp_path, public_url="https://mosael.test", cookie_secure=False)
-    app = create_app(config)
+    app = build_app(config)
     client = TestClient(app)
     try:
         signup(client, email="alice@example.com")
@@ -112,7 +112,7 @@ def test_a_local_account_can_exist_before_cloud_registration_and_stays_put(tmp_p
 
 def test_cloud_uses_its_own_ids_not_local_ones(tmp_path):
     config = CloudConfig(data_dir=tmp_path, public_url="https://mosael.test", cookie_secure=False)
-    app = create_app(config)
+    app = build_app(config)
     client = TestClient(app)
     try:
         user = signup(client)

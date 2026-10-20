@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from cloud.db import Base
@@ -35,7 +35,7 @@ class CloudUser(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     #: argon2id 哈希(见 security.hash_password)。绝不存明文。
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    #: 邮箱验证这一期不做 —— 字段先留着,以后做验证时不必再加迁移。
+    #: 注册时要先验邮箱验证码,验过即写这个时间;更早的账号可能是空,不做回填。
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
 
@@ -52,6 +52,33 @@ class CloudSession(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class CloudEmailCode(Base):
+    """一次邮箱验证码。**只存哈希**;6 位明文只出现在发出去的那封邮件里。
+
+    码不绑用户:注册时用户还不存在,登录时邮箱可能根本没注册(枚举防护要求两条路径的响应
+    一致,所以未注册邮箱也会留一行 —— 它永远收不到码,也就永远用不了)。
+    """
+
+    __tablename__ = "cloud_email_codes"
+    __table_args__ = (
+        Index("idx_cloud_email_codes_lookup", "email", "purpose", "created_at"),
+        Index("idx_cloud_email_codes_ip", "request_ip", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    #: `signup` / `login`。同一个验证码不能跨用途使用。
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: 验错次数。到上限即作废,逼用户重新发码。
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: 请求来源 IP,只用于"每 IP 每小时"限流;它和码一起过期,不是身份,也不进任何响应。
+    request_ip: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class CloudDeviceCode(Base):

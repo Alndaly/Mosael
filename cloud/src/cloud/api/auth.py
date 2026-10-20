@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
 from cloud.config import CloudConfig
+from cloud.email_codes import consume_code, issue_code
 from cloud.errors import CloudError
 from cloud.models import CloudSession, CloudUser, now
 from cloud.security import hash_password, new_token, token_digest, verify_password
@@ -22,8 +23,14 @@ from cloud.security import hash_password, new_token, token_digest, verify_passwo
 router = APIRouter(tags=["accounts"])
 
 
+class EmailIn(BaseModel):
+    email: EmailStr
+
+
 class SignupIn(BaseModel):
     email: EmailStr
+    #: 先 POST /signup/code 拿到的 6 位码。留空由路由给一句"请输入验证码",而不是 pydantic 的字段路径。
+    code: str = Field(default="", max_length=12)
     #: 长度策略在路由里判 —— 报错要能说清"至少几位",而不是 pydantic 的字段路径。
     password: str = Field(min_length=1, max_length=512)
 
@@ -31,6 +38,16 @@ class SignupIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=512)
+
+
+class LoginCodeIn(BaseModel):
+    email: EmailStr
+    code: str = Field(default="", max_length=12)
+
+
+def request_ip(request: Request) -> str:
+    """限流用的来源 IP。反代后面要开 uvicorn 的 proxy headers,否则这里看到的是代理地址。"""
+    return request.client.host if request.client is not None else ""
 
 
 def user_out(user: CloudUser) -> dict[str, object]:
@@ -65,19 +82,53 @@ def clear_session_cookie(response: Response, config: CloudConfig) -> None:
     )
 
 
+def open_session(db, config: CloudConfig, user: CloudUser, response: Response) -> None:
+    """给一次成功的认证发会话。密码登录和验证码登录**共用这一条路径**,行为才不会分叉。"""
+    raw = new_token()
+    expires_at = now() + timedelta(days=config.session_ttl_days)
+    db.add(CloudSession(token_hash=token_digest(raw), user_id=user.id, expires_at=expires_at))
+    db.commit()
+
+    set_session_cookie(response, config, raw, max_age=int((expires_at - now()).total_seconds()))
+    response.headers["Cache-Control"] = "no-store"
+
+
+@router.post("/signup/code")
+def signup_code(body: EmailIn, db: DbSession, request: Request) -> dict[str, object]:
+    """注册第一步:把 6 位码发到这个邮箱。已注册的邮箱直接 409(注册页本来就会说)。"""
+    email = str(body.email).strip().lower()
+    issue_code(
+        db,
+        email=email,
+        purpose="signup",
+        request_ip=request_ip(request),
+        sender=request.app.state.code_sender,
+    )
+    return {"sent": True}
+
+
 @router.post("/signup", status_code=201)
 def signup(body: SignupIn, db: DbSession, config: CurrentConfig) -> dict[str, object]:
-    """注册**不自动登录**:官网把用户送到登录页,让"注册"和"登录"各自只有一件事。"""
+    """注册:**必须带邮箱验证码**,验过才建账号,并把 `email_verified_at` 写上。
+
+    仍然不自动登录:官网把用户送到登录页,让"注册"和"登录"各自只有一件事。
+    """
     if len(body.password) < config.password_min_length:
         raise CloudError(400, "password_too_short", min=config.password_min_length)
     if len(body.password) > config.password_max_length:
         raise CloudError(400, "password_too_long", max=config.password_max_length)
 
     email = str(body.email).strip().lower()
+    # 先看重复:已注册的邮箱没有可发的注册码,直接给 409,别让人先等一封邮件。
     if db.scalar(select(CloudUser.id).where(CloudUser.email == email)) is not None:
         raise CloudError(409, "email_taken")
 
-    user = CloudUser(email=email, password_hash=hash_password(body.password))
+    code = body.code.strip()
+    if not code:
+        raise CloudError(400, "email_code_required")
+    consume_code(db, email=email, purpose="signup", code=code)
+
+    user = CloudUser(email=email, password_hash=hash_password(body.password), email_verified_at=now())
     db.add(user)
     try:
         db.commit()
@@ -96,13 +147,41 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
     if user is None or not verify_password(body.password, user.password_hash):
         raise CloudError(401, "invalid_credentials")
 
-    raw = new_token()
-    expires_at = now() + timedelta(days=config.session_ttl_days)
-    db.add(CloudSession(token_hash=token_digest(raw), user_id=user.id, expires_at=expires_at))
-    db.commit()
+    open_session(db, config, user, response)
+    return {"user": user_out(user)}
 
-    set_session_cookie(response, config, raw, max_age=int((expires_at - now()).total_seconds()))
-    response.headers["Cache-Control"] = "no-store"
+
+@router.post("/login/code")
+def send_login_code(body: EmailIn, db: DbSession, request: Request) -> dict[str, object]:
+    """登录第一步:发码。**未注册邮箱也回同一句** `{"sent": true}`,不泄露这个邮箱有没有注册。"""
+    email = str(body.email).strip().lower()
+    issue_code(
+        db,
+        email=email,
+        purpose="login",
+        request_ip=request_ip(request),
+        sender=request.app.state.code_sender,
+    )
+    return {"sent": True}
+
+
+@router.post("/login/code/verify")
+def login_with_code(
+    body: LoginCodeIn, db: DbSession, config: CurrentConfig, response: Response
+) -> dict[str, object]:
+    """登录第二步:码换会话。会话 cookie 与密码登录完全同一条路径。"""
+    email = str(body.email).strip().lower()
+    code = body.code.strip()
+    if not code:
+        raise CloudError(400, "email_code_required")
+
+    user = db.scalar(select(CloudUser).where(CloudUser.email == email))
+    if user is None:
+        # 未知邮箱根本收不到码;统一报"码无效",与"码错"不可区分。
+        raise CloudError(400, "email_code_invalid")
+    consume_code(db, email=email, purpose="login", code=code)
+
+    open_session(db, config, user, response)
     return {"user": user_out(user)}
 
 

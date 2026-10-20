@@ -221,6 +221,12 @@ export function AccountView({
                 <CheckCircle2 className="size-3.5" aria-hidden />
                 {copy.signedInLabel}
               </span>
+              {user.email_verified_at && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-foreground">
+                  <CheckCircle2 className="size-3.5" aria-hidden />
+                  {copy.emailVerified}
+                </span>
+              )}
             </div>
             <h2
               id="account-identity"

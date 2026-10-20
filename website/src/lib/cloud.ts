@@ -86,11 +86,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const cloudAccount = {
-  signup(email: string, password: string): Promise<{ user: CloudUser }> {
-    return request("/signup", { method: "POST", body: JSON.stringify({ email, password }) });
+  sendSignupCode(email: string): Promise<{ sent: boolean }> {
+    return request("/signup/code", { method: "POST", body: JSON.stringify({ email }) });
+  },
+  signup(email: string, code: string, password: string): Promise<{ user: CloudUser }> {
+    return request("/signup", { method: "POST", body: JSON.stringify({ email, code, password }) });
   },
   login(email: string, password: string): Promise<{ user: CloudUser }> {
     return request("/login", { method: "POST", body: JSON.stringify({ email, password }) });
+  },
+  sendLoginCode(email: string): Promise<{ sent: boolean }> {
+    return request("/login/code", { method: "POST", body: JSON.stringify({ email }) });
+  },
+  loginWithCode(email: string, code: string): Promise<{ user: CloudUser }> {
+    return request("/login/code/verify", { method: "POST", body: JSON.stringify({ email, code }) });
   },
   logout(): Promise<void> {
     return request("/logout", { method: "POST" });

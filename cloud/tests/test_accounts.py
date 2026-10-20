@@ -11,8 +11,8 @@ from conftest import PASSWORD, api, scalar, signup, signed_in
 def test_signup_login_me_logout_round_trip(client, db_path):
     user = signup(client)
     assert user["email"] == "alice@example.com"
-    # 邮箱验证这一期不做,但字段已经留好。
-    assert user["email_verified_at"] is None
+    # 注册这一步现在会验邮箱验证码,成功即视为已验证。
+    assert user["email_verified_at"] is not None
     assert "password" not in str(user) and "hash" not in str(user)
 
     response = client.post(api("/login"), json={"email": "alice@example.com", "password": PASSWORD})

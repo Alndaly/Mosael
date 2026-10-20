@@ -20,6 +20,42 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Email or password is incorrect.",
         "zh": "邮箱或密码不正确。",
     },
+    "email_code_required": {
+        "en": "Enter the 6-digit code we emailed you.",
+        "zh": "请输入邮箱收到的 6 位验证码。",
+    },
+    "email_code_invalid": {
+        "en": "That code is not correct. Check the email and try again.",
+        "zh": "验证码不正确，请核对邮件后重试。",
+    },
+    "email_code_expired": {
+        "en": "That code has expired. Request a new one.",
+        "zh": "验证码已过期，请重新获取。",
+    },
+    "email_code_used": {
+        "en": "That code has already been used. Request a new one.",
+        "zh": "验证码已经用过了，请重新获取。",
+    },
+    "email_code_attempts_exhausted": {
+        "en": "Too many wrong codes. Request a new one.",
+        "zh": "验证码错误次数过多，请重新获取。",
+    },
+    "email_code_cooldown": {
+        "en": "Wait {seconds} seconds before requesting another code.",
+        "zh": "请等 {seconds} 秒后再重新发送验证码。",
+    },
+    "too_many_requests": {
+        "en": "Too many requests from here. Try again later.",
+        "zh": "操作太频繁，请稍后再试。",
+    },
+    "mail_not_configured": {
+        "en": "Email delivery is not configured on this service yet. Contact the administrator.",
+        "zh": "这台服务还没配置发信，请联系管理员。",
+    },
+    "email_send_failed": {
+        "en": "The code could not be emailed. Try again in a moment.",
+        "zh": "验证码邮件没有发出去，请稍后重试。",
+    },
     "password_too_short": {
         "en": "The password must be at least {min} characters.",
         "zh": "密码至少要 {min} 个字符。",

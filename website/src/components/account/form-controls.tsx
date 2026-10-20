@@ -117,6 +117,126 @@ export function PasswordField({
   );
 }
 
+/**
+ * 6 位数字验证码输入框。仍是 `AccountField`,只是把键盘、自动填充和长度钉死;
+ * 发送按钮作为 `trailing` 放在输入框右侧(和密码可见性按钮同一套位置约定)。
+ */
+export function CodeField({
+  id,
+  label,
+  hint,
+  error,
+  describedBy,
+  trailing,
+  ...props
+}: Omit<FieldProps, "type" | "trailing"> & { trailing?: ReactNode }) {
+  return (
+    <AccountField
+      {...props}
+      id={id}
+      label={label}
+      hint={hint}
+      error={error}
+      describedBy={describedBy}
+      type="text"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      pattern="[0-9]{6}"
+      maxLength={6}
+      placeholder="000000"
+      spellCheck={false}
+      className="pr-32 font-mono tracking-[0.28em]"
+      trailing={trailing}
+    />
+  );
+}
+
+/** 发送验证码 / 重发。冷却时按钮自己禁用并显示剩余秒数,倒计时逻辑仍在表单里。 */
+export function SendCodeButton({
+  label,
+  sendingLabel,
+  resendLabel,
+  sending,
+  cooldown,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  sendingLabel: string;
+  resendLabel: string;
+  sending: boolean;
+  cooldown: number;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const blocked = sending || cooldown > 0 || disabled;
+  return (
+    <button
+      type="button"
+      aria-busy={sending}
+      disabled={blocked}
+      onClick={onClick}
+      className="absolute inset-y-1 right-1 inline-flex items-center rounded-lg px-3 text-[13px] font-semibold text-primary transition-colors hover:bg-brand-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+    >
+      {sending && <LoaderCircle className="mr-1.5 size-3.5 animate-spin motion-reduce:animate-none" aria-hidden />}
+      {sending ? sendingLabel : cooldown > 0 ? `${resendLabel} (${cooldown}s)` : label}
+    </button>
+  );
+}
+
+/**
+ * 登录方式分段控件。
+ *
+ * 两个按钮是同一页里的两种入口,不是两个页面 —— 切过去时邮箱还在,用户不用重填。
+ * 用 `fieldset` + `aria-pressed`:两段就是两个独立开关,Tab 键依次可达,
+ * 读屏也能听出当前选中的是哪一个。
+ */
+export function SegmentedControl<T extends string>({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+  disabled = false,
+}: {
+  id: string;
+  label: string;
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <fieldset
+      id={id}
+      aria-label={label}
+      className="m-0 grid min-w-0 grid-cols-2 gap-1 rounded-full border border-border bg-card p-1"
+    >
+      <legend className="sr-only">{label}</legend>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "h-11 min-w-0 rounded-full px-4 text-[14px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
+              selected
+                ? "bg-primary text-primary-foreground shadow-[0_8px_24px_-16px_color-mix(in_oklab,var(--primary)_80%,transparent)]"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </fieldset>
+  );
+}
+
 export function FormAlert({
   id,
   title,
@@ -141,9 +261,10 @@ export function FormAlert({
   );
 }
 
-export function FormNotice({ children }: { children: ReactNode }) {
+export function FormNotice({ id, children }: { id?: string; children: ReactNode }) {
   return (
     <output
+      id={id}
       aria-live="polite"
       className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-brand-soft px-4 py-3.5 text-accent"
     >
