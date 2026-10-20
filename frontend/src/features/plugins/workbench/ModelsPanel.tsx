@@ -361,8 +361,11 @@ function SlotPicker({
                   <li
                     data-model-row=""
                     className={cn(
-                      "group/thumb relative min-w-0 rounded-lg border",
-                      chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
+                      // 框常显:透明描边会让卡片之间看起来像"多出来的间距"(维护者)。未选中也是实边框 + 卡片底色。
+                      "group/thumb relative min-w-0 overflow-hidden rounded-lg border",
+                      chosen
+                        ? "border-primary/50 bg-accent"
+                        : "border-border bg-card hover:border-primary/30 hover:bg-secondary",
                     )}
                   >
                     {/* 整张卡是一颗按钮:点哪儿(缩略图那层除外)都是填进这一格。缩略图在里面,所以填的过程中那颗转圈
@@ -372,11 +375,11 @@ function SlotPicker({
                       aria-pressed={chosen}
                       aria-busy={filling || undefined}
                       disabled={pick.isPending}
-                      className="grid w-full cursor-pointer gap-2 rounded-lg border-0 bg-transparent p-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default"
+                      className="grid w-full cursor-pointer gap-0 rounded-lg border-0 bg-transparent p-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default"
                       onClick={() => pick.mutate(model)}
                     >
-                      {/* 固定 4:3 且填满卡宽:图片 object-cover,卡片高矮不跟着原图比例变 */}
-                      <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-md bg-secondary">
+                      {/* 封面固定高度、撑满卡宽、图到边(卡内不再留白):卡片高矮不随原图或面板宽度变 */}
+                      <span className="relative block h-24 w-full overflow-hidden bg-secondary">
                         <span className="absolute inset-0 block [&>*]:size-full">{thumb}</span>
                         {/* 填的过程中是转圈,填好了是对勾(尺寸不变)。压在缩略图的右下角;和右上角的 ⓘ 分处两头,
                             永不重叠。只是画给人看的状态,读屏听按钮的 aria-pressed / aria-busy,自己不接点击 */}
@@ -384,14 +387,14 @@ function SlotPicker({
                           <span
                             data-model-state=""
                             aria-hidden
-                            className="pointer-events-none absolute bottom-1 right-1 z-10 grid size-4 place-items-center"
+                            className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 grid size-4 place-items-center"
                           >
                             {filling ? <Loader2 size={14} className="animate-mosael-spin text-muted-foreground" />
                               : <Check size={14} className="text-primary" />}
                           </span>
                         )}
                       </span>
-                      <span className="grid min-w-0 gap-0.5">
+                      <span className="grid min-w-0 gap-0.5 px-2 pb-2 pt-1.5">
                         {/* 名字的说明显式朝下:这一列是「左」的 Hint 区域(见 ComfyWorkbench 的 COLUMN_REGION),跟着区域走会横到
                             左边的画布上(维护者)。卡片下方有地方,往下弹不盖住这张卡 */}
                         <Truncate side="bottom" className="text-ui-xs font-medium text-foreground">{name}</Truncate>
@@ -409,14 +412,14 @@ function SlotPicker({
                         )}
                       </span>
                     </button>
-                    {/* 看大图:缩略图上那一层。透明的一颗按钮,盖住缩略图;位置和里面那张图同一块
-                        (卡内边距 p-2,所以 left/right/top 也是 2、比例同样是 4:3) */}
+                    {/* 看大图:缩略图上那一层。透明的一颗按钮,盖住缩略图;图到边、固定高,所以这层也是
+                        inset-x-0 / top-0 / h-24 */}
                     {previewable(model) && (
                       <IconButton
                         unstyled
                         data-model-preview=""
                         label={t("workbenchModelsPreview").replace("{name}", name)}
-                        className="absolute left-2 right-2 top-2 aspect-[4/3] cursor-zoom-in rounded-md border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        className="absolute inset-x-0 top-0 h-24 cursor-zoom-in rounded-none border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         onClick={() => preview(model)}
                       />
                     )}
@@ -427,7 +430,7 @@ function SlotPicker({
                       data-model-detail={keyOf(model)}
                       label={t("workbenchModelDetailOpen").replace("{name}", name)}
                       className={cn(
-                        "absolute right-2 top-2 z-10 grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0",
+                        "absolute right-1.5 top-1.5 z-10 grid size-7 cursor-pointer place-items-center rounded-md border-0 p-0",
                         "text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         // 常显(维护者:卡片形态下不需要悬停显示,安排在卡里就行)。压在图上,给一层底才看得清
                         "bg-background/60 backdrop-blur-xs",

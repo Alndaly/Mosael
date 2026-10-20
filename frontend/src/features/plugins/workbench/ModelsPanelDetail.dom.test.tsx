@@ -364,15 +364,27 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
     expect(eye.className, "小眼睛也按 xs 档 28,不与搜索框差一截").toMatch(/\bsize-7\b/);
   });
 
+  it("⑫ 卡片框常显:没选中、没悬停时也有实边框和卡片底色", async () => {
+    // 维护者:「卡片框没选中 / hover 的情况下也得有,否则看上去就像多了莫名其妙的间距」✗。
+    // 透明描边 + 透明底 = 每张卡只剩内容浮在面板底色上,卡与卡之间那条缝看起来像多出来的间距。
+    await mount();
+    const card = row("Pony"); // 未选中那张（SDXL Base 是已选中的,选中态本来就该是 primary 描边）
+    expect(card.className, "未选中也有实边框").toMatch(/\bborder-border\b/);
+    expect(card.className, "不再是透明描边").not.toMatch(/\bborder-transparent\b/);
+    expect(card.className, "有卡片底色").toMatch(/\bbg-card\b/);
+    expect(card.className, "圆角把封面裁进卡里").toMatch(/\boverflow-hidden\b/);
+    expect(card.className).toMatch(/\brounded-lg\b/);
+  });
+
   it("⑦ 缩略图固定 4:3、填满卡片宽度,图片 object-cover:图片不撑高卡片,卡是竖排(图在上、字在下)", async () => {
     await mount();
     const card = row("SDXL Base");
     const img = card.querySelector<HTMLImageElement>("img");
     expect(img, "有预览图的卡里有图").not.toBeNull();
     expect(img!.className, "裁切填满,不按原图比例撑开").toMatch(/\bobject-cover\b/);
-    const box = img!.parentElement!.closest<HTMLElement>("[class*='aspect-']");
-    expect(box, "比例写在缩略图那一层").not.toBeNull();
-    expect(box!.className, "固定 4:3").toMatch(/aspect-\[4\/3\]/);
+    const box = img!.parentElement!.closest<HTMLElement>("[class*='h-24']");
+    expect(box, "固定高度写在缩略图那一层").not.toBeNull();
+    expect(box!.className, "封面固定高度,不按原图或面板宽度变").toMatch(/\bh-24\b/);
     expect(box!.className, "填满卡片宽度").toMatch(/\bw-full\b/);
     expect(box!.closest("[data-model-row]"), "缩略图在卡里").toBe(card);
     const pick = within(card).getByRole("button", { pressed: true });
@@ -385,15 +397,15 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
     const card = row("SDXL Base");
     const info = within(card).getByRole("button", { name: "workbenchModelDetailOpen" });
     const state = card.querySelector<HTMLElement>("[data-model-state]");
-    const box = card.querySelector<HTMLElement>("[class*='aspect-']")!;
+    const box = card.querySelector<HTMLElement>("[class*='h-24']")!;
     const pick = within(card).getByRole("button", { pressed: true });
 
-    //: ⓘ 压在缩略图右上角:卡是定位上下文,卡片自身的内边距 8px,角标 top-2/right-2(8px)正好贴着缩略图边
+    //: 封面图到边(卡片不再留白,维护者:「封面和卡片之间不需要内间距」),所以 ⓘ 直接在图的角上内收 6px
     expect(card.className, "<li> 是定位上下文").toMatch(/\brelative\b/);
-    expect(pick.className, "缩略图离卡边 8px").toMatch(/\bp-2\b/);
+    expect(pick.className, "卡片不再留白,图到边").toMatch(/\bp-0\b/);
     expect(info.className, "绝对定位,不再占一格").toMatch(/\babsolute\b/);
-    expect(info.className, "缩略图右上角").toMatch(/\bright-2\b/);
-    expect(info.className).toMatch(/\btop-2\b/);
+    expect(info.className, "缩略图右上角").toMatch(/\bright-1\.5\b/);
+    expect(info.className).toMatch(/\btop-1\.5\b/);
     expect(info.className, "ⓘ 不在下沿").not.toMatch(/\bbottom-/);
     expect(info.className, "层叠在缩略图之上").toMatch(/\bz-10\b/);
     expect(info.className, "常显:不再有藏/现两态").not.toMatch(/\bopacity-0\b/);
@@ -405,8 +417,8 @@ describe("模型行徽标布局:徽标同高、角标排最后", () => {
     expect(state, "已选中:卡里有 ✓ 这一层").not.toBeNull();
     expect(box.contains(state!), "✓ 画在缩略图那一层").toBe(true);
     expect(state!.className, "脱离文档流").toMatch(/\babsolute\b/);
-    expect(state!.className, "缩略图右下角").toMatch(/\bright-1\b/);
-    expect(state!.className).toMatch(/\bbottom-1\b/);
+    expect(state!.className, "缩略图右下角").toMatch(/\bright-1\.5\b/);
+    expect(state!.className).toMatch(/\bbottom-1\.5\b/);
     expect(state!.className, "和 ⓘ 的 top 分处上下").not.toMatch(/\btop-/);
     expect(state!.className, "两个角标都在内容之上").toMatch(/\bz-10\b/);
     expect(state!.className, "不许挡缩略图的点击").toMatch(/\bpointer-events-none\b/);
