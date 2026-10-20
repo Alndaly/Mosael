@@ -217,6 +217,14 @@ export const plugins = {
     "宿主的几项能力各交给哪一家做 —— 素材外链、文档解析、转写、配音、降噪这些,一项能力一组,组里写明它用在哪。",
   capabilityProvider: "用哪一家",
   capabilityUsedBy: "用在哪",
+  //: 卡片里收起的那一行摘要:只有类别和处数,点开才是真数据。
+  capabilityUsesCount: "用在 {n} 处",
+  capabilityUseKindApp: "界面",
+  capabilityUseKindWorkflow: "工作流",
+  capabilityUseKindAgent: "智能体",
+  //: 标题行里「现在用谁」那一格:没点名/没有默认时各说一句短的。
+  capabilityUnset: "未指定",
+  capabilityNoDefaultShort: "由每个入口点名",
   capabilityProviders: "有哪几家",
   capabilityNoDefault: "这一项没有默认:每个用到它的地方都点名用哪一家。",
   capabilityOnlyOne: "目前只有这一家;装了能做这件事的插件后,可以在这里换。",

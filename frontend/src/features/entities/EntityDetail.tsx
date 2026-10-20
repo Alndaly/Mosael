@@ -339,7 +339,7 @@ function VariantsTab({
   return (
     <section className="grid gap-4" aria-label={t("entityVariants")}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="m-0 max-w-2xl text-ui-sm text-muted-foreground">{t(`entityVariantsHint_${kind}`)}</p>
+        <p className="m-0 text-ui-sm text-muted-foreground">{t(`entityVariantsHint_${kind}`)}</p>
         <span className="flex flex-wrap gap-2">
           {variants.length > 0 && (
             <Button variant="outline" aria-pressed={selectMode} onClick={() => (selectMode ? exit() : enterSelectMode())}>

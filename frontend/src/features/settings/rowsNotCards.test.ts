@@ -12,6 +12,9 @@
  * **圆角 + 整圈边框 + 表面底色**的类串。
  *
  * 存量冻结在 GRANDFATHERED,每一条写清为什么它就该是一个框;清单只减不增。
+ *
+ * **唯一放行的是节的外壳**(`SETTINGS_CARD`,见下):几件互不相干的节并列时(「能力提供方」的七项能力)
+ * 一节一张卡片;列表里的一项仍然不是卡片。
  */
 
 // 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
@@ -59,6 +62,16 @@ const ROUNDED = /(?:^|\s)rounded(?:-(?:sm|md|lg|xl|2xl))?(?=\s|$)/;
 const FULL_BORDER = /(?:^|\s)border(?=\s|$)/;
 const SURFACE = /(?:^|\s)bg-(?:background|panel|card)(?=\s|$)/;
 
+/**
+ * **节级卡片只有一只外壳**:`components/settings/settings-layout.tsx` 的 `SETTINGS_CARD`。
+ *
+ * 这条棘轮原本说「设置页里的一项是行,不是卡片」—— 现在仍然成立:行照旧只由分隔线隔开。
+ * 变的是**节的外壳**:维护者要求「能力提供方」七项能力一项一张卡片(此前组间只有一条发丝线,
+ * 七组摞在一起像一份长列表)。卡片是「几个互不相干的节」的分区方式,不是给列表里的一项加框 ——
+ * 所以只放行共享常量这一处,别处再手搓一张仍然会红。
+ */
+const CARD_SHELL = "components/settings/settings-layout.tsx: overflow-hidden rounded-lg border border-border bg-panel";
+
 function cardClasses(): string[] {
   const found: string[] = [];
   for (const file of ROOTS.flatMap(sourceFiles)) {
@@ -74,7 +87,12 @@ function cardClasses(): string[] {
 
 describe("设置里的列表是行,不是卡片", () => {
   it("不新增带圆角 + 整圈边框 + 表面底色的容器", () => {
-    expect(cardClasses().filter((key) => !GRANDFATHERED.has(key))).toEqual([]);
+    expect(cardClasses().filter((key) => !GRANDFATHERED.has(key) && key !== CARD_SHELL)).toEqual([]);
+  });
+
+  it("节级卡片只有共享的那一只外壳", () => {
+    //: 常量被删掉/改名(或者有人把它复制到别处)时这条会红:卡片页只能引用 `SETTINGS_CARD`。
+    expect(cardClasses()).toContain(CARD_SHELL);
   });
 
   it("清单只减不增:修好的那条要从清单里删掉", () => {

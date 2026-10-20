@@ -21,10 +21,24 @@ import { cn } from "@/lib/utils";
  * 某个功能里面(棘轮:features/featureBoundaries.test.ts 管的是同一件事的更严重形态)。
  */
 
+/**
+ * 一节的**卡片外壳**。和 `ADMIN_CARD` 同一套:圆角 + 一圈边框 + 表面底色。
+ *
+ * 设置页的常态是「一页一节、节与节之间一条发丝线」,所以 `SettingsGroup` 默认**不是**卡片(框套框)。
+ * 但「能力提供方」这类页面是**一页并列着几件互不相干的事**(七项能力各用哪一家):发丝线读起来
+ * 就是一份长列表,看不出「这是 7 个独立分区」。那种页面给 `card`,一节一张。
+ *
+ * **只此一只外壳。** 设置里不许各自手搓 `rounded + border + bg-panel`(棘轮:rowsNotCards.test.ts);
+ * 卡片页要框就引用这一个常量。
+ */
+export const SETTINGS_CARD = "overflow-hidden rounded-lg border border-border bg-panel";
+
 export function SettingsGroup({
   title,
   description,
   actions,
+  card = false,
+  titleAdornment,
   className,
   contentClassName,
   children,
@@ -32,6 +46,10 @@ export function SettingsGroup({
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  /** 一节一张卡片(几件互不相干的事并列时)。默认不是卡片:一页一节,由 `SettingsSectionStack` 画线。 */
+  card?: boolean;
+  /** 标题同一行、名字后面的那一格 —— 「能力提供方」用它写当前选择(「降噪 · 内置降噪」),不用往下找下拉。 */
+  titleAdornment?: React.ReactNode;
   className?: string;
   contentClassName?: string;
   /** 没有内容时**不画那个框** —— 只有标题和说明的分组(比如"自助注册已开放")本来就没有行,
@@ -40,43 +58,76 @@ export function SettingsGroup({
 }) {
   const hasContent = React.Children.toArray(children).some(Boolean);
   return (
-    <section data-slot="settings-group" className={cn("@container/settings grid gap-1", className)}>
+    <section
+      data-slot="settings-group"
+      data-settings-card={card ? "" : undefined}
+      className={cn("@container/settings grid gap-1", card && SETTINGS_CARD, className)}
+    >
       {/* 动作**对齐整个抬头的竖向中心**,不是对齐标题那一行,也不是对齐整块的底边。
           三种都试过:`items-end` 在说明一长时把按钮拖到最后一行旁边,看着像那句话的一部分;
           `items-start` 则在说明有两三行时把按钮顶在最上面,右边空出一大块。
-          `items-center` 两头都不沾 —— 按钮始终落在这一节抬头的视觉重心上。 */}
+          `items-center` 两头都不沾 —— 按钮始终落在这一节抬头的视觉重心上。
+
+          卡片里改成**两列网格**:右边那格按动作自己的宽度收,动作永远钉在右上角。`flex-wrap` 在说明
+          一长时会把动作折到说明下面(维护者截图里「去插件市场找」两种位置就是它) —— 网格不折。 */}
       <header
         data-slot="settings-group-header"
         className={cn(
-          "flex flex-wrap items-start justify-between gap-4 px-0.5",
-          hasContent && "pb-2",
+          card
+            ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 px-4 pt-4"
+            : "flex flex-wrap items-start justify-between gap-4 px-0.5",
+          card ? (hasContent ? "pb-2" : "pb-4") : hasContent && "pb-2",
         )}
       >
         <div className="min-w-0">
-          <h2
-            data-slot="settings-group-title"
-            className="m-0 text-xl font-semibold leading-snug tracking-tight"
-          >
-            {title}
-          </h2>
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h2
+              data-slot="settings-group-title"
+              className={cn(
+                "m-0 font-semibold leading-snug tracking-tight",
+                card ? "text-ui-md" : "text-xl",
+              )}
+            >
+              {title}
+            </h2>
+            {titleAdornment && (
+              <span
+                data-slot="settings-group-adornment"
+                className="inline-flex min-w-0 items-center gap-1.5 text-ui-sm font-normal leading-snug text-muted-foreground"
+              >
+                <span aria-hidden>·</span>
+                {titleAdornment}
+              </span>
+            )}
+          </div>
           {description && (
             /* 说明跟着这一列铺开,不设宽度上限:设置页是宽面板,后面紧跟满宽的行,说明被 42rem
                截住时右边会空出一大块(维护者指出)。同一种「节说明」在全应用只有一种规则
-               (管理页的 AdminSection 是同一条);窄容器(弹窗、侧栏)里的正文不在此列 —— 它们的行长本来就短。 */
+               (管理页的 AdminSection 是同一条);窄容器(弹窗、侧栏)里的正文不在此列 —— 它们的行长本来就短。
+
+               卡片里说明收一档:`text-ui-sm`(14px 灰)是说明,控件行的标签是同一档字号但
+               `font-medium text-foreground` —— 颜色 + 字重把「这是操作」和「这是解释」分开。 */
             <p
               data-slot="settings-group-description"
-              className="mb-0 mt-1.5 text-ui-md leading-[1.55] text-muted-foreground"
+              className={cn(
+                "mb-0 mt-1.5 leading-[1.55] text-muted-foreground",
+                card ? "text-ui-sm" : "text-ui-md",
+              )}
             >
               {description}
             </p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && (
+          <div data-slot="settings-group-actions" className="flex shrink-0 items-center gap-2">
+            {actions}
+          </div>
+        )}
       </header>
       {hasContent && (
         <div
           data-slot="settings-group-content"
-          className={cn("grid [&>*+*]:border-t [&>*+*]:border-divider", contentClassName)}
+          className={cn("grid [&>*+*]:border-t [&>*+*]:border-divider", card && "px-4", contentClassName)}
         >
           {children}
         </div>
