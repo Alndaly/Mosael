@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { zhCN } from "@/app/messages/zh-CN";
+
 /**
  * 「默认」的摆放规则(维护者定的):**只出现在同一能力有多个可选实现的地方**,并且永远放在
  * 这些实现所在的那一节里 —— 节说明之后、实现列表之前。
@@ -62,7 +64,16 @@ let holdAsr = false;
 let holdTtsConfig = false;
 let holdTtsModels = false;
 
+//: 「模型下载源」那一行(InstallSourceSection)也在这条测试里渲染 —— 默认行要和它是同一张卡片。
+const installSource = {
+  pip_index: "", npm_registry: "", pip_presets: [], npm_presets: [],
+  pytorch_index: "", pytorch_presets: [], github_mirror: "",
+  model_source: "hf-mirror", model_sources: ["hf-mirror", "hf", "modelscope"],
+};
+
 vi.mock("@/api/client", () => ({
+  getInstallSource: () => Promise.resolve(installSource),
+  updateInstallSource: (body: Record<string, unknown>) => Promise.resolve({ ...installSource, ...body }),
   listAsrModels: () => (holdAsr ? new Promise<never>(() => {}) : Promise.resolve(asrModels)),
   downloadAsrModel: (id: string) => Promise.resolve(asrModels.find((one) => one.id === id)),
   setDefaultAsrModel: (id: string) => {
@@ -84,8 +95,10 @@ vi.mock("@/api/client", () => ({
 }));
 
 import { AsrModelsSection } from "./AsrModelsSection";
+import { InstallSourceSection } from "./InstallSourceSection";
 import { SeparationEnginesSection } from "./SeparationEnginesSection";
 import { VoiceCloneSection } from "./VoiceCloneSection";
+import { ADMIN_CARD } from "./adminLayout";
 
 function renderWithClient(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -104,11 +117,12 @@ function group(kind: "clone" | "preset"): HTMLElement {
   return node;
 }
 
-/** 一条实现(一个引擎/模型)自己那一行 —— 控件里也会出现引擎名,所以不能只按文字找。 */
+/** 一条实现(一个引擎/模型)自己那一行 —— 控件里也会出现引擎名,所以不能只按文字找。
+ *  默认那一行现在也是 AdminRow(整行),它的下拉里同样写着引擎名,得先把那一行排除掉。 */
 function rowByLabel(scope: HTMLElement, label: string): HTMLElement {
-  const row = [...scope.querySelectorAll<HTMLElement>("[data-admin-row]")].find((one) =>
-    within(one).queryByText(label),
-  );
+  const row = [...scope.querySelectorAll<HTMLElement>("[data-admin-row]")]
+    .filter((one) => one.closest("[data-admin-default-line]") === null)
+    .find((one) => within(one).queryByText(label));
   if (!row) throw new Error(`没有「${label}」那一行`);
   return row;
 }
@@ -268,6 +282,12 @@ describe("转写模型:默认是说明之后、列表之前的一个下拉", () 
     const line = defaultLine(box);
     expect(line.dataset.defaultKind).toBe("single");
     expect(line).toHaveTextContent(DEFAULT_ONLY_ONE);
+    //: 单实现也是整行:标题在左、那句话是行的说明,右边没有控件。
+    const row = line.querySelector<HTMLElement>("[data-admin-row]");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText(ASR_DEFAULT)).toBeInTheDocument();
+    expect(row!.querySelector("[data-admin-row-description]")).toHaveTextContent(DEFAULT_ONLY_ONE);
+    expect(row!.querySelector("[data-admin-row-control]")).toBeNull();
     expect(within(box).queryByRole("combobox")).toBeNull();
     expect(within(box).queryByText(CURRENT_DEFAULT)).toBeNull();
   });
@@ -284,6 +304,63 @@ describe("转写模型:默认是说明之后、列表之前的一个下拉", () 
   });
 });
 
+describe("默认那一行和「模型下载源」是同一种整行", () => {
+  it("同一张卡片、同一个行:外层类与「模型下载源」那一行一模一样,行本身不描边", async () => {
+    asrModels = [
+      asrModel({ id: "funasr", label: "FunASR", is_default: true }),
+      asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX" }),
+    ];
+    renderWithClient(
+      <>
+        <AsrModelsSection />
+        <InstallSourceSection />
+      </>,
+    );
+    await screen.findByText("WhisperX");
+
+    //: 参照:「模型下载源」是卡片里的一行(AdminRow)。
+    const sourcePicker = await screen.findByRole("combobox", { name: zhCN.voiceCloneSource });
+    const sourceRow = sourcePicker.closest("[data-admin-row]") as HTMLElement;
+    expect(sourceRow).not.toBeNull();
+    const sourceCard = sourceRow.parentElement as HTMLElement;
+
+    const line = defaultLine(section("engine-transcribe"));
+    expect(line.className, "默认行外层就是那张卡片").toBe(sourceCard.className);
+    expect(line.className).toBe(ADMIN_CARD);
+    const row = line.querySelector<HTMLElement>("[data-admin-row]");
+    expect(row, "默认行里就是那一种行").not.toBeNull();
+    //: 卡片画边框和圆角,行本身不画 —— 参照那一行也是这样。
+    expect(row).not.toHaveClass("border");
+    expect(row).not.toHaveClass("rounded-lg");
+    expect(row!.className).toBe(sourceRow.className);
+  });
+
+  it("左边标题 + 说明、右边下拉;DOM 顺序就是标题 → 说明 → 控件", async () => {
+    asrModels = [
+      asrModel({ id: "funasr", label: "FunASR", is_default: true }),
+      asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX" }),
+    ];
+    renderWithClient(<AsrModelsSection />);
+    await screen.findByText("WhisperX");
+
+    const line = defaultLine(section("engine-transcribe"));
+    const row = line.querySelector<HTMLElement>("[data-admin-row]")!;
+    const textCell = row.children[0] as HTMLElement;
+    const controlCell = row.children[1] as HTMLElement;
+
+    //: 左格:标题一行 + 说明一行。
+    expect(within(textCell).getByText(ASR_DEFAULT)).toBeInTheDocument();
+    const description = textCell.querySelector<HTMLElement>("[data-admin-row-description]");
+    expect(description).toHaveTextContent(zhCN.defaultRowHint);
+    //: 右格:那个下拉本身没变,仍是唯一能写默认的控件。
+    expect(controlCell).toHaveAttribute("data-admin-row-control");
+    expect(within(controlCell).getByRole("combobox", { name: ASR_DEFAULT })).toBeInTheDocument();
+    //: 控件在文字之后,不是左边塞一个小 label、右边再放一个小下拉。
+    expect(row.lastElementChild).toBe(controlCell);
+    expect(textCell.compareDocumentPosition(controlCell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe("人声与背景音分离:只有一种引擎", () => {
   it("说清没有默认可设,而且那句话在说明之后、列表之前", async () => {
     separationEngines = [separationEngine()];
@@ -297,6 +374,20 @@ describe("人声与背景音分离:只有一种引擎", () => {
     expect(line.previousElementSibling).toBe(box.querySelector("header"));
     expect(line.nextElementSibling?.querySelector("[data-admin-row]")).not.toBeNull();
     expect(within(box).queryByRole("combobox")).toBeNull();
+  });
+
+  it("单实现也用整行:那句话在行的说明里,右边没有控件", async () => {
+    separationEngines = [separationEngine()];
+    renderWithClient(<SeparationEnginesSection />);
+    await screen.findByText("Demucs");
+
+    const line = defaultLine(section("engine-separation"));
+    expect(line.className, "和别的行同一张卡片").toBe(ADMIN_CARD);
+    const row = line.querySelector<HTMLElement>("[data-admin-row]");
+    expect(row, "单实现也是整行,不是一行小字").not.toBeNull();
+    expect(row!.querySelector("[data-admin-row-description]")).toHaveTextContent(DEFAULT_ONLY_ONE);
+    expect(row!.querySelector("[data-admin-row-control]")).toBeNull();
+    expect(within(line).queryByRole("combobox")).toBeNull();
   });
 });
 

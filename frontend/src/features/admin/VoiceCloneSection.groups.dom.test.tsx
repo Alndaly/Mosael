@@ -159,7 +159,10 @@ describe("语音合成引擎这一节", () => {
     expect(trigger).toHaveTextContent("F5-TTS");
     expect(within(clone).getAllByRole("combobox")).toHaveLength(1);
 
-    const rows = [...clone.querySelectorAll<HTMLElement>("[data-admin-row]")];
+    //: 默认那一行现在也是 AdminRow(整行),触发器里同样写着 F5-TTS —— 只找列表里的行。
+    const rows = [...clone.querySelectorAll<HTMLElement>("[data-admin-row]")].filter(
+      (row) => row.closest("[data-admin-default-line]") === null,
+    );
     const f5 = rows.find((row) => row.textContent?.includes("F5-TTS"))!;
     const fish = rows.find((row) => row.textContent?.includes("Fish Speech S2 Pro"))!;
     //: 已默认 = 一枚不可点的「当前默认」,不是「设为默认」按钮,也不是可点的状态。

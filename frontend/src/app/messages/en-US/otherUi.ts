@@ -899,6 +899,11 @@ export const otherUi = {
   //: implementations, and lives where they are; it is the only place that writes the default
   //: (see features/admin/defaultRow).
   defaultOnlyOneEngine: "This section has only one engine, so there is no default to set.",
+  //: The default row is a full row (same as "Model download source"): title + this description on
+  //: the left, the selector on the right.
+  defaultRowHint: "The item that is the default is marked in the list; changes here only affect this machine, and this is the only place in the section that can change it.",
+  //: Neutral title for that row when only one implementation exists and the caller gave no label.
+  defaultRowTitle: "Default",
   defaultNotSet: "No default set",
   //: The quiet marker on the row that is currently the default (not clickable).
   defaultCurrent: "Current default",

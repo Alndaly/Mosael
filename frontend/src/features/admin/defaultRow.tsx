@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ADMIN_CARD, AdminRow } from "./adminLayout";
 
 /**
  * 「默认」的摆放规则(维护者定的):**只出现在同一能力有多个可选实现的地方**,并且永远放在
@@ -21,6 +22,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
  * 同一批名字在列表正上方再抄一遍 —— 那正是维护者说的"设置与列表混在一起";下拉只占一行,
  * 当前值在触发器里,候选在弹层里。未安装的选项在弹层里禁用,并带一行理由("还没安装,先下载"),
  * 不必猜为什么点不了。两三个选项的克隆组沿用同一个控件,这一页就只有一种设默认的样子。
+ *
+ * 为什么是**整行**:默认不是飘在节顶的一枚小标签,它和列表行、和「模型下载源」那一行是同一种
+ * 东西 —— `AdminRow` 装在同一张 `ADMIN_CARD` 里:左边标题 + 一句说明,右边才是控件。只有一种
+ * 实现时也一样,只是右边没有控件、说明换成「这一节只有一种引擎」。
  */
 
 /** 这一节有没有"多个可选实现" —— 有,才谈得上默认。 */
@@ -29,12 +34,12 @@ export function hasDefaultChoice(optionCount: number | undefined): boolean {
 }
 
 /** 一句话:这一节只有一种实现,所以没有默认可设。 */
-function OnlyOneImplementationNote() {
+function OnlyOneImplementationRow({ label }: { label: string }) {
   const t = useI18n();
   return (
-    <p data-admin-default-line data-default-kind="single" className="m-0 text-ui-xs leading-normal text-muted-foreground">
-      {t("defaultOnlyOneEngine")}
-    </p>
+    <div className={ADMIN_CARD} data-admin-default-line data-default-kind="single">
+      <AdminRow label={label} description={t("defaultOnlyOneEngine")} />
+    </div>
   );
 }
 
@@ -46,7 +51,7 @@ export type AdminDefaultOption = {
 };
 
 /**
- * 一节里「默认」那**一行控件**:说明之后、列表之前。
+ * 一节里「默认」那**一整行**:说明之后、列表之前,和「模型下载源」同款的一整张卡片 + 一行。
  *
  * 这是整节里**唯一**能改默认的地方 —— 列表行上的「设为默认」已经拿掉,否则同一个默认就有
  * 两个写入口。`options` 还没取到(undefined)时什么都不画:"不知道有几个"不是"只有一个"。
@@ -75,35 +80,30 @@ export function AdminDefaultSelect({
   if (!options) return null;
   const count = options.length;
   if (!hasDefaultChoice(count)) {
-    return count === 1 ? <OnlyOneImplementationNote /> : null;
+    return count === 1 ? <OnlyOneImplementationRow label={label} /> : null;
   }
   return (
-    <div
-      data-admin-default-line
-      data-default-kind="choice"
-      className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-    >
-      <span data-admin-default-label className="text-ui-xs leading-normal text-muted-foreground">
-        {label}
-      </span>
-      <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger aria-label={label} className={SETTINGS_FIELD_WIDTH}>
-          <SelectValue placeholder={placeholder ?? t("defaultNotSet")} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem
-              key={option.id}
-              value={option.id}
-              disabled={!option.installed}
-              /* 禁用了就要说清为什么 —— 一个灰掉、没有理由的选项,看起来只是"点了没反应"。 */
-              description={option.installed ? undefined : t("defaultNotInstalled")}
-            >
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className={ADMIN_CARD} data-admin-default-line data-default-kind="choice">
+      <AdminRow label={label} description={t("defaultRowHint")}>
+        <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
+          <SelectTrigger aria-label={label} className={SETTINGS_FIELD_WIDTH}>
+            <SelectValue placeholder={placeholder ?? t("defaultNotSet")} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem
+                key={option.id}
+                value={option.id}
+                disabled={!option.installed}
+                /* 禁用了就要说清为什么 —— 一个灰掉、没有理由的选项,看起来只是"点了没反应"。 */
+                description={option.installed ? undefined : t("defaultNotInstalled")}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </AdminRow>
     </div>
   );
 }
@@ -126,9 +126,11 @@ export function AdminDefaultMarker() {
 }
 
 /**
- * 只有一种实现的节用的那句话。和 `AdminDefaultSelect` 同一个位置(说明之后、列表之前),
- * 免得"为什么这一节没有默认"要靠人猜。
+ * 只有一种实现的节用的那一行。和 `AdminDefaultSelect` 同一个位置(说明之后、列表之前),
+ * 也同一种整行样子 —— 免得"为什么这一节没有默认"要靠人猜,又和别的行长得不一样。
+ * 调用处不给标题时就用一个中性的「默认」。
  */
-export function AdminOnlyOneNote({ optionCount }: { optionCount: number | undefined }) {
-  return optionCount === 1 ? <OnlyOneImplementationNote /> : null;
+export function AdminOnlyOneNote({ optionCount, label }: { optionCount: number | undefined; label?: string }) {
+  const t = useI18n();
+  return optionCount === 1 ? <OnlyOneImplementationRow label={label ?? t("defaultRowTitle")} /> : null;
 }

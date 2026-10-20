@@ -67,10 +67,11 @@ function renderSection(rows: Array<Record<string, unknown>>) {
 }
 
 //: 节顶那条「默认模型」里也会写着默认的那一个名字 —— 找**行**不能只认第一个同名字符串。
+//: 默认那一行现在也是 AdminRow(整行),它的触发器和这条一样写着当前值,也要排除。
 const rowOf = async (label: string) => {
   const row = (await screen.findAllByText(label))
     .map((one) => one.closest("[data-admin-row]"))
-    .find((one): one is HTMLElement => one instanceof HTMLElement);
+    .find((one): one is HTMLElement => one instanceof HTMLElement && !one.closest("[data-admin-default-line]"));
   if (!row) throw new Error(`没有「${label}」那一行`);
   return row;
 };
@@ -309,9 +310,9 @@ describe("设为默认", () => {
 
   /** 同步版的 `rowOf`:上面那几条要在 `waitFor` 里连着查两行,不能每一步都 await 一次查。 */
   function rowOfSync(label: string): HTMLElement {
-    const row = [...box().querySelectorAll<HTMLElement>("[data-admin-row]")].find((one) =>
-      within(one).queryByText(label),
-    );
+    const row = [...box().querySelectorAll<HTMLElement>("[data-admin-row]")]
+      .filter((one) => one.closest("[data-admin-default-line]") === null)
+      .find((one) => within(one).queryByText(label));
     if (!row) throw new Error(`没有「${label}」那一行`);
     return row;
   }
