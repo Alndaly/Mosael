@@ -8,7 +8,10 @@ import {
   dashboardLoginHref,
   defaultDashboardTab,
   normalizeDashboardTab,
+  parseOAuthOutcome,
 } from "@/components/account/dashboard-utils";
+import { OAuthOutcomeToast } from "@/components/account/oauth-outcome";
+import { ResumeLoginReturn } from "@/components/community/login-return";
 import { cookieHeader, loadUserShares, loadViewer } from "@/components/community/share-server";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
@@ -16,7 +19,7 @@ import { CloudApiError, type CloudShare } from "@/lib/cloud";
 import { pageMetadata } from "@/lib/seo";
 
 type Params = Promise<{ locale: string }>;
-type SearchParams = Promise<{ tab?: string | string[] }>;
+type SearchParams = Promise<{ tab?: string | string[]; oauth?: string | string[] }>;
 
 /** 私有的控制台:登录后才能到,不进搜索索引。 */
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
@@ -53,6 +56,8 @@ export default async function DashboardPage({
 
   const search = await searchParams;
   const copy = getMessages(locale).dashboard;
+  // `/account` 的永久跳转把第三方回调的结果码透传到这里(见该页的说明)。
+  const oauthOutcome = parseOAuthOutcome(search.oauth);
 
   const cookie = await cookieHeader();
   let viewer: Awaited<ReturnType<typeof loadViewer>> = null;
@@ -111,13 +116,23 @@ export default async function DashboardPage({
   const initialTab = normalizeDashboardTab(search.tab) || defaultDashboardTab(Boolean(handle));
 
   return (
-    <DashboardView
-      locale={locale}
-      copy={copy}
-      viewer={viewer}
-      shares={shares}
-      initialTab={initialTab}
-      loadError={loadError}
-    />
+    <>
+      {/*
+        登录前从社区 / 控制台带来的 next(见 components/community/login-return.tsx):
+        登录表单成功后固定去 `/account`,而它现在只是一个永久跳到控制台的壳子 ——
+        所以「回到刚才那一页」在这里落地。
+      */}
+      <ResumeLoginReturn locale={locale} />
+      {/* 第三方回调的结果码由 `/account` 透传过来,来了就在控制台说清。 */}
+      <OAuthOutcomeToast locale={locale} outcome={oauthOutcome} />
+      <DashboardView
+        locale={locale}
+        copy={copy}
+        viewer={viewer}
+        shares={shares}
+        initialTab={initialTab}
+        loadError={loadError}
+      />
+    </>
   );
 }

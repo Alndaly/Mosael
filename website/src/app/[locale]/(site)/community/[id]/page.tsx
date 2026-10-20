@@ -6,8 +6,9 @@ import { Suspense } from "react";
 
 import { DetailBody, InfoList, Section, SideCard, Steps, actionClass } from "@/components/community/detail";
 import { DetailSkeleton } from "@/components/community/detail-skeleton";
-import { CommentSection, ShareEngagement } from "@/components/community/share-detail";
-import { cookieHeader, loadComments, loadShare, loadViewer } from "@/components/community/share-server";
+import { CommentSection, ShareCommentCountProvider, ShareEngagement } from "@/components/community/share-detail";
+import { SharePreview } from "@/components/community/share-preview";
+import { cookieHeader, loadComments, loadShare, loadSharePayload, loadViewer } from "@/components/community/share-server";
 import { formatBytes, formatShareDate } from "@/components/community/share-utils";
 import { InitialTile } from "@/components/community/tile";
 import { PageGlow } from "@/components/page-hero";
@@ -112,13 +113,22 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
     return <ShareLoadError locale={locale} message={fallbackMessage(locale, error, t.loadFailed)} />;
   }
 
-  const [commentsResult, viewerResult] = await Promise.allSettled([loadComments(id), loadViewer(cookie)]);
+  const [commentsResult, viewerResult, previewResult] = await Promise.allSettled([
+    loadComments(id),
+    loadViewer(cookie),
+    // 只有工作流 / 画布才值得取 payload:插件的 payload 是 manifest,没有坐标,不做预览。
+    share.kind === "workflow" || share.kind === "board"
+      ? loadSharePayload(share.id, cookie)
+      : Promise.resolve(null),
+  ]);
   const comments: CloudCommentPage | null = commentsResult.status === "fulfilled" ? commentsResult.value : null;
   const commentsError =
     commentsResult.status === "rejected"
       ? fallbackMessage(locale, commentsResult.reason, t.loadFailed)
       : "";
   const viewer: CloudIdentity | null = viewerResult.status === "fulfilled" ? viewerResult.value : null;
+  // 取失败 / 200 但不是预期形状都只是「没有预览」,页面其余部分照常,不另出错误块。
+  const previewPayload = previewResult.status === "fulfilled" ? previewResult.value : null;
 
   const author = share.author.display_name?.trim() || share.author.handle || "—";
   const kindLabel = share.kind === "board" ? t.kindBoard : t.kindWorkflow;
@@ -127,7 +137,9 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
   const avatarSeed = share.author.avatar_seed || share.author.handle || share.id;
 
   return (
-    <>
+    // 统计卡(右上)与评论区(正文)是两个 client island:评论数在这一层共享,
+    // 不再用 window 自定义事件广播(见 share-detail.tsx 的 ShareCommentCountProvider)。
+    <ShareCommentCountProvider initialCount={share.stats.comments}>
       <section className="relative isolate -mt-20 overflow-hidden border-b border-border bg-paper">
         <PageGlow />
         <div className="mx-auto max-w-[76rem] px-5 pt-30 pb-10 sm:px-8 sm:pt-34">
@@ -176,6 +188,8 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
       <DetailBody
         main={
           <>
+            {/* 先让人看见它长什么样,再解释它是什么。取不到 / 形状不对 / 插件都不留空框。 */}
+            <SharePreview locale={locale} kind={share.kind} payload={previewPayload} />
             <Section id="about" title={t.whatIsTitle}>
               <p className="m-0 text-sm leading-7 text-muted-foreground">
                 {share.kind === "board" ? t.whatIsBoard : t.whatIsWorkflow}
@@ -222,7 +236,7 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
           </>
         }
       />
-    </>
+    </ShareCommentCountProvider>
   );
 }
 

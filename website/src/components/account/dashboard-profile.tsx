@@ -1,12 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, PenLine } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { AccountDangerZone } from "@/components/account/account-danger-zone";
 import { AccountField, FormAlert, SubmitButton } from "@/components/account/form-controls";
+
 import { InitialTile } from "@/components/community/tile";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
@@ -22,7 +23,11 @@ import type { DashboardTab } from "./dashboard-utils";
 type ProfileViewer = { display_name?: string | null; handle?: string | null };
 
 /**
- * 个人信息:公开身份的两列 + 头像预览 + 保存 / 退出。
+ * 个人信息:公开身份的两列 + 头像预览 + 保存 / 退出 + 最底下的危险区。
+ *
+ * **账号页收进控制台之后,这一块就是原来 `(auth)/account` 的全部内容**:身份(邮箱)、
+ * 退出、删号都在这里。删号是最后一块(`AccountDangerZone`),形态与账号页那块一致:
+ * 警告配色、说清不可恢复、两次点击。
  *
  * **邮箱只在这里出现,而且只有本人看得到** —— 它来自 `useViewer()` 那一份 `/me`
  * (站头也读同一份,只是站头只取公开三列),概览和分享列表都拿不到它。
@@ -191,14 +196,6 @@ export function DashboardProfile({
           />
           <div className="flex flex-wrap items-center gap-3">
             <SubmitButton label={copy.save} busyLabel={copy.saving} busy={busy === "save"} />
-            {viewer.handle && (
-              <Link
-                href={`/${locale}/account`}
-                className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                {copy.accountSettings}
-              </Link>
-            )}
           </div>
         </form>
 
@@ -220,6 +217,9 @@ export function DashboardProfile({
           </Button>
         </div>
       )}
+
+      {/* 危险区放在这一块的**最底下**:删号不是日常动作,它属于「个人信息」的最后一步。 */}
+      <AccountDangerZone locale={locale} copy={copy} />
     </div>
   );
 }

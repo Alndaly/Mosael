@@ -10,6 +10,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import {
+  CLOUD_API,
   CloudApiError,
   cloudForServer,
   sumShareStats,
@@ -45,6 +46,53 @@ export function serverCloud(cookie = "") {
  */
 export const loadShare = cache(async (id: string, cookie: string): Promise<CloudShare> => {
   return serverCloud(cookie).shares.get(id);
+});
+
+/**
+ * 分享的 payload(工程文件本体)。**只在详情页要画预览时调用**;列表和详情本身都不取内容。
+ *
+ * 云端是 `GET /shares/{id}/payload` → `{ payload }`(见 `cloud/src/cloud/api/shares.py`)。
+ * `lib/cloud.ts` 的客户端目前只包了 `/download`,这里直接走同一条服务端腿 —— 地址 / cookie
+ * 的拼法和 `serverCloud` 一致。失败就抛出去,调用处把「没有预览」当成正常情况(页面其余部分
+ * 照常),不在这里吞成空对象 —— 那会把「取失败」和「payload 就是空」混成同一个答案。
+ *
+ * `cache` + `cookie` 同 `loadShare`:一次渲染里只向云端问一遍。
+ */
+export const loadSharePayload = cache(async (id: string, cookie: string): Promise<unknown> => {
+  let response: Response;
+  try {
+    response = await fetch(`${serverCloudBase()}${CLOUD_API}/shares/${encodeURIComponent(id)}/payload`, {
+      headers: cookie ? { cookie } : {},
+      // 和 lib/cloud.ts 的 request 一样:分享内容可能刚被作者改过,不能拿构建期的缓存。
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new CloudApiError(
+      "network_error",
+      { en: "Can't reach MosaelCloud. Check your connection and try again.", zh: "连不上 MosaelCloud，请检查网络后重试。" },
+      0,
+    );
+  }
+
+  const body = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    const error = body !== null && typeof body === "object" ? (body as { error?: unknown }) : {};
+    throw new CloudApiError(
+      typeof error.error === "string" ? error.error : "request_failed",
+      { en: "That share's content could not be loaded.", zh: "这条分享的内容没有取到。" },
+      response.status,
+    );
+  }
+  // `{ payload: ... }` 是云端的契约;200 但不是这个形状,就当作「没有可预览的内容」。
+  if (body === null || typeof body !== "object" || !("payload" in body)) {
+    throw new CloudApiError(
+      "invalid_payload",
+      { en: "That share has no previewable content.", zh: "这条分享没有可预览的内容。" },
+      response.status,
+    );
+  }
+  return (body as { payload: unknown }).payload;
 });
 
 /** 评论第一页。读评论是公开接口,不需要会话。 */

@@ -6,7 +6,8 @@ import { type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { cn } from "@/lib/utils";
 
-import { communityTabs, type CommunityCounts, type CommunitySection } from "./community-tabs";
+import { BoardTabCount } from "./board-tab-count";
+import { communityTabs, TAB_COUNT_CLASS, type CommunityCounts, type CommunitySection } from "./community-tabs";
 
 /**
  * 社区各页(首页 / 插件 / 工作流)共用的页头。
@@ -78,11 +79,12 @@ export function CommunityHeader({
               )}
             >
               {tab.label}
-              {tab.count !== undefined && (
-                <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[0.6875rem] tabular-nums text-muted-foreground">
-                  {tab.count}
-                </span>
-              )}
+              {tab.id === "boards" ? (
+                // 画布的数服务端不知道:这一格是 client,读的是 /boards 列表的同一份缓存。
+                <BoardTabCount locale={locale} />
+              ) : tab.count !== undefined ? (
+                <span className={TAB_COUNT_CLASS}>{tab.count}</span>
+              ) : null}
             </Link>
           ))}
         </nav>

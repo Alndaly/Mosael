@@ -139,6 +139,13 @@ test("(auth) 布局没有整站导航,只留一个可跳转的 main", () => {
   for (const route of AUTH_ROUTES) {
     const page = read(LOCALE, "(auth)", route);
     assert.doesNotMatch(page, /SiteHeader|<header[\s>]/, `${route} 里出现了整站导航`);
+    // 账号页并进了控制台,但地址与分组**都保留**:这一页现在只是一个永久跳转,
+    // 不再画账号壳(壳仍由登录 / 注册页使用)。分组契约不因为页面内容变薄而拆。
+    if (route === "account/page.tsx") {
+      assert.match(page, /permanentRedirect\(/, `${route} 应该只是跳到控制台`);
+      assert.doesNotMatch(page, /AccountShell/, `${route} 又画回了账号壳`);
+      continue;
+    }
     assert.match(page, /AccountShell/, `${route} 没有走账号壳`);
   }
 });

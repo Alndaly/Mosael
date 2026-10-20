@@ -25,8 +25,8 @@ const { getMessages } = await import("../src/i18n/messages.ts");
 
 const read = (relative) => fs.readFileSync(path.resolve(import.meta.dirname, "..", relative), "utf8");
 
-test("三页都在 (auth) 分组里,而且每一页都经 pageMetadata 出 head(未登录页不进搜索索引由页面自己声明)", () => {
-  for (const page of ["signup", "login", "account"]) {
+test("登录 / 注册在 (auth) 分组里并各自出 head;/account 只剩永久跳转,不再有自己的 head", () => {
+  for (const page of ["signup", "login"]) {
     const file = path.join(SRC, "app", "[locale]", "(auth)", page, "page.tsx");
     assert.ok(fs.existsSync(file), `缺少 ${page} 页`);
     const source = fs.readFileSync(file, "utf8");
@@ -34,13 +34,20 @@ test("三页都在 (auth) 分组里,而且每一页都经 pageMetadata 出 head(
     assert.match(source, /pageMetadata\(/, `${page} 没有走 pageMetadata`);
     assert.match(source, /index:\s*false/, `${page} 是私有页,应当 noindex`);
   }
+
+  // `/account` 并进控制台后没有可描述的内容:一个 308 就够了(控制台自己 noindex)。
+  const account = path.join(SRC, "app", "[locale]", "(auth)", "account", "page.tsx");
+  assert.ok(fs.existsSync(account), "缺少 account 页 —— 旧地址仍要能打开");
+  const source = fs.readFileSync(account, "utf8");
+  assert.match(source, /permanentRedirect\(/, "account 页不是永久跳转");
+  assert.doesNotMatch(source, /generateMetadata/, "account 页只是跳转,不该再出 head");
 });
 
 test("浏览器只打同源 /api/cloud/v1,不出现 localStorage 令牌", () => {
   const client = read("src/lib/cloud.ts");
   assert.match(client, /CLOUD_API\s*=\s*"\/api\/cloud\/v1"/);
   assert.match(client, /credentials:\s*"same-origin"/);
-  for (const relative of ["src/lib/cloud.ts", "src/components/account/signup-form.tsx", "src/components/account/login-form.tsx", "src/components/account/account-view.tsx", "src/components/account/account-nav.tsx"]) {
+  for (const relative of ["src/lib/cloud.ts", "src/components/account/signup-form.tsx", "src/components/account/login-form.tsx", "src/components/account/account-danger-zone.tsx", "src/components/account/account-nav.tsx"]) {
     const source = read(relative);
     assert.ok(!/localStorage\s*\./.test(source), `${relative} 把云端会话放进 localStorage 了`);
     assert.ok(!/document\.cookie/.test(source), `${relative} 自己读写了 cookie`);
@@ -54,23 +61,17 @@ test("官网把 /api/cloud/v1/* 同源反代给 Cloud,不在浏览器里跨域",
   assert.doesNotMatch(config, /Access-Control-Allow-Origin/);
 });
 
-test("中英文案齐全:登录、退出、删号各有一份", () => {
+test("中英文案齐全:登录在 account,退出 / 删号在控制台 dashboard", () => {
   for (const locale of LOCALES) {
-    const account = getMessages(locale).account;
-    for (const key of [
-      "login",
-      "signup",
-      "account",
-      "email",
-      "password",
-      "signIn",
-      "signUp",
-      "signOut",
-      "deleteAccount",
-      "registered",
-    ]) {
+    const messages = getMessages(locale);
+    const account = messages.account;
+    for (const key of ["login", "signup", "account", "email", "password", "signIn", "signUp", "registered"]) {
       assert.ok(account[key], `${locale} 缺 account.${key}`);
     }
     assert.ok(account.signIn !== account.signUp, `${locale} 的登录和注册是同一个词`);
+    // 账号页并进控制台之后,退出与删号这两句话跟着搬到了 dashboard 文案里。
+    for (const key of ["signOut", "signingOut", "deleteAccount", "deleteConfirm", "dangerZone"]) {
+      assert.ok(messages.dashboard[key], `${locale} 缺 dashboard.${key}`);
+    }
   }
 });

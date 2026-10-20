@@ -84,8 +84,9 @@ test("每一个页面路由都经 pageMetadata 出 <head>,根布局不再写会�
   const missing = pages
     .filter((file) => {
       const text = fs.readFileSync(file, "utf8");
-      // `/docs` 只做跳转,没有自己的内容可描述。
-      if (/redirect\(/.test(text) && !/generateMetadata/.test(text)) return false;
+      // 只做跳转的页面没有自己的内容可描述:`/docs`,以及并进控制台后的 `/account`
+      // (它现在是 `permanentRedirect(...)`,308 到 /[locale]/dashboard)。
+      if (/permanentRedirect\(|redirect\(/.test(text) && !/generateMetadata/.test(text)) return false;
       return !/export async function generateMetadata/.test(text) || !/pageMetadata\(/.test(text);
     })
     .map((file) => path.relative(SRC, file));

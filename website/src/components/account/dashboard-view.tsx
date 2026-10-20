@@ -80,7 +80,7 @@ export function DashboardView({
 
   return (
     <>
-      <DashboardHeader locale={locale} active={tab} copy={copy} onSelect={select} />
+      <DashboardHeader locale={locale} active={tab} copy={copy} identity={currentViewer} onSelect={select} />
       <section className="bg-paper">
         <div className="mx-auto max-w-[76rem] px-5 py-10 sm:px-8 sm:pb-24">
           {tab === "overview" && (

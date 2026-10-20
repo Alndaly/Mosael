@@ -32,7 +32,6 @@ const shell = source("account-shell");
 const controls = source("form-controls");
 const login = source("login-form");
 const signup = source("signup-form");
-const account = source("account-view");
 
 test("三页共用一套分屏骨架:桌面左表单、右产品叙事,移动端单列", () => {
   assert.match(shell, /lg:grid-cols-\[minmax\(0,0\.92fr\)_minmax\(0,1\.08fr\)\]/, "账号骨架没有桌面分屏网格");
@@ -83,19 +82,9 @@ test("登录 / 注册都有四态,且登录和注册的提交按钮可区分", (
   assert.doesNotMatch(signup, /signupSuccessCta|\/login\?registered=1/, "注册成功后还在让用户再去登录一次");
 });
 
-test("账号页把加载 / 未登录 / 失败 / 已登录四种状态都画出来", () => {
-  assert.match(account, /phase === "loading"/, "缺少加载态");
-  assert.match(account, /phase === "anonymous"/, "缺少未登录态");
-  assert.match(account, /phase === "error"/, "缺少失败态");
-  assert.match(account, /phase === "signed"|user\.email/, "缺少已登录态");
-  assert.match(account, /aria-busy/, "加载态没有 aria-busy");
-  assert.match(account, /animate-pulse[\s\S]*motion-reduce:animate-none/, "骨架屏没有减少动效回退");
-  assert.match(account, /copy\.retry/, "失败态没有重试文案");
-  assert.match(account, /role="alert"/, "操作失败没有 role=alert");
-  assert.match(account, /aria-live="polite"/, "加载 / 成功区域没有礼貌播报");
-  // 设备绑定已经整体移除(dashboard.test.mjs ⑤),账号页只剩身份与危险操作。
-  assert.match(account, /deleteConfirm/, "删号没有二次确认");
-});
+// 账号页的四态(加载 / 未登录 / 失败 / 已登录)随 `/account` 一起收进了控制台:
+// 现在那一页只是 `permanentRedirect(...)`(见 account-consolidation.test.mjs),
+// 身份与删号都在 dashboard 那一侧,由 dashboard.test.mjs 与 account-consolidation.test.mjs 钉。
 
 test("暗色 / 亮色文字都达到 WCAG AA(4.5:1),含右侧暗房面板", () => {
   const toRgb = (hex) => hex.match(/[0-9a-f]{2}/gi).map((pair) => parseInt(pair, 16) / 255);
@@ -154,10 +143,6 @@ test("新增文案中英同键,且没有把按钮词当标签用", () => {
     "hidePassword",
     "passwordHint",
     "formErrorTitle",
-    "retry",
-    "signedInLabel",
-    "accountIdentity",
-    "dangerZone",
   ]) {
     assert.ok(zh[key], `中文缺 account.${key}`);
     assert.ok(en[key], `英文缺 account.${key}`);

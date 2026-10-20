@@ -86,7 +86,10 @@ test("② 详情:深链、下载成 .json、统计、404 可读文案与下一�
   assert.match(page, /status === 404/, "详情页没有单独处理 404");
   assert.match(page, /\.text\(locale\)/, "404 / 失败没有显示后端的人话");
   assert.match(page, /backToCommunity/, "404 没有「回到社区」的下一步");
-  assert.doesNotMatch(page, /payload/i, "详情页取数碰了 payload(只该在下载 / 深链时取)");
+  // 预览会在服务端取 payload,但**不能**走 `POST /download` —— 那是「下载 +1」的接口,
+  // 只是看一眼详情不该把统计刷上去(预览见 test/share-preview.test.mjs)。
+  assert.match(page, /loadSharePayload/, "详情页没有为预览取 payload");
+  assert.doesNotMatch(page, /\.download\(/, "详情页走了下载接口(下载数会被预览带涨)");
 
   const ui = maybeRead(DETAIL_UI);
   assert.ok(ui, "缺少分享详情的交互组件");
@@ -188,7 +191,9 @@ test("⑥ email 绝不出现:社区组件与页面只碰公开身份三列", asy
     handle: "alice",
     avatar_seed: "abcd",
   });
-  assert.deepEqual(stripped, { display_name: "Alice", handle: "alice", avatar_seed: "abcd" });
+  // 「官方」是公开身份的第 4 列(官方号的徽标首帧就要有,不能等客户端 /me);
+  // **email 仍然一律不出现** —— 这条测试守的就是这个。
+  assert.deepEqual(stripped, { display_name: "Alice", handle: "alice", avatar_seed: "abcd", official: false });
   assert.ok(!JSON.stringify(stripped).includes("alice@example.com"), "公开身份里漏出了 email");
 });
 

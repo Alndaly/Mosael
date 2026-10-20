@@ -5,6 +5,8 @@
  * ```
  * 改昵称/短名/头像  -> viewer(站头首字母、色块、aria-label) + 我的分享里的作者名 + 个人页
  * 上传/删除分享     -> 我的分享 + 概览统计 + 该 kind 的列表(community/plugins/workflows)
+ * 点赞/收藏/下载    -> 列表分组(卡片上的统计) + 我的分享
+ * 评论新增/删除     -> 同上 + 通知(作者会收到一条,未读角标也要变)
  * 标已读            -> unread + 通知列表
  * ```
  *
@@ -64,6 +66,27 @@ export function invalidateAfterProfileSave(client: InvalidationClient): Promise<
 export function invalidateAfterShareChange(client: InvalidationClient, kind?: ShareKind): Promise<void> {
   const listKey = kind === "plugin" || kind === "workflow" ? queryKeys.shareList(kind) : queryKeys.shareList();
   return invalidate(client, [queryKeys.sharesByMe(), listKey]);
+}
+
+/**
+ * 详情页上的一次互动。列表卡片上的四项统计都来自 `shareList` 的那份 `CloudShare`,
+ * 「我的分享」/ 概览也各有一份 —— 只改详情页本地 state 的话,回到列表还是旧数字。
+ *
+ * **只标脏,不写数据**:不要把列表 `setQueryData` 成空数组(那是「整个列表没了」,
+ * 不是「这条的统计变了」);重取会拿到云端真实的数。
+ *
+ * 评论还会让作者收到通知(未读角标随之变化),所以额外刷通知的整组前缀;
+ * 点赞 / 收藏 / 下载不会产生通知。
+ */
+export type ShareInteractionKind = "like" | "favorite" | "download" | "comment";
+
+export function invalidateAfterShareInteract(
+  client: InvalidationClient,
+  kind: ShareInteractionKind,
+): Promise<void> {
+  const keys: QueryKey[] = [queryKeys.shareList(), queryKeys.sharesByMe()];
+  if (kind === "comment") keys.push(queryKeys.notificationsAll());
+  return invalidate(client, keys);
 }
 
 /** 标已读(单条或全部):站头角标 + 通知列表。 */

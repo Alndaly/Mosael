@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -25,12 +26,10 @@ import {
   type CloudIdentity,
   type CloudShare,
 } from "@/lib/cloud";
+import { invalidateAfterShareInteract } from "@/lib/query-invalidation";
 import { cn } from "@/lib/utils";
 
 import { communityLoginHref, formatShareDate, shareFilename } from "./share-utils";
-
-/** 评论数变化时通知同一页的统计卡(两个 client island 之间只共享这一个数字)。 */
-const COMMENT_COUNT_EVENT = "mosael:share-comment-count";
 
 function errorText(locale: Locale, failure: unknown, fallback: string): string {
   return failure instanceof CloudApiError ? failure.text(locale) : fallback;
@@ -38,6 +37,36 @@ function errorText(locale: Locale, failure: unknown, fallback: string): string {
 
 function authorName(author: CloudIdentity): string {
   return author.display_name?.trim() || author.handle || "—";
+}
+
+/**
+ * 详情页里两个 client island(右上角统计卡 / 正文评论区)共用的评论数。
+ *
+ * 旧实现靠 window 自定义事件在两个 island 之间广播评论数:那是一条绕过查询缓存的全局
+ * 旁路,谁都能发、谁都能收,列表页面还收不到。现在评论数只活在**这一页的 React state**
+ * 里,由这个 provider 把两个 island 包在一起;「别的页面要跟着变」交给
+ * `invalidateAfterShareInteract(queryClient, "comment")`。
+ *
+ * 初始值取服务端渲染时那份 `share.stats.comments`,点完评论 / 删除后本地乐观地加减,
+ * 立刻反映在统计卡上。
+ */
+type CommentCountState = { count: number; adjust: (delta: number) => void };
+
+const CommentCountContext = React.createContext<CommentCountState | null>(null);
+
+export function ShareCommentCountProvider({
+  initialCount,
+  children,
+}: {
+  initialCount: number;
+  children: React.ReactNode;
+}) {
+  const [count, setCount] = React.useState(initialCount);
+  const adjust = React.useCallback((delta: number) => {
+    setCount((value) => Math.max(0, value + delta));
+  }, []);
+  const value = React.useMemo(() => ({ count, adjust }), [count, adjust]);
+  return <CommentCountContext.Provider value={value}>{children}</CommentCountContext.Provider>;
 }
 
 function StatCell({ label, value }: { label: string; value: number }) {
@@ -67,27 +96,19 @@ export function ShareEngagement({
 }) {
   const t = getMessages(locale).community;
   const detailPath = localePath(locale, `/community/${share.id}`);
+  const queryClient = useQueryClient();
+  // provider 在详情页外层(见 page.tsx);万一单独用这个组件,退回服务端给的那份数。
+  const sharedCommentCount = React.useContext(CommentCountContext);
   const [liked, setLiked] = React.useState(share.liked_by_me);
   const [favorited, setFavorited] = React.useState(share.favorited_by_me);
   const [likes, setLikes] = React.useState(share.stats.likes);
   const [favorites, setFavorites] = React.useState(share.stats.favorites);
   const [downloads, setDownloads] = React.useState(share.stats.downloads);
-  const [commentCount, setCommentCount] = React.useState(share.stats.comments);
   const [busyLike, setBusyLike] = React.useState(false);
   const [busyFavorite, setBusyFavorite] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
   const [needsLogin, setNeedsLogin] = React.useState(false);
   const [error, setError] = React.useState("");
-
-  React.useEffect(() => {
-    const onCount = (event: Event) => {
-      const detail = (event as CustomEvent<{ shareId: string; delta: number }>).detail;
-      if (!detail || detail.shareId !== share.id) return;
-      setCommentCount((value) => Math.max(0, value + detail.delta));
-    };
-    window.addEventListener(COMMENT_COUNT_EVENT, onCount);
-    return () => window.removeEventListener(COMMENT_COUNT_EVENT, onCount);
-  }, [share.id]);
 
   const handleFailure = (failure: unknown, fallback: string) => {
     if (failure instanceof CloudApiError && failure.status === 401) {
@@ -110,6 +131,8 @@ export function ShareEngagement({
       await cloudShares.like(share.id, next);
       setLiked(next);
       setLikes((value) => Math.max(0, value + (next ? 1 : -1)));
+      // 详情页的数字先本地变;列表卡片 / 我的分享靠标脏,回去时重取。
+      void invalidateAfterShareInteract(queryClient, "like");
     } catch (failure) {
       handleFailure(failure, t.loadFailed);
     } finally {
@@ -130,6 +153,7 @@ export function ShareEngagement({
       await cloudShares.favorite(share.id, next);
       setFavorited(next);
       setFavorites((value) => Math.max(0, value + (next ? 1 : -1)));
+      void invalidateAfterShareInteract(queryClient, "favorite");
     } catch (failure) {
       handleFailure(failure, t.loadFailed);
     } finally {
@@ -143,6 +167,8 @@ export function ShareEngagement({
     setError("");
     try {
       const { payload } = await cloudShares.download(share.id);
+      // 下载数在服务端 +1:列表卡片上的 downloads 要重取;详情页自己的数字先本地 +1。
+      void invalidateAfterShareInteract(queryClient, "download");
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -210,7 +236,7 @@ export function ShareEngagement({
         <StatCell label={t.downloads} value={downloads} />
         <StatCell label={t.likes} value={likes} />
         <StatCell label={t.favorites} value={favorites} />
-        <StatCell label={t.comments} value={commentCount} />
+        <StatCell label={t.comments} value={sharedCommentCount?.count ?? share.stats.comments} />
       </dl>
 
       {needsLogin && (
@@ -256,6 +282,9 @@ export function CommentSection({
 }) {
   const t = getMessages(locale).community;
   const detailPath = localePath(locale, `/community/${shareId}`);
+  const queryClient = useQueryClient();
+  // 和右上角统计卡共用这一页的评论数(provider 在 page.tsx);单独用时退回不改数字。
+  const sharedCommentCount = React.useContext(CommentCountContext);
   const [comments, setComments] = React.useState<CloudComment[]>(initial?.items ?? []);
   const [nextCursor, setNextCursor] = React.useState<string | null>(initial?.next_cursor ?? null);
   const [identity, setIdentity] = React.useState<CloudIdentity | null>(viewer);
@@ -278,7 +307,9 @@ export function CommentSection({
     try {
       const { comment } = await cloudShares.createComment(shareId, text);
       setComments((previous) => [comment, ...previous]);
-      window.dispatchEvent(new CustomEvent(COMMENT_COUNT_EVENT, { detail: { shareId, delta: 1 } }));
+      // 详情页的评论数先本地 +1;列表 / 我的分享 / 作者的通知靠标脏,回头重取。
+      sharedCommentCount?.adjust(1);
+      void invalidateAfterShareInteract(queryClient, "comment");
       setBody("");
       setPending(null);
     } catch (failure) {
@@ -346,7 +377,8 @@ export function CommentSection({
     try {
       await cloudShares.deleteComment(shareId, commentId);
       setComments((previous) => previous.filter((comment) => comment.id !== commentId));
-      window.dispatchEvent(new CustomEvent(COMMENT_COUNT_EVENT, { detail: { shareId, delta: -1 } }));
+      sharedCommentCount?.adjust(-1);
+      void invalidateAfterShareInteract(queryClient, "comment");
     } catch (failure) {
       setError(errorText(locale, failure, t.loadFailed));
     }

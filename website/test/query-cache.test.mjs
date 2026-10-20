@@ -62,7 +62,8 @@ const QUERIES = "src/lib/queries.ts";
 const NAV = "src/components/account/account-nav.tsx";
 const PROFILE = "src/components/account/dashboard-profile.tsx";
 const NOTIFICATIONS = "src/components/account/dashboard-notifications.tsx";
-const ACCOUNT_VIEW = "src/components/account/account-view.tsx";
+const ACCOUNT_PAGE = "src/app/[locale]/(auth)/account/page.tsx";
+const DANGER_ZONE = "src/components/account/account-danger-zone.tsx";
 const LOGIN = "src/components/account/login-form.tsx";
 const SIGNUP = "src/components/account/signup-form.tsx";
 const BROWSE = "src/components/community/browse.tsx";
@@ -162,7 +163,7 @@ test("② 查询键只在 lib/queryKeys.ts 定义:业务代码里没有裸数组
   assert.deepEqual(clientOwners, [], `QueryClient 在 ${clientOwners.join(", ")} 里又 new 了一次`);
 });
 
-test("③ 站头 / 个人页 / 通知 / 账号页改成了 hook,不再 useEffect 取数", async () => {
+test("③ 站头 / 个人页 / 通知改成了 hook;账号页只剩跳转", async () => {
   assert.ok(exists(QUERIES), `缺少 ${QUERIES}(useViewer / useUnreadCount / useMyShares / useNotifications)`);
   const queries = read(QUERIES);
   for (const hook of ["useViewer", "useUnreadCount", "useMyShares", "useNotifications"]) {
@@ -188,9 +189,10 @@ test("③ 站头 / 个人页 / 通知 / 账号页改成了 hook,不再 useEffect
   assert.doesNotMatch(stripComments(notifications), /useEffect/, "通知分区还在用 useEffect 取列表");
   assert.doesNotMatch(stripComments(notifications), /cloudNotifications\.list\(/, "通知分区还留着手写取数");
 
-  const account = stripComments(read(ACCOUNT_VIEW));
-  assert.match(account, /useViewer\(\)/, "账号页没有复用 useViewer");
-  assert.doesNotMatch(account, /useEffect\(\(\)[\s\S]{0,400}cloudAccount\.me\(/, "账号页还在 useEffect 里问 /me");
+  // 账号页已经收成永久跳转:它自己不该再取任何身份数据(取数只在控制台那一侧)。
+  const account = stripComments(read(ACCOUNT_PAGE));
+  assert.doesNotMatch(account, /useViewer\(|useEffect|cloudAccount\.me\(/, "账号页跳转还在自己问 /me");
+  assert.match(account, /permanentRedirect\(/, "账号页没有收敛成跳转");
 
   for (const [name, relative] of [
     ["登录", LOGIN],
@@ -235,14 +237,15 @@ test("⑤ 退出登录 → invalidate viewer(不刷的话站头还挂着上一�
   assert.ok(received.includes(JSON.stringify(keys.queryKeys.viewer())), `退出登录后没有 invalidate viewer,收到 ${received.join(" / ")}`);
   assert.ok(received.includes(JSON.stringify(keys.queryKeys.unread())), "退出登录后角标还留着上一个账号的未读数");
 
-  for (const [name, relative] of [
-    ["个人信息", PROFILE],
-    ["账号页", ACCOUNT_VIEW],
-  ]) {
-    const source = read(relative);
-    assert.match(source, /invalidateAfterSignOut\(/, `${name}退出登录后没有刷新 viewer`);
-    assert.match(source, /cloudAccount\.logout\([\s\S]{0,500}?invalidateAfterSignOut\(/, `${name}退出请求回来了却没有刷新缓存`);
-  }
+  // 个人信息里那个「退出」还要刷 viewer。
+  const profile = read(PROFILE);
+  assert.match(profile, /invalidateAfterSignOut\(/, "个人信息退出登录后没有刷新 viewer");
+  assert.match(profile, /cloudAccount\.logout\([\s\S]{0,500}?invalidateAfterSignOut\(/, "个人信息退出请求回来了却没有刷新缓存");
+
+  // 删号走的是同一个 helper:DELETE /me 之后所有属于这个账号的缓存都要失效。
+  const danger = read(DANGER_ZONE);
+  assert.match(danger, /invalidateAfterSignOut\(/, "删号后没有刷新 viewer / 角标 / 通知 / 我的分享");
+  assert.match(danger, /cloudAccount\.deleteAccount\([\s\S]{0,500}?invalidateAfterSignOut\(/, "删号请求回来了却没有刷新缓存");
 });
 
 test("⑥ 列表:失败不重试、成功不重复拉(staleTime),并且用 useQuery 包起来", async () => {

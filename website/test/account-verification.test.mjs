@@ -119,7 +119,6 @@ test("登录码的提示不泄露邮箱是否注册,中英同键", () => {
     "loginModeCode",
     "loginWithCode",
     "verifying",
-    "emailVerified",
   ]) {
     assert.ok(zh[key], `中文缺 account.${key}`);
     assert.ok(en[key], `英文缺 account.${key}`);

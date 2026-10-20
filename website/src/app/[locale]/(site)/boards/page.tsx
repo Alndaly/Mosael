@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { BoardBrowser } from "@/components/community/browse";
 import { CommunityHeader } from "@/components/community/community-header";
-import { isLocale, localePath } from "@/i18n/config";
+import { isLocale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { listPlugins, listWorkflows } from "@/lib/registry";
 import { pageMetadata } from "@/lib/seo";

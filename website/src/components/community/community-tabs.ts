@@ -20,8 +20,9 @@ export const COMMUNITY_SECTIONS = ["plugins", "workflows", "boards"] as const;
 export type CommunitySection = (typeof COMMUNITY_SECTIONS)[number];
 
 /**
- * 页头 tab 上的数字。**画布的数拿不到就不传**(画布分享只在浏览器里取,服务端渲染时不知道)——
- * 页头的规则是"拿不到就不显示数字",不编一个 0 出来。
+ * 页头 tab 上的数字。**画布的数不在这里**:服务端渲染时不知道画布分享有几条,
+ * 那一格由页头挂的 `BoardTabCount`(client)按同一份列表缓存补上(`boards` 留作
+ * 可选的静态兜底,目前没有页面传它)。页头的规则是"拿不到就不显示数字",不编一个 0。
  */
 export type CommunityCounts = {
   plugins: number;
@@ -30,6 +31,26 @@ export type CommunityCounts = {
 };
 
 export type CommunityTab = { id: CommunitySection; label: string; href: string; count?: number };
+
+/**
+ * 页头 tab 上的数字胶囊。**只有这一份**:
+ * 插件 / 工作流的数字由服务端给,画布的数字由客户端补 —— 两处必须长得一模一样。
+ */
+export const TAB_COUNT_CLASS =
+  "rounded-full bg-secondary px-2 py-0.5 font-mono text-[0.6875rem] tabular-nums text-muted-foreground";
+
+/**
+ * 「创意画板」tab 上要显示的数字。
+ *
+ * 服务端渲染时不知道画布分享有几条,所以这个数字只能由浏览器取(见 `board-tab-count.tsx`,
+ * 取数规则和 `/boards` 列表共用 `useListedShares("board", locale)` 那一份缓存)。
+ *
+ * 取数中 / 取不到 / 一条都没有时 `useListedShares` 都是空数组 —— 三种情况都**不显示数字**:
+ * 页头的规则是「拿不到就不显示」,绝不先闪一个 0,也不把 0 画成一个真实计数。
+ */
+export function boardTabCount(shares: readonly unknown[] | undefined): number | undefined {
+  return shares && shares.length > 0 ? shares.length : undefined;
+}
 
 const PATHS: Record<CommunitySection, string> = {
   plugins: "/plugins",

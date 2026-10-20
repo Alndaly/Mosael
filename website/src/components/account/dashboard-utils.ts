@@ -1,11 +1,49 @@
 /**
- * 「我的」控制台的纯逻辑:tab 清单、地址、登录回跳、删完一条之后剩哪些。
+ * 「我的」控制台的纯逻辑:tab 清单、地址、登录回跳、删完一条之后剩哪些、是不是官方号。
  *
  * 放在 `.ts`(没有 JSX)里,前端与 `node --test` 能直接 import 同一份实现 —— 四个 tab 的地址
  * 是**可收藏、可分享的 URL**,不是组件里的一个 state;删掉一条分享之后概览的数字必须跟着变,
  * 这两件事都值得真的跑一遍,而不是渲染出来看。
  */
 import type { CloudShare } from "@/lib/cloud";
+
+/**
+ * 控制台页头要展示的身份。
+ *
+ * `official` 是云端公开身份(`public_user()`)里的那一列,`/me` 的 `account_user()` 也带它;
+ * 前端 `CloudUser` 类型还没声明这一列(`lib/cloud.ts` 不在这次改动的范围里),所以这里按
+ * 实际响应收窄成结构类型 —— **不改 cloud 客户端**,只在需要它的地方读。
+ */
+export type DashboardIdentity = {
+  display_name?: string | null;
+  handle?: string | null;
+  official?: boolean;
+};
+
+/**
+ * 官方账号才画那枚「官方」徽标。
+ *
+ * 只认严格的 `true`:云端给的就是布尔值,`undefined` / `false`(以及还没读到身份)一律当普通账号,
+ * 不猜、不从短名(`mosael` 是保留字)反推。
+ */
+export function showsOfficialBadge(identity: DashboardIdentity | null | undefined): boolean {
+  return identity?.official === true;
+}
+
+/**
+ * 第三方登录的结果码(云端 `api/oauth.py` 只发 `created` / `existing` 两个)。
+ *
+ * 控制台页是服务端组件,从 `"use client"` 模块 import 一个普通函数拿到的是客户端引用、
+ * 不能在服务端调用;所以归一化放在这个没有 JSX 的纯模块里,`/account` 的跳转页与控制台
+ * 都 import 同一份判断。
+ */
+export type OAuthOutcome = "" | "created" | "existing";
+
+export function parseOAuthOutcome(value: string | string[] | undefined): OAuthOutcome {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first === "created" || first === "existing" ? first : "";
+}
+
 
 /** 四个分区。顺序 = tab 栏的顺序;地址是 `?tab=` 的取值。 */
 export const DASHBOARD_TABS = ["overview", "shares", "profile", "notifications"] as const;

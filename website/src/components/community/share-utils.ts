@@ -23,11 +23,14 @@ export function publicIdentity(user: {
   display_name?: string | null;
   handle?: string | null;
   avatar_seed?: string | null;
+  official?: boolean | null;
 }): CloudIdentity {
   return {
     display_name: typeof user.display_name === "string" ? user.display_name : null,
     handle: typeof user.handle === "string" ? user.handle : null,
     avatar_seed: typeof user.avatar_seed === "string" ? user.avatar_seed : null,
+    // 「官方」也是公开身份的一部分:官方号的徽标不该等到客户端 /me 回来才出现(首帧就该有)。
+    official: user.official === true,
   };
 }
 

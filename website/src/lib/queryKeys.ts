@@ -29,6 +29,11 @@ export const queryKeys = {
   unread: () => ["notifications", "unread"] as const,
   /** 通知分区:`/notifications`(游标翻页)。 */
   notifications: () => ["notifications", "list"] as const,
+  /**
+   * 通知的**整组前缀**(未读角标 + 通知列表)。评论新增 / 删除会让作者那边多一条通知,
+   * 两处一起标脏;单点刷新请用 `unread()` / `notifications()`。
+   */
+  notificationsAll: () => ["notifications"] as const,
   /** 第三方登录按钮的可用性(`/oauth/providers`)。 */
   oauthProviders: () => ["oauth", "providers"] as const,
   /** 某个人的公开分享(控制台的「我的分享」)。不传 handle = 分组前缀。 */

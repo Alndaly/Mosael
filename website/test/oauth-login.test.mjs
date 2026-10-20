@@ -34,7 +34,9 @@ const maybeRead = (relative) => {
 const buttons = maybeRead("src/components/account/oauth-buttons.tsx");
 const login = read("src/components/account/login-form.tsx");
 const signup = read("src/components/account/signup-form.tsx");
-const account = read("src/components/account/account-view.tsx");
+const accountPage = read("src/app/[locale]/(auth)/account/page.tsx");
+const dashboardPage = read("src/app/[locale]/(site)/dashboard/page.tsx");
+const outcomeToast = maybeRead("src/components/account/oauth-outcome.tsx");
 const icons = read("src/components/icons.tsx");
 const client = read("src/lib/cloud.ts");
 
@@ -139,10 +141,15 @@ test("失败原因按稳定错误码翻成当前语言,未知码落到通用文�
   assert.match(zh.oauthErrorCodeRejected, /PKCE/, "中文没有说清 PKCE 校验失败");
 });
 
-test("登录后的结果在账号页说清:新建 / 绑定到已有账号", () => {
-  assert.match(account, /oauthOutcome/, "账号页没有接收第三方登录结果");
-  assert.match(account, /copy\.oauthCreated/, "没有「已创建账号」的提示");
-  assert.match(account, /copy\.oauthExisting/, "没有「已绑定到已有账号」的提示");
+test("登录后的结果在控制台说清:新建 / 绑定到已有账号", () => {
+  // 云端的回调仍回到 /account?oauth=…(cloud 不在这笔改动里),而 /account 只剩永久跳转:
+  // 结果码必须被透传,否则「已创建 / 已绑定」那句提示会在 308 里丢掉。
+  assert.match(accountPage, /permanentRedirect\(/, "/account 不是永久跳转");
+  assert.match(accountPage, /oauth/, "/account 跳转没有透传第三方登录结果");
+  assert.match(dashboardPage, /OAuthOutcomeToast/, "控制台没有接上第三方登录结果");
+  assert.match(dashboardPage, /parseOAuthOutcome\(/, "控制台没有归一化结果码");
+  assert.match(outcomeToast, /copy\.oauthCreated/, "没有「已创建账号」的提示");
+  assert.match(outcomeToast, /copy\.oauthExisting/, "没有「已绑定到已有账号」的提示");
   const loginPage = read("src/app/[locale]/(auth)/login/page.tsx");
   const signupPage = read("src/app/[locale]/(auth)/signup/page.tsx");
   assert.match(loginPage, /oauth_error/, "登录页没有读回失败错误码");

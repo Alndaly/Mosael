@@ -48,7 +48,6 @@ function dashboardUtils() {
 
 const DASHBOARD_PAGE = "src/app/[locale]/(site)/dashboard/page.tsx";
 const ACCOUNT_PAGE = "src/app/[locale]/(auth)/account/page.tsx";
-const ACCOUNT_VIEW = "src/components/account/account-view.tsx";
 const ACCOUNT_NAV = "src/components/account/account-nav.tsx";
 const DASHBOARD_HEADER = "src/components/account/dashboard-header.tsx";
 const DASHBOARD_VIEW = "src/components/account/dashboard-view.tsx";
@@ -206,7 +205,7 @@ test("④ 个人信息:PUT /me,409 两种 handle 冲突都显示后端原话", (
   }
 });
 
-test("⑤ 设备绑定整体移除:没有设备分区,/account 只剩身份与危险操作", () => {
+test("⑤ 设备绑定整体移除:没有设备分区;/account 收成跳转,删除账号在控制台", () => {
   // 云端设备绑定已经拆掉(cloud /devices、/device/* 都不存在了),控制台不再有设备分区。
   assert.ok(!exists("src/components/account/dashboard-devices.tsx"), "设备分区组件还在");
   for (const relative of [DASHBOARD_HEADER, DASHBOARD_VIEW, DASHBOARD_PAGE]) {
@@ -215,13 +214,16 @@ test("⑤ 设备绑定整体移除:没有设备分区,/account 只剩身份与�
   assert.doesNotMatch(read("src/components/account/dashboard-utils.ts"), /devices/, "tab 清单里还有 devices");
   assert.doesNotMatch(read("src/lib/cloud.ts"), /devices|revokeDevice|approveDevice/, "cloud 客户端还在调设备接口");
 
-  // /account 只剩身份、退出、删号与登录回跳;不再处理桌面绑定带来的 user_code。
-  assert.ok(exists(ACCOUNT_PAGE), "/account 被删了,登录回跳会断");
+  // /account 只剩一个永久跳转(路由仍在 (auth) 组,地址不拆);不再处理桌面绑定带来的 user_code。
+  assert.ok(exists(ACCOUNT_PAGE), "/account 被删了,旧地址与第三方回调会断");
   const page = read(ACCOUNT_PAGE);
-  assert.match(page, /AccountShell/, "/account 不再走账号壳");
-  assert.match(page, /ResumeLoginReturn/, "/account 丢了登录回跳");
+  assert.match(page, /permanentRedirect\(/, "/account 还没有收敛成跳转");
+  assert.match(page, /\/\$\{locale\}\/dashboard/, "/account 没有跳到控制台");
   assert.doesNotMatch(page, /user_code|tab=devices/, "/account 还在处理设备绑定回跳");
-  assert.doesNotMatch(read(ACCOUNT_VIEW), /devices|deviceCode|approveDevice|revokeDevice/, "账号页还在管设备");
+
+  // 登录回跳与删号都搬到了控制台:登录表单仍固定去 /account,由它的 308 落到这里。
+  assert.match(read(DASHBOARD_PAGE), /ResumeLoginReturn/, "登录后回跳没有搬到控制台");
+  assert.match(read(DASHBOARD_PROFILE), /<AccountDangerZone/, "「个人信息」底部没有接上删除账号");
 });
 
 test("⑥ 通知接上云端列表(空态仍是零条分支、不造假),没有 handle 时个人信息高亮", () => {

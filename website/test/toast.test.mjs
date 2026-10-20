@@ -49,7 +49,8 @@ const hook = maybeRead("src/components/ui/use-toast.ts");
 const controls = maybeRead("src/components/account/form-controls.tsx");
 const signup = maybeRead("src/components/account/signup-form.tsx");
 const login = maybeRead("src/components/account/login-form.tsx");
-const account = maybeRead("src/components/account/account-view.tsx");
+// 账号页并进控制台后只剩跳转;它原来的删号错误提示跟危险区一起搬到了控制台。
+const dangerZone = maybeRead("src/components/account/account-danger-zone.tsx");
 const profile = maybeRead("src/components/account/dashboard-profile.tsx");
 const pkg = JSON.parse(read("package.json"));
 
@@ -92,7 +93,7 @@ test("④ 失败仍然是字段旁的 FormAlert(回归,没有跟着改成 toast)
   for (const [name, source] of [
     ["注册", signup],
     ["登录", login],
-    ["账号", account],
+    ["删除账号", dangerZone],
     ["个人信息", profile],
   ]) {
     assert.match(source, /<FormAlert id=/, `${name}页丢了内联的错误提示`);
@@ -121,7 +122,7 @@ test("⑥ toast 文案仍然来自 messages.ts(中英各一条)", () => {
   for (const [name, source] of [
     ["注册", signup],
     ["登录", login],
-    ["账号", account],
+    ["删除账号", dangerZone],
     ["个人信息", profile],
   ]) {
     assert.doesNotMatch(source, /toast\(\{ title: "/, `${name}页把 toast 文案写死了`);
