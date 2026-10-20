@@ -2,7 +2,7 @@ export const aiStudio = {
   // AI Studio
   aiTabChat: "对话",
   aiTabCreate: "创作",
-  audioCloneNeedsVoice: "本地克隆要先有音色 —— 在设置的「配音与音色」里上传或录一段参考音频。",
+  audioCloneNeedsVoice: "本地克隆要先有音色 —— 在设置的「我的音色」里上传或录一段参考音频。",
   audioManageVoices: "管理音色",
   audioPodcastUnavailable: "还没有可用的播客服务。",
   audioConfigurePodcast: "去配置",
@@ -411,12 +411,13 @@ export const aiStudio = {
   asrModelRetry: "重试",
   saved: "已保存",
   aiRuntimeTitle: "AI 运行时",
-  /* 「配音与音色」= 内置配音引擎 + 声音克隆 + 音色库。此前前一个在「AI 音频」里、后两个在
-     「语音与服务」组里 —— 同一件事拆在两个组,内置引擎卡片上还挂着一个跳去克隆页的链接。 */
-  settingsDubbingTitle: "配音与音色",
-  //: 页头(结构声明里那个空组)。下面两组各自讲自己那一件事,页头这句把两件都覆盖到。
-  settingsDubbingPageDesc:
-    "不用连接就能用的配音引擎在这台机器上装了没有(内置配音引擎),以及这个工作区有哪些音色、怎么建(音色库)。",
+  /* 这一页只剩**这个工作区的音色库**(试听、改名、补参考文本、删除、新建)。此前它叫「配音 + 音色」,
+     页里还单挂一组只读的「内置配音引擎」—— 那一组说的是**这台机器**上哪几个引擎能用,已经搬到
+     「能力提供方 → 配音」那张卡的默认行下面(CapabilityProvidersSection),页名也顺手改成了「我的音色」。
+     旧页名一个字符都不留:指路文案里残留它,就是把用户指去一个不存在的地方(棘轮:settingsPageName.test.ts)。 */
+  settingsDubbingTitle: "我的音色",
+  //: 页头(结构声明里那个空组)。这一页只讲一件事:这个工作区有哪些音色、怎么建。(引擎装了没有不在这里。)
+  settingsDubbingPageDesc: "这个工作区有哪些音色、怎么建。",
   installSourceTitle: "下载源",
   installSourcePipIndexHint: "只管装 Python 依赖。国内建议选镜像,直连 PyPI 可能非常慢。模型权重从哪下是另一项:这一节最后的「模型下载源」。",
   installSourceModelHint: "模型权重从哪儿下:声音克隆、本机识别(NSFW)、Mosael 起的本机 ComfyUI 都用这一行。选 ModelScope 时只有支持它的克隆引擎走 ModelScope,别的照旧从 HuggingFace 拉。",

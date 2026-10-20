@@ -2,7 +2,7 @@ export const aiStudio = {
   // AI Studio
   aiTabChat: "Chat",
   aiTabCreate: "Create",
-  audioCloneNeedsVoice: "Local cloning needs a voice first — upload or record a reference clip under Settings → Dubbing & voices.",
+  audioCloneNeedsVoice: "Local cloning needs a voice first — upload or record a reference clip under Settings → My voices.",
   audioManageVoices: "Manage voices",
   audioPodcastUnavailable: "No podcast service is available yet.",
   audioConfigurePodcast: "Set up",
@@ -410,11 +410,14 @@ export const aiStudio = {
   asrModelRetry: "Retry",
   saved: "Saved",
   aiRuntimeTitle: "AI runtime",
-  settingsDubbingTitle: "Dubbing & voices",
-  //: The page header (the empty group in the structure declaration). The two groups below each
-  //: speak for themselves; this one sentence has to cover both.
-  settingsDubbingPageDesc:
-    "Whether the dubbing engines that need no connection are installed on this machine (built-in engines), and which voices this workspace has and how to add them (the voice library).",
+  /* This page is only the workspace's voice library (preview, rename, reference text, delete, create).
+     It used to be named after "dubbing + voices" and carried a read-only "built-in voice engines" group;
+     which engines this machine can use now lives under Capability providers → Dubbing, and the page is
+     called My voices. The old page name is gone for good (ratchet: settingsPageName.test.ts). */
+  settingsDubbingTitle: "My voices",
+  //: The page header (the empty group in the structure declaration). One thing: which voices this
+  //: workspace has and how to add them. Whether an engine is installed is not answered here.
+  settingsDubbingPageDesc: "Which voices this workspace has and how to add them.",
   installSourceTitle: "Download sources",
   installSourcePipIndexHint: "Only covers Python dependencies. Pick a mirror if PyPI is slow where you are. Where model weights download from is separate: Model download source at the end of this section.",
   installSourceModelHint: "Where model weights are downloaded from: voice cloning, local NSFW detection and the local ComfyUI that Mosael starts all use this row. With ModelScope, only clone engines that support it use ModelScope; everything else still downloads from HuggingFace.",

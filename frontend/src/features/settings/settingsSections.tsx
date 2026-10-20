@@ -26,7 +26,6 @@ import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
 import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/features/settings/AppearanceSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { BackendSection } from "@/features/settings/BackendSection";
-import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { LocalAppSection } from "@/features/settings/LocalAppSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
@@ -141,8 +140,10 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
           </>
         ),
       },
-      // 这个工作区的音色库,加上不用连接就能配音的几个内置引擎现在能不能用(只读)。
-      // 本地克隆引擎怎么装、用哪个解释器和下载源是部署级的,在管理页「引擎」。
+      // **这一页只剩这个工作区的音色库。** 此前它的页名把"配音"和"音色"并成一句,页里还挂着一组只读的
+      // 「内置配音引擎」(克隆 / Qwen3-TTS / Edge 各一行「即开即用」)—— 那组说的是**这台机器**上
+      // 哪几个引擎能用,属于挑引擎的地方,已经搬到「能力提供方 → 配音」那张卡的默认行下面
+      // (`CapabilityProvidersSection`)。本地克隆引擎怎么装、用哪个解释器和下载源是部署级的,在管理页「引擎」。
       // **页头是声明层那个空组。** 挂在某个子组上的话,那一组在有些状态下根本不渲染(数据没到、
       // 出错、或者它自己决定不画),页头就跟着没了 —— 页名不该由子组的有无决定。同页的
       // capabilities 是现成的例子:骨架与 `PageLoadError` 都是组件的早返回。
@@ -151,12 +152,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
           id: "dubbing",
           label: "settingsDubbingTitle",
           icon: <AudioLines size={14} />,
-          render: ({ workspace }) => (
-            <>
-              <BuiltinTtsSection />
-              <VoiceLibrarySection workspace={workspace} />
-            </>
-          ),
+          render: ({ workspace }) => <VoiceLibrarySection workspace={workspace} />,
         },
         "settingsDubbingPageDesc",
       ),
@@ -197,7 +193,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         },
         "providerVideoPageDesc",
       ),
-      // **只放云端的配音与播客连接。** 内置配音引擎与音色库在「个人与工作区 → 配音与音色」,
+      // **只放云端的配音与播客连接。** 这个工作区的音色库是「个人与工作区 → 我的音色」;
+      // 「这台机器上哪几个配音引擎能用」写在「能力提供方 → 配音」那张卡里。
       // 本地克隆引擎的安装在管理页;语音对话是智能体的一种说话方式,归「智能体」。
       // 这一页有四个组、四个概念(默认模型 / 语音合成 / 播客对话 / 音乐与音效生成),一层都没说
       // 「这是音频」—— 页头那句说明把它说清,子组名与子组说明各自不动。

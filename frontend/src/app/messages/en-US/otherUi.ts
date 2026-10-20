@@ -614,10 +614,11 @@ export const otherUi = {
   voicePodcastNeedTwo: "A dialogue needs two different speakers",
   voiceEngineVoice: "Voice",
   voiceSpeed: "Speed",
+  //: The "built-in voice engines" group (title + description + three "Ready to use" rows) is gone: which
+  //: engines this machine can use now sits under the Default row of Capability providers → Dubbing
+  //: (CapabilityProvidersSection). The title key still has one reader: the settings search index
+  //: (`lib/settingsSearch.ts`, the dubbing row) — that file is outside this change.
   builtinTtsTitle: "Built-in voice engines",
-  builtinTtsDesc: "No provider connection needed — available in the editor's voiceover panel. For more voices or higher quality, add a connection under AI providers → AI audio.",
-  builtinTtsNoEngines: "No built-in engine is available on this machine — add a connection under AI providers → AI audio and come back.",
-  builtinTtsReady: "Ready to use",
   engineInstalledByAdmin: "A deployment admin installs it under Admin → Engines",
   engineGoInstall: "Install",
   voiceEngineVoiceId: "Voice id",

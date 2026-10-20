@@ -239,6 +239,13 @@ export const plugins = {
   capabilityVoiceDefaultPersonalOnly:
     "「{name}」只属于某个人 / 某个工作区(插件连接、克隆音色),不能当这台机器的默认;配音面板里照常能选它。",
   capabilityVoiceDefaultSaved: "已保存。",
+  //: 「这台机器上有几个配音引擎能用」—— 此前它是设置页单独一组「内置配音引擎」,现在写在默认那一行下面。
+  //: 数量与名字都从能力表的 options 数出来(`missing` 为空的就是能用),不写死。
+  capabilityVoiceEnginesReady: "这台机器上 {n} 个配音引擎都可用（{names}）。",
+  //: 一个都不用时:先说清现状,再指向**管理页「引擎」里真有**的那一节 —— 不是一个应用里不存在的按钮。
+  capabilityVoiceEnginesNone: "这台机器还没有可用的配音引擎 —— 去「管理 → 引擎 → 本地语音合成引擎」装一个。",
+  //: 成员改不了这台机器的引擎(装引擎只给部署管理员):给一个他打不开的入口、或一句「去点点看」,等于死路。
+  capabilityVoiceEnginesNoneMember: "这台机器还没有可用的配音引擎 —— 由部署管理员在「管理 → 引擎 → 本地语音合成引擎」里安装。",
   capabilityOnlyOne: "目前只有这一家;装了能做这件事的插件后,可以在这里换。",
   capabilityBuiltinUnready: "「{name}」还不能选:{fields}",
   capabilityGoPlugins: "去插件页",

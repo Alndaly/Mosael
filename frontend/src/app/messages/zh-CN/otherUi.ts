@@ -612,10 +612,11 @@ export const otherUi = {
   voicePodcastNeedTwo: "对谈需要两个不同的发音人",
   voiceEngineVoice: "音色",
   voiceSpeed: "语速",
+  //: 设置里「内置配音引擎」那一组(标题 + 说明 + 三条「即开即用」)删掉了:「这台机器上哪几个引擎能用」
+  //: 现在写在「能力提供方 → 配音」那张卡的默认行下面(`CapabilityProvidersSection`)。
+  //: 标题这个键留着还有一处读者:设置搜索的索引关键词(`lib/settingsSearch.ts` 的 dubbing 那一行,
+  //: 那个文件不在这次改动的范围里)。要把它挪到 capabilities 那一页,改的就是那一行。
   builtinTtsTitle: "内置配音引擎",
-  builtinTtsDesc: "无需供应商连接,在剪辑页「配音」面板里就能用;要更多音色或更高质量,在「AI 供应商 → AI 音频」里添加连接。",
-  builtinTtsNoEngines: "本机没有可用的内置引擎 —— 去「AI 供应商 → AI 音频」加一个连接后回来。",
-  builtinTtsReady: "即开即用",
   engineInstalledByAdmin: "由部署管理员在「管理 → 引擎」里安装",
   engineGoInstall: "去安装",
   voiceEngineVoiceId: "音色 id",

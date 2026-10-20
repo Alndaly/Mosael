@@ -235,6 +235,13 @@ export const plugins = {
   capabilityVoiceDefaultPersonalOnly:
     "“{name}” belongs to one person / workspace (a plugin connection or a cloned voice), so it can't be this machine's default; the dubbing panel still offers it.",
   capabilityVoiceDefaultSaved: "Saved.",
+  //: Which engines this machine can dub with. It used to be its own "built-in voice engines" group in
+  //: Settings; the count and the names come from the capability table's options (empty `missing` = usable).
+  capabilityVoiceEnginesReady: "{n} voice engine(s) are available on this machine ({names}).",
+  //: None usable: say so, then point at the section that actually exists under Admin → Engines.
+  capabilityVoiceEnginesNone: "No voice engine is available on this machine yet — install one under Admin → Engines → Local speech synthesis engines.",
+  //: Members cannot install engines (that is a deployment admin action); their sentence says who does it.
+  capabilityVoiceEnginesNoneMember: "No voice engine is available on this machine yet — a deployment admin installs one under Admin → Engines → Local speech synthesis engines.",
   capabilityOnlyOne: "This is the only one for now; install a plugin that does this to switch here.",
   capabilityBuiltinUnready: "“{name}” can't be chosen yet: {fields}",
   capabilityGoPlugins: "Open Plugins",

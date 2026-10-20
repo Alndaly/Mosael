@@ -18,7 +18,6 @@ vi.mock("@/features/settings/AppearanceSection", () => ({
 }));
 vi.mock("@/features/settings/AutopilotRulesSection", () => ({ AutopilotRulesSection: () => null }));
 vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => null }));
-vi.mock("@/features/settings/BuiltinTtsSection", () => ({ BuiltinTtsSection: () => null }));
 vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null }));
 vi.mock("@/features/settings/LocalAppSection", () => ({ LocalAppSection: () => null }));
 vi.mock("@/features/settings/ProviderDefaultsSection", () => ({ ProviderDefaultsSection: () => null }));
@@ -89,7 +88,7 @@ describe("设置页结构", () => {
   });
 
   it("云端供应商组里只有云端连接", () => {
-    //: 语音对话是智能体的说话方式,内置配音与音色库不是云端连接 —— 都不该出现在「AI 供应商」下面。
+    //: 语音对话是智能体的说话方式,这个工作区的音色库不是云端连接 —— 都不该出现在「AI 供应商」下面。
     expect(groupOf("agent-voice")).toBe("studioSettingsAgent");
     expect(groupOf("dubbing")).not.toBe("studioSettingsProviders");
   });

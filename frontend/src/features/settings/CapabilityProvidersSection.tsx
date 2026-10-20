@@ -291,6 +291,11 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
     },
   });
   const uses = choices.used_by ?? [];
+  //: **「这台机器上有哪几个配音引擎能用」写在这一行,不再在设置页单开一组。** 此前它是一组只读的
+  //: 「内置配音引擎」(克隆 / Qwen3-TTS / Edge 各一行「即开即用」)—— 那正是**挑引擎的地方**该回答的事,
+  //: 而挑引擎的地方就是这一行:默认用哪个引擎。数字与名字都从能力表的 `options` 数出来(`missing`
+  //: 为空的就是跑得起来的),不写死:换一台机器、装上一个引擎,这句话自己跟着变。
+  const usableEngines = (choices.options ?? []).filter((option) => (option.missing ?? []).length === 0);
   //: 「不能设为默认」的几家:只属于某个人 / 某个工作区的(插件连接、克隆音色),以及还没装好的。
   //: **数量在这里数出来**,文案只写「{n} 家不能设为默认」—— 数写死在文案里,换一台机器就对不上;
   //: 一家都没有时整行不画,不写「0 家」。
@@ -322,6 +327,18 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
         description={!isAdmin ? t("capabilityVoiceDefaultAdminOnly") : undefined}
         notes={
           <>
+            {/* 这台机器上有几个引擎能用(见上面 `usableEngines`):数字与名字都是数出来的。
+                一个都没有时说的是现状 + 去哪装 —— 管理员指向管理页「引擎」里那一节,成员说的是
+                「由部署管理员安装」:给他一个打不开的入口等于死路(和删掉的「内置配音引擎」那一组同一条规矩)。 */}
+            <SettingsItemNote>
+              <span data-capability-voice-engines="">
+                {usableEngines.length > 0
+                  ? t("capabilityVoiceEnginesReady")
+                      .replace("{n}", String(usableEngines.length))
+                      .replace("{names}", usableEngines.map((option) => option.name).join(" / "))
+                  : t(isAdmin ? "capabilityVoiceEnginesNone" : "capabilityVoiceEnginesNoneMember")}
+              </span>
+            </SettingsItemNote>
             {save.isError && (
               <SettingsItemNote tone="destructive" icon={<CircleDashed size={13} aria-hidden />}>
                 {save.error instanceof Error ? save.error.message : String(save.error)}

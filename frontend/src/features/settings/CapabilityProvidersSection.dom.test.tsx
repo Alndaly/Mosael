@@ -69,8 +69,13 @@ vi.mock("@/api/domains/speech", () => speechApi);
 const admin = vi.hoisted(() => ({ value: true }));
 vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => admin.value }));
 vi.mock("@/app/preferences", () => ({
-  //: 别的键原样回键名(测试只钉结构);数量那一条要看到真数字,所以留着 `{n}` 让组件自己替换。
-  useI18n: () => (key: string) => (key === "capabilityVoiceRestricted" ? "{n} 家不能设为默认" : key),
+  //: 别的键原样回键名(测试只钉结构);数量那几条要看到真数字,所以留着占位符让组件自己替换。
+  useI18n: () => (key: string) =>
+    key === "capabilityVoiceRestricted"
+      ? "{n} 家不能设为默认"
+      : key === "capabilityVoiceEnginesReady"
+        ? "这台机器上 {n} 个配音引擎都可用（{names}）。"
+        : key,
 }));
 const { findPluginsFor } = vi.hoisted(() => ({ findPluginsFor: vi.fn() }));
 vi.mock("@/lib/deepLink", () => ({ findPluginsFor }));
@@ -913,4 +918,114 @@ it("能选的有两家以上:「自动 / 不指定」保留 —— 不选也能�
   //: 内置的「自动」和一家插件:两项,「不指定」那一项留着(标签就是那个内置实现)。
   expect(pickerValues(parse)).toEqual(["__unset__", "m1"]);
   expect(parse.textContent).toContain("本地解析");
+});
+
+/**
+ * 「这台机器上有几个配音引擎能用」从设置页单独一组(内置配音引擎:克隆 / Qwen3-TTS / Edge 各一行
+ * 「即开即用」)搬到了这张卡的「默认」行下面。
+ *
+ * 那一组是三行只读状态 + 一句「装了没有」的说明,而这里正是挑引擎的地方 —— 同一件事没有必要分两处说。
+ * 数字与名字都从能力表的 `options` 数出来(`missing` 为空的就是能用的),不写死;一个都不用时说清现状,
+ * 并指向管理页里真有的那一节。
+ */
+const voiceCard = (options: Array<{ id: string; name: string; builtin?: boolean; missing?: string[] }>) => ({
+  capability: "speech",
+  label: "配音",
+  description: "念字",
+  current: null,
+  automatic: null,
+  defaultable: true,
+  default_shape: "engine_voice",
+  options,
+  used_by: [{ kind: "app", label: "剪辑页字幕:「配音」" }],
+});
+
+/** 配音那张卡里「N 个引擎可用」那一句 —— 它是控件行下面的一行说明。 */
+const availability = (group: HTMLElement) => group.querySelector<HTMLElement>("[data-capability-voice-engines]");
+
+it("「默认」这一行写着这台机器有几个配音引擎可用:数量与名字都数出来,不写死", async () => {
+  //: 一开始只有克隆那一家装好了(OpenAI 还没配连接)。
+  const first = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const card = () => screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  await waitFor(() => expect(availability(card())).not.toBeNull());
+  expect(availability(card())!.textContent).toBe("这台机器上 1 个配音引擎都可用（本地音色克隆）。");
+  first.unmount();
+
+  //: 再装上一台:数字与名字跟着数据走,不是文案里写死的「3 个」。
+  listCapabilityChoices.mockImplementation(async () => [
+    voiceCard([
+      { id: "builtin:clone", name: "本地音色克隆", builtin: true, missing: [] },
+      { id: "builtin:qwentts", name: "Qwen3-TTS", builtin: true, missing: [] },
+      { id: "builtin:openai", name: "OpenAI", builtin: true, missing: ["还没配好这家的连接"] },
+    ]),
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  await waitFor(() => expect(availability(card())).not.toBeNull());
+  expect(availability(card())!.textContent).toBe("这台机器上 2 个配音引擎都可用（本地音色克隆 / Qwen3-TTS）。");
+});
+
+it("一个能用的配音引擎都没有:那一行说清现状,并指向管理页「引擎」里的「本地语音合成引擎」", async () => {
+  listCapabilityChoices.mockImplementation(async () => [
+    voiceCard([{ id: "builtin:clone", name: "本地音色克隆", builtin: true, missing: ["运行环境还没装"] }]),
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const card = () => screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  await waitFor(() => expect(availability(card())).not.toBeNull());
+  expect(availability(card())!.textContent).toBe("capabilityVoiceEnginesNone");
+
+  //: 文案本身指到的是管理页里**真有**的那一节(`voiceCloneTitle`),不是一个应用里不存在的按钮。
+  expect(zhCN.capabilityVoiceEnginesNone).toContain("还没有可用的配音引擎");
+  expect(zhCN.capabilityVoiceEnginesNone).toContain("管理 → 引擎");
+  expect(zhCN.capabilityVoiceEnginesNone).toContain(zhCN.voiceCloneTitle);
+  //: 成员改不了这台机器的引擎:那句话说的是「由部署管理员安装」,不给一个他打不开的入口。
+  expect(zhCN.capabilityVoiceEnginesNoneMember).toContain(zhCN.voiceCloneTitle);
+  expect(zhCN.capabilityVoiceEnginesNoneMember).toContain("部署管理员");
+  //: 英文两份也在,键集一致(messages.test.ts 管键集,这里钉的是两份都指对了地方)。
+  expect(enUS.capabilityVoiceEnginesNone).toContain("Admin → Engines");
+  expect(enUS.capabilityVoiceEnginesNone).toContain(enUS.voiceCloneTitle);
+});
+
+it("一个可用引擎都没有、看的人是成员:那一行换成「由部署管理员安装」,不给死入口", async () => {
+  admin.value = false;
+  listCapabilityChoices.mockImplementation(async () => [
+    voiceCard([{ id: "builtin:clone", name: "本地音色克隆", builtin: true, missing: ["运行环境还没装"] }]),
+  ]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const card = () => screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  await waitFor(() => expect(availability(card())).not.toBeNull());
+  expect(availability(card())!.textContent).toBe("capabilityVoiceEnginesNoneMember");
+});
+
+it("一个引擎都没登记时也照实说没有 —— 不写「0 个引擎都可用」", async () => {
+  listCapabilityChoices.mockImplementation(async () => [voiceCard([])]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const card = () => screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  await waitFor(() => expect(availability(card())).not.toBeNull());
+  expect(availability(card())!.textContent).toBe("capabilityVoiceEnginesNone");
+  expect(card().textContent).not.toContain("0 个");
 });

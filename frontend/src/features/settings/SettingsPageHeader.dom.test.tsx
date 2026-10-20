@@ -36,7 +36,6 @@ vi.mock("@/features/settings/AppearanceSection", () => ({
 }));
 vi.mock("@/features/settings/AutopilotRulesSection", () => ({ AutopilotRulesSection: () => null }));
 vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => null }));
-vi.mock("@/features/settings/BuiltinTtsSection", () => ({ BuiltinTtsSection: () => null }));
 vi.mock("@/features/settings/CapabilityProvidersSection", () => ({ CapabilityProvidersSection: () => null }));
 vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null }));
 vi.mock("@/features/settings/LocalAppSection", () => ({ LocalAppSection: () => null }));
