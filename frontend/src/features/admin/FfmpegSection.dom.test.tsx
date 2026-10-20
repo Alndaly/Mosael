@@ -243,6 +243,50 @@ it("重新检测:问后端再探一次", async () => {
   expect(rechecks).toBe(1);
 });
 
+/** 「正在用的 ffmpeg」那一行 —— 重新检测只重探它,状态和按钮都在它的右格里。 */
+function inUseRow(): HTMLElement {
+  const row = screen.getByText("ffmpegInUse").closest<HTMLElement>("[data-admin-row]");
+  if (!row) throw new Error("「ffmpegInUse」不在一个 [data-admin-row] 里");
+  return row;
+}
+
+//: 维护者:「**重新检测**的按钮的**位置为何是独立出去的**」。它只重探「正在用的 ffmpeg」那一行,
+//: 此前却挂在节头的 actions 里 —— 按钮和它管的东西分家。挪进那一行的右格,和保存那颗同一套语法。
+it("重新检测在「正在用的 ffmpeg」那一行的右格,不独立挂在节头", async () => {
+  show();
+  await screen.findByText("ffmpegNoTextBurnIn");
+  const button = screen.getByRole("button", { name: /ffmpegRecheck/ });
+  const row = inUseRow();
+  const control = row.querySelector<HTMLElement>("[data-admin-row-control]");
+  expect(control).not.toBeNull();
+  //: 和保存那颗同一套:按钮在 [data-admin-row-control] 里,那一格是行的直接孩子。
+  expect(within(control!).getByRole("button", { name: /ffmpegRecheck/ })).toBe(button);
+  expect(control!.parentElement).toBe(row);
+  //: 节头不再拿它当 actions;说明(整节的背景)仍留在节头。
+  const section = document.querySelector<HTMLElement>('[data-admin-section="ffmpeg"]')!;
+  const header = section.querySelector<HTMLElement>("header")!;
+  expect(header.contains(button)).toBe(false);
+  expect(within(header).getByText("ffmpegSectionDesc")).toBeInTheDocument();
+  //: 整节只有这一颗重新检测。
+  expect(screen.getAllByRole("button", { name: /ffmpegRecheck/ })).toHaveLength(1);
+});
+
+//: 两种形态(pinned / unpinned)都只是路径那一格的状态,重新检测照样在「正在用的」那一行、照样能按。
+it.each([false, true])("重新检测两种形态都在那一行、都能按(pinned=%s)", async (pinned) => {
+  stored = { ...BREW, path: pinned ? "/usr/bin/ffmpeg" : "", pinned_by_environment: pinned };
+  show();
+  await screen.findByText("ffmpegInUse");
+  const control = inUseRow().querySelector<HTMLElement>("[data-admin-row-control]");
+  expect(control).not.toBeNull();
+  const button = within(control!).getByRole("button", { name: /ffmpegRecheck/ });
+  expect(button).not.toBeDisabled();
+  //: 这一节只有这一颗;按下去仍然问后端再探一次。
+  expect(screen.getAllByRole("button", { name: /ffmpegRecheck/ })).toHaveLength(1);
+  stored = { ...stored, libass: true, text_burn_in: "libass" };
+  fireEvent.click(button);
+  await waitFor(() => expect(rechecks).toBe(1));
+});
+
 /** 路径那一行 —— 从输入框往上找最近的 AdminRow(行里也会出现别的行,不能只按文字找)。 */
 function pathRow(): HTMLElement {
   const input = screen.getByLabelText("ffmpegPathLabel");

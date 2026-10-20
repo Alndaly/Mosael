@@ -62,18 +62,22 @@ export function FfmpegSection({ workspaceId }: { workspaceId: string }) {
   const pinnedHintId = React.useId();
 
   return (
-    <AdminSection
-      id="ffmpeg"
-      title={t("ffmpegSectionTitle")}
-      description={t("ffmpegSectionDesc")}
-      actions={
-        <Button size="sm" variant="outline" disabled={!data} loading={recheck.isPending} onClick={() => recheck.mutate()}>
-          <RotateCw size={13} /> {t("ffmpegRecheck")}
-        </Button>
-      }
-    >
+    <AdminSection id="ffmpeg" title={t("ffmpegSectionTitle")} description={t("ffmpegSectionDesc")}>
       <div className={ADMIN_CARD}>
-        {data ? <InUseRow data={data} /> : <AdminRow label={t("connecting")} />}
+        {data ? (
+          <InUseRow
+            data={data}
+            //: 重新检测只重探「正在用的 ffmpeg」这一行 —— 按钮就放在这一行的右格,和保存那颗同一套。
+            //: 挂在节头 actions 里时,按钮和它管的东西分家(维护者:「位置为何是独立出去的」)。
+            action={
+              <Button size="sm" variant="outline" disabled={!data} loading={recheck.isPending} onClick={() => recheck.mutate()}>
+                <RotateCw size={13} /> {t("ffmpegRecheck")}
+              </Button>
+            }
+          />
+        ) : (
+          <AdminRow label={t("connecting")} />
+        )}
         {data?.install?.available && !data.libass && <InstallRow workspaceId={workspaceId} install={data.install} onDone={() => qc.invalidateQueries({ queryKey: QUERY_KEY })} />}
         {/* 和「TTS 解释器」同一套行语法:左边标题 + 说明,右边控件格(输入框 + 保存)。此前控件堆在
             字下面、占满整行 —— 同一页两套行,看着像两个页面拼起来的。宽度取 SETTINGS_FIELD_WIDTH,
@@ -203,7 +207,8 @@ function InstallRow({ workspaceId, install, onDone }: {
   );
 }
 
-function InUseRow({ data }: { data: FfmpegSettings }) {
+/** 「重新检测」跟着这一行走:它重探的就是这一行说的那个 ffmpeg,所以放在右格里,不挂节头。 */
+function InUseRow({ data, action }: { data: FfmpegSettings; action?: React.ReactNode }) {
   const t = useI18n();
   const refused = data.found && data.text_burn_in == null;
   return (
@@ -234,6 +239,7 @@ function InUseRow({ data }: { data: FfmpegSettings }) {
       ) : (
         <AdminRowState>{t("ffmpegNoLibass")}</AdminRowState>
       )}
+      {action}
     </AdminRow>
   );
 }

@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { CONTROL_HEIGHT } from "@/components/ui/control-size";
-import { ADMIN_CARD, AdminRow, AdminRowNote, AdminRowState, AdminTag } from "./adminLayout";
+import { ADMIN_CARD, AdminRow, AdminRowNote, AdminRowState, AdminSection, AdminTag } from "./adminLayout";
 
 /**
  * 管理页只有一种行。引擎、模型这类「一个东西」的行用的是 AdminRow 的几个插槽,而不是另一种行 ——
@@ -67,5 +67,50 @@ describe("AdminRow 的插槽", () => {
     expect(tag).toHaveClass("rounded-full", "text-warning");
     expect(tag).not.toHaveClass("border");
     expect(tag).not.toHaveClass("uppercase");
+  });
+});
+
+/**
+ * 维护者:「为何 **title 下方的 description** 距离整行右侧有**非常大的间距**」。
+ *
+ * 说明写死 `max-w-2xl`(42rem),而管理面板是整页宽、下面紧跟满宽卡片 —— 说明早早折在那里,
+ * 右边空出一大块。宽度是排版:交给这一列,不再在说明身上设上限。
+ */
+describe("AdminSection 的说明", () => {
+  it("说明不再限宽:类里没有 max-w-*,跟着这一列铺开", () => {
+    render(
+      <AdminSection id="description-width" title="标题" description="一句说明">
+        <div />
+      </AdminSection>,
+    );
+    const description = screen.getByText("一句说明");
+    expect(description.tagName).toBe("P");
+    const tokens = description.className.split(/\s+/);
+    //: 没有宽度上限(此前的 max-w-2xl 就是那处大间距)。
+    expect(tokens.filter((token) => token.startsWith("max-w-"))).toEqual([]);
+    //: 字号/颜色仍是同一套,只是不再截宽。
+    expect(description).toHaveClass("text-ui-sm", "text-muted-foreground");
+  });
+
+  it("窄容器里说明能铺满:没有宽度上限、也没被塞进横向滚动的框里", () => {
+    const long = "这是一段很长的说明,".repeat(20);
+    const { container } = render(
+      <div style={{ width: 320 }}>
+        <AdminSection id="narrow" title="窄" description={long}>
+          <div />
+        </AdminSection>
+      </div>,
+    );
+    const description = container.querySelector<HTMLElement>("[data-admin-section='narrow'] header p");
+    expect(description).not.toBeNull();
+    const tokens = description!.className.split(/\s+/);
+    //: 宽度跟着容器走:不写 max-w-*、不写 w-max、也不禁换行 —— 窄容器里它也占满这一列。
+    expect(tokens.filter((token) => token.startsWith("max-w-") || token === "w-max" || token === "whitespace-nowrap")).toEqual([]);
+    //: 块级 p 在 min-w-0 的格子里:宽度 auto = 这一列的宽,不是内容宽。
+    expect(description!.tagName).toBe("P");
+    expect(description!.parentElement).toHaveClass("min-w-0");
+    expect(description!.parentElement).not.toHaveClass("w-fit", "w-max", "inline-block");
+    //: 说明不在一个会横向滚动的容器里。
+    expect(description!.closest(".overflow-x-auto, .overflow-x-scroll")).toBeNull();
   });
 });
