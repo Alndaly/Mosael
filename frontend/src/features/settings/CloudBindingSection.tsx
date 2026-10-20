@@ -30,6 +30,11 @@ import { parseServerTime } from "@/lib/time";
  *
  * 解绑的真实语义是**只删本地这一行**:浏览器里的云端会话、云端那台设备都不动;要撤销云端设备
  * 得到官网账号页。界面上照这个语义写,不把「解除本机绑定」说成「云端也退出了」。
+ *
+ * **「这个部署接没接 MosaelCloud」是另一件事**,而且必须在点之前就知道:`MOSAEL_CLOUD_URL` 为空时,
+ * 登录按钮只会换来一句 `cloud_not_configured` —— 一颗能点但没用的按钮。部署配置在进程启动时就定了,
+ * 所以它不是一次「失败」而是一种**部署状态**:读状态时顺带知道(响应里的 `configured`),或者
+ * 从任何一次带 `cloud_not_configured` 的失败里记下来;知道以后就把入口关掉并说清怎么接。
  */
 export function CloudBindingSection() {
   const t = useI18n();
@@ -42,17 +47,39 @@ export function CloudBindingSection() {
   const [failure, setFailure] = React.useState<CloudBindingFailure | null>(null);
   const [readFailure, setReadFailure] = React.useState<CloudBindingFailure | null>(null);
   const [copied, setCopied] = React.useState(false);
+  //: 这个部署没接 MosaelCloud。一旦知道就不重置 —— 配置存的是环境变量,不重启进程不会变。
+  const [notConfigured, setNotConfigured] = React.useState(false);
+  const notConfiguredHintId = React.useId();
+
+  /**
+   * 绑定状态回包怎么落地。`configured` 是「这个部署接没接 Cloud」的部署事实(不是这次请求的结果):
+   * 后端给了 `false` 就据此把登录入口关掉;没带这个字段就保持未知(照常显示登录)。
+   */
+  const applyStatus = (found: CloudBindingStatus) => {
+    if ((found as CloudBindingStatus & { configured?: boolean }).configured === false) setNotConfigured(true);
+    setBinding(found);
+    setReadFailure(null);
+  };
+
+  /** 把一次失败拆开,并记住「部署没接 Cloud」这个不可重试的结论。 */
+  const noteFailure = (error: unknown): CloudBindingFailure => {
+    const next = describeCloudBindingFailure(error);
+    if (next.notConfigured) setNotConfigured(true);
+    return next;
+  };
 
   React.useEffect(() => {
     let alive = true;
     void getCloudBinding()
       .then((found) => {
         if (!alive) return;
-        setBinding(found);
-        setReadFailure(null);
+        applyStatus(found);
       })
       .catch((error: unknown) => {
-        if (alive) setReadFailure(describeCloudBindingFailure(error));
+        if (!alive) return;
+        const next = noteFailure(error);
+        //: 「没接 Cloud」不是读失败:它有自己的说明和关掉的入口,不摆「重试」。
+        setReadFailure(next.notConfigured ? null : next);
       })
       .finally(() => {
         if (alive) setBusy("");
@@ -60,17 +87,19 @@ export function CloudBindingSection() {
     return () => {
       alive = false;
     };
+    //: 只在挂载时读一次;失败/成功后的重读都走 readStatus。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** 重新问一次后端。完成 / 解绑之后都走它,不拿回包或本地状态冒充结果。 */
   const readStatus = async (): Promise<CloudBindingStatus | null> => {
     try {
       const found = await getCloudBinding();
-      setBinding(found);
-      setReadFailure(null);
+      applyStatus(found);
       return found;
     } catch (error) {
-      setReadFailure(describeCloudBindingFailure(error));
+      const next = noteFailure(error);
+      setReadFailure(next.notConfigured ? null : next);
       return null;
     }
   };
@@ -91,7 +120,9 @@ export function CloudBindingSection() {
     try {
       setIssued(await startCloudBinding());
     } catch (error) {
-      setFailure(describeCloudBindingFailure(error));
+      const next = noteFailure(error);
+      //: 部署没接 Cloud:换成「怎么接」那段说明 + 关掉的入口,而不是一条带错误码的失败。
+      setFailure(next.notConfigured ? null : next);
     } finally {
       setBusy("");
     }
@@ -166,7 +197,7 @@ export function CloudBindingSection() {
           <small className="text-ui-sm leading-[1.5] text-muted-foreground">{t("cloudBindingOauthNote")}</small>
         </div>
 
-        {busy === "loading" && !binding && !readFailure && (
+        {busy === "loading" && !binding && !readFailure && !notConfigured && (
           <small className="text-ui-sm text-muted-foreground" role="status">
             {t("cloudBindingChecking")}
           </small>
@@ -267,6 +298,27 @@ export function CloudBindingSection() {
               </small>
             )}
           </div>
+        ) : notConfigured ? (
+          //: 部署没接 MosaelCloud:说清是什么、怎么接,并且**把入口关掉** —— 不是点了才换一句报错。
+          <div className="grid gap-2" data-cloud-binding-not-configured="">
+            <div className="grid gap-1" id={notConfiguredHintId}>
+              <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+                {t("cloudBindingNotConfigured")}
+              </small>
+              <small className="text-ui-sm leading-[1.5] text-muted-foreground">
+                {t("cloudBindingNotConfiguredFix")}
+              </small>
+            </div>
+            <div>
+              {/* 禁用不是全部:原因就挂在那两句说明上,由 aria-describedby 指过来(光变灰不算说明)。 */}
+              <Button size="sm" disabled aria-describedby={notConfiguredHintId}>
+                {t("cloudBindingBind")}
+              </Button>
+            </div>
+          </div>
+        ) : busy === "loading" && !binding && !readFailure ? (
+          //: 状态还没回来:不摆一颗「看起来能点」的登录键。那行「正在读取登录状态…」就是现有的读状态。
+          null
         ) : (
           <div className="grid gap-2">
             <div>
@@ -323,7 +375,11 @@ function FailureLine({ failure, onRestart }: { failure: CloudBindingFailure; onR
   return (
     <div className="grid gap-1" role="alert" data-cloud-binding-failure={failure.code ?? undefined}>
       <small className="text-ui-sm leading-[1.5] text-muted-foreground">{sentence}</small>
-      {failure.code && !failure.unreachable && (
+      {/*
+        「部署没接 Cloud」不给错误码:它不是用户能修的一次失败,而是一句部署事实;
+        `cloud_not_configured` 只对开发者有意义,摆出来只会让用户拿一个机器词去搜。
+      */}
+      {failure.code && !failure.unreachable && !failure.notConfigured && (
         <small className="text-ui-xs leading-[1.5] text-muted-foreground">
           {t("cloudBindingErrorCode").replace("{code}", failure.code)}
         </small>

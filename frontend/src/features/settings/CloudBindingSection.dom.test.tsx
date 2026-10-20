@@ -233,3 +233,85 @@ describe("MosaelCloud 账号", () => {
     expect(await screen.findByRole("button", { name: "登录 MosaelCloud" })).toBeTruthy();
   });
 });
+
+/**
+ * 部署没接 MosaelCloud(`MOSAEL_CLOUD_URL` 为空)时,那一块**不能是一颗能点但没用的登录键**。
+ *
+ * 维护者截图里点下去只换来「这个部署没有配置 MosaelCloud」+ 错误码 `cloud_not_configured` ——
+ * 错误的呈现方式有两种:让用户先点一次才知道(死按钮),或者把 `cloud_not_configured` 这种
+ * 给开发者看的机器码摆到用户面前。两条都不该有:入口关掉,两句人话说清是什么、怎么接。
+ */
+describe("部署没接 MosaelCloud", () => {
+  const notConfigured = new ApiError(
+    "MosaelCloud is not configured for this deployment (MOSAEL_CLOUD_URL).",
+    503,
+    JSON.stringify({
+      detail: {
+        code: "cloud_not_configured",
+        message: "MosaelCloud is not configured for this deployment (MOSAEL_CLOUD_URL).",
+      },
+    }),
+  );
+
+  /** 登录键在、禁用了、原因由 aria-describedby 指着说得清;不出现错误码,也不摆一条「重试」。 */
+  async function expectDisabledWithReason() {
+    const button = await screen.findByRole("button", { name: "登录 MosaelCloud" });
+    expect(button.hasAttribute("disabled"), "没配置时登录键必须是禁用的,不是点了才报错").toBe(true);
+
+    const describedBy = button.getAttribute("aria-describedby");
+    expect(describedBy, "禁用的按钮要用 aria-describedby 指到原因上").toBeTruthy();
+    const reason = document.getElementById(describedBy ?? "");
+    expect(reason, `aria-describedby=${describedBy} 指向的元素应存在`).toBeTruthy();
+    expect(reason?.textContent).toContain("这个部署没有接 MosaelCloud。");
+    expect(reason?.textContent, "要说清怎么接").toContain("MOSAEL_CLOUD_URL");
+    expect(reason?.textContent).toContain("然后重启 Mosael");
+
+    expect(screen.queryByText(/错误码:?\s*cloud_not_configured/), "不给用户看机器码").toBeNull();
+    expect(screen.queryByText(/cloud_not_configured/), "不给用户看机器码").toBeNull();
+    expect(screen.queryByRole("button", { name: "重试" }), "静态配置,重试不解决问题").toBeNull();
+  }
+
+  it("读绑定状态时就带回 configured:false —— 首屏直接禁用并说清怎么接", async () => {
+    h.status.mockResolvedValue({ ...unbound, configured: false });
+    render(<CloudBindingSection />);
+
+    await expectDisabledWithReason();
+  });
+
+  it("读绑定状态就失败于 cloud_not_configured —— 同样禁用并说清,不摆「重试」", async () => {
+    h.status.mockRejectedValue(notConfigured);
+    render(<CloudBindingSection />);
+
+    await expectDisabledWithReason();
+  });
+
+  it("点下去才知道没配置:换成说明 + 关掉的入口,不再显示错误码", async () => {
+    h.status.mockResolvedValue(unbound);
+    h.start.mockRejectedValue(notConfigured);
+    const user = userEvent.setup();
+    render(<CloudBindingSection />);
+
+    const button = await screen.findByRole("button", { name: "登录 MosaelCloud" });
+    expect(button.hasAttribute("disabled")).toBe(false);
+    await user.click(button);
+
+    await expectDisabledWithReason();
+  });
+
+  it("状态还在读的时候不摆一颗能点的登录键(现有 loading 态还在)", async () => {
+    let resolveStatus!: (value: typeof unbound) => void;
+    h.status.mockReturnValue(
+      new Promise<typeof unbound>((resolve) => {
+        resolveStatus = resolve;
+      }),
+    );
+    render(<CloudBindingSection />);
+
+    expect(screen.getByText("正在读取登录状态…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "登录 MosaelCloud" }), "状态未知时不能显示可点").toBeNull();
+
+    resolveStatus(unbound);
+    const button = await screen.findByRole("button", { name: "登录 MosaelCloud" });
+    expect(button.hasAttribute("disabled"), "读完了、接得上,登录键照旧可点").toBe(false);
+  });
+});
