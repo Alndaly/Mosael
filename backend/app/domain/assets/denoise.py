@@ -31,6 +31,7 @@ from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.assets.lineage import DENOISE, derived
+from app.domain.denoise_defaults import resolve_denoise_engine
 from app.domain.jobs import (
     RENDER_SLOTS,
     create_job,
@@ -57,14 +58,18 @@ class DenoiseDomainError(DenoiseError):
 
 
 def ready_adapter(db: Session, owner_user_id: str | None, engine: str = "") -> DenoiseAdapter:
-    """这次用哪一家(ADR 0032):`engine` 是提供方 id(内置的 `builtin:<引擎>`、插件的连接 id),空 = 按这个人的默认,
-    没定就用第一个跑得起来、不动配乐的内置引擎。挑不出来、没准备好,抛一句说得清下一步的话。
+    """这次用哪一家(ADR 0032):`engine` 是提供方 id(内置的 `builtin:<引擎>`、插件的连接 id),空 = 按默认挑。
+
+    **「按默认」只有一个解析点**(`domain/denoise_defaults.resolve_denoise_engine`):这次点名的 >
+    这个人在「能力提供方 → 降噪」定过的 > 管理 → 引擎 → 降噪 里这台机器的默认 > 第一个跑得起来、
+    不顺手去掉配乐的内置引擎。把优先级放在这里,而不是各入口各拼一份,才不会出现"管理页写着一个、
+    降噪用的是另一个"。挑不出来、没准备好,抛一句说得清下一步的话。
 
     **不替用户准备**(装依赖、拉权重)—— 那是设置里显式的一步(ADR-0016 同一条)。
     """
     from app.domain.audio_capabilities import denoise_adapter
 
-    return denoise_adapter(db, owner_user_id, engine)
+    return denoise_adapter(db, owner_user_id, resolve_denoise_engine(db, owner_user_id, explicit=engine))
 
 
 def list_engines(db: Session, owner_user_id: str | None) -> list[dict]:

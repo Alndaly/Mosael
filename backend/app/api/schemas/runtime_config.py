@@ -209,6 +209,15 @@ class DenoiseEngineOut(ApiModel):
     status: str
     message: str = ""
     size_bytes: int = 0
+    #: 是不是这台机器在管理 → 引擎里设的**默认降噪引擎**。只有部署默认这一个布尔,不是"这次会用谁"
+    #: —— 后者还要叠上每个人自己的选择(见 domain/denoise_defaults.resolve_denoise_engine)。
+    is_default: bool = False
+
+
+class DenoiseDefaultUpdate(ApiModel):
+    """把哪一种降噪引擎设成这台机器的默认。存的是能力表里的提供方 id(`builtin:<引擎>`)。"""
+
+    engine: str
 
 
 class SeparationEngineOut(ApiModel):

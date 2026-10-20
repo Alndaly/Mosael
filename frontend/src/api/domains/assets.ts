@@ -259,6 +259,17 @@ export function installDenoiseEngine(engine: string): Promise<DenoiseEngine> {
   return api<DenoiseEngine>(`/api/denoise/engines/${encodeURIComponent(engine)}/install`, { method: "POST" });
 }
 
+/**
+ * 把这**一种**设成这台机器的默认降噪引擎(管理 → 引擎 → 降噪;只有部署管理员能调)。
+ * 回包是改完之后的那一行 —— 界面照它再向后端问一次整张列表,不自己把别的行改掉。
+ *
+ * 它是两层里的**部署默认**那一层:「设置 → 能力提供方 → 降噪」里按人选的会覆盖它
+ * (有效值只在后端 domain/denoise_defaults.resolve_denoise_engine 里算)。
+ */
+export function setDefaultDenoiseEngine(engine: string): Promise<DenoiseEngine> {
+  return api<DenoiseEngine>("/api/settings/denoise", { method: "PUT", body: JSON.stringify({ engine }) });
+}
+
 /** 降噪,产出一份**新**素材(视频保留画面、只换声音);原素材不动。排成任务。 */
 export function denoiseAsset(assetId: string, body: { engine?: string; strength?: DenoiseStrength } = {}): Promise<Job> {
   return api<Job>(`/api/assets/${assetId}/denoise`, { method: "POST", body: JSON.stringify(body) });
