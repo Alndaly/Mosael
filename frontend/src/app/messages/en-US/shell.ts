@@ -110,6 +110,8 @@ export const shell = {
   loginHeroBody: "Edit, subtitle, dub, and publish — let one idea grow into a finished story in one place.",
   signOut: "Sign out",
   settingsAccount: "Account",
+  //: What the account page header adds after "which account, signed in how": this page has **two** accounts.
+  settingsAccountScope: "; the MosaelCloud account handles the cloud separately, and the two accounts are independent.",
   settingsUsernameDesc: "The name you sign in to this Mosael with; teammates also use it to invite you to a workspace.",
   usernameChange: "Change sign-in name",
   usernameChangeConfirm: "Change your sign-in name to “{name}”? You will sign in with the new one next time, and teammates will invite you by it.",

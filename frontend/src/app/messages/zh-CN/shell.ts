@@ -112,6 +112,8 @@ export const shell = {
   loginHeroBody: "剪辑、字幕、配音、发布——让一段灵感在同一个地方长成作品。",
   signOut: "退出登录",
   settingsAccount: "账户",
+  //: 账户页的页头在「这是哪儿的账号、怎么登进来的」之外补的一句:这一页有**两个**账号。
+  settingsAccountScope: ";另有 MosaelCloud 账号管云端,两个账号互相独立。",
   settingsUsernameDesc: "登录这台 Mosael 用的名字;同事邀请你进工作区时填的也是它。",
   usernameChange: "修改登录名",
   usernameChangeConfirm: "登录名改成「{name}」?下次登录要用新的;同事邀请你时也用它。",

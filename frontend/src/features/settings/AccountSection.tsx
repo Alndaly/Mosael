@@ -123,67 +123,82 @@ export function AccountSection() {
     }
   };
 
+  //: 「这是哪儿的账号、怎么登进来的」——账号菜单用的是同一句(accountOrigin),页头与本地账号块共用。
+  //: 连着团队服务器时它是「{server} 上的账号」,不会被写死成「本地账号」。
+  const origin = accountOrigin(t, customServerHost(), user?.oauth_providers ?? []);
+
   return (
     <SettingsGroup
       title={t("settingsAccount")}
-      // 和账号菜单同一行:这是哪台服务器上的账号、怎么登进来的。此前写死「本地账号,数据都在这台设备上」,
-      // 连着团队服务器的人从菜单点「账号设置」进来,看到的是和菜单相反的说法。
-      description={accountOrigin(t, customServerHost(), user?.oauth_providers ?? [])}
+      // 页头要同时讲两套账号:这一页有本地账号(这台机器上的身份)和 MosaelCloud 账号(云端的)。
+      // 「是哪儿的账号」那一半来自 origin;页面自己补上另外半句(云账号、两者独立) ——
+      // 只删掉那句会让这一页没了定位,只留那句又只描述了半页(维护者:「header 怎么还是本地账号」)。
+      description={`${origin}${t("settingsAccountScope")}`}
       actions={
         <Button variant="outline" size="sm" onClick={() => void logout()}>
           <LogOut size={13} /> {t("signOut")}
         </Button>
       }
     >
+      {/* 顺序:云账号置顶 → 本地账号(身份、资料)→ 登录密码紧跟本地账号。
+          维护者一眼看出的误会:此前密码被云账号隔开,看着像云账号的密码;而密码属于本地账号,
+          放在它后面归属才一眼就清。
+          只挪位置:未绑 / 已绑 / 读失败三种状态、设备码、解绑都由 CloudBindingSection 自己管,一行没改。 */}
+      <CloudBindingSection />
       <SettingsBlock>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-          <IconButton
-            unstyled
-            className="group/avatar relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 bg-accent p-0 font-bold text-accent-foreground shadow-[var(--shadow-panel)]"
-            label={t("avatarChange")}
-            loading={avatarPending}
-            onClick={() => avatarInputRef.current?.click()}
-          >
-            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
-            <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
-              {avatarPending ? <Loader2 size={13} className="animate-mosael-spin" /> : <Camera size={13} />}
+        <div className="grid gap-3">
+          {/* 本地账号这一块的标题就是「这是哪儿的账号、怎么登进来的」那句 —— 和页头、账号菜单同一个来源。
+              云账号置顶之后,这一行把紧随其后的身份/资料认领回本地账号;连着团队服务器时它显示的是那台服务器。 */}
+          <strong className="text-ui-lg font-semibold leading-snug">{origin}</strong>
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+            <IconButton
+              unstyled
+              className="group/avatar relative inline-flex h-[38px] w-[38px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-0 bg-accent p-0 font-bold text-accent-foreground shadow-[var(--shadow-panel)]"
+              label={t("avatarChange")}
+              loading={avatarPending}
+              onClick={() => avatarInputRef.current?.click()}
+            >
+              {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+              <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
+                {avatarPending ? <Loader2 size={13} className="animate-mosael-spin" /> : <Camera size={13} />}
+              </span>
+            </IconButton>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void pickAvatar(file);
+              }}
+            />
+            <div className="[&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-sm [&_strong]:font-[650]">
+              <strong>{displayName}</strong>
+              <small>@{profile.username || "account"}</small>
+            </div>
+            <span
+              className={cn(
+                "inline-flex items-center gap-[5px] whitespace-nowrap text-xs text-muted-foreground",
+                saveState === "saved" && "text-success",
+                saveState === "error" && "text-destructive",
+              )}
+              aria-live="polite"
+            >
+              {saveState === "idle" ? null : saveState === "saving" ? (
+                <>
+                  <Loader2 size={12} className="animate-mosael-spin" /> {t("profileSaving")}
+                </>
+              ) : saveState === "error" ? (
+                t("profileSaveFailed")
+              ) : (
+                <>
+                  <Check size={12} /> {t("profileSaved")}
+                </>
+              )}
             </span>
-          </IconButton>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void pickAvatar(file);
-            }}
-          />
-          <div className="[&_small]:text-xs [&_small]:leading-[1.45] [&_small]:text-muted-foreground [&_strong]:block [&_strong]:text-sm [&_strong]:font-[650]">
-            <strong>{displayName}</strong>
-            <small>@{profile.username || "account"}</small>
           </div>
-          <span
-            className={cn(
-              "inline-flex items-center gap-[5px] whitespace-nowrap text-xs text-muted-foreground",
-              saveState === "saved" && "text-success",
-              saveState === "error" && "text-destructive",
-            )}
-            aria-live="polite"
-          >
-            {saveState === "idle" ? null : saveState === "saving" ? (
-              <>
-                <Loader2 size={12} className="animate-mosael-spin" /> {t("profileSaving")}
-              </>
-            ) : saveState === "error" ? (
-              t("profileSaveFailed")
-            ) : (
-              <>
-                <Check size={12} /> {t("profileSaved")}
-              </>
-            )}
-          </span>
         </div>
       </SettingsBlock>
       <SettingsBlock>
@@ -229,10 +244,6 @@ export function AccountSection() {
           </SettingsField>
         </SettingsForm>
       </SettingsBlock>
-      {/* 顺序:身份(本地账号)→ 云账号 → 改密码。云账号此前在页面最底部、登录密码之下,维护者说「很难看到」;
-          放到这里让一进来就看见,但不放到最顶 —— 本地账号仍是这台机器的身份。
-          只挪位置:未绑 / 已绑 / 读失败三种状态、设备码、解绑都由 CloudBindingSection 自己管,一行没改。 */}
-      <CloudBindingSection />
       <SettingsBlock>
         <div className="grid gap-3">
           {/* 一小节的标题比同一块里「当前密码」「新密码」的字段名(16px)重一档,说明和字段说明同一档(14px)——
