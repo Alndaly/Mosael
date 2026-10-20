@@ -493,6 +493,7 @@ const zh = {
     whatIsTitle: "这是什么",
     whatIsWorkflow: "一份 Mosael 工作流（.json）。里面是一串搭好的节点：打开后换成你自己的模型和素材，就能跑起来。",
     whatIsBoard: "一块 Mosael 画布（.json）。素材、位置和连线都保存在里面：打开后可以接着往下做。",
+    whatIsPlugin: "一个 Mosael 插件（官方发布）。它把外部能力接进来：装上之后就是智能体和工具手边的本事，跟着应用更新。",
     // 详情页的内容预览:一张结构图,不是可点的控件。数量单位跟着 workflow / board 换。
     previewWorkflow: "工作流预览",
     previewBoard: "画布预览",
@@ -1075,6 +1076,7 @@ const en: Messages = {
     whatIsTitle: "What this is",
     whatIsWorkflow: "A Mosael workflow (.json): a ready-made chain of nodes. Open it, swap in your own models and media, and run it.",
     whatIsBoard: "A Mosael board (.json): the media, positions and connections on a canvas. Open it and keep building.",
+    whatIsPlugin: "A Mosael plugin (published by us). It brings an outside capability in — after installing, it sits alongside the agent and the tools.",
     // Preview of the shared content: a structural diagram, not a control.
     previewWorkflow: "Workflow preview",
     previewBoard: "Board preview",

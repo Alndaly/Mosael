@@ -131,7 +131,10 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
   const previewPayload = previewResult.status === "fulfilled" ? previewResult.value : null;
 
   const author = share.author.display_name?.trim() || share.author.handle || "—";
-  const kindLabel = share.kind === "board" ? t.kindBoard : t.kindWorkflow;
+  // 三种类型各说各的。之前只判了 board,插件会落进最后一个分支被写成「工作流」
+  // (维护者截图:Blender MCP 显示「类型 工作流」)。
+  const kindLabel =
+    share.kind === "board" ? t.kindBoard : share.kind === "plugin" ? t.kindPlugin : t.kindWorkflow;
   // 摘要是数据字段:走 toPlainText 再上页面 / 进 meta,别把 markdown 记号当正文露出来。
   const summaryText = share.summary?.trim() ? toPlainText(share.summary) : "";
   const avatarSeed = share.author.avatar_seed || share.author.handle || share.id;
@@ -192,7 +195,7 @@ async function ShareDetailSection({ locale, id }: { locale: Locale; id: string }
             <SharePreview locale={locale} kind={share.kind} payload={previewPayload} />
             <Section id="about" title={t.whatIsTitle}>
               <p className="m-0 text-sm leading-7 text-muted-foreground">
-                {share.kind === "board" ? t.whatIsBoard : t.whatIsWorkflow}
+                {share.kind === "board" ? t.whatIsBoard : share.kind === "plugin" ? t.whatIsPlugin : t.whatIsWorkflow}
               </p>
               <div className="mt-6">
                 <Steps steps={t.importSteps} />
