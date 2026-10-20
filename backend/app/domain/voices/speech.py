@@ -7,8 +7,9 @@ engine_catalog 里,voices 要用就得回头 import 它,而 engine_catalog 又�
 没有前缀(`is_plugin`)。
 
 配音是一项**宿主能力**(ADR 0032 第四步):本机克隆、Edge、OpenAI、火山、百炼这几家是内置提供方
-(`builtin:clone`、`builtin:edge`……),认领 `speech` 的插件连接和它们并列。和别的能力不同,**配音没有默认**:
-引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),每个入口都点名(`defaultable=False`)。
+(`builtin:clone`、`builtin:edge`……),认领 `speech` 的插件连接和它们并列。它的默认是**一对**(引擎 + 音色,
+`default_shape="engine_voice"`):引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),所以默认也
+必须成对存在、成对校验 —— 见 `domain/voices/defaults`。
 
 **契约**(认领 `speech` 的工具是一个普通工具,ADR 0033;按 `op` 分两件事):
 
@@ -106,7 +107,9 @@ CAPABILITY = Capability(
           for cls in (OpenAISpeechAdapter, VolcanoSpeechAdapter, BailianSpeechAdapter, CosyVoiceSpeechAdapter)),
     ),
     auto_single=False,
-    defaultable=False,
+    #: 默认 = 引擎 + 音色一对(见 domain/voices/defaults);设置页那一行因此是两个控件,不是一个下拉。
+    defaultable=True,
+    default_shape="engine_voice",
 )
 
 
@@ -141,8 +144,9 @@ _NO_SETUP = (EDGE_ENGINE, CLONE_ENGINE, QWEN_ENGINE)
 def engine_choices(db: Session, user_id: str | None) -> dict[str, str]:
     """「点错了引擎」那句话里摆出来的两串:**现在**能用的引擎 id,和其中不用配置、不花钱的那几个。
 
-    配音没有默认引擎(`defaultable=False`,不替人挑一个要钥匙的),所以不说「默认是哪个」,说「哪个不用配」——
-    智能体此前点错了名字只拿到一句「没有这个配音引擎」,转头请用户去设置里给 Edge 配一个根本不用配的东西。
+    这里不说「默认是哪个」,说「哪个不用配」—— 默认那一对由设置页管(`domain/voices/defaults`),
+    而这句话要回答的是"我现在能写哪一个";智能体此前点错了名字只拿到一句「没有这个配音引擎」,
+    转头请用户去设置里给 Edge 配一个根本不用配的东西。
     """
     from app.domain import capabilities
 

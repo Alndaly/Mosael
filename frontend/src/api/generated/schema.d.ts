@@ -2412,6 +2412,9 @@ export interface paths {
         /**
          * List Tts Engines
          * @description Engines the配音 UI can offer, and what each one needs from the user.
+         *
+         *     每一行还带「是不是这台机器默认那一对里的引擎」(`is_default`)。默认不另开 GET ——
+         *     **同一个答案只有一处来源**(和降噪、转写同一条),写入口在 `PUT /api/settings/voice-default`。
          */
         get: operations["list_tts_engines_api_tts_engines_get"];
         put?: never;
@@ -2437,6 +2440,30 @@ export interface paths {
          */
         get: operations["list_tts_voices_api_tts_voices_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/voice-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Voice Default
+         * @description 把这台机器的默认定成**一对**(引擎 + 音色)。
+         *
+         *     **只许设现在就能用的引擎、并且音色必须属于它**(`domain/voices/defaults.set_default_voice`):
+         *     成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。
+         *     和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。
+         */
+        put: operations["set_voice_default_api_settings_voice_default_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -11979,6 +12006,11 @@ export interface components {
              * @default true
              */
             defaultable: boolean;
+            /**
+             * Default Shape
+             * @default provider
+             */
+            default_shape: string;
             /** Options */
             options?: components["schemas"]["CapabilityProviderOut"][];
             /** Used By */
@@ -19757,6 +19789,16 @@ export interface components {
              * @default false
              */
             clones_voices: boolean;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+            /**
+             * Plugin
+             * @default false
+             */
+            plugin: boolean;
         };
         /** TtsEngineOut */
         TtsEngineOut: {
@@ -19857,6 +19899,11 @@ export interface components {
              * @default false
              */
             cloned: boolean;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
         };
         /**
          * UnpricedUsageOut
@@ -20122,6 +20169,32 @@ export interface components {
             start: number;
             /** Duration */
             duration?: number | null;
+        };
+        /**
+         * VoiceDefaultOut
+         * @description 改完之后的那一对。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。
+         */
+        VoiceDefaultOut: {
+            /** Engine */
+            engine: string;
+            /** Voice */
+            voice: string;
+        };
+        /**
+         * VoiceDefaultUpdate
+         * @description 这台机器默认那一对(引擎 + 音色)。两格都空 = 清掉(回到每个入口各自点名)。
+         */
+        VoiceDefaultUpdate: {
+            /**
+             * Engine
+             * @default
+             */
+            engine: string;
+            /**
+             * Voice
+             * @default
+             */
+            voice: string;
         };
         /** VoiceDeleteOut */
         VoiceDeleteOut: {
@@ -26387,6 +26460,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TtsVoiceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_voice_default_api_settings_voice_default_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceDefaultUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceDefaultOut"];
                 };
             };
             /** @description Validation Error */

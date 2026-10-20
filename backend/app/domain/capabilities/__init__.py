@@ -90,9 +90,11 @@ class Capability:
     #: 没定默认、也没有内置实现时,只有一家配好就不问直接用。**数据会离开本机的能力**(文档交给云端解析)
     #: 不该这样:用哪家必须他自己定过。
     auto_single: bool = True
-    #: 这项能力有没有「默认用哪家」。配音没有:引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),
-    #: 每个入口都点名 —— 设置页只列候选和「用在哪」,不给默认的选择器。
+    #: 这项能力有没有「默认用哪家」。配音也有,只是它的默认是**一对**(引擎 + 音色),见 `default_shape`。
     defaultable: bool = True
+    #: 默认那一行画什么:`provider` = 一个下拉(选一家提供方);`engine_voice` = 两个控件(引擎 + 音色),
+    #: 给配音:引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),单独一个下拉设不出默认。
+    default_shape: str = "provider"
     #: 走不走这里的挑法。生成(按连接 + 模型挑,ADR 0020)和工具清单(每个连接自己报)不走:它们没有候选、没有默认,
     #: 不进设置页,`get` 查不到;表里只留名字、用在哪和下面两个钩子。
     pickable: bool = True
@@ -217,7 +219,7 @@ def uses_of(name: str, *, settings: bool = True) -> list[Use]:
     `settings=False`:设置页自己列的时候不带那一条 —— 在「能力提供方」里写「能力提供方:设成默认」是废话。"""
     from app.core.i18n import fragment
 
-    #: 没有默认的能力(配音)不在设置里「设成默认」。
+    #: 没有默认的能力不在设置里「设成默认」(今天每一项都有,包括配音 —— 它的默认是一对)。
     found = [Use(name, "app", fragment("capUse_settingsDefault"))] \
         if settings and get(name) is not None and _registry[name].defaultable else []
     found += [one for one in _uses if one.capability == name]
@@ -312,8 +314,9 @@ def choices(db: Session, owner_user_id: str, capability: Capability) -> dict[str
         "current": chosen,
         #: **不选的话**会用哪一家 —— 和当前选没选无关(选定之后它不改口)。
         "automatic": automatic.id if automatic else None,
-        #: 没有「默认用哪家」的能力(配音):设置页只列候选和用在哪。
+        #: 有没有「默认用哪家」;有的话默认那一行长什么样(配音是 `engine_voice`:引擎 + 音色两个控件)。
         "defaultable": capability.defaultable,
+        "default_shape": capability.default_shape,
         "options": [{"id": one.id, "name": one.name, "builtin": one.builtin, "missing": list(one.missing)}
                     for one in candidates],
         #: 定了这一家,哪些地方跟着换(ADR 0032 §4)。

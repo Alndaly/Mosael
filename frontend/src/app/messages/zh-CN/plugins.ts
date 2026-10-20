@@ -224,9 +224,16 @@ export const plugins = {
   capabilityUseKindAgent: "智能体",
   //: 标题行里「现在用谁」那一格:没点名/没有默认时各说一句短的。
   capabilityUnset: "未指定",
-  capabilityNoDefaultShort: "由每个入口点名",
-  capabilityProviders: "有哪几家",
-  capabilityNoDefault: "这一项没有默认:每个用到它的地方都点名用哪一家。",
+  //: 配音的默认是**一对**(引擎 + 音色),所以那一行是两个控件 —— 不是一个下拉。
+  capabilityVoiceDefault: "默认(引擎 + 音色)",
+  capabilityVoiceDefaultSave: "保存默认",
+  capabilityVoiceDefaultNeedEngine: "先选一个引擎。",
+  capabilityVoiceDefaultNeedVoice: "再选一个音色 —— 默认要是一对,只有引擎还念不出来。",
+  capabilityVoiceDefaultAdminOnly: "只有部署管理员能改这台机器的默认。",
+  capabilityVoiceDefaultUnready: "「{name}」还用不了:{reason}",
+  capabilityVoiceDefaultPersonalOnly:
+    "「{name}」只属于某个人 / 某个工作区(插件连接、克隆音色),不能当这台机器的默认;配音面板里照常能选它。",
+  capabilityVoiceDefaultSaved: "已保存。",
   capabilityOnlyOne: "目前只有这一家;装了能做这件事的插件后,可以在这里换。",
   capabilityBuiltinUnready: "「{name}」还不能选:{fields}",
   capabilityGoPlugins: "去插件页",

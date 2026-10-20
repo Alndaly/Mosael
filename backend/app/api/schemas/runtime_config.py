@@ -127,6 +127,12 @@ class TtsEngineChoiceOut(ApiModel):
     #: 这个引擎能把配音库里的嗓子复刻上去、用它念(ADR 0037;目前是百炼 CosyVoice)。配音库据此摆「复刻到百炼」,
     #: 音色下拉据此多一组克隆音色。
     clones_voices: bool = False
+    #: 这是不是这台机器默认那一对里的引擎(见 domain/voices/defaults)。**同一个答案只有一处来源**:
+    #: 不另开「当前默认」的 GET,就标在候选列表上。
+    is_default: bool = False
+    #: 这一项是插件连接(不是内置引擎)。部署默认只收内置引擎 —— 插件连接属于某个人,
+    #: 拿它当"这台机器的默认"对别人不成立(见 domain/voices/defaults 的模块说明)。
+    plugin: bool = False
 
 
 class TtsConfigOut(ApiModel):

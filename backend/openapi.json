@@ -6144,7 +6144,7 @@
           "voices"
         ],
         "summary": "List Tts Engines",
-        "description": "Engines the配音 UI can offer, and what each one needs from the user.",
+        "description": "Engines the配音 UI can offer, and what each one needs from the user.\n\n每一行还带「是不是这台机器默认那一对里的引擎」(`is_default`)。默认不另开 GET ——\n**同一个答案只有一处来源**(和降噪、转写同一条),写入口在 `PUT /api/settings/voice-default`。",
         "operationId": "list_tts_engines_api_tts_engines_get",
         "responses": {
           "200": {
@@ -6214,6 +6214,48 @@
                     "$ref": "#/components/schemas/TtsVoiceOut"
                   },
                   "title": "Response List Tts Voices Api Tts Voices Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/voice-default": {
+      "put": {
+        "tags": [
+          "voices"
+        ],
+        "summary": "Set Voice Default",
+        "description": "把这台机器的默认定成**一对**(引擎 + 音色)。\n\n**只许设现在就能用的引擎、并且音色必须属于它**(`domain/voices/defaults.set_default_voice`):\n成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。\n和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。",
+        "operationId": "set_voice_default_api_settings_voice_default_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceDefaultUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceDefaultOut"
                 }
               }
             }
@@ -33465,6 +33507,11 @@
             "title": "Defaultable",
             "default": true
           },
+          "default_shape": {
+            "type": "string",
+            "title": "Default Shape",
+            "default": "provider"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/CapabilityProviderOut"
@@ -49834,6 +49881,16 @@
             "type": "boolean",
             "title": "Clones Voices",
             "default": false
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
+          },
+          "plugin": {
+            "type": "boolean",
+            "title": "Plugin",
+            "default": false
           }
         },
         "type": "object",
@@ -49971,6 +50028,11 @@
           "cloned": {
             "type": "boolean",
             "title": "Cloned",
+            "default": false
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
             "default": false
           }
         },
@@ -50481,6 +50543,44 @@
         "type": "object",
         "title": "VideoToGifRequest",
         "description": "Options for creating a new GIF asset from a video asset."
+      },
+      "VoiceDefaultOut": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          },
+          "voice": {
+            "type": "string",
+            "title": "Voice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine",
+          "voice"
+        ],
+        "title": "VoiceDefaultOut",
+        "description": "改完之后的那一对。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。"
+      },
+      "VoiceDefaultUpdate": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Engine",
+            "default": ""
+          },
+          "voice": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Voice",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "VoiceDefaultUpdate",
+        "description": "这台机器默认那一对(引擎 + 音色)。两格都空 = 清掉(回到每个入口各自点名)。"
       },
       "VoiceDeleteOut": {
         "properties": {

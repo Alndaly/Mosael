@@ -18,8 +18,10 @@ import React from "react";
 import { CircleDashed, Plug, Store } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { capabilityKeys } from "@/api/queryKeys";
+import { capabilityKeys, voiceKeys } from "@/api/queryKeys";
 import { listCapabilityChoices, setCapabilityDefault, type CapabilityChoices as Choices } from "@/api/domains/capabilities";
+import { CLONE_ENGINE, listTtsEngines, listTtsVoices, setVoiceDefault } from "@/api/domains/speech";
+import { useIsDeploymentAdmin } from "@/app/auth";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -32,7 +34,6 @@ import {
   SettingsGroup,
   SettingsItemNote,
   SettingsItemRow,
-  SettingsTag,
 } from "@/components/settings/settings-layout";
 import { PageLoadError } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -87,8 +88,9 @@ export function CapabilityProvidersSection() {
   return (
     <div data-capability-cards="" className={CARD_STACK}>
       {groups.map((choices) =>
-        choices.defaultable === false
-          ? <ProvidersOnlyGroup key={choices.capability} choices={choices} />
+        //: 默认是一对(引擎 + 音色)的能力(配音):那一行是两个控件,不是一个下拉。
+        choices.defaultable && choices.default_shape === "engine_voice"
+          ? <VoiceDefaultGroup key={choices.capability} choices={choices} />
           : <CapabilityGroup key={choices.capability} choices={choices} />,
       )}
     </div>
@@ -138,8 +140,8 @@ export const CAPABILITY_SKELETON_GROUPS: readonly CapabilitySkeletonShape[] = [
   { title: "w-20", current: "w-16", description: ["w-1/2"], picker: true, uses: 0 },
   //: 素材外链:一行,有下拉(一家都没有时那个位置是「去插件页」按钮,同样是右边一格)。
   { title: "w-16", current: "w-16", description: ["w-2/5"], picker: true, uses: 0 },
-  //: 配音:没有默认,只列候选,底下收着一行「用在 1 处」—— 没有下拉。
-  { title: "w-12", current: "w-20", description: ["w-3/5"], picker: false, uses: 1 },
+  //: 配音:默认是引擎 + 音色一对,右边是两个控件(骨架用同一档占位);底下收着一行「用在 1 处」。
+  { title: "w-12", current: "w-20", description: ["w-3/5"], picker: true, uses: 1 },
   //: 转写:说明两行,有下拉,没有用法。
   { title: "w-16", current: "w-16", description: ["w-4/5", "w-1/3"], picker: true, uses: 0 },
   //: 翻译:一行,有下拉,没有用法。
@@ -239,43 +241,133 @@ function CapabilityGroupsSkeleton() {
 }
 
 /**
- * 没有「默认用哪家」的能力(配音:引擎和音色成对选,每个入口都点名)。不摆选择器 —— 摆了也改变不了任何地方 ——
- * 只列有哪几家、没配好的缺什么、用在哪。
+ * 默认是一对的能力(配音):引擎 + 音色两个控件。
+ *
+ * 为什么不是一个下拉:引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),只存引擎的"默认"
+ * 在真正念的时候仍然得让人再点一次音色。所以这一行两块:引擎、它的音色,保存时一起写、后端一起校验
+ * (不属于这个引擎的音色回 409,理由写在这一行下面)。
+ *
+ * 当前默认**不另取一份**:引擎下拉读 `/tts/engines` 每行上的 `is_default`,音色下拉读
+ * `/tts/voices` 每行上的 `is_default` —— 和后端解析用的是同一份存储。
  */
-function ProvidersOnlyGroup({ choices }: { choices: Choices }) {
+function VoiceDefaultGroup({ choices }: { choices: Choices }) {
   const t = useI18n();
-  const options = choices.options ?? [];
-  const ready = options.filter((option) => (option.missing ?? []).length === 0);
-  const unready = options.filter((option) => (option.missing ?? []).length > 0);
+  const qc = useQueryClient();
+  const isAdmin = useIsDeploymentAdmin();
+  //: 和配音面板 / 设置页别处同一个键:装完引擎、别处改了默认,这一行跟着刷新。
+  const enginesQuery = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
+  const engines = enginesQuery.data ?? [];
+  //: 这台机器的默认只收内置引擎:插件连接属于某个人(见 domain/voices/defaults),对别人不成立。
+  //: 本机克隆的音色属于**某个工作区**的配音库,也没有一个能当全机默认的音色 id —— 两者都不进下拉。
+  const ready = engines.filter((engine) => engine.ready && !engine.plugin && engine.id !== CLONE_ENGINE);
+  const unready = engines.filter((engine) => !engine.ready);
+  const personalOnly = engines.filter((engine) => engine.ready && (engine.plugin || engine.id === CLONE_ENGINE));
+  const serverEngine = engines.find((engine) => engine.is_default)?.id ?? "";
+  //: `null` = 跟着服务端那份;空串 = 用户选了「不指定」(清掉默认)。两者不是一回事。
+  const [pickedEngine, setPickedEngine] = React.useState<string | null>(null);
+  const [pickedVoice, setPickedVoice] = React.useState<string | null>(null);
+  const engine = pickedEngine ?? serverEngine;
+  const voicesQuery = useQuery({
+    queryKey: voiceKeys.engineVoices(engine),
+    queryFn: () => listTtsVoices(engine),
+    enabled: Boolean(engine),
+    staleTime: 30_000,
+  });
+  const voices = voicesQuery.data ?? [];
+  const serverVoice = voices.find((voice) => voice.is_default)?.value ?? "";
+  const voice = pickedVoice ?? serverVoice;
+  const readyVoices = voices.filter((item) => !item.cloned);
+  const chosenVoice = readyVoices.find((item) => item.value === voice);
+  const save = useMutation({
+    mutationFn: () => setVoiceDefault(engine, engine === "" ? "" : voice),
+    onSuccess: () => {
+      //: 写后 invalidate:引擎/音色候选上的 `is_default` 是当前默认的唯一来源,不自己改缓存。
+      void qc.invalidateQueries({ queryKey: ["tts-engines"] });
+      void qc.invalidateQueries({ queryKey: voiceKeys.engineVoices(engine) });
+      void qc.invalidateQueries({ queryKey: KEY });
+      //: 回到「跟着服务端」:下一次渲染读的就是刚写进去的那一对。
+      setPickedEngine(null);
+      setPickedVoice(null);
+    },
+  });
+  const canSave = isAdmin && (engine === "" || Boolean(chosenVoice)) && !save.isPending;
   const uses = choices.used_by ?? [];
+  //: 标题行照别组一样写「现在用谁」:默认那一对(引擎 · 音色);没设过就是「未指定」。
+  const engineLabel = engines.find((item) => item.id === serverEngine)?.label ?? "";
+  const voiceLabel = voices.find((item) => item.value === serverVoice)?.label ?? "";
+  const current = serverEngine
+    ? [engineLabel || serverEngine, voiceLabel].filter(Boolean).join(" · ")
+    : t("capabilityUnset");
+
   return (
     <SettingsGroup
       card
       title={choices.label}
-      titleAdornment={<CurrentSelection>{t("capabilityNoDefaultShort")}</CurrentSelection>}
+      titleAdornment={<CurrentSelection>{current}</CurrentSelection>}
       description={toPlainText(choices.description)}
       actions={<FindPlugins capability={choices.capability} />}
     >
       <SettingsItemRow
-        label={<ControlLabel>{t("capabilityProviders")}</ControlLabel>}
-        description={t("capabilityNoDefault")}
+        label={<ControlLabel>{t("capabilityVoiceDefault")}</ControlLabel>}
+        description={!isAdmin
+          ? t("capabilityVoiceDefaultAdminOnly")
+          : !engine
+            ? t("capabilityVoiceDefaultNeedEngine")
+            : !chosenVoice
+              ? t("capabilityVoiceDefaultNeedVoice")
+              : undefined}
         notes={
           <>
-            {ready.length > 0 && (
-              <div data-capability-ready="" className="flex flex-wrap gap-1.5 pt-1">
-                {ready.map((option) => <SettingsTag key={option.id}>{option.name}</SettingsTag>)}
-              </div>
-            )}
-            {unready.map((option) => (
-              <SettingsItemNote key={option.id} icon={<CircleDashed size={13} aria-hidden />}>
-                {t(option.builtin ? "capabilityBuiltinUnready" : "assetLinkMissing")
-                  .replace("{name}", option.name)
-                  .replace("{fields}", (option.missing ?? []).join(t("listSeparator")))}
+            {personalOnly.map((item) => (
+              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t("capabilityVoiceDefaultPersonalOnly").replace("{name}", item.label)}
               </SettingsItemNote>
             ))}
+            {unready.map((item) => (
+              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t("capabilityVoiceDefaultUnready")
+                  .replace("{name}", item.label)
+                  .replace("{reason}", item.note || "—")}
+              </SettingsItemNote>
+            ))}
+            {save.isError && (
+              <SettingsItemNote tone="destructive" icon={<CircleDashed size={13} aria-hidden />}>
+                {save.error instanceof Error ? save.error.message : String(save.error)}
+              </SettingsItemNote>
+            )}
+            {save.isSuccess && !save.isPending && (
+              <SettingsItemNote>{t("capabilityVoiceDefaultSaved")}</SettingsItemNote>
+            )}
           </>
         }
-      />
+      >
+        <OptionPicker
+          ariaLabel={t("capabilityVoiceDefault")}
+          value={engine || UNSET}
+          disabled={!isAdmin || save.isPending}
+          onChange={(value) => {
+            setPickedEngine(value === UNSET ? "" : value);
+            setPickedVoice(null);
+          }}
+          options={[
+            { value: UNSET, label: t("capabilityUnset") },
+            ...ready.map((item) => ({ value: item.id, label: item.label, description: item.note || undefined })),
+          ]}
+          className={SETTINGS_FIELD_WIDTH}
+        />
+        <OptionPicker
+          ariaLabel={t("voiceEngineVoice")}
+          value={voice}
+          disabled={!isAdmin || !engine || save.isPending}
+          placeholder={t("capabilityVoiceDefaultNeedVoice")}
+          onChange={(value) => setPickedVoice(value)}
+          options={readyVoices.map((item) => ({ value: item.value, label: item.label }))}
+          className={SETTINGS_FIELD_WIDTH}
+        />
+        <Button size="sm" variant="outline" loading={save.isPending} disabled={!canSave} onClick={() => save.mutate()}>
+          {t("capabilityVoiceDefaultSave")}
+        </Button>
+      </SettingsItemRow>
       {uses.length > 0 && <CapabilityUseSummary uses={uses} />}
     </SettingsGroup>
   );

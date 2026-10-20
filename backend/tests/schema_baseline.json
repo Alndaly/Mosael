@@ -96,6 +96,12 @@
     "id",
     "updated_at"
   ],
+  "voice_default_config": [
+    "engine",
+    "id",
+    "updated_at",
+    "voice"
+  ],
   "media_tools_config": [
     "ffmpeg_path",
     "id",

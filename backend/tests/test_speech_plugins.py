@@ -79,13 +79,16 @@ def test_配音任务的产出含AI_导出时认得出是合成人声() -> None:
     assert asset["source"] == "tts" and asset["ai_generated"] is True
 
 
-def test_配音没有默认_设置页只列候选() -> None:
+def test_配音能设默认_而且默认是一对引擎加音色() -> None:
+    """维护者:「配音应该也有默认机制」。默认不是「用哪一家」那种单选,而是引擎 + 音色一对 ——
+    契约里 `default_shape` 说清这一项画两个控件(见 domain/voices/defaults)。"""
     client, _ws, _me, plugin = _setup()
     speech = next(one for one in client.get("/api/settings/capabilities").json() if one["capability"] == "speech")
-    assert speech["defaultable"] is False
+    assert speech["defaultable"] is True
+    assert speech["default_shape"] == "engine_voice"
     assert {"builtin:clone", "builtin:edge", plugin} <= {one["id"] for one in speech["options"]}
-    refused = client.put("/api/settings/capabilities/speech", json={"provider_id": plugin})
-    assert refused.status_code == 400 and "没有默认" in refused.json()["detail"]
+    #: 个人覆盖仍然走通用那一条(存的是引擎);默认那一对的写入口在 /api/settings/voice-default。
+    assert client.put("/api/settings/capabilities/speech", json={"provider_id": plugin}).status_code == 200
 
 
 def test_点名一个不存在的引擎_建任务之前就拒() -> None:

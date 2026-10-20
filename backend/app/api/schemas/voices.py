@@ -207,6 +207,23 @@ class TtsVoiceOut(ApiModel):
     #: 这一项是配音库里的一把克隆嗓子(`value` 是它的 id),由这个引擎念它的远端副本(ADR 0037)。
     #: 选它时请求带 `voice_id`、`engine_voice` 留空。只在能复刻的引擎(CosyVoice)、带了工作区时出现。
     cloned: bool = False
+    #: 这是不是这台机器默认那一对里的音色(和引擎一起标:默认是一对)。见 domain/voices/defaults。
+    is_default: bool = False
+
+
+class VoiceDefaultUpdate(ApiModel):
+    """这台机器默认那一对(引擎 + 音色)。两格都空 = 清掉(回到每个入口各自点名)。"""
+
+    engine: str = Field(default="", max_length=80)
+    #: 这个引擎自己的音色 id;必须和引擎是一对,不属于它时 409。
+    voice: str = Field(default="", max_length=200)
+
+
+class VoiceDefaultOut(ApiModel):
+    """改完之后的那一对。当前默认不另开 GET —— 它作为 `is_default` 标在 /tts/engines 和 /tts/voices 上。"""
+
+    engine: str
+    voice: str
 
 
 class VoiceFromSpeakerRequest(ApiModel):

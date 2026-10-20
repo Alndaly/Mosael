@@ -585,8 +585,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "capUse_boardSpeak": {"zh": "画板的「配音」", "en": "Dub on the board"},
     "capability_speech": {"zh": "配音", "en": "Speech"},
     "capability_speech_desc": {
-        "zh": "用一个音色把文字念出来。本机克隆、Edge、各家云端之外,装了配音插件的也在这里。配音没有默认:引擎和音色是成对选的,每个用到它的地方都点名。",
-        "en": "Read text aloud in a voice. Besides on-device cloning, Edge and cloud engines, installed speech plugins appear here. Speech has no default: engine and voice are picked together wherever it's used.",
+        "zh": "用一个音色把文字念出来。本机克隆、Edge、各家云端之外,装了配音插件的也在这里。这里设的是这台机器的默认:引擎和音色是成对选的,所以默认也是一对;没设默认时,每个用到它的地方各自点名。",
+        "en": "Read text aloud in a voice. Besides on-device cloning, Edge and cloud engines, installed speech plugins appear here. What you set here is this machine's default: engine and voice are picked together, so the default is a pair; with no default, every place that uses it names its own.",
     },
     "speechErr_unknownEngine": {"zh": "没有这个配音引擎:{name}", "en": "No such speech engine: {name}"},
     "speechErr_engineNotReady": {"zh": "「{plugin}」还用不了:{missing}", "en": "“{plugin}” can't be used yet: {missing}"},
@@ -609,6 +609,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "speechErr_voiceInSeveralEngines": {
         "zh": "音色「{voice}」好几个引擎都有,请点名其中一个:{choices}",
         "en": "Several engines have the voice “{voice}”; name one of them: {choices}",
+    },
+    "routeErr_voiceNotInEngine": {
+        "zh": "「{voice}」不是「{engine}」的音色 —— 默认要分成对的那一格:换一个属于它的音色,或者连引擎一起换。",
+        "en": "“{voice}” isn't a voice of “{engine}” — the default has to be a matching pair: pick a voice that belongs to it, or change the engine too.",
     },
     "speechHint_noConnection": {"zh": "还没配好这家的连接 —— 去「设置 → AI 音频」", "en": "This provider's connection isn't set up yet — see Settings → AI audio"},
     "voiceErr_pluginFailed": {"zh": "「{plugin}」没念成:{detail}", "en": "“{plugin}” couldn't read it: {detail}"},

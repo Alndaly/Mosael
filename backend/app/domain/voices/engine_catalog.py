@@ -267,6 +267,44 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None, workspa
     return stock
 
 
+def set_default_voice(db: Session, engine: str, voice: str) -> tuple[str, str]:
+    """把这台机器的默认定成这一对(引擎 + 音色),校验放在这里。
+
+    **只许设现在就能跑的引擎、并且音色必须属于它**:设完下一次念字就得先下载 / 先配连接的"默认",
+    和没设没有区别,只是屏幕上多了一句承诺。音色和引擎不是一对时也当场拒 —— 那正是这个功能存在的
+    理由(引擎和音色是成对选的)。两格都空 = 清掉默认。
+
+    只收内置引擎(插件连接属于某个人,不是这台机器的资产);音色清单和界面下拉同一个产地
+    (`list_engine_voices`,不带工作区 —— 别人的工作区配音库里的嗓子不在这台机器的默认里)。
+
+    不提交,由入口提交(和 `capabilities.set_default`、`denoise_defaults.set_default_engine` 同一套)。
+    解析与存储在 `domain/voices/defaults`;本模块只负责问音色目录这一半。
+    """
+    from app.core.i18n import tr
+    from app.domain import capabilities
+    from app.domain.voices import defaults as voice_defaults
+
+    #: 旧 id / 大小写先按能力表归一 —— 和 pick、resolve 用的是同一份解析。
+    wanted = capabilities.canonical_id(CAPABILITY, engine)
+    voice = (voice or "").strip()
+    if not wanted and not voice:
+        return voice_defaults.clear_default(db)
+
+    #: 部署默认只可能是内置引擎:插件连接在 provider 列表里要靠"谁"才拿得到,这里不传人。
+    candidates = capabilities.providers(db, None, CAPABILITY)
+    found = next((one for one in candidates if one.id == wanted), None)
+    if found is None:
+        raise voice_defaults.UnknownVoiceEngine(wanted or engine)
+    if found.missing:
+        raise voice_defaults.VoiceEngineNotReady(found.name, tr("punct_listSep").join(found.missing))
+    listed = [str(item["value"]) for item in list_engine_voices(db, found.id, user_id=None)]
+    if not voice:
+        raise voice_defaults.VoiceMissing(found.id, listed)
+    if voice not in listed:
+        raise voice_defaults.VoiceNotInEngine(voice, found.id)
+    return voice_defaults.store_default(db, found.id, voice)
+
+
 def _clones_remotely(engine: str) -> bool:
     from app.domain.voices.remote import clones_remotely
 
@@ -473,7 +511,8 @@ def _engine_list(engines: list[dict[str, Any]]) -> str:
 def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, workspace_id: str) -> tuple[str, str]:
     """「引擎 + 音色」定成确定的一对 `(引擎 id, 音色)`,给**点名不全**的一方(智能体)用。
 
-    配音没有默认(`defaultable=False`),所以这里从不替人挑引擎 —— 挑中一个要钥匙的就是替他花钱。能做的只有两件:
+    两格都空时先问这台机器的默认那一对(`domain/voices/defaults`,经 `synthesis_params`);没有默认才
+    退回原来的"必须点名"。能做的还有两件:
 
     - 引擎按名字或 id 认(和字幕配音同一个认法,`capabilities.resolve_named`),认不出就把能用的 id 都列出来 ——
       模型写成 `edge-tts` 时,下一次就能写对,而不是被一句「没有这个引擎」打发走,转头让用户去设置里配一个
@@ -509,6 +548,14 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
             raise VoiceError("voiceErr_voiceNotInWorkspace")
         return named.id, voice
     if not voice:
+        #: 两格都没点名:先问默认那一对(唯一解析点见 domain/voices/defaults)。没有默认就照旧要求点名 ——
+        #: 行为和这一格出现之前完全一样。经 synthesis_params 走,是为了"默认"只有一份解析。
+        try:
+            defaulted = synthesis_params(db, engine="", voice="", user_id=user_id, workspace_id=workspace_id)
+        except VoiceError:
+            defaulted = None
+        if defaulted is not None:
+            return str(defaulted["engine"]), str(defaulted.get("engine_voice") or defaulted.get("voice_id") or "")
         free = [one for one in usable if one["free"]]
         raise SpeechProviderUnavailable("speechErr_pickEngineAndVoice", choices=_engine_list(usable), free=_engine_list(free))
     owners = [one for one in engines if voice in voices_of[one["id"]]]
@@ -539,10 +586,14 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     顺手存下。引擎那条要一个工作区来认领产出(克隆那条从 Voice 行上取)。
     `options` 是两条路各自的附加项(克隆权重、引擎连接/模型),不属于这条路的丢掉。
     """
+    from app.domain.voices.defaults import resolve_voice_default
     from app.domain.voices.voices import VoiceError
 
-    engine = (engine or "").strip() or CLONE_ENGINE
-    voice = (voice or "").strip()
+    #: **这一个就是「点名」那一处的兜底**(配音唯一接线点):点名的照原样,两格都空才用默认那一对。
+    #: 空手回去仍然交给下面那句"没有选音色" —— 没有默认时行为和以前逐字一样。
+    resolved = resolve_voice_default(db, user_id, explicit_engine=engine, explicit_voice=voice)
+    engine = (resolved.engine or "").strip() or CLONE_ENGINE
+    voice = (resolved.voice or "").strip()
     if not voice:
         raise VoiceError("voiceErr_noVoiceSelected")
     require_engine(db, engine, user_id=user_id)

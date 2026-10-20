@@ -65,4 +65,6 @@ def test_插件能写的每一项能力都叫得出名字_说得出用在哪() -
         assert term["label"] and term["label"] != name, f"{name} 没有给人看的名字"
         assert term["used_by"], f"{name} 说不出装上之后用在哪"
     speech = [use["label"] for use in terms["speech"]["used_by"]]
-    assert not any("设成默认" in label for label in speech), "配音没有默认,不该叫人去设置里设成默认"
+    #: 配音也有默认了(默认是一对:引擎 + 音色,见 domain/voices/defaults),所以用在哪这一栏照常
+    #: 包含「设成默认」—— 不包含反而说明能力表又把它当成没默认的那一项了。
+    assert any("设成默认" in label for label in speech), "配音有默认,这里该有一条「设成默认」"

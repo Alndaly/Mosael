@@ -169,6 +169,21 @@ export function listTtsEngines(): Promise<TtsEngineChoice[]> {
   return api<TtsEngineChoice[]>("/api/tts/engines");
 }
 
+export type VoiceDefault = components["schemas"]["VoiceDefaultOut"];
+
+/**
+ * 把这台机器的默认设成**一对**(引擎 + 音色;`PUT /api/settings/voice-default`,只有部署管理员能调)。
+ *
+ * 默认不是一家提供方:引擎和音色是成对选的,所以两格一起写、一起校验(不属于这个引擎的音色回 409)。
+ * 两格都空 = 清掉默认。回的是改完之后的那一对;候选列表上的 `is_default` 才是当前默认的唯一来源。
+ */
+export function setVoiceDefault(engine: string, voice: string): Promise<VoiceDefault> {
+  return api<VoiceDefault>("/api/settings/voice-default", {
+    method: "PUT",
+    body: JSON.stringify({ engine, voice }),
+  });
+}
+
 /**
  * 用远端引擎念:它自己的音色(`engine_voice`),或者能复刻的引擎(CosyVoice)念配音库里的一把嗓子(`voice_id`,
  * 念它的远端副本;这个账号第一次用时要同意上传,见 `remoteConsentRequest`)。

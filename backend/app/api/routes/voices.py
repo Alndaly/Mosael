@@ -16,6 +16,8 @@ from app.db.models import Job
 from app.api.schemas import (
     EngineSynthesizeRequest,
     RemoteCopyRequest,
+    VoiceDefaultOut,
+    VoiceDefaultUpdate,
     VoiceDeleteOut,
     VoicePreviewRequest,
     TtsEngineChoiceOut,
@@ -242,11 +244,20 @@ def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
 
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
 def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
-    """Engines the配音 UI can offer, and what each one needs from the user."""
+    """Engines the配音 UI can offer, and what each one needs from the user.
+
+    每一行还带「是不是这台机器默认那一对里的引擎」(`is_default`)。默认不另开 GET ——
+    **同一个答案只有一处来源**(和降噪、转写同一条),写入口在 `PUT /api/settings/voice-default`。
+    """
+    from app.domain.voices import defaults as voice_defaults
     from app.domain.voices.engine_catalog import describe_engines
 
+    default_engine, _default_voice = voice_defaults.default_pair(db)
     locale = get_current_locale()
-    return [translate_fields(row, ("label", "note"), locale) for row in describe_engines(db, user.id)]
+    rows = [translate_fields(row, ("label", "note"), locale) for row in describe_engines(db, user.id)]
+    for row in rows:
+        row["is_default"] = bool(default_engine) and row["id"] == default_engine
+    return rows
 
 
 @router.get("/tts/voices", response_model=list[TtsVoiceOut])
@@ -254,11 +265,41 @@ def list_tts_voices(engine: str, db: DbSession, user: CurrentUser, workspace_id:
     """The voices an engine can speak in, live where the account allows it (see engine_catalog).
 
     带上工作区时,能复刻的引擎(CosyVoice)在系统音色之外再列这个工作区配音库里的克隆音色(`cloned`,ADR 0037)。"""
+    from app.domain.voices import defaults as voice_defaults
     from app.domain.voices.engine_catalog import list_engine_voices
 
     if workspace_id:
         voice_uc.ensure_can_list(db, user, workspace_id)
-    return list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
+    default_engine, default_voice = voice_defaults.default_pair(db)
+    rows = list_engine_voices(db, engine, user_id=user.id, workspace_id=workspace_id)
+    for row in rows:
+        #: 默认是一对:问"这个音色是不是默认的",必须同时在默认那个引擎下问,否则 Edge 的晓晓
+        #: 会把火山上同名的音色也标成默认。
+        row["is_default"] = bool(default_voice) and engine == default_engine and row["value"] == default_voice
+    return rows
+
+
+@router.put("/settings/voice-default", response_model=VoiceDefaultOut)
+def set_voice_default(body: VoiceDefaultUpdate, db: Tx, user: CurrentUser) -> dict:
+    """把这台机器的默认定成**一对**(引擎 + 音色)。
+
+    **只许设现在就能用的引擎、并且音色必须属于它**(`domain/voices/defaults.set_default_voice`):
+    成对校验正是这个功能存在的理由 —— 火山的音色拿到 Edge 上就是错的。两格都空 = 清掉默认。
+    和装引擎、设降噪默认同一道门:改这台机器的默认只给部署管理员。
+    """
+    from app.domain.voices import defaults as voice_defaults
+    from app.domain.voices.engine_catalog import set_default_voice
+
+    ensure_deployment_admin(db, user)
+    try:
+        engine, voice = set_default_voice(db, body.engine, body.voice)
+    except voice_defaults.UnknownVoiceEngine as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (voice_defaults.VoiceEngineNotReady, voice_defaults.VoiceMissing,
+            voice_defaults.VoiceNotInEngine) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    return {"engine": engine, "voice": voice}
 
 
 @router.post("/tts/preview")

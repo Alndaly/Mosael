@@ -31,7 +31,8 @@ const listed = [
     options: [{ id: "builtin:local", name: "本地解析", builtin: true, missing: [] }, { id: "m1", name: "MinerU 云端", builtin: false, missing: [] }] },
   { capability: "audio_separation", label: "分离人声", description: "拆人声", current: null, automatic: "builtin:demucs",
     options: [{ id: "builtin:demucs", name: "Demucs(本机)", builtin: true, missing: [] }] },
-  { capability: "speech", label: "配音", description: "念字", current: null, automatic: null, defaultable: false,
+  { capability: "speech", label: "配音", description: "念字", current: null, automatic: null, defaultable: true,
+    default_shape: "engine_voice",
     options: [
       { id: "builtin:clone", name: "本地音色克隆", builtin: true, missing: [] },
       { id: "builtin:openai", name: "OpenAI", builtin: true, missing: ["还没配好这家的连接"] },
@@ -50,27 +51,65 @@ const registered = [
   { capability: "audio_separation", label: "分离人声", description: "拆人声", current: null, automatic: null, options: [] },
   { capability: "document_parse", label: "文档解析", description: "转成 Markdown", current: null, automatic: null, options: [] },
   { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null, options: [] },
-  { capability: "speech", label: "配音", description: "念字", current: null, automatic: null, defaultable: false, options: [] },
+  { capability: "speech", label: "配音", description: "念字", current: null, automatic: null, defaultable: true, default_shape: "engine_voice", options: [] },
   { capability: "transcription", label: "转写", description: "听写成字", current: null, automatic: null, options: [] },
   { capability: "translation", label: "翻译", description: "译成中文", current: null, automatic: null, options: [] },
 ];
 const { listCapabilityChoices } = vi.hoisted(() => ({ listCapabilityChoices: vi.fn() }));
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices, setCapabilityDefault: vi.fn() }));
+const speechApi = vi.hoisted(() => ({
+  CLONE_ENGINE: "builtin:clone",
+  listTtsEngines: vi.fn(),
+  listTtsVoices: vi.fn(),
+  setVoiceDefault: vi.fn(),
+}));
+vi.mock("@/api/domains/speech", () => speechApi);
+const admin = vi.hoisted(() => ({ value: true }));
+vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => admin.value }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 const { findPluginsFor } = vi.hoisted(() => ({ findPluginsFor: vi.fn() }));
 vi.mock("@/lib/deepLink", () => ({ findPluginsFor }));
-//: 下拉在 jsdom 里点不开;这里只关心**给了哪几项**,所以把选项平铺出来。
+//: 下拉在 jsdom 里点不开;这里只关心**给了哪几项、选了哪一项**,所以把选项平铺成按钮。
 vi.mock("@/components/ui/option-picker", () => ({
-  OptionPicker: ({ options }: { options: Array<{ value: string; label: string }> }) => (
-    <ul data-picker="">{options.map((one) => <li key={one.value} data-value={one.value}>{one.label}</li>)}</ul>
+  OptionPicker: ({ options, onChange, disabled }: {
+    options: Array<{ value: string; label: string }>;
+    onChange: (next: string) => void;
+    disabled?: boolean;
+  }) => (
+    <ul data-picker="" data-disabled={disabled ? "" : undefined}>
+      {options.map((one) => (
+        <li key={one.value} data-value={one.value}>
+          <button type="button" onClick={() => onChange(one.value)}>{one.label}</button>
+        </li>
+      ))}
+    </ul>
   ),
 }));
 
 import { CAPABILITY_SKELETON_GROUPS, CapabilityProvidersSection } from "./CapabilityProvidersSection";
 
+/** 配音默认那一对的候选项:Edge 装好了、OpenAI 还没配连接;/tts/voices 给 Edge 的两把嗓子。 */
+const engines = [
+  { id: "builtin:edge", label: "Edge", needs_key: false, needs_voice_id: false, voices: [], supports_speed: true,
+    note: "ttsProviderNote_edge", ready: true, clones_voices: false, is_default: true },
+  { id: "builtin:openai", label: "OpenAI", needs_key: true, needs_voice_id: false, voices: [], supports_speed: true,
+    note: "ttsProviderNote_openai", ready: false, clones_voices: false, is_default: false },
+];
+const edgeVoices = [
+  { value: "zh-CN-XiaoxiaoNeural", label: "晓晓", resource_id: "", cloned: false, is_default: true },
+  { value: "zh-CN-YunxiNeural", label: "云希", resource_id: "", cloned: false, is_default: false },
+];
+
 beforeEach(() => {
+  admin.value = true;
   listCapabilityChoices.mockReset();
   listCapabilityChoices.mockImplementation(async () => listed);
+  speechApi.listTtsEngines.mockReset();
+  speechApi.listTtsEngines.mockResolvedValue(engines);
+  speechApi.listTtsVoices.mockReset();
+  speechApi.listTtsVoices.mockResolvedValue(edgeVoices);
+  speechApi.setVoiceDefault.mockReset();
+  speechApi.setVoiceDefault.mockResolvedValue({ engine: "builtin:edge", voice: "zh-CN-YunxiNeural" });
 });
 
 it("后端还在答的那几秒是骨架屏,不是一片白;答了原地换上", async () => {
@@ -149,7 +188,7 @@ it("每组高度不同:有下拉的组多一块和下拉同宽同高的控件,�
   const groups = skeletonGroups(container);
   const withPicker = groups.filter((group) => group.querySelector("[data-capability-skeleton-control]"));
   const withoutPicker = groups.filter((group) => !group.querySelector("[data-capability-skeleton-control]"));
-  //: 别 7 组一模一样:分离人声、配音那两组真页没有下拉。
+  //: 别 7 组一模一样:分离人声真页没有下拉,配音那一行是两个控件(骨架占一块)。
   expect(withPicker.length).toBeGreaterThan(0);
   expect(withoutPicker.length).toBeGreaterThan(0);
   for (const group of withPicker) {
@@ -333,8 +372,9 @@ it("标题行就写着现在用谁:能力名旁边就是当前选择,不用往�
   //: 一家都没有的:写「未指定」,不是一个空格子。
   expect(cardOf("素材外链").querySelector("[data-capability-current]")!.textContent).toBe("capabilityUnset");
 
-  //: 没有默认的能力:说清它是由每个入口点名的,不是「未指定」。
-  expect(cardOf("配音").querySelector("[data-capability-current]")!.textContent).toBe("capabilityNoDefaultShort");
+  //: 配音有默认,而且默认是一对:标题行写「引擎 · 音色」,不再说「由每个入口点名」。
+  //: 引擎目录和音色是另一份查询(和配音面板同一个键),它们到了之后标题行跟着换。
+  await waitFor(() => expect(cardOf("配音").querySelector("[data-capability-current]")!.textContent).toBe("Edge · 晓晓"));
 });
 
 it("「用哪一家」是控件行的标签:14px 深色,和组说明的灰不同级", async () => {
@@ -432,7 +472,9 @@ it("只有一家可用时直接写出是哪一家,不摆一个灰掉的下拉", 
   expect(group.querySelector("[data-capability-current]")?.textContent).toBe("Demucs(本机)");
   expect(group.querySelector('[data-slot="settings-item-control"]')).toBeNull();
   expect(group.textContent).toContain("capabilityOnlyOne");
-  expect(container.querySelectorAll("[data-picker]")).toHaveLength(2);
+  //: 降噪、文档解析各一个,配音两个(引擎 + 音色)。
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  expect(container.querySelectorAll("[data-picker]")).toHaveLength(4);
 });
 
 it("几个内置实现并列可选:自动用的那个就是「不指定」,别的内置引擎和插件一样能点名;没配好的说清缺什么", async () => {
@@ -481,7 +523,7 @@ it("「用在哪」默认收成一行摘要,点开才列出接口给的那几处
   expect(container.querySelectorAll("[data-capability-uses-summary]")).toHaveLength(2);
 });
 
-it("没有默认的能力(配音)不摆选择器:列有哪几家、缺什么、用在哪", async () => {
+it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」那句话没了;未安装的引擎不进下拉、理由写在行下", async () => {
   const { container } = render(
     <QueryClientProvider client={new QueryClient()}>
       <CapabilityProvidersSection />
@@ -489,16 +531,58 @@ it("没有默认的能力(配音)不摆选择器:列有哪几家、缺什么、�
   );
   await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
   const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
-  expect(group.querySelector("[data-picker]")).toBeNull();
-  expect(group.textContent).toContain("capabilityNoDefault");
-  expect(group.querySelector("[data-capability-ready]")?.textContent).toBe("本地音色克隆");
-  expect(group.textContent).toContain("capabilityBuiltinUnready");
+  //: 那句话删掉了 —— 配音有默认,只是它的默认是一对。
+  expect(group.textContent).not.toContain("capabilityNoDefault");
+  const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
+  expect(pickers).toHaveLength(2);
+  //: 第一格是引擎(当前默认 Edge),第二格是它的音色(当前默认晓晓)。候选项是另一份查询,等它到。
+  await waitFor(() => expect(pickers[1].textContent).toContain("晓晓"));
+  expect(pickers[0].textContent).toContain("Edge");
+  //: 没装好的引擎不在下拉里,但用户看得到它、以及为什么选不了。
+  expect(pickers[0].textContent).not.toContain("OpenAI");
+  expect(group.textContent).toContain("capabilityVoiceDefaultUnready");
+  //: 未安装的引擎的**名字**在那一行说明里(t 在测试里只回 key,所以这里只钉"有那一行")。
   //: 配音那一处用法也收在摘要里,点开才列。
   const summary = group.querySelector<HTMLElement>("[data-capability-uses-summary]")!;
   expect(summary.dataset.capabilityUseCount).toBe("1");
   fireEvent.click(within(summary).getByRole("button"));
   await waitFor(() => expect(group.querySelectorAll("[data-capability-use]")).toHaveLength(1));
   expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(0);
+});
+
+it("改了音色之后保存:写的是「引擎 + 音色」这一对,并让候选列表失效", async () => {
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
+  await waitFor(() => expect(pickers[1].textContent).toContain("云希"));
+  fireEvent.click(within(pickers[1]).getByRole("button", { name: "云希" }));
+  fireEvent.click(within(group).getByRole("button", { name: "capabilityVoiceDefaultSave" }));
+  await waitFor(() => expect(speechApi.setVoiceDefault).toHaveBeenCalledWith("builtin:edge", "zh-CN-YunxiNeural"));
+  //: 写后重取:引擎列表和这一家的音色列表都在失效之列(默认的唯一来源是它们的 is_default)。
+  await waitFor(() => expect(speechApi.listTtsEngines).toHaveBeenCalledTimes(2));
+  expect(container.querySelectorAll("[data-picker]")).toHaveLength(4);
+});
+
+it("不是部署管理员:两个控件都禁用,并说明只有管理员能改这台机器的默认", async () => {
+  admin.value = false;
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  const pickers = group.querySelectorAll<HTMLElement>("[data-picker]");
+  expect(pickers).toHaveLength(2);
+  for (const picker of pickers) expect(picker.hasAttribute("data-disabled")).toBe(true);
+  expect((within(group).getByRole("button", { name: "capabilityVoiceDefaultSave" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(group.textContent).toContain("capabilityVoiceDefaultAdminOnly");
+  expect(container.querySelectorAll("[data-picker]")).toHaveLength(4);
 });
 
 it("每项能力都能去插件市场找「谁还能做这件事」,带着这项能力去", async () => {

@@ -351,7 +351,8 @@ def test_CosyVoice的音色下拉多一组克隆音色_要带工作区(bailian) 
     plain = env.client.get("/api/tts/voices", params={"engine": COSY}).json()
     assert plain and not [one for one in plain if one.get("cloned")], "不带工作区只有系统音色"
     grouped = env.client.get("/api/tts/voices", params={"engine": COSY, "workspace_id": env.workspace_id}).json()
-    assert grouped[-1] == {"value": env.voice_id, "label": "小美", "resource_id": "", "cloned": True}
+    assert grouped[-1] == {"value": env.voice_id, "label": "小美", "resource_id": "", "cloned": True,
+                           "is_default": False}
     assert [one["value"] for one in grouped[:-1]] == [one["value"] for one in plain], "系统音色在前,克隆音色在后"
     edge = env.client.get("/api/tts/voices", params={"engine": "builtin:edge", "workspace_id": env.workspace_id}).json()
     assert not [one for one in edge if one.get("cloned")], "念不了克隆音色的引擎不列"
