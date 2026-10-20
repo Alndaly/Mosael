@@ -2,23 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  KeyRound,
-  Laptop,
-  LockKeyhole,
-  LogOut,
-  ShieldAlert,
-  Trash2,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, CheckCircle2, LockKeyhole, LogOut, ShieldAlert, Trash2 } from "lucide-react";
 
-import { AccountField, FormAlert, FormNotice, SubmitButton } from "@/components/account/form-controls";
+import { FormAlert, FormNotice } from "@/components/account/form-controls";
 import { Button } from "@/components/ui/button";
 import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
-import { CloudApiError, cloudAccount, type CloudDevice, type CloudUser } from "@/lib/cloud";
+import { CloudApiError, cloudAccount, type CloudUser } from "@/lib/cloud";
 
 type Phase = "loading" | "anonymous" | "signed" | "error";
 
@@ -26,32 +17,30 @@ type Phase = "loading" | "anonymous" | "signed" | "error";
  * 账号页:**只知道云端身份**。
  *
  * 它不请求本地后端、不显示工作区 / 素材 / 本地用户名 —— 那属于本机 Mosael,这一页是 MosaelCloud 的。
- * 设备确认也在这里:桌面端显示 `user_code`,用户在这个已登录的页面点一下确认。
  *
- * 四态都当成正式界面来画:加载是骨架、未登录有入口、失败能重试、已登录分成身份 / 设备 / 确认 /
- * 危险操作四块。删号永远藏在最后一块,并且要点两次。
+ * **设备的那两块(已绑定 / 确认这台设备)已经搬到「我的」控制台**
+ * (`components/account/dashboard-devices.tsx`);这一页只剩身份、退出与删号,以及登录 /
+ * 桌面绑定回跳(`ResumeLoginReturn`)。桌面绑定链接仍然是 `/account?user_code=…` —— 见
+ * `app/[locale]/(auth)/account/page.tsx`,它把带确认码的访问转给控制台的设备分区。
+ *
+ * 四态都当成正式界面来画:加载是骨架、未登录有入口、失败能重试、已登录是身份 + 危险操作。
+ * 删号永远藏在最后一块,并且要点两次。
  */
 export function AccountView({
   locale,
   copy,
-  initialCode = "",
   oauthOutcome = "",
 }: {
   locale: Locale;
   copy: Messages["account"];
-  initialCode?: string;
   /** 刚通过 GitHub / Google 回到这一页时,Cloud 用 `?oauth=created|existing` 说清结果。 */
   oauthOutcome?: "" | "created" | "existing";
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [user, setUser] = useState<CloudUser | null>(null);
-  const [devices, setDevices] = useState<CloudDevice[]>([]);
-  const [code, setCode] = useState(initialCode.toUpperCase());
-  const [codeError, setCodeError] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -59,11 +48,9 @@ export function AccountView({
     let alive = true;
     cloudAccount
       .me()
-      .then(async (me) => {
-        const list = await cloudAccount.devices();
+      .then((me) => {
         if (!alive) return;
         setUser(me.user);
-        setDevices(list.devices);
         setPhase("signed");
       })
       .catch((failure: unknown) => {
@@ -79,41 +66,6 @@ export function AccountView({
       alive = false;
     };
   }, [locale, copy.loadFailed, reloadKey]);
-
-  const approve = async (event: FormEvent) => {
-    event.preventDefault();
-    setError("");
-    setNotice("");
-    setCodeError("");
-    if (!code.trim()) {
-      setCodeError(copy.deviceCodeRequired);
-      return;
-    }
-    setBusy("approve");
-    try {
-      await cloudAccount.approveDevice(code.trim());
-      setNotice(copy.approved);
-      setCode("");
-    } catch (failure) {
-      setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const revoke = async (deviceId: string) => {
-    setError("");
-    setNotice("");
-    setBusy(deviceId);
-    try {
-      await cloudAccount.revokeDevice(deviceId);
-      setDevices((current) => current.filter((device) => device.id !== deviceId));
-    } catch (failure) {
-      setError(failure instanceof CloudApiError ? failure.text(locale) : copy.actionFailed);
-    } finally {
-      setBusy("");
-    }
-  };
 
   const signOut = async () => {
     setBusy("logout");
@@ -212,7 +164,6 @@ export function AccountView({
           {error}
         </FormAlert>
       )}
-      {notice && <FormNotice>{notice}</FormNotice>}
 
       <section aria-labelledby="account-identity" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
         <div className="flex flex-wrap items-start gap-4">
@@ -254,82 +205,6 @@ export function AccountView({
             {busy === "logout" ? copy.signingOut : copy.signOut}
           </Button>
         </div>
-      </section>
-
-      <section aria-labelledby="account-devices" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
-        <div className="flex items-start gap-3">
-          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground">
-            <Laptop className="size-5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <h2 id="account-devices" className="font-display text-xl font-semibold tracking-[-0.03em]">
-              {copy.devices}
-            </h2>
-            <p className="mt-1 text-[13px] leading-6 text-muted-foreground">{copy.devicesHint}</p>
-          </div>
-        </div>
-
-        {devices.length === 0 ? (
-          <div className="mt-5 rounded-2xl border border-dashed border-border bg-paper/60 px-5 py-7 text-center">
-            <Laptop className="mx-auto size-5 text-muted-foreground" aria-hidden />
-            <p className="mt-3 text-sm text-muted-foreground">{copy.noDevices}</p>
-          </div>
-        ) : (
-          <ul className="m-0 mt-5 grid list-none gap-2.5 p-0">
-            {devices.map((device) => (
-              <li
-                key={device.id}
-                className="flex min-w-0 flex-wrap items-center gap-3 rounded-2xl border border-border bg-paper/50 p-3.5 sm:flex-nowrap"
-              >
-                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-                  <Laptop className="size-4" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]">{device.name || device.id}</span>
-                <Button
-                  variant="outline"
-                  disabled={busy === device.id}
-                  aria-busy={busy === device.id}
-                  onClick={() => void revoke(device.id)}
-                  className="min-h-9 rounded-full px-3.5 text-[13px]"
-                >
-                  {busy === device.id ? copy.revoking : copy.revoke}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section aria-labelledby="account-approve" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
-        <div className="flex items-start gap-3">
-          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-soft text-accent">
-            <KeyRound className="size-5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <h2 id="account-approve" className="font-display text-xl font-semibold tracking-[-0.03em]">
-              {copy.approve}
-            </h2>
-            <p id="device-code-hint" className="mt-1 text-sm leading-7 text-muted-foreground">
-              {copy.deviceCodeHint}
-            </p>
-          </div>
-        </div>
-        <form className="mt-5 grid gap-5" onSubmit={approve} noValidate>
-          <AccountField
-            id="device-code"
-            label={copy.deviceCode}
-            placeholder="ABCD-EFGH"
-            autoComplete="one-time-code"
-            autoCapitalize="characters"
-            spellCheck={false}
-            value={code}
-            error={codeError}
-            describedBy="device-code-hint"
-            className="font-mono tracking-[0.14em] uppercase"
-            onChange={(event) => setCode(event.target.value.toUpperCase())}
-          />
-          <SubmitButton label={copy.approve} busyLabel={copy.approving} busy={busy === "approve"} />
-        </form>
       </section>
 
       <section

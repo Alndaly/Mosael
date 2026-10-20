@@ -118,8 +118,9 @@ test("⑤ 未登录仍是「登录」描边按钮(回归)", () => {
   assert.match(accountNav, /\/\$\{locale\}\/login/);
 });
 
-test("⑥ 头像仍然去 /account(回归)", () => {
-  assert.match(accountNav, /href=\{`\/\$\{locale\}\/account`\}/, "头像的链接目标不是账号页");
+test("⑥ 头像去「我的」控制台(不再去 /account)", () => {
+  assert.match(accountNav, /href=\{`\/\$\{locale\}\/dashboard`\}/, "头像的链接目标不是控制台");
+  assert.doesNotMatch(accountNav, /href=\{`\/\$\{locale\}\/account`\}/, "头像还在去 /account");
 });
 
 test("移动端同一套:头像没有 hidden 只留桌面", () => {

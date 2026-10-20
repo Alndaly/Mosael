@@ -1,0 +1,222 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { LogOut, PenLine } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+
+import { AccountField, FormAlert, FormNotice, SubmitButton } from "@/components/account/form-controls";
+import { InitialTile } from "@/components/community/tile";
+import { Button } from "@/components/ui/button";
+import type { Locale } from "@/i18n/config";
+import type { Messages } from "@/i18n/messages";
+import { CloudApiError, cloudAccount, cloudProfile, type CloudIdentity } from "@/lib/cloud";
+
+import type { DashboardTab } from "./dashboard-utils";
+
+/**
+ * 个人信息:公开身份的两列 + 头像预览 + 保存 / 退出。
+ *
+ * **邮箱只在这里出现,而且只有本人看得到** —— 它是从 `/me` 单独取的(不随页面首屏的 RSC
+ * 数据走),概览和分享列表都拿不到它。
+ *
+ * 头像预览和顶栏、社区卡片共用同一套 `--tile-*` 色相(见 `components/community/tile.tsx`):
+ * 同一个名字在顶栏和这里永远同一块颜色。
+ *
+ * `handle_taken` / `handle_reserved` 是 409,但含义完全不同(被别人占了 / 是保留字)。
+ * 前端不替后端改写成自己的句子 —— 后端给的那句就是用户该看到的那句。
+ */
+export function DashboardProfile({
+  locale,
+  copy,
+  viewer,
+  onSelect,
+}: {
+  locale: Locale;
+  copy: Messages["dashboard"];
+  viewer: CloudIdentity;
+  onSelect: (tab: DashboardTab) => void;
+}) {
+  const router = useRouter();
+  const [displayName, setDisplayName] = useState(viewer.display_name ?? "");
+  const [handle, setHandle] = useState(viewer.handle ?? "");
+  const [displayError, setDisplayError] = useState("");
+  const [handleError, setHandleError] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState("");
+  const [email, setEmail] = useState<string | null>(null);
+  const [emailFailed, setEmailFailed] = useState(false);
+
+  const hasHandle = Boolean(viewer.handle?.trim());
+
+  // 邮箱是「本人那一处」:只在打开个人信息时问一次 /me。
+  useEffect(() => {
+    let alive = true;
+    cloudAccount
+      .me()
+      .then(({ user }) => {
+        if (alive) setEmail(user.email);
+      })
+      .catch(() => {
+        if (alive) setEmailFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    setDisplayError("");
+    setHandleError("");
+    setError("");
+    setNotice("");
+    const name = displayName.trim();
+    if (!name) {
+      setDisplayError(copy.displayNameRequired);
+      return;
+    }
+    setBusy("save");
+    try {
+      const patch: { display_name: string; handle?: string } = { display_name: name };
+      // 空 handle = 不改短名;发一个空串过去会被云端判成非法。
+      if (handle.trim()) patch.handle = handle.trim();
+      const { user } = await cloudProfile.update(patch);
+      setDisplayName(user.display_name ?? name);
+      setHandle(user.handle ?? handle.trim());
+      setNotice(copy.saved);
+      // 顶栏 / 概览都按新的身份重算(有了 handle,概览才有东西可统计)。
+      router.refresh();
+    } catch (failure) {
+      if (failure instanceof CloudApiError) {
+        if (failure.code === "handle_taken" || failure.code === "handle_reserved") {
+          setHandleError(failure.text(locale));
+        } else if (failure.code.startsWith("display_name")) {
+          setDisplayError(failure.text(locale));
+        } else if (failure.code.startsWith("handle")) {
+          setHandleError(failure.text(locale));
+        } else {
+          setError(failure.text(locale));
+        }
+      } else {
+        setError(copy.saveFailed);
+      }
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const signOut = async () => {
+    setBusy("logout");
+    try {
+      await cloudAccount.logout();
+    } catch {
+      // 本地无状态可清:cookie 由服务端撤销;即使请求失败,离开这一页也不显示旧账号。
+    }
+    router.push(`/${locale}/login`);
+  };
+
+  const previewSeed = displayName.trim() || handle.trim() || viewer.handle?.trim() || "mosael";
+  const previewName = displayName.trim() || handle.trim() || "?";
+
+  return (
+    <div className="grid gap-4">
+      {!hasHandle && (
+        <output className="flex flex-wrap items-start gap-3 rounded-2xl border border-primary/30 bg-brand-soft px-4 py-3.5">
+          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-card text-accent">
+            <PenLine className="size-4" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="m-0 text-sm font-semibold">{copy.noHandleTitle}</p>
+            <p className="mt-1 mb-0 text-[13px] leading-6 text-muted-foreground">{copy.noHandleBody}</p>
+          </div>
+        </output>
+      )}
+
+      {error && (
+        <FormAlert id="dashboard-profile-error" title={copy.tabProfile}>
+          {error}
+        </FormAlert>
+      )}
+      {notice && <FormNotice>{notice}</FormNotice>}
+
+      <section aria-labelledby="dashboard-profile" className="rounded-3xl border border-border bg-card p-6 sm:p-7">
+        <div className="flex flex-wrap items-start gap-4">
+          <InitialTile seed={previewSeed} name={previewName} size="lg" />
+          <div className="min-w-0 flex-1">
+            <h2 id="dashboard-profile" className="m-0 font-display text-xl font-semibold tracking-[-0.03em]">
+              {copy.tabProfile}
+            </h2>
+            <p className="mt-1 mb-0 text-[13px] leading-6 text-muted-foreground">{copy.profileLede}</p>
+          </div>
+          <Button
+            variant="outline"
+            disabled={busy === "logout"}
+            aria-busy={busy === "logout"}
+            onClick={() => void signOut()}
+            className="min-h-10 w-full rounded-full px-4 text-[13px] font-semibold sm:ml-auto sm:w-auto"
+          >
+            <LogOut className="size-3.5" aria-hidden />
+            {busy === "logout" ? copy.signingOut : copy.signOut}
+          </Button>
+        </div>
+
+        <form className="mt-6 grid gap-5" onSubmit={save} noValidate>
+          <AccountField
+            id="dashboard-display-name"
+            label={copy.displayName}
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            autoComplete="nickname"
+            maxLength={40}
+            error={displayError}
+          />
+          <AccountField
+            id="dashboard-handle"
+            label={copy.handle}
+            value={handle}
+            onChange={(event) => setHandle(event.target.value)}
+            hint={copy.handleHint}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={24}
+            error={handleError}
+            className="font-mono"
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <SubmitButton label={copy.save} busyLabel={copy.saving} busy={busy === "save"} />
+            {viewer.handle && (
+              <Link
+                href={`/${locale}/account`}
+                className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {copy.accountSettings}
+              </Link>
+            )}
+          </div>
+        </form>
+
+        <dl className="m-0 mt-6 grid gap-1 border-t border-border pt-5 text-[13px]">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
+            <dt className="m-0 font-medium text-muted-foreground">{copy.email}</dt>
+            <dd className="m-0 min-w-0 font-mono [overflow-wrap:anywhere]">
+              {email ?? (emailFailed ? copy.emailUnavailable : "…")}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-1 mb-0 text-xs leading-5 text-muted-foreground">{copy.emailHint}</p>
+      </section>
+
+      {!hasHandle && (
+        <div>
+          <Button variant="ghost" onClick={() => onSelect("overview")} className="min-h-10 rounded-full px-4 text-[13px]">
+            {copy.tabOverview}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

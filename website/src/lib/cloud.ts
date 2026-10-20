@@ -60,6 +60,32 @@ export type CloudShare = {
   favorited_by_me: boolean;
 };
 
+/** 一件分享都没有时的统计。**全 0 是真实结果**,不是占位符。 */
+export const ZERO_SHARE_STATS: CloudShareStats = {
+  downloads: 0,
+  likes: 0,
+  favorites: 0,
+  comments: 0,
+};
+
+/**
+ * 把若干条分享的 `stats` 加起来。
+ *
+ * 「我的」控制台概览上的五个数字只有这一个来源:云端在 `/users/{handle}/shares` 里已经算好
+ * 每条分享的下载 / 点赞 / 收藏 / 评论,这里只是求和 —— 不另开统计接口、不猜、不补 0。
+ * 纯函数:浏览器、服务端和 node 测试跑的是同一份逻辑。
+ */
+export function sumShareStats(shares: ReadonlyArray<Pick<CloudShare, "stats">>): CloudShareStats {
+  const total: CloudShareStats = { ...ZERO_SHARE_STATS };
+  for (const share of shares) {
+    total.downloads += Number(share.stats?.downloads) || 0;
+    total.likes += Number(share.stats?.likes) || 0;
+    total.favorites += Number(share.stats?.favorites) || 0;
+    total.comments += Number(share.stats?.comments) || 0;
+  }
+  return total;
+}
+
 export type CloudSharePage = { items: CloudShare[]; next_cursor: string | null };
 
 export type CloudComment = {

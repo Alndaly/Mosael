@@ -12,10 +12,12 @@ import { cookies } from "next/headers";
 import {
   CloudApiError,
   cloudForServer,
+  sumShareStats,
   type CloudCommentPage,
   type CloudIdentity,
   type CloudShare,
   type CloudSharePage,
+  type CloudShareStats,
 } from "@/lib/cloud";
 
 import { publicIdentity, SHARE_PAGE_SIZE, type ShareListQuery } from "./share-utils";
@@ -60,6 +62,37 @@ export const loadShareList = cache(async (query: ShareListQuery, cookie: string)
 export const loadComments = cache(async (id: string): Promise<CloudCommentPage> => {
   return serverCloud().shares.comments(id, { limit: 30 });
 });
+
+/** 一页最多 50 条(Cloud 的 `MAX_LIMIT`);控制台按页把一个人的分享全部取齐再求和。 */
+const USER_SHARE_PAGE_LIMIT = 50;
+
+/** 求和 / 列表最多翻这么多页。上限只是防止一个异常账号把 SSR 拖住,不是业务上限。 */
+const MAX_USER_SHARE_PAGES = 10;
+
+/**
+ * 某人**已公开**的分享,取齐(按页翻到没有 `next_cursor` 为止)。
+ *
+ * 「我的」控制台的概览直接对这批数据的 `stats` 求和(见 `sumShareStats`),所以这里必须
+ * 尽量取全,不能只拿第一页就把数字当总数。**只用已有的 `GET /users/{handle}/shares`** ——
+ * 它只回 listed 的公开分享,和别的访客看到的完全一致;没有为控制台另开接口。
+ */
+export const loadUserShares = cache(
+  async (handle: string, cookie: string): Promise<{ shares: CloudShare[]; totals: CloudShareStats }> => {
+    const client = serverCloud(cookie);
+    const shares: CloudShare[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < MAX_USER_SHARE_PAGES; page += 1) {
+      const result = await client.shares.byUser(handle, {
+        limit: USER_SHARE_PAGE_LIMIT,
+        ...(cursor ? { cursor } : {}),
+      });
+      shares.push(...result.items);
+      cursor = result.next_cursor;
+      if (!cursor) break;
+    }
+    return { shares, totals: sumShareStats(shares) };
+  },
+);
 
 /**
  * 当前登录者(公开三列)。401 是「没登录」,不是错误;网络 / 服务端故障则抛出去,

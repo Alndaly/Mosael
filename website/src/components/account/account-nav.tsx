@@ -10,7 +10,7 @@ import { cloudAccount, type CloudUser } from "@/lib/cloud";
 
 /**
  * 站头的账号入口。未登录时是「登录」次级按钮,登录后是**一颗圆形头像** —— 账号名的
- * 第一个字,点进去还是账号页(邮箱和退出都在那一页)。
+ * 第一个字,点进去是**「我的」控制台**(概览 / 我的分享 / 个人信息 / 设备 / 通知)。
  *
  * 未登录那颗是 816c0c714 定稿的**次级按钮**:复用账号页那颗 `Button variant="outline"`,
  * 描边 + 次要文字色,与「下载」的实心主色隔开一级 —— 它在站头里紧贴「下载」左侧,是这一簇
@@ -95,7 +95,7 @@ export function AccountNav({
     const label = avatarLabel(accountLabel, name);
     return (
       <Link
-        href={`/${locale}/account`}
+        href={`/${locale}/dashboard`}
         aria-label={label}
         title={label}
         className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-ink transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"

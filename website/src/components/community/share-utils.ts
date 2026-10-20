@@ -97,14 +97,31 @@ export function communityLoginHref(locale: string, next: string): string {
 }
 
 /**
- * 登录回跳只允许回社区页。
+ * 站内绝对路径、不带协议。
  *
  * 放宽成「任何站内路径」的话,`?next=` 就成了一个开放跳转口子(别人可以把登录页当跳板)。
  * 这里连协议相对地址(`//host`)和带协议的绝对地址一起挡掉。
  */
-export function isCommunityReturnPath(next: string | null | undefined, locale: string): next is string {
+function isLocalPath(next: string | null | undefined): next is string {
   if (typeof next !== "string" || !next.startsWith("/")) return false;
-  if (next.startsWith("//") || next.includes("\\") || next.includes("://")) return false;
+  return !next.startsWith("//") && !next.includes("\\") && !next.includes("://");
+}
+
+/** 登录回跳只允许回社区页。 */
+export function isCommunityReturnPath(next: string | null | undefined, locale: string): next is string {
+  if (!isLocalPath(next)) return false;
   const base = `/${locale}/community`;
   return next === base || next.startsWith(`${base}/`) || next.startsWith(`${base}?`);
+}
+
+/** 「我的」控制台也是私有入口:从那里被踢去登录,登录完要能回来。 */
+export function isDashboardReturnPath(next: string | null | undefined, locale: string): next is string {
+  if (!isLocalPath(next)) return false;
+  const base = `/${locale}/dashboard`;
+  return next === base || next.startsWith(`${base}/`) || next.startsWith(`${base}?`);
+}
+
+/** 登录页唯一该接受的回跳集合:社区页 + 控制台。两者都不带协议、不跨语言。 */
+export function isLoginReturnPath(next: string | null | undefined, locale: string): next is string {
+  return isCommunityReturnPath(next, locale) || isDashboardReturnPath(next, locale);
 }
