@@ -9,12 +9,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * 「默认」的摆放规则(维护者定的):**只出现在同一能力有多个可选实现的地方**,并且永远放在
  * 这些实现所在的那一节里 —— 节说明之后、实现列表之前。
  *
- * 这一组钉住四个决定:
- *   1. 那句话/那一行由**数据**决定:≥2 个候选才有默认行,只有 1 个则说清"没有默认可设";
- *   2. 位置统一:默认那条永远在说明之后、列表之前;
- *   3. 交互统一:ASR 和 TTS 都是**行内「设为默认」**,默认那一行是状态、不可点;TTS 的下拉不再存在
- *      (否则同一个默认有两处可写);
- *   4. 未安装的不能设默认,已默认的不能再点。
+ * 这一组钉住五个决定:
+ *   1. 那句话/那个控件由**数据**决定:≥2 个候选才有选择器,只有 1 个则说清"没有默认可设",
+ *      数据没到(undefined)就什么都不画 —— 别把"未知"画成"只有一个";
+ *   2. 位置统一:默认永远在说明之后、列表之前(转写是节说明之后;TTS 是克隆组说明之后);
+ *   3. 交互统一:ASR 和 TTS 都是**一个下拉**,那是整节唯一能改默认的地方;
+ *   4. 列表行不再承担"设默认":行里没有「设为默认」按钮,已默认那行只剩一枚不可点的淡标记;
+ *   5. 未安装的选项在下拉里禁用,并给出理由("还没安装,先下载")。
  *
  * 现实数据:ASR 目录有 5 个模型;TTS 的克隆组有 F5-TTS / Fish Speech 两个,预置组只有 Qwen3-TTS
  * 一个;人声分离只有 Demucs 一个。所以"只有一个候选"不是假想 —— 预置组和分离现在就长这样。
@@ -55,22 +56,28 @@ let ttsModels: Array<Record<string, unknown>> = [];
 let separationEngines: Array<Record<string, unknown>> = [];
 let ttsConfig: Record<string, unknown> = {};
 const updateTtsConfig = vi.fn();
+const setDefaultAsrModel = vi.fn();
+//: 数据"还没到":接口一直不答。用来钉「undefined 不画控件」。
+let holdAsr = false;
+let holdTtsConfig = false;
+let holdTtsModels = false;
 
 vi.mock("@/api/client", () => ({
-  listAsrModels: () => Promise.resolve(asrModels),
+  listAsrModels: () => (holdAsr ? new Promise<never>(() => {}) : Promise.resolve(asrModels)),
   downloadAsrModel: (id: string) => Promise.resolve(asrModels.find((one) => one.id === id)),
   setDefaultAsrModel: (id: string) => {
+    setDefaultAsrModel(id);
     asrModels = asrModels.map((one) => ({ ...one, is_default: one.id === id }));
     return Promise.resolve(asrModels.find((one) => one.id === id));
   },
-  getTtsConfig: () => Promise.resolve(ttsConfig),
+  getTtsConfig: () => (holdTtsConfig ? new Promise<never>(() => {}) : Promise.resolve(ttsConfig)),
   updateTtsConfig: (body: Record<string, unknown>) => {
     updateTtsConfig(body);
     // 后端真的存下来了:再问一次配置时,新答案就是它。
     ttsConfig = { ...ttsConfig, ...body };
     return Promise.resolve(ttsConfig);
   },
-  listTtsModels: () => Promise.resolve(ttsModels),
+  listTtsModels: () => (holdTtsModels ? new Promise<never>(() => {}) : Promise.resolve(ttsModels)),
   downloadTtsModel: (id: string) => Promise.resolve(ttsModels.find((one) => one.id === id)),
   listSeparationEngines: () => Promise.resolve(separationEngines),
   installSeparationEngine: () => Promise.resolve(separationEngines[0]),
@@ -82,7 +89,7 @@ import { VoiceCloneSection } from "./VoiceCloneSection";
 
 function renderWithClient(node: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
+  render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
 }
 
 function section(id: string): HTMLElement {
@@ -97,7 +104,7 @@ function group(kind: "clone" | "preset"): HTMLElement {
   return node;
 }
 
-/** 一条实现(一个引擎/模型)自己那一行 —— 默认行里也会出现引擎名,所以不能只按文字找。 */
+/** 一条实现(一个引擎/模型)自己那一行 —— 控件里也会出现引擎名,所以不能只按文字找。 */
 function rowByLabel(scope: HTMLElement, label: string): HTMLElement {
   const row = [...scope.querySelectorAll<HTMLElement>("[data-admin-row]")].find((one) =>
     within(one).queryByText(label),
@@ -106,8 +113,16 @@ function rowByLabel(scope: HTMLElement, label: string): HTMLElement {
   return row;
 }
 
+/** 默认那一行(控件 / 只有一句话时的那句)。 */
+function defaultLine(scope: HTMLElement): HTMLElement {
+  const line = scope.querySelector<HTMLElement>("[data-admin-default-line]");
+  if (!line) throw new Error("没有默认那一行");
+  return line;
+}
+
 const DEFAULT_ONLY_ONE = "这一节只有一种引擎,所以没有默认可设。";
-const SET_DEFAULT = "设为默认";
+const CURRENT_DEFAULT = "当前默认";
+const NOT_INSTALLED_REASON = "还没安装,先下载";
 const ASR_DEFAULT = "默认模型";
 const TTS_DEFAULT = "默认克隆引擎";
 
@@ -120,10 +135,14 @@ beforeEach(() => {
     worker_ready: true, worker_python: "/x/python", worker_checked: true,
   };
   updateTtsConfig.mockClear();
+  setDefaultAsrModel.mockClear();
+  holdAsr = false;
+  holdTtsConfig = false;
+  holdTtsModels = false;
 });
 
-describe("转写模型:默认行跟着模型数量走", () => {
-  it("多个模型 → 默认行在节说明之后、模型列表之前", async () => {
+describe("转写模型:默认是说明之后、列表之前的一个下拉", () => {
+  it("多个模型 → 下拉在节说明之后、模型列表之前,当前值就是默认模型", async () => {
     asrModels = [
       asrModel({ id: "funasr", label: "FunASR", is_default: true }),
       asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX" }),
@@ -132,29 +151,136 @@ describe("转写模型:默认行跟着模型数量走", () => {
     await screen.findByText("WhisperX");
 
     const box = section("engine-transcribe");
-    const line = box.querySelector<HTMLElement>("[data-admin-default-line]");
-    expect(line).not.toBeNull();
-    expect(line!.dataset.defaultKind).toBe("choice");
+    const line = defaultLine(box);
+    expect(line.dataset.defaultKind).toBe("choice");
     expect(line).toHaveTextContent(ASR_DEFAULT);
-    expect(line).toHaveTextContent("FunASR");
 
-    // 节说明(header 里的那句)之后、列表那一张卡之前。
-    expect(line!.previousElementSibling).toBe(box.querySelector("header"));
-    const card = line!.nextElementSibling as HTMLElement;
+    const trigger = within(line).getByRole("combobox", { name: ASR_DEFAULT });
+    // 触发器里是**当前值**,不是一个只读的「默认是哪个」。
+    expect(trigger).toHaveTextContent("FunASR");
+
+    // 节说明(header)之后、模型列表那一张卡之前。
+    expect(line.previousElementSibling).toBe(box.querySelector("header"));
+    const card = line.nextElementSibling as HTMLElement;
     expect(card.querySelector("[data-admin-row]")).not.toBeNull();
   });
 
-  it("只有一个模型 → 没有默认可设:说那一句,也不摆「设为默认」/「默认模型」", async () => {
+  it("整节只有这一个能改默认的控件;列表行没有「设为默认」,已默认那行只有淡标记", async () => {
+    asrModels = [
+      asrModel({ id: "funasr", label: "FunASR", is_default: true }),
+      asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX" }),
+    ];
+    renderWithClient(<AsrModelsSection />);
+    await screen.findByText("WhisperX");
+
+    const box = section("engine-transcribe");
+    // 唯一可写处:一个下拉。列表行里再没有第二颗「设为默认」。
+    expect(within(box).getAllByRole("combobox")).toHaveLength(1);
+    expect(within(box).queryByRole("button", { name: "设为默认" })).toBeNull();
+
+    const funasr = rowByLabel(box, "FunASR");
+    const marker = funasr.querySelector<HTMLElement>("[data-admin-default-marker]");
+    expect(marker).not.toBeNull();
+    expect(marker).toHaveTextContent(CURRENT_DEFAULT);
+    // 只是字:不是按钮、也点不动。
+    expect(marker!.closest("button")).toBeNull();
+    expect(within(funasr).queryByRole("button", { name: CURRENT_DEFAULT })).toBeNull();
+    // 另一行没有这枚标记。
+    expect(rowByLabel(box, "WhisperX").querySelector("[data-admin-default-marker]")).toBeNull();
+  });
+
+  it("在下拉里选另一个装好的模型 → 写默认、列表重新读一次,标记跟着过去", async () => {
+    const user = userEvent.setup();
+    asrModels = [
+      asrModel({ id: "funasr", label: "FunASR", is_default: true }),
+      asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX" }),
+    ];
+    renderWithClient(<AsrModelsSection />);
+    await screen.findByText("WhisperX");
+
+    const box = section("engine-transcribe");
+    await user.click(within(box).getByRole("combobox", { name: ASR_DEFAULT }));
+    await user.click(await screen.findByRole("option", { name: "WhisperX" }));
+
+    await waitFor(() => expect(setDefaultAsrModel).toHaveBeenCalledWith("whisperx"));
+    await waitFor(() =>
+      expect(within(section("engine-transcribe")).getByRole("combobox", { name: ASR_DEFAULT })).toHaveTextContent(
+        "WhisperX",
+      ),
+    );
+    await waitFor(() => {
+      expect(rowByLabel(section("engine-transcribe"), "WhisperX").querySelector("[data-admin-default-marker]")).not.toBeNull();
+      expect(rowByLabel(section("engine-transcribe"), "FunASR").querySelector("[data-admin-default-marker]")).toBeNull();
+    });
+    // 写完之后还是只有这一个能改。
+    expect(within(section("engine-transcribe")).getAllByRole("combobox")).toHaveLength(1);
+  });
+
+  it("还没设过默认时触发器写「自动」,选一个装好的就设上", async () => {
+    const user = userEvent.setup();
+    asrModels = [
+      asrModel({ id: "funasr", label: "FunASR" }),
+      asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX" }),
+    ];
+    renderWithClient(<AsrModelsSection />);
+    await screen.findByText("WhisperX");
+
+    const box = section("engine-transcribe");
+    expect(within(box).getByRole("combobox", { name: ASR_DEFAULT })).toHaveTextContent("自动(还没设默认)");
+
+    await user.click(within(box).getByRole("combobox", { name: ASR_DEFAULT }));
+    await user.click(await screen.findByRole("option", { name: "FunASR" }));
+
+    await waitFor(() => expect(setDefaultAsrModel).toHaveBeenCalledWith("funasr"));
+    await waitFor(() =>
+      expect(within(section("engine-transcribe")).getByRole("combobox", { name: ASR_DEFAULT })).toHaveTextContent(
+        "FunASR",
+      ),
+    );
+    expect(
+      rowByLabel(section("engine-transcribe"), "FunASR").querySelector("[data-admin-default-marker]"),
+    ).not.toBeNull();
+  });
+
+  it("未安装的模型在选项里禁用,并写着为什么", async () => {
+    const user = userEvent.setup();
+    asrModels = [
+      asrModel({ id: "funasr", label: "FunASR", is_default: true }),
+      asrModel({ id: "whisperx", engine: "whisperx", label: "WhisperX", status: "missing", runtime_ready: false }),
+    ];
+    renderWithClient(<AsrModelsSection />);
+    await screen.findByText("WhisperX");
+
+    await user.click(within(section("engine-transcribe")).getByRole("combobox", { name: ASR_DEFAULT }));
+    const missing = await screen.findByRole("option", { name: /WhisperX/ });
+    expect(missing).toHaveAttribute("aria-disabled", "true");
+    expect(missing).toHaveTextContent(NOT_INSTALLED_REASON);
+    // 装好的那个仍然能选。
+    expect(screen.getByRole("option", { name: "FunASR" })).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("只有一个模型 → 没有下拉,只说那一句", async () => {
     asrModels = [asrModel({ id: "funasr", label: "FunASR" })];
     renderWithClient(<AsrModelsSection />);
     await screen.findByText("FunASR");
 
     const box = section("engine-transcribe");
-    const line = box.querySelector<HTMLElement>("[data-admin-default-line]");
-    expect(line!.dataset.defaultKind).toBe("single");
+    const line = defaultLine(box);
+    expect(line.dataset.defaultKind).toBe("single");
     expect(line).toHaveTextContent(DEFAULT_ONLY_ONE);
-    expect(within(box).queryByRole("button", { name: SET_DEFAULT })).toBeNull();
-    expect(within(box).queryByText(ASR_DEFAULT)).toBeNull();
+    expect(within(box).queryByRole("combobox")).toBeNull();
+    expect(within(box).queryByText(CURRENT_DEFAULT)).toBeNull();
+  });
+
+  it("数据还没到(undefined)时什么都不画 —— 未知不是「只有一个」", async () => {
+    holdAsr = true;
+    renderWithClient(<AsrModelsSection />);
+    await screen.findByText("正在连接后端");
+
+    const box = section("engine-transcribe");
+    expect(box.querySelector("[data-admin-default-line]")).toBeNull();
+    expect(within(box).queryByRole("combobox")).toBeNull();
+    expect(within(box).queryByText(DEFAULT_ONLY_ONE)).toBeNull();
   });
 });
 
@@ -165,82 +291,88 @@ describe("人声与背景音分离:只有一种引擎", () => {
     await screen.findByText("Demucs");
 
     const box = section("engine-separation");
-    const line = box.querySelector<HTMLElement>("[data-admin-default-line]");
-    expect(line!.dataset.defaultKind).toBe("single");
+    const line = defaultLine(box);
+    expect(line.dataset.defaultKind).toBe("single");
     expect(line).toHaveTextContent(DEFAULT_ONLY_ONE);
-    expect(line!.previousElementSibling).toBe(box.querySelector("header"));
-    expect(line!.nextElementSibling?.querySelector("[data-admin-row]")).not.toBeNull();
+    expect(line.previousElementSibling).toBe(box.querySelector("header"));
+    expect(line.nextElementSibling?.querySelector("[data-admin-row]")).not.toBeNull();
+    expect(within(box).queryByRole("combobox")).toBeNull();
   });
 });
 
-describe("语音合成引擎:默认在克隆那一组、用行内「设为默认」", () => {
+describe("语音合成引擎:默认是克隆组说明之后、列表之前的一个下拉", () => {
   beforeEach(() => {
     ttsModels = [
       ttsEngine(),
       ttsEngine({ id: "fish-speech", label: "Fish Speech" }),
       ttsEngine({ id: "qwen-tts", label: "Qwen3-TTS", status: "missing", runtime_ready: false }),
     ];
-    ttsConfig = {
-      engine: "f5-tts", python_path: "", fish_repo_dir: "", fish_model_dir: "",
-      worker_ready: true, worker_python: "/x/python", worker_checked: true,
-    };
   });
 
-  it("默认不再是一个下拉;默认行在克隆组说明之后、两行之前", async () => {
+  it("克隆组:下拉在组说明之后、两行之前,当前值是已保存的默认", async () => {
     renderWithClient(<VoiceCloneSection />);
     await screen.findByRole("heading", { name: "克隆引擎" });
 
-    expect(screen.queryByRole("combobox", { name: TTS_DEFAULT })).toBeNull();
-
     const clone = group("clone");
-    const line = clone.querySelector<HTMLElement>("[data-admin-default-line]");
-    expect(line!.dataset.defaultKind).toBe("choice");
+    const line = defaultLine(clone);
+    expect(line.dataset.defaultKind).toBe("choice");
     expect(line).toHaveTextContent(TTS_DEFAULT);
-    expect(line).toHaveTextContent("F5-TTS");
+    expect(within(line).getByRole("combobox", { name: TTS_DEFAULT })).toHaveTextContent("F5-TTS");
     // 组说明之后、克隆引擎列表之前。
-    expect(line!.previousElementSibling).toBe(clone.querySelector("h3")!.parentElement);
-    expect(line!.nextElementSibling?.querySelector("[data-admin-row]")).not.toBeNull();
+    expect(line.previousElementSibling).toBe(clone.querySelector("h3")!.parentElement);
+    expect(line.nextElementSibling?.querySelector("[data-admin-row]")).not.toBeNull();
 
-    // 预置音色那一组只有一种引擎 —— 它没有默认可设。
+    // 预置音色那一组只有一种引擎 —— 它没有选择器,只有那句话。
     const preset = group("preset");
-    const note = preset.querySelector<HTMLElement>("[data-admin-default-line]");
-    expect(note!.dataset.defaultKind).toBe("single");
+    const note = defaultLine(preset);
+    expect(note.dataset.defaultKind).toBe("single");
     expect(note).toHaveTextContent(DEFAULT_ONLY_ONE);
+    expect(within(preset).queryByRole("combobox")).toBeNull();
   });
 
-  it("行内:已默认的那一行是状态、不可点;另一行的「设为默认」写进 TtsConfig.engine —— 只有这一处可写", async () => {
+  it("列表行没有「设为默认」;已默认那行只有一枚不可点的「当前默认」", async () => {
+    renderWithClient(<VoiceCloneSection />);
+    await screen.findByRole("heading", { name: "克隆引擎" });
+
+    const clone = group("clone");
+    expect(within(clone).getAllByRole("combobox")).toHaveLength(1);
+    expect(within(clone).queryByRole("button", { name: "设为默认" })).toBeNull();
+
+    const f5 = rowByLabel(clone, "F5-TTS");
+    const marker = f5.querySelector<HTMLElement>("[data-admin-default-marker]");
+    expect(marker).not.toBeNull();
+    expect(marker).toHaveTextContent(CURRENT_DEFAULT);
+    expect(marker!.closest("button")).toBeNull();
+    expect(rowByLabel(clone, "Fish Speech").querySelector("[data-admin-default-marker]")).toBeNull();
+    // 预置音色引擎不属于「默认克隆引擎」。
+    expect(within(group("preset")).queryByText(CURRENT_DEFAULT)).toBeNull();
+  });
+
+  it("在下拉里换一个 → 写进 TtsConfig.engine —— 只有这一处可写", async () => {
     const user = userEvent.setup();
     renderWithClient(<VoiceCloneSection />);
     await screen.findByRole("heading", { name: "克隆引擎" });
 
-    const clone = group("clone");
-    const f5 = rowByLabel(clone, "F5-TTS");
-    const fish = rowByLabel(clone, "Fish Speech");
-
-    // 已默认 = 一枚状态,不是按钮。
-    expect(within(f5).getByText(TTS_DEFAULT)).toHaveAttribute("data-admin-row-state");
-    expect(within(f5).queryByRole("button", { name: SET_DEFAULT })).toBeNull();
-    // 没有下拉:能写默认的只有行内那一处。
-    expect(screen.queryByRole("combobox", { name: TTS_DEFAULT })).toBeNull();
-    expect(within(clone).getAllByRole("button", { name: SET_DEFAULT })).toHaveLength(1);
-
-    await user.click(within(fish).getByRole("button", { name: SET_DEFAULT }));
+    await user.click(within(group("clone")).getByRole("combobox", { name: TTS_DEFAULT }));
+    await user.click(await screen.findByRole("option", { name: "Fish Speech" }));
 
     await waitFor(() => expect(updateTtsConfig).toHaveBeenCalledTimes(1));
     expect(updateTtsConfig).toHaveBeenCalledWith(
       expect.objectContaining({ engine: "fish-speech", python_path: "" }),
     );
 
-    // 默认翻过去:原来的默认行变回「设为默认」,新的那一行标着默认。
+    await waitFor(() =>
+      expect(within(group("clone")).getByRole("combobox", { name: TTS_DEFAULT })).toHaveTextContent("Fish Speech"),
+    );
     await waitFor(() => {
-      expect(within(rowByLabel(group("clone"), "Fish Speech")).getByText(TTS_DEFAULT)).toBeInTheDocument();
+      expect(rowByLabel(group("clone"), "Fish Speech").querySelector("[data-admin-default-marker]")).not.toBeNull();
+      expect(rowByLabel(group("clone"), "F5-TTS").querySelector("[data-admin-default-marker]")).toBeNull();
     });
-    const f5Now = rowByLabel(group("clone"), "F5-TTS");
-    expect(within(f5Now).getByRole("button", { name: SET_DEFAULT })).toBeInTheDocument();
-    expect(within(f5Now).queryByText(TTS_DEFAULT)).toBeNull();
+    expect(within(group("clone")).getAllByRole("combobox")).toHaveLength(1);
   });
 
-  it("还没装的克隆引擎不能设默认", async () => {
+  it("还没装的克隆引擎在选项里禁用,并写着为什么", async () => {
+    const user = userEvent.setup();
     ttsModels = [
       ttsEngine(),
       ttsEngine({ id: "fish-speech", label: "Fish Speech", status: "missing", runtime_ready: false }),
@@ -249,11 +381,14 @@ describe("语音合成引擎:默认在克隆那一组、用行内「设为默认
     renderWithClient(<VoiceCloneSection />);
     await screen.findByRole("heading", { name: "克隆引擎" });
 
-    const fish = rowByLabel(group("clone"), "Fish Speech");
-    expect(within(fish).queryByRole("button", { name: SET_DEFAULT })).toBeNull();
+    await user.click(within(group("clone")).getByRole("combobox", { name: TTS_DEFAULT }));
+    const fish = await screen.findByRole("option", { name: /Fish Speech/ });
+    expect(fish).toHaveAttribute("aria-disabled", "true");
+    expect(fish).toHaveTextContent(NOT_INSTALLED_REASON);
+    expect(screen.getByRole("option", { name: "F5-TTS" })).not.toHaveAttribute("aria-disabled", "true");
   });
 
-  it("克隆引擎只剩一种时也不摆默认 —— 与「≥2 才有默认」同一条规则", async () => {
+  it("克隆引擎只剩一种时也不摆选择器 —— 与「≥2 才有默认」同一条规则", async () => {
     ttsModels = [
       ttsEngine(),
       ttsEngine({ id: "qwen-tts", label: "Qwen3-TTS", status: "missing", runtime_ready: false }),
@@ -262,9 +397,31 @@ describe("语音合成引擎:默认在克隆那一组、用行内「设为默认
     await screen.findByRole("heading", { name: "克隆引擎" });
 
     const clone = group("clone");
-    const line = clone.querySelector<HTMLElement>("[data-admin-default-line]");
-    expect(line!.dataset.defaultKind).toBe("single");
-    expect(within(clone).queryByRole("button", { name: SET_DEFAULT })).toBeNull();
-    expect(within(clone).queryByText(TTS_DEFAULT)).toBeNull();
+    const line = defaultLine(clone);
+    expect(line.dataset.defaultKind).toBe("single");
+    expect(within(clone).queryByRole("combobox")).toBeNull();
+    expect(within(clone).queryByText(CURRENT_DEFAULT)).toBeNull();
+  });
+
+  it("配置还没到(undefined)时什么都不画 —— 别把未知画成「只有一个」", async () => {
+    holdTtsConfig = true;
+    renderWithClient(<VoiceCloneSection />);
+    await screen.findByRole("heading", { name: "克隆引擎" });
+
+    const clone = group("clone");
+    expect(clone.querySelector("[data-admin-default-line]")).toBeNull();
+    expect(within(clone).queryByRole("combobox")).toBeNull();
+    expect(within(clone).queryByText(DEFAULT_ONLY_ONE)).toBeNull();
+  });
+
+  it("权重表还没到(undefined)时也不画控件 / 不画那句话", async () => {
+    holdTtsModels = true;
+    renderWithClient(<VoiceCloneSection />);
+    await screen.findByRole("heading", { name: "语音合成引擎" });
+
+    const box = section("engine-clone");
+    expect(box.querySelector("[data-admin-default-line]")).toBeNull();
+    expect(within(box).queryByRole("combobox")).toBeNull();
+    expect(within(box).queryByText(DEFAULT_ONLY_ONE)).toBeNull();
   });
 });

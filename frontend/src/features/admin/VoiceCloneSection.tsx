@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CheckCircle2, CircleAlert, Star } from "lucide-react";
+import { CheckCircle2, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -20,8 +20,8 @@ import { Input } from "@/components/ui/input";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import type { TtsEngine } from "@/api/domains/speech";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-import { ADMIN_CARD, AdminRow, AdminRowState, AdminSection } from "./adminLayout";
-import { AdminDefaultLine, AdminOnlyOneNote, hasDefaultChoice } from "./defaultRow";
+import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
+import { AdminDefaultMarker, AdminDefaultSelect, AdminOnlyOneNote, hasDefaultChoice } from "./defaultRow";
 import { ModelDownloadRow } from "./ModelDownloadRow";
 
 
@@ -42,7 +42,7 @@ function clonesFromReference(engineId: string): boolean {
   return CLONE_ENGINE_IDS.has(engineId);
 }
 
-/** 权重表的一个能力分区:组头(小标题 + 一句说明)+ 组里的「默认」那一行 + 那一组的行。
+/** 权重表的一个能力分区:组头(小标题 + 一句说明)+ 组里的「默认」那一个控件 + 那一组的行。
  *  分组**只**是渲染时的分区 —— 下载、状态、进度、失败、重试仍是同一份 ModelDownloadRow 和同一个 mutation。
  *  「默认」永远在组说明之后、列表之前(和转写那一节同一个位置),而且只属于这一组 —— 克隆引擎的默认
  *  不该挂在含预置音色引擎的整节顶上。 */
@@ -182,6 +182,17 @@ export function VoiceCloneSection() {
   const engineModels = models.data ?? [];
   const cloneModels = engineModels.filter((model) => clonesFromReference(model.id));
   const presetModels = engineModels.filter((model) => !clonesFromReference(model.id));
+  // 默认克隆引擎 = TtsConfig.engine 这一个字段。它的**唯一写入口**是克隆组顶上那个选择器;
+  // 配置/权重表还没到(options = undefined)时那个控件什么都不画(见 defaultRow)。
+  const cloneOptions = config.data
+    ? cloneModels.map((model) => ({
+        id: model.id,
+        label: model.label,
+        //: 设默认看的是权重在不在盘上(status);运行环境探没探完是另一件事。
+        installed: model.status === "installed",
+      }))
+    : undefined;
+  const savedClone = cloneModels.some((model) => model.id === config.data?.engine) ? config.data?.engine : undefined;
   // **同一个渲染器给两组用** —— 两组只是分区,不是两套下载/状态逻辑。
   const renderModelRow = (model: TtsEngine) => {
     const busy = startingId === model.id || model.status === "downloading";
@@ -198,26 +209,9 @@ export function VoiceCloneSection() {
           // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
           busyReason={t("ttsThisDownloading")}
           actionHint={unsaved ? t("ttsSaveAndDownload") : undefined}
-          // 默认就在这一行上设(和转写模型同一套):默认那一行是**状态**,不能再点;装好的另一行
-          // 才有「设为默认」。候选全在眼前,不必展开一个下拉才知道有谁。
+          // 已默认只是**一枚淡标记**,不可点:改默认在克隆组顶上那个选择器里(唯一可写处)。
           extra={
-            canSetDefault ? (
-              config.data?.engine === model.id ? (
-                <AdminRowState tone="success" icon={<Star size={13} aria-hidden />}>
-                  {t("voiceCloneEngine")}
-                </AdminRowState>
-              ) : model.status === "installed" ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  loading={makeDefault.isPending && makeDefault.variables === model.id}
-                  disabled={makeDefault.isPending && makeDefault.variables === model.id}
-                  onClick={() => makeDefault.mutate(model.id)}
-                >
-                  {t("voiceCloneSetDefault")}
-                </Button>
-              ) : null
-            ) : null
+            canSetDefault && config.data?.engine === model.id ? <AdminDefaultMarker /> : null
           }
           onDownload={() => download.mutate(model.id)}
         />
@@ -269,8 +263,9 @@ export function VoiceCloneSection() {
 
       <Form {...form}>
         <form className={ADMIN_CARD} onSubmit={submit} noValidate>
-          {/* 没有「引擎」下拉:**默认只在这一组里设,而且只有行内「设为默认」这一处可写**
-              (见 defaultRow)。下拉和行内按钮并存 = 同一个默认有两个写入口,一个存了另一个还不知道。 */}
+          {/* **默认只在这一组顶上那个选择器里设,那是唯一可写处**(见 defaultRow)。表单里的
+              `engine` 只是把已保存的默认原样带回去保存(它没有可改的控件),所以同一个默认
+              不会有两个写入口。 */}
           <FormField
             control={form.control}
             name="python_path"
@@ -298,10 +293,13 @@ export function VoiceCloneSection() {
               title={t("voiceCloneGroupClones")}
               description={t("voiceCloneGroupClonesDesc")}
               before={
-                <AdminDefaultLine
+                <AdminDefaultSelect
                   label={t("voiceCloneEngine")}
-                  optionCount={config.data ? cloneModels.length : undefined}
-                  current={cloneModels.find((model) => model.id === config.data?.engine)?.label ?? config.data?.engine}
+                  options={cloneOptions}
+                  value={savedClone}
+                  placeholder={config.data?.engine ?? t("defaultNotSet")}
+                  disabled={makeDefault.isPending}
+                  onChange={(id) => makeDefault.mutate(id)}
                 />
               }
             >

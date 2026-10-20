@@ -146,23 +146,41 @@ describe("语音合成引擎这一节", () => {
     await waitFor(() => expect(downloadTtsModel).toHaveBeenCalledWith("f5-tts"));
   });
 
-  it("默认不再是一个下拉:已默认的那一行标着「默认克隆引擎」,另一行是「设为默认」", async () => {
-    //: 未安装的不能设默认,所以两行都得是已安装。
+  it("默认是一个下拉(在克隆组说明之后);列表行没有「设为默认」,已默认那行只有淡标记", async () => {
+    //: 两行都装好才谈得上"选谁"。
     models[0] = { ...models[0], status: "installed", runtime_ready: true };
     models[1] = { ...models[1], status: "installed", runtime_ready: true };
     renderSection();
     await waitForGroups();
 
-    //: 下拉已经不在了 —— 留着它就是第二个能写默认的地方。
-    expect(screen.queryByRole("combobox", { name: "默认克隆引擎" })).toBeNull();
+    //: 下拉在克隆组里,而且整组只有这一个能改默认。
+    const clone = group("clone");
+    const trigger = within(clone).getByRole("combobox", { name: "默认克隆引擎" });
+    expect(trigger).toHaveTextContent("F5-TTS");
+    expect(within(clone).getAllByRole("combobox")).toHaveLength(1);
 
-    const rows = [...group("clone").querySelectorAll<HTMLElement>("[data-admin-row]")];
+    const rows = [...clone.querySelectorAll<HTMLElement>("[data-admin-row]")];
     const f5 = rows.find((row) => row.textContent?.includes("F5-TTS"))!;
     const fish = rows.find((row) => row.textContent?.includes("Fish Speech S2 Pro"))!;
-    expect(within(f5).getByText("默认克隆引擎")).toHaveAttribute("data-admin-row-state");
-    expect(within(f5).queryByRole("button", { name: "设为默认" })).toBeNull();
-    expect(within(fish).getByRole("button", { name: "设为默认" })).toBeInTheDocument();
+    //: 已默认 = 一枚不可点的「当前默认」,不是「设为默认」按钮,也不是可点的状态。
+    const marker = f5.querySelector<HTMLElement>("[data-admin-default-marker]");
+    expect(marker).toHaveTextContent("当前默认");
+    expect(marker!.closest("button")).toBeNull();
+    expect(within(fish).queryByRole("button", { name: "设为默认" })).toBeNull();
+    expect(fish.querySelector("[data-admin-default-marker]")).toBeNull();
     //: Qwen3-TTS 是预置音色引擎,不属于"默认克隆引擎";后端 PUT 也只收 f5-tts|fish-speech。
-    expect(within(group("preset")).queryByText("默认克隆引擎")).toBeNull();
+    expect(within(group("preset")).queryByText("当前默认")).toBeNull();
+  });
+
+  it("没安装的克隆引擎选项禁用,并写着为什么", async () => {
+    //: 两行都没装 —— 下载/状态照旧,选择器里两项都点不了,但理由看得见。
+    renderSection();
+    await waitForGroups();
+
+    await userEvent.click(within(group("clone")).getByRole("combobox", { name: "默认克隆引擎" }));
+    const fish = await screen.findByRole("option", { name: /Fish Speech S2 Pro/ });
+    expect(fish).toHaveAttribute("aria-disabled", "true");
+    expect(fish).toHaveTextContent("还没安装,先下载");
+    expect(screen.getByRole("option", { name: "F5-TTS" })).toHaveAttribute("aria-disabled", "true");
   });
 });

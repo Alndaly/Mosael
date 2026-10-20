@@ -1,14 +1,12 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Star } from "lucide-react";
 import { toast } from "sonner";
 
 import { downloadAsrModel, listAsrModels, setDefaultAsrModel } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
-import { ADMIN_CARD, AdminRow, AdminRowState, AdminSection } from "./adminLayout";
-import { AdminDefaultLine, hasDefaultChoice } from "./defaultRow";
+import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
+import { AdminDefaultMarker, AdminDefaultSelect, hasDefaultChoice } from "./defaultRow";
 import { ModelDownloadRow } from "./ModelDownloadRow";
 
 /**
@@ -40,9 +38,19 @@ export function AsrModelsSection() {
     //: **从后端重新读整张列表**,不是只把本地这一行改成默认:默认只有一个,原来那一个也得跟着改口。
     //: (后端的回包就是改完之后的那一行,但其余行只有再问一次才知道。)
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["asr-models"] }),
-    //: 接口拒了(没安装 / 不认识的 id)要把原因原样说出来 —— 一颗点了没反应的按钮等于坏了。
+    //: 接口拒了(没安装 / 不认识的 id)要把原因原样说出来 —— 点了没反应的控件等于坏了。
+    //: 界面上未安装的选项已经禁用(后端仍会回 409,见 routes/asr.set_default_asr_model),这里兜住那一路。
     onError: (error: Error) => toast.error(error.message),
   });
+
+  const options = models.data?.map((model) => ({
+    id: model.id,
+    label: model.label,
+    //: 设默认看的是**权重在不在盘上**(status),不是运行环境探没探完 —— 后者只是还没答。
+    installed: model.status === "installed",
+  }));
+  const defaultModel = models.data?.find((model) => model.is_default);
+  const canSetDefault = hasDefaultChoice(models.data?.length);
 
   return (
     <AdminSection
@@ -55,11 +63,14 @@ export function AsrModelsSection() {
       }
     >
       {/* 默认只在这一节有**多个**可选模型时才存在;只有一种时说清为什么没有默认可设(见 defaultRow)。
-          位置和别处一样:节说明之后、模型列表之前。 */}
-      <AdminDefaultLine
+          整个「设默认」只有这一处:说明之后、模型列表之前;列表行不再有按钮。 */}
+      <AdminDefaultSelect
         label={t("asrModelIsDefault")}
-        optionCount={models.data?.length}
-        current={models.data?.find((model) => model.is_default)?.label ?? t("asrDefaultAuto")}
+        options={options}
+        value={defaultModel?.id}
+        placeholder={t("asrDefaultAuto")}
+        disabled={setDefault.isPending}
+        onChange={(id) => setDefault.mutate(id)}
       />
       <div className={ADMIN_CARD}>
         {models.data?.map((model) => (
@@ -72,28 +83,9 @@ export function AsrModelsSection() {
             // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。
             busy={(download.isPending && download.variables === model.id) || model.status === "downloading"}
             busyReason={t("ttsThisDownloading")}
-            // 已默认 = 一枚**状态**,不是一颗按钮:它不能再点(再点一次也还是它)。
-            // 没安装的卡上没有这一格 —— 设一份没装的,"默认"只是一句空话(后端也会拒,见 set_default_model)。
+            // 已默认只是**一枚淡标记**,不是按钮:改默认在节顶那个选择器里(唯一可写处)。
             // 整个"默认"只在这一节有 ≥2 个候选时才摆(见 defaultRow);只有一种实现时它没有意义。
-            extra={
-              hasDefaultChoice(models.data?.length) ? (
-                model.is_default ? (
-                  <AdminRowState tone="success" icon={<Star size={13} />}>
-                    {t("asrModelIsDefault")}
-                  </AdminRowState>
-                ) : model.status === "installed" ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    loading={setDefault.isPending && setDefault.variables === model.id}
-                    disabled={setDefault.isPending && setDefault.variables === model.id}
-                    onClick={() => setDefault.mutate(model.id)}
-                  >
-                    {t("asrModelSetDefault")}
-                  </Button>
-                ) : null
-              ) : null
-            }
+            extra={canSetDefault && model.is_default ? <AdminDefaultMarker /> : null}
             onDownload={() => download.mutate(model.id)}
           />
         ))}

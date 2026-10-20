@@ -895,10 +895,15 @@ export const otherUi = {
   ffmpegPathPlaceholder: "Empty: use the ffmpeg on PATH",
   denoiseEnginesTitle: "Noise reduction",
   denoiseEnginesDesc: "The methods offered when reducing noise from the media library, the editor, workflows and the agent. Built-in and RNNoise ship with the app; DeepFilterNet gives the best results and needs a one-time download. To keep only the voice and nothing else, use voice and background separation.",
-  //: The "default" row in each Admin → Engines section only exists when the capability has ≥2
-  //: implementations, and always lives in the section where they are (see features/admin/defaultRow).
+  //: The "default" control in each Admin → Engines section only exists when the capability has ≥2
+  //: implementations, and lives where they are; it is the only place that writes the default
+  //: (see features/admin/defaultRow).
   defaultOnlyOneEngine: "This section has only one engine, so there is no default to set.",
   defaultNotSet: "No default set",
+  //: The quiet marker on the row that is currently the default (not clickable).
+  defaultCurrent: "Current default",
+  //: Why an uninstalled option is disabled inside the selector.
+  defaultNotInstalled: "Not installed yet — download it first",
   denoiseInstall: "Download",
   denoiseRetry: "Retry",
   denoiseInstalled: "Installed",

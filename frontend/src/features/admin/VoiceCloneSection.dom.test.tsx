@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -132,12 +132,12 @@ describe("横幅说的是被选中那个引擎的真实状态", () => {
   });
 
   it("把另一个装好的引擎设为默认后,横幅跟着换成它,不说它「尚未就绪」", async () => {
-    //: 默认不再是下拉(那会是第二个能写默认的地方),而是行内的「设为默认」—— 点下去就存。
+    //: 默认在克隆组顶上那个下拉里选 —— 这是唯一能写默认的地方。
     const user = userEvent.setup();
     renderSection();
-    const fishRow = (await screen.findByText("Fish Speech")).closest("[data-admin-row]") as HTMLElement;
 
-    await user.click(within(fishRow).getByRole("button", { name: "voiceCloneSetDefault" }));
+    await user.click(await screen.findByRole("combobox", { name: "voiceCloneEngine" }));
+    await user.click(await screen.findByRole("option", { name: "Fish Speech" }));
 
     await waitFor(() => expect(config.engine).toBe("fish-speech"));
     await waitFor(() => expect(screen.queryByText(/voiceCloneNotReady/)).toBeNull());

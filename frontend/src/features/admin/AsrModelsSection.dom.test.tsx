@@ -108,8 +108,8 @@ describe("转写模型", () => {
     await waitFor(() => expect(downloads).toEqual(["funasr"]));
   });
 
-  it("装好且跑得起来:右边是已安装和「设为默认」,没有下载按钮", async () => {
-    //: ≥2 个候选才存在「默认」(见 defaultRow.dom.test.tsx),所以这里给两个。
+  it("装好且跑得起来:右边是已安装,没有下载按钮,也没有行内「设为默认」", async () => {
+    //: ≥2 个候选才存在「默认」控件(见 defaultRow.dom.test.tsx),所以这里给两个。
     renderSection([
       { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true },
       { ...base, id: "whisperx", engine: "whisperx", label: "WhisperX" },
@@ -117,9 +117,11 @@ describe("转写模型", () => {
     const row = await rowOf("FunASR");
     const state = within(row).getByText("asrModelInstalled").closest("[data-admin-row-state]");
     expect(state).toHaveAttribute("data-tone", "success");
-    //: 已安装 = 能设默认(盘上有这份权重)。下载那一套按钮不该再出现。
-    expect(within(row).getByRole("button", { name: /asrModelSetDefault/ })).toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: /asrModelDownload|asrModelRetry|asrModelInstallRuntime/ })).toBeNull();
+    //: 「设默认」只有节顶那一个下拉;列表行不再承担这个动作。
+    expect(within(row).queryByRole("button", { name: "设为默认" })).toBeNull();
+    const box = document.querySelector('[data-admin-section="engine-transcribe"]') as HTMLElement;
+    expect(within(box).getAllByRole("combobox")).toHaveLength(1);
   });
 
   it("运行环境还没测完时说「正在检查」,不下结论也不摆下载按钮(默认仍可设:权重在盘上)", async () => {
@@ -130,8 +132,9 @@ describe("转写模型", () => {
     const row = await rowOf("FunASR");
     expect(within(row).getByText("runtimeChecking")).toHaveAttribute("data-admin-row-note");
     expect(within(row).queryByRole("button", { name: /asrModelDownload|asrModelRetry|asrModelInstallRuntime/ })).toBeNull();
-    //: 权重在盘上,只是还没探完环境 —— 设默认仍然成立(设默认看的是权重在不在)。
-    expect(within(row).getByRole("button", { name: /asrModelSetDefault/ })).toBeInTheDocument();
+    //: 权重在盘上,只是还没探完环境 —— 它在下拉里仍然可选(设默认看的是权重在不在)。
+    //: 行里没有「设为默认」按钮:那是唯一可写处之外的第二个入口,已经拿掉。
+    expect(within(row).queryByRole("button", { name: "设为默认" })).toBeNull();
     expect(row).not.toHaveTextContent("asrModelInstalled");
   });
 
@@ -217,61 +220,99 @@ describe("转写模型", () => {
  * 用户报的那件事:五张卡(已安装)只有「已安装 / 下载」,没有**设为默认**。
  * 默认是这台机器的设定,所以只有部署管理员、且只有**已经装在盘上**的模型能设 ——
  * 设一份没装的,下一次转写照样得先下几个 GB,「默认」只是一句空话。
+ *
+ * 设默认的**唯一入口**是节说明之后、列表之前的那个下拉;列表行里不再有按钮,
+ * 已默认那一行只剩一枚不可点的淡标记。
  */
 describe("设为默认", () => {
-  it("已安装的卡上能设默认;已默认的显示「默认模型」且不能再点", async () => {
-    const user = userEvent.setup();
+  const box = () => {
+    const node = document.querySelector('[data-admin-section="engine-transcribe"]');
+    if (!(node instanceof HTMLElement)) throw new Error("没有转写那一节");
+    return node;
+  };
+  const combobox = () => within(box()).getByRole("combobox", { name: "asrModelIsDefault" });
+
+  it("已默认的只在行里留一枚淡标记;整节唯一能改默认的是那个下拉", async () => {
     renderSection([
       { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true },
       { ...base, id: "whisperx-large-v3", engine: "whisperx", label: "WhisperX Large v3", status: "installed", runtime_ready: true, is_default: true },
     ]);
-    const funasr = await rowOf("FunASR");
-    //: 已默认的那一个只说「默认模型」,不再是一颗能点的按钮。
     const large = await rowOf("WhisperX Large v3");
-    expect(within(large).getByText("asrModelIsDefault")).toHaveAttribute("data-admin-row-state");
-    expect(within(large).queryByRole("button", { name: /asrModelSetDefault/ })).toBeNull();
+    const funasr = await rowOf("FunASR");
 
-    await user.click(within(funasr).getByRole("button", { name: /asrModelSetDefault/ }));
-    await waitFor(() => expect(defaultCalls).toEqual(["funasr"]));
+    //: 当前值就在触发器里。
+    expect(combobox()).toHaveTextContent("WhisperX Large v3");
+    //: 唯一可写处:一个下拉;列表行没有「设为默认」。
+    expect(within(box()).getAllByRole("combobox")).toHaveLength(1);
+    expect(within(box()).queryByRole("button", { name: "设为默认" })).toBeNull();
+
+    //: 已默认那一行只是一枚淡标记,不是按钮。
+    const marker = large.querySelector<HTMLElement>("[data-admin-default-marker]");
+    expect(marker).not.toBeNull();
+    expect(marker).toHaveTextContent("defaultCurrent");
+    expect(marker!.closest("button")).toBeNull();
+    expect(within(large).queryByRole("button", { name: "defaultCurrent" })).toBeNull();
+    expect(funasr.querySelector("[data-admin-default-marker]")).toBeNull();
   });
 
-  it("没安装的卡上没有「设为默认」", async () => {
+  it("没安装的模型在选项里禁用,并写着为什么 —— UI 不让点到,后端仍会 409", async () => {
+    const user = userEvent.setup();
     renderSection([
       { ...base, id: "funasr", engine: "funasr", label: "FunASR" },
       { ...base, id: "whisperx", engine: "whisperx", label: "WhisperX", status: "installed", runtime_ready: true },
     ]);
-    const row = await rowOf("FunASR");
-    expect(within(row).queryByRole("button", { name: /asrModelSetDefault/ })).toBeNull();
+    await rowOf("FunASR");
+
+    await user.click(combobox());
+    const missing = await screen.findByRole("option", { name: /FunASR/ });
+    expect(missing).toHaveAttribute("aria-disabled", "true");
+    expect(missing).toHaveTextContent("defaultNotInstalled");
+    expect(screen.getByRole("option", { name: "WhisperX" })).not.toHaveAttribute("aria-disabled", "true");
   });
 
-  it("设完立刻反映:从后端重新读整张列表,而不是只改本地那一个开关", async () => {
+  it("选一个装好的:调 set_default、从后端重新读整张列表,标记跟着过去", async () => {
     const user = userEvent.setup();
     renderSection([
       { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true },
       { ...base, id: "whisperx-large-v3", engine: "whisperx", label: "WhisperX Large v3", status: "installed", runtime_ready: true, is_default: true },
     ]);
+    await rowOf("FunASR");
     expect(reads).toHaveLength(1);
 
-    await user.click(within(await rowOf("FunASR")).getByRole("button", { name: /asrModelSetDefault/ }));
+    await user.click(combobox());
+    await user.click(await screen.findByRole("option", { name: "FunASR" }));
 
+    await waitFor(() => expect(defaultCalls).toEqual(["funasr"]));
     //: **再问一次后端**:默认只有一个,别的行(原来是默认的那一行)也得跟着改口。
     await waitFor(() => expect(reads.length).toBeGreaterThan(1));
-    await waitFor(async () => {
-      expect(within(await rowOf("FunASR")).getByText("asrModelIsDefault")).toBeInTheDocument();
-      expect(within(await rowOf("WhisperX Large v3")).queryByText("asrModelIsDefault")).toBeNull();
+    await waitFor(() => {
+      expect(rowOfSync("FunASR").querySelector("[data-admin-default-marker]")).not.toBeNull();
+      expect(rowOfSync("WhisperX Large v3").querySelector("[data-admin-default-marker]")).toBeNull();
+      expect(combobox()).toHaveTextContent("FunASR");
     });
   });
 
-  it("接口拒了要说清原因 —— 不是按钮点一下什么都不发生", async () => {
+  it("接口拒了要说清原因 —— 不是选一下什么都不发生", async () => {
     rejectDefault = "「WhisperX Small」还没安装,不能设成默认 —— 先在右边点「下载」,装好之后再设。";
     const user = userEvent.setup();
     renderSection([
       { ...base, id: "whisperx-small", engine: "whisperx", label: "WhisperX Small", status: "installed" },
       { ...base, id: "whisperx-large-v3", engine: "whisperx", label: "WhisperX Large v3", status: "installed", runtime_ready: true },
     ]);
+    await rowOf("WhisperX Small");
 
-    await user.click(within(await rowOf("WhisperX Small")).getByRole("button", { name: /asrModelSetDefault/ }));
+    await user.click(combobox());
+    await user.click(await screen.findByRole("option", { name: "WhisperX Small" }));
 
     await waitFor(() => expect(errors).toEqual([rejectDefault]));
   });
+
+  /** 同步版的 `rowOf`:上面那几条要在 `waitFor` 里连着查两行,不能每一步都 await 一次查。 */
+  function rowOfSync(label: string): HTMLElement {
+    const row = [...box().querySelectorAll<HTMLElement>("[data-admin-row]")].find((one) =>
+      within(one).queryByText(label),
+    );
+    if (!row) throw new Error(`没有「${label}」那一行`);
+    return row;
+  }
 });
