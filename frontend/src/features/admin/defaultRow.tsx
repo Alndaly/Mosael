@@ -43,11 +43,14 @@ function OnlyOneImplementationRow({ label }: { label: string }) {
   );
 }
 
-/** 选择器里的一项。`installed` 决定它能不能被选中 —— 没装的设成默认只是一句空话(后端也会拒)。 */
+/** 选择器里的一项。`installed` 决定它能不能被选中 —— 没装的设成默认只是一句空话(后端也会拒)。
+ *  `reason` 是禁用时给的那句理由:默认是「还没安装,先下载」;不要下载、只是这台机器上用不了的
+ *  (比如 ffmpeg 不带 RNNoise 滤镜)要给它真正的原因,不然用户会去找一个不存在的下载按钮。 */
 export type AdminDefaultOption = {
   id: string;
   label: string;
   installed: boolean;
+  reason?: string;
 };
 
 /**
@@ -55,9 +58,13 @@ export type AdminDefaultOption = {
  *
  * 这是整节里**唯一**能改默认的地方 —— 列表行上的「设为默认」已经拿掉,否则同一个默认就有
  * 两个写入口。`options` 还没取到(undefined)时什么都不画:"不知道有几个"不是"只有一个"。
+ *
+ * 说明默认是一句通用的话(「只影响这台机器」「这里唯一能改」);某一节还有额外的一层
+ * (降噪:按人选的覆盖它),调用处用 `description` 写清 —— 别让用户以为这里设了就一定生效。
  */
 export function AdminDefaultSelect({
   label,
+  description,
   options,
   value,
   placeholder,
@@ -65,6 +72,8 @@ export function AdminDefaultSelect({
   disabled,
 }: {
   label: string;
+  /** 行说明;不给就用那句通用的 `defaultRowHint`。 */
+  description?: string;
   /** 这一节的可选项;数据没到 = undefined。 */
   options: AdminDefaultOption[] | undefined;
   /** 当前默认的那一项;没有默认时留空。 */
@@ -84,7 +93,7 @@ export function AdminDefaultSelect({
   }
   return (
     <div className={ADMIN_CARD} data-admin-default-line data-default-kind="choice">
-      <AdminRow label={label} description={t("defaultRowHint")}>
+      <AdminRow label={label} description={description ?? t("defaultRowHint")}>
         <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
           <SelectTrigger aria-label={label} className={SETTINGS_FIELD_WIDTH}>
             <SelectValue placeholder={placeholder ?? t("defaultNotSet")} />
@@ -96,7 +105,7 @@ export function AdminDefaultSelect({
                 value={option.id}
                 disabled={!option.installed}
                 /* 禁用了就要说清为什么 —— 一个灰掉、没有理由的选项,看起来只是"点了没反应"。 */
-                description={option.installed ? undefined : t("defaultNotInstalled")}
+                description={option.installed ? undefined : (option.reason ?? t("defaultNotInstalled"))}
               >
                 {option.label}
               </SelectItem>

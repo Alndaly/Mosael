@@ -113,6 +113,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "TtsConfig": ("app/domain/voices/tts_settings.py",),
     #: 这台机器默认用哪个转写模型:读与写都只在 domain/asr(有效值的**唯一**解析点)。
     "AsrConfig": ("app/domain/asr/",),
+    #: 这台机器默认用哪一种降噪引擎:读与写都只在 domain/denoise_defaults(有效值的**唯一**解析点)。
+    "DenoiseConfig": ("app/domain/denoise_defaults.py",),
     # 智能体/集成
     "AgentSession": ("app/domain/agent/",),
     # 分组对话和生成共用一张表(kind 分开),所以归属在中立的 domain/session_groups。

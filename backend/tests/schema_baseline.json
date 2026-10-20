@@ -91,6 +91,11 @@
     "id",
     "updated_at"
   ],
+  "denoise_config": [
+    "default_engine",
+    "id",
+    "updated_at"
+  ],
   "media_tools_config": [
     "ffmpeg_path",
     "id",

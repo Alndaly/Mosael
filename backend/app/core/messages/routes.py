@@ -203,6 +203,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个降噪引擎不需要安装,或者不存在",
         "en": "This noise-reduction engine doesn't need installing, or doesn't exist.",
     },
+    "routeErr_unknownDenoiseEngine": {
+        "zh": "没有这个降噪引擎:{engine}(可选的是内置降噪、DeepFilterNet 语音降噪和 RNNoise 语音降噪)",
+        "en": "There's no noise-reduction engine called {engine}. The choices are built-in noise reduction, DeepFilterNet speech enhancement and RNNoise speech denoising.",
+    },
+    "routeErr_denoiseEngineNotInstalled": {
+        "zh": "「{engine}」还没安装,不能设成默认 —— 它现在只是一行待下载的引擎。先在列表里点「下载」,装好之后再设。",
+        "en": "“{engine}” isn't installed yet, so it can't be the default — right now it's only an entry waiting to be downloaded. Hit Download in the list first, then set it.",
+    },
+    "routeErr_denoiseEngineNotReady": {
+        "zh": "「{engine}」现在还用不了,不能设成默认:{missing}",
+        "en": "“{engine}” can't be used on this machine yet, so it can't be the default: {missing}",
+    },
     "routeErr_badGenerationKind": {
         "zh": "kind 只能是 image 或 video",
         "en": "kind must be image or video.",

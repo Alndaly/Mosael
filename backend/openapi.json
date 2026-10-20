@@ -4828,6 +4828,48 @@
         }
       }
     },
+    "/api/settings/denoise": {
+      "put": {
+        "tags": [
+          "denoise"
+        ],
+        "summary": "Set Default Denoise Engine",
+        "description": "把这台机器的默认降噪引擎设成这一种。\n\n**只许设已经装好的**(`domain/denoise_defaults.set_default_engine`):没装的设成默认,\"默认\"\n就是一句空话 —— 下一次降噪照样得先下载。和装引擎同一道门(往这台机器上放东西、决定它默认用\n哪一个,对所有人都是一件部署级的事)。\n\n回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。",
+        "operationId": "set_default_denoise_engine_api_settings_denoise_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DenoiseDefaultUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DenoiseEngineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/denoise/engines/{engine}/install": {
       "post": {
         "tags": [
@@ -34958,6 +35000,20 @@
         "title": "DenoiseAssetRequest",
         "description": "给一份素材降噪。空 engine = 内置引擎;档位的合法值由契约判(领域层报 422)。"
       },
+      "DenoiseDefaultUpdate": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine"
+        ],
+        "title": "DenoiseDefaultUpdate",
+        "description": "把哪一种降噪引擎设成这台机器的默认。存的是能力表里的提供方 id(`builtin:<引擎>`)。"
+      },
       "DenoiseEngineOut": {
         "properties": {
           "engine": {
@@ -35010,6 +35066,11 @@
             "type": "integer",
             "title": "Size Bytes",
             "default": 0
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default",
+            "default": false
           }
         },
         "type": "object",

@@ -1889,6 +1889,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/denoise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Default Denoise Engine
+         * @description 把这台机器的默认降噪引擎设成这一种。
+         *
+         *     **只许设已经装好的**(`domain/denoise_defaults.set_default_engine`):没装的设成默认,"默认"
+         *     就是一句空话 —— 下一次降噪照样得先下载。和装引擎同一道门(往这台机器上放东西、决定它默认用
+         *     哪一个,对所有人都是一件部署级的事)。
+         *
+         *     回的是改完之后的那一行;界面据此**再向后端问一次**整张列表,而不是自己把别的行改掉。
+         */
+        put: operations["set_default_denoise_engine_api_settings_denoise_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/denoise/engines/{engine}/install": {
         parameters: {
             query?: never;
@@ -12612,6 +12638,14 @@ export interface components {
             strength: string;
         };
         /**
+         * DenoiseDefaultUpdate
+         * @description 把哪一种降噪引擎设成这台机器的默认。存的是能力表里的提供方 id(`builtin:<引擎>`)。
+         */
+        DenoiseDefaultUpdate: {
+            /** Engine */
+            engine: string;
+        };
+        /**
          * DenoiseEngineOut
          * @description 一个降噪引擎:它是什么、现在能不能用、要不要装。
          *
@@ -12657,6 +12691,11 @@ export interface components {
              * @default 0
              */
             size_bytes: number;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
         };
         /** DeploymentAdminUpdate */
         DeploymentAdminUpdate: {
@@ -25403,6 +25442,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DenoiseEngineOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_default_denoise_engine_api_settings_denoise_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DenoiseDefaultUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DenoiseEngineOut"];
                 };
             };
             /** @description Validation Error */

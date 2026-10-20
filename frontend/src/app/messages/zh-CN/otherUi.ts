@@ -895,6 +895,11 @@ export const otherUi = {
   ffmpegPathPlaceholder: "留空:用 PATH 上的 ffmpeg",
   denoiseEnginesTitle: "降噪",
   denoiseEnginesDesc: "素材库、剪辑台、工作流和智能体降噪时可以选的几种方式。内置降噪和 RNNoise 随应用带着;DeepFilterNet 效果最好,要先下载一次。只想要人声、别的都不要,用「人声与背景音分离」。",
+  //: 降噪的**部署默认**(管理 → 引擎 → 降噪):这一节有三种实现,所以有默认可设。
+  denoiseDefaultTitle: "默认降噪引擎",
+  //: 这一行是整行(标题 + 这句 + 下拉)。必须说清两层:这里设的是这台机器的默认,按人选的会覆盖它。
+  denoiseDefaultHint: "这里设的是这台机器的默认;「设置 → 能力提供方 → 降噪」里按人选的会覆盖它。",
+  denoiseDefaultAuto: "自动(还没设默认)",
   //: 管理 → 引擎里各节的「默认」:只有同一能力有 ≥2 个可选实现时才存在,而且永远放在
   //: 这些实现所在的那一节里、设默认的选择器只有一处(规则见 features/admin/defaultRow)。
   defaultOnlyOneEngine: "这一节只有一种引擎,所以没有默认可设。",

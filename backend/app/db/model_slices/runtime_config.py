@@ -1,4 +1,4 @@
-"""这台机器上的配置:本机 AI 运行时、转写默认模型、部署、网络出口、TTS、用哪个 ffmpeg。
+"""这台机器上的配置:本机 AI 运行时、转写默认模型、降噪默认引擎、部署、网络出口、TTS、用哪个 ffmpeg。
 
 都是**单例行**(每张表只有一行),所以它们不带 workspace_id —— 它们描述的是部署,不是工作区。
 """
@@ -41,6 +41,29 @@ class AsrConfig(Base):
     #: 转写模型目录(`ai/runtime/asr_models.CATALOG`)里的 id,不是引擎名 —— whisperx 有三档权重,
     #: 「默认」要说得出是哪一档。空串 = 没设过。
     default_model: Mapped[str] = mapped_column(String(80), nullable=False, default="", server_default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class DenoiseConfig(Base):
+    """Singleton (id='default') 这台机器默认用哪一种降噪引擎(管理 → 引擎 → 降噪)。
+
+    和转写默认模型、默认克隆引擎同一类:装了什么、默认用哪个,对这台机器上的所有人是同一件事,
+    所以是部署级设置,写它只给部署管理员。
+
+    **它不是唯一的一层。** 每个人在「设置 → 能力提供方 → 降噪」里定过的那一家优先于它(那是他做
+    的选择);没定过才落到这里,再没设才用第一个跑得起来、不动配乐的内置引擎。有效值只有一处算,
+    见 `domain/denoise_defaults.resolve_denoise_engine`。
+
+    **存的是提供方 id,不是引擎名**(内置的形如 `builtin:rnnoise`,见 domain/capabilities):
+    界面上能选的每一项在别处都叫这个,存别的写法等于多一套要维护的对照表。空串 = 没设过默认,
+    行为和这一格出现之前完全一样。
+    """
+
+    __tablename__ = "denoise_config"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default="default")
+    #: 能力表里 `audio_denoise` 的提供方 id。空串 = 没设过。
+    default_engine: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
 

@@ -895,6 +895,13 @@ export const otherUi = {
   ffmpegPathPlaceholder: "Empty: use the ffmpeg on PATH",
   denoiseEnginesTitle: "Noise reduction",
   denoiseEnginesDesc: "The methods offered when reducing noise from the media library, the editor, workflows and the agent. Built-in and RNNoise ship with the app; DeepFilterNet gives the best results and needs a one-time download. To keep only the voice and nothing else, use voice and background separation.",
+  //: The **deployment default** for noise reduction (Admin → Engines → Noise reduction): this
+  //: section has three implementations, so there is a default to set.
+  denoiseDefaultTitle: "Default noise-reduction engine",
+  //: This is a full row (title + this + select). It must spell out both layers: this is the machine
+  //: default, and a per-person choice overrides it.
+  denoiseDefaultHint: "This sets the default for this machine; a per-person choice under Settings → Capability providers → Noise reduction overrides it.",
+  denoiseDefaultAuto: "Automatic (none set)",
   //: The "default" control in each Admin → Engines section only exists when the capability has ≥2
   //: implementations, and lives where they are; it is the only place that writes the default
   //: (see features/admin/defaultRow).
