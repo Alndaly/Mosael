@@ -34130,6 +34130,10 @@
       },
       "CloudBindingOut": {
         "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
           "bound": {
             "type": "boolean",
             "title": "Bound"
@@ -34171,6 +34175,7 @@
         },
         "type": "object",
         "required": [
+          "configured",
           "bound"
         ],
         "title": "CloudBindingOut"

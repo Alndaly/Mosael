@@ -124,11 +124,22 @@ def complete(db: Session, user: User, device_code: str) -> dict:
     return {"status": "approved", "email": email, "device_id": device_id}
 
 
+def configured() -> bool:
+    """这个部署有没有接 MosaelCloud(看 `MOSAEL_CLOUD_URL`)。
+
+    **必须和 `post_json` 里那条判断用同一份来源** ✓ —— 两处各算各的就会说出两句话 ✗。
+    """
+    return bool(settings.cloud_url.strip())
+
+
 def status_of(db: Session, user: User) -> dict:
+    # `configured` 是给界面首屏用的:没接的时候按钮该是灰的,而不是点了才报错。
+    base = {"configured": configured()}
     row = db.get(CloudBinding, user.id)
     if row is None:
-        return {"bound": False, "email": None, "device_id": None, "created_at": None}
+        return {**base, "bound": False, "email": None, "device_id": None, "created_at": None}
     return {
+        **base,
         "bound": True,
         "email": row.email,
         "device_id": row.device_id,

@@ -37,6 +37,8 @@ class CloudBindingCompleteOut(ApiModel):
 
 
 class CloudBindingOut(ApiModel):
+    #: 这个部署接没接 MosaelCloud(`MOSAEL_CLOUD_URL`)。没接时界面把入口置灰,不靠"点一次才知道"。
+    configured: bool
     bound: bool
     email: str | None = None
     device_id: str | None = None

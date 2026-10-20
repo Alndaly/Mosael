@@ -12255,6 +12255,8 @@ export interface components {
         };
         /** CloudBindingOut */
         CloudBindingOut: {
+            /** Configured */
+            configured: boolean;
             /** Bound */
             bound: boolean;
             /** Email */
