@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
-import type { TtsEngine } from "@/api/domains/speech";
+import type { TtsConfig, TtsEngine } from "@/api/domains/speech";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 import { AdminDefaultMarker, AdminDefaultSelect, AdminOnlyOneNote, hasDefaultChoice } from "./defaultRow";
@@ -106,14 +106,20 @@ export function VoiceCloneSection() {
   const engineValue = form.watch("engine");
   const engineLabel = (models.data ?? []).find((item) => item.id === engineValue)?.label ?? engineValue;
 
+  // **一份配置铺回表单,只有这一个地方。** GET 回来时用;设完默认时也用 —— 写接口回读的也是
+  // 同一份配置(见 makeDefault)。分两处写,迟早有一处忘了新的那个字段。
+  const applyConfig = (data: TtsConfig) => {
+    form.reset({
+      engine: data.engine,
+      python_path: data.python_path,
+      fish_repo_dir: data.fish_repo_dir ?? "",
+      fish_model_dir: data.fish_model_dir ?? "",
+    });
+  };
+
   React.useEffect(() => {
     if (!config.data) return;
-    form.reset({
-      engine: config.data.engine,
-      python_path: config.data.python_path,
-      fish_repo_dir: config.data.fish_repo_dir ?? "",
-      fish_model_dir: config.data.fish_model_dir ?? "",
-    });
+    applyConfig(config.data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.data]);
 
@@ -132,7 +138,14 @@ export function VoiceCloneSection() {
   // 先存再做):只把 engine 写回去、把用户刚打的路径丢掉,比多存一次糟得多。
   const makeDefault = useMutation({
     mutationFn: (engineId: string) => updateTtsConfig({ ...form.getValues(), engine: engineId }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["tts-config"] }),
+    onSuccess: (saved) => {
+      // **默认改成功了,表单里的 `engine` 必须立刻跟上。** 只把配置查询标脏不够:回读是**另一次**
+      // 请求,而用户往往紧接着就点「保存」—— 那一瞬间表单里还是旧 engine,PUT 会把它当成当前值
+      // 写回去,刚设的默认就被悄悄改回。写入时本来就把表单里所有字段一起发了(见上面那段说明),
+      // 所以按**这次写入的回读**整张表单重置是对的:engine 跟上,刚存下的路径也不再是「没保存」。
+      applyConfig(saved);
+      void qc.invalidateQueries({ queryKey: ["tts-config"] });
+    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -228,22 +241,7 @@ export function VoiceCloneSection() {
   };
 
   return (
-    <AdminSection
-      id="engine-clone"
-      title={t("voiceCloneTitle")}
-      description={t("voiceCloneDesc")}
-      actions={
-        <>
-          {/* 「改了还没保存」讲的是**这个表单**的状态,所以只说一次、说在「保存」旁边。
-              此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
-              各自出了问题。 */}
-          {unsaved && <small className="text-ui-xs text-muted-foreground">{t("ttsSaveAndDownload")}</small>}
-          <Button size="sm" loading={save.isPending} onClick={submit}>
-            {t("save")}
-          </Button>
-        </>
-      }
-    >
+    <AdminSection id="engine-clone" title={t("voiceCloneTitle")} description={t("voiceCloneDesc")}>
       {config.data && (
         <Alert variant={ready || runtimeChecking ? "default" : "destructive"}>
           {ready ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
@@ -271,12 +269,30 @@ export function VoiceCloneSection() {
             name="python_path"
             render={({ field }) => (
               <AdminRow label={t("voiceCloneInterpreter")} description={t("voiceCloneInterpreterHint")}>
-                <Input
-                  className={SETTINGS_FIELD_WIDTH}
-                  aria-label={t("voiceCloneInterpreter")}
-                  placeholder="/path/to/venv/bin/python"
-                  {...field}
-                />
+                {/* 控件格:输入框 + 保存 —— **和「FFmpeg 路径」那一行同一个语法**。此前保存飘在
+                    节头,不属于任何一行,读的人得先猜它存的是哪张表单。保存是这张 `<form>` 的
+                    提交键,所以写 `type="submit"`(棘轮:design/buttonTypes);尺寸用默认档,
+                    和旁边的输入框一样高(棘轮:design/controlRhythm)。
+                    「改了还没保存」讲的是**这个表单**的状态,所以只说一次、贴在这颗保存下面
+                    (此前每张引擎卡片下面各挂一遍,同一句话一屏两三次,像是每个引擎各自出了问题)。 */}
+                <div className="flex min-w-0 flex-col items-end gap-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Input
+                      className={SETTINGS_FIELD_WIDTH}
+                      aria-label={t("voiceCloneInterpreter")}
+                      placeholder="/path/to/venv/bin/python"
+                      {...field}
+                    />
+                    <Button type="submit" loading={save.isPending}>
+                      {t("save")}
+                    </Button>
+                  </div>
+                  {unsaved && (
+                    <small className="max-w-72 text-right text-ui-xs leading-normal text-muted-foreground">
+                      {t("ttsSaveAndDownload")}
+                    </small>
+                  )}
+                </div>
               </AdminRow>
             )}
           />
