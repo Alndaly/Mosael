@@ -51,7 +51,7 @@ def test_cloud_has_its_own_tables_and_no_local_identity_columns(tmp_path):
     create_app(config)
     with sqlite3.connect(tmp_path / "cloud.db") as connection:
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-        assert {"cloud_users", "cloud_sessions", "cloud_device_codes", "cloud_devices"} <= tables
+        assert {"cloud_users", "cloud_sessions"} <= tables
         assert not ({"users", "workspaces", "auth_sessions", "workspace_members"} & tables)
 
         columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_users)")}
@@ -92,7 +92,7 @@ def test_cloud_signup_and_login_never_touch_the_local_database(tmp_path):
     with sqlite3.connect(config.data_dir / "cloud.db") as connection:
         dump = "\n".join(
             str(row)
-            for table in ("cloud_users", "cloud_sessions", "cloud_device_codes", "cloud_devices")
+            for table in ("cloud_users", "cloud_sessions")
             for row in connection.execute(f"SELECT * FROM {table}")
         )
     assert "local-user-1" not in dump

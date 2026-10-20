@@ -89,7 +89,7 @@ test("账号页把加载 / 未登录 / 失败 / 已登录四种状态都画出�
   assert.match(account, /copy\.retry/, "失败态没有重试文案");
   assert.match(account, /role="alert"/, "操作失败没有 role=alert");
   assert.match(account, /aria-live="polite"/, "加载 / 成功区域没有礼貌播报");
-  // 设备列表 / 确认码已经搬到「我的」控制台(dashboard.test.mjs ⑤),账号页只剩身份与危险操作。
+  // 设备绑定已经整体移除(dashboard.test.mjs ⑤),账号页只剩身份与危险操作。
   assert.match(account, /deleteConfirm/, "删号没有二次确认");
 });
 
@@ -156,7 +156,6 @@ test("新增文案中英同键,且没有把按钮词当标签用", () => {
     "retry",
     "signedInLabel",
     "accountIdentity",
-    "devicesHint",
     "dangerZone",
   ]) {
     assert.ok(zh[key], `中文缺 account.${key}`);

@@ -1,9 +1,9 @@
-# MosaelCloud 账号与桌面端绑定
+# MosaelCloud 账号服务
 
-最初一期只做两件事:**MosaelCloud 有自己的一套账号**、**桌面端能把它绑到某个本地用户身上**。
-这一版又补上了**邮箱验证码注册**与**验证码登录**(见「邮箱验证码与验证码登录」一节),
-以及 **GitHub / Google 登录**(见「GitHub / Google 登录」一节)。
-社区分享的第①笔(身份、分享、点赞 / 收藏 / 评论)见「社区分享第①笔:身份、分享、互动」;
+**MosaelCloud 有自己的一套账号**:邮箱验证码注册、密码 / 验证码两种登录,以及
+**GitHub / Google 登录**(见「GitHub / Google 登录」一节)。社区分享的第①笔(身份、分享、
+点赞 / 收藏 / 评论)见「社区分享第①笔」。**桌面端不绑定云端账号** —— 没有设备码、没有设备
+列表,也没有 `/api/cloud/binding*` 这一层;桌面端只经本地后端**只读反代**社区分享。
 同步、钱包、模型网关不在这里,也不预先加字段。
 
 设计方向来自 [ADR 0039](adr/0039-mosael-cloud.md)(Cloud 是独立产品边界),但它当时设想的是
@@ -14,32 +14,30 @@
 
 | | 本地 Mosael | MosaelCloud |
 | --- | --- | --- |
-| 谁在用 | 这台机器 / 这个部署 | 官网 + 桌面端绑定的云端账号 |
+| 谁在用 | 这台机器 / 这个部署 | 官网 |
 | 身份表 | `backend` 的 `users`(用户名 + 密码) | `cloud/` 的 `cloud_users`(邮箱 + 密码) |
 | 登录 | 本地后端签的会话(`auth_sessions`) | Cloud 的 HttpOnly cookie(`cloud_sessions`) |
-| 桌面端关系 | 本地账号照旧登录、照旧用 | 只是**附加**在某个本地用户上的一条绑定 |
+| 桌面端关系 | 本地账号照旧登录、照旧用 | 不绑定;社区分享的读请求经本地后端反代 |
 
-**互不污染**:Cloud 不知道本地 `users` / `workspaces` / `auth_sessions`;本地 `users` 也不因为
-绑定多一列。绑定关系只存在本地新表 `cloud_bindings` 里,指着"这个本地用户 ↔ 那个云端账号"。
-两边的测试分别用两个真实 SQLite 文件钉住这条边界(见 `cloud/tests/test_identity_isolation.py`
-与 `backend/tests/test_cloud_binding.py`)。
+**互不污染**:Cloud 不知道本地 `users` / `workspaces` / `auth_sessions`,本地库里也没有任何
+指向 Cloud 账号的表。Cloud 的测试用两个真实 SQLite 文件钉住这条边界(见
+`cloud/tests/test_identity_isolation.py`)。
 
 ## 目录与部署形态
 
 ```
 cloud/                      新的后端模块(FastAPI + SQLAlchemy),不属于 backend/
-  src/cloud/                账号、会话、设备码、设备
+  src/cloud/                账号、会话、OAuth、社区分享
   tests/                    SQLite 临时库,不连外网
 website/                    官网:注册 / 登录 / 账号三页 + 同源反代
-backend/                    本地后端:cloud_bindings 新表 + /api/cloud/binding/*
-frontend/src/features/      桌面端设置页里的「绑定 MosaelCloud」入口
+backend/                    本地后端:社区分享只读反代 /api/cloud/v1/shares/*
 ```
 
 **为什么放 `cloud/` 而不是 `backend/`**:`backend/` 是跑在用户自己电脑上的本地服务端,它的
 `users`、工作区、素材、插件都属于这台机器;MosaelCloud 是维护者部署的公网账号服务,数据库、
 合规边界、发布节奏都不同。放进 `backend/` 会让"本地账号"和"云端账号"在同一个进程、同一个库
 里长出互相引用的可能,而这正是这一期要避免的。也不并进 `community/`:社区服务是另一个产品
-(工作流 / 插件市场 / 画板分享,ADR 0026),桌面端接入已被移除,和"账号 + 绑定"的最小面不一致。
+(工作流 / 插件市场 / 画板分享,ADR 0026),桌面端接入已被移除,和账号服务的最小面不一致。
 
 ### 本地开发
 
@@ -52,7 +50,7 @@ CLOUD_COOKIE_SECURE=false CLOUD_PUBLIC_URL=http://localhost:3000 \
 
 官网 `pnpm dev`(:3000)的 `next.config.ts` 会把 `/api/cloud/v1/*` 同源反代到
 `CLOUD_API_URL`(默认 `http://127.0.0.1:8901`)。本地后端要设 `MOSAEL_CLOUD_URL=
-http://127.0.0.1:8901/api/cloud/v1` 才能发起绑定。
+http://127.0.0.1:8901/api/cloud/v1` 才能反代社区分享。
 
 ### 生产
 
@@ -119,13 +117,7 @@ SMTP / OAuth 留空就是"没启用"(接口明确报错、官网不显示按钮)
 | POST | `/login/code/verify` | 邮箱 + 验证码换会话,cookie 与密码登录同一条路径 |
 | POST | `/logout` | 撤销当前会话 |
 | GET | `/me` | 当前云端账号 |
-| DELETE | `/me` | 删号(会话 / 设备 / 设备码级联删除) |
-| POST | `/device/code` | 桌面端取 `{device_code, user_code, expires_in, interval}` |
-| POST | `/device/approve` | 已登录的官网确认 `{user_code}` |
-| POST | `/device/token` | 桌面端轮询;未确认 428,确认后一次性发凭据 |
-| GET | `/devices` | 这个账号绑定的设备(官网账号页) |
-| DELETE | `/device/{id}` | 云端撤销某台设备 |
-| GET | `/device/me` | Bearer 设备凭据认自己(给后续同步 / 分享留的接口) |
+| DELETE | `/me` | 删号(会话 / 身份 / 分享级联删除) |
 | GET | `/oauth/providers` | 哪些第三方登录已配置: `{providers:{github:bool, google:bool}}` |
 | GET | `/oauth/{provider}/start` | 生成 state / nonce / PKCE,302 到第三方;未配置 302 回官网报"没启用" |
 | GET | `/oauth/{provider}/callback` | 校验 state + nonce,换 token、取身份,走现有 `open_session`;成功后 302 到 `/account` |
@@ -365,32 +357,8 @@ provider 报错不外泄原始信息、唯一约束在库上。官网侧另有
   `HttpOnly; Secure(生产); SameSite=Lax; Path=/api/cloud/v1`。登出删这一行;过期在读取时
   即删。没有把 token 返回给 JS。
 - **CSRF**:SameSite=Lax + 写请求的 Origin/Referer 同源校验 + `Sec-Fetch-Site: cross-site`
-  直接拒绝。设备码两个入口(`/device/code`、`/device/token`)是给本机进程的,不走 cookie,
-  因此不受这道闸约束。缺少 Origin 的非浏览器调用放行 —— 浏览器一定会带,缺头等于"不是浏览器"。
-- **设备凭据**:这一期选**长期 opaque token**(随机 256 位、只存哈希、按人可撤销、删号即失效),
-  而不是短期 access + refresh:桌面端这一期只需要"存下来",refresh 轮换要配一套客户端刷新
-  逻辑,现在用不上。代价是它比短期令牌值钱,所以有撤销、有删号级联、且从不进渲染层 / 日志。
-
-## 绑定完整时序
-
-```
-桌面端(渲染层)        本地后端(用户自己的)              MosaelCloud                官网(已登录)
- 点「绑定」  ───────▶ POST /api/cloud/binding/start ──▶ POST /device/code
-            ◀──────── {user_code, device_code, …} ◀──── {device_code, user_code, …}
- 显示 user_code, 打开 verification_uri_complete ─────────────────────────▶ 账号页(带 ?user_code=)
-                                                                          用户点「确认这台设备」
-                                                               ◀────────── POST /device/approve
- 点「我已确认」──────▶ POST /api/cloud/binding/complete ─▶ POST /device/token
-            ◀──────── {status:"approved", email, device_id} ◀── 一次性凭据
-                         本地只存 email / device_id / 加密后的 token
-```
-
-- 未确认时 Cloud 回 428 `authorization_pending`,本地接口回 `{status:"pending"}`。
-- 过期 / 已用过分别回 410 `device_code_expired` / `device_code_used`;本地原样转述错误码。
-- `device_code` 只交给渲染层用于回调 `complete`;它是短期轮询码,不是账号凭据。**云端 token
-  从不经过渲染层**。
-- 解绑:桌面端 `DELETE /api/cloud/binding` 只删本地行;撤销云端设备在官网账号页
-  (`DELETE /device/{id}`)。两件事分开,是因为它们属于两份不同的数据。
+  直接拒绝。所有写接口都走 cookie,没有需要豁免的本机进程入口。缺少 Origin 的非浏览器调用
+  放行 —— 浏览器一定会带,缺头等于"不是浏览器"。
 
 ## 社区分享第①笔:身份、分享、互动
 
@@ -416,50 +384,26 @@ P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的�
 - **注册即登录**:signup 与登录 / 验证码 / 第三方回调共用同一个 `open_session`,响应直接带
   会话 cookie,紧接着 `GET /me` 就是 200。
 - **迁移**:`cloud/migrations/versions/0001_initial.py`(create_all 时代的基线)+
-  `0002_identity_and_community.py`(身份三列 + 分享四表)。`cloud.app.create_app()` 启动时执行
-  `alembic upgrade head`;表结构不再由 `create_all` 猜,已有库先用 `cloud.cli stamp 0001`。
-
-## 本地新表与迁移
-
-`backend/app/db/model_slices/cloud_binding.py`:
-
-```
-cloud_bindings(
-  user_id PK → users.id ON DELETE CASCADE,
-  cloud_user_id, email, device_id,
-  token TEXT  ← core/secrets_at_rest.EncryptedText
-  created_at
-)
-```
-
-- 只**新增**表,旧表和旧列一行不动。
-- 迁移步骤 `migrate-cloud-bindings-table`(`backend/app/db/migrations.py`,AFTER_SCHEMA)把新表
-  记进迁移账本,并对已有库做 `checkfirst`;`Base.metadata` 的 create-all 照旧建新表。
-- `token` 登记在 `core/secrets_at_rest.ENCRYPTED_COLUMNS`,棘轮测试保证它确实用了加密列。
-- 本地账号删除时,`domain/members.delete_account` 按 schema 扫到 `cloud_bindings.user_id`
-  并删掉;外键也写了 CASCADE。
+  `0002_identity_and_community.py`(身份三列 + 分享四表)、`0003_notifications.py`(通知表),
+  以及 `0004_drop_device_binding.py`(拆掉设备绑定,删两张表)。`cloud.app.create_app()` 启动时
+  执行 `alembic upgrade head`;表结构不再由 `create_all` 猜,已有库先用 `cloud.cli stamp 0001`。
 
 ## 不在这一期
 
 分享的后续(draft、审核 / 举报、头像上传、下载权限 / 付费)、feed、同步、钱包、模型网关、
-找回密码 / 设置密码、密码登录的失败限速 / 人机验证、云端设备凭据的刷新轮换、
-桌面端用云端凭据调用任何业务接口、第三方身份的列表 / 解绑 / 账号合并。
+找回密码 / 设置密码、密码登录的失败限速 / 人机验证、第三方身份的列表 / 解绑 / 账号合并。
 
 ## 只有真机能验 / 拿不准
 
-- **真机**:系统浏览器打开 `verification_uri_complete`、桌面端在 Electron 里打开外部链接、
-  真实 Postgres 上的 Alembic 迁移与并发设备码消费、真实 SMTP 提供商的投递(SPF / DKIM /
+- **真机**:真实 Postgres 上的 Alembic 迁移、真实 SMTP 提供商的投递(SPF / DKIM /
   退信)、反代后面 `request.client.host` 是否拿到真实客户端 IP(uvicorn 需要开 proxy headers,
   否则每 IP 限流会退化成"每个代理一个桶")。CI 用 SQLite + TestClient,发信走注入的假 sender。
-- **拿不准**:长期设备 token 在"后续分享 / 同步"里是否够用;如果那时需要更细的权限,应该加
-  作用域或改成 access + refresh,而不是把这一枚 token 直接当万能钥匙。邮箱验证码目前每次
+- **拿不准**:邮箱验证码目前每次
   重新签发,旧码在同一 purpose 下会被"最新一枚"覆盖逻辑间接作废,但没有显式批量失效;
   如果以后要支持「作废旧码」,再加一列或一条 UPDATE。SMTP 运行中故障时,注册过的邮箱会拿到
   `502`、未注册的仍是 `200` —— 这是「把失败说清楚」与「枚举防护」之间的取舍;正常运行时两者一致。
 - **这一期没做**:密码登录的失败限速与人机验证、找回密码、验证码行的过期清理。上线公网前
   至少要补"按 IP + 按账号的失败限速"和一张清理任务;邮箱验证码本身的限流已经就位。
-- **语言**:`verification_uri` 固定指到 `/en/account`,中文用户需要自己在站内切到中文。
-  设备码本身把 `user_code` 带在查询串里,登录后仍会预填。
 - **第三方登录只有真机能验**:GitHub / Google 控制台里的回调地址与 scope、真实授权页与
   同意页、HTTPS 下 `SameSite=Lax` cookie 能否随"第三方 → 我们的回调"这次顶层跳转带回来、
   邮件是否在第三方那边已验证、以及 `CLOUD_PUBLIC_URL` 与实际访问 Origin 不一致时的报错。

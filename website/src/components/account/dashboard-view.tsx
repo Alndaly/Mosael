@@ -6,7 +6,6 @@ import type { Locale } from "@/i18n/config";
 import type { Messages } from "@/i18n/messages";
 import { sumShareStats, type CloudIdentity, type CloudShare } from "@/lib/cloud";
 
-import { DashboardDevices } from "./dashboard-devices";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardNotifications } from "./dashboard-notifications";
 import { DashboardOverview } from "./dashboard-overview";
@@ -15,7 +14,7 @@ import { DashboardShares } from "./dashboard-shares";
 import { dashboardTabHref, withoutShare, type DashboardTab } from "./dashboard-utils";
 
 /**
- * 「我的」控制台:页头 + 五个分区。
+ * 「我的」控制台:页头 + 四个分区。
  *
  * 身份门禁在服务端(`app/[locale]/(site)/dashboard/page.tsx`)—— 未登录根本到不了这里;
  * 这一层只管「切分区」和「删掉一条之后列表与统计一起变」。
@@ -29,21 +28,16 @@ import { dashboardTabHref, withoutShare, type DashboardTab } from "./dashboard-u
 export function DashboardView({
   locale,
   copy,
-  accountCopy,
   viewer,
   shares: initialShares,
   initialTab,
-  initialCode = "",
   loadError = "",
 }: {
   locale: Locale;
   copy: Messages["dashboard"];
-  accountCopy: Messages["account"];
   viewer: CloudIdentity;
   shares: CloudShare[];
   initialTab: DashboardTab;
-  /** 桌面绑定带来的确认码(`/account?user_code=…` 转过来),设备分区会预填。 */
-  initialCode?: string;
   loadError?: string;
 }) {
   const [tab, setTab] = useState<DashboardTab>(initialTab);
@@ -92,7 +86,6 @@ export function DashboardView({
           {tab === "profile" && (
             <DashboardProfile locale={locale} copy={copy} viewer={viewer} onSelect={select} />
           )}
-          {tab === "devices" && <DashboardDevices locale={locale} copy={accountCopy} initialCode={initialCode} />}
           {tab === "notifications" && <DashboardNotifications locale={locale} copy={copy} />}
         </div>
       </section>

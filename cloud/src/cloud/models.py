@@ -102,33 +102,6 @@ class CloudEmailCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
-class CloudDeviceCode(Base):
-    """一次设备码绑定。桌面端拿 `device_code`,用户看 `user_code`,官网确认后这里记下是谁。"""
-
-    __tablename__ = "cloud_device_codes"
-    __table_args__ = (
-        Index("idx_cloud_device_codes_user", "user_id"),
-        Index("idx_cloud_device_codes_expires", "expires_at"),
-    )
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    #: 给人念的 8 位码,形如 `ABCD-EFGH`。
-    user_code: Mapped[str] = mapped_column(String(9), unique=True, nullable=False)
-    #: 给桌面端轮询的 256 位随机串;只存哈希。
-    device_code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    device_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    #: 确认的人。确认之前为空;账号删掉时跟着级联消失。
-    user_id: Mapped[str | None] = mapped_column(
-        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=True
-    )
-    #: pending → approved → consumed。没有 denied:这一期官网只提供"允许",不提供"拒绝"。
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
-
-
 class CloudIdentity(Base):
     """一个第三方身份(GitHub / Google)与某个 MosaelCloud 账号的绑定。
 
@@ -181,26 +154,6 @@ class CloudOAuthState(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
-
-
-class CloudDevice(Base):
-    """一台已经绑定的设备 —— 桌面端存着的那份云端凭据在这里只存哈希。
-
-    **凭据是长期有效的**(撤销之前一直能用),不是短期 access + refresh:这一期桌面端只需要
-    "把绑定结果存下来",而 refresh 轮换要配一套客户端刷新逻辑,本期用不上。代价是它比短期令牌
-    更值钱,所以:随机 256 位、只存哈希、按人可撤销、删号即级联删除。
-    """
-
-    __tablename__ = "cloud_devices"
-    __table_args__ = (Index("idx_cloud_devices_user", "user_id"),)
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
-    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
 
 
 class CloudShare(Base):

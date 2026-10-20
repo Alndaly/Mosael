@@ -640,7 +640,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_browser_router, prefix="/api", dependencies=protected)
     app.include_router(browser_profiles_router, prefix="/api", dependencies=protected)
     app.include_router(local_services_router, prefix="/api", dependencies=protected)
-    # 本地保存的 MosaelCloud 绑定(不是本地账号;见 domain/cloud_binding)。
+    # 社区分享的只读反代(Cloud 只接受官网同源;见 domain/cloud_binding)。
     app.include_router(cloud_router, prefix="/api", dependencies=protected)
     return app
 

@@ -79,23 +79,15 @@ def test_not_authenticated_is_bilingual(client):
     assert response.json()["message"]["zh"] and response.json()["message"]["en"]
 
 
-def test_delete_account_removes_sessions_and_device_credentials(client, db_path):
+def test_delete_account_removes_sessions(client, db_path):
     signed_in(client)
-    code = client.post(api("/device/code"), json={"device_name": "Mac"}).json()
-    client.post(api("/device/approve"), json={"user_code": code["user_code"]})
-    issued = client.post(api("/device/token"), json={"device_code": code["device_code"]})
-    assert issued.status_code == 200, issued.text
-    token = issued.json()["credential"]["token"]
-    assert client.get(api("/device/me"), headers={"Authorization": f"Bearer {token}"}).status_code == 200
 
     deleted = client.delete(api("/me"))
     assert deleted.status_code == 204
     assert client.get(api("/me")).status_code == 401
     assert client.post(api("/login"), json={"email": "alice@example.com", "password": PASSWORD}).status_code == 401
-    assert client.get(api("/device/me"), headers={"Authorization": f"Bearer {token}"}).status_code == 401
     assert scalar(db_path, "SELECT COUNT(*) FROM cloud_users") == 0
     assert scalar(db_path, "SELECT COUNT(*) FROM cloud_sessions") == 0
-    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_devices") == 0
 
 
 def test_sessions_are_removed_on_logout_but_other_sessions_survive(client, app):

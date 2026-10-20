@@ -137,12 +137,6 @@ def signed_in(client: TestClient, email: str = "alice@example.com", password: st
     return login(client, email=email, password=password)
 
 
-def device_code(client: TestClient, name: str = "MacBook Pro") -> dict:
-    response = client.post(api("/device/code"), json={"device_name": name})
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
 # ---------------------------------------------------------------------------
 # 第三方登录(OAuth)的假 provider
 #

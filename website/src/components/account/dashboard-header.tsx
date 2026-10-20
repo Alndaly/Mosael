@@ -14,7 +14,7 @@ import { DASHBOARD_TABS, dashboardTabHref, type DashboardTab } from "./dashboard
  * 「我的」控制台的页头。
  *
  * 形态借自社区页头(`components/community/community-header.tsx`):一行标题 + 一句话,
- * 下面是一条贴底边的 tab 栏 —— 五个分区是同一个控制台的不同切面,不是五篇文章。区别只在
+ * 下面是一条贴底边的 tab 栏 —— 四个分区是同一个控制台的不同切面,不是四篇文章。区别只在
  * 这里是**私有页面**:tab 的地址是 `?tab=`,不做搜索、不显示任何计数。
  *
  * tab 是真正的链接(`href` + `aria-current`):中键新标签、复制地址、刷新,都还能回到同一个
@@ -24,7 +24,6 @@ const TAB_LABELS: Record<DashboardTab, keyof Messages["dashboard"]> = {
   overview: "tabOverview",
   shares: "tabShares",
   profile: "tabProfile",
-  devices: "tabDevices",
   notifications: "tabNotifications",
 };
 

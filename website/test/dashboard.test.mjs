@@ -7,11 +7,11 @@ import { pathToFileURL } from "node:url";
 
 //: 「我的」控制台(/[locale]/dashboard)的契约。
 //:
-//: 这一个页面要同时做五件事:概览统计、我的分享(能删)、个人信息(能改)、设备(从 /account
-//: 原样搬来)、通知空态。断言分两层:
+//: 这一个页面要同时做四件事:概览统计、我的分享(能删)、个人信息(能改)、通知空态。
+//: 断言分两层:
 //:   - **真的跑一遍**纯逻辑(统计求和、删除后剩哪些、tab 归一化、登录回跳),而不是用正则猜;
 //:   - 结构层只盯「该在的还在、不该出现的没出现」—— email 只许出现在个人信息那一块,
-//:     通知不许编数据,五个 tab 的地址必须能直接打开。
+//:     通知不许编数据,四个 tab 的地址必须能直接打开。
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SRC = path.join(ROOT, "src");
 registerHooks({
@@ -42,7 +42,7 @@ try {
   utils = null;
 }
 function dashboardUtils() {
-  assert.ok(utils, "还没有 dashboard-utils.ts(五个 tab / 登录回跳 / 删除后剩哪些)");
+  assert.ok(utils, "还没有 dashboard-utils.ts(四个 tab / 登录回跳 / 删除后剩哪些)");
   return utils;
 }
 
@@ -55,7 +55,6 @@ const DASHBOARD_VIEW = "src/components/account/dashboard-view.tsx";
 const DASHBOARD_OVERVIEW = "src/components/account/dashboard-overview.tsx";
 const DASHBOARD_SHARES = "src/components/account/dashboard-shares.tsx";
 const DASHBOARD_PROFILE = "src/components/account/dashboard-profile.tsx";
-const DASHBOARD_DEVICES = "src/components/account/dashboard-devices.tsx";
 const DASHBOARD_NOTIFICATIONS = "src/components/account/dashboard-notifications.tsx";
 
 const DASHBOARD_COMPONENTS = [
@@ -64,7 +63,6 @@ const DASHBOARD_COMPONENTS = [
   DASHBOARD_OVERVIEW,
   DASHBOARD_SHARES,
   DASHBOARD_PROFILE,
-  DASHBOARD_DEVICES,
   DASHBOARD_NOTIFICATIONS,
 ];
 
@@ -85,7 +83,7 @@ const shares = {
   ],
 };
 
-test("① 五个 tab 都在,未登录 307 到 login?next=dashboard", () => {
+test("① 四个 tab 都在,未登录 307 到 login?next=dashboard", () => {
   assert.ok(exists(DASHBOARD_PAGE), `缺少控制台页面 ${DASHBOARD_PAGE}`);
   const page = read(DASHBOARD_PAGE);
 
@@ -100,7 +98,7 @@ test("① 五个 tab 都在,未登录 307 到 login?next=dashboard", () => {
   assert.match(page, /index:\s*false/, "控制台是私有页,应当 noindex");
 
   const lib = dashboardUtils();
-  for (const tab of ["overview", "shares", "profile", "devices", "notifications"]) {
+  for (const tab of ["overview", "shares", "profile", "notifications"]) {
     assert.equal(lib.normalizeDashboardTab(tab), tab, `${tab} 不是可识别的 tab`);
     assert.equal(lib.dashboardTabHref("zh", tab), `/zh/dashboard?tab=${tab}`, `${tab} 的地址不对`);
   }
@@ -108,7 +106,9 @@ test("① 五个 tab 都在,未登录 307 到 login?next=dashboard", () => {
     assert.equal(lib.normalizeDashboardTab(junk), "", `非法 tab ${String(junk)} 没有被忽略`);
   }
   // 地址里重复的 tab 只认第一个(next 的 searchParams 是数组)。
-  assert.equal(lib.normalizeDashboardTab(["shares", "devices"]), "shares");
+  assert.equal(lib.normalizeDashboardTab(["shares", "profile"]), "shares");
+  //: 设备分区已经拆掉:旧书签(甚至 `/account?user_code=` 的转发目标)不再是合法 tab。
+  assert.equal(lib.normalizeDashboardTab("devices"), "", "devices 仍然是合法 tab");
   assert.equal(
     lib.dashboardLoginHref("zh"),
     "/zh/login?next=%2Fzh%2Fdashboard",
@@ -116,12 +116,12 @@ test("① 五个 tab 都在,未登录 307 到 login?next=dashboard", () => {
   );
   assert.equal(lib.dashboardLoginHref("en"), "/en/login?next=%2Fen%2Fdashboard");
 
-  // 五个 tab 由同一份清单渲染,地址可直接打开(Link 带 href,不是只换 state)。
+  // 四个 tab 由同一份清单渲染,地址可直接打开(Link 带 href,不是只换 state)。
   const header = read(DASHBOARD_HEADER);
   assert.match(header, /DASHBOARD_TABS\.map/, "tab 不是从同一份清单渲染的");
   assert.match(header, /href=\{dashboardTabHref\(/, "tab 只有 onClick、没有可打开的地址");
   assert.match(header, /aria-current=\{/, "当前 tab 没有 aria-current");
-  for (const tab of ["overview", "shares", "profile", "devices", "notifications"]) {
+  for (const tab of ["overview", "shares", "profile", "notifications"]) {
     assert.match(page + read(DASHBOARD_VIEW), new RegExp(tab), `页面没有渲染 ${tab} 分区`);
   }
 });
@@ -206,45 +206,22 @@ test("④ 个人信息:PUT /me,409 两种 handle 冲突都显示后端原话", (
   }
 });
 
-test("⑤ 设备两块原样搬进控制台,/account 只剩身份与危险操作", () => {
-  assert.ok(!exists(ACCOUNT_VIEW) || !/cloudAccount\.(devices|revokeDevice|approveDevice)/.test(read(ACCOUNT_VIEW)), "账号页还在自己管设备");
-  assert.doesNotMatch(read(ACCOUNT_VIEW), /copy\.devices\b/, "账号页仍然渲染设备列表");
-
-  const panel = read(DASHBOARD_DEVICES);
-  for (const pattern of [
-    /cloudAccount\s*\n?\s*\.devices\(\)/,
-    /\.revokeDevice\(/,
-    /\.approveDevice\(/,
-    /copy\.devices\b/,
-    /copy\.devicesHint/,
-    /copy\.noDevices/,
-    /copy\.revoke/,
-    /copy\.revoking/,
-    /copy\.deviceCode/,
-    /copy\.deviceCodeHint/,
-    /copy\.approve/,
-    /copy\.approving/,
-    /copy\.approved/,
-    /copy\.deviceCodeRequired/,
-    /initialCode/,
-  ]) {
-    assert.match(panel, pattern, `搬过来的设备块缺了 ${pattern}`);
+test("⑤ 设备绑定整体移除:没有设备分区,/account 只剩身份与危险操作", () => {
+  // 云端设备绑定已经拆掉(cloud /devices、/device/* 都不存在了),控制台不再有设备分区。
+  assert.ok(!exists("src/components/account/dashboard-devices.tsx"), "设备分区组件还在");
+  for (const relative of [DASHBOARD_HEADER, DASHBOARD_VIEW, DASHBOARD_PAGE]) {
+    assert.doesNotMatch(read(relative), /devices?\b/i, `${relative} 仍然提到设备`);
   }
-  // 搬的是同一套行为:错误仍是后端文案 + 通用失败兜底。
-  assert.match(panel, /failure instanceof CloudApiError \? failure\.text\(locale\) : copy\.actionFailed/);
-  assert.match(panel, /AccountField/, "设备确认码没有复用带 label 的字段");
-  assert.match(panel, /SubmitButton/, "设备确认没有复用统一主按钮");
-  assert.match(panel, /aria-busy/, "设备操作没有 aria-busy");
+  assert.doesNotMatch(read("src/components/account/dashboard-utils.ts"), /devices/, "tab 清单里还有 devices");
+  assert.doesNotMatch(read("src/lib/cloud.ts"), /devices|revokeDevice|approveDevice/, "cloud 客户端还在调设备接口");
 
-  // /account 保留:桌面绑定至今指向它(cloud /device/code 的 verification_uri)。
-  assert.ok(exists(ACCOUNT_PAGE), "/account 被删了,桌面绑定和登录回跳会断");
+  // /account 只剩身份、退出、删号与登录回跳;不再处理桌面绑定带来的 user_code。
+  assert.ok(exists(ACCOUNT_PAGE), "/account 被删了,登录回跳会断");
   const page = read(ACCOUNT_PAGE);
   assert.match(page, /AccountShell/, "/account 不再走账号壳");
   assert.match(page, /ResumeLoginReturn/, "/account 丢了登录回跳");
-  // 桌面端带 user_code 打开 /account:转给控制台的设备 tab,确认码跟着走。
-  assert.match(page, /user_code/, "/account 没有处理桌面绑定带来的 user_code");
-  assert.match(page, /redirect\(/, "带 user_code 时没有转给控制台的设备分区");
-  assert.match(page, /tab=devices/, "转发目标不是设备分区");
+  assert.doesNotMatch(page, /user_code|tab=devices/, "/account 还在处理设备绑定回跳");
+  assert.doesNotMatch(read(ACCOUNT_VIEW), /devices|deviceCode|approveDevice|revokeDevice/, "账号页还在管设备");
 });
 
 test("⑥ 通知接上云端列表(空态仍是零条分支、不造假),没有 handle 时个人信息高亮", () => {
@@ -300,7 +277,6 @@ test("⑧ 文案中英同键;控制台不写第二套 fetch", () => {
     "tabOverview",
     "tabShares",
     "tabProfile",
-    "tabDevices",
     "tabNotifications",
     "sharesCount",
     "totalDownloads",

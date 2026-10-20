@@ -13,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { accountOrigin } from "@/components/layout/accountOrigin";
 import { ConfirmDialog } from "@/components/app/modals";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
-import { CloudBindingSection } from "@/features/settings/CloudBindingSection";
 import { cn } from "@/lib/utils";
 
 export function AccountSection() {
@@ -130,21 +129,15 @@ export function AccountSection() {
   return (
     <SettingsGroup
       title={t("settingsAccount")}
-      // 页头要同时讲两套账号:这一页有本地账号(这台机器上的身份)和 MosaelCloud 账号(云端的)。
-      // 「是哪儿的账号」那一半来自 origin;页面自己补上另外半句(云账号、两者独立) ——
-      // 只删掉那句会让这一页没了定位,只留那句又只描述了半页(维护者:「header 怎么还是本地账号」)。
-      description={`${origin}${t("settingsAccountScope")}`}
+      // 页头只描述这一页有的东西:本地账号(这台机器上的身份)。「是哪儿的账号」来自 origin。
+      description={origin}
       actions={
         <Button variant="outline" size="sm" onClick={() => void logout()}>
           <LogOut size={13} /> {t("signOut")}
         </Button>
       }
     >
-      {/* 顺序:云账号置顶 → 本地账号(身份、资料)→ 登录密码紧跟本地账号。
-          维护者一眼看出的误会:此前密码被云账号隔开,看着像云账号的密码;而密码属于本地账号,
-          放在它后面归属才一眼就清。
-          只挪位置:未绑 / 已绑 / 读失败三种状态、设备码、解绑都由 CloudBindingSection 自己管,一行没改。 */}
-      <CloudBindingSection />
+      {/* 顺序:本地账号(身份、资料)→ 登录密码紧跟本地账号。密码属于本地账号,放在它后面归属才一眼就清。 */}
       <SettingsBlock>
         <div className="grid gap-3">
           {/* 本地账号这一块的标题就是「这是哪儿的账号、怎么登进来的」那句 —— 和页头、账号菜单同一个来源。

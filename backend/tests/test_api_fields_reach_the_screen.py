@@ -83,6 +83,9 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "TtsEngineOut.needs_source": "要不要本地权重,后端判",
     "TtsEngineOut.source_ready": "本地权重就绪与否,后端判",
     "TtsEngineOut.source_dir": "本地路径,不该上界面",
+    #: 引擎要不要钥匙由后端折算进 `ready` / `free`(见 domain/voices/engine_catalog.py);
+    #: 界面只读折算后的 `ready`,不读这个原始开关。
+    "TtsEngineChoiceOut.needs_key": "后端按它算 ready / free;界面读 ready",
     # —— 协作:活动流
     "ActivityOut.actor_id": "界面显示的是 actor 那个对象(名字和头像),原始 id 不上屏",
     "ConfirmationOut.decided_by": "留痕:记在谁头上。界面显示的是哪一档放的,不是一个用户 id",

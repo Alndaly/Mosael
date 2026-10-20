@@ -25,10 +25,8 @@ def test_migrations_build_the_full_schema(tmp_path):
             "cloud_users",
             "cloud_sessions",
             "cloud_email_codes",
-            "cloud_device_codes",
             "cloud_identities",
             "cloud_oauth_states",
-            "cloud_devices",
             "cloud_shares",
             "cloud_share_likes",
             "cloud_share_favorites",
@@ -36,11 +34,14 @@ def test_migrations_build_the_full_schema(tmp_path):
             "cloud_share_notifications",
         } <= tables
 
+        # 0004 拆掉了设备绑定:两张表在 head 的库里不存在。
+        assert not ({"cloud_device_codes", "cloud_devices"} & tables)
+
         columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_users)")}
         assert {"display_name", "handle", "avatar_seed"} <= columns
 
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version == ("0003",)
+        assert version == ("0004",)
 
         unique_handle = [
             row[1]
@@ -74,7 +75,38 @@ def test_upgrading_a_0001_database_keeps_rows_and_leaves_identity_empty(tmp_path
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"cloud_shares", "cloud_share_likes", "cloud_share_favorites", "cloud_share_comments"} <= tables
         assert {"cloud_share_notifications"} <= tables
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0003",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004",)
+
+
+def test_0004_drops_the_device_binding_tables(tmp_path):
+    """升到 0003 时两张表还在(0001 建的);0004 把它们连同数据一起删掉。"""
+    from cloud.schema import upgrade_database
+
+    path = tmp_path / "binding.db"
+    url = _url(path)
+    upgrade_database(url, "0003")
+
+    with sqlite3.connect(path) as connection:
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        assert {"cloud_device_codes", "cloud_devices"} <= tables
+        connection.execute(
+            "INSERT INTO cloud_users (id, email, password_hash, email_verified_at, created_at) "
+            "VALUES ('u1', 'old@example.com', NULL, NULL, '2026-01-01 00:00:00.000000')"
+        )
+        connection.execute(
+            "INSERT INTO cloud_devices (id, user_id, name, token_hash, created_at) "
+            "VALUES ('d1', 'u1', 'Mac', 'hash', '2026-01-01 00:00:00.000000')"
+        )
+        connection.commit()
+
+    upgrade_database(url, "head")
+
+    with sqlite3.connect(path) as connection:
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        assert not ({"cloud_device_codes", "cloud_devices"} & tables)
+        # 账号本身不受影响。
+        assert connection.execute("SELECT email FROM cloud_users WHERE id = 'u1'").fetchone() == ("old@example.com",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004",)
 
 
 def test_notification_table_shape_and_indexes(tmp_path):

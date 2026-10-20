@@ -32,8 +32,6 @@ export type CloudUser = {
   avatar_seed?: string | null;
 };
 
-export type CloudDevice = { id: string; name: string; created_at: string };
-
 export type CloudMessage = { en: string; zh: string };
 
 /** 分享类型。 */
@@ -285,15 +283,6 @@ function createClient(context: RequestContext = {}) {
       },
       deleteAccount(): Promise<void> {
         return request("/me", { method: "DELETE" }, context);
-      },
-      devices(): Promise<{ devices: CloudDevice[] }> {
-        return request("/devices", {}, context);
-      },
-      revokeDevice(deviceId: string): Promise<void> {
-        return request(`/device/${encodeURIComponent(deviceId)}`, { method: "DELETE" }, context);
-      },
-      approveDevice(userCode: string): Promise<void> {
-        return request("/device/approve", { method: "POST", body: JSON.stringify({ user_code: userCode }) }, context);
       },
     },
     profile: {

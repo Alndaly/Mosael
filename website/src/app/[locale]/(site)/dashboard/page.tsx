@@ -16,7 +16,7 @@ import { CloudApiError, type CloudShare } from "@/lib/cloud";
 import { pageMetadata } from "@/lib/seo";
 
 type Params = Promise<{ locale: string }>;
-type SearchParams = Promise<{ tab?: string | string[]; user_code?: string | string[] }>;
+type SearchParams = Promise<{ tab?: string | string[] }>;
 
 /** 私有的控制台:登录后才能到,不进搜索索引。 */
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
@@ -29,11 +29,6 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
-/** 查询串里的值可能是数组;控制台只认第一个。 */
-function first(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
 /**
  * 「我的」控制台。
  *
@@ -42,7 +37,7 @@ function first(value: string | string[] | undefined): string {
  * 那里有一句「先起个名字」(见 `defaultDashboardTab`),而不是把概览留成一片空白。
  *
  * 页面本身只做取数:身份(公开三列,不含 email)、这个人的公开分享、以及按分享 `stats` 求和。
- * 交互(切分区 / 删除 / 改身份 / 设备)都在 `DashboardView` 那一层。
+ * 交互(切分区 / 删除 / 改身份)都在 `DashboardView` 那一层。
  */
 export const dynamic = "force-dynamic";
 
@@ -58,7 +53,6 @@ export default async function DashboardPage({
 
   const search = await searchParams;
   const copy = getMessages(locale).dashboard;
-  const accountCopy = getMessages(locale).account;
 
   const cookie = await cookieHeader();
   let viewer: Awaited<ReturnType<typeof loadViewer>> = null;
@@ -120,11 +114,9 @@ export default async function DashboardPage({
     <DashboardView
       locale={locale}
       copy={copy}
-      accountCopy={accountCopy}
       viewer={viewer}
       shares={shares}
       initialTab={initialTab}
-      initialCode={first(search.user_code)}
       loadError={loadError}
     />
   );

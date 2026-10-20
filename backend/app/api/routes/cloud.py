@@ -1,9 +1,8 @@
-"""「绑定 MosaelCloud」和社区分享只读反代的本地入口。
+"""社区分享只读反代的本地入口。
 
-云端凭据只走这里和本地库;渲染层拿不到 token。绑定接口只做四件事:发起、完成、看状态、解绑。
-社区分享的那三条只是**只读转发**:桌面端打的是本机后端,而 Cloud 只接受官网同源、不开 CORS ——
-没有这一层,真机上社区分享永远打不开。**写接口(发布 / 评论 / 点赞)不转发**:它们要第一方
-会话,桌面端没有,转了只会 401。
+桌面端打的是本机后端,而 Cloud 只接受官网同源、不开 CORS —— 没有这一层,真机上社区分享
+永远打不开。**写接口(发布 / 评论 / 点赞)不转发**:它们要第一方会话,桌面端没有,转了只会 401。
+Cloud 的地址、客户端与超时都在 `domain/cloud_binding` 里,这里只做转发。
 """
 
 from __future__ import annotations
@@ -14,15 +13,6 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas.cloud import (
-    CloudBindingCompleteIn,
-    CloudBindingCompleteOut,
-    CloudBindingOut,
-    CloudBindingRemovedOut,
-    CloudBindingStartIn,
-    CloudBindingStartOut,
-)
 from app.domain import cloud_binding
 
 router = APIRouter(tags=["cloud"])
@@ -32,7 +22,7 @@ router = APIRouter(tags=["cloud"])
 SHARE_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 ShareId = Annotated[str, Path(pattern=SHARE_ID_PATTERN, description="MosaelCloud 社区分享 id")]
 
-#: 这三句和绑定入口用同一套话:同一个部署没接 Cloud、连不上 Cloud 时,界面看到的是同一句话。
+#: 同一个部署没接 Cloud、连不上 Cloud 时,界面看到的是这三句。
 _CLOUD_UNREACHABLE = {"code": "cloud_unreachable", "message": "Can't reach MosaelCloud. Check the network and try again."}
 _CLOUD_TIMEOUT = {"code": "cloud_timeout", "message": "MosaelCloud took too long to answer. Try again in a moment."}
 _CLOUD_UPSTREAM_ERROR = {
@@ -43,40 +33,6 @@ _CLOUD_UPSTREAM_ERROR = {
 
 def _http_error(error: cloud_binding.CloudBindingError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail={"code": error.code, "message": error.message})
-
-
-def _fail(error: cloud_binding.CloudBindingError) -> None:
-    raise _http_error(error)
-
-
-@router.post("/cloud/binding/start", response_model=CloudBindingStartOut)
-def start_binding(body: CloudBindingStartIn, user: CurrentUser) -> dict:
-    try:
-        return cloud_binding.start(user, body.device_name)
-    except cloud_binding.CloudUnavailable as exc:
-        raise HTTPException(status_code=503, detail=_CLOUD_UNREACHABLE) from exc
-    except cloud_binding.CloudBindingError as exc:
-        _fail(exc)
-
-
-@router.post("/cloud/binding/complete", response_model=CloudBindingCompleteOut)
-def complete_binding(body: CloudBindingCompleteIn, user: CurrentUser, db: Tx) -> dict:
-    try:
-        return cloud_binding.complete(db, user, body.device_code)
-    except cloud_binding.CloudUnavailable as exc:
-        raise HTTPException(status_code=503, detail=_CLOUD_UNREACHABLE) from exc
-    except cloud_binding.CloudBindingError as exc:
-        _fail(exc)
-
-
-@router.get("/cloud/binding", response_model=CloudBindingOut)
-def get_binding(user: CurrentUser, db: DbSession) -> dict:
-    return cloud_binding.status_of(db, user)
-
-
-@router.delete("/cloud/binding", response_model=CloudBindingRemovedOut)
-def remove_binding(user: CurrentUser, db: Tx) -> dict:
-    return {"removed": cloud_binding.remove(db, user)}
 
 
 # ---------------------------------------------------------------- 社区分享(只读反代)
@@ -94,7 +50,7 @@ def _relay(status: int, body: dict | list) -> JSONResponse:
 
 
 def _forward(call: Callable[[], tuple[int, dict | list]]) -> JSONResponse:
-    """一次转发的统一出口:慢 → 504,到不了 → 503,没配 → 503(和绑定入口同一句),5xx → 502。"""
+    """一次转发的统一出口:慢 → 504,到不了 → 503,没配 → 503,5xx → 502。"""
     try:
         status, body = call()
     except cloud_binding.CloudTimeout as exc:

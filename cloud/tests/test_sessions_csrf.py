@@ -137,14 +137,3 @@ def test_cross_site_logout_leaves_the_session_alive(client):
     refused = client.post(api("/logout"), headers={"Origin": "https://evil.example"})
     assert refused.status_code == 403
     assert client.get(api("/me")).status_code == 200
-
-
-def test_device_endpoints_do_not_depend_on_cookies(client):
-    """桌面端没有浏览器 Origin,也不该被会话 cookie 的 CSRF 规则挡住。"""
-    response = client.post(
-        api("/device/code"),
-        json={"device_name": "Mac"},
-        headers={"Origin": "https://evil.example"},
-    )
-    # 这道闸只保护 cookie 认证的浏览器端点;设备码入口是给本机进程的。
-    assert response.status_code == 200

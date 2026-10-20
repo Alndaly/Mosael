@@ -22,8 +22,6 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "WorkspaceMember": ("app/domain/members.py",),
     "WorkspaceInvitation": ("app/domain/members.py",),
     "OAuthIdentity": ("app/api/routes/oauth.py",),
-    #: 桌面端保存的 MosaelCloud 绑定(不是本地账号):只归 cloud_binding 域建。
-    "CloudBinding": ("app/domain/cloud_binding.py",),
     # 创作核心
     "Project": ("app/domain/projects/",),
     "Asset": ("app/domain/assets/",),

@@ -1,8 +1,8 @@
 """社区分享的**只读**反代:桌面端打本机后端,本机后端替它去 Cloud 取。
 
-Cloud 只接受官网同源、不开 CORS,而本地后端原先只有 `/api/cloud/binding*` —— 于是真机上
-社区分享永远打不开(界面把一次"没接上"说成"分享不存在")。这三条路由只做读:详情、内容、
-下载(+1 计数)。**写接口(发布 / 评论 / 点赞)不转发**:它们要第一方会话,桌面端没有。
+Cloud 只接受官网同源、不开 CORS,所以真机上的社区分享要经本地后端转发(否则永远打不开,
+界面还会把一次"没接上"说成"分享不存在")。这三条路由只做读:详情、内容、下载(+1 计数)。
+**写接口(发布 / 评论 / 点赞)不转发**:它们要第一方会话,桌面端没有。
 
 不碰网络:Cloud 那一侧按 `get_json` / `post_json` 打桩,方法那一层按 `RetryingClient` 打桩。
 """
@@ -221,14 +221,11 @@ def test_an_unreachable_cloud_is_503(monkeypatch):
 
 
 def test_without_cloud_url_every_share_route_says_not_configured(monkeypatch):
-    """和 `binding/start` **同一句**:同一个部署没接 Cloud,不管点哪条路都是这句话。"""
+    """同一个部署没接 Cloud,不管点哪条路都是这句话。"""
     client = fresh_client()
     monkeypatch.setattr(settings, "cloud_url", "")
 
-    binding = client.post("/api/cloud/binding/start", json={})
-    assert binding.status_code == 503
-    assert binding.json()["detail"]["code"] == "cloud_not_configured"
-
+    expected: str | None = None
     for method, path in (
         ("get", f"/api/cloud/v1/shares/{SHARE_ID}"),
         ("get", f"/api/cloud/v1/shares/{SHARE_ID}/payload"),
@@ -237,7 +234,8 @@ def test_without_cloud_url_every_share_route_says_not_configured(monkeypatch):
         response = getattr(client, method)(path)
         assert response.status_code == 503, (method, path, response.text)
         assert response.json()["detail"]["code"] == "cloud_not_configured"
-        assert response.json()["detail"]["message"] == binding.json()["detail"]["message"]
+        expected = expected or response.json()["detail"]["message"]
+        assert response.json()["detail"]["message"] == expected
 
 
 # ---------------------------------------------------------------- ④ id 是外部输入

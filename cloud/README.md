@@ -1,7 +1,7 @@
 # MosaelCloud 账号服务
 
 独立于本地 Mosael 的账号服务:邮箱 + 验证码 + 密码注册、密码 / 验证码两种登录、
-**GitHub / Google 第三方登录(授权码 + PKCE)**、HttpOnly cookie 会话、设备码绑定,
+**GitHub / Google 第三方登录(授权码 + PKCE)**、HttpOnly cookie 会话,
 以及社区分享第①笔:**身份(昵称 / 短名 / 头像种子)+ 分享 + 点赞 / 收藏 / 评论**、
 第②笔:**评论 / 点赞 / 收藏的通知**,注册即登录。
 设计、部署与取舍见 [`docs/CLOUD_ACCOUNTS.md`](../docs/CLOUD_ACCOUNTS.md)。
@@ -129,11 +129,9 @@ CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
 | --- | --- | --- |
 | `CLOUD_DATA_DIR` | `./cloud-data` | SQLite 与运行数据 |
 | `CLOUD_DATABASE_URL` | 空 → 数据目录里的 SQLite | 生产用 Postgres |
-| `CLOUD_PUBLIC_URL` | `http://localhost:3000` | 官网原点:设备授权页、同源校验 |
+| `CLOUD_PUBLIC_URL` | `http://localhost:3000` | 官网原点:同源校验与 OAuth 回调 |
 | `CLOUD_COOKIE_SECURE` | `true` | 本地 http 开发设 `false` |
 | `CLOUD_SESSION_TTL_DAYS` | `30` | 登录会话有效期 |
-| `CLOUD_DEVICE_CODE_TTL_SECONDS` | `600` | 设备码有效期 |
-| `CLOUD_DEVICE_POLL_INTERVAL_SECONDS` | `5` | 桌面端轮询间隔 |
 | `CLOUD_PASSWORD_MIN_LENGTH` | `8` | 密码下限 |
 | `CLOUD_SMTP_HOST` | 空(未配置发信) | 可写 `host:port`;空则发码接口 503 |
 | `CLOUD_SMTP_PORT` | `587` | host 里没写端口时用它 |

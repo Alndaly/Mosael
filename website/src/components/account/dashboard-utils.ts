@@ -1,14 +1,14 @@
 /**
  * 「我的」控制台的纯逻辑:tab 清单、地址、登录回跳、删完一条之后剩哪些。
  *
- * 放在 `.ts`(没有 JSX)里,前端与 `node --test` 能直接 import 同一份实现 —— 五个 tab 的地址
+ * 放在 `.ts`(没有 JSX)里,前端与 `node --test` 能直接 import 同一份实现 —— 四个 tab 的地址
  * 是**可收藏、可分享的 URL**,不是组件里的一个 state;删掉一条分享之后概览的数字必须跟着变,
  * 这两件事都值得真的跑一遍,而不是渲染出来看。
  */
 import type { CloudShare } from "@/lib/cloud";
 
-/** 五个分区。顺序 = tab 栏的顺序;地址是 `?tab=` 的取值。 */
-export const DASHBOARD_TABS = ["overview", "shares", "profile", "devices", "notifications"] as const;
+/** 四个分区。顺序 = tab 栏的顺序;地址是 `?tab=` 的取值。 */
+export const DASHBOARD_TABS = ["overview", "shares", "profile", "notifications"] as const;
 
 export type DashboardTab = (typeof DASHBOARD_TABS)[number];
 

@@ -1,16 +1,16 @@
-"""HTTP 依赖:一次请求一个会话、cookie 认人、Bearer 认设备。"""
+"""HTTP 依赖:一次请求一个会话、cookie 认人。"""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from cloud.config import CloudConfig
 from cloud.errors import CloudError
-from cloud.models import CloudDevice, CloudSession, CloudUser, now
+from cloud.models import CloudSession, CloudUser, now
 from cloud.security import token_digest
 
 
@@ -68,23 +68,3 @@ def optional_user(request: Request, db: DbSession, config: CurrentConfig) -> Clo
 
 
 MaybeUser = Annotated[CloudUser | None, Depends(optional_user)]
-
-
-def current_device(
-    db: DbSession,
-    authorization: Annotated[str | None, Header()] = None,
-) -> tuple[CloudDevice, CloudUser]:
-    """桌面端拿绑定到的云端凭据认自己。没有 cookie、没有 CSRF —— 它本来就不是浏览器会话。"""
-    scheme, _, raw = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not raw.strip():
-        raise CloudError(401, "invalid_device_token")
-    device = db.query(CloudDevice).filter(CloudDevice.token_hash == token_digest(raw.strip())).one_or_none()
-    if device is None:
-        raise CloudError(401, "invalid_device_token")
-    user = db.get(CloudUser, device.user_id)
-    if user is None:
-        raise CloudError(401, "invalid_device_token")
-    return device, user
-
-
-CurrentDevice = Annotated[tuple[CloudDevice, CloudUser], Depends(current_device)]

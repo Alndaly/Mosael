@@ -54,7 +54,7 @@ test("官网把 /api/cloud/v1/* 同源反代给 Cloud,不在浏览器里跨域",
   assert.doesNotMatch(config, /Access-Control-Allow-Origin/);
 });
 
-test("中英文案齐全:登录、退出、删号、设备确认各有一份", () => {
+test("中英文案齐全:登录、退出、删号各有一份", () => {
   for (const locale of LOCALES) {
     const account = getMessages(locale).account;
     for (const key of [
@@ -67,9 +67,6 @@ test("中英文案齐全:登录、退出、删号、设备确认各有一份", (
       "signUp",
       "signOut",
       "deleteAccount",
-      "devices",
-      "approve",
-      "approved",
       "registered",
     ]) {
       assert.ok(account[key], `${locale} 缺 account.${key}`);

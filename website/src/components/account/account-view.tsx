@@ -18,10 +18,7 @@ type Phase = "loading" | "anonymous" | "signed" | "error";
  *
  * 它不请求本地后端、不显示工作区 / 素材 / 本地用户名 —— 那属于本机 Mosael,这一页是 MosaelCloud 的。
  *
- * **设备的那两块(已绑定 / 确认这台设备)已经搬到「我的」控制台**
- * (`components/account/dashboard-devices.tsx`);这一页只剩身份、退出与删号,以及登录 /
- * 桌面绑定回跳(`ResumeLoginReturn`)。桌面绑定链接仍然是 `/account?user_code=…` —— 见
- * `app/[locale]/(auth)/account/page.tsx`,它把带确认码的访问转给控制台的设备分区。
+ * 设备绑定机制已经拆掉;这一页只剩身份、退出与删号,以及登录回跳(`ResumeLoginReturn`)。
  *
  * 四态都当成正式界面来画:加载是骨架、未登录有入口、失败能重试、已登录是身份 + 危险操作。
  * 删号永远藏在最后一块,并且要点两次。

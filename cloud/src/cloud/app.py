@@ -1,4 +1,4 @@
-"""MosaelCloud 的 HTTP 装配:同源校验、错误形状、会话与设备路由。
+"""MosaelCloud 的 HTTP 装配:同源校验、错误形状、账号与社区分享路由。
 
 **只走同源反代,不做 CORS。** 官网的浏览器端只请求自己域名下的 `/api/cloud/v1/*`,由 Caddy
 (生产)或 Next.js 的 rewrite(本地开发)转给本服务。理由写在 `docs/CLOUD_ACCOUNTS.md`:
@@ -16,7 +16,6 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from cloud.api.auth import router as accounts_router
-from cloud.api.device import router as devices_router
 from cloud.api.notifications import router as notifications_router
 from cloud.api.oauth import router as oauth_router
 from cloud.api.profile import router as profile_router
@@ -27,9 +26,8 @@ from cloud.errors import CloudError, message
 from cloud.mailer import CodeSender, SmtpCodeSender
 from cloud.oauth import OAuthProvider, default_providers
 
-#: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸;设备码入口是给本机进程的。
+#: 会改状态的请求方法。只有带 cookie 的浏览器端点需要过同源闸。
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-CSRF_EXEMPT = frozenset({f"{API_PREFIX}/device/code", f"{API_PREFIX}/device/token"})
 
 
 def _origin_of(value: str) -> str:
@@ -102,7 +100,6 @@ def create_app(
         if (
             request.method in UNSAFE_METHODS
             and path.startswith(API_PREFIX)
-            and path not in CSRF_EXEMPT
             and _cross_site(request, resolved)
         ):
             return _error(403, "cross_site_request")
@@ -134,7 +131,6 @@ def create_app(
         return {"status": "ok"}
 
     app.include_router(accounts_router, prefix=API_PREFIX)
-    app.include_router(devices_router, prefix=API_PREFIX)
     app.include_router(oauth_router, prefix=API_PREFIX)
     app.include_router(profile_router, prefix=API_PREFIX)
     app.include_router(shares_router, prefix=API_PREFIX)
