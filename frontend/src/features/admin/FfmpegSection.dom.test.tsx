@@ -1,8 +1,12 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
+
+import { zhCN } from "@/app/messages/zh-CN";
+import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
+import { ADMIN_CARD } from "./adminLayout";
 
 /**
  * 管理 → 引擎 → FFmpeg(ADR 0048):启动时探出来的结论摆在界面上,填的路径交给后端判。
@@ -12,6 +16,9 @@ import { beforeEach, expect, it, vi } from "vitest";
  * - 找不到 ffmpeg:说找不到;
  * - 环境变量钉住了:那一格不能填,说为什么;
  * - 填的路径被后端挡下:那句话贴着输入框留着,一改就消失;存下之后显示新探出来的样子。
+ *
+ * 版式:路径这一行和这一页别的行(以及「TTS 解释器」那一格)同一套语法 —— 一张 ADMIN_CARD、
+ * 左边标题 + 说明、右边控件格,保存按钮就在输入框旁边那一格(整节只有它一颗)。
  */
 
 const t = (key: string) => key;
@@ -189,4 +196,56 @@ it("重新检测:问后端再探一次", async () => {
   fireEvent.click(screen.getByRole("button", { name: /ffmpegRecheck/ }));
   expect(await screen.findByText("ffmpegHasLibass")).toBeInTheDocument();
   expect(rechecks).toBe(1);
+});
+
+/** 路径那一行 —— 从输入框往上找最近的 AdminRow(行里也会出现别的行,不能只按文字找)。 */
+function pathRow(): HTMLElement {
+  const input = screen.getByLabelText("ffmpegPathLabel");
+  const row = input.closest<HTMLElement>("[data-admin-row]");
+  if (!row) throw new Error("「ffmpeg 路径」的输入框不在一个 [data-admin-row] 里");
+  return row;
+}
+
+//: 维护者:「ffmpeg路径的配置」和「TTS 解释器(可选)」这两个表单的风格不一致 咋回事。
+//: TTS 那一格是 ADMIN_CARD 里的 AdminRow:左边标题 + 说明,右边控件。这一节此前把控件堆在字下面、
+//: 占满整行 —— 同一页两套行语法。下面钉住改后的样子。
+it("路径这一行照抄「TTS 解释器」:一张 ADMIN_CARD 里的 AdminRow,左边标题 + 说明、右边控件格", async () => {
+  show();
+  const input = await screen.findByLabelText("ffmpegPathLabel");
+  const row = pathRow();
+  //: 和别的行同一张卡片(ADMIN_CARD),不是自己写的一行。
+  expect(row.parentElement?.className).toBe(ADMIN_CARD);
+  //: 左格:标题 + 说明(不是把说明塞进右格)。
+  expect(within(row).getByText("ffmpegPathLabel")).toBeInTheDocument();
+  expect(row.querySelector("[data-admin-row-description]")).toHaveTextContent("ffmpegPathDesc");
+  //: 右格:控件格,输入框和保存按钮都在里面;控件格是这一行的直接孩子(左字右控件,不是上下堆)。
+  const control = row.querySelector<HTMLElement>("[data-admin-row-control]");
+  expect(control).not.toBeNull();
+  expect(control!.parentElement).toBe(row);
+  expect(within(control!).getByLabelText("ffmpegPathLabel")).toBe(input);
+  expect(within(control!).getByRole("button", { name: "save" })).toBeInTheDocument();
+});
+
+it("输入框和「TTS 解释器」一样宽:同一个 SETTINGS_FIELD_WIDTH", async () => {
+  show();
+  const input = await screen.findByLabelText("ffmpegPathLabel");
+  expect(input.className).toContain(SETTINGS_FIELD_WIDTH);
+  expect(input).toHaveClass("font-mono");
+});
+
+it("保存按钮只有一处:在输入框右边那一格,不在整节底部再放一颗", async () => {
+  show();
+  await screen.findByLabelText("ffmpegPathLabel");
+  const saves = screen.getAllByRole("button", { name: "save" });
+  expect(saves).toHaveLength(1);
+  expect(pathRow().querySelector("[data-admin-row-control]")).toContainElement(saves[0]);
+});
+
+it("钉住时那句说明一字不改:原文照旧,只是这一格不能填", async () => {
+  stored = { ...BREW, pinned_by_environment: true };
+  show();
+  expect(await screen.findByText("ffmpegPathPinned")).toBeInTheDocument();
+  expect(pathRow().querySelector("[data-admin-row-description]")).toHaveTextContent("ffmpegPathPinned");
+  //: 真文案(这条用例的 t 返回键名,原文另钉一次):环境变量已经指定了 ffmpeg,这里填的不生效。
+  expect((zhCN as Record<string, string>).ffmpegPathPinned).toBe("环境变量 MOSAEL_FFMPEG 已经指定了 ffmpeg,这里填的不生效。");
 });

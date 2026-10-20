@@ -8,8 +8,10 @@ import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { FailureCard } from "@/components/failure/FailureCard";
+import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { ADMIN_CARD, AdminRow, AdminRowNote, AdminRowState, AdminSection } from "./adminLayout";
 
 type FfmpegSettings = components["schemas"]["FfmpegSettingsOut"];
@@ -68,43 +70,47 @@ export function FfmpegSection({ workspaceId }: { workspaceId: string }) {
       <div className={ADMIN_CARD}>
         {data ? <InUseRow data={data} /> : <AdminRow label={t("connecting")} />}
         {data?.install?.available && !data.libass && <InstallRow workspaceId={workspaceId} install={data.install} onDone={() => qc.invalidateQueries({ queryKey: QUERY_KEY })} />}
+        {/* 和「TTS 解释器」同一套行语法:左边标题 + 说明,右边控件格(输入框 + 保存)。此前控件堆在
+            字下面、占满整行 —— 同一页两套行,看着像两个页面拼起来的。宽度取 SETTINGS_FIELD_WIDTH,
+            和那一格一样。 */}
         <AdminRow
-          stacked
           label={t("ffmpegPathLabel")}
           description={data?.pinned_by_environment ? t("ffmpegPathPinned") : t("ffmpegPathDesc")}
+          //: 后端挡下的那句话横贯整行、留在这一行下面:塞进右边那一格会把 280px 的输入框挤窄,
+          //: 放左格又比说明还大。一改输入就消失(见 onChange)。
+          footer={
+            save.isError ? (
+              <div id={errorId} role="alert">
+                <FailureCard size="inline" lines={3} title={t("ffmpegPathRefused")} summary={errorText(save.error)} />
+              </div>
+            ) : undefined
+          }
         >
           <form
-            className="grid min-w-0 gap-1.5"
+            className="flex min-w-0 items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault();
               if (dirty && !save.isPending) save.mutate(value.trim());
             }}
           >
-            <div className="flex min-w-0 gap-2">
-              <Input
-                aria-label={t("ffmpegPathLabel")}
-                aria-invalid={save.isError || undefined}
-                aria-describedby={save.isError ? errorId : undefined}
-                className="font-mono"
-                // 不拿一条真路径当占位:灰字的「/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg」看上去像已经填好了。
-                placeholder={t("ffmpegPathPlaceholder")}
-                spellCheck={false}
-                value={value}
-                disabled={!data || data.pinned_by_environment}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  if (save.isError) save.reset();
-                }}
-              />
-              <Button type="submit" disabled={!dirty} loading={save.isPending}>
-                {t("save")}
-              </Button>
-            </div>
-            {save.isError && (
-              <div id={errorId} role="alert">
-                <FailureCard size="inline" lines={3} title={t("ffmpegPathRefused")} summary={errorText(save.error)} />
-              </div>
-            )}
+            <Input
+              aria-label={t("ffmpegPathLabel")}
+              aria-invalid={save.isError || undefined}
+              aria-describedby={save.isError ? errorId : undefined}
+              className={cn(SETTINGS_FIELD_WIDTH, "font-mono")}
+              // 不拿一条真路径当占位:灰字的「/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg」看上去像已经填好了。
+              placeholder={t("ffmpegPathPlaceholder")}
+              spellCheck={false}
+              value={value}
+              disabled={!data || data.pinned_by_environment}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                if (save.isError) save.reset();
+              }}
+            />
+            <Button type="submit" disabled={!dirty} loading={save.isPending}>
+              {t("save")}
+            </Button>
           </form>
         </AdminRow>
       </div>
