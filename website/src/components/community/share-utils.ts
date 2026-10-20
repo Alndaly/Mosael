@@ -58,21 +58,6 @@ export function shareSearch(query: ShareListQuery): string {
   return suffix ? `?${suffix}` : "";
 }
 
-/**
- * 分享标签页上该显示的数字 —— **只有真知道总数时才返回**。
- *
- * 列表接口给的是游标分页,没有 total:取完一页还有 `next_cursor` 时总数是未知的;带着
- * `q` / `kind` 取到的只是筛选后的子集,更不能当总数。0 条也不显示 0(见 community-tabs)。
- */
-export function knownShareCount(
-  query: ShareListQuery,
-  page: Pick<CloudSharePage, "items" | "next_cursor"> | null,
-): number | undefined {
-  if (!page) return undefined;
-  if (page.next_cursor) return undefined;
-  if (query.q.trim() || query.kind) return undefined;
-  return page.items.length > 0 ? page.items.length : undefined;
-}
 
 /**
  * 「去上传」归谁:**列表非空归页头,列表为空归空态**,任何一屏都只出现一次。

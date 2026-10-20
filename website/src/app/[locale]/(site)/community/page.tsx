@@ -6,7 +6,7 @@ import { CommunityHeader } from "@/components/community/community-header";
 import { ShareListSkeleton } from "@/components/community/share-skeleton";
 import { ShareBrowser } from "@/components/community/shares";
 import { cookieHeader, loadShareList } from "@/components/community/share-server";
-import { knownShareCount, parseShareQuery, uploadCtaSurface } from "@/components/community/share-utils";
+import { parseShareQuery, uploadCtaSurface } from "@/components/community/share-utils";
 import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { listPlugins, listWorkflows } from "@/lib/registry";
@@ -63,12 +63,9 @@ export default async function CommunityPage({ params, searchParams }: { params: 
     <>
       <CommunityHeader
         locale={locale}
-        active="shares"
         counts={{
           plugins: listPlugins(locale).length,
           workflows: listWorkflows(locale).length,
-          // 单页取完、且没在筛选时才是真总数;否则不传,tab 上就不显示数字(不显示 0)。
-          shares: knownShareCount(query, page),
         }}
         title={t.sharesTitle}
         lede={t.sharesLede}

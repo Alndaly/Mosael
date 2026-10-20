@@ -29,8 +29,11 @@ export function CommunityHeader({
   contribute,
 }: {
   locale: Locale;
-  /** 当前分区。**只用于高亮**,不参与生成 tab。类型覆盖三个分区,不是收窄过的子集。 */
-  active: CommunitySection;
+  /**
+   * 当前分区,**只用于高亮**,不参与生成 tab。不传 = 这一页不在 tab 里
+   * (例如 `/community` 的用户分享流 —— 它仍可访问,但不占导航)。
+   */
+  active?: CommunitySection;
   counts: CommunityCounts;
   title: string;
   lede: string;

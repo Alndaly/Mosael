@@ -11,7 +11,8 @@ import { registerSourceAliases } from "./source-aliases.mjs";
 //: 于是切到 `/plugins` 或 `/workflows` 之后,「分享」这一项整个从页头消失,用户看到的就是
 //: 「分享列表没了」。数据一直在云端,消失的只是入口。
 //:
-//: 这里把重构后的结构钉死:tab 只由 (locale, counts) 决定,三个分区在三个页面都在;
+//: 这里把重构后的结构钉死:**社区就是「插件」和「工作流」两件事**(维护者:「插件和工作流本身就是分享的呀,
+//: 官方插件和工作流就是官方账号发布分享的」),"分享"不占 tab;tab 只由 (locale, counts) 决定,两页都在;
 //: 筛选(kind)和排序(sort)是两个控件;「去上传」只出现一次;空态不再占一整屏。
 const ROOT = path.resolve(import.meta.dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(ROOT, relative), "utf8");
@@ -56,10 +57,10 @@ function controlGroup(source, legendText) {
   return { open, close, block: source.slice(open, close) };
 }
 
-test("① 三个分区在三个页面都在:分享 / 插件 / 工作流(3 页 × 3 tab)", async () => {
+test("① 社区两个分区在页头都在:插件 / 工作流 —— 不为「分享」单开 tab", async () => {
   // 先钉住根因:tab 只能来自同一个纯函数,页头不许再按 active 条件拼接。
   const header = read(HEADER);
-  assert.doesNotMatch(header, /active ===/, "页头又按 active 条件拼 tab 了(原始 bug:切到插件页「分享」就没了)");
+  assert.doesNotMatch(header, /active ===/, "页头又按 active 条件拼 tab 了(这正是之前「切一下 tab 列表就没了」的 bug)");
   assert.match(header, /communityTabs\(locale, counts\)/, "页头没有用 communityTabs 生成 tab");
 
   const mod = await tabsModule();
@@ -67,57 +68,33 @@ test("① 三个分区在三个页面都在:分享 / 插件 / 工作流(3 页 ×
 
   for (const locale of ["zh", "en"]) {
     const tabs = mod.communityTabs(locale, { plugins: 9, workflows: 15 });
-    assert.deepEqual(
-      tabs.map((tab) => tab.id),
-      ["shares", "plugins", "workflows"],
-      `${locale}: 社区 tab 不是完整的三项`,
-    );
+    assert.deepEqual(tabs.map((tab) => tab.id), ["plugins", "workflows"], `${locale}: 社区 tab 不是「插件 / 工作流」两项`);
     assert.deepEqual(
       tabs.map((tab) => tab.href),
-      [`/${locale}/community`, `/${locale}/plugins`, `/${locale}/workflows`],
+      [`/${locale}/plugins`, `/${locale}/workflows`],
       `${locale}: tab 指向的地址不对`,
+    );
+    assert.ok(
+      tabs.every((tab) => tab.href !== `/${locale}/community`),
+      `${locale}: 「分享」又占了一个 tab —— 社区就是插件和工作流两件事`,
     );
   }
 
-  // 三个列表页各把「当前是哪个分区」告诉页头;tab 本身来自同一个函数,与页面无关。
-  const pages = [
-    [LIST_PAGE, "shares"],
-    [PLUGINS_PAGE, "plugins"],
-    [WORKFLOWS_PAGE, "workflows"],
-  ];
-  for (const [page, active] of pages) {
+  // 计数:两项各自带数字。
+  assert.deepEqual(mod.communityTabs("zh", { plugins: 9, workflows: 15 }).map((tab) => tab.count), [9, 15], "计数不对");
+  assert.equal(mod.communityTabs("en", { plugins: 1, workflows: 2 })[0].label, getMessages("en").plugins.title, "「插件」tab 文案不对");
+  assert.equal(mod.communityTabs("en", { plugins: 1, workflows: 2 })[1].label, getMessages("en").workflows.title, "「工作流」tab 文案不对");
+
+  // 两个列表页各自把「当前分区」告诉页头;tab 本身来自同一个函数,与页面无关。
+  for (const [page, active] of [[PLUGINS_PAGE, "plugins"], [WORKFLOWS_PAGE, "workflows"]]) {
     const source = read(page);
     assert.match(source, /<CommunityHeader/, `${page} 没有渲染社区页头`);
     assert.match(source, new RegExp(`active="${active}"`), `${page} 没有把当前分区传给页头`);
-    const tabs = mod.communityTabs("zh", { plugins: 9, workflows: 15, shares: 4 });
-    for (const id of ["shares", "plugins", "workflows"]) {
-      assert.ok(tabs.some((tab) => tab.id === id), `${page} 的页头少了「${id}」tab`);
-    }
   }
-
-  // 计数:插件 / 工作流照旧带数字;分享只在拿得到时带 —— 拿不到、或 0 条,都不显示数字。
-  const full = mod.communityTabs("zh", { plugins: 9, workflows: 15, shares: 37 });
-  assert.deepEqual(
-    full.map((tab) => tab.count),
-    [37, 9, 15],
-    "计数不对:分享 / 插件 / 工作流",
-  );
-  assert.equal(mod.communityTabs("zh", { plugins: 9, workflows: 15 })[0].count, undefined, "拿不到分享数时编了一个数字");
-  assert.equal(mod.communityTabs("zh", { plugins: 9, workflows: 15, shares: 0 })[0].count, undefined, "0 条分享时显示了 0");
-  assert.equal(
-    mod.communityTabs("en", { plugins: 1, workflows: 1 })[0].label,
-    getMessages("en").community.shares,
-    "「分享」tab 没有用社区分区的文案",
-  );
-
-  // 「什么时候知道总数」:单页取完、且没在筛选时,条数就是总数。
-  const utils = await shareUtils();
-  const query = { q: "", kind: "", sort: "new" };
-  assert.equal(utils.knownShareCount(query, { items: [{}, {}], next_cursor: null }), 2);
-  assert.equal(utils.knownShareCount(query, { items: [{}], next_cursor: "next" }), undefined, "还有下一页时不该把首页条数当总数");
-  assert.equal(utils.knownShareCount({ q: "hi", kind: "", sort: "new" }, { items: [{}], next_cursor: null }), undefined, "筛选后的条数不是总数");
-  assert.equal(utils.knownShareCount(query, { items: [], next_cursor: null }), undefined, "0 条分享不该显示 0");
-  assert.equal(utils.knownShareCount(query, null), undefined, "取数失败时不该编数字");
+  // 分享流那一页仍然存在、仍然渲染列表,只是不再占一个 tab(页头不传 active)。
+  const listPage = read(LIST_PAGE);
+  assert.match(listPage, /<CommunityHeader/, "分享页没有渲染社区页头");
+  assert.doesNotMatch(listPage, /active="shares"/, "分享页又把自己当成一个 tab 了");
 });
 
 test("② 当前页高亮:aria-current 只给当前分区", () => {
@@ -128,12 +105,14 @@ test("② 当前页高亮:aria-current 只给当前分区", () => {
     "高亮没有落在当前分区上(aria-current 不是由 tab.id === active 决定)",
   );
   assert.match(header, /tab\.id === active/, "tab 没有按当前分区高亮");
-  assert.match(header, /active: CommunitySection/, "active 的类型必须覆盖三个分区,别再收窄");
+  // 可选:分享流那一页不属于任何一个 tab,不传 active 就没有高亮。
+  assert.match(header, /active\?: CommunitySection/, "active 必须可省 —— /community 不在 tab 里");
 
-  // 三个页面传的 active 与它们自己所属的分区一致。
-  assert.match(read(LIST_PAGE), /active="shares"/);
+  // 两个 tab 页各自传自己的分区。
   assert.match(read(PLUGINS_PAGE), /active="plugins"/);
   assert.match(read(WORKFLOWS_PAGE), /active="workflows"/);
+  // 分享流不把自己当 tab。
+  assert.doesNotMatch(read(LIST_PAGE), /active="shares"/, "分享页又把自己当成一个 tab 了");
 });
 
 test("③ 筛选(kind)与排序(sort)是两组独立控件,中间有分隔", () => {
@@ -235,22 +214,15 @@ test("⑥ 空态收成两行 + 一个按钮,不再是大虚线框 + 图标", () 
   );
 });
 
-test("⑦ 回归:切到插件页再切回来,「分享」还在、分享列表还在", async () => {
+test("⑦ 回归:切到别的分区再回来,页头两项仍在(不随当前页裁剪)", async () => {
   const mod = await tabsModule();
   assert.ok(mod, "缺少 community-tabs.ts");
 
-  // 渲染分享页 → 切到插件页 → 回分享页:每一步的页头都该有完整的三项。
-  // 旧实现按 active 拼 tab,切到 /plugins 时「分享」整项消失(原始 bug);现在 tab 的生成函数
-  // 根本不收 active,结构上不可能因为切换而少一项。
-  const counts = { plugins: 9, workflows: 15, shares: 4 };
-  for (const active of ["shares", "plugins", "workflows"]) {
-    const tabs = mod.communityTabs("zh", counts);
-    assert.deepEqual(
-      tabs.map((tab) => tab.id),
-      ["shares", "plugins", "workflows"],
-      `停在 ${active} 时页头少了 tab`,
-    );
-    assert.ok(tabs.find((tab) => tab.id === "shares").href === "/zh/community", "「分享」tab 没指回列表页");
+  // 旧实现按 active 拼 tab,切走时那一项整项消失(原始 bug)。现在生成函数根本不收 active,
+  // 结构上不可能因为切换而少一项。
+  for (const active of ["plugins", "workflows", undefined]) {
+    const tabs = mod.communityTabs("zh", { plugins: 9, workflows: 15 });
+    assert.deepEqual(tabs.map((tab) => tab.id), ["plugins", "workflows"], `停在 ${active ?? "/community"} 时页头少了 tab`);
   }
   assert.equal(mod.communityTabs.length, 2, "communityTabs 只该收 locale 和 counts —— 收 active 就又会按页面裁剪");
 
@@ -258,10 +230,9 @@ test("⑦ 回归:切到插件页再切回来,「分享」还在、分享列表�
   assert.doesNotMatch(header, /active ===/, "页头又按 active 条件拼 tab 了");
   assert.doesNotMatch(header, /\.\.\.\(active/, "页头又在用展开语法按 active 拼 tab");
 
-  // 分享列表本身挂在页面数据上,不挂在 active 上:来回切 tab 只是换页,列表还在。
+  // 分享列表挂在页面数据上,不挂在 active 上。
   const page = read(LIST_PAGE);
   assert.match(page, /<ShareBrowser/, "分享页没有渲染列表(或空态)");
-  assert.match(page, /initial=\{(?:page|initial)\}/, "分享页的列表没有接上首屏数据");
+  assert.match(page, /initial=\{page\}/, "分享页的列表没有接上首屏数据");
   assert.match(page, /loadShareList/, "分享页没有取分享列表");
-  assert.doesNotMatch(page, /active\s*===\s*"shares"[\s\S]{0,200}<ShareBrowser/, "分享列表被挂在 active 上了");
 });
