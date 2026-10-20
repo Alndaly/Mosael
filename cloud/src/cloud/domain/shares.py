@@ -362,6 +362,9 @@ def _serialize_many(db: Session, shares: list[CloudShare], viewer: CloudUser | N
     return [
         {
             "id": share.id,
+            # 官方内容的稳定标识:现在是"哪一条官方插件/工作流"(slug 由发布方在 Git 里维护,
+            # 见 cloud.official),官网靠它把卡片链回静态详情页。用户分享这一列是 NULL。
+            "slug": share.slug,
             "kind": share.kind,
             "locale": share.locale,
             "title": share.title,

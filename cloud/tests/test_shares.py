@@ -402,3 +402,13 @@ def test_public_responses_never_contain_email(client):
             assert not any(part == "email" for part in re.split(r"[.\[\]]", path)), path
             assert value != "alice@example.com", path
             assert "alice@example.com" not in str(value), path
+
+
+def test_public_shape_carries_slug(client):
+    """官方卡片要靠 slug 链回静态详情页:用户分享这一列是 NULL,官方分享才是发布方维护的标识。"""
+    signup(client)
+    make_identity(client)
+    created = publish_ok(client)
+    one = client.get(api(f"/shares/{created['id']}")).json()
+    assert "slug" in one, "公开形状里没有 slug —— 官网没法把官方卡片链回静态详情页"
+    assert one["slug"] is None, "用户分享不该有 slug(那个键只有官方种子用)"
