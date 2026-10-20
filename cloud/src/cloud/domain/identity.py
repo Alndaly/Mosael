@@ -90,6 +90,21 @@ def new_handle() -> str:
     return f"member-{secrets.token_hex(4)}"
 
 
+def give_default_identity(user: CloudUser) -> None:
+    """注册那一刻就把身份填上:**新账号不该先撞"先起个名字"那堵墙**。
+
+    默认昵称 = 默认短名(同一个 `member-xxxxxxxx`)。**不从邮箱前缀推**:昵称是公开的,而从
+    `lucky.always.h@...` 里截出来的名字等于把邮箱露了一半。用户之后在「个人信息」里改,
+    `PUT /me` 那条路一行没动。
+    """
+    if not user.handle:
+        user.handle = new_handle()
+    if not user.display_name:
+        user.display_name = user.handle
+    if not user.avatar_seed:
+        user.avatar_seed = new_avatar_seed()
+
+
 def new_avatar_seed() -> str:
     return secrets.token_hex(4)
 

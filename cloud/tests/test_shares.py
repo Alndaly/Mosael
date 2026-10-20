@@ -24,9 +24,17 @@ def test_publishing_requires_a_session(client):
     assert response.json()["error"] == "not_authenticated"
 
 
+def test_signup_comes_with_an_identity_so_publishing_works_right_away(client):
+    """注册**自动给一个默认身份** —— 新账号不该先撞"先起个名字"那堵墙(维护者)。"""
+    signup(client)
+    response = client.post(api("/shares"), json=share_body())
+    assert response.status_code == 201, response.text
+
+
 def test_publishing_without_a_display_name_is_409(client, db_path):
-    """② 没有昵称 → 409 + "先起个名字";不是 401,也不是注册时就拦。"""
-    signup(client)  # 注册即登录,但还没有身份
+    """老账号没有昵称时仍然是 409 + "先起个名字";不是 401(门禁留在写接口,不挪到注册)。"""
+    signup(client)
+    execute(db_path, "UPDATE cloud_users SET display_name = NULL")
     response = client.post(api("/shares"), json=share_body())
     assert response.status_code == 409, response.text
     body = response.json()

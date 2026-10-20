@@ -85,7 +85,7 @@ def test_likes_require_a_session_and_an_existing_share(client):
 # ---------------------------------------------------------------- 评论
 
 
-def test_comment_requires_identity_and_session(client, app):
+def test_comment_requires_identity_and_session(client, app, db_path):
     share = _share(client)
 
     guest = TestClient(app)
@@ -96,7 +96,9 @@ def test_comment_requires_identity_and_session(client, app):
 
     other = TestClient(app)
     try:
-        signup(other, email="bob@example.com")  # 已登录,但还没起名字
+        signup(other, email="bob@example.com")  # 注册即登录,而且注册就带了默认身份
+        # 没有身份的**老账号**才该被拦:把昵称清掉,模拟那种账号(写接口的门禁一行未动)。
+        execute(db_path, "UPDATE cloud_users SET display_name = NULL WHERE email = 'bob@example.com'")
         response = other.post(api(f"/shares/{share['id']}/comments"), json={"body": "hi"})
         assert response.status_code == 409, response.text
         assert response.json()["error"] == "identity_required"

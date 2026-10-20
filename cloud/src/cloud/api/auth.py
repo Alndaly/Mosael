@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
 from cloud.config import API_PREFIX, CloudConfig
-from cloud.domain.identity import account_user
+from cloud.domain.identity import account_user, give_default_identity
 from cloud.email_codes import consume_code, issue_code
 from cloud.errors import CloudError
 from cloud.models import CloudSession, CloudUser, now
@@ -131,6 +131,8 @@ def signup(body: SignupIn, db: DbSession, config: CurrentConfig, response: Respo
     consume_code(db, email=email, purpose="signup", code=code)
 
     user = CloudUser(email=email, password_hash=hash_password(body.password), email_verified_at=now())
+    # 注册即给默认身份:新账号一进来就能分享,不用先去起名字(之后在「个人信息」里改)。
+    give_default_identity(user)
     db.add(user)
     try:
         db.commit()

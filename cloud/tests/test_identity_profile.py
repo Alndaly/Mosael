@@ -38,9 +38,10 @@ def test_put_me_sets_name_and_derives_handle_and_avatar_seed(client, db_path):
 
     # 注册时没有身份:三列都是空。
     before = client.get(api("/me")).json()["user"]
-    assert before["display_name"] is None
-    assert before["handle"] is None
-    assert before["avatar_seed"] is None
+    # 注册已经给了一个默认身份(默认昵称 = 默认短名),不再是从 NULL 开始。
+    assert before["display_name"], "注册后应当已经有默认昵称"
+    assert before["handle"] and HANDLE_RE.fullmatch(before["handle"]), before["handle"]
+    assert before["avatar_seed"], "注册后也应当有头像种子(自动色块要有东西算)"
 
     updated = client.put(api("/me"), json=identity_body("Alice"))
     assert updated.status_code == 200, updated.text

@@ -29,6 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from cloud.api.auth import open_session
 from cloud.api.deps import CurrentConfig, DbSession
 from cloud.config import OAUTH_PROVIDERS, CloudConfig
+from cloud.domain.identity import give_default_identity
 from cloud.errors import CloudError
 from cloud.models import CloudIdentity, CloudOAuthState, CloudSession, CloudUser, now
 from cloud.oauth import (
@@ -320,6 +321,7 @@ def _resolve_account(
     outcome = "existing"
     if user is None:
         user = CloudUser(email=email, password_hash=None, email_verified_at=now())
+        give_default_identity(user)
         db.add(user)
         db.flush()
         outcome = "created"
