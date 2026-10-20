@@ -8,7 +8,6 @@ import {
   Heart,
   LoaderCircle,
   MessageSquare,
-  PackageOpen,
   RotateCcw,
   Search,
   Upload,
@@ -24,7 +23,7 @@ import { toPlainText } from "@/lib/inline-markdown";
 import { CloudApiError, cloudShares, type CloudShare, type CloudSharePage } from "@/lib/cloud";
 import { cn } from "@/lib/utils";
 
-import { SHARE_PAGE_SIZE, type ShareListQuery } from "./share-utils";
+import { SHARE_PAGE_SIZE, shareSearch, type ShareListQuery } from "./share-utils";
 
 const CARD =
   "group flex min-w-0 flex-col rounded-2xl border border-border bg-card p-5 transition-[border-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_10px_30px_-18px_color-mix(in_oklab,var(--primary)_60%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0";
@@ -109,23 +108,35 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
+/**
+ * 空态:两行字 + 一个按钮。
+ *
+ * 早先是一个占满整屏的大虚线框:图标 + 三行说明 + 按钮。列表空是个很普通的状态,不该比
+ * 列表本身还占地方,所以收成一个紧凑的块 —— 一行说清是什么状态,一行给下一步,一个按钮。
+ *
+ * 按钮分两种,但**永远只有一个**:没有数据时是「去上传」(页头此时不给 CTA),筛空时是
+ * 「清除筛选」。两种情况下「去上传」都不会重复出现。
+ */
 function EmptyState({ locale, filtered, onClear }: { locale: Locale; filtered: boolean; onClear: () => void }) {
   const t = getMessages(locale).community;
   return (
-    <div className="grid place-items-center gap-3 rounded-2xl border border-dashed border-border px-6 py-20 text-center">
-      <PackageOpen className="size-6 text-muted-foreground" aria-hidden />
-      <p className="m-0 font-semibold">{filtered ? t.emptyFiltered : t.emptyNoShares}</p>
-      <p className="m-0 max-w-md text-sm leading-6 text-muted-foreground">
+    <div className="rounded-xl border border-border bg-card px-5 py-6">
+      <p className="m-0 text-sm font-semibold">{filtered ? t.emptyFiltered : t.emptyNoShares}</p>
+      <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
         {filtered ? t.emptyFilteredHint : t.emptyNoSharesHint}
       </p>
       {filtered ? (
-        <button type="button" onClick={onClear} className="mt-1 text-sm font-semibold text-primary hover:underline">
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-4 inline-flex h-9 items-center rounded-full border border-border px-4 text-sm font-semibold transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
           {t.clearFilters}
         </button>
       ) : (
         <Link
           href={localePath(locale, "/community/upload")}
-          className="mt-1 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/88"
+          className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/88"
         >
           <Upload className="size-4" aria-hidden />
           {t.uploadCta}
@@ -199,12 +210,9 @@ export function ShareBrowser({
   }, [fetchFirst, query]);
 
   React.useEffect(() => {
-    const params = new URLSearchParams();
-    if (query.q) params.set("q", query.q);
-    if (query.kind) params.set("kind", query.kind);
-    if (query.sort !== "new") params.set("sort", query.sort);
-    const suffix = params.toString();
-    window.history.replaceState(null, "", localePath(locale, "/community") + (suffix ? `?${suffix}` : ""));
+    // 地址栏就地改(replaceState):不触发服务端导航,列表由下面的请求就地更新。
+    // 查询串的拼法在 share-utils 里,首屏解析用的是同一对函数 —— 刷新后结果一致。
+    window.history.replaceState(null, "", localePath(locale, "/community") + shareSearch(query));
   }, [locale, query]);
 
   const loadMore = async () => {
@@ -238,8 +246,8 @@ export function ShareBrowser({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="relative block min-w-0 basis-full sm:max-w-md sm:flex-1 sm:basis-0">
+      <div className="grid gap-4">
+        <label className="relative block min-w-0 sm:max-w-md">
           <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
             type="search"
@@ -251,37 +259,63 @@ export function ShareBrowser({
           />
         </label>
 
-        <fieldset className="flex min-w-0 flex-wrap gap-2" aria-label={t.filterKind}>
-          <Chip active={query.kind === ""} onClick={() => setQuery((previous) => ({ ...previous, kind: "" }))}>
-            {t.all}
-          </Chip>
-          <Chip active={query.kind === "workflow"} onClick={() => setQuery((previous) => ({ ...previous, kind: "workflow" }))}>
-            {t.kindWorkflow}
-          </Chip>
-          <Chip active={query.kind === "board"} onClick={() => setQuery((previous) => ({ ...previous, kind: "board" }))}>
-            {t.kindBoard}
-          </Chip>
-        </fieldset>
+        {/*
+         * 类型和排序是**两个维度**,不是一排可以混着选的 chip:早先 `[全部][工作流][画布]
+         * [最新][热门]` 挤在同一个 flex 行里,看着像「五选一」。现在各成一个带标题的
+         * fieldset,中间用竖线隔开、留出间距 —— 选类型不影响排序,选排序也不影响类型。
+         */}
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="mb-2 p-0 font-mono text-[0.6875rem] font-bold tracking-widest text-muted-foreground uppercase">
+              {t.filterKind}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              <Chip active={query.kind === ""} onClick={() => setQuery((previous) => ({ ...previous, kind: "" }))}>
+                {t.all}
+              </Chip>
+              <Chip
+                active={query.kind === "workflow"}
+                onClick={() => setQuery((previous) => ({ ...previous, kind: "workflow" }))}
+              >
+                {t.kindWorkflow}
+              </Chip>
+              <Chip active={query.kind === "board"} onClick={() => setQuery((previous) => ({ ...previous, kind: "board" }))}>
+                {t.kindBoard}
+              </Chip>
+            </div>
+          </fieldset>
 
-        <fieldset className="flex min-w-0 flex-wrap items-center gap-2" aria-label={t.filterSort}>
-          <Chip active={query.sort === "new"} onClick={() => setQuery((previous) => ({ ...previous, sort: "new" }))}>
-            {t.sortNew}
-          </Chip>
-          <Chip active={query.sort === "hot"} onClick={() => setQuery((previous) => ({ ...previous, sort: "hot" }))}>
-            {t.sortHot}
-          </Chip>
-        </fieldset>
+          {/* 竖线 = 两个控件之间的分隔;`hr` 自带 separator 语义,不用 span + role。 */}
+          <hr
+            aria-orientation="vertical"
+            className="mb-2.5 hidden h-9 w-px shrink-0 self-end border-0 bg-border sm:block"
+          />
 
-        {(filtered || query.q) && (
-          <button
-            type="button"
-            onClick={() => setQuery({ q: "", kind: "", sort: "new" })}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-4" aria-hidden />
-            {t.clearFilters}
-          </button>
-        )}
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="mb-2 p-0 font-mono text-[0.6875rem] font-bold tracking-widest text-muted-foreground uppercase">
+              {t.filterSort}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              <Chip active={query.sort === "new"} onClick={() => setQuery((previous) => ({ ...previous, sort: "new" }))}>
+                {t.sortNew}
+              </Chip>
+              <Chip active={query.sort === "hot"} onClick={() => setQuery((previous) => ({ ...previous, sort: "hot" }))}>
+                {t.sortHot}
+              </Chip>
+            </div>
+          </fieldset>
+
+          {(filtered || query.q) && (
+            <button
+              type="button"
+              onClick={() => setQuery({ q: "", kind: "", sort: "new" })}
+              className="mb-0.5 ms-auto inline-flex h-9 items-center gap-1 rounded-full px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <X className="size-4" aria-hidden />
+              {t.clearFilters}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (

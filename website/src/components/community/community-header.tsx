@@ -2,16 +2,23 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { PageGlow } from "@/components/page-hero";
-import { type Locale, localePath } from "@/i18n/config";
+import { type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { cn } from "@/lib/utils";
 
+import { communityTabs, type CommunityCounts, type CommunitySection } from "./community-tabs";
+
 /**
- * 社区两页(插件 / 工作流)共用的页头。
+ * 社区三个分区(分享 / 插件 / 工作流)共用的页头。
  *
  * 不再是官网内页那种占半屏的大标题:社区页是**拿来逛和找**的,进来第一眼该看到的是
- * 有哪些东西,而不是一句口号。所以页头压到一行标题 + 一句话,两页之间用标签页切换 ——
- * 它们是同一个社区的两个分区,不是两篇文章。
+ * 有哪些东西,而不是一句口号。所以页头压到一行标题 + 一句话,分区之间用 tab 切换 ——
+ * 它们是同一个社区的三块,不是三篇文章。
+ *
+ * **tab 只有一套,三个页面都渲染同一套。** 旧实现按 `active` 决定要不要放「分享」:
+ * 切到 `/plugins` 或 `/workflows` 时这一项直接消失,用户看到的就是「分享列表没了」。
+ * 现在 tab 全部来自 `communityTabs(locale, counts)`(它不收 active),`active` 只负责
+ * 当前项的高亮 —— 当前页不可能改变「有哪些入口」。
  */
 export function CommunityHeader({
   locale,
@@ -22,22 +29,16 @@ export function CommunityHeader({
   contribute,
 }: {
   locale: Locale;
-  active: "shares" | "plugins" | "workflows";
-  counts: { plugins: number; workflows: number; shares?: number };
+  /** 当前分区。**只用于高亮**,不参与生成 tab。类型覆盖三个分区,不是收窄过的子集。 */
+  active: CommunitySection;
+  counts: CommunityCounts;
   title: string;
   lede: string;
-  contribute: { label: string; href: string };
+  /** 页头右上的行动按钮;`null` = 这一屏不给 CTA(由空态给出唯一的那个)。 */
+  contribute?: { label: string; href: string } | null;
 }) {
   const t = getMessages(locale);
-  const tabs = [
-    // 分享是社区的新入口。插件 / 工作流两页仍是原来的两个标签页(active 不是 shares 时
-    // 这里不会多出第三个),它们的版面和行为不动。
-    ...(active === "shares"
-      ? [{ id: "shares" as const, label: t.community.shares, count: counts.shares, href: localePath(locale, "/community") }]
-      : []),
-    { id: "plugins" as const, label: t.plugins.title, count: counts.plugins, href: localePath(locale, "/plugins") },
-    { id: "workflows" as const, label: t.workflows.title, count: counts.workflows, href: localePath(locale, "/workflows") },
-  ];
+  const tabs = communityTabs(locale, counts);
   return (
     <section className="relative isolate -mt-20 overflow-hidden border-b border-border bg-paper">
       <PageGlow />
@@ -48,17 +49,19 @@ export function CommunityHeader({
             <h1 className="m-0 font-display text-4xl font-bold tracking-[-0.035em] text-balance sm:text-5xl">{title}</h1>
             <p className="mt-3 mb-0 text-base leading-7 text-muted-foreground">{lede}</p>
           </div>
-          <a
-            href={contribute.href}
-            // 站内的指南就地打开,仓库链接开新页。
-            {...(/^https?:/.test(contribute.href) ? { target: "_blank", rel: "noreferrer" } : {})}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            {contribute.label}
-            <ArrowUpRight className="size-4" aria-hidden />
-          </a>
+          {contribute && (
+            <a
+              href={contribute.href}
+              // 站内的指南就地打开,仓库链接开新页。
+              {...(/^https?:/.test(contribute.href) ? { target: "_blank", rel: "noreferrer" } : {})}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {contribute.label}
+              <ArrowUpRight className="size-4" aria-hidden />
+            </a>
+          )}
         </div>
-        <nav aria-label={t.community.name} className="mt-8 flex gap-6">
+        <nav aria-label={t.community.name} className="mt-8 flex flex-wrap gap-x-6 gap-y-2">
           {tabs.map((tab) => (
             <Link
               key={tab.id}

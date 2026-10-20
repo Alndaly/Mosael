@@ -5,7 +5,7 @@
  * 不该散落在各个组件里 —— 后端量的是「紧凑 JSON 的 UTF-8 字节数」,前端拦 2MB 时量的
  * 必须是同一把尺子,不然会出现「前端说没超、后端回 413」。
  */
-import type { CloudIdentity } from "@/lib/cloud";
+import type { CloudIdentity, CloudSharePage } from "@/lib/cloud";
 
 /** 后端 `MAX_PAYLOAD_BYTES` 的同一数值(2 MB)。 */
 export const MAX_SHARE_BYTES = 2 * 1024 * 1024;
@@ -15,6 +15,74 @@ export const SHARE_PAGE_SIZE = 24;
 
 /** 列表的筛选条件。服务端首屏和客户端翻页用的是同一个形状。 */
 export type ShareListQuery = { q: string; kind: "" | "workflow" | "board"; sort: "new" | "hot" };
+
+/** 地址栏里那三个参数。App Router 的单值参数可能被写重成数组,这里只认第一个。 */
+export type ShareQueryParams = {
+  q?: string | string[];
+  kind?: string | string[];
+  sort?: string | string[];
+};
+
+function firstValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? "";
+  return value ?? "";
+}
+
+/**
+ * 地址栏 → 筛选条件。**不认识的值一律回落到默认**,别把 `?kind=evil` 带进请求。
+ *
+ * 首屏和分享出去的链接走这条;客户端改筛选走 shareSearch,两边是同一对函数 —— 刷新前后
+ * 看到的结果才会一致。
+ */
+export function parseShareQuery(params: ShareQueryParams): ShareListQuery {
+  const kind = firstValue(params.kind);
+  return {
+    q: firstValue(params.q).trim().slice(0, 200),
+    kind: kind === "workflow" || kind === "board" ? kind : "",
+    sort: firstValue(params.sort) === "hot" ? "hot" : "new",
+  };
+}
+
+/**
+ * 筛选条件 → 地址栏查询串(`""` 或 `?q=…&kind=…&sort=…`)。
+ *
+ * 默认值不写进地址栏(`sort=new`、`kind=` 都是默认),这样 `/community` 本身就是干净的;
+ * 非默认值一个都不能丢 —— 分享出去的链接要能还原同一份结果。
+ */
+export function shareSearch(query: ShareListQuery): string {
+  const params = new URLSearchParams();
+  if (query.q.trim()) params.set("q", query.q);
+  if (query.kind) params.set("kind", query.kind);
+  if (query.sort !== "new") params.set("sort", query.sort);
+  const suffix = params.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
+/**
+ * 分享标签页上该显示的数字 —— **只有真知道总数时才返回**。
+ *
+ * 列表接口给的是游标分页,没有 total:取完一页还有 `next_cursor` 时总数是未知的;带着
+ * `q` / `kind` 取到的只是筛选后的子集,更不能当总数。0 条也不显示 0(见 community-tabs)。
+ */
+export function knownShareCount(
+  query: ShareListQuery,
+  page: Pick<CloudSharePage, "items" | "next_cursor"> | null,
+): number | undefined {
+  if (!page) return undefined;
+  if (page.next_cursor) return undefined;
+  if (query.q.trim() || query.kind) return undefined;
+  return page.items.length > 0 ? page.items.length : undefined;
+}
+
+/**
+ * 「去上传」归谁:**列表非空归页头,列表为空归空态**,任何一屏都只出现一次。
+ *
+ * 两处各写一遍判断迟早会漂(这次就是页头 + 空态同时出现);写成一个函数,页面和测试读的是
+ * 同一条规则。
+ */
+export function uploadCtaSurface(hasShares: boolean): "header" | "empty" {
+  return hasShares ? "header" : "empty";
+}
 
 /** 登录回跳暂存在 sessionStorage:只活在这个标签页,关掉就没了。 */
 export const COMMUNITY_RETURN_KEY = "mosael:community-return";
