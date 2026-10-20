@@ -83,9 +83,9 @@ export function AsrModelsSection() {
             // 只看这一行自己在不在下 —— 每个引擎有自己的 venv,同时装不会互相弄坏。
             busy={(download.isPending && download.variables === model.id) || model.status === "downloading"}
             busyReason={t("ttsThisDownloading")}
-            // 已默认只是**一枚淡标记**,不是按钮:改默认在节顶那个选择器里(唯一可写处)。
-            // 整个"默认"只在这一节有 ≥2 个候选时才摆(见 defaultRow);只有一种实现时它没有意义。
-            extra={canSetDefault && model.is_default ? <AdminDefaultMarker /> : null}
+            // 已默认只是名字右边**一枚 badge**,不是按钮、也不占右边状态槽:改默认在节顶那个选择器里
+            // (唯一可写处)。整个"默认"只在这一节有 ≥2 个候选时才摆(见 defaultRow);只有一种实现时它没有意义。
+            tags={canSetDefault && model.is_default ? <AdminDefaultMarker /> : null}
             onDownload={() => download.mutate(model.id)}
           />
         ))}

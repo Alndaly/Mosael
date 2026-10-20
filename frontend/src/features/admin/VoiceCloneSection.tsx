@@ -222,10 +222,9 @@ export function VoiceCloneSection() {
           // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
           busyReason={t("ttsThisDownloading")}
           actionHint={unsaved ? t("ttsSaveAndDownload") : undefined}
-          // 已默认只是**一枚淡标记**,不可点:改默认在克隆组顶上那个选择器里(唯一可写处)。
-          extra={
-            canSetDefault && config.data?.engine === model.id ? <AdminDefaultMarker /> : null
-          }
+          // 已默认只是名字右边**一枚 badge**,不可点、也不占右边状态槽:改默认在克隆组顶上那个
+          // 选择器里(唯一可写处)。
+          tags={canSetDefault && config.data?.engine === model.id ? <AdminDefaultMarker /> : null}
           onDownload={() => download.mutate(model.id)}
         />
         {/* 预置音色引擎**不在这里切换**。不写这句的话,用户装好 Qwen3-TTS、在这张表里看到

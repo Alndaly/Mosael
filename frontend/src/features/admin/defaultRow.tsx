@@ -1,15 +1,15 @@
 import React from "react";
-import { Star } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ADMIN_CARD, AdminRow } from "./adminLayout";
 
 /**
  * 「默认」的摆放规则(维护者定的):**只出现在同一能力有多个可选实现的地方**,并且永远放在
  * 这些实现所在的那一节里 —— 节说明之后、实现列表之前。**设默认的控件只有这一处**;列表行
- * 只负责下载/状态,不再承担"设默认"(那边只剩一枚不可点的「当前默认」)。
+ * 只负责下载/状态,不再承担"设默认"(那边只剩名字右边一枚不可点的「当前默认」badge)。
  *
  * 为什么强调"节里":默认回答的是「在这几项之间选一个」。挪到别的页面、或者抽成一页「默认设置」,
  * 用户就看不到它在谁和谁之间选,只剩一个孤零零的当前值。
@@ -118,19 +118,22 @@ export function AdminDefaultSelect({
 }
 
 /**
- * 列表里**已经默认**的那一行上的淡标记。只是一行字,不可点 —— 改默认在节顶那个选择器里。
+ * 列表里**已经默认**的那一行上的 badge:贴着名字(标题)的右边,不可点 —— 改默认在节顶那个选择器里。
  * 和「设为默认」按钮不同,它不承担动作,所以也不会成为第二个写入口。
+ *
+ * **为什么离开右边那一格**:右边回答的是"这一项现在能不能用"(已安装 / 可用 / 下载),而这枚
+ * 回答的是"这几项里选中的是它" —— 两件事并排放在同一格,读起来像同一类状态。维护者原话:
+ * 「这种当前默认的提示请你放在左侧 title 的右边,可以做成一个 badge 的样式」。
+ *
+ * **为什么是 badge、为什么只有字**:用的是基础件 `Badge` 的 secondary 一档(小圆角 + 浅底 +
+ * 小字,颜色全走现有 token)。字就是「当前默认」本身 —— 一颗星得靠猜,而读屏也只念得出字。
  */
 export function AdminDefaultMarker() {
   const t = useI18n();
   return (
-    <span
-      data-admin-default-marker
-      className="inline-flex items-center gap-1 text-ui-xs leading-normal text-muted-foreground"
-    >
-      <Star size={12} aria-hidden />
+    <Badge variant="secondary" data-admin-default-marker className="shrink-0 whitespace-nowrap">
       {t("defaultCurrent")}
-    </span>
+    </Badge>
   );
 }
 

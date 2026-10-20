@@ -38,7 +38,7 @@ export function ModelDownloadRow({
   busy,
   busyReason,
   actionHint,
-  extra,
+  tags,
   onDownload,
 }: {
   model: DownloadableModel;
@@ -51,9 +51,9 @@ export function ModelDownloadRow({
   busyReason?: string;
   /** 能点时按钮上的补充说明(点了会先做什么)。 */
   actionHint?: string;
-  /** 这一行自己的额外一格,摆在下载/已安装那一格**前面**。现在只放已默认的淡标记「当前默认」——
+  /** 名字右边的安静标签,交给 AdminRow 摆(现在只放已默认的那枚「当前默认」badge)——
    *  它不可点:设默认在节顶那个选择器里,列表行不再承担这个动作。 */
-  extra?: React.ReactNode;
+  tags?: React.ReactNode;
   onDownload: () => void;
 }) {
   const t = useI18n();
@@ -78,6 +78,7 @@ export function ModelDownloadRow({
     <AdminRow
       label={model.label}
       meta={[meta, size]}
+      tags={tags}
       description={model.detail}
       notes={
         <>
@@ -124,9 +125,6 @@ export function ModelDownloadRow({
         ) : undefined
       }
     >
-      {/* 调用方自己的额外一格(已默认的淡标记)。放在下载那一格前面:
-          这一份是当前默认,和它下没下是两件事。 */}
-      {extra}
       {/* **两件事分开说**:文件在不在盘上(status),和跑不跑得起来(runtime_ready)。
           它们完全可以一真一假 —— 模型缓存是别的工具下的,而这台机器上没有任何解释器装了
           对应的包。只看前者的话,页面写着「已安装」、一用就报找不到环境,而用户最容易做的事

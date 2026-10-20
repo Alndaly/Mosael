@@ -112,9 +112,10 @@ function EngineRow({ engine, busy, onInstall }: { engine: DenoiseEngine; busy: b
       ]}
       tags={
         <>
-          {engine.removes_music && <AdminTag tone="warning">{t("denoiseRemovesMusicBadge")}</AdminTag>}
-          {/* 已默认只是**一枚淡标记**,不可点:改默认在节顶那一行里(唯一可写处)。 */}
+          {/* 已默认只是名字右边**一枚 badge**,不可点、也不占右边状态槽:改默认在节顶那一行里
+              (唯一可写处)。摆在别的标签前面,紧贴着自己的名字。 */}
           {engine.is_default && <AdminDefaultMarker />}
+          {engine.removes_music && <AdminTag tone="warning">{t("denoiseRemovesMusicBadge")}</AdminTag>}
         </>
       }
       description={<InlineMarkdown text={engine.description} />}
