@@ -333,8 +333,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No Python interpreter is available to create the runtime",
     },
     "runtimeErr_noBasePythonTts": {
-        "zh": "找不到可用于创建运行环境的 Python。请重装应用,或在「管理 → 引擎 → 声音克隆」里手动指定一个 TTS 解释器(需要部署管理员)。",
-        "en": "No Python is available to create the runtime. Reinstall the app, or set a TTS interpreter manually under Admin → Engines → Voice cloning (deployment admins only).",
+        "zh": "找不到可用于创建运行环境的 Python。请重装应用,或在「管理 → 引擎 → 语音合成引擎」里手动指定一个 TTS 解释器(需要部署管理员)。",
+        "en": "No Python is available to create the runtime. Reinstall the app, or set a TTS interpreter manually under Admin → Engines → Speech synthesis engines (deployment admins only).",
     },
     "runtimeErr_venvFailed": {"zh": "创建运行环境失败:{detail}", "en": "Could not create the runtime: {detail}"},
     "runtimeErr_venvFailedSilent": {"zh": "创建运行环境失败:没有留下原因", "en": "Could not create the runtime, and no reason was given"},
@@ -371,8 +371,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A language pack is already downloading ({busy}). Wait for it to finish.",
     },
     "runtimeErr_f5RuntimeMissing": {
-        "zh": "请先在「管理 → 引擎 → 声音克隆」里安装 F5-TTS 运行环境(需要部署管理员)",
-        "en": "Install the F5-TTS runtime first under Admin → Engines → Voice cloning (deployment admins only)",
+        "zh": "请先在「管理 → 引擎 → 语音合成引擎」里安装 F5-TTS 运行环境(需要部署管理员)",
+        "en": "Install the F5-TTS runtime first under Admin → Engines → Speech synthesis engines (deployment admins only)",
     },
     "runtimeErr_f5CheckpointMissing": {
         "zh": "下载报成功,但检查点不在盘上",
@@ -388,8 +388,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "runtimeErr_f5NoTarget": {"zh": "没有指定权重目录", "en": "No weights directory was given"},
     "runtimeErr_qwenModelMissing": {
-        "zh": "Qwen3-TTS 不可用:权重还没下。部署管理员在「管理 → 引擎 → 声音克隆」里点 Qwen3-TTS 那一行的「下载」,或把 MOSAEL_QWEN_MODEL_DIR 指到一个含有 model.safetensors 与 speech_tokenizer/model.safetensors 的目录。",
-        "en": "Qwen3-TTS is unavailable: its weights aren't downloaded. A deployment admin downloads it under Admin → Engines → Voice cloning, or points MOSAEL_QWEN_MODEL_DIR at a directory holding model.safetensors and speech_tokenizer/model.safetensors.",
+        "zh": "Qwen3-TTS 不可用:权重还没下。部署管理员在「管理 → 引擎 → 语音合成引擎」里点 Qwen3-TTS 那一行的「下载」,或把 MOSAEL_QWEN_MODEL_DIR 指到一个含有 model.safetensors 与 speech_tokenizer/model.safetensors 的目录。",
+        "en": "Qwen3-TTS is unavailable: its weights aren't downloaded. A deployment admin downloads it under Admin → Engines → Speech synthesis engines, or points MOSAEL_QWEN_MODEL_DIR at a directory holding model.safetensors and speech_tokenizer/model.safetensors.",
     },
     "runtimeErr_qwenNoTarget": {"zh": "没有指定 Qwen3-TTS 的权重目录", "en": "No weights directory was given for Qwen3-TTS"},
     "runtimeErr_qwenNoRevision": {
@@ -411,12 +411,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Could not fetch the Fish Speech source: git gave no reason",
     },
     "runtimeErr_fishRepoMissing": {
-        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。部署管理员在「管理 → 引擎 → 声音克隆」里下载 Fish Speech(源码与权重一并装好),或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(源码目录未找到)",
-        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. A deployment admin downloads Fish Speech under Admin → Engines → Voice cloning (it fetches both), or sets MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (Source directory not found.)",
+        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。部署管理员在「管理 → 引擎 → 语音合成引擎」里下载 Fish Speech(源码与权重一并装好),或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(源码目录未找到)",
+        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. A deployment admin downloads Fish Speech under Admin → Engines → Speech synthesis engines (it fetches both), or sets MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (Source directory not found.)",
     },
     "runtimeErr_fishModelMissing": {
-        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。部署管理员在「管理 → 引擎 → 声音克隆」里下载 Fish Speech(源码与权重一并装好),或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(模型目录缺少 codec.pth)",
-        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. A deployment admin downloads Fish Speech under Admin → Engines → Voice cloning (it fetches both), or sets MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (codec.pth is missing from the model directory.)",
+        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。部署管理员在「管理 → 引擎 → 语音合成引擎」里下载 Fish Speech(源码与权重一并装好),或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(模型目录缺少 codec.pth)",
+        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. A deployment admin downloads Fish Speech under Admin → Engines → Speech synthesis engines (it fetches both), or sets MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (codec.pth is missing from the model directory.)",
     },
     "runtimeErr_fishNeedsReference": {"zh": "Fish Speech 需要参考音频", "en": "Fish Speech needs reference audio"},
     "runtimeErr_downloadNoReason": {

@@ -44,7 +44,7 @@ def test_worker_failure_keeps_the_upstream_line_inside_an_english_sentence() -> 
     assert isinstance(error, voices.VoiceError)
     assert _en(error) == (
         "Speech synthesis failed: ModuleNotFoundError: No module named 'natsort' — the engine's runtime is "
-        "incomplete. A deployment admin clicks Download under Admin → Engines → Voice cloning to add the missing "
+        "incomplete. A deployment admin clicks Download under Admin → Engines → Speech synthesis engines to add the missing "
         "dependencies."
     )
 

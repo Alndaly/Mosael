@@ -19,6 +19,7 @@ import { Form, FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
+import type { TtsEngine } from "@/api/domains/speech";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 import { ModelDownloadRow } from "./ModelDownloadRow";
@@ -26,10 +27,49 @@ import { ModelDownloadRow } from "./ModelDownloadRow";
 
 type ConfigForm = { engine: string; python_path: string; fish_repo_dir: string; fish_model_dir: string };
 
-/** 管理 → 引擎 → 声音克隆:选默认克隆引擎、指定装了引擎的 Python 解释器,并下载引擎权重。这几项存在整台部署共用的
-    一行 TtsConfig 里,写入只给部署管理员(routes/voices.set_tts_config:解释器路径会进子进程的 argv;下载同理),
-    所以在管理页。**模型下载源不在这里**:本机识别(NSFW)、Mosael 起的本机 ComfyUI 下模型读的也是它,它是这一页顶上
-    「下载源」里的一行(体检 UM-16)。 */
+/**
+ * 这张权重表同时装着**两种能力**的引擎,所以按能力分两区渲染。
+ *
+ * **能力从哪儿来?** `/api/tts/models` 没有能力字段。`clones_voices` 长在 `/api/voices/engines` 上,
+ * 语义是"能把配音库里的嗓子复刻到远端"(目前只有百炼 CosyVoice),**不是**"零样本克隆/预置音色" ——
+ * 拿它分组会把这一节分错。所以这里认后端引擎目录(`ai/runtime/tts_models.CATALOG`)的 id:
+ * f5-tts / fish-speech 是克隆引擎,qwen-tts 是预置音色引擎。新增引擎时要在这里表态;认不出的
+ * 落到预置音色那一区 —— 至少不会被误标成"能克隆"。
+ */
+const CLONE_ENGINE_IDS = new Set(["f5-tts", "fish-speech"]);
+
+function clonesFromReference(engineId: string): boolean {
+  return CLONE_ENGINE_IDS.has(engineId);
+}
+
+/** 权重表的一个能力分区:组头(小标题 + 一句说明)+ 那一组的行。
+ *  分组**只**是渲染时的分区 —— 下载、状态、进度、失败、重试仍是同一份 ModelDownloadRow 和同一个 mutation。 */
+function EngineGroup({
+  kind,
+  title,
+  description,
+  children,
+}: {
+  kind: "clone" | "preset";
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section data-engine-group={kind} aria-label={title} className="grid min-w-0 gap-2">
+      <div className="grid min-w-0 gap-0.5">
+        <h3 className="m-0 text-ui-sm font-semibold leading-snug">{title}</h3>
+        <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{description}</p>
+      </div>
+      <div className={ADMIN_CARD}>{children}</div>
+    </section>
+  );
+}
+
+/** 管理 → 引擎 → 语音合成引擎:选默认克隆引擎、指定装了引擎的 Python 解释器,并下载引擎权重。这几项存在整台部署
+    共用的那一行 TtsConfig 里,写入只给部署管理员(routes/voices.set_tts_config:解释器路径会进子进程的 argv;
+    下载同理),所以在管理页。**模型下载源不在这里**:本机识别(NSFW)、Mosael 起的本机 ComfyUI 下模型读的也是它,
+    它是这一页顶上「下载源」里的一行(体检 UM-16)。 */
 export function VoiceCloneSection() {
   const t = useI18n();
   const qc = useQueryClient();
@@ -123,6 +163,38 @@ export function VoiceCloneSection() {
   // 比不显示更糟 —— 那看起来像解释器路径丢了。
   const showsPython = ready && selected === config.data?.engine && Boolean(config.data?.worker_python);
 
+  // 权重表按能力分两区。**只在这里过滤,不在别处再抄一遍**:行本身仍是那个 ModelDownloadRow。
+  const engineModels = models.data ?? [];
+  const cloneModels = engineModels.filter((model) => clonesFromReference(model.id));
+  const presetModels = engineModels.filter((model) => !clonesFromReference(model.id));
+  // **同一个渲染器给两组用** —— 两组只是分区,不是两套下载/状态逻辑。
+  const renderModelRow = (model: TtsEngine) => {
+    const busy = startingId === model.id || model.status === "downloading";
+    const preset = !clonesFromReference(model.id);
+    return (
+      <div key={model.id}>
+        <ModelDownloadRow
+          model={model}
+          noRuntimeText={t("voiceModelNoRuntime")}
+          busy={busy}
+          // **禁用了就要说为什么。** 按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",
+          // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
+          busyReason={t("ttsThisDownloading")}
+          actionHint={unsaved ? t("ttsSaveAndDownload") : undefined}
+          onDownload={() => download.mutate(model.id)}
+        />
+        {/* 预置音色引擎**不在这里切换**。不写这句的话,用户装好 Qwen3-TTS、在这张表里看到
+            「已安装」,却只在上面的「默认克隆引擎」里找它 —— 那个下拉按后端只收 f5-tts/fish-speech,
+            它本来就不属于那里。指路要指向真实存在的入口:剪辑台的「配音」、创作页的「语音」。 */}
+        {preset && (
+          <p className="m-0 px-4 pb-3 text-ui-xs leading-normal text-muted-foreground">
+            {t("voiceClonePickElsewhere")}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <AdminSection
       id="engine-clone"
@@ -195,24 +267,28 @@ export function VoiceCloneSection() {
         </form>
       </Form>
 
-      <div className={ADMIN_CARD}>
-        {models.data?.map((model) => {
-          const busy = startingId === model.id || model.status === "downloading";
-          return (
-            <ModelDownloadRow
-              key={model.id}
-              model={model}
-              noRuntimeText={t("voiceModelNoRuntime")}
-              busy={busy}
-              // **禁用了就要说为什么。** 按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",
-              // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-              busyReason={t("ttsThisDownloading")}
-              actionHint={unsaved ? t("ttsSaveAndDownload") : undefined}
-              onDownload={() => download.mutate(model.id)}
-            />
-          );
-        })}
-      </div>
+      {engineModels.length > 0 && (
+        <div className="grid min-w-0 gap-4">
+          {cloneModels.length > 0 && (
+            <EngineGroup
+              kind="clone"
+              title={t("voiceCloneGroupClones")}
+              description={t("voiceCloneGroupClonesDesc")}
+            >
+              {cloneModels.map(renderModelRow)}
+            </EngineGroup>
+          )}
+          {presetModels.length > 0 && (
+            <EngineGroup
+              kind="preset"
+              title={t("voiceCloneGroupPreset")}
+              description={t("voiceCloneGroupPresetDesc")}
+            >
+              {presetModels.map(renderModelRow)}
+            </EngineGroup>
+          )}
+        </div>
+      )}
     </AdminSection>
   );
 }

@@ -18,12 +18,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This voice has no reference text, and {label} can't work it out on its own — it needs to know what the reference audio says to learn the voice, or the result will be unintelligible. Add the reference text to this voice in the voice library, or switch to F5-TTS (it transcribes the reference audio itself).",
     },
     "voiceErr_noRuntime": {
-        "zh": "{label} 还没有运行环境:没有任何 Python 解释器装了它。部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」,装一次就好;想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。",
-        "en": "{label} has no runtime yet: no Python interpreter has it installed. A deployment admin clicks Download under Admin → Engines → Voice cloning — it only needs installing once. To get audio right away, pick the free Edge online engine above; it needs no install.",
+        "zh": "{label} 还没有运行环境:没有任何 Python 解释器装了它。部署管理员在「管理 → 引擎 → 语音合成引擎」里点「下载」,装一次就好;想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。",
+        "en": "{label} has no runtime yet: no Python interpreter has it installed. A deployment admin clicks Download under Admin → Engines → Speech synthesis engines — it only needs installing once. To get audio right away, pick the free Edge online engine above; it needs no install.",
     },
     "voiceErr_noWeights": {
-        "zh": "{label} 的模型权重还没下好,现在合成不出声音。部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」补上 —— 这里不会自动下:那是几个 GB 的事,该由管理员决定什么时候开始。",
-        "en": "{label}'s model weights aren't downloaded yet, so it can't synthesise anything. A deployment admin clicks Download under Admin → Engines → Voice cloning — it won't start on its own here, since it's several GB and the admin decides when.",
+        "zh": "{label} 的模型权重还没下好,现在合成不出声音。部署管理员在「管理 → 引擎 → 语音合成引擎」里点「下载」补上 —— 这里不会自动下:那是几个 GB 的事,该由管理员决定什么时候开始。",
+        "en": "{label}'s model weights aren't downloaded yet, so it can't synthesise anything. A deployment admin clicks Download under Admin → Engines → Speech synthesis engines — it won't start on its own here, since it's several GB and the admin decides when.",
     },
     "voiceErr_unknownEngine": {"zh": "不认识的本地引擎:{engine}", "en": "Unknown local engine: {engine}"},
     "voiceErr_qwenUnknownVoice": {
@@ -39,12 +39,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Speech synthesis failed and the worker process left no reason. Try once more; if it keeps happening, please report it.",
     },
     "voiceErr_synthTorchcodec": {
-        "zh": "语音合成失败:音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。升级引擎依赖通常就能解决(管理 → 引擎 →「声音克隆」→ 下载,需要部署管理员);若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。",
-        "en": "Speech synthesis failed: the audio decoding library (torchcodec) couldn't load — it needs a matching FFmpeg version. Upgrading the engine's dependencies usually fixes it (Admin → Engines → Voice cloning → Download, deployment admins only); if not, install ffmpeg from Homebrew — the system copy is left untouched.",
+        "zh": "语音合成失败:音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。升级引擎依赖通常就能解决(管理 → 引擎 →「语音合成引擎」→ 下载,需要部署管理员);若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。",
+        "en": "Speech synthesis failed: the audio decoding library (torchcodec) couldn't load — it needs a matching FFmpeg version. Upgrading the engine's dependencies usually fixes it (Admin → Engines → Speech synthesis engines → Download, deployment admins only); if not, install ffmpeg from Homebrew — the system copy is left untouched.",
     },
     "voiceErr_synthMissingModule": {
-        "zh": "语音合成失败:{detail} —— 引擎的运行环境不完整。部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」,它会把缺的依赖补上。",
-        "en": "Speech synthesis failed: {detail} — the engine's runtime is incomplete. A deployment admin clicks Download under Admin → Engines → Voice cloning to add the missing dependencies.",
+        "zh": "语音合成失败:{detail} —— 引擎的运行环境不完整。部署管理员在「管理 → 引擎 → 语音合成引擎」里点「下载」,它会把缺的依赖补上。",
+        "en": "Speech synthesis failed: {detail} — the engine's runtime is incomplete. A deployment admin clicks Download under Admin → Engines → Speech synthesis engines to add the missing dependencies.",
     },
     "voiceErr_synthFailed": {"zh": "语音合成失败:{detail}", "en": "Speech synthesis failed: {detail}"},
     "voiceErr_synthNoAudio": {
@@ -52,12 +52,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Speech synthesis failed: the worker reported success but produced no audio.",
     },
     "voiceErr_jaCloneNeedsWeights": {
-        "zh": "这段文本是日文,而本地克隆现在装的权重念不了它。部署管理员在「管理 → 引擎 → 声音克隆」下载日文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的日文音色或 OpenAI TTS。",
-        "en": "This text is Japanese, and the local cloning weights installed now can't read it. Once a deployment admin downloads the Japanese model (about {size} GB) under Admin → Engines → Voice cloning, it reads in your own voice — or, to skip the wait, use a Japanese Edge TTS voice or OpenAI TTS.",
+        "zh": "这段文本是日文,而本地克隆现在装的权重念不了它。部署管理员在「管理 → 引擎 → 语音合成引擎」下载日文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的日文音色或 OpenAI TTS。",
+        "en": "This text is Japanese, and the local cloning weights installed now can't read it. Once a deployment admin downloads the Japanese model (about {size} GB) under Admin → Engines → Speech synthesis engines, it reads in your own voice — or, to skip the wait, use a Japanese Edge TTS voice or OpenAI TTS.",
     },
     "voiceErr_koCloneNeedsWeights": {
-        "zh": "这段文本是韩文,而本地克隆现在装的权重念不了它。部署管理员在「管理 → 引擎 → 声音克隆」下载韩文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的韩文音色或 OpenAI TTS。",
-        "en": "This text is Korean, and the local cloning weights installed now can't read it. Once a deployment admin downloads the Korean model (about {size} GB) under Admin → Engines → Voice cloning, it reads in your own voice — or, to skip the wait, use a Korean Edge TTS voice or OpenAI TTS.",
+        "zh": "这段文本是韩文,而本地克隆现在装的权重念不了它。部署管理员在「管理 → 引擎 → 语音合成引擎」下载韩文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的韩文音色或 OpenAI TTS。",
+        "en": "This text is Korean, and the local cloning weights installed now can't read it. Once a deployment admin downloads the Korean model (about {size} GB) under Admin → Engines → Speech synthesis engines, it reads in your own voice — or, to skip the wait, use a Korean Edge TTS voice or OpenAI TTS.",
     },
     "voiceErr_jaCloneUnsupported": {
         "zh": "这段文本是日文,而本地音色克隆没有能念它的模型 —— 它不会报错,只会念出一段听不懂的声音。改用 Edge TTS 的日文音色,或 OpenAI TTS。",

@@ -178,14 +178,19 @@ def test_other_f5_failures_do_not_lead_with_the_raw_exception_either() -> None:
     assert "重试" in shown, f"没给用户能做的事:{shown}"
 
 
-def test_f5_runtime_missing_points_at_the_voice_cloning_section() -> None:
-    """这条本来就指对了 —— 一并钉住,免得下次改文案又漂走。"""
+def test_f5_runtime_missing_points_at_the_tts_engines_section() -> None:
+    """这条本来就指对了 —— 一并钉住,免得下次改文案又漂走。
+
+    那一节从「声音克隆」改名成「语音合成引擎」(它同时装着克隆引擎和预置音色引擎,见
+    VoiceCloneSection 的分组)。**指路的文案得跟着改名走**:名字对不上,用户拿到的就是一条
+    指向不存在的地方的指示 —— 和"装了却找不到"是同一种坏。
+    """
     shown = render_message("runtimeErr_f5RuntimeMissing", "zh")
     zh_ai = _zh_messages("aiStudio.ts")
 
-    assert '"声音克隆"' in zh_ai and 'voiceCloneTitle: "声音克隆"' in zh_ai
+    assert 'voiceCloneTitle: "语音合成引擎"' in zh_ai
     assert "上面的" not in shown, f"改文案又漂成相对位置了:{shown}"
-    assert "管理 → 引擎 → 声音克隆" in shown
+    assert "管理 → 引擎 → 语音合成引擎" in shown
 
 
 def test_the_other_f5_statuses_do_not_point_at_a_ghost_setting() -> None:

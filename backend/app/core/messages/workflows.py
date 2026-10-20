@@ -663,13 +663,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Runs locally — no network, no cost; 9 preset voices, no reference audio needed.",
     },
     "ttsProviderNote_qwenMissing": {
-        "zh": "Qwen3-TTS 的权重还没下:部署管理员在「管理 → 引擎 → 声音克隆」里点 Qwen3-TTS 那一行的「下载」(约 4.5 GB,另装数 GB 运行环境)。只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
-        "en": "The Qwen3-TTS weights aren't downloaded yet — a deployment admin downloads it from the Qwen3-TTS row under Admin → Engines → Voice cloning (about 4.5 GB, plus a few GB of runtime). If you just want sound now, Edge below needs no setup.",
+        "zh": "Qwen3-TTS 的权重还没下:部署管理员在「管理 → 引擎 → 语音合成引擎」里点 Qwen3-TTS 那一行的「下载」(约 4.5 GB,另装数 GB 运行环境)。只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
+        "en": "The Qwen3-TTS weights aren't downloaded yet — a deployment admin downloads it from the Qwen3-TTS row under Admin → Engines → Speech synthesis engines (about 4.5 GB, plus a few GB of runtime). If you just want sound now, Edge below needs no setup.",
     },
     "ttsProviderNote_cloneReady": {"zh": "用音色库里的克隆音色,完全本地。", "en": "Uses cloned voices from your library — fully local."},
     "ttsProviderNote_cloneMissing": {
-        "zh": "本地引擎还没装:部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」装一次;只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
-        "en": "The local engine isn't installed yet — a deployment admin installs it once under Admin → Engines → Voice cloning. If you just want sound now, Edge below needs no setup.",
+        "zh": "本地引擎还没装:部署管理员在「管理 → 引擎 → 语音合成引擎」里点「下载」装一次;只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
+        "en": "The local engine isn't installed yet — a deployment admin installs it once under Admin → Engines → Speech synthesis engines. If you just want sound now, Edge below needs no setup.",
     },
     "ttsProviderNote_edge": {
         "zh": "免费在线合成,无需任何配置;需联网,微软 Edge 同款音色。",

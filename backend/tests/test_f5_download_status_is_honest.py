@@ -94,7 +94,7 @@ def test_a_failure_keeps_a_reason_that_can_be_translated(monkeypatch: pytest.Mon
 
     assert row["status"] == "failed"
     assert row["message"] == (
-        "Install the F5-TTS runtime first under Admin → Engines → Voice cloning (deployment admins only)"
+        "Install the F5-TTS runtime first under Admin → Engines → Speech synthesis engines (deployment admins only)"
     )
     assert "message_params" not in row, "参数栏该被出口摘掉,不然前端会把它当字段读"
     assert row["error"] == "boom", "原文要留着,排障时只有它说得出是哪一层出的错"
@@ -248,6 +248,6 @@ def test_the_list_route_gives_the_reason_in_the_readers_language(monkeypatch: py
 
     assert row["status"] == "failed"
     assert row["message"] == (
-        "Install the F5-TTS runtime first under Admin → Engines → Voice cloning (deployment admins only)"
+        "Install the F5-TTS runtime first under Admin → Engines → Speech synthesis engines (deployment admins only)"
     )
     assert "message_params" not in row
