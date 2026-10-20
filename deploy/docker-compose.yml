@@ -135,7 +135,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # Cloud 启动时会 create_all;等它 healthy 再跑,免得第一轮在"表还不存在"上刷错误。
+      # Cloud 启动时执行 Alembic 迁移;等它 healthy 再跑,免得第一轮在"表还不存在"上刷错误。
       cloud:
         condition: service_healthy
 

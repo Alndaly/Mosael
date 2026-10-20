@@ -1,14 +1,17 @@
 """Cloud 自己的数据库底座。
 
-新服务、没有历史数据,所以建表用 `Base.metadata.create_all` —— 没有需要逐步演进的旧形状。
-一旦线上有了真实数据,表结构变化就该换成显式迁移(和社区服务一样);这里不预先造一套用不到
-的迁移框架(那正是"为了以后可能用到加东西")。
+表结构**只由 `migrations/` 里的 Alembic 脚本演进**,启动时升到 head —— 没有"模型也能建表"的
+`create_all` 平行路径,也就没有"新库和迁移出来的库长得不一样"这种事。
 """
 
 from __future__ import annotations
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import JSON, create_engine, event
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+#: JSON 列:PostgreSQL 上落 JSONB,SQLite 上用 JSON(两种库存的是同一份结构)。
+JSONType = JSON().with_variant(JSONB(), "postgresql")
 
 
 class Base(DeclarativeBase):
@@ -25,11 +28,11 @@ class Database:
             event.listen(self.engine, "connect", _sqlite_pragmas)
         self.sessions = sessionmaker(bind=self.engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
-    def create_all(self) -> None:
-        # 先 import 模型,`Base.metadata` 才有表。
-        from cloud import models  # noqa: F401
+    def migrate(self) -> None:
+        """把库升到最新迁移。表结构不从这里推断,只执行 `migrations/` 里的脚本。"""
+        from cloud.schema import upgrade_database
 
-        Base.metadata.create_all(bind=self.engine)
+        upgrade_database(self.url)
 
     def session(self) -> Session:
         return self.sessions()

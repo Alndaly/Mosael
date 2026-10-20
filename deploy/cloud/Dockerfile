@@ -2,7 +2,7 @@
 #   docker build -f deploy/cloud/Dockerfile -t mosael-cloud .
 #
 # 启动方式与本地一致:uv sync 装锁文件里的依赖,再用 uvicorn 跑 cloud.main:app。
-# 表结构由应用启动时的 create_all 创建(全新库);旧库升级见 deploy/README.md。
+# 表结构由启动时执行的 Alembic 迁移(`cloud/migrations/`)建起来;旧库升级见 deploy/README.md。
 
 FROM python:3.14-slim
 
@@ -32,6 +32,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 # 源码在本机是 600(仓库里的文件权限),必须让运行用户能读 —— 否则以 cloud 身份启动时
 # import cloud.app 会 Permission denied。
 COPY --chown=10001:10001 cloud/src ./src
+# 迁移脚本不在 wheel 里,必须跟着镜像走:`cloud.schema` 从 /app/cloud/migrations 读它们。
+COPY --chown=10001:10001 cloud/migrations ./migrations
+COPY --chown=10001:10001 cloud/alembic.ini ./alembic.ini
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/cloud/.venv/bin:$PATH" \

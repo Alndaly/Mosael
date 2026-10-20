@@ -96,6 +96,86 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The password must be at most {max} characters.",
         "zh": "密码最多 {max} 个字符。",
     },
+    "identity_required": {
+        "en": "Pick a display name first. It is the name other people will see next to your shares and comments.",
+        "zh": "先起个名字再来发布或评论。这个名字会显示在别人看到的分享和评论旁边。",
+    },
+    "display_name_required": {
+        "en": "The display name cannot be empty.",
+        "zh": "昵称不能为空。",
+    },
+    "display_name_too_long": {
+        "en": "The display name must be at most {max} characters.",
+        "zh": "昵称最多 {max} 个字符。",
+    },
+    "handle_invalid": {
+        "en": "Handles can only use lowercase letters, digits, hyphens and underscores, up to {max} characters.",
+        "zh": "短名只能用英文小写字母、数字、连字符和下划线，最多 {max} 个字符。",
+    },
+    "handle_reserved": {
+        "en": "That handle is reserved. Choose another one.",
+        "zh": "这个短名是保留字，请换一个。",
+    },
+    "handle_taken": {
+        "en": "That handle is already taken. Choose another one.",
+        "zh": "这个短名已经有人用了，请换一个。",
+    },
+    "title_required": {
+        "en": "A share needs a title.",
+        "zh": "分享需要一个标题。",
+    },
+    "title_too_long": {
+        "en": "The title must be at most {max} characters.",
+        "zh": "标题最多 {max} 个字符。",
+    },
+    "summary_too_long": {
+        "en": "The summary must be at most {max} characters.",
+        "zh": "简介最多 {max} 个字符。",
+    },
+    "license_too_long": {
+        "en": "The license name must be at most {max} characters.",
+        "zh": "许可协议名称最多 {max} 个字符。",
+    },
+    "invalid_kind": {
+        "en": "A share must be one of: {allowed}.",
+        "zh": "分享类型只能是：{allowed}。",
+    },
+    "invalid_payload": {
+        "en": "The share payload must be a JSON value.",
+        "zh": "分享内容必须是一份 JSON。",
+    },
+    "payload_too_large": {
+        "en": "This share is too large. The payload limit is {limit}.",
+        "zh": "这份分享太大了，内容上限是 {limit}。",
+    },
+    "share_not_found": {
+        "en": "That share does not exist, or it has been removed.",
+        "zh": "这个分享不存在，或者已经被删除了。",
+    },
+    "comment_empty": {
+        "en": "A comment cannot be empty.",
+        "zh": "评论不能为空。",
+    },
+    "comment_too_long": {
+        "en": "A comment must be at most {max} characters.",
+        "zh": "评论最多 {max} 个字符。",
+    },
+    "comment_not_found": {
+        "en": "That comment does not exist.",
+        "zh": "这条评论不存在。",
+    },
+    "user_not_found": {
+        "en": "No MosaelCloud account uses that handle.",
+        "zh": "没有这个短名对应的账号。",
+    },
+    "invalid_cursor": {
+        "en": "The page cursor is invalid. Start from the first page.",
+        "zh": "翻页游标无效，请从第一页重新开始。",
+    },
+    "invalid_sort": {
+        "en": "Sorting must be one of: {allowed}.",
+        "zh": "排序只能是：{allowed}。",
+    },
     "not_authenticated": {
         "en": "You are not signed in. Sign in and try again.",
         "zh": "你还没有登录，请登录后再试。",

@@ -55,8 +55,18 @@ def test_cloud_has_its_own_tables_and_no_local_identity_columns(tmp_path):
         assert not ({"users", "workspaces", "auth_sessions", "workspace_members"} & tables)
 
         columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_users)")}
-        assert columns == {"id", "email", "password_hash", "email_verified_at", "created_at"}
-        assert not ({"username", "display_name", "workspace_id", "local_user_id"} & columns)
+        # 身份的三列属于 Cloud 自己;本地账号的用户名 / 工作区列一个都不许过来。
+        assert columns == {
+            "id",
+            "email",
+            "password_hash",
+            "email_verified_at",
+            "created_at",
+            "display_name",
+            "handle",
+            "avatar_seed",
+        }
+        assert not ({"username", "workspace_id", "local_user_id"} & columns)
 
 
 def test_cloud_signup_and_login_never_touch_the_local_database(tmp_path):
@@ -102,7 +112,8 @@ def test_a_local_account_can_exist_before_cloud_registration_and_stays_put(tmp_p
     client = TestClient(app)
     try:
         signup(client, email="alice@example.com")
-        assert client.get(api("/me")).status_code == 401  # 注册不会顺手登录
+        assert client.get(api("/me")).status_code == 200  # 注册即登录
+        client.post(api("/logout"))
         client.post(api("/login"), json={"email": "alice@example.com", "password": PASSWORD})
         assert client.get(api("/me")).status_code == 200
     finally:

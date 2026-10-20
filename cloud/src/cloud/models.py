@@ -9,11 +9,20 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cloud.db import Base
+from cloud.db import Base, JSONType
 
 
 def new_id() -> str:
@@ -26,7 +35,11 @@ def now() -> datetime:
 
 
 class CloudUser(Base):
-    """一个 MosaelCloud 账号。邮箱必填,密码可选(第三方登录建出来的账号没有);**没有**本地账号的用户名、工作区、部署管理员。"""
+    """一个 MosaelCloud 账号。邮箱必填,密码可选(第三方登录建出来的账号没有);**没有**本地账号的用户名、工作区、部署管理员。
+
+    身份(`display_name` / `handle` / `avatar_seed`)是**另一件事**,可空:注册不要求填,
+    第一次发布或评论时才要求。没填之前账号照样能浏览、能登录。
+    """
 
     __tablename__ = "cloud_users"
 
@@ -39,6 +52,12 @@ class CloudUser(Base):
     #: 注册时要先验邮箱验证码,验过即写这个时间;更早的账号可能是空,不做回填。
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    #: 公开昵称。可空 = 还没有身份;空串不允许。**公开响应里只给这一列,不给 email。**
+    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    #: 唯一短名,个人页 `/u/<handle>`。可空(还没起名字),多个 NULL 不算冲突。
+    handle: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True, default=None)
+    #: 头像种子:一个短字符串。P1 的头像 = 昵称首字母 + 由这个种子决定的颜色,**不存图片**。
+    avatar_seed: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
 
 
 class CloudSession(Base):
@@ -180,4 +199,91 @@ class CloudDevice(Base):
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudShare(Base):
+    """一次社区分享:工作流工程文件,或画板。
+
+    **内容必须挂在身份上。** `owner_user_id` 非空,没有匿名发布。`payload` 服务端只校验
+    "是一份 JSON 且不超过 2 MB",不解析里面的节点 / 画板结构 —— 那是客户端的事。
+    """
+
+    __tablename__ = "cloud_shares"
+    __table_args__ = (
+        CheckConstraint("kind IN ('workflow', 'board')", name="ck_cloud_shares_kind"),
+        CheckConstraint("status IN ('listed', 'removed')", name="ck_cloud_shares_status"),
+        Index("idx_cloud_shares_owner", "owner_user_id"),
+        Index("idx_cloud_shares_created", "created_at"),
+        Index("idx_cloud_shares_kind_created", "kind", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    owner_user_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
+    )
+    #: `workflow` / `board`。别的值在 domain 层就 422,数据库再兜一道 CHECK。
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    #: 工程文件本体。列表和详情都不返回它,只有 `/payload` 与 `/download` 给。
+    payload: Mapped[Any] = mapped_column(JSONType, nullable=False)
+    #: 紧凑 UTF-8 JSON 的实际字节数。列表页只读这个数,不必碰 payload。
+    bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    license: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    #: P1 只有 `listed` / `removed`。作者删除 = 软删(改状态),不再出现在任何公开读接口里。
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="listed")
+    #: 下载计次。`POST /download` 每次 +1。
+    downloads: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now, onupdate=now)
+
+
+class CloudShareLike(Base):
+    """一个人对一次分享的点赞。**去重靠 `(share_id, user_id)` 主键**,不靠先查再插。"""
+
+    __tablename__ = "cloud_share_likes"
+    __table_args__ = (Index("idx_cloud_share_likes_user", "user_id"),)
+
+    share_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_shares.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudShareFavorite(Base):
+    """一个人收藏的一次分享。和点赞同一套形状:唯一性由主键保证,重复写是幂等的。"""
+
+    __tablename__ = "cloud_share_favorites"
+    __table_args__ = (Index("idx_cloud_share_favorites_user", "user_id"),)
+
+    share_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_shares.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)
+
+
+class CloudShareComment(Base):
+    """一条评论。`body` 存原文(不转义、不渲染 markdown);响应是 JSON 纯文本,由前端按文本显示。"""
+
+    __tablename__ = "cloud_share_comments"
+    __table_args__ = (
+        Index("idx_cloud_share_comments_share", "share_id", "created_at"),
+        Index("idx_cloud_share_comments_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    share_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_shares.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("cloud_users.id", ondelete="CASCADE"), nullable=False
+    )
+    body: Mapped[str] = mapped_column(String(2000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now)

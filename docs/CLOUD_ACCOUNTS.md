@@ -3,7 +3,8 @@
 最初一期只做两件事:**MosaelCloud 有自己的一套账号**、**桌面端能把它绑到某个本地用户身上**。
 这一版又补上了**邮箱验证码注册**与**验证码登录**(见「邮箱验证码与验证码登录」一节),
 以及 **GitHub / Google 登录**(见「GitHub / Google 登录」一节)。
-分享、社区、同步、钱包、模型网关都不在这里,也不预先加字段。
+社区分享的第①笔(身份、分享、点赞 / 收藏 / 评论)见「社区分享第①笔:身份、分享、互动」;
+同步、钱包、模型网关不在这里,也不预先加字段。
 
 设计方向来自 [ADR 0039](adr/0039-mosael-cloud.md)(Cloud 是独立产品边界),但它当时设想的是
 "重新接社区服务的设备授权";这一期按维护者的新方向改成**一套独立的 Cloud 账号**,不复用
@@ -391,6 +392,33 @@ provider 报错不外泄原始信息、唯一约束在库上。官网侧另有
 - 解绑:桌面端 `DELETE /api/cloud/binding` 只删本地行;撤销云端设备在官网账号页
   (`DELETE /device/{id}`)。两件事分开,是因为它们属于两份不同的数据。
 
+## 社区分享第①笔:身份、分享、互动
+
+P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的「社区分享接口」一节):
+
+- **身份**加在 `cloud_users` 上:`display_name` / `handle` / `avatar_seed`,三列都可空 ——
+  注册不填,第一次发布 / 评论才要求(缺 `display_name` → `409 identity_required`,文案是
+  "先起个名字")。`handle` 唯一、只允许 `[a-z0-9_-]`、保留字(`admin` / `api` / `u` …)回 409;
+  没显式给时自动生成 `member-xxxxxxxx`,之后可用 `PUT /me` 改。头像不存图片:只存短种子,
+  P1 由前端算"昵称首字母 + 由种子决定的颜色"。
+- **分享**表 `cloud_shares`:`owner_user_id` NOT NULL(没有匿名发布);`kind` 只有
+  `workflow` / `board`;`payload` 是 JSON(Postgres 上 JSONB),服务端只确认它是合法 JSON 并量
+  **2 MB** 上限(超过 → 413,不截断、不解析节点 / 画板结构);`status` 只有 `listed` / `removed`。
+- **互动**三表 `cloud_share_likes` / `cloud_share_favorites` / `cloud_share_comments`,每张都带
+  `user_id`。点赞 / 收藏靠 `(share_id, user_id)` 主键去重:重复 POST 返回 204 且什么都不变,
+  不是 409;DELETE 不存在的行也是 204。评论非空、有长度上限,空评论 422。
+- **公开响应里只有** `display_name` / `handle` / `avatar_seed` 三列身份;email 不出现在任何公开
+  列表 / 详情 / 评论 / 个人页。`payload` 只在 `/shares/{id}/payload` 与 `/shares/{id}/download`
+  返回,列表和详情不返回(省流量)。评论存原文、响应是 JSON 纯文本,不做 markdown / HTML 渲染。
+- **删除权限**:`DELETE /shares/{id}` 对非作者回 **404**(不是 403)—— 不区分"这个 id 不存在"
+  与"这个 id 不是你的",已删除的分享也就不留下探测口;作者删除是软删(`status='removed'`),
+  重复删除仍 204。删除评论同理,只有本人,别人 404。
+- **注册即登录**:signup 与登录 / 验证码 / 第三方回调共用同一个 `open_session`,响应直接带
+  会话 cookie,紧接着 `GET /me` 就是 200。
+- **迁移**:`cloud/migrations/versions/0001_initial.py`(create_all 时代的基线)+
+  `0002_identity_and_community.py`(身份三列 + 分享四表)。`cloud.app.create_app()` 启动时执行
+  `alembic upgrade head`;表结构不再由 `create_all` 猜,已有库先用 `cloud.cli stamp 0001`。
+
 ## 本地新表与迁移
 
 `backend/app/db/model_slices/cloud_binding.py`:
@@ -413,13 +441,14 @@ cloud_bindings(
 
 ## 不在这一期
 
-分享、社区、feed、同步、钱包、模型网关、找回密码 / 设置密码、密码登录的失败限速 / 人机验证、
-云端设备凭据的刷新轮换、桌面端用云端凭据调用任何业务接口、第三方身份的列表 / 解绑 / 账号合并。
+分享的后续(draft、审核 / 举报、头像上传、下载权限 / 付费)、feed、同步、钱包、模型网关、
+找回密码 / 设置密码、密码登录的失败限速 / 人机验证、云端设备凭据的刷新轮换、
+桌面端用云端凭据调用任何业务接口、第三方身份的列表 / 解绑 / 账号合并。
 
 ## 只有真机能验 / 拿不准
 
 - **真机**:系统浏览器打开 `verification_uri_complete`、桌面端在 Electron 里打开外部链接、
-  真实 Postgres 上的 `create_all` 与并发设备码消费、真实 SMTP 提供商的投递(SPF / DKIM /
+  真实 Postgres 上的 Alembic 迁移与并发设备码消费、真实 SMTP 提供商的投递(SPF / DKIM /
   退信)、反代后面 `request.client.host` 是否拿到真实客户端 IP(uvicorn 需要开 proxy headers,
   否则每 IP 限流会退化成"每个代理一个桶")。CI 用 SQLite + TestClient,发信走注入的假 sender。
 - **拿不准**:长期设备 token 在"后续分享 / 同步"里是否够用;如果那时需要更细的权限,应该加
@@ -442,6 +471,11 @@ cloud_bindings(
   行里只有哈希与短期 verifier,但公网长期运行前应补一条定时清理。是否允许一个账号绑多个
   **同一 provider** 的身份也没有产品约束:库允许,登录按第三方 id 解析,不做限制;若产品
   要求"一家一个",应在绑定时加应用层检查,而不是把唯一约束改成 `(provider, cloud_user_id)`。
-- **已有库升级**:`cloud_users.password_hash` 从 NOT NULL 改成可空,`create_all` 不会改已有列。
-  Postgres 需 `ALTER TABLE cloud_users ALTER COLUMN password_hash DROP NOT NULL;`;SQLite 开发库
-  删掉重建;线上有真实数据时应写显式迁移。
+- **已有库升级**:`cloud_users.password_hash` 从 NOT NULL 改成可空,现在由迁移体系接管。
+  `create_all` 时代建出来的旧库先 `python -m cloud.cli stamp 0001`,再让启动迁移升到 head;
+  若旧库的 `password_hash` 仍是 NOT NULL,Postgres 还需
+  `ALTER TABLE cloud_users ALTER COLUMN password_hash DROP NOT NULL;`。新库不做这一步。
+- **拿不准(社区分享)**:`payload` 的 2 MB 是**紧凑 UTF-8 JSON 的字节数**,不是请求体大小;
+  前端若带大量空白,请求体会略大,但存进去的内容仍按这个尺度判定。下载计数用一条自增 UPDATE,
+  高并发下计数准确,但没有做防刷(同一账号可以反复下载加数);如果以后要做"一人一天算一次",
+  应该加 `(share_id, user_id, day)` 的去重表,而不是在读取代码里猜。

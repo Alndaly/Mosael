@@ -53,6 +53,23 @@ def current_user(request: Request, db: DbSession, config: CurrentConfig) -> Clou
 CurrentUser = Annotated[CloudUser, Depends(current_user)]
 
 
+def optional_user(request: Request, db: DbSession, config: CurrentConfig) -> CloudUser | None:
+    """公开读接口用:带了有效会话就认出是谁,没有(或过期)就当游客。
+
+    **不报 401**:浏览不需要登录;`liked_by_me` / `favorited_by_me` 在游客这里是 false。
+    """
+    raw = request.cookies.get(config.cookie_name, "")
+    if not raw:
+        return None
+    session = db.get(CloudSession, token_digest(raw))
+    if session is None or session.expires_at <= now():
+        return None
+    return db.get(CloudUser, session.user_id)
+
+
+MaybeUser = Annotated[CloudUser | None, Depends(optional_user)]
+
+
 def current_device(
     db: DbSession,
     authorization: Annotated[str | None, Header()] = None,

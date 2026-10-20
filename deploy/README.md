@@ -57,7 +57,7 @@ curl -fsS https://mosael.example.com/api/cloud/v1/health   # {"status":"ok"}
 | `cloud/Dockerfile` | `uv sync --frozen --no-dev` + `uvicorn cloud.main:app`,非 root,只暴露容器内 8000。 |
 | `website/Dockerfile` | pnpm 构建 Next.js;`output: "standalone"` 运行产物 + public/media,非 root,只暴露容器内 3000。 |
 | `cloud/Dockerfile.dockerignore`、`website/Dockerfile.dockerignore` | 构建上下文是**仓库根**(`context: ..`),这两个文件只放对应镜像真正需要的路径(等价于社区服务的 `Dockerfile.dockerignore`)。 |
-| `postgres/init.sql` | 只在数据卷为空时执行:校验 UTF8、把库默认时区钉成 UTC;表由 Cloud 启动时 `create_all` 建。 |
+| `postgres/init.sql` | 只在数据卷为空时执行:校验 UTF8、把库默认时区钉成 UTC;表由 Cloud 启动时的 Alembic 迁移建。 |
 | `cron/cleanup.sh` | 每 `CLEANUP_INTERVAL_SECONDS` 删一次过期 `cloud_email_codes` / `cloud_sessions` / `cloud_oauth_states`。 |
 
 ## 首次部署清单
@@ -174,23 +174,28 @@ SWC 与 sharp。`docker build` 默认构建成**构建机**的架构:
 
 ## 旧库升级(复用已有 Cloud 数据库)
 
-全新库什么也不用做:Cloud 启动时 `Base.metadata.create_all` 会按当前模型建表,
-`cloud_users.password_hash` 本来就是可空(第三方登录新建的账号没有密码)。
+全新库什么也不用做:Cloud 启动时执行 `cloud/migrations/` 里的 Alembic 迁移,直接建到最新
+(`cloud_users.password_hash` 本来就是可空,第三方登录新建的账号没有密码)。
 
-**旧库**(在第三方登录之前建的)的 `password_hash` 是 `NOT NULL`;`create_all` 不会改已有列。
-在启动新版 Cloud 之前执行一次:
+**由旧版 `create_all` 建出来的库**(没有 `alembic_version` 表)在启动新版之前先标一次基线,
+之后每次升级都由启动迁移接手:
 
 ```bash
 cd deploy
 docker compose up -d postgres
-docker compose exec -T postgres psql -U mosael -d mosael <<'SQL'
-ALTER TABLE cloud_users ALTER COLUMN password_hash DROP NOT NULL;
-SQL
+docker compose run --rm cloud python -m cloud.cli stamp 0001
 docker compose up -d
 ```
 
-只在旧库上执行;新库执行会报列已经是可空(或没有可改的东西),不要反复跑。SQLite 开发库
-不需要这条,直接换新库即可。
+- 只在这样的旧库上 stamp 一次;**新库不要 stamp**(它已经是迁移建出来的)。
+- 若库是在第三方登录之前建的,`password_hash` 还是 `NOT NULL`,再执行一次:
+  ```bash
+  docker compose exec -T postgres psql -U mosael -d mosael <<'SQL'
+ALTER TABLE cloud_users ALTER COLUMN password_hash DROP NOT NULL;
+SQL
+  ```
+- 社区分享第①笔会由启动迁移自动加 `display_name` / `handle` / `avatar_seed` 三列和分享四表;
+  已有账号保持"没有身份"(三列为空),写接口会要求用户自己起名 —— 不替旧数据猜昵称。
 
 ## 过期行清理
 

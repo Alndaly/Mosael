@@ -186,6 +186,8 @@ def test_five_wrong_attempts_burn_the_code(client, db_path):
 
 def test_password_login_and_code_login_open_the_same_kind_of_session(client, db_path):
     signup(client, email="both@example.com")
+    # 注册即登录,先退出,这样下面数的是"登录"造出来的会话,不是注册那一枚。
+    assert client.post(api("/logout")).status_code == 204
 
     password_login = client.post(api("/login"), json={"email": "both@example.com", "password": PASSWORD})
     assert password_login.status_code == 200, password_login.text

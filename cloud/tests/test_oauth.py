@@ -249,7 +249,7 @@ def test_identity_whose_verified_email_belongs_to_another_account_is_a_conflict(
     assert created.headers["location"] == "https://mosael.test/en/account?oauth=created"
     bob_id = scalar(oauth_db_path, "SELECT cloud_user_id FROM cloud_identities")
 
-    # 另有一个 alice 的账号(注册不自动登录),然后清掉 bob 的会话,按"未登录"再走一次。
+    # 另有一个 alice 的账号(注册即登录),清掉它的会话,按"未登录"再走一次。
     signup(oauth_client, email="alice@example.com")
     oauth_client.cookies.delete("mosael_cloud_session")
     oauth_providers["github"].email = "alice@example.com"

@@ -9,6 +9,8 @@ dependencies = [
   "pydantic>=2.9",
   "pydantic-settings>=2.5",
   "sqlalchemy>=2.1",
+  # 表结构变化一律走 Alembic(migrations/),不在读取代码里认两种形状。
+  "alembic>=1.14",
   # 密码哈希只用成熟库的 argon2id,不自己写 KDF。
   "argon2-cffi>=23.1",
   # Pydantic 的 EmailStr 需要它;校验邮箱格式这件事不自己写正则。

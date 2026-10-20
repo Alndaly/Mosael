@@ -18,6 +18,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from cloud.api.auth import router as accounts_router
 from cloud.api.device import router as devices_router
 from cloud.api.oauth import router as oauth_router
+from cloud.api.profile import router as profile_router
+from cloud.api.shares import router as shares_router
 from cloud.config import API_PREFIX, CloudConfig
 from cloud.db import Database
 from cloud.errors import CloudError, message
@@ -76,7 +78,8 @@ def create_app(
     resolved = config or CloudConfig.from_env()
     resolved.data_dir.mkdir(parents=True, exist_ok=True)
     database = Database(resolved.resolved_database_url)
-    database.create_all()
+    # 表结构只有一条来源:migrations/ 里的脚本。启动即升到 head,不另走 create_all。
+    database.migrate()
 
     app = FastAPI(
         title="MosaelCloud",
@@ -132,4 +135,6 @@ def create_app(
     app.include_router(accounts_router, prefix=API_PREFIX)
     app.include_router(devices_router, prefix=API_PREFIX)
     app.include_router(oauth_router, prefix=API_PREFIX)
+    app.include_router(profile_router, prefix=API_PREFIX)
+    app.include_router(shares_router, prefix=API_PREFIX)
     return app

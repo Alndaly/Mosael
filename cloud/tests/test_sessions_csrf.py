@@ -49,7 +49,8 @@ def test_secure_is_on_when_configured(tmp_path):
 
 
 def test_session_token_is_unpredictable_and_only_its_digest_is_stored(client, db_path):
-    signed_in(client)
+    # 注册即登录,所以 signup 给的这一枚就是第一个会话 —— 库里此刻只有这一行。
+    signup(client)
     first = session_token(client)
     assert len(first) >= 43, len(first)
     stored = scalar(db_path, "SELECT token_hash FROM cloud_sessions")

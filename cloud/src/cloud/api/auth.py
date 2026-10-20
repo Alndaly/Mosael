@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
 from cloud.config import CloudConfig
+from cloud.domain.identity import account_user
 from cloud.email_codes import consume_code, issue_code
 from cloud.errors import CloudError
 from cloud.models import CloudSession, CloudUser, now
@@ -50,16 +51,6 @@ def request_ip(request: Request) -> str:
     return request.client.host if request.client is not None else ""
 
 
-def user_out(user: CloudUser) -> dict[str, object]:
-    """交给界面的账号样子。**密码哈希永远不出现在任何响应里。**"""
-    return {
-        "id": user.id,
-        "email": user.email,
-        "email_verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
-        "created_at": user.created_at.isoformat(),
-    }
-
-
 def set_session_cookie(response: Response, config: CloudConfig, raw: str, max_age: int) -> None:
     response.set_cookie(
         config.cookie_name,
@@ -83,7 +74,7 @@ def clear_session_cookie(response: Response, config: CloudConfig) -> None:
 
 
 def open_session(db, config: CloudConfig, user: CloudUser, response: Response) -> None:
-    """给一次成功的认证发会话。密码登录和验证码登录**共用这一条路径**,行为才不会分叉。"""
+    """给一次成功的认证发会话。注册、密码登录、验证码登录、第三方登录**共用这一条路径**,行为才不会分叉。"""
     raw = new_token()
     expires_at = now() + timedelta(days=config.session_ttl_days)
     db.add(CloudSession(token_hash=token_digest(raw), user_id=user.id, expires_at=expires_at))
@@ -108,10 +99,11 @@ def signup_code(body: EmailIn, db: DbSession, request: Request) -> dict[str, obj
 
 
 @router.post("/signup", status_code=201)
-def signup(body: SignupIn, db: DbSession, config: CurrentConfig) -> dict[str, object]:
+def signup(body: SignupIn, db: DbSession, config: CurrentConfig, response: Response) -> dict[str, object]:
     """注册:**必须带邮箱验证码**,验过才建账号,并把 `email_verified_at` 写上。
 
-    仍然不自动登录:官网把用户送到登录页,让"注册"和"登录"各自只有一件事。
+    **注册成功即登录**:和密码 / 验证码登录共用同一个 `open_session`,响应里直接是会话
+    cookie,紧接着 `GET /me` 就是 200。注册页不必再让用户"用刚设的邮箱登录一次"。
     """
     if len(body.password) < config.password_min_length:
         raise CloudError(400, "password_too_short", min=config.password_min_length)
@@ -136,7 +128,8 @@ def signup(body: SignupIn, db: DbSession, config: CurrentConfig) -> dict[str, ob
         # 并发注册同一个邮箱:唯一索引先撞上,给同一句人话。
         db.rollback()
         raise CloudError(409, "email_taken") from exc
-    return {"user": user_out(user)}
+    open_session(db, config, user, response)
+    return {"user": account_user(user)}
 
 
 @router.post("/login")
@@ -149,7 +142,7 @@ def login(body: LoginIn, db: DbSession, config: CurrentConfig, response: Respons
         raise CloudError(401, "invalid_credentials")
 
     open_session(db, config, user, response)
-    return {"user": user_out(user)}
+    return {"user": account_user(user)}
 
 
 @router.post("/login/code")
@@ -183,7 +176,7 @@ def login_with_code(
     consume_code(db, email=email, purpose="login", code=code)
 
     open_session(db, config, user, response)
-    return {"user": user_out(user)}
+    return {"user": account_user(user)}
 
 
 @router.post("/logout", status_code=204)
@@ -203,7 +196,7 @@ def logout(request: Request, db: DbSession, config: CurrentConfig):
 
 @router.get("/me")
 def me(user: CurrentUser) -> dict[str, object]:
-    return {"user": user_out(user)}
+    return {"user": account_user(user)}
 
 
 @router.delete("/me", status_code=204)

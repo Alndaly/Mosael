@@ -3,7 +3,7 @@
 #   1. 编码不是 UTF8 就直接失败,免得悄悄建出一个存不了中文的库;
 #   2. 把库的默认时区钉成 UTC —— cloud/ 的时间都是朴素 UTC,避免服务器本地时区影响清理判断。
 #
-# 表结构不在这里建:Cloud 启动时用 Base.metadata.create_all 建(全新库的正确做法)。
+# 表结构不在这里建:Cloud 启动时执行 cloud/migrations/ 里的 Alembic 迁移(全新库直接到 head)。
 
 DO $$
 BEGIN
