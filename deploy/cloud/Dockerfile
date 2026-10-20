@@ -20,7 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 #
 # PIP_INDEX_URL 可在构建时覆盖(国内可用镜像加速):
 #   docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 RUN pip install --no-cache-dir --index-url "$PIP_INDEX_URL" "uv~=0.12"
 
 WORKDIR /app/cloud
