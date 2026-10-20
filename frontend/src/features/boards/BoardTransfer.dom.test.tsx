@@ -172,16 +172,9 @@ describe("导出当前画板", () => {
     localStorage.setItem("mosael:selected:boards:w1", "b1");
     mount();
 
-    const button = await screen.findByRole("button", { name: zh.boardsExport });
-    //: ④ 导出入口有 aria-label,也是一颗真的 button(键盘可达)。
-    expect(button).toHaveAttribute("aria-label", zh.boardsExport);
-    expect(button.tagName).toBe("BUTTON");
-
-    //: 用键盘而不是鼠标点它。
-    const user = userEvent.setup();
-    button.focus();
-    expect(button).toHaveFocus();
-    await user.keyboard("{Enter}");
+    //: 导出是「更多」那颗菜单里的一项(维护者:画板级动作收在弹窗里,别在工具栏上再摆一颗图标)。
+    fireEvent.click(await screen.findByRole("button", { name: zh.more }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: zh.boardsExport }));
 
     await waitFor(() => expect(download.saveJsonToDisk).toHaveBeenCalledTimes(1));
     const [filename, data] = download.saveJsonToDisk.mock.calls[0] as [string, Record<string, unknown>];

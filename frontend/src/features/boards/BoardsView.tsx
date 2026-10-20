@@ -1261,13 +1261,15 @@ function BoardDetail({
                 </IconButton>
               </CanvasToolbarGroup>
               <CanvasToolbarGroup label={t("more")}>
-                {/* 导出走「更多」那一组,不另开一栏:它和删除一样是整张画板的级动作。 */}
-                <IconButton label={t("boardsExport")} onClick={exportFile}>
-                  <FileOutput size={14} />
-                </IconButton>
+                {/* 画板级的动作都收在「更多」这颗菜单里(不只是工具栏上多一个图标) */}
                 <ActionMenu
                   label={t("more")}
                   actions={[
+                    {
+                      label: t("boardsExport"),
+                      icon: <FileOutput size={14} />,
+                      onSelect: exportFile,
+                    },
                     {
                       label: t("delete"),
                       icon: <Trash2 size={14} />,
