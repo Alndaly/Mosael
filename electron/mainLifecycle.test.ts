@@ -50,6 +50,24 @@ describe("窗口", () => {
   });
 });
 
+describe("单实例与协议唤起", () => {
+  /**
+   * 应用已经在跑的时候再点一条 `mosael://`(包括新的 `mosael://import?share=…`):
+   * 第二次启动只把 argv 交给当前实例、把它唤到前台,绝不开第二个窗口。
+   */
+  it("第二个实例只交参数 + 唤到前台,不建窗口", () => {
+    const branch = MAIN.match(/app\.on\("second-instance"[\s\S]*?\n\}\);/)?.[0];
+    expect(branch, "second-instance 的接线没找到").toBeTruthy();
+    expect(branch).toMatch(/system\.adoptSecondInstance\(argv\)/);
+    expect(branch).not.toMatch(/new BrowserWindow|createMainWindow|createWindow/);
+  });
+
+  it("单实例锁在 app ready 之前、协议登记在系统层", () => {
+    expect(MAIN).toMatch(/if \(!app\.requestSingleInstanceLock\(\)\) \{/);
+    expect(MAIN).toMatch(/if \(system\) system\.adoptSecondInstance\(argv\);/);
+  });
+});
+
 describe("视图 → 放大 / 缩小", () => {
   /** 从 main.cjs 取出 zoomWindow 本身跑。 */
   function loadZoomWindow() {

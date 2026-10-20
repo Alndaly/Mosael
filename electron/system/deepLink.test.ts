@@ -58,12 +58,48 @@ describe("mosael:// 深链解析", () => {
     expect(parseDeepLink("mosael://open")).toBeNull();
   });
 
-  it("只认 open 这一个动作:执行类动作一律不解析", () => {
+  it("只认 open / import 两个动作:执行类动作一律不解析", () => {
     // 这是这个模块最重要的一条。协议不需要用户确认就能被任意网页触发,一旦支持
     // 「运行工作流」,访问一个恶意网页就等于让它驱动你的自动化(带着登录态和发布权限)。
     expect(parseDeepLink("mosael://run?view=workflows&id=abc")).toBeNull();
     expect(parseDeepLink("mosael://execute?workflow=abc")).toBeNull();
     expect(parseDeepLink("mosael://publish?id=abc")).toBeNull();
+    // 「导入」也必须是白名单里的那一件事:别的动作带着 share 也不认。
+    expect(parseDeepLink("mosael://delete?share=abc")).toBeNull();
+    expect(parseDeepLink("mosael://settle?share=abc")).toBeNull();
+    expect(parseDeepLink("mosael://open?share=abc")).toBeNull();
+  });
+
+  it("社区分享导入(官网「在 Mosael 中打开」):只认 import 这个 host,share 是纯 id", () => {
+    // 官网 share-detail.tsx 生成的形状。解析结果只带两件事:落到工作流页,以及 `share:<id>` 这个
+    // 交给页面自己去取的标记 —— 深链本身不执行导入,导入要人在弹窗里点(见 features/workflows)。
+    expect(parseDeepLink("mosael://import?share=abc")).toEqual({ view: "workflows", template: "share:abc" });
+    expect(parseDeepLink("mosael://import?share=Ab_c-123")).toEqual({ view: "workflows", template: "share:Ab_c-123" });
+    expect(parseDeepLink(`mosael://import?share=${"a".repeat(64)}`)).toEqual({
+      view: "workflows",
+      template: `share:${"a".repeat(64)}`,
+    });
+    // 一条链接只做一件事:附带别的参数不跟着生效(不能既导入又跳设置、加入工作区)。
+    expect(parseDeepLink("mosael://import?share=abc&view=settings")).toEqual({ view: "workflows", template: "share:abc" });
+    expect(parseDeepLink("mosael://import?share=abc&template=full_video_generation")).toEqual({
+      view: "workflows",
+      template: "share:abc",
+    });
+    expect(parseDeepLink("mosael://import?share=abc&join=Ab_c-12345678")).toEqual({
+      view: "workflows",
+      template: "share:abc",
+    });
+  });
+
+  it("share 限死字符集 —— 它是外部输入,绝不当路径拼进 URL", () => {
+    expect(parseDeepLink("mosael://import?share=../../etc/passwd")).toBeNull();
+    expect(parseDeepLink("mosael://import?share=has spaces")).toBeNull();
+    expect(parseDeepLink("mosael://import?share=a%2Fb")).toBeNull();
+    expect(parseDeepLink("mosael://import?share=abc%00def")).toBeNull();
+    expect(parseDeepLink("mosael://import?share=abc?x=1")).toBeNull();
+    expect(parseDeepLink("mosael://import?share=")).toBeNull();
+    expect(parseDeepLink("mosael://import")).toBeNull();
+    expect(parseDeepLink(`mosael://import?share=${"a".repeat(65)}`)).toBeNull();
   });
 
   it("拒绝别的协议", () => {

@@ -31,6 +31,8 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 import { WorkflowCard } from "@/features/workflows/WorkflowCard";
+import { ShareImportDialog } from "@/features/workflows/ShareImportDialog";
+import { shareFromTemplate } from "@/features/workflows/shareImport";
 import { WorkflowEditor } from "@/features/workflows/WorkflowEditor";
 import { WorkflowTriggersDialog } from "@/features/workflows/WorkflowTriggersDialog";
 import { analyzeWorkflowNow } from "@/features/workflows/readiness";
@@ -54,8 +56,17 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const [triggersFor, setTriggersFor] = React.useState<Workflow | null>(null);
   const [communityOpen, setCommunityOpen] = React.useState(false);
   const [communityFocus, setCommunityFocus] = React.useState<string | null>(null);
+  //: 官网社区分享的「在 Mosael 中打开」(mosael://import?share=…):等确认的分享 id,null = 没开。
+  //: 深链只把 id 送到这里;读取 / 导入在弹窗里由人点(见 ShareImportDialog)。
+  const [importShare, setImportShare] = React.useState<string | null>(null);
   //: 官网「在 Mosael 中打开」:打开工作流社区、选中那个模板 —— 添加副本仍由人点。
+  //: 社区分享的导入请求走同一条投递,靠 `share:` 前缀分开(见 electron/system/deepLink)。
   useOpenRequest(OPEN_WORKFLOW_TEMPLATE, (templateId) => {
+    const share = shareFromTemplate(templateId);
+    if (share) {
+      setImportShare(share);
+      return;
+    }
     setCommunityFocus(templateId);
     setCommunityOpen(true);
   });
@@ -281,6 +292,23 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     />
   );
 
+  /**
+   * 社区分享导入:预览由弹窗自己取,成功后**选中刚导入的那一条** —— 人点完链接就该看见导进来的东西,
+   * 而不是停在列表上再自己找一遍。列表作废一次,新工作流立刻出现在缓存里。
+   */
+  const shareImportDialog = (
+    <ShareImportDialog
+      shareId={importShare}
+      workspaceId={workspace.id}
+      onClose={() => setImportShare(null)}
+      onImported={(workflow) => {
+        setImportShare(null);
+        setSelectedId(workflow.id);
+        void qc.invalidateQueries({ queryKey: ["workflows", workspace.id] });
+      }}
+    />
+  );
+
   if (workflows.isSuccess && (workflows.data ?? []).length === 0) {
     return (
       <div className={STUDIO_PAGE}>
@@ -326,6 +354,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           }
         />
         {communityDialog}
+        {shareImportDialog}
       </div>
     );
   }
@@ -361,6 +390,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
           />
         </div>
         {importControl}
+        {shareImportDialog}
         </div>
       );
   }
@@ -451,6 +481,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       </div>
       {importControl}
       {communityDialog}
+      {shareImportDialog}
       <RenameDialog
         open={menuRenaming !== null}
         title={t("rename")}

@@ -17,7 +17,12 @@
  *   mosael://open?view=plugins&market=<插件 id>        —— 打开插件市场、找到这个插件
  *   mosael://open?view=workflows&template=<模板 id>    —— 打开工作流社区、选中这个模板
  *   mosael://open?join=<邀请码>                        —— 一张邀请链接(ADR 0054):应用被叫到前台,码交给界面
+ *   mosael://import?share=<分享 id>                    —— 官网社区分享「在 Mosael 中打开」(见下)
  * view 必须在白名单里(和前端 StudioView 一一对应);id 可选,用于打开具体记录。
+ *
+ * `import` 是**唯一**一个不清自来的动作,而且它仍然不执行任何东西:解析结果只说「到工作流页,
+ * 有一个分享 id 等人确认」,真正的读取 / 导入由界面弹窗里的人点。分享 id 只做 id 用,绝不出现在
+ * URL 路径里(它是外部输入,拼路径就是注入口)。
  *
  * `market` / `template` 是官网社区页「在 Mosael 中打开」用的:官网上看的是**还没装**的插件、
  * **还没添加**的模板,它们在本机没有记录 id。同样只导航 —— 打开市场、选中那一项,装不装、
@@ -59,12 +64,28 @@ const JOIN_PATTERN = /^[A-Za-z0-9_-]{8,200}$/;
 const MARKET_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
 const TEMPLATE_PATTERN = /^[a-z0-9_]{1,64}$/;
 
+/**
+ * 社区分享 id(云端 `cloud_shares.id`):和记录 id 同一族字符集。**只当 id 用**,不拼路径、不拼 URL。
+ * 1..64 是云端那边就有的上限,这里不替它放宽。
+ */
+const SHARE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * 分享 id 借工作流社区那条「选中一个模板 / 打开社区」的通道送到页面,用这个前缀和真模板 id 分开。
+ *
+ * 为什么不是一条新事件:渲染层能接的通道(`lib/deepLink` 的 `mosael:open-*`)是**页面挂载后**
+ * 才订阅的,而深链可能在页面还没挂上时就到 —— 社区那条通道有个信箱会替晚挂的页面留着
+ * (`useOpenRequest`)。所以复用它的投递,页面看见 `share:` 前缀就知道这不是模板、而是导入请求。
+ * 冒号不在模板 id 的字符集里,真模板永远撞不上。
+ */
+export const SHARE_IMPORT_TEMPLATE_PREFIX = "share:";
+
 export interface DeepLink {
   view: string;
   id?: string;
   /** 插件市场里要找的那个插件(只在 view=plugins 时)。 */
   market?: string;
-  /** 工作流社区里要选中的模板(只在 view=workflows 时)。 */
+  /** 工作流社区里要选中的模板(只在 view=workflows 时)。社区分享导入用 `share:` 前缀借这条通道投递(见下)。 */
   template?: string;
   /**
    * 邀请链接里的码(ADR 0054)。界面拿到它:没登录时登录页说「X 邀请你加入 Y」、注册时带上;登录了就加入那个工作区、
@@ -84,6 +105,18 @@ export function parseDeepLink(raw: string): DeepLink | null {
     return null;
   }
   if (url.protocol !== `${PROTOCOL}:`) return null;
+
+  // mosael://import?share=… —— 官网社区分享的「在 Mosael 中打开」。
+  //
+  // 只认 `share` 这一个参数,而且**这里不执行、也不读取任何东西**:它把「去工作流页、有人在等确认」
+  // 告诉界面,分享内容由弹窗里的人点了才去取(见 features/workflows 的分享导入弹窗)。
+  // 别的参数(哪怕是 view / join / template)一律不跟着生效 —— 一条链接只做一件事。
+  if (url.hostname === "import") {
+    const share = url.searchParams.get("share");
+    if (!share || !SHARE_PATTERN.test(share)) return null;
+    return { view: "workflows", template: `${SHARE_IMPORT_TEMPLATE_PREFIX}${share}` };
+  }
+
   // mosael://open?... —— host 是 "open",其余动作一律不认(见文件头:只导航)。
   if (url.hostname !== "open") return null;
 
