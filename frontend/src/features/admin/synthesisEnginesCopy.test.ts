@@ -13,13 +13,13 @@ import { messages } from "@/app/messages";
  * 分组渲染在 VoiceCloneSection.groups.dom.test.tsx 里钉。
  */
 describe("「声音克隆」这一节的标题与说明改成覆盖两种能力", () => {
-  it("中文标题是「语音合成引擎」,不再说成克隆专属", () => {
-    expect(messages["zh-CN"].voiceCloneTitle).toBe("语音合成引擎");
+  it("中文标题是「本地语音合成引擎」,点明管的是本机引擎、不再说成克隆专属", () => {
+    expect(messages["zh-CN"].voiceCloneTitle).toBe("本地语音合成引擎");
   });
 
   it("英文标题同样讲合成,不再只说克隆", () => {
     const title = messages["en-US"].voiceCloneTitle;
-    expect(title).toBe("Speech synthesis engines");
+    expect(title).toBe("Local speech synthesis engines");
     expect(title.toLowerCase()).not.toContain("cloning");
   });
 
