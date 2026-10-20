@@ -891,8 +891,10 @@ export const otherUi = {
   ffmpegPathLabel: "ffmpeg 路径",
   ffmpegPathDesc: "留空就用系统 PATH 上的 ffmpeg。填了完整路径的话,同一目录下的 ffprobe 也一起用。保存后立刻生效。",
   ffmpegPathPinned: "环境变量 MOSAEL_FFMPEG 已经指定了 ffmpeg,这里填的不生效。",
+  ffmpegPathPinnedWhere: "要改用哪个 ffmpeg,请设置环境变量 MOSAEL_FFMPEG 再重启 Mosael —— 这一页填不了。",
   ffmpegPathRefused: "这个路径用不了",
   ffmpegPathPlaceholder: "留空:用 PATH 上的 ffmpeg",
+  ffmpegPathPlaceholderPinned: "由环境变量决定",
   denoiseEnginesTitle: "降噪",
   denoiseEnginesDesc: "素材库、剪辑台、工作流和智能体降噪时可以选的几种方式。内置降噪和 RNNoise 随应用带着;DeepFilterNet 效果最好,要先下载一次。只想要人声、别的都不要,用「人声与背景音分离」。",
   //: 降噪的**部署默认**(管理 → 引擎 → 降噪):这一节有三种实现,所以有默认可设。

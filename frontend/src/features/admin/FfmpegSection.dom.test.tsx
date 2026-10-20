@@ -162,12 +162,57 @@ it("找不到 ffmpeg:说找不到", async () => {
   expect(screen.queryByText("ffmpegNoTextBurnIn")).not.toBeInTheDocument();
 });
 
-it("环境变量钉住了:那一格不能填,说为什么;报错说改环境变量", async () => {
-  stored = { ...BREW, pinned_by_environment: true, in_use: "/usr/local/bin/ffmpeg" };
+//: 维护者:「这个 ffmpeg 这里的相关 UI 和配置是否有点问题」。**有问题**:
+//: 说明写着「填的不生效」,那一格却还是能填的样子、placeholder 还写「留空:用 PATH 上的 ffmpeg」——
+//: 一行里两种优先级在说话。环境变量钉住时这一格不该是「能填但没用」。
+it("环境变量钉住了:那一格不能填、说明为什么、说清去哪改;placeholder 不再提「留空=PATH」", async () => {
+  // 存过的路径还在:钉住时它不生效,但这一格显示的仍是库里那份。
+  stored = { ...BREW, path: "/usr/bin/ffmpeg", pinned_by_environment: true, in_use: "/usr/local/bin/ffmpeg" };
   show();
+  // 说明:为什么(原文)+ 去哪改(改环境变量,不是这页)
   expect(await screen.findByText("ffmpegPathPinned")).toBeInTheDocument();
+  expect(screen.getByText("ffmpegPathPinnedWhere")).toBeInTheDocument();
   expect(screen.getByText("ffmpegNoTextBurnInPinned")).toBeInTheDocument();
-  expect(screen.getByLabelText("ffmpegPathLabel")).toBeDisabled();
+
+  const input = screen.getByLabelText("ffmpegPathLabel");
+  // ① 打不了字 —— 打不了字就不会骗人
+  expect(input).toBeDisabled();
+  // ② placeholder 换成「由环境变量决定」,不再说「留空:用 PATH 上的 ffmpeg」
+  expect(input).toHaveAttribute("placeholder", "ffmpegPathPlaceholderPinned");
+  expect(input.getAttribute("placeholder")).not.toBe("ffmpegPathPlaceholder");
+
+  // ⑤ 禁用态有可读的原因:aria-describedby 指着那句说明(不是只有灰)
+  const describedBy = input.getAttribute("aria-describedby");
+  expect(describedBy).toBeTruthy();
+  const reason = document.getElementById(describedBy!);
+  expect(reason).not.toBeNull();
+  expect(reason).toHaveTextContent("ffmpegPathPinned");
+
+  // 保存:这一格打不了字 → 永远不 dirty → 保持禁用(不是新长出来的一颗按钮)
+  expect(screen.getByRole("button", { name: "save" })).toBeDisabled();
+  // 「重新检测」和路径字段无关,照样能按
+  expect(screen.getByRole("button", { name: /ffmpegRecheck/ })).not.toBeDisabled();
+});
+
+it("没钉住时行为一点不变:能填、placeholder 还是「留空:用 PATH 上的 ffmpeg」、保存按 dirty", async () => {
+  stored = { ...BREW, path: "" };
+  show();
+  const input = await screen.findByLabelText("ffmpegPathLabel");
+  await waitFor(() => expect(input).not.toBeDisabled());
+  // 没钉住:placeholder 原样(真文案另钉一次),也没有那句「由环境变量决定」
+  expect(input).toHaveAttribute("placeholder", "ffmpegPathPlaceholder");
+  // 没钉住、也没报错:不挂 aria-describedby(它只给禁用态和报错用)
+  expect(input).not.toHaveAttribute("aria-describedby");
+
+  const saveButton = screen.getByRole("button", { name: "save" });
+  expect(saveButton).toBeDisabled();
+  fireEvent.change(input, { target: { value: FULL } });
+  expect(saveButton).not.toBeDisabled();
+  // 只剩空白:trim 之后和库里那份一样 → 又回到不 dirty
+  fireEvent.change(input, { target: { value: "   " } });
+  expect(saveButton).toBeDisabled();
+
+  expect((zhCN as Record<string, string>).ffmpegPathPlaceholder).toBe("留空:用 PATH 上的 ffmpeg");
 });
 
 it("填的路径被挡下:那句话贴着输入框,一改就消失;存下之后显示新探出来的样子", async () => {
@@ -241,11 +286,20 @@ it("保存按钮只有一处:在输入框右边那一格,不在整节底部再�
   expect(pathRow().querySelector("[data-admin-row-control]")).toContainElement(saves[0]);
 });
 
-it("钉住时那句说明一字不改:原文照旧,只是这一格不能填", async () => {
+it("钉住时的真文案:为什么照旧,后面补一句去哪改;placeholder 由环境变量决定", async () => {
   stored = { ...BREW, pinned_by_environment: true };
   show();
   expect(await screen.findByText("ffmpegPathPinned")).toBeInTheDocument();
   expect(pathRow().querySelector("[data-admin-row-description]")).toHaveTextContent("ffmpegPathPinned");
-  //: 真文案(这条用例的 t 返回键名,原文另钉一次):环境变量已经指定了 ffmpeg,这里填的不生效。
-  expect((zhCN as Record<string, string>).ffmpegPathPinned).toBe("环境变量 MOSAEL_FFMPEG 已经指定了 ffmpeg,这里填的不生效。");
+  const zh = zhCN as Record<string, string>;
+  //: 为什么:原文照旧(环境变量已经指定了 ffmpeg,这里填的不生效)。
+  expect(zh.ffmpegPathPinned).toBe("环境变量 MOSAEL_FFMPEG 已经指定了 ffmpeg,这里填的不生效。");
+  //: 去哪改:改环境变量、重启 —— 不指向这一页上任何一颗按钮(这页没有「改环境变量」的地方)。
+  expect(zh.ffmpegPathPinnedWhere).toContain("环境变量 MOSAEL_FFMPEG");
+  expect(zh.ffmpegPathPinnedWhere).toContain("重启");
+  expect(zh.ffmpegPathPinnedWhere).not.toMatch(/下面的|上面的|点击|按钮/);
+  //: placeholder 不再说「留空 = PATH」:环境变量说了算,这格留空也轮不到 PATH。
+  expect(zh.ffmpegPathPlaceholderPinned).toBe("由环境变量决定");
+  expect(zh.ffmpegPathPlaceholderPinned).not.toContain("PATH");
+  expect(zh.ffmpegPathPlaceholderPinned).not.toContain("留空");
 });

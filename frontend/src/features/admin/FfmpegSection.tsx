@@ -55,6 +55,11 @@ export function FfmpegSection({ workspaceId }: { workspaceId: string }) {
   const value = draft ?? data?.path ?? "";
   const dirty = data != null && value.trim() !== data.path;
   const errorId = React.useId();
+  //: 环境变量钉住了:这一格填了也不生效(后端 apply 直接跳过)。打不了字就不会骗人 —— 连带
+  //: 「保存」永远不 dirty,placeholder 也换成「由环境变量决定」,不再说「留空:用 PATH 上的 ffmpeg」。
+  const pinned = data?.pinned_by_environment === true;
+  //: 禁用态的原因(为什么不能填 + 去哪改)挂在这条说明上,由 aria-describedby 指过来:光变灰不算说明。
+  const pinnedHintId = React.useId();
 
   return (
     <AdminSection
@@ -75,7 +80,18 @@ export function FfmpegSection({ workspaceId }: { workspaceId: string }) {
             和那一格一样。 */}
         <AdminRow
           label={t("ffmpegPathLabel")}
-          description={data?.pinned_by_environment ? t("ffmpegPathPinned") : t("ffmpegPathDesc")}
+          //: 钉住时左格说完两件事:为什么填了不生效(原文),和去哪改(环境变量 + 重启,不是这页)。
+          //: 两句分开渲染、同一个 id 包住 —— aria-describedby 指过来时读得到完整原因。
+          description={
+            pinned ? (
+              <span id={pinnedHintId}>
+                <span className="block">{t("ffmpegPathPinned")}</span>
+                <span className="block">{t("ffmpegPathPinnedWhere")}</span>
+              </span>
+            ) : (
+              t("ffmpegPathDesc")
+            )
+          }
           //: 后端挡下的那句话横贯整行、留在这一行下面:塞进右边那一格会把 280px 的输入框挤窄,
           //: 放左格又比说明还大。一改输入就消失(见 onChange)。
           footer={
@@ -96,13 +112,15 @@ export function FfmpegSection({ workspaceId }: { workspaceId: string }) {
             <Input
               aria-label={t("ffmpegPathLabel")}
               aria-invalid={save.isError || undefined}
-              aria-describedby={save.isError ? errorId : undefined}
+              //: 禁用态也要说得清:原因(为什么 + 去哪改)和填错的报错各挂一个,谁在就指谁。
+              aria-describedby={[pinned ? pinnedHintId : null, save.isError ? errorId : null].filter(Boolean).join(" ") || undefined}
               className={cn(SETTINGS_FIELD_WIDTH, "font-mono")}
               // 不拿一条真路径当占位:灰字的「/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg」看上去像已经填好了。
-              placeholder={t("ffmpegPathPlaceholder")}
+              //: 钉住时更不能再写「留空就用 PATH」—— 环境变量说了算,这格留空也轮不到 PATH。
+              placeholder={pinned ? t("ffmpegPathPlaceholderPinned") : t("ffmpegPathPlaceholder")}
               spellCheck={false}
               value={value}
-              disabled={!data || data.pinned_by_environment}
+              disabled={!data || pinned}
               onChange={(event) => {
                 setDraft(event.target.value);
                 if (save.isError) save.reset();

@@ -891,8 +891,10 @@ export const otherUi = {
   ffmpegPathLabel: "ffmpeg path",
   ffmpegPathDesc: "Leave empty to use the ffmpeg on the system PATH. With a full path, the ffprobe in the same folder is used too. Takes effect as soon as you save.",
   ffmpegPathPinned: "The MOSAEL_FFMPEG environment variable already sets ffmpeg, so a path entered here has no effect.",
+  ffmpegPathPinnedWhere: "To use a different ffmpeg, set the MOSAEL_FFMPEG environment variable and restart Mosael — it can't be changed on this page.",
   ffmpegPathRefused: "Can't use this path",
   ffmpegPathPlaceholder: "Empty: use the ffmpeg on PATH",
+  ffmpegPathPlaceholderPinned: "Set by the environment variable",
   denoiseEnginesTitle: "Noise reduction",
   denoiseEnginesDesc: "The methods offered when reducing noise from the media library, the editor, workflows and the agent. Built-in and RNNoise ship with the app; DeepFilterNet gives the best results and needs a one-time download. To keep only the voice and nothing else, use voice and background separation.",
   //: The **deployment default** for noise reduction (Admin → Engines → Noise reduction): this
