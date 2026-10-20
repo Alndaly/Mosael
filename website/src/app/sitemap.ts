@@ -22,6 +22,7 @@ type Entry = { path: string; priority: number; lastModified?: string };
 function entries(): Entry[] {
   const list: Entry[] = [
     { path: "", priority: 1 },
+    { path: "/community", priority: 0.7 },
     { path: "/workflows", priority: 0.8 },
     { path: "/plugins", priority: 0.8 },
     { path: "/changelog", priority: 0.6 },

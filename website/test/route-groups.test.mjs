@@ -35,6 +35,9 @@ const { getMessages } = await import("../src/i18n/messages.ts");
 const SITE_ROUTES = [
   "page.tsx",
   "changelog/page.tsx",
+  "community/page.tsx",
+  "community/[id]/page.tsx",
+  "community/upload/page.tsx",
   "docs/page.tsx",
   "docs/[section]/[name]/page.tsx",
   "plugins/page.tsx",
@@ -78,7 +81,22 @@ test("分组名不进 URL:每个页面还是原来的地址", () => {
     .sort();
   assert.deepEqual(
     urls,
-    ["", "/account", "/changelog", "/docs", "/docs/[section]/[name]", "/login", "/plugins", "/plugins/[slug]", "/signup", "/workflows", "/workflows/[slug]"].sort(),
+    [
+      "",
+      "/account",
+      "/changelog",
+      "/community",
+      "/community/[id]",
+      "/community/upload",
+      "/docs",
+      "/docs/[section]/[name]",
+      "/login",
+      "/plugins",
+      "/plugins/[slug]",
+      "/signup",
+      "/workflows",
+      "/workflows/[slug]",
+    ].sort(),
   );
 });
 

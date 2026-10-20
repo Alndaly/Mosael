@@ -1,10 +1,9 @@
 /**
  * 注册成功之后去哪儿:**社区页**。
  *
- * 站点自己的信息结构里没有 `/community` 这一页 —— 站头「社区」指向 `/plugins`,
- * 插件与工作流是同一个社区的两个分区(见 `components/community/community-header.tsx`)。
- * 所以目标就是 `/${locale}/plugins`,并且**只写在这一处**:哪天社区真有了独立入口,
- * 改这一行常量即可,别让组件和测试各抄一份路径。
+ * 社区有了自己的入口 `/community`(分享列表),插件与工作流是它的两个分区
+ * (见 `components/community/community-header.tsx` 的标签页)。目标只写在这一处:
+ * 页面和测试都从这里拿路径,别各抄一份。
  *
  * 路径带 `[locale]` 段:跳转要落在用户当前语言下,不能硬编码某种语言。
  *
@@ -12,7 +11,7 @@
  * 会话(成功文案就是让用户去登录),所以这里也没有任何需要清理的浏览器状态。
  */
 
-export const COMMUNITY_PATH = "/plugins";
+export const COMMUNITY_PATH = "/community";
 
 /**
  * 成功态至少留这么久再跳。

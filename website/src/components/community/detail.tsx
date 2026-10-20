@@ -77,6 +77,19 @@ export function DetailHeader({
   );
 }
 
+/**
+ * 主操作 / 次操作两种按钮的样式。`ActionLink` 用 `<a>`,社区分享页的下载 / 点赞 / 收藏
+ * 需要 `<button>`,共用同一份 class,两种元素不会长得不一样。
+ */
+export function actionClass(primary = false): string {
+  return cn(
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-60",
+    primary
+      ? "bg-primary text-primary-foreground hover:bg-primary/88"
+      : "border border-border bg-card hover:border-foreground/30",
+  );
+}
+
 /** 主操作 / 次操作两种按钮。站外链接(下载、源码)开新页,`mosael://` 就地唤起。 */
 export function ActionLink({
   href,
@@ -95,12 +108,7 @@ export function ActionLink({
       href={href}
       download={download || undefined}
       {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
-      className={cn(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-        primary
-          ? "bg-primary text-primary-foreground hover:bg-primary/88"
-          : "border border-border bg-card hover:border-foreground/30",
-      )}
+      className={actionClass(primary)}
     >
       {children}
     </a>

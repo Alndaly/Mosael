@@ -42,7 +42,11 @@ function tileStyle(seed: string) {
   return { color: hue, backgroundColor: `color-mix(in oklab, ${hue} 14%, var(--card))` };
 }
 
-export function PluginTile({ seed, name, size = "md" }: { seed: string; name: string; size?: keyof typeof SIZES }) {
+/**
+ * 名字首字 + 按 seed 固定的色块。插件、作者头像、分享卡片共用同一套辨识方式 ——
+ * 同一个 seed 在列表和详情里永远是同一块颜色。
+ */
+export function InitialTile({ seed, name, size = "md" }: { seed: string; name: string; size?: keyof typeof SIZES }) {
   // 「Amazon S3」取 A,「腾讯云 COS」取 腾 —— 按字形取,不按 UTF-16 码元。
   const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "?";
   return (
@@ -54,6 +58,10 @@ export function PluginTile({ seed, name, size = "md" }: { seed: string; name: st
       {initial}
     </span>
   );
+}
+
+export function PluginTile({ seed, name, size = "md" }: { seed: string; name: string; size?: keyof typeof SIZES }) {
+  return <InitialTile seed={seed} name={name} size={size} />;
 }
 
 const WORKFLOW_ICONS: Record<string, LucideIcon> = {

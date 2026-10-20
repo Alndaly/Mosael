@@ -1,26 +1,92 @@
 /**
- * MosaelCloud 的浏览器客户端。
+ * MosaelCloud 的客户端 + 服务端取数封装。
  *
- * **只打同源的 `/api/cloud/v1/*`** —— 生产由 Caddy 把这个前缀转给 cloud 服务,本地开发由
+ * **浏览器只打同源的 `/api/cloud/v1/*`** —— 生产由 Caddy 把这个前缀转给 cloud 服务,本地开发由
  * `next.config.ts` 的 rewrite 转给 `CLOUD_API_URL`。同源有两个直接好处:会话 cookie 是第一方的,
  * 不需要 CORS + `SameSite=None`;云端那侧的 Origin 校验认的就是官网自己的地址。
  *
- * 会话 token 由服务端放在 HttpOnly cookie 里,**客户端拿不到、也不该拿**。所以这里没有
+ * 会话 token 由服务端放在 HttpOnly cookie 里,**客户端拿不到、也不该拿**。所以浏览器这一侧没有
  * localStorage、没有 Authorization 头 —— 只有 `fetch` 默认带着的同源 cookie。
+ *
+ * 服务端渲染时不能靠浏览器的 cookie jar:调 `cloudForServer({ baseUrl, cookie })` 拿一个
+ * 「显式把 cookie 头带上、直连 Cloud 内网地址」的客户端。**仍然是同一个 request 实现**,
+ * 没有第二套 fetch。
  */
 
 export const CLOUD_API = "/api/cloud/v1";
+
+/** 公开身份三列。**没有 email** —— 公开响应里本来就不带它。 */
+export type CloudIdentity = {
+  display_name: string | null;
+  handle: string | null;
+  avatar_seed: string | null;
+};
 
 export type CloudUser = {
   id: string;
   email: string;
   email_verified_at: string | null;
   created_at: string;
+  display_name?: string | null;
+  handle?: string | null;
+  avatar_seed?: string | null;
 };
 
 export type CloudDevice = { id: string; name: string; created_at: string };
 
 export type CloudMessage = { en: string; zh: string };
+
+/** 分享类型。 */
+export type CloudShareKind = "workflow" | "board";
+
+export type CloudShareStats = {
+  downloads: number;
+  likes: number;
+  favorites: number;
+  comments: number;
+};
+
+export type CloudShare = {
+  id: string;
+  kind: CloudShareKind;
+  title: string;
+  summary: string | null;
+  bytes: number;
+  license: string | null;
+  created_at: string;
+  author: CloudIdentity;
+  stats: CloudShareStats;
+  liked_by_me: boolean;
+  favorited_by_me: boolean;
+};
+
+export type CloudSharePage = { items: CloudShare[]; next_cursor: string | null };
+
+export type CloudComment = {
+  id: string;
+  share_id: string;
+  body: string;
+  created_at: string;
+  author: CloudIdentity;
+};
+
+export type CloudCommentPage = { items: CloudComment[]; next_cursor: string | null };
+
+export type CloudShareInput = {
+  kind: CloudShareKind;
+  title: string;
+  summary?: string;
+  payload: unknown;
+  license?: string;
+};
+
+export type CloudShareQuery = {
+  q?: string;
+  kind?: string;
+  sort?: string;
+  limit?: number;
+  cursor?: string;
+};
 
 const NETWORK_MESSAGE: CloudMessage = {
   en: "Can't reach MosaelCloud. Check your connection and try again.",
@@ -63,14 +129,28 @@ function messageOf(value: unknown): CloudMessage {
   return FALLBACK_MESSAGE;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/**
+ * 一次请求的落点。浏览器不传 `context`(同源、带 cookie);服务端传 `baseUrl` + `cookie`
+ * —— 直连 Cloud,不走公网回环。
+ */
+type RequestContext = { baseUrl?: string; cookie?: string };
+
+function apiBase(context: RequestContext): string {
+  if (!context.baseUrl) return CLOUD_API;
+  return `${context.baseUrl.replace(/\/+$/, "")}${CLOUD_API}`;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, context: RequestContext = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
+  if (context.cookie) headers.set("cookie", context.cookie);
+
   let response: Response;
   try {
-    response = await fetch(`${CLOUD_API}${path}`, {
+    response = await fetch(`${apiBase(context)}${path}`, {
       ...init,
       // 同源请求本来就带 cookie;写出来是让"会话在 cookie 里"这件事在调用处可见。
+      // 服务端那条腿把 cookie 显式放进请求头,Node 的 fetch 不理会 credentials(浏览器概念)。
       credentials: "same-origin",
       cache: "no-store",
       headers,
@@ -90,45 +170,138 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-export const cloudAccount = {
-  /** 哪些第三方登录已配置。官网只渲染 true 的那几颗按钮。 */
-  oauthProviders(): Promise<{ providers: { github: boolean; google: boolean } }> {
-    return request("/oauth/providers");
-  },
-  sendSignupCode(email: string): Promise<{ sent: boolean }> {
-    return request("/signup/code", { method: "POST", body: JSON.stringify({ email }) });
-  },
-  signup(email: string, code: string, password: string): Promise<{ user: CloudUser }> {
-    return request("/signup", { method: "POST", body: JSON.stringify({ email, code, password }) });
-  },
-  login(email: string, password: string): Promise<{ user: CloudUser }> {
-    return request("/login", { method: "POST", body: JSON.stringify({ email, password }) });
-  },
-  sendLoginCode(email: string): Promise<{ sent: boolean }> {
-    return request("/login/code", { method: "POST", body: JSON.stringify({ email }) });
-  },
-  loginWithCode(email: string, code: string): Promise<{ user: CloudUser }> {
-    return request("/login/code/verify", { method: "POST", body: JSON.stringify({ email, code }) });
-  },
-  logout(): Promise<void> {
-    return request("/logout", { method: "POST" });
-  },
-  me(): Promise<{ user: CloudUser }> {
-    return request("/me");
-  },
-  deleteAccount(): Promise<void> {
-    return request("/me", { method: "DELETE" });
-  },
-  devices(): Promise<{ devices: CloudDevice[] }> {
-    return request("/devices");
-  },
-  revokeDevice(deviceId: string): Promise<void> {
-    return request(`/device/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
-  },
-  approveDevice(userCode: string): Promise<void> {
-    return request("/device/approve", {
-      method: "POST",
-      body: JSON.stringify({ user_code: userCode }),
-    });
-  },
-};
+function queryString(query: CloudShareQuery): string {
+  const search = new URLSearchParams();
+  if (query.q) search.set("q", query.q);
+  if (query.kind) search.set("kind", query.kind);
+  if (query.sort) search.set("sort", query.sort);
+  if (query.limit) search.set("limit", String(query.limit));
+  if (query.cursor) search.set("cursor", query.cursor);
+  const value = search.toString();
+  return value ? `?${value}` : "";
+}
+
+/**
+ * 同一个客户端的两条腿:账号(登录 / 会话)与社区(分享 / 互动)。
+ *
+ * 工厂而不是两份对象:服务端只是换一个 `baseUrl` / `cookie` 的来源,方法名、类型和错误语义
+ * 必须完全一致,否则「浏览器能点、首屏渲染却挂」这种错会藏在两套代码的缝里。
+ */
+function createClient(context: RequestContext = {}) {
+  return {
+    account: {
+      /** 哪些第三方登录已配置。官网只渲染 true 的那几颗按钮。 */
+      oauthProviders(): Promise<{ providers: { github: boolean; google: boolean } }> {
+        return request("/oauth/providers", {}, context);
+      },
+      sendSignupCode(email: string): Promise<{ sent: boolean }> {
+        return request("/signup/code", { method: "POST", body: JSON.stringify({ email }) }, context);
+      },
+      signup(email: string, code: string, password: string): Promise<{ user: CloudUser }> {
+        return request("/signup", { method: "POST", body: JSON.stringify({ email, code, password }) }, context);
+      },
+      login(email: string, password: string): Promise<{ user: CloudUser }> {
+        return request("/login", { method: "POST", body: JSON.stringify({ email, password }) }, context);
+      },
+      sendLoginCode(email: string): Promise<{ sent: boolean }> {
+        return request("/login/code", { method: "POST", body: JSON.stringify({ email }) }, context);
+      },
+      loginWithCode(email: string, code: string): Promise<{ user: CloudUser }> {
+        return request("/login/code/verify", { method: "POST", body: JSON.stringify({ email, code }) }, context);
+      },
+      logout(): Promise<void> {
+        return request("/logout", { method: "POST" }, context);
+      },
+      me(): Promise<{ user: CloudUser }> {
+        return request("/me", {}, context);
+      },
+      deleteAccount(): Promise<void> {
+        return request("/me", { method: "DELETE" }, context);
+      },
+      devices(): Promise<{ devices: CloudDevice[] }> {
+        return request("/devices", {}, context);
+      },
+      revokeDevice(deviceId: string): Promise<void> {
+        return request(`/device/${encodeURIComponent(deviceId)}`, { method: "DELETE" }, context);
+      },
+      approveDevice(userCode: string): Promise<void> {
+        return request("/device/approve", { method: "POST", body: JSON.stringify({ user_code: userCode }) }, context);
+      },
+    },
+    profile: {
+      /** `PUT /me`:第一次设置昵称 / 短名时用。 */
+      update(patch: { display_name?: string; handle?: string }): Promise<{ user: CloudUser }> {
+        return request("/me", { method: "PUT", body: JSON.stringify(patch) }, context);
+      },
+    },
+    shares: {
+      list(query: CloudShareQuery = {}): Promise<CloudSharePage> {
+        return request(`/shares${queryString(query)}`, {}, context);
+      },
+      get(id: string): Promise<CloudShare> {
+        return request(`/shares/${encodeURIComponent(id)}`, {}, context);
+      },
+      /** 下载:**只有这里**把工程文件取出来,并且让 downloads +1。 */
+      download(id: string): Promise<{ payload: unknown }> {
+        return request(`/shares/${encodeURIComponent(id)}/download`, { method: "POST" }, context);
+      },
+      create(input: CloudShareInput): Promise<{ share: CloudShare }> {
+        return request("/shares", { method: "POST", body: JSON.stringify(input) }, context);
+      },
+      remove(id: string): Promise<void> {
+        return request(`/shares/${encodeURIComponent(id)}`, { method: "DELETE" }, context);
+      },
+      like(id: string, liked: boolean): Promise<void> {
+        return request(`/shares/${encodeURIComponent(id)}/like`, { method: liked ? "POST" : "DELETE" }, context);
+      },
+      favorite(id: string, favorited: boolean): Promise<void> {
+        return request(`/shares/${encodeURIComponent(id)}/favorite`, {
+          method: favorited ? "POST" : "DELETE",
+        }, context);
+      },
+      comments(id: string, query: { limit?: number; cursor?: string } = {}): Promise<CloudCommentPage> {
+        const search = new URLSearchParams();
+        if (query.limit) search.set("limit", String(query.limit));
+        if (query.cursor) search.set("cursor", query.cursor);
+        const suffix = search.toString();
+        return request(`/shares/${encodeURIComponent(id)}/comments${suffix ? `?${suffix}` : ""}`, {}, context);
+      },
+      createComment(id: string, body: string): Promise<{ comment: CloudComment }> {
+        return request(`/shares/${encodeURIComponent(id)}/comments`, {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        }, context);
+      },
+      deleteComment(id: string, commentId: string): Promise<void> {
+        return request(
+          `/shares/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
+          { method: "DELETE" },
+          context,
+        );
+      },
+      byUser(handle: string, query: { limit?: number; cursor?: string } = {}): Promise<CloudSharePage> {
+        const search = new URLSearchParams();
+        if (query.limit) search.set("limit", String(query.limit));
+        if (query.cursor) search.set("cursor", query.cursor);
+        const suffix = search.toString();
+        return request(`/users/${encodeURIComponent(handle)}/shares${suffix ? `?${suffix}` : ""}`, {}, context);
+      },
+    },
+  };
+}
+
+const browser = createClient();
+
+export const cloudAccount = browser.account;
+export const cloudProfile = browser.profile;
+export const cloudShares = browser.shares;
+
+/**
+ * 服务端渲染用的客户端。
+ *
+ * 只给 server component 用:显式带 cookie(而不是浏览器自动带),并直连 `CLOUD_API_URL`
+ * 指的内网地址。**不要在客户端组件里调用它** —— 那会把服务端地址带进浏览器包。
+ */
+export function cloudForServer(options: { baseUrl: string; cookie?: string }): ReturnType<typeof createClient> {
+  return createClient(options);
+}

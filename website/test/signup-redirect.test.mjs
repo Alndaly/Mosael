@@ -5,10 +5,9 @@ import test from "node:test";
 
 //: 注册成功之后的去向。
 //:
-//: 维护者:「账号创建成功后 应该自动跳转到社区页面」。站点自己的信息结构里,"社区"不是一条
-//: `/community` 路由 —— 站头「社区」指向 `/plugins`,插件与工作流是同一个社区的两个分区
-//: (`src/components/community/community-header.tsx`)。所以目标必须是 `/plugins`,并且
-//: **只写在一处**:哪天社区真有了独立入口,改那个常量就够,别让组件和测试各抄一份路径。
+//: 维护者:「账号创建成功后 应该自动跳转到社区页面」。社区现在有了自己的入口
+//: `/community`(分享列表),插件与工作流是它的两个分区(`community-header.tsx` 的标签页)。
+//: 所以目标必须是 `/community`,并且**只写在一处**:改那个常量就够,别让组件和测试各抄一份路径。
 //:
 //: 三条一起钉住行为:带语言段(`/[locale]/plugins`)、成功卡片先可见约 1.5 秒再跳、
 //: 跳转**不碰 cookie**(同源客户端导航,已有会话不该因为这次跳转出任何事)。
@@ -29,7 +28,7 @@ function fakeRouter() {
 
 test("注册成功后跳到当前语言的社区页,而且是站内真实存在的那一页", async () => {
   // 目标页真的在磁盘上 —— 跳到一条不存在的路由等于把刚注册的人送进 404。
-  assert.ok(exists("src/app/[locale]/(site)/plugins/page.tsx"), "跳转目标不是站内真实页面");
+  assert.ok(exists("src/app/[locale]/(site)/community/page.tsx"), "跳转目标不是站内真实页面");
 
   for (const locale of ["en", "zh"]) {
     const router = fakeRouter();
@@ -38,7 +37,7 @@ test("注册成功后跳到当前语言的社区页,而且是站内真实存在�
     await sleep(30);
     assert.deepEqual(
       router.pushed,
-      [`/${locale}/plugins`],
+      [`/${locale}/community`],
       `没有跳到带语言段的社区页(${locale})`,
     );
     cancel();
@@ -57,7 +56,7 @@ test("成功卡片先可见约 1.5 秒:不是立刻消失,也不是永远不走"
   await sleep(1000);
   assert.deepEqual(router.pushed, [], "1 秒内就跳走了 ——「账号已创建」没人看得见");
   await sleep(700);
-  assert.deepEqual(router.pushed, ["/zh/plugins"], "1.5 秒后没有去社区页");
+  assert.deepEqual(router.pushed, ["/zh/community"], "1.5 秒后没有去社区页");
   cancel();
 });
 

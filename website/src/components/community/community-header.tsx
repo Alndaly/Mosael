@@ -22,14 +22,19 @@ export function CommunityHeader({
   contribute,
 }: {
   locale: Locale;
-  active: "plugins" | "workflows";
-  counts: { plugins: number; workflows: number };
+  active: "shares" | "plugins" | "workflows";
+  counts: { plugins: number; workflows: number; shares?: number };
   title: string;
   lede: string;
   contribute: { label: string; href: string };
 }) {
   const t = getMessages(locale);
   const tabs = [
+    // 分享是社区的新入口。插件 / 工作流两页仍是原来的两个标签页(active 不是 shares 时
+    // 这里不会多出第三个),它们的版面和行为不动。
+    ...(active === "shares"
+      ? [{ id: "shares" as const, label: t.community.shares, count: counts.shares, href: localePath(locale, "/community") }]
+      : []),
     { id: "plugins" as const, label: t.plugins.title, count: counts.plugins, href: localePath(locale, "/plugins") },
     { id: "workflows" as const, label: t.workflows.title, count: counts.workflows, href: localePath(locale, "/workflows") },
   ];
@@ -67,9 +72,11 @@ export function CommunityHeader({
               )}
             >
               {tab.label}
-              <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[0.6875rem] tabular-nums text-muted-foreground">
-                {tab.count}
-              </span>
+              {tab.count !== undefined && (
+                <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[0.6875rem] tabular-nums text-muted-foreground">
+                  {tab.count}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
