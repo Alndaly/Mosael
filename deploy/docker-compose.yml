@@ -60,6 +60,11 @@ services:
       CLOUD_GITHUB_CLIENT_SECRET: ${CLOUD_GITHUB_CLIENT_SECRET:-}
       CLOUD_GOOGLE_CLIENT_ID: ${CLOUD_GOOGLE_CLIENT_ID:-}
       CLOUD_GOOGLE_CLIENT_SECRET: ${CLOUD_GOOGLE_CLIENT_SECRET:-}
+      # 官方内容那个账号:密码由部署方在 .env 里设(种子每次按它写回,能轮换);
+      # 邮箱要真实可达(验证码登录靠它)。不设就是默认的保留域 + 没密码。
+      CLOUD_OFFICIAL_HANDLE: ${CLOUD_OFFICIAL_HANDLE:-mosael}
+      CLOUD_OFFICIAL_EMAIL: ${CLOUD_OFFICIAL_EMAIL:-official@mosael.example}
+      CLOUD_OFFICIAL_PASSWORD: ${CLOUD_OFFICIAL_PASSWORD:-}
     # 只绑回环:宿主机 nginx 的 /api/cloud/ 指向 127.0.0.1:${CLOUD_PORT}。
     ports:
       - "127.0.0.1:${CLOUD_PORT:-8901}:8000"
