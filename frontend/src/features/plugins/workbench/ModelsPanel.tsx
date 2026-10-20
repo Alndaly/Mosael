@@ -352,7 +352,7 @@ function SlotPicker({
                   <li
                     data-model-row=""
                     className={cn(
-                      "group/thumb flex min-w-0 items-center gap-2.5 rounded-lg border p-1.5",
+                      "group/thumb relative flex min-w-0 items-center gap-2.5 rounded-lg border p-1.5",
                       chosen ? "border-primary/50 bg-accent" : "border-transparent hover:bg-secondary",
                     )}
                   >
@@ -397,14 +397,15 @@ function SlotPicker({
                           : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
                       </span>
                     </button>
-                    {/* 查看详情:悬停、聚焦这一行时露出来(键盘 Tab 得到);点一行本身照旧是填进画布。和这一行一样高的一条窄键
-                        (不另定一档高度:旁边是 44 的缩略图) */}
+                    {/* 查看详情:悬停、聚焦这一行时露出来(键盘 Tab 得到);点一行本身照旧是填进画布。脱离
+                        文档流覆盖在行的右上角(维护者:不占行内一格、不撑高/撑宽),只挡右上角一小块,
+                        出现时自己接收点击,不误触下面的填画布按钮 */}
                     <IconButton
                       unstyled
                       data-model-detail={keyOf(model)}
                       label={t("workbenchModelDetailOpen").replace("{name}", name)}
                       className={cn(
-                        "grid w-7 shrink-0 cursor-pointer place-items-center self-stretch rounded-md border-0 bg-transparent p-0",
+                        "absolute right-1 top-1 z-10 grid size-7 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0",
                         "text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         "opacity-0 transition-opacity duration-100",
                         "group-hover/thumb:opacity-100 group-focus-within/thumb:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100",

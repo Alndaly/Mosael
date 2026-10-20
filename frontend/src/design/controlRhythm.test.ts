@@ -48,6 +48,8 @@ const GRANDFATHERED = new Map<string, string>([
   ["components/ui/slider.tsx: 6/16", "滑杆的轨道与滑块"],
   ["components/ui/command.tsx: 16/40", "放大镜图标在输入框内部"],
   // 画布上的小圆工具条:配色圆点比图标按钮小是有意的。
+  // 模型行右上角的「查看详情」:脱离文档流覆盖在行的右上角(不占行内一格),比 44 的缩略图小是有意的。
+  ["features/plugins/workbench/ModelsPanel.tsx: 28/44", "ⓘ 详情键绝对定位覆盖在行右上角,不撑行"],
 ]);
 
 /** `box-sizing: border-box` 是全局的(design/tokens.css),所以写了 height 就是最终高度。 */

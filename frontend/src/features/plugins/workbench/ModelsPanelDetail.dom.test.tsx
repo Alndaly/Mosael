@@ -330,4 +330,19 @@ describe("模型行徽标布局:角标进 meta 行最左", () => {
     const source = fs.readFileSync("./src/features/plugins/workbench/ModelsPanel.tsx", "utf8");
     expect(source, "右侧独立徽标列已删").not.toContain("flex-col items-end");
   });
+
+  it("⑥ ⓘ 详情按钮脱离文档流:覆盖在行的右上角,<li> 有 relative,不再撑高/撑宽行", async () => {
+    await mount();
+    const rowEl = row("Pony");
+    const info = within(rowEl).getByRole("button", { name: "workbenchModelDetailOpen" });
+    expect(info.className, "绝对定位,不再是行内撑满行高的那一列").toMatch(/\babsolute\b/);
+    expect(info.className, "覆盖在行右上角").toMatch(/\bright-1\b/);
+    expect(info.className).toMatch(/\btop-1\b/);
+    expect(info.className, "不再撑高/撑宽行").not.toMatch(/\bself-stretch\b/);
+    expect(info.className, "层叠在最上,挡住角上的点击不误触下面的填画布按钮").toMatch(/\bz-10\b/);
+    expect(rowEl.className, "<li> 是定位上下文").toMatch(/\brelative\b/);
+    expect(info.className, "悬停显现逻辑保留").toMatch(/group-hover\/thumb:opacity-100/);
+    expect(info.className).toMatch(/group-focus-within\/thumb:opacity-100/);
+    expect(info.className).toMatch(/\bopacity-0\b/);
+  });
 });
