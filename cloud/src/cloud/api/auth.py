@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from cloud.api.deps import CurrentConfig, CurrentUser, DbSession
-from cloud.config import CloudConfig
+from cloud.config import API_PREFIX, CloudConfig
 from cloud.domain.identity import account_user
 from cloud.email_codes import consume_code, issue_code
 from cloud.errors import CloudError
@@ -52,6 +52,11 @@ def request_ip(request: Request) -> str:
 
 
 def set_session_cookie(response: Response, config: CloudConfig, raw: str, max_age: int) -> None:
+    # 一次性清理:早先的会话 cookie 被限定在 `/api/cloud/v1` 上,浏览器里可能还留着一条同名的。
+    # 同名不同 path 的两条会一起发给接口,服务端收到哪条全看解析顺序 —— 那会让"登录了却像没登录"
+    # 随机复现。发新 cookie 的同时把旧路径那条作废,不留两套。
+    response.delete_cookie(config.cookie_name, path=API_PREFIX, httponly=True,
+                           secure=config.cookie_secure, samesite="lax")
     response.set_cookie(
         config.cookie_name,
         raw,

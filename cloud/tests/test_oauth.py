@@ -99,7 +99,7 @@ def test_start_sets_a_scoped_httponly_nonce_cookie(oauth_client):
     assert "mosael_cloud_oauth_state=" in cookie
     assert "HttpOnly" in cookie
     assert "SameSite=lax" in cookie
-    assert "Path=/api/cloud/v1" in cookie
+    assert "Path=/" in cookie
 
 
 # ---------------------------------------------------------------------------

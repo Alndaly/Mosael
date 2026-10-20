@@ -27,7 +27,7 @@ def test_session_cookie_is_httponly_samesite_lax_and_scoped(client):
     header = cookie_header(response)
     assert "HttpOnly" in header
     assert "SameSite=lax" in header
-    assert "Path=/api/cloud/v1" in header
+    assert "Path=/" in header
     # 本地测试走 http,cookie_secure=False;Secure 那一条在下面单独验。
     assert "Secure" not in header
 

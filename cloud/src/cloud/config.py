@@ -52,7 +52,10 @@ class CloudConfig:
     #: 会话 cookie。生产必须 Secure;本地 http 开发显式关掉。
     cookie_secure: bool = True
     cookie_name: str = "mosael_cloud_session"
-    cookie_path: str = API_PREFIX
+    #: 会话 cookie 的作用路径。**必须是 `/`**:官网的控制台、社区页是在服务端渲染时读这份 cookie
+    #: 判断"谁在看"的(见 website 的 loadViewer),限定成 `/api/cloud/v1` 的 cookie 根本到不了页面请求,
+    #: 结果就是"浏览器里明明登录了,点开头像却跳登录页"。
+    cookie_path: str = "/"
     #: 登录会话活多久。没有滑动续期:到期就要重新登录,撤销靠删行。
     session_ttl_days: int = 30
     #: 密码长度下限。上限只是挡住拿超长串做 DoS 的请求,不是强度策略。
@@ -148,7 +151,7 @@ class CloudConfig:
             database_url=os.environ.get("CLOUD_DATABASE_URL", "").strip(),
             cookie_secure=_flag("CLOUD_COOKIE_SECURE", True),
             cookie_name=os.environ.get("CLOUD_COOKIE_NAME", "mosael_cloud_session").strip() or "mosael_cloud_session",
-            cookie_path=os.environ.get("CLOUD_COOKIE_PATH", API_PREFIX).strip() or API_PREFIX,
+            cookie_path=os.environ.get("CLOUD_COOKIE_PATH", "/").strip() or "/",
             session_ttl_days=int(os.environ.get("CLOUD_SESSION_TTL_DAYS", "30")),
             password_min_length=int(os.environ.get("CLOUD_PASSWORD_MIN_LENGTH", "8")),
             smtp_host=smtp_host,
