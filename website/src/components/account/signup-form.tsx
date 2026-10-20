@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
+import { scheduleCommunityRedirect } from "@/components/account/signup-redirect";
 import {
   AccountField,
   CodeField,
@@ -28,7 +30,10 @@ type Phase = "form" | "success";
  *
  * 验证码是注册的一部分,不是可选项:后端不验码就会拒。发送按钮有 60 秒本地倒计时
  * (服务端同样有冷却),发送中 / 已发送 / 失败都在按钮和提示区里说清楚。
- * 成功后**留在这页**给出成功态 —— 静默跳转会让用户不确定账号到底建没建成。
+ *
+ * 成功后**先留在本页**把「账号已创建」摆出来,约 1.5 秒后**自动去社区页**:立刻跳等于
+ * 这句提示没出现过,而把提示带到社区页要改社区页(另一笔)。目标见
+ * `components/account/signup-redirect.ts`(带当前语言段,不硬编码、不跳不存在的路由)。
  */
 export function SignupForm({
   locale,
@@ -54,6 +59,14 @@ export function SignupForm({
   const [busy, setBusy] = useState(false);
   const countdown = useResendCountdown();
   const oauthMessage = oauthError ? copy[oauthErrorCopyKey(oauthError)] : "";
+  const router = useRouter();
+
+  // 成功卡片先留一会儿再走:定时器由 phase 决定,与屏幕大小无关 —— 移动端同样跳。
+  // cleanup 会把定时器撤掉:这 1.5 秒里用户自己点了别处,就别再把他拽去社区页。
+  useEffect(() => {
+    if (phase !== "success") return;
+    return scheduleCommunityRedirect(router, locale);
+  }, [phase, router, locale]);
 
   const sendCode = async () => {
     setError("");
