@@ -41,15 +41,26 @@ const nextConfig: NextConfig = {
   },
 
   /**
-   * MosaelCloud 与官网同源。浏览器只请求 `/api/cloud/v1/*`,这里把它转给 Cloud 服务:
-   * 本地开发默认 `http://127.0.0.1:8901`,部署时用 `CLOUD_API_URL` 指到内部地址。
+   * MosaelCloud 与官网同源。浏览器只请求 `/api/cloud/v1/*`,这里把它转给 Cloud 服务。
+   *
+   * 目标按环境取默认值 —— **发布版必须连官方,不能指望"部署时记得在 Vercel 里配环境变量"**:
+   *
+   * - `pnpm dev` / 本地预览 → `http://127.0.0.1:8901`(deploy/docker-compose.yml 那台的端口);
+   * - 生产构建 → `https://pre.mosael.com`,那是 MosaelCloud 本身;官网 `mosael.com` 在 Vercel 上,
+   *   没有内网可达的 Cloud,所以只能走公网回源;
+   * - `CLOUD_API_URL` 一旦设置就覆盖上面两者(自建部署、独立域名的用户走这条)。
    *
    * **不要改成跨域直连** —— 那需要 CORS + `SameSite=None`,而云端会话 cookie 只有在同源时
    * 才是第一方的;同源也让 Cloud 的 Origin 校验只需要认识官网这一个地址。
-   * 生产上若 Caddy 已经把这个前缀直接转给了 Cloud,这条 rewrite 不会被用到,留着不影响。
+   *
+   * 生产上若反代(Caddy / nginx)已经把这个前缀直接转给了 Cloud,这条 rewrite 不会被用到,留着不影响。
    */
   async rewrites() {
-    const cloud = (process.env.CLOUD_API_URL || "http://127.0.0.1:8901").replace(/\/+$/, "");
+    const fallback =
+      process.env.NODE_ENV === "development"
+        ? "http://127.0.0.1:8901"
+        : "https://pre.mosael.com";
+    const cloud = (process.env.CLOUD_API_URL || fallback).replace(/\/+$/, "");
     return [
       { source: "/api/cloud/v1/:path*", destination: `${cloud}/api/cloud/v1/:path*` },
     ];
