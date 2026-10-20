@@ -7,9 +7,10 @@ import { BOARD_ITEM_EVENT, OPEN_BOARD_EVENT, parseBoardItem, useHashOpenRequest,
 import { CARD_GRID, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Bot, Check, CheckSquare, Copy, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
+import { ArrowUpRight, Bot, Check, CheckSquare, Copy, FileOutput, Import, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { errorText } from "@/api/errorMessage";
+import { saveJsonToDisk } from "@/lib/download";
 
 import {
   ApiError,
@@ -83,6 +84,14 @@ import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
 import { announceEntityReceipt } from "@/features/entities/entityMeta";
 import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { rebaseCanvas } from "@/features/boards/boardRebase";
+import {
+  BoardFileError,
+  boardExportFilename,
+  boardFileOf,
+  boardImportErrorText,
+  readBoardFile,
+  uniqueBoardName,
+} from "@/features/boards/boardTransfer";
 import { sequencesFilledFrom } from "@/features/boards/useBoardSequenceLinks";
 import { boardSequenceKey } from "@/features/boards/SequenceCell";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
@@ -143,6 +152,49 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   });
 
   const refreshList = () => void queryClient.invalidateQueries({ queryKey: boardKeys.list(workspace.id), exact: true });
+
+  /**
+   * 导入一份画板文件,建一张**新**画板(不动任何已有的板)。
+   *
+   * 读进来的 `.json` 和社区上传表单收的是同一份东西(导出在画板里,见 BoardDetail 的 exportFile);
+   * 从社区下载的文件也走这里。名字取文件里的 `name`,和清单上已有的重名就加「副本」后缀。
+   * 画布原样交给 `POST /boards` —— 素材只是 id 引用,不把原图/二进制塞进文件。
+   */
+  const importInputRef = React.useRef<HTMLInputElement | null>(null);
+  const importBoard = useMutation({
+    mutationFn: async (file: File) => {
+      const imported = await readBoardFile(file);
+      const name = uniqueBoardName(
+        imported.name || t("boardsImportUntitled"),
+        list.map((board) => board.name),
+        (one) => t("boardsCopyName").replace("{name}", one),
+      );
+      return createBoard({ workspace_id: workspace.id, name, canvas: imported.canvas });
+    },
+    onSuccess: (made) => {
+      toast.success(t("boardsImported").replace("{name}", made.name));
+      refreshList();
+    },
+    //: 坏文件那一句已经是人话(不是这块的 JSON / 太大 / 版本不认识……);服务端拒绝才加一层标题。
+    onError: (error: Error) => {
+      if (error instanceof BoardFileError) toast.error(boardImportErrorText(t, error));
+      else toast.error(t("boardsImportFailed"), { description: error.message });
+    },
+  });
+  //: 一个 hidden input 给「导入」按钮点(和工作流列表同一条);放在渲染的那一支里,不另开一栏。
+  const importControl = (
+    <input
+      ref={importInputRef}
+      type="file"
+      accept=".json,application/json"
+      className="hidden"
+      onChange={(event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (file) importBoard.mutate(file);
+      }}
+    />
+  );
 
   //: 卡片上的单条动作(「⋯」菜单与右键菜单共用):打开、重命名、创建副本、删除。
   const [menuRenaming, setMenuRenaming] = React.useState<BoardSummary | null>(null);
@@ -258,11 +310,25 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
           title={t("boardsEmptyTitle")}
           body={t("boardsEmptyHint")}
           action={
-            <Hint disabledReason={writeBlocked?.reason}>
-              <Button loading={create.isPending} disabled={Boolean(writeBlocked)} onClick={() => create.mutate()}>
-                <Plus size={15} /> {t("boardsNew")}
-              </Button>
-            </Hint>
+            //: 空清单里也得能导入 —— 从社区下载了一份画板、手里一张板都没有,正是最需要它的入口。
+            <span className="inline-flex flex-wrap items-center justify-center gap-2">
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button loading={create.isPending} disabled={Boolean(writeBlocked)} onClick={() => create.mutate()}>
+                  <Plus size={15} /> {t("boardsNew")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
+                <Button
+                  variant="outline"
+                  loading={importBoard.isPending}
+                  disabled={Boolean(writeBlocked)}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Import size={15} /> {t("boardsImport")}
+                </Button>
+              </Hint>
+              {importControl}
+            </span>
           }
         />
       </div>
@@ -304,10 +370,21 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
                 <Check size={13} /> {t("mediaSelectMode")}
               </Button>
               <Hint disabledReason={writeBlocked?.reason}>
+                <Button
+                  variant="outline"
+                  loading={importBoard.isPending}
+                  disabled={Boolean(writeBlocked)}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Import size={13} /> {t("boardsImport")}
+                </Button>
+              </Hint>
+              <Hint disabledReason={writeBlocked?.reason}>
                 <Button loading={create.isPending} disabled={Boolean(writeBlocked)} onClick={() => create.mutate()}>
                   <Plus size={13} /> {t("boardsNew")}
                 </Button>
               </Hint>
+              {importControl}
             </>
           )}
         </span>
@@ -1146,6 +1223,22 @@ function BoardDetail({
       .finally(() => setSavingName(false));
   };
 
+  /**
+   * 导出**当前这一份**画板。
+   *
+   * 用界面上已经加载的那份(先把画布攒着、还没自动保存的编辑 flush 出来),**不再请求一次详情**;
+   * 落成 `<画板名>.mosael-board.json`,内容和社区上传表单收的那份 `.json` 一样:
+   * `{format, version, name, canvas}` —— `canvas` 原样,素材只是 id 引用,不带原图/二进制。
+   */
+  const exportFile = () => {
+    try {
+      const latest = api?.flush() ?? localCanvas.current ?? canvas ?? board.canvas;
+      saveJsonToDisk(boardExportFilename(board.name), boardFileOf(board.name, latest));
+    } catch (error) {
+      toast.error(t("boardsExportFailed"), { description: (error as Error).message });
+    }
+  };
+
   // 画布铺满,操作那组胶囊浮在右上。「这是哪一张、回哪儿去」写在顶栏的路径里(创意画板 / 这张板,
   // 见 components/layout/pageTrail),点名字改名 —— 画布左上角不再摆一颗「返回 · 名字」。
   return (
@@ -1168,6 +1261,10 @@ function BoardDetail({
                 </IconButton>
               </CanvasToolbarGroup>
               <CanvasToolbarGroup label={t("more")}>
+                {/* 导出走「更多」那一组,不另开一栏:它和删除一样是整张画板的级动作。 */}
+                <IconButton label={t("boardsExport")} onClick={exportFile}>
+                  <FileOutput size={14} />
+                </IconButton>
                 <ActionMenu
                   label={t("more")}
                   actions={[

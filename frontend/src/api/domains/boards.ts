@@ -150,7 +150,8 @@ export function appendBoardNote(
   return api(`/api/boards/${boardId}/notes`, { method: "POST", body: JSON.stringify(body) });
 }
 
-export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {
+/** 建一张画板。`canvas` 可带(画板导入:一次 POST 就把画布落进去,不必建完再 PATCH);后端会照常规范化。 */
+export function createBoard(body: { workspace_id: string; name?: string; canvas?: BoardCanvas }): Promise<Board> {
   return api<Board>("/api/boards", { method: "POST", body: JSON.stringify(body) });
 }
 
