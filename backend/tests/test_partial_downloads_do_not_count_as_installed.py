@@ -1,6 +1,14 @@
-"""下到一半的分片既不算进度,也要在日志里点名。
+"""下到一半的分片:不算「装好了没有」,但算「下载到哪了」,并且要在日志里点名。
 
-用户机器上的实际输出:
+**两种语义,别混**(见 `tts_models.bytes_on_disk` 的两个问法):
+
+  * 「装好了没有」—— `_measure` / `_is_installed` / 失败日志里那句"量到多少":**排除**
+    `*.incomplete`。半截 blob 加载不了,算进去会写出「已安装」而合成在加载权重时炸。
+  * 「下载到哪了」—— 下载进度条的分子(`_progress_bytes`,**且**为 `include_unfinished=True`):
+    **必须算上**它们。否则 Qwen 那几 GB 主权重从开始下到 rename 完成,刻度一动不动。
+
+本文件钉的是前一种(文件名:`..._do_not_count_as_installed`);后一种钉在
+`test_progress_counts_the_unfinished_part.py`。用户机器上的实际输出:
 
     判定:未装好
     量到 1,402,802,293 字节 / 需要 900,000,000(总量 1,500,000,000,估算)
@@ -33,7 +41,8 @@ def test_半个分片不计入已下载的字节(tmp_path, monkeypatch) -> None:
     (cached / "blobs" / "done.safetensors").write_bytes(b"x" * 100)
     (cached / "blobs" / "abc123.incomplete").write_bytes(b"x" * 900)
 
-    # 900 个字节还躺在半路上,不能拿它充数 —— 这个数同时是进度条的分子和体积兜底的判据。
+    # 900 个字节还躺在半路上,不能拿它充"装好了"的体积兜底 —— 这一问法只数落定的文件。
+    # (进度是另一种问法:`_progress_bytes` 会把它算上,见 test_progress_counts_the_unfinished_part.py。)
     assert tts_models._measure(engine) == 100
 
 

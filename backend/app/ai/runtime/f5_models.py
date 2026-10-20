@@ -31,6 +31,7 @@ from typing import Any
 import logging
 
 from app.ai.runtime import remote_size
+from app.ai.runtime.tts_models import bytes_on_disk
 from app.core.rate import DownloadRate
 
 from app.ai.runtime.download_state import DownloadProgress, DownloadStore
@@ -456,14 +457,11 @@ class _ByteWatcher:
         # 只量这个模型自己的目录。基础模型 shared_root=True 落在根下,那就量检查点本身 ——
         # 量整个根目录会把别的语言包一起算进来,进度于是从一开始就是满的。
         target = root() / self._model.local_dir if self._model.local_dir else checkpoint_path(self._model)
-        try:
-            if target.is_file():
-                return target.stat().st_size
-            if target.is_dir():
-                return sum(f.stat().st_size for f in target.rglob("*") if f.is_file())
-        except OSError:
-            logger.debug("量 %s 的下载进度时读不动", target, exc_info=True)
-        return 0
+        # **和其他两条路同一份量法**(`tts_models.bytes_on_disk`),问的是"下载到哪了",所以
+        # include_unfinished=True:没下完的块要算进去。F5 走 `hf_hub_download(local_dir=…)`,
+        # 未完成的检查点同样躺在 `<target>/.cache/huggingface/download/*.incomplete` 下,数落定
+        # 的文件等于主权重全程不动。这不是行为变化:这里的进度一直就是数整个目录的。
+        return bytes_on_disk(target, include_unfinished=True)
 
     def _run(self) -> None:
         total, _estimated = measured_total(self._model, blocking=True)

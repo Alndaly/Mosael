@@ -174,7 +174,9 @@ def effective_source(engine_id: str, source: str) -> str:
     return source if source in sources_for(engine_id) else "hf"
 
 
-#: HuggingFace 下到一半的 blob。文件名形如 `<sha>.incomplete`。
+#: HuggingFace 下到一半的 blob。缓存里形如 `blobs/<sha>.incomplete`;走 `local_dir` 时形如
+#: `<local_dir>/.cache/huggingface/download/<hash>.<etag>.incomplete`(下完才 rename 成正式名字,
+#: 见 huggingface_hub 的 `_local_folder.LocalDownloadFilePaths.incomplete_path`)。
 _PARTIAL_SUFFIX = ".incomplete"
 
 
@@ -190,30 +192,43 @@ def _hf_roots() -> list[Path]:
     return [root for root in roots if root.is_dir()]
 
 
-def _dir_size(path: Path) -> int:
-    """目录里**已经落定**的字节数。
+def bytes_on_disk(target: Path, *, include_unfinished: bool) -> int:
+    """量 target(文件或目录)上有多少字节。**引擎权重和 F5 权重共用这一份量法。**
 
-    `*.incomplete` 不算:那是 HuggingFace 正在写(或者曾经写了一半)的 blob,它既不能加载,
-    也不代表进度已经到手 —— 下一次续传可能整个重来。而这个数同时当着三样东西用:进度条的
-    分子、"装好了没有"的体积兜底、以及失败日志里那句"量到多少"。
+    同一个动作,两种问法,只差这一个参数:
 
-    把半个文件算进去的后果,这个文件顶上已经写过一次(分片 2 才下三分之一、总量已经过线,
-    于是设置页写着「已安装」而合成在加载权重时炸)。用户机器上量到 1.40 GB / 需要 0.90 GB
-    却判"未装好",看着像自相矛盾 —— 其实是那 1.40 GB 里有一截根本不能用。
+    * ``include_unfinished=False``:**已经落定**的字节。`*.incomplete` 不算。这是"装好了没有"
+      的量法(`_measure` / `_is_installed` / 失败日志里那句"量到多少")。HuggingFace 正在写、
+      或曾经写了一半的 blob 既不能加载,也不代表进度已经到手 —— 把它算进去的后果这个文件顶上
+      已经写过一次:分片 2 才下三分之一、总量已经过线,于是设置页写着「已安装」而合成在加载
+      权重时炸。
+    * ``include_unfinished=True``:**盘上此刻**的字节,下到一半的也算。这是"下载到哪了"的量法
+      (`_progress_bytes`)。HF 在 `local_dir` 模式下把主权重一直写在
+      `<local_dir>/.cache/huggingface/download/<hash>.<etag>.incomplete`,下完才 rename 到正式
+      名字 —— 也就是说整个主模型下载期间,正式路径下**一个字节都不多**。只数落定文件的进度条
+      于是从头到尾不动(真机:3.83 GB 在下,刻度停在 687 MB / 15%)。
+
+    所以这里数的是**整棵目录树**,而不是只挑某个后缀:`.cache/huggingface/download` 那一层是
+    被量目录的子目录,只把后缀过滤放开、不把这一层算进来,等于没改。
     """
     total = 0
     try:
-        for child in path.rglob("*"):
+        if target.is_file():
+            # 目标本身就是一个文件(F5 基础模型的检查点走这条):没有目录可数。
+            return target.stat().st_size
+        for child in target.rglob("*"):
             try:
-                if child.is_file() and not child.name.endswith(_PARTIAL_SUFFIX):
-                    total += child.stat().st_size
+                if not child.is_file():
+                    continue
+                if not include_unfinished and child.name.endswith(_PARTIAL_SUFFIX):
+                    continue
+                total += child.stat().st_size
             except OSError:
                 continue
     except OSError as exc:
         # 目录读不动时返回的是**残缺的**总量,而这个数会被 `_is_installed` 当判据用 ——
         # 一个权限问题会表现成"模型没装好"。量不全就说一声。
-        logger.debug("量 %s 的大小时读不动:%s", path, exc)
-        return total
+        logger.debug("量 %s 的大小时读不动:%s", target, exc)
     return total
 
 
@@ -233,30 +248,48 @@ def _f5_model_dir() -> Path | None:
     return path if path.is_dir() else None
 
 
-def _measure(engine: TtsEngine) -> int:
+def _measure(engine: TtsEngine, *, include_unfinished: bool = False) -> int:
+    """这个引擎的权重现在占多少字节。
+
+    默认问的是"装好了没有"(不含 `*.incomplete`,见 `bytes_on_disk`);下载那条路用
+    `include_unfinished=True` 问"下载到哪了"(见 `_progress_bytes`)。
+    """
     # Fish Speech reuses a local weights dir (configured / app-managed), not the
     # HF hub cache — measure that so a reused setup reads as installed, not "missing".
     if engine.id == "fish-speech":
         model = _fish_model_dir()
         if model is not None:
-            return _dir_size(model)
+            return bytes_on_disk(model, include_unfinished=include_unfinished)
     if engine.id == "f5-tts":
         managed = _f5_model_dir()
-        if managed is not None and _dir_size(managed) > 0:
-            return _dir_size(managed)
+        size = bytes_on_disk(managed, include_unfinished=include_unfinished) if managed is not None else 0
+        if size > 0:
+            return size
     if engine.id == qwen_models.ENGINE_ID:
         # 两个下载源都铺进同一个托管目录(见 config.MANAGED_QWEN_MODEL),量它就是量下载进度。
         managed = qwen_models.root()
         if managed.is_dir():
-            return _dir_size(managed)
+            return bytes_on_disk(managed, include_unfinished=include_unfinished)
     total = 0
     for name in engine.cache_dirs:
         for root in _hf_roots():
             found = root / name
             if found.is_dir():
-                total += _dir_size(found)
+                total += bytes_on_disk(found, include_unfinished=include_unfinished)
                 break
     return total
+
+
+def _progress_bytes(progress_dir: Path | None, engine: TtsEngine) -> int:
+    """下载进度的分子:盘上此刻有多少字节,**含没下完的那一截**。
+
+    有托管目录(引擎权重 / Fish / Qwen 都铺在 App 自己的目录里)就量它;没有(预热是去拉 HF
+    缓存的那些引擎)就量这个引擎的缓存目录。两种都要算上 `.incomplete`,否则 Qwen 那 3.83 GB
+    的主权重从开始下到 rename 完成,这个数一直是同一批小文件。
+    """
+    if progress_dir is not None:
+        return bytes_on_disk(progress_dir, include_unfinished=True)
+    return _measure(engine, include_unfinished=True)
 
 
 #: safetensors 分片清单的文件名。模型自己带着"我需要哪些文件、合起来多大"的答案。
@@ -1060,7 +1093,7 @@ def _download_body(engine_id: str) -> None:
         python = resolve_engine_python(engine.id) or _download_python(engine.id)
 
     def measure() -> int:
-        return _dir_size(progress_dir) if progress_dir is not None else _measure(engine)
+        return _progress_bytes(progress_dir, engine)
 
     started = time.monotonic()
     last_bytes = measure()
@@ -1131,4 +1164,5 @@ def _download_body(engine_id: str) -> None:
 
 
 __all__ = ["CATALOG", "list_status", "get_status", "start_download", "is_installed",
-           "resolve_engine_python", "clear_runtime_probes", "sources_for", "effective_source"]
+           "resolve_engine_python", "clear_runtime_probes", "sources_for", "effective_source",
+           "bytes_on_disk"]
