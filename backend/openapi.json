@@ -28666,6 +28666,138 @@
           }
         }
       }
+    },
+    "/api/cloud/v1/shares/{share_id}": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Get Community Share",
+        "description": "分享详情。**公开读**:不转发本地会话,云端那侧按游客认。",
+        "operationId": "get_community_share_api_cloud_v1_shares__share_id__get",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/shares/{share_id}/payload": {
+      "get": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Get Community Share Payload",
+        "description": "分享内容本体。响应就是 Cloud 的 `{\"payload\": …}`,这里不拆、不校验。",
+        "operationId": "get_community_share_payload_api_cloud_v1_shares__share_id__payload_get",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cloud/v1/shares/{share_id}/download": {
+      "post": {
+        "tags": [
+          "cloud"
+        ],
+        "summary": "Download Community Share",
+        "description": "下载一次。Cloud 那侧会**把 downloads +1**,所以方法必须是 POST —— 别顺手改成 GET。",
+        "operationId": "download_community_share_api_cloud_v1_shares__share_id__download_post",
+        "parameters": [
+          {
+            "name": "share_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "description": "MosaelCloud 社区分享 id",
+              "title": "Share Id"
+            },
+            "description": "MosaelCloud 社区分享 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

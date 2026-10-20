@@ -9770,6 +9770,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cloud/v1/shares/{share_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Community Share
+         * @description 分享详情。**公开读**:不转发本地会话,云端那侧按游客认。
+         */
+        get: operations["get_community_share_api_cloud_v1_shares__share_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/shares/{share_id}/payload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Community Share Payload
+         * @description 分享内容本体。响应就是 Cloud 的 `{"payload": …}`,这里不拆、不校验。
+         */
+        get: operations["get_community_share_payload_api_cloud_v1_shares__share_id__payload_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cloud/v1/shares/{share_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Community Share
+         * @description 下载一次。Cloud 那侧会**把 downloads +1**,所以方法必须是 POST —— 别顺手改成 GET。
+         */
+        post: operations["download_community_share_api_cloud_v1_shares__share_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -41267,6 +41327,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloudBindingRemovedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_community_share_api_cloud_v1_shares__share_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_community_share_payload_api_cloud_v1_shares__share_id__payload_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_community_share_api_cloud_v1_shares__share_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description MosaelCloud 社区分享 id */
+                share_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
