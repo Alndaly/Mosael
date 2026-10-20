@@ -230,6 +230,29 @@ it("骨架组的壳就是真页 SettingsGroup 那一套:区块/抬头/标题/内
   }
 });
 
+/**
+ * 真页的说明在 0bb1a33f3(管理页)/ 本笔(设置页)拿掉了写死的 `max-w-2xl` —— 整页宽的面板里,
+ * 42rem 的天花板就是维护者截图里那句「描述右侧有很大的间距」。骨架是**同一格**的占位:
+ * 真页不自带宽度上限,骨架多留一条 `max-w-*` 就是在加载完的一瞬间把行宽从窄换到宽。
+ */
+it("说明那一格骨架不很多留一条宽度上限:真页已经没有 42rem 的天花板", () => {
+  const { container } = renderPendingSkeleton();
+  const skeleton = skeletonGroups(container)[0];
+  const real = render(<SettingsGroup title="真页的一组" description="这一组是干什么的" />).container;
+  const realDescription = real.querySelector<HTMLElement>('[data-slot="settings-group-description"]')!;
+  const skeletonDescription = skeleton.querySelector<HTMLElement>('[data-slot="settings-group-description"]')!;
+  for (const node of [realDescription, skeletonDescription]) {
+    expect(node.className.split(/\s+/).filter((token) => token.startsWith("max-w-"))).toEqual([]);
+  }
+  //: 骨架那一格仍是真页同一组类名 + 把几条灰条竖起来的那层 `grid gap-1.5`。
+  const skeletonTokens = skeletonDescription.className.split(/\s+/);
+  expect(skeletonTokens).toContain("grid");
+  expect(skeletonTokens).toContain("gap-1.5");
+  for (const token of realDescription.className.split(/\s+/)) {
+    expect(skeletonTokens).toContain(token);
+  }
+});
+
 it("真实页一点没变:数据到了还是「一项能力一组」,标题/说明/那一行/用在哪都在,骨架整块退场", async () => {
   const { container } = render(
     <QueryClientProvider client={new QueryClient()}>

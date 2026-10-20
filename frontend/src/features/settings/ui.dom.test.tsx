@@ -261,3 +261,49 @@ describe("settings section layout", () => {
     expect(tag).not.toHaveClass("uppercase");
   });
 });
+
+/**
+ * 维护者:「有不少页面依然 title 下面的描述右侧有很大的间距」。
+ *
+ * 说明写死 `max-w-2xl`(42rem),而设置页是整页宽、下面紧跟满宽的行 —— 说明早早折在 42rem,
+ * 右边空出一大块。管理页的同类段落(AdminSection)已经在 0bb1a33f3 改掉;设置页这份是设置各页
+ * 共用的节头(`SettingsGroup`,管理页的 AdminSection 是同一版式),同一种「节说明」只能有一种规则:
+ * 宽度交给这一列,不再在说明身上设上限。
+ *
+ * 窄容器(弹窗、侧栏)里的正文**不在这条规则里** —— 那些地方的行长本来就短,限宽是对的,
+ * 所以下面第二条钉的是「窄容器里说明铺满、不横滚」,而不是「窄容器里也把上限拿掉」。
+ */
+describe("SettingsGroup 的说明", () => {
+  it("说明不再限宽:类里没有 max-w-*,跟着这一列铺开", () => {
+    render(<SettingsGroup title="自动放行准则" description="这几类操作按什么判" />);
+
+    const description = screen.getByText("这几类操作按什么判");
+    expect(description.tagName).toBe("P");
+    expect(description).toHaveAttribute("data-slot", "settings-group-description");
+    //: 没有宽度上限(此前的 max-w-2xl 就是那处大间距)。
+    expect(description.className.split(/\s+/).filter((token) => token.startsWith("max-w-"))).toEqual([]);
+    //: 字号/颜色仍是同一套,只是不再截宽。
+    expect(description).toHaveClass("text-ui-md", "text-muted-foreground");
+  });
+
+  it("窄容器里说明能铺满:没有宽度上限、也没被塞进横向滚动的框里", () => {
+    const long = "这是一段很长的说明,".repeat(20);
+    const { container } = render(
+      <div style={{ width: 320 }}>
+        <SettingsGroup title="窄" description={long} />
+      </div>,
+    );
+
+    const description = container.querySelector<HTMLElement>('[data-slot="settings-group-description"]')!;
+    expect(description).not.toBeNull();
+    const tokens = description.className.split(/\s+/);
+    //: 宽度跟着容器走:不写 max-w-*、不写 w-max、也不禁换行。
+    expect(tokens.filter((token) => token.startsWith("max-w-") || token === "w-max" || token === "whitespace-nowrap")).toEqual([]);
+    //: 块级 p 在 min-w-0 的格子里:宽度 auto = 这一列的宽,不是内容宽。
+    expect(description.tagName).toBe("P");
+    expect(description.parentElement).toHaveClass("min-w-0");
+    expect(description.parentElement).not.toHaveClass("w-fit", "w-max", "inline-block");
+    //: 说明不在一个会横向滚动的容器里。
+    expect(description.closest(".overflow-x-auto, .overflow-x-scroll")).toBeNull();
+  });
+});

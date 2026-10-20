@@ -146,10 +146,11 @@ function CapabilitySkeletonGroup({ shape, label }: { shape: CapabilitySkeletonSh
             <h2 data-slot="settings-group-title" className="m-0 text-xl font-semibold leading-snug tracking-tight">
               <Skeleton data-capability-skeleton-title="" className={cn("h-5", shape.title)} />
             </h2>
-            {/*: 说明那一格和真页的说明同一档字号/颜色/边距,只多一层 `grid gap-1.5` 把几条灰条竖着排。 */}
+            {/*: 说明那一格和真页的说明同一档字号/颜色/边距,只多一层 `grid gap-1.5` 把几条灰条竖着排。
+                真页的说明不再限宽(整页宽的面板里 42rem 会留出右侧一大块空白),骨架也不留 —— 加载前后行宽一致。 */}
             <div
               data-slot="settings-group-description"
-              className="mb-0 mt-1.5 grid max-w-2xl gap-1.5 text-ui-md leading-[1.55] text-muted-foreground"
+              className="mb-0 mt-1.5 grid gap-1.5 text-ui-md leading-[1.55] text-muted-foreground"
             >
               {shape.description.map((width, index) => (
                 <Skeleton key={index} data-capability-skeleton-description="" className={cn("h-3.5", width)} />

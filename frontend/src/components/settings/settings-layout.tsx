@@ -60,9 +60,12 @@ export function SettingsGroup({
             {title}
           </h2>
           {description && (
+            /* 说明跟着这一列铺开,不设宽度上限:设置页是宽面板,后面紧跟满宽的行,说明被 42rem
+               截住时右边会空出一大块(维护者指出)。同一种「节说明」在全应用只有一种规则
+               (管理页的 AdminSection 是同一条);窄容器(弹窗、侧栏)里的正文不在此列 —— 它们的行长本来就短。 */
             <p
               data-slot="settings-group-description"
-              className="mb-0 mt-1.5 max-w-2xl text-ui-md leading-[1.55] text-muted-foreground"
+              className="mb-0 mt-1.5 text-ui-md leading-[1.55] text-muted-foreground"
             >
               {description}
             </p>
