@@ -12,7 +12,7 @@
  * 的模板片段算进去,于是把 `studioPromptEditText` 判成了死键 —— 是 tsc 把它挡了下来。
  * 漏判的代价只是少删几条;误删的代价是界面上直接显示键名。
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -35,12 +35,17 @@ function sources(dir: string): string[] {
 }
 
 /** 所有分区文件(两种语言),不含只做拼接的 index.ts。 */
-function tableFiles(): string[] {
-  return readdirSync(MESSAGE_TABLES).flatMap((locale) =>
-    readdirSync(join(MESSAGE_TABLES, locale))
-      .filter((name) => name.endsWith(".ts") && name !== "index.ts")
-      .map((name) => join(MESSAGE_TABLES, locale, name)),
-  );
+export function tableFiles(): string[] {
+  // 只有**目录**才是语言目录。这个目录下还放着测试/工具文件(它们不是文案表),以前把每个条目
+  // 都当语言目录去 readdir,结果整仓 vitest 在收集阶段就 ENOTDIR 挂了 —— 一道棘轮不该因为
+  // 旁边多了一个文件就炸。
+  return readdirSync(MESSAGE_TABLES, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((locale) =>
+      readdirSync(join(MESSAGE_TABLES, locale.name))
+        .filter((name) => name.endsWith(".ts") && name !== "index.ts")
+        .map((name) => join(MESSAGE_TABLES, locale.name, name)),
+    );
 }
 
 /** 模板里**每一段字面量**都是线索:`studioPrompt${kind}Text` 给出 studioPrompt 和 Text。 */
@@ -81,5 +86,27 @@ describe("文案表", () => {
   it("这道棘轮扫得到东西 —— 别变成空转", () => {
     expect(keys.length).toBeGreaterThan(2000);
     expect(fragments.size).toBeGreaterThan(10);
+  });
+});
+
+describe("分区扫描", () => {
+  // 回归:一条在 `qwenWhereToPick.test.ts` 放进 messages/ 时暴露出来的问题 —— 旧实现把
+  // messages/ 下每个条目都当语言目录去 readdir,于是一个同目录的测试文件就让整仓 vitest
+  // 在收集阶段 ENOTDIR。语言目录才读,旁边的测试/工具文件不该炸。
+  it("messages/ 下多一个普通文件也不会 ENOTDIR", () => {
+    const probe = join(MESSAGE_TABLES, `.ratchet-probe-${process.pid}.ts`);
+    writeFileSync(probe, "export {};\n");
+    try {
+      let files: string[] = [];
+      expect(() => {
+        files = tableFiles();
+      }).not.toThrow();
+      // 扫到的仍然是语言目录里的分区表,那个探针不在里面。
+      expect(files.length).toBeGreaterThan(0);
+      expect(files).not.toContain(probe);
+      expect(files.every((path) => statSync(path).isFile())).toBe(true);
+    } finally {
+      rmSync(probe, { force: true });
+    }
   });
 });
