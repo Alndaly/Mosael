@@ -134,15 +134,7 @@ beforeEach(() => {
   api.getModelDetail.mockImplementation(async (_id: string, folder: string, name: string) => ({
     folder, name, metadata: { "modelspec.architecture": "stable-diffusion-xl-v1-base" }, tags: [],
   }));
-  api.getModelLibrary.mockResolvedValue({
-    folders: [{ name: "checkpoints", count: 3 }], missing: [], download: { route: "local", note: "" },
-    preview_tools: { lookup: "sha256", save: true, save_note: "" },
-    models: [
-      model("sdxl.safetensors", { title: "SDXL Base", used_by: [{ id: "人像/古风.json", label: "古风" }] }),
-      model("pony.safetensors", { title: "Pony", nsfw: FLAGGED }),
-      model("flux-dev.safetensors", { title: "Flux Dev", family: "Flux", has_preview: false }),
-    ],
-  });
+  api.getModelLibrary.mockImplementation(LIBRARY);
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
@@ -154,6 +146,17 @@ afterEach(async () => {
   resetWorkbench();
   resetNativeViewAside();
   vi.unstubAllGlobals();
+});
+
+/** 默认模型库(beforeEach 用);个别用例再追加模型时整体重设。 */
+const LIBRARY = () => ({
+  folders: [{ name: "checkpoints", count: 3 }], missing: [], download: { route: "local", note: "" },
+  preview_tools: { lookup: "sha256", save: true, save_note: "" },
+  models: [
+    model("sdxl.safetensors", { title: "SDXL Base", used_by: [{ id: "人像/古风.json", label: "古风" }] }),
+    model("pony.safetensors", { title: "Pony", nsfw: FLAGGED }),
+    model("flux-dev.safetensors", { title: "Flux Dev", family: "Flux", has_preview: false }),
+  ],
 });
 
 describe("工作台模型库里的模型详情", () => {
@@ -264,5 +267,67 @@ describe("工作台模型库里的模型详情", () => {
     expect(dialog.querySelector('img[src^="preview://"], img[src^="thumb://"]'), "不显示就不去取图").toBeNull();
     act(() => void fireEvent.click(within(dialog).getByRole("button", { name: /modelShowHiddenPreview/ })));
     expect(dialog.querySelector("[data-hidden-preview]")).toBeNull();
+  });
+});
+
+/**
+ * 模型行的徽标布局(维护者截图:「右侧这个模型 list 的这个 nsfw 标应该在左下方,然后 Hint 也应该在上下才对而不是在左右」):
+ * NSFW / 预览来源角标收进第二行(meta)的最左,和底模徽标、副题同一行;名字独占第一行 —— 上下结构,不再有行尾那一列。
+ */
+describe("模型行徽标布局:角标进 meta 行最左", () => {
+  it("① NSFW 徽标在 meta 行内、且是 meta 行的第一个元素", async () => {
+    await mount();
+    const mark = row("Pony").querySelector("[data-nsfw-mark]");
+    expect(mark, "Pony 判成 NSFW:行里有这枚徽标").not.toBeNull();
+    const meta = mark!.parentElement!;
+    expect(meta.className, "徽标在横排的 meta 行里(对齐由容器的 items-center 出)").toMatch(/\bflex\b/);
+    expect(meta.className).toMatch(/\bitems-center\b/);
+    expect(meta.children[0], "DOM 顺序:NSFW 徽标是 meta 行的第一个(= 左下)").toBe(mark);
+  });
+
+  it("② PreviewOriginMark 与 NSFW 同列同行", async () => {
+    api.getModelLibrary.mockImplementation(() => Promise.resolve({
+      ...LIBRARY(),
+      models: [...LIBRARY().models, model("civ-dl.safetensors", { title: "Civ DL", nsfw: FLAGGED, preview_origin: "civitai" })],
+    }));
+    await mount();
+    const rowEl = row("Civ DL");
+    const mark = rowEl.querySelector("[data-nsfw-mark]");
+    const origin = rowEl.querySelector("[data-preview-origin]");
+    expect(mark, "判成 NSFW:行里有这枚徽标").not.toBeNull();
+    expect(origin, "预览图来自 Civitai:行里有来源徽标").not.toBeNull();
+    expect(origin!.parentElement, "两枚徽标同一个父元素、同一行(meta 行)").toBe(mark!.parentElement);
+    const meta = origin!.parentElement!;
+    expect(meta.className, "那一行是横排的 meta 行(items-center),不是行尾那列").toMatch(/\bitems-center\b/);
+    expect(within(meta).getByText("SDXL"), "meta 行里还有底模徽标(Hint 跟着徽标,上下排)").toBeInTheDocument();
+  });
+
+  it("③ 没有 hint(底模/家族/副题)只有 NSFW 的模型也显示徽标", async () => {
+    api.getModelLibrary.mockImplementation(() => Promise.resolve({
+      ...LIBRARY(),
+      models: [...LIBRARY().models, model("raw-nsfw.safetensors", { title: "", family: "", nsfw: FLAGGED })],
+    }));
+    await mount();
+    const mark = row("raw-nsfw.safetensors").querySelector("[data-nsfw-mark]");
+    expect(mark, "meta 行的渲染条件要算上 NSFW,不然这种行不画徽标").not.toBeNull();
+    expect(mark!.parentElement!.className, "画在横排的 meta 行里(items-center),不是行尾那列").toMatch(/\bitems-center\b/);
+  });
+
+  it("④ 名字仍在独立第一行:grid 两行结构,meta 是第二行", async () => {
+    await mount();
+    const nameEl = within(row("Pony")).getByText("Pony");
+    const grid = nameEl.parentElement!;
+    expect(grid.className, "名字和 meta 共用一个 grid 容器").toMatch(/\bgrid\b/);
+    expect(grid.children[0], "名字独占第一行").toBe(nameEl);
+    const meta = grid.children[1];
+    expect(meta, "有第二行").not.toBeUndefined();
+    expect(meta.className).toMatch(/\bflex\b/);
+    expect(meta.querySelector("[data-nsfw-mark]"), "第二行就是 meta 行,徽标挪进来了").not.toBeNull();
+  });
+
+  it("⑤ 行尾独立的徽标列不存在了(源码里没有那个 flex-col items-end 块)", async () => {
+    const fs = await import("node:fs");
+    const source = fs.readFileSync("./src/features/plugins/workbench/ModelsPanel.tsx", "utf8");
+    expect(source, "右侧独立徽标列已删").not.toContain("flex-col items-end");
   });
 });

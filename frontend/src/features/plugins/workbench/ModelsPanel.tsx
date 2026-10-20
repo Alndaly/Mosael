@@ -379,8 +379,12 @@ function SlotPicker({
                     >
                       <span className="grid min-w-0 flex-1 gap-0.5">
                         <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
-                        {(model.encoder?.label || model.family || subtitle) && (
+                        {/* 第二行:角标(NSFW、预览来源)在最左,然后底模徽标、触发词;没有 hint 只有角标的行也要画
+                            (维护者:角标在左下、Hint 跟着徽标,名字与它们上下,不在行尾另起一列) */}
+                        {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server") || model.encoder?.label || model.family || subtitle) && (
                           <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
+                            <NsfwMark nsfw={model.nsfw} className="h-4" />
+                            <PreviewOriginMark origin={model.preview_origin} className="h-4 shadow-none" />
                             {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
                             <EncoderRecipeMark model={model} recipe={slot.recipe} />
                             {subtitle && <Truncate>{subtitle}</Truncate>}
@@ -393,13 +397,6 @@ function SlotPicker({
                           : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
                       </span>
                     </button>
-                    {/* 判成 NSFW、预览图来自 Civitai 的角标:在填的那颗按钮外面(它们自己能聚焦、悬停说凭什么) */}
-                    {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server")) && (
-                      <span className="flex shrink-0 flex-col items-end gap-0.5">
-                        <NsfwMark nsfw={model.nsfw} className="h-4" />
-                        <PreviewOriginMark origin={model.preview_origin} className="h-4 shadow-none" />
-                      </span>
-                    )}
                     {/* 查看详情:悬停、聚焦这一行时露出来(键盘 Tab 得到);点一行本身照旧是填进画布。和这一行一样高的一条窄键
                         (不另定一档高度:旁边是 44 的缩略图) */}
                     <IconButton
