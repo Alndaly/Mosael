@@ -271,21 +271,24 @@ describe("工作台模型库里的模型详情", () => {
 });
 
 /**
- * 模型行的徽标布局(维护者截图:「右侧这个模型 list 的这个 nsfw 标应该在左下方,然后 Hint 也应该在上下才对而不是在左右」):
- * NSFW / 预览来源角标收进第二行(meta)的最左,和底模徽标、副题同一行;名字独占第一行 —— 上下结构,不再有行尾那一列。
+ * 模型行的徽标布局(维护者:「希望这些 badge 垂直高度是一致的」「NSFW 标应该在这些 badges 的最后」):
+ * 名字独占第一行;第二行(meta)从左到右是 [底模徽标] [EncoderRecipeMark] [副题] [NSFW] [PreviewOriginMark]。
+ * NSFW 与预览来源是一对、一起排在最后;所有徽标同一档高度(和 CatalogBadge 一样)。
  */
-describe("模型行徽标布局:角标进 meta 行最左", () => {
-  it("① NSFW 徽标在 meta 行内、且是 meta 行的第一个元素", async () => {
+describe("模型行徽标布局:徽标同高、角标排最后", () => {
+  it("① 两枚徽标同一档高度:NSFW 与底模徽标(CatalogBadge)最终都是 h-6", async () => {
     await mount();
     const mark = row("Pony").querySelector("[data-nsfw-mark]");
     expect(mark, "Pony 判成 NSFW:行里有这枚徽标").not.toBeNull();
     const meta = mark!.parentElement!;
-    expect(meta.className, "徽标在横排的 meta 行里(对齐由容器的 items-center 出)").toMatch(/\bflex\b/);
-    expect(meta.className).toMatch(/\bitems-center\b/);
-    expect(meta.children[0], "DOM 顺序:NSFW 徽标是 meta 行的第一个(= 左下)").toBe(mark);
+    const family = within(meta).getByText("SDXL");
+    const heights = (el: Element) => el.className.split(/\s+/).filter((one) => /^-?h-\d+(\.\d+)?$/.test(one));
+    expect(heights(mark!), "NSFW 粉胶囊的高度类").toEqual(["h-6"]);
+    expect(heights(family), "底模徽标(CatalogBadge)的高度类").toEqual(["h-6"]);
+    expect(heights(mark!), "两枚徽标同一档尺码,不是两套").toEqual(heights(family));
   });
 
-  it("② PreviewOriginMark 与 NSFW 同列同行", async () => {
+  it("② meta 行顺序:底模徽标 → 副题 → NSFW → PreviewOriginMark,角标在最后且成对", async () => {
     api.getModelLibrary.mockImplementation(() => Promise.resolve({
       ...LIBRARY(),
       models: [...LIBRARY().models, model("civ-dl.safetensors", { title: "Civ DL", nsfw: FLAGGED, preview_origin: "civitai" })],
@@ -299,7 +302,13 @@ describe("模型行徽标布局:角标进 meta 行最左", () => {
     expect(origin!.parentElement, "两枚徽标同一个父元素、同一行(meta 行)").toBe(mark!.parentElement);
     const meta = origin!.parentElement!;
     expect(meta.className, "那一行是横排的 meta 行(items-center),不是行尾那列").toMatch(/\bitems-center\b/);
-    expect(within(meta).getByText("SDXL"), "meta 行里还有底模徽标(Hint 跟着徽标,上下排)").toBeInTheDocument();
+    const family = within(meta).getByText("SDXL");
+    const subtitle = within(meta).getByText("civ-dl.safetensors");
+    const order = [...meta.children];
+    expect(order.indexOf(family), "底模徽标排在 NSFW 之前").toBeLessThan(order.indexOf(mark!));
+    expect(order.indexOf(subtitle), "副题也在 NSFW 之前").toBeLessThan(order.indexOf(mark!));
+    expect(order.indexOf(mark!), "NSFW 排在底模徽标之后").toBeGreaterThan(order.indexOf(family));
+    expect(order.slice(-2), "NSFW 与预览来源是最后两枚、并排成对,不拆散").toEqual([mark, origin]);
   });
 
   it("③ 没有 hint(底模/家族/副题)只有 NSFW 的模型也显示徽标", async () => {
@@ -344,5 +353,37 @@ describe("模型行徽标布局:角标进 meta 行最左", () => {
     expect(info.className, "悬停显现逻辑保留").toMatch(/group-hover\/thumb:opacity-100/);
     expect(info.className).toMatch(/group-focus-within\/thumb:opacity-100/);
     expect(info.className).toMatch(/\bopacity-0\b/);
+  });
+
+  it("⑦ 转圈/✓ 是右下角的绝对定位覆盖层:不占行内一格,和右上角 ⓘ 上下错开", async () => {
+    await mount();
+    const rowEl = row("SDXL Base");
+    const state = rowEl.querySelector("[data-model-state]");
+    expect(state, "已选中:行里有 ✓ 这一层").not.toBeNull();
+    expect(state!.className, "脱离文档流覆盖在行上").toMatch(/\babsolute\b/);
+    expect(state!.className, "右下角").toMatch(/\bright-1\b/);
+    expect(state!.className, "右下角").toMatch(/\bbottom-1\b/);
+    expect(state!.className, "和 ⓘ 的 top-1 分处上下,不用 top-1").not.toMatch(/\btop-1\b/);
+    expect(state!.className, "两个覆盖层都在内容之上").toMatch(/\bz-10\b/);
+    expect(state!.className, "不再占行内一格(不挤窄行内容)").not.toMatch(/\bshrink-0\b/);
+    expect(state!.getAttribute("aria-hidden"), "只是画给人看的状态,读屏听按钮的 aria-pressed/aria-busy").not.toBeNull();
+
+    const info = within(rowEl).getByRole("button", { name: "workbenchModelDetailOpen" });
+    expect(info.className, "ⓘ 详情键保持右上角").toMatch(/\bright-1\b/);
+    expect(info.className).toMatch(/\btop-1\b/);
+    expect(info.className, "ⓘ 不在右下角").not.toMatch(/\bbottom-1\b/);
+    expect(rowEl.querySelector("[data-model-detail]"), "两个覆盖层用不同的选择器").toBe(info);
+    expect(rowEl.querySelector("[data-model-state]")).not.toBe(info);
+    expect(within(rowEl).getByRole("button", { pressed: true }).querySelector("[data-model-state]"),
+      "状态层跟着填画布按钮(pending 时转圈的那一处),但绝对定位、不占行内一格").toBe(state);
+    expect(row("Flux Dev").querySelector("[data-model-state]"), "未选中不显示").toBeNull();
+  });
+
+  it("⑧ 模型名的 Truncate 显式 side=\"bottom\":不跟着工作台那一列默认的「朝左」横到画布上", async () => {
+    const fs = await import("node:fs");
+    const source = fs.readFileSync("./src/features/plugins/workbench/ModelsPanel.tsx", "utf8");
+    expect(source, "名字的 Truncate 显式朝下(工作台那一列是 side: left,不显式给就横在行的左边)").toMatch(
+      /<Truncate\b[^>]*\bside="bottom"[^>]*>\{name\}<\/Truncate>/,
+    );
   });
 });

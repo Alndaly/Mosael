@@ -378,24 +378,35 @@ function SlotPicker({
                       onClick={() => pick.mutate(model)}
                     >
                       <span className="grid min-w-0 flex-1 gap-0.5">
-                        <Truncate className="text-ui-xs font-medium text-foreground">{name}</Truncate>
-                        {/* 第二行:角标(NSFW、预览来源)在最左,然后底模徽标、触发词;没有 hint 只有角标的行也要画
-                            (维护者:角标在左下、Hint 跟着徽标,名字与它们上下,不在行尾另起一列) */}
+                        {/* 名字的说明显式朝下:这一列是「左」的 Hint 区域(见 ComfyWorkbench 的 COLUMN_REGION),跟着区域走会横到
+                            左边的画布上(维护者)。行下方有地方,往下弹不盖住这一行 */}
+                        <Truncate side="bottom" className="text-ui-xs font-medium text-foreground">{name}</Truncate>
+                        {/* 第二行(meta):底模徽标、文本编码器、触发词,最后是 NSFW 与预览来源这一对;没有 hint 只有角标的
+                            行也要画。所有徽标同一档高度(和 CatalogBadge 一样);角标排在最后(维护者:NSFW 标应该在最后),
+                            Hint 跟着徽标,名字与它们上下,不在行尾另起一列 */}
                         {(model.nsfw?.flagged || (model.preview_origin && model.preview_origin !== "server") || model.encoder?.label || model.family || subtitle) && (
                           <span className="flex min-w-0 items-center gap-1 text-ui-2xs text-muted-foreground">
-                            <NsfwMark nsfw={model.nsfw} className="h-4" />
-                            <PreviewOriginMark origin={model.preview_origin} className="h-4 shadow-none" />
                             {(model.encoder?.label || model.family) && <CatalogBadge tone="muted">{model.encoder?.label || model.family}</CatalogBadge>}
                             <EncoderRecipeMark model={model} recipe={slot.recipe} />
                             {subtitle && <Truncate>{subtitle}</Truncate>}
+                            <NsfwMark nsfw={model.nsfw} className="h-6" />
+                            <PreviewOriginMark origin={model.preview_origin} className="h-6 shadow-none" />
                           </span>
                         )}
                       </span>
-                      {/* 同一格:填的过程中是转圈,填好了是对勾 —— 宽度不变,这一行不跳 */}
-                      <span className="grid size-4 shrink-0 place-items-center">
-                        {filling ? <Loader2 size={14} aria-hidden className="animate-mosael-spin text-muted-foreground" />
-                          : chosen ? <Check size={14} aria-hidden className="text-primary" /> : null}
-                      </span>
+                      {/* 同一格:填的过程中是转圈,填好了是对勾(尺寸不变)。脱离文档流覆盖在行的右下角(维护者:选中态也应该是
+                          悬浮着的,不是固定在行内的一个元素),不再占行内一格、挤窄名字与徽标;和右上角的 ⓘ 一上一下错开,
+                          各自只盖一小块,互不重叠。只是画给人看的状态,读屏听按钮的 aria-pressed / aria-busy */}
+                      {(filling || chosen) && (
+                        <span
+                          data-model-state=""
+                          aria-hidden
+                          className="pointer-events-none absolute bottom-1 right-1 z-10 grid size-4 place-items-center"
+                        >
+                          {filling ? <Loader2 size={14} className="animate-mosael-spin text-muted-foreground" />
+                            : <Check size={14} className="text-primary" />}
+                        </span>
+                      )}
                     </button>
                     {/* 查看详情:悬停、聚焦这一行时露出来(键盘 Tab 得到);点一行本身照旧是填进画布。脱离
                         文档流覆盖在行的右上角(维护者:不占行内一格、不撑高/撑宽),只挡右上角一小块,
