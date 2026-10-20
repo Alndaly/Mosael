@@ -140,6 +140,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A share must be one of: {allowed}.",
         "zh": "分享类型只能是：{allowed}。",
     },
+    "invalid_locale": {
+        "en": "A share's locale must be one of: {allowed}.",
+        "zh": "分享的语言只能是：{allowed}。",
+    },
     "invalid_payload": {
         "en": "The share payload must be a JSON value.",
         "zh": "分享内容必须是一份 JSON。",
@@ -175,10 +179,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "invalid_sort": {
         "en": "Sorting must be one of: {allowed}.",
         "zh": "排序只能是：{allowed}。",
-    },
-    "official_account_cannot_sign_in": {
-        "en": "This is an official publishing account and cannot be signed in to. Use your own account.",
-        "zh": "这是官方发布账号，不能登录。请使用你自己的账号。",
     },
     "not_authenticated": {
         "en": "You are not signed in. Sign in and try again.",

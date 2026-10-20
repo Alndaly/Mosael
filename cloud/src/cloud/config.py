@@ -81,6 +81,14 @@ class CloudConfig:
     oauth_state_ttl_seconds: int = 600
     #: 把 state 绑到发起请求的浏览器的那枚短命 cookie 的名字。
     oauth_cookie_name: str = "mosael_cloud_oauth_state"
+    #: 官方发布账号。**它是一个可以正常登录的账号**(不是"内容占位符"):种子命令按这三个值
+    #: 建号 / 设密码,运营改环境变量就能改密码。handle / email 只在**建号时**使用;
+    #: 已存在的官方账号不会被种子改 handle / email(见 `cloud.official`)。
+    official_handle: str = "mosael"
+    official_email: str = "official@mosael.example"
+    #: 官方号的密码。**空 = 不改密码**:新账号因此没有密码(密码登录 401),不是启动错误。
+    #: 非空时短于 `password_min_length` 直接让配置构造失败 —— 不静默接受一个弱密码。
+    official_password: str = ""
     #: 从 `public_url` 推出来的同源校验名单(允许的 Origin)。
     allowed_origins: frozenset[str] = field(default_factory=frozenset)
 
@@ -99,6 +107,12 @@ class CloudConfig:
             raise ValueError("smtp_port must be between 1 and 65535")
         if self.oauth_state_ttl_seconds <= 0:
             raise ValueError("oauth_state_ttl_seconds must be positive")
+        # 官方号是人类要登录的账号,它和人自己设的密码守同一条下限。**启动时失败**,不是等到
+        # 第一次登录才说 —— 部署方会立刻看到配置有问题,而不是得到一个弱密码的运营账号。
+        if self.official_password and len(self.official_password) < self.password_min_length:
+            raise ValueError(
+                f"CLOUD_OFFICIAL_PASSWORD must be at least {self.password_min_length} characters"
+            )
 
     @property
     def resolved_database_url(self) -> str:
@@ -165,4 +179,8 @@ class CloudConfig:
             google_client_id=os.environ.get("CLOUD_GOOGLE_CLIENT_ID", "").strip(),
             google_client_secret=os.environ.get("CLOUD_GOOGLE_CLIENT_SECRET", "").strip(),
             oauth_state_ttl_seconds=int(os.environ.get("CLOUD_OAUTH_STATE_TTL_SECONDS", "600")),
+            # 密码**不 strip**:前后空格就是密码的一部分,原样交给 hash_password。
+            official_handle=os.environ.get("CLOUD_OFFICIAL_HANDLE", "").strip() or "mosael",
+            official_email=os.environ.get("CLOUD_OFFICIAL_EMAIL", "").strip() or "official@mosael.example",
+            official_password=os.environ.get("CLOUD_OFFICIAL_PASSWORD", ""),
         )

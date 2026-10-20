@@ -32,6 +32,10 @@ router = APIRouter(tags=["shares"])
 class ShareIn(BaseModel):
     #: `workflow` / `board` / `plugin`。别的值由 domain 回 422(带"只能是哪几个"的人话)。
     kind: str
+    #: 标题 / 简介的语言(`zh-CN` / `en-US`)。**必填**:用户的语言来自官网当前语言段,
+    #: 服务端不替内容猜 —— 英文内容不该因为没传而被标成中文。缺字段 = 422 invalid_request,
+    #: 值不合法 = 422 invalid_locale。
+    locale: str
     title: str
     summary: str | None = None
     #: 工程文件本体。`Any` 是有意的:服务端不解析结构,只量大小。
@@ -49,6 +53,7 @@ def publish(body: ShareIn, user: CurrentUser, db: DbSession) -> dict[str, object
         db,
         user,
         kind=body.kind,
+        locale=body.locale,
         title=body.title,
         summary=body.summary,
         payload=body.payload,
@@ -63,12 +68,13 @@ def browse(
     db: DbSession,
     q: str = "",
     kind: str = "",
+    locale: str = "",
     sort: str = "new",
     limit: int = 20,
     cursor: str = "",
 ) -> dict[str, object]:
     items, next_cursor = list_shares(
-        db, user, q=q, kind=kind, sort=sort, limit=limit, cursor=cursor
+        db, user, q=q, kind=kind, locale=locale, sort=sort, limit=limit, cursor=cursor
     )
     return {"items": items, "next_cursor": next_cursor}
 

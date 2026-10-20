@@ -30,6 +30,8 @@ from cloud.models import (
 from cloud.pagination import after_clause, clamp_limit, decode_cursor, encode_cursor
 
 SHARE_KINDS = ("workflow", "board", "plugin")
+#: 分享标题 / 简介的语言。只有这两种,和数据库 CHECK 一致;提交别的值 → 422。
+SHARE_LOCALES = ("zh-CN", "en-US")
 SHARE_STATUS_LISTED = "listed"
 SHARE_STATUS_REMOVED = "removed"
 SHARE_SORTS = ("new", "hot")
@@ -104,9 +106,13 @@ def create_share(
     summary: str | None,
     payload: Any,
     license: str | None,
+    locale: str,
     slug: str | None = None,
 ) -> dict[str, object]:
     """发布。**需要 session + 已设置的 display_name**;没有名字是 409。
+
+    `locale` 是**必填**的:它说明标题 / 简介写的是哪种语言,由发布方声明(官网当前语言段),
+    服务端不替内容猜语言 —— 猜错会把英文内容标成中文,而且不可逆。
 
     `slug` 只有种子命令用(`cloud.official`):它让"官方 bundle 里的这一条"有一个稳定去重键。
     HTTP 入口不传它,所以用户分享的这一列永远是 NULL。
@@ -114,6 +120,8 @@ def create_share(
     ensure_identity(user)
     if kind not in SHARE_KINDS:
         raise CloudError(422, "invalid_kind", allowed=" / ".join(SHARE_KINDS))
+    if locale not in SHARE_LOCALES:
+        raise CloudError(422, "invalid_locale", allowed=" / ".join(SHARE_LOCALES))
     if payload is None:
         raise CloudError(422, "invalid_payload")
     size = payload_bytes(payload)
@@ -124,6 +132,7 @@ def create_share(
     share = CloudShare(
         owner_user_id=user.id,
         kind=kind,
+        locale=locale,
         title=_clean_title(title),
         summary=_clean_summary(summary),
         payload=payload,
@@ -186,14 +195,21 @@ def list_shares(
     *,
     q: str = "",
     kind: str = "",
+    locale: str = "",
     sort: str = "new",
     limit: int | None = None,
     cursor: str = "",
     owner_user_id: str | None = None,
 ) -> tuple[list[dict[str, object]], str | None]:
-    """公开列表。`sort=new` 按创建时间;`sort=hot` 按互动热度(下载 + 点赞×3 + 收藏×2 + 评论)。"""
+    """公开列表。`sort=new` 按创建时间;`sort=hot` 按互动热度(下载 + 点赞×3 + 收藏×2 + 评论)。
+
+    `locale` 空 = **不筛语言,两种都返回**。这里不替调用方猜一个默认语言:猜成 zh-CN 会让
+    英文内容从列表里静默消失,而"不传"本来就该是"我还没选语言"。
+    """
     if kind and kind not in SHARE_KINDS:
         raise CloudError(422, "invalid_kind", allowed=" / ".join(SHARE_KINDS))
+    if locale and locale not in SHARE_LOCALES:
+        raise CloudError(422, "invalid_locale", allowed=" / ".join(SHARE_LOCALES))
     if sort not in SHARE_SORTS:
         raise CloudError(422, "invalid_sort", allowed=" / ".join(SHARE_SORTS))
 
@@ -203,6 +219,8 @@ def list_shares(
         conditions.append(CloudShare.owner_user_id == owner_user_id)
     if kind:
         conditions.append(CloudShare.kind == kind)
+    if locale:
+        conditions.append(CloudShare.locale == locale)
     needle = (q or "").strip()
     if needle:
         conditions.append(
@@ -345,6 +363,7 @@ def _serialize_many(db: Session, shares: list[CloudShare], viewer: CloudUser | N
         {
             "id": share.id,
             "kind": share.kind,
+            "locale": share.locale,
             "title": share.title,
             "summary": share.summary,
             "bytes": share.bytes,

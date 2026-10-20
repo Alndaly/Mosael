@@ -30,6 +30,8 @@ def share_body(**overrides: Any) -> dict[str, Any]:
         "summary": "A tiny workflow for testing.",
         "payload": {"version": 1, "nodes": [], "edges": []},
         "license": "CC-BY-4.0",
+        # 语言是发布时必须声明的字段(不是服务端猜的):测试默认发中文那一行。
+        "locale": "zh-CN",
     }
     body.update(overrides)
     return body

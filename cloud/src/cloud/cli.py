@@ -17,12 +17,13 @@ from cloud.config import CloudConfig
 from cloud.schema import stamp_database, upgrade_database
 
 
-def database_url() -> str:
+def load_config() -> CloudConfig:
+    """和 uvicorn 启动读同一份配置。短官方密码等配置错误在这里就让命令失败。"""
     config = CloudConfig.from_env()
     if not config.database_url:
         # SQLite 不会替我们建目录;uvicorn 入口会建,CLI 也要能单独跑。
         config.data_dir.mkdir(parents=True, exist_ok=True)
-    return config.resolved_database_url
+    return config
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,7 +42,13 @@ def main(argv: list[str] | None = None) -> int:
     seed.add_argument("--bundle", required=True, help="bundle JSON 的路径")
 
     args = parser.parse_args(argv)
-    url = database_url()
+    try:
+        config = load_config()
+    except ValueError as exc:
+        # 配置错误(例如 CLOUD_OFFICIAL_PASSWORD 太短)不静默:命令以 2 退出并说清原因。
+        print(f"配置错误: {exc}", file=sys.stderr)
+        return 2
+    url = config.resolved_database_url
     if args.command == "migrate":
         upgrade_database(url, args.revision)
         print(f"数据库已升级到 {args.revision}")
@@ -55,7 +62,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             bundle = load_bundle(args.bundle)
             upgrade_database(url)
-            report = seed_official(url, bundle)
+            report = seed_official(
+                url,
+                bundle,
+                handle=config.official_handle,
+                email=config.official_email,
+                password=config.official_password,
+            )
         except SeedError as exc:
             print(f"种子命令失败: {exc}", file=sys.stderr)
             return 2

@@ -83,11 +83,13 @@ def issue_code(
     db.add(row)
     db.commit()
 
-    if purpose == "login" and (user is None or user.official):
-        # 未知邮箱与官方账号都不投递,但响应 / 配额与普通邮箱完全一致。
-        # 官方账号的邮箱本来就在不可投递的保留域里,这里再明确一次:不发。
+    if purpose == "login" and user is None:
+        # 未知邮箱不投递(没有账号可登录),但响应 / 配额与已注册邮箱完全一致 ——
+        # 枚举防护靠的就是这两条路径不可区分。
+        # 官方账号**不在这里**:它的邮箱由部署配置成真实拥有的地址,验证码正常投递、
+        # 正常受上面那几条冷却 / 每小时上限约束(没有官方号后门)。
         logger.info(
-            "login code requested for a non-signable address (%s); response kept identical",
+            "login code requested for an unknown address (%s); response kept identical",
             mask_email(email),
         )
         return

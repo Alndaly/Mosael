@@ -371,7 +371,8 @@ P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的�
   没显式给时自动生成 `member-xxxxxxxx`,之后可用 `PUT /me` 改。头像不存图片:只存短种子,
   P1 由前端算"昵称首字母 + 由种子决定的颜色"。
 - **分享**表 `cloud_shares`:`owner_user_id` NOT NULL(没有匿名发布);`kind` 是
-  `workflow` / `board` / `plugin`(0005 起);`payload` 是 JSON(Postgres 上 JSONB),服务端只
+  `workflow` / `board` / `plugin`(0005 起);`locale` 是 `zh-CN` / `en-US`(0007 起,
+  **NOT NULL**,发布时必填);`payload` 是 JSON(Postgres 上 JSONB),服务端只
   确认它是合法 JSON 并量 **2 MB** 上限(超过 → 413,不截断、不解析节点 / 画板结构);`status`
   只有 `listed` / `removed`。
 - **互动**三表 `cloud_share_likes` / `cloud_share_favorites` / `cloud_share_comments`,每张都带
@@ -390,7 +391,8 @@ P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的�
   `0002_identity_and_community.py`(身份三列 + 分享四表)、`0003_notifications.py`(通知表)、
   `0004_drop_device_binding.py`(拆掉设备绑定,删两张表)、`0005_shares_plugin_kind.py`
   (`kind` 的 CHECK 加上 `plugin`)、`0006_official_accounts_and_seed_slug.py`
-  (`cloud_users.official` + `cloud_shares.slug` 去重键)。`cloud.app.create_app()` 启动时执行
+  (`cloud_users.official` + `cloud_shares.slug` 去重键)、`0007_shares_locale.py`
+  (`cloud_shares.locale` + 四列唯一键,**既有行回填 `zh-CN`**)。`cloud.app.create_app()` 启动时执行
   `alembic upgrade head`;表结构不再由 `create_all` 猜,已有库先用 `cloud.cli stamp 0001`。
 
 ## 官方内容 = 官方账号发布的分享
@@ -400,21 +402,33 @@ P1 的地基,接口契约由这一笔定死(逐条列在 `cloud/README.md` 的�
 
 - **`plugin` 是 `kind` 的第三个取值**(0005 迁移改 CHECK)。发布、列表过滤、详情、payload、
   下载全部复用用户分享那套接口与 payload 形状;没有"官方 payload"分支,排序 / 游标 / 统计不分叉。
+- **语言(0007)**:`cloud_shares.locale` NOT NULL,只许 `zh-CN` / `en-US`,发布时必填
+  (`POST /shares` 缺 → 422,非法值 → `422 invalid_locale`);`GET /shares?locale=` 过滤,
+  **不传 = 两种都返回**(不猜默认语言,否则英文内容会从列表里静默消失)。同一条官方内容的
+  中英两行 **payload 相同**、标题 / 简介各取自己的语言;既有行由迁移回填 `zh-CN`。
 - **`cloud_users.official`(0006)** 是公开标记:`public_user()` 带出 `official`,出现在列表 /
   详情 / 评论 / 通知的 `author` 里。`email` 仍然只出现在本人形状 `/me`。
 - **只有部署脚本能造官方号**:注册模型没有 `official` 字段(pydantic 忽略多余键),`PUT /me`
   也不读它;唯一写入点是 `python -m cloud.cli seed-official`。测试直接钉住"注册请求里塞
   `official: true` 之后库里的值仍是 0"。
-- **官方账号不能登录**:种子不设密码;邮箱是 `official@mosael.example`(RFC 2606 保留域,
-  DNS 不可达);登录发码对官方账号不投递(响应与未注册邮箱一致);所有认证路径唯一的发会话入口
-  `open_session` 对 `official` 账号回 `403 official_account_cannot_sign_in`。三条互不依赖,
-  所以"拿到密码 / 拿到码 / 以后多一条登录方式"都换不到会话。
-- **种子幂等键是 `(官方账号, kind, slug)`**,slug 来自外部 bundle,存在 `cloud_shares.slug`,
-  唯一索引兜底。不用标题:标题会被运营改,按标题去重会在下次部署多出一条。**只补缺**:
-  已存在的行整行跳过,不覆盖标题 / 简介 / payload;用户分享的 slug 为 NULL,永远不会被碰到。
-  bundle 格式与样例见 `cloud/README.md` 的「官方内容」一节。
-- **回退**:`0005` 的 downgrade 把 CHECK 换回两个值。如果库里已经有 plugin 行,回退会
-  **明确失败**而不是悄悄删数据;要回退先人工决定那些行怎么处理。
+- **官方账号可以正常登录**:身份来自 `CLOUD_OFFICIAL_HANDLE` / `CLOUD_OFFICIAL_EMAIL`
+  (有缺省,只在建号时用),密码来自 `CLOUD_OFFICIAL_PASSWORD`。原来的三道"登不上"的闸已拆:
+  种子不再固定无密码、发码对官方号恢复投递、`open_session` 不再对 `official` 回 403,
+  `/login` 也不再跳过官方号。**没设密码**时种子不动密码:新账号密码登录 **401**
+  (`invalid_credentials`,不是 403,不暴露官方身份),不是启动错误;**密码短于
+  `CLOUD_PASSWORD_MIN_LENGTH` 则配置构造即失败**,uvicorn / CLI 直接退出。
+- **官方号没有登录后门**:验证码的 60 秒冷却、每邮箱 / 每 IP 每小时上限都照常生效;
+  密码登录与普通账号同一条 `verify_password`。这一期仍然没有"密码登录失败限速"(见文末),
+  但那是所有账号共同的状态,不是官方号的特权。
+- **种子幂等键是 `(官方账号, kind, slug, locale)`**,slug 来自外部 bundle,存在
+  `cloud_shares.slug`,四列唯一索引兜底。不用标题:标题会被运营改,按标题去重会在下次部署
+  多出一条。**只补缺**:已存在的行整行跳过,不覆盖标题 / 简介 / payload;用户分享的 slug 为
+  NULL,永远不会被碰到。**唯一例外是密码**,理由见 `cloud/official.py` 的注释。
+  bundle 格式(每条 `slug` + `locales: {zh-CN: {title, summary?}, en-US: {...}}`)与样例见
+  `cloud/README.md` 的「官方内容」一节;bundle 缺一种语言就只发一条,不编造另一种语言的标题。
+- **回退**:`0005` 的 downgrade 把 CHECK 换回两个值;`0007` 的 downgrade 删 `locale` 并把
+  唯一键换回三列。如果库里已经有 plugin 行 / 同一 slug 的两种语言,回退会**明确失败**
+  而不是悄悄删数据;要回退先人工决定那些行怎么处理。
 
 ## 不在这一期
 

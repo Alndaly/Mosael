@@ -174,12 +174,22 @@ class CloudShare(Base):
     __table_args__ = (
         CheckConstraint("kind IN ('workflow', 'board', 'plugin')", name="ck_cloud_shares_kind"),
         CheckConstraint("status IN ('listed', 'removed')", name="ck_cloud_shares_status"),
+        # 语言只有两种;和 kind / status 一样,domain 层先校验,数据库再兜一道。
+        CheckConstraint("locale IN ('zh-CN', 'en-US')", name="ck_cloud_shares_locale"),
         Index("idx_cloud_shares_owner", "owner_user_id"),
         Index("idx_cloud_shares_created", "created_at"),
         Index("idx_cloud_shares_kind_created", "kind", "created_at"),
-        # 种子命令的稳定键:同一官方账号 + 同一 kind + 同一 slug 只能有一行(kind 也进键,
-        # 因为唯一性只该在"同一类内容"里成立)。用户分享的 slug 是 NULL,多条 NULL 不冲突。
-        Index("uq_cloud_shares_owner_kind_slug", "owner_user_id", "kind", "slug", unique=True),
+        # 种子命令的稳定键:同一官方账号 + 同一 kind + 同一 slug + 同一语言只能有一行
+        # (kind / locale 都进键,因为唯一性只该在"同一类内容、同一种语言"里成立)。
+        # 用户分享的 slug 是 NULL,多条 NULL 不冲突。
+        Index(
+            "uq_cloud_shares_owner_kind_slug_locale",
+            "owner_user_id",
+            "kind",
+            "slug",
+            "locale",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
@@ -188,6 +198,12 @@ class CloudShare(Base):
     )
     #: `workflow` / `board` / `plugin`。别的值在 domain 层就 422,数据库再兜一道 CHECK。
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: 这条分享的标题 / 简介是哪一种语言(`zh-CN` / `en-US`)。**发布时必须声明**:
+    #: 用户的语言来自官网当前语言段;官方内容按 bundle 里的 `locales` 一条语言一行。
+    #: 既有行由 0007 迁移填 `zh-CN` —— 迁移当时没有别的语言信息可推断,只能这么定。
+    locale: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="zh-CN", server_default="zh-CN"
+    )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     summary: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     #: 工程文件本体。列表和详情都不返回它,只有 `/payload` 与 `/download` 给。

@@ -1,7 +1,8 @@
-"""官方账号:公开身份里的 `official`,注册不能自封,以及种子 / 登录闸(③④ 在后面的用例里)。
+"""官方账号:公开身份里的 `official`、注册不能自封、以及"它可以正常登录"。
 
 **官方标记是公开信息**,所以它跟着 `display_name` / `handle` / `avatar_seed` 一起出现在
-每个公开响应里;email 仍然只在 `/me` 这个"本人"形状里。
+每个公开响应里;email 仍然只在 `/me` 这个"本人"形状里。官方号的密码由部署配置
+(`CLOUD_OFFICIAL_PASSWORD`)决定,不是"永远登不上"的特殊账号。
 """
 
 from __future__ import annotations
@@ -80,17 +81,53 @@ def test_signup_cannot_make_itself_official(client, db_path):
 
 
 OFFICIAL_EMAIL = "official@mosael.example"
+#: 运维从环境变量 `CLOUD_OFFICIAL_PASSWORD` 交给种子命令的那个值;测试里直接传给种子函数。
+OFFICIAL_PASSWORD = "Official-Horse-9"
 
 
-def _seed_official_account(config) -> None:
-    """只建官方账号(空 bundle)。④ 关心的是这个账号怎么被挡在登录之外。"""
+def _seed_official_account(config, *, password: str = "") -> None:
+    """只建官方账号(空 bundle)。密码是"部署时配的那一个",不配就没有。"""
     from cloud.official import seed_official
 
-    seed_official(config.resolved_database_url, {"plugins": [], "workflows": []})
+    seed_official(
+        config.resolved_database_url,
+        {"plugins": [], "workflows": []},
+        password=password,
+    )
 
 
-def test_official_account_has_no_password_to_log_in_with(client, config, db_path):
-    """④ 没设密码 → 密码登录那条路对官方号永远是 401;不会发出会话。"""
+def test_official_account_with_a_configured_password_can_log_in(client, config, db_path):
+    """② 有密码 → 官方号就是**普通登录账号**:密码登录 200、拿到会话、`/me` 是本人。"""
+    _seed_official_account(config, password=OFFICIAL_PASSWORD)
+
+    response = client.post(
+        api("/login"), json={"email": OFFICIAL_EMAIL, "password": OFFICIAL_PASSWORD}
+    )
+    assert response.status_code == 200, response.text
+    user = response.json()["user"]
+    assert user["email"] == OFFICIAL_EMAIL
+    assert user["handle"] == "mosael"
+    assert user["official"] is True
+
+    me = client.get(api("/me"))
+    assert me.status_code == 200, me.text
+    assert me.json()["user"]["email"] == OFFICIAL_EMAIL
+    assert me.json()["user"]["official"] is True
+    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_sessions") == 1
+
+
+def test_official_account_with_a_configured_password_rejects_a_wrong_one(client, config, db_path):
+    """② 可登录不等于免验证:密码错仍然是 401,不区分"官方号 / 密码错"。"""
+    _seed_official_account(config, password=OFFICIAL_PASSWORD)
+
+    response = client.post(api("/login"), json={"email": OFFICIAL_EMAIL, "password": PASSWORD})
+    assert response.status_code == 401, response.text
+    assert response.json()["error"] == "invalid_credentials"
+    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_sessions") == 0
+
+
+def test_official_account_without_a_password_is_401_not_403(client, config, db_path):
+    """② 没设密码 → 密码登录 401（不是 403）:别在响应里暴露"这是官方号"。"""
     _seed_official_account(config)
 
     response = client.post(api("/login"), json={"email": OFFICIAL_EMAIL, "password": PASSWORD})
@@ -99,36 +136,32 @@ def test_official_account_has_no_password_to_log_in_with(client, config, db_path
     assert scalar(db_path, "SELECT COUNT(*) FROM cloud_sessions") == 0
 
 
-def test_official_account_gets_no_login_code_and_no_session(client, config, db_path, sender):
-    """④ 发码接口照常回 `sent`,但**不投递**;就算码泄露了,也换不到会话。"""
-    _seed_official_account(config)
+def test_official_login_code_is_delivered_and_signs_in(client, config, db_path, sender):
+    """② 官方号的登录验证码**恢复投递**;码换会话不再被 `open_session` 403。"""
+    _seed_official_account(config, password=OFFICIAL_PASSWORD)
 
     response = client.post(api("/login/code"), json={"email": OFFICIAL_EMAIL})
     assert response.status_code == 200, response.text
     assert response.json() == {"sent": True}
-    # 与"未注册邮箱"完全同一句响应,但一封都不发: .invalid 域也永远收不到。
-    assert sender.codes(OFFICIAL_EMAIL, "login") == []
+    codes = sender.codes(OFFICIAL_EMAIL, "login")
+    assert len(codes) == 1
 
-    # 最坏情况:有人拿到了一个对得上的码(这里直接按真实哈希格式塞一行)。
-    # 唯一发会话的入口 `open_session` 仍然拒绝官方账号。
-    from datetime import UTC, datetime, timedelta
-
-    from cloud.security import email_code_digest
-
-    code = "424242"
-    created = datetime.now(UTC).replace(tzinfo=None)
-    execute(
-        db_path,
-        "INSERT INTO cloud_email_codes (id, email, purpose, code_hash, attempts, request_ip, created_at, expires_at) "
-        "VALUES ('leaked', ?, 'login', ?, 0, '203.0.113.9', ?, ?)",
-        (
-            OFFICIAL_EMAIL,
-            email_code_digest(OFFICIAL_EMAIL, "login", code),
-            created.strftime("%Y-%m-%d %H:%M:%S.%f"),
-            (created + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S.%f"),
-        ),
+    verify = client.post(
+        api("/login/code/verify"), json={"email": OFFICIAL_EMAIL, "code": codes[0]}
     )
-    verify = client.post(api("/login/code/verify"), json={"email": OFFICIAL_EMAIL, "code": code})
-    assert verify.status_code == 403, verify.text
-    assert verify.json()["error"] == "official_account_cannot_sign_in"
-    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_sessions") == 0
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["user"]["official"] is True
+    assert client.get(api("/me")).json()["user"]["email"] == OFFICIAL_EMAIL
+    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_sessions") == 1
+
+
+def test_official_login_codes_are_rate_limited_like_any_account(client, config, sender):
+    """②④ 官方号没有限流后门:同一邮箱的 60 秒冷却对它同样生效。"""
+    _seed_official_account(config, password=OFFICIAL_PASSWORD)
+
+    first = client.post(api("/login/code"), json={"email": OFFICIAL_EMAIL})
+    assert first.status_code == 200, first.text
+    second = client.post(api("/login/code"), json={"email": OFFICIAL_EMAIL})
+    assert second.status_code == 429, second.text
+    assert second.json()["error"] == "email_code_cooldown"
+    assert len(sender.codes(OFFICIAL_EMAIL, "login")) == 1

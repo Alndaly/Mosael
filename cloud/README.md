@@ -5,6 +5,8 @@
 以及社区分享第①笔:**身份(昵称 / 短名 / 头像种子)+ 分享 + 点赞 / 收藏 / 评论**、
 第②笔:**评论 / 点赞 / 收藏的通知**,第③笔:**官方内容 = 官方账号发布的分享**
 (插件 / 工作流,`official` 公开标记 + `seed-official` 幂等种子命令),注册即登录。
+第④笔:**分享记下语言(`zh-CN` / `en-US`)**,官方内容按语言各发一条;
+**官方账号可以正常登录**,密码来自环境变量 `CLOUD_OFFICIAL_PASSWORD`。
 设计、部署与取舍见 [`docs/CLOUD_ACCOUNTS.md`](../docs/CLOUD_ACCOUNTS.md)。
 
 ## 本地跑起来
@@ -48,9 +50,12 @@ http://localhost:3000/api/cloud/v1/oauth/google/callback
 ```
 GET    /me                        → {user} | 401
 PUT    /me                        body {display_name?, handle?} → {user};冲突 409 / 校验 422
-POST   /shares                    body {kind,title,summary?,payload,license?} → {share} (201)
-                                  kind 只能是 workflow|board|plugin(否则 422);payload > 2 MB → 413
-GET    /shares                    ?q=&kind=&sort=new|hot&limit=&cursor= → {items,next_cursor}
+POST   /shares                    body {kind,locale,title,summary?,payload,license?} → {share} (201)
+                                  kind 只能是 workflow|board|plugin(否则 422);
+                                  locale 只能是 zh-CN|en-US(**必填**,缺 422 / 非法 422 invalid_locale);
+                                  payload > 2 MB → 413
+GET    /shares                    ?q=&kind=&locale=&sort=new|hot&limit=&cursor= → {items,next_cursor}
+                                  locale 省略 = 不筛语言(两种都返回);非法值 422
 GET    /shares/{id}               → {share}(不含 payload)
 GET    /shares/{id}/payload       → {payload}
 POST   /shares/{id}/download      → {payload},downloads + 1
@@ -70,9 +75,17 @@ POST   /notifications/read        body {ids?} → {marked,unread};不传 ids = �
 (只有本人看得到);公开列表 / 详情 / 评论里的 `author` 只有公开身份四列(含 `official`)。
 
 `share` 的公开形状固定为
-`{id,kind,title,summary,bytes,license,created_at,author,stats,liked_by_me,favorited_by_me}`;
+`{id,kind,locale,title,summary,bytes,license,created_at,author,stats,liked_by_me,favorited_by_me}`;
 `stats = {downloads,likes,favorites,comments}`;游客的 `liked_by_me` / `favorited_by_me` 是 false。
-`payload` 只在 `/payload` 与 `/download` 单独取。
+`locale` 是**这一行标题 / 简介的语言**,不是 payload 的语言(同一条官方内容两种语言共用 payload)。
+`payload` 只在 `/payload` 与 `/download` 单独取;详情 / payload / 下载不因 locale 改变行为。
+
+**`locale` 必填、`GET /shares` 不传则返回全部**,两条都是刻意的:
+
+- 发布时"自己的语言"来自**官网当前语言段**,应该由客户端明确声明;服务端给默认值会把英文内容
+  悄悄标成中文(而且一旦落库就不可逆)。所以 `POST /shares` 缺 `locale` = 422。
+- 列表不传 `locale` 时**两种语言都返回**,不替调用方猜一个默认值:猜成 `zh-CN` 会让英文内容
+  从列表里静默消失。"没选语言"是调用方的真实状态,应该原样体现在结果里。
 
 ### 通知
 
@@ -96,14 +109,24 @@ POST   /notifications/read        body {ids?} → {marked,unread};不传 ids = �
 共用 `cloud_shares`、共用 `/shares` 读接口、共用同一套 payload 形状;没有第二张表、没有第二套
 结构,列表的排序 / 游标 / 统计也不为官方内容分叉。
 
-- `cloud_users.official`(NOT NULL,默认 false)是**公开信息**:公开响应里的 `author.official`。
-  **只有部署脚本会写 true**;注册与 `PUT /me` 都不认这个字段(测试钉住"注册请求里塞
-  `official: true` 没有用")。
-- 官方账号固定为 `handle=mosael`、`display_name=Mosael 官方`、
-  `email=official@mosael.example`(RFC 2606 保留域,公网 DNS 不可达)。
-- **它不能登录**:种子不设密码;发码接口对它不投递(响应与未注册邮箱一致);最后一道闸是
-  `open_session` —— 所有认证路径(密码 / 验证码 / 第三方)都从这里发会话,它对 `official`
-  账号直接回 `403 official_account_cannot_sign_in`。
+- `cloud_users.official`(NOT NULL,默认 false)是**公开信息**:公开响应里的 `author.official`
+  (徽章用)。**只有部署脚本会写 true**;注册与 `PUT /me` 都不认这个字段(测试钉住"注册请求里塞
+  `official: true` 没有用")—— 这条不变。
+- 身份来自配置,有缺省:`handle=mosael`(`CLOUD_OFFICIAL_HANDLE`)、`display_name=Mosael 官方`、
+  `email=official@mosael.example`(`CLOUD_OFFICIAL_EMAIL`,RFC 2606 保留域)。**handle / email
+  只在建号时使用**;已存在的官方账号不会被种子改写(见下面的"只补缺")。
+- **它可以正常登录**:官方账号是一个由部署方持有的运营账号,密码来自
+  `CLOUD_OFFICIAL_PASSWORD`。原来的三道"官方登不上"的闸**已经拆掉**:
+  1. 种子不再固定"不设密码"—— 设了环境变量就 `hash_password` 写进去;
+  2. 发码接口对官方号**恢复正常投递**(邮箱由部署方配成真实拥有的地址,才收得到码);
+  3. `open_session` 不再对 `official` 账号回 403,`/login` 也不再跳过官方号的密码校验。
+- **没设密码时**:种子不动密码。新建的账号因此 `password_hash = NULL`,密码登录回 **401**
+  (`invalid_credentials`,不是 403 —— 不在响应里暴露"这是官方号");这**不是启动错误**。
+  如果账号之前设过密码、后来把环境变量删掉,旧密码保持不变(`没设就不动`)。
+- **短密码是启动错误**:`CLOUD_OFFICIAL_PASSWORD` 短于 `CLOUD_PASSWORD_MIN_LENGTH` 时,
+  `CloudConfig` 构造即失败 —— uvicorn 起不来 / CLI 以退出码 2 结束,不静默接受弱密码。
+- **官方号没有登录后门**:验证码的 60 秒冷却、每邮箱 / 每 IP 每小时上限对它一样生效;
+  密码登录与普通账号走同一条 `verify_password`。
 - `kind=plugin` 与 `workflow` / `board` 并列;`POST /shares`、`GET /shares?kind=`、
   详情 / payload / 下载都认它,非法 kind 仍然 422。
 
@@ -115,14 +138,22 @@ uv run python -m cloud.cli seed-official --bundle ./official-bundle.json
 ```
 
 它先把库升到 head(和 uvicorn 启动同一条迁移路径),再按 bundle 补官方账号与分享。
-**幂等**:去重键是 `(官方账号, kind, bundle 里的 slug)`,对应 `cloud_shares.slug` 上的
-唯一索引 `(owner_user_id, kind, slug)`。
+**幂等键是 `(官方账号, kind, bundle 里的 slug, locale)`**,对应 0007 起
+`cloud_shares` 上的唯一索引 `(owner_user_id, kind, slug, locale)`。
+
+**同一条内容按语言各发一行**:`zh-CN` 一行、`en-US` 一行,两行 **payload 相同**,标题 / 简介
+取各自语言。重复跑不新增。bundle 里**缺一种语言**(例如只有 `zh-CN`)时只发有的那一行 ——
+**不编造英文标题 / 简介**。
 
 为什么用 slug 而不是标题:标题是给人改的 —— 运营改一次标题,按标题去重就会在下一次部署
 产出第二条;slug 是发布方在 Git 里维护的稳定标识。**只补缺**:按这个键已经存在的行整行跳过
 (标题 / 简介 / payload / 许可都不动);用户自己的分享没有 slug,种子永远碰不到它们。
 bundle 里改标题也不会回写已有行 —— 要更新内容请在库里改,或者换一个新 slug 重新发布;
 已经被软删(`status='removed'`)的官方分享不会被下一次种子"复活",它按去重键仍算存在。
+
+**唯一的例外是密码**:设了 `CLOUD_OFFICIAL_PASSWORD` 就每次种子都把它重新 hash 写回。
+标题 / payload 是"内容",运营可能在库里手改过,所以要保留;密码是"凭据",它只有一个来源 ——
+部署环境变量。不每次写回,运营改环境变量就永远改不了密码,轮换也无法完成。没设就不动密码。
 
 bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 
@@ -131,9 +162,10 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
   "plugins": [
     {
       "slug": "mosael.official.example",
-      "locale": "zh-CN",
-      "title": "官方示例插件",
-      "summary": "官方账号发布的示例插件。",
+      "locales": {
+        "zh-CN": {"title": "官方示例插件", "summary": "官方账号发布的示例插件。"},
+        "en-US": {"title": "Official Example Plugin", "summary": "Published by the official account."}
+      },
       "license": "MIT",
       "payload": {"version": 1, "manifest": {"id": "mosael.official.example"}, "files": []}
     }
@@ -141,7 +173,10 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
   "workflows": [
     {
       "slug": "mosael.official.welcome",
-      "title": "官方入门工作流",
+      "locales": {
+        "zh-CN": {"title": "官方入门工作流"},
+        "en-US": {"title": "Official Welcome Workflow"}
+      },
       "payload": {"version": 1, "nodes": [], "edges": []}
     }
   ]
@@ -149,9 +184,10 @@ bundle 是**外部输入**,cloud 不读仓库其它目录。格式:
 ```
 
 - 顶层只有 `plugins` / `workflows` 两个数组;出现别的键整份拒绝。
-- 每条必填 `slug`(小写字母 / 数字 / `.` `_` `-`,最长 80)与 `title`、`payload`;
-  `summary` / `license` / `locale` 可选。`locale` 只是操作者标注,**不落库、不参与去重**
-  (分享表没有 locale 列,payload 也必须和用户分享同构);多语言版本请用不同 slug。
+- 每条必填 `slug`(小写字母 / 数字 / `.` `_` `-`,最长 80)、`locales` 与 `payload`;
+  `license` 可选。`locales` 至少一种语言,键只能是 `zh-CN` / `en-US`;每种语言的
+  `title` 必填、`summary` 可选。**标题 / 简介在 `locales` 里,不在条目顶层** ——
+  旧格式(`locale` + 顶层 `title`)整份拒绝,不写"两种 bundle 都认"的兼容分支。
 - 结构不对 → 退出码 2、stderr 说明原因、**一行都不写**(先整份校验,再建账号)。
 - 同一个 `slug` 在同一个数组里只能出现一次;`plugins` 与 `workflows` 之间允许同名。
 
@@ -190,7 +226,12 @@ CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
 - 社区分享第③笔(官方内容)的迁移是 `0005_shares_plugin_kind.py`(`kind` 的 CHECK 加上
   `plugin`)+ `0006_official_accounts_and_seed_slug.py`(`cloud_users.official` 与
   `cloud_shares.slug` 去重键)。种子命令见下一节。
-- 登录仍是原来的规则:`cloud_users.password_hash` 可空(第三方登录建的账号没有密码)。
+- **语言(0007,`0007_shares_locale.py`)**:`cloud_shares` 加 `locale`(NOT NULL,只许
+  `zh-CN` / `en-US`),**既有行一律回填 `zh-CN`** —— 迁移当时没有语言信息可推断,只能这么定;
+  种子唯一键同时扩成 `(owner_user_id, kind, slug, locale)`。downgrade 会删列并把唯一键换回
+  三列;如果库里已经有同一 slug 的两种语言,回退会**明确失败**,需要先人工处理那些行。
+- 登录仍是原来的规则:`cloud_users.password_hash` 可空(第三方登录建的账号没有密码);
+  官方账号设了 `CLOUD_OFFICIAL_PASSWORD` 就有密码,和普通账号走同一条登录路径。
 
 ## 配置
 
@@ -211,6 +252,9 @@ CI 不启动这个服务;它只跑上面的 pytest。OAuth 测试注入
 | `CLOUD_GITHUB_CLIENT_ID` / `_SECRET` | 空(未启用) | GitHub OAuth App 凭据;空则入口报"没启用" |
 | `CLOUD_GOOGLE_CLIENT_ID` / `_SECRET` | 空(未启用) | Google OAuth 客户端凭据;空则入口报"没启用" |
 | `CLOUD_OAUTH_STATE_TTL_SECONDS` | `600` | 一次 OAuth 登录的 state / nonce 有效期 |
+| `CLOUD_OFFICIAL_HANDLE` | `mosael` | 官方账号短名;**只在建号时使用**,已存在不改 |
+| `CLOUD_OFFICIAL_EMAIL` | `official@mosael.example` | 官方账号邮箱;**只在建号时使用**;验证码登录要求它是真实拥有的地址 |
+| `CLOUD_OFFICIAL_PASSWORD` | 空 | 官方账号密码。设了 → 每次种子都写回(轮换);空 → 不动密码(新号密码登录 401);短于 `CLOUD_PASSWORD_MIN_LENGTH` → 启动失败 |
 
 ### 第三方 OAuth 应用的填法
 

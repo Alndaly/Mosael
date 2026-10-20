@@ -43,7 +43,7 @@ def test_migrations_build_the_full_schema(tmp_path):
         assert {"display_name", "handle", "avatar_seed"} <= columns
 
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert version == ("0006",)
+        assert version == ("0007",)
 
         unique_handle = [
             row[1]
@@ -77,7 +77,7 @@ def test_upgrading_a_0001_database_keeps_rows_and_leaves_identity_empty(tmp_path
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert {"cloud_shares", "cloud_share_likes", "cloud_share_favorites", "cloud_share_comments"} <= tables
         assert {"cloud_share_notifications"} <= tables
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
 
 
 def test_0004_drops_the_device_binding_tables(tmp_path):
@@ -108,7 +108,7 @@ def test_0004_drops_the_device_binding_tables(tmp_path):
         assert not ({"cloud_device_codes", "cloud_devices"} & tables)
         # 账号本身不受影响。
         assert connection.execute("SELECT email FROM cloud_users WHERE id = 'u1'").fetchone() == ("old@example.com",)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
 
 
 def test_notification_table_shape_and_indexes(tmp_path):
@@ -200,7 +200,7 @@ def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
     upgrade_database(url, "head")
 
     with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
 
         # ① plugin 现在能建;非法值仍然被数据库兜住。
         connection.execute(_share_insert("plugin"), ("s1", "plugin"))
@@ -223,12 +223,16 @@ def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
         assert connection.execute("SELECT official FROM cloud_users WHERE id = 'u2'").fetchone() == (0,)
         assert connection.execute("SELECT official FROM cloud_users WHERE id = 'u1'").fetchone() == (0,)
 
-        # ③ slug 可空(用户分享没有它),但同一作者 + 同一 kind + 同一 slug 只能有一行。
+        # ③ slug 可空(用户分享没有它),但同一作者 + 同一 kind + 同一 slug + 同一 locale
+        #    只能有一行。
         share_columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_shares)")}
         assert share_columns["slug"][3] == 0
         # 多条 NULL 不冲突(用户分享都没有 slug)。
         connection.execute(_share_insert("plugin"), ("s4", "plugin"))
         connection.commit()
+        # 0007 之前插入的行由迁移 / 数据库默认补成 zh-CN —— 既有行没有语言信息可推断,
+        # 只能按"迁移当时的内容都是中文"来定。
+        assert connection.execute("SELECT locale FROM cloud_shares WHERE id = 's4'").fetchone() == ("zh-CN",)
         connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's1'")
         connection.commit()
         # kind 进唯一键:另一个 kind 用同一 slug 是允许的。
@@ -237,6 +241,14 @@ def test_0005_allows_plugin_kind_and_0006_adds_official_and_seed_slug(tmp_path):
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's4'")
         connection.rollback()
+        # ① locale 也进唯一键:同一 slug 的两种语言可以共存,同语言仍然只许一行。
+        connection.execute(
+            "UPDATE cloud_shares SET slug = 'mosael.official.example', locale = 'en-US' WHERE id = 's4'"
+        )
+        connection.commit()
+        assert connection.execute(
+            "SELECT COUNT(*) FROM cloud_shares WHERE slug = 'mosael.official.example'"
+        ).fetchone() == (3,)
 
 
 def test_downgrade_from_head_restores_the_0004_shape(tmp_path):
@@ -254,6 +266,7 @@ def test_downgrade_from_head_restores_the_0004_shape(tmp_path):
         assert "official" not in user_columns
         share_columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_shares)")}
         assert "slug" not in share_columns
+        assert "locale" not in share_columns
 
         connection.execute(
             "INSERT INTO cloud_users (id, email, created_at) "
@@ -265,3 +278,128 @@ def test_downgrade_from_head_restores_the_0004_shape(tmp_path):
         connection.execute(_share_insert("workflow"), ("s2", "workflow"))
         connection.commit()
         assert connection.execute("SELECT COUNT(*) FROM cloud_shares").fetchone() == (1,)
+
+
+def _share_insert_with_locale(locale: str):
+    return (
+        "INSERT INTO cloud_shares (id, owner_user_id, kind, title, payload, bytes, license, status, "
+        "downloads, locale, created_at, updated_at) VALUES (?, 'u1', 'plugin', 'Title', '{}', 2, NULL, "
+        "'listed', 0, ?, '2026-01-01 00:00:00.000000', '2026-01-01 00:00:00.000000')"
+    )
+
+
+def test_0007_backfills_existing_rows_with_zh_cn_and_checks_two_locales(tmp_path):
+    """① 0007:`locale` NOT NULL、既有行填 `zh-CN`、只许两种值,唯一键扩到四列。"""
+    from cloud.schema import upgrade_database
+
+    path = tmp_path / "locale.db"
+    url = _url(path)
+    upgrade_database(url, "0006")
+
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO cloud_users (id, email, created_at) "
+            "VALUES ('u1', 'old@example.com', '2026-01-01 00:00:00.000000')"
+        )
+        # 0006 的形状里没有 locale 列。
+        with pytest.raises(sqlite3.OperationalError):
+            connection.execute("SELECT locale FROM cloud_shares")
+        connection.rollback()
+        connection.execute(_share_insert("plugin"), ("s1", "plugin"))
+        connection.commit()
+
+    upgrade_database(url, "head")
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        columns = {row[1]: row for row in connection.execute("PRAGMA table_info(cloud_shares)")}
+        assert columns["locale"][3] == 1  # NOT NULL
+        # 既有行没有语言信息可推断 —— 迁移只能把它们都当中文,并在迁移里写明。
+        assert connection.execute("SELECT locale FROM cloud_shares WHERE id = 's1'").fetchone() == ("zh-CN",)
+
+        # 新行不显式给 locale 时,数据库默认也是 zh-CN。
+        connection.execute(_share_insert("workflow"), ("s2", "workflow"))
+        connection.commit()
+        assert connection.execute("SELECT locale FROM cloud_shares WHERE id = 's2'").fetchone() == ("zh-CN",)
+
+        # 只有 zh-CN / en-US 两种值,第三个值被数据库拒绝。
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(_share_insert_with_locale("fr-FR"), ("s3", "fr-FR"))
+        connection.rollback()
+
+        # 唯一索引是 (owner, kind, slug, locale):同 slug 的两种语言能共存,
+        # 同一种语言重复仍然被拒。
+        connection.execute(
+            "UPDATE cloud_shares SET slug = 'mosael.official.example', locale = 'zh-CN' WHERE id = 's1'"
+        )
+        connection.commit()
+        connection.execute(_share_insert_with_locale("en-US"), ("s4", "en-US"))
+        connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's4'")
+        connection.execute(_share_insert_with_locale("zh-CN"), ("s5", "zh-CN"))
+        connection.commit()
+        # 同一种语言再来一行同 slug → 撞四列唯一索引。
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's5'"
+            )
+        connection.rollback()
+
+        index_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' "
+            "AND name = 'uq_cloud_shares_owner_kind_slug_locale'"
+        ).fetchone()[0]
+        assert "UNIQUE" in index_sql.upper()
+        assert all(column in index_sql for column in ("owner_user_id", "kind", "slug", "locale"))
+        assert connection.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' "
+            "AND name = 'uq_cloud_shares_owner_kind_slug'"
+        ).fetchone() == (0,)
+
+
+def test_0007_downgrade_round_trip_restores_the_0006_shape(tmp_path):
+    """⑤ 0007 建得出、down 得回;再升回来也还是同一份数据(行不丢)。"""
+    from cloud.schema import downgrade_database, upgrade_database
+
+    path = tmp_path / "locale-downgrade.db"
+    url = _url(path)
+    upgrade_database(url)
+
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO cloud_users (id, email, created_at) "
+            "VALUES ('u1', 'old@example.com', '2026-01-01 00:00:00.000000')"
+        )
+        connection.execute(_share_insert("plugin"), ("s1", "plugin"))
+        connection.execute("UPDATE cloud_shares SET slug = 'mosael.official.example' WHERE id = 's1'")
+        connection.commit()
+
+    downgrade_database(url, "0006")
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
+        share_columns = {row[1] for row in connection.execute("PRAGMA table_info(cloud_shares)")}
+        assert "locale" not in share_columns
+        assert connection.execute("SELECT id, slug FROM cloud_shares").fetchall() == [
+            ("s1", "mosael.official.example")
+        ]
+        indexes = {row[1] for row in connection.execute("PRAGMA index_list('cloud_shares')")}
+        assert "uq_cloud_shares_owner_kind_slug" in indexes
+        assert "uq_cloud_shares_owner_kind_slug_locale" not in indexes
+
+    upgrade_database(url, "head")
+
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0007",)
+        assert connection.execute("SELECT id, locale FROM cloud_shares").fetchall() == [("s1", "zh-CN")]
+
+
+def test_models_and_migrations_do_not_drift(tmp_path):
+    """⑤ `alembic check` 零漂移:models.py 与 migrations/ 讲的是同一份表结构。"""
+    from alembic import command
+
+    from cloud.schema import _config, upgrade_database
+
+    path = tmp_path / "drift.db"
+    url = _url(path)
+    upgrade_database(url)
+    command.check(_config(url))

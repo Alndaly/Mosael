@@ -319,6 +319,69 @@ def test_viewer_flags_are_false_for_guests(client, app):
         guest.close()
 
 
+def test_locale_is_required_stored_and_returned(client, db_path):
+    """① `locale` 是发布参数:必填、落库、公开形状里带出来;非法值 422。
+
+    必填的理由:用户发布时的"自己的语言"来自官网当前语言段 —— 让客户端明说,
+    比服务端猜一个默认值更接近它的语义(英文内容不会被悄悄标成中文)。
+    """
+    signup(client)
+    make_identity(client)
+
+    missing = share_body()
+    missing.pop("locale")
+    response = client.post(api("/shares"), json=missing)
+    assert response.status_code == 422, response.text
+    assert response.json()["error"] == "invalid_request"
+    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_shares") == 0
+
+    zh = publish_ok(client, locale="zh-CN", title="中文标题")
+    en = publish_ok(client, locale="en-US", title="English title")
+    assert (zh["locale"], en["locale"]) == ("zh-CN", "en-US")
+    assert scalar(db_path, "SELECT locale FROM cloud_shares WHERE id = ?", (zh["id"],)) == "zh-CN"
+    assert client.get(api(f"/shares/{zh['id']}")).json()["locale"] == "zh-CN"
+
+    bad = client.post(api("/shares"), json=share_body(locale="fr-FR"))
+    assert bad.status_code == 422, bad.text
+    assert bad.json()["error"] == "invalid_locale"
+    assert scalar(db_path, "SELECT COUNT(*) FROM cloud_shares") == 2
+
+
+def test_list_filters_by_locale_and_omitting_it_returns_every_language(client):
+    """① `?locale=` 过滤;**不传 = 两种都返回**,不替调用方猜一个默认语言。
+
+    不猜的理由:默认成 zh-CN 会让英文列表被悄悄漏掉;不传就返回全部,让客户端明确选择。
+    """
+    signup(client)
+    make_identity(client)
+    zh = publish_ok(client, locale="zh-CN", title="中文")
+    en = publish_ok(client, locale="en-US", title="English")
+
+    zh_items = client.get(api("/shares?locale=zh-CN")).json()["items"]
+    assert [item["id"] for item in zh_items] == [zh["id"]]
+    en_items = client.get(api("/shares?locale=en-US")).json()["items"]
+    assert [item["id"] for item in en_items] == [en["id"]]
+
+    everything = client.get(api("/shares")).json()["items"]
+    assert {item["id"] for item in everything} == {zh["id"], en["id"]}
+    assert {item["locale"] for item in everything} == {"zh-CN", "en-US"}
+
+    assert client.get(api("/shares?locale=fr-FR")).status_code == 422
+
+
+def test_locale_filter_combines_with_kind_and_search(client):
+    """① 新过滤器不和已有的 kind / q 打架。"""
+    signup(client)
+    make_identity(client)
+    zh = publish_ok(client, kind="plugin", locale="zh-CN", title="插件")
+    en = publish_ok(client, kind="plugin", locale="en-US", title="Plugin")
+
+    items = client.get(api("/shares?kind=plugin&locale=en-US")).json()["items"]
+    assert [item["id"] for item in items] == [en["id"]]
+    found = client.get(api("/shares?q=插件&locale=zh-CN")).json()["items"]
+    assert [item["id"] for item in found] == [zh["id"]]
+
+
 def test_public_responses_never_contain_email(client):
     """⑤ 全字段扫描:列表 / 详情 / 用户页 / 评论里都没有 email 键,也没有注册邮箱的值。"""
     signup(client)
