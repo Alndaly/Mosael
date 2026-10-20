@@ -274,7 +274,7 @@ function SlotPicker({
   };
 
   return (
-    <section aria-label={`${slot.widget} · ${slot.folder}`} className="grid gap-2.5">
+    <section aria-label={`${slot.widget} · ${slot.folder}`} className="flex h-full min-h-0 flex-col gap-2.5">
       <header className="grid gap-1">
         <h3 className="m-0 flex min-w-0 items-center gap-1.5 text-ui-sm font-semibold text-foreground">
           <Truncate>{node.title || node.type}</Truncate>
@@ -332,7 +332,10 @@ function SlotPicker({
         </div>
       )}
       {loading ? (
-        <LoadingState label={t("workbenchModelsLoading")} className="h-auto py-6" />
+        <>
+          {/* 撑满剩余高度:不然它只有内容那么高,视觉上贴着搜索框(维护者:「loading 并未居中」) */}
+          <LoadingState label={t("workbenchModelsLoading")} className="min-h-0 flex-1" />
+        </>
       ) : error ? (
         <PanelNote tone="error">{error}</PanelNote>
       ) : listed.length === 0 ? (
