@@ -55,6 +55,8 @@ release/
 .ruff_cache/
 .astro/
 .claude/
+.codegraph/
+.codex/
 
 # pnpm 的内容寻址 store:本机依赖缓存,由 pnpm 自动管理;落在仓内(如 CI 或手动指定 store-dir 时)
 # 也不该入库——它只是 node_modules 的物料来源,且体积随安装历史无限增长。

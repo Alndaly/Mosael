@@ -18,5 +18,4 @@ runs:
         enable-cache: true
         cache-dependency-glob: |
           backend/uv.lock
-          community/uv.lock
           packages/mosael-formats/uv.lock

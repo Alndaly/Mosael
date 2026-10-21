@@ -1,8 +1,12 @@
 # ADR 0026:社区服务 —— 账号、提交、画板分享
 
+> **Superseded by [ADR 0039](0039-mosael-cloud.md)(Mosael Cloud)。**
+> 社区服务(`community/`、`deploy/community/`)已于 2026-10-21 整体删除:官网和桌面端都只跟 Mosael Cloud 通信。
+> 这份 ADR 留作历史,解释当时为什么那样设计。
+
 ## Status
 
-Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COMMUNITY.md](../DEPLOY_COMMUNITY.md) 进行。
+Accepted — 2026-09-27,**Superseded — 2026-10-21**(见上)。当时按阶段落地,部署文档 `DEPLOY_COMMUNITY.md` 随服务一起删掉了。
 
 **修订 2026-09-27(同日):桌面应用的接入先拿掉。** 维护者:「把社区相关的能力都先去掉,先把资产库做好。」社区服务
 (`community/`)的代码留在仓库里;官网恢复成 1.7.0 的社区(官方索引静态生成,没有账号和提交);应用里的社区账号、画板分享、发布到社区、插件市场的社区来源、资产分享与导入
