@@ -54,7 +54,7 @@ import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem } from "@/features/agent/ToolCalls";
 import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
-import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
+import type { AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";

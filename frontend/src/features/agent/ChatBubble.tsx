@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 
 import { CompactionNotice, type CompactionInfo } from "@/features/agent/ContextMeter";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem, type FoldedReceipt } from "@/features/agent/ToolCalls";
-import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
+import type { AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { CHAT_ASSISTANT_ROW_CLASS, CHAT_USER_PILL_CLASS, CHAT_USER_ROW_CLASS } from "@/features/agent/agentRow";
 import type { JSONContent } from "@tiptap/react";
