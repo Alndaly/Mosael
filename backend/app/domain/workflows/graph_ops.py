@@ -54,12 +54,15 @@ def apply_graph_ops(graph: dict[str, Any], operations: list[dict[str, Any]]) -> 
         max_x = max((int((n.get("position") or {}).get("x", 0)) for n in nodes), default=0)
         return {"x": max_x + 240, "y": 160}
 
-    for op in operations:
+    for index, op in enumerate(operations, 1):
         kind = str(op.get("kind", ""))
         if kind == "add_node":
             node_type = str(op.get("type", ""))
+            if not node_type:
+                # 模型在长 JSON 里丢键时,空引号帮不了它:点破缺的是哪个键、去哪查、形状长什么样。
+                raise WorkflowDomainError("wfErr_addNodeTypeMissing", params={"index": index})
             if node_type not in NODE_TYPES:
-                raise WorkflowDomainError("wfErr_unknownNodeType", params={"type": node_type or '""'})
+                raise WorkflowDomainError("wfErr_unknownNodeType", params={"type": node_type, "index": index})
             if node_type == "start" and any(str(node.get("type")) == "start" for node in nodes):
                 raise WorkflowDomainError("wfErr_startExists")
             node_id = str(op.get("node_id") or "").strip() or ("start" if node_type == "start" and "start" not in by_id else gen_node_id(node_type))
