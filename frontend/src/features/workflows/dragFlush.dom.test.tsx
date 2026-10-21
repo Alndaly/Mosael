@@ -34,7 +34,7 @@ function setup(graph: WorkflowGraph) {
       setEdges,
       setDirty,
       canAddStart: false,
-      selectedFlowIds: [],
+      selectedFlowIds: new Set(),
       selectInspectorNode: vi.fn(),
       focusPosition: vi.fn(),
       rfRef: React.createRef(),
