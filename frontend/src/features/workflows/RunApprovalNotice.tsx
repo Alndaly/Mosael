@@ -34,7 +34,8 @@ export function RunApprovalNotice({ workflowId }: { workflowId: string }) {
     <div
       role="status"
       data-wf-run-approval=""
-      className={cn(CANVAS_GLASS_SURFACE_CLASS, "grid gap-2 border-b border-border p-2 text-ui-xs text-muted-foreground")}
+      // 标题栏自带 border-b,这里再来一条就是两条线并排(维护者:「内部甚至我感觉有多余的边线」)。
+      className={cn(CANVAS_GLASS_SURFACE_CLASS, "grid gap-2 px-3 py-2 text-ui-xs text-muted-foreground")}
     >
       <p className="m-0 flex items-center gap-1.5 font-medium text-foreground">
         <UserCheck size={13} className="shrink-0 text-warning" />
