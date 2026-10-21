@@ -255,6 +255,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "由桌面端发布器用已登录的 TikTok 账号自动上传;首次使用需登录,境内需要可用的代理。",
         "en": "Uploads with your signed-in TikTok account via the desktop publisher; sign in on first use, and you may need a working proxy.",
     },
+    "platformDesc_x": {
+        "zh": "用已登录的 X 账号发帖(文案 + 视频,视频限 2 分 20 秒 / 512MB);首次使用需登录,境内需要可用的代理。帖子发出即公开。",
+        "en": "Posts to X with your signed-in account (text + video; video up to 2:20 / 512MB); sign in on first use, and you may need a working proxy. Posts are public.",
+    },
     "platformDesc_youtube": {
         "zh": (
             "由桌面端发布器用已登录的 YouTube 账号上传;首次使用需登录,境内需要可用的代理。"

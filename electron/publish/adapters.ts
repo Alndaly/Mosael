@@ -9,6 +9,7 @@ import { WeixinChannelsAdapter } from "./adapters/weixinChannels";
 import { BilibiliAdapter } from "./adapters/bilibili";
 import { TiktokAdapter } from "./adapters/tiktok";
 import { YoutubeAdapter } from "./adapters/youtube";
+import { XAdapter } from "./adapters/x";
 
 export type { PublishAdapter } from "./adapters/shared";
 export { MockAdapter } from "./adapters/mock";
@@ -18,6 +19,7 @@ export { WeixinChannelsAdapter } from "./adapters/weixinChannels";
 export { BilibiliAdapter } from "./adapters/bilibili";
 export { TiktokAdapter } from "./adapters/tiktok";
 export { YoutubeAdapter } from "./adapters/youtube";
+export { XAdapter } from "./adapters/x";
 
 /** 唯一装配入口：平台注册表决定 Adapter，调用方不感知平台文件布局。 */
 export const createAdapter = (platform: string, driver: PageDriver, task: PublishTask): PublishAdapter => {
@@ -28,5 +30,6 @@ export const createAdapter = (platform: string, driver: PageDriver, task: Publis
   if (normalized === "bilibili") return new BilibiliAdapter(driver, task);
   if (normalized === "tiktok") return new TiktokAdapter(driver, task);
   if (normalized === "youtube") return new YoutubeAdapter(driver, task);
+  if (normalized === "x") return new XAdapter(driver, task);
   return new MockAdapter(driver, task);
 };

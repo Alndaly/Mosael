@@ -195,6 +195,16 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "title_max": 2200,
         "short_title": False,
     },
+    # X(Twitter):没有发布选项 —— 帖子即公开,不存在「仅自己可见」分档,PLATFORM_OPTIONS 里
+    # 不给它声明任何键(声明了不生效比不声明糟)。
+    "x": {
+        "label": "X",
+        "description": "platformDesc_x",
+        "config": {},
+        # X 没有标题栏:这一栏是**帖子正文**,上限 280。
+        "title_max": 280,
+        "short_title": False,
+    },
     "youtube": {
         "label": "YouTube",
         # 「通行密钥」这一句不是啰嗦:内嵌视图里 isUserVerifyingPlatformAuthenticatorAvailable()
@@ -218,6 +228,7 @@ PLATFORM_ALIASES = {
     "视频号": "weixin-channels", "微信视频号": "weixin-channels", "channels": "weixin-channels",
     "wechat": "weixin-channels", "weixin": "weixin-channels",
     "b站": "bilibili", "哔哩哔哩": "bilibili", "bili": "bilibili",
+    "x": "x", "X": "x", "twitter": "x", "Twitter": "x", "推特": "x",
 }
 
 # 老版任务状态词汇 1:1,移植的适配器直接映射。

@@ -23,7 +23,7 @@ vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 import type { PageDriver } from "./pageDriver";
 
 // 动态 import:vi.mock("electron") 必须在模块求值前生效。
-const { TiktokAdapter, WeixinChannelsAdapter, YoutubeAdapter } = await import("./adapters");
+const { TiktokAdapter, WeixinChannelsAdapter, YoutubeAdapter, XAdapter } = await import("./adapters");
 
 interface FakePage {
   url: string;
@@ -194,5 +194,35 @@ describe("视频号登录态判定", () => {
   it("真在助手后台里:认得出来", async () => {
     const { driver } = fakeDriver({ url: platform, texts: ["通知中心", "数据中心"] });
     expect(await new WeixinChannelsAdapter(driver, task).checkLogin()).toBe(true);
+  });
+});
+
+describe("X 登录态判定", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("auth_token cookie 在,就算停在信息流也认得出来", async () => {
+    // x.com 登完常把人留在首页/信息流,不在 /compose/post(同 YouTube 走完停在 www 那一课)。
+    const { driver } = fakeDriver({ url: "https://x.com/home", cookies: ["auth_token"] });
+    expect(await new XAdapter(driver, task).checkLogin()).toBe(true);
+  });
+
+  it("没有 cookie、撰写框也渲染不出来:看页面文案", async () => {
+    const { driver } = fakeDriver({ url: "https://x.com/home", texts: ["推荐", "有什么新鲜事?"] });
+    expect(await new XAdapter(driver, task).checkLogin()).toBe(true);
+  });
+
+  it("左边栏挂着登录入口 = 未登录", async () => {
+    const { driver } = fakeDriver({
+      url: "https://x.com/home",
+      // fakeDriver 按整串选择器匹配(不做 querySelector),逗号列表要整串给
+      css: ['[data-testid="loginButton"], a[href="/i/flow/login"]'],
+      cookies: ["auth_token"], // 过期 cookie 还在分区里 —— 页面判据先命中,不被它盖过去
+    });
+    expect(await new XAdapter(driver, task).checkLogin()).toBe(false);
+  });
+
+  it("人被送到了 /i/flow/login:直接判未登录", async () => {
+    const { driver } = fakeDriver({ url: "https://x.com/i/flow/login" });
+    expect(await new XAdapter(driver, task).checkLogin()).toBe(false);
   });
 });

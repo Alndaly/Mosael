@@ -7,7 +7,8 @@ export type SupportedPlatform =
   | "weixin-channels"
   | "bilibili"
   | "tiktok"
-  | "youtube";
+  | "youtube"
+  | "x";
 
 export interface PlatformDefinition {
   id: SupportedPlatform;
@@ -170,6 +171,31 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
       url: "https://www.youtube.com/",
       cookies: ["SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID"],
       hosts: ["youtube.com"],
+    },
+  },
+  {
+    id: "x",
+    nameKey: "platform_x",
+    aliases: ["x", "twitter", "X", "推特"], // i18n-ok
+    loginUrl: "https://x.com/i/flow/login",
+    dashboardUrl: "https://x.com/home",
+    // 发帖框是 x.com 全站共用的撰写组件,/compose/post 是一页只有它的干净落地(信息流那页
+    // 首屏未必挂着输入框)。
+    publishUrl: "https://x.com/compose/post",
+    // X 没有「作品管理」页:发出的帖子落在个人主页时间线上。
+    manageUrl: "https://x.com/home",
+    // 帖子正文 280 字;「标题」一栏发出去就是帖子文案(和 TikTok 的 caption 同一角色)。
+    titleMaxLength: 280,
+    supportsShortTitle: false,
+    // 没有独立描述/标签栏 —— 文案和 #hashtag 都写进正文。
+    supportsDescription: false,
+    supportsTags: false,
+    // 登录态的页面无关判据:auth_token 是 HttpOnly 会话 cookie,登录即写 —— x.com 登完
+    // 常把人留在首页/信息流,不在撰写页。
+    session: {
+      url: "https://x.com",
+      cookies: ["auth_token"],
+      hosts: ["x.com", "twitter.com"],
     },
   },
 ];

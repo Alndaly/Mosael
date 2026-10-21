@@ -21,6 +21,8 @@ export const MANAGE_URL_PATTERNS = {
   // **不能只写 /videos/** —— 上传页本身就是 `.../videos/upload?...`,那样这条在点提交之前就已经
   // 为真,收尾判定等于没做(实测:提交后 3 毫秒就"确认成功")。排除掉 /upload 才是"回到了列表页"。
   youtube: /studio\.youtube\.com\/channel\/[^/]+\/videos(?!\/upload)/,
+  // X 发完没有「管理页」:提交后会把人送回首页 —— 那就是它的终态页。
+  x: /x\.com\/home/,
 } as const;
 
 export const SELECTORS = {
@@ -205,5 +207,35 @@ export const SELECTORS = {
     // 未登录时 Google 会把你送去登录页;这比找文案可靠得多。
     isLoginUrl: (u: string): boolean => /accounts\.google\.com|\/ServiceLogin|signin/.test(u),
     isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.youtube.test(u),
+  },
+  /**
+   * X(Twitter)。**结构优先**:x.com 全站组件都带 data-testid(它们自己的 web 测试在用,
+   * 比类名稳 —— 类名是构建期哈希),界面语言跟账号走,所以文案只作兜底、中英各一份。
+   *
+   * 视频限制:≤2:20、≤512MB(超出时页面自己在上传后报错,waitResult 会等到超时而非常青)。
+   * 境内需要可用的出站代理,和 TikTok/YouTube 同一类。
+   */
+  x: {
+    uploadUrl: resolvePlatform("x").publishUrl,
+    manageUrl: resolvePlatform("x").manageUrl,
+    // 撰写组件的照片/视频按钮背后就是这一个 input,媒体类型由 accept 限定。
+    fileInput: 'input[data-testid="fileInput"], input[type="file"]',
+    textEditor: '[data-testid="tweetTextarea_0"][contenteditable="true"], div[contenteditable="true"][data-testid]',
+    postButton: 'button[data-testid="tweetButton"]',
+    // 媒体缩略图容器:出现 = 接住了;里面的 progressbar 消失 = 处理完。
+    attachments: '[data-testid="attachments"]',
+    uploadProgress: '[data-testid="attachments"] [role="progressbar"]',
+    // 首访/久未登录会挂 onboarding、换语言等模态,挡真实点击 —— 逐条试关。
+    dismissTexts: ["Got it", "知道了", "Continue", "继续", "Not now", "暂不", "Skip for now", "暂时跳过", "Maybe later", "稍后"], // i18n-ok
+    postTexts: ["Post", "发布", "发帖"], // i18n-ok
+    // 未登录:左边栏是「登录」而不是账号头像切换钮;登录流程也会把人直接送到 /i/flow/login。
+    loggedOutMarks: '[data-testid="loginButton"], a[href="/i/flow/login"]',
+    loggedOutTexts: ["Sign in to X", "登录 X", "Join X", "加入 X", "Create your account", "创建你的账号"], // i18n-ok
+    loggedInTexts: ["For You", "推荐", "Following", "正在关注", "Home", "主页", "What is happening?!", "有什么新鲜事?"], // i18n-ok
+    uploadFailedTexts: ["Your video could not be uploaded", "视频无法上传", "Video is too long", "视频过长", "Upload failed", "上传失败"], // i18n-ok
+    // 「已发送」toast;中英文面各一份。组件消失(发帖框卸载)是另一条更强的判据,见适配器。
+    publishDoneTexts: ["Your post was sent", "帖子已发送", "已发布", "Post successful", "发布成功"], // i18n-ok
+    isLoginUrl: (u: string): boolean => /\/i\/flow\/login|\/login/.test(u),
+    isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.x.test(u),
   },
 } as const;

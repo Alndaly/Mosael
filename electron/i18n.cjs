@@ -207,6 +207,7 @@ const MESSAGES = {
   platform_bilibili: { zh: "B 站", en: "Bilibili" },
   platform_tiktok: { zh: "TikTok", en: "TikTok" },
   platform_youtube: { zh: "YouTube", en: "YouTube" },
+  platform_x: { zh: "X", en: "X" },
 
   // ---- 发布步骤(实时面板) ----
   publishStep_preparing: { zh: "准备中", en: "Preparing" },
