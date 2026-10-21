@@ -287,8 +287,6 @@ export const nodeToolbar = {
   taskAwaitingApprovalBodyOther: "「{workflow}」v{version} 是别人改的,要任务的主人认可之后,这个任务到点才会接着跑。",
   wfAwaitingYourApproval: "你的定时任务「{task}」在等你认可「{workflow}」v{version}:认可之前它到点会停下,不花你的 AI 连接。",
   wfAwaitingOwnerApproval: "{owner} 的定时任务「{task}」用着这张图:改过的这一版要 {owner} 认可之后,它到点才会接着用 {owner} 的 AI 连接。已经通知了 {owner}。",
-  runApprovalHeading: "这一步在等你确认",
-  runApprovalWaiting: "这一次运行停在「{node}」,确认之后从这里接着跑(前面跑过的步骤不会重跑)。",
   runApprovalExpires: "超过 {time} 没人处理,就按这个节点上写的办。",
   runApprovalNoExpiry: "不设超时,一直等。",
   runApprovalNotePlaceholder: "备注(可留空)",
@@ -298,7 +296,7 @@ export const nodeToolbar = {
   runApprovalFeishuHint: "在飞书里点那张卡也一样。",
   //: 「这一次到底发到飞书没有」—— 上面那句「在飞书里点那张卡也一样」**只有真发出去过时才成立**,
   //: 所以没发出去就换成这几句,别把人支去一个什么都没有的地方(见后端 domain/workflows/approvals)。
-  //: 句子的拼法在 RunApprovalNotice.tsx 里(前端的 t() 不做插值),这里只有**词**。
+  //: 句子的拼法在 RunApprovalCard.tsx 里(前端的 t() 不做插值),这里只有**词**。
   runApprovalDeliverySent: "已发到飞书",
   runApprovalDeliveryStationOnly: "仅站内",
   runApprovalNotDelivered: "这次没能发到飞书,只能在站内批。",

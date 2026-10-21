@@ -504,6 +504,8 @@ export const publish = {
   wfHistoryLoading: "Loading runs…",
   wfHistoryLoadFailed: "Couldn’t load the run history",
   wfHistoryNoSteps: "No node steps",
+  /** Pill at the end of a paused await_approval step row in the run timeline. */
+  wfStepWaiting: "Waiting for you",
   wfRevisionHistory: "Version history",
   wfRevisionHistoryDesc: "Executable changes create immutable revisions; canvas layout does not. Restoring appends a version, and the latest 100 are shown.",
   wfRevisionCurrent: "Current",

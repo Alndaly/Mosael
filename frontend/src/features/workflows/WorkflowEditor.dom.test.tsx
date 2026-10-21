@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchWorkflowNodeTypes: vi.fn(),
   updateWorkflow: vi.fn(),
   listWorkflowRuns: vi.fn(),
+  listRunApprovals: vi.fn(),
   runWorkflow: vi.fn(),
   listJobEvents: vi.fn(),
   listJobChildren: vi.fn(),
@@ -63,6 +64,7 @@ beforeEach(() => {
   localStorage.setItem("mosael:selected:workflows", "wf1");
   apiMocks.fetchWorkflowNodeTypes.mockResolvedValue(NODE_TYPES);
   apiMocks.listWorkflowRuns.mockResolvedValue([]);
+  apiMocks.listRunApprovals.mockResolvedValue([]);
   apiMocks.listJobEvents.mockResolvedValue([]);
   apiMocks.listJobChildren.mockResolvedValue([]);
   apiMocks.runWorkflow.mockResolvedValue({ id: "job-1", status: "queued" });

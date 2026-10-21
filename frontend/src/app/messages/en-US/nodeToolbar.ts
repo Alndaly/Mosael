@@ -280,8 +280,6 @@ export const nodeToolbar = {
   taskAwaitingApprovalBodyOther: "“{workflow}” v{version} was changed by someone else. The task runs again once its owner approves this version.",
   wfAwaitingYourApproval: "Your scheduled task “{task}” is waiting for you to approve “{workflow}” v{version}. Until then it stops when it's due instead of spending your AI connections.",
   wfAwaitingOwnerApproval: "{owner}'s scheduled task “{task}” uses this workflow: this changed version has to be approved by {owner} before the task spends {owner}'s AI connections again. {owner} has been notified.",
-  runApprovalHeading: "A step is waiting for you",
-  runApprovalWaiting: "This run is stopped at “{node}”. Deciding continues from there — earlier steps are not run again.",
   runApprovalExpires: "If nobody decides within {time}, the node's own rule applies.",
   runApprovalNoExpiry: "No timeout: it waits indefinitely.",
   runApprovalNotePlaceholder: "Note (optional)",
@@ -291,7 +289,7 @@ export const nodeToolbar = {
   runApprovalFeishuHint: "Clicking the card in Feishu does the same thing.",
   //: Whether this run's card actually reached Feishu (see backend domain/workflows/approvals).
   //: The hint above is only true when it did — otherwise say what happened instead of sending
-  //: people to a place where nothing arrived. The sentence is assembled in RunApprovalNotice.tsx
+  //: people to a place where nothing arrived. The sentence is assembled in RunApprovalCard.tsx
   //: (the frontend t() does not interpolate); only the words live here.
   runApprovalDeliverySent: "Sent to Feishu",
   runApprovalDeliveryStationOnly: "In-app only",

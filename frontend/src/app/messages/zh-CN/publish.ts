@@ -505,6 +505,8 @@ export const publish = {
   wfHistoryLoading: "正在读取执行记录…",
   wfHistoryLoadFailed: "执行记录读取失败",
   wfHistoryNoSteps: "没有节点步骤",
+  /** 步骤轨上「等人确认」那一步行尾的小胶囊 —— 这一步停下是在等人,不是在跑。 */
+  wfStepWaiting: "等你确认",
   wfRevisionHistory: "版本历史",
   wfRevisionHistoryDesc: "可执行内容变化时保存不可变修订；画布布局不单独成版。恢复旧版会追加新版本，显示最近 100 个。",
   wfRevisionCurrent: "当前",

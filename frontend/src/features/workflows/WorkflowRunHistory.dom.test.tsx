@@ -8,6 +8,7 @@ const apiMocks = vi.hoisted(() => ({
   listWorkflowRuns: vi.fn(),
   listJobEvents: vi.fn(),
   listJobChildren: vi.fn(),
+  listRunApprovals: vi.fn(),
 }));
 
 vi.mock("@/api/client", async (importOriginal) => ({
@@ -30,7 +31,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderHistory(viewedRunId: string | null = "j1", onViewRun = vi.fn()) {
+function renderHistory(viewedRunId: string | null = "j1", onViewRun = vi.fn(), approvals: unknown[] = []) {
+  // 待批单默认空数组 —— react-query 不认 undefined 的 queryFn 返回值。
+  apiMocks.listRunApprovals.mockResolvedValue(approvals);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -181,4 +184,53 @@ it("单跑一个节点的运行标注「部分运行(目标:节点名)」,整跑
   const badge = await screen.findByText("wfHistoryPartialRun");
   expect(badge.getAttribute("data-run-partial")).not.toBeNull();
   expect(document.querySelectorAll("[data-run-partial]")).toHaveLength(1);
+});
+
+//: 一次运行停在「等人确认」上:审批卡挂在**它卡住的那一步的展开体里** —— 不再在面板顶部
+//: 另起一段把同一件事说第二遍;步骤行上一枚「等你确认」胶囊点出它在等。
+it("等人确认:审批卡就地展开在它卡住的那一步里,并自动展开", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    { id: "j1", kind: "workflow", status: "running", message: "等待确认: 测试", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {} },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([
+    { id: "e1", job_id: "j1", type: "workflow.node.started", created_at: "2026-09-19T04:00:01Z", payload: { node_id: "start", name: "开始" } },
+    { id: "e2", job_id: "j1", type: "workflow.node.finished", created_at: "2026-09-19T04:00:02Z", payload: { node_id: "start", name: "开始", outputs: {} } },
+    { id: "e3", job_id: "j1", type: "workflow.node.started", created_at: "2026-09-19T04:00:03Z", payload: { node_id: "gate", name: "等人确认" } },
+  ]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory("j1", vi.fn(), [
+    {
+      id: "ap-1", job_id: "j1", workflow_id: "wf1", node_id: "gate", node_name: "等人确认",
+      title: "测试1", body: "确认之后接着跑", approve_label: "", reject_label: "",
+      allow_note: true, status: "pending", decision: "", feishu_delivery: "sent",
+      feishu_delivery_reason: "", expires_at: null, created_at: "2026-09-19T04:00:03",
+    },
+  ]);
+
+  // 卡片标题就地出现在「等人确认」那一步的展开体里,不用点任何展开钮。
+  const card = await screen.findByText("测试1");
+  expect(card.closest("[data-wf-run-approval]")).not.toBeNull();
+  // 步骤行有「等你确认」胶囊。
+  expect(await screen.findByText("wfStepWaiting")).toBeInTheDocument();
+});
+
+//: 待批的是**另一次**运行(用户在看旧的一次):这张卡不该出现 —— 列表行上的手形图标在点它。
+it("待批单属于另一次运行:详情里不出现审批卡", async () => {
+  apiMocks.listWorkflowRuns.mockResolvedValue([
+    { id: "j1", kind: "workflow", status: "succeeded", message: "较早一次", created_at: "2026-09-19T04:00:00", updated_at: "2026-09-19T04:00:10", payload: {} },
+    { id: "j2", kind: "workflow", status: "running", message: "等待确认: 测试", created_at: "2026-09-19T05:00:00", updated_at: "2026-09-19T05:00:10", payload: {} },
+  ]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
+  renderHistory("j1", vi.fn(), [
+    {
+      id: "ap-1", job_id: "j2", workflow_id: "wf1", node_id: "gate", node_name: "等人确认",
+      title: "测试1", body: "", approve_label: "", reject_label: "",
+      allow_note: false, status: "pending", decision: "", feishu_delivery: "",
+      feishu_delivery_reason: "", expires_at: null, created_at: "2026-09-19T05:00:03",
+    },
+  ]);
+
+  await screen.findByText("较早一次");
+  expect(screen.queryByText("测试1")).toBeNull();
 });

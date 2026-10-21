@@ -1,17 +1,17 @@
 import React from "react";
 import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import { useQuery } from "@tanstack/react-query";
-import { Ban, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, ChevronDown, CircleDashed, Clock, Hand, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
-import { attestRequestOf, listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
+import { attestRequestOf, listJobEvents, listRunApprovals, listWorkflowRuns, runApprovalsKey, type Job, type RunApproval } from "@/api/client";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { RunApprovalNotice } from "@/features/workflows/RunApprovalNotice";
+import { RunApprovalCard } from "@/features/workflows/RunApprovalCard";
 import { assetOutputs, outputRows, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
 import { formatCosts, type CostAmount } from "@/lib/money";
-import { parseServerTime } from "@/lib/time";
+import { formatShortDate, parseServerTime } from "@/lib/time";
 import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { runStatusText } from "@/components/jobs/runStatus";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
@@ -36,10 +36,6 @@ function ms(a: string, b: string): number {
   return Math.max(0, parseServerTime(b).getTime() - parseServerTime(a).getTime());
 }
 
-
-
-/** 素材产出的预览条。素材可能已被删除(取不到就不渲染),所以查询失败是正常路径不是错误。 */
-
 /** 输出摘要拼成可读文本:字符串原样(引擎侧已截断),其余 JSON 化。 */
 function outputsText(outputs: Record<string, unknown>): string {
   return Object.entries(outputs)
@@ -62,7 +58,7 @@ function partialRunTarget(job: Job): string | null {
 
 /** 这次运行花了多少钱(后端 billing.usage.run_costs 记在 result.costs):大模型的调用挂在运行上、生成和配音挂在子任务上,
  *  一起算。一次计费调用都没有的(没花钱的流程)不说。 */
-function runCosts(job: Job): { amounts: CostAmount[]; calls: number; unpriced: number } | null {
+function runCost(job: Job): { amounts: CostAmount[]; calls: number; unpriced: number } | null {
   const costs = (job.result as Record<string, unknown> | undefined)?.costs as
     | { amounts?: CostAmount[]; calls?: number; unpriced?: number }
     | undefined;
@@ -70,28 +66,41 @@ function runCosts(job: Job): { amounts: CostAmount[]; calls: number; unpriced: n
   return { amounts: costs.amounts ?? [], calls: costs.calls, unpriced: costs.unpriced ?? 0 };
 }
 
+/** 花费那一粒,嵌在详情眉行里(列表行没说过的那几样:日期 · 耗时 · 花费)。 */
 function RunCosts({ job }: { job: Job }) {
   const t = useI18n();
   const { locale } = usePreferences();
-  const costs = runCosts(job);
+  const costs = runCost(job);
   if (!costs) return null;
   return (
-    <p data-testid="run-costs" className="m-0 mb-2 px-1.5 text-ui-2xs text-muted-foreground">
+    <span data-testid="run-costs" className="timecode">
       {t("wfHistoryCost")
         //: 一笔钱都没有:有没定价的就是「未定价」,否则都是免费的、失败了没扣钱的(后端不把它们的 0 算成钱)——「未扣费」
         .replace("{cost}", formatCosts(costs.amounts, locale) || t(costs.unpriced > 0 ? "wfHistoryCostNone" : "wfHistoryCostNotCharged"))
         .replace("{calls}", String(costs.calls))}
       {costs.unpriced > 0 && ` ${t("wfHistoryCostUnpriced").replace("{count}", String(costs.unpriced))}`}
-    </p>
+    </span>
   );
 }
 
-function RunIcon({ status }: { status: string }) {
-  if (status === "succeeded") return <CheckCircle2 size={13} className="text-success" />;
-  if (status === "failed") return <XCircle size={13} className="text-destructive" />;
-  if (status === "cancelled") return <Ban size={13} className="text-muted-foreground" />;
-  if (RUNNING.has(status)) return <Loader2 size={13} className="animate-mosael-spin text-primary" />;
-  return <CircleDashed size={13} />;
+/** 运行行的状态图标:停在等人确认上的运行**不在转圈** —— 它安静地在等一只手指点。 */
+function RunIcon({ status, waiting }: { status: string; waiting?: boolean }) {
+  if (waiting) return <Hand size={14} className="shrink-0 text-warning" />;
+  if (status === "succeeded") return <CheckCircle2 size={14} className="shrink-0 text-success" />;
+  if (status === "failed") return <XCircle size={14} className="shrink-0 text-destructive" />;
+  if (status === "cancelled") return <Ban size={14} className="shrink-0 text-muted-foreground" />;
+  if (RUNNING.has(status)) return <Loader2 size={14} className="animate-mosael-spin shrink-0 text-primary" />;
+  return <CircleDashed size={14} />;
+}
+
+/** 步骤行的状态图标,和运行列表同一套语言:成功绿勾、失败红叉、在跑转圈、停下等人琥珀;跳过/取消是安静的灰。 */
+function StepIcon({ status, waiting }: { status: string; waiting: boolean }) {
+  if (waiting) return <Hand size={14} className="shrink-0 text-warning" />;
+  if (status === "done") return <CheckCircle2 size={14} className="shrink-0 text-success" />;
+  if (status === "failed") return <XCircle size={14} className="shrink-0 text-destructive" />;
+  if (status === "cancelled") return <Ban size={14} className="shrink-0 text-muted-foreground" />;
+  if (status === "skipped") return <SkipForward size={14} className="shrink-0 text-muted-foreground" />;
+  return <Loader2 size={14} className="animate-mosael-spin shrink-0 text-primary" />;
 }
 
 export function WorkflowRunHistory({
@@ -138,6 +147,19 @@ export function WorkflowRunHistory({
     refetchInterval: (q) => ((q.state.data as Job[] | undefined)?.some((j) => RUNNING.has(j.status)) ? 2000 : false),
   });
 
+  // 待批单:这张工作流的运行里此刻在等确认的那几步。它**不再独占面板顶部一段** ——
+  // 挂在它实际卡住的那一次运行、那一步的展开体里(列表行上用琥珀色的手形图标点出它在等)。
+  const approvals = useQuery({
+    queryKey: runApprovalsKey(workflowId),
+    queryFn: () => listRunApprovals(workflowId),
+    //: 停在等人确认上的运行**会一直停着**,所以这一条要轮询 —— 别处的决定(飞书点的、别人点的、
+    //: 超时处理的)落了库,这一条得自己消失。
+    refetchInterval: (q) => ((q.state.data as RunApproval[] | undefined)?.length ? 5000 : false),
+  });
+  const waitingJobIds = React.useMemo(() => new Set((approvals.data ?? []).map((a) => a.job_id)), [approvals.data]);
+  /** 正在看的那一次运行里等确认的那一张(一张运行至多一张:同一步只停一次)。 */
+  const approval = (approvals.data ?? []).find((a) => a.job_id === viewedRunId) ?? null;
+
   const selected = runs.data?.find((j) => j.id === viewedRunId) ?? null;
   const events = useQuery({
     queryKey: ["job-events", viewedRunId],
@@ -170,14 +192,17 @@ export function WorkflowRunHistory({
   );
   //: 这次运行派生的子任务(出片、配音、导出…)。循环体里的那些只在这里看得见。
   const children = useJobChildren(viewedRunId, Boolean(selected && RUNNING.has(selected.status)));
+  // 自动展开两种步:跑挂且有详情的(让人直接看到原因),和停下等确认的那一步(让人直接批)。
   React.useEffect(() => {
-    const failedWithDetails = steps.filter((step) => step.status === "failed" && step.details).map((step) => step.nid);
-    if (failedWithDetails.length === 0) return;
+    const auto = steps
+      .filter((step) => (step.status === "failed" && step.details) || (approval != null && approval.node_id === step.nid))
+      .map((step) => step.nid);
+    if (auto.length === 0) return;
     setExpanded((previous) => {
-      if (failedWithDetails.every((nid) => previous.has(nid))) return previous;
-      return new Set([...previous, ...failedWithDetails]);
+      if (auto.every((nid) => previous.has(nid))) return previous;
+      return new Set([...previous, ...auto]);
     });
-  }, [steps]);
+  }, [steps, approval]);
 
   // 数据 2s 一轮询,但耗时显示要每秒走字:运行中的 run/节点用 now 与开始时间实时求差,
   // 而不是等下一次轮询把 updated_at 带回来。没有任何东西在跑时不启动定时器。
@@ -200,14 +225,18 @@ export function WorkflowRunHistory({
 
   // 和 AI 助手一样停靠在右栏,不再是盖在画布上的悬浮层:悬浮会挡住正在跑的节点,
   // 而运行时恰恰要同时看见画布和这里。
+  //
+  // **一个面板,两个分区,一条分隔线**(列表 | 详情)。面板这一圈框是全面板唯一的框;
+  // 里面只说「列表」和「详情」两件事,步骤是带圆点的时间线 —— 轨道是一条 1px 的线,
+  // 不是第二个框。
   return (
     <aside
       className={cn(
-        "flex flex-col",
+        "flex min-h-0 flex-col",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
-          : "relative min-h-0 min-w-0",
+          : "relative min-w-0",
       )}
       style={floatStyle}
       {...focusProps}
@@ -224,6 +253,9 @@ export function WorkflowRunHistory({
       >
         <h2>
           <History size={14} /> {t("wfHistory")}
+          <span data-wf-run-count="" className="text-ui-2xs font-normal tabular-nums text-muted-foreground">
+            {runs.data?.length ?? 0}
+          </span>
         </h2>
         <IconButton
           unstyled
@@ -237,16 +269,13 @@ export function WorkflowRunHistory({
           <X size={13} />
         </IconButton>
       </div>
-      {/* 「等人确认」的入口就在运行历史顶上:那一次运行**没有失败、也没在跑**,它停在一步上等人点。
-          没有这一段的话,面板上只会看到一次永远"运行中"的记录 —— 看不出它在等谁。 */}
-      <RunApprovalNotice workflowId={workflowId} />
-      {/* **内容区自己滚。** 只有里面那一段(正文、列表)设上限是不够的:待批卡本身还有标题、
-          等待说明、投递状态、备注、按钮 —— 面板一矮,按钮照样被推到可视区外,而这一层不滚。
-          维护者:「右侧这个确认卡内容过大的时候还是会导致无法浏览审批」。 */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
-            不会被固定的上下分栏推到面板底部。 */}
-        <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1">
+      {/* **两个分区,各自滚自己的**:列表封顶 45%,详情吃掉剩下的。这一层(以及外框)
+          一条 overflow 都不写 —— 滚动责任唯一地落在各分区头上,不存在"两层 overflow 抢
+          同一条 CSS 属性、谁赢取决于 Tailwind 生成顺序"的老毛病。 */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* ── 运行列表 ── 少量记录按内容占高;多了在面板高度的 45% 内滚。
+            详情因此总是紧跟所选记录,不会被固定分栏推到面板底部。 */}
+        <div className="flex max-h-[45%] shrink-0 flex-col gap-0.5 overflow-y-auto border-b border-border px-2 py-1.5">
           {/* **四种状态都要说出来**:读取中、读取失败、确实没有、有。此前只处理了后两种,
               于是接口一 500(一条失败原因里的花括号把整个列表打挂),面板就是一片空白 ——
               看起来和"一次都没跑过"一模一样,而用户明明跑过很多次。 */}
@@ -269,48 +298,55 @@ export function WorkflowRunHistory({
           {runs.data && runs.data.length === 0 && (
             <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
           )}
-          {(runs.data ?? []).map((run) => (
-            <button
-              key={run.id}
-              type="button"
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-foreground hover:bg-secondary",
-                run.id === viewedRunId && "bg-accent hover:bg-accent",
-              )}
-              aria-current={run.id === viewedRunId ? "true" : undefined}
-              onClick={() => onViewRun(run.id)}
-            >
-              <RunIcon status={run.status} />
-              {partialRunTarget(run) && (
-                // 单跑一个节点的那一轮:行首标一句「部分运行(目标:节点名)」—— 它和整跑长在同一张
-                // 列表里,不标的话看不出这次为什么只有几步、钱花在哪儿。
-                <Truncate
-                  as="span"
-                  data-run-partial=""
-                  text={partialRunTarget(run)}
-                  className="max-w-[45%] shrink rounded-full border border-border bg-muted px-1.5 py-px text-ui-2xs text-muted-foreground"
-                >
-                  {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
-                </Truncate>
-              )}
-              <span className="flex min-w-0 flex-1 flex-col gap-px">
-                {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
-                <Truncate className="text-xs">
-                  {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
-                </Truncate>
-                <span className="timecode text-ui-2xs text-muted-foreground">
-                  {run.created_at ? relTime(run.created_at, now) : ""}
-                  {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
-                  {run.created_at && RUNNING.has(run.status)
-                    ? ` · ${Math.max(0, (now - parseServerTime(run.created_at).getTime()) / 1000).toFixed(0)}s`
-                    : run.created_at && run.updated_at && ` · ${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}
+          {(runs.data ?? []).map((run) => {
+            const waiting = waitingJobIds.has(run.id);
+            return (
+              <button
+                key={run.id}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-foreground hover:bg-secondary",
+                  run.id === viewedRunId && "bg-accent hover:bg-accent",
+                )}
+                aria-current={run.id === viewedRunId ? "true" : undefined}
+                onClick={() => onViewRun(run.id)}
+              >
+                <RunIcon status={run.status} waiting={waiting} />
+                <span className="flex min-w-0 flex-1 flex-col gap-px">
+                  {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
+                  <Truncate className="text-xs font-medium">
+                    {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
+                  </Truncate>
+                  <span className="flex min-w-0 items-center gap-1.5 text-ui-2xs text-muted-foreground">
+                    <span className="timecode shrink-0">{run.created_at ? relTime(run.created_at, now) : ""}</span>
+                    {typeof run.payload?.workflow_revision === "number" && (
+                      <span className="shrink-0">· v{run.payload.workflow_revision}</span>
+                    )}
+                    {partialRunTarget(run) && (
+                      // 单跑一个节点的那一轮:行尾标一句「部分运行(目标:节点名)」—— 它和整跑长在同一张
+                      // 列表里,不标的话看不出这次为什么只有几步、钱花在哪儿。
+                      <Truncate
+                        as="span"
+                        data-run-partial=""
+                        text={partialRunTarget(run)}
+                        className="min-w-0 rounded-full border border-border bg-muted px-1.5 py-px text-muted-foreground"
+                      >
+                        {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
+                      </Truncate>
+                    )}
+                  </span>
                 </span>
-              </span>
-              <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
-            </button>
-          ))}
+                <span className="timecode shrink-0 text-ui-2xs text-muted-foreground">
+                  {run.created_at && RUNNING.has(run.status)
+                    ? `${Math.max(0, (now - parseServerTime(run.created_at).getTime()) / 1000).toFixed(0)}s`
+                    : run.created_at && run.updated_at && `${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+        {/* ── 选中那一次运行的详情 ── */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {!selected ? (
             // 「选一次运行」只在**有得选**的时候说 —— 列表是空的、还在读、或者读挂了时,这句话是在
             // 让人去点一个不存在的东西。
@@ -320,12 +356,30 @@ export function WorkflowRunHistory({
               </div>
             )
           ) : (
-            <>
+            <div className="flex flex-col gap-3 px-3 py-3">
+              {/* 眉行只说列表行没说过的那几样:日期 · 耗时 · 花费。
+                  标题、相对时间、状态图标都在列表行里有了 —— 同一件事不说第二遍。 */}
+              <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-ui-2xs text-muted-foreground">
+                {selected.created_at && (
+                  <span className="timecode">{formatShortDate(selected.created_at)}</span>
+                )}
+                {selected.created_at && selected.updated_at && !RUNNING.has(selected.status) && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="timecode">{(ms(selected.created_at, selected.updated_at) / 1000).toFixed(1)}s</span>
+                  </>
+                )}
+                {runCost(selected) && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <RunCosts job={selected} />
+                  </>
+                )}
+              </p>
               {/* 这一轮跑挂了:全应用那一份失败展示 —— 那一句、原因和怎么修照跑挂的那个子任务说(后端解开「子任务失败」那层壳),
                   原文在「详情」里;停在「这一版是别人改的,要主人认可」时就地给认可那一版的按钮(见 AttestRevisionButton)。 */}
               {selected.error && (
                 <FailureCard
-                  className="mb-2"
                   title={t("wfRunFailed")}
                   {...failureFields(selected, selected.error)}
                   actions={runAttest(selected) ? <AttestRevisionButton attest={runAttest(selected)!} /> : undefined}
@@ -333,101 +387,110 @@ export function WorkflowRunHistory({
                 />
               )}
               {!selected.error && runAttest(selected) && (
-                <div className="mb-2 flex justify-end">
+                <div className="flex justify-end">
                   <AttestRevisionButton attest={runAttest(selected)!} />
                 </div>
               )}
-              <RunCosts job={selected} />
-              <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
-                {steps.map((s) => {
-                  const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error) || Boolean(s.details);
-                  const open = expanded.has(s.nid);
-                  return (
-                    <li key={s.nid} className={cn("rounded-md text-xs", s.status === "skipped" && "opacity-55")}>
-                      <button
-                        type="button"
-                        className={cn(
-                          "flex w-full items-center gap-[7px] rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-xs text-foreground",
-                          hasDetail && "cursor-pointer hover:bg-secondary",
-                        )}
-                        onClick={() => hasDetail && toggleExpanded(s.nid)}
-                        aria-expanded={hasDetail ? open : undefined}
-                      >
-                        {s.status === "done" ? (
-                          <CheckCircle2 size={12} className="shrink-0 text-success" />
-                        ) : s.status === "failed" ? (
-                          <XCircle size={12} className="shrink-0 text-destructive" />
-                        ) : s.status === "skipped" ? (
-                          <SkipForward size={12} className="shrink-0" />
-                        ) : s.status === "cancelled" ? (
-                          <Ban size={12} className="shrink-0 text-muted-foreground" />
-                        ) : (
-                          <Loader2 size={12} className="animate-mosael-spin shrink-0 text-primary" />
-                        )}
-                        <Truncate className="flex-1">
-                          {s.name}
-                          {s.status === "running" && s.message && (
-                            <span className="ml-1.5 text-ui-2xs text-muted-foreground">{s.message}</span>
+              {steps.length > 0 && (
+                /* 步骤是一行一行的状态清单,和运行列表同一套图标语言;展开体挂在它自己那一步的下面、
+                   顺着名字那一列缩进。 */
+                <ol className="m-0 flex list-none flex-col gap-2 p-0">
+                  {steps.map((s) => {
+                    const waiting = approval != null && approval.node_id === s.nid;
+                    const hasDetail =
+                      waiting ||
+                      (s.outputs && Object.keys(s.outputs).length > 0) ||
+                      Boolean(s.error) ||
+                      Boolean(s.details);
+                    const open = hasDetail && expanded.has(s.nid);
+                    return (
+                      <li key={s.nid} className={cn("flex flex-col gap-2", s.status === "skipped" && "opacity-55")}>
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1 text-left text-xs text-foreground",
+                            hasDetail && "cursor-pointer hover:bg-secondary",
                           )}
-                        </Truncate>
-                        {s.status === "skipped" || s.status === "cancelled" ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
-                            {t(STEP_STATUS_LABELS[s.status])}
+                          onClick={() => hasDetail && toggleExpanded(s.nid)}
+                          aria-expanded={hasDetail ? open : undefined}
+                        >
+                          <StepIcon status={s.status} waiting={waiting} />
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                            <Truncate>{s.name}</Truncate>
+                            {waiting && (
+                              // 这一步停下是在等人,不是在跑 —— 一枚小胶囊说清「等什么」。
+                              <span className="shrink-0 rounded-full bg-warning/10 px-1.5 py-px text-ui-2xs font-medium text-warning">
+                                {t("wfStepWaiting")}
+                              </span>
+                            )}
+                            {s.status === "running" && s.message && (
+                              <Truncate className="text-ui-2xs text-muted-foreground">{s.message}</Truncate>
+                            )}
                           </span>
-                        ) : s.status === "running" && s.startAt != null ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
-                            <Clock size={10} /> {Math.max(0, (now - s.startAt) / 1000).toFixed(0)}s
-                          </span>
-                        ) : s.ms != null ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
-                            <Clock size={10} /> {(s.ms / 1000).toFixed(2)}s
-                          </span>
-                        ) : null}
-                        {hasDetail && (
-                          <ChevronDown size={11} className={cn("shrink-0 text-muted-foreground transition-transform duration-100", !open && "-rotate-90")} />
+                          {s.status === "skipped" || s.status === "cancelled" ? (
+                            <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                              {t(STEP_STATUS_LABELS[s.status])}
+                            </span>
+                          ) : s.status === "running" && s.startAt != null ? (
+                            <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                              <Clock size={10} /> {Math.max(0, (now - s.startAt) / 1000).toFixed(0)}s
+                            </span>
+                          ) : s.ms != null ? (
+                            <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                              <Clock size={10} /> {(s.ms / 1000).toFixed(2)}s
+                            </span>
+                          ) : null}
+                          {hasDetail && (
+                            <ChevronDown size={11} className={cn("shrink-0 text-muted-foreground transition-transform duration-100", !open && "-rotate-90")} />
+                          )}
+                        </button>
+                        {open && (
+                          /* 展开体与步骤行同一边缘起(不另缩进):失败档、产出、审批卡都是这一步的「下文」,
+                             对齐行的左缘,读起来是同一列里的东西。跑挂的那一步:一行档(那一句 + 「详情」浮层),
+                             整轮的失败已经在上面那张卡里说过一遍。 */
+                          <div className="flex min-w-0 flex-col gap-2">
+                            {s.failure && (
+                              <FailureCard size="inline" lines={2} className="w-auto" title={t(STEP_STATUS_LABELS.failed)}
+                                           {...s.failure} data-step-failed={s.nid} />
+                            )}
+                            {s.details && <WorkflowFailureDetails details={s.details} />}
+                            {/* 产出素材:和画布卡片、检查器用**同一个**组件 —— 此前这里第三次抄了那张
+                                "什么类型配什么尺寸"的表,于是同一份音频在三个地方长三个样子。 */}
+                            <OutputAssets
+                              items={assetOutputs(outputRows(registry, nodeTypeById[s.nid] ?? "", s.outputs))}
+                              density="panel"
+                              gallery={runGallery}
+                              className="gap-1.5"
+                            />
+                            {s.outputs && Object.keys(s.outputs).length > 0 && (
+                              <pre className="m-0 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
+                                {outputsText(s.outputs)}
+                              </pre>
+                            )}
+                            {/* 等人确认:审批卡就挂在这一步的展开体里 —— 「停在哪」由位置回答,
+                                「要你做什么」由这张卡回答,不在面板顶部另起一段说第二遍。 */}
+                            {waiting && approval && <RunApprovalCard row={approval} workflowId={workflowId} />}
+                          </div>
                         )}
-                      </button>
-                      {/* 跑挂的那一步:一行档(那一句 + 「详情」浮层),整轮的失败已经在上面那张卡里说过一遍 */}
-                      {open && s.failure && (
-                        <FailureCard size="inline" lines={2} className="mx-1.5 mb-1 mt-0.5 w-auto" title={t(STEP_STATUS_LABELS.failed)}
-                                     {...s.failure} data-step-failed={s.nid} />
-                      )}
-                      {open && s.details && (
-                        <div className="mx-1.5 mb-1 mt-1">
-                          <WorkflowFailureDetails details={s.details} />
-                        </div>
-                      )}
-                      {/* 产出素材:和画布卡片、检查器用**同一个**组件 —— 此前这里第三次抄了那张
-                          "什么类型配什么尺寸"的表,于是同一份音频在三个地方长三个样子。 */}
-                      {open && (
-                        <OutputAssets
-                          items={assetOutputs(outputRows(registry, nodeTypeById[s.nid] ?? "", s.outputs))}
-                          density="panel"
-                          gallery={runGallery}
-                          className="mx-1.5 mb-1 mt-0.5 gap-1.5"
-                        />
-                      )}
-                      {open && s.outputs && Object.keys(s.outputs).length > 0 && (
-                        <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
-                          {outputsText(s.outputs)}
-                        </pre>
-                      )}
-                    </li>
-                  );
-                })}
-                {steps.length === 0 && events.isFetched && <p className="px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryNoSteps")}</p>}
-              </ol>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+              {steps.length === 0 && events.isFetched && (
+                <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryNoSteps")}</p>
+              )}
               {/* **循环体里的节点不发事件**(子图不带 job,见 engine.execute_graph),所以上面
                   那份按节点画的清单在一次跑六镜的运行里只有「逐镜生成」一个条目在转圈。而那六次
                   出片其实各自都建了任务,parent_job_id 指着这次运行 —— 数据一直在,只是工作流
                   这一侧从没去取。摆出来,而不是发明一种新的事件。 */}
               {(children.data ?? []).length > 0 && (
-                <div className="grid min-w-0 gap-1 border-t border-border px-2 pt-2">
-                  <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
+                <div className="flex min-w-0 flex-col gap-2 border-t border-border pt-3">
+                  <span className="text-ui-2xs font-medium text-muted-foreground">{t("jobDetailChildren")}</span>
                   <JobChildrenList>{children.data ?? []}</JobChildrenList>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
