@@ -315,8 +315,7 @@ def computer_screenshot(
     window="main" (the app window, default) or "publish" (the publisher window). It does NOT
     capture your desktop, other apps or the menu bar, needs no screen-recording permission, and
     never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large window; the
-    embedded page is browser_screenshot. The same PNG is also saved as an asset and returned as
-    produced_asset_ids, so the user sees it in the conversation (images are for the model only).
+    embedded page is browser_screenshot.
     """
     import base64
 

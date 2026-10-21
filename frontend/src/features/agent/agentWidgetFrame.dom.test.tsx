@@ -3,7 +3,7 @@
  * 智能体小界面画进一轮回答的结果区:框的属性就是安全边界的落地(只给 allow-scripts、不带 referrer、
  * 文档开头是 CSP),复制拿到的是模型原样的源码,展开时对话里那一份先卸下。
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -63,8 +63,10 @@ describe("AgentWidgetFrame", () => {
     render(<AgentWidgetFrame widget={widget} />);
     reportHeight(frames()[0], 500);
     await waitFor(() => expect(frames()[0].style.height).toBe("500px"));
-    reportHeight(frames()[0], 120);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // 拒收不需要真等:更新被拦下,flush 之后值根本不会变。
+    await act(async () => {
+      reportHeight(frames()[0], 120);
+    });
     expect(frames()[0].style.height).toBe("500px");
     // 分步的真变矮照常收:500 → 350 是七成,过。
     reportHeight(frames()[0], 350);

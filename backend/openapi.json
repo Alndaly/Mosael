@@ -47338,10 +47338,6 @@
             "type": "string",
             "title": "Node Id"
           },
-          "node_name": {
-            "type": "string",
-            "title": "Node Name"
-          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -47402,7 +47398,6 @@
           "job_id",
           "workflow_id",
           "node_id",
-          "node_name",
           "title",
           "body",
           "approve_label",

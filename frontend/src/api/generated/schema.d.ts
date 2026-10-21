@@ -18492,8 +18492,6 @@ export interface components {
             workflow_id: string;
             /** Node Id */
             node_id: string;
-            /** Node Name */
-            node_name: string;
             /** Title */
             title: string;
             /** Body */

@@ -104,7 +104,6 @@ class RunApprovalOut(OrmModel):
     job_id: str
     workflow_id: str
     node_id: str
-    node_name: str
     title: str
     body: str
     #: 按钮文案:节点上写的;空着时界面按语言给缺省的「确认 / 拒绝」。
