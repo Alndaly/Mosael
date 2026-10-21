@@ -146,15 +146,15 @@ function baseHeaders(): Record<string, string> {
   };
 }
 
-/** 一个没成的响应 → 抛什么:401 交给登录处理,别的带着状态码和原文。`api` 和 `apiUpload` 同一套。 */
+/**
+ * 一个没成的响应 → 抛什么。**只造错误,不碰会话。**
+ *
+ * 这里以前顺手处理 401(清令牌 + 回登录页),于是 `request()` 里那句 `localSession: false` 的守卫
+ * 形同虚设:`apiAllowingUnauthorized` 的 401 照样把人从**本机**账号踢出去。踩到的现象是
+ * 「一打开账号/设置页就回到登录页」—— 那一页会问 MosaelCloud `/me`,而云端 401 说的是
+ * 「云那边没登录」,不是「这台机器退出了」。
+ */
 function failure(path: string, method: string, status: number, statusText: string, body: string): Error {
-  if (status === 401 && !path.startsWith("/api/auth/")) {
-    // 这条日志是排"登录后被踢回登录页"的:踢人的是**这一条请求**,不是登录本身。
-    // 以前这里一声不响地清令牌,现场只剩"回到登录页"这个结果。控制台日志用英文,和下面 `[api]` 那条一致。
-    console.warn(`[auth] 401 from ${method.toUpperCase()} ${path} — local session dropped, back to sign-in`);
-    onUnauthorized?.();
-    return new Error("Not authenticated");
-  }
   console.warn(`[api] ${method.toUpperCase()} ${path} → ${status} ${statusText}${body ? `: ${body}` : ""}`);
   return new ApiError(humanError(status, statusText, body), status, body);
 }
@@ -176,8 +176,14 @@ async function request(path: string, init?: RequestInit, { localSession = true }
   }
   //: `localSession: false` 的接口,它的 401 说的不是「本机登录过期」:比如 MosaelCloud 的会话没了。
   //: 那种 401 必须原样带着后端文案抛给调用方,更不能顺手把本地登录一起退出。
-  if (localSession && response.status === 401 && !path.startsWith("/api/auth/")) {
-    throw failure(path, init?.method ?? "GET", response.status, response.statusText, "");
+  if (response.status === 401 && !path.startsWith("/api/auth/")) {
+    if (localSession) {
+      // 踢人的是**这一条请求**,不是登录本身 —— 这行日志是"登录后被踢回登录页"唯一的线索。
+      console.warn(`[auth] 401 from ${(init?.method ?? "GET").toUpperCase()} ${path} — local session dropped, back to sign-in`);
+      onUnauthorized?.();
+      throw new Error("Not authenticated");
+    }
+    throw failure(path, init?.method ?? "GET", response.status, response.statusText, await response.text());
   }
   if (!response.ok) {
     throw failure(path, init?.method ?? "GET", response.status, response.statusText, await response.text());
