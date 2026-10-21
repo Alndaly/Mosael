@@ -147,7 +147,7 @@ def announce_run_approval(db: Session, approval: WorkflowRunApproval) -> Deliver
     approval.feishu_receive_id = receive_id
     approval.feishu_receive_type = receive_type
     try:
-        return Delivery(DELIVERY_SENT, message_id=send_approval_card(db, bot, receive_id, receive_type, approval))
+        return send_approval_card(db, bot, receive_id, receive_type, approval)
     except Exception as exc:  # noqa: BLE001 —— 卡片和降级的文字都没出去:交给领域说给用户听
         logger.warning("workflow approval %s never reached feishu: %s", approval.id, exc)
         return Delivery(DELIVERY_FAILED, reason=str(exc).strip() or type(exc).__name__)
@@ -215,8 +215,9 @@ def send_approval_card(
     transport = domain_gateway.transport()
     hours = int(round((approval.timeout_seconds or 0) / 3600)) if approval.timeout_seconds else None
     workflow = db.get(Workflow, approval.workflow_id)
+    card_failed = ""
     try:
-        return transport.send_card(
+        message_id = transport.send_card(
             bot, receive_id, receive_type,
             cards.approval_card(
                 approval_id=approval.id,
@@ -230,8 +231,12 @@ def send_approval_card(
                 timeout_hours=hours,
             ),
         )
+        return Delivery(DELIVERY_SENT, message_id=message_id)
     except client.FeishuError as exc:
-        missing_capability = CARD_CAPABILITY_ERROR in str(exc)
+        card_failed = str(exc)[:200]
+        missing_capability = CARD_CAPABILITY_ERROR in card_failed
+        #: **原因不能只写日志。** 日志会滚走(维护者原话:「由于日志的滚动 我已经无法看到」),
+        #: 而这条原因要能事后查到、并且在设置页/待批卡上看见 —— 由调用方写进 `feishu_delivery_reason`。
         logger.warning("feishu approval card send failed, falling back to text: %s", exc)
 
     tail = f"\n\n(飞书内直接确认需要:{_CARD_SETUP_HINT})" if missing_capability else ""
@@ -247,7 +252,9 @@ def send_approval_card(
         bot_row = db.get(FeishuBot, bot.id)
         if bot_row is not None and CARD_CAPABILITY_ERROR not in (bot_row.status_detail or ""):
             bot_row.status_detail = f"交互卡片未开启({CARD_CAPABILITY_ERROR}):{_CARD_SETUP_HINT}"[:400]
-    return message_id
+    #: 卡片失败、退成文字时把**卡片那边的真实原因**一并交回:界面据此说清"为什么没有按钮",
+    #: 而不是让用户以为"本来就是文字消息"。
+    return Delivery(DELIVERY_SENT, message_id=message_id, reason=f"卡片发送失败,已改为文字:{card_failed}" if card_failed else "")
 
 
 #: 这一次等待结束时补的那句话(取消 / 超时 / 到点提醒)。认不出的档位退到一句通用的话 —— 不抛。
