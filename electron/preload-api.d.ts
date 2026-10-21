@@ -148,6 +148,8 @@ export interface MosaelPublishBridge {
   setPanelLayout(change: LivePanelLayoutChange): Promise<void>;
   closePanel(id: string): Promise<void>;
   setPanelMuted(id: string, muted: boolean): Promise<void>;
+  /** 弹窗开着时收起悬浮面板(原生视图永远压在渲染层之上),关掉再放回。 */
+  setPanelsHidden(hidden: boolean): Promise<void>;
   /** 前台会话的页面列表:切换、关闭、拖动重排(整份新次序)、新建(地址栏同一套归一)、让出左侧的像素宽。 */
   switchPage(id: string): Promise<boolean>;
   closePage(id: string): Promise<boolean>;

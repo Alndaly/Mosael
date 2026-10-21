@@ -73,6 +73,17 @@ export function ModalSubmit(props: Omit<ButtonProps, "type" | "form">) {
   return <Button {...props} type="submit" form={formId} />;
 }
 
+/**
+ * 原生悬浮面板(发布任务 / RPA 会话的浏览器卡片)**永远画在渲染层之上**,弹窗的中心又正好落在
+ * 面板区域上 —— 弹窗开着时不藏,视图就压在弹窗和它的遮罩上(维护者实测:发布任务运行中打开
+ * 详情弹窗,内嵌浏览器像层级坏了)。门开着就藏,最后一个门关上再放回;计数在模块级,多个弹窗
+ * 同时开着时谁先关都不会提前把面板放出来。
+ */
+let openModalCount = 0;
+const syncFloatingPanels = (): void => {
+  void window.mosaelPublish?.setPanelsHidden(openModalCount > 0).catch(() => undefined);
+};
+
 export function ModalShell({
   open,
   onOpenChange,
@@ -119,6 +130,16 @@ export function ModalShell({
   dropzone?: { handlers: React.HTMLAttributes<HTMLDivElement>; overlay: React.ReactNode };
 }) {
   const formId = React.useId();
+  //: 弹窗开着时收起悬浮面板(见文件顶部的 syncFloatingPanels)。
+  React.useEffect(() => {
+    if (!open) return;
+    openModalCount += 1;
+    syncFloatingPanels();
+    return () => {
+      openModalCount = Math.max(0, openModalCount - 1);
+      syncFloatingPanels();
+    };
+  }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={modal}>
       <DialogContent

@@ -664,9 +664,29 @@ export class AccountViewManager {
     const { view } = this.ensure(accountId);
     this.window.contentView.addChildView(view);
     view.webContents.setZoomFactor(this.panelZoom());
+    //: 弹窗正开着(见 setPanelsHidden):新挂的面板也不能压上来,等弹窗关掉再显示。
+    if (this.panelsHidden) view.setVisible(false);
     this.syncAudio();
     this.layout();
     return true;
+  }
+
+  /**
+   * 渲染层的弹窗开着时把挂着的面板整摞收起来,弹窗关掉再放回。
+   *
+   * 原生视图**永远画在渲染层之上**:弹窗(发布详情、确认这类)中心就在面板区域上,不藏的话
+   * 视图直接压在弹窗和它的遮罩上 —— 维护者实测「发布任务启动后内嵌浏览器窗口像层级坏了」。
+   * 只动可见性不动挂载:任务照常继续出帧,关掉弹窗后原样回来。
+   */
+  private panelsHidden = false;
+
+  setPanelsHidden(hidden: boolean): void {
+    if (this.panelsHidden === hidden) return;
+    this.panelsHidden = hidden;
+    for (const id of this.panels) {
+      const view = this.views.get(id);
+      if (this.alive(view)) view.setVisible(!hidden);
+    }
   }
 
   /**

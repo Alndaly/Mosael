@@ -39,6 +39,7 @@ const IPC = Object.freeze({
     publishPanelLayout: "publish:panelLayout",
     publishClosePanel: "publish:closePanel",
     publishPanelMuted: "publish:panelMuted",
+    publishPanelsHidden: "publish:panelsHidden",
     // 前台会话的页面列表(左侧那一列):都作用在前台那个会话上,渲染层不点名要哪个会话。
     publishSwitchPage: "publish:switchPage",
     publishClosePage: "publish:closePage",
@@ -162,6 +163,16 @@ function parseUrlRequest(value, channel) {
 function parsePanelId(value) {
   const payload = record(value, IPC.invoke.publishClosePanel);
   return { id: requiredString(payload, "id", IPC.invoke.publishClosePanel) };
+}
+
+/** 渲染层弹窗开着时请主进程把悬浮面板收起来(原生视图永远压在渲染层之上)。 */
+function parsePanelsHidden(value) {
+  const channel = IPC.invoke.publishPanelsHidden;
+  const payload = record(value, channel);
+  if (typeof payload.hidden !== "boolean") {
+    throw new TypeError(`${channel}: hidden must be a boolean`);
+  }
+  return payload.hidden;
 }
 
 function parsePanelMuted(value) {

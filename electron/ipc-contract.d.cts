@@ -23,6 +23,7 @@ export const IPC: {
     publishPanelLayout: "publish:panelLayout";
     publishClosePanel: "publish:closePanel";
     publishPanelMuted: "publish:panelMuted";
+    publishPanelsHidden: "publish:panelsHidden";
     publishSwitchPage: "publish:switchPage";
     publishClosePage: "publish:closePage";
     publishReorderPages: "publish:reorderPages";

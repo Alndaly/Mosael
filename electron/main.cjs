@@ -63,6 +63,7 @@ const {
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
+  parsePanelsHidden,
   parsePickPath,
   parsePublishTarget,
   parseReadMode,
@@ -1343,6 +1344,10 @@ app.whenReady().then(async () => {
   handle(IPC.invoke.publishClosePanel, (_e, payload) => {
     const { id } = parsePanelId(payload);
     return requirePublish().closePanel(id);
+  });
+  // 弹窗开着时收/放悬浮面板(原生视图永远压在渲染层之上,见 AccountViewManager.setPanelsHidden)。
+  handle(IPC.invoke.publishPanelsHidden, (_e, payload) => {
+    return requirePublish().setPanelsHidden(parsePanelsHidden(payload));
   });
   // 前台会话的页面列表:切换、关闭、拖动重排、新建、让出左侧那一列。
   handle(IPC.invoke.publishSwitchPage, (_e, payload) =>
