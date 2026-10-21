@@ -22,18 +22,30 @@ import { cn } from "@/lib/utils";
  * 不写 `allow`(权限策略):不透明来源的框对摄像头、麦克风、定位这类能力**默认就没有**,写一份清单反倒是在
  * 暗示"清单外的给了"。`referrerPolicy="no-referrer"`:框里从 CDN 拉库时不带这一页的地址。
  */
-function WidgetIframe({ srcDoc, title, fill = false }: { srcDoc: string; title: string; fill?: boolean }) {
+// 同一颗组件在「实时流 → 落库消息」切换时会重挂。高度协商若从头再来,**视口相对**的内容
+// (地图用 100%/vh 撑满框那种)会跟着框高回环收敛,一圈比一圈矮(用户实测:回答结束后
+// 内嵌地图瘪成一条)。记住每颗组件上次谈好的高度,重挂从那儿接着谈。
+const widgetHeightCache = new Map<string, number>();
+
+function WidgetIframe({ srcDoc, title, cacheKey, fill = false }: { srcDoc: string; title: string; cacheKey: string; fill?: boolean }) {
   const frame = React.useRef<HTMLIFrameElement | null>(null);
-  const [height, setHeight] = React.useState(WIDGET_INITIAL_HEIGHT);
+  const [height, setHeight] = React.useState(() => widgetHeightCache.get(cacheKey) ?? WIDGET_INITIAL_HEIGHT);
   React.useEffect(() => {
     if (fill) return;
     const onMessage = (event: MessageEvent) => {
       const next = widgetHeightFrom(event, frame.current?.contentWindow);
-      if (next !== null) setHeight(next);
+      if (next === null) return;
+      setHeight((current) => {
+        // 单次上报缩到六成以下,基本是「内容高度跟着框高走」的回环在收敛,不是内容真的变矮 —— 拒收,
+        // 一颗地图才不会每次重挂都瘪一圈。内容真要变矮(面板收起)也是分几步报上来的。
+        if (next < current * 0.6) return current;
+        widgetHeightCache.set(cacheKey, next);
+        return next;
+      });
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fill]);
+  }, [fill, cacheKey]);
   return (
     <iframe
       ref={frame}
@@ -75,6 +87,7 @@ export function AgentWidgetFrame({ widget }: { widget: AgentWidget }) {
 
   return (
     <figure className="m-0 min-w-0 overflow-hidden rounded-lg border border-border" data-agent-widget={widget.id}>
+      {/* cacheKey 用组件自己的 id:重挂(流式 → 落库)后高度从上次谈好的接着来 */}
       <figcaption className="flex h-8 min-w-0 items-center gap-1.5 border-b border-border pl-2.5 pr-1 text-ui-xs text-muted-foreground">
         <AppWindow size={13} className="flex-none" aria-hidden />
         <Truncate className="min-w-0 flex-1">{title}</Truncate>
@@ -85,7 +98,7 @@ export function AgentWidgetFrame({ widget }: { widget: AgentWidget }) {
           <Maximize2 />
         </IconButton>
       </figcaption>
-      {!expanded && <WidgetIframe srcDoc={srcDoc} title={title} />}
+      {!expanded && <WidgetIframe srcDoc={srcDoc} title={title} cacheKey={widget.id} />}
       <ModalShell
         open={expanded}
         onOpenChange={setExpanded}
@@ -93,7 +106,7 @@ export function AgentWidgetFrame({ widget }: { widget: AgentWidget }) {
         className="h-[90vh] w-[min(1200px,calc(100vw-48px))]"
         bodyClassName="flex flex-col p-0 [scrollbar-gutter:auto]"
       >
-        <WidgetIframe srcDoc={srcDoc} title={title} fill />
+        <WidgetIframe srcDoc={srcDoc} title={title} cacheKey={widget.id} fill />
       </ModalShell>
     </figure>
   );

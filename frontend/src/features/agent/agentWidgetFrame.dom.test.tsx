@@ -28,6 +28,13 @@ function frames(): HTMLIFrameElement[] {
   return Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe[data-agent-widget-frame]"));
 }
 
+/** 以「这个框的窗口」身份报一个高度上来。 */
+function reportHeight(frame: HTMLIFrameElement, height: number) {
+  window.dispatchEvent(
+    new MessageEvent("message", { data: { type: "mosael-widget-height", height }, source: frame.contentWindow }),
+  );
+}
+
 describe("AgentWidgetFrame", () => {
   it("框只给 allow-scripts、不带 referrer、不写 allow;文档开头是我们的 CSP", () => {
     render(<AgentWidgetFrame widget={widget} />);
@@ -39,6 +46,29 @@ describe("AgentWidgetFrame", () => {
     const srcDoc = frame.getAttribute("srcdoc") ?? "";
     expect(srcDoc.indexOf(WIDGET_CSP)).toBeGreaterThan(-1);
     expect(srcDoc.indexOf(WIDGET_CSP)).toBeLessThan(srcDoc.indexOf(widget.html));
+  });
+
+  it("回答落定重挂后,高度从上次谈好的接着来 —— 视口相对的内容不会重新回环缩水", async () => {
+    const first = render(<AgentWidgetFrame widget={widget} />);
+    reportHeight(frames()[0], 400);
+    await waitFor(() => expect(frames()[0].style.height).toBe("400px"));
+    first.unmount();
+
+    // 同一颗组件(实时流 → 落库消息)重挂:不从初始档位重来,直接站在 400。
+    render(<AgentWidgetFrame widget={widget} />);
+    expect(frames()[0].style.height).toBe("400px");
+  });
+
+  it("单次上报缩到六成以下按回环拒收 —— 内容跟着框高走的一圈比一圈矮不是「变矮」", async () => {
+    render(<AgentWidgetFrame widget={widget} />);
+    reportHeight(frames()[0], 500);
+    await waitFor(() => expect(frames()[0].style.height).toBe("500px"));
+    reportHeight(frames()[0], 120);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(frames()[0].style.height).toBe("500px");
+    // 分步的真变矮照常收:500 → 350 是七成,过。
+    reportHeight(frames()[0], 350);
+    await waitFor(() => expect(frames()[0].style.height).toBe("350px"));
   });
 
   it("别的窗口发来的高度消息不改框高", () => {
