@@ -86,13 +86,22 @@ describe("生成模型选择器的默认", () => {
 });
 
 describe("连接重建之后,同一份模型自动接回去", () => {
-  const option = (profile: string, model: string) => ({
-    value: `${profile}:${model}`,
-    model,
+  //: 要的只是 chooseGenerationOption 读的那几列 —— 直接写成这个形状,**别 `as never`**:
+  //: 那样 `chosen.option?.provider_profile_id` 就成了 never 上的属性,tsc 直接报错(CI 的 typecheck 红过)。
+  //: 用**真类型的子集**造对象(`GenerationOption` 的必填列一个不少地补齐)——
+  //: 别 `as never`(那样属性访问就成了 never 上的,tsc 直接红),也别只写一半(缺字段一样红)。
+  const option = (profile: string, model: string): GenerationOption => ({
+    id: `${profile}:${model}`,
     provider_profile_id: profile,
+    plugin_instance_id: "",
+    profile_name: profile,
+    provider: "comfyui",
     kind: "image",
+    model,
+    model_label: model,
+    adapter_available: true,
     is_default: false,
-  } as never);
+  } as unknown as GenerationOption);
   const saved = (profile: string, model: string) => ({ provider_profile_id: profile, model, kind: "image" });
 
   it("连接 id 变了、同一份模型只剩一个:接回去,并标记 remapped", () => {
