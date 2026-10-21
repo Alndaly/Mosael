@@ -240,7 +240,10 @@ export function WorkflowRunHistory({
       {/* 「等人确认」的入口就在运行历史顶上:那一次运行**没有失败、也没在跑**,它停在一步上等人点。
           没有这一段的话,面板上只会看到一次永远"运行中"的记录 —— 看不出它在等谁。 */}
       <RunApprovalNotice workflowId={workflowId} />
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* **内容区自己滚。** 只有里面那一段(正文、列表)设上限是不够的:待批卡本身还有标题、
+          等待说明、投递状态、备注、按钮 —— 面板一矮,按钮照样被推到可视区外,而这一层不滚。
+          维护者:「右侧这个确认卡内容过大的时候还是会导致无法浏览审批」。 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
             不会被固定的上下分栏推到面板底部。 */}
         <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1">
