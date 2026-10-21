@@ -1,9 +1,8 @@
 /**
- * 一轮回答的**产出** —— 结果区里画在正文下面的那些东西:这一轮做出来的素材、智能体给的小界面。
+ * 一轮回答的**产出** —— 「做出来的」素材的认定,以及回执归属。
  *
- * 「过程」和「结果」分开之后(见 ToolCalls.AgentTurnContent),过程默认收起;而这一轮真正交出来的图
- * 不能跟着工具行一起收进去 —— 用户要的是那几张图,不是 `get_job` 那一行。所以这里从时间线和回执里
- * 把产出单独认出来,交给结果区。
+ * 渲染侧(ToolCalls.resultDocument)把正文和产出按时间线顺序交织成一份答案文档;
+ * 这里提供产出认定(producedByTool)和回执归属(receivedAssetIdsByMessage)。
  *
  * ## 「做出来的」和「碰过的」不是一回事
  *
@@ -60,31 +59,6 @@ export function producedByTool(tool: ToolCall): string[] {
   return [];
 }
 
-function pushUnique(out: string[], seen: Set<string>, ids: Iterable<string>) {
-  for (const id of ids) {
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(id);
-  }
-}
-
-/**
- * 这一轮做出来的素材,按出现的先后、去重。
- *
- * 只看父会话自己的 `tool`:`subtool` 是子智能体的步骤,它的产出属于子会话那一边(SubagentPanel 里那条
- * 对话自己的结果区),在父对话的答案下面再摆一遍就成了「两个人交了同一份作业」。
- * `extra`(回执带来的)接在后面,同样去重 —— 智能体轮询看到了、回执也送到了,是同一张图。
- */
-export function turnOutputAssetIds(timeline: AgentTimelineItem[] | undefined, extra: readonly string[] = []): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const item of timeline ?? []) {
-    if (item.type === "tool") pushUnique(out, seen, producedByTool(item.tool));
-  }
-  pushUnique(out, seen, extra);
-  return out;
-}
-
 type ReceiptLike = { id: string; role: string; payload?: unknown };
 
 function receiptAssetIds(message: ReceiptLike): string[] {
@@ -133,13 +107,20 @@ export const SHOW_WIDGET_TOOL = "show_widget";
  *
  * 内容取自调用的参数,不取自结果:结果只回一句「已显示」,把几十 KB 的 HTML 原样再回给模型一遍是白花上下文。
  */
+/** 这一次 `show_widget` 调用给出的合法小界面;没成功/没内容的返回 null。 */
+export function widgetOfTool(tool: ToolCall): AgentWidget | null {
+  if (tool.name !== SHOW_WIDGET_TOOL || tool.status !== "done") return null;
+  const args = tool.args as { title?: unknown; html?: unknown } | null | undefined;
+  if (typeof args?.html !== "string" || !args.html.trim()) return null;
+  return { id: tool.id, title: typeof args.title === "string" ? args.title : "", html: args.html };
+}
+
 export function turnWidgets(timeline: AgentTimelineItem[] | undefined): AgentWidget[] {
   const widgets: AgentWidget[] = [];
   for (const item of timeline ?? []) {
-    if (item.type !== "tool" || item.tool.name !== SHOW_WIDGET_TOOL || item.tool.status !== "done") continue;
-    const args = item.tool.args as { title?: unknown; html?: unknown } | null | undefined;
-    if (typeof args?.html !== "string" || !args.html.trim()) continue;
-    widgets.push({ id: item.tool.id, title: typeof args.title === "string" ? args.title : "", html: args.html });
+    if (item.type !== "tool") continue;
+    const widget = widgetOfTool(item.tool);
+    if (widget) widgets.push(widget);
   }
   return widgets;
 }

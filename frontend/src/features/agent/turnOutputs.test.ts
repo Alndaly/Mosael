@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AgentTimelineItem, ToolCall } from "@/features/agent/ToolCalls";
-import { producedByTool, receivedAssetIdsByMessage, turnOutputAssetIds, turnWidgets } from "@/features/agent/turnOutputs";
+import { producedByTool, receivedAssetIdsByMessage, turnWidgets } from "@/features/agent/turnOutputs";
 
 function tool(name: string, result: unknown, extra: Partial<ToolCall> = {}): { type: "tool"; tool: ToolCall } {
   return { type: "tool", tool: { id: `${name}-${Math.random()}`, name, status: "done", result, ...extra } };
@@ -47,15 +47,6 @@ describe("这一轮做出来的素材", () => {
     expect(producedByTool(tool("get_job", text).tool)).toEqual(["t"]);
   });
 
-  it("一轮里按出现先后去重,回执带来的接在后面;子智能体的步骤不算", () => {
-    const timeline: AgentTimelineItem[] = [
-      tool("get_job", { status: "succeeded", result: { asset_ids: ["a", "b"] } }),
-      { type: "subtool", parent_id: "p", tool: { id: "s", name: "get_job", status: "done", result: { status: "succeeded", result: { asset_id: "sub" } } } },
-      tool("get_job", { status: "succeeded", result: { asset_ids: ["b"] } }),
-      tool("get_job", { status: "succeeded", result: { asset_id: "c" } }, { status: "error" }),
-    ];
-    expect(turnOutputAssetIds(timeline, ["b", "r"])).toEqual(["a", "b", "r"]);
-  });
 });
 
 describe("回执带来的素材归给接着的那一条回答", () => {

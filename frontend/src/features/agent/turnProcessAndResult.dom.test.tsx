@@ -121,6 +121,26 @@ describe("一轮回答", () => {
     expect(processRow()?.querySelector("[data-pending-card]")).not.toBeNull();
   });
 
+  it("做出来的图是答案文档的一部分:跑着就在,位置在产出它的步骤之后(时间线顺序)", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const tree = (running: boolean) => (
+      <QueryClientProvider client={client}>
+        <AgentTurnContent timeline={work} running={running} />
+      </QueryClientProvider>
+    );
+    const view = render(tree(true));
+    // 跑着:工具一交图,文档流里立刻有它 —— 图在产出它的步骤之后、总结正文之前。
+    const result = document.querySelector("[data-turn-result]");
+    await waitFor(() => expect(result?.querySelectorAll("img")).toHaveLength(2));
+    const children = [...(result?.children ?? [])];
+    const imgIndex = children.findIndex((child) => child.querySelector("img"));
+    const textIndex = children.findIndex((child) => child.textContent === "图片已生成");
+    expect(imgIndex, "图在正文前面(时间线:先产出、后总结)").toBeGreaterThanOrEqual(0);
+    expect(imgIndex).toBeLessThan(textIndex);
+    view.rerender(tree(false));
+    await waitFor(() => expect(document.querySelector("[data-turn-result]")?.querySelectorAll("img")).toHaveLength(2));
+  });
+
   it("过程只有一段思考:不套摘要,思考块自己收起", () => {
     renderTurn({ timeline: [{ type: "thinking", text: "想", done: true }, { type: "text", text: "好的" }] });
     expect(screen.queryByRole("button", { name: /agentProcess/ })).toBeNull();

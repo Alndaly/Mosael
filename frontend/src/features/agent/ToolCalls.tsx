@@ -26,8 +26,8 @@ import { collectCitations } from "@/features/agent/citations";
 import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { DecisionsContext, useToolCallConfirmation } from "@/features/agent/decisionsContext";
-import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
-import { turnOutputAssetIds, turnWidgets } from "@/features/agent/turnOutputs";
+import { InlineProducedMedia, MediaPreviewGrid } from "@/features/agent/MediaPreview";
+import { producedByTool, widgetOfTool, type AgentWidget } from "@/features/agent/turnOutputs";
 import { AgentWidgetFrame } from "@/features/agent/AgentWidgetFrame";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 
@@ -566,6 +566,44 @@ export function splitTurn(blocks: TurnBlock[]): { process: TurnBlock[]; result: 
   return { process: blocks.slice(0, cut), result: blocks.slice(cut) };
 }
 
+export type ResultDocItem =
+  | { kind: "text"; text: string }
+  | { kind: "assets"; ids: string[] }
+  | { kind: "widget"; widget: AgentWidget };
+
+/**
+ * **答案文档**:正文块和「做出来的素材」按时间线顺序交织 —— 结果本身就是回答 markdown 的一部分,
+ * 在产出它的那一步该在的位置(维护者定),而不是正文下面另起一块「结果区」。
+ *
+ * 截图那一轮就是 [工具 → 图] 然后 [总结]:图在总结**上面**,「上面这张」指得上。跑着的时候照常在
+ * 流:工具一交图,文档流里立刻多一张 —— 用户看着答案成形。`show_widget` 的小界面(内嵌 HTML)
+ * 同一条规则:织在它那次调用该在的位置,不钉在消息末尾(维护者截图:正文说「地图可以拖动」,
+ * 地图却在整条消息最后垫底)。回执带来的(`receivedAssetIds`)是**前一轮**的产出,接在文档末尾。
+ * 同一素材只摆一遍(工具结果里提过、回执又送到,是同一张)。
+ */
+export function resultDocument(blocks: TurnBlock[], receivedAssetIds: readonly string[] = []): ResultDocItem[] {
+  const { result } = splitTurn(blocks);
+  const doc: ResultDocItem[] = [];
+  const seen = new Set<string>();
+  const push = (ids: string[]) => {
+    const fresh = ids.filter((id) => id.trim() && !seen.has(id));
+    for (const id of fresh) seen.add(id);
+    if (fresh.length > 0) doc.push({ kind: "assets", ids: fresh });
+  };
+  for (const block of blocks) {
+    if (block.type === "text" && result.includes(block)) doc.push({ kind: "text", text: block.text });
+    else if (block.type === "tools") {
+      for (const tool of block.tools) {
+        push(producedByTool(tool));
+        const widget = widgetOfTool(tool);
+        if (widget) doc.push({ kind: "widget", widget });
+      }
+    }
+  }
+  push([...receivedAssetIds]);
+  return doc;
+}
+
 /** 过程有几步:每次工具调用、每段思考、每条被接住的回执各算一步。中途的旁白不算 —— 它不是一步动作。 */
 function processSteps(process: TurnBlock[]): number {
   return process.reduce(
@@ -691,8 +729,10 @@ const NO_RECEIPTS: readonly FoldedReceipt[] = [];
  * - 三种时候**不收**:跑失败了(要看得见断在哪一步)、没有结果(这一轮就停在过程里,收起来什么都不剩)、
  *   有确认卡在等人拍板(卡就挂在发起它的那一行下面,见 ToolCallCard;PendingDecisions 也按「那一行看得见」
  *   决定要不要在对话末尾再摆一张)。
- * - **结果**是末尾那段正文,加上这一轮做出来的素材(turnOutputs:任务产物、派生素材、回执带来的)和智能体给的
- *   小界面(`show_widget`,关在沙箱 iframe 里,见 agentWidget.ts)。
+ * - **结果是一份文档**:末尾的正文和这一轮做出来的素材按时间线顺序交织(resultDocument)—— 图就在
+ *   产出它的那一步该在的位置,是回答 markdown 流的一部分,不是末尾另起一块「结果区」。回执带来的素材
+ *   (前一轮的产出)接在文档末尾。智能体给的小界面(`show_widget`,沙箱 iframe,见 agentWidget.ts)也织在
+ *   它那次调用该在的位置 —— 它一样是结果,不殿后。
  *
  * 过程只有一段思考时不套摘要:「已处理 · 1 步」包着「已思考」是同一件事说两遍,思考块自己会收起。
  */
@@ -719,22 +759,21 @@ export function AgentTurnContent({
 }) {
   const t = useI18n();
   const citations = React.useMemo(() => collectCitations(timeline), [timeline]);
-  const { process, result } = React.useMemo(
+  const ordered = React.useMemo(
     () =>
-      splitTurn(
-        foldedReceipts.length > 0
-          ? [{ type: "receipts" as const, receipts: foldedReceipts }, ...turnBlocks(timeline)]
-          : turnBlocks(timeline),
-      ),
+      foldedReceipts.length > 0
+        ? [{ type: "receipts" as const, receipts: foldedReceipts } as TurnBlock, ...turnBlocks(timeline)]
+        : turnBlocks(timeline),
     [timeline, foldedReceipts],
   );
-  const outputs = React.useMemo(() => turnOutputAssetIds(timeline, receivedAssetIds), [timeline, receivedAssetIds]);
-  const widgets = React.useMemo(() => turnWidgets(timeline), [timeline]);
+  const { process } = React.useMemo(() => splitTurn(ordered), [ordered]);
+  /** 答案文档:正文和「做出来的素材」按时间线顺序交织 —— 结果在产出它的位置,不在末尾另起一块(见 resultDocument)。 */
+  const doc = React.useMemo(() => resultDocument(ordered, receivedAssetIds), [ordered, receivedAssetIds]);
   const decisions = React.useContext(DecisionsContext);
   const awaitingDecision = process.some(
     (block) => block.type === "tools" && block.tools.some((tool) => decisions?.byToolCall.get(tool.id)?.status === "pending"),
   );
-  const hasResult = result.length > 0 || outputs.length > 0 || widgets.length > 0;
+  const hasResult = doc.length > 0;
   const settled = !running && !failed && hasResult;
   //: 用户亲手开合过就听他的(null = 没碰过,跟着状态走)。不用 effect 去"在跑完那一刻收起":
   //: 跟着状态算出来的开合,跑完自然就是收着的,而他点过的那一下也不会被下一次渲染抹掉。
@@ -784,13 +823,15 @@ export function AgentTurnContent({
       ))}
       {hasResult && (
         <div className={AGENT_TURN_BLOCKS_CLASS} data-turn-result="">
-          {result.map((block, index) => (
-            <TurnBlockView key={`result-${index}`} block={block} index={index} />
-          ))}
-          {outputs.length > 0 && <MediaPreviewGrid assetIds={outputs} reveal className="py-1" />}
-          {widgets.map((widget) => (
-            <AgentWidgetFrame key={widget.id} widget={widget} />
-          ))}
+          {doc.map((item, index) =>
+            item.kind === "text" ? (
+              <TurnBlockView key={`result-${index}`} block={{ type: "text", text: item.text }} index={index} />
+            ) : item.kind === "widget" ? (
+              <AgentWidgetFrame key={`result-${index}`} widget={item.widget} />
+            ) : (
+              <InlineProducedMedia key={`result-${index}`} assetIds={item.ids} />
+            ),
+          )}
         </div>
       )}
     </div></CitationContext.Provider>
