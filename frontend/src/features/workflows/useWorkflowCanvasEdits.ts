@@ -229,76 +229,13 @@ export function useWorkflowCanvasEdits({
     return listenKeys(window, onKey);
   }, [copySelection, cutSelection, pasteClipboard, selectedFlowIds, handleCollapse]);
 
-  //: 拖拽期间**不把位置写回 graph**:position 每帧连发,而 graph 一动,挂在它上面的
-  //: 就绪分析、引用提示线、道次高低排序整条派生链每帧重算 —— 拖起来掉帧、看着晕(维护者
-  //: 实测)。拖动只需要 React Flow 那份 nodes 状态(视觉);graph 里的位置等 dragStop
-  //: 一次性落(撤销塌成一条、保存照旧等 dragging 松手,两条都不断)。
-  const draggingRef = React.useRef(false);
-  const pendingDragPositionsRef = React.useRef(new Map<string, { x: number; y: number }>());
-
-  const handleNodeDragStart = React.useCallback(() => {
-    draggingRef.current = true;
-    pendingDragPositionsRef.current.clear();
-  }, []);
-
-  const handleNodeDragStop = React.useCallback(() => {
-    draggingRef.current = false;
-    const pending = pendingDragPositionsRef.current;
-    pendingDragPositionsRef.current = new Map();
-    if (pending.size === 0) return;
-    setDirty(true);
-    setGraph((current) => {
-      let next = current;
-      const nodePositions = new Map<string, { x: number; y: number }>();
-      const markerPositions = new Map<string, { x: number; y: number }>();
-      for (const [id, position] of pending) {
-        if (id.startsWith(MARKER_PREFIX)) markerPositions.set(id.slice(MARKER_PREFIX.length), position);
-        else nodePositions.set(id, position);
-      }
-      if (nodePositions.size > 0) {
-        next = {
-          ...next,
-          nodes: next.nodes.map((node) => {
-            const position = nodePositions.get(node.id);
-            return position ? { ...node, position } : node;
-          }),
-        };
-      }
-      if (markerPositions.size > 0) {
-        next = {
-          ...next,
-          markers: (next.markers ?? []).map((marker) => {
-            const position = markerPositions.get(marker.id);
-            // 和逐帧那条路同一个取整:标记落库的是整数坐标。
-            return position ? { ...marker, x: Math.round(position.x), y: Math.round(position.y) } : marker;
-          }),
-        };
-      }
-      return next;
-    }, { coalesce: "drag" });
-  }, [setGraph, setDirty]);
-
   const onNodesChange = React.useCallback(
     (changes: NodeChange[]) => {
       setNodes((current) => applyNodeChanges(changes, current));
-      // 拖拽中的 position 只进缓冲(上面那条注释说了为什么);键盘方向键的挪动没有
-      // dragStart/dragStop,走即时同步 —— 由 draggingRef 区分这两路。
-      if (draggingRef.current) {
-        let onlyPositions = true;
-        for (const change of changes) {
-          if (change.type === "position" && change.position && "id" in change) {
-            pendingDragPositionsRef.current.set(change.id, change.position);
-          } else {
-            onlyPositions = false;
-          }
-        }
-        // 整批都是拖出来的 position:全部进缓冲,graph 这一帧不碰(连 setGraph 调用都省掉)。
-        if (onlyPositions) return;
-      }
       // 拖拽会连发几十次 position;声明 coalesce,让这一串在历史里塌成一条(存的是拖之前的
       // 图)。删除是离散操作,不合并 —— 连删两个节点该能分别撤销。
-      const dragging = draggingRef.current || changes.some((change) => change.type === "position");
-      // 位置/删除同步回 graph(拖拽中的 position 已在上面进缓冲,这里只处理其余改动)
+      const dragging = changes.some((change) => change.type === "position");
+      // 位置/删除同步回 graph
       setGraph((current) => {
         let next = current;
         for (const change of changes) {
@@ -307,7 +244,6 @@ export function useWorkflowCanvasEdits({
           if ("id" in change && change.id.startsWith(MARKER_PREFIX)) {
             const markerId = change.id.slice(MARKER_PREFIX.length);
             if (change.type === "position" && change.position) {
-              if (draggingRef.current) continue; // 同节点位置:dragStop 一次性落
               next = {
                 ...next,
                 markers: (next.markers ?? []).map((marker) =>
@@ -322,7 +258,6 @@ export function useWorkflowCanvasEdits({
             continue;
           }
           if (change.type === "position" && change.position) {
-            if (draggingRef.current) continue; // 拖拽中的位置在 dragStop 一次性落(见上面那条注释)
             next = {
               ...next,
               nodes: next.nodes.map((node) =>
@@ -523,8 +458,6 @@ export function useWorkflowCanvasEdits({
     dropUpload,
     pendingDropAt,
     canvasDrop,
-    handleNodeDragStart,
-    handleNodeDragStop,
   };
 }
 
