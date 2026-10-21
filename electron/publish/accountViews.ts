@@ -1,4 +1,5 @@
-import { app, screen, session, WebContentsView, type BaseWindow } from "electron";
+import { app, screen, session, WebContentsView, type BaseWindow, type Session } from "electron";
+import { plog } from "./log";
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type PageSummary, type ViewState } from "./types";
@@ -104,6 +105,29 @@ const MAX_PANELS = 4;
 const IDLE_SWEEP_MS = 5_000;
 /** 用户拖动/缩放后的面板几何存这儿,重启后接着用。 */
 const LAYOUT_FILE = "panel-layout.json";
+
+/**
+ * **登录排障探针**:把凭证域上的请求结果落进 publisher.log(X 登录页报「An unexpected
+ * error occurred」而同一代理下 Chrome 正常 —— 病因只可能在应用这一侧的客户端,先把真实
+ * 请求的状态码/失败码取到手再定修法;此前两轮凭推理改客户端都是猜)。
+ *
+ * 只记非 2xx 与接口调用:登录页一屏几十个静态资源 200,全记会把日志淹掉。
+ * 按会话挂一次 —— 一个分区的 webRequest 是「后挂覆盖先挂」。
+ */
+const netProbeWatched = new WeakSet<Session>();
+const NET_PROBE_FILTER = { urls: ["*://*.x.com/*", "*://*.twitter.com/*", "*://accounts.google.com/*"] };
+const watchLoginNetwork = (sess: Session): void => {
+  if (netProbeWatched.has(sess)) return;
+  netProbeWatched.add(sess);
+  sess.webRequest.onCompleted(NET_PROBE_FILTER, (details) => {
+    const api = details.url.includes("/1.1/") || details.url.includes("/i/api/");
+    if (details.statusCode < 400 && !api) return;
+    plog("[net]", details.method, details.statusCode, details.url);
+  });
+  sess.webRequest.onErrorOccurred(NET_PROBE_FILTER, (details) => {
+    plog("[net-err]", details.method, details.error, details.url);
+  });
+};
 
 /**
  * 抹掉「不是任何一种真实浏览器」的身份 token,剩下的就是一枚干净的 Chrome UA。
@@ -1032,7 +1056,11 @@ export class AccountViewManager {
     });
     const isCurrent = () => this.views.get(accountId) === view;
     // 授权页、新开的页面同样会读 UA 做风控:一律抹掉 Electron 字样(收进来的页面还没开始加载,来得及)。
-    view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
+    const ua = platformUserAgent(view.webContents.getUserAgent());
+    view.webContents.setUserAgent(ua);
+    //: 登录排障:站点实际看到的 UA 落一行,重启/改动是否生效一眼可查。
+    plog("[net] ua", ua);
+    watchLoginNetwork(view.webContents.session);
     // 新页面默认静音:它此刻不在前台。show() / switchPage 会按 syncAudio 的唯一判据放开。
     view.webContents.setAudioMuted(true);
     // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
