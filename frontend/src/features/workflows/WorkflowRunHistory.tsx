@@ -202,12 +202,15 @@ export function WorkflowRunHistory({
   // 而运行时恰恰要同时看见画布和这里。
   return (
     <aside
+      // 高度**由父级那一格决定**,不由内容决定:停靠时 `h-full` 吃满右栏,悬浮时窗口自己有高度。
+      // 少了这一步,内容一多就把面板本身撑高 —— 里面那些 `overflow-y-auto` 会全部失效
+      // (维护者:「一旦出现一个内容比较多的确认卡 就会撑开到超出整个模块的高度」)。
       className={cn(
-        "flex flex-col",
+        "flex h-full min-h-0 flex-col overflow-hidden",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
-          : "relative min-h-0 min-w-0",
+          : "relative min-w-0",
       )}
       style={floatStyle}
       {...focusProps}

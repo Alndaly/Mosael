@@ -72,7 +72,9 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
   const deciding = decide.isPending ? decide.variables : null;
   const delivery = deliveryLine(row, t);
   return (
-    <div className="grid gap-1.5 rounded-md border border-border bg-background/40 p-2">
+    /* 外层(待批那一段)已经有一圈边和底色 —— 卡片自己再画一圈就成了双线(维护者:「看上去和外侧的 border 重叠在一块儿」)。
+       这里只留内边距和间距。 */
+    <div className="grid gap-1.5 p-1">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
       {/*: **正文有上限、自己滚。** 审批正文可能是整篇稿子(几千字),此前它原样铺开、
           把「同意 / 拒绝」推到可视区外面,而外面这一层不滚 —— 维护者撞到的就是"卡太高,点不到按钮"。
