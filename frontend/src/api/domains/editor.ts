@@ -496,7 +496,12 @@ export async function translateTexts(
     const remaining = deadlineAt - Date.now();
     if (remaining <= 0) throw new TranslationDeadlineExceeded(deadlineMs);
     const batch = texts.slice(start, start + TRANSLATE_BATCH);
-    const budget = Math.min(options.batchTimeoutMs ?? TRANSLATE_BATCH_TIMEOUT_MS, remaining);
+    const batchBudget = options.batchTimeoutMs ?? TRANSLATE_BATCH_TIMEOUT_MS;
+    //: 正好是"剩下的总预算"压过批次上限时,这一批等不到就**就是总预算用完了** —— 别拿 `Date.now()` 去二次判:
+    //: 定时器可能在 39.9ms 就醒,那一刻 `Date.now() >= deadlineAt` 还差 1 毫秒,于是被误报成"批超时"
+    //: (CI 上随机出现的那条 `expected TranslationTimeout to be TranslationDeadlineExceeded` 就是这个)。
+    const clampedByDeadline = remaining <= batchBudget;
+    const budget = clampedByDeadline ? remaining : batchBudget;
     const gate = batchGate(budget, options.signal);
     let result: { translations: string[] };
     try {
@@ -511,7 +516,7 @@ export async function translateTexts(
       //: 先看是不是调用方喊停 —— 那一条要落到「已取消」,不是「失败」。
       if (options.signal?.aborted) throw new TranslationCancelled();
       if (gate.timedOut) {
-        if (Date.now() >= deadlineAt) throw new TranslationDeadlineExceeded(deadlineMs);
+        if (clampedByDeadline || Date.now() >= deadlineAt) throw new TranslationDeadlineExceeded(deadlineMs);
         throw new TranslationTimeout(budget);
       }
       throw error;
