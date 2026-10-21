@@ -15,6 +15,7 @@ from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 import contextlib
 import contextvars
 import json
+import logging
 from typing import Annotated, Any
 
 from mcp.types import ImageContent, TextContent
@@ -23,6 +24,8 @@ from pydantic import Field
 from mcp.server.mcpserver import MCPServer
 
 mcp = MCPServer("mosael")
+
+logger = logging.getLogger(__name__)
 
 
 def _workspaces() -> list[dict[str, Any]]:
@@ -312,17 +315,47 @@ def computer_screenshot(
     window="main" (the app window, default) or "publish" (the publisher window). It does NOT
     capture your desktop, other apps or the menu bar, needs no screen-recording permission, and
     never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large window; the
-    embedded page is browser_screenshot.
+    embedded page is browser_screenshot. The same PNG is also saved as an asset and returned as
+    asset_ids, so the user sees it in the conversation (images are for the model only).
     """
+    import base64
+
     from app.domain.agent.computer_use import screenshot
 
     shot = screenshot(window=window, scale=scale)
+    # 同一份 PNG 落一份进素材库、把 id 交回结果:对话界面(ToolCalls)早就会渲染 result.asset_ids,
+    # 生成图片、飞书图片都走这条通道 —— 「模型看得到」(images)和「用户看得到」(asset_ids)是两回事。
+    asset_id: str | None = None
+    try:
+        workspace_id = _default_workspace_id()
+    except (RuntimeError, ValueError):
+        workspace_id = ""  # 没有调用方上下文(直接函数调用/脚本):跳过入库,截图本身照常返回
+    if workspace_id:
+        try:
+            from app.core.db import SessionLocal
+            from app.domain.assets.importer import import_binary_asset
+
+            with SessionLocal() as db:
+                asset = import_binary_asset(
+                    db,
+                    workspace_id=workspace_id,
+                    project_id=None,
+                    data=base64.b64decode(shot["image"]),
+                    original=f"窗口截图-{shot['window']}.png",
+                    content_type="image/png",
+                    source="captured",
+                    name=f"窗口截图 · {shot['window']}",
+                )
+                asset_id = asset.id
+        except Exception:  # noqa: BLE001 —— 入库失败不该让截图本身失败:模型还有 images 能看
+            logger.warning("computer_screenshot asset import failed", exc_info=True)
     return _with_images(
         {
             "window": shot["window"],
             "width": shot["width"],
             "height": shot["height"],
             "scale": shot["scale"],
+            **({"asset_ids": [asset_id]} if asset_id else {}),
             "images": [{"view": "computer", "mime_type": "image/png", "data": shot["image"]}],
         }
     )
