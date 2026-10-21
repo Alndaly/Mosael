@@ -1134,7 +1134,10 @@ export class AccountViewManager {
     if (identity) {
       try {
         if (!view.webContents.debugger.isAttached()) view.webContents.debugger.attach("1.3");
-        void view.webContents.debugger.sendCommand("Emulation.setUserAgentOverride", identity).catch(() => undefined);
+        void view.webContents.debugger
+          .sendCommand("Emulation.setUserAgentOverride", identity)
+          .then(() => plog("[cdp] user agent override applied"))
+          .catch((error: unknown) => plog("[cdp] user agent override FAILED", error instanceof Error ? error.message : String(error)));
       } catch {
         // 附加失败(被占用 / 已销毁):放过,页面照样能开。
       }
@@ -1152,6 +1155,32 @@ export class AccountViewManager {
     view.webContents.setWindowOpenHandler((details) => this.openWindow(accountId, view, details));
     // 下载不弹系统保存框:分区会话上接管(同一个会话只接一次,会话里的每一页都走它)。
     this.downloads.watch(view.webContents.session);
+    //: 登录排障第二层:页面加载后**实测**浏览器身份(client hints 是否真的改掉了)+ WebGL/时区,
+    //: 以及页面控制台的报错 —— 「An unexpected error occurred」是页面自己渲染的,错误源头在 JS 里。
+    view.webContents.on("did-finish-load", () => {
+      const url = view.webContents.getURL();
+      if (!/x\.com|twitter\.com/i.test(url)) return;
+      void view.webContents
+        .executeJavaScript(
+          `JSON.stringify({
+            ua: navigator.userAgent,
+            brands: navigator.userAgentData ? navigator.userAgentData.brands : null,
+            platform: navigator.userAgentData ? navigator.userAgentData.platform : null,
+            webgl: (() => { try { return !!document.createElement("canvas").getContext("webgl"); } catch { return "throw"; } })(),
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            lang: navigator.language,
+            cookies: navigator.cookieEnabled,
+          })`,
+        )
+        .then((facts: unknown) => plog("[page]", String(facts).slice(0, 600)))
+        .catch(() => undefined);
+    });
+    view.webContents.on("console-message", (details: { level?: string; message?: string; sourceId?: string }) => {
+      if (!/x\.com|twitter\.com/i.test(view.webContents.getURL())) return;
+      if (details.level !== "error" && details.level !== "warning") return;
+      plog("[console]", details.level, (details.message ?? "").slice(0, 300), details.sourceId ?? "");
+    });
+
     // 页面在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 —— 否则当前页指着
     // 一具尸体,顶部工具条收不回去,复用它的每一处都在 undefined 上取属性。
     const contentsId = view.webContents.id;
