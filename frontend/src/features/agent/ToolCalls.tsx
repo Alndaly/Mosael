@@ -666,28 +666,32 @@ function ReceiptStep({ receipt }: { receipt: FoldedReceipt }) {
       <Button
         variant="ghost"
         size="xs"
-        className="w-full min-w-0 justify-start gap-1.5 font-normal"
+        // 显式三栏:左(图标 + 后台任务 · 种类)/ 中(主题,占满剩余、自然左对齐截断)/ 右(状态)。
+        // 此前是 flex 排,主题靠 flex-1 挤在中间,和左边的「·」脱节、视觉上悬空(维护者截图)。
+        className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 font-normal"
         loading={openTask.isPending}
         disabled={!jobId}
         onClick={() => jobId && openTask.mutate()}
         data-receipt-step={jobId}
       >
         <JobKindIcon meta={kind} size={12} />
-        <span className="flex-none">{t("chatJobsTitle")}</span>
-        {kind.label ? (
-          <>
-            <span className="flex-none text-muted-foreground" aria-hidden>·</span>
-            <span className="flex-none">{kind.label}</span>
-          </>
-        ) : null}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="flex-none">{t("chatJobsTitle")}</span>
+          {kind.label ? (
+            <>
+              <span className="flex-none text-muted-foreground" aria-hidden>·</span>
+              <span className="flex-none">{kind.label}</span>
+            </>
+          ) : null}
+        </span>
+        {/* 主题没有时占位,三栏的列位才不塌;不挂悬空的「·」分隔。 */}
         {subject ? (
-          <>
-            <span className="flex-none text-muted-foreground" aria-hidden>·</span>
-            <Truncate className="flex-1 text-muted-foreground">{subject}</Truncate>
-          </>
-        ) : null}
+          <Truncate className="text-muted-foreground">{subject}</Truncate>
+        ) : (
+          <span aria-hidden />
+        )}
         {status ? (
-          <span className="flex-none pl-1.5 text-ui-xs text-muted-foreground">{runStatusText(t, status)}</span>
+          <span className="text-ui-xs text-muted-foreground">{runStatusText(t, status)}</span>
         ) : null}
       </Button>
       <JobDetailDialog job={detailJob} onClose={() => setDetailJob(null)} />
