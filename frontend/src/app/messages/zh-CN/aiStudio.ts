@@ -45,6 +45,9 @@ export const aiStudio = {
   createGoToOrigin: "回到那里",
   createGoToOriginHint: "去这条会话开出来的那一处",
   createShowEarlier: "显示更早的",
+  //: 会话记着的连接不在了、但同一份模型还在清单里(插件实例重建/重连之后常见):接回去,并说一句 ——
+  //: 不然用户会以为"我的工作流被换成了别的"。
+  connectionRemapped: "这条会话原来用的连接已经换了,已按同一份模型重新对上。",
   createFamilyLocked: "这条是{kind}会话,只列这一族的模型;换别的种类请点左上角「+」新开一条。",
   createEngineNotReady: "这个引擎现在用不了,先到设置里配好",
   createCloneNotInstalled: "本机克隆还没装好",

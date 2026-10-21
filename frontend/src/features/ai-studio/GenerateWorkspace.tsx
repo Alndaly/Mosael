@@ -1674,6 +1674,12 @@ export function GenerateWorkspace({
                                       onPickAnother={pickAnotherModel} className="mt-1.5" />
                 )}
                 {/* 会话锁族:有记录的会话下拉只列同一族,说一句为什么、想换怎么办 */}
+                {/* 会话记着的连接不在了、按同一份模型接回来了:说一句,别让人以为模型被悄悄换掉 */}
+                {!pickedOption && sessionChoice.remapped && (
+                  <span className="mt-1 block text-ui-2xs leading-[1.45] text-muted-foreground" data-connection-remapped="">
+                    {t("connectionRemapped")}
+                  </span>
+                )}
                 {familyLocked && activeSession?.kind && (
                   <span className="mt-1 block text-ui-2xs leading-[1.45] text-muted-foreground" data-family-locked="">
                     {t("createFamilyLocked").replace("{kind}", capabilityLabel(activeSession.kind))}

@@ -73,14 +73,57 @@ describe("生成模型选择器的默认", () => {
 
     expect(pickGenerationOption([first])).toBeNull();
     expect(pickGenerationOption([first, chosen])).toBe(chosen);
-    expect(chooseGenerationOption([first, chosen], saved("aaa"))).toEqual({ option: first, missing: null });
-    expect(chooseGenerationOption([first, chosen], null)).toEqual({ option: chosen, missing: null });
+    expect(chooseGenerationOption([first, chosen], saved("aaa"))).toEqual({ option: first, missing: null, remapped: false });
+    expect(chooseGenerationOption([first, chosen], null)).toEqual({ option: chosen, missing: null, remapped: false });
     // 记着的已经不在清单里:是它不在了,不是默认 —— 默认那个是按次付费的别家模型也说不定
-    expect(chooseGenerationOption([first, chosen], saved("gone"))).toEqual({ option: null, missing: saved("gone") });
+    expect(chooseGenerationOption([first, chosen], saved("gone"))).toEqual({ option: null, missing: saved("gone"), remapped: false });
     // 清单还没到:不说「不在了」
-    expect(chooseGenerationOption([], saved("gone"), { loaded: false })).toEqual({ option: null, missing: null });
+    expect(chooseGenerationOption([], saved("gone"), { loaded: false })).toEqual({ option: null, missing: null, remapped: false });
     // 只认这种生成的默认
     expect(pickGenerationOption([first, video], { kind: "image" })).toBeNull();
     expect(pickGenerationOption([first, video], { kind: "video" })).toBe(video);
+  });
+});
+
+describe("连接重建之后,同一份模型自动接回去", () => {
+  const option = (profile: string, model: string) => ({
+    value: `${profile}:${model}`,
+    model,
+    provider_profile_id: profile,
+    kind: "image",
+    is_default: false,
+  } as never);
+  const saved = (profile: string, model: string) => ({ provider_profile_id: profile, model, kind: "image" });
+
+  it("连接 id 变了、同一份模型只剩一个:接回去,并标记 remapped", () => {
+    //: 维护者遇到的样子:插件实例重建后 provider_profile_id 换了 -> 原来那条永远对不上 ->
+    //: 模型说"用不了"、"在工作台里打开"那颗按钮也一起没了。
+    const chosen = chooseGenerationOption([option("new", "zimage.json")], saved("old", "zimage.json"));
+    expect(chosen.option?.provider_profile_id).toBe("new");
+    expect(chosen.missing).toBeNull();
+    expect(chosen.remapped).toBe(true);
+  });
+
+  it("同一份模型有好几条:不猜,照实说那条不在了", () => {
+    //: 分不清就让人自己选 —— 猜错等于把用户的工作流换成别人的。
+    const chosen = chooseGenerationOption(
+      [option("a", "zimage.json"), option("b", "zimage.json")],
+      saved("old", "zimage.json"),
+    );
+    expect(chosen.option).toBeNull();
+    expect(chosen.missing).toEqual(saved("old", "zimage.json"));
+    expect(chosen.remapped).toBe(false);
+  });
+
+  it("模型名字也不在:不接", () => {
+    const chosen = chooseGenerationOption([option("new", "other.json")], saved("old", "zimage.json"));
+    expect(chosen.option).toBeNull();
+    expect(chosen.missing).toEqual(saved("old", "zimage.json"));
+  });
+
+  it("原连接还在:就是它,不算重接", () => {
+    const chosen = chooseGenerationOption([option("old", "zimage.json")], saved("old", "zimage.json"));
+    expect(chosen.option?.provider_profile_id).toBe("old");
+    expect(chosen.remapped).toBe(false);
   });
 });

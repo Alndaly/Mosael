@@ -45,6 +45,7 @@ export const aiStudio = {
   createGoToOrigin: "Go there",
   createGoToOriginHint: "Open the place this session came from",
   createShowEarlier: "Show earlier",
+  connectionRemapped: "This session's original connection is gone; it is matched again by the same model.",
   createFamilyLocked: "This is a {kind} session, so only models of that family are listed. To switch, start a new session with + at the top left.",
   createEngineNotReady: "This engine can’t be used yet — set it up in Settings first",
   createCloneNotInstalled: "Local cloning isn’t installed yet",

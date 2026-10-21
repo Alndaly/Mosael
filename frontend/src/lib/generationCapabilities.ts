@@ -62,12 +62,19 @@ export function chooseGenerationOption<T extends GenerationOption>(
   options: readonly T[],
   saved: SavedGenerationModel | null,
   { kind, loaded = true }: { kind?: string; loaded?: boolean } = {},
-): { option: T | null; missing: SavedGenerationModel | null } {
-  if (!saved) return { option: pickGenerationOption(options, { kind }), missing: null };
+): { option: T | null; missing: SavedGenerationModel | null; remapped: boolean } {
+  if (!saved) return { option: pickGenerationOption(options, { kind }), missing: null, remapped: false };
   const kept = options.find((option) => option.provider_profile_id === saved.provider_profile_id && option.model === saved.model
                                         && (!saved.kind || option.kind === saved.kind));
-  if (kept) return { option: kept, missing: null };
-  return { option: null, missing: loaded ? saved : null };
+  if (kept) return { option: kept, missing: null, remapped: false };
+  //: **连接换了,工作流还在。** 插件实例被删掉重建、ComfyUI 重连之后,连接是一条新行(新 id),
+  //: 旧会话记着的那个 id 就永远对不上了 —— 表现成"重新打开会话,模型说用不了、工作台那颗按钮也不见了"
+  //: (维护者:「有些时候在工作台内打开这个 button 不会显示」)。这里按**同一份模型**把它接回去:
+  //: 只有唯一一条同名模型时才接 —— 有几条同样的就说明真分不清,宁可让它显示 missing 让人自己选。
+  //: 接上时 `remapped` 为真,界面据此说一句"连接换了,已按同一份重新对上",而不是静默换掉。
+  const candidates = options.filter((option) => option.model === saved.model && (!saved.kind || option.kind === saved.kind));
+  if (candidates.length === 1) return { option: candidates[0], missing: null, remapped: true };
+  return { option: null, missing: loaded ? saved : null, remapped: false };
 }
 
 export function capabilityList(model: GenerationOption | null, key: string, fallback: string[]): string[] {
