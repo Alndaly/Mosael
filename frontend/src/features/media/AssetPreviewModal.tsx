@@ -161,15 +161,6 @@ export function AssetPreviewModal({
             <Badge variant="secondary">{kindLabel}</Badge>
             <Badge variant="outline">{t(assetOriginKey(shown))}</Badge>
             {showsContainsAi(shown) && <Badge variant="outline">{t("mediaSourceContainsAi")}</Badge>}
-            <DetailActions
-              actions={headerActions}
-              label={t("studioActions")}
-              pinned={
-                shown.kind === "video"
-                  ? <ScrubActionButton asset={shown} run={scrub} open={scrubOpen} onOpenChange={setScrubOpen} />
-                  : null
-              }
-            />
           </div>
         </header>
         <div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(200px,1fr)_minmax(0,180px)] md:grid-cols-[minmax(0,1fr)_300px] md:grid-rows-[minmax(0,1fr)]">
@@ -284,6 +275,19 @@ export function AssetPreviewModal({
             )}
             {/* 清除元数据(ADR 0062)跑完之后的那几样出口:打开新素材 / 看对账 / 十道门 / 清掉了什么。 */}
             <ScrubMetadataPanel asset={shown} run={scrub} onOpenAsset={openSource} />
+            {/* 「把它交出去」的那几个动作(保存/改名/打标签/⋯)住在信息面板底部 —— 维护者定:
+                不放头部那一排(右侧要悬空避开关闭钮,看着奇怪)。 */}
+            <div className="mt-auto border-t border-divider pt-4">
+              <DetailActions
+                actions={headerActions}
+                label={t("studioActions")}
+                pinned={
+                  shown.kind === "video"
+                    ? <ScrubActionButton asset={shown} run={scrub} open={scrubOpen} onOpenChange={setScrubOpen} />
+                    : null
+                }
+              />
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -292,7 +296,7 @@ export function AssetPreviewModal({
 }
 
 /**
- * 头部那一排:前三个(下载、改名、打标签)摆成按钮,其余收进 ⋯ —— 和卡片的菜单同一组,不另起一套。
+ * 右侧信息面板底部那一排:前三个(下载、改名、打标签)摆成按钮,其余收进 ⋯ —— 和卡片的菜单同一组,不另起一套。
  *
  * `pinned` 是**详情自己带的那一颗**(视频的「清除元数据…」):它排在「保存到本地」前面 ——
  * 这份素材上"把它交出去"的两个动作挨着。**它也占那一排的三个位子之一**(见下面那两句注释):
