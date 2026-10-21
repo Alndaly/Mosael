@@ -52,6 +52,13 @@ CLOUD_COOKIE_SECURE=false CLOUD_PUBLIC_URL=http://localhost:3000 \
 `CLOUD_API_URL`(默认 `http://127.0.0.1:8901`)。本地后端要设 `MOSAEL_CLOUD_URL=
 http://127.0.0.1:8901/api/cloud/v1` 才能反代社区分享。
 
+**后缀 `/api/cloud/v1` 不能省。** 转发是按 `base + "/shares"` 这样拼的:少了后缀请求会打到站点根,
+云端回 404 —— 表现为「登录完立刻被踢回登录页」,很难看出来。配错时 `require_configured()` 会直接
+503 `cloud_misconfigured` 并说明要补什么。
+
+本地同时跑官网和桌面端时,Cloud 那边用 `CLOUD_ALLOWED_ORIGINS` 把两个 Origin 都列上
+(官网 `http://127.0.0.1:3000` / 桌面后端 `http://127.0.0.1:8901`),否则桌面端直连会被同源闸挡住。
+
 ### 生产
 
 Cloud 是一个独立进程:PostgreSQL(`CLOUD_DATABASE_URL=postgresql+psycopg://…`)、

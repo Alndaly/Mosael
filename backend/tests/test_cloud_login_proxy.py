@@ -24,7 +24,10 @@ from app.core.db import SessionLocal, engine
 from app.domain import cloud_binding
 from tests.util import fresh_client
 
-CLOUD_URL = "https://cloud.example"
+#: 必须带 `/api/cloud/v1` —— 转发是 `base + "/shares"` 拼的,少了后缀会打到站点根(见 require_configured)。
+CLOUD_URL = "https://cloud.example/api/cloud/v1"
+#: 同一台机器上的站点根 —— 云端看到的路径是去掉 `/api/cloud/v1` 之后的。
+CLOUD_ORIGIN = "https://cloud.example"
 COOKIE_NAME = "mosael_cloud_session"
 COOKIE_VALUE = "tok-7f4b29c1d8e35a6079bc"
 EMAIL = "alice@example.com"
@@ -74,7 +77,12 @@ class FakeCloud:
         self.responses.append(error)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
+        # 云端自己看到的路径是去掉 `/api/cloud/v1` 之后的 —— 那份前缀属于**部署地址**(见 require_configured),
+        # 不属于路由。记的时候剥掉,测试才能继续断言 `/shares` 这种"路由视角"的路径。
+        routed = str(request.url).replace(CLOUD_URL, CLOUD_ORIGIN)
+        self.requests.append(
+            httpx.Request(request.method, routed, headers=request.headers, content=request.content)
+        )
         if not self.responses:
             raise AssertionError(f"unexpected outbound request: {request.method} {request.url}")
         found = self.responses.pop(0)
@@ -255,7 +263,8 @@ def test_outbound_write_requests_pass_the_cloud_same_origin_gate(cloud: FakeClou
     outbound = cloud.requests[-1]
 
     assert outbound.method == "POST"
-    assert _cloud_accepts(outbound.headers, CLOUD_URL), dict(outbound.headers)
+    # 比的是**站点根**(Origin 没有路径),不是带 `/api/cloud/v1` 的部署地址。
+    assert _cloud_accepts(outbound.headers, CLOUD_ORIGIN), dict(outbound.headers)
     assert outbound.headers["sec-fetch-site"] != "cross-site"
 
 

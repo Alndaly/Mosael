@@ -139,6 +139,14 @@ def require_configured() -> None:
             "cloud_not_configured",
             "MosaelCloud is not configured for this deployment (MOSAEL_CLOUD_URL).",
         )
+    # 地址必须带上 `/api/cloud/v1`:转发时是 `base + "/shares"` 这样拼的,少了后缀请求会打到站点根,
+    # 云端回 404 —— 表现为"登录完就掉线",排查很久。宁可当场 503 说清楚。
+    if not settings.cloud_url.strip().rstrip("/").endswith("/api/cloud/v1"):
+        raise CloudBindingError(
+            503,
+            "cloud_misconfigured",
+            "MOSAEL_CLOUD_URL must include the /api/cloud/v1 suffix, e.g. https://mosael.com/api/cloud/v1.",
+        )
 
 
 def request_json(
