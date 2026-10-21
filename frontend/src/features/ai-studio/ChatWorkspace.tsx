@@ -218,9 +218,17 @@ export function ChatWorkspace({
     refetchOnWindowFocus: true,
   });
   useTranscriptFollowsSession(activeSession?.id ?? "", session.data);
+  //: 刚发出去的那一小窗:新建会话发送时,消息查询切到刚建出来的会话 id、数据还没回来 ——
+  //: 这一刻摆骨架会把整列画面顶成假气泡(用户实测:发送触发 Skeleton)。第一条消息一到就归位;
+  //: 发送失败也归位(错误由 toast 说,画面回到发送前的样子)。
+  const [justSent, setJustSent] = React.useState(false);
+  React.useEffect(() => {
+    if (justSent && messages.data) setJustSent(false);
+  }, [justSent, messages.data]);
+
   //: 会话清单还在路上,或者选中的这条会话的消息还在路上。两者都不算"这条会话是空的"。
   //: `enabled` 为假时 React Query 的 status 也是 pending,所以要先确认真的有一条会话在读。
-  const sessionLoading = current.resolving || (Boolean(activeSession) && messages.isPending);
+  const sessionLoading = !justSent && (current.resolving || (Boolean(activeSession) && messages.isPending));
   //: 免提模式念的就是最后一条**成功**的助手回复;失败的那条由 failure 单独念(它的 content
   //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
   
@@ -294,6 +302,8 @@ export function ChatWorkspace({
 
   // 发送时没有会话就先建一个(生成页同款「输入框直达」交互)。
   const sendMessage = useMutation({
+    onMutate: () => setJustSent(true),
+    onError: () => setJustSent(false),
     mutationFn: async ({ content, references, document }: { content: string; references: AgentReference[]; document: JSONContent }) => {
       const targetId = (await current.ensure()).id;
       //: 「/」点名的技能(ADR 0040 §4)跟着这条消息走,后端把全文挂到这一轮。
@@ -692,7 +702,7 @@ export function ChatWorkspace({
                   <ChatTranscriptSkeleton />
                 </>
               )}
-              {!sessionLoading && (messages.data ?? []).length === 0 && !running && (
+              {!justSent && !sessionLoading && (messages.data ?? []).length === 0 && !running && (
                 <div className="m-auto w-full max-w-[780px]">
                   <div className="mx-auto max-w-xl px-6 py-10">
                     <Sparkles className="mb-6 size-9 text-primary" strokeWidth={1.4} />
