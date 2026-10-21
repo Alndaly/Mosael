@@ -142,7 +142,14 @@ def approval_card(
                     "name": NOTE_FIELD,
                     "placeholder": {"tag": "plain_text", "content": "备注(可留空)"},
                 },
-                *[{**button, "action_type": "form_submit"} for button in buttons],
+                #: **form 里的按钮必须有 `name`**：飞书表单提交靠它区分"点了哪一个" ——
+                #: 缺了它整张卡仍然被拒(实测 `ErrCode: 200530`,
+                #: `name can not be empty string`,路径指向 form -> button)。
+                *[{
+                    **button,
+                    "action_type": "form_submit",
+                    "name": button["value"]["action"].rsplit(".", 1)[-1],
+                } for button in buttons],
             ],
         })
     else:

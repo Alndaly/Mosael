@@ -20,6 +20,10 @@ def test_有备注时按钮必须放在_form_里且是_form_submit():
     submits = [one for one in form["elements"] if one.get("action_type") == "form_submit"]
     assert len(submits) == 2, "form 里必须有两个 form_submit(同意 / 拒绝),否则整张卡被飞书拒收"
     assert {one["value"]["action"] for one in submits} == {cards.ACTION_RUN_APPROVE, cards.ACTION_RUN_REJECT}
+    #: **每个 form 按钮都要有 name** —— 缺了它整张卡仍被拒:
+    #: `ErrCode: 200530, ErrPath: ROOT -> elements -> [3](tag: form) -> elements -> [1](tag: button),`
+    #: `ErrMsg: name can not be empty string`
+    assert all(one.get("name") for one in submits), "form 里的按钮缺 name,飞书会拒收整张卡"
     #: 不能既放 form 里又放外面 —— 外面再摆一份会出现四颗按钮。
     assert not any(one.get("tag") == "action" for one in card["elements"])
 
