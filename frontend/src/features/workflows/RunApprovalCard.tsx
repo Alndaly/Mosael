@@ -75,10 +75,10 @@ export function RunApprovalCard({ row, workflowId }: { row: RunApproval; workflo
       )}
       {folded && (
         <Button
-          variant="link"
+          variant="inline"
           aria-expanded={openBody}
           aria-controls={bodyId}
-          className="h-auto self-start px-0 py-0 text-ui-xs underline"
+          className="self-start underline"
           onClick={() => setOpenBody((value) => !value)}
         >
           {openBody ? t("confirmCollapse") : t("confirmNoteExpand")}
