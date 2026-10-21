@@ -42,12 +42,12 @@ import { DecisionsContext, usePendingConfirmations, type Decisions } from "@/fea
 /** 三档动作。顺序固定:允许一次 → 本会话始终允许 → 拒绝,从最小授权到最大再到否。 */
 type Choice = "once" | "session" | "reject";
 
-//: 主按钮只有一个:「允许一次」是最小的授权。「拒绝」推到行尾,和两个「允许」分开 —— 扫一眼就知道
-//: 哪边是放行、哪边是否决;窄对话栏里换行时它也还是独自在右。
+//: 主按钮只有一个(实心「允许一次」);「拒绝」**跟在允许后面**、outline 档与实心主按钮区分
+//: (维护者拍板:否决键推到行尾离手太远;并排成组,靠实心/描边 + 悬停变红分清放行与否决)。
 const CHOICES = [
   { choice: "once", icon: Check, label: "confirmAllowOnce", variant: "default", className: undefined },
   { choice: "session", icon: CheckCheck, label: "confirmAllowSession", variant: "outline", className: undefined },
-  { choice: "reject", icon: X, label: "confirmReject", variant: "ghost", className: "ml-auto text-muted-foreground hover:text-destructive" },
+  { choice: "reject", icon: X, label: "confirmReject", variant: "outline", className: "text-muted-foreground hover:text-destructive" },
 ] as const satisfies readonly {
   choice: Choice;
   icon: typeof Check;
