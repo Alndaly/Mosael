@@ -1,19 +1,27 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
-  "v1.9.11": {
+  "v2.0.0": {
     zh: [
-      "**配音也有默认了。** 它一直缺这一项:转写、降噪、语音合成都有「默认用哪个」,只有配音没有,每个用到它的地方都得自己点名。现在补上 —— 默认不是单个下拉,是**一对**:选「哪一家」不够,还得知道「哪个音色」,所以默认行是引擎 + 音色两个下拉;选齐就存,和别处同一条规矩。",
-      "**能力提供方变得能扫了。** 一项能力一张卡片,标题行直接写「现在用谁」(「降噪 · 内置降噪」「配音 · 未指定」),不用往下找下拉;「用在哪」收成一行摘要、点开才展开;「去插件市场找」统一钉在右上;下拉里的「自动」项只在能选 ≥2 家时出现。",
-      "**没接 MosaelCloud 时不再给一颗点了才报错的按钮。** 首屏就知道这个部署接没接,没接时按钮置灰、说清要设 `MOSAEL_CLOUD_URL`,并且不再把 `cloud_not_configured` 这种机器词摆给用户看。",
-      "**几处「说了不算」和「指错地方」的修。** 节说明不再被 42rem 截住、右边空一大块;FFmpeg 被环境变量钉住时,框里的 placeholder 不再自相矛盾;「重新检测」挪进它检测的那一行;节名改成「本地语音合成引擎」,并且 12 处指向它的指路文案跟着改。",
-      "**官网:登录重新设计,注册完自动进社区。** 「登录」从一行纯文字变成安静的描边按钮、挪到「下载」左边;MosaelCloud 注册成功后不再停在成功卡片上,自动跳到社区。",
+      "**桌面端接上 MosaelCloud。** 设置里多一块「MosaelCloud 账号」,和本地账号**是两套身份、可以单独登录**:桌面端自己转发票据、云端密码不落本机、登录后的会话只存在这台机器上。接入点写在 `MOSAEL_CLOUD_URL`(要带 `/api/cloud/v1`),没接时那块说清要设什么,而不是给一颗点了才报错的按钮。",
+      "**官网多了一整个社区。** `/community` 是社区首页(插件 / 工作流 / 创意画板三段),三个市场页各自能搜、能筛、能排序;官方内容由官方账号发布(中英各一份),用户也能上传自己的 `.json`。分享详情页有**内容预览**:工作流和画布画成结构图,还能在**无限画布里浏览**(平移缩放、只读)。",
+      "**创意画板能导出和导入了。** 打开画板从「更多」里导出 `.mosael-board.json`(素材仍是引用),清单里导入一份就多一张板;导出的就是能直接传社区的那一份,两个方向都不用手工拼。",
+      "**工作台能打开 ComfyUI 上的工作流。** 选中某台机器上的一张工作流时多一颗「在工作台里打开」,进去就是画布 + 模型库 + 缺失项。连接重建之后它会按**同一份模型自动接回**并说明一句,不再像凭空消失。",
+      "**智能体跑一半断掉,已经说过的话还在。** 此前一轮的正文只在内存里、跑完才落库:后端重启或失败,那些字就没了,界面上只剩工具步骤。现在正文**边流边写**进库,中断时接一句说明、步骤照留。",
+      "**官网表单控件换成 shadcn/ui。** 下拉、输入、标签全站统一(下拉是真 Radix Select,键盘全支持),不再有各系统长得不一样的原生控件;模块的字段高度、圆角、字号写回组件本身,业务代码不再各处覆盖。",
+      "**工作流执行历史重排。** 「等人确认」的审批卡挂在它实际卡住的那一步里就地展开 —— 标题、正文、备注、确认/拒绝都在那一步内,不再在面板顶部另起一段把同一件事说三遍;步骤是一行行的状态清单,和运行列表同一套图标语言。",
+      "**智能体的回答是一份文档。** 做出来的图、截下的屏幕、画出来的小界面(地图)按时间线顺序织在正文该在的位置 —— 先截图后总结,图就在总结上面,「上面这张」指得上;不再统一垫在消息末尾。computer use 的窗口截图除了在回答里直接看得见,还自动存进素材库。",
+      "**免提语音不再被一点声音打断。** 它念的时候,检测阈值抬到回声档 —— 自己的回声、键盘声顶不破,人凑近说话照样立刻打断;发送消息的那一小窗也不再闪一屏骨架。",
     ],
     en: [
-      "**Dubbing has a default now.** It was the one capability missing it — transcription, denoise and speech synthesis all had a \"use this one by default\" row, while dubbing made every caller name its own engine and voice. The default is not a single dropdown but a **pair**: knowing which provider is not enough, you also need which voice, so the row is engine plus voice. Pick both and it saves, the same rule as everywhere else.",
-      "**Capability providers are scannable now.** One card per capability, with the title row stating the current choice (\"Denoise · Built-in\", \"Dubbing · Not set\") so you no longer hunt for the dropdown; \"used in\" collapses to a single summary line that expands on demand; \"find more in the plugin market\" is pinned to the same corner on every card; and the \"automatic\" option only appears when there are two or more providers to choose from.",
-      "**No more button that only explains itself after you press it.** The app now knows on first paint whether this deployment is connected to MosaelCloud; when it is not, the button is disabled, the text says to set `MOSAEL_CLOUD_URL`, and the `cloud_not_configured` machine word is no longer shown to users.",
-      "**Fixes where the UI said one thing and did another.** Section descriptions are no longer capped at 42rem with a big empty gap on the right; when FFmpeg is pinned by the environment the field's placeholder no longer contradicts the line above it; \"recheck\" moved into the row it rechecks; and the section is now called \"Local speech synthesis engines\", with the twelve pieces of guidance that pointed at the old name updated too.",
-      "**Website: the sign-in entry is redesigned, and signup lands in the community.** \"Sign in\" is a quiet outlined button next to \"Download\" instead of a bare text link, and a successful MosaelCloud signup now goes straight to the community instead of stopping on the success card.",
+      "**The desktop app connects to MosaelCloud.** Settings has a MosaelCloud account block that is **a second, separately signable identity**: the desktop app relays the credentials itself, the cloud password is never stored locally, and the session lives only on this machine. The endpoint is `MOSAEL_CLOUD_URL` (with the `/api/cloud/v1` suffix); when it is not configured the block says so instead of offering a button that only fails.",
+      "**The website gained a whole community.** `/community` is the landing page (plugins, workflows, boards), and each market page has its own search, filters and sorting. Official content is published by the official account (once per language) and anyone can upload their own `.json`. Share pages now **preview the content** — workflows and boards are drawn as structure diagrams — and boards can be explored in an **infinite, read-only canvas** with pan and zoom.",
+      "**Boards can be exported and imported.** Exporting from a board's “more” menu writes a `.mosael-board.json` (media stays referenced), and importing one in the list adds a board. The exported file is exactly what the community accepts, so neither direction needs hand-assembly.",
+      "**The studio can open a workflow that lives on ComfyUI.** When the selected model is a workflow on one of your machines there is now a “open in studio” entry that lands on the canvas with the model library and missing items. After a connection is rebuilt it re-attaches by the **same model** and says so, instead of appearing to vanish.",
+      "**A turn that dies mid-way keeps what the model already said.** Previously a turn's text only lived in memory and was written when the turn finished, so a backend restart or a failure erased it and only the tool steps remained. The text is now **persisted as it streams**, and an interrupted turn appends an explanation while keeping the steps.",
+      "**Website form controls are shadcn/ui.** Selects, inputs and labels are consistent across the site (the select is a real Radix Select with full keyboard support), the native controls that looked different on every OS are gone, and field height, radius and type size live in the components rather than being overridden per call site.",
+      "**The workflow run history is rearranged.** The approval card for a step that is waiting for you expands inline at the step that is actually paused — title, body, note and approve/reject all live inside that step instead of a third repetition at the top of the panel — and steps are a plain list of rows sharing the same icon language as the run list.",
+      "**The agent's reply is a document.** Produced images, captured screenshots and drawn widgets (a map) are woven into the reply at their place in the timeline — screenshot first, summary after, so “the image above” really points at it — instead of being stacked at the end of the message. A computer-use window screenshot is both visible in the reply and saved to the asset library.",
+      "**Hands-free voice no longer breaks at the slightest sound.** While it speaks, the detection threshold moves to an echo-proof tier — its own echo and keyboard clicks stay below it, while a person leaning in still interrupts immediately. The moment after sending a message no longer flashes a full skeleton either.",
     ],
   },
 
