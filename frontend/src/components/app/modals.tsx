@@ -81,7 +81,9 @@ export function ModalSubmit(props: Omit<ButtonProps, "type" | "form">) {
  */
 let openModalCount = 0;
 const syncFloatingPanels = (): void => {
-  void window.mosaelPublish?.setPanelsHidden(openModalCount > 0).catch(() => undefined);
+  //: 桥可能是局部替身(测试 / 旧 preload):方法不存在就什么都不做,不能因为一颗按钮把弹窗弄崩。
+  const bridge = window.mosaelPublish as { setPanelsHidden?: (hidden: boolean) => Promise<void> } | undefined;
+  void bridge?.setPanelsHidden?.(openModalCount > 0)?.catch?.(() => undefined);
 };
 
 export function ModalShell({
