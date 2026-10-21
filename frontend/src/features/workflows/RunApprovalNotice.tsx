@@ -78,7 +78,7 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
   return (
     /* 外层(待批那一段)已经有一圈边和底色 —— 卡片自己再画一圈就成了双线(维护者:「看上去和外侧的 border 重叠在一块儿」)。
        这里只留内边距和间距。 */
-    <div className="grid gap-1.5 p-1">
+    <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
       {/*: **正文不设高度上限、自己也不滚。**
           上限和滚动只在**运行历史的内容区**这一层(见 `WorkflowRunHistory` 的
@@ -88,7 +88,7 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
           正文短的时候什么都不发生,卡片自然收着。 */}
       {row.body && (
         <div
-          className="rounded bg-secondary/30 px-2 py-1.5"
+          className="rounded-md bg-secondary/40 px-2.5 py-2"
           data-wf-run-approval-body=""
         >
           <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>
