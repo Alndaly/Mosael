@@ -144,7 +144,9 @@ export function AssetPreviewModal({
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className={cn("w-[min(1040px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0", shown.kind === "audio" ? "h-[min(480px,86dvh)] md:w-[min(880px,calc(100vw-32px))]" : shown.kind === "document" ? "h-[min(900px,90dvh)] md:w-[min(1480px,calc(100vw-32px))]" : "h-[min(720px,86dvh)]")}>
-        <header className="grid min-w-0 gap-2 border-b border-divider px-5 py-4 pr-14">
+        {/* 「让路给右上角那颗 X」的内边距只属于标题那一行(pr-10);整颗 header 都 pr 的话,
+            下面那排动作钮的右缘会悬空 56px,和角上的 X 对不上(维护者截图:奇怪的间距)。 */}
+        <header className="grid min-w-0 gap-2 border-b border-divider px-5 py-4">
           {trail.length > 0 && (
             <button
               type="button"
@@ -154,7 +156,7 @@ export function AssetPreviewModal({
               <ArrowLeft size={12} /> {t("assetLineageBack")}
             </button>
           )}
-          <DialogTitle className="min-w-0 max-h-24 overflow-y-auto whitespace-normal text-ui-lg leading-snug [overflow-wrap:anywhere]">{shown.name}</DialogTitle>
+          <DialogTitle className="min-w-0 max-h-24 overflow-y-auto whitespace-normal pr-10 text-ui-lg leading-snug [overflow-wrap:anywhere]">{shown.name}</DialogTitle>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">{kindLabel}</Badge>
             <Badge variant="outline">{t(assetOriginKey(shown))}</Badge>
