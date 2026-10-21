@@ -286,23 +286,25 @@ export function WorkflowRunHistory({
               onClick={() => onViewRun(run.id)}
             >
               <RunIcon status={run.status} />
-              {partialRunTarget(run) && (
-                // 单跑一个节点的那一轮:行首标一句「部分运行(目标:节点名)」—— 它和整跑长在同一张
-                // 列表里,不标的话看不出这次为什么只有几步、钱花在哪儿。
-                <Truncate
-                  as="span"
-                  data-run-partial=""
-                  text={partialRunTarget(run)}
-                  className="max-w-[45%] shrink rounded-full border border-border bg-muted px-1.5 py-px text-ui-2xs text-muted-foreground"
-                >
-                  {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
-                </Truncate>
-              )}
               <span className="flex min-w-0 flex-1 flex-col gap-px">
                 {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
-                <Truncate className="text-xs">
-                  {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
-                </Truncate>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Truncate className="min-w-0 text-xs">
+                    {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
+                  </Truncate>
+                  {/* 状态徽章在**文案右侧**(维护者:「这种 label 应该放在文案右侧而不是左侧」)——
+                      行首留给"哪一次运行",读完标题才看到"它怎么了"。 */}
+                  {partialRunTarget(run) && (
+                    <Truncate
+                      as="span"
+                      data-run-partial=""
+                      text={partialRunTarget(run)}
+                      className="ml-auto max-w-[45%] shrink-0 rounded-full border border-border bg-muted px-1.5 py-px text-ui-2xs text-muted-foreground"
+                    >
+                      {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
+                    </Truncate>
+                  )}
+                </span>
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}

@@ -81,7 +81,7 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
           上限跟着视口走(`40vh`),短正文不受影响;按钮因此永远在卡里看得见的地方。 */}
       {row.body && (
         <div
-          className="max-h-[min(24rem,40vh)] overflow-y-auto overscroll-contain rounded border border-border/60 bg-secondary/40 px-2 py-1.5"
+          className="max-h-[min(24rem,40vh)] overflow-y-auto overscroll-contain rounded bg-secondary/30 px-2 py-1.5"
           data-wf-run-approval-body=""
         >
           <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>
