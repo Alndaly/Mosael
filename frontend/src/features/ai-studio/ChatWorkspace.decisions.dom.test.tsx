@@ -22,6 +22,18 @@ const tool = (id: string, status = "done") => ({
   tool: { id, name: "generate_speech", args: { text: id }, status, result: status === "done" ? { ok: true } : undefined },
 });
 
+/**
+ * 默认的对话。**每一条用例开始前都要回到这一份**:第二条用例改写过 `listAgentMessages` 的
+ * 返回值却从不还原,乱序跑时它先跑,第一条就吃到别人的消息、找不到 `a3` 而红
+ * (CI 的 `test / frontend` 就是被这个弄红的,顺序一变就复现)。
+ */
+const DEFAULT_MESSAGES = () => [
+  { id: "u1", session_id: "s1", role: "user", content: "配三段", payload: {}, error: null, created_at: "2026-10-02T10:00:00" },
+  { id: "m1", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:01:00",
+    payload: { timeline: [tool("a1"), tool("a2"), tool("a3", "error")] } },
+  { id: "u2", session_id: "s1", role: "user", content: "后来的一句", payload: {}, error: null, created_at: "2026-10-02T10:02:00" },
+];
+
 vi.mock("@/api/client", () => ({
   isNotFound: () => false,
   API_BASE: "http://backend.test",
@@ -37,12 +49,7 @@ vi.mock("@/api/client", () => ({
   createAgentSession: vi.fn(),
   updateAgentSession: vi.fn(),
   getAgentSession: vi.fn(async () => ({ id: "s1", workspace_id: "w1", home_kind: "studio", home_id: "", home_name: "", home_state: "ok", title: "配音", status: "idle", is_mine: true })),
-  listAgentMessages: vi.fn(async () => [
-    { id: "u1", session_id: "s1", role: "user", content: "配三段", payload: {}, error: null, created_at: "2026-10-02T10:00:00" },
-    { id: "m1", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:01:00",
-      payload: { timeline: [tool("a1"), tool("a2"), tool("a3", "error")] } },
-    { id: "u2", session_id: "s1", role: "user", content: "后来的一句", payload: {}, error: null, created_at: "2026-10-02T10:02:00" },
-  ]),
+  listAgentMessages: vi.fn(async () => DEFAULT_MESSAGES()),
   listAgentQueue: vi.fn(async () => []),
   listAgentUsageEvents: vi.fn(async () => []),
   listAgentQuestions: vi.fn(async () => []),
@@ -97,6 +104,9 @@ class NoopResizeObserver {
 }
 
 beforeEach(() => {
+  // 每条用例都从这一份开始:上一条改过 `listAgentMessages` 的话,乱序跑会互相污染。
+  vi.mocked(listAgentMessages).mockResolvedValue(DEFAULT_MESSAGES() as never);
+  mocks.cards = [];
   window.localStorage.clear();
   window.sessionStorage.clear();
   adoptAgentSession("w1", { kind: "studio", id: "" }, "s1");
@@ -116,8 +126,12 @@ it("执行完的收成行里的状态,还在等的那张摆在它那次调用里
     </QueryClientProvider>,
   );
 
-  await waitFor(() =>
-    expect(container.querySelector("article")?.closest("[data-tool-call]")?.getAttribute("data-tool-call")).toBe("a3"),
+  //: **等到真的挂上来**,别按 `waitFor` 的 1 秒默认值赌:这条用例在某次乱序跑里首帧花了 4 秒
+  //: (CI 上就是它把 `test / frontend` 弄红的),而渲染本身没有任何问题。
+  await waitFor(
+    () =>
+      expect(container.querySelector("article")?.closest("[data-tool-call]")?.getAttribute("data-tool-call")).toBe("a3"),
+    { timeout: 8000 },
   );
   expect(container.querySelectorAll("article")).toHaveLength(1);
   expect(container.querySelectorAll("[data-decision='executed']")).toHaveLength(2);
