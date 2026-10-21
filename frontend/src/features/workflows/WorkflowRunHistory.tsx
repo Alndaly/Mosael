@@ -206,7 +206,7 @@ export function WorkflowRunHistory({
       // 少了这一步,内容一多就把面板本身撑高 —— 里面那些 `overflow-y-auto` 会全部失效
       // (维护者:「一旦出现一个内容比较多的确认卡 就会撑开到超出整个模块的高度」)。
       className={cn(
-        "flex h-full min-h-0 flex-col overflow-hidden",
+        "flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
@@ -221,6 +221,8 @@ export function WorkflowRunHistory({
       <div
         className={cn(
           PANEL_HEADER_CLASS,
+          // 面板根自己滚(见上面),头部吸顶 —— 滚多远都还在,不用依赖"内容区 flex-1"那条链。
+          "sticky top-0 z-10 bg-background",
           isFloating && "cursor-move",
         )}
         onPointerDown={startDrag}
@@ -246,7 +248,7 @@ export function WorkflowRunHistory({
       {/* **内容区自己滚。** 只有里面那一段(正文、列表)设上限是不够的:待批卡本身还有标题、
           等待说明、投递状态、备注、按钮 —— 面板一矮,按钮照样被推到可视区外,而这一层不滚。
           维护者:「右侧这个确认卡内容过大的时候还是会导致无法浏览审批」。 */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-col">
         {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
             不会被固定的上下分栏推到面板底部。 */}
         <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1">
