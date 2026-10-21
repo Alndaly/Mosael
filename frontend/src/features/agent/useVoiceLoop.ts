@@ -53,6 +53,11 @@ export type VoiceLoopState =
 /** 每隔多久取一次音量。20 次/秒:够分辨句中停顿,又不至于让主线程忙起来。 */
 const SAMPLE_MS = 50;
 
+/** 它在念的时候,「起说」阈值抬到的档位(默认 3.5 的约两倍)。自己的声音经扬声器回到麦克风,
+ *  残余回声会顶破默认阈值、一句话开头就把播放掐掉;真打断是人凑近说话,远比回声响,抬到 6 挡得住
+ *  回声、挡不住人。 */
+const SPEAKING_START_FACTOR = 6;
+
 /** 消息发出去了、却迟迟没有任何信号(轮询没看到 `busy`,回复也没到)时,最多再把「在想」挂这么久。
  *  正常路径**不走它**:消息发出去时起表,轮询一旦看到这一轮在跑就作废,回复到了就直接切「生成语音中」。
  *  它只兜两种真会空下来的结局 —— 这一轮只调了工具、没有回复可念,以及轮询被某种原因错过。
@@ -124,6 +129,11 @@ export function useVoiceLoop({
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<BlobPart[]>([]);
   const detectorRef = React.useRef(new UtteranceDetector());
+
+  // 它在念 → 起说阈值抬到回声档;回到别的状态 → 归位(平时要灵敏,真有人轻声开口还得听得到)。
+  React.useEffect(() => {
+    detectorRef.current.setStartFactor(state === "speaking" ? SPEAKING_START_FACTOR : null);
+  }, [state]);
   const onUtteranceRef = React.useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
   const questionRef = React.useRef(question);
@@ -335,7 +345,11 @@ export function useVoiceLoop({
   const start = React.useCallback(async () => {
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 回声消除必须显式要:它是「它在念的时候不会被自己的声音打断」的底座。缺省 audio:true 在
+      // 有的设备/系统上不带 AEC,残余回声直接把 VAD 顶穿(用户实测:稍有声音就打断播放)。
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
     } catch {
       toast.error(t("agentVoiceMicUnavailable"));
       return;

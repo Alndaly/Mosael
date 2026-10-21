@@ -78,6 +78,21 @@ describe("分句", () => {
     expect(new Set(events)).toEqual(new Set(["idle"]));
   });
 
+  it("它在念的时候:起说阈值临时抬高,回声顶不破;回到平时归位", () => {
+    // 平时档:5× 地板的持续声音算开口。
+    expect(feed(settled(), Array(6).fill(0.05))[0]).toBe("speaking");
+    // 回声档(6×):同样的 5× 持续回声顶不破,一直 idle。
+    const echoing = settled();
+    echoing.setStartFactor(6);
+    expect(new Set(feed(echoing, Array(8).fill(0.05)))).toEqual(new Set(["idle"]));
+    // 人凑近说话(30×)照样开口 —— 回声档挡得住回声,挡不住人。
+    expect(feed(echoing, [0.3])[0]).toBe("speaking");
+    // 归位:回到默认的灵敏档。
+    const back = settled();
+    back.setStartFactor(null);
+    expect(feed(back, [0.1])[0]).toBe("speaking");
+  });
+
   it("说话中不抬高地板 —— 否则长句子会把自己判成静音", () => {
     const detector = settled();
     // 连说 6 秒。地板若跟着涨,说到后面 LOUD 就不再"高于地板×2"了,会提前断句。

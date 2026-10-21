@@ -60,6 +60,22 @@ export class UtteranceDetector {
 
   constructor(private readonly options: UtteranceOptions = DEFAULT_UTTERANCE_OPTIONS) {}
 
+  /** 起说阈值的临时档位(它在念的时候对自己的回声要迟钝,见 useVoiceLoop);null = 回构造档位。 */
+  private startFactorOverride: number | null = null;
+
+  private get startFactor(): number {
+    return this.startFactorOverride ?? this.options.startFactor;
+  }
+
+  /**
+   * 临时抬高/归位「起说」阈值。**只在它在念的时候用**:自己的声音经扬声器回来,残余回声顶破默认
+   * 阈值,一句话开头就把播放掐了(用户原话:稍微有点声音就打断)。真打断是人凑近说话,远比回声
+   * 响 —— 阈值抬高一档挡得住回声,挡不住人。必须保持高于止说阈值(那就是滞回)。
+   */
+  setStartFactor(factor: number | null): void {
+    this.startFactorOverride = factor;
+  }
+
   /** 此刻要多响才算"开口了"。
    *
    * 给可视化用,而不是给判决用 —— 判决在 push 里。浮标把音量画成"相对这条线的高度",
@@ -68,7 +84,7 @@ export class UtteranceDetector {
    * 用户都会得出同一个结论 —— "它没在听我"。
    */
   get triggerLevel(): number {
-    return Math.max(this.floor, 0.005) * this.options.startFactor;
+    return Math.max(this.floor, 0.005) * this.startFactor;
   }
 
   /** 说到现在多久了(毫秒)。UI 用它显示"正在听"。 */
@@ -95,7 +111,7 @@ export class UtteranceDetector {
     const floor = Math.max(this.floor, 0.005);
 
     if (!this.speaking) {
-      if (rms > floor * this.options.startFactor) {
+      if (rms > floor * this.startFactor) {
         this.speaking = true;
         this.startedAt = atMs;
         this.quietSince = null;

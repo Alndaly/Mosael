@@ -59,6 +59,7 @@ vi.mock("@/features/agent/utteranceDetector", () => ({
     triggerLevel = 1;
     push = () => mocks.events.shift() ?? "silence";
     reset = vi.fn();
+    setStartFactor = vi.fn();
   },
 }));
 

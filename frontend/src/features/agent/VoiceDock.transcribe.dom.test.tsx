@@ -61,6 +61,7 @@ vi.mock("@/components/app/useFloatingPanel", () => ({
 //: 分句器是音频算法,这里只借它说「开始说了 / 说完了」两拍。
 vi.mock("@/features/agent/utteranceDetector", () => ({
   UtteranceDetector: class {
+    setStartFactor = vi.fn();
     triggerLevel = 1;
     push = mocks.push;
     reset = vi.fn();
