@@ -231,7 +231,7 @@ export const ChatBubble = React.memo(function ChatBubble({
             </div>
           )}
         </>
-      ) : (
+      ) : payload?.answers ? null : (
         <div
           className={
             inset
@@ -241,12 +241,7 @@ export const ChatBubble = React.memo(function ChatBubble({
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
           <div className={inset ? "whitespace-pre-wrap" : undefined}>
-            {/* 一次选择在对话里不该退化成一段自述:有结构就照结构画,没有(老消息)才退回正文。 */}
-            {payload?.answers ? (
-              <AnsweredChoiceCard answers={payload.answers} />
-            ) : (
-              <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} quote={payload?.quote} />
-            )}
+            <UserMessageContent content={message.content} document={payload?.body_document} mediaGallery={mediaGallery} quote={payload?.quote} />
           </div>
         </div>
       )}

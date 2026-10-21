@@ -597,7 +597,7 @@ export function CanvasAgentChat({
             return <JobReceiptNotice key={message.id} content={message.content} payload={message.payload} />;
           }
           return (
-            <div
+            (payload as { answers?: unknown } | null)?.answers ? null : <div
               key={message.id}
               className={
                 message.role === "assistant"
@@ -627,11 +627,7 @@ export function CanvasAgentChat({
                   )}
                 </>
               ) : (
-                payload?.answers ? (
-                  <AnsweredChoiceCard answers={payload.answers} />
-                ) : (
-                  <UserMessageContent content={message.content} document={payload?.body_document} quote={payload?.quote} />
-                )
+                <UserMessageContent content={message.content} document={payload?.body_document} quote={payload?.quote} />
               )}
               {message.role === "assistant" && (
                 <MessageUsageFooter

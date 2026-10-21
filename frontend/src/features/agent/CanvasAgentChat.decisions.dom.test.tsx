@@ -371,20 +371,20 @@ describe("答完的选择", () => {
     ];
   });
 
-  it("记录跟着用户那条消息 —— 不是被工具结果「顶掉」、也不是画进助手那一条", async () => {
+  it("回执那条**不画成消息**:答案只在 ask_user 那张卡里", async () => {
+    //: 维护者:「**我的选择不应该作为一个消息卡片 这个就显示在 ask_user 的那个工具卡片内即可**」✓。
     const { container } = await mount();
+    await waitFor(() => expect(row(container, "ask")).toBeTruthy());
 
-    const record = await waitFor(() => {
-      const found = container.querySelector("[data-answer-record]");
-      expect(found, "一次选择的记录不能因为工具结果也记了同一件事就不画").toBeTruthy();
-      return found!;
-    });
-    expect(record.textContent).toContain(question);
-    expect(record.textContent).toContain("先暂停");
-    // 最要紧的一条:它不在助手那一条消息的工具行里。
-    expect(record.closest("[data-tool-call]")).toBeNull();
-    // 给模型读的那句正文不上界面。
+    // 回执那条消息本身不渲染任何东西(记录卡、气泡都没有)。
+    expect(container.querySelector("[data-answer-record]")).toBeNull();
+    // 给模型读的那句正文也不上界面。
     expect(container.textContent).not.toContain("我选好了");
+    // 答案改由工具卡承担 —— 展开后那一行"已选"里就是它。
+    const line = row(container, "ask") as HTMLElement;
+    fireEvent.click(within(line).getByRole("button"));
+    await waitFor(() => expect(line.querySelector("[data-answer-status]")).toBeTruthy());
+    expect(line.textContent).toContain("先暂停");
   });
 
   it("助手那一步展开后只有一行状态,不是又一张记录卡", async () => {

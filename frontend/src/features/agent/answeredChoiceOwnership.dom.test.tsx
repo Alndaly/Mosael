@@ -79,21 +79,22 @@ describe("助手那一侧:只写这一步拿到了什么,不转述用户的话",
   });
 });
 
-describe("用户那一侧:选择记在用户自己的那条消息里", () => {
-  it("消息里画着问的是什么、选的是哪一项", () => {
+describe("回执那条消息不画成气泡:答案已经在 ask_user 的卡片里", () => {
+  //: 维护者:「**我的选择不应该作为一个消息卡片 这个就显示在 ask_user 的那个工具卡片内即可**」✓。
+  //: 后端仍要把答案拼成一句话发回去(模型读的是它)✓,但界面上**不该多出一条"我说的话"** ✗ ——
+  //: 那一轮的工具卡已经把「已选 …」画出来了 ✓。
+  it("有 answers 的回执:界面上什么都不画", () => {
     const { container } = renderInClient(
       <ChatBubble message={agentMessage("user", { answers: picked })} usageEvents={[]} workspaceId="w1" />,
     );
-    const record = container.querySelector("[data-answer-record]");
-    expect(record, "选择记录该在用户那条消息里画出来").toBeTruthy();
-    expect(record!.textContent).toContain("接下来怎么走？");
-    expect(record!.textContent).toContain("先暂停");
-    expect(record!.textContent).toContain("已选");
-    // 发给模型的正文(「我选好了:」)不该出现在界面上。
+    expect(container.querySelector("[data-answer-record]"), "回执不该再画成消息里的记录卡").toBeNull();
+    expect(container.querySelector("[data-testid='user-bubble']")).toBeNull();
+    // 发给模型的那句正文也不该出现在界面上。
     expect(container.textContent ?? "").not.toContain("我选好了");
+    expect(container.textContent ?? "").toEqual("");
   });
 
-  it("跳过:也只是用户那条消息里的一个状态", () => {
+  it("跳过:同样不画", () => {
     const { container } = renderInClient(
       <ChatBubble
         message={agentMessage("user", { answers: { dismissed: true, question_id: "q1" } })}
@@ -101,8 +102,7 @@ describe("用户那一侧:选择记在用户自己的那条消息里", () => {
         workspaceId="w1"
       />,
     );
-    expect(container.querySelector("[data-answer-record]")).toBeTruthy();
-    expect(container.textContent).toContain("已跳过");
-    expect(container.textContent ?? "").not.toMatch(/你跳过了/);
+    expect(container.querySelector("[data-answer-record]")).toBeNull();
+    expect(container.textContent ?? "").not.toContain("已跳过");
   });
 });

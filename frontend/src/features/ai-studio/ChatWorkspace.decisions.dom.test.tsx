@@ -8,7 +8,7 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { adoptAgentSession } from "@/features/agent/sessionSelection";
@@ -141,12 +141,13 @@ it("执行完的收成行里的状态,还在等的那张摆在它那次调用里
 });
 
 /**
- * 答完的选择:记录画在**用户那条消息**里,不在助手那一条里。
+ * 答完的选择:**回执那条消息不画成气泡**,答案只在 `ask_user` 的工具卡里。
  *
- * 两个入口的这一点是同一条规矩(这边走 ChatBubble) —— 在上面那条测试的同一套挂载里再钉一次,
- * 免得下次只改了画布助手。(`ask_user` 的结果自己也画一份记录的那次回归,两边各中了一次。)
+ * 维护者:「**我的选择不应该作为一个消息卡片 这个就显示在 ask_user 的那个工具卡片内即可**」✓。
+ * 后端仍然要把答案拼成一句话发回去(模型读的是它)✓ —— 那是协议,不是界面。
+ * 两个入口是同一条规矩(这边走 ChatBubble),所以两边各钉一次。
  */
-it("选择的记录跟着用户那条消息,助手那一步只有一行状态", async () => {
+it("回执那条不画成消息,答案在 ask_user 卡里", async () => {
   vi.mocked(listAgentMessages).mockResolvedValue([
     { id: "u1", session_id: "s1", role: "user", content: "开工", payload: {}, error: null, created_at: "2026-10-02T10:00:00" },
     { id: "m1", session_id: "s1", role: "assistant", content: "", error: null, created_at: "2026-10-02T10:00:30",
@@ -162,12 +163,14 @@ it("选择的记录跟着用户那条消息,助手那一步只有一行状态", 
     </QueryClientProvider>,
   );
 
-  const record = await waitFor(() => {
-    const found = container.querySelector("[data-answer-record]");
-    expect(found, "一次选择的记录该画在用户那条消息里").toBeTruthy();
-    return found!;
-  });
-  expect(record.textContent).toContain("先暂停");
-  expect(record.closest("[data-tool-call]")).toBeNull();
+  // 等这一轮挂上来(有工具卡就说明消息都在了)。
+  await waitFor(() => expect(container.querySelector("[data-tool-call='ask']")).toBeTruthy());
+  // 回执那条**不渲染**:既没有记录卡,也没有"我选好了…"那段自述。
+  expect(container.querySelector("[data-answer-record]")).toBeNull();
   expect(container.textContent).not.toContain("我选好了");
+  // 答案由工具卡承担:展开后那一行状态里有它。
+  const card = container.querySelector("[data-tool-call='ask']") as HTMLElement;
+  fireEvent.click(within(card).getByRole("button"));
+  await waitFor(() => expect(card.querySelector("[data-answer-status]")).toBeTruthy());
+  expect(card.textContent).toContain("先暂停");
 });
