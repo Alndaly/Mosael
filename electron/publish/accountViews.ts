@@ -106,95 +106,19 @@ const IDLE_SWEEP_MS = 5_000;
 const LAYOUT_FILE = "panel-layout.json";
 
 /**
- * 一枚**自洽**的 Chrome 身份,交给 CDP 的 `Emulation.setUserAgentOverride`。
+ * 内嵌浏览器的身份:**如实声明自己是 Electron**,不做 Chrome 伪装。
  *
- * 为什么需要它:抹掉 UA 里的 token 还不够 —— Chromium 的 client hints(Sec-CH-UA 请求头 /
- * `navigator.userAgentData`)仍按内核自己的品牌上报「Chromium」,和 UA 里的 `Chrome/…` 对不上。
- * X 的服务端按这组证据分类客户端:实测日志里我们的登录请求被重定向到
- * `x.com/i/jf/onboarding/web?mode=login`(正常 Chrome 停在 `/i/flow/login`),那个流程随后就挂出
- * 「An unexpected error occurred」。
+ * 维护者 2026-10-22 拍板的取舍。此前为了让 X 的登录页不报「An unexpected error」,我们把 UA
+ * 洗成干净 Chrome、再用 CDP 的 `Emulation.setUserAgentOverride` 把 client hints /
+ * `navigator.userAgentData` 也对齐成 Chrome —— 登录确实过了,但 X 的帮助页(help.x.com,挂在
+ * Cloudflare Turnstile 后面)随即**无限循环验证**:Turnstile 专门识别「自称 Chrome、信号却
+ * 不像 Chrome」的客户端,放行之后立刻再挑战一次。
  *
- * `Emulation.setUserAgentOverride` 是 Chromium 给 Puppeteer 做同样事情的那条路:它同时覆盖
- * UA 请求头、client hints 头与 `navigator.userAgentData`,三处说的是同一件事。(webContents 的
- * `setUserAgent` 只覆盖 UA 字符串,client hints 由内核拥有 —— 那条路已试过,修不了。)
+ * 公开的同款实测(Orca 浏览器):Chrome 形状的 UA + 补的 client hints 在 Turnstile 上 12/12
+ * 失败,而**如实声明的 Electron UA 通过 5/5**。两套反欺诈对这个客户端的期待正好相反,而 X 登录
+ * 真正的修复是 preload 里那几处假指纹(见 account-view-preload.cjs),不是 UA 伪装 —— 所以这里
+ * 选"如实声明":默认 UA 原样使用,不洗、不覆盖。
  */
-export interface ChromeIdentityOverride {
-  userAgent: string;
-  acceptLanguage: string;
-  platform: string;
-  userAgentMetadata: {
-    brands: Array<{ brand: string; version: string }>;
-    fullVersionList: Array<{ brand: string; version: string }>;
-    fullVersion: string;
-    platform: string;
-    platformVersion: string;
-    architecture: string;
-    model: string;
-    mobile: boolean;
-    bitness: string;
-  };
-}
-
-/** macOS 的产品版本 = Darwin 主版本 - 9(Chromium 在 client hints 里报的是产品版本,不是内核版本)。 */
-const macPlatformVersion = (): string => {
-  if (process.platform !== "darwin") return "";
-  const [major = 0, minor = 0] = (process.getSystemVersion?.() ?? "").split(".").map((one) => Number.parseInt(one, 10) || 0);
-  return major >= 20 ? `${major - 9}.${minor}.0` : "10.15.7";
-};
-
-export const chromeIdentityOverride = (userAgent: string): ChromeIdentityOverride | null => {
-  const version = /Chrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/.exec(userAgent);
-  if (!version) return null;
-  const [, major, minor, build, patch] = version;
-  const full = `${major}.${minor}.${build}.${patch}`;
-  const mac = process.platform === "darwin";
-  return {
-    userAgent,
-    acceptLanguage: "zh-CN,zh;q=0.9,en;q=0.8",
-    platform: mac ? "MacIntel" : process.platform === "win32" ? "Win32" : "Linux x86_64",
-    userAgentMetadata: {
-      brands: [
-        { brand: "Google Chrome", version: major },
-        { brand: "Chromium", version: major },
-        { brand: "Not_A Brand", version: "24" },
-      ],
-      fullVersionList: [
-        { brand: "Google Chrome", version: full },
-        { brand: "Chromium", version: full },
-        { brand: "Not_A Brand", version: "24.0.0.0" },
-      ],
-      fullVersion: full,
-      platform: mac ? "macOS" : process.platform === "win32" ? "Windows" : "Linux",
-      platformVersion: macPlatformVersion(),
-      architecture: process.arch === "arm64" ? "arm" : "x86",
-      model: "",
-      mobile: false,
-      bitness: "64",
-    },
-  };
-};
-
-/**
- * 抹掉「不是任何一种真实浏览器」的身份 token,剩下的就是一枚干净的 Chrome UA。
- *
- * Electron 的默认 UA 是 `… AppleWebKit/537.36 (KHTML, like Gecko) Mosael/2.0.0 Chrome/152…
- * Electron/44.4.5 Safari/537.36`(2026-10-22 在应用里实测)。**只抹 Electron 不够** —— 应用名
- * token(`Mosael/2.0.0`)还留在里面,而没有任何浏览器这样自称;拿这个身份去登录,反欺诈会判会话
- * 可疑(x.com 的登录页直接回「An unexpected error occurred」;同款事故:Orca 浏览器 v1.4.198
- * 被 x.com / LinkedIn 判可疑会话,修法就是这两条 replace)。
- *
- * 顺序:先 Electron,再应用名 token(它夹在 `)` 和 ` Chrome/` 之间)。
- */
-export const platformUserAgent = (userAgent: string): string => {
-  return (
-    userAgent
-      .replace(/\s+Electron\/\S+/i, "")
-      // `) Mosael/2.0.0 Chrome/` → `) Chrome/`;没有应用名 token 时(裸 Electron)这条不匹配,
-      // 不会把 `) Chrome/` 本身吃掉。
-      .replace(/(\)\s+)\S+\s+(Chrome\/)/, "$1$2")
-  );
-};
-
 /** 悬浮卡片的几何,下发给渲染层去画圆角/阴影/标题条(原生 View 画不了这些)。 */
 export interface PanelCard {
   id: string;
@@ -1120,21 +1044,7 @@ export class AccountViewManager {
       this.lastFocused = view.webContents;
     });
     const isCurrent = () => this.views.get(accountId) === view;
-    // 授权页、新开的页面同样会读 UA 做风控:一律抹掉 Electron 字样(收进来的页面还没开始加载,来得及)。
-    const ua = platformUserAgent(view.webContents.getUserAgent());
-    view.webContents.setUserAgent(ua);
-    //: UA 字符串、client hints、navigator.userAgentData 三处必须是**同一个身份**(见
-    //: chromeIdentityOverride)。走 CDP,因为只有它同时覆盖这三层;设不上就退回普通 UA,
-    //: 不阻塞页面(登录失败会以平台自己的报错呈现)。
-    const identity = chromeIdentityOverride(ua);
-    if (identity) {
-      try {
-        if (!view.webContents.debugger.isAttached()) view.webContents.debugger.attach("1.3");
-        void view.webContents.debugger.sendCommand("Emulation.setUserAgentOverride", identity).catch(() => undefined);
-      } catch {
-        // 附加失败(被占用 / 已销毁):放过,页面照样能开。
-      }
-    }
+    // UA 用 Electron 原生那一枚(如实声明,见上面的 policy;不洗、不覆盖)。
     // 新页面默认静音:它此刻不在前台。show() / switchPage 会按 syncAudio 的唯一判据放开。
     view.webContents.setAudioMuted(true);
     // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
