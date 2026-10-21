@@ -20,9 +20,13 @@ const SOURCE = fs.readFileSync(
   "utf8",
 );
 
-function runPatches({ platformAuthenticator }: { platformAuthenticator: boolean }) {
+function stealthSource(): string {
   const match = SOURCE.match(/const STEALTH_JS = `([\s\S]*?)`;/);
   if (!match) throw new Error("找不到 STEALTH_JS —— 补丁的取法要跟着改");
+  return match[1];
+}
+
+function runPatches({ platformAuthenticator }: { platformAuthenticator: boolean }) {
   class FakeDomException extends Error {
     constructor(message: string, name: string) {
       super(message);
@@ -53,7 +57,7 @@ function runPatches({ platformAuthenticator }: { platformAuthenticator: boolean 
     Notification: { permission: "default" },
   };
   vm.createContext(context);
-  vm.runInContext(match[1], context);
+  vm.runInContext(stealthSource(), context);
   return context as {
     window: { PublicKeyCredential: Record<string, () => Promise<boolean>> };
     navigator: typeof navigator;
@@ -93,9 +97,17 @@ describe("内嵌账号视图的页面补丁", () => {
     await expect(window.PublicKeyCredential.isConditionalMediationAvailable()).resolves.toBe(false);
   });
 
-  it("反检测那几条还在", () => {
+  it("反检测那几条还在 —— 只补 Chromium 与 Chrome 确有差别的那几处", () => {
     // 同一段脚本里的东西,别在改 WebAuthn 时把它们碰掉了。
-    expect(SOURCE).toContain("webdriver");
-    expect(SOURCE).toContain("WebGLRenderingContext");
+    const script = stealthSource();
+    expect(script).toContain("webdriver");
+    //: plugins 补成 Chrome 真实报的 PDF Viewer 列表(此前是 Plugin 1/2/3 三个假名字 ——
+    //: 反欺诈一比对就是「自称 Chrome、指纹却不是 Chrome」,X 登录一直报错就是栽在这里)。
+    expect(script).toContain("PDF Viewer");
+    //: WebGL vendor/renderer 与 permissions.query **不再伪造**。谎报 Intel(Apple Silicon 上
+    //: 直接矛盾)、返回普通对象冒充 PermissionStatus,都是比不补更糟的破绽;原生值本就与 Chrome
+    //: 接近(同为 ANGLE 渲染)。这两处出现 = 有人把旧补丁抄回来了。
+    expect(script).not.toContain("WebGLRenderingContext");
+    expect(script).not.toContain("permissions.query");
   });
 });
