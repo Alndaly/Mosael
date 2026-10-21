@@ -111,36 +111,42 @@ def approval_card(
     elements.append(_text(f"工作流:`{workflow}` · 节点:`{node}`"))
     if timeout_hours:
         elements.append(_text(f"超过 **{timeout_hours} 小时**没人处理就按节点上写的办。"))
+    buttons = [
+        {
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": approve_label or "确认"},
+            "type": "primary",
+            "value": {"action": ACTION_RUN_APPROVE, "approval_id": approval_id},
+        },
+        {
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": reject_label or "拒绝"},
+            "type": "danger",
+            "value": {"action": ACTION_RUN_REJECT, "approval_id": approval_id},
+        },
+    ]
     if allow_note:
-        #: 输入框留给批的人写一句话。**按钮照旧是普通按钮(`value` 里带着动作)** —— 不指望
-        #: 表单提交把输入框的值带回来:带得回来就用(见 approvals._note_from),带不回来这一步也
-        #: 照样批得动。一个收不到备注的输入框是可接受的退化,一个点不动的按钮不是。
+        #: **有输入框时,按钮必须在这个 form 里面,并且是 `form_submit`。**
+        #: 飞书对卡片 schema 是硬校验:form 里没有一个提交按钮,整张卡直接不收 ——
+        #: 真实错误码(从 `feishu_delivery_reason` 里读到的):
+        #:   `ErrCode: 300123, ErrPath: ROOT -> elements -> [3](tag: form),`
+        #:   `ErrMsg: there is no submit button in the form container`
+        #: 于是"为了能带一句备注"加的输入框,把整张卡连带拒掉了,只剩降级的那段文字。
+        #: 现在按钮就在 form 里(带 `value` 区分同意/拒绝),备注与决定一起提交。
         elements.append({
             "tag": "form",
             "name": "approval_note",
-            "elements": [{
-                "tag": "input",
-                "name": NOTE_FIELD,
-                "placeholder": {"tag": "plain_text", "content": "备注(可留空)"},
-            }],
+            "elements": [
+                {
+                    "tag": "input",
+                    "name": NOTE_FIELD,
+                    "placeholder": {"tag": "plain_text", "content": "备注(可留空)"},
+                },
+                *[{**button, "action_type": "form_submit"} for button in buttons],
+            ],
         })
-    elements.append({
-        "tag": "action",
-        "actions": [
-            {
-                "tag": "button",
-                "text": {"tag": "plain_text", "content": approve_label or "确认"},
-                "type": "primary",
-                "value": {"action": ACTION_RUN_APPROVE, "approval_id": approval_id},
-            },
-            {
-                "tag": "button",
-                "text": {"tag": "plain_text", "content": reject_label or "拒绝"},
-                "type": "danger",
-                "value": {"action": ACTION_RUN_REJECT, "approval_id": approval_id},
-            },
-        ],
-    })
+    else:
+        elements.append({"tag": "action", "actions": buttons})
     return {
         "config": {"wide_screen_mode": True},
         "header": {"template": "orange", "title": {"tag": "plain_text", "content": title or "需要你确认"}},
