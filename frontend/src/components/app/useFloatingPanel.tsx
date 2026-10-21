@@ -21,8 +21,12 @@ export const PANEL_HEADER_CLASS =
 
 /** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界 ——
  *  而它和画布上别的浮窗(合成器、评论卡)也是同一套,见 CANVAS_WINDOW_SURFACE_CLASS。 */
+//: **不在这里写 `overflow-hidden`。** 两个面板的圆角靠外层裁剪没错 ✓,但它会和面板自己的
+//: `overflow-y-auto` 抢同一条属性 —— 谁赢取决于 Tailwind 的生成顺序 ✗,于是"给内容区加了滚动却
+//: 纹丝不动"(维护者那块执行历史,连改四次都没滚起来 ✗)。裁剪交给需要它的子层,
+//: 面板这一层只负责圆角与边框。
 export const DOCKABLE_PANEL_FRAME_CLASS =
-  `overflow-hidden ${CANVAS_WINDOW_SURFACE_CLASS}`;
+  `${CANVAS_WINDOW_SURFACE_CLASS} overflow-x-hidden`;
 
 /**
  * 悬浮窗的叠放次序:一个从底到顶的 id 序列,z-index = BASE + 下标。
