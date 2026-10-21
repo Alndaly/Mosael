@@ -35,7 +35,11 @@ export function RunApprovalNotice({ workflowId }: { workflowId: string }) {
       role="status"
       data-wf-run-approval=""
       // 标题栏自带 border-b,这里再来一条就是两条线并排(维护者:「内部甚至我感觉有多余的边线」)。
-      className={cn(CANVAS_GLASS_SURFACE_CLASS, "grid gap-2 px-3 py-2 text-ui-xs text-muted-foreground")}
+      className={cn(
+        CANVAS_GLASS_SURFACE_CLASS,
+        // 它是内容区(纵向 flex)里的一段:按内容自然高,不参与压缩 —— 长了由外层内容区滚。
+        "grid shrink-0 gap-2 px-3 py-2 text-ui-xs text-muted-foreground",
+      )}
     >
       <p className="m-0 flex items-center gap-1.5 font-medium text-foreground">
         <UserCheck size={13} className="shrink-0 text-warning" />
@@ -76,12 +80,15 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
        这里只留内边距和间距。 */
     <div className="grid gap-1.5 p-1">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
-      {/*: **正文有上限、自己滚。** 审批正文可能是整篇稿子(几千字),此前它原样铺开、
-          把「同意 / 拒绝」推到可视区外面,而外面这一层不滚 —— 维护者撞到的就是"卡太高,点不到按钮"。
-          上限跟着视口走(`40vh`),短正文不受影响;按钮因此永远在卡里看得见的地方。 */}
+      {/*: **正文不设高度上限、自己也不滚。**
+          上限和滚动只在**运行历史的内容区**这一层(见 `WorkflowRunHistory` 的
+          `[data-wf-run-history-scroll]`)。卡片按内容自然高:正文多长,卡片就多高,
+          长了把外层内容区撑出滚动条 —— 这里再套一个 `max-h` 会变成双重滚动,很难用
+          (拖小面板时正文和卡片各滚各的,按钮还可能在两层外面)。
+          正文短的时候什么都不发生,卡片自然收着。 */}
       {row.body && (
         <div
-          className="max-h-[min(24rem,40vh)] overflow-y-auto overscroll-contain rounded bg-secondary/30 px-2 py-1.5"
+          className="rounded bg-secondary/30 px-2 py-1.5"
           data-wf-run-approval-body=""
         >
           <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>
@@ -109,7 +116,14 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
           onChange={(event) => setNote(event.target.value)}
         />
       )}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/*: **决定按钮贴在卡底。** 正文不设上限之后,一张几千字的确认卡会很高 —— 按钮在
+          内容流的末尾,要滚到底才看得见。这一行 `sticky bottom-0` 钉在**内容区滚动口**的
+          下沿(它的包含块是这张卡,所以滚出这张卡就自然放开),卡片再长,「确认 / 拒绝」
+          也始终在看得见、点得到的地方。底色 + 模糊是为了压住从下面滚过去的正文。 */}
+      <div
+        data-wf-run-approval-actions=""
+        className="sticky bottom-0 z-[1] -mx-1 flex flex-wrap items-center gap-1.5 border-t border-border/60 bg-background/90 px-1 py-1 backdrop-blur-sm"
+      >
         {/*: 转圈只给**被点的那一颗**。此前两颗都吃 `decide.isPending`,点「拒绝」两个一起转 ——
             看起来像两个决定都在提交。这一次点的是哪个由这次 mutate 的参数说了算
             (`decide.variables`,自带一份就够,不再另起一个 state);另一颗只禁用,不转圈。 */}

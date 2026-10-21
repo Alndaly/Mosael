@@ -202,11 +202,15 @@ export function WorkflowRunHistory({
   // 而运行时恰恰要同时看见画布和这里。
   return (
     <aside
-      // 高度**由父级那一格决定**,不由内容决定:停靠时 `h-full` 吃满右栏,悬浮时窗口自己有高度。
-      // 少了这一步,内容一多就把面板本身撑高 —— 里面那些 `overflow-y-auto` 会全部失效
-      // (维护者:「一旦出现一个内容比较多的确认卡 就会撑开到超出整个模块的高度」)。
+      // **高度由父级决定,不由内容决定。** 停靠时 `h-full` 吃满右栏那一格(网格
+      // `minmax(0,1fr)` 给的高度);悬浮时窗口自己有高度(`useFloatingPanel` 的 inline height)。
+      // 根这一层只负责竖直分栏:标题栏固定、内容区吃掉剩下的。
+      //
+      // 少了 `h-full` / `min-h-0`,内容一多就把面板本身撑高 —— 里面所有 `overflow-y-auto`
+      // 都失去可滚的余地(维护者:「一旦出现一个内容比较多的确认卡 就会撑开到超出整个模块
+      // 的高度」)。`min-h-0` 是关键那一格:flex 子项默认 `min-height: auto`,会按内容撑。
       className={cn(
-        "flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden",
+        "flex h-full min-h-0 flex-col",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
@@ -220,9 +224,8 @@ export function WorkflowRunHistory({
       {handles}
       <div
         className={cn(
+          // `h-12 shrink-0`:标题栏高度是刻度,不参与压缩;它**不在滚动区里**,滚多远都还在。
           PANEL_HEADER_CLASS,
-          // 面板根自己滚(见上面),头部吸顶 —— 滚多远都还在,不用依赖"内容区 flex-1"那条链。
-          "sticky top-0 z-10 bg-background",
           isFloating && "cursor-move",
         )}
         onPointerDown={startDrag}
@@ -242,16 +245,26 @@ export function WorkflowRunHistory({
           <X size={13} />
         </IconButton>
       </div>
-      {/* 「等人确认」的入口就在运行历史顶上:那一次运行**没有失败、也没在跑**,它停在一步上等人点。
-          没有这一段的话,面板上只会看到一次永远"运行中"的记录 —— 看不出它在等谁。 */}
-      <RunApprovalNotice workflowId={workflowId} />
-      {/* **内容区自己滚。** 只有里面那一段(正文、列表)设上限是不够的:待批卡本身还有标题、
-          等待说明、投递状态、备注、按钮 —— 面板一矮,按钮照样被推到可视区外,而这一层不滚。
-          维护者:「右侧这个确认卡内容过大的时候还是会导致无法浏览审批」。 */}
-      <div className="flex flex-col">
+      {/*
+        **内容区是唯一负责滚的那一层。** `flex-1 min-h-0` 让它吃掉标题栏之外的全部高度
+        (`min-h-0` 不能少:不加它,flex 子项按内容的 min-height 撑,这一层就又被内容顶大);
+        `overflow-y-auto` 让超出的内容滚,而不是把面板撑高。
+        `[scrollbar-gutter:stable]` 给滚动条预留位置 —— 长正文出现滚动条时内容不横向抖一下。
+        `overscroll-contain` 到底后不把滚动传给画布。
+
+        「等人确认」那一段也在**这里面**,而不是标题栏和滚动区之间:卡片按内容自然高,
+        长了由这一层滚 —— 卡片自己不再设高度上限(那是双重滚动,很难用)。
+        标题栏在滚动区外面,所以始终可见。 */}
+      <div
+        data-wf-run-history-scroll=""
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]"
+      >
+        {/* 待批卡按内容自然高(正文不再设上限),长了由上面这一层滚;`shrink-0` 防止 flex 把它压扁。 */}
+        <RunApprovalNotice workflowId={workflowId} />
         {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
-            不会被固定的上下分栏推到面板底部。 */}
-        <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1">
+            不会被固定的上下分栏推到面板底部。列表自己的上限不参与撑高内容区:
+            `max-h-[40%]` + `overflow-y-auto` 让它封顶在内容区高度的四成。 */}
+        <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1 [scrollbar-gutter:stable]">
           {/* **四种状态都要说出来**:读取中、读取失败、确实没有、有。此前只处理了后两种,
               于是接口一 500(一条失败原因里的花括号把整个列表打挂),面板就是一片空白 ——
               看起来和"一次都没跑过"一模一样,而用户明明跑过很多次。 */}
@@ -279,7 +292,8 @@ export function WorkflowRunHistory({
               key={run.id}
               type="button"
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-foreground hover:bg-secondary",
+                // 行内边距统一成 px-3 py-2(此前是 px-2 py-1.5,和下面步骤行不是一个节奏)。
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-foreground hover:bg-secondary",
                 run.id === viewedRunId && "bg-accent hover:bg-accent",
               )}
               aria-current={run.id === viewedRunId ? "true" : undefined}
@@ -317,7 +331,10 @@ export function WorkflowRunHistory({
             </button>
           ))}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+        {/* 详情不再自己开一层滚动:整个内容区已经是一层滚动,里面再套一层会变成双滚动条。
+            这里只吃掉剩余高度(`flex-1 min-h-0`),内容长了交给外层滚。 */}
+        // 两段内容用同一套外边距(px-1 py-1),视觉间距交给每一行自己的 px-3 py-2。
+        <div className="min-h-0 flex-1 px-1 py-1">
           {!selected ? (
             // 「选一次运行」只在**有得选**的时候说 —— 列表是空的、还在读、或者读挂了时,这句话是在
             // 让人去点一个不存在的东西。
