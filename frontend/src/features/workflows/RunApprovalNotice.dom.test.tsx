@@ -206,18 +206,77 @@ describe("运行停在等人确认上", () => {
   });
 });
 
-describe("审批正文很长时", () => {
-  it("正文自己滚、有高度上限;「确认 / 拒绝」不会被顶出卡外", async () => {
-    //: 维护者:「确认卡高度超出后我无法滚动导致我都无法点击同意拒绝」—— 正文原样铺开把按钮推走了。
+describe("ADR 0074:待批段的形态(左条 + 浅底,正文折 6 行)", () => {
+  /** 整圈边(不是 border-t / border-l 这类单边,也不是 border-border 这种颜色)。 */
+  const fullBorder = (el: HTMLElement) =>
+    el.className.split(/\s+/).some((token) => /^border(?:-[1-8]|\[[^\]]+\])?$/.test(token));
+
+  it("2px 强调色左边条 + 浅强调底;不画第二圈边、不铺第二块卡片底", async () => {
+    renderNotice([row]);
+    const notice = (await screen.findByText("要发布吗")).closest("[data-wf-run-approval]") as HTMLElement;
+    expect(notice.className).toContain("border-l-2");
+    expect(notice.className).toContain("border-primary");
+    expect(notice.className).toContain("bg-accent/40");
+    //: 段块里没有整圈边,也没有卡片自己的底色。
+    expect(fullBorder(notice)).toBe(false);
+    expect(notice.className).not.toContain("bg-card");
+    expect(notice.className).not.toContain("rounded");
+
+    const inner = notice.querySelector("[data-wf-run-approval-row]") as HTMLElement;
+    expect(inner.className).not.toContain("rounded");
+    expect(fullBorder(inner)).toBe(false);
+    expect(inner.className).not.toContain("bg-card");
+  });
+
+  it("长正文折 6 行(中文);「展开全文」取消折叠,「收起」折回去", async () => {
+    const body = Array.from({ length: 10 }, (_, index) => `第 ${index + 1} 行稿子`).join("\n");
+    renderNotice([{ ...row, body }]);
+    await screen.findByText("要发布吗");
+
+    const text = () => document.querySelector("[data-wf-run-approval-body] p") as HTMLElement;
+    //: 默认只露前 6 行 —— 第 7 行不在 DOM 里(CSS 的 line-clamp 会把全文留在 DOM 里)。
+    expect(text().textContent).toContain("第 6 行稿子");
+    expect(text().textContent).not.toContain("第 7 行稿子");
+
+    const more = screen.getByRole("button", { name: "confirmNoteExpand" });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(more);
+    expect(text().textContent).toContain("第 10 行稿子");
+    expect(screen.getByRole("button", { name: "confirmCollapse" }).getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "confirmCollapse" }));
+    expect(text().textContent).not.toContain("第 7 行稿子");
+    expect(screen.getByRole("button", { name: "confirmNoteExpand" })).toBeInTheDocument();
+  });
+
+  it("正文限高自己滚;按钮是它的兄弟、右对齐 —— 正文再长也不把「确认 / 拒绝」推走", async () => {
     renderNotice([{ ...row, body: "很长的稿子。".repeat(400) }]);
-    expect(await screen.findByText("要发布吗")).toBeInTheDocument();
+    await screen.findByText("要发布吗");
 
     const body = document.querySelector("[data-wf-run-approval-body]") as HTMLElement;
-    expect(body, "正文该有一个上限 + 滚动的容器").toBeTruthy();
-    //: 上限和纵向滚动两样都要:只给上限是截断,只给滚动不生效。
+    expect(body.className).toContain("max-h-[min(24rem,40vh)]");
     expect(body.className).toContain("overflow-y-auto");
-    expect(body.className).toMatch(/max-h-\[/);
-    //: 按钮在正文**外面**,不跟着一起滚走。
-    expect(body.contains(screen.getByRole("button", { name: "确认发布" }))).toBe(false);
+    //: 这一块**不许画边**:框只属于面板那一层。
+    expect(body.className.includes("border")).toBe(false);
+
+    const actions = document.querySelector("[data-wf-run-approval-actions]") as HTMLElement;
+    expect(body.contains(actions), "按钮不能在正文里跟着一起滚").toBe(false);
+    expect(actions.className).toContain("justify-end");
+    expect(actions.contains(screen.getByRole("button", { name: "确认发布" }))).toBe(true);
+    expect(actions.contains(screen.getByRole("button", { name: "先别发" }))).toBe(true);
+  });
+
+  it("面板里没有第二圈 rounded + border 的块(输入框只画一条下划线)", async () => {
+    renderNotice([row]);
+    const notice = (await screen.findByText("要发布吗")).closest("[data-wf-run-approval]") as HTMLElement;
+    const cards = [...notice.querySelectorAll<HTMLElement>('[class*="border"]')].filter((el) => {
+      const control = el.closest("button, input, textarea, select, a, [role='button']") !== null;
+      return !control && /(?:^|\s)rounded(?:-|$)/.test(el.className) && fullBorder(el);
+    });
+    expect(cards, cards.map((el) => el.className).join(" | ")).toEqual([]);
+
+    const note = screen.getByPlaceholderText("备注(可留空)") as HTMLInputElement;
+    expect(note.className).toContain("border-b");
+    expect(fullBorder(note), "备注框只画下划线,不画整圈").toBe(false);
   });
 });

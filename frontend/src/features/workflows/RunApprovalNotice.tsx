@@ -6,7 +6,6 @@ import React from "react";
 import { decideRunApproval, listRunApprovals, runApprovalsKey, type RunApproval } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { CANVAS_GLASS_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { parseServerTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -34,14 +33,13 @@ export function RunApprovalNotice({ workflowId }: { workflowId: string }) {
     <div
       role="status"
       data-wf-run-approval=""
-      // 标题栏自带 border-b,这里再来一条就是两条线并排(维护者:「内部甚至我感觉有多余的边线」)。
-      className={cn(
-        CANVAS_GLASS_SURFACE_CLASS,
-        // 它是内容区(纵向 flex)里的一段:按内容自然高,不参与压缩 —— 长了由外层内容区滚。
-        "grid shrink-0 gap-2 px-3 py-2 text-ui-xs text-muted-foreground",
-      )}
+      // **待批段的两个形态:2px 强调色左边条 + 浅强调底**(ADR 0074,维护者选定)。
+      // 这里**不画整圈边、不铺卡片底** —— 整块面板只有它自己那一圈 `rounded-xl border`;
+      // 段与段之间只有一条 `border-t`(见 WorkflowRunHistory 的列表/详情)。
+      // 没有待批时整块返回 null:不占位、不留线。
+      className="flex shrink-0 flex-col gap-2 border-l-2 border-primary bg-accent/40 px-3 py-2 text-ui-xs text-muted-foreground"
     >
-      <p className="m-0 flex items-center gap-1.5 font-medium text-foreground">
+      <p className="m-0 flex items-center gap-1 font-medium text-foreground">
         <UserCheck size={13} className="shrink-0 text-warning" />
         {t("runApprovalHeading")}
       </p>
@@ -52,10 +50,30 @@ export function RunApprovalNotice({ workflowId }: { workflowId: string }) {
   );
 }
 
+/** 折叠后露出的行数:够看清这一段在问什么,又不至于把「确认 / 拒绝」推出面板。 */
+const FOLD_LINES = 6;
+/** 没有换行的长段落也要折:一行几千字的稿件,光按行数折不住(一行就是全部)。 */
+const FOLD_CHARS = 360;
+
+/**
+ * 折叠时露出来的那一段。**在 JS 里切,不靠 CSS 的 `line-clamp`** ——
+ * 跟 AI 助手正文、笔记差异同一套(见 ConfirmationCard 的 TextBlock):切掉的字不在 DOM 里,
+ * 读屏也不会读到一截被 CSS 藏起来的重复全文;而 `line-clamp` 在本仓是「截断不给出全文」的记号
+ * (design/truncatedText.test.ts),这里本来就有一条「展开全文」,不该再混进那个清单。
+ */
+function previewOf(text: string): { shown: string; folded: boolean } {
+  const lines = text.split("\n");
+  const preview = lines.slice(0, FOLD_LINES).join("\n").slice(0, FOLD_CHARS);
+  return { shown: preview, folded: preview.length < text.length };
+}
+
 function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [note, setNote] = React.useState("");
+  //: 正文默认折 6 行;「展开全文 / 收起」改成落在这一行自己的状态上(同一条待批单里可能有多条)。
+  const [openBody, setOpenBody] = React.useState(false);
+  const bodyId = React.useId();
   const decide = useMutation({
     mutationFn: (decision: "approved" | "rejected") => decideRunApproval(row.id, decision, note.trim()),
     onSuccess: (updated) => {
@@ -75,27 +93,47 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
   //: 这一次点的是哪个决定 —— 只用来决定**哪一颗按钮转圈**(见下面那颗按钮上的注释)。
   const deciding = decide.isPending ? decide.variables : null;
   const delivery = deliveryLine(row, t);
+  //: 折 6 行;正文短的时候 `folded` 为 false,什么都不发生。
+  const preview = row.body ? previewOf(row.body) : null;
+  const folded = Boolean(preview?.folded);
+  const shownBody = preview ? (openBody ? row.body : preview.shown) : "";
   return (
-    /* 外层(待批那一段)已经有一圈边和底色 —— 卡片自己再画一圈就成了双线(维护者:「看上去和外侧的 border 重叠在一块儿」)。
-       这里只留内边距和间距。 */
-    <div className="grid gap-2 rounded-lg border border-border bg-card p-3">
+    /* 一行待批单:外层那一段已经有左条和浅底,这里只是一组块(标题 / 正文 / 元信息 / 备注 / 按钮),
+       间距 8px,不再自己画边、铺底。 */
+    <div data-wf-run-approval-row="" className="flex min-w-0 flex-col gap-2">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
-      {/*: **正文不设高度上限、自己也不滚。**
-          上限和滚动只在**运行历史的内容区**这一层(见 `WorkflowRunHistory` 的
-          `[data-wf-run-history-scroll]`)。卡片按内容自然高:正文多长,卡片就多高,
-          长了把外层内容区撑出滚动条 —— 这里再套一个 `max-h` 会变成双重滚动,很难用
-          (拖小面板时正文和卡片各滚各的,按钮还可能在两层外面)。
-          正文短的时候什么都不发生,卡片自然收着。 */}
+      {/*: **正文:折叠 6 行,展开后限高滚动;不画边、不铺底。**
+          上限和滚动只在正文这一块(ADR 0074 决定 5 唯一的例外,刻意的:整篇稿子不该把按钮推走)——
+          这里再画一圈边就成了"框套框",再铺一块底就成了第四块底。 */}
       {row.body && (
         <div
-          className="rounded-md bg-secondary/40 px-2.5 py-2"
           data-wf-run-approval-body=""
+          className="max-h-[min(24rem,40vh)] overflow-y-auto"
         >
-          <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>
+          {/*: 折叠时末尾给一个省略号 —— 让「这里还有」看得见,而不是断在一句话中间。 */}
+          <p id={bodyId} className="m-0 whitespace-pre-wrap break-words">
+            {shownBody}
+            {folded && !openBody ? <span className="text-muted-foreground">…</span> : null}
+          </p>
         </div>
       )}
-      <p className="m-0">{t("runApprovalWaiting").replace("{node}", row.node_name || row.node_id)}</p>
-      <p className="m-0 text-ui-2xs">{expiry(row, t)}</p>
+      {folded && (
+        <Button
+          variant="inline"
+          aria-expanded={openBody}
+          aria-controls={bodyId}
+          className="justify-self-start"
+          onClick={() => setOpenBody((value) => !value)}
+        >
+          {openBody ? t("confirmCollapse") : t("confirmNoteExpand")}
+        </Button>
+      )}
+      {/* 元信息:停在哪一步、什么时候算超时 —— 一行,段内 4px。 */}
+      <p className="m-0 flex flex-wrap items-center gap-1 text-ui-2xs text-muted-foreground">
+        <span>{t("runApprovalWaiting").replace("{node}", row.node_name || row.node_id)}</span>
+        <span aria-hidden>·</span>
+        <span>{expiry(row, t)}</span>
+      </p>
       {/*: **到底发到飞书没有**。后端把投递结果记在那张单上(见 domain/workflows/approvals):
           发了 / 这次就没打算发(写了「仅站内」、没有机器人、没绑定)/ 发失败了。
           没发出去的那两种要用一行提醒看得见 —— 用户在飞书群里等一张**不会来的卡**,
@@ -109,24 +147,35 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
         </p>
       )}
       {row.allow_note && (
+        //: 输入框只画**一条下划线**:面板里只有一层框,再给输入框一圈边就是第二个框。
         <input
-          className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-ui-xs text-foreground"
+          className="w-full border-b border-border bg-transparent px-0 py-1 text-ui-xs text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
           placeholder={t("runApprovalNotePlaceholder")}
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />
       )}
-      {/*: **决定按钮贴在卡底。** 正文不设上限之后,一张几千字的确认卡会很高 —— 按钮在
-          内容流的末尾,要滚到底才看得见。这一行 `sticky bottom-0` 钉在**内容区滚动口**的
-          下沿(它的包含块是这张卡,所以滚出这张卡就自然放开),卡片再长,「确认 / 拒绝」
-          也始终在看得见、点得到的地方。底色 + 模糊是为了压住从下面滚过去的正文。 */}
+      {/*: **按钮右对齐,并且贴在滚动口底沿。** 正文有自己的限高滚动;但面板可以被拖到
+          380px(悬浮的最小高度),这时「标题 + 正文 + meta + 备注 + 展开」仍然比可视区高,
+          按钮会落到底沿外(实测:按钮 622–654,面板 236–616)。`sticky bottom-0` 让它在
+          这种情况下钉在面板底、始终点得到;正常高度下它就是普通一行,看不出区别。
+          底色用和待批段同一档的强调色 + 面板底混出来的不透明色(`bg-accent/40` 叠在面板上
+          就是这个颜色),不是第四块底、也不画边。 */}
       <div
         data-wf-run-approval-actions=""
-        className="sticky bottom-0 z-[1] -mx-1 flex flex-wrap items-center gap-1.5 border-t border-border/60 bg-background/90 px-1 py-1 backdrop-blur-sm"
+        className="sticky bottom-0 z-[1] flex flex-wrap items-center justify-end gap-2 bg-[color-mix(in_oklab,var(--accent)_40%,var(--panel))] py-1"
       >
         {/*: 转圈只给**被点的那一颗**。此前两颗都吃 `decide.isPending`,点「拒绝」两个一起转 ——
             看起来像两个决定都在提交。这一次点的是哪个由这次 mutate 的参数说了算
             (`decide.variables`,自带一份就够,不再另起一个 state);另一颗只禁用,不转圈。 */}
+        <span className="mr-auto text-ui-2xs">
+          {decide.isPending
+            ? t("runApprovalSending")
+            : /*: 这句只在**真发出去过**时才说 —— 没发出去时上面那行已经说清了去哪儿批。 */
+              row.feishu_delivery === "sent"
+              ? t("runApprovalFeishuHint")
+              : ""}
+        </span>
         <Button
           size="sm"
           loading={deciding === "approved"}
@@ -144,14 +193,6 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
         >
           {row.reject_label || t("runApprovalRejected")}
         </Button>
-        <span className="text-ui-2xs">
-          {decide.isPending
-            ? t("runApprovalSending")
-            : /*: 这句只在**真发出去过**时才说 —— 没发出去时上面那行已经说清了去哪儿批。 */
-              row.feishu_delivery === "sent"
-              ? t("runApprovalFeishuHint")
-              : ""}
-        </span>
       </div>
     </div>
   );

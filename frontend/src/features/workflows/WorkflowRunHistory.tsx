@@ -76,7 +76,7 @@ function RunCosts({ job }: { job: Job }) {
   const costs = runCosts(job);
   if (!costs) return null;
   return (
-    <p data-testid="run-costs" className="m-0 mb-2 px-1.5 text-ui-2xs text-muted-foreground">
+    <p data-testid="run-costs" className="m-0 px-1 text-ui-2xs text-muted-foreground">
       {t("wfHistoryCost")
         //: 一笔钱都没有:有没定价的就是「未定价」,否则都是免费的、失败了没扣钱的(后端不把它们的 0 算成钱)——「未扣费」
         .replace("{cost}", formatCosts(costs.amounts, locale) || t(costs.unpriced > 0 ? "wfHistoryCostNone" : "wfHistoryCostNotCharged"))
@@ -200,17 +200,20 @@ export function WorkflowRunHistory({
 
   // 和 AI 助手一样停靠在右栏,不再是盖在画布上的悬浮层:悬浮会挡住正在跑的节点,
   // 而运行时恰恰要同时看见画布和这里。
+  //
+  // **一个面板,三段落,一条分隔线**(ADR 0074):
+  //   头(吸顶) / 待批段 / ── 一条 border-t ── / 列表 / ── 一条 border-t ── / 详情。
+  // 整个面板只有它自己这一圈 `rounded-xl border`;里面任何块都不再画整圈边。
   return (
     <aside
-      // **高度由父级决定,不由内容决定。** 停靠时 `h-full` 吃满右栏那一格(网格
-      // `minmax(0,1fr)` 给的高度);悬浮时窗口自己有高度(`useFloatingPanel` 的 inline height)。
-      // 根这一层只负责竖直分栏:标题栏固定、内容区吃掉剩下的。
-      //
-      // 少了 `h-full` / `min-h-0`,内容一多就把面板本身撑高 —— 里面所有 `overflow-y-auto`
-      // 都失去可滚的余地(维护者:「一旦出现一个内容比较多的确认卡 就会撑开到超出整个模块
-      // 的高度」)。`min-h-0` 是关键那一格:flex 子项默认 `min-height: auto`,会按内容撑。
+      data-wf-run-history=""
       className={cn(
-        "flex h-full min-h-0 flex-col",
+        // **面板根是唯一负责滚的那一层。** 头部 `sticky top-0` 跟着它走;外框
+        // (`DOCKABLE_PANEL_FRAME_CLASS`)一条 `overflow-*` 都不写 —— 两处写 overflow 会抢同一个
+        // 属性,谁赢取决于 Tailwind 的生成顺序(ADR 0074 决定 5)。
+        // `h-full` / `min-h-0`:停靠时吃满右栏那一格,不由内容把面板撑高。
+        // `gap-3`:段与段之间只有 12px 这一种刻度。`scrollbar-gutter`:出滚动条时内容不横跳。
+        "flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
         DOCKABLE_PANEL_FRAME_CLASS,
         isFloating
           ? "fixed max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] border-floating-border"
@@ -223,15 +226,24 @@ export function WorkflowRunHistory({
     >
       {handles}
       <div
+        data-wf-run-history-header=""
         className={cn(
-          // `h-12 shrink-0`:标题栏高度是刻度,不参与压缩;它**不在滚动区里**,滚多远都还在。
+          // 标题栏是刻度(和 AI 助手同一套),不参与压缩,而且**吸顶**:滚到哪儿它都在。
+          // `bg-panel` 是压住从下面滚过去的行 —— 它不是第四种底,就是面板自己那一层。
           PANEL_HEADER_CLASS,
+          "sticky top-0 z-10 bg-panel",
           isFloating && "cursor-move",
         )}
         onPointerDown={startDrag}
       >
         <h2>
           <History size={14} /> {t("wfHistory")}
+          <span
+            data-wf-run-count=""
+            className="ml-0.5 text-ui-2xs font-normal tabular-nums text-muted-foreground"
+          >
+            {runs.data?.length ?? 0}
+          </span>
         </h2>
         <IconButton
           unstyled
@@ -245,111 +257,106 @@ export function WorkflowRunHistory({
           <X size={13} />
         </IconButton>
       </div>
-      {/*
-        **内容区是唯一负责滚的那一层。** `flex-1 min-h-0` 让它吃掉标题栏之外的全部高度
-        (`min-h-0` 不能少:不加它,flex 子项按内容的 min-height 撑,这一层就又被内容顶大);
-        `overflow-y-auto` 让超出的内容滚,而不是把面板撑高。
-        `[scrollbar-gutter:stable]` 给滚动条预留位置 —— 长正文出现滚动条时内容不横向抖一下。
-        `overscroll-contain` 到底后不把滚动传给画布。
 
-        「等人确认」那一段也在**这里面**,而不是标题栏和滚动区之间:卡片按内容自然高,
-        长了由这一层滚 —— 卡片自己不再设高度上限(那是双重滚动,很难用)。
-        标题栏在滚动区外面,所以始终可见。 */}
+      {/*: **待批段永远在顶。** 没有待批时它自己整块返回 null —— 不占位、也不留线
+          (ADR 0074 决定 6)。它和列表之间那条线由列表自己的 `border-t` 画,只有一条。 */}
+      <RunApprovalNotice workflowId={workflowId} />
+
       <div
-        data-wf-run-history-scroll=""
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]"
+        data-wf-run-history-list=""
+        // 段的边界是一条**单边** `border-t`(整圈边只属于面板);块间 8px、行间 4px。
+        className="flex shrink-0 flex-col gap-1 border-t border-border px-2 py-2"
       >
-        {/* 待批卡按内容自然高(正文不再设上限),长了由上面这一层滚;`shrink-0` 防止 flex 把它压扁。 */}
-        <RunApprovalNotice workflowId={workflowId} />
-        {/* 少量记录按内容占高；多了才在 40% 高度内滚动。详情因此总是紧跟所选记录，
-            不会被固定的上下分栏推到面板底部。列表自己的上限不参与撑高内容区:
-            `max-h-[40%]` + `overflow-y-auto` 让它封顶在内容区高度的四成。 */}
-        <div className="max-h-[40%] shrink-0 overflow-y-auto border-b border-border p-1 [scrollbar-gutter:stable]">
-          {/* **四种状态都要说出来**:读取中、读取失败、确实没有、有。此前只处理了后两种,
-              于是接口一 500(一条失败原因里的花括号把整个列表打挂),面板就是一片空白 ——
-              看起来和"一次都没跑过"一模一样,而用户明明跑过很多次。 */}
-          {runs.isPending && (
-            <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryLoading")}</p>
-          )}
-          {runs.isError && (
-            <div role="alert" className="grid justify-items-center gap-1.5 px-2 py-3 text-center">
-              <p className="m-0 text-ui-xs text-destructive">{t("wfHistoryLoadFailed")}</p>
-              <p className="m-0 break-words text-ui-2xs text-muted-foreground">{(runs.error as Error)?.message}</p>
-              <button
-                type="button"
-                className="cursor-pointer rounded-md border border-border bg-transparent px-2 py-0.5 text-ui-xs text-foreground hover:bg-secondary"
-                onClick={() => void runs.refetch()}
-              >
-                {t("retry")}
-              </button>
-            </div>
-          )}
-          {runs.data && runs.data.length === 0 && (
-            <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
-          )}
-          {(runs.data ?? []).map((run) => (
+        {/* **四种状态都要说出来**:读取中、读取失败、确实没有、有。此前只处理了后两种,
+            于是接口一 500(一条失败原因里的花括号把整个列表打挂),面板就是一片空白 ——
+            看起来和"一次都没跑过"一模一样,而用户明明跑过很多次。 */}
+        {runs.isPending && (
+          <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryLoading")}</p>
+        )}
+        {runs.isError && (
+          <div role="alert" className="grid justify-items-center gap-2 px-2 py-3 text-center">
+            <p className="m-0 text-ui-xs text-destructive">{t("wfHistoryLoadFailed")}</p>
+            <p className="m-0 break-words text-ui-2xs text-muted-foreground">{(runs.error as Error)?.message}</p>
+            {/*: 重试是一句**行内动作**,不是第二颗带框的按钮 —— 面板里只有一层框。 */}
             <button
-              key={run.id}
               type="button"
-              className={cn(
-                // 行内边距统一成 px-3 py-2(此前是 px-2 py-1.5,和下面步骤行不是一个节奏)。
-                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-foreground hover:bg-secondary",
-                run.id === viewedRunId && "bg-accent hover:bg-accent",
-              )}
-              aria-current={run.id === viewedRunId ? "true" : undefined}
-              onClick={() => onViewRun(run.id)}
+              className="cursor-pointer border-0 bg-transparent p-0 text-ui-xs text-primary hover:underline"
+              onClick={() => void runs.refetch()}
             >
-              <RunIcon status={run.status} />
-              <span className="flex min-w-0 flex-1 flex-col gap-px">
-                {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <Truncate className="min-w-0 text-xs">
-                    {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
-                  </Truncate>
-                  {/* 状态徽章在**文案右侧**(维护者:「这种 label 应该放在文案右侧而不是左侧」)——
-                      行首留给"哪一次运行",读完标题才看到"它怎么了"。 */}
-                  {partialRunTarget(run) && (
-                    <Truncate
-                      as="span"
-                      data-run-partial=""
-                      text={partialRunTarget(run)}
-                      className="ml-auto max-w-[45%] shrink-0 rounded-full border border-border bg-muted px-1.5 py-px text-ui-2xs text-muted-foreground"
-                    >
-                      {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
-                    </Truncate>
-                  )}
-                </span>
-                <span className="timecode text-ui-2xs text-muted-foreground">
-                  {run.created_at ? relTime(run.created_at, now) : ""}
-                  {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
-                  {run.created_at && RUNNING.has(run.status)
-                    ? ` · ${Math.max(0, (now - parseServerTime(run.created_at).getTime()) / 1000).toFixed(0)}s`
-                    : run.created_at && run.updated_at && ` · ${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}
-                </span>
-              </span>
-              <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+              {t("retry")}
             </button>
-          ))}
-        </div>
-        {/* 详情不再自己开一层滚动:整个内容区已经是一层滚动,里面再套一层会变成双滚动条。
-            这里只吃掉剩余高度(`flex-1 min-h-0`),内容长了交给外层滚。 */}
-        // 两段内容用同一套外边距(px-1 py-1),视觉间距交给每一行自己的 px-3 py-2。
-        <div className="min-h-0 flex-1 px-1 py-1">
+          </div>
+        )}
+        {runs.data && runs.data.length === 0 && (
+          <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryEmpty")}</p>
+        )}
+        {(runs.data ?? []).map((run) => (
+          <button
+            key={run.id}
+            type="button"
+            // **44px 行**(`min-h-11`):列表行和下面的步骤行同一个高度,视觉上一条节奏。
+            // 选中那一行是面板里三块底之一(强调底);悬停只是同一个强调色的更浅一档。
+            className={cn(
+              "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-foreground transition-colors",
+              run.id === viewedRunId ? "bg-accent hover:bg-accent" : "hover:bg-accent/50",
+            )}
+            aria-current={run.id === viewedRunId ? "true" : undefined}
+            onClick={() => onViewRun(run.id)}
+          >
+            <RunIcon status={run.status} />
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              {/* 这一页上按的是「停止运行」:被停下的写「已停止」(ADR 0049 决定 11),不写任务的那句「已取消」。 */}
+              <span className="flex min-w-0 items-center gap-1">
+                <Truncate className="min-w-0 flex-1 text-xs">
+                  {run.status === "cancelled" ? t("wfHistoryStopped") : run.message || runStatusText(t, run.status)}
+                </Truncate>
+                {/* 状态徽章在**文案右侧**(维护者:「这种 label 应该放在文案右侧而不是左侧」)——
+                    行首留给"哪一次运行",读完标题才看到"它怎么了"。 */}
+                {partialRunTarget(run) && (
+                  <Truncate
+                    as="span"
+                    data-run-partial=""
+                    text={partialRunTarget(run)}
+                    className="ml-auto max-w-[45%] shrink-0 text-ui-2xs text-muted-foreground"
+                  >
+                    {t("wfHistoryPartialRun").replace("{node}", partialRunTarget(run)!)}
+                  </Truncate>
+                )}
+              </span>
+              <span className="timecode text-ui-2xs text-muted-foreground">
+                {run.created_at ? relTime(run.created_at, now) : ""}
+                {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
+                {run.created_at && RUNNING.has(run.status)
+                  ? ` · ${Math.max(0, (now - parseServerTime(run.created_at).getTime()) / 1000).toFixed(0)}s`
+                  : run.created_at && run.updated_at && ` · ${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}
+              </span>
+            </span>
+            <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+          </button>
+        ))}
+      </div>
+
+      {/* **详情默认展开最后选中的那次运行** —— 编辑器给的 `viewedRunId` 指哪次就展开哪次,
+          不用再点一下(ADR 0074:两个待批段的形态)。没有可选的运行时不画这一段的线。 */}
+      {(selected || (runs.data?.length ?? 0) > 0) && (
+        <div
+          data-wf-run-history-detail=""
+          className="flex shrink-0 flex-col gap-2 border-t border-border px-2 pb-3 pt-2"
+        >
           {!selected ? (
             // 「选一次运行」只在**有得选**的时候说 —— 列表是空的、还在读、或者读挂了时,这句话是在
             // 让人去点一个不存在的东西。
-            (runs.data?.length ?? 0) > 0 && (
-              <div className="grid h-full place-items-center">
-                <p className="m-0 px-2 text-center text-ui-xs text-muted-foreground">{t("wfHistoryPick")}</p>
-              </div>
-            )
+            <div className="grid place-items-center px-2 py-3">
+              <p className="m-0 text-center text-ui-xs text-muted-foreground">{t("wfHistoryPick")}</p>
+            </div>
           ) : (
             <>
               {/* 这一轮跑挂了:全应用那一份失败展示 —— 那一句、原因和怎么修照跑挂的那个子任务说(后端解开「子任务失败」那层壳),
-                  原文在「详情」里;停在「这一版是别人改的,要主人认可」时就地给认可那一版的按钮(见 AttestRevisionButton)。 */}
+                  原文在「详情」里;停在「这一版是别人改的,要主人认可」时就地给认可那一版的按钮(见 AttestRevisionButton)。
+                  面板已经有一圈边,这张卡不再画自己那一圈(`border-0 bg-transparent`),否则就是第二层框。 */}
               {selected.error && (
                 <FailureCard
-                  className="mb-2"
+                  className="border-0 bg-transparent"
                   title={t("wfRunFailed")}
                   {...failureFields(selected, selected.error)}
                   actions={runAttest(selected) ? <AttestRevisionButton attest={runAttest(selected)!} /> : undefined}
@@ -357,53 +364,58 @@ export function WorkflowRunHistory({
                 />
               )}
               {!selected.error && runAttest(selected) && (
-                <div className="mb-2 flex justify-end">
+                <div className="flex justify-end">
                   <AttestRevisionButton attest={runAttest(selected)!} />
                 </div>
               )}
               <RunCosts job={selected} />
-              <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
+              <ol className="m-0 flex list-none flex-col gap-1 p-0">
                 {steps.map((s) => {
                   const hasDetail = (s.outputs && Object.keys(s.outputs).length > 0) || Boolean(s.error) || Boolean(s.details);
                   const open = expanded.has(s.nid);
+                  const current = s.status === "running";
                   return (
-                    <li key={s.nid} className={cn("rounded-md text-xs", s.status === "skipped" && "opacity-55")}>
+                    <li key={s.nid} className={cn("min-w-0", s.status === "skipped" && "opacity-55")}>
                       <button
                         type="button"
+                        // **44px 步骤行**:和上面列表行同高;耗时在行尾右对齐;正在跑的那一步用强调底标出来。
                         className={cn(
-                          "flex w-full items-center gap-[7px] rounded-md border-0 bg-transparent px-1.5 py-1 text-left text-xs text-foreground",
-                          hasDetail && "cursor-pointer hover:bg-secondary",
+                          "flex min-h-11 w-full items-center gap-1 rounded-md px-2 text-left text-xs text-foreground transition-colors",
+                          hasDetail && "cursor-pointer hover:bg-accent/50",
+                          current && "bg-accent hover:bg-accent",
                         )}
                         onClick={() => hasDetail && toggleExpanded(s.nid)}
                         aria-expanded={hasDetail ? open : undefined}
+                        aria-current={current ? "step" : undefined}
                       >
                         {s.status === "done" ? (
-                          <CheckCircle2 size={12} className="shrink-0 text-success" />
+                          <CheckCircle2 size={13} className="shrink-0 text-success" />
                         ) : s.status === "failed" ? (
-                          <XCircle size={12} className="shrink-0 text-destructive" />
+                          <XCircle size={13} className="shrink-0 text-destructive" />
                         ) : s.status === "skipped" ? (
-                          <SkipForward size={12} className="shrink-0" />
+                          <SkipForward size={13} className="shrink-0" />
                         ) : s.status === "cancelled" ? (
-                          <Ban size={12} className="shrink-0 text-muted-foreground" />
+                          <Ban size={13} className="shrink-0 text-muted-foreground" />
                         ) : (
-                          <Loader2 size={12} className="animate-mosael-spin shrink-0 text-primary" />
+                          <Loader2 size={13} className="animate-mosael-spin shrink-0 text-primary" />
                         )}
-                        <Truncate className="flex-1">
+                        <Truncate className="min-w-0 flex-1">
                           {s.name}
                           {s.status === "running" && s.message && (
                             <span className="ml-1.5 text-ui-2xs text-muted-foreground">{s.message}</span>
                           )}
                         </Truncate>
+                        {/* 耗时 / 状态**右对齐**:和列表行右侧的徽章是同一条竖线。 */}
                         {s.status === "skipped" || s.status === "cancelled" ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                          <span className="timecode ml-auto inline-flex shrink-0 items-center gap-1 text-ui-2xs text-muted-foreground">
                             {t(STEP_STATUS_LABELS[s.status])}
                           </span>
                         ) : s.status === "running" && s.startAt != null ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                          <span className="timecode ml-auto inline-flex shrink-0 items-center gap-1 text-ui-2xs text-muted-foreground">
                             <Clock size={10} /> {Math.max(0, (now - s.startAt) / 1000).toFixed(0)}s
                           </span>
                         ) : s.ms != null ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                          <span className="timecode ml-auto inline-flex shrink-0 items-center gap-1 text-ui-2xs text-muted-foreground">
                             <Clock size={10} /> {(s.ms / 1000).toFixed(2)}s
                           </span>
                         ) : null}
@@ -413,11 +425,11 @@ export function WorkflowRunHistory({
                       </button>
                       {/* 跑挂的那一步:一行档(那一句 + 「详情」浮层),整轮的失败已经在上面那张卡里说过一遍 */}
                       {open && s.failure && (
-                        <FailureCard size="inline" lines={2} className="mx-1.5 mb-1 mt-0.5 w-auto" title={t(STEP_STATUS_LABELS.failed)}
+                        <FailureCard size="inline" lines={2} className="mx-2 mb-2 mt-1 w-auto" title={t(STEP_STATUS_LABELS.failed)}
                                      {...s.failure} data-step-failed={s.nid} />
                       )}
                       {open && s.details && (
-                        <div className="mx-1.5 mb-1 mt-1">
+                        <div className="mx-2 mb-2 mt-1">
                           <WorkflowFailureDetails details={s.details} />
                         </div>
                       )}
@@ -428,25 +440,28 @@ export function WorkflowRunHistory({
                           items={assetOutputs(outputRows(registry, nodeTypeById[s.nid] ?? "", s.outputs))}
                           density="panel"
                           gallery={runGallery}
-                          className="mx-1.5 mb-1 mt-0.5 gap-1.5"
+                          className="mx-2 mb-2 mt-1 gap-2"
                         />
                       )}
+                      {/* 这一步的原始输出:面板根已经在滚,这一块不再自己开滚动、也不再画一块底。 */}
                       {open && s.outputs && Object.keys(s.outputs).length > 0 && (
-                        <pre className="mx-1.5 mb-1 mt-0.5 max-h-44 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1.5 font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
+                        <pre className="mx-2 mb-2 mt-1 whitespace-pre-wrap break-words font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
                           {outputsText(s.outputs)}
                         </pre>
                       )}
                     </li>
                   );
                 })}
-                {steps.length === 0 && events.isFetched && <p className="px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryNoSteps")}</p>}
+                {steps.length === 0 && events.isFetched && (
+                  <p className="m-0 px-2 py-3 text-center text-ui-xs text-muted-foreground">{t("wfHistoryNoSteps")}</p>
+                )}
               </ol>
               {/* **循环体里的节点不发事件**(子图不带 job,见 engine.execute_graph),所以上面
                   那份按节点画的清单在一次跑六镜的运行里只有「逐镜生成」一个条目在转圈。而那六次
                   出片其实各自都建了任务,parent_job_id 指着这次运行 —— 数据一直在,只是工作流
                   这一侧从没去取。摆出来,而不是发明一种新的事件。 */}
               {(children.data ?? []).length > 0 && (
-                <div className="grid min-w-0 gap-1 border-t border-border px-2 pt-2">
+                <div className="flex min-w-0 flex-col gap-2 px-2 pt-1">
                   <span className="text-ui-xs font-semibold text-muted-foreground">{t("jobDetailChildren")}</span>
                   <JobChildrenList>{children.data ?? []}</JobChildrenList>
                 </div>
@@ -454,7 +469,7 @@ export function WorkflowRunHistory({
             </>
           )}
         </div>
-      </div>
+      )}
     </aside>
   );
 }
