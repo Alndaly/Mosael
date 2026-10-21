@@ -323,6 +323,8 @@ export function WorkflowEditor({
     dropUpload,
     pendingDropAt,
     canvasDrop,
+    handleNodeDragStart,
+    handleNodeDragStop,
   } = useWorkflowCanvasEdits({
     graph,
     setGraph,
@@ -728,8 +730,14 @@ export function WorkflowEditor({
               canvas.handlers.onMoveEnd();
               viewport.remember(next);
             }}
-            onNodeDragStart={() => setDragging(true)}
-            onNodeDragStop={() => setDragging(false)}
+            onNodeDragStart={() => {
+              setDragging(true);
+              handleNodeDragStart();
+            }}
+            onNodeDragStop={() => {
+              handleNodeDragStop();
+              setDragging(false);
+            }}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             connectionRadius={36}
