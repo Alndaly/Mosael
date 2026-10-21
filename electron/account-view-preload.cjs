@@ -7,34 +7,36 @@ const { webFrame } = require("electron");
 
 // 反检测:视图是 contextIsolation 的,preload 改 navigator 影响不到页面「主世界」——必须用
 // webFrame.executeJavaScript 把补丁注进主世界,且趁 preload 执行(document_start 前、页面脚本跑之前)
-// 尽早打上。抹掉最常被平台风控读取的自动化指纹:navigator.webdriver、缺失的 window.chrome / plugins /
-// languages、permissions.query 行为、WebGL vendor/renderer。治标不治本,但比只抹 UA 里的 Electron 字样强。
+// 尽早打上。抹掉最常被平台风控读取的自动化指纹:navigator.webdriver、缺失的 window.chrome /
+// languages、plugins。
+//
+// **只补「Chromium 与真的 Chrome 不一样」的那几处,而且补成 Chrome 的样子。**
+// 此前这里还伪造过 WebGL vendor/renderer(谎报 Intel —— 这台是 Apple Silicon)和 permissions.query
+// 的返回(一个普通对象而不是 PermissionStatus),plugins 则是 `Plugin 1/2/3` 三个假名字。这比不补更
+// 糟:反欺诈一比对就是「自称 Chrome、指纹却不是 Chrome」。X 的登录页一直挂「An unexpected error
+// occurred」,排查到这一层(详见 publish/accountViews 的登录探针)。WebGL / permissions 现在不碰 ——
+// Electron 与 Chrome 同为 ANGLE 渲染,原生值本就接近;plugins 补成 Chrome 真实报的 PDF 列表。
 const STEALTH_JS = `(() => {
   const def = (obj, prop, get) => { try { Object.defineProperty(obj, prop, { get, configurable: true }); } catch (e) {} };
   def(Navigator.prototype, 'webdriver', () => false);
   try { if (!window.chrome) window.chrome = { runtime: {} }; } catch (e) {}
   try { if (!navigator.languages || !navigator.languages.length) def(Navigator.prototype, 'languages', () => ['zh-CN', 'zh']); } catch (e) {}
+  //: Chrome 的 navigator.plugins 是 5 个 PDF Viewer 条目(内部 PDF 查看器),不是三个假名 ——
+  //: 只补数量会漏出「Plugin 1」这种一眼假的名字。每条的 mimeTypes 里是 text/pdf 与 application/pdf。
   try {
-    if (navigator.plugins && navigator.plugins.length === 0)
-      def(Navigator.prototype, 'plugins', () => [1, 2, 3].map((i) => ({ name: 'Plugin ' + i })));
-  } catch (e) {}
-  try {
-    const q = navigator.permissions && navigator.permissions.query;
-    if (q) navigator.permissions.query = (p) =>
-      p && p.name === 'notifications' ? Promise.resolve({ state: Notification.permission }) : q.call(navigator.permissions, p);
-  } catch (e) {}
-  try {
-    const patch = (proto) => {
-      if (!proto) return;
-      const g = proto.getParameter;
-      proto.getParameter = function (p) {
-        if (p === 37445) return 'Intel Inc.';
-        if (p === 37446) return 'Intel Iris OpenGL Engine';
-        return g.call(this, p);
-      };
-    };
-    patch(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
-    patch(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
+    if (navigator.plugins && navigator.plugins.length === 0) {
+      const mime = (type) => ({ type, suffixes: 'pdf', description: 'Portable Document Format' });
+      const plugin = (name) => ({
+        name,
+        filename: 'internal-pdf-viewer',
+        description: 'Portable Document Format',
+        length: 2,
+        0: mime('application/pdf'),
+        1: mime('text/pdf'),
+      });
+      const names = ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer', 'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'];
+      def(Navigator.prototype, 'plugins', () => names.map(plugin));
+    }
   } catch (e) {}
   // **WebAuthn:有认证器就放行,没有就当场说不 —— 唯独不能一直挂着。**
   //
