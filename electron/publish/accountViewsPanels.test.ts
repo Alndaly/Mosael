@@ -1000,3 +1000,25 @@ describe("capturing a page that isn't on the window (the 5th session, a page in 
     await expect(manager.withPageOnSurface("nope", null, async () => "x")).rejects.toThrow(/page/);
   });
 });
+
+describe("内嵌浏览器的 UA 清洗(X 登录被反欺诈拒的那次)", () => {
+  it("实测 UA:Electron 与应用名 token 都抹掉,只剩干净 Chrome", async () => {
+    const { platformUserAgent } = await import("./accountViews");
+    expect(
+      platformUserAgent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Mosael/2.0.0 Chrome/152.0.7977.130 Electron/44.4.5 Safari/537.36",
+      ),
+    ).toBe(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36",
+    );
+  });
+
+  it("裸 Electron(没有应用名 token)同样干净,且不误吃 Chrome", async () => {
+    const { platformUserAgent } = await import("./accountViews");
+    expect(
+      platformUserAgent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Electron/44.4.5 Safari/537.36",
+      ),
+    ).toBe("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36");
+  });
+});

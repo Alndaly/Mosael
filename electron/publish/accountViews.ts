@@ -105,8 +105,25 @@ const IDLE_SWEEP_MS = 5_000;
 /** 用户拖动/缩放后的面板几何存这儿,重启后接着用。 */
 const LAYOUT_FILE = "panel-layout.json";
 
-const platformUserAgent = (userAgent: string): string => {
-  return userAgent.replace(/\sElectron\/[\d.]+/i, "");
+/**
+ * 抹掉「不是任何一种真实浏览器」的身份 token,剩下的就是一枚干净的 Chrome UA。
+ *
+ * Electron 的默认 UA 是 `… AppleWebKit/537.36 (KHTML, like Gecko) Mosael/2.0.0 Chrome/152…
+ * Electron/44.4.5 Safari/537.36`(2026-10-22 在应用里实测)。**只抹 Electron 不够** —— 应用名
+ * token(`Mosael/2.0.0`)还留在里面,而没有任何浏览器这样自称;拿这个身份去登录,反欺诈会判会话
+ * 可疑(x.com 的登录页直接回「An unexpected error occurred」;同款事故:Orca 浏览器 v1.4.198
+ * 被 x.com / LinkedIn 判可疑会话,修法就是这两条 replace)。
+ *
+ * 顺序:先 Electron,再应用名 token(它夹在 `)` 和 ` Chrome/` 之间)。
+ */
+export const platformUserAgent = (userAgent: string): string => {
+  return (
+    userAgent
+      .replace(/\s+Electron\/\S+/i, "")
+      // `) Mosael/2.0.0 Chrome/` → `) Chrome/`;没有应用名 token 时(裸 Electron)这条不匹配,
+      // 不会把 `) Chrome/` 本身吃掉。
+      .replace(/(\)\s+)\S+\s+(Chrome\/)/, "$1$2")
+  );
 };
 
 /** 悬浮卡片的几何,下发给渲染层去画圆角/阴影/标题条(原生 View 画不了这些)。 */
