@@ -1160,6 +1160,44 @@ export class AccountViewManager {
     view.webContents.on("did-finish-load", () => {
       const url = view.webContents.getURL();
       if (!/x\.com|twitter\.com/i.test(url)) return;
+      //: 接口 200 不代表成功:X 在 200 的响应体里回 {errors:[...]},登录页据此画红字。
+      //: 把 fetch/XHR 包一层,可疑响应体打到 console.error —— 上面的 console 探针会落日志。
+      void view.webContents
+        .executeJavaScript(
+          `(() => {
+            if (window.__mosaelNetBody) return "already";
+            window.__mosaelNetBody = true;
+            const interesting = (url, status) => /api\\.x\\.com\\/(1\\.1|i\\/api)/.test(String(url)) && (/flow|graphql|onboarding|login/.test(String(url)) || status >= 400);
+            const report = (url, status, text) => {
+              if (!text) return;
+              if (status >= 400 || /"errors"\\s*:/.test(text)) {
+                console.error("[mosael-net]", status, String(url).slice(0, 160), String(text).slice(0, 900));
+              }
+            };
+            const origFetch = window.fetch;
+            window.fetch = async (...args) => {
+              const res = await origFetch.apply(window, args);
+              try {
+                const url = (args[0] && args[0].url) || String(args[0]);
+                if (interesting(url, res.status)) {
+                  res.clone().text().then((text) => report(url, res.status, text)).catch(() => undefined);
+                }
+              } catch (error) { /* 观测失败不影响页面 */ }
+              return res;
+            };
+            const origOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+              this.addEventListener("loadend", () => {
+                try {
+                  if (interesting(url, this.status)) report(url, this.status, this.responseText);
+                } catch (error) { /* 同上 */ }
+              });
+              return origOpen.call(this, method, url, ...rest);
+            };
+            return "wrapped";
+          })()`,
+        )
+        .catch(() => undefined);
       void view.webContents
         .executeJavaScript(
           `JSON.stringify({
