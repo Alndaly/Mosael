@@ -429,9 +429,11 @@ const zh = {
     seoDescription: "浏览 Mosael 社区里公开分享的画布。下载 .json 工程文件，或者在 Mosael 里打开，接着往下做。",
     keywords: ["Mosael 画板", "创意画板", "画布分享", "AI 创作画板"],
     lede: "大家分享的画布：素材、位置和连线都在里面，打开就能接着往下做。",
+    // 「分享你的画布」——和 /workflows 的「分享你的工作流」同一个位置(页头右上)、同一个形状。
+    contribute: "分享你的画布",
     search: "搜索画板",
     empty: "还没有人分享画布",
-    emptyHint: "上传一份画布 .json，它就会出现在这里。",
+    emptyHint: "点右上角「分享你的画布」，传一份 .json，它就会出现在这里。",
   },
   community: {
     name: "社区",
@@ -1017,9 +1019,10 @@ const en: Messages = {
       "Browse boards shared in the Mosael community. Download the .json project file, or open it in Mosael and keep building.",
     keywords: ["Mosael boards", "idea board", "infinite canvas", "board sharing"],
     lede: "Boards people shared: media, positions and connections are all inside, so you can open one and keep building.",
+    contribute: "Share a board",
     search: "Search boards",
     empty: "Nobody has shared a board yet",
-    emptyHint: "Upload a board .json and it will show up here.",
+    emptyHint: "Use “Share a board” in the top right — upload a .json and it shows up here.",
   },
   community: {
     name: "Community",

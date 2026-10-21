@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { BoardBrowser } from "@/components/community/browse";
 import { CommunityHeader } from "@/components/community/community-header";
-import { isLocale } from "@/i18n/config";
+import { isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { listPlugins, listWorkflows } from "@/lib/registry";
 import { pageMetadata } from "@/lib/seo";
@@ -39,9 +39,9 @@ export default async function BoardsPage({ params }: { params: Params }) {
         counts={{ plugins: listPlugins(locale).length, workflows: listWorkflows(locale).length }}
         title={t.boards.heading}
         lede={t.boards.lede}
-        // 页头**不给** CTA:这一页的列表是浏览器里取的,只有它知道此刻空不空。
-        // 空态那条链接与非空时筛选区那颗按钮由列表自己出 —— 一屏永远只有一处「去上传」。
-        contribute={null}
+        // **和 /workflows 一个位置**:页头右上。以前这里放 /plugins 的「写一个插件」误导,后来干脆不给,
+        // 把入口塞进搜索条右边 —— 于是两页的分享按钮一个在页头、一个在列表里,看着不像同一件事。
+        contribute={{ label: t.boards.contribute, href: localePath(locale, "/community/upload") }}
       />
       <section className="bg-paper">
         <div className="mx-auto max-w-[76rem] px-5 py-10 sm:px-8 sm:pb-24">

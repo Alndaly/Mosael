@@ -92,8 +92,14 @@ test("② /boards 是完整列表页:只取 kind=board + 当前 locale,不混官
   assert.match(page, /notFound\(\)/, "/boards 没有处理非法语言");
   assert.match(page, /<CommunityHeader/, "/boards 没有和 /plugins、/workflows 一样的页头");
   assert.match(page, /<BoardBrowser locale=\{locale\}/, "/boards 没有渲染画板列表");
-  // 页头**不带** CTA:这一页的列表在浏览器里取,只有它知道此刻空不空;一屏只留一处「去上传」。
-  assert.match(page, /contribute=\{null\}/, "/boards 的页头又把「去上传」加回来了(会和空态那条重复)");
+  // 和维护者对齐过:「**创意画板和工作流的分享按钮位置不一致**」。
+  // 现在两页都放在**页头右上**(同一个 `CommunityHeader` 的 contribute),列表里不再出现第二颗。
+  assert.match(
+    page,
+    /contribute=\{\{ label: t\.boards\.contribute, href: localePath\(locale, "\/community\/upload"\) \}\}/,
+    "/boards 的分享按钮没在页头(要和工作流同一个位置)",
+  );
+  assert.doesNotMatch(page, /contribute=\{null\}/, "/boards 的页头还写着 contribute={null}");
 
   const browse = maybeRead(BROWSE);
   assert.match(browse, /export function BoardBrowser/, "缺少 BoardBrowser");
@@ -103,9 +109,9 @@ test("② /boards 是完整列表页:只取 kind=board + 当前 locale,不混官
   assert.match(browser, /<ShareCard locale=\{locale\} share=\{/, "BoardBrowser 没有用现有 ShareCard");
   assert.match(browser, /SearchBox/, "BoardBrowser 没有搜索(和 /plugins、/workflows 同构)");
   assert.doesNotMatch(browser, /PluginCard|WorkflowCard|mergeListing\(/, "画板列表混进了官方静态内容");
-  // 空态另走一条:没有画布时给「去上传」,搜索筛空时给清筛选。
+  // 整页空态只给**一句人话 + 指到页头那颗按钮**;不再自己放第二颗「去上传」(会重复)。
   assert.match(browser, /t\.boards\.empty/, "没有画布的整页空态没有文案");
-  assert.match(browser, /localePath\(locale, "\/community\/upload"\)/, "空态没有「去上传」的入口");
+  assert.doesNotMatch(browser, /localePath\(locale, "\/community\/upload"\)/, "空态又自己加了一颗上传按钮");
 
   // 真正发出去的请求:kind=board + 当前语言,只取两页各一次。
   const realFetch = globalThis.fetch;
@@ -170,12 +176,14 @@ test("④ 一条画布都没有:一句人话 + 去上传,沿用现有空态样�
   const zh = getMessages("zh").boards;
   const en = getMessages("en").boards;
   assert.match(zh.empty, /还没有人分享画布/, "中文空态没有说清「还没有人分享画布」");
-  assert.match(zh.emptyHint, /上传/, "中文空态没有指向「去上传」");
+  // 空态仍然要指路,但**不再自己放一颗按钮**(那会和页头那颗重复):它说的是"点右上角那颗"。
+  assert.match(zh.emptyHint, /右上角/, "中文空态没有指到页头那颗「分享你的画布」");
+  assert.match(en.emptyHint, /top right/i, "英文空态没有指到页头那颗按钮");
   assert.ok(en.empty && en.emptyHint, "英文空态缺文案");
 
   const browser = section(maybeRead(BROWSE), "export function BoardBrowser");
   assert.match(browser, /t\.boards\.empty/, "BoardBrowser 没有渲染「还没有人分享画布」");
-  assert.match(browser, /uploadCta/, "空态没有「去上传」这个动作");
+  assert.doesNotMatch(browser, /uploadCta/, "空态不该再渲染上传按钮(入口在页头)");
   assert.match(browser, /border-dashed/, "空态没有沿用现有空态的虚线框样式");
 });
 

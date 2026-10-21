@@ -360,16 +360,6 @@ export function BoardBrowser({ locale }: { locale: Locale }) {
     <div className="grid gap-6">
       <div className="flex flex-wrap items-center gap-3">
         <SearchBox value={query} onChange={setQuery} placeholder={t.boards.search} />
-        {/* 「去上传」只在一屏出现一次:有画布时在这条工具条上,空的时候交给空态(页头不再给) */}
-        {shares.length > 0 && (
-          <Link
-            href={localePath(locale, "/community/upload")}
-            className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-semibold transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            {t.community.uploadCta}
-            <ArrowUpRight className="size-4" aria-hidden />
-          </Link>
-        )}
         {query && (
           <button type="button" onClick={() => setQuery("")} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <X className="size-4" aria-hidden />
@@ -406,13 +396,8 @@ function BoardsEmpty({ locale }: { locale: Locale }) {
     <div className="grid place-items-center gap-3 rounded-2xl border border-dashed border-border px-6 py-20 text-center">
       <LayoutGrid className="size-6 text-muted-foreground" aria-hidden />
       <p className="m-0 font-semibold">{t.boards.empty}</p>
+      {/* 入口在页头右上(和 /workflows 同一个位置)——这里不再给第二颗按钮。 */}
       <p className="m-0 text-sm text-muted-foreground">{t.boards.emptyHint}</p>
-      <Link
-        href={localePath(locale, "/community/upload")}
-        className="mt-1 text-sm font-semibold text-primary hover:underline"
-      >
-        {t.community.uploadCta}
-      </Link>
     </div>
   );
 }
