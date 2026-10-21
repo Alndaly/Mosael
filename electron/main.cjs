@@ -821,6 +821,16 @@ function createWindow() {
       preload: path.join(__dirname, "preload.bundle.cjs"),
     },
   });
+  // 开发时把渲染层的 console 转出来:那些错误只活在 DevTools 里,而"登录后被踢回登录页"这类
+  // 问题恰恰写在渲染层控制台里(401 是谁发的、之后怎么处理)。只在这一份日志里能看见。
+  if (isDev) {
+    win.webContents.on("console-message", (event) => {
+      const level = typeof event.level === "string" ? event.level : `level-${event.level}`;
+      if (level !== "error" && level !== "warning") return;
+      const where = event.sourceId ? ` (${path.basename(event.sourceId)}:${event.lineNumber})` : "";
+      console.log(`[renderer/${level}] ${event.message}${where}`);
+    });
+  }
   if (placement.maximized && !isSmokeTest) win.maximize();
   rememberWindowBounds(win, windowStateFile);
   // 无边框自绘标题:菜单栏默认隐藏,Win/Linux 下按 Alt 唤起(快捷键始终有效)。

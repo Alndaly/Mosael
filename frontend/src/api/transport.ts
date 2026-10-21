@@ -149,6 +149,9 @@ function baseHeaders(): Record<string, string> {
 /** 一个没成的响应 → 抛什么:401 交给登录处理,别的带着状态码和原文。`api` 和 `apiUpload` 同一套。 */
 function failure(path: string, method: string, status: number, statusText: string, body: string): Error {
   if (status === 401 && !path.startsWith("/api/auth/")) {
+    // 这条日志是排"登录后被踢回登录页"的:踢人的是**这一条请求**,不是登录本身。
+    // 以前这里一声不响地清令牌,现场只剩"回到登录页"这个结果。控制台日志用英文,和下面 `[api]` 那条一致。
+    console.warn(`[auth] 401 from ${method.toUpperCase()} ${path} — local session dropped, back to sign-in`);
     onUnauthorized?.();
     return new Error("Not authenticated");
   }
