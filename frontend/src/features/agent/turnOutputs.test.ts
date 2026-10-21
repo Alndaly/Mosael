@@ -26,6 +26,14 @@ describe("这一轮做出来的素材", () => {
     expect(producedByTool(mask.tool)).toEqual(["m"]);
   });
 
+  it("同步工具直接交回的产出(computer_screenshot):produced_asset_ids 算,平铺的 asset_ids 不算", () => {
+    expect(
+      producedByTool(tool("computer_screenshot", { window: "main", produced_asset_ids: ["shot1"] }).tool),
+    ).toEqual(["shot1"]);
+    // 平铺 asset_ids 是「碰过的」读法 —— 一份随便什么的 id 列表不能进答案区。
+    expect(producedByTool(tool("some_list", { asset_ids: ["a", "b"] }).tool)).toEqual([]);
+  });
+
   it("碰过的不算产出:分析的图、改标签的那份、解析文档的那份", () => {
     // 这些结果顶层也带 asset_id,但它们说的是「我对这份做了什么」,不是「我做出了这份」。
     expect(producedByTool(tool("analyze_image", { asset_id: "mine", description: "一只猫" }).tool)).toEqual([]);

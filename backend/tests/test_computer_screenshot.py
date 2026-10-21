@@ -207,7 +207,9 @@ def test_the_same_png_is_saved_as_an_asset_so_the_conversation_shows_it(monkeypa
     # 给模型看的原样还在……
     assert len(body["images"]) == 1
     # ……给界面看的素材 id 也给了:库里那一份内容就是桥回来的同一张 PNG。
-    asset_ids = body["result"]["asset_ids"]
+    # 键名是 produced_asset_ids:前端结果区(turnOutputs)按这个形状认「做出来的」,
+    # 平铺的 asset_ids 是「碰过的」读法,不进答案区。
+    asset_ids = body["result"]["produced_asset_ids"]
     assert len(asset_ids) == 1
     asset = client.get(f"/api/assets/{asset_ids[0]}").json()
     assert asset["workspace_id"] == ws["id"]
@@ -237,7 +239,7 @@ def test_a_failing_asset_import_does_not_fail_the_screenshot(monkeypatch) -> Non
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["result"]["window"] == "main"
-    assert "asset_ids" not in body["result"]
+    assert "produced_asset_ids" not in body["result"]
     assert len(body["images"]) == 1
 
 

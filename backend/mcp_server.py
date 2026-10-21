@@ -316,15 +316,17 @@ def computer_screenshot(
     capture your desktop, other apps or the menu bar, needs no screen-recording permission, and
     never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large window; the
     embedded page is browser_screenshot. The same PNG is also saved as an asset and returned as
-    asset_ids, so the user sees it in the conversation (images are for the model only).
+    produced_asset_ids, so the user sees it in the conversation (images are for the model only).
     """
     import base64
 
     from app.domain.agent.computer_use import screenshot
 
     shot = screenshot(window=window, scale=scale)
-    # 同一份 PNG 落一份进素材库、把 id 交回结果:对话界面(ToolCalls)早就会渲染 result.asset_ids,
-    # 生成图片、飞书图片都走这条通道 —— 「模型看得到」(images)和「用户看得到」(asset_ids)是两回事。
+    # 同一份 PNG 落一份进素材库、把 id 交回结果:对话界面早就会渲染工具结果里的素材
+    # (ToolCalls 按 asset_ids 形状的键收),而「模型看得到」(images)和「用户看得到」是两回事。
+    # 键名用 produced_asset_ids 而不是平铺的 asset_ids:前端结果区(turnOutputs.producedByTool)
+    # 按形状认「做出来的」产出,平铺 asset_ids 是「碰过的」读法,不认。
     asset_id: str | None = None
     try:
         workspace_id = _default_workspace_id()
@@ -355,7 +357,7 @@ def computer_screenshot(
             "width": shot["width"],
             "height": shot["height"],
             "scale": shot["scale"],
-            **({"asset_ids": [asset_id]} if asset_id else {}),
+            **({"produced_asset_ids": [asset_id]} if asset_id else {}),
             "images": [{"view": "computer", "mime_type": "image/png", "data": shot["image"]}],
         }
     )
