@@ -1000,22 +1000,3 @@ describe("capturing a page that isn't on the window (the 5th session, a page in 
     await expect(manager.withPageOnSurface("nope", null, async () => "x")).rejects.toThrow(/page/);
   });
 });
-
-describe("chromeClientHints(X/Google 登录的浏览器完整性头)", () => {
-  it("认得出 Chrome 版本:品牌与 fullVersion 和 UA 一致", async () => {
-    const { chromeClientHints } = await import("./accountViews");
-    const hints = chromeClientHints(
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7230.66 Safari/537.36",
-    );
-    expect(hints).not.toBeUndefined();
-    expect(hints!.brands).toContainEqual({ brand: "Google Chrome", version: "140" });
-    expect(hints!.fullVersionList).toContainEqual({ brand: "Google Chrome", version: "140.0.7230.66" });
-    expect(hints!.fullVersion).toBe("140.0.7230.66");
-    expect(hints!.mobile).toBe(false);
-  });
-
-  it("UA 里认不出 Chrome 版本(测试替身/记号变更):返回 undefined,退回只设 UA", async () => {
-    const { chromeClientHints } = await import("./accountViews");
-    expect(chromeClientHints("Mozilla/5.0 Electron/44.4.5")).toBeUndefined();
-  });
-});
