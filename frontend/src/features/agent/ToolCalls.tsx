@@ -666,9 +666,10 @@ function ReceiptStep({ receipt }: { receipt: FoldedReceipt }) {
       <Button
         variant="ghost"
         size="xs"
-        // 显式三栏:左(图标 + 后台任务 · 种类)/ 中(主题,占满剩余、自然左对齐截断)/ 右(状态)。
-        // 此前是 flex 排,主题靠 flex-1 挤在中间,和左边的「·」脱节、视觉上悬空(维护者截图)。
-        className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 font-normal"
+        // 显式四栏:图标 / 后台任务 · 种类 / 主题(占满剩余、自然左对齐截断)/ 状态。
+        // 子元素正好四个,栏位一一对应 —— 三个栏的话第四个子元素会被挤到下一行(维护者截图)。
+        // 此前是 flex 排,主题靠 flex-1 挤在中间,和左边的「·」脱节、视觉上悬空。
+        className="grid w-full min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-1.5 font-normal"
         loading={openTask.isPending}
         disabled={!jobId}
         onClick={() => jobId && openTask.mutate()}
