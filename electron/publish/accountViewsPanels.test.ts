@@ -44,7 +44,12 @@ const fake = vi.hoisted(() => {
       };
     })();
     navigationHistory = { canGoBack: () => false, canGoForward: () => false };
-    debugger = { isAttached: () => false };
+    debugger = {
+      isAttached: () => false,
+      //: 登录排障:创建页面时通过 CDP 对齐 UA/client hints 身份(见 accountViews)。
+      attach: () => undefined,
+      sendCommand: async () => undefined,
+    };
     mainFrame = { routingId: 1, framesInSubtree: [] as unknown[], executeJavaScript: async (_code?: string): Promise<unknown> => undefined };
     /** 系统焦点在不在这个网页上(webContents.focus())。 */
     focused = false;
@@ -1025,5 +1030,27 @@ describe("内嵌浏览器的 UA 清洗(X 登录被反欺诈拒的那次)", () =>
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Electron/44.4.5 Safari/537.36",
       ),
     ).toBe("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36");
+  });
+});
+
+describe("CDP 身份对齐(chromeIdentityOverride)", () => {
+  it("UA、client hints、userAgentData 三处说同一件事:Google Chrome + 同版本", async () => {
+    const { chromeIdentityOverride } = await import("./accountViews");
+    const ua =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36";
+    const identity = chromeIdentityOverride(ua);
+    expect(identity).not.toBeNull();
+    expect(identity!.userAgent).toBe(ua);
+    expect(identity!.userAgentMetadata.brands).toContainEqual({ brand: "Google Chrome", version: "152" });
+    expect(identity!.userAgentMetadata.fullVersionList).toContainEqual({ brand: "Google Chrome", version: "152.0.7977.130" });
+    expect(identity!.userAgentMetadata.fullVersion).toBe("152.0.7977.130");
+    expect(identity!.userAgentMetadata.mobile).toBe(false);
+    //: 平台名跟着系统走,测试机是 macOS。
+    expect(identity!.platform).toBe(process.platform === "darwin" ? "MacIntel" : identity!.platform);
+  });
+
+  it("认不出 Chrome 版本:返回 null(不退化成乱设身份)", async () => {
+    const { chromeIdentityOverride } = await import("./accountViews");
+    expect(chromeIdentityOverride("Mozilla/5.0 Electron/44.4.5")).toBeNull();
   });
 });

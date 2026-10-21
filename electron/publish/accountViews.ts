@@ -107,6 +107,75 @@ const IDLE_SWEEP_MS = 5_000;
 const LAYOUT_FILE = "panel-layout.json";
 
 /**
+ * 一枚**自洽**的 Chrome 身份,交给 CDP 的 `Emulation.setUserAgentOverride`。
+ *
+ * 为什么需要它:抹掉 UA 里的 token 还不够 —— Chromium 的 client hints(Sec-CH-UA 请求头 /
+ * `navigator.userAgentData`)仍按内核自己的品牌上报「Chromium」,和 UA 里的 `Chrome/…` 对不上。
+ * X 的服务端按这组证据分类客户端:实测日志里我们的登录请求被重定向到
+ * `x.com/i/jf/onboarding/web?mode=login`(正常 Chrome 停在 `/i/flow/login`),那个流程随后就挂出
+ * 「An unexpected error occurred」。
+ *
+ * `Emulation.setUserAgentOverride` 是 Chromium 给 Puppeteer 做同样事情的那条路:它同时覆盖
+ * UA 请求头、client hints 头与 `navigator.userAgentData`,三处说的是同一件事。(webContents 的
+ * `setUserAgent` 只覆盖 UA 字符串,client hints 由内核拥有 —— 那条路已试过,修不了。)
+ */
+export interface ChromeIdentityOverride {
+  userAgent: string;
+  acceptLanguage: string;
+  platform: string;
+  userAgentMetadata: {
+    brands: Array<{ brand: string; version: string }>;
+    fullVersionList: Array<{ brand: string; version: string }>;
+    fullVersion: string;
+    platform: string;
+    platformVersion: string;
+    architecture: string;
+    model: string;
+    mobile: boolean;
+    bitness: string;
+  };
+}
+
+/** macOS 的产品版本 = Darwin 主版本 - 9(Chromium 在 client hints 里报的是产品版本,不是内核版本)。 */
+const macPlatformVersion = (): string => {
+  if (process.platform !== "darwin") return "";
+  const [major = 0, minor = 0] = (process.getSystemVersion?.() ?? "").split(".").map((one) => Number.parseInt(one, 10) || 0);
+  return major >= 20 ? `${major - 9}.${minor}.0` : "10.15.7";
+};
+
+export const chromeIdentityOverride = (userAgent: string): ChromeIdentityOverride | null => {
+  const version = /Chrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/.exec(userAgent);
+  if (!version) return null;
+  const [, major, minor, build, patch] = version;
+  const full = `${major}.${minor}.${build}.${patch}`;
+  const mac = process.platform === "darwin";
+  return {
+    userAgent,
+    acceptLanguage: "zh-CN,zh;q=0.9,en;q=0.8",
+    platform: mac ? "MacIntel" : process.platform === "win32" ? "Win32" : "Linux x86_64",
+    userAgentMetadata: {
+      brands: [
+        { brand: "Google Chrome", version: major },
+        { brand: "Chromium", version: major },
+        { brand: "Not_A Brand", version: "24" },
+      ],
+      fullVersionList: [
+        { brand: "Google Chrome", version: full },
+        { brand: "Chromium", version: full },
+        { brand: "Not_A Brand", version: "24.0.0.0" },
+      ],
+      fullVersion: full,
+      platform: mac ? "macOS" : process.platform === "win32" ? "Windows" : "Linux",
+      platformVersion: macPlatformVersion(),
+      architecture: process.arch === "arm64" ? "arm" : "x86",
+      model: "",
+      mobile: false,
+      bitness: "64",
+    },
+  };
+};
+
+/**
  * **登录排障探针**:把凭证域上的请求结果落进 publisher.log(X 登录页报「An unexpected
  * error occurred」而同一代理下 Chrome 正常 —— 病因只可能在应用这一侧的客户端,先把真实
  * 请求的状态码/失败码取到手再定修法;此前两轮凭推理改客户端都是猜)。
@@ -1058,6 +1127,18 @@ export class AccountViewManager {
     // 授权页、新开的页面同样会读 UA 做风控:一律抹掉 Electron 字样(收进来的页面还没开始加载,来得及)。
     const ua = platformUserAgent(view.webContents.getUserAgent());
     view.webContents.setUserAgent(ua);
+    //: UA 字符串、client hints、navigator.userAgentData 三处必须是**同一个身份**(见
+    //: chromeIdentityOverride)。走 CDP,因为只有它同时覆盖这三层;设不上就退回普通 UA,
+    //: 不阻塞页面(登录失败会以平台自己的报错呈现)。
+    const identity = chromeIdentityOverride(ua);
+    if (identity) {
+      try {
+        if (!view.webContents.debugger.isAttached()) view.webContents.debugger.attach("1.3");
+        void view.webContents.debugger.sendCommand("Emulation.setUserAgentOverride", identity).catch(() => undefined);
+      } catch {
+        // 附加失败(被占用 / 已销毁):放过,页面照样能开。
+      }
+    }
     //: 登录排障:站点实际看到的 UA 落一行,重启/改动是否生效一眼可查。
     plog("[net] ua", ua);
     watchLoginNetwork(view.webContents.session);
