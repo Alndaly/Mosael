@@ -15,9 +15,10 @@ from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 import contextlib
 import contextvars
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.types import ImageContent, TextContent
+from pydantic import Field
 # mcp 2.0 把 FastMCP 改名为 MCPServer(mcp.server.fastmcp 整个模块已移除),装饰器与 run() 不变。
 from mcp.server.mcpserver import MCPServer
 
@@ -2426,8 +2427,22 @@ def create_workflow(name: str, graph: dict[str, Any] | None = None, description:
     return _confirmation_reply(confirmation)
 
 
+#: `edit_workflow` 的 operations 契约。**必须写进 schema,不能只写在 docstring 里**:
+#: 模型见过的 docstring 是有限的,而工具参数表是结构化的、每条都会带上。把形状漏在注释里,
+#: 就会出现"每条 operation 少了 kind"这种请求 —— 服务端只能回一句 `Unsupported workflow op: None`。
+#: 只写"每条必须有 kind"这一句就够了 —— 每个字段的细节在 docstring 里,而**工具定义每轮都重发**,
+#: 塞满就要挤占对话空间(tests/test_tool_definitions_budget.py 按每一处盯着)。
+#: 这里只放**最小提示**:工具定义每轮都重发,长一句就挤占对话空间(tests/test_tool_definitions_budget.py 按每一处盯着)。
+#: 完整的 kind 列表在 docstring 里;写错了会拿到一条点名的报错(见 confirmable/automation 的 validate)。
+_WORKFLOW_OPS_HELP = "`kind` is required on every operation."
+
+
 @tool(effect="confirms", kit="canvas")
-def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+def edit_workflow(
+    workflow_id: str,
+    operations: Annotated[list[dict[str, Any]], Field(description=_WORKFLOW_OPS_HELP)],
+    workspace_id: str = "",
+) -> dict[str, Any]:
     """Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops.
 
     Use this for workflow canvas nodes/edges/configs: add_node, connect,

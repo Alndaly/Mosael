@@ -156,10 +156,15 @@ def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, A
     operations = payload.get("operations")
     if not isinstance(operations, list) or not operations:
         raise ConfirmationError("edit_workflow requires a non-empty operations list")
-    for operation in operations:
+    for index, operation in enumerate(operations):
         kind = operation.get("kind") if isinstance(operation, dict) else None
         if kind not in GRAPH_OP_KINDS:
-            raise ConfirmationError(f"Unsupported workflow op: {kind}")
+            # 说清**第几条、缺了什么、能用哪些**:原来只回一句 `Unsupported workflow op: None`,
+            # 模型看不出是"少了 kind",只能再猜一次。
+            allowed = ", ".join(GRAPH_OP_KINDS)
+            raise ConfirmationError(
+                f"operation #{index + 1} needs a `kind` from: {allowed} (got {kind!r})"
+            )
     # Dry-run the ops onto the current graph so malformed edits fail fast (before approval).
     try:
         preview = apply_graph_ops(workflow.graph or {}, operations)
