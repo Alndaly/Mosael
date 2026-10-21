@@ -205,8 +205,11 @@ export function CloudAccountSection() {
                   />
                 </SettingsField>
               ) : null}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button variant="ghost" onClick={useCode}>
+              {/* 切换登录方式 = **和主动作并排的次要动作**,所以走 outline(和输入框同一种描边、同高)。
+                  以前是 ghost:没有轮廓、只有悬停底色,左侧像一行浮着的字,和右边的实心按钮凑不成一对
+                  (维护者:「现在怪怪的 好像多出间距一样」)。 */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Button variant="outline" onClick={useCode}>
                   {mode === "password" ? t("settingsCloudUseCode") : t("settingsCloudUsePassword")}
                 </Button>
                 <div className="flex items-center gap-2">
