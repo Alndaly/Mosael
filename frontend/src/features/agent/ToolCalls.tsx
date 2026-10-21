@@ -666,17 +666,17 @@ function ReceiptStep({ receipt }: { receipt: FoldedReceipt }) {
       <Button
         variant="ghost"
         size="xs"
-        // 显式四栏:图标 / 后台任务 · 种类 / 主题(占满剩余、自然左对齐截断)/ 状态。
-        // 子元素正好四个,栏位一一对应 —— 三个栏的话第四个子元素会被挤到下一行(维护者截图)。
-        // 此前是 flex 排,主题靠 flex-1 挤在中间,和左边的「·」脱节、视觉上悬空。
-        className="grid w-full min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-1.5 font-normal"
+        className="w-full min-w-0 justify-start gap-1.5 font-normal"
         loading={openTask.isPending}
         disabled={!jobId}
         onClick={() => jobId && openTask.mutate()}
         data-receipt-step={jobId}
       >
         <JobKindIcon meta={kind} size={12} />
-        <span className="flex min-w-0 items-center gap-1.5">
+        {/* 整句左组吃满剩余、内部截断:「后台任务 · 工作流 · 新工作流……」。主题是短语的
+            末尾从句,不独立成栏 —— 单独占一栏读起来就是个来路不明的中间元素(维护者截图)。
+            状态不吃 flex,永远钉在右缘。 */}
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="flex-none">{t("chatJobsTitle")}</span>
           {kind.label ? (
             <>
@@ -684,15 +684,15 @@ function ReceiptStep({ receipt }: { receipt: FoldedReceipt }) {
               <span className="flex-none">{kind.label}</span>
             </>
           ) : null}
+          {subject ? (
+            <>
+              <span className="flex-none text-muted-foreground" aria-hidden>·</span>
+              <Truncate className="text-muted-foreground">{subject}</Truncate>
+            </>
+          ) : null}
         </span>
-        {/* 主题没有时占位,三栏的列位才不塌;不挂悬空的「·」分隔。 */}
-        {subject ? (
-          <Truncate className="text-muted-foreground">{subject}</Truncate>
-        ) : (
-          <span aria-hidden />
-        )}
         {status ? (
-          <span className="text-ui-xs text-muted-foreground">{runStatusText(t, status)}</span>
+          <span className="flex-none text-ui-xs text-muted-foreground">{runStatusText(t, status)}</span>
         ) : null}
       </Button>
       <JobDetailDialog job={detailJob} onClose={() => setDetailJob(null)} />
