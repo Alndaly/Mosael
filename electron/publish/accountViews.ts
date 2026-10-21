@@ -109,6 +109,58 @@ const platformUserAgent = (userAgent: string): string => {
   return userAgent.replace(/\sElectron\/[\d.]+/i, "");
 };
 
+/** Electron 44 运行时支持 `setUserAgent(ua, clientHints)`,但仓里这份 electron.d.ts 还是
+ *  旧签名(第二参标成 acceptLanguages)—— 类型按结构自定义,调用处一次收窄。 */
+interface UserAgentBrandVersion {
+  brand: string;
+  version: string;
+}
+export interface UserAgentHints {
+  brands: UserAgentBrandVersion[];
+  fullVersionList?: UserAgentBrandVersion[];
+  fullVersion?: string;
+  platform: string;
+  architecture?: string;
+  model?: string;
+  mobile?: boolean;
+}
+
+/**
+ * 与 UA **同版本**的 Chrome 品牌 client hints(Sec-CH-UA 一族)。
+ *
+ * 为什么需要它:X / Google 的登录接口会校验 UA 和 client hints 的一致性。只抹掉 UA 里的
+ * Electron 令牌不够 —— Chromium 仍按自己的真实品牌上报 `Sec-CH-UA: "Chromium"`,和 UA 里
+ * 的 `Chrome/x.y.z.w` 对不上,完整性检查直接拒绝(症状:X 登录页一加载就挂出
+ * 「An unexpected error occurred. Please try again.」,横幅出现在输入任何东西之前)。
+ * 补齐与 UA 版本一致的 Google Chrome 品牌后,这组头自洽,和真 Chrome 无异。
+ *
+ * UA 里认不出 Chrome 版本(测试替身、未来 Chromium 改记号)就返回 undefined —— 退回只设 UA,
+ * 行为与此前完全一致。
+ */
+export const chromeClientHints = (userAgent: string): UserAgentHints | undefined => {
+  const version = /Chrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/.exec(userAgent);
+  if (!version) return undefined;
+  const [, major, minor, build, patch] = version;
+  const full = `${major}.${minor}.${build}.${patch}`;
+  return {
+    brands: [
+      { brand: "Google Chrome", version: major },
+      { brand: "Chromium", version: major },
+      { brand: "Not_A Brand", version: "24" },
+    ],
+    fullVersionList: [
+      { brand: "Google Chrome", version: full },
+      { brand: "Chromium", version: full },
+      { brand: "Not_A Brand", version: "24.0.0.0" },
+    ],
+    fullVersion: full,
+    platform: process.platform === "darwin" ? "macOS" : process.platform === "win32" ? "Windows" : "Linux",
+    architecture: process.arch === "arm64" ? "arm" : "x86",
+    model: "",
+    mobile: false,
+  };
+};
+
 /** 悬浮卡片的几何,下发给渲染层去画圆角/阴影/标题条(原生 View 画不了这些)。 */
 export interface PanelCard {
   id: string;
@@ -1014,8 +1066,12 @@ export class AccountViewManager {
       this.lastFocused = view.webContents;
     });
     const isCurrent = () => this.views.get(accountId) === view;
-    // 授权页、新开的页面同样会读 UA 做风控:一律抹掉 Electron 字样(收进来的页面还没开始加载,来得及)。
-    view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
+    // 授权页、风控页都读 UA 和 client hints 做浏览器完整性校验(见 chromeClientHints):
+    // 一律抹掉 Electron 字样,并补上与 UA 同版本的 Chrome 品牌(收进来的页面还没开始加载,来得及)。
+    const ua = platformUserAgent(view.webContents.getUserAgent());
+    // d.ts 旧签名只认一个参;运行时(v28 起)收 client hints。收窄一次,两处都给(见上)。
+    const setUA = view.webContents.setUserAgent as (userAgent: string, hints?: UserAgentHints) => void;
+    setUA(ua, chromeClientHints(ua));
     // 新页面默认静音:它此刻不在前台。show() / switchPage 会按 syncAudio 的唯一判据放开。
     view.webContents.setAudioMuted(true);
     // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
