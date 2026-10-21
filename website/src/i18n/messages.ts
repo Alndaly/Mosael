@@ -478,7 +478,9 @@ const zh = {
     emptyFiltered: "没有匹配的分享",
     emptyFilteredHint: "换个关键词，或者清掉筛选再看看。",
     clearFilters: "清除筛选",
-    uploadCta: "去上传",
+    // 社区首页页头那颗。市场页用的是「分享你的工作流 / 分享你的画布」,这里也统一成「分享你的…」——
+    // 同一个动作、同一个位置,措辞不该两样(「去上传」单看没错,但和旁边三页凑不成一套)。
+    uploadCta: "分享你的作品",
     loadMore: "加载更多",
     loadingMore: "正在加载…",
     loadingShares: "正在加载分享…",
@@ -1070,7 +1072,7 @@ const en: Messages = {
     emptyFiltered: "No shares match",
     emptyFilteredHint: "Try another keyword, or clear the filters.",
     clearFilters: "Clear filters",
-    uploadCta: "Upload a share",
+    uploadCta: "Share your work",
     loadMore: "Load more",
     loadingMore: "Loading…",
     loadingShares: "Loading shares…",
