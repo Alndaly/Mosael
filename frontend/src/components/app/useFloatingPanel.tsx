@@ -15,7 +15,9 @@ import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout"
 /** 两个面板共用的标题栏刻度:同样的高度、内边距、按钮间距。
  *  各写各的时候,并排放在右栏里按钮疏密一眼就能看出不一样。 */
 export const PANEL_HEADER_CLASS =
-  "flex h-12 cursor-default select-none touch-none items-center gap-2 border-b border-border pl-4 pr-3 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-ui-sm [&_h2]:font-semibold";
+  //: **`shrink-0`**:面板是纵向 flex,变矮时标题栏会被当弹性项压扁(维护者拖小执行历史就看到上下内边距变窄)。
+  //: 标题栏的高度是刻度的(12),不该参与压缩;要压的是下面的内容区,它自己会滚。
+  "flex h-12 shrink-0 cursor-default select-none touch-none items-center gap-2 border-b border-border pl-4 pr-3 [&_h2]:m-0 [&_h2]:flex [&_h2]:flex-1 [&_h2]:items-center [&_h2]:gap-1.5 [&_h2]:text-ui-sm [&_h2]:font-semibold";
 
 /** 停靠和悬浮面板共用的外框。智能体与执行历史必须是一套圆角和边界 ——
  *  而它和画布上别的浮窗(合成器、评论卡)也是同一套,见 CANVAS_WINDOW_SURFACE_CLASS。 */
