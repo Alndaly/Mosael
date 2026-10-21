@@ -232,7 +232,7 @@ export const SELECTORS = {
     loggedOutMarks: '[data-testid="loginButton"], a[href="/i/flow/login"]',
     loggedOutTexts: ["Sign in to X", "登录 X", "Join X", "加入 X", "Create your account", "创建你的账号"], // i18n-ok
     loggedInTexts: ["For You", "推荐", "Following", "正在关注", "Home", "主页", "What is happening?!", "有什么新鲜事?"], // i18n-ok
-    uploadFailedTexts: ["Your video could not be uploaded", "视频无法上传", "Video is too long", "视频过长", "Upload failed", "上传失败"], // i18n-ok
+    uploadFailedTexts: ["Your video could not be uploaded", "视频无法上传", "Video is too long", "视频过长", "Upload failed", "上传失败", "could not be processed", "Incompatible video codecs", "无法处理", "不兼容的视频编解码器"], // i18n-ok
     // 「已发送」toast;中英文面各一份。组件消失(发帖框卸载)是另一条更强的判据,见适配器。
     publishDoneTexts: ["Your post was sent", "帖子已发送", "已发布", "Post successful", "发布成功"], // i18n-ok
     isLoginUrl: (u: string): boolean => /\/i\/flow\/login|\/login/.test(u),

@@ -1,7 +1,9 @@
+import { statSync } from "node:fs";
+
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, hasStoredSession, plogPageState, publishError, wait } from "./shared";
+import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { plog } from "../log";
 
@@ -17,13 +19,18 @@ import { plog } from "../log";
  * 境内需要可用的出站代理(和 TikTok/YouTube 同一类);登录态靠 auth_token cookie 与
  * 页面结构双重判据(platforms.ts 的 session 配置)。
  */
+//: X 的上传上限(2026-10 的公开限制):≤512MB、≤2 分 20 秒、MP4(H.264 + AAC)。
+//: 超限时页面会先接住文件、随后报「could not be processed / Incompatible video codecs」——
+//: 不提前挡一下,用户只能对着那句英文猜。
+const X_MAX_BYTES = 512 * 1024 * 1024;
+
 export class XAdapter implements PublishAdapter {
   private readonly s = SELECTORS.x;
 
-  // X 没有发布选项(无可见性分档 —— 帖子即公开),task 用不上;构造签名与别家保持一致。
+  // 帖子文本要把「简介」一起写进去(见 fillTitle),所以任务要留着。
   constructor(
     private readonly driver: PageDriver,
-    _task: PublishTask,
+    private readonly task: PublishTask,
   ) {}
 
   async openCreatorPage(): Promise<void> {
@@ -71,6 +78,19 @@ export class XAdapter implements PublishAdapter {
   }
 
   async uploadVideo(videoPath: string): Promise<void> {
+    //: 体积先挡:超限时 X 只会回一句笼统的「could not be processed」,提前说是哪个限制。
+    try {
+      const bytes = statSync(videoPath).size;
+      if (bytes > X_MAX_BYTES) {
+        throw publishError("x", "publishErr_videoTooLarge", {
+          limit: 512,
+          actual: Math.round(bytes / (1024 * 1024)),
+        });
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("publishErr_videoTooLarge")) throw error;
+      // 读不到文件大小(路径不存在等)交给后面的上传步骤报,别在这里吞掉。
+    }
     if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
       await plogPageState("X upload entry missing:", this.driver);
       throw publishError("x", "publishErr_noUploadEntry");
@@ -85,12 +105,20 @@ export class XAdapter implements PublishAdapter {
     const failedPattern = this.s.uploadFailedTexts.join("|");
     const deadline = Date.now() + UPLOAD_TIMEOUT;
     while (Date.now() < deadline) {
-      const failed = await this.driver
-        .evaluate<boolean>(`new RegExp(${JSON.stringify(failedPattern)}).test(document.body?.innerText || '')`)
-        .catch(() => false);
-      if (failed) {
+      //: 页面报错时把那句话本身带出来 —— X 会说「Incompatible video codecs」这类具体原因,
+      //: 笼统的「上传失败」会让用户拿着一个 2:20 都不到的片子反复重试。
+      const failedLine = await this.driver
+        .evaluate<string>(
+          `(() => {
+            const re = new RegExp(${JSON.stringify(failedPattern)});
+            const lines = (document.body?.innerText || "").split("\\n").map((one) => one.trim());
+            return lines.find((one) => re.test(one)) || "";
+          })()`,
+        )
+        .catch(() => "");
+      if (failedLine) {
         await plogPageState("X upload failed:", this.driver);
-        throw publishError("x", "publishErr_uploadFailed");
+        throw publishError("x", "publishErr_videoRejected", { reason: JSON.stringify(failedLine.slice(0, 160)) });
       }
       const processing = await this.driver.cssVisible(this.s.uploadProgress, 1_000).catch(() => false);
       if (!processing) {
@@ -103,13 +131,16 @@ export class XAdapter implements PublishAdapter {
   }
 
   async fillTitle(title: string): Promise<void> {
-    // X 没有标题栏:这一栏就是**帖子正文**。X 会用占位提示,不预填内容,照旧回读校验一次
-    // (和 TikTok 那一课同因:发出去的文字若和填的不一致,是静默发错内容)。
+    // X 没有标题栏:这一栏就是**帖子正文**。标题是它的第一行,简介(平台的「简介」字段,
+    // 见 platformOptions.description)接在下面 —— 只写标题的话简介就整个丢了(维护者实测:
+    // 发出去的帖子只有「标题 #标签」)。标签由 fillTags 接在末尾。
+    const description = stringOption(this.task, "description");
+    const text = description ? `${title}\n${description}` : title;
     await this.driver.focusAndClearField(this.s.textEditor);
-    await this.driver.insertText(this.s.textEditor, title);
+    await this.driver.insertText(this.s.textEditor, text);
     await wait(400);
     const actual = ((await this.driver.cssValue(this.s.textEditor)) ?? "").trim();
-    if (!actual.includes(title.trim())) {
+    if (!actual.includes(title.trim()) || (description && !actual.includes(description.trim()))) {
       await plogPageState("X text mismatch:", this.driver);
       throw publishError("x", "publishErr_titleMismatch", {
         expected: JSON.stringify(title.slice(0, 40)),

@@ -247,6 +247,8 @@ const MESSAGES = {
     en: "{platform}: the upload did not finish in time.",
   },
   publishErr_uploadFailed: { zh: "{platform} 报告视频上传失败。", en: "{platform} reported that the video upload failed." },
+  publishErr_videoRejected: { zh: "{platform} 不接受这个视频文件:{reason}。视频要求 MP4(H.264 + AAC)、≤2 分 20 秒、≤512MB。", en: "{platform} rejected this video file: {reason}. Videos must be MP4 (H.264 + AAC), at most 2:20 and 512MB." },
+  publishErr_videoTooLarge: { zh: "{platform} 的上传上限是 {limit}MB,这个文件有 {actual}MB。", en: "{platform} accepts files up to {limit}MB; this one is {actual}MB." },
   publishErr_titleRejected: {
     zh: "{platform} 的标题输入框没有接受填入的内容。",
     en: "{platform}: the title field did not accept the text.",
