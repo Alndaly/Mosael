@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **127** 个工具,其中 **40** 个走确认卡、**1** 个停下来等用户作答。
+共 **128** 个工具,其中 **40** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -50,6 +50,7 @@
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
+| `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's OWN window — returns a PNG you can see. |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
@@ -92,7 +93,7 @@
 | `inspect_sequence` | 直接执行 | Read-only: a VIDEO TIMELINE's tracks and clips — the ids, times and revision edit_timeline needs. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status, where it was opened). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace, newest first, one page at a time. |
-| `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — their abilities and slot generators. |
+| `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — abilities and slot generators. |
 | `list_boards` | 直接执行 | Read-only: list CREATIVE BOARDS (infinite canvases) in a workspace. |
 | `list_entities` | 直接执行 | Read-only: list the asset library — the named CHARACTERS, LOCATIONS and PROPS of this workspace. |
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video / generate_sound. |

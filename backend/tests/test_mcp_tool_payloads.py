@@ -107,6 +107,8 @@ ARGS: dict[str, dict[str, Any]] = {
     "get_confirmation": {"confirmation_id": "no-such-confirmation"},
     "inspect_sequence": {"sequence_id": "no-such-sequence"},
     "analyze_asset": {"asset_id": "no-such-asset", "question": "这是什么"},
+    # 桌面壳的宿主桥不在这个测试进程里:调用会回一句人话(ComputerUseError),不是载荷形状被拒。
+    "computer_screenshot": {},
     "read_document": {"asset_id": "no-such-asset", "first": 1, "last": 2},
     "analyze_document_pages": {"asset_id": "no-such-asset", "pages": [1], "question": "版式怎样"},
     "transcribe_asset": {"asset_id": "no-such-asset"},

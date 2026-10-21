@@ -297,6 +297,38 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool(effect="reads")
+def computer_screenshot(
+    window: Annotated[
+        str,
+        Field(description='"main" or "publish".'),
+    ] = "main",
+    scale: Annotated[
+        float,
+        Field(description="0.25–1."),
+    ] = 1,
+) -> list[TextContent | ImageContent]:
+    """Read-only: LOOK at Mosael's OWN window — returns a PNG you can see.
+
+    window="main" (the app window, default) or "publish" (the publisher window). It does NOT
+    capture your desktop, other apps or the menu bar, needs no screen-recording permission, and
+    never clicks, types or scrolls. scale 0.25–1 (default 1) shrinks a large window; the
+    embedded page is browser_screenshot.
+    """
+    from app.domain.agent.computer_use import screenshot
+
+    shot = screenshot(window=window, scale=scale)
+    return _with_images(
+        {
+            "window": shot["window"],
+            "width": shot["width"],
+            "height": shot["height"],
+            "scale": shot["scale"],
+            "images": [{"view": "computer", "mime_type": "image/png", "data": shot["image"]}],
+        }
+    )
+
+
+@tool(effect="reads")
 def list_assets(
     workspace_id: str = "",
     kind: str = "",
@@ -2668,35 +2700,24 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
 
 @tool(effect="reads", kit="canvas")
 def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
-    """Read-only: list what content items on a creative board can DO — their abilities and slot generators.
+    """Read-only: list what content items on a creative board can DO — abilities and slot generators.
 
-    A board only holds CONTENT TRANSFORMS — tools that turn an asset, text or 3D scene
-    into new content (video to GIF, transcribe, translate, separate vocals, denoise,
-    a ComfyUI workflow that makes images…) or make new assets. There are no separate
-    tool items: each entry lives on content items.
-    Flow control and data plumbing (call a workflow, HTTP requests, templates, JSON,
-    string handling, note search) and plugin tools that only list, report or upload
-    are not board tools: build a workflow for those.
+    A board holds only CONTENT TRANSFORMS (video to GIF, transcribe, translate, separate
+    vocals, denoise, a ComfyUI workflow…) or generators that make new assets. Flow control
+    and data plumbing (workflows, HTTP, templates, JSON, note search) are not board tools.
 
-    Each entry is a producer id (use it as `producer` in edit_board set_form/add_item
-    and run_board_item), its label, `role`, `hosts`, `board_description` (one line on
-    what it does to content), `effects` ("none" runs directly when you call
-    run_board_item; "paid"/"external" asks the user first) and `config` — the fields a
-    creator fills on the board (type, required, options, description; mappings, raw
-    JSON and code fields are not on the board).
-      role "ability": an ability of items of the kinds in `hosts`. The host item's own
-        content fills the field named in `host_fields[kind]` — never set that field.
-        Store its settings with set_form on the host (with `producer`) and run it with
-        run_board_item(item_id=host, producer=id); outputs land to the host's right.
-      role "slot": a generator that consumes no board content; it fills an EMPTY slot
-        of a kind in `hosts` — set it as that slot's own producer.
-    A field's `board_sources` lists the item kinds it can take from items connected
-    into the host through `bindings`; an empty list means fill it in `config`. Plugin
-    tools appear only for plugins the user has connected. Built-in slot producers
-    (generate/write/speak) are not listed — add empty slots and let the user generate.
-    Also listed: "scene_render" (hosts ["scene"]) — the scene item renders itself; set
-    its config on the scene item and run_board_item on it. And "sequence_export"
-    (hosts ["sequence"]) — a timeline item exports itself; its video lands to its right.
+    Each entry: a producer id (use it as `producer` in edit_board set_form/add_item and
+    run_board_item), label, `role`, `hosts`, `board_description`, `effects` ("none" runs
+    directly; "paid"/"external" asks first) and `config` — fields a creator fills (type,
+    required, options, description; mappings, raw JSON and code fields are not on the board).
+      role "ability": the host item's own content fills `host_fields[kind]` — never set it.
+        Store settings with set_form on the host (with `producer`) and run it with
+        run_board_item(item_id=host, producer=id); outputs land to its right.
+      role "slot": consumes no board content; fills an EMPTY slot of a kind in `hosts`.
+    `board_sources` lists the kinds a field takes from connected items (via `bindings`); an
+    empty list means fill it in `config`. Plugin tools appear only for connected plugins;
+    built-in generate/write/speak slots are not listed. Also listed: "scene_render" (scene
+    items render themselves) and "sequence_export" (timeline items export themselves).
     """
     from app.core.i18n import get_current_locale
     from app.domain.boards import use_cases

@@ -70,6 +70,10 @@ const IPC = Object.freeze({
     pageToolsRead: "pageTools:read",
     pageToolsInset: "pageTools:inset",
     pageToolsSaveDownload: "pageTools:saveDownload",
+    // Computer Use P0(ADR 0075):**只读地截 Mosael 自己的窗口**。没有鼠标 / 键盘 / 拖拽 / 滚动,
+    // 也不走系统截屏 —— 主进程用 webContents.capturePage() 拍自己,不需要屏幕录制权限。
+    // 后端够不着 ipcMain,它经 main.cjs 的回环桥以同一个通道名问(见 domain/agent/computer_use)。
+    computerScreenshot: "computer:screenshot",
     // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的那个位置(见 save-file.cjs)。四步走 ——
     // 开工(弹框)、写一块、收尾(改名到位)、撤掉。分四步而不是一步:素材原文件可以有 2 GiB
     // (见 publish/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节。
@@ -585,6 +589,27 @@ function parseCaptureMode(value) {
   return { mode: oneOf(payload, "mode", ["visible", "full"], channel) };
 }
 
+/** 电脑使用能截的两个窗口。`publish` 是发布器自己的窗口,不是内嵌网页(见 ADR 0075 的 L1/L2 分层)。 */
+const COMPUTER_WINDOWS = ["main", "publish"];
+
+/**
+ * 截 Mosael 自己的窗口:载荷可以整个不给(缺省 `main`),只认 `window`。
+ *
+ * `scale` 不在这里 —— 缩放是后端把图交给模型之前做的事(见 domain/agent/computer_use),
+ * 主进程只负责拍一张原图。渲染层送不进来的字段(路径、分区、脚本)一律拒收。
+ */
+function parseComputerScreenshot(value) {
+  const channel = IPC.invoke.computerScreenshot;
+  const payload = value === undefined || value === null ? {} : record(value, channel);
+  onlyKeys(payload, ["window"], channel);
+  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
+  if (!COMPUTER_WINDOWS.includes(name)) {
+    // 带上引号:这条消息会经宿主桥原样回到后端的错误里,模型读到的应是两个**值**,不是两个词。
+    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
+  }
+  return { window: name };
+}
+
 /**
  * 框选的结果:冻结画面上的矩形,按画面的**比例**给(0–1)—— 显示尺寸只有渲染层知道,原图尺寸只有
  * 主进程知道,比例是两边都不用猜的那个量。`selection: null` 是取消。
@@ -943,6 +968,7 @@ module.exports = {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComputerScreenshot,
   parseComfyNavigation,
   parseComfyWorkbenchCall,
   parseComfyWorkbenchOpen,

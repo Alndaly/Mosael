@@ -47,6 +47,7 @@ export const IPC: {
     pageToolsRead: "pageTools:read";
     pageToolsInset: "pageTools:inset";
     pageToolsSaveDownload: "pageTools:saveDownload";
+    computerScreenshot: "computer:screenshot";
     saveFileBegin: "saveFile:begin";
     saveFileWrite: "saveFile:write";
     saveFileEnd: "saveFile:end";
@@ -118,6 +119,7 @@ export function parseSystemStatus(value: unknown): { runningJobs: number; progre
 export function parseTaskNotice(value: unknown): { title: string; body: string };
 export function parseLocale(value: unknown): { locale: string };
 export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
+export function parseComputerScreenshot(value: unknown): { window: "main" | "publish" };
 export function parseRegionSelection(value: unknown): {
   selection: { x: number; y: number; width: number; height: number } | null;
 };

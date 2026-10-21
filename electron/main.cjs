@@ -14,7 +14,9 @@ const {
   systemPreferences,
 } = require("electron");
 const { spawn } = require("node:child_process");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
+const nodeNet = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { loginShellPath } = require("./login-shell-path.cjs");
@@ -46,6 +48,7 @@ const {
   parseComfyWorkbenchOpen,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComputerScreenshot,
   parseImageUrls,
   parseLocale,
   parseNewPage,
@@ -306,6 +309,212 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
+// ---------------- Computer Use(ADR 0075 P0):只读地截 Mosael 自己的窗口 ----------------
+//
+// P0 只有一件只读的事:把 Mosael 自己的窗口拍下来给模型看。没有鼠标、键盘、拖拽、滚动,
+// 也不申请屏幕录制权限 —— `webContents.capturePage()` 拍的是本进程自己的渲染,不是系统屏幕。
+//
+// 后端为什么需要一条桥:Electron 的 `ipcMain` 只服务渲染层,Python 后端是另一个进程,够不着。
+// 这个仓库里后端与 Electron 之间现有的跨进程执行全是反向拉取(Electron 轮询后端的 worker 队列),
+// 而 P0 要一次同步的「拍一张、马上看」。所以主进程在启动后端之前开一条**只绑回环、只认
+// `computer:screenshot` 一条通道、带每进程随机令牌**的一问一答 TCP 桥。端口和令牌有两条路给后端:
+// 壳拉起的那个走环境变量(`MOSAEL_HOST_BRIDGE_PORT` / `MOSAEL_HOST_BRIDGE_TOKEN`,环境变量优先),
+// `pnpm dev:backend` 单独起的那个按**同一个数据目录**读 `host-bridge.json`(0600)。远程团队服务器
+// 上两样都没有,于是工具会回一句人话(见 backend/app/domain/agent/computer_use.py)。
+//
+// 这不是一条通用 RPC:通道写死一条,参数过同一个契约解析器(parseComputerScreenshot),拿不到
+// 别的窗口、别的能力。令牌只在本进程内存和那份 0600 文件里,不写日志。
+const HOST_BRIDGE_FILE = "host-bridge.json";
+const HOST_BRIDGE_MAX_REQUEST = 64 * 1024;
+/** 能截的窗口。`publish` 是发布器自己的窗口,不是内嵌网页(那是 ADR 0075 的 L2,P0 不碰)。 */
+const COMPUTER_WINDOW_NAMES = Object.freeze(["main", "publish"]);
+let hostBridge = null;
+let hostBridgeStarting = null;
+
+function hostBridgeFile() {
+  return path.join(configuredDataDir, HOST_BRIDGE_FILE);
+}
+
+/**
+ * 按名字挑一个窗口。**只挑 Mosael 自己的** —— 桌面、别的 App 在这里根本没有对应项。
+ * 不退回「随便哪个窗口」:截错一个窗口比截不到更糟(它会把用户别处的画面交给模型)。
+ */
+function chooseComputerWindow(name, windows, roles) {
+  if (!COMPUTER_WINDOW_NAMES.includes(name)) {
+    throw new Error(
+      `Unknown window "${name}". Use "main" (the Mosael app window) or "publish" (the publisher window).`,
+    );
+  }
+  // 只取**这个名字对应的那个引用**:引用没有 / 已销毁就是「没有这个窗口」,不回退到窗口列表里
+  // 随便找一个 —— 那会把发布器、启动小窗甚至以后别的东西当成主窗口拍给模型。
+  // (`windows` 仍留在签名里:两处调用都传 `BrowserWindow.getAllWindows()`,它说明「只可能看自己
+  // 进程里的窗口」;但挑哪一个只由 roles 决定。)
+  void windows;
+  const named = roles && roles[name];
+  return named && typeof named.isDestroyed === "function" && !named.isDestroyed() ? named : null;
+}
+
+/**
+ * 拍下 `request.window` 指定的那个 Mosael 窗口,回 `{window, width, height, image}`(`image` 是 PNG 的
+ * base64;缩放由后端做,主进程只给原图)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
+ */
+async function captureMosaelWindow(request, windows, roles) {
+  const wanted = request && request.window !== undefined ? request.window : "main";
+  const name = String(wanted).trim().toLowerCase();
+  const win = chooseComputerWindow(name, windows, roles);
+  if (!win) {
+    throw new Error(`There is no ${name} window open in Mosael to screenshot. Nothing was captured.`);
+  }
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was captured.`);
+  }
+  const image = await win.webContents.capturePage();
+  if (!image || image.isEmpty()) {
+    throw new Error(
+      `The ${name} window produced an empty picture (it may be hidden or not composited). Nothing was captured.`,
+    );
+  }
+  const { width, height } = image.getSize();
+  return { window: name, width, height, image: image.toPNG().toString("base64") };
+}
+
+/** 令牌比较:定长、常数时间。别用 `===`,也别把令牌写进日志。 */
+function hostBridgeTokenMatches(given) {
+  if (!hostBridge || typeof given !== "string") return false;
+  const expected = Buffer.from(hostBridge.token, "utf8");
+  const actual = Buffer.from(given, "utf8");
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+/** 回一条 JSON 并收掉连接。桥是一次一问的,没有长连接、没有推送。 */
+function replyHostBridge(socket, message) {
+  if (socket.destroyed) return;
+  try {
+    socket.end(`${JSON.stringify(message)}\n`);
+  } catch {
+    socket.destroy();
+  }
+}
+
+/** 解一条请求:令牌 → 通道 → 参数 → 拍。任何一步不对都回一句人话,不抛给主进程。
+ *
+ * 回包里的 `status` 是给人和测试看的**语义**:401 = 没有令牌 / 令牌不对;405 = 通道不对(这条桥
+ * 只认 `computer:screenshot`,不是通用 RPC);400 = 参数不对;503 = 窗口此刻不在(没开 / 最小化 /
+ * 空图)。后端只读 `ok` / `error` / `result`,`status` 不参与控制流。
+ */
+async function answerHostBridgeRequest(line, socket) {
+  let request;
+  try {
+    request = JSON.parse(line);
+  } catch {
+    return replyHostBridge(socket, {
+      ok: false,
+      status: 400,
+      error: "The host bridge got something that isn't JSON.",
+    });
+  }
+  if (!request || typeof request !== "object" || !hostBridgeTokenMatches(request.token)) {
+    appendMainLog("host-bridge", "refused a request with a bad token");
+    return replyHostBridge(socket, { ok: false, status: 401, error: "The host bridge refused this request." });
+  }
+  if (request.channel !== IPC.invoke.computerScreenshot) {
+    return replyHostBridge(socket, {
+      ok: false,
+      status: 405,
+      error: "The host bridge only serves computer:screenshot.",
+    });
+  }
+  try {
+    const result = await captureMosaelWindow(parseComputerScreenshot(request.payload), BrowserWindow.getAllWindows(), {
+      main: mainWindow,
+    });
+    replyHostBridge(socket, { ok: true, result });
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    // 契约解析器的 TypeError = 参数不对(400);其余是这台机器此刻的状态(没窗口 / 最小化 / 空图,503)。
+    const status = error && error.name === "TypeError" ? 400 : 503;
+    replyHostBridge(socket, { ok: false, status, error: message });
+  }
+}
+
+/**
+ * 起桥(只起一次)。绑定端口 0 让系统挑一个空闲端口,只监听 127.0.0.1;令牌每进程一次。
+ * 端口和令牌写进数据目录的 `host-bridge.json`(0600),后端按同一个数据目录找它。
+ */
+async function startHostBridge() {
+  if (hostBridge) return hostBridge;
+  // 启动流程里两处都会要它(whenReady 与 spawnBackendProcess),并发调用只能起一个服务、一份令牌。
+  if (hostBridgeStarting) return hostBridgeStarting;
+  hostBridgeStarting = startHostBridgeOnce();
+  try {
+    return await hostBridgeStarting;
+  } finally {
+    hostBridgeStarting = null;
+  }
+}
+
+async function startHostBridgeOnce() {
+  const token = crypto.randomBytes(32).toString("hex");
+  const server = nodeNet.createServer((socket) => {
+    let buffered = "";
+    socket.setEncoding("utf8");
+    socket.setTimeout(30 * 1000, () => socket.destroy());
+    socket.on("error", () => {
+      /* 对端走了:没有要收拾的 */
+    });
+    socket.on("data", (chunk) => {
+      buffered += chunk;
+      if (buffered.length > HOST_BRIDGE_MAX_REQUEST) {
+        socket.destroy();
+        return;
+      }
+      const end = buffered.indexOf("\n");
+      if (end === -1) return;
+      const line = buffered.slice(0, end);
+      buffered = "";
+      void answerHostBridgeRequest(line, socket);
+    });
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.removeListener("error", reject);
+      // 监听之后也要有 error 监听器,否则一次 EADDR 之类的事件会把整个主进程带走。
+      server.on("error", (error) => appendMainLog("host-bridge", error));
+      resolve();
+    });
+  });
+  hostBridge = { port: server.address().port, token, server };
+  try {
+    fs.mkdirSync(configuredDataDir, { recursive: true });
+    fs.writeFileSync(hostBridgeFile(), JSON.stringify({ port: hostBridge.port, token }), { mode: 0o600 });
+  } catch (error) {
+    // 文件写不出去,后端就找不到这条桥。桥本身留着(以后可能还有别的读法),但要留一笔。
+    appendMainLog("host-bridge-file", error);
+  }
+  appendMainLog("host-bridge", `listening on 127.0.0.1:${hostBridge.port}`);
+  return hostBridge;
+}
+
+/** 收桥,并只收掉**自己写的**那份文件(另一实例的文件不碰)。 */
+function stopHostBridge() {
+  const bridge = hostBridge;
+  hostBridge = null;
+  if (bridge) {
+    try {
+      bridge.server.close();
+    } catch {
+      /* 已经关了 */
+    }
+  }
+  try {
+    const saved = JSON.parse(fs.readFileSync(hostBridgeFile(), "utf8"));
+    if (bridge && saved && saved.token === bridge.token) fs.rmSync(hostBridgeFile(), { force: true });
+  } catch {
+    /* 没有文件 / 读不动:本来就不该有 */
+  }
+}
+
 function backendCommand() {
   if (isDev) {
     const backendDir = path.resolve(__dirname, "../backend");
@@ -411,6 +620,14 @@ async function openKeychainAccess() {
  * 这时已经在退出应用。
  */
 async function spawnBackendProcess() {
+  // Computer Use 的宿主桥(见 startHostBridge):先起桥、把 host-bridge.json 写下去,再起后端 ——
+  // 反过来的话,后端接到的第一句 computer_screenshot 会找不到这条桥。起不来不算致命:截图工具会
+  // 回一句人话,后端照常启动。
+  try {
+    await startHostBridge();
+  } catch (error) {
+    appendMainLog("host-bridge-failed", error);
+  }
   // 落盘加密的主密钥:系统钥匙串封存,经标准输入交给后端(见 master-key.cjs)。没有可用的钥匙串时后端照旧用数据目录里的
   // secret.key。封存过却解不开就停下来问人,人说退出就不起后端 —— 绝不让后端另生一把新钥匙。**只在打包版这么做**:
   // 开发时常有人对着同一个数据目录手动起 uvicorn,明文文件被收走的话,手动起的那个就起不来了。
@@ -466,6 +683,11 @@ async function spawnBackendProcess() {
     MOSAEL_APP_VERSION: app.getVersion(),
     // 壳被强杀时不会执行任何清理;后端盯着这个 pid,壳没了就自己收尾退出(backend app/core/lifeline.py)。
     MOSAEL_PARENT_PID: String(process.pid),
+    // Computer Use 的宿主桥(见 startHostBridge):端口和每进程随机令牌经环境变量交给这个子进程。
+    // 令牌不进命令行(argv 本机可见)、不进日志;桥没起来就传空串,后端会按数据目录里的
+    // host-bridge.json 再找一次,找不到就回一句人话。
+    MOSAEL_HOST_BRIDGE_PORT: hostBridge ? String(hostBridge.port) : "",
+    MOSAEL_HOST_BRIDGE_TOKEN: hostBridge ? hostBridge.token : "",
   };
   if (!isDev) {
     // 打包版从 Finder / Dock 启动时 PATH 是 launchd 的最小集,插件找不到 node / uvx(见 login-shell-path)。
@@ -787,6 +1009,9 @@ function showWindow() {
 }
 
 let mainWindowCreated = false;
+//: 主窗口的引用。Computer Use(ADR 0075 P0)只截它 —— `BrowserWindow.getAllWindows()` 里还可能有
+//: 启动小窗之类的东西,「第一个窗口」不等于「Mosael 的窗口」。
+let mainWindow = null;
 
 function createWindow() {
   mainWindowCreated = true;
@@ -821,6 +1046,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.bundle.cjs"),
     },
   });
+  mainWindow = win;
   // 开发时把渲染层的 console 转出来:那些错误只活在 DevTools 里,而"登录后被踢回登录页"这类
   // 问题恰恰写在渲染层控制台里(401 是谁发的、之后怎么处理)。只在这一份日志里能看见。
   if (isDev) {
@@ -1026,6 +1252,7 @@ function createWindow() {
   }
 
   win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
     try {
       publish?.stopPublishWorker();
       publish?.stopBrowserWorker?.();
@@ -1043,6 +1270,9 @@ app.whenReady().then(async () => {
   // 平台认证器要在 ready 之后配。没签名时它自己会跳过(见 webauthn.cjs 里的三个前提)。
   const platformAuthenticatorConfigured = require("./webauthn.cjs").configurePlatformAuthenticator();
   reportSmoke({ platformAuthenticatorConfigured });
+  // Computer Use 的宿主桥:后端可能已被一个开发进程拉起来(壳只是复用它),所以不能等到 spawn 才起 ——
+  // 只要这个壳活着,桥就该在。起不来不算致命(截图工具会回一句人话)。
+  startHostBridge().catch((error) => appendMainLog("host-bridge-failed", error));
   const started = await startBackendOnLaunch();
   if (started.status !== "ready" && started.status !== "reused") {
     reportSmoke({ backendHealthy: false, rendererLoaded: false, error: `backend did not become healthy (${started.status})` });
@@ -1208,6 +1438,11 @@ app.whenReady().then(async () => {
   );
   handle(IPC.invoke.pageToolsSaveDownload, (_e, payload) =>
     requirePublish().saveDownload(parseSaveDownload(payload)),
+  );
+  // Computer Use P0(ADR 0075):只读地拍 Mosael 自己的窗口。渲染层这条路今天没有调用者(工具在后端跑,
+  // 经下面的宿主桥进来),但它和桥走**同一个** captureMosaelWindow、同一个契约解析器 —— 不多出第二条实现。
+  handle(IPC.invoke.computerScreenshot, (_e, payload) =>
+    captureMosaelWindow(parseComputerScreenshot(payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
   );
   // 开发时主进程过期提示:主进程启动时加载的产物(main.cjs、几个 bundle)变了,而正在跑的还是旧的 —— 渲染层
   // 热更新成了新代码,去调旧主进程里没有的处理器就会失败。给界面一条「重启后生效」,能重启时带按钮。
@@ -1462,6 +1697,8 @@ app.on("before-quit", (event) => {
 app.on("will-quit", () => {
   markSmokeStage("will-quit");
   staleWatcher?.close();
+  // 桥和它的令牌文件跟着壳一起收掉:后端下次找不到它就会回一句人话,而不是连一个已经没人听的端口。
+  stopHostBridge();
   // 写到一半的保存撤掉:临时文件不该留在他选的那一格旁边(撤不掉进程也马上就没了,见 save-file.cjs 的闲置超时)。
   void saveFiles?.dispose();
   backendSupervisor.killNow();
