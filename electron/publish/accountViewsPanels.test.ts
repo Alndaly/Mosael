@@ -36,12 +36,7 @@ const fake = vi.hoisted(() => {
      * (见 downloads.ts)。这里只记下挂了什么。
      */
     session = new (class extends Emitter {
-      webRequest = {
-        onResponseStarted: () => undefined,
-        //: 登录排障探针(见 accountViews.watchLoginNetwork)也挂在会话上。
-        onCompleted: () => undefined,
-        onErrorOccurred: () => undefined,
-      };
+      webRequest = { onResponseStarted: () => undefined };
     })();
     navigationHistory = { canGoBack: () => false, canGoForward: () => false };
     debugger = {

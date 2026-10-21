@@ -1,5 +1,4 @@
-import { app, screen, session, WebContentsView, type BaseWindow, type Session } from "electron";
-import { plog } from "./log";
+import { app, screen, session, WebContentsView, type BaseWindow } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type PageSummary, type ViewState } from "./types";
@@ -173,29 +172,6 @@ export const chromeIdentityOverride = (userAgent: string): ChromeIdentityOverrid
       bitness: "64",
     },
   };
-};
-
-/**
- * **登录排障探针**:把凭证域上的请求结果落进 publisher.log(X 登录页报「An unexpected
- * error occurred」而同一代理下 Chrome 正常 —— 病因只可能在应用这一侧的客户端,先把真实
- * 请求的状态码/失败码取到手再定修法;此前两轮凭推理改客户端都是猜)。
- *
- * 只记非 2xx 与接口调用:登录页一屏几十个静态资源 200,全记会把日志淹掉。
- * 按会话挂一次 —— 一个分区的 webRequest 是「后挂覆盖先挂」。
- */
-const netProbeWatched = new WeakSet<Session>();
-const NET_PROBE_FILTER = { urls: ["*://*.x.com/*", "*://*.twitter.com/*", "*://accounts.google.com/*"] };
-const watchLoginNetwork = (sess: Session): void => {
-  if (netProbeWatched.has(sess)) return;
-  netProbeWatched.add(sess);
-  sess.webRequest.onCompleted(NET_PROBE_FILTER, (details) => {
-    const api = details.url.includes("/1.1/") || details.url.includes("/i/api/");
-    if (details.statusCode < 400 && !api) return;
-    plog("[net]", details.method, details.statusCode, details.url);
-  });
-  sess.webRequest.onErrorOccurred(NET_PROBE_FILTER, (details) => {
-    plog("[net-err]", details.method, details.error, details.url);
-  });
 };
 
 /**
@@ -1134,17 +1110,11 @@ export class AccountViewManager {
     if (identity) {
       try {
         if (!view.webContents.debugger.isAttached()) view.webContents.debugger.attach("1.3");
-        void view.webContents.debugger
-          .sendCommand("Emulation.setUserAgentOverride", identity)
-          .then(() => plog("[cdp] user agent override applied"))
-          .catch((error: unknown) => plog("[cdp] user agent override FAILED", error instanceof Error ? error.message : String(error)));
+        void view.webContents.debugger.sendCommand("Emulation.setUserAgentOverride", identity).catch(() => undefined);
       } catch {
         // 附加失败(被占用 / 已销毁):放过,页面照样能开。
       }
     }
-    //: 登录排障:站点实际看到的 UA 落一行,重启/改动是否生效一眼可查。
-    plog("[net] ua", ua);
-    watchLoginNetwork(view.webContents.session);
     // 新页面默认静音:它此刻不在前台。show() / switchPage 会按 syncAudio 的唯一判据放开。
     view.webContents.setAudioMuted(true);
     // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
@@ -1155,77 +1125,6 @@ export class AccountViewManager {
     view.webContents.setWindowOpenHandler((details) => this.openWindow(accountId, view, details));
     // 下载不弹系统保存框:分区会话上接管(同一个会话只接一次,会话里的每一页都走它)。
     this.downloads.watch(view.webContents.session);
-    //: 登录排障第二层:页面加载后**实测**浏览器身份(client hints 是否真的改掉了)+ WebGL/时区,
-    //: 以及页面控制台的报错 —— 「An unexpected error occurred」是页面自己渲染的,错误源头在 JS 里。
-    view.webContents.on("did-finish-load", () => {
-      const url = view.webContents.getURL();
-      if (!/x\.com|twitter\.com/i.test(url)) return;
-      //: 接口 200 不代表成功:X 在 200 的响应体里回 {errors:[...]},登录页据此画红字。
-      //: 把 fetch/XHR 包一层,可疑响应体打到 console.error —— 上面的 console 探针会落日志。
-      void view.webContents
-        .executeJavaScript(
-          `(() => {
-            if (window.__mosaelNetBody) return "already";
-            window.__mosaelNetBody = true;
-            const interesting = (url, status) => /api\\.x\\.com\\/(1\\.1|i\\/api)/.test(String(url)) && (/flow|graphql|onboarding|login/.test(String(url)) || status >= 400);
-            const report = (url, status, text) => {
-              if (!text) return;
-              if (status >= 400 || /"errors"\\s*:/.test(text)) {
-                console.error("[mosael-net]", status, String(url).slice(0, 160), String(text).slice(0, 900));
-              }
-            };
-            const origFetch = window.fetch;
-            window.fetch = async (...args) => {
-              const res = await origFetch.apply(window, args);
-              try {
-                const url = (args[0] && args[0].url) || String(args[0]);
-                if (interesting(url, res.status)) {
-                  res.clone().text().then((text) => report(url, res.status, text)).catch(() => undefined);
-                }
-              } catch (error) { /* 观测失败不影响页面 */ }
-              return res;
-            };
-            const origOpen = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-              this.addEventListener("loadend", () => {
-                try {
-                  if (interesting(url, this.status)) report(url, this.status, this.responseText);
-                } catch (error) { /* 同上 */ }
-              });
-              return origOpen.call(this, method, url, ...rest);
-            };
-            return "wrapped";
-          })()`,
-        )
-        .catch(() => undefined);
-      void view.webContents
-        .executeJavaScript(
-          `JSON.stringify({
-            ua: navigator.userAgent,
-            brands: navigator.userAgentData ? navigator.userAgentData.brands : null,
-            platform: navigator.userAgentData ? navigator.userAgentData.platform : null,
-            webgl: (() => { try { return !!document.createElement("canvas").getContext("webgl"); } catch { return "throw"; } })(),
-            webglVendor: (() => { try { const gl = document.createElement("canvas").getContext("webgl"); const ext = gl && gl.getExtension("WEBGL_debug_renderer_info"); return ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) + " / " + gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : "no-ext"; } catch { return "throw"; } })(),
-            plugins: navigator.plugins ? navigator.plugins.length : -1,
-            plugin0: navigator.plugins && navigator.plugins.length ? navigator.plugins[0].name : "",
-            chrome: typeof window.chrome,
-            chromeRuntime: window.chrome ? typeof window.chrome.runtime : "none",
-            webdriver: navigator.webdriver,
-            languages: navigator.languages,
-            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            lang: navigator.language,
-            cookies: navigator.cookieEnabled,
-          })`,
-        )
-        .then((facts: unknown) => plog("[page]", String(facts).slice(0, 600)))
-        .catch(() => undefined);
-    });
-    view.webContents.on("console-message", (details: { level?: string; message?: string; sourceId?: string }) => {
-      if (!/x\.com|twitter\.com/i.test(view.webContents.getURL())) return;
-      if (details.level !== "error" && details.level !== "warning") return;
-      plog("[console]", details.level, (details.message ?? "").slice(0, 300), details.sourceId ?? "");
-    });
-
     // 页面在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 —— 否则当前页指着
     // 一具尸体,顶部工具条收不回去,复用它的每一处都在 undefined 上取属性。
     const contentsId = view.webContents.id;
