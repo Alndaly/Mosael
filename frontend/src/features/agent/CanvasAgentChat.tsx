@@ -689,7 +689,9 @@ export function CanvasAgentChat({
             resuming={resumeQueued.isPending}
             cancelling={cancelQueued.isPending}
           />
-          <div data-toast-avoid="" className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
+          {/* 输入卡**不**挂 data-toast-avoid(维护者定):提示条就该待在窗口右下角,短暂盖住一角没关系。
+              避让机制留着备用,见 components/app/toastClearance。 */}
+          <div className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
             {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
             {/* 附件就是「这条消息里带了什么」,一排摆在输入卡里(笔记引用是正文里的节点,走 `@`)。 */}
             {/* 附上的压缩包 / 文件夹解开后要人看的:发现了技能、有文件没收(ADR 0059)。 */}

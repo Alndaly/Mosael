@@ -32,9 +32,9 @@
 - **空页只留一个入口。** 列表真取回来是空的时,主动作只在正中的空状态里摆一颗实心的;页头不再摆第二颗同一件事的
   (画板、工作流、发布、浏览器池、首页、资产、3D 场景同一个做法)。空状态里有几个动作时只有一颗实心,其余描边。
   取的途中页头照旧摆着 —— 大多数时候不是空的,不让它晚一拍才冒出来。
-- **贴底的输入区挂 `data-toast-avoid`。** 右下角的提示条量这些元素,伸进它那一列就整体抬到上沿之上
-  (`components/app/toastClearance`),不盖住发送键。新写一个贴着窗口底边的输入框就挂上;规则只此一处,不逐页挪提示条。
-  棘轮:`design/toastClearance.test.ts`。
+- **提示条永远待在窗口右下角;避让机制留着备用。** 右下角的提示条不因为任何贴底输入区挪位置 —— 短暂盖住一角没关系,
+  抬起来反而飘在半空(维护者定)。`components/app/toastClearance` 的机制保留:哪天有新表面需要提示条让开贴底的输入区,
+  在输入区最外层挂 `data-toast-avoid` 即自动启用;规则只此一处,不逐页挪提示条。棘轮:`design/toastClearance.test.ts`。
 - **动效只用一套刻度,只在它说明了一件事的时候动。** 时长四档(值在 `design/tokens.css` 的 `--motion-*`):
   快 `duration-100`(行上的悬停底色、小箭头转向、悬停才露出的小图标)、中 `duration-160`(控件换颜色、浮层 / 菜单 /
   说明 / 弹窗进出、折叠区块、东西挪到新位置;只写 `transition-colors` 不写时长就是这一档)、慢 `duration-240`
@@ -495,7 +495,7 @@ python3 scripts/sync-ratchet-docs.py
 | 语义色的对比度:正文不低于 4.5:1,描边不低于 3:1,点阵这类底纹允许 1.3–1.8。 | `frontend/src/design/semanticColors.test.ts` |
 | 加载占位一律走 components/ui/skeleton 的扫光,不再有各写各的 animate-pulse 灰块。 | `frontend/src/design/skeletons.test.ts` |
 | 棘轮:测试里拿真计时器「等 N 毫秒」只减不增 —— 测试等条件(`waitFor` / `findBy*`),要推时间就用假计时器。 | `frontend/src/design/testsWaitForConditions.test.ts` |
-| 贴底的输入区挂 `data-toast-avoid`,右下角的提示条才知道要让开它(components/app/toastClearance)。 | `frontend/src/design/toastClearance.test.ts` |
+| 提示条让开贴底输入区的**机制**是接好的(components/app/toastClearance),随时可以启用 | `frontend/src/design/toastClearance.test.ts` |
 | 字段名 / 表单名外面那一层必须能收缩 —— 否则 `Truncate` 拿不到宽度,长名字被硬裁掉、连省略号都没有。 | `frontend/src/design/truncateNeedsShrinkableBox.test.ts` |
 | 截断的字悬停看得到全文:截断一律走 `Truncate`。 | `frontend/src/design/truncatedText.test.ts` |
 | 界面字号走 token,不写死像素。 | `frontend/src/design/typeScale.test.ts` |

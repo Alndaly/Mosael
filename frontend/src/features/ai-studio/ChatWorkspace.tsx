@@ -749,8 +749,8 @@ export function ChatWorkspace({
                   resuming={resumeQueued.isPending}
                   cancelling={cancelQueued.isPending}
                 />
+                {/* 输入卡**不**避让右下角的提示条(维护者定):提示条就该待在窗口右下角,短暂盖住一角没关系。 */}
                 <form
-                  data-toast-avoid=""
                   className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring")}
                   onSubmit={submit}
                 >
