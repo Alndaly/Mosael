@@ -166,25 +166,63 @@ export function useWorkflowDisplayNodes({
   //: 哪一档才去问,见 feishuTargetParents)。查不到的值照旧写 id,不编名字。
   const feishuParents = React.useMemo(() => feishuTargetParents(graph), [graph]);
   const feishuNames = useFeishuTargetNames(workspaceId, feishuParents);
+  //: 逐节点缓存:输入没变动的节点原样复用上一帧的结果(连对象身份都不变),React Flow 才会跳过重渲染。
+  //: 拖动每帧只动被拖那一颗的位置 —— 此前整段 map 每帧给**所有**节点造新对象/新 data,几十个节点
+  //: 的卡片每帧全量重画,拖起来掉帧、看着晕(维护者实测)。签名逐项比身份,便宜;命中的节点
+  //: 只有位置/选中态可能变,那时包一层新对象(也只有它被重画)。
+  const nodeCacheRef = React.useRef(new Map<string, { sig: unknown[]; result: Node }>());
   return React.useMemo(
     () => {
       //: 画布节点(react-flow 的)身上没有 config,配置在图里。按 id 取回来。
       const graphNode = (id: string) =>
         graph.nodes.find((one) => one.id === id) ?? { id, type: "", config: {} };
-      return nodes.map((node) => {
+      //: runByNode / nodeZ 只按**每节点的值**进签名(nodeZ 挂在 nodes 上,拖动每帧换新对象,
+      //: 进了全局签名缓存就每帧全灭 —— 那正是缓存最该起作用的时候)。
+      //: 签名**摊平**成一维逐项比身份:嵌套数组的话,外层元素比的是数组身份,每跑一次全灭。
+      const globalSig = [layerIssues, unusableReasons, t, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded, feishuNames];
+      const cache = nodeCacheRef.current;
+      const nextCache = new Map<string, { sig: unknown[]; result: Node }>();
+      const built = nodes.map((node) => {
         // 标记不是工作流节点:它没有类型、没有接点、没有就绪度,下面那一整套算它就是白算。
         if (isMarkerNode(node)) {
-          return { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected, style: { ...node.style, pointerEvents: markerMode ? "auto" as const : "none" as const }, data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
+          const sig = [node.data, markers, markerMode, markersVisible, patchMarker, deleteMarker, ...globalSig];
+          const hit = cache.get(node.id);
+          if (hit && sig.every((one, i) => one === hit.sig[i])) {
+            const { position, dragging, selected } = node;
+            if (hit.result.position === position && hit.result.dragging === dragging && hit.result.selected === selected) {
+              nextCache.set(node.id, hit);
+              return hit.result;
+            }
+            const moved = { ...hit.result, position, dragging, selected };
+            nextCache.set(node.id, { sig, result: moved });
+            return moved;
+          }
+          const result = { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected, style: { ...node.style, pointerEvents: markerMode ? "auto" as const : "none" as const }, data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
+          nextCache.set(node.id, { sig, result });
+          return result;
         }
         // 角标按**这一层**折好了(layerIssues):这一层自己的节点挂自己的问题,更深处的挂在通往它的容器上。
         // 运行状态仍只认主流程:体里的节点不发事件(子图不带 job),体里的 id 又是另一套命名空间
         // (体里也可以有一个 llm-1),拿去查只会张冠李戴。
         const nodeIssues = layerIssues.get(node.id);
+        const step = atRoot ? runByNode[node.id] : undefined;
+        const gNode = graphNode(node.id);
+        const sig = [node.data, nodeIssues, step, nodeZ[node.id], gNode, ...globalSig];
+        const hit = cache.get(node.id);
+        if (hit && sig.every((one, i) => one === hit.sig[i])) {
+          const { position, dragging, selected } = node;
+          if (hit.result.position === position && hit.result.dragging === dragging && hit.result.selected === selected) {
+            nextCache.set(node.id, hit);
+            return hit.result;
+          }
+          const moved = { ...hit.result, position, dragging, selected };
+          nextCache.set(node.id, { sig, result: moved });
+          return moved;
+        }
         const badge = nodeIssues
           ? { severity: worstSeverity(nodeIssues), count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry, unusableReasons, refName)).join("\n") }
           : null;
-        const step = atRoot ? runByNode[node.id] : undefined;
-        return {
+        const result = {
           ...node,
           className: cn(node.className, searchHighlightClass(searchHit, node.id)) || undefined,
           draggable: !annotationMode, selectable: !annotationMode,
@@ -198,12 +236,16 @@ export function useWorkflowDisplayNodes({
             // **这两项算在这里,不在 toWorkflowFlowNodes。** 那个函数跑在 useState 的初始化里,
             // 那一刻节点类型还没拉回来、registry 是空的 —— 算出来的永远是空值,而且不会重算。
             // (素材节点的缩略图和图标就是这么丢的:改成读注册表之后,读的是一张还没到货的表。)
-            configAssetId: configAssetId(graphNode(node.id), registry),
-            configSummary: workflowNodeSubtitle(graphNode(node.id), registry, generationModels.options, t, generationModels.loaded, feishuNames),
-            ...workflowPortPresentation(graphNode(node.id), node.data as WorkflowNodeData, registry, portNamer),
+            configAssetId: configAssetId(gNode, registry),
+            configSummary: workflowNodeSubtitle(gNode, registry, generationModels.options, t, generationModels.loaded, feishuNames),
+            ...workflowPortPresentation(gNode, node.data as WorkflowNodeData, registry, portNamer),
           },
         };
+        nextCache.set(node.id, { sig, result });
+        return result;
       });
+      nodeCacheRef.current = nextCache;
+      return built;
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
     [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName, portNamer, generationModels.options, generationModels.loaded, feishuNames],
