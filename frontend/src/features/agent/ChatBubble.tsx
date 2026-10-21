@@ -170,6 +170,8 @@ export const ChatBubble = React.memo(function ChatBubble({
         quote?: AgentMessageQuote;
       }
     | null;
+  /** 正在流式写入的草稿:正文和脚注都按它分岔(「还没有可保存的内容」那种半程交互不挂)。 */
+  const streaming = Boolean((payload as { streaming?: boolean } | null)?.streaming);
   // 手动压缩留下的是一条 role=system、内容为空的消息,只承载压缩标记。
   if (message.role === "system") {
     return payload?.compaction ? (
@@ -215,7 +217,7 @@ export const ChatBubble = React.memo(function ChatBubble({
       )}
       {/* 正在流式写入的**草稿**:后端在跑的过程中就把它落库了(为了重启/失败后正文还在)。
           实时流已经在画这一轮,这里不重复画;收尾后 `streaming` 去掉,它作为历史消息出现。 */}
-      {(payload as { streaming?: boolean } | null)?.streaming ? null : message.role === "assistant" ? (
+      {streaming ? null : message.role === "assistant" ? (
         /* **失败的那一轮,已经做过的事照样要看得见。** 此前这里是二选一:只要带 error 就
            只画错误卡 —— 一次跑了三分钟、调了十来次工具的对话,最后一步断线,用户看到的就只剩
            一句「执行失败」。过程在上、失败原因在下,顺序本身就说明了"跑到哪儿断的"。 */
@@ -250,6 +252,9 @@ export const ChatBubble = React.memo(function ChatBubble({
       {/* 两侧都有脚注,长得一样(见 MessageFooter):助手那边是耗时/tokens/计费,
           用户这边是发出的时间。都只在悬停时显形 —— 常态下这一行是空的,不该占视线。 */}
       {message.role === "assistant" ? (
+        //: 流式草稿不挂脚注:还没有定稿 —— 保存/朗读对着半句话,点下去是「还没有可保存的内容」
+        //: (维护者截图),耗时/tokens 也是半程的数。收尾后它作为历史消息出现,脚注跟着回来。
+        streaming ? null : (
         <MessageUsageFooter
                   messageId={message.id}
           workspaceId={workspaceId}
@@ -258,6 +263,7 @@ export const ChatBubble = React.memo(function ChatBubble({
           durationOverride={payload?.usage?.duration_seconds}
           className="opacity-0 transition-opacity duration-100 group-hover/bubble:opacity-100"
         />
+        )
       ) : (
         <MessageFooter
           content={message.content}
