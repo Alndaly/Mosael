@@ -8,7 +8,7 @@
  */
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, LayoutGrid, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X, ArrowUpRight } from "lucide-react";
+import { BadgeCheck, LayoutGrid, Package, Plug, Search, Shield, SquareTerminal, Workflow, Wrench, X } from "lucide-react";
 import * as React from "react";
 
 import {
