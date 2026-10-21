@@ -73,7 +73,17 @@ function RunApprovalRow({ row, workflowId }: { row: RunApproval; workflowId: str
   return (
     <div className="grid gap-1.5 rounded-md border border-border bg-background/40 p-2">
       <p className="m-0 font-medium text-foreground">{row.title}</p>
-      {row.body && <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>}
+      {/*: **正文有上限、自己滚。** 审批正文可能是整篇稿子(几千字),此前它原样铺开、
+          把「同意 / 拒绝」推到可视区外面,而外面这一层不滚 —— 维护者撞到的就是"卡太高,点不到按钮"。
+          上限跟着视口走(`40vh`),短正文不受影响;按钮因此永远在卡里看得见的地方。 */}
+      {row.body && (
+        <div
+          className="max-h-[min(24rem,40vh)] overflow-y-auto overscroll-contain rounded border border-border/60 bg-secondary/40 px-2 py-1.5"
+          data-wf-run-approval-body=""
+        >
+          <p className="m-0 whitespace-pre-wrap break-words">{row.body}</p>
+        </div>
+      )}
       <p className="m-0">{t("runApprovalWaiting").replace("{node}", row.node_name || row.node_id)}</p>
       <p className="m-0 text-ui-2xs">{expiry(row, t)}</p>
       {/*: **到底发到飞书没有**。后端把投递结果记在那张单上(见 domain/workflows/approvals):

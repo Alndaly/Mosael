@@ -205,3 +205,19 @@ describe("运行停在等人确认上", () => {
     expect(screen.queryByText("在飞书里点那张卡片也一样。")).toBeNull();
   });
 });
+
+describe("审批正文很长时", () => {
+  it("正文自己滚、有高度上限;「确认 / 拒绝」不会被顶出卡外", async () => {
+    //: 维护者:「确认卡高度超出后我无法滚动导致我都无法点击同意拒绝」—— 正文原样铺开把按钮推走了。
+    renderNotice([{ ...row, body: "很长的稿子。".repeat(400) }]);
+    expect(await screen.findByText("要发布吗")).toBeInTheDocument();
+
+    const body = document.querySelector("[data-wf-run-approval-body]") as HTMLElement;
+    expect(body, "正文该有一个上限 + 滚动的容器").toBeTruthy();
+    //: 上限和纵向滚动两样都要:只给上限是截断,只给滚动不生效。
+    expect(body.className).toContain("overflow-y-auto");
+    expect(body.className).toMatch(/max-h-\[/);
+    //: 按钮在正文**外面**,不跟着一起滚走。
+    expect(body.contains(screen.getByRole("button", { name: "确认发布" }))).toBe(false);
+  });
+});
