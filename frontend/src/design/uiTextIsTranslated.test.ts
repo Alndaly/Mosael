@@ -70,6 +70,7 @@ export function count(): Map<string, number> {
 const EXEMPT = new Map<string, string>([
   ["electron/i18n.cjs", "桌面壳(主进程)的文案表本身:每个 key 的 zh 那一半就是中文,en 成对写在旁边(electron/i18n.test.ts 查齐)"],
   ["electron/publish/selectors.ts", "发布适配器拿去匹配抖音/小红书/视频号/B 站真实页面上中文按钮与提示的文字,翻译了就点不中"],
+  ["electron/publish/platforms.ts", "平台别名的匹配词表(用户/智能体说「抖音」「小红书」「推特」时按这些认出是哪个平台),不是界面文字"],
   ["browser-extension/src/i18n.ts", "扩展自己的中英文案表(侧栏按浏览器语言或用户选择取一份)"],
   ["browser-extension/src/platforms/labels.ts", "剥掉 B 站页面标题里「哔哩哔哩」后缀的解析正则"],
   ["frontend/src/domain/timeline/transcriptProjection.ts", "识别中文口语语气词(呃、嗯、那个……)的词表"],
@@ -91,7 +92,6 @@ const LEFT = new Map<string, number>([
   ["electron/publish/adapters/weixinChannels.ts", 1],
   ["electron/publish/adapters/xiaohongshu.ts", 4],
   ["electron/publish/clickChain.ts", 1],
-  ["electron/publish/platforms.ts", 7],
   //: 剩下 1 行是剥掉报错前缀「失败 ·」的解析正则,不是界面文字。
   ["frontend/src/features/scenes/SceneStudio.tsx", 4],
 ]);
