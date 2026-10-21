@@ -597,7 +597,8 @@ export function CanvasAgentChat({
             return <JobReceiptNotice key={message.id} content={message.content} payload={message.payload} />;
           }
           return (
-            (payload as { answers?: unknown } | null)?.answers ? null : <div
+            (payload as { answers?: unknown; streaming?: boolean } | null)?.answers ||
+            (payload as { streaming?: boolean } | null)?.streaming ? null : <div
               key={message.id}
               className={
                 message.role === "assistant"

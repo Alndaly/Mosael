@@ -115,7 +115,8 @@ def test_session_turn_lifecycle_with_fake_adapter(monkeypatch) -> None:
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert [m["role"] for m in messages] == ["user", "assistant"]
@@ -203,7 +204,8 @@ def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypat
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert messages[0]["content"] == "删掉这个节点"
@@ -228,7 +230,8 @@ def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert messages[1]["error"]
@@ -292,7 +295,8 @@ def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert messages[1]["content"] == timed_out
@@ -316,7 +320,8 @@ def test_只有一段日志时仍然退回那句常量(monkeypatch) -> None:
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert messages[1]["content"] == "智能体执行失败，请稍后重试。"
@@ -341,7 +346,8 @@ def test_empty_turn_surfaces_error_not_blank_bubble(monkeypatch) -> None:
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert len(messages) >= 2, messages
@@ -379,7 +385,8 @@ def test_missing_model_fails_fast_with_clear_error(monkeypatch) -> None:
     messages = []
     while time.time() < deadline:
         messages = client.get(f"/api/agent/sessions/{session['id']}/messages").json()
-        if len(messages) >= 2:
+        #: 这一轮跑着时库里已经有草稿(边流边写)—— 等它收尾("streaming" 标记消失)才算结束。
+        if len(messages) >= 2 and not (messages[-1].get("payload") or {}).get("streaming"):
             break
         time.sleep(0.1)
     assert len(messages) >= 2, messages

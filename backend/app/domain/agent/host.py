@@ -664,6 +664,70 @@ def _start_turn(session_id: str, prompt: str, token: str, *, actor_id: str | Non
     threading.Thread(target=run, daemon=True, name=TURN_THREAD_NAME).start()
 
 
+#: 流式正文落库的节流:每 1 秒或每 4000 字写一次。**不开长事务** —— 每次一个短会话,
+#: 因为一轮模型调用要跑几十秒,不能攥着连接不放(原设计里"运行时不持有数据库会话"是对的)。
+_DRAFT_FLUSH_SECONDS = 1.0
+_DRAFT_FLUSH_CHARS = 4000
+
+
+def _open_assistant_draft(session_id: str) -> str | None:
+    """先落一条空草稿,后面的正文往里追加。
+
+    **这里必须自己提交**(这个文件里已有的那几处 commit 同一个理由):一轮模型调用要跑几十秒,
+    期间不能攥着调用方的会话;而正文必须**在跑的过程中**就落库 —— 后端重启 / 进程被杀时,
+    内存里那些字一个字都留不下来(维护者撞到的就是"中断后只剩工具调用")。
+    """
+    with SessionLocal() as db:
+        draft = AgentMessage(session_id=session_id, role="assistant", content="", payload={"streaming": True})
+        db.add(draft)
+        db.commit()
+        return draft.id
+
+
+def _flush_assistant_draft(draft_id: str, text: str) -> None:
+    """把到目前为止的正文写进草稿(写不进就算了:下一拍还会再写,不能因为这一下就掐断这一轮)。"""
+    try:
+        with SessionLocal() as db:
+            draft = db.get(AgentMessage, draft_id)
+            if draft is None or not isinstance(draft.payload, dict) or not draft.payload.get("streaming"):
+                return
+            draft.content = text
+            db.commit()
+    except Exception:  # noqa: BLE001 —— 落库失败不该影响正在跑的这一轮
+        logger.debug("agent draft flush failed", exc_info=True)
+
+
+def _finish_assistant_draft(
+    db: Session, draft_id: str | None, session_id: str, *, content: str, error: str | None = None, payload: dict
+) -> AgentMessage:
+    """收尾:**更新那条草稿**,而不是另起一条(否则草稿会变成一条带正文的孤儿消息)。
+
+    `streaming` 标记在这里去掉 —— 前端只在它还在时跳过这条(那一轮由实时流负责画)。
+    """
+    message = db.get(AgentMessage, draft_id) if draft_id else None
+    if message is None:
+        message = AgentMessage(session_id=session_id, role="assistant")
+        db.add(message)
+    message.content = content
+    message.error = error
+    message.payload = dict(payload)
+    db.flush()
+    return message
+
+
+def _streaming_draft(db: Session, session_id: str) -> AgentMessage | None:
+    """这一轮还没收尾的草稿(重启接管时用):最后一条助手消息、且还带着 `streaming`。"""
+    latest = db.scalars(
+        select(AgentMessage)
+        .where(AgentMessage.session_id == session_id, AgentMessage.role == "assistant")
+        .order_by(AgentMessage.created_at.desc())
+        .limit(1)
+    ).first()
+    if latest is not None and isinstance(latest.payload, dict) and latest.payload.get("streaming"):
+        return latest
+    return None
+
+
 def _failed_turn_timeline(session_id: str) -> dict:
     """失败那一轮已经发生过的过程,整理成和成功轮同一种形状。
 
@@ -759,11 +823,29 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             failure = exc
 
     # ---- 2. 运行:不持有任何数据库会话 ----
+    draft_id: str | None = None
+    draft_buffer: dict[str, float | str] = {"text": "", "saved": 0.0, "at": 0.0}
     if failure is None:
+        # 先落一条空草稿:跑的过程中**边流边写**,进程被掐断时已经说过的话还在库里。
+        draft_id = _open_assistant_draft(session_id)
+
+        def _persist_delta(delta: str) -> None:
+            _stream_append(session_id, delta)
+            draft_buffer["text"] = str(draft_buffer["text"]) + delta
+            if draft_id is None:
+                return
+            now = time.monotonic()
+            grew = len(str(draft_buffer["text"])) - float(draft_buffer["saved"])
+            if now - float(draft_buffer["at"]) < _DRAFT_FLUSH_SECONDS and grew < _DRAFT_FLUSH_CHARS:
+                return
+            draft_buffer["at"] = now
+            draft_buffer["saved"] = float(len(str(draft_buffer["text"])))
+            _flush_assistant_draft(draft_id, str(draft_buffer["text"]))
+
         try:
             result = run_turn(
                 adapter,
-                on_delta=lambda delta: _stream_append(session_id, delta),
+                on_delta=_persist_delta,
                 on_tool=lambda event: _stream_tool_event(session_id, event),
                 on_thinking=lambda event: _stream_thinking(session_id, event),
                 **turn_kwargs,
@@ -802,9 +884,10 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
             prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
-            assistant_message = AgentMessage(
-                session_id=session.id,
-                role="assistant",
+            assistant_message = _finish_assistant_draft(
+                db,
+                draft_id,
+                session.id,
                 content=final_text,
                 payload={
                     "usage": usage,
@@ -818,8 +901,6 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                     **({"timeline": timeline} if timeline else {}),
                 },
             )
-            db.add(assistant_message)
-            db.flush()
             cards_expire_as = card_expiry.EXPIRY_TURN_STOPPED if result.aborted else card_expiry.EXPIRY_TURN_ENDED
             stopped_by_user = result.aborted
             name_it = titles.wants_a_name(db, session)
@@ -864,11 +945,16 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                 session.adapter_state = exc.adapter_state
             usage = _usage_from_started(turn_started)
             usage["metering"] = _turn_metering(prompt, "", getattr(exc, "usage", None))
-            assistant_message = AgentMessage(
-                session_id=session.id,
-                role="assistant",
-                # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议。
-                content=getattr(exc, "human", "") or tr("agentErr_turnFailed"),
+            # **失败也要留住已经说过的正文。** 原来这里只写一句报错,模型跑一半说过的话(在草稿里)
+            # 就被这条新消息取代了 —— 界面上只剩工具步骤。
+            streamed = str(draft_buffer["text"]).strip()
+            failure_text = getattr(exc, "human", "") or tr("agentErr_turnFailed")
+            assistant_message = _finish_assistant_draft(
+                db,
+                draft_id,
+                session.id,
+                # 说得出原因就说原因 —— 「请稍后重试」对一次超时是错的建议;正文在前,原因在后。
+                content="{}\n\n{}".format(streamed, failure_text) if streamed else failure_text,
                 error=str(exc)[:800],
                 payload={
                     "usage": usage,
@@ -885,8 +971,6 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                     **({"context": exc.context} if getattr(exc, "context", None) else {}),
                 },
             )
-            db.add(assistant_message)
-            db.flush()
             if provider_vendor or provider_model:
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
@@ -909,15 +993,16 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             logger.exception("Agent turn crashed")
             usage = _usage_from_started(turn_started)
             usage["metering"] = _turn_metering(prompt, "", None)
-            assistant_message = AgentMessage(
-                session_id=session.id,
-                role="assistant",
-                content=tr("agentErr_turnCrashed"),
+            streamed = str(draft_buffer["text"]).strip()
+            crashed = tr("agentErr_turnCrashed")
+            assistant_message = _finish_assistant_draft(
+                db,
+                draft_id,
+                session.id,
+                content="{}\n\n{}".format(streamed, crashed) if streamed else crashed,
                 error=str(exc)[:800],
                 payload={"usage": usage, **_failed_turn_timeline(session_id)},
             )
-            db.add(assistant_message)
-            db.flush()
             if provider_vendor or provider_model:
                 # 异常已经被这里接住了,billable 看不见 —— 显式标失败。失败的轮次照样记一条,回报了用量的照它计价。
                 with billable(
@@ -1094,17 +1179,26 @@ def reconcile_orphaned_agent_sessions(db: Session) -> int:
         #: 最后一条是「已送的终态回执」时把它重新标成待送,提交之后 drain 一次,让下一轮真的读到它。
         if _redeliver_receipt_if_unread(db, session):
             redeliver.append(session.id)
-        db.add(
-            AgentMessage(
-                session_id=session.id,
-                role="assistant",
-                content=INTERRUPTED_NOTICE,
-                error="backend restarted mid-turn",
-                #: **这一轮的步骤还回得去**(见 `_interrupted_turn_payload`)。带上稳定标记:前端据此
-                #: 把「重启中断」与「真实失败」分开统计 —— 中断不是失败,不该把连续失败数顶上去。
-                payload=_interrupted_turn_payload(db, session.id),
+        interrupted = _interrupted_turn_payload(db, session.id)
+        draft = _streaming_draft(db, session.id)
+        if draft is not None:
+            # **草稿还在:已经说过的话留着**,只把中断说明接在后面。
+            kept = (draft.content or "").strip()
+            draft.content = "{}\n\n{}".format(kept, INTERRUPTED_NOTICE) if kept else INTERRUPTED_NOTICE
+            draft.error = "backend restarted mid-turn"
+            draft.payload = interrupted
+        else:
+            db.add(
+                AgentMessage(
+                    session_id=session.id,
+                    role="assistant",
+                    content=INTERRUPTED_NOTICE,
+                    error="backend restarted mid-turn",
+                    #: **这一轮的步骤还回得去**(见 `_interrupted_turn_payload`)。带上稳定标记:前端据此
+                    #: 把「重启中断」与「真实失败」分开统计 —— 中断不是失败,不该把连续失败数顶上去。
+                    payload=interrupted,
+                )
             )
-        )
     if stale:
         # 只作废**这些会话**的卡。session_id 为空的那批来自 MCP / 飞书等外部智能体,
         # 它们是另一条生命周期(进程可能还活着、还在等人点),不该被这里顺手清掉。

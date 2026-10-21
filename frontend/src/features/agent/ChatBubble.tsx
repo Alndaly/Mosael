@@ -213,7 +213,9 @@ export const ChatBubble = React.memo(function ChatBubble({
           <CompactionNotice info={payload.compaction} />
         </div>
       )}
-      {message.role === "assistant" ? (
+      {/* 正在流式写入的**草稿**:后端在跑的过程中就把它落库了(为了重启/失败后正文还在)。
+          实时流已经在画这一轮,这里不重复画;收尾后 `streaming` 去掉,它作为历史消息出现。 */}
+      {(payload as { streaming?: boolean } | null)?.streaming ? null : message.role === "assistant" ? (
         /* **失败的那一轮,已经做过的事照样要看得见。** 此前这里是二选一:只要带 error 就
            只画错误卡 —— 一次跑了三分钟、调了十来次工具的对话,最后一步断线,用户看到的就只剩
            一句「执行失败」。过程在上、失败原因在下,顺序本身就说明了"跑到哪儿断的"。 */

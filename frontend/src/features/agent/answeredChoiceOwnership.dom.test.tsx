@@ -106,3 +106,30 @@ describe("回执那条消息不画成气泡:答案已经在 ask_user 的卡片�
     expect(container.textContent ?? "").not.toContain("已跳过");
   });
 });
+
+describe("正在流式写入的草稿不画(实时流在画)", () => {
+  //: 后端在跑的过程中就把正文落库了(为了重启/失败后还看得到,见 backend 的 `_open_assistant_draft`)。
+  //: 那一轮由实时流负责画,这条草稿不该再占一个气泡 —— 收尾(`streaming` 去掉)之后才作为历史消息出现。
+  it("带 streaming 的助手消息:不渲染", () => {
+    const { container } = renderInClient(
+      <ChatBubble
+        message={agentMessage("assistant", { streaming: true }, "正在搭图…")}
+        usageEvents={[]}
+        workspaceId="w1"
+      />,
+    );
+    expect(container.textContent ?? "").not.toContain("正在搭图");
+  });
+
+  it("收尾之后(没有 streaming):正常画出来", () => {
+    //: 助手消息的正文走 timeline 里的 text 项(不是 `content` 直接摆上去)。
+    const { container } = renderInClient(
+      <ChatBubble
+        message={agentMessage("assistant", { timeline: [{ type: "text", text: "已经搭好 4 路抓取。" }] })}
+        usageEvents={[]}
+        workspaceId="w1"
+      />,
+    );
+    expect(container.textContent).toContain("已经搭好 4 路抓取。");
+  });
+});
