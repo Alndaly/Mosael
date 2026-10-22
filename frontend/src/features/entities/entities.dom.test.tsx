@@ -257,6 +257,17 @@ describe("资产页", () => {
     expect(await screen.findByRole("region", { name: "entityReferences" })).toBeTruthy();
   });
 
+  it("空态长在「剩余空间」的中间:容器自己撑满,空态才能居中(和工作台一致)", async () => {
+    //: 维护者 2026-10-23:资产页的空态一直贴在搜索条下面,没有像工作台那样落在中间。
+    //: 根子是这一格只是 `pt-5` 的普通块 —— 空态的 `m-auto` 没有可分配的余量。
+    api.listEntities.mockResolvedValue([]);
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    const empty = (await screen.findByText("entitiesEmptyTitle")).closest(".empty-state")!;
+    const container = empty.parentElement!;
+    expect(container.className).toContain("flex-1");
+    expect(container.className).toContain("items-center");
+  });
+
   it("这一类一个都没有:「新建」只在空状态里摆一颗,页头不再摆第二颗;切到有东西的那一类,页头那颗回来", async () => {
     api.listEntities.mockResolvedValue([summary({ id: "e2", kind: "location", name: "老街", cover_asset_id: null, tags: [], variant_count: 0 })]);
     mount(<EntitiesView workspace={WORKSPACE} />);

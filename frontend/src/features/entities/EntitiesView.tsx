@@ -219,9 +219,11 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         <EntitySelectionBar collection={collection} rows={visible} className="border-t border-divider pt-3" />
       </div>
 
-      {/* 空态要落在**剩下的那块空间**中间,和工作台一致:根容器是列方向的 flex,列表这一格
-          `flex-1` 之后空态才有地方可以居中;有内容时它照旧从头排。 */}
-      <div className={cn("pt-5", visible.length === 0 && !listing.isPending && "flex flex-1 items-center justify-center")}>
+      {/* 空态要落在**剩下的那块空间**中间,和工作台同一个做法:根容器是列方向的 flex,
+          这一格在有内容时只是普通容器(`pt-5`),在空 / 载入中 / 出错时**自己长满剩余高度**并把
+          里面的空态居中。此前它只是一个 `pt-5` 的普通块,空态的 `m-auto` 没有可分配的余量,
+          于是永远贴在上边 —— 这就是「资产页空态没居中」的根子。 */}
+      <div className={cn(visible.length === 0 || listing.isPending || listing.isError ? "flex flex-1 items-center justify-center" : "pt-5")}>
         {listing.isPending ? (
           <div role="status" aria-busy="true" className={CARD_GRID}>
             <span className="sr-only">{t("pageLoading")}</span>
