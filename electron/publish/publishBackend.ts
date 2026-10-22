@@ -20,6 +20,10 @@ interface BackendTask {
   platform: string;
   proxy: string | null;
   video_path: string;
+  /** 内容形状与多份素材(ADR 0076);老后端不给这几个字段时按视频兜底。 */
+  content_kind?: string;
+  body?: string;
+  media_paths?: string[];
   title: string;
   tags: string[];
   description: string;

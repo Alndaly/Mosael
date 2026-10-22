@@ -7,6 +7,8 @@ import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt 
 import { plog } from "../log";
 
 export class XiaohongshuAdapter implements PublishAdapter {
+  //: 图文是这一页的**默认**形态(ADR 0076 第一步);文章(写长文)还没接。
+  readonly supports = ["video", "image-text"] as const;
   private readonly s = SELECTORS.xiaohongshu;
 
   constructor(
@@ -16,7 +18,9 @@ export class XiaohongshuAdapter implements PublishAdapter {
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.publishUrl);
-    // Default tab is image-text; switch to the video uploader if present.
+    //: 创作页**默认就是图文**;只有视频任务才去点「上传视频」那个 tab。
+    //: (此前无条件点它,于是图文任务被带到了视频上传页。)
+    if (this.task.contentKind !== "video") return;
     await clickTextPreferTrusted(this.driver, this.s.videoTabText, {
       exact: true,
       selector: "button, [role=button], a, div, span",
@@ -50,6 +54,46 @@ export class XiaohongshuAdapter implements PublishAdapter {
       }));
     if (!publishReady) {
       throw publishError("xiaohongshu", "publishErr_uploadTimeout");
+    }
+  }
+
+  /** 图文:一次交多份图片(**顺序就是数组顺序**),等编辑器与「发布」都就绪。 */
+  async uploadImages(paths: string[]): Promise<void> {
+    if (paths.length === 0) throw publishError("xiaohongshu", "publishErr_noAssets");
+    await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
+    await this.driver.setFiles(this.s.fileInput, paths);
+    const ready = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
+    if (!ready) {
+      throw publishError("xiaohongshu", "publishErr_editorMissing");
+    }
+    const publishReady =
+      (await this.driver.waitCssEnabled(this.s.submitButton, UPLOAD_TIMEOUT)) ||
+      (await this.driver.waitTextEnabledDeep(this.s.submitText, 1_000, {
+        hostSelector: this.s.submitHost,
+      }));
+    if (!publishReady) {
+      throw publishError("xiaohongshu", "publishErr_uploadTimeout");
+    }
+  }
+
+  /** 正文:图文用编辑器,和话题填的是同一个 contenteditable。 */
+  async fillBody(body: string): Promise<void> {
+    const value = body.trim();
+    if (!value) return;
+    await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
+    await typeOrFill(this.driver, "xiaohongshu body", this.s.contentEditor, value, async () => {
+      await this.driver.focusAndClearField(this.s.contentEditor);
+      await this.driver.insertText(this.s.contentEditor, value);
+    });
+    const accepted = await this.driver.waitForFunction(
+      `(() => (document.querySelector(${JSON.stringify(
+        this.s.contentEditor,
+      )})?.innerText || '').includes(${JSON.stringify(value)}))()`,
+      3_000,
+      200,
+    );
+    if (!accepted) {
+      throw publishError("xiaohongshu", "publishErr_descriptionRejected");
     }
   }
 

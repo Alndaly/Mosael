@@ -14,12 +14,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from app.core.db import SessionLocal
 from app.db.models import PublishTask
-from app.domain.publish import CONTENT_KINDS, PUBLISH_PLATFORMS, content_limits, content_kinds, start_publish
-from tests.util import create_asset, fresh_client, insert_asset, user_id, make_video_asset
+from app.domain.publish import CONTENT_KINDS, PUBLISH_PLATFORMS, content_limits, content_kinds
+from tests.util import create_asset, fresh_client, make_video_asset
 
 CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "platform-contracts.json"
 

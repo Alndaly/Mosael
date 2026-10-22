@@ -27,6 +27,7 @@ import type { DownloadNotice } from "./downloads";
 import { FloatLayer, type FloatHint, type FloatPointer } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
+import { publishError } from "./adapters/shared";
 import { newWorkflowInPage, openWorkflowInPage, type ComfyNewOutcome, type ComfyOpenOutcome } from "./comfyEditor";
 import type { ComfyNavigation, NavigationOutcome } from "./comfyNavigation";
 import { comfyViewOpening, comfyViewShown, setComfyNavigation } from "./comfyViews";
@@ -226,6 +227,9 @@ function toAdapterTask(t: backend.BackendTask): PublishTask {
     accountName: t.account_name,
     platform: resolvePlatform(t.platform).id,
     videoPath: t.video_path,
+    contentKind: (t.content_kind as "video" | "image-text" | "article" | undefined) ?? "video",
+    mediaPaths: t.media_paths?.length ? t.media_paths : [t.video_path],
+    body: t.body ?? "",
     title: t.title,
     tags: t.tags || [],
     platformOptions: {
@@ -343,11 +347,28 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     await backend.patchAccount(t.accountId, { binding_status: "bound", last_error: null });
 
     await step(tr("publishStep_upload"));
-    await adapter.uploadVideo(t.videoPath);
+    //: 按任务声明的形状挑上传方法(ADR 0076)。适配器不自己判断 kind —— 它只声明自己做到了哪些,
+    //: 由这里按 `supports` 对一遍,对不上就**在动手前**失败,说清这个平台/这个适配器还发不了。
+    const kind = t.contentKind ?? "video";
+    const supported = adapter.supports ?? (["video"] as const);
+    if (!supported.includes(kind)) {
+      throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
+    }
+    if (kind === "video") {
+      await adapter.uploadVideo(t.videoPath);
+    } else {
+      if (!adapter.uploadImages) throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
+      await adapter.uploadImages(t.mediaPaths);
+    }
     await delay(stepDelay());
     await step(tr("publishStep_fillTitle"));
     await adapter.fillTitle(t.title);
     await delay(stepDelay());
+    if (kind !== "video" && t.body && adapter.fillBody) {
+      await step(tr("publishStep_fillBody"));
+      await adapter.fillBody(t.body);
+      await delay(stepDelay());
+    }
     await step(tr("publishStep_fillTags"));
     await adapter.fillTags(t.tags);
     await delay(stepDelay());
@@ -452,6 +473,9 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     accountName: acc.name ?? "",
     platform,
     videoPath: "",
+    contentKind: "video",
+    mediaPaths: [],
+    body: "",
     title: "",
     tags: [],
     platformOptions: { description: "", shortTitle: "" },
@@ -844,6 +868,9 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       accountName: "",
       platform: def.id,
       videoPath: "",
+      contentKind: "video",
+      mediaPaths: [],
+      body: "",
       title: "",
       tags: [],
       platformOptions: {},

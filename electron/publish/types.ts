@@ -78,6 +78,9 @@ export interface PageSummary {
   current: boolean;
 }
 
+/** 能下发的三种内容形状(ADR 0076);`document` 不是其中一种,它要先转换成这三种之一。 */
+export type ContentKind = "video" | "image-text" | "article";
+
 /** 适配器消费的任务形状(与桌面版一致):videoPath / title / tags / platformOptions{description,shortTitle,…平台选项}。 */
 export interface PublishTask {
   id: string;
@@ -85,6 +88,12 @@ export interface PublishTask {
   accountName: string;
   platform: Platform;
   videoPath: string;
+  /** 这一条发的是什么形状(ADR 0076);老任务是 video。 */
+  contentKind: ContentKind;
+  /** 图文 / 文章的全部素材,**按顺序**;视频就是一份。 */
+  mediaPaths: string[];
+  /** 正文 / 长文(图文与文章用);平台没有正文栏就是空串。 */
+  body: string;
   title: string;
   tags: string[];
   platformOptions: Record<string, unknown>;

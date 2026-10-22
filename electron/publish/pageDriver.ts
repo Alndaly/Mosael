@@ -1285,12 +1285,13 @@ export class PageDriver {
    * 找不到就是找不到。不给的是发布适配器那种「这个平台的上传框大概长这样」:没对上时退回页面上第一个
    * 文件框(平台常把它藏进 shadow DOM)。见 findFileInputNode。
    */
-  async setFiles(selector: string, filePath: string, opts: FileInputLookup = {}): Promise<void> {
+  async setFiles(selector: string, filePath: string | string[], opts: FileInputLookup = {}): Promise<void> {
     this.throwIfAborted();
     const nodeId = await this.findFileInputNode(selector, opts);
     this.throwIfAborted();
     await this.wc.debugger.sendCommand("DOM.setFileInputFiles", {
-      files: [filePath],
+      //: 图文一次交多份(顺序就是数组顺序)—— 平台的图片 input 都是 multiple。
+      files: Array.isArray(filePath) ? filePath : [filePath],
       nodeId,
     });
   }

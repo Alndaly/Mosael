@@ -1,0 +1,67 @@
+"""适配器声明「我做到了哪些内容形状」,注册表声明「平台能发哪些」——两者不能各说各的。
+
+ADR 0076:后端 `PUBLISH_PLATFORMS[platform]["kinds"]` 说平台**能发**什么,执行器侧的适配器用
+`readonly supports = [...]` 说我们**实现了**什么。前者是事实,后者是进度;后者超出前者,说明有人
+把"平台能发"当成了"我们已经会发",用户会在真实页面上撞到一个做不到的任务。
+
+这条测试是一道**棘轮**:改任何一边都得同时改另一边。没声明 `supports` 的适配器按「只发视频」算。
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+
+from app.domain.publish import content_kinds
+
+RATCHET = True
+
+ADAPTERS = Path(__file__).resolve().parents[2] / "electron" / "publish" / "adapters"
+#: 文件名 → 平台。`mock` 是测试替身,不参与。
+FILES = {
+    "douyin.ts": "douyin",
+    "xiaohongshu.ts": "xiaohongshu",
+    "weixinChannels.ts": "weixin-channels",
+    "bilibili.ts": "bilibili",
+    "tiktok.ts": "tiktok",
+    "x.ts": "x",
+    "youtube.ts": "youtube",
+}
+
+
+def _supports(path: Path) -> tuple[str, ...]:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"readonly\s+supports\s*=\s*\[([^\]]*)\]", text)
+    if not match:
+        return ("video",)
+    return tuple(item.strip().strip("\"'") for item in match.group(1).split(",") if item.strip())
+
+
+def test_every_adapter_file_has_a_platform() -> None:
+    found = {path.name for path in ADAPTERS.glob("*.ts")} - {"shared.ts", "index.ts", "mock.ts"}
+    assert found == set(FILES), f"适配器文件与这张表对不上:{found ^ set(FILES)}"
+
+
+@pytest.mark.parametrize(("file_name", "platform"), sorted(FILES.items()))
+def test_an_adapter_never_claims_a_shape_the_platform_cannot_take(file_name: str, platform: str) -> None:
+    implemented = set(_supports(ADAPTERS / file_name))
+    declared = set(content_kinds(platform))
+    assert implemented <= declared, (
+        f"{file_name} 说它会发 {sorted(implemented - declared)},但注册表里 {platform} 只声明了 {sorted(declared)} —— "
+        f"先改注册表(如果平台真能发),或者别在适配器里声明它"
+    )
+
+
+def test_the_registry_never_promises_a_shape_no_adapter_implements() -> None:
+    """反向也要看:平台声明了、但没有任何适配器实现 —— 那是**进度**,不是错误,但必须被看见。
+
+    这里不做硬断言(否则每加一个平台的 kind 就得先写适配器),而是要求这张进度表在测试里写出来,
+    改注册表的人会看到自己把哪一格点成了「已实现」。
+    """
+    implemented = {_supports(ADAPTERS / name) for name in FILES}
+    union = {kind for kinds in implemented for kind in kinds}
+    assert "video" in union, "连视频都不认了?适配器一定出了事"
+    #: 目前只有小红书把图文做完了;抖音 / TikTok / YouTube 的图文入口都已在真机确认,适配器随后跟上。
+    assert "image-text" in union

@@ -1,4 +1,4 @@
-import type { PublishTask } from "../types";
+import type { ContentKind, PublishTask } from "../types";
 import type { SupportedPlatform } from "../platforms";
 import { platformName, resolvePlatform } from "../platforms";
 import type { PageDriver } from "../pageDriver";
@@ -6,9 +6,18 @@ import { plog } from "../log";
 import { t } from "../../i18n.cjs";
 
 export interface PublishAdapter {
+  /**
+   * 这个适配器真做得到的形状(ADR 0076)。后端注册表声明平台**能发**什么,这里声明我们**实现了**
+   * 什么 —— 两者对不上由测试发现(见 electron/publish/adapters/supports.test.ts)。默认只有视频。
+   */
+  readonly supports?: readonly ContentKind[];
   openCreatorPage(): Promise<void>;
   checkLogin(): Promise<boolean>;
   uploadVideo(videoPath: string): Promise<void>;
+  /** 图文:一次交多份图片,顺序就是数组顺序。 */
+  uploadImages?(paths: string[]): Promise<void>;
+  /** 正文 / 长文(富文本编辑器)。 */
+  fillBody?(body: string): Promise<void>;
   fillTitle(title: string): Promise<void>;
   fillTags(tags: string[]): Promise<void>;
   submit(): Promise<void>;

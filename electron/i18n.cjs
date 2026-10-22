@@ -215,7 +215,16 @@ const MESSAGES = {
   publishStep_preparing: { zh: "准备中", en: "Preparing" },
   publishStep_openCreator: { zh: "打开创作页", en: "Opening the creator page" },
   publishStep_checkLogin: { zh: "检查登录态", en: "Checking sign-in" },
-  publishStep_upload: { zh: "上传视频", en: "Uploading the video" },
+  publishErr_noAssets: {
+    zh: "这条内容没有可上传的素材",
+    en: "This post has no media to upload.",
+  },
+  publishErr_kindNotImplemented: {
+    zh: "{platform} 的这一版还发不了「{kind}」:先按视频发,或者等适配器跟上",
+    en: "This build cannot post a “{kind}” to {platform} yet — publish it as a video, or wait for the adapter.",
+  },
+  publishStep_upload: { zh: "上传素材", en: "Uploading the media" },
+  publishStep_fillBody: { zh: "填写正文", en: "Filling in the body" },
   publishStep_fillTitle: { zh: "填写标题", en: "Filling in the title" },
   publishStep_fillTags: { zh: "填写标签与简介", en: "Filling in tags and description" },
   publishStep_submit: { zh: "提交投稿", en: "Submitting" },
