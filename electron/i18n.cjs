@@ -58,8 +58,7 @@ const MESSAGES = {
   common_untitled: { zh: "未命名", en: "Untitled" },
 
   // ---- 托盘 ----
-  // Computer Use(ADR 0075):屏幕上四角描边与托盘菜单上的字。
-  computerUse_overlay: { zh: "Computer Use 正在操作 Mosael · 按 ⌘⇧Esc 急停", en: "Computer Use is operating Mosael · press ⌘⇧Esc to stop" },
+  // Computer Use(ADR 0075):托盘菜单上的字。四角描边只画边、不写字(同一句话窗口里的提示条已经在说)。
   computerUse_stop: { zh: "停止 Computer Use", en: "Stop Computer Use" },
   tray_running: { zh: "{count} 个任务运行中", en: "{count} running" },
   tray_idle: { zh: "空闲", en: "Idle" },
