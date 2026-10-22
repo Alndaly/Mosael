@@ -20,7 +20,7 @@ KNOWN_CAPABILITY_IDS = ("chat", "image", "video", "audio", "tts", "podcast")
 KNOWN_AUTH_TYPES = ("oauth", "api_key")
 KNOWN_FIELD_STORAGES = ("api_key", "base_url", "default_model", "extra")
 #: 模型目录怎么问(见 ai/model_catalog):OpenAI 兼容的 `GET /models`,或 Gemini 原生的 `GET /v1beta/models`。
-KNOWN_CATALOG_PROTOCOLS = ("openai", "gemini")
+KNOWN_CATALOG_PROTOCOLS = ("openai", "gemini", "command-code")
 
 
 @dataclass(frozen=True)
@@ -593,6 +593,45 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
         "auth": ["oauth"],
         "pi_provider": "openai-codex",
         "fields": [],
+    },
+    "command-code": {
+        "label": "Command Code(订阅计划)",
+        #: 一把 Key 同时给 CLI 与 API(官方文档:同一个 Key 认证 CLI 和 Provider API);GOAT / Pro /
+        #: Max / Provider 计划都带 API 访问,Go 计划没有。**不是 OAuth**:订阅买完在 Studio 里生成 Key,
+        #: 所以这里走 api_key 那一档,pi 不参与。
+        "base_url": "https://api.commandcode.ai/provider/v1",
+        "capabilities": (
+            "对话。订阅计划自带额度:每月 credits + 5 小时 / 每周两个滚动窗口(Go / GOAT / Pro / Max 各自的"
+            "上限不同),额外充的 pay-as-you-go credits 不受窗口限制;余额与窗口只在 Command Code 的 "
+            "Studio 里看,API 没有查询端点。按量付费计划(Provider)就是纯余额。"
+        ),
+        "capability_ids": ["chat"],
+        #: 目录里同时有只认 `/messages` 的 Claude 和只认 `/chat/completions`、`/responses` 的其余模型 ——
+        #: 目录协议按 `supported_endpoints` 过滤,只留本应用这条 OpenAI 兼容通道发得出去的。
+        "model_catalog": "command-code",
+        "fields": [
+            {
+                "key": "api_key",
+                "label": "Command Code API Key",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "在 Command Code 的 Studio → API keys 里生成;同一个 Key 也能给 CLI 用。",
+            },
+            {
+                "key": "base_url",
+                "label": "Command Code Endpoint",
+                "storage": "base_url",
+                "default": "https://api.commandcode.ai/provider/v1",
+                "hint": "通常保持默认。/chat/completions 与 /responses 是 OpenAI 格式,/messages 是 Anthropic 格式;本应用走前两条。",
+            },
+            {
+                "key": "default_model",
+                "label": "初始模型(可选)",
+                "storage": "default_model",
+                "hint": "仅在创建连接时先加入一个模型;保存后请在模型列表里管理。",
+            },
+        ],
     },
     "github-copilot": {
         "label": "GitHub Copilot",

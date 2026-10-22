@@ -40,7 +40,7 @@ Mosael 的 AI 能力(智能体对话、文生图 / 视频、配音、转写等)�
 进对应分区点「**添加供应商**」：
 
 1. 选**服务商**。列表按分区过滤，目录随版本扩充：
-   - **AI 对话**：阿里云百炼、Kimi、DeepSeek、MiniMax、OpenAI、Google AI Studio(Gemini,见下)、OpenAI 兼容端点，以及下面「订阅计划」那一组；
+   - **AI 对话**：阿里云百炼、Kimi、DeepSeek、MiniMax、OpenAI、Command Code、Google AI Studio(Gemini,见下)、OpenAI 兼容端点，以及下面「订阅计划」那一组；
    - **AI 绘图**：阿里云百炼、火山方舟 ARK、OpenAI、OpenAI 兼容端点、Evolink；
    - **AI 视频**：阿里云百炼、火山方舟 ARK、MiniMax、火山引擎 即梦 AI(视觉)、HeyGen、Hedra、Google AI Studio(Veo)、Evolink、快手可灵 —— 其中即梦、HeyGen、Hedra 和可灵的数字人模型见[数字人](/docs/guides/digital-humans)；
    - **AI 音频**：语音合成（阿里云百炼、OpenAI、火山引擎语音合成）、播客对话（火山引擎播客）、音乐与音效（见下）。
@@ -190,7 +190,18 @@ OpenAI 目前没有音乐 / 音效生成接口（只有语音合成），所以�
 
 ## 订阅计划：授权登录，不用 API Key
 
-Claude Pro/Max、Kimi Code、ChatGPT Plus/Pro、GitHub Copilot、xAI、OpenRouter 这些**订阅计划**没有可填的密钥。在 AI 对话分区「添加供应商」时选对应条目，保存后回到列表点该行的「**授权登录**」：
+Claude Pro/Max、Kimi Code、ChatGPT Plus/Pro、GitHub Copilot、xAI、OpenRouter 这些**订阅计划**没有可填的密钥。
+
+**也有「订阅计划但用 API Key」的一家:Command Code。** 它的计划(Go / GOAT / Pro / Max)在供应商自己的
+Studio 里购买，然后在同一处生成 API Key —— 同一个 Key 既认证它的 CLI，也用在这里。所以它不走授权登录，
+而是和别的 API Key 服务商一样粘贴密钥：
+
+- 端点固定为 `https://api.commandcode.ai/provider/v1`，走 OpenAI 兼容通道；
+- 模型目录现取自它的 `/models`，并按每条模型的 `supported_endpoints` 只保留本应用发得出去的那些
+  (只认 Anthropic `/messages` 的 Claude 会因此不出现)；
+- **额度不在我们这边显示**：它的每月 credits 与「5 小时 / 每周」两个滚动窗口只在自己的 Studio 里看，
+  API 没有查询端点。额外充的按量余额不受窗口限制。
+在 AI 对话分区「添加供应商」时选对应条目，保存后回到列表点该行的「**授权登录**」：
 
 1. 部分服务商先让你选**登录方式**(如 Codex 的「浏览器授权 / 设备码」)。
 2. 弹窗里会出现**授权链接**或**设备码**，照着在浏览器里完成即可；需要粘贴授权码的会就地给输入框。

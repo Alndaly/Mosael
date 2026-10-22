@@ -42,7 +42,7 @@ Click the chevron on a provider row to see that connection's model list.
 Click **Add provider** in the relevant section:
 
 1. Pick a **vendor**. The list is filtered by section and grows over time:
-   - **AI Chat**: Alibaba Bailian, Kimi, DeepSeek, MiniMax, OpenAI, Google AI Studio (Gemini, see below), OpenAI-compatible endpoints, plus the subscription group below;
+   - **AI Chat**: Alibaba Bailian, Kimi, DeepSeek, MiniMax, OpenAI, Command Code, Google AI Studio (Gemini, see below), OpenAI-compatible endpoints, plus the subscription group below;
    - **AI Image**: Alibaba Bailian, Volcengine ARK, OpenAI, OpenAI-compatible endpoints, Evolink;
    - **AI Video**: Alibaba Bailian, Volcengine ARK, MiniMax, Volcengine Jimeng AI (vision), HeyGen, Hedra, Google AI Studio (Veo), Evolink, Kuaishou Kling — the digital-human models from Jimeng, HeyGen, Hedra and Kling are covered in [Digital humans](/docs/guides/digital-humans);
    - **AI Audio**: speech synthesis (Alibaba Bailian, OpenAI, Volcengine TTS), podcast dialogue (Volcengine podcast), music & sound (below).
@@ -215,6 +215,17 @@ Two things worth stating plainly:
 agent or scheduled tasks submit without some of them, those are written into the request with the model's declared default too,
 instead of being left out and falling back to the provider's own default — Evolink's gpt-image-2, for instance, declares the
 cheapest low quality while the provider's own default is medium. Values you set explicitly are sent as you set them.
+
+**One provider is a subscription plan that still uses an API key: Command Code.** You buy its plan
+(Go / GOAT / Pro / Max) in its own Studio and generate an API key there — the same key authenticates
+its CLI and this app. So it does not use the authorize flow; paste the key like any other provider:
+
+- The endpoint is fixed at `https://api.commandcode.ai/provider/v1` (OpenAI-compatible);
+- The model list comes from its `/models`, filtered by each model's `supported_endpoints` to the ones
+  this app can actually call (Claude models that only answer on Anthropic `/messages` therefore do not
+  show up);
+- **Usage is not shown here**: its monthly credits and the rolling 5-hour / weekly windows only live in
+  its Studio — there is no query endpoint. Extra pay-as-you-go credit is never capped by those windows.
 
 ## Subscription plans: authorize instead of pasting a key
 
