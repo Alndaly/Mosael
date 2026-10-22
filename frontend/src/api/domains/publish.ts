@@ -57,7 +57,13 @@ export function listPublishTasks(workspaceId: string): Promise<PublishTask[]> {
 export function createPublishTask(body: {
   workspace_id: string;
   account_id: string;
-  asset_id: string;
+  /** 视频与老调用点仍传一份素材;图文 / 文章传 `asset_ids`(按顺序)。 */
+  asset_id?: string;
+  asset_ids?: string[];
+  /** 内容形状(ADR 0076):video / image-text / article。 */
+  content_kind?: string;
+  /** 图文 / 文章的正文。 */
+  body?: string;
   title: string;
   description: string;
   tags: string[];

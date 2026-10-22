@@ -19,6 +19,8 @@ from app.domain.publish import worker as publish_worker
 from app.db.models import Asset, PublishAccount
 from app.core.i18n import get_current_locale, t, tr
 from app.domain.publish import (
+    content_kinds,
+    content_limits,
     PUBLISH_PLATFORMS,
     PublishDomainError,
     create_account,
@@ -45,6 +47,9 @@ def platforms() -> list[dict]:
             "description": t(meta["description"], locale),
             "config": meta["config"],
             "title_max": meta.get("title_max", 300),
+            #: 能发哪几种形状、各有什么上限(ADR 0076)。前端只列可选项、按上限计数 —— 不再抄一遍。
+            "kinds": list(content_kinds(key)),
+            "content_limits": {kind: content_limits(key, kind) for kind in content_kinds(key)},
             "short_title": meta.get("short_title", False),
             # 平台自己的发布选项:前端照这份**自动**把控件画出来,不为每个平台写一段表单。
             "options": [

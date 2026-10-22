@@ -21,6 +21,7 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { useAssetSearch } from "@/lib/assetQueries";
@@ -457,7 +458,15 @@ function PublishCard({
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
       <div className="grid min-w-0 gap-1">
-        <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
+        <div className="flex min-w-0 items-center gap-2">
+          <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
+          {/*: 这条发的是什么形状(ADR 0076):视频是老形状,不必占位;图文 / 文章要一眼看得出来。 */}
+          {task.content_kind && task.content_kind !== "video" && (
+            <span className="shrink-0 rounded-full bg-panel-subtle px-1.5 py-0.5 text-ui-xs text-muted-foreground">
+              {t((task.content_kind === "image-text" ? "publishKind_imageText" : `publishKind_${task.content_kind}`) as never)}
+            </span>
+          )}
+        </div>
         <div className="flex min-w-0 items-center gap-1 text-ui-sm text-muted-foreground">
           <span className="shrink-0">{task.platform} · {task.account_name} ·</span>
           {/*: 成片名可点:直接预览这条素材。行内动作走 Button 的 inline 档(design/inlineActions 的
@@ -587,6 +596,11 @@ function CreatePublishDialog({
 }) {
   const t = useI18n();
   const [assetId, setAssetId] = React.useState<string | null>(null);
+  //: 内容形状(ADR 0076):平台认哪几种由 /publish/platforms 的 `kinds` 决定,这里不写死。
+  const [kind, setKind] = React.useState("video");
+  //: 图文 / 文章的多份图片(顺序就是发布顺序)。
+  const [imageIds, setImageIds] = React.useState<string[]>([]);
+  const [body, setBody] = React.useState("");
   const [accountId, setAccountId] = React.useState<string | null>(null);
   const [title, setTitle] = React.useState("");
   const [shortTitle, setShortTitle] = React.useState("");
@@ -599,6 +613,8 @@ function CreatePublishDialog({
   //: 能发的是视频:按种类在服务端筛、敲字在服务端搜,不把整个素材库拉回来。选中的那一份记下名字 ——
   //: 再搜别的字时它不一定还在清单里,触发器上照样写着它。
   const videos = useAssetSearch({ workspace_id: workspace.id, kind: ["video"] }, { enabled: open });
+  //: 图文 / 文章用图片;和多选视频那条一样,按种类在服务端筛。
+  const images = useAssetSearch({ workspace_id: workspace.id, kind: ["image"] }, { enabled: open && kind !== "video" });
   const [assetName, setAssetName] = React.useState("");
   const accounts = useQuery({
     queryKey: ["publish-accounts", workspace.id],
@@ -615,7 +631,25 @@ function CreatePublishDialog({
   const selectedAccount = usableAccounts.find((account) => account.id === accountId) ?? null;
   const platformMeta =
     (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
-  const titleMax = platformMeta?.title_max ?? 300;
+  const platformKinds = React.useMemo(() => platformMeta?.kinds ?? ["video"], [platformMeta?.kinds]);
+  //: 换了账号(平台),当前形状要是人家不认,回落到它认的第一档。
+  React.useEffect(() => {
+    if (!platformKinds.includes(kind)) setKind(platformKinds[0] ?? "video");
+  }, [kind, platformKinds]);
+  const kindLimits = (platformMeta?.content_limits?.[kind] ?? {}) as {
+    title_max?: number;
+    body_max?: number | null;
+    max_items?: number | null;
+  };
+  const titleMax = kindLimits.title_max ?? platformMeta?.title_max ?? 300;
+  const bodyMax = kindLimits.body_max ?? null;
+  const maxItems = kindLimits.max_items ?? null;
+  const needsImages = kind !== "video";
+  //: 这一条能不能提交:视频要一份素材;图文 / 文章要 1..max 张图;正文不超上限。
+  const assetCount = needsImages ? imageIds.length : assetId ? 1 : 0;
+  const tooManyImages = maxItems !== null && imageIds.length > maxItems;
+  const bodyTooLong = bodyMax !== null && [...body].length > bodyMax;
+  const assetsReady = assetCount > 0 && !tooManyImages;
   // 超长的标题后端会拒(publishErr_titleTooLong):计数变红的同时就不让提交,别等点了再报错。
   // 按码点数,和后端的 len() 同一把尺 —— `.length` 数的是 UTF-16 单元,一个 emoji 算两个,会提前拦下。
   const titleLength = [...title.trim()].length;
@@ -626,6 +660,17 @@ function CreatePublishDialog({
   React.useEffect(() => {
     setOptions(Object.fromEntries(optionSpecs.map((spec) => [spec.key, spec.default])));
   }, [platformMeta?.platform]);
+
+  //: 换形状:把不适用的选择清掉 —— 带着上一次的素材提交,发出去的和看到的不一样。
+  React.useEffect(() => {
+    if (kind === "video") {
+      setImageIds([]);
+      setBody("");
+    } else {
+      setAssetId(null);
+      setAssetName("");
+    }
+  }, [kind]);
 
   const aiCopy = useMutation({
     mutationFn: () => generatePublishCopy({ workspace_id: workspace.id, asset_id: assetId }),
@@ -642,7 +687,8 @@ function CreatePublishDialog({
       createPublishTask({
         workspace_id: workspace.id,
         account_id: accountId!,
-        asset_id: assetId!,
+        content_kind: kind,
+        ...(needsImages ? { asset_ids: imageIds, body: body.trim() } : { asset_id: assetId! }),
         title: title.trim(),
         description: description.trim(),
         tags: tagsText
@@ -669,11 +715,23 @@ function CreatePublishDialog({
       title={t("publishCreate")}
       footer={
         <>
-          <Button className="mr-auto" variant="outline" size="sm" disabled={!assetId} loading={aiCopy.isPending} onClick={() => aiCopy.mutate()}>
+          <Button
+            className="mr-auto"
+            variant="outline"
+            size="sm"
+            disabled={kind !== "video" || !assetId}
+            loading={aiCopy.isPending}
+            onClick={() => aiCopy.mutate()}
+          >
             <Sparkles size={13} /> {t("publishAiCopy")}
           </Button>
           <Button variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
-          <Button size="sm" disabled={!assetId || !selectedAccount || titleTooLong} loading={create.isPending} onClick={() => create.mutate()}>
+          <Button
+            size="sm"
+            disabled={!assetsReady || !selectedAccount || titleTooLong || bodyTooLong}
+            loading={create.isPending}
+            onClick={() => create.mutate()}
+          >
             <Rocket size={13} /> {t("publishStart")}
           </Button>
         </>
@@ -682,6 +740,7 @@ function CreatePublishDialog({
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAsset")}</span>
+          {!needsImages && (
           <Combobox
             value={assetId ?? ""}
             options={videos.items.map((asset) => ({ value: asset.id, label: asset.name }))}
@@ -696,6 +755,50 @@ function CreatePublishDialog({
               setAssetName(videos.items.find((asset) => asset.id === id)?.name ?? "");
             }}
           />
+          )}
+          {needsImages && (
+            <div className="grid gap-1.5">
+              <Combobox
+                value=""
+                options={images.items
+                  .filter((asset) => !imageIds.includes(asset.id))
+                  .map((asset) => ({ value: asset.id, label: asset.name }))}
+                onSearch={images.search}
+                searching={images.isFetching}
+                renderValue={() => t("publishPickImages")}
+                placeholder={t("publishPickImages")}
+                emptyText={t("cmdkEmpty")}
+                className="w-full"
+                onValueChange={(id) => {
+                  if (id) setImageIds((current) => (current.includes(id) ? current : [...current, id]));
+                }}
+              />
+              {imageIds.length > 0 && (
+                <ol className="grid gap-1">
+                  {imageIds.map((id, index) => (
+                    <li key={id} className="flex items-center gap-2 rounded border border-border bg-field px-2 py-1 text-ui-sm">
+                      <span className="text-ui-xs text-muted-foreground">{index + 1}</span>
+                      <Truncate className="min-w-0 flex-1">
+                        {images.items.find((asset) => asset.id === id)?.name ?? id}
+                      </Truncate>
+                      <Button
+                        variant="inline"
+                        size="xs"
+                        onClick={() => setImageIds((current) => current.filter((one) => one !== id))}
+                      >
+                        {t("delete")}
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <small className={tooManyImages ? "text-destructive" : undefined}>
+                {maxItems === null
+                  ? t("publishImageCountNoLimit").replace("{count}", String(imageIds.length))
+                  : t("publishImageCount").replace("{count}", String(imageIds.length)).replace("{max}", String(maxItems))}
+              </small>
+            </div>
+          )}
           {videos.isSuccess && videos.total === 0 && !videos.query && <small>{t("publishNoVideos")}</small>}
         </label>
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
@@ -717,6 +820,23 @@ function CreatePublishDialog({
               </button>
             </small>
           )}
+          {/* 内容形状(ADR 0076):平台认哪几种由后端声明,前端只列可选项。只有一种时不摆选择器。 */}
+          {selectedAccount && platformKinds.length > 1 && (
+            <div className="grid gap-1">
+              <span className="text-xs font-semibold text-foreground">{t("publishContentKind")}</span>
+              <Segmented
+              size="sm"
+              aria-label={t("publishContentKind")}
+              value={kind}
+              onValueChange={(next) => setKind(next)}
+              options={platformKinds.map((one) => ({
+                value: one,
+                label: t((one === "image-text" ? "publishKind_imageText" : `publishKind_${one}`) as never),
+              }))}
+            />
+            </div>
+          )}
+
           {unreadableAccounts.length > 0 && (
             <small data-publish-accounts-unreadable="">
               {t("publishAccountConfigUnreadable").replace("{names}", unreadableAccounts.map((account) => account.name).join(t("listSeparator")))}
@@ -749,6 +869,19 @@ function CreatePublishDialog({
           <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
             <span>{t("publishShortTitle")}</span>
             <Input value={shortTitle} maxLength={20} onChange={(event) => setShortTitle(event.target.value)} />
+          </label>
+        )}
+        {/* 图文 / 文章的正文:平台的上限由后端声明(`content_limits.body_max`),这里只计数。 */}
+        {needsImages && (
+          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+            <span>
+              {t("publishBody")}
+              <small className={bodyTooLong ? "text-destructive" : undefined}>
+                {[...body].length}
+                {bodyMax === null ? "" : ` / ${bodyMax}`}
+              </small>
+            </span>
+            <Textarea rows={6} value={body} onChange={(event) => setBody(event.target.value)} />
           </label>
         )}
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">

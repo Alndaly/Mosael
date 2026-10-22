@@ -1,6 +1,7 @@
 # ADR 0076 · 自动发布:从「只发视频」扩到图文与文章
 
-- 状态:Proposed — 2026-10-22(同日按维护者要求逐个平台核实了真实能力,见「事实核对」)
+- 状态:**Accepted,分步实现中** — 2026-10-22 提出并按真实平台能力核对;2026-10-23 落地第一、二步
+  (内容形状进模型与校验 → 小红书图文先通),其余平台与文章形态按下面的推进顺序继续
 - 相关:ADR 0021 / 0044(确认卡与效果)、ADR 0032(宿主能力)、ADR 0075(Computer Use)
 - 代码位置:`backend/app/domain/publish/`、`electron/publish/`、`frontend/src/features/publish/`
 
@@ -140,6 +141,19 @@ TikTok、YouTube 社区帖)只能转成图片轮播(一页一图)。这是上一
 - 文档转图片(若某个平台没有文章形态)只转**页面图像**,不执行任何内容;
 - 失败原因沿用 `publishErr_*`(按语言翻),新增的只能加 key,不在适配器里拼句子;
 - 截图/证据:`docs/validation/` 记录每一次真发(平台侧条目类型正确)。
+
+## 已完成(2026-10-23)
+
+- **第一步:内容形状进模型与校验。** `PublishTask` 有 `content_kind` / `asset_ids` / `body` /
+  `media_meta`(迁移 + schema 39);`PUBLISH_PLATFORMS` 每平台声明 `kinds` 与各自的 `content` 上限,
+  数字全部来自真机核对,没核实的写 `None`(不猜不拦);`start_publish` 按声明拦;读的一侧对老任务回退;
+  执行器认领带回 `content_kind` / `body` / `media_paths`。
+- **第二步:小红书图文先通。** 适配器接口按形状拆(`uploadImages` / `fillBody` / `supports`),
+  worker 按任务声明的形状挑方法、不认的**在动手前**失败;小红书创作页默认就是图文(只有视频任务才切
+  视频 tab),多图与正文都接上。棘轮 `test_publish_adapter_supports_match_registry` 让「平台能发」
+  与「我们已经会发」不能混为一谈。
+- **前端**:发布表单按平台声明列「内容类型」、图文 / 文章走多图选择(带数量上限提示)与正文框、
+  提交带 `content_kind` / `asset_ids` / `body`;列表行给图文 / 文章一个形状标签。
 
 ## 推进顺序(每一步都能独立发布)
 

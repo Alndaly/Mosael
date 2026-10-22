@@ -18164,8 +18164,23 @@ export interface components {
             workspace_id: string;
             /** Account Id */
             account_id: string;
-            /** Asset Id */
+            /**
+             * Asset Id
+             * @default
+             */
             asset_id: string;
+            /** Asset Ids */
+            asset_ids?: string[];
+            /**
+             * Content Kind
+             * @default video
+             */
+            content_kind: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
             /**
              * Title
              * @default
@@ -18241,6 +18256,14 @@ export interface components {
              * @default false
              */
             short_title: boolean;
+            /** Kinds */
+            kinds?: string[];
+            /** Content Limits */
+            content_limits?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
             /** Options */
             options?: components["schemas"]["PublishOptionSpec"][];
         };
@@ -18258,6 +18281,18 @@ export interface components {
             platform: string;
             /** Asset Id */
             asset_id: string | null;
+            /** Asset Ids */
+            asset_ids?: string[];
+            /**
+             * Content Kind
+             * @default video
+             */
+            content_kind: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
             /** Asset Name */
             asset_name: string;
             /** Title */

@@ -46663,7 +46663,28 @@
           },
           "asset_id": {
             "type": "string",
-            "title": "Asset Id"
+            "title": "Asset Id",
+            "default": ""
+          },
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 64,
+            "title": "Asset Ids"
+          },
+          "content_kind": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Content Kind",
+            "default": "video"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 40000,
+            "title": "Body",
+            "default": ""
           },
           "title": {
             "type": "string",
@@ -46700,8 +46721,7 @@
         "type": "object",
         "required": [
           "workspace_id",
-          "account_id",
-          "asset_id"
+          "account_id"
         ],
         "title": "PublishCreate"
       },
@@ -46796,6 +46816,21 @@
             "title": "Short Title",
             "default": false
           },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kinds"
+          },
+          "content_limits": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Content Limits"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/PublishOptionSpec"
@@ -46845,6 +46880,23 @@
               }
             ],
             "title": "Asset Id"
+          },
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Asset Ids"
+          },
+          "content_kind": {
+            "type": "string",
+            "title": "Content Kind",
+            "default": "video"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body",
+            "default": ""
           },
           "asset_name": {
             "type": "string",
