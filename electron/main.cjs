@@ -48,7 +48,9 @@ const {
   parseComfyWorkbenchOpen,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComputerClick,
   parseComputerScreenshot,
+  parseComputerType,
   parseImageUrls,
   parseLocale,
   parseNewPage,
@@ -356,6 +358,60 @@ function chooseComputerWindow(name, windows, roles) {
 }
 
 /**
+ * 点一下 `request.window` 指定的那个 Mosael 窗口。坐标是**页面 CSS 像素**(和 capturePage 出来的图
+ * 同一套坐标,缩放在后端做);越界就回一句带窗口尺寸的人话 —— 让模型知道该往哪边改,而不是点了个空。
+ *
+ * 走的是 `webContents.sendInputEvent`(可信输入),不是系统级鼠标注入:只在这个窗口里生效,窗口
+ * 不在前台也点得中,同时**碰不到桌面和别的 App**(L1,ADR 0075)。
+ */
+function clickMosaelWindow(request, windows, roles) {
+  const name = String(request.window || "main");
+  const win = chooseComputerWindow(name, windows, roles);
+  if (!win) {
+    throw new Error(`There is no ${name} window open in Mosael to click. Nothing was clicked.`);
+  }
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was clicked.`);
+  }
+  const contents = win.webContents;
+  const size = typeof contents.getSize === "function" ? contents.getSize() : null;
+  if (size && (request.x >= size[0] || request.y >= size[1])) {
+    throw new Error(
+      `That point is outside the ${name} window: it reports ${size[0]}×${size[1]} CSS pixels, and (${request.x}, ${request.y}) is not inside it. Nothing was clicked.`,
+    );
+  }
+  const x = Math.round(request.x);
+  const y = Math.round(request.y);
+  const button = request.button || "left";
+  const clickCount = request.clickCount || 1;
+  contents.sendInputEvent({ type: "mouseMove", x, y });
+  contents.sendInputEvent({ type: "mouseDown", x, y, button, clickCount });
+  contents.sendInputEvent({ type: "mouseUp", x, y, button, clickCount });
+  return { window: name, x, y, button, clickCount };
+}
+
+/**
+ * 往 `request.window` 指定的 Mosael 窗口里输入一段文字:先聚焦窗口与网页,再把文字插到焦点处。
+ * `insertText` 是 Chromium 自己的「插入文本」,和用户打字走同一条路(受控输入框的 onInput 会触发),
+ * 比逐字符发 keyDown/char 稳,也不会被输入法状态影响。
+ */
+function typeIntoMosaelWindow(request, windows, roles) {
+  const name = String(request.window || "main");
+  const win = chooseComputerWindow(name, windows, roles);
+  if (!win) {
+    throw new Error(`There is no ${name} window open in Mosael to type into. Nothing was typed.`);
+  }
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was typed.`);
+  }
+  const contents = win.webContents;
+  if (typeof win.focus === "function") win.focus();
+  if (typeof contents.focus === "function") contents.focus();
+  contents.insertText(String(request.text));
+  return { window: name, typed: String(request.text).length };
+}
+
+/**
  * 拍下 `request.window` 指定的那个 Mosael 窗口,回 `{window, width, height, image}`(`image` 是 PNG 的
  * base64;缩放由后端做,主进程只给原图)。参数不对 / 没窗口 / 最小化 / 空图,都抛一句人话。
  */
@@ -418,17 +474,26 @@ async function answerHostBridgeRequest(line, socket) {
     appendMainLog("host-bridge", "refused a request with a bad token");
     return replyHostBridge(socket, { ok: false, status: 401, error: "The host bridge refused this request." });
   }
-  if (request.channel !== IPC.invoke.computerScreenshot) {
+  //: 通道写死三条(截图 / 点击 / 输入),不是通用 RPC:每多一条都是多一种能对 Mosael 干的事,
+  //: 而这里刻意不开「执行任意 JS」「发给任意窗口」那种口子。
+  const handlers = {
+    [IPC.invoke.computerScreenshot]: () =>
+      captureMosaelWindow(parseComputerScreenshot(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+    [IPC.invoke.computerClick]: () =>
+      clickMosaelWindow(parseComputerClick(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+    [IPC.invoke.computerType]: () =>
+      typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+  };
+  const handler = Object.prototype.hasOwnProperty.call(handlers, request.channel) ? handlers[request.channel] : null;
+  if (!handler) {
     return replyHostBridge(socket, {
       ok: false,
       status: 405,
-      error: "The host bridge only serves computer:screenshot.",
+      error: "The host bridge only serves computer:screenshot, computer:click and computer:type.",
     });
   }
   try {
-    const result = await captureMosaelWindow(parseComputerScreenshot(request.payload), BrowserWindow.getAllWindows(), {
-      main: mainWindow,
-    });
+    const result = await handler();
     replyHostBridge(socket, { ok: true, result });
   } catch (error) {
     const message = String(error && error.message ? error.message : error);

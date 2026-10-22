@@ -299,6 +299,51 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@tool(effect="confirms")
+def computer_click(
+    x: Annotated[int, Field(description="X pixel in the screenshot.")],
+    y: Annotated[int, Field(description="Y pixel in the screenshot.")],
+    window: Annotated[str, Field(description='"main" or "publish".')] = "main",
+    button: Annotated[str, Field(description='"left" or "right".')] = "left",
+    click_count: Annotated[int, Field(description="1 or 2.")] = 1,
+    scale: Annotated[float, Field(description="Screenshot's scale.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: click a point in Mosael's OWN window."""
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_click",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {
+                "window": window,
+                "x": x,
+                "y": y,
+                "button": button,
+                "click_count": click_count,
+                "scale": scale,
+            },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
+def computer_type(
+    text: Annotated[str, Field(description="What to type (max 2000).")],
+    window: Annotated[str, Field(description='"main" or "publish".')] = "main",
+) -> dict[str, Any]:
+    """Confirmation required: type into Mosael's OWN window."""
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_type",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"window": window, "text": text},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
 @tool(effect="reads")
 def computer_screenshot(
     window: Annotated[

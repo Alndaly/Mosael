@@ -28,13 +28,15 @@ def test_确认门控工具的描述讲明了它是阻塞的_并且不叫模型�
 
     for name in gated:
         description = specs[name].description
-        assert "BLOCKS until the user approves" in description, f"{name}:没说清它会阻塞到用户批准"
+        #: 措辞在 42 份工具定义里各发一遍,所以压到短句(见 tool_manifest._CONFIRMATION_PROTOCOL);
+        #: 这里钉的是**它说了要阻塞**,不是某个版本的具体说法。
+        assert "BLOCKS until" in description, f"{name}:没说清它会阻塞到用户批准"
         # 反过来:别再教模型去轮询确认卡 —— 这条路上它拿不到 confirmation_id。
         assert "get_confirmation returns" not in description, f"{name}:还在教模型轮询 get_confirmation"
 
     # 非门控工具不该被塞这段协议:它们根本不建卡,多这一段只是噪音(还占每轮的上下文)。
     for name in ("list_assets", "get_current_time"):
-        assert "BLOCKS until the user approves" not in specs[name].description, f"{name}:不该带确认协议"
+        assert "BLOCKS until" not in specs[name].description, f"{name}:不该带确认协议"
 
 
 def test_系统提示也不教模型去轮询确认卡() -> None:

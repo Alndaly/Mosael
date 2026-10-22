@@ -49,8 +49,17 @@ BRIDGE_PORT_ENV = "MOSAEL_HOST_BRIDGE_PORT"
 BRIDGE_TOKEN_ENV = "MOSAEL_HOST_BRIDGE_TOKEN"
 #: 壳写在数据目录里的桥地址(0600)。和 main.cjs 的 HOST_BRIDGE_FILE 是同一个文件名。
 BRIDGE_FILE = "host-bridge.json"
-#: 桥上的通道名。和 `electron/ipc-contract.cjs` 的 `IPC.invoke.computerScreenshot` 是同一个字符串。
+#: 桥上的通道名。和 `electron/ipc-contract.cjs` 的 `IPC.invoke.computerScreenshot` 等是同一批字符串。
 SCREENSHOT_CHANNEL = "computer:screenshot"
+#: 动手:L1 的点击与输入(ADR 0075 的 P1)。坐标是**看着的那张图**上的(缩放过的)像素,
+#: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
+CLICK_CHANNEL = "computer:click"
+TYPE_CHANNEL = "computer:type"
+
+#: 能点的键。
+CLICK_BUTTONS = ("left", "right")
+#: 一次最多输入这么多字符。再多就不是「在输入框里写一句话」,而是整段粘贴了。
+MAX_TYPE_CHARS = 2000
 
 
 class ComputerUseError(ValueError):
@@ -78,6 +87,64 @@ def screenshot(window: str = DEFAULT_WINDOW, scale: float = DEFAULT_SCALE) -> di
         "scale": factor,
         "image": base64.b64encode(raw).decode("ascii"),
     }
+
+
+def click(
+    window: str = DEFAULT_WINDOW,
+    x: object = 0,
+    y: object = 0,
+    button: str = "left",
+    click_count: object = 1,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """点一下 Mosael 自己的窗口。`x`/`y` 是**图片上**的像素(=窗口 CSS 像素 × scale)。
+
+    返回实际点到的 CSS 坐标与缩放,模型据此核对「我刚才看的那张图」和这次动作是同一个坐标系。
+    """
+    name = _window_name(window)
+    factor = _scale(scale)
+    css_x = _screenshot_coordinate(x, "x", factor)
+    css_y = _screenshot_coordinate(y, "y", factor)
+    kind = str(button or "left").strip().lower()
+    if kind not in CLICK_BUTTONS:
+        raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
+    count = _click_count(click_count)
+    answer = _host_call(
+        CLICK_CHANNEL,
+        {"window": name, "x": css_x, "y": css_y, "button": kind, "clickCount": count},
+    )
+    if not isinstance(answer, dict) or not answer.get("window"):
+        raise ComputerUseError("The Mosael window bridge answered without confirming the click.")
+    return {"window": name, "x": css_x, "y": css_y, "scale": factor, "button": kind, "clickCount": count}
+
+
+def type_text(window: str = DEFAULT_WINDOW, text: object = "") -> dict[str, Any]:
+    """往 Mosael 自己的窗口里输入一段文字(输入到当前焦点)。"""
+    name = _window_name(window)
+    if not isinstance(text, str) or not text:
+        raise ComputerUseError("text must be a non-empty string; nothing was typed.")
+    if len(text) > MAX_TYPE_CHARS:
+        raise ComputerUseError(f"text must be at most {MAX_TYPE_CHARS} characters (got {len(text)}); nothing was typed.")
+    answer = _host_call(TYPE_CHANNEL, {"window": name, "text": text})
+    if not isinstance(answer, dict) or not answer.get("window"):
+        raise ComputerUseError("The Mosael window bridge answered without confirming the typing.")
+    return {"window": name, "typed": len(text)}
+
+
+def _screenshot_coordinate(value: object, axis: str, factor: float) -> int:
+    """图片像素 → 窗口 CSS 像素。整数、非负;缩放过的图除回去(并接受模型给的图坐标)。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ComputerUseError(f"{axis} must be a number: the pixel column/row in the screenshot you looked at.")
+    pixels = float(value)
+    if not math.isfinite(pixels) or pixels < 0:
+        raise ComputerUseError(f"{axis} must be a non-negative number (got {value!r}).")
+    return max(0, round(pixels / factor))
+
+
+def _click_count(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2):
+        raise ComputerUseError(f"click_count must be 1 (single) or 2 (double), not {value!r}.")
+    return int(value)
 
 
 def _window_name(value: object) -> str:
@@ -230,12 +297,17 @@ def _host_call(channel: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
+    "CLICK_BUTTONS",
+    "CLICK_CHANNEL",
     "ComputerUseError",
     "DEFAULT_SCALE",
     "DEFAULT_WINDOW",
     "MAX_SCALE",
     "MIN_SCALE",
     "SCREENSHOT_CHANNEL",
+    "TYPE_CHANNEL",
     "WINDOW_NAMES",
+    "click",
     "screenshot",
+    "type_text",
 ]

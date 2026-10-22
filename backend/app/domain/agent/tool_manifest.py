@@ -288,7 +288,9 @@ def _plugin_tools(
 #: 此前 251 字符,压到 100 字符、意思不丢 —— 会阻塞到用户批或拒;拿到结果 = 做了;报错(拒绝、作废、执行失败,见 sidecar
 #: tools.awaitConfirmation 抛的那几句)= 没做;别自己轮询。
 #: 仍然写在每个工具自己的说明里(test_tool_confirmation_contract 钉着),不挪进系统提示。
-_CONFIRMATION_PROTOCOL = "BLOCKS until the user approves or rejects; a result means done, an error means not done. Don't poll."
+#: 每张确认卡都要带的一段:它会在**每一个**确认卡工具的每一份定义里各发一遍(见预算测试),
+#: 所以压到最短。四件事是必要的:阻塞到有人批、结果=做了、错误=没做、别轮询。
+_CONFIRMATION_PROTOCOL = "BLOCKS until approved (result = done, error = not done). Don't poll."
 
 
 #: 选择卡在这条路上的真实协议。和确认卡是同一件事的两个结局:
@@ -298,11 +300,10 @@ _CONFIRMATION_PROTOCOL = "BLOCKS until the user approves or rejects; a result me
 #:     见 domain/agent/questions.deliver_to_session)。所以这边不抛错,如实说"还没答",
 #:     让模型自己决定是按判断继续还是收尾 —— 抛错会让它以为问这件事失败了,转头再问一遍。
 _ANSWER_PROTOCOL = (
-    "This call BLOCKS until the user answers or skips, and then returns their answer directly "
-    "— there is no question_id for you to poll and no need to call get_answer afterwards. "
-    "If it returns status \"pending\" the user has not got to it yet: carry on with your own "
-    "best judgement or wrap up, and do NOT ask the same thing again — their answer will arrive "
-    "on its own once they do respond."
+    "BLOCKS until the user answers or skips, then returns the answer directly — no question_id "
+    "to poll, no get_answer call. status \"pending\" = they have not got to it yet: carry on "
+    "with your own best judgement or wrap up, and do NOT ask the same thing again — their answer "
+    "will arrive on its own."
 )
 
 

@@ -75,6 +75,8 @@ const IPC = Object.freeze({
     // 也不走系统截屏 —— 主进程用 webContents.capturePage() 拍自己,不需要屏幕录制权限。
     // 后端够不着 ipcMain,它经 main.cjs 的回环桥以同一个通道名问(见 domain/agent/computer_use)。
     computerScreenshot: "computer:screenshot",
+    computerClick: "computer:click",
+    computerType: "computer:type",
     // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的那个位置(见 save-file.cjs)。四步走 ——
     // 开工(弹框)、写一块、收尾(改名到位)、撤掉。分四步而不是一步:素材原文件可以有 2 GiB
     // (见 publish/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节。
@@ -622,6 +624,45 @@ function parseComputerScreenshot(value) {
 }
 
 /**
+ * 点一下 Mosael 自己的窗口:坐标是**页面 CSS 像素**(左上角为原点),和 `capturePage` 拍出来的
+ * 图同一个坐标系(缩放在后端做,见 domain/agent/computer_use)。按钮只认左/右,连点只认 1/2。
+ */
+function parseComputerClick(value) {
+  const channel = IPC.invoke.computerClick;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["window", "x", "y", "button", "clickCount"], channel);
+  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
+  if (!COMPUTER_WINDOWS.includes(name)) {
+    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
+  }
+  const coordinate = (key) => {
+    const n = payload[key];
+    if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
+    return n;
+  };
+  const button = payload.button === undefined ? "left" : payload.button;
+  if (button !== "left" && button !== "right") throw new TypeError(`${channel}: button must be "left" or "right"`);
+  const clickCount = payload.clickCount === undefined ? 1 : payload.clickCount;
+  if (clickCount !== 1 && clickCount !== 2) throw new TypeError(`${channel}: clickCount must be 1 or 2`);
+  return { window: name, x: coordinate("x"), y: coordinate("y"), button, clickCount };
+}
+
+/** 往 Mosael 自己的窗口里输入一段文字(输入到当前焦点,走 `webContents.insertText`)。 */
+function parseComputerType(value) {
+  const channel = IPC.invoke.computerType;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["window", "text"], channel);
+  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
+  if (!COMPUTER_WINDOWS.includes(name)) {
+    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
+  }
+  const text = payload.text;
+  if (typeof text !== "string" || !text) throw new TypeError(`${channel}: text must be a non-empty string`);
+  if (text.length > 2000) throw new TypeError(`${channel}: text must be at most 2000 characters`);
+  return { window: name, text };
+}
+
+/**
  * 框选的结果:冻结画面上的矩形,按画面的**比例**给(0–1)—— 显示尺寸只有渲染层知道,原图尺寸只有
  * 主进程知道,比例是两边都不用猜的那个量。`selection: null` 是取消。
  */
@@ -979,7 +1020,9 @@ module.exports = {
   parseBrowserLogin,
   parseBrowserProfile,
   parseCaptureMode,
+  parseComputerClick,
   parseComputerScreenshot,
+  parseComputerType,
   parseComfyNavigation,
   parseComfyWorkbenchCall,
   parseComfyWorkbenchOpen,

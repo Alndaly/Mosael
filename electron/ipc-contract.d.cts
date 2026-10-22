@@ -49,6 +49,8 @@ export const IPC: {
     pageToolsInset: "pageTools:inset";
     pageToolsSaveDownload: "pageTools:saveDownload";
     computerScreenshot: "computer:screenshot";
+    computerClick: "computer:click";
+    computerType: "computer:type";
     saveFileBegin: "saveFile:begin";
     saveFileWrite: "saveFile:write";
     saveFileEnd: "saveFile:end";
@@ -121,6 +123,8 @@ export function parseTaskNotice(value: unknown): { title: string; body: string }
 export function parseLocale(value: unknown): { locale: string };
 export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
 export function parseComputerScreenshot(value: unknown): { window: "main" | "publish" };
+export function parseComputerClick(value: unknown): { window: string; x: number; y: number; button: "left" | "right"; clickCount: 1 | 2 };
+export function parseComputerType(value: unknown): { window: string; text: string };
 export function parseRegionSelection(value: unknown): {
   selection: { x: number; y: number; width: number; height: number } | null;
 };
