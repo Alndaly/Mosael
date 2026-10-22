@@ -534,6 +534,17 @@ export function Recorder({
           <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
             {recording ? fmt(secs) : "00:00"}
           </span>
+          {/* 录制中的音频电平:和红点排在同一行(左上),计时器在右下 —— 两者不抢位置。
+             此前它被 absolute 定位在模态体末尾,压在了计时器和底部说明上(维护者 2026-10-23)。 */}
+          {recording && audioLevelStream && (
+            <div className="absolute left-7 top-2 flex w-32 items-center rounded-full bg-black/55 px-2 py-1 backdrop-blur-sm">
+              <AudioLevelMeter
+                stream={audioLevelStream}
+                kind={recordingMicPresent ? "microphone" : "system"}
+                className="w-full"
+              />
+            </div>
+          )}
         </div>
 
         {capturesScreen && !recording && (
@@ -802,13 +813,6 @@ export function Recorder({
             电平柱有声即动,哑设备(录了 0 秒那种)开录前就现形。换麦克风即换流、换电平。 */}
         {capturesMicrophone && microphoneStream && !recording && <MicrophoneLevelMeter stream={microphoneStream} />}
 
-        {/* 录制中:画面里也看得见电平 —— 只看屏幕时最该确认的是「系统声音到底有没有进来」,
-            所以那一档显示系统声音的电平;带了麦克风就显示麦克风那一路。 */}
-        {recording && audioLevelStream && (
-          <div className="absolute bottom-9 left-2.5 w-40 rounded-md bg-black/55 px-2 py-1.5 backdrop-blur-sm">
-            <AudioLevelMeter stream={audioLevelStream} kind={recordingMicPresent ? "microphone" : "system"} />
-          </div>
-        )}
       </div>
     </ModalShell>
   );
