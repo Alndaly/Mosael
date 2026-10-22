@@ -15,6 +15,8 @@ const IPC = Object.freeze({
     recordingStatus: "recording-permissions:status",
     recordingRequest: "recording-permissions:request",
     recordingOpenSettings: "recording-permissions:open-settings",
+    //: macOS 的屏幕录制没有「主动请求」接口:只能靠一次真实抓屏尝试把应用登记进系统授权列表。
+    recordingPrepareScreen: "recording-permissions:prepare-screen",
     getOpenAtLogin: "system:getOpenAtLogin",
     setOpenAtLogin: "system:setOpenAtLogin",
     customCssRead: "customCss:read",

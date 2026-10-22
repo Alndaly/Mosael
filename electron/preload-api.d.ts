@@ -367,6 +367,11 @@ export interface MosaelDesktopBridge {
     getStatus(kind: RecordingPermissionKind): Promise<RecordingPermissionStatus>;
     request(kind: Exclude<RecordingPermissionKind, "screen">): Promise<boolean | null>;
     openSettings(kind: RecordingPermissionKind): Promise<boolean>;
+    /**
+     * macOS 的屏幕录制没有「主动请求」接口:问一次 `desktopCapturer`,把应用登记进
+     * 「屏幕与系统音频录制」列表并触发系统提示。授权后**要重启应用**才生效(macOS 的要求)。
+     */
+    prepareScreen(): Promise<{ status: RecordingPermissionStatus; screens: number }>;
   };
   /**
    * 系统的选文件 / 选文件夹对话框(路径格旁边的「选择…」),从 `defaultPath` 开始;交回选中的路径,取消是 null。

@@ -6,6 +6,8 @@ export const IPC: {
     recordingStatus: "recording-permissions:status";
     recordingRequest: "recording-permissions:request";
     recordingOpenSettings: "recording-permissions:open-settings";
+    /** 屏幕录制没有「主动请求」接口:抓一次源,把应用登记进系统授权列表(macOS)。 */
+    recordingPrepareScreen: "recording-permissions:prepare-screen";
     getOpenAtLogin: "system:getOpenAtLogin";
     setOpenAtLogin: "system:setOpenAtLogin";
     customCssRead: "customCss:read";

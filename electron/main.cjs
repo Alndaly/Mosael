@@ -1710,6 +1710,11 @@ app.whenReady().then(async () => {
   handle(IPC.invoke.recordingStatus, (_event, kind) => recordingPermissions.getStatus(kind));
   handle(IPC.invoke.recordingRequest, (_event, kind) => recordingPermissions.request(kind));
   handle(IPC.invoke.recordingOpenSettings, (_event, kind) => recordingPermissions.openSettings(kind));
+  //: 屏幕录制没有原生「请求」接口(见 recording-permissions 里 prepareScreen 的说明):问一次
+  //: desktopCapturer,把应用登记进系统授权列表并触发系统提示。
+  handle(IPC.invoke.recordingPrepareScreen, () =>
+    recordingPermissions.prepareScreen({ getSources: (options) => require("electron").desktopCapturer.getSources(options) }),
+  );
   // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的位置(见 save-file.cjs)。路径只由保存框产生 ——
   // 渲染层送的是建议名和一块块字节。桌面上没有界面语言的那份文案表,标题在这里用 t() 说。
   saveFiles = createSaveDesk({

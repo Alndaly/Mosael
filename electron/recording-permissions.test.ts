@@ -14,6 +14,9 @@ const { createRecordingPermissionService } = require("./recording-permissions.cj
     getStatus: (kind: "camera" | "microphone" | "screen") => string;
     request: (kind: "camera" | "microphone") => Promise<boolean | null>;
     openSettings: (kind: "camera" | "microphone" | "screen") => Promise<boolean>;
+    prepareScreen: (desktopCapturer: {
+      getSources: (options: { types: string[]; thumbnailSize: { width: number; height: number } }) => Promise<unknown[]>;
+    }) => Promise<{ status: string; screens: number }>;
   };
 };
 
@@ -55,5 +58,45 @@ describe("recording permission service", () => {
     await expect(service.request("camera")).resolves.toBeNull();
     expect(service.getStatus("screen")).toBe("unknown");
     await expect(service.openSettings("screen")).resolves.toBe(false);
+  });
+});
+
+describe("screen recording needs an actual capture attempt", () => {
+  it("asks desktopCapturer for screens — that call is what registers the app in the system list", async () => {
+    const getSources = vi.fn().mockResolvedValue([{ id: "screen:0:0" }, { id: "screen:1:0" }]);
+    const getMediaAccessStatus = vi.fn(() => "not-determined");
+    const service = createRecordingPermissionService({
+      platform: "darwin",
+      shell: { openExternal: vi.fn() },
+      systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus },
+    });
+
+    await expect(service.prepareScreen({ getSources })).resolves.toEqual({ status: "not-determined", screens: 2 });
+    //: 只问「屏幕」:窗口那张缩略图对授权没有帮助,却会把所有窗口都枚举一遍。
+    expect(getSources.mock.calls[0][0]).toMatchObject({ types: ["screen"] });
+  });
+
+  it("a failing or empty enumeration still reports the status instead of throwing", async () => {
+    const service = createRecordingPermissionService({
+      platform: "darwin",
+      shell: { openExternal: vi.fn() },
+      systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "denied") },
+    });
+
+    await expect(service.prepareScreen({ getSources: vi.fn().mockRejectedValue(new Error("nope")) })).resolves.toEqual({
+      status: "denied",
+      screens: 0,
+    });
+  });
+
+  it("on other platforms there is nothing to register", async () => {
+    const getSources = vi.fn();
+    const service = createRecordingPermissionService({
+      platform: "win32",
+      shell: { openExternal: vi.fn() },
+      systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "unknown") },
+    });
+    await expect(service.prepareScreen({ getSources })).resolves.toEqual({ status: "unknown", screens: 0 });
+    expect(getSources).not.toHaveBeenCalled();
   });
 });

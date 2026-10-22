@@ -572,6 +572,22 @@ export function Recorder({
                     <Settings size={12} /> {t("recordOpenSystemSettings")}
                   </Button>
                 )}
+              {visiblePermissionIssue === "screen" && window.mosaelDesktop?.recordingPermissions?.prepareScreen && (
+                //: macOS 只在应用**真的尝试抓屏**时才把它登记进授权列表。这条按下去就是那次尝试:
+                //: 系统会弹「要录制你的屏幕吗」,允许之后**重启应用**才生效(macOS 的要求)。
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    void window.mosaelDesktop?.recordingPermissions
+                      ?.prepareScreen?.()
+                      .then(() => toast.info(t("recordScreenPermissionPrompted")))
+                      .catch(() => undefined);
+                  }}
+                >
+                  <Settings size={12} /> {t("recordRequestScreenPermission")}
+                </Button>
+              )}
               {(visiblePermissionIssue === "cameraMicrophone" || visiblePermissionIssue === "microphone") && (
                 <Button
                   size="sm"

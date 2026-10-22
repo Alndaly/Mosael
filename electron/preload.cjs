@@ -113,6 +113,8 @@ const desktopBridge = {
     getStatus: (kind) => invoke(IPC.invoke.recordingStatus, kind),
     request: (kind) => invoke(IPC.invoke.recordingRequest, kind),
     openSettings: (kind) => invoke(IPC.invoke.recordingOpenSettings, kind),
+    //: 屏幕录制没有原生「请求」:抓一次源,把应用登记进系统授权列表(见 recording-permissions)。
+    prepareScreen: () => invoke(IPC.invoke.recordingPrepareScreen),
   },
   // 路径格旁边的「选择…」:系统的选文件 / 选文件夹对话框,交回选中的路径(取消是 null)。
   pickPath: (request) => invoke(IPC.invoke.pickPath, request),

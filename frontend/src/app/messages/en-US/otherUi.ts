@@ -133,6 +133,8 @@ export const otherUi = {
   recordSystemAudioPermissionHint: "Allow audio in the sharing picker. If audio is unavailable, enable screen and system audio recording in System Settings.",
   recordInputPermissionTitle: "Recording device access required",
   recordInputPermissionHint: "Allow Mosael to use the camera and microphone required for this recording.",
+  recordRequestScreenPermission: "Request screen access",
+  recordScreenPermissionPrompted: "Asked macOS for screen recording. After allowing it, restart Mosael before recording (macOS requires it).",
   recordOpenSystemSettings: "Open System Settings",
   recordOpenCameraSettings: "Camera settings",
   recordOpenMicrophoneSettings: "Microphone settings",
