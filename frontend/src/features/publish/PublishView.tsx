@@ -347,7 +347,9 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     // 行上下 12(py-3)、行内各段 4(gap-1)、日期栏头 8 —— 素材库列表是同一套读法。
     // **hover 底色和圆角都在这一层**:-mx-3 出血让底色盖住整行,rounded-lg 让四个角是圆的
     // (和素材库列表的 AssetTile 同一种写法;此前底色铺在按钮上,圆角看不见)。
-    <article className="-mx-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-lg px-3 py-3 transition-colors hover:bg-secondary/40">
+    // 左侧内边距 12(和别页内容对齐);**右侧给到 20** —— 状态列是右对齐的,圆角底色亮起时
+    // 12 会让「失败 · 02:59」贴住边(维护者截图),右侧没有对齐约束,多给一点呼吸。
+    <article className="-mx-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-lg py-3 pl-3 pr-5 transition-colors hover:bg-secondary/40">
       <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
