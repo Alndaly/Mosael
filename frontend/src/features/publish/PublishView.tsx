@@ -275,7 +275,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
               {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
               {/* 实底日期条让滚动经过的记录不会与日期叠字。 */}
-              <h3 className="workspace-sticky sticky top-0 z-[1] m-0 bg-background py-3 text-ui-sm font-medium text-muted-foreground">
+              <h3 className="workspace-sticky sticky top-0 z-[1] m-0 bg-background py-2 text-ui-sm font-medium text-muted-foreground">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
@@ -285,7 +285,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                     <ContextMenuTrigger asChild>
                       <button
                         type="button"
-                        className="relative h-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="relative -mx-3 block rounded-md text-left transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
                         onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
                       >
@@ -343,12 +343,14 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
   const { locale } = usePreferences();
   const { Icon, tone, spin } = statusTone(task.status);
   return (
-    // **同一种信息落在同一个位置**:状态行贴顶、元信息贴底(mt-auto),中间留给长短不一的标题。
-    // 此前全部顺排,于是标题一行和两行的卡片里,"发到哪个号""哪条成片"各自落在不同高度 ——
-    // 同一排卡片横着看过去像三种模板。
-    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 px-3 py-5 transition-colors hover:bg-panel">
-      <span className={cn("grid size-11 place-items-center rounded-xl bg-panel-subtle", tone)}><Icon size={20} className={spin ? "animate-mosael-spin" : undefined} /></span>
-      <div className="grid min-w-0 gap-2">
+    // 一条记录一行:图标 / 标题 + 元信息 + 失败原因 / 状态 + 时间。间距只走 12/8/4 那一套:
+    // 行上下 12(py-3)、行内各段 4(gap-1)、日期栏头 8 —— 素材库列表是同一套读法。hover
+    // 底色由外面那颗按钮铺(它会 -mx-3 出血),底色才盖住整行而不是缩在内容里。
+    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 px-3 py-3">
+      <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
+        <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
+      </span>
+      <div className="grid min-w-0 gap-1">
         <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
         <Truncate className="text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</Truncate>
         {task.status === "failed" && task.error && (
@@ -357,7 +359,7 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
           </Truncate>
         )}
       </div>
-      <div className={cn("grid gap-2 text-right", selecting && "pr-7")}>
+      <div className={cn("grid shrink-0 gap-1 text-right", selecting && "pr-7")}>
         <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
         <span className="text-ui-xs tabular-nums text-muted-foreground">{localTime(task.created_at, locale)}</span>
       </div>
