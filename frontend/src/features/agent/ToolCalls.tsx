@@ -27,7 +27,7 @@ import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { DecisionsContext, useToolCallConfirmation } from "@/features/agent/decisionsContext";
 import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
-import { widgetOfTool, type AgentWidget } from "@/features/agent/turnOutputs";
+import { widgetOfTool } from "@/features/agent/turnOutputs";
 import { AgentWidgetFrame } from "@/features/agent/AgentWidgetFrame";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 

@@ -242,3 +242,4 @@
 3. **provider_auth 租约** —— 挪成数据库里的租约行(TTL + 持有者),语义不变。
 4. **publish 认领** —— 需要真正的行锁(`SELECT … FOR UPDATE SKIP LOCKED`),**这一条才是换 Postgres 的理由**,而不是"SQLite 不够大"。
 5. **agent/login `_sessions`、feishu `_processes`、scheduler** —— 这些绑着子进程,天然属于"某一个进程"。正确做法是把它们从 web 进程里搬出去,成为单独的、只有一份的常驻服务,而不是让每个 web 进程都养一份。
+- `app/domain/agent/computer_use.py:_touched_this_turn` — 这一轮智能体有没有在 Mosael 窗口里动过手(点/输入/滚动成功过一次就置位),回合收尾据此决定要不要让桌面壳熄灭「被控制中」;重启丢掉没关系,那一轮已经结束了。

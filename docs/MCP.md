@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **128** 个工具,其中 **40** 个走确认卡、**1** 个停下来等用户作答。
+共 **131** 个工具,其中 **43** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -50,7 +50,10 @@
 | `comfy_node_types` | 直接执行 | Read-only: ComfyUI node types — search with `query` or look up exact `classes`; inputs (type, |
 | `comfy_template` | 直接执行 | Read-only: one template adapted to this machine — model status, the `changes` made (another subfolder |
 | `comfy_templates` | 直接执行 | Read-only: find official ComfyUI templates by `task`, `model` or `query`; prefer one over building |
+| `computer_click` | 确认卡 | Confirmation required: click a point in Mosael's OWN window. |
 | `computer_screenshot` | 直接执行 | Read-only: LOOK at Mosael's OWN window — returns a PNG you can see. |
+| `computer_scroll` | 确认卡 | Confirmation required: scroll in Mosael's OWN window (dy > 0 = down, one notch ≈ 3 lines). |
+| `computer_type` | 确认卡 | Confirmation required: type text into Mosael's OWN window (into the focused field). |
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `copy_skill` | 确认卡 | Confirmation required, every time: copy a built-in or plugin skill into this workspace's own skills as |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
@@ -130,7 +133,7 @@
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
 | `set_skill_enabled` | 确认卡 | Confirmation required, every time: turn a skill on or off in this workspace (on shows its full text). |
-| `show_widget` | 直接执行 | Show an interactive HTML view (map, chart) in your answer. html ≤60k chars, sandboxed, no network; |
+| `show_widget` | 直接执行 | Show a sandboxed HTML view (map, chart) in THIS call's details (the process area). |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
 | `split_image_grid` | 确认卡 | Confirmation required: split an EXISTING grid image (a 3x3 sticker sheet, a 2x2 storyboard) into NEW images. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |

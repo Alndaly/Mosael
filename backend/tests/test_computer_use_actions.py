@@ -19,6 +19,7 @@ import pytest
 import mcp_server
 from app.domain.agent import computer_use
 from app.domain.agent.confirmable import tool_spec
+from app.domain.agent.errors import ConfirmationError
 from tests.util import fresh_client
 
 
@@ -276,17 +277,17 @@ def test_the_card_checks_shape_before_opening() -> None:
             {"button": "middle"},
             {"click_count": 3},
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(ConfirmationError):
                 spec.validate(db, "w1", _click_payload(**bad), None)
 
         type_spec = tool_spec("computer_type")
         type_spec.validate(db, "w1", {"window": "main", "text": "hi"}, None)
-        with pytest.raises(Exception):
+        with pytest.raises(ConfirmationError):
             type_spec.validate(db, "w1", {"window": "main", "text": ""}, None)
 
         scroll_spec = tool_spec("computer_scroll")
         scroll_spec.validate(db, "w1", {"window": "main", "dy": 3}, None)
-        with pytest.raises(Exception):
+        with pytest.raises(ConfirmationError):
             scroll_spec.validate(db, "w1", {"window": "main", "dy": 0}, None)
 
 
