@@ -319,7 +319,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           </Select>
         </div>
       </div>
-      <div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+      {/* 列表是一片**白底面板**(维护者:list 改为白色背景):页面底是浅灰,记录落在白面上。
+          日期栏头跟着用面板色,滚动时贴顶不露一条灰。 */}
+      <div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg bg-panel [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
@@ -327,7 +329,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
               {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
               {/* 实底日期条让滚动经过的记录不会与日期叠字。 */}
-              <h3 className="workspace-sticky sticky top-0 z-[1] m-0 bg-background py-2 text-ui-sm font-medium text-muted-foreground">
+              <h3 className="workspace-sticky sticky top-0 z-[1] m-0 bg-panel py-2 text-ui-sm font-medium text-muted-foreground">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
