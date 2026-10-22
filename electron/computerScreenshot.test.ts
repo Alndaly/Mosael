@@ -196,9 +196,14 @@ describe("接线:IPC + 回环桥都走同一个拍摄函数", () => {
     );
   });
 
-  it("后端那条桥也只认 computer:screenshot,并复用同一个解析器和拍摄函数", () => {
+  it("后端那条桥只认写死的那几条 computer 通道,并复用同一份解析器与动作函数", () => {
     expect(MAIN).toMatch(/function startHostBridge\(/);
-    expect(MAIN).toMatch(/request\.channel !== IPC\.invoke\.computerScreenshot/);
+    //: 通道是**一张写死的表**(截图 / 点击 / 输入),不是「把 channel 转给任意处理器」。
+    expect(MAIN).toMatch(/const handlers = \{/);
+    expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]:/);
+    expect(MAIN).toMatch(/\[IPC\.invoke\.computerClick\]:/);
+    expect(MAIN).toMatch(/\[IPC\.invoke\.computerType\]:/);
+    expect(MAIN).toMatch(/Object\.prototype\.hasOwnProperty\.call\(handlers, request\.channel\)/);
     // 桥的地址与令牌落在数据目录的 host-bridge.json(0600),后端按同一个数据目录找它。
     expect(MAIN).toMatch(/const HOST_BRIDGE_FILE = "host-bridge\.json"/);
     expect(MAIN).toMatch(/fs\.writeFileSync\(hostBridgeFile\(\), JSON\.stringify\(\{ port: hostBridge\.port, token \}\), \{ mode: 0o600 \}\)/);
@@ -376,14 +381,14 @@ describe("宿主桥的安全边界", () => {
     }
   });
 
-  it("令牌对、但方法不是 screenshot —— 直接拒，桥不是通用 RPC", async () => {
+  it("令牌对、但通道不在那张表里 —— 直接拒，桥不是通用 RPC", async () => {
     const main = fakeWindow("main");
     const bridge = await startBridge({ windows: [main], main });
     try {
       const reply = await bridge.ask({
         token: bridge.bridge.token,
-        channel: "computer:click",
-        payload: { x: 10, y: 20 },
+        channel: "computer:launchMissiles",
+        payload: {},
       });
       expect(reply).toMatchObject({ ok: false, status: 405 });
       expect(reply.error).toMatch(/computer:screenshot/);

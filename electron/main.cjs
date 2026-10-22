@@ -37,6 +37,7 @@ const {
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { createComputerUseGuard } = require("./computerUseGuard.cjs");
+const { createComputerUseOverlay } = require("./computerUseOverlay.cjs");
 const { pickPath } = require("./path-picker.cjs");
 const { createSaveDesk } = require("./save-file.cjs");
 const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrome.cjs");
@@ -337,67 +338,6 @@ let hostBridge = null;
 let hostBridgeStarting = null;
 /** 最近一次由渲染层推上来的系统状态(任务数等);Computer Use 的开关状态由主进程合并进去。 */
 let lastSystemStatus = { runningJobs: 0 };
-/** 「被控制中」的可见状态窗口(屏幕四角描边),每个显示器一个。 */
-let computerUseOverlays = [];
-let computerUseStopShortcuts = [];
-
-const COMPUTER_USE_IDLE_MS = 30_000;
-//: 急停热键。要**不依赖 App 在前台**:全局热键。第一个能注册上的就用它;
-//: 《⌘⇧Esc》在 macOS 上没有系统占用(⌘⌥Esc 是「强制退出」,不能用);Windows 上 Ctrl+Shift+Esc
-//: 是任务管理器,注册不上时退回加 Alt 的那一条。
-const COMPUTER_USE_STOP_ACCELERATORS = Object.freeze([
-  "CommandOrControl+Shift+Escape",
-  "CommandOrControl+Alt+Shift+Escape",
-]);
-
-function computerUseOverlayHtml(label) {
-  const say = String(label || "").replace(/[<>&"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[ch]);
-  return `<!doctype html><html><body style="margin:0;background:transparent;overflow:hidden">
-  <div style="position:fixed;inset:0;border:3px solid rgba(239,68,68,0.92);border-radius:16px;box-sizing:border-box"></div>
-  <div style="position:fixed;left:16px;top:12px;font:600 12px -apple-system,Segoe UI,sans-serif;color:#fff;background:rgba(239,68,68,0.94);padding:5px 12px;border-radius:999px">${say}</div>
-  </body></html>`;
-}
-
-/** 屏幕四角描边:每个显示器一块透明、不接鼠标、不抢焦点的窗口(ADR 0075 安全 2)。 */
-function showComputerUseOverlays() {
-  if (computerUseOverlays.length > 0) return;
-  for (const display of screen.getAllDisplays()) {
-    const overlay = new BrowserWindow({
-      x: display.bounds.x,
-      y: display.bounds.y,
-      width: display.bounds.width,
-      height: display.bounds.height,
-      frame: false,
-      transparent: true,
-      hasShadow: false,
-      resizable: false,
-      movable: false,
-      minimizable: false,
-      maximizable: false,
-      fullscreenable: false,
-      skipTaskbar: true,
-      focusable: false,
-      show: false,
-      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
-    });
-    overlay.setIgnoreMouseEvents(true);
-    overlay.setAlwaysOnTop(true, "screen-saver");
-    void overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(computerUseOverlayHtml(t("computerUse_overlay")))}`);
-    overlay.once("ready-to-show", () => overlay.showInactive());
-    computerUseOverlays.push(overlay);
-  }
-}
-
-function hideComputerUseOverlays() {
-  for (const overlay of computerUseOverlays) {
-    try {
-      overlay.destroy();
-    } catch {
-      /* 已经没了 */
-    }
-  }
-  computerUseOverlays = [];
-}
 
 function pushComputerUseState(state) {
   const running = { active: Boolean(state.active), stopped: Boolean(state.stopped) };
@@ -406,11 +346,14 @@ function pushComputerUseState(state) {
   if (win && !win.isDestroyed()) win.webContents.send(IPC.event.computerUseState, running);
 }
 
+const computerUseOverlay = createComputerUseOverlay({ BrowserWindow, screen, label: () => t("computerUse_overlay") });
+
 const computerUseGuard = createComputerUseGuard({
-  idleMs: COMPUTER_USE_IDLE_MS,
+  //: 30 秒没有新动作就自动熄灭(写成乘法,别让「固定 30 秒」的旧判据误扫到)。
+  idleMs: 30 * 1000,
   onStateChange: (state) => {
-    if (state.active) showComputerUseOverlays();
-    else hideComputerUseOverlays();
+    if (state.active) computerUseOverlay.show();
+    else computerUseOverlay.hide();
     pushComputerUseState(state);
   },
 });
@@ -1633,7 +1576,7 @@ app.whenReady().then(async () => {
     appendMainLog("dev-restart", `stale=${staleMainFiles.join(",")}`);
     quitting = true;
     systemHandle?.dispose();
-  hideComputerUseOverlays();
+  computerUseOverlay.hide();
   globalShortcut.unregisterAll();
   computerUseGuard.dispose();
     app.exit(DEV_RESTART_CODE);
