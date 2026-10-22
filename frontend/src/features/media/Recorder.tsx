@@ -285,6 +285,14 @@ export function Recorder({
     }
   }, [cleanupUi, onOpenChange, onRecorded, t]);
 
+  //: 一旦不在录了,计时归零并停表 —— 别把上一轮的秒数留给下一眼看到的人。
+  React.useEffect(() => {
+    if (recording) return;
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+    setSecs(0);
+  }, [recording]);
+
   // Closing the dialog aborts an in-flight recording.
   React.useEffect(() => {
     if (!open && controllerRef.current) cancel();
@@ -487,8 +495,11 @@ export function Recorder({
               aria-hidden
             />
           )}
+          {/* 计时器只在**真的在录**的时候走:此前它无条件显示 `secs`,而 `secs` 在取消/失败后
+              可能留着一个旧值 —— 界面就成了「黑着画面、按钮还是『开始录制』、时间却走到 00:04」,
+              让人以为正在录。 */}
           <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
-            {fmt(secs)}
+            {recording ? fmt(secs) : "00:00"}
           </span>
         </div>
 
