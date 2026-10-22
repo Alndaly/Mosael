@@ -51,15 +51,104 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     assert set(tools["computer_type"]["parameters"]["properties"]) == {"text", "window"}
 
 
-def test_every_card_asks_even_with_a_bypass() -> None:
-    """ADR 0075 安全 1:动手的每一步都要人点头 —— 没有本会话放行,bypass 也放不过。"""
+def test_the_actions_are_ordinary_edit_tier_tools() -> None:
+    """edit 档:本会话始终允许、auto 档的 edit 直放、bypass 都对它们生效(维护者 2026-10-22)。
+
+    它们不声明「每次都问」—— 那只留给会长期改变智能体做法的操作(改技能,ADR 0043);
+    点一下 / 输入一段的后果在这一屏里,和改时间线同级。
+    """
     for name in ("computer_click", "computer_type"):
         spec = tool_spec(name)
         assert spec is not None, name
         assert spec.permission == "edit", name
         assert spec.cost == "none", name
-        assert spec.always_asks is True, name
+        assert spec.always_asks is False, name
+        # 没有可配置的放行判据(那是 external 那一档才有的),edit 在 auto 下本来就直放。
         assert spec.gate == "", name
+
+
+def _session_client(client, mode: str | None = None, allowances: list[dict] | None = None):
+    """一次真的对话:工作区 + 会话 + 带会话归属的令牌(卡挂在哪次对话由令牌说了算)。"""
+    from app.core.db import SessionLocal
+    from app.core.security import mint_service_session
+    from app.db.models import User
+
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    session = client.post(
+        "/api/agent/sessions",
+        json={"home": {"kind": "studio"}, "workspace_id": workspace, "title": "T"},
+    ).json()["id"]
+    patch: dict = {}
+    if mode is not None:
+        patch["permission_mode"] = mode
+    if allowances is not None:
+        patch["auto_allow_tools"] = allowances
+    if patch:
+        assert client.patch(f"/api/agent/sessions/{session}", json=patch).status_code == 200
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.username == "tester").one()
+        token = mint_service_session(db, user.id, agent_session_id=session)
+    client.headers["Authorization"] = f"Bearer {token}"
+    return workspace, session
+
+
+def _card_after(client, workspace: str, session: str, card_id: str) -> dict:
+    """等自动放行的执行线程跑完,再读卡(接口与库都看:模式留在 decision_detail 里)。"""
+    from app.core.db import SessionLocal
+    from app.db.models import ToolConfirmation
+    from app.domain.agent.autopilot import wait_for_idle_autopilot
+
+    wait_for_idle_autopilot()
+    listed = client.get(f"/api/confirmations?workspace_id={workspace}&session_id={session}").json()
+    out = next(one for one in listed if one["id"] == card_id)
+    with SessionLocal() as db:
+        card = db.get(ToolConfirmation, card_id)
+        out["decision_detail"] = card.decision_detail
+        out["decision_mode"] = card.decision_mode
+    return out
+
+
+def test_bypass_approves_the_click(monkeypatch) -> None:
+    #: 桥是替身:这条测的是「卡有没有被自动放行、执行了没有」,不是真的点在窗口上。
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"window": payload["window"]})
+    client = fresh_client()
+    workspace, session = _session_client(client, mode="bypass")
+
+    response = client.post("/api/agent/tools/computer_click", json={"arguments": {"x": 10, "y": 20}})
+    assert response.status_code == 200, response.text
+    card = _card_after(client, workspace, session, response.json()["result"]["confirmation_id"])
+
+    assert card["status"] == "executed", card
+    assert card["decision_mode"] == "bypass"
+
+
+def test_auto_mode_approves_edit_tier_actions(monkeypatch) -> None:
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"window": payload["window"]})
+    client = fresh_client()
+    workspace, session = _session_client(client, mode="auto")
+
+    response = client.post("/api/agent/tools/computer_type", json={"arguments": {"text": "你好"}})
+    assert response.status_code == 200, response.text
+    card = _card_after(client, workspace, session, response.json()["result"]["confirmation_id"])
+
+    assert card["status"] == "executed", card
+    assert card["decision_mode"] == "auto"
+
+
+def test_session_allowance_approves_later_clicks(monkeypatch) -> None:
+    """在卡上点过「本会话始终允许」之后,同一段对话里的下一次点击不再问人。"""
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: {"window": payload["window"]})
+    client = fresh_client()
+    workspace, session = _session_client(
+        client, mode="manual", allowances=[{"tool": "computer_click", "permission": "edit"}]
+    )
+
+    response = client.post("/api/agent/tools/computer_click", json={"arguments": {"x": 1, "y": 2}})
+    assert response.status_code == 200, response.text
+    card = _card_after(client, workspace, session, response.json()["result"]["confirmation_id"])
+
+    assert card["status"] == "executed", card
+    assert card["decision_mode"] == "session-allow"
 
 
 # ── 领域:坐标换算与桥调用 ──────────────────────────────────

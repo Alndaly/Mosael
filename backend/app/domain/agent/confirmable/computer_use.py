@@ -1,8 +1,12 @@
 """Computer Use 的动手那半边(ADR 0075 的 L1):点一下、输入一段 —— **只碰 Mosael 自己的窗口**。
 
-和截图不同,这两样会真的改变界面状态,所以**每一张卡都要人点头**(`always_asks`):不提供
-「本会话始终允许」,自动放行与 bypass 也放不过它们。坐标是模型看着的那张(可能缩小过的)图上的
-像素,缩放换算在 domain/agent/computer_use 里做,这里只校验形状。
+和截图不同,这两样会真的改变界面状态,所以走确认卡(`permission="edit"`)。但**不声明
+「每次都问」**(维护者 2026-10-22):它属于 edit 档,和「改时间线」同一级 —— 本会话始终允许、
+auto 档的 edit 直放、bypass 都该对它们生效。所以别的地方(Bypass/auto)已经在问「谁点的头」,
+这里不再多拦一道;卡上仍然写清要发生什么(坐标与按钮 / 要输入的字)。
+
+坐标是模型看着的那张(可能缩小过的)图上的像素,缩放换算在 domain/agent/computer_use 里做,
+这里只校验形状。
 """
 
 from __future__ import annotations
@@ -102,8 +106,6 @@ confirmable_tool(ConfirmableTool(
     cost="none",
     #: 只动这一屏的界面状态,不写任何数据
     writes=(),
-    #: 每一步都要人点头:不提供「本会话始终允许」,自动放行与 bypass 也放不过(ADR 0075 安全 1)
-    always_asks=True,
     validate=_validate_click,
     summarize=_summarize_click,
     execute=_execute_click,
@@ -115,7 +117,6 @@ confirmable_tool(ConfirmableTool(
     permission="edit",
     cost="none",
     writes=(),
-    always_asks=True,
     validate=_validate_type,
     summarize=_summarize_type,
     execute=_execute_type,
