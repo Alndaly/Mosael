@@ -39,6 +39,12 @@ export function AudioLevelMeter({
   const hasMicrophone = stream.getAudioTracks().length > 0;
   const label = kind === "system" ? t("recordSystemAudioLevel") : t("recordLevel");
   const Icon = kind === "system" ? Volume2 : Mic;
+  //: **设备签名**:换设备(比如换成 iPhone 当麦克风)时,MediaStream 对象可能还是同一个,
+  //: 而挂在旧轨道上的分析图永远读静音 —— 表现就是「电平柱一根都不动」。签名变了就重建分析图。
+  const trackSignature = stream
+    .getAudioTracks()
+    .map((track) => `${track.id}:${track.getSettings?.().deviceId ?? ""}`)
+    .join("|");
 
   React.useEffect(() => {
     const meter = meterRef.current;
@@ -65,10 +71,20 @@ export function AudioLevelMeter({
       void context.close().catch(() => undefined);
       return;
     }
-    // A context created outside a user gesture can start suspended.
+    //: 没有用户手势时建出来的 AudioContext 会一直 suspended(读到全零 = 电平柱不动)。
+    //: 先试一次,不行就等下一次指针按在这块界面上时再 resume —— 用户迟早会点一下「开始录制」。
+    //: 建好就问一次(挂起的话这一步就是唤醒);之后只在还挂着时重试。
     void context.resume().catch(() => undefined);
+    const resume = () => {
+      //: `state` 拿不到时按「可能挂起」处理 —— 宁可多 resume 一次,也不要读到一屏全零。
+      if (context.state !== "running") void context.resume().catch(() => undefined);
+    };
+    const gesture = () => resume();
+    window.addEventListener("pointerdown", gesture, true);
+    const resumeTimer = window.setInterval(resume, 500);
 
     const samples = new Uint8Array(analyser.fftSize);
+    const floats = new Float32Array(analyser.fftSize);
     let level = 0;
     let active: boolean | null = null;
     let frame = 0;
@@ -76,6 +92,12 @@ export function AudioLevelMeter({
       analyser.getByteTimeDomainData(samples);
       let peak = 0;
       for (const sample of samples) peak = Math.max(peak, Math.abs(sample - 128) / 128);
+      //: byte 读法在个别设备(外接 / Continuity 麦克风)上会给出恒 128(看起来像静音);
+      //: 这时再读一次 float 数据,有信号就用它。
+      if (peak < 1e-4 && analyser.getFloatTimeDomainData) {
+        analyser.getFloatTimeDomainData(floats);
+        for (const sample of floats) peak = Math.max(peak, Math.abs(sample));
+      }
       level = Math.max(Math.min(1, peak * GAIN), level * DECAY);
       const shown = level.toFixed(2);
       if (shown !== meter.getAttribute("aria-valuenow")) {
@@ -92,6 +114,8 @@ export function AudioLevelMeter({
     frame = requestAnimationFrame(render);
 
     return () => {
+      window.removeEventListener("pointerdown", gesture, true);
+      window.clearInterval(resumeTimer);
       cancelAnimationFrame(frame);
       source.disconnect();
       analyser.disconnect();
@@ -101,7 +125,7 @@ export function AudioLevelMeter({
       delete meter.dataset.active;
       meter.hidden = false;
     };
-  }, [hasMicrophone, stream]);
+  }, [hasMicrophone, stream, trackSignature]);
 
   if (!hasMicrophone) return null;
 
