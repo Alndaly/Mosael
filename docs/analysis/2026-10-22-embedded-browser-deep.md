@@ -151,6 +151,26 @@
 | **P6** | 面板缩放下的交互 | 归入 P5 | — |
 | **P7** | 观察性 | ✅ 已做(trace + net-probe) | 把登录/动作的耗时也量化 |
 
+## 9.5 视频号登录:已解决(2026-10-22 22:38 确认)
+
+三次尝试叠在一起才通,顺序本身就是结论 —— **三个独立的原因,不是同一个 bug 的三次误判**:
+
+1. **点了没反应** → `weixin://` 被 Chromium 静默丢掉(它要唤起微信客户端确认)。修:白名单 scheme
+   交给 `shell.openExternal`;
+2. **「允许」之后回登录页** → 我先后猜了两轮(跨站 iframe 种不下 cookie → 把回调提顶层),结果是
+   提上去变白页:那一步**依赖 `window.parent`**,挪走就不工作,已回退。真正原因在下面第 3 条;
+3. **登录成功、`sessionid` 也种下了,随即被判无效** → **身份自相矛盾**:UA 洗成 Chrome,而
+   `navigator.userAgentData.brands` 仍是 `[Not?A_Brand, Chromium]`(没有 Google Chrome)。修:
+   `chrome` 档走 **CDP `Emulation.setUserAgentOverride`**,一次对齐 UA 头 / `Sec-CH-UA` /
+   `userAgentData`;X 保持如实声明(Turnstile 那一侧的实测结论)。
+
+顺带把「同一个账号两份分区」修掉(`persist:openstudio-*` → `persist:mosael-<accountId>` 的幂等迁移)——
+它当时让「卡片说已登录、智能体开会话却让他登录」。**改完实测:视频号 `binding_status=bound`,
+`sessionid`/`wxuin` 正常在位。**
+
+一条方法论:**「之前是好的」这条信息比任何推理都值钱**。本轮三次回归全部源自我们自己的身份/分区改动,
+而每次都是维护者提醒「之前能登」才把方向掰回来。
+
 ## 10. 结论
 
 - **架构没问题**:原生视图 + 主进程执行是唯一能同时满足「真实登录态、可信输入、截图、代理、下载」的
