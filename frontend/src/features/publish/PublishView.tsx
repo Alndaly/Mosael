@@ -21,7 +21,6 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { useAssetSearch } from "@/lib/assetQueries";
@@ -512,40 +511,41 @@ function PublishCard({
           </div>
         )}
       </div>
-      <div className={cn("relative z-10 grid shrink-0 justify-items-end gap-1 text-right", selecting && "pr-7")}>
+      {/*: 右列撑满行高:状态/时间贴顶,动作 mt-auto 钉在**这一行的右下角**(维护者要求)。 */}
+      <div className={cn("relative z-10 flex shrink-0 flex-col items-end gap-1 self-stretch text-right", selecting && "pr-7")}>
         <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
         <span className="text-ui-xs tabular-nums text-muted-foreground">{localTime(task.created_at, locale)}</span>
-        {/*: 行内动作摆在状态下面(整行那颗 absolute 按钮盖在下面,所以这一列要 z 压上去)。
+        {/*: 行内动作摆在状态下面、贴着这一行的右下角(维护者:文字 + 图标,正常的按钮)。
             写权限不足时删除禁掉并说明原因 —— 和详情弹窗里那一颗同一条判据。 */}
         {(onOpenPage || onDelete) && !selecting && (
-          <div className="flex items-center gap-1">
+          <div className="mt-auto flex items-center gap-1">
             {onOpenPage && (
-              <IconButton
-                variant="secondary"
-                size="icon-xs"
-                label={t("publishOpenPage")}
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={(event) => {
                   event.stopPropagation();
                   onOpenPage();
                 }}
               >
-                <ExternalLink size={13} />
-              </IconButton>
+                <ExternalLink size={13} /> {t("publishOpenPage")}
+              </Button>
             )}
             {onDelete && (
-              <IconButton
-                variant="secondary"
-                size="icon-xs"
-                label={t("delete")}
-                disabled={Boolean(deleteReason)}
-                disabledReason={deleteReason ?? undefined}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDelete();
-                }}
-              >
-                <Trash2 size={13} />
-              </IconButton>
+              <Hint disabledReason={deleteReason ?? undefined}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive"
+                  disabled={Boolean(deleteReason)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete();
+                  }}
+                >
+                  <Trash2 size={13} /> {t("delete")}
+                </Button>
+              </Hint>
             )}
           </div>
         )}
