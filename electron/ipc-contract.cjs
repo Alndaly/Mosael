@@ -77,6 +77,7 @@ const IPC = Object.freeze({
     computerScreenshot: "computer:screenshot",
     computerClick: "computer:click",
     computerType: "computer:type",
+    computerScroll: "computer:scroll",
     // 急停 / 恢复(ADR 0075 安全 3):全局热键与界面上的按钮都走这里。
     computerStop: "computer:stop",
     computerResume: "computer:resume",
@@ -652,6 +653,31 @@ function parseComputerClick(value) {
   return { window: name, x: coordinate("x"), y: coordinate("y"), button, clickCount };
 }
 
+/**
+ * 在 Mosael 自己的窗口里滚动:`dy` 是滚轮格数(正 = 往下,负 = 往上);可选 `x`/`y` 指定指针位置
+ * (不给就落在窗口正中 —— Chromium 的滚轮事件要一个位置)。坐标同样是页面 CSS 像素。
+ */
+function parseComputerScroll(value) {
+  const channel = IPC.invoke.computerScroll;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["window", "dy", "x", "y"], channel);
+  const name = payload.window === undefined ? "main" : String(payload.window).trim().toLowerCase();
+  if (!COMPUTER_WINDOWS.includes(name)) {
+    throw new TypeError(`${channel}: window must be one of ${COMPUTER_WINDOWS.map((one) => `"${one}"`).join(", ")}`);
+  }
+  const dy = payload.dy;
+  if (!Number.isInteger(dy) || dy === 0 || Math.abs(dy) > 30) {
+    throw new TypeError(`${channel}: dy must be a non-zero integer between -30 and 30 (wheel notches)`);
+  }
+  const point = (key) => {
+    if (payload[key] === undefined) return null;
+    const n = payload[key];
+    if (!Number.isInteger(n) || n < 0) throw new TypeError(`${channel}: ${key} must be a non-negative integer`);
+    return n;
+  };
+  return { window: name, dy, x: point("x"), y: point("y") };
+}
+
 /** 往 Mosael 自己的窗口里输入一段文字(输入到当前焦点,走 `webContents.insertText`)。 */
 function parseComputerType(value) {
   const channel = IPC.invoke.computerType;
@@ -1027,6 +1053,7 @@ module.exports = {
   parseCaptureMode,
   parseComputerClick,
   parseComputerScreenshot,
+  parseComputerScroll,
   parseComputerType,
   parseComfyNavigation,
   parseComfyWorkbenchCall,

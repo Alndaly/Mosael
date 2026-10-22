@@ -333,6 +333,26 @@ def computer_click(
 
 
 @tool(effect="confirms")
+def computer_scroll(
+    dy: Annotated[int, Field(description="Wheel notches: positive scrolls down, negative up (max 30).")],
+    x: Annotated[int | None, Field(description="Pointer x in the screenshot pixels (omit for the middle).")] = None,
+    y: Annotated[int | None, Field(description="Pointer y in the screenshot pixels (omit for the middle).")] = None,
+    window: Annotated[str, Field(description='"main" or "publish".')] = "main",
+    scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
+) -> dict[str, Any]:
+    """Confirmation required: scroll in Mosael's OWN window (dy > 0 = down, one notch ≈ 3 lines)."""
+    confirmation = _open_card(
+        {
+            "workspace_id": _default_workspace_id(),
+            "tool": "computer_scroll",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"window": window, "dy": dy, "x": x, "y": y, "scale": scale},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def computer_type(
     text: Annotated[str, Field(description="What to type (at most 2000 characters).")],
     window: Annotated[str, Field(description='"main" or "publish".')] = "main",

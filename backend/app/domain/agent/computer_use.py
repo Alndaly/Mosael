@@ -55,6 +55,9 @@ SCREENSHOT_CHANNEL = "computer:screenshot"
 #: 这里除以 scale 换成窗口的 CSS 像素再交给主进程 —— 模型不需要知道缩放这回事。
 CLICK_CHANNEL = "computer:click"
 TYPE_CHANNEL = "computer:type"
+SCROLL_CHANNEL = "computer:scroll"
+#: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
+MAX_SCROLL_NOTCHES = 30
 
 #: 能点的键。
 CLICK_BUTTONS = ("left", "right")
@@ -129,6 +132,32 @@ def type_text(window: str = DEFAULT_WINDOW, text: object = "") -> dict[str, Any]
     if not isinstance(answer, dict) or not answer.get("window"):
         raise ComputerUseError("The Mosael window bridge answered without confirming the typing.")
     return {"window": name, "typed": len(text)}
+
+
+def scroll(
+    window: str = DEFAULT_WINDOW,
+    dy: object = 0,
+    x: object = None,
+    y: object = None,
+    scale: float = DEFAULT_SCALE,
+) -> dict[str, Any]:
+    """在 Mosael 自己的窗口里滚动。`dy` 是滚轮格数(正 = 往下);`x`/`y` 是在图片上的指针位置(可省)。"""
+    name = _window_name(window)
+    factor = _scale(scale)
+    if isinstance(dy, bool) or not isinstance(dy, (int, float)):
+        raise ComputerUseError(f"dy must be a number of wheel notches (got {dy!r}).")
+    notches = int(dy)
+    if notches == 0 or abs(notches) > MAX_SCROLL_NOTCHES:
+        raise ComputerUseError(f"dy must be a non-zero integer between -{MAX_SCROLL_NOTCHES} and {MAX_SCROLL_NOTCHES}.")
+    payload: dict[str, Any] = {"window": name, "dy": notches}
+    if x is not None:
+        payload["x"] = _screenshot_coordinate(x, "x", factor)
+    if y is not None:
+        payload["y"] = _screenshot_coordinate(y, "y", factor)
+    answer = _host_call(SCROLL_CHANNEL, payload)
+    if not isinstance(answer, dict) or not answer.get("window"):
+        raise ComputerUseError("The Mosael window bridge answered without confirming the scroll.")
+    return {"window": name, "dy": notches, "scale": factor, "x": payload.get("x"), "y": payload.get("y")}
 
 
 def _screenshot_coordinate(value: object, axis: str, factor: float) -> int:
@@ -305,9 +334,11 @@ __all__ = [
     "MAX_SCALE",
     "MIN_SCALE",
     "SCREENSHOT_CHANNEL",
+    "SCROLL_CHANNEL",
     "TYPE_CHANNEL",
     "WINDOW_NAMES",
     "click",
     "screenshot",
+    "scroll",
     "type_text",
 ]

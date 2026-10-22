@@ -21,6 +21,7 @@ const contract = require("./ipc-contract.cjs") as {
   IPC: { invoke: Record<string, string> };
   parseComputerClick: (value: unknown) => { window: string; x: number; y: number; button: string; clickCount: number };
   parseComputerType: (value: unknown) => { window: string; text: string };
+  parseComputerScroll: (value: unknown) => { window: string; dy: number; x: number | null; y: number | null };
 };
 
 function sourceOf(name: string): string {
@@ -74,15 +75,17 @@ function loadActions() {
     ) => FakeWindow | null,
   };
   vm.runInNewContext(
-    `${windowNamesSource()}\n${sourceOf("chooseComputerWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n` +
+    `${windowNamesSource()}\n${sourceOf("chooseComputerWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n` +
       "this.chooseComputerWindow = chooseComputerWindow;\n" +
       "this.clickMosaelWindow = clickMosaelWindow;\n" +
-      "this.typeIntoMosaelWindow = typeIntoMosaelWindow;",
+      "this.typeIntoMosaelWindow = typeIntoMosaelWindow;\n" +
+      "this.scrollMosaelWindow = scrollMosaelWindow;",
     context,
   );
   return context as unknown as {
     clickMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>) => Record<string, unknown>;
     typeIntoMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>) => Record<string, unknown>;
+    scrollMosaelWindow: (request: Record<string, unknown>, windows: FakeWindow[], roles: Record<string, FakeWindow | undefined>) => Record<string, unknown>;
   };
 }
 
@@ -105,6 +108,15 @@ describe("computer_click / computer_type 的 IPC 契约", () => {
     expect(contract.parseComputerType({ text: "hi" })).toEqual({ window: "main", text: "hi" });
     expect(() => contract.parseComputerType({ text: "" })).toThrow(/non-empty/);
     expect(() => contract.parseComputerType({ text: "x".repeat(2001) })).toThrow(/2000/);
+
+    expect(contract.IPC.invoke.computerScroll).toBe("computer:scroll");
+    expect(contract.parseComputerScroll({ dy: 3 })).toEqual({ window: "main", dy: 3, x: null, y: null });
+    expect(contract.parseComputerScroll({ window: "publish", dy: -2, x: 10, y: 20 })).toEqual({
+      window: "publish", dy: -2, x: 10, y: 20,
+    });
+    expect(() => contract.parseComputerScroll({ dy: 0 })).toThrow(/non-zero/);
+    expect(() => contract.parseComputerScroll({ dy: 31 })).toThrow(/30/);
+    expect(() => contract.parseComputerScroll({ dy: 1, x: -1 })).toThrow(/non-negative/);
   });
 });
 
@@ -161,6 +173,39 @@ describe("输入到 Mosael 自己的窗口", () => {
     expect(main.webContents.focus).toHaveBeenCalledTimes(1);
     expect(main.webContents.insertText).toHaveBeenCalledWith("你好");
     expect(result).toEqual({ window: "main", typed: 2 });
+  });
+
+  it("滚动:滚轮事件落在窗口正中(不给位置时),dy 会换算成 Chromium 的 deltaY", () => {
+    const main = fakeWindow({ size: [1000, 800] });
+    const { scrollMosaelWindow } = loadActions();
+
+    const result = scrollMosaelWindow({ window: "main", dy: 3, x: null, y: null }, [main], { main });
+
+    expect(main.webContents.sendInputEvent).toHaveBeenCalledWith({
+      type: "mouseWheel", x: 500, y: 400, deltaY: -3, canScroll: true,
+    });
+    expect(result).toEqual({ window: "main", dy: 3, x: 500, y: 400 });
+
+    // 指到坐标上就照给的来;往上的 dy 是正的 deltaY。
+    scrollMosaelWindow({ window: "main", dy: -2, x: 10, y: 20 }, [main], { main });
+    expect(main.webContents.sendInputEvent).toHaveBeenLastCalledWith({
+      type: "mouseWheel", x: 10, y: 20, deltaY: 2, canScroll: true,
+    });
+  });
+
+  it("滚动越界 / 最小化:一下都不发", () => {
+    const main = fakeWindow({ size: [1000, 800] });
+    const { scrollMosaelWindow } = loadActions();
+    expect(() => scrollMosaelWindow({ window: "main", dy: 1, x: 1000, y: 10 }, [main], { main })).toThrow(
+      /outside the main window/,
+    );
+    expect(main.webContents.sendInputEvent).not.toHaveBeenCalled();
+
+    const minimized = fakeWindow({ minimized: true });
+    expect(() => scrollMosaelWindow({ window: "main", dy: 1, x: null, y: null }, [minimized], { main: minimized })).toThrow(
+      /minimized/,
+    );
+    expect(minimized.webContents.sendInputEvent).not.toHaveBeenCalled();
   });
 
   it("窗口最小化 / 不在:什么都不输", () => {

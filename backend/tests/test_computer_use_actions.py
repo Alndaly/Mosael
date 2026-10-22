@@ -49,6 +49,7 @@ def test_the_actions_are_confirmation_tools_not_read_only() -> None:
     assert click_properties["button"]["default"] == "left"
     assert click_properties["click_count"]["default"] == 1
     assert set(tools["computer_type"]["parameters"]["properties"]) == {"text", "window"}
+    assert set(tools["computer_scroll"]["parameters"]["properties"]) == {"dy", "x", "y", "window", "scale"}
 
 
 def test_the_actions_are_ordinary_edit_tier_tools() -> None:
@@ -57,7 +58,7 @@ def test_the_actions_are_ordinary_edit_tier_tools() -> None:
     它们不声明「每次都问」—— 那只留给会长期改变智能体做法的操作(改技能,ADR 0043);
     点一下 / 输入一段的后果在这一屏里,和改时间线同级。
     """
-    for name in ("computer_click", "computer_type"):
+    for name in ("computer_click", "computer_type", "computer_scroll"):
         spec = tool_spec(name)
         assert spec is not None, name
         assert spec.permission == "edit", name
@@ -208,6 +209,43 @@ def test_type_text_goes_through_the_bridge_and_caps_length(monkeypatch) -> None:
         computer_use.type_text(text="x" * (computer_use.MAX_TYPE_CHARS + 1))
 
 
+# ── 领域:滚动 ────────────────────────────────────────────
+
+
+def test_scroll_goes_through_the_bridge_with_the_pointer_position(monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_host_call(channel: str, payload: dict) -> dict:
+        calls.append((channel, payload))
+        return {"window": payload["window"]}
+
+    monkeypatch.setattr(computer_use, "_host_call", fake_host_call)
+
+    result = computer_use.scroll(dy=3, x=100, y=40, scale=0.5)
+
+    # 图上的 (100, 40) 在窗口里是 (200, 80) 的 CSS 像素;dy 不给位置就不带 x/y。
+    assert calls == [("computer:scroll", {"window": "main", "dy": 3, "x": 200, "y": 80})]
+    assert result == {"window": "main", "dy": 3, "scale": 0.5, "x": 200, "y": 80}
+
+    calls.clear()
+    computer_use.scroll(dy=-2)
+    assert calls == [("computer:scroll", {"window": "main", "dy": -2})]
+
+
+def test_scroll_rejects_zero_and_runaway_notches(monkeypatch) -> None:
+    def should_not_be_called(*_args, **_kwargs) -> dict:
+        raise AssertionError("参数就不对,不该去敲 Electron 的门")
+
+    monkeypatch.setattr(computer_use, "_host_call", should_not_be_called)
+
+    with pytest.raises(computer_use.ComputerUseError, match="non-zero"):
+        computer_use.scroll(dy=0)
+    with pytest.raises(computer_use.ComputerUseError, match="between"):
+        computer_use.scroll(dy=computer_use.MAX_SCROLL_NOTCHES + 1)
+    with pytest.raises(computer_use.ComputerUseError, match="dy must be"):
+        computer_use.scroll(dy=True)
+
+
 # ── 确认卡:校验 / 摘要 / 执行 ──────────────────────────────
 
 
@@ -232,6 +270,11 @@ def test_the_card_checks_shape_before_opening() -> None:
         with pytest.raises(Exception):
             type_spec.validate(db, "w1", {"window": "main", "text": ""}, None)
 
+        scroll_spec = tool_spec("computer_scroll")
+        scroll_spec.validate(db, "w1", {"window": "main", "dy": 3}, None)
+        with pytest.raises(Exception):
+            scroll_spec.validate(db, "w1", {"window": "main", "dy": 0}, None)
+
 
 def test_the_card_says_what_will_happen() -> None:
     from app.core.db import SessionLocal
@@ -244,6 +287,14 @@ def test_the_card_says_what_will_happen() -> None:
         key, params = tool_spec("computer_type").summarize(db, {"window": "main", "text": "你好"})
         assert key == "confirm_computerType"
         assert params["text"] == "你好"
+        assert tool_spec("computer_scroll").summarize(db, {"window": "main", "dy": 3}) == (
+            "confirm_computerScrollDown",
+            {"steps": 3},
+        )
+        assert tool_spec("computer_scroll").summarize(db, {"window": "main", "dy": -2}) == (
+            "confirm_computerScrollUp",
+            {"steps": 2},
+        )
 
 
 def test_approved_card_executes_through_the_bridge(monkeypatch) -> None:
@@ -276,5 +327,9 @@ def test_the_tool_endpoint_opens_a_card_and_does_not_act_immediately() -> None:
     assert body["result"]["confirmation_id"]
 
     response = client.post("/api/agent/tools/computer_type", json={"arguments": {"text": "你好"}})
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["status"] == "pending"
+
+    response = client.post("/api/agent/tools/computer_scroll", json={"arguments": {"dy": -3}})
     assert response.status_code == 200, response.text
     assert response.json()["result"]["status"] == "pending"

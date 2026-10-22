@@ -51,6 +51,7 @@ export const IPC: {
     computerScreenshot: "computer:screenshot";
     computerClick: "computer:click";
     computerType: "computer:type";
+    computerScroll: "computer:scroll";
     computerStop: "computer:stop";
     computerResume: "computer:resume";
     saveFileBegin: "saveFile:begin";
@@ -128,6 +129,7 @@ export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
 export function parseComputerScreenshot(value: unknown): { window: "main" | "publish" };
 export function parseComputerClick(value: unknown): { window: string; x: number; y: number; button: "left" | "right"; clickCount: 1 | 2 };
 export function parseComputerType(value: unknown): { window: string; text: string };
+export function parseComputerScroll(value: unknown): { window: string; dy: number; x: number | null; y: number | null };
 export function parseRegionSelection(value: unknown): {
   selection: { x: number; y: number; width: number; height: number } | null;
 };

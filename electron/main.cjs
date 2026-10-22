@@ -53,6 +53,7 @@ const {
   parseCaptureMode,
   parseComputerClick,
   parseComputerScreenshot,
+  parseComputerScroll,
   parseComputerType,
   parseImageUrls,
   parseLocale,
@@ -439,6 +440,33 @@ function clickMosaelWindow(request, windows, roles) {
 }
 
 /**
+ * 在 `request.window` 指定的 Mosael 窗口里滚动:Chromium 的滚轮事件需要一个位置,不给就用窗口正中。
+ * 只在这个窗口里生效(L1,ADR 0075),不碰桌面和别的 App。
+ */
+function scrollMosaelWindow(request, windows, roles) {
+  const name = String(request.window || "main");
+  const win = chooseComputerWindow(name, windows, roles);
+  if (!win) {
+    throw new Error(`There is no ${name} window open in Mosael to scroll. Nothing was scrolled.`);
+  }
+  if (typeof win.isMinimized === "function" && win.isMinimized()) {
+    throw new Error(`The ${name} window is minimized; restore it and try again. Nothing was scrolled.`);
+  }
+  const contents = win.webContents;
+  const size = typeof contents.getSize === "function" ? contents.getSize() : [0, 0];
+  if (request.x !== null && size[0] && request.x >= size[0]) {
+    throw new Error(`That x is outside the ${name} window (it is ${size[0]} CSS pixels wide). Nothing was scrolled.`);
+  }
+  if (request.y !== null && size[1] && request.y >= size[1]) {
+    throw new Error(`That y is outside the ${name} window (it is ${size[1]} CSS pixels tall). Nothing was scrolled.`);
+  }
+  const x = request.x === null ? Math.round(size[0] / 2) : Math.round(request.x);
+  const y = request.y === null ? Math.round(size[1] / 2) : Math.round(request.y);
+  contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: -request.dy, canScroll: true });
+  return { window: name, dy: request.dy, x, y };
+}
+
+/**
  * 往 `request.window` 指定的 Mosael 窗口里输入一段文字:先聚焦窗口与网页,再把文字插到焦点处。
  * `insertText` 是 Chromium 自己的「插入文本」,和用户打字走同一条路(受控输入框的 onInput 会触发),
  * 比逐字符发 keyDown/char 稳,也不会被输入法状态影响。
@@ -534,6 +562,10 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerType]: () =>
       withComputerUse(() =>
         typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+      ),
+    [IPC.invoke.computerScroll]: () =>
+      withComputerUse(() =>
+        scrollMosaelWindow(parseComputerScroll(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
       ),
   };
   const handler = Object.prototype.hasOwnProperty.call(handlers, request.channel) ? handlers[request.channel] : null;

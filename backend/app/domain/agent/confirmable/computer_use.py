@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.agent.computer_use import CLICK_BUTTONS, MAX_TYPE_CHARS, ComputerUseError
 from app.domain.agent.computer_use import click as use_click
+from app.domain.agent.computer_use import scroll as use_scroll
 from app.domain.agent.computer_use import type_text as use_type
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
@@ -109,6 +110,46 @@ confirmable_tool(ConfirmableTool(
     validate=_validate_click,
     summarize=_summarize_click,
     execute=_execute_click,
+))
+
+
+def _validate_scroll(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    dy = payload.get("dy")
+    if isinstance(dy, bool) or not isinstance(dy, (int, float)) or int(dy) == 0 or abs(int(dy)) > 30:
+        raise ConfirmationError("confirmErr_computerScrollDy")
+
+
+def _summarize_scroll(db: Session, payload: dict[str, Any]) -> Summary:
+    notches = int(payload.get("dy") or 0)
+    #: 方向是两个句子,不是一个布尔参数 —— 卡上的话要能直接读,别让 {down} 渲染成 True / False。
+    if notches > 0:
+        return "confirm_computerScrollDown", {"steps": notches}
+    return "confirm_computerScrollUp", {"steps": -notches}
+
+
+def _execute_scroll(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    payload = confirmation.payload
+    try:
+        return use_scroll(
+            window=str(payload.get("window") or "main"),
+            dy=payload.get("dy", 0),
+            x=payload.get("x"),
+            y=payload.get("y"),
+            scale=float(payload.get("scale", 1)),
+        )
+    except ComputerUseError as error:
+        raise ConfirmationError(str(error)) from None
+
+
+confirmable_tool(ConfirmableTool(
+    name="computer_scroll",
+    permission="edit",
+    cost="none",
+    #: 滚动只改这一屏的视图位置,不写任何数据 —— 最容易撤回的一类动作
+    writes=(),
+    validate=_validate_scroll,
+    summarize=_summarize_scroll,
+    execute=_execute_scroll,
 ))
 
 
