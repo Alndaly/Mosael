@@ -11,8 +11,17 @@
 // 发送。判据刻意很窄 —— 只有「子框架 + 地址带 OAuth 回调标记 + 和顶层页面同一个注册域」这一种才提上来,
 // 别的一律不碰(广告 iframe、内嵌播放器、第三方统计都不受影响)。
 
-/** 地址里出现这些,才认为它是「登录回调」而不是普通子页面跳转。 */
-const CALLBACK_MARKERS = /(?:[?&#](?:code|state|auth_code|ticket|login_ticket)=)|oauth[-_]?callback|\/oauth\//i;
+/**
+ * 哪些地址算「登录回调」。**只看这个地址自己的路径与查询**,不看它参数里带的东西 ——
+ * 第一版就栽在这儿:`qrconnect?...&redirect_uri=https%3A%2F%2F…oauth-callback.html` 里的
+ * `redirect_uri` 值写着 callback,于是**登录起点**被误当成回调提到了顶层(用户看到的是一个
+ * 没有站点外框、只有一个「微信快捷登录」按钮的裸页)。
+ */
+const CALLBACK_PATH = /(?:^|\/)(?:oauth[-_]?callback|callback)(?:[./?#]|$)/i;
+/** 这些路径是**发起**登录的,不是回调 —— 一律不碰。 */
+const START_PATHS = /(?:qrconnect|\/authorize|oauth2?\/authorize|\/login|\/connect)/i;
+/** 回调自己带的凭据参数(必须在自己这一层的查询串里)。 */
+const CALLBACK_PARAMS = ["code", "auth_code", "login_ticket", "ticket"];
 
 /** 注册域:比 hostname 粗一档(`a.b.com` 与 `c.b.com` 同域)。IP 与 localhost 原样返回。 */
 function registrableDomain(hostname) {
@@ -38,7 +47,11 @@ function shouldPromoteFrameNavigation(frameUrl, topUrl) {
     return false;
   }
   if (frame.protocol !== "https:" && frame.protocol !== "http:") return false;
-  if (!CALLBACK_MARKERS.test(frame.href)) return false;
+  //: 发起登录的那一步(qrconnect / authorize / login)绝不能提上来 —— 它本来就该待在 iframe 里。
+  if (START_PATHS.test(frame.pathname)) return false;
+  const looksLikeCallback =
+    CALLBACK_PATH.test(frame.pathname) || CALLBACK_PARAMS.some((name) => frame.searchParams.has(name));
+  if (!looksLikeCallback) return false;
   const frameDomain = registrableDomain(frame.hostname);
   const topDomain = registrableDomain(top.hostname);
   return Boolean(frameDomain) && frameDomain === topDomain;

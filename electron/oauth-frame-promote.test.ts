@@ -36,6 +36,20 @@ describe("登录回调的 iframe → 顶层", () => {
     expect(shouldPromoteFrameNavigation("not a url", top)).toBe(false);
   });
 
+  it("**发起**登录那一步不提上来 —— 它的 redirect_uri 参数里写着 callback,但那不是回调", () => {
+    //: 现场:第一版按「地址里出现 oauth-callback」判,于是把 qrconnect 自己提到了顶层,
+    //: 用户看到的是一个没有站点外框、只有一个「微信快捷登录」按钮的裸页。
+    expect(
+      shouldPromoteFrameNavigation(
+        "https://open.weixin.qq.com/connect/qrconnect?appid=wx20d84d087938fd46&scope=snsapi_login" +
+          "&redirect_uri=https%3A%2F%2Fchannels.weixin.qq.com%2Fplatform%2Foauth-callback.html%3Fdark%3D1" +
+          "&state=undefined&login_type=jssdk&self_redirect=true",
+        "https://channels.weixin.qq.com/login.html",
+      ),
+    ).toBe(false);
+    expect(shouldPromoteFrameNavigation("https://channels.weixin.qq.com/platform/login?next=1", "https://channels.weixin.qq.com/login.html")).toBe(false);
+  });
+
   it("注册域:同域不同子域算一个,两级后缀(co.uk / com.cn)多留一段", () => {
     //: 注册域是「可注册后缀 + 一段」:weixin.qq.com 的注册域就是 qq.com(和浏览器给 cookie 定作用域同一档)。
     expect(registrableDomain("channels.weixin.qq.com")).toBe("qq.com");
