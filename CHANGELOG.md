@@ -3,6 +3,17 @@
 This file records user-visible release highlights. GitHub Releases contains the complete generated
 commit list and downloadable artifacts.
 
+## [2.0.1] - 2026-10-22
+
+### X(Twitter) 账号接入;发布列表重做成一份能直接干活的清单
+
+- **X 账号。** 发布体系接入 X:用已登录账号发帖(文案 + 视频)。「标题」写帖子第一行、「简介」接在下面、标签接在末尾;上传前先挡 512MB,平台拒收时把它自己那句原话带进报错并写明 X 的要求(MP4 H.264+AAC、≤2:20、≤512MB);别名认 x / twitter / 推特。
+- **发布列表能搜能排,一行看全。** 搜索标题 / 简介 / 标签 / 成片 / 账号;排序「最新发布 / 最早发布 / 按名称」并记住选择;行里直接有简介、标签、作品状态、失败原因(提示色),成片名点开素材预览,「查看页面 / 删除」也在行内;整行点击不再弹任何东西,新建发布提交后也不再自动弹进度窗 —— 每天一张圆角白卡,行分割线内缩。
+- **内嵌浏览器改为如实声明 Electron。** 此前为了过 X 的登录,把 UA 和 client hints 伪装成 Chrome,代价是 X 帮助页(Cloudflare Turnstile)无限循环验证;现在如实声明自己是 Electron(Turnstile 认这个)。X 登录能通,真正靠的是修掉账号视图 preload 里的假指纹:`navigator.plugins` 报「Plugin 1/2/3」、在 Apple Silicon 上谎报 Intel 的 WebGL、伪装成 PermissionStatus 的普通对象 —— 都改回 Chrome 真实的样子。
+- **弹窗开着时收起悬浮浏览器面板。** 原生面板永远画在渲染层之上,任务运行中打开发布详情时会直接压在弹窗上;现在任何弹窗开着都先收起,关掉原样放回。
+- **确认卡的「拒绝」跟在允许后面。** 不再推到行尾,改用 outline 档与实心主按钮区分。
+- **后台任务的回执行读成一句话。** 「后台任务 · 工作流 · 主题」连读,主题不再单独占一格悬在中间。
+
 ## [2.0.0] - 2026-10-21
 
 ### 桌面端接上 MosaelCloud,官网长出一个社区

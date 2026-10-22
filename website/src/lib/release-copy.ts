@@ -1,5 +1,19 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.0.1": {
+    zh: [
+      "**X(Twitter)接进发布体系。** 用已登录的 X 账号发帖(文案 + 视频):「标题」写帖子第一行、「简介」接在下面、标签接在末尾;视频超限或编码不被接受时,报错带上平台自己的那句话,并写明 X 的要求(MP4 H.264+AAC、≤2:20、≤512MB)。",
+      "**发布列表变成一份能直接干活的清单。** 顶部能搜(标题 / 简介 / 标签 / 成片 / 账号)、能排(最新发布 / 最早发布 / 按名称,并记住选择);每行直接给出简介、标签、作品状态与失败原因,成片名点开素材预览,「查看页面 / 删除」就在行内;整行点击不再弹任何东西,提交后也不再自动弹进度窗 —— 每天一张圆角白卡,行分割线内缩。",
+      "**内嵌浏览器如实声明 Electron。** 此前为了让 X 的登录过,把 UA 和 client hints 伪装成 Chrome,代价是 X 的帮助页(Cloudflare Turnstile)无限循环验证;现在不再伪装。X 登录能通,真正靠的是修掉账号视图里的假指纹 —— `navigator.plugins` 报「Plugin 1/2/3」、在 Apple Silicon 上谎报 Intel 的 WebGL、伪装成 PermissionStatus 的普通对象,都改回 Chrome 真实的样子,别的平台登录也顺带受益。",
+      "**两处交互修正。** 弹窗开着时收起悬浮浏览器面板(原生面板永远画在渲染层之上,任务运行中打开发布详情会压在弹窗上);确认卡的「拒绝」不再推到行尾,和两颗允许同排成组,靠实心/描边区分主次。",
+    ],
+    en: [
+      "**X (Twitter) joins publishing.** Post with a signed-in X account (text + video): the title becomes the first line, the description follows it, and tags are appended; if the video is too long or its codec is rejected, the error carries the platform's own wording plus X's requirements (MP4 H.264+AAC, at most 2:20 and 512MB).",
+      "**The publish list is now a worklist you can act on directly.** Search (title / description / tags / asset / account) and sorting (newest / oldest / by name, remembered) live at the top; each row shows the description, tags, post status and failure reason, the asset name opens a preview, and “view page / delete” sit inside the row. Clicking the row no longer opens anything, and submitting no longer pops a progress dialog — one rounded white card per day with inset row dividers.",
+      "**The embedded browser now declares itself as Electron.** Spoofing UA and client hints as Chrome was what made X login pass, but it left X's help pages looping forever on Cloudflare Turnstile; now the browser states what it is and Turnstile accepts it. What actually fixed X login was repairing the fake fingerprints in the account view — `navigator.plugins` reporting “Plugin 1/2/3”, WebGL claiming Intel on Apple Silicon, a plain object posing as PermissionStatus — all restored to what Chrome really reports, which helps other platforms' sign-ins too.",
+      "**Two interaction fixes.** Floating browser panels now hide while a dialog is open (native views always paint above the renderer, so they used to cover the publish detail dialog mid-run); and the confirmation card's “reject” no longer sits alone at the far end — the three actions line up, with solid versus outlined buttons carrying the weight.",
+    ],
+  },
   "v2.0.0": {
     zh: [
       "**桌面端接上 MosaelCloud。** 设置里多一块「MosaelCloud 账号」,和本地账号**是两套身份、可以单独登录**:桌面端自己转发票据、云端密码不落本机、登录后的会话只存在这台机器上。接入点写在 `MOSAEL_CLOUD_URL`(要带 `/api/cloud/v1`),没接时那块说清要设什么,而不是给一颗点了才报错的按钮。",
