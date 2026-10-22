@@ -22,7 +22,9 @@ def _columns() -> set[str]:
 
 
 def test_the_schema_version_is_the_one_that_knows_this_migration() -> None:
-    assert DATABASE_SCHEMA_VERSION == 36
+    #: 这条迁移只关心「版本号已经越过了它引入的那一版」;后续迁移只增不减地往上走,
+    #: 所以断言用 >= 而不是钉死某个数字(钉死的话每加一次迁移都要回来改这里)。
+    assert DATABASE_SCHEMA_VERSION >= 36
 
 
 def test_a_fresh_database_has_the_table_with_the_declared_columns() -> None:

@@ -58,6 +58,40 @@ try {
     }
   };
 
+  /**
+   * 主 bundle 换了身份还不够:**helper 进程**才是真正去要系统权限的那个(屏幕 / 摄像头 / 麦克风
+   * 都由 GPU/主 helper 发起),而 Electron 的 helper 一直叫 `com.github.Electron.helper`。
+   *
+   * 证据(2026-10-23 实测,TCC 日志):`service=kTCCServiceScreenCapture, client=com.github.Electron.helper,
+   * responsible=com.apple.Terminal` —— 系统记的是**另一个应用**去要权限,于是「屏幕与系统音频录制」
+   * 列表里永远没有 Mosael,也没有可勾的开关。
+   */
+  const helperBundleIds = () => {
+    const frameworks = path.join(app, "Contents", "Frameworks");
+    const renames = [
+      ["Electron Helper.app", "dev.mosael.app.dev.helper"],
+      ["Electron Helper (GPU).app", "dev.mosael.app.dev.helper.gpu"],
+      ["Electron Helper (Renderer).app", "dev.mosael.app.dev.helper.renderer"],
+      ["Electron Helper (Plugin).app", "dev.mosael.app.dev.helper.plugin"],
+    ];
+    let touched = false;
+    for (const [folder, bundleId] of renames) {
+      const helperPlist = path.join(frameworks, folder, "Contents", "Info.plist");
+      if (!fs.existsSync(helperPlist)) continue;
+      const readId = () => {
+        try {
+          return execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleIdentifier", helperPlist]).toString().trim();
+        } catch {
+          return "";
+        }
+      };
+      if (readId() === bundleId) continue;
+      execFileSync("/usr/libexec/PlistBuddy", ["-c", `Set :CFBundleIdentifier ${bundleId}`, helperPlist]);
+      touched = true;
+    }
+    return touched;
+  };
+
   const signatureIsValid = () => {
     try {
       execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", app], { stdio: "ignore" });
@@ -76,6 +110,8 @@ try {
       return String(error && error.stderr ? error.stderr : "");
     }
   };
+  const helpersRenamed = helperBundleIds();
+  if (helpersRenamed) changed = true;
   const wantedIdentity = developerIdIdentity();
   const signedByWanted = wantedIdentity ? currentAuthority().includes(wantedIdentity) : currentAuthority().includes("Signature=adhoc");
   if (changed || !signatureIsValid() || !signedByWanted) {

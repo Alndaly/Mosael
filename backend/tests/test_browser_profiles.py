@@ -263,3 +263,28 @@ def test_a_profile_carries_its_own_browser_identity() -> None:
     listed = client.get(f"/api/browser/profiles?workspace_id={ws}")
     row = next(one for one in listed.json() if one["id"] == created.json()["id"])
     assert row["identity"] is None
+
+
+def test_the_identity_column_migration_backfills_nothing_and_is_idempotent() -> None:
+    """`migrate-browser-profiles-pin-identity`:老档案留空(空 = 跟着平台规矩走),再跑一次是 no-op。
+
+    身份钉在账号上,而不是全局:全局改一次会把所有已登录账号的样子一起换掉(2026-10-22 两次事故的根)。
+    所以这条迁移**只加列、不回填** —— 回填一个"默认身份"就等于替用户做了一次全局决定。
+    """
+    from sqlalchemy import inspect, text
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_browser_profiles_pin_identity
+
+    fresh_client()
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE browser_profiles DROP COLUMN identity"))
+    engine.dispose()
+    assert "identity" not in {column["name"] for column in inspect(engine).get_columns("browser_profiles")}
+
+    _migrate_browser_profiles_pin_identity()
+    assert "identity" in {column["name"] for column in inspect(engine).get_columns("browser_profiles")}
+
+    # 再跑一次:没有异常、列还在(迁移是可重入的)。
+    _migrate_browser_profiles_pin_identity()
+    assert "identity" in {column["name"] for column in inspect(engine).get_columns("browser_profiles")}
