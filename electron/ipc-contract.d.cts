@@ -72,6 +72,7 @@ export const IPC: {
     locale: "mosael:locale";
     floatShow: "float:show";
     floatHide: "float:hide";
+    netProbe: "mosael:net-probe";
     toastsShow: "toasts:show";
     toastsHide: "toasts:hide";
   }>;

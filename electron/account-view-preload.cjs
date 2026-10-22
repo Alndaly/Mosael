@@ -3,7 +3,8 @@
 // 返回主 UI 走内嵌浏览器工具栏(主窗口 HTML 的「← 返回 Mosael」+ Esc,见 accountViews.ts /
 // App.tsx)——曾经往页面里注入过一个悬浮返回钮兜底 macOS 焦点吞点击,现已移除:工具栏那条本身
 // 在主窗口视图里,不涉及跨 webContents 首点丢失,注入钮反而挡住平台页面右上角。
-const { webFrame } = require("electron");
+const { webFrame, ipcRenderer } = require("electron");
+const { IPC } = require("./ipc-contract.cjs");
 
 // 反检测:视图是 contextIsolation 的,preload 改 navigator 影响不到页面「主世界」——必须用
 // webFrame.executeJavaScript 把补丁注进主世界,且趁 preload 执行(document_start 前、页面脚本跑之前)
@@ -86,4 +87,57 @@ try {
   void webFrame.executeJavaScript(STEALTH_JS);
 } catch (e) {
   /* 注入失败不影响自动化主流程 */
+}
+
+/**
+ * 登录排障用的**网络探针**:把页面自己发出的请求结果(含响应体前 200 字)回报给主进程。
+ *
+ * 为什么必须在 preload:`webRequest` 只看得到状态码,看不到响应体,而「为什么这个会话被判无效」
+ * 就写在登录接口的 JSON 里(errCode / 错误文案)。preload 在页面脚本之前跑,所以能罩住整条登录流程。
+ *
+ * 只报**微信这两个域**的同源请求,只留 origin+path,body 截断 —— 屏幕上不该出现别人的数据。
+ */
+const PROBE_HOSTS = ["channels.weixin.qq.com", "open.weixin.qq.com"];
+try {
+  const report = (url, status, body) => {
+    try {
+      const parsed = new URL(String(url), location.href);
+      if (!PROBE_HOSTS.includes(parsed.hostname)) return;
+      const text = typeof body === "string" ? body : "";
+      ipcRenderer.send(IPC.send.netProbe, {
+        path: parsed.pathname,
+        status,
+        body: text.slice(0, 200),
+      });
+    } catch (e) {
+      /* 地址都解析不了,不报 */
+    }
+  };
+  const originalFetch = window.fetch;
+  if (typeof originalFetch === "function") {
+    window.fetch = function patchedFetch(...args) {
+      const target = args[0] && args[0].url ? args[0].url : args[0];
+      const done = originalFetch.apply(this, args);
+      try {
+        done.then(
+          (response) => {
+            try {
+              response.clone().text().then((text) => report(response.url || target, response.status, text)).catch(() => {});
+            } catch (e) {}
+          },
+          () => {},
+        );
+      } catch (e) {}
+      return done;
+    };
+  }
+  const originalOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...rest) {
+    try {
+      this.addEventListener("loadend", () => report(url, this.status, this.responseText));
+    } catch (e) {}
+    return originalOpen.call(this, method, url, ...rest);
+  };
+} catch (e) {
+  /* 探针装不上不影响页面 */
 }

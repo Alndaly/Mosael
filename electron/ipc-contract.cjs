@@ -100,6 +100,9 @@ const IPC = Object.freeze({
     floatShow: "float:show",
     floatHide: "float:hide",
     // 原生视图在前台时,右下角的提示条交给提示条那一块浮层视图画在网页上面 / 收起(ADR 0051,见 publish/floatLayer.ts)。
+    // 登录排障:内嵌视图 preload 把页面自己发出的请求结果(含响应体前 200 字)回传给主进程。
+    // 只收微信那两个域,只写结构化日志 —— 见 main.cjs 的 installNetProbeRelay。
+    netProbe: "mosael:net-probe",
     toastsShow: "toasts:show",
     toastsHide: "toasts:hide",
   }),

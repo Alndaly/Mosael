@@ -713,6 +713,38 @@ function stopHostBridge() {
   }
 }
 
+/**
+ * 登录排障探针的回传口(preload 里的 mosael:net-probe)。
+ *
+ * **只收微信那两个域**发来的、**只写结构化日志**:path(已由 preload 抹掉查询串)、状态码、
+ * 响应体前 200 字。响应体是别人页面上的东西,所以:来源不是这两个域就整条丢弃;字段名里像凭据的
+ * 一律打码(trace.scrub);长度在 preload 已经截断。
+ *
+ * 为什么需要它:视频号扫码后 `sessionid` 已经种下、页面却回登录页,而「被判无效」的原因写在登录接口
+ * 的 JSON 里 —— `webRequest` 只看得到状态码,看不到 body;只有页面自己的 preload 能拿到。
+ */
+const NET_PROBE_HOSTS = new Set(["channels.weixin.qq.com", "open.weixin.qq.com"]);
+
+function installNetProbeRelay() {
+  const { createTrace } = require("./publish/trace.cjs");
+  const probeTrace = createTrace({ dir: app.getPath("userData") });
+  listen(IPC.send.netProbe, (_event, payload) => {
+    try {
+      //: `listen` 的回调里 event 是原来的第一个参数(还是 Electron 的 IpcMainEvent)。
+      const url = new URL(String(_event?.sender?.getURL?.() || ""));
+      if (!NET_PROBE_HOSTS.has(url.hostname)) return;
+      probeTrace.event("net-probe", {
+        from: url.pathname,
+        path: String(payload?.path || "").slice(0, 200),
+        status: payload?.status,
+        body: String(payload?.body || "").slice(0, 200),
+      });
+    } catch {
+      /* 来源不可辨:丢弃 */
+    }
+  });
+}
+
 function backendCommand() {
   if (isDev) {
     const backendDir = path.resolve(__dirname, "../backend");
@@ -1866,6 +1898,7 @@ app.whenReady().then(async () => {
       //: 合并「被控制中」——系统层只认这一份快照(托盘图标据此变色)。
       systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: computerUseGuard.isActive() });
     });
+    installNetProbeRelay();
     //: Computer Use 的急停热键:不依赖 App 在前台,所以注册在(全局)系统层。
     registerComputerUseStopShortcuts();
     // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
