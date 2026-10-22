@@ -18154,6 +18154,105 @@
         }
       }
     },
+    "/api/settings/providers/{profile_id}/command-code/login": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Start Command Code Login",
+        "description": "发起浏览器登录:返回要打开的 Studio 地址与这次登录的 id(前端轮询后面的)。",
+        "operationId": "start_command_code_login_api_settings_providers__profile_id__command_code_login_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Start Command Code Login Api Settings Providers  Profile Id  Command Code Login Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/providers/{profile_id}/command-code/login/{login_id}": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Poll Command Code Login",
+        "description": "登录走到哪了。拿到 Key 的那一次顺手验一遍再存 —— 存一把没验过的 Key,用户要等到一轮对话\n失败时才知道它坏了。",
+        "operationId": "poll_command_code_login_api_settings_providers__profile_id__command_code_login__login_id__get",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "login_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Login Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Poll Command Code Login Api Settings Providers  Profile Id  Command Code Login  Login Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/providers/{profile_id}/models": {
       "get": {
         "tags": [

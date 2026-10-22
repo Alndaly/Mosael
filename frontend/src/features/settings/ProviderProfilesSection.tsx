@@ -16,6 +16,7 @@ import {
   type ProviderProfile,
   type VendorPreset,
 } from "@/api/client";
+import { pollCommandCodeLogin, startCommandCodeLogin } from "@/api/domains/providers";
 import { providerKeys } from "@/api/queryKeys";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
@@ -86,6 +87,78 @@ function ClosingMenuItem(props: React.ComponentProps<typeof MenuItem>) {
     <PopoverClose asChild>
       <MenuItem {...props} />
     </PopoverClose>
+  );
+}
+
+/**
+ * Command Code 的「用浏览器登录」。
+ *
+ * 它和别的订阅计划不同:那些的授权流程在 pi 的 Provider 里(走 ProviderOAuthDialog 的事件流),
+ * 而 Command Code 没有 pi Provider —— 它的 CLI 是「打开 Studio → Studio 把 API Key POST 回本机」。
+ * 所以这里自己一对接口:发起、轮询;拿到 Key 的那一次后端顺手验过并已存进这条连接。
+ *
+ * 必须**先保存连接**才有 profile id(和「授权登录」同一条规矩,文案也共用)。
+ */
+function CommandCodeLoginButton({ profileId, onDone }: { profileId: string; onDone: () => void }) {
+  const t = useI18n();
+  const [phase, setPhase] = React.useState<"idle" | "waiting" | "error">("idle");
+  const [href, setHref] = React.useState("");
+
+  const finish = (status: string, error?: string) => {
+    if (status === "done") {
+      setPhase("idle");
+      toast.success(t("providerCommandCodeDone"));
+      onDone();
+      return;
+    }
+    if (status === "error" || status === "expired") {
+      setPhase("error");
+      toast.error(error || t("providerCommandCodeExpired"));
+    }
+  };
+
+  const begin = async () => {
+    try {
+      const started = await startCommandCodeLogin(profileId);
+      setHref(started.url);
+      setPhase("waiting");
+      const poll = window.setInterval(() => {
+        void pollCommandCodeLogin(profileId, started.login_id)
+          .then((result) => {
+            if (result.status === "waiting") return;
+            window.clearInterval(poll);
+            finish(result.status, result.error);
+          })
+          .catch((error: Error) => {
+            window.clearInterval(poll);
+            setPhase("error");
+            toast.error(error.message);
+          });
+      }, 1500);
+    } catch (error) {
+      setPhase("error");
+      toast.error((error as Error).message);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" disabled={phase === "waiting"} onClick={() => void begin()}>
+        <ExternalLink size={12} />
+        {phase === "waiting" ? t("providerCommandCodeWaiting") : t("providerCommandCodeLogin")}
+      </Button>
+      {phase === "waiting" && href && (
+        <a
+          className="inline-flex items-center gap-1 text-ui-xs font-medium text-primary no-underline hover:underline"
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          {t("providerOauthOpenLink")}
+          <ExternalLink size={11} />
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -416,6 +489,14 @@ export function ProviderProfilesSection({
                 )}
               />
             ))}
+            {vendor === "command-code" && editing && (
+              <CommandCodeLoginButton
+                profileId={editing.id}
+                onDone={() => {
+                  void refresh();
+                }}
+              />
+            )}
             {/* 「支持能力」这一栏已经删掉。它编辑的是 ProviderProfile.capability_ids —— 那个字段在
                 供应商⇄模型重构里就没了(能力挂在模型行上:同一个端点既可能有对话模型也可能有生图
                 模型,挂在连接上就只能二选一)。更新路由一直显式忽略它,于是这一栏勾了、存了、

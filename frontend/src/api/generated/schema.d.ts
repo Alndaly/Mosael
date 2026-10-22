@@ -6008,6 +6008,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/providers/{profile_id}/command-code/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Command Code Login
+         * @description 发起浏览器登录:返回要打开的 Studio 地址与这次登录的 id(前端轮询后面的)。
+         */
+        post: operations["start_command_code_login_api_settings_providers__profile_id__command_code_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/providers/{profile_id}/command-code/login/{login_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Poll Command Code Login
+         * @description 登录走到哪了。拿到 Key 的那一次顺手验一遍再存 —— 存一把没验过的 Key,用户要等到一轮对话
+         *     失败时才知道它坏了。
+         */
+        get: operations["poll_command_code_login_api_settings_providers__profile_id__command_code_login__login_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/providers/{profile_id}/models": {
         parameters: {
             query?: never;
@@ -34228,6 +34269,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_command_code_login_api_settings_providers__profile_id__command_code_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poll_command_code_login_api_settings_providers__profile_id__command_code_login__login_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                profile_id: string;
+                login_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
