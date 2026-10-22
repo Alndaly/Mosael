@@ -31,6 +31,7 @@ export const IPC: {
     publishPagesInset: "publish:pagesInset";
     publishSnapshotPage: "publish:snapshotPage";
     publishCoverPage: "publish:coverPage";
+    publishHostLayer: "publish:hostLayer";
     publishOverlay: "publish:overlay";
     publishFocusPage: "publish:focusPage";
     browserOpenLogin: "browser:openLogin";
@@ -129,6 +130,7 @@ export function parseTaskNotice(value: unknown): { title: string; body: string }
 export function parseLocale(value: unknown): { locale: string };
 export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
 export function parseComputerScreenshot(value: unknown): { window: "main" | "publish" };
+export function parseHostLayer(value: unknown): { id: string; kind: "region" | "cover" | "overlay" | "panels" | "inset"; active: boolean; width?: number };
 export function parseComputerClick(value: unknown): { window: string; x: number; y: number; button: "left" | "right"; clickCount: 1 | 2 };
 export function parseComputerType(value: unknown): { window: string; text: string };
 export function parseComputerScroll(value: unknown): { window: string; dy: number; x: number | null; y: number | null };

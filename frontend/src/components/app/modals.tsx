@@ -82,8 +82,12 @@ export function ModalSubmit(props: Omit<ButtonProps, "type" | "form">) {
 let openModalCount = 0;
 const syncFloatingPanels = (): void => {
   //: 桥可能是局部替身(测试 / 旧 preload):方法不存在就什么都不做,不能因为一颗按钮把弹窗弄崩。
-  const bridge = window.mosaelPublish as { setPanelsHidden?: (hidden: boolean) => Promise<void> } | undefined;
-  void bridge?.setPanelsHidden?.(openModalCount > 0)?.catch?.(() => undefined);
+  //: 走**声明式让位**(P2):这里只是一条「弹窗开着」的声明,折算成什么指令由主进程决定
+  //: (见 publish/hostLayers)。旧通道 setPanelsHidden 仍然在,留给还没迁的地方。
+  const bridge = window.mosaelPublish as
+    | { setHostLayer?: (claim: { id: string; kind: "panels"; active: boolean }) => Promise<void> }
+    | undefined;
+  void bridge?.setHostLayer?.({ id: "modals", kind: "panels", active: openModalCount > 0 })?.catch?.(() => undefined);
 };
 
 export function ModalShell({

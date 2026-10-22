@@ -37,6 +37,8 @@ import { platformName, resolvePlatform } from "./platforms";
 //: 登录的显式状态机与结构化日志(P3 / P7):失败时要能一眼看出停在哪一步、为什么停。
 import { createLoginFlow } from "./loginPhase.cjs";
 import { createTrace } from "./trace.cjs";
+//: 声明式让位(P2):浮层只说「要哪种让法」,折算成对原生视图的指令在这里做一次。
+import { createHostLayers } from "./hostLayers.cjs";
 import { findPost, postEndpoint } from "./publishedPost";
 import type { PageDriver } from "./pageDriver";
 import type { LiveViewFrame, PublishTask, ViewState } from "./types";
@@ -1008,6 +1010,33 @@ export function closePanel(id: string): void {
  */
 export function setPanelsHidden(hidden: boolean): void {
   views?.setPanelsHidden(hidden);
+}
+
+/**
+ * 声明式让位(P2):浮层发一条声明,这里把**所有**在生效的声明折算成指令。
+ *
+ * 为什么不再让每个浮层各调一条通道:每加一个浮层就要记得接一次,漏接的表现是「被网页盖住、点不到」,
+ * 而且不报错。现在只有这一处懂「几条声明怎么合成」,新浮层只要说清楚自己要哪种让法。
+ */
+const hostLayers = createHostLayers();
+
+export function setHostLayer(claim: { id: string; kind: string; active: boolean; width?: number }): void {
+  const directives = hostLayers.set(claim.id, claim);
+  applyHostLayers(directives);
+}
+
+/** 浮层卸载:撤掉它那条声明(否则它会一直占着让位,网页永远缩着)。 */
+export function clearHostLayer(id: string): void {
+  applyHostLayers(hostLayers.clear(id));
+}
+
+function applyHostLayers(directives: { reasons: string[]; panelsHidden: boolean; insetRight: number }): void {
+  if (!views) return;
+  for (const reason of ["region", "cover", "overlay"] as const) {
+    views.setForegroundHidden(reason, directives.reasons.includes(reason));
+  }
+  views.setPanelsHidden(directives.panelsHidden);
+  views.setShellInset(directives.insetRight);
 }
 
 /** 悬浮浏览器声音由 Electron 层控制,页面脚本无法绕过也不会因 SPA 导航失效。 */

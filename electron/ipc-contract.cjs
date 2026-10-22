@@ -50,6 +50,9 @@ const IPC = Object.freeze({
     publishSnapshotPage: "publish:snapshotPage",
     publishCoverPage: "publish:coverPage",
     // Mosael 的整窗浮层(看大图)亮着:前台网页挪到窗口外,浮层收起再放回(见 accountViews 的 ForegroundHideReason)。
+    //: **声明式让位**(P2):浮层说「我要在页面上画东西、要哪种让法」,主进程折算成对原生视图的指令。
+    //: 新浮层只接这一条,不必再记得四条老通道各接一次(见 publish/hostLayers)。
+    publishHostLayer: "publish:hostLayer",
     publishOverlay: "publish:overlay",
     // 键盘交给前台网页(顶栏、页面列表里点完之后接着打字的是网页)。
     publishFocusPage: "publish:focusPage",
@@ -699,6 +702,28 @@ function parseComputerType(value) {
 }
 
 /**
+ * 一条让位声明:`{id, kind, active}`(inset 另带 `width`)。`id` 是声明者自己的名字(同一 id 后写覆盖),
+ * `kind` 只能是 region / cover / overlay / panels / inset —— 不认识的让法直接拒:悄悄忽略等于
+ * 「浮层被网页盖住、还查不出为什么」。
+ */
+function parseHostLayer(value) {
+  const channel = IPC.invoke.publishHostLayer;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["id", "kind", "active", "width"], channel);
+  const id = String(payload.id || "").trim();
+  if (!id) throw new TypeError(`${channel}: id is required`);
+  const kinds = ["region", "cover", "overlay", "panels", "inset"];
+  if (!kinds.includes(payload.kind)) throw new TypeError(`${channel}: kind must be one of ${kinds.join(", ")}`);
+  if (typeof payload.active !== "boolean") throw new TypeError(`${channel}: active must be a boolean`);
+  const out = { id, kind: payload.kind, active: payload.active };
+  if (payload.width !== undefined) {
+    if (!Number.isInteger(payload.width) || payload.width < 0) throw new TypeError(`${channel}: width must be a non-negative integer`);
+    out.width = payload.width;
+  }
+  return out;
+}
+
+/**
  * 框选的结果:冻结画面上的矩形,按画面的**比例**给(0–1)—— 显示尺寸只有渲染层知道,原图尺寸只有
  * 主进程知道,比例是两边都不用猜的那个量。`selection: null` 是取消。
  */
@@ -1057,6 +1082,7 @@ module.exports = {
   parseBrowserProfile,
   parseCaptureMode,
   parseComputerClick,
+  parseHostLayer,
   parseComputerScreenshot,
   parseComputerScroll,
   parseComputerType,
