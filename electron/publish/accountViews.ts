@@ -1034,11 +1034,25 @@ export class AccountViewManager {
 
   /** 这个视图对应的平台(发布账号 / 池档案)。决定它对外声明哪一种身份,见 view-identity.cjs。 */
   private readonly platformOf = new Map<string, string>();
+  /** 档案自己钉的身份(见 BrowserProfile.identity):有它就不看平台规矩。 */
+  private readonly identityOf = new Map<string, string>();
 
   /**
    * 告诉视图层「这个账号是哪个平台的」。**建视图之前**调用最稳:身份要在第一次请求之前定下来
    * (Chromium 的 UA 是随请求发出去的,加载完再改对这一页没用)。
    */
+  /**
+   * 档案自己钉的浏览器身份(`chrome` / `electron`)。**有它就不看平台规矩** —— 身份是「这个账号在这
+   * 个站上的样子」,钉在账号上才不会因为一次全局调整把所有已登录会话一起换掉(2026-10-22 的教训)。
+   */
+  setAccountIdentity(accountId: string, identity: string): void {
+    const next = String(identity || "").trim();
+    if (next !== "chrome" && next !== "electron") return;
+    this.identityOf.set(accountId, next);
+    const existing = this.views.get(accountId);
+    if (existing && this.alive(existing)) this.applyIdentity(accountId, existing.webContents.session, existing.webContents);
+  }
+
   setAccountPlatform(accountId: string, platform: string): void {
     const next = String(platform || "").trim();
     if (!next || this.platformOf.get(accountId) === next) return;
@@ -1053,7 +1067,8 @@ export class AccountViewManager {
     //: 替身会话(测试里的假 session)没有这个方法:身份是锦上添花,不该让建视图失败。
     if (!target || typeof target.setUserAgent !== "function") return;
     const platform = this.platformOf.get(accountId) ?? "";
-    const identity = identityForPlatform(platform);
+    //: 档案钉了就用档案的,没钉才看平台规矩。
+    const identity = this.identityOf.get(accountId) ?? identityForPlatform(platform);
     const native = app.userAgentFallback;
     if (identity !== "chrome") {
       target.setUserAgent(native);

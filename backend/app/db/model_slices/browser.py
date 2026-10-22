@@ -29,6 +29,11 @@ class BrowserProfile(Base):
     #: 通用档案就是一个**可持久化的浏览器会话** —— 认不出任何站点的登录态,所以卡片不谈「登没
     #: 登录」,只管「回到上次那一页」。发布账号的档案不用它。
     start_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: 这档案的**浏览器身份**(`chrome` / `electron`,见 electron/view-identity.cjs)。NULL = 跟着平台
+    #: 的规矩走(视频号、抖音它们要干净 Chrome,X 要如实声明 Electron)。
+    #: 为什么存进档案:身份是「这个账号在这个站上的样子」,不是全局开关 —— 改全局等于悄悄把所有
+    #: 已登录账号的身份一起换掉(2026-10-22 因此废掉两轮登录)。存下来之后,它跟着账号走、可单独调。
+    identity: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

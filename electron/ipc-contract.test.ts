@@ -20,6 +20,7 @@ const contract = require("./ipc-contract.cjs") as {
     name: string;
     proxy: string | null;
     resume: boolean;
+    identity: "chrome" | "electron" | null;
   };
   parseBrowserProfile: (value: unknown) => { partition: string };
   parseComfyNavigation: (value: unknown) => { partition: string; mode: string };
@@ -126,7 +127,19 @@ describe("Electron IPC contract", () => {
       name: "Example",
       proxy: null,
       resume: false,
+      //: 没钉身份(null = 跟着平台规矩走);钉了也只认这两档。
+      identity: null,
     });
+    expect(contract.parseBrowserLogin({
+      partition: "persist:pool-user",
+      url: "https://example.com/login",
+      identity: "chrome",
+    }).identity).toBe("chrome");
+    expect(contract.parseBrowserLogin({
+      partition: "persist:pool-user",
+      url: "https://example.com/login",
+      identity: "safari",
+    }).identity).toBeNull();
     expect(() => contract.parseBrowserLogin({ partition: "persist:publish-user", url: "https://example.com" }))
       .toThrow(/partition/);
     expect(() => contract.parseBrowserLogin({ partition: "persist:pool-user", url: "file:\/\/\/tmp/x" }))

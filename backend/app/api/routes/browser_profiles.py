@@ -40,6 +40,7 @@ def _serialize(db, prof: BrowserProfile, user: User, shared: set[str]) -> Browse
         enabled=prof.enabled,
         last_used_at=prof.last_used_at,
         start_url=prof.start_url,
+        identity=prof.identity,
         created_at=prof.created_at,
         platform=account.platform if account else None,
         bound_account_id=account.id if account else None,

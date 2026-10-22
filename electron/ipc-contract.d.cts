@@ -106,11 +106,12 @@ export function parsePanelLayout(value: unknown): import("./preload-api").LivePa
 export function parsePickPath(value: unknown): Required<import("./preload-api").PickPathRequest>;
 export function parseBrowserProfile(value: unknown): { partition: string };
 export function parseBrowserLogin(value: unknown): {
-  resume: boolean;
   partition: string;
   url: string;
   name: string;
   proxy: string | null;
+  resume: boolean;
+  identity: "chrome" | "electron" | null;
 };
 export function parseComfyNavigation(value: unknown): { partition: string; mode: "trackpad" | "mouse" };
 export function parseComfyWorkbenchOpen(value: unknown): {

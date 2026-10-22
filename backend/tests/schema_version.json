@@ -1,5 +1,5 @@
 {
-  "version": 37,
+  "version": 38,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -81,6 +81,7 @@
     "migrate-browser-nodes-fill-one-target-keeping-reference-fallbacks",
     "migrate-browser-pool",
     "migrate-browser-profile-start-url",
+    "migrate-browser-profiles-pin-identity",
     "migrate-browser-sessions-one-open-per-login",
     "migrate-called-workflows-declare-their-output",
     "migrate-cancelled-jobs-get-their-own-status",

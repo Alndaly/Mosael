@@ -207,6 +207,8 @@ export interface MosaelBrowserBridge {
     proxy?: string | null;
     /** 视图还开着就原样亮出来(回到上次那一页);否则打开 url。 */
     resume?: boolean;
+    /** 档案钉的浏览器身份(见 BrowserProfile.identity):有它就不看平台规矩。 */
+    identity?: "chrome" | "electron";
   }): Promise<{ ok: boolean; error?: string }>;
   /** 清掉一个通用档案里存着的全部登录数据(cookie / 本地存储 / 缓存)。 */
   clearProfile(partition: string): Promise<void>;

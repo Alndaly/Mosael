@@ -12179,6 +12179,8 @@ export interface components {
             last_used_at?: string | null;
             /** Start Url */
             start_url?: string | null;
+            /** Identity */
+            identity?: string | null;
             /**
              * Created At
              * Format: date-time

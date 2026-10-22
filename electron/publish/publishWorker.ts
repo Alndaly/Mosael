@@ -661,10 +661,14 @@ export async function openPoolLogin(opts: {
   name?: string;
   proxy?: string | null;
   resume?: boolean;
+  /** 档案钉的浏览器身份(见 BrowserProfile.identity);不传就按平台规矩。 */
+  identity?: string | null;
 }): Promise<void> {
   if (!views) throw new Error(tr("publishErr_notReady"));
   if (views.visibleAccountId && views.visibleAccountId !== opts.partition)
     throw new Error(tr("publishErr_foregroundBusy"));
+  //: **建视图之前**定身份(UA 随第一次请求发出去),见 accountViews.applyIdentity。
+  if (opts.identity) views.setAccountIdentity(opts.partition, opts.identity);
   await views.openView({
     viewId: opts.partition,
     partition: opts.partition,
@@ -755,6 +759,51 @@ export function embeddedViewVisible(): boolean {
 }
 
 /** 触发某账号登录:亮出其视图、打开登录页,轮询登录态并回写后端(最多 10 分钟)。 */
+/**
+ * 登录失败时留一份**现场**:哪一步、停在哪个地址、分区的 cookie 种下了哪些、认了几次未登录。
+ *
+ * 为什么非留不可:视频号那轮(2026-10-22)花了三次尝试才定位,前半程全靠人回忆「之前是好的」。
+ * 有这份记录,下一次就能直接回答三件事:①登录协议走完了吗 ②会话 cookie 种下来了吗
+ * ③种下来之后平台是不是把这一页判成了未登录 —— 这三件事对应三种完全不同的修法。
+ */
+async function collectLoginForensics(input: {
+  accountId: string;
+  platform: string;
+  reason: string;
+  driver: { url(): string; cookieNames(): Promise<string[]> } | null;
+  lastNegativeUrl: string;
+  negatives: number;
+}): Promise<void> {
+  try {
+    const url = input.driver?.url() ?? "";
+    const cookies = (await input.driver?.cookieNames()) ?? [];
+    //: 只留这个平台自己的域,别的域(统计、CDN)是噪音。
+    const own = cookies.filter((one) => url && one.includes(new URL(url).hostname.split(".").slice(-2).join(".")));
+    const session = own.filter((one) => /(session|token|auth|sid|uin|ticket)/i.test(one)).length;
+    trace.event("login-forensics", {
+      account: input.accountId,
+      platform: input.platform,
+      reason: input.reason,
+      url: url.slice(0, 200),
+      lastNegativeUrl: input.lastNegativeUrl.slice(0, 200),
+      negatives: input.negatives,
+      cookiesForThisSite: own.length,
+      credentialishCookies: session,
+      cookieNames: own.slice(0, 20),
+    });
+    plog(
+      "login forensics:",
+      input.accountId,
+      input.reason,
+      `url=${url.slice(0, 120)}`,
+      `cookies=${own.length}`,
+      `credentialish=${session}`,
+    );
+  } catch (error) {
+    plog("login forensics failed:", input.accountId, String(error).slice(0, 120));
+  }
+}
+
 export async function openLogin(accountId: string, platform: string): Promise<void> {
   if (!views) return;
   // 该账号正有「真发布任务」在后台跑:登录会切它的视图/抢焦点,拒绝,等任务完成。
@@ -809,6 +858,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     // 每换一页记一行「在这页上判成未登录」。此前轮询一句日志都不留,TikTok 登完停在信息流、
     // 满 10 分钟都没认出来,事后只能从「超时之后的复检一查就是已登录」倒推。
     let lastNegativeUrl = "";
+    let negatives = 0;
     const poll = async () => {
       loginPollTimer = null;
       // stop/换代/视图销毁/超时:收工,不再续排。
@@ -816,6 +866,14 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         const why = Date.now() > deadline ? "timeout" : "stopped";
         plog("login poll ended without login:", accountId, why);
         flow.fail(why);
+        await collectLoginForensics({
+          accountId,
+          platform,
+          reason: why,
+          driver,
+          lastNegativeUrl,
+          negatives,
+        });
         endLogin(gen, accountId);
         return;
       }
@@ -824,6 +882,14 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       if (views.visibleAccountId !== accountId) {
         plog("login poll ended (view dismissed):", accountId);
         flow.fail("dismissed");
+        await collectLoginForensics({
+          accountId,
+          platform,
+          reason: "dismissed",
+          driver,
+          lastNegativeUrl,
+          negatives,
+        });
         endLogin(gen, accountId);
         return;
       }
@@ -841,6 +907,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         return;
       }
       if (!ok) {
+        negatives += 1;
         const here = driver.url();
         if (here !== lastNegativeUrl) plog("login poll: not logged in yet at", here.slice(0, 160));
         lastNegativeUrl = here;
@@ -864,7 +931,15 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     };
     void poll();
   } catch (error) {
-    // 打开/导航阶段就失败:收工,再把错误抛给调用方。
+    // 打开/导航阶段就失败:收工,再把错误抛给调用方 —— 但**先把现场留下**。
+    await collectLoginForensics({
+      accountId,
+      platform,
+      reason: `error: ${String(error).slice(0, 120)}`,
+      driver: views?.getDriver(accountId) ?? null,
+      lastNegativeUrl: "",
+      negatives: 0,
+    });
     endLogin(gen, accountId);
     throw error;
   }

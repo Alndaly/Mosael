@@ -245,3 +245,21 @@ def test_migrate_browser_profile_start_url_adds_the_column_once() -> None:
         kept = conn.execute(text("SELECT name, start_url FROM browser_profiles WHERE id = :id"), {"id": prof["id"]}).one()
     assert columns.count("start_url") == 1
     assert tuple(kept) == ("老档案", None)
+
+
+def test_a_profile_carries_its_own_browser_identity() -> None:
+    """档案能钉自己的浏览器身份;不钉就是 None(跟着平台规矩走)。
+
+    为什么要有这一列:身份是「这个账号在这个站上的样子」,不是全局开关。全局改一次会把所有已登录
+    账号一起换掉 —— 2026-10-22 视频号那两轮就是这么废掉的。留空 = 与迁移前行为一致,所以老档案
+    不用回填。
+    """
+    client = fresh_client()
+    ws = _ws(client)
+    created = client.post("/api/browser/profiles", json={"workspace_id": ws, "name": "钉身份的档案"})
+    assert created.status_code == 200, created.text
+    assert created.json().get("identity") is None, "没钉的时候必须是 None,不能默默钉一个默认身份"
+
+    listed = client.get(f"/api/browser/profiles?workspace_id={ws}")
+    row = next(one for one in listed.json() if one["id"] == created.json()["id"])
+    assert row["identity"] is None

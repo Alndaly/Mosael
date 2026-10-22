@@ -6886,6 +6886,18 @@ def _migrate_clips_get_a_link_group() -> None:
             conn.execute(text("ALTER TABLE clips ADD COLUMN link_group VARCHAR(64)"))
 
 
+def _migrate_browser_profiles_pin_identity() -> None:
+    """档案记下自己的浏览器身份(见 BrowserProfile.identity)。
+
+    已有的档案**留空** —— 空 = 跟着平台的规矩走,与迁移前行为一致。这一列是给「把身份钉在账号上」
+    留的入口:全局改一次身份会把所有已登录账号的样子一起换掉(2026-10-22 两次事故的根)。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(browser_profiles)"))}
+        if columns and "identity" not in columns:
+            conn.execute(text("ALTER TABLE browser_profiles ADD COLUMN identity VARCHAR(20)"))
+
+
 def _migrate_browser_profile_start_url() -> None:
     """通用档案记下下次从哪一页开(见 BrowserProfile.start_url)。老档案留空 —— 它们从没记过。"""
     with engine.begin() as conn:
@@ -10055,6 +10067,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_subtitle_tracks_hide_instead_of_mute,
                 _migrate_model_structured_output,
                 _migrate_browser_profile_start_url,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 BrowserProfile 已经指望 identity 存在了。
+                _migrate_browser_profiles_pin_identity,
                 _migrate_usage_unpriced_reason,
                 _migrate_pricing_time_prices,
                 _migrate_pricing_rules_by_resolution,

@@ -33968,6 +33968,17 @@
             ],
             "title": "Start Url"
           },
+          "identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",

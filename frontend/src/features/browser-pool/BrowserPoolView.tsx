@@ -159,7 +159,15 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
    * 「打开其他网址」是唯一会导航走的入口。
    */
   const openSite = async (p: BrowserProfile, url: string, resume = false): Promise<boolean> => {
-    const res = await window.mosaelBrowser?.openLogin?.({ partition: p.partition, url, name: p.name, proxy: p.proxy, resume });
+    const res = await window.mosaelBrowser?.openLogin?.({
+      partition: p.partition,
+      url,
+      name: p.name,
+      proxy: p.proxy,
+      resume,
+      //: 档案钉过的身份优先(见 BrowserProfile.identity):身份跟着账号走,不跟着全局走。
+      identity: p.identity === "chrome" || p.identity === "electron" ? p.identity : undefined,
+    });
     if (!res?.ok) {
       toast.error(res?.error ?? t("poolOpenFailed"));
       return false;

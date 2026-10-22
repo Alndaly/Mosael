@@ -244,6 +244,8 @@ function parseBrowserLogin(value) {
     proxy: typeof payload.proxy === "string" && payload.proxy.trim() ? payload.proxy.trim() : null,
     // 视图还开着就接着用,不导航(见 AccountViewManager.openView)。
     resume: payload.resume === true,
+    //: 档案钉的浏览器身份;只认这两档,别的一律当没填(跟着平台规矩走)。
+    identity: payload.identity === "chrome" || payload.identity === "electron" ? payload.identity : null,
   };
 }
 

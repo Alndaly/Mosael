@@ -240,6 +240,23 @@ export class PageDriver {
   }
 
   /**
+   * 这个分区里 cookie 的「域名 + 名字」清单(**不含值**)——只给排障用。
+   *
+   * 登录失败时要回答的第一个问题是「登录成功的那些 cookie 到底种下来没有」。值不能进日志
+   * (那是别人的会话凭据),名字足够判断:少了 `sessionid` 是没种上,种上了还被拒是平台判了无效。
+   */
+  async cookieNames(): Promise<string[]> {
+    try {
+      const jar = await this.wc.session.cookies.get({});
+      return jar
+        .filter((cookie) => (cookie.value ?? "").trim() !== "")
+        .map((cookie) => `${cookie.domain ?? ""}:${cookie.name}`);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * 这个分区里对某个站点生效的**整罐 cookie**,已经转成 Netscape 格式的行。
    *
    * `hasCookie` 回答"登录了吗",这个回答"把登录态借给别人用" —— yt-dlp 这类外部工具只认
