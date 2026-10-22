@@ -138,6 +138,9 @@ describe("点的是 Mosael 自己的窗口", () => {
       { type: "mouseUp", x: 120, y: 80, button: "right", clickCount: 2 },
     ]);
     expect(result).toEqual({ window: "main", x: 120, y: 80, button: "right", clickCount: 2 });
+    //: 点之前先聚焦窗口与页面 —— sendInputEvent 作用的对象是窗口里那个页面。
+    expect(main.focus).toHaveBeenCalledTimes(1);
+    expect(main.webContents.focus).toHaveBeenCalledTimes(1);
   });
 
   it("点在窗口外面:一下都不发,回来的是一句带尺寸的人话", () => {
@@ -181,15 +184,16 @@ describe("输入到 Mosael 自己的窗口", () => {
 
     const result = scrollMosaelWindow({ window: "main", dy: 3, x: null, y: null }, [main], { main });
 
+    //: 一格 ≈ 100 像素(3 行):只发 deltaY = -dy 的话「滚 3 格」只走 3 像素,看起来就是没动。
     expect(main.webContents.sendInputEvent).toHaveBeenCalledWith({
-      type: "mouseWheel", x: 500, y: 400, deltaY: -3, canScroll: true,
+      type: "mouseWheel", x: 500, y: 400, deltaY: -300, canScroll: true,
     });
     expect(result).toEqual({ window: "main", dy: 3, x: 500, y: 400 });
 
     // 指到坐标上就照给的来;往上的 dy 是正的 deltaY。
     scrollMosaelWindow({ window: "main", dy: -2, x: 10, y: 20 }, [main], { main });
     expect(main.webContents.sendInputEvent).toHaveBeenLastCalledWith({
-      type: "mouseWheel", x: 10, y: 20, deltaY: 2, canScroll: true,
+      type: "mouseWheel", x: 10, y: 20, deltaY: 200, canScroll: true,
     });
   });
 

@@ -67,6 +67,15 @@ function createComputerUseGuard(options = {}) {
     return changed || wasActive;
   }
 
+  /** 这一轮结束了(回合收尾):「被控制中」熄灭,但**不**设成急停 —— 下一轮还可以动。 */
+  function end() {
+    if (!active) return false;
+    active = false;
+    disarm();
+    onStateChange(state("ended"));
+    return true;
+  }
+
   /** 用户明确恢复:允许下一次动作。 */
   function resume() {
     if (!stopped) return false;
@@ -77,6 +86,7 @@ function createComputerUseGuard(options = {}) {
 
   return {
     noteActivity,
+    end,
     stop,
     resume,
     isActive: () => active,

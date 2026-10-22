@@ -90,6 +90,20 @@ describe("Computer Use 的状态与急停", () => {
     expect(instance.resume()).toBe(false);
   });
 
+  it("回合结束(end)熄灭「被控制中」,但不等于急停:下一轮还能动", () => {
+    const { instance, states } = guard();
+    instance.noteActivity();
+    expect(instance.end()).toBe(true);
+    expect(instance.isActive()).toBe(false);
+    expect(instance.isStopped()).toBe(false);
+    expect(states.at(-1)).toBe("off:open:ended");
+
+    instance.noteActivity(); // 下一轮照常能点亮
+    expect(instance.isActive()).toBe(true);
+    expect(instance.end()).toBe(true);
+    expect(instance.end()).toBe(false); // 没亮着时 end 什么也不做
+  });
+
   it("dispose 之后不再点亮(退出时把定时器收掉)", () => {
     const { instance } = guard();
     instance.dispose();

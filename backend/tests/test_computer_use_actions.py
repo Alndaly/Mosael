@@ -246,6 +246,20 @@ def test_scroll_rejects_zero_and_runaway_notches(monkeypatch) -> None:
         computer_use.scroll(dy=True)
 
 
+def test_end_turn_tells_the_host_and_survives_a_missing_bridge(monkeypatch) -> None:
+    """回合结束:告诉桌面壳熄灭「被控制中」;桥不在(独立后端)时静默跳过,绝不让收尾失败。"""
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: calls.append((channel, payload)) or {})
+    computer_use.end_turn()
+    assert calls == [("computer:end", {})]
+
+    def no_bridge(*_args, **_kwargs):
+        raise computer_use.ComputerUseError("only works in the Mosael desktop app")
+
+    monkeypatch.setattr(computer_use, "_host_call", no_bridge)
+    computer_use.end_turn()  # 不抛
+
+
 # ── 确认卡:校验 / 摘要 / 执行 ──────────────────────────────
 
 

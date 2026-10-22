@@ -78,6 +78,8 @@ const IPC = Object.freeze({
     computerClick: "computer:click",
     computerType: "computer:type",
     computerScroll: "computer:scroll",
+    // 这一轮智能体结束了(后端在回合收尾时发):「被控制中」熄灭,但**不**等于急停 —— 下一轮还能动。
+    computerEnd: "computer:end",
     // 急停 / 恢复(ADR 0075 安全 3):全局热键与界面上的按钮都走这里。
     computerStop: "computer:stop",
     computerResume: "computer:resume",

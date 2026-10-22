@@ -56,6 +56,8 @@ SCREENSHOT_CHANNEL = "computer:screenshot"
 CLICK_CHANNEL = "computer:click"
 TYPE_CHANNEL = "computer:type"
 SCROLL_CHANNEL = "computer:scroll"
+#: 这一轮结束了 —— 让主进程把「被控制中」熄灭(不是急停:下一轮还能动)。
+END_CHANNEL = "computer:end"
 #: 一次滚动最多几格滚轮。再多就不是「往下看看」,而是整段跳走。
 MAX_SCROLL_NOTCHES = 30
 
@@ -92,6 +94,11 @@ def screenshot(window: str = DEFAULT_WINDOW, scale: float = DEFAULT_SCALE) -> di
     }
 
 
+def _mark_touched() -> None:
+    global _touched_this_turn
+    _touched_this_turn = True
+
+
 def click(
     window: str = DEFAULT_WINDOW,
     x: object = 0,
@@ -112,6 +119,7 @@ def click(
     if kind not in CLICK_BUTTONS:
         raise ComputerUseError(f'button must be "left" or "right" (got {button!r}).')
     count = _click_count(click_count)
+    _mark_touched()
     answer = _host_call(
         CLICK_CHANNEL,
         {"window": name, "x": css_x, "y": css_y, "button": kind, "clickCount": count},
@@ -128,6 +136,7 @@ def type_text(window: str = DEFAULT_WINDOW, text: object = "") -> dict[str, Any]
         raise ComputerUseError("text must be a non-empty string; nothing was typed.")
     if len(text) > MAX_TYPE_CHARS:
         raise ComputerUseError(f"text must be at most {MAX_TYPE_CHARS} characters (got {len(text)}); nothing was typed.")
+    _mark_touched()
     answer = _host_call(TYPE_CHANNEL, {"window": name, "text": text})
     if not isinstance(answer, dict) or not answer.get("window"):
         raise ComputerUseError("The Mosael window bridge answered without confirming the typing.")
@@ -154,6 +163,7 @@ def scroll(
         payload["x"] = _screenshot_coordinate(x, "x", factor)
     if y is not None:
         payload["y"] = _screenshot_coordinate(y, "y", factor)
+    _mark_touched()
     answer = _host_call(SCROLL_CHANNEL, payload)
     if not isinstance(answer, dict) or not answer.get("window"):
         raise ComputerUseError("The Mosael window bridge answered without confirming the scroll.")
@@ -174,6 +184,27 @@ def _click_count(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) not in (1, 2):
         raise ComputerUseError(f"click_count must be 1 (single) or 2 (double), not {value!r}.")
     return int(value)
+
+
+#: 这一轮里动过手没有(点/输入/滚动成功过一次就记上)。回合结束时据此决定要不要提醒桌面壳 ——
+#: 每一轮都发一条桥消息也没坏处,但「没动过」的回合根本不需要问对面。
+_touched_this_turn = False
+
+
+def end_turn() -> None:
+    """一次智能体回合结束:如果这一轮动过手,告诉桌面壳「被控制中」可以熄了。
+
+    **不是急停**:不设 stopped,下一轮还能动。桥不在(独立后端 / 远程部署)时静默跳过 ——
+    回合收尾不该因为一条提示通道不在而失败。
+    """
+    global _touched_this_turn
+    if not _touched_this_turn:
+        return
+    _touched_this_turn = False
+    try:
+        _host_call(END_CHANNEL, {})
+    except ComputerUseError:
+        pass
 
 
 def _window_name(value: object) -> str:
@@ -330,6 +361,7 @@ __all__ = [
     "CLICK_CHANNEL",
     "ComputerUseError",
     "DEFAULT_SCALE",
+    "END_CHANNEL",
     "DEFAULT_WINDOW",
     "MAX_SCALE",
     "MIN_SCALE",
@@ -338,6 +370,7 @@ __all__ = [
     "TYPE_CHANNEL",
     "WINDOW_NAMES",
     "click",
+    "end_turn",
     "screenshot",
     "scroll",
     "type_text",

@@ -33,6 +33,7 @@ from app.domain.agent.stream import (
     _timeline_for_payload,
 )
 from app.domain.agent import card_expiry
+from app.domain.agent import computer_use
 from app.domain.agent import origins
 from app.domain.agent import titles
 from app.domain.agent.places import STUDIO_PLACE, Place
@@ -1053,6 +1054,12 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
             _stream_finish(session_id, final_text)
             # 消息 payload 里已经有折叠好的 timeline;这一轮落库的中间事件到此为止(见 app.db.agent_turn_events)。
             _discard_turn_events(session_id)
+            #: 这一轮用过 Computer Use 的话,桌面壳那边的「被控制中」要跟着灭(不是急停)。
+            #: 桥不在(独立后端)时 end_turn 自己静默跳过;收尾路径再兜一层,绝不让它连累回合结束。
+            try:
+                computer_use.end_turn()
+            except Exception:  # noqa: BLE001 —— 收尾路径
+                logger.debug("could not tell the host to end Computer Use", exc_info=True)
     # 外部渠道(飞书……)把这一轮的结果送回原会话。在 drain 之前:排队的下一轮不该抢在这一轮的回复前面。
     origins.turn_finished(origin, session_id)
     if name_it:

@@ -429,6 +429,8 @@ function clickMosaelWindow(request, windows, roles) {
       `That point is outside the ${name} window: it reports ${size[0]}×${size[1]} CSS pixels, and (${request.x}, ${request.y}) is not inside it. Nothing was clicked.`,
     );
   }
+  if (typeof win.focus === "function") win.focus();
+  if (typeof contents.focus === "function") contents.focus();
   const x = Math.round(request.x);
   const y = Math.round(request.y);
   const button = request.button || "left";
@@ -460,9 +462,12 @@ function scrollMosaelWindow(request, windows, roles) {
   if (request.y !== null && size[1] && request.y >= size[1]) {
     throw new Error(`That y is outside the ${name} window (it is ${size[1]} CSS pixels tall). Nothing was scrolled.`);
   }
+  if (typeof win.focus === "function") win.focus();
+  if (typeof contents.focus === "function") contents.focus();
   const x = request.x === null ? Math.round(size[0] / 2) : Math.round(request.x);
   const y = request.y === null ? Math.round(size[1] / 2) : Math.round(request.y);
-  contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: -request.dy, canScroll: true });
+  //: 一格滚轮 ≈ 100 像素(约 3 行)。直接发 deltaY = -dy 的话「滚 3 格」只走 3 像素,人看着就是没动。
+  contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: -request.dy * 100, canScroll: true });
   return { window: name, dy: request.dy, x, y };
 }
 
@@ -507,8 +512,18 @@ async function captureMosaelWindow(request, windows, roles) {
       `The ${name} window produced an empty picture (it may be hidden or not composited). Nothing was captured.`,
     );
   }
-  const { width, height } = image.getSize();
-  return { window: name, width, height, image: image.toPNG().toString("base64") };
+  //: **按窗口的 CSS 尺寸归一化**。Retina 上 capturePage 给的是物理像素(2x):一张 1600×1136 的图背后
+  //: 是 800×568 的页面,而 `sendInputEvent` 认的是 CSS 像素 —— 不缩放的话模型按图给的坐标点下去会差一倍
+  //: (点到的位置全偏到左上角,看起来就是「点了没反应」)。缩到 CSS 尺寸之后,「图上的像素」和「点击坐标」
+  //: 就是同一套数,后端那个 scale 也就还是唯一的一次缩放。
+  const content = typeof win.getContentSize === "function" ? win.getContentSize() : null;
+  let shot = image;
+  const captured = image.getSize();
+  if (content && content[0] > 0 && content[1] > 0 && (captured.width !== content[0] || captured.height !== content[1])) {
+    shot = image.resize({ width: content[0], height: content[1], quality: "best" });
+  }
+  const { width, height } = shot.getSize();
+  return { window: name, width, height, image: shot.toPNG().toString("base64") };
 }
 
 /** 令牌比较:定长、常数时间。别用 `===`,也别把令牌写进日志。 */
@@ -563,6 +578,11 @@ async function answerHostBridgeRequest(line, socket) {
       withComputerUse(() =>
         typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
       ),
+    [IPC.invoke.computerEnd]: () => {
+      //: 回合结束:熄灭「被控制中」。不是急停 —— 不设 stopped,下一轮还能动。
+      computerUseGuard.end();
+      return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
+    },
     [IPC.invoke.computerScroll]: () =>
       withComputerUse(() =>
         scrollMosaelWindow(parseComputerScroll(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),

@@ -46,14 +46,20 @@ type FakeImage = {
 
 type FakeWindow = {
   label: string;
-  webContents: { capturePage: ReturnType<typeof vi.fn> };
+  webContents: { capturePage: ReturnType<typeof vi.fn>; getSize?: () => [number, number] };
   isDestroyed: () => boolean;
   isMinimized: () => boolean;
+  getContentSize?: () => [number, number];
 };
 
 function fakeWindow(
   label: string,
-  options: { destroyed?: boolean; minimized?: boolean; image?: FakeImage } = {},
+  options: {
+    destroyed?: boolean;
+    minimized?: boolean;
+    image?: FakeImage;
+    contentSize?: [number, number];
+  } = {},
 ): FakeWindow {
   const image =
     options.image ??
@@ -62,9 +68,14 @@ function fakeWindow(
       getSize: () => ({ width: 800, height: 600 }),
       toPNG: () => Buffer.from(`png:${label}`),
     } satisfies FakeImage);
+  const captureSize = image.getSize();
   return {
     label,
-    webContents: { capturePage: vi.fn(async () => image) },
+    webContents: {
+      capturePage: vi.fn(async () => image),
+      getSize: () => options.contentSize ?? [captureSize.width, captureSize.height],
+    },
+    getContentSize: options.contentSize ? () => options.contentSize as [number, number] : undefined,
     isDestroyed: () => options.destroyed ?? false,
     isMinimized: () => options.minimized ?? false,
   };
@@ -125,6 +136,29 @@ describe("按 window 参数挑窗口", () => {
   it("不认识的窗口名是一句人话,不是一句 undefined", () => {
     const { chooseComputerWindow } = loadCapture();
     expect(() => chooseComputerWindow("desktop", [], {})).toThrow(/Unknown window "desktop".*"main".*"publish"/);
+  });
+});
+
+describe("图上的像素 = 窗口的 CSS 像素(Retina 归一化)", () => {
+  it("capturePage 给 2x 图时缩回窗口的 CSS 尺寸 —— 否则点击坐标会差一倍", async () => {
+    const image = {
+      isEmpty: () => false,
+      getSize: () => ({ width: 1600, height: 1136 }),
+      toPNG: () => Buffer.from("retina"),
+      resize: vi.fn(({ width, height }: { width: number; height: number }) => ({
+        isEmpty: () => false,
+        getSize: () => ({ width, height }),
+        toPNG: () => Buffer.from(`resized:${width}x${height}`),
+      })),
+    };
+    const main = fakeWindow("main", { image, contentSize: [800, 568] });
+    const { captureMosaelWindow } = loadCapture();
+
+    const shot = await captureMosaelWindow({ window: "main" }, [main], { main });
+
+    expect(shot.width).toBe(800);
+    expect(shot.height).toBe(568);
+    expect(Buffer.from(shot.image, "base64").toString()).toBe("resized:800x568");
   });
 });
 

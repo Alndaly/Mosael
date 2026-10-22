@@ -52,6 +52,7 @@ export const IPC: {
     computerClick: "computer:click";
     computerType: "computer:type";
     computerScroll: "computer:scroll";
+    computerEnd: "computer:end";
     computerStop: "computer:stop";
     computerResume: "computer:resume";
     saveFileBegin: "saveFile:begin";
