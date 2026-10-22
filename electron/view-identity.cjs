@@ -20,7 +20,7 @@
 //:
 //: 所以默认**如实声明**(自洽);哪天真要 Chrome 形状的身份,得三处一起对齐(CDP),不能只洗 UA。
 //: X 早就是这一档(Turnstile 的实测结论),视频号在排查「扫码后回登录页」时也归到这一档。
-const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "weixin-channels"]);
+const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter"]);
 
 /** 抹掉 UA 里的 Electron 与 Mosael token,得到一枚干净 Chrome UA;认不出 Chrome 版本就原样返回。 */
 function cleanChromeUserAgent(userAgent) {
@@ -33,10 +33,65 @@ function cleanChromeUserAgent(userAgent) {
     .trim();
 }
 
+/** macOS 的产品版本 = Darwin 主版本 - 9(Chromium 在 client hints 里报的是产品版本,不是内核版本)。 */
+function macPlatformVersion(systemVersion, platform) {
+  if (platform !== "darwin") return "";
+  const [major = 0, minor = 0] = String(systemVersion || "")
+    .split(".")
+    .map((one) => Number.parseInt(one, 10) || 0);
+  return major >= 20 ? `${major - 9}.${minor}.0` : "10.15.7";
+}
+
+/**
+ * 一枚**自洽**的 Chrome 身份,交给 CDP 的 `Emulation.setUserAgentOverride`。
+ *
+ * 为什么非它不可:抹 UA 字符串只改 UA,Chromium 自己报的 client hints(`Sec-CH-UA` 头与
+ * `navigator.userAgentData`)还是「Chromium + Not_A Brand」——**没有 Google Chrome 品牌**。
+ * 这就成了「自称 Chrome、信号不像」。视频号 2026-10-22 实测:扫码/快捷登录都成功、`sessionid`
+ * 也确实种进了分区,平台页随即判会话无效、退回登录页。
+ *
+ * `Emulation.setUserAgentOverride` 是 Chromium 给 Puppeteer / DevTools 做同样事情的那条路:
+ * 它一次覆盖 UA 请求头、client hints 头与 `navigator.userAgentData`,三处说的是同一件事。
+ * (webContents 的 `setUserAgent` 只覆盖 UA 字符串 —— 那条路试过,修不了。)
+ */
+function chromeIdentityOverride(userAgent, options = {}) {
+  const version = /Chrome\/(\d+)\.(\d+)\.(\d+)\.(\d+)/.exec(String(userAgent || ""));
+  if (!version) return null;
+  const [, major, minor, build, patch] = version;
+  const full = `${major}.${minor}.${build}.${patch}`;
+  const platform = options.platform || "darwin";
+  const arch = options.arch || "arm64";
+  const mac = platform === "darwin";
+  return {
+    userAgent: String(userAgent),
+    acceptLanguage: "zh-CN,zh;q=0.9,en;q=0.8",
+    platform: mac ? "MacIntel" : platform === "win32" ? "Win32" : "Linux x86_64",
+    userAgentMetadata: {
+      brands: [
+        { brand: "Google Chrome", version: major },
+        { brand: "Chromium", version: major },
+        { brand: "Not_A Brand", version: "24" },
+      ],
+      fullVersionList: [
+        { brand: "Google Chrome", version: full },
+        { brand: "Chromium", version: full },
+        { brand: "Not_A Brand", version: "24.0.0.0" },
+      ],
+      fullVersion: full,
+      platform: mac ? "macOS" : platform === "win32" ? "Windows" : "Linux",
+      platformVersion: macPlatformVersion(options.systemVersion, platform),
+      architecture: arch === "arm64" ? "arm" : "x86",
+      model: "",
+      mobile: false,
+      bitness: "64",
+    },
+  };
+}
+
 /** 这个平台用哪一档身份:`"chrome"`(干净 Chrome UA)或 `"electron"`(如实声明,不洗)。 */
 function identityForPlatform(platform) {
   const id = String(platform || "").trim().toLowerCase();
   return CHROME_IDENTITY_EXEMPT.has(id) ? "electron" : "chrome";
 }
 
-module.exports = { CHROME_IDENTITY_EXEMPT, cleanChromeUserAgent, identityForPlatform };
+module.exports = { CHROME_IDENTITY_EXEMPT, chromeIdentityOverride, cleanChromeUserAgent, identityForPlatform };

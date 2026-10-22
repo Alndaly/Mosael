@@ -8,9 +8,13 @@ import { describe, expect, it } from "vitest";
 
 // CommonJS is intentional: main.cjs 的视图层加载同一份。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { cleanChromeUserAgent, identityForPlatform } = require("./view-identity.cjs") as {
+const { cleanChromeUserAgent, identityForPlatform, chromeIdentityOverride } = require("./view-identity.cjs") as {
   cleanChromeUserAgent: (ua: string) => string;
   identityForPlatform: (platform: string | null | undefined) => "chrome" | "electron";
+  chromeIdentityOverride: (
+    ua: string,
+    options?: { platform?: string; arch?: string; systemVersion?: string },
+  ) => { userAgent: string; acceptLanguage: string; platform: string; userAgentMetadata: Record<string, unknown> } | null;
 };
 
 const ELECTRON_UA =
@@ -29,15 +33,26 @@ describe("内嵌浏览器的身份", () => {
     expect(cleanChromeUserAgent("")).toBe("");
   });
 
-  it("X 与视频号如实声明(洗 UA 会和 client hints 自相矛盾);其余平台给干净 Chrome UA", () => {
-    for (const platform of ["x", "X", "twitter", "weixin-channels"]) {
-      expect(identityForPlatform(platform), platform).toBe("electron");
-    }
-    for (const platform of ["douyin", "xiaohongshu", "bilibili", "tiktok", "youtube"]) {
+  it("X 如实声明;其余平台(视频号、抖音、小红书…)给**对齐过 client hints** 的 Chrome 身份", () => {
+    for (const platform of ["x", "X", "twitter"]) expect(identityForPlatform(platform), platform).toBe("electron");
+    for (const platform of ["weixin-channels", "douyin", "xiaohongshu", "bilibili", "tiktok", "youtube"]) {
       expect(identityForPlatform(platform), platform).toBe("chrome");
     }
     // 未知 / 空:默认干净 Chrome(登录能过的那一边),不是永久伪装。
     expect(identityForPlatform(null)).toBe("chrome");
     expect(identityForPlatform("")).toBe("chrome");
+  });
+
+  it("CDP 那份覆盖:UA 与 client hints 说的是同一件事(有 Google Chrome 品牌)", () => {
+    const clean = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36";
+    const override = chromeIdentityOverride(clean, { platform: "darwin", arch: "arm64", systemVersion: "25.0.0" })!;
+    expect(override.userAgent).toBe(clean);
+    const metadata = override.userAgentMetadata as { brands: Array<{ brand: string }>; platformVersion: string; architecture: string };
+    //: 这就是视频号那轮缺的东西:UA 说 Chrome,而 brands 里只有 Chromium。
+    expect(metadata.brands.map((one) => one.brand)).toContain("Google Chrome");
+    expect(metadata.platformVersion).toBe("16.0.0");
+    expect(metadata.architecture).toBe("arm");
+    // 认不出 Chrome 版本就返回 null(调用方退回只洗 UA),不编一个身份。
+    expect(chromeIdentityOverride("curl/8")).toBeNull();
   });
 });

@@ -101,6 +101,11 @@ YouTube 登完落在 `www.youtube.com` 而不是 Studio,只认创作页长相必
 Chrome」)。现在只有**平台级一个维度**,而真实世界的影响因素至少还有:站点、流程(登录/发布/阅读)、
 是否需要过 Turnstile。这就是这轮连续三次回归的土壤。
 
+**做法(2026-10-22 落地)**:`chrome` 那一档现在走 **CDP** —— `webContents.debugger.attach("1.3")` 之后发
+`Emulation.setUserAgentOverride`,把 UA 请求头、`Sec-CH-UA` 头与 `navigator.userAgentData` 一次对齐
+(见 `view-identity.chromeIdentityOverride`)。这是 Chromium 给 Puppeteer / DevTools 做同一件事的那条路;
+`webContents.setUserAgent` 只改 UA 字符串,所以单用它必然自相矛盾。
+
 **更硬的一条(2026-10-22 实测)**:只洗 UA 会得到一份**自相矛盾**的身份 —— UA 说
 `Chrome/152`,而 Chromium 自己报的 `navigator.userAgentData.brands` 是
 `[{Not?A_Brand 24}, {Chromium 152}]`:没有 Google Chrome 品牌。视频号于是「扫码/快捷登录都成功、

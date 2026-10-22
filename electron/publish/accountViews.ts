@@ -2,7 +2,7 @@ import { app, screen, session, shell, WebContentsView, type BaseWindow } from "e
 // 登录要唤起本机客户端的那几种协议(微信快捷登录等):交给系统,否则 Chromium 静默丢掉 ——
 // 用户看到的是「点了没反应 / 又回登录页」,而不是任何错误。
 import { forwardExternalLogin, isExternalLoginUrl } from "../external-login-schemes.cjs";
-import { cleanChromeUserAgent, identityForPlatform } from "../view-identity.cjs";
+import { chromeIdentityOverride, cleanChromeUserAgent, identityForPlatform } from "../view-identity.cjs";
 //: 登录排障:视频号那几轮只有「扫码成功、cookie 种下了、又回登录页」这一句,看不出是哪条请求判死的。
 //: 这里把这两个站点的请求结果记进 browser-trace.log(只记 origin+path,不带查询串)。
 import { watchSession as watchNet } from "./netTrace.cjs";
@@ -1053,13 +1053,33 @@ export class AccountViewManager {
   }
 
   /** 按平台给这个会话定身份:干净 Chrome UA 或如实声明 Electron(不洗)。 */
-  private applyIdentity(accountId: string, target: Electron.Session): void {
+  private applyIdentity(accountId: string, target: Electron.Session, contents?: Electron.WebContents): void {
     //: 替身会话(测试里的假 session)没有这个方法:身份是锦上添花,不该让建视图失败。
     if (!target || typeof target.setUserAgent !== "function") return;
     const platform = this.platformOf.get(accountId) ?? "";
     const identity = identityForPlatform(platform);
     const native = app.userAgentFallback;
-    target.setUserAgent(identity === "chrome" ? cleanChromeUserAgent(native) : native);
+    if (identity !== "chrome") {
+      target.setUserAgent(native);
+      return;
+    }
+    const clean = cleanChromeUserAgent(native);
+    //: 先按会话设一遍(下一跳请求就用它),再走 CDP 把 client hints / userAgentData 一并对齐 ——
+    //: 只洗 UA 会得到「自称 Chrome、信号是 Chromium」的自相矛盾身份(视频号就是被这一条判死的)。
+    target.setUserAgent(clean);
+    if (!contents) return;
+    const override = chromeIdentityOverride(clean, {
+      platform: process.platform,
+      arch: process.arch,
+      systemVersion: typeof process.getSystemVersion === "function" ? process.getSystemVersion() : "",
+    });
+    if (!override) return;
+    try {
+      if (!contents.debugger.isAttached()) contents.debugger.attach("1.3");
+      void contents.debugger.sendCommand("Emulation.setUserAgentOverride", override).catch(() => undefined);
+    } catch {
+      /* devtools 正开着 / 旧版 Electron:退回「只洗 UA」,比什么都不做强不了,但也不至于失败 */
+    }
   }
 
   private createTab(accountId: string, adopt?: Electron.BrowserWindowConstructorOptions): PageTab {
@@ -1077,7 +1097,7 @@ export class AccountViewManager {
             contextIsolation: true,
           },
         });
-    this.applyIdentity(accountId, view.webContents.session);
+    this.applyIdentity(accountId, view.webContents.session, view.webContents);
     watchNet(
       view.webContents.session,
       (event) => this.trace.event("net", { view: accountId, ...event }),
