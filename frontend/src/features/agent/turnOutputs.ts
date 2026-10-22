@@ -15,9 +15,11 @@
  *   存在,和后端 receipts.produced_asset_ids 读的是同一份。
  * - **从一份素材派生出新素材**:结果顶层带 `source_asset_id`,旁边的 `asset_id` / `asset_ids` 就是派生物
  *   (切宫格、做蒙版)。`source_asset_id` 本身是原料,不算。
- * - **同步工具直接交回的产出**:结果顶层带 `produced_asset_ids`(computer_screenshot 这类 —— 截一张图
- *   当场入素材库交回 id)。平铺的 `asset_ids` **不收**:那是「碰过的」工具行明细的读法,一份随便什么的
- *   id 列表摆进答案,会把用户自己的原图挂到「看看这张图」的回答下面。
+ * 平铺的 `asset_ids` **不收**:那是「碰过的」工具行明细的读法,一份随便什么的 id 列表摆进答案,
+ * 会把用户自己的原图挂到「看看这张图」的回答下面。
+ *
+ * **截图不算产出**:computer_screenshot 的图是「过程里的一眼」,交回时用的是单数键 `screenshot_asset_id`
+ * (只进工具行明细),不进这一份 —— 否则每一步下面都挂着一张图,看起来像答案。
  *
  * 判据看形状不看工具名单:名单要跟着工具表走,而「终态任务的 result 是产物」这件事不会变。
  *
@@ -50,11 +52,6 @@ export function producedByTool(tool: ToolCall): string[] {
   if (data.status === "succeeded" && isRecord(data.result)) return idsAt(data.result);
   if (typeof data.source_asset_id === "string") {
     return idsAt(data).filter((id) => id !== data.source_asset_id);
-  }
-  if (Array.isArray(data.produced_asset_ids)) {
-    return data.produced_asset_ids
-      .filter((one): one is string => typeof one === "string" && one.trim() !== "")
-      .map((one) => one.trim());
   }
   return [];
 }

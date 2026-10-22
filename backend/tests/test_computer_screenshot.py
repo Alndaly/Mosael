@@ -185,16 +185,19 @@ def test_the_tool_function_returns_text_and_image_blocks() -> None:
     assert isinstance(blocks[0], TextContent)
     text = json.loads(blocks[0].text)
     assert (text["width"], text["height"], text["scale"], text["window"]) == (320, 200, 1, "main")
-    assert "asset_ids" not in text, "没有调用方上下文(直接函数调用):跳过入库,截图照常返回"
+    assert "screenshot_asset_id" not in text, "没有调用方上下文(直接函数调用):跳过入库,截图照常返回"
     assert isinstance(blocks[1], ImageContent)
     assert blocks[1].mime_type == "image/png"
     assert base64.b64decode(blocks[1].data) == _png(320, 200)
 
 
-def test_the_same_png_is_saved_as_an_asset_so_the_conversation_shows_it(monkeypatch) -> None:
-    """「模型看得到」和「用户看得到」是两回事:images 只给模型,轮末还会被裁掉;
-    对话界面渲染的是 result.asset_ids(生成图片、飞书图片都走这条通道,见 ToolCalls)。
-    所以同一份 PNG 要落一份进素材库、把 id 交回来。"""
+def test_the_same_png_is_saved_as_an_asset_but_not_into_the_answer_area(monkeypatch) -> None:
+    """「模型看得到」和「用户看得到」是两回事:images 只给模型,轮末还会被裁掉;所以同一份 PNG
+    要落一份进素材库、把 id 交回来。
+
+    **但只进工具行明细,不进答案区**:截图是过程里的一眼,不是这一轮的产出 —— 以前交给
+    `produced_asset_ids`,结果每一步下面都挂着一张图(维护者:「这种不是答案的中间过程的图片为何
+    也显示在答案那一侧了」)。现在用单数键 `screenshot_asset_id`,前端结果区不认它。"""
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     monkeypatch.setattr(computer_use, "_host_call", lambda channel, payload: _shot(320, 200))
@@ -206,23 +209,22 @@ def test_the_same_png_is_saved_as_an_asset_so_the_conversation_shows_it(monkeypa
 
     # 给模型看的原样还在……
     assert len(body["images"]) == 1
-    # ……给界面看的素材 id 也给了:库里那一份内容就是桥回来的同一张 PNG。
-    # 键名是 produced_asset_ids:前端结果区(turnOutputs)按这个形状认「做出来的」,
-    # 平铺的 asset_ids 是「碰过的」读法,不进答案区。
-    asset_ids = body["result"]["produced_asset_ids"]
-    assert len(asset_ids) == 1
-    asset = client.get(f"/api/assets/{asset_ids[0]}").json()
+    # ……给用户看的素材也在库里(展开工具行才看得见),但键名不会被当成「这一轮的产出」。
+    assert "produced_asset_ids" not in body["result"], "截图不进答案区"
+    asset_id = body["result"]["screenshot_asset_id"]
+    assert isinstance(asset_id, str) and asset_id
+    asset = client.get(f"/api/assets/{asset_id}").json()
     assert asset["workspace_id"] == ws["id"]
     assert asset["source"] == "captured"
     assert "main" in asset["name"]
-    file = client.get(f"/api/assets/{asset_ids[0]}/file")
+    file = client.get(f"/api/assets/{asset_id}/file")
     assert file.status_code == 200
     assert file.content == _png(320, 200)
 
 
 def test_a_failing_asset_import_does_not_fail_the_screenshot(monkeypatch) -> None:
     """入库只是「让用户也看得见」的副本:它失败了,截图本身(模型看 images)照常返回,
-    只是结果里没有 asset_ids。"""
+     只是结果里没有截图 id。"""
     import app.domain.assets.importer as importer
 
     client = fresh_client()
@@ -239,7 +241,7 @@ def test_a_failing_asset_import_does_not_fail_the_screenshot(monkeypatch) -> Non
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["result"]["window"] == "main"
-    assert "produced_asset_ids" not in body["result"]
+    assert "screenshot_asset_id" not in body["result"]
     assert len(body["images"]) == 1
 
 

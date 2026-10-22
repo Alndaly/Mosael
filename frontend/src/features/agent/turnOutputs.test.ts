@@ -26,10 +26,12 @@ describe("这一轮做出来的素材", () => {
     expect(producedByTool(mask.tool)).toEqual(["m"]);
   });
 
-  it("同步工具直接交回的产出(computer_screenshot):produced_asset_ids 算,平铺的 asset_ids 不算", () => {
+  it("截图是过程里的一眼,不是产出:答案区一张都不挂", () => {
+    //: 「这种不是答案的中间过程的图片为何也显示在答案那一侧了」(维护者)—— 截图只进工具行明细,
+    //: 交回时用单数键 screenshot_asset_id,这一份不认它。
     expect(
-      producedByTool(tool("computer_screenshot", { window: "main", produced_asset_ids: ["shot1"] }).tool),
-    ).toEqual(["shot1"]);
+      producedByTool(tool("computer_screenshot", { window: "main", screenshot_asset_id: "shot1" }).tool),
+    ).toEqual([]);
     // 平铺 asset_ids 是「碰过的」读法 —— 一份随便什么的 id 列表不能进答案区。
     expect(producedByTool(tool("some_list", { asset_ids: ["a", "b"] }).tool)).toEqual([]);
   });
