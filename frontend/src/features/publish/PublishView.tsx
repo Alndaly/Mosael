@@ -144,9 +144,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         open={creating}
         workspace={workspace}
         onClose={() => setCreating(false)}
-        onCreated={(task) => {
+        onCreated={() => {
+          //: **不自动打开详情弹窗**(维护者:提交后那个"进度弹窗"不要了)。进度就在列表项里看:
+          //: 状态列(运行中 → 成功/失败,定时轮询)、失败原因、时间都在那一行;要细节再点开这一条。
           setCreating(false);
-          setOpenId(task.id);
           refresh();
         }}
         onManageAccounts={() => {
