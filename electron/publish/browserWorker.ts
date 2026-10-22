@@ -24,9 +24,13 @@ import { dropActionDownloads, saveActionDownloads } from "./actionDownloads";
 import { executeBrowserAction, type ActionOutcome } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
+//: 动作也进结构化日志(P7):一次动作做了什么、用了多久、成没成。
+import { createTrace } from "./trace.cjs";
 import { t } from "../i18n.cjs";
 import { parseComfyWorkbenchCall } from "../ipc-contract.cjs";
 import { applyPartitionMove } from "./partitionMoves";
+
+const trace = createTrace({ dir: app.getPath("userData") });
 import { comfyWorkbenchCall } from "./publishWorker";
 
 const IDLE_MS = 1200;
@@ -230,12 +234,17 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
       try {
         // 「截图」节点:截这一页、存进素材库(和顶栏截屏同一份实现,见 actionCapture);「切换页面」节点:
         // 在会话的几个页面之间切换 / 关掉当前页(见 actionPage)。别的动作照旧交给驱动。
-        outcome =
-          action.action === "capture"
-            ? await captureForAction({ actionId: action.id, views, sessionId: action.session_id, args: action.args })
-            : action.action === "page"
-              ? pageForAction(views, action.session_id, action.args)
-              : await executeBrowserAction(driver, action.action, action.args);
+        //: 一次动作 = 一条结构化日志(kind / 会话 / 用了多久 / 成没成,URL 只留 origin+path)。
+        outcome = await trace.span(
+          "action",
+          { kind: action.action, session: action.session_id, account: action.session_id },
+          async () =>
+            action.action === "capture"
+              ? await captureForAction({ actionId: action.id, views, sessionId: action.session_id, args: action.args })
+              : action.action === "page"
+                ? pageForAction(views, action.session_id, action.args)
+                : await executeBrowserAction(driver, action.action, action.args),
+        );
       } catch (error) {
         await dropActionDownloads(downloads);
         throw error;

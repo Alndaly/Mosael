@@ -433,6 +433,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "该档案正被占用(同一时刻只允许一个会话),请稍后再试",
         "en": "This profile is in use (only one session at a time). Try again later.",
     },
+    #: 池档案被占用的**具体**说法(P4):谁占着、开了多久。只说「被占用」时,人既不知道要等多久,
+    #: 也不知道该去关哪一个 —— 实测里维护者就被这句话卡住过一次(自己刚打开的那一页占着)。
+    "browserErr_profileBusyInUse": {
+        "zh": "该档案正被{who}占用(已开 {minutes} 分钟)。同一份登录同一时刻只给一个会话:把它关掉再试,或等它收工。",
+        "en": "This profile is held by {who} (open for {minutes} min). One sign-in serves one session at a time: close it and retry, or wait for it to finish.",
+    },
+    "browserHolder_agent": {"zh": "智能体的一次浏览器会话", "en": "an agent browser session"},
+    "browserHolder_workflow": {"zh": "一次工作流运行", "en": "a workflow run"},
+    "browserHolder_manual": {"zh": "另一个打开的浏览器会话", "en": "another open browser session"},
     "browserErr_sessionClosed": {
         "zh": "浏览器会话不存在或已关闭",
         "en": "The browser session doesn't exist or has been closed.",

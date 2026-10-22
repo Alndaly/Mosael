@@ -254,7 +254,7 @@ def open_session(
                 workspace_id=workspace_id, kind="named", name=session_name, partition=partition,
                 owner_kind=owner_kind, owner_id=owner_id, status="open",
             ),
-            busy=lambda: BrowserDomainError("browserErr_sessionBusy", name=session_name),
+            busy=lambda holder=None: BrowserDomainError("browserErr_sessionBusy", name=session_name),
         )
     session = BrowserSession(
         workspace_id=workspace_id, kind="ephemeral", name="", owner_kind=owner_kind, owner_id=owner_id,
@@ -321,7 +321,7 @@ def _open_profile_session(
             owner_id=owner_id,
             status="open",
         ),
-        busy=lambda: BrowserDomainError("browserErr_profileBusy"),
+        busy=lambda holder=None: _profile_busy(holder),
     )
 
 
@@ -362,7 +362,21 @@ def login_notice(db: Session, session: BrowserSession) -> str:
     return tr("browserNotice_loginNotCarriedOver", name=session.name, detail=move.reason)
 
 
-def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[[], BrowserDomainError]) -> BrowserSession:
+def _profile_busy(holder: BrowserSession | None) -> BrowserDomainError:
+    """池档案被另一个会话占着:说清是谁、开了多久(P4)。
+
+    `holder` 是占着它的那条会话。没有(拿锁超时那种)就退回原来那句笼统的话。
+    """
+    if holder is None:
+        return BrowserDomainError("browserErr_profileBusy")
+    from app.core.i18n import fragment
+
+    minutes = max(0, int((now() - holder.created_at).total_seconds() // 60)) if holder.created_at else 0
+    who = fragment(f"browserHolder_{holder.owner_kind or 'manual'}")
+    return BrowserDomainError("browserErr_profileBusyInUse", who=who, minutes=minutes)
+
+
+def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[..., BrowserDomainError]) -> BrowserSession:
     """具名 / 池档案会话的租约:这份登录(分区)上已经开着的那个归同一个 owner 就复用,归别人就拒;没有就开 `wanted`。
     占着它的那个早就没人用了(智能体没关、运行异常退出)的话先收回来再判(见 reclaim_idle_sessions)。
 
@@ -398,7 +412,9 @@ def _lease_once(wanted: BrowserSession, busy: Callable[[], BrowserDomainError]) 
         if existing is not None and (
             existing.owner_kind != wanted.owner_kind or (existing.owner_id or "") != (wanted.owner_id or "")
         ):
-            raise busy()
+            #: 把「谁占着、开了多久」一起交出去 —— 只说「被占用」的话,用户既不知道等多久,也不知道
+            #: 该去关哪一个(P4:会话所有权要可操作)。
+            raise busy(existing)
         if wanted.profile_id:
             profile = lease.get(BrowserProfile, wanted.profile_id)
             if profile is not None:

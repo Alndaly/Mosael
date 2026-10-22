@@ -34,6 +34,9 @@ import type { WorkbenchCall, WorkbenchCallResult, WorkbenchState } from "./comfy
 import { WorkbenchSessions } from "./comfyWorkbenchSessions";
 import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
+//: 登录的显式状态机与结构化日志(P3 / P7):失败时要能一眼看出停在哪一步、为什么停。
+import { createLoginFlow } from "./loginPhase.cjs";
+import { createTrace } from "./trace.cjs";
 import { findPost, postEndpoint } from "./publishedPost";
 import type { PageDriver } from "./pageDriver";
 import type { LiveViewFrame, PublishTask, ViewState } from "./types";
@@ -670,6 +673,9 @@ export async function openPoolLogin(opts: {
   });
 }
 
+/** 排查日志:一行一个 JSON(userData/browser-trace.log,超 2MB 轮转一份)。 */
+const trace = createTrace({ dir: app.getPath("userData") });
+
 const COMFY_PARTITION_PREFIX = "persist:pool-comfyui-";
 
 /** 开工作台的结果:打开了那一张 / 新建了一张 / 只是回到画布,或者没成的原因(那台机器上没有这一张、这版前端没有「新建」命令……)。 */
@@ -759,6 +765,13 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
   // 避免复检的旧 goto 与登录的新 goto 互相 abort 把页面留成空白。
   loginAccounts.add(accountId);
   const gen = generation;
+  //: 这一步开始有明确的状态了(见 loginPhase):opening → waiting → verifying → bound / failed(原因)。
+  const flow = createLoginFlow({
+    onChange: (state) => {
+      trace.event("login", { account: accountId, platform, ...state });
+      plog("login phase:", accountId, state.phase, state.reason || "", state.detail || "");
+    },
+  });
   try {
     //: 身份跟着平台走:**建视图之前**先告诉它(UA 随第一次请求发出去,加载完再改对那一页没用)——
     //: 视频号要干净 Chrome UA,X 要如实声明 Electron(见 view-identity.cjs)。
@@ -768,6 +781,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
     // 亮出视图即占据前台单槽,loop 不再对该账号启动新复检;在飞的旧复检 goto 会被下面
     // 登录 goto 的 loadURL 自然覆盖(ERR_ABORTED),不会与登录页互抢。
     views.show(accountId);
+    flow.opened();
     const def = resolvePlatform(platform);
     await backend.patchAccount(accountId, { binding_status: "checking" });
     // 不 await 整页加载:视图已亮出(用户能看到加载中),导航是 fire-and-forget,
@@ -797,7 +811,9 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       loginPollTimer = null;
       // stop/换代/视图销毁/超时:收工,不再续排。
       if (stopped || gen !== generation || !views || Date.now() > deadline) {
-        plog("login poll ended without login:", accountId, Date.now() > deadline ? "timeout" : "stopped");
+        const why = Date.now() > deadline ? "timeout" : "stopped";
+        plog("login poll ended without login:", accountId, why);
+        flow.fail(why);
         endLogin(gen, accountId);
         return;
       }
@@ -805,14 +821,17 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       // 而且 loginAccounts 里挂着它会让复检一直跳过这个账号 —— 状态就永远停在「检测中」。
       if (views.visibleAccountId !== accountId) {
         plog("login poll ended (view dismissed):", accountId);
+        flow.fail("dismissed");
         endLogin(gen, accountId);
         return;
       }
       let ok = false;
+      flow.verifying();
       try {
-        ok = await adapter.checkLogin();
-      } catch {
-        /* 页面还没到位 */
+        ok = await trace.span("checkLogin", { account: accountId, platform }, () => adapter.checkLogin());
+      } catch (error) {
+        /* 页面还没到位:留着错误,别把它当成「没登录」的结论 */
+        flow.checkFailed(error);
       }
       // checkLogin 挂起期间可能已 stop/换代:再查一次,别对已属新代的共享状态动手或续排。
       if (stopped || gen !== generation || !views) {
@@ -823,9 +842,11 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
         const here = driver.url();
         if (here !== lastNegativeUrl) plog("login poll: not logged in yet at", here.slice(0, 160));
         lastNegativeUrl = here;
+        flow.notYet(here);
       }
       if (ok) {
         plog("login poll: logged in", accountId, def.id);
+        flow.bound();
         try {
           await backend.patchAccount(accountId, { binding_status: "bound", last_error: null });
         } catch {

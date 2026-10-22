@@ -95,7 +95,7 @@ def test_同一拍打开同一个池档案_只开出一个_后到的报被占用
 
     for n in range(ROUNDS):
         [(opened, errors, crashes)] = _open_concurrently(open_then_note, rounds=1)
-        assert crashes == [] and len(opened) == 1 and errors == ["browserErr_profileBusy"], (n, opened, errors, crashes)
+        assert crashes == [] and len(opened) == 1 and errors == ["browserErr_profileBusyInUse"], (n, opened, errors, crashes)
         assert [row.id for row in _open_rows(partition)] == opened
         with SessionLocal() as db:
             browser.close_session(db, opened[0])  # 下一轮重新抢

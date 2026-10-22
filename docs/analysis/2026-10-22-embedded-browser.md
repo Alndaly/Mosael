@@ -119,11 +119,11 @@ Chrome」)。现在只有**平台级一个维度**,而真实世界的影响因�
 | **P0** | 身份是平台级单值,失败无证据 | ①身份升级成「站点档案」(host → 身份 + 是否覆盖 client hints),②登录失败时自动取证:URL 链、关键 cookie **名**(不记值)、最后 3 次 `checkLogin` 判据结果、一张截图,落进 publisher.log 一处 |
 | **P1** | 站点契约散落、改版无感知 | 契约集中成数据(`contracts/platforms/*.json`),加「每日冒烟」:只开创作页,断言关键选择器还在;断了自动开卡或用 Computer Use 兜底 |
 | **P2** | 让位协议手工登记 | 抽成统一的「宿主要在这一块画东西」声明 API,浮层声明区域 → 视图自动让位/挪开,而不是每个浮层各改一处 |
-| **P3** | 登录是一堆 if | 抽成显式状态机:`opening → waiting-user → verifying → bound / failed(原因)`,每种原因带可执行的下一步(重新登录 / 换身份档 / 用外部浏览器) |
-| **P4** | 会话所有权只有一句报错 | 明确「谁占着前台、为什么、等多久」,给「等待 / 抢占 / 取消」三选一 |
+| ~~**P3**~~ | 登录是一堆 if | ✅ 已做:`publish/loginPhase.cjs`,`opening → waiting → verifying → bound / failed(timeout/dismissed/stopped/error/switched)`,已接进 `openLogin` |
+| ~~**P4**~~ | 会话所有权只有一句报错 | ✅ 已做:池档案被占用时说出「谁占着、开了多久」(`browserErr_profileBusyInUse` + `browserHolder_*` 文案) |
 | **P5** | 坐标系换算散落 | 统一 `pageToDip` / `dipToPage` helper,把 zoomFactor、Retina 缩放、窗口内容原点三件事收在一处 |
 | **P6** | 面板缩放(0.3)下的交互 | 现在靠 `getZoomFactor()` 现算;归入 P5 |
-| **P7** | 观察性差 | 每次登录/发布/动作都留一条结构化日志(阶段、URL、判据、耗时),现在散在 `plog` 文本里 |
+| ~~**P7**~~ | 观察性差 | ✅ 已做:`publish/trace.cjs` 写 `<userData>/browser-trace.log`(一行一个 JSON、URL 只留 origin+path、凭据键打码、2MB 轮转),登录状态机与每个浏览器动作都记一条 |
 
 ## 8. 结论
 
