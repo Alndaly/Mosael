@@ -22,6 +22,7 @@ import {
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { useAssetSearch } from "@/lib/assetQueries";
@@ -341,7 +342,21 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                           className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
                         />
-                        <PublishCard task={task} selecting={selectMode} onPreviewAsset={openAsset} />
+                        <PublishCard
+                          task={task}
+                          selecting={selectMode}
+                          onPreviewAsset={openAsset}
+                          onOpenPage={
+                            window.mosaelPublish
+                              ? () =>
+                                  void window.mosaelPublish
+                                    ?.openPage(task.account_id, task.platform)
+                                    .catch((error: Error) => toast.error(error.message))
+                              : undefined
+                          }
+                          onDelete={() => setDeleting(task)}
+                          deleteReason={writeBlocked?.reason}
+                        />
                         {selectMode && <SelectionCheck selected={selectedIds.has(task.id)} />}
                       </div>
                     </ContextMenuTrigger>
@@ -394,11 +409,19 @@ function PublishCard({
   task,
   selecting = false,
   onPreviewAsset,
+  onOpenPage,
+  onDelete,
+  deleteReason,
 }: {
   task: PublishTask;
   selecting?: boolean;
   /** 点成片名直接预览这条素材(id 可能为空:素材已删,那就只显示名字)。 */
   onPreviewAsset?: (assetId: string) => void;
+  /** 打开这条发布在平台上的页面(桌面版才有)。 */
+  onOpenPage?: () => void;
+  /** 删除这条记录(写权限不足时给 deleteReason,按钮禁掉并说明原因)。 */
+  onDelete?: () => void;
+  deleteReason?: string | false | null;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -466,9 +489,43 @@ function PublishCard({
           </Truncate>
         )}
       </div>
-      <div className={cn("grid shrink-0 gap-1 text-right", selecting && "pr-7")}>
+      <div className={cn("relative z-10 grid shrink-0 justify-items-end gap-1 text-right", selecting && "pr-7")}>
         <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
         <span className="text-ui-xs tabular-nums text-muted-foreground">{localTime(task.created_at, locale)}</span>
+        {/*: 行内动作摆在状态下面(整行那颗 absolute 按钮盖在下面,所以这一列要 z 压上去)。
+            写权限不足时删除禁掉并说明原因 —— 和详情弹窗里那一颗同一条判据。 */}
+        {(onOpenPage || onDelete) && !selecting && (
+          <div className="flex items-center gap-1">
+            {onOpenPage && (
+              <IconButton
+                variant="secondary"
+                size="icon-xs"
+                label={t("publishOpenPage")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenPage();
+                }}
+              >
+                <ExternalLink size={13} />
+              </IconButton>
+            )}
+            {onDelete && (
+              <IconButton
+                variant="secondary"
+                size="icon-xs"
+                label={t("delete")}
+                disabled={Boolean(deleteReason)}
+                disabledReason={deleteReason ?? undefined}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete();
+                }}
+              >
+                <Trash2 size={13} />
+              </IconButton>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );
