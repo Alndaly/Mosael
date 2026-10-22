@@ -37,6 +37,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
 import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
+import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { gotoRecord, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
@@ -122,6 +123,8 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
 
   // 详情走弹窗:记录本身是一条条独立的东西,列表 + 常驻右栏会把整页宽度让给"当前这一条",
   // 而多数时候人是在**扫一遍**,不是在盯着一条看。
+  //: 素材预览:列表里点成片名直接看素材(按 id 补全完整素材再开详情弹窗,见 useAssetPreviewModal)。
+  const { openAsset, modal: assetModal } = useAssetPreviewModal();
   const [openId, setOpenId] = React.useState<string | null>(null);
   const opened = (tasks.data ?? []).find((task) => task.id === openId) ?? null;
   // 按天分栏。时间是无时区标记的 UTC 串,分组必须按本地日历天算(见 lib/dayGroups)。
@@ -182,6 +185,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           gotoRecord("/browser-pool"); // 账号管理归口浏览器池;没账号时引导过去添加
         }}
       />
+      {assetModal}
       <PublishDetailDialog
         task={opened}
         writeBlocked={writeBlocked}
@@ -324,17 +328,22 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                 {group.items.map((task) => (
                   <ContextMenu key={task.id}>
                     <ContextMenuTrigger asChild>
-                      <button
-                        type="button"
-                        //: **不留圆角**:这个按钮是 divide-y 的直接子元素,分割线以 border-top 画在它身上 ——
-                        //: 按钮一圆,分割线两端就跟着弯(维护者截图)。圆角只给里面那层 hover 底色。
-                        className="relative block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
+                      <div
+                        //: 行容器(**不是 button**):里面还要放「点开预览素材」这颗按钮,按钮套按钮是非法结构。
+                        //: 写法照素材库列表:整行铺一颗 absolute 的无障碍按钮,行内其它按钮用 z 压在上面。
+                        //: **这一层不留圆角**(它是 divide-y 的直接子元素,分割线以 border-top 画在它身上,
+                        //: 圆角会让分割线两端弯起来);圆角与 hover 底色只在内层。
+                        className="group relative cursor-pointer"
                         onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
                       >
-                        <PublishCard task={task} selecting={selectMode} />
+                        <button
+                          type="button"
+                          className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
+                        />
+                        <PublishCard task={task} selecting={selectMode} onPreviewAsset={openAsset} />
                         {selectMode && <SelectionCheck selected={selectedIds.has(task.id)} />}
-                      </button>
+                      </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
                       <ContextMenuItem className="text-destructive focus:text-destructive" disabled={Boolean(writeBlocked)} onSelect={() => setDeleting(task)}>
@@ -381,7 +390,16 @@ function localTime(iso: string, locale: string): string {
  * 记录卡片。**卡面上要能判断"这条要不要点开"** —— 所以给的是状态、什么时候、发到哪个号、
  * 发的哪条成片;失败时把原因头一行也带出来,那通常就是他要找的东西。
  */
-function PublishCard({ task, selecting = false }: { task: PublishTask; selecting?: boolean }) {
+function PublishCard({
+  task,
+  selecting = false,
+  onPreviewAsset,
+}: {
+  task: PublishTask;
+  selecting?: boolean;
+  /** 点成片名直接预览这条素材(id 可能为空:素材已删,那就只显示名字)。 */
+  onPreviewAsset?: (assetId: string) => void;
+}) {
   const t = useI18n();
   const { locale } = usePreferences();
   const { Icon, tone, spin } = statusTone(task.status);
@@ -389,16 +407,35 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
     // 一条记录一行,信息**都在行里**(维护者:此前只有标题/账号/成片,信息量太少,详情要靠弹窗):
     // 标题、平台 · 账号 · 成片、简介、标签、作品状态/失败原因、状态与时间。
     // 间距只走 12/8/4:行上下 12(py-3)、行内各段 4(gap-1)、标签 chip 之间 4、日期栏头 8。
-    // **hover 底色和圆角都在这一层**;底色与内容同宽(不再 -mx-3 出血 —— 滚动容器会连圆角
-    // 一起裁掉)。左侧 12(和别页内容对齐);右侧 20(状态列右对齐,12 会贴住圆角的边)。
-    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-5 rounded-lg py-3 pl-3 pr-5 transition-colors hover:bg-secondary/40">
+    // hover 底色与圆角在**外层行容器**上(它才是接收点击与悬停的那一层);这里只管排布。
+    // 左侧 12(和别页内容对齐);右侧 20(状态列右对齐,12 会贴住圆角的边)。
+    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-5 py-3 pl-3 pr-5">
       {/*: 首行是标题(ui-md),图标跟着首行对齐而不是整段居中。 */}
       <span className={cn("mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
       <div className="grid min-w-0 gap-1">
         <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
-        <Truncate className="text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</Truncate>
+        <div className="flex min-w-0 items-center gap-1 text-ui-sm text-muted-foreground">
+          <span className="shrink-0">{task.platform} · {task.account_name} ·</span>
+          {/*: 成片名可点:直接预览这条素材。行内动作走 Button 的 inline 档(design/inlineActions 的
+              规矩 —— 挨着值的按钮不摆正文字号);整行那颗 absolute 按钮盖在下面,所以这颗要 z 压上去。 */}
+          {onPreviewAsset && task.asset_id ? (
+            <Button
+              variant="inline"
+              size="xs"
+              className="relative z-10 min-w-0"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPreviewAsset(task.asset_id!);
+              }}
+            >
+              <Truncate>{task.asset_name}</Truncate>
+            </Button>
+          ) : (
+            <Truncate>{task.asset_name}</Truncate>
+          )}
+        </div>
         {/*: 简介:这条发出去的正文是什么。 */}
         {task.description && (
           <Truncate as="p" lines={2} className="text-ui-sm text-muted-foreground" data-publish-row-description="">
