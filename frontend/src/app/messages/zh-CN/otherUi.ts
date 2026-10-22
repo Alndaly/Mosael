@@ -130,7 +130,7 @@ export const otherUi = {
   recordPermissionsHint: "由你主动申请后，Mosael 才会访问当前录制所需的设备。",
   recordRequestPermissions: "申请权限",
   recordScreenPermissionTitle: "需要屏幕录制权限",
-  recordScreenPermissionHint: "请允许 Mosael 录制屏幕；若此前已拒绝，需要在系统设置中重新开启。",
+  recordScreenPermissionHint: "请在系统设置里允许 Mosael 录制屏幕；允许之后要重启 Mosael 才生效（macOS 的要求）。",
   recordSystemAudioPermissionTitle: "需要屏幕与系统音频权限",
   recordSystemAudioPermissionHint: "请在共享选择器中允许音频；若没有音频选项，请在系统设置中开启屏幕与系统音频录制。",
   recordInputPermissionTitle: "需要录制设备权限",

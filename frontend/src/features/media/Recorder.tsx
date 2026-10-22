@@ -214,7 +214,9 @@ export function Recorder({
     const readStatuses = async () => {
       if (capturesScreen) {
         const status = await check("screen");
-        if (!disposed && (status === "denied" || status === "restricted")) setPermissionIssue("screen");
+        //: **两个方向都要处理**:拒绝 → 弹出提示;已经允许(用户在系统设置里勾上了)→ 把提示收掉。
+        //: 只判前者的话,用户明明授权了,红框还会一直挂在那儿。
+        if (!disposed) setPermissionIssue(status === "denied" || status === "restricted" ? "screen" : null);
       }
       const required: InputPermission[] = [];
       if (capturesCamera) required.push("camera");
@@ -230,8 +232,15 @@ export function Recorder({
       }));
     };
     void readStatuses().catch(() => undefined);
+    //: 用户去系统设置里勾选、再回到 Mosael:窗口拿到焦点时再读一次状态。
+    //: macOS 的授权对**当前进程**不一定立刻生效,但那句提示该不该继续挂着,这里能判断。
+    const onFocus = () => void readStatuses().catch(() => undefined);
+    window.addEventListener("focus", onFocus);
+    const poll = window.setInterval(onFocus, 3_000);
     return () => {
       disposed = true;
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(poll);
     };
   }, [capturesCamera, capturesMicrophone, capturesScreen, open, recording, source]);
 

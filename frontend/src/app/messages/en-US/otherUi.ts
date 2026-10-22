@@ -130,7 +130,7 @@ export const otherUi = {
   recordPermissionsHint: "Mosael only accesses the devices needed for this recording after you explicitly allow it.",
   recordRequestPermissions: "Allow access",
   recordScreenPermissionTitle: "Screen recording access required",
-  recordScreenPermissionHint: "Allow Mosael to record the screen. If access was denied earlier, enable it in System Settings.",
+  recordScreenPermissionHint: "Allow Mosael to record the screen in System Settings; macOS applies the grant only after Mosael restarts.",
   recordSystemAudioPermissionTitle: "Screen and system audio access required",
   recordSystemAudioPermissionHint: "Allow audio in the sharing picker. If audio is unavailable, enable screen and system audio recording in System Settings.",
   recordInputPermissionTitle: "Recording device access required",

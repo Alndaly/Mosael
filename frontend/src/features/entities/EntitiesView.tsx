@@ -30,6 +30,7 @@ import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { Hint } from "@/components/ui/tooltip";
 import { EntityDetail } from "@/features/entities/EntityDetail";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
+import { cn } from "@/lib/utils";
 
 type SortKey = "updated" | "name" | "references";
 const SORT_KEYS: readonly SortKey[] = ["updated", "name", "references"];
@@ -218,7 +219,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         <EntitySelectionBar collection={collection} rows={visible} className="border-t border-divider pt-3" />
       </div>
 
-      <div className="pt-5">
+      {/* 空态要落在**剩下的那块空间**中间,和工作台一致:根容器是列方向的 flex,列表这一格
+          `flex-1` 之后空态才有地方可以居中;有内容时它照旧从头排。 */}
+      <div className={cn("pt-5", visible.length === 0 && !listing.isPending && "flex flex-1 items-center justify-center")}>
         {listing.isPending ? (
           <div role="status" aria-busy="true" className={CARD_GRID}>
             <span className="sr-only">{t("pageLoading")}</span>

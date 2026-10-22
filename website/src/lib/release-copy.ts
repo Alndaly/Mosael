@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.1.1": {
+    zh: [
+      "**录屏幕时也能同步录麦克风。** 屏幕那一档多一个「麦克风」开关(默认关、记住选择):打开后系统声音和你的解说会混成一条音轨。此前只能二选一——要么录系统声音,要么切到「麦克风」只录人声,讲课时两样都要。麦克风取不到时只降级成「没有解说」,录屏照常进行。",
+      "**录制中看得见音频电平。** 画面左下角浮一条电平柱:带了麦克风显示麦克风,只录屏幕显示屏幕里的系统声音——最该确认的就是「声音到底有没有进来」。外接/iPhone 麦克风此前一直不动,原因是换设备时分析图挂在旧轨道、`AudioContext` 挂起、个别设备 byte 读法恒为静音值,三处都已修好。",
+      "**计时器只在这真的录的时候走。** 取消或失败后不再留着上一轮的秒数(此前会出现「黑着画面、按钮还是『开始录制』、时间却走到 00:04」),不在录就显示 00:00。",
+    ],
+    en: [
+      "**Record the microphone together with the screen.** The screen source now has a microphone switch (off by default, remembered): turn it on and the system audio and your narration are mixed into one track. Before this you had to choose — either device audio, or the “microphone” source with voice only; a walkthrough needs both. If the microphone cannot be opened, the recording still proceeds without narration.",
+      "**A live audio level while recording.** A meter floats in the lower-left of the preview: the microphone when one is included, otherwise the screen's own audio — which is exactly what you want to confirm has arrived. External and iPhone microphones used to show nothing; the analyser was bound to a stale track after a device switch, the AudioContext could stay suspended, and some devices report silence through the byte read-out. All three are fixed.",
+      "**The timer only runs while it is really recording.** Cancelling or failing no longer keeps the previous take's seconds (the dialog used to show a black preview, a “start recording” button and a timer at 00:04); idle now reads 00:00.",
+    ],
+  },
   "v2.1.0": {
     zh: [
       "**Computer Use 真正能操作窗口了。** 此前点击 / 输入 / 滚动一律落在左上角 —— 截图给的是 Retina 物理像素,而输入事件认 CSS 像素;换算修好后坐标对得上。一轮结束自动退出「被控制中」,动手时窗口里亮一枚指针(点了哪里、滚了哪里都看得见),四角描边只画边。「本会话始终允许」与自动放行 / bypass 对这一组动作都生效。",
