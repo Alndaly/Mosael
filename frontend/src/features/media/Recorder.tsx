@@ -522,22 +522,22 @@ export function Recorder({
           ) : (
             <PreviewPlaceholder icon={<Mic size={24} />} text={t("record_mic_placeholder")} />
           )}
+          {/* 录制中的提示层:左上红点、右下计时、**左下音频电平** —— 三者各占一角,互不相压。
+              维护者 2026-10-23:「还是用这个方式,但是音频条放到视频左下角」。 */}
           {recording && (
             <span
               className="absolute left-2.5 top-2.5 h-2.5 w-2.5 animate-recorder-blink rounded-full bg-destructive"
               aria-hidden
             />
           )}
-          {/* 计时器只在**真的在录**的时候走:此前它无条件显示 `secs`,而 `secs` 在取消/失败后
-              可能留着一个旧值 —— 界面就成了「黑着画面、按钮还是『开始录制』、时间却走到 00:04」,
-              让人以为正在录。 */}
-          <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
-            {recording ? fmt(secs) : "00:00"}
-          </span>
-          {/* 录制中的音频电平:和红点排在同一行(左上),计时器在右下 —— 两者不抢位置。
-             此前它被 absolute 定位在模态体末尾,压在了计时器和底部说明上(维护者 2026-10-23)。 */}
           {recording && audioLevelStream && (
-            <div className="absolute left-7 top-2 flex w-32 items-center rounded-full bg-black/55 px-2 py-1 backdrop-blur-sm">
+            <div
+              className={cn(
+                "absolute left-2.5 flex w-32 items-center rounded-full bg-black/55 px-2 py-1 backdrop-blur-sm",
+                //: 双画面(屏幕 + 摄像头)时左下有「屏幕」那个小标签,电平往上让一格,别压它。
+                source === "screenCamera" ? "bottom-9" : "bottom-2",
+              )}
+            >
               <AudioLevelMeter
                 stream={audioLevelStream}
                 kind={recordingMicPresent ? "microphone" : "system"}
@@ -545,6 +545,10 @@ export function Recorder({
               />
             </div>
           )}
+          {/* 计时器只在**真的在录**的时候走:不在录就显示 00:00 —— 别把上一轮的秒数留给下一眼看到的人。 */}
+          <span className="timecode absolute bottom-2 right-2.5 tabular-nums text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.7)]">
+            {recording ? fmt(secs) : "00:00"}
+          </span>
         </div>
 
         {capturesScreen && !recording && (
