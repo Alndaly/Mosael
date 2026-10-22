@@ -604,6 +604,7 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             "对话。订阅计划自带额度:每月 credits + 5 小时 / 每周两个滚动窗口(Go / GOAT / Pro / Max 各自的"
             "上限不同),额外充的 pay-as-you-go credits 不受窗口限制;余额与窗口只在 Command Code 的 "
             "Studio 里看,API 没有查询端点。按量付费计划(Provider)就是纯余额。"
+            "凭据可以用浏览器登录获取(在 Studio 里登录,Key 自动交回本机),也可以直接粘一把 API Key。"
         ),
         "capability_ids": ["chat"],
         #: 目录里同时有只认 `/messages` 的 Claude 和只认 `/chat/completions`、`/responses` 的其余模型 ——

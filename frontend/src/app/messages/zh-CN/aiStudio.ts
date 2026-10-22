@@ -630,6 +630,7 @@ export const aiStudio = {
   providerOauthSubmit: "提交",
   providerOauthDone: "授权成功,已可用的模型:{count} 个",
   providerOauthFailed: "授权失败",
+  providerCommandCodeLoginHint: "在打开的页面里登录 Command Code,Key 会自动交回 Mosael;也可以关掉它,回到这条连接里手动粘贴 Key。",
   providerCommandCodeLogin: "用浏览器登录",
   providerCommandCodeWaiting: "等你在浏览器里完成登录…",
   providerCommandCodeDone: "登录成功,已经把 Key 存进这条连接",

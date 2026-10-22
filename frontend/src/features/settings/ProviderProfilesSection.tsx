@@ -99,7 +99,16 @@ function ClosingMenuItem(props: React.ComponentProps<typeof MenuItem>) {
  *
  * 必须**先保存连接**才有 profile id(和「授权登录」同一条规矩,文案也共用)。
  */
-function CommandCodeLoginButton({ profileId, onDone }: { profileId: string; onDone: () => void }) {
+function CommandCodeLoginButton({
+  profileId,
+  onDone,
+  autoStart = false,
+}: {
+  profileId: string;
+  onDone: () => void;
+  /** 刚建好的连接:一进来就开(见 create.onSuccess)。 */
+  autoStart?: boolean;
+}) {
   const t = useI18n();
   const [phase, setPhase] = React.useState<"idle" | "waiting" | "error">("idle");
   const [href, setHref] = React.useState("");
@@ -117,7 +126,7 @@ function CommandCodeLoginButton({ profileId, onDone }: { profileId: string; onDo
     }
   };
 
-  const begin = async () => {
+  const begin = React.useCallback(async () => {
     try {
       const started = await startCommandCodeLogin(profileId);
       setHref(started.url);
@@ -139,7 +148,13 @@ function CommandCodeLoginButton({ profileId, onDone }: { profileId: string; onDo
       setPhase("error");
       toast.error((error as Error).message);
     }
-  };
+  }, [profileId, t]);
+
+  React.useEffect(() => {
+    if (autoStart) void begin();
+    //: 只在挂载时开一次:begin 会随 profileId 变,重复触发就是重复起回环服务。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -273,9 +288,12 @@ export function ProviderProfilesSection({
         vendor: values.vendor,
         config: cleanConfig(values.config),
       }),
-    onSuccess: () => {
+    onSuccess: (profile) => {
       closeModal();
       void refresh();
+      //: Command Code 的「凭据」本来就是浏览器登录换来的 Key:刚建好就把登录开起来,
+      //: 而不是让人回 Studio 里再抄一遍(手贴 Key 那条路仍在——编辑这条连接就能填)。
+      if (profile?.vendor === "command-code" && profile.id) setLoginAfterCreate(profile.id);
     },
   });
   /* 一个弹窗,两件事:**连接**(端点、名字 —— 部署的配置)和**我的密钥**(我自己的)。
@@ -353,6 +371,8 @@ export function ProviderProfilesSection({
 
   /** 正在授权的档案。订阅计划没有可填的 Key,授权是它唯一的"配置"动作。 */
   const [authing, setAuthing] = React.useState<ProviderProfile | null>(null);
+  /** 刚建好的 Command Code 连接:直接开浏览器登录(见 create.onSuccess)。 */
+  const [loginAfterCreate, setLoginAfterCreate] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   /** 溢出菜单发给模型列表的动作(添加模型 / 进入选择)。
       数据与弹窗都在列表那层,菜单只发信号;`at` 让连点两次同一个动作也能再来一遍。 */
@@ -504,6 +524,29 @@ export function ProviderProfilesSection({
           </form>
         </Form>
       </ModalShell>
+
+      {loginAfterCreate && (
+        <ModalShell
+          open
+          onOpenChange={(next) => !next && setLoginAfterCreate(null)}
+          title={t("providerCommandCodeLogin")}
+          footer={
+            <Button variant="outline" size="sm" onClick={() => setLoginAfterCreate(null)}>
+              {t("close")}
+            </Button>
+          }
+        >
+          <p className="mb-3 text-ui-sm text-muted-foreground">{t("providerCommandCodeLoginHint")}</p>
+          <CommandCodeLoginButton
+            profileId={loginAfterCreate}
+            autoStart
+            onDone={() => {
+              void refresh();
+              setLoginAfterCreate(null);
+            }}
+          />
+        </ModalShell>
+      )}
 
       <ConfirmDialog
         open={removing !== null}

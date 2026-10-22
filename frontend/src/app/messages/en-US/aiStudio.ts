@@ -629,6 +629,7 @@ export const aiStudio = {
   providerOauthSubmit: "Submit",
   providerOauthDone: "Signed in. {count} models available",
   providerOauthFailed: "Authorization failed",
+  providerCommandCodeLoginHint: "Sign in to Command Code in the page that opens — the key comes back to Mosael automatically. You can also close it and paste a key on this connection instead.",
   providerCommandCodeLogin: "Sign in with browser",
   providerCommandCodeWaiting: "Waiting for you to finish in the browser…",
   providerCommandCodeDone: "Signed in — the key is saved on this connection",
