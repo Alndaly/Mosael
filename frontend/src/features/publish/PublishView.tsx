@@ -286,7 +286,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                     <ContextMenuTrigger asChild>
                       <button
                         type="button"
-                        className="relative block w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        //: **不留圆角**:这个按钮是 divide-y 的直接子元素,分割线以 border-top 画在它身上 ——
+                        //: 按钮一圆,分割线两端就跟着弯(维护者截图)。圆角只给里面那层 hover 底色。
+                        className="relative block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
                         onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
                       >
