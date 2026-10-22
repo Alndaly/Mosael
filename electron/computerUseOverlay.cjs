@@ -5,21 +5,19 @@
 //
 // 它只画,不判断:什么时候亮、什么时候灭由 computerUseGuard.cjs 的状态说了算。
 
-function computerUseOverlayHtml(label) {
-  const say = String(label || "").replace(
-    /[<>&"]/g,
-    (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[ch],
-  );
+/**
+ * 只画一圈红边。**不再写「正在操作」那句话** —— 窗口里那条提示条已经把同一件事说了,还带着
+ * 「停止」按钮;两边各说一遍就是同一语义画了两遍(维护者反复提的那条)。
+ */
+function computerUseOverlayHtml() {
   return `<!doctype html><html><body style="margin:0;background:transparent;overflow:hidden">
   <div style="position:fixed;inset:0;border:3px solid rgba(239,68,68,0.92);border-radius:16px;box-sizing:border-box"></div>
-  <div style="position:fixed;left:16px;top:12px;font:600 12px -apple-system,Segoe UI,sans-serif;color:#fff;background:rgba(239,68,68,0.94);padding:5px 12px;border-radius:999px">${say}</div>
   </body></html>`;
 }
 
 function createComputerUseOverlay(options = {}) {
   const BrowserWindow = options.BrowserWindow;
   const screen = options.screen;
-  const label = typeof options.label === "function" ? options.label : () => options.label || "";
   let windows = [];
 
   function show() {
@@ -45,7 +43,7 @@ function createComputerUseOverlay(options = {}) {
       });
       overlay.setIgnoreMouseEvents(true);
       overlay.setAlwaysOnTop(true, "screen-saver");
-      void overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(computerUseOverlayHtml(label()))}`);
+      void overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(computerUseOverlayHtml())}`);
       overlay.once("ready-to-show", () => overlay.showInactive());
       windows.push(overlay);
     }

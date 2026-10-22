@@ -81,8 +81,10 @@ describe("屏幕四角描边", () => {
     expect(overlay.count()).toBe(0);
   });
 
-  it("文字进 HTML 前转义(标签名来自界面文案,不该被当成结构)", () => {
-    expect(computerUseOverlayHtml('<b x="1">')).not.toMatch(/<b x=/);
-    expect(computerUseOverlayHtml('<b x="1">')).toMatch(/&lt;b x=&quot;1&quot;&gt;/);
+  it("只画那圈边,不再重复写「正在操作」——窗口里那条提示条已经在说同一件事", () => {
+    const html = computerUseOverlayHtml();
+    expect(html).toContain("border:3px solid");
+    expect(html).not.toContain("Computer Use");
+    expect(html).not.toContain("正在操作");
   });
 });

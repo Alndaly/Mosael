@@ -348,7 +348,7 @@ function pushComputerUseState(state) {
   if (win && !win.isDestroyed()) win.webContents.send(IPC.event.computerUseState, running);
 }
 
-const computerUseOverlay = createComputerUseOverlay({ BrowserWindow, screen, label: () => t("computerUse_overlay") });
+const computerUseOverlay = createComputerUseOverlay({ BrowserWindow, screen });
 const computerUseCursor = createComputerUseCursor({ BrowserWindow });
 
 const computerUseGuard = createComputerUseGuard({
