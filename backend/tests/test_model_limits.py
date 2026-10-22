@@ -121,14 +121,18 @@ def test_user_override_is_not_capped() -> None:
     assert resolved.effective_max_output_tokens == 200_000
 
 
-def test_local_endpoint_still_gets_the_conservative_window() -> None:
+def test_local_endpoint_gets_the_shared_fallback_window() -> None:
+    """本机/LAN 查不到窗口时和云端同一个回退(2026-10-22 从 64K 调到 128K)。
+
+    近两年的本机模型训练窗口都 ≥128K;真正的上限是推理服务加载长度(Ollama num_ctx、LM Studio、
+    vLLM --max-model-len)—— 把加载长度配得更小的机器要在模型设置里填真实窗口。
+    """
     resolved = model_limits.resolve(
         model_id="some-local-gguf", base_url="http://127.0.0.1:11434/v1", vendor="openai-compatible"
     )
     assert resolved.effective_context_window == LOCAL_FALLBACK_CONTEXT_WINDOW
     assert resolved.context_window_source == "fallback"
-    # 本机仍比云端保守:推理服务那一侧的设置(num_ctx、加载长度)常比模型的训练窗口小。
-    assert LOCAL_FALLBACK_CONTEXT_WINDOW < FALLBACK_CONTEXT_WINDOW
+    assert LOCAL_FALLBACK_CONTEXT_WINDOW == FALLBACK_CONTEXT_WINDOW == 128000
 
 
 def test_unknown_cloud_model_keeps_the_conservative_fallback() -> None:

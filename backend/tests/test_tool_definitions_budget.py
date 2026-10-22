@@ -13,13 +13,15 @@
 所以回退窗口调到了 64K(理由全文在 app/domain/providers/model_limits.LOCAL_FALLBACK_CONTEXT_WINDOW),
 预算在这里明说。
 
-## 为什么是 65%(维护者 2026-10-22 放宽;此前是六成)
+## 为什么是六成
 
 - 轮前压缩在窗口的 80% 触发(agent-sidecar/src/compaction.ts 的 COMPACT_RATIO)。固定开销压不掉:它越靠近
   80%,压缩越频繁,到了 80% 就每轮都压、每轮都压不下去。
-- 六成这个数是 32K 回退窗口时代定的。现在回退窗口是 64K,而大多数模型的上下文更大 —— 维护者同意把它**稍微**
-  放宽到 65%(64K 下 41,600):对话在第一次压缩之前仍有约 21.6K 可用,离 80% 还留着 15 个点。
-- **回退窗口本身仍然不往上调**:它是对「查不到窗口的本机模型」的猜测,调大它不会让那台机器上的窗口变大。
+- 六成的**基数**在 2026-10-22 从 64K 调到 128K(本机/LAN 回退窗口,理由见 model_limits.
+  LOCAL_FALLBACK_CONTEXT_WINDOW):预算因此是 76,800,而比例仍是六成。固定开销现在约 3.9 万,第一次压缩
+  之前(80% = 102,400)还留着六万多给对话和输出。
+- **比例不跟着基数一起放开**:六成到八成之间那两成仍然是对话在第一次压缩之前能用的地方;再往上那两成留给
+  本轮回复与工具结果。
 - 顶到了怎么办:先把说明写紧(op_args 的 note、工具 docstring —— 工具定义每轮重发,一个字一个字地算);写不紧
   再谈按需裁剪工具集。**不要再把回退窗口往上调**:它是对「查不到窗口的本机模型」的猜测,调大它不会让那台
   机器上的窗口变大,只会让请求在服务端超窗。
@@ -70,7 +72,7 @@ from tests.fake_comfyui import FakeComfyUI, comfyui_grants
 from tests.util import add_provider, fresh_client, second_client, user_id
 
 #: 固定开销(工具定义 + 系统提示)最多占本机回退窗口的这么多。理由见模块说明。
-FIXED_OVERHEAD_SHARE = 0.65
+FIXED_OVERHEAD_SHARE = 0.6
 #: 发给智能体的一个插件工具(名字 + 说明 + 入参的 JSON)最多这么多字符:入参收紧到 4,000(plugin_schema.SPEC_CAP),
 #: 加上说明和确认协议那一段。维护者那台上最大的一个此前 84,737。
 PLUGIN_TOOL_CAP = 6_000
@@ -202,13 +204,13 @@ def _said(session_id: str, place: dict[str, str] | None, queued: bool = False) -
 
 
 @pytest.mark.parametrize("kind", PLACES)
-def test_接了_ComfyUI_的本机模型_每一处的工具定义加系统提示_不超过回退窗口的百分之六十五(everywhere, kind: str) -> None:
+def test_接了_ComfyUI_的本机模型_每一处的工具定义加系统提示_不超过回退窗口的六成(everywhere, kind: str) -> None:
     parts = _context(everywhere["client"], everywhere["sessions"][kind])
     fixed = parts["tools"] + parts["system"]
     budget = int(LOCAL_FALLBACK_CONTEXT_WINDOW * FIXED_OVERHEAD_SHARE)
     assert fixed <= budget, (
         f"在「{kind}」那一处,每轮重发的固定开销 {fixed}(工具定义 {parts['tools']} + 系统提示 {parts['system']})"
-        f"超过了本机回退窗口 {LOCAL_FALLBACK_CONTEXT_WINDOW} 的 65%({budget})。"
+        f"超过了本机回退窗口 {LOCAL_FALLBACK_CONTEXT_WINDOW} 的六成({budget})。"
         "先把新加的说明写紧,别去调回退窗口 —— 见本模块说明;新的 comfy_* 记得进 kit=\"comfyui\"。"
     )
 
