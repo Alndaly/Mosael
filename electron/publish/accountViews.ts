@@ -6,6 +6,8 @@ import { chromeIdentityOverride, cleanChromeUserAgent, identityForPlatform } fro
 //: 登录排障:视频号那几轮只有「扫码成功、cookie 种下了、又回登录页」这一句,看不出是哪条请求判死的。
 //: 这里把这两个站点的请求结果记进 browser-trace.log(只记 origin+path,不带查询串)。
 import { watchSession as watchNet } from "./netTrace.cjs";
+//: 四套坐标系只在一处相乘(P5/P6):见 publish/coords。
+import { cssToDip } from "./coords.cjs";
 import { createTrace } from "./trace.cjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -685,15 +687,9 @@ export class AccountViewManager {
     return { width: width / zoom, height: height / zoom };
   }
 
-  /** CSS 像素的矩形 → 原生视图要的 DIP。往里取整:原生视图宁可窄半个像素,也不压住外壳的边。 */
+  /** CSS 像素的矩形 → 原生视图要的 DIP。**换算住在 publish/coords**,这里只把缩放递进去(P5)。 */
   private toDip(rect: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
-    const zoom = this.hostZoom();
-    // `|| 0`:Math.ceil(-0.000001) 是 -0。
-    const x = Math.ceil(rect.x * zoom - 1e-6) || 0;
-    const y = Math.ceil(rect.y * zoom - 1e-6) || 0;
-    const right = Math.floor((rect.x + rect.width) * zoom + 1e-6);
-    const bottom = Math.floor((rect.y + rect.height) * zoom + 1e-6);
-    return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
+    return cssToDip(rect, this.hostZoom());
   }
 
   /** 主窗口的缩放变了:面板网页的缩放(含着主窗口的缩放)和所有视图的位置重来一遍。 */

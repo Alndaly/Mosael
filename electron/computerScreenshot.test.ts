@@ -83,6 +83,8 @@ function fakeWindow(
 
 function loadCapture() {
   const context = {
+    //: 归一化判断住在 publish/coords(Retina 上 capturePage 给物理像素):沙箱里要把它递进去。
+    captureToCss: require("./publish/coords.cjs").captureToCss,
     Object,
     String,
     Error,
@@ -369,6 +371,8 @@ async function startBridge(options: { windows: FakeWindow[]; main?: FakeWindow |
     },
     IPC: contract.IPC,
     parseComputerScreenshot: contract.parseComputerScreenshot,
+    //: 归一化判断住在 publish/coords(Retina 上 capturePage 给物理像素):桥的沙箱里也递进去。
+    captureToCss: require("./publish/coords.cjs").captureToCss,
     BrowserWindow: { getAllWindows: () => options.windows },
     mainWindow: options.main ?? null,
   };

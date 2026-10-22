@@ -37,6 +37,8 @@ const {
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { createComputerUseGuard } = require("./computerUseGuard.cjs");
+//: 坐标换算只有一份(见 publish/coords):Retina 截图归一化也走它。
+const { captureToCss } = require("./publish/coords.cjs");
 const { createComputerUseOverlay } = require("./computerUseOverlay.cjs");
 const { createComputerUseCursor } = require("./computerUseCursor.cjs");
 const { pickPath } = require("./path-picker.cjs");
@@ -546,10 +548,9 @@ async function captureMosaelWindow(request, windows, roles) {
   //: 就是同一套数,后端那个 scale 也就还是唯一的一次缩放。
   const content = typeof win.getContentSize === "function" ? win.getContentSize() : null;
   let shot = image;
-  const captured = image.getSize();
-  if (content && content[0] > 0 && content[1] > 0 && (captured.width !== content[0] || captured.height !== content[1])) {
-    shot = image.resize({ width: content[0], height: content[1], quality: "best" });
-  }
+  //: 归一化判断也住在 publish/coords(Retina 上 capturePage 给物理像素,而 sendInputEvent 认 CSS)。
+  const target = captureToCss(image.getSize(), content || null);
+  if (target) shot = image.resize({ width: target.width, height: target.height, quality: "best" });
   const { width, height } = shot.getSize();
   return { window: name, width, height, image: shot.toPNG().toString("base64") };
 }

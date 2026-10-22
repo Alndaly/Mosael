@@ -9,6 +9,8 @@ import { writeFile } from "node:fs/promises";
 
 import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "./errors";
 import { plog } from "./log";
+//: 四套坐标系只在一处相乘(P5/P6):见 publish/coords。
+import { pageToView, safeZoom } from "./coords.cjs";
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -188,15 +190,16 @@ export class PageDriver {
     // 乘上就命中。
     const zoom = (() => {
       try {
-        return this.wc.getZoomFactor() || 1;
+        return safeZoom(this.wc.getZoomFactor());
       } catch {
         return 1; // webContents 已销毁,数值无意义,让后续调用自己去抛
       }
     })();
     const jitterX = Math.min(rect.width / 4, 6);
     const jitterY = Math.min(rect.height / 4, 6);
-    const tx = Math.round((rect.x + rect.width / 2 + (Math.random() * 2 - 1) * jitterX) * zoom);
-    const ty = Math.round((rect.y + rect.height / 2 + (Math.random() * 2 - 1) * jitterY) * zoom);
+    //: 页面 CSS → 视图 CSS:乘法住在 publish/coords(P5/P6),这里不再自己乘。
+    const tx = Math.round(pageToView(rect.x + rect.width / 2 + (Math.random() * 2 - 1) * jitterX, zoom));
+    const ty = Math.round(pageToView(rect.y + rect.height / 2 + (Math.random() * 2 - 1) * jitterY, zoom));
     const steps = this.rand(3, 6);
     const sx = tx - this.rand(20, 60);
     const sy = ty - this.rand(20, 60);
