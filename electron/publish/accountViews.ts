@@ -3,6 +3,10 @@ import { app, screen, session, shell, WebContentsView, type BaseWindow } from "e
 // 用户看到的是「点了没反应 / 又回登录页」,而不是任何错误。
 import { forwardExternalLogin, isExternalLoginUrl } from "../external-login-schemes.cjs";
 import { cleanChromeUserAgent, identityForPlatform } from "../view-identity.cjs";
+//: 登录排障:视频号那几轮只有「扫码成功、cookie 种下了、又回登录页」这一句,看不出是哪条请求判死的。
+//: 这里把这两个站点的请求结果记进 browser-trace.log(只记 origin+path,不带查询串)。
+import { watchSession as watchNet } from "./netTrace.cjs";
+import { createTrace } from "./trace.cjs";
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type PageSummary, type ViewState } from "./types";
@@ -1028,6 +1032,10 @@ export class AccountViewManager {
    * 给会话建一个页面。`adopt`:window.open / target=_blank 开出来的那个 —— Chromium 已经为它建好了
    * WebContents(带着 opener 关系),这里把它收进一个视图,而不是另起一个。
    */
+  /** 排障日志与「这个 session 已经挂过网路追踪」的记号。 */
+  private readonly trace = createTrace({ dir: app.getPath("userData") });
+  private readonly traced = new WeakSet<object>();
+
   /** 这个视图对应的平台(发布账号 / 池档案)。决定它对外声明哪一种身份,见 view-identity.cjs。 */
   private readonly platformOf = new Map<string, string>();
 
@@ -1070,6 +1078,11 @@ export class AccountViewManager {
           },
         });
     this.applyIdentity(accountId, view.webContents.session);
+    watchNet(
+      view.webContents.session,
+      (event) => this.trace.event("net", { view: accountId, ...event }),
+      { seen: this.traced },
+    );
     const tab: PageTab = { view, driver: new PageDriver(view.webContents), favicon: "" };
     view.webContents.on("focus", () => {
       this.lastFocused = view.webContents;
