@@ -1,5 +1,4 @@
 import { LoadingState } from "@/components/layout/LoadingState";
-import { FailureCard, failureFields } from "@/components/failure/FailureCard";
 import React from "react";
 import { PageHeading, STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MenuItemBody } from "@/components/ui/menu";
 import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
-import { useWriteBlocked, type WriteBlock } from "@/components/layout/useWriteBlocked";
+import { useWriteBlocked } from "@/components/layout/useWriteBlocked";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
@@ -62,7 +61,11 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
 
   // 任务中心深链(mosael:open-* 事件通道):直接选中那条发布记录。
-  useOpenRequest("mosael:open-publish-task", (id) => setOpenId(id));
+  useOpenRequest("mosael:open-publish-task", (id) => {
+    setStatusFilter("all");
+    setSearch("");
+    setFocusedId(id);
+  });
   const [creating, setCreating] = React.useState(false);
   const [deleting, setDeleting] = React.useState<PublishTask | null>(null);
 
@@ -126,8 +129,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   // 而多数时候人是在**扫一遍**,不是在盯着一条看。
   //: 素材预览:列表里点成片名直接看素材(按 id 补全完整素材再开详情弹窗,见 useAssetPreviewModal)。
   const { openAsset, modal: assetModal } = useAssetPreviewModal();
-  const [openId, setOpenId] = React.useState<string | null>(null);
-  const opened = (tasks.data ?? []).find((task) => task.id === openId) ?? null;
+  //: 深链(mosael:open-publish-task)只把那条滚进视野、短暂高亮 —— 详情弹窗已按维护者要求删掉,
+  //: 信息与动作都在行内。
+  const [focusedId, setFocusedId] = React.useState<string | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
   // 按天分栏。时间是无时区标记的 UTC 串,分组必须按本地日历天算(见 lib/dayGroups)。
   const [statusFilter, setStatusFilter] = React.useState("all");
   //: 搜索:标题 / 简介 / 标签 / 成片名 / 账号都对。数据都在手上(分页由列表整取),本地筛。
@@ -135,9 +140,18 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   //: 排序是**怎么看**的一部分,不是这一刻的临时值 —— 切走再回来照旧(和素材库同一个做法)。
   const [sortKey, setSortKey] = usePersistentTab<"newest" | "oldest">("publish-sort", "newest", ["newest", "oldest"]);
   useSectionEntry("publish", (entry) => {
-    setOpenId(null);
+    setFocusedId(null);
     setStatusFilter(STATUS_FILTERS.includes(entry) ? entry : "all");
   });
+  //: 深链过来的那一条:滚进视野、亮 2 秒。
+  React.useEffect(() => {
+    if (!focusedId) return;
+    const row = listRef.current?.querySelector(`[data-publish-task="${focusedId}"]`);
+    row?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const timer = window.setTimeout(() => setFocusedId(null), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [focusedId]);
+
   const filteredTasks = React.useMemo(() => {
     const needle = search.trim().toLowerCase();
     const kept = (tasks.data ?? []).filter((task) => {
@@ -187,14 +201,6 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         }}
       />
       {assetModal}
-      <PublishDetailDialog
-        task={opened}
-        writeBlocked={writeBlocked}
-        onClose={() => setOpenId(null)}
-        onDelete={() => {
-          if (opened) setDeleting(opened);
-        }}
-      />
       <ConfirmDialog
         open={batchDeleting}
         title={t("deleteConfirmTitle")}
@@ -313,7 +319,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           </Select>
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+      <div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
@@ -334,8 +340,13 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                         //: 写法照素材库列表:整行铺一颗 absolute 的无障碍按钮,行内其它按钮用 z 压在上面。
                         //: **这一层不留圆角**(它是 divide-y 的直接子元素,分割线以 border-top 画在它身上,
                         //: 圆角会让分割线两端弯起来);圆角与 hover 底色只在内层。
-                        className="group relative cursor-pointer"
-                        onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
+                        className={cn(
+                          "group relative cursor-pointer rounded-lg",
+                          //: 深链定位到的那一条亮一下 —— 详情弹窗删掉之后,这是"从通知点进来"唯一的位置感。
+                          focusedId === task.id && "ring-2 ring-primary/50",
+                        )}
+                        data-publish-task={task.id}
+                        onClick={() => (selectMode ? toggle(task.id) : task.asset_id ? openAsset(task.asset_id) : undefined)}
                       >
                         <button
                           type="button"
@@ -388,11 +399,6 @@ function statusTone(status: string) {
   }
   if (BLOCKED.has(status)) return { Icon: CircleAlert, tone: "text-warning", spin: false };
   return { Icon: CircleAlert, tone: "text-destructive", spin: false };
-}
-
-function StatusIcon({ status }: { status: string }) {
-  const { Icon, tone, spin } = statusTone(status);
-  return <Icon size={13} className={cn("shrink-0", tone, spin && "animate-mosael-spin")} aria-hidden />;
 }
 
 /** 按本地时区显示后端时间。 */
@@ -482,11 +488,23 @@ function PublishCard({
             {task.error_summary || task.error}
           </Truncate>
         )}
-        {/*: 成功时把「作品」那一格从弹窗搬上来:读到 ID 就摆出来,没读到就明说(和弹窗同一句)。 */}
+        {/*: 成功时把「作品」那一格从弹窗搬上来:读到 ID 就摆出来,没读到就明说(和弹窗同一句);
+            平台给了链接就再给一个「查看作品」出口(整行那颗 absolute 按钮盖在下面,链接要 z 压上去)。 */}
         {["succeeded", "success"].includes(task.status) && (
-          <Truncate className="text-ui-xs text-muted-foreground" data-publish-row-post="">
-            {task.post?.post_id ? `${t("publishPost")} ${task.post.post_id}` : t("publishPostMissing")}
-          </Truncate>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground" data-publish-row-post="">
+            <Truncate>{task.post?.post_id ? `${t("publishPost")} ${task.post.post_id}` : t("publishPostMissing")}</Truncate>
+            {task.post?.url && (
+              <a
+                href={task.post.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="relative z-10 inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ExternalLink size={11} /> {t("publishPostOpen")}
+              </a>
+            )}
+          </div>
         )}
       </div>
       <div className={cn("relative z-10 grid shrink-0 justify-items-end gap-1 text-right", selecting && "pr-7")}>
@@ -528,145 +546,6 @@ function PublishCard({
         )}
       </div>
     </article>
-  );
-}
-
-/** 详情弹窗。点开一条才看细节 —— 常驻右栏会把整页宽度让给"当前这一条",而多数时候人是在扫一遍。 */
-function PublishDetailDialog({ task, writeBlocked, onClose, onDelete }: { task: PublishTask | null; writeBlocked: WriteBlock | null; onClose: () => void; onDelete: () => void }) {
-  const t = useI18n();
-  return (
-    <ModalShell
-      open={task !== null}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      title={task ? task.title || task.asset_name : t("publishListTitle")}
-      className="w-[min(620px,calc(100vw-32px))]"
-      footer={
-        task ? (
-          <>
-            {window.mosaelPublish && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  onClose();
-                  window.mosaelPublish
-                    ?.openPage(task.account_id, task.platform)
-                    .catch((error: Error) => toast.error(error.message));
-                }}
-              >
-                <ExternalLink size={13} /> {t("publishOpenPage")}
-              </Button>
-            )}
-            <Hint disabledReason={writeBlocked?.reason}>
-              <Button size="sm" variant="outline" className="hover:border-[color-mix(in_oklab,var(--destructive)_45%,var(--border))] hover:text-destructive" disabled={Boolean(writeBlocked)} onClick={onDelete}>
-                <Trash2 size={13} /> {t("delete")}
-              </Button>
-            </Hint>
-            <Button size="sm" onClick={onClose}>{t("close")}</Button>
-          </>
-        ) : undefined
-      }
-    >
-      {task && <PublishDetail task={task} />}
-    </ModalShell>
-  );
-}
-
-/** 详情行:标签固定窄列 + 值紧随其右、左对齐填满剩余宽度(读起来是"字段:内容",
- *  而不是设置页那种"标签左、控件甩到最右"、中间一大片空白)。窄屏改成上下堆叠。 */
-/** 详情里的一行事实。**没有边框、没有底色、不画横线** —— 弹窗本身已经是一张卡,里面再套一张
- *  带框的表就是盒中盒,而行与行之间靠间距分开就够了(素材预览弹窗里的同类就是这么排的,
- *  两处保持一致)。 */
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-baseline gap-3 max-[520px]:grid-cols-1 max-[520px]:gap-1">
-      <dt className="text-ui-xs text-muted-foreground">{label}</dt>
-      <dd className="m-0 min-w-0 text-ui-sm leading-[1.6] text-foreground [overflow-wrap:anywhere]">{children}</dd>
-    </div>
-  );
-}
-
-function PublishDetail({
-  task,
-}: {
-  task: PublishTask;
-}) {
-  const t = useI18n();
-  const { locale } = usePreferences();
-  // 不再需要问「这个平台是不是浏览器平台」:发布任务只可能是平台账号发布。
-  
-  return (
-    // 外框和标题由弹窗提供 —— 这里再套一张卡就是盒中盒,标题也会重复一遍。
-    <div className="grid w-full content-start gap-2.5">
-      <section>
-        <header className="pb-2.5">
-          {/* 状态只说一次:此前这一行写着「失败」,右边还浮着一个同义的红色图标。 */}
-          <p className="m-0 flex min-w-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
-            <StatusIcon status={task.status} />
-            <Truncate>
-              {task.account_name} · {task.platform} ·{" "}
-              <span className={statusTone(task.status).tone}>{t(`batchStatus_${task.status}` as never)}</span>
-            </Truncate>
-          </p>
-        </header>
-        <dl className="m-0 grid gap-2.5">
-          <InfoRow label={t("publishAsset")}>
-            <code className="timecode text-xs text-muted-foreground [overflow-wrap:anywhere]">{task.asset_name}</code>
-          </InfoRow>
-          {task.description && (
-            <InfoRow label={t("publishDescription")}>
-              <p className="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{task.description}</p>
-            </InfoRow>
-          )}
-          {task.tags.length > 0 && (
-            <InfoRow label={t("publishTags")}>
-              <div className="flex flex-wrap gap-1">
-                {task.tags.map((tag) => (
-                  <span className="inline-flex items-center gap-[3px] rounded-full border border-border bg-panel-subtle px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </InfoRow>
-          )}
-          {/* 发出去的那条作品在平台上的 ID —— 之后按它查数据(TikHub 之类)。没读到就明说,不留一个空格子。 */}
-          {task.post && (
-            <InfoRow label={t("publishPost")}>
-              {task.post.post_id ? (
-                <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                  <code className="timecode text-xs [overflow-wrap:anywhere]">{task.post.post_id}</code>
-                  {task.post.url && (
-                    <a
-                      href={task.post.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1 text-ui-xs text-primary underline-offset-2 hover:underline"
-                    >
-                      <ExternalLink size={12} /> {t("publishPostOpen")}
-                    </a>
-                  )}
-                </span>
-              ) : (
-                <p className="m-0 text-muted-foreground">{t("publishPostMissing")}</p>
-              )}
-            </InfoRow>
-          )}
-          {task.post?.published_at && (
-            <InfoRow label={t("publishPostAt")}>
-              <time className="timecode text-xs text-muted-foreground" dateTime={task.post.published_at}>
-                {new Date(task.post.published_at).toLocaleString(locale)}
-              </time>
-            </InfoRow>
-          )}
-        </dl>
-        {/* 发布失败:全应用那一份失败展示 —— 那一句(去掉自动化脚本的套话、日志),原文(Playwright 的整段)在「详情」里 */}
-        {task.status === "failed" && task.error ? (
-          <FailureCard className="mt-3" title={t("publishFailedTitle")} {...failureFields(task, task.error)} data-publish-failed="" />
-        ) : null}
-      </section>
-    </div>
   );
 }
 
