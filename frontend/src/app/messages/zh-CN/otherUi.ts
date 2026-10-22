@@ -145,6 +145,7 @@ export const otherUi = {
   recordRetry: "重试",
   recordDeviceDefault: "跟随系统默认",
   recordDeviceUnnamed: "未命名设备",
+  recordSystemAudioLevel: "系统声音",
   recordLevel: "输入电平",
   record_screen: "屏幕",
   record_camera: "摄像头",

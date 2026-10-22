@@ -1,5 +1,5 @@
 import React from "react";
-import { Mic } from "lucide-react";
+import { Mic, Volume2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Hint } from "@/components/ui/tooltip";
@@ -23,11 +23,22 @@ const DECAY = 0.85;
  * disconnected and its AudioContext closed, as on unmount. The graph only reads the stream;
  * stopping the stream's tracks stays with whoever owns them.
  */
-export function MicrophoneLevelMeter({ stream, className }: { stream: MediaStream; className?: string }) {
+export function AudioLevelMeter({
+  stream,
+  className,
+  kind = "microphone",
+}: {
+  stream: MediaStream;
+  className?: string;
+  /** 这一条电平代表哪一路声音:麦克风,还是屏幕里的系统声音。 */
+  kind?: "microphone" | "system";
+}) {
   const t = useI18n();
   const meterRef = React.useRef<HTMLDivElement | null>(null);
   const barRef = React.useRef<HTMLDivElement | null>(null);
   const hasMicrophone = stream.getAudioTracks().length > 0;
+  const label = kind === "system" ? t("recordSystemAudioLevel") : t("recordLevel");
+  const Icon = kind === "system" ? Volume2 : Mic;
 
   React.useEffect(() => {
     const meter = meterRef.current;
@@ -95,17 +106,17 @@ export function MicrophoneLevelMeter({ stream, className }: { stream: MediaStrea
   if (!hasMicrophone) return null;
 
   return (
-    <Hint label={t("recordLevel")}>
+    <Hint label={label}>
       <div
         ref={meterRef}
         role="meter"
-        aria-label={t("recordLevel")}
+        aria-label={label}
         aria-valuemin={0}
         aria-valuemax={1}
         aria-valuenow={0}
         className={cn("group flex items-center gap-2", className)}
       >
-        <Mic size={11} className="shrink-0 text-muted-foreground" />
+        <Icon size={11} className="shrink-0 text-muted-foreground" />
         <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-panel-inset">
           <div
             ref={barRef}
@@ -117,3 +128,6 @@ export function MicrophoneLevelMeter({ stream, className }: { stream: MediaStrea
     </Hint>
   );
 }
+
+/** 麦克风电平(旧名字,保留给已有的调用点)。 */
+export const MicrophoneLevelMeter = AudioLevelMeter;

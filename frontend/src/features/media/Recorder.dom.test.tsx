@@ -756,7 +756,9 @@ describe("Recorder", () => {
       expect(FakeAudioContext.instances).toHaveLength(0);
     });
 
-    it("shows no microphone level while recording the screen alone, even with device audio", async () => {
+    it("shows the device-audio level while recording the screen alone, not a microphone one", async () => {
+      //: 只录屏幕时最该确认的是「系统声音到底有没有进来」——所以那一档显示的是系统声音的电平,
+      //: 而不是冒充成麦克风电平。
       const screenCapture = fakeStream({ audio: true });
       getDisplayMedia.mockResolvedValueOnce(screenCapture.stream);
       const user = userEvent.setup();
@@ -765,8 +767,8 @@ describe("Recorder", () => {
       await user.click(screen.getByRole("button", { name: /recordStart/ }));
       await screen.findByRole("button", { name: /recordStop/ });
 
-      expect(levelMeter()).not.toBeInTheDocument();
-      expect(FakeAudioContext.instances).toHaveLength(0);
+      expect(screen.getByRole("meter", { name: "recordSystemAudioLevel" })).toBeVisible();
+      expect(screen.queryByRole("meter", { name: "recordLevel" })).not.toBeInTheDocument();
     });
 
     it("does not open the microphone for the mic source before access is granted", async () => {

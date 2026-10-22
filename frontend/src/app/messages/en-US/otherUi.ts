@@ -145,6 +145,7 @@ export const otherUi = {
   recordRetry: "Try again",
   recordDeviceDefault: "Use system default",
   recordDeviceUnnamed: "Unnamed device",
+  recordSystemAudioLevel: "System audio",
   recordLevel: "Input level",
   record_screen: "Screen",
   record_camera: "Camera",

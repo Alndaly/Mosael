@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { createInputPreview } from "./inputPreview";
-import { MicrophoneLevelMeter } from "./MicrophoneLevelMeter";
+import { AudioLevelMeter, MicrophoneLevelMeter } from "./MicrophoneLevelMeter";
 import { selectableRecordingDevices } from "./recordingDevices";
 import {
   createRecordingController,
@@ -170,6 +170,15 @@ export function Recorder({
   // While recording, the streams the recording owns; before that, the preview's own stream.
   const cameraStream = previewStreams.camera ?? (capturesCamera ? inputPreviewState.stream : null);
   const microphoneStream = recording ? previewStreams.microphone : inputPreviewState.stream;
+  //: 录制中要显示的那条电平:有麦克风就看麦克风,否则看屏幕里的系统声音(只录屏幕时最该确认的是它)。
+  const recordingMicPresent = Boolean(recording && previewStreams.microphone?.getAudioTracks().length);
+  const audioLevelStream = !recording
+    ? null
+    : recordingMicPresent
+      ? previewStreams.microphone
+      : previewStreams.screen?.getAudioTracks().length
+        ? previewStreams.screen
+        : null;
   const visiblePermissionIssue: RecordingPermissionIssue | null =
     permissionIssue ?? (inputPreviewFailed ? (capturesCamera ? "cameraMicrophone" : "microphone") : null);
 
@@ -782,7 +791,15 @@ export function Recorder({
 
         {/* 输入电平:只要麦克风真的开着(录制前的预览流、录制中接管的同一条流)就显示;
             电平柱有声即动,哑设备(录了 0 秒那种)开录前就现形。换麦克风即换流、换电平。 */}
-        {capturesMicrophone && microphoneStream && <MicrophoneLevelMeter stream={microphoneStream} />}
+        {capturesMicrophone && microphoneStream && !recording && <MicrophoneLevelMeter stream={microphoneStream} />}
+
+        {/* 录制中:画面里也看得见电平 —— 只看屏幕时最该确认的是「系统声音到底有没有进来」,
+            所以那一档显示系统声音的电平;带了麦克风就显示麦克风那一路。 */}
+        {recording && audioLevelStream && (
+          <div className="absolute bottom-9 left-2.5 w-40 rounded-md bg-black/55 px-2 py-1.5 backdrop-blur-sm">
+            <AudioLevelMeter stream={audioLevelStream} kind={recordingMicPresent ? "microphone" : "system"} />
+          </div>
+        )}
       </div>
     </ModalShell>
   );
