@@ -1,5 +1,23 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.1.0": {
+    zh: [
+      "**Computer Use 真正能操作窗口了。** 此前点击 / 输入 / 滚动一律落在左上角 —— 截图给的是 Retina 物理像素,而输入事件认 CSS 像素;换算修好后坐标对得上。一轮结束自动退出「被控制中」,动手时窗口里亮一枚指针(点了哪里、滚了哪里都看得见),四角描边只画边。「本会话始终允许」与自动放行 / bypass 对这一组动作都生效。",
+      "**答案区是智能体自己的文档。** 回答 = 它写的 Markdown + 它主动给你看的小界面;工具产出的截图不再被自动织进正文(那是过程里的一眼),做出来的图仍可按素材引用放进正文。此前小界面被塞进折叠的过程里,你翻不到真正要的结果。",
+      "**微信视频号登录修好了。** 三个独立原因:`weixin://` 交给系统(否则「微信快捷登录」点了没反应);撤掉「把 OAuth 回调提到顶层」(那一步依赖 `window.parent`,挪走就是白页);`chrome` 身份改走 CDP 对齐 —— UA、`Sec-CH-UA`、`navigator.userAgentData` 说的是同一件事。只洗 UA 会「自称 Chrome、信号是 Chromium」,扫码成功、`sessionid` 种下也会被判无效。同一账号两份分区的老账也一并清掉。",
+      "**内嵌浏览器更结实。** 让位协议改成声明式(浮层只说「要哪种让法」,折算只在一处,四条手工通道删除),四套坐标系的换算收成一个模块(此前三次点击脱靶都在这里),登录失败会自己留证据(停在哪一页、cookie 名字、认了几次未登录)。",
+      "**发布有了「站点契约 + 每日冒烟」。** 七家平台的入口、冒烟断言与已核实的上限写成数据,每天用不登录的浏览器确认「站还认得出来」;平台改版当天就能看见,而不是等某次真发布停在上传之后。ADR 0076 的真机核对(抖音 35 张图 / 文章 20000 字、小红书 18 张 / 1000 字 / 长文标题 64 字、TikTok 35 张、YouTube 10 张)也一并落地。",
+      "**两处体验修正。** 本机 / LAN 回退上下文窗口 64K → 128K;ComfyUI 里被 ⌘B 全旁路的工作流不再被说成「空的」—— 它只是现在没有会跑的节点。",
+    ],
+    en: [
+      "**Computer Use now actually drives the window.** Clicks, typing and scrolling used to land in the top-left corner — screenshots came back in Retina physical pixels while input events take CSS pixels. With the conversion fixed the coordinates line up. A turn clears the “being controlled” state when it ends, a pointer cue shows where it clicked or scrolled, and the corner outline draws edges only. “Always allow for this session”, auto-approve and bypass all apply to this family of actions.",
+      "**The answer is the agent's own document.** The reply is the Markdown it wrote plus any widget it chose to show you; screenshots from tools are no longer woven into it automatically (they are a glance from the process), while images it produced can still be placed inline as asset references. Widgets used to be buried in the collapsed process, so the result you asked for was hard to find.",
+      "**WeChat Channels login works again.** Three independent causes: `weixin://` now goes to the system (otherwise the WeChat sign-in button does nothing); the “promote the OAuth callback to top level” change was reverted (that step relies on `window.parent`, so promoting it produced a blank page); and the `chrome` identity now goes through CDP so UA, `Sec-CH-UA` and `navigator.userAgentData` agree. Stripping only the UA string made the app claim Chrome while its client hints said Chromium — the QR login succeeded, the session cookie landed, and the platform still rejected it. The duplicate-partition legacy (one account with two cookie jars) is migrated too.",
+      "**A sturdier embedded browser.** Yielding to overlays is declarative now (a layer states which kind of yield it needs and the composition happens in one place; the four hand-written channels are gone), the four coordinate spaces convert through one module (all three click-miss bugs lived there), and a failed login records its own evidence — which page it stopped on, cookie names, how many times it was judged signed-out.",
+      "**Publishing has site contracts and a daily smoke.** Entry points, assertions and verified limits for all seven platforms are data, and an unauthenticated browser checks every day that each site still looks like itself — a redesign shows up the same day instead of after a failed upload. The real-machine facts from ADR 0076 (Douyin 35 images / 20,000-character articles, Xiaohongshu 18 images / 1,000 characters / 64-character long-form title, TikTok 35 images, YouTube 10) land with it.",
+      "**Two smaller fixes.** The local/LAN fallback context window moves from 64K to 128K, and a ComfyUI workflow whose nodes were all bypassed with ⌘B is no longer reported as “empty” — it simply has nothing that runs right now.",
+    ],
+  },
   "v2.0.1": {
     zh: [
       "**X(Twitter)接进发布体系。** 用已登录的 X 账号发帖(文案 + 视频):「标题」写帖子第一行、「简介」接在下面、标签接在末尾;视频超限或编码不被接受时,报错带上平台自己的那句话,并写明 X 的要求(MP4 H.264+AAC、≤2:20、≤512MB)。",
