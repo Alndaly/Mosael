@@ -1,0 +1,51 @@
+# 站点契约冒烟:每天用**不登录**的浏览器打开各平台创作页/登录页,确认「站还认得出来」。
+#
+# 它守的是发布链路上最贵的那种失败:**上传传完了、按钮在但点不动** —— 一句 "did not confirm publish",
+# 和「点了但没生效」在日志里长得一样,真正的原因(平台改版、选择器/文案失配)要人到现场才发现。
+#
+# 不登录,所以不需要任何凭据;也不在 PR 上跑(它对代码改动不敏感,只对**网站**变化敏感)——
+# 每天定时 + 手动触发,红了说明某家改版了,去看 contracts/platform-contracts.json 与对应适配器。
+name: Platform smoke
+
+on:
+  schedule:
+    - cron: "23 19 * * *" # 北京时间每天 03:23,避开整点排队(与 chaos 错开)
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 只跑这几家(空格分隔,留空=全部)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/toolchain
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Electron 在无头 Linux 上要 xvfb;--no-sandbox 由脚本自己加(容器里 root 跑不了沙箱)。
+      - name: Run the site-contract smoke
+        run: |
+          xvfb-run -a ./node_modules/.bin/electron --no-sandbox scripts/platform-smoke.cjs ${{ inputs.platforms }}
+
+      # 结果落成 artifact:红了直接看是哪一家、页面当时是什么样。
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-smoke-report
+          path: |
+            contracts/platform-contracts.json
+          if-no-files-found: ignore

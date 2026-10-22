@@ -1,0 +1,155 @@
+{
+  "contract": "platform-contracts",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "每个发布平台的**站点契约**:入口地址、冒烟时要看到的字样、以及已核实的发布上限。适配器里的选择器与这里的上限是同一件事的两面 —— 平台改版时先断在这里,而不是断在「上传完成但按钮点不动」。由 backend/tests/test_platform_contracts.py 与 scripts/platform-smoke.cjs 消费;上限按 ADR 0076 的真机核对(2026-10-22)填写,后端 PUBLISH_PLATFORMS 与它必须一致。",
+  "notes": [
+    "冒烟**不登录**:它只用公开页面判断「站点还认得出来吗」。断言写法是 textAny 或 urlAny 命中其一即通过 —— 未登录时各家会跳到自己家的登录页/信息流,硬写一个文案必然误报。",
+    "limits 里的 null = 这个平台没有那种形态(例如 X 没有独立标题栏,titleMax 就是帖子正文上限)。titleMax 必须与后端一致:平台侧超长会让任务在服务端晚失败。",
+    "imageMax 是**图文/照片轮播**的上限(抖音 35、小红书 18、视频号 18、TikTok 35、YouTube 社区帖 10);bodyMax 是正文/描述字数上限;null = 未核实或该平台没有。",
+    "未登录时平台会跳自家登录页(B 站跳 passport、TikTok 跳 /login),那次跳转会让最初的 loadURL 以 ERR_ABORTED 失败 —— 冒烟把「失败之后照样读一次页面、再按 textAny/urlAny 判」当作正常路径,不当成站点故障。"
+  ],
+  "platforms": {
+    "douyin": {
+      "loginUrl": "https://creator.douyin.com/",
+      "publishUrl": "https://creator.douyin.com/creator-micro/content/upload",
+      "smoke": {
+        "url": "https://creator.douyin.com/creator-micro/content/upload",
+        "textAny": [
+          "扫码登录",
+          "发布视频",
+          "作品发布"
+        ],
+        "urlAny": [
+          "creator.douyin.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 30,
+        "imageMax": 35,
+        "bodyMax": null
+      }
+    },
+    "xiaohongshu": {
+      "loginUrl": "https://creator.xiaohongshu.com/",
+      "publishUrl": "https://creator.xiaohongshu.com/publish/publish",
+      "smoke": {
+        "url": "https://creator.xiaohongshu.com/publish/publish",
+        "textAny": [
+          "短信登录",
+          "上传视频",
+          "发布笔记"
+        ],
+        "urlAny": [
+          "creator.xiaohongshu.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 20,
+        "imageMax": 18,
+        "bodyMax": 1000
+      }
+    },
+    "weixin-channels": {
+      "loginUrl": "https://channels.weixin.qq.com/login.html",
+      "publishUrl": "https://channels.weixin.qq.com/platform/post/create",
+      "smoke": {
+        "url": "https://channels.weixin.qq.com/login.html",
+        "textAny": [
+          "微信快捷登录",
+          "登录视频号助手",
+          "扫码登录"
+        ],
+        "urlAny": [
+          "channels.weixin.qq.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 16,
+        "imageMax": 18,
+        "bodyMax": 1000
+      }
+    },
+    "bilibili": {
+      "loginUrl": "https://member.bilibili.com/platform/home",
+      "publishUrl": "https://member.bilibili.com/platform/upload/video/frame",
+      "smoke": {
+        "url": "https://member.bilibili.com/platform/home",
+        "textAny": [
+          "投稿",
+          "登录",
+          "创作中心"
+        ],
+        "urlAny": [
+          "member.bilibili.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 80,
+        "imageMax": null,
+        "bodyMax": null
+      }
+    },
+    "tiktok": {
+      "loginUrl": "https://www.tiktok.com/login",
+      "publishUrl": "https://www.tiktok.com/tiktokstudio/upload",
+      "smoke": {
+        "url": "https://www.tiktok.com/tiktokstudio/upload",
+        "textAny": [
+          "Select video",
+          "Log in",
+          "Upload"
+        ],
+        "urlAny": [
+          "tiktok.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 2200,
+        "imageMax": 35,
+        "bodyMax": 4000
+      }
+    },
+    "youtube": {
+      "loginUrl": "https://studio.youtube.com/",
+      "publishUrl": "https://studio.youtube.com/",
+      "smoke": {
+        "url": "https://studio.youtube.com/",
+        "textAny": [
+          "上传视频",
+          "Sign in",
+          "登录"
+        ],
+        "urlAny": [
+          "studio.youtube.com",
+          "accounts.google.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 100,
+        "imageMax": 10,
+        "bodyMax": null
+      }
+    },
+    "x": {
+      "loginUrl": "https://x.com/i/flow/login",
+      "publishUrl": "https://x.com/compose/post",
+      "smoke": {
+        "url": "https://x.com/compose/post",
+        "textAny": [
+          "Post",
+          "Log in",
+          "登录"
+        ],
+        "urlAny": [
+          "x.com"
+        ]
+      },
+      "limits": {
+        "titleMax": 280,
+        "imageMax": 4,
+        "bodyMax": null
+      }
+    }
+  }
+}
