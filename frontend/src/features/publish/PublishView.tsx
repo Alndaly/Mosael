@@ -285,7 +285,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                     <ContextMenuTrigger asChild>
                       <button
                         type="button"
-                        className="relative -mx-3 block rounded-md text-left transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="relative block w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
                         onClick={() => (selectMode ? toggle(task.id) : setOpenId(task.id))}
                       >
@@ -344,9 +344,10 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
   const { Icon, tone, spin } = statusTone(task.status);
   return (
     // 一条记录一行:图标 / 标题 + 元信息 + 失败原因 / 状态 + 时间。间距只走 12/8/4 那一套:
-    // 行上下 12(py-3)、行内各段 4(gap-1)、日期栏头 8 —— 素材库列表是同一套读法。hover
-    // 底色由外面那颗按钮铺(它会 -mx-3 出血),底色才盖住整行而不是缩在内容里。
-    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 px-3 py-3">
+    // 行上下 12(py-3)、行内各段 4(gap-1)、日期栏头 8 —— 素材库列表是同一套读法。
+    // **hover 底色和圆角都在这一层**:-mx-3 出血让底色盖住整行,rounded-lg 让四个角是圆的
+    // (和素材库列表的 AssetTile 同一种写法;此前底色铺在按钮上,圆角看不见)。
+    <article className="-mx-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-lg px-3 py-3 transition-colors hover:bg-secondary/40">
       <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
