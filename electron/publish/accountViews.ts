@@ -3,6 +3,7 @@ import { app, screen, session, shell, WebContentsView, type BaseWindow } from "e
 // 用户看到的是「点了没反应 / 又回登录页」,而不是任何错误。
 import { forwardExternalLogin, isExternalLoginUrl } from "../external-login-schemes.cjs";
 import { shouldPromoteFrameNavigation } from "../oauth-frame-promote.cjs";
+import { cleanChromeUserAgent, identityForPlatform } from "../view-identity.cjs";
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type PageSummary, type ViewState } from "./types";
@@ -1028,6 +1029,32 @@ export class AccountViewManager {
    * 给会话建一个页面。`adopt`:window.open / target=_blank 开出来的那个 —— Chromium 已经为它建好了
    * WebContents(带着 opener 关系),这里把它收进一个视图,而不是另起一个。
    */
+  /** 这个视图对应的平台(发布账号 / 池档案)。决定它对外声明哪一种身份,见 view-identity.cjs。 */
+  private readonly platformOf = new Map<string, string>();
+
+  /**
+   * 告诉视图层「这个账号是哪个平台的」。**建视图之前**调用最稳:身份要在第一次请求之前定下来
+   * (Chromium 的 UA 是随请求发出去的,加载完再改对这一页没用)。
+   */
+  setAccountPlatform(accountId: string, platform: string): void {
+    const next = String(platform || "").trim();
+    if (!next || this.platformOf.get(accountId) === next) return;
+    this.platformOf.set(accountId, next);
+    // 已经有视图就顺手改掉它的会话 UA:下一次导航(以及页面里的 fetch)就带新身份。
+    const existing = this.views.get(accountId);
+    if (existing && this.alive(existing)) this.applyIdentity(accountId, existing.webContents.session);
+  }
+
+  /** 按平台给这个会话定身份:干净 Chrome UA 或如实声明 Electron(不洗)。 */
+  private applyIdentity(accountId: string, target: Electron.Session): void {
+    //: 替身会话(测试里的假 session)没有这个方法:身份是锦上添花,不该让建视图失败。
+    if (!target || typeof target.setUserAgent !== "function") return;
+    const platform = this.platformOf.get(accountId) ?? "";
+    const identity = identityForPlatform(platform);
+    const native = app.userAgentFallback;
+    target.setUserAgent(identity === "chrome" ? cleanChromeUserAgent(native) : native);
+  }
+
   private createTab(accountId: string, adopt?: Electron.BrowserWindowConstructorOptions): PageTab {
     const view = adopt
       ? // 第三方登录(TikTok 的「用 Google 继续」、各家的微信/QQ 授权)全靠 window.open:授权页办完事要
@@ -1043,6 +1070,7 @@ export class AccountViewManager {
             contextIsolation: true,
           },
         });
+    this.applyIdentity(accountId, view.webContents.session);
     const tab: PageTab = { view, driver: new PageDriver(view.webContents), favicon: "" };
     view.webContents.on("focus", () => {
       this.lastFocused = view.webContents;

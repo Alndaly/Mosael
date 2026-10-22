@@ -262,6 +262,9 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     return;
   }
   plog("runTask start:", bt.id, bt.platform, bt.video_path);
+  //: 同一份身份规则:发布任务走的也是这个账号的视图。
+  //: 老版本/测试替身可能没有这个方法:身份是锦上添花,绝不能让它挡住任务。
+  views?.setAccountPlatform?.(bt.account_id, bt.platform);
   const t = toAdapterTask(bt);
   const taskViews = views;
   const driver = taskViews.getDriver(t.accountId); // ensure 视图(不 show);getDriver 不抛
@@ -757,6 +760,9 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
   loginAccounts.add(accountId);
   const gen = generation;
   try {
+    //: 身份跟着平台走:**建视图之前**先告诉它(UA 随第一次请求发出去,加载完再改对那一页没用)——
+    //: 视频号要干净 Chrome UA,X 要如实声明 Electron(见 view-identity.cjs)。
+    views.setAccountPlatform?.(accountId, platform);
     await views.configureAccount(accountId, await backend.accountProxy(accountId));
     const driver = views.getDriver(accountId);
     // 亮出视图即占据前台单槽,loop 不再对该账号启动新复检;在飞的旧复检 goto 会被下面
