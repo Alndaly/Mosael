@@ -53,7 +53,6 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "WorkflowRevisionOut.created_by": "留痕:这一版是谁存的",
     "WorkflowRevisionDetailOut.created_by": "留痕:这一版是谁存的",
     "AgentQuestionOut.answered_at": "留痕:什么时候答的",
-    "PublishedPostOut.published_at": "留痕:这条作品在平台上发出的服务端时间;界面的行里显示的是记录时间",
     "ProviderQuotaOut.fetched_at": "留痕:这份额度是什么时候取的",
     # —— 给 sidecar / MCP 那一侧读的确认卡
     "ConfirmationOut.summary_key": "卡片摘要的未翻译形态。界面读翻好的 summary,这两个给别的运行时",

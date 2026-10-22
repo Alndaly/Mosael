@@ -404,6 +404,7 @@ export const publish = {
   publishStart: "发布",
   publishFailedToast: "发布创建失败",
   publishPost: "作品",
+  publishPostAt: "发布时间",
   publishPostOpen: "在平台上查看",
   publishPostMissing: "发布时没读到平台返回的作品 ID(平台可能改了接口)。作品本身已经发出去了。",
   publishDeleteBody: "发布记录将被删除,已产出的文件不受影响。",

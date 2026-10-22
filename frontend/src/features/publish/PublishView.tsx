@@ -508,6 +508,12 @@ function PublishCard({
         {["succeeded", "success"].includes(task.status) && (
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground" data-publish-row-post="">
             <Truncate>{task.post?.post_id ? `${t("publishPost")} ${task.post.post_id}` : t("publishPostMissing")}</Truncate>
+            {/*: 作品**真正发出去的时刻**(published_at,服务端记的),和右上角那颗记录创建时间不是同一个。 */}
+            {task.post?.published_at && (
+              <span data-publish-row-published="" className="shrink-0">
+                {t("publishPostAt")} {new Date(task.post.published_at).toLocaleString(locale)}
+              </span>
+            )}
             {task.post?.url && (
               <a
                 href={task.post.url}

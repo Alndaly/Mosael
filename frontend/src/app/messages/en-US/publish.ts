@@ -403,6 +403,7 @@ export const publish = {
   publishStart: "Publish",
   publishFailedToast: "Publish failed to start",
   publishPost: "Post",
+  publishPostAt: "Published at",
   publishPostOpen: "View on the platform",
   publishPostMissing: "The platform's post ID was not read at publish time (its interface may have changed). The post itself went out.",
   publishDeleteBody: "The record is removed; produced files are untouched.",
