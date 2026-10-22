@@ -1864,18 +1864,30 @@ app.whenReady().then(async () => {
 
   // 系统能力:窗口建好之后再注册(residency 要挂到窗口的 close 上)。
   if (system) {
-    systemHandle = system.registerSystemCapabilities({
-      getWindow: () => BrowserWindow.getAllWindows()[0] ?? null,
-      showWindow,
-      isDev,
-      iconPath: path.join(__dirname, "..", "build", "icon.png"),
-      trayTemplatePath: path.join(__dirname, "..", "build", "trayTemplate.png"),
-      trayLightPath: path.join(__dirname, "..", "build", "tray-light.png"),
-      trayDarkPath: path.join(__dirname, "..", "build", "tray-dark.png"),
-      //: Computer Use 被控制中:托盘换红图标,菜单里给一颗急停(ADR 0075 安全 2/3)。
-      trayComputerUsePath: path.join(__dirname, "..", "build", "tray-computer-use.png"),
-      onComputerUseStop: () => computerUseGuard.stop("tray"),
-    });
+    //: 托盘 / 驻留 / 通知这一套失败时,**别让它把同一段里的处理器一起带走** —— 首当其冲的是
+    //: 渲染层启动就调的自定义 CSS 那四条(见下面的注释)。
+    try {
+      systemHandle = system.registerSystemCapabilities({
+        getWindow: () => BrowserWindow.getAllWindows()[0] ?? null,
+        showWindow,
+        isDev,
+        iconPath: path.join(__dirname, "..", "build", "icon.png"),
+        trayTemplatePath: path.join(__dirname, "..", "build", "trayTemplate.png"),
+        trayLightPath: path.join(__dirname, "..", "build", "tray-light.png"),
+        trayDarkPath: path.join(__dirname, "..", "build", "tray-dark.png"),
+        //: Computer Use 被控制中:托盘换红图标,菜单里给一颗急停(ADR 0075 安全 2/3)。
+        trayComputerUsePath: path.join(__dirname, "..", "build", "tray-computer-use.png"),
+        onComputerUseStop: () => computerUseGuard.stop("tray"),
+      });
+    } catch (error) {
+      appendMainLog("system", `capabilities not registered: ${String(error).slice(0, 200)}`);
+    }
+    //: **先注册渲染层启动时就会调的那几条**(自定义 CSS),再折腾托盘、热键、网络探针 ——
+    //: 后面任何一步抛异常都不该让「设置页读不到 CSS」变成「这个功能要重启」。
+    handle(IPC.invoke.customCssRead, () => system.readCustomCss());
+    handle(IPC.invoke.customCssPath, () => system.customCssPath());
+    handle(IPC.invoke.customCssOpen, () => system.openCustomCss());
+    handle(IPC.invoke.customCssReveal, () => system.revealCustomCss());
     // Computer Use 的急停 / 恢复:界面上的按钮与全局热键走同一条状态机(见 computerUseGuard.cjs)。
     handle(IPC.invoke.computerStop, () => {
       computerUseGuard.stop("manual");
@@ -1892,9 +1904,20 @@ app.whenReady().then(async () => {
       //: 合并「被控制中」——系统层只认这一份快照(托盘图标据此变色)。
       systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: computerUseGuard.isActive() });
     });
-    installNetProbeRelay();
+    //: 这两步都碰系统层(webRequest / globalShortcut),失败时只影响它自己 —— 别把后面的
+    //: 处理器一起带走(2026-10-23 一次现场:某个更早的异常让自定义 CSS 的处理器没注册上,
+    //: 界面报的是「这个功能要重启 Mosael」)。
+    try {
+      installNetProbeRelay();
+    } catch (error) {
+      appendMainLog("net-probe", `relay not installed: ${String(error).slice(0, 160)}`);
+    }
     //: Computer Use 的急停热键:不依赖 App 在前台,所以注册在(全局)系统层。
-    registerComputerUseStopShortcuts();
+    try {
+      registerComputerUseStopShortcuts();
+    } catch (error) {
+      appendMainLog("computer-use", `shortcuts not registered: ${String(error).slice(0, 160)}`);
+    }
     // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
     listen(IPC.send.systemNotify, (_e, payload) => system.showTaskNotification(parseTaskNotice(payload)));
     // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:
@@ -1903,13 +1926,6 @@ app.whenReady().then(async () => {
     handle(IPC.invoke.setOpenAtLogin, (_e, enabled) =>
       isDev ? null : system.setOpenAtLogin(Boolean(enabled)),
     );
-
-    // 自定义 CSS:渲染层要三样东西 —— 内容(启动时读一次,之后靠推送)、路径(设置页显示)、
-    // 以及打开/定位这个文件的两个动作。写入始终由用户在自己的编辑器里完成,应用不代写。
-    handle(IPC.invoke.customCssRead, () => system.readCustomCss());
-    handle(IPC.invoke.customCssPath, () => system.customCssPath());
-    handle(IPC.invoke.customCssOpen, () => system.openCustomCss());
-    handle(IPC.invoke.customCssReveal, () => system.revealCustomCss());
 
     // 开机自启拉起时静默驻留托盘,不弹窗口。
     if (system.isHiddenLaunch()) BrowserWindow.getAllWindows()[0]?.hide();
