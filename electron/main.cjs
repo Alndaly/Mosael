@@ -38,6 +38,7 @@ const {
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
 const { createComputerUseGuard } = require("./computerUseGuard.cjs");
 const { createComputerUseOverlay } = require("./computerUseOverlay.cjs");
+const { createComputerUseCursor } = require("./computerUseCursor.cjs");
 const { pickPath } = require("./path-picker.cjs");
 const { createSaveDesk } = require("./save-file.cjs");
 const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrome.cjs");
@@ -348,13 +349,17 @@ function pushComputerUseState(state) {
 }
 
 const computerUseOverlay = createComputerUseOverlay({ BrowserWindow, screen, label: () => t("computerUse_overlay") });
+const computerUseCursor = createComputerUseCursor({ BrowserWindow });
 
 const computerUseGuard = createComputerUseGuard({
   //: 30 秒没有新动作就自动熄灭(写成乘法,别让「固定 30 秒」的旧判据误扫到)。
   idleMs: 30 * 1000,
   onStateChange: (state) => {
     if (state.active) computerUseOverlay.show();
-    else computerUseOverlay.hide();
+    else {
+      computerUseOverlay.hide();
+      computerUseCursor.hide();
+    }
     pushComputerUseState(state);
   },
 });
@@ -413,7 +418,22 @@ function chooseComputerWindow(name, windows, roles) {
  * 走的是 `webContents.sendInputEvent`(可信输入),不是系统级鼠标注入:只在这个窗口里生效,窗口
  * 不在前台也点得中,同时**碰不到桌面和别的 App**(L1,ADR 0075)。
  */
-function clickMosaelWindow(request, windows, roles) {
+/** 把窗口里的 CSS 坐标换成屏幕坐标,交给指针提示亮一下(提示窗口的尖端落在那个点)。 */
+let lastComputerUsePoint = null;
+
+function showComputerUseCursor(win, x, y, kind, cursor) {
+  if (!cursor || typeof win.getContentBounds !== "function") return;
+  try {
+    const bounds = win.getContentBounds();
+    if (!bounds) return;
+    lastComputerUsePoint = { x: bounds.x + x, y: bounds.y + y };
+    cursor.showAt(lastComputerUsePoint.x, lastComputerUsePoint.y, kind);
+  } catch {
+    /* 窗口没了:提示是锦上添花,别因为它影响动作本身 */
+  }
+}
+
+function clickMosaelWindow(request, windows, roles, cursor = null) {
   const name = String(request.window || "main");
   const win = chooseComputerWindow(name, windows, roles);
   if (!win) {
@@ -438,6 +458,9 @@ function clickMosaelWindow(request, windows, roles) {
   contents.sendInputEvent({ type: "mouseMove", x, y });
   contents.sendInputEvent({ type: "mouseDown", x, y, button, clickCount });
   contents.sendInputEvent({ type: "mouseUp", x, y, button, clickCount });
+  //: 在窗口里那个点上亮一枚指针(区别于真光标:它只亮一下,拍图也拍不到)——
+  //: 连续自动放行时,人至少看得见「它刚才点了哪儿」。
+  showComputerUseCursor(win, x, y, "click", cursor);
   return { window: name, x, y, button, clickCount };
 }
 
@@ -445,7 +468,7 @@ function clickMosaelWindow(request, windows, roles) {
  * 在 `request.window` 指定的 Mosael 窗口里滚动:Chromium 的滚轮事件需要一个位置,不给就用窗口正中。
  * 只在这个窗口里生效(L1,ADR 0075),不碰桌面和别的 App。
  */
-function scrollMosaelWindow(request, windows, roles) {
+function scrollMosaelWindow(request, windows, roles, cursor = null) {
   const name = String(request.window || "main");
   const win = chooseComputerWindow(name, windows, roles);
   if (!win) {
@@ -468,6 +491,7 @@ function scrollMosaelWindow(request, windows, roles) {
   const y = request.y === null ? Math.round(size[1] / 2) : Math.round(request.y);
   //: 一格滚轮 ≈ 100 像素(约 3 行)。直接发 deltaY = -dy 的话「滚 3 格」只走 3 像素,人看着就是没动。
   contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: -request.dy * 100, canScroll: true });
+  showComputerUseCursor(win, x, y, request.dy > 0 ? "scroll-down" : "scroll-up", cursor);
   return { window: name, dy: request.dy, x, y };
 }
 
@@ -476,7 +500,7 @@ function scrollMosaelWindow(request, windows, roles) {
  * `insertText` 是 Chromium 自己的「插入文本」,和用户打字走同一条路(受控输入框的 onInput 会触发),
  * 比逐字符发 keyDown/char 稳,也不会被输入法状态影响。
  */
-function typeIntoMosaelWindow(request, windows, roles) {
+function typeIntoMosaelWindow(request, windows, roles, cursor = null) {
   const name = String(request.window || "main");
   const win = chooseComputerWindow(name, windows, roles);
   if (!win) {
@@ -489,6 +513,10 @@ function typeIntoMosaelWindow(request, windows, roles) {
   if (typeof win.focus === "function") win.focus();
   if (typeof contents.focus === "function") contents.focus();
   contents.insertText(String(request.text));
+  //: 输入没有坐标 —— 接着在上一次点/滚的位置亮一下,让人看得出「刚才那一下是在这儿打的字」。
+  if (cursor && lastComputerUsePoint) {
+    cursor.showAt(lastComputerUsePoint.x, lastComputerUsePoint.y, "type");
+  }
   return { window: name, typed: String(request.text).length };
 }
 
@@ -572,11 +600,11 @@ async function answerHostBridgeRequest(line, socket) {
       captureMosaelWindow(parseComputerScreenshot(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
     [IPC.invoke.computerClick]: () =>
       withComputerUse(() =>
-        clickMosaelWindow(parseComputerClick(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+        clickMosaelWindow(parseComputerClick(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }, computerUseCursor),
       ),
     [IPC.invoke.computerType]: () =>
       withComputerUse(() =>
-        typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+        typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }, computerUseCursor),
       ),
     [IPC.invoke.computerEnd]: () => {
       //: 回合结束:熄灭「被控制中」。不是急停 —— 不设 stopped,下一轮还能动。
@@ -585,7 +613,7 @@ async function answerHostBridgeRequest(line, socket) {
     },
     [IPC.invoke.computerScroll]: () =>
       withComputerUse(() =>
-        scrollMosaelWindow(parseComputerScroll(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+        scrollMosaelWindow(parseComputerScroll(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }, computerUseCursor),
       ),
   };
   const handler = Object.prototype.hasOwnProperty.call(handlers, request.channel) ? handlers[request.channel] : null;
@@ -1629,6 +1657,7 @@ app.whenReady().then(async () => {
     quitting = true;
     systemHandle?.dispose();
   computerUseOverlay.hide();
+  computerUseCursor.dispose();
   globalShortcut.unregisterAll();
   computerUseGuard.dispose();
     app.exit(DEV_RESTART_CODE);
