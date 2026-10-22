@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -57,6 +57,18 @@ class PublishTask(Base):
     #: 素材没了也说得出发的是什么。
     asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
     asset_name: Mapped[str] = mapped_column(String(400), nullable=False, default="", server_default="")
+    #: 这一条发的是**什么形状**(ADR 0076):video / image-text / article。默认 video,
+    #: 老数据不用迁移;读的一侧也要按默认值兜底。
+    content_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="video", server_default="video")
+    #: 图文 / 文章的多份素材(按顺序);`asset_id` 仍写第一份,老读者不用改。
+    #: 空数组 = 老任务,读的一侧回退到 `[asset_id]`。
+    #: `server_default` 不是装饰:老库升级时「重建表再搬列」的那条迁移只搬旧列,
+    #: 缺的列靠 SQL 默认值补 —— 没有它,一行老数据都搬不进去。
+    asset_ids: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list, server_default=text("'[]'"))
+    #: 正文 / 长文。以前正文塞在 `options.description` 里 —— 那是「发布选项」混进了「内容」,这里归位。
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    #: 图片顺序之外的附加信息(alt / 说明),平台支持时用。
+    media_meta: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
     title: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)

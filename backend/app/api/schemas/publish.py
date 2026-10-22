@@ -78,7 +78,13 @@ class PublishAccountOut(OrmModel):
 class PublishCreate(ApiModel):
     workspace_id: str
     account_id: str
-    asset_id: str
+    #: 视频与老调用点仍传 `asset_id`;图文 / 文章传 `asset_ids`(按顺序)。两个都给时以 `asset_ids` 为准。
+    asset_id: str = ""
+    asset_ids: list[str] = Field(default_factory=list, max_length=64)
+    #: 内容形状(ADR 0076):video / image-text / article。默认 video —— 老调用方不用改。
+    content_kind: str = Field(default="video", max_length=20)
+    #: 正文 / 长文(图文与文章用)。以前正文塞在 `options.description` 里,现在归位。
+    body: str = Field(default="", max_length=40000)
     title: str = Field(default="", max_length=300)
     description: str = Field(default="", max_length=5000)
     tags: list[str] = Field(default_factory=list, max_length=24)
@@ -104,6 +110,10 @@ class PublishTaskOut(FailureReadout, ApiModel):
     platform: str
     #: 素材已经删了的那条发布记录为空(记录留着,见 db.model_slices.publish.PublishTask.asset_id)。
     asset_id: str | None
+    #: 这条发的是什么形状、几份素材(图文 / 文章多份;视频与老任务一份)。
+    asset_ids: list[str] = Field(default_factory=list)
+    content_kind: str = "video"
+    body: str = ""
     asset_name: str
     title: str
     description: str

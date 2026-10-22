@@ -131,13 +131,25 @@ def claim_next_pending(
         return None
     task, account = row
     # 素材删了、发布记录留着的(asset_id 置空,见 PublishTask.asset_id)。还在发的素材删不掉,所以排着的任务正常走不到这里。
-    asset = db.get(Asset, task.asset_id) if task.asset_id else None
-    if asset is None or not asset.file_key:
+    #: 图文 / 文章可能有多份素材(ADR 0076):`asset_ids` 为空(老任务)时回退到 `[asset_id]`。
+    wanted_ids = list(task.asset_ids or []) or ([task.asset_id] if task.asset_id else [])
+    items: list[Asset] = []
+    for asset_id in wanted_ids:
+        one = db.get(Asset, asset_id)
+        if one is None or not one.file_key:
+            task.status = "failed"
+            task.error_message = "素材文件缺失"
+            _sync_job(db, task)
+            db.flush()
+            return None
+        items.append(one)
+    if not items:
         task.status = "failed"
         task.error_message = "素材文件缺失"
         _sync_job(db, task)
         db.flush()
         return None
+    asset = items[0]
 
     task.status = "running"
     task.claimed_by = worker
@@ -152,6 +164,11 @@ def claim_next_pending(
         "account_name": account.name,
         "platform": account.platform,
         "proxy": account.proxy,
+        #: 内容形状与多份素材(ADR 0076):执行器按 kind 挑上传方法,视频仍只取第一份。
+        "content_kind": task.content_kind or "video",
+        "body": task.body or "",
+        "media_paths": [str(resolve_key(one.file_key)) for one in items],
+        #: 兼容老执行器:视频那一份仍放在 video_path。
         "video_path": str(resolve_key(asset.file_key)),
         "title": task.title,
         "tags": list(task.tags or []),

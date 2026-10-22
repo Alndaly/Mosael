@@ -1,5 +1,5 @@
 {
-  "version": 38,
+  "version": 39,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -194,6 +194,7 @@
     "migrate-publish-task-claimed-by",
     "migrate-publish-task-options",
     "migrate-publish-task-post",
+    "migrate-publish-tasks-get-content-shape",
     "migrate-registration-invites-become-invite-links",
     "migrate-removed-track-records-are-complete",
     "migrate-resource-ownership",

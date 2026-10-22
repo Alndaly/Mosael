@@ -6886,6 +6886,26 @@ def _migrate_clips_get_a_link_group() -> None:
             conn.execute(text("ALTER TABLE clips ADD COLUMN link_group VARCHAR(64)"))
 
 
+def _migrate_publish_tasks_get_content_shape() -> None:
+    """发布任务从「一份视频」变成「三种内容形状」(ADR 0076,见 domain/publish)。
+
+    `content_kind` 默认 `video`、`asset_ids` 默认空数组 —— 老任务不用回填:读的一侧在
+    `asset_ids` 为空时回退到 `[asset_id]`,在 `content_kind` 为空时按 `video` 处理。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(publish_tasks)"))}
+        if not columns:
+            return
+        if "content_kind" not in columns:
+            conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN content_kind VARCHAR(20) NOT NULL DEFAULT 'video'"))
+        if "asset_ids" not in columns:
+            conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN asset_ids JSON NOT NULL DEFAULT '[]'"))
+        if "body" not in columns:
+            conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN body TEXT NOT NULL DEFAULT ''"))
+        if "media_meta" not in columns:
+            conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN media_meta JSON NOT NULL DEFAULT '{}'"))
+
+
 def _migrate_browser_profiles_pin_identity() -> None:
     """档案记下自己的浏览器身份(见 BrowserProfile.identity)。
 
@@ -10067,6 +10087,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_subtitle_tracks_hide_instead_of_mute,
                 _migrate_model_structured_output,
                 _migrate_browser_profile_start_url,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 PublishTask 已经指望这几列存在了。
+                _migrate_publish_tasks_get_content_shape,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 BrowserProfile 已经指望 identity 存在了。
                 _migrate_browser_profiles_pin_identity,
                 _migrate_usage_unpriced_reason,

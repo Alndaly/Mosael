@@ -169,6 +169,12 @@ def test_老库的发布记录升级后_删素材不再连带删掉_名字补上
     engine.dispose()
 
     _migrate_publish_records_outlive_their_asset()
+    #: 老库升上来时会跑**整条**迁移链:除了「记录活得比素材久」,还包括内容形状那几列
+    #: (ADR 0076 的 content_kind / asset_ids / body)。只跑前者的话,这张老形状的表缺列,
+    #: 之后 ORM 一读就炸。
+    from app.db.migrations import _migrate_publish_tasks_get_content_shape
+
+    _migrate_publish_tasks_get_content_shape()
     _migrate_publish_records_outlive_their_asset()  # 第二次:已经是新形状,只按名字补一遍(没有要补的)
 
     with engine.connect() as conn:

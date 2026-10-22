@@ -156,6 +156,33 @@ def normalize_options(platform: str, raw: dict[str, Any] | None) -> dict[str, An
     return out
 
 
+#: 能下发的**内容形状**(ADR 0076)。`document` 刻意不在里面:没有平台接受一份文档文件,它要先
+#: 在素材域转换成下面三种之一。加一种形状 = 这里加一个值 + 适配器实现同名方法 + 前端加一档,
+#: 三处对不上就有测试会红(见 tests/test_publish_content_kinds.py)。
+CONTENT_KINDS = ("video", "image-text", "article")
+
+#: 每种形状在**默认**(平台没单独声明)情况下的上限。平台声明覆盖它。
+#: `None` = 没核实过,就不拦 —— 宁可等平台自己拒,也不要凭猜写一个数把用户挡住。
+DEFAULT_CONTENT_LIMITS: dict[str, dict[str, Any]] = {
+    "video": {"max_items": 1},
+    "image-text": {"max_items": 18, "body_max": None},
+    "article": {"max_items": None, "body_max": None, "body_min": None},
+}
+
+
+def content_limits(platform: str, kind: str) -> dict[str, Any]:
+    """这个平台这种形状的上限:平台声明 > 默认。"""
+    declared = (PUBLISH_PLATFORMS.get(platform, {}).get("content") or {}).get(kind)
+    if declared is None:
+        return {}
+    return {**DEFAULT_CONTENT_LIMITS.get(kind, {}), **declared}
+
+
+def content_kinds(platform: str) -> tuple[str, ...]:
+    """这个平台认哪几种形状;空 = 只发视频(老平台注册表不用改)。"""
+    return tuple(PUBLISH_PLATFORMS.get(platform, {}).get("kinds") or ("video",))
+
+
 PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
     "douyin": {
         "label": "抖音",
@@ -163,6 +190,12 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {},
         "title_max": 30,
         "short_title": False,
+        # 真机(2026-10-22):创作中心四个 tab —— 视频 / 图文(≤35 张、单图 ≤50MB、无 gif)/ 文章。
+        "kinds": ("video", "image-text", "article"),
+        "content": {
+            "image-text": {"max_items": 35},
+            "article": {"title_max": 30, "body_max": 20000},
+        },
     },
     "xiaohongshu": {
         "label": "小红书",
@@ -170,6 +203,13 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {},
         "title_max": 20,
         "short_title": False,
+        # 真机(2026-10-22):上传图文 ≤18 张(计数 1/18)、单图 ≤32MB、正文 0/1000、无 gif;
+        # 「写长文」标题 maxlength=64、正文只显示字数不标上限。
+        "kinds": ("video", "image-text", "article"),
+        "content": {
+            "image-text": {"max_items": 18, "body_max": 1000},
+            "article": {"title_max": 64, "body_max": None},
+        },
     },
     "weixin-channels": {
         "label": "微信视频号",
@@ -177,6 +217,9 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {},
         "title_max": 16,
         "short_title": True,
+        # 助手端图文 ≤18 张(手机端 ≤20);**超过 18 张会变成视频** —— 适配器要挡在 18。
+        "kinds": ("video", "image-text"),
+        "content": {"image-text": {"max_items": 18, "body_max": 1000}},
     },
     "bilibili": {
         "label": "Bilibili",
@@ -184,6 +227,13 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {},
         "title_max": 80,
         "short_title": False,
+        # 专栏(文章)真机确认入口;字数/图片上限仍是二手口径(200–20000 字、标题 ≤40),
+        # 且**发布后不能编辑** —— 发之前必须让人看全文。
+        "kinds": ("video", "image-text", "article"),
+        "content": {
+            "image-text": {"max_items": None},
+            "article": {"title_max": 40, "body_min": 200, "body_max": 20000},
+        },
     },
     # TikTok 与 YouTube 都在境外:登录和上传都要能连上它们,通常得配好出站代理(管理 → 部署设置 /
     # 浏览器档案各自的代理)。连不上时表现为登录页打不开,而不是"登录失败"。
@@ -194,6 +244,9 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         # TikTok 没有独立标题,发布时那一栏是**文案**(caption),上限 2200。
         "title_max": 2200,
         "short_title": False,
+        # Studio 照片轮播:≤35 张、单图 ≤50MB;标题 90 / 描述 4000(页面口径)。
+        "kinds": ("video", "image-text"),
+        "content": {"image-text": {"max_items": 35, "title_max": 90, "body_max": 4000}},
     },
     # X(Twitter):没有发布选项 —— 帖子即公开,不存在「仅自己可见」分档,PLATFORM_OPTIONS 里
     # 不给它声明任何键(声明了不生效比不声明糟)。
@@ -204,6 +257,9 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         # X 没有标题栏:这一栏是**帖子正文**,上限 280。
         "title_max": 280,
         "short_title": False,
+        # 帖子:≤280 字、1–4 张图;长文(Articles)入口待真机,先不声明 article。
+        "kinds": ("video", "image-text"),
+        "content": {"image-text": {"max_items": 4}},
     },
     "youtube": {
         "label": "YouTube",
@@ -214,6 +270,9 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {},
         "title_max": 100,
         "short_title": False,
+        # 社区帖子:文字 + ≤10 图,且频道要先「启用我的社区」。
+        "kinds": ("video", "image-text"),
+        "content": {"image-text": {"max_items": 10}},
     },
 }
 
@@ -364,13 +423,17 @@ def start_publish(
     *,
     workspace_id: str,
     account: PublishAccount,
-    asset: Asset,
+    asset: Asset | None = None,
     title: str,
     description: str,
     tags: list[str],
     actor: Actor,
     short_title: str = "",
     options: dict[str, Any] | None = None,
+    #: 内容形状与多份素材(ADR 0076)。`asset` 单数保留:视频、以及所有老调用点都还这么传。
+    kind: str = "video",
+    assets: list[Asset] | None = None,
+    body: str = "",
 ) -> PublishTask:
     """建一条发布任务 —— **所有发布入口的唯一实现**(发布页、工作流发布节点、智能体确认卡)。
     守着它的是 tests/test_private_identities_need_their_owner.py:每个调用点都写出 actor,每个入口
@@ -391,27 +454,67 @@ def start_publish(
     sharing.ensure_usable(db, "publish_account", account, actor)
     if not account.enabled:
         raise PublishDomainError("publishErr_accountDisabled")
-    if not asset.file_key:
-        raise PublishDomainError("publishErr_assetNoFile")
     meta = PUBLISH_PLATFORMS[account.platform]
-    title_max = int(meta.get("title_max", 300))
+    #: 三种真实形状(ADR 0076):`document` 不是其中一种 —— 它要先在素材域转换成下面之一。
+    if kind not in CONTENT_KINDS:
+        raise PublishDomainError("publishErr_unknownKind", kind=repr(kind), supported=", ".join(CONTENT_KINDS))
+    declared = content_kinds(account.platform)
+    if kind not in declared:
+        raise PublishDomainError(
+            "publishErr_kindUnsupported", platform=meta["label"], kind=kind, supported=", ".join(declared)
+        )
+    items = list(assets) if assets else ([asset] if asset else [])
+    items = [one for one in items if one is not None]
+    limits = content_limits(account.platform, kind)
+    if not items:
+        raise PublishDomainError("publishErr_noAssets", platform=meta["label"], kind=kind)
+    max_items = limits.get("max_items")
+    if max_items is not None and len(items) > int(max_items):
+        raise PublishDomainError(
+            "publishErr_tooManyAssets", platform=meta["label"], kind=kind, max=int(max_items), count=len(items)
+        )
+    if kind == "video" and len(items) != 1:
+        raise PublishDomainError("publishErr_videoNeedsOneAsset", count=len(items))
+    for one in items:
+        if not one.file_key:
+            raise PublishDomainError("publishErr_assetNoFile")
+    #: 正文长度:平台声明了的才拦(没核实过的不猜,交给平台自己拒)。
+    body = body or ""
+    body_min = limits.get("body_min")
+    body_max = limits.get("body_max")
+    if body_min is not None and 0 < len(body) < int(body_min):
+        raise PublishDomainError("publishErr_bodyTooShort", platform=meta["label"], min=int(body_min), count=len(body))
+    if body_max is not None and len(body) > int(body_max):
+        raise PublishDomainError("publishErr_bodyTooLong", platform=meta["label"], max=int(body_max), count=len(body))
+    title_max = int(limits.get("title_max") or meta.get("title_max", 300))
     if title and len(title) > title_max:
         raise PublishDomainError("publishErr_titleTooLong", platform=meta["label"], max=title_max, count=len(title))
+    first = items[0]
 
     job = create_job(
         db,
         workspace_id=workspace_id,
         kind="publish",
         created_by=actor_id(actor),
-        payload={"account_id": account.id, "asset_id": asset.id, "platform": account.platform, "subject": title or asset.name},
-        message="jobMsg_publishWaiting", message_params={"title": title or asset.name},
+        payload={
+            "account_id": account.id,
+            "asset_id": first.id,
+            "asset_ids": [one.id for one in items],
+            "content_kind": kind,
+            "platform": account.platform,
+            "subject": title or first.name,
+        },
+        message="jobMsg_publishWaiting", message_params={"title": title or first.name},
     )
     task = PublishTask(
         workspace_id=workspace_id,
         account_id=account.id,
-        asset_id=asset.id,
+        asset_id=first.id,
         #: 素材之后删了,记录还说得出发的是什么(见 PublishTask.asset_id)。
-        asset_name=asset.name or "",
+        asset_name=first.name or "",
+        content_kind=kind,
+        asset_ids=[one.id for one in items],
+        body=body,
         title=title,
         description=description,
         tags=tags,
@@ -441,6 +544,8 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
     # 那些需要人介入的中间态。以前这里要按 executor 在 task.status 和 job.status 之间二选一,
     # 因为本地目录/webhook 也混在这张表里;它们拆走之后就只剩一个来源了。
     status = task.status
+    raw_ids = list(task.asset_ids or [])
+    asset_ids = raw_ids or ([task.asset_id] if task.asset_id else [])
     return {
         "id": task.id,
         "workspace_id": task.workspace_id,
@@ -448,6 +553,10 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
         "account_name": account.name if account else "",
         "platform": platform,
         "asset_id": task.asset_id,
+        #: 多份素材(图文 / 文章);视频与老任务就是一份。
+        "asset_ids": asset_ids,
+        "content_kind": task.content_kind or "video",
+        "body": task.body or "",
         #: 素材删了,记录还在(asset_id 为空):名字取建任务时记下的那份。
         "asset_name": asset.name if asset else task.asset_name,
         "title": task.title,

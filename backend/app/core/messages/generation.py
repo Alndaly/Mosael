@@ -390,6 +390,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{platform} 标题最多 {max} 字(当前 {count} 字)",
         "en": "{platform} titles can be at most {max} characters (this one has {count}).",
     },
+    # ── 内容形状(ADR 0076)────────────────────────────────────────────────────
+    "publishErr_unknownKind": {
+        "zh": "未知的内容类型: {kind}(支持 {supported})",
+        "en": "Unknown content kind: {kind} (supported: {supported}).",
+    },
+    "publishErr_kindUnsupported": {
+        "zh": "{platform} 不支持发「{kind}」(它能发:{supported})",
+        "en": "{platform} does not accept “{kind}” (it accepts: {supported}).",
+    },
+    "publishErr_noAssets": {
+        "zh": "这条「{kind}」需要至少一份素材",
+        "en": "This “{kind}” needs at least one asset.",
+    },
+    "publishErr_tooManyAssets": {
+        "zh": "{platform} 的{kind}最多 {max} 份素材(当前 {count} 份)",
+        "en": "{platform} accepts at most {max} items for “{kind}” (this one has {count}).",
+    },
+    "publishErr_videoNeedsOneAsset": {
+        "zh": "视频发布只能带一份视频素材(当前 {count} 份)",
+        "en": "A video post takes exactly one video asset (this one has {count}).",
+    },
+    "publishErr_bodyTooLong": {
+        "zh": "{platform} 正文最多 {max} 字(当前 {count} 字)",
+        "en": "{platform} bodies can be at most {max} characters (this one has {count}).",
+    },
+    "publishErr_bodyTooShort": {
+        "zh": "{platform} 正文至少 {min} 字(当前 {count} 字)",
+        "en": "{platform} bodies need at least {min} characters (this one has {count}).",
+    },
     "publishErr_assetNotFound": {"zh": "素材不存在", "en": "Asset not found."},
     "publishErr_copyNeedsInput": {"zh": "需要提供 brief 或素材", "en": "Provide a brief or an asset."},
     "publishErr_copyNoJson": {"zh": "输出中没有 JSON 对象", "en": "The output contains no JSON object."},

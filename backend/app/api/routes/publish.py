@@ -134,15 +134,24 @@ def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     account = db.get(PublishAccount, body.account_id)
     if account is None or account.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail=tr("routeErr_publishAccountNotInWorkspace"))
-    asset = db.get(Asset, body.asset_id)
-    if asset is None or asset.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_assetNotInWorkspace"))
+    #: 素材:视频 / 老调用点传一个 `asset_id`;图文 / 文章传 `asset_ids`(按顺序)。
+    requested_ids = [one for one in (body.asset_ids or []) if one] or ([body.asset_id] if body.asset_id else [])
+    if not requested_ids:
+        raise HTTPException(status_code=422, detail=tr("publishErr_noAssets", kind=body.content_kind))
+    assets: list[Asset] = []
+    for asset_id in requested_ids:
+        found = db.get(Asset, asset_id)
+        if found is None or found.workspace_id != body.workspace_id:
+            raise HTTPException(status_code=404, detail=tr("routeErr_assetNotInWorkspace"))
+        assets.append(found)
     try:
         task = start_publish(
             db,
             workspace_id=body.workspace_id,
             account=account,
-            asset=asset,
+            assets=assets,
+            kind=body.content_kind,
+            body=body.body,
             title=body.title,
             description=body.description,
             tags=body.tags,
