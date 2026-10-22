@@ -337,23 +337,27 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                   <ContextMenu key={task.id}>
                     <ContextMenuTrigger asChild>
                       <div
-                        //: 行容器(**不是 button**):里面还要放「点开预览素材」这颗按钮,按钮套按钮是非法结构。
-                        //: 写法照素材库列表:整行铺一颗 absolute 的无障碍按钮,行内其它按钮用 z 压在上面。
+                        //: 行容器。**点整行什么都不做**(维护者:整行点击不应该有反应)—— 动作都在行内:
+                        //: 成片名开预览、右侧两颗钮查看页面/删除。只在多选模式下整行可点(勾选)。
+                        //: 行容器不是 button:里面还要放「点开预览素材」那颗按钮,按钮套按钮是非法结构。
                         //: **这一层不留圆角**(它是 divide-y 的直接子元素,分割线以 border-top 画在它身上,
-                        //: 圆角会让分割线两端弯起来);圆角与 hover 底色只在内层。
+                        //: 圆角会让分割线两端弯起来)。
                         className={cn(
-                          "group relative cursor-pointer rounded-lg",
+                          "group relative rounded-lg",
                           //: 深链定位到的那一条亮一下 —— 详情弹窗删掉之后,这是"从通知点进来"唯一的位置感。
                           focusedId === task.id && "ring-2 ring-primary/50",
                         )}
                         data-publish-task={task.id}
-                        onClick={() => (selectMode ? toggle(task.id) : task.asset_id ? openAsset(task.asset_id) : undefined)}
+                        onClick={selectMode ? () => toggle(task.id) : undefined}
                       >
-                        <button
-                          type="button"
-                          className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
-                        />
+                        {/*: 多选模式下整行可点 = 勾选;此时才铺那颗铺满整行的无障碍按钮。 */}
+                        {selectMode && (
+                          <button
+                            type="button"
+                            className="absolute inset-0 z-[1] rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={`${task.title || task.asset_name} · ${t(`batchStatus_${task.status}` as never)}`}
+                          />
+                        )}
                         <PublishCard
                           task={task}
                           selecting={selectMode}

@@ -38,7 +38,7 @@ import { readHint } from "@/test/hint";
 it("selects only visible publish records and drops selections hidden by a status filter", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
-  await screen.findByRole("button", { name: /Published film/ });
+  await screen.findByText("Published film");
   fireEvent.click(screen.getByRole("tab", { name: "studioNeedsAttention" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectAll" }));
@@ -54,8 +54,8 @@ it("enters at the succeeded records when the statistics tile sends it there", as
   gotoSection("publish", "succeeded");
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
-  await screen.findByRole("button", { name: /Published film/ });
-  await waitFor(() => expect(screen.queryByRole("button", { name: /Needs a retry/ })).toBeNull());
+  await screen.findByText("Published film");
+  await waitFor(() => expect(screen.queryByText("Needs a retry")).toBeNull());
   client.clear();
 });
 
@@ -121,7 +121,7 @@ it("新建发布:账号取不回来说取不回来、能重试;存着的设置�
 it("只读成员:新建发布是灰的并说为什么,右键删除也是灰的", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "viewer" } as Workspace} /></QueryClientProvider>);
-  const record = await screen.findByRole("button", { name: /Published film/ });
+  const record = await screen.findByText("Published film");
   const create = screen.getByRole("button", { name: "publishCreate" });
   expect(create).toBeDisabled();
   expect(await readHint(create)).toBe("roleReadOnlyHint");

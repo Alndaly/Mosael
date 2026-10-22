@@ -61,7 +61,7 @@ it("执行器在线就不出声 —— 一条常驻的警告等于没有警告",
 
   show();
 
-  await screen.findByRole("button", { name: /Waiting/ });
+  await screen.findByText("Waiting");
   expect(screen.queryByText("publishExecutorOffline")).not.toBeInTheDocument();
 });
 
@@ -71,7 +71,7 @@ it("没有待办就根本不问 —— 省得每 10 秒一次空轮询", async (
 
   show();
 
-  await screen.findByRole("button", { name: /Done/ });
+  await screen.findByText("Done");
   await waitFor(() => expect(online).not.toHaveBeenCalled());
   expect(screen.queryByText("publishExecutorOffline")).not.toBeInTheDocument();
 });
@@ -82,6 +82,6 @@ it("还没问到答案时不报警 —— 否则刚进页面会闪一条假的",
 
   show();
 
-  await screen.findByRole("button", { name: /Waiting/ });
+  await screen.findByText("Waiting");
   expect(screen.queryByText("publishExecutorOffline")).not.toBeInTheDocument();
 });
