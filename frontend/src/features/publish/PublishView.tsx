@@ -305,8 +305,9 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           <span>{t("publishExecutorOffline")}</span>
         </div>
       )}
-      {/* 一行:状态页签(看哪些)→ 搜索 + 排序(在这刀之内再筛再排,搜索吃满余量)。 */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {/* 一行:状态页签(看哪些)→ 搜索 + 排序(在这刀之内再筛再排,搜索吃满余量)。
+          段与段之间 16(和素材库工具条的 gap-x-4 同一档);搜索与排序是一段,内部 8。 */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
         <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <SearchInput className="min-w-40 flex-1" aria-label={t("publishSearchPlaceholder")} value={search} placeholder={t("publishSearchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
