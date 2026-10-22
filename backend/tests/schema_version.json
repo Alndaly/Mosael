@@ -1,5 +1,5 @@
 {
-  "version": 36,
+  "version": 37,
   "steps": [
     "adopt-deepseek-vendor",
     "backfill-activity-events",
@@ -74,6 +74,7 @@
     "migrate-board-trim-slots-record-their-source",
     "migrate-board-wiring-tools-become-notes",
     "migrate-boards-remember-their-project",
+    "migrate-bound-profiles-use-the-account-partition",
     "migrate-browser-action-leases",
     "migrate-browser-boolean-options",
     "migrate-browser-fallback-targets-come-back",
