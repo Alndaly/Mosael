@@ -116,7 +116,7 @@ Chrome」)。现在只有**平台级一个维度**,而真实世界的影响因�
 
 | 优先级 | 问题 | 建议 |
 |---|---|---|
-| **P0** | 身份是平台级单值,失败无证据 | ①身份升级成「站点档案」(host → 身份 + 是否覆盖 client hints),②登录失败时自动取证:URL 链、关键 cookie **名**(不记值)、最后 3 次 `checkLogin` 判据结果、一张截图,落进 publisher.log 一处 |
+| **P0** | 身份是平台级单值,失败无证据 | ①身份升级成「站点档案」(host → 身份 + 是否覆盖 client hints),②登录失败时自动取证:URL 链、关键 cookie **名**(不记值)、最后 3 次 `checkLogin` 判据结果、一张截图,落进 `browser-trace.log` 一处;**③已发现并修掉的实例**:同一个账号存在两份分区 —— 登录落在 `persist:mosael-<accountId>`,而池档案还指着历史前缀 `persist:openstudio-<accountId>`,于是「卡片说已登录、打开也是登录态,智能体开会话却让他登录」。修法:`_migrate_bound_profiles_use_the_account_partition` 把绑定了账号的档案改回规范分区(幂等) |
 | **P1** | 站点契约散落、改版无感知 | 契约集中成数据(`contracts/platforms/*.json`),加「每日冒烟」:只开创作页,断言关键选择器还在;断了自动开卡或用 Computer Use 兜底 |
 | **P2** | 让位协议手工登记 | 抽成统一的「宿主要在这一块画东西」声明 API,浮层声明区域 → 视图自动让位/挪开,而不是每个浮层各改一处 |
 | ~~**P3**~~ | 登录是一堆 if | ✅ 已做:`publish/loginPhase.cjs`,`opening → waiting → verifying → bound / failed(timeout/dismissed/stopped/error/switched)`,已接进 `openLogin` |

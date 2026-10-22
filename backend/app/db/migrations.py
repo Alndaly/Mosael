@@ -3282,6 +3282,42 @@ def _backfill_browser_pool() -> None:
             )
 
 
+def _migrate_bound_profiles_use_the_account_partition() -> None:
+    """把「绑定了发布账号的浏览器档案」的分区改回**那个账号的规范分区**。
+
+    现场(2026-10-22):同一个抖音账号有两份分区 —— 发布账号登录落在
+    `persist:mosael-<accountId>`(真正的 sessionid 就在这儿),而浏览器池档案的 `partition`
+    还指着一个历史前缀 `persist:openstudio-<accountId>`(里面只有 `sid_guard` 这类不认证的票据)。
+    于是:账号池卡片显示「已登录」(那是发布账号的 binding_status)、点「打开」走发布账号的视图
+    也是登录态,但**智能体经浏览器池开会话**打开的是那份旧分区 —— 平台让他登录。
+
+    这正是 contracts/shared-constants.json 里 `publish_partition_prefix` 警告过的那种事故:
+    改前缀之后,已登录账号的 cookie「凭空消失」,而且不会有任何报错。
+
+    幂等:只改「挂着的账号还在、且分区不等于规范值」的那几行。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "publish_accounts" not in tables or "browser_profiles" not in tables:
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT a.id AS account_id, a.profile_id AS profile_id, p.\"partition\" AS partition "
+                "FROM publish_accounts a JOIN browser_profiles p ON p.id = a.profile_id "
+                "WHERE a.profile_id IS NOT NULL"
+            )
+        ).fetchall()
+        for row in rows:
+            canonical = f"persist:{PARTITION_PREFIX}-{row.account_id}"
+            if (row.partition or "") == canonical:
+                continue
+            conn.execute(
+                text('UPDATE browser_profiles SET "partition" = :part, updated_at = CURRENT_TIMESTAMP WHERE id = :pid'),
+                {"part": canonical, "pid": row.profile_id},
+            )
+
+
 def _migrate_drop_local_publish_accounts() -> None:
     """清掉 platform 为 folder / webhook 的「发布账号」及其空壳浏览器档案。
 
@@ -10346,6 +10382,9 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_scheduled_tasks_vouch_for_what_they_run),
             #: 注册邀请码并进邀请链接(ADR 0054 D50):新表由 SCHEMA 建好了;码换成哈希,老码照样用到过期,旧表删掉。
             #: 指着已经不在的人的邀请和通知一并清掉(维护者库里有 2026-07-22 留下的两行)。
+            #: 绑定了发布账号的档案,分区必须是那个账号的规范分区 —— 历史前缀(openstudio-)留在库里时,
+            #: 池会话打开的是另一份没有登录态的分区:卡片说「已登录」,平台却让他登录(2026-10-22 现场)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_bound_profiles_use_the_account_partition),
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_registration_invites_become_invite_links,
