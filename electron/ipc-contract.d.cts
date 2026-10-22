@@ -51,6 +51,8 @@ export const IPC: {
     computerScreenshot: "computer:screenshot";
     computerClick: "computer:click";
     computerType: "computer:type";
+    computerStop: "computer:stop";
+    computerResume: "computer:resume";
     saveFileBegin: "saveFile:begin";
     saveFileWrite: "saveFile:write";
     saveFileEnd: "saveFile:end";
@@ -86,6 +88,7 @@ export const IPC: {
     comfyuiWorkbench: "comfyui:workbench";
     toastsPointer: "toasts:pointer";
     commandPalette: "mosael:command-palette";
+    computerUseState: "computer:use-state";
   }>;
 };
 

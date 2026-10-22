@@ -77,6 +77,9 @@ const IPC = Object.freeze({
     computerScreenshot: "computer:screenshot",
     computerClick: "computer:click",
     computerType: "computer:type",
+    // 急停 / 恢复(ADR 0075 安全 3):全局热键与界面上的按钮都走这里。
+    computerStop: "computer:stop",
+    computerResume: "computer:resume",
     // 「保存到本地」:系统保存框 + 主进程把字节写到用户当场选的那个位置(见 save-file.cjs)。四步走 ——
     // 开工(弹框)、写一块、收尾(改名到位)、撤掉。分四步而不是一步:素材原文件可以有 2 GiB
     // (见 publish/downloadRules.MAX_DOWNLOAD_BYTES),一条 IPC 消息装不下那么多字节。
@@ -116,6 +119,8 @@ const IPC = Object.freeze({
     toastsPointer: "toasts:pointer",
     // 内嵌网页、工作台画布里按的 ⌘K:主进程截下来交给渲染层开命令面板(ADR 0051)。
     commandPalette: "mosael:command-palette",
+    // Computer Use 的「被控制中 / 已急停」状态:{active, stopped}(见 computerUseGuard.cjs)。
+    computerUseState: "computer:use-state",
   }),
 });
 

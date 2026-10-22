@@ -45,6 +45,9 @@ release/
 !/build/icon.png
 !/build/trayTemplate.png
 !/build/trayTemplate@2x.png
+# Computer Use 被控制中时的红色托盘图标(ADR 0075 安全 2;打包输入,见 package.json 的 build/tray*.png)
+!/build/tray-computer-use.png
+!/build/tray-computer-use@2x.png
 !/build/icon.icns
 !/build/installer.nsh
 !/build/entitlements.mac.plist

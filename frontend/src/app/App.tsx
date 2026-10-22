@@ -65,6 +65,7 @@ import { ImagePreviewProvider, useImagePreview } from "@/components/app/image-pr
 import { NativeViewStandIn } from "@/components/ui/nativeViewAside";
 import { BrowserPreview } from "@/features/browser-pool/BrowserPreview";
 import { LivePanels } from "@/features/browser-pool/LivePanels";
+import { ComputerUseBanner } from "@/components/app/ComputerUseBanner";
 import { BrowserPageList } from "@/features/browser-pool/BrowserPageList";
 import { installEmbeddedFocus, pageAfterPointer } from "@/features/browser-pool/embeddedFocus";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -136,6 +137,8 @@ export function App() {
                   {/* 常驻在窗口上的这几块各自兜底:哪一块渲染出错只收起它自己、弹一条提示,不把整个窗口换成「出错了」
                       (见 components/app/errorBoundary 的 SectionBoundary)。 */}
                   <SectionBoundary mode="quiet"><MainStaleNotice /></SectionBoundary>
+                  {/* Computer Use 被控制中 / 已急停(ADR 0075 安全 2/3):发生在渲染层看不见的地方,必须一眼可见。 */}
+                  <SectionBoundary mode="quiet"><ComputerUseBanner /></SectionBoundary>
                   <PublishViewBar />
                   <SectionBoundary mode="quiet"><BrowserDownloads /></SectionBoundary>
                   <SectionBoundary mode="quiet"><BrowserPreview /></SectionBoundary>

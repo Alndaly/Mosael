@@ -33,6 +33,7 @@ const NOT_GLOBAL: Record<string, string> = {
   ComfyWorkbench: "原生视图的外壳本身(工作台的顶栏和右边那一列)",
   ChromeStatusSlot: "原生视图的外壳本身(外壳顶栏上给 chrome 那一类留的位)",
   MainStaleNotice: "只在开发时出现;原生视图在前台时外壳顶栏上有它的小标记(MainStaleBadge)",
+  ComputerUseBanner: "Computer Use 的窗口内提示条:被控制时屏幕四角描边与托盘换红已经全局可见(ADR 0075 安全 2);原生视图在前台时它会盖住这一条,但动手只发往主窗口那一层,而请视图让开会把用户正在看的网页挪走",
   NotificationCenter: "只从顶栏的铃铛打开,原生视图在前台时顶栏被外壳盖着,开不出来",
   RenameDialog: "只从侧栏的工作区菜单打开,原生视图在前台时点不到",
   DeleteWorkspaceDialog: "只从侧栏的工作区菜单打开,原生视图在前台时点不到",

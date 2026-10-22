@@ -12,6 +12,7 @@ const {
   session,
   shell,
   systemPreferences,
+  globalShortcut,
 } = require("electron");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
@@ -35,6 +36,7 @@ const {
   writeDiagnosticArchive,
 } = require("./data-management.cjs");
 const { createRecordingPermissionService } = require("./recording-permissions.cjs");
+const { createComputerUseGuard } = require("./computerUseGuard.cjs");
 const { pickPath } = require("./path-picker.cjs");
 const { createSaveDesk } = require("./save-file.cjs");
 const { WINDOW_CHROME_HEIGHT, TRAFFIC_LIGHT_POSITION } = require("./window-chrome.cjs");
@@ -333,6 +335,109 @@ const HOST_BRIDGE_MAX_REQUEST = 64 * 1024;
 const COMPUTER_WINDOW_NAMES = Object.freeze(["main", "publish"]);
 let hostBridge = null;
 let hostBridgeStarting = null;
+/** 最近一次由渲染层推上来的系统状态(任务数等);Computer Use 的开关状态由主进程合并进去。 */
+let lastSystemStatus = { runningJobs: 0 };
+/** 「被控制中」的可见状态窗口(屏幕四角描边),每个显示器一个。 */
+let computerUseOverlays = [];
+let computerUseStopShortcuts = [];
+
+const COMPUTER_USE_IDLE_MS = 30_000;
+//: 急停热键。要**不依赖 App 在前台**:全局热键。第一个能注册上的就用它;
+//: 《⌘⇧Esc》在 macOS 上没有系统占用(⌘⌥Esc 是「强制退出」,不能用);Windows 上 Ctrl+Shift+Esc
+//: 是任务管理器,注册不上时退回加 Alt 的那一条。
+const COMPUTER_USE_STOP_ACCELERATORS = Object.freeze([
+  "CommandOrControl+Shift+Escape",
+  "CommandOrControl+Alt+Shift+Escape",
+]);
+
+function computerUseOverlayHtml(label) {
+  const say = String(label || "").replace(/[<>&"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[ch]);
+  return `<!doctype html><html><body style="margin:0;background:transparent;overflow:hidden">
+  <div style="position:fixed;inset:0;border:3px solid rgba(239,68,68,0.92);border-radius:16px;box-sizing:border-box"></div>
+  <div style="position:fixed;left:16px;top:12px;font:600 12px -apple-system,Segoe UI,sans-serif;color:#fff;background:rgba(239,68,68,0.94);padding:5px 12px;border-radius:999px">${say}</div>
+  </body></html>`;
+}
+
+/** 屏幕四角描边:每个显示器一块透明、不接鼠标、不抢焦点的窗口(ADR 0075 安全 2)。 */
+function showComputerUseOverlays() {
+  if (computerUseOverlays.length > 0) return;
+  for (const display of screen.getAllDisplays()) {
+    const overlay = new BrowserWindow({
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: display.bounds.width,
+      height: display.bounds.height,
+      frame: false,
+      transparent: true,
+      hasShadow: false,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      focusable: false,
+      show: false,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    overlay.setIgnoreMouseEvents(true);
+    overlay.setAlwaysOnTop(true, "screen-saver");
+    void overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(computerUseOverlayHtml(t("computerUse_overlay")))}`);
+    overlay.once("ready-to-show", () => overlay.showInactive());
+    computerUseOverlays.push(overlay);
+  }
+}
+
+function hideComputerUseOverlays() {
+  for (const overlay of computerUseOverlays) {
+    try {
+      overlay.destroy();
+    } catch {
+      /* 已经没了 */
+    }
+  }
+  computerUseOverlays = [];
+}
+
+function pushComputerUseState(state) {
+  const running = { active: Boolean(state.active), stopped: Boolean(state.stopped) };
+  systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: running.active && !running.stopped });
+  const win = mainWindow;
+  if (win && !win.isDestroyed()) win.webContents.send(IPC.event.computerUseState, running);
+}
+
+const computerUseGuard = createComputerUseGuard({
+  idleMs: COMPUTER_USE_IDLE_MS,
+  onStateChange: (state) => {
+    if (state.active) showComputerUseOverlays();
+    else hideComputerUseOverlays();
+    pushComputerUseState(state);
+  },
+});
+
+/** 一次「动手」:先过守卫(急停挡着就抛错,调用方什么都不做),再做。 */
+function withComputerUse(action) {
+  computerUseGuard.noteActivity();
+  return action();
+}
+
+/** 注册急停热键;一条都注册不上时留一笔日志(不静默)。 */
+function registerComputerUseStopShortcuts() {
+  for (const accelerator of COMPUTER_USE_STOP_ACCELERATORS) {
+    try {
+      if (globalShortcut.register(accelerator, () => {
+        computerUseGuard.stop("hotkey");
+        showWindow();
+      })) {
+        computerUseStopShortcuts.push(accelerator);
+        return;
+      }
+    } catch {
+      /* 被占用:试下一条 */
+    }
+  }
+  appendMainLog("computer-use", "could not register the emergency-stop hotkey");
+}
 
 function hostBridgeFile() {
   return path.join(configuredDataDir, HOST_BRIDGE_FILE);
@@ -480,9 +585,13 @@ async function answerHostBridgeRequest(line, socket) {
     [IPC.invoke.computerScreenshot]: () =>
       captureMosaelWindow(parseComputerScreenshot(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
     [IPC.invoke.computerClick]: () =>
-      clickMosaelWindow(parseComputerClick(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+      withComputerUse(() =>
+        clickMosaelWindow(parseComputerClick(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+      ),
     [IPC.invoke.computerType]: () =>
-      typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+      withComputerUse(() =>
+        typeIntoMosaelWindow(parseComputerType(request.payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
+      ),
   };
   const handler = Object.prototype.hasOwnProperty.call(handlers, request.channel) ? handlers[request.channel] : null;
   if (!handler) {
@@ -1524,6 +1633,9 @@ app.whenReady().then(async () => {
     appendMainLog("dev-restart", `stale=${staleMainFiles.join(",")}`);
     quitting = true;
     systemHandle?.dispose();
+  hideComputerUseOverlays();
+  globalShortcut.unregisterAll();
+  computerUseGuard.dispose();
     app.exit(DEV_RESTART_CODE);
   });
   if (isDev && !isSmokeTest) {
@@ -1710,9 +1822,28 @@ app.whenReady().then(async () => {
       trayTemplatePath: path.join(__dirname, "..", "build", "trayTemplate.png"),
       trayLightPath: path.join(__dirname, "..", "build", "tray-light.png"),
       trayDarkPath: path.join(__dirname, "..", "build", "tray-dark.png"),
+      //: Computer Use 被控制中:托盘换红图标,菜单里给一颗急停(ADR 0075 安全 2/3)。
+      trayComputerUsePath: path.join(__dirname, "..", "build", "tray-computer-use.png"),
+      onComputerUseStop: () => computerUseGuard.stop("tray"),
     });
+    // Computer Use 的急停 / 恢复:界面上的按钮与全局热键走同一条状态机(见 computerUseGuard.cjs)。
+    handle(IPC.invoke.computerStop, () => {
+      computerUseGuard.stop("manual");
+      return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
+    });
+    handle(IPC.invoke.computerResume, () => {
+      computerUseGuard.resume();
+      return { active: computerUseGuard.isActive(), stopped: computerUseGuard.isStopped() };
+    });
+
     // 渲染层把「有几个任务在跑」推上来 —— 托盘文案和防睡眠都吃这一份,系统层不反查后端。
-    listen(IPC.send.systemStatus, (_e, payload) => systemHandle?.pushStatus(parseSystemStatus(payload)));
+    listen(IPC.send.systemStatus, (_e, payload) => {
+      lastSystemStatus = { ...lastSystemStatus, ...parseSystemStatus(payload) };
+      //: 合并「被控制中」——系统层只认这一份快照(托盘图标据此变色)。
+      systemHandle?.pushStatus({ ...lastSystemStatus, computerUseActive: computerUseGuard.isActive() });
+    });
+    //: Computer Use 的急停热键:不依赖 App 在前台,所以注册在(全局)系统层。
+    registerComputerUseStopShortcuts();
     // 渲染层在任务结束时调用。发不发由主进程判(窗口藏起来时渲染层的 hasFocus 不可靠)。
     listen(IPC.send.systemNotify, (_e, payload) => system.showTaskNotification(parseTaskNotice(payload)));
     // 开发模式返回 null = 「本环境不支持」,设置页据此隐藏开关。不能只是让它失效:

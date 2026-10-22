@@ -38,7 +38,12 @@ export function resolveTrayAsset(
   return { path: ctx.iconPath, template: false, dedicated: false };
 }
 
-function buildIcon(ctx: SystemContext) {
+function buildIcon(ctx: SystemContext, computerUseActive = false) {
+  //: 被控制中:换一枚红色的同一枚图标(ADR 0075 安全 2)。没有专门的资源时退回普通图标。
+  if (computerUseActive && ctx.trayComputerUsePath) {
+    const active = nativeImage.createFromPath(ctx.trayComputerUsePath);
+    if (!active.isEmpty()) return active;
+  }
   let asset = resolveTrayAsset(ctx);
   let image = nativeImage.createFromPath(asset.path);
   // 专用资源被误删/漏打包时退回主图标，托盘入口不能跟着消失。
@@ -80,11 +85,18 @@ export const tray: Capability = {
 
     const rebuild = () => {
       const busy = status.runningJobs > 0;
+      const controlling = Boolean(status.computerUseActive);
       const running = t("tray_running", { count: status.runningJobs });
-      trayIcon.setToolTip(busy ? `Mosael · ${running}` : "Mosael");
+      const icon = buildIcon(ctx, controlling);
+      if (!icon.isEmpty()) trayIcon.setImage(icon);
+      trayIcon.setToolTip(controlling ? `Mosael · ${t("computerUse_stop")}` : busy ? `Mosael · ${running}` : "Mosael");
       trayIcon.setContextMenu(
         Menu.buildFromTemplate([
           { label: busy ? running : t("tray_idle"), enabled: false },
+          //: 被控制中:菜单里直接给一颗急停(界面之外的第二个出口;全局热键是第一个)。
+          ...(controlling && ctx.onComputerUseStop
+            ? [{ label: t("computerUse_stop"), click: () => ctx.onComputerUseStop?.() }]
+            : []),
           { type: "separator" },
           { label: t("tray_open"), click: () => ctx.showWindow() },
           ...(ctx.isDev

@@ -21,6 +21,13 @@ export interface SystemContext {
   trayLightPath?: string;
   /** Windows 深色任务栏上的浅色托盘图。 */
   trayDarkPath?: string;
+  /**
+   * Computer Use 正在操作时的托盘图标(红色;ADR 0075 安全 2「被控制中必须可见」)。
+   * 缺资源时退回普通图标 —— 托盘入口不能跟着消失。
+   */
+  trayComputerUsePath?: string;
+  /** 托盘菜单里的「停止 Computer Use」。不给就不出这一项。 */
+  onComputerUseStop?: () => void;
 }
 
 /** 渲染层推上来的运行状态。系统层只消费,不生产。 */
@@ -29,8 +36,11 @@ export interface SystemStatus {
   runningJobs: number;
   /** 运行中任务的整体进度 0..1;后端还没报进度时给 null(此时任务栏走不确定态)。 */
   progress?: number | null;
+  /** Computer Use 是否正在操作 Mosael(被控制中:托盘图标变色、菜单里给一颗「停止」)。 */
+  computerUseActive?: boolean;
 }
 
+/** 系统层看到的那一份快照:任务数,以及 Computer Use 是否正在操作(ADR 0075 安全 2 —— 托盘图标据此变色)。 */
 export const EMPTY_STATUS: SystemStatus = { runningJobs: 0 };
 
 /** 一个系统能力模块。register 返回的清理函数在退出时调用。 */

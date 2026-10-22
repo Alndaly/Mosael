@@ -152,6 +152,11 @@ const desktopBridge = {
     callback(lastFullscreen);
     return onEvent(IPC.event.fullscreen, callback);
   },
+  // Computer Use:被控制中 / 已急停的状态(见 computerUseGuard.cjs),以及界面上的急停与恢复。
+  // 全局热键也会走同一条状态机,所以这里只订阅、不自己判。
+  onComputerUseState: (callback) => onEvent(IPC.event.computerUseState, callback),
+  stopComputerUse: () => invoke(IPC.invoke.computerStop),
+  resumeComputerUse: () => invoke(IPC.invoke.computerResume),
 };
 contextBridge.exposeInMainWorld("mosaelDesktop", desktopBridge);
 

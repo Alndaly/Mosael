@@ -350,6 +350,10 @@ export interface MosaelDesktopBridge {
   platform: string;
   setTitleOverlay(colors: { color: string; symbolColor: string }): void;
   onFullscreen(callback: (fullscreen: boolean) => void): () => void;
+  /** Computer Use 的「被控制中 / 已急停」状态(ADR 0075 安全 2):全局热键与界面按钮共用同一条状态机。 */
+  onComputerUseState(callback: (state: { active: boolean; stopped: boolean }) => void): () => void;
+  stopComputerUse(): Promise<{ active: boolean; stopped: boolean }>;
+  resumeComputerUse(): Promise<{ active: boolean; stopped: boolean }>;
   checkUpdates(): Promise<MosaelUpdateInfo>;
   onUpdateAvailable(callback: (info: MosaelUpdateInfo) => void): () => void;
   reportStatus(status: { runningJobs: number; progress?: number | null }): void;
