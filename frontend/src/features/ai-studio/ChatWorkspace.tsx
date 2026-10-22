@@ -44,7 +44,6 @@ import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { ChatBubble, caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
-import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
 import { ChatTranscriptSkeleton } from "@/features/agent/chatSkeleton";
 import { isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { SessionList } from "@/features/ai-studio/SessionList";
@@ -380,7 +379,6 @@ export function ChatWorkspace({
   const foldedIds = React.useMemo(() => new Set([...folded.values()].flat().map((receipt) => receipt.id)), [folded]);
   //: 回执带来的素材画进接着它的那一轮回答(见 turnOutputs);后面还没有回答的归正在跑的这一轮。
   //: memo 住:每条气泡拿到的是这张表里的同一个数组,对话没变就不换引用。
-  const received = React.useMemo(() => receivedAssetIdsByMessage(transcriptMessages), [transcriptMessages]);
   //: 「N 个子代理」的数据源:历史消息的 timeline 摊平,再接上正在流的这一轮 ——
   //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
   //: 正在查看的子代理(DSH 形态:进它自己的会话视图,面包屑返回)。换会话就退出 ——
@@ -673,20 +671,19 @@ export function ChatWorkspace({
                     workspaceId={workspace.id}
                     usageEvents={usageByMessage.get(message.id) ?? NO_USAGE}
                     mediaGallery={mediaGallery}
-                    receivedAssetIds={received.byMessage.get(message.id)}
                     foldedReceipts={folded.get(message.id)}
                   />
                 ),
               )}
               {running && streamText && (
                 <div className="relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]">
-                  <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />
+                  <AgentTurnContent timeline={streamTimeline} running />
                   <AgentStatusRow className="mt-1.5" meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
                 </div>
               )}
               {running && !streamText && (
                 <div className="relative mx-auto flex w-full max-w-[780px] shrink-0 flex-col items-stretch gap-[7px] text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
-                  <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />
+                  <AgentTurnContent timeline={streamTimeline} running />
                   {/* 整理上下文的那几十秒这段对话也是占着的(和一轮同一个认领,见 host.compact_session_context):说它在整理,不说在思考。 */}
                   <AgentStatusRow label={t(compactContext.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
                 </div>

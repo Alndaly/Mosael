@@ -53,7 +53,6 @@ import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/fe
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem } from "@/features/agent/ToolCalls";
-import { receivedAssetIdsByMessage } from "@/features/agent/turnOutputs";
 import type { AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { caughtReceiptsByMessage } from "@/features/agent/ChatBubble";
@@ -302,7 +301,6 @@ export function CanvasAgentChat({
   //: 被收起来的那几条消息 id:map 时跳过,否则它会单独占一条(接住了,却同时出现在两处)。
   const foldedIds = React.useMemo(() => new Set([...folded.values()].flat().map((receipt) => receipt.id)), [folded]);
   //: 回执带来的素材画进接着它的那一轮回答(见 turnOutputs);后面还没有回答的归正在跑的这一轮。
-  const received = receivedAssetIdsByMessage(transcript);
   //: 对话里画出来的工具调用:对得上其中一行的确认卡就摆在那一行里,对不上的才退回列表末尾。
   const placedToolCalls = toolCallIds([
     ...visibleMessages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline),
@@ -618,7 +616,6 @@ export function CanvasAgentChat({
                     timeline={payload?.timeline}
                     failed={Boolean(message.error)}
                     durationSeconds={duration}
-                    receivedAssetIds={received.byMessage.get(message.id)}
                     foldedReceipts={folded.get(message.id)}
                   />
                   {message.error && (
@@ -645,13 +642,13 @@ export function CanvasAgentChat({
         })}
         {running && streamText && (
           <div className="relative w-full min-w-0 max-w-full text-ui-md leading-[1.65] [word-break:break-word]">
-            <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />
+            <AgentTurnContent timeline={streamTimeline} running />
             <AgentStatusRow className="mt-1.5" meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
         {running && !streamText && (
           <div className="relative flex w-full min-w-0 max-w-full flex-col items-stretch gap-1.5 text-ui-md leading-[1.65] text-muted-foreground [word-break:break-word]">
-            <AgentTurnContent timeline={streamTimeline} running receivedAssetIds={received.pending} />
+            <AgentTurnContent timeline={streamTimeline} running />
             <AgentStatusRow label={t(compact.isPending ? "agentCompactRunning" : "chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}

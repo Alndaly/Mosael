@@ -1,99 +1,30 @@
-/** 一轮回答的产出:哪些素材算「这一轮做出来的」、回执带来的归给谁、智能体给的小界面。 */
+/**
+ * 渲染侧现在只保留一件事:认出 `show_widget` 的小界面(它画在发起它的那一行明细里)。
+ *
+ * 「哪个工具算做出了产出、该织进答案」那条固定规则已经删掉(维护者 2026-10-22):答案区只放智能体
+ * 最后的正文,要展示什么由它在 markdown 里自己写。
+ */
 import { describe, expect, it } from "vitest";
 
-import type { AgentTimelineItem, ToolCall } from "@/features/agent/ToolCalls";
-import { producedByTool, receivedAssetIdsByMessage, turnWidgets } from "@/features/agent/turnOutputs";
+import { SHOW_WIDGET_TOOL, widgetOfTool } from "@/features/agent/turnOutputs";
+import type { ToolCall } from "@/features/agent/ToolCalls";
 
-function tool(name: string, result: unknown, extra: Partial<ToolCall> = {}): { type: "tool"; tool: ToolCall } {
-  return { type: "tool", tool: { id: `${name}-${Math.random()}`, name, status: "done", result, ...extra } };
+function tool(name: string, args: unknown, status: ToolCall["status"] = "done"): ToolCall {
+  return { id: "t1", name, args, status, result: { ok: true } };
 }
 
-describe("这一轮做出来的素材", () => {
-  it("任务终态的 result 是产物:生成的多张、渲染的一份都认", () => {
-    expect(producedByTool(tool("get_job", { id: "j", status: "succeeded", result: { asset_ids: ["a", "b"] } }).tool)).toEqual(["a", "b"]);
-    expect(producedByTool(tool("get_job", { id: "j", status: "succeeded", result: { asset_id: "r" } }).tool)).toEqual(["r"]);
+describe("show_widget 的小界面", () => {
+  it("成功的那次,内容取自参数(不取自结果:结果只回一句「已显示」)", () => {
+    expect(widgetOfTool(tool(SHOW_WIDGET_TOOL, { title: "地图", html: "<p>hi</p>" }))).toEqual({
+      id: "t1",
+      title: "地图",
+      html: "<p>hi</p>",
+    });
   });
 
-  it("没跑完、失败的任务什么都没做出来", () => {
-    expect(producedByTool(tool("get_job", { status: "running", result: { asset_ids: ["a"] } }).tool)).toEqual([]);
-    expect(producedByTool(tool("get_job", { status: "failed", result: { asset_id: "a" } }).tool)).toEqual([]);
-  });
-
-  it("从一份素材派生出来的才算,原料本身不算", () => {
-    const grid = tool("split_image_grid", { asset_ids: ["c1", "c2"], source_asset_id: "src" });
-    expect(producedByTool(grid.tool)).toEqual(["c1", "c2"]);
-    const mask = tool("create_mask", { asset_id: "m", source_asset_id: "src" });
-    expect(producedByTool(mask.tool)).toEqual(["m"]);
-  });
-
-  it("截图是过程里的一眼,不是产出:答案区一张都不挂", () => {
-    //: 「这种不是答案的中间过程的图片为何也显示在答案那一侧了」(维护者)—— 截图只进工具行明细,
-    //: 交回时用单数键 screenshot_asset_id,这一份不认它。
-    expect(
-      producedByTool(tool("computer_screenshot", { window: "main", screenshot_asset_id: "shot1" }).tool),
-    ).toEqual([]);
-    // 平铺 asset_ids 是「碰过的」读法 —— 一份随便什么的 id 列表不能进答案区。
-    expect(producedByTool(tool("some_list", { asset_ids: ["a", "b"] }).tool)).toEqual([]);
-  });
-
-  it("碰过的不算产出:分析的图、改标签的那份、解析文档的那份", () => {
-    // 这些结果顶层也带 asset_id,但它们说的是「我对这份做了什么」,不是「我做出了这份」。
-    expect(producedByTool(tool("analyze_image", { asset_id: "mine", description: "一只猫" }).tool)).toEqual([]);
-    expect(producedByTool(tool("parse_document", { asset_id: "doc", extraction_id: "e", job_id: "j" }).tool)).toEqual([]);
-  });
-
-  it("运行时包过一层的结果照样认(MCP 的 {result}、pi 的 details.data、文本 JSON)", () => {
-    const wrapped = { result: { status: "succeeded", result: { asset_ids: ["w"] } } };
-    expect(producedByTool(tool("get_job", wrapped).tool)).toEqual(["w"]);
-    const text = { content: [{ type: "text", text: JSON.stringify({ status: "succeeded", result: { asset_id: "t" } }) }] };
-    expect(producedByTool(tool("get_job", text).tool)).toEqual(["t"]);
-  });
-
-});
-
-describe("回执带来的素材归给接着的那一条回答", () => {
-  const receipt = (id: string, assetIds: string[], extra: Record<string, unknown> = {}) => ({
-    id,
-    role: "job_receipt",
-    payload: { job_id: `job-${id}`, asset_ids: assetIds, ...extra },
-  });
-
-  it("连着到的几条回执归给同一条回答,之前的回答不沾", () => {
-    const { byMessage, pending } = receivedAssetIdsByMessage([
-      { id: "u1", role: "user" },
-      { id: "a1", role: "assistant" },
-      receipt("r1", ["x"]),
-      receipt("r2", ["y", "z"]),
-      { id: "a2", role: "assistant" },
-    ]);
-    expect(byMessage.get("a1")).toBeUndefined();
-    expect(byMessage.get("a2")).toEqual(["x", "y", "z"]);
-    expect(pending).toEqual([]);
-  });
-
-  it("回执搭了用户那一轮的车:回执、他那句话、回答 —— 还是归给那条回答", () => {
-    const { byMessage } = receivedAssetIdsByMessage([receipt("r1", ["x"]), { id: "u2", role: "user" }, { id: "a2", role: "assistant" }]);
-    expect(byMessage.get("a2")).toEqual(["x"]);
-  });
-
-  it("后面还没有回答的(那一轮正在跑)记成 pending;没交给智能体的不算", () => {
-    const { pending } = receivedAssetIdsByMessage([
-      { id: "a1", role: "assistant" },
-      receipt("r1", ["x"]),
-      receipt("r2", ["w"], { undelivered: true }),
-    ]);
-    expect(pending).toEqual(["x"]);
-  });
-});
-
-describe("智能体给的小界面", () => {
-  it("只认成功了的 show_widget,内容取自参数", () => {
-    const timeline: AgentTimelineItem[] = [
-      { type: "tool", tool: { id: "w1", name: "show_widget", status: "done", args: { title: "地图", html: "<div>map</div>" }, result: { shown: true } } },
-      { type: "tool", tool: { id: "w2", name: "show_widget", status: "error", args: { title: "坏的", html: "<div/>" } } },
-      { type: "tool", tool: { id: "w3", name: "show_widget", status: "done", args: { title: "空的", html: "  " } } },
-      { type: "tool", tool: { id: "w4", name: "list_assets", status: "done", args: { html: "<b>不是</b>" } } },
-    ];
-    expect(turnWidgets(timeline)).toEqual([{ id: "w1", title: "地图", html: "<div>map</div>" }]);
+  it("失败 / 空内容 / 别的工具:都不算(不给自己造一个坏掉的框)", () => {
+    expect(widgetOfTool(tool(SHOW_WIDGET_TOOL, { html: "<p>hi</p>" }, "error"))).toBeNull();
+    expect(widgetOfTool(tool(SHOW_WIDGET_TOOL, { html: "   " }))).toBeNull();
+    expect(widgetOfTool(tool("get_job", { html: "<p>hi</p>" }))).toBeNull();
   });
 });

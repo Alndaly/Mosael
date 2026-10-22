@@ -1664,15 +1664,19 @@ WIDGET_TITLE_LIMIT = 80
 
 @tool(effect="reads")
 def show_widget(title: str, html: str) -> dict[str, Any]:
-    """Show an interactive HTML view (map, chart) in your answer. html ≤60k chars, sandboxed, no network;
-    JS/CSS inline or jsdelivr/unpkg/cdnjs; images data: or OSM tiles. CSS vars --foreground --background --primary."""
+    """Show a sandboxed HTML view (map, chart) in THIS call's details (the process area).
+
+    It does NOT appear in the answer: the answer is only your own reply text. To put something in
+    front of the user, write it in your reply — `![alt](mosael-asset:<asset_id>)` for an asset,
+    or a little inline HTML (it is sanitized). html ≤60k chars, no network; JS/CSS inline or
+    jsdelivr/unpkg/cdnjs; images data: or OSM tiles. CSS vars --foreground --background --primary."""
     # 为什么是工具而不是回答里约定一个 ```html 代码块(两条路都能让界面画出来):
     # - 参数是结构化的,这里能**先校验**(空、超长)再交给界面;代码块写坏了(少一个反引号、JS 里本身带 ```)
     #   界面只能猜它在哪结束,猜错就是半截 HTML 混进正文。
     # - 流式输出时代码块是一点点长出来的,画到一半的 HTML 会反复重建 iframe;工具调用的参数是整份到的。
     # - 回答的正文保持是人话:复制、朗读、导出时不会带出一大段 HTML。
-    # 界面从**调用参数**里取 html 来画(features/agent/turnOutputs.turnWidgets),结果里不回传 —— 再回一遍
-    # 是让模型白读一次自己刚写的几十 KB。
+    # 界面从**调用参数**里取 html 来画(features/agent/turnOutputs.widgetOfTool,画在那一行明细里),
+    # 结果里不回传 —— 再回一遍是让模型白读一次自己刚写的几十 KB。
     #
     # 安全边界不在这里:这里只管尺寸。HTML 是模型写的,模型读过的网页、文档都可能往里塞东西,所以界面把它
     # 关进不同源的沙箱 iframe、用 CSP 断网(见前端 features/agent/agentWidget.ts 的说明)。

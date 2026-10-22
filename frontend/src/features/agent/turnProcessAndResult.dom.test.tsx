@@ -76,7 +76,7 @@ describe("过程和结果的分界", () => {
 });
 
 describe("一轮回答", () => {
-  it("跑完了:过程收成一行摘要(几步、多久),答案和做出来的图摊在下面", async () => {
+  it("跑完了:过程收成一行摘要(几步、多久),答案区只有那段正文(不再往里摆图)", async () => {
     renderTurn({ durationSeconds: 32 });
     const summary = screen.getByRole("button", { name: `agentProcessDone · ${formatElapsedSeconds(32)}` });
     expect(summary.getAttribute("aria-expanded")).toBe("false");
@@ -84,18 +84,22 @@ describe("一轮回答", () => {
     expect(processRow()).toBeNull();
     expect(screen.getByText("图片已生成")).toBeTruthy();
     const result = document.querySelector("[data-turn-result]");
-    await waitFor(() => expect(result?.querySelectorAll("img")).toHaveLength(2));
+    //: 答案区显示什么由智能体自己写在正文里(维护者 2026-10-22):工具做出来的图不再自动摆进来。
+    expect(result?.querySelectorAll("img")).toHaveLength(0);
     fireEvent.click(summary);
     expect(processRow()).not.toBeNull();
   });
 
-  it("结果区的图可以去素材库;工具行自己不再为素材摊开", async () => {
+  it("做出来的图在**过程**里(那一行明细),可以点去素材库;答案区只有正文", async () => {
     renderTurn({});
-    const reveal = await screen.findAllByRole("button", { name: "agentOutputOpenInLibrary" });
-    fireEvent.click(reveal[1]);
-    expect(opened).toEqual(["img-2"]);
     fireEvent.click(screen.getByRole("button", { name: /agentProcessDone/ }));
-    expect(document.querySelector("[data-tool-call='t2'] [data-tool-details]")).toBeNull();
+    const row = document.querySelector<HTMLElement>("[data-tool-call='t2']")!;
+    fireEvent.click(row.querySelector("button")!);
+    const reveal = await screen.findAllByRole("button", { name: "agentOutputOpenInLibrary" });
+    fireEvent.click(reveal[0]);
+    expect(opened).toEqual(["img-1"]);
+    // 答案区里没有它们。
+    expect(document.querySelector("[data-turn-result]")?.querySelectorAll("img")).toHaveLength(0);
   });
 
   it("还在跑:过程摊着,摘要说「处理中」", () => {
@@ -121,7 +125,7 @@ describe("一轮回答", () => {
     expect(processRow()?.querySelector("[data-pending-card]")).not.toBeNull();
   });
 
-  it("做出来的图是答案文档的一部分:跑着就在,位置在产出它的步骤之后(时间线顺序)", async () => {
+  it("跑着的时候答案区也只画正文;图在过程里,不会随着流式回答冒出来", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const tree = (running: boolean) => (
       <QueryClientProvider client={client}>
@@ -129,16 +133,10 @@ describe("一轮回答", () => {
       </QueryClientProvider>
     );
     const view = render(tree(true));
-    // 跑着:工具一交图,文档流里立刻有它 —— 图在产出它的步骤之后、总结正文之前。
-    const result = document.querySelector("[data-turn-result]");
-    await waitFor(() => expect(result?.querySelectorAll("img")).toHaveLength(2));
-    const children = [...(result?.children ?? [])];
-    const imgIndex = children.findIndex((child) => child.querySelector("img"));
-    const textIndex = children.findIndex((child) => child.textContent === "图片已生成");
-    expect(imgIndex, "图在正文前面(时间线:先产出、后总结)").toBeGreaterThanOrEqual(0);
-    expect(imgIndex).toBeLessThan(textIndex);
+    expect(screen.getByText("图片已生成")).toBeTruthy();
+    expect(document.querySelector("[data-turn-result]")?.querySelectorAll("img")).toHaveLength(0);
     view.rerender(tree(false));
-    await waitFor(() => expect(document.querySelector("[data-turn-result]")?.querySelectorAll("img")).toHaveLength(2));
+    expect(document.querySelector("[data-turn-result]")?.querySelectorAll("img")).toHaveLength(0);
   });
 
   it("过程只有一段思考:不套摘要,思考块自己收起", () => {
@@ -147,9 +145,9 @@ describe("一轮回答", () => {
     expect(screen.getByText("agentThought")).toBeTruthy();
   });
 
-  it("回执带来的图接在这一轮自己的产出后面,同一张不摆两遍", async () => {
-    renderTurn({ receivedAssetIds: ["img-2", "img-3"] });
+  it("回执带来的图也不往答案区摆 —— 智能体要给人看,就自己写进正文", async () => {
+    renderTurn({});
     const result = document.querySelector("[data-turn-result]");
-    await waitFor(() => expect(result?.querySelectorAll("img")).toHaveLength(3));
+    expect(result?.querySelectorAll("img")).toHaveLength(0);
   });
 });

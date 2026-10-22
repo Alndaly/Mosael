@@ -140,7 +140,6 @@ export const ChatBubble = React.memo(function ChatBubble({
   usageEvents,
   mediaGallery,
   workspaceId,
-  receivedAssetIds,
   foldedReceipts,
 }: {
   message: AgentMessage;
@@ -148,8 +147,6 @@ export const ChatBubble = React.memo(function ChatBubble({
   mediaGallery?: ImagePreviewItem[];
   /** 念这一条记在哪个工作区的账上,也决定要不要 ai 权限(见 routes/agent.speak)。 */
   workspaceId: string;
-  /** 助手消息:回执带来、该画进这一轮结果里的素材(见 turnOutputs.receivedAssetIdsByMessage)。 */
-  receivedAssetIds?: readonly string[];
   /** 助手消息:被这一轮**接住**的回执(见 receiptWasCaught),收进「已处理 · N 步」里。
    *  没被接住的不传进来 —— 它们作为独立的一条显式出现(见 JobReceiptNotice)。
    *  调用方要给稳定的数组:气泡是 memo 的。 */
@@ -226,7 +223,6 @@ export const ChatBubble = React.memo(function ChatBubble({
             timeline={payload?.timeline}
             failed={Boolean(message.error)}
             durationSeconds={payload?.usage?.duration_seconds}
-            receivedAssetIds={receivedAssetIds}
             foldedReceipts={foldedReceipts}
           />
           {message.error && (

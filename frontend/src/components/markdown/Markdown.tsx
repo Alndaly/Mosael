@@ -4,10 +4,12 @@ import { CodeBlock, CodeBlockCopyButton, Streamdown, type Components } from "str
 import { WrapText } from "lucide-react";
 
 import { requestImagePreview } from "@/components/app/image-preview-request";
+import { assetPreviewUrl } from "@/api/domains/assets";
 import { codeHighlighter } from "@/components/markdown/codeHighlighter";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { CitationLink } from "./CitationLink";
+import { rewriteAssetRefs } from "./assetRefs";
 import { MARKDOWN_REF, MarkdownRefsContext } from "./markdownRefs";
 
 import { useI18n } from "@/app/preferences";
@@ -124,7 +126,11 @@ const COMPONENTS: Components = { pre: CodeCard, a: MarkdownLink };
 export function AgentMarkdown({ children, fullTables = false }: { children: string; fullTables?: boolean }) {
   const t = useI18n();
   const refs = React.useContext(MarkdownRefsContext);
-  const markdown = React.useMemo(() => (refs ? refs.rewrite(children) : children), [refs, children]);
+  //: 正文里 `![说明](mosael-asset:<id>)` → 带 token 的素材地址(媒体元素加不了请求头,见 assetRefs)。
+  const markdown = React.useMemo(
+    () => rewriteAssetRefs(refs ? refs.rewrite(children) : children, assetPreviewUrl),
+    [refs, children],
+  );
   return (
     // 正文里的图(回复里贴的图、文档解析出的插图)点开看大图,左右翻的是**这一段**里的全部图。
     // 不接管 Streamdown 自己的图片组件(它带着加载失败的说明和悬停下载),只在外面接住点在图上的那一下。
