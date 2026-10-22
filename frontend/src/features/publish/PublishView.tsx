@@ -30,6 +30,8 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchInput } from "@/components/ui/search-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MenuItemBody } from "@/components/ui/menu";
 import { Truncate } from "@/components/ui/truncate";
 import { Hint } from "@/components/ui/tooltip";
@@ -39,6 +41,7 @@ import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { gotoRecord, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { parseServerTime, useNow } from "@/lib/time";
+import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -123,11 +126,35 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   const opened = (tasks.data ?? []).find((task) => task.id === openId) ?? null;
   // 按天分栏。时间是无时区标记的 UTC 串,分组必须按本地日历天算(见 lib/dayGroups)。
   const [statusFilter, setStatusFilter] = React.useState("all");
+  //: 搜索:标题 / 简介 / 标签 / 成片名 / 账号都对。数据都在手上(分页由列表整取),本地筛。
+  const [search, setSearch] = React.useState("");
+  //: 排序是**怎么看**的一部分,不是这一刻的临时值 —— 切走再回来照旧(和素材库同一个做法)。
+  const [sortKey, setSortKey] = usePersistentTab<"newest" | "oldest">("publish-sort", "newest", ["newest", "oldest"]);
   useSectionEntry("publish", (entry) => {
     setOpenId(null);
     setStatusFilter(STATUS_FILTERS.includes(entry) ? entry : "all");
   });
-  const filteredTasks = React.useMemo(() => (tasks.data ?? []).filter(task => statusFilter === "all" || (statusFilter === "active" ? ACTIVE.has(task.status) : statusFilter === "succeeded" ? ["succeeded", "success"].includes(task.status) : !ACTIVE.has(task.status) && !["succeeded", "success"].includes(task.status))), [tasks.data, statusFilter]);
+  const filteredTasks = React.useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const kept = (tasks.data ?? []).filter((task) => {
+      const byStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active"
+          ? ACTIVE.has(task.status)
+          : statusFilter === "succeeded"
+            ? ["succeeded", "success"].includes(task.status)
+            : !ACTIVE.has(task.status) && !["succeeded", "success"].includes(task.status));
+      if (!byStatus) return false;
+      if (!needle) return true;
+      return [task.title, task.description, task.asset_name, task.account_name, ...task.tags]
+        .some((field) => field?.toLowerCase().includes(needle));
+    });
+    //: 按发布(记录创建)时间排;「最新发布」在前是默认。
+    return [...kept].sort((a, b) => {
+      const delta = parseServerTime(a.created_at).getTime() - parseServerTime(b.created_at).getTime();
+      return sortKey === "newest" ? -delta : delta;
+    });
+  }, [tasks.data, statusFilter, search, sortKey]);
   const groups = React.useMemo(
     () => groupByLocalDay(filteredTasks, (task) => task.created_at),
     [filteredTasks],
@@ -267,7 +294,20 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           <span>{t("publishExecutorOffline")}</span>
         </div>
       )}
-      <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
+      {/* 一行:状态页签(看哪些)→ 搜索 + 排序(在这刀之内再筛再排,搜索吃满余量)。 */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <SearchInput className="min-w-40 flex-1" aria-label={t("publishSearchPlaceholder")} value={search} placeholder={t("publishSearchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
+          <Select value={sortKey} onValueChange={(value) => setSortKey(value as "newest" | "oldest")}>
+            <SelectTrigger className="w-auto min-w-28" aria-label={t("publishSortNewest")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">{t("publishSortNewest")}</SelectItem>
+              <SelectItem value="oldest">{t("publishSortOldest")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
