@@ -357,7 +357,9 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
         <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
         <Truncate className="text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</Truncate>
         {task.status === "failed" && task.error && (
-          <Truncate as="p" lines={2} className="text-ui-sm text-muted-foreground" data-publish-failed-summary="">
+          //: 失败原因带**提示色**(和状态列同一个语义色):灰色读起来像补充说明,可这一句正是
+          //: "要不要点开这条"的判断依据(维护者截图指出)。
+          <Truncate as="p" lines={2} className="text-ui-sm text-destructive" data-publish-failed-summary="">
             {task.error_summary || task.error}
           </Truncate>
         )}
