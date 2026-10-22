@@ -1664,12 +1664,13 @@ WIDGET_TITLE_LIMIT = 80
 
 @tool(effect="reads")
 def show_widget(title: str, html: str) -> dict[str, Any]:
-    """Show a sandboxed HTML view (map, chart) in THIS call's details (the process area).
+    """Show a sandboxed HTML view (map, chart, a small page) IN YOUR ANSWER, right where you called it.
 
-    It does NOT appear in the answer: the answer is only your own reply text. To put something in
-    front of the user, write it in your reply — `![alt](mosael-asset:<asset_id>)` for an asset,
-    or a little inline HTML (it is sanitized). html ≤60k chars, no network; JS/CSS inline or
-    jsdelivr/unpkg/cdnjs; images data: or OSM tiles. CSS vars --foreground --background --primary."""
+    Use it whenever the user should SEE something interactive — a rendered page, a chart, a map.
+    Write the surrounding words in your reply text; the widget lands in the answer between them.
+    html ≤60k chars, no network; JS/CSS inline or jsdelivr/unpkg/cdnjs; images data: or OSM tiles.
+    CSS vars --foreground --background --primary. For a plain image use `![alt](mosael-asset:<id>)`
+    in your reply instead — generated media is NOT shown automatically."""
     # 为什么是工具而不是回答里约定一个 ```html 代码块(两条路都能让界面画出来):
     # - 参数是结构化的,这里能**先校验**(空、超长)再交给界面;代码块写坏了(少一个反引号、JS 里本身带 ```)
     #   界面只能猜它在哪结束,猜错就是半截 HTML 混进正文。

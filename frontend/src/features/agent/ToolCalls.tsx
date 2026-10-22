@@ -27,7 +27,7 @@ import { AgentPageViewsContext } from "@/features/agent/pageViews";
 import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
 import { DecisionsContext, useToolCallConfirmation } from "@/features/agent/decisionsContext";
 import { MediaPreviewGrid } from "@/features/agent/MediaPreview";
-import { widgetOfTool } from "@/features/agent/turnOutputs";
+import { widgetOfTool, type AgentWidget } from "@/features/agent/turnOutputs";
 import { AgentWidgetFrame } from "@/features/agent/AgentWidgetFrame";
 import { EXPIRED, expiryLabel } from "@/features/agent/cardExpiry";
 
@@ -219,9 +219,6 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
     () => (tool.status === "error" ? [] : [...collectAssetIds(tool.args, collectAssetIds(data))]),
     [tool.args, data, tool.status],
   );
-  //: `show_widget` 给的小界面画在**这次调用的明细里**(过程的一部分)。答案区只放正文 —— 要让用户
-  //: 一眼看到它,就在正文里写内嵌 HTML / 图片引用(见 resultDocument 的说明)。
-  const widget = React.useMemo(() => (tool.status === "error" ? null : widgetOfTool(tool)), [tool]);
 
   // **成功时不写「已完成」** —— 那个 ✓ 已经说过一遍了,再写一次只是在占地方。
   // 运行中和失败时保留:那两个词带的信息,图标传达不了全部(尤其失败,它要把视线拉过去)。
@@ -238,7 +235,7 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
       ? rawFailureFields(format(data ?? tool.result) ?? "", t("toolFailed"))
       : null;
   const hasBody = Boolean(
-    (argText && !argsAreJustPreview) || resultText || richShape || hasPageCard || failure || assetIds.length > 0 || widget !== null,
+    (argText && !argsAreJustPreview) || resultText || richShape || hasPageCard || failure || assetIds.length > 0,
   );
   // 页面专用结果和失败原因原先作为工具行的兄弟卡一直摊开,看起来像第二条消息。
   // 现在它们进这次调用的明细,结果刚到或失败时自动展开,仍然不会把重要回包藏起来。
@@ -345,7 +342,6 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
               />
             </div>
           )}
-          {widget && <AgentWidgetFrame widget={widget} />}
           {assetIds.length > 0 && (
             //: `reveal`:每张卡带一颗「在素材库中打开」—— 做出来的图现在只在过程里,这个出口要跟着过来。
             <MediaPreviewGrid assetIds={assetIds} reveal className={cn(AGENT_ROW_BODY_CLASS, "mt-1.5")} />
@@ -573,22 +569,33 @@ export function splitTurn(blocks: TurnBlock[]): { process: TurnBlock[]; result: 
   return { process: blocks.slice(0, cut), result: blocks.slice(cut) };
 }
 
-export type ResultDocItem = { kind: "text"; text: string };
+export type ResultDocItem =
+  | { kind: "text"; text: string }
+  | { kind: "widget"; widget: AgentWidget };
 
 /**
- * **答案文档 = 智能体最后那段正文**,别的都不自动往里塞(维护者 2026-10-22)。
+ * **答案文档 = 智能体最后那段正文 + 它主动要展示的小界面**(维护者 2026-10-22)。
  *
- * 「答案区显示什么」是**智能体自己的决定**,不是渲染器的固定规则:它要展示图,就在正文里写
- * `![说明](mosael-asset:<asset_id>)`;要一小块界面,就写内嵌 HTML —— 这些本来就是流式正文的一部分,
- * 一边流一边画。工具做出来的素材、回执带来的图、`show_widget` 的小界面**只出现在过程里**
- * (工具行明细 / 回执那一步),不自动摆进答案:同一张图在正文和结果区各出现一次,是同一件事画两遍;
- * 而且「图上文下」还是「文上图下」该由写字的人定,不是由渲染顺序定。
+ * 「答案区显示什么」是**智能体自己的决定**,不是渲染器的固定规则:
+ *
+ * - 要放图:在正文里写 `![说明](mosael-asset:<asset_id>)`,渲染前换成本地可取的地址;
+ * - 要放一小块交互界面:调 `show_widget` —— 那个工具的契约就是「把这个拿给用户看」,所以它画在
+ *   **答案里**(按时间线顺序和正文交织),不是埋进折叠的「已处理 · N 步」里;
+ * - 工具**碰过 / 跑出来**的素材(生成任务的产物、回执带来的图)不自动摆进答案:要不要给人看,
+ *   由它在正文里写引用决定。把「工具一产出就挂到答案下面」当固定规则是错的。
  */
 export function resultDocument(blocks: TurnBlock[]): ResultDocItem[] {
   const { result } = splitTurn(blocks);
   const doc: ResultDocItem[] = [];
-  for (const block of result) {
-    if (block.type === "text" && block.text) doc.push({ kind: "text", text: block.text });
+  for (const block of blocks) {
+    if (block.type === "text") {
+      if (result.includes(block) && block.text) doc.push({ kind: "text", text: block.text });
+    } else if (block.type === "tools") {
+      for (const tool of block.tools) {
+        const widget = widgetOfTool(tool);
+        if (widget) doc.push({ kind: "widget", widget });
+      }
+    }
   }
   return doc;
 }
@@ -724,7 +731,8 @@ const NO_RECEIPTS: readonly FoldedReceipt[] = [];
  *   决定要不要在对话末尾再摆一张)。
  * - **结果就是那段正文**(维护者 2026-10-22):答案区显示什么由智能体自己决定 —— 它把要展示的图写成
  *   `![说明](mosael-asset:<asset_id>)`、要的小界面写成内嵌 HTML,这些都是流式正文的一部分,边流边画。
- *   工具做的素材、回执带来的图、`show_widget` 的小界面**不自动摆进答案**,只留在过程里(工具行明细)。
+ *   `show_widget` 的小界面是**智能体主动要展示**的东西,画在答案里(和正文按时间线交织);
+ *   工具碰过 / 跑出来的素材留在过程里,要不要给人看由它在正文里写引用决定。
  *
  * 过程只有一段思考时不套摘要:「已处理 · 1 步」包着「已思考」是同一件事说两遍,思考块自己会收起。
  */
@@ -812,9 +820,13 @@ export function AgentTurnContent({
       ))}
       {hasResult && (
         <div className={AGENT_TURN_BLOCKS_CLASS} data-turn-result="">
-          {doc.map((item, index) => (
-            <TurnBlockView key={`result-${index}`} block={{ type: "text", text: item.text }} index={index} />
-          ))}
+          {doc.map((item, index) =>
+            item.kind === "text" ? (
+              <TurnBlockView key={`result-${index}`} block={{ type: "text", text: item.text }} index={index} />
+            ) : (
+              <AgentWidgetFrame key={`result-${index}`} widget={item.widget} />
+            ),
+          )}
         </div>
       )}
     </div></CitationContext.Provider>

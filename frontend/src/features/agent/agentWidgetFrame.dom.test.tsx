@@ -107,26 +107,24 @@ describe("AgentWidgetFrame", () => {
   });
 });
 
-describe("小界面画在发起它的那一行明细里(不是答案区)", () => {
+describe("小界面画在答案里(智能体主动要展示的东西)", () => {
   const timeline: AgentTimelineItem[] = [
     { type: "tool", tool: { id: "s1", name: "show_widget", status: "done", args: widget, result: { shown: true, title: widget.title } } },
     { type: "tool", tool: { id: "s2", name: "show_widget", status: "error", args: { title: "坏的", html: "<p>x</p>" }, result: { error: "too long" } } },
     { type: "text", text: "地图在上面" },
   ];
 
-  it("成功的那次在那一行的明细里,失败的不画;答案区只有正文(维护者 2026-10-22)", async () => {
+  it("成功的那次画在答案里,失败的不画;过程里不再摆第二份", async () => {
     render(<AgentTurnContent timeline={timeline} />);
-    // 答案区:只有「地图在上面」这句正文,没有固定摆进来的小界面。
     const result = document.querySelector("[data-turn-result]");
-    expect(result?.textContent).toBe("地图在上面");
-    expect(result?.querySelector("[data-agent-widget]")).toBeNull();
+    //: show_widget 的契约就是「把这个拿给用户看」—— 它属于答案,不埋在折叠的「已处理」里。
+    await waitFor(() => expect(result?.querySelector('[data-agent-widget="s1"]')).not.toBeNull());
+    expect(result?.textContent).toContain("地图在上面");
     expect(document.querySelector('[data-agent-widget="s2"]')).toBeNull();
 
-    // 过程收在「已处理」那一行里;点开,再点开那次调用本身 —— 明细里才是它。
+    // 过程摊开之后也没有第二份。
     fireEvent.click(screen.getByRole("button", { name: /agentProcessDone/ }));
     const row = document.querySelector<HTMLElement>("[data-tool-call='s1']");
-    expect(row).not.toBeNull();
-    fireEvent.click(row!.querySelector("button")!);
-    await waitFor(() => expect(row?.querySelector('[data-agent-widget="s1"]')).not.toBeNull());
+    expect(row?.querySelector("[data-agent-widget]")).toBeNull();
   });
 });
