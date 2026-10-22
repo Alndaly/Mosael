@@ -581,7 +581,15 @@ export function Recorder({
                   onClick={() => {
                     void window.mosaelDesktop?.recordingPermissions
                       ?.prepareScreen?.()
-                      .then(() => toast.info(t("recordScreenPermissionPrompted")))
+                      .then((result) => {
+                        //: 系统已经拒过一次就不会再弹框(只能去设置里勾):那种情况主进程会顺手
+                        //: 把设置面板打开,这里就把话说成「去列表里勾上 / 手动添加」。
+                        toast.info(
+                          result?.prompted === false
+                            ? t("recordScreenPermissionDeniedHint")
+                            : t("recordScreenPermissionPrompted"),
+                        );
+                      })
                       .catch(() => undefined);
                   }}
                 >

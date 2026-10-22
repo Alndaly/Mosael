@@ -142,10 +142,22 @@ export function createRecordingController(
         if (capturesScreen) {
           acquisitionIssue = "screen";
           screenStream = await dependencies.mediaDevices.getDisplayMedia({
-            video: true,
+            //: **固定 30fps**:不写 frameRate 时 Chromium 按「画面变了才出帧」自适应,出一帧、
+            //: 停几帧、再出一帧 —— 在画面里有大片渐变或纯色时,这就是肉眼看到的频闪(维护者
+            //: 2026-10-23 报「某些色彩有频闪」)。定住帧率,编码器才有稳定的时间轴可以分配码率。
+            video: { frameRate: { ideal: 30, max: 30 } },
             audio: options.captureSystemAudio,
           });
           acquiredStreams.add(screenStream);
+          //: 屏幕内容是**细节**型(文字、纯色块、渐变),不是运动型:告诉 Chromium 用 detail 的
+          //: 编码策略,它才不会按"运动画面"降帧降质,渐变上的色带 / 闪烁也会少很多。
+          for (const track of screenStream.getVideoTracks()) {
+            try {
+              track.contentHint = "detail";
+            } catch {
+              /* 不支持 contentHint 的运行时:忽略,固定帧率已经是主要的那一半 */
+            }
+          }
           assertStarting();
           if (options.captureSystemAudio && !hasLiveAudioTrack(screenStream)) {
             throw new RecordingStartError("systemAudio");

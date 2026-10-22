@@ -16,7 +16,7 @@ const { createRecordingPermissionService } = require("./recording-permissions.cj
     openSettings: (kind: "camera" | "microphone" | "screen") => Promise<boolean>;
     prepareScreen: (desktopCapturer: {
       getSources: (options: { types: string[]; thumbnailSize: { width: number; height: number } }) => Promise<unknown[]>;
-    }) => Promise<{ status: string; screens: number }>;
+  }) => Promise<{ status: string; screens: number; prompted: boolean }>;
   };
 };
 
@@ -71,7 +71,7 @@ describe("screen recording needs an actual capture attempt", () => {
       systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus },
     });
 
-    await expect(service.prepareScreen({ getSources })).resolves.toEqual({ status: "not-determined", screens: 2 });
+    await expect(service.prepareScreen({ getSources })).resolves.toMatchObject({ status: "not-determined", screens: 2 });
     //: 只问「屏幕」:窗口那张缩略图对授权没有帮助,却会把所有窗口都枚举一遍。
     expect(getSources.mock.calls[0][0]).toMatchObject({ types: ["screen"] });
   });
@@ -83,10 +83,16 @@ describe("screen recording needs an actual capture attempt", () => {
       systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "denied") },
     });
 
-    await expect(service.prepareScreen({ getSources: vi.fn().mockRejectedValue(new Error("nope")) })).resolves.toEqual({
-      status: "denied",
-      screens: 0,
+    const openSettings = vi.fn().mockResolvedValue(true);
+    const denied = createRecordingPermissionService({
+      platform: "darwin",
+      shell: { openExternal: openSettings },
+      systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "denied") },
     });
+    const result = await denied.prepareScreen({ getSources: vi.fn().mockRejectedValue(new Error("nope")) });
+    expect(result).toMatchObject({ status: "denied", screens: 0, prompted: false });
+    //: 已经拒绝过就不会再弹框:要顺手把设置面板打开,而不是让人对着不动的界面等。
+    expect(openSettings).toHaveBeenCalled();
   });
 
   it("on other platforms there is nothing to register", async () => {
@@ -96,7 +102,11 @@ describe("screen recording needs an actual capture attempt", () => {
       shell: { openExternal: vi.fn() },
       systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "unknown") },
     });
-    await expect(service.prepareScreen({ getSources })).resolves.toEqual({ status: "unknown", screens: 0 });
+    await expect(service.prepareScreen({ getSources })).resolves.toEqual({
+      status: "unknown",
+      screens: 0,
+      prompted: false,
+    });
     expect(getSources).not.toHaveBeenCalled();
   });
 });

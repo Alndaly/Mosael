@@ -287,7 +287,11 @@ describe("Recorder", () => {
     await user.click(deviceAudio);
     await user.click(screen.getByRole("button", { name: /recordStart/ }));
 
-    expect(getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: false });
+    expect(getDisplayMedia).toHaveBeenCalledWith({
+      //: 固定 30fps:不写 frameRate 会让 Chromium 自适应出帧,渐变/纯色上会看着闪(2026-10-23)。
+      video: { frameRate: { ideal: 30, max: 30 } },
+      audio: false,
+    });
   });
 
   it("does not silently create a mute recording when requested system audio was not granted", async () => {
@@ -347,7 +351,10 @@ describe("Recorder", () => {
       expect.stringMatching(/^record_screen_file-\d+\.webm$/),
       expect.stringMatching(/^record_camera_file-\d+\.webm$/),
     ]);
-    expect(getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: true });
+    expect(getDisplayMedia).toHaveBeenCalledWith({
+      video: { frameRate: { ideal: 30, max: 30 } },
+      audio: true,
+    });
     expect(getUserMedia).toHaveBeenLastCalledWith({ video: true, audio: true });
     expect(screenCapture.track.stop).toHaveBeenCalledOnce();
     expect(cameraCapture.track.stop).toHaveBeenCalledOnce();

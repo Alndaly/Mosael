@@ -78,7 +78,11 @@ describe("recording controller", () => {
       requestStop,
     });
 
-    expect(deps.getDisplayMedia).toHaveBeenCalledWith({ video: true, audio: true });
+    expect(deps.getDisplayMedia).toHaveBeenCalledWith({
+      //: 固定 30fps(见 recordingController 的注释):自适应出帧在渐变/纯色上看着会闪。
+      video: { frameRate: { ideal: 30, max: 30 } },
+      audio: true,
+    });
     // The camera comes from the caller's (already open) input source.
     expect(camera$.take).toHaveBeenCalledOnce();
     expect(deps.createSession).toHaveBeenCalledWith(

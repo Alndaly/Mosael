@@ -42,6 +42,30 @@ export function releaseRecordingInputs(inputs: readonly RecordingInput[]): void 
  * together. Files are returned only after all captures have finished successfully, so a
  * two-source session cannot silently import half of the expected result.
  */
+/**
+ * MediaRecorder 的参数:**默认值对屏幕内容太省**。
+ *
+ * 不指定时 Chromium 给的是 VP8 + 约 2.5Mbps —— 录文字和纯色块还过得去,一旦画面里出现大面积
+ * 渐变(毛玻璃、阴影、色彩过渡),码率不够就会在色带上"呼吸"式地闪,维护者 2026-10-23 报的
+ * 「某些色彩频闪」就是这一类。屏幕内容又不像摄像机画面那样能靠时域冗余省码率:它每个像素都在
+ * 详情上,只能给足码率。
+ *
+ * 顺序上优先 VP9(同码率下渐变明显更干净),不支持才退 VP8 / 裸 webm;音频给 192k 免得
+ * 系统声音里的音乐发闷。
+ */
+function recorderOptions(input: RecordingInput): MediaRecorderOptions {
+  if (input.kind === "mic") return { audioBitsPerSecond: 192_000 };
+  const video = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find(
+    (type) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(type),
+  );
+  return {
+    ...(video ? { mimeType: video } : {}),
+    //: 12Mbps 是"屏幕内容"这一档的起点:1080p 的文字/渐变在这个量级上不再需要编码器做取舍。
+    videoBitsPerSecond: 12_000_000,
+    audioBitsPerSecond: 192_000,
+  };
+}
+
 export function createRecordingSession(
   inputs: readonly RecordingInput[],
   options: RecordingSessionOptions = {},
@@ -57,7 +81,7 @@ export function createRecordingSession(
   let errorReported = false;
 
   const captures = inputs.map((input) => {
-    const recorder = new MediaRecorder(input.stream);
+    const recorder = new MediaRecorder(input.stream, recorderOptions(input));
     const chunks: Blob[] = [];
     let failure: Error | null = null;
     let resolveFile!: (file: File) => void;

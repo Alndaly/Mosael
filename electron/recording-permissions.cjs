@@ -49,19 +49,33 @@ function createRecordingPermissionService({ platform, shell, systemPreferences }
      * macOS 不让列出整块屏幕。而这个应用在授权列表里**根本还没出现**,用户没地方可开。
      */
     async prepareScreen(desktopCapturer) {
-      if (platform !== "darwin") return { status: "unknown", screens: 0 };
-      const status = systemPreferences.getMediaAccessStatus("screen");
+      if (platform !== "darwin") return { status: "unknown", screens: 0, prompted: false };
+      const before = systemPreferences.getMediaAccessStatus("screen");
       let screens = 0;
       try {
+        //: 缩略图**要有真实尺寸**:1×1 时 Chromium 不必真的抓一帧,也就不去碰系统授权;
+        //: 320×180 会走一次真实截取 —— macOS 15 正是在那一步把应用登记进授权列表并弹框
+        //: (维护者 2026-10-23:点「请求屏幕权限」只弹了个 toast,系统那边毫无动静)。
         const sources = await desktopCapturer.getSources({
           types: ["screen"],
-          thumbnailSize: { width: 1, height: 1 },
+          thumbnailSize: { width: 320, height: 180 },
         });
         screens = sources.length;
       } catch {
         /* 拿不到源 = 还没授权;状态照样交回去,界面按它说话 */
       }
-      return { status, screens };
+      const status = systemPreferences.getMediaAccessStatus("screen");
+      //: **已经被拒过一次,系统就不会再弹框了**(TCC 的规矩:拒绝即终态,只能去设置里勾)。
+      //: 那种情况下直接把设置面板打开 —— 让人对着一个永远不会出现的弹窗等,是最坏的做法。
+      const prompted = before !== "denied" && status !== "denied";
+      if (!prompted) {
+        try {
+          await this.openSettings("screen");
+        } catch {
+          /* 打不开设置也不影响交回状态 */
+        }
+      }
+      return { status, screens, prompted };
     },
 
     async openSettings(kind) {
