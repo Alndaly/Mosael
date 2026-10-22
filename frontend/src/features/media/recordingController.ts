@@ -1,3 +1,4 @@
+import { mixAudioTracks, type MixedAudio } from "./audioMix";
 import { createMirroredCameraCapture, type CameraCapture } from "./cameraCapture";
 import {
   createRecordingSession,
@@ -22,6 +23,8 @@ export interface RecordingInputSource {
 export interface RecordingStartOptions {
   source: RecordingSource;
   captureSystemAudio: boolean;
+  /** 录屏幕时**同时录麦克风**(讲课时屏幕里放的东西和解说都要)。摄像头 / 麦克风来源本来就带它。 */
+  captureMicrophone?: boolean;
   inputs: RecordingInputSource;
   mirrorCamera: boolean;
   filenames: Record<RecordingKind, string>;
@@ -51,6 +54,8 @@ export interface RecordingControllerDependencies {
   mediaDevices: RecordingMediaDevices;
   createSession: typeof createRecordingSession;
   createMirroredCapture(source: MediaStream): CameraCapture;
+  /** 混音可注入,便于测试;默认走 Web Audio(见 audioMix)。 */
+  mixAudio?: typeof mixAudioTracks;
 }
 
 export class RecordingStartError extends Error {
@@ -94,6 +99,7 @@ export function createRecordingController(
     mediaDevices: navigator.mediaDevices,
     createSession: createRecordingSession,
     createMirroredCapture: createMirroredCameraCapture,
+    mixAudio: mixAudioTracks,
   },
 ): RecordingController {
   let state: "idle" | "starting" | "recording" | "stopping" | "stopped" | "cancelled" | "failed" =
@@ -162,12 +168,50 @@ export function createRecordingController(
           if (options.captureSystemAudio && !hasLiveAudioTrack(screenStream)) {
             throw new RecordingStartError("systemAudio");
           }
+          //: 还要自己的解说时,先把麦克风取过来(在系统选择器成功之后再取 —— 取消了就什么都不碰),
+          //: 再和系统声音混成一条轨。MediaRecorder 一个流上只认一条音轨,混音必须在开始录之前做完。
+          let mixed: MixedAudio | null = null;
+          if (options.captureMicrophone) {
+            //: 麦克风取不到(没插麦 / 被拒 / 这台机器没有输入)时**不该让整次录屏失败** ——
+            //: 用户要的是「屏幕 + 解说」,少了后者仍然是一段可用的录屏。
+            try {
+              micStream = await options.inputs.take();
+              acquiredStreams.add(micStream);
+              assertStarting();
+            } catch (error) {
+              if (error instanceof RecordingCancelledError) throw error;
+              micStream = null;
+            }
+          }
+          if (micStream) {
+            mixed = (dependencies.mixAudio ?? mixAudioTracks)(
+              options.captureSystemAudio ? screenStream : null,
+              micStream,
+            );
+          }
+          //: 混音没真正改变东西时(只有一路音源、或 Web Audio 不可用)**沿用原流** ——
+          //: 别为了一条本来就在的轨道再造一个 MediaStream(某些运行时的构造函数还不支持)。
+          const canCompose = typeof MediaStream === "function";
+          const screenInput =
+            mixed && mixed.stream !== screenStream && canCompose
+              ? new MediaStream([...screenStream.getVideoTracks(), ...mixed.stream.getAudioTracks()])
+              : mixed && mixed.stream !== screenStream
+                ? mixed.stream // 运行时没有 MediaStream 构造器(测试环境):直接交混好的那条
+                : screenStream;
           inputs.push({
             kind: "screen",
-            stream: screenStream,
+            stream: screenInput,
             filenamePrefix: options.filenames.screen,
+            //: 混音与取来的麦克风都归这次输入所有:收工时一起放掉。
+            release: mixed
+              ? () => {
+                  mixed.release();
+                  if (micStream) stopStream(micStream);
+                }
+              : undefined,
           });
-          transferToInput(screenStream);
+          transferToInput(screenInput);
+          if (screenInput !== screenStream) transferToInput(screenStream);
         }
 
         if (capturesCamera) {

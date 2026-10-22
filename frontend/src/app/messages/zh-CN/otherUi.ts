@@ -122,6 +122,8 @@ export const otherUi = {
   recordCamera: "摄像头",
   recordCameraMirror: "镜像摄像头",
   recordSystemAudio: "系统音频",
+  recordScreenMicrophone: "麦克风",
+  recordScreenMicrophoneHint: "录屏幕的同时录下你的解说,和屏幕里的声音混在一起;关掉就只录屏幕。",
   recordSystemAudioHint: "同步录制设备正在播放的声音；在系统选择器中仍需允许共享音频。",
   recordSystemAudioMissing: "系统没有提供音频轨道，请在共享选择器中开启“共享音频”后重试",
   recordPermissionsTitle: "摄像头与麦克风权限",

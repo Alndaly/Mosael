@@ -128,6 +128,57 @@ describe("recording controller", () => {
     expect(active.previewStreams).toEqual({ screen: null, camera: camera.stream, microphone: camera.stream });
   });
 
+  it("screen + microphone: takes the mic and records the mixed track, not the raw screen audio", async () => {
+    //: 讲课时屏幕里的声音和自己的解说都要:MediaRecorder 一个流只认一条音轨,所以先混再录。
+    const screen = fakeStream({ audio: true });
+    const mic = fakeStream({ audio: true });
+    const mixed = fakeStream({ audio: true });
+    const mixAudio = vi.fn(() => ({ stream: mixed.stream, release: vi.fn() }));
+    const deps = dependencies({ mixAudio });
+    deps.getDisplayMedia.mockResolvedValue(screen.stream);
+    const controller = createRecordingController(deps.value);
+    const take = vi.fn().mockResolvedValue(mic.stream);
+
+    await controller.start({
+      source: "screen",
+      captureSystemAudio: true,
+      captureMicrophone: true,
+      inputs: { take },
+      mirrorCamera: false,
+      filenames: { screen: "s", camera: "c", mic: "m" },
+      requestStop: vi.fn(),
+    });
+
+    expect(take).toHaveBeenCalledOnce();
+    expect(mixAudio).toHaveBeenCalledWith(screen.stream, mic.stream);
+    const [inputs] = deps.createSession.mock.calls.at(-1)! as unknown as [
+      Array<{ kind: string; stream: MediaStream }>,
+    ];
+    expect(inputs[0].kind).toBe("screen");
+    //: 交给录制的是混好的那条流(它的音轨),不是原始屏幕流。
+    expect(inputs[0].stream).not.toBe(screen.stream);
+    expect(inputs[0].stream.getAudioTracks()).toEqual(mixed.stream.getAudioTracks());
+  });
+
+  it("a missing microphone does not fail the whole screen recording", async () => {
+    const screen = fakeStream({ audio: true });
+    const deps = dependencies({ mixAudio: vi.fn() });
+    deps.getDisplayMedia.mockResolvedValue(screen.stream);
+    const controller = createRecordingController(deps.value);
+
+    await expect(
+      controller.start({
+        source: "screen",
+        captureSystemAudio: true,
+        captureMicrophone: true,
+        inputs: { take: () => Promise.reject(new DOMException("denied", "NotAllowedError")) },
+        mirrorCamera: false,
+        filenames: { screen: "s", camera: "c", mic: "m" },
+        requestStop: vi.fn(),
+      }),
+    ).resolves.toBeTruthy();
+  });
+
   it("records the microphone taken from the input source", async () => {
     const microphone = fakeStream({ audio: true });
     const deps = dependencies();

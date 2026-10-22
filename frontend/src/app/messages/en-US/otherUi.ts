@@ -122,6 +122,8 @@ export const otherUi = {
   recordCamera: "Camera",
   recordCameraMirror: "Mirror camera",
   recordSystemAudio: "System audio",
+  recordScreenMicrophone: "Microphone",
+  recordScreenMicrophoneHint: "Record your narration along with the screen and mix it with the screen's own audio; turn it off to capture the screen only.",
   recordSystemAudioHint: "Capture sound playing on this device; also allow audio in the system sharing picker.",
   recordSystemAudioMissing: "No system-audio track was shared. Enable audio in the system picker and try again.",
   recordPermissionsTitle: "Camera and microphone permissions",

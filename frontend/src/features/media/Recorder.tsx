@@ -35,6 +35,8 @@ import { EmptyRecordingError } from "./recordingSession";
 
 const SOURCES: readonly RecordingSource[] = ["screen", "camera", "screenCamera", "mic"];
 const CAMERA_MIRROR_STORAGE_KEY = "mosael.recorder.cameraMirror";
+/** 录屏时是否同时录麦克风(记住选择)。 */
+const SCREEN_MIC_STORAGE_KEY = "mosael.recorder.screenMic";
 const SYSTEM_AUDIO_STORAGE_KEY = "mosael.recorder.systemAudio";
 
 type InputPermission = "camera" | "microphone";
@@ -120,6 +122,16 @@ export function Recorder({
   const [mirrorCamera, setMirrorCamera] = React.useState(
     () => localStorage.getItem(CAMERA_MIRROR_STORAGE_KEY) === "true",
   );
+  /**
+   * 录屏幕时**同时录麦克风**(讲课时屏幕里的声音和自己的解说都要)。记住选择。
+   *
+   * 默认**关**:麦克风在用户点开这个开关之前不该被打开 —— 屏幕上放的东西和"有没有人在听"
+   * 是两件事,不能因为选了「屏幕」就默认开始收音。
+   */
+  const [captureScreenMic, setCaptureScreenMic] = React.useState(() => {
+    const stored = localStorage.getItem(SCREEN_MIC_STORAGE_KEY);
+    return stored === "1";
+  });
   const [captureSystemAudio, setCaptureSystemAudio] = React.useState(
     () => localStorage.getItem(SYSTEM_AUDIO_STORAGE_KEY) !== "false",
   );
@@ -309,6 +321,9 @@ export function Recorder({
       const active = await controller.start({
         source,
         captureSystemAudio,
+        //: 只有「纯屏幕」这一档才需要它:摄像头 / 屏幕+摄像头 / 麦克风来源本来就带麦克风
+        //: (屏幕+摄像头那条的摄像头流里就有麦克风),再取一次会抢走本该给摄像头的那一份。
+        captureMicrophone: source === "screen" && captureScreenMic,
         inputs: { take: () => inputPreview.take({ cameraId: previewCameraId, micId }) },
         mirrorCamera,
         filenames: {
@@ -519,6 +534,30 @@ export function Recorder({
                 localStorage.setItem(SYSTEM_AUDIO_STORAGE_KEY, String(checked));
               }}
               aria-label={t("recordSystemAudio")}
+            />
+          </label>
+        )}
+
+        {source === "screen" && !recording && (
+          //: 屏幕 + 自己的解说:讲课时两样都要。和「系统音频」并排同一形态 —— 它们都是
+          //: 「这段画面要不要带上某一路声音」。
+          <label className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel px-3 py-2.5">
+            <span className="flex min-w-0 items-start gap-2">
+              <Mic size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+              <span className="grid min-w-0 gap-0.5">
+                <span className="text-xs font-medium text-foreground">{t("recordScreenMicrophone")}</span>
+                <span className="text-ui-xs leading-[1.4] text-muted-foreground">
+                  {t("recordScreenMicrophoneHint")}
+                </span>
+              </span>
+            </span>
+            <Switch
+              checked={captureScreenMic}
+              onCheckedChange={(checked) => {
+                setCaptureScreenMic(checked);
+                localStorage.setItem(SCREEN_MIC_STORAGE_KEY, checked ? "1" : "0");
+              }}
+              aria-label={t("recordScreenMicrophone")}
             />
           </label>
         )}
