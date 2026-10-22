@@ -83,16 +83,16 @@ describe("screen recording needs an actual capture attempt", () => {
       systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "denied") },
     });
 
-    const openSettings = vi.fn().mockResolvedValue(true);
+    const openExternal = vi.fn().mockResolvedValue(undefined);
     const denied = createRecordingPermissionService({
       platform: "darwin",
-      shell: { openExternal: openSettings },
+      shell: { openExternal },
       systemPreferences: { askForMediaAccess: vi.fn(), getMediaAccessStatus: vi.fn(() => "denied") },
     });
     const result = await denied.prepareScreen({ getSources: vi.fn().mockRejectedValue(new Error("nope")) });
     expect(result).toMatchObject({ status: "denied", screens: 0, prompted: false });
-    //: 已经拒绝过就不会再弹框:要顺手把设置面板打开,而不是让人对着不动的界面等。
-    expect(openSettings).toHaveBeenCalled();
+    //: **不替用户点「打开系统设置」**:那颗按钮就在旁边,替它点会让两个动作看起来一模一样。
+    expect(openExternal).not.toHaveBeenCalled();
   });
 
   it("on other platforms there is nothing to register", async () => {

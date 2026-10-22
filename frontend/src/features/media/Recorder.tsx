@@ -561,6 +561,9 @@ export function Recorder({
                 </span>
               </span>
             </span>
+            {visiblePermissionIssue === "screen" && (
+              <p className="mt-1 text-ui-xs text-muted-foreground">{t("recordScreenPermissionTwiceHint")}</p>
+            )}
             <div className="flex flex-wrap justify-end gap-2">
               {(visiblePermissionIssue === "screen" || visiblePermissionIssue === "systemAudio") &&
                 window.mosaelDesktop?.recordingPermissions?.openSettings && (

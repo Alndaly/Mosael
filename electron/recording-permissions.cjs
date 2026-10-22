@@ -66,15 +66,10 @@ function createRecordingPermissionService({ platform, shell, systemPreferences }
       }
       const status = systemPreferences.getMediaAccessStatus("screen");
       //: **已经被拒过一次,系统就不会再弹框了**(TCC 的规矩:拒绝即终态,只能去设置里勾)。
-      //: 那种情况下直接把设置面板打开 —— 让人对着一个永远不会出现的弹窗等,是最坏的做法。
+      //: 但这里**不顺手打开设置** —— 那颗「打开系统设置」按钮就在旁边,替用户点它会让两个动作
+      //: 看起来一模一样(维护者 2026-10-23 就是这么问的)。把「这次有没有可能弹框」交回界面,
+      //: 由它用一句话说清楚该点哪个。
       const prompted = before !== "denied" && status !== "denied";
-      if (!prompted) {
-        try {
-          await this.openSettings("screen");
-        } catch {
-          /* 打不开设置也不影响交回状态 */
-        }
-      }
       return { status, screens, prompted };
     },
 
