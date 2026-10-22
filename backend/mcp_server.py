@@ -301,14 +301,19 @@ def _confirmation_reply(confirmation: dict[str, Any]) -> dict[str, Any]:
 
 @tool(effect="confirms")
 def computer_click(
-    x: Annotated[int, Field(description="X pixel in the screenshot.")],
-    y: Annotated[int, Field(description="Y pixel in the screenshot.")],
+    x: Annotated[int, Field(description="X pixel in the picture computer_screenshot returned.")],
+    y: Annotated[int, Field(description="Y pixel in the picture computer_screenshot returned.")],
     window: Annotated[str, Field(description='"main" or "publish".')] = "main",
     button: Annotated[str, Field(description='"left" or "right".')] = "left",
-    click_count: Annotated[int, Field(description="1 or 2.")] = 1,
-    scale: Annotated[float, Field(description="Screenshot's scale.")] = 1,
+    click_count: Annotated[int, Field(description="1 (single) or 2 (double).")] = 1,
+    scale: Annotated[float, Field(description="The same scale you passed to computer_screenshot.")] = 1,
 ) -> dict[str, Any]:
-    """Confirmation required: click a point in Mosael's OWN window."""
+    """Confirmation required: click a point in Mosael's OWN window.
+
+    Coordinates are pixels in the picture computer_screenshot returned — pass that call's scale.
+    It only acts inside Mosael's own UI (never the desktop or other apps), and every click waits
+    for the user's approval: there is no "always allow".
+    """
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),
@@ -329,10 +334,14 @@ def computer_click(
 
 @tool(effect="confirms")
 def computer_type(
-    text: Annotated[str, Field(description="What to type (max 2000).")],
+    text: Annotated[str, Field(description="What to type (at most 2000 characters).")],
     window: Annotated[str, Field(description='"main" or "publish".')] = "main",
 ) -> dict[str, Any]:
-    """Confirmation required: type into Mosael's OWN window."""
+    """Confirmation required: type text into Mosael's OWN window (into the focused field).
+
+    It only types inside Mosael's own UI (never the desktop or other apps), and every input waits
+    for the user's approval: there is no "always allow".
+    """
     confirmation = _open_card(
         {
             "workspace_id": _default_workspace_id(),

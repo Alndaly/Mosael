@@ -60,7 +60,7 @@ FALLBACK_CONTEXT_WINDOW = 128000
 #: 真正的上限是推理服务那一侧的设置(Ollama num_ctx、LM Studio 加载长度、vLLM --max-model-len)。
 #:
 #: 64K = 固定开销装得下、还给对话和输出留出空间的最小一档(按「宁可报小」向下取整到整千)。
-#: 工具定义加系统提示不得超过它的六成,由 tests/test_tool_definitions_budget.py 盯着(理由写在那里)。
+#: 工具定义加系统提示不得超过它的 65%,由 tests/test_tool_definitions_budget.py 盯着(理由写在那里)。
 LOCAL_FALLBACK_CONTEXT_WINDOW = 64000
 #: 连这张表都没有这个模型时的输出额度。同样由那份语料钉住(max_output_cases)。
 FALLBACK_MAX_OUTPUT_TOKENS = 4096
