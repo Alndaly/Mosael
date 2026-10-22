@@ -2,7 +2,6 @@ import { app, screen, session, shell, WebContentsView, type BaseWindow } from "e
 // 登录要唤起本机客户端的那几种协议(微信快捷登录等):交给系统,否则 Chromium 静默丢掉 ——
 // 用户看到的是「点了没反应 / 又回登录页」,而不是任何错误。
 import { forwardExternalLogin, isExternalLoginUrl } from "../external-login-schemes.cjs";
-import { shouldPromoteFrameNavigation } from "../oauth-frame-promote.cjs";
 import { cleanChromeUserAgent, identityForPlatform } from "../view-identity.cjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -1087,15 +1086,6 @@ export class AccountViewManager {
     view.webContents.setWindowOpenHandler((details) => this.openWindow(accountId, view, details));
     //: 登录要拉起本机客户端(微信快捷登录的 `weixin://`):交给系统,别让 Chromium 静默丢掉。
     forwardExternalLogin(view.webContents, (url) => shell.openExternal(url));
-    //: 第三方登录的**回调落在 iframe 里**时,提到顶层再打开 —— 跨站 iframe 里种不下会话 cookie,
-    //: 于是平台页一调接口就说未登录、又跳回登录页(视频号快捷登录实测就是这个)。判据很窄:
-    //: 子框架 + 带 OAuth 回调标记 + 和顶层页面同一个注册域(见 oauth-frame-promote)。
-    view.webContents.on("will-frame-navigate", (event) => {
-      if (event.isMainFrame) return;
-      if (!shouldPromoteFrameNavigation(event.url, view.webContents.getURL())) return;
-      event.preventDefault();
-      void view.webContents.loadURL(event.url);
-    });
     // 下载不弹系统保存框:分区会话上接管(同一个会话只接一次,会话里的每一页都走它)。
     this.downloads.watch(view.webContents.session);
     // 页面在我们之外没掉(渲染进程崩溃 / 页面自己 window.close())时,账本要跟着清 —— 否则当前页指着
