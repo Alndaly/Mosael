@@ -166,24 +166,3 @@ export function deletePricingRule(ruleId: string): Promise<void> {
 export function prefillPricingRules(profileId: string): Promise<PricingPrefill> {
   return api<PricingPrefill>(`/api/settings/providers/${profileId}/pricing/prefill`, { method: "POST" });
 }
-
-/**
- * Command Code 的浏览器登录:它在 Studio 里点一下,把 API Key POST 回本机(Node/后端)的回环服务。
- *
- * 和别的订阅计划不同 —— 那些的授权流程在 pi 的 Provider 里,这里没有;所以它自己一对接口:
- * 发起(拿要打开的地址与 login_id)、轮询(拿到 Key 的那一次后端顺手验证并存入)。
- */
-export function startCommandCodeLogin(profileId: string): Promise<{ login_id: string; url: string }> {
-  return api<{ login_id: string; url: string }>(`/api/settings/providers/${profileId}/command-code/login`, {
-    method: "POST",
-  });
-}
-
-export function pollCommandCodeLogin(
-  profileId: string,
-  loginId: string,
-): Promise<{ status: "waiting" | "done" | "error" | "expired"; error?: string; user_name?: string }> {
-  return api<{ status: "waiting" | "done" | "error" | "expired"; error?: string; user_name?: string }>(
-    `/api/settings/providers/${profileId}/command-code/login/${loginId}`,
-  );
-}

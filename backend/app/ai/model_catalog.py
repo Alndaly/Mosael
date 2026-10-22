@@ -86,36 +86,6 @@ def _per_million(value: object) -> float | None:
     return amount * 1_000_000 if amount >= 0 else None
 
 
-#: Command Code 的目录里,`supported_endpoints` 写了每条模型走哪条路。本应用只有 OpenAI 兼容那两条
-#: (`/chat/completions`、`/responses`),而 Claude 那几条只认 `/messages` —— 不过滤的话,界面上会出现
-#: 一排"选了必然 400"的模型。
-_COMMAND_CODE_ENDPOINTS = ("/chat/completions", "/responses")
-
-
-def _fetch_command_code(base: str, api_key: str) -> list[CatalogModel]:
-    """Command Code 的模型目录:按 `supported_endpoints` 过滤出本应用发得出去的那几条。
-
-    它给的是标准 OpenAI 目录格式(id / context_length / pricing),只多一个 `supported_endpoints`
-    与 `owned_by`,所以过滤之后照旧交给 `_parse` —— 字段口径和别家一样,不再抄一份。
-    """
-    with RetryingClient(timeout=_FETCH_TIMEOUT, max_retries=0) as client:
-        resp = client.get(f"{base}/models", headers=auth_headers(api_key))
-    resp.raise_for_status()
-    rows = resp.json().get("data")
-    if not isinstance(rows, list):
-        return []
-    usable = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        endpoints = row.get("supported_endpoints")
-        #: 没写这个字段的照收(别家的目录都没有它);写了就得有一条是本应用走的路。
-        if isinstance(endpoints, list) and not any(endpoint in _COMMAND_CODE_ENDPOINTS for endpoint in endpoints):
-            continue
-        usable.append(row)
-    return _parse(usable)
-
-
 def _parse(rows: object) -> list[CatalogModel]:
     if not isinstance(rows, list):
         return []
@@ -203,8 +173,6 @@ def fetch_models(
     try:
         if protocol == "gemini":
             models = _fetch_gemini(base, api_key)
-        elif protocol == "command-code":
-            models = _fetch_command_code(base, api_key)
         else:
             #: 连接里填的地址:过出站检查(core/outbound_guard);本机端点永远直连,不被送进代理。
             with RetryingClient(timeout=_FETCH_TIMEOUT, max_retries=0) as client:

@@ -8,7 +8,6 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import OAuthAnswerIn, OAuthLoginOut, OAuthPromptOut, ProviderModelOut, ProviderProfileOut, ProviderQuotaOut
 from app.core.config import settings as settings_config
 from app.db.models import ProviderProfile, new_id
-from app.domain.providers import command_code_login
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
 from app.domain.agent.host import mint_tool_token
@@ -180,43 +179,3 @@ def logout_oauth_provider(profile_id: str, db: Tx, user: CurrentUser) -> Provide
     db.refresh(profile)
     return profile_out(db, profile, user)
 
-
-# ── Command Code:订阅计划,但登录的产物是一把 **API Key** ────────────────────────────────
-#
-# 别的订阅计划(Claude Pro/Max、Codex、Copilot)的授权流程在 pi 的 Provider 定义里,这里只转发事件。
-# Command Code 没有 pi Provider:它自己的 CLI 是「起一个只监听回环的一次性服务 → 打开 Studio →
-# Studio 把 Key POST 回来」,见 domain/providers/command_code_login。拿到 Key 之后和手贴的一样,
-# 存成这条连接的 api_key —— 聊天继续走 OpenAI 兼容通道(见 presets 的 `command-code`)。
-
-
-@router.post("/settings/providers/{profile_id}/command-code/login")
-def start_command_code_login(profile_id: str, db: DbSession, user: CurrentUser) -> dict[str, object]:
-    """发起浏览器登录:返回要打开的 Studio 地址与这次登录的 id(前端轮询后面的)。"""
-    profile = require_own_profile(db, user, profile_id)
-    if profile.vendor != "command-code":
-        raise HTTPException(status_code=400, detail=tr("routeErr_notSubscriptionPlan"))
-    try:
-        started = command_code_login.start(profile.id)
-    except command_code_login.CommandCodeLoginError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"login_id": started["pending_id"], "url": started["url"]}
-
-
-@router.get("/settings/providers/{profile_id}/command-code/login/{login_id}")
-def poll_command_code_login(profile_id: str, login_id: str, db: Tx, user: CurrentUser) -> dict[str, object]:
-    """登录走到哪了。拿到 Key 的那一次顺手验一遍再存 —— 存一把没验过的 Key,用户要等到一轮对话
-    失败时才知道它坏了。"""
-    profile = require_own_profile(db, user, profile_id)
-    if profile.vendor != "command-code":
-        raise HTTPException(status_code=400, detail=tr("routeErr_notSubscriptionPlan"))
-    state = command_code_login.poll(login_id)
-    if state.get("status") != "done":
-        return {"status": state.get("status", "waiting"), "error": state.get("error")}
-    api_key = str(state.get("api_key") or "")
-    try:
-        command_code_login.validate_key(api_key)
-    except command_code_login.CommandCodeLoginError as exc:
-        return {"status": "error", "error": str(exc)}
-    provider_credentials.upsert(db, profile.id, user.id, api_key=api_key)
-    db.commit()
-    return {"status": "done", "user_name": str(state.get("user_name") or "")}
