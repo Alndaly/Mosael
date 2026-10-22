@@ -346,24 +346,46 @@ function PublishCard({ task, selecting = false }: { task: PublishTask; selecting
   const { locale } = usePreferences();
   const { Icon, tone, spin } = statusTone(task.status);
   return (
-    // 一条记录一行:图标 / 标题 + 元信息 + 失败原因 / 状态 + 时间。间距只走 12/8/4 那一套:
-    // 行上下 12(py-3)、行内各段 4(gap-1)、日期栏头 8 —— 素材库列表是同一套读法。
-    // **hover 底色和圆角都在这一层**(此前底色铺在按钮上,圆角看不见)。底色与内容**同宽**:
-    // 不要再 -mx-3 出血 —— 列表的滚动容器是 overflow-y-auto,另一轴会被算成 auto,出血部分
-    // 连圆角一起被裁掉,右侧看起来就像没有内间距(维护者截图)。
-    // 左侧内边距 12(和别页内容对齐);右侧 20 —— 状态列右对齐,12 会贴住圆角的边。
-    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-5 rounded-lg py-3 pl-3 pr-5 transition-colors hover:bg-secondary/40">
-      <span className={cn("grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
+    // 一条记录一行,信息**都在行里**(维护者:此前只有标题/账号/成片,信息量太少,详情要靠弹窗):
+    // 标题、平台 · 账号 · 成片、简介、标签、作品状态/失败原因、状态与时间。
+    // 间距只走 12/8/4:行上下 12(py-3)、行内各段 4(gap-1)、标签 chip 之间 4、日期栏头 8。
+    // **hover 底色和圆角都在这一层**;底色与内容同宽(不再 -mx-3 出血 —— 滚动容器会连圆角
+    // 一起裁掉)。左侧 12(和别页内容对齐);右侧 20(状态列右对齐,12 会贴住圆角的边)。
+    <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-5 rounded-lg py-3 pl-3 pr-5 transition-colors hover:bg-secondary/40">
+      {/*: 首行是标题(ui-md),图标跟着首行对齐而不是整段居中。 */}
+      <span className={cn("mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
       <div className="grid min-w-0 gap-1">
         <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
         <Truncate className="text-ui-sm text-muted-foreground">{task.platform} · {task.account_name} · {task.asset_name}</Truncate>
+        {/*: 简介:这条发出去的正文是什么。 */}
+        {task.description && (
+          <Truncate as="p" lines={2} className="text-ui-sm text-muted-foreground" data-publish-row-description="">
+            {task.description}
+          </Truncate>
+        )}
+        {/*: 标签:一行 chip,和详情弹窗里同一个形状。 */}
+        {task.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1" data-publish-row-tags="">
+            {task.tags.map((tag) => (
+              <span className="inline-flex items-center rounded-full border border-border bg-panel-subtle px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
         {task.status === "failed" && task.error && (
           //: 失败原因带**提示色**(和状态列同一个语义色):灰色读起来像补充说明,可这一句正是
           //: "要不要点开这条"的判断依据(维护者截图指出)。
           <Truncate as="p" lines={2} className="text-ui-sm text-destructive" data-publish-failed-summary="">
             {task.error_summary || task.error}
+          </Truncate>
+        )}
+        {/*: 成功时把「作品」那一格从弹窗搬上来:读到 ID 就摆出来,没读到就明说(和弹窗同一句)。 */}
+        {["succeeded", "success"].includes(task.status) && (
+          <Truncate className="text-ui-xs text-muted-foreground" data-publish-row-post="">
+            {task.post?.post_id ? `${t("publishPost")} ${task.post.post_id}` : t("publishPostMissing")}
           </Truncate>
         )}
       </div>
