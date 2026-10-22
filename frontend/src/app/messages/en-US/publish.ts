@@ -356,6 +356,7 @@ export const publish = {
   railSignedInWith: "Signed in with {provider}",
   railAccountSettings: "Account settings",
   publishSearchPlaceholder: "Search titles, descriptions, tags or assets…",
+  publishSortName: "By name",
   publishSortNewest: "Newest first",
   publishSortOldest: "Oldest first",
   publishEmptyTitle: "No publishes yet",

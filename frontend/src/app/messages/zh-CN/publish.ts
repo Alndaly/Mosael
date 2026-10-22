@@ -357,6 +357,7 @@ export const publish = {
   railSignedInWith: "通过 {provider} 登录",
   railAccountSettings: "账号设置",
   publishSearchPlaceholder: "搜索标题、简介、标签或成片…",
+  publishSortName: "按名称",
   publishSortNewest: "最新发布",
   publishSortOldest: "最早发布",
   publishEmptyTitle: "还没有发布记录",

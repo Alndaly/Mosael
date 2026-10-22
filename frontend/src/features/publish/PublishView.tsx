@@ -137,7 +137,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   //: 搜索:标题 / 简介 / 标签 / 成片名 / 账号都对。数据都在手上(分页由列表整取),本地筛。
   const [search, setSearch] = React.useState("");
   //: 排序是**怎么看**的一部分,不是这一刻的临时值 —— 切走再回来照旧(和素材库同一个做法)。
-  const [sortKey, setSortKey] = usePersistentTab<"newest" | "oldest">("publish-sort", "newest", ["newest", "oldest"]);
+  const [sortKey, setSortKey] = usePersistentTab<"newest" | "oldest" | "name">("publish-sort", "newest", ["newest", "oldest", "name"]);
   useSectionEntry("publish", (entry) => {
     setFocusedId(null);
     setStatusFilter(STATUS_FILTERS.includes(entry) ? entry : "all");
@@ -166,12 +166,14 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
       return [task.title, task.description, task.asset_name, task.account_name, ...task.tags]
         .some((field) => field?.toLowerCase().includes(needle));
     });
-    //: 按发布(记录创建)时间排;「最新发布」在前是默认。
+    //: 按发布(记录创建)时间排;「最新发布」在前是默认。按名称排时用界面语言比(中文按拼音、英文按字母)。
+    const nameOf = (task: PublishTask) => task.title || task.asset_name;
     return [...kept].sort((a, b) => {
+      if (sortKey === "name") return nameOf(a).localeCompare(nameOf(b), locale);
       const delta = parseServerTime(a.created_at).getTime() - parseServerTime(b.created_at).getTime();
       return sortKey === "newest" ? -delta : delta;
     });
-  }, [tasks.data, statusFilter, search, sortKey]);
+  }, [tasks.data, statusFilter, search, sortKey, locale]);
   const groups = React.useMemo(
     () => groupByLocalDay(filteredTasks, (task) => task.created_at),
     [filteredTasks],
@@ -310,11 +312,12 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         <CollectionTabs label={t("publishTabRecords")} value={statusFilter} onChange={setStatusFilter} items={[{value:"all", label:t("studioAll")}, {value:"active", label:t("batchStatus_running")}, {value:"succeeded", label:t("batchStatus_succeeded")}, {value:"attention", label:t("studioNeedsAttention")}]} />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <SearchInput className="min-w-40 flex-1" aria-label={t("publishSearchPlaceholder")} value={search} placeholder={t("publishSearchPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
-          <Select value={sortKey} onValueChange={(value) => setSortKey(value as "newest" | "oldest")}>
+          <Select value={sortKey} onValueChange={(value) => setSortKey(value as "newest" | "oldest" | "name")}>
             <SelectTrigger className="w-auto min-w-28" aria-label={t("publishSortNewest")}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="newest">{t("publishSortNewest")}</SelectItem>
               <SelectItem value="oldest">{t("publishSortOldest")}</SelectItem>
+              <SelectItem value="name">{t("publishSortName")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
