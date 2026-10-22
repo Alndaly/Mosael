@@ -101,6 +101,13 @@ YouTube 登完落在 `www.youtube.com` 而不是 Studio,只认创作页长相必
 Chrome」)。现在只有**平台级一个维度**,而真实世界的影响因素至少还有:站点、流程(登录/发布/阅读)、
 是否需要过 Turnstile。这就是这轮连续三次回归的土壤。
 
+**更硬的一条(2026-10-22 实测)**:只洗 UA 会得到一份**自相矛盾**的身份 —— UA 说
+`Chrome/152`,而 Chromium 自己报的 `navigator.userAgentData.brands` 是
+`[{Not?A_Brand 24}, {Chromium 152}]`:没有 Google Chrome 品牌。视频号于是「扫码/快捷登录都成功、
+`sessionid` 也种下了,随后立刻被判无效退回登录页」。把 client hints 一起对齐要 CDP 的
+`Emulation.setUserAgentOverride`,而那正是让 Cloudflare Turnstile 判定「自称 Chrome、信号不像」的
+做法。**结论:默认如实声明(自洽);要 Chrome 形状必须三处一起对齐,不能只洗 UA。**
+
 ## 6. 与真 Chrome 的行为差异(这几轮全踩在点上)
 
 | 差异 | 现象 | 处置 |

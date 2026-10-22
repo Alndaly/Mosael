@@ -29,9 +29,11 @@ describe("内嵌浏览器的身份", () => {
     expect(cleanChromeUserAgent("")).toBe("");
   });
 
-  it("X 保持如实声明;其余平台(视频号、抖音、小红书…)给干净 Chrome UA", () => {
-    for (const platform of ["x", "X", "twitter"]) expect(identityForPlatform(platform)).toBe("electron");
-    for (const platform of ["weixin-channels", "douyin", "xiaohongshu", "bilibili", "tiktok", "youtube"]) {
+  it("X 与视频号如实声明(洗 UA 会和 client hints 自相矛盾);其余平台给干净 Chrome UA", () => {
+    for (const platform of ["x", "X", "twitter", "weixin-channels"]) {
+      expect(identityForPlatform(platform), platform).toBe("electron");
+    }
+    for (const platform of ["douyin", "xiaohongshu", "bilibili", "tiktok", "youtube"]) {
       expect(identityForPlatform(platform), platform).toBe("chrome");
     }
     // 未知 / 空:默认干净 Chrome(登录能过的那一边),不是永久伪装。
