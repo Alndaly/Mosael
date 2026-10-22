@@ -29,6 +29,7 @@ function desktop(extra: Record<string, unknown> = {}) {
       listener = callback;
       return () => (listener = null);
     },
+    setHostLayer: vi.fn(async () => undefined),
     setPagesInset: vi.fn(async () => undefined),
     hideView: vi.fn(async () => undefined),
   });

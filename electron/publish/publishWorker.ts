@@ -960,9 +960,6 @@ export function reorderViewPages(ids: string[]): boolean {
 export function newViewPage(url: string): boolean {
   return views?.newPage(url) ?? false;
 }
-export function setPagesInset(left: number): void {
-  views?.setPagesInset(left);
-}
 /** 页面列表展开、收起、临时展开:先拍下前台网页的画面(渲染层铺回原处),再把原生视图挪开 / 放回原处。 */
 export function snapshotViewPage(): Promise<ForegroundSnapshot | null> {
   return views?.snapshotForeground() ?? Promise.resolve(null);
@@ -984,13 +981,6 @@ export function showToasts(toasts: Omit<FloatHint, "id">): Promise<void> {
 }
 export function hideToasts(): void {
   toastLayer?.hide();
-}
-export function coverViewPage(covered: boolean): void {
-  views?.setForegroundHidden("cover", covered);
-}
-/** Mosael 的整窗浮层(看大图)亮着:前台网页挪到窗口外,浮层收起再放回(见 ForegroundHideReason 的 "overlay")。 */
-export function overlayViewPage(up: boolean): void {
-  views?.setForegroundHidden("overlay", up);
 }
 
 /** 收起内嵌视图,把窗口还给 React UI。 */
@@ -1030,13 +1020,19 @@ export function clearHostLayer(id: string): void {
   applyHostLayers(hostLayers.clear(id));
 }
 
-function applyHostLayers(directives: { reasons: string[]; panelsHidden: boolean; insetRight: number }): void {
+function applyHostLayers(directives: {
+  reasons: string[];
+  panelsHidden: boolean;
+  insetRight: number;
+  insetLeft: number;
+}): void {
   if (!views) return;
   for (const reason of ["region", "cover", "overlay"] as const) {
     views.setForegroundHidden(reason, directives.reasons.includes(reason));
   }
   views.setPanelsHidden(directives.panelsHidden);
   views.setShellInset(directives.insetRight);
+  views.setPagesInset(directives.insetLeft);
 }
 
 /** 悬浮浏览器声音由 Electron 层控制,页面脚本无法绕过也不会因 SPA 导航失效。 */

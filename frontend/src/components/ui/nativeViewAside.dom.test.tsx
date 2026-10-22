@@ -34,7 +34,7 @@ const FRAME = "data:image/jpeg;base64,ZnJhbWU=";
  * 挪开 / 放回要过一阵才完成(主进程挪视图、下一帧合成):过一会儿再看 DOM,看到的就是那时候人眼里的样子。
  */
 let log: string[];
-let setOverlay: ReturnType<typeof vi.fn>;
+let setHostLayer: ReturnType<typeof vi.fn>;
 let snapshotPage: ReturnType<typeof vi.fn>;
 const standIn = () => document.querySelector<HTMLImageElement>("[data-native-view-stand-in]");
 const loadedFrames = new WeakSet<Element>();
@@ -46,7 +46,8 @@ const settles = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 beforeEach(() => {
   log = [];
-  setOverlay = vi.fn(async (up: boolean) => {
+  setHostLayer = vi.fn(async (claim: { id: string; kind: string; active: boolean }) => {
+    const up = claim.active;
     await settles();
     log.push(`${up ? "aside" : "back"}:frame=${frameState()}`);
   });
@@ -54,7 +55,7 @@ beforeEach(() => {
     log.push("snapshot");
     return { frame: FRAME, bounds: BOUNDS };
   });
-  vi.stubGlobal("mosaelPublish", { setOverlay, snapshotPage });
+  vi.stubGlobal("mosaelPublish", { setHostLayer, snapshotPage });
 });
 afterEach(async () => {
   cleanup();
@@ -81,7 +82,7 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
         <NativeViewStandIn />
       </ImagePreviewProvider>,
     );
-    expect(setOverlay).not.toHaveBeenCalled();
+    expect(setHostLayer).not.toHaveBeenCalled();
     const opener = screen.getByRole("button", { name: "看大图" });
     opener.focus();
     fireEvent.click(opener);
@@ -99,7 +100,7 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(log.at(-1), "放回视图时画面还铺着(视图先盖住它)").toBe("back:frame=on"));
     await waitFor(() => expect(standIn(), "放回之后才拿掉").toBeNull());
-    expect(setOverlay).toHaveBeenCalledTimes(2);
+    expect(setHostLayer).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
@@ -121,7 +122,7 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
       fireEvent.load(standIn()!);
       await new Promise((resolve) => setTimeout(resolve, 60));
       expect(decode).toHaveBeenCalledTimes(1);
-      expect(setOverlay, "加载好了、还没解码好:视图还在原处").not.toHaveBeenCalled();
+      expect(setHostLayer, "加载好了、还没解码好:视图还在原处").not.toHaveBeenCalled();
       decodedNow();
       await waitFor(() => expect(log).toEqual(["snapshot", "aside:frame=on"]));
     } finally {
@@ -152,7 +153,7 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     fireEvent.load(standIn()!);
     report("something-else");
     await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(setOverlay, "加载好了、报的是别的图:视图还在原处").not.toHaveBeenCalled();
+    expect(setHostLayer, "加载好了、报的是别的图:视图还在原处").not.toHaveBeenCalled();
     report(id);
     await waitFor(() => expect(log).toEqual(["snapshot", "aside:frame=on"]));
     expect(observers, "收到了就不再听").toHaveLength(0);
@@ -167,11 +168,11 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
         await vi.advanceTimersByTimeAsync(10);
       });
       expect(standIn()).not.toBeNull();
-      expect(setOverlay).not.toHaveBeenCalled();
+      expect(setHostLayer).not.toHaveBeenCalled();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_100);
       });
-      expect(setOverlay).toHaveBeenCalledWith(true);
+      expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true]);
     } finally {
       vi.useRealTimers();
     }
@@ -195,14 +196,14 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     const first = stepNativeViewAside();
     const second = stepNativeViewAside();
     await frameLoads();
-    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true]));
     expect(snapshotPage).toHaveBeenCalledTimes(1);
     first();
     first();
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(setOverlay.mock.calls, "还有一处要它让开").toEqual([[true]]);
+    expect(setHostLayer.mock.calls.map(([claim]) => claim.active), "还有一处要它让开").toEqual([true]);
     act(() => second());
-    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true], [false]]));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true, false]));
     await waitFor(() => expect(standIn()).toBeNull());
   });
 
@@ -217,7 +218,8 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
 
   it("挪开的路上收起了:挪完接着放回,画面最后拿掉;收起之后又打开:重新拍一张", async () => {
     let moved: () => void = () => undefined;
-    setOverlay.mockImplementationOnce(async (up: boolean) => {
+    setHostLayer.mockImplementationOnce(async (claim: { active: boolean }) => {
+      const up = claim.active;
       log.push(`${up ? "aside" : "back"}:frame=${frameState()}`);
       await new Promise<void>((resolve) => {
         moved = resolve;
@@ -242,7 +244,7 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
     render(<NativeViewStandIn />);
     const popover = stepNativeViewAside();
     await frameLoads();
-    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true]));
     //: React 在同一次提交里先跑卸载(弹出层放开)、再跑挂载(详情框占上)
     popover();
     const detail = stepNativeViewAside();
@@ -251,17 +253,17 @@ describe("整窗的浮层亮着时,原生网页视图让开", () => {
       await Promise.resolve();
     });
     await settleNativeViewAside();
-    expect(setOverlay.mock.calls, "视图一直让开着").toEqual([[true]]);
+    expect(setHostLayer.mock.calls.map(([claim]) => claim.active), "视图一直让开着").toEqual([true]);
     expect(snapshotPage).toHaveBeenCalledTimes(1);
     act(() => detail());
-    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true], [false]]));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true, false]));
   });
 
   it("网页版(没有这座桥):什么都不做", () => {
     vi.stubGlobal("mosaelPublish", undefined);
     const release = stepNativeViewAside();
     release();
-    expect(setOverlay).not.toHaveBeenCalled();
+    expect(setHostLayer).not.toHaveBeenCalled();
     expect(snapshotPage).not.toHaveBeenCalled();
   });
 });

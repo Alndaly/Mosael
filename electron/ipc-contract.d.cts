@@ -130,7 +130,13 @@ export function parseTaskNotice(value: unknown): { title: string; body: string }
 export function parseLocale(value: unknown): { locale: string };
 export function parseCaptureMode(value: unknown): { mode: "visible" | "full" };
 export function parseComputerScreenshot(value: unknown): { window: "main" | "publish" };
-export function parseHostLayer(value: unknown): { id: string; kind: "region" | "cover" | "overlay" | "panels" | "inset"; active: boolean; width?: number };
+export function parseHostLayer(value: unknown): {
+  id: string;
+  kind: "region" | "cover" | "overlay" | "panels" | "inset";
+  active: boolean;
+  width?: number;
+  side?: "left" | "right";
+};
 export function parseComputerClick(value: unknown): { window: string; x: number; y: number; button: "left" | "right"; clickCount: 1 | 2 };
 export function parseComputerType(value: unknown): { window: string; text: string };
 export function parseComputerScroll(value: unknown): { window: string; dy: number; x: number | null; y: number | null };
@@ -143,9 +149,6 @@ export function parseToolsInset(value: unknown): { right: number };
 export function parsePageId(value: unknown, channel: string): { id: string };
 export function parsePageOrder(value: unknown): { ids: string[] };
 export function parseNewPage(value: unknown): { url: string };
-export function parsePagesInset(value: unknown): { left: number };
-export function parseCoverPage(value: unknown): { covered: boolean };
-export function parseOverlay(value: unknown): { up: boolean };
 export function parseFloatShow(value: unknown): {
   id: string;
   html: string;

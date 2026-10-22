@@ -151,25 +151,24 @@ export interface MosaelPublishBridge {
   /** 弹窗开着时收起悬浮面板(原生视图永远压在渲染层之上),关掉再放回。 */
   setPanelsHidden(hidden: boolean): Promise<void>;
   /** 声明式让位(P2):浮层说自己要哪种让法,主进程折算成对原生视图的指令。 */
-  setHostLayer(claim: { id: string; kind: "region" | "cover" | "overlay" | "panels" | "inset"; active: boolean; width?: number }): Promise<void>;
+  setHostLayer(claim: {
+    id: string;
+    kind: "region" | "cover" | "overlay" | "panels" | "inset";
+    active: boolean;
+    width?: number;
+    side?: "left" | "right";
+  }): Promise<void>;
   /** 前台会话的页面列表:切换、关闭、拖动重排(整份新次序)、新建(地址栏同一套归一)、让出左侧的像素宽。 */
   switchPage(id: string): Promise<boolean>;
   closePage(id: string): Promise<boolean>;
   reorderPages(ids: string[]): Promise<boolean>;
   newPage(url: string): Promise<boolean>;
-  setPagesInset(left: number): Promise<void>;
   /**
    * 页面列表展开、收起、临时展开(见 usePageListMotion):先拍下前台网页此刻的画面和它在窗口里该在的位置,渲染层
-   * 铺回原处;再 coverPage(true) 把原生视图挪到窗口外,列表就在那张画面上变形。变完 coverPage(false)。没有前台
+   * 铺回原处;再声明 `{kind:"cover", active:true}` 把原生视图挪到窗口外,列表就在那张画面上变形;变完关掉。没有前台
    * 网页时 null。
    */
   snapshotPage(): Promise<PageSnapshot | null>;
-  coverPage(covered: boolean): Promise<void>;
-  /**
-   * Mosael 自己的整窗浮层(看大图)亮着 / 收起:前台网页挪到窗口外 / 放回原处(原生视图盖在一切 DOM 上,不让开浮层
-   * 就只露出顶栏和侧栏)。渲染层按引用计数调(见 components/ui/nativeViewAside),这里只收「有 / 没有」。
-   */
-  setOverlay(up: boolean): Promise<void>;
   /** 键盘交给前台网页(顶栏、页面列表里用鼠标点完之后,接着打字的该是网页)。 */
   focusPage(): Promise<void>;
   /**

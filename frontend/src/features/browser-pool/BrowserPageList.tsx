@@ -65,10 +65,15 @@ function PageList({
   const backdropRight = snapshot ? snapshot.bounds.x + snapshot.bounds.width : 0;
   const edge = useEdgeColor(snapshot?.frame ?? null);
 
+  //: 声明式让位(P2):只说「左侧要让出多少」,折算成对原生视图的指令由主进程做(见 publish/hostLayers)。
   React.useEffect(() => {
-    void bridge.setPagesInset(inset);
+    void bridge.setHostLayer({ id: "page-list-inset", kind: "inset", side: "left", active: inset > 0, width: inset });
   }, [bridge, inset]);
-  React.useEffect(() => () => void bridge.setPagesInset(0), [bridge]);
+  React.useEffect(
+    () => () =>
+      void bridge.setHostLayer({ id: "page-list-inset", kind: "inset", side: "left", active: false, width: 0 }),
+    [bridge],
+  );
 
   // 开满了被拦下(新窗口、新建页面):说一句。挂上时已有的那次不算。
   const seenLimit = React.useRef(state.pageLimitHitAt ?? 0);

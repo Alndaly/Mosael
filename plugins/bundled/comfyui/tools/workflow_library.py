@@ -755,7 +755,8 @@ def describe(row: dict[str, Any], source: dict[str, Any], object_info: dict[str,
         row.update({"kind": info["kind"], "inputs": info["inputs"], "parameters": info["parameters"],
                     "outputs": info["outputs"], "app": app_form.summary(marks, resolved, locale)})
     elif not row.get("problem"):
-        row["problem"] = say(locale, "工作流是空的", "The workflow is empty")
+        #: 空 API 图有两种:文件里真的没有节点,或者**全被旁路/静音**(⌘B)了 —— 后者不是空的工作流。
+        row["problem"] = graph.dormant_reason(source, locale) or say(locale, "工作流是空的", "The workflow is empty")
     if missing:
         #: 不管转不转得过来,顶部那句都说清**为什么**:装包 / 已装没加载(禁用、版本不对)/ 核心节点太老 / 认不出。
         row["problem"] = _missing_problem(missing, packs, core, locale)

@@ -45,15 +45,12 @@ const IPC = Object.freeze({
     publishClosePage: "publish:closePage",
     publishReorderPages: "publish:reorderPages",
     publishNewPage: "publish:newPage",
-    publishPagesInset: "publish:pagesInset",
     // 页面列表展开 / 收起 / 临时展开:拍下前台网页的画面、把原生视图挪开 / 放回(列表在那张画面上变形)。
     publishSnapshotPage: "publish:snapshotPage",
-    publishCoverPage: "publish:coverPage",
     // Mosael 的整窗浮层(看大图)亮着:前台网页挪到窗口外,浮层收起再放回(见 accountViews 的 ForegroundHideReason)。
     //: **声明式让位**(P2):浮层说「我要在页面上画东西、要哪种让法」,主进程折算成对原生视图的指令。
     //: 新浮层只接这一条,不必再记得四条老通道各接一次(见 publish/hostLayers)。
     publishHostLayer: "publish:hostLayer",
-    publishOverlay: "publish:overlay",
     // 键盘交给前台网页(顶栏、页面列表里点完之后接着打字的是网页)。
     publishFocusPage: "publish:focusPage",
     browserOpenLogin: "browser:openLogin",
@@ -709,7 +706,7 @@ function parseComputerType(value) {
 function parseHostLayer(value) {
   const channel = IPC.invoke.publishHostLayer;
   const payload = record(value, channel);
-  onlyKeys(payload, ["id", "kind", "active", "width"], channel);
+  onlyKeys(payload, ["id", "kind", "active", "width", "side"], channel);
   const id = String(payload.id || "").trim();
   if (!id) throw new TypeError(`${channel}: id is required`);
   const kinds = ["region", "cover", "overlay", "panels", "inset"];
@@ -719,6 +716,10 @@ function parseHostLayer(value) {
   if (payload.width !== undefined) {
     if (!Number.isInteger(payload.width) || payload.width < 0) throw new TypeError(`${channel}: width must be a non-negative integer`);
     out.width = payload.width;
+  }
+  if (payload.side !== undefined) {
+    if (payload.side !== "left" && payload.side !== "right") throw new TypeError(`${channel}: side must be "left" or "right"`);
+    out.side = payload.side;
   }
   return out;
 }
@@ -818,17 +819,6 @@ function parseNewPage(value) {
   return { url };
 }
 
-/** 页面列表开合:前台视图左侧让出的像素宽。 */
-function parsePagesInset(value) {
-  const channel = IPC.invoke.publishPagesInset;
-  const payload = record(value, channel);
-  onlyKeys(payload, ["left"], channel);
-  const left = payload.left;
-  if (typeof left !== "number" || !Number.isFinite(left) || left < 0 || left > 4000) {
-    throw new TypeError(`${channel}: left must be a number between 0 and 4000`);
-  }
-  return { left };
-}
 
 const FLOAT_ROOT_ATTRIBUTE = /^(?:data-[a-z0-9-]+|lang|dir)$/;
 
@@ -900,23 +890,7 @@ function parseFloatHide(value) {
   return { id: requiredString(payload, "id", channel) };
 }
 
-/** 把前台网页挪开 / 放回(页面列表在它的画面上变形)。 */
-function parseCoverPage(value) {
-  const channel = IPC.invoke.publishCoverPage;
-  const payload = record(value, channel);
-  onlyKeys(payload, ["covered"], channel);
-  if (typeof payload.covered !== "boolean") throw new TypeError(`${channel}: covered must be a boolean`);
-  return { covered: payload.covered };
-}
 
-/** Mosael 的整窗浮层亮着 / 收起:前台网页挪开 / 放回。 */
-function parseOverlay(value) {
-  const channel = IPC.invoke.publishOverlay;
-  const payload = record(value, channel);
-  onlyKeys(payload, ["up"], channel);
-  if (typeof payload.up !== "boolean") throw new TypeError(`${channel}: up must be a boolean`);
-  return { up: payload.up };
-}
 
 /**
  * 把一份下好的下载存进素材库:存到哪个服务器、哪个工作区、以谁的身份 —— 这些只有渲染层知道。
@@ -1094,9 +1068,6 @@ module.exports = {
   parseNewPage,
   parsePageId,
   parsePageOrder,
-  parsePagesInset,
-  parseCoverPage,
-  parseOverlay,
   parseFloatShow,
   parseFloatHide,
   parseToastsShow,

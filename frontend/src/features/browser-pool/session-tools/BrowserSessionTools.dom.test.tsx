@@ -60,10 +60,10 @@ function capture(extra: Record<string, unknown> = {}) {
 
 let tools: Record<string, ReturnType<typeof vi.fn>>;
 const hideView = vi.fn();
-const setOverlay = vi.fn(async (_up: boolean) => undefined);
+const setHostLayer = vi.fn(async (_claim: { id: string; kind: string; active: boolean }) => undefined);
 
 beforeEach(() => {
-  for (const fn of [...Object.values(api), ...Object.values(links), agent.startAgentDraft, hideView, setOverlay]) fn.mockReset();
+  for (const fn of [...Object.values(api), ...Object.values(links), agent.startAgentDraft, hideView, setHostLayer]) fn.mockReset();
   api.listBrowserProfiles.mockResolvedValue([{ id: "p1", partition: "persist:pool-p1", name: "我的档案" }]);
   api.importWebCapture.mockImplementation(async () => ({ id: "asset-1" }));
   api.urlSupport.mockResolvedValue({ supported: false, extractor: "" });
@@ -77,7 +77,7 @@ beforeEach(() => {
     readPage: vi.fn(async (mode: string) => ({ page: PAGE, html: mode === "article" ? "<article>正文</article>" : "", selection: "" })),
     setInset: vi.fn(async () => undefined),
   };
-  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView, setOverlay } });
+  Object.assign(window, { mosaelPageTools: tools, mosaelPublish: { hideView, setHostLayer } });
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
 });
@@ -370,9 +370,9 @@ describe("采集页面图片", () => {
     expect(viewer.textContent).toContain("第三张");
     expect(viewer.textContent, "取到了的两张成组翻").toMatch(/2\s*\/\s*2/);
     expect(document.querySelector('[data-page-image="ready"]')!.getAttribute("aria-pressed"), "看大图不勾选").toBe("false");
-    await waitFor(() => expect(setOverlay).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(true));
     fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(setOverlay).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(false));
   });
 });
 

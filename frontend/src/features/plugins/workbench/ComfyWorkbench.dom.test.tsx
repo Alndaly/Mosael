@@ -144,7 +144,7 @@ function desktop() {
     mosaelPageTools: { setInset: vi.fn(async (_right: number) => undefined) },
     mosaelPublish: {
       hideView: vi.fn(async () => undefined),
-      setOverlay: vi.fn(async (_up: boolean) => undefined),
+      setHostLayer: vi.fn(async (_claim: { id: string; kind: string; active: boolean }) => undefined),
       focusPage: vi.fn(async () => undefined),
       onViewState: (callback: typeof viewListener) => {
         viewListener = callback;
@@ -556,11 +556,11 @@ describe("ComfyUI 工作台", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "workflowFormDelete" }));
     const ask = await screen.findByRole("alertdialog");
     expect(ask.className, "压在外壳(z-200)之上").toMatch(/\bz-\[205\]/);
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(true));
     await waitFor(() => expect(within(ask).getAllByRole("listitem")).toHaveLength(1));
     expect(api.getFormUsages).toHaveBeenCalledWith("i1", { workspace_id: "w1", model: "古风.json#k3x9a2", tool: "wf_x_k3x9a2" });
     fireEvent.click(within(ask).getByRole("button", { name: "cancel" }));
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(false));
   });
 
   //: PLG-10:「表单」页签此前按 workflow.key 重挂,一张没存过的工作流第一次存盘(或改名、挪文件夹)时 key 变了,没同步的草稿静默没了
@@ -657,13 +657,13 @@ describe("ComfyUI 工作台", () => {
     await waitFor(() => expect(api.getWorkflowLibrary).toHaveBeenCalledWith("i1", "w1"));
     const dialog = await screen.findByRole("dialog");
     expect(dialog.className, "压在外壳(z-200)之上").toMatch(/\bz-\[205\]/);
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(true));
     expect(within(dialog).getByText("人像/古风.json")).toBeTruthy();
     expect(within(dialog).queryByText("别的.json"), "只列上一版的那几张").toBeNull();
     expect(api.getCanvasMarks, "什么都没往画布上写").not.toHaveBeenCalled();
     expect(calls(bridge).some((one) => one.op === "setMarks")).toBe(false);
     fireEvent.click(within(dialog).getByRole("button", { name: "cancel" }));
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(false));
   });
 
   it("表单:更新版插件写的表单 —— 说升级 Mosael,不给升级也不给写;画布上有没存的改动时上一版的也先不给升级", async () => {
@@ -1049,9 +1049,9 @@ describe("模型库:换模型不闪;点缩略图看大图", () => {
     });
     expect(viewer.textContent).toContain("Pony");
     expect(calls(bridge).some((one) => one.op === "setWidget"), "看大图不填").toBe(false);
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(true));
     fireEvent.keyDown(window, { key: "Escape" });
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(false));
     await waitFor(() => expect(document.activeElement).toBe(thumb));
   });
 });
@@ -1093,7 +1093,7 @@ describe("运行与结果:点结果看大图;结果取自哪个节点", () => {
     // 面板上先是 PreviewImage #17 那一组(a1、a3),再是高清 #9(a2):点的是第一组的第二张
     await waitFor(() => expect(viewer.textContent).toContain("PreviewImage #17 · 2/3"));
     expect(viewer.textContent, "计数是这一次全部的三张").toMatch(/2\s*\/\s*3/);
-    await waitFor(() => expect(bridge.mosaelPublish.setOverlay).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(bridge.mosaelPublish.setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(true));
   });
 
   it("产物类型以素材详情为准:视频用播放语义和文件流,不被运行记录的 image 类型误画成大图", async () => {

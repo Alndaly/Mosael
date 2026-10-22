@@ -13,7 +13,7 @@ import { resetNativeViewAside, settleNativeViewAside } from "@/components/ui/nat
 import { resetNativeViewForTests } from "@/lib/nativeView";
 
 let push: ((state: { visible: boolean }) => void) | null = null;
-const setOverlay = vi.fn(async (_up: boolean) => undefined);
+const setHostLayer = vi.fn(async (_claim: { id: string; kind: string; active: boolean }) => undefined);
 
 function desktop(visible: boolean) {
   vi.stubGlobal("mosaelPublish", {
@@ -22,7 +22,7 @@ function desktop(visible: boolean) {
       callback({ visible });
       return () => (push = null);
     },
-    setOverlay,
+    setHostLayer,
   });
   resetNativeViewForTests();
 }
@@ -45,16 +45,21 @@ afterEach(async () => {
   resetNativeViewAside();
   vi.unstubAllGlobals();
   resetNativeViewForTests();
-  setOverlay.mockClear();
+  setHostLayer.mockClear();
 });
 
 it("视图在前台:弹窗抬过外壳(z 205),开着时视图让开,关了视图回来", async () => {
   desktop(true);
   const view = render(<Ask open />);
   expect(screen.getByRole("alertdialog").className).toMatch(/z-\[205\]/);
-  await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+  await waitFor(() => expect(setHostLayer.mock.calls).toEqual([[{ id: "native-view-aside", kind: "overlay", active: true }]]));
   view.rerender(<Ask open={false} />);
-  await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true], [false]]));
+  await waitFor(() =>
+    expect(setHostLayer.mock.calls).toEqual([
+      [{ id: "native-view-aside", kind: "overlay", active: true }],
+      [{ id: "native-view-aside", kind: "overlay", active: false }],
+    ]),
+  );
 });
 
 it("视图不在前台:和平时一样", async () => {
@@ -62,7 +67,7 @@ it("视图不在前台:和平时一样", async () => {
   render(<Ask open />);
   expect(screen.getByRole("alertdialog").className).not.toMatch(/z-\[205\]/);
   //: 没有拍画面这一步时,请视图让开是在弹窗挂上的那一刻同步发出去的:此刻没发就是没发
-  expect(setOverlay).not.toHaveBeenCalled();
+  expect(setHostLayer).not.toHaveBeenCalled();
 });
 
 it("开着的时候视图亮起来(人点开了内嵌浏览器):跟着抬过去、请它让开", async () => {
@@ -70,5 +75,5 @@ it("开着的时候视图亮起来(人点开了内嵌浏览器):跟着抬过去�
   render(<Ask open />);
   act(() => push?.({ visible: true }));
   expect(screen.getByRole("alertdialog").className).toMatch(/z-\[205\]/);
-  await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+  await waitFor(() => expect(setHostLayer.mock.calls).toEqual([[{ id: "native-view-aside", kind: "overlay", active: true }]]));
 });

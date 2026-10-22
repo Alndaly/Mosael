@@ -13,20 +13,25 @@ const KINDS = Object.freeze(["region", "cover", "overlay", "panels", "inset"]);
 
 /** 能不能同时有多条声明(同一个 kind 下按 id 分别算)。 */
 function createHostLayers() {
-  /** id → { kind, active, width } */
+  /** id → { kind, active, width, side } */
   const claims = new Map();
 
   function directives() {
     const reasons = new Set();
     let panelsHidden = false;
     let insetRight = 0;
+    let insetLeft = 0;
     for (const claim of claims.values()) {
       if (!claim.active) continue;
       if (claim.kind === "panels") panelsHidden = true;
-      else if (claim.kind === "inset") insetRight = Math.max(insetRight, Number(claim.width) || 0);
-      else reasons.add(claim.kind);
+      else if (claim.kind === "inset") {
+        //: 两侧各取最大的那一条:页面列表在左边、工具侧栏在右边,互不相干。
+        const width = Math.max(0, Number(claim.width) || 0);
+        if (claim.side === "left") insetLeft = Math.max(insetLeft, width);
+        else insetRight = Math.max(insetRight, width);
+      } else reasons.add(claim.kind);
     }
-    return { reasons: [...reasons], panelsHidden, insetRight };
+    return { reasons: [...reasons], panelsHidden, insetRight, insetLeft };
   }
 
   return {
@@ -40,6 +45,7 @@ function createHostLayers() {
         kind,
         active: Boolean(claim?.active),
         width: Number(claim?.width) || 0,
+        side: claim?.side === "left" ? "left" : "right",
       });
       return directives();
     },

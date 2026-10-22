@@ -169,7 +169,7 @@ it("挂在对话上的卡写「智能体请求」,外部智能体的卡才写「
  */
 describe("原生视图在前台时,卡收在外壳顶栏上", () => {
   let push: ((state: { visible: boolean }) => void) | null = null;
-  const setOverlay = vi.fn(async (_up: boolean) => undefined);
+  const setHostLayer = vi.fn(async (_claim: { id: string; kind: string; active: boolean }) => undefined);
   const hideView = vi.fn(async () => undefined);
   function desktop() {
     vi.stubGlobal("mosaelPublish", {
@@ -178,7 +178,7 @@ describe("原生视图在前台时,卡收在外壳顶栏上", () => {
         callback({ visible: true });
         return () => (push = null);
       },
-      setOverlay,
+      setHostLayer,
       hideView,
     });
     resetNativeViewForTests();
@@ -201,7 +201,7 @@ describe("原生视图在前台时,卡收在外壳顶栏上", () => {
     resetNativeViewAside();
     vi.unstubAllGlobals();
     resetNativeViewForTests();
-    setOverlay.mockClear();
+    setHostLayer.mockClear();
     hideView.mockClear();
   });
 
@@ -212,18 +212,18 @@ describe("原生视图在前台时,卡收在外壳顶栏上", () => {
     expect(screen.getByTestId("browser-bar").contains(pill)).toBe(true);
     expect(pill.className, "和外壳顶栏的控件同一档(xs)").toMatch(/\bh-7\b/);
     expect(screen.queryByText("不隔离")).toBeNull();
-    expect(setOverlay).not.toHaveBeenCalled();
+    expect(setHostLayer).not.toHaveBeenCalled();
 
     fireEvent.click(pill);
     const region = await screen.findByRole("region", { name: "confirmTitle" });
     expect(region.className).toMatch(/z-\[210\]/);
     expect(region.hasAttribute("data-app-chrome")).toBe(true);
     expect(screen.getByText("不隔离")).toBeTruthy();
-    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true]]));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true]));
 
     fireEvent.click(screen.getByRole("button", { name: /confirmCenterTuck/ }));
     expect(await screen.findByRole("button", { name: /confirmCenterWaiting/ })).toBeTruthy();
-    await waitFor(() => expect(setOverlay.mock.calls).toEqual([[true], [false]]));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toEqual([true, false]));
   });
 
   it("视图收起:卡回到右上角照常摆着", async () => {

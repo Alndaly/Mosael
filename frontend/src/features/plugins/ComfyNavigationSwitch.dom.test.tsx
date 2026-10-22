@@ -78,14 +78,14 @@ describe("工作台的画布操控方式(样子是画布那一份,存储只对�
 
   it("菜单落在原生网页视图上:开着时请视图让开,关了放回", async () => {
     bridge("applied");
-    const setOverlay = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal("mosaelPublish", { setOverlay });
+    const setHostLayer = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("mosaelPublish", { setHostLayer });
     render(<ComfyNavigationSwitch connectionId="c1" />);
     fireEvent.click(trigger());
     await screen.findByRole("menu");
-    await waitFor(() => expect(setOverlay).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(setHostLayer.mock.calls.map(([claim]) => claim.active)).toContain(true));
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
-    await waitFor(() => expect(setOverlay).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(setHostLayer.mock.calls.at(-1)?.[0]?.active).toBe(false));
   });
 
   it("没有这座桥(网页版、旧主进程)就什么都不摆", () => {

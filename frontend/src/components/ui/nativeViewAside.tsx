@@ -22,7 +22,7 @@ import * as React from "react";
  * 引用计数:几处浮层同时亮着,最后一处收起才放回。没有前台网页时拍不到画面,只请主进程记一笔(它那边什么都不挪);
  * 网页版没有这座桥,什么都不做。
  */
-type Bridge = Pick<NonNullable<Window["mosaelPublish"]>, "setOverlay"> &
+type Bridge = Pick<NonNullable<Window["mosaelPublish"]>, "setHostLayer"> &
   Partial<Pick<NonNullable<Window["mosaelPublish"]>, "snapshotPage">>;
 
 /** 铺在原生视图原处的那张画面;`take` 是第几次拍的 —— 每次都是一张新图(重新挂、重新等加载)。 */
@@ -81,7 +81,7 @@ function setStandIn(next: StandInFrame | null): void {
 
 function bridgeOf(): Bridge | null {
   const bridge = typeof window === "undefined" ? undefined : window.mosaelPublish;
-  return typeof bridge?.setOverlay === "function" ? bridge : null;
+  return typeof bridge?.setHostLayer === "function" ? bridge : null;
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -107,13 +107,14 @@ async function stepAside(bridge: Bridge): Promise<boolean> {
       painted.stop();
     }
   }
-  await bridge.setOverlay(true).catch(() => undefined);
+  //: 声明式让位(P2):这个浮层要「整窗盖在网页上」,理由记成 overlay。
+  await bridge.setHostLayer({ id: "native-view-aside", kind: "overlay", active: true }).catch(() => undefined);
   return true;
 }
 
 /** 回到原处:先放回视图(它盖住那张画面),过两帧再拿掉画面。 */
 async function stepBack(bridge: Bridge): Promise<void> {
-  await bridge.setOverlay(false).catch(() => undefined);
+  await bridge.setHostLayer({ id: "native-view-aside", kind: "overlay", active: false }).catch(() => undefined);
   if (!standIn) return;
   await nextFrame();
   await nextFrame();

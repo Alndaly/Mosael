@@ -809,6 +809,50 @@ def missing_required(api: dict[str, Any], object_info: dict[str, Any]) -> list[s
     return found
 
 
+def dormant_counts(ui_graph: dict[str, Any]) -> tuple[int, int, int]:
+    """(节点总数, 被旁路, 被静音) —— 只看**前端的** mode。
+
+    `convert.to_api` 把静音(mode 2)与旁路(mode 4)的节点排除在「真会跑的图」之外,于是一张**全部
+    节点都被 ⌘B 旁路**的图会得到一张空图。那不等于「工作流是空的」:文件里有 106 个节点,只是现在
+    没有会跑的。分不清这两件事,维护者看到的就是「工作流明明不是空的,却显示工作流是空的」。
+    """
+    nodes = ui_graph.get("nodes") if isinstance(ui_graph, dict) else None
+    total = bypass = muted = 0
+    for node in nodes if isinstance(nodes, list) else []:
+        if not isinstance(node, dict):
+            continue
+        total += 1
+        mode = node.get("mode")
+        if mode == convert.MODE_BYPASS:
+            bypass += 1
+        elif mode == convert.MODE_NEVER:
+            muted += 1
+    return total, bypass, muted
+
+
+def dormant_reason(ui_graph: dict[str, Any], locale: str) -> str:
+    """这张图为什么「没有会跑的节点」。**不是空的就别说空**。
+
+    返回空串 = 既不是空图、也不是全被旁路/静音(调用方按自己的语义填原因)。
+    """
+    total, bypass, muted = dormant_counts(ui_graph)
+    if total == 0:
+        return say(locale, "工作流是空的", "The workflow is empty")
+    if bypass + muted >= total:
+        #: 两种语言各自拼一句(别把中文那半句塞进英文里)。
+        zh_detail = (f"{total} 个节点全部被旁路(⌘B)或静音" if bypass and muted
+                     else f"{total} 个节点全部被旁路(⌘B)" if bypass else f"{total} 个节点全部被静音")
+        en_detail = (f"all {total} nodes are bypassed (⌘B) or muted" if bypass and muted
+                     else f"all {total} nodes are bypassed (⌘B)" if bypass else f"all {total} nodes are muted")
+        return say(
+            locale,
+            f"这张图现在没有会跑的节点:{zh_detail} —— 工作流本身不是空的,取消旁路/静音就又能跑",
+            f"Nothing in this workflow runs right now: {en_detail}. The file itself is not empty — "
+            f"un-bypass or un-mute them and it runs again.",
+        )
+    return ""
+
+
 def live(api: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
     """ComfyUI **真会跑**的那部分图:能跑的输出节点和它们的上游,别的都不算(返回新图,不改入参)。
 

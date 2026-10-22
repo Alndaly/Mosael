@@ -64,9 +64,6 @@ const {
   parseNewPage,
   parsePageId,
   parsePageOrder,
-  parsePagesInset,
-  parseCoverPage,
-  parseOverlay,
   parseFloatShow,
   parseFloatHide,
   parseToastsShow,
@@ -1591,14 +1588,7 @@ app.whenReady().then(async () => {
     requirePublish().reorderViewPages(parsePageOrder(payload).ids),
   );
   handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
-  handle(IPC.invoke.publishPagesInset, (_e, payload) =>
-    requirePublish().setPagesInset(parsePagesInset(payload).left),
-  );
   handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
-  handle(IPC.invoke.publishCoverPage, (_e, payload) =>
-    requirePublish().coverViewPage(parseCoverPage(payload).covered),
-  );
-  handle(IPC.invoke.publishOverlay, (_e, payload) => requirePublish().overlayViewPage(parseOverlay(payload).up));
   //: 声明式让位(P2):一条通道承载所有浮层的「请原生视图让开」,见 publish/hostLayers。
   handle(IPC.invoke.publishHostLayer, (_e, payload) => requirePublish().setHostLayer(parseHostLayer(payload)));
   handle(IPC.invoke.publishFocusPage, () => requirePublish().focusViewPage());

@@ -15,7 +15,7 @@ const HOVER_MS = 150;
 const LEAVE_MS = 150;
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
-type MotionBridge = Pick<NonNullable<Window["mosaelPublish"]>, "snapshotPage" | "coverPage">;
+type MotionBridge = Pick<NonNullable<Window["mosaelPublish"]>, "snapshotPage" | "setHostLayer">;
 /** 拍下的画面;`take` 是第几次拍的 —— 每次盖都是一张新图(重新挂上、重新等它加载),哪怕和上一张一模一样。 */
 export type PageSnapshot = NonNullable<Awaited<ReturnType<MotionBridge["snapshotPage"]>>> & { take: number };
 
@@ -95,7 +95,8 @@ export function usePageListMotion(bridge: MotionBridge, keepPeekOpen: boolean) {
     await nextFrame();
     if (!alive.current) return false;
     try {
-      await bridge.coverPage(true);
+      //: 声明式让位(P2):列表在这张画面上变形,原生视图先挪开(理由记成 cover)。
+      await bridge.setHostLayer({ id: "page-list-cover", kind: "cover", active: true });
     } catch {
       setSnapshot(null);
       return false;
@@ -111,7 +112,7 @@ export function usePageListMotion(bridge: MotionBridge, keepPeekOpen: boolean) {
       return;
     }
     covered.current = false;
-    await bridge.coverPage(false).catch(() => undefined);
+    await bridge.setHostLayer({ id: "page-list-cover", kind: "cover", active: false }).catch(() => undefined);
     await nextFrame();
     await nextFrame();
     if (!covered.current && alive.current) setSnapshot(null);
@@ -182,7 +183,7 @@ export function usePageListMotion(bridge: MotionBridge, keepPeekOpen: boolean) {
       window.clearTimeout(leaveTimer.current);
       if (covered.current) {
         covered.current = false;
-        void bridge.coverPage(false).catch(() => undefined);
+        void bridge.setHostLayer({ id: "page-list-cover", kind: "cover", active: false }).catch(() => undefined);
       }
     };
   }, [bridge]);

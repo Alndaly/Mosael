@@ -135,7 +135,7 @@ it("设置项搜得到;只在管理页的,不是部署管理员时看得到但�
 //: (不然面板一关网页又盖回来,跳过去的那一页在它底下)。换主题人还在原处,不收。
 describe("原生视图在前台时的命令面板", () => {
   const order: string[] = [];
-  let bridge: { onViewState: unknown; setOverlay: ReturnType<typeof vi.fn>; hideView: ReturnType<typeof vi.fn> };
+  let bridge: { onViewState: unknown; setHostLayer: ReturnType<typeof vi.fn>; hideView: ReturnType<typeof vi.fn> };
   beforeEach(() => {
     order.length = 0;
     bridge = {
@@ -143,7 +143,7 @@ describe("原生视图在前台时的命令面板", () => {
         callback({ visible: true });
         return () => undefined;
       },
-      setOverlay: vi.fn(async (up: boolean) => void order.push(`overlay:${up}`)),
+      setHostLayer: vi.fn(async (claim: { active: boolean }) => void order.push(`overlay:${claim.active}`)),
       hideView: vi.fn(async () => void order.push("hideView")),
     };
     vi.stubGlobal("mosaelPublish", bridge);

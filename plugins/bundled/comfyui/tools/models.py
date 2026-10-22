@@ -246,7 +246,9 @@ def each(comfy: Comfy, object_info: dict[str, Any], locale: str) -> Iterator[Wor
             yield Workflow(path, label_of(path), {}, {}, str(exc) or type(exc).__name__)
             continue
         if not api:
-            yield Workflow(path, label_of(path), {}, {}, say(locale, "工作流是空的", "The workflow is empty"), _ident(ui_graph))
+            #: 空 API 图有两种:文件里真的没有节点,或者**全被旁路/静音**(⌘B)了。后者不是空的。
+            reason = graph.dormant_reason(ui_graph, locale) or say(locale, "工作流是空的", "The workflow is empty")
+            yield Workflow(path, label_of(path), {}, {}, reason, _ident(ui_graph))
             continue
         yield Workflow(path, label_of(path), api, convert.titles_of(api), "", _ident(ui_graph), app_form.read(ui_graph))
     for path in others:

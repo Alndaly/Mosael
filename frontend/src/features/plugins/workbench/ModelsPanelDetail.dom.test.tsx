@@ -81,9 +81,10 @@ function desktop() {
       log.push("snapshot");
       return { frame: "data:image/jpeg;base64,ZnJhbWU=", bounds: { x: 0, y: 56, width: 1020, height: 844 } };
     }),
-    setOverlay: vi.fn(async (up: boolean) => {
+    setHostLayer: vi.fn(async (claim: { kind: string; active: boolean }) => {
+      if (claim.kind !== "overlay") return;
       await new Promise((resolve) => setTimeout(resolve, 10));
-      log.push(`${up ? "aside" : "back"}:frame=${stand()}`);
+      log.push(`${claim.active ? "aside" : "back"}:frame=${stand()}`);
     }),
   };
   vi.stubGlobal("mosaelPublish", publish);
@@ -251,7 +252,7 @@ describe("工作台模型库里的模型详情", () => {
       connectionId: "i1", call: { op: "setWidget", node: "4", widget: "ckpt_name", value: "flux-dev.safetensors" },
     }));
     expect(detailDialog()).toBeNull();
-    expect(bridge.publish.setOverlay).not.toHaveBeenCalled();
+    expect(bridge.publish.setHostLayer.mock.calls.filter(([claim]) => claim.kind === "overlay")).toEqual([]);
   });
 
   it("详情里的预览图照模型库那两组设置:预览图不显示时只画占位,点「显示这一张」才去取", async () => {

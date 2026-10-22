@@ -193,11 +193,8 @@ const publishBridge = {
   closePage: (id) => invoke(IPC.invoke.publishClosePage, { id }),
   reorderPages: (ids) => invoke(IPC.invoke.publishReorderPages, { ids }),
   newPage: (url) => invoke(IPC.invoke.publishNewPage, { url }),
-  setPagesInset: (left) => invoke(IPC.invoke.publishPagesInset, { left }),
   snapshotPage: () => invoke(IPC.invoke.publishSnapshotPage),
-  coverPage: (covered) => invoke(IPC.invoke.publishCoverPage, { covered }),
   // Mosael 的整窗浮层(看大图)亮着时前台网页挪到窗口外,收起时放回(原生视图盖在一切 DOM 上)。
-  setOverlay: (up) => invoke(IPC.invoke.publishOverlay, { up }),
   focusPage: () => invoke(IPC.invoke.publishFocusPage),
   // 外壳里的悬停说明画到网页上面(浮层视图):不等回话,跟着说明出、收。
   showFloat: (hint) => ipcRenderer.send(IPC.send.floatShow, hint),

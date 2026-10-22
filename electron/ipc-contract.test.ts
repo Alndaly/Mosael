@@ -42,9 +42,6 @@ const contract = require("./ipc-contract.cjs") as {
   parsePageId: (value: unknown, channel: string) => { id: string };
   parsePageOrder: (value: unknown) => { ids: string[] };
   parseNewPage: (value: unknown) => { url: string };
-  parsePagesInset: (value: unknown) => { left: number };
-  parseCoverPage: (value: unknown) => { covered: boolean };
-  parseOverlay: (value: unknown) => { up: boolean };
   parseFloatShow: (value: unknown) => {
     id: string;
     html: string;
@@ -369,6 +366,22 @@ describe("Electron IPC contract", () => {
   });
 
   it("decodes the page list's requests: page ids are the main process's numbers, the order is a list of them", () => {
+    // 声明式让位(P2):一条通道,不认识的让法当场拒。
+    expect(contract.parseHostLayer({ id: "modals", kind: "panels", active: true })).toEqual({
+      id: "modals",
+      kind: "panels",
+      active: true,
+    });
+    expect(contract.parseHostLayer({ id: "x", kind: "inset", active: true, side: "left", width: 220 })).toEqual({
+      id: "x",
+      kind: "inset",
+      active: true,
+      side: "left",
+      width: 220,
+    });
+    expect(() => contract.parseHostLayer({ id: "x", kind: "nope", active: true })).toThrow(/kind/);
+    expect(() => contract.parseHostLayer({ id: "", kind: "panels", active: true })).toThrow(/id/);
+
     expect(contract.parsePageId({ id: "42" }, "publish:switchPage")).toEqual({ id: "42" });
     expect(() => contract.parsePageId({ id: "../x" }, "publish:switchPage")).toThrow(/page id/);
     expect(() => contract.parsePageId({ id: "1", accountId: "x" }, "publish:switchPage")).toThrow(/unexpected field accountId/);
@@ -377,14 +390,6 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parsePageOrder({ ids: [1, 2] })).toThrow(/page id/);
     expect(contract.parseNewPage({ url: "bilibili.com" })).toEqual({ url: "bilibili.com" });
     expect(() => contract.parseNewPage({ url: "" })).toThrow(/url/);
-    expect(contract.parsePagesInset({ left: 220 })).toEqual({ left: 220 });
-    expect(() => contract.parsePagesInset({ left: -1 })).toThrow(/left/);
-    expect(contract.parseOverlay({ up: true })).toEqual({ up: true });
-    expect(() => contract.parseOverlay({ up: 1 })).toThrow(/up/);
-    expect(() => contract.parseOverlay({ up: false, x: 0 })).toThrow(/unexpected field x/);
-    expect(contract.parseCoverPage({ covered: true })).toEqual({ covered: true });
-    expect(() => contract.parseCoverPage({ covered: "yes" })).toThrow(/covered/);
-    expect(() => contract.parseCoverPage({ covered: false, left: 1 })).toThrow(/unexpected field left/);
   });
 
   it("decodes a hint for the float layer: bounded markup and rectangle, only theme-ish attributes of the root", () => {

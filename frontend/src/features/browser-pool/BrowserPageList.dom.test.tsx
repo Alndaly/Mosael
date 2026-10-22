@@ -25,23 +25,33 @@ const SNAPSHOT = { frame: "data:image/jpeg;base64,AAAA", bounds: { x: 48, y: 56,
 
 const bridge = {
   snapshotPage: vi.fn(async (): Promise<typeof SNAPSHOT | null> => SNAPSHOT),
-  coverPage: vi.fn(async (_covered: boolean) => undefined),
+  setHostLayer: vi.fn(async (_claim: { id: string; kind: string; active: boolean; side?: string; width?: number }) => undefined),
   switchPage: vi.fn(async () => true),
   closePage: vi.fn(async () => true),
   reorderPages: vi.fn(async () => true),
   newPage: vi.fn(async () => true),
-  setPagesInset: vi.fn(async (_inset: number) => undefined),
   focusPage: vi.fn(async () => undefined),
 };
 
 beforeEach(() => {
   for (const fn of Object.values(bridge)) fn.mockClear();
   bridge.snapshotPage.mockImplementation(async () => SNAPSHOT);
-  bridge.setPagesInset.mockImplementation(async () => undefined);
-  bridge.coverPage.mockImplementation(async () => undefined);
   window.localStorage.clear();
   Object.defineProperty(window, "mosaelPublish", { configurable: true, value: bridge });
 });
+
+/** 页面列表的左侧让位声明(最后一条)。 */
+function insetClaims(): Array<{ active: boolean; width?: number }> {
+  return bridge.setHostLayer.mock.calls
+    .map(([claim]) => claim)
+    .filter((claim) => claim.kind === "inset" && claim.side === "left");
+}
+
+/** 原生视图此刻是否因为列表变形而让开(理由 cover)。 */
+function coverActive(): boolean {
+  const claims = bridge.setHostLayer.mock.calls.map(([claim]) => claim).filter((claim) => claim.kind === "cover");
+  return claims.length > 0 && claims[claims.length - 1].active;
+}
 
 function state(extra: Partial<PublishViewState> = {}): PublishViewState {
   return { visible: true, accountId: "persist:pool-p1", accountName: "档案", pages: PAGES, pageLimit: 10, pageLimitHitAt: 0, ...extra };
@@ -60,14 +70,29 @@ const order = (fn: { mock: { calls: unknown[][]; invocationCallOrder: number[] }
   return index < 0 ? Number.POSITIVE_INFINITY : fn.mock.invocationCallOrder[index];
 };
 
+/** 「列表让开」那一次声明排在第几(理由 cover)。 */
+const coverOrder = (active: boolean) =>
+  order(bridge.setHostLayer, { id: "page-list-cover", kind: "cover", active });
+/** 「左侧让位」那一次声明排在第几。 */
+const insetOrder = (width: number) =>
+  order(bridge.setHostLayer, {
+    id: "page-list-inset",
+    kind: "inset",
+    side: "left",
+    active: width > 0,
+    width,
+  });
+
 /** 等新拍的那张画面铺上(它加载完才挪开原生视图)。上一张可能还没拿掉,只认没加载过的那张。 */
 async function coverLoads() {
   await waitFor(() => expect(backdrop() && !backdrop()!.dataset.loaded).toBe(true));
   const image = backdrop()!;
   image.dataset.loaded = "1";
-  const covers = bridge.coverPage.mock.calls.filter(([covered]) => covered).length;
+  const covers = bridge.setHostLayer.mock.calls.filter(([claim]) => claim.kind === "cover" && claim.active).length;
   fireEvent.load(image);
-  await waitFor(() => expect(bridge.coverPage.mock.calls.filter(([covered]) => covered).length).toBe(covers + 1));
+  await waitFor(() =>
+    expect(bridge.setHostLayer.mock.calls.filter(([claim]) => claim.kind === "cover" && claim.active).length).toBe(covers + 1),
+  );
 }
 
 /** 临时展开:先等画面铺好,再等列表展开。 */
@@ -121,20 +146,20 @@ describe("页面列表", () => {
 
   it("挂上时左侧让出列表那么宽;收起成图标条变窄并记住;卸载时还回去", async () => {
     const { unmount } = render(<BrowserPageList state={state()} top={56} />);
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH);
+    expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_WIDTH);
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
     expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBe("1");
     await coverLoads();
     await waitFor(() => expect(listState()).toBe("collapsed"));
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_COLLAPSED_WIDTH);
+    await waitFor(() => expect(coverActive()).toBe(false));
     unmount();
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(0);
+    expect(insetClaims().at(-1)?.active).toBe(false);
 
     // 下次打开还是收起的。
     render(<BrowserPageList state={state()} top={56} />);
     expect(document.querySelector("[data-page-list]")?.getAttribute("data-page-list")).toBe("collapsed");
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
+    expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_COLLAPSED_WIDTH);
   });
 
   it("开满了被拦下时说一句(挂上之前那次不算)", () => {
@@ -179,15 +204,15 @@ describe("收起时临时展开(像 Arc)", () => {
     const frame = backdropFrame()!;
     expect([frame.style.left, frame.style.top, frame.style.width, frame.style.height]).toEqual(["48px", "56px", "1392px", "844px"]);
     expect([backdrop()!.style.width, backdrop()!.style.height]).toEqual(["1392px", "844px"]);
-    expect(bridge.coverPage).toHaveBeenLastCalledWith(true);
+    expect(coverActive()).toBe(true);
     expect(nav().style.width).toBe(`${PAGE_LIST_WIDTH}px`);
     // 盖在网页上,不推挤它:左侧让出的还是图标条那么宽。
-    expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
+    expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_COLLAPSED_WIDTH);
     // 每页的标题和网址都看得见(网址在悬停、聚焦那一行时露出来,和展开时一样)。
     expect(row("1").querySelector("button")?.textContent).toBe("首页https://example.com/");
 
     fireEvent.mouseLeave(nav());
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(coverActive()).toBe(false));
     await waitFor(() => expect(backdrop()).toBeNull());
     expect(listState()).toBe("collapsed");
     expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBe("1");
@@ -199,7 +224,7 @@ describe("收起时临时展开(像 Arc)", () => {
     fireEvent.mouseLeave(nav());
     await pause(300);
     expect(bridge.snapshotPage).not.toHaveBeenCalled();
-    expect(bridge.coverPage).not.toHaveBeenCalled();
+    expect(coverActive()).toBe(false);
   });
 
   it("键盘切进列表也展开;焦点离开就收回", async () => {
@@ -214,7 +239,7 @@ describe("收起时临时展开(像 Arc)", () => {
     await peekOut(() => act(() => row("2").querySelector("button")!.focus()));
     act(() => (document.querySelector("[data-outside]") as HTMLElement).focus());
     await waitFor(() => expect(listState()).toBe("collapsed"));
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(coverActive()).toBe(false));
   });
 
   it("在展开的列表里点一页:切过去,马上收回让人看到那一页;鼠标移开再回来才再展开", async () => {
@@ -224,7 +249,7 @@ describe("收起时临时展开(像 Arc)", () => {
     expect(bridge.switchPage).toHaveBeenCalledWith("1");
     await waitFor(() => expect(backdrop()).toBeNull());
     expect(listState()).toBe("collapsed");
-    expect(bridge.coverPage).toHaveBeenLastCalledWith(false);
+    expect(coverActive()).toBe(false);
     await pause(300);
     expect(bridge.snapshotPage).toHaveBeenCalledTimes(1);
 
@@ -263,18 +288,18 @@ describe("收起时临时展开(像 Arc)", () => {
     await waitFor(() => expect(listState()).toBe("expanded"));
     expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBeNull();
     //: 让出多宽跟着动画的形状(usePageListMotion 的 shape)走,比 listState 晚一步;慢机器上晚得更多 —— 等它,不量先后。
-    await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH));
+    await waitFor(() => expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_WIDTH));
     await waitFor(() => expect(backdrop()).toBeNull());
-    expect(bridge.coverPage).toHaveBeenLastCalledWith(false);
+    expect(coverActive()).toBe(false);
   });
 
   it("展开着被卸掉(回到 Mosael)时把网页亮回来;拍不到画面就不展开", async () => {
     const { unmount } = render(<BrowserPageList state={state()} top={56} />);
     await peekOut(() => fireEvent.mouseEnter(nav()));
     unmount();
-    expect(bridge.coverPage).toHaveBeenLastCalledWith(false);
+    expect(coverActive()).toBe(false);
 
-    bridge.coverPage.mockClear();
+    bridge.setHostLayer.mockClear();
     bridge.snapshotPage.mockImplementation(async () => null);
     render(<BrowserPageList state={state()} top={56} />);
     fireEvent.mouseEnter(nav());
@@ -282,7 +307,7 @@ describe("收起时临时展开(像 Arc)", () => {
     await pause(100);
     expect(listState()).toBe("collapsed");
     expect(backdrop()).toBeNull();
-    expect(bridge.coverPage).not.toHaveBeenCalled();
+    expect(coverActive()).toBe(false);
   });
 });
 
@@ -291,25 +316,28 @@ describe("展开、收起的过渡", () => {
     //: 「网页变窄」那一刻的样子在那一刻记下来:滑动只有 160ms,事后再看,机器一忙(waitFor 隔 50ms 才看一眼、线程被抢)
     //: 看到时已经滑完、揭开了 —— 并行满载时实测 `coverPage` 已经被叫过 false。
     let sliding: Record<string, unknown> | null = null;
-    bridge.setPagesInset.mockImplementation(async (inset: number) => {
+    bridge.setHostLayer.mockImplementation(async (claim: { kind: string; side?: string; active: boolean; width?: number }) => {
+      const inset = claim.kind === "inset" && claim.side === "left" && claim.active ? (claim.width ?? 0) : 0;
       if (inset !== PAGE_LIST_COLLAPSED_WIDTH || sliding) return;
       sliding = {
         navWidth: nav().style.width,
         navTransition: nav().style.transition,
         frameLeft: backdropFrame()?.style.left,
         frameTransition: backdropFrame()?.style.transition,
-        uncovered: bridge.coverPage.mock.calls.some(([covered]) => covered === false),
+        uncovered: bridge.setHostLayer.mock.calls.some(
+          ([claim]) => claim.kind === "cover" && claim.active === false,
+        ),
       };
     });
     render(<BrowserPageList state={state()} top={56} />);
     bridge.snapshotPage.mockImplementation(async () => ({ ...SNAPSHOT, bounds: { ...SNAPSHOT.bounds, x: 220, width: 1220 } }));
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
     // 画面没盖好之前,网页和列表都不动。
-    expect(bridge.setPagesInset).not.toHaveBeenCalledWith(PAGE_LIST_COLLAPSED_WIDTH);
+    expect(insetClaims().some((claim) => claim.active && claim.width === PAGE_LIST_COLLAPSED_WIDTH)).toBe(false);
     expect(nav().style.width).toBe(`${PAGE_LIST_WIDTH}px`);
     await coverLoads();
     // 画面先铺在网页原来的位置,对齐到像素。
-    await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_COLLAPSED_WIDTH));
+    await waitFor(() => expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_COLLAPSED_WIDTH));
     // 盖着的时候列表和画面的左沿一起往回滑(同一条过渡),那时还没揭开。
     expect(sliding).toEqual({
       navWidth: `${PAGE_LIST_COLLAPSED_WIDTH}px`,
@@ -318,11 +346,11 @@ describe("展开、收起的过渡", () => {
       frameTransition: expect.stringContaining(`left ${PAGE_LIST_MOTION_MS}ms`),
       uncovered: false,
     });
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(coverActive()).toBe(false));
     await waitFor(() => expect(backdrop()).toBeNull());
-    expect(order(bridge.snapshotPage)).toBeLessThan(order(bridge.coverPage, true));
-    expect(order(bridge.coverPage, true)).toBeLessThan(order(bridge.setPagesInset, PAGE_LIST_COLLAPSED_WIDTH));
-    expect(order(bridge.setPagesInset, PAGE_LIST_COLLAPSED_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
+    expect(order(bridge.snapshotPage)).toBeLessThan(coverOrder(true));
+    expect(coverOrder(true)).toBeLessThan(insetOrder(PAGE_LIST_COLLAPSED_WIDTH));
+    expect(insetOrder(PAGE_LIST_COLLAPSED_WIDTH)).toBeLessThan(coverOrder(false));
   });
 
   it("画面起步时就在网页原来的位置(收起前是 220)", async () => {
@@ -342,9 +370,9 @@ describe("展开、收起的过渡", () => {
     await coverLoads();
     await waitFor(() => expect(listState()).toBe("expanded"));
     expect(nav().style.width).toBe(`${PAGE_LIST_WIDTH}px`);
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
-    expect(order(bridge.coverPage, true)).toBeLessThan(order(bridge.setPagesInset, PAGE_LIST_WIDTH));
-    expect(order(bridge.setPagesInset, PAGE_LIST_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
+    await waitFor(() => expect(coverActive()).toBe(false));
+    expect(coverOrder(true)).toBeLessThan(insetOrder(PAGE_LIST_WIDTH));
+    expect(insetOrder(PAGE_LIST_WIDTH)).toBeLessThan(coverOrder(false));
     expect(window.localStorage.getItem("mosael.browserPages.collapsed")).toBeNull();
   });
 
@@ -353,13 +381,13 @@ describe("展开、收起的过渡", () => {
     render(<BrowserPageList state={state()} top={56} />);
     await peekOut(() => fireEvent.mouseEnter(nav()));
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
-    await waitFor(() => expect(bridge.setPagesInset).toHaveBeenLastCalledWith(PAGE_LIST_WIDTH));
+    await waitFor(() => expect(insetClaims().at(-1)?.width).toBe(PAGE_LIST_WIDTH));
     expect(bridge.snapshotPage).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(coverActive()).toBe(false));
     //: 中途一次都没揭开:揭开只有最后那一次,排在网页挪好之后。按调用先后判,不在「看见网页挪好」那一刻去看还没揭开 ——
     //: 那一刻之后只剩 160ms 的滑动,机器一忙,看的时候已经滑完、揭开了(并行满载时实测)。
-    expect(bridge.coverPage.mock.calls.filter(([covered]) => covered === false)).toHaveLength(1);
-    expect(order(bridge.setPagesInset, PAGE_LIST_WIDTH)).toBeLessThan(order(bridge.coverPage, false));
+    expect(bridge.setHostLayer.mock.calls.filter(([claim]) => claim.kind === "cover" && !claim.active)).toHaveLength(1);
+    expect(insetOrder(PAGE_LIST_WIDTH)).toBeLessThan(coverOrder(false));
   });
 
   it("临时展开、收回也是滑出去滑回来:列表宽度带过渡,收回时滑完了才揭开", async () => {
@@ -369,12 +397,12 @@ describe("展开、收起的过渡", () => {
     expect(nav().style.transition).toContain(`width ${PAGE_LIST_MOTION_MS}ms`);
     //: 揭开那一刻列表是什么样子,在那一刻记下来(同上:不在事后去看「还没揭开」)。
     const atUncover: (string | null)[] = [];
-    bridge.coverPage.mockImplementation(async (covered: boolean) => {
-      if (!covered) atUncover.push(listState());
+    bridge.setHostLayer.mockImplementation(async (claim: { kind: string; active: boolean }) => {
+      if (claim.kind === "cover" && !claim.active) atUncover.push(listState());
     });
     fireEvent.mouseLeave(nav());
     await waitFor(() => expect(listState()).toBe("collapsed"));
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(coverActive()).toBe(false));
     expect(atUncover, "揭开时列表已经收回了,不是一边揭开一边还在临时展开").toEqual(["collapsed"]);
   });
 
@@ -391,8 +419,8 @@ describe("展开、收起的过渡", () => {
       expect(nav().style.transition).toBe("none");
       fireEvent.click(document.querySelector("[data-page-list-toggle]")!);
       await coverLoads();
-      await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
-      expect(order(bridge.coverPage, true)).toBeLessThan(order(bridge.setPagesInset, PAGE_LIST_COLLAPSED_WIDTH));
+      await waitFor(() => expect(coverActive()).toBe(false));
+      expect(coverOrder(true)).toBeLessThan(insetOrder(PAGE_LIST_COLLAPSED_WIDTH));
     } finally {
       window.matchMedia = matchMedia;
     }
@@ -421,7 +449,7 @@ describe("键盘焦点", () => {
     expect(bridge.focusPage).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(toggle);
     await coverLoads();
-    await waitFor(() => expect(bridge.coverPage).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(coverActive()).toBe(false));
     fireEvent.click(document.querySelector("[data-page-list-toggle]")!, { detail: 1 });
     expect(bridge.focusPage).toHaveBeenCalledTimes(1);
   });
