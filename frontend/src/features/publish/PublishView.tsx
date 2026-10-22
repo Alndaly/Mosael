@@ -457,7 +457,9 @@ function PublishCard({
             <Button
               variant="inline"
               size="xs"
-              className="relative z-10 min-w-0"
+              //: 悬停**只出下划线**,不要那层底色(维护者:"hover 后有下划线的那种 button")——
+              //: 成片名是一段值里的链接感,不是一颗带底色的按钮。
+              className="relative z-10 min-w-0 hover:bg-transparent hover:underline underline-offset-2"
               onClick={(event) => {
                 event.stopPropagation();
                 onPreviewAsset(task.asset_id!);
