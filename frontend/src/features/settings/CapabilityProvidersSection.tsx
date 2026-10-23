@@ -452,6 +452,8 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
           ? t("assetLinkAuto").replace("{name}", automatic.name)
           : t("assetLinkAsk");
   const uses = choices.used_by ?? [];
+  //: 「没配好的那几家」收着还是展开 —— 和配音那一项同一个控件(`Disclosure`),默认收起。
+  const [unreadyOpen, setUnreadyOpen] = React.useState(false);
   //: 除了「不指定」没有别的可选:不摆一个灰掉的下拉(像坏了),直接写出现在用的是哪一家、为什么只有它。
   const nothingElse = ready.length === 0 && !choices.current;
   //: 标题行里「现在用谁」:点名了就是点名那一家;没点名但有一个自动的内置实现,用的就是它;
@@ -479,14 +481,6 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
               ? automaticBuiltin ? t("capabilityOnlyOne") : unsetLabel
               : undefined
         }
-        //: 没配好的不进下拉(选了也用不了),一家一行说清缺什么 —— 否则用户不知道它为什么不在。
-        notes={unready.map((option) => (
-          <SettingsItemNote key={option.id} icon={<CircleDashed size={13} aria-hidden />}>
-            {t(option.builtin ? "capabilityBuiltinUnready" : "assetLinkMissing")
-              .replace("{name}", option.name)
-              .replace("{fields}", (option.missing ?? []).join(t("listSeparator")))}
-          </SettingsItemNote>
-        ))}
       >
         {options.length === 0 ? (
           <Button asChild size="sm" variant="outline">
@@ -507,6 +501,34 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
           />
         )}
       </SettingsItemRow>
+      {unready.length > 0 && (
+        //: **没配好的那几家收成一行**:一家一条铺满卡片时,这一页看起来像"到处都坏着",而真正能用的
+        //: 那一家反而被埋掉了(维护者按「配音」那一项的收法点的这个)。收起时只有一句数量 + 看原因,
+        //: 点开才是每一家缺什么 —— 内容一条不丢。
+        <div data-capability-unready="" className="min-w-0 py-3">
+          <Disclosure
+            wide
+            label={
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <TriangleAlert size={13} aria-hidden className="shrink-0" />
+                {t("capabilityUnready").replace("{n}", String(unready.length))}
+              </span>
+            }
+            hint={t("capabilityUnreadyWhy")}
+            open={unreadyOpen}
+            onOpenChange={setUnreadyOpen}
+            contentClassName="grid gap-1.5 pt-2"
+          >
+            {unready.map((option) => (
+              <SettingsItemNote key={option.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t(option.builtin ? "capabilityBuiltinUnready" : "assetLinkMissing")
+                  .replace("{name}", option.name)
+                  .replace("{fields}", (option.missing ?? []).join(t("listSeparator")))}
+              </SettingsItemNote>
+            ))}
+          </Disclosure>
+        </div>
+      )}
       {uses.length > 0 && <CapabilityUseSummary uses={uses} />}
     </SettingsGroup>
   );

@@ -497,7 +497,11 @@ it("几个内置实现并列可选:自动用的那个就是「不指定」,别�
   const denoise = screen.getByText("降噪").closest('[data-slot="settings-group"]') as HTMLElement;
   const picker = denoise.querySelector<HTMLElement>("[data-picker]")!;
   expect([...picker.querySelectorAll("li")].map((one) => one.textContent)).toEqual(["内置降噪", "DeepFilterNet", "云端降噪"]);
-  expect(within(denoise).getByText("capabilityBuiltinUnready")).toBeTruthy();
+  //: 没配好的那几家**收成一行**(和配音那一项同一种收法):收起时不铺在控件下面,点开才逐条说缺什么。
+  const unready = within(denoise).getByText("capabilityUnready");
+  expect(unready).toBeTruthy();
+  fireEvent.click(unready.closest("button") ?? unready);
+  await waitFor(() => expect(within(denoise).getByText("capabilityBuiltinUnready")).toBeTruthy());
   expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(1);
 });
 
@@ -857,7 +861,10 @@ it("有几家、却一家都没配好时按能力说:转写不提「桶和密钥
   const transcribe = screen.getByText("转写").closest('[data-slot="settings-group"]') as HTMLElement;
   expect(transcribe.textContent).toContain("capabilityNoneReady");
   expect(transcribe.textContent).not.toContain("assetLinkNoneReady");
-  expect(within(transcribe).getAllByText("capabilityBuiltinUnready")).toHaveLength(2);
+  //: 两家都没配好 → **收成一行**,点开才是各自缺什么(和配音那一项同一种收法)。
+  const unready = within(transcribe).getByText("capabilityUnready");
+  fireEvent.click(unready.closest("button") ?? unready);
+  await waitFor(() => expect(within(transcribe).getAllByText("capabilityBuiltinUnready")).toHaveLength(2));
   const link = screen.getByText("素材外链").closest('[data-slot="settings-group"]') as HTMLElement;
   expect(link.textContent).toContain("assetLinkNoneReady");
 });

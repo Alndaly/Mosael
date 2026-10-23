@@ -230,6 +230,9 @@ export const plugins = {
   capabilityVoiceRestricted: "{n} can't be the default",
   //: Tail of the collapsed line: expand to read both explanations.
   capabilityVoiceRestrictedWhy: "See why",
+  //: 任何能力都能用的一句:没配好的那几家收成一行(和配音那一项同一种收法)。
+  capabilityUnready: "{n} not set up yet",
+  capabilityUnreadyWhy: "See why",
   capabilityVoiceDefaultAdminOnly: "Only a deployment admin can change this machine's default.",
   capabilityVoiceDefaultUnready: "“{name}” can't be used yet: {reason}",
   capabilityVoiceDefaultPersonalOnly:

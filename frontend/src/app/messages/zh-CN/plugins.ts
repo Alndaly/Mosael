@@ -234,6 +234,9 @@ export const plugins = {
   capabilityVoiceRestricted: "{n} 家不能设为默认",
   //: 收起那一行的尾巴:点开看那两段原文。
   capabilityVoiceRestrictedWhy: "看原因",
+  //: 任何能力都能用的一句:没配好的那几家收成一行(和配音那一项同一种收法)。
+  capabilityUnready: "{n} 家还没配好",
+  capabilityUnreadyWhy: "看原因",
   capabilityVoiceDefaultAdminOnly: "只有部署管理员能改这台机器的默认。",
   capabilityVoiceDefaultUnready: "「{name}」还用不了:{reason}",
   capabilityVoiceDefaultPersonalOnly:
