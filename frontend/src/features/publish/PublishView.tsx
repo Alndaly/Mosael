@@ -799,7 +799,9 @@ function CreatePublishDialog({
               //: **铺满这一行**(`fill`):同 `ExportControl` / `MaskFromAssetDialog` 里那种
               //: 「一整行的分段」—— 弹窗里一条只有两三档的选择,居中一小撮会显得没排满。
               fill
-              size="sm"
+              //: **md**(40px),和这个弹窗里其余字段同高:分段原来用的是 sm(32),
+              //: 比上面的下拉矮一截,一行里两种高度看着就是没对齐。
+              size="md"
               aria-label={t("publishContentKind")}
               value={kind}
               onValueChange={(next) => setKind(next)}
