@@ -21,15 +21,35 @@ export { TiktokAdapter } from "./adapters/tiktok";
 export { YoutubeAdapter } from "./adapters/youtube";
 export { XAdapter } from "./adapters/x";
 
-/** 唯一装配入口：平台注册表决定 Adapter，调用方不感知平台文件布局。 */
+/**
+ * **唯一装配入口**:平台 id → 适配器构造器。
+ *
+ * 以前是一条 `if (normalized === "douyin") …` 的链:加一个平台要改函数体,而且这个函数的
+ * "支持了谁"要靠读代码才知道。现在是一张表 —— 新平台加一行,漏加会落到 Mock(测试会红)。
+ */
+const ADAPTERS: Record<string, new (driver: PageDriver, task: PublishTask) => PublishAdapter> = {
+  douyin: DouyinAdapter,
+  xiaohongshu: XiaohongshuAdapter,
+  "weixin-channels": WeixinChannelsAdapter,
+  bilibili: BilibiliAdapter,
+  tiktok: TiktokAdapter,
+  youtube: YoutubeAdapter,
+  x: XAdapter,
+};
+
+/** 每个适配器**声明**支持的形状(契约测试按它核对入口/文件框是否写全)。 */
+export const ADAPTER_SUPPORTS: Record<string, readonly string[]> = {
+  douyin: DouyinAdapter.prototype.supports,
+  xiaohongshu: XiaohongshuAdapter.prototype.supports,
+  "weixin-channels": WeixinChannelsAdapter.prototype.supports,
+  bilibili: BilibiliAdapter.prototype.supports,
+  tiktok: TiktokAdapter.prototype.supports,
+  youtube: YoutubeAdapter.prototype.supports,
+  x: XAdapter.prototype.supports,
+  mock: MockAdapter.prototype.supports,
+};
+
 export const createAdapter = (platform: string, driver: PageDriver, task: PublishTask): PublishAdapter => {
-  const normalized = resolvePlatform(platform).id;
-  if (normalized === "douyin") return new DouyinAdapter(driver, task);
-  if (normalized === "xiaohongshu") return new XiaohongshuAdapter(driver, task);
-  if (normalized === "weixin-channels") return new WeixinChannelsAdapter(driver, task);
-  if (normalized === "bilibili") return new BilibiliAdapter(driver, task);
-  if (normalized === "tiktok") return new TiktokAdapter(driver, task);
-  if (normalized === "youtube") return new YoutubeAdapter(driver, task);
-  if (normalized === "x") return new XAdapter(driver, task);
-  return new MockAdapter(driver, task);
+  const Adapter = ADAPTERS[resolvePlatform(platform).id] ?? MockAdapter;
+  return new Adapter(driver, task);
 };

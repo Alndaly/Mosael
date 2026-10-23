@@ -1,10 +1,11 @@
-import type { ContentKind, PublishTask } from "../types";
+import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOption, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { SELECTORS } from "../selectors";
+import { contractFor } from "../contracts";
 import { AutomationBlockedError } from "../errors";
 import { clearOverlays } from "../overlays";
 import { linesEntered, successVisible } from "../verify";
@@ -22,6 +23,8 @@ import { plog } from "../log";
  * 与 `supports` 一致地报出来。
  */
 interface EntryPlan {
+  /** 直连地址(契约给的页面参数);没有就走下面的 tab 步骤。 */
+  url?: string;
   /** 依次要点的入口文案:第一步是顶部 tab,后面是这一档页面上的按钮。 */
   steps: readonly string[];
   /** 进到之后应该**被选中**的那个 tab 文案(多步的形状取最后进到的那一页的代表文案;空串 = 不看)。 */
@@ -40,26 +43,6 @@ interface EntryPlan {
   hint: string;
 }
 
-const XIAOHONGSHU_ENTRY: Partial<Record<ContentKind, EntryPlan>> = {
-  //: 页面上的中文只说一遍:全部取自 `selectors`(它是**匹配平台真实页面**的词表,专门豁免翻译)。
-  //: 适配器里再写一遍,就会多出一份「界面文字」——`uiTextIsTranslated` 那道棘轮正是这么红的。
-  video: {
-    steps: [SELECTORS.xiaohongshu.videoTabText],
-    activeTab: SELECTORS.xiaohongshu.videoTabText,
-    acceptExtensions: [".mp4", ".mov"],
-    urlContains: "",
-    hint: SELECTORS.xiaohongshu.dropHintByKind.video,
-  },
-  "image-text": {
-    steps: [SELECTORS.xiaohongshu.imageTextTabText],
-    activeTab: SELECTORS.xiaohongshu.imageTextTabText,
-    acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"],
-    urlContains: "target=image",
-    hint: SELECTORS.xiaohongshu.dropHintByKind["image-text"],
-  },
-  //: 「写长文」还没接(要再点一次「新的创作」,而且编辑器没有文件上传)。接的时候照这个写:
-  //: article: { steps: [写长文 tab, 新的创作], activeTab: 写长文 tab, acceptExtensions: [], urlContains: "target=article", hint: ... },
-};
 
 /**
  * 「页面回到创作页」之后给成功证据的宽限期(毫秒)。
@@ -74,6 +57,8 @@ export class XiaohongshuAdapter implements PublishAdapter {
   //: 已经接的两档:视频、图文。**「写长文」是另一套页面**(见 `XIAOHONGSHU_ENTRY`),还没接。
   readonly supports = ["video", "image-text"] as const;
   private readonly s = SELECTORS.xiaohongshu;
+  /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来,适配器只管小红书特有的动作。 */
+  private readonly c = contractFor("xiaohongshu");
 
   constructor(
     private readonly driver: PageDriver,
@@ -81,14 +66,14 @@ export class XiaohongshuAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    const plan = XIAOHONGSHU_ENTRY[this.task.contentKind];
+    const plan = this.c.entry[this.task.contentKind] as EntryPlan | undefined;
     if (!plan) {
       //: 表里没有 = 这一种形状我们还没接(`supports` 也已经声明过,走到这里是代码不一致)。
       throw publishError("xiaohongshu", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     }
     //: **先走这一档的直连地址**(借鉴 social-auto-upload):`?target=image` / `?target=video` 是这一页
     //: 自己的参数,比「进去再点 tab」确定得多 —— 点不中、点到离屏克隆、SPA 还没渲染都能躲开。
-    const entryUrl = this.s.entryUrlByKind[this.task.contentKind];
+    const entryUrl = plan.url;
     if (entryUrl) {
       await this.driver.goto(entryUrl);
       await this.driver.cssAttached(this.s.fileInput, UPLOAD_TIMEOUT).catch(() => undefined);
@@ -265,7 +250,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
 
   /** 把这一页上挂着的浮层(编辑器介绍框 / 原创权益说明)按声明关掉 —— 关法在 selectors 里。 */
   private async clearStuckOverlays(): Promise<void> {
-    await clearOverlays(this.driver, this.s.overlays, "xiaohongshu", (text) =>
+    await clearOverlays(this.driver, this.c.overlays, "xiaohongshu", (text) =>
       clickTextPreferTrusted(this.driver, text, {
         exact: true,
         selector: "button, [role=button], div, span",
@@ -441,7 +426,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
       //: 才关得掉(否则按钮是 disabled)。这套关法现在写在 selectors 的 `overlays` 里,
       //: 由统一的浮层策略执行 —— 适配器不再自己记得"先勾哪个框再点哪颗钮"。
       await this.clearStuckOverlays();
-      if (await this.driver.hasText(this.s.overlays[1].detect.text)) {
+      if (await this.driver.hasText(this.c.overlays[1].detect.text ?? "")) {
         await plogPageState("Xiaohongshu original modal did not close:", this.driver);
         throw publishError("xiaohongshu", "publishErr_originalStuck", { after: true, wanted });
       }
@@ -714,7 +699,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
     //: 任务在本该失败的这一刻继续等了十分钟(维护者 2026-10-23 的截图:面板停在「等待平台确认」,
     //: 里面却是「上传视频」那个创作页)。
     //: 成功信号交给原语:**地址 > 文案**,文案能看见 shadow DOM(平台的提示常挂在自定义元素里)。
-    const signals = { urls: this.s.publishDoneUrls, texts: this.s.publishDoneTexts };
+    const signals = this.c.done;
     const deadline = Date.now() + RESULT_TIMEOUT;
     await wait(1_000);
     let grace = 0;

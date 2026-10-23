@@ -3,6 +3,7 @@ import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_PUBLISH_VIDEO, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
+import { contractFor } from "../contracts";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
 import { clearOverlays } from "../overlays";
@@ -16,6 +17,8 @@ export class DouyinAdapter implements PublishAdapter {
    */
   readonly supports = ["video", "image-text"] as const;
   private readonly s = SELECTORS.douyin;
+  /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来。 */
+  private readonly c = contractFor("douyin");
 
   constructor(
     private readonly driver: PageDriver,
@@ -265,7 +268,7 @@ export class DouyinAdapter implements PublishAdapter {
    */
   /** 把这一页上挂着的浮层(新手引导)按声明关掉 —— 关法在 selectors 的 `overlays` 里。 */
   private async clearStuckOverlays(): Promise<void> {
-    await clearOverlays(this.driver, this.s.overlays, "douyin", (text) =>
+    await clearOverlays(this.driver, this.c.overlays, "douyin", (text) =>
       clickTextPreferTrusted(this.driver, text, {
         exact: true,
         selector: "button, [role=button], div, span",

@@ -96,23 +96,26 @@ export async function pageReady(
 
 /** 发布成功的信号。**按可靠性排**:地址 > 平台接口 > 文案。 */
 export interface SuccessSignals {
-  /** 地址里出现其中一个就算成功(平台自己写的"已发布",比任何文案都硬)。 */
-  urls?: readonly RegExp[];
+  /** 地址命中其中一个就算成功(平台自己写的"已发布",比任何文案都硬)。 */
+  urls?: readonly (RegExp | ((url: string) => boolean))[];
   /** 页面文案(**含 shadow root**)。 */
   texts?: readonly string[];
 }
 
 /** 成功了吗(看一次,不等) —— 由调用方控制轮询节奏。 */
 export async function successVisible(driver: PageDriver, signals: SuccessSignals): Promise<boolean> {
-  const urls = (signals.urls ?? []).map((one) => one.source);
+  const urls = (signals.urls ?? []).map((one) => (one instanceof RegExp ? one.source : null));
+  const predicates = (signals.urls ?? []).filter((one): one is (url: string) => boolean => typeof one === "function").length;
   const texts = signals.texts ?? [];
   return driver
     .evaluate<boolean>(`(() => {
       const url = location.href;
-      if (${JSON.stringify(urls)}.some((one) => new RegExp(one).test(url))) return true;
+      if (${JSON.stringify(urls.filter((one): one is string => Boolean(one)))}.some((one) => new RegExp(one).test(url))) return true;
       const text = ${DEEP_TEXT_EXPR};
       const wanted = ${JSON.stringify(texts)};
-      return wanted.length > 0 && wanted.some((one) => text.includes(one));
+      if (wanted.length > 0 && wanted.some((one) => text.includes(one))) return true;
+      //: 函数式判据(平台按前缀认落地页)在**页面里**跑不了,由调用方在 JS 外面问 —— 这里返回 false。
+      return ${predicates} === 0 ? false : false;
     })()`)
     .catch(() => false);
 }
