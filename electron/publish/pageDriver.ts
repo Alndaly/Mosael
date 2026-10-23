@@ -1215,6 +1215,26 @@ export class PageDriver {
     }
   }
 
+  /**
+   * **一行一行地打**:每行打完按一次真实回车,再打下一行。
+   *
+   * 为什么不把带 `\n` 的整段交给 `type()`:那些换行是「字符」,富文本编辑器往往先把它当普通文字收下,
+   * 等失焦/下一次渲染才一次性变成段落 —— 人看到的就是「先出现一整段,然后一瞬间全部换行」
+   * (维护者 2026-10-23 观察到的正是这个)。逐行打 + 真实回车,格式是**边打边成形的**,
+   * 平台侧看到的也才是「人在分行写」。
+   */
+  async typeLines(text: string): Promise<void> {
+    const lines = text.split(/\r?\n/);
+    for (const [index, line] of lines.entries()) {
+      if (line) await this.type(line);
+      if (index < lines.length - 1) {
+        await this.pressKey("Enter");
+        //: 换行之后停一下再打下一行,别让回车和下一行挤在同一毫秒里。
+        await this.wait(90 + Math.round(Math.random() * 160));
+      }
+    }
+  }
+
   async pressKey(key: "Enter" | "Escape" | "Space" | "Tab"): Promise<void> {
     const code = KEY_MAP[key] ?? key;
     this.wc.sendInputEvent({ type: "keyDown", keyCode: code });

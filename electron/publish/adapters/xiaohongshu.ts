@@ -223,10 +223,25 @@ export class XiaohongshuAdapter implements PublishAdapter {
         if (typed) break;
         await this.dismissHints();
       }
-      await typeOrFill(this.driver, "xiaohongshu body", this.s.contentEditor, value, async () => {
-        await this.driver.focusAndClearField(this.s.contentEditor);
-        await this.driver.insertText(this.s.contentEditor, value);
-      });
+      await typeOrFill(
+        this.driver,
+        "xiaohongshu body",
+        this.s.contentEditor,
+        value,
+        async () => {
+          await this.driver.focusAndClearField(this.s.contentEditor);
+          await this.driver.insertText(this.s.contentEditor, value);
+        },
+        //: **逐行打**(每行一个真实回车)。整段塞含 `\n` 的字符串时,换行会先当普通文字、
+        //: 事后才一次性成段 —— 人看到的就是「先出现一整段、然后一瞬间全部换行」(维护者 2026-10-23)。
+        //: 先聚焦并清空,再逐行打;清空走真实按键(见 clearFocusedField 的说明)。
+        async () => {
+          //: 点一下编辑器拿到焦点(可信点击优先),清空,再逐行打。
+          await this.driver.pointerClickCss(this.s.contentEditor).catch(() => undefined);
+          await this.driver.focusAndClearField(this.s.contentEditor);
+          await this.driver.typeLines(value);
+        },
+      );
       if ((await this.bodyMatch(value)).ok) return;
     }
     //: 还是没对上:**按行**报出到底进去了几行。整段一致才算填好 —— 只进了一部分就发出去,
@@ -344,7 +359,11 @@ export class XiaohongshuAdapter implements PublishAdapter {
       if (!normalizedTag) {
         continue;
       }
-      //: 逐字真实按键(而不是一次性 insertText):话题候选靠输入变化触发,而风控也会看输入节奏。
+      //: **每个标签单独一行**再逐字打(维护者:「标签最好应该换行输入」)。挤在同一行里,
+      //: 话题候选与后续文本会互相干扰,发出来也是一长串;换行之后每条话题各占一行,和人在编辑器里
+      //: 一个一个加话题的样子一致。
+      await this.driver.pressKey("Enter");
+      await wait(120 + Math.round(Math.random() * 160));
       await this.driver.type(`#${normalizedTag}`);
       await this.driver.waitForFunction(
         `(() => {

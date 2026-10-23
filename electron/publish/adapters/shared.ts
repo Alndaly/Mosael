@@ -79,9 +79,14 @@ export async function typeOrFill(
   selector: string,
   text: string,
   fallback: () => Promise<unknown>,
+  /**
+   * 「可信输入」这一步具体怎么打。默认 `typeInto`(聚焦 + 清空 + 逐字);
+   * 多行正文要传**逐行打**(`driver.typeLines`),否则换行会事后才成段。
+   */
+  trusted: () => Promise<void> = () => driver.typeInto(selector, text),
 ): Promise<void> {
   try {
-    await driver.typeInto(selector, text);
+    await trusted();
     plog(`${what}: typed (trusted)`);
   } catch (error) {
     plog(`${what}: trusted typing did not stick, falling back to DOM events —`, String(error).replace(/^Error: /, "").slice(0, 130));
