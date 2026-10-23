@@ -609,6 +609,7 @@ export const aiStudio = {
   retry: "重试",
   providerNoProfiles: "还没有配置供应商。",
   providerOauthExpired: "授权过期 · 重新授权",
+  providerConfigUnreadable: "设置解不开了,重新填一次",
   modelCapabilitiesFollowPreset: "清掉标注,改回自动识别",
   providerHealthChecking: "探测中",
   providerHealthOffline: "离线",

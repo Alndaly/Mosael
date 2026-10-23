@@ -45978,6 +45978,11 @@
             "title": "Is Mine",
             "default": false
           },
+          "config_unreadable": {
+            "type": "boolean",
+            "title": "Config Unreadable",
+            "default": false
+          },
           "plugin_instance_id": {
             "anyOf": [
               {

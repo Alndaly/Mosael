@@ -17919,6 +17919,11 @@ export interface components {
              * @default false
              */
             is_mine: boolean;
+            /**
+             * Config Unreadable
+             * @default false
+             */
+            config_unreadable: boolean;
             /** Plugin Instance Id */
             plugin_instance_id?: string | null;
             /** Plugin Package Id */

@@ -106,6 +106,9 @@
   「页面 → 媒体地址」的站点 resolver 注册表(现在为空),以及登记它时用的那把锁。注册发生在
   import 时(以后每个站点一个模块),重启就按同一份代码重建;多进程下各有一份同样的表。它不存
   用户数据,也不改变「能不能起第二个进程」的答案。
+- `app/core/secrets_at_rest.py:_UNDECRYPTABLE` — 报过「这份密文解不开」的那几段密文。纯去重:
+  主密钥换掉之后,每读一次配置都会解一次密,同一个错会刷满日志(2026-10-23 那份日志里就是几十行
+  一模一样的 ERROR)。重启后重新报一次,不影响任何数据。
 - `app/ai/model_catalog.py:_cache`、`app/ai/model_catalog.py:_refreshing` — 供应商模型清单,带 TTL。
 - `app/ai/runtime/remote_size.py:_cache`、`app/ai/runtime/remote_size.py:_refreshing` — 远端权重体积。
 - 引擎就绪探测:`app/ai/runtime/tts_models.py:_probes`、`app/ai/runtime/asr_models.py:_probes`、

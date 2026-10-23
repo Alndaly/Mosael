@@ -228,6 +228,9 @@ class ProviderProfileOut(OrmModel):
     key_hint: str = ""
     #: 我在这条连接上配过自己的钥匙吗。没配 → 这条连接对我不可用,界面直说。
     is_mine: bool = False
+    #: 这条连接上存过钥匙,但**解不开**(主密钥换了/丢了)。读出来的密钥字段会是空的 —— 界面要说清
+    #: 原因,否则用户只会以为自己的密钥消失了,然后一遍遍重填。
+    config_unreadable: bool = False
     #: 这条连接**是一个插件实例**(提供生成能力的插件,见 ADR 0020)。有值时它由插件管理:
     #: 名字、地址、模型都跟着插件实例走,钥匙在插件实例上;设置页只读、点过去是插件页。
     plugin_instance_id: str | None = None

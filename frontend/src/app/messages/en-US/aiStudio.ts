@@ -608,6 +608,7 @@ export const aiStudio = {
   retry: "Retry",
   providerNoProfiles: "No providers configured yet.",
   providerOauthExpired: "Sign-in expired · re-authorize",
+  providerConfigUnreadable: "These settings can no longer be decrypted — fill them in once more",
   modelCapabilitiesFollowPreset: "Clear the tags and detect automatically again",
   providerHealthChecking: "Checking",
   providerHealthOffline: "Offline",

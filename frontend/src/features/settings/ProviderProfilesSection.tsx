@@ -511,6 +511,11 @@ export function ProviderProfilesSection({
                   ) : (
                     <> · <FixLink onClick={() => openEdit(profile)}>{t("providerNoKeyOfMine")}</FixLink></>
                   )}
+                  {/*: 钥匙还在但解不开(主密钥换了/丢了):必须说出来 —— 否则用户只会看到密钥是空的,
+                      以为是自己的密钥丢了,然后一遍遍重填。 */}
+                  {profile.config_unreadable && (
+                    <> · <FixLink onClick={() => openEdit(profile)}>{t("providerConfigUnreadable")}</FixLink></>
+                  )}
                   {profile.base_url ? ` · ${profile.base_url}` : ""}
                   {/* 在线状态贴在地址后面:它说的正是"这个地址通不通"。 */}
                   <ProviderHealth profileId={profile.id} className="ml-1.5 align-middle" usable={providerProblem(profile) === null} />

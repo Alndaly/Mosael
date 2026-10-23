@@ -128,6 +128,11 @@ def encrypt(plaintext: str) -> str:
     return Fernet(master_key()).encrypt(plaintext.encode()).decode()
 
 
+#: 报过「解不开」的那几段密文。**同一条只报一次**:主密钥换掉之后,每读一次配置都会解一次密,
+#: 一个设置页刷下来就是几十上百行同样的 ERROR(2026-10-23 维护者日志里正是这样),把真正要看的信息淹了。
+_UNDECRYPTABLE: set[str] = set()
+
+
 def decrypt(token: str) -> str | None:
     """解不开就回 None —— 调用方据此当作「没配置」。
 
@@ -137,7 +142,14 @@ def decrypt(token: str) -> str | None:
     try:
         return Fernet(master_key()).decrypt(token.encode()).decode()
     except (InvalidToken, ValueError):
-        logger.error("解不开一份落盘的凭据:主密钥换了或丢了(见 core/secrets_at_rest)")
+        if token not in _UNDECRYPTABLE:
+            _UNDECRYPTABLE.add(token)
+            logger.error(
+                "解不开一份落盘的凭据:主密钥换了或丢了(见 core/secrets_at_rest)。"
+                "这一份不会再重复报;把所有读到它的设置重新填一次即可恢复"
+            )
+        else:
+            logger.debug("解不开一份落盘的凭据(已报过,不重复)")
         return None
 
 

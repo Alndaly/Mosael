@@ -179,7 +179,22 @@ def describe_connection(db: Session, profile: ProviderProfile, user_id: str) -> 
         # 重启也不丢;网络不通、对方 5xx 不算。此前按「进程内存里最近刷不动」判:对话里刷新被拒不会记进去,
         # 重启又清空,于是授权早失效了,连接行还写「已授权」。
         "oauth_expired": oauth_linked and needs_reauthorization(credential),
+        #: **钥匙还在,但解不开**(主密钥换了/丢了 —— 换过数据目录、重装、恢复备份都会这样)。
+        #: 解不开时读出来一片空;界面不说明白,用户只会以为「我的密钥没了」。
+        "config_unreadable": _is_unreadable(credential),
     }
+
+
+def _is_unreadable(credential: ProviderCredential | None) -> bool:
+    """这条连接看着配过,却一字都读不出来 —— 主密钥换了或丢了(见 core/secrets_at_rest)。
+
+    判据看 `secrets is None`:密文解不开时 `EncryptedJSON` 交回 None,而「从没存过」那一列落的是
+    `{}`(解出来是空 dict)。`api_key` 读失败交回的是空串,和「没填」分不开,所以它只用来排除
+    「确实存过别的东西」的情况。
+    """
+    if credential is None or credential.secrets is not None:
+        return False
+    return not credential.api_key and not credential.oauth_credential
 
 
 # ---------------- 表单字段 ↔ 存储 ----------------
@@ -201,7 +216,10 @@ def _read_field(
     if spec.storage == "api_key":
         return (credential.api_key if credential else "") or ""
     if spec.secret:
-        return str((credential.secrets if credential else {}).get(spec.key) or "")
+        #: `credential.secrets` 可能是 **None**:密文解不开时 `EncryptedJSON` 交回 None(主密钥换了/丢了)。
+        #: 此前这里只判 `credential` 是否为空,于是主密钥一换,`GET /api/settings/providers` 直接 500
+        #: (`'NoneType' object has no attribute 'get'`,2026-10-23 维护者日志)。
+        return str(((credential.secrets if credential else None) or {}).get(spec.key) or "")
     if spec.storage == "base_url":
         return profile.base_url or ""
     if spec.storage == "default_model":
