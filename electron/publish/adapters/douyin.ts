@@ -7,6 +7,12 @@ import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt 
 import { plog } from "../log";
 
 export class DouyinAdapter implements PublishAdapter {
+  /**
+   * 已接的形状(ADR 0076 第 2 步):视频与**图文**。
+   * 图文 2026-10-23 真机核对:投稿页「发布图文」tab → 交图 → 跳到 `/content/post/image`,
+   * 标题 0/20、描述 0/1000、最多 35 张图,可见性三档与视频同一套 label。
+   */
+  readonly supports = ["video", "image-text"] as const;
   private readonly s = SELECTORS.douyin;
 
   constructor(
@@ -16,6 +22,21 @@ export class DouyinAdapter implements PublishAdapter {
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.uploadUrl);
+    if (this.task.contentKind === "image-text") {
+      //: 投稿页**默认是视频**那一档(真机),图文的文件框在点了「发布图文」之后才可用:
+      //: 视频那个框只收 `video/*`,把图片交给它,页面只会回一句「请先切换到图文」。
+      const switched = await clickTextPreferTrusted(this.driver, this.s.imageTextTabText, {
+        exact: true,
+        selector: "div, button, [role=button], a, span, li",
+      })
+        .then(() => true)
+        .catch(() => false);
+      const ready = await this.driver.cssAttached(this.s.imageFileInput, switched ? ACTION_TIMEOUT : 3_000);
+      if (!ready) {
+        throw publishError("douyin", "publishErr_tabMissing", { tab: this.s.imageTextTabText });
+      }
+      return;
+    }
     const uploadReady = await this.driver.fileInputAttached(this.s.fileInput, 6_000);
     if (!uploadReady && (await this.driver.hasText(TEXT_PUBLISH_VIDEO))) {
       await clickTextPreferTrusted(this.driver, TEXT_PUBLISH_VIDEO, {
@@ -23,6 +44,46 @@ export class DouyinAdapter implements PublishAdapter {
         selector: "button, [role=button], a, div, span",
       }).catch(() => undefined);
     }
+  }
+
+  /** 图文:一次交多张图片(**顺序就是数组顺序**),等它跳到图文编辑器。 */
+  async uploadImages(paths: string[]): Promise<void> {
+    if (!paths.length) throw publishError("douyin", "publishErr_noAssets");
+    await this.driver.fileInputAttached(this.s.imageFileInput, ACTION_TIMEOUT);
+    await this.driver.setFiles(this.s.imageFileInput, paths);
+    //: 交完图上会跳到 `/content/post/image`;那一页**没有文件框**,只有标题与描述。
+    const landed = await this.driver.waitForFunction(
+      `(() => location.href.includes('/content/post/image'))()`,
+      UPLOAD_TIMEOUT,
+      500,
+    );
+    if (!landed) throw publishError("douyin", "publishErr_editorMissing");
+    await this.driver.cssVisible(this.s.imageTitleInput, UPLOAD_TIMEOUT);
+    await this.dismissOnboarding();
+  }
+
+  /** 图文的正文:抖音的 zone 编辑器(和视频那一档的「作品描述」是同一个控件家族)。 */
+  async fillBody(body: string): Promise<void> {
+    const value = body.trim();
+    if (!value) return;
+    const selector = this.s.imageDescEditor;
+    await this.driver.cssVisible(selector, ACTION_TIMEOUT);
+    await typeOrFill(this.driver, "douyin body", selector, value, async () => {
+      await this.driver.focusAndClearField(selector);
+      await this.driver.insertText(selector, value);
+    });
+    //: 富文本会把 `1. …` 变成有序列表、换行位置也会变,所以**空白不敏感**地比对(同小红的教训)。
+    const accepted = await this.driver.waitForFunction(
+      `(() => {
+        const squash = (text) => String(text || '').replace(/\s+/g, '');
+        const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
+        const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
+        return squash(longest).includes(squash(${JSON.stringify(value)}));
+      })()`,
+      4_000,
+      200,
+    );
+    if (!accepted) throw publishError("douyin", "publishErr_descriptionRejected");
   }
 
   async checkLogin(): Promise<boolean> {
@@ -58,35 +119,41 @@ export class DouyinAdapter implements PublishAdapter {
   }
 
   async fillTitle(title: string): Promise<void> {
-    await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
-    const value = title.slice(0, 30);
-    await typeOrFill(this.driver, "douyin title", this.s.titleInput, value, () =>
-      this.driver.fillCss(this.s.titleInput, value),
-    );
+    const selector = this.task.contentKind === "image-text" ? this.s.imageTitleInput : this.s.titleInput;
+    await this.driver.cssVisible(selector, ACTION_TIMEOUT);
+    //: 图文标题上限 20(真机 0/20),视频那一档是 30。
+    const value = title.slice(0, this.task.contentKind === "image-text" ? 20 : 30);
+    await typeOrFill(this.driver, "douyin title", selector, value, () => this.driver.fillCss(selector, value));
+  }
+
+  /** 描述/正文那一格:视频是 `作品描述`,图文是 `添加作品描述...` —— 同一个编辑器家族的两种壳。 */
+  private get descField(): string {
+    return this.task.contentKind === "image-text" ? this.s.imageDescEditor : this.s.descEditor;
   }
 
   async fillTags(tags: string[]): Promise<void> {
-    const description = stringOption(this.task, "description");
+    //: 说明只在**视频**那一档由这里填;图文的正文已经由 `fillBody` 填过(再填一遍就是两段重复文字)。
+    const description = this.task.contentKind === "video" ? stringOption(this.task, "description") : "";
     if (description) {
-      await this.driver.cssVisible(this.s.descEditor, ACTION_TIMEOUT);
-      await typeOrFill(this.driver, "douyin desc", this.s.descEditor, description, async () => {
+      await this.driver.cssVisible(this.descField, ACTION_TIMEOUT);
+      await typeOrFill(this.driver, "douyin desc", this.descField, description, async () => {
         // 降级前必须先清空:typeInto 可能已敲进去一部分,而 insertText 是在光标处插入,
         // 不清就会把残留和完整文案叠在一起。
-        await this.driver.focusAndClearField(this.s.descEditor);
-        await this.driver.insertText(this.s.descEditor, description);
+        await this.driver.focusAndClearField(this.descField);
+        await this.driver.insertText(this.descField, description);
       });
     }
     if (!tags.length) {
       return;
     }
-    await this.driver.cssVisible(this.s.descEditor, ACTION_TIMEOUT);
+    await this.driver.cssVisible(this.descField, ACTION_TIMEOUT);
     for (const tag of tags) {
       const normalizedTag = normalizeTag(tag);
       if (!normalizedTag) {
         continue;
       }
       const topicText = `#${normalizedTag}`;
-      await this.driver.insertText(this.s.descEditor, ` ${topicText}`);
+      await this.driver.insertText(this.descField, ` ${topicText}`);
       await wait(800);
       const pickedTopic = await this.driver
         .pointerClickByText(topicText, {
@@ -105,7 +172,7 @@ export class DouyinAdapter implements PublishAdapter {
       } else {
         await this.driver.pressKey("Space");
       }
-      await this.driver.insertText(this.s.descEditor, " ");
+      await this.driver.insertText(this.descField, " ");
       await wait(300);
     }
     await this.driver.pressKey("Escape");

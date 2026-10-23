@@ -184,6 +184,9 @@ def content_limits(platform: str, kind: str) -> dict[str, Any]:
 #: 在真实页面上失败的选项。
 IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     "xiaohongshu": ("video", "image-text"),
+    #: 抖音图文 2026-10-23 真机核对后接上:标题 20 字、描述 1000 字、≤35 张图(单图 ≤50MB,
+    #: jpg/jpeg/png/webp,不支持 gif)。入口在投稿页的「发布图文」tab。
+    "douyin": ("video", "image-text"),
 }
 
 
@@ -207,7 +210,8 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         # 真机(2026-10-22):创作中心四个 tab —— 视频 / 图文(≤35 张、单图 ≤50MB、无 gif)/ 文章。
         "kinds": ("video", "image-text", "article"),
         "content": {
-            "image-text": {"max_items": 35},
+            #: 真机(2026-10-23):标题 0/20、描述 0/1000、最多 35 张图。
+            "image-text": {"max_items": 35, "title_max": 20, "body_max": 1000},
             "article": {"title_max": 30, "body_max": 20000},
         },
     },

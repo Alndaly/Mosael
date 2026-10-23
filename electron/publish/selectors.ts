@@ -40,8 +40,20 @@ export const SELECTORS = {
     // 可见性(实测):三档各是一个 label 包着 input[type=checkbox],默认「公开」已选中。
     // **按文案找,不按类名** —— radio-d4zkru 这种是构建期哈希,下次发版就变。
     visibilityTexts: { public: ["公开"], friends: ["好友可见"], private: ["仅自己可见"] } as const, // i18n-ok
-    isPublishUrl: (u: string): boolean => /content\/(publish|post\/video)/.test(u),
+    //: 发完之后落在哪:作品管理 / 内容管理(`MANAGE_URL_PATTERNS.douyin`)。
+    isPublishUrl: (u: string): boolean => /content\/(publish|post\/video|post\/image)/.test(u),
     isManageUrl: (u: string): boolean => MANAGE_URL_PATTERNS.douyin.test(u),
+    //: ---- 图文(ADR 0076 第 2 步;2026-10-23 真机核对)----
+    //: 投稿页四个 tab「发布视频 / 发布图文 / 发布全景视频 / 发布文章」,**默认是视频**;
+    //: 图文档的文件框 `accept` 是 `image/png,image/jpeg,…`(视频那个是 `video/*`),按它区分。
+    //: 上传成功后会跳到 `/creator-micro/content/post/image?…media_type=image…`,那一页**没有**文件框,
+    //: 只有标题(`添加作品标题`,0/20)与描述(`添加作品描述...`,0/1000)。
+    imageTextTabText: "发布图文", // i18n-ok
+    imageFileInput: 'input[type="file"][accept*="image"]',
+    imageTextUrl: (u: string): boolean => /content\/post\/image/.test(u),
+    imageTitleInput: 'input[placeholder="添加作品标题"]', // i18n-ok
+    imageDescEditor: 'div[data-placeholder="添加作品描述..."]', // i18n-ok
+    publishDoneTexts: ["发布成功", "作品发布成功", "审核中"], // i18n-ok
   },
   xiaohongshu: {
     publishUrl: resolvePlatform("xiaohongshu").publishUrl,
