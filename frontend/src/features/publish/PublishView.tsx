@@ -796,6 +796,9 @@ function CreatePublishDialog({
           <div className="grid gap-1">
             <span className="text-xs font-semibold text-foreground">{t("publishContentKind")}</span>
             <Segmented
+              //: **铺满这一行**(`fill`):同 `ExportControl` / `MaskFromAssetDialog` 里那种
+              //: 「一整行的分段」—— 弹窗里一条只有两三档的选择,居中一小撮会显得没排满。
+              fill
               size="sm"
               aria-label={t("publishContentKind")}
               value={kind}
