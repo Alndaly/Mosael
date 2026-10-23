@@ -187,6 +187,8 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     #: 抖音图文 2026-10-23 真机核对后接上:标题 20 字、描述 1000 字、≤35 张图(单图 ≤50MB,
     #: jpg/jpeg/png/webp,不支持 gif)。入口在投稿页的「发布图文」tab。
     "douyin": ("video", "image-text"),
+    #: X 图文 2026-10-24 接上:≤4 张图,正文一栏(标题并进正文)。见 PUBLISH_PLATFORMS["x"]。
+    "x": ("video", "image-text"),
 }
 
 
@@ -276,8 +278,10 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "title_max": 280,
         "short_title": False,
         # 帖子:≤280 字、1–4 张图;长文(Articles)入口待真机,先不声明 article。
+        # 图文 2026-10-24 真机核对:撰写页的同一个文件框收图片(可多选),正文一栏装
+        # 「标题 + 空行 + 正文」—— 所以我们把标题并进正文一起发。
         "kinds": ("video", "image-text"),
-        "content": {"image-text": {"max_items": 4}},
+        "content": {"image-text": {"max_items": 4, "title_max": 70, "body_max": 260}},
     },
     "youtube": {
         "label": "YouTube",

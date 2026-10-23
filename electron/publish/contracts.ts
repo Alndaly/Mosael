@@ -85,8 +85,12 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   x: {
-    entry: { video: { url: resolvePlatform("x").publishUrl } },
-    fileInput: { video: SELECTORS.x.fileInput },
+    entry: {
+      video: { url: resolvePlatform("x").publishUrl },
+      //: 图文和视频是**同一个撰写页、同一个文件框**(X 的文件框图片与视频一起收)。
+      "image-text": { url: resolvePlatform("x").publishUrl, acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"] },
+    },
+    fileInput: { video: SELECTORS.x.fileInput, "image-text": SELECTORS.x.fileInput },
     submitText: SELECTORS.x.postTexts[0],
     //: X 发完把人送回首页:地址 + 撰写组件消失 —— 两道都要(TikTok 那课的同一道闸)。
     done: { urls: [/x\.com\/home/], texts: SELECTORS.x.publishDoneTexts, formGone: SELECTORS.x.textEditor },

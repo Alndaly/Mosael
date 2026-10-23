@@ -36,7 +36,7 @@ export class XAdapter implements PublishAdapter {
   }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
-  static readonly KINDS = ["video"] as const;
+  static readonly KINDS = ["video", "image-text"] as const;
   readonly supports = XAdapter.KINDS;
   private readonly s = SELECTORS.x;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
@@ -145,7 +145,32 @@ export class XAdapter implements PublishAdapter {
     throw publishError("x", "publishErr_uploadTimeout");
   }
 
+  async uploadImages(paths: string[]): Promise<void> {
+    //: X 的图片和视频走**同一个**文件框(它接受图片与视频),一次交多张。
+    if (!paths.length) throw publishError("x", "publishErr_noAssets");
+    if (!(await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT))) {
+      await plogPageState("X image upload entry missing:", this.driver);
+      throw publishError("x", "publishErr_noUploadEntry");
+    }
+    await this.driver.setFiles(this.s.fileInput, paths);
+    //: 等每一张都挂上(缩略图容器出现)并处理完(进度条消失)—— 和视频那条同一道判据。
+    if (!(await this.driver.cssVisible(this.s.attachments, UPLOAD_TIMEOUT))) {
+      throw publishError("x", "publishErr_editorMissing");
+    }
+    const deadline = Date.now() + UPLOAD_TIMEOUT;
+    while (Date.now() < deadline) {
+      const processing = await this.driver.cssVisible(this.s.uploadProgress, 1_000).catch(() => false);
+      if (!processing) return;
+      await wait(1_000);
+    }
+    await plogPageState("X images did not settle:", this.driver);
+    throw publishError("x", "publishErr_uploadTimeout");
+  }
+
   async fillTitle(title: string): Promise<void> {
+    //: **图文**:标题和正文要写成同一条帖子,由 `fillBody` 一次写入;这里什么都不做
+    //: (X 只有一个文本框,分两次写就是后一次覆盖前一次)。
+    if (this.task.contentKind === "image-text") return;
     // X 没有标题栏:这一栏就是**帖子正文**。标题是它的第一行,简介(平台的「简介」字段,
     // 见 platformOptions.description)接在下面 —— 只写标题的话简介就整个丢了(维护者实测:
     // 发出去的帖子只有「标题 #标签」)。标签由 fillTags 接在末尾。
@@ -161,6 +186,23 @@ export class XAdapter implements PublishAdapter {
         expected: JSON.stringify(title.slice(0, 40)),
         actual: JSON.stringify(actual.slice(0, 80)),
       });
+    }
+  }
+
+  /** 图文的正文:标题 + 正文,一次写进那条帖子。 */
+  async fillBody(body: string): Promise<void> {
+    const value = body.trim();
+    if (!value) return;
+    const title = this.task.title.trim();
+    const text = title ? `${title}\n\n${value}` : value;
+    await this.driver.cssVisible(this.s.textEditor, ACTION_TIMEOUT);
+    await this.driver.focusAndClearField(this.s.textEditor);
+    await this.driver.insertTextLines(this.s.textEditor, text);
+    await wait(400);
+    const actual = ((await this.driver.cssValue(this.s.textEditor)) ?? "").trim();
+    if (!actual.includes(title || value.split("\n")[0])) {
+      await plogPageState("X body mismatch:", this.driver);
+      throw publishError("x", "publishErr_descriptionRejected");
     }
   }
 

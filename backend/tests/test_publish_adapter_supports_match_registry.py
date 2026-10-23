@@ -32,8 +32,10 @@ FILES = {
 
 
 def _supports(path: Path) -> tuple[str, ...]:
+    """适配器声明的形状。**声明在类的 `KINDS` 上**(实例字段读不到,见 adapters.ts 的
+    `ADAPTER_SUPPORTS`)—— 这里读同一个地方。"""
     text = path.read_text(encoding="utf-8")
-    match = re.search(r"readonly\s+supports\s*=\s*\[([^\]]*)\]", text)
+    match = re.search(r"static\s+readonly\s+KINDS\s*=\s*\[([^\]]*)\]", text)
     if not match:
         return ("video",)
     return tuple(item.strip().strip("\"'") for item in match.group(1).split(",") if item.strip())
@@ -63,7 +65,7 @@ def test_the_registry_never_promises_a_shape_no_adapter_implements() -> None:
     implemented = {_supports(ADAPTERS / name) for name in FILES}
     union = {kind for kinds in implemented for kind in kinds}
     assert "video" in union, "连视频都不认了?适配器一定出了事"
-    #: 目前只有小红书把图文做完了;抖音 / TikTok / YouTube 的图文入口都已在真机确认,适配器随后跟上。
+    #: 小红书 / 抖音 / X 的图文已接;TikTok / 视频号 / YouTube 的入口待真机确认后跟上。
     assert "image-text" in union
 
 
