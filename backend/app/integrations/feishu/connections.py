@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -158,7 +157,8 @@ def worker_command(bot_id: str) -> list[str]:
     (`mosael-backend feishu-worker <bot_id>`),开发版仍旧走 `python -m …`。两条路跑的是同一份代码。
     """
     if interpreter.is_frozen():
-        return [sys.executable, "feishu-worker", bot_id]
+        #: 冻结版里跑的是**应用自己**的管理命令(不是拿它当解释器,见 interpreter.self_command)。
+        return interpreter.self_command("feishu-worker", bot_id)
     backend_dir = Path(__file__).resolve().parents[3]
     python = backend_dir / ".venv" / "bin" / "python"
     return [str(python) if python.exists() else interpreter.base_python(), "-m", "app.integrations.feishu.worker", bot_id]

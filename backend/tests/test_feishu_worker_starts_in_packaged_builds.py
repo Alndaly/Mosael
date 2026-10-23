@@ -24,8 +24,9 @@ def test_开发版走_python_m_模块(monkeypatch) -> None:
 
 
 def test_打包版用同一个二进制加管理命令(monkeypatch) -> None:
+    """冻结版里 `sys.executable` 是应用自己 —— 用它跑**自己的管理命令**,不是拿它当解释器。"""
     monkeypatch.setattr(interpreter, "is_frozen", lambda: True)
-    monkeypatch.setattr(connections.sys, "executable", "/Applications/Mosael.app/mosael-backend")
+    monkeypatch.setattr(interpreter.sys, "executable", "/Applications/Mosael.app/mosael-backend")
     assert connections.worker_command("bot-1") == ["/Applications/Mosael.app/mosael-backend", "feishu-worker", "bot-1"]
 
 

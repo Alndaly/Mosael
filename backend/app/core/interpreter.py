@@ -45,6 +45,17 @@ REPO_BUNDLED_PYTHON = Path(__file__).resolve().parents[3] / "build" / "python" /
 )
 
 
+def self_command(*args: str) -> list[str]:
+    """把**应用自己**当命令跑一次(管理命令),如 `["<exe>", "feishu-worker", "<bot>"]`。
+
+    **这不是把冻结的 exe 当解释器**(那是 `base_python()` 明令禁止的那件事):冻结版里
+    `sys.executable` 是应用自己,而"再跑一个自己的管理子命令"正是它存在的意义 ——
+    飞书长连接就这么起(`mosael-backend feishu-worker <bot_id>`,见 `app/cli.py`)。
+    统一从这里出:全项目只有这一处读 `sys.executable`,新代码就不会各写各的。
+    """
+    return [sys.executable, *args]
+
+
 def base_python() -> str:
     """用来**创建**托管 venv 的解释器。找不到可用的返回空串。
 
