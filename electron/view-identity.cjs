@@ -24,7 +24,12 @@
 //: **小红书也先归到这一档(2026-10-23 实验)**:它的发布风控会在点「发布」时要求扫码/身份验证,
 //: 而「自称 Chrome、信号不像」正是那类风控最容易抓的一组证据。改回如实声明之后要复核两件事:
 //: ① 登录还进得去 ② 发布是否不再弹验证。不行就把这一项删掉 —— 一行的事。
-const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "xiaohongshu"]);
+//:
+//: **YouTube 也回到这一档(2026-10-23)**:维护者说「以前我是可以的」—— 对的,10-22 那批身份改动
+//: 之前 YouTube 用的是如实声明的 Electron,登录能过;改成「干净 Chrome UA + CDP 对齐」之后,
+//: Google 在输完密码那一刻回 `accounts.google.com/v3/signin/rejected`「此浏览器或应用可能不安全」。
+//: 而 CDP 对齐那条路要在建视图时**挂上 debugger**,那本身就是 DevTools 特征。先回退到能用的那一档。
+const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "xiaohongshu", "youtube"]);
 
 /** 抹掉 UA 里的 Electron 与 Mosael token,得到一枚干净 Chrome UA;认不出 Chrome 版本就原样返回。 */
 function cleanChromeUserAgent(userAgent) {

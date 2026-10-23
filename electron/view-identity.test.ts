@@ -37,7 +37,9 @@ describe("内嵌浏览器的身份", () => {
     for (const platform of ["x", "X", "twitter"]) expect(identityForPlatform(platform), platform).toBe("electron");
     //: 小红书 2026-10-23 起因「点发布被要求扫码验证」改回如实声明(见 view-identity 的注释)。
     expect(identityForPlatform("xiaohongshu"), "小红书").toBe("electron");
-    for (const platform of ["weixin-channels", "douyin", "bilibili", "tiktok", "youtube"]) {
+    //: YouTube 2026-10-23 起回到如实声明:11-22 那批身份改动之后 Google 把登录判成「不安全的浏览器」。
+    expect(identityForPlatform("youtube"), "YouTube").toBe("electron");
+    for (const platform of ["weixin-channels", "douyin", "bilibili", "tiktok"]) {
       expect(identityForPlatform(platform), platform).toBe("chrome");
     }
     // 未知 / 空:默认干净 Chrome(登录能过的那一边),不是永久伪装。

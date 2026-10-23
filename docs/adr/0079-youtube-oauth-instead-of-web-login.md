@@ -4,7 +4,17 @@
 - 相关:ADR 0044(确认卡与措辞)、ADR 0076(发布的内容形状)
 - 代码位置:`electron/publish/adapters/youtube.ts`、`backend/app/domain/publish/`、`backend/app/domain/providers/`
 
-## 事实(2026-10-23 真机)
+## 先修回归(2026-10-23)
+
+维护者说「以前我是可以的」—— 对的。10-22 那批身份改动之前,YouTube 用的是**如实声明的 Electron**
+UA,登录能过;`1d56a2ca4`(身份按平台走)把它换成了「干净 Chrome UA」,`eaff42722` 又给 Chrome 身份
+加上了 **CDP 对齐**(`Emulation.setUserAgentOverride`,建视图时就要挂 debugger —— 那本身就是
+DevTools 特征)。两条叠起来,Google 在输完密码那一刻回 `signin/rejected`。
+
+所以先**回退到能用的那一档**:`CHROME_IDENTITY_EXEMPT += youtube`,YouTube 重新如实声明 Electron
+(不洗 UA、不挂 debugger)。下面的 OAuth 是**长期方案**,不是为绕过这次拦截而加的补丁。
+
+## 事实(2026-10-23 真机,Chrome 身份那一档)
 
 用发布账号的浏览器池打开 `accounts.google.com/ServiceLogin?service=youtube`:
 
