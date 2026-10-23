@@ -35,7 +35,7 @@ const XIAOHONGSHU: PlatformContract = {
 
 const DOUYIN: PlatformContract = {
   entry: {
-    video: { acceptExtensions: [".mp4", ".mov"] },
+    video: { url: resolvePlatform("douyin").publishUrl, acceptExtensions: [".mp4", ".mov"] },
     "image-text": {
       steps: [douyin.imageTextTabText],
       acceptExtensions: [".png", ".jpg", ".jpeg", ".webp"],
@@ -57,35 +57,35 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
   xiaohongshu: XIAOHONGSHU,
   douyin: DOUYIN,
   "weixin-channels": {
-    entry: { video: {} },
+    entry: { video: { url: resolvePlatform("weixin-channels").publishUrl } },
     fileInput: { video: SELECTORS.weixinChannels.fileInput },
     submitText: SELECTORS.weixinChannels.submitText,
     done: { urls: [], texts: SELECTORS.weixinChannels.publishDoneTexts },
     overlays: [],
   },
   bilibili: {
-    entry: { video: {} },
+    entry: { video: { url: resolvePlatform("bilibili").publishUrl } },
     fileInput: { video: SELECTORS.bilibili.fileInput },
     submitText: SELECTORS.bilibili.submitTexts[0],
     done: { urls: [], texts: SELECTORS.bilibili.publishDoneTexts },
     overlays: [],
   },
   tiktok: {
-    entry: { video: {} },
+    entry: { video: { url: resolvePlatform("tiktok").publishUrl } },
     fileInput: { video: SELECTORS.tiktok.fileInput },
     submitText: SELECTORS.tiktok.postTexts[0],
     done: { urls: [], texts: SELECTORS.tiktok.publishDoneTexts },
     overlays: [],
   },
   x: {
-    entry: { video: {} },
+    entry: { video: { url: resolvePlatform("x").publishUrl } },
     fileInput: { video: SELECTORS.x.fileInput },
     submitText: SELECTORS.x.postTexts[0],
     done: { urls: [], texts: SELECTORS.x.publishDoneTexts },
     overlays: [],
   },
   mock: {
-    entry: { video: {} },
+    entry: { video: { url: "about:blank" } },
     fileInput: { video: "input[type='file']" },
     submitText: SELECTORS.x.postTexts[0],
     //: 测试替身:它的页面是我们自己画的,提交后画一行「发布成功」。
@@ -93,7 +93,7 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   youtube: {
-    entry: { video: {} },
+    entry: { video: { url: resolvePlatform("youtube").publishUrl } },
     fileInput: { video: SELECTORS.youtube.fileInput },
     submitText: SELECTORS.youtube.doneButton,
     done: { urls: [], texts: SELECTORS.youtube.publishDoneTexts },

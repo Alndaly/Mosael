@@ -55,7 +55,9 @@ const BOUNCE_GRACE_MS = 12_000;
 
 export class XiaohongshuAdapter implements PublishAdapter {
   //: 已经接的两档:视频、图文。**「写长文」是另一套页面**(见 `XIAOHONGSHU_ENTRY`),还没接。
-  readonly supports = ["video", "image-text"] as const;
+  /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
+  static readonly KINDS = ["video", "image-text"] as const;
+  readonly supports = XiaohongshuAdapter.KINDS;
   private readonly s = SELECTORS.xiaohongshu;
   /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来,适配器只管小红书特有的动作。 */
   private readonly c = contractFor("xiaohongshu");

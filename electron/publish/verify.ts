@@ -102,22 +102,24 @@ export interface SuccessSignals {
   texts?: readonly string[];
 }
 
-/** 成功了吗(看一次,不等) —— 由调用方控制轮询节奏。 */
+/** 判断这段地址算不算成功 —— 正则与函数两种判据在这里统一。**在 Node 里做**,不塞进页面脚本。 */
+export function urlMatches(url: string, urls: SuccessSignals["urls"] = []): boolean {
+  return urls.some((one) => (one instanceof RegExp ? one.test(url) : one(url)));
+}
+
+/** 整页可见文字(**含 shadow root**)。 */
+export async function deepText(driver: PageDriver): Promise<string> {
+  return driver.evaluate<string>(DEEP_TEXT_EXPR).catch(() => "");
+}
+
+/** 成功了吗(看一次,不等) —— 由调用方控制轮询节奏。**地址在 Node 里比,文案在页面里读**。 */
 export async function successVisible(driver: PageDriver, signals: SuccessSignals): Promise<boolean> {
-  const urls = (signals.urls ?? []).map((one) => (one instanceof RegExp ? one.source : null));
-  const predicates = (signals.urls ?? []).filter((one): one is (url: string) => boolean => typeof one === "function").length;
+  const url = driver.url();
+  if (url && urlMatches(url, signals.urls)) return true;
   const texts = signals.texts ?? [];
-  return driver
-    .evaluate<boolean>(`(() => {
-      const url = location.href;
-      if (${JSON.stringify(urls.filter((one): one is string => Boolean(one)))}.some((one) => new RegExp(one).test(url))) return true;
-      const text = ${DEEP_TEXT_EXPR};
-      const wanted = ${JSON.stringify(texts)};
-      if (wanted.length > 0 && wanted.some((one) => text.includes(one))) return true;
-      //: 函数式判据(平台按前缀认落地页)在**页面里**跑不了,由调用方在 JS 外面问 —— 这里返回 false。
-      return ${predicates} === 0 ? false : false;
-    })()`)
-    .catch(() => false);
+  if (!texts.length) return false;
+  const text = await deepText(driver);
+  return texts.some((one) => text.includes(one));
 }
 
 /** 等成功信号出现。 */

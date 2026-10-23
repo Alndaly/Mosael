@@ -10,7 +10,9 @@ import { plog } from "../log";
 
 export class TiktokAdapter implements PublishAdapter {
   /** 已接的形状(ADR 0076)。 */
-  readonly supports = ["video"] as const;
+  /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
+  static readonly KINDS = ["video"] as const;
+  readonly supports = TiktokAdapter.KINDS;
   private readonly s = SELECTORS.tiktok;
 
   // 文案走 fillTitle/fillTags 的入参,但**发布选项要从 task 上取**(可见性),所以两个都留。

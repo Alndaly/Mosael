@@ -15,7 +15,9 @@ export class DouyinAdapter implements PublishAdapter {
    * 图文 2026-10-23 真机核对:投稿页「发布图文」tab → 交图 → 跳到 `/content/post/image`,
    * 标题 0/20、描述 0/1000、最多 35 张图,可见性三档与视频同一套 label。
    */
-  readonly supports = ["video", "image-text"] as const;
+  /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
+  static readonly KINDS = ["video", "image-text"] as const;
+  readonly supports = DouyinAdapter.KINDS;
   private readonly s = SELECTORS.douyin;
   /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来。 */
   private readonly c = contractFor("douyin");

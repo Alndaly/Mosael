@@ -5,7 +5,9 @@ import { escapeHtml, wait } from "./shared";
 
 export class MockAdapter implements PublishAdapter {
   /** 已接的形状(ADR 0076)。 */
-  readonly supports = ["video"] as const;
+  /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
+  static readonly KINDS = ["video"] as const;
+  readonly supports = MockAdapter.KINDS;
   constructor(
     private readonly driver: PageDriver,
     private readonly task: PublishTask,

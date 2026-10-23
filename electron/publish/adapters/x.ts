@@ -26,7 +26,9 @@ const X_MAX_BYTES = 512 * 1024 * 1024;
 
 export class XAdapter implements PublishAdapter {
   /** 已接的形状(ADR 0076)。 */
-  readonly supports = ["video"] as const;
+  /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
+  static readonly KINDS = ["video"] as const;
+  readonly supports = XAdapter.KINDS;
   private readonly s = SELECTORS.x;
 
   // 帖子文本要把「简介」一起写进去(见 fillTitle),所以任务要留着。

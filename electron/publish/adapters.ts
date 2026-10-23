@@ -39,14 +39,14 @@ const ADAPTERS: Record<string, new (driver: PageDriver, task: PublishTask) => Pu
 
 /** 每个适配器**声明**支持的形状(契约测试按它核对入口/文件框是否写全)。 */
 export const ADAPTER_SUPPORTS: Record<string, readonly string[]> = {
-  douyin: DouyinAdapter.prototype.supports,
-  xiaohongshu: XiaohongshuAdapter.prototype.supports,
-  "weixin-channels": WeixinChannelsAdapter.prototype.supports,
-  bilibili: BilibiliAdapter.prototype.supports,
-  tiktok: TiktokAdapter.prototype.supports,
-  youtube: YoutubeAdapter.prototype.supports,
-  x: XAdapter.prototype.supports,
-  mock: MockAdapter.prototype.supports,
+  douyin: DouyinAdapter.KINDS,
+  xiaohongshu: XiaohongshuAdapter.KINDS,
+  "weixin-channels": WeixinChannelsAdapter.KINDS,
+  bilibili: BilibiliAdapter.KINDS,
+  tiktok: TiktokAdapter.KINDS,
+  youtube: YoutubeAdapter.KINDS,
+  x: XAdapter.KINDS,
+  mock: MockAdapter.KINDS,
 };
 
 export const createAdapter = (platform: string, driver: PageDriver, task: PublishTask): PublishAdapter => {
