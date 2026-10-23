@@ -26,6 +26,7 @@ import type { MessageKey } from "@/app/messages";
 import { DIALOG_FIELD } from "@/components/app/modals";
 import { platformLabel } from "@/lib/platformLabel";
 import { AssetGridField } from "@/features/nodeForms/AssetGridField";
+import { AssetPickerField } from "@/features/publish/AssetPickerField";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { useAssetSearch } from "@/lib/assetQueries";
@@ -870,18 +871,16 @@ function CreatePublishDialog({
         <div className="grid gap-2">
           <span className="text-ui-sm font-medium text-foreground">{t("publishAsset")}</span>
           {!needsImages && (
-            <Combobox
+            //: **点开弹窗挑一份**(和图文那格的素材弹窗同一个控件):就地展开的下拉会把几十份成片
+            //: 的名字排成一列,既难认也和应用里"挑素材"的样子不一样(维护者 2026-10-23)。
+            <AssetPickerField
+              workspaceId={workspace.id}
               value={assetId ?? ""}
-              options={videos.items.map((asset) => ({ value: asset.id, label: asset.name }))}
-              onSearch={videos.search}
-              searching={videos.isFetching}
-              renderValue={() => assetName || undefined}
+              label={assetName}
               placeholder={t("publishPickAsset")}
-              emptyText={t("cmdkEmpty")}
-              className="w-full"
-              onValueChange={(id) => {
+              onChange={(id, name) => {
                 setAssetId(id);
-                setAssetName(videos.items.find((asset) => asset.id === id)?.name ?? "");
+                setAssetName(name);
               }}
             />
           )}

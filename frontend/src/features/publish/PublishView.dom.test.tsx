@@ -31,13 +31,14 @@ vi.mock("@/app/preferences", () => ({
 }));
 
 import { listAssetPage } from "@/api/client";
+import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { gotoSection } from "@/lib/deepLink";
 import { PublishView } from "./PublishView";
 import { readHint } from "@/test/hint";
 
 it("selects only visible publish records and drops selections hidden by a status filter", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><ImagePreviewProvider><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></ImagePreviewProvider></QueryClientProvider>);
   await screen.findByText("Published film");
   fireEvent.click(screen.getByRole("tab", { name: "studioNeedsAttention" }));
   fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
@@ -53,7 +54,7 @@ it("selects only visible publish records and drops selections hidden by a status
 it("enters at the succeeded records when the statistics tile sends it there", async () => {
   gotoSection("publish", "succeeded");
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><ImagePreviewProvider><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></ImagePreviewProvider></QueryClientProvider>);
   await screen.findByText("Published film");
   await waitFor(() => expect(screen.queryByText("Needs a retry")).toBeNull());
   client.clear();
@@ -65,17 +66,20 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   Element.prototype.scrollIntoView = () => {};
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><ImagePreviewProvider><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></ImagePreviewProvider></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
   const dialog = await screen.findByRole("dialog", { name: "publishCreate" });
 
-  //: **发布目标排在第一位**(先选发到哪,再选发什么形状),素材那一格在它后面。
-  const [accountPicker, assetPicker] = within(dialog).getAllByRole("combobox");
+  //: **发布目标排在第一位**(先选发到哪,再选发什么形状);素材那一格不再是就地展开的下拉,
+  //: 而是一个**打开素材弹窗**的触发器(和图文那格同一个弹窗,见 AssetPickerField)。
+  const [accountPicker] = within(dialog).getAllByRole("combobox");
+  const assetPicker = within(dialog).getByRole("button", { name: /publishPickAsset/ });
   await user.click(assetPicker);
-  await user.click(await screen.findByRole("option", { name: "Final cut" }));
-  //: 只问视频,而且是在服务端筛的 —— 不把整个素材库拉回来再挑。
-  expect(vi.mocked(listAssetPage).mock.calls[0][0]).toMatchObject({ workspace_id: "qa", kind: ["video"] });
+  const picker = await screen.findByRole("dialog", { name: /publishPickVideoTitle/ });
+  //: 弹窗开着才挂载、只列视频 —— 而且是在服务端筛的,不把整个素材库拉回来再挑。
+  expect(vi.mocked(listAssetPage).mock.calls.at(-1)?.[0]).toMatchObject({ workspace_id: "qa", kind: ["video"] });
+  await user.click(await within(picker).findByText("Final cut"));
   expect(assetPicker).toHaveTextContent("Final cut");
   await user.click(accountPicker);
   expect(screen.queryByRole("option", { name: "Paused account" })).toBeNull();
@@ -102,7 +106,7 @@ it("新建发布:账号取不回来说取不回来、能重试;存着的设置�
   Element.prototype.scrollIntoView = () => {};
   vi.mocked(listPublishAccounts).mockRejectedValueOnce(new Error("boom"));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  const { container } = render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></QueryClientProvider>);
+  const { container } = render(<QueryClientProvider client={client}><ImagePreviewProvider><PublishView workspace={{ id: "qa", role: "editor" } as Workspace} /></ImagePreviewProvider></QueryClientProvider>);
   const user = userEvent.setup();
   await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
   await waitFor(() => expect(container.ownerDocument.querySelector("[data-publish-accounts-error]")).not.toBeNull());
@@ -121,7 +125,7 @@ it("新建发布:账号取不回来说取不回来、能重试;存着的设置�
 //: 只读成员(体检 UM-20 / D62):新建发布和删除记录是灰的、说清为什么;看记录照常。
 it("只读成员:新建发布是灰的并说为什么,右键删除也是灰的", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><PublishView workspace={{ id: "qa", role: "viewer" } as Workspace} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><ImagePreviewProvider><PublishView workspace={{ id: "qa", role: "viewer" } as Workspace} /></ImagePreviewProvider></QueryClientProvider>);
   const record = await screen.findByText("Published film");
   const create = screen.getByRole("button", { name: "publishCreate" });
   expect(create).toBeDisabled();

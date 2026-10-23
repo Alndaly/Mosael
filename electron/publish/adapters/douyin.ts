@@ -25,17 +25,26 @@ export class DouyinAdapter implements PublishAdapter {
     if (this.task.contentKind === "image-text") {
       //: 投稿页**默认是视频**那一档(真机),图文的文件框在点了「发布图文」之后才可用:
       //: 视频那个框只收 `video/*`,把图片交给它,页面只会回一句「请先切换到图文」。
-      const switched = await clickTextPreferTrusted(this.driver, this.s.imageTextTabText, {
-        exact: true,
-        selector: "div, button, [role=button], a, span, li",
-      })
-        .then(() => true)
-        .catch(() => false);
-      const ready = await this.driver.cssAttached(this.s.imageFileInput, switched ? ACTION_TIMEOUT : 3_000);
-      if (!ready) {
+      //:
+      //: **先等那一排 tab 画出来再点**:SPA 落地时它们晚一拍才出现,直接点会"点了个空气",
+      //: 然后以「找不到入口」失败(2026-10-23 真机就是这么红的一条)。判据用页面自己的文案。
+      const tabsReady = await this.driver.waitForFunction(
+        `(() => (document.body?.innerText || '').includes(${JSON.stringify(this.s.imageTextTabText)}))()`,
+        ACTION_TIMEOUT,
+        300,
+      );
+      if (!tabsReady) {
         throw publishError("douyin", "publishErr_tabMissing", { tab: this.s.imageTextTabText });
       }
-      return;
+      //: 点两次(精确 / 包含):tab 上可能带角标之类附加字。
+      for (const exact of [true, false]) {
+        await clickTextPreferTrusted(this.driver, this.s.imageTextTabText, {
+          exact,
+          selector: "div, button, [role=button], a, span, li",
+        }).catch(() => undefined);
+        if (await this.driver.cssAttached(this.s.imageFileInput, 5_000)) return;
+      }
+      throw publishError("douyin", "publishErr_tabMissing", { tab: this.s.imageTextTabText });
     }
     const uploadReady = await this.driver.fileInputAttached(this.s.fileInput, 6_000);
     if (!uploadReady && (await this.driver.hasText(TEXT_PUBLISH_VIDEO))) {

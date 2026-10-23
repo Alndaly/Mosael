@@ -59,6 +59,15 @@ const XIAOHONGSHU_ENTRY: Partial<Record<ContentKind, EntryPlan>> = {
   //: article: { steps: [写长文 tab, 新的创作], activeTab: 写长文 tab, acceptExtensions: [], urlContains: "target=article", hint: ... },
 };
 
+/**
+ * 「页面回到创作页」之后给成功证据的宽限期(毫秒)。
+ *
+ * 发成功之后小红书会自己回到创作页并把标题清空 —— 那几秒和「被平台弹回来」长得一模一样。
+ * 真机(2026-10-23)已经出现过一次误判:页面写着「发布成功」,任务却报「页面被送回了创作页」。
+ * 12 秒足够让成功提示 / 落地页出现,又不至于让真失败等太久。
+ */
+const BOUNCE_GRACE_MS = 12_000;
+
 export class XiaohongshuAdapter implements PublishAdapter {
   //: 已经接的两档:视频、图文。**「写长文」是另一套页面**(见 `XIAOHONGSHU_ENTRY`),还没接。
   readonly supports = ["video", "image-text"] as const;
@@ -721,20 +730,30 @@ export class XiaohongshuAdapter implements PublishAdapter {
         .catch(() => null);
       if (state?.done) return;
       if (state?.backToEditor) {
-        //: 再等一拍:平台可能正在这一次跳转里渲染成功页。
-        await wait(1_500);
-        const stillBack = await this.driver
-          .evaluate<boolean>(`(() => {
-            const text = document.body?.innerText || '';
-            if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return false;
-            const title = document.querySelector(${JSON.stringify(this.s.titleInput)});
-            return !title || !(title.value || '').trim();
-          })()`)
-          .catch(() => false);
-        if (stillBack) {
-          await plogPageState("waitResult bounced back to the editor (xiaohongshu):", this.driver);
-          throw publishError("xiaohongshu", "publishErr_backToEditor");
+        //: **别急着判失败**:发成功之后小红书就是会回到创作页(标题清空),中间那几秒看起来和
+        //: 「被平台弹回来」一模一样 —— 2026-10-23 真机就是这样:页面上明明写着「发布成功」,
+        //: 我们却判了「页面被送回了创作页」。所以这里给足宽限期(成功提示 / 落地页都可能晚到),
+        //: 期间一直盯着成功证据;宽限期过了还没有,才算真的没发出去。
+        const graceDeadline = Date.now() + BOUNCE_GRACE_MS;
+        let succeeded = false;
+        while (Date.now() < graceDeadline) {
+          await wait(600);
+          const evidence = await this.driver
+            .evaluate<boolean>(`(() => {
+              const text = document.body?.innerText || '';
+              if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
+              const url = location.href;
+              return ${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(url));
+            })()`)
+            .catch(() => false);
+          if (evidence) {
+            succeeded = true;
+            break;
+          }
         }
+        if (succeeded) return;
+        await plogPageState("waitResult bounced back to the editor (xiaohongshu):", this.driver);
+        throw publishError("xiaohongshu", "publishErr_backToEditor");
       }
       await wait(800);
     }
