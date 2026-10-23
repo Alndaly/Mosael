@@ -357,7 +357,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           //: (`px-6 py-7 xl:px-9 xl:py-8`)在这条列表外面,不抵掉它的话滚动条会缩在内容区里、
           //: 底部还留一条常驻空带。所以用负外边距抵掉、再用等量内边距把内容推回原位:
           //: 视觉对齐不变,滚动条和内容边界都贴到窗口边。
-          "-mr-6 -mb-7 pr-6 xl:-mr-9 xl:-mb-8 xl:pr-9",
+          "-mr-6 -mb-7 pb-3 pr-6 xl:-mr-9 xl:-mb-8 xl:pb-4 xl:pr-9",
         )}
       >
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
