@@ -227,6 +227,10 @@ const MESSAGES = {
     zh: "{platform} 点了「发布」但页面没有反应:多半是被风控或校验拦下了。点「查看页面」看看那一页说了什么,或在窗口里手动发布",
     en: "{platform} did not react to the Publish click — usually a risk check or a validation. Open the page to see what it says, or publish there by hand.",
   },
+  publishErr_googleBlocksEmbedded: {
+    zh: "Google 不允许在应用内浏览器里登录(它的原话是「此浏览器或应用可能不安全」)。{platform} 的网页登录这条路走不通 —— 需要接 Google 账号授权(OAuth)才能发。",
+    en: "Google refuses sign-in inside embedded browsers (“This browser or app may not be secure”). Web login cannot work for {platform} — it needs Google OAuth instead.",
+  },
   publishErr_verifyRequired: {
     zh: "{platform} 要你先过一下验证(扫码 / 身份验证):窗口已经亮出来,完成之后点任务行的「重试」继续发",
     en: "{platform} wants you to pass a check first (QR code / identity): the window is open — finish it, then hit Retry on the task row.",

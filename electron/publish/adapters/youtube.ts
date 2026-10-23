@@ -3,6 +3,9 @@ import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, boolOption, enumOption, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";
+import { AutomationBlockedError } from "../errors";
+import { t } from "../../i18n.cjs";
+import { platformName } from "../platforms";
 import { plog } from "../log";
 import { resolvePlatform } from "../platforms";
 
@@ -25,6 +28,15 @@ export class YoutubeAdapter implements PublishAdapter {
   }
 
   async checkLogin(): Promise<boolean> {
+    //: **Google 拒绝在应用内浏览器里登录** —— 先认这一条,并把它说成一句人话:此时页面停在
+    //: `accounts.google.com/v3/signin/rejected`「此浏览器或应用可能不安全」,用户看到的只是一张
+    //: Google 的拒绝页,不知道该怎么办,也不知道这不是 Mosael 的 bug。
+    if (this.s.embeddedLoginBlockedUrl.test(this.driver.url())) {
+      throw new AutomationBlockedError(
+        "manual_required",
+        t("publishErr_googleBlocksEmbedded", { platform: platformName("youtube") }),
+      );
+    }
     // 未登录时 Google 直接把你送去登录页 —— 比找文案可靠。会话过期同样走这条,所以它必须排在
     // cookie 判据前面:否则残留 cookie 会把已失效的会话说成有效。
     if (this.s.isLoginUrl(this.driver.url())) {

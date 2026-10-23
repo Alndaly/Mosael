@@ -220,6 +220,11 @@ export const SELECTORS = {
    * 代价远小于反过来。这一点也写进了后端的平台说明,用户在界面上看得到。
    */
   youtube: {
+    //: **Google 会把内嵌浏览器挡在登录之外**:输完账号密码后跳到
+    //: `accounts.google.com/v3/signin/rejected`,页面上写「此浏览器或应用可能不安全」(2026-10-23 真机)。
+    //: 这不是我们能洗掉的指纹问题 —— Google 明确不为嵌入式 webview 提供网页登录。认出来,说清楚,
+    //: 别让用户对着那张 Google 页面猜。
+    embeddedLoginBlockedUrl: /accounts\.google\.com\/.*(rejected|denied)/,
     // /upload 会直接把 Studio 带进上传对话框,比先进 Studio 再点「创建」少两跳。
     uploadUrl: "https://www.youtube.com/upload",
     fileInput: 'input[type="file"]',
