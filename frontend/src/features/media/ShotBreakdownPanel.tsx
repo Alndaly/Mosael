@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookPlus, Clapperboard, Copy, Check, Loader2, MessageSquareText } from "lucide-react";
+import { BookPlus, Clapperboard, Copy, Check, ImageOff, Loader2, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +25,7 @@ import { MenuItem } from "@/components/ui/menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { jobSettled } from "@/components/jobs/runStatus";
 import { SaveToNote } from "@/features/notes/SaveToNote";
+import { Hint } from "@/components/ui/tooltip";
 import { formatTimecode } from "@/lib/time";
 import { ShotPaceStrip } from "@/features/media/ShotPaceStrip";
 import { shotHintText, storyboardText, vocabKey, type ShotField } from "@/features/media/shotVocab";
@@ -240,6 +241,40 @@ function runningIn(rows: JobRow[] | undefined, assetId: string): JobRow | null {
  * 行本身走 `MenuItem`(列表行和菜单行同一种样子、同一个键盘走法,见 `SaveToNote` 的挑选列表),
  * 不另搓一个 `<button>`:它自带悬停底色、焦点圈和 role。
  */
+/**
+ * 镜头表里的那一小格插图。
+ *
+ * **读不出来要有兜底**:这一帧是后端按镜头位置截的,素材被清理、重拆过、或那一镜刚好没截到,
+ * 接口就 404 —— 此前直接是一个 `<img>`,界面上就是浏览器的破图图标(维护者 2026-10-23 截图)。
+ * 现在失败时画一枚中性图标,并给一句说明(悬停可看),和素材库里"文件缺失"的处理同一种态度:
+ * 事实说不出来就明说,不装成一张图。
+ */
+function ShotFrameThumb({ assetId, name }: { assetId: string; name: string }) {
+  const t = useI18n();
+  const [broken, setBroken] = React.useState(false);
+  if (broken) {
+    return (
+      <Hint label={t("shotFrameMissing")}>
+        <span
+          data-shot-frame-missing=""
+          className="grid aspect-video w-16 place-items-center rounded-sm bg-workspace-subtle text-muted-foreground"
+        >
+          <ImageOff size={14} aria-hidden />
+        </span>
+      </Hint>
+    );
+  }
+  return (
+    <img
+      src={shotFrameUrl(assetId, name)}
+      alt=""
+      loading="lazy"
+      className="aspect-video w-16 rounded-sm bg-workspace-subtle object-cover"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 function ShotRow({ shot, assetId, onSeek }: { shot: Shot; assetId: string; onSeek: (seconds: number) => void }) {
   const t = useI18n();
   //: 表里的值是后端给的裸 dict —— 缺一格不该让整块崩掉(不该缺,但账算在这里,不算在渲染里)。
@@ -267,12 +302,7 @@ function ShotRow({ shot, assetId, onSeek }: { shot: Shot; assetId: string; onSee
       label={
         <span className="grid grid-cols-[64px_minmax(0,1fr)] items-start gap-2">
           {/* 这一镜 15% 处的那一帧:表里的插图,和镜头表一起生成、一起没。 */}
-          <img
-            src={shotFrameUrl(assetId, `${shot.id}a.jpg`)}
-            alt=""
-            loading="lazy"
-            className="aspect-video w-16 rounded-sm bg-workspace-subtle object-cover"
-          />
+          <ShotFrameThumb assetId={assetId} name={`${shot.id}a.jpg`} />
           <span className="grid min-w-0 gap-0.5">
             <span className="flex min-w-0 items-baseline gap-1.5">
               <span className="font-mono text-ui-xs font-medium tabular-nums text-foreground">{shot.id}</span>

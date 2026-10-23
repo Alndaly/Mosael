@@ -227,6 +227,22 @@ it("拆过:每一镜都有缩略图、镜号时间、景别运镜的中文、画
   expect(thumbs[1]).toContain("/shots/frames/S02a.jpg");
 });
 
+//: 缩略图读不出来(素材被清理 / 重拆过 / 那一帧没截到)时要有兜底,不能是浏览器的破图图标。
+it("缩略图 404:换成中性图标 + 一句说明,不留破图", async () => {
+  getShotBreakdown.mockResolvedValue(ready());
+  const { container } = show();
+
+  await waitFor(() => expect(container.querySelectorAll("[data-shot-row]")).toHaveLength(2));
+  const [first] = [...container.querySelectorAll<HTMLElement>("[data-shot-row]")];
+  const img = first.querySelector("img");
+  expect(img).not.toBeNull();
+
+  fireEvent.error(img!);
+
+  expect(first.querySelector("img")).toBeNull();
+  expect(first.querySelector("[data-shot-frame-missing]")).not.toBeNull();
+});
+
 //: ④ 有表但一镜都没判过:只有机器那一半,不炸,而且说得出为什么。
 it("没判过画面:只显示机器量的那一半,并说明原因", async () => {
   getShotBreakdown.mockResolvedValue(
