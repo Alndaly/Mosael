@@ -906,6 +906,53 @@ export class PageDriver {
     })()`);
   }
 
+  /**
+   * 把**多行**文本写进富文本编辑器,**换行由编辑器自己成段**。
+   *
+   * 走 `execCommand`,不走真实按键:真实按键的 Enter 要求窗口焦点落在这一页上,没落上时它
+   * **静默地什么都不做** —— 2026-10-23 真机就是这样:四行文案发出去变成一行(每行的"回车"都没生效),
+   * 而当时的判定只查"包含原文",照样判通过。
+   *
+   * 先整段 `insertText`(带 `
+`,编辑器认),不行再逐行 `insertText` + `insertLineBreak`。
+   */
+  async insertTextLines(selector: string, value: string): Promise<void> {
+    await this.focusEnd(selector);
+    const whole = JSON.stringify(value);
+    await this.evaluate(`(() => {
+      const el = document.activeElement;
+      if (!el) return false;
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      if (document.execCommand('insertText', false, ${whole})) return true;
+      return false;
+    })()`);
+    if (await this.editorHasLines(selector, value.split(/\r?\n/).filter((one) => one.trim()).length)) return;
+    const lines = JSON.stringify(value.split(/\r?\n/));
+    await this.evaluate(`(() => {
+      const el = document.activeElement;
+      if (!el) return false;
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      const lines = ${lines};
+      lines.forEach((line, index) => {
+        document.execCommand('insertText', false, line);
+        if (index < lines.length - 1) document.execCommand('insertLineBreak', false, null);
+      });
+      return true;
+    })()`);
+  }
+
+  /** 编辑器里现在有几行(空行不算)。 */
+  private async editorHasLines(selector: string, expected: number): Promise<boolean> {
+    const counted = await this.evaluate<number>(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const text = (el?.innerText || '').replace(/\u200b/g, '');
+      return text.split('\n').filter((line) => line.trim()).length;
+    })()`).catch(() => 0);
+    return counted >= expected;
+  }
+
   // ---- text-based queries (Playwright :has-text / text= replacement) ------
 
   async hasText(text: string): Promise<boolean> {

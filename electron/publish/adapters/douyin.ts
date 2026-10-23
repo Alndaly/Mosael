@@ -93,8 +93,10 @@ export class DouyinAdapter implements PublishAdapter {
     //: **整段插入,不逐行打**。逐行打要在每行末尾按一次回车,而抖音这个编辑器会把 `1. ` 变成
     //: 有序列表、回车又新起一个段 —— 几行文字于是被拆散、重排(真机 2026-10-23 得到
     //: 「2. 衣着描述…\n1」这种顺序)。整段 `insertText` 里带真换行,由编辑器自己决定怎么成段。
-    await this.driver.focusAndClearField(selector);
-    await this.driver.insertText(selector, value);
+    //: **多行要真的成行**:整段 `insertText` 里带真换行,由编辑器自己成段;不成就逐行 +
+    //: `insertLineBreak`。此前那条路是"打完一行按一次回车" —— 真机的回车要求窗口焦点,
+    //: 没落上时四行会并成一行发出去(2026-10-23 真机,判定却只查"包含原文",照样放行)。
+    await this.driver.insertTextLines(selector, value);
     //: 判定交给统一原语:按行、按顺序,且不许混进旧字 —— 三件都是真机上踩过的坑
     //: (2026-10-23:只判"包含"会放过旧草稿;只判整段会放过被重排的正文)。
     const { ok, matched, total } = await linesEntered(this.driver, selector, value, {
