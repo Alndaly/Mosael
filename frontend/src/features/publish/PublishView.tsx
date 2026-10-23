@@ -815,10 +815,19 @@ function CreatePublishDialog({
             </div>
           )}
 
+          {/* 「存着的设置解不开了」是**要人去处理**的警告(重新登录一次),不是普通说明:
+              用警告色 + 一枚图标,和旁边的灰色小字区分开。 */}
           {unreadableAccounts.length > 0 && (
-            <small data-publish-accounts-unreadable="">
-              {t("publishAccountConfigUnreadable").replace("{names}", unreadableAccounts.map((account) => account.name).join(t("listSeparator")))}
-            </small>
+            <p
+              data-publish-accounts-unreadable=""
+              role="note"
+              className="m-0 flex items-start gap-1.5 text-ui-xs leading-[1.45] text-warning"
+            >
+              <CircleAlert size={13} className="mt-[1px] shrink-0" />
+              <span>
+                {t("publishAccountConfigUnreadable").replace("{names}", unreadableAccounts.map((account) => account.name).join(t("listSeparator")))}
+              </span>
+            </p>
           )}
           {accounts.isSuccess && (allAccounts.length === 0 || disabledAccounts > 0) && (
             <small>
