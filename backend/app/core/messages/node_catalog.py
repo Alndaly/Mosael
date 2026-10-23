@@ -68,7 +68,22 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_publish": {"zh": "发布", "en": "Publish"},
     "wfNode_publish_desc": {"zh": "用已登录的平台账号发布到抖音 / 小红书 / 视频号 / B站(由桌面端内嵌浏览器执行)。", "en": "Publish to Douyin / Xiaohongshu / Weixin Channels / Bilibili using an already signed-in account (carried out by the desktop app's embedded browser)."},
     "wfNode_publish_account_id": {"zh": "浏览器池可查", "en": "Look it up in the browser pool"},
+    "wfOpt_content_kind_video": {"zh": "视频", "en": "Video"},
+    "wfOpt_content_kind_image-text": {"zh": "图文", "en": "Image & text"},
+    "wfOpt_content_kind_article": {"zh": "文章", "en": "Article"},
+    "wfNode_publish_content_kind": {
+        "zh": "内容类型:视频发一份成片;图文 / 文章发一组图片加正文",
+        "en": "Content kind: video posts one finished file; image-text / article posts a set of images plus body text",
+    },
     "wfNode_publish_asset_id": {"zh": "要发布的素材 —— 必须已经下载到本地", "en": "The asset to publish — it must already be downloaded locally"},
+    "wfNode_publish_asset_ids": {
+        "zh": "要发布的图片(可多张,顺序就是发出去的顺序)—— 必须已经下载到本地",
+        "en": "Images to publish (several allowed; the order is the order they are posted) — they must already be downloaded locally",
+    },
+    "wfNode_publish_description": {
+        "zh": "视频填「简介」、图文 / 文章填「正文」",
+        "en": "Caption for a video, body text for image-text / article",
+    },
     "wfNode_publish_title": {"zh": "各平台的长度上限不同,超了会被平台拒掉", "en": "Length limits differ per platform; going over gets rejected by the platform"},
     "wfNode_condition": {"zh": "条件分支", "en": "Condition"},
     "wfNode_condition_desc": {"zh": "按条件把流程导向「真」或「假」分支(连线时从对应端点拉出)。", "en": "Route the flow down the “true” or “false” branch (drag from the matching port when connecting)."},

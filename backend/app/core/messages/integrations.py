@@ -903,6 +903,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_if_exists": {"zh": "同名时", "en": "When it exists"},
     #: 一串素材和一份素材**不同名**:生成节点同时交出这两样(封面一份、这次出的全部),都叫「素材」时画布上两个口一模一样。
     "wfField_asset_ids": {"zh": "素材列表", "en": "Media list"},
+    "wfField_content_kind": {"zh": "内容类型", "en": "Content kind"},
     #: 大模型节点那一格排除清单的名字。它不单独出现在面板上(声明 edited_by,由「要模型看的图片」的格子一起编辑),
     #: 但报错提到字段(`field_name`)时得有个人话名字,不能露出 `image_asset_ids_excluded` 这个键名。
     "wfField_image_asset_ids_excluded": {"zh": "不要自动带上的图", "en": "Referenced images left out"},

@@ -138,6 +138,7 @@ _FIELD_LABELS = {
     "unmatched": "wfField_unmatched",
     "asset_id": "wfField_asset_id",
     "asset_ids": "wfField_asset_ids",
+    "content_kind": "wfField_content_kind",
     "attribute": "wfField_attribute",
     "body": "wfField_body",
     "citation_url": "wfField_citation_url",
@@ -1254,9 +1255,34 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_publish_desc",
         "config": {
             "account_id": {"type": "string", "required": True, "description": "wfNode_publish_account_id", "options_from": "publish_accounts"},
-            "asset_id": {"type": "template", "required": True, "description": "wfNode_publish_asset_id"},
+            #: **内容形状**(ADR 0076):视频一份素材,图文一组图片 + 正文。平台认哪几种由后端声明,
+            #: 这里给全集,运行前由 `start_publish` 按平台校验(发不了的形状会当场拒,不会白跑一趟)。
+            "content_kind": {
+                "type": "string",
+                "default": "video",
+                "options": ["video", "image-text", "article"],
+                "description": "wfNode_publish_content_kind",
+            },
+            #: 视频那一档:一份素材。和 `asset_ids` 按形状互斥(见各自的 active_when)。
+            "asset_id": {
+                "type": "template",
+                "required": True,
+                "active_when": {"content_kind": "video"},
+                "description": "wfNode_publish_asset_id",
+            },
+            #: 图文 / 文章那一档:一组图片(`editor: asset_grid`,和工作流别的图片格子同一个控件),
+            #: 值仍是逗号分隔的素材 id 串,顺序就是发给平台的顺序。
+            "asset_ids": {
+                "type": "template",
+                "required": True,
+                "media": ["image"],
+                "editor": "asset_grid",
+                "active_when": {"content_kind": ["image-text", "article"]},
+                "description": "wfNode_publish_asset_ids",
+            },
             "title": {"type": "template", "description": "wfNode_publish_title"},
-            "description": {"type": "template"},
+            #: 视频那一档是「简介」;图文 / 文章那一档是**正文**——同一个字段,称呼跟着形状走。
+            "description": {"type": "template", "description": "wfNode_publish_description"},
         },
         # post_id / post_url:发出去的那条作品在平台上的 ID 与链接(见 domain/publish/post.py),
         # 下游拿它去查这条作品的数据。平台接口没读到时是空串。

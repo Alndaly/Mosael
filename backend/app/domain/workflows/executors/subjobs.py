@@ -494,23 +494,44 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
     account = db.get(PublishAccount, str(config.get("account_id", "")))
     if account is None or account.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_publishAccountMissing")
-    asset = db.get(Asset, str(config.get("asset_id", "")))
-    if asset is None or asset.workspace_id != scope.workspace_id:
-        raise WorkflowDomainError("wfErr_publishAssetMissing")
+    #: **内容形状**(ADR 0076):视频发一份成片,图文 / 文章发一组图片 + 正文。
+    #: 两种形状的素材字段不同(asset_id / asset_ids),按形状取那一格;平台是否认它由
+    #: `start_publish` 校验(发不了的形状当场拒,不会白跑一趟)。
+    kind = str(config.get("content_kind") or "video")
+    asset: Asset | None = None
+    assets: list[Asset] = []
+    if kind == "video":
+        asset = db.get(Asset, str(config.get("asset_id", "")))
+        if asset is None or asset.workspace_id != scope.workspace_id:
+            raise WorkflowDomainError("wfErr_publishAssetMissing")
+    else:
+        raw_ids = [one.strip() for one in str(config.get("asset_ids") or "").split(",") if one.strip()]
+        if not raw_ids:
+            raise WorkflowDomainError("wfErr_publishAssetMissing")
+        for asset_id in raw_ids:
+            one = db.get(Asset, asset_id)
+            if one is None or one.workspace_id != scope.workspace_id:
+                raise WorkflowDomainError("wfErr_publishAssetMissing")
+            assets.append(one)
     # 用的是**这次运行**的授权:操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,
     # 见 scheduler.operations._open_run),加上被执行那一版图的担保人(见 workflows.authority)。
     # 别人的私有账号、同事改过而主人没认可的那一版,都在 start_publish 里被拒。
     from app.domain.workflows.authority import current_authority
 
+    description = str(config.get("description", ""))
     task = start_publish(
         db,
         workspace_id=scope.workspace_id,
         account=account,
         asset=asset,
         title=str(config.get("title", "")),
-        description=str(config.get("description", "")),
+        #: 图文 / 文章的正文就是上面那一格(节点上叫「说明」);视频那一档它仍是简介。
+        description="" if kind != "video" else description,
         actor=current_authority(db),
         tags=[],
+        kind=kind,
+        assets=assets or None,
+        body=description if kind != "video" else "",
     )
     final = wait_for_job(task.job_id or "", release=db)
     result = final.result or {}
