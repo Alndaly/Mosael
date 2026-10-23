@@ -29,6 +29,7 @@ const card = (id: string, intermediate = "", lineText: string | null = null): As
   id, name: intermediate ? "zh-TW-HsiaoChenNeural · 配音" : id, workspace_id: "ws", project_id: null,
   original_filename: `${id}.mp3`, kind: "audio", source: intermediate ? "tts" : "imported", tags: [], derived: false,
   ai_generated: Boolean(intermediate), intermediate, created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",
+  file_missing: false,
   media_info: { duration: 2, width: null, height: null, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null, line_text: lineText },
 });
 

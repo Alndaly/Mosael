@@ -535,7 +535,13 @@ function RailUserMenu({ compact }: { compact: boolean }) {
   const [open, setOpen] = React.useState(false);
   const displayName = user?.display_name || user?.username || "user";
   const initial = displayName.slice(0, 1).toUpperCase();
-  const avatarSrc = user?.avatar_key && user.id ? userAvatarUrl(user.id, user.avatar_key) : "";
+  const avatarUrl = user?.avatar_key && user.id ? userAvatarUrl(user.id, user.avatar_key) : "";
+  //: **图片挂了就退回昵称首字**。此前只在「没有 avatar_key」时画首字母:文件被清理、CDN 读到 404 时
+  //: `<img>` 会显示浏览器的破图图标(维护者 2026-10-23 截图:左下角头像是个破图)。这里记住
+  //: 加载失败,之后一律画字母。
+  const [avatarBroken, setAvatarBroken] = React.useState(false);
+  const avatarSrc = avatarUrl && !avatarBroken ? avatarUrl : "";
+  const onAvatarError = () => setAvatarBroken(true);
   const origin = accountOrigin(t, customServerHost(), user?.oauth_providers ?? []);
 
   return (
@@ -545,7 +551,7 @@ function RailUserMenu({ compact }: { compact: boolean }) {
         <PopoverTrigger asChild>
           <button type="button" className={cn("flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 text-left hover:bg-secondary", compact && "justify-center px-0")} aria-label={displayName}>
             <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary text-sm font-semibold">
-              {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+              {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" onError={onAvatarError} /> : initial}
             </span>
             {!compact && <><Truncate className="flex-1 text-ui-sm font-medium">{displayName}</Truncate><ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" /></>}
           </button>
@@ -554,7 +560,7 @@ function RailUserMenu({ compact }: { compact: boolean }) {
       <MenuContent label={displayName} side="right" align="end" sideOffset={10}>
         <div className="flex items-center gap-2 px-1.5 pb-1.5 pt-0.5">
           <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-ui-md font-bold text-primary">
-            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+            {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" onError={onAvatarError} /> : initial}
           </span>
           <div className="grid min-w-0 text-ui-xs text-muted-foreground">
             <Truncate as="strong" className="text-ui-md text-foreground">{displayName}</Truncate>

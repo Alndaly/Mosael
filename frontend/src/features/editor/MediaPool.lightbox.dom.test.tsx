@@ -29,6 +29,7 @@ import { MediaPool } from "./MediaPool";
 const asset = (id: string, kind: string): AssetCard => ({
   id, name: id, workspace_id: "ws", project_id: "p", original_filename: id, kind, source: "imported", tags: [],
   derived: false, ai_generated: false, intermediate: "",
+  file_missing: false,
   media_info: { duration: 10, width: 1920, height: 1080, fps: 25, has_thumbnail: false, format: null, pages: null, size_bytes: null },
 });
 //: 两个视频挨着 —— 灯箱画廊里它们就是相邻的两项。

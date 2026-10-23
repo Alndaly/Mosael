@@ -44,6 +44,7 @@ vi.mock("@/features/media/AssetPreviewModalById", () => ({
 const card = (id: string, name: string): AssetCard => ({
   id, name, workspace_id: "ws", project_id: "p", original_filename: name, kind: "video", source: "imported", tags: [],
   derived: false, ai_generated: false, intermediate: "",
+  file_missing: false,
   media_info: { duration: null, width: null, height: null, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null },
 });
 const CARDS = [card("a", "成片A"), card("b", "成片B")];

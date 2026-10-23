@@ -21,6 +21,7 @@ vi.mock("@/api/client", async (original) => ({
 const asset = (id: string, kind: string, tags: string[] = []): AssetCard => ({
   id, name: id, workspace_id: "ws", project_id: null, original_filename: id, kind, source: "imported", tags,
   derived: false, ai_generated: false, intermediate: "",
+  file_missing: false,
   media_info: { duration: null, width: null, height: null, fps: null, has_thumbnail: false, format: null, pages: null, size_bytes: null },
 });
 

@@ -117,6 +117,11 @@ class AssetCardOut(OrmModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     media_info: AssetCardMediaOut
+    #: **磁盘上那份文件还在不在**。文件被清理掉(换机器、迁移没带上、手动删了目录)之后,
+    #: 数据库这一行还在、缩略图也还躺在那儿 —— 卡片照样画出预览,直到去发布才报「素材文件不在
+    #: 这台电脑上」(2026-10-23 真机)。所以由后端说这句话,前端据此画"文件缺失",不发缩略图请求。
+
+    file_missing: bool = False
 
     @field_validator("derived", mode="before")
     @classmethod

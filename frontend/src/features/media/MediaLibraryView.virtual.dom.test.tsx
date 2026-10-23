@@ -26,6 +26,7 @@ vi.mock("@/features/media/AssetPreviewModal", () => ({ AssetPreviewModal: () => 
 const card = (id: string): AssetCard => ({
   id, name: id, workspace_id: "ws", project_id: null, original_filename: `${id}.png`, kind: "image", source: "imported", tags: [],
   derived: false, ai_generated: false, intermediate: "", created_at: "2026-01-01T00:00:00", updated_at: "2026-01-01T00:00:00",
+  file_missing: false,
   media_info: { duration: null, width: 100, height: 100, fps: null, has_thumbnail: true, format: null, pages: null, size_bytes: null },
 });
 const pageOf = (from: number, n: number, next: string | null, total: number): AssetPage => ({

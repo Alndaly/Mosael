@@ -1,4 +1,5 @@
 export const assetLibrary = {
+  mediaFileMissing: "文件缺失",
   // ---- 资产库(ADR 0027):人物 / 场景 / 道具 ----
   navEntities: "资产",
   entitiesDesc: "人物、场景、道具:一个有名字的东西,参考图是素材库里的图。生成时 @ 它,提示词描述和参考图自动带上。",

@@ -1,4 +1,5 @@
 export const assetLibrary = {
+  mediaFileMissing: "File missing",
   // ---- Asset library (ADR 0027): characters / locations / props ----
   navEntities: "Assets",
   entitiesDesc: "Characters, locations and props: named things whose reference images come from your media library. @ one in a generation and its prompt descriptor and references come along.",

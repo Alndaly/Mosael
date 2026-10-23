@@ -11260,6 +11260,11 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
             media_info: components["schemas"]["AssetCardMediaOut"];
+            /**
+             * File Missing
+             * @default false
+             */
+            file_missing: boolean;
         };
         /**
          * AssetDerivationOut

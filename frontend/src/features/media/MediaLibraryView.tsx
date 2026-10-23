@@ -755,8 +755,11 @@ function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard
   const t = useI18n();
   const [thumbFailed, setThumbFailed] = React.useState(false);
   const { duration, width, height, fps } = asset.media_info;
+  //: 文件不在了就别再发缩略图请求:后端会回 404,而那张 jpg 可能比源文件活得久 ——
+  //: 卡片上画出"能预览"的样子,直到发布时才报「素材文件不在这台电脑上」(2026-10-23 真机)。
+  const missing = Boolean(asset.file_missing);
   //: 文档的封面是解析时渲的第一页(ADR 0031),还没有就画图标。
-  const hasThumb = asset.kind !== "audio" && (asset.kind !== "document" || Boolean(asset.media_info.has_thumbnail)) && !thumbFailed;
+  const hasThumb = !missing && asset.kind !== "audio" && (asset.kind !== "document" || Boolean(asset.media_info.has_thumbnail)) && !thumbFailed;
   return (
     <article
       className={cn(
@@ -780,6 +783,12 @@ function AssetTile({ asset, selected = false, list = false }: { asset: AssetCard
           />
         ) : (
           <span>{kindIcon(asset.kind)}</span>
+        )}
+        {/*: 文件缺失是**事实**,写在卡片上:缩略图、时长、预览都不该再假装它还在。 */}
+        {missing && (
+          <span className="absolute inset-0 grid place-items-center bg-[color-mix(in_srgb,var(--background)_88%,transparent)] text-ui-xs font-medium text-destructive">
+            {t("mediaFileMissing")}
+          </span>
         )}
         {/* 时长角标只对有时基的素材(视频/音频)有意义;图片 duration 恒为 0,别显示 00:00。 */}
         {asset.kind !== "image" && duration != null && (

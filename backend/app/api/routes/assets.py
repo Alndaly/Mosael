@@ -10,7 +10,7 @@ from app.api.responses import file_response
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, ImageUrlImportRequest, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetCardOut, AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetFacetsOut, AssetLineageOut, AssetOut, AssetPageOut, AssetUpdate, DenoiseAssetRequest, JobOut, ImageUrlImportRequest, LocalImportRequest, MaskAssetRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
@@ -307,7 +307,16 @@ def list_assets(
         found = use_cases.list_assets(db, user, scope, sort=sort, cursor=cursor, limit=limit)
     except AssetListingError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
-    return {"items": found.items, "next_cursor": found.next_cursor, "total": found.total}
+    return {
+        "items": [
+            AssetCardOut.model_validate(asset).model_copy(
+                update={"file_missing": not resolve_key(asset.file_key).is_file()},
+            )
+            for asset in found.items
+        ],
+        "next_cursor": found.next_cursor,
+        "total": found.total,
+    }
 
 
 @router.get("/assets/facets", response_model=AssetFacetsOut)
@@ -532,6 +541,11 @@ def get_asset_preview(asset_id: str, db: DbSession, user: CurrentUser) -> FileRe
 def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     asset = use_cases.readable_file(db, user, asset_id)
     source = resolve_key(asset.file_key)
+    #: **原文件没了就别再给缩略图**:缩略图是生成时留在同一个目录里的 jpg,它比源文件活得久,
+    #: 于是卡片还能"预览"一份已经不存在的素材(2026-10-23 真机)。这里如实回 404,
+    #: 由列表里的 `file_missing` 告诉界面怎么画。
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="Asset file missing")
     thumb = thumbnail_path(source.parent)
     if not thumb.is_file():
         generate_thumbnail(source, asset.kind, source.parent)  # backfill for pre-thumbnail imports

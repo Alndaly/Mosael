@@ -31921,6 +31921,11 @@
           },
           "media_info": {
             "$ref": "#/components/schemas/AssetCardMediaOut"
+          },
+          "file_missing": {
+            "type": "boolean",
+            "title": "File Missing",
+            "default": false
           }
         },
         "type": "object",
