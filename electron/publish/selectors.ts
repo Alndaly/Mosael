@@ -132,7 +132,9 @@ export const SELECTORS = {
     publishDoneTexts: ["发布成功", "发布完成", "笔记发布成功", "提交成功", "后将返回发布页"], // i18n-ok
     //: **发出去之后落在哪**:笔记详情、笔记管理、创作者首页的笔记列表。三种都算成功(平台改版时
     //: 它在这三处之间换)。此前只看文案,于是「发出去了但停在管理页」会被当成没确认(2026-10-23)。
-    publishDoneUrls: [/explore\//, /note-manager/, /\/new\/notes/, /discovery\/item/],
+    //: **`published=true`**(真机 2026-10-23):发完之后小红书回到创作页时,地址里带着这个参数
+    //: (`?source=&published=true`)。它比"成功文案"可靠 —— 那行字只在屏幕上停一两秒,而地址不会骗人。
+    publishDoneUrls: [/published=true/, /explore\//, /note-manager/, /\/new\/notes/, /discovery\/item/],
     loggedInTexts: ["发布笔记", "创作中心", "数据中心"], // i18n-ok
     isLoginUrl: (u: string): boolean => /\/login/.test(u),
     isPublishEditorUrl: (u: string): boolean => /\/publish\/publish|\/new\/publish/.test(u),

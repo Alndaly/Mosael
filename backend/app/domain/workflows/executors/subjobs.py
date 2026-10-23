@@ -531,7 +531,8 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
     )
     #: 标签:和发布页那一栏同一种写法(逗号 / 换行分隔),去掉用户顺手打的 `#`。
     raw_tags = str(config.get("tags") or "")
-    tags = [one.strip().lstrip("#") for one in re.split(r"[,，\n]", raw_tags) if one.strip().lstrip("#")]
+    #: 顿号与空白同样算分隔符(和发布页那一栏一致)。
+    tags = [one.strip().lstrip("#") for one in re.split(r"[,，、\s]+", raw_tags) if one.strip().lstrip("#")]
 
     description = str(config.get("description", ""))
     task = start_publish(

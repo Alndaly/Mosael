@@ -760,7 +760,9 @@ function CreatePublishDialog({
         //: 这里一处定死,别再让后面的键把它盖掉。
         description: needsImages ? "" : description.trim(),
         tags: tagsText
-          .split(/[,，\s]+/)
+          //: **顿号也是分隔符**:「人物、AI」是两个人给的标签,不是带顿号的一个。此前只按逗号/空白拆,
+          //: 记录里就出现了一个叫「人物、AI」的标签(维护者 2026-10-23 截图指出)。
+          .split(/[,，、\s]+/)
           .map((tag) => tag.trim())
           .filter(Boolean),
         short_title: shortTitle.trim(),
