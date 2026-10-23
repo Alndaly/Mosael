@@ -53,7 +53,12 @@ export const SELECTORS = {
     //: 两个 tab 的拖拽区文案不同(「拖拽视频到此或点击上传」/「拖拽图片…」)——**用它判 tab 真的切了**。
     //: 只看「文件 input 在不在」不行:视频 tab 上也有一个 input,于是图文被交到视频页,平台回一句
     //: 「上传图文,请先切换到图片tab」(维护者 2026-10-23 真机)。
-    dropHintByKind: { video: "拖拽视频", "image-text": "拖拽图片" } as Record<string, string>, // i18n-ok
+    //: 视频档是「拖拽视频到此或点击上传」;图文档是「**上传图片**,或写文字生成图片」——
+    //: 两种文案不一样,而且改版会换(上一版这里是「拖拽图片」,线上并不是)。
+    //: 所以除了文案,还看**文件 input 的 accept**:视频档只收 video、图文档只收 image,
+    //: 那是页面自己的契约,比文案稳。
+    dropHintByKind: { video: "拖拽视频", "image-text": "上传图片" } as Record<string, string>, // i18n-ok
+    acceptByKind: { video: "video", "image-text": "image" } as Record<string, string>,
     fileInput: 'input[type="file"]',
     titleInput:
       'input[placeholder*="填写标题"], input[placeholder*="请输入标题"], input[placeholder*="标题"], textarea[placeholder*="标题"]', // i18n-ok

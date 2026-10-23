@@ -38,28 +38,53 @@ export class XiaohongshuAdapter implements PublishAdapter {
       //: 这张表里没有 = 这一种形状我们还没接(`supports` 也已经声明过了,走到这里是代码不一致)。
       throw publishError("xiaohongshu", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     }
-    //: **等到 tab 出来再点**:goto 回来时 SPA 可能还没画出这一排,点了等于没点(也不会报错)。
+    //: **等到 tab 那一排画出来再点**:`goto` 回来时 SPA 可能还没渲染,点了等于没点(也不报错)。
     await this.driver.cssAttached(this.s.fileInput, UPLOAD_TIMEOUT);
-    const dropHint = this.s.dropHintByKind[this.task.contentKind] ?? "";
-    //: 判据是**这一档的拖拽区文案出现了**,不是「文件 input 在不在」:两个 tab 都有 input,
-    //: 拿它当判据会把图文任务放到视频 tab 上,平台再回一句「请先切换到图片tab」。
-    if (dropHint && (await this.driver.hasText(dropHint))) return;
-    //: 点两次:先按**文案完全相等**点(正常情况);没切过去再按「包含」点一次 —— tab 上可能带
-    //: 「新」角标之类的附加字,`textContent` 就不再严格相等了。每点一次都用拖拽区文案验。
+    const ready = () => this.onExpectedTab();
+    if (await ready()) return;
+    //: 点两次:先按「文案完全相等」,没切过去再按「包含」—— tab 上可能带「新」角标之类附加字。
     for (const exact of [true, false]) {
       await clickTextPreferTrusted(this.driver, tabText, {
         exact,
         selector: "button, [role=button], a, div, span, li",
       }).catch(() => undefined);
-      if (!dropHint) return;
-      const switched = await this.driver.waitForFunction(
-        `(() => (document.body?.innerText || "").includes(${JSON.stringify(dropHint)}))()`,
-        5_000,
-        300,
-      );
+      const switched = await this.driver.waitForFunction(this.onExpectedTabExpression(), 5_000, 300);
       if (switched) return;
     }
     throw publishError("xiaohongshu", "publishErr_tabMissing", { tab: tabText });
+  }
+
+  /**
+   * 现在这一页是不是**这一种形状**的那一档?两条判据任一成立即可:
+   *
+   * - 文件 input 的 `accept` 里有这一档要的那一类(`video` / `image`)—— 页面自己的契约,最稳;
+   * - 或者这一档的拖拽区文案出现了(改版会换文案,所以只当补充)。
+   *
+   * **不能用「文件 input 在不在」**:两个 tab 都有 input,那会让图文任务停在视频页上交图片,
+   * 平台再回一句「请先切换到图片tab」。
+   */
+  private onExpectedTabExpression(): string {
+    const accept = this.s.acceptByKind[this.task.contentKind] ?? "";
+    const hint = this.s.dropHintByKind[this.task.contentKind] ?? "";
+    return `(() => {
+      const accept = ${JSON.stringify(accept)};
+      const hint = ${JSON.stringify(hint)};
+      const accepts = [...document.querySelectorAll('input[type="file"]')]
+        .map((one) => (one.getAttribute('accept') || '').toLowerCase())
+        .join(',');
+      if (accept && accepts.includes(accept)) return true;
+      const text = document.body?.innerText || '';
+      return Boolean(hint) && text.includes(hint);
+    })()`;
+  }
+
+  /** 一次同步判断(用于「已经在这一档上了就别点」)。 */
+  private async onExpectedTab(): Promise<boolean> {
+    try {
+      return Boolean(await this.driver.evaluate<boolean>(this.onExpectedTabExpression()));
+    } catch {
+      return false;
+    }
   }
 
   async checkLogin(): Promise<boolean> {
