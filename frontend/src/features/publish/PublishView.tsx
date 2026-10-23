@@ -23,6 +23,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import type { MessageKey } from "@/app/messages";
+import { DIALOG_FIELD } from "@/components/app/modals";
 import { platformLabel } from "@/lib/platformLabel";
 import { AssetGridField } from "@/features/nodeForms/AssetGridField";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -474,7 +475,9 @@ function PublishCard({
     // 左侧 12(和别页内容对齐);右侧 20(状态列右对齐,12 会贴住圆角的边)。
     <article className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-5 py-3 pl-3 pr-5">
       {/*: 首行是标题(ui-md),图标跟着首行对齐而不是整段居中。 */}
-      <span className={cn("mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
+      {/*: 图标只当**行的锚**,不染状态色 —— 状态由标题旁那枚徽标说(此前红圈「!」+ 红字「失败」+
+          红字失败原因,同一件事三遍)。 */}
+      <span className="mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle text-muted-foreground">
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
       {/*: 左列分**三层**:① 标题 + 元信息 ② 正文(简介 + 标签)③ 结果(失败原因 / 作品)。
@@ -498,7 +501,12 @@ function PublishCard({
           <div className="flex min-w-0 items-center gap-1 text-ui-sm text-muted-foreground">
             {/*: **只写平台的中文名**,不写 `xiaohongshu` 这种技术 id ——
                 此前是「xiaohongshu · 小红书」,同一个东西写了两遍,而其中一遍是给程序看的。 */}
-            <span className="shrink-0">{platformLabel(task.platform, t)} · {task.account_name}</span>
+            {/*: 账号名常常就叫「小红书」——和平台名一样时只写一次,否则读起来是「小红书 · 小红书」。 */}
+            <span className="shrink-0">
+              {task.account_name && task.account_name !== platformLabel(task.platform, t)
+                ? `${platformLabel(task.platform, t)} · ${task.account_name}`
+                : platformLabel(task.platform, t)}
+            </span>
             {/*: 只有**标题和成片不是同一个名字**时才把成片名再写一遍 —— 没有标题的记录里,
                 标题位置摆的就是成片名,再写一次就是两条边在说同一件事。 */}
             {task.title && <span className="shrink-0">·</span>}
@@ -789,8 +797,8 @@ function CreatePublishDialog({
         </>
       }
     >
-      <div className="grid gap-3 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+      <div className="grid gap-3">
+        <label className={DIALOG_FIELD}>
           <span>{t("publishAccount")}</span>
           <Combobox
             value={accountId ?? ""}
@@ -899,7 +907,7 @@ function CreatePublishDialog({
             <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
           )}
         </div>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className={DIALOG_FIELD}>
           <span>
             {t("publishTitle")}
             <em className={cn(
@@ -912,14 +920,14 @@ function CreatePublishDialog({
           <Input value={title} maxLength={titleMax + 20} onChange={(event) => setTitle(event.target.value)} />
         </label>
         {platformMeta?.short_title && (
-          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+          <label className={DIALOG_FIELD}>
             <span>{t("publishShortTitle")}</span>
             <Input value={shortTitle} maxLength={20} onChange={(event) => setShortTitle(event.target.value)} />
           </label>
         )}
         {/* 图文 / 文章的正文:平台的上限由后端声明(`content_limits.body_max`),这里只计数。 */}
         {needsImages && (
-          <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+          <label className={DIALOG_FIELD}>
             <span>
               {t("publishBody")}
               <small className={bodyTooLong ? "text-destructive" : undefined}>
@@ -931,7 +939,7 @@ function CreatePublishDialog({
           </label>
         )}
         {!needsImages && (
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className={DIALOG_FIELD}>
           <span>{t("publishDescription")}</span>
           <Textarea
             rows={3}
@@ -940,7 +948,7 @@ function CreatePublishDialog({
           />
         </label>
         )}
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className={DIALOG_FIELD}>
           <span>{t("publishTags")}</span>
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />
         </label>

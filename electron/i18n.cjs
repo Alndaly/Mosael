@@ -219,6 +219,10 @@ const MESSAGES = {
     zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
     en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
   },
+  publishErr_submitNoReaction: {
+    zh: "{platform} 点了「发布」但页面没有反应:多半是被风控或校验拦下了。点「查看页面」看看那一页说了什么,或在窗口里手动发布",
+    en: "{platform} did not react to the Publish click — usually a risk check or a validation. Open the page to see what it says, or publish there by hand.",
+  },
   publishErr_verifyRequired: {
     zh: "{platform} 要你先过一下验证(扫码 / 身份验证):窗口已经亮出来,完成之后点任务行的「重试」继续发",
     en: "{platform} wants you to pass a check first (QR code / identity): the window is open — finish it, then hit Retry on the task row.",

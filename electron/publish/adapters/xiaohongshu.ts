@@ -6,7 +6,7 @@ import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { SELECTORS } from "../selectors";
 import { AutomationBlockedError } from "../errors";
-import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
+import { CommitClickError, PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
 
 /**
@@ -500,6 +500,21 @@ export class XiaohongshuAdapter implements PublishAdapter {
     // 四条降级路径互为兜底:发布按钮是 shadow DOM 里的自定义元素,外面 querySelector 不到,
     // 改版时往往是前几条陆续失效、最后落到最脆的按文案点击,而表现只是「偶尔发不出去」——
     // 所以走通的是哪一条必须记下来。这些路径全是派发事件,不依赖坐标,故都算 dom 类。
+    try {
+      await this.commitPublishClick();
+    } catch (error) {
+      //: 「点了但页面毫无反应」是**常见**结果(风控拦下、校验未过、网络卡住)—— 但链上传出来的原话是
+      //: 「xiaohongshu submit: clicked but the page never reacted (tried: deep text 发布, …)」,
+      //: 给用户看就是把内部诊断倒出来(维护者截图指出)。翻成一句人话,细节留在 trace 里。
+      if (error instanceof CommitClickError) {
+        throw publishError("xiaohongshu", "publishErr_submitNoReaction");
+      }
+      throw error;
+    }
+  }
+
+  /** 点「发布」的降级链本身(拆出来只是为了给它包一层人话错误)。 */
+  private async commitPublishClick(): Promise<void> {
     await commitClick({
       what: "xiaohongshu submit",
       attempts: [
