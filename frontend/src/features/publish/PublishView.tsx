@@ -349,7 +349,17 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           那条空带就一直在,看着像「多的底部内间距」。所以这里把那层内边距**换成列表自己的**
           (`-mb-7 xl:-mb-8` 顶到底 + 等量 `pb`):滚动区贴着底边,只有滚到最底才露出那一段间距
           (维护者 2026-10-23:「只有滚动到底部才会出现和底部的间距」)。 */}
-      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden -mb-7 pb-7 xl:-mb-8 xl:pb-8 [&>*]:shrink-0">
+      <div
+        ref={listRef}
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden [&>*]:shrink-0",
+          //: 滚动条要贴在**窗口**右边、滚动区要一直铺到**窗口**底边 —— 页面那圈内边距
+          //: (`px-6 py-7 xl:px-9 xl:py-8`)在这条列表外面,不抵掉它的话滚动条会缩在内容区里、
+          //: 底部还留一条常驻空带。所以用负外边距抵掉、再用等量内边距把内容推回原位:
+          //: 视觉对齐不变,滚动条和内容边界都贴到窗口边。
+          "-mr-6 -mb-7 pr-6 xl:-mr-9 xl:-mb-8 xl:pr-9",
+        )}
+      >
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
