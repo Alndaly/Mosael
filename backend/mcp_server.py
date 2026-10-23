@@ -3331,7 +3331,10 @@ def browser_screenshot(
 @tool(effect="writes")
 def browser_upload(session_id: str, selector: str, asset_id: str, frame: str = "", workspace_id: str = "") -> dict[str, Any]:
     """Put an asset's file into a page's <input type=file> — the key step when uploading a video.
-    frame: the iframe holding the file input, as in browser_click."""
+    frame: the iframe holding the file input, as in browser_click.
+
+    Returns { value: { files, selector }, last_url } — 塞进去几份、用的是哪个选择器、动作停在哪一页。
+    (此前这条只回 `{}`:成功和失败长得一模一样,只能靠再读一次页面去猜。)"""
     return _browser_act(session_id, "upload", {"selector": selector, "asset_id": asset_id, **_in_frame(frame)}, workspace_id)
 
 

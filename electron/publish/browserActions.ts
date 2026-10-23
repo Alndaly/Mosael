@@ -227,7 +227,9 @@ export async function executeBrowserAction(
       const ok = await driver.fileInputAttached(selector, timeout, lookup);
       if (!ok) throw new Error(t("browserErr_fileInputMissing", { selector }));
       await driver.setFiles(selector, path, lookup);
-      return { lastUrl: driver.url() };
+      //: 交回**塞了什么、塞进哪个框**:此前这条动作只 return lastUrl,而执行器只把 `value` 写进结果,
+      //: 于是 upload 在数据库里是 `{}` —— 成功与失败长得一模一样(2026-10-23 维护者让我修这个)。
+      return { value: { files: 1, selector }, lastUrl: driver.url() };
     }
     case "press_key": {
       await driver.pressKey(s(args.key) as "Enter" | "Escape" | "Space" | "Tab");

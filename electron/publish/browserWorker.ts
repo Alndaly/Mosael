@@ -261,6 +261,9 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
         result: {
           ...(outcome.value !== undefined ? { value: outcome.value } : {}),
           ...(saved.length ? { downloads: saved } : {}),
+          //: 动作做完停在哪一页也一起交回去:调用方常需要它(「点完之后跳到哪了」),而此前它在
+          //: 参数里传了、却在结果里丢掉。
+          ...(outcome.lastUrl ? { last_url: outcome.lastUrl } : {}),
         },
         last_url: outcome.lastUrl,
       });

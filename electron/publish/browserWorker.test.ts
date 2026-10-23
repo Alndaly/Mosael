@@ -258,7 +258,7 @@ it("点开了一个下载:不弹保存框,文件交给后端进素材库,素材 
   );
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
     status: "done",
-    result: { downloads: [{ asset_id: "asset-1", name: "report.pdf", bytes: 3 }] },
+    result: expect.objectContaining({ downloads: [{ asset_id: "asset-1", name: "report.pdf", bytes: 3 }] }),
     last_url: "https://example.com/files",
   });
   expect(existsSync(file.file.path)).toBe(false);
@@ -320,7 +320,7 @@ it("「截图」动作截这一页(交给截图那一份实现),结果里带着�
   expect(mocks.capture).toHaveBeenCalledWith({ actionId: "a1", views: mocks.views, sessionId: "s1", args: { mode: "element", selector: "h1" } });
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
     status: "done",
-    result: { value: { asset_id: "shot-1", width: 10, height: 10 } },
+    result: expect.objectContaining({ value: { asset_id: "shot-1", width: 10, height: 10 } }),
     last_url: "https://x.test/",
   });
 });
@@ -335,7 +335,7 @@ it("「切换页面」动作交给页面列表那一份(不走驱动),结果里�
   expect(mocks.page).toHaveBeenCalledWith(mocks.views, "s1", { operation: "switch", by: "index", value: "2" });
   expect(mocks.backend.report).toHaveBeenCalledWith("a1", {
     status: "done",
-    result: { value: { index: 2, title: "第二页", url: "https://x.test/2", count: 2 } },
+    result: expect.objectContaining({ value: { index: 2, title: "第二页", url: "https://x.test/2", count: 2 } }),
     last_url: "https://x.test/2",
   });
 });
