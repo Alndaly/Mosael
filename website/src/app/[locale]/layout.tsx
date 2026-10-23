@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import { Geist, Geist_Mono, Syne } from "next/font/google";
 import { notFound } from "next/navigation";
 
 // 思源黑体(可变字重)。**不能走 next/font/google** —— 它给 Noto Sans SC 只认 latin 子集,
@@ -8,6 +7,9 @@ import { notFound } from "next/navigation";
 // 一个走硬边和重黑体的版面配上宋体,按钮里的两个字立刻像是另一个网站的。
 // fontsource 这份把字体按 unicode-range 切成了上百片,浏览器只取真正用到的那几片。
 import "@fontsource-variable/noto-sans-sc";
+import "@fontsource-variable/syne";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import "../globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
@@ -27,16 +29,8 @@ import { SITE } from "@/lib/site";
  * 中文落到下一顺位,于是同一行里两种字重能对上。全站不用衬线体 —— 宋体的笔锋在大字号的
  * 实色块上会被压扁,也和硬边的调子不搭。
  */
-const syne = Syne({
-  variable: "--font-display-latin",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-});
-const geist = Geist({ variable: "--font-body-latin", subsets: ["latin"] });
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+//: 字体**随包发**(`@fontsource-variable/{syne,geist,geist-mono}`):`next/font/google` 在构建时要去
+//: Google 取文件,CI 没网络就整页构建失败(2026-10-24)。这三行 import 只注册 @font-face。
 
 // GA4 的 Measurement ID 是公开配置，但仍只从部署环境读取：没有配置的构建不会加载
 // Google 脚本，也不会向分析服务发送任何数据。
@@ -128,7 +122,7 @@ export default async function LocaleLayout({
         <meta httpEquiv="Cache-Control" content="no-transform" />
         <meta httpEquiv="Cache-Control" content="no-siteapp" />
       </head>
-      <body className={`${syne.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
+      <body className="antialiased">
         <ThemeProvider>
           {/*
             TanStack Query 的 Provider。**只挂这一处**:`(site)` 与 `(auth)` 两组页面共用

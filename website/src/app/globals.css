@@ -56,10 +56,15 @@
   /* 两套字体,各管一段:
        display —— Syne(拉丁)+ 思源黑 900(汉字),只给大标题
        sans    —— Geist(拉丁)+ 思源黑 400/500(汉字),正文和界面
-     Syne 没有汉字字形,中文自动落到下一顺位,同一行里两种字重正好对得上。 */
-  --font-display: var(--font-body-latin), "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-body-latin), "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+     Syne 没有汉字字形,中文自动落到下一顺位,同一行里两种字重正好对得上。
+
+     **三种字体都随包发**(`@fontsource-variable/*` 与 `geist`),不走 `next/font/google`:
+     后者在构建时要去 fonts.googleapis.com 取字体文件 —— CI 拿不到网络,于是
+     `next build` 直接报 `Module not found: @vercel/turbopack-next/internal/font/google/font`
+     (2026-10-24 CI 就是这么红的)。本地能过、CI 过不去的那种失败最难查。 */
+  --font-display: "Syne Variable", "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist Variable", "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* 走马灯。两段等长内容首尾相接,移动一半的宽度正好接上,循环看不出缝。 */
   --animate-marquee: marquee 38s linear infinite;

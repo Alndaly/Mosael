@@ -1,20 +1,14 @@
-import { Geist, Geist_Mono, Syne } from "next/font/google";
 
 import "@fontsource-variable/noto-sans-sc";
+import "@fontsource-variable/syne";
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
 import "./globals.css";
 import { DEFAULT_LOCALE, HTML_LANG, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 
-const syne = Syne({
-  variable: "--font-display-latin",
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-});
-const geist = Geist({ variable: "--font-body-latin", subsets: ["latin"] });
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+//: 字体**随包发**(`@fontsource-variable/{syne,geist,geist-mono}`):`next/font/google` 在构建时要去
+//: Google 取文件,CI 没网络就整页构建失败(2026-10-24)。这三行 import 只注册 @font-face。
 
 /**
  * 落在所有路由之外的 404 —— `/fr`、`/dosc` 这种。
@@ -30,7 +24,7 @@ export default function RootNotFound() {
   return (
     <div
       lang={HTML_LANG[DEFAULT_LOCALE]}
-      className={`${syne.variable} ${geist.variable} ${geistMono.variable} bg-paper text-foreground antialiased`}
+      className={` bg-paper text-foreground antialiased`}
     >
       <main className="mx-auto flex min-h-svh max-w-[96rem] flex-col items-start justify-center px-5 sm:px-8">
         <p className="m-0 font-mono text-sm font-bold tracking-widest text-flame uppercase">404</p>
