@@ -7,19 +7,33 @@ import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt 
 import { plog } from "../log";
 
 /**
- * **哪种内容形状点哪个 tab** —— 一张表,不写条件分支。
+ * **每种内容形状怎么进到它的创作页** —— 一张「步骤计划」表,不写条件分支。
  *
- * 加一种形状(写长文、发播客)时只在这里加一行,`openCreatorPage` 一个字都不用动;表里没有的形状
- * 就是「还没接」,和 `supports` 说的一致。此前是三元表达式挑文案,读的人得先在心里展开才知道
- * 「图文走哪个」。
+ * 小红书的几种发布方式**不是同一个页面**:视频 / 图文是「发布笔记」页上的两个 tab,而
+ * 「写长文」是另一套(先切 tab,再点「新的创作」,进到标题 + 正文 + 一键排版的编辑器,没有文件上传)。
+ * 所以表里存的不是「一个 tab 文案」,而是**依次要点的那几步**,以及进到之后怎么确认。
+ *
+ * 加一种形状时只在这里加一行:步骤多一步就多写一个文案,别的代码不动。表里没有的形状就是还没接,
+ * 与 `supports` 一致地报出来。
  */
-const XIAOHONGSHU_TAB: Partial<Record<ContentKind, string>> = {
-  video: SELECTORS.xiaohongshu.videoTabText,
-  "image-text": SELECTORS.xiaohongshu.imageTextTabText,
+interface EntryPlan {
+  /** 依次要点的入口文案:第一步是顶部 tab,后面是这一档页面上的按钮。 */
+  steps: readonly string[];
+  /** 进到之后文件 input 的 `accept` 里该有的那一类;空串 = 这一档没有文件上传(长文是写字)。 */
+  accept: string;
+  /** 进到之后这一页该出现的文案(改版会换,只当兜底)。 */
+  hint: string;
+}
+
+const XIAOHONGSHU_ENTRY: Partial<Record<ContentKind, EntryPlan>> = {
+  video: { steps: [SELECTORS.xiaohongshu.videoTabText], accept: "video", hint: "拖拽视频" },
+  "image-text": { steps: [SELECTORS.xiaohongshu.imageTextTabText], accept: "image", hint: "上传图片" },
+  //: 「写长文」还没接(要再点一次「新的创作」,而且编辑器没有文件上传)。接的时候照这个写:
+  //: article: { steps: ["写长文", "新的创作"], accept: "", hint: "输入标题" },
 };
 
 export class XiaohongshuAdapter implements PublishAdapter {
-  //: 图文是这一页的**默认**形态(ADR 0076 第一步);文章(写长文)还没接。
+  //: 已经接的两档:视频、图文。**「写长文」是另一套页面**(见 `XIAOHONGSHU_ENTRY`),还没接。
   readonly supports = ["video", "image-text"] as const;
   private readonly s = SELECTORS.xiaohongshu;
 
@@ -30,45 +44,43 @@ export class XiaohongshuAdapter implements PublishAdapter {
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.publishUrl);
-    //: **按形状显式切 tab**。创作页顶部是「上传视频 / 上传图文 / 写长文 / 发播客」,
-    //: 落进去是哪一档不能假设:实测默认不是图文,图文任务会在视频页上交图片,页面回一句
-    //: 「请先切换到图文 tab」。点不到就明说,别让它在后面以「上传超时」的形式失败。
-    const tabText = XIAOHONGSHU_TAB[this.task.contentKind];
-    if (!tabText) {
-      //: 这张表里没有 = 这一种形状我们还没接(`supports` 也已经声明过了,走到这里是代码不一致)。
+    //: **按形状进到它的创作页**。几种发布方式不是同一个页面(见 `XIAOHONGSHU_ENTRY` 的说明),
+    //: 落进去是哪一档也不能假设:实测默认是视频,图文任务会在视频页上交图片,平台回一句
+    //: 「请先切换到图片tab」(维护者 2026-10-23 真机)。
+    const plan = XIAOHONGSHU_ENTRY[this.task.contentKind];
+    if (!plan) {
+      //: 表里没有 = 这一种形状我们还没接(`supports` 也已经声明过,走到这里是代码不一致)。
       throw publishError("xiaohongshu", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     }
-    //: **等到 tab 那一排画出来再点**:`goto` 回来时 SPA 可能还没渲染,点了等于没点(也不报错)。
-    await this.driver.cssAttached(this.s.fileInput, UPLOAD_TIMEOUT);
-    const ready = () => this.onExpectedTab();
-    if (await ready()) return;
-    //: 点两次:先按「文案完全相等」,没切过去再按「包含」—— tab 上可能带「新」角标之类附加字。
-    for (const exact of [true, false]) {
-      await clickTextPreferTrusted(this.driver, tabText, {
-        exact,
-        selector: "button, [role=button], a, div, span, li",
-      }).catch(() => undefined);
-      const switched = await this.driver.waitForFunction(this.onExpectedTabExpression(), 5_000, 300);
-      if (switched) return;
+    //: **等到页面画出东西再点**:`goto` 回来时 SPA 可能还没渲染,点了等于没点(也不报错)。
+    await this.driver.cssAttached(this.s.fileInput, UPLOAD_TIMEOUT).catch(() => undefined);
+    if (await this.onPlannedPage(plan)) return;
+    for (const stepText of plan.steps) {
+      //: 每一步最多点两次:先按「文案完全相等」,没进到再按「包含」—— 入口上可能带「新」角标之类。
+      //: 两种都没到目标页就继续下一步(这一档可能是多步的,比如长文要先落地再点「新的创作」)。
+      for (const exact of [true, false]) {
+        await clickTextPreferTrusted(this.driver, stepText, {
+          exact,
+          selector: "button, [role=button], a, div, span, li",
+        }).catch(() => undefined);
+        if (await this.waitForPlannedPage(plan)) return;
+      }
     }
-    throw publishError("xiaohongshu", "publishErr_tabMissing", { tab: tabText });
+    throw publishError("xiaohongshu", "publishErr_tabMissing", { tab: plan.steps[0] });
   }
 
   /**
-   * 现在这一页是不是**这一种形状**的那一档?两条判据任一成立即可:
+   * 现在这一页是不是**这一种形状的目标页**?两条判据任一成立即可:
    *
    * - 文件 input 的 `accept` 里有这一档要的那一类(`video` / `image`)—— 页面自己的契约,最稳;
-   * - 或者这一档的拖拽区文案出现了(改版会换文案,所以只当补充)。
+   * - 或者这一档页面上该出现的文案出现了(改版会换文案,所以只当兜底)。
    *
-   * **不能用「文件 input 在不在」**:两个 tab 都有 input,那会让图文任务停在视频页上交图片,
-   * 平台再回一句「请先切换到图片tab」。
+   * **不能用「文件 input 在不在」**:视频页也有 input,那会让图文任务停在视频页上交图片。
    */
-  private onExpectedTabExpression(): string {
-    const accept = this.s.acceptByKind[this.task.contentKind] ?? "";
-    const hint = this.s.dropHintByKind[this.task.contentKind] ?? "";
+  private plannedPageExpression(plan: EntryPlan): string {
     return `(() => {
-      const accept = ${JSON.stringify(accept)};
-      const hint = ${JSON.stringify(hint)};
+      const accept = ${JSON.stringify(plan.accept)};
+      const hint = ${JSON.stringify(plan.hint)};
       const accepts = [...document.querySelectorAll('input[type="file"]')]
         .map((one) => (one.getAttribute('accept') || '').toLowerCase())
         .join(',');
@@ -78,13 +90,16 @@ export class XiaohongshuAdapter implements PublishAdapter {
     })()`;
   }
 
-  /** 一次同步判断(用于「已经在这一档上了就别点」)。 */
-  private async onExpectedTab(): Promise<boolean> {
+  private async onPlannedPage(plan: EntryPlan): Promise<boolean> {
     try {
-      return Boolean(await this.driver.evaluate<boolean>(this.onExpectedTabExpression()));
+      return Boolean(await this.driver.evaluate<boolean>(this.plannedPageExpression(plan)));
     } catch {
       return false;
     }
+  }
+
+  private async waitForPlannedPage(plan: EntryPlan): Promise<boolean> {
+    return this.driver.waitForFunction(this.plannedPageExpression(plan), 5_000, 300);
   }
 
   async checkLogin(): Promise<boolean> {
