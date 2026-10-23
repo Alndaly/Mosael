@@ -1275,11 +1275,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options": ["video", "image-text", "article"],
                 "description": "wfNode_publish_content_kind",
             },
-            #: ③ 素材:视频一份成片,图文 / 文章一组图片(和工作流别的图片格子同一个控件)。
+            #: ③ 素材:视频一份成片,图文 / 文章一组图片。
+            #: 视频这一格和**发布页的「成片素材」是同一个控件**(按钮点开挑素材的弹窗),
+            #: 不是一个把素材都塞进去的长下拉 —— 工作区素材一多,下拉里翻半天还容易点错。
             "asset_id": {
                 "type": "template",
                 "required": True,
                 "media": ["video"],
+                "editor": "asset_picker",
                 "active_when": {"content_kind": "video"},
                 "description": "wfNode_publish_asset_id",
             },

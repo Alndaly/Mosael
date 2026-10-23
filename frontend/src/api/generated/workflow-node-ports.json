@@ -3506,6 +3506,7 @@
       },
       "asset_id": {
         "type": "template",
+        "editor": "asset_picker",
         "media": [
           "video"
         ],

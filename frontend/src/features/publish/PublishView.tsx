@@ -26,7 +26,7 @@ import type { MessageKey } from "@/app/messages";
 import { DIALOG_FIELD } from "@/components/app/modals";
 import { platformLabel } from "@/lib/platformLabel";
 import { AssetGridField } from "@/features/nodeForms/AssetGridField";
-import { AssetPickerField } from "@/features/publish/AssetPickerField";
+import { AssetPickerField } from "@/components/app/AssetPickerField";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { useAssetSearch } from "@/lib/assetQueries";

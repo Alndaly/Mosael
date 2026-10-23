@@ -9,6 +9,7 @@ import { CodeEditor } from "@/components/app/code-editor";
 import { AssetGridField, assetGridMax, assetGridRoles, type AssetGridModel, type AutoImageRef } from "@/features/nodeForms/AssetGridField";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { PublishOptionsField } from "@/features/nodeForms/PublishOptionsField";
+import { AssetPickerField } from "@/components/app/AssetPickerField";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Input } from "@/components/ui/input";
@@ -338,6 +339,12 @@ export interface FieldBinding {
   renderBound: (key: string) => React.ReactNode;
 }
 
+/** 素材 id → 名字(取自同一份下拉清单);认不出就显示 id 本身。 */
+function labelOfAsset(assetId: string, options: DynamicOption[] | null): string {
+  if (!assetId) return "";
+  return options?.find((one) => one.value === assetId)?.label ?? assetId;
+}
+
 export function NodeConfigForm({
   fields,
   config,
@@ -561,6 +568,16 @@ export function NodeConfigForm({
                 // 一行一条 `素材id:角色`,由声明决定(见上面那个 assetGridField);接上游(`{{上游}}`)的那
                 // 一半由外面裹的绑定钮管,一行一项的格子还多一条「再加一份」的手填入口。
                 assetGridField(key, spec, value, insertable)
+              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "asset_picker" ? (
+                // 一份成片:**和发布页「成片素材」同一个控件** —— 一颗按钮点开挑素材的弹窗。
+                // 由后端的字段声明点名(editor: "asset_picker"),这里不认节点类型。
+                <AssetPickerField
+                  workspaceId={workspaceId}
+                  value={String(value ?? "")}
+                  label={labelOfAsset(String(value ?? ""), options)}
+                  placeholder={t("publishPickAsset")}
+                  onChange={(assetId) => setConfig(key, assetId)}
+                />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "publish_options" ? (
                 // 发布节点的**平台选项**:跟着同一节点上选的账号走(由后端的字段声明点名,不在这里认节点类型)。
                 <PublishOptionsField
