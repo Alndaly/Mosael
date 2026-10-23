@@ -711,12 +711,42 @@ export class XiaohongshuAdapter implements PublishAdapter {
     //: 里面却是「上传视频」那个创作页)。
     const donePattern = this.s.publishDoneTexts.join("|");
     const doneUrls = this.s.publishDoneUrls.map((one) => one.source);
+    //: **成功提示也会出现在 shadow DOM 里**(小红书这页的自定义元素不少)。只看 `body.innerText`
+    //: 会漏掉它 —— 真机就是这样:「发布成功」摆在屏幕中间(维护者截图),我们却一个字都没读到,
+    //: 于是转头去判「回到创作页」= 失败。这段把 shadow root 里的字一起收。
+    const deepText = `(() => {
+      const seen = new Set();
+      const visible = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      };
+      const walk = (root) => {
+        if (!root || seen.has(root)) return '';
+        seen.add(root);
+        let text = root instanceof Document ? (root.body?.innerText || '') : '';
+        for (const el of root.querySelectorAll ? root.querySelectorAll('*') : []) {
+          if (el.shadowRoot) text += '\\n' + walk(el.shadowRoot);
+          else if (!(root instanceof Document) && visible(el)) text += '\\n' + (el.innerText || el.textContent || '');
+        }
+        return text;
+      };
+      return walk(document);
+    })()`;
+    //: 立刻看一次成功证据(宽限期里每 600ms 调一次,由外层循环控制节奏)。
+    const successVisible = () =>
+      this.driver
+        .evaluate<boolean>(`(() => {
+          const text = ${deepText};
+          if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
+          return ${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(location.href));
+        })()`)
+        .catch(() => false);
     const deadline = Date.now() + RESULT_TIMEOUT;
     await wait(1_000);
     while (Date.now() < deadline) {
       const state = await this.driver
         .evaluate<{ done: boolean; backToEditor: boolean; url: string }>(`(() => {
-          const text = document.body?.innerText || '';
+          const text = ${deepText};
           if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return { done: true, backToEditor: false, url: location.href };
           const url = location.href;
           if (${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(url))) {
@@ -738,14 +768,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
         let succeeded = false;
         while (Date.now() < graceDeadline) {
           await wait(600);
-          const evidence = await this.driver
-            .evaluate<boolean>(`(() => {
-              const text = document.body?.innerText || '';
-              if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
-              const url = location.href;
-              return ${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(url));
-            })()`)
-            .catch(() => false);
+          const evidence = await successVisible();
           if (evidence) {
             succeeded = true;
             break;
