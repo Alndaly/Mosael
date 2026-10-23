@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -489,14 +490,13 @@ def synthesize_speech_preflight(db: Session, config: dict[str, Any], actor: str 
 @register("publish")
 def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.db.models import Asset, PublishAccount
-    from app.domain.publish import start_publish
+    from app.domain.publish import option_specs, start_publish
 
     account = db.get(PublishAccount, str(config.get("account_id", "")))
     if account is None or account.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_publishAccountMissing")
-    #: **内容形状**(ADR 0076):视频发一份成片,图文 / 文章发一组图片 + 正文。
-    #: 两种形状的素材字段不同(asset_id / asset_ids),按形状取那一格;平台是否认它由
-    #: `start_publish` 校验(发不了的形状当场拒,不会白跑一趟)。
+    #: **内容形状**(ADR 0076):视频发一份成片 + 简介,图文 / 文章发一组图片 + 正文。
+    #: 两种形状的素材字段不同(asset_id / asset_ids),文案字段也不同(description / body)。
     kind = str(config.get("content_kind") or "video")
     asset: Asset | None = None
     assets: list[Asset] = []
@@ -513,10 +513,25 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
             if one is None or one.workspace_id != scope.workspace_id:
                 raise WorkflowDomainError("wfErr_publishAssetMissing")
             assets.append(one)
-    # 用的是**这次运行**的授权:操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,
-    # 见 scheduler.operations._open_run),加上被执行那一版图的担保人(见 workflows.authority)。
-    # 别人的私有账号、同事改过而主人没认可的那一版,都在 start_publish 里被拒。
+
+    #: 用的是**这次运行**的授权:操作人(手动运行是点运行的人,定时任务 / webhook 是任务主人,
+    #: 见 scheduler.operations._open_run),加上被执行那一版图的担保人(见 workflows.authority)。
+    #: 别人的私有账号、同事改过而主人没认可的那一版,都在 start_publish 里被拒。
     from app.domain.workflows.authority import current_authority
+
+    #: 平台选项:节点上存的是「这个平台认得的那几个键」的一个对象。**只交平台声明过的键** ——
+    #: `normalize_options` 对不认识的键是报错而不是忽略(静默丢掉等于用户以为设了、其实没设),
+    #: 而节点的配置是静态的、账号是运行时选的,所以在这里按平台筛一遍。
+    allowed = {spec["key"] for spec in option_specs(account.platform)}
+    raw_options = config.get("options")
+    options = (
+        {key: value for key, value in raw_options.items() if key in allowed}
+        if isinstance(raw_options, dict)
+        else {}
+    )
+    #: 标签:和发布页那一栏同一种写法(逗号 / 换行分隔),去掉用户顺手打的 `#`。
+    raw_tags = str(config.get("tags") or "")
+    tags = [one.strip().lstrip("#") for one in re.split(r"[,，\n]", raw_tags) if one.strip().lstrip("#")]
 
     description = str(config.get("description", ""))
     task = start_publish(
@@ -525,19 +540,18 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
         account=account,
         asset=asset,
         title=str(config.get("title", "")),
-        #: 图文 / 文章的正文就是上面那一格(节点上叫「说明」);视频那一档它仍是简介。
-        description="" if kind != "video" else description,
+        description=description if kind == "video" else "",
         actor=current_authority(db),
-        tags=[],
+        tags=tags,
+        options=options,
         kind=kind,
         assets=assets or None,
-        body=description if kind != "video" else "",
+        body=str(config.get("body", "")) if kind != "video" else "",
     )
     final = wait_for_job(task.job_id or "", release=db)
     result = final.result or {}
     post = result.get("post") if isinstance(result.get("post"), dict) else {}
     return {"post_id": str(post.get("post_id") or ""), "post_url": str(post.get("url") or ""), "result": result}
-
 
 
 @register("edit_timeline")

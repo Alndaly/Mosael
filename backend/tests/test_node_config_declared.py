@@ -358,7 +358,10 @@ def test_名字到值的映射不该让用户手写_JSON() -> None:
                 continue
             editor = config_editor(key, meta)
             #: start_params 也是一行一对(名字 → 默认值),多一个「必填」开关 —— 开始节点的启动参数。
-            assert editor in {"map", "json", "start_params"}, f"{name}.{key} 没说清用哪种编辑器"
+            #: publish_options 同样不是手写 JSON:它按**所选账号的平台**把发布页那一排控件
+            #: (原创声明 / 谁能看 …)画出来,值才存成对象。新加一种编辑器就往这个集合里加一个,
+            #: 加了才说明"这一格有自己的控件",而不是让用户对着 `{}` 背键名。
+            assert editor in {"map", "json", "start_params", "publish_options"}, f"{name}.{key} 没说清用哪种编辑器"
 
 
 def test_只有真正自由结构的才留原始_JSON() -> None:

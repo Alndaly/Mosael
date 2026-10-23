@@ -80,9 +80,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "要发布的图片(可多张,顺序就是发出去的顺序)—— 必须已经下载到本地",
         "en": "Images to publish (several allowed; the order is the order they are posted) — they must already be downloaded locally",
     },
-    "wfNode_publish_description": {
-        "zh": "视频填「简介」、图文 / 文章填「正文」",
-        "en": "Caption for a video, body text for image-text / article",
+    "wfNode_publish_caption": {
+        "zh": "简介(视频那一档)",
+        "en": "Caption (video)",
+    },
+    "wfNode_publish_body_label": {"zh": "正文", "en": "Body"},
+    "wfNode_publish_options_label": {"zh": "平台选项", "en": "Platform options"},
+    "wfNode_publish_body": {
+        "zh": "正文(图文 / 文章那一档)",
+        "en": "Body text (image-text / article)",
+    },
+    "wfNode_publish_tags": {
+        "zh": "标签,逗号分隔(如:海边, 旅行)",
+        "en": "Tags, comma separated (e.g. seaside, travel)",
+    },
+    "wfNode_publish_options": {
+        "zh": "平台选项(原创声明 / 谁能看 …)—— 跟随所选账号的平台",
+        "en": "Platform options (originality, who can see it, …) — these follow the chosen account's platform",
     },
     "wfNode_publish_title": {"zh": "各平台的长度上限不同,超了会被平台拒掉", "en": "Length limits differ per platform; going over gets rejected by the platform"},
     "wfNode_condition": {"zh": "条件分支", "en": "Condition"},

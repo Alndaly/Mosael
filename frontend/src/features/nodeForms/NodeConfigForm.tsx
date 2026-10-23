@@ -8,6 +8,7 @@ import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
 import { AssetGridField, assetGridMax, assetGridRoles, type AssetGridModel, type AutoImageRef } from "@/features/nodeForms/AssetGridField";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
+import { PublishOptionsField } from "@/features/nodeForms/PublishOptionsField";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Input } from "@/components/ui/input";
@@ -560,6 +561,14 @@ export function NodeConfigForm({
                 // 一行一条 `素材id:角色`,由声明决定(见上面那个 assetGridField);接上游(`{{上游}}`)的那
                 // 一半由外面裹的绑定钮管,一行一项的格子还多一条「再加一份」的手填入口。
                 assetGridField(key, spec, value, insertable)
+              ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "publish_options" ? (
+                // 发布节点的**平台选项**:跟着同一节点上选的账号走(由后端的字段声明点名,不在这里认节点类型)。
+                <PublishOptionsField
+                  workspaceId={workspaceId}
+                  accountId={String(config.account_id ?? "")}
+                  value={value}
+                  onChange={(next) => setConfig(key, next)}
+                />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
                 // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />

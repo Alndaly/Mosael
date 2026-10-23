@@ -99,7 +99,8 @@ _RAW_JSON_FIELDS = {"json_schema"}
 
 
 def config_editor(key: str, spec: dict[str, Any]) -> str:
-    """这个字段用哪种编辑器:map(一行一对)/ json(原始 JSON)/ 某个专用控件 / 空(按类型走)。
+    """这个字段用哪种编辑器:map(一行一对)/ json(原始 JSON)/ 某个专用控件(`asset_grid`、
+    `publish_options` …)/ 空(按类型走)。
 
     **声明写了就听声明,不管是什么类型** —— 有些字段的值形状很普通(一串逗号分隔的 id),
     但挑它的过程不普通(要列出这个工作区里的 3D 模型、能多选)。此前这里只认 object,于是
@@ -1253,25 +1254,35 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_publish",
         "label": "wfNode_publish",
         "description": "wfNode_publish_desc",
+        #: **字段与发布页那张表单一一对应**(维护者 2026-10-23:「实际填写应该和发布页面的表单类似」)。
+        #:
+        #: 顺序就是人做决定的顺序:发到哪 → 发什么形状 → 交什么素材 → 写什么 → 谁能看。
+        #: 内容形状切换时,素材与文案那两格跟着换(`active_when`):视频是一份成片 + 简介,
+        #: 图文 / 文章是一组图片 + 正文 —— 和发布页完全一致,不在这里发明第三套语义。
         "config": {
-            "account_id": {"type": "string", "required": True, "description": "wfNode_publish_account_id", "options_from": "publish_accounts"},
-            #: **内容形状**(ADR 0076):视频一份素材,图文一组图片 + 正文。平台认哪几种由后端声明,
-            #: 这里给全集,运行前由 `start_publish` 按平台校验(发不了的形状会当场拒,不会白跑一趟)。
+            #: ① 发布目标
+            "account_id": {
+                "type": "string",
+                "required": True,
+                "options_from": "publish_accounts",
+                "description": "wfNode_publish_account_id",
+            },
+            #: ② 内容类型。平台认哪几种由后端声明(`implemented_kinds`),这里给全集,
+            #: 运行前由 `start_publish` 按平台校验 —— 发不了的形状当场拒,不会白跑一趟。
             "content_kind": {
                 "type": "string",
                 "default": "video",
                 "options": ["video", "image-text", "article"],
                 "description": "wfNode_publish_content_kind",
             },
-            #: 视频那一档:一份素材。和 `asset_ids` 按形状互斥(见各自的 active_when)。
+            #: ③ 素材:视频一份成片,图文 / 文章一组图片(和工作流别的图片格子同一个控件)。
             "asset_id": {
                 "type": "template",
                 "required": True,
+                "media": ["video"],
                 "active_when": {"content_kind": "video"},
                 "description": "wfNode_publish_asset_id",
             },
-            #: 图文 / 文章那一档:一组图片(`editor: asset_grid`,和工作流别的图片格子同一个控件),
-            #: 值仍是逗号分隔的素材 id 串,顺序就是发给平台的顺序。
             "asset_ids": {
                 "type": "template",
                 "required": True,
@@ -1280,9 +1291,33 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "active_when": {"content_kind": ["image-text", "article"]},
                 "description": "wfNode_publish_asset_ids",
             },
+            #: ④ 文案:标题两边都有;视频写「简介」,图文 / 文章写「正文」。
             "title": {"type": "template", "description": "wfNode_publish_title"},
-            #: 视频那一档是「简介」;图文 / 文章那一档是**正文**——同一个字段,称呼跟着形状走。
-            "description": {"type": "template", "description": "wfNode_publish_description"},
+            "description": {
+                "type": "template",
+                "active_when": {"content_kind": "video"},
+                "description": "wfNode_publish_caption",
+            },
+            "body": {
+                "type": "template",
+                #: `body` 在共用名字表里是循环体那一格(「子图」),这里说的是**正文** ——
+                #: 同一个键两种意思时必须自己写 label(见 test_共用表的名字只给同一个意思的字段)。
+                "label": "wfNode_publish_body_label",
+                "active_when": {"content_kind": ["image-text", "article"]},
+                "description": "wfNode_publish_body",
+            },
+            #: ⑤ 标签:和发布页那一栏同一种写法(逗号分隔),运行时按平台规则加 `#`。
+            "tags": {"type": "template", "description": "wfNode_publish_tags"},
+            #: ⑥ 平台选项(**跟着账号走**):发布页那一排「原创声明 / 可见性 / …」是后端按平台声明的,
+            #: 这里用专用控件按所选账号的平台把同一批控件画出来,值按原样存成一个对象。
+            "options": {
+                #: 这一格**不是**「名字 → 值」的映射(那种走 map 编辑器),而是按所选账号的平台把
+                #: 发布页那一排控件画出来 —— 值仍是一个对象,只是编辑方式由平台声明决定。
+                "type": "object",
+                "label": "wfNode_publish_options_label",
+                "editor": "publish_options",
+                "description": "wfNode_publish_options",
+            },
         },
         # post_id / post_url:发出去的那条作品在平台上的 ID 与链接(见 domain/publish/post.py),
         # 下游拿它去查这条作品的数据。平台接口没读到时是空串。
