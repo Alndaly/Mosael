@@ -36,23 +36,24 @@ interface EntryPlan {
 }
 
 const XIAOHONGSHU_ENTRY: Partial<Record<ContentKind, EntryPlan>> = {
+  //: 页面上的中文只说一遍:全部取自 `selectors`(它是**匹配平台真实页面**的词表,专门豁免翻译)。
+  //: 适配器里再写一遍,就会多出一份「界面文字」——`uiTextIsTranslated` 那道棘轮正是这么红的。
   video: {
     steps: [SELECTORS.xiaohongshu.videoTabText],
-    activeTab: "上传视频",
+    activeTab: SELECTORS.xiaohongshu.videoTabText,
     acceptExtensions: [".mp4", ".mov"],
-    //: 视频是默认档:刚进这一页时地址里没有 target 参数,所以这里不看地址。
     urlContains: "",
-    hint: "拖拽视频",
+    hint: SELECTORS.xiaohongshu.dropHintByKind.video,
   },
   "image-text": {
     steps: [SELECTORS.xiaohongshu.imageTextTabText],
-    activeTab: "上传图文",
+    activeTab: SELECTORS.xiaohongshu.imageTextTabText,
     acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"],
     urlContains: "target=image",
-    hint: "上传图片",
+    hint: SELECTORS.xiaohongshu.dropHintByKind["image-text"],
   },
   //: 「写长文」还没接(要再点一次「新的创作」,而且编辑器没有文件上传)。接的时候照这个写:
-  //: article: { steps: ["写长文", "新的创作"], activeTab: "写长文", acceptExtensions: [], urlContains: "target=article", hint: "输入标题" },
+  //: article: { steps: [写长文 tab, 新的创作], activeTab: 写长文 tab, acceptExtensions: [], urlContains: "target=article", hint: ... },
 };
 
 export class XiaohongshuAdapter implements PublishAdapter {
