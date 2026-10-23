@@ -344,10 +344,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
       {/* 每天一张**圆角白卡**(维护者给的图):日期栏头在卡外,记录落在卡里;卡片内的分割线内缩。 */}
-      {/*: 底部多留一截空白:最后一张卡的下沿贴着滚动容器底边,看着像被裁掉一半;而且外层
-          STUDIO_PAGE 自己还有一份页脚内边距(下一节才到底),这里再叠一层会显得「内容被切断」。
-          所以列表末尾补 pb-12(48px,和页脚内边距同一档)。 */}
-      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden pb-12 [&>*]:shrink-0">
+      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden pb-5 [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
