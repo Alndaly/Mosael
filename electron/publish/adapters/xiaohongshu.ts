@@ -186,6 +186,8 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (!publishReady) {
       throw publishError("xiaohongshu", "publishErr_uploadTimeout");
     }
+    //: 上传成功会弹「图片可以编辑啦」——它盖在中间,后面填字/点发布都会被它挡一下。
+    await this.dismissHints();
   }
 
   /** 正文:图文用编辑器,和话题填的是同一个 contenteditable。 */
@@ -198,14 +200,37 @@ export class XiaohongshuAdapter implements PublishAdapter {
       await this.driver.insertText(this.s.contentEditor, value);
     });
     const accepted = await this.driver.waitForFunction(
-      `(() => (document.querySelector(${JSON.stringify(
-        this.s.contentEditor,
-      )})?.innerText || '').includes(${JSON.stringify(value)}))()`,
+      this.acceptsTextExpression(this.s.contentEditor, value),
       3_000,
       200,
     );
     if (!accepted) {
       throw publishError("xiaohongshu", "publishErr_descriptionRejected");
+    }
+  }
+
+  /**
+   * 「这段文字进去了吗」的表达式 —— **空白不敏感**。
+   *
+   * 小红书的正文是富文本:原样打进去的 `1. …` 会被它变成有序列表,`innerText` 于是多了换行;
+   * 直接 `includes(原文)` 就永远不成立(真机:文字明明在编辑器里、字数也涨了,却被判"没有接受")。
+   * 两边都把空白去掉再比,才是「这些字进去了吗」。
+   */
+  private acceptsTextExpression(selector: string, value: string): string {
+    return `(() => {
+      const squash = (text) => String(text || '').replace(/\s+/g, '');
+      const shown = squash(document.querySelector(${JSON.stringify(selector)})?.innerText);
+      return shown.includes(squash(${JSON.stringify(value)}));
+    })()`;
+  }
+
+  /** 上传后那种「图片可以编辑啦」的提示框会挡住「发布」:能点掉就点掉,点不到也不算错。 */
+  private async dismissHints(): Promise<void> {
+    for (const text of this.s.dismissibleHints) {
+      await clickTextPreferTrusted(this.driver, text, {
+        exact: true,
+        selector: "button, [role=button], a, div, span",
+      }).catch(() => undefined);
     }
   }
 
@@ -239,9 +264,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
       });
       await this.driver.insertText(this.s.contentEditor, " ");
       const accepted = await this.driver.waitForFunction(
-        `(() => (document.querySelector(${JSON.stringify(
-          this.s.contentEditor,
-        )})?.innerText || '').includes(${JSON.stringify(description)}))()`,
+        this.acceptsTextExpression(this.s.contentEditor, description),
         3_000,
         200,
       );
@@ -375,6 +398,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
+    await this.dismissHints();
     await this.applyOriginal();
     await this.applyVisibility();
     const ready =

@@ -61,6 +61,8 @@ export const SELECTORS = {
     //: 真机读到的 accept 是**扩展名清单**(`.mp4,.mov,.flv…` / 图片那档同理),不含 `video/` 或
     //: `image/`,所以不能拿它当判据。真正可靠的信号是**当前选中的是哪个 tab**:`.creator-tab.active`。
     activeTab: ".creator-tab.active",
+    //: 上传后弹的那种「图片可以编辑啦,快来试试吧」提示框:挡在页面中间,不点掉会挡住「发布」。
+    dismissibleHints: ["我知道了"], // i18n-ok
     fileInput: 'input[type="file"]',
     titleInput:
       'input[placeholder*="填写标题"], input[placeholder*="请输入标题"], input[placeholder*="标题"], textarea[placeholder*="标题"]', // i18n-ok
