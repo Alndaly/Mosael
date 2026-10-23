@@ -483,6 +483,34 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (current !== wanted) {
       await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
       await wait(400);
+      //: 勾上之后平台会弹「笔记完成原创声明后,将获得以下权益」——**必须点「声明原创」确认**,
+      //: 否则这个弹窗一直盖着页面,后面打开可见性下拉时选项点不到,任务就停在
+      //: 「可见范围没能设成 private」(真机 2026-10-23 反复失败的就是这一条)。
+      const modalUp = await this.driver.waitForFunction(
+        `(() => (document.body?.innerText || '').includes(${JSON.stringify(this.s.originalModalText)}))()`,
+        2_500,
+        200,
+      );
+      if (modalUp) {
+        //: **先勾同意框**,否则「声明原创」是禁用的(真机实测 `d-button-default disabled`)。
+        //: 不勾就点,按钮不吃、弹窗不关 —— 后面打开可见性下拉时选项被它挡着,任务停在
+        //: 「可见范围没能设成 private」。这条链子 2026-10-23 查了两轮才理清。
+        await this.driver.clickCss(this.s.originalConsentBox).catch(() => undefined);
+        await wait(300);
+        const confirmed = await clickTextPreferTrusted(this.driver, this.s.originalConfirmText, {
+          exact: true,
+          selector: "button, [role=button], div, span",
+        })
+          .then(() => true)
+          .catch(() => false);
+        await wait(600);
+        const stillUp = await this.driver.hasText(this.s.originalModalText).catch(() => false);
+        plog("xiaohongshu original modal:", confirmed ? "confirmed" : "click failed", stillUp ? "(still open)" : "(closed)");
+        if (stillUp) {
+          await plogPageState("Xiaohongshu original modal did not close:", this.driver);
+          throw publishError("xiaohongshu", "publishErr_originalStuck", { after: true, wanted });
+        }
+      }
     }
     const after = await this.driver
       .evaluate<boolean | null>(`(() => { const i = document.querySelector(${sel}); return i ? i.checked : null; })()`)
@@ -505,6 +533,16 @@ export class XiaohongshuAdapter implements PublishAdapter {
   private async applyVisibility(): Promise<void> {
     const visibility = enumOption(this.task, "visibility", "private", ["private", "friends", "public"] as const);
     const wanted = this.s.visibilityTexts[visibility];
+    //: 开下拉之前先把挡路的弹窗清掉(原创权益说明 / 「图片可以编辑啦」)——它们都盖在页面上,
+    //: 一盖住,下拉里的选项就点不到。
+    if (await this.driver.hasText(this.s.originalModalText).catch(() => false)) {
+      await clickTextPreferTrusted(this.driver, this.s.originalConfirmText, {
+        exact: true,
+        selector: "button, [role=button], div, span",
+      }).catch(() => undefined);
+      await wait(500);
+    }
+    await this.dismissHints();
     await this.driver
       .evaluate(`(() => {
         const w = document.querySelector(${JSON.stringify(this.s.visibilityTrigger)});

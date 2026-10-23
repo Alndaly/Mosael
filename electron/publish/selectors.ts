@@ -110,6 +110,14 @@ export const SELECTORS = {
     submitHost: "xhs-publish-btn",
     // 「原创声明」:实测是 .original-wrapper 里的 input[type=checkbox],默认不勾。
     originalSwitch: ".original-wrapper input[type=checkbox]",
+    //: 勾「原创声明」会**弹出权益说明弹窗**(真机 2026-10-23):「笔记完成原创声明后,将获得以下权益」
+    //: + 一颗「声明原创」确认钮。不点掉它,后面打开可见性下拉时选项被它挡着 —— 于是「可见范围
+    //: 没能设成 private」,整条发布中止。这是这次失败的真正原因。
+    originalModalText: "笔记完成原创声明后", // i18n-ok
+    originalConfirmText: "声明原创", // i18n-ok
+    //: 弹窗里还有一枚**必须勾上**的同意框(「我已阅读并同意《原创声明须知》」)——不勾,
+    //: 「声明原创」是禁用的(真机 2026-10-23 实测:`d-button-default disabled`)。
+    originalConsentBox: ".d-modal-mask input[type=checkbox]",
     // 可见性(实测):`.permission-card-select` 是小红书自己的 d-select,**合成事件和可信点击都打不开它**,
     // 只有「聚焦 + 回车」能展开(那个 wrapper 带 tabindex="1")。展开后三档渲染成 .group-info .name。
     visibilityTrigger: ".permission-card-select",
