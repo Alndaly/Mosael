@@ -468,6 +468,19 @@ function clickMosaelWindow(request, windows, roles, cursor = null) {
  * 在 `request.window` 指定的 Mosael 窗口里滚动:Chromium 的滚轮事件需要一个位置,不给就用窗口正中。
  * 只在这个窗口里生效(L1,ADR 0075),不碰桌面和别的 App。
  */
+/**
+ * 同步小睡(毫秒)。滚轮事件之间要隔二十来毫秒,而这些事件是**同步**发的(`sendInputEvent` 不是
+ * Promise),这段代码跑在主进程里,用不了 `await` —— 又不能让主进程真的忙等把 UI 卡住,所以用
+ * `Atomics.wait` 让这一个线程睡过去(事件循环之外,不占 CPU)。
+ */
+function spinWait(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    /* 环境不支持就干脆不等 —— 少一次抖动,比卡住强 */
+  }
+}
+
 function scrollMosaelWindow(request, windows, roles, cursor = null) {
   const name = String(request.window || "main");
   const win = chooseComputerWindow(name, windows, roles);
@@ -490,7 +503,18 @@ function scrollMosaelWindow(request, windows, roles, cursor = null) {
   const x = request.x === null ? Math.round(size[0] / 2) : Math.round(request.x);
   const y = request.y === null ? Math.round(size[1] / 2) : Math.round(request.y);
   //: 一格滚轮 ≈ 100 像素(约 3 行)。直接发 deltaY = -dy 的话「滚 3 格」只走 3 像素,人看着就是没动。
-  contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: -request.dy * 100, canScroll: true });
+  //:
+  //: **分成若干格来滚,不再一次到底**(维护者 2026-10-23:「滚动似乎是一瞬间到底的,应该有个实际
+  //: 的滚动过程」)。人滚滚轮是一格一格来的:这里按 100 像素一格切成 4–8 格,格间 16–40ms 抖动,
+  //: 总时长跟着距离走(最多约 400ms)。页面自己也靠这一串事件做惯性滚动与懒加载 —— 一次到底时
+  //: 那些都来不及发生,看起来就是"跳"过去的。
+  const steps = Math.min(8, Math.max(4, Math.abs(request.dy)));
+  const perStep = (-request.dy * 100) / steps;
+  for (let index = 0; index < steps; index += 1) {
+    contents.sendInputEvent({ type: "mouseWheel", x, y, deltaY: perStep, canScroll: true });
+    //: 最后一格之后不等:调用方马上要读页面,多等这一下只是白慢。
+    if (index < steps - 1) spinWait(16 + Math.round(Math.random() * 24));
+  }
   showComputerUseCursor(win, x, y, request.dy > 0 ? "scroll-down" : "scroll-up", cursor);
   return { window: name, dy: request.dy, x, y };
 }

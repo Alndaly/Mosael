@@ -79,7 +79,7 @@ function loadActions() {
     ) => FakeWindow | null,
   };
   vm.runInNewContext(
-    `${windowNamesSource()}\n${sourceOf("chooseComputerWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
+    `${windowNamesSource()}\n${sourceOf("spinWait")}\n${sourceOf("chooseComputerWindow")}\n${sourceOf("clickMosaelWindow")}\n${sourceOf("scrollMosaelWindow")}\n${sourceOf("typeIntoMosaelWindow")}\n${sourceOf("showComputerUseCursor")}\n` +
       "this.chooseComputerWindow = chooseComputerWindow;\n" +
       "this.clickMosaelWindow = clickMosaelWindow;\n" +
       "this.typeIntoMosaelWindow = typeIntoMosaelWindow;\n" +
@@ -212,17 +212,23 @@ describe("输入到 Mosael 自己的窗口", () => {
 
     const result = scrollMosaelWindow({ window: "main", dy: 3, x: null, y: null }, [main], { main });
 
-    //: 一格 ≈ 100 像素(3 行):只发 deltaY = -dy 的话「滚 3 格」只走 3 像素,看起来就是没动。
-    expect(main.webContents.sendInputEvent).toHaveBeenCalledWith({
-      type: "mouseWheel", x: 500, y: 400, deltaY: -300, canScroll: true,
-    });
+    //: 一格 ≈ 100 像素(3 行),而且**分成若干格来滚** —— 一次到底在页面上就是"跳"过去。
+    const wheels = main.webContents.sendInputEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === "mouseWheel");
+    expect(wheels.length).toBeGreaterThan(1);
+    expect(wheels.every((event) => event.x === 500 && event.y === 400)).toBe(true);
+    expect(wheels.reduce((sum, event) => sum + event.deltaY, 0)).toBe(-300);
     expect(result).toEqual({ window: "main", dy: 3, x: 500, y: 400 });
 
     // 指到坐标上就照给的来;往上的 dy 是正的 deltaY。
+    main.webContents.sendInputEvent.mockClear();
     scrollMosaelWindow({ window: "main", dy: -2, x: 10, y: 20 }, [main], { main });
-    expect(main.webContents.sendInputEvent).toHaveBeenLastCalledWith({
-      type: "mouseWheel", x: 10, y: 20, deltaY: 200, canScroll: true,
-    });
+    const upward = main.webContents.sendInputEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === "mouseWheel");
+    expect(upward.every((event) => event.x === 10 && event.y === 20)).toBe(true);
+    expect(upward.reduce((sum, event) => sum + event.deltaY, 0)).toBe(200);
   });
 
   it("滚动越界 / 最小化:一下都不发", () => {
