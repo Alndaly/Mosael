@@ -35,6 +35,11 @@
 //: 如实声明之后就能正常登录 —— 差别只在身份那一档。TikTok 自己那套登录(手机号 / 邮箱)不受影响。
 const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "xiaohongshu", "youtube", "tiktok"]);
 
+//: **改这一档等于让已登录的会话重登。** Google 把会话绑在浏览器身份上:UA / client hints 一变,
+//: 它就把那枚 cookie 当可疑会话作废 —— 2026-10-23 一天里 YouTube 的身份来回换过两次,维护者
+//: 「之前明明成功登录过」的那次会话就是这样没的。所以:改某平台的 identity,要预期**那个平台的
+//: 所有人重新登录一次**;验证完就不要再翻烧饼。
+
 /** 抹掉 UA 里的 Electron 与 Mosael token,得到一枚干净 Chrome UA;认不出 Chrome 版本就原样返回。 */
 function cleanChromeUserAgent(userAgent) {
   const ua = String(userAgent || "");

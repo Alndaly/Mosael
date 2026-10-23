@@ -14,6 +14,15 @@ DevTools 特征)。两条叠起来,Google 在输完密码那一刻回 `signin/re
 所以先**回退到能用的那一档**:`CHROME_IDENTITY_EXEMPT += youtube`,YouTube 重新如实声明 Electron
 (不洗 UA、不挂 debugger)。下面的 OAuth 是**长期方案**,不是为绕过这次拦截而加的补丁。
 
+## 会话为什么会"没了"(2026-10-23)
+
+维护者:「我之前明明成功登陆过了」。查日志:那几次登录窗口最后都是 `login poll ended (view dismissed)`
+—— 窗口被关掉,登录没走完;而更早那次**成功**的会话确实存在过,是**身份档被改掉**之后失效的:
+Google 把会话绑在浏览器身份上(UA / client hints),一变就作废那枚 cookie。一天里 YouTube 的身份
+来回换过两次(真 Chrome 假象 → 如实 Electron),于是「明明登过」的会话就没了。
+
+所以:改某平台的 identity = **那个平台的所有人重新登录一次**;验证完别再翻烧饼。
+
 ## 事实(2026-10-23 真机,Chrome 身份那一档)
 
 用发布账号的浏览器池打开 `accounts.google.com/ServiceLogin?service=youtube`:
