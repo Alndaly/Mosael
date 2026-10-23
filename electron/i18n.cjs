@@ -215,6 +215,10 @@ const MESSAGES = {
   publishStep_preparing: { zh: "准备中", en: "Preparing" },
   publishStep_openCreator: { zh: "打开创作页", en: "Opening the creator page" },
   publishStep_checkLogin: { zh: "检查登录态", en: "Checking sign-in" },
+  publishErr_tabMissing: {
+    zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
+    en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
+  },
   publishErr_noAssets: {
     zh: "这条内容没有可上传的素材",
     en: "This post has no media to upload.",

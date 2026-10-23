@@ -18,13 +18,21 @@ export class XiaohongshuAdapter implements PublishAdapter {
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.publishUrl);
-    //: 创作页**默认就是图文**;只有视频任务才去点「上传视频」那个 tab。
-    //: (此前无条件点它,于是图文任务被带到了视频上传页。)
-    if (this.task.contentKind !== "video") return;
-    await clickTextPreferTrusted(this.driver, this.s.videoTabText, {
+    //: **按形状显式切 tab**。创作页顶部是「上传视频 / 上传图文 / 写长文 / 发播客」,
+    //: 落进去是哪一档不能假设:实测默认不是图文,图文任务会在视频页上交图片,页面回一句
+    //: 「请先切换到图文 tab」。点不到就明说,别让它在后面以「上传超时」的形式失败。
+    const tabText = this.task.contentKind === "video" ? this.s.videoTabText : this.s.imageTextTabText;
+    const switched = await clickTextPreferTrusted(this.driver, tabText, {
       exact: true,
       selector: "button, [role=button], a, div, span",
-    }).catch(() => undefined);
+    })
+      .then(() => true)
+      .catch(() => false);
+    if (!switched && this.task.contentKind !== "video") {
+      //: 已经在这个 tab 上时点不到也算过(文案可能被换掉);用文件 input 是否出现做判据。
+      const ready = await this.driver.cssAttached(this.s.fileInput, 3_000);
+      if (!ready) throw publishError("xiaohongshu", "publishErr_tabMissing", { tab: tabText });
+    }
   }
 
   async checkLogin(): Promise<boolean> {

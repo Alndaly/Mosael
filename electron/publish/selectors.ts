@@ -45,7 +45,11 @@ export const SELECTORS = {
   },
   xiaohongshu: {
     publishUrl: resolvePlatform("xiaohongshu").publishUrl,
+    //: 创作页顶部是几个 tab:**上传视频 / 上传图文**(另有「写长文」「发播客」)。
+    //: 之前假设「默认就是图文」,实测不是 —— 落进去是视频那一档,于是图文任务在视频页上交图片,
+    //: 页面回一句「请先切换到图文 tab」。**按形状显式点对应的 tab**,不猜默认值。
     videoTabText: "上传视频", // i18n-ok
+    imageTextTabText: "上传图文", // i18n-ok
     fileInput: 'input[type="file"]',
     titleInput:
       'input[placeholder*="填写标题"], input[placeholder*="请输入标题"], input[placeholder*="标题"], textarea[placeholder*="标题"]', // i18n-ok
@@ -66,7 +70,8 @@ export const SELECTORS = {
     visibilityOption: ".group-info .name",
     visibilityTexts: { public: ["公开可见"], friends: ["仅互关好友可见"], private: ["仅自己可见"] } as const, // i18n-ok
     submitText: "发布", // i18n-ok
-    uploadProgressTexts: ["正在上传视频", "视频上传中", "上传中"], // i18n-ok
+    //: 图文任务等的是「正在上传图片」;两个都列上 —— 等错文案会白等到超时。
+    uploadProgressTexts: ["正在上传视频", "视频上传中", "正在上传图片", "图片上传中", "上传中"], // i18n-ok
     publishDoneTexts: ["发布成功", "发布完成", "审核中", "笔记发布成功", "提交成功"], // i18n-ok
     loggedInTexts: ["发布笔记", "创作中心", "数据中心"], // i18n-ok
     isLoginUrl: (u: string): boolean => /\/login/.test(u),
