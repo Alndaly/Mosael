@@ -95,7 +95,7 @@ let mirroring: string | null = null;
  * **画面是尽力而为,步骤文案才是保证项。** Chromium 只为真正参与合成的视图产生像素:
  * electron 冒烟实测,未加入窗口的 WebContentsView 上 screencast 0 帧、capturePage 空图、
  * CDP Page.captureScreenshot 直接挂起;窗口隐藏或被遮挡时同样取不到。而发布任务跑的时候视图
- * 正是「不在窗口里」这个状态——只有失败现场被 requestFront 亮出来后才稳定有画面。
+ * 正是「不在窗口里」这个状态(只有需要人当场处理的那几档才 requestFront 亮出来)。
  * (线上确有后台任务成功截到图的例子,所以不是必然失败,但不能当作保证。)
  *
  * 因此这里每拍推一帧,画面拿到就带上、拿不到就只带步骤:哪怕一个像素都没有,用户也能看到
@@ -532,17 +532,12 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
       screenshot_path: screenshot,
     });
     settle(t, blocked ?? "failed");
-    // 失败/受阻且现场还在(验证码、审核提示、报错弹窗):请求前台亮出来供用户查看。抢不到就算了,
-    // 任务行的「查看页面」可再亮。现场已没了(webContents 已销毁/空白)就不请求。
-    const hasLive = (() => {
-      try {
-        const url = driver.url();
-        return Boolean(url) && url !== "about:blank";
-      } catch {
-        return false; // webContents 已销毁
-      }
-    })();
-    if (hasLive) requestFront(t.accountId);
+    //: **普通失败不抢前台**。此前失败且有现场就 `requestFront`,于是任务一挂,整个窗口被那块
+    //: 内嵌浏览器顶掉,人正在做的别的事被赶走 —— 而失败原因已经在任务行里写着,现场截图也存下来了
+    //: (维护者 2026-10-23:「一旦发布中途失败就自动跳到全屏内嵌浏览器,我觉得没有必要」)。
+    //: 只有**真的需要人当场处理**的那几档才亮出来:验证码 / 权限 / 手工确认 —— 那几档不处理,
+    //: 任务永远过不去,而人也不知道该点什么。
+    if (bindingStatus) requestFront(t.accountId);
   } finally {
     clearInterval(cancellationTimer);
     await capture?.stop().catch(() => undefined);
