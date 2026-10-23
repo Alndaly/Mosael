@@ -712,6 +712,9 @@ function CreatePublishDialog({
       open={open}
       onOpenChange={(next) => !next && onClose()}
       title={t("publishCreate")}
+      //: 发布表单字段多(内容类型、素材网格、标题、正文、标签、平台选项),360 的默认宽度会让人
+      //: 一行一行往下滚;给到 720,网格一次能摆下几张缩略图。窄窗口仍然收在视口内。
+      className="w-[min(720px,calc(100vw-32px))]"
       footer={
         <>
           <Button
