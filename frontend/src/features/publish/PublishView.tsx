@@ -832,25 +832,22 @@ function CreatePublishDialog({
           )}
           {/* 图文 / 文章:和工作流节点表单**同一个控件**(上传瓦片 + 「+」从素材库挑 + 缩略图 + 拖拽排序)。 */}
           {needsImages && (
-            //: 限一下宽度:这个控件按「一排占满」排版是对的(节点表单里那一格本来就窄),
-            //: 放进 720 宽的弹窗后瓦片会被拉成 300 多宽的扁条,缩略图几乎看不出是什么。
-            //: 480 是它自己那四列的正常尺度。
-            <div className="max-w-[480px]">
-              <AssetGridField
-                value={imageIds.join(",")}
-                workspaceId={workspace.id}
-                media={["image"]}
-                max={maxItems ?? 18}
-                onChange={(next) => {
-                  setImageIds(
-                    String(next ?? "")
-                      .split(",")
-                      .map((one) => one.trim())
-                      .filter(Boolean),
-                  );
-                }}
-              />
-            </div>
+            //: **撑满这一栏**,和别字段同宽(维护者 2026-10-23)。控件自己按「一排占满」排版,
+            //: 挑到四张以上就回到四列;少于四枚时每枚各占一等份 —— 那是它本来的意思。
+            <AssetGridField
+              value={imageIds.join(",")}
+              workspaceId={workspace.id}
+              media={["image"]}
+              max={maxItems ?? 18}
+              onChange={(next) => {
+                setImageIds(
+                  String(next ?? "")
+                    .split(",")
+                    .map((one) => one.trim())
+                    .filter(Boolean),
+                );
+              }}
+            />
           )}
           {!needsImages && videos.isSuccess && videos.total === 0 && !videos.query && (
             <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
