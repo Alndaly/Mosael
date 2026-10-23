@@ -630,7 +630,12 @@ function CreatePublishDialog({
   const selectedAccount = usableAccounts.find((account) => account.id === accountId) ?? null;
   const platformMeta =
     (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
-  const platformKinds = React.useMemo(() => platformMeta?.kinds ?? ["video"], [platformMeta?.kinds]);
+  //: 只列**我们已经会发**的形状(后端按适配器进度声明)。平台能发、但适配器还没接的(比如小红书的
+  //: 「文章」)不摆出来 —— 摆了就是让用户点一下,再在真实页面上失败。
+  const platformKinds = React.useMemo(
+    () => platformMeta?.implemented_kinds ?? ["video"],
+    [platformMeta?.implemented_kinds],
+  );
   //: 换了账号(平台),当前形状要是人家不认,回落到它认的第一档。
   React.useEffect(() => {
     if (!platformKinds.includes(kind)) setKind(platformKinds[0] ?? "video");
@@ -822,20 +827,25 @@ function CreatePublishDialog({
           )}
           {/* 图文 / 文章:和工作流节点表单**同一个控件**(上传瓦片 + 「+」从素材库挑 + 缩略图 + 拖拽排序)。 */}
           {needsImages && (
-            <AssetGridField
-              value={imageIds.join(",")}
-              workspaceId={workspace.id}
-              media={["image"]}
-              max={maxItems ?? 18}
-              onChange={(next) => {
-                setImageIds(
-                  String(next ?? "")
-                    .split(",")
-                    .map((one) => one.trim())
-                    .filter(Boolean),
-                );
-              }}
-            />
+            //: 限一下宽度:这个控件按「一排占满」排版是对的(节点表单里那一格本来就窄),
+            //: 放进 720 宽的弹窗后瓦片会被拉成 300 多宽的扁条,缩略图几乎看不出是什么。
+            //: 480 是它自己那四列的正常尺度。
+            <div className="max-w-[480px]">
+              <AssetGridField
+                value={imageIds.join(",")}
+                workspaceId={workspace.id}
+                media={["image"]}
+                max={maxItems ?? 18}
+                onChange={(next) => {
+                  setImageIds(
+                    String(next ?? "")
+                      .split(",")
+                      .map((one) => one.trim())
+                      .filter(Boolean),
+                  );
+                }}
+              />
+            </div>
           )}
           {!needsImages && videos.isSuccess && videos.total === 0 && !videos.query && (
             <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
