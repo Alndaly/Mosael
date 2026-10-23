@@ -354,7 +354,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                   底色必须是**实底**:`bg-background` 在磨砂外观下是半透明的,记录滚到它底下会透出来,
                   于是"今天"和第一条记录的成片名、时间叠在同一行(维护者 2026-10-23 截图)。
                   这里照 TraceView 的分组标题用 `bg-panel`(卡片同一层实底),并让它横向铺满卡片宽度。 */}
-              <h3 className="workspace-sticky sticky top-0 z-[2] -mx-px m-0 flex items-baseline gap-1.5 rounded-lg bg-panel px-3 py-2 text-ui-sm font-medium text-muted-foreground">
+              <h3 className="workspace-sticky sticky top-0 z-30 -mx-px m-0 flex items-baseline gap-1.5 rounded-lg bg-panel px-3 py-2 text-ui-sm font-medium text-muted-foreground">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
