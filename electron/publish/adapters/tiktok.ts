@@ -3,6 +3,9 @@ import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, enumOption, hasStoredSession, plogPageState, publishError, wait } from "./shared";
 import { SELECTORS } from "../selectors";
+import { AutomationBlockedError } from "../errors";
+import { t } from "../../i18n.cjs";
+import { platformName } from "../platforms";
 import { plog } from "../log";
 
 export class TiktokAdapter implements PublishAdapter {
@@ -25,6 +28,14 @@ export class TiktokAdapter implements PublishAdapter {
   }
 
   async checkLogin(): Promise<boolean> {
+    if (this.s.thirdPartyGoogleBlocked.test(this.driver.url())) {
+      //: Google 不给嵌入式 webview 做第三方 OAuth(与 YouTube 同一个策略)。这不是我们能绕的,
+      //: 但必须说清楚:"改用手机号 / 邮箱登录"是**能走通**的那条路。
+      throw new AutomationBlockedError(
+        "manual_required",
+        t("publishErr_thirdPartyGoogleBlocked", { platform: platformName("tiktok") }),
+      );
+    }
     if (this.s.isLoginUrl(this.driver.url())) {
       return false;
     }

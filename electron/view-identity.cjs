@@ -29,7 +29,11 @@
 //: 之前 YouTube 用的是如实声明的 Electron,登录能过;改成「干净 Chrome UA + CDP 对齐」之后,
 //: Google 在输完密码那一刻回 `accounts.google.com/v3/signin/rejected`「此浏览器或应用可能不安全」。
 //: 而 CDP 对齐那条路要在建视图时**挂上 debugger**,那本身就是 DevTools 特征。先回退到能用的那一档。
-const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "xiaohongshu", "youtube"]);
+//:
+//: **TikTok 也归到这一档(2026-10-23)**:它的「用 Google 继续」是第三方 OAuth,同一个 Google
+//: 登录页在 Chrome 身份下直接回 `signin/rejected`(「此浏览器或应用可能不安全」),而 YouTube 换成
+//: 如实声明之后就能正常登录 —— 差别只在身份那一档。TikTok 自己那套登录(手机号 / 邮箱)不受影响。
+const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "xiaohongshu", "youtube", "tiktok"]);
 
 /** 抹掉 UA 里的 Electron 与 Mosael token,得到一枚干净 Chrome UA;认不出 Chrome 版本就原样返回。 */
 function cleanChromeUserAgent(userAgent) {

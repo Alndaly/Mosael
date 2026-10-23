@@ -176,6 +176,10 @@ export const SELECTORS = {
    * 比 "Log in to TikTok" 这种句子稳得多。文案只作为兜底,且中英各列一份。
    */
   tiktok: {
+    //: 「用 Google 继续」是**第三方 OAuth**:Google 不给嵌入式 webview 做这件事,输完账号会跳到
+    //: `accounts.google.com/v3/signin/rejected?app_domain=…www.tiktok.com&client_id=…`。
+    //: 认出来,告诉人改用手机号 / 邮箱登录 —— 别让人对着 Google 那张拒绝页以为是我们坏了。
+    thirdPartyGoogleBlocked: /accounts\.google\.com\/.*(rejected|denied)/,
     uploadUrl: resolvePlatform("tiktok").publishUrl,
     manageUrl: resolvePlatform("tiktok").manageUrl,
     fileInput: 'input[type="file"]',

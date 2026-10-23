@@ -227,6 +227,10 @@ const MESSAGES = {
     zh: "{platform} 点了「发布」但页面没有反应:多半是被风控或校验拦下了。点「查看页面」看看那一页说了什么,或在窗口里手动发布",
     en: "{platform} did not react to the Publish click — usually a risk check or a validation. Open the page to see what it says, or publish there by hand.",
   },
+  publishErr_thirdPartyGoogleBlocked: {
+    zh: "「用 Google 继续」这一步过不去:Google 不允许在应用内浏览器里完成第三方授权。{platform} 请改用手机号 / 邮箱登录;想用 Google 账号发视频,那是另一件事(见 ADR 0079 的 OAuth 那条路)。",
+    en: "Continue with Google cannot work here: Google blocks third-party OAuth inside embedded browsers. Sign in to {platform} with phone or email instead — using a Google account to publish is a separate path (see ADR 0079).",
+  },
   publishErr_googleBlocksEmbedded: {
     zh: "Google 不允许在应用内浏览器里登录(它的原话是「此浏览器或应用可能不安全」)。{platform} 的网页登录这条路走不通 —— 需要接 Google 账号授权(OAuth)才能发。",
     en: "Google refuses sign-in inside embedded browsers (“This browser or app may not be secure”). Web login cannot work for {platform} — it needs Google OAuth instead.",
