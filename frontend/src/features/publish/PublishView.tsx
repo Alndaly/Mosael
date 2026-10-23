@@ -846,8 +846,9 @@ function CreatePublishDialog({
         {/* 内容形状(ADR 0076):**排在发布目标之后** —— 先选发到哪,再选发什么形状,
             素材那一格才跟着换(视频是一份、图文是多张)。平台只认一种形状时不摆选择器。 */}
         {selectedAccount && platformKinds.length > 1 && (
-          <div className="grid gap-1">
-            <span className="text-xs font-semibold text-foreground">{t("publishContentKind")}</span>
+          <div className="grid gap-2">
+            {/*: 标题字号/字重跟着 DIALOG_FIELD 走(ui-sm / medium),不再自己写一套 12px 半粗。 */}
+            <span className="text-ui-sm font-medium text-foreground">{t("publishContentKind")}</span>
             <Segmented
               //: **铺满这一行**(`fill`):同 `ExportControl` / `MaskFromAssetDialog` 里那种
               //: 「一整行的分段」—— 弹窗里一条只有两三档的选择,居中一小撮会显得没排满。
@@ -866,8 +867,8 @@ function CreatePublishDialog({
             />
           </div>
         )}
-        <div className="grid gap-1">
-          <span className="text-xs font-semibold text-foreground">{t("publishAsset")}</span>
+        <div className="grid gap-2">
+          <span className="text-ui-sm font-medium text-foreground">{t("publishAsset")}</span>
           {!needsImages && (
             <Combobox
               value={assetId ?? ""}
@@ -973,10 +974,13 @@ function CreatePublishDialog({
              */
             <label
               key={spec.key}
-              className="flex items-center justify-between gap-4 rounded border border-border bg-field px-2.5 py-2"
+              //: **和别的字段同一种皮肤**:同样的 `rounded-md`(4px 的 `rounded` 会明显比方圆)、
+              //: 同样的 `border-field-border` 与 `bg-field`、同样的标签字号与字重 ——
+              //: 此前这里自己写了一套,维护者一眼看出「圆角、边框和别处不一致」(2026-10-23)。
+              className="flex items-center justify-between gap-4 rounded-md border border-field-border bg-field px-2.5 py-2"
             >
               <span className="grid min-w-0 gap-0.5">
-                <span className="text-xs font-semibold text-foreground">{spec.label}</span>
+                <span className="text-ui-sm font-medium text-foreground">{spec.label}</span>
                 {spec.description && (
                   <small className="text-ui-xs leading-[1.4] text-muted-foreground">
                     <InlineMarkdown text={spec.description} />
@@ -989,7 +993,7 @@ function CreatePublishDialog({
               />
             </label>
           ) : (
-            <label key={spec.key} className={"grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground"}>
+            <label key={spec.key} className={DIALOG_FIELD}>
               <span>{spec.label}</span>
               <Combobox
                 value={String(options[spec.key] ?? spec.default)}
