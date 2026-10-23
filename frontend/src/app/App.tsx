@@ -50,7 +50,7 @@ import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 import { VoiceDock } from "@/features/agent/VoiceDock";
 import { RemoteVoiceConsentHost } from "@/features/voice/remoteVoiceConsent";
 import { goHome } from "@/features/ai-studio/goToPlace";
-import { PlugZap } from "lucide-react";
+import { PlugZap, Volume2, VolumeX } from "lucide-react";
 
 import { ServerPicker } from "@/components/app/ServerPicker";
 import { useToastClearance } from "@/components/app/toastClearance";
@@ -300,6 +300,22 @@ export function PublishViewBar() {
       {workspaceId && (
         // key:换了一个视图(或同一视图换了档案)就是另一段会话,上一页的侧栏、下载、勾选都不该带过来。
         <BrowserSessionTools key={`${state.accountId}:${state.partition ?? ""}`} workspaceId={workspaceId} state={state} barHeight={PUBLISH_BAR_HEIGHT} />
+      )}
+      {/*: **声音开关**。内嵌浏览器里的平台视频会自己播,而声音默认是关的 —— 这里给一个能打开的开关
+          (面板卡片上有同一颗,但前台全屏那条顶栏此前没有,想开/关都无从下手)。 */}
+      {state.accountId && (
+        //: 用 IconButton 的**默认档**(ghost / icon-sm):高度、圆角、留白都由控件自己给,
+        //: 不在这条顶栏里再写一遍(那正是 design/controlOverrides 棘轮盯的)。
+        <span className="[-webkit-app-region:no-drag] inline-flex shrink-0">
+          <IconButton
+            label={t(state.muted === false ? "livePanelMute" : "livePanelUnmute")}
+            aria-pressed={state.muted === false}
+            data-publish-audio=""
+            onClick={() => void window.mosaelPublish?.setPanelMuted?.(state.accountId!, state.muted === false)}
+          >
+            {state.muted === false ? <Volume2 size={15} /> : <VolumeX size={15} />}
+          </IconButton>
+        </span>
       )}
       {/* 等人拍板的卡、免提浮标:网页在前台时收在这里(ADR 0051,见 ChromeStatusSlot) */}
       <ChromeStatusSlot size="xs" />

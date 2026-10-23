@@ -21,6 +21,8 @@ export interface PublishViewState {
   pageLimit?: number;
   /** 最近一次因为开满了而拦下新页面的时刻(毫秒时间戳,0 是没有过)。 */
   pageLimitHitAt?: number;
+  /** 这个视图现在是不是静着音(默认静音;用户点顶栏那枚音量按钮才出声)。 */
+  muted?: boolean;
 }
 
 export interface PublishPage {

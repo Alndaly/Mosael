@@ -206,7 +206,14 @@ export class AccountViewManager {
   // 正在以悬浮面板形式挂载的账号,按挂载顺序 —— 决定叠放次序(后挂的在上)。
   private panels: string[] = [];
   /** 用户明确允许出声的悬浮面板。未挂载/已关闭的视图永远不在这里。 */
-  private audiblePanels = new Set<string>();
+  /**
+   * **哪些视图被用户显式打开了声音**。默认什么都没有 —— 包括前台全屏那一个。
+   *
+   * 此前前台视图默认出声(见下方 syncAudio 的旧注释):打开内嵌浏览器,平台的自动播放视频就直接响,
+   * 而且**没有任何开关**(面板卡片上有音量按钮,但前台全屏那条顶栏没有,`setPanelMuted` 又只对
+   * 面板生效)。维护者 2026-10-23:「打开全屏内嵌浏览器默认是开启音频的,而且无法配置音频开关」。
+   */
+  private audibleViews = new Set<string>();
   /**
    * 用户拖动/缩放后的面板几何(见 PanelLayout)。卡片堆最上面那张落在这里,其余从它向上错开。
    */
@@ -472,7 +479,7 @@ export class AccountViewManager {
     if (index >= 0) this.panels.splice(index, 1);
     this.panelIdleMs.delete(accountId);
     this.panelTouchedAt.delete(accountId);
-    this.audiblePanels.delete(accountId);
+    this.audibleViews.delete(accountId);
     this.hover.drop(accountId);
     this.views.delete(accountId);
     this.drivers.delete(accountId);
@@ -518,14 +525,14 @@ export class AccountViewManager {
   }
 
   /**
-   * 前台视图默认出声；悬浮面板只有用户明确打开声音后才出声；隐藏视图永远静音。
+   * **默认静音;用户在顶栏/卡片上打开声音才出声。**
    *
    * hide() 只是把视图从窗口摘掉 —— WebContents 还在跑,而且我们特意关掉了 backgroundThrottling,
    * 于是 TikTok 信息流这种自动播放的页面在你回到应用之后还在响。静音走 Electron 这一层而不是往页面
    * 里注 JS:页面改不掉它,SPA 也没法在下一次渲染时把自己恢复出声。
    *
    * 判据只在这一个方法里算,show/hide/panelAttach/panelDetach 都调它 —— 不在四个地方各写一遍
-   * 「现在该不该静音」。
+   * 「现在该不该静音」。**前台全屏与悬浮面板用同一条判据**:用户开过声音就出声,否则不响。
    */
   private syncAudio(): void {
     for (const [id, list] of this.tabs) {
@@ -538,7 +545,8 @@ export class AccountViewManager {
   }
 
   private isAudible(accountId: string): boolean {
-    return accountId === this.visibleId || (this.panels.includes(accountId) && this.audiblePanels.has(accountId));
+    //: 只有**用户显式打开**过的才出声(前台全屏也一样);关掉页面/收起视图时这里已被清掉。
+    return this.audibleViews.has(accountId);
   }
 
   /**
@@ -792,7 +800,7 @@ export class AccountViewManager {
     if (index >= 0) this.panels.splice(index, 1);
     this.panelIdleMs.delete(accountId);
     this.panelTouchedAt.delete(accountId);
-    this.audiblePanels.delete(accountId);
+    this.audibleViews.delete(accountId);
     this.hover.drop(accountId);
     if (this.visibleId === accountId) return;
     const view = this.views.get(accountId);
@@ -803,9 +811,10 @@ export class AccountViewManager {
 
   /** 用户切换悬浮浏览器声音。只接受仍挂在面板里的 id,避免给隐藏视图留下出声许可。 */
   setPanelMuted(accountId: string, muted: boolean): void {
-    if (!this.panels.includes(accountId)) return;
-    if (muted) this.audiblePanels.delete(accountId);
-    else this.audiblePanels.add(accountId);
+    //: **前台全屏也走这里**:此前它早退于「不在面板列表里」,于是那条顶栏就算有按钮也点不动声音。
+    if (!this.views.has(accountId)) return;
+    if (muted) this.audibleViews.delete(accountId);
+    else this.audibleViews.add(accountId);
     this.syncAudio();
     // 解除 Electron 总静音还不够:网页可能自身 muted/volume=0，或此前被 hide() 暂停。
     if (!muted) this.syncPageMedia(accountId, true);
@@ -1514,6 +1523,8 @@ export class AccountViewManager {
       pages: this.visibleId ? this.pagesOf(this.visibleId) : [],
       pageLimit: MAX_PAGES,
       pageLimitHitAt: this.pageLimitHitAt,
+      //: 顶栏那枚音量按钮要知道现在是不是静着(默认静)。
+      muted: wc ? wc.isAudioMuted() : true,
     });
   }
 }
