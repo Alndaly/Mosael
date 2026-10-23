@@ -474,52 +474,63 @@ function PublishCard({
       <span className={cn("mt-0.5 grid size-10 shrink-0 place-items-center rounded-lg bg-panel-subtle", tone)}>
         <Icon size={18} className={spin ? "animate-mosael-spin" : undefined} />
       </span>
-      <div className="grid min-w-0 gap-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
-          {/*: 这条发的是什么形状(ADR 0076):视频是老形状,不必占位;其余形状要一眼看得出来。 */}
-          {task.content_kind !== "video" && kindLabel(task.content_kind) && (
-            <span className="shrink-0 rounded-full bg-panel-subtle px-1.5 py-0.5 text-ui-xs text-muted-foreground">
-              {t(kindLabel(task.content_kind) as MessageKey)}
-            </span>
-          )}
-        </div>
-        <div className="flex min-w-0 items-center gap-1 text-ui-sm text-muted-foreground">
-          <span className="shrink-0">{task.platform} · {task.account_name} ·</span>
-          {/*: 成片名可点:直接预览这条素材。行内动作走 Button 的 inline 档(design/inlineActions 的
-              规矩 —— 挨着值的按钮不摆正文字号);整行那颗 absolute 按钮盖在下面,所以这颗要 z 压上去。 */}
-          {onPreviewAsset && task.asset_id ? (
-            <Button
-              variant="inline"
-              size="xs"
-              //: 悬停**只出下划线**,不要那层底色(维护者:"hover 后有下划线的那种 button")——
-              //: 成片名是一段值里的链接感,不是一颗带底色的按钮。
-              className="relative z-10 min-w-0 hover:bg-transparent hover:underline underline-offset-2"
-              onClick={(event) => {
-                event.stopPropagation();
-                onPreviewAsset(task.asset_id!);
-              }}
-            >
-              <Truncate>{task.asset_name}</Truncate>
-            </Button>
-          ) : (
-            <Truncate>{task.asset_name}</Truncate>
-          )}
-        </div>
-        {/*: 简介:这条发出去的正文是什么。 */}
-        {task.description && (
-          <Truncate as="p" lines={2} className="text-ui-sm text-muted-foreground" data-publish-row-description="">
-            {task.description}
-          </Truncate>
-        )}
-        {/*: 标签:一行 chip,和详情弹窗里同一个形状。 */}
-        {task.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1" data-publish-row-tags="">
-            {task.tags.map((tag) => (
-              <span className="inline-flex items-center rounded-full border border-border bg-panel-subtle px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>
-                {tag}
+      {/*: 左列分**三层**:① 标题 + 元信息 ② 正文(简介 + 标签)③ 结果(失败原因 / 作品)。
+          层间 8、层内 4(间距只走 12/8/4)。此前五样东西全是 4px,标题、成片、正文、标签、报错
+          挤成一片,读起来"浮着"、没有主次(维护者 2026-10-23)。 */}
+      <div className="grid min-w-0 gap-2">
+        <div className="grid gap-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
+            {/*: 这条发的是什么形状(ADR 0076):视频是老形状,不必占位;其余形状要一眼看得出来。 */}
+            {task.content_kind !== "video" && kindLabel(task.content_kind) && (
+              <span className="shrink-0 rounded-full bg-panel-subtle px-1.5 py-0.5 text-ui-xs text-muted-foreground">
+                {t(kindLabel(task.content_kind) as MessageKey)}
               </span>
+            )}
+          </div>
+          <div className="flex min-w-0 items-center gap-1 text-ui-sm text-muted-foreground">
+            <span className="shrink-0">{task.platform} · {task.account_name}</span>
+            {/*: 只有**标题和成片不是同一个名字**时才把成片名再写一遍 —— 没有标题的记录里,
+                标题位置摆的就是成片名,再写一次就是两条边在说同一件事。 */}
+            {task.title && <span className="shrink-0">·</span>}
+            {task.title && (onPreviewAsset && task.asset_id ? (
+              <Button
+                variant="inline"
+                size="xs"
+                //: 悬停**只出下划线**,不要那层底色(维护者:"hover 后有下划线的那种 button")——
+                //: 成片名是一段值里的链接感,不是一颗带底色的按钮。
+                className="relative z-10 min-w-0 hover:bg-transparent hover:underline underline-offset-2"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPreviewAsset(task.asset_id!);
+                }}
+              >
+                <Truncate>{task.asset_name}</Truncate>
+              </Button>
+            ) : (
+              <Truncate>{task.asset_name}</Truncate>
             ))}
+          </div>
+        </div>
+        {(task.description || task.tags.length > 0) && (
+          <div className="grid gap-1" data-publish-row-body="">
+            {/*: 正文:这条发出去的是什么。用的是正文色(不是灰的)—— 它仅次于标题,
+                灰掉之后和「平台 · 账号」那条元信息混成一层。 */}
+            {task.description && (
+              <Truncate as="p" lines={2} className="text-ui-sm text-foreground" data-publish-row-description="">
+                {task.description}
+              </Truncate>
+            )}
+            {/*: 标签:一行 chip,和详情弹窗里同一个形状。 */}
+            {task.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1" data-publish-row-tags="">
+                {task.tags.map((tag) => (
+                  <span className="inline-flex items-center rounded-full border border-border bg-panel-subtle px-1.5 py-px text-ui-xs text-muted-foreground" key={tag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {task.status === "failed" && task.error && (
@@ -529,8 +540,6 @@ function PublishCard({
             {task.error_summary || task.error}
           </Truncate>
         )}
-        {/*: 成功时把「作品」那一格从弹窗搬上来:读到 ID 就摆出来,没读到就明说(和弹窗同一句);
-            平台给了链接就再给一个「查看作品」出口(整行那颗 absolute 按钮盖在下面,链接要 z 压上去)。 */}
         {["succeeded", "success"].includes(task.status) && (
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui-xs text-muted-foreground" data-publish-row-post="">
             <Truncate>{task.post?.post_id ? `${t("publishPost")} ${task.post.post_id}` : t("publishPostMissing")}</Truncate>
