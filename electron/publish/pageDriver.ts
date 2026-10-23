@@ -692,15 +692,17 @@ export class PageDriver {
           return { top: r.top, bottom: r.bottom, vh: innerHeight, vw: innerWidth };
         })()`,
       ).catch(() => null);
-    const band = 80;
+    //: 判据是「**整块已经看得见**」,不是一个 80px 的舒适带 —— 后者会把贴在页面顶部的 tab 条
+    //: 也"居中"一下,于是刚落地页面就自己滚了一下(维护者 2026-10-23:「为何刚加载页面就会有滚动操作」)。
+    const margin = 8;
     for (let step = 0; step < 12; step += 1) {
       this.throwIfAborted();
       const at = await measure();
       if (!at || !at.vh) return false;
-      if (at.top >= band && at.bottom <= at.vh - band) return true;
-      const up = at.top < band;
-      const distance = up ? band - at.top + 60 : at.bottom - (at.vh - band) + 60;
-      const delta = Math.min(320, Math.max(90, distance)) * (up ? -1 : 1);
+      if (at.top >= margin && at.bottom <= at.vh - margin) return true;
+      const up = at.top < 0;
+      const distance = up ? -at.top + 40 : at.bottom - at.vh + 40;
+      const delta = Math.min(240, Math.max(60, distance)) * (up ? -1 : 1);
       this.wc.sendInputEvent({
         type: "mouseWheel",
         x: Math.round(at.vw / 2),
@@ -923,8 +925,10 @@ export class PageDriver {
     text: string,
     options: { exact?: boolean; selector?: string } = {},
   ): Promise<void> {
-    //: 先把目标滚进安全视野(真实滚轮、一格一格),否则下面那次测量拿到的是滚动前的位置。
-    if (options.selector) await this.humanScrollIntoView(options.selector).catch(() => false);
+    //: 先把目标滚进视口(真实滚轮、一格一格),否则下面那次测量拿到的是滚动前的位置。
+    const scrolled = options.selector
+      ? await this.humanScrollIntoView(options.selector).catch(() => false)
+      : false;
     const t = JSON.stringify(text);
     const selector = JSON.stringify(options.selector ?? "button, [role=button], a");
     const matcher = options.exact
@@ -942,7 +946,8 @@ export class PageDriver {
       const els = [...document.querySelectorAll(${selector})];
       const el = clickTarget(els.filter((e) => visible(e) && ${matcher}));
       if (!el) return null;
-      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      //: 滚轮已经把它带进来了就别再跳(跳 = 页面又动一下);滚不到(iframe / 页面不吃滚轮)才兜底。
+      if (${scrolled ? "false" : "true"}) el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const r = el.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight };
     })()`);

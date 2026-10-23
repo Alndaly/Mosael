@@ -77,17 +77,23 @@ export class DouyinAdapter implements PublishAdapter {
     if (!value) return;
     const selector = this.s.imageDescEditor;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
-    await typeOrFill(this.driver, "douyin body", selector, value, async () => {
-      await this.driver.focusAndClearField(selector);
-      await this.driver.insertText(selector, value);
-    });
+    //: **先点一下拿到焦点**,再逐行打。此前走 `focusEnd` + 一次性 insertText:传完图之后 DOM
+    //: 会重建,`focusEnd` 找的是那一刻的节点,报「element not found」把整条任务拦下(真机 2026-10-23)。
+    //: 点一下 + 真实按键不依赖节点身份,编辑器换了实例也照样能打进去。
+    await this.driver.pointerClickCss(selector).catch(() => undefined);
+    await this.driver.focusAndClearField(selector).catch(() => undefined);
+    await this.driver.typeLines(value);
     //: 富文本会把 `1. …` 变成有序列表、换行位置也会变,所以**空白不敏感**地比对(同小红的教训)。
     const accepted = await this.driver.waitForFunction(
       `(() => {
         const squash = (text) => String(text || '').replace(/\s+/g, '');
+        const want = squash(${JSON.stringify(value)});
         const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
         const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
-        return squash(longest).includes(squash(${JSON.stringify(value)}));
+        if (squash(longest).includes(want)) return true;
+        //: 兜底:这个平台自己也有字数计数(0 / 1000)。富文本改写标点/列表时,长度对得上就够了。
+        const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
+        return counted ? Number(counted[1]) >= Math.floor(want.length * 0.6) : false;
       })()`,
       4_000,
       200,

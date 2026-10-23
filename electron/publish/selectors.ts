@@ -52,7 +52,11 @@ export const SELECTORS = {
     imageFileInput: 'input[type="file"][accept*="image"]',
     imageTextUrl: (u: string): boolean => /content\/post\/image/.test(u),
     imageTitleInput: 'input[placeholder="添加作品标题"]', // i18n-ok
-    imageDescEditor: 'div[data-placeholder="添加作品描述..."]', // i18n-ok
+    //: 描述编辑器(真机 2026-10-23):`div.zone-container` 里的 contenteditable,`data-placeholder`
+    //: 只是空态提示,传完图 DOM 会重建、提示也可能换成别的字。所以给**一条按稳定性排的链**:
+    //: 先 zone-container,再 contenteditable,最后才是按提示文案找。
+    imageDescEditor:
+      'div.zone-container[contenteditable="true"], div.zone-container, div[data-placeholder*="作品描述"], div[contenteditable="true"]',
     publishDoneTexts: ["发布成功", "作品发布成功", "审核中"], // i18n-ok
   },
   xiaohongshu: {
