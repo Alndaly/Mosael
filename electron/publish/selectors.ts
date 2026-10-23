@@ -45,6 +45,13 @@ export const SELECTORS = {
   },
   xiaohongshu: {
     publishUrl: resolvePlatform("xiaohongshu").publishUrl,
+    //: **各档的直连地址**(借鉴 social-auto-upload 的做法):这一页认 `?target=image` / `?target=video`,
+    //: 直接导航过去比「点 tab」确定得多 —— 点不中、点到离屏克隆、SPA 还没渲染,这几种都能躲开。
+    //: 点 tab 仍然留着当兜底(地址被平台改掉时还有一条路)。
+    entryUrlByKind: {
+      video: `${resolvePlatform("xiaohongshu").publishUrl}?from=homepage&target=video`,
+      "image-text": `${resolvePlatform("xiaohongshu").publishUrl}?from=homepage&target=image`,
+    } as Record<string, string>,
     //: 创作页顶部是几个 tab:**上传视频 / 上传图文**(另有「写长文」「发播客」)。
     //: 之前假设「默认就是图文」,实测不是 —— 落进去是视频那一档,于是图文任务在视频页上交图片,
     //: 页面回一句「请先切换到图文 tab」。**按形状显式点对应的 tab**,不猜默认值。
@@ -64,10 +71,15 @@ export const SELECTORS = {
     //: 上传后弹的那种「图片可以编辑啦,快来试试吧」提示框:挡在页面中间,不点掉会挡住「发布」。
     dismissibleHints: ["我知道了"], // i18n-ok
     fileInput: 'input[type="file"]',
+    //: **按 accept 选图文档那个 input**(借鉴 social-auto-upload):视频档的 accept 是一串视频扩展名,
+    //: 图文档是 `.jpg,.jpeg,.png,.webp` —— 用 accept 定位,图片不会交给视频那个框。
+    imageFileInput: 'input[type="file"][accept*=".jpg"], input[type="file"][accept*="image"]',
     titleInput:
       'input[placeholder*="填写标题"], input[placeholder*="请输入标题"], input[placeholder*="标题"], textarea[placeholder*="标题"]', // i18n-ok
+    //: 正文编辑器:真机是个 `<p data-placeholder="输入正文描述">`(contenteditable 在它身上),
+    //: 所以它排第一;后面几条是历史形态的兜底。
     contentEditor:
-      'div[contenteditable="true"], .ql-editor, [data-placeholder*="正文"], [aria-label*="正文"]', // i18n-ok
+      'p[data-placeholder*="输入正文描述"], div[contenteditable="true"], .ql-editor, [data-placeholder*="正文"], [aria-label*="正文"]', // i18n-ok
     submitButton:
       'xhs-publish-btn[is-publish="true"][submit-disabled="false"], .publish-page-publish-btn button',
     // Custom element whose host exposes enabled/loading state via attributes.

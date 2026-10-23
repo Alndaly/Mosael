@@ -67,21 +67,23 @@ export class XiaohongshuAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    await this.driver.goto(this.s.publishUrl);
-    //: **按形状进到它的创作页**。几种发布方式不是同一个页面(见 `XIAOHONGSHU_ENTRY` 的说明),
-    //: 落进去是哪一档也不能假设:实测默认是视频,图文任务会在视频页上交图片,平台回一句
-    //: 「请先切换到图片tab」(维护者 2026-10-23 真机)。
     const plan = XIAOHONGSHU_ENTRY[this.task.contentKind];
     if (!plan) {
       //: 表里没有 = 这一种形状我们还没接(`supports` 也已经声明过,走到这里是代码不一致)。
       throw publishError("xiaohongshu", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     }
-    //: **等到页面画出东西再点**:`goto` 回来时 SPA 可能还没渲染,点了等于没点(也不报错)。
+    //: **先走这一档的直连地址**(借鉴 social-auto-upload):`?target=image` / `?target=video` 是这一页
+    //: 自己的参数,比「进去再点 tab」确定得多 —— 点不中、点到离屏克隆、SPA 还没渲染都能躲开。
+    const entryUrl = this.s.entryUrlByKind[this.task.contentKind];
+    if (entryUrl) {
+      await this.driver.goto(entryUrl);
+      await this.driver.cssAttached(this.s.fileInput, UPLOAD_TIMEOUT).catch(() => undefined);
+      if (await this.onPlannedPage(plan)) return;
+    }
+    //: 地址这条路没成(平台改了参数),退回「点 tab」:逐步点,每步最多两次(精确 / 包含)。
+    if (!entryUrl) await this.driver.goto(this.s.publishUrl);
     await this.driver.cssAttached(this.s.fileInput, UPLOAD_TIMEOUT).catch(() => undefined);
-    if (await this.onPlannedPage(plan)) return;
     for (const stepText of plan.steps) {
-      //: 每一步最多点两次:先按「文案完全相等」,没进到再按「包含」—— 入口上可能带「新」角标之类。
-      //: 两种都没到目标页就继续下一步(这一档可能是多步的,比如长文要先落地再点「新的创作」)。
       for (const exact of [true, false]) {
         await clickTextPreferTrusted(this.driver, stepText, {
           exact,
@@ -172,8 +174,12 @@ export class XiaohongshuAdapter implements PublishAdapter {
   /** 图文:一次交多份图片(**顺序就是数组顺序**),等编辑器与「发布」都就绪。 */
   async uploadImages(paths: string[]): Promise<void> {
     if (paths.length === 0) throw publishError("xiaohongshu", "publishErr_noAssets");
-    await this.driver.fileInputAttached(this.s.fileInput, ACTION_TIMEOUT);
-    await this.driver.setFiles(this.s.fileInput, paths);
+    //: 用 accept 定位**图文档**那个 input:视频档的框只收视频扩展名,把图片塞进去会被页面拒
+    //: (真机那句「请先切换到图片tab」就是这么来的)。找不到再退回泛匹配。
+    const input =
+      (await this.driver.cssAttached(this.s.imageFileInput, ACTION_TIMEOUT)) ? this.s.imageFileInput : this.s.fileInput;
+    await this.driver.fileInputAttached(input, ACTION_TIMEOUT);
+    await this.driver.setFiles(input, paths);
     const ready = await this.driver.cssVisible(this.s.titleInput, UPLOAD_TIMEOUT);
     if (!ready) {
       throw publishError("xiaohongshu", "publishErr_editorMissing");
