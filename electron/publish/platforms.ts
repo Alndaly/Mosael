@@ -155,12 +155,14 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     id: "youtube",
     nameKey: "platform_youtube",
     aliases: ["youtube", "yt", "油管"], // i18n-ok
-    //: **登录从 YouTube 自己的站进去,不要直接打开 accounts.google.com**(2026-10-23)。
-    //: 直接开 `accounts.google.com/ServiceLogin` 会落进 Google 的**旧版**登录流程(`flowName=GlifWebSignIn`),
-    //: 而从 youtube.com 自己跳过去时走的是新流程(`flowName=WebLiteSignIn`,界面也不一样);
-    //: 哪一版由 Google 按浏览器与 cookie 决定,我们只负责**从对的入口进**,不去替它选。
-    //: 未登录时 studio.youtube.com 会自己跳到 accounts.google.com —— checkLogin 据此判定。
-    loginUrl: "https://studio.youtube.com/",
+    //: **入口决定 Google 给你哪一版登录流程,而两版对我们的待遇不同**(2026-10-23 实测):
+    //: - 直接开 `accounts.google.com/ServiceLogin?service=youtube` → `flowName=WebLiteSignIn`,
+    //:   那一版能正常输账号密码(维护者反馈「可以正常登录了」正是这一版);
+    //: - 从 `youtube.com/upload` / `studio.youtube.com` 让它自己跳过去 → `flowName=GlifWebSignIn`,
+    //:   那一版在**填完邮箱点「下一步」的那一刻**就回 `signin/rejected`(「此浏览器或应用可能不安全」),
+    //:   连密码页都到不了(用池会话实测复现)。
+    //: 所以我上一版「从 youtube.com 自己跳」是反的 —— 退回 ServiceLogin 这个入口。
+    loginUrl: "https://accounts.google.com/ServiceLogin?service=youtube",
     dashboardUrl: "https://studio.youtube.com/",
     publishUrl: "https://studio.youtube.com/",
     manageUrl: "https://studio.youtube.com/",
