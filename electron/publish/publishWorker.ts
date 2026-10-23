@@ -229,7 +229,8 @@ function resolveBlockedStatus(
  * 表里没有 = 不支持,和适配器声明的 `supports` 一起在动手前拦下。
  */
 const UPLOAD_BY_KIND: Partial<Record<ContentKind, (adapter: PublishAdapter, task: PublishTask) => Promise<void>>> = {
-  video: (adapter, task) => adapter.uploadVideo(task.videoPath),
+  //: 视频就是 `mediaPaths` 里那一份(协议里没有单独的"视频路径")。
+  video: (adapter, task) => adapter.uploadVideo(task.mediaPaths[0]),
   "image-text": (adapter, task) => {
     if (!adapter.uploadImages) {
       return Promise.reject(publishError(task.platform, "publishErr_kindNotImplemented", { kind: "image-text" }));
@@ -247,9 +248,8 @@ function toAdapterTask(t: backend.BackendTask): PublishTask {
     accountId: t.account_id,
     accountName: t.account_name,
     platform: resolvePlatform(t.platform).id,
-    videoPath: t.video_path,
     contentKind: (t.content_kind as "video" | "image-text" | "article" | undefined) ?? "video",
-    mediaPaths: t.media_paths?.length ? t.media_paths : [t.video_path],
+    mediaPaths: t.media_paths,
     body: t.body ?? "",
     title: t.title,
     tags: t.tags || [],
@@ -368,7 +368,7 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     running.delete(bt.account_id);
     return;
   }
-  plog("runTask start:", bt.id, bt.platform, bt.video_path);
+  plog("runTask start:", bt.id, bt.platform, bt.media_paths.join(", "));
   //: 同一份身份规则:发布任务走的也是这个账号的视图。
   //: 老版本/测试替身可能没有这个方法:身份是锦上添花,绝不能让它挡住任务。
   views?.setAccountPlatform?.(bt.account_id, bt.platform);
@@ -449,8 +449,8 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     await step(tr("publishStep_upload"));
     //: 按任务声明的形状挑上传方法(ADR 0076)。适配器不自己判断 kind —— 它只声明自己做到了哪些,
     //: 由这里按 `supports` 对一遍,对不上就**在动手前**失败,说清这个平台/这个适配器还发不了。
-    const kind = t.contentKind ?? "video";
-    const supported = adapter.supports ?? (["video"] as const);
+    const kind = t.contentKind;
+    const supported = adapter.supports;
     const upload = UPLOAD_BY_KIND[kind];
     if (!supported.includes(kind) || !upload) {
       throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
@@ -574,7 +574,6 @@ async function checkAccountStatus(acc: backend.CheckAccount): Promise<void> {
     accountId: acc.account_id,
     accountName: acc.name ?? "",
     platform,
-    videoPath: "",
     contentKind: "video",
     mediaPaths: [],
     body: "",
@@ -969,8 +968,7 @@ export async function openLogin(accountId: string, platform: string): Promise<vo
       accountId,
       accountName: "",
       platform: def.id,
-      videoPath: "",
-      contentKind: "video",
+        contentKind: "video",
       mediaPaths: [],
       body: "",
       title: "",

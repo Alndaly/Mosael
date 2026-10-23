@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
-  const adapter = Object.fromEntries(["openCreatorPage", "checkLogin", "uploadVideo", "fillTitle", "fillTags", "submit", "waitResult"].map(k => [k, vi.fn(async () => true)]));
+  //: `supports` 是接口上**必填**的声明(见 adapters/shared):假适配器也得说清自己会发什么形状。
+  const adapter = {
+    supports: ["video"] as const,
+    ...Object.fromEntries(["openCreatorPage", "checkLogin", "uploadVideo", "fillTitle", "fillTags", "submit", "waitResult"].map(k => [k, vi.fn(async () => true)])),
+  };
   const driver = { setAbortSignal: vi.fn(), captureResponses: vi.fn(() => ({ stop: async () => [] })), setMetricsOverride: vi.fn(), clearMetricsOverride: vi.fn(async () => {}), url: () => "about:blank" };
   const views = { attachWindow: vi.fn(), getDriver: () => driver, panelAttach: vi.fn(), panelDetach: vi.fn(), isPanelled: () => true, configureAccount: vi.fn(async () => {}) };
   const backend = { heartbeat: vi.fn(async () => {}), markDue: vi.fn(async () => {}), claimTask: vi.fn(), claimCheck: vi.fn(async () => ({ account: null })), patchAccount: vi.fn(async () => {}), reportTask: vi.fn(async () => {}), taskStatus: vi.fn(async () => ({ status: "running" })) };
@@ -26,7 +30,8 @@ beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks();
   mocks.backend.taskStatus.mockResolvedValue({ status: "running" });
   mocks.backend.claimTask.mockResolvedValue({ task: null }).mockResolvedValueOnce({ task: {
-    id: "task", account_id: "account", account_name: "Test", platform: "douyin", video_path: MEDIA, title: "test", tags: [], status: "running",
+    id: "task", account_id: "account", account_name: "Test", platform: "douyin",
+    content_kind: "video", body: "", media_paths: [MEDIA], title: "test", tags: [], status: "running",
   } });
   mocks.adapter.fillTags.mockImplementation(async () => true);
 });

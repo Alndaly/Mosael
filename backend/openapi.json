@@ -46671,24 +46671,19 @@
             "type": "string",
             "title": "Account Id"
           },
-          "asset_id": {
-            "type": "string",
-            "title": "Asset Id",
-            "default": ""
-          },
           "asset_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
             "maxItems": 64,
+            "minItems": 1,
             "title": "Asset Ids"
           },
           "content_kind": {
             "type": "string",
             "maxLength": 20,
-            "title": "Content Kind",
-            "default": "video"
+            "title": "Content Kind"
           },
           "body": {
             "type": "string",
@@ -46731,7 +46726,9 @@
         "type": "object",
         "required": [
           "workspace_id",
-          "account_id"
+          "account_id",
+          "asset_ids",
+          "content_kind"
         ],
         "title": "PublishCreate"
       },

@@ -4,6 +4,8 @@ import type { PublishAdapter } from "./shared";
 import { escapeHtml, wait } from "./shared";
 
 export class MockAdapter implements PublishAdapter {
+  /** 已接的形状(ADR 0076)。 */
+  readonly supports = ["video"] as const;
   constructor(
     private readonly driver: PageDriver,
     private readonly task: PublishTask,

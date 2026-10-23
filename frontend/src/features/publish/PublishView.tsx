@@ -753,7 +753,9 @@ function CreatePublishDialog({
         workspace_id: workspace.id,
         account_id: accountId!,
         content_kind: kind,
-        ...(needsImages ? { asset_ids: imageIds, body: body.trim() } : { asset_id: assetId! }),
+        //: 素材只有一种形状:`asset_ids`。视频就是只有一份的那个列表 —— 不再有"单数 / 复数"两条路。
+        asset_ids: needsImages ? imageIds : [assetId!],
+        ...(needsImages ? { body: body.trim() } : {}),
         title: title.trim(),
         //: **简介只属于视频那一档**。此前 spread 里写了 `description: ""`,可**下面这行又把它覆盖回去**
         //: ——图文任务于是带着简介里残留的旧字发出去(真机 2026-10-23:记录里显示「1.」,正文却对不上)。

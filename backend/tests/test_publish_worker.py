@@ -18,7 +18,8 @@ def setup_browser_task(client) -> tuple[dict, dict, dict]:
         json={
             "workspace_id": ws["id"],
             "account_id": account["id"],
-            "asset_id": asset["id"],
+            "asset_ids": [asset["id"]],
+            "content_kind": "video",
             "title": "夏日海边三十秒混剪压在三十字以内",
             "description": "简介",
             "tags": ["海边"],
@@ -47,7 +48,7 @@ def test_browser_platform_waits_for_worker_and_reports() -> None:
     claimed = client.post("/api/publish/worker/claim", json={"exclude_accounts": [], "worker": WORKER}).json()
     assert claimed["task"]["id"] == task["id"]
     assert claimed["task"]["platform"] == "douyin"
-    assert claimed["task"]["video_path"].endswith("clip.mp4")
+    assert claimed["task"]["media_paths"][0].endswith("clip.mp4")
 
     # 同账号任务在 exclude 列表里 → 认领不到
     again = client.post("/api/publish/worker/claim", json={"exclude_accounts": [account["id"]], "worker": WORKER}).json()
@@ -109,7 +110,8 @@ def test_title_limit_and_binding_check_flow() -> None:
         json={
             "workspace_id": ws["id"],
             "account_id": account["id"],
-            "asset_id": asset["id"],
+            "asset_ids": [asset["id"]],
+            "content_kind": "video",
             "title": "这是一条明显超过十六个字上限的超长标题啊",
         },
     )

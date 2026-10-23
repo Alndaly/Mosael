@@ -19,11 +19,11 @@ interface BackendTask {
   account_name: string;
   platform: string;
   proxy: string | null;
-  video_path: string;
-  /** 内容形状与多份素材(ADR 0076);老后端不给这几个字段时按视频兜底。 */
-  content_kind?: string;
-  body?: string;
-  media_paths?: string[];
+  /** 内容形状(ADR 0076)。必填 —— 执行器不猜"没给就当视频"。 */
+  content_kind: string;
+  body: string;
+  /** 素材路径,按发出去的顺序;视频就是装着一份的那个列表。 */
+  media_paths: string[];
   title: string;
   tags: string[];
   description: string;

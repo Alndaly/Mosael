@@ -191,8 +191,15 @@ def test_a_body_over_the_platform_limit_is_refused() -> None:
     assert "1000" in response.text
 
 
-def test_old_tasks_fall_back_to_their_single_asset() -> None:
-    """老任务没有 asset_ids / content_kind:读出来要是「一份视频」,不是「零份素材」。"""
+def test_the_migration_backfills_the_single_asset_and_the_kind() -> None:
+    """**形状由迁移统一,不靠运行时回退**。
+
+    这一条此前测的是"读的一侧在 asset_ids 为空时回退到 [asset_id]" —— 那条回退让"老形状"永远
+    活着。现在改成测迁移:空 asset_ids + 空 content_kind 的行,迁移后被填成「一份素材 / video」,
+    而运行时只认库里那两个字段。
+    """
+    from app.db.migrations import _migrate_publish_tasks_get_content_shape
+
     client = _client()
     workspace_id = _workspace(client)
     account = _account(client, workspace_id, "douyin")
@@ -202,21 +209,25 @@ def test_old_tasks_fall_back_to_their_single_asset() -> None:
         json={
             "workspace_id": workspace_id,
             "account_id": account["id"],
-            "asset_id": asset["id"],
+            "asset_ids": [asset["id"]],
+            "content_kind": "video",
             "title": "老形状",
         },
     ).json()
 
     with SessionLocal() as db:
         task = db.get(PublishTask, created["id"])
+        #: 模拟迁移之前落下的那一行。
         task.asset_ids = []
         task.content_kind = ""
         db.commit()
 
-    listed = client.get(f"/api/publish/tasks?workspace_id={workspace_id}").json()
-    row = next(one for one in listed if one["id"] == created["id"])
-    assert row["asset_ids"] == [asset["id"]]
-    assert row["content_kind"] == "video"
+    _migrate_publish_tasks_get_content_shape()
+
+    with SessionLocal() as db:
+        task = db.get(PublishTask, created["id"])
+        assert task.asset_ids == [asset["id"]]
+        assert task.content_kind == "video"
 
 
 def test_the_worker_gets_every_asset_in_order_and_the_content_shape() -> None:
@@ -249,5 +260,5 @@ def test_the_worker_gets_every_asset_in_order_and_the_content_shape() -> None:
     assert handed["content_kind"] == "image-text"
     assert handed["body"] == "正文"
     assert len(handed["media_paths"]) == 2
-    #: 视频那一份仍放在 video_path(老执行器的兼容读法)。
-    assert handed["video_path"] == handed["media_paths"][0]
+    #: **只有一种形状**:`media_paths`(按顺序)。协议里不再有 `video_path` —— 视频就是第一个。
+    assert "video_path" not in handed

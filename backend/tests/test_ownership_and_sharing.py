@@ -181,7 +181,12 @@ def test_an_unshared_account_cannot_be_used_to_publish() -> None:
 
     refused = mate.post(
         "/api/publish/tasks",
-        json={"workspace_id": workspace["id"], "account_id": account_id, "asset_id": "whatever"},
+        json={
+            "workspace_id": workspace["id"],
+            "account_id": account_id,
+            "asset_ids": ["whatever"],
+            "content_kind": "video",
+        },
     )
     assert refused.status_code in (403, 404), refused.text
 

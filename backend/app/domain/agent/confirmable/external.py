@@ -38,7 +38,9 @@ def _execute_publish_asset(db: Session, confirmation: Any, actor: str | None) ->
         db,
         workspace_id=confirmation.workspace_id,
         account=account,
-        asset=asset,
+        #: 这张卡只发视频:一份素材的列表。
+        assets=[asset],
+        kind="video",
         title=str(payload.get("title") or ""),
         description=str(payload.get("description") or ""),
         tags=[],

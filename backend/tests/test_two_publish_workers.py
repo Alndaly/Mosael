@@ -97,7 +97,8 @@ def test_同一个账号不会被两个执行器同时认领() -> None:
         json={
             "workspace_id": ws["id"],
             "account_id": account["id"],
-            "asset_id": asset_id,
+            "asset_ids": [asset_id],
+            "content_kind": "video",
             "title": "同一个账号的第二条",
             "description": "",
             "tags": [],

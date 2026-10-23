@@ -6889,8 +6889,10 @@ def _migrate_clips_get_a_link_group() -> None:
 def _migrate_publish_tasks_get_content_shape() -> None:
     """发布任务从「一份视频」变成「三种内容形状」(ADR 0076,见 domain/publish)。
 
-    `content_kind` 默认 `video`、`asset_ids` 默认空数组 —— 老任务不用回填:读的一侧在
-    `asset_ids` 为空时回退到 `[asset_id]`,在 `content_kind` 为空时按 `video` 处理。
+    **迁移一次、之后只有一种形状**:`content_kind` 一律有值(默认 video),`asset_ids` 一律装
+    着这份任务的素材(单份视频就是它自己的 id)。此前读的一侧还带着「`asset_ids` 为空就回退到
+    `[asset_id]`」的运行时分支 —— 那让"老任务"永远活着,读代码的人得同时想两种数据。
+    现在回填到底,读的一侧只认 `asset_ids`。
     """
     with engine.begin() as conn:
         columns = {row[1] for row in conn.execute(text("PRAGMA table_info(publish_tasks)"))}
@@ -6904,6 +6906,77 @@ def _migrate_publish_tasks_get_content_shape() -> None:
             conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN body TEXT NOT NULL DEFAULT ''"))
         if "media_meta" not in columns:
             conn.execute(text("ALTER TABLE publish_tasks ADD COLUMN media_meta JSON NOT NULL DEFAULT '{}'"))
+        #: 回填:`asset_ids` 为空而有 `asset_id` 的行,把那一份写进去(单素材任务的唯一形状)。
+        rows = conn.execute(
+            text("SELECT id, asset_id, asset_ids, content_kind FROM publish_tasks"),
+        ).fetchall()
+        for task_id, asset_id, raw_ids, content_kind in rows:
+            #: 这一行是**裸文本**(迁移直接走 SQL,不经过 ORM 的 JSON 列):`'[]'` 是个非空字符串,
+            #: 拿它当布尔判会以为"已经有素材了"。先解成列表再看。
+            try:
+                current_ids = json.loads(raw_ids) if raw_ids else []
+            except (TypeError, ValueError):
+                current_ids = []
+            updates: dict[str, Any] = {}
+            if (not current_ids) and asset_id:
+                updates["asset_ids"] = json.dumps([asset_id])
+            if not content_kind:
+                updates["content_kind"] = "video"
+            if updates:
+                assignments = ", ".join(f"{key} = :{key}" for key in updates)
+                conn.execute(text(f"UPDATE publish_tasks SET {assignments} WHERE id = :id"), {**updates, "id": task_id})
+        #: 迁移之后这两种形状不该再出现:出现了就是这条迁移的漏洞,当场说出来,别留给运行时猜。
+        leftovers = conn.execute(
+            text("SELECT COUNT(*) FROM publish_tasks WHERE asset_ids = '[]' AND asset_id IS NOT NULL"),
+        ).scalar()
+        if leftovers:
+            raise RuntimeError(f"publish_tasks 迁移未完成:{leftovers} 行有 asset_id 但 asset_ids 仍为空")
+
+
+def _migrate_workflow_publish_nodes_get_content_kind() -> None:
+    """工作流里的发布节点补上 `content_kind`(ADR 0076)。
+
+    节点声明里有默认值,但那是**新建节点**的默认;已经存下来的图里没有这个键。执行器不再写
+    「没填就当 video」这种回退(回退会让"旧图"永远活着,读代码要同时想两种),所以在这里一次补齐:
+    没有 `content_kind` 的发布节点写成 `video` —— 它们当初只能是视频。
+    """
+    with engine.begin() as conn:
+        tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+        if "workflows" not in tables:
+            return
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(workflows)"))}
+        json_columns = [name for name in ("graph", "nodes", "definition") if name in columns]
+        for column in json_columns:
+            for workflow_id, raw in conn.execute(text(f"SELECT id, {column} FROM workflows")).fetchall():
+                if not raw:
+                    continue
+                try:
+                    doc = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+                changed = _backfill_publish_nodes(doc)
+                if changed:
+                    conn.execute(
+                        text(f"UPDATE workflows SET {column} = :doc WHERE id = :id"),
+                        {"doc": json.dumps(doc, ensure_ascii=False), "id": workflow_id},
+                    )
+
+
+def _backfill_publish_nodes(doc: Any) -> bool:
+    """把一处 JSON 文档里所有 publish 节点的 `config.content_kind` 补成 `video`;返回有没有改动。"""
+    if isinstance(doc, dict):
+        changed = False
+        if doc.get("type") == "publish":
+            config = doc.get("config")
+            if isinstance(config, dict) and not config.get("content_kind"):
+                config["content_kind"] = "video"
+                changed = True
+        for value in doc.values():
+            changed = _backfill_publish_nodes(value) or changed
+        return changed
+    if isinstance(doc, list):
+        return any(_backfill_publish_nodes(one) for one in doc)
+    return False
 
 
 def _migrate_browser_profiles_pin_identity() -> None:
@@ -10089,6 +10162,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_browser_profile_start_url,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 PublishTask 已经指望这几列存在了。
                 _migrate_publish_tasks_get_content_shape,
+                _migrate_workflow_publish_nodes_get_content_kind,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 BrowserProfile 已经指望 identity 存在了。
                 _migrate_browser_profiles_pin_identity,
                 _migrate_usage_unpriced_reason,

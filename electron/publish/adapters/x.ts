@@ -25,6 +25,8 @@ import { plog } from "../log";
 const X_MAX_BYTES = 512 * 1024 * 1024;
 
 export class XAdapter implements PublishAdapter {
+  /** 已接的形状(ADR 0076)。 */
+  readonly supports = ["video"] as const;
   private readonly s = SELECTORS.x;
 
   // 帖子文本要把「简介」一起写进去(见 fillTitle),所以任务要留着。

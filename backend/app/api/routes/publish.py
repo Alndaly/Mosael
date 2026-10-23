@@ -141,8 +141,8 @@ def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     account = db.get(PublishAccount, body.account_id)
     if account is None or account.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail=tr("routeErr_publishAccountNotInWorkspace"))
-    #: 素材:视频 / 老调用点传一个 `asset_id`;图文 / 文章传 `asset_ids`(按顺序)。
-    requested_ids = [one for one in (body.asset_ids or []) if one] or ([body.asset_id] if body.asset_id else [])
+    #: 素材只有一种形状:`asset_ids`(按发出去的顺序)。视频也是只有一份的那个列表。
+    requested_ids = [one for one in body.asset_ids if one]
     if not requested_ids:
         raise HTTPException(status_code=422, detail=tr("publishErr_noAssets", kind=body.content_kind))
     assets: list[Asset] = []

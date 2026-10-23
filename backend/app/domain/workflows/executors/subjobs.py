@@ -496,8 +496,9 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
     if account is None or account.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_publishAccountMissing")
     #: **内容形状**(ADR 0076):视频发一份成片 + 简介,图文 / 文章发一组图片 + 正文。
-    #: 两种形状的素材字段不同(asset_id / asset_ids),文案字段也不同(description / body)。
-    kind = str(config.get("content_kind") or "video")
+    #: 老图没有这个键的,**由迁移补齐**(见 db/migrations 的 workflow publish nodes),这里不回退 ——
+    #: 回退会让"旧图"永远活着,读代码的人得同时想两种配置。
+    kind = str(config["content_kind"])
     asset: Asset | None = None
     assets: list[Asset] = []
     if kind == "video":
@@ -539,14 +540,13 @@ def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, A
         db,
         workspace_id=scope.workspace_id,
         account=account,
-        asset=asset,
+        assets=[asset] if asset is not None else assets,
+        kind=kind,
         title=str(config.get("title", "")),
         description=description if kind == "video" else "",
         actor=current_authority(db),
         tags=tags,
         options=options,
-        kind=kind,
-        assets=assets or None,
         body=str(config.get("body", "")) if kind != "video" else "",
     )
     final = wait_for_job(task.job_id or "", release=db)

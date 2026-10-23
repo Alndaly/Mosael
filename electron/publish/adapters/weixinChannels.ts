@@ -7,6 +7,8 @@ import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt 
 import { AutomationBlockedError } from "../errors";
 
 export class WeixinChannelsAdapter implements PublishAdapter {
+  /** 已接的形状(ADR 0076)。 */
+  readonly supports = ["video"] as const;
   private readonly s = SELECTORS.weixinChannels;
 
   constructor(

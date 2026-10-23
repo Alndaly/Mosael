@@ -441,16 +441,14 @@ def start_publish(
     *,
     workspace_id: str,
     account: PublishAccount,
-    asset: Asset | None = None,
+    assets: list[Asset],
+    kind: str,
     title: str,
     description: str,
     tags: list[str],
     actor: Actor,
     short_title: str = "",
     options: dict[str, Any] | None = None,
-    #: 内容形状与多份素材(ADR 0076)。`asset` 单数保留:视频、以及所有老调用点都还这么传。
-    kind: str = "video",
-    assets: list[Asset] | None = None,
     body: str = "",
 ) -> PublishTask:
     """建一条发布任务 —— **所有发布入口的唯一实现**(发布页、工作流发布节点、智能体确认卡)。
@@ -481,8 +479,8 @@ def start_publish(
         raise PublishDomainError(
             "publishErr_kindUnsupported", platform=meta["label"], kind=kind, supported=", ".join(declared)
         )
-    items = list(assets) if assets else ([asset] if asset else [])
-    items = [one for one in items if one is not None]
+    #: 素材**只有一种形状**:一份列表。视频就是只装一份的那个列表(ADR 0076 之后没有第二种传法)。
+    items = [one for one in assets if one is not None]
     limits = content_limits(account.platform, kind)
     if not items:
         raise PublishDomainError("publishErr_noAssets", platform=meta["label"], kind=kind)
@@ -562,8 +560,7 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
     # 那些需要人介入的中间态。以前这里要按 executor 在 task.status 和 job.status 之间二选一,
     # 因为本地目录/webhook 也混在这张表里;它们拆走之后就只剩一个来源了。
     status = task.status
-    raw_ids = list(task.asset_ids or [])
-    asset_ids = raw_ids or ([task.asset_id] if task.asset_id else [])
+    asset_ids = list(task.asset_ids)
     return {
         "id": task.id,
         "workspace_id": task.workspace_id,
@@ -571,9 +568,9 @@ def task_with_status(db: Session, task: PublishTask) -> dict[str, Any]:
         "account_name": account.name if account else "",
         "platform": platform,
         "asset_id": task.asset_id,
-        #: 多份素材(图文 / 文章);视频与老任务就是一份。
+        #: 这份任务的素材(按发出去的顺序);视频就是一份。
         "asset_ids": asset_ids,
-        "content_kind": task.content_kind or "video",
+        "content_kind": task.content_kind,
         "body": task.body or "",
         #: 素材删了,记录还在(asset_id 为空):名字取建任务时记下的那份。
         "asset_name": asset.name if asset else task.asset_name,

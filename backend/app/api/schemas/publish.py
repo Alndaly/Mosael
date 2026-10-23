@@ -84,11 +84,11 @@ class PublishAccountOut(OrmModel):
 class PublishCreate(ApiModel):
     workspace_id: str
     account_id: str
-    #: 视频与老调用点仍传 `asset_id`;图文 / 文章传 `asset_ids`(按顺序)。两个都给时以 `asset_ids` 为准。
-    asset_id: str = ""
-    asset_ids: list[str] = Field(default_factory=list, max_length=64)
-    #: 内容形状(ADR 0076):video / image-text / article。默认 video —— 老调用方不用改。
-    content_kind: str = Field(default="video", max_length=20)
+    #: 这份任务的素材,按发出去的顺序。视频就是**只有一个元素**的那个列表 —— 没有第二种传法。
+    asset_ids: list[str] = Field(min_length=1, max_length=64)
+    #: 内容形状(ADR 0076):video / image-text / article。**必填**:没有"默认当视频"这一档,
+    #: 不然同一个入口要同时想两种形状(形状决定素材怎么发、正文在哪一格)。
+    content_kind: str = Field(max_length=20)
     #: 正文 / 长文(图文与文章用)。以前正文塞在 `options.description` 里,现在归位。
     body: str = Field(default="", max_length=40000)
     title: str = Field(default="", max_length=300)

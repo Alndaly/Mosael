@@ -18174,17 +18174,9 @@ export interface components {
             workspace_id: string;
             /** Account Id */
             account_id: string;
-            /**
-             * Asset Id
-             * @default
-             */
-            asset_id: string;
             /** Asset Ids */
-            asset_ids?: string[];
-            /**
-             * Content Kind
-             * @default video
-             */
+            asset_ids: string[];
+            /** Content Kind */
             content_kind: string;
             /**
              * Body

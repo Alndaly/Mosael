@@ -142,7 +142,7 @@ def _share(client: TestClient, kind: str, resource_id: str, workspace_id: str) -
 def _publish(client: TestClient, workspace_id: str, account_id: str, asset_id: str):
     return client.post(
         "/api/publish/tasks",
-        json={"workspace_id": workspace_id, "account_id": account_id, "asset_id": asset_id, "title": "t"},
+        json={"workspace_id": workspace_id, "account_id": account_id, "asset_ids": [asset_id], "content_kind": "video", "title": "t"},
     )
 
 
@@ -160,7 +160,7 @@ def test_a_mate_cannot_publish_with_a_private_account() -> None:
 
     en = mate.post(
         "/api/publish/tasks",
-        json={"workspace_id": workspace["id"], "account_id": account["id"], "asset_id": asset["id"]},
+        json={"workspace_id": workspace["id"], "account_id": account["id"], "asset_ids": [asset["id"]], "content_kind": "video"},
         headers={"Accept-Language": "en"},
     )
     assert "hasn't been shared" in en.json()["detail"]
@@ -221,7 +221,7 @@ def test_the_publish_node_runs_as_the_runs_actor(monkeypatch) -> None:
     owner, workspace, _mate = _team()
     account = _account(owner, workspace["id"])
     asset = make_video_asset(owner, workspace["id"])
-    config = {"account_id": account["id"], "asset_id": asset["id"], "title": "t"}
+    config = {"account_id": account["id"], "asset_id": asset["id"], "content_kind": "video", "title": "t"}
 
     with pytest.raises(sharing.NotUsableError) as refused:
         _run_node("publish", workspace["id"], _uid("mate"), config)
@@ -249,6 +249,8 @@ def test_the_publish_card_uses_the_approvers_authority() -> None:
     owner, workspace, mate = _team()
     account = _account(owner, workspace["id"])
     asset = make_video_asset(owner, workspace["id"])
+    #: 这张卡是**发一份素材**(publish_asset):卡自己的 payload 用单数 —— 进 start_publish 时
+    #: 由执行器包成"一个元素的列表"。
     payload = {"account_id": account["id"], "asset_id": asset["id"], "title": "t"}
 
     denied = _card(mate, workspace["id"], "publish_asset", payload)

@@ -167,9 +167,8 @@ def claim_next_pending(
         #: 内容形状与多份素材(ADR 0076):执行器按 kind 挑上传方法,视频仍只取第一份。
         "content_kind": task.content_kind or "video",
         "body": task.body or "",
+        #: 素材路径,按发出去的顺序。视频就是只装一份的那个列表 —— 执行器认这一个字段。
         "media_paths": [str(resolve_key(one.file_key)) for one in items],
-        #: 兼容老执行器:视频那一份仍放在 video_path。
-        "video_path": str(resolve_key(asset.file_key)),
         "title": task.title,
         "tags": list(task.tags or []),
         "description": task.description,

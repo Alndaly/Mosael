@@ -543,9 +543,9 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
     source = resolve_key(asset.file_key)
     #: **原文件没了就别再给缩略图**:缩略图是生成时留在同一个目录里的 jpg,它比源文件活得久,
     #: 于是卡片还能"预览"一份已经不存在的素材(2026-10-23 真机)。这里如实回 404,
-    #: 由列表里的 `file_missing` 告诉界面怎么画。
+    #: 由列表里的 `file_missing` 告诉界面怎么画。文案走 i18n(路由里的 details 不写死英文)。
     if not source.is_file():
-        raise HTTPException(status_code=404, detail="Asset file missing")
+        raise HTTPException(status_code=404, detail=tr("analysisErr_fileMissing"))
     thumb = thumbnail_path(source.parent)
     if not thumb.is_file():
         generate_thumbnail(source, asset.kind, source.parent)  # backfill for pre-thumbnail imports

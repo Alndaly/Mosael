@@ -8,9 +8,10 @@ import { t } from "../../i18n.cjs";
 export interface PublishAdapter {
   /**
    * 这个适配器真做得到的形状(ADR 0076)。后端注册表声明平台**能发**什么,这里声明我们**实现了**
-   * 什么 —— 两者对不上由测试发现(见 electron/publish/adapters/supports.test.ts)。默认只有视频。
+   * 什么 —— 两者对不上由测试发现(见 electron/publish/adapters/supports.test.ts)。
+   * **必填**:没有"没声明就当只有视频"这一档,漏声明是类型错误。
    */
-  readonly supports?: readonly ContentKind[];
+  readonly supports: readonly ContentKind[];
   openCreatorPage(): Promise<void>;
   checkLogin(): Promise<boolean>;
   uploadVideo(videoPath: string): Promise<void>;

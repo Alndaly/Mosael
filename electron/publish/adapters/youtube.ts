@@ -10,6 +10,8 @@ import { plog } from "../log";
 import { resolvePlatform } from "../platforms";
 
 export class YoutubeAdapter implements PublishAdapter {
+  /** 已接的形状(ADR 0076)。 */
+  readonly supports = ["video"] as const;
   private readonly s = SELECTORS.youtube;
   /** 本次上传拿到的视频 ID(详情页会显示 youtu.be 链接)。收尾判定靠它认「**这一支**发出去了」。 */
   private uploadedId: string | null = null;
