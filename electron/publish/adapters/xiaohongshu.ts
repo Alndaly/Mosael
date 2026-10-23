@@ -212,29 +212,29 @@ export class XiaohongshuAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
-    await typeOrFill(this.driver, "xiaohongshu body", this.s.contentEditor, value, async () => {
-      await this.driver.focusAndClearField(this.s.contentEditor);
-      await this.driver.insertText(this.s.contentEditor, value);
-    });
-    const accepted = await this.driver.waitForFunction(
-      `(() => {
-        const squash = (text) => String(text || '').replace(/\s+/g, '');
-        const want = squash(${JSON.stringify(value)});
-        const editor = document.querySelector(${JSON.stringify(this.s.contentEditor)});
-        //: ① 编辑器里的字(innerText 会被富文本加换行,所以空白去掉再比)
-        if (squash(editor?.innerText).includes(want)) return true;
-        //: ② textContent(有些编辑器不产出 innerText)
-        if (squash(editor?.textContent).includes(want)) return true;
-        //: ③ 平台自己的字数计数器 ≥ 这段字(再往下不猜)
-        const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
-        return counted ? Number(counted[1]) >= want.length : false;
-      })()`,
-      3_000,
-      200,
-    );
-    if (!accepted) {
-      throw publishError("xiaohongshu", "publishErr_descriptionRejected");
+    //: 打两遍:第一遍的点击可能被「图片可以编辑啦」那类浮层吃掉(字没进去,也不报错)。
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await typeOrFill(this.driver, "xiaohongshu body", this.s.contentEditor, value, async () => {
+        await this.driver.focusAndClearField(this.s.contentEditor);
+        await this.driver.insertText(this.s.contentEditor, value);
+      });
+      if (await this.driver.waitForFunction(this.bodyFilledExpression(value), 4_000, 200)) return;
+      await this.dismissHints();
     }
+    //: 还是不匹配 —— **编辑器里到底有没有字**才是分水岭:
+    //: 空的 = 真的没填进去,报错(发出去会是一条没正文的笔记);
+    //: 有字但比对不上 = 富文本把它改成了别的样子(列表/换行/标点),这时候**不该拦发布** ——
+    //: 真机 2026-10-23 三次都是这种:字明明在、字数也涨了,却被判"没接受",整条任务白跑。
+    const shown = await this.driver
+      .evaluate<string>(`(() => {
+        const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
+        const longest = editors
+          .map((one) => (one.innerText || one.textContent || ''))
+          .sort((a, b) => b.length - a.length)[0] || '';
+        return longest.trim();
+      })()`)
+      .catch(() => "");
+    if (!shown) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
   }
 
   /**
@@ -244,6 +244,27 @@ export class XiaohongshuAdapter implements PublishAdapter {
    * 直接 `includes(原文)` 就永远不成立(真机:文字明明在编辑器里、字数也涨了,却被判"没有接受")。
    * 两边都把空白去掉再比,才是「这些字进去了吗」。
    */
+  /**
+   * 正文是否已经填进去。判据按**可靠性**排,任一成立即可:
+   *
+   * 1. 候选编辑器里**文字最多的那一个**包含要填的字(空白不敏感)—— 不假定 `querySelector` 的第一个
+   *    就是真编辑器:真机上选择器还可能先命中一个空的占位 `<p>`,那样比对必然失败;
+   * 2. 平台自己的字数计数器 ≥ 要填的六成长度(富文本会改写标点/列表,长度会差几个字)。
+   */
+  private bodyFilledExpression(value: string): string {
+    return `(() => {
+      const squash = (text) => String(text || '').replace(/\s+/g, '');
+      const want = squash(${JSON.stringify(value)});
+      const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
+      const longest = editors
+        .map((one) => (one.innerText || one.textContent || ''))
+        .sort((a, b) => b.length - a.length)[0] || '';
+      if (squash(longest).includes(want)) return true;
+      const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
+      return counted ? Number(counted[1]) >= Math.floor(want.length * 0.6) : false;
+    })()`;
+  }
+
   private acceptsTextExpression(selector: string, value: string): string {
     return `(() => {
       const squash = (text) => String(text || '').replace(/\s+/g, '');
