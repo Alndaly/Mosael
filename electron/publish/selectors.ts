@@ -89,6 +89,9 @@ export const SELECTORS = {
     //: 风控要人当场过一下的信号(扫码 / 身份验证 / 人脸)。**我们不尝试绕过**,
     //: 只把它当成「需要人」的一档交出去:亮出窗口让用户扫,扫完继续(见 ADR 0078)。
     verificationTexts: ["扫码验证", "安全验证", "身份验证", "请完成验证", "拖动滑块", "人脸验证"], // i18n-ok
+    //: 打 `#话题` 时平台拒收的字样(图 1 红提示):「话题内不允许包含特殊符号」。出现 = 这个话题
+    //: 带不了特殊符号,跳过而不是硬发。
+    topicInvalidText: "话题内不允许包含特殊符号", // i18n-ok
     fileInput: 'input[type="file"]',
     //: **按 accept 选图文档那个 input**(借鉴 social-auto-upload):视频档的 accept 是一串视频扩展名,
     //: 图文档是 `.jpg,.jpeg,.png,.webp` —— 用 accept 定位,图片不会交给视频那个框。

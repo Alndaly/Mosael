@@ -146,7 +146,25 @@ function onPlatformSite(url: string, hosts: readonly string[]): boolean {
   return hosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
 }
 
-export const normalizeTag = (tag: string): string => tag.replace(/^#/, "").trim();
+/**
+ * 把用户给的话题**规范成平台认的那一格**。
+ *
+ * 小红书话题只认「中英文 / 数字 / 下划线」([social-auto-upload 的实测结论](
+ * https://github.com/dreammis/social-auto-upload/blob/main/uploader/xiaohongshu_uploader/main.py),
+ * 它的做法是逐字打 `#tag`、候选没出现就跳过)。
+ * 用户从别处复制来的标签常带**顿号、逗号、书名号、emoji** —— 平台收到会弹
+ * 「话题内不允许包含特殊符号」(2026-10-23 真机截图),话题框挂着、后面的话题全加不进去。
+ *
+ * 这里做两件事:① 去掉 # 头和空白(原有);② 把**不允许的字符整个丢掉**,把顿号 / 逗号
+ * 换成空格(可能是一个标签里塞了两个词,如「生图、AI」)。
+ */
+export const normalizeTag = (tag: string): string => {
+  const withoutHash = tag.replace(/^#/, "").trim();
+  //: 顿号 / 逗号是「一个格子里塞了两个标签」最常见的写法:换成空格,后面按空格拆开。
+  const splitSafe = withoutHash.replace(/[、,，]/g, " ");
+  //: 话题字符集:中英文、数字、下划线。其它(书名号、引号、emoji、减号…)全部丢掉。
+  return splitSafe.replace(/[^\w\u4e00-\u9fff ]/g, "").trim();
+};
 
 export const escapeHtml = (value: string): string =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

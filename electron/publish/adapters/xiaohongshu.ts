@@ -359,21 +359,61 @@ export class XiaohongshuAdapter implements PublishAdapter {
         throw publishError("xiaohongshu", "publishErr_descriptionRejected");
       }
     }
-    if (!tags.length) {
+    //: **一个格子里可能塞了几个标签**(`生图、AI`、`海边, 旅行, vlog`):先把它们拆开,
+    //: 再逐个规范化。不然顿号会被当成话题的一部分打进去,平台立刻弹
+    //: 「话题内不允许包含特殊符号」(真机 2026-10-23 截图)。
+    const expanded = tags.flatMap((one) =>
+      String(one)
+        .split(/[、,，\s]+/)
+        .map(normalizeTag)
+        .filter(Boolean),
+    );
+    //: 平台话题有上限(10 个);超出会让候选框一直弹着、后面的话题全加不进去。截断而不是报错
+    //: (和 social-auto-upload 同一条教训:「标签数量超过上限会导致死循环卡住发布」)。
+    const usable = expanded.slice(0, 10);
+    if (expanded.length > usable.length) {
+      plog("xiaohongshu tags: more than 10, posting with the first", usable.length);
+    }
+    if (!usable.length) {
       return;
     }
     await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
-    for (const tag of tags) {
-      const normalizedTag = normalizeTag(tag);
-      if (!normalizedTag) {
-        continue;
-      }
+    for (const tag of usable) {
+      const normalizedTag = tag;
       //: **每个标签单独一行**再逐字打(维护者:「标签最好应该换行输入」)。挤在同一行里,
       //: 话题候选与后续文本会互相干扰,发出来也是一长串;换行之后每条话题各占一行,和人在编辑器里
       //: 一个一个加话题的样子一致。
       await this.driver.pressKey("Enter");
       await wait(120 + Math.round(Math.random() * 160));
       await this.driver.type(`#${normalizedTag}`);
+      //: **平台会弹「话题内不允许包含特殊符号」**(打 `#生成` 那一下,图 1 里的红提示):
+      //: 用户给的话题里带了特殊符号,而平台话题不允许带。不处理会让候选框一直弹着、挡住后面
+      //: 的输入 —— 真机就是这么失败的(2026-10-23)。同样等三秒;消失就继续,还在就**跳过这个话题**。
+      const invalid = await this.driver.waitForFunction(
+        `(() => (document.body?.innerText || '').includes(${JSON.stringify(this.s.topicInvalidText)}))()`,
+        3_000,
+        200,
+      );
+      if (invalid) {
+        //: 把这个打不进去的话题删掉(选区选中当前输入),回车换行,继续下一个 ——
+        //: 不删的话话题框一直挂着,后面所有话题都加不进去。
+        plog("xiaohongshu tag skipped (topic text rejected):", normalizedTag);
+        await this.driver
+          .evaluate(`(() => {
+            const editor = document.querySelector(${JSON.stringify(this.s.contentEditor)});
+            if (!editor) return false;
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            return true;
+          })()`)
+          .catch(() => undefined);
+        await this.driver.pressKey("Space").catch(() => undefined);
+        await this.driver.pressKey("Enter").catch(() => undefined);
+        continue;
+      }
       await this.driver.waitForFunction(
         `(() => {
           const target = ${JSON.stringify(`#${normalizedTag}`)};
