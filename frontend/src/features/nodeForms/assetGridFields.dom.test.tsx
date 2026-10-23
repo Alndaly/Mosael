@@ -113,6 +113,8 @@ describe("「一次挑一组素材」的字段都走共用的格子控件(真声
       "asset_update.asset_ids",
       "entity_save.asset_ids",
       "llm.image_asset_ids",
+      //: 发布节点的图文 / 文章素材(ADR 0076):同一组图片、同一个格子、顺序就是发出去的顺序。
+      "publish.asset_ids",
     ]);
   });
 

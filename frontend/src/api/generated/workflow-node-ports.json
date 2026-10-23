@@ -3497,11 +3497,32 @@
           "en": "Publishing account"
         }
       },
+      "content_kind": {
+        "type": "string",
+        "label": {
+          "zh": "内容类型",
+          "en": "Content kind"
+        }
+      },
       "asset_id": {
         "type": "template",
+        "media": [
+          "video"
+        ],
         "label": {
           "zh": "素材",
           "en": "Media"
+        }
+      },
+      "asset_ids": {
+        "type": "template",
+        "editor": "asset_grid",
+        "media": [
+          "image"
+        ],
+        "label": {
+          "zh": "素材列表",
+          "en": "Media list"
         }
       },
       "title": {
@@ -3516,6 +3537,28 @@
         "label": {
           "zh": "说明",
           "en": "Description"
+        }
+      },
+      "body": {
+        "type": "template",
+        "label": {
+          "zh": "正文",
+          "en": "Body"
+        }
+      },
+      "tags": {
+        "type": "template",
+        "label": {
+          "zh": "标签",
+          "en": "Tags"
+        }
+      },
+      "options": {
+        "type": "object",
+        "editor": "publish_options",
+        "label": {
+          "zh": "平台选项",
+          "en": "Platform options"
         }
       }
     },

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listPublishAccounts, listPublishPlatforms, type PublishPlatform } from "@/api/domains/publish";
 import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
+import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Switch } from "@/components/ui/switch";
 
 /**
@@ -33,14 +34,16 @@ export function PublishOptionsField({
   onChange: (next: Record<string, unknown>) => void;
 }) {
   const t = useI18n();
+  //: 键沿用发布页那两族(`publish-accounts` / `publish-platforms`):同一份数据分在两族,
+  //: 失效只会覆盖其中一族(见 api/queryKeys.test.ts 的那条棘轮)。
   const accounts = useQuery({
-    queryKey: ["publish", "accounts", workspaceId],
+    queryKey: ["publish-accounts", workspaceId],
     queryFn: () => listPublishAccounts(workspaceId),
     enabled: Boolean(workspaceId),
     staleTime: 30_000,
   });
   const platforms = useQuery({
-    queryKey: ["publish", "platforms"],
+    queryKey: ["publish-platforms"],
     queryFn: () => listPublishPlatforms(),
     staleTime: 5 * 60_000,
   });
@@ -74,7 +77,9 @@ export function PublishOptionsField({
               <span className="grid min-w-0 gap-0.5">
                 <span className="text-ui-sm font-medium text-foreground">{spec.label}</span>
                 {spec.description ? (
-                  <small className="text-ui-xs leading-[1.4] text-muted-foreground">{spec.description}</small>
+                  <small className="text-ui-xs leading-[1.4] text-muted-foreground">
+                    <InlineMarkdown text={spec.description} />
+                  </small>
                 ) : null}
               </span>
               <Switch checked={Boolean(current)} onCheckedChange={(next) => set(spec.key, next)} />
@@ -92,7 +97,9 @@ export function PublishOptionsField({
               onValueChange={(next) => set(spec.key, next)}
             />
             {spec.description ? (
-              <small className="text-ui-xs leading-[1.4] text-muted-foreground">{spec.description}</small>
+              <small className="text-ui-xs leading-[1.4] text-muted-foreground">
+                <InlineMarkdown text={spec.description} />
+              </small>
             ) : null}
           </label>
         );
