@@ -1,7 +1,7 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
+import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
@@ -12,13 +12,23 @@ export class BilibiliAdapter implements PublishAdapter {
 
   /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
   private entryUrl(): string {
-    const url = this.c.entry.video?.url;
-    if (!url) throw publishError("bilibili", "publishErr_kindNotImplemented", { kind: "video" });
+    const url = this.c.entry[this.task.contentKind]?.url ?? this.c.entry.video?.url;
+    if (!url) throw publishError("bilibili", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     return url;
+  }
+
+  /** 文章这一档的驱动:**编辑器整个在 `read-editor` 那个同源 iframe 里**。 */
+  private articleDriver(): PageDriver {
+    return this.driver.inFrame(this.s.articleFrame);
+  }
+
+  /** 这一次发的是文章吗(专栏)。 */
+  private get isArticle(): boolean {
+    return this.task.contentKind === "article";
   }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
-  static readonly KINDS = ["video"] as const;
+  static readonly KINDS = ["video", "article"] as const;
   readonly supports = BilibiliAdapter.KINDS;
   private readonly s = SELECTORS.bilibili;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
@@ -30,6 +40,16 @@ export class BilibiliAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
+    if (this.isArticle) {
+      //: 专栏编辑器在 iframe 里,**等里面那格标题出现**才算这一页就绪(外层的导航早就有了)。
+      await this.driver.goto(this.entryUrl());
+      const inner = this.articleDriver();
+      if (!(await inner.cssVisible(this.s.articleTitle, 20_000).catch(() => false))) {
+        await plogPageState("Bilibili article editor missing:", this.driver);
+        throw publishError("bilibili", "publishErr_editorMissing");
+      }
+      return;
+    }
     await this.driver.goto(this.entryUrl());
     // 上一次投稿成功后,B 站**原地**把编辑页替换成成功页(URL 不变,见 waitResult 注释)。而持久
     // 视图复用同一 WebContents,下一次 goto 到「同一个 URL」常被 SPA abort、不刷新,于是残留成功页
@@ -136,6 +156,17 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   async fillTitle(title: string): Promise<void> {
+    if (this.isArticle) {
+      const value = title.slice(0, 50);
+      const inner = this.articleDriver();
+      if (!(await inner.cssVisible(this.s.articleTitle, ACTION_TIMEOUT))) {
+        throw publishError("bilibili", "publishErr_editorMissing");
+      }
+      await inner.fillField(this.s.articleTitle, value);
+      const current = await inner.cssValue(this.s.articleTitle);
+      if (!current?.includes(value)) throw publishError("bilibili", "publishErr_titleRejected");
+      return;
+    }
     const value = title.slice(0, 80);
     await this.driver.cssVisible(this.s.titleInput, ACTION_TIMEOUT);
     await typeOrFill(this.driver, "bilibili title", this.s.titleInput, value, () =>
@@ -147,7 +178,30 @@ export class BilibiliAdapter implements PublishAdapter {
     }
   }
 
+  async fillBody(body: string): Promise<void> {
+    const value = body.trim();
+    if (!value) return;
+    const inner = this.articleDriver();
+    if (!(await inner.cssVisible(this.s.articleEditor, ACTION_TIMEOUT))) {
+      await plogPageState("Bilibili article editor missing:", this.driver);
+      throw publishError("bilibili", "publishErr_editorMissing");
+    }
+    await inner.focusAndClearField(this.s.articleEditor);
+    await inner.insertTextLines(this.s.articleEditor, value);
+    const shown = await inner.cssValue(this.s.articleEditor);
+    //: 判定按"字都在"(空白不敏感):tiptap 会按段落重排,行内空白/顺序在它那儿不是问题,
+    //: 但**大段缺失**是问题(发布后不能改,少一段就是少一段)。
+    const squash = (text: string) => text.replace(/\s+/g, "");
+    const want = squash(value).slice(0, 60);
+    if (!squash(shown ?? "").includes(want)) {
+      await plogPageState("Bilibili article body mismatch:", this.driver);
+      throw publishError("bilibili", "publishErr_descriptionRejected");
+    }
+  }
+
   async fillTags(tags: string[]): Promise<void> {
+    //: 文章没有标签那一栏(专栏的话题在编辑器工具栏里,是正文的一部分);标签留给视频那一档。
+    if (this.isArticle) return;
     await this.selectCreationStatement();
 
     const description = stringOption(this.task, "description");
@@ -189,6 +243,10 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
+    if (this.isArticle) {
+      await this.submitArticle();
+      return;
+    }
     // 点之前先体检一遍必填项。B 站在必填项没齐时点「立即投稿」是**静默无反应**的——没有 toast、
     // 没有报错、表单原地不动,和「按钮点不动」长得一模一样。此前的快照只取到表单下半部分,
     // 恰好漏掉了标题/创作声明/分区/封面这些必填项所在的上半部分。
@@ -246,6 +304,81 @@ export class BilibiliAdapter implements PublishAdapter {
    * `starred` 直接从 DOM 里找带 `*` 的标签、连带取它旁边控件的当前值,这样即使 B 站加了新的必填项
    * 也能一起报出来,不必等我们更新选择器。
    */
+  /**
+   * 发一篇专栏。
+   *
+   * **先设「仅自己可见」再发**:B 站专栏**发布后不能编辑**,而自动发布误发公开是收不回来的 ——
+   * 先私密、人看过确认没缺段再改公开,代价小得多(和 YouTube 强制先 Private 同一条规矩)。
+   */
+  /**
+   * 专栏发完的收尾。
+   *
+   * 没有"稿件管理页"那种确定跳转:发布后要么留在原页换成成功提示,要么跳到文章页。判据两条:
+   * **地址不再停在编辑页**(`upload/text`)或**出现成功 / 审核中的文案**;失败原文一并认。
+   */
+  private async waitArticleResult(): Promise<void> {
+    const deadline = Date.now() + RESULT_TIMEOUT;
+    const failTexts = this.s.publishFailTexts;
+    while (Date.now() < deadline) {
+      const state = await this.driver
+        .evaluate<{ url: string; text: string }>(`(() => ({
+          url: location.href,
+          text: (document.body?.innerText || '').slice(0, 4000),
+        }))()`)
+        .catch(() => null);
+      if (state) {
+        const failed = failTexts.find((one) => state.text.includes(one));
+        if (failed) throw publishError("bilibili", "publishErr_rejected", { reason: failed });
+        const stillEditing = /upload\/text/.test(state.url);
+        const done = this.s.articleDoneTexts.find((one) => state.text.includes(one));
+        if (!stillEditing || done) {
+          plog("bilibili article waitResult:", { url: state.url, done: done ?? null });
+          return;
+        }
+      }
+      await wait(1_000);
+    }
+    await plogPageState("Bilibili article waitResult failed:", this.driver);
+    throw publishError("bilibili", "publishErr_notConfirmed");
+  }
+
+  private async submitArticle(): Promise<void> {
+    const inner = this.articleDriver();
+    //: **先设「仅自己可见」**,再点「发布」。B 站专栏**发布后不能编辑**,自动发布误发公开收不回来 ——
+    //: 先私密、人看过确认没缺段再改公开(和 YouTube 强制 Private 同一条规矩)。
+    //: 可见范围是两个 `input[type=radio]`,标签文字是「仅自己可见 (将不支持分享、商业推广)」——
+    //: 按**前缀**认,再点它自己的 input(点外层 label 有时只改了样式、没改状态)。
+    let chosen = false;
+    for (let attempt = 0; attempt < 20 && !chosen; attempt += 1) {
+      chosen = await inner
+        .evaluate<boolean>(`(() => {
+          const radios = [...document.querySelectorAll('input[type=radio]')];
+          const target = radios.find((input) => {
+            const holder = input.closest('label') || input.parentElement;
+            return Boolean(holder && (holder.textContent || '').trim().startsWith(${JSON.stringify(this.s.articlePrivateText)}));
+          });
+          if (!target) return false;
+          if (!target.checked) target.click();
+          return target.checked;
+        })()`)
+        .catch(() => false);
+      if (!chosen) await wait(200);
+    }
+    plog("bilibili article visibility (private):", chosen);
+    if (!chosen) {
+      await plogPageState("Bilibili article visibility not applied:", this.driver);
+      throw publishError("bilibili", "publishErr_visibilityNotApplied");
+    }
+    const clicked = await inner
+      .clickByText(this.s.articlePublishText, { exact: true })
+      .then(() => true)
+      .catch(() => false);
+    if (!clicked) {
+      await plogPageState("Bilibili article publish button missing:", this.driver);
+      throw publishError("bilibili", "publishErr_submitDisabled");
+    }
+  }
+
   private async submitReadiness(): Promise<unknown> {
     return this.driver
       .evaluate(
@@ -302,6 +435,10 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
+    if (this.isArticle) {
+      await this.waitArticleResult();
+      return;
+    }
     //: 15 分钟:B 站确认投稿的延迟**方差极大**(实测同一视频 11 秒 / 5 分钟以上都有),
     //: 宁可多等 —— 误报失败的代价是用户重试、重复投稿。
     const outcome = await awaitResult(this.driver, this.c.done, { timeout: 15 * 60 * 1000 });

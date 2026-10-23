@@ -240,6 +240,9 @@ const UPLOAD_BY_KIND: Partial<Record<ContentKind, (adapter: PublishAdapter, task
     }
     return adapter.uploadImages(task.mediaPaths);
   },
+  //: 文章是**一篇长文**,没有素材要交(封面可留空,平台自己截正文开头)。这一步什么都不做,
+  //: 但必须**在表里**:没有它,写作「这一档没实现」,文章就发不出去。
+  article: () => Promise.resolve(),
 };
 
 /** 哪几种形状**有正文栏**要填(视频那档的文案走「简介」)。加形状时改这一行。 */

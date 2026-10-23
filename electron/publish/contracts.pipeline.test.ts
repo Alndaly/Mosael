@@ -22,8 +22,9 @@ const { successVisible, linesEntered } = await import("./verify");
 function pageFor(platform: string, kind: string) {
   const contract = PUBLISH_CONTRACTS[platform as keyof typeof PUBLISH_CONTRACTS];
   const fileInput = contract.fileInput[kind as keyof typeof contract.fileInput];
+  //: 文章没有素材(不摆文件框)。
   return fakePage({
-    elements: new Map([[fileInput as string, { visible: true, enabled: true }]]),
+    elements: new Map(fileInput ? [[fileInput as string, { visible: true, enabled: true }]] : []),
   });
 }
 
@@ -40,7 +41,7 @@ describe("契约管道", () => {
 
   for (const { platform, kind, contract } of cases) {
     describe(`${platform} × ${kind}`, () => {
-      it("进得去:入口有直连地址或可点的 tab,落地后文件框在", async () => {
+      it("进得去:入口有直连地址或可点的 tab;要交素材的形状落地后文件框在", async () => {
         const entry = contract.entry[kind as keyof typeof contract.entry];
         expect(entry, "契约缺这一档的入口").toBeTruthy();
         expect(
@@ -51,14 +52,18 @@ describe("契约管道", () => {
         const page = pageFor(platform, kind);
         const driver = fakeDriver(page);
         if (entry?.url) await driver.goto(entry.url);
-        //: 落地后文件框必须在这个选择器上(否则上传那一步没有落点)。
-        await expect(driver.cssAttached(contract.fileInput[kind as keyof typeof contract.fileInput] as string)).resolves.toBe(true);
+        const fileInput = contract.fileInput[kind as keyof typeof contract.fileInput];
+        if (fileInput) {
+          //: 落地后文件框必须在这个选择器上(否则上传那一步没有落点)。
+          await expect(driver.cssAttached(fileInput)).resolves.toBe(true);
+        }
       });
 
       it("交得了:文件按形状交给契约里的那个框", async () => {
+        const fileInput = contract.fileInput[kind as keyof typeof contract.fileInput] as string | undefined;
+        if (!fileInput) return; // 文章没有素材
         const page = pageFor(platform, kind);
         const driver = fakeDriver(page);
-        const fileInput = contract.fileInput[kind as keyof typeof contract.fileInput] as string;
         await driver.setFiles(fileInput, "/tmp/a.mp4");
         expect(page.files).toEqual(["/tmp/a.mp4"]);
       });

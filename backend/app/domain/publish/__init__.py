@@ -191,6 +191,9 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     "x": ("video", "image-text"),
     #: TikTok 图文(carousel)2026-10-24 接上:投稿页有「照片」档(`?tab=photo`),≤35 张图。
     "tiktok": ("video", "image-text"),
+    #: B站专栏(article)2026-10-24 接上:编辑器在 `read-editor` 框架里,标题 50 / 正文 100000。
+    #: 文章**没有素材**:它是一篇长文,封面可留空(平台自动截正文开头)。
+    "bilibili": ("video", "article"),
 }
 
 
@@ -249,12 +252,13 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "config": {},
         "title_max": 80,
         "short_title": False,
-        # 专栏(文章)真机确认入口;字数/图片上限仍是二手口径(200–20000 字、标题 ≤40),
-        # 且**发布后不能编辑** —— 发之前必须让人看全文。
+        # 专栏(文章)真机核对 2026-10-24:编辑器在 `read-editor` iframe 里,标题 50 字
+        # (placeholder 写「建议 30 字以内」)、正文计数 0/100000;可见范围有「仅自己可见」;
+        # **发布后不能编辑** —— 发之前必须让人看全文。
         "kinds": ("video", "image-text", "article"),
         "content": {
             "image-text": {"max_items": None},
-            "article": {"title_max": 40, "body_min": 200, "body_max": 20000},
+            "article": {"title_max": 50, "body_min": 200, "body_max": 100000},
         },
     },
     # TikTok 与 YouTube 都在境外:登录和上传都要能连上它们,通常得配好出站代理(管理 → 部署设置 /
@@ -486,7 +490,8 @@ def start_publish(
             "publishErr_kindUnsupported", platform=meta["label"], kind=kind, supported=", ".join(declared)
         )
     #: 素材**只有一种形状**:一份列表。视频就是只装一份的那个列表(ADR 0076 之后没有第二种传法)。
-    items = [one for one in assets if one is not None]
+    #: 文章是**一篇长文**,没有素材(封面可留空,平台自己截正文开头);其余形状必须带素材。
+    items = [one for one in assets if one is not None] if kind != "article" else []
     limits = content_limits(account.platform, kind)
     if not items:
         raise PublishDomainError("publishErr_noAssets", platform=meta["label"], kind=kind)

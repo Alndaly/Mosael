@@ -64,12 +64,17 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   bilibili: {
-    entry: { video: { url: resolvePlatform("bilibili").publishUrl } },
+    entry: {
+      video: { url: resolvePlatform("bilibili").publishUrl },
+      //: 专栏:一套独立的编辑器页面(编辑器在 `read-editor` iframe 里,适配器用 inFrame 进去)。
+      article: { url: SELECTORS.bilibili.articleUrl },
+    },
+    //: 文章**没有素材**:封面可以留空(平台自己截正文开头)。
     fileInput: { video: SELECTORS.bilibili.fileInput },
     submitText: SELECTORS.bilibili.submitTexts[0],
     //: B 站发完**不换地址**,原地换成成功页:靠"成功文案 + 编辑表单消失"判定(见 verify.formGone)。
     done: {
-      texts: SELECTORS.bilibili.publishDoneTexts,
+      texts: [...SELECTORS.bilibili.publishDoneTexts, ...SELECTORS.bilibili.articleDoneTexts],
       formGone: SELECTORS.bilibili.submitButton,
       //: 明确失败原文:出现即失败(不用等到超时)。
       failTexts: SELECTORS.bilibili.publishFailTexts,

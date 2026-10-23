@@ -204,6 +204,20 @@ export const SELECTORS = {
     submitTexts: ["立即投稿", "投稿", "发布"], // i18n-ok
     //: 明确的失败原文(出现即失败):不用等满 15 分钟才报「未确认发布」。
     publishFailTexts: ["投稿失败", "提交失败", "发布失败", "标题重复"], // i18n-ok
+    //: ---- 专栏(article)2026-10-24 真机核对 ----
+    //: 编辑器整个在 `read-editor` 这个 iframe 里(同源):标题是 `textarea.title-input__inner`,
+    //: 正文是 tiptap/ProseMirror 的 contenteditable,右边「发布设置」里有可见范围。
+    //: 新建专栏的入口是 `/text/edit`(**不是** `/text/new-article`:那个地址只挂了 `read-draft`
+    //: 框架、编辑器根本不挂载 —— 真机 2026-10-24 两扇页面逐一对过)。它会自行跳到 `new-edit`,
+    //: 编辑器在 `read-editor` 框架里。
+    articleUrl: "https://member.bilibili.com/platform/upload/text/edit",
+    articleFrame: 'iframe[src*="read-editor"]',
+    articleTitle: "textarea.title-input__inner",
+    articleEditor: '.tiptap[contenteditable="true"], .ProseMirror[contenteditable="true"]',
+    articlePublishText: "发布", // i18n-ok
+    articleDraftText: "保存为草稿", // i18n-ok
+    articlePrivateText: "仅自己可见", // i18n-ok
+    articleDoneTexts: ["发布成功", "投稿成功", "审核中", "专栏发布成功"], // i18n-ok
     loggedOutTexts: ["登录", "扫码登录", "密码登录", "短信登录"], // i18n-ok
     loggedInTexts: ["创作首页", "稿件管理", "内容管理", "投稿", "创作中心"], // i18n-ok
     uploadDoneTexts: ["上传完成", "上传成功", "视频上传完成", "上传完毕"], // i18n-ok

@@ -25,12 +25,14 @@ describe("平台契约", () => {
     }
   });
 
-  it("适配器声明支持的形状,契约里必须有入口与文件框", () => {
+  it("适配器声明支持的形状,契约里必须有入口;**要交素材的形状**还必须有文件框", () => {
     for (const platform of PLATFORMS) {
       const kinds = ADAPTER_SUPPORTS[platform] ?? [];
       const contract = PUBLISH_CONTRACTS[platform as keyof typeof PUBLISH_CONTRACTS];
       for (const kind of kinds) {
         expect(contract.entry[kind], `${platform} × ${kind}:契约没有入口`).toBeTruthy();
+        //: 文章是一篇长文,**没有素材** —— 不要求文件框;视频 / 图文必须有一个。
+        if (kind === "article") continue;
         expect(contract.fileInput[kind], `${platform} × ${kind}:契约没有文件框`).toBeTruthy();
       }
     }
