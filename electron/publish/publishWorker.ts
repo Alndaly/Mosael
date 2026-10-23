@@ -24,6 +24,8 @@ import {
   type PanelLayoutChange,
 } from "./accountViews";
 import type { DownloadNotice } from "./downloads";
+import type { ContentKind } from "./types";
+import type { PublishAdapter } from "./adapters/shared";
 import { FloatLayer, type FloatHint, type FloatPointer } from "./floatLayer";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
@@ -220,6 +222,25 @@ function resolveBlockedStatus(
   return "blocked";
 }
 
+/**
+ * **内容形状 → 怎么把它传上去**。一张表,不写「不是视频就当图文」那种分支。
+ *
+ * 加一种形状(文章、播客)时在这里加一行、在适配器里实现对应方法;worker 的主流程一个字都不用动。
+ * 表里没有 = 不支持,和适配器声明的 `supports` 一起在动手前拦下。
+ */
+const UPLOAD_BY_KIND: Partial<Record<ContentKind, (adapter: PublishAdapter, task: PublishTask) => Promise<void>>> = {
+  video: (adapter, task) => adapter.uploadVideo(task.videoPath),
+  "image-text": (adapter, task) => {
+    if (!adapter.uploadImages) {
+      return Promise.reject(publishError(task.platform, "publishErr_kindNotImplemented", { kind: "image-text" }));
+    }
+    return adapter.uploadImages(task.mediaPaths);
+  },
+};
+
+/** 哪几种形状**有正文栏**要填(视频那档的文案走「简介」)。加形状时改这一行。 */
+const FILLS_BODY: ReadonlySet<ContentKind> = new Set<ContentKind>(["image-text", "article"]);
+
 function toAdapterTask(t: backend.BackendTask): PublishTask {
   return {
     id: t.id,
@@ -351,22 +372,21 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     //: 由这里按 `supports` 对一遍,对不上就**在动手前**失败,说清这个平台/这个适配器还发不了。
     const kind = t.contentKind ?? "video";
     const supported = adapter.supports ?? (["video"] as const);
-    if (!supported.includes(kind)) {
+    const upload = UPLOAD_BY_KIND[kind];
+    if (!supported.includes(kind) || !upload) {
       throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
     }
-    if (kind === "video") {
-      await adapter.uploadVideo(t.videoPath);
-    } else {
-      if (!adapter.uploadImages) throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
-      await adapter.uploadImages(t.mediaPaths);
-    }
+    await upload(adapter, t);
     await delay(stepDelay());
     await step(tr("publishStep_fillTitle"));
     await adapter.fillTitle(t.title);
     await delay(stepDelay());
-    if (kind !== "video" && t.body && adapter.fillBody) {
+    //: 正文只有认这一种形状的适配器才填 —— 加形状时只改 `FILLS_BODY` 这一行。
+    if (FILLS_BODY.has(kind) && t.body) {
+      const fillBody = adapter.fillBody?.bind(adapter);
+      if (!fillBody) throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
       await step(tr("publishStep_fillBody"));
-      await adapter.fillBody(t.body);
+      await fillBody(t.body);
       await delay(stepDelay());
     }
     await step(tr("publishStep_fillTags"));

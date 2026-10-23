@@ -1,10 +1,22 @@
-import type { PublishTask } from "../types";
+import type { ContentKind, PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOption, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
+
+/**
+ * **哪种内容形状点哪个 tab** —— 一张表,不写条件分支。
+ *
+ * 加一种形状(写长文、发播客)时只在这里加一行,`openCreatorPage` 一个字都不用动;表里没有的形状
+ * 就是「还没接」,和 `supports` 说的一致。此前是三元表达式挑文案,读的人得先在心里展开才知道
+ * 「图文走哪个」。
+ */
+const XIAOHONGSHU_TAB: Partial<Record<ContentKind, string>> = {
+  video: SELECTORS.xiaohongshu.videoTabText,
+  "image-text": SELECTORS.xiaohongshu.imageTextTabText,
+};
 
 export class XiaohongshuAdapter implements PublishAdapter {
   //: 图文是这一页的**默认**形态(ADR 0076 第一步);文章(写长文)还没接。
@@ -21,18 +33,21 @@ export class XiaohongshuAdapter implements PublishAdapter {
     //: **按形状显式切 tab**。创作页顶部是「上传视频 / 上传图文 / 写长文 / 发播客」,
     //: 落进去是哪一档不能假设:实测默认不是图文,图文任务会在视频页上交图片,页面回一句
     //: 「请先切换到图文 tab」。点不到就明说,别让它在后面以「上传超时」的形式失败。
-    const tabText = this.task.contentKind === "video" ? this.s.videoTabText : this.s.imageTextTabText;
+    const tabText = XIAOHONGSHU_TAB[this.task.contentKind];
+    if (!tabText) {
+      //: 这张表里没有 = 这一种形状我们还没接(`supports` 也已经声明过了,走到这里是代码不一致)。
+      throw publishError("xiaohongshu", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
+    }
     const switched = await clickTextPreferTrusted(this.driver, tabText, {
       exact: true,
       selector: "button, [role=button], a, div, span",
     })
       .then(() => true)
       .catch(() => false);
-    if (!switched && this.task.contentKind !== "video") {
-      //: 已经在这个 tab 上时点不到也算过(文案可能被换掉);用文件 input 是否出现做判据。
-      const ready = await this.driver.cssAttached(this.s.fileInput, 3_000);
-      if (!ready) throw publishError("xiaohongshu", "publishErr_tabMissing", { tab: tabText });
-    }
+    if (switched) return;
+    //: 点不到有两种:已经在这个 tab 上(文案可能被换掉 —— 用文件 input 出现没出现判),或者真没有这个入口。
+    const ready = await this.driver.cssAttached(this.s.fileInput, 3_000);
+    if (!ready) throw publishError("xiaohongshu", "publishErr_tabMissing", { tab: tabText });
   }
 
   async checkLogin(): Promise<boolean> {

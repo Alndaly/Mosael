@@ -22,6 +22,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
+import type { MessageKey } from "@/app/messages";
 import { AssetGridField } from "@/features/nodeForms/AssetGridField";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
@@ -55,6 +56,21 @@ const STATUS_FILTERS: readonly string[] = ["all", "active", "succeeded", "attent
 /** 发布页(计划 §6.9 / Phase 13):成片 + 文案 → 发布目标,状态走任务总线。
  *  账号矩阵是一等页签:多平台账号的登录态、启停、复检都在这里管,登录会话
  *  由桌面端 persist: 分区持久化,重启不丢。 */
+/**
+ * **内容形状 → 文案 key**。一张表,不用三元判断。
+ *
+ * 形状名带连字符(`image-text`)不能直接拼成 key,所以以前写成「是 image-text 就用 A、否则拼 B」;
+ * 加第三种形状时那句要再改。表里没有的形状就不出标签 —— 不认识就别硬编一个。
+ */
+const KIND_LABEL_KEY: Partial<Record<string, MessageKey>> = {
+  video: "publishKind_video",
+  "image-text": "publishKind_imageText",
+  article: "publishKind_article",
+};
+
+const kindLabel = (kind: string | undefined): string | null =>
+  kind ? (KIND_LABEL_KEY[kind] ?? null) : null;
+
 export function PublishView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const writeBlocked = useWriteBlocked(workspace.role);
@@ -461,10 +477,10 @@ function PublishCard({
       <div className="grid min-w-0 gap-1">
         <div className="flex min-w-0 items-center gap-2">
           <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
-          {/*: 这条发的是什么形状(ADR 0076):视频是老形状,不必占位;图文 / 文章要一眼看得出来。 */}
-          {task.content_kind && task.content_kind !== "video" && (
+          {/*: 这条发的是什么形状(ADR 0076):视频是老形状,不必占位;其余形状要一眼看得出来。 */}
+          {task.content_kind !== "video" && kindLabel(task.content_kind) && (
             <span className="shrink-0 rounded-full bg-panel-subtle px-1.5 py-0.5 text-ui-xs text-muted-foreground">
-              {t((task.content_kind === "image-text" ? "publishKind_imageText" : `publishKind_${task.content_kind}`) as never)}
+              {t(kindLabel(task.content_kind) as MessageKey)}
             </span>
           )}
         </div>
@@ -807,7 +823,8 @@ function CreatePublishDialog({
               onValueChange={(next) => setKind(next)}
               options={platformKinds.map((one) => ({
                 value: one,
-                label: t((one === "image-text" ? "publishKind_imageText" : `publishKind_${one}`) as never),
+                //: 表里没有的形状不硬编名字(见 `KIND_LABEL_KEY`);真到那一步该先补表。
+                label: kindLabel(one) ? t(kindLabel(one) as MessageKey) : one,
               }))}
             />
           </div>
