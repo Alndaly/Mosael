@@ -50,6 +50,10 @@ export const SELECTORS = {
     //: 页面回一句「请先切换到图文 tab」。**按形状显式点对应的 tab**,不猜默认值。
     videoTabText: "上传视频", // i18n-ok
     imageTextTabText: "上传图文", // i18n-ok
+    //: 两个 tab 的拖拽区文案不同(「拖拽视频到此或点击上传」/「拖拽图片…」)——**用它判 tab 真的切了**。
+    //: 只看「文件 input 在不在」不行:视频 tab 上也有一个 input,于是图文被交到视频页,平台回一句
+    //: 「上传图文,请先切换到图片tab」(维护者 2026-10-23 真机)。
+    dropHintByKind: { video: "拖拽视频", "image-text": "拖拽图片" } as Record<string, string>, // i18n-ok
     fileInput: 'input[type="file"]',
     titleInput:
       'input[placeholder*="填写标题"], input[placeholder*="请输入标题"], input[placeholder*="标题"], textarea[placeholder*="标题"]', // i18n-ok
