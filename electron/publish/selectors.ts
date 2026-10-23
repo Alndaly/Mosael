@@ -73,10 +73,18 @@ export const SELECTORS = {
     //: 适配器不再自己记得调 `dismissHints`。
     overlays: [
       //: 上传成功后平台弹的编辑器介绍框,盖在页面中间。
-      { detect: { text: "图片可以编辑啦" }, dismiss: { click: "我知道了" } },
+      {
+        id: "editor-intro", // i18n-ok 规则名
+        detect: { text: "图片可以编辑啦" },
+        //: 按**选择器**点:那个提示框里外层容器(`div.feature-guide__footer`)的文字也是「我知道了」,
+        //: 按文案点会先命中它 —— 点容器什么都不会发生(真机 2026-10-23:日志说关掉了七次,框一直在)。
+        dismiss: { clickSelector: ".feature-guide__btn", click: "我知道了" },
+        gone: { text: "图片可以编辑啦" },
+      },
       //: 勾「原创声明」后的权益说明:**先勾同意框**,「声明原创」才是可点的
       //: (真机实测那是 `d-button-default disabled`)。不关掉它,可见性下拉的选项点不到。
       {
+        id: "original-modal", // i18n-ok 规则名,不是界面文案
         detect: { text: "笔记完成原创声明后" },
         dismiss: { tick: ".d-modal-mask input[type=checkbox]", click: "声明原创" },
       },

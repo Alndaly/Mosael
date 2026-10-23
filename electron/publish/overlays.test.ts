@@ -66,6 +66,37 @@ describe("clearOverlays", () => {
     );
   });
 
+  it("按**选择器**点关闭钮:按文案点会先命中外层容器", async () => {
+    const { driver, clickText } = fakeDriver({ texts: ["图片可以编辑啦"] });
+    const rules: OverlayRule[] = [
+      {
+        detect: { text: "图片可以编辑啦" },
+        dismiss: { clickSelector: ".feature-guide__btn", click: "我知道了" },
+        gone: { text: "图片可以编辑啦" },
+      },
+    ];
+    //: 点选择器才真的关掉;点文案(外层容器)什么都不会发生。
+    const clickCss = driver.clickCss as unknown as { mockImplementation: (fn: (s: string) => Promise<void>) => void };
+    const texts = (driver.hasText as unknown as { mock: { getMockImplementation: () => (t: string) => Promise<boolean> } });
+    const stillThere = async (t: string) => t === "图片可以编辑啦";
+    clickCss.mockImplementation(async () => {
+      //: 关掉之后那句话没了。
+      const impl = texts.mock.getMockImplementation();
+      void impl;
+    });
+    //: 用最直白的模型重写一次:选择器点击后 hasText 返回 false。
+    let open = true;
+    (driver.hasText as unknown as { mockImplementation: (fn: (t: string) => Promise<boolean>) => void }).mockImplementation(
+      async (t: string) => (t === "图片可以编辑啦" ? open : stillThere(t)),
+    );
+    clickCss.mockImplementation(async (selector: string) => {
+      if (selector === ".feature-guide__btn") open = false;
+    });
+
+    expect(await clearOverlays(driver, rules, "test", clickText)).toEqual(["图片可以编辑啦"]);
+    expect(driver.clickCss).toHaveBeenCalledWith(".feature-guide__btn");
+  });
+
   it("选择器认的浮层(新手引导)按 Esc 关,并用选择器确认它没了", async () => {
     const { driver, clickText, css, calls } = fakeDriver({ css: [".shepherd-element"] });
     const rules: OverlayRule[] = [

@@ -421,23 +421,30 @@ export class XiaohongshuAdapter implements PublishAdapter {
       await plogPageState("Xiaohongshu original switch missing:", this.driver);
       throw publishError("xiaohongshu", "publishErr_originalMissing");
     }
-    if (current !== wanted) {
-      await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
-      await wait(400);
-      //: 勾上之后平台会弹「笔记完成原创声明后…」的权益说明,**必须勾同意框再点「声明原创」**
-      //: 才关得掉(否则按钮是 disabled)。这套关法现在写在 selectors 的 `overlays` 里,
-      //: 由统一的浮层策略执行 —— 适配器不再自己记得"先勾哪个框再点哪颗钮"。
+    //: 契约里那条原创权益浮层(按**规则名**找,不在这里重复页面文案)。
+    const declaration = this.c.overlays.find((rule) => rule.id === "original-modal");
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const state = await this.driver
+        .evaluate<boolean | null>(`(() => { const i = document.querySelector(${sel}); return i ? i.checked : null; })()`)
+        .catch(() => null);
+      if (state === wanted) break;
+      //: 点开关本身。**可能点不中**:上一屏的提示框还盖着(真机 2026-10-23:提示框盖着时
+      //: 点下去什么都没发生,开关停在 false,却报成"原创声明没能生效")。
       await this.clearStuckOverlays();
-      if (await this.driver.hasText(this.c.overlays[1].detect.text ?? "")) {
-        await plogPageState("Xiaohongshu original modal did not close:", this.driver);
-        throw publishError("xiaohongshu", "publishErr_originalStuck", { after: true, wanted });
+      await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
+      await wait(500);
+      //: 勾上之后平台会弹「笔记完成原创声明后…」的权益说明,**必须勾同意框再点「声明原创」**
+      //: 才关得掉(否则按钮是 disabled)。关法写在 selectors 的 `overlays` 里,由统一策略执行。
+      await this.clearStuckOverlays();
+      if (declaration && (await this.driver.hasText(declaration.detect.text ?? ""))) {
+        plog("xiaohongshu original modal still open after attempt", attempt);
       }
     }
     const after = await this.driver
       .evaluate<boolean | null>(`(() => { const i = document.querySelector(${sel}); return i ? i.checked : null; })()`)
       .catch(() => null);
     if (after !== wanted) {
-      await plogPageState("Xiaohongshu original not applied:", this.driver);
+      await plogPageState("Xiaohongshu original not applied (after retries):", this.driver);
       throw publishError("xiaohongshu", "publishErr_originalStuck", { after, wanted });
     }
     plog("xiaohongshu original-content declaration:", wanted);

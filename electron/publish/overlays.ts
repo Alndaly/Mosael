@@ -26,13 +26,26 @@ export type ClickByText = (text: string) => Promise<void>;
  * 一种浮层。
  *
  * - `detect`:认它的依据 —— 页面文字,或一个选择器(新手引导那种没有固定文案的);
- * - `dismiss`:关它的动作,按顺序做:`tick`(先勾一个框)→ `click`(点一颗按钮)→ `escape`(按 Esc);
+ * - `dismiss`:关它的动作,按顺序做:`tick`(先勾一个框)→ `clickSelector`(按选择器点,最准)→
+ *   `click`(按文案点)→ `escape`(按 Esc);
  * - `gone`:关掉之后该消失的那句话,默认就是 `detect` 的文字(用选择器认的必须自己给)。
  */
 export interface OverlayRule {
+  /** 规则名:适配器要"确认某一条关掉了没有"时按它找,不用重复页面文案。 */
+  id?: string;
   detect: { text?: string; selector?: string };
-  dismiss: { tick?: string; click?: string; escape?: boolean };
+  dismiss: { tick?: string; clickSelector?: string; click?: string; escape?: boolean };
   gone?: { text?: string; selector?: string };
+}
+
+/** 关掉之后等它真的消失(过渡动画 / 异步卸载)。等不到就当没关掉。 */
+async function waitGone(driver: OverlayDriver, rule: OverlayRule, timeout = 1_500): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (!(await stillThere(driver, rule))) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return false;
 }
 
 /** 最多找几轮。一轮里把每条规则试一次,关掉一个就重来 —— 有的弹窗是套着的。 */
@@ -56,9 +69,15 @@ async function stillThere(driver: OverlayDriver, rule: OverlayRule): Promise<boo
 }
 
 async function dismiss(driver: OverlayDriver, clickText: ClickByText, rule: OverlayRule): Promise<void> {
-  const { tick, click, escape } = rule.dismiss;
+  const { tick, clickSelector, click, escape } = rule.dismiss;
   if (tick) {
     await driver.clickCss(tick).catch(() => undefined);
+  }
+  //: **优先按选择器点**。按文案点会先命中包着按钮的外层容器(小红书那个提示框里,
+  //: `div.feature-guide__footer` 的文字也是「我知道了」),点容器什么都不会发生 —— 真机 2026-10-23
+  //: 就是这样:日志里"关掉了"七次,提示框一次都没关。
+  if (clickSelector) {
+    await driver.clickCss(clickSelector).catch(() => undefined);
   }
   if (click) {
     await clickText(click).catch(() => undefined);
@@ -90,10 +109,9 @@ export async function clearOverlays(
       await dismiss(driver, clickText, rule);
       cleared.push(name);
       acted = true;
-      plog(`overlay cleared${label ? ` (${label})` : ""}:`, name);
-      if (await stillThere(driver, rule)) {
-        plog(`overlay still up after dismissing${label ? ` (${label})` : ""}:`, name);
-      }
+      //: 关掉之后**等它真的消失**(过渡 200–400ms),等到了才算关掉;等不到才记一笔。
+      const gone = await waitGone(driver, rule);
+      plog(`overlay ${gone ? "cleared" : "still up"}${label ? ` (${label})` : ""}:`, name);
       break; // 关掉一个就重开一轮:页面上可能换了另一个浮层
     }
     if (!acted) return cleared;
