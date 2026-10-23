@@ -1,7 +1,3 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const adapter = Object.fromEntries(["openCreatorPage", "checkLogin", "uploadVideo", "fillTitle", "fillTags", "submit", "waitResult"].map(k => [k, vi.fn(async () => true)]));
@@ -11,16 +7,20 @@ const mocks = vi.hoisted(() => {
   return { adapter, driver, views, backend };
 });
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
+//: 执行器开跑前会 stat 一下素材文件(素材丢了要在动手前点名)。这条用例用的是假计时器,
+//: 真实文件系统的 Promise 什么时候 resolve 不确定 —— CI 上就因此错过了「提交」那一拍。
+//: 这里直接把 stat 钉成"文件在",让用例只测调度,不测磁盘。
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn(async () => undefined),
+  stat: vi.fn(async () => ({ isFile: () => true, size: 1 })),
+}));
 vi.mock("./accountViews", () => ({ createSharedViews: () => mocks.views, destroySharedViews: vi.fn() }));
 vi.mock("./adapters", () => ({ createAdapter: () => mocks.adapter }));
 vi.mock("./log", () => ({ plog: vi.fn() }));
 vi.mock("./publishBackend", () => mocks.backend);
 import { startPublishWorker, stopPublishWorker } from "./publishWorker";
 
-//: 执行器现在开跑之前会看「素材文件在不在」(不存在的路径交给页面只会换来平台一句含糊的
-//: 「部分文件处理失败」),所以这一份任务得指向一个真实的临时文件。
-const MEDIA = join(mkdtempSync(join(tmpdir(), "mosael-publish-")), "test.mp4");
-writeFileSync(MEDIA, "x");
+const MEDIA = "/tmp/mosael-cancel-test.mp4";
 
 beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks();
