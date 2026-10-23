@@ -708,7 +708,15 @@ function CreatePublishDialog({
         workspace_id: workspace.id,
         account_id: accountId!,
         content_kind: kind,
-        ...(needsImages ? { asset_ids: imageIds, body: body.trim() } : { asset_id: assetId! }),
+        ...(needsImages
+          ? {
+              asset_ids: imageIds,
+              body: body.trim(),
+              //: 图文 / 文章的正文就是 body:简介那一栏是**视频档**的东西,不能把同一段文字再发一遍,
+              //: 否则适配器会把它当第二段填进编辑器(真机:正文被打了两遍)。
+              description: "",
+            }
+          : { asset_id: assetId! }),
         title: title.trim(),
         description: description.trim(),
         tags: tagsText

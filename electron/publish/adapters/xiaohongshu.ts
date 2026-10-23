@@ -212,20 +212,37 @@ export class XiaohongshuAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
-    //: 打两遍:第一遍的点击可能被「图片可以编辑啦」那类浮层吃掉(字没进去,也不报错)。
+    //: 只在**编辑器还是空的**时候补打一遍(第一遍的点击可能被「图片可以编辑啦」那类浮层吃掉)。
+    //: 已经打进去过就不重打 —— 再打一遍就是同一段文字出现两次(真机 2026-10-23)。
     for (let attempt = 1; attempt <= 2; attempt += 1) {
+      if (attempt > 1) {
+        const typed = await this.editorText();
+        if (typed) break;
+        await this.dismissHints();
+      }
       await typeOrFill(this.driver, "xiaohongshu body", this.s.contentEditor, value, async () => {
         await this.driver.focusAndClearField(this.s.contentEditor);
         await this.driver.insertText(this.s.contentEditor, value);
       });
       if ((await this.bodyMatch(value)).ok) return;
-      await this.dismissHints();
     }
     //: 还是没对上:**按行**报出到底进去了几行。整段一致才算填好 —— 只进了一部分就发出去,
     //: 用户看到的正文和他在表单里写的不一样,那比失败更糟(所以这里不"有字就放过")。
     const { matched, total } = await this.bodyMatch(value);
     if (matched === 0) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
     throw publishError("xiaohongshu", "publishErr_bodyPartial", { matched, total });
+  }
+
+  /** 编辑器里眼下有什么字(取候选里最长的那一个;空占位 `<p>` 会先被 querySelector 命中)。 */
+  private async editorText(): Promise<string> {
+    return this.driver
+      .evaluate<string>(`(() => {
+        const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
+        return (editors
+          .map((one) => (one.innerText || one.textContent || ''))
+          .sort((a, b) => b.length - a.length)[0] || '').trim();
+      })()`)
+      .catch(() => "");
   }
 
   /**
@@ -296,7 +313,9 @@ export class XiaohongshuAdapter implements PublishAdapter {
   }
 
   async fillTags(tags: string[]): Promise<void> {
-    const description = stringOption(this.task, "description");
+    //: **简介只有视频那一档有**。图文 / 文章的正文已经由 `fillBody` 填过,这里再来一遍就会把同一段
+    //: 文字打两次(维护者 2026-10-23:「会打两遍输入框文案」),而且第二遍的校验还可能不过。
+    const description = this.task.contentKind === "video" ? stringOption(this.task, "description") : "";
     if (description) {
       await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
       await typeOrFill(this.driver, "xiaohongshu desc", this.s.contentEditor, description, async () => {
