@@ -19,17 +19,40 @@ import { plog } from "../log";
 interface EntryPlan {
   /** 依次要点的入口文案:第一步是顶部 tab,后面是这一档页面上的按钮。 */
   steps: readonly string[];
-  /** 进到之后文件 input 的 `accept` 里该有的那一类;空串 = 这一档没有文件上传(长文是写字)。 */
-  accept: string;
+  /** 进到之后应该**被选中**的那个 tab 文案(多步的形状取最后进到的那一页的代表文案;空串 = 不看)。 */
+  activeTab: string;
+  /**
+   * 进到之后文件 input 的 `accept` 里该出现的**扩展名**(真机读到的是一串扩展名,不是 `image/*`)。
+   * 空数组 = 这一档没有文件上传(长文是写字)。
+   */
+  acceptExtensions: readonly string[];
+  /**
+   * 进到之后地址栏里该出现的片段。切 tab 时这一页会**换路由**(真机:`?from=tab_switch&target=image`),
+   * 所以地址是最直接的证据;空串 = 这一档不改地址(长文是同一路由下换内容)。
+   */
+  urlContains: string;
   /** 进到之后这一页该出现的文案(改版会换,只当兜底)。 */
   hint: string;
 }
 
 const XIAOHONGSHU_ENTRY: Partial<Record<ContentKind, EntryPlan>> = {
-  video: { steps: [SELECTORS.xiaohongshu.videoTabText], accept: "video", hint: "拖拽视频" },
-  "image-text": { steps: [SELECTORS.xiaohongshu.imageTextTabText], accept: "image", hint: "上传图片" },
+  video: {
+    steps: [SELECTORS.xiaohongshu.videoTabText],
+    activeTab: "上传视频",
+    acceptExtensions: [".mp4", ".mov"],
+    //: 视频是默认档:刚进这一页时地址里没有 target 参数,所以这里不看地址。
+    urlContains: "",
+    hint: "拖拽视频",
+  },
+  "image-text": {
+    steps: [SELECTORS.xiaohongshu.imageTextTabText],
+    activeTab: "上传图文",
+    acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+    urlContains: "target=image",
+    hint: "上传图片",
+  },
   //: 「写长文」还没接(要再点一次「新的创作」,而且编辑器没有文件上传)。接的时候照这个写:
-  //: article: { steps: ["写长文", "新的创作"], accept: "", hint: "输入标题" },
+  //: article: { steps: ["写长文", "新的创作"], activeTab: "写长文", acceptExtensions: [], urlContains: "target=article", hint: "输入标题" },
 };
 
 export class XiaohongshuAdapter implements PublishAdapter {
@@ -72,21 +95,34 @@ export class XiaohongshuAdapter implements PublishAdapter {
   /**
    * 现在这一页是不是**这一种形状的目标页**?两条判据任一成立即可:
    *
-   * - 文件 input 的 `accept` 里有这一档要的那一类(`video` / `image`)—— 页面自己的契约,最稳;
+   * - **当前选中的 tab** 是这一档(`.creator-tab.active` 的文字)—— 最可靠;
    * - 或者这一档页面上该出现的文案出现了(改版会换文案,所以只当兜底)。
    *
    * **不能用「文件 input 在不在」**:视频页也有 input,那会让图文任务停在视频页上交图片。
    */
   private plannedPageExpression(plan: EntryPlan): string {
+    const activeTab = JSON.stringify(plan.activeTab);
+    const hint = JSON.stringify(plan.hint);
+    const extensions = JSON.stringify(plan.acceptExtensions);
+    const urlContains = JSON.stringify(plan.urlContains);
+    const activeSelector = JSON.stringify(this.s.activeTab);
     return `(() => {
-      const accept = ${JSON.stringify(plan.accept)};
-      const hint = ${JSON.stringify(plan.hint)};
+      //: 1) 选中的 tab 是这一档 —— 最直接。
+      const wanted = ${activeTab};
+      const active = document.querySelector(${activeSelector});
+      if (wanted && (active?.textContent || '').trim() === wanted) return true;
+      //: 2) 地址换成这一档的路由(切 tab 是换路由,真机是 ?from=tab_switch&target=image)。
+      const wantedUrl = ${urlContains};
+      if (wantedUrl && location.href.includes(wantedUrl)) return true;
+      //: 3) 文件 input 的 accept 里有这一档的扩展名(真机读到的是一串扩展名,不是 MIME)。
+      const wantedExtensions = ${extensions};
       const accepts = [...document.querySelectorAll('input[type="file"]')]
         .map((one) => (one.getAttribute('accept') || '').toLowerCase())
         .join(',');
-      if (accept && accepts.includes(accept)) return true;
+      if (wantedExtensions.some((one) => accepts.includes(one))) return true;
+      //: 4) 这一页该出现的文案(改版会换,只当兜底)。
       const text = document.body?.innerText || '';
-      return Boolean(hint) && text.includes(hint);
+      return Boolean(${hint}) && text.includes(${hint});
     })()`;
   }
 

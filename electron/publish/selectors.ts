@@ -58,7 +58,9 @@ export const SELECTORS = {
     //: 所以除了文案,还看**文件 input 的 accept**:视频档只收 video、图文档只收 image,
     //: 那是页面自己的契约,比文案稳。
     dropHintByKind: { video: "拖拽视频", "image-text": "上传图片" } as Record<string, string>, // i18n-ok
-    acceptByKind: { video: "video", "image-text": "image" } as Record<string, string>,
+    //: 真机读到的 accept 是**扩展名清单**(`.mp4,.mov,.flv…` / 图片那档同理),不含 `video/` 或
+    //: `image/`,所以不能拿它当判据。真正可靠的信号是**当前选中的是哪个 tab**:`.creator-tab.active`。
+    activeTab: ".creator-tab.active",
     fileInput: 'input[type="file"]',
     titleInput:
       'input[placeholder*="填写标题"], input[placeholder*="请输入标题"], input[placeholder*="标题"], textarea[placeholder*="标题"]', // i18n-ok

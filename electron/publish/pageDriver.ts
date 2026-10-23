@@ -84,6 +84,38 @@ export type FrameLookup =
   | { state: "notFrame"; tag: string }
   | { state: "crossOrigin"; src: string };
 
+/**
+ * 「按文字点」时怎么从一堆匹配元素里挑出该点的那一个 —— **两个按文字点的入口共用这一串**。
+ *
+ * 同一段文字常常嵌好几层(`div.creator-tab > span.title`),而**点最里面那层不一定算数**:
+ * 小红书的 tab 就是这样 —— 点 `span.title` 页面纹丝不动,点外层 `div.creator-tab` 才切过去
+ * (2026-10-23 真机实测)。所以规则是:在「祖先也匹配同一段文字」这条链上取**最外层**,
+ * 但外层比最内层大过 4 倍就不要(那已经是整块区域,点它的中心会落到别的东西上)。
+ *
+ * 另外一律排除**视口外**的:小红书还有一份离屏克隆(坐标 -9700)专门给动画用,只判宽高会挑中它。
+ */
+const PICK_BY_TEXT_JS = `
+  const onScreen = (r) => r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
+  const visible = (e) => {
+    const r = e.getBoundingClientRect();
+    const style = getComputedStyle(e);
+    return r.width > 0 && r.height > 0 && style.visibility !== 'hidden' && style.display !== 'none' && onScreen(r);
+  };
+  const areaOf = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height; };
+  const clickTarget = (matches) => {
+    const pool = new Set(matches);
+    const chosen = new Set();
+    for (const el of matches) {
+      let root = el;
+      let parent = el.parentElement;
+      while (parent && pool.has(parent)) { root = parent; parent = parent.parentElement; }
+      const inner = areaOf(el);
+      chosen.add(inner > 0 && areaOf(root) <= inner * 4 ? root : el);
+    }
+    return [...chosen].sort((a, b) => areaOf(a) - areaOf(b))[0] ?? null;
+  };
+`;
+
 export class PageDriver {
   private debuggerAttached = false;
   private abortSignal: AbortSignal | null = null;
@@ -830,12 +862,9 @@ export class PageDriver {
       ? `e.textContent && e.textContent.trim() === ${t}`
       : `e.textContent && e.textContent.trim().includes(${t})`;
     const ok = await this.evaluate<boolean>(`(() => {
+      ${PICK_BY_TEXT_JS}
       const els = [...document.querySelectorAll(${selector})];
-      const visible = (e) => {
-        const r = e.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden';
-      };
-      const el = els.find((e) => ${matcher} && visible(e));
+      const el = clickTarget(els.filter((e) => ${matcher} && visible(e)));
       if (!el) return false;
       el.click();
       return true;
@@ -862,19 +891,10 @@ export class PageDriver {
       vw: number;
       vh: number;
     } | null>(`(() => {
+      ${PICK_BY_TEXT_JS}
       const els = [...document.querySelectorAll(${selector})];
-      const visible = (e) => {
-        const r = e.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden';
-      };
-      const matches = els.filter((e) => visible(e) && ${matcher});
-      if (!matches.length) return null;
-      const area = (e) => {
-        const r = e.getBoundingClientRect();
-        return r.width * r.height;
-      };
-      matches.sort((a, b) => area(a) - area(b));
-      const el = matches[0];
+      const el = clickTarget(els.filter((e) => visible(e) && ${matcher}));
+      if (!el) return null;
       el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const r = el.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight };
