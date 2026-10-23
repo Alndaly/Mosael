@@ -57,8 +57,18 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
   xiaohongshu: XIAOHONGSHU,
   douyin: DOUYIN,
   "weixin-channels": {
-    entry: { video: { url: resolvePlatform("weixin-channels").publishUrl } },
-    fileInput: { video: SELECTORS.weixinChannels.fileInput },
+    entry: {
+      video: { url: resolvePlatform("weixin-channels").publishUrl },
+      //: 图文是另一页「发表动态」:表单整个在 `empty.html` 那个 iframe 里(适配器用 inFrame 进去)。
+      "image-text": {
+        url: SELECTORS.weixinChannels.imageTextUrl,
+        acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+      },
+    },
+    fileInput: {
+      video: SELECTORS.weixinChannels.fileInput,
+      "image-text": SELECTORS.weixinChannels.imageFileInput,
+    },
     submitText: SELECTORS.weixinChannels.submitText,
     done: { urls: [], texts: SELECTORS.weixinChannels.publishDoneTexts },
     overlays: [],

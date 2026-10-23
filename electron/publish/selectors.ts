@@ -184,6 +184,16 @@ export const SELECTORS = {
       '.login-view, .login-qrcode-wrap, .qrcode-wrap, iframe[src*="login-for-iframe"], iframe[src*="login"]',
     isLoginUrl: (u: string): boolean => /login/.test(u),
     isListUrl: (u: string): boolean => MANAGE_URL_PATTERNS.weixinChannels.test(u),
+    //: ---- 图文(2026-10-24 真机核对)----
+    //: 「发表动态」页:**整个表单在 `empty.html` 那个同源 iframe 里**(外层页面只有导航)。
+    //: 标题 22 字、描述 1000 字、≤18 张图(单张 ≤20MB),按钮「发表」也在框架里。
+    imageTextUrl: "https://channels.weixin.qq.com/platform/post/lifeCreate",
+    imageTextFrame: 'iframe[src*="empty.html"]',
+    imageTitleInput: 'input[placeholder*="填写标题"]', // i18n-ok
+    imageDescEditor: 'div.input-editor[contenteditable], div.input-editor', // i18n-ok
+    imageFileInput: 'input[type="file"][accept*="image"]',
+    imageUploaded: '.post-upload-wrap img, .ant-upload-list-item img, [class*="upload-item"] img',
+    imageTitleKey: "图文标题", // i18n-ok
   },
   bilibili: {
     uploadUrl: resolvePlatform("bilibili").publishUrl,

@@ -191,6 +191,8 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     "x": ("video", "image-text"),
     #: TikTok 图文(carousel)2026-10-24 接上:投稿页有「照片」档(`?tab=photo`),≤35 张图。
     "tiktok": ("video", "image-text"),
+    #: 视频号图文 2026-10-24 接上:「发表动态」页(表单在 `empty.html` 框架里),≤18 张图。
+    "weixin-channels": ("video", "image-text"),
     #: B站专栏(article)2026-10-24 接上:编辑器在 `read-editor` 框架里,标题 50 / 正文 100000。
     #: 文章**没有素材**:它是一篇长文,封面可留空(平台自动截正文开头)。
     "bilibili": ("video", "article"),
@@ -243,8 +245,9 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "title_max": 16,
         "short_title": True,
         # 助手端图文 ≤18 张(手机端 ≤20);**超过 18 张会变成视频** —— 适配器要挡在 18。
+        # 图文 2026-10-24 真机核对:「发表动态」页的标题 22 字、描述 1000 字、单张 ≤20MB。
         "kinds": ("video", "image-text"),
-        "content": {"image-text": {"max_items": 18, "body_max": 1000}},
+        "content": {"image-text": {"max_items": 18, "title_max": 22, "body_max": 1000}},
     },
     "bilibili": {
         "label": "Bilibili",

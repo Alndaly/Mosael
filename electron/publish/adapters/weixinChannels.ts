@@ -13,13 +13,22 @@ export class WeixinChannelsAdapter implements PublishAdapter {
 
   /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
   private entryUrl(): string {
-    const url = this.c.entry.video?.url;
-    if (!url) throw publishError("weixin-channels", "publishErr_kindNotImplemented", { kind: "video" });
+    const url = this.c.entry[this.task.contentKind]?.url ?? this.c.entry.video?.url;
+    if (!url) throw publishError("weixin-channels", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     return url;
+  }
+
+  /** 图文那一档的驱动:「发表动态」的表单整个在同源 iframe 里(外层只有导航)。 */
+  private imageDriver(): PageDriver {
+    return this.driver.inFrame(this.s.imageTextFrame);
+  }
+
+  private get isImageText(): boolean {
+    return this.task.contentKind === "image-text";
   }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
-  static readonly KINDS = ["video"] as const;
+  static readonly KINDS = ["video", "image-text"] as const;
   readonly supports = WeixinChannelsAdapter.KINDS;
   private readonly s = SELECTORS.weixinChannels;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
@@ -31,6 +40,16 @@ export class WeixinChannelsAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
+    if (this.isImageText) {
+      await this.driver.goto(this.entryUrl());
+      const inner = this.imageDriver();
+      const ready = await inner.cssVisible(this.s.imageTitleInput, 20_000).catch(() => false);
+      if (!ready) {
+        await plogPageState("WeChat channels image composer missing:", this.driver);
+        throw publishError("weixin-channels", "publishErr_editorMissing");
+      }
+      return;
+    }
     await this.driver.goto(this.entryUrl());
   }
 
@@ -94,7 +113,33 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     }
   }
 
+  async uploadImages(paths: string[]): Promise<void> {
+    //: 「发表动态」页:一次交多张(平台上限 18 张、单张 ≤20MB),文件框在 iframe 里。
+    if (!paths.length) throw publishError("weixin-channels", "publishErr_noAssets");
+    const inner = this.imageDriver();
+    if (!(await inner.fileInputAttached(this.s.imageFileInput, ACTION_TIMEOUT))) {
+      await plogPageState("WeChat channels image upload entry missing:", this.driver);
+      throw publishError("weixin-channels", "publishErr_noUploadEntry");
+    }
+    await inner.setFiles(this.s.imageFileInput, paths);
+    //: 缩略图出现 = 前端接住了文件。没有别的完成信号(平台不显示进度/百分比)。
+    if (!(await inner.cssVisible(this.s.imageUploaded, UPLOAD_TIMEOUT).catch(() => false))) {
+      await plogPageState("WeChat channels images not accepted:", this.driver);
+      throw publishError("weixin-channels", "publishErr_uploadTimeout");
+    }
+    await wait(600);
+  }
+
   async fillTitle(title: string): Promise<void> {
+    if (this.isImageText) {
+      const value = title.slice(0, 22);
+      const inner = this.imageDriver();
+      await inner.cssVisible(this.s.imageTitleInput, ACTION_TIMEOUT);
+      await inner.fillField(this.s.imageTitleInput, value);
+      const current = await inner.cssValue(this.s.imageTitleInput);
+      if (!current?.includes(value)) throw publishError("weixin-channels", "publishErr_titleRejected");
+      return;
+    }
     await this.waitForHumanGateIfNeeded();
     await this.assertCanPublish();
     const description = stringOption(this.task, "description") ?? title;
@@ -114,7 +159,37 @@ export class WeixinChannelsAdapter implements PublishAdapter {
     }
   }
 
+  async fillBody(body: string): Promise<void> {
+    const value = body.trim();
+    if (!value) return;
+    const inner = this.imageDriver();
+    if (!(await inner.cssVisible(this.s.imageDescEditor, ACTION_TIMEOUT))) {
+      await plogPageState("WeChat channels image description missing:", this.driver);
+      throw publishError("weixin-channels", "publishErr_editorMissing");
+    }
+    await inner.focusAndClearField(this.s.imageDescEditor);
+    await inner.insertTextLines(this.s.imageDescEditor, value);
+    const shown = await inner.cssValue(this.s.imageDescEditor);
+    const squash = (text: string) => text.replace(/\s+/g, "");
+    if (!squash(shown ?? "").includes(squash(value).slice(0, 40))) {
+      await plogPageState("WeChat channels image description mismatch:", this.driver);
+      throw publishError("weixin-channels", "publishErr_descriptionRejected");
+    }
+  }
+
   async fillTags(tags: string[]): Promise<void> {
+    //: 图文的标签是**描述里的 #话题**,接在正文后面(视频那一档才有独立的标签框)。
+    if (this.isImageText) {
+      const inner = this.imageDriver();
+      for (const tag of tags) {
+        const normalized = normalizeTag(tag);
+        if (!normalized) continue;
+        await inner.focusEnd(this.s.imageDescEditor);
+        await inner.insertText(this.s.imageDescEditor, ` #${normalized}`);
+        await wait(300);
+      }
+      return;
+    }
     if (!tags.length) {
       return;
     }
@@ -131,6 +206,18 @@ export class WeixinChannelsAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
+    if (this.isImageText) {
+      const inner = this.imageDriver();
+      const clicked = await inner
+        .clickByText(this.s.submitText, { exact: true })
+        .then(() => true)
+        .catch(() => false);
+      if (!clicked) {
+        await plogPageState("WeChat channels image publish button missing:", this.driver);
+        throw publishError("weixin-channels", "publishErr_submitDisabled");
+      }
+      return;
+    }
     await this.waitForHumanGateIfNeeded();
     await this.assertCanPublish();
     const ready = await this.driver.waitButtonEnabled(this.s.submitText, ACTION_TIMEOUT);
