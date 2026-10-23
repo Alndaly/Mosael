@@ -19,6 +19,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -347,7 +348,7 @@ function RunCard({
                                     isVideo ? "cursor-pointer" : "cursor-zoom-in")}
                       onClick={() => open(asset)}
                     >
-                      <img src={assetThumbnailUrl(asset)} alt={t(isVideo ? "workbenchRunVideoOutputAlt" : "workbenchRunOutputAlt").replace("{node}", name)}
+                      <FallbackImage src={assetThumbnailUrl(asset)} alt={t(isVideo ? "workbenchRunVideoOutputAlt" : "workbenchRunOutputAlt").replace("{node}", name)}
                            loading="lazy" className="block aspect-square w-full rounded-md bg-secondary object-cover" />
                       {isVideo && (
                         <span aria-hidden className="absolute inset-0 grid place-items-center rounded-md bg-black/15">

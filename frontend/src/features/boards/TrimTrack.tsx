@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { assetFilmstripUrl, fetchWaveform } from "@/api/client";
 import { cn } from "@/lib/utils";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 /**
  * 剪辑用的那条轨:**看着片子本身去剪**,而不是填两个秒数。
@@ -74,7 +75,7 @@ export function TrimTrack({
     >
       {kind === "video" ? (
         //: 帧条铺满整条轨。**不保持比例** —— 这里要的是"第几秒长什么样",而不是每一格都方正。
-        <img
+        <FallbackImage
           src={assetFilmstripUrl(assetId)}
           alt=""
           draggable={false}

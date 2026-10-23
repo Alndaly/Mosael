@@ -3,6 +3,7 @@ import React from "react";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 
 type Details = Record<string, unknown>;
 
@@ -89,7 +90,7 @@ export function WorkflowFailureDetails({ details }: { details: Details | undefin
               openImagePreview({ src: screenshot, title: pageUrl ? `${t("jobDetailScreenshot")} · ${pageUrl}` : t("jobDetailScreenshot") })
             }
           >
-            <img src={screenshot} alt={t("jobDetailScreenshot")} className="block min-w-0 max-w-full" />
+            <FallbackImage src={screenshot} alt={t("jobDetailScreenshot")} className="block min-w-0 max-w-full" />
           </IconButton>
         </div>
       )}

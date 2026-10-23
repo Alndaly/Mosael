@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
@@ -61,7 +62,7 @@ export function ComposerChips({
                 {/* 缩略图和图标占同一个方格 —— 一排里有图有文件时,名字仍然从同一列开始。 */}
                 <span className="grid size-5 shrink-0 place-items-center overflow-hidden rounded bg-muted text-muted-foreground">
                   {chip.thumbnail ? (
-                    <img src={chip.thumbnail} alt="" className="size-5 object-cover" loading="lazy" />
+                    <FallbackImage src={chip.thumbnail} alt="" className="size-5 object-cover" loading="lazy" />
                   ) : (
                     chip.icon
                   )}

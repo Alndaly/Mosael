@@ -21,6 +21,7 @@ import { ModelPreviewSettingsButton } from "@/components/generation/ModelPreview
 import { NsfwMark, previewBlurClass } from "@/components/generation/ModelThumb";
 import { previewTreatment, useModelPreviewSettings } from "@/components/generation/modelPreviewSettings";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger, openContextMenuFromKeyboard } from "@/components/ui/context-menu";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
@@ -202,7 +203,7 @@ function OutputTile({ output, asset, treatment, alt, actions, onOpen, onReveal }
               className="block size-full cursor-zoom-in border-0 bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               onClick={onOpen}
             >
-              <img
+              <FallbackImage
                 src={assetThumbnailUrl(output.asset_id)}
                 alt={name}
                 loading="lazy"

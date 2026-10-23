@@ -7,6 +7,7 @@ import { errorText } from "@/api/errorMessage";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -156,7 +157,18 @@ export function AccountSection() {
               loading={avatarPending}
               onClick={() => avatarInputRef.current?.click()}
             >
-              {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
+              {avatarSrc ? (
+                //: 头像读不出来(被换掉 / 文件没了)就退回昵称首字 —— 裸 `<img>` 在这里是破图图标。
+                <FallbackImage
+                  src={avatarSrc}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  fallbackClassName="bg-transparent"
+                  fallback={<span className="text-sm font-semibold">{initial}</span>}
+                />
+              ) : (
+                initial
+              )}
               <span className="absolute inset-0 grid place-items-center bg-[rgb(0_0_0/0.45)] text-white opacity-0 transition-opacity duration-100 group-hover/avatar:opacity-100">
                 {avatarPending ? <Loader2 size={13} className="animate-mosael-spin" /> : <Camera size={13} />}
               </span>

@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { KeyframePairFrame, SLOT_TILE, SlotTileText } from "@/components/generation/slotTiles";
 import { IconButton } from "@/components/ui/icon-button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { cn } from "@/lib/utils";
 import { Truncate } from "@/components/ui/truncate";
 import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, slotColumns, slotName, type FrameSlot, type SourceRole } from "@/lib/sourceFrames";
@@ -113,7 +114,7 @@ function Tile({
             {/* 绝对定位填满:此前是 h-full —— 而这颗按钮是 grid + place-items-center 的行,
                 行高由内容定、内容的 100% 又指着行高,百分比没着落,缩略图按原图比例渲染
                 (实测 68px 的格里画了张 149px 的图,只看得见中间一截)。 */}
-            <img className="absolute inset-0 block size-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
+            <FallbackImage className="absolute inset-0 block size-full object-cover" src={assetThumbnailUrl(slot.assetId)} alt="" />
           </IconButton>
         )}
         {name && (

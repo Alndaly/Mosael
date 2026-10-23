@@ -34,6 +34,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CollectionTabs } from "@/components/layout/StudioPage";
 import { FieldBox } from "@/components/ui/field-box";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { Button } from "@/components/ui/button";
 import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
 import { IconButton } from "@/components/ui/icon-button";
@@ -191,7 +192,7 @@ export function EntityDetail({
           className={cn("relative grid aspect-[4/5] w-full max-w-[180px] place-items-center overflow-hidden rounded-xl border border-border bg-panel-inset p-0 text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", cover ? "cursor-zoom-in" : "cursor-pointer")}
         >
           {data.display_cover_asset_id ? (
-            <img src={assetThumbnailUrl(data.display_cover_asset_id)} alt="" className="absolute inset-0 size-full object-cover" />
+            <FallbackImage src={assetThumbnailUrl(data.display_cover_asset_id)} alt="" className="absolute inset-0 size-full object-cover" />
           ) : (
             <KindIcon size={36} strokeWidth={1.2} />
           )}
@@ -793,7 +794,7 @@ function GenerationUsageCard({ one }: { one: EntityUsageGeneration }) {
     <UsageCard
       lead={
         one.result_asset_id ? (
-          <img src={assetThumbnailUrl(one.result_asset_id)} alt="" loading="lazy" className="size-full object-cover" />
+          <FallbackImage src={assetThumbnailUrl(one.result_asset_id)} alt="" loading="lazy" className="size-full object-cover" />
         ) : one.kind === "video" ? (
           <Clapperboard size={18} />
         ) : (

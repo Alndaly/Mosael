@@ -7,6 +7,7 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { Badge } from "@/components/ui/badge";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Hint } from "@/components/ui/tooltip";
@@ -183,7 +184,7 @@ export function AssetPreviewModal({
                 className="group/zoom relative grid h-full min-h-0 w-full min-w-0 cursor-zoom-in place-items-center border-0 bg-transparent p-4"
                 onClick={() => openImagePreview({ src, title: shown.name, assetId: shown.id })}
               >
-                <img className="h-full min-h-0 w-full min-w-0 object-contain" src={src} alt={shown.name} />
+                <FallbackImage className="h-full min-h-0 w-full min-w-0 object-contain" src={src} alt={shown.name} />
                 <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-ui-xs text-white opacity-0 transition-opacity duration-160 group-hover/zoom:opacity-100 group-focus-visible/zoom:opacity-100">
                   <Maximize2 size={12} /> {t("assetClickToZoom")}
                 </span>

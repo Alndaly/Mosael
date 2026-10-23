@@ -9,6 +9,7 @@ import { gotoRecord } from "@/lib/deepLink";
 import { getNoteSourceMessage, type NoteSource } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
@@ -38,7 +39,7 @@ export function SourceLink({ source, workspaceId }: { source: NoteSource; worksp
             紧挨着一颗无边钮,一颗有框一颗没框、还矮 4px。 */}
         {asset.data && <IconButton variant="ghost" size="icon-sm" label={t("assetSaveLocal")} onClick={() => saveAssetToDisk(asset.data)}><Download /></IconButton>}
       </div>
-      {(asset.isError || detail.isError) ? <p>{s.unavailable}</p> : source.kind === "message" ? <div className="max-h-[65vh] overflow-auto"><AgentMarkdown>{detail.data?.content || s.loading}</AgentMarkdown></div> : asset.data ? asset.data.kind === "image" ? <IconButton unstyled label={s.node.preview} className="block w-fit max-w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={() => openImagePreview({ src: assetPreviewUrl(source.id), title: source.label || asset.data?.name, assetId: source.id })}><img src={assetPreviewUrl(source.id)} alt={source.label} className="max-h-[65vh] object-contain" /></IconButton> : asset.data.kind === "audio" ? <AudioPlayerBar src={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} className="my-6 h-10 rounded-lg border border-border bg-panel" /> : <div className="aspect-video max-h-[65vh] w-full overflow-hidden rounded-lg"><VideoPlayer assetSrc={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} /></div> : <p>{s.loading}</p>}
+      {(asset.isError || detail.isError) ? <p>{s.unavailable}</p> : source.kind === "message" ? <div className="max-h-[65vh] overflow-auto"><AgentMarkdown>{detail.data?.content || s.loading}</AgentMarkdown></div> : asset.data ? asset.data.kind === "image" ? <IconButton unstyled label={s.node.preview} className="block w-fit max-w-full cursor-zoom-in border-0 bg-transparent p-0" onClick={() => openImagePreview({ src: assetPreviewUrl(source.id), title: source.label || asset.data?.name, assetId: source.id })}><FallbackImage src={assetPreviewUrl(source.id)} alt={source.label} className="max-h-[65vh] object-contain" /></IconButton> : asset.data.kind === "audio" ? <AudioPlayerBar src={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} className="my-6 h-10 rounded-lg border border-border bg-panel" /> : <div className="aspect-video max-h-[65vh] w-full overflow-hidden rounded-lg"><VideoPlayer assetSrc={assetFileUrl(source.id)} startAt={source.start ?? undefined} endAt={source.end ?? null} /></div> : <p>{s.loading}</p>}
       {source.quote && <blockquote className="text-sm text-muted-foreground">{source.quote}</blockquote>}
     </DialogContent></Dialog></>;
 }

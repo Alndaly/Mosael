@@ -15,6 +15,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { assetThumbnailUrl, type Asset, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Truncate } from "@/components/ui/truncate";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import type { MessageKey } from "@/app/messages";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
@@ -517,7 +518,7 @@ export function PromptEditor({
                   {item.asset.kind === "audio" ? (
                     <span className="grid h-8 w-10 shrink-0 place-items-center rounded bg-control text-muted-foreground"><Music2 size={16} aria-hidden /></span>
                   ) : (
-                    <img src={assetThumbnailUrl(item.asset.id)} alt="" className="h-8 w-10 shrink-0 rounded bg-control object-cover" />
+                    <FallbackImage src={assetThumbnailUrl(item.asset.id)} alt="" className="h-8 w-10 shrink-0 rounded bg-control object-cover" />
                   )}
                   <Truncate className="flex-1 text-ui-xs text-foreground">
                     {item.asset.name || item.asset.original_filename}

@@ -4,6 +4,7 @@ import { FileText, Film, Music } from "lucide-react";
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, type Job } from "@/api/client";
 import { AudioPlayerBar } from "@/components/app/media-playback";
 import { IconButton } from "@/components/ui/icon-button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { Truncate } from "@/components/ui/truncate";
 import { noteHref } from "@/lib/deepLink";
 import { useAssetDetails } from "@/lib/assetQueries";
@@ -79,7 +80,7 @@ export function JobResult({ job }: { job: Job }) {
                 onClick={() => openImagePreview({ ...gallery[index], gallery })}
                 className="relative aspect-square cursor-zoom-in overflow-hidden rounded-md border border-border bg-panel-inset p-0 hover:border-border-strong"
               >
-                <img src={assetThumbnailUrl(id)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+                <FallbackImage src={assetThumbnailUrl(id)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                 {asset?.kind === "video" && (
                   <Film size={12} className="absolute bottom-1 right-1 text-[#e8eaed] drop-shadow" aria-hidden />
                 )}

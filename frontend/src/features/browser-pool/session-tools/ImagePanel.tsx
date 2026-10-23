@@ -4,6 +4,7 @@ import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { ViewFullSizeButton } from "@/components/app/view-full-size";
 import { Hint } from "@/components/ui/tooltip";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { cn } from "@/lib/utils";
 
 export interface PageImageItem {
@@ -66,7 +67,7 @@ export function ImagePanel({
               )}
             >
               {image.state === "ready" && image.preview ? (
-                <img src={image.preview} alt={image.alt} className="h-full w-full object-cover" draggable={false} />
+                <FallbackImage src={image.preview} alt={image.alt} className="h-full w-full object-cover" draggable={false} />
               ) : image.state === "loading" ? (
                 <Loader2 size={14} className="animate-mosael-spin text-muted-foreground" />
               ) : (

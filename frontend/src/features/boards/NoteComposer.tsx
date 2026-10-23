@@ -11,6 +11,7 @@ import {
   type PromptDocument,
 } from "@/features/boards/PromptEditor";
 import { IconButton } from "@/components/ui/icon-button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
@@ -207,7 +208,7 @@ export function NoteComposer({
                   className={cn("block h-8 w-8 overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong", asset.kind === "audio" ? "cursor-pointer" : "cursor-zoom-in")}
                 >
                   {asset.kind === "image" ? (
-                    <img src={assetThumbnailUrl(asset.id)} alt="" className="h-full w-full object-cover" />
+                    <FallbackImage src={assetThumbnailUrl(asset.id)} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <span className="grid h-full w-full place-items-center text-muted-foreground">
                       {asset.kind === "video" ? <Film size={13} /> : <Music size={13} />}

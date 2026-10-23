@@ -7,6 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { IconButton } from "@/components/ui/icon-button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { Truncate } from "@/components/ui/truncate";
 import { gotoAsset } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
@@ -273,7 +274,7 @@ function MediaImageButton({
       className="block cursor-zoom-in border-0 bg-transparent p-0 focus-visible:rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       onClick={onOpen}
     >
-      <img className={cn("rounded-lg border border-border bg-black object-contain", imgClassName)} src={src} alt={asset.name} loading="lazy" />
+      <FallbackImage className={cn("rounded-lg border border-border bg-black object-contain", imgClassName)} src={src} alt={asset.name} loading="lazy" />
     </IconButton>
   );
 }

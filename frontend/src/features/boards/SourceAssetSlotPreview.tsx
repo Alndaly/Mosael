@@ -5,6 +5,7 @@ import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { IconButton } from "@/components/ui/icon-button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 
 /**
@@ -53,7 +54,7 @@ export function SourceAssetSlotPreview({
       }
       className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
     >
-      <img src={assetThumbnailUrl(assetId)} alt="" className="h-full w-full object-cover" />
+      <FallbackImage src={assetThumbnailUrl(assetId)} alt="" className="h-full w-full object-cover" />
     </IconButton>
   );
 

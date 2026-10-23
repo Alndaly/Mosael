@@ -48,6 +48,7 @@ import {
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
@@ -364,7 +365,7 @@ function ReferenceCard({
         aria-label={`${reference.asset_name} · ${roleLabel}`}
       >
         {image ? (
-          <img src={assetThumbnailUrl(reference.asset_id)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+          <FallbackImage src={assetThumbnailUrl(reference.asset_id)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <Film size={24} strokeWidth={1.4} />
         )}

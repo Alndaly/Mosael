@@ -24,6 +24,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { IconButton } from "@/components/ui/icon-button";
 import { Truncate } from "@/components/ui/truncate";
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
@@ -199,7 +200,7 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
                   hint={t("assetClickToZoom")}
                   onClick={() => openImagePreview({ ...pageGallery[index], gallery: pageGallery })}
                 >
-                  <img src={pageGallery[index].src} alt="" loading="lazy" className="block h-auto w-full" />
+                  <FallbackImage src={pageGallery[index].src} alt="" loading="lazy" className="block h-auto w-full" />
                 </IconButton>
               </figure>
             ))}

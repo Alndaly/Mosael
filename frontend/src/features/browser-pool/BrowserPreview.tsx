@@ -1,4 +1,5 @@
 import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { cn } from "@/lib/utils";
 import React from "react";
 import { Loader2, MonitorPlay, Square, X } from "lucide-react";
@@ -72,7 +73,7 @@ export function BrowserPreview() {
         </IconButton>
       </div>
       {frame.dataUrl ? (
-        <img src={frame.dataUrl} alt="" className="block w-full bg-black" />
+        <FallbackImage src={frame.dataUrl} alt="" className="block w-full bg-black" />
       ) : (
         // 后台视图取不到像素是常态(见 electron/publish/publishWorker.ts 的 LiveMirror),此时面板退化成「步骤 + 地址」。
         // 整块消失反而更糟:那正是用户以为「卡死了」的时刻,更需要看到它还在跑。

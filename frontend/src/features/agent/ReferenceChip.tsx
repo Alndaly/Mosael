@@ -5,6 +5,7 @@ import { assetThumbnailUrl } from "@/api/client";
 import { REFERENCE_META, type ReferenceKind } from "@/features/agent/references";
 import { useReferencePreview } from "@/features/agent/useReferencePreview";
 import { Truncate } from "@/components/ui/truncate";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { cn } from "@/lib/utils";
 
 /**
@@ -56,7 +57,7 @@ export const ReferenceChip = Node.create({
 export function ReferenceThumb({ kind, id }: { kind: ReferenceKind; id: string }) {
   const Icon = REFERENCE_META[kind]?.icon ?? REFERENCE_META.asset.icon;
   if (kind === "asset") {
-    return <img src={assetThumbnailUrl(id)} alt="" className="h-8 w-10 shrink-0 rounded bg-control object-cover" />;
+    return <FallbackImage src={assetThumbnailUrl(id)} alt="" className="h-8 w-10 shrink-0 rounded bg-control object-cover" />;
   }
   return (
     <span className="grid h-8 w-10 shrink-0 place-items-center rounded bg-control text-muted-foreground">
@@ -114,7 +115,7 @@ export function ReferenceBadge({
     >
       {/* 素材给缩略图,其余给图标 —— 素材是用样子认的,笔记和工作流是用名字认的。 */}
       {kind === "asset" ? (
-        <img src={assetThumbnailUrl(id)} alt="" className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover" />
+        <FallbackImage src={assetThumbnailUrl(id)} alt="" className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover" />
       ) : (
         <Icon size={11} className="shrink-0 text-muted-foreground" />
       )}

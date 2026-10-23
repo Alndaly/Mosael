@@ -4,6 +4,7 @@ import { Columns2, Download, FlipHorizontal, Grid2x2, Link2, Link2Off, Maximize2
 import { assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { FallbackImage } from "@/components/ui/fallback-image";
 import { FloatingIconButton } from "@/components/ui/floating-button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
@@ -165,7 +166,7 @@ function Pane({
         onWheel={onWheel}
         onPointerDown={onPointerDown}
       >
-        <img
+        <FallbackImage
           src={assetPreviewUrl(asset.id)}
           alt={asset.name || asset.original_filename}
           draggable={false}
@@ -279,11 +280,11 @@ function SplitPane({
       onWheel={onWheel}
       onPointerDown={startPan}
     >
-      <img src={assetPreviewUrl(a.id)} alt="" draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
+      <FallbackImage src={assetPreviewUrl(a.id)} alt="" draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
       {/* B 层只露出分割线右侧。clip-path 而不是 width:两张图的定位必须完全一致,
           否则擦除时画面会横向跳一下。 */}
       <div className="pointer-events-none absolute inset-0" style={{ clipPath: `inset(0 0 0 ${split}%)` }}>
-        <img src={assetPreviewUrl(b.id)} alt="" draggable={false} className="absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
+        <FallbackImage src={assetPreviewUrl(b.id)} alt="" draggable={false} className="absolute left-1/2 top-1/2 max-h-full max-w-full select-none object-contain" style={style} />
       </div>
 
       {/* 命中区 12px、可见线 1px:分割线越细,两侧的差异越是紧挨着可比;而 1px 宽的东西
