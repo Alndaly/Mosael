@@ -100,6 +100,21 @@ describe("契约管道", () => {
         expect(key).toBeTruthy();
       });
 
+      it("formGone 闸门:编辑表单还在时,成功文案再像也不算成功", async () => {
+        if (!contract.done.formGone) return;
+        const page = pageFor(platform, kind);
+        const text = (contract.done.texts ?? [])[0];
+        if (!text) return;
+        page.texts.add(text);
+        //: 表单还在(说明还没投出去):文案命中也不能判成功 —— 这道闸是防"把别人的发布记成自己的"。
+        page.elements.set(contract.done.formGone, { visible: true, enabled: true });
+        expect(await successVisible(fakeDriver(page), contract.done)).toBe(false);
+
+        //: 表单消失之后才认。
+        page.elements.set(contract.done.formGone, { visible: false, enabled: false });
+        expect(await successVisible(fakeDriver(page), contract.done)).toBe(true);
+      });
+
       it("正文判定按行、按顺序:重排不算进去", async () => {
         const page = pageFor(platform, kind);
         const driver = fakeDriver(page);

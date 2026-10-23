@@ -5,13 +5,25 @@ import { ACTION_TIMEOUT, HUMAN_INTERVENTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIME
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { AutomationBlockedError } from "../errors";
+import { contractFor } from "../contracts";
+import { awaitResult } from "../verify";
+import { plog } from "../log";
 
 export class WeixinChannelsAdapter implements PublishAdapter {
+
+  /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
+  private entryUrl(): string {
+    const url = this.c.entry.video?.url;
+    if (!url) throw publishError("weixin-channels", "publishErr_kindNotImplemented", { kind: "video" });
+    return url;
+  }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
   static readonly KINDS = ["video"] as const;
   readonly supports = WeixinChannelsAdapter.KINDS;
   private readonly s = SELECTORS.weixinChannels;
+  /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
+  private readonly c = contractFor("weixin-channels");
 
   constructor(
     private readonly driver: PageDriver,
@@ -19,7 +31,7 @@ export class WeixinChannelsAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    await this.driver.goto(this.s.createUrl);
+    await this.driver.goto(this.entryUrl());
   }
 
   /**
@@ -147,29 +159,12 @@ export class WeixinChannelsAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
-    const donePattern = this.s.publishDoneTexts.join("|");
-    const ok =
-      (await this.driver.waitForUrl(this.s.isListUrl, RESULT_TIMEOUT)) ||
-      (await this.driver.waitForFunction(
-        `(() => {
-          const seen = new Set();
-          const collect = (root) => {
-            if (!root || seen.has(root)) return '';
-            seen.add(root);
-            let text = root instanceof Document ? (root.body?.innerText || '') : (root.textContent || '');
-            for (const el of root.querySelectorAll ? root.querySelectorAll('*') : []) {
-              if (el.shadowRoot) text += '\\n' + collect(el.shadowRoot);
-            }
-            return text;
-          };
-          return new RegExp(${JSON.stringify(donePattern)}).test(collect(document));
-        })()`,
-        10_000,
-      ));
-    if (!ok) {
-      await plogPageState("waitResult failed (weixin-channels):", this.driver);
-      throw publishError("weixin-channels", "publishErr_notConfirmed");
-    }
+    //: 判据在契约里:跳到作品列表 **或** 页面上出现成功文案(含 shadow root,原语负责)。
+    const outcome = await awaitResult(this.driver, this.c.done, { timeout: RESULT_TIMEOUT });
+    plog("weixin-channels waitResult:", outcome);
+    if (outcome.status === "success") return;
+    await plogPageState("waitResult failed (weixin-channels):", this.driver);
+    throw publishError("weixin-channels", "publishErr_notConfirmed");
   }
 
   private async waitForHumanGateIfNeeded(): Promise<void> {

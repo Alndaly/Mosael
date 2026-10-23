@@ -100,6 +100,16 @@ export interface SuccessSignals {
   urls?: readonly (RegExp | ((url: string) => boolean))[];
   /** 页面文案(**含 shadow root**)。 */
   texts?: readonly string[];
+  /**
+   * **成功的前提**:这个选择器必须已经不在页面上。
+   *
+   * B 站 / TikTok / X 发完之后都是**原地**把编辑页换成结果页(地址不变或换到列表),
+   * 于是"成功文案"很容易被页面上早就存在的词命中(列表列名、导航项)。判据里加一道
+   * "编辑表单没了" —— 否则会把**别人完成的发布**、或者一次根本没点中按钮的操作记成成功。
+   */
+  formGone?: string;
+  /** 明确的失败提示:出现即失败(平台的"投稿失败 / 标题重复"这类原文)。 */
+  failTexts?: readonly string[];
 }
 
 /** 判断这段地址算不算成功 —— 正则与函数两种判据在这里统一。**在 Node 里做**,不塞进页面脚本。 */
@@ -114,12 +124,19 @@ export async function deepText(driver: PageDriver): Promise<string> {
 
 /** 成功了吗(看一次,不等) —— 由调用方控制轮询节奏。**地址在 Node 里比,文案在页面里读**。 */
 export async function successVisible(driver: PageDriver, signals: SuccessSignals): Promise<boolean> {
+  //: ① **闸门先过**:编辑表单还在 = 还什么都没发出去,文案再像也不能算成功(B站 / TikTok / X 的教训)。
+  if (signals.formGone) {
+    const stillThere = await driver.cssVisible(signals.formGone, 300).catch(() => false);
+    if (stillThere) return false;
+  }
+  //: ② 地址(平台自己写的落地页 / 已发布参数)—— 最硬。
   const url = driver.url();
   if (url && urlMatches(url, signals.urls)) return true;
+  //: ③ 文案(含 shadow root)。没有文案信号的平台到这里就是 false。
   const texts = signals.texts ?? [];
   if (!texts.length) return false;
-  const text = await deepText(driver);
-  return texts.some((one) => text.includes(one));
+  const body = await deepText(driver);
+  return texts.some((one) => body.includes(one));
 }
 
 /** 等成功信号出现。 */
@@ -183,4 +200,30 @@ export async function linesEntered(
     }
   }
   return { ok: false, matched, total: lines.length };
+}
+
+/**
+ * 等结果:**成功、失败、超时**三种,一次说清。
+ *
+ * 各平台此前各写一套"循环 + 失败文案 + 跳转兜底",于是同一件事有五种口径(而且 B 站那种
+ * 延迟方差极大的平台还得单独调超时)。这里统一:先看失败提示,再过 `formGone` 闸,再看成功信号。
+ */
+export async function awaitResult(
+  driver: PageDriver,
+  signals: SuccessSignals,
+  options: { timeout?: number; poll?: number } = {},
+): Promise<{ status: "success" | "failed" | "timeout"; reason?: string }> {
+  const deadline = Date.now() + (options.timeout ?? 120_000);
+  const poll = options.poll ?? 1_000;
+  while (Date.now() < deadline) {
+    const failTexts = signals.failTexts ?? [];
+    if (failTexts.length) {
+      const body = await deepText(driver);
+      const hit = failTexts.find((one) => body.includes(one));
+      if (hit) return { status: "failed", reason: hit };
+    }
+    if (await successVisible(driver, signals)) return { status: "success" };
+    await new Promise((resolve) => setTimeout(resolve, poll));
+  }
+  return { status: "timeout" };
 }

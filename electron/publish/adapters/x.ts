@@ -6,6 +6,8 @@ import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, UPLOAD_TIMEOUT, clickTextPreferTrusted, hasStoredSession, plogPageState, publishError, stringOption, wait } from "./shared";
 import { SELECTORS } from "../selectors";
 import { plog } from "../log";
+import { contractFor } from "../contracts";
+import { awaitResult } from "../verify";
 
 /**
  * X(Twitter)。发帖走 x.com 全站共用的撰写组件(`/compose/post` 一页只有它)。
@@ -25,11 +27,20 @@ import { plog } from "../log";
 const X_MAX_BYTES = 512 * 1024 * 1024;
 
 export class XAdapter implements PublishAdapter {
+
+  /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
+  private entryUrl(): string {
+    const url = this.c.entry.video?.url;
+    if (!url) throw publishError("x", "publishErr_kindNotImplemented", { kind: "video" });
+    return url;
+  }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
   static readonly KINDS = ["video"] as const;
   readonly supports = XAdapter.KINDS;
   private readonly s = SELECTORS.x;
+  /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
+  private readonly c = contractFor("x");
 
   // 帖子文本要把「简介」一起写进去(见 fillTitle),所以任务要留着。
   constructor(
@@ -38,12 +49,12 @@ export class XAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    await this.driver.goto(this.s.uploadUrl);
+    await this.driver.goto(this.entryUrl());
     // 撰写组件是 SPA 路由;持久视图复用同一个 WebContents,上一次发完停在首页,直接 goto
     // 同站另一路由未必重挂组件。没探到正文框就断开再回来(同 B 站/TikTok 那一课)。
     if (!(await this.driver.cssVisible(this.s.textEditor, 6_000))) {
       await this.driver.goto("about:blank");
-      await this.driver.goto(this.s.uploadUrl);
+      await this.driver.goto(this.entryUrl());
     }
     // 首访的 onboarding / 提示模态挡真实点击:逐条试着关(点「暂不/关闭」,不替用户改设置)。
     for (const text of this.s.dismissTexts) {
@@ -186,23 +197,12 @@ export class XAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
-    // 两条判据,任一即真:①「已发送」toast;②撰写组件卸载(X 发完把人送回首页)——
-    // 「Post 不在了」单独不算数(可能被模态遮掉),必须组件整体消失,和 TikTok 的
-    // formGone 同一道防「页面上早就在的词」的关。
-    const donePattern = this.s.publishDoneTexts.join("|");
-    const probe = `(() => {
-      const text = document.body?.innerText || '';
-      const toast = new RegExp(${JSON.stringify(donePattern)}).test(text);
-      const composerGone = !document.querySelector(${JSON.stringify(this.s.textEditor)});
-      const listed = /x\\.com\\/home/.test(location.href);
-      return { ok: toast || (composerGone && listed), toast: toast, composerGone: composerGone, listed: listed, url: location.href };
-    })()`;
-    const settled = await this.driver.waitForFunction(`(${probe}).ok`, RESULT_TIMEOUT, 1_000);
-    const state = await this.driver.evaluate<Record<string, unknown>>(probe).catch(() => null);
-    plog("x waitResult:", { settled, ...(state ?? {}) });
-    if (!settled) {
-      await plogPageState("waitResult failed (x):", this.driver);
-      throw publishError("x", "publishErr_notConfirmed");
-    }
+    //: 判据在契约里:地址回到首页 **或**「已发送」toast;两者都要过"撰写组件已经消失"这道闸
+    //: (X 发完把人送回首页,而 "Post" 这类词在按钮上本来就写着)。
+    const outcome = await awaitResult(this.driver, this.c.done, { timeout: RESULT_TIMEOUT });
+    plog("x waitResult:", outcome);
+    if (outcome.status === "success") return;
+    await plogPageState("waitResult failed (x):", this.driver);
+    throw publishError("x", "publishErr_notConfirmed");
   }
 }

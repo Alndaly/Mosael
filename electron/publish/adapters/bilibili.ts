@@ -1,17 +1,28 @@
 import type { PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
-import { ACTION_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, publishError, stringOption, typeOrFill, wait } from "./shared";
+import { ACTION_TIMEOUT, UPLOAD_TIMEOUT, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
+import { awaitResult } from "../verify";
+import { contractFor } from "../contracts";
 
 export class BilibiliAdapter implements PublishAdapter {
+
+  /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
+  private entryUrl(): string {
+    const url = this.c.entry.video?.url;
+    if (!url) throw publishError("bilibili", "publishErr_kindNotImplemented", { kind: "video" });
+    return url;
+  }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
   static readonly KINDS = ["video"] as const;
   readonly supports = BilibiliAdapter.KINDS;
   private readonly s = SELECTORS.bilibili;
+  /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
+  private readonly c = contractFor("bilibili");
 
   constructor(
     private readonly driver: PageDriver,
@@ -19,14 +30,14 @@ export class BilibiliAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    await this.driver.goto(this.s.uploadUrl);
+    await this.driver.goto(this.entryUrl());
     // 上一次投稿成功后,B 站**原地**把编辑页替换成成功页(URL 不变,见 waitResult 注释)。而持久
     // 视图复用同一 WebContents,下一次 goto 到「同一个 URL」常被 SPA abort、不刷新,于是残留成功页
     // ——找不到上传入口,这一次发布就失败。没探到文件输入(成功页/异常态)就先去 about:blank 断开
     // SPA,再回到上传页,强制拿一张干净页面。
     if (!(await this.driver.fileInputAttached(this.s.fileInput, 6_000))) {
       await this.driver.goto("about:blank");
-      await this.driver.goto(this.s.uploadUrl);
+      await this.driver.goto(this.entryUrl());
     }
   }
 
@@ -291,45 +302,15 @@ export class BilibiliAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
-    // B 站投稿成功**不跳转 URL**:原地把编辑页替换成成功页(「稿件投递成功 / 查看进度 / 再投一个」)。
-    // 旧实现先 waitForUrl(稿件管理页) 干等满 RESULT_TIMEOUT 再看文本——URL 永远不变,于是每次成功都要
-    // 白卡约 2 分钟,慢一点还会误报「未确认发布」。改为单循环并发判断:成功页文案(强信号)/ 老流程
-    // 跳转(兜底)/ 明确失败提示 任一出现即结束。提交处理可达 ~2 分钟,给足 5 分钟余量。
-    //
-    // 成功判定必须**同时**满足「出现成功文案」和「编辑表单已消失」。只认文案会误报:实测有一次
-    // 自动化的点击根本没落到按钮上(后台视图视口 0×0,见 PageDriver.setMetricsOverride),用户
-    // 自己手动点了投稿,页面弹出「投稿成功」——于是这里把**别人完成的发布**记成了自己的成果,
-    // 上报 success、发通知、工作流收工。「什么都没发却报成功」是最坏的失败模式,宁可多等到超时。
-    // 编辑表单还在就说明没投出去:B 站成功后是原地把编辑页换成成功页,提交按钮不会留着。
-    // 15 分钟,不是 5 分钟。B 站确认投稿的延迟**方差极大**,实测同一个视频两次:
-    //   ・一次点击后 11 秒就出现成功页(formGone + 成功文案);
-    //   ・另一次点击已被受理(提交按钮随即消失),却过了 5 分钟还没翻成功页 —— 旧窗口到点就报
-    //     「未确认发布」,而稿件其实**已经投成了**;用户于是重试,重试又再投一稿。
-    // 差别应该来自后台的上传→转码(360P/480P/720P/1080P 逐档)→审核要走多久。宁可多等,
-    // 也不能把成功报成失败:误报失败的代价是重复投稿,而多等只是多占一会儿账号槽。
-    const RESULT_WAIT = 15 * 60 * 1000;
-    const probe = `(() => {
-      const t = (document.body && document.body.innerText) || '';
-      const formGone = !document.querySelector(${JSON.stringify(this.s.submitButton)});
-      const success = /稿件投递成功|投稿成功|稿件投稿成功|投稿完成/.test(t) && formGone;
-      const redirected = /upload-manager|content-manager|article/.test(location.href);
-      const m = t.match(/投稿失败|提交失败|发布失败|标题重复/);
-      return { ok: success || redirected, fail: m ? m[0] : null, formGone: formGone, url: location.href };
-    })()`;
-    const settled = await this.driver.waitForFunction(
-      `(() => { const s = ${probe}; return s.ok || s.fail; })()`,
-      RESULT_WAIT,
-      1_000,
-    );
-    const state = await this.driver.evaluate<{
-      ok: boolean;
-      fail: string | null;
-      formGone: boolean;
-      url: string;
-    }>(probe);
-    plog("waitResult:", { settled, ...state });
-    if (state.ok) return;
-    if (state.fail) throw publishError("bilibili", "publishErr_rejected", { reason: state.fail });
+    //: 15 分钟:B 站确认投稿的延迟**方差极大**(实测同一视频 11 秒 / 5 分钟以上都有),
+    //: 宁可多等 —— 误报失败的代价是用户重试、重复投稿。
+    const outcome = await awaitResult(this.driver, this.c.done, { timeout: 15 * 60 * 1000 });
+    plog("waitResult:", outcome);
+    if (outcome.status === "success") return;
+    if (outcome.status === "failed") {
+      throw publishError("bilibili", "publishErr_rejected", { reason: outcome.reason ?? "" });
+    }
+    await plogPageState("waitResult failed (bilibili):", this.driver);
     throw publishError("bilibili", "publishErr_notConfirmed");
   }
 

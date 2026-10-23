@@ -67,21 +67,29 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     entry: { video: { url: resolvePlatform("bilibili").publishUrl } },
     fileInput: { video: SELECTORS.bilibili.fileInput },
     submitText: SELECTORS.bilibili.submitTexts[0],
-    done: { urls: [], texts: SELECTORS.bilibili.publishDoneTexts },
+    //: B 站发完**不换地址**,原地换成成功页:靠"成功文案 + 编辑表单消失"判定(见 verify.formGone)。
+    done: {
+      texts: SELECTORS.bilibili.publishDoneTexts,
+      formGone: SELECTORS.bilibili.submitButton,
+      //: 明确失败原文:出现即失败(不用等到超时)。
+      failTexts: SELECTORS.bilibili.publishFailTexts,
+    },
     overlays: [],
   },
   tiktok: {
     entry: { video: { url: resolvePlatform("tiktok").publishUrl } },
     fileInput: { video: SELECTORS.tiktok.fileInput },
     submitText: SELECTORS.tiktok.postTexts[0],
-    done: { urls: [], texts: SELECTORS.tiktok.publishDoneTexts },
+    //: TikTok 同理:发布按钮不在了才算数(页面导航里本来就有 "Manage your posts" 这种词)。
+    done: { urls: [], texts: SELECTORS.tiktok.publishDoneTexts, formGone: SELECTORS.tiktok.postButton },
     overlays: [],
   },
   x: {
     entry: { video: { url: resolvePlatform("x").publishUrl } },
     fileInput: { video: SELECTORS.x.fileInput },
     submitText: SELECTORS.x.postTexts[0],
-    done: { urls: [], texts: SELECTORS.x.publishDoneTexts },
+    //: X 发完把人送回首页:地址 + 撰写组件消失 —— 两道都要(TikTok 那课的同一道闸)。
+    done: { urls: [/x\.com\/home/], texts: SELECTORS.x.publishDoneTexts, formGone: SELECTORS.x.textEditor },
     overlays: [],
   },
   mock: {

@@ -7,14 +7,24 @@ import { AutomationBlockedError } from "../errors";
 import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { plog } from "../log";
+import { contractFor } from "../contracts";
 import { resolvePlatform } from "../platforms";
 
 export class YoutubeAdapter implements PublishAdapter {
+
+  /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
+  private entryUrl(): string {
+    const url = this.c.entry.video?.url;
+    if (!url) throw publishError("youtube", "publishErr_kindNotImplemented", { kind: "video" });
+    return url;
+  }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
   static readonly KINDS = ["video"] as const;
   readonly supports = YoutubeAdapter.KINDS;
   private readonly s = SELECTORS.youtube;
+  /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
+  private readonly c = contractFor("youtube");
   /** 本次上传拿到的视频 ID(详情页会显示 youtu.be 链接)。收尾判定靠它认「**这一支**发出去了」。 */
   private uploadedId: string | null = null;
 
@@ -24,10 +34,10 @@ export class YoutubeAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    await this.driver.goto(this.s.uploadUrl);
+    await this.driver.goto(this.entryUrl());
     if (!(await this.driver.fileInputAttached(this.s.fileInput, 8_000))) {
       await this.driver.goto("about:blank");
-      await this.driver.goto(this.s.uploadUrl);
+      await this.driver.goto(this.entryUrl());
     }
   }
 

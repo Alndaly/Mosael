@@ -7,13 +7,24 @@ import { AutomationBlockedError } from "../errors";
 import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { plog } from "../log";
+import { contractFor } from "../contracts";
+import { awaitResult } from "../verify";
 
 export class TiktokAdapter implements PublishAdapter {
+
+  /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
+  private entryUrl(): string {
+    const url = this.c.entry.video?.url;
+    if (!url) throw publishError("tiktok", "publishErr_kindNotImplemented", { kind: "video" });
+    return url;
+  }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
   static readonly KINDS = ["video"] as const;
   readonly supports = TiktokAdapter.KINDS;
   private readonly s = SELECTORS.tiktok;
+  /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
+  private readonly c = contractFor("tiktok");
 
   // 文案走 fillTitle/fillTags 的入参,但**发布选项要从 task 上取**(可见性),所以两个都留。
   constructor(
@@ -22,12 +33,12 @@ export class TiktokAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
-    await this.driver.goto(this.s.uploadUrl);
+    await this.driver.goto(this.entryUrl());
     // 同 B 站:持久视图复用同一个 WebContents,上一次发完可能停在结果态,goto 同一 URL 常被
     // SPA abort。没探到文件输入就先断开再回来。
     if (!(await this.driver.fileInputAttached(this.s.fileInput, 6_000))) {
       await this.driver.goto("about:blank");
-      await this.driver.goto(this.s.uploadUrl);
+      await this.driver.goto(this.entryUrl());
     }
   }
 
@@ -205,24 +216,13 @@ export class TiktokAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
-    // 判据:完成文案,或跳到了内容管理页。**外加「发布按钮已经不在了」** —— 光看文案会被页面上
-    // 早就存在的词命中(原先的 "posted" 是列表列名、"Manage your posts" 是导航项,两者在点发布
-    // 之前就在,判定恒真)。另外原来还挂着一段 `(函数源码 && false) ||` 的死表达式,一并删掉。
-    const donePattern = this.s.publishDoneTexts.join("|");
-    const probe = `(() => {
-      const text = document.body?.innerText || '';
-      const formGone = !document.querySelector(${JSON.stringify(this.s.postButton)});
-      const hasDoneText = new RegExp(${JSON.stringify(donePattern)}).test(text);
-      const listed = /tiktokstudio\\/content/.test(location.href);
-      return { ok: listed || (hasDoneText && formGone), hasDoneText: hasDoneText, formGone: formGone, listed: listed, url: location.href };
-    })()`;
-    const settled = await this.driver.waitForFunction(`(${probe}).ok`, RESULT_TIMEOUT, 1_000);
-    const state = await this.driver.evaluate<Record<string, unknown>>(probe).catch(() => null);
-    plog("tiktok waitResult:", { settled, ...(state ?? {}) });
-    if (!settled) {
-      await plogPageState("waitResult failed (tiktok):", this.driver);
-      throw publishError("tiktok", "publishErr_notConfirmed");
-    }
+    //: 判据在契约里:成功文案 **且** 发布按钮已经不在(页面导航里本来就有 "Manage your posts"
+    //: 这类词,只认文案会恒真);跳到内容管理页也算成功。
+    const outcome = await awaitResult(this.driver, this.c.done, { timeout: RESULT_TIMEOUT });
+    plog("tiktok waitResult:", outcome);
+    if (outcome.status === "success") return;
+    await plogPageState("waitResult failed (tiktok):", this.driver);
+    throw publishError("tiktok", "publishErr_notConfirmed");
   }
 }
 

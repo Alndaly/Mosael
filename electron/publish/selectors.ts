@@ -194,6 +194,8 @@ export const SELECTORS = {
     coverRecommendation: ".cover .img-item-cover",
     submitButton: ".submit-add",
     submitTexts: ["立即投稿", "投稿", "发布"], // i18n-ok
+    //: 明确的失败原文(出现即失败):不用等满 15 分钟才报「未确认发布」。
+    publishFailTexts: ["投稿失败", "提交失败", "发布失败", "标题重复"], // i18n-ok
     loggedOutTexts: ["登录", "扫码登录", "密码登录", "短信登录"], // i18n-ok
     loggedInTexts: ["创作首页", "稿件管理", "内容管理", "投稿", "创作中心"], // i18n-ok
     uploadDoneTexts: ["上传完成", "上传成功", "视频上传完成", "上传完毕"], // i18n-ok

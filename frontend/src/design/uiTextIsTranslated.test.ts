@@ -87,7 +87,7 @@ const EXEMPT = new Map<string, string>([
 const LEFT = new Map<string, number>([
   //: 剩下 2 行是第二语言下拉里语言的自称(中文、日本語),各用各的文字写。
   ["browser-extension/src/sidepanel.tsx", 2],
-  ["electron/publish/adapters/bilibili.ts", 9],
+  ["electron/publish/adapters/bilibili.ts", 7],
   ["electron/publish/adapters/shared.ts", 2],
   ["electron/publish/adapters/weixinChannels.ts", 1],
   ["electron/publish/adapters/xiaohongshu.ts", 4],
