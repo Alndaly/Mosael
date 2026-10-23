@@ -219,6 +219,10 @@ const MESSAGES = {
     zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
     en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
   },
+  publishErr_bodyPartial: {
+    zh: "{platform} 的正文只进去了 {matched}/{total} 行(富文本编辑器把它改写成了别的样子),请在页面上补全再发",
+    en: "Only {matched} of {total} body lines reached {platform} (its rich-text editor rewrote them) — finish it on the page and post again.",
+  },
   publishErr_assetFileMissing: {
     zh: "素材文件不在这台电脑上(或已损坏):{name} —— 重新导入这份素材再发",
     en: "That asset's file is missing on this computer (or empty): {name} — re-import it and post again.",

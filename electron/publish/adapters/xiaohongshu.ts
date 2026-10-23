@@ -218,51 +218,43 @@ export class XiaohongshuAdapter implements PublishAdapter {
         await this.driver.focusAndClearField(this.s.contentEditor);
         await this.driver.insertText(this.s.contentEditor, value);
       });
-      if (await this.driver.waitForFunction(this.bodyFilledExpression(value), 4_000, 200)) return;
+      if ((await this.bodyMatch(value)).ok) return;
       await this.dismissHints();
     }
-    //: 还是不匹配 —— **编辑器里到底有没有字**才是分水岭:
-    //: 空的 = 真的没填进去,报错(发出去会是一条没正文的笔记);
-    //: 有字但比对不上 = 富文本把它改成了别的样子(列表/换行/标点),这时候**不该拦发布** ——
-    //: 真机 2026-10-23 三次都是这种:字明明在、字数也涨了,却被判"没接受",整条任务白跑。
-    const shown = await this.driver
-      .evaluate<string>(`(() => {
+    //: 还是没对上:**按行**报出到底进去了几行。整段一致才算填好 —— 只进了一部分就发出去,
+    //: 用户看到的正文和他在表单里写的不一样,那比失败更糟(所以这里不"有字就放过")。
+    const { matched, total } = await this.bodyMatch(value);
+    if (matched === 0) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
+    throw publishError("xiaohongshu", "publishErr_bodyPartial", { matched, total });
+  }
+
+  /**
+   * 正文**按行**核对:每一行(非空、去空白后)都要在编辑器里出现。
+   *
+   * 为什么不整段比:小红书的正文是富文本,`1. …` 会被它变成有序列表、换行位置也会变 —— 整段
+   * `includes` 会误判(真机 2026-10-23 连误三次,把本来能发的笔记全拦了)。
+   * 为什么也不"有字就算":只进去一半同样要拦 —— 发出去的正文和用户写的不一样,比失败更糟。
+   *
+   * 取**文字最多的那个候选元素**来比:真机上 `querySelector` 先命中的可能是空的占位 `<p>`。
+   */
+  private async bodyMatch(value: string): Promise<{ ok: boolean; matched: number; total: number }> {
+    const lines = value
+      .split(/\r?\n/)
+      .map((one) => one.trim())
+      .filter(Boolean);
+    return this.driver
+      .evaluate<{ ok: boolean; matched: number; total: number }>(`(() => {
+        const squash = (text) => String(text || '').replace(/\s+/g, '');
         const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
         const longest = editors
           .map((one) => (one.innerText || one.textContent || ''))
           .sort((a, b) => b.length - a.length)[0] || '';
-        return longest.trim();
+        const shown = squash(longest);
+        const lines = ${JSON.stringify(lines)}.map(squash).filter(Boolean);
+        const matched = lines.filter((one) => shown.includes(one)).length;
+        return { ok: lines.length > 0 && matched === lines.length, matched, total: lines.length };
       })()`)
-      .catch(() => "");
-    if (!shown) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
-  }
-
-  /**
-   * 「这段文字进去了吗」的表达式 —— **空白不敏感**。
-   *
-   * 小红书的正文是富文本:原样打进去的 `1. …` 会被它变成有序列表,`innerText` 于是多了换行;
-   * 直接 `includes(原文)` 就永远不成立(真机:文字明明在编辑器里、字数也涨了,却被判"没有接受")。
-   * 两边都把空白去掉再比,才是「这些字进去了吗」。
-   */
-  /**
-   * 正文是否已经填进去。判据按**可靠性**排,任一成立即可:
-   *
-   * 1. 候选编辑器里**文字最多的那一个**包含要填的字(空白不敏感)—— 不假定 `querySelector` 的第一个
-   *    就是真编辑器:真机上选择器还可能先命中一个空的占位 `<p>`,那样比对必然失败;
-   * 2. 平台自己的字数计数器 ≥ 要填的六成长度(富文本会改写标点/列表,长度会差几个字)。
-   */
-  private bodyFilledExpression(value: string): string {
-    return `(() => {
-      const squash = (text) => String(text || '').replace(/\s+/g, '');
-      const want = squash(${JSON.stringify(value)});
-      const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
-      const longest = editors
-        .map((one) => (one.innerText || one.textContent || ''))
-        .sort((a, b) => b.length - a.length)[0] || '';
-      if (squash(longest).includes(want)) return true;
-      const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
-      return counted ? Number(counted[1]) >= Math.floor(want.length * 0.6) : false;
-    })()`;
+      .catch(() => ({ ok: false, matched: 0, total: lines.length }));
   }
 
   private acceptsTextExpression(selector: string, value: string): string {
