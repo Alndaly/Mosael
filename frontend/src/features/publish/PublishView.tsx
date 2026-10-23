@@ -554,14 +554,16 @@ function PublishCard({
           </div>
         )}
       </div>
-      {/*: 右列撑满行高:状态/时间贴顶,动作 mt-auto 钉在**这一行的右下角**(维护者要求)。 */}
-      <div className={cn("relative z-10 flex shrink-0 flex-col items-end gap-1 self-stretch text-right", selecting && "pr-7")}>
+      {/*: 右列是**一整块**,贴着行顶:状态 → 时间 → 动作。此前状态贴顶、动作 `mt-auto` 钉在行底,
+          一条内容多的记录（简介 + 标签 + 失败原因）中间被撑开,右列就分成上下两座孤岛 ——
+          维护者截图指出的「右侧内容层级不对」就是这个(2026-10-23)。现在三样排在一起、都右对齐。 */}
+      <div className={cn("relative z-10 flex shrink-0 flex-col items-end gap-1 text-right", selecting && "pr-7")}>
         <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
         <span className="text-ui-xs tabular-nums text-muted-foreground">{localTime(task.created_at, locale)}</span>
-        {/*: 行内动作摆在状态下面、贴着这一行的右下角(维护者:文字 + 图标,正常的按钮)。
+        {/*: 行内动作紧跟其后(空一格):文字 + 图标,正常的按钮。
             写权限不足时删除禁掉并说明原因 —— 和详情弹窗里那一颗同一条判据。 */}
         {(onOpenPage || onDelete) && !selecting && (
-          <div className="mt-auto flex items-center gap-1">
+          <div className="mt-1 flex items-center gap-1">
             {onOpenPage && (
               <Button
                 variant="outline"
