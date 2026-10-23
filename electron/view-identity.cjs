@@ -20,7 +20,11 @@
 //:
 //: 所以默认**如实声明**(自洽);哪天真要 Chrome 形状的身份,得三处一起对齐(CDP),不能只洗 UA。
 //: X 早就是这一档(Turnstile 的实测结论),视频号在排查「扫码后回登录页」时也归到这一档。
-const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter"]);
+//:
+//: **小红书也先归到这一档(2026-10-23 实验)**:它的发布风控会在点「发布」时要求扫码/身份验证,
+//: 而「自称 Chrome、信号不像」正是那类风控最容易抓的一组证据。改回如实声明之后要复核两件事:
+//: ① 登录还进得去 ② 发布是否不再弹验证。不行就把这一项删掉 —— 一行的事。
+const CHROME_IDENTITY_EXEMPT = new Set(["x", "twitter", "xiaohongshu"]);
 
 /** 抹掉 UA 里的 Electron 与 Mosael token,得到一枚干净 Chrome UA;认不出 Chrome 版本就原样返回。 */
 function cleanChromeUserAgent(userAgent) {

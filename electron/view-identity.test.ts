@@ -33,9 +33,11 @@ describe("内嵌浏览器的身份", () => {
     expect(cleanChromeUserAgent("")).toBe("");
   });
 
-  it("X 如实声明;其余平台(视频号、抖音、小红书…)给**对齐过 client hints** 的 Chrome 身份", () => {
+  it("X 与小红书如实声明;其余平台(视频号、抖音、B 站…)给**对齐过 client hints** 的 Chrome 身份", () => {
     for (const platform of ["x", "X", "twitter"]) expect(identityForPlatform(platform), platform).toBe("electron");
-    for (const platform of ["weixin-channels", "douyin", "xiaohongshu", "bilibili", "tiktok", "youtube"]) {
+    //: 小红书 2026-10-23 起因「点发布被要求扫码验证」改回如实声明(见 view-identity 的注释)。
+    expect(identityForPlatform("xiaohongshu"), "小红书").toBe("electron");
+    for (const platform of ["weixin-channels", "douyin", "bilibili", "tiktok", "youtube"]) {
       expect(identityForPlatform(platform), platform).toBe("chrome");
     }
     // 未知 / 空:默认干净 Chrome(登录能过的那一边),不是永久伪装。

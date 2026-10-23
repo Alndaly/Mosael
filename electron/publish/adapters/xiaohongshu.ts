@@ -344,7 +344,8 @@ export class XiaohongshuAdapter implements PublishAdapter {
       if (!normalizedTag) {
         continue;
       }
-      await this.driver.insertText(this.s.contentEditor, `#${normalizedTag}`);
+      //: 逐字真实按键(而不是一次性 insertText):话题候选靠输入变化触发,而风控也会看输入节奏。
+      await this.driver.type(`#${normalizedTag}`);
       await this.driver.waitForFunction(
         `(() => {
           const target = ${JSON.stringify(`#${normalizedTag}`)};

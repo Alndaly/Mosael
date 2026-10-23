@@ -1200,11 +1200,18 @@ export class PageDriver {
 
   // ---- real input events --------------------------------------------------
 
+  /**
+   * 逐字真实按键。**间隔带抖动**(25–75ms,偶尔停顿一下)—— 固定 20ms 的等距输入本身就是
+   * 一条"这是程序"的证据,而风控会看节奏(2026-10-23:小红书点发布时要求扫码验证)。
+   */
   async type(text: string): Promise<void> {
-    for (const ch of text) {
+    for (const [index, ch] of [...text].entries()) {
       this.throwIfAborted();
       this.wc.sendInputEvent({ type: "char", keyCode: ch });
-      await this.wait(20);
+      const jitter = 25 + Math.random() * 50;
+      //: 每打十几个字停一下,像人在想下一句怎么写。
+      const pause = index > 0 && index % 12 === 0 ? 120 + Math.random() * 260 : 0;
+      await this.wait(Math.round(jitter + pause));
     }
   }
 
