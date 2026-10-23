@@ -219,6 +219,10 @@ const MESSAGES = {
     zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
     en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
   },
+  publishErr_editorNotEmpty: {
+    zh: "{platform} 的正文编辑器里还留着上一次的内容,清不掉 —— 打开那扇窗口手动清空(或放弃草稿)再试",
+    en: "{platform} still holds the previous text in its editor and it cannot be cleared — open the window, clear it (or discard the draft), then retry.",
+  },
   publishErr_backToEditor: {
     zh: "点了「发布」之后 {platform} 又把页面送回了创作页(标题已经空了):这条没被平台收下,多半是校验没过或被风控拦了。点「查看页面」看看那一页说了什么",
     en: "{platform} sent you back to the create page after the Publish click (the title is empty again): the post was not taken — usually a validation or a risk check. Open the page to see what it says.",

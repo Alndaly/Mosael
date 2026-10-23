@@ -344,7 +344,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
       {/* 每天一张**圆角白卡**(维护者给的图):日期栏头在卡外,记录落在卡里;卡片内的分割线内缩。 */}
-      <div ref={listRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
@@ -358,7 +358,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
                 <span className="font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
-              <div className="grid overflow-hidden rounded-lg bg-panel">
+              <div className="grid min-w-0 overflow-hidden rounded-lg bg-panel">
                 {group.items.map((task, index) => (
                   <React.Fragment key={task.id}>
                   {/*: 行与行之间的分割线**内缩 12px**(不顶到卡片左右边):线从正文起点开始,

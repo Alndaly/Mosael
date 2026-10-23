@@ -77,59 +77,43 @@ export class DouyinAdapter implements PublishAdapter {
     if (!value) return;
     const selector = this.s.imageDescEditor;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
-    //: **两条路都留**:先真实按键(点一下拿焦点 + 逐行打),不成就用 DOM 的 insertText。
-    //: 只留前一条时,一旦窗口焦点没落在这一页上,字一个都进不去,而我们只看到「没接受」——
-    //: 真机 2026-10-23 的失败正是这样:池会话里手工点一下再打字是好的,说明编辑器本身没问题。
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      if (attempt === 1) {
-        await typeOrFill(
-          this.driver,
-          "douyin body",
-          selector,
-          value,
-          async () => {
-            await this.driver.focusAndClearField(selector);
-            await this.driver.insertText(selector, value);
-          },
-          async () => {
-            //: 点一下再逐行打(不依赖节点身份:传完图抖音会重建这块 DOM)。
-            await this.driver.pointerClickCss(selector).catch(() => undefined);
-            await this.driver.focusAndClearField(selector).catch(() => undefined);
-            await this.driver.typeLines(value);
-          },
-        );
-      } else {
-        //: 第二遍只走 DOM 插入(和窗口焦点无关)。
-        await this.driver.focusAndClearField(selector);
-        await this.driver.insertText(selector, value);
-      }
-      const accepted = await this.driver.waitForFunction(
-        `(() => {
-          const squash = (text) => String(text || '').replace(/\s+/g, '');
-          const want = squash(${JSON.stringify(value)});
-          const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
-          const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
-          if (squash(longest).includes(want)) return true;
-          //: 兜底:这个平台自己也有字数计数(0 / 1000)。富文本改写标点/列表时,长度对得上就够了。
-          const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
-          return counted ? Number(counted[1]) >= Math.floor(want.length * 0.6) : false;
-        })()`,
-        4_000,
-        200,
-      );
-      if (accepted) return;
-      //: 没进去就把当时的样子记下来(编辑器里有什么字、焦点在谁身上)—— 下一次查这条不用猜。
+    //: **先把它清干净再打**。抖音的正文编辑器会恢复上一次的字(平台自己存草稿),而原来那套
+    //: 清空(`execCommand selectAll + delete`)在它身上静默失败 —— 于是新字插进旧字中间,得到
+    //: 「2. 详细描述…1. 避免空泛的描述2. …」这种东西,校验永远不成立。真机 2026-10-23 就是这样。
+    if (!(await this.driver.clearRichEditor(selector))) {
+      throw publishError("douyin", "publishErr_editorNotEmpty");
+    }
+    await typeOrFill(this.driver, "douyin body", selector, value, async () => {
+      await this.driver.focusAndClearField(selector);
+      await this.driver.insertText(selector, value);
+    }, async () => {
+      await this.driver.typeLines(value);
+    });
+    const accepted = await this.driver.waitForFunction(
+      `(() => {
+        const squash = (text) => String(text || '').replace(/\u200b/g, '').replace(/\s+/g, '');
+        const want = squash(${JSON.stringify(value)});
+        const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
+        const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
+        const got = squash(longest);
+        //: ① 要的字都在;② **而且没有多出来的旧字** —— 只判"包含"的话,旧草稿叠在里面也会判通过
+        //: (2026-10-23 真机就是这种:字是进去了,可混着上一次的,发出去是错的正文)。
+        return got.includes(want) && got.length <= Math.ceil(want.length * 1.15);
+      })()`,
+      4_000,
+      200,
+    );
+    if (!accepted) {
       const seen = await this.driver
         .evaluate<string>(`(() => {
           const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
           const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
-          const active = document.activeElement;
-          return JSON.stringify({ got: longest.slice(0, 60), active: active ? String(active.className).slice(0, 60) : null });
+          return JSON.stringify({ got: longest.slice(0, 80) });
         })()`)
         .catch(() => "");
-      plog(`douyin body: attempt ${attempt} did not land —`, seen);
+      plog("douyin body: still not right after typing —", seen);
+      throw publishError("douyin", "publishErr_descriptionRejected");
     }
-    throw publishError("douyin", "publishErr_descriptionRejected");
   }
 
   async checkLogin(): Promise<boolean> {

@@ -590,6 +590,78 @@ export class PageDriver {
     }
   }
 
+  /**
+   * **把富文本编辑器清干净** —— 清不掉就别接着打字。
+   *
+   * 为什么单独一条:抖音的正文编辑器会**恢复上一次的字**(平台自己存草稿),而 `focusAndClearField`
+   * 那套(execCommand selectAll + delete)在它身上**静默失败**:字还在,接着打就是往中间插。
+   * 真机 2026-10-23 的现场就是"新字和旧字搅在一起":`2. 详细描述…1. 避免空泛的描述2. …`,
+   * 于是校验(包含原文)永远不成立,而人看到的是「正文编辑器没有接受填入的描述」。
+   *
+   * 顺序:真实按键(全选 + 退格)→ execCommand 全选删除 → 直接清 textContent;每一轮都回读,
+   * 空了才算数。三轮还清不掉就返回 false —— 让调用方**说清是"清不掉"**,别把原因推给"没接受"。
+   */
+  async clearRichEditor(selector: string): Promise<boolean> {
+    const read = () =>
+      this.evaluate<string>(`(() => {
+        ${this.deepQueryPrelude(selector)}
+        const el = find(document);
+        if (!el) return '';
+        return (el.innerText || el.textContent || '').replace(/\u200b/g, '').trim();
+      })()`).catch(() => '');
+    const empty = () => read().then((text) => text.length === 0).catch(() => false);
+    for (let round = 0; round < 3; round += 1) {
+      //: 先点进去(拿到编辑器自己的光标),再用真实按键全选 + 退格 —— 编辑器认的是这两下。
+      await this.pointerClickCss(selector).catch(() => undefined);
+      await this.pressSelectAll();
+      await this.pressBackspace();
+      await this.wait(120);
+      if (await empty()) return true;
+      //: 真实按键没吃(或它有自定义 keymap):退回 DOM 的全选删除。
+      await this.evaluate(`(() => {
+        ${this.deepQueryPrelude(selector)}
+        const el = find(document);
+        if (!el) return false;
+        el.focus();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+        return true;
+      })()`).catch(() => false);
+      await this.wait(120);
+      if (await empty()) return true;
+      //: 最后一条:直接清空内容(有些编辑器不吃 execCommand,但认 textContent 被改)。
+      await this.evaluate(`(() => {
+        ${this.deepQueryPrelude(selector)}
+        const el = find(document);
+        if (!el) return false;
+        el.textContent = '';
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+        return true;
+      })()`).catch(() => false);
+      await this.wait(120);
+      if (await empty()) return true;
+    }
+    return false;
+  }
+
+  /** 真实按键「全选」(mac 用 ⌘A,其它平台 Ctrl+A)。 */
+  private async pressSelectAll(): Promise<void> {
+    const accel = process.platform === "darwin" ? "meta" : "control";
+    for (const type of ["keyDown", "keyUp"] as const) {
+      this.wc.sendInputEvent({ type, keyCode: "a", modifiers: [accel] });
+    }
+    await this.wait(60);
+  }
+
+  /** 真实按键「退格」。 */
+  private async pressBackspace(): Promise<void> {
+    for (const type of ["keyDown", "keyUp"] as const) {
+      this.wc.sendInputEvent({ type, keyCode: "Backspace" });
+    }
+    await this.wait(60);
+  }
+
   async focusAndClearField(selector: string): Promise<boolean> {
     return this.evaluate<boolean>(`(() => {
       ${this.deepQueryPrelude(selector)}
