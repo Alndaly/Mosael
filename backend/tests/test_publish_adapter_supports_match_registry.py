@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.publish import content_kinds
+from app.domain.publish import IMPLEMENTED_KINDS, content_kinds, implemented_kinds
 
 RATCHET = True
 
@@ -65,3 +65,19 @@ def test_the_registry_never_promises_a_shape_no_adapter_implements() -> None:
     assert "video" in union, "连视频都不认了?适配器一定出了事"
     #: 目前只有小红书把图文做完了;抖音 / TikTok / YouTube 的图文入口都已在真机确认,适配器随后跟上。
     assert "image-text" in union
+
+
+#: 后端 `IMPLEMENTED_KINDS` 与适配器文件声明的是**同一件事**(进度),不能各说各的。
+@pytest.mark.parametrize(("file_name", "platform"), sorted(FILES.items()))
+def test_the_backend_progress_list_matches_the_adapter_declaration(file_name: str, platform: str) -> None:
+    adapter = tuple(sorted(_supports(ADAPTERS / file_name)))
+    backend = tuple(sorted(implemented_kinds(platform)))
+    assert adapter == backend, (
+        f"{platform}: 适配器声明 {adapter},后端 IMPLEMENTED_KINDS 写 {backend} —— "
+        f"界面按后者列选项,两边不一致就会摆出一个点了会失败的形状(或藏起一个已经能用的)"
+    )
+
+
+def test_the_progress_list_never_exceeds_the_platform_capability() -> None:
+    for platform, kinds in IMPLEMENTED_KINDS.items():
+        assert set(kinds) <= set(content_kinds(platform)), platform

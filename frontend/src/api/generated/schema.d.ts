@@ -18258,6 +18258,8 @@ export interface components {
             short_title: boolean;
             /** Kinds */
             kinds?: string[];
+            /** Implemented Kinds */
+            implemented_kinds?: string[];
             /** Content Limits */
             content_limits?: {
                 [key: string]: {

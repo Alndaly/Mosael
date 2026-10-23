@@ -178,6 +178,20 @@ def content_limits(platform: str, kind: str) -> dict[str, Any]:
     return {**DEFAULT_CONTENT_LIMITS.get(kind, {}), **declared}
 
 
+#: **我们已经会发**的形状(执行器侧适配器声明的那一份,由 electron/publish/adapters/*.ts 的
+#: `supports` 交叉核对,见 tests/test_publish_adapter_supports_match_registry.py)。
+#: 它和 `content_kinds`(平台能发什么)是两件事:这里是**进度**,界面只列这里有的,不摆一个点了会
+#: 在真实页面上失败的选项。
+IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
+    "xiaohongshu": ("video", "image-text"),
+}
+
+
+def implemented_kinds(platform: str) -> tuple[str, ...]:
+    """界面上能选的形状:平台能发 ∩ 我们已经会发。"""
+    return tuple(IMPLEMENTED_KINDS.get(platform, ("video",)))
+
+
 def content_kinds(platform: str) -> tuple[str, ...]:
     """这个平台认哪几种形状;空 = 只发视频(老平台注册表不用改)。"""
     return tuple(PUBLISH_PLATFORMS.get(platform, {}).get("kinds") or ("video",))

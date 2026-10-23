@@ -21,6 +21,7 @@ from app.core.i18n import get_current_locale, t, tr
 from app.domain.publish import (
     content_kinds,
     content_limits,
+    implemented_kinds,
     PUBLISH_PLATFORMS,
     PublishDomainError,
     create_account,
@@ -49,6 +50,7 @@ def platforms() -> list[dict]:
             "title_max": meta.get("title_max", 300),
             #: 能发哪几种形状、各有什么上限(ADR 0076)。前端只列可选项、按上限计数 —— 不再抄一遍。
             "kinds": list(content_kinds(key)),
+            "implemented_kinds": list(implemented_kinds(key)),
             "content_limits": {kind: content_limits(key, kind) for kind in content_kinds(key)},
             "short_title": meta.get("short_title", False),
             # 平台自己的发布选项:前端照这份**自动**把控件画出来,不为每个平台写一段表单。

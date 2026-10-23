@@ -22,6 +22,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
+import { AssetGridField } from "@/features/nodeForms/AssetGridField";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
 import { useAssetSearch } from "@/lib/assetQueries";
@@ -613,8 +614,6 @@ function CreatePublishDialog({
   //: 能发的是视频:按种类在服务端筛、敲字在服务端搜,不把整个素材库拉回来。选中的那一份记下名字 ——
   //: 再搜别的字时它不一定还在清单里,触发器上照样写着它。
   const videos = useAssetSearch({ workspace_id: workspace.id, kind: ["video"] }, { enabled: open });
-  //: 图文 / 文章用图片;和多选视频那条一样,按种类在服务端筛。
-  const images = useAssetSearch({ workspace_id: workspace.id, kind: ["image"] }, { enabled: open && kind !== "video" });
   const [assetName, setAssetName] = React.useState("");
   const accounts = useQuery({
     queryKey: ["publish-accounts", workspace.id],
@@ -738,69 +737,45 @@ function CreatePublishDialog({
       }
     >
       <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-          <span>{t("publishAsset")}</span>
+        <div className="grid gap-1">
+          <span className="text-xs font-semibold text-foreground">{t("publishAsset")}</span>
           {!needsImages && (
-          <Combobox
-            value={assetId ?? ""}
-            options={videos.items.map((asset) => ({ value: asset.id, label: asset.name }))}
-            onSearch={videos.search}
-            searching={videos.isFetching}
-            renderValue={() => assetName || undefined}
-            placeholder={t("publishPickAsset")}
-            emptyText={t("cmdkEmpty")}
-            className="w-full"
-            onValueChange={(id) => {
-              setAssetId(id);
-              setAssetName(videos.items.find((asset) => asset.id === id)?.name ?? "");
-            }}
-          />
+            <Combobox
+              value={assetId ?? ""}
+              options={videos.items.map((asset) => ({ value: asset.id, label: asset.name }))}
+              onSearch={videos.search}
+              searching={videos.isFetching}
+              renderValue={() => assetName || undefined}
+              placeholder={t("publishPickAsset")}
+              emptyText={t("cmdkEmpty")}
+              className="w-full"
+              onValueChange={(id) => {
+                setAssetId(id);
+                setAssetName(videos.items.find((asset) => asset.id === id)?.name ?? "");
+              }}
+            />
           )}
+          {/* 图文 / 文章:和工作流节点表单**同一个控件**(上传瓦片 + 「+」从素材库挑 + 缩略图 + 拖拽排序)。 */}
           {needsImages && (
-            <div className="grid gap-1.5">
-              <Combobox
-                value=""
-                options={images.items
-                  .filter((asset) => !imageIds.includes(asset.id))
-                  .map((asset) => ({ value: asset.id, label: asset.name }))}
-                onSearch={images.search}
-                searching={images.isFetching}
-                renderValue={() => t("publishPickImages")}
-                placeholder={t("publishPickImages")}
-                emptyText={t("cmdkEmpty")}
-                className="w-full"
-                onValueChange={(id) => {
-                  if (id) setImageIds((current) => (current.includes(id) ? current : [...current, id]));
-                }}
-              />
-              {imageIds.length > 0 && (
-                <ol className="grid gap-1">
-                  {imageIds.map((id, index) => (
-                    <li key={id} className="flex items-center gap-2 rounded border border-border bg-field px-2 py-1 text-ui-sm">
-                      <span className="text-ui-xs text-muted-foreground">{index + 1}</span>
-                      <Truncate className="min-w-0 flex-1">
-                        {images.items.find((asset) => asset.id === id)?.name ?? id}
-                      </Truncate>
-                      <Button
-                        variant="inline"
-                        size="xs"
-                        onClick={() => setImageIds((current) => current.filter((one) => one !== id))}
-                      >
-                        {t("delete")}
-                      </Button>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              <small className={tooManyImages ? "text-destructive" : undefined}>
-                {maxItems === null
-                  ? t("publishImageCountNoLimit").replace("{count}", String(imageIds.length))
-                  : t("publishImageCount").replace("{count}", String(imageIds.length)).replace("{max}", String(maxItems))}
-              </small>
-            </div>
+            <AssetGridField
+              value={imageIds.join(",")}
+              workspaceId={workspace.id}
+              media={["image"]}
+              max={maxItems ?? 18}
+              onChange={(next) => {
+                setImageIds(
+                  String(next ?? "")
+                    .split(",")
+                    .map((one) => one.trim())
+                    .filter(Boolean),
+                );
+              }}
+            />
           )}
-          {videos.isSuccess && videos.total === 0 && !videos.query && <small>{t("publishNoVideos")}</small>}
-        </label>
+          {!needsImages && videos.isSuccess && videos.total === 0 && !videos.query && (
+            <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
+          )}
+        </div>
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishAccount")}</span>
           <Combobox
@@ -884,6 +859,7 @@ function CreatePublishDialog({
             <Textarea rows={6} value={body} onChange={(event) => setBody(event.target.value)} />
           </label>
         )}
+        {!needsImages && (
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishDescription")}</span>
           <Textarea
@@ -892,6 +868,7 @@ function CreatePublishDialog({
             onChange={(event) => setDescription(event.target.value)}
           />
         </label>
+        )}
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>{t("publishTags")}</span>
           <Input value={tagsText} placeholder={t("publishTagsPlaceholder")} onChange={(event) => setTagsText(event.target.value)} />

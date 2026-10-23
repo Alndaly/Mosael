@@ -34,8 +34,10 @@ class PublishPlatformOut(ApiModel):
     config: dict
     title_max: int = 300
     short_title: bool = False
-    #: 这个平台认哪几种内容形状(ADR 0076):video / image-text / article。
+    #: 这个平台**能发**哪几种形状(ADR 0076):video / image-text / article。
     kinds: list[str] = Field(default_factory=lambda: ["video"])
+    #: 我们**已经会发**的那几种(界面只列这些;`kinds - implemented_kinds` 是待做的进度)。
+    implemented_kinds: list[str] = Field(default_factory=lambda: ["video"])
     #: 每种形状的上限(张数 / 正文字数),键是形状名;没核实的值不出现,不猜。
     content_limits: dict[str, dict] = Field(default_factory=dict)
     #: 该平台自己的发布选项声明(可见性…)。前端照它渲染控件,别处不硬编码。

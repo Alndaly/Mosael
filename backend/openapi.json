@@ -46823,6 +46823,13 @@
             "type": "array",
             "title": "Kinds"
           },
+          "implemented_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Implemented Kinds"
+          },
           "content_limits": {
             "additionalProperties": {
               "additionalProperties": true,
