@@ -23,6 +23,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import type { MessageKey } from "@/app/messages";
+import { platformLabel } from "@/lib/platformLabel";
 import { AssetGridField } from "@/features/nodeForms/AssetGridField";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Combobox } from "@/components/app/combobox";
@@ -347,11 +348,13 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           const day = dayGroupOf(group.key, now, locale);
           return (
             <section key={group.key || "unknown"} className="grid gap-2 pb-4">
-              {/* 日期栏头贴顶:滚很长时也知道现在看的是哪一天。 */}
-              {/* 实底日期条让滚动经过的记录不会与日期叠字。 */}
-              <h3 className="workspace-sticky sticky top-0 z-[1] m-0 bg-background py-2 text-ui-sm font-medium text-muted-foreground">
+              {/*: 日期栏头**自己一行、贴顶**;滚很长时也知道现在看的是哪一天。
+                  底色必须是**实底**:`bg-background` 在磨砂外观下是半透明的,记录滚到它底下会透出来,
+                  于是"今天"和第一条记录的成片名、时间叠在同一行(维护者 2026-10-23 截图)。
+                  这里照 TraceView 的分组标题用 `bg-panel`(卡片同一层实底),并让它横向铺满卡片宽度。 */}
+              <h3 className="workspace-sticky sticky top-0 z-[2] -mx-px m-0 flex items-baseline gap-1.5 rounded-lg bg-panel px-3 py-2 text-ui-sm font-medium text-muted-foreground">
                 {day.kind === "today" ? t("dateToday") : day.kind === "yesterday" ? t("dateYesterday") : day.text}
-                <span className="ml-1.5 font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
+                <span className="font-normal tabular-nums text-muted-foreground/70">{group.items.length}</span>
               </h3>
               <div className="grid overflow-hidden rounded-lg bg-panel">
                 {group.items.map((task, index) => (
@@ -481,6 +484,10 @@ function PublishCard({
         <div className="grid gap-1">
           <div className="flex min-w-0 items-center gap-2">
             <Truncate as="strong" className="text-ui-md font-semibold">{task.title || task.asset_name}</Truncate>
+            {/*: 状态徽标跟着标题:一条记录"是什么、现在怎样"在一处读。 */}
+            <span className={cn("shrink-0 rounded-full bg-panel-subtle px-1.5 py-0.5 text-ui-xs font-medium", tone)}>
+              {t(`batchStatus_${task.status}` as never)}
+            </span>
             {/*: 这条发的是什么形状(ADR 0076):视频是老形状,不必占位;其余形状要一眼看得出来。 */}
             {task.content_kind !== "video" && kindLabel(task.content_kind) && (
               <span className="shrink-0 rounded-full bg-panel-subtle px-1.5 py-0.5 text-ui-xs text-muted-foreground">
@@ -489,7 +496,9 @@ function PublishCard({
             )}
           </div>
           <div className="flex min-w-0 items-center gap-1 text-ui-sm text-muted-foreground">
-            <span className="shrink-0">{task.platform} · {task.account_name}</span>
+            {/*: **只写平台的中文名**,不写 `xiaohongshu` 这种技术 id ——
+                此前是「xiaohongshu · 小红书」,同一个东西写了两遍,而其中一遍是给程序看的。 */}
+            <span className="shrink-0">{platformLabel(task.platform, t)} · {task.account_name}</span>
             {/*: 只有**标题和成片不是同一个名字**时才把成片名再写一遍 —— 没有标题的记录里,
                 标题位置摆的就是成片名,再写一次就是两条边在说同一件事。 */}
             {task.title && <span className="shrink-0">·</span>}
@@ -567,7 +576,8 @@ function PublishCard({
           一条内容多的记录（简介 + 标签 + 失败原因）中间被撑开,右列就分成上下两座孤岛 ——
           维护者截图指出的「右侧内容层级不对」就是这个(2026-10-23)。现在三样排在一起、都右对齐。 */}
       <div className={cn("relative z-10 flex shrink-0 flex-col items-end gap-1 text-right", selecting && "pr-7")}>
-        <span className={cn("text-ui-sm font-medium", tone)}>{t(`batchStatus_${task.status}` as never)}</span>
+        {/*: 右列只放**记录本身**的时间与动作。状态词搬去标题旁(见上)—— 同一件事(really? this one)
+            不要一处红字、一处彩标。 */}
         <span className="text-ui-xs tabular-nums text-muted-foreground">{localTime(task.created_at, locale)}</span>
         {/*: 行内动作紧跟其后(空一格):文字 + 图标,正常的按钮。
             写权限不足时删除禁掉并说明原因 —— 和详情弹窗里那一颗同一条判据。 */}

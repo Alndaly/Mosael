@@ -1,6 +1,7 @@
 import React from "react";
 import { Activity, Coins, FolderOpen, Rocket } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis } from "recharts";
+import { platformLabel } from "@/lib/platformLabel";
 
 import type { WorkspaceSummary } from "@/api/client";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -8,7 +9,6 @@ import { formatMoney, microsIn, type CostAmount } from "@/lib/money";
 import { segmentedItemClass, segmentedListClass } from "@/components/ui/segmented";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
-import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import {
   ChartContainer,
@@ -425,27 +425,6 @@ const PLATFORM_COLORS = [
   "var(--chart-ok)",
   "var(--chart-fail)",
 ] as const;
-
-// 平台 → 图表上的短标签。**这是第三份平台表**(后端 PUBLISH_PLATFORMS、Electron
-// PLATFORM_DEFINITIONS 各一份),但它要的是"短到能塞进图例"的名字,和另两份的用途不同:
-// 后端那份是给下拉和说明用的完整名。加新平台时三处都要加 —— 漏了这里的后果很轻(退回显示裸
-// id,见下面的 fallback),所以没有为它单开一条契约。
-const PLATFORM_LABELS: Record<string, MessageKey> = {
-  folder: "homeChartPlatformFolder",
-  webhook: "homeChartPlatformWebhook",
-  douyin: "homeChartPlatformDouyin",
-  bilibili: "homeChartPlatformBilibili",
-  xiaohongshu: "homeChartPlatformXiaohongshu",
-  "weixin-channels": "homeChartPlatformWeixinChannels",
-  tiktok: "homeChartPlatformTiktok",
-  youtube: "homeChartPlatformYoutube",
-};
-
-function platformLabel(platform: string, t: (key: MessageKey) => string): string {
-  const known = PLATFORM_LABELS[platform];
-  if (!known) return platform;
-  return t(known);
-}
 
 export function PublishPlatformsChart({ platforms }: { platforms: WorkspaceSummary["publish_platforms"] }) {
   const t = useI18n();
