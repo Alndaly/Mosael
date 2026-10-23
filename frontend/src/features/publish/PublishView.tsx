@@ -534,9 +534,9 @@ function PublishCard({
           <div className="grid gap-1" data-publish-row-body="">
             {/*: 正文:这条发出去的是什么。用的是正文色(不是灰的)—— 它仅次于标题,
                 灰掉之后和「平台 · 账号」那条元信息混成一层。 */}
-            {task.description && (
+            {(task.content_kind !== "video" ? task.body : task.description) && (
               <Truncate as="p" lines={2} className="text-ui-sm text-foreground" data-publish-row-description="">
-                {task.description}
+                {task.content_kind !== "video" ? task.body : task.description}
               </Truncate>
             )}
             {/*: 标签:一行 chip,和详情弹窗里同一个形状。 */}
@@ -738,17 +738,12 @@ function CreatePublishDialog({
         workspace_id: workspace.id,
         account_id: accountId!,
         content_kind: kind,
-        ...(needsImages
-          ? {
-              asset_ids: imageIds,
-              body: body.trim(),
-              //: 图文 / 文章的正文就是 body:简介那一栏是**视频档**的东西,不能把同一段文字再发一遍,
-              //: 否则适配器会把它当第二段填进编辑器(真机:正文被打了两遍)。
-              description: "",
-            }
-          : { asset_id: assetId! }),
+        ...(needsImages ? { asset_ids: imageIds, body: body.trim() } : { asset_id: assetId! }),
         title: title.trim(),
-        description: description.trim(),
+        //: **简介只属于视频那一档**。此前 spread 里写了 `description: ""`,可**下面这行又把它覆盖回去**
+        //: ——图文任务于是带着简介里残留的旧字发出去(真机 2026-10-23:记录里显示「1.」,正文却对不上)。
+        //: 这里一处定死,别再让后面的键把它盖掉。
+        description: needsImages ? "" : description.trim(),
         tags: tagsText
           .split(/[,，\s]+/)
           .map((tag) => tag.trim())

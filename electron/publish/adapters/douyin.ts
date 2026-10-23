@@ -83,12 +83,11 @@ export class DouyinAdapter implements PublishAdapter {
     if (!(await this.driver.clearRichEditor(selector))) {
       throw publishError("douyin", "publishErr_editorNotEmpty");
     }
-    await typeOrFill(this.driver, "douyin body", selector, value, async () => {
-      await this.driver.focusAndClearField(selector);
-      await this.driver.insertText(selector, value);
-    }, async () => {
-      await this.driver.typeLines(value);
-    });
+    //: **整段插入,不逐行打**。逐行打要在每行末尾按一次回车,而抖音这个编辑器会把 `1. ` 变成
+    //: 有序列表、回车又新起一个段 —— 几行文字于是被拆散、重排(真机 2026-10-23 得到
+    //: 「2. 衣着描述…\n1」这种顺序)。整段 `insertText` 里带真换行,由编辑器自己决定怎么成段。
+    await this.driver.focusAndClearField(selector);
+    await this.driver.insertText(selector, value);
     const accepted = await this.driver.waitForFunction(
       `(() => {
         const squash = (text) => String(text || '').replace(/\u200b/g, '').replace(/\s+/g, '');
@@ -96,9 +95,16 @@ export class DouyinAdapter implements PublishAdapter {
         const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
         const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
         const got = squash(longest);
-        //: ① 要的字都在;② **而且没有多出来的旧字** —— 只判"包含"的话,旧草稿叠在里面也会判通过
-        //: (2026-10-23 真机就是这种:字是进去了,可混着上一次的,发出去是错的正文)。
-        return got.includes(want) && got.length <= Math.ceil(want.length * 1.15);
+        //: ① 要的字都在;② 没有多出来的旧字(只判"包含"会让旧草稿叠着也通过);
+        //: ③ **各行按顺序出现** —— 抖音会因回车/列表把段落重排,顺序错了发出去就是错的正文。
+        if (!got.includes(want) || got.length > Math.ceil(want.length * 1.15)) return false;
+        let at = -1;
+        for (const line of want.split(/\n+/).filter(Boolean)) {
+          const pos = got.indexOf(line, at + 1);
+          if (pos <= at) return false;
+          at = pos;
+        }
+        return true;
       })()`,
       4_000,
       200,
