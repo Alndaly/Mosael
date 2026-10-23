@@ -671,15 +671,60 @@ export class PageDriver {
     }
   }
 
+  /**
+   * **像人那样滚过去**:一格一格发真实 `mouseWheel`,而不是一步 `scrollIntoView`。
+   *
+   * 发布自动化此前只有 `scrollIntoView`(程序瞬间跳),页面上看不到滚动过程:没有 `scroll` 事件序列、
+   * 没有惯性、懒加载来不及触发 —— 机器味最重的一处,也是「按钮明明在那儿却点空」的来源之一
+   * (跳过去的同一帧就读了 rect)。维护者 2026-10-23 问起滚动怎么做的。
+   *
+   * 判定:元素不在「视口内缩 80px」的安全带里就朝那个方向滚,每格 110–200px、间隔 20–50ms 抖动,
+   * 最多 12 格;滚到了返回 true。**滚不到就交回调用方退回 `scrollIntoView`** —— 正确性优先。
+   */
+  private async humanScrollIntoView(selector: string): Promise<boolean> {
+    const measure = () =>
+      this.evaluate<{ top: number; bottom: number; vh: number; vw: number } | null>(
+        `(() => {
+          ${this.deepQueryPrelude(selector)}
+          const el = find(document);
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, vh: innerHeight, vw: innerWidth };
+        })()`,
+      ).catch(() => null);
+    const band = 80;
+    for (let step = 0; step < 12; step += 1) {
+      this.throwIfAborted();
+      const at = await measure();
+      if (!at || !at.vh) return false;
+      if (at.top >= band && at.bottom <= at.vh - band) return true;
+      const up = at.top < band;
+      const distance = up ? band - at.top + 60 : at.bottom - (at.vh - band) + 60;
+      const delta = Math.min(320, Math.max(90, distance)) * (up ? -1 : 1);
+      this.wc.sendInputEvent({
+        type: "mouseWheel",
+        x: Math.round(at.vw / 2),
+        y: Math.round(at.vh / 2),
+        deltaY: delta,
+        canScroll: true,
+      });
+      await this.wait(20 + Math.round(Math.random() * 30));
+    }
+    return false;
+  }
+
   async pointerClickCss(selector: string): Promise<void> {
     // scrollIntoView 之后必须**等滚动停下来**再读 rect:页面若是平滑滚动,同步读到的是滚动前的
     // 位置,而 humanClickAt 还要花 100–200ms 移动鼠标,真正点下去时按钮早已不在那儿 —— 命中测试
     // 在 t0 通过、在点击时刻却落空,且不报错。先滚,再等位置稳定,最后才取 rect 与命中测试。
-    await this.evaluate(`(() => {
-      ${this.deepQueryPrelude(selector)}
-      const el = find(document);
-      if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
-    })()`);
+    if (!(await this.humanScrollIntoView(selector))) {
+      //: 滚不过去(元素在 iframe 里、或者页面不响应滚轮)才退回程序滚动 —— 那是**兜底**,不是常态。
+      await this.evaluate(`(() => {
+        ${this.deepQueryPrelude(selector)}
+        const el = find(document);
+        if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      })()`);
+    }
     await this.waitForRectStable(selector);
 
     // 视口尺寸和 rect 一起取回:同一次 evaluate,不多花一个来回。
@@ -878,6 +923,8 @@ export class PageDriver {
     text: string,
     options: { exact?: boolean; selector?: string } = {},
   ): Promise<void> {
+    //: 先把目标滚进安全视野(真实滚轮、一格一格),否则下面那次测量拿到的是滚动前的位置。
+    if (options.selector) await this.humanScrollIntoView(options.selector).catch(() => false);
     const t = JSON.stringify(text);
     const selector = JSON.stringify(options.selector ?? "button, [role=button], a");
     const matcher = options.exact
