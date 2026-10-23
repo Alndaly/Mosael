@@ -696,23 +696,49 @@ export class XiaohongshuAdapter implements PublishAdapter {
       );
     }
 
+    //: 判「发完了吗」看三样:**成功文案**、**落在哪个页**(笔记详情 / 笔记管理 / 列表)、
+    //: 以及——**回到创作页且草稿空了**就是没发出去。最后这条此前没有,于是页面被平台弹回创作页时,
+    //: 任务在本该失败的这一刻继续等了十分钟(维护者 2026-10-23 的截图:面板停在「等待平台确认」,
+    //: 里面却是「上传视频」那个创作页)。
     const donePattern = this.s.publishDoneTexts.join("|");
+    const doneUrls = this.s.publishDoneUrls.map((one) => one.source);
+    const deadline = Date.now() + RESULT_TIMEOUT;
     await wait(1_000);
-    const ok = await this.driver.waitForFunction(
-      `(() => {
-        const text = document.body?.innerText || '';
-        if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
-        const url = location.href;
-        const isEditor = /\\/publish\\/publish|\\/new\\/publish/.test(url);
-        const hasPublishHost = Boolean(document.querySelector(${JSON.stringify(this.s.submitHost)}));
-        return !isEditor && !hasPublishHost && /creator\\.xiaohongshu\\.com/.test(url);
-      })()`,
-      RESULT_TIMEOUT,
-      1_000,
-    );
-    if (!ok) {
-      await plogPageState("waitResult failed (xiaohongshu):", this.driver);
-      throw publishError("xiaohongshu", "publishErr_notConfirmed");
+    while (Date.now() < deadline) {
+      const state = await this.driver
+        .evaluate<{ done: boolean; backToEditor: boolean; url: string }>(`(() => {
+          const text = document.body?.innerText || '';
+          if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return { done: true, backToEditor: false, url: location.href };
+          const url = location.href;
+          if (${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(url))) {
+            return { done: true, backToEditor: false, url };
+          }
+          const isEditor = /\\/publish\\/publish|\\/new\\/publish/.test(url);
+          const title = document.querySelector(${JSON.stringify(this.s.titleInput)});
+          const titleEmpty = !title || !(title.value || '').trim();
+          return { done: false, backToEditor: Boolean(isEditor && titleEmpty), url };
+        })()`)
+        .catch(() => null);
+      if (state?.done) return;
+      if (state?.backToEditor) {
+        //: 再等一拍:平台可能正在这一次跳转里渲染成功页。
+        await wait(1_500);
+        const stillBack = await this.driver
+          .evaluate<boolean>(`(() => {
+            const text = document.body?.innerText || '';
+            if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return false;
+            const title = document.querySelector(${JSON.stringify(this.s.titleInput)});
+            return !title || !(title.value || '').trim();
+          })()`)
+          .catch(() => false);
+        if (stillBack) {
+          await plogPageState("waitResult bounced back to the editor (xiaohongshu):", this.driver);
+          throw publishError("xiaohongshu", "publishErr_backToEditor");
+        }
+      }
+      await wait(800);
     }
+    await plogPageState("waitResult timed out (xiaohongshu):", this.driver);
+    throw publishError("xiaohongshu", "publishErr_notConfirmed");
   }
 }

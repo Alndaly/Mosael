@@ -56,6 +56,17 @@ export const domAttempt = (label: string, click: () => Promise<void>): ClickAtte
  * 判定要**宽**:它的职责不是判断成功(那是 waitResult 的事),而是判断「这一下点进去了吗」。
  * 判严了会导致重复提交,而重复投稿的代价比多等一轮大得多。
  */
+export type Reaction = (() => Promise<boolean>) & {
+  /**
+   * **立刻**看一次,不等。给「点击之前」的自检用。
+   *
+   * 自检此前直接调用它那个会等 8 秒的版本 —— 于是每次点「发布」之前都白等 8 秒(小红书真机
+   * 2026-10-23 的时间线:07:08 备好、07:16 才点第一下)。点击**之前**页面上不可能有反应,
+   * 等它 8 秒纯是浪费。
+   */
+  now: () => Promise<boolean>;
+};
+
 export function pageReacted(
   driver: PageDriver,
   opts: {
@@ -64,10 +75,13 @@ export function pageReacted(
     urlPattern?: RegExp;
     timeoutMs?: number;
   },
-): () => Promise<boolean> {
+): Reaction {
   const expr = reactionExpression(opts);
   const timeout = opts.timeoutMs ?? 8_000;
-  return () => driver.waitForFunction(expr, timeout, 500);
+  const wait = () => driver.waitForFunction(expr, timeout, 500);
+  return Object.assign(wait, {
+    now: () => driver.evaluate<boolean>(expr).catch(() => false),
+  });
 }
 
 /** 判定表达式的构造(与 driver 无关,便于单测)。 */
@@ -124,9 +138,10 @@ export class CommitClickError extends Error {
  */
 async function acceptancePreflight(
   what: string,
-  accepted: () => Promise<boolean>,
+  accepted: (() => Promise<boolean>) & { now?: () => Promise<boolean> },
 ): Promise<boolean> {
-  const alreadyTrue = await accepted().catch(() => false);
+  //: 自检**不等**:它问的是「此刻是不是已经为真」,等 8 秒既没意义又拖慢每一次点击。
+  const alreadyTrue = await (accepted.now ? accepted.now() : accepted()).catch(() => false);
   if (alreadyTrue) {
     plog(
       `${what}: the acceptance check was already true before clicking — it cannot tell success from failure, so click once and leave the verdict to waitResult`,

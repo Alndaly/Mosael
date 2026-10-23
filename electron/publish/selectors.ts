@@ -101,6 +101,9 @@ export const SELECTORS = {
     //: 图文任务等的是「正在上传图片」;两个都列上 —— 等错文案会白等到超时。
     uploadProgressTexts: ["正在上传视频", "视频上传中", "正在上传图片", "图片上传中", "上传中"], // i18n-ok
     publishDoneTexts: ["发布成功", "发布完成", "审核中", "笔记发布成功", "提交成功"], // i18n-ok
+    //: **发出去之后落在哪**:笔记详情、笔记管理、创作者首页的笔记列表。三种都算成功(平台改版时
+    //: 它在这三处之间换)。此前只看文案,于是「发出去了但停在管理页」会被当成没确认(2026-10-23)。
+    publishDoneUrls: [/explore\//, /note-manager/, /\/new\/notes/, /discovery\/item/],
     loggedInTexts: ["发布笔记", "创作中心", "数据中心"], // i18n-ok
     isLoginUrl: (u: string): boolean => /\/login/.test(u),
     isPublishEditorUrl: (u: string): boolean => /\/publish\/publish|\/new\/publish/.test(u),

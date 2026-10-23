@@ -219,6 +219,10 @@ const MESSAGES = {
     zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
     en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
   },
+  publishErr_backToEditor: {
+    zh: "点了「发布」之后 {platform} 又把页面送回了创作页(标题已经空了):这条没被平台收下,多半是校验没过或被风控拦了。点「查看页面」看看那一页说了什么",
+    en: "{platform} sent you back to the create page after the Publish click (the title is empty again): the post was not taken — usually a validation or a risk check. Open the page to see what it says.",
+  },
   publishErr_submitNoReaction: {
     zh: "{platform} 点了「发布」但页面没有反应:多半是被风控或校验拦下了。点「查看页面」看看那一页说了什么,或在窗口里手动发布",
     en: "{platform} did not react to the Publish click — usually a risk check or a validation. Open the page to see what it says, or publish there by hand.",
