@@ -2,7 +2,10 @@ import type { ContentKind, PublishTask } from "../types";
 import type { PageDriver } from "../pageDriver";
 import type { PublishAdapter } from "./shared";
 import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_NEW_TOPIC, UPLOAD_TIMEOUT, boolOption, clickTextPreferTrusted, enumOption, normalizeTag, plogPageState, publishError, stringOption, typeOrFill, wait } from "./shared";
+import { t } from "../../i18n.cjs";
+import { platformName } from "../platforms";
 import { SELECTORS } from "../selectors";
+import { AutomationBlockedError } from "../errors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
 
@@ -639,6 +642,25 @@ export class XiaohongshuAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
+    //: 点完「发布」之后,小红书的风控有时会弹扫码 / 身份验证。**我们不绕** —— 那是平台的安全机制;
+    //: 但要把它说清楚并把人请过来(执行器会把窗口亮出来、任务标成「需要处理」),
+    //: 而不是让它在 10 分钟里一遍遍等到超时、报一句「没有确认发布」。
+    const blocked = await this.driver.waitForFunction(
+      `(() => {
+        const text = document.body?.innerText || '';
+        return ${JSON.stringify(SELECTORS.xiaohongshu.verificationTexts)}.some((one) => text.includes(one));
+      })()`,
+      4_000,
+      400,
+    );
+    if (blocked) {
+      //: 文案走 i18n(桌面壳的 publishErr_*):界面上的字不写在适配器里。
+      throw new AutomationBlockedError(
+        "manual_required",
+        t("publishErr_verifyRequired", { platform: platformName("xiaohongshu") }),
+      );
+    }
+
     const donePattern = this.s.publishDoneTexts.join("|");
     await wait(1_000);
     const ok = await this.driver.waitForFunction(

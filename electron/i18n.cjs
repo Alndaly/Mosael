@@ -219,6 +219,10 @@ const MESSAGES = {
     zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
     en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
   },
+  publishErr_verifyRequired: {
+    zh: "{platform} 要你先过一下验证(扫码 / 身份验证):窗口已经亮出来,完成之后点任务行的「重试」继续发",
+    en: "{platform} wants you to pass a check first (QR code / identity): the window is open — finish it, then hit Retry on the task row.",
+  },
   publishErr_bodyPartial: {
     zh: "{platform} 的正文只进去了 {matched}/{total} 行(富文本编辑器把它改写成了别的样子),请在页面上补全再发",
     en: "Only {matched} of {total} body lines reached {platform} (its rich-text editor rewrote them) — finish it on the page and post again.",
