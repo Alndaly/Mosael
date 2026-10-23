@@ -77,28 +77,59 @@ export class DouyinAdapter implements PublishAdapter {
     if (!value) return;
     const selector = this.s.imageDescEditor;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
-    //: **先点一下拿到焦点**,再逐行打。此前走 `focusEnd` + 一次性 insertText:传完图之后 DOM
-    //: 会重建,`focusEnd` 找的是那一刻的节点,报「element not found」把整条任务拦下(真机 2026-10-23)。
-    //: 点一下 + 真实按键不依赖节点身份,编辑器换了实例也照样能打进去。
-    await this.driver.pointerClickCss(selector).catch(() => undefined);
-    await this.driver.focusAndClearField(selector).catch(() => undefined);
-    await this.driver.typeLines(value);
-    //: 富文本会把 `1. …` 变成有序列表、换行位置也会变,所以**空白不敏感**地比对(同小红的教训)。
-    const accepted = await this.driver.waitForFunction(
-      `(() => {
-        const squash = (text) => String(text || '').replace(/\s+/g, '');
-        const want = squash(${JSON.stringify(value)});
-        const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
-        const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
-        if (squash(longest).includes(want)) return true;
-        //: 兜底:这个平台自己也有字数计数(0 / 1000)。富文本改写标点/列表时,长度对得上就够了。
-        const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
-        return counted ? Number(counted[1]) >= Math.floor(want.length * 0.6) : false;
-      })()`,
-      4_000,
-      200,
-    );
-    if (!accepted) throw publishError("douyin", "publishErr_descriptionRejected");
+    //: **两条路都留**:先真实按键(点一下拿焦点 + 逐行打),不成就用 DOM 的 insertText。
+    //: 只留前一条时,一旦窗口焦点没落在这一页上,字一个都进不去,而我们只看到「没接受」——
+    //: 真机 2026-10-23 的失败正是这样:池会话里手工点一下再打字是好的,说明编辑器本身没问题。
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      if (attempt === 1) {
+        await typeOrFill(
+          this.driver,
+          "douyin body",
+          selector,
+          value,
+          async () => {
+            await this.driver.focusAndClearField(selector);
+            await this.driver.insertText(selector, value);
+          },
+          async () => {
+            //: 点一下再逐行打(不依赖节点身份:传完图抖音会重建这块 DOM)。
+            await this.driver.pointerClickCss(selector).catch(() => undefined);
+            await this.driver.focusAndClearField(selector).catch(() => undefined);
+            await this.driver.typeLines(value);
+          },
+        );
+      } else {
+        //: 第二遍只走 DOM 插入(和窗口焦点无关)。
+        await this.driver.focusAndClearField(selector);
+        await this.driver.insertText(selector, value);
+      }
+      const accepted = await this.driver.waitForFunction(
+        `(() => {
+          const squash = (text) => String(text || '').replace(/\s+/g, '');
+          const want = squash(${JSON.stringify(value)});
+          const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
+          const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
+          if (squash(longest).includes(want)) return true;
+          //: 兜底:这个平台自己也有字数计数(0 / 1000)。富文本改写标点/列表时,长度对得上就够了。
+          const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
+          return counted ? Number(counted[1]) >= Math.floor(want.length * 0.6) : false;
+        })()`,
+        4_000,
+        200,
+      );
+      if (accepted) return;
+      //: 没进去就把当时的样子记下来(编辑器里有什么字、焦点在谁身上)—— 下一次查这条不用猜。
+      const seen = await this.driver
+        .evaluate<string>(`(() => {
+          const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
+          const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
+          const active = document.activeElement;
+          return JSON.stringify({ got: longest.slice(0, 60), active: active ? String(active.className).slice(0, 60) : null });
+        })()`)
+        .catch(() => "");
+      plog(`douyin body: attempt ${attempt} did not land —`, seen);
+    }
+    throw publishError("douyin", "publishErr_descriptionRejected");
   }
 
   async checkLogin(): Promise<boolean> {
