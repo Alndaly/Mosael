@@ -155,8 +155,12 @@ export const PLATFORM_DEFINITIONS: PlatformDefinition[] = [
     id: "youtube",
     nameKey: "platform_youtube",
     aliases: ["youtube", "yt", "油管"], // i18n-ok
-    // 未登录时 studio.youtube.com 会跳到 accounts.google.com —— checkLogin 据此判定。
-    loginUrl: "https://accounts.google.com/ServiceLogin?service=youtube",
+    //: **登录从 YouTube 自己的站进去,不要直接打开 accounts.google.com**(2026-10-23)。
+    //: 直接开 `accounts.google.com/ServiceLogin` 会落进 Google 的**旧版**登录流程(`flowName=GlifWebSignIn`),
+    //: 而从 youtube.com 自己跳过去时走的是新流程(`flowName=WebLiteSignIn`,界面也不一样);
+    //: 哪一版由 Google 按浏览器与 cookie 决定,我们只负责**从对的入口进**,不去替它选。
+    //: 未登录时 studio.youtube.com 会自己跳到 accounts.google.com —— checkLogin 据此判定。
+    loginUrl: "https://studio.youtube.com/",
     dashboardUrl: "https://studio.youtube.com/",
     publishUrl: "https://studio.youtube.com/",
     manageUrl: "https://studio.youtube.com/",
