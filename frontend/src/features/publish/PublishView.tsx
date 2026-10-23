@@ -344,10 +344,12 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
       {/* 每天一张**圆角白卡**(维护者给的图):日期栏头在卡外,记录落在卡里;卡片内的分割线内缩。 */}
-      {/*: **底部不写死内间距**:每个日期分组自带 `pb-4`(16px),最后一张卡离容器下沿就是这一档。
-          我之前叠过 `pb-12`/`pb-5`,那是把「滚动容器」和「页面」两层内边距重复算了一遍 ——
-          维护者说得对,这层不该写死。 */}
-      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden [&>*]:shrink-0">
+      {/*: 列表的滚动区要**一直铺到窗口底边**,中间不能留一条常驻的空带。
+          页面的内边距(`STUDIO_PAGE` 的 `py-7 xl:py-8`)在这条列表下面又留了一层 —— 内容一超屏,
+          那条空带就一直在,看着像「多的底部内间距」。所以这里把那层内边距**换成列表自己的**
+          (`-mb-7 xl:-mb-8` 顶到底 + 等量 `pb`):滚动区贴着底边,只有滚到最底才露出那一段间距
+          (维护者 2026-10-23:「只有滚动到底部才会出现和底部的间距」)。 */}
+      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden -mb-7 pb-7 xl:-mb-8 xl:pb-8 [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
