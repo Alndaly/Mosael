@@ -1,3 +1,7 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const adapter = Object.fromEntries(["openCreatorPage", "checkLogin", "uploadVideo", "fillTitle", "fillTags", "submit", "waitResult"].map(k => [k, vi.fn(async () => true)]));
@@ -13,11 +17,16 @@ vi.mock("./log", () => ({ plog: vi.fn() }));
 vi.mock("./publishBackend", () => mocks.backend);
 import { startPublishWorker, stopPublishWorker } from "./publishWorker";
 
+//: 执行器现在开跑之前会看「素材文件在不在」(不存在的路径交给页面只会换来平台一句含糊的
+//: 「部分文件处理失败」),所以这一份任务得指向一个真实的临时文件。
+const MEDIA = join(mkdtempSync(join(tmpdir(), "mosael-publish-")), "test.mp4");
+writeFileSync(MEDIA, "x");
+
 beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks();
   mocks.backend.taskStatus.mockResolvedValue({ status: "running" });
   mocks.backend.claimTask.mockResolvedValue({ task: null }).mockResolvedValueOnce({ task: {
-    id: "task", account_id: "account", account_name: "Test", platform: "douyin", video_path: "/tmp/test.mp4", title: "test", tags: [], status: "running",
+    id: "task", account_id: "account", account_name: "Test", platform: "douyin", video_path: MEDIA, title: "test", tags: [], status: "running",
   } });
   mocks.adapter.fillTags.mockImplementation(async () => true);
 });

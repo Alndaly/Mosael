@@ -219,6 +219,14 @@ const MESSAGES = {
     zh: "{platform} 上找不到「{tab}」这个入口:页面可能改版了,或者这个账号没有这种发布方式",
     en: "Could not find the “{tab}” entry on {platform}: the page may have changed, or this account cannot post that way.",
   },
+  publishErr_assetFileMissing: {
+    zh: "素材文件不在这台电脑上(或已损坏):{name} —— 重新导入这份素材再发",
+    en: "That asset's file is missing on this computer (or empty): {name} — re-import it and post again.",
+  },
+  publishErr_imagesRejected: {
+    zh: "{platform} 只收到了 {shown} / {expected} 张图片:有文件没被平台接受(格式或大小),请换掉那张再发",
+    en: "{platform} took {shown} of {expected} images: some file was refused (format or size) — swap it out and post again.",
+  },
   publishErr_noAssets: {
     zh: "这条内容没有可上传的素材",
     en: "This post has no media to upload.",

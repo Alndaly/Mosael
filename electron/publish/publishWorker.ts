@@ -11,7 +11,7 @@
 //    失败/受阻现场。用 views.visibleAccountId 表达前台是否被占;被占时后台任务不抢,视图仍在,
 //    用户可稍后从任务行「查看页面」再亮出来。
 import { app, type BaseWindow } from "electron";
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat as fsStat } from "node:fs/promises";
 import path from "node:path";
 
 import { t as tr } from "../i18n.cjs";
@@ -340,6 +340,26 @@ async function collectFailureForensics(
   }
 }
 
+/** 这一条任务要上传的素材里,第一个**磁盘上没有 / 是空文件**的(给名字)。都齐就 null。 */
+async function firstMissingMedia(task: PublishTask): Promise<string | null> {
+  for (const [index, file] of task.mediaPaths.entries()) {
+    try {
+      const stat = await fsStat(file);
+      if (!stat.isFile() || stat.size === 0) return mediaName(task, index, file);
+    } catch {
+      return mediaName(task, index, file);
+    }
+  }
+  return null;
+}
+
+/** 报错里写哪一份:单份就用任务标题,多份带上序号 —— 用户才知道该换哪张图。 */
+function mediaName(task: PublishTask, index: number, file: string): string {
+  const base = path.basename(file);
+  if (task.mediaPaths.length <= 1) return base;
+  return `${index + 1}/${task.mediaPaths.length} · ${base}`;
+}
+
 /** 跑一条发布任务(后台不可见)。完成时从 running 移除。需要用户在场的时刻(准备好待确认 / 失败现场)
  *  请求前台可见槽:抢到就亮出来,抢不到(前台被别的账号占)也没关系——视图仍在,任务行可再亮。 */
 async function runTask(bt: backend.BackendTask): Promise<void> {
@@ -435,6 +455,11 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     if (!supported.includes(kind) || !upload) {
       throw publishError(t.platform, "publishErr_kindNotImplemented", { kind });
     }
+    //: **先看文件在不在**。素材文件丢了(被清理、换机器、迁移没带上)时,把不存在的路径交给页面只会得到
+    //: 平台自己一句含糊的「部分文件处理失败,未上传」—— 少一张图照样进编辑器,发出去的笔记比看到的多
+    //: 少一张都不知道(真机 2026-10-23)。在这里点名,比让平台去猜清楚得多。
+    const missing = await firstMissingMedia(t);
+    if (missing) throw publishError(t.platform, "publishErr_assetFileMissing", { name: missing });
     await upload(adapter, t);
     await delay(stepDelay());
     await step(tr("publishStep_fillTitle"));

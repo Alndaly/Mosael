@@ -192,6 +192,17 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (!publishReady) {
       throw publishError("xiaohongshu", "publishErr_uploadTimeout");
     }
+    //: **核对张数**。平台对不合规的图会弹一句「部分文件处理失败,未上传」然后照样进编辑器 ——
+    //: 不核对就会以为传完了,发出去的笔记少一张(真机 2026-10-23)。
+    const shown = await this.driver
+      .evaluate<number | null>(`(() => {
+        const match = (document.body?.innerText || '').match(/\b(\d+)\s*\/\s*18\b/);
+        return match ? Number(match[1]) : null;
+      })()`)
+      .catch(() => null);
+    if (typeof shown === "number" && shown < paths.length) {
+      throw publishError("xiaohongshu", "publishErr_imagesRejected", { expected: paths.length, shown });
+    }
     //: 上传成功会弹「图片可以编辑啦」——它盖在中间,后面填字/点发布都会被它挡一下。
     await this.dismissHints();
   }
@@ -206,7 +217,18 @@ export class XiaohongshuAdapter implements PublishAdapter {
       await this.driver.insertText(this.s.contentEditor, value);
     });
     const accepted = await this.driver.waitForFunction(
-      this.acceptsTextExpression(this.s.contentEditor, value),
+      `(() => {
+        const squash = (text) => String(text || '').replace(/\s+/g, '');
+        const want = squash(${JSON.stringify(value)});
+        const editor = document.querySelector(${JSON.stringify(this.s.contentEditor)});
+        //: ① 编辑器里的字(innerText 会被富文本加换行,所以空白去掉再比)
+        if (squash(editor?.innerText).includes(want)) return true;
+        //: ② textContent(有些编辑器不产出 innerText)
+        if (squash(editor?.textContent).includes(want)) return true;
+        //: ③ 平台自己的字数计数器 ≥ 这段字(再往下不猜)
+        const counted = (document.body?.innerText || '').match(/(\d+)\s*\/\s*1000/);
+        return counted ? Number(counted[1]) >= want.length : false;
+      })()`,
       3_000,
       200,
     );
