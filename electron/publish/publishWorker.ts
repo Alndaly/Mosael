@@ -283,6 +283,63 @@ async function captureFailure(
   }
 }
 
+/**
+ * 发布失败时留一份**可判读的现场**(ADR 0078 第一条):卡在哪一步、页面当时是什么样、哪些元素像目标。
+ *
+ * 为什么不是"再截一张图就够了":2026-10-23 一天撞了三次「我们对那一页的理解错了一点」——
+ * 落在视频 tab、判据文案根本不存在、富文本把空格变换行。这三次光看截图都看不出**判据**错在哪,
+ * 所以这里连「这一步期望什么、页面上有哪些候选」一起记。
+ */
+async function collectFailureForensics(
+  task: PublishTask,
+  driver: PageDriver,
+  error: unknown,
+  stepLabel: string,
+): Promise<void> {
+  try {
+    const facts = await driver.evaluate<{
+      url: string;
+      title: string;
+      text: string;
+      fileAccepts: string[];
+      candidates: { tag: string; text: string; x: number; y: number }[];
+    }>(`(() => {
+      const visible = (e) => {
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+      };
+      const candidates = [...document.querySelectorAll("button, [role=button], a, .creator-tab, input, [contenteditable]")]
+        .filter(visible)
+        .slice(0, 40)
+        .map((e) => ({
+          tag: e.tagName.toLowerCase(),
+          text: (e.textContent || e.getAttribute("placeholder") || "").trim().slice(0, 40),
+          x: Math.round(e.getBoundingClientRect().x),
+          y: Math.round(e.getBoundingClientRect().y),
+        }))
+        .filter((one) => one.text);
+      return {
+        url: location.href,
+        title: document.title,
+        text: (document.body?.innerText || "").slice(0, 2000),
+        fileAccepts: [...document.querySelectorAll('input[type="file"]')].map((one) => one.getAttribute("accept") || ""),
+        candidates: candidates.slice(0, 12),
+      };
+    })()`);
+    trace.event("publish-failure", {
+      task: task.id,
+      platform: task.platform,
+      kind: task.contentKind,
+      step: stepLabel,
+      error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+      ...facts,
+    });
+    plog("publish forensics:", task.id, stepLabel, facts.url.slice(0, 120), `candidates=${facts.candidates.length}`);
+  } catch (failure) {
+    plog("publish forensics failed:", task.id, String(failure).slice(0, 160));
+  }
+}
+
 /** 跑一条发布任务(后台不可见)。完成时从 running 移除。需要用户在场的时刻(准备好待确认 / 失败现场)
  *  请求前台可见槽:抢到就亮出来,抢不到(前台被别的账号占)也没关系——视图仍在,任务行可再亮。 */
 async function runTask(bt: backend.BackendTask): Promise<void> {
@@ -328,8 +385,10 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     polling = true;
     void checkpoint().catch(() => undefined).finally(() => { polling = false; });
   }, 500);
+  let stepLabel = "";
   const step = async (label: string, settled = false): Promise<void> => {
     await checkpoint();
+    stepLabel = label;
     plog("runTask step:", bt.id, label);
     mirror.step(`${platformLabel} · ${label}`, settled);
   };
@@ -423,6 +482,9 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     // 「一直在跑」。所以它前面的每一步都必须既有界又不抛 —— 线上就出过 captureFailure 里
     // capturePage 挂死、把回报一起拖没的情况(见 PageDriver.screenshot 的注释)。
     const screenshot = await captureFailure(t.id, driver);
+    //: 失败现场也要**可判读**:一张截图 + 一句话,看不出「那一页到底长什么样、还差什么」。
+    //: 这一步把当时的事实与候选元素写进 trace(ADR 0078 的第一条),用户与后续分析都靠它。
+    await collectFailureForensics(t, driver, error, stepLabel);
     const blocked = resolveBlockedStatus(error);
     const bindingStatus =
       blocked === "login_required"

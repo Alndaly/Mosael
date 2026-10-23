@@ -313,7 +313,11 @@ export class XiaohongshuAdapter implements PublishAdapter {
           .then(() => true)
           .catch(() => false));
       if (!picked) {
-        await this.driver.pressKey("Enter");
+        //: 话题候选依赖平台的联想接口:等不到候选就**跳过这个标签**并收起下拉,继续下一个 ——
+        //: 别让「增强项」把整条发布拖垮(借鉴 social-auto-upload)。已经打进去的 `#tag` 会作为普通文字
+        //: 留在正文里(平台不认它,但也不影响发布);**不去全选删除** —— 那样会把正文一起清掉。
+        await this.driver.pressKey("Escape").catch(() => undefined);
+        continue;
       }
       const selected = await this.driver.waitForFunction(
         `(() => [...document.querySelectorAll('a.tiptap-topic')].some((el) => { // i18n-ok
