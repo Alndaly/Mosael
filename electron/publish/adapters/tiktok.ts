@@ -14,13 +14,13 @@ export class TiktokAdapter implements PublishAdapter {
 
   /** 这一档的入口地址:契约里写的那一条(平台改了投稿地址只需要改契约)。 */
   private entryUrl(): string {
-    const url = this.c.entry.video?.url;
-    if (!url) throw publishError("tiktok", "publishErr_kindNotImplemented", { kind: "video" });
+    const url = this.c.entry[this.task.contentKind]?.url ?? this.c.entry.video?.url;
+    if (!url) throw publishError("tiktok", "publishErr_kindNotImplemented", { kind: this.task.contentKind });
     return url;
   }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
-  static readonly KINDS = ["video"] as const;
+  static readonly KINDS = ["video", "image-text"] as const;
   readonly supports = TiktokAdapter.KINDS;
   private readonly s = SELECTORS.tiktok;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
@@ -33,6 +33,8 @@ export class TiktokAdapter implements PublishAdapter {
   ) {}
 
   async openCreatorPage(): Promise<void> {
+    //: 图文走**直连的 ?tab=photo**(2026-10-24 真机核对):TikTok Studio 的投稿页有「视频 / 照片」
+    //: 两个 tab,照片档的地址就是 `?tab=photo`,比进去再点 tab 确定。
     await this.driver.goto(this.entryUrl());
     // 同 B 站:持久视图复用同一个 WebContents,上一次发完可能停在结果态,goto 同一 URL 常被
     // SPA abort。没探到文件输入就先断开再回来。
@@ -110,7 +112,42 @@ export class TiktokAdapter implements PublishAdapter {
     throw publishError("tiktok", "publishErr_uploadTimeout");
   }
 
+  async uploadImages(paths: string[]): Promise<void> {
+    //: 照片档一次交多张(平台上限 35,单张 ≤50MB);文件框按 `accept` 选图片那一个。
+    if (!paths.length) throw publishError("tiktok", "publishErr_noAssets");
+    //: 契约里照片档的文件框是必填的(契约测试也钉着),这里断言一次让类型收窄。
+    const input = this.c.fileInput["image-text"] ?? this.s.fileInput;
+    if (!(await this.driver.fileInputAttached(input, ACTION_TIMEOUT))) {
+      await plogPageState("TikTok photo upload entry missing:", this.driver);
+      throw publishError("tiktok", "publishErr_noUploadEntry");
+    }
+    await this.driver.setFiles(input, paths);
+    //: 进到编辑页(`/tiktokstudio/upload/post/photo`)并且文案编辑器出现 = 图接住了。
+    if (!(await this.driver.cssVisible(this.s.captionEditor, UPLOAD_TIMEOUT))) {
+      throw publishError("tiktok", "publishErr_editorMissing");
+    }
+  }
+
+  /** 图文的文案:标题 + 空行 + 正文,一次写进同一条作品。 */
+  async fillBody(body: string): Promise<void> {
+    const value = body.trim();
+    if (!value) return;
+    const title = this.task.title.trim();
+    const text = title ? `${title}\n\n${value}` : value;
+    await this.driver.cssVisible(this.s.captionEditor, ACTION_TIMEOUT);
+    await this.driver.focusAndClearField(this.s.captionEditor);
+    await this.driver.insertTextLines(this.s.captionEditor, text);
+    await wait(500);
+    const actual = ((await this.driver.cssValue(this.s.captionEditor)) ?? "").trim();
+    if (!actual.includes(title || value.split("\n")[0])) {
+      await plogPageState("TikTok photo caption mismatch:", this.driver);
+      throw publishError("tiktok", "publishErr_descriptionRejected");
+    }
+  }
+
   async fillTitle(title: string): Promise<void> {
+    //: **图文**:标题和正文写成同一段文案,由 `fillBody` 一次写入(分两次写是后一次覆盖前一次)。
+    if (this.task.contentKind === "image-text") return;
     // TikTok 没有独立标题栏,这一栏是**文案**;标签在 fillTags 里接到同一段文字后面。
     // 和 YouTube 一样:TikTok 用**文件名**预填文案,清不干净就会发出一条叫 3cce8622… 的片子,
     // 而且是静默的。填完回读校验一次。

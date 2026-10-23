@@ -77,8 +77,19 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
     overlays: [],
   },
   tiktok: {
-    entry: { video: { url: resolvePlatform("tiktok").publishUrl } },
-    fileInput: { video: SELECTORS.tiktok.fileInput },
+    entry: {
+      video: { url: resolvePlatform("tiktok").publishUrl },
+      //: 照片档是同一个投稿页的另一个 tab(`?tab=photo`),直连过去最稳。
+      "image-text": {
+        url: `${resolvePlatform("tiktok").publishUrl}?tab=photo`,
+        steps: [SELECTORS.tiktok.photoTabText],
+        acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+      },
+    },
+    fileInput: {
+      video: SELECTORS.tiktok.fileInput,
+      "image-text": "input[type='file'][accept*='image']",
+    },
     submitText: SELECTORS.tiktok.postTexts[0],
     //: TikTok 同理:发布按钮不在了才算数(页面导航里本来就有 "Manage your posts" 这种词)。
     done: { urls: [], texts: SELECTORS.tiktok.publishDoneTexts, formGone: SELECTORS.tiktok.postButton },

@@ -189,6 +189,8 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     "douyin": ("video", "image-text"),
     #: X 图文 2026-10-24 接上:≤4 张图,正文一栏(标题并进正文)。见 PUBLISH_PLATFORMS["x"]。
     "x": ("video", "image-text"),
+    #: TikTok 图文(carousel)2026-10-24 接上:投稿页有「照片」档(`?tab=photo`),≤35 张图。
+    "tiktok": ("video", "image-text"),
 }
 
 

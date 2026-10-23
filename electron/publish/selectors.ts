@@ -244,6 +244,8 @@ export const SELECTORS = {
     // 上传页会弹「是否开启自动内容检查」;它是个模态,挡住真实点击。**点取消**——不替用户改账号设置。
     dismissTexts: ["Cancel", "取消", "Got it", "知道了"], // i18n-ok
     postTexts: ["Post", "发布"], // i18n-ok
+    //: 投稿页的两个档:视频 / 照片(照片档的地址是 `?tab=photo`)。
+    photoTabText: "照片", // i18n-ok
     loggedOutMarks: '[data-e2e="login-title"], [data-e2e="channel-item"]',
     loggedOutTexts: ["Log in to TikTok", "Use QR code", "登录 TikTok", "扫码登录"], // i18n-ok
     loggedInTexts: ["Upload video", "Select video", "上传视频", "选择视频"], // i18n-ok
