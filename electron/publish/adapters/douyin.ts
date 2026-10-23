@@ -5,6 +5,8 @@ import { ACTION_TIMEOUT, RESULT_TIMEOUT, TEXT_PUBLISH_VIDEO, UPLOAD_TIMEOUT, cli
 import { MANAGE_URL_PATTERNS, SELECTORS } from "../selectors";
 import { PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
+import { clearOverlays } from "../overlays";
+import { linesEntered } from "../verify";
 
 export class DouyinAdapter implements PublishAdapter {
   /**
@@ -68,7 +70,7 @@ export class DouyinAdapter implements PublishAdapter {
     );
     if (!landed) throw publishError("douyin", "publishErr_editorMissing");
     await this.driver.cssVisible(this.s.imageTitleInput, UPLOAD_TIMEOUT);
-    await this.dismissOnboarding();
+    await this.clearStuckOverlays();
   }
 
   /** 图文的正文:抖音的 zone 编辑器(和视频那一档的「作品描述」是同一个控件家族)。 */
@@ -88,36 +90,13 @@ export class DouyinAdapter implements PublishAdapter {
     //: 「2. 衣着描述…\n1」这种顺序)。整段 `insertText` 里带真换行,由编辑器自己决定怎么成段。
     await this.driver.focusAndClearField(selector);
     await this.driver.insertText(selector, value);
-    const accepted = await this.driver.waitForFunction(
-      `(() => {
-        const squash = (text) => String(text || '').replace(/\u200b/g, '').replace(/\s+/g, '');
-        const want = squash(${JSON.stringify(value)});
-        const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
-        const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
-        const got = squash(longest);
-        //: ① 要的字都在;② 没有多出来的旧字(只判"包含"会让旧草稿叠着也通过);
-        //: ③ **各行按顺序出现** —— 抖音会因回车/列表把段落重排,顺序错了发出去就是错的正文。
-        if (!got.includes(want) || got.length > Math.ceil(want.length * 1.15)) return false;
-        let at = -1;
-        for (const line of want.split(/\n+/).filter(Boolean)) {
-          const pos = got.indexOf(line, at + 1);
-          if (pos <= at) return false;
-          at = pos;
-        }
-        return true;
-      })()`,
-      4_000,
-      200,
-    );
-    if (!accepted) {
-      const seen = await this.driver
-        .evaluate<string>(`(() => {
-          const editors = [...document.querySelectorAll(${JSON.stringify(selector)})];
-          const longest = editors.map((one) => one.innerText || one.textContent || '').sort((a, b) => b.length - a.length)[0] || '';
-          return JSON.stringify({ got: longest.slice(0, 80) });
-        })()`)
-        .catch(() => "");
-      plog("douyin body: still not right after typing —", seen);
+    //: 判定交给统一原语:按行、按顺序,且不许混进旧字 —— 三件都是真机上踩过的坑
+    //: (2026-10-23:只判"包含"会放过旧草稿;只判整段会放过被重排的正文)。
+    const { ok, matched, total } = await linesEntered(this.driver, selector, value, {
+      counter: /(\d+)\s*\/\s*1000/,
+    });
+    if (!ok) {
+      plog("douyin body: did not land as written —", JSON.stringify({ matched, total }));
       throw publishError("douyin", "publishErr_descriptionRejected");
     }
   }
@@ -253,7 +232,7 @@ export class DouyinAdapter implements PublishAdapter {
 
   async submit(): Promise<void> {
     await this.selectVisibility();
-    await this.dismissOnboarding();
+    await this.clearStuckOverlays();
     await commitClick({
       what: "douyin submit",
       attempts: [
@@ -284,25 +263,14 @@ export class DouyinAdapter implements PublishAdapter {
    * 还会让 shepherd 内部状态以为引导仍在进行)。人会按 Esc 或点关闭按钮,两者都是真实输入。
    * 都不成才退回删节点。
    */
-  private async dismissOnboarding(): Promise<void> {
-    const gone = async (): Promise<boolean> => !(await this.driver.cssVisible(this.s.overlays, 300));
-    if (await gone()) return;
-
-    await this.driver.pressKey("Escape"); // shepherd 默认 exitOnEsc
-    if (await gone()) {
-      plog("douyin onboarding: dismissed by Escape (trusted)");
-      return;
-    }
-    const clicked = await this.driver
-      .pointerClickCss(".shepherd-cancel-icon, .shepherd-element button[aria-label], .shepherd-button")
-      .then(() => true)
-      .catch(() => false);
-    if (clicked && (await gone())) {
-      plog("douyin onboarding: dismissed by trusted click");
-      return;
-    }
-    plog("douyin onboarding: trusted dismissal failed, removing the node instead");
-    await this.driver.removeElements(this.s.overlays);
+  /** 把这一页上挂着的浮层(新手引导)按声明关掉 —— 关法在 selectors 的 `overlays` 里。 */
+  private async clearStuckOverlays(): Promise<void> {
+    await clearOverlays(this.driver, this.s.overlays, "douyin", (text) =>
+      clickTextPreferTrusted(this.driver, text, {
+        exact: true,
+        selector: "button, [role=button], div, span",
+      }),
+    );
   }
 
   async waitResult(): Promise<void> {

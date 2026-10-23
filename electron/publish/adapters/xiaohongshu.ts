@@ -6,6 +6,8 @@ import { t } from "../../i18n.cjs";
 import { platformName } from "../platforms";
 import { SELECTORS } from "../selectors";
 import { AutomationBlockedError } from "../errors";
+import { clearOverlays } from "../overlays";
+import { linesEntered, successVisible } from "../verify";
 import { CommitClickError, PROCESSING_TEXTS, commitClick, domAttempt, pageReacted, pointerAttempt } from "../clickChain";
 import { plog } from "../log";
 
@@ -216,7 +218,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
       throw publishError("xiaohongshu", "publishErr_imagesRejected", { expected: paths.length, shown });
     }
     //: 上传成功会弹「图片可以编辑啦」——它盖在中间,后面填字/点发布都会被它挡一下。
-    await this.dismissHints();
+    await this.clearStuckOverlays();
   }
 
   /** 正文:图文用编辑器,和话题填的是同一个 contenteditable。 */
@@ -224,81 +226,33 @@ export class XiaohongshuAdapter implements PublishAdapter {
     const value = body.trim();
     if (!value) return;
     await this.driver.cssVisible(this.s.contentEditor, ACTION_TIMEOUT);
-    //: 只在**编辑器还是空的**时候补打一遍(第一遍的点击可能被「图片可以编辑啦」那类浮层吃掉)。
-    //: 已经打进去过就不重打 —— 再打一遍就是同一段文字出现两次(真机 2026-10-23)。
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      if (attempt > 1) {
-        const typed = await this.editorText();
-        if (typed) break;
-        await this.dismissHints();
-      }
-      await typeOrFill(
-        this.driver,
-        "xiaohongshu body",
-        this.s.contentEditor,
-        value,
-        async () => {
-          await this.driver.focusAndClearField(this.s.contentEditor);
-          await this.driver.insertText(this.s.contentEditor, value);
-        },
-        //: **逐行打**(每行一个真实回车)。整段塞含 `\n` 的字符串时,换行会先当普通文字、
-        //: 事后才一次性成段 —— 人看到的就是「先出现一整段、然后一瞬间全部换行」(维护者 2026-10-23)。
-        //: 先聚焦并清空,再逐行打;清空走真实按键(见 clearFocusedField 的说明)。
-        async () => {
-          //: 点一下编辑器拿到焦点(可信点击优先),清空,再逐行打。
-          await this.driver.pointerClickCss(this.s.contentEditor).catch(() => undefined);
-          await this.driver.focusAndClearField(this.s.contentEditor);
-          await this.driver.typeLines(value);
-        },
-      );
-      if ((await this.bodyMatch(value)).ok) return;
+    //: **先清干净**:小红书会恢复上一次的草稿,旧字不清掉、新字插进去就是搅在一起
+    //: (真机 2026-10-23:正文里混着上一轮的字,校验永远不成立)。
+    if (!(await this.driver.clearRichEditor(this.s.contentEditor))) {
+      throw publishError("xiaohongshu", "publishErr_editorNotEmpty");
     }
-    //: 还是没对上:**按行**报出到底进去了几行。整段一致才算填好 —— 只进了一部分就发出去,
-    //: 用户看到的正文和他在表单里写的不一样,那比失败更糟(所以这里不"有字就放过")。
-    const { matched, total } = await this.bodyMatch(value);
-    if (matched === 0) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
-    throw publishError("xiaohongshu", "publishErr_bodyPartial", { matched, total });
-  }
-
-  /** 编辑器里眼下有什么字(取候选里最长的那一个;空占位 `<p>` 会先被 querySelector 命中)。 */
-  private async editorText(): Promise<string> {
-    return this.driver
-      .evaluate<string>(`(() => {
-        const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
-        return (editors
-          .map((one) => (one.innerText || one.textContent || ''))
-          .sort((a, b) => b.length - a.length)[0] || '').trim();
-      })()`)
-      .catch(() => "");
-  }
-
-  /**
-   * 正文**按行**核对:每一行(非空、去空白后)都要在编辑器里出现。
-   *
-   * 为什么不整段比:小红书的正文是富文本,`1. …` 会被它变成有序列表、换行位置也会变 —— 整段
-   * `includes` 会误判(真机 2026-10-23 连误三次,把本来能发的笔记全拦了)。
-   * 为什么也不"有字就算":只进去一半同样要拦 —— 发出去的正文和用户写的不一样,比失败更糟。
-   *
-   * 取**文字最多的那个候选元素**来比:真机上 `querySelector` 先命中的可能是空的占位 `<p>`。
-   */
-  private async bodyMatch(value: string): Promise<{ ok: boolean; matched: number; total: number }> {
-    const lines = value
-      .split(/\r?\n/)
-      .map((one) => one.trim())
-      .filter(Boolean);
-    return this.driver
-      .evaluate<{ ok: boolean; matched: number; total: number }>(`(() => {
-        const squash = (text) => String(text || '').replace(/\s+/g, '');
-        const editors = [...document.querySelectorAll(${JSON.stringify(this.s.contentEditor)})];
-        const longest = editors
-          .map((one) => (one.innerText || one.textContent || ''))
-          .sort((a, b) => b.length - a.length)[0] || '';
-        const shown = squash(longest);
-        const lines = ${JSON.stringify(lines)}.map(squash).filter(Boolean);
-        const matched = lines.filter((one) => shown.includes(one)).length;
-        return { ok: lines.length > 0 && matched === lines.length, matched, total: lines.length };
-      })()`)
-      .catch(() => ({ ok: false, matched: 0, total: lines.length }));
+    await typeOrFill(
+      this.driver,
+      "xiaohongshu body",
+      this.s.contentEditor,
+      value,
+      async () => {
+        await this.driver.focusAndClearField(this.s.contentEditor);
+        await this.driver.insertText(this.s.contentEditor, value);
+      },
+      //: **逐行打**(每行一个真实回车):整段塞进去时,换行会先当普通文字、事后才一次性成段,
+      //: 看着就是「先出现一整段、然后一瞬间全部换行」(维护者 2026-10-23)。
+      async () => {
+        await this.driver.pointerClickCss(this.s.contentEditor).catch(() => undefined);
+        await this.driver.focusAndClearField(this.s.contentEditor);
+        await this.driver.typeLines(value);
+      },
+    );
+    const { ok, matched, total } = await linesEntered(this.driver, this.s.contentEditor, value);
+    if (!ok) {
+      if (matched === 0) throw publishError("xiaohongshu", "publishErr_descriptionRejected");
+      throw publishError("xiaohongshu", "publishErr_bodyPartial", { matched, total });
+    }
   }
 
   private acceptsTextExpression(selector: string, value: string): string {
@@ -309,14 +263,14 @@ export class XiaohongshuAdapter implements PublishAdapter {
     })()`;
   }
 
-  /** 上传后那种「图片可以编辑啦」的提示框会挡住「发布」:能点掉就点掉,点不到也不算错。 */
-  private async dismissHints(): Promise<void> {
-    for (const text of this.s.dismissibleHints) {
-      await clickTextPreferTrusted(this.driver, text, {
+  /** 把这一页上挂着的浮层(编辑器介绍框 / 原创权益说明)按声明关掉 —— 关法在 selectors 里。 */
+  private async clearStuckOverlays(): Promise<void> {
+    await clearOverlays(this.driver, this.s.overlays, "xiaohongshu", (text) =>
+      clickTextPreferTrusted(this.driver, text, {
         exact: true,
-        selector: "button, [role=button], a, div, span",
-      }).catch(() => undefined);
-    }
+        selector: "button, [role=button], div, span",
+      }),
+    );
   }
 
   async fillTitle(title: string): Promise<void> {
@@ -483,33 +437,13 @@ export class XiaohongshuAdapter implements PublishAdapter {
     if (current !== wanted) {
       await this.driver.clickCss(this.s.originalSwitch).catch(() => undefined);
       await wait(400);
-      //: 勾上之后平台会弹「笔记完成原创声明后,将获得以下权益」——**必须点「声明原创」确认**,
-      //: 否则这个弹窗一直盖着页面,后面打开可见性下拉时选项点不到,任务就停在
-      //: 「可见范围没能设成 private」(真机 2026-10-23 反复失败的就是这一条)。
-      const modalUp = await this.driver.waitForFunction(
-        `(() => (document.body?.innerText || '').includes(${JSON.stringify(this.s.originalModalText)}))()`,
-        2_500,
-        200,
-      );
-      if (modalUp) {
-        //: **先勾同意框**,否则「声明原创」是禁用的(真机实测 `d-button-default disabled`)。
-        //: 不勾就点,按钮不吃、弹窗不关 —— 后面打开可见性下拉时选项被它挡着,任务停在
-        //: 「可见范围没能设成 private」。这条链子 2026-10-23 查了两轮才理清。
-        await this.driver.clickCss(this.s.originalConsentBox).catch(() => undefined);
-        await wait(300);
-        const confirmed = await clickTextPreferTrusted(this.driver, this.s.originalConfirmText, {
-          exact: true,
-          selector: "button, [role=button], div, span",
-        })
-          .then(() => true)
-          .catch(() => false);
-        await wait(600);
-        const stillUp = await this.driver.hasText(this.s.originalModalText).catch(() => false);
-        plog("xiaohongshu original modal:", confirmed ? "confirmed" : "click failed", stillUp ? "(still open)" : "(closed)");
-        if (stillUp) {
-          await plogPageState("Xiaohongshu original modal did not close:", this.driver);
-          throw publishError("xiaohongshu", "publishErr_originalStuck", { after: true, wanted });
-        }
+      //: 勾上之后平台会弹「笔记完成原创声明后…」的权益说明,**必须勾同意框再点「声明原创」**
+      //: 才关得掉(否则按钮是 disabled)。这套关法现在写在 selectors 的 `overlays` 里,
+      //: 由统一的浮层策略执行 —— 适配器不再自己记得"先勾哪个框再点哪颗钮"。
+      await this.clearStuckOverlays();
+      if (await this.driver.hasText(this.s.overlays[1].detect.text)) {
+        await plogPageState("Xiaohongshu original modal did not close:", this.driver);
+        throw publishError("xiaohongshu", "publishErr_originalStuck", { after: true, wanted });
       }
     }
     const after = await this.driver
@@ -533,16 +467,8 @@ export class XiaohongshuAdapter implements PublishAdapter {
   private async applyVisibility(): Promise<void> {
     const visibility = enumOption(this.task, "visibility", "private", ["private", "friends", "public"] as const);
     const wanted = this.s.visibilityTexts[visibility];
-    //: 开下拉之前先把挡路的弹窗清掉(原创权益说明 / 「图片可以编辑啦」)——它们都盖在页面上,
-    //: 一盖住,下拉里的选项就点不到。
-    if (await this.driver.hasText(this.s.originalModalText).catch(() => false)) {
-      await clickTextPreferTrusted(this.driver, this.s.originalConfirmText, {
-        exact: true,
-        selector: "button, [role=button], div, span",
-      }).catch(() => undefined);
-      await wait(500);
-    }
-    await this.dismissHints();
+    //: 开下拉之前先把挡路的浮层清掉 —— 一盖住,下拉里的选项就点不到。
+    await this.clearStuckOverlays();
     await this.driver
       .evaluate(`(() => {
         const w = document.querySelector(${JSON.stringify(this.s.visibilityTrigger)});
@@ -572,7 +498,7 @@ export class XiaohongshuAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
-    await this.dismissHints();
+    await this.clearStuckOverlays();
     await this.applyOriginal();
     await this.applyVisibility();
     const ready =
@@ -787,76 +713,31 @@ export class XiaohongshuAdapter implements PublishAdapter {
     //: 以及——**回到创作页且草稿空了**就是没发出去。最后这条此前没有,于是页面被平台弹回创作页时,
     //: 任务在本该失败的这一刻继续等了十分钟(维护者 2026-10-23 的截图:面板停在「等待平台确认」,
     //: 里面却是「上传视频」那个创作页)。
-    const donePattern = this.s.publishDoneTexts.join("|");
-    const doneUrls = this.s.publishDoneUrls.map((one) => one.source);
-    //: **成功提示也会出现在 shadow DOM 里**(小红书这页的自定义元素不少)。只看 `body.innerText`
-    //: 会漏掉它 —— 真机就是这样:「发布成功」摆在屏幕中间(维护者截图),我们却一个字都没读到,
-    //: 于是转头去判「回到创作页」= 失败。这段把 shadow root 里的字一起收。
-    const deepText = `(() => {
-      const seen = new Set();
-      const visible = (el) => {
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-      };
-      const walk = (root) => {
-        if (!root || seen.has(root)) return '';
-        seen.add(root);
-        let text = root instanceof Document ? (root.body?.innerText || '') : '';
-        for (const el of root.querySelectorAll ? root.querySelectorAll('*') : []) {
-          if (el.shadowRoot) text += '\\n' + walk(el.shadowRoot);
-          else if (!(root instanceof Document) && visible(el)) text += '\\n' + (el.innerText || el.textContent || '');
-        }
-        return text;
-      };
-      return walk(document);
-    })()`;
-    //: 立刻看一次成功证据(宽限期里每 600ms 调一次,由外层循环控制节奏)。
-    const successVisible = () =>
-      this.driver
-        .evaluate<boolean>(`(() => {
-          const text = ${deepText};
-          if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return true;
-          return ${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(location.href));
-        })()`)
-        .catch(() => false);
+    //: 成功信号交给原语:**地址 > 文案**,文案能看见 shadow DOM(平台的提示常挂在自定义元素里)。
+    const signals = { urls: this.s.publishDoneUrls, texts: this.s.publishDoneTexts };
     const deadline = Date.now() + RESULT_TIMEOUT;
     await wait(1_000);
+    let grace = 0;
     while (Date.now() < deadline) {
       const state = await this.driver
-        .evaluate<{ done: boolean; backToEditor: boolean; url: string }>(`(() => {
-          const text = ${deepText};
-          if (new RegExp(${JSON.stringify(donePattern)}).test(text)) return { done: true, backToEditor: false, url: location.href };
+        .evaluate<{ backToEditor: boolean; titleEmpty: boolean }>(`(() => {
           const url = location.href;
-          if (${JSON.stringify(doneUrls)}.some((one) => new RegExp(one).test(url))) {
-            return { done: true, backToEditor: false, url };
-          }
-          const isEditor = /\\/publish\\/publish|\\/new\\/publish/.test(url);
+          const isEditor = /\/publish\/publish|\/new\/publish/.test(url);
           const title = document.querySelector(${JSON.stringify(this.s.titleInput)});
-          const titleEmpty = !title || !(title.value || '').trim();
-          return { done: false, backToEditor: Boolean(isEditor && titleEmpty), url };
+          return { backToEditor: Boolean(isEditor), titleEmpty: !title || !(title.value || '').trim() };
         })()`)
         .catch(() => null);
-      if (state?.done) return;
-      if (state?.backToEditor) {
-        //: **别急着判失败**:发成功之后小红书就是会回到创作页(标题清空),中间那几秒看起来和
-        //: 「被平台弹回来」一模一样 —— 2026-10-23 真机就是这样:页面上明明写着「发布成功」,
-        //: 我们却判了「页面被送回了创作页」。所以这里给足宽限期(成功提示 / 落地页都可能晚到),
-        //: 期间一直盯着成功证据;宽限期过了还没有,才算真的没发出去。
-        const graceDeadline = Date.now() + BOUNCE_GRACE_MS;
-        let succeeded = false;
-        while (Date.now() < graceDeadline) {
-          await wait(600);
-          const evidence = await successVisible();
-          if (evidence) {
-            succeeded = true;
-            break;
-          }
+      if (await successVisible(this.driver, signals)) return;
+      if (state?.backToEditor && state.titleEmpty) {
+        //: 发成功之后小红书会回到创作页、标题清空 —— 那几秒和"被平台弹回来"长得一模一样,
+        //: 所以先给宽限期盯成功信号(`published=true` 就在地址里),别急着判失败。
+        if (grace === 0) grace = Date.now() + BOUNCE_GRACE_MS;
+        if (Date.now() > grace) {
+          await plogPageState("waitResult bounced back to the editor (xiaohongshu):", this.driver);
+          throw publishError("xiaohongshu", "publishErr_backToEditor");
         }
-        if (succeeded) return;
-        await plogPageState("waitResult bounced back to the editor (xiaohongshu):", this.driver);
-        throw publishError("xiaohongshu", "publishErr_backToEditor");
       }
-      await wait(800);
+      await wait(600);
     }
     await plogPageState("waitResult timed out (xiaohongshu):", this.driver);
     throw publishError("xiaohongshu", "publishErr_notConfirmed");

@@ -37,6 +37,9 @@ import type { WorkbenchCall, WorkbenchCallResult, WorkbenchState } from "./comfy
 import { WorkbenchSessions } from "./comfyWorkbenchSessions";
 import { isAutomationBlockedError } from "./errors";
 import { platformName, resolvePlatform } from "./platforms";
+import { SELECTORS } from "./selectors";
+import { clickTextPreferTrusted } from "./adapters/shared";
+import { clearOverlays, type OverlayRule } from "./overlays";
 //: 登录的显式状态机与结构化日志(P3 / P7):失败时要能一眼看出停在哪一步、为什么停。
 import { createLoginFlow } from "./loginPhase.cjs";
 import { createTrace } from "./trace.cjs";
@@ -406,11 +409,24 @@ async function runTask(bt: backend.BackendTask): Promise<void> {
     void checkpoint().catch(() => undefined).finally(() => { polling = false; });
   }, 500);
   let stepLabel = "";
+  //: 这一页会挡路的浮层(声明在 selectors 的 `overlays`)。**每一步之前**统一清一遍 ——
+  //: 平台弹层不报错,只是把下一步挡住,失败会以"某个无关步骤超时"的形式出现(2026-10-23 三次)。
+  //: 平台的页面词表里可能还没有 `overlays`(比如刚接的新平台):那就没有要清的浮层。
+  const selectorTable = SELECTORS as Record<string, { overlays?: readonly OverlayRule[] } | undefined>;
+  const overlayRules = selectorTable[resolvePlatform(t.platform).id]?.overlays ?? [];
+  const clearStuckOverlays = async (): Promise<void> => {
+    if (!overlayRules.length) return;
+    await clearOverlays(driver, overlayRules, resolvePlatform(t.platform).id, (text) =>
+      clickTextPreferTrusted(driver, text, { exact: true, selector: "button, [role=button], div, span" }),
+    ).catch((error: unknown) => plog("clearStuckOverlays failed:", String(error).slice(0, 120)));
+  };
   const step = async (label: string, settled = false): Promise<void> => {
     await checkpoint();
     stepLabel = label;
     plog("runTask step:", bt.id, label);
     mirror.step(`${platformLabel} · ${label}`, settled);
+    //: 进入这一步之前,先把上一屏留下的提示框 / 引导关掉(幂等,没有就一次驱动调用都不做)。
+    if (!settled) await clearStuckOverlays();
   };
   try {
     // 把视图挂成右下角悬浮面板:参与合成 → 有真实布局与命中测试 → **可信指针输入可用**,

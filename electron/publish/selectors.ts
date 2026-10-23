@@ -1,3 +1,4 @@
+import type { OverlayRule } from "./overlays";
 import { resolvePlatform } from "./platforms";
 
 /**
@@ -28,10 +29,17 @@ export const MANAGE_URL_PATTERNS = {
 export const SELECTORS = {
   douyin: {
     uploadUrl: resolvePlatform("douyin").publishUrl,
+    //: 新手引导浮层(shepherd.js):没有固定文案,按结构认;Esc 是它默认的退出键。
+    overlays: [
+      {
+        detect: { selector: ".shepherd-element, .shepherd-modal-overlay-container" },
+        dismiss: { escape: true },
+        gone: { selector: ".shepherd-element, .shepherd-modal-overlay-container" },
+      },
+    ] satisfies OverlayRule[],
     fileInput: "div[class^='container'] input[type='file'], input[type='file']",
     titleInput: 'input[placeholder*="填写作品标题"], input[placeholder*="作品标题"]', // i18n-ok 平台页面的匹配文案/选择器/注入脚本,非产品文案
     descEditor: 'div.zone-container[contenteditable="true"], div[contenteditable="true"]',
-    overlays: '.shepherd-element, .shepherd-modal-overlay-container, [class*="mention-wrapper"]',
     submitText: "发布", // i18n-ok
     uploadDoneText: "重新上传", // i18n-ok
     uploadFailedText: "上传失败", // i18n-ok
@@ -61,6 +69,18 @@ export const SELECTORS = {
   },
   xiaohongshu: {
     publishUrl: resolvePlatform("xiaohongshu").publishUrl,
+    //: **会挡路的浮层**(见 overlays.ts):每条写清怎么认、怎么关。执行器每一步之前统一跑一遍,
+    //: 适配器不再自己记得调 `dismissHints`。
+    overlays: [
+      //: 上传成功后平台弹的编辑器介绍框,盖在页面中间。
+      { detect: { text: "图片可以编辑啦" }, dismiss: { click: "我知道了" } },
+      //: 勾「原创声明」后的权益说明:**先勾同意框**,「声明原创」才是可点的
+      //: (真机实测那是 `d-button-default disabled`)。不关掉它,可见性下拉的选项点不到。
+      {
+        detect: { text: "笔记完成原创声明后" },
+        dismiss: { tick: ".d-modal-mask input[type=checkbox]", click: "声明原创" },
+      },
+    ] satisfies OverlayRule[],
     //: **各档的直连地址**(借鉴 social-auto-upload 的做法):这一页认 `?target=image` / `?target=video`,
     //: 直接导航过去比「点 tab」确定得多 —— 点不中、点到离屏克隆、SPA 还没渲染,这几种都能躲开。
     //: 点 tab 仍然留着当兜底(地址被平台改掉时还有一条路)。
@@ -84,8 +104,6 @@ export const SELECTORS = {
     //: 真机读到的 accept 是**扩展名清单**(`.mp4,.mov,.flv…` / 图片那档同理),不含 `video/` 或
     //: `image/`,所以不能拿它当判据。真正可靠的信号是**当前选中的是哪个 tab**:`.creator-tab.active`。
     activeTab: ".creator-tab.active",
-    //: 上传后弹的那种「图片可以编辑啦,快来试试吧」提示框:挡在页面中间,不点掉会挡住「发布」。
-    dismissibleHints: ["我知道了"], // i18n-ok
     //: 风控要人当场过一下的信号(扫码 / 身份验证 / 人脸)。**我们不尝试绕过**,
     //: 只把它当成「需要人」的一档交出去:亮出窗口让用户扫,扫完继续(见 ADR 0078)。
     verificationTexts: ["扫码验证", "安全验证", "身份验证", "请完成验证", "拖动滑块", "人脸验证"], // i18n-ok
@@ -113,11 +131,6 @@ export const SELECTORS = {
     //: 勾「原创声明」会**弹出权益说明弹窗**(真机 2026-10-23):「笔记完成原创声明后,将获得以下权益」
     //: + 一颗「声明原创」确认钮。不点掉它,后面打开可见性下拉时选项被它挡着 —— 于是「可见范围
     //: 没能设成 private」,整条发布中止。这是这次失败的真正原因。
-    originalModalText: "笔记完成原创声明后", // i18n-ok
-    originalConfirmText: "声明原创", // i18n-ok
-    //: 弹窗里还有一枚**必须勾上**的同意框(「我已阅读并同意《原创声明须知》」)——不勾,
-    //: 「声明原创」是禁用的(真机 2026-10-23 实测:`d-button-default disabled`)。
-    originalConsentBox: ".d-modal-mask input[type=checkbox]",
     // 可见性(实测):`.permission-card-select` 是小红书自己的 d-select,**合成事件和可信点击都打不开它**,
     // 只有「聚焦 + 回车」能展开(那个 wrapper 带 tabindex="1")。展开后三档渲染成 .group-info .name。
     visibilityTrigger: ".permission-card-select",
