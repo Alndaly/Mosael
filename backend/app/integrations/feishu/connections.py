@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -148,9 +149,23 @@ def _drain(connection: Connection) -> None:
         bots.write_status(connection.bot_id, "error", detail)
 
 
-def start_connection(bot_id: str) -> None:
+def worker_command(bot_id: str) -> list[str]:
+    """怎么起这个长连接子进程。
+
+    **打包版没有 `app` 包可以 import**:后端是个冻结二进制(PyInstaller),`python -m app.integrations…
+    在那一版里是 `ModuleNotFoundError: app.integrations`,进程立刻退出、设置页只留下一句
+    「长连接进程退出(code 2)」(2026-10-23 真机)。所以打包版改用**同一个二进制 + 管理命令**
+    (`mosael-backend feishu-worker <bot_id>`),开发版仍旧走 `python -m …`。两条路跑的是同一份代码。
+    """
+    if interpreter.is_frozen():
+        return [sys.executable, "feishu-worker", bot_id]
     backend_dir = Path(__file__).resolve().parents[3]
     python = backend_dir / ".venv" / "bin" / "python"
+    return [str(python) if python.exists() else interpreter.base_python(), "-m", "app.integrations.feishu.worker", bot_id]
+
+
+def start_connection(bot_id: str) -> None:
+    backend_dir = Path(__file__).resolve().parents[3]
     with SessionLocal() as db:
         bot = db.get(FeishuBot, bot_id)
         if bot is None:
@@ -162,7 +177,7 @@ def start_connection(bot_id: str) -> None:
             return
         bots.write_status(bot_id, "connecting")
         process = popen_text(
-            [str(python) if python.exists() else interpreter.base_python(), "-m", "app.integrations.feishu.worker", bot_id],
+            worker_command(bot_id),
             cwd=backend_dir,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

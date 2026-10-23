@@ -1,7 +1,14 @@
 """后端命令行:不经过界面、直接对这台机器上的数据目录做的管理员的事。
 
-现在只有一件:`reset-password` —— 唯一的部署管理员忘了密码时,界面上没有任何人能替他重置(管理页的「重置密码」
-要先登录成部署管理员),整台部署就锁在外面。能在这台机器上跑命令的人本来就能读写这份数据目录,所以由它兜底。
+现在两件:
+
+- `reset-password` —— 唯一的部署管理员忘了密码时,界面上没有任何人能替他重置(管理页的「重置密码」
+  要先登录成部署管理员),整台部署就锁在外面。能在这台机器上跑命令的人本来就能读写这份数据目录,
+  所以由它兜底;
+- `feishu-worker <bot_id>` —— 一条飞书长连接。**打包后的后端里没有 `app` 这个包可 import**(它是冻结
+  二进制),所以长连接子进程不能再走 `python -m app.integrations.feishu.worker`:那条命令在打包版里
+  是 `ModuleNotFoundError: app.integrations`,进程秒退、设置页写着「长连接进程退出(code 2)」
+  (2026-10-23 真机)。改成用同一个二进制 + 管理命令起,开发版和打包版走同一条路。
 
 用法:
   开发环境      cd backend && uv run python -m app.cli reset-password <用户名>
@@ -45,7 +52,15 @@ def _reset_password(args: argparse.Namespace) -> int:
     return 0
 
 
-COMMANDS = {"reset-password"}
+COMMANDS = {"reset-password", "feishu-worker"}
+
+
+def _feishu_worker(args: argparse.Namespace) -> int:
+    """跑一条长连接,直到 stdin 关掉(主进程退出)或进程被杀。"""
+    from app.integrations.feishu.worker import main as run_worker
+
+    run_worker(args.bot_id)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,6 +74,13 @@ def main(argv: list[str] | None = None) -> int:
     reset.add_argument("username", help="要重置的用户名 / the username")
     reset.add_argument("--password", help="直接设成这个密码(不给就随机生成) / set this password instead of a random one")
     reset.set_defaults(handler=_reset_password)
+    worker = sub.add_parser(
+        "feishu-worker",
+        help="跑一条飞书长连接(内部使用:后端为每个机器人起一个) / run one Feishu long connection (internal)",
+        description="由后端按机器人拉起的长连接子进程入口;凭据从 stdin 读,不经过命令行。",
+    )
+    worker.add_argument("bot_id", help="机器人 id / the bot id")
+    worker.set_defaults(handler=_feishu_worker)
     args = parser.parse_args(argv)
     return int(args.handler(args))
 

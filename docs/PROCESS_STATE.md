@@ -59,6 +59,7 @@
 | `app/domain/jobs.py:RENDER_SLOTS`、`app/domain/jobs.py:ASR_SLOTS`、`app/domain/jobs.py:TTS_SLOTS`、`app/domain/jobs.py:PLUGIN_SLOTS`、`app/media/proxy.py:TRANSCODE_SLOTS`、`app/domain/workflows/engine.py:NODE_CONNECTIONS` | 几类重活同时跑几份(导出、识别、合成、插件进程、代理转码),以及工作流引擎能同时占几条库连接 | 名额按进程算:第二个进程再给一份,同时跑的 ffmpeg、模型进程翻倍,机器被压满;引擎那份本来就按本进程的连接池算,不出错。重启后归零,没有要恢复的。 |
 | `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
+| `app/integrations/feishu/connections.py:worker_command` | 长连接子进程的命令行 | **打包版没有 `app` 包可 import**(后端是冻结二进制),所以那一路走 `mosael-backend feishu-worker <bot_id>`,开发版走 `python -m app.integrations.feishu.worker`。写成 `python -m` 会在打包版里秒退(2026-10-23:「长连接进程退出(code 2)」)。 |
 | `app/integrations/feishu/connections.py:_pumps` | 还活着的泵线程(读 worker 输出、写最后一次状态) | 和 `_processes` 同属一个进程。子进程自己退出时连接先从表里摘掉、泵还在写,停机要等的是它们全部 —— 不等就会在库关掉之后才写(测试里写进下一条用例清过的库)。重启时随进程一起没了,不需要恢复。 |
 | `app/ai/sidecar/pi_client.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/domain/browser/__init__.py:_executor_contact` | 最近一次浏览器执行器来认领 / 心跳的时刻 | 只用来把排队超时说清楚(执行器在线 → 「排队太久、前面有几条」,不在 → 「桌面端没开」)。重启后归零,执行器下一拍认领就补上;第二个进程收不到另一边的认领,会把「排队太久」错说成「桌面端没开」—— 错的只是那句话,动作照样按超时收尾。 |
