@@ -106,7 +106,10 @@ export function LivePanels() {
             key={card.id}
             // 原生视图只覆盖内容矩形。外壳若 pointer-events:none,标题间隙、圆角和 4px 内缩边框
             // 会直接点到下面的工作流画布。整个外壳承担命中屏障；内容区仍由上层原生视图接管。
-            className="pointer-events-auto fixed z-[70] overflow-hidden border border-floating-border bg-panel shadow-[var(--shadow-raised)]"
+            //: **浮窗的壳要盖在弹窗上**(z-80 > 弹窗的 z-70):里面那块网页是原生视图,永远画在
+            //: DOM 之上 —— 壳若比弹窗低,边框和四周的拉伸条就被弹窗盖住,只剩网页浮在那儿,
+            //: 看着就是「浮窗没有边框、拖不动」(维护者 2026-10-23 截图)。
+            className="pointer-events-auto fixed z-[80] overflow-hidden border border-floating-border bg-panel shadow-[var(--shadow-raised)]"
             data-live-panel={card.id}
             style={{
               left: card.x,
@@ -183,7 +186,7 @@ export function LivePanels() {
 
       {dragCursor && (
         // 拖动期间光标要一直是那个方向的样式,而不是随指针下面的画布元素变来变去。
-        <div aria-hidden className="pointer-events-auto fixed inset-0 z-[71]" style={{ cursor: dragCursor }} />
+        <div aria-hidden className="pointer-events-auto fixed inset-0 z-[81]" style={{ cursor: dragCursor }} />
       )}
     </div>
   );
