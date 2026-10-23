@@ -6930,7 +6930,10 @@ def _migrate_publish_tasks_get_content_shape() -> None:
             text("SELECT COUNT(*) FROM publish_tasks WHERE asset_ids = '[]' AND asset_id IS NOT NULL"),
         ).scalar()
         if leftovers:
-            raise RuntimeError(f"publish_tasks 迁移未完成:{leftovers} 行有 asset_id 但 asset_ids 仍为空")
+            #: 迁移内部的硬失败(不是给用户看的报错):留给运行时猜更糟,宁可启动时就炸。
+            raise RuntimeError(
+                f"publish_tasks migration incomplete: {leftovers} row(s) have asset_id but empty asset_ids",
+            )
 
 
 def _migrate_workflow_publish_nodes_get_content_kind() -> None:
