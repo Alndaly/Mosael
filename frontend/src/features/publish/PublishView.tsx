@@ -344,7 +344,10 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
       {/* 每天一张**圆角白卡**(维护者给的图):日期栏头在卡外,记录落在卡里;卡片内的分割线内缩。 */}
-      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden pb-5 [&>*]:shrink-0">
+      {/*: **底部不写死内间距**:每个日期分组自带 `pb-4`(16px),最后一张卡离容器下沿就是这一档。
+          我之前叠过 `pb-12`/`pb-5`,那是把「滚动容器」和「页面」两层内边距重复算了一遍 ——
+          维护者说得对,这层不该写死。 */}
+      <div ref={listRef} className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden [&>*]:shrink-0">
         {tasks.isPending ? <LoadingState className="h-auto flex-1" /> : tasks.isError ? <EmptyState icon={<Rocket />} title={t("pageLoadError")} body={tasks.error.message} action={<Button variant="secondary" onClick={() => void tasks.refetch()}>{t("retry")}</Button>} /> : filteredTasks.length === 0 && <EmptyState icon={<Rocket />} title={t("studioNoMatches")} body={t("studioNoMatchesHint")} />}
         {groups.map((group) => {
           const day = dayGroupOf(group.key, now, locale);
