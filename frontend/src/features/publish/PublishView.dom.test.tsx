@@ -70,7 +70,8 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   await user.click((await screen.findAllByRole("button", { name: /publishCreate/ }))[0]);
   const dialog = await screen.findByRole("dialog", { name: "publishCreate" });
 
-  const [assetPicker, accountPicker] = within(dialog).getAllByRole("combobox");
+  //: **发布目标排在第一位**(先选发到哪,再选发什么形状),素材那一格在它后面。
+  const [accountPicker, assetPicker] = within(dialog).getAllByRole("combobox");
   await user.click(assetPicker);
   await user.click(await screen.findByRole("option", { name: "Final cut" }));
   //: 只问视频,而且是在服务端筛的 —— 不把整个素材库拉回来再挑。

@@ -739,7 +739,69 @@ function CreatePublishDialog({
         </>
       }
     >
-      <div className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+      <div className="grid gap-3 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
+          <span>{t("publishAccount")}</span>
+          <Combobox
+            value={accountId ?? ""}
+            options={usableAccounts.map((account: PublishAccount) => ({ value: account.id, label: account.name }))}
+            placeholder={t("publishPickAccount")}
+            emptyText={t("cmdkEmpty")}
+            className="w-full"
+            onValueChange={setAccountId}
+          />
+          {/* 取不回来不是「没有账号」:此前下拉里只写「没有匹配的结果」,没有一句错误也没有下一步(体检 UM-22)。 */}
+          {accounts.isError && (
+            <small data-publish-accounts-error="" className="text-destructive">
+              {t("publishAccountsLoadFailed")}{" "}
+              <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={() => void accounts.refetch()}>
+                {t("retry")}
+              </button>
+            </small>
+          )}
+          
+          {/* 「存着的设置解不开了」是**要人去处理**的警告(重新登录一次),不是普通说明:
+              用警告色 + 一枚图标,和旁边的灰色小字区分开。 */}
+          {unreadableAccounts.length > 0 && (
+            <p
+              data-publish-accounts-unreadable=""
+              role="note"
+              className="m-0 flex items-start gap-1.5 text-ui-xs leading-[1.45] text-warning"
+            >
+              <CircleAlert size={13} className="mt-[1px] shrink-0" />
+              <span>
+                {t("publishAccountConfigUnreadable").replace("{names}", unreadableAccounts.map((account) => account.name).join(t("listSeparator")))}
+              </span>
+            </p>
+          )}
+          {accounts.isSuccess && (allAccounts.length === 0 || disabledAccounts > 0) && (
+            <small>
+              {allAccounts.length === 0
+                ? t("publishNoAccounts")
+                : t("publishAccountsDisabledHidden").replace("{n}", String(disabledAccounts))}{" "}
+              <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={onManageAccounts}>
+                {t("publishAccounts")}
+              </button>
+            </small>
+          )}
+        </label>
+        {/* 内容形状(ADR 0076):**排在发布目标之后** —— 先选发到哪,再选发什么形状,
+            素材那一格才跟着换(视频是一份、图文是多张)。平台只认一种形状时不摆选择器。 */}
+        {selectedAccount && platformKinds.length > 1 && (
+          <div className="grid gap-1">
+            <span className="text-xs font-semibold text-foreground">{t("publishContentKind")}</span>
+            <Segmented
+              size="sm"
+              aria-label={t("publishContentKind")}
+              value={kind}
+              onValueChange={(next) => setKind(next)}
+              options={platformKinds.map((one) => ({
+                value: one,
+                label: t((one === "image-text" ? "publishKind_imageText" : `publishKind_${one}`) as never),
+              }))}
+            />
+          </div>
+        )}
         <div className="grid gap-1">
           <span className="text-xs font-semibold text-foreground">{t("publishAsset")}</span>
           {!needsImages && (
@@ -779,67 +841,6 @@ function CreatePublishDialog({
             <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
           )}
         </div>
-        <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
-          <span>{t("publishAccount")}</span>
-          <Combobox
-            value={accountId ?? ""}
-            options={usableAccounts.map((account: PublishAccount) => ({ value: account.id, label: account.name }))}
-            placeholder={t("publishPickAccount")}
-            emptyText={t("cmdkEmpty")}
-            className="w-full"
-            onValueChange={setAccountId}
-          />
-          {/* 取不回来不是「没有账号」:此前下拉里只写「没有匹配的结果」,没有一句错误也没有下一步(体检 UM-22)。 */}
-          {accounts.isError && (
-            <small data-publish-accounts-error="" className="text-destructive">
-              {t("publishAccountsLoadFailed")}{" "}
-              <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={() => void accounts.refetch()}>
-                {t("retry")}
-              </button>
-            </small>
-          )}
-          {/* 内容形状(ADR 0076):平台认哪几种由后端声明,前端只列可选项。只有一种时不摆选择器。 */}
-          {selectedAccount && platformKinds.length > 1 && (
-            <div className="grid gap-1">
-              <span className="text-xs font-semibold text-foreground">{t("publishContentKind")}</span>
-              <Segmented
-              size="sm"
-              aria-label={t("publishContentKind")}
-              value={kind}
-              onValueChange={(next) => setKind(next)}
-              options={platformKinds.map((one) => ({
-                value: one,
-                label: t((one === "image-text" ? "publishKind_imageText" : `publishKind_${one}`) as never),
-              }))}
-            />
-            </div>
-          )}
-
-          {/* 「存着的设置解不开了」是**要人去处理**的警告(重新登录一次),不是普通说明:
-              用警告色 + 一枚图标,和旁边的灰色小字区分开。 */}
-          {unreadableAccounts.length > 0 && (
-            <p
-              data-publish-accounts-unreadable=""
-              role="note"
-              className="m-0 flex items-start gap-1.5 text-ui-xs leading-[1.45] text-warning"
-            >
-              <CircleAlert size={13} className="mt-[1px] shrink-0" />
-              <span>
-                {t("publishAccountConfigUnreadable").replace("{names}", unreadableAccounts.map((account) => account.name).join(t("listSeparator")))}
-              </span>
-            </p>
-          )}
-          {accounts.isSuccess && (allAccounts.length === 0 || disabledAccounts > 0) && (
-            <small>
-              {allAccounts.length === 0
-                ? t("publishNoAccounts")
-                : t("publishAccountsDisabledHidden").replace("{n}", String(disabledAccounts))}{" "}
-              <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={onManageAccounts}>
-                {t("publishAccounts")}
-              </button>
-            </small>
-          )}
-        </label>
         <label className="grid gap-1 [&>span]:flex [&>span]:items-center [&>span]:gap-[3px] [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground [&_small]:text-ui-xs [&_small]:leading-[1.4] [&_small]:text-muted-foreground [&_input]:resize-y [&_input]:rounded [&_input]:border [&_input]:border-border [&_input]:bg-field [&_input]:p-1.5 [&_input]:text-ui-sm [&_input]:text-foreground [&_input:focus-visible]:border-primary [&_input:focus-visible]:outline-none [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none">
           <span>
             {t("publishTitle")}
