@@ -46701,7 +46701,6 @@
             },
             "type": "array",
             "maxItems": 64,
-            "minItems": 1,
             "title": "Asset Ids"
           },
           "content_kind": {
@@ -46751,7 +46750,6 @@
         "required": [
           "workspace_id",
           "account_id",
-          "asset_ids",
           "content_kind"
         ],
         "title": "PublishCreate"

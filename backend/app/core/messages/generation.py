@@ -407,6 +407,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{platform} 的{kind}最多 {max} 份素材(当前 {count} 份)",
         "en": "{platform} accepts at most {max} items for “{kind}” (this one has {count}).",
     },
+    "publishErr_coverNotSupported": {
+        "zh": "{platform} 的文章不接受单独选封面 —— 封面由平台按正文生成。",
+        "en": "A {platform} article doesn't take a cover image — the platform builds one from the body.",
+    },
     "publishErr_coverRequired": {
         "zh": "抖音文章必须有一张封面图 —— 在「成片素材」里选一张(它同时会被用作文章头图)。",
         "en": "A Douyin article needs a cover image — pick one under “finished assets” (it is also used as the article header).",

@@ -265,3 +265,65 @@ def test_the_worker_gets_every_asset_in_order_and_the_content_shape() -> None:
     assert len(handed["media_paths"]) == 2
     #: **只有一种形状**:`media_paths`(按顺序)。协议里不再有 `video_path` —— 视频就是第一个。
     assert "video_path" not in handed
+
+
+def test_article_cover_requirement_is_declared_per_platform() -> None:
+    """文章要不要封面,是**平台的声明**(`content.article.cover`),不是通用表单里的一句话。
+
+    抖音文章的封面必填(真机核对过);小红书长文的封面由平台按正文生成 —— 声明成 `none`,
+    界面就不该出现选图的地方。这条钉住两端的"谁说了算":后端声明。
+    """
+    assert content_limits("douyin", "article")["cover"] == "required"
+    assert content_limits("xiaohongshu", "article")["cover"] == "none"
+    assert content_limits("bilibili", "article")["cover"] == "none"
+    assert content_limits("x", "article")["cover"] == "none"
+    #: 没声明的平台落到默认:可给可不给(不猜它不需要,也不硬说它需要)。
+    assert content_limits("tiktok", "article").get("cover") in (None, "optional")
+
+
+def test_a_required_cover_is_rejected_at_create_time_not_at_publish_time() -> None:
+    """投稿时就拦:抖音文章没有封面,不该等执行器在真实页面上才发现。"""
+    client = _client()
+    workspace_id = _workspace(client)
+    account = _account(client, workspace_id, "douyin")
+
+    response = client.post(
+        "/api/publish/tasks",
+        json={
+            "workspace_id": workspace_id,
+            "account_id": account["id"],
+            "title": "一篇文章",
+            "body": "正文",
+            "content_kind": "article",
+            "asset_ids": [],
+            "tags": [],
+            "options": {"visibility": "private"},
+        },
+    )
+    #: 领域错误映射成 422(和"标题超长"那些同一条路);文案要说清"需要一张封面"。
+    assert response.status_code == 422
+    assert "封面" in response.text
+
+
+def test_a_platform_that_generates_its_own_cover_refuses_a_picked_one() -> None:
+    """小红书长文不接受单独选封面 —— 静默丢掉比报错更糟(用户以为封面换成了那张图)。"""
+    client = _client()
+    workspace_id = _workspace(client)
+    account = _account(client, workspace_id, "xiaohongshu")
+    image = _image(client, workspace_id, "封面")
+
+    response = client.post(
+        "/api/publish/tasks",
+        json={
+            "workspace_id": workspace_id,
+            "account_id": account["id"],
+            "title": "一篇长文",
+            "body": "正文",
+            "content_kind": "article",
+            "asset_ids": [image["id"]],
+            "tags": [],
+            "options": {},
+        },
+    )
+    assert response.status_code == 422
+    assert "封面" in response.text

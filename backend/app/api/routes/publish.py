@@ -142,9 +142,9 @@ def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     if account is None or account.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail=tr("routeErr_publishAccountNotInWorkspace"))
     #: 素材只有一种形状:`asset_ids`(按发出去的顺序)。视频也是只有一份的那个列表。
+    #: **"至少要几份"不在这里判** —— 视频要一份、图文要一份以上、文章看平台的 `cover` 声明
+    #: (required / optional / none)。这些都在领域层按声明校验,路由只管"这些 id 归不归这个工作区"。
     requested_ids = [one for one in body.asset_ids if one]
-    if not requested_ids:
-        raise HTTPException(status_code=422, detail=tr("publishErr_noAssets", kind=body.content_kind))
     assets: list[Asset] = []
     for asset_id in requested_ids:
         found = db.get(Asset, asset_id)

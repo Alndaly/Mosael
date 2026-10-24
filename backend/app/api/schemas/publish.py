@@ -85,7 +85,10 @@ class PublishCreate(ApiModel):
     workspace_id: str
     account_id: str
     #: 这份任务的素材,按发出去的顺序。视频就是**只有一个元素**的那个列表 —— 没有第二种传法。
-    asset_ids: list[str] = Field(min_length=1, max_length=64)
+    #: **可以为空**:文章那一档要不要图由平台的 `content.article.cover` 声明(小红书长文没有素材,
+    #: 抖音文章必须有一张)。"至少一份"是**领域层按声明**判的,不在这里一刀切 —— 否则
+    #: 声明成 `none` 的平台永远发不出文章(接口先回 422,界面那句话就成了摆设)。
+    asset_ids: list[str] = Field(default_factory=list, max_length=64)
     #: 内容形状(ADR 0076):video / image-text / article。**必填**:没有"默认当视频"这一档,
     #: 不然同一个入口要同时想两种形状(形状决定素材怎么发、正文在哪一格)。
     content_kind: str = Field(max_length=20)

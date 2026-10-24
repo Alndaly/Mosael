@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { messages } from "@/app/messages";
-import { ASSET_LABEL_KEY } from "@/features/publish/PublishView";
+import { ASSET_LABEL_KEY, COVER_HINT_KEY } from "@/features/publish/PublishView";
 
 for (const locale of ["zh-CN", "en-US"] as const) {
   describe(locale, () => {
@@ -32,3 +32,32 @@ for (const locale of ["zh-CN", "en-US"] as const) {
     });
   });
 }
+
+describe("文章封面的提示是**声明式**的", () => {
+  /**
+   * 以前这句是写死在通用表单里的「抖音的文章必须有一张」—— 平台名进通用表单,
+   * 第二个平台要封面时只能往句子里再加一个名字。现在三档声明对三句文案,平台名只在后端声明里。
+   */
+  for (const locale of ["zh-CN", "en-US"] as const) {
+    const table = messages[locale] as Record<string, string>;
+
+    it(`${locale}:required / optional / none 各有自己的说法`, () => {
+      const keys = [COVER_HINT_KEY.required, COVER_HINT_KEY.optional, COVER_HINT_KEY.none];
+      const labels = keys.map((key) => table[key]);
+      for (const label of labels) expect(typeof label).toBe("string");
+      expect(new Set(labels).size).toBe(3);
+    });
+
+    it(`${locale}:只有 required 那句说"必填",只有 none 那句说"平台生成"`, () => {
+      expect(table[COVER_HINT_KEY.required]).toMatch(/必填|Required/);
+      expect(table[COVER_HINT_KEY.none]).toMatch(/生成|builds|auto/i);
+      expect(table[COVER_HINT_KEY.optional]).not.toMatch(/必填|Required/);
+    });
+
+    it(`${locale}:提示里**不出现平台名**(平台是声明,不该写进句子)`, () => {
+      for (const key of Object.values(COVER_HINT_KEY)) {
+        expect(table[key]).not.toMatch(/抖音|小红书|Douyin|Xiaohongshu/i);
+      }
+    });
+  }
+});

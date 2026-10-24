@@ -18179,7 +18179,7 @@ export interface components {
             /** Account Id */
             account_id: string;
             /** Asset Ids */
-            asset_ids: string[];
+            asset_ids?: string[];
             /** Content Kind */
             content_kind: string;
             /**

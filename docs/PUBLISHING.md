@@ -23,6 +23,10 @@
 | X | ✓ | ✓ ≤4 图 / ≥280 字 | ✓ 长文(Articles):标题 ≤100 |
 | YouTube | ✓ | — | —（YouTube 没有长文形态;文字向只有**社区帖**,入口在频道页「创建 → 发帖」,不在 Studio。当前账号还没有频道，见 ADR 0079 补记） |
 
+文章那一档要不要图,由平台的 `content.article.cover` 声明(`required` / `optional` / `none`)——
+抖音文章是 `required`,小红书 / B站 / X 是 `none`(封面由平台按正文生成或不需要)。界面上的提示和
+投稿时的校验都读这一处,平台名不写进通用表单。
+
 事实来源与逐平台的真机核对记录见 [ADR 0076](adr/0076-auto-publish-image-text-and-articles.md);
 「怎么进这一页、怎么判成功、哪些浮层要关」写在契约里,见下一节与
 [ADR 0080](adr/0080-publish-automation-contract-and-pipeline.md)。

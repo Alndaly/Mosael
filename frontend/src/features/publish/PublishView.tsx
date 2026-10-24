@@ -84,6 +84,22 @@ export const ASSET_LABEL_KEY: Record<string, MessageKey> = {
   article: "publishAssetCover",
 };
 
+/**
+ * 文章封面那句提示:**从平台的 `cover` 声明来**。
+ *
+ * 以前这句是写死在通用表单里的(「抖音的文章必须有一张」)—— 平台名写进通用表单,
+ * 第二个平台要封面时只能往这句里再加一个名字。现在是三种声明对三句文案。
+ */
+export const COVER_HINT_KEY: Record<"required" | "optional" | "none", MessageKey> = {
+  required: "publishAssetCoverRequired",
+  optional: "publishAssetCoverOptional",
+  none: "publishAssetCoverAuto",
+};
+
+function coverHintKey(policy: "required" | "optional" | "none"): MessageKey {
+  return COVER_HINT_KEY[policy];
+}
+
 function assetLabelKey(kind: string): MessageKey {
   //: 表里没有的形状按文章那格处理(封面):它至少不会把"成片"安到图片上。
   return ASSET_LABEL_KEY[kind] ?? "publishAssetCover";
@@ -723,17 +739,29 @@ function CreatePublishDialog({
     title_max?: number;
     body_max?: number | null;
     max_items?: number | null;
+    /** 文章那一档要不要图,由**平台的声明**决定(后端 `content.article.cover`)。 */
+    cover?: "required" | "optional" | "none" | null;
   };
   const titleMax = kindLimits.title_max ?? platformMeta?.title_max ?? 300;
   const bodyMax = kindLimits.body_max ?? null;
   const maxItems = kindLimits.max_items ?? null;
   const needsImages = kind !== "video";
-  //: 这一条能不能提交:视频要一份素材;图文要 1..max 张图;**文章那一档素材是可选的** ——
-  //: 小红书长文的封面由平台自己生成,抖音文章则要一张(发的时候再拦,见适配器)。
+  //: 文章那一档要不要图,读**平台的声明**(`content.article.cover`):required 就得给一张,
+  //: none 是平台按正文自己生成、这里连选图的地方都不该出现。界面上那句提示也从它来 ——
+  //: 不再把"抖音"写死在通用表单里(以后 X 长文要封面,只改后端声明)。
+  const coverPolicy: "required" | "optional" | "none" =
+    kind === "article" ? (kindLimits.cover ?? "optional") : "none";
+  const wantsCover = kind === "article" && coverPolicy !== "none";
+  const showAssetField = kind !== "article" || wantsCover;
   const assetCount = needsImages ? imageIds.length : assetId ? 1 : 0;
   const tooManyImages = maxItems !== null && imageIds.length > maxItems;
   const bodyTooLong = bodyMax !== null && [...body].length > bodyMax;
-  const assetsReady = (assetCount > 0 || kind === "article") && !tooManyImages;
+  const assetsReady =
+    (kind === "article"
+      ? coverPolicy === "required"
+        ? assetCount === 1
+        : true
+      : assetCount > 0) && !tooManyImages;
   // 超长的标题后端会拒(publishErr_titleTooLong):计数变红的同时就不让提交,别等点了再报错。
   // 按码点数,和后端的 len() 同一把尺 —— `.length` 数的是 UTF-16 单元,一个 emoji 算两个,会提前拦下。
   const titleLength = [...title.trim()].length;
@@ -905,6 +933,12 @@ function CreatePublishDialog({
           {/*: 标签跟着内容类型走:**视频那格是"成片",图文那格只是图片,文章那格是封面** ——
                一个"成片素材"套在图文/文章上,会让人以为必须先从剪辑器导出一条片子。 */}
           <span className="text-ui-sm font-medium text-foreground">{t(assetLabelKey(kind))}</span>
+          {/*: 文章那一格的说服从**平台声明**来:必填 / 可选 / 平台自己生成(不用选)。 */}
+          {kind === "article" && (
+            <small className="text-ui-xs leading-[1.4] text-muted-foreground">
+              {t(coverHintKey(coverPolicy))}
+            </small>
+          )}
           {!needsImages && (
             //: **点开弹窗挑一份**(和图文那格的素材弹窗同一个控件):就地展开的下拉会把几十份成片
             //: 的名字排成一列,既难认也和应用里"挑素材"的样子不一样(维护者 2026-10-23)。
@@ -920,7 +954,7 @@ function CreatePublishDialog({
             />
           )}
           {/* 图文 / 文章:和工作流节点表单**同一个控件**(上传瓦片 + 「+」从素材库挑 + 缩略图 + 拖拽排序)。 */}
-          {needsImages && (
+          {showAssetField && needsImages && (
             //: **撑满这一栏**,和别字段同宽(维护者 2026-10-23)。控件自己按「一排占满」排版,
             //: 挑到四张以上就回到四列;少于四枚时每枚各占一等份 —— 那是它本来的意思。
             <AssetGridField
@@ -937,9 +971,6 @@ function CreatePublishDialog({
                 );
               }}
             />
-          )}
-          {kind === "article" && (
-            <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishAssetCoverHint")}</small>
           )}
           {!needsImages && videos.isSuccess && videos.total === 0 && !videos.query && (
             <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
