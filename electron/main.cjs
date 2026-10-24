@@ -1673,9 +1673,12 @@ app.whenReady().then(async () => {
   );
   // Computer Use P0(ADR 0075):只读地拍 Mosael 自己的窗口。渲染层这条路今天没有调用者(工具在后端跑,
   // 经下面的宿主桥进来),但它和桥走**同一个** captureMosaelWindow、同一个契约解析器 —— 不多出第二条实现。
-  handle(IPC.invoke.computerScreenshot, (_e, payload) =>
-    captureMosaelWindow(parseComputerScreenshot(payload), BrowserWindow.getAllWindows(), { main: mainWindow }),
-  );
+  handle(IPC.invoke.computerScreenshot, (_e, payload) => {
+    //: 渲染层这条路今天没有调用者(工具在后端跑,经宿主桥进来),但契约照旧校验:
+    //: 多一个字段就拒,而不是静默忽略。
+    parseComputerScreenshot(payload);
+    return captureMosaelWindow(mainWindow);
+  });
   // 开发时主进程过期提示:主进程启动时加载的产物(main.cjs、几个 bundle)变了,而正在跑的还是旧的 —— 渲染层
   // 热更新成了新代码,去调旧主进程里没有的处理器就会失败。给界面一条「重启后生效」,能重启时带按钮。
   // 正式打包的应用不起这个(isDev 为假)。

@@ -204,7 +204,11 @@ describe("截的是 Mosael 自己的窗口", () => {
 
 describe("接线:IPC + 回环桥都走同一个拍摄函数", () => {
   it("注册了 IPC 处理器,而且它拿的是 BrowserWindow 里的窗口和主窗口引用", () => {
-    expect(MAIN).toMatch(/handle\(IPC\.invoke\.computerScreenshot,/);
+    //: 渲染层这条路和桥走**同一个**拍摄函数:参数只有主窗口。
+    //: 此前重构漏了这一处,仍是旧签名 `captureMosaelWindow(parseComputerScreenshot(payload), …)`,
+    //: 于是 `{}` 被当成窗口交给 `computerUseWindow`,永远回「没有 Mosael 窗口」。
+    expect(MAIN).toMatch(/handle\(IPC\.invoke\.computerScreenshot,[\s\S]{0,240}?captureMosaelWindow\(mainWindow\)/);
+    expect(MAIN).not.toMatch(/captureMosaelWindow\(\s*parseComputerScreenshot/);
     //: 桥的截图 handler 直接把**主窗口**交给拍摄函数 —— 没有"按名字挑窗口"这一步了。
     expect(MAIN).toMatch(/\[IPC\.invoke\.computerScreenshot\]: \(\) => captureMosaelWindow\(mainWindow\)/);
   });
