@@ -27,6 +27,8 @@ const PULSE_ALLOWED: Record<string, string> = {
   //: 状态圈从 features/agent/StatusIcon.tsx 搬下来,和「一行」的几何一起归检查器共用
   //: (任务计划、后台任务、最近工具都从 components/layout/InspectorStatusRow 取同一颗圈)。
   "components/layout/InspectorStatusRow.tsx": "运行中的状态圈",
+  //: 飞书机器人行上的「连接中」圆点:点完重启要知道"它在动",而不只是换了个颜色。
+  "features/settings/FeishuSection.tsx": "飞书长连接的「连接中」状态圆点",
 };
 
 function sources(): Array<[string, string]> {

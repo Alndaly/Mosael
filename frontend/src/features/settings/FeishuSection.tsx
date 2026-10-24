@@ -115,7 +115,17 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
   });
   const restartBot = useMutation({
     mutationFn: (id: string) => api<FeishuBot>(`/api/feishu/bots/${id}/restart`, { method: "POST" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
+    //: **点了就有反应**:后端重启一条连接是"立刻受理、后台去连",接口很快就返回;而这一页是每 4 秒
+    //: 轮询一次 —— 只等接口回来再 invalidate 的话,中间这几秒按钮不转、状态还是上一轮的「错误」,
+    //: 看起来就像"点了没反应"(维护者 2026-10-24:「刷新没有 loading」)。这里先把这一行标成
+    //: 连接中,真实状态仍由轮询写回。
+    onMutate: (id) => {
+      qc.setQueryData<FeishuBot[]>(["feishu-bots", workspace.id], (list) =>
+        (list ?? []).map((one) => (one.id === id ? { ...one, status: "connecting", status_detail: "" } : one)),
+      );
+    },
+    onError: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
   });
   const removeBot = useMutation({
     mutationFn: (id: string) => api(`/api/feishu/bots/${id}`, { method: "DELETE" }),
@@ -242,7 +252,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                   <IconButton loading={issueCode.isPending && issueCode.variables === bot.id} onClick={() => issueCode.mutate(bot.id)} label={t("feishuBind")}>
                     <Link2 size={14} />
                   </IconButton>
-                  <IconButton loading={restartBot.isPending && restartBot.variables === bot.id} onClick={() => restartBot.mutate(bot.id)} label={t("feishuRestart")}>
+                  {/*: 转圈的条件是「**这条连接正在连**」,不只是"请求还没回来" —— 后者只闪一下,
+                       真正在等的是后端把长连接建起来(`status === "connecting"`,轮到 online/error 才停)。 */}
+                  <IconButton loading={(restartBot.isPending && restartBot.variables === bot.id) || bot.status === "connecting"} onClick={() => restartBot.mutate(bot.id)} label={t("feishuRestart")}>
                     <RefreshCcw size={14} />
                   </IconButton>
                   <IconButton className="text-muted-foreground hover:text-destructive" loading={removeBot.isPending && removeBot.variables === bot.id} onClick={() => removeBot.mutate(bot.id)} label={t("feishuRemove")}>
@@ -393,7 +405,9 @@ function StatusBadge({ status }: { status: string }) {
           : "bg-secondary text-muted-foreground";
   return (
     <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-ui-2xs font-semibold ${tone}`}>
-      <i className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+      {/*: 连接中让那一点**呼吸**起来:光换个颜色,人分不清"正在连"和"停在这个状态" ——
+           而重启之后最要紧的就是"它在动"。 */}
+      <i className={`h-1.5 w-1.5 rounded-full bg-current${status === "connecting" ? " animate-pulse" : ""}`} aria-hidden />
       {label}
     </span>
   );
