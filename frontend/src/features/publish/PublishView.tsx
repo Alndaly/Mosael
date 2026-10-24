@@ -710,11 +710,12 @@ function CreatePublishDialog({
   const bodyMax = kindLimits.body_max ?? null;
   const maxItems = kindLimits.max_items ?? null;
   const needsImages = kind !== "video";
-  //: 这一条能不能提交:视频要一份素材;图文 / 文章要 1..max 张图;正文不超上限。
+  //: 这一条能不能提交:视频要一份素材;图文要 1..max 张图;**文章那一档素材是可选的** ——
+  //: 小红书长文的封面由平台自己生成,抖音文章则要一张(发的时候再拦,见适配器)。
   const assetCount = needsImages ? imageIds.length : assetId ? 1 : 0;
   const tooManyImages = maxItems !== null && imageIds.length > maxItems;
   const bodyTooLong = bodyMax !== null && [...body].length > bodyMax;
-  const assetsReady = assetCount > 0 && !tooManyImages;
+  const assetsReady = (assetCount > 0 || kind === "article") && !tooManyImages;
   // 超长的标题后端会拒(publishErr_titleTooLong):计数变红的同时就不让提交,别等点了再报错。
   // 按码点数,和后端的 len() 同一把尺 —— `.length` 数的是 UTF-16 单元,一个 emoji 算两个,会提前拦下。
   const titleLength = [...title.trim()].length;

@@ -183,7 +183,6 @@ def content_limits(platform: str, kind: str) -> dict[str, Any]:
 #: 它和 `content_kinds`(平台能发什么)是两件事:这里是**进度**,界面只列这里有的,不摆一个点了会
 #: 在真实页面上失败的选项。
 IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
-    "xiaohongshu": ("video", "image-text"),
     #: 抖音图文 2026-10-23 真机核对后接上:标题 20 字、描述 1000 字、≤35 张图(单图 ≤50MB,
     #: jpg/jpeg/png/webp,不支持 gif)。入口在投稿页的「发布图文」tab。
     "douyin": ("video", "image-text"),
@@ -194,6 +193,8 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     "tiktok": ("video", "image-text"),
     #: 视频号图文 2026-10-24 接上:「发表动态」页(表单在 `empty.html` 框架里),≤18 张图。
     "weixin-channels": ("video", "image-text"),
+    #: 小红书长文 2026-10-24 接上:列表页「新的创作」→ 标题 64 / 正文 tiptap → 一键排版 → 下一步。
+    "xiaohongshu": ("video", "image-text", "article"),
     #: B站专栏(article)2026-10-24 接上:编辑器在 `read-editor` 框架里,标题 50 / 正文 100000。
     #: 文章**没有素材**:它是一篇长文,封面可留空(平台自动截正文开头)。
     "bilibili": ("video", "article"),
@@ -262,7 +263,7 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "kinds": ("video", "image-text", "article"),
         "content": {
             "image-text": {"max_items": None},
-            "article": {"title_max": 50, "body_min": 200, "body_max": 100000},
+            "article": {"title_max": 50, "body_min": 200, "body_max": 100000, "max_items": 1},
         },
     },
     # TikTok 与 YouTube 都在境外:登录和上传都要能连上它们,通常得配好出站代理(管理 → 部署设置 /
@@ -295,7 +296,7 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
             "image-text": {"max_items": 4, "title_max": 70, "body_max": 260},
             #: 长文(Articles)2026-10-24 真机核对:编辑器标题 ≤100 字(`Add a title`),
             #: 正文是 DraftJS 富文本、页面不显示字数上限 —— 正文不设上限(不猜不拦)。
-            "article": {"title_max": 100},
+            "article": {"title_max": 100, "max_items": 1},
         },
     },
     "youtube": {
@@ -499,8 +500,9 @@ def start_publish(
             "publishErr_kindUnsupported", platform=meta["label"], kind=kind, supported=", ".join(declared)
         )
     #: 素材**只有一种形状**:一份列表。视频就是只装一份的那个列表(ADR 0076 之后没有第二种传法)。
-    #: 文章是**一篇长文**,没有素材(封面可留空,平台自己截正文开头);其余形状必须带素材。
-    items = [one for one in assets if one is not None] if kind != "article" else []
+    #: 文章是**一篇长文**:素材**可选**(0 或 1 张)—— 小红书长文的封面由平台自己生成,
+    #: 抖音文章则要一张(作头图 / 封面,发的时候在适配器里拦)。其余形状必须带素材。
+    items = [one for one in assets if one is not None] if kind != "article" else [one for one in assets if one is not None][:1]
     limits = content_limits(account.platform, kind)
     if not items:
         raise PublishDomainError("publishErr_noAssets", platform=meta["label"], kind=kind)
@@ -511,6 +513,8 @@ def start_publish(
         )
     if kind == "video" and len(items) != 1:
         raise PublishDomainError("publishErr_videoNeedsOneAsset", count=len(items))
+    if kind == "article" and len(items) > 1:
+        raise PublishDomainError("publishErr_articleTooManyAssets", count=len(items))
     for one in items:
         if not one.file_key:
             raise PublishDomainError("publishErr_assetNoFile")

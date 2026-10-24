@@ -407,6 +407,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{platform} 的{kind}最多 {max} 份素材(当前 {count} 份)",
         "en": "{platform} accepts at most {max} items for “{kind}” (this one has {count}).",
     },
+    "publishErr_articleTooManyAssets": {
+        "zh": "文章最多带一张图(用作封面 / 头图),现在给了 {count} 张。",
+        "en": "An article takes at most one image (the cover), but {count} were given.",
+    },
     "publishErr_videoNeedsOneAsset": {
         "zh": "视频发布只能带一份视频素材(当前 {count} 份)",
         "en": "A video post takes exactly one video asset (this one has {count}).",

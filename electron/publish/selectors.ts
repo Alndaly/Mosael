@@ -151,6 +151,15 @@ export const SELECTORS = {
     //: 真机成功页(维护者截图):大字「发布成功」+ 小字「0 秒后将返回发布页」,几秒后自己回发布页。
     //: 所以文案先于跳转出现 —— 判定要**先看文案**,别等它把页面换掉之后再去猜。
     publishDoneTexts: ["发布成功", "发布完成", "笔记发布成功", "提交成功", "后将返回发布页"], // i18n-ok
+    //: ---- 长文(写长文,2026-10-24 真机核对)----
+    //: 直连 `?target=article` 到的是"长文列表"页(新的创作 / 导入链接 / 合集),点「新的创作」
+    //: 才进编辑器:标题 `textarea[placeholder="输入标题"]`(≤64)、正文 tiptap、右下「暂存离开 /
+    //: 一键排版」。排版之后才有「下一步」→ 进到普通发布页(可见范围 / 原创声明 / 发布)。
+    articleNewText: "新的创作", // i18n-ok
+    articleTitle: 'textarea[placeholder="输入标题"]', // i18n-ok
+    articleEditor: ".tiptap.ProseMirror[contenteditable='true'], .tiptap.ProseMirror",
+    articleFormatText: "一键排版", // i18n-ok
+    articleNextText: "下一步", // i18n-ok
     //: **发出去之后落在哪**:笔记详情、笔记管理、创作者首页的笔记列表。三种都算成功(平台改版时
     //: 它在这三处之间换)。此前只看文案,于是「发出去了但停在管理页」会被当成没确认(2026-10-23)。
     //: **`published=true`**(真机 2026-10-23):发完之后小红书回到创作页时,地址里带着这个参数

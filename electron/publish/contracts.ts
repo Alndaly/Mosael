@@ -25,7 +25,13 @@ const XIAOHONGSHU: PlatformContract = {
       acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"],
       hint: xhs.dropHintByKind["image-text"],
     },
-    //: 「写长文」是另一套页面(要再点一次「新的创作」,而且编辑器没有文件上传),还没接。
+    //: 「写长文」是另一套页面:直连 `?target=article` 到列表页,点「新的创作」才进编辑器;
+    //: 没有文件上传(封面由平台按正文生成),排版 → 下一步 之后才进普通发布页。
+    article: {
+      url: `${resolvePlatform("xiaohongshu").publishUrl}?from=homepage&target=article`,
+      steps: [xhs.articleNewText],
+      acceptExtensions: [],
+    },
   },
   fileInput: { video: xhs.fileInput, "image-text": xhs.fileInput },
   submitText: xhs.submitText,
