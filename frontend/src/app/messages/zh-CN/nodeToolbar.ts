@@ -398,5 +398,7 @@ export const nodeToolbar = {
   feishuEditName: "名称",
   feishuEditSave: "保存并重连",
   feishuEditSecretPlaceholder: "留空 = 不修改",
+  feishuRemoveTitle: "删除这台机器人?",
+  feishuRemoveBody: "「{name}」的长连接会断开,它名下的账号绑定也一起删掉。飞书那边的应用不会被删,需要的话可以在开放平台自己处理。",
   feishuRemove: "删除",
 } as const;

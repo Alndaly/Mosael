@@ -6,6 +6,7 @@ import { KeyRound, Link2, Loader2, MessageSquare, Pencil, QrCode, RefreshCcw, Tr
 import { api, type Workspace } from "@/api/client";
 import { updateFeishuBot } from "@/api/domains/feishu";
 import { FailureCard } from "@/components/failure/FailureCard";
+import { ConfirmDialog } from "@/components/app/modals";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -152,8 +153,14 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
   });
   const removeBot = useMutation({
     mutationFn: (id: string) => api(`/api/feishu/bots/${id}`, { method: "DELETE" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
+    onSuccess: () => {
+      setRemoving(null);
+      void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] });
+    },
   });
+  //: **删机器人是破坏性的**(长连接断、名下绑定一起走),点一下就删是这一页唯一没有确认的地方 ——
+  //: 而这一页别的删除(记忆、技能)都走 `ConfirmDialog`(维护者 2026-10-24)。
+  const [removing, setRemoving] = React.useState<FeishuBot | null>(null);
 
   // Account binding: the bot acts with the bound member's permissions, so a Feishu user
   // must bind first. Member issues a code, then DMs it to the bot.
@@ -283,7 +290,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                   <IconButton loading={(restartBot.isPending && restartBot.variables === bot.id) || bot.status === "connecting"} onClick={() => restartBot.mutate(bot.id)} label={t("feishuRestart")}>
                     <RefreshCcw size={14} />
                   </IconButton>
-                  <IconButton className="text-muted-foreground hover:text-destructive" loading={removeBot.isPending && removeBot.variables === bot.id} onClick={() => removeBot.mutate(bot.id)} label={t("feishuRemove")}>
+                  {/*: 删除是**危险动作**,颜色不能淡成和旁边两个一样:`text-muted-foreground` 看起来
+                       只是"又一个图标",点下去却是不可撤销的(维护者 2026-10-24)。 */}
+                  <IconButton className="text-destructive/75 hover:text-destructive" onClick={() => setRemoving(bot)} label={t("feishuRemove")}>
                     <Trash2 size={14} />
                   </IconButton>
                 </div>
@@ -331,6 +340,16 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
           </div>
         </div>
       </ModalShell>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={t("feishuRemoveTitle")}
+        body={t("feishuRemoveBody").replace("{name}", removing?.name ?? "")}
+        confirmLabel={t("feishuRemove")}
+        pending={removeBot.isPending}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => removing && removeBot.mutate(removing.id)}
+      />
 
       <ModalShell
         open={editing !== null}

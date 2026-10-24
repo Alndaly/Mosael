@@ -391,5 +391,7 @@ export const nodeToolbar = {
   feishuEditName: "Name",
   feishuEditSave: "Save and reconnect",
   feishuEditSecretPlaceholder: "Leave empty to keep the current one",
+  feishuRemoveTitle: "Delete this bot?",
+  feishuRemoveBody: "“{name}”'s long connection will disconnect and its account bindings go with it. The app itself stays in the Feishu console — remove it there if you want it gone.",
   feishuRemove: "Remove",
 } as const;
