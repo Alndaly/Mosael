@@ -1,5 +1,21 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v2.2.0": {
+    zh: [
+      "**发布矩阵补上图文与长文。** 抖音图文 / 文章、小红书图文 / 长文、X 图文 / 长文、TikTok 图文、B 站专栏、视频号图文都接上了；发布页和工作流的发布节点共用同一套「内容类型 + 素材 + 正文 + 平台选项」，封面要不要给由平台声明(required / optional / none)，而不是写死在表单里。七家平台的入口、成功信号和真机核对过的上限收进站点契约，每天用不登录的浏览器冒烟一次。",
+      "**首页并进剪辑页，项目只有一个入口。** 没有选中项目时「剪辑」就是项目浏览器，选中后才进入时间线；从别的 tab 回来仍是刚才那条时间线，顶栏面包屑的「剪辑」才回项目列表。新建项目统一建完直接打开，不再一处留在原地、一处跳走；项目被删后也不会静默换成另一个。AI Studio 移到剪辑上方，并有一条分组线。",
+      "**说话输入有实时音量。** 录音时那颗胶囊旁多一条三格电平：麦克风选错、静音、离太远、系统输入为 0，不用录完再猜；按 dB 映射、上升立刻跟上、间隙缓降。",
+      "**Computer Use 去掉一条永远走不通的分支。** 不存在的「publish 发布器窗口」从契约、主进程、后端到测试整个删掉，同时修掉渲染层截图接线里漏改的旧签名。内嵌网页仍走 `browser_screenshot`；ADR 0075 改为决定书，L2 / L3 与全量回放另列 ADR 0081，未实现的部分不冒充已交付。",
+      "**飞书与界面收尾。** 机器人可编辑、删除先确认、重启立即进入「连接中」并转圈；打包版长连接不再走不存在的 `python -m`，凭据解不开时说清要重填 App Secret。深色阴影改成大模糊低 alpha，图片加载失败各处都有兜底；发布列表、字段皮肤和文档同步到同一版。",
+    ],
+    en: [
+      "**Publishing gains image-text and long-form posts.** Douyin image-text and articles, Xiaohongshu image-text and long-form, X image-text and Articles, TikTok photo carousels, Bilibili columns and WeChat Channels posts are all wired. The publish page and the workflow publish node share one content-kind + assets + body + options form, and whether a cover is required is declared per platform (required / optional / none) instead of hard-coded in the form. Site contracts now carry entry points, success signals and real-machine-verified limits, with a daily unauthenticated smoke run.",
+      "**Home is folded into the editor, leaving one project entry.** With no project selected the Editor page is the project browser; selecting one opens the timeline, and returning from another tab brings back that same timeline. The Editor breadcrumb is what takes you back to the project list. Creating a project opens it immediately, and deleting one no longer silently drops you into a different project. AI Studio moves above Editor with a divider.",
+      "**Live input level while recording.** A three-segment meter sits next to the recording capsule: a wrong microphone, mute, distance or a zeroed system input no longer looks identical to a good take. Levels map by dB, rise immediately and decay slowly in the gaps.",
+      "**Computer Use loses an impossible window.** The non-existent `publish` publisher window is removed from the contract, main process, backend and tests, and the old-signature call left behind in the renderer screenshot path is fixed too. Embedded pages still use `browser_screenshot`; ADR 0075 is now a decision record, with L2 / L3 and full replay moved to ADR 0081 — unimplemented parts are not presented as shipped.",
+      "**Feishu and polish.** Bots can be edited, deletion asks first, and restart shows “connecting” with a spinner immediately. The packaged long-connection worker no longer invokes `python -m`, and an undecryptable secret tells you to re-enter the App Secret. Dark-mode shadows are now large-blur, low-alpha, and broken images have fallbacks everywhere; the publish list, field skins and documentation are synced to this release.",
+    ],
+  },
   "v2.1.1": {
     zh: [
       "**录屏幕时也能同步录麦克风。** 屏幕那一档多一个「麦克风」开关(默认关、记住选择):打开后系统声音和你的解说会混成一条音轨。此前只能二选一——要么录系统声音,要么切到「麦克风」只录人声,讲课时两样都要。麦克风取不到时只降级成「没有解说」,录屏照常进行。",

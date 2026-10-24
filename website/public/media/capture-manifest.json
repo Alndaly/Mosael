@@ -4,21 +4,21 @@
       "scene": "home",
       "locale": "zh",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 649638,
-      "sha256": "73e7575f74129143fe5bbd153c506b3465cba0a71d67ac74a3d8afc658384837"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 654317,
+      "sha256": "f2416d3a702e90bb0bb4ce27dc0865a535a18261962cfd57620173da9757a6da"
     },
     "videos/dark/home.mp4": {
       "scene": "home",
       "locale": "zh",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 249433,
-      "sha256": "dbc68406c762c0c22e4a51c790522ceb7207393abb01c0b587bf7fcedd10a35a"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 254249,
+      "sha256": "c298fb177159f7fd8032bec4e818f414df0d42df8b5bf77f195e158c35e3e298"
     },
     "screens/dark/media.png": {
       "scene": "media-preview",
@@ -464,21 +464,21 @@
       "scene": "home",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 645242,
-      "sha256": "d1cd9c38709c4fb413c31c9c6c8baae941e58fce6dd74024724b49406ca23a2f"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 645188,
+      "sha256": "f29116a330c8113f16e4d07bf8dd0827df83419a1fdf738f484e08a05ac4a3a4"
     },
     "videos/home.mp4": {
       "scene": "home",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 249885,
-      "sha256": "b74f72918d6f051ddc8052cace8e8d720fc3b2067776309568a630f3fc713abc"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 252196,
+      "sha256": "809afedf1f1c364300e1c35380e80a04007a860e21d127c9bf52c956ebb49a5b"
     },
     "screens/media.png": {
       "scene": "media-preview",
@@ -924,21 +924,21 @@
       "scene": "home",
       "locale": "en",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 654216,
-      "sha256": "209e8d20c8f1732c80b5568a325a08f5a32e6a981c37e92299aee25c86e6ab0f"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 655057,
+      "sha256": "b89867dc2920aba1321f8793e2938b9cac8ec46793505f06c3e1b0a899665b75"
     },
     "videos/en/home.mp4": {
       "scene": "home",
       "locale": "en",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 259284,
-      "sha256": "24ca5bb5065b0102e51bad9ab900c3766faaa3922b5e7d78fffce5495142481c"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 274663,
+      "sha256": "a0474951503f4d5c927cee15f6bd6e68235bae1220e91c05867fd0ed18b25c23"
     },
     "screens/en/media.png": {
       "scene": "media-preview",
@@ -1564,21 +1564,21 @@
       "scene": "home",
       "locale": "en",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 657688,
-      "sha256": "26d610da5cd0636fc1a3368d7e7046f62de34027b9a058876c53da362732bcdb"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 654396,
+      "sha256": "6fca4eb87f3b30891f0c37d561ff958802c34be5d9277e94fc29c8ccb7cb274f"
     },
     "videos/en/dark/home.mp4": {
       "scene": "home",
       "locale": "en",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 276974,
-      "sha256": "9252d9e73ed2c70b893a47e63e3f8dcdac8bb5008ac4a27ba08c96b2f1904a8e"
+      "version": "2.2.0",
+      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+      "bytes": 258350,
+      "sha256": "bd331e269c4c59fd030d8c7cf8d8362565a17b61f7f559cf6dd5cf07c0648f9b"
     },
     "screens/en/dark/media.png": {
       "scene": "media-preview",
@@ -5663,14 +5663,14 @@
       "sha256": "7af50ef2dab2eebc5f65bee2eec20a0ee0ee024a7422d3ecd99c951db57a7261"
     }
   },
-  "version": "1.8.3",
-  "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-  "capturedAt": "2026-10-05T03:33:06.494423+00:00",
+  "version": "2.2.0",
+  "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
+  "capturedAt": "2026-10-24T17:11:12.126881+00:00",
   "viewport": {
     "width": 1440,
     "height": 900
   },
   "note": "Live interface captures from an isolated demo backend seeded by website/scripts/seed-doc-demo.py. Licensed sample footage and manually prepared editing exercise; no simulated AI replies, tool successes or publishing successes.",
-  "documentedVersion": "2.1.1",
+  "documentedVersion": "2.2.0",
   "postprocess": "PNG screenshots are quantized with pngquant --quality=80-100 --speed 1 --skip-if-larger --strip (resolution unchanged); bytes and sha256 describe the quantized files. Moving demos are MP4 only."
 }

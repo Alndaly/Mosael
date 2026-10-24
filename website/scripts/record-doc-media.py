@@ -189,9 +189,9 @@ def home(c: Capture) -> None:
     c.goto("home")
     c.shot("home")
     c.begin()
-    c.click("全部项目")
+    c.tab("全部项目").click()
     c.hold()
-    c.click("最近编辑")
+    c.tab("最近编辑").click()
     c.page.get_by_role("button", name=re.compile(re.escape(c.T["project"]))).first.click()
     c.hold(2200)
 
