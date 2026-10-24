@@ -74,8 +74,11 @@ def test_image_limits_match_the_verified_platform_contract() -> None:
 
 
 def test_a_platform_that_has_no_article_shape_says_so() -> None:
-    """文章形态是按平台真机核过的:X 的 Articles 入口还没找到,就不声明。"""
-    assert "article" not in content_kinds("x")
+    """文章形态是按平台真机核过的。
+
+    X 的 Articles 入口 2026-10-24 找到了(`x.com/compose/articles` 的「Write」新建草稿),
+    所以现在**声明** article;YouTube 仍然没有(Studio 里没有社区帖 / 长文入口)。"""
+    assert "article" in content_kinds("x")  # Articles:编辑端点「Write」新建
     assert "article" not in content_kinds("youtube")
     assert "article" in content_kinds("xiaohongshu")  # 写长文(标题 64)
     assert "article" in content_kinds("douyin")  # 发布文章(正文 20000)

@@ -115,11 +115,18 @@ export const PUBLISH_CONTRACTS: Record<SupportedPlatform, PlatformContract> = {
       video: { url: resolvePlatform("x").publishUrl },
       //: 图文和视频是**同一个撰写页、同一个文件框**(X 的文件框图片与视频一起收)。
       "image-text": { url: resolvePlatform("x").publishUrl, acceptExtensions: [".jpg", ".jpeg", ".png", ".webp"] },
+      //: 长文(Articles):入口是文章列表页,点「Write」才新建草稿 —— 没有"直连新文章"的地址。
+      article: { url: SELECTORS.x.articleListUrl, steps: [SELECTORS.x.articleWriteText] },
     },
     fileInput: { video: SELECTORS.x.fileInput, "image-text": SELECTORS.x.fileInput },
     submitText: SELECTORS.x.postTexts[0],
     //: X 发完把人送回首页:地址 + 撰写组件消失 —— 两道都要(TikTok 那课的同一道闸)。
-    done: { urls: [/x\.com\/home/], texts: SELECTORS.x.publishDoneTexts, formGone: SELECTORS.x.textEditor },
+    //: 长文与帖子不是同一个终态:长文发完停在文章页 / 列表页,编辑页(`…/articles/edit/…`)消失。
+    done: {
+      urls: [/x\.com\/home/, /\/articles(\?|$)/],
+      texts: [...SELECTORS.x.publishDoneTexts, ...SELECTORS.x.articleDoneTexts],
+      formGone: SELECTORS.x.textEditor,
+    },
     overlays: [],
   },
   mock: {

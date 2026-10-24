@@ -188,7 +188,8 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     #: jpg/jpeg/png/webp,不支持 gif)。入口在投稿页的「发布图文」tab。
     "douyin": ("video", "image-text"),
     #: X 图文 2026-10-24 接上:≤4 张图,正文一栏(标题并进正文)。见 PUBLISH_PLATFORMS["x"]。
-    "x": ("video", "image-text"),
+    #: X 长文(Articles)2026-10-24 接上:文章列表页点「Write」新建草稿,标题 ≤100。
+    "x": ("video", "image-text", "article"),
     #: TikTok 图文(carousel)2026-10-24 接上:投稿页有「照片」档(`?tab=photo`),≤35 张图。
     "tiktok": ("video", "image-text"),
     #: 视频号图文 2026-10-24 接上:「发表动态」页(表单在 `empty.html` 框架里),≤18 张图。
@@ -289,8 +290,13 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         # 帖子:≤280 字、1–4 张图;长文(Articles)入口待真机,先不声明 article。
         # 图文 2026-10-24 真机核对:撰写页的同一个文件框收图片(可多选),正文一栏装
         # 「标题 + 空行 + 正文」—— 所以我们把标题并进正文一起发。
-        "kinds": ("video", "image-text"),
-        "content": {"image-text": {"max_items": 4, "title_max": 70, "body_max": 260}},
+        "kinds": ("video", "image-text", "article"),
+        "content": {
+            "image-text": {"max_items": 4, "title_max": 70, "body_max": 260},
+            #: 长文(Articles)2026-10-24 真机核对:编辑器标题 ≤100 字(`Add a title`),
+            #: 正文是 DraftJS 富文本、页面不显示字数上限 —— 正文不设上限(不猜不拦)。
+            "article": {"title_max": 100},
+        },
     },
     "youtube": {
         "label": "YouTube",

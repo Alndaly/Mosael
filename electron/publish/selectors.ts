@@ -353,6 +353,17 @@ export const SELECTORS = {
     // 首访/久未登录会挂 onboarding、换语言等模态,挡真实点击 —— 逐条试关。
     dismissTexts: ["Got it", "知道了", "Continue", "继续", "Not now", "暂不", "Skip for now", "暂时跳过", "Maybe later", "稍后"], // i18n-ok
     postTexts: ["Post", "发布", "发帖"], // i18n-ok
+    //: ---- 长文(Articles,2026-10-24 真机核对)----
+    //: 入口是 `x.com/compose/articles` 的列表页,点「Write」才**新建一篇草稿**并跳到
+    //: `/compose/articles/edit/<id>`;编辑器里:标题 `textarea[placeholder="Add a title"]`(≤100)、
+    //: 正文 DraftJS contenteditable、封面走一个 file input;右上「Publish」。
+    articleListUrl: "https://x.com/compose/articles",
+    articleWriteText: "Write", // i18n-ok
+    articleTitle: 'textarea[placeholder="Add a title"]', // i18n-ok
+    articleEditor: ".public-DraftEditor-content[contenteditable='true'], .public-DraftEditor-content",
+    articlePublishText: "Publish", // i18n-ok
+    articleEditUrl: /\/compose\/articles\/edit\//,
+    articleDoneTexts: ["Your article has been published", "Article published", "Your Article is live"], // i18n-ok
     // 未登录:左边栏是「登录」而不是账号头像切换钮;登录流程也会把人直接送到 /i/flow/login。
     loggedOutMarks: '[data-testid="loginButton"], a[href="/i/flow/login"]',
     loggedOutTexts: ["Sign in to X", "登录 X", "Join X", "加入 X", "Create your account", "创建你的账号"], // i18n-ok

@@ -36,7 +36,7 @@ export class XAdapter implements PublishAdapter {
   }
   /** 已接的形状(ADR 0076)。 */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
-  static readonly KINDS = ["video", "image-text"] as const;
+  static readonly KINDS = ["video", "image-text", "article"] as const;
   readonly supports = XAdapter.KINDS;
   private readonly s = SELECTORS.x;
   /** 页面契约:入口 / 提交 / 成功信号都从这儿来。 */
@@ -48,7 +48,29 @@ export class XAdapter implements PublishAdapter {
     private readonly task: PublishTask,
   ) {}
 
+  private get isArticle(): boolean {
+    return this.task.contentKind === "article";
+  }
+
   async openCreatorPage(): Promise<void> {
+    if (this.isArticle) {
+      //: 长文没有"直连新文章"的地址:先进文章列表页,点「Write」由平台**新建一篇草稿**
+      //: (地址随后变成 `/compose/articles/edit/<id>`)。
+      await this.driver.goto(this.entryUrl());
+      await clickTextPreferTrusted(this.driver, this.s.articleWriteText, { exact: true });
+      const ready = await this.driver
+        .waitForFunction(
+          `(() => Boolean(document.querySelector(${JSON.stringify(this.s.articleTitle)})))()`,
+          20_000,
+          250,
+        )
+        .catch(() => false);
+      if (!ready) {
+        await plogPageState("X article editor missing:", this.driver);
+        throw publishError("x", "publishErr_editorMissing");
+      }
+      return;
+    }
     await this.driver.goto(this.entryUrl());
     // 撰写组件是 SPA 路由;持久视图复用同一个 WebContents,上一次发完停在首页,直接 goto
     // 同站另一路由未必重挂组件。没探到正文框就断开再回来(同 B 站/TikTok 那一课)。
@@ -168,6 +190,14 @@ export class XAdapter implements PublishAdapter {
   }
 
   async fillTitle(title: string): Promise<void> {
+    if (this.isArticle) {
+      const value = title.slice(0, 100);
+      await this.driver.cssVisible(this.s.articleTitle, ACTION_TIMEOUT);
+      await this.driver.fillField(this.s.articleTitle, value);
+      const current = await this.driver.cssValue(this.s.articleTitle);
+      if (!current?.includes(value)) throw publishError("x", "publishErr_titleRejected");
+      return;
+    }
     //: **图文**:标题和正文要写成同一条帖子,由 `fillBody` 一次写入;这里什么都不做
     //: (X 只有一个文本框,分两次写就是后一次覆盖前一次)。
     if (this.task.contentKind === "image-text") return;
@@ -193,6 +223,19 @@ export class XAdapter implements PublishAdapter {
   async fillBody(body: string): Promise<void> {
     const value = body.trim();
     if (!value) return;
+    if (this.isArticle) {
+      await this.driver.cssVisible(this.s.articleEditor, ACTION_TIMEOUT);
+      await this.driver.focusAndClearField(this.s.articleEditor);
+      await this.driver.insertTextLines(this.s.articleEditor, value);
+      await wait(500);
+      const actual = ((await this.driver.cssValue(this.s.articleEditor)) ?? "").trim();
+      //: 判定按"开头那段字在不在"(DraftJS 按段落重排,行内空白不是问题;整段缺失才是)。
+      if (!actual.replace(/\s+/g, "").includes(value.replace(/\s+/g, "").slice(0, 40))) {
+        await plogPageState("X article body mismatch:", this.driver);
+        throw publishError("x", "publishErr_descriptionRejected");
+      }
+      return;
+    }
     const title = this.task.title.trim();
     const text = title ? `${title}\n\n${value}` : value;
     await this.driver.cssVisible(this.s.textEditor, ACTION_TIMEOUT);
@@ -210,6 +253,17 @@ export class XAdapter implements PublishAdapter {
     if (tags.length === 0) {
       return;
     }
+    if (this.isArticle) {
+      //: 长文的标签同样是正文里的 #hashtag(没有独立标签栏)。
+      for (const tag of tags) {
+        const clean = tag.replace(/^#/, "").trim();
+        if (!clean) continue;
+        await this.driver.focusEnd(this.s.articleEditor);
+        await this.driver.insertText(this.s.articleEditor, ` ${clean}`);
+        await wait(300);
+      }
+      return;
+    }
     // 话题写进正文末尾:X 的 #hashtag 本来就是正文的一部分,没有独立标签框。
     await this.driver.focusEnd(this.s.textEditor);
     for (const tag of tags) {
@@ -221,6 +275,37 @@ export class XAdapter implements PublishAdapter {
   }
 
   async submit(): Promise<void> {
+    if (this.isArticle) {
+      //: 长文的「Publish」在编辑器右上。**发布后不可逆**,所以只点一次;若平台弹出一层
+      //: 确认(内容摘要 + 再点一次 Publish),那也算同一次提交的一部分。
+      const clicked = await clickTextPreferTrusted(this.driver, this.s.articlePublishText, { exact: true })
+        .then(() => true)
+        .catch(() => false);
+      if (!clicked) {
+        await plogPageState("X article publish button missing:", this.driver);
+        throw publishError("x", "publishErr_submitDisabled");
+      }
+      //: 有的版本发完会再弹一层确认(`role=dialog` 里的第二颗 Publish)。**只在弹层里找**:
+      //: 在整页里找会有两个问题 —— 一是可能又点到右上那颗(重复提交),二是有些版本把按钮
+      //: 留在 DOM 里但已禁用,点了也没反应却记成"点过"。
+      await wait(1_200);
+      const confirmed = await this.driver
+        .evaluate<boolean>(`(() => {
+          const dialogs = [...document.querySelectorAll('[role="dialog"], [data-testid="sheetDialog"]')];
+          for (const dialog of dialogs) {
+            const again = [...dialog.querySelectorAll('button, [role=button]')]
+              .find((one) => (one.textContent || '').trim() === ${JSON.stringify(this.s.articlePublishText)});
+            if (again) {
+              again.click();
+              return true;
+            }
+          }
+          return false;
+        })()`)
+        .catch(() => false);
+      plog("x article submit: confirm dialog", confirmed);
+      return;
+    }
     // X 的发帖钮在媒体处理完、正文非空时才可用;不可用就等它可用,而不是绕过去硬点
     // (设不上就不许发 —— 自动发布误发公开是收不回的,和别家同一规矩)。
     if (!(await this.driver.waitCssEnabled(this.s.postButton, ACTION_TIMEOUT).catch(() => false))) {
@@ -239,6 +324,26 @@ export class XAdapter implements PublishAdapter {
   }
 
   async waitResult(): Promise<void> {
+    if (this.isArticle) {
+      //: 长文发完:编辑页(`…/articles/edit/<id>`)消失 —— 地址变了,或标题框没了。
+      //: 只看地址不够(列表页与编辑页只差一段路径),所以再等真正的成功文案/落地页。
+      const deadline = Date.now() + RESULT_TIMEOUT;
+      while (Date.now() < deadline) {
+        const state = await this.driver
+          .evaluate<{ url: string; editor: boolean }>(`(() => ({
+            url: location.href,
+            editor: Boolean(document.querySelector(${JSON.stringify(this.s.articleTitle)})),
+          }))()`)
+          .catch(() => null);
+        if (state && !state.editor) {
+          plog("x article waitResult:", { url: state.url });
+          return;
+        }
+        await wait(1_000);
+      }
+      await plogPageState("X article waitResult failed:", this.driver);
+      throw publishError("x", "publishErr_notConfirmed");
+    }
     //: 判据在契约里:地址回到首页 **或**「已发送」toast;两者都要过"撰写组件已经消失"这道闸
     //: (X 发完把人送回首页,而 "Post" 这类词在按钮上本来就写着)。
     const outcome = await awaitResult(this.driver, this.c.done, { timeout: RESULT_TIMEOUT });
