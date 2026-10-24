@@ -15,9 +15,10 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core import interpreter
+from app.core.i18n import tr
 from app.core.child_process import popen_text
 from app.core.db import SessionLocal
 from app.db.models import FeishuBot
@@ -171,6 +172,17 @@ def start_connection(bot_id: str) -> None:
         if bot is None:
             raise LookupError(bot_id)
         credentials = {"app_id": bot.app_id, "app_secret": bot.app_secret}
+        #: **凭据解不开就别起进程**:`EncryptedText` 解不出来时给的是空串,子进程只看到"没有凭据",
+        #: 于是 exit 2 —— 设置页上只剩「长连接进程退出(code 2)」,而该做的动作(重填 Secret)一个字没说。
+        #: 这里按"盘上有没有密文"分成两种说法:有密文 = 解不开(主密钥换了),没密文 = 从未填过。
+        if not credentials["app_secret"]:
+            stored = db.execute(
+                text("SELECT app_secret FROM feishu_bots WHERE id = :id"), {"id": bot_id},
+            ).scalar()
+            detail = tr("feishuErr_secretUnreadable" if stored else "feishuErr_secretMissing")
+            logger.warning("feishu[%s] credentials unusable: %s", bot_id, detail)
+            bots.write_status(bot_id, "error", detail)
+            return
     with _process_lock:
         existing = _processes.get(bot_id)
         if existing is not None and existing.process.poll() is None:

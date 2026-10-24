@@ -34,3 +34,42 @@ def test_管理命令认得_feishu_worker() -> None:
     from app import cli
 
     assert "feishu-worker" in cli.COMMANDS
+
+
+def test_凭据解不开时不拉进程_而是说清该重填(monkeypatch) -> None:
+    """`EncryptedText` 解不出来给的是空串;子进程只看到"没有凭据"→ exit 2,
+    设置页上就只剩「长连接进程退出(code 2)」,该做的动作一个字没说。"""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.core import secrets_at_rest
+    from app.db.models import Base, FeishuBot
+    from app.domain.feishu import bots
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+
+    written: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(connections, "SessionLocal", Session)
+    monkeypatch.setattr(bots, "write_status", lambda bot_id, status, detail="": written.append((bot_id, status, detail)))
+
+    with Session() as db:
+        db.add(
+            FeishuBot(id="bot-1", workspace_id="ws-1", name="助手", app_id="cli_x", app_secret="s3cret")
+        )
+        db.commit()
+
+    #: 模拟"主密钥换了":盘上有密文(`EncryptedText` 写进去就加密),但解不开 → 读出来是空串。
+    monkeypatch.setattr(secrets_at_rest, "decrypt", lambda _value: None)
+
+    def _fail(*_args, **_kwargs):
+        raise AssertionError("凭据不可用时不该起子进程")
+
+    monkeypatch.setattr(connections, "popen_text", _fail)
+    monkeypatch.setattr(connections.interpreter, "is_frozen", lambda: False)
+
+    connections.start_connection("bot-1")
+
+    assert written and written[0][1] == "error"
+    assert "App Secret" in written[0][2] or "App Secret" in str(written[0][2])

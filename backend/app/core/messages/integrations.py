@@ -30,6 +30,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "飞书未返回 device_code,扫码创建暂不可用,请手动创建应用。",
         "en": "Feishu didn't return a device_code, so QR creation is unavailable for now. Create the app by hand.",
     },
+    #: 落盘的那份 App Secret **解不开**(主密钥换了 / 数据目录搬过家)。解出来是空串,
+    #: 长连接子进程只看到"没有凭据"、于是 exit 2 —— 设置页上就只剩「长连接进程退出(code 2)」,
+    #: 真正的动作(把 Secret 重填一次)完全没说出来(2026-10-24 真机)。
+    "feishuErr_secretUnreadable": {
+        "zh": "App Secret 解不开:这台电脑的主密钥换了或丢了(数据目录搬过家也会这样)。在「飞书机器人 → 编辑」里把 App Secret 重填一次即可恢复。",
+        "en": "The App Secret can't be decrypted: this machine's master key changed or was lost (moving the data directory does this too). Re-enter the App Secret under “Feishu bot → Edit” to recover.",
+    },
+    "feishuErr_secretMissing": {
+        "zh": "还缺 App Secret —— 在「飞书机器人 → 编辑」里填上,长连接才连得起来。",
+        "en": "The App Secret is missing — fill it in under “Feishu bot → Edit” so the long connection can start.",
+    },
     "feishuErr_sendCard": {
         "zh": "飞书发卡片失败: {detail}",
         "en": "Couldn't send the Feishu card: {detail}",
