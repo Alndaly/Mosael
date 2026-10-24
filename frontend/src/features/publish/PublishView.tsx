@@ -71,6 +71,24 @@ const KIND_LABEL_KEY: Partial<Record<string, MessageKey>> = {
   article: "publishKind_article",
 };
 
+/**
+ * 素材那一格的标题:**跟着内容类型走**。
+ *
+ * 视频那格是"成片"(它确实是剪出来的片子);图文那格只是图片;文章那格是封面 ——
+ * 一个"成片素材"套在图文/文章上,会让人以为这些形状也得先从剪辑器导一条片子出来
+ * (维护者 2026-10-24:「对于图文类型单纯是素材吧,也没有成片的说法」)。
+ */
+export const ASSET_LABEL_KEY: Record<string, MessageKey> = {
+  video: "publishAssetVideo",
+  "image-text": "publishAssetImages",
+  article: "publishAssetCover",
+};
+
+function assetLabelKey(kind: string): MessageKey {
+  //: 表里没有的形状按文章那格处理(封面):它至少不会把"成片"安到图片上。
+  return ASSET_LABEL_KEY[kind] ?? "publishAssetCover";
+}
+
 const kindLabel = (kind: string | undefined): string | null =>
   kind ? (KIND_LABEL_KEY[kind] ?? null) : null;
 
@@ -884,7 +902,9 @@ function CreatePublishDialog({
           </div>
         )}
         <div className="grid gap-2">
-          <span className="text-ui-sm font-medium text-foreground">{t("publishAsset")}</span>
+          {/*: 标签跟着内容类型走:**视频那格是"成片",图文那格只是图片,文章那格是封面** ——
+               一个"成片素材"套在图文/文章上,会让人以为必须先从剪辑器导出一条片子。 */}
+          <span className="text-ui-sm font-medium text-foreground">{t(assetLabelKey(kind))}</span>
           {!needsImages && (
             //: **点开弹窗挑一份**(和图文那格的素材弹窗同一个控件):就地展开的下拉会把几十份成片
             //: 的名字排成一列,既难认也和应用里"挑素材"的样子不一样(维护者 2026-10-23)。
@@ -917,6 +937,9 @@ function CreatePublishDialog({
                 );
               }}
             />
+          )}
+          {kind === "article" && (
+            <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishAssetCoverHint")}</small>
           )}
           {!needsImages && videos.isSuccess && videos.total === 0 && !videos.query && (
             <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("publishNoVideos")}</small>
