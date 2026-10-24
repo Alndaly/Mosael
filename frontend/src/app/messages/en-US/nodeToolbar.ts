@@ -386,5 +386,10 @@ export const nodeToolbar = {
   feishuBindHint: "The bot acts with the bound member's permissions. Send this code to the bot from Feishu to bind (valid 10 min). Unbound users can't use it.",
   feishuBindMembers: "Bound Feishu users",
   feishuBindNobody: "Nobody bound yet",
+  feishuEdit: "Edit bot",
+  feishuEditHint: "Saving reconnects this long connection. If you moved machines or the master key changed (old ciphertext can no longer be read), re-enter the App Secret here to recover.",
+  feishuEditName: "Name",
+  feishuEditSave: "Save and reconnect",
+  feishuEditSecretPlaceholder: "Leave empty to keep the current one",
   feishuRemove: "Remove",
 } as const;

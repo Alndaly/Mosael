@@ -37227,6 +37227,30 @@
               }
             ],
             "title": "Enabled"
+          },
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "app_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 400
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Secret"
           }
         },
         "type": "object",

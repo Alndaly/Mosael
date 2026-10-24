@@ -1,9 +1,11 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { KeyRound, Link2, Loader2, MessageSquare, QrCode, RefreshCcw, Trash2 } from "lucide-react";
+import { KeyRound, Link2, Loader2, MessageSquare, Pencil, QrCode, RefreshCcw, Trash2 } from "lucide-react";
 
 import { api, type Workspace } from "@/api/client";
+import { updateFeishuBot } from "@/api/domains/feishu";
+import { FailureCard } from "@/components/failure/FailureCard";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -113,6 +115,27 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       api<FeishuBot>(`/api/feishu/bots/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] }),
   });
+  //: 编辑:名称 / App ID / App Secret。**此前没有这个入口** —— 而"主密钥换过之后旧密文解不开"唯一的
+  //: 出路就是重填一次(2026-10-24:设置页只能看着「长连接进程退出」而没有地方改)。
+  const [editing, setEditing] = React.useState<FeishuBot | null>(null);
+  const [editName, setEditName] = React.useState("");
+  const [editAppId, setEditAppId] = React.useState("");
+  const [editSecret, setEditSecret] = React.useState("");
+  const openEdit = (bot: FeishuBot) => {
+    setEditing(bot);
+    setEditName(bot.name);
+    setEditAppId(bot.app_id);
+    setEditSecret("");
+  };
+  const saveEdit = useMutation({
+    //: 接口住 `api/domains/feishu`(design/apiSeam:界面里不新增 `/api/` 字面量)。
+    mutationFn: (body: Parameters<typeof updateFeishuBot>[1]) => updateFeishuBot(editing?.id ?? "", body),
+    onSuccess: () => {
+      setEditing(null);
+      void qc.invalidateQueries({ queryKey: ["feishu-bots", workspace.id] });
+    },
+  });
+
   const restartBot = useMutation({
     mutationFn: (id: string) => api<FeishuBot>(`/api/feishu/bots/${id}/restart`, { method: "POST" }),
     //: **点了就有反应**:后端重启一条连接是"立刻受理、后台去连",接口很快就返回;而这一页是每 4 秒
@@ -249,6 +272,9 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
                     </SelectContent>
                   </Select>
                   <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+                  <IconButton data-feishu-edit="" onClick={() => openEdit(bot)} label={t("feishuEdit")}>
+                    <Pencil size={14} />
+                  </IconButton>
                   <IconButton loading={issueCode.isPending && issueCode.variables === bot.id} onClick={() => issueCode.mutate(bot.id)} label={t("feishuBind")}>
                     <Link2 size={14} />
                   </IconButton>
@@ -303,6 +329,57 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
               {onboarding.data?.user_code ? ` · ${onboarding.data.user_code}` : ""}
             </p>
           </div>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={editing !== null}
+        onOpenChange={(next) => !next && setEditing(null)}
+        title={t("feishuEdit")}
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>{t("cancel")}</Button>
+            <Button
+              size="sm"
+              //: 名称 / App ID 不能空;Secret **留空 = 不改**(它不回显,也就没有"原值"可填)。
+              disabled={!editName.trim() || !editAppId.trim()}
+              loading={saveEdit.isPending}
+              onClick={() =>
+                saveEdit.mutate({
+                  name: editName.trim(),
+                  app_id: editAppId.trim(),
+                  ...(editSecret.trim() ? { app_secret: editSecret.trim() } : {}),
+                })
+              }
+            >
+              {t("feishuEditSave")}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <p className="text-ui-md text-muted-foreground">{t("feishuEditHint")}</p>
+          <div className="grid gap-1.5">
+            <label className="text-ui-sm font-medium text-foreground">{t("feishuEditName")}</label>
+            <Input value={editName} onChange={(event) => setEditName(event.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <label className="text-ui-sm font-medium text-foreground">{t("feishuAppId")}</label>
+            <Input value={editAppId} onChange={(event) => setEditAppId(event.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <label className="text-ui-sm font-medium text-foreground">{t("feishuAppSecret")}</label>
+            <Input
+              type="password"
+              placeholder={t("feishuEditSecretPlaceholder")}
+              value={editSecret}
+              onChange={(event) => setEditSecret(event.target.value)}
+            />
+          </div>
+          {saveEdit.isError && (
+            //: 失败展示走共用件(design/failureDisplays:不许手写)。
+            <FailureCard size="inline" status="failed" title={t("feishuEdit")} summary={String((saveEdit.error as Error).message)} />
+          )}
         </div>
       </ModalShell>
 

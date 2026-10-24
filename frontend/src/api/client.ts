@@ -16,6 +16,7 @@ export * from "@/api/domains/confirmations";
 export * from "@/api/domains/browser";
 export * from "@/api/domains/editor";
 export * from "@/api/domains/entities";
+export * from "@/api/domains/feishu";
 export * from "@/api/domains/generation";
 export * from "@/api/domains/identity";
 export * from "@/api/domains/jobs";

@@ -13597,6 +13597,10 @@ export interface components {
             capability?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** App Id */
+            app_id?: string | null;
+            /** App Secret */
+            app_secret?: string | null;
         };
         /** FeishuOnboardingOut */
         FeishuOnboardingOut: {

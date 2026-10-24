@@ -393,5 +393,10 @@ export const nodeToolbar = {
   feishuBindHint: "机器人会以「绑定成员」的权限执行。把下面的绑定码在飞书里直接发给机器人即可完成绑定(10 分钟内有效)。未绑定的人无法使用。",
   feishuBindMembers: "已绑定的飞书用户",
   feishuBindNobody: "还没有人绑定",
+  feishuEdit: "编辑机器人",
+  feishuEditHint: "改完保存会自动重连这条长连接。换机器、主密钥换过(旧密文解不开)时,在这里把 App Secret 重填一次即可恢复。",
+  feishuEditName: "名称",
+  feishuEditSave: "保存并重连",
+  feishuEditSecretPlaceholder: "留空 = 不修改",
   feishuRemove: "删除",
 } as const;

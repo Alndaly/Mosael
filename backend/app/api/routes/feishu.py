@@ -41,6 +41,10 @@ def update_bot(bot_id: str, body: FeishuBotUpdate, db: Tx, user: CurrentUser) ->
     if "enabled" in changes:
         toggle = connections.start_connection if bot.enabled else connections.stop_connection
         after_commit(db, lambda: toggle(bot_id))
+    elif {"app_id", "app_secret"} & set(changes):
+        #: **换了凭据要重启这条连接**:旧进程手里还是旧 app_secret(甚至解不开的那一份),
+        #: 不重启的话设置页会一直显示旧错误,用户以为"改了没用"。
+        after_commit(db, lambda: connections.restart_connection(bot_id))
     return bot
 
 
