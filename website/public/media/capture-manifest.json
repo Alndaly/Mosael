@@ -444,481 +444,481 @@
       "scene": "login",
       "locale": "zh",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 736107,
-      "sha256": "f2120d34465ce97912f7e588203e36fab64d59e081880422a286e6f3b16fdb41"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 727181,
+      "sha256": "b70c38f44e77125c2782e106d274c0e9c7e1356bed978d412ed3bc2d68ece3f6"
     },
     "videos/dark/login.mp4": {
       "scene": "login",
       "locale": "zh",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 62343,
-      "sha256": "2df1edc1454072ad32043de574198dc4127a4551d6d951e655edaceab39721e1"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 80310,
+      "sha256": "3952d95419a79d01468cf6162189ba2add9d035f1f55e40d26bc29e6c7ac686d"
     },
     "screens/home.png": {
       "scene": "home",
       "locale": "zh",
       "theme": "light",
       "version": "2.2.0",
-      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
-      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
-      "bytes": 645188,
-      "sha256": "f29116a330c8113f16e4d07bf8dd0827df83419a1fdf738f484e08a05ac4a3a4"
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 644904,
+      "sha256": "3444440df98d8ee8a30fea9860f8981e48675ef1ff92d8ac2927f72022e682c8"
     },
     "videos/home.mp4": {
       "scene": "home",
       "locale": "zh",
       "theme": "light",
       "version": "2.2.0",
-      "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
-      "capturedAt": "2026-10-24T17:11:12.126881+00:00",
-      "bytes": 252196,
-      "sha256": "809afedf1f1c364300e1c35380e80a04007a860e21d127c9bf52c956ebb49a5b"
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 253823,
+      "sha256": "4dbacc657ff0650edfc463116fa9733971a7f94221ca6f1d574c80f5fa43ddcf"
     },
     "screens/media.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 636269,
-      "sha256": "a9241da655594649567ccb7b94bc3e3386f7427d29258dc8b6fae3dfd81d644f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 636566,
+      "sha256": "23fbba1adc53b0246fe1c065bdb0d94a0979869bdeb852976f516e0821d7f6f2"
     },
     "screens/url-import.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 644945,
-      "sha256": "ce07a916e63d46339e896267f48eb177935f87d3a78a9802b9e2ece4516a3f62"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 618331,
+      "sha256": "3677df855b4e28cb0c0072cab1c6b633c3eadbfdb9a4b02ced954de45de0d22d"
     },
     "screens/media-video.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 943135,
-      "sha256": "aa9d9f63e90dda97a6432e0a49a6760986ae6f860650fc53718b45a0ceee1460"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 988582,
+      "sha256": "d1918ea759021adbf77d8bcebeb68ab475c79e4141e350fde81763a538e15890"
     },
     "screens/media-audio.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 509752,
-      "sha256": "f7471ec65e8664364a73b10eb4706bc93817a72376cb0137527e63d36c95e942"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 470570,
+      "sha256": "45d1a5cbc40c16b28d84b9396c8047dd7b5c19762da108feaf9ab777ca8b50ef"
     },
     "screens/media-image.png": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 884316,
-      "sha256": "256e1a0d32aed515c84366212f2b0ebb6a54fcbcafe0b6f5340817eaa8e6e8b1"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 899801,
+      "sha256": "b5948911701d33a6763545b1729059f3e5ef793fd1488bcfab7f8b97fc08784a"
     },
     "videos/media-preview.mp4": {
       "scene": "media-preview",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 1594793,
-      "sha256": "4e42ddb1a8637cff0a6e5b555be2d5904213514907302364c959b44ff028c0ec"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:25:23.783553+00:00",
+      "bytes": 1695380,
+      "sha256": "c74a3cf34266e1586fdbc391211e04f0dae761d247a30116550254e58ee51224"
     },
     "screens/editor.png": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 700024,
-      "sha256": "7366def729b1ace7b72ab7d4f5c793876f6837dc44b4d836903eedeaf2fee164"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 694513,
+      "sha256": "aa61f3e14d80d9dbedd187ef16316e98d5e9c979da73d7a88c1d9fb370899121"
     },
     "screens/editor-inspector.png": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 656304,
-      "sha256": "bb62ea7afe51cc99610cb945c5393f1a7ac59fe153d0e50a90b3bf72e9a13f46"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 659088,
+      "sha256": "1f51383268f8aeb5220b6656abd4034b1fa020dceffd6dc2ca55277b486770b2"
     },
     "videos/timeline-edit.mp4": {
       "scene": "timeline-edit",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 359051,
-      "sha256": "f8c9c55e5145d5137d10f12874829255e39119cb38ebdeb1ad039b6718798dd2"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 340692,
+      "sha256": "8a2728fbfd5bff1f4e3b2de70de758b2b4b2dc9560a13a469300cc026cdcbb97"
     },
     "screens/subtitles.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 668492,
-      "sha256": "a95e17cd5514fc450aee93ad952f2efcd08160837c5d2464e5d4519f76f80364"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 665446,
+      "sha256": "f28b6a14b6d6d7b3618ac316b88a73cf75e45bf4bfe65b5d6e5176c6df80a10e"
     },
     "screens/subtitle-dub.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 663489,
-      "sha256": "7aed58bcbcae8923cf7b256e376aa062d72b7c97cdecf09101f35275678ee9b1"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 661607,
+      "sha256": "e45a4cf0de10da695a8379320833702014841701b52d3249c9f6bc92998696b2"
     },
     "screens/transcript.png": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 663280,
-      "sha256": "96450a31580cc0791c757ce0b8bb895ad26dc79d5faf0b2cecbc8ffb4ecf6633"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 658872,
+      "sha256": "1f58ff77cb768e4087219d6a7106a1cef62964cd8ab4deccbe1fc69382d03cdf"
     },
     "videos/subtitle-dub.mp4": {
       "scene": "subtitle-dub",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 207788,
-      "sha256": "4f47d422549607551406b85d0ac3343273fe697b5936f50470a5868c525a7574"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 294044,
+      "sha256": "037143a330910139b285056c3afb2919022232407f152ac669afbea0c88b9875"
     },
     "screens/ai-chat.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 82351,
-      "sha256": "664f6b1ef4003d8b4d9464a435d4c6fafa3e4536b77549c5492c312b1bdec9cf"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:37:02.166478+00:00",
+      "bytes": 80851,
+      "sha256": "38efdf267c80b132b19f6a458d4cbd10e098406d0928af01bbbb0b3fa90698a7"
     },
     "screens/agent-trace.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 74530,
-      "sha256": "73cc667d6c60677f3115321609b18ef0b0c9fb0e9dc579f3a8753f45da461c7e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:37:02.166478+00:00",
+      "bytes": 73765,
+      "sha256": "b43493c45e65f8a8e165e761108756aae72e226a427199bee2cb0f83e768b2fd"
     },
     "screens/ai-generate.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 91355,
-      "sha256": "d30245bbc0f706beb3fac6fe401038a953afe56a22611a1eeeab59f346cb8001"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:37:02.166478+00:00",
+      "bytes": 97205,
+      "sha256": "562330d47614b0417e626808b0ebce85a052c52840ee64e9b0fdede0bbc2ee0d"
     },
     "videos/ai-studio.mp4": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 154314,
-      "sha256": "770ac94819b9b0ea016b618f123cc4273edf868f33ca88570047f00c2fce16ee"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:37:02.166478+00:00",
+      "bytes": 122471,
+      "sha256": "8646c367279288bb7d701350d1e828f2afee0e2837a9a317e7decad81af647dd"
     },
     "screens/workflow-list.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 144867,
-      "sha256": "dfb0ab8dcfa0d4a410d191cd19c5a55939966dcb8ba1ca34634549f0510c42fa"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 144088,
+      "sha256": "ab372b6b3b44ae43c35e2d812e2f433e582b66df76264003fe4976ed1786ecc6"
     },
     "screens/workflows.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 147186,
-      "sha256": "60067619dafe48972e501b5211b7a6634e9d3e8cb4ecdbe75ce02c2af8f9a0f0"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 155337,
+      "sha256": "f9ffdf009fce870eb42d05cf13e272eb4fa773b1ee1d80800f0ca1a3c1e457ce"
     },
     "screens/workflow-add-node.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 179249,
-      "sha256": "d06e064e6e809888311fdd5bca3b5168a2505401f1f97ab5dfa3fba491cacc55"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 189041,
+      "sha256": "aa5b09d56c8195574998356f74f0202129dbf3f70f1d35934e077e18889a17c7"
     },
     "screens/workflow-node.png": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 173484,
-      "sha256": "1821b2dcb651d94bc8863181d7443b1680ac304c7ede38a6a616c0b35602797c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 178069,
+      "sha256": "52ac62b064578efe44fdbadf2a9c4d8bdb29cd6b83eb62be22fbabde6f21ff58"
     },
     "videos/workflows.mp4": {
       "scene": "workflows",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 263668,
-      "sha256": "74d53d8c8791ca01d946bde68e061670fba9584e70e47da810f16648b67f2805"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 256434,
+      "sha256": "d0c089b63da49e001087ccf2b39ef764f7413e2445aa0a2371f44923fb67e875"
     },
     "screens/boards.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 266721,
-      "sha256": "662668392ad2c733d2ca2d292d3ee46a1e824dcb417a16e341a435b5e260ad0c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 267478,
+      "sha256": "5a2cc2e231a340cc161a59aacb9422dc8c1b21f4bb55adb7f19d08ad009355ea"
     },
     "screens/board-form.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 279963,
-      "sha256": "5a6c7aa6870dd317189b12c4f52161c13c13477367fe669b8b075fbf14b435da"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 277679,
+      "sha256": "19a1393b54f1e05c28ca6ef8d3bcabb5b68b87488374d09e0a3f7819685b017e"
     },
     "screens/board-mention.png": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 300780,
-      "sha256": "51bcf629c1d3ccb49612f30106597aee454fcb162e0121be1cde16d9d3d3b8f0"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 302782,
+      "sha256": "731f948f552ac42d2dabc22c3c830c9779fb462ba1b4f6d46d9c4fa74ee883b3"
     },
     "videos/boards.mp4": {
       "scene": "boards",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 169262,
-      "sha256": "8496b24eb5d714bc349ae8a4ef02235925f83a47be5be8a2fa25629535bdf0f8"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 189654,
+      "sha256": "6c08aa00bf4cd261d9b5cf42701836bd009a157d4d8119c97dadd29ee0ccc566"
     },
     "screens/plugins.png": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 107872,
-      "sha256": "6762f2c7002e598cba5e93731280604dc465b09d5f12cdbb102a3edb160e555e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 126344,
+      "sha256": "5ff3416ef3155c108f1f770abd1d95b3c787a1204127ac16da70750927e5c440"
     },
     "videos/plugins.mp4": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 305174,
-      "sha256": "fc09baeb095c644ea0068db9f93a07b4c80d44acd2211ae25b316a7371415109"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 310648,
+      "sha256": "b1f1020b3b7c091c22e57458bdce75a014657422d5d7bc5f413d7e639c973efa"
     },
     "screens/publish.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 62672,
-      "sha256": "d5bd2985d02a8fbf3a208c8fd4be2cae4494517f0783d3743a7dd2792fb92c40"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 61758,
+      "sha256": "dbc3473c1e6124b472920376945c56523efe5e962dbb5fe86933120318a4f767"
     },
     "screens/publish-form.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 172057,
-      "sha256": "03daef39376b55300d7beb2ca6463558a8fa4933feaaecb56ce13e80c764e9b5"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 160914,
+      "sha256": "13d52d44f2447bc56a03ca55e9edd3b7a62b53b1f4ff4780a73726416271840e"
     },
     "screens/browser-pool.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 60014,
-      "sha256": "2ec1e1c910dca2d5c1c49a1953f1084ce2e8557954aaf40e3aae8fa777f7e07d"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 59050,
+      "sha256": "1f22fa48527eba293f97bdb0cd931affc4361dcdd518f8d31bf6f74884be5225"
     },
     "screens/browser-account.png": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 195403,
-      "sha256": "32795d11f04152b953a181a26a1d896c2f133a7c372c4312a22c384f1dddb464"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 186814,
+      "sha256": "5664479d66d5b041b3cd7e80484bc791fedfbc9ec5f08f45ce92e38db1d1334f"
     },
     "videos/publishing.mp4": {
       "scene": "publishing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 273039,
-      "sha256": "a74cc99dbb98a57f907d96ac6e3a44557c8ffc6ac98bd61000a9d9f6d5a59804"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 266383,
+      "sha256": "b654fcd4aed50058b001462ba49f5918cc47084f27ea818914fa987d393e3bc5"
     },
     "screens/scheduler.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 81350,
-      "sha256": "af64eeb7f9ad78bde80027d3992cac82d04d7b455209a4bf931b80107ed22886"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 85941,
+      "sha256": "2440a7b95974bc3d07feda2350c0a528246c90a65d6f722690d74f81dc857dbe"
     },
     "screens/scheduler-form.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 222084,
-      "sha256": "e113454ccf9937e6f06eaab3bcc9bf1081bc4b0f704f2bf4cbcaa082341dab61"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 246643,
+      "sha256": "eeb628362d01c9e1fcf7fd6c395c35f256ed37c437b6683a9548452fb4baa036"
     },
     "videos/scheduler.mp4": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 179057,
-      "sha256": "72bb31b456e06dafca8eb894f3385dfe1a12843703433a2f40d1da2061bacd41"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 215016,
+      "sha256": "54893262ee3c18cf6b298ed57dc9745a7438c45d6186601556dc01fcb202563a"
     },
     "screens/settings.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 113997,
-      "sha256": "736382399adbb5cd303231ade1e8ddee6a173c04eb8528d9c0dc4415ce746312"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 131425,
+      "sha256": "33f2fff514997974ab7ce11208b08ddda5f240dc69542dbed5475ddca4206028"
     },
     "screens/settings-models.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 113078,
-      "sha256": "656f642b6df293e5858f67ec5fbb7a54c7509692480b1012c531dda59f3c611a"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 128817,
+      "sha256": "71e24e11194cae8b1e3ae075ca524289ef2b6af2b17bfab78c50ebd310828ff7"
     },
     "videos/providers.mp4": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 170835,
-      "sha256": "83142c36d2b19855428ab38513587db9b9ee3b289cf7505c088feb44b277216b"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 190033,
+      "sha256": "1670b50ca42f0575bad0b35146d969f81f21488e467cb98956d17fc6aa799e21"
     },
     "screens/settings-appearance.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 170950,
-      "sha256": "b35d6d5a742fdb7f2d51ae2b9661f1c5338ae196b4ce019ae4a0901e64a7b7bd"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:02:02.383162+00:00",
+      "bytes": 178819,
+      "sha256": "97151eae83d26eacb6ca362711e746e17f1ceb2b78b77aa524c5ccf118fa42f9"
     },
     "screens/settings-fonts.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 170202,
-      "sha256": "1467a5a82b667435078ec16078587c6430470f3c40ed0c4ed767f3bc99476617"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:02:02.383162+00:00",
+      "bytes": 178921,
+      "sha256": "e1b4ae79e1887a40b626190a8dea1e63f09c7ba67b3dc780f741a765c4ff8666"
     },
     "videos/appearance.mp4": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 562564,
-      "sha256": "c0ac0944911258d51f6c0e1ac31618019569ebb5d09951e9f6c44e9fba400b51"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:02:02.383162+00:00",
+      "bytes": 550895,
+      "sha256": "a65628034a33b7e5b76ed424938a2c5377ca2854a958ced704a631833e5b4822"
     },
     "screens/login.png": {
       "scene": "login",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 716905,
-      "sha256": "d1f41bdd2cf263b2b609e780a151f1b600dc6288e40f02d68a77bccb328005e7"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 723655,
+      "sha256": "0d69c1fc6a48e1568b11845954a8f936c44b66ccd134781bf503432cb1a38ce8"
     },
     "videos/login.mp4": {
       "scene": "login",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 62885,
-      "sha256": "0ce51405b1473aa46413479e7ff5126752274618c7e80e5d1f973ef5332b12af"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 81110,
+      "sha256": "085d8b95407ed260d73bdb9a2ccda4f0cc8cf8d3c8acf964171ca47beb67ee4b"
     },
     "screens/en/home.png": {
       "scene": "home",
@@ -1364,21 +1364,21 @@
       "scene": "login",
       "locale": "en",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 729178,
-      "sha256": "06aa8d2a56365485df2baa6da0aabc516eb315378e71a1fa0343cb1a804c69cc"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 728776,
+      "sha256": "f5e88a98927f832542689975b522ae7c4a20264005bff1b54d58d1232543f23f"
     },
     "videos/en/login.mp4": {
       "scene": "login",
       "locale": "en",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 77002,
-      "sha256": "5182a0bc988d1107e2d8fc6dccca7ab3a74f72bbfb96d96dd59c8b239628da7b"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 69006,
+      "sha256": "90e76850d48ebcbc1775bf5a3ea22a8c1f985a87e7f73be7f603006ddc5770ca"
     },
     "screens/en/dark/plugins.png": {
       "scene": "plugins",
@@ -1544,21 +1544,21 @@
       "scene": "login",
       "locale": "en",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 725348,
-      "sha256": "311ccbf985075c26a74523d222dc33e3a577ce781ddec0c8f84d23511a695a40"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 730773,
+      "sha256": "da34bc445abafb57fa74e91c78b5830d6837f0b1660fa9d3b679023cdf473ad0"
     },
     "videos/en/dark/login.mp4": {
       "scene": "login",
       "locale": "en",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 64045,
-      "sha256": "5d3d807b0ca3aaa5b657c025bcd841910027a65358f019cd69dc06c0188c96ad"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 84433,
+      "sha256": "5d0d70e4bdb83390ae609e780a4659d1f379a4e5f5548bd3ac8978718ea04d57"
     },
     "screens/en/dark/home.png": {
       "scene": "home",
@@ -1844,121 +1844,121 @@
       "scene": "scenes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 371733,
-      "sha256": "eff57f7a8d36d4770238b6809c41be8c9d9f3adcfc9418bd56bb572301e26ed0"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 372273,
+      "sha256": "0c3e81910192158271e8b3ef9b0c882669289d51ed99410805bbe90d9fb1ce6d"
     },
     "screens/scene-add.png": {
       "scene": "scenes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 366628,
-      "sha256": "fd983a0ea3a8c71b44662bb000b2a1358c3dfbee0893c03817200548cae64e93"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 361322,
+      "sha256": "e060bcaf805e9b3482296fc37fcfb3b612b63a2de36c702cef8be7227c01f113"
     },
     "screens/scene-camera.png": {
       "scene": "scenes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 172030,
-      "sha256": "fd9d23d1d4d16d185ec878028bdd9d1adec85b8c9978d25b01e422f076fa3bde"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 170881,
+      "sha256": "d8d20cb06ec46bad71cd9b38c6fa5c928c00c6aefe35d2a16541797f548cbfc2"
     },
     "screens/scene-observation.png": {
       "scene": "scenes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 426945,
-      "sha256": "34b9cf52f41f0802da3967532e5d0f8668fe77a0145815ea905e4e9aa22862b9"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 417301,
+      "sha256": "cad64bdf263b8af28733db14867eca9470b18d2cd4bc21ef1a364988bb78958c"
     },
     "screens/scene-keyframes.png": {
       "scene": "scenes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 267303,
-      "sha256": "5855ed603a2a91e3a2bac8c1aa85b0e518706e9ef6ee80fe2fde17aa48f62f7f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 264057,
+      "sha256": "ae6fd7c6d06e5c320f0c239f2da7a06bb839caf1a368deadeefff65828cdb00b"
     },
     "videos/scenes.mp4": {
       "scene": "scenes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 389880,
-      "sha256": "62c88e8181f53b55af814fb1779ab78855b3498ae915f1394ac98196ad41446e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 482731,
+      "sha256": "6893845766609650cc0e17ad19a01b84ef8a3e5ff4e28dc15effcade21a53cf8"
     },
     "screens/notes.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 143793,
-      "sha256": "29cad48df768f59c4592c4cbe8a195e81e7ad8e29a3459bae3f9e77734e1d349"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 141306,
+      "sha256": "fa1110dbf2a812e66d0bb05ddc412db3630dc51da30ce0199f0df2bcf12eefe7"
     },
     "screens/notes-markdown.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 132876,
-      "sha256": "183a27b389cadaa32dc2eb097066a62b2ef48815b66d75428496ce92fde2d2bd"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 130256,
+      "sha256": "47215aa04a2ee29c6a5d5028626e103d4b285866ece9a7225da337dccf96731b"
     },
     "videos/notes.mp4": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 399317,
-      "sha256": "544c6cfa582214544f133b978fada9fa5f91fd942f4ab1e32ae4bea035134e26"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 397444,
+      "sha256": "1aa67aab4aae470e73ae97fd704a297db37df9bc6fce5fb6645e97360ecd66b2"
     },
     "screens/annotations.png": {
       "scene": "annotations",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 126486,
-      "sha256": "6dbd92c7b5f4365066099eca2e41e96e6822c2017e89dd4f34bffcbea3554b10"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 127136,
+      "sha256": "4f73a06155c3e8c71329ab370307ce7db637f3a276bc9e02cc63c0000084f022"
     },
     "screens/marker-editor.png": {
       "scene": "annotations",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 131873,
-      "sha256": "b369e6e095f934a9e517a3f34487ca28943cf1ea8a950621b46290e947b7eefb"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 130733,
+      "sha256": "0c413d2bb5cd0301b540a1e1f6c2454842fc68e19c2fd3441b801327cd62b35e"
     },
     "videos/annotations.mp4": {
       "scene": "annotations",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 112735,
-      "sha256": "03761e0c7ac0244896b6d88e4a0f02e7578a78287b31e6e480344ab695677ebc"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 124084,
+      "sha256": "f9264e1537632b0cd71dff78e4abe39fe62c926ac544a6aae62acaea8736a763"
     },
     "screens/dark/scenes.png": {
       "scene": "scenes",
@@ -2324,11 +2324,11 @@
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 297087,
-      "sha256": "a2d9d1a5f8bd8311a240d2b03bfe98dfbe4a8a7285273d1798f072caca198b45"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 295722,
+      "sha256": "7e1ce51c042dc0c9bcbcb0ae85c2d2fcd1866fac0d014dd19bdd8901d323b240"
     },
     "screens/dark/plugin-connection.png": {
       "scene": "plugins",
@@ -2365,16 +2365,16 @@
       "locale": "zh",
       "theme": "light",
       "font": "wenkai",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:55:46.586308+00:00",
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:16:14.537633+00:00",
       "viewport": {
         "width": 1440,
         "height": 940
       },
       "deviceScaleFactor": 2,
-      "bytes": 300481,
-      "sha256": "49b7feb1c686d55add81c98f9cb35346575e0667ad640cb016008dc660e08660",
+      "bytes": 300711,
+      "sha256": "90aefd3f5486c6d750c58b727c8a9086aa217110cf8f2fe429362f8f187adda3",
       "note": "Live app screenshot from the isolated demo environment (seed-doc-demo.py) with a supported appearance preference. No mocked UI."
     },
     "homepage/zh/editor.png": {
@@ -2382,16 +2382,16 @@
       "locale": "zh",
       "theme": "dark",
       "font": "newsreader",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:55:51.129182+00:00",
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:16:19.508672+00:00",
       "viewport": {
         "width": 1440,
         "height": 940
       },
       "deviceScaleFactor": 2,
-      "bytes": 909898,
-      "sha256": "146ec6078bb70142a470682984233535fa424a7851c25bf95116a59e0b7ce624",
+      "bytes": 905320,
+      "sha256": "13f0e1b9ef9d739580ec9604e68820a7c17f22ffefc93970816baa72a86d0008",
       "note": "Live app screenshot from the isolated demo environment (seed-doc-demo.py) with a supported appearance preference. No mocked UI."
     },
     "homepage/zh/scenes.png": {
@@ -2399,16 +2399,16 @@
       "locale": "zh",
       "theme": "dark",
       "font": "space-grotesk",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:55:56.857401+00:00",
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:16:24.986665+00:00",
       "viewport": {
         "width": 1440,
         "height": 940
       },
       "deviceScaleFactor": 2,
-      "bytes": 509206,
-      "sha256": "1b188df5040cfeb6326db6b0ea015fb96fcd0877bce100247a51a6f522049115",
+      "bytes": 512252,
+      "sha256": "9ecc4239bdb8797bb61fd7bc7bf99834bed8c0a8191982c9981b55164b54ab91",
       "note": "Live app screenshot from the isolated demo environment (seed-doc-demo.py) with a supported appearance preference. No mocked UI."
     },
     "homepage/en/boards.png": {
@@ -2416,16 +2416,16 @@
       "locale": "en",
       "theme": "light",
       "font": "caveat",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:56:03.041456+00:00",
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:16:31.116550+00:00",
       "viewport": {
         "width": 1440,
         "height": 940
       },
       "deviceScaleFactor": 2,
-      "bytes": 295061,
-      "sha256": "a9c81efdab95ea13e3bf7884ae02d7701dde75bd30b1c4be38d13cb6f0da500b",
+      "bytes": 294716,
+      "sha256": "497422479e21f236527420f6f33753873b93616a7404e09f622bd75881dd7015",
       "note": "Live app screenshot from the isolated demo environment (seed-doc-demo.py) with a supported appearance preference. No mocked UI."
     },
     "homepage/en/editor.png": {
@@ -2433,16 +2433,16 @@
       "locale": "en",
       "theme": "dark",
       "font": "newsreader",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:56:07.573090+00:00",
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:16:36.054631+00:00",
       "viewport": {
         "width": 1440,
         "height": 940
       },
       "deviceScaleFactor": 2,
-      "bytes": 899119,
-      "sha256": "00c90f2dcf5d247d402944e61e0986afd6a2c70da37bac3c83473bb5ee7c010c",
+      "bytes": 897483,
+      "sha256": "4a4aaaa2240c49d048599552fced906c2b01d41461899ef7c6f98645b4154320",
       "note": "Live app screenshot from the isolated demo environment (seed-doc-demo.py) with a supported appearance preference. No mocked UI."
     },
     "homepage/en/scenes.png": {
@@ -2450,587 +2450,587 @@
       "locale": "en",
       "theme": "dark",
       "font": "space-grotesk",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:56:13.220803+00:00",
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:16:41.491868+00:00",
       "viewport": {
         "width": 1440,
         "height": 940
       },
       "deviceScaleFactor": 2,
-      "bytes": 495546,
-      "sha256": "cf4e823908fae5743dc73f0b24ff34959715e5849d4f52bc863cb5ef2324e0f7",
+      "bytes": 494381,
+      "sha256": "68aed4d14ae9ec82b0b06aa3039ee61275fd42c36c51037b15b518f12c4b88c4",
       "note": "Live app screenshot from the isolated demo environment (seed-doc-demo.py) with a supported appearance preference. No mocked UI."
     },
     "screens/media-documents.png": {
       "scene": "documents",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 75191,
-      "sha256": "b60a2e5c1c4a51e686e716c25f7839313bf722567ac8a75b7da1b315dbbff052"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:28:17.233330+00:00",
+      "bytes": 73333,
+      "sha256": "2db8b5acdc938689c9fc8690c9afbe07a0fce3085405d35c1f966e484a1499c6"
     },
     "screens/document-reader.png": {
       "scene": "documents",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 191923,
-      "sha256": "f236a46a7d1f8cf7e8530aecc94fde968fdeec5ec2254f2dc180405e602aa929"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:28:17.233330+00:00",
+      "bytes": 195746,
+      "sha256": "cd6272493293e76b490ae7e032959888eff35e9dd29e53b64053e750d499fb37"
     },
     "videos/documents.mp4": {
       "scene": "documents",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 402188,
-      "sha256": "bb5b7c5a3d71ee8d8e9ae379db32562ef8a7f95faad5f6ef93431f79f155ec3c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:28:17.233330+00:00",
+      "bytes": 503137,
+      "sha256": "3c805be39bd9c619d85f3ac345c0beaa1c199e2524d2e9d8362f3e6f761b8440"
     },
     "screens/editor-linked.png": {
       "scene": "timeline-tools",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 673140,
-      "sha256": "583f8101260c2d172560bf53e6b13a84b95a147c10bca727071abbee637df51f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 669880,
+      "sha256": "266deada21b3a93ada013bcdb20dad64c07ad518af87e2c912bf0351cf8d78de"
     },
     "screens/editor-overwrite.png": {
       "scene": "timeline-tools",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 667205,
-      "sha256": "74fc5d3aa02e4b9bb4deeb8590401418adb01e7a0015ab6faa943d17ceeafe35"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 670632,
+      "sha256": "5223cc6403eb4b9c372bd2c49202453fc2a90c7bb3b57ec9da3dbf578117a308"
     },
     "screens/editor-in-out.png": {
       "scene": "timeline-tools",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 449454,
-      "sha256": "61d8b0184130453e9f5673f648e3a30c30a9c2ebab66c663c72f448e8d0c41a5"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 445698,
+      "sha256": "ff6a8a13cc027a371f177d8f14d7110705f701107d7c180761e55b63db23ccb4"
     },
     "screens/editor-clip-menu.png": {
       "scene": "timeline-tools",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 462015,
-      "sha256": "ab5ef9b99431965d2a0958aac26b1a69867c2ee54f4ece588359f48e16ef7aa1"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 456798,
+      "sha256": "f365dd016d640a1e713a4c51731b5b10b608f1fb548e0a7947418367dec73b5d"
     },
     "screens/editor-shortcuts.png": {
       "scene": "timeline-tools",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 478205,
-      "sha256": "4abfe1d0c4241067e6f5b4e60deffe18cc78e35c6ff07d7d92edc991c23dc104"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 476867,
+      "sha256": "2419cc090862f5cb4926df5014953b7a5b565a0f2d5cef11a5d8888e29d5c29c"
     },
     "videos/timeline-tools.mp4": {
       "scene": "timeline-tools",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 643109,
-      "sha256": "7e3322ba3121e47708590f5c46fdaee104edd54b11f4d6c45dd8de58a3ecb137"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 605640,
+      "sha256": "d78ee5d99662a83e8a76196f9f7ef3dbfacae07b0c05a6b604723ab874d620d4"
     },
     "screens/subtitle-bilingual.png": {
       "scene": "subtitle-panel",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 502723,
-      "sha256": "f387f1c479f82941f4db980c597cbf9c31876c9e6a882a715514dc96e59b070f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 500924,
+      "sha256": "dca8583728638ad3a4cdc5037d1508ba8b075352c610209ce0b1334b16624587"
     },
     "screens/subtitle-timing.png": {
       "scene": "subtitle-panel",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 504541,
-      "sha256": "48c726db50d7b222640b1cfcaa2f7bbf77c1076f08bbd2216f5ad6e64d1efd0c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 504624,
+      "sha256": "b8e8f7255ed1c6e51a58602dc26f8b5d4575b94253a4c1a2e09427aed147176c"
     },
     "screens/subtitle-import.png": {
       "scene": "subtitle-panel",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 509084,
-      "sha256": "b4bb84639d1446a56806b0e94f7f60d08eb05a20a0e90127ff751b121b4d40cc"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 507059,
+      "sha256": "11fc2ca727b38147b32feab9ffdbdc58b9a5fed98dd77a468fce551b2e868a37"
     },
     "screens/subtitle-files.png": {
       "scene": "subtitle-panel",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 506327,
-      "sha256": "e45a50d419bd4168f2f429c7cb0a199fa2e00b1a5fd255e6fb5ccf580e1ac5de"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 503439,
+      "sha256": "cbd6b291b652966c1b13fe71e78866041f360e67587ad7c83e04b0aedd5b7b63"
     },
     "videos/subtitle-panel.mp4": {
       "scene": "subtitle-panel",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 370345,
-      "sha256": "580d5c07ef770a3798784356816e86850e6289a34f45ea63118df0a600ccf25e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 530388,
+      "sha256": "e1f73883a1f16df3877d6104992b9bcbcb4268365408c2e2a3c912944aff8745"
     },
     "screens/export-dialog.png": {
       "scene": "export",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 594529,
-      "sha256": "cf2c4b6b87b6ac2cc3d24c83cecda4da6e20c5ac8b1693bc0affd69c7c62ad0c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 577740,
+      "sha256": "af687fd15cf0801efb660639a54c0f94c0261682617bf1772725f19ecc758f2d"
     },
     "videos/export.mp4": {
       "scene": "export",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 435543,
-      "sha256": "0510a401fffb366359464415e46207d71399f67fe4141bcd73ae09094c48502d"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:34:17.663987+00:00",
+      "bytes": 454770,
+      "sha256": "8d4946656aa0f63c47be2697b2c56e82967d45f4947b372af7228fb056b840ea"
     },
     "screens/ai-audio.png": {
       "scene": "ai-studio",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 72338,
-      "sha256": "bb58b819494b2a66736c605a09038981dcb76d74687a73da76af4a4f834acc70"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:37:02.166478+00:00",
+      "bytes": 86048,
+      "sha256": "09803730f969502fec4055ef06006b507f35fb26fb6c2f5ca7e4e63c91833529"
     },
     "screens/agent-confirm.png": {
       "scene": "agent",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 168127,
-      "sha256": "fb7fb57d89cedf474291b1b88f39c70d19b58d5315709523fa47a0c872555741"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 110576,
+      "sha256": "3ef1b3380f50d05ca9d64f013871f5822feabc372e31f6e26ad11efcd1b1df96"
     },
     "screens/agent-decided.png": {
       "scene": "agent",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 116542,
-      "sha256": "b5f9ec2e54ac2469008f00cbc246a981d3950f26bbc389741738147898947913"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 94634,
+      "sha256": "d28daaa3c0b387b33b3e5347116565be332b4a473ca26d76703930c28cd0a167"
     },
     "videos/agent.mp4": {
       "scene": "agent",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 125576,
-      "sha256": "ed1ea5941c2773cd0c4ea1d337e95fa79ccf3ec0702fbf39b344414506564182"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 112324,
+      "sha256": "d9e1bb071afadfed33b264a98491b84d9972d0b5cde2a94447b4e336dd8854b6"
     },
     "screens/workflow-references.png": {
       "scene": "workflow-editor",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 131809,
-      "sha256": "b55a40a26d383f2a1769a58dd8eb1fe73b5be74e8f1371e358982104b8299aea"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 129987,
+      "sha256": "a7322134f6b41b0085bcce2b61d862afee82dffa8f5ced17d0c139eafd35f995"
     },
     "screens/workflow-reference-tags.png": {
       "scene": "workflow-editor",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 133357,
-      "sha256": "e63278e96359e0c44345427e72cbb637ba7d4dcc83c8e0a302e0b6ea3af7996f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 133548,
+      "sha256": "1e1c45fc4a8f0d2db9fa6954e5d361417fcf71acf7e6b2acef8a8a021348a50f"
     },
     "screens/workflow-start-params.png": {
       "scene": "workflow-editor",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 128435,
-      "sha256": "7119e22f94a5aeb42dd129c215adc6470b874ad340eb7af5d71805e424be69d6"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 122167,
+      "sha256": "7676e867389e31ba3e6fb59d8e138cd6c345bc8bfe82dccbd71cc3676d5db665"
     },
     "screens/workflow-readiness.png": {
       "scene": "workflow-editor",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 90618,
-      "sha256": "f0faf438bc5290e6eaaa52954d7a2521d239466a3f30103a3a35414123b4fce4"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 90548,
+      "sha256": "8da864b601b383ac8d7372a42ce34ff57291b854af732e20e362c4f0ec9713e6"
     },
     "screens/workflow-runs.png": {
       "scene": "workflow-editor",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 126297,
-      "sha256": "3e6eae1445f91b4cb41706ddbde43f08eb09c78152f807baf9bf9bd217ebb67c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 127586,
+      "sha256": "29b861103906c788393f41358dbb308512ca9fa4d2660a3f2aa5e1cd166ad156"
     },
     "videos/workflow-editor.mp4": {
       "scene": "workflow-editor",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 263198,
-      "sha256": "09584b8e1b92de3552b16b56dc77549e8de8768213257f3126a88004f9d26b0e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 355820,
+      "sha256": "321c590aed345acbc6680885dc7949408926e8ed3268142ba949bfdf79cea7b9"
     },
     "screens/workflow-templates.png": {
       "scene": "workflow-templates",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:02:57.158523+00:00",
-      "bytes": 346543,
-      "sha256": "82141df80ddb7af06aee720e166149314cb89098c89b354257062ff6d0c3d918"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 343395,
+      "sha256": "6c6db2835bbbed09c43726e6631e4d49a7b79f3c37c2cbe82152f3e6e25f060b"
     },
     "screens/workflow-template-check.png": {
       "scene": "workflow-templates",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:02:57.158523+00:00",
-      "bytes": 364199,
-      "sha256": "a1874fe4a50ecfc9314f30cd18ae0c0e10d4491d3a2fb9159b9687b127a1e691"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 366163,
+      "sha256": "4cf62182927d1f6612df128cfb664fb0e06ef2522c9cbd25dcbde2addf7ab2ef"
     },
     "screens/workflow-start-options.png": {
       "scene": "workflow-templates",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:02:57.158523+00:00",
-      "bytes": 189032,
-      "sha256": "6e8f5d8518aba1480d9dd96a3517d85a7808fd40dc359c2c2b978855d7bd9889"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 188345,
+      "sha256": "2fee6c9c089f487c1ac1de8cf892aa3c19574700911366de6ada0ffd8852afea"
     },
     "screens/workflow-full-video.png": {
       "scene": "workflow-templates",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:02:57.158523+00:00",
-      "bytes": 216969,
-      "sha256": "a4ba2d1baf15d43b7d7a6a0193ef518485b3d225d4781c2fb161b6feaa353dcd"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 235854,
+      "sha256": "269bbec32a68fa51bc8c51ee9c23d673e73d283cdfee7590d28d7a64ca4ecfda"
     },
     "videos/workflow-templates.mp4": {
       "scene": "workflow-templates",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:02:57.158523+00:00",
-      "bytes": 1706216,
-      "sha256": "abc7c03cb725c3fea655765e6d392e1fba88b9a8698cd2b01ee9ca7a0ec91dc5"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 1847970,
+      "sha256": "9bf1ffce018f9b472061738ffcf33e9837fdb0799b45f44e074201b4a8145914"
     },
     "screens/board-add-menu.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 268036,
-      "sha256": "a7ed1f54eb8a5843de726394f1a6161b79583ff85dcf8eea46f374b454eaa02f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 267981,
+      "sha256": "48accc594d3b5f8746b7df429277d1ba82cf9a224bd9bea11604bc7575c78a04"
     },
     "screens/board-abilities.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 275518,
-      "sha256": "ba50578a65d59d640b39e7b10d95386ce782cc5f1e7ec4fd4d127c0de2e92b5e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 274938,
+      "sha256": "9648c328ff644cb24e0f416bb85e0e79a9878d85cbcf728d9f639fd298bcf3f3"
     },
     "screens/board-selection.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 256420,
-      "sha256": "f1f0956b4d115b1b1bb08f7a506852cb794008ec023942992dc50bc69efd1883"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 274404,
+      "sha256": "b0ecfc86fb2657181c5398d53c632b1005e35a90a7c53894aa82c5b49061a884"
     },
     "screens/board-generate.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 295027,
-      "sha256": "78ba011e8df5127fef47a000c33278554f92f0ece8c36e52e1e9ff9058cfa027"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 292198,
+      "sha256": "10335bf8c026356ade237f3f3b3a820340cfb0a95bc9a1aa1eac956616a14b09"
     },
     "screens/board-picker.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 319432,
-      "sha256": "c21e666f9b176da381209f706687279735c2a6d2ae79b21c300072f679c7e1fa"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 459757,
+      "sha256": "d33c41a1c374f094711b3c50d5bdcd035acd4dc14c74c32d855fc09dc2c5cd77"
     },
     "screens/board-scene-cell.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 152816,
-      "sha256": "cd7c5f33c9708233d6ad21b30ed6c02b521104c9c8aaad9a87582322fceeea0e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 151981,
+      "sha256": "c0dd37b5b5f578c68a1278225703dc238653d2c6d85155411801a6812de6b404"
     },
     "screens/board-scene-reference.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 148396,
-      "sha256": "87949b38486ad562549db8208711e4982e1cc2bc123827c94efed6df580ba7b3"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 146580,
+      "sha256": "ef787d29f07a623d9a805f7081e5af186c1bb5c113efec205e20ac8fe2f79d81"
     },
     "screens/board-timeline.png": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 488255,
-      "sha256": "830b6c1dc181076cd6dc7791d725c0c2164ccc49229e2b2142b28f72aa4cd104"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 488590,
+      "sha256": "4848eea42b8c42e770e2259630b508125306407350ec05809c09c60e38786f48"
     },
     "videos/board-cells.mp4": {
       "scene": "board-cells",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 945486,
-      "sha256": "25bf2a838f5cbf8df178435cf9690545e497e14b34f812af34e0d8b665038062"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 1003654,
+      "sha256": "75ee5d78593c9917b5336c147dd77278b04ca7cbe3b730a62f95bcd210f78f80"
     },
     "screens/entities.png": {
       "scene": "entities",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 464106,
-      "sha256": "3aa6b11b4ecf45c9739cef78d7210f419791d60f3470422732c69ed3c78b5ecb"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:49:38.185157+00:00",
+      "bytes": 462128,
+      "sha256": "2fc6f04877eda59abe304917f87389109c1c6c82579c8cef72939f922d322e32"
     },
     "screens/entity-detail.png": {
       "scene": "entities",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 244509,
-      "sha256": "46b048f326b991666a02494e24ff43ee67a52a4cc22aa19f3b7fe3bbef27c998"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:49:38.185157+00:00",
+      "bytes": 246638,
+      "sha256": "83ad92ea217e0511cc6cd584bffa79188e5f9a2216850daa1734a1d1b05efaea"
     },
     "screens/entity-speak.png": {
       "scene": "entities",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 309895,
-      "sha256": "b375515db72613ee98c845c7abeaef315e20373351efb3b6618e1c29980e7b26"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:49:38.185157+00:00",
+      "bytes": 310070,
+      "sha256": "324ec98614a659925bc1c53fa64973945676bc9e30c0b06190d9acba61a00640"
     },
     "videos/entities.mp4": {
       "scene": "entities",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 294412,
-      "sha256": "aa6af51f45ab4bd160c70c1a3ad8cc0a7172f47f69954088f51662d99930b110"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:49:38.185157+00:00",
+      "bytes": 311989,
+      "sha256": "cead4f9186dea32a6ae3461706545a2f01dfbb3cb30ac79364fe9503433b64c3"
     },
     "screens/plugin-detail.png": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 138156,
-      "sha256": "3b7232e8a73e29e01f55a93dee1b6a3cdb8b1d308d4547c8aedf496b22a61080"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 137939,
+      "sha256": "8eed030ce9604b1cf333f9ca88ebebea521be17d0cc8f909d8279a377100d39f"
     },
     "screens/plugin-market.png": {
       "scene": "plugin-market",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 332571,
-      "sha256": "a46fb3e6159ee083054783b3f8c0c8179b47b07d34cb4ac7881754eaa94132de"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 293864,
+      "sha256": "c6cc85a17b562644ed5a16f09ef268a340a0cdebdb0987580868a3b3e96b2334"
     },
     "videos/plugin-market.mp4": {
       "scene": "plugin-market",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 617079,
-      "sha256": "b610e20cc67f5d77a0e46d7f990876fabb144c10235cf60da8f9d2458823d9db"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 475184,
+      "sha256": "63f1cd5e7bc421989dc3a34771431d8153d99ff40f33ee16e51fc7f111c362f0"
     },
     "screens/scheduler-runs.png": {
       "scene": "scheduler",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 93514,
-      "sha256": "6a978c69c51814c65b52cf797f2aa482375baa448220e9c468d2163772870e42"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 112594,
+      "sha256": "c8dd6e0a4fee906c2be92926579711955ce0ada2dab01bfa07513279e37e4cda"
     },
     "screens/settings-capabilities.png": {
       "scene": "providers",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 182529,
-      "sha256": "47919ea3e134e60b3277290a9d8b4c8a3fa4a61166165b8d015815f885185b39"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 166854,
+      "sha256": "5efbaabb86d2691792a5477c14ea6574b7bbe5aab53b76787a07655d1e4f9593"
     },
     "screens/settings-background.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 238057,
-      "sha256": "bef66175f5497c99593b4a39eb9439499df165bacb0ce66e81814fff5ec56fe8"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:02:02.383162+00:00",
+      "bytes": 247163,
+      "sha256": "58f149390650f9d4adc1066f3ee939e8bf71a88cf9b3ed99a77945a291a879cd"
     },
     "screens/appearance-glass.png": {
       "scene": "appearance",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T20:27:40.192314+00:00",
-      "bytes": 668993,
-      "sha256": "e26cfd3d8bee27e61f83e145248f563ddfd6561cf35116fc7e7f443947878051"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:02:02.383162+00:00",
+      "bytes": 670894,
+      "sha256": "a009baf606d5503a78fc0a514f5d6ada786a6d07bf101b875de3209dfba00e70"
     },
     "screens/admin.png": {
       "scene": "admin",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 90641,
-      "sha256": "52849dd18d662a483f3b73a60e9b99c3f8691bc4820a148760fd4439d280161c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:04:05.626220+00:00",
+      "bytes": 92082,
+      "sha256": "cea8be9869c882341b3c6ae07e867d4d97889168a6f19c0c83a3bf995a645b0f"
     },
     "screens/admin-members.png": {
       "scene": "admin",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 81901,
-      "sha256": "095e0610d198701244e74ad3da9b7ec046bb2da2a4ad387c724671fb206b52b2"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:04:05.626220+00:00",
+      "bytes": 82557,
+      "sha256": "718478299ffe9097e666329031679d736c52a16bd15f27b92394895e14f835d3"
     },
     "screens/admin-engines.png": {
       "scene": "admin",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 174692,
-      "sha256": "5a48f3ee539670736d7c9d7b4ec1006f8aa6fd25cd98d666db5ae212d795425c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:04:05.626220+00:00",
+      "bytes": 184457,
+      "sha256": "f66318636894ba804bd45494778759cb210f96adb95a5808300f0faf758864a7"
     },
     "screens/admin-deployment.png": {
       "scene": "admin",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 150366,
-      "sha256": "70ddbfe80bb3b815f88d54810773c3d266460907d4e9af34dc618b43cf588697"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:04:05.626220+00:00",
+      "bytes": 125994,
+      "sha256": "9e56a2d999c745546d084688b716388c33687d096f9ee74e38b0dee51001fc4b"
     },
     "screens/statistics.png": {
       "scene": "admin",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 90615,
-      "sha256": "b08e8c58cc14bfd70c3f177334914bb723bff49697e7fb700b3984d283b7da57"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:04:05.626220+00:00",
+      "bytes": 90221,
+      "sha256": "776ae4795fafeae2efe49d81114c6586580a50916071fa9f2dc089680716dac0"
     },
     "videos/admin.mp4": {
       "scene": "admin",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:06:15.806080+00:00",
-      "bytes": 398740,
-      "sha256": "c1c3e491700a74879425d7b7a0316073ef1970c9eef2f971a7f36b0a0dc8450f"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:04:05.626220+00:00",
+      "bytes": 449282,
+      "sha256": "e3950cedcf84aceff697419f52c7f4133be757ee54cfe44567bd468173400353"
     },
     "screens/dark/media-documents.png": {
       "scene": "documents",
@@ -4746,11 +4746,11 @@
       "scene": "workflow-templates",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "69a86757ac6bb97355bceac7e78da198ae367473",
-      "capturedAt": "2026-10-03T21:02:57.158523+00:00",
-      "bytes": 126229,
-      "sha256": "9a9fc7792cd5cf98d6fd259258139d4bd0eefce1bf5282075d514cae971b771c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 124778,
+      "sha256": "e602ffb8ffbb27ec95aa57cf661c841e4ce864a88aaa7f36c7f4f86b39f42b15"
     },
     "screens/dark/workflow-readiness-blocked.png": {
       "scene": "workflow-templates",
@@ -4786,221 +4786,221 @@
       "scene": "generation-models",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 135727,
-      "sha256": "63624f2d32532d9fc277a1299717c1f0d1ebaef78742bd5f227d24eef5c48b5c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 147468,
+      "sha256": "1d53486e37f032af16a005c248c2c8a27f5e63d2fe6d52ae7ee1ba7d688f3972"
     },
     "videos/generation-models.mp4": {
       "scene": "generation-models",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 148079,
-      "sha256": "09e628c0c7b51f90f8ef5cbda41c58300f8412bcd7d16811ebfe897ead35ef72"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:38:27.238274+00:00",
+      "bytes": 171680,
+      "sha256": "8a9d06fb8d153fa5f601d45d2081ee324828fff2b12e38c29b7511238cdaf18a"
     },
     "screens/notes-hint.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 145991,
-      "sha256": "8a44a620fbd80349cd99107315b7d71decce93f503040cd62cc30e30ed851008"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 143284,
+      "sha256": "6e4dfa697e13ba1d5419fd07aca270c1dcbc16c168600bda5d5a5414e5fe4c9b"
     },
     "screens/notes-insert-menu.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 154671,
-      "sha256": "7db31943e5fcc477d418c64fdd665ffa259e8a8984cf4bbe445819b9d073ec6c"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 152922,
+      "sha256": "9839361a86a2644e458709ca8d1d182f1f81697f7826e6a4cad3d2b94a40ba7d"
     },
     "screens/notes-selection.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 146048,
-      "sha256": "dcc65bb639cb7c178c7f818efc2d6341d12d2dd4f669dba89c217f81d40acce6"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 144239,
+      "sha256": "39b8a26fe88b408a2d6bb43670ef0cbcc1ecacb5ea90e93d842c5aeca3d455b3"
     },
     "screens/notes-ai-actions.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 174136,
-      "sha256": "99c9b3d331f6bed69f21ba9d660fe797ed0572c0947e2252213991a36547518b"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 172198,
+      "sha256": "5671ada7de2a40f9e6fe34cdd6d88baed0769453e49dc9bf830f6002772ca7a9"
     },
     "screens/notes-agent.png": {
       "scene": "notes",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 169438,
-      "sha256": "ec34e390efbae63fdfa262d4df1c3ae7e82f376eff97e6d60bb6b39859e4affd"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 170234,
+      "sha256": "750f2cc0c0c209652f559fc0f4007a0c3ebf1f4349c441d75a3f9589104a98c1"
     },
     "screens/notes-history.png": {
       "scene": "note-history",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 258512,
-      "sha256": "0708cd4aac7e57b38d01a647733d35022a841dc8da69057ea170f0db6ba998f9"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 254070,
+      "sha256": "1849cf3b55f9c2877912cfd2e8af4592a3a684d5ae96e381380cbbd1b09f4155"
     },
     "screens/notes-history-compare.png": {
       "scene": "note-history",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 243849,
-      "sha256": "abd8a3d899a1d9e1626c195d826da0fca18dcfdaeb5ccb4c2f82938dffc8c6ee"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 241519,
+      "sha256": "bd3c9476f406798e8f873a6a80f1a36926792a39ff817aaa9700c8ffb9735a25"
     },
     "videos/note-history.mp4": {
       "scene": "note-history",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 467928,
-      "sha256": "55ef264bf6ee3c6d0d526d4ca7208faa6b77676d6e9e765b7b4fc3817b2ae913"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:44:13.032013+00:00",
+      "bytes": 496388,
+      "sha256": "98677bebf08ed37c9da909d06eb3377d9fbd2be4e95081b9f9984f015d9a25d3"
     },
     "screens/plugin-collapsed.png": {
       "scene": "plugins",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 110872,
-      "sha256": "f824daedece1e826401acd18ff7319fc23dd40280187db12a12d19537e73f479"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:53:40.030315+00:00",
+      "bytes": 128783,
+      "sha256": "1eff8d3b26255864bd589c40403d251b30936b0c7171f2c391bfdb9e316f6321"
     },
     "screens/model-library.png": {
       "scene": "model-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 535498,
-      "sha256": "00453ce172dcb3ce0fd5d693e3ccb098a5d39bce628e0bbcbe12aba5a8e70520"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 526785,
+      "sha256": "2df059237e82c36427bf8363bc00f679392315711fd98ade71f2596ec8e7c2f0"
     },
     "screens/model-detail.png": {
       "scene": "model-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 578049,
-      "sha256": "38432b2de194b0bc91650c03860147792019f53139c2d139b6eab906ebb7ee90"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 586273,
+      "sha256": "80daaa29bd4628eb9b6268792302a960e381f74ffea21453e35bc621d66f5c31"
     },
     "screens/model-library-error.png": {
       "scene": "model-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 216030,
-      "sha256": "3151cbdb6f0831d5af8a28e6870f67787bc519080b52308f85384358861fcadd"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 223041,
+      "sha256": "90622e9f58922546f9d14d27db0ec8cf51f95faca0f577dcf9303d5a9e3c6387"
     },
     "videos/model-library.mp4": {
       "scene": "model-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 589326,
-      "sha256": "898d22521d42124b6b98e21d93894698cf0083530aff605e778e95ce47703ad8"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 643890,
+      "sha256": "42fdcbc3878a5e3e112bbad6422bb10506ce8060ab1fd0de1ffa8e5b0c4404e7"
     },
     "screens/workflow-library.png": {
       "scene": "workflow-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 214896,
-      "sha256": "01d2693cf19551ea2306a541f8df4929c0066b99ced7252c14522ef0b7bda574"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 221473,
+      "sha256": "b436f7deee14579b19fea6edb90415a8dd0e2f23b1b200467368de5c92237ad8"
     },
     "screens/workflow-import.png": {
       "scene": "workflow-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 294987,
-      "sha256": "043c321305a2580f1dea852d3ed5d6e39f7ce21752e8d8c4f37c51e2780c7201"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 307755,
+      "sha256": "50e1e4957df31a1856c8bd9bd19cb3ea54a551df24eab6aff109f0d6dab74149"
     },
     "screens/workflow-library-detail.png": {
       "scene": "workflow-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 252611,
-      "sha256": "ab5416cb61c1e1c955ab8c41f8072949213f9df0d7c5e924705b206ad3c62eb5"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 263590,
+      "sha256": "63735136d75854081879c353f15ff396d2c5ecc86644b39e0dba6be8c422e6b0"
     },
     "screens/model-download.png": {
       "scene": "workflow-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 531560,
-      "sha256": "3d2c773243ec0f3b93f30b3fdc0fb081af5cd82038555d59c24e6c0e7670098b"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 559455,
+      "sha256": "027b7e4d28b6ada490692aa46b410f60e2006e59d30cafada7ed61bd67fdf2d1"
     },
     "videos/workflow-library.mp4": {
       "scene": "workflow-library",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 788286,
-      "sha256": "0e096381ec41b0b6977cf0b7663e54182c7f8026964c3a04c76d229d67a4616a"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T18:58:28.050990+00:00",
+      "bytes": 789046,
+      "sha256": "a4a0235ce89e027c0f97ee22da6dbf9563fdd989f52da840120688cb2222f29f"
     },
     "screens/admin-pricing.png": {
       "scene": "pricing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 161649,
-      "sha256": "a05c63d3486ce99d1c504f658cd6ac4186f2eee58ac9f146eca4aef408b83c58"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 177248,
+      "sha256": "9923faf304bb0e6beba5825e79325f1bb95f29581e96ecd553389209efb367b3"
     },
     "videos/pricing.mp4": {
       "scene": "pricing",
       "locale": "zh",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 242106,
-      "sha256": "fa8d0e795aa6d78789422087450ef6b15b2982fcbb772008ad1c459f3a9280ae"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 354185,
+      "sha256": "a4601bff8c2026855d9bbd80aa99e650223091d2e3c231249df77d9a1baa790a"
     },
     "screens/dark/ai-generate-models.png": {
       "scene": "generation-models",
@@ -5206,21 +5206,21 @@
       "scene": "pricing",
       "locale": "zh",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 162185,
-      "sha256": "ab9c4cc51278f9d331e008e9d61e0056d173d53c76df06ff3e294a385789a8ed"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 177658,
+      "sha256": "1bba66fc2dfbe9897b023ccab2d1967bf02b9bfc64c036ffafabe0942bc503a4"
     },
     "videos/dark/pricing.mp4": {
       "scene": "pricing",
       "locale": "zh",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 259902,
-      "sha256": "daaef62be1299d8cab4161e0641e5e7912dd0c91414f0cba03c920018b48162e"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 298105,
+      "sha256": "04feeb3e7a20cbd813213ef5a4ad839e6bf48464a86848a6c16e474d67fbaf86"
     },
     "screens/en/ai-generate-models.png": {
       "scene": "generation-models",
@@ -5426,21 +5426,21 @@
       "scene": "pricing",
       "locale": "en",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 160368,
-      "sha256": "c712b2237733c9d382b80cbb76ecb757573d539fa4299e3454fadc5ebe167998"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 172421,
+      "sha256": "05ddc8cf9327c5bc5793b72efc78fe953093252015f7830de3067a71ac8a4367"
     },
     "videos/en/pricing.mp4": {
       "scene": "pricing",
       "locale": "en",
       "theme": "light",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 322759,
-      "sha256": "f20931385dd6aa026ae49c943bf1f6629649dfb3f6250a02573b129b811d4156"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 426378,
+      "sha256": "839ac8b2387950ef3694c6878c0154ad9f357de99abb6e953f1b19432021541a"
     },
     "screens/en/dark/ai-generate-models.png": {
       "scene": "generation-models",
@@ -5646,26 +5646,26 @@
       "scene": "pricing",
       "locale": "en",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 159956,
-      "sha256": "4bab88c7441260c20be8c361932cfaa404b9fe1e0358bf7e6b33817630274b54"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 172059,
+      "sha256": "9faff2cec5a9746a2666ab7188ecaa0eaa8104044d4b5836f72a5fc2a9778b2a"
     },
     "videos/en/dark/pricing.mp4": {
       "scene": "pricing",
       "locale": "en",
       "theme": "dark",
-      "version": "1.8.3",
-      "sourceCommit": "b00f247387a83285065e72545fc401e6173ba78f",
-      "capturedAt": "2026-10-05T03:33:06.494423+00:00",
-      "bytes": 299821,
-      "sha256": "7af50ef2dab2eebc5f65bee2eec20a0ee0ee024a7422d3ecd99c951db57a7261"
+      "version": "2.2.0",
+      "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+      "capturedAt": "2026-10-24T19:05:21.528416+00:00",
+      "bytes": 341363,
+      "sha256": "10888ad4a83a87f13b7946e21bb5437722b7fbef05ac604c87e43166e28a67ae"
     }
   },
   "version": "2.2.0",
-  "sourceCommit": "788e8944d38bd889c0403d522c7af1f918aa698c",
-  "capturedAt": "2026-10-24T17:11:12.126881+00:00",
+  "sourceCommit": "9a6a32e0e92a32886903b11f552d19168b7a2e1a",
+  "capturedAt": "2026-10-24T19:05:21.528416+00:00",
   "viewport": {
     "width": 1440,
     "height": 900

@@ -216,7 +216,7 @@ def media(c: Capture) -> None:
 def documents(c: Capture) -> None:
     c.goto("media")
     c.begin()
-    c.page.get_by_role("button", name=re.compile("^" + c.word("文档", "Document") + r"\s*\d")).first.click()
+    c.page.get_by_role("tab", name=re.compile("^" + c.word("文档", "Document") + r"\s*\d")).first.click()
     c.hold(1100)
     c.shot("media-documents")
     c.page.get_by_role("button", name=c.T["assets"]["shotlist"], exact=True).first.click()
@@ -231,11 +231,11 @@ def timeline_edit(c: Capture) -> None:
     c.editor()
     c.shot("editor")
     c.begin()
-    c.page.get_by_role("button", name=re.compile(re.escape(c.T["assets"]["rodents"]) + "$")).first.click()
+    c.page.locator("[data-clip-id]").filter(has_text=c.T["assets"]["rodents"]).first.click()
     c.hold()
     c.shot("editor-inspector")
-    c.click("播放 / 暂停 (Space)", hold=2600)
-    c.click("播放 / 暂停 (Space)")
+    c.click("播放 / 暂停", hold=2600)
+    c.click("播放 / 暂停")
 
 
 def timeline_tools(c: Capture) -> None:
@@ -243,12 +243,12 @@ def timeline_tools(c: Capture) -> None:
     c.begin()
     c.click("放大时间线", hold=500)
     c.click("放大时间线", hold=700)
-    clip = c.page.get_by_role("button", name=re.compile(re.escape(c.T["assets"]["rodents"]) + "$")).first
+    clip = c.page.locator("[data-clip-id]").filter(has_text=c.T["assets"]["rodents"]).first
     clip.click()
     c.hold(900)
     c.shot("editor-linked")
     # Drag a shot over its neighbour in overwrite mode: the covered part is cut out live. Esc cancels the drag.
-    moving = c.page.get_by_role("button", name=re.compile(re.escape(c.T["assets"]["butterfly"]) + "$")).first
+    moving = c.page.locator("[data-clip-id]").filter(has_text=c.T["assets"]["butterfly"]).first
     box = moving.bounding_box()
     x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     c.page.mouse.move(x, y)
@@ -341,11 +341,11 @@ def ai(c: Capture) -> None:
     c.hold(1300)
     c.tab("对话", "Conversation").last.click()
     c.hold()
-    c.tab("生成", "Generate").click()
+    c.tab("创作", "Create").click()
     c.hold()
     c.shot("ai-generate")
     c.hold(1300)
-    c.tab("音频", "Audio").click()
+    c.tab("音乐", "Music").click()
     c.hold(1300)
     c.shot("ai-audio")
     c.tab("对话", "Chat").first.click()
@@ -382,7 +382,7 @@ def generation_models(c: Capture) -> None:
     """A demo ComfyUI workflow picked in AI Studio's generator: the LoRA field lists the connection's LoRA files with
     their previews, base models and trigger words; picking one shows its trigger words. Nothing is generated."""
     c.goto("ai")
-    c.tab("生成", "Generate").click()
+    c.tab("创作", "Create").click()
     c.hold(1200)
     c.begin()
     c.page.get_by_role("button", name=c.word("模型", "Model"), exact=True).click()
@@ -451,7 +451,7 @@ def workflow_templates(c: Capture) -> None:
     c.workflow("account_analysis")
     c.node("start").click()
     c.hold(1300)
-    c.page.get_by_role("combobox").filter(has_text=c.word("选一个")).first.click()
+    c.page.get_by_role("combobox").filter(has_text=re.compile("选一个|运行时选|Pick one|Picked at run time")).first.click()
     c.hold(1000)
     c.shot("workflow-start-options")
     c.hold(1000)
@@ -702,7 +702,7 @@ def comfyui(c: Capture) -> None:
     refreshed it, and each set should show it in its own language."""
     c.goto("plugins")
     c.page.get_by_role("button", name=re.compile("^ComfyUI")).first.click()
-    c.connection("offline").get_by_role("button", name=c.word("刷新模型")).click()
+    c.connection("offline").get_by_role("button", name=c.word("刷新工作流")).click()
     c.hold(2500)
     c.page.mouse.move(1000, 860)
     c.hold(600)
@@ -727,7 +727,8 @@ def model_library(c: Capture) -> None:
     c.hold(1800)
     c.shot("model-library")
     c.page.get_by_role("dialog").get_by_role("button", name=re.compile("storybook-style-lora")).first.click()
-    c.hold(1900)
+    c.page.get_by_role("menuitem", name=c.word("打开详情", "Open details")).first.click()
+    c.hold(1200)
     c.shot("model-detail")
     c.hold(1500)
     c.page.get_by_role("dialog").get_by_role("button", name=c.word("返回模型库"), exact=True).first.click()
@@ -853,12 +854,12 @@ def appearance(c: Capture) -> None:
         c.hold(1500)
     c.shot("settings-fonts")
     # Background and frosted glass: a gradient preset, kept per device (this browser context only).
-    c.click("渐变预设", hold=900)
+    c.page.get_by_role("radio", name=c.word("渐变预设", "Gradient preset"), exact=True).click()
     c.click("晨雾" if c.theme == "light" else "极光", hold=1200)
     c.page.get_by_role("heading", name=c.word("背景与磨玻璃")).scroll_into_view_if_needed()
     c.hold(900)
     c.shot("settings-background")
-    c.page.get_by_role("navigation", name=c.word("主导航")).get_by_role("button", name=c.word("工作台"), exact=True).click()
+    c.page.get_by_role("navigation", name=c.word("主导航")).get_by_role("button", name=c.word("剪辑", "Editor"), exact=True).click()
     c.hold(1600)
     c.shot("appearance-glass")
 
@@ -867,9 +868,9 @@ def entities(c: Capture) -> None:
     c.goto("entities")
     c.shot("entities")
     c.begin()
-    kinds = c.page.get_by_role("group", name=c.word("资产种类"))
+    kinds = c.page.get_by_role("tablist", name=c.word("资产种类"))
     for zh, en in (("场景", "Location"), ("道具", "Prop"), ("人物", "Character")):
-        kinds.get_by_role("button", name=re.compile("^" + c.word(zh, en) + r" \d")).click()
+        kinds.get_by_role("tab", name=re.compile("^" + c.word(zh, en) + r" \d")).click()
         c.hold(900)
     c.goto("entities?entity=" + c.F["entities"]["buck"])
     c.hold(800)
@@ -885,9 +886,9 @@ def admin(c: Capture) -> None:
     c.goto("admin")
     c.shot("admin")
     c.begin()
-    c.click("成员", "Members", hold=1200)
+    c.tab("成员", "Members").click()
     c.shot("admin-members")
-    c.click("引擎", "Engines", hold=1200)
+    c.tab("引擎", "Engines").click()
     c.shot("admin-engines")
     # A long list: the app's top bar stays put while only the page content scrolls.
     c.page.mouse.move(900, 600)
@@ -895,7 +896,7 @@ def admin(c: Capture) -> None:
         c.page.mouse.wheel(0, 500)
         c.hold(400)
     c.hold(600)
-    c.click("部署设置", hold=1200)
+    c.tab("部署设置", "Deployment").click()
     c.shot("admin-deployment")
     c.hold(900)
     c.page.get_by_role("navigation", name=c.word("主导航")).get_by_role("button", name=c.word("统计"), exact=True).click()
@@ -909,7 +910,7 @@ def pricing(c: Capture) -> None:
     a closed local port, so nothing goes online); video models are priced per resolution tier. The rules are deleted
     again after the recording (see main)."""
     c.goto("admin")
-    c.click("成本规则", "Cost rules", hold=1200)
+    c.tab("成本规则", "Cost rules").click()
     c.begin()
     c.click("预填价格", hold=1300)
     row = c.page.get_by_role("dialog").get_by_role("listitem").filter(has_text=SEED.PLACEHOLDER_PROVIDER)

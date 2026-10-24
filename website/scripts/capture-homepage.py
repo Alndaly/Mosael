@@ -69,8 +69,10 @@ def main():
                     localStorage.setItem('mosael.sidebar.collapsed', 'true');
                     localStorage.setItem('mosael.editor.panels.v2', JSON.stringify({left:{media:250},right:260,timeline:300}));
                 }''', [args.api, token, theme, font, 'zh-CN' if locale == 'zh' else 'en-US', F['workspace']])
-                page.goto(args.app + '/#/' + route, wait_until='networkidle')
+                # Reload once to let the injected session take effect before navigating:
+                # going to a route first would boot the app with the old (empty) token and log it out.
                 page.reload(wait_until='networkidle')
+                page.goto(args.app + '/#/' + route, wait_until='networkidle')
                 if name == 'boards':
                     page.locator('.react-flow__node').first.wait_for()
                     page.wait_for_timeout(1500)
