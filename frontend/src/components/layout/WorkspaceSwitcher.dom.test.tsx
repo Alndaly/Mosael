@@ -45,7 +45,7 @@ function Gate({ onResolve }: { onResolve: (id: string) => void }) {
   return (
     <TooltipProvider>
       <AppShell
-        view="home" onViewChange={vi.fn()}
+        view="editor" onViewChange={vi.fn()}
         workspaceId={workspace.id} workspaceName={workspace.name}
         workspaces={list ?? []} onSelectWorkspace={setActiveId}
         projectName={null} projects={[]} currentProjectId={null} onSwitchProject={vi.fn()}

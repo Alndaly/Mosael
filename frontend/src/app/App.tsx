@@ -104,6 +104,8 @@ const hideNativeView = () => void window.mosaelPublish?.hideView().catch(() => u
 //: 缓存窗口、获焦不重拉、4xx 不重试都在 app/queryClient 里说明。
 const queryClient = createAppQueryClient((message) => toast.error(message), translateNow);
 
+const EDITOR_VIEW: StudioView = "editor";
+
 export function App() {
   // **整页点不动**的兜底:Radix 偶发把 body 的 pointer-events:none 留在那儿(浮层还开着就被
   // 卸载、或两个浮层的清理互相打架),此后整个应用只能刷新。挂在最外层 —— 留下锁的那个浮层
@@ -558,18 +560,20 @@ function Studio({
     sceneNavigation.visit(workspace.id, window.location.hash);
     // Set the destination before mounting SceneStudio: its initial state reads the URL.
     if (next === "scenes") window.location.hash = sceneNavigation.restore(workspace.id);
+    //: 侧栏只是换页:不清掉当前项目。项目 id 在 hash 的 `p` 里,回到剪辑仍然是那条时间线;
+    //: 要回项目列表,用顶栏面包屑里的「剪辑」(见 AppShell),不是侧栏。
     setView(next);
   };
 
   // Switching workspaces: the open project belongs to the previous workspace, so
-  // drop it and return home. The ref skips the initial mount (hash restore).
+  // drop it and return to the project list (the editor's no-project state).
   const lastWorkspaceRef = React.useRef(workspace.id);
   React.useEffect(() => {
     if (lastWorkspaceRef.current !== workspace.id) {
       lastWorkspaceRef.current = workspace.id;
       routeWorkspace.current = workspace.id;
       setProjectId(null);
-      setView("home");
+      setView("editor");
     }
   }, [workspace.id]);
 
@@ -582,7 +586,9 @@ function Studio({
       const next = readHash();
       sceneNavigation.visit(routeWorkspace.current, window.location.hash);
       setView(next.view);
-      if (next.projectId) setProjectId(next.projectId);
+      //: `#/editor` 不带 `p` = 回到项目列表。只在有值时设置的话,从剪辑里点
+      //: 「全部项目」会留下旧 projectId,页面还以为选中着那个项目。
+      setProjectId(next.projectId);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -592,21 +598,34 @@ function Studio({
     queryFn: () =>
       api<ProjectWithStats[]>(`/api/projects?workspace_id=${workspace.id}`),
     staleTime: 0,
-    refetchInterval: view === "home" ? 5_000 : false,
+    //: 项目列表是这一页的空态;选中项目之后不再轮询(剪辑页有自己的查询)。
+    refetchInterval: view === EDITOR_VIEW && projectId === null ? 5_000 : false,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
-  const project =
-    projects.data?.find((item) => item.id === projectId) ??
-    projects.data?.[0] ??
-    null;
+  //: **不兜到第一个项目。** 兜底会让「点剪辑」和「项目被删」都静默落到别的项目上;
+  //: 找不到就是项目列表(或者一次明确的「项目不见了」提示)。
+  const project = projects.data?.find((item) => item.id === projectId) ?? null;
+
+  //: 地址里带着一个已经不在列表里的项目(删了 / 换了工作区):清掉它,回到项目列表。
+  //: 只在列表真的取回来之后判 —— 首帧还在加载时不能把刚恢复出来的 projectId 当成失效。
+  React.useEffect(() => {
+    if (!projectId || !projects.data) return;
+    if (projects.data.some((item) => item.id === projectId)) return;
+    setProjectId(null);
+    toast(t("projectMissing"));
+  }, [projectId, projects.data, t]);
 
   const openProject = (id: string) => {
     setProjectId(id);
     setView("editor");
   };
+  const showProjects = () => {
+    setProjectId(null);
+    setView("editor");
+  };
 
-  // 新建项目的入口不止首页一处(顶栏切换器、剪辑页空态也有),所以在这里建一次往下传,
+  // 新建项目的入口不止剪辑页一处(顶栏切换器、命令面板也有),所以在这里建一次往下传,
   // 而不是各页各建一个 —— 见 useCreateProject 里那条「先写缓存再跳转」的说明。
   const createProject = useCreateProject(workspace.id, openProject);
 
@@ -648,7 +667,8 @@ function Studio({
         projects={(projects.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
         currentProjectId={project?.id ?? null}
         onSwitchProject={openProject}
-        onCreateProject={() => createProject.mutate()}
+        onShowProjects={showProjects}
+        onCreateProject={(name) => createProject.mutate(name)}
         creatingProject={createProject.isPending}
         createProjectBlocked={createProjectBlocked?.brief}
       >
@@ -665,7 +685,7 @@ function Studio({
           projects: projects.data ?? [],
           projectsLoad: { pending: projects.isPending, error: projects.isError ? projects.error : null, retrying: projects.isFetching, retry: () => void projects.refetch() },
           openProject,
-          createProject: () => createProject.mutate(),
+          createProject: (name) => createProject.mutate(name),
           creatingProject: createProject.isPending,
           t,
         })}

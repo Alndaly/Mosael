@@ -52,7 +52,7 @@ describe("待处理的那一张", () => {
     window.history.replaceState(null, "", "/#/join/Code-1234abcd");
     captureInviteFromLocation();
     expect(pendingInvite()).toBe("Code-1234abcd");
-    expect(window.location.hash).toBe("#/home");
+    expect(window.location.hash).toBe("#/editor");
     clearPendingInvite();
     expect(pendingInvite()).toBeNull();
   });
@@ -69,7 +69,7 @@ describe("待处理的那一张", () => {
 
   it("桌面端深链:登录之前也接得住", () => {
     const stop = listenInviteDeepLinks();
-    window.dispatchEvent(new CustomEvent("mosael:deep-link", { detail: { view: "home", join: "Code-1234abcd" } }));
+    window.dispatchEvent(new CustomEvent("mosael:deep-link", { detail: { view: "editor", join: "Code-1234abcd" } }));
     expect(pendingInvite()).toBe("Code-1234abcd");
     stop();
   });

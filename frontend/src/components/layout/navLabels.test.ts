@@ -2,7 +2,7 @@
  * **每个页面都得有自己的名字。**
  *
  * 真机上 `#/admin` 的面包屑写着「首页」:侧栏是 `[...SECONDARY_NAV, ADMIN_NAV]` 拼出来的,
- * 而面包屑只查 `[...PRIMARY_NAV, ...SECONDARY_NAV]` —— ADMIN_NAV 不在里面,于是 `?? "navHome"`
+ * 而面包屑只查 `[...PRIMARY_NAV, ...SECONDARY_NAV]` —— ADMIN_NAV 不在里面,于是 `?? "navEditor"`
  * 这个兜底接住了它,页面顶上就写着别的页面的名字。
  *
  * 又是同一个形状:**同一份清单在两处各列一遍,其中一处漏了一项**。所以这里不是补一个
@@ -67,4 +67,9 @@ describe("页面清单只有一份", () => {
       expect(item.keywords.length, item.view).toBeGreaterThan(0);
     }
   });
+});
+
+it("AI Studio 在剪辑上方,并在剪辑前有一条分组线", () => {
+  expect(NAV_ITEMS.slice(0, 2).map((item) => item.view)).toEqual(["ai", "editor"]);
+  expect(NAV_ITEMS.find((item) => item.view === "editor")?.dividerBefore).toBe(true);
 });

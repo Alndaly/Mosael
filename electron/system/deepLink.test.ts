@@ -42,10 +42,10 @@ describe("mosael:// 深链解析", () => {
     expect(parseDeepLink("mosael://open?view=workflows&template=Full-Video")).toBeNull();
   });
 
-  it("邀请链接(ADR 0054):码交给界面,页面一律是首页;字符集不对整条不认", () => {
-    expect(parseDeepLink("mosael://open?join=Ab_c-12345678")).toEqual({ view: "home", join: "Ab_c-12345678" });
+  it("邀请链接(ADR 0054):码交给界面,页面一律是剪辑页;字符集不对整条不认", () => {
+    expect(parseDeepLink("mosael://open?join=Ab_c-12345678")).toEqual({ view: "editor", join: "Ab_c-12345678" });
     // 带了 join 就只认 join:别的参数不跟着生效,免得一条链接既加入工作区又跳到别处。
-    expect(parseDeepLink("mosael://open?join=Ab_c-12345678&view=admin")).toEqual({ view: "home", join: "Ab_c-12345678" });
+    expect(parseDeepLink("mosael://open?join=Ab_c-12345678&view=admin")).toEqual({ view: "editor", join: "Ab_c-12345678" });
     expect(parseDeepLink("mosael://open?join=short")).toBeNull();
     expect(parseDeepLink("mosael://open?join=../../etc/passwd")).toBeNull();
     expect(parseDeepLink("mosael://open?join=")).toBeNull();

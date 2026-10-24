@@ -27,7 +27,7 @@ beforeEach(() => { state.admin = false; state.user = { username: "studio" }; loc
 function mount(overrides: Partial<React.ComponentProps<typeof AppShell>> = {}) {
   const navigate = vi.fn();
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <TooltipProvider><AppShell view="home" onViewChange={navigate} workspaceName="Studio" projectName={null} {...overrides}>
+    <TooltipProvider><AppShell view="editor" onViewChange={navigate} workspaceName="Studio" projectName={null} {...overrides}>
       <button>Existing workspace content</button>
     </AppShell></TooltipProvider>
   </QueryClientProvider>);
@@ -36,6 +36,8 @@ function mount(overrides: Partial<React.ComponentProps<typeof AppShell>> = {}) {
 
 it("keeps every regular view reachable when navigation is expanded or collapsed", () => {
   const navigate = mount();
+  //: 剪辑页没有项目时,页面名仍然是「剪辑」;点它才回项目列表。
+  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("navEditor");
   for (const collapse of [false, true]) {
     if (collapse) fireEvent.click(screen.getByRole("button", { name: "navCollapse" }));
     for (const item of NAV_ITEMS.filter(item => item.view !== "admin")) {
@@ -51,7 +53,7 @@ it("keeps every regular view reachable when navigation is expanded or collapsed"
 
 it("does not expose deployment administration to ordinary users", async () => {
   mount();
-  await waitFor(() => expect(screen.getByRole("button", { name: "navHome" })).toBeVisible());
+  await waitFor(() => expect(screen.getByRole("button", { name: "navEditor" })).toBeVisible());
   expect(screen.queryByRole("button", { name: "navAdmin" })).not.toBeInTheDocument();
 });
 
@@ -355,3 +357,10 @@ it("选中项的勾还在行尾(没挪到左边),切换照常", async () => {
   expect(switchTo).toHaveBeenCalledWith("b");
 });
 
+
+it("顶栏面包屑的「剪辑」回到项目列表(侧栏不承担这件事)", () => {
+  const showProjects = vi.fn();
+  mount({ projectName: "P", onShowProjects: showProjects });
+  fireEvent.click(screen.getByRole("button", { name: "navEditor · homeAll" }));
+  expect(showProjects).toHaveBeenCalledTimes(1);
+});

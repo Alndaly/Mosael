@@ -34,7 +34,6 @@
  * 白名单而非透传:避免把任意字符串塞进 location.hash。
  */
 export const ALLOWED_VIEWS: ReadonlySet<string> = new Set([
-  "home",
   "statistics",
   "media",
   "entities",
@@ -90,7 +89,7 @@ export interface DeepLink {
   /**
    * 邀请链接里的码(ADR 0054)。界面拿到它:没登录时登录页说「X 邀请你加入 Y」、注册时带上;登录了就加入那个工作区、
    * 切过去,toast 写主人和角色、能撤销(维护者拍板 D51)。加入一个工作区不花钱、不对外发东西,也不碰你别的工作区里的
-   * 内容;撤销就是退出。它来时 view 一律是首页。
+   * 内容;撤销就是退出。它来时 view 一律是剪辑页(没有项目时就是项目列表)。
    */
   join?: string;
 }
@@ -121,7 +120,7 @@ export function parseDeepLink(raw: string): DeepLink | null {
   if (url.hostname !== "open") return null;
 
   const join = url.searchParams.get("join");
-  if (join !== null) return JOIN_PATTERN.test(join) ? { view: "home", join } : null;
+  if (join !== null) return JOIN_PATTERN.test(join) ? { view: "editor", join } : null;
 
   const view = url.searchParams.get("view") || "";
   if (!ALLOWED_VIEWS.has(view)) return null;

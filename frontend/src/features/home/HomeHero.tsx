@@ -75,7 +75,6 @@ function IdleDecor() {
 
 export function HomeHero({
   greeting,
-  workspaceName,
   now,
   poem,
   poemLoading,
@@ -86,7 +85,6 @@ export function HomeHero({
 }: {
   actions?: React.ReactNode;
   greeting: string;
-  workspaceName: string;
   now: Date;
   poem: Poem;
   poemLoading: boolean;
@@ -110,7 +108,6 @@ export function HomeHero({
       <div className="relative flex min-w-0 flex-col justify-center gap-0.5">
         <h2 className="m-0 flex flex-wrap items-baseline gap-x-2 text-ui-title font-semibold leading-tight tracking-tight">
           {greeting}
-          <span className="text-ui-sm font-normal text-muted-foreground">{workspaceName}</span>
           {holiday && HolidayIcon && (
             <span
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-ui-xs font-medium"

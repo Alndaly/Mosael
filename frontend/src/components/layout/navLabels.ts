@@ -6,7 +6,6 @@ import {
   CalendarClock,
   ChartNoAxesCombined,
   FolderOpen,
-  Home,
   LayoutGrid,
   Plug,
   Rocket,
@@ -25,13 +24,12 @@ import type { MessageKey } from "@/app/messages";
  *
  * 此前侧栏和面包屑各拼各的:侧栏是 `[...SECONDARY_NAV, ADMIN_NAV]`,面包屑是
  * `[...PRIMARY_NAV, ...SECONDARY_NAV]` —— admin 只进了前者,于是 `#/admin` 的面包屑
- * 被 `?? "navHome"` 兜成了「首页」。同一份清单在两处各列一遍,漏掉一项是迟早的事。
+ * 被 `?? "navEditor"` 兜成了「剪辑」。同一份清单在两处各列一遍,漏掉一项是迟早的事。
  *
  * 侧栏要分组、要按权限过滤,那是**它自己的事**,从这一份里取即可;而"这个页面叫什么"
  * 全应用只有一个答案。
  */
 export type StudioView =
-  | "home"
   | "statistics"
   | "media"
   | "entities"
@@ -68,19 +66,22 @@ export type NavItem = {
   labelKey: MessageKey;
   placement: NavPlacement;
   icon: LucideIcon;
+  /** 这一项之前画一条分组线(与 AppShell 现有的那条同款)。 */
+  dividerBefore?: boolean;
   keywords: readonly string[];
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { view: "home", labelKey: "navHome", placement: "primary", icon: Home, keywords: ["home", "shouye"] },
+  //: 首页/工作台不是一个独立 tab —— 没有项目时,`editor` 就是项目浏览器(见 app/pages.tsx)。
+  //: 「剪辑」是唯一的项目入口:选项目、建项目、进时间线都在这一页。
+  { view: "ai", labelKey: "navAi", placement: "primary", icon: Bot, keywords: ["ai", "chat", "agent"] },
+  { view: "editor", labelKey: "navEditor", placement: "primary", icon: Scissors, keywords: ["editor", "cut", "jianji", "project", "xiangmu"], dividerBefore: true },
   { view: "media", labelKey: "navMedia", placement: "primary", icon: FolderOpen, keywords: ["media", "assets", "sucai"] },
   //: 资产库(ADR 0027):人物、场景、道具。紧挨着「素材」—— 素材是文件,资产是「一个有名字的东西」,参考图是素材。
   { view: "entities", labelKey: "navEntities", placement: "primary", icon: UsersRound, keywords: ["entities", "characters", "zichan", "renwu"] },
   { view: "notes", labelKey: "navNotes", placement: "primary", icon: BookOpen, keywords: ["notes", "biji"] },
   { view: "scenes", labelKey: "navScenes", placement: "primary", icon: Box, keywords: ["scene", "3d", "changjing"] },
   { view: "boards", labelKey: "navBoards", placement: "primary", icon: LayoutGrid, keywords: ["board", "canvas", "huaban"] },
-  { view: "editor", labelKey: "navEditor", placement: "primary", icon: Scissors, keywords: ["editor", "cut", "jianji"] },
-  { view: "ai", labelKey: "navAi", placement: "primary", icon: Bot, keywords: ["ai", "chat", "agent"] },
   { view: "publish", labelKey: "navPublish", placement: "secondary", icon: Rocket, keywords: ["publish", "fabu"] },
   { view: "workflows", labelKey: "navWorkflows", placement: "secondary", icon: Workflow, keywords: ["workflow", "flow", "gongzuoliu"] },
   {

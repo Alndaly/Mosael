@@ -88,7 +88,7 @@ function renderEditor() {
   return render(
     <QueryClientProvider client={client}>
       <TooltipProvider><RecordingProvider workspaceId={workspace.id}>
-        <EditorView workspace={workspace} project={project} onCreateProject={vi.fn()} creatingProject={false} />
+        <EditorView workspace={workspace} project={project} />
       </RecordingProvider></TooltipProvider>
     </QueryClientProvider>,
   );

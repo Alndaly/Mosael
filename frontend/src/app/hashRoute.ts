@@ -12,7 +12,8 @@ export function readHash(): { view: StudioView; projectId: string | null } {
   // Hash routing survives file:// packaging — the fragment never hits HTTP.
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [path, query] = raw.split("?");
-  const view = VALID_VIEWS.includes(path) ? (path as StudioView) : "home";
+  //: 不认识的页面(包括已经不存在的 `home`)落到剪辑页:没有项目时它就是项目浏览器。
+  const view = VALID_VIEWS.includes(path) ? (path as StudioView) : "editor";
   const projectId = new URLSearchParams(query ?? "").get("p");
   return { view, projectId };
 }

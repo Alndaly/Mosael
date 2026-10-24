@@ -102,7 +102,7 @@ it("links only the tiles that have a list explaining their number, each to that 
   await screen.findByRole("button", { name: /homeStatProjects/ });
 
   for (const [label, args] of [
-    ["Projects", ["home"]],
+    ["Projects", ["editor"]],
     ["Assets", ["media"]],
     ["Workflows", ["workflows"]],
     ["Published", ["publish", "succeeded"]],

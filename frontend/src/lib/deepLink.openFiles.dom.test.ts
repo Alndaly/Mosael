@@ -108,7 +108,7 @@ describe("和深链共用同一个落点", () => {
     const files = vi.fn();
     const stop = listenDesktopDeepLinks(files);
     //: 文件那条通道没被碰坏,深链那条也照旧(只导航 —— 这里只证明它没被这次的改动弄丢)。
-    expect(() => window.dispatchEvent(new CustomEvent("mosael:deep-link", { detail: { view: "home" } }))).not.toThrow();
+    expect(() => window.dispatchEvent(new CustomEvent("mosael:deep-link", { detail: { view: "editor" } }))).not.toThrow();
     stop();
   });
 });

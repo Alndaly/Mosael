@@ -104,7 +104,7 @@ export function captureInviteFromLocation(location: Location = window.location, 
   const match = location.hash.match(JOIN_HASH);
   if (!match) return;
   setPendingInvite(match[1]);
-  history.replaceState(null, "", `${location.pathname}${location.search}#/home`);
+  history.replaceState(null, "", `${location.pathname}${location.search}#/editor`);
 }
 
 /** 桌面端深链 `mosael://open?join=<码>`:主进程转成 `mosael:deep-link` 事件(detail.join)。登录前也要接得住,所以在

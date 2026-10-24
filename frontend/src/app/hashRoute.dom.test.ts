@@ -22,3 +22,16 @@ it("别的页照旧写成规范的样子:项目参数是 ?p=,不认识的参数�
   writeHash("media", null);
   expect(window.location.hash).toBe("#/media");
 });
+
+it("不认识的页面落到剪辑的项目浏览器(不留旧页面兼容分支)", () => {
+  window.history.replaceState(null, "", "#/home");
+  expect(readHash()).toEqual({ view: "editor", projectId: null });
+  writeHash("editor", null);
+  expect(window.location.hash).toBe("#/editor");
+
+  window.history.replaceState(null, "", "#/");
+  expect(readHash()).toEqual({ view: "editor", projectId: null });
+
+  window.history.replaceState(null, "", "#/editor?p=p1");
+  expect(readHash()).toEqual({ view: "editor", projectId: "p1" });
+});

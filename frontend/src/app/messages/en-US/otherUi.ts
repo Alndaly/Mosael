@@ -2,7 +2,6 @@ export const otherUi = {
   feishuNoBots: "No Feishu bot bound yet.",
 
   // Editor
-  emptyProject: "Create a project to start editing",
   media: "Media",
   import: "Import",
   record: "Record",

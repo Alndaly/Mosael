@@ -78,6 +78,7 @@ export function AppShell({
   projects = [],
   currentProjectId,
   onSwitchProject,
+  onShowProjects,
   onCreateProject,
   creatingProject,
   createProjectBlocked = null,
@@ -95,7 +96,9 @@ export function AppShell({
   projects?: { id: string; name: string }[];
   currentProjectId?: string | null;
   onSwitchProject?: (id: string) => void;
-  onCreateProject?: () => void;
+  /** 面包屑里的「剪辑」回到项目列表(不清当前页状态,只是不选项目)。 */
+  onShowProjects?: () => void;
+  onCreateProject?: (name?: string) => void;
   creatingProject?: boolean;
   /** 只读成员建不了项目:切换器里「新建项目」收成灰的,说明为什么。 */
   createProjectBlocked?: string | null;
@@ -178,6 +181,15 @@ export function AppShell({
                   <button type="button" onClick={trail.onRoot} className={TRAIL_LINK}>
                     {pageLabel}
                   </button>
+                ) : view === "editor" && projectName && onShowProjects ? (
+                  <IconButton
+                    unstyled
+                    className={TRAIL_LINK}
+                    label={`${pageLabel} · ${t("homeAll")}`}
+                    onClick={onShowProjects}
+                  >
+                    {pageLabel}
+                  </IconButton>
                 ) : (
                   pageLabel
                 )}
@@ -215,24 +227,20 @@ export function AppShell({
                   </React.Fragment>
                 );
               })}
-              {scoped && (
+              {scoped && projectName && (
                 <>
                   <span className="text-border-strong">/</span>
-                  {projectName ? (
-                    onSwitchProject && projects.length > 0 ? (
-                      <ProjectSwitcher
-                        projects={projects}
-                        currentProjectId={currentProjectId ?? null}
-                        onSwitchProject={onSwitchProject}
-                        onCreateProject={onCreateProject}
-                        creatingProject={creatingProject}
-                        createProjectBlocked={createProjectBlocked}
-                      />
-                    ) : (
-                      <Truncate as="strong" className="font-semibold text-foreground">{projectName}</Truncate>
-                    )
+                  {onSwitchProject && projects.length > 0 ? (
+                    <ProjectSwitcher
+                      projects={projects}
+                      currentProjectId={currentProjectId ?? null}
+                      onSwitchProject={onSwitchProject}
+                      onCreateProject={onCreateProject}
+                      creatingProject={creatingProject}
+                      createProjectBlocked={createProjectBlocked}
+                    />
                   ) : (
-                    <span className="italic text-muted-foreground">{t("crumbNoProject")}</span>
+                    <Truncate as="strong" className="font-semibold text-foreground">{projectName}</Truncate>
                   )}
                 </>
               )}
@@ -280,7 +288,12 @@ export function AppShell({
           <WorkspaceSwitcher compact={compact} workspaceId={workspaceId} workspaceName={workspaceName} workspaces={workspaces} onSelectWorkspace={onSelectWorkspace} />
         </div>
         <nav id="studio-navigation" aria-label={t("navMain")} className="flex min-h-0 flex-1 flex-col gap-1 [@media(max-height:850px)]:gap-0.5 overflow-y-auto overflow-x-hidden">
-          {PRIMARY_NAV.map(railItem)}
+          {PRIMARY_NAV.map((item) => (
+            <React.Fragment key={item.view}>
+              {item.dividerBefore && <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-divider" />}
+              {railItem(item)}
+            </React.Fragment>
+          ))}
           <div className="mx-2 my-3 [@media(max-height:850px)]:my-2 border-t border-divider" />
           {[...SECONDARY_NAV, ...(isDeploymentAdmin ? ADMIN_NAV : [])].map(railItem)}
         </nav>
@@ -301,7 +314,7 @@ export function AppShell({
 /** In-editor timeline switcher: the project name in the breadcrumb becomes a dropdown of the
     workspace's projects (each = a timeline), so you can jump between timelines without going home.
     列表底部同样带「新建项目」入口 —— 理由和工作区切换器那条一样:不给可见线索,就没人
-    知道这里能新建,只能绕回首页。 */
+    知道这里能新建,只能用面包屑里的「剪辑」回项目列表。 */
 function ProjectSwitcher({
   projects,
   currentProjectId,
@@ -313,7 +326,7 @@ function ProjectSwitcher({
   projects: { id: string; name: string }[];
   currentProjectId: string | null;
   onSwitchProject: (id: string) => void;
-  onCreateProject?: () => void;
+  onCreateProject?: (name?: string) => void;
   creatingProject?: boolean;
   /** 只读成员建不了项目:条目收成灰的,说明为什么(见 useWriteBlocked)。 */
   createProjectBlocked?: string | null;

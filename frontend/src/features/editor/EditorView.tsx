@@ -2,7 +2,7 @@ import "./editor.css";
 import { assetKeys, transcriptKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, FolderPlus, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { Bot, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 import { errorText } from "@/api/errorMessage";
@@ -98,40 +98,8 @@ import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
 import { useDndAccessibility } from "@/components/app/dndAccessibility";
 
-export function EditorView({
-  workspace,
-  project,
-  onCreateProject,
-  creatingProject,
-}: {
-  workspace: Workspace;
-  project: Project | null;
-  onCreateProject: () => void;
-  creatingProject: boolean;
-}) {
-  const t = useI18n();
-  const writeBlocked = useWriteBlocked(workspace.role);
-  if (!project) {
-    // 空态必须给出口:一个项目都没有时顶栏的项目切换器压根不渲染(AppShell 里
-    // `projects.length > 0` 才挂),这个按钮就是剪辑页唯一能新建的地方——否则用户
-    // 只看到「没有项目」,得自己猜要回首页。
-    return (
-      <div className="flex h-full min-h-0 flex-col items-stretch overflow-auto p-2 [&>*]:shrink-0">
-        <EmptyState
-          icon={<Scissors size={22} />}
-          title={t("emptyProject")}
-          body={t("homeEmptyBody")}
-          action={
-            <Hint disabledReason={writeBlocked?.reason}>
-              <Button onClick={onCreateProject} disabled={creatingProject || Boolean(writeBlocked)}>
-                <FolderPlus size={15} /> {t("createProject")}
-              </Button>
-            </Hint>
-          }
-        />
-      </div>
-    );
-  }
+/** 选中项目之后的剪辑台。没有项目时由 `app/pages.tsx` 渲染项目浏览器,这里不再有第二种空态。 */
+export function EditorView({ workspace, project }: { workspace: Workspace; project: Project }) {
   return <Editor workspace={workspace} project={project} />;
 }
 

@@ -57,7 +57,7 @@ it("邀请链接(mosael://open?join=…):先收起视图,再去加入、切过�
   const { hideView } = desktop(true);
   const stopInvite = listenInviteDeepLinks();
   try {
-    window.dispatchEvent(new CustomEvent("mosael:deep-link", { detail: { view: "home", join: "abcdefgh1234" } }));
+    window.dispatchEvent(new CustomEvent("mosael:deep-link", { detail: { view: "editor", join: "abcdefgh1234" } }));
     expect(hideView).toHaveBeenCalledTimes(1);
     expect(pendingInvite()).toBe("abcdefgh1234");
   } finally {

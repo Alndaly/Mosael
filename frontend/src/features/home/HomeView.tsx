@@ -37,45 +37,45 @@ import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { useMultiSelect } from "@/lib/useMultiSelect";
-import { nextProjectName, useCreateProject } from "@/lib/useCreateProject";
+import { nextProjectName } from "@/lib/useCreateProject";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { toast } from "sonner";
 
 
-/** 项目列表取得怎样。列表在 App 里取(侧栏切项目也要它),首页只读这份状态。 */
+/** 项目列表取得怎样。列表在 App 里取(侧栏切项目也要它),项目浏览器只读这份状态。 */
 export type ProjectsLoad = { pending: boolean; error: unknown; retrying: boolean; retry: () => void };
 
+/**
+ * **剪辑页没有选中项目时的项目浏览器。**
+ *
+ * 这里曾经是独立的「工作台」tab。它和剪辑页共享同一个 `projectId`,却各有一套新建/切换行为:
+ * 在首页新建留在原地,在顶栏新建直接进剪辑 —— 同一个动作两种结果。现在只留一个页面:
+ * 没选项目时就是这里,选中之后就是编辑器(见 app/pages.tsx)。
+ */
 export function HomeView({
   workspace,
   projects,
   load,
   onOpenProject,
+  onCreateProject,
+  creatingProject = false,
 }: {
   workspace: Workspace;
   projects: ProjectWithStats[];
   load: ProjectsLoad;
   onOpenProject: (projectId: string) => void;
+  /** 新建项目 —— 和顶栏切换器、命令面板走同一个入口:建完直接打开它。 */
+  onCreateProject: (name?: string) => void;
+  creatingProject?: boolean;
 }) {
   const t = useI18n();
   //: 只读成员建不了、改不了、删不了项目:这几处灰掉并说为什么(体检 D62,和定时任务页同一个做法)。
   const writeBlocked = useWriteBlocked(workspace.role);
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Project | null>(null);
-  //: 新建:先弹窗起名,建好**留在首页**,新项目滚到看得见的地方、高亮一下 —— 此前一点就建了个
-  //: 「未命名项目 N」并直接跳进剪辑页,看起来像只是跳了个页面,根本没意识到建了东西。
+  //: 新建先弹窗起名;确认之后交给 App 去建并打开 —— 反馈由「进入剪辑」本身给出,
+  //: 不再在首页滚过去、亮一下(那一套只在「建完留在原地」时才有意义)。
   const [naming, setNaming] = React.useState(false);
-  const [justCreated, setJustCreated] = React.useState<string | null>(null);
-  const create = useCreateProject(workspace.id, (id) => {
-    setNaming(false);
-    setSearch("");
-    setJustCreated(id);
-  });
-  React.useEffect(() => {
-    if (!justCreated) return;
-    document.querySelector(`[data-project-id="${justCreated}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    const timer = window.setTimeout(() => setJustCreated(null), 2400);
-    return () => window.clearTimeout(timer);
-  }, [justCreated, projects]);
   const [deleting, setDeleting] = React.useState<Project | null>(null);
   const [search, setSearch] = React.useState("");
   const [collection, setCollection] = usePersistentTab<"recent" | "all">("home-collection", "recent", ["recent", "all"]);
@@ -218,7 +218,6 @@ export function HomeView({
           </Hint>
         )}
         greeting={t(greetingKey)}
-        workspaceName={workspace.name}
         now={now}
         poem={poem}
         poemLoading={poemLoading}
@@ -291,10 +290,10 @@ export function HomeView({
         <>
           {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
-            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} writeBlocked={writeBlocked} />)}
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} writeBlocked={writeBlocked} />)}
           </div>}
           <div className="grid gap-1 empty:hidden">
-            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} writeBlocked={writeBlocked} />)}
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} writeBlocked={writeBlocked} />)}
           </div>
         </>
       )}
@@ -304,9 +303,12 @@ export function HomeView({
         title={t("createProject")}
         initialValue={nextProjectName(t("projectDefault"), projects)}
         confirmLabel={t("createProjectConfirm")}
-        pending={create.isPending}
+        pending={creatingProject}
         onCancel={() => setNaming(false)}
-        onSubmit={(name) => create.mutate(name)}
+        onSubmit={(name) => {
+          setNaming(false);
+          onCreateProject(name);
+        }}
       />
       <RenameDialog
         open={renaming !== null}
@@ -337,7 +339,7 @@ export function HomeView({
 }
 
 /** Every presentation shares the same actions; images always belong to this project. */
-function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, menuSelection = 1, onDeleteSelection, highlighted = false, writeBlocked = null }: {
+function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, menuSelection = 1, onDeleteSelection, writeBlocked = null }: {
   project: ProjectWithStats; featured?: boolean; className?: string;
   onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
   /** 选择模式下点卡片是勾选,不是打开;单条的操作菜单收起来(批量动作在工具条上)。 */
@@ -345,8 +347,6 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   /** 右键菜单作用于几项(useMultiSelect.menuTargets):大于 1 = 右键的这一项在选区里,菜单作用于整个选区,
    *  只给能对一批做的动作;和时间线同一条规则。 */
   menuSelection?: number; onDeleteSelection?: () => void;
-  /** 刚建好的那一个:亮一下,让人一眼看到它在哪儿。 */
-  highlighted?: boolean;
   /** 改不了(只读成员)的原因;改名、删除灰掉,原因写在条目下面。 */
   writeBlocked?: WriteBlock | null;
 }) {
@@ -360,9 +360,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
   //: **整行 / 整张卡**都是可点区域(点空白处也算),由外层 article 统一接:平时是打开,选择模式下
   //: 是勾选。里面的封面和标题只是给键盘用的按钮,点击冒泡上去 —— 各处理一次的话,选择模式下点
   //: 封面会勾上又立刻取消,平时会打开两次。
-  //: 刚建好的那个和选中的长得一样(卡片是封面一圈主色,列表行是一层主色底),只是过两秒自己褪掉 ——
-  //: 另起一套「整张卡外面再套一圈」的样式,把标题也圈进去,和选中态不是一个语言。
-  const marked = (selecting && selected) || highlighted;
+  const marked = selecting && selected;
   const activate = () => (selecting ? onToggle?.(project.id) : onOpen(project.id));
   const open = () => onOpen(project.id);
   // 列表行的背景向外延伸，抵消自身内边距，让封面和操作按钮对齐上方精选卡片。

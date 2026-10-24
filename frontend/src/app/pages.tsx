@@ -9,7 +9,8 @@ import { HomeView, type ProjectsLoad } from "@/features/home/HomeView";
  * **页面按需加载。** 打开一次素材库,不该先解析工作流的图编辑器、笔记的富文本内核和 3D 的
  * three.js —— 它们此前全在同一个 4.2 MB 的主包里,每次启动都要解析一遍。
  *
- * 只有首屏那一页(home)是直接 import 的:它一定会被渲染,给它加一层 Suspense 只会多一次闪烁。
+ * 首屏是「剪辑」没有项目时的项目浏览器:它一定会被渲染,所以直接 import(给它加一层
+ * Suspense 只会多一次闪烁)。编辑器本身仍然懒加载 —— 选中项目之后才需要它。
  */
 const AdminView = React.lazy(() => import("@/features/admin/AdminView").then((m) => ({ default: m.AdminView })));
 const AiStudio = React.lazy(() => import("@/features/ai-studio/AiStudio").then((m) => ({ default: m.AiStudio })));
@@ -33,10 +34,10 @@ export type PageContext = {
   workspace: Workspace;
   project: ProjectWithStats | null;
   projects: ProjectWithStats[];
-  /** 项目列表取得怎样:首页要分得清「还没有项目」和「没取回来」。 */
+  /** 项目列表取得怎样:项目浏览器要分得清「还没有项目」和「没取回来」。 */
   projectsLoad: ProjectsLoad;
   openProject: (projectId: string) => void;
-  createProject: () => void;
+  createProject: (name?: string) => void;
   creatingProject: boolean;
   t: (key: MessageKey) => string;
 };
@@ -49,28 +50,27 @@ export type PageContext = {
  * 所以只有这一层 import 各个功能模块。
  */
 export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.ReactNode> = {
-  home: (ctx) => (
-    <HomeView
-      workspace={ctx.workspace}
-      projects={ctx.projects}
-      load={ctx.projectsLoad}
-      onOpenProject={ctx.openProject}
-    />
-  ),
   statistics: (ctx) => <StatisticsView workspace={ctx.workspace} />,
   media: (ctx) => <MediaLibraryView workspace={ctx.workspace} />,
   entities: (ctx) => <EntitiesView key={ctx.workspace.id} workspace={ctx.workspace} />,
   notes: (ctx) => <NotesWithAgent key={ctx.workspace.id} workspace={ctx.workspace} />,
   scenes: (ctx) => <SceneStudio key={ctx.workspace.id} workspace={ctx.workspace} />,
   boards: (ctx) => <BoardsView workspace={ctx.workspace} />,
-  editor: (ctx) => (
-    <EditorView
-      workspace={ctx.workspace}
-      project={ctx.project}
-      onCreateProject={ctx.createProject}
-      creatingProject={ctx.creatingProject}
-    />
-  ),
+  //: **一个 tab,两个状态。** 没有选中项目时是项目浏览器;选中之后才挂编辑器。
+  //: 编辑器保持懒加载,项目浏览器在首屏静态闭包里 —— 启动不会被 mp4box / 时间线拖重。
+  editor: (ctx) =>
+    ctx.project ? (
+      <EditorView workspace={ctx.workspace} project={ctx.project} />
+    ) : (
+      <HomeView
+        workspace={ctx.workspace}
+        projects={ctx.projects}
+        load={ctx.projectsLoad}
+        onOpenProject={ctx.openProject}
+        onCreateProject={ctx.createProject}
+        creatingProject={ctx.creatingProject}
+      />
+    ),
   ai: (ctx) => <AiStudio workspace={ctx.workspace} />,
   publish: (ctx) => <PublishView workspace={ctx.workspace} />,
   workflows: (ctx) => <WorkflowsView workspace={ctx.workspace} />,

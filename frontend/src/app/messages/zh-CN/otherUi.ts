@@ -108,7 +108,6 @@ export const otherUi = {
   feishuNoBots: "还没有绑定飞书机器人。",
 
   // Editor
-  emptyProject: "创建项目后开始剪辑",
   media: "素材",
   import: "导入",
   record: "录制",

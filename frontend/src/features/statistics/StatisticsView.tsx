@@ -84,7 +84,7 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
   const lastDays = t("statLastNDays").replace("{n}", windowDays);
   const statTiles: StatTile[] = stats
     ? [
-        { key: "homeStatProjects", value: stats.project_count, icon: <Clapperboard size={13} />, open: () => gotoSection("home") },
+        { key: "homeStatProjects", value: stats.project_count, icon: <Clapperboard size={13} />, open: () => gotoSection("editor") },
         { key: "homeStatAssets", value: stats.asset_count, icon: <Film size={13} />, open: () => gotoSection("media") },
         { key: "homeStatSequences", value: stats.sequence_count, icon: <Layers size={13} /> },
         { key: "homeStatWorkflows", value: stats.workflow_count, icon: <WorkflowIcon size={13} />, open: () => gotoSection("workflows") },
