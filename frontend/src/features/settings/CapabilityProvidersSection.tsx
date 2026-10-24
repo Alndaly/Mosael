@@ -296,10 +296,13 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
   //: 而挑引擎的地方就是这一行:默认用哪个引擎。数字与名字都从能力表的 `options` 数出来(`missing`
   //: 为空的就是跑得起来的),不写死:换一台机器、装上一个引擎,这句话自己跟着变。
   const usableEngines = (choices.options ?? []).filter((option) => (option.missing ?? []).length === 0);
-  //: 「不能设为默认」的几家:只属于某个人 / 某个工作区的(插件连接、克隆音色),以及还没装好的。
-  //: **数量在这里数出来**,文案只写「{n} 家不能设为默认」—— 数写死在文案里,换一台机器就对不上;
-  //: 一家都没有时整行不画,不写「0 家」。
-  const restrictedCount = personalOnly.length + unready.length;
+  //: **两件事,两行。** 它们看起来像一回事,实际不是:
+  //:   · **还没配好**(`unready`):这家**跑不了** —— 引擎没装 / 权重没下 / 凭据没填。配好就能选;
+  //:   · **不能设为默认**(`personalOnly`):这家**能用**,但它属于某个人或某个工作区
+  //:     (插件连接、本机克隆音色),写成"全机默认"对别人不成立 —— 只能在具体入口单次点名。
+  //: 此前把它们并成一行「{n} 家不能设为默认」,于是"没装"被读成了"权限限制"(维护者 2026-10-24 问的
+  //: 正是这两个词的区别)。数量都从数据数出来,一家都没有时整行不画。
+  const [unreadyOpen, setUnreadyOpen] = React.useState(false);
   const [restrictedOpen, setRestrictedOpen] = React.useState(false);
   //: 标题行照别组一样写「现在用谁」:默认那一对(引擎 · 音色);没设过就是「未指定」。
   const engineLabel = engines.find((item) => item.id === serverEngine)?.label ?? "";
@@ -382,16 +385,42 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
           className={SETTINGS_FIELD_WIDTH}
         />
       </SettingsItemRow>
-      {restrictedCount > 0 && (
-        //: 那两段「不能设为默认」的解释默认收成一行 —— 和底下「用在哪」同一种收法。
-        //: 收起时只留一句「{n} 家不能设为默认 · 看原因」,点开才是原文,内容一条不丢。
+      {unready.length > 0 && (
+        //: ① **还没配好**:这家现在跑不了(引擎没装 / 权重没下 / 凭据没填)。收起一行,点开逐条说缺什么。
+        <div data-capability-voice-unready="" className="min-w-0 py-3">
+          <Disclosure
+            wide
+            label={
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <TriangleAlert size={13} aria-hidden className="shrink-0" />
+                {t("capabilityUnready").replace("{n}", String(unready.length))}
+              </span>
+            }
+            hint={t("capabilityUnreadyWhy")}
+            open={unreadyOpen}
+            onOpenChange={setUnreadyOpen}
+            contentClassName="grid gap-1.5 pt-2"
+          >
+            {unready.map((item) => (
+              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t("capabilityVoiceDefaultUnready")
+                  .replace("{name}", item.label)
+                  .replace("{reason}", item.note || "—")}
+              </SettingsItemNote>
+            ))}
+          </Disclosure>
+        </div>
+      )}
+      {personalOnly.length > 0 && (
+        //: ② **能用、但不能设为默认**:插件连接属于某个人、本机克隆音色属于某个工作区 ——
+        //: 写成全机默认对别人不成立,只能在具体入口单次点名。
         <div data-capability-voice-restricted="" className="min-w-0 py-3">
           <Disclosure
             wide
             label={
               <span className="inline-flex min-w-0 items-center gap-1.5">
                 <TriangleAlert size={13} aria-hidden className="shrink-0" />
-                {t("capabilityVoiceRestricted").replace("{n}", String(restrictedCount))}
+                {t("capabilityVoiceRestricted").replace("{n}", String(personalOnly.length))}
               </span>
             }
             hint={t("capabilityVoiceRestrictedWhy")}
@@ -402,13 +431,6 @@ function VoiceDefaultGroup({ choices }: { choices: Choices }) {
             {personalOnly.map((item) => (
               <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
                 {t("capabilityVoiceDefaultPersonalOnly").replace("{name}", item.label)}
-              </SettingsItemNote>
-            ))}
-            {unready.map((item) => (
-              <SettingsItemNote key={item.id} icon={<CircleDashed size={13} aria-hidden />}>
-                {t("capabilityVoiceDefaultUnready")
-                  .replace("{name}", item.label)
-                  .replace("{reason}", item.note || "—")}
               </SettingsItemNote>
             ))}
           </Disclosure>

@@ -554,10 +554,12 @@ it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」
   expect(pickers[0].textContent).toContain("Edge");
   //: 没装好的引擎不在下拉里,但用户看得到它、以及为什么选不了 —— 收在那一行解释里,点开才列。
   expect(pickers[0].textContent).not.toContain("OpenAI");
-  const restricted = group.querySelector<HTMLElement>("[data-capability-voice-restricted]")!;
-  expect(restricted.textContent).toContain("capabilityVoiceRestricted");
+  //: **两件事两行**:「还没配好」= 跑不了(引擎没装 / 权重没下);「不能设为默认」= 能用但属于
+  //: 某个人(插件连接 / 克隆音色)。未安装的引擎属于前者。
+  const unreadyRow = group.querySelector<HTMLElement>("[data-capability-voice-unready]")!;
+  expect(unreadyRow.textContent).toContain("capabilityUnready");
   expect(group.textContent).not.toContain("capabilityVoiceDefaultUnready");
-  fireEvent.click(within(restricted).getByRole("button"));
+  fireEvent.click(within(unreadyRow).getByRole("button"));
   await waitFor(() => expect(group.textContent).toContain("capabilityVoiceDefaultUnready"));
   //: 未安装的引擎的**名字**在那一行说明里(t 在测试里只回 key,所以这里只钉"有那一行")。
   //: 配音那一处用法也收在摘要里,点开才列。
@@ -575,6 +577,8 @@ it("配音的默认行是引擎 + 音色两个控件,「这一项没有默认」
  * 下面几条把新排版钉在结构上:说明两行以内、控件不被注释隔开、限制项收进一个可展开项、
  * 数量从数据算、一家都没有时整行不出现。
  */
+//: **两件事两行**:「还没配好」(跑不了)与「不能设为默认」(能用但属于某个人)。
+const unreadyLine = (group: HTMLElement) => group.querySelector<HTMLElement>("[data-capability-voice-unready]");
 const countLine = (group: HTMLElement) => group.querySelector<HTMLElement>("[data-capability-voice-restricted]");
 
 it("配音那一组的说明收成两行以内:只说这一节是什么 + 默认是一对", async () => {
@@ -622,8 +626,8 @@ it("「先选一个引擎。」不在了:那是控件的注释,两个下拉自�
   expect(pickers[0].textContent).toContain("capabilityUnset");
 });
 
-it("「不能设为默认」的两段解释收进一个可展开项:收起一行,点开原文都在", async () => {
-  //: 一家只属于某个人(克隆音色)、一家还用不了(OpenAI):正好是截图里那两段。
+it("「还用不了」和「只属于某个人」各收一行:收起各一行,点开各自原文都在", async () => {
+  //: 一家只属于某个人(克隆音色)、一家还用不了(OpenAI) —— 两件不同的事,分别收进两行。
   speechApi.listTtsEngines.mockResolvedValue([
     ...engines,
     { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: true, voices: [],
@@ -638,24 +642,27 @@ it("「不能设为默认」的两段解释收进一个可展开项:收起一行
   const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
   //: 那一行要等引擎目录到齐(克隆音色 + OpenAI)才画得出来。
   await waitFor(() => expect(countLine(group)).not.toBeNull());
-  const restricted = countLine(group)!;
-  //: 收起时只有一行,两段原文都没挂载。
+  await waitFor(() => expect(unreadyLine(group)).not.toBeNull());
+  const restricted = countLine(group)!;   //: 能用、但属于某个人
+  const unready = unreadyLine(group)!;    //: 现在还用不了
+  //: 收起时两行各自只有一句,原文都没挂载。
   expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(0);
-  const trigger = within(restricted).getByRole("button");
-  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(unready.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(0);
   expect(restricted.textContent).toContain("capabilityVoiceRestricted");
-  //: 点开:两段原文一条不少(个人专属 + 还用不了)。
-  fireEvent.click(trigger);
-  await waitFor(() => expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(2));
+  expect(unready.textContent).toContain("capabilityUnready");
+
+  //: 点开各自:原文各在各的行里(不混)。
+  fireEvent.click(within(restricted).getByRole("button"));
+  fireEvent.click(within(unready).getByRole("button"));
+  await waitFor(() => expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(1));
+  await waitFor(() => expect(unready.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(1));
   expect(restricted.textContent).toContain("capabilityVoiceDefaultPersonalOnly");
-  expect(restricted.textContent).toContain("capabilityVoiceDefaultUnready");
-  expect(trigger.getAttribute("aria-expanded")).toBe("true");
-  //: 再收起:又只剩一行。
-  fireEvent.click(trigger);
-  await waitFor(() => expect(restricted.querySelectorAll('[data-slot="settings-item-note"]')).toHaveLength(0));
+  expect(restricted.textContent).not.toContain("capabilityVoiceDefaultUnready");
+  expect(unready.textContent).toContain("capabilityVoiceDefaultUnready");
+  expect(unready.textContent).not.toContain("capabilityVoiceDefaultPersonalOnly");
 });
 
-it("「几家不能设为默认」是数出来的:1 家、2 家跟着数据走,不写死", async () => {
+it("两行的数字各按自己的数据数:还用不了 1 家、只属于某个人 1 家,不写死", async () => {
   const first = render(
     <QueryClientProvider client={new QueryClient()}>
       <CapabilityProvidersSection />
@@ -664,8 +671,11 @@ it("「几家不能设为默认」是数出来的:1 家、2 家跟着数据走,�
   await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
   //: 默认那组数据:Edge 装好了、OpenAI 还用不了 → 1 家。
   const firstGroup = () => screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
-  await waitFor(() => expect(countLine(firstGroup())).not.toBeNull());
-  expect(countLine(firstGroup())!.textContent).toContain("1 家不能设为默认");
+  //: 默认数据里 OpenAI 还用不了 → 「还没配好」是 1 家;没有"只属于某个人"的,那一行不出现。
+  await waitFor(() => expect(unreadyLine(firstGroup())).not.toBeNull());
+  //: 测试里的 t 只回 key(文案表不参与),"数量"由数据决定这一条在组件里:行是否存在看长度。
+  expect(unreadyLine(firstGroup())!.textContent).toContain("capabilityUnready");
+  expect(countLine(firstGroup())).toBeNull();
   first.unmount();
 
   //: 再加一家只属于某个人的(克隆音色)→ 2 家。数量从数据算,不是文案里写死的。
@@ -680,7 +690,10 @@ it("「几家不能设为默认」是数出来的:1 家、2 家跟着数据走,�
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
-  await waitFor(() => expect(countLine(firstGroup())?.textContent).toContain("2 家不能设为默认"));
+  //: 加了克隆音色 → 「不能设为默认」1 家(它属于某个工作区);「还没配好」仍是 1 家。
+  await waitFor(() => expect(countLine(firstGroup())?.textContent).toContain("1 家不能设为默认"));
+  //: 测试里的 t 只回 key(文案表不参与),"数量"由数据决定这一条在组件里:行是否存在看长度。
+  expect(unreadyLine(firstGroup())!.textContent).toContain("capabilityUnready");
 });
 
 it("一家都不受限时,「不能设为默认」这一整行不出现 —— 不写「0 家」", async () => {
