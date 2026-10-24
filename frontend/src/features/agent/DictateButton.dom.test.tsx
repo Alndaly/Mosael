@@ -117,3 +117,25 @@ describe("说话输入", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "transcribing" })).toBeTruthy());
   });
 });
+
+it("录音时那一格会显示实时电平;没在录时不出现(jsdom 里没有 AudioContext 也不影响录音)", async () => {
+  const onText = vi.fn();
+  const track = grantMic();
+  vi.stubGlobal("fetch", reply(200, { text: "补一句" }));
+  render(<DictateButton onText={onText} />);
+
+  //: 没在录:没有电平条 —— 空闲时多一格东西只会让人以为它在听。
+  expect(document.querySelector("[data-dictate-level]")).toBeNull();
+
+  fireEvent.click(screen.getByRole("button"));
+  await waitFor(() => expect(FakeRecorder.last).not.toBeNull());
+
+  //: 录音中:电平条在,而且带着 aria 值(读屏能念出来)。jsdom 没有 AudioContext,
+  //: 所以这里同时也钉住了"拿不到分析节点时按钮照常工作"。
+  const meter = await screen.findByRole("progressbar", { name: "dictateLevel" });
+  expect(meter.getAttribute("aria-valuenow")).toBe("0");
+
+  fireEvent.click(screen.getByRole("button"));
+  await waitFor(() => expect(document.querySelector("[data-dictate-level]")).toBeNull());
+  expect(track.stop).toHaveBeenCalled();
+});

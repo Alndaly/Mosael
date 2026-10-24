@@ -165,6 +165,7 @@ export const publish = {
   speakStop: "停止播放",
   speakFailed: "这段没能念出来。",
   dictateStop: "停止并识别",
+  dictateLevel: "输入音量",
   dictateNoMic: "用不了麦克风 —— 到系统设置里看看有没有把录音权限给 Mosael。",
   dictateFailed: "这段没能转成文字,再说一次试试。",
   dictateHeardNothing: "没听到内容 —— 离麦克风近一点,或者确认选对了输入设备。",

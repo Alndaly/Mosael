@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ApiError, dictate } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { IconButton } from "@/components/ui/icon-button";
+import { useMicLevel } from "@/features/agent/useMicLevel";
 import { cn } from "@/lib/utils";
 
 /** 和后端 DICTATION_MAX_SECONDS 对齐。到点自己收,不指望被拒。 */
@@ -34,6 +35,8 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
   const [state, setState] = React.useState<State>("idle");
   const [seconds, setSeconds] = React.useState(0);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
+  //: 电平要在**渲染时**读:只留 ref 的话它变了也不会重画。
+  const [stream, setStream] = React.useState<MediaStream | null>(null);
   const stopTimerRef = React.useRef<number | null>(null);
 
   const cleanup = React.useCallback(() => {
@@ -44,6 +47,7 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
     // 录完要把轨道关掉,否则系统的录音指示灯一直亮着 —— 用户会以为我们在偷听。
     recorderRef.current?.stream.getTracks().forEach((track) => track.stop());
     recorderRef.current = null;
+    setStream(null);
   }, []);
 
   React.useEffect(() => cleanup, [cleanup]);
@@ -84,6 +88,7 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
       }
     };
     recorderRef.current = recorder;
+    setStream(stream);
     recorder.start();
     setSeconds(0);
     setState("recording");
@@ -102,6 +107,9 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
 
   const busy = state === "transcribing";
   const recording = state === "recording";
+  //: 录音时给一条实时电平:看不到自己有没有出声,是"录完才发现识别不出来"的根源。
+  const level = useMicLevel(recording ? stream : null);
+  const levelPercent = Math.round(level * 100);
   //: 转写时那颗按钮只剩一圈转(Button 的 loading),名字还写着「说话输入」的话,悬停得到的
   //: 是一句已经做完的事。用编辑器转写那条既有文案 —— 它此刻确实在转写。
   const label = recording ? t("dictateStop") : busy ? t("transcribing") : t("dictate");
@@ -123,6 +131,29 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
           <Square size={11} className="fill-current" />
           {/* 计时是"还能说多久"的唯一线索 —— 到点会自动收,不说的话那一下看着像卡了。 */}
           <span className="text-ui-xs tabular-nums">{seconds}s</span>
+          {/*: 三格电平:开口就动,静音/选错麦克风就一直是空的 —— 那正是要让人看见的事。
+               宽度固定(26px),胶囊的宽度只随计时那几位数字变,不会因为电平抖动而抖。 */}
+          <span
+            data-dictate-level=""
+            role="progressbar"
+            aria-label={t("dictateLevel")}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={levelPercent}
+            className="flex h-3 w-4 shrink-0 items-end gap-[2px]"
+          >
+            {/*: 从左到右**越来越高**:这是一条电平,不是装饰性的三道杠 —— 高度顺序反过来
+                 会读成"中间最响",和真实的音量没关系。 */}
+            {[0.5, 0.78, 1].map((weight, index) => (
+              <i
+                key={index}
+                aria-hidden
+                className="w-[2.5px] flex-1 rounded-full bg-current"
+                //: 最低留一点点高度:全 0 的三条线看起来像没画出来。
+                style={{ height: `${Math.max(10, Math.min(100, levelPercent * weight * 1.5))}%` }}
+              />
+            ))}
+          </span>
         </>
       ) : (
         <Mic size={14} />

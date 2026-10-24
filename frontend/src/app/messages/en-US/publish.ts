@@ -165,6 +165,7 @@ export const publish = {
   speakStop: "Stop playback",
   speakFailed: "That could not be read aloud.",
   dictateStop: "Stop and transcribe",
+  dictateLevel: "Input level",
   dictateNoMic: "No microphone available — check that Mosael is allowed to record in your system settings.",
   dictateFailed: "That clip could not be transcribed. Try saying it again.",
   dictateHeardNothing: "Nothing was heard — move closer to the microphone, or check the input device.",
