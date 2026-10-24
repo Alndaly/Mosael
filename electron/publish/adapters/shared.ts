@@ -17,6 +17,8 @@ export interface PublishAdapter {
   uploadVideo(videoPath: string): Promise<void>;
   /** 图文:一次交多份图片,顺序就是数组顺序。 */
   uploadImages?(paths: string[]): Promise<void>;
+  /** 文章封面(有的平台必填,而且是"点了才创建 input"的上传区)。`paths` 最多一张。 */
+  uploadCover?(paths: string[]): Promise<void>;
   /** 正文 / 长文(富文本编辑器)。 */
   fillBody?(body: string): Promise<void>;
   fillTitle(title: string): Promise<void>;

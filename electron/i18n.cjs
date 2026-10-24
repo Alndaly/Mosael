@@ -350,6 +350,10 @@ const MESSAGES = {
     zh: "{platform} 的「原创声明」控件没有找到。",
     en: "{platform}: the “original content” control was not found.",
   },
+  publishErr_coverRequired: {
+    zh: "{platform} 的文章必须有封面图 —— 在「成片素材」里选一张(它同时用作文章头图)。",
+    en: "A {platform} article needs a cover image — pick one under finished assets (it also becomes the article header).",
+  },
   publishErr_originalStuck: {
     zh: "{platform} 的「原创声明」停在 {after},应为 {wanted}。",
     en: "{platform}: the “original content” switch stayed {after}, wanted {wanted}.",

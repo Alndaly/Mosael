@@ -185,7 +185,6 @@ def content_limits(platform: str, kind: str) -> dict[str, Any]:
 IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     #: 抖音图文 2026-10-23 真机核对后接上:标题 20 字、描述 1000 字、≤35 张图(单图 ≤50MB,
     #: jpg/jpeg/png/webp,不支持 gif)。入口在投稿页的「发布图文」tab。
-    "douyin": ("video", "image-text"),
     #: X 图文 2026-10-24 接上:≤4 张图,正文一栏(标题并进正文)。见 PUBLISH_PLATFORMS["x"]。
     #: X 长文(Articles)2026-10-24 接上:文章列表页点「Write」新建草稿,标题 ≤100。
     "x": ("video", "image-text", "article"),
@@ -193,6 +192,8 @@ IMPLEMENTED_KINDS: dict[str, tuple[str, ...]] = {
     "tiktok": ("video", "image-text"),
     #: 视频号图文 2026-10-24 接上:「发表动态」页(表单在 `empty.html` 框架里),≤18 张图。
     "weixin-channels": ("video", "image-text"),
+    #: 抖音文章 2026-10-24 接上:独立页(标题 30 / 摘要 30 / 正文 20000),**封面必填**一张。
+    "douyin": ("video", "image-text", "article"),
     #: 小红书长文 2026-10-24 接上:列表页「新的创作」→ 标题 64 / 正文 tiptap → 一键排版 → 下一步。
     "xiaohongshu": ("video", "image-text", "article"),
     #: B站专栏(article)2026-10-24 接上:编辑器在 `read-editor` 框架里,标题 50 / 正文 100000。
@@ -223,7 +224,7 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "content": {
             #: 真机(2026-10-23):标题 0/20、描述 0/1000、最多 35 张图。
             "image-text": {"max_items": 35, "title_max": 20, "body_max": 1000},
-            "article": {"title_max": 30, "body_max": 20000},
+            "article": {"title_max": 30, "body_max": 20000, "max_items": 1},
         },
     },
     "xiaohongshu": {

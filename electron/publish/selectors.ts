@@ -57,6 +57,15 @@ export const SELECTORS = {
     //: 上传成功后会跳到 `/creator-micro/content/post/image?…media_type=image…`,那一页**没有**文件框,
     //: 只有标题(`添加作品标题`,0/20)与描述(`添加作品描述...`,0/1000)。
     imageTextTabText: "发布图文", // i18n-ok
+    //: ---- 文章(2026-10-24 真机)----
+    //: 入口 `creator-micro/content/post/article`:标题(≤30)/ 摘要(≤30)/ 正文 tiptap(0/20000)/
+    //: 文章头图(可选)/ **封面设置(必填)**。封面和头图的“+”**点了才创建 file input**
+    //: (页面上没有现成的 input),所以走驱动的文件选择框拦截(chooseFilesByClicking)。
+    articleTitleInput: 'input[placeholder*="文章标题"]', // i18n-ok
+    articleSummaryInput: 'input[placeholder*="内容摘要"]', // i18n-ok
+    articleEditor: ".tiptap.ProseMirror[contenteditable='true'], .tiptap.ProseMirror",
+    articleCoverText: "点击上传封面图", // i18n-ok
+    articleCoverReady: ".content-upload-ksKds3 img, [class*='cover'] img",
     imageFileInput: 'input[type="file"][accept*="image"]',
     imageTextUrl: (u: string): boolean => /content\/post\/image/.test(u),
     imageTitleInput: 'input[placeholder="添加作品标题"]', // i18n-ok

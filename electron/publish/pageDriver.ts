@@ -1514,6 +1514,48 @@ export class PageDriver {
     });
   }
 
+  /**
+   * **点一下、再把文件交给它** —— 给"点开才创建 input"的平台用(抖音文章的封面就是这种)。
+   *
+   * 这类上传器页面上**根本没有 `input[type=file]`**:点了上传区,平台才临时造一个、弹出系统选文件框。
+   * `setFiles(selector, …)` 在那种页面上永远等不到元素。这里走 CDP 的**文件选择框拦截**:
+   * `Page.setInterceptFileChooserDialog` 打开后点一下上传区,平台弹出的选择框被拦下,
+   * 事件里带 `backendNodeId` —— 直接 `DOM.setFileInputFiles` 把文件塞给那个瞬时 input。
+   *
+   * @param trigger 触发上传区的动作(通常是按文案可信点击)
+   * @returns 平台是否真的弹出了文件选择框
+   */
+  async chooseFilesByClicking(trigger: () => Promise<void>, files: string[], timeout = 15_000): Promise<boolean> {
+    this.ensureDebugger();
+    const debuggerApi = this.wc.debugger;
+    let nodeId: number | null = null;
+    let arrived: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => {
+      arrived = resolve;
+    });
+    const onMessage = (_event: unknown, method: string, params: { backendNodeId?: number }) => {
+      if (method !== "Page.fileChooserOpened") return;
+      nodeId = params.backendNodeId ?? null;
+      arrived();
+    };
+    debuggerApi.on("message", onMessage as never);
+    try {
+      await debuggerApi.sendCommand("Page.enable");
+      await debuggerApi.sendCommand("Page.setInterceptFileChooserDialog", { enabled: true });
+      await trigger();
+      const got = await Promise.race([
+        opened.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeout)),
+      ]);
+      if (!got || nodeId === null) return false;
+      await debuggerApi.sendCommand("DOM.setFileInputFiles", { files, backendNodeId: nodeId });
+      return true;
+    } finally {
+      debuggerApi.removeListener("message", onMessage as never);
+      await debuggerApi.sendCommand("Page.setInterceptFileChooserDialog", { enabled: false }).catch(() => undefined);
+    }
+  }
+
   async fileInputAttached(selector = 'input[type="file"]', timeout = 8_000, opts: FileInputLookup = {}): Promise<boolean> {
     const deadline = Date.now() + timeout;
     do {

@@ -46,6 +46,13 @@ const DOUYIN: PlatformContract = {
       steps: [douyin.imageTextTabText],
       acceptExtensions: [".png", ".jpg", ".jpeg", ".webp"],
     },
+    //: 文章是**另一个页面**(标题 / 摘要 / 正文 / 封面上传),不是投稿页上的 tab。
+    //: 封面必填,且上传区是"点了才创建 file input" —— 由适配器 `uploadCover` 走文件选择框拦截。
+    article: {
+      //: 投稿页是 `…/creator-micro/content/upload`,文章页是 `…/creator-micro/content/post/article`。
+      url: "https://creator.douyin.com/creator-micro/content/post/article",
+      acceptExtensions: [".png", ".jpg", ".jpeg", ".webp"],
+    },
   },
   fileInput: {
     //: 两个 input 同时在页面上,**按 accept 区分**:视频那个是 `video/*`,图文那个是图片类型。

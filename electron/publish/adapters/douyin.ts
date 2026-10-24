@@ -16,7 +16,7 @@ export class DouyinAdapter implements PublishAdapter {
    * 标题 0/20、描述 0/1000、最多 35 张图,可见性三档与视频同一套 label。
    */
   /** 已接的形状:声明在**类**上 —— 契约测试与执行器要按平台读它(实例字段读不到)。 */
-  static readonly KINDS = ["video", "image-text"] as const;
+  static readonly KINDS = ["video", "image-text", "article"] as const;
   readonly supports = DouyinAdapter.KINDS;
   private readonly s = SELECTORS.douyin;
   /** 页面契约:入口 / 提交 / 成功信号 / 浮层都从这儿来。 */
@@ -26,6 +26,10 @@ export class DouyinAdapter implements PublishAdapter {
     private readonly driver: PageDriver,
     private readonly task: PublishTask,
   ) {}
+
+  private get isArticle(): boolean {
+    return this.task.contentKind === "article";
+  }
 
   async openCreatorPage(): Promise<void> {
     await this.driver.goto(this.s.uploadUrl);
@@ -78,10 +82,55 @@ export class DouyinAdapter implements PublishAdapter {
     await this.clearStuckOverlays();
   }
 
+  /**
+   * 文章的封面(必填)。
+   *
+   * 抖音的封面和文章头图都是**点了才创建 `input[type=file]`** 的上传区 —— 页面上没有现成的
+   * input,`setFiles(selector)` 会一直等不到元素。这里用驱动的「文件选择框拦截」:
+   * 开拦截 → 点「点击上传封面图」→ 平台弹出的选择框被拦下、事件里带 backendNodeId →
+   * 把文件塞给那个瞬时 input。**一张**;没有素材就直接说清楚,别等到提交时被平台拒。
+   */
+  async uploadCover(paths: string[]): Promise<void> {
+    if (paths.length === 0) {
+      throw publishError("douyin", "publishErr_coverRequired");
+    }
+    const [cover] = paths;
+    const attached = await this.driver.chooseFilesByClicking(
+      () => clickTextPreferTrusted(this.driver, this.s.articleCoverText, { exact: true }),
+      [cover],
+    );
+    if (!attached) {
+      await plogPageState("Douyin article cover picker did not open:", this.driver);
+      throw publishError("douyin", "publishErr_noUploadEntry");
+    }
+    //: 封面上传完,那一格会出现图片;「点击上传封面图」这句话随之消失。
+    const replaced = await this.driver
+      .waitTextGoneDeep(this.s.articleCoverText, UPLOAD_TIMEOUT, 500)
+      .catch(() => false);
+    if (!replaced && !(await this.driver.cssVisible(this.s.articleCoverReady, 5_000).catch(() => false))) {
+      await plogPageState("Douyin article cover not accepted:", this.driver);
+      throw publishError("douyin", "publishErr_uploadTimeout");
+    }
+  }
+
   /** 图文的正文:抖音的 zone 编辑器(和视频那一档的「作品描述」是同一个控件家族)。 */
   async fillBody(body: string): Promise<void> {
     const value = body.trim();
     if (!value) return;
+    if (this.isArticle) {
+      await this.driver.cssVisible(this.s.articleEditor, ACTION_TIMEOUT);
+      if (!(await this.driver.clearRichEditor(this.s.articleEditor))) {
+        throw publishError("douyin", "publishErr_editorNotEmpty");
+      }
+      await this.driver.insertTextLines(this.s.articleEditor, value);
+      const shown = await this.driver.cssValue(this.s.articleEditor);
+      const squash = (text: string) => text.replace(/\s+/g, "");
+      if (!squash(shown ?? "").includes(squash(value).slice(0, 40))) {
+        await plogPageState("Douyin article body mismatch:", this.driver);
+        throw publishError("douyin", "publishErr_descriptionRejected");
+      }
+      return;
+    }
     const selector = this.s.imageDescEditor;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
     //: **先把它清干净再打**。抖音的正文编辑器会恢复上一次的字(平台自己存草稿),而原来那套
@@ -141,6 +190,14 @@ export class DouyinAdapter implements PublishAdapter {
   }
 
   async fillTitle(title: string): Promise<void> {
+    if (this.isArticle) {
+      const value = title.slice(0, 30);
+      await this.driver.cssVisible(this.s.articleTitleInput, ACTION_TIMEOUT);
+      await this.driver.fillField(this.s.articleTitleInput, value);
+      const current = await this.driver.cssValue(this.s.articleTitleInput);
+      if (!current?.includes(value)) throw publishError("douyin", "publishErr_titleRejected");
+      return;
+    }
     const selector = this.task.contentKind === "image-text" ? this.s.imageTitleInput : this.s.titleInput;
     await this.driver.cssVisible(selector, ACTION_TIMEOUT);
     //: 图文标题上限 20(真机 0/20),视频那一档是 30。
