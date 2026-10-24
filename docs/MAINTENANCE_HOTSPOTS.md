@@ -92,15 +92,23 @@ Evolink 使用同一生成协议跨图像/视频，保留单一 `generation.py`�
 
 - 已把平台页面选择器契约抽到 `electron/publish/selectors.ts`。这是第一条低风险 seam:
   平台页面 DOM 变化现在可以独立 review,不用在 1000 行 Adapter 实现里找常量。
-- 已按平台拆到 `electron/publish/adapters/*.ts`,`electron/publish/adapters.ts` 只保留统一装配入口
-  `createAdapter`。调用方不感知文件布局,新增平台也不再扩大既有平台 Implementation。
+- 已按平台拆到 `electron/publish/adapters/*.ts`,`electron/publish/adapters.ts` 只保留
+  `ADAPTERS` 注册表(2026-10-24:那条 `if` 链换成了表)。调用方不感知文件布局。
 - 已把小红书等平台 helper 移回对应 Adapter。`PageDriver` 只保留导航、DOM 探测、可信输入、文件、
   cookie、诊断与截图这些通用浏览器能力。
+- **2026-10-24 又收了三层**(ADR 0080):
+  - `contract.ts` / `contracts.ts`:平台事实(入口 / 文件框 / 提交 / 成功信号 / 浮层)成了数据;
+  - `overlays.ts`:挡路浮层的声明式关法,执行器每步之前统一跑;
+  - `verify.ts`:判定原语(文字进没进 / 按行按顺序 / 成功信号带 `formGone` 闸);
+  - `fakePage.ts` + `contracts.pipeline.test.ts`:平台 × 形状自动展开的管道测试。
 
 **Remaining slice**
 
 1. 抽出 `runPublishTask(...)` Module:`publishWorker.ts` 目前仍同时拥有轮询/并发和单任务的状态回报、
    截图、blocked 映射。抽出后让 worker 只编排,并给单任务执行形成一个稳定测试 surface。
+   (2026-10-24 的 P2 只把"浮层"和"判定"抽走了,步骤编排本身还在这个文件里。)
+2. 契约还差**字段级**声明:标题 / 正文 / 标签的选择器现在仍在 `selectors.ts`,适配器各自引用它 ——
+   下一步把它们也写进契约,适配器就只剩"平台特有动作"了。
 
 ## 2. 前端全局样式 — ✅ 已解决(2026-07-22)
 

@@ -145,8 +145,10 @@ characters, locations and props live in the asset library — `@` one while gene
 
 ### Publish to Douyin, TikTok, Bilibili, Xiaohongshu and YouTube
 
-Browser Pool keeps persistent sign-ins and proxies for several accounts. Publishing forms follow each destination's
-options; review the video, account and post before submitting, then track the result.
+Browser Pool keeps persistent sign-ins and proxies for several accounts. Each platform takes the content it supports —
+video on every one of them, **image-text** on Douyin, Xiaohongshu, WeChat Channels, TikTok and X, and **articles
+(columns)** on Bilibili. Publishing forms follow each destination's options; review the media, account and copy before
+submitting, then track the result.
 [Publishing](https://mosael.com/en/docs/guides/publishing) · [Browser profiles](https://mosael.com/en/docs/guides/browser-pool)
 
 ### Plugins and the Chrome companion

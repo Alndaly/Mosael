@@ -4,9 +4,28 @@
 
 ## 只有一类执行器
 
-平台注册表在 `backend/app/domain/publish/__init__.py`(`PUBLISH_PLATFORMS`),现在只有需要登录态的
-真平台:`douyin` `bilibili` `xiaohongshu` `weixin-channels`,一律由**桌面端内嵌浏览器**驱动真实
-平台页面。
+平台注册表在 `backend/app/domain/publish/__init__.py`(`PUBLISH_PLATFORMS`),只有需要登录态的
+真平台:`douyin` / `xiaohongshu` / `weixin-channels` / `bilibili` / `tiktok` / `x` / `youtube`,
+一律由**桌面端内嵌浏览器**驱动真实平台页面。
+
+### 每个平台能发什么
+
+「平台能发」(注册表的 `kinds`)与「我们已经会发」(`IMPLEMENTED_KINDS`)是两件事,由棘轮
+`test_publish_adapter_supports_match_registry` 对齐;界面的「内容类型」只列后者。
+
+| 平台 | 视频 | 图文 | 文章(专栏) |
+| --- | --- | --- | --- |
+| 小红书 | ✓ | ✓ ≤18 图 / 正文 ≤1000 | — |
+| 抖音 | ✓ | ✓ ≤35 图 / 标题 20 / 描述 1000 | — |
+| 微信视频号 | ✓ | ✓ ≤18 图 / 标题 22 / 描述 1000 | — |
+| Bilibili | ✓ | — | ✓ 专栏:标题 50 / 正文 100000 |
+| TikTok | ✓ | ✓ 照片轮播 ≤35 / 标题 90 / 描述 4000 | — |
+| X | ✓ | ✓ ≤4 图 / ≥280 字 | — |
+| YouTube | ✓ | — | — |
+
+事实来源与逐平台的真机核对记录见 [ADR 0076](adr/0076-auto-publish-image-text-and-articles.md);
+「怎么进这一页、怎么判成功、哪些浮层要关」写在契约里,见下一节与
+[ADR 0080](adr/0080-publish-automation-contract-and-pipeline.md)。
 
 后端只负责入队(`status=pending`),真正干活的是 Electron 里的发布执行器。所以**网页版无法发布**
 ——UI 会提示"需要桌面端"。
@@ -41,6 +60,21 @@
 
 任务富状态会同步映射到任务总线的 `job`,并产生站内通知(成功/失败/需重登/被拦截…)。
 **已取消的任务不给后到的回报复活**(`report_task` 里的规则)。
+
+### 认领回来的任务长什么样
+
+执行器从 `claim` 拿到的只有**一种形状**(ADR 0080 的迁移纪律:旧数据在启动时补齐,读的一侧
+不再有「没有就用默认值」那种兼容分支):
+
+| 字段 | 说明 |
+| --- | --- |
+| `content_kind` | `video` / `image-text` / `article`,**必填** |
+| `media_paths` | 素材路径,**按发出去的顺序**;视频就是只有一个元素的列表 |
+| `body` | 图文 / 文章的正文;视频这一档是空串 |
+| `title` / `tags` / `options` | 与发布页同源;`options` 在**建任务时**就补齐并校验过,执行器拿到的永远是完整字典 |
+
+协议里**没有** `asset_id` 单数、也没有 `video_path`:视频就是 `media_paths[0]`。形状与素材
+的旧写法只存在于迁移脚本里(见 `backend/app/db/migrations.py` 的 publish 两条)。
 
 ### 发出去的那条作品(`post`)
 

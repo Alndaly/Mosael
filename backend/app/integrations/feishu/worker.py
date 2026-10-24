@@ -1,6 +1,11 @@
 """子进程入口:一个机器人一条飞书长连接,**只转发事件**。
 
-``python -m app.integrations.feishu.worker <bot_id>`` — 由 connections.start_connection 拉起。
+由 `connections.start_connection` 拉起。**两条起法**:
+
+- 开发版:`python -m app.integrations.feishu.worker <bot_id>`;
+- 打包版(冻结二进制,盘上没有 `app` 包):`mosael-backend feishu-worker <bot_id>`
+  —— 同一个二进制带管理命令(`app/cli.py`)。写成 `python -m` 在那一版里是
+  `ModuleNotFoundError: app.integrations`(2026-10-23 真机)。
 独立进程是 lark_oapi SDK 的硬约束:它的 ws 客户端共享模块级事件循环,同一进程跑多条连接会互相污染。
 
 它不碰数据库、不要主密钥、不跑智能体 —— 那些都在主进程,和桌面端同一条路。此前这里直接调

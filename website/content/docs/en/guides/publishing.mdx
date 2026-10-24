@@ -4,7 +4,7 @@ description: Choose a finished video and destination, review the post and track 
 seo_title: Publish to Douyin, TikTok, Bilibili, Xiaohongshu, YouTube
 keywords: multi-platform video publishing, publish to TikTok, YouTube upload, Douyin, Bilibili, Xiaohongshu
 order: 12
-updated: 2026-10-04
+updated: 2026-10-24
 version: 2.1.1
 ---
 
@@ -12,9 +12,27 @@ version: 2.1.1
 
 ![Publish initial state](/media/screens/en/publish.png)
 
+## Content kinds: video / image-text / article
+
+New publish offers the kinds each platform supports — not every platform takes all three:
+
+| Platform | Video | Image-text | Article (column) |
+| --- | --- | --- | --- |
+| Xiaohongshu | Upload video | Note: up to 18 images, body ≤1000 chars | — |
+| Douyin | | Publish image-text: up to 35 images, title 20, body 1000 | — |
+| WeChat Channels | | Publish post: up to 18 images, title 22, body 1000 | — |
+| Bilibili | | — | Column: title 50, body 100000 (can't be edited after publishing) |
+| TikTok | | Photo carousel: up to 35 images, title 90, body 4000 | — |
+| X | | Up to 4 images, title folded into the body | — |
+| YouTube | | — | — |
+
+Image-text and article take images (except articles): the asset field turns into the asset picker /
+an image grid. An article is one long text with no media; Bilibili columns are set to "only me" before
+submitting because they can't be edited afterwards.
+
 ## Create a publish task
 
-Choose **New publish**, select an imported or exported video, add title, description and tags, then choose a destination: a local directory, webhook or connected platform account. The form displays fields for that destination. AI copywriting requires a configured chat model.
+Choose **New publish**, select an imported or exported video (or a set of images / a body for image-text and articles), add title, body and tags, then pick a platform account. The form shows the fields that platform and content kind need. AI copywriting requires a configured chat model.
 
 ![New publish form](/media/screens/en/publish-form.png)
 
