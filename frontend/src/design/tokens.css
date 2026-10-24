@@ -417,18 +417,22 @@
   --modal-control: rgb(255 255 255 / 0.05);
   --canvas-window-solid: #24272c;
   --canvas-window-tint: rgb(36 39 44 / 0.70);
-  --shadow-floating: 0 4px 16px rgb(0 0 0 / 0.24);
-  --shadow-modal: 0 12px 36px rgb(0 0 0 / 0.24);
-  --shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
-  /* 深色画布上这三层要**靠近彼此**:原来 24px/-8 与 56px/-16 两层各自 alpha 0.5 / 0.44 叠在
-     深色底上,边界处会显出一条条同心的暗环(维护者 2026-10-23:「阴影有非常明显的分层感」)。
-     三层留着(它们负责接触感 / 形体 / 远处的软影),但把**台阶压平**:模糊半径彼此靠近、
-     spread 收小、alpha 降下来 —— 层与层之间靠渐变过渡,而不是靠"一圈比一圈深"。 */
+  /* 深色下**所有阴影都换成"大模糊 + 低 alpha + 零 spread"**。
+     原因是深色底上的暗影只有几十级灰阶可用:alpha 一大、spread 一负,层与层的交界就成了
+     看得见的一圈(维护者 2026-10-24:「很多阴影有着明显的分层」—— 画布节点弹窗、内嵌浏览器
+     浮窗都在列)。零 spread 让衰减从边缘连续开始,alpha 压低之后每一圈的台阶小于 1/255,
+     也就不再有"同心环"。层次仍靠**强度与模糊半径**分开,不靠负 spread 收边。 */
+  --shadow-floating: 0 2px 10px rgb(0 0 0 / 0.18);
+  --shadow-modal: 0 4px 14px rgb(0 0 0 / 0.18), 0 20px 48px rgb(0 0 0 / 0.16);
+  --shadow-panel: 0 2px 8px rgb(0 0 0 / 0.16), 0 10px 28px rgb(0 0 0 / 0.10);
   --shadow-canvas-window:
-    0 1px 2px rgb(0 0 0 / 0.26),
-    0 6px 14px -4px rgb(0 0 0 / 0.30),
-    0 18px 40px -14px rgb(0 0 0 / 0.26);
-  --shadow-raised: 0 12px 48px rgb(0 0 0 / 0.48);
+    0 2px 6px rgb(0 0 0 / 0.16),
+    0 10px 26px rgb(0 0 0 / 0.20),
+    0 30px 64px rgb(0 0 0 / 0.14);
+  --shadow-raised:
+    0 2px 8px rgb(0 0 0 / 0.18),
+    0 12px 32px rgb(0 0 0 / 0.20),
+    0 32px 72px rgb(0 0 0 / 0.12);
 
   /* Neutral monitor surround and lanes; clip colors identify media types. */
   --monitor-bg: #0b0c0e;

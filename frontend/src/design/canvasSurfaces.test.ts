@@ -101,3 +101,40 @@ describe("画布浮层", () => {
     expect(CANVAS_GLASS_SURFACE_CLASS).toContain("shadow-[var(--shadow-panel)]");
   });
 });
+
+/**
+ * 深色下的阴影**不许有负 spread、alpha 也不许大**。
+ *
+ * 深色底上能用的灰阶只有几十级:负 spread 会把衰减的起点切成一条硬边,alpha 一大,层与层之间
+ * 就成了看得见的一圈同心环(维护者 2026-10-24:「很多阴影有着明显的分层」—— 画布节点弹窗、
+ * 内嵌浏览器浮窗都在列)。层次靠**强度与模糊半径**分,不靠负 spread 收边。
+ */
+describe("深色阴影的形状", () => {
+  const DARK = ".dark";
+  const SHADOWS = ["shadow-floating", "shadow-modal", "shadow-panel", "shadow-canvas-window", "shadow-raised"];
+
+  /** `0 12px 32px -8px rgb(0 0 0 / 0.2)` → 每一项的四条长度值。 */
+  const layers = (value: string) =>
+    [...value.matchAll(/(-?\d+(?:\.\d+)?)(?:px)?/g)].map((one) => Number(one[1]));
+
+  for (const name of SHADOWS) {
+    it(`--${name}:深色下没有负 spread`, () => {
+      const value = token(DARK, name);
+      //: 一条阴影 = `offsetX offsetY blur spread? color`;spread 是**颜色前面的那个长度**。
+      for (const layer of value.split(/,(?![^(]*\))/)) {
+        const lengths = layers(layer.replace(/rgb\([^)]*\)/g, ""));
+        //: 只认「三条或四条长度」的写法:两条 = 没有 spread。
+        if (lengths.length >= 4) {
+          expect(lengths[3], `${name} 里有负 spread:${layer.trim()}`).toBeGreaterThanOrEqual(0);
+        }
+      }
+    });
+
+    it(`--${name}:深色下 alpha 不超过 0.24`, () => {
+      const value = token(DARK, name);
+      for (const match of value.matchAll(/\/\s*([0-9.]+)\s*\)/g)) {
+        expect(Number(match[1]), `${name} 的某一层太黑:${value}`).toBeLessThanOrEqual(0.24);
+      }
+    });
+  }
+});
